@@ -44,7 +44,7 @@ const CURSOR_COLUMN: int = 18
 ## the reason [member reveal_speed] is a rate: the period is the same either
 ## way and this does not assume 60 Hz.
 const CURSOR_BLINK_FRAMES: int = 16
-const FRAME_SECONDS: float = 1.0 / 60.0
+const FRAME_SECONDS: float = Gen2WorldAnimation.FRAME_SECONDS
 
 ## `TextScroll` shifts the whole interior up one tile row, blanks the row it
 ## leaves at the bottom and spends five frames. `_ContText` and
@@ -130,6 +130,8 @@ var _scroll_lines: Array = []
 var _scroll_rows: int = 0
 var _scroll_elapsed: float = 0.0
 var _scroll_page: int = -1
+## The clock an undriven box reveals on; see [method _process].
+var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 
 
 func _ready() -> void:
@@ -143,16 +145,23 @@ func _ready() -> void:
 ## screenshot driver, a replay. `PrintLetterDelay` is a frame count on the
 ## cartridge, so this is the same clock [method _process] converts real time into.
 func advance_frame() -> void:
-	_process(FRAME_SECONDS)
+	_advance()
 
 
+## An undriven box keeps its own clock, so GAME SPEED reaches a box nothing else
+## is spending frames for the way it reaches a driven one.
 func _process(delta: float) -> void:
+	for _frame: int in _frame_clock.tick(delta):
+		_advance()
+
+
+func _advance() -> void:
 	if _scroll_page >= 0:
-		_advance_scroll(delta)
+		advance_scroll_frames(1.0)
 		return
 	if _shown < float(_tiles_on_page):
 		var rate: float = maxf(reveal_speed, ACCELERATED_SPEED) if accelerated else reveal_speed
-		_shown = minf(_shown + delta * rate, float(_tiles_on_page))
+		_shown = minf(_shown + FRAME_SECONDS * rate, float(_tiles_on_page))
 		_redraw()
 		return
 	if _pages.is_empty():
@@ -165,7 +174,7 @@ func _process(delta: float) -> void:
 		return
 	# Waiting: only the arrow changes, and only when it crosses a half period.
 	var was_up: bool = _cursor_up()
-	_blink = fmod(_blink + delta, FRAME_SECONDS * float(CURSOR_BLINK_FRAMES) * 2.0)
+	_blink = fmod(_blink + FRAME_SECONDS, FRAME_SECONDS * float(CURSOR_BLINK_FRAMES) * 2.0)
 	if _cursor_up() != was_up:
 		_redraw()
 
@@ -343,10 +352,6 @@ func _begin_scroll(next_page: int) -> void:
 	_shown = 0.0
 	set_process(not driven)
 	_redraw()
-
-
-func _advance_scroll(delta: float) -> void:
-	advance_scroll_frames(delta / FRAME_SECONDS)
 
 
 ## [param frames] hardware frames of `TextScroll`. Counted in frames rather than

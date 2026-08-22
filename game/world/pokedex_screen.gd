@@ -82,7 +82,7 @@ var _message: String = ""
 ## `wDexArrowCursorBlinkCounter`, and the leftover of a hardware frame this
 ## screen has not counted yet.
 var _blink: int = 0
-var _elapsed: float = 0.0
+var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 
 
 ## Optional the way the trainer card is: without a world, its state or a cache
@@ -562,9 +562,7 @@ func _search_type_line() -> String:
 func _process(delta: float) -> void:
 	if _dex == null:
 		return
-	_elapsed += delta
-	while _elapsed >= Gen2WorldAnimation.FRAME_SECONDS:
-		_elapsed -= Gen2WorldAnimation.FRAME_SECONDS
+	for _frame: int in _frame_clock.tick(delta):
 		advance_frame()
 
 

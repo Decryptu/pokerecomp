@@ -23,8 +23,8 @@ var _credits: Gen2Credits = null
 var _page: Gen2CreditsPage = null
 var _view: TextureRect = null
 var _held: Array = []
-## Leftover of a hardware frame this screen has not counted yet.
-var _elapsed: float = 0.0
+## This screen's hardware-frame clock.
+var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 
 
 ## [param skippable] is `STATUSFLAGS_HALL_OF_FAME_F`. False leaves the credits
@@ -118,9 +118,7 @@ func render() -> Image:
 func _process(delta: float) -> void:
 	if _credits == null:
 		return
-	_elapsed += delta
-	while _elapsed >= Gen2WorldAnimation.FRAME_SECONDS:
-		_elapsed -= Gen2WorldAnimation.FRAME_SECONDS
+	for _frame: int in _frame_clock.tick(delta):
 		advance_frame()
 
 

@@ -17,8 +17,8 @@ const TEXT_DELAY_FAST: int = 1
 const TEXT_DELAY_MED: int = 3
 const TEXT_DELAY_SLOW: int = 5
 const TEXT_DELAY_MASK: int = 0b111
-## The delays above are frame counts, so a rate needs the frame.
-const FRAME_SECONDS: float = 1.0 / 60.0
+## The delays above are frame counts of the hardware VBlank, so a rate needs it.
+const FRAME_SECONDS: float = Gen2WorldAnimation.FRAME_SECONDS
 const TEXT_DELAYS: Array[int] = [TEXT_DELAY_FAST, TEXT_DELAY_MED, TEXT_DELAY_SLOW]
 
 ## Both of these read backwards: `options_menu.asm` `Options_BattleScene`
@@ -52,6 +52,9 @@ const BIT_FAST_TEXT_DELAY: int = 0
 const MAX_VOLUME: int = 10
 const VIDEO_MODES: Array[StringName] = [&"windowed", &"fullscreen", &"borderless"]
 const GAME_SPEEDS: Array[StringName] = [&"normal", &"double", &"half"]
+## How much hardware time one real second buys, per row of [constant
+## GAME_SPEEDS]. See [method speed_scale].
+const GAME_SPEED_SCALES: Array[float] = [1.0, 2.0, 0.5]
 const FPS_CHOICES: Array[int] = [30, 60, 120, 144, 0]
 const UI_THEMES: Array[StringName] = [&"light", &"dark"]
 ## `auto` shows the on-screen controller while the player is using the
@@ -140,6 +143,17 @@ func text_delay_frames() -> int:
 ## needs: 60, 20 or 12 characters a second. See [member Gen2TextBox.reveal_speed].
 func text_reveal_speed() -> float:
 	return 1.0 / (FRAME_SECONDS * float(text_delay_frames()))
+
+
+## Hardware frames per real second, as a multiple of the cartridge's own rate.
+##
+## Applied by [Gen2WorldAnimation.FrameClock] and nowhere else, which is what
+## keeps it off the sound driver: [Gen2AudioPlayer] fills its generator from the
+## output's own demand, so music, effects and cries run at the cartridge's tempo
+## and pitch at every setting.
+func speed_scale() -> float:
+	var row: int = GAME_SPEEDS.find(game_speed)
+	return GAME_SPEED_SCALES[row] if row >= 0 else 1.0
 
 
 ## Reads a cartridge block back. A short block is refused rather than padded,

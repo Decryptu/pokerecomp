@@ -86,7 +86,33 @@ var _loaded_mods: Array = []
 ## built would not be offered until the next map. It also means a broken mod is
 ## reported while there is still a launcher to report it in.
 func _ready() -> void:
+	apply_display_options(Gen2OptionsStore.current())
 	load_mods()
+
+
+## Puts the app block's window and frame-rate settings into the engine.
+##
+## The settings page calls this after every change, the way it calls
+## [method Gen2InputRuntime.apply_options] for the control scheme; nothing else
+## needs to. Refused on anything but a player's own launch: a headless check or a
+## `-s` tool would otherwise be capped at whatever frame rate the developer last
+## chose, and a screenshot driver would take the window with it. GAME SPEED is
+## not here: it reaches the game through [Gen2WorldAnimation.FrameClock], which
+## is what keeps it off the audio driver.
+static func apply_display_options(options: Gen2Options) -> void:
+	if options == null or not is_player_launch():
+		return
+	Engine.max_fps = maxi(options.max_fps, 0)
+	var mode: DisplayServer.WindowMode = DisplayServer.WINDOW_MODE_WINDOWED
+	var borderless: bool = false
+	match options.video_mode:
+		&"fullscreen":
+			mode = DisplayServer.WINDOW_MODE_FULLSCREEN
+		&"borderless":
+			mode = DisplayServer.WINDOW_MODE_FULLSCREEN
+			borderless = true
+	DisplayServer.window_set_mode(mode)
+	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, borderless)
 
 
 ## Discovers and runs every mod under [constant Gen2ModHost.ROOT], returning the
@@ -135,6 +161,14 @@ static func mods_are_allowed() -> bool:
 	var args: PackedStringArray = OS.get_cmdline_args()
 	if args.has("--mods") or OS.get_cmdline_user_args().has("--mods"):
 		return true
+	return is_player_launch()
+
+
+## Whether this process is a player running the game rather than a check, a test
+## tier, a screenshot driver or a replay. See [method mods_are_allowed] for what
+## rides on the distinction.
+static func is_player_launch() -> bool:
+	var args: PackedStringArray = OS.get_cmdline_args()
 	return not (
 		DisplayServer.get_name() == "headless"
 		or args.has("-s") or args.has("--script")

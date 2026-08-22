@@ -307,6 +307,7 @@ func _titles(values: Array[StringName]) -> Array[String]:
 
 
 func _persist() -> void:
+	Gen2GameRuntime.apply_display_options(_options)
 	var ok: bool = Gen2OptionsStore.save(_options)
 	_saved.text = (
 		"Saved." if ok else "The options file could not be written."

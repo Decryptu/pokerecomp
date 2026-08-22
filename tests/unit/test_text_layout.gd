@@ -100,7 +100,7 @@ func test_a_page_says_how_it_was_reached() -> void:
 	assert_eq(pages[2]["lines"], PackedStringArray(["b", "c"]))
 
 
-const FRAME: float = 1.0 / 60.0
+const FRAME: float = Gen2TextBox.FRAME_SECONDS
 
 
 func _box() -> Gen2TextBox:

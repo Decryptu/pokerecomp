@@ -9,7 +9,6 @@ extends RefCounted
 ## engine/menus/intro_menu.asm (SplashScreen, IntroSceneJumper,
 ## TitleScreenScene, Copyright).
 
-const FRAME_RATE: float = 59.7275
 const COPYRIGHT_PRELUDE_FRAMES: int = 10
 const COPYRIGHT_HOLD_FRAMES: int = 100
 

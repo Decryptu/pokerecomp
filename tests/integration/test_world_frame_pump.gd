@@ -49,7 +49,7 @@ func _open_world(seed_value: int = 4242) -> Gen2WorldScreen:
 	## tree ran above left a remainder banked, which is the state a case that
 	## counts frames has to start from zero.
 	screen.set_process(false)
-	screen._frame_elapsed = 0.0
+	screen._frame_clock.reset()
 	return screen
 
 
@@ -131,6 +131,44 @@ func test_the_same_seed_and_frame_count_reach_the_same_world_at_any_frame_rate()
 		screen.free()
 	assert_eq(snapshots[0], snapshots[1], "30 fps and 60 fps disagree")
 	assert_eq(snapshots[1], snapshots[2], "60 fps and 144 fps disagree")
+
+
+## GAME SPEED multiplies real time on its way into hardware frames, and the pump
+## is the only place it is applied, so every screen that counts frames gets it
+## and nothing that does not count them can.
+func test_game_speed_scales_real_time_into_hardware_frames() -> void:
+	_world_screen = await _open_world()
+	var options: Gen2Options = Gen2OptionsStore.current()
+	var chosen: StringName = options.game_speed
+	for speed: StringName in [&"double", &"half", &"normal"]:
+		options.game_speed = speed
+		_world_screen._frame_clock.reset()
+		var before: int = _world_screen._world.frame_number
+		# Two hardware frames of real time, which is four, one and then two.
+		_world_screen._process(FRAME * 2.0)
+		assert_eq(
+			_world_screen._world.frame_number - before,
+			int(round(2.0 * options.speed_scale())),
+			"%s" % speed,
+		)
+	options.game_speed = chosen
+
+
+## The cap is the clock's, so a stall drops frames at every speed rather than
+## handing a screen a backlog four times the size at double.
+func test_the_catch_up_cap_holds_at_every_speed() -> void:
+	_world_screen = await _open_world()
+	var options: Gen2Options = Gen2OptionsStore.current()
+	var chosen: StringName = options.game_speed
+	options.game_speed = &"double"
+	_world_screen._frame_clock.reset()
+	var before: int = _world_screen._world.frame_number
+	_world_screen._process(10.0)
+	assert_eq(
+		_world_screen._world.frame_number - before,
+		Gen2WorldAnimation.MAX_CATCHUP_FRAMES
+	)
+	options.game_speed = chosen
 
 
 ## `Gen2WorldClock` is deliberately not converted: Generation 2 keeps a

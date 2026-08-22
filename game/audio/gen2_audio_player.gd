@@ -10,11 +10,32 @@ extends Node
 ## samples the APU produced from it.
 
 ## The generator's depth, which Godot rounds up to 4,096 output frames: seven
-## driver frames, 125 ms. This is latency, not headroom, because the buffer is
-## kept as full as it will go, so a button's effect is heard that long after the
-## press. Measured worst emptiness on a desktop run is a quarter of it; halving
-## it again would leave nothing for a long frame.
+## driver frames. This is capacity, not latency: [member _target_frames] is how
+## much of it is kept filled, and the rest is headroom a long frame is caught up
+## into. See [method _service_timeline].
 const BUFFER_SECONDS: float = 0.1
+
+## Driver frames kept queued ahead of the output, and so the press-to-sound delay
+## this player adds before the platform's own: three frames is 50 ms at
+## [constant Gen2Apu.SAMPLE_RATE].
+##
+## The buffer used to be kept as full as it would go, which spent its whole
+## 125 ms depth as latency. Measured worst emptiness on a desktop run was a
+## quarter of the depth, so about two driver frames are consumed between two
+## services there; three is that with a frame to spare, and a device that cannot
+## hold it says so by running the queue dry, which raises the target rather than
+## needing a build per target and an ear.
+const TARGET_FRAMES_MIN: int = 3
+## The ceiling the target grows to, which is the whole buffer: past it there is
+## nothing left to raise.
+const TARGET_FRAMES_MAX: int = 7
+
+## Real seconds the output may take nothing from the driver before it is treated
+## as dead. See [method _watch_for_a_dead_output].
+const STALL_SECONDS: float = 0.5
+## How much of that window a resume leaves: enough for a session that really did
+## come back to prove it, and no longer.
+const RESUME_GRACE_SECONDS: float = 0.1
 
 ## Whether `Music_StereoPanning` is honoured. Follows the SOUND option, which is
 ## what `wOptions`' STEREO bit means to the driver.
@@ -42,6 +63,20 @@ var _engine: Gen2SoundEngine = null
 var _apu: Gen2Apu = null
 var _music_key: String = ""
 var _buffer: PackedVector2Array = PackedVector2Array()
+## How much of the generator is kept filled, in driver frames. Raised by an
+## underrun and never lowered inside a run: a device that stuttered once will do
+## it again, and the frame of latency is cheaper than the gap.
+var _target_frames: int = TARGET_FRAMES_MIN
+## The generator's own depth in output frames, learned from the first service
+## rather than computed, since Godot rounds the length it was asked for.
+var _capacity: int = 0
+## Real seconds the output has consumed nothing while the driver had sound for
+## it. See [constant STALL_SECONDS].
+var _starved_seconds: float = 0.0
+## Underruns and dead-output rebuilds this player has seen, for [method
+## audio_status] and for a check that has to say a device held up.
+var _underruns: int = 0
+var _restarts: int = 0
 
 
 ## The driver exists before the node enters the tree: a host that plays its map
@@ -60,9 +95,28 @@ func _ready() -> void:
 	set_process(true)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	_apply_volume()
-	_service_timeline()
+	_service_timeline(delta)
+
+
+## The audio session, on every platform that says anything about it.
+##
+## Android and iOS send the two APPLICATION notifications when a call, Siri, the
+## audio focus or a home press takes the session away, and desktop sends the two
+## FOCUS ones. Coming back is what needs handling: the driver kept running, the
+## stream player still reports `playing`, and pushing into a playback nothing
+## consumes is silence over live music until a screen change builds another one.
+## A resume does not rebuild outright, because an alt-tab is a FOCUS_IN too and
+## a live output would be cut for nothing; it shortens the watchdog's window
+## instead, so an output that is still there proves it on the next tick and one
+## that is not is replaced a tenth of a second later. Going away needs nothing:
+## `_process` stops with the main loop, and where it does not the generator fills
+## and the fill stops.
+func _notification(what: int) -> void:
+	match what:
+		NOTIFICATION_APPLICATION_RESUMED, NOTIFICATION_APPLICATION_FOCUS_IN:
+			_starved_seconds = maxf(_starved_seconds, STALL_SECONDS - RESUME_GRACE_SECONDS)
 
 
 ## The app block's two volumes, pushed to the driver's mix rather than to the
@@ -258,6 +312,11 @@ func audio_status() -> Dictionary:
 		# The bank and address of the piece the driver is on, which is the same
 		# key a second request for it is continued by. Empty when nothing is.
 		"music_key": _music_key,
+		# What the output cost: how far ahead of it the driver is kept, how often
+		# that was not enough, and how many dead sessions were rebuilt.
+		"target_frames": _target_frames,
+		"underruns": _underruns,
+		"output_restarts": _restarts,
 	}
 
 
@@ -302,10 +361,14 @@ func _start_stream() -> void:
 		_playback = _player.get_stream_playback() as AudioStreamGeneratorPlayback
 
 
-## Fills the generator a source frame at a time. Audio time is the driver's
-## clock, not the renderer's: a long game frame is caught up here rather than
-## slowing the music down.
-func _service_timeline() -> void:
+## Fills the generator up to [member _target_frames] ahead of the output.
+##
+## Audio time is the driver's clock, not the renderer's: a long game frame is
+## caught up here rather than slowing the music down, and GAME SPEED never
+## reaches it, because [param delta] is only ever the dead-output watchdog's.
+## Filling to a target rather than to the brim is what makes the rest of the
+## depth headroom instead of latency.
+func _service_timeline(delta: float = 0.0) -> void:
 	if _player == null:
 		return
 	if not _player.playing:
@@ -314,6 +377,7 @@ func _service_timeline() -> void:
 		# asked for the same piece again used to leave behind. The output
 		# follows the driver rather than the other way round.
 		if not _engine.any_channel_active():
+			_starved_seconds = 0.0
 			return
 		_start_stream()
 		if not _player.playing:
@@ -322,8 +386,67 @@ func _service_timeline() -> void:
 		_playback = _player.get_stream_playback() as AudioStreamGeneratorPlayback
 		if _playback == null:
 			return
-	while _playback.get_frames_available() >= Gen2Apu.SAMPLES_PER_FRAME:
+	var available: int = _playback.get_frames_available()
+	# The depth Godot actually gave, which is the length it was asked for rounded
+	# up to a power of two. Read rather than computed, and highest wins: the
+	# buffer is only this empty before the first fill.
+	var known: int = _capacity
+	_capacity = maxi(_capacity, available)
+	# A buffer that drained to empty was heard as a gap, so the target rises and
+	# the device tunes itself rather than needing a build and an ear per target.
+	# Only once a depth is known: a fresh stream is legitimately empty, and a
+	# rebuilt output has to learn the new device's depth before it can be short.
+	if known > 0 and available >= known and _timeline_updates > 0:
+		_underruns += 1
+		_target_frames = mini(_target_frames + 1, TARGET_FRAMES_MAX)
+	var target: int = mini(_target_frames * Gen2Apu.SAMPLES_PER_FRAME, _capacity)
+	var pushed: int = 0
+	while available >= Gen2Apu.SAMPLES_PER_FRAME and _capacity - available < target:
 		_timeline_updates += 1
 		_engine.update_sound()
 		_apu.render_frame(_buffer)
 		_playback.push_buffer(_buffer)
+		available = _playback.get_frames_available()
+		pushed += 1
+	_watch_for_a_dead_output(delta, pushed)
+
+
+## Rebuilds an output that has taken nothing from the driver for
+## [constant STALL_SECONDS] while the driver had sound for it.
+##
+## The platforms that announce an interruption are handled in
+## [method _notification]; this is the ones that do not, and it is also what
+## makes that handler cheap, since a resume only has to shorten this window
+## rather than rebuild a live output. `AudioStreamPlayer` reports `playing` over
+## a dead device, so what the queue does is the only honest evidence: a live one
+## consumes 59.7 driver frames a second and so takes a fill within a few ticks,
+## whatever the host's frame rate.
+func _watch_for_a_dead_output(delta: float, pushed: int) -> void:
+	if pushed > 0 or not _engine.any_channel_active():
+		_starved_seconds = 0.0
+		return
+	_starved_seconds += delta
+	if _starved_seconds >= STALL_SECONDS:
+		_restart_output()
+
+
+## Drops the stream player and builds another, which is the only way back from a
+## session that went away: the playback the audio server held belongs to the
+## device that is gone. The driver is untouched, so the piece the game is on
+## carries on from where it stands rather than restarting.
+func _restart_output() -> void:
+	_starved_seconds = 0.0
+	if _player == null:
+		return
+	_restarts += 1
+	_player.stop()
+	_player.stream = null
+	# Off the tree before it is freed, so the replacement can take its name back
+	# on this frame rather than being renamed against a child queued for deletion.
+	remove_child(_player)
+	_player.queue_free()
+	_player = null
+	_generator = null
+	_playback = null
+	_capacity = 0
+	_start_stream()

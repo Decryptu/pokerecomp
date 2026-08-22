@@ -220,9 +220,8 @@ var _object_random := RandomNumberGenerator.new()
 ## The Day-Care's rolls, from a stream of their own for the same reason.
 var _breed_random := RandomNumberGenerator.new()
 var _selected_rod: StringName = Gen2WorldEncounter.METHOD_OLD_ROD
-## Real time banked toward the next hardware frame. The overworld's one clock:
-## see [method _process].
-var _frame_elapsed: float = 0.0
+## The overworld's hardware-frame clock: see [method _process].
+var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 ## `(frame, button)` input, recorded from a run and played back into another.
 ## Both are opt-in and off in play. A replay applies a log's entries on the frame
 ## that recorded them, from inside the pump, so a host that owes two frames
@@ -634,16 +633,12 @@ func cycle_view() -> Dictionary:
 
 
 ## Real time becomes hardware frames here and nowhere else in the overworld.
-## Everything that counts frames is spent by [method advance_frame]; the day
-## cycle underneath it is the one deliberate reader of `delta`, because Gen II
-## keeps a real-time clock and a wall-clock reading is what the day cycle wants.
+## Everything that counts frames is spent by [method advance_frame], so GAME
+## SPEED reaches all of it through the clock; the day cycle underneath is the one
+## deliberate reader of `delta`, because Gen II keeps a real-time clock and a
+## wall-clock reading is what the day cycle wants at any speed.
 func _process(delta: float) -> void:
-	_frame_elapsed = minf(
-		_frame_elapsed + delta,
-		Gen2WorldAnimation.FRAME_SECONDS * float(Gen2WorldAnimation.MAX_CATCHUP_FRAMES),
-	)
-	while _frame_elapsed >= Gen2WorldAnimation.FRAME_SECONDS:
-		_frame_elapsed -= Gen2WorldAnimation.FRAME_SECONDS
+	for _frame: int in _frame_clock.tick(delta):
 		advance_frame()
 	_advance_day_cycle(delta)
 	## Every drawn frame rather than every hardware frame: above sixty a drawn

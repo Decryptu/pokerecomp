@@ -63,7 +63,7 @@ var _audio: Gen2AudioPlayer = null
 var _audio_started: bool = false
 var _cry_played: bool = false
 var _presentation := Gen2IntroPresentation.new()
-var _accumulator: float = 0.0
+var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 ## What to run when the queue empties, which is where the routine resumes.
 var _after: Callable = Callable()
 
@@ -123,10 +123,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if _text_box != null:
 		_text_box.accelerated = Gen2Button.text_accelerating()
-	_accumulator += delta * Gen2IntroPresentation.FRAME_RATE
-	var frames: int = int(_accumulator)
-	_accumulator -= float(frames)
-	advance_frames(frames)
+	advance_frames(_frame_clock.tick(delta))
 
 
 ## Runs [param count] source frames of whatever the screen is standing in.
@@ -242,7 +239,7 @@ func _after_first_fade() -> void:
 func _queue(after: Callable) -> void:
 	_after = after
 	_phase = Phase.ANIMATING
-	_accumulator = 0.0
+	_frame_clock.reset()
 	_apply_frame()
 
 
