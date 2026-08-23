@@ -239,9 +239,15 @@ static func number(
 	return box
 
 
+## [param format] spells the readout, for a row the cartridge shows as something
+## other than the byte it stores: OPTION's own frame row is `UpdateFrame`'s
+## `add '1'`, so a stored 0 reads TYPE 1. Omitted, the readout is the number.
 static func slider(
-	theme: Gen2LauncherTheme, value: int, minimum: int, maximum: int, handler: Callable
+	theme: Gen2LauncherTheme, value: int, minimum: int, maximum: int, handler: Callable,
+	format: Callable = Callable()
 ) -> Control:
+	var spell: Callable = format if format.is_valid() \
+		else func(number: int) -> String: return str(number)
 	var line: HBoxContainer = row(GAP_MD)
 	var bar := HSlider.new()
 	bar.min_value = minimum
@@ -250,11 +256,11 @@ static func slider(
 	bar.value = value
 	bar.custom_minimum_size = Vector2(170, 22)
 	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var readout: Label = muted(theme, str(value))
-	readout.custom_minimum_size = Vector2(30, 0)
+	var readout: Label = muted(theme, spell.call(value))
+	readout.custom_minimum_size = Vector2(52, 0)
 	readout.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	bar.value_changed.connect(func(changed: float) -> void:
-		readout.text = str(int(changed))
+		readout.text = spell.call(int(changed))
 		handler.call(int(changed))
 	)
 	line.add_child(bar)
