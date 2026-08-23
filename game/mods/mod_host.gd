@@ -45,8 +45,9 @@ const RENDERER_SURFACE_METHOD: String = "uses_hardware_viewport"
 const RENDERER_RESIZE_METHOD: String = "set_native_size"
 ## Optional, world renderers only. Called with the screen's [Gen2WorldEffects]
 ## when the renderer is built. It holds the sprites the engine draws over the
-## map rather than as objects, all of them presentation with no world state
-## behind them, so a renderer that draws its own effects can ignore it.
+## map rather than as objects, and `offset()`, the earthquake's own scroll, which
+## is the background's and moves no sprite. All of it is presentation with no
+## world state behind it, so a renderer that draws its own effects can ignore it.
 const RENDERER_EFFECTS_METHOD: String = "set_effects"
 ## Optional, world renderers only. Called with the screen's [Gen2WorldActors]
 ## when the renderer is built. It holds the sprites registered mods put in the

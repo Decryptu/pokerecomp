@@ -2180,7 +2180,15 @@ func test_player_walk_step_starts_a_cell_behind_and_never_moves_the_committed_ce
 	assert_eq(world.player_pixel_position(), Gen2WorldAPI.PLAYER_VIEW_CELL * 16)
 
 
-func test_the_camera_origin_follows_the_player_one_pass_behind() -> void:
+## `_UpdateSprites` and `ScrollScreen` are one after the other at the end of
+## `HandleMapBackground`, so a pass's shadow OAM and its scroll are latched by
+## the same VBlank: the drawn player never leaves PLAYER_VIEW_CELL and the camera
+## moves the whole step, every pass of it, by the same two pixels. Measured on a
+## real cartridge as OAM slot 0 against rSCX, which is what the PPU read; the
+## `sprite_x - scx` of 62 the WRAM fields report is one pass of lead
+## `HandleMapObjects` writes before `NextOverworldFrame` spends its two frames
+## and nothing draws from.
+func test_the_camera_and_the_drawn_player_move_on_the_same_pass() -> void:
 	var world: Gen2WorldAPI = _world()
 	# Standing still, the hardware page origin and the camera agree.
 	assert_eq(world.player_position_cells(), Vector2(8.0, 6.0))
@@ -2194,22 +2202,26 @@ func test_the_camera_origin_follows_the_player_one_pass_behind() -> void:
 	assert_eq(world.player_position_cells(), Vector2(8.0, 6.0))
 	assert_eq(world.visible_origin_cells(), Vector2(4.0, 2.0))
 
-	# `ScrollScreen` runs after `NextOverworldFrame`, so the scroll a pass
-	# computed is written two frames after the sprite moved: the camera stands
-	# still on the pass the walk starts and the player is drawn two pixels ahead
-	# of it, which is `sprite_x - scx` of 62 on the cartridge.
-	assert_true(world.advance_player_step_pass())
-	assert_eq(world.player_position_cells(), Vector2(7.875, 6.0))
-	assert_eq(world.visible_origin_cells(), Vector2(4.0, 2.0))
-	assert_eq(world.player_pixel_position(), Vector2i(62, 64))
+	var last: Vector2 = world.view_origin_pixels()
+	for pass_index: int in Gen2WorldAPI.STEP_PASSES_WALK:
+		assert_true(world.advance_player_step_pass())
+		assert_eq(
+			world.player_pixel_position(), Gen2WorldAPI.PLAYER_VIEW_CELL * 16,
+			"pass %d draws the player where he rests" % pass_index,
+		)
+		assert_eq(
+			world.view_origin_pixels(), last + Vector2(-2.0, 0.0),
+			"pass %d scrolls the camera by the step vector" % pass_index,
+		)
+		last = world.view_origin_pixels()
 
-	# The step lands on the committed cell with the camera still one pass behind,
-	# and the pass after it, which moves nothing, is where the two agree again.
-	_finish_player_step(world)
+	# The step ends on the committed cell with nothing left for a later pass to
+	# catch up on: the pass after it moves the camera no further.
 	assert_false(world.player_step_in_progress())
 	assert_eq(world.player_position_cells(), Vector2(7.0, 6.0))
-	assert_eq(world.visible_origin_cells(), Vector2(3.125, 2.0))
+	assert_eq(world.visible_origin_cells(), Vector2(3.0, 2.0))
 	assert_false(world.advance_player_step_pass())
+	assert_eq(world.view_origin_pixels(), last)
 	assert_eq(world.visible_origin_cells(), Vector2(world.visible_screen_origin_cell()))
 	assert_eq(world.player_pixel_position(), Gen2WorldAPI.PLAYER_VIEW_CELL * 16)
 
@@ -7715,6 +7727,18 @@ func test_a_wider_view_keeps_the_player_where_the_hardware_put_him() -> void:
 	assert_eq(
 		world.player_view_pixel(), world.player_pixel_position() + Vector2i(160, 32),
 		"and the sprite is drawn there",
+	)
+	# An odd surround has one whole-pixel answer, not a floor on one side and a
+	# ceiling on the other: the map quads and the player are placed from it.
+	world.view_pixels = Gen2WorldAPI.VIEW_PIXELS + Vector2i(321, 65)
+	assert_eq(world.view_surround_offset(), Vector2i(160, 32))
+	assert_eq(world.view_origin_pixels(), framed - Vector2(160, 32))
+	assert_eq(world.player_view_pixel(), world.player_pixel_position() + Vector2i(160, 32))
+	assert_eq(
+		Vector2(world.player_view_pixel()),
+		Vector2(world.player_cell) * float(Gen2WorldAPI.CELL_PIXELS)
+			- world.view_origin_pixels(),
+		"the player stands where an object on his own cell would be drawn",
 	)
 
 

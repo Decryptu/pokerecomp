@@ -10,10 +10,13 @@ extends SceneTree
 ## same artefact off a real cartridge. The line is
 ## `frame cam_x cam_y x y screen_x screen_y facing walk_frame`, where `cam_x`
 ## and `cam_y` are hSCX/hSCY in map pixels rather than modulo the BG map and
-## `screen_x`/`screen_y` are `sprite_x - scx` on that side: the camera lags the
-## player by one pass (`ScrollScreen` runs after `NextOverworldFrame`), so a
-## walking player is drawn two pixels ahead of its resting cell and the pair is
-## what says so.
+## `screen_x`/`screen_y` are the player's own drawn pixel.
+##
+## Diff `screen_x` against the cartridge's OAM slot 0 minus rSCX, not against its
+## `wPlayerSpriteX - hSCX`: `HandleMapObjects` writes the object field before
+## `NextOverworldFrame` spends its two frames and `_UpdateSprites` does not copy
+## it into shadow OAM until after them, so that pair reads two pixels of lead the
+## screen never shows.
 ##
 ## Ten standing frames come first, the way the cartridge trace opens, so a diff
 ## aligns on the frame the direction starts being held rather than on the file.

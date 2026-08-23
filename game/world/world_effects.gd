@@ -320,15 +320,19 @@ func sprites_active() -> bool:
 	return not _sprites.is_empty()
 
 
+## `StepFunction_ScreenShake.Run` reaches hSCY and nothing else: the whole shake
+## is one vertical scroll offset whose sign `.GetSign` flips on what is left of
+## the duration, and the pass that runs it out deletes the object with the offset
+## undone. In hardware pixels, and the background's alone, since a scroll moves
+## no sprite.
 func offset() -> Vector2:
 	if not active():
 		return Vector2.ZERO
-	var magnitude: float = float(_amplitude)
-	match _frame & 3:
-		0: return Vector2(-magnitude, 0.0)
-		1: return Vector2(magnitude, 0.0)
-		2: return Vector2(0.0, -magnitude)
-		_: return Vector2(0.0, magnitude)
+	## `dec [hl]` before the sign, so the first pass already reads one less.
+	var remaining: int = _duration - 1 - _frame
+	if remaining <= 0:
+		return Vector2.ZERO
+	return Vector2(0.0, float(_amplitude if remaining % 2 == 0 else -_amplitude))
 
 
 ## What a renderer draws this frame: one record per live sprite, each carrying

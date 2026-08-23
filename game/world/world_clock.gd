@@ -26,10 +26,19 @@ const MORN_START: int = 4
 const DAY_START: int = 10
 const NITE_START: int = 18
 
+## `--clock=HH:MM`, and `--clock=HH:MM:D` to name the day of the week as well.
+## The prefix, so the switch is written once.
+const PIN_ARGUMENT: String = "--clock="
+
 var day: int = 0
 var hour: int = 0
 var minute: int = 0
+## Whether this clock is held where it was opened. See [method pin].
+var pinned: bool = false
 var _elapsed_seconds: float = 0.0
+
+static var _pin: Dictionary = {}
+static var _pin_read: bool = false
 
 
 func _init(start_hour: int = 0, start_minute: int = 0, start_day: int = 0) -> void:
@@ -48,8 +57,46 @@ func time_of_day() -> int:
 	return Gen2WorldPalette.TIME_NIGHT
 
 
+## `--clock=HH:MM` on the command line: the time every world opened this run
+## starts at and is held at, over the export defaults and over a save's own.
+##
+## An hour reaches the screen through the palettes and the light, and a renderer
+## reads world state and must not write it, so a shot tool or a mod's own
+## instrument cannot otherwise photograph what it draws at any hour but the one
+## the run happens to be in. Empty unless the switch was passed, and read once:
+## a run's clock cannot change under it.
+static func pin() -> Dictionary:
+	if not _pin_read:
+		_pin_read = true
+		_pin = parse_pin(OS.get_cmdline_args() + OS.get_cmdline_user_args())
+	return _pin
+
+
+## The pin [param args] names, empty if none of them is one. Public so a test
+## reaches the parsing without a command line.
+static func parse_pin(args: PackedStringArray) -> Dictionary:
+	for argument: String in args:
+		if not argument.begins_with(PIN_ARGUMENT):
+			continue
+		var parts: PackedStringArray = argument.trim_prefix(PIN_ARGUMENT).split(":")
+		if parts.size() < 2 or not parts[0].is_valid_int() or not parts[1].is_valid_int():
+			push_warning("%s wants HH:MM, or HH:MM:D for the day: %s" % [
+				PIN_ARGUMENT, argument
+			])
+			continue
+		var named_day: int = 0
+		if parts.size() > 2 and parts[2].is_valid_int():
+			named_day = int(parts[2])
+		return {
+			"hour": posmod(int(parts[0]), HOURS_PER_DAY),
+			"minute": posmod(int(parts[1]), MINUTES_PER_HOUR),
+			"day": posmod(named_day, DAYS_PER_WEEK),
+		}
+	return {}
+
+
 func advance(seconds: float, world: Gen2WorldAPI = null) -> Array:
-	if seconds <= 0.0:
+	if seconds <= 0.0 or pinned:
 		return []
 	_elapsed_seconds += seconds
 	var ticks: Array = []

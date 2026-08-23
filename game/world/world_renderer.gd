@@ -543,6 +543,14 @@ func refresh() -> void:
 	queue_redraw()
 
 
+## The scroll the map is drawn at. `StepFunction_ScreenShake` reaches hSCY and
+## nothing else, so an earthquake moves the background under the sprites standing
+## on it rather than moving the picture.
+func _background_camera() -> Vector2:
+	var camera: Vector2 = _world.view_origin_pixels()
+	return camera if _effects == null else camera + _effects.offset()
+
+
 ## Lays the map quads out under this frame's camera.
 ##
 ## The order is the order the cartridge's own buffer would be read in if it had
@@ -558,7 +566,7 @@ func _sync_map_layers() -> void:
 		return
 	var map: Gen2WorldMap = _world.current_map
 	var tileset: Gen2WorldTileset = _world.current_tileset
-	var camera: Vector2 = _world.view_origin_pixels().floor()
+	var camera: Vector2 = _background_camera()
 	var view := Vector2(view_pixels())
 	var block_pixels: int = RomLayout.MAP_BLOCK_CELL_WIDTH * Gen2WorldAPI.CELL_PIXELS
 	var used: int = 0
@@ -595,7 +603,7 @@ func _sync_map_layers() -> void:
 				Vector2i(near.width_blocks, near.height_blocks), near.border_block,
 				near_tileset.block_count, near_tileset.tile_count, false,
 			)
-			layer.place(at.floor(), size)
+			layer.place(at, size)
 
 	var buffer: ImageTexture = _map_buffer_texture()
 	if buffer != null:
@@ -610,7 +618,7 @@ func _sync_map_layers() -> void:
 			tileset.block_count, tileset.tile_count, false,
 		)
 		layer.place(
-			(Vector2.ONE * float(-Gen2WorldAPI.BUFFER_BLOCKS * block_pixels) - camera).floor(),
+			Vector2.ONE * float(-Gen2WorldAPI.BUFFER_BLOCKS * block_pixels) - camera,
 			Vector2(span) * float(block_pixels),
 		)
 	_show_map_layers(used)
@@ -719,11 +727,12 @@ func _draw() -> void:
 		return
 
 	var camera_pixels: Vector2 = _world.view_origin_pixels()
+	var background: Vector2 = _background_camera()
 	## `Cut_Headbutt_GetPixelFacing`'s tree goes away while its own sprite
 	## animation plays, which the map quad knows nothing about: the four tiles of
 	## the cell are painted over with the tileset's own blank one.
 	for cell: Vector2i in (_effects.hidden_tree_cells() if _effects != null else []):
-		var at: Vector2 = Vector2(cell * Gen2WorldAPI.CELL_PIXELS) - camera_pixels
+		var at: Vector2 = Vector2(cell * Gen2WorldAPI.CELL_PIXELS) - background
 		for row: int in RomLayout.MAP_BLOCK_CELL_WIDTH:
 			for column: int in RomLayout.MAP_BLOCK_CELL_WIDTH:
 				draw_texture_rect_region(
@@ -740,7 +749,7 @@ func _draw() -> void:
 					),
 				)
 	if not _transition_cells.is_empty():
-		_draw_transition(camera_pixels)
+		_draw_transition(background)
 	if _transition_sprites == Gen2BattleTransition.SPRITES_NONE:
 		return
 
@@ -800,7 +809,7 @@ func _draw() -> void:
 		if offset != Vector2i.ZERO:
 			continue
 		if _in_grass(object.cell):
-			_draw_grass_over(pixel, camera_pixels)
+			_draw_grass_over(pixel, background)
 		if object.emote_visible:
 			_draw_emote(object.emote_id, pixel)
 		if not battlers_only:
@@ -817,7 +826,7 @@ func _draw() -> void:
 	if player_texture != null:
 		draw_texture(player_texture, player + jump)
 		if _in_grass(_world.player_cell):
-			_draw_grass_over(player + jump, camera_pixels)
+			_draw_grass_over(player + jump, background)
 		if _world.fishing_busy():
 			_draw_fishing_rod(player + jump)
 	else:
@@ -913,7 +922,7 @@ func _draw_actor(sprite: Dictionary, camera_pixels: Vector2) -> void:
 		return
 	draw_texture(texture, pixel)
 	if _in_grass(Vector2i(roundi(cell_position.x), roundi(cell_position.y))):
-		_draw_grass_over(pixel, camera_pixels)
+		_draw_grass_over(pixel, _background_camera())
 	## The same bubble a map object's `showemote` puts up, over an actor that
 	## asked for one. Drawn after the grass, as an object's is: `SpawnEmote` is
 	## its own OAM and stands over the tuft rather than behind it.
@@ -967,7 +976,7 @@ func _in_grass(cell: Vector2i) -> bool:
 
 ## Redraws the map over the bottom half of a sprite drawn at [param pixel], with
 ## the transparent index left out, which is what OAM_PRIO amounts to here.
-func _draw_grass_over(pixel: Vector2, camera_pixels: Vector2) -> void:
+func _draw_grass_over(pixel: Vector2, background: Vector2) -> void:
 	if _priority_atlas == null:
 		_build_priority_atlas()
 	if _priority_atlas == null:
@@ -980,17 +989,17 @@ func _draw_grass_over(pixel: Vector2, camera_pixels: Vector2) -> void:
 	## two. Walking the whole page for it cost the view's every tile once per
 	## sprite standing in grass, which a window-filling view cannot afford.
 	var first := Vector2i(
-		floori((over.position.x + camera_pixels.x) / float(Gen2Tiles.TILE_WIDTH)),
-		floori((over.position.y + camera_pixels.y) / float(Gen2Tiles.TILE_HEIGHT)),
+		floori((over.position.x + background.x) / float(Gen2Tiles.TILE_WIDTH)),
+		floori((over.position.y + background.y) / float(Gen2Tiles.TILE_HEIGHT)),
 	)
 	var last := Vector2i(
-		ceili((over.end.x + camera_pixels.x) / float(Gen2Tiles.TILE_WIDTH)),
-		ceili((over.end.y + camera_pixels.y) / float(Gen2Tiles.TILE_HEIGHT)),
+		ceili((over.end.x + background.x) / float(Gen2Tiles.TILE_WIDTH)),
+		ceili((over.end.y + background.y) / float(Gen2Tiles.TILE_HEIGHT)),
 	)
 	for y: int in range(first.y, last.y + 1):
 		for x: int in range(first.x, last.x + 1):
 			var at := Rect2(
-				Vector2(x * Gen2Tiles.TILE_WIDTH, y * Gen2Tiles.TILE_HEIGHT) - camera_pixels,
+				Vector2(x * Gen2Tiles.TILE_WIDTH, y * Gen2Tiles.TILE_HEIGHT) - background,
 				Vector2(Gen2Tiles.TILE_WIDTH, Gen2Tiles.TILE_HEIGHT),
 			)
 			var covered: Rect2 = at.intersection(over)
@@ -1012,7 +1021,7 @@ func _draw_grass_over(pixel: Vector2, camera_pixels: Vector2) -> void:
 	## wins the priority test where it wrote is its own tile rather than the
 	## grass. The pieces above left those cells to it.
 	if not _transition_cells.is_empty():
-		_draw_transition(camera_pixels, over, true)
+		_draw_transition(background, over, true)
 
 
 ## The graphics tile drawn at a map-space tile coordinate, through the same
