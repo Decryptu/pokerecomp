@@ -580,7 +580,7 @@ func _process(_delta: float) -> bool:
 			&"warp", &"door", &"map_name_sign", &"ledge", &"heal_machine",
 			&"battle", &"battle_transition", &"level_evolution", &"egg_hatch",
 			&"name_rater", &"move_deleter", &"move_tutor", &"day_care",
-			&"ice_slide", &"whiteout",
+			&"ice_slide", &"whiteout", &"view_cover",
 		]:
 			## Those kinds drove themselves to the frame they want; every other
 			## kind stages a sprite and then spends the frames it needs.
@@ -610,10 +610,17 @@ func _process(_delta: float) -> bool:
 ## the autoloads are in the tree, so nothing is registered while the screen is
 ## being built and the choice has to wait for the first frame.
 func _choose_view() -> void:
+	## Remembered whether or not this run chooses one: the `view_cover` driver
+	## switches views itself, and the choice is persisted wherever it is made.
+	_restore_view = Gen2ModHost.instance().selected_view()
 	if _view.is_empty():
 		return
-	_restore_view = Gen2ModHost.instance().selected_view()
 	var chosen: Dictionary = _screen.select_view(_view)
+	## A live switch is covered by a wipe whose middle is the build; a
+	## photograph wants the picture behind it rather than the wipe, unless the
+	## wipe is what is being photographed.
+	if _kind != &"view_cover":
+		_screen.settle_view_cover()
 	if not bool(chosen.get("ok", false)):
 		push_error("View %s unavailable: %s. Did you pass --mods?" % [
 			_view, chosen.get("reason", "unknown")
@@ -623,7 +630,7 @@ func _choose_view() -> void:
 ## A view is chosen per installation and persisted, so a capture that chose one
 ## puts the player's own back rather than leaving them on a mod's renderer.
 func _restore_selected_view() -> void:
-	if _view.is_empty() or _restore_view.is_empty():
+	if _restore_view.is_empty():
 		return
 	Gen2ModHost.instance().select_view(_restore_view)
 

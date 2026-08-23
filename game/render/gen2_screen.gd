@@ -103,6 +103,18 @@ var _draw_scale: float = 1.0
 var _interface: Control = null
 ## Drawn between the content and the interface: see [member interface_masked].
 var _mask: Control = null
+## The cover a view switch is hidden behind, above both layers rather than
+## inside either: see [method play_view_cover].
+var _cover: Control = null
+var _cover_cells: PackedByteArray = PackedByteArray()
+## Each frame of the close, kept so the open is the same picture backwards.
+var _cover_frames: Array[PackedByteArray] = []
+var _cover_index: int = 0
+var _cover_opening: bool = false
+## What the black middle runs. Cleared as it is called, so a cover interrupted
+## after that point cannot run it twice.
+var _cover_rebuild: Callable = Callable()
+var _cover_clock := Gen2WorldAnimation.FrameClock.new()
 
 
 func _ready() -> void:
@@ -124,6 +136,17 @@ func _ready() -> void:
 	# does, so the rectangle it was clipped against does it instead.
 	_interface.clip_contents = true
 	_viewport.add_child(_interface)
+	## Outside the viewport, because it covers a native renderer as well: the
+	## viewport is composited over the native layer and a cover inside it would
+	## leave a 3D view showing through.
+	_cover = Control.new()
+	_cover.name = "Cover"
+	_cover.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_cover.visible = false
+	_cover.draw.connect(_draw_cover)
+	add_child(_cover)
+	set_process(false)
 	_fit()
 
 
@@ -254,6 +277,148 @@ func viewport() -> SubViewport:
 ## interface sits, which is above whatever [method display_content] drew.
 func interface_layer() -> Control:
 	return _interface
+
+
+## Hides a view switch behind the cartridge's own way of going black.
+##
+## Building a renderer is a stall: a 3D view meshes a whole map on the frame it
+## is turned on, and nothing on one thread can animate over its own freeze. Only
+## the middle is frozen, though, and the middle is a still picture, so the close
+## is spent on the renderer that is still running, [param rebuild] is called on
+## the frame the screen is fully black, and the open is spent on the one it
+## built. The player sees a wipe with a long middle instead of a jump.
+##
+## `StartTrainerBattle_SpeckleToBlack` is the pattern
+## ([method Gen2BattleTransition.create_outro]), so the switch reads as the
+## game's own and costs no art. The open is the close's frames backwards, which
+## is the same picture rather than a second animation.
+##
+## This is around the switch rather than at one caller: every way of choosing a
+## view reaches [signal Gen2ModHost.view_changed], and every screen listening to
+## it comes through here. A screen that cannot animate -- a headless check, a
+## screenshot driver, a screen not in the tree -- rebuilds at once, because a
+## cover measured by nobody is only a delay.
+func play_view_cover(rebuild: Callable) -> void:
+	if not _can_animate_cover():
+		if rebuild.is_valid():
+			rebuild.call()
+		return
+	## A second switch before the first has finished: the first one's rebuild is
+	## owed either way, and a cover restarted from black has nothing to hide.
+	_run_cover_rebuild()
+	_cover_rebuild = rebuild
+	_cover_frames = _cover_close_frames()
+	_cover_index = 0
+	_cover_opening = false
+	_cover_clock.reset()
+	_cover_cells = _cover_frames[0]
+	_cover.visible = true
+	_cover.queue_redraw()
+	set_process(true)
+
+
+## Whether a view switch is still being covered.
+func view_cover_active() -> bool:
+	return _cover != null and _cover.visible
+
+
+## Spends the whole cover now, for a caller that wants the switch done rather
+## than shown: a tool taking a photograph, or a test.
+func settle_view_cover() -> void:
+	_run_cover_rebuild()
+	_cover_frames = []
+	_cover_cells = PackedByteArray()
+	_cover_index = 0
+	_cover_opening = false
+	if _cover != null:
+		_cover.visible = false
+	set_process(false)
+
+
+## Spends [param frames] hardware frames of a running cover, for a tool
+## photographing the wipe itself rather than what it uncovers. The clock stops
+## with it: a driver that steps the cover by hand owns its pace, or the frames
+## it spends taking the picture would finish the wipe underneath it.
+func step_view_cover(frames: int) -> void:
+	set_process(false)
+	for _frame: int in frames:
+		if not view_cover_active():
+			return
+		_advance_cover()
+
+
+func _process(delta: float) -> void:
+	if not view_cover_active():
+		set_process(false)
+		return
+	for _frame: int in _cover_clock.tick(delta):
+		_advance_cover()
+		if not view_cover_active():
+			return
+
+
+## One hardware frame of the cover: down the close, the rebuild on the black
+## frame, then back up the same frames.
+func _advance_cover() -> void:
+	if not _cover_opening:
+		_cover_index += 1
+		if _cover_index >= _cover_frames.size():
+			_run_cover_rebuild()
+			_cover_opening = true
+			_cover_index = _cover_frames.size() - 1
+	else:
+		_cover_index -= 1
+		if _cover_index < 0:
+			settle_view_cover()
+			return
+	_cover_cells = _cover_frames[_cover_index]
+	_cover.queue_redraw()
+
+
+func _run_cover_rebuild() -> void:
+	if not _cover_rebuild.is_valid():
+		return
+	var rebuild: Callable = _cover_rebuild
+	_cover_rebuild = Callable()
+	rebuild.call()
+
+
+## The close, frame by frame, ending on the screen fully black.
+func _cover_close_frames() -> Array[PackedByteArray]:
+	var out: Array[PackedByteArray] = []
+	var outro: Gen2BattleTransition = Gen2BattleTransition.create_outro()
+	out.append(outro.cells().duplicate())
+	while outro.advance_frame():
+		out.append(outro.cells().duplicate())
+	return out
+
+
+func _can_animate_cover() -> bool:
+	return is_inside_tree() and not Engine.is_editor_hint() 		and DisplayServer.get_name() != "headless"
+
+
+## The transition's twenty by eighteen cells over the whole control, letterbox
+## included: what it covers is the switch, not the hardware screen, and a
+## renderer drawing at window resolution has no 160x144 rectangle to stop at.
+func _draw_cover() -> void:
+	if _cover_cells.is_empty():
+		return
+	var cell := Vector2(
+		size.x / float(Gen2BattleTransition.COLUMNS),
+		size.y / float(Gen2BattleTransition.ROWS),
+	)
+	for row: int in Gen2BattleTransition.ROWS:
+		for column: int in Gen2BattleTransition.COLUMNS:
+			if _cover_cells[row * Gen2BattleTransition.COLUMNS + column] 				== Gen2BattleTransition.CELL_NONE:
+				continue
+			_cover.draw_rect(
+				Rect2(
+					Vector2(float(column) * cell.x, float(row) * cell.y),
+					## Rounded up, so two cells meet rather than leave a seam.
+					Vector2(ceilf(cell.x), ceilf(cell.y))
+				),
+				Color.BLACK, true
+			)
 
 
 ## The letterbox, drawn rather than left empty: four rectangles around the

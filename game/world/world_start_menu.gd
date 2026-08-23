@@ -98,7 +98,11 @@ static func build(
 		if not String(gate).is_empty() and not bool(passes.get(gate, false)):
 			continue
 		if entry["kind"] == ITEM_EXIT:
-			if not Gen2ModHost.instance().option_mod_ids().is_empty():
+			## The entry carries the host's own VIEW row as well as the mods'
+			## settings, so a player with a view to switch to reaches it with no
+			## mod having registered anything.
+			if not Gen2ModHost.instance().option_mod_ids().is_empty() \
+				or Gen2ModHost.instance().view_ids().size() > 1:
 				rows.append(_entry(ITEM_MODS, "MODS", true))
 			rows.append_array(Gen2ModHost.instance().menu_entries(Gen2ModHost.MENU_START))
 		var label: String = String(entry["label"])

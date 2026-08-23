@@ -1581,6 +1581,24 @@ func test_a_view_no_mod_registered_is_refused_and_leaves_the_choice_alone() -> v
 	assert_eq(host.selected_view(), Gen2ModHost.BUILT_IN_RENDERER)
 
 
+## R36b: `select_view` sets host state and nothing else, so the launcher, the
+## start menu's VIEW row and the key that cycles views all needed a rebuild of
+## their own. One signal is what makes them one path, and a choice that did not
+## change anything is not a switch to hide or rebuild for.
+func test_choosing_a_view_announces_the_change_once() -> void:
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	host.register_world_renderer(&"voxel3d", _world_renderer_script(), "Voxel")
+	var seen: Array[StringName] = []
+	host.view_changed.connect(func(id: StringName) -> void: seen.append(id))
+
+	assert_true(host.select_view(&"voxel3d")["ok"])
+	assert_true(host.select_view(&"voxel3d")["ok"])
+	assert_false(host.select_view(&"nothing_registered_this")["ok"])
+	assert_true(host.select_view(Gen2ModHost.BUILT_IN_RENDERER)["ok"])
+
+	assert_eq(seen, [&"voxel3d", Gen2ModHost.BUILT_IN_RENDERER] as Array[StringName])
+
+
 ## One entry per view rather than one per surface, built-in first so a player
 ## cycling from it reaches the mods in the order they loaded.
 func test_the_view_list_names_each_id_once_with_the_built_in_first() -> void:

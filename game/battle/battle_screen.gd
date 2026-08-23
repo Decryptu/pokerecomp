@@ -568,6 +568,7 @@ func _ready() -> void:
 	_build_renderer()
 	if not _renderer_ready:
 		return
+	Gen2ModHost.instance().view_changed.connect(_on_view_changed)
 
 	## The cartridge has one APU. A screen that opened this one hands its own
 	## driver over so a cry here takes the channels the map music is holding
@@ -4507,9 +4508,14 @@ func select_view(id: StringName) -> Dictionary:
 	if not bool(result.get("ok", false)):
 		show_message("Renderer unavailable: %s" % String(result.get("reason", "unknown")))
 		return result
-	_build_renderer()
 	show_message("Renderer: %s" % Gen2ModHost.instance().view_label(id))
 	return result
+
+
+## The same one switch the overworld takes: see
+## [method Gen2WorldScreen._on_view_changed].
+func _on_view_changed(_id: StringName) -> void:
+	_screen.play_view_cover(_build_renderer)
 
 
 ## Selects the view after the current one, wrapping.

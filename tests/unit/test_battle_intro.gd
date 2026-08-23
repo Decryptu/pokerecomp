@@ -221,6 +221,28 @@ func _count(cells: PackedByteArray, value: int) -> int:
 	return out
 
 
+## The view switch's cover is this animation with nothing in front of it: no
+## ball, no flash, no BG map of squares, because nothing is being transitioned
+## to. It has to end black, since the frame it ends on is the one the new
+## renderer is built behind ([method Gen2Screen.play_view_cover]).
+func test_the_outro_alone_is_a_cover_that_ends_black() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var outro: Gen2BattleTransition = Gen2BattleTransition.create_outro(rng)
+	var frames: int = 0
+	var squares: int = 0
+	while outro.advance_frame() and frames < 4000:
+		frames += 1
+		squares = maxi(squares, _count(outro.cells(), Gen2BattleTransition.CELL_SQUARE))
+
+	assert_eq(
+		_count(outro.cells(), Gen2BattleTransition.CELL_BLACK),
+		Gen2BattleTransition.COLUMNS * Gen2BattleTransition.ROWS
+	)
+	assert_eq(squares, 0, "a cover has no Poke Ball and no BG map behind it")
+	assert_between(frames, 10, 40, "the scatter alone, not a whole transition")
+
+
 func test_every_transition_ends_with_the_screen_black() -> void:
 	for stronger: bool in [false, true]:
 		for cave: bool in [false, true]:

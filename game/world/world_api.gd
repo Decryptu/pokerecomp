@@ -33,6 +33,10 @@ const MOVEMENT_BIKE: StringName = &"bike"
 ## constants/sprite_constants.asm's first real id, and what GetMonSprite answers
 ## for a variable sprite no script has assigned yet.
 const SPRITE_CHRIS: int = 1
+## `GetMonSprite`'s two `.BreedMon` bytes, which are the species in the day
+## care's own slots rather than an entry in any sprite table.
+const SPRITE_DAY_CARE_MON_1: int = 0xE0
+const SPRITE_DAY_CARE_MON_2: int = 0xE1
 const TRAINER_SHOCK_EMOTE: int = 0
 ## `SeenByTrainerScript`'s `showemote EMOTE_SHOCK, LAST_TALKED, 30`
 ## (engine/events/trainer_scripts.asm), read the way every other `showemote` is:
@@ -6346,6 +6350,45 @@ func _on_world_state_changed() -> void:
 	set_object_time(object_hour, object_time_of_day)
 
 
+## `GetMonSprite` itself: a variable slot resolves through the table and is
+## re-read, because a script may assign one a Pokemon sprite, and an unassigned
+## slot answers `WALKING_SPRITE`. A day care byte keeps its own id here and is
+## read for its species by [method _mon_icon_for_sprite]; an empty slot is
+## `.NoBreedmon`, which is the same 1.
+func _resolved_sprite(sprite_number: int) -> int:
+	var resolved: int = sprite_number
+	## The table is a byte per slot and a slot may name another one, so the walk
+	## is bounded rather than trusted to end.
+	for _pass: int in 4:
+		if resolved == SPRITE_DAY_CARE_MON_1 or resolved == SPRITE_DAY_CARE_MON_2:
+			return resolved if _day_care_species(resolved) > 0 else SPRITE_CHRIS
+		if resolved < Gen2WorldScriptRunner.VARIABLE_SPRITE_BASE:
+			return resolved
+		var assigned: int = int(_variable_sprites.get(resolved, 0))
+		if assigned == 0:
+			return SPRITE_CHRIS
+		resolved = assigned
+	return SPRITE_CHRIS
+
+
+## `SpriteMons` for the thirty-five reusable shapes, and `ReadMonMenuIcon` on
+## the species itself for the two day care bytes, which is what
+## `LoadOverworldMonIcon` does with `wBreedMon1Species` and `wBreedMon2Species`.
+func _mon_icon_for_sprite(sprite_number: int) -> int:
+	if sprite_number == SPRITE_DAY_CARE_MON_1 or sprite_number == SPRITE_DAY_CARE_MON_2:
+		return data.mon_menu_icon(_day_care_species(sprite_number)) if data != null else 0
+	return Gen2WorldSprite.mon_icon_for_sprite(sprite_number)
+
+
+func _day_care_species(sprite_number: int) -> int:
+	if state == null:
+		return 0
+	var mon: Gen2SaveMon = state.day_care_mon(
+		0 if sprite_number == SPRITE_DAY_CARE_MON_1 else 1
+	)
+	return 0 if mon == null else mon.species
+
+
 ## One row of a map's object events as a live object.
 ##
 ## `GetMonSprite`'s `.Variable` branch reads wVariableSprites and falls through
@@ -6355,17 +6398,15 @@ func _on_world_state_changed() -> void:
 ## script has assigned yet is drawn, occupies its cell and is talkable.
 ## Copycat's House 2F is where it matters: SPRITE_COPYCAT is $fb and only the
 ## Copycat's own script assigns it, so without this she could not be reached to
-## run it. An object that should not be there at all is masked by
-## [method load_object_masks], not by this fallback.
+## run it. Route 37's twins are the same rule seen from the other end: their
+## SPRITE_WEIRD_TREE is Sudowoodo's slot and only Route 36's own script assigns
+## it, so a save that has not met Sudowoodo really does stand two copies of the
+## player's sprite on that route. An object that should not be there at all is
+## masked by [method load_object_masks], not by this fallback.
 func _object_from_event(index: int, value: Dictionary) -> Gen2WorldObject:
-	var source_sprite_number: int = int(value.get("sprite", 0))
-	var sprite_number: int = int(_variable_sprites.get(
-		source_sprite_number, source_sprite_number
-	))
-	if sprite_number >= Gen2WorldScriptRunner.VARIABLE_SPRITE_BASE:
-		sprite_number = SPRITE_CHRIS
+	var sprite_number: int = _resolved_sprite(int(value.get("sprite", 0)))
 	var sprite: Gen2WorldSprite = null
-	var icon_number: int = Gen2WorldSprite.mon_icon_for_sprite(sprite_number)
+	var icon_number: int = _mon_icon_for_sprite(sprite_number)
 	if icon_number > 0:
 		sprite = data.overworld_icon(icon_number)
 	else:
