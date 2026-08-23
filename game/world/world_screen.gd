@@ -264,6 +264,13 @@ var _interface_owned_pushed: bool = false
 @onready var _caption: Label = %Caption
 @onready var _hint: Label = %Hint
 
+## The debug caption without its frame-rate tail, and that tail. The readout is
+## rebuilt on a map, a step or a script, and the rate once a second, so the two
+## are kept apart rather than rebuilding the whole line every drawn frame.
+var _caption_text: String = ""
+var _rate_text: String = ""
+var _rate_reading: Dictionary = {}
+
 
 func _ready() -> void:
 	# The map and cell readout and the shortcut legend are scaffolding, and they
@@ -282,10 +289,35 @@ func _ready() -> void:
 ## this left the player a black screen with no reason on it. Every caller
 ## returns straight after, so nothing overwrites it with the readout.
 func _show_load_failure(reason: String, detail: String) -> void:
-	_caption.text = reason
+	_set_caption(reason)
 	_hint.text = detail
 	_caption.visible = true
 	_hint.visible = true
+
+
+## The debug caption, with whatever frame-rate reading is current appended.
+func _set_caption(text: String) -> void:
+	_caption_text = text
+	_caption.text = _caption_text + _rate_text
+
+
+## `fps` is host frames drawn, `hw` the hardware frames the pump spent, which is
+## 59.7 on a machine keeping up and whatever GAME SPEED multiplies that by, and
+## `worst` the longest single frame of the second, which is where a stutter shows
+## and an average hides it. The reading changes once a second and the line is
+## rebuilt only then: this is drawn on the frame it is measuring.
+## See [method Gen2WorldAnimation.FrameClock.rate].
+func _refresh_frame_rate() -> void:
+	if _world == null or _caption == null or not _caption.visible:
+		return
+	var rate: Dictionary = _frame_clock.rate()
+	if rate.is_empty() or rate == _rate_reading:
+		return
+	_rate_reading = rate
+	_rate_text = "   %.0f fps   hw %.0f/s   worst %.1f ms" % [
+		float(rate["fps"]), float(rate["hardware"]), float(rate["worst_ms"]),
+	]
+	_caption.text = _caption_text + _rate_text
 
 
 ## The two scaffolding labels off, for a capture that is diffed against a
@@ -671,6 +703,7 @@ func cycle_view() -> Dictionary:
 func _process(delta: float) -> void:
 	for _frame: int in _frame_clock.tick(delta):
 		advance_frame()
+	_refresh_frame_rate()
 	_advance_day_cycle(delta)
 	## Every drawn frame rather than every hardware frame: above sixty a drawn
 	## frame can carry no hardware one, and a screen opened by the press that
@@ -2965,7 +2998,7 @@ func preview_party_transaction() -> void:
 		_script_prompt = "Party transaction failed: %s" % String(result.get("reason", "unknown"))
 	_refresh_labels()
 	if not preview_caption.is_empty():
-		_caption.text = preview_caption
+		_set_caption(preview_caption)
 
 
 ## Public screenshot driver for the pack's item use. It grants a Potion and hurts
@@ -6567,16 +6600,17 @@ func _refresh_labels() -> void:
 	if _world == null or _data == null:
 		return
 	_refresh_party_summary()
-	_caption.text = "%s   map %d/%d   cell %d,%d" % [
+	var caption: String = "%s   map %d/%d   cell %d,%d" % [
 		_data.title(), _world.current_map.group, _world.current_map.number,
 		_world.player_cell.x, _world.player_cell.y,
 	]
 	var ring: Dictionary = _world.pending_phone_ring()
 	if _world.phone_ring_active() and not ring.is_empty():
-		_caption.text += "   PHONE RING %d/%d: %s" % [
+		caption += "   PHONE RING %d/%d: %s" % [
 			int(ring.get("ring", 0)), int(ring.get("rings", 0)),
 			_phone_contact_label(ring.get("contact", {})),
 		]
+	_set_caption(caption)
 	var rods: Array[StringName] = _world.available_fishing_rods()
 	var rod_labels: Array[String] = []
 	for rod: StringName in rods:
