@@ -5568,6 +5568,11 @@ func _apply_map(
 	custom_facing: bool = false,
 	from_warp: int = 0,
 ) -> void:
+	# The one breadcrumb a bug report cannot do without: every warp, connection
+	# and load reaches this, so a log always says which map the player was on.
+	Gen2Diagnostics.trace("map", "group %d map %d, tileset %d, cell %s" % [
+		target_map.group, target_map.number, target_map.tileset, target_cell,
+	])
 	_record_escape_points(target_map, from_warp)
 	## `RefreshPlayerSprite` clears `wPlayerTurningDirection`, and every warp and
 	## connection reaches it, so a slide never survives a map change.

@@ -25,7 +25,7 @@ var _selected_game_id: StringName = &""
 ## The game a re-import is replacing, so a cache is only overwritten by a dump
 ## of the cartridge it already holds.
 var _reimport_game_id: StringName = &""
-var _status: Dictionary = {"title": "", "detail": ""}
+var _status: Dictionary = {"kind": &"info", "title": "", "detail": ""}
 
 
 func _ready() -> void:
@@ -33,6 +33,7 @@ func _ready() -> void:
 	_build()
 	_print_allowlist()
 	_refresh_games()
+	_report_previous_crash()
 
 
 ## Rebuilt whole when the appearance changes, which is the only way a launcher
@@ -73,10 +74,13 @@ func _build() -> void:
 	_shell.page_selected.connect(_on_page_selected)
 	_build_dialogs()
 	_on_page_selected(_shell.current_page())
-	# A message survives a palette rebuild; a launcher with nothing to report
-	# shows nothing at all.
+	# A message survives a palette rebuild, in the kind it was raised as: an
+	# error replayed as information takes the warning glyph off it and gives it
+	# a dismissal timer the toast deliberately withholds from a failure.
 	if not String(_status["title"]).is_empty():
-		_set_status(&"info", String(_status["title"]), String(_status["detail"]))
+		_set_status(
+			StringName(_status["kind"]), String(_status["title"]), String(_status["detail"])
+		)
 
 
 func _build_dialogs() -> void:
@@ -378,6 +382,7 @@ func launcher_snapshot() -> Dictionary:
 		}
 	return {
 		"status": String(_status["title"]),
+		"kind": String(_status["kind"]),
 		"detail": String(_status["detail"]),
 		"importing": _importing,
 		"page": String(_shell.current_page()) if _shell != null else "",
@@ -572,9 +577,24 @@ func _finish_import(success: bool, message: String) -> void:
 
 
 func _set_status(kind: StringName, title: String, detail: String) -> void:
-	_status = {"title": title, "detail": detail}
+	_status = {"kind": kind, "title": title, "detail": detail}
 	if _shell != null:
 		_shell.toast().show_message(kind, title, detail)
+
+
+## Says so when the last session did not shut down, and says where the report
+## file is. The launcher is the one screen a player is certain to see after a
+## crash, so this is where the offer belongs; nothing is written or sent here.
+func _report_previous_crash() -> void:
+	var diagnostics: Gen2Diagnostics = Gen2Diagnostics.instance()
+	if diagnostics == null or not diagnostics.previous_session_crashed():
+		return
+	diagnostics.forget_previous_crash()
+	_set_status(
+		&"error",
+		"The last session ended unexpectedly.",
+		"About > Report a bug will save a file with the logs in it.",
+	)
 
 
 func _print_allowlist() -> void:

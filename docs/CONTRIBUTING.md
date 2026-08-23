@@ -32,6 +32,7 @@ tools still read it with `FileAccess`. Do not delete it.
 | `game/render/` | Tile-grid pages; a `*_page.gd` draws, its model decides |
 | `game/mods/` | Manifest validation and the registry. See [MODS.md](MODS.md) |
 | `audio/` | The cartridge's own driver over an emulated APU |
+| `autoload/diagnostics.gd` | The log sink, the crash marker and the report bundle |
 
 Four boundaries are load-bearing and not obvious from one file:
 
@@ -43,6 +44,14 @@ Four boundaries are load-bearing and not obvious from one file:
   never read scripts, text or audio.
 - **Never match a keycode in a screen; match a `Gen2Button`.** An embedded host
   takes `handle_button(button)`, so a test presses a button, not a key.
+- **Anything printed is already in the bug report.** `Gen2Diagnostics` installs
+  a [Logger] with `OS.add_logger`, so every `print`, `push_warning`,
+  `push_error` and runtime error, in the game, a tool or a mod, reaches the
+  session log and the report a player attaches to an issue. Never add a second
+  reporting path beside a message; add the message. `Gen2Diagnostics.note()` is
+  the same print with a topic on it, for a fact a reader of the log needs, and
+  `trace()` is the one for a breadcrumb, which is kept out of a check or a tool
+  run so its output stays readable.
 - **Reach an autoload by its static accessor**, `Gen2InputRuntime.instance()` or
   `Gen2GameRuntime.instance()`, never the `InputRuntime`/`GameRuntime` global. A
   script handed to `-s` compiles before the tree exists, so naming one by

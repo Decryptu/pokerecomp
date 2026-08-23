@@ -41,6 +41,12 @@ func _mods_page() -> Gen2ModsPage:
 
 
 func _open_launcher() -> void:
+	# The machine running the tests may itself have crashed last, and the notice
+	# that raises is a toast every other launcher test would then have to
+	# tolerate. Each test says for itself what the previous session did.
+	var diagnostics: Gen2Diagnostics = Gen2Diagnostics.instance()
+	if diagnostics != null:
+		diagnostics.adopt_marker("")
 	var packed: PackedScene = load("res://game/main/main.tscn")
 	_launcher = packed.instantiate()
 	add_child(_launcher)
@@ -512,3 +518,40 @@ func test_a_mod_with_no_renderer_has_no_view_switch() -> void:
 	detail.set_row(page._row_for(PROBE_MOD_ID))
 	assert_null(detail.find_child(String(Gen2ModDetailPage.VIEW_SWITCH_NAME), true, false))
 	Gen2ModHost.reset()
+
+
+## A palette change rebuilds the launcher whole and replays whatever it was
+## saying. Replayed as information, a failure lost its warning glyph and picked
+## up the dismissal timer the toast withholds from an error on purpose.
+func test_a_failure_survives_a_rebuild_as_a_failure() -> void:
+	await _open_launcher()
+	_launcher.import_mod_path("user://no-such-mod.zip")
+	assert_eq(_launcher.launcher_snapshot()["kind"], "error")
+
+	_launcher.preview_theme(&"dark")
+	await get_tree().process_frame
+	var snapshot: Dictionary = _launcher.launcher_snapshot()
+	assert_eq(snapshot["kind"], "error")
+	assert_eq(snapshot["status"], "That mod was not installed.")
+
+
+## A crash the player never saw a message about is a crash they cannot report.
+func test_a_crashed_session_is_reported_at_the_next_launch() -> void:
+	await _open_launcher()
+	Gen2Diagnostics.instance().adopt_marker('{"clean": false}')
+	await _open_launcher_keeping_the_marker()
+	var snapshot: Dictionary = _launcher.launcher_snapshot()
+	assert_eq(snapshot["kind"], "error")
+	assert_string_contains(String(snapshot["status"]), "ended unexpectedly")
+	assert_false(
+		Gen2Diagnostics.instance().previous_session_crashed(),
+		"and it is said once, not again on every rebuild",
+	)
+
+
+func _open_launcher_keeping_the_marker() -> void:
+	if is_instance_valid(_launcher):
+		_launcher.free()
+	_launcher = (load("res://game/main/main.tscn") as PackedScene).instantiate()
+	add_child(_launcher)
+	await get_tree().process_frame

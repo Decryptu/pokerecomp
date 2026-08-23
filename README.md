@@ -337,6 +337,22 @@ Either works:
 Say which cartridge, where you were and what you did. A screenshot settles most
 of it.
 
+The sheet behind that button also has **Save a report file**, which writes one
+`.zip` to your downloads folder and opens the folder on it. It holds the build,
+your machine, your settings, the mods you have installed and the last few
+session logs, and nothing else: no save data and no other file from your
+computer. **Copy the details** puts the same thing without the logs on the
+clipboard, which is the version that fits in a chat message. Attach the file if
+the game crashed or looked wrong; it is the difference between a report someone
+can act on and one nobody can reproduce.
+
+The launcher says so at the next launch when a session did not shut down
+cleanly. Logs live under `logs/` in the same directory as your saves:
+`%APPDATA%\Godot\app_userdata\pokerecomp` on Windows,
+`~/Library/Application Support/Godot/app_userdata/pokerecomp` on macOS,
+`~/.local/share/godot/app_userdata/pokerecomp` on Linux. Old ones are deleted as
+new ones arrive, so they never grow without bound.
+
 ## Contributing
 
 Read [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md). No cartridge-derived data may
