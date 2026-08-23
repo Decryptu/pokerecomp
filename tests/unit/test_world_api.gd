@@ -5011,6 +5011,37 @@ func test_an_unassigned_variable_sprite_still_occupies_and_is_talkable() -> void
 	assert_false(world.can_walk_to(Vector2i(7, 5)), "it did not occupy its cell")
 
 
+## `GetMonSprite`'s two `.BreedMon` branches read wBreedMon1Species and
+## wBreedMon2Species and hand the species to `LoadOverworldMonIcon`, so Route
+## 34's two day care objects are drawn as whatever is boarding there. An empty
+## slot is `.NoBreedmon`, which is the same `ld a, WALKING_SPRITE` the
+## unassigned variable sprite above answers with.
+func test_a_day_care_object_is_drawn_as_the_mon_boarding_there() -> void:
+	var data: GameData = GameData.open_directory(_directory)
+	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(7, 6))
+	var objects: Array = world.current_map.events["objects"]
+	objects[0]["sprite"] = Gen2WorldAPI.SPRITE_DAY_CARE_MON_1
+	objects[0]["x"] = 7
+	objects[0]["y"] = 5
+
+	world.reload_current_map()
+	var empty: Gen2WorldObject = world.object_at(Vector2i(7, 5))
+	assert_not_null(empty, "an empty day care slot left the cell empty")
+	assert_eq(empty.sprite_number, Gen2WorldAPI.SPRITE_CHRIS, "and it drew nothing")
+
+	var boarder := Gen2SaveMon.new()
+	boarder.species = 1
+	world.state.set_day_care_mon(0, boarder)
+	world.reload_current_map()
+
+	var standing: Gen2WorldObject = world.object_at(Vector2i(7, 5))
+	assert_not_null(standing)
+	assert_eq(
+		standing.sprite_number, Gen2WorldAPI.SPRITE_DAY_CARE_MON_1,
+		"a boarding mon was still drawn as the player"
+	)
+
+
 ## `ReadObjectEvents` builds wMapObjects from map data and `LoadSpriteGFX` fills
 ## VRAM afterwards, so an object exists before its graphics do and none of
 ## IsNPCAtCoord, CheckFacingObject or CanObjectMoveInDirection asks what loaded.

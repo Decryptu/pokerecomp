@@ -14,6 +14,22 @@ const ITEMFINDER: int = 0x37
 const CARD_KEY: int = 0x7F
 const OLD_ROD: int = Gen2WorldInventory.ITEM_OLD_ROD
 
+## The least a registered world renderer can be, for the VIEW row's own case.
+const RENDERER_SOURCE: String = """extends Node2D
+
+func set_world(_world, _animation = null) -> void:
+	pass
+
+func set_time_of_day(_time_of_day: int) -> void:
+	pass
+
+func refresh() -> void:
+	pass
+
+func refresh_animation() -> void:
+	pass
+"""
+
 var _data: GameData = null
 var _world_screen: Gen2WorldScreen = null
 
@@ -151,6 +167,41 @@ func test_mod_settings_use_the_hardware_option_screen() -> void:
 	assert_true((host.get("_view") as TextureRect).visible)
 
 	Gen2ModHost.reset()
+
+
+## R36: `V` is behind `Gen2DebugKeys.enabled`, so a shipped build had exactly
+## one place to change the view and it was the launcher. The row is the host's
+## own, it is in front of the mods' settings, and the entry is reachable with no
+## mod having registered a setting at all.
+func test_the_view_row_is_reachable_and_switches_the_live_screen() -> void:
+	var script := GDScript.new()
+	script.source_code = RENDERER_SOURCE
+	script.reload()
+	assert_true(Gen2ModHost.instance().register_world_renderer(&"voxel", script)["ok"])
+	await _open_world()
+	var built_in: Node = _world_screen._renderer
+	_world_screen._open_start_menu()
+	await get_tree().process_frame
+	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
+	_select(host, Gen2WorldStartMenu.ITEM_MODS)
+	host.handle_button(Gen2Button.A)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.MODS)
+	assert_eq(host.get("_mod_cursor"), 0)
+
+	host.handle_button(Gen2Button.RIGHT)
+
+	assert_eq(Gen2ModHost.instance().selected_view(), &"voxel")
+	assert_ne(_world_screen._renderer, built_in, "the live screen kept its renderer")
+	## A on a value row does nothing, the way it does on the cartridge's own.
+	host.handle_button(Gen2Button.A)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.MODS)
+
+	host.handle_button(Gen2Button.LEFT)
+	assert_eq(Gen2ModHost.instance().selected_view(), Gen2ModHost.BUILT_IN_RENDERER)
+
+	Gen2ModHost.reset()
+	DirAccess.remove_absolute(Gen2ModState.PATH)
+	Gen2ModState.reload()
 
 
 func test_long_mod_list_scrolls_the_hardware_option_screen() -> void:

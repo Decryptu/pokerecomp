@@ -167,6 +167,11 @@ signal option_changed(id: StringName, key: StringName, value: Variant)
 ## Emitted when one of a mod's own registered actions is pressed or released,
 ## whichever device produced it. See [method register_action].
 signal action_changed(id: StringName, key: StringName, pressed: bool)
+## Emitted whenever [method select_view] changes the view, whichever surface
+## chose it. A live screen rebuilds what it is drawing with on this, which is
+## what makes one switch of one host state reach the world, the battle and the
+## key that cycles them; nothing a mod registered changes.
+signal view_changed(id: StringName)
 
 static var _instance: Gen2ModHost = null
 ## Which mod packs this process has mounted. Static because a resource pack
@@ -466,15 +471,19 @@ func selected_view() -> StringName:
 ## ever selects either.
 ##
 ## Persisted per installation, so the choice survives a restart the way a mod's
-## own options do. The caller rebuilds whatever it is showing; nothing here
-## touches a live screen.
+## own options do. A live screen rebuilds on [signal view_changed], so the
+## launcher's page, the start menu's row and the key that cycles views are one
+## path rather than three, and a caller that holds no screen needs nothing.
 func select_view(id: StringName) -> Dictionary:
 	if id != BUILT_IN_RENDERER and not _world_renderers.has(id) \
 		and not _battle_renderers.has(id):
 		return {"ok": false, "reason": &"unknown_renderer", "detail": String(id)}
+	var changed: bool = _selected_view != id
 	_selected_view = id
 	if not Gen2ModState.set_selected_view(id):
 		return {"ok": false, "reason": &"view_not_written", "detail": String(id)}
+	if changed:
+		view_changed.emit(id)
 	return {"ok": true, "id": id}
 
 

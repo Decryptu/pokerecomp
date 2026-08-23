@@ -14,6 +14,10 @@ const SERVICE_SCENE: PackedScene = preload("res://game/world/world_service_scree
 const START_MENU_SCENE: PackedScene = preload("res://game/world/start_menu_screen.tscn")
 const PARTY_SCENE: PackedScene = preload("res://game/save/party_screen.tscn")
 const AUDIO_PLAYER_SCRIPT := preload("res://game/audio/gen2_audio_player.gd")
+## How far into a view switch's close [method preview_view_cover] photographs:
+## part way down the scatter, where the wipe is readable and the screen is not
+## yet black.
+const PREVIEW_COVER_FRAMES: int = 10
 ## constants/sfx_constants.asm's SFX_JUMP_OVER_LEDGE (comments there are hex,
 ## confirmed against neighbouring $0a/$0f/$1a), played by .TryJump as the hop
 ## starts. Played directly rather than through _handle_audio_request(), which
@@ -411,6 +415,7 @@ func _build_world() -> void:
 	_animation.configure(_world, _render_time_of_day())
 	_apply_screen_fill()
 	_build_renderer()
+	Gen2ModHost.instance().view_changed.connect(_on_view_changed)
 	_screen.view_size_changed.connect(_on_view_size_changed)
 	_screen_base_position = _screen.position
 	_audio_player = AUDIO_PLAYER_SCRIPT.new()
@@ -613,10 +618,22 @@ func select_view(id: StringName) -> Dictionary:
 		_script_prompt = "Renderer unavailable: %s" % String(result.get("reason", "unknown"))
 		_refresh_labels()
 		return result
-	_build_renderer()
 	_script_prompt = "Renderer: %s" % Gen2ModHost.instance().view_label(id)
 	_refresh_labels()
 	return result
+
+
+## Spends the whole of a view switch's cover now, for a caller that wants the
+## renderer swapped rather than the swap shown: a tool taking a photograph.
+func settle_view_cover() -> void:
+	_screen.settle_view_cover()
+
+
+## The switch itself, wherever it was made: this screen, the launcher's mod page
+## or the start menu's own row. The renderer is built inside the cover rather
+## than here, because building one is a stall of its own.
+func _on_view_changed(_id: StringName) -> void:
+	_screen.play_view_cover(_build_renderer)
 
 
 ## Selects the view after the current one, wrapping. One key can then cycle every
@@ -3249,6 +3266,33 @@ func preview_start_menu() -> void:
 		_open_start_menu()
 		return
 	_start_menu_host.handle_button(Gen2Button.DOWN)
+
+
+## Public screenshot driver for the cover a view switch is hidden behind: the
+## switch itself, photographed part way down its close. See
+## [method Gen2Screen.play_view_cover].
+func preview_view_cover() -> void:
+	## A `view=` argument has already chosen one and left its cover running; on
+	## its own the driver switches to the next view itself.
+	if not _screen.view_cover_active() and not cycle_view().get("ok", false):
+		return
+	_screen.step_view_cover(PREVIEW_COVER_FRAMES)
+
+
+## Public screenshot driver for the MODS entry, which is where a player changes
+## the view on a shipped build: one call opens the menu and walks to the row,
+## and the picture is the host's own VIEW row at the top of it.
+func preview_mod_views() -> void:
+	if _world == null or _data == null:
+		return
+	if _start_menu_host == null:
+		_injected_save = _embedded_party_save()
+		_open_start_menu()
+	if _start_menu_host == null:
+		return
+	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_MODS):
+		return
+	_start_menu_host.handle_button(Gen2Button.A)
 
 
 ## Public screenshot driver for `_Option`, which is what the start menu's own

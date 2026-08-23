@@ -198,9 +198,14 @@ var _save_result: Dictionary = {}
 
 var _options_menu: Gen2WorldOptionsMenu = null
 
+## The two kinds of row the MODS entry holds: see [method _mod_rows].
+const MOD_ROW_VIEW: StringName = &"view"
+const MOD_ROW_MOD: StringName = &"mod"
+
 ## The MODS entry: which mod is being configured and where each cursor sits.
 ## The rows themselves are the host's registrations, read fresh on every render
-## so a value changed from the launcher is never shown stale.
+## so a value changed from the launcher is never shown stale. The VIEW row in
+## front of them is the host's own and belongs to no mod: see [method _mod_rows].
 var _mod_ids: Array[StringName] = []
 var _mod_cursor: int = 0
 var _mod_id: StringName = &""
@@ -208,8 +213,8 @@ var _mod_option_cursor: int = 0
 
 ## The cartridge's own screens, drawn into whichever [Gen2Screen] the host
 ## handed over. `StartMenu`'s box sits over the map, so it goes into the world's
-## own screen rather than one of this node's; without one, the panel below
-## stands in, which is what a test or the launcher gets.
+## own screen rather than one of this node's; without one, nothing is drawn at
+## all, which is what a test or the launcher gets.
 var _screen: Gen2Screen = null
 var _view: TextureRect = null
 var _page: Gen2StartMenuPage = null
@@ -218,8 +223,6 @@ var _page: Gen2StartMenuPage = null
 var _target_page: Gen2PartyMenuPage = null
 ## The target list's icon clock.
 var _target_clock := Gen2WorldAnimation.FrameClock.new()
-## The panel's own two roots, hidden whenever a cartridge screen is up.
-
 
 
 func _ready() -> void:
@@ -416,9 +419,14 @@ func _move(direction: Vector2i) -> void:
 				_persist_options()
 				_render_options_menu()
 		Mode.MODS:
-			if direction.y != 0 and not _mod_ids.is_empty():
-				_mod_cursor = wrapi(_mod_cursor + signi(direction.y), 0, _mod_ids.size())
+			var mod_rows: Array = _mod_rows()
+			if mod_rows.is_empty():
+				return
+			if direction.y != 0:
+				_mod_cursor = wrapi(_mod_cursor + signi(direction.y), 0, mod_rows.size())
 				_render_mods()
+			elif direction.x != 0 and _mod_view_row(mod_rows):
+				_cycle_view(signi(direction.x))
 		Mode.MOD_OPTIONS:
 			var rows: Array = _mod_options()
 			if rows.is_empty():
@@ -491,9 +499,12 @@ func _confirm() -> void:
 		Mode.OPTIONS:
 			if _options_menu.is_cancel():
 				_open_list_mode()
+		## The VIEW row is read with left and right, the way a value row is, so
+		## A does nothing on it.
 		Mode.MODS:
-			if _mod_cursor >= 0 and _mod_cursor < _mod_ids.size():
-				_open_mod_options_mode(_mod_ids[_mod_cursor])
+			var chosen: Dictionary = _mod_row()
+			if StringName(chosen.get("kind", &"")) == MOD_ROW_MOD:
+				_open_mod_options_mode(StringName(chosen["id"]))
 		## A ladder row is read with left and right, so A does nothing on one, the
 		## way it does on the cartridge's own value rows. A button row is the
 		## exception: pressing it is the whole setting.
@@ -610,7 +621,52 @@ func _render_options_menu() -> void:
 func _open_mods_mode() -> void:
 	_mode = Mode.MODS
 	_mod_ids = Gen2ModHost.instance().option_mod_ids()
-	_mod_cursor = clampi(_mod_cursor, 0, maxi(_mod_ids.size() - 1, 0))
+	_mod_cursor = clampi(_mod_cursor, 0, maxi(_mod_rows().size() - 1, 0))
+	_render_mods()
+
+
+## The rows the MODS entry shows: the host's own VIEW row where the player has
+## more than one view to choose from, then one row per mod that registered a
+## setting.
+##
+## The view is the host's and not any mod's: `Gen2ModHost` holds one selection
+## for both surfaces, persists it and draws it on the launcher's mod page, and a
+## mod registering a VIEW button of its own would be a private copy of that
+## state, six of them for six mods. This is the same list on the surface a
+## player is already changing what a mod does from, which is the only place a
+## shipped build has: `V` is behind [method Gen2DebugKeys.enabled].
+func _mod_rows() -> Array:
+	var rows: Array = []
+	if Gen2ModHost.instance().view_ids().size() > 1:
+		rows.append({"kind": MOD_ROW_VIEW, "id": &""})
+	for id: StringName in _mod_ids:
+		rows.append({"kind": MOD_ROW_MOD, "id": id})
+	return rows
+
+
+## The row the cursor is on, empty where there is none.
+func _mod_row() -> Dictionary:
+	var rows: Array = _mod_rows()
+	if _mod_cursor < 0 or _mod_cursor >= rows.size():
+		return {}
+	return rows[_mod_cursor]
+
+
+func _mod_view_row(rows: Array) -> bool:
+	return _mod_cursor >= 0 and _mod_cursor < rows.size() \
+		and StringName(rows[_mod_cursor].get("kind", &"")) == MOD_ROW_VIEW
+
+
+## One step along the host's view list, wrapping. The switch is the host's, so
+## the live screens rebuild on [signal Gen2ModHost.view_changed] and this row
+## neither knows nor cares which of them is up.
+func _cycle_view(step: int) -> void:
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	var ids: Array[StringName] = host.view_ids()
+	if ids.size() < 2:
+		return
+	var at: int = maxi(ids.find(host.selected_view()), 0)
+	host.select_view(ids[posmod(at + step, ids.size())])
 	_render_mods()
 
 
@@ -1935,8 +1991,14 @@ func _hardware_image() -> Image:
 			)
 		Mode.MODS:
 			var rows: Array = []
-			for id: StringName in _mod_ids:
-				rows.append({"label": _mod_name(id), "value": ""})
+			for row: Dictionary in _mod_rows():
+				if StringName(row["kind"]) == MOD_ROW_VIEW:
+					var host: Gen2ModHost = Gen2ModHost.instance()
+					rows.append({
+						"label": "VIEW", "value": host.view_label(host.selected_view()),
+					})
+					continue
+				rows.append({"label": _mod_name(StringName(row["id"])), "value": ""})
 			var window: Dictionary = _option_window(rows, _mod_cursor)
 			return _page.render_options(window["rows"], window["cursor"])
 		Mode.MOD_OPTIONS:

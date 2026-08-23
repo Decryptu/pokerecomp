@@ -172,8 +172,35 @@ func test_a_registered_entry_without_a_handler_is_unavailable() -> void:
 	Gen2ModHost.reset()
 
 
-## MODS is not the cartridge's, so it appears only when a mod registered a
-## setting, and it sits ahead of both the registered entries and EXIT.
+## The entry also carries the host's own VIEW row, so a mod that registered a
+## renderer and no setting still has to be reachable: without this, a player on
+## a shipped build could only change the view from the launcher.
+func test_mods_appears_for_a_registered_view_with_no_setting() -> void:
+	Gen2ModHost.reset()
+	var script := GDScript.new()
+	script.source_code = """extends Node2D
+func set_world(_world, _animation = null) -> void:
+	pass
+func set_time_of_day(_time_of_day: int) -> void:
+	pass
+func refresh() -> void:
+	pass
+func refresh_animation() -> void:
+	pass
+"""
+	script.reload()
+	assert_true(bool(
+		Gen2ModHost.instance().register_world_renderer(&"voxel", script).get("ok", false)
+	))
+
+	var menu: Gen2WorldStartMenu = Gen2WorldStartMenu.build(0, false, false)
+
+	assert_true(_kinds(menu).has(Gen2WorldStartMenu.ITEM_MODS))
+	Gen2ModHost.reset()
+
+
+## MODS is not the cartridge's, so it appears only when there is something in it
+## to change, and it sits ahead of both the registered entries and EXIT.
 func test_mods_appears_only_for_a_mod_that_registered_a_setting() -> void:
 	Gen2ModHost.reset()
 	var without: Gen2WorldStartMenu = Gen2WorldStartMenu.build(0, false, false)

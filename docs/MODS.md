@@ -38,7 +38,7 @@ user://mods/<id>/
 | `id` | Lowercase `[a-z0-9][a-z0-9_-]*`; addresses the directory and registry keys |
 | `name` | Shown to the player |
 | `version` | The mod's own version, not the host's |
-| `api_version` | Between `Gen2ModManifest.MIN_API_VERSION` and `API_VERSION`. Declare the oldest host you need: 11 for [the battle entrance](#the-entrance) and the battle view's other resolved fields, 10 for [a screen that fills the window](#a-screen-that-fills-the-window) and the maps past this one's edge, 9 for an item that names an evolution method, 8 for a stats-screen page, 7 for an actor's `interact`, `emote` and outbox and for hidden-item requests, 6 for `occupied` in the visible-encounter context, 5 for the run's rules, 4 for types, matchups, mod art and event mutators, 3 for mart rows and named axes, 2 for visible encounters, 1 for everything else |
+| `api_version` | Between `Gen2ModManifest.MIN_API_VERSION` and `API_VERSION`. Declare the oldest host you need: 12 for `Gen2ModHost.view_changed`, 11 for [the battle entrance](#the-entrance) and the battle view's other resolved fields, 10 for [a screen that fills the window](#a-screen-that-fills-the-window) and the maps past this one's edge, 9 for an item that names an evolution method, 8 for a stats-screen page, 7 for an actor's `interact`, `emote` and outbox and for hidden-item requests, 6 for `occupied` in the visible-encounter context, 5 for the run's rules, 4 for types, matchups, mod art and event mutators, 3 for mart rows and named axes, 2 for visible encounters, 1 for everything else |
 | `entry` | A `.gd` path inside the mod directory, or inside the pack when there is one |
 | `pack` | Optional `.pck` or `.zip` beside `mod.json`, holding the mod's files |
 | `description` | Optional |
@@ -103,7 +103,7 @@ Two example mods are in `mods/examples/`, to copy into `user://mods/`:
 
 | Mod | Shows |
 |---|---|
-| `voxel_preview/` | A world renderer. Switch it on from its page in the launcher, or press `V` in the overworld; it reads the same collision, block and palette data the 2D view reads and extrudes geometry from it, on the native layer with a translucent text box and one registered setting |
+| `voxel_preview/` | A world renderer. Switch it on from its page in the launcher, from the start menu's MODS entry, or with `V` in the overworld; it reads the same collision, block and palette data the 2D view reads and extrudes geometry from it, on the native layer with a translucent text box and one registered setting |
 | `new_content/` | Every non-renderer surface in one file: a type and two matchups, a species with its own art, a move, a move effect, an item with its pocket and mart shelf, a named control axis, a visible-encounter population that reads the run's rules, two rebalancing patches, both event channels and the world channel's presentation mutator |
 
 The repository examples are development material and are excluded from every
@@ -251,7 +251,8 @@ belongs to the first one followed, so it is on screen once.
 ## Adding content
 
 `mods/examples/new_content/` is every non-renderer surface of the contract in one
-file, `api_version` 9: it registers a type and two chart exceptions, a species
+file: it declares the current `api_version` and its newest surface is 9's, and
+it registers a type and two chart exceptions, a species
 with its own decoded art, a move and its effect, an item with a pack pocket, a
 mart shelf and an evolution it causes, a named control axis, a world actor that
 walks behind the player, a fourth page on the stats screen and a visible-encounter population that reads the
@@ -827,15 +828,37 @@ keeps the built-in renderer on the other, and `gen2` selects both.
 | `view_surfaces(id) -> Dictionary` | `{world, battle}`, which of the two that id draws |
 | `selected_view() -> StringName` | The chosen id, whether or not its mod is loaded |
 | `select_view(id) -> Dictionary` | Chooses it, and persists the choice |
+| `view_changed(id)` | Signal, emitted whenever the chosen id actually changes |
 
 The choice is stored per installation in `user://mods_disabled.json` beside the
 disabled list, so it survives a restart the way a mod's own options do, and it is
 resolved every time a surface builds a renderer rather than once at load: a
 stored id whose mod is uninstalled or switched off draws with the built-in
 renderer and is not refused, and starts drawing again the moment the mod
-registers. Players reach it from the mod's own page in the launcher, which is
-where they already change what a mod does; `V` stays as the live switch where
-[Gen2DebugKeys] is enabled.
+registers.
+
+**Every way of choosing reaches the same live screen.** `select_view` announces
+the change on `view_changed`, and the world and battle screens rebuild what they
+are drawing with on it, so the launcher's mod page, the start menu's own VIEW
+row and `V` are one path. A mod neither needs nor should hold a screen; it may
+connect to the signal to hear about a switch.
+
+**Players reach the view from three places.** The mod's page in the launcher,
+where they already change what a mod does; the VIEW row at the top of the start
+menu's MODS entry, which is the host's own row and appears as soon as more than
+one view is registered, whether or not any mod registered a setting; and `V`
+where [Gen2DebugKeys] is enabled. A mod must not register a view button of its
+own: the host holds the one selection, and a mod's copy of it would be a second
+answer to the same question.
+
+**The switch is covered.** Building a renderer is a stall -- meshing a map can
+land whole on one frame -- and nothing on one thread can animate over its own
+freeze. `Gen2Screen.play_view_cover` closes with
+`StartTrainerBattle_SpeckleToBlack`'s own scatter on the renderer that is still
+running, builds the new one on the frame the screen is fully black, and opens
+with the same frames backwards. It is around the switch rather than at a caller,
+so every one of the three gets it, and renderers need nothing new: the outgoing
+one is asked for no frame it would not have drawn anyway.
 
 ## Replacing the battle renderer
 
