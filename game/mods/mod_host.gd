@@ -233,11 +233,14 @@ var _failures: Array = []
 static func instance() -> Gen2ModHost:
 	if _instance == null:
 		_instance = Gen2ModHost.new()
+		## Short because the start menu's VIEW row draws a label in
+		## `Gen2StartMenuPage.OPTIONS_VALUE_CELLS` cells: a longer one is cut
+		## there and a player picking a view reads the cut, not the name.
 		_instance.register_world_renderer(
-			BUILT_IN_RENDERER, Gen2WorldRenderer, "Game Boy Color 2D"
+			BUILT_IN_RENDERER, Gen2WorldRenderer, "GBC 2D"
 		)
 		_instance.register_battle_renderer(
-			BUILT_IN_RENDERER, Gen2BattleRenderer, "Game Boy Color 2D"
+			BUILT_IN_RENDERER, Gen2BattleRenderer, "GBC 2D"
 		)
 		## Read before any mod has registered anything, which is the only order
 		## available: the id is resolved every time a renderer is asked for, so a

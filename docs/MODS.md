@@ -824,7 +824,7 @@ keeps the built-in renderer on the other, and `gen2` selects both.
 | Method | Value |
 |---|---|
 | `view_ids() -> Array[StringName]` | Every id that registered a renderer of either kind, `gen2` first and the rest in load order |
-| `view_label(id) -> String` | The label the registration gave |
+| `view_label(id) -> String` | The label the registration gave, drawn in eight cells (see "What a name is drawn in") |
 | `view_surfaces(id) -> Dictionary` | `{world, battle}`, which of the two that id draws |
 | `selected_view() -> StringName` | The chosen id, whether or not its mod is loaded |
 | `select_view(id) -> Dictionary` | Chooses it, and persists the choice |
@@ -842,6 +842,23 @@ the change on `view_changed`, and the world and battle screens rebuild what they
 are drawing with on it, so the launcher's mod page, the start menu's own VIEW
 row and `V` are one path. A mod neither needs nor should hold a screen; it may
 connect to the signal to hear about a switch.
+
+### What a name is drawn in
+
+The start menu is the hardware's twenty-cell screen, so a name a mod registers
+is drawn into a fixed budget and a longer one ends in the charmap's own "…":
+
+| Row | Cells | What is drawn there |
+|---|---|---|
+| A mod's name in the MODS list | 17 | The manifest's `name` |
+| A setting's `label`, and the VIEW row's own | 17 | `register_option`'s `label` |
+| A setting's value, and a view's label | 8 | The chosen rung's label, a button's `press_label`, or `view_label` |
+
+The built-in view is labelled "GBC 2D" for that reason. A name that has to read
+whole in the start menu is written to those budgets; a longer one still works
+and is shown cut, rather than drawn through the panel's border as it was before.
+The numbers are `Gen2StartMenuPage.OPTIONS_LABEL_CELLS` and
+`OPTIONS_VALUE_CELLS`. The launcher draws the full name either way.
 
 **Players reach the view from three places.** The mod's page in the launcher,
 where they already change what a mod does; the VIEW row at the top of the start

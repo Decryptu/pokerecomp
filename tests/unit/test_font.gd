@@ -235,3 +235,34 @@ func test_a_cache_without_the_battle_strip_refuses_that_run_rather_than_guessing
 	# And the letters it does have still draw.
 	font.draw_code(RomLayout.FONT_FIRST_CODE, into, Gen2Font.TILE, 0, 0)
 	assert_eq(into[0], Gen2Tiles.INK)
+
+
+func test_a_bounded_run_that_fits_is_untouched() -> void:
+	var codes: PackedByteArray = Gen2Font.fit("AB", 4)
+	assert_eq(codes, Gen2Text.encode("AB"))
+
+
+func test_a_bounded_run_that_does_not_fit_ends_in_an_ellipsis() -> void:
+	# The whole point: two labels sharing a prefix must not draw the same cells.
+	var codes: PackedByteArray = Gen2Font.fit("ABABAB", 3)
+	assert_eq(codes.size(), 3)
+	assert_eq(codes[2], Gen2Text.ELLIPSIS_CODE)
+	assert_eq(codes.slice(0, 2), Gen2Text.encode("AB"))
+
+
+func test_one_cell_of_room_is_all_ellipsis_and_none_is_nothing() -> void:
+	assert_eq(Gen2Font.fit("ABAB", 1), PackedByteArray([Gen2Text.ELLIPSIS_CODE]))
+	assert_eq(Gen2Font.fit("ABAB", 0), PackedByteArray())
+
+
+func test_the_battle_strip_cuts_without_an_ellipsis() -> void:
+	# $75 is part of an HP bar with that strip loaded, so there is no glyph to
+	# mark the cut with.
+	var codes: PackedByteArray = Gen2Font.fit("ABAB", 2, Gen2Text.FONT_BATTLE_EXTRA)
+	assert_eq(codes, Gen2Text.encode("AB", Gen2Text.FONT_BATTLE_EXTRA))
+
+
+func test_drawing_stops_at_the_bound_and_marks_it() -> void:
+	var into: PackedByteArray = _canvas(4)
+	assert_eq(_font.draw_text("AAAA", into, 4 * Gen2Font.TILE, 0, 0, Gen2Text.FONT_MAIN, 2), 2)
+	assert_eq(into[Gen2Font.TILE * 2], 0, "nothing past the bound")

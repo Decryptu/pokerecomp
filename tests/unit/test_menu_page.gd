@@ -179,6 +179,9 @@ func test_the_pokepic_box_refuses_a_species_the_cache_does_not_hold() -> void:
 ## written to fit the box it is placed in. A label a mod registers is not, and
 ## unbounded it was drawn straight through the right-hand border and over
 ## whatever the box sits on, which is what the in-game MODS row could do.
+## The cut itself, and that it is marked, are [Gen2Font]'s and tested there. Here
+## the row is only bounded: the ellipsis lands in the last interior column, which
+## this cache has no tile for, so the column before it is the last glyph.
 func test_a_row_too_wide_for_its_box_is_cut_at_the_border() -> void:
 	var box: Gen2MenuBox = _box()
 	var indices: PackedByteArray = _blank()
@@ -186,7 +189,10 @@ func test_a_row_too_wide_for_its_box_is_cut_at_the_border() -> void:
 
 	# The last interior column, one short of the right-hand border at box.right.
 	var last: int = box.left + box.interior().x
-	assert_true(_ink_in_tile(indices, Vector2i(last, box.item_position(0).y)), "fills the row")
+	assert_true(
+		_ink_in_tile(indices, Vector2i(last - 1, box.item_position(0).y)),
+		"fills the row up to the cut"
+	)
 	for column: int in range(box.right + 1, Gen2Screen.WIDTH / TILE):
 		assert_false(
 			_ink_in_tile(indices, Vector2i(column, box.item_position(0).y)),

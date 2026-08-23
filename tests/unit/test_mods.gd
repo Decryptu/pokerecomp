@@ -1615,6 +1615,19 @@ func test_the_view_list_names_each_id_once_with_the_built_in_first() -> void:
 	assert_eq(host.view_surfaces(&"arena"), {"world": false, "battle": true})
 
 
+## The start menu's VIEW row is the one place a shipped build picks a view, and
+## it draws a label in eight cells. The built-in one is the host's own, so a
+## rename that no longer reads whole there fails here rather than in a photo.
+func test_the_built_in_view_label_fits_the_row_it_is_read_in() -> void:
+	var label: String = Gen2ModHost.instance().view_label(Gen2ModHost.BUILT_IN_RENDERER)
+	assert_false(label.is_empty())
+	assert_eq(
+		Gen2Font.fit(label, Gen2StartMenuPage.OPTIONS_VALUE_CELLS),
+		Gen2Text.encode(label),
+		"%s is drawn cut in the VIEW row" % label
+	)
+
+
 ## The choice is the installation's, so it outlives the host a mod list change
 ## throws away. A stored id whose mod is no longer registered draws with the
 ## built-in renderer and is not refused: the mod may be reinstalled.
