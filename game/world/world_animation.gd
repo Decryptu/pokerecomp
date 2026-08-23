@@ -30,7 +30,15 @@ const TIMER_WATER_PALETTE: Array = [0, 1, 2, 1]
 ## from the output's own demand rather than from a game frame, so music, effects
 ## and cries keep the cartridge's tempo and pitch at every setting.
 class FrameClock extends RefCounted:
+	## How long [method rate] averages over before it publishes a new reading.
+	const RATE_WINDOW_SECONDS: float = 1.0
+
 	var _elapsed: float = 0.0
+	var _window_seconds: float = 0.0
+	var _window_ticks: int = 0
+	var _window_frames: int = 0
+	var _window_worst: float = 0.0
+	var _rate: Dictionary = {}
 
 	## Hardware frames owed since the last call. The scale is read every call
 	## because the settings object is shared and edited in place.
@@ -41,12 +49,46 @@ class FrameClock extends RefCounted:
 		)
 		var frames: int = int(_elapsed / FRAME_SECONDS)
 		_elapsed -= float(frames) * FRAME_SECONDS
+		_measure(delta, frames)
 		return frames
 
 	## Drops the banked remainder, for a pump that was not running: a screen that
-	## comes back owes frames from now rather than from when it stopped.
+	## comes back owes frames from now rather than from when it stopped. The
+	## measurement window goes with it, since a reading across a gap is a lie.
 	func reset() -> void:
 		_elapsed = 0.0
+		_window_seconds = 0.0
+		_window_ticks = 0
+		_window_frames = 0
+		_window_worst = 0.0
+		_rate = {}
+
+	## The last completed second of this pump, as `fps` (host frames drawn),
+	## `hardware` (hardware frames spent, which is 59.7 on a machine keeping up
+	## and whatever GAME SPEED multiplies that by) and `worst_ms` (the longest
+	## single host frame in the window, which is the number a stutter shows in
+	## and an average hides). Empty until the first window closes, and empty again
+	## after a reset, so a pump driven by hand rather than by a clock reports
+	## nothing instead of reporting zero.
+	func rate() -> Dictionary:
+		return _rate
+
+	func _measure(delta: float, frames: int) -> void:
+		_window_seconds += delta
+		_window_ticks += 1
+		_window_frames += frames
+		_window_worst = maxf(_window_worst, delta)
+		if _window_seconds < RATE_WINDOW_SECONDS:
+			return
+		_rate = {
+			"fps": float(_window_ticks) / _window_seconds,
+			"hardware": float(_window_frames) / _window_seconds,
+			"worst_ms": _window_worst * 1000.0,
+		}
+		_window_seconds = 0.0
+		_window_ticks = 0
+		_window_frames = 0
+		_window_worst = 0.0
 
 
 var data: GameData = null

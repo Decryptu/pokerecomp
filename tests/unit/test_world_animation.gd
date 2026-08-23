@@ -514,3 +514,39 @@ func test_roof_colours_replace_two_slots_on_outdoor_maps_only() -> void:
 	assert_eq(Gen2WorldPalette.roof_colors(
 		data, Gen2WorldPalette.ENVIRONMENT_TOWN, Gen2WorldPalette.TIME_DAY, 2
 	)[0], Gen2Palette.from_packed(0x0003))
+
+
+## The debug readout's frame-rate line, which is what says whether a stutter was
+## a dropped drawn frame or a dropped hardware one.
+func test_the_frame_clock_reports_a_second_of_drawn_and_hardware_frames() -> void:
+	var clock := Gen2WorldAnimation.FrameClock.new()
+	assert_eq(clock.rate(), {}, "nothing is reported before a window closes")
+
+	# Sixty host frames at the hardware's own rate, which is 59.7275 Hz and not
+	# 60: one hardware frame each, and the sixtieth closes the window.
+	var hardware: int = 0
+	for _host: int in 60:
+		hardware += clock.tick(Gen2WorldAnimation.FRAME_SECONDS)
+	assert_eq(hardware, 60)
+	var rate: Dictionary = clock.rate()
+	assert_almost_eq(float(rate["fps"]), 59.7275, 0.1)
+	assert_almost_eq(float(rate["hardware"]), 59.7275, 0.1)
+	assert_almost_eq(
+		float(rate["worst_ms"]), Gen2WorldAnimation.FRAME_SECONDS * 1000.0, 0.1
+	)
+
+	# One host frame that took a fifth of a second is the whole point: the mean
+	# hides it and `worst_ms` does not. It also costs hardware frames, because
+	# MAX_CATCHUP_FRAMES refuses to spend more than four of them at once.
+	clock.tick(0.2)
+	for _host: int in 48:
+		clock.tick(Gen2WorldAnimation.FRAME_SECONDS)
+	var stalled: Dictionary = clock.rate()
+	assert_almost_eq(float(stalled["worst_ms"]), 200.0, 1.0)
+	assert_true(
+		float(stalled["hardware"]) < 59.0,
+		"a stall drops hardware frames rather than banking them: %f" % stalled["hardware"],
+	)
+
+	clock.reset()
+	assert_eq(clock.rate(), {}, "a reading across a gap is not reported")

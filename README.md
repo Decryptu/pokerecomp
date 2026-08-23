@@ -219,7 +219,11 @@ output's own demand rather than by a game frame, so music, effects and cries kee
 the cartridge's tempo and pitch at every setting; only how often the game asks
 for one changes.
 
-Development shortcuts are debug-build only, along with the map and cell readout:
+Development shortcuts are debug-build only, along with the map and cell readout.
+That readout carries the frame rate beside the cell: `fps` is host frames drawn,
+`hw` the hardware frames the pump actually spent, which is 59.7 a second on a
+machine keeping up, and `worst` the longest single frame of the last second,
+which is where a stutter shows and an average hides it.
 
 | Scene | Keys |
 |---|---|
