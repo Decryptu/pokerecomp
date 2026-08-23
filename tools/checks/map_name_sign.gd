@@ -139,9 +139,11 @@ func _check_palette(landmark: int, blank: Color) -> void:
 	if not _r.check(wanted.size() >= 4, "the cache holds no PAL_BG_TEXT palette."):
 		return
 	## The rendered sign is an 8-bit image, so the comparison is made there
-	## rather than on the palette's own 5-bit-derived floats.
+	## rather than on the palette's own 5-bit-derived floats, and through the
+	## drawing's own conversion rather than `Color.to_rgba32`, which rounds where
+	## every blit in the game truncates.
 	_r.check(
-		blank.to_rgba32() == wanted[0].to_rgba32(),
+		blank == Gen2PicImage.quantized(wanted)[0],
 		"landmark %d's sign interior is %s, not PAL_BG_TEXT's own %s." % [
 			landmark, blank, wanted[0]
 		]

@@ -135,20 +135,22 @@ func advance() -> void:
 ## The page as pixels with the icon composed on top: it is an object, so colour
 ## 0 is transparent and it is blended rather than written into the buffer.
 func render(page: Dictionary, data: GameData) -> Image:
-	var image: Image = _background(page, data)
+	var pixels: PackedInt32Array = _background(page, data)
+	var width: int = COLUMNS * TILE
+	var height: int = ROWS * TILE
 	if data == null or _frame < 0:
-		return image
+		return Gen2PicImage.canvas_image(pixels, width, height)
 	var colors: PackedColorArray = data.party_menu_icon_palette()
 	var strip: PackedByteArray = data.species_icon_indices(int(page.get("species", 0)))
 	if strip.is_empty() or colors.size() != Gen2Palette.COLORS_PER_PIC:
-		return image
+		return Gen2PicImage.canvas_image(pixels, width, height)
 	var first: int = _frame * ICON_FRAME_TILES
 	for quadrant: int in ICON_FRAME_TILES:
 		Gen2PartyMenuPage.blend_tile(
-			image, strip, first + quadrant, colors,
+			pixels, strip, first + quadrant, colors,
 			ICON_AT + Vector2i((quadrant & 1) * TILE, (quadrant >> 1) * TILE)
 		)
-	return image
+	return Gen2PicImage.canvas_image(pixels, width, height)
 
 
 ## `_CGB_MoveList`: `PREDEFPAL_GOLDENROD` over the whole screen, and one
@@ -162,10 +164,10 @@ static func attributes() -> PackedInt32Array:
 	return Gen2PicImage.attribute_boxes([HP_ATTRIBUTE], COLUMNS, ROWS)
 
 
-func _background(page: Dictionary, data: GameData) -> Image:
+func _background(page: Dictionary, data: GameData) -> PackedInt32Array:
 	var indices: PackedByteArray = draw(page)
 	if data == null:
-		return Gen2PicImage.from_indices(
+		return Gen2PicImage.canvas_from_indices(
 			indices, COLUMNS * TILE, ROWS * TILE,
 			Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 		)
@@ -173,7 +175,7 @@ func _background(page: Dictionary, data: GameData) -> Image:
 		int(page.get("hp", 0)), int(page.get("max_hp", 0)),
 		Gen2BattleHud.HP_BAR_TILES * TILE
 	)
-	return Gen2PicImage.from_attributes(
+	return Gen2PicImage.canvas_from_attributes(
 		indices, COLUMNS * TILE, ROWS * TILE, attributes(), COLUMNS,
 		[data.move_screen_palette(), data.bar_palette(GameData.hp_bar_palette_name(lit))]
 	)

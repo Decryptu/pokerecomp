@@ -654,7 +654,7 @@ func _draw_hud_balls() -> void:
 		buffer, Gen2Screen.WIDTH, Gen2Screen.HEIGHT,
 		_object_palette(Gen2BattleAnimBackground.PAL_OB_YELLOW), true
 	)
-	_hud_balls.texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(_hud_balls, image)
 	_hud_balls.size = image.get_size()
 	_hud_balls.position = Vector2.ZERO
 
@@ -682,7 +682,7 @@ func _draw_sprites() -> void:
 	for entry: Variant in intro:
 		if entry is Dictionary:
 			_blit_sprite(image, entry as Dictionary, true)
-	_sprites.texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(_sprites, image)
 	_sprites.size = image.get_size()
 	_sprites.position = Vector2.ZERO
 
@@ -840,7 +840,7 @@ func _show_image(into: TextureRect, image: Image) -> void:
 	var offsets: PackedInt32Array = PackedInt32Array(_view.get("raster_scx", []))
 	if not offsets.is_empty():
 		image = Gen2Raster.scroll(image, offsets, MAP_WIDTH)
-	into.texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(into, image)
 	into.size = image.get_size()
 	into.position = Vector2.ZERO
 

@@ -5926,7 +5926,7 @@ func _show_money_window(event: Dictionary) -> void:
 	var image: Image = drawn["image"]
 	_money_window = TextureRect.new()
 	_money_window.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_money_window.texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(_money_window, image)
 	_money_window.size = image.get_size()
 	_money_window.position = Vector2(
 		(drawn["at"] as Vector2i) * Gen2Font.TILE
@@ -6064,7 +6064,7 @@ func _show_story_picture(species: int) -> void:
 	_hide_story_picture()
 	_story_picture = TextureRect.new()
 	_story_picture.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_story_picture.texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(_story_picture, image)
 	_story_picture.size = image.get_size()
 	_story_picture.position = Vector2(
 		Gen2PokepicPage.menu_box().border_position() * Gen2Font.TILE
@@ -6108,7 +6108,7 @@ func _raise_map_name_sign() -> void:
 		return
 	_map_name_sign = TextureRect.new()
 	_map_name_sign.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_map_name_sign.texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(_map_name_sign, image)
 	_map_name_sign.size = image.get_size()
 	_map_name_sign.position = Vector2(0, Gen2MapNameSignPage.TOP)
 	_map_name_sign.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -6182,7 +6182,7 @@ func _open_unown_wall(word: String) -> bool:
 	var box: Gen2MenuBox = Gen2UnownWall.menu_box(word)
 	_unown_wall_box = TextureRect.new()
 	_unown_wall_box.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_unown_wall_box.texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(_unown_wall_box, image)
 	_unown_wall_box.size = image.get_size()
 	_unown_wall_box.position = Vector2(box.border_position() * Gen2Font.TILE)
 	_unown_wall_box.mouse_filter = Control.MOUSE_FILTER_IGNORE

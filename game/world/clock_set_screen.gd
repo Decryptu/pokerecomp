@@ -311,7 +311,7 @@ func _render() -> void:
 		Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK])),
 		_presentation.bgp()
 	)
-	_view.texture = ImageTexture.create_from_image(_page.render(
+	Gen2PicImage.show(_view, _page.render(
 		value_text, "", _confirm_cursor if confirm else -1, kind, colors
 	))
 	if _text_box != null:

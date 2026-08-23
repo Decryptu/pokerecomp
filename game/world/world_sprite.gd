@@ -177,29 +177,23 @@ static func image_for(
 	facing: int = FACING_DOWN,
 	frame: int = 0,
 ) -> Image:
-	var image := Image.create(16, 16, false, Image.FORMAT_RGBA8)
-	image.fill(Color(0, 0, 0, 0))
+	var pixels: PackedInt32Array = Gen2PicImage.canvas(16, 16)
 	if sprite == null or sprite.tiles < 4:
-		return image
+		return Gen2PicImage.canvas_image(pixels, 16, 16)
 	var width: int = sprite.tiles * Gen2Tiles.TILE_WIDTH
 	var source_tile: int = sprite.frame_tile_offset(facing, frame)
 	if source_tile < 0 or source_tile + 4 > sprite.tiles or indices.size() < width * 8:
-		return image
+		return Gen2PicImage.canvas_image(pixels, 16, 16)
 
+	var table: PackedInt32Array = Gen2PicImage.lookup(palette, true)
 	for tile: int in 4:
-		var source_x: int = (source_tile + tile) * Gen2Tiles.TILE_WIDTH
-		var destination_x: int = (tile & 1) * Gen2Tiles.TILE_WIDTH
-		var destination_y: int = (tile >> 1) * Gen2Tiles.TILE_HEIGHT
-		for y: int in Gen2Tiles.TILE_HEIGHT:
-			for x: int in Gen2Tiles.TILE_WIDTH:
-				var color_index: int = int(indices[y * width + source_x + x])
-				var color := Color.MAGENTA
-				if color_index < palette.size():
-					color = palette[color_index]
-				if color_index == 0:
-					color.a = 0.0
-				image.set_pixel(destination_x + x, destination_y + y, color)
+		Gen2PicImage.blit_tile(
+			pixels, 16, 16, indices, sprite.tiles, source_tile + tile,
+			(tile & 1) * Gen2Tiles.TILE_WIDTH, (tile >> 1) * Gen2Tiles.TILE_HEIGHT,
+			table
+		)
 
+	var image: Image = Gen2PicImage.canvas_image(pixels, 16, 16)
 	if frame_is_mirrored(facing, frame):
 		image.flip_x()
 	return image
@@ -215,37 +209,19 @@ static func big_image_for(
 	palette: PackedColorArray,
 	shape: int,
 ) -> Image:
-	var image := Image.create(32, 32, false, Image.FORMAT_RGBA8)
-	image.fill(Color(0, 0, 0, 0))
+	var pixels: PackedInt32Array = Gen2PicImage.canvas(32, 32)
 	if sprite == null or shape == BIG_SHAPE_NONE:
-		return image
+		return Gen2PicImage.canvas_image(pixels, 32, 32)
 	var tile_width: int = sprite.tiles
 	if tile_width <= 0 or indices.size() < tile_width * Gen2Tiles.TILE_PIXELS:
-		return image
-	var placements: Array = _big_placements(shape)
-	for placement: Array in placements:
-		var x: int = int(placement[0])
-		var y: int = int(placement[1])
-		var flip_x: bool = bool(placement[2])
-		var tile: int = int(placement[3])
-		if tile < 0 or tile >= sprite.tiles:
-			continue
-		for row: int in Gen2Tiles.TILE_HEIGHT:
-			for column: int in Gen2Tiles.TILE_WIDTH:
-				var source_x: int = column if not flip_x else 7 - column
-				var color_index: int = int(
-					indices[
-						row * tile_width * Gen2Tiles.TILE_WIDTH
-						+ tile * Gen2Tiles.TILE_WIDTH + source_x
-					]
-				)
-				var color := Color.MAGENTA
-				if color_index < palette.size():
-					color = palette[color_index]
-				if color_index == 0:
-					color.a = 0.0
-				image.set_pixel(x + column, y + row, color)
-	return image
+		return Gen2PicImage.canvas_image(pixels, 32, 32)
+	var table: PackedInt32Array = Gen2PicImage.lookup(palette, true)
+	for placement: Array in _big_placements(shape):
+		Gen2PicImage.blit_tile(
+			pixels, 32, 32, indices, tile_width, int(placement[3]),
+			int(placement[0]), int(placement[1]), table, bool(placement[2])
+		)
+	return Gen2PicImage.canvas_image(pixels, 32, 32)
 
 
 static func _big_placements(shape: int) -> Array:

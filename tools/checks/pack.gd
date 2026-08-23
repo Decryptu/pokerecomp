@@ -415,13 +415,7 @@ func _check_pack_palettes(
 		return
 	var palettes: Array = []
 	for slot: int in RomLayout.PACK_PALETTES:
-		var colours := PackedColorArray()
-		for colour: Color in data.pack_palette(slot):
-			colours.append(Color8(
-				int(roundf(colour.r * 255.0)), int(roundf(colour.g * 255.0)),
-				int(roundf(colour.b * 255.0)), int(roundf(colour.a * 255.0))
-			))
-		palettes.append(colours)
+		palettes.append(Gen2PicImage.quantized(data.pack_palette(slot)))
 	for row: int in Gen2PackPage.ROWS:
 		for column: int in columns:
 			var allowed: PackedColorArray = palettes[slots[row * columns + column]]

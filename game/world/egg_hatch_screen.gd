@@ -453,7 +453,7 @@ func _draw_yes_no() -> void:
 		return
 	var box: Gen2MenuBox = Gen2MenuBox.yes_no()
 	var image: Image = _menu_page.render(box, ["YES", "NO"], 0 if _nickname_yes else 1)
-	_menu.texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(_menu, image)
 	_menu.position = Vector2(box.border_position() * TILE)
 	_menu.visible = true
 
@@ -480,7 +480,7 @@ func _blit(pic: Dictionary, colours: PackedColorArray, at: Vector2i) -> void:
 	var image: Image = Gen2PicImage.from_atlas(
 		_data.atlas_indices(pic["atlas"]), _data.atlas(pic["atlas"]), pic, colours
 	)
-	_pic.texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(_pic, image)
 	_pic.size = Vector2(image.get_size())
 	_pic_origin = at
 	_place_pic()
@@ -520,7 +520,7 @@ func _draw_animation_box() -> void:
 	var image: Image = Gen2PicImage.from_indices(
 		indices, side, side, _data.palette(int(current_hatch().get("species", 0)))
 	)
-	_pic.texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(_pic, image)
 	_pic.size = Vector2(image.get_size())
 	_pic_origin = HATCHLING_AT
 	_place_pic()

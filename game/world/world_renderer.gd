@@ -47,9 +47,6 @@ var _tiles_textures: Dictionary = {}
 ## the connection strips in it are the cartridge's own.
 var _buffer_texture: ImageTexture = null
 var _buffer_revision: int = -1
-## Kept beside the texture so an animation frame can repaint the one or two
-## tiles it rewrote instead of recolouring the whole strip.
-var _atlas_image: Image = null
 var _background_color: Color = FALLBACK_BACKGROUND
 var _actor_textures: Dictionary = {}
 var _priority_atlas: ImageTexture = null
@@ -151,46 +148,88 @@ func set_fade(order: int, white_fill: bool = false) -> void:
 ## Repaints the tiles the last animation frame rewrote.
 ##
 ## The sequence touches one or two of a tileset's tiles per frame, so recolouring
-## the whole strip was almost all of the frame's cost. A palette
-## command is the exception: it changes every tile drawn with that row, so it
-## still rebuilds.
+## the whole strip was almost all of the frame's cost. A palette command is the
+## exception and recolours every tile drawn with that row, but it is still a
+## repaint of the strips already cached rather than a rebuild of them: the
+## graphics, the roof and the quads are all unchanged, and only the colours a
+## tile is written through are not.
 func refresh_animation() -> void:
-	if _animation == null or _atlas == null or _atlas_image == null \
-		or _animation.palette_changed():
+	if _animation == null or _atlas == null:
 		_rebuild_atlas()
 		queue_redraw()
 		return
+	var recolour: bool = _animation.palette_changed()
 	var changed: PackedInt32Array = _animation.changed_tiles()
-	if changed.is_empty():
+	if not recolour and changed.is_empty():
 		return
 	var animated: PackedByteArray = _animation.current_indices()
 	for entry: Dictionary in _atlases.values():
-		if not bool(entry["animated"]):
-			continue
-		# The roof stands over `vTiles2 tile $0a` for as long as the map is
-		# loaded, so an animation pass rebuilds the strip under it rather than
-		# replacing it.
-		var indices: PackedByteArray = _world.data.roofed_tile_indices(
-			animated, int(entry["roof"]), int(entry["tile_count"])
-		)
-		var image: Image = entry["image"]
-		var palettes: Array = entry["palettes"]
-		for tile: int in changed:
-			_paint_tile(image, indices, palettes, tile)
-		(entry["texture"] as ImageTexture).update(image)
-		entry["indices"] = indices
+		_repaint_atlas(entry, animated, changed, recolour)
 	# The priority strip is the map being walked on, not whichever cached strip
 	# the loop ended on: a connected map in another group has its own roof.
 	var current: Dictionary = _atlas_for(_world.current_map, _world.current_tileset)
+	if recolour and not current.is_empty():
+		var palettes: Array = current["palettes"]
+		if not palettes.is_empty() and (palettes[0] as PackedColorArray).size() >= 1:
+			_background_color = (palettes[0] as PackedColorArray)[0]
 	_priority_indices = current["indices"] if not current.is_empty() else animated
 	_priority_atlas = null
 	queue_redraw()
 
 
+## One cached strip through this frame's graphics and, when [param recolour], its
+## own palette rows read again. Only the tiles whose colours or whose pixels
+## actually moved are written.
+func _repaint_atlas(
+	entry: Dictionary, animated: PackedByteArray, changed: PackedInt32Array,
+	recolour: bool
+) -> void:
+	var tiles: int = int(entry["tile_count"])
+	var indices: PackedByteArray = entry["indices"]
+	var repaint := PackedByteArray()
+	repaint.resize(tiles)
+	var any: bool = false
+	if bool(entry["animated"]):
+		# The roof stands over `vTiles2 tile $0a` for as long as the map is
+		# loaded, so an animation pass rebuilds the strip under it rather than
+		# replacing it.
+		indices = _world.data.roofed_tile_indices(
+			animated, int(entry["roof"]), tiles
+		)
+		entry["indices"] = indices
+		for tile: int in changed:
+			if tile >= 0 and tile < tiles:
+				repaint[tile] = 1
+				any = true
+	if recolour:
+		var palettes: Array = _tile_palettes_for(entry["map"], entry["tileset"])
+		var tables: Array = _palette_tables(palettes)
+		var was: Array = entry["tables"]
+		entry["palettes"] = palettes
+		entry["tables"] = tables
+		for tile: int in tiles:
+			if tile < was.size() and tables[tile] == was[tile]:
+				continue
+			repaint[tile] = 1
+			any = true
+	if not any:
+		return
+	var words: PackedInt32Array = entry["words"]
+	var background: int = Gen2PicImage.lookup(
+		PackedColorArray([_background_color])
+	)[0]
+	for tile: int in tiles:
+		if repaint[tile] != 0:
+			_paint_tile(words, tiles, indices, entry["tables"], background, tile)
+	entry["words"] = words
+	(entry["texture"] as ImageTexture).update(
+		Gen2PicImage.canvas_image(words, tiles * Gen2Tiles.TILE_WIDTH, Gen2Tiles.TILE_HEIGHT)
+	)
+
+
 func _rebuild_atlas() -> void:
 	_atlases.clear()
 	_atlas = null
-	_atlas_image = null
 	_background_color = FALLBACK_BACKGROUND
 	if _world == null or _world.data == null or _world.current_tileset == null:
 		return
@@ -201,7 +240,6 @@ func _rebuild_atlas() -> void:
 	if not palettes.is_empty() and (palettes[0] as PackedColorArray).size() >= 1:
 		_background_color = (palettes[0] as PackedColorArray)[0]
 	_atlas = entry["texture"]
-	_atlas_image = entry["image"]
 	# Built on demand: only an object standing in grass reads it.
 	_priority_indices = entry["indices"]
 	_priority_atlas = null
@@ -217,7 +255,9 @@ func _rebuild_atlas() -> void:
 func _atlas_for(map: Gen2WorldMap, tileset: Gen2WorldTileset) -> Dictionary:
 	if map == null or tileset == null or _world == null or _world.data == null:
 		return {}
-	var key: String = "%d:%d:%d" % [tileset.number, map.environment, map.group]
+	## Packed rather than formatted: `_sync_map_layers` asks for one of these per
+	## connected map on every frame the camera moves.
+	var key: int = tileset.number | (map.environment << 8) | (map.group << 16)
 	if _atlases.has(key):
 		return _atlases[key]
 	var indices: PackedByteArray = _world.data.world_tileset_indices(tileset.number)
@@ -231,16 +271,28 @@ func _atlas_for(map: Gen2WorldMap, tileset: Gen2WorldTileset) -> Dictionary:
 	var roof: int = _world.data.map_roof(map, tileset)
 	indices = _world.data.roofed_tile_indices(indices, roof, tileset.tile_count)
 	var palettes: Array = _tile_palettes_for(map, tileset)
-	var image := Image.create(
-		tileset.tile_count * Gen2Tiles.TILE_WIDTH, Gen2Tiles.TILE_HEIGHT,
-		false, Image.FORMAT_RGBA8,
+	var tables: Array = _palette_tables(palettes)
+	var background: int = Gen2PicImage.lookup(
+		PackedColorArray([_background_color])
+	)[0]
+	var words: PackedInt32Array = Gen2PicImage.canvas(
+		tileset.tile_count * Gen2Tiles.TILE_WIDTH, Gen2Tiles.TILE_HEIGHT
 	)
 	for tile: int in tileset.tile_count:
-		_paint_tile(image, indices, palettes, tile)
+		_paint_tile(words, tileset.tile_count, indices, tables, background, tile)
 	var entry: Dictionary = {
-		"texture": ImageTexture.create_from_image(image),
-		"image": image,
+		"texture": ImageTexture.create_from_image(Gen2PicImage.canvas_image(
+			words, tileset.tile_count * Gen2Tiles.TILE_WIDTH, Gen2Tiles.TILE_HEIGHT
+		)),
+		## The strip before its conversion, so an animation frame repaints the
+		## one or two tiles it rewrote rather than recolouring the whole run.
+		"words": words,
 		"palettes": palettes,
+		"tables": tables,
+		## Kept so a palette step reads the rows this strip was coloured through
+		## again rather than rebuilding the cache to find out.
+		"map": map,
+		"tileset": tileset,
 		"indices": indices,
 		"animated": animated,
 		"roof": roof,
@@ -303,18 +355,40 @@ func _tile_palettes_for(map: Gen2WorldMap, tileset: Gen2WorldTileset) -> Array:
 ## One tile of the strip, coloured. Index 0 is a colour here rather than a hole:
 ## the atlas is the background layer, and the cartridge's transparent index
 ## belongs to sprites.
-func _paint_tile(image: Image, indices: PackedByteArray, palettes: Array, tile: int) -> void:
-	var width: int = image.get_width()
-	var palette: PackedColorArray = palettes[tile] if tile < palettes.size() else PackedColorArray()
+func _paint_tile(
+	words: PackedInt32Array, tiles: int, indices: PackedByteArray, tables: Array,
+	background: int, tile: int
+) -> void:
+	var width: int = tiles * Gen2Tiles.TILE_WIDTH
+	var table: PackedInt32Array = tables[tile] if tile < tables.size() \
+		else PackedInt32Array()
+	var colors: int = table.size()
 	var left: int = tile * Gen2Tiles.TILE_WIDTH
 	for y: int in Gen2Tiles.TILE_HEIGHT:
 		var row: int = y * width + left
 		for x: int in Gen2Tiles.TILE_WIDTH:
 			var color_index: int = indices[row + x]
-			image.set_pixel(
-				left + x, y,
-				palette[color_index] if color_index < palette.size() else _background_color
-			)
+			words[row + x] = table[color_index] if color_index < colors else background
+
+
+## One [method Gen2PicImage.lookup] per tile, built once for a repaint rather
+## than once inside it. A tileset's couple of hundred tiles share the eight or
+## nine rows `GetMapPalette` resolved, so each row is converted once. Trimmed to
+## the row's own length, so a colour it does not hold still falls through to the
+## background the way it did before the table existed.
+func _palette_tables(palettes: Array) -> Array:
+	var seen: Dictionary = {}
+	var out: Array = []
+	for entry: Variant in palettes:
+		var palette: PackedColorArray = entry
+		if seen.has(palette):
+			out.append(seen[palette])
+			continue
+		var table: PackedInt32Array = Gen2PicImage.lookup(palette)
+		table.resize(palette.size())
+		seen[palette] = table
+		out.append(table)
+	return out
 
 
 ## `DoBattleTransition`, drawn over whatever the map was already showing.
@@ -795,10 +869,13 @@ func _actor_texture(
 	if sprite == null or _world == null or _world.data == null:
 		return null
 	var palette: int = palette_override if palette_override != 0 else sprite.default_palette
-	var key: String = "%d:%d:%d:%d:%d:%d:%d:%d" % [
-		sprite.sprite_type, sprite.number, palette, facing, frame, big_shape, _time_of_day,
-		hash(color_override),
-	]
+	## Packed rather than formatted: every sprite on screen asks for one of these
+	## on every drawn frame, and the override is empty for all but a visible
+	## encounter. Twelve bits for the sprite number leaves every field room for
+	## more than the cartridge has, and the hash sits above all of them.
+	var key: int = sprite.sprite_type | (sprite.number << 3) | (palette << 15) \
+		| (facing << 19) | (frame << 22) | (big_shape << 25) | (_time_of_day << 28) \
+		| (hash(color_override) << 30)
 	if _actor_textures.has(key):
 		return _actor_textures[key]
 	var indices: PackedByteArray = _world.data.overworld_icon_indices(sprite.icon_number) \
@@ -989,17 +1066,23 @@ func _transition_wrote(at: Vector2) -> bool:
 ## The same strip as the atlas with the cartridge's transparent index left out,
 ## for the tiles that are drawn over a sprite rather than under it.
 func _build_priority_atlas() -> void:
-	if _atlas_image == null:
+	if _atlas == null:
 		return
-	var image: Image = _atlas_image.duplicate()
-	var width: int = image.get_width()
+	var entry: Dictionary = _atlas_for(_world.current_map, _world.current_tileset)
+	if entry.is_empty():
+		return
+	var width: int = int(entry["tile_count"]) * Gen2Tiles.TILE_WIDTH
 	if _priority_indices.size() < width * Gen2Tiles.TILE_HEIGHT:
 		return
+	var words: PackedInt32Array = (entry["words"] as PackedInt32Array).duplicate()
 	for y: int in Gen2Tiles.TILE_HEIGHT:
+		var row: int = y * width
 		for x: int in width:
-			if int(_priority_indices[y * width + x]) == 0:
-				image.set_pixel(x, y, Color(0, 0, 0, 0))
-	_priority_atlas = ImageTexture.create_from_image(image)
+			if int(_priority_indices[row + x]) == 0:
+				words[row + x] = 0
+	_priority_atlas = ImageTexture.create_from_image(
+		Gen2PicImage.canvas_image(words, width, Gen2Tiles.TILE_HEIGHT)
+	)
 
 
 ## `FacingFishDown` and its three siblings: the standing player plus one tile of

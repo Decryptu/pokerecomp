@@ -93,9 +93,10 @@ func _initialize() -> void:
 		quit(1)
 		return
 
-	var options: Gen2Options = Gen2OptionsStore.current()
-	options.battle_scene = not _scene_off
-	Gen2OptionsStore.save(options)
+	## The shared object rather than the file: `CheckBattleScene` reads what
+	## `current()` answers, and a capture has no business rewriting the option
+	## the owner of this machine chose.
+	Gen2OptionsStore.current().battle_scene = not _scene_off
 
 	root.set_content_scale_size(WINDOW_SIZE)
 	root.size = WINDOW_SIZE

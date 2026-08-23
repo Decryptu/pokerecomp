@@ -220,6 +220,6 @@ func _refresh() -> void:
 		_view.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(_view)
-	_view.texture = ImageTexture.create_from_image(
+	Gen2PicImage.show(_view,
 		_page.render(_machine, overlay_state())
 	)

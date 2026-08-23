@@ -79,6 +79,12 @@ func _initialize() -> void:
 		quit(1)
 		return
 	root.add_child(_screen)
+	## The party menu steps its icons off a real delta, so a run that took a
+	## millisecond longer photographed the next frame of the animation and the
+	## same shot came out two ways. The frames belong to this tool; it spends
+	## none, and the picture is the one the screen opened on.
+	if _screen is Gen2PartyScreen:
+		_screen.set_process(false)
 	# The party and box views are window-resolution panels, so they are given the
 	# whole window the way a scene root would be; the start menu is a hardware
 	# screen inside one and takes its own layer once both are in the tree.

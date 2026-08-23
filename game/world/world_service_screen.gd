@@ -623,7 +623,7 @@ func _render_mart() -> void:
 				menu, Rect2i(Vector2i.ZERO, menu.get_size()),
 				box.border_position() * Gen2Font.TILE
 			)
-	_mart_view.texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(_mart_view, image)
 
 
 ## `UpdateItemDescription`, which prints nothing for the CANCEL row.
@@ -1329,7 +1329,7 @@ func _render_service_page(values: Array) -> void:
 		_title, _summary, labels, _cursor, _status, _service_box()
 	)
 	if image != null:
-		_service_view.texture = ImageTexture.create_from_image(image)
+		Gen2PicImage.show(_service_view, image)
 	_service_drawn = image != null
 	_apply_layer_visibility()
 

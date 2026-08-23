@@ -431,7 +431,7 @@ func _redraw() -> void:
 	)
 	if not raster_scx.is_empty():
 		image = Gen2Raster.scroll(image, raster_scx, Gen2BattleIntro.MAP_WIDTH)
-	texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(self, image)
 	size = Vector2(width, height)
 
 

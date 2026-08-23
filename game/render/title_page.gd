@@ -194,8 +194,15 @@ var _tilemap: PackedByteArray = PackedByteArray()
 var _drawn: PackedByteArray = PackedByteArray()
 ## Which pixels an object has already claimed this frame.
 var _taken: PackedByteArray = PackedByteArray()
-var _map: Image = null
+## The BG map this frame, one packed colour per pixel beside the colour indices
+## `OAM_PRIO` reads.
+var _map: PackedInt32Array = PackedInt32Array()
 var _map_indices: PackedByteArray = PackedByteArray()
+## The same map without whatever moves on it, built once: the logo, the version
+## line and Gold and Silver's whole tilemap never change, and rebuilding 140
+## tiles of them sixty times a second is the frame this screen used to spend.
+var _base: PackedInt32Array = PackedInt32Array()
+var _base_indices: PackedByteArray = PackedByteArray()
 
 
 ## Null on a cache with no title art, which is the caller's cue to skip the
@@ -242,36 +249,46 @@ static func from_data(data: GameData) -> Gen2TitlePage:
 func draw(scene: Gen2TitleScene) -> Image:
 	var width: int = COLUMNS * TILE
 	var height: int = ROWS * TILE
-	var image: Image = Image.create_empty(width, height, false, Image.FORMAT_RGBA8)
-	var blank: Color = _background[0][0] if not _background[0].is_empty() else Color.BLACK
-	image.fill(blank)
+	var blank: int = 0
+	if not _background.is_empty() and not _background[0].is_empty():
+		blank = Gen2PicImage.lookup(_background[0])[0]
+	if scene == null:
+		var empty: PackedInt32Array = Gen2PicImage.canvas(width, height)
+		empty.fill(blank)
+		return Gen2PicImage.canvas_image(empty, width, height)
+
+	_build_base(blank)
+	if _profile == RomRegistry.CRYSTAL:
+		# The strip `LoadSuicuneFrame` re-points is the one thing on the map that
+		# moves, so the frame starts from the still half rather than from blank.
+		_map = _base.duplicate()
+		_map_indices = _base_indices.duplicate()
+		_draw_crystal_suicune(scene)
+	else:
+		_map = _base
+		_map_indices = _base_indices
 	# What colour index each pixel of the background ended up as, which is the
 	# only thing `OAM_PRIO` reads: a sprite behind the background shows through
-	# colour 0 and nowhere else.
-	_drawn.resize(width * height)
-	_drawn.fill(0)
-	if scene == null:
-		return image
-
-	_map = Image.create_empty(MAP_WIDTH, MAP_HEIGHT, false, Image.FORMAT_RGBA8)
-	_map.fill(blank)
-	_map_indices.resize(MAP_WIDTH * MAP_HEIGHT)
-	_map_indices.fill(0)
-	if _profile == RomRegistry.CRYSTAL:
-		_draw_crystal_background(scene)
-	else:
-		_draw_gs_background()
-	_compose(image, scene)
-	_draw_copyright_window(image, scene)
+	# colour 0 and nowhere else. Collected only for a frame that has one, since
+	# it is a second store per pixel of the screen and Crystal never asks.
+	var behind: bool = false
+	var sprites: Array[Dictionary] = shadow_oam(scene)
+	for entry: Dictionary in sprites:
+		if bool(entry["behind"]):
+			behind = true
+			break
+	_drawn.resize(0)
+	var pixels: PackedInt32Array = _compose(scene, behind)
+	_draw_copyright_window(pixels, scene)
 
 	# The lower OAM index wins a pixel, so a slot only paints where no earlier
 	# one did: Gold's bird is copied into the last struct, so every trail spawned
 	# after it still takes a lower slot and covers it.
 	_taken.resize(width * height)
 	_taken.fill(0)
-	for entry: Dictionary in shadow_oam(scene):
-		_draw_sprite(image, entry)
-	return image
+	for entry: Dictionary in sprites:
+		_draw_sprite(pixels, entry)
+	return Gen2PicImage.canvas_image(pixels, width, height)
 
 
 ## Every object expanded into the shadow OAM the hardware would hold, in struct
@@ -308,52 +325,79 @@ func shadow_oam(scene: Gen2TitleScene) -> Array[Dictionary]:
 
 ## The BG map through `hSCX` and whatever `wLYOverrides` is writing over it, one
 ## scanline at a time.
-func _compose(image: Image, scene: Gen2TitleScene) -> void:
+func _compose(scene: Gen2TitleScene, collect_indices: bool) -> PackedInt32Array:
 	var offsets: PackedInt32Array = scene.line_offsets()
 	var base: int = scene.scroll_x()
 	var scy: int = scene.scroll_y()
-	for y: int in image.get_height():
+	var width: int = COLUMNS * TILE
+	var pixels := PackedInt32Array()
+	## Appended run by run rather than pixel by pixel: the map is wider than the
+	## screen, so a scanline is one span of it or two with the wrap between them,
+	## and a span is a copy the engine does in one call.
+	for y: int in ROWS * TILE:
 		# `LCD` fires on `STAT_MODE_0` and writes `wLYOverrides[rLY]` to rSCX,
 		# which the line after it is drawn with; `VBlank_Cutscene` writes entry
 		# zero, so the first two lines share it.
 		var line: int = maxi(y - 1, 0)
 		var shift: int = offsets[line] if line < offsets.size() else base
-		var row: int = posmod(y + scy, MAP_HEIGHT)
-		for x: int in image.get_width():
-			var from: int = posmod(x + shift, MAP_WIDTH)
-			image.set_pixel(x, y, _map.get_pixel(from, row))
-			_drawn[y * image.get_width() + x] = _map_indices[row * MAP_WIDTH + from]
+		var row: int = posmod(y + scy, MAP_HEIGHT) * MAP_WIDTH
+		var from: int = posmod(shift, MAP_WIDTH)
+		var first: int = mini(width, MAP_WIDTH - from)
+		pixels.append_array(_map.slice(row + from, row + from + first))
+		if collect_indices:
+			_drawn.append_array(_map_indices.slice(row + from, row + from + first))
+		if first < width:
+			pixels.append_array(_map.slice(row, row + width - first))
+			if collect_indices:
+				_drawn.append_array(_map_indices.slice(row, row + width - first))
+	return pixels
 
 
 ## The window layer, which on this screen is the copyright line and nothing
 ## else: one row of `vBGMap1` at `hWX` 7, so it starts at column 0 and covers
 ## whatever the background left under it.
-func _draw_copyright_window(image: Image, scene: Gen2TitleScene) -> void:
+func _draw_copyright_window(pixels: PackedInt32Array, scene: Gen2TitleScene) -> void:
 	var top: int = scene.window_y()
-	if top >= image.get_height():
+	if top >= ROWS * TILE:
 		return
 	var palette: PackedColorArray = _palette(_background, CRYSTAL_COPYRIGHT_PALETTE)
 	if palette.is_empty():
 		return
+	var table: PackedInt32Array = Gen2PicImage.lookup(palette)
 	for index: int in CRYSTAL_COPYRIGHT_TILES:
 		_blit_window_tile(
-			image, palette, CRYSTAL_COPYRIGHT_TILE + index,
+			pixels, table, CRYSTAL_COPYRIGHT_TILE + index,
 			Vector2i((CRYSTAL_COPYRIGHT_AT + index) * TILE, top)
 		)
 
 
 ## `DrawTitleGraphic` over the logo, then `LoadSuicuneFrame`'s own six rows of
 ## eight. `hSCX` is the entrance's own scroll and moves the whole background.
-func _draw_crystal_background(scene: Gen2TitleScene) -> void:
+func _build_base(blank: int) -> void:
+	if not _base.is_empty():
+		return
+	_map = Gen2PicImage.canvas(MAP_WIDTH, MAP_HEIGHT)
+	_map.fill(blank)
+	_map_indices.resize(MAP_WIDTH * MAP_HEIGHT)
+	_map_indices.fill(0)
+	if _profile == RomRegistry.CRYSTAL:
+		_draw_crystal_logo()
+	else:
+		_draw_gs_background()
+	_base = _map.duplicate()
+	_base_indices = _map_indices.duplicate()
+
+
+func _draw_crystal_logo() -> void:
 	for row: int in CRYSTAL_LOGO_ROWS:
-		var palette: PackedColorArray = _palette(
+		var table: PackedInt32Array = _table(
 			_background, CRYSTAL_LOGO_PALETTES[row]
 		)
 		for column: int in CRYSTAL_LOGO_COLUMNS:
 			_blit_background(
 				"title_logo", row * CRYSTAL_LOGO_COLUMNS + column,
 				Vector2i(CRYSTAL_LOGO_AT.x + column, CRYSTAL_LOGO_AT.y + row) * TILE,
-				palette
+				table
 			)
 	# The eleven tiles of "CRYSTAL VERSION" sit on the logo's last row and take a
 	# palette of their own.
@@ -363,12 +407,17 @@ func _draw_crystal_background(scene: Gen2TitleScene) -> void:
 			"title_logo",
 			(CRYSTAL_VERSION_ROW - CRYSTAL_LOGO_AT.y) * CRYSTAL_LOGO_COLUMNS + column,
 			Vector2i(column, CRYSTAL_VERSION_ROW) * TILE,
-			_palette(_background, CRYSTAL_VERSION_PALETTE)
+			_table(_background, CRYSTAL_VERSION_PALETTE)
 		)
+
+
+## `LoadSuicuneFrame` re-points the strip every eighth frame, which is the one
+## part of Crystal's map that is not the same on every frame.
+func _draw_crystal_suicune(scene: Gen2TitleScene) -> void:
+	var table: PackedInt32Array = _table(_background, CRYSTAL_SUICUNE_PALETTE)
 	for placed: Vector3i in scene.suicune_tiles():
 		_blit_background(
-			"title_suicune", placed.z, Vector2i(placed.x, placed.y) * TILE,
-			_palette(_background, CRYSTAL_SUICUNE_PALETTE)
+			"title_suicune", placed.z, Vector2i(placed.x, placed.y) * TILE, table
 		)
 
 
@@ -388,7 +437,7 @@ func _draw_gs_background() -> void:
 				tile = code - GS_TOP_FIRST_TILE
 			_blit_background(
 				name, tile, Vector2i(column, row) * TILE,
-				_palette(_background, _gs_palette(row, column))
+				_table(_background, _gs_palette(row, column))
 			)
 
 
@@ -406,15 +455,16 @@ func _gs_palette(row: int, column: int) -> int:
 ## One shadow-OAM entry, drawn through an object palette whose first colour is
 ## transparent. The screen is in 8x16 mode, so the entry's tile is the top half
 ## and the one after it the bottom.
-func _draw_sprite(image: Image, entry: Dictionary) -> void:
+func _draw_sprite(pixels: PackedInt32Array, entry: Dictionary) -> void:
 	var palette: PackedColorArray = _palette(_object, int(entry["palette"]))
 	if palette.size() <= TRANSPARENT_INDEX:
 		return
+	var table: PackedInt32Array = Gen2PicImage.lookup(palette)
 	var to := Vector2i(int(entry["x"]) - OAM_ORIGIN.x, int(entry["y"]) - OAM_ORIGIN.y)
 	var sheet: String = String(entry["sheet"])
 	for half: int in OBJECT_HEIGHT:
 		_blit_sprite_tile(
-			image, palette, sheet, int(entry["tile"]) - _vram_base(sheet) + half,
+			pixels, table, sheet, int(entry["tile"]) - _vram_base(sheet) + half,
 			Vector2i(to.x, to.y + half * TILE), bool(entry["behind"])
 		)
 
@@ -465,6 +515,12 @@ func _oam_set(kind: StringName, frame: int) -> Array[Vector3i]:
 			return out
 
 
+## The same run through [method Gen2PicImage.lookup], which is what every blit
+## below writes.
+func _table(run: Array[PackedColorArray], index: int) -> PackedInt32Array:
+	return Gen2PicImage.lookup(_palette(run, index))
+
+
 func _palette(run: Array[PackedColorArray], index: int) -> PackedColorArray:
 	if index < 0 or index >= run.size():
 		return PackedColorArray()
@@ -474,16 +530,17 @@ func _palette(run: Array[PackedColorArray], index: int) -> PackedColorArray:
 ## One tile into the BG map, through the palette its attribute names. The map is
 ## what wraps and what the scroll is applied to; nothing here knows the screen.
 func _blit_background(
-	name: String, tile: int, at: Vector2i, palette: PackedColorArray
+	name: String, tile: int, at: Vector2i, table: PackedInt32Array
 ) -> void:
 	var tiles: PackedByteArray = _sheets.get(name, PackedByteArray())
 	var stride: int = int(_widths.get(name, 0))
-	if stride <= 0 or tile < 0 or palette.is_empty():
+	if stride <= 0 or tile < 0 or table.is_empty():
 		return
 	for y: int in TILE:
 		var target_y: int = at.y + y
-		if target_y < 0 or target_y >= _map.get_height():
+		if target_y < 0 or target_y >= MAP_HEIGHT:
 			continue
+		var row: int = target_y * MAP_WIDTH
 		for x: int in TILE:
 			var target_x: int = at.x + x
 			if target_x < 0 or target_x >= MAP_WIDTH:
@@ -492,65 +549,69 @@ func _blit_background(
 			if from < 0 or from >= tiles.size():
 				continue
 			var value: int = tiles[from]
-			if value >= palette.size():
+			if value >= table.size():
 				continue
-			_map.set_pixel(target_x, target_y, palette[value])
-			_map_indices[target_y * MAP_WIDTH + target_x] = value
+			_map[row + target_x] = table[value]
+			_map_indices[row + target_x] = value
 
 
 ## One window tile straight onto the screen. The window is drawn over the
 ## background and under nothing, so it needs neither the map's wrap nor a claim
 ## on [member _taken].
 func _blit_window_tile(
-	image: Image, palette: PackedColorArray, tile: int, at: Vector2i
+	pixels: PackedInt32Array, table: PackedInt32Array, tile: int, at: Vector2i
 ) -> void:
 	var tiles: PackedByteArray = _sheets.get("title_logo", PackedByteArray())
 	var stride: int = int(_widths.get("title_logo", 0))
 	if stride <= 0:
 		return
+	var width: int = COLUMNS * TILE
 	for y: int in TILE:
 		var target_y: int = at.y + y
-		if target_y < 0 or target_y >= image.get_height():
+		if target_y < 0 or target_y >= ROWS * TILE:
 			continue
+		var row: int = target_y * width
 		for x: int in TILE:
 			var target_x: int = at.x + x
-			if target_x < 0 or target_x >= image.get_width():
+			if target_x < 0 or target_x >= width:
 				continue
 			var from: int = y * stride + tile * TILE + x
 			if from < 0 or from >= tiles.size():
 				continue
 			var value: int = tiles[from]
-			if value >= palette.size():
+			if value >= table.size():
 				continue
-			image.set_pixel(target_x, target_y, palette[value])
+			pixels[row + target_x] = table[value]
 
 
 ## One object tile onto the drawn screen, clipped per axis so a sprite hanging
 ## off an edge cannot wrap onto the opposite one. [param behind] is `OAM_PRIO`,
 ## which lets the background's colours 1 to 3 cover the object.
 func _blit_sprite_tile(
-	image: Image, palette: PackedColorArray, name: String, tile: int, at: Vector2i,
-	behind: bool = false
+	pixels: PackedInt32Array, table: PackedInt32Array, name: String, tile: int,
+	at: Vector2i, behind: bool = false
 ) -> void:
 	var tiles: PackedByteArray = _sheets.get(name, PackedByteArray())
 	var stride: int = int(_widths.get(name, 0))
 	if stride <= 0 or tile < 0:
 		return
+	var width: int = COLUMNS * TILE
 	for y: int in TILE:
 		var target_y: int = at.y + y
-		if target_y < 0 or target_y >= image.get_height():
+		if target_y < 0 or target_y >= ROWS * TILE:
 			continue
+		var row: int = target_y * width
 		for x: int in TILE:
 			var target_x: int = at.x + x
-			if target_x < 0 or target_x >= image.get_width():
+			if target_x < 0 or target_x >= width:
 				continue
 			var from: int = y * stride + tile * TILE + x
 			if from < 0 or from >= tiles.size():
 				continue
 			var value: int = tiles[from]
-			if value == TRANSPARENT_INDEX or value >= palette.size():
+			if value == TRANSPARENT_INDEX or value >= table.size():
 				continue
-			var at_pixel: int = target_y * image.get_width() + target_x
+			var at_pixel: int = row + target_x
 			if _taken[at_pixel] != 0:
 				continue
 			# The claim comes first: an object that loses the pixel to the
@@ -558,4 +619,4 @@ func _blit_sprite_tile(
 			_taken[at_pixel] = 1
 			if behind and _drawn[at_pixel] != 0:
 				continue
-			image.set_pixel(target_x, target_y, palette[value])
+			pixels[at_pixel] = table[value]

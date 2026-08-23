@@ -121,7 +121,7 @@ func _check_page(
 	## The identity `LoadStatsScreenPals` writes: colour 0 of the HP palette, and
 	## so the background of every cell the attrmap left on slot 0.
 	if not _r.check(
-		image.get_pixel(0, (Gen2StatsScreenPage.MON_ROWS + 1) * TILE) == _quantised(
+		image.get_pixel(0, (Gen2StatsScreenPage.MON_ROWS + 1) * TILE) == Gen2PicImage.quantized(
 			PackedColorArray([tint]))[0],
 		"species %d page %d does not tint the lower half." % [species, number]
 	):
@@ -137,11 +137,11 @@ func _palettes(
 	var lit: int = Gen2BattleHud.bar_pixels(hp, max_hp, Gen2BattleHud.HP_BAR_TILES * TILE)
 	var out: Array = [
 		_tinted(_r.data.bar_palette(GameData.hp_bar_palette_name(lit)), tint),
-		_quantised(_r.data.palette(species) if species > 0 else _r.data.egg_palette()),
+		Gen2PicImage.quantized(_r.data.palette(species) if species > 0 else _r.data.egg_palette()),
 		_tinted(_r.data.bar_palette(GameData.EXP_BAR_PALETTE), tint),
 	]
 	for index: int in pages:
-		out.append(_quantised(
+		out.append(Gen2PicImage.quantized(
 			_r.data.stats_page_palette(Gen2StatsScreenPage.PINK_PAGE + index)
 		))
 	return out
@@ -151,26 +151,13 @@ func _tinted(palette: PackedColorArray, colour: Color) -> PackedColorArray:
 	var out: PackedColorArray = palette.duplicate()
 	if not out.is_empty():
 		out[0] = colour
-	return _quantised(out)
+	return Gen2PicImage.quantized(out)
 
 
 ## The source's own boxes, flattened the way `WipeAttrmap` plus `FillBoxCGB`
 ## leaves them.
 func _source_slots() -> PackedInt32Array:
 	return Gen2PicImage.attribute_boxes(SOURCE_BOXES, COLUMNS, ROWS)
-
-
-## A 15-bit colour is stored as a float and read back through an eight-bit
-## image, so the comparison is made where the picture is: `Color8`'s own
-## rounding, which is what [method Gen2PicImage.from_attributes] wrote.
-func _quantised(palette: PackedColorArray) -> PackedColorArray:
-	var out := PackedColorArray()
-	for colour: Color in palette:
-		out.append(Color8(
-			int(roundf(colour.r * 255.0)), int(roundf(colour.g * 255.0)),
-			int(roundf(colour.b * 255.0)), int(roundf(colour.a * 255.0))
-		))
-	return out
 
 
 ## `EggStatsInit` jumps past `StatsScreen_LoadPage`, so an egg reaches
@@ -189,7 +176,7 @@ func _check_egg(page: Gen2StatsScreenPage) -> void:
 		"an egg's stats screen is tinted, and no cartridge tints one."
 	)
 	var slots: PackedInt32Array = _source_slots()
-	var egg: PackedColorArray = _quantised(_r.data.egg_palette())
+	var egg: PackedColorArray = Gen2PicImage.quantized(_r.data.egg_palette())
 	for row: int in Gen2StatsScreenPage.MON_ROWS:
 		for column: int in COLUMNS:
 			if slots[row * COLUMNS + column] != Gen2StatsScreenPage.MON_SLOT:
@@ -210,7 +197,7 @@ func _check_move_screen() -> void:
 	var page: Gen2MoveScreenPage = Gen2MoveScreenPage.from_data(_r.data)
 	if not _r.check(page != null, "the move screen page will not build."):
 		return
-	var goldenrod: PackedColorArray = _quantised(_r.data.move_screen_palette())
+	var goldenrod: PackedColorArray = Gen2PicImage.quantized(_r.data.move_screen_palette())
 	_r.check(
 		goldenrod.size() == RomLayout.PREDEF_PALETTE_COLORS,
 		"the move screen's palette is %d colours, not %d." % [
@@ -236,7 +223,7 @@ func _check_move_screen() -> void:
 	var slots: PackedInt32Array = Gen2PicImage.attribute_boxes(
 		SOURCE_MOVE_BOXES, COLUMNS, ROWS
 	)
-	var hp: PackedColorArray = _quantised(_r.data.bar_palette(
+	var hp: PackedColorArray = Gen2PicImage.quantized(_r.data.bar_palette(
 		GameData.hp_bar_palette_name(Gen2BattleHud.bar_pixels(
 			1, 100, Gen2BattleHud.HP_BAR_TILES * TILE
 		))

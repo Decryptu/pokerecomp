@@ -166,6 +166,6 @@ func _build_chart() -> void:
 		indices, width, height,
 		Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	)
-	_chart.texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(_chart, image)
 	_chart.size = Vector2(width, height)
 	_chart.position = Vector2(int((Gen2Screen.WIDTH - width) / 2), 8)

@@ -374,14 +374,14 @@ func _sprite() -> TextureRect:
 func _refresh() -> void:
 	if not _open or _background == null or _page == null:
 		return
-	_background.texture = ImageTexture.create_from_image(_background_image())
+	Gen2PicImage.show(_background, _background_image())
 	_background.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 	_arrow.position = Vector2(_arrow_position())
-	_arrow.texture = ImageTexture.create_from_image(_arrow_image())
+	Gen2PicImage.show(_arrow, _arrow_image())
 	_knob_icon.visible = _card == CARD_RADIO
 	if _knob_icon.visible:
 		_knob_icon.position = Vector2(_knob_position())
-		_knob_icon.texture = ImageTexture.create_from_image(_knob_image())
+		Gen2PicImage.show(_knob_icon, _knob_image())
 
 
 func _background_image() -> Image:
@@ -455,29 +455,23 @@ func _knob_image() -> Image:
 ## through the overworld's first palette the way every icon on these screens is.
 ## Colour zero is transparent, which is what lets one sit over the card.
 func _icon(first: int, columns: int, rows: int, repeat: bool = false) -> Image:
-	var pixels := Vector2i(columns, rows) * Gen2TownMapPage.TILE
-	var out := Image.create(pixels.x, pixels.y, false, Image.FORMAT_RGBA8)
-	out.fill(Color(0, 0, 0, 0))
+	var size := Vector2i(columns, rows) * Gen2TownMapPage.TILE
+	var out: PackedInt32Array = Gen2PicImage.canvas(size.x, size.y)
 	var tiles: PackedByteArray = _data.tile_indices("pokegear_sprites") if _data != null \
 		else PackedByteArray()
 	var palette: PackedColorArray = _data.overworld_sprite_palette(0, _time_of_day) \
 		if _data != null else PackedColorArray()
 	if tiles.is_empty() or palette.is_empty():
-		return out
-	var width: int = tiles.size() / Gen2TownMapPage.TILE
+		return Gen2PicImage.canvas_image(out, size.x, size.y)
+	@warning_ignore("integer_division")
+	var strip_tiles: int = tiles.size() / Gen2Tiles.TILE_PIXELS
+	var table: PackedInt32Array = Gen2PicImage.lookup(palette)
 	for row: int in rows:
 		for column: int in columns:
-			var tile: int = first if repeat else first + row * columns + column
-			for y: int in Gen2TownMapPage.TILE:
-				for x: int in Gen2TownMapPage.TILE:
-					var index: int = tiles[
-						y * width + tile * Gen2TownMapPage.TILE + x
-					]
-					if index == 0:
-						continue
-					out.set_pixel(
-						column * Gen2TownMapPage.TILE + x,
-						row * Gen2TownMapPage.TILE + y,
-						palette[clampi(index, 0, palette.size() - 1)]
-					)
-	return out
+			Gen2PicImage.blit_tile(
+				out, size.x, size.y, tiles, strip_tiles,
+				first if repeat else first + row * columns + column,
+				column * Gen2TownMapPage.TILE, row * Gen2TownMapPage.TILE,
+				table, false, false, 0
+			)
+	return Gen2PicImage.canvas_image(out, size.x, size.y)

@@ -112,7 +112,7 @@ func _refresh() -> void:
 		Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK])),
 		true
 	)
-	_background.texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(_background, image)
 	_background.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 	_refresh_pic(page)
 
@@ -133,7 +133,7 @@ func _refresh_pic(page: Dictionary) -> void:
 		_data.atlas_indices(pic["atlas"]), _data.atlas(pic["atlas"]), pic,
 		_data.palette(species)
 	)
-	_pic.texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(_pic, image)
 	_pic.size = Vector2(image.get_size())
 	## The source centres a seven-tile cell on (6,5); a pic smaller than that
 	## cell is drawn at its bottom, the way _PrepMonFrontpic places it.

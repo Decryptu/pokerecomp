@@ -68,33 +68,35 @@ func image(data: GameData, state: Dictionary) -> Image:
 	var map: PackedInt32Array = state.get("map", PackedInt32Array())
 	var slots: PackedInt32Array = state.get("attributes", PackedInt32Array())
 	var indices: PackedByteArray = compose(map, int(state.get("block", -1)))
-	var out := Image.create(Gen2Screen.WIDTH, Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8)
+	var out: PackedInt32Array = Gen2PicImage.canvas(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 	if map.size() < COLUMNS * ROWS or slots.size() < COLUMNS * ROWS:
-		return out
+		return Gen2PicImage.canvas_image(out, Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 	var scene: int = int(state.get("scene", 0))
-	var palettes: Array = []
+	var tables: Array[PackedInt32Array] = []
 	for slot: int in [
 		Gen2Credits.PALETTE_BANNER, Gen2Credits.PALETTE_BORDER, Gen2Credits.PALETTE_TEXT,
 	]:
-		palettes.append(palette(data, scene, slot))
+		var colors: PackedColorArray = palette(data, scene, slot)
+		tables.append(
+			PackedInt32Array() if colors.is_empty() else Gen2PicImage.lookup(colors)
+		)
 	var scroll: int = int(state.get("scroll", 0))
 	var scrolled: Array = state.get("scroll_rows", [])
 	for row: int in ROWS:
 		var shift: int = scroll if row in scrolled else 0
 		for column: int in COLUMNS:
-			var palette_colors: PackedColorArray = palettes[
-				clampi(slots[row * COLUMNS + column], 0, palettes.size() - 1)
+			var table: PackedInt32Array = tables[
+				clampi(slots[row * COLUMNS + column], 0, tables.size() - 1)
 			]
-			if palette_colors.is_empty():
+			if table.is_empty():
 				continue
 			for y: int in TILE:
+				var at_y: int = row * TILE + y
+				var line: int = at_y * WIDTH
 				for x: int in TILE:
 					var at_x: int = column * TILE + x
-					var at_y: int = row * TILE + y
-					out.set_pixel(at_x, at_y, palette_colors[
-						indices[at_y * WIDTH + (at_x + shift) % WIDTH]
-					])
-	return out
+					out[line + at_x] = table[indices[line + (at_x + shift) % WIDTH]]
+	return Gen2PicImage.canvas_image(out, Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 
 
 ## `GetCreditsPalette`, whose Gold and Silver branch copies one four-colour

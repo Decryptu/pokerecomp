@@ -403,7 +403,7 @@ func _sprite() -> TextureRect:
 
 func _refresh() -> void:
 	if _background != null:
-		_background.texture = ImageTexture.create_from_image(_background_image())
+		Gen2PicImage.show(_background, _background_image())
 		_background.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 	_refresh_arrow()
 	if _map != null and _map.screen == Gen2TownMap.SCREEN_DEX_AREA:
@@ -423,7 +423,7 @@ func _refresh_objects() -> void:
 		and _has_landmark(_map.player_landmark)
 	if _player_icon.visible:
 		_player_icon.position = Vector2(_icon_position(_map.player_landmark))
-		_player_icon.texture = ImageTexture.create_from_image(_player_image())
+		Gen2PicImage.show(_player_icon, _player_image())
 	var landmarks: Array = current_nests() if _oam == OAM_NESTS else []
 	while _nest_icons.size() < landmarks.size():
 		_nest_icons.append(_sprite())
@@ -435,7 +435,7 @@ func _refresh_objects() -> void:
 		if not node.visible:
 			continue
 		node.position = Vector2(_nest_position(landmark))
-		node.texture = ImageTexture.create_from_image(icon)
+		Gen2PicImage.show(node, icon)
 
 
 ## Up only on the Pokegear's own card: `OverworldTownMap`, the fly map and the
@@ -453,7 +453,7 @@ func _refresh_arrow() -> void:
 			0
 		)
 	)
-	_arrow.texture = ImageTexture.create_from_image(_icon_from("pokegear_sprites", ARROW_TILE))
+	Gen2PicImage.show(_arrow, _icon_from("pokegear_sprites", ARROW_TILE))
 
 
 func _background_image() -> Image:
@@ -483,7 +483,7 @@ func _refresh_cursor() -> void:
 	if _cursor_icon == null or _map == null:
 		return
 	_place(_cursor_icon, cursor_landmark())
-	_cursor_icon.texture = ImageTexture.create_from_image(_cursor_image())
+	Gen2PicImage.show(_cursor_icon, _cursor_image())
 
 
 func _cursor_image() -> Image:
@@ -498,28 +498,21 @@ func _icon_from(sheet: String, first: int, flip: bool = false) -> Image:
 	var tiles: PackedByteArray = _data.tile_indices(sheet) if _data != null \
 		else PackedByteArray()
 	var palette: PackedColorArray = _object_palette()
-	var out := Image.create(ICON_SIZE, ICON_SIZE, false, Image.FORMAT_RGBA8)
-	out.fill(Color(0, 0, 0, 0))
+	var out: PackedInt32Array = Gen2PicImage.canvas(ICON_SIZE, ICON_SIZE)
 	if tiles.is_empty() or palette.is_empty():
-		return out
-	var width: int = tiles.size() / Gen2TownMapPage.TILE
+		return Gen2PicImage.canvas_image(out, ICON_SIZE, ICON_SIZE)
+	@warning_ignore("integer_division")
+	var strip_tiles: int = tiles.size() / Gen2Tiles.TILE_PIXELS
+	# Object colour zero is transparent under the hardware's own rules, which is
+	# what lets an icon sit over the map.
+	var table: PackedInt32Array = Gen2PicImage.lookup(palette)
 	for quadrant: int in 4:
-		var source_x: int = (first + quadrant) * Gen2TownMapPage.TILE
-		var to_x: int = (quadrant & 1) * Gen2TownMapPage.TILE
-		var to_y: int = (quadrant >> 1) * Gen2TownMapPage.TILE
-		for y: int in Gen2TownMapPage.TILE:
-			for x: int in Gen2TownMapPage.TILE:
-				var index: int = tiles[
-					y * width + source_x + (Gen2TownMapPage.TILE - 1 - x if flip else x)
-				]
-				# Object colour zero is transparent under the hardware's own
-				# rules, which is what lets an icon sit over the map.
-				if index == 0:
-					continue
-				out.set_pixel(
-					to_x + x, to_y + y, palette[clampi(index, 0, palette.size() - 1)]
-				)
-	return out
+		Gen2PicImage.blit_tile(
+			out, ICON_SIZE, ICON_SIZE, tiles, strip_tiles, first + quadrant,
+			(quadrant & 1) * Gen2TownMapPage.TILE,
+			(quadrant >> 1) * Gen2TownMapPage.TILE, table, flip, false, 0
+		)
+	return Gen2PicImage.canvas_image(out, ICON_SIZE, ICON_SIZE)
 
 
 ## `PokegearMap_InitPlayerIcon`: `GetPlayerIcon`'s standing and walking frames,
@@ -530,7 +523,7 @@ func _refresh_player_icon() -> void:
 	if _player_icon == null or _map == null:
 		return
 	_place(_player_icon, _map.player_landmark)
-	_player_icon.texture = ImageTexture.create_from_image(_player_image())
+	Gen2PicImage.show(_player_icon, _player_image())
 
 
 func _player_image() -> Image:
@@ -574,18 +567,16 @@ func _nest_image() -> Image:
 	var tiles: PackedByteArray = _data.tile_indices("dex_nest_icon") if _data != null \
 		else PackedByteArray()
 	var palette: PackedColorArray = _object_palette()
-	var out := Image.create(NEST_ICON_SIZE, NEST_ICON_SIZE, false, Image.FORMAT_RGBA8)
-	out.fill(Color(0, 0, 0, 0))
-	if tiles.size() < Gen2TownMapPage.TILE * Gen2TownMapPage.TILE or palette.is_empty():
-		return out
-	var width: int = tiles.size() / Gen2TownMapPage.TILE
-	for y: int in Gen2TownMapPage.TILE:
-		for x: int in Gen2TownMapPage.TILE:
-			var index: int = tiles[y * width + NEST_TILE * Gen2TownMapPage.TILE + x]
-			if index == 0:
-				continue
-			out.set_pixel(x, y, palette[clampi(index, 0, palette.size() - 1)])
-	return out
+	var out: PackedInt32Array = Gen2PicImage.canvas(NEST_ICON_SIZE, NEST_ICON_SIZE)
+	if tiles.size() < Gen2Tiles.TILE_PIXELS or palette.is_empty():
+		return Gen2PicImage.canvas_image(out, NEST_ICON_SIZE, NEST_ICON_SIZE)
+	@warning_ignore("integer_division")
+	Gen2PicImage.blit_tile(
+		out, NEST_ICON_SIZE, NEST_ICON_SIZE, tiles,
+		tiles.size() / Gen2Tiles.TILE_PIXELS, NEST_TILE, 0, 0,
+		Gen2PicImage.lookup(palette), false, false, 0
+	)
+	return Gen2PicImage.canvas_image(out, NEST_ICON_SIZE, NEST_ICON_SIZE)
 
 
 ## `.nestloop`'s `sub 4` on both coordinates, which centres one tile on the

@@ -100,7 +100,7 @@ func _refresh() -> void:
 	if _background == null or _page == null or _screen == null:
 		return
 	var indices: PackedByteArray = _page.draw(_screen, _prompt)
-	_background.texture = ImageTexture.create_from_image(Gen2PicImage.from_indices(
+	Gen2PicImage.show(_background, Gen2PicImage.from_indices(
 		indices, Gen2Screen.WIDTH, Gen2Screen.HEIGHT, _colors()
 	))
 	_background.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)

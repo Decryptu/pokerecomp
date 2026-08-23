@@ -153,15 +153,15 @@ func render(
 	_draw_cursor(page, width, cursor)
 	_draw_prompt(page, width, prompt)
 
-	var image: Image = Gen2PicImage.from_indices(
+	var pixels: PackedInt32Array = Gen2PicImage.canvas_from_indices(
 		page, width, height, Gen2Palette.pic_palette(
 			PackedColorArray([Color.WHITE, Color.BLACK])
 		)
 	)
 	for index: int in rows.size():
-		_blend_bar(image, index, rows[index])
-	_blend_icons(image, rows.size())
-	return image
+		_blend_bar(pixels, index, rows[index])
+	_blend_icons(pixels, rows.size())
+	return Gen2PicImage.canvas_image(pixels, width, height)
 
 
 ## One pass of `PlaySpriteAnimations` over `InitPartyMenuGFX`'s structs: the
@@ -247,7 +247,7 @@ func _step_icon_frame(icon: Dictionary) -> void:
 ## The icons over the page, in the one palette `InitPartyMenuOBPals` gives them.
 ## They are objects rather than tiles, so colour 0 is transparent and they are
 ## blended on top rather than written into the index buffer.
-func _blend_icons(image: Image, count: int) -> void:
+func _blend_icons(pixels: PackedInt32Array, count: int) -> void:
 	if data == null or _icons.is_empty():
 		return
 	var colors: PackedColorArray = data.party_menu_icon_palette()
@@ -276,7 +276,7 @@ func _blend_icons(image: Image, count: int) -> void:
 				source = held
 				tile = ICON_ITEM_TILE
 			blend_tile(
-				image, source, tile, colors,
+				pixels, source, tile, colors,
 				at + Vector2i((quadrant & 1) * ICON_TILE, (quadrant >> 1) * ICON_TILE)
 			)
 
@@ -284,25 +284,15 @@ func _blend_icons(image: Image, count: int) -> void:
 ## One 8x8 tile of an index strip, clipped to the screen. Static and public
 ## because the move screen composes the same icon over its own page.
 static func blend_tile(
-	image: Image, strip: PackedByteArray, tile: int, colors: PackedColorArray, at: Vector2i
+	pixels: PackedInt32Array, strip: PackedByteArray, tile: int,
+	colors: PackedColorArray, at: Vector2i
 ) -> void:
 	@warning_ignore("integer_division")
-	var width: int = strip.size() / Gen2Tiles.TILE_HEIGHT
-	var left: int = tile * Gen2Tiles.TILE_WIDTH
-	if left + Gen2Tiles.TILE_WIDTH > width:
-		return
-	for row: int in Gen2Tiles.TILE_HEIGHT:
-		var y: int = at.y + row
-		if y < 0 or y >= Gen2Screen.HEIGHT:
-			continue
-		for column: int in Gen2Tiles.TILE_WIDTH:
-			var x: int = at.x + column
-			if x < 0 or x >= Gen2Screen.WIDTH:
-				continue
-			var index: int = strip[row * width + left + column]
-			if index == 0:
-				continue
-			image.set_pixel(x, y, colors[index])
+	var tiles: int = strip.size() / Gen2Tiles.TILE_PIXELS
+	Gen2PicImage.blit_tile(
+		pixels, Gen2Screen.WIDTH, Gen2Screen.HEIGHT, strip, tiles, tile,
+		at.x, at.y, Gen2PicImage.lookup(colors), false, false, 0
+	)
 
 
 func _draw_member(page: PackedByteArray, width: int, index: int, row: Dictionary) -> void:
@@ -337,28 +327,37 @@ func _draw_member(page: PackedByteArray, width: int, index: int, row: Dictionary
 
 ## The fill of one bar, blended over the page in its own colour: the hardware
 ## gives every tile its own palette, and one index buffer carries one.
-func _blend_bar(image: Image, index: int, row: Dictionary) -> void:
+##
+## A bar is one tile row of the screen, so it is drawn into a strip that tall:
+## six party rows used to cost six 160x144 buffers and six whole images a frame
+## for six 48x8 rectangles.
+func _blend_bar(pixels: PackedInt32Array, index: int, row: Dictionary) -> void:
 	var width: int = Gen2Screen.WIDTH
 	if bool(row.get("egg", false)):
 		return
 	var buffer: PackedByteArray = PackedByteArray()
-	buffer.resize(width * Gen2Screen.HEIGHT)
+	buffer.resize(width * TILE)
 	var hp: int = int(row.get("hp", 0))
 	var max_hp: int = int(row.get("max_hp", 0))
 	var top: int = HP_BAR.y + index * ROW_STEP
-	hud.draw_hp_bar(buffer, width, Vector2i(HP_BAR.x, top), hp, max_hp)
+	hud.draw_hp_bar(buffer, width, Vector2i(HP_BAR.x, 0), hp, max_hp)
 
 	var lit: int = Gen2BattleHud.bar_pixels(
 		hp, max_hp, Gen2BattleHud.HP_BAR_TILES * TILE
 	)
-	var fill: Image = Gen2PicImage.from_indices(
-		buffer, width, Gen2Screen.HEIGHT,
+	var table: PackedInt32Array = Gen2PicImage.lookup(
 		data.bar_palette(GameData.hp_bar_palette_name(lit)), true
 	)
-	var at := Vector2i((HP_BAR.x + 2) * TILE, top * TILE)
-	image.blend_rect(
-		fill, Rect2i(at, Vector2i(Gen2BattleHud.HP_BAR_TILES * TILE, TILE)), at
-	)
+	var left: int = (HP_BAR.x + 2) * TILE
+	for y: int in TILE:
+		var from: int = y * width
+		var to: int = (top * TILE + y) * width
+		for x: int in range(left, left + Gen2BattleHud.HP_BAR_TILES * TILE):
+			var value: int = buffer[from + x]
+			# `blend_rect` over a transparent index 0 left the pixel alone.
+			if value == 0:
+				continue
+			pixels[to + x] = table[value]
 
 
 ## `PlaceStatusString`: FNT for no health left, otherwise the first flag on the

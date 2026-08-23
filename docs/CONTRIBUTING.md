@@ -108,6 +108,19 @@ An optional `<method> <times> [int arg]` drives a scene before capture. Keep
 state changes as callable methods, not only input branches, so screens stay
 inspectable without a key press.
 
+`tools/profile.gd` answers what a drawn frame costs, per screen, in
+milliseconds. It needs a window too, and it turns the frame cap and the vertical
+sync off so the number is the work rather than the monitor:
+
+```bash
+godot --path . -s res://tools/profile.gd -- all crystal 600
+```
+
+Each subject is driven by counted hardware frames with the screen's own
+`_process` off, so a row is comparable between two runs on one machine. Between
+machines only the ratio carries; a subject over 16.7 ms on the machine measuring
+it cannot hold sixty anywhere.
+
 The GDScript analyzer runs only inside the editor: no CLI mode prints its
 warnings, `--check-only` suppresses them, and file logging records the running
 game rather than the editor. Read them with `tools/dump_editor_errors.gd` from

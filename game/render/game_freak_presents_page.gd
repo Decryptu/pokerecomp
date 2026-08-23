@@ -120,14 +120,16 @@ func draw(phase: Gen2GameFreakPresents) -> Image:
 	indices.fill(BLANK_INDEX)
 	if phase != null:
 		_draw_words(indices, width, phase)
-	var image: Image = Gen2PicImage.from_indices(indices, width, height, _background)
+	var pixels: PackedInt32Array = Gen2PicImage.canvas_from_indices(
+		indices, width, height, _background
+	)
 	# The lower OAM index wins a pixel, so a slot only paints where no earlier
 	# one did.
 	var taken := PackedByteArray()
 	taken.resize(width * height)
 	for entry: Dictionary in shadow_oam(phase):
-		_draw_sprite(image, phase, entry, taken)
-	return image
+		_draw_sprite(pixels, phase, entry, taken)
+	return Gen2PicImage.canvas_image(pixels, width, height)
 
 
 ## Every live struct expanded into the shadow OAM the hardware would hold, in
@@ -190,7 +192,7 @@ func _draw_words(
 ## One shadow-OAM entry, drawn through the object palette whose first colour is
 ## transparent.
 func _draw_sprite(
-	image: Image, phase: Gen2GameFreakPresents, entry: Dictionary,
+	pixels: PackedInt32Array, phase: Gen2GameFreakPresents, entry: Dictionary,
 	taken: PackedByteArray
 ) -> void:
 	# `dbsprite`'s attribute byte names the object palette. Only Gold's logo is
@@ -199,7 +201,7 @@ func _draw_sprite(
 	if palette.size() <= TRANSPARENT_INDEX:
 		return
 	_blit_sprite_tile(
-		image, palette,
+		pixels, palette,
 		int(entry["tile"]) - _vram_base(),
 		Vector2i(int(entry["x"]) - OAM_ORIGIN.x, int(entry["y"]) - OAM_ORIGIN.y),
 		bool(entry["flip_x"]), bool(entry["flip_y"]), taken
@@ -313,7 +315,7 @@ func _blit_tile(
 ## off an edge cannot wrap onto the opposite one.
 ## [param taken] marks the pixels an earlier slot has already claimed.
 func _blit_sprite_tile(
-	image: Image, palette: PackedColorArray, tile: int, at: Vector2i,
+	pixels: PackedInt32Array, palette: PackedColorArray, tile: int, at: Vector2i,
 	flip_x: bool, flip_y: bool, taken: PackedByteArray
 ) -> void:
 	var tiles: PackedByteArray = _sprite_tiles
@@ -330,13 +332,17 @@ func _blit_sprite_tile(
 			index = tile - RomLayout.PRESENTS_LOGO_TILES
 	if stride <= 0 or index < 0:
 		return
+	var width: int = COLUMNS * TILE
+	var height: int = ROWS * TILE
+	var table: PackedInt32Array = Gen2PicImage.lookup(palette)
 	for y: int in TILE:
 		var target_y: int = at.y + y
-		if target_y < 0 or target_y >= image.get_height():
+		if target_y < 0 or target_y >= height:
 			continue
+		var row: int = target_y * width
 		for x: int in TILE:
 			var target_x: int = at.x + x
-			if target_x < 0 or target_x >= image.get_width():
+			if target_x < 0 or target_x >= width:
 				continue
 			var source_x: int = TILE - 1 - x if flip_x else x
 			var source_y: int = TILE - 1 - y if flip_y else y
@@ -346,8 +352,8 @@ func _blit_sprite_tile(
 			var value: int = tiles[from]
 			if value == TRANSPARENT_INDEX or value >= palette.size():
 				continue
-			var at_pixel: int = target_y * image.get_width() + target_x
+			var at_pixel: int = row + target_x
 			if taken[at_pixel] != 0:
 				continue
 			taken[at_pixel] = 1
-			image.set_pixel(target_x, target_y, palette[value])
+			pixels[at_pixel] = table[value]

@@ -417,7 +417,7 @@ func _draw_species(species: int) -> void:
 		_data.atlas_indices(pic["atlas"]), _data.atlas(pic["atlas"]), pic,
 		_data.palette(species)
 	)
-	_pic.texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(_pic, image)
 	_pic.size = Vector2(image.get_size())
 	## `PadFrontpic` bottom-aligns a pic shorter than the block one column in,
 	## which is where `PlaceGraphic`'s tile numbers put it.
@@ -462,6 +462,6 @@ func _draw_animation_box() -> void:
 		indices, side, side,
 		_data.palette(int(current_plan().get("new_species", 0)))
 	)
-	_pic.texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(_pic, image)
 	_pic.size = Vector2(image.get_size())
 	_pic.position = Vector2(PIC_AT.x * TILE, PIC_AT.y * TILE)

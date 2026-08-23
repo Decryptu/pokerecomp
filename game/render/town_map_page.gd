@@ -477,25 +477,28 @@ func attributes(data: GameData, map: PackedInt32Array) -> PackedInt32Array:
 func image(data: GameData, map: PackedInt32Array, female: bool = false) -> Image:
 	var indices: PackedByteArray = compose(map)
 	var slots: PackedInt32Array = attributes(data, map)
-	var out := Image.create(Gen2Screen.WIDTH, Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8)
-	var palettes: Array = []
+	var out: PackedInt32Array = Gen2PicImage.canvas(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
+	var tables: Array[PackedInt32Array] = []
+	var sizes := PackedInt32Array()
 	for slot: int in RomLayout.TOWN_MAP_PALETTES:
-		palettes.append(data.town_map_palette(slot, female))
+		var palette: PackedColorArray = data.town_map_palette(slot, female)
+		tables.append(
+			PackedInt32Array() if palette.is_empty() else Gen2PicImage.lookup(palette)
+		)
+		sizes.append(palette.size())
 	for row: int in ROWS:
 		for column: int in COLUMNS:
-			var palette: PackedColorArray = palettes[
-				clampi(slots[row * COLUMNS + column], 0, palettes.size() - 1)
-			]
-			if palette.is_empty():
+			var slot: int = clampi(slots[row * COLUMNS + column], 0, tables.size() - 1)
+			var table: PackedInt32Array = tables[slot]
+			if table.is_empty():
 				continue
+			var last: int = sizes[slot] - 1
 			for y: int in TILE:
+				var line: int = (row * TILE + y) * Gen2Screen.WIDTH
 				for x: int in TILE:
 					var at_x: int = column * TILE + x
-					var at_y: int = row * TILE + y
-					out.set_pixel(at_x, at_y, palette[
-						clampi(indices[at_y * Gen2Screen.WIDTH + at_x], 0, palette.size() - 1)
-					])
-	return out
+					out[line + at_x] = table[clampi(indices[line + at_x], 0, last)]
+	return Gen2PicImage.canvas_image(out, Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 
 
 ## Resolves every tile number to pixels: the two graphics sheets out of the VRAM

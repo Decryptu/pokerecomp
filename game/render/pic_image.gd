@@ -31,19 +31,29 @@ static func from_indices(
 	if width <= 0 or height <= 0 or indices.size() < width * height:
 		return Image.create_empty(maxi(width, 1), maxi(height, 1), false, Image.FORMAT_RGBA8)
 
-	var lookup: PackedByteArray = _lookup(palette, transparent_background)
-	var pixels: PackedByteArray = PackedByteArray()
-	pixels.resize(width * height * CHANNELS)
+	return canvas_image(
+		canvas_from_indices(indices, width, height, palette, transparent_background),
+		width, height
+	)
 
+
+## The same before the conversion, for a page that goes on to blit over it.
+static func canvas_from_indices(
+	indices: PackedByteArray,
+	width: int,
+	height: int,
+	palette: PackedColorArray,
+	transparent_background: bool = false
+) -> PackedInt32Array:
+	var words := PackedInt32Array()
+	if width <= 0 or height <= 0 or indices.size() < width * height:
+		words.resize(maxi(width, 1) * maxi(height, 1))
+		return words
+	var table: PackedInt32Array = lookup(palette, transparent_background)
+	words.resize(width * height)
 	for i: int in width * height:
-		var at: int = int(indices[i]) * CHANNELS
-		var to: int = i * CHANNELS
-		pixels[to] = lookup[at]
-		pixels[to + 1] = lookup[at + 1]
-		pixels[to + 2] = lookup[at + 2]
-		pixels[to + 3] = lookup[at + 3]
-
-	return Image.create_from_data(width, height, false, Image.FORMAT_RGBA8, pixels)
+		words[i] = table[indices[i]]
+	return words
 
 
 ## An image from a row-major index buffer plus `wAttrmap`: one palette index per
@@ -67,30 +77,45 @@ static func from_attributes(
 	if width <= 0 or height <= 0 or indices.size() < width * height:
 		return Image.create_empty(maxi(width, 1), maxi(height, 1), false, Image.FORMAT_RGBA8)
 
-	var lookups: Array[PackedByteArray] = []
+	return canvas_image(
+		canvas_from_attributes(indices, width, height, slots, columns, palettes),
+		width, height
+	)
+
+
+## The same before the conversion, for a page that goes on to blit over it.
+static func canvas_from_attributes(
+	indices: PackedByteArray,
+	width: int,
+	height: int,
+	slots: PackedInt32Array,
+	columns: int,
+	palettes: Array
+) -> PackedInt32Array:
+	var words := PackedInt32Array()
+	if palettes.is_empty() or width <= 0 or height <= 0 \
+		or indices.size() < width * height:
+		words.resize(maxi(width, 1) * maxi(height, 1))
+		return words
+
+	var lookups: Array[PackedInt32Array] = []
 	for palette: Variant in palettes:
-		lookups.append(_lookup(palette as PackedColorArray, false))
+		lookups.append(lookup(palette as PackedColorArray, false))
 
 	var tile: int = Gen2Font.TILE
-	var pixels: PackedByteArray = PackedByteArray()
-	pixels.resize(width * height * CHANNELS)
+	words.resize(width * height)
 	for y: int in height:
 		@warning_ignore("integer_division")
 		var row: int = (y / tile) * columns
+		var line: int = y * width
 		for x: int in width:
 			@warning_ignore("integer_division")
 			var slot: int = row + x / tile
-			var lookup: PackedByteArray = lookups[
+			var table: PackedInt32Array = lookups[
 				clampi(slots[slot] if slot < slots.size() else 0, 0, lookups.size() - 1)
 			]
-			var at: int = int(indices[y * width + x]) * CHANNELS
-			var to: int = (y * width + x) * CHANNELS
-			pixels[to] = lookup[at]
-			pixels[to + 1] = lookup[at + 1]
-			pixels[to + 2] = lookup[at + 2]
-			pixels[to + 3] = lookup[at + 3]
-
-	return Image.create_from_data(width, height, false, Image.FORMAT_RGBA8, pixels)
+			words[line + x] = table[indices[line + x]]
+	return words
 
 
 ## An attrmap from a list of `FillBoxCGB` boxes, each (x, y, width, height,
@@ -177,22 +202,35 @@ static func atlas_cell(
 	return {"indices": cropped, "width": width, "height": height}
 
 
-## Four bytes per index, so the inner loop copies rather than converting colours.
-static func _lookup(palette: PackedColorArray, transparent_background: bool) -> PackedByteArray:
-	var out: PackedByteArray = PackedByteArray()
-	out.resize(Gen2Palette.COLORS_PER_PIC * CHANNELS)
+## One packed RGBA8 word per colour index, so a blit is an array copy rather
+## than a [Color] conversion. Little-endian, which is the order
+## [method PackedInt32Array.to_byte_array] writes and `FORMAT_RGBA8` reads.
+##
+## Public because every per-tile blit in the project shares it: a page that
+## builds a [Color] per pixel pays a binding call and an allocation for a table
+## lookup, which is what [method blit_tile] exists to stop.
+static func lookup(
+	palette: PackedColorArray, transparent_background: bool = false
+) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	var count: int = maxi(palette.size(), Gen2Palette.COLORS_PER_PIC)
+	out.resize(count)
 
-	for i: int in Gen2Palette.COLORS_PER_PIC:
+	for i: int in count:
 		var color: Color = palette[i] if i < palette.size() else Color.MAGENTA
-		var at: int = i * CHANNELS
-		out[at] = int(roundf(color.r * 255.0))
-		out[at + 1] = int(roundf(color.g * 255.0))
-		out[at + 2] = int(roundf(color.b * 255.0))
 		# The palette's own alpha, so a translucent colour needs no second
 		# flag. Every cartridge palette is opaque, Gen2Palette.decode_color
 		# building an opaque Color.
-		out[at + 3] = 0 if transparent_background and i == 0 \
-			else int(roundf(clampf(color.a, 0.0, 1.0) * 255.0))
+		var alpha: int = 0 if transparent_background and i == 0 \
+			else int(clampf(color.a, 0.0, 1.0) * 255.0)
+		## Truncated, not rounded: `Image.set_pixel` casts and a five-bit
+		## colour's own reference expansion floors, so a colour comes out the
+		## same byte whichever path drew it. Rounding put every caller of this
+		## table one unit off the rest of the game on nine of the 32 levels.
+		out[i] = int(clampf(color.r, 0.0, 1.0) * 255.0) \
+			| (int(clampf(color.g, 0.0, 1.0) * 255.0) << 8) \
+			| (int(clampf(color.b, 0.0, 1.0) * 255.0) << 16) \
+			| (alpha << 24)
 
 	return out
 
@@ -252,3 +290,131 @@ static func x_flipped_indices(indices: PackedByteArray, width: int) -> PackedByt
 		for x: int in width:
 			out[row + x] = indices[row + width - 1 - x]
 	return out
+
+
+## The palette as the eight-bit colours a blit actually writes.
+##
+## For a caller comparing a rendered pixel against a palette: a 15-bit colour is
+## kept as a float and read back through an eight-bit image, so the comparison
+## belongs where the picture is and the conversion has to be the drawing's own.
+static func quantized(
+	palette: PackedColorArray, transparent_background: bool = false
+) -> PackedColorArray:
+	var table: PackedInt32Array = lookup(palette, transparent_background)
+	var out := PackedColorArray()
+	for index: int in palette.size():
+		var word: int = table[index]
+		out.append(Color8(
+			word & 0xFF, (word >> 8) & 0xFF, (word >> 16) & 0xFF, (word >> 24) & 0xFF
+		))
+	return out
+
+
+## A blank canvas [param width] x [param height], one packed RGBA8 word per
+## pixel. Every word is zero, which is transparent black.
+##
+## A word rather than four bytes because the inner loop of every page in the
+## project is one store per pixel either way, and four of them cost four bounds
+## checks; the conversion to bytes at the end is one memcpy.
+static func canvas(width: int, height: int) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	out.resize(maxi(width, 0) * maxi(height, 0))
+	return out
+
+
+## The [Image] a canvas has become. Paired with [method canvas] so a page builds
+## its screen in one buffer and pays one conversion.
+static func canvas_image(pixels: PackedInt32Array, width: int, height: int) -> Image:
+	if width <= 0 or height <= 0 or pixels.size() < width * height:
+		return Image.create_empty(maxi(width, 1), maxi(height, 1), false, Image.FORMAT_RGBA8)
+	return Image.create_from_data(
+		width, height, false, Image.FORMAT_RGBA8, pixels.to_byte_array()
+	)
+
+
+## One 8x8 tile of [param strip] into a [method canvas] buffer.
+##
+## [param strip] is a horizontal run of [param strip_tiles] tiles, one byte of
+## colour index per pixel, which is the shape every sheet in the cache is stored
+## in; [param table] is [method lookup]'s. [param skip_index] is the colour the
+## blit leaves standing, -1 for none: an object palette never draws index 0 and
+## a background tile draws all four.
+##
+## Clipped rather than refused, so a caller places a sprite partly off screen
+## the way OAM does.
+static func blit_tile(
+	pixels: PackedInt32Array,
+	width: int,
+	height: int,
+	strip: PackedByteArray,
+	strip_tiles: int,
+	tile: int,
+	at_x: int,
+	at_y: int,
+	table: PackedInt32Array,
+	flip_x: bool = false,
+	flip_y: bool = false,
+	skip_index: int = -1,
+) -> void:
+	if strip_tiles <= 0 or tile < 0 or tile >= strip_tiles or table.is_empty():
+		return
+	var stride: int = strip_tiles * Gen2Tiles.TILE_WIDTH
+	var left: int = tile * Gen2Tiles.TILE_WIDTH
+	var colors: int = table.size()
+	for row: int in Gen2Tiles.TILE_HEIGHT:
+		var y: int = at_y + row
+		if y < 0 or y >= height:
+			continue
+		var from: int = (
+			(Gen2Tiles.TILE_HEIGHT - 1 - row) if flip_y else row
+		) * stride + left
+		if from < 0 or from + Gen2Tiles.TILE_WIDTH > strip.size():
+			continue
+		var to_row: int = y * width
+		for column: int in Gen2Tiles.TILE_WIDTH:
+			var x: int = at_x + column
+			if x < 0 or x >= width:
+				continue
+			var index: int = strip[
+				from + ((Gen2Tiles.TILE_WIDTH - 1 - column) if flip_x else column)
+			]
+			if index == skip_index:
+				continue
+			pixels[to_row + x] = table[mini(index, colors - 1)]
+
+
+## Puts [param image] on [param target].
+##
+## The one way a screen in this project hands a redrawn picture to the node that
+## shows it, so the reuse below happens everywhere rather than at whichever
+## screen was measured.
+static func show(target: TextureRect, image: Image) -> void:
+	if target == null:
+		return
+	target.texture = refreshed_texture(target.texture as ImageTexture, image)
+
+
+## The texture [param texture] becomes once it holds [param image].
+##
+## A screen redrawn every frame used to answer `ImageTexture.create_from_image`
+## each time, which allocates a texture and frees the last one on every frame it
+## draws; `update` writes into the one already on the GPU. The size and format
+## have to match for that, so a first frame and a resize still create.
+##
+## Not headless. There is no GPU there to save the upload to, and the dummy
+## driver hands `ImageTexture.get_image` back the picture the texture was
+## created with rather than the one it was last updated with, so a check or a
+## test that reads a screen back would read the frame before the one it asked
+## for.
+static func refreshed_texture(texture: ImageTexture, image: Image) -> ImageTexture:
+	if image == null:
+		return texture
+	if texture == null or _drawing_nothing \
+		or Vector2i(texture.get_size()) != image.get_size() \
+		or texture.get_format() != image.get_format():
+		return ImageTexture.create_from_image(image)
+	texture.update(image)
+	return texture
+
+
+static var _drawing_nothing: bool = DisplayServer.get_name() == "headless"

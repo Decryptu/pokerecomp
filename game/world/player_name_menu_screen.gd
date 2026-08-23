@@ -81,7 +81,7 @@ func _refresh() -> void:
 	_page.draw(box, _options, _menu.selected_index(), indices, Gen2Screen.WIDTH, "NAME", 2)
 	# Index 0 stays transparent: `MENU_BACKUP_TILES` draws this over the left of
 	# a screen the player pic is still standing on the right of.
-	_background.texture = ImageTexture.create_from_image(Gen2PicImage.from_indices(
+	Gen2PicImage.show(_background, Gen2PicImage.from_indices(
 		indices, Gen2Screen.WIDTH, Gen2Screen.HEIGHT, _colors(), true
 	))
 	_background.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)

@@ -324,6 +324,6 @@ func _draw_yes_no() -> void:
 		return
 	var box: Gen2MenuBox = Gen2MenuBox.yes_no()
 	var image: Image = _menu_page.render(box, ["YES", "NO"], 0 if _yes else 1)
-	_menu.texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(_menu, image)
 	_menu.position = Vector2(box.border_position() * TILE)
 	_menu.visible = true

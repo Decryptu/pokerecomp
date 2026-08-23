@@ -10,6 +10,17 @@ extends RefCounted
 ##
 ## One [method render_frame] call is one LCD frame: registers are sampled once
 ## and held for the whole block, exactly as a per-VBlank driver observes them.
+##
+## Two things are counted rather than walked, and both answer the same samples.
+## `update_freq`'s loop adds `freq_inc` to a counter that resets to zero on every
+## crossing of `FREQ_INC_REF`, so the crossings a sample makes are
+## `(counter + freq_inc - 1) / FREQ_INC_REF` and what is left is the remainder;
+## the duty counter and the wave position are advanced by that count in one step,
+## since only where they end up is read. And minigb_apu's sub-sample average,
+## `((pos - prev) / freq_inc) * val`, is integer division on `uint32_t` with
+## `pos - prev` always below `freq_inc`, so every term of it is zero and the
+## sample is the last value the walk left. The noise channel runs sixteen
+## crossings a sample at its fastest rate, which is what both of these cost.
 
 const SAMPLE_RATE: int = 32768
 ## AUDIO_SAMPLE_RATE / (DMG clock / 70,224 clocks per frame), truncated.
@@ -27,6 +38,11 @@ const MAX_CHAN_VOLUME: int = 15
 ## master level under the 16-bit ceiling.
 const VOL_STEP: int = 273
 const WAVE_STEP: int = 511
+## The DAC's own full scale. A power of two, so scaling by it and by its
+## reciprocal are both exact and the reciprocal costs a multiply rather than a
+## divide once per sample per channel.
+const FULL_SCALE: float = 32768.0
+const INV_FULL_SCALE: float = 1.0 / FULL_SCALE
 
 const DUTY_PATTERNS: Array = [0x10, 0x30, 0x3C, 0xCF]
 const NOISE_DIVISORS: Array = [8, 16, 32, 48, 64, 80, 96, 112]
@@ -249,8 +265,7 @@ func write(address: int, value: int) -> void:
 ## it past the next call must copy it.
 func render_frame(out: PackedVector2Array) -> void:
 	var mix: PackedInt32Array = _mix
-	for index: int in SAMPLES_PER_FRAME * 2:
-		mix[index] = 0
+	mix.fill(0)
 	_render_square(mix, 0)
 	_render_square(mix, 1)
 	_render_wave(mix)
@@ -268,8 +283,7 @@ func render_frame(out: PackedVector2Array) -> void:
 ## Only the offline render and trace tools use this.
 func render_frame_pcm() -> PackedInt32Array:
 	var mix: PackedInt32Array = _mix
-	for index: int in SAMPLES_PER_FRAME * 2:
-		mix[index] = 0
+	mix.fill(0)
 	_render_square(mix, 0)
 	_render_square(mix, 1)
 	_render_wave(mix)
@@ -346,14 +360,19 @@ func _render_square(mix: PackedInt32Array, channel: int) -> void:
 				len_counter = 0
 		if not enabled:
 			continue
-		env_counter += env_inc
-		while env_counter > FREQ_INC_REF:
-			if env_step != 0:
-				volume += 1 if env_up else -1
-				if volume == 0 or volume == MAX_CHAN_VOLUME:
-					env_inc = 0
-				volume = clampi(volume, 0, MAX_CHAN_VOLUME)
-			env_counter -= FREQ_INC_REF
+		## `env_inc` is zeroed once the envelope has run out of steps, and a
+		## note holds far longer than it takes; the drain below cannot fire with
+		## nothing being added, since it always leaves the counter under the
+		## reference.
+		if env_inc != 0:
+			env_counter += env_inc
+			while env_counter > FREQ_INC_REF:
+				if env_step != 0:
+					volume += 1 if env_up else -1
+					if volume == 0 or volume == MAX_CHAN_VOLUME:
+						env_inc = 0
+					volume = clampi(volume, 0, MAX_CHAN_VOLUME)
+				env_counter -= FREQ_INC_REF
 		if channel == 0 and _sweep_inc != 0:
 			_sweep_counter += _sweep_inc
 			while _sweep_counter > FREQ_INC_REF:
@@ -369,27 +388,21 @@ func _render_square(mix: PackedInt32Array, channel: int) -> void:
 					enabled = false
 					_enabled[0] = 0
 				_sweep_counter -= FREQ_INC_REF
-		var position: int = 0
-		var previous: int = 0
-		var sample: int = 0
-		while true:
-			var increment: int = freq_inc - position
-			freq_counter += increment
-			if freq_counter <= FREQ_INC_REF:
-				position = freq_inc
-				break
-			position = freq_inc - (freq_counter - FREQ_INC_REF)
-			freq_counter = 0
-			duty_counter = (duty_counter + 1) & 7
-			sample += ((position - previous) / freq_inc) * value
+		var total: int = freq_counter + freq_inc
+		if total > FREQ_INC_REF:
+			@warning_ignore("integer_division")
+			var steps: int = (total - 1) / FREQ_INC_REF
+			freq_counter = total - steps * FREQ_INC_REF
+			duty_counter = (duty_counter + steps) & 7
 			value = VOL_STEP if (duty & (1 << duty_counter)) != 0 else -VOL_STEP
-			previous = position
-		sample += value
+		else:
+			freq_counter = total
+		var sample: int = value
 		sample = (sample * volume) / 4
-		var raw: float = float(sample) / 32768.0
+		var raw: float = float(sample) * INV_FULL_SCALE
 		var filtered: float = raw - capacitor
 		capacitor = raw - filtered * 0.996
-		sample = int(filtered * 32768.0)
+		sample = int(filtered * FULL_SCALE)
 		var at: int = index * 2
 		mix[at] += int(float(sample) * left)
 		mix[at + 1] += int(float(sample) * right)
@@ -439,30 +452,24 @@ func _render_wave(mix: PackedInt32Array) -> void:
 			continue
 		var packed: int = wave[position >> 1]
 		var nibble: int = ((packed & 0x0F) if (position & 1) != 0 else (packed >> 4)) >> shift
-		var cursor: int = 0
-		var previous: int = 0
-		var sample: int = 0
-		while true:
-			var increment: int = freq_inc - cursor
-			freq_counter += increment
-			if freq_counter <= FREQ_INC_REF:
-				cursor = freq_inc
-				break
-			cursor = freq_inc - (freq_counter - FREQ_INC_REF)
-			freq_counter = 0
-			position = (position + 1) & 31
-			sample += ((cursor - previous) / freq_inc) * (nibble - 8) * WAVE_STEP
+		var total: int = freq_counter + freq_inc
+		if total > FREQ_INC_REF:
+			@warning_ignore("integer_division")
+			var steps: int = (total - 1) / FREQ_INC_REF
+			freq_counter = total - steps * FREQ_INC_REF
+			position = (position + steps) & 31
 			packed = wave[position >> 1]
 			nibble = ((packed & 0x0F) if (position & 1) != 0 else (packed >> 4)) >> shift
-			previous = cursor
-		sample += (nibble - 8) * WAVE_STEP
+		else:
+			freq_counter = total
+		var sample: int = (nibble - 8) * WAVE_STEP
 		if volume == 0:
 			continue
 		sample = sample / 4
-		var raw: float = float(sample) / 32768.0
+		var raw: float = float(sample) * INV_FULL_SCALE
 		var filtered: float = raw - capacitor
 		capacitor = raw - filtered * 0.996
-		sample = int(filtered * 32768.0)
+		sample = int(filtered * FULL_SCALE)
 		var at: int = index * 2
 		mix[at] += int(float(sample) * left)
 		mix[at + 1] += int(float(sample) * right)
@@ -499,6 +506,9 @@ func _render_noise(mix: PackedInt32Array) -> void:
 	var gain: float = channel_gain[3]
 	var left: float = float(_on_left[3] * _master_left) * gain
 	var right: float = float(_on_right[3] * _master_right) * gain
+	# `wide` cannot change inside a frame: NR43 is sampled once, above.
+	var tap_high: int = 14 if wide else 6
+	var tap_low: int = 13 if wide else 5
 	for index: int in SAMPLES_PER_FRAME:
 		if len_enabled:
 			len_counter += len_inc
@@ -508,38 +518,39 @@ func _render_noise(mix: PackedInt32Array) -> void:
 				len_counter = 0
 		if not enabled:
 			continue
-		env_counter += env_inc
-		while env_counter > FREQ_INC_REF:
-			if env_step != 0:
-				volume += 1 if env_up else -1
-				if volume == 0 or volume == MAX_CHAN_VOLUME:
-					env_inc = 0
-				volume = clampi(volume, 0, MAX_CHAN_VOLUME)
-			env_counter -= FREQ_INC_REF
-		var position: int = 0
-		var previous: int = 0
-		var sample: int = 0
-		while true:
-			var increment: int = freq_inc - position
-			freq_counter += increment
-			if freq_counter <= FREQ_INC_REF:
-				position = freq_inc
-				break
-			position = freq_inc - (freq_counter - FREQ_INC_REF)
-			freq_counter = 0
+		## `env_inc` is zeroed once the envelope has run out of steps, and a
+		## note holds far longer than it takes; the drain below cannot fire with
+		## nothing being added, since it always leaves the counter under the
+		## reference.
+		if env_inc != 0:
+			env_counter += env_inc
+			while env_counter > FREQ_INC_REF:
+				if env_step != 0:
+					volume += 1 if env_up else -1
+					if volume == 0 or volume == MAX_CHAN_VOLUME:
+						env_inc = 0
+					volume = clampi(volume, 0, MAX_CHAN_VOLUME)
+				env_counter -= FREQ_INC_REF
+		var total: int = freq_counter + freq_inc
+		var steps: int = 0
+		if total > FREQ_INC_REF:
+			@warning_ignore("integer_division")
+			steps = (total - 1) / FREQ_INC_REF
+			freq_counter = total - steps * FREQ_INC_REF
+		else:
+			freq_counter = total
+		## The register is a shift, so unlike the duty counter and the wave
+		## position it has to be walked one step at a time.
+		for _step: int in steps:
 			lfsr = ((lfsr << 1) | (1 if value >= VOL_STEP else 0)) & 0xFFFF
-			var tap_high: int = 14 if wide else 6
-			var tap_low: int = 13 if wide else 5
 			var feedback: int = ((lfsr >> tap_high) & 1) ^ ((lfsr >> tap_low) & 1)
 			value = -VOL_STEP if feedback != 0 else VOL_STEP
-			sample += ((position - previous) / freq_inc) * value
-			previous = position
-		sample += value
+		var sample: int = value
 		sample = (sample * volume) / 4
-		var raw: float = float(sample) / 32768.0
+		var raw: float = float(sample) * INV_FULL_SCALE
 		var filtered: float = raw - capacitor
 		capacitor = raw - filtered * 0.996
-		sample = int(filtered * 32768.0)
+		sample = int(filtered * FULL_SCALE)
 		var at: int = index * 2
 		mix[at] += int(float(sample) * left)
 		mix[at + 1] += int(float(sample) * right)
