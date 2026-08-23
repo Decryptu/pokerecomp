@@ -292,7 +292,7 @@ func _refresh() -> void:
 	var palette: PackedColorArray = _interface_palette()
 	if _backdrop != null:
 		_backdrop.color = palette[0]
-	_background.texture = ImageTexture.create_from_image(Gen2PicImage.from_indices(
+	Gen2PicImage.show(_background, Gen2PicImage.from_indices(
 		indices, Gen2Screen.WIDTH, Gen2Screen.HEIGHT, palette, true
 	))
 	_background.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
@@ -374,7 +374,7 @@ func _refresh_pic(mon: Gen2SaveMon) -> void:
 		_data.atlas_indices(pic["atlas"]), _data.atlas(pic["atlas"]), pic,
 		_data.palette(mon.species)
 	)
-	_pic.texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(_pic, image)
 	_pic.size = Vector2(image.get_size())
 	## `_PrepMonFrontpic` places a pic smaller than the seven-tile cell at its
 	## bottom, which is what keeps every species standing on the same line.
@@ -398,7 +398,7 @@ func _refresh_cursor(row_count: int) -> void:
 			continue
 		var sprite: Dictionary = sprites[index]
 		node.position = Vector2(sprite["position"])
-		node.texture = ImageTexture.create_from_image(_cursor_image(
+		Gen2PicImage.show(node, _cursor_image(
 			sheet, palette, int(sprite["tile"]),
 			bool(sprite["flip_x"]), bool(sprite["flip_y"])
 		))

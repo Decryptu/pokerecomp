@@ -292,18 +292,18 @@ static func from_data(data: GameData) -> Gen2GoldSilverIntroPage:
 
 ## The whole 160x144 screen for one frame of [param movie].
 func draw(movie: Gen2GoldSilverIntro) -> Image:
-	var image := Image.create(WIDTH, HEIGHT, false, Image.FORMAT_RGBA8)
+	var pixels: PackedInt32Array = Gen2PicImage.canvas(WIDTH, HEIGHT)
 	if movie == null:
-		return image
-	var behind: PackedByteArray = _draw_background(image, movie)
+		return Gen2PicImage.canvas_image(pixels, WIDTH, HEIGHT)
+	var behind: PackedByteArray = _draw_background(pixels, movie)
 	# The lower OAM index wins a pixel, so a slot only paints where no earlier
 	# one did: Charizard's small fireball sits behind the big one it is spawned
 	# after, and the note behind Pikachu.
 	var taken := PackedByteArray()
 	taken.resize(WIDTH * HEIGHT)
 	for entry: Dictionary in shadow_oam(movie):
-		_draw_sprite(image, movie, entry, behind, taken)
-	return image
+		_draw_sprite(pixels, movie, entry, behind, taken)
+	return Gen2PicImage.canvas_image(pixels, WIDTH, HEIGHT)
 
 
 ## Every live struct expanded into the shadow OAM the hardware would hold, in
@@ -350,7 +350,9 @@ func shadow_oam(movie: Gen2GoldSilverIntro) -> Array[Dictionary]:
 ## bytes and the map is 256 pixels square, so the sampling wraps rather than
 ## clipping. Returns each pixel's own colour index, which is what an `OAM_PRIO`
 ## sprite is drawn against.
-func _draw_background(image: Image, movie: Gen2GoldSilverIntro) -> PackedByteArray:
+func _draw_background(
+	pixels: PackedInt32Array, movie: Gen2GoldSilverIntro
+) -> PackedByteArray:
 	var behind := PackedByteArray()
 	var map: PackedByteArray = movie.bg_map()
 	if map.size() < MAP_COLUMNS * MAP_ROWS:
@@ -359,41 +361,62 @@ func _draw_background(image: Image, movie: Gen2GoldSilverIntro) -> PackedByteArr
 	if palette.is_empty():
 		return behind
 	behind.resize(WIDTH * HEIGHT)
+	var table: PackedInt32Array = Gen2PicImage.lookup(palette)
 	var sheets: Dictionary = CUTSCENE_SHEETS.get(movie.cutscene(), {})
 	var low: PackedByteArray = _sheet(String(sheets.get("bg", "")))
 	var high: PackedByteArray = _sheet(String(sheets.get("bg_high", "")))
+	@warning_ignore("integer_division")
+	var low_stride: int = low.size() / TILE
+	@warning_ignore("integer_division")
+	var high_stride: int = high.size() / TILE
 	var scx: int = movie.scroll().x
+	## `hSCX` is one value for the whole frame here, so a run of pixels inside
+	## one tile shares its map cell and its sheet row.
 	for y: int in HEIGHT:
 		var scy: int = movie.scroll_y_at(y)
 		var map_y: int = (y + scy) & 0xFF
+		@warning_ignore("integer_division")
 		var row: int = (map_y / TILE) % MAP_ROWS
 		var in_tile_y: int = map_y % TILE
-		for x: int in WIDTH:
+		var line: int = y * WIDTH
+		var x: int = 0
+		while x < WIDTH:
 			var map_x: int = (x + scx) & 0xFF
+			var in_tile_x: int = map_x % TILE
+			var run: int = mini(TILE - in_tile_x, WIDTH - x)
+			@warning_ignore("integer_division")
 			var column: int = (map_x / TILE) % MAP_COLUMNS
 			var tile: int = map[row * MAP_COLUMNS + column]
 			var strip: PackedByteArray = low
+			var stride: int = low_stride
 			var index: int = tile
 			if tile >= HIGH_TILE:
 				strip = high
+				stride = high_stride
 				index = tile - HIGH_TILE
-			var pixel: int = _pixel(strip, index, map_x % TILE, in_tile_y, false, false)
-			behind[y * WIDTH + x] = pixel
-			image.set_pixel(x, y, palette[pixel])
+			# What a tile the sheet does not reach draws as.
+			var from: int = -1
+			if index >= 0 and (index + 1) * TILE <= stride:
+				from = in_tile_y * stride + index * TILE
+			for step: int in run:
+				var pixel: int = 0 if from < 0 else strip[from + in_tile_x + step]
+				behind[line + x + step] = pixel
+				pixels[line + x + step] = table[pixel]
+			x += run
 	return behind
 
 
 ## One shadow-OAM entry, off the cutscene's own object sheet. The position is
 ## already the OAM byte, so it is only moved off OAM's own (8, 16) origin.
 func _draw_sprite(
-	image: Image, movie: Gen2GoldSilverIntro, entry: Dictionary,
+	pixels: PackedInt32Array, movie: Gen2GoldSilverIntro, entry: Dictionary,
 	behind: PackedByteArray, taken: PackedByteArray
 ) -> void:
 	var palette: PackedColorArray = movie.object_palette(int(entry["palette"]))
 	if palette.size() <= TRANSPARENT_INDEX:
 		return
 	_blit_sprite_tile(
-		image,
+		pixels,
 		_sheet(String((CUTSCENE_SHEETS.get(movie.cutscene(), {}) as Dictionary).get("obj", ""))),
 		palette, int(entry["tile"]),
 		Vector2i(int(entry["x"]) - OAM_ORIGIN.x, int(entry["y"]) - OAM_ORIGIN.y),
@@ -411,11 +434,12 @@ func _draw_sprite(
 ## `OAM_PRIO` and empty otherwise. The claim comes first: a sprite that loses the
 ## pixel to the background still wins it against the sprites behind it.
 func _blit_sprite_tile(
-	image: Image, strip: PackedByteArray, palette: PackedColorArray, tile: int,
-	at: Vector2i, flip_x: bool, flip_y: bool, taken: PackedByteArray,
+	pixels: PackedInt32Array, strip: PackedByteArray, palette: PackedColorArray,
+	tile: int, at: Vector2i, flip_x: bool, flip_y: bool, taken: PackedByteArray,
 	behind: PackedByteArray, starters: bool
 ) -> void:
 	var starter: Dictionary = _starter_for(tile) if starters else {}
+	var table: PackedInt32Array = Gen2PicImage.lookup(palette)
 	for row: int in TILE:
 		var y: int = at.y + row
 		if y < 0 or y >= HEIGHT:
@@ -435,7 +459,7 @@ func _blit_sprite_tile(
 			taken[at_pixel] = 1
 			if not behind.is_empty() and behind[at_pixel] != TRANSPARENT_INDEX:
 				continue
-			image.set_pixel(x, y, palette[pixel])
+			pixels[at_pixel] = table[pixel]
 
 
 ## Which of the three front pics a sprite tile lands in, if any.

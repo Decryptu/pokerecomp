@@ -31,14 +31,29 @@ static func from_indices(
 	if width <= 0 or height <= 0 or indices.size() < width * height:
 		return Image.create_empty(maxi(width, 1), maxi(height, 1), false, Image.FORMAT_RGBA8)
 
-	var table: PackedInt32Array = lookup(palette, transparent_background)
-	var words := PackedInt32Array()
-	words.resize(width * height)
+	return canvas_image(
+		canvas_from_indices(indices, width, height, palette, transparent_background),
+		width, height
+	)
 
+
+## The same before the conversion, for a page that goes on to blit over it.
+static func canvas_from_indices(
+	indices: PackedByteArray,
+	width: int,
+	height: int,
+	palette: PackedColorArray,
+	transparent_background: bool = false
+) -> PackedInt32Array:
+	var words := PackedInt32Array()
+	if width <= 0 or height <= 0 or indices.size() < width * height:
+		words.resize(maxi(width, 1) * maxi(height, 1))
+		return words
+	var table: PackedInt32Array = lookup(palette, transparent_background)
+	words.resize(width * height)
 	for i: int in width * height:
 		words[i] = table[indices[i]]
-
-	return canvas_image(words, width, height)
+	return words
 
 
 ## An image from a row-major index buffer plus `wAttrmap`: one palette index per
@@ -62,12 +77,32 @@ static func from_attributes(
 	if width <= 0 or height <= 0 or indices.size() < width * height:
 		return Image.create_empty(maxi(width, 1), maxi(height, 1), false, Image.FORMAT_RGBA8)
 
+	return canvas_image(
+		canvas_from_attributes(indices, width, height, slots, columns, palettes),
+		width, height
+	)
+
+
+## The same before the conversion, for a page that goes on to blit over it.
+static func canvas_from_attributes(
+	indices: PackedByteArray,
+	width: int,
+	height: int,
+	slots: PackedInt32Array,
+	columns: int,
+	palettes: Array
+) -> PackedInt32Array:
+	var words := PackedInt32Array()
+	if palettes.is_empty() or width <= 0 or height <= 0 \
+		or indices.size() < width * height:
+		words.resize(maxi(width, 1) * maxi(height, 1))
+		return words
+
 	var lookups: Array[PackedInt32Array] = []
 	for palette: Variant in palettes:
 		lookups.append(lookup(palette as PackedColorArray, false))
 
 	var tile: int = Gen2Font.TILE
-	var words := PackedInt32Array()
 	words.resize(width * height)
 	for y: int in height:
 		@warning_ignore("integer_division")
@@ -80,8 +115,7 @@ static func from_attributes(
 				clampi(slots[slot] if slot < slots.size() else 0, 0, lookups.size() - 1)
 			]
 			words[line + x] = table[indices[line + x]]
-
-	return canvas_image(words, width, height)
+	return words
 
 
 ## An attrmap from a list of `FillBoxCGB` boxes, each (x, y, width, height,
@@ -349,17 +383,38 @@ static func blit_tile(
 			pixels[to_row + x] = table[mini(index, colors - 1)]
 
 
+## Puts [param image] on [param target].
+##
+## The one way a screen in this project hands a redrawn picture to the node that
+## shows it, so the reuse below happens everywhere rather than at whichever
+## screen was measured.
+static func show(target: TextureRect, image: Image) -> void:
+	if target == null:
+		return
+	target.texture = refreshed_texture(target.texture as ImageTexture, image)
+
+
 ## The texture [param texture] becomes once it holds [param image].
 ##
 ## A screen redrawn every frame used to answer `ImageTexture.create_from_image`
 ## each time, which allocates a texture and frees the last one on every frame it
 ## draws; `update` writes into the one already on the GPU. The size and format
 ## have to match for that, so a first frame and a resize still create.
+##
+## Not headless. There is no GPU there to save the upload to, and the dummy
+## driver hands `ImageTexture.get_image` back the picture the texture was
+## created with rather than the one it was last updated with, so a check or a
+## test that reads a screen back would read the frame before the one it asked
+## for.
 static func refreshed_texture(texture: ImageTexture, image: Image) -> ImageTexture:
 	if image == null:
 		return texture
-	if texture == null or Vector2i(texture.get_size()) != image.get_size() \
+	if texture == null or _drawing_nothing \
+		or Vector2i(texture.get_size()) != image.get_size() \
 		or texture.get_format() != image.get_format():
 		return ImageTexture.create_from_image(image)
 	texture.update(image)
 	return texture
+
+
+static var _drawing_nothing: bool = DisplayServer.get_name() == "headless"

@@ -511,7 +511,7 @@ func _show_pic(kind: int) -> void:
 func _redraw_pic(colors: PackedColorArray) -> void:
 	if _pic_cell.is_empty():
 		return
-	_pic.texture = ImageTexture.create_from_image(Gen2PicImage.from_indices(
+	Gen2PicImage.show(_pic, Gen2PicImage.from_indices(
 		_pic_cell["indices"], int(_pic_cell["width"]), int(_pic_cell["height"]), colors
 	))
 
@@ -631,7 +631,7 @@ func _redraw_sprite(colors: PackedColorArray) -> void:
 	var image: Image = Gen2WorldSprite.image_for(
 		_sprite_source, _data.overworld_sprite_indices(_sprite_source.number), colors
 	)
-	_sprite.texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(_sprite, image)
 	_sprite.size = Vector2(image.get_size())
 
 

@@ -455,7 +455,7 @@ func _open_search_results_mode() -> void:
 func _refresh() -> void:
 	if _background == null or _page == null or _dex == null:
 		return
-	_background.texture = ImageTexture.create_from_image(render())
+	Gen2PicImage.show(_background, render())
 	_background.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 
 

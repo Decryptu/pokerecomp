@@ -3740,7 +3740,7 @@ func _show_menu_image(image: Image, at: Vector2i) -> void:
 func _show_layer_image(layer: TextureRect, image: Image, at: Vector2i) -> void:
 	if layer == null:
 		return
-	layer.texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(layer, image)
 	layer.position = Vector2(at)
 	layer.size = Vector2(image.get_size())
 	layer.visible = true

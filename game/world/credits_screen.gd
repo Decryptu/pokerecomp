@@ -125,4 +125,4 @@ func _process(delta: float) -> void:
 func _refresh() -> void:
 	if _view == null:
 		return
-	_view.texture = ImageTexture.create_from_image(render())
+	Gen2PicImage.show(_view, render())

@@ -160,7 +160,7 @@ func _refresh_trainer() -> void:
 
 
 func _show(image: Image) -> void:
-	_pic.texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(_pic, image)
 	_pic.size = image.get_size()
 	_pic.position = (
 		Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT) - Vector2(image.get_size())

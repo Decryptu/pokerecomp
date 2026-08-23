@@ -1879,7 +1879,7 @@ func _render_hardware() -> void:
 	_view.visible = image != null
 	if image == null:
 		return
-	_view.texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(_view, image)
 
 
 ## The words this mode's own box prints, which is what [method _hardware_image]

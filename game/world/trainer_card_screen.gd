@@ -142,7 +142,7 @@ func _refresh_page() -> void:
 	var separator: bool = int(_frames / SEPARATOR_FRAMES) % 2 == 0
 	var page: Dictionary = Gen2TrainerCard.page(_save, _world, _page, separator)
 	var indices: PackedByteArray = _page_renderer.draw(page)
-	_background.texture = ImageTexture.create_from_image(
+	Gen2PicImage.show(_background,
 		_image_from(indices, _page_renderer.attributes())
 	)
 	_background.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
@@ -152,24 +152,13 @@ func _refresh_page() -> void:
 ## why this cannot go through [method Gen2PicImage.from_indices] whole: the card
 ## is eight palettes at once.
 func _image_from(indices: PackedByteArray, attributes: PackedInt32Array) -> Image:
-	var image := Image.create(Gen2Screen.WIDTH, Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8)
-	var tile: int = Gen2TrainerCardPage.TILE
 	var palettes: Array = []
 	for slot: int in RomLayout.CARD_PALETTE_CLASSES.size():
 		palettes.append(_data.card_palette(slot))
-	for row: int in Gen2TrainerCardPage.ROWS:
-		for column: int in Gen2TrainerCardPage.COLUMNS:
-			var slot: int = attributes[row * Gen2TrainerCardPage.COLUMNS + column]
-			var palette: PackedColorArray = palettes[clampi(slot, 0, palettes.size() - 1)]
-			for y: int in tile:
-				for x: int in tile:
-					var at_x: int = column * tile + x
-					var at_y: int = row * tile + y
-					var index: int = indices[at_y * Gen2Screen.WIDTH + at_x]
-					image.set_pixel(
-						at_x, at_y, palette[clampi(index, 0, palette.size() - 1)]
-					)
-	return image
+	return Gen2PicImage.from_attributes(
+		indices, Gen2Screen.WIDTH, Gen2Screen.HEIGHT, attributes,
+		Gen2TrainerCardPage.COLUMNS, palettes
+	)
 
 
 ## `TrainerCard_Page2_3_OAMUpdate`: one 2x2 object group per set badge, skipping
@@ -194,7 +183,7 @@ func _refresh_badges() -> void:
 		var sprite := TextureRect.new()
 		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		sprite.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		sprite.texture = ImageTexture.create_from_image(
+		Gen2PicImage.show(sprite,
 			_badge_image(int((badge["frames"] as Array)[frame]))
 		)
 		sprite.position = Vector2(
@@ -212,28 +201,24 @@ func _badge_image(frame_tile: int) -> Image:
 	var tiles: PackedByteArray = _data.tile_indices("card_badges")
 	var palette: PackedColorArray = _data.card_badge_palette()
 	var side: int = BADGE_TILE_SIZE * 2
-	var image := Image.create(side, side, false, Image.FORMAT_RGBA8)
+	var pixels: PackedInt32Array = Gen2PicImage.canvas(side, side)
 	if tiles.is_empty():
-		return image
-	var strip_width: int = tiles.size() / BADGE_TILE_SIZE
-	var flip: bool = (frame_tile & BADGE_FLIP) != 0
+		return Gen2PicImage.canvas_image(pixels, side, side)
+	@warning_ignore("integer_division")
+	var strip_tiles: int = tiles.size() / Gen2Tiles.TILE_PIXELS
 	var first: int = frame_tile & ~BADGE_FLIP
+	## Object colour zero is transparent under the hardware's own rules, which
+	## is what lets a badge sit over the card.
+	var table: PackedInt32Array = Gen2PicImage.lookup(palette)
 	for quadrant: int in 4:
-		var tile: int = first + quadrant
-		var to_x: int = (quadrant % 2) * BADGE_TILE_SIZE
-		var to_y: int = int(quadrant / 2) * BADGE_TILE_SIZE
-		for y: int in BADGE_TILE_SIZE:
-			for x: int in BADGE_TILE_SIZE:
-				var from: int = y * strip_width + tile * BADGE_TILE_SIZE + x
-				if from >= tiles.size():
-					continue
-				var index: int = tiles[from]
-				## Object colour zero is transparent under the hardware's own
-				## rules, which is what lets a badge sit over the card.
-				if index == 0:
-					continue
-				var at_x: int = side - 1 - (to_x + x) if flip else to_x + x
-				image.set_pixel(
-					at_x, to_y + y, palette[clampi(index, 0, palette.size() - 1)]
-				)
+		@warning_ignore("integer_division")
+		var to_y: int = (quadrant / 2) * BADGE_TILE_SIZE
+		Gen2PicImage.blit_tile(
+			pixels, side, side, tiles, strip_tiles, first + quadrant,
+			(quadrant % 2) * BADGE_TILE_SIZE, to_y, table, false, false, 0
+		)
+	var image: Image = Gen2PicImage.canvas_image(pixels, side, side)
+	# `OAM_XFLIP` on the group mirrors the whole 16x16, quadrants included.
+	if (frame_tile & BADGE_FLIP) != 0:
+		image.flip_x()
 	return image

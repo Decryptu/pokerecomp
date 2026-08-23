@@ -30,6 +30,8 @@ const BATTLE_FRAMES: int = 1200
 ## The hardware's own frame. A subject over this on this machine cannot hold
 ## sixty on any machine.
 const HARDWARE_FRAME_MS: float = 1000.0 / 60.0
+## Fixed, so two runs of a subject walk the same map and roll the same wilds.
+const PROFILE_SEED: int = 20260823
 
 ## Every subject, in the order `all` runs them. Each names the method that opens
 ## it; the method answers a node to add and a [Callable] that spends one hardware
@@ -55,6 +57,9 @@ func _initialize() -> void:
 	# under a 60 Hz sync measures the monitor.
 	Engine.max_fps = 0
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	# Every subject runs on the defaults rather than on whatever the owner of
+	# this machine last chose, so two runs on two machines are the same run.
+	Gen2OptionsStore.use_test_path()
 	_run.call_deferred()
 
 
@@ -200,10 +205,10 @@ func _open_title() -> Dictionary:
 
 func _open_overworld(fill: bool = true) -> Dictionary:
 	## SCREEN FILL is on by default, so the wide buffer is the ordinary case and
-	## the 160x144 one is what a player who turned it off gets.
-	var options: Gen2Options = Gen2OptionsStore.current()
-	options.screen_fill = fill
-	Gen2OptionsStore.save(options)
+	## the 160x144 one is what a player who turned it off gets. Set on the shared
+	## object rather than saved: the store is pointed at its own file below, and
+	## a measurement has no business rewriting what the player chose.
+	Gen2OptionsStore.current().screen_fill = fill
 	var packed: PackedScene = load("res://game/world/world_screen.tscn")
 	var screen: Gen2WorldScreen = packed.instantiate() as Gen2WorldScreen
 	var save: Gen2SaveData = Gen2SaveStore.create_development_save(_data, 0)
@@ -300,7 +305,3 @@ func _open_world_menu(button: int) -> Dictionary:
 	for _frame: int in 32:
 		screen.advance_frame()
 	return opened
-
-
-## Fixed, so two runs of a subject walk the same map and roll the same wilds.
-const PROFILE_SEED: int = 20260823
