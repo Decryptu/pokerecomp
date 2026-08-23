@@ -437,5 +437,9 @@ static func _valid_slot(slot: int) -> bool:
 	return slot >= 0 and slot < MAX_SLOTS
 
 
+## Every refusal in this file goes through here, which is why the diagnostics
+## note sits here rather than at each `return`: a save that would not write is
+## the one thing a bug report cannot reconstruct afterwards.
 static func _failure(message: String) -> Dictionary:
+	Gen2Diagnostics.note("save", "refused: %s" % message)
 	return {"ok": false, "message": message}

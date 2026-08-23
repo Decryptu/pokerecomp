@@ -18,12 +18,14 @@ config/icon="res://app_icon.png"
 
 [autoload]
 
+Diagnostics="*res://autoload/diagnostics.gd"
 GameRuntime="*res://autoload/game_runtime.gd"
 InputRuntime="*res://autoload/input_runtime.gd"
 
 [debug]
 
 file_logging/enable_file_logging=true
+file_logging/max_log_files=10
 gdscript/warnings/integer_division=0
 
 [display]

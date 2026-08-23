@@ -13,6 +13,8 @@ signal update_check_requested
 
 var _theme: Gen2LauncherTheme = null
 var _result: Label = null
+## The report sheet's own answer line, rebuilt with the sheet.
+var _report_result: Label = null
 ## What a sheet opens over. The page itself is swapped out with the dock, so a
 ## sheet parented to it would vanish with the page behind it.
 var _host: Control = null
@@ -134,7 +136,71 @@ func open_report_sheet() -> void:
 	body.add_child(Gen2LauncherUI.muted(
 		_theme, "For everyone else. Ask in the chat and someone will write it up."
 	))
+
+	body.add_child(Gen2LauncherUI.caption(_theme, "Attach the details"))
+	body.add_child(Gen2LauncherUI.muted(
+		_theme,
+		"A report file holds this build, your machine, your settings, the mods "
+		+ "you have installed and the last few session logs. No save data and "
+		+ "nothing else from your computer.",
+	))
+	var actions: HFlowContainer = Gen2LauncherUI.actions()
+	body.add_child(actions)
+	var save: Gen2LauncherButton = Gen2LauncherButton.create(
+		_theme, "Save a report file", Gen2LauncherButton.Variant.NEUTRAL, &"save"
+	)
+	save.pressed.connect(_save_report_file)
+	actions.add_child(save)
+	var copy: Gen2LauncherButton = Gen2LauncherButton.create(
+		_theme, "Copy the details", Gen2LauncherButton.Variant.NEUTRAL
+	)
+	copy.pressed.connect(_copy_report_summary)
+	actions.add_child(copy)
+	_report_result = Gen2LauncherUI.muted(_theme, "")
+	body.add_child(_report_result)
+	sheet.closed.connect(func() -> void: _report_result = null)
 	sheet.open(_host if _host != null else self)
+
+
+## Writes the bundle and shows the player where it went.
+##
+## The file manager is opened rather than the file: a zip handed to the desktop
+## would be unpacked or opened by whatever is registered for it, and what the
+## player needs is the file itself, selected, ready to drag into an issue or a
+## chat. A platform with no file manager answers nothing and the path in the
+## line below is what the player goes by.
+func _save_report_file() -> void:
+	var diagnostics: Gen2Diagnostics = Gen2Diagnostics.instance()
+	if diagnostics == null:
+		_set_report_result("Diagnostics are not running in this build.", _theme.error)
+		return
+	var written: Dictionary = diagnostics.write_bundle()
+	if not bool(written["ok"]):
+		_set_report_result(String(written["message"]), _theme.error)
+		return
+	var path: String = String(written["path"])
+	# The whole path, not the filename: a phone opens no file manager, so the
+	# line below is the only thing that says where the file went.
+	_set_report_result("Saved %s" % path, _theme.success)
+	OS.shell_show_in_file_manager(path, true)
+
+
+## The header without the log tail, which is what fits in a chat message. The
+## file above is the whole thing.
+func _copy_report_summary() -> void:
+	var diagnostics: Gen2Diagnostics = Gen2Diagnostics.instance()
+	if diagnostics == null:
+		_set_report_result("Diagnostics are not running in this build.", _theme.error)
+		return
+	DisplayServer.clipboard_set(diagnostics.summary())
+	_set_report_result("Copied. Paste it with your report.", _theme.success)
+
+
+func _set_report_result(message: String, colour: Color) -> void:
+	if _report_result == null or not is_instance_valid(_report_result):
+		return
+	_report_result.text = message
+	_report_result.add_theme_color_override("font_color", colour)
 
 
 ## A button that hands [param url] to the desktop's browser. [param sheet] is
