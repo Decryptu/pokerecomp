@@ -359,45 +359,15 @@ static func slider(
 	return line
 
 
-## The one file picker every launcher dialog is built from. Any new file-picking
-## UI goes through here rather than building its own [FileDialog].
-##
-## `use_native_dialog` is asked for unconditionally rather than gated on
-## `FEATURE_NATIVE_DIALOG_FILE`: [FileDialog] already makes that exact test
-## before it goes native and falls back to its own window when the platform says
-## no, so a second gate here can only refuse a picker the platform would have
-## given us. Android answers it and hands over the system picker, which grants
-## the one file chosen and is why the app declares no storage permission.
-##
-## iOS answers no: `DisplayServerIOS` implements no `file_dialog_show` at the
-## engine pin, so there is no system picker to open and the built-in browser is
-## what appears. Browsing the whole filesystem there lists paths
-## `FileAccess.open()` then refuses, so the browser is rooted at the app's own
-## Documents instead, which is the one place a sandboxed app may read and which
-## `UIFileSharingEnabled` lets the Files app put a cartridge into.
+## The one file picker every launcher dialog is built from. The platform
+## reasoning, and what shows it, are in [Gen2LauncherFilePicker].
 static func file_picker(
 	theme: Gen2LauncherTheme,
 	title_text: String,
 	mode: FileDialog.FileMode,
 	filters: PackedStringArray
-) -> FileDialog:
-	var dialog := FileDialog.new()
-	dialog.file_mode = mode
-	var native: bool = DisplayServer.has_feature(DisplayServer.FEATURE_NATIVE_DIALOG_FILE)
-	dialog.access = (
-		FileDialog.ACCESS_FILESYSTEM
-		if native or not OS.has_feature("mobile")
-		else FileDialog.ACCESS_USERDATA
-	)
-	dialog.filters = filters
-	dialog.title = title_text
-	if dialog.access == FileDialog.ACCESS_USERDATA:
-		# The browser gives no room to explain itself, and a player looking at an
-		# empty folder needs to be told which folder it is.
-		dialog.title = "%s (this app's Documents folder)" % title_text
-	dialog.use_native_dialog = true
-	dialog.theme = theme.control_theme()
-	return dialog
+) -> Gen2LauncherFilePicker:
+	return Gen2LauncherFilePicker.create(theme, title_text, mode, filters)
 
 
 ## The square a mod's icon is drawn in, on a list row and on its own page.

@@ -16,8 +16,8 @@ var _settings: Gen2SettingsPage = null
 var _about: Gen2AboutPage = null
 var _title_backdrop: Gen2LauncherTitleBackdrop = null
 
-var _file_dialog: FileDialog = null
-var _mod_dialog: FileDialog = null
+var _file_dialog: Gen2LauncherFilePicker = null
+var _mod_dialog: Gen2LauncherFilePicker = null
 var _update_http: HTTPRequest = null
 
 var _importing: bool = false
@@ -106,8 +106,8 @@ func _build_dialogs() -> void:
 		window.files_dropped.connect(_on_files_dropped)
 
 
-func _picker(title: String, filters: PackedStringArray) -> FileDialog:
-	var dialog: FileDialog = Gen2LauncherUI.file_picker(
+func _picker(title: String, filters: PackedStringArray) -> Gen2LauncherFilePicker:
+	var dialog: Gen2LauncherFilePicker = Gen2LauncherUI.file_picker(
 		_palette, title, FileDialog.FILE_MODE_OPEN_FILE, filters
 	)
 	add_child(dialog)
@@ -221,7 +221,7 @@ func _confirm_mod_replace(path: String, mod_name: String) -> void:
 func _open_mod_dialog() -> void:
 	if _importing:
 		return
-	_mod_dialog.popup_centered(Vector2i(920, 620))
+	_mod_dialog.show_picker(Vector2i(920, 620))
 
 
 ## Asks the release API what the latest version is. Public so a test can drive
@@ -499,7 +499,7 @@ func _open_import_dialog(_game_id: StringName = &"") -> void:
 		"Choose a cartridge dump.",
 		"The importer identifies the cartridge by SHA-1, never by filename.",
 	)
-	_file_dialog.popup_centered(Vector2i(920, 620))
+	_file_dialog.show_picker(Vector2i(920, 620))
 
 
 func _on_file_selected(path: String) -> void:

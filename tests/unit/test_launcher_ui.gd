@@ -113,10 +113,33 @@ func test_every_file_picker_asks_for_the_systems_own() -> void:
 	# One helper, so a screen added later cannot reintroduce its own gate.
 	for path: String in _scripts_under("res://game"):
 		var source: String = FileAccess.get_file_as_string(path)
-		if path.ends_with("launcher/launcher_ui.gd"):
+		if path.ends_with("launcher/launcher_file_picker.gd"):
 			continue
 		assert_false(source.contains("FileDialog.new()"), path)
 		assert_false(source.contains("FEATURE_NATIVE_DIALOG_FILE"), path)
+		assert_false(source.contains("popup_centered") and path.ends_with("save_screen.gd"), path)
+
+
+func test_a_picker_reads_its_extensions_out_of_its_own_filters() -> void:
+	# What the system picker is asked to offer comes from the same filter string
+	# the built-in browser uses, so the two can never be told different things.
+	var dialog: Gen2LauncherFilePicker = Gen2LauncherUI.file_picker(
+		_light,
+		"Choose",
+		FileDialog.FILE_MODE_OPEN_FILE,
+		PackedStringArray(["*.gbc, *.gb ; Game Boy cartridge", "*.zip ; Archive"]),
+	)
+	autofree(dialog)
+	assert_eq(
+		Array(dialog.extensions()),
+		["gbc", "gb", "zip"],
+		"bare, in order, and each one only once",
+	)
+	var everything: Gen2LauncherFilePicker = Gen2LauncherUI.file_picker(
+		_light, "Choose", FileDialog.FILE_MODE_OPEN_FILE, PackedStringArray(["*.* ; Every file"])
+	)
+	autofree(everything)
+	assert_eq(Array(everything.extensions()), [], "and a filter that means anything asks for it")
 
 
 func _scripts_under(root: String) -> Array[String]:
