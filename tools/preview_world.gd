@@ -71,6 +71,11 @@ extends SceneTree
 ## MoveDeletion`, which no fixture cell reaches: the first number is how many
 ## presses into the routine to photograph, so 0 is the introduction, 2 its last
 ## page with the YES/NO up, and 4 the party list),
+## `gift_nickname` (`GiveANickname_YesNo`, which no fixture cell reaches because
+## a `givepoke` is somebody's map script: the first number is how many presses
+## into the prompt to photograph, 1 its question with the YES/NO up and 2 the
+## `WasSentToBillsPCText` behind NO, and the second the species, plus 1000 for
+## the box branch that prints that line),
 ## `move_tutor` (`special MoveTutor`, driven the same way, except that it opens
 ## on `ChooseMonToLearnTMHM` rather than on a box: 0 is that list),
 ## `day_care` (the Day-Care's five specials, driven the same way: the first
@@ -279,7 +284,7 @@ func _build_live(data: GameData, group: int, number: int, cell: Vector2i) -> voi
 	elif cell.x >= 0 and _kind not in [
 		&"battle_transition", &"level_evolution", &"egg_hatch", &"name_rater",
 		&"move_deleter", &"move_tutor", &"day_care", &"unown_puzzle", &"slot_machine",
-		&"card_flip", &"tile_anim", &"ice_slide", &"whiteout",
+		&"card_flip", &"tile_anim", &"ice_slide", &"whiteout", &"gift_nickname",
 	]:
 		_screen.start_cell = cell
 	## Pinned so two captures of the same map are the same picture: the seed the
@@ -383,6 +388,22 @@ func _process(_delta: float) -> bool:
 					break
 				if hatching.awaiting_press():
 					_screen.press_button(Gen2Button.A)
+		elif _kind == &"gift_nickname":
+			## `GivePoke`'s own prompt. The presses are spent behind the frames
+			## the box owes, since nothing shortens a printing text; the second
+			## number's thousands digit is the box branch.
+			_screen.preview_gift_nickname(maxi(_cell.y, 0) % 1000, _cell.y >= 1000)
+			_settle_mon_special("_nickname_host")
+			for _press: int in maxi(_cell.x, 0):
+				var prompt: Gen2NicknamePromptScreen = _screen.get("_nickname_host")
+				if prompt == null:
+					break
+				## NO on the question, so the mode photographs the routine's own
+				## boxes; the keyboard behind YES has `preview_naming_screen.gd`.
+				_screen.press_button(
+					Gen2Button.B if prompt.question_ready() else Gen2Button.A
+				)
+				_settle_mon_special("_nickname_host")
 		elif _kind == &"whiteout":
 			## `Script_Whiteout`, which no fixture cell reaches: the party is
 			## poisoned down to its last point and the pass `CountStep` owes is
@@ -580,7 +601,7 @@ func _process(_delta: float) -> bool:
 			&"warp", &"door", &"map_name_sign", &"ledge", &"heal_machine",
 			&"battle", &"battle_transition", &"level_evolution", &"egg_hatch",
 			&"name_rater", &"move_deleter", &"move_tutor", &"day_care",
-			&"ice_slide", &"whiteout", &"view_cover",
+			&"ice_slide", &"whiteout", &"view_cover", &"gift_nickname",
 		]:
 			## Those kinds drove themselves to the frame they want; every other
 			## kind stages a sprite and then spends the frames it needs.

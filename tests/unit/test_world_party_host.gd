@@ -158,6 +158,50 @@ func test_giveegg_records_an_egg_without_pretending_it_can_battle() -> void:
 	assert_eq(result["transaction"]["kind"], &"egg")
 
 
+## `GiveANickname_YesNo` answered YES, then `InitNickname`. The screen owns both
+## boxes; what the host owes is writing the answer into the row it just made.
+func test_a_gift_takes_the_nickname_the_prompt_answered() -> void:
+	_set_script(0x6200)
+	_world.dispatch_script_events(Vector2i(2, 2))
+	var result: Dictionary = Gen2WorldHost.complete_runtime_request(
+		_world, {"nickname": "SPARKY"}, _save, false, _random
+	)
+	assert_true(result["ok"])
+	assert_eq(_save.party[2].nickname, "SPARKY")
+
+
+## `.skip_nickname` copies `wMonOrItemNameBuffer` over `sBoxMonNicknames` behind
+## `InitNickname`, so a boxed gift always ends up with the species name.
+func test_a_boxed_gift_keeps_the_species_name_over_the_answer() -> void:
+	while _save.party.size() < Gen2SaveData.MAX_PARTY:
+		_save.party.append(Gen2SaveMon.from_dict(_save.party[0].to_dict()))
+	_set_script(0x6200)
+	_world.dispatch_script_events(Vector2i(2, 2))
+	var result: Dictionary = Gen2WorldHost.complete_runtime_request(
+		_world, {"nickname": "SPARKY"}, _save, false, _random
+	)
+	assert_true(result["ok"])
+	assert_eq(_save.boxes[0].slots[0].nickname, String(_data.species(25)["name"]))
+	assert_eq(int(result["results"][0]["events"][0]["result"]["script_value"]), 1)
+
+
+## `GiveEgg` is `TryAddMonToParty` and nothing else, so a full party boxes no egg
+## and `Script_giveegg`'s own `xor a` is what the script reads.
+func test_a_full_party_boxes_no_egg_and_answers_zero() -> void:
+	while _save.party.size() < Gen2SaveData.MAX_PARTY:
+		_save.party.append(Gen2SaveMon.from_dict(_save.party[0].to_dict()))
+	var before: Dictionary = _save.to_dict()
+	_set_script(0x6210)
+	_world.dispatch_script_events(Vector2i(2, 2))
+	var result: Dictionary = Gen2WorldHost.complete_runtime_request(
+		_world, {}, _save, false, _random
+	)
+	assert_true(result["ok"])
+	assert_false(result["transaction"]["accepted"])
+	assert_eq(int(result["results"][0]["events"][0]["result"]["script_value"]), 0)
+	assert_eq(_save.to_dict(), before)
+
+
 func test_npc_trade_uses_the_imported_record_and_replaces_the_requested_slot() -> void:
 	_set_script(0x6220)
 	_world.dispatch_script_events(Vector2i(2, 2))
@@ -208,7 +252,9 @@ func test_full_party_stores_a_gift_in_the_first_pc_box_slot() -> void:
 	assert_eq(result["transaction"]["destination"]["destination"], &"box")
 
 
-func test_full_party_and_boxes_refuse_a_gift_without_mutation() -> void:
+## `.FailedToGiveMon`'s `ld b, $2`: nothing is written and the script reads 2
+## and runs on, which is not a refusal the host may stop the script for.
+func test_full_party_and_boxes_leave_a_gift_unwritten_and_answer_two() -> void:
 	while _save.party.size() < Gen2SaveData.MAX_PARTY:
 		_save.party.append(Gen2SaveMon.from_dict(_save.party[0].to_dict()))
 	for box: Gen2SaveBox in _save.boxes:
@@ -220,8 +266,9 @@ func test_full_party_and_boxes_refuse_a_gift_without_mutation() -> void:
 	var result: Dictionary = Gen2WorldHost.complete_runtime_request(
 		_world, {}, _save, false, _random
 	)
-	assert_false(result["ok"])
-	assert_eq(result["reason"], &"storage_full")
+	assert_true(result["ok"])
+	assert_false(result["transaction"]["accepted"])
+	assert_eq(int(result["results"][0]["events"][0]["result"]["script_value"]), 2)
 	assert_eq(_save.to_dict(), before)
 
 

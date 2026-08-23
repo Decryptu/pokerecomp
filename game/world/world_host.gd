@@ -8,10 +8,15 @@ extends RefCounted
 ## if the subsystem had run.
 
 ## The requests the host settles out of the save alone. `special HealParty`,
-## `givepoke` and `giveegg` each run to completion inside the command that asked
-## for them and the script runs straight on, so a screen completes one where it
-## is staged rather than waiting for a press: the cartridge spends none, and a
-## request nothing draws for has nothing to acknowledge.
+## `giveegg` and a `givepoke` that names an OT each run to completion inside the
+## command that asked for them and the script runs straight on, so a screen
+## completes one where it is staged rather than waiting for a press.
+##
+## `pokemon_requested` is here for those and no further: `GivePoke`'s `.wildmon`
+## branch reaches `GiveANickname_YesNo`, which is a box and a naming screen, so a
+## screen that can draw one intercepts the request in front of this list
+## (`Gen2WorldScreen._open_gift_nickname`) and a driver that cannot settles it
+## here with the species name, which is what NO answers.
 const UNATTENDED_REQUESTS: Array[StringName] = [
 	&"party_heal_requested", &"pokemon_requested", &"trade_requested",
 ]
