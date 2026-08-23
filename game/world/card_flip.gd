@@ -227,15 +227,15 @@ var _payout_left: int = 0
 var _events: Array = []
 
 
-## [param coins] is `wCoins` and [param rng] the generator every `Random` is
-## drawn from.
+## [param start_coins] is `wCoins` and [param rng] the generator every `Random`
+## is drawn from.
 static func create(
-	board: PackedByteArray, coins: int, rng: RandomNumberGenerator
+	board: PackedByteArray, start_coins: int, rng: RandomNumberGenerator
 ) -> Gen2CardFlip:
 	var game := Gen2CardFlip.new()
 	game._rng = rng
 	game._board = board
-	game._coins = clampi(coins, 0, MAX_COINS)
+	game._coins = clampi(start_coins, 0, MAX_COINS)
 	game._deck.resize(DECK_SIZE)
 	game._discarded.resize(DECK_SIZE)
 	game._tilemap.resize(SCREEN_COLUMNS * SCREEN_ROWS)

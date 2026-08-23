@@ -127,10 +127,10 @@ func configure_tileset(
 ## water moving across a route boundary rather than restarting it.
 func reload_tileset(world: Gen2WorldAPI, time_of_day: int = Gen2WorldPalette.TIME_MORNING) -> void:
 	var at_command: int = _command_index
-	var timer: int = _timer
+	var at_timer: int = _timer
 	configure(world, time_of_day)
 	_command_index = at_command
-	_timer = timer
+	_timer = at_timer
 
 
 ## Runs one hardware frame's command and reports whether the tile strip or a

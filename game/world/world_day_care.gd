@@ -584,8 +584,8 @@ static func _last_healthy(save: Gen2SaveData, party_index: int) -> bool:
 
 ## `.day_care_lady`'s three `inc [hl]`: one point of experience, with the high
 ## byte held at `MAX_DAY_CARE_EXP`'s own on the pass a carry reaches it.
-static func _day_care_exp_after(exp: int) -> int:
-	var raised: int = (exp + 1) & 0xFFFFFF
+static func _day_care_exp_after(points: int) -> int:
+	var raised: int = (points + 1) & 0xFFFFFF
 	if raised & 0xFFFF == 0 and raised >> 16 >= MAX_DAY_CARE_EXP >> 16:
 		return MAX_DAY_CARE_EXP
 	return raised

@@ -317,16 +317,16 @@ static func from_data(data: GameData) -> Gen2CardFlipPage:
 	var one: PackedByteArray = data.card_flip_indices("card_flip_1")
 	var two: PackedByteArray = data.card_flip_indices("card_flip_2")
 	var three: PackedByteArray = data.card_flip_indices("card_flip_3")
-	var board: PackedByteArray = data.card_flip_tilemap()
+	var tilemap: PackedByteArray = data.card_flip_tilemap()
 	if glyphs == null or one.is_empty() or two.is_empty() or three.is_empty() \
-		or board.size() < RomLayout.CARD_FLIP_TILEMAP_BYTES:
+		or tilemap.size() < RomLayout.CARD_FLIP_TILEMAP_BYTES:
 		return null
 
 	var page := Gen2CardFlipPage.new()
 	page.font = glyphs
 	page.frame_style = Gen2OptionsStore.current().textbox_frame
 	page.digits_lifted = data.id == RomRegistry.CRYSTAL
-	page._board = board
+	page._board = tilemap
 	page._background_tiles = _bank(
 		[[SHEET_1_FIRST_TILE, one], [SHEET_2_FIRST_TILE, two]], BACKGROUND_TILES
 	)

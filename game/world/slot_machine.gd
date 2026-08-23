@@ -250,14 +250,15 @@ static func _percent(value: int) -> int:
 	return value * 0xFF / 100
 
 
-## [param coins] is `wCoins`, [param lucky] the `wScriptVar` the map set, and
-## [param rng] the generator every `Random` here is drawn from.
+## [param start_coins] is `wCoins`, [param lucky] the `wScriptVar` the map set,
+## and [param rng] the generator every `Random` here is drawn from.
 static func create(
-	strips: Array[PackedByteArray], coins: int, lucky: bool, rng: RandomNumberGenerator
+	strips: Array[PackedByteArray], start_coins: int, lucky: bool,
+	rng: RandomNumberGenerator
 ) -> Gen2SlotMachine:
 	var machine := Gen2SlotMachine.new()
 	machine._rng = rng
-	machine._coins = clampi(coins, 0, MAX_COINS)
+	machine._coins = clampi(start_coins, 0, MAX_COINS)
 	machine._lucky = lucky
 	for reel: int in REELS:
 		var state := Reel.new()

@@ -26,20 +26,21 @@ var _native: Object = null
 
 
 static func create(
-	theme: Gen2LauncherTheme,
+	palette: Gen2LauncherTheme,
 	title_text: String,
-	mode: FileDialog.FileMode,
-	filters: PackedStringArray,
+	picker_mode: FileDialog.FileMode,
+	patterns: PackedStringArray,
 ) -> Gen2LauncherFilePicker:
 	var dialog := Gen2LauncherFilePicker.new()
-	dialog.file_mode = mode
-	dialog.filters = filters
+	dialog.file_mode = picker_mode
+	dialog.filters = patterns
 	dialog.title = title_text
 	dialog.use_native_dialog = true
-	dialog.theme = theme.control_theme()
+	dialog.theme = palette.control_theme()
 	# The plugin opens files; naming one that does not exist yet is a different
 	# controller and a different flow, so a save keeps the engine's own path.
-	if mode == FileDialog.FILE_MODE_OPEN_FILE and Engine.has_singleton(NATIVE_SINGLETON):
+	if picker_mode == FileDialog.FILE_MODE_OPEN_FILE \
+		and Engine.has_singleton(NATIVE_SINGLETON):
 		dialog._native = Engine.get_singleton(NATIVE_SINGLETON)
 	dialog.access = (
 		FileDialog.ACCESS_FILESYSTEM if dialog._can_browse_freely() else FileDialog.ACCESS_USERDATA

@@ -452,10 +452,10 @@ func _max_zoom_step() -> int:
 ## The buffer a scale of [param scale] needs to cover [param area], rounded up
 ## to a whole block on each axis past the hardware's own screen so the 160x144
 ## interface rectangle lands on a whole tile.
-static func buffer_for(area: Vector2, scale: float) -> Vector2i:
+static func buffer_for(area: Vector2, at_scale: float) -> Vector2i:
 	var wanted := Vector2i(
-		maxi(ceili(area.x / maxf(scale, MIN_SCALE)), WIDTH),
-		maxi(ceili(area.y / maxf(scale, MIN_SCALE)), HEIGHT),
+		maxi(ceili(area.x / maxf(at_scale, MIN_SCALE)), WIDTH),
+		maxi(ceili(area.y / maxf(at_scale, MIN_SCALE)), HEIGHT),
 	)
 	return Vector2i(
 		WIDTH + ceili(float(wanted.x - WIDTH) / float(BUFFER_STEP)) * BUFFER_STEP,

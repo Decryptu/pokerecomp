@@ -215,9 +215,9 @@ func game_titles() -> Array[String]:
 static func titles_for(ids: Array) -> Array[String]:
 	var out: Array[String] = []
 	for game: Variant in ids:
-		var id := StringName(game)
-		var title: String = RomRegistry.title_for(id)
-		out.append(title if not title.is_empty() else String(id))
+		var game_id := StringName(game)
+		var title: String = RomRegistry.title_for(game_id)
+		out.append(title if not title.is_empty() else String(game_id))
 	return out
 
 
