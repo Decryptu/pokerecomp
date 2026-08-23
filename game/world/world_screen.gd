@@ -155,6 +155,13 @@ var _evolution_save: Gen2SaveData = null
 ## `OverworldHatchEgg`'s screen and the save whose party it has already written.
 var _hatch_host: Gen2EggHatchScreen = null
 var _hatch_save: Gen2SaveData = null
+## `GiveANickname_YesNo`'s screen, standing between `givepoke` staging the
+## request and the party host applying it.
+var _nickname_host: Gen2NicknamePromptScreen = null
+var _nickname_answer: String = ""
+## Raised by the screenshot driver alone, which opens the prompt with no
+## `givepoke` behind it and so has no request to complete when it closes.
+var _nickname_preview: bool = false
 ## `special NameRater`'s screen and the save whose party row it may rename.
 var _name_rater_host: Gen2NameRaterScreen = null
 var _name_rater_save: Gen2SaveData = null
@@ -577,6 +584,7 @@ func _apply_interface_mask() -> void:
 		or _hall_of_fame_host != null or _trainer_card_host != null
 		or _pokedex_host != null or _credits_host != null
 		or _evolution_host != null or _hatch_host != null
+		or _nickname_host != null
 		or _name_rater_host != null or _move_deleter_host != null
 		or _move_tutor_host != null or _day_care_host != null
 		or _unown_puzzle_host != null or _slot_machine_host != null
@@ -829,6 +837,8 @@ func advance_frame() -> void:
 		_evolution_host.advance_frame()
 	if _hatch_host != null:
 		_hatch_host.advance_frame()
+	if _nickname_host != null:
+		_nickname_host.advance_frame()
 	if _name_rater_host != null:
 		_name_rater_host.advance_frame()
 	if _move_deleter_host != null:
@@ -997,6 +1007,7 @@ func _overlay_open() -> bool:
 		or _hall_of_fame_host != null or _trainer_card_host != null \
 		or _pokedex_host != null or _credits_host != null \
 		or _evolution_host != null or _hatch_host != null \
+		or _nickname_host != null \
 		or _name_rater_host != null or _move_deleter_host != null \
 		or _move_tutor_host != null \
 		or _day_care_host != null or _unown_puzzle_host != null \
@@ -1109,6 +1120,11 @@ func _handle_button(button: int) -> bool:
 	## map loop suspended in exactly the same place.
 	if _hatch_host != null:
 		_hatch_host.handle_button(button)
+		return true
+	## `GivePoke` runs inside `givepoke`, with the map loop suspended behind the
+	## script the same way, and its own naming screen is reached through it.
+	if _nickname_host != null:
+		_nickname_host.handle_button(button)
 		return true
 	## `special NameRater` runs inside `opentext`, so the map loop is suspended
 	## behind it the same way and its own two screens are reached through it.
@@ -1671,6 +1687,74 @@ func _on_hatch_named(party_index: int, nickname: String) -> void:
 		return
 	mon.nickname = nickname
 	_script_prompt = "%s hatched" % nickname
+
+
+## `GivePoke`'s own prompt, for the `givepoke` sites that name no OT: thirteen
+## of the fourteen, every starter among them. `GiveANickname_YesNo` stands
+## between `TryAddMonToParty` and the row being named, so the request is left
+## pending while the screen is up and the party host applies it with the answer.
+##
+## False when the routine reaches no prompt and the request may be settled where
+## it was staged: an egg, a gift that names an OT, and the storage that has room
+## for neither, which is `.FailedToGiveMon`.
+func _open_gift_nickname(request: Dictionary) -> bool:
+	if _nickname_host != null or _world == null or _data == null:
+		return false
+	var values: Dictionary = request.get("values", {})
+	if not values.has("pokemon") or int(values.get("trainer", 0)) != 0:
+		return false
+	var species: int = int(values.get("pokemon", 0))
+	var species_name: String = String(_data.species(species).get("name", ""))
+	if species_name.is_empty():
+		return false
+	var save: Gen2SaveData = _injected_save if _injected_save != null \
+		else _selected_runtime_save()
+	var destination: StringName = Gen2WorldPartyHost.gift_destination(save)
+	if destination == &"full":
+		return false
+	var host := Gen2NicknamePromptScreen.new()
+	host.set_context(
+		_data, species_name,
+		Gen2WorldPartyHost.sent_to_box_text(species_name) if destination == &"box" else ""
+	)
+	_nickname_answer = species_name
+	host.named.connect(_on_gift_named)
+	host.closed.connect(_on_gift_nickname_closed)
+	host.z_index = 30
+	_nickname_host = host
+	_screen.display(host)
+	if _nickname_host == null:
+		return false
+	_script_prompt = "Nickname"
+	_refresh_labels()
+	return true
+
+
+func _on_gift_named(nickname: String) -> void:
+	_nickname_answer = nickname
+
+
+## `InitNickname` has answered, so the row the party host is about to write
+## carries the player's entry rather than `wStringBuffer1`'s species name.
+func _on_gift_nickname_closed() -> void:
+	var host: Gen2NicknamePromptScreen = _nickname_host
+	_nickname_host = null
+	if host != null:
+		Gen2Screen.drop(host)
+	if _renderer != null:
+		_renderer.refresh()
+	if _nickname_preview:
+		_nickname_preview = false
+		_refresh_labels()
+		return
+	var settled: Dictionary = _complete_pending_request({
+		"ok": true, "nickname": _nickname_answer,
+	})
+	if not bool(settled.get("ok", false)):
+		_script_prompt = "Host unavailable: %s" % String(settled.get("reason", "unknown"))
+		_refresh_labels()
+		return
+	_show_script_results(settled.get("results", []))
 
 
 func _on_hatch_closed() -> void:
@@ -3170,6 +3254,34 @@ func preview_egg_hatch(species: int = 0) -> void:
 	if summary.is_empty():
 		return
 	_open_hatch([summary], save)
+
+
+## Public screenshot driver for `GiveANickname_YesNo`, which no fixture cell
+## reaches: a `givepoke` is somebody's map script. The prompt is opened over the
+## map with no request behind it, so its close writes nothing.
+func preview_gift_nickname(species: int = 0, boxed: bool = false) -> void:
+	if _world == null or _data == null or _nickname_host != null:
+		return
+	var chosen: int = species if species > 0 else 1
+	var species_name: String = String(_data.species(chosen).get("name", ""))
+	if species_name.is_empty():
+		_script_prompt = "This cartridge has no species %d" % chosen
+		_refresh_labels()
+		return
+	var host := Gen2NicknamePromptScreen.new()
+	host.set_context(
+		_data, species_name,
+		Gen2WorldPartyHost.sent_to_box_text(species_name) if boxed else ""
+	)
+	_nickname_answer = species_name
+	_nickname_preview = true
+	host.named.connect(_on_gift_named)
+	host.closed.connect(_on_gift_nickname_closed)
+	host.z_index = 30
+	_nickname_host = host
+	_screen.display(host)
+	_script_prompt = "Nickname"
+	_refresh_labels()
 
 
 ## Public screenshot driver for the blackout. It poisons the whole party down to
@@ -5557,6 +5669,9 @@ func _show_script_results(results: Array) -> void:
 					})
 					_show_script_results(swarm_results)
 					return
+				if StringName(request.get("kind", &"")) == &"pokemon_requested" \
+					and _open_gift_nickname(request):
+					break
 				if StringName(request.get("kind", &"")) in \
 					Gen2WorldHost.UNATTENDED_REQUESTS:
 					var settled: Array = _complete_unattended_request()

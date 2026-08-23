@@ -680,6 +680,34 @@ static func nickname_prompt(nickname: String) -> String:
 	return "%s'S\nNICKNAME?" % nickname
 
 
+## `_CaughtAskNicknameText`, the question `GiveANickname_YesNo` asks for anything
+## received rather than hatched. Distinct from [method nickname_question], which
+## is `_BreedAskNicknameText` and names the row on its own line.
+static func caught_nickname_question(species_name: String) -> String:
+	return "Give a nickname to\nthe %s you%sreceived?" % [
+		species_name, Gen2TextStream.SCROLL_BREAK,
+	]
+
+
+## `_WasSentToBillsPCText`, printed behind the nickname whenever a `givepoke`
+## landed in the box.
+static func sent_to_box_text(species_name: String) -> String:
+	return "%s was\nsent to BILL's PC." % species_name
+
+
+## Where `GivePoke` would put one more Pokemon: `TryAddMonToParty` first, then
+## `SendMonIntoBox`, and `.FailedToGiveMon` when neither has room. Answered
+## without writing anything, because `GiveANickname_YesNo` stands between the
+## two on the cartridge and the prompt it opens is drawn before this port's own
+## transaction runs.
+static func gift_destination(save: Gen2SaveData) -> StringName:
+	if save == null:
+		return &"full"
+	if save.party.size() < Gen2SaveData.MAX_PARTY:
+		return &"party"
+	return &"box" if bool(save.first_empty_box_slot().get("ok", false)) else &"full"
+
+
 ## `DoEggStep`, spent [param times] over. Each pass walks the party from the
 ## front taking one hatch cycle off every egg, and stops on the first egg whose
 ## counter reaches zero, so an egg behind that one keeps its cycle for that
@@ -943,27 +971,72 @@ static func _apply_party_request(
 		set_caught_data(
 			mon, level, world.object_time_of_day, world.player_female(), world.landmark()
 		)
-		if not is_egg:
-			var source: Dictionary = request.get("source", {})
-			var bank: int = int(source.get("bank", -1))
-			var nickname: String = _world_name(
-				world.data, bank, int(values.get("nickname_address", -1))
-			)
-			var ot_name: String = _world_name(
-				world.data, bank, int(values.get("ot_name_address", -1))
-			)
-			if not nickname.is_empty():
-				mon.nickname = nickname
-			if not ot_name.is_empty():
-				mon.original_trainer = ot_name
-				## `SetGiftPartyMonCaughtData`: a `givepoke` that names an OT is
-				## somebody's present, so its level byte is zero and its
-				## landmark is LANDMARK_GIFT rather than this map.
-				set_caught_data(mon, 0, -1, world.player_female(), LANDMARK_GIFT)
-		return _append_mon(candidate, mon, 2 if is_egg else 1, {
-			"kind": &"egg" if is_egg else &"gift",
-			"species": species, "level": level, "item": held_item,
+		if is_egg:
+			## `GiveEgg` is `TryAddMonToParty` and nothing else, so a full party
+			## boxes no egg and leaves `Script_giveegg`'s own `xor a` in
+			## wScriptVar; only the `ret nc` past it writes 2.
+			if candidate.party.size() >= Gen2SaveData.MAX_PARTY:
+				return {
+					"ok": true, "accepted": false, "script_value": 0,
+					"reason": &"party_full",
+					"summary": {
+						"kind": &"egg", "accepted": false,
+						"species": species, "level": level,
+					},
+				}
+			return _append_mon(candidate, mon, 2, {
+				"kind": &"egg", "species": species, "level": level, "item": held_item,
+			})
+		var source: Dictionary = request.get("source", {})
+		var bank: int = int(source.get("bank", -1))
+		var nickname: String = _world_name(
+			world.data, bank, int(values.get("nickname_address", -1))
+		)
+		var ot_name: String = _world_name(
+			world.data, bank, int(values.get("ot_name_address", -1))
+		)
+		if not nickname.is_empty():
+			mon.nickname = nickname
+		if not ot_name.is_empty():
+			mon.original_trainer = ot_name
+			## `SetGiftPartyMonCaughtData`: a `givepoke` that names an OT is
+			## somebody's present, so its level byte is zero and its
+			## landmark is LANDMARK_GIFT rather than this map.
+			set_caught_data(mon, 0, -1, world.player_female(), LANDMARK_GIFT)
+		elif result.has("nickname"):
+			## `GiveANickname_YesNo` and `InitNickname`: the `.wildmon` branch,
+			## which is the thirteen `givepoke` sites that name no OT. The screen
+			## drew the question and the naming keyboard, and NO answers with the
+			## species name `.done` already left in the row.
+			var chosen: String = String(result["nickname"]).strip_edges()
+			if not chosen.is_empty():
+				mon.nickname = chosen
+		var appended: Dictionary = _append_mon(candidate, mon, 0, {
+			"kind": &"gift", "species": species, "level": level, "item": held_item,
 		})
+		if not bool(appended.get("ok", false)):
+			## `.FailedToGiveMon`'s `ld b, $2`: neither the party nor the box had
+			## room, so nothing is written and the script reads 2 and runs on.
+			if StringName(appended.get("reason", &"")) == &"storage_full":
+				return {
+					"ok": true, "accepted": false, "script_value": 2,
+					"reason": &"storage_full",
+					"summary": {
+						"kind": &"gift", "accepted": false,
+						"species": species, "level": level,
+					},
+				}
+			return appended
+		var destination: StringName = StringName(
+			(appended["summary"]["destination"] as Dictionary).get("destination", &"party")
+		)
+		if destination == &"box":
+			## `.skip_nickname`'s tail copies `wMonOrItemNameBuffer` over
+			## `sBoxMonNicknames` after `InitNickname` has written the player's
+			## entry, so a boxed gift always ends up with the species name.
+			mon.nickname = String(world.data.species(species).get("name", ""))
+			appended["script_value"] = 1
+		return appended
 
 	if kind == &"trade_requested":
 		var values: Dictionary = request.get("values", {})

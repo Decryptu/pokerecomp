@@ -153,6 +153,12 @@ func handle_button(button: int) -> bool:
 	if _phase == Phase.NAMING and _naming != null:
 		return _naming.handle_button(button)
 	if _phase == Phase.ASK_NICKNAME:
+		if _menu == null or not _menu.visible:
+			if button == Gen2Button.A and _text_box != null \
+				and (_text_box.is_revealing() or _text_box.has_pages_left()):
+				_text_box.advance()
+				return true
+			return false
 		match button:
 			Gen2Button.UP, Gen2Button.DOWN:
 				_nickname_yes = not _nickname_yes
@@ -235,7 +241,14 @@ func advance_frame() -> void:
 	if _text_box != null and _text_box.visible:
 		_text_box.advance_frame()
 		if _text_box.is_revealing() or _text_box.has_pages_left():
+			## `YesNoBox` opens behind `PrintText` returning, so the menu is not
+			## up while the question is still printing.
+			if _phase == Phase.ASK_NICKNAME and _menu != null:
+				_menu.visible = false
 			return
+	if _phase == Phase.ASK_NICKNAME and _menu != null and not _menu.visible:
+		_draw_yes_no()
+		return
 	match _phase:
 		Phase.HUH:
 			## Reached on the frame the empty `para` page has been pressed past,
@@ -381,7 +394,6 @@ func _open_nickname_question() -> void:
 	_show_text(
 		Gen2WorldPartyHost.nickname_question(String(current_hatch().get("nickname", "")))
 	)
-	_draw_yes_no()
 
 
 ## `.nonickname` keeps `wStringBuffer1`, which is the species name the row was

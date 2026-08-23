@@ -1332,6 +1332,12 @@ func test_yes_opens_the_naming_screen_and_its_entry_becomes_the_nickname() -> vo
 		if screen.awaiting_press():
 			_world_screen.press_button(Gen2Button.A)
 	assert_eq(screen.nickname_cursor(), 0, "YesNoBox opens on YES")
+	## `YesNoBox` stands behind `PrintText` returning, so the menu is not up
+	## while the question is still printing and A spends the text instead.
+	for _frame: int in 600:
+		if screen._menu.visible:
+			break
+		_world_screen.advance_frame()
 	_world_screen.press_button(Gen2Button.A)
 	assert_eq(screen.phase(), Gen2EggHatchScreen.Phase.NAMING)
 	var model: Gen2NamingScreen = screen.naming_screen().model()
@@ -1344,6 +1350,125 @@ func test_yes_opens_the_naming_screen_and_its_entry_becomes_the_nickname() -> vo
 	await _settle_hatch()
 	assert_null(_world_screen.get("_hatch_host"))
 	assert_eq(save.party[0].nickname.length(), 1, "the one letter that was entered")
+
+
+## `givepoke SPECIES, 5` on the cell the player spawns on, so the coord event
+## the fixture already carries runs `GivePoke` when the script is dispatched.
+func _write_givepoke_script() -> void:
+	var directory: String = Fixture.directory()
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(directory))
+	scripts[Gen2WorldScript.pointer_key(Fixture.BANK, Fixture.TUTORIAL_SCRIPT)] = [
+		Gen2WorldScript.GIVEPOKE, Fixture.TRAINER_SPECIES, 5, 0, 0,
+		Gen2WorldScript.END,
+	]
+	RomCache.write_json(RomCache.world_scripts_path(directory), scripts)
+	_data = GameData.open_directory(directory)
+
+
+func _run_givepoke() -> Gen2NicknamePromptScreen:
+	_world_screen._show_script_results(
+		_world_screen._world.dispatch_script_events(Vector2i(4, 5))
+	)
+	return _world_screen.get("_nickname_host")
+
+
+## Spends whatever the box still owes and presses past each page it ends on,
+## which is what `PrintText` returning costs: `_CaughtAskNicknameText`'s own
+## `cont` is a press, and `YesNoBox` opens only behind the last of them.
+func _settle_nickname_text() -> void:
+	for _frame: int in 600:
+		var host: Gen2NicknamePromptScreen = _world_screen.get("_nickname_host")
+		if host == null:
+			return
+		if not host._text_box.is_revealing():
+			if not host._text_box.has_pages_left():
+				break
+			_world_screen.press_button(Gen2Button.A)
+		_world_screen.advance_frame()
+	_world_screen.advance_frame()
+
+
+## `GivePoke`'s `.wildmon` branch, which is the thirteen `givepoke` sites that
+## name no OT: every starter among them. NO is `.skip_nickname`, which keeps the
+## species name `GetPokemonName` left in the row.
+func test_a_gift_asks_for_a_nickname_and_no_keeps_the_species_name() -> void:
+	_write_givepoke_script()
+	await _open_world(true)
+	var save: Gen2SaveData = _world_screen._injected_save
+	var before: int = save.party.size()
+	var host: Gen2NicknamePromptScreen = _run_givepoke()
+	assert_not_null(host, "`GiveANickname_YesNo` is drawn")
+	assert_eq(save.party.size(), before, "and nothing is written while it stands")
+	var species_name: String = String(
+		_data.species(Fixture.TRAINER_SPECIES).get("name", "")
+	)
+	_settle_nickname_text()
+	## `cont` scrolls by one line rather than clearing the box, so the answer's
+	## page opens on the line above it rather than on an empty box.
+	assert_eq(host.text_lines(), PackedStringArray([
+		"Give a nickname to", "the %s you" % species_name,
+		"the %s you" % species_name, "received?",
+	]))
+	assert_eq(host.nickname_cursor(), 0, "YesNoBox opens on YES")
+	_world_screen.press_button(Gen2Button.B)
+	assert_null(_world_screen.get("_nickname_host"), "and B closes it as NO")
+	assert_eq(save.party.size(), before + 1, "the row is written behind the prompt")
+	assert_eq(save.party[before].nickname, species_name)
+	## `Gen2Screen.drop` is a `queue_free`, spent on a process frame this test
+	## otherwise never runs.
+	await get_tree().process_frame
+
+
+## YES reaches `NamingScreen` under NAME_MON, and `InitNickname` writes what it
+## stored into the row the request is about to make.
+func test_a_gift_takes_the_name_the_keyboard_stored() -> void:
+	_write_givepoke_script()
+	await _open_world(true)
+	var save: Gen2SaveData = _world_screen._injected_save
+	var before: int = save.party.size()
+	var host: Gen2NicknamePromptScreen = _run_givepoke()
+	_settle_nickname_text()
+	_world_screen.press_button(Gen2Button.A)
+	assert_eq(host.phase(), Gen2NicknamePromptScreen.Phase.NAMING)
+	var model: Gen2NamingScreen = host.naming_screen().model()
+	assert_eq(model.max_length, Gen2NamingScreen.MON_MAX_LENGTH)
+	model.press_a()
+	model.column = Gen2NamingScreen.LAST_COLUMN
+	model.row = model.command_row()
+	_world_screen.press_button(Gen2Button.A)
+
+	assert_null(_world_screen.get("_nickname_host"))
+	assert_eq(save.party.size(), before + 1)
+	assert_eq(save.party[before].nickname.length(), 1, "the one letter that was entered")
+	await get_tree().process_frame
+
+
+## `.failed`'s box branch: `WasSentToBillsPCText` is printed behind the nickname,
+## and `.skip_nickname`'s own copy puts the species name back over whatever the
+## keyboard stored.
+func test_a_boxed_gift_prints_bills_pc_and_keeps_the_species_name() -> void:
+	_write_givepoke_script()
+	await _open_world(true)
+	var save: Gen2SaveData = _world_screen._injected_save
+	while save.party.size() < Gen2SaveData.MAX_PARTY:
+		save.party.append(Gen2SaveMon.from_dict(save.party[0].to_dict()))
+	var host: Gen2NicknamePromptScreen = _run_givepoke()
+	_settle_nickname_text()
+	_world_screen.press_button(Gen2Button.B)
+	assert_eq(host.phase(), Gen2NicknamePromptScreen.Phase.AFTER_TEXT)
+	_settle_nickname_text()
+	var species_name: String = String(
+		_data.species(Fixture.TRAINER_SPECIES).get("name", "")
+	)
+	assert_eq(
+		" ".join(host.text_lines()),
+		Gen2WorldPartyHost.sent_to_box_text(species_name).replace("\n", " ")
+	)
+	_world_screen.press_button(Gen2Button.A)
+	assert_null(_world_screen.get("_nickname_host"))
+	assert_eq(save.party.size(), Gen2SaveData.MAX_PARTY)
+	assert_eq(save.boxes[0].slots[0].nickname, species_name)
+	await get_tree().process_frame
 
 
 ## `CountStep`'s `cp 4` and the `DoPoisonStep` behind it. Three steps are below
