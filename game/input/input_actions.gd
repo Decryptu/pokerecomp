@@ -209,9 +209,13 @@ static func from_event(event: InputEvent) -> Dictionary:
 
 ## The key actually printed where this physical one sits, as a keycode.
 ## `keyboard_get_label_from_physical` returns a key rather than a string, and
-## refuses on a display server with no keyboard, which is every headless run.
+## refuses on a display server with no keyboard to read a layout off: a headless
+## run, and every handheld, whose display server answers no whether or not a
+## keyboard happens to be paired. There is no feature flag to ask instead, and
+## the refusal is an error, so a settings page put fourteen of them into every
+## bug report a phone ever sent.
 static func _labelled_key(code: int) -> int:
-	if DisplayServer.get_name() == "headless":
+	if DisplayServer.get_name() == "headless" or OS.has_feature("mobile"):
 		return code
 	var labelled: int = DisplayServer.keyboard_get_label_from_physical(code)
 	return labelled if labelled != 0 else code

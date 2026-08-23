@@ -184,6 +184,9 @@ func summary() -> String:
 		_setting("rendering/renderer/rendering_method", "?"),
 		_video_adapter(),
 	])
+	# Which of the three ways to ask for a file this build has. A player who
+	# cannot get a cartridge in is the report this line is here for.
+	lines.append("Files      %s" % _file_picker_kind())
 	lines.append("Session    %s, %d error%s, %d warning%s%s" % [
 		_uptime(),
 		_errors, "" if _errors == 1 else "s",
@@ -242,7 +245,9 @@ func _pack_bundle(directory: String) -> Dictionary:
 			return {"ok": false, "message": "That folder could not be opened.", "path": ""}
 		if DirAccess.make_dir_absolute(directory) != OK:
 			return {"ok": false, "message": "That folder could not be opened.", "path": ""}
-	var path: String = "%s/%s%s.zip" % [directory, BUNDLE_PREFIX, _file_stamp()]
+	# path_join rather than a format string: a globalized user:// already ends in
+	# a separator, and the result is read off a phone screen and typed by hand.
+	var path: String = directory.path_join("%s%s.zip" % [BUNDLE_PREFIX, _file_stamp()])
 	var packer := ZIPPacker.new()
 	if packer.open(path) != OK:
 		return {"ok": false, "message": "The report file could not be created.", "path": ""}
@@ -491,6 +496,15 @@ static func _file_size(path: String) -> int:
 
 static func _setting(key: String, fallback: String) -> String:
 	return String(ProjectSettings.get_setting(key, fallback))
+
+
+## Which picker [Gen2LauncherFilePicker] would present here.
+static func _file_picker_kind() -> String:
+	if Engine.has_singleton(Gen2LauncherFilePicker.NATIVE_SINGLETON):
+		return "the system picker, through the platform plugin"
+	if DisplayServer.has_feature(DisplayServer.FEATURE_NATIVE_DIALOG_FILE):
+		return "the system picker, through the engine"
+	return "the engine's own browser"
 
 
 ## Empty on a headless run, and on a machine whose driver never answered.

@@ -1,0 +1,15 @@
+[config]
+name="NativeFilePicker"
+binary="native_file_picker.a"
+
+initialization="godot_native_file_picker_init"
+deinitialization="godot_native_file_picker_deinit"
+
+[dependencies]
+linked=[]
+embedded=[]
+system=["UniformTypeIdentifiers.framework"]
+
+capabilities=[]
+
+files=[]

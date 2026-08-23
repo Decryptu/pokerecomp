@@ -96,6 +96,18 @@ const DEX_ORDER_NEW_FIRST: int = 152
 const DEX_ORDER_ALPHA_FIRST: int = 63
 
 var _lz: Gen2Lz = Gen2Lz.new()
+## When the import last handed the main loop a frame. See [method _breathe].
+var _last_breath: int = 0
+
+
+## Hands the main loop a frame if one is due, so a launcher watching this import
+## keeps drawing. [param yield_ms] of zero never suspends, and awaiting a
+## coroutine that does not suspend returns at once.
+func _breathe(yield_ms: int) -> void:
+	if yield_ms <= 0 or Time.get_ticks_msec() - _last_breath < yield_ms:
+		return
+	_last_breath = Time.get_ticks_msec()
+	await Engine.get_main_loop().process_frame
 
 
 ## Sanity-checks [RomLayout] against the cartridge before anything is decoded.
@@ -3929,8 +3941,15 @@ static func type_name(rom: RomFile, layout: Dictionary, type_number: int) -> Str
 ##
 ## [param on_progress] is called as [code](stage, done, total)[/code] if given.
 ## Returns { ok, message, directory, species, elapsed_ms }.
-func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dictionary:
+## [param yield_ms] is how often the one long stretch of this hands the main loop
+## a frame: the catalogue scan is seven eighths of the wall clock and everything
+## else is under a second. Zero, the default, never suspends, which is what a
+## command line import and a corpus check want.
+func import_rom(
+	rom: RomFile, on_progress: Callable = Callable(), yield_ms: int = 0
+) -> Dictionary:
 	var started: int = Time.get_ticks_msec()
+	_last_breath = started
 	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
 	var result: Dictionary = {
 		"ok": false,
@@ -3976,11 +3995,13 @@ func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dictionary:
 		return result
 
 	var species: Array = _import_species(rom, layout, on_progress)
+	await _breathe(yield_ms)
 	if species.is_empty():
 		result["message"] = "Decoded no species."
 		return result
 
 	var pics: Dictionary = _import_pics(rom, layout, species, on_progress)
+	await _breathe(yield_ms)
 	if pics.is_empty():
 		result["message"] = "Could not decode pics."
 		return result
@@ -3988,45 +4009,60 @@ func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dictionary:
 	# Crystal's alone; Gold and Silver have no pic animation, so an empty answer
 	# is the honest one rather than a failure.
 	var pic_anims: Dictionary = _import_pic_anims(rom, layout, species)
+	await _breathe(yield_ms)
 	if pic_anims.is_empty() and not RomLayout.pic_anim(layout).is_empty():
 		result["message"] = "Could not decode pic animations."
 		return result
 
 	var tiles: Dictionary = _import_tiles(rom, layout, on_progress)
+	await _breathe(yield_ms)
 	if tiles.is_empty():
 		result["message"] = "Could not write the font."
 		return result
 
 	var dex_orders: Dictionary = _import_dex_orders(rom, layout)
+	await _breathe(yield_ms)
 	if dex_orders.is_empty():
 		result["message"] = "Dex order tables are outside the cartridge."
 		return result
 
 	var moves: Array = _import_moves(rom, layout, on_progress)
+	await _breathe(yield_ms)
 	var tmhm_moves: Array = _import_tmhm_moves(rom, layout)
+	await _breathe(yield_ms)
 	if tmhm_moves.is_empty():
 		result["message"] = "TM/HM move table is outside the cartridge or malformed."
 		return result
 	var happiness_changes: Array = _import_happiness_changes(rom, layout)
+	await _breathe(yield_ms)
 	if happiness_changes.is_empty():
 		result["message"] = "Happiness change table is outside the cartridge or malformed."
 		return result
 	var name_input_chars: Array = _import_name_input_chars(rom, layout)
+	await _breathe(yield_ms)
 	var string_buffers: Array = _import_string_buffer_pointers(rom, layout)
+	await _breathe(yield_ms)
 	var intro_text: Dictionary = _import_intro_text(rom, layout)
+	await _breathe(yield_ms)
 	if intro_text.is_empty():
 		result["message"] = "Intro text is outside the cartridge or malformed."
 		return result
 	var items: Array = _import_items(rom, layout, on_progress)
+	await _breathe(yield_ms)
 	var trades: Array = _import_world_trades(rom, layout)
+	await _breathe(yield_ms)
 	var types: Array = _import_types(rom, layout, on_progress)
+	await _breathe(yield_ms)
 	var matchups: Array = read_matchups(rom, layout)
 	var trainers: Array = _import_trainers(rom, layout, on_progress)
+	await _breathe(yield_ms)
 	var world: Dictionary = Gen2WorldImporter.import_to_cache(rom, layout, directory, on_progress)
+	await _breathe(yield_ms)
 	if not bool(world.get("ok", false)):
 		result["message"] = String(world.get("message", "Could not import overworld data."))
 		return result
 	var encounters: Dictionary = Gen2WorldEncounterImporter.import_to_cache(rom, layout, directory)
+	await _breathe(yield_ms)
 	if not bool(encounters.get("ok", false)):
 		result["message"] = String(encounters.get("message", "Could not import wild encounter data."))
 		return result
@@ -4035,10 +4071,12 @@ func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dictionary:
 		world.get("scripts", {}), world.get("standard_scripts", {}),
 		world.get("text", {}), world.get("movements", {})
 	)
+	await _breathe(yield_ms)
 	if not bool(services.get("ok", false)):
 		result["message"] = String(services.get("message", "Could not import world service data."))
 		return result
 	var battle_anims: Dictionary = Gen2BattleAnimImporter.import_to_cache(rom, layout, directory)
+	await _breathe(yield_ms)
 	if not bool(battle_anims.get("ok", false)):
 		result["message"] = String(
 			battle_anims.get("message", "Could not import battle animation data.")
@@ -4200,10 +4238,10 @@ func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dictionary:
 	## After the manifest, because the scan opens the cache it describes.
 	var catalogued: GameData = GameData.open_directory(directory)
 	if catalogued != null:
-		RomCache.write_json(
-			RomCache.world_catalog_path(directory),
-			Gen2WorldCatalog.build(catalogued).to_dict()
+		var catalog: Gen2WorldCatalog = await Gen2WorldCatalog.build_reporting(
+			catalogued, on_progress, yield_ms
 		)
+		RomCache.write_json(RomCache.world_catalog_path(directory), catalog.to_dict())
 
 	result["ok"] = true
 	result["species"] = species.size()

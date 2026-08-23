@@ -26,9 +26,9 @@ var _details_box: VBoxContainer = null
 var _status_title: String = ""
 var _status_detail: String = ""
 var _name_input: LineEdit = null
-var _export_dialog: FileDialog = null
-var _slot_import_dialog: FileDialog = null
-var _file_dialog: FileDialog = null
+var _export_dialog: Gen2LauncherFilePicker = null
+var _slot_import_dialog: Gen2LauncherFilePicker = null
+var _file_dialog: Gen2LauncherFilePicker = null
 
 
 func _ready() -> void:
@@ -241,8 +241,10 @@ func _build_ui() -> void:
 	)
 	_slot_import_dialog.file_selected.connect(_import_slot_file)
 
-func _picker(title: String, mode: FileDialog.FileMode, filters: PackedStringArray) -> FileDialog:
-	var dialog: FileDialog = Gen2LauncherUI.file_picker(_palette, title, mode, filters)
+func _picker(
+	title: String, mode: FileDialog.FileMode, filters: PackedStringArray
+) -> Gen2LauncherFilePicker:
+	var dialog: Gen2LauncherFilePicker = Gen2LauncherUI.file_picker(_palette, title, mode, filters)
 	add_child(dialog)
 	return dialog
 
@@ -394,10 +396,10 @@ func _add_slot_management(body: VBoxContainer) -> void:
 	body.add_child(file_row)
 	file_row.add_child(_action("Edit save", Gen2LauncherButton.Variant.NEUTRAL, &"settings", _open_editor))
 	file_row.add_child(_action("Export", Gen2LauncherButton.Variant.NEUTRAL, &"", func() -> void:
-		_export_dialog.popup_centered(Vector2i(900, 600))
+		_export_dialog.show_picker(Vector2i(900, 600))
 	))
 	file_row.add_child(_action("Import", Gen2LauncherButton.Variant.NEUTRAL, &"", func() -> void:
-		_slot_import_dialog.popup_centered(Vector2i(900, 600))
+		_slot_import_dialog.show_picker(Vector2i(900, 600))
 	))
 	file_row.add_child(_action("Delete", Gen2LauncherButton.Variant.DANGER, &"trash", _request_delete))
 
@@ -546,7 +548,7 @@ func _request_new_game() -> void:
 
 
 func _request_import() -> void:
-	_file_dialog.popup_centered(Vector2i(900, 600))
+	_file_dialog.show_picker(Vector2i(900, 600))
 
 
 func _on_file_selected(path: String) -> void:

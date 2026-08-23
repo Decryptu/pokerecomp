@@ -14,6 +14,10 @@ enum Variant {
 	NEUTRAL,
 	## No fill until hovered. Rows of these read as labels.
 	QUIET,
+	## Quiet, but standing on the toast's chip rather than on the page. The
+	## page's own muted ink is all but invisible against a surface that is the
+	## opposite side of the page from it.
+	ON_CHIP,
 	## Destructive, tinted with the error colour.
 	DANGER,
 	## One choice inside a segmented track.
@@ -143,6 +147,9 @@ func repaint() -> void:
 		Variant.QUIET:
 			fill = _theme.accent_wash(0.13) if _active else Color(0, 0, 0, 0)
 			ink = _theme.accent if _active else _theme.muted
+		Variant.ON_CHIP:
+			fill = _theme.with_alpha(_theme.on_surface, 0.16) if reached else Color(0, 0, 0, 0)
+			ink = _theme.with_alpha(_theme.on_surface, 1.0 if reached else 0.7)
 		Variant.DANGER:
 			fill = _theme.with_alpha(_theme.error, 0.12)
 			border = _theme.with_alpha(_theme.error, 0.40)

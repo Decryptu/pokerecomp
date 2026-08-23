@@ -102,6 +102,10 @@ var _item_sources: Dictionary = {}
 ## Built on first ask. See [method field_hm_items].
 var _field_hms: Array[int] = []
 
+## How many scripts [method build_reporting] decodes between two checks of the
+## clock. Small enough that a chunk is far shorter than a frame.
+const SCAN_CHUNK: int = 64
+
 
 ## Builds the catalog for [param data]. Walks every imported script once and
 ## every map's events once, which is why a caller holds the result rather than
@@ -111,7 +115,42 @@ static func build(data: GameData) -> Gen2WorldCatalog:
 	out._data = data
 	if data == null:
 		return out
-	out._scan_scripts()
+	out._scan_keys(out._script_keys(), 0, -1)
+	out._scan_map_events()
+	out._attribute_maps()
+	return out
+
+
+## The same scan, in chunks, handing the main loop a frame between them and
+## saying how far along it is.
+##
+## This walk is seven eighths of a cartridge import's wall clock: it decodes
+## every command of every script the import just wrote. Run whole it is the one
+## stretch long enough for a player to decide the launcher has stopped, so the
+## import uses this and the lazy rebuild behind [method GameData.catalog] uses
+## [method build], which has no screen to keep alive and no loop to give a frame
+## back to.
+static func build_reporting(
+	data: GameData, on_progress: Callable = Callable(), yield_ms: int = 0
+) -> Gen2WorldCatalog:
+	var out := Gen2WorldCatalog.new()
+	out._data = data
+	if data == null:
+		return out
+	var keys: Array = out._script_keys()
+	var last_yield: int = Time.get_ticks_msec()
+	var at: int = 0
+	while at < keys.size():
+		var upto: int = mini(at + SCAN_CHUNK, keys.size())
+		out._scan_keys(keys, at, upto)
+		at = upto
+		if on_progress.is_valid():
+			on_progress.call("catalogue", at, keys.size())
+		# Measured rather than counted: one script costs whatever its commands
+		# happen to cost, and what matters is a steady screen.
+		if yield_ms > 0 and Time.get_ticks_msec() - last_yield >= yield_ms:
+			last_yield = Time.get_ticks_msec()
+			await Engine.get_main_loop().process_frame
 	out._scan_map_events()
 	out._attribute_maps()
 	return out
@@ -365,10 +404,17 @@ func is_progression(row: Dictionary) -> bool:
 ## the decoder does not know ends that script's walk rather than guessing an
 ## operand width, which is the same rule `scan_references` follows: a site found
 ## past an unknown command would be at an invented offset.
-func _scan_scripts() -> void:
+func _script_keys() -> Array:
+	return _data.world_script_keys()
+
+
+## Scans `keys[from:upto]`, or all of them when [param upto] is negative. One
+## body for both builders, so only how the walk is broken up differs.
+func _scan_keys(keys: Array, from: int, upto: int) -> void:
 	var crystal: bool = Gen2WorldState.is_crystal_profile(_data)
-	for key: Variant in _data.world_script_keys():
-		var parts: PackedStringArray = String(key).split(":")
+	var last: int = keys.size() if upto < 0 else upto
+	for index: int in range(from, last):
+		var parts: PackedStringArray = String(keys[index]).split(":")
 		if parts.size() != 2:
 			continue
 		## `Gen2WorldScript.pointer_key` is a DECIMAL bank and a hex address.

@@ -8,6 +8,10 @@ extends Control
 ## code from [Gen2LauncherShell] and the cards under it, so changing the
 ## appearance is a rebuild rather than a repaint.
 
+## How often the cartridge import hands the loop a frame back. Long enough that
+## the frames cost the import very little, short enough to read as motion.
+const IMPORT_YIELD_MS: int = 80
+
 var _palette: Gen2LauncherTheme = null
 var _shell: Gen2LauncherShell = null
 var _shelf: Gen2ShelfPage = null
@@ -16,8 +20,8 @@ var _settings: Gen2SettingsPage = null
 var _about: Gen2AboutPage = null
 var _title_backdrop: Gen2LauncherTitleBackdrop = null
 
-var _file_dialog: FileDialog = null
-var _mod_dialog: FileDialog = null
+var _file_dialog: Gen2LauncherFilePicker = null
+var _mod_dialog: Gen2LauncherFilePicker = null
 var _update_http: HTTPRequest = null
 
 var _importing: bool = false
@@ -106,8 +110,8 @@ func _build_dialogs() -> void:
 		window.files_dropped.connect(_on_files_dropped)
 
 
-func _picker(title: String, filters: PackedStringArray) -> FileDialog:
-	var dialog: FileDialog = Gen2LauncherUI.file_picker(
+func _picker(title: String, filters: PackedStringArray) -> Gen2LauncherFilePicker:
+	var dialog: Gen2LauncherFilePicker = Gen2LauncherUI.file_picker(
 		_palette, title, FileDialog.FILE_MODE_OPEN_FILE, filters
 	)
 	add_child(dialog)
@@ -175,9 +179,11 @@ func _cartridge_detail(game_id: StringName, data: GameData) -> String:
 	return "Ready. %d save%s" % [ready_slots, "" if ready_slots == 1 else "s"]
 
 
-## Public driver used by tests and by non-interactive tooling.
+## Public driver used by tests and by non-interactive tooling. Awaitable because
+## the import gives the screen one frame to put its progress up before taking
+## the main thread for the rest of the job.
 func import_rom_path(path: String) -> void:
-	_on_file_selected(path)
+	await _on_file_selected(path)
 
 
 ## Installs a mod archive and loads it without a restart, which is safe here
@@ -221,7 +227,7 @@ func _confirm_mod_replace(path: String, mod_name: String) -> void:
 func _open_mod_dialog() -> void:
 	if _importing:
 		return
-	_mod_dialog.popup_centered(Vector2i(920, 620))
+	_mod_dialog.show_picker(Vector2i(920, 620))
 
 
 ## Asks the release API what the latest version is. Public so a test can drive
@@ -444,6 +450,14 @@ func preview_sheet(view: StringName) -> void:
 		&"report":
 			select_page(&"about")
 			_about.open_report_sheet()
+		&"toast":
+			# The one message that stays until it is dismissed, over the shelf's
+			# own action row, which is what its dismiss button has to clear.
+			_set_status(
+				&"error",
+				"The last session ended unexpectedly.",
+				"About > Report a bug will save a file with the logs in it.",
+			)
 		&"binding":
 			select_page(&"settings")
 			var sheet: Gen2BindingSheet = Gen2BindingSheet.for_button(
@@ -499,7 +513,7 @@ func _open_import_dialog(_game_id: StringName = &"") -> void:
 		"Choose a cartridge dump.",
 		"The importer identifies the cartridge by SHA-1, never by filename.",
 	)
-	_file_dialog.popup_centered(Vector2i(920, 620))
+	_file_dialog.show_picker(Vector2i(920, 620))
 
 
 func _on_file_selected(path: String) -> void:
@@ -509,6 +523,11 @@ func _on_file_selected(path: String) -> void:
 	_shelf.set_busy(true)
 	_shell.toast().set_progress(true, 0.0)
 	_set_status(&"busy", "Verifying cartridge...", path.get_file())
+	# A frame before the first of the work, so the toast is laid out rather than
+	# merely built. The tree's own signal rather than the rendering server's:
+	# `frame_post_draw` is never emitted on a headless run, where this would
+	# then wait for a frame that is never drawn.
+	await get_tree().process_frame
 
 	var identity: Dictionary = RomVerifier.identify(path)
 	if identity["status"] != RomVerifier.Status.OK:
@@ -533,13 +552,18 @@ func _on_file_selected(path: String) -> void:
 		return
 
 	_set_status(&"busy", "Checking table layout...", path.get_file())
+	# The layout check reads the whole overworld once, which is most of a second
+	# on a phone, and it is the last thing before the import proper.
+	await get_tree().process_frame
 	var layout_check: Dictionary = RomImporter.verify_layout(rom)
 	if not layout_check["ok"]:
 		_finish_import(false, String(layout_check["message"]))
 		return
 
 	var importer := RomImporter.new()
-	var result: Dictionary = importer.import_rom(rom, _on_import_progress)
+	var result: Dictionary = await importer.import_rom(
+		rom, _on_import_progress, IMPORT_YIELD_MS
+	)
 	if not result["ok"]:
 		_finish_import(false, String(result["message"]))
 		return

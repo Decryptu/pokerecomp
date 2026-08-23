@@ -1,0 +1,3 @@
+# The plugin sources are built by tools/build_ios_plugin.sh, not imported as
+# game resources: the static libraries would otherwise be packed into the game
+# data as well as linked into the app.

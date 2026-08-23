@@ -103,7 +103,7 @@ func test_launcher_reports_a_rejected_rom_without_importing() -> void:
 	file.store_buffer(bytes)
 	file.close()
 
-	_launcher.import_rom_path(_scratch_path)
+	await _launcher.import_rom_path(_scratch_path)
 	var snapshot: Dictionary = _launcher.launcher_snapshot()
 
 	assert_eq(snapshot["status"], "Import stopped.")
@@ -360,21 +360,44 @@ func test_a_silent_toast_is_not_on_screen_at_all() -> void:
 	assert_true(toast.visible)
 
 
-## And it never takes a click, shown or not. The toast is drawn over the bottom
-## centre of every launcher page, which is where the shelf puts Play and the
-## cache button; a card that stopped the mouse left both of them dead.
-func test_a_toast_never_takes_a_click_from_what_is_under_it() -> void:
+## The toast is drawn over the bottom centre of every launcher page, which is
+## where the shelf puts Play and the cache button, so a card that stopped the
+## mouse left both of them dead. Its dismiss button is the one exception, and it
+## is only there on a message that would otherwise stay up forever.
+func test_only_a_toasts_dismiss_button_takes_a_click_from_what_is_under_it() -> void:
 	await _open_launcher()
 	var toast: Gen2LauncherToast = _find_toast(_launcher)
-	toast.show_message(&"error", "Something", "happened")
 
+	toast.show_message(&"error", "Something", "happened")
+	await get_tree().process_frame
 	var stopping: Array[String] = []
 	_mouse_stoppers(toast, stopping)
-	assert_eq(stopping, [] as Array[String], "nothing in a toast is clickable")
+	assert_eq(stopping.size(), 1, "a refusal offers a way out and nothing else")
+
+	# An import ends itself, so offering to hide it would be offering to cancel
+	# something this cannot; information goes on its own.
+	for kind: StringName in [&"busy", &"info", &"success"]:
+		toast.show_message(kind, "Something", "happened")
+		await get_tree().process_frame
+		var others: Array[String] = []
+		_mouse_stoppers(toast, others)
+		assert_eq(others, [] as Array[String], "nothing is clickable on a %s toast" % kind)
+
+	toast.hide_message()
+	await get_tree().process_frame
+	var hidden: Array[String] = []
+	_mouse_stoppers(toast, hidden)
+	assert_eq(hidden, [] as Array[String], "and a toast that has gone takes nothing at all")
 
 
+## Every control in [param node]'s subtree that would actually take a press,
+## which is one that stops the mouse and is on screen to be pressed.
 func _mouse_stoppers(node: Node, out: Array[String]) -> void:
-	if node is Control and node.mouse_filter == Control.MOUSE_FILTER_STOP:
+	if (
+		node is Control
+		and (node as Control).mouse_filter == Control.MOUSE_FILTER_STOP
+		and (node as Control).is_visible_in_tree()
+	):
 		out.append("%s %s" % [node.get_class(), node.name])
 	for child: Node in node.get_children():
 		_mouse_stoppers(child, out)

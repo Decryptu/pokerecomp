@@ -42,3 +42,7 @@ export_credentials.cfg
 # Local checkouts of the authoritative source repositories. These are fetched
 # for comparison only and must never become project content.
 /.references/
+
+# Built iOS plugin libraries. The sources beside them are tracked; the binaries
+# are produced by tools/build_ios_plugin.sh against the engine checkout.
+/ios/plugins/*/*.a
