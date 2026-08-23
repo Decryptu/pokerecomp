@@ -139,6 +139,17 @@ and `--mods` on the command line puts them back for a run that is about a mod:
 godot --headless --path . --quit-after 30 --mods
 ```
 
+`--clock=HH:MM` pins the world clock for the run, over the export defaults and
+over a save's own, and holds it there: every world opened believes it is that
+time, so a renderer can be photographed at a chosen hour through the production
+path. `--clock=HH:MM:D` names the day of the week with it. A renderer reads world
+state and must not write it, which is why this is a switch rather than a call.
+
+```bash
+godot --path . -s res://tools/preview_world.gd --clock=06:00 -- crystal 24 3 \
+  /tmp/dawn.png live effects 20 8
+```
+
 Mods load the same way in an exported build as in the editor: the entry script
 is plain GDScript read at runtime, even though the game's own scripts ship as
 binary tokens. An installed mod loads immediately, without a restart, and so
@@ -1224,6 +1235,14 @@ What the host does with a valid population:
 A world renderer that wants to draw the sparkle itself takes the optional
 `set_encounters(encounters: Gen2WorldEncounters)`; the population itself already
 arrives through `set_actors`.
+
+### The earthquake
+
+`Gen2WorldEffects.offset()` is `StepFunction_ScreenShake`, in hardware pixels and
+positive downward. It reaches hSCY on the cartridge and hSCY alone, so it is the
+**background's** offset and moves no sprite: the built-in view adds it to the
+camera the map quads are placed at and to nothing else. A renderer taking
+`set_effects` applies it the same way, or ignores it and does not shake.
 
 ## Hidden items a mod can see, and ask for
 

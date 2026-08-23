@@ -254,7 +254,6 @@ var _spending_frame: bool = false
 ## that started one is waiting on it.
 var _sound_schedule: Array = []
 var _sound_schedule_frame: int = 0
-var _screen_base_position: Vector2 = Vector2.ZERO
 ## Whether a screen laid out in 160x144 owns the picture, as last told to the
 ## renderer, and whether it has been told at all: [method _apply_interface_mask]
 ## runs every frame, and a renderer swapped in mid-scene has heard nothing.
@@ -398,7 +397,15 @@ func _build_world() -> void:
 	_world.script_random = _encounter_random
 	_world.object_random = _object_random
 	_world.breed_random = _breed_random
+	## `--clock=HH:MM` beats both the export defaults and the save's own, and
+	## holds the clock there for the run: see [method Gen2WorldClock.pin].
+	var pinned_clock: Dictionary = Gen2WorldClock.pin()
+	if not pinned_clock.is_empty():
+		initial_day = int(pinned_clock["day"])
+		initial_hour = int(pinned_clock["hour"])
+		initial_minute = int(pinned_clock["minute"])
 	_clock = Gen2WorldClock.new(initial_hour, initial_minute, initial_day)
+	_clock.pinned = not pinned_clock.is_empty()
 	time_of_day = _clock.time_of_day()
 	_animation = Gen2WorldAnimation.new()
 	_effects = Gen2WorldEffects.new()
@@ -424,7 +431,6 @@ func _build_world() -> void:
 	_build_renderer()
 	Gen2ModHost.instance().view_changed.connect(_on_view_changed)
 	_screen.view_size_changed.connect(_on_view_size_changed)
-	_screen_base_position = _screen.position
 	_audio_player = AUDIO_PLAYER_SCRIPT.new()
 	_audio_player.name = "AudioPlayer"
 	add_child(_audio_player)
@@ -730,7 +736,6 @@ func advance_frame() -> void:
 			effects_moved = _effects.advance_pass() or effects_moved
 		if effects_moved and _renderer != null:
 			_renderer.refresh()
-		_apply_world_effect_offset()
 	## `AnimateTileset` is VBlank's, not the pass's, so the water and the flowers
 	## animate on every frame while the objects standing on them move on passes.
 	if _animation != null and _animation.advance_frame() and _renderer != null:
@@ -5618,7 +5623,8 @@ func _show_script_results(results: Array) -> void:
 						&"screen_shake",
 						result_event,
 					)
-				_apply_world_effect_offset()
+				if _renderer != null:
+					_renderer.refresh()
 			elif result_event.get("type", &"") == &"tree_shake_requested":
 				## The object animates itself for the frames the stream sleeps;
 				## there is nothing for a host to start.
@@ -5861,13 +5867,6 @@ func _spawn_grass_rustles() -> void:
 		)
 	if _renderer != null and _effects.sprites_active():
 		_renderer.refresh()
-
-
-func _apply_world_effect_offset() -> void:
-	if _screen == null:
-		return
-	var effect_offset: Vector2 = _effects.offset() if _effects != null else Vector2.ZERO
-	_screen.position = _screen_base_position + effect_offset
 
 
 ## The yes half of an Ask*Script. Each move's own request is what decides

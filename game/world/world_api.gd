@@ -359,10 +359,6 @@ var _player_queued_steps: Array = []
 var _player_scripted_steps: bool = false
 ## The player's own OBJECT_STEP_FRAME. See Gen2WorldObject.step_frame.
 var _player_step_frame: int = 0
-## How far the player has moved that hSCX/hSCY have not been given yet: one
-## pass's step vector, since `ScrollScreen` runs after `NextOverworldFrame`.
-## See visible_origin_cells().
-var _camera_lag_cells: Vector2 = Vector2.ZERO
 ## Frames left of the counted wait a script is standing in, -1 while it is not
 ## standing in one or has not started counting.
 var _script_wait_frames: int = -1
@@ -714,21 +710,32 @@ func player_position_cells() -> Vector2:
 func visible_origin_cells() -> Vector2:
 	if current_map == null:
 		return Vector2.ZERO
-	return player_position_cells() - _camera_lag_cells - Vector2(PLAYER_VIEW_CELL)
+	return player_position_cells() - Vector2(PLAYER_VIEW_CELL)
+
+
+## Half of whatever surround a view wider than the hardware's added, in whole
+## pixels. The camera and the player's own pixel are both measured from this, so
+## a surround with an odd side cannot round the two apart.
+func view_surround_offset() -> Vector2i:
+	return Vector2i(
+		floori((view_pixels.x - VIEW_PIXELS.x) * 0.5),
+		floori((view_pixels.y - VIEW_PIXELS.y) * 0.5),
+	)
 
 
 ## The drawn surface's top-left in world pixels, which is
-## [method visible_origin_cells] for a hardware-sized view.
+## [method visible_origin_cells] for a hardware-sized view. Whole pixels: the map
+## quads and every sprite standing on them are placed from this one number.
 func view_origin_pixels() -> Vector2:
 	return visible_origin_cells() * float(CELL_PIXELS) \
-		- Vector2(view_pixels - VIEW_PIXELS) * 0.5
+		- Vector2(view_surround_offset())
 
 
-## The player's screen pixel, which is PLAYER_VIEW_CELL plus whatever hSCX/hSCY
-## have not caught up with: `ScrollScreen` sits after `NextOverworldFrame` in
-## `HandleMapBackground`, so the scroll a pass computed is written two frames
-## after the sprite moved and a walking player is drawn two pixels ahead of its
-## resting cell for the whole walk.
+## The player's screen pixel, which is PLAYER_VIEW_CELL for as long as the
+## player is the thing the view is framed on. `_UpdateSprites` and `ScrollScreen`
+## are one after the other at the end of `HandleMapBackground`, so the shadow OAM
+## a pass wrote and the scroll it computed are latched by the same VBlank and the
+## drawn player never leaves its resting pixel. Only a height offset moves it.
 func player_pixel_position() -> Vector2i:
 	return Vector2i(
 		(player_position_cells() - visible_origin_cells()) * float(CELL_PIXELS)
@@ -736,10 +743,10 @@ func player_pixel_position() -> Vector2i:
 
 
 ## The player's pixel inside the drawn surface, which is
-## [method player_pixel_position] plus half of whatever surround a view wider
-## than the hardware's added. The two are the same value on a 160x144 view.
+## [method player_pixel_position] plus [method view_surround_offset]. The two are
+## the same value on a 160x144 view.
 func player_view_pixel() -> Vector2i:
-	return player_pixel_position() + (view_pixels - VIEW_PIXELS) / 2
+	return player_pixel_position() + view_surround_offset()
 
 
 func player_step_in_progress() -> bool:
@@ -882,7 +889,6 @@ func _begin_player_step(
 
 
 func _clear_player_step() -> void:
-	_camera_lag_cells = Vector2.ZERO
 	_player_step_began = false
 	_player_jumping = false
 	_player_step_direction = Vector2i.ZERO
@@ -900,16 +906,11 @@ func _clear_player_step() -> void:
 ## never starts a step sees no difference.
 func advance_player_step_pass() -> bool:
 	if _player_step_passes_remaining <= 0:
-		_camera_lag_cells = Vector2.ZERO
 		return false
-	var before: Vector2 = player_position_cells()
 	_player_step_frame = (_player_step_frame + 1) & 0x0F
 	_player_step_passes_remaining -= 1
 	if _player_step_passes_remaining <= 0:
 		_start_next_player_step()
-	## What `ScrollScreen` will add to hSCX/hSCY, which it does not do until
-	## after this pass's own two frames have been spent.
-	_camera_lag_cells = player_position_cells() - before
 	return true
 
 

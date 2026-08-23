@@ -7,11 +7,21 @@ func test_source_packed_screen_shake_uses_duration_and_amplitude_bits() -> void:
 	assert_true(started["active"])
 	assert_eq(started["duration"], 20)
 	assert_eq(started["amplitude"], 2)
-	assert_eq(started["offset"], Vector2(-2, 0))
+	# hSCY and nothing else, the sign flipping on what is left of the duration
+	# after `.Run`'s own `dec [hl]`: 19 on the first pass, so the scroll goes down
+	# before it goes up.
+	assert_eq(started["offset"], Vector2(0, -2))
 
+	var seen: Array[Vector2] = []
 	for _frame: int in 19:
+		seen.append(effects.offset())
 		assert_true(effects.advance_pass())
+	assert_eq(seen[1], Vector2(0, 2), "and back on the next pass")
+	assert_eq(seen[18], Vector2(0, -2), "still shaking on the last shaking pass")
+	for entry: Vector2 in seen:
+		assert_eq(entry.x, 0.0, "no horizontal half")
 	assert_true(effects.active())
+	assert_eq(effects.offset(), Vector2.ZERO, "the pass that runs it out undoes it")
 	assert_true(effects.advance_pass())
 	assert_false(effects.active())
 	assert_false(effects.advance_pass(), "a spent effect costs no more frames")
