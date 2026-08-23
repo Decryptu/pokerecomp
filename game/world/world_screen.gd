@@ -986,14 +986,17 @@ func _overlay_open() -> bool:
 		or _slot_machine_host != null or _card_flip_host != null
 
 
-## Wandering objects keep to themselves while anything else owns the world. A
-## script may be moving those same objects, a trainer approach paces its own
-## object by call count, and an overlay hides the map entirely.
+## Wandering objects keep to themselves while anything else owns the world: a
+## trainer approach paces its own object by call count, and an overlay hides the
+## map entirely. A script is not by itself one of those things, which is
+## `Gen2WorldAPI.script_stops_the_map()`: the frames it spends in a wait are
+## `HandleMap`'s own, so the map keeps walking around an `applymovement` except
+## for the objects that command froze.
 func _objects_may_move() -> bool:
 	return _world != null and not _overlay_open() \
 		and not _field_move_text and _oak_pc_pages.is_empty() \
 		and _trainer_approach.is_empty() \
-		and not _world.script_busy() \
+		and not _world.script_stops_the_map() \
 		and not _world.phone_ring_active() \
 		and not _world.fishing_busy()
 

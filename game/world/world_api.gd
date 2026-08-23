@@ -3231,6 +3231,18 @@ func script_busy() -> bool:
 	return _active_script != null or not _script_queue.is_empty()
 
 
+## Whether the script holding the world is one that stops the map around it.
+##
+## `ScriptEvents` runs inside `HandleMap`, and `HandleMapObjects` runs on the
+## same iteration, so a script standing in `WaitScript` or `WaitScriptMovement`
+## leaves every object that is not frozen stepping: `FreezeAllOtherObjects` is
+## what stops them, per object, and `applymovement` is its only caller. What
+## does stop the whole map is a textbox, a menu or a host screen, each of which
+## is a loop of its own that never reaches `HandleMap`.
+func script_stops_the_map() -> bool:
+	return script_busy() and pending_script_wait().is_empty()
+
+
 func pending_runtime_request() -> Dictionary:
 	return _active_script.pending_runtime_request() if _active_script != null else {}
 
@@ -3457,7 +3469,7 @@ func run_event_queue(acknowledge: bool = false, choice: int = -1) -> Array:
 			results.append(_apply_result_events(result))
 			break
 		results.append(_finish_script_result(result))
-		_active_script = null
+		_clear_active_script()
 	return results
 
 
@@ -3494,7 +3506,7 @@ func complete_runtime_request(result: Dictionary) -> Array:
 		return results
 	if StringName(advanced.get("status", &"")) == &"recovered":
 		results.append(advanced)
-		_active_script = null
+		_clear_active_script()
 		_script_queue.clear()
 		return results
 	results.append_array(_resume_after(advanced))
@@ -3509,7 +3521,7 @@ func _resume_after(advanced: Dictionary) -> Array:
 	results.append(
 		_finish_script_result(advanced) if bool(advanced.get("ok", false)) else advanced
 	)
-	_active_script = null
+	_clear_active_script()
 	results.append_array(_drain_script_queue())
 	return results
 
@@ -3543,8 +3555,16 @@ func _drain_script_queue() -> Array:
 			results.append(_apply_result_events(next))
 			break
 		results.append(_finish_script_result(next) if bool(next.get("ok", false)) else next)
-		_active_script = null
+		_clear_active_script()
 	return results
+
+
+## `StopScript` leaves nothing frozen behind it: `ApplyMovement`'s freeze is
+## released by the wait it staged, and a script that ends or is abandoned before
+## that wait completes would otherwise leave the map standing still for good.
+func _clear_active_script() -> void:
+	_active_script = null
+	unfreeze_all_objects()
 
 
 func _active_events_at(cell: Vector2i) -> Array:
@@ -4177,6 +4197,9 @@ func _apply_object_movement(event: Dictionary) -> Array:
 		})
 		return generated
 	var object: Gen2WorldObject = objects[object_index]
+	## `ApplyMovement` freezes the map around the object it is about to walk,
+	## and the wait this command stages is what thaws it again.
+	freeze_all_other_objects(object_index)
 	## Where the stream leaves the object looking. The drawn facing trails the
 	## walk one step at a time, so the record the next map load restores is this
 	## rather than whichever step is on screen when the stream is applied.
@@ -4306,6 +4329,9 @@ func _apply_player_movement(event: Dictionary) -> Array:
 			"type": &"movement_failed", "reason": decoded.get("reason", &"invalid_movement"),
 			"player": true,
 		}]
+	## The player is object struct 0, so `applymovement PLAYER` freezes every
+	## map object exactly as an NPC's own does.
+	freeze_all_other_objects(-1)
 	for command: Dictionary in decoded.get("commands", []):
 		var kind: StringName = StringName(command.get("kind", &""))
 		if kind in SCRIPTED_TURN_KINDS:
@@ -4903,6 +4929,11 @@ func advance_object_steps_pass(random: RandomNumberGenerator) -> bool:
 		# the speed on every frame both drivers run.
 		if object.scripted_steps:
 			continue
+		# `HandleStepType` returns before every step function while FROZEN_F is
+		# set, so a frozen object spends no step frame, no wait frame and takes
+		# no decision. `applymovement` is what freezes the rest of the map.
+		if object.frozen:
+			continue
 		# A step in flight is drained whatever put it there, so a pushed
 		# boulder slides even though its template never decides anything.
 		# StepFunction_StrengthBoulder ends by standing the boulder back up
@@ -4940,6 +4971,47 @@ func advance_object_steps_pass(random: RandomNumberGenerator) -> bool:
 ## when a scripted stream needs drawing. This decides nothing, rolls nothing and
 ## writes no cell: every cell the stream names committed when it was applied.
 ## Returns true when something a renderer draws moved.
+## `FreezeAllOtherObjects` (engine/overworld/map_objects.asm): `ApplyMovement`
+## freezes every object that has a sprite and then clears the bit on the one it
+## is about to move, so the map stands still around a scripted walk and nowhere
+## else. [param moving_index] is -1 for the player, who is object struct 0 on
+## the cartridge and not a member of `objects` here.
+##
+## `UnfreezeFollowerObject` behind it clears the follower's bit when the object
+## being moved is the leader it was told to follow, which is what keeps a
+## `follow` pair walking together through one `applymovement`.
+func freeze_all_other_objects(moving_index: int) -> void:
+	for slot: int in objects.size():
+		var object: Gen2WorldObject = objects[slot]
+		object.frozen = object.active and not object.deleted and slot != moving_index
+	_unfreeze_follower_of(moving_index)
+
+
+## `UnfreezeAllObjects`, which `WaitScript` and `WaitScriptMovement` both run the
+## frame their wait ends: the freeze lasts exactly as long as the wait an
+## `applymovement` staged.
+func unfreeze_all_objects() -> void:
+	for object: Gen2WorldObject in objects:
+		object.frozen = false
+
+
+## The follower of [param leader_index], which is the pair `_object_followers`
+## keys by the follower and names the leader in `target_index`.
+func _unfreeze_follower_of(leader_index: int) -> void:
+	if current_map == null:
+		return
+	for key: String in _object_followers:
+		var separator: PackedStringArray = key.split(":")
+		if separator.size() != 3 or int(separator[0]) != current_map.group \
+			or int(separator[1]) != current_map.number:
+			continue
+		if int((_object_followers[key] as Dictionary).get("target_index", -2)) != leader_index:
+			continue
+		var follower_index: int = int(separator[2])
+		if follower_index >= 0 and follower_index < objects.size():
+			objects[follower_index].frozen = false
+
+
 func advance_scripted_steps_pass() -> bool:
 	var changed: bool = false
 	for object: Gen2WorldObject in objects:
@@ -4988,6 +5060,9 @@ func scripted_movement_in_progress() -> bool:
 
 func _complete_script_wait() -> Array:
 	_script_wait_frames = -1
+	## `WaitScript` and `WaitScriptMovement` both run `UnfreezeAllObjects` the
+	## frame their wait ends, before they hand the script back to `SCRIPT_READ`.
+	unfreeze_all_objects()
 	if _active_script == null:
 		return []
 	var advanced: Dictionary = _active_script.complete_wait()
