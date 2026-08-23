@@ -11,12 +11,14 @@ extends Control
 ## A message that stays carries a dismiss button, because "until it is replaced"
 ## is forever on a screen the player is not about to do anything else on. A
 ## running import is the exception: it goes when the import does, and a button
-## offering to hide it would be offering to cancel something it cannot.
+## offering to hide it would be offering to cancel something it cannot. Its
+## glyph turns instead, which is the whole of the difference between a launcher
+## that is working and one that has stopped.
 
 ## How long a message that reports no problem stays up.
 const LINGER: float = 3.6
-## The shortest gap between two forced repaints during a blocking job.
-const PUMP_INTERVAL_MS: int = 60
+## How fast the busy glyph turns, in radians a second.
+const SPIN_RATE: float = 3.2
 const ICON: float = 22.0
 
 var _theme: Gen2LauncherTheme = null
@@ -27,10 +29,8 @@ var _detail: Label = null
 var _progress: ProgressBar = null
 var _close: Gen2LauncherButton = null
 var _timer: SceneTreeTimer = null
-## Wall clock of the last forced redraw, so a blocking import repaints often
-## enough to look alive and rarely enough to stay quick. See [method pump].
-var _last_pump: int = 0
 var _spin: float = 0.0
+var _spinning: bool = false
 ## The one fade in flight. Raising and hiding overlap often enough that two
 ## tweens would otherwise race for the same alpha and the later one would lose.
 var _fade: Tween = null
@@ -127,7 +127,8 @@ func show_message(kind: StringName, heading: String, detail: String) -> void:
 			colour = _theme.on_chip(_theme.accent)
 			glyph = &"refresh"
 	_icon.set_glyph(glyph, ICON, colour)
-	if kind != &"busy":
+	_spinning = kind == &"busy"
+	if not _spinning:
 		_spin = 0.0
 		_icon.rotation = 0.0
 	_heading.text = heading
@@ -149,32 +150,15 @@ func set_progress(shown: bool, value: float = 0.0) -> void:
 	_progress.value = value
 
 
-## Repaints the screen from inside a job that is not giving it back.
-##
-## A cartridge import runs to the end on the main thread, so the tree never
-## reaches its next frame and the bar this toast is drawing does not move: the
-## whole ten to twenty seconds looks like a launcher that has stopped. Forcing a
-## frame is what a loading screen does, and the icon is turned by hand because
-## the tree is not running to animate it. Throttled, because the redraw is time
-## taken away from the import it is reporting.
-func pump() -> void:
-	if not _shown or not is_inside_tree() or DisplayServer.get_name() == "headless":
+## Turns the busy glyph. The import that raises one hands the loop a frame at a
+## time (see `Gen2Main.IMPORT_YIELD_MS`), so this animates on those frames and
+## is what says the launcher is still working rather than stuck.
+func _process(delta: float) -> void:
+	if not _spinning:
 		return
-	var now: int = Time.get_ticks_msec()
-	if now - _last_pump < PUMP_INTERVAL_MS:
-		return
-	_last_pump = now
-	# Nothing is animating the entrance either, so it is finished rather than
-	# left part way and the toast drawn at whatever alpha it had reached.
-	if _fade != null and _fade.is_valid():
-		_fade.kill()
-	modulate.a = 1.0
-	_card.position.y = 0.0
-	_spin = fmod(_spin + TAU / 8.0, TAU)
-	# The measured size is a layout pass away; the glyph's own is not.
+	_spin = fmod(_spin + delta * SPIN_RATE, TAU)
 	_icon.pivot_offset = Vector2(ICON, ICON) * 0.5
 	_icon.rotation = _spin
-	RenderingServer.force_draw()
 
 
 func hide_message() -> void:

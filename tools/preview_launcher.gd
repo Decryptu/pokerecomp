@@ -8,7 +8,9 @@ extends SceneTree
 ##       [scroll] [focus index] [fade step] [insets]
 ##
 ## `view` opens a sheet (`manage`, `touch`, `binding`, `bugs`, `report`,
-## `delete_mod`), raises the `toast` that stays until it is dismissed, or
+## `delete_mod`), raises the `toast` that stays until it is dismissed, runs an
+## `import` of the cartridge named in the `mod id` slot so the progress the
+## launcher draws from inside that job can be photographed from outside, or
 ## picks the mods page's own: `list`, `sources`, or `mod` with an id.
 ## `fade` is which step of the screen transition to photograph, 0 for none and 1
 ## to 4 for one of `FadeOutToWhite`'s own rows: the launcher's leave-the-screen
@@ -46,6 +48,11 @@ var _mod: String = ""
 var _scroll: int = 0
 var _focus: int = -1
 var _fade: int = 0
+## Forced frames seen during an import, and which one is photographed: late
+## enough that the bar has something on it, early enough to be inside the job.
+var _forced: int = 0
+var _captured: bool = false
+const FORCED_FRAME_WANTED: int = 34
 
 
 func _initialize() -> void:
@@ -98,7 +105,12 @@ func _process(_delta: float) -> bool:
 		if STATES.has(_state):
 			_launcher.preview_slot_states(STATES[_state])
 		_launcher.select_page(StringName(_page))
-		if _view in ["manage", "touch", "binding", "delete_mod", "bugs", "report", "toast"]:
+		if _view == "import":
+			# Started rather than awaited: the import hands a frame back as it
+			# goes, so the ordinary shot below lands in the middle of it, which
+			# is the screen worth photographing.
+			_launcher.import_rom_path(_mod)
+		elif _view in ["manage", "touch", "binding", "delete_mod", "bugs", "report", "toast"]:
 			_launcher.preview_sheet(StringName(_view))
 		elif not _view.is_empty():
 			_launcher.preview_mods_view(StringName(_view), StringName(_mod))

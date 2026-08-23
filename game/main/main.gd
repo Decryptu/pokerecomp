@@ -8,6 +8,10 @@ extends Control
 ## code from [Gen2LauncherShell] and the cards under it, so changing the
 ## appearance is a rebuild rather than a repaint.
 
+## How often the cartridge import hands the loop a frame back. Long enough that
+## the frames cost the import very little, short enough to read as motion.
+const IMPORT_YIELD_MS: int = 80
+
 var _palette: Gen2LauncherTheme = null
 var _shell: Gen2LauncherShell = null
 var _shelf: Gen2ShelfPage = null
@@ -519,9 +523,10 @@ func _on_file_selected(path: String) -> void:
 	_shelf.set_busy(true)
 	_shell.toast().set_progress(true, 0.0)
 	_set_status(&"busy", "Verifying cartridge...", path.get_file())
-	# The one frame the tree gets for the whole import: the toast has just been
-	# made visible, and a container sorts its children on a deferred call that
-	# would otherwise not be reached until the import had already finished.
+	# A frame before the first of the work, so the toast is laid out rather than
+	# merely built. The tree's own signal rather than the rendering server's:
+	# `frame_post_draw` is never emitted on a headless run, where this would
+	# then wait for a frame that is never drawn.
 	await get_tree().process_frame
 
 	var identity: Dictionary = RomVerifier.identify(path)
@@ -547,13 +552,18 @@ func _on_file_selected(path: String) -> void:
 		return
 
 	_set_status(&"busy", "Checking table layout...", path.get_file())
+	# The layout check reads the whole overworld once, which is most of a second
+	# on a phone, and it is the last thing before the import proper.
+	await get_tree().process_frame
 	var layout_check: Dictionary = RomImporter.verify_layout(rom)
 	if not layout_check["ok"]:
 		_finish_import(false, String(layout_check["message"]))
 		return
 
 	var importer := RomImporter.new()
-	var result: Dictionary = importer.import_rom(rom, _on_import_progress)
+	var result: Dictionary = await importer.import_rom(
+		rom, _on_import_progress, IMPORT_YIELD_MS
+	)
 	if not result["ok"]:
 		_finish_import(false, String(result["message"]))
 		return
@@ -575,10 +585,6 @@ func _on_import_progress(stage: String, done: int, total: int) -> void:
 	if total > 0:
 		_shell.toast().set_progress(true, float(done) / float(total) * 100.0)
 	_set_status(&"busy", "%s, %d/%d" % [stage.capitalize(), done, total], "")
-	# The import holds the main thread for the whole of its ten to twenty
-	# seconds, so this is the only place the screen it is reporting to can be
-	# repainted at all.
-	_shell.toast().pump()
 
 
 func _finish_import(success: bool, message: String) -> void:

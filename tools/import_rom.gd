@@ -36,7 +36,7 @@ func _initialize() -> void:
 
 	var failures: int = 0
 	for path: String in paths:
-		if not _handle(path, verify_only):
+		if not await _handle(path, verify_only):
 			failures += 1
 
 	print("\n%d/%d %s." % [
@@ -71,7 +71,7 @@ func _handle(path: String, verify_only: bool) -> bool:
 		return true
 
 	var importer := RomImporter.new()
-	var result: Dictionary = importer.import_rom(rom, _report)
+	var result: Dictionary = await importer.import_rom(rom, _report)
 	print("    %s" % result["message"])
 	if result["ok"]:
 		print("    cache: %s" % ProjectSettings.globalize_path(result["directory"]))
