@@ -190,7 +190,8 @@ func _build() -> void:
 		_theme, _options.textbox_frame, 0, Gen2Options.FRAME_COUNT - 1,
 		func(value: int) -> void:
 			_options.textbox_frame = value
-			_persist()
+			_persist(),
+		func(value: int) -> String: return "Type %d" % (value + 1)
 	)))
 	game.add_child(Gen2LauncherUI.field(_theme, "Menu account", _toggle(
 		_options.menu_account, func(on: bool) -> void:
@@ -203,6 +204,15 @@ func _build() -> void:
 			_options.printer_brightness = index
 			_persist()
 	)))
+	## The one row here that changes nothing you can see. It is the cartridge's
+	## own PRINT byte and is kept because the block is kept whole; the Game Boy
+	## Printer is a real peripheral with no path to a modern device, so the
+	## Pokedex's own PRINT does nothing, exactly as `.Print` does without one.
+	game.add_child(Gen2LauncherUI.muted(
+		_theme,
+		"Print sets the Game Boy Printer's darkness. Nothing here can print, so "
+		+ "this only keeps the byte the cartridge stored."
+	))
 	column.add_child(Gen2LauncherUI.dock_safe_space())
 
 
