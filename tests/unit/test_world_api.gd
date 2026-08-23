@@ -4399,9 +4399,9 @@ func _types_of(result: Dictionary) -> Array[StringName]:
 
 
 ## The two drivers own different objects. advance_object_steps_pass() decides
-## movement and a screen stops calling it while a script runs, which is exactly
-## when a scripted trail has to keep being drawn, so draining it there as well
-## would walk it at twice the speed.
+## movement and skips the object whose trail a script owns, which is exactly the
+## object advance_scripted_steps_pass() draws, so draining it in both would walk
+## it at twice the speed.
 func test_the_movement_driver_leaves_a_scripted_trail_to_its_own_driver() -> void:
 	RomCache.write_json(RomCache.world_movements_path(_directory), {
 		"48:6100": [0x0F, 0x47],
@@ -4427,6 +4427,53 @@ func test_the_movement_driver_leaves_a_scripted_trail_to_its_own_driver() -> voi
 	for _frame: int in half:
 		assert_true(world.advance_scripted_steps_pass())
 	assert_eq(object.step_offset_cells(), Vector2(-0.5, 0.0))
+
+
+## `ApplyMovement` freezes every other object for as long as the wait it staged
+## lasts, and `HandleStepType` returns in front of every step function while
+## FROZEN_F is set: a wanderer beside a scripted walk stands still, and starts
+## again the frame `UnfreezeAllObjects` runs.
+func test_an_applymovement_freezes_the_map_around_it_until_its_wait_ends() -> void:
+	RomCache.write_json(RomCache.world_movements_path(_directory), {
+		"48:6100": [0x0F, 0x47],
+	})
+	RomCache.write_json(RomCache.world_scripts_path(_directory), {
+		"48:6070": [0x69, 2, 0x00, 0x61, 0x91],
+	})
+	var data: GameData = GameData.open_directory(_directory)
+	data.world_map(1, 1).events["coord_events"][0]["script"] = 0x6070
+	data.world_map(1, 1).events["objects"].append({
+		"sprite": 1, "x": 9, "y": 6, "x_radius": 2, "y_radius": 2,
+		"movement": Gen2WorldObject.MOVEMENT_WANDER, "event_flag": 0xFFFF,
+	})
+	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(7, 6))
+	var walker: Gen2WorldObject = world.objects[0]
+	var wanderer: Gen2WorldObject = world.objects[world.objects.size() - 1]
+	assert_eq(wanderer.movement, Gen2WorldObject.MOVEMENT_WANDER)
+
+	assert_eq(world.dispatch_script_events()[0]["status"], &"waiting")
+	assert_true(walker.scripted_steps, "the object the stream names walks")
+	assert_true(wanderer.frozen, "everything else is frozen")
+	assert_false(world.script_stops_the_map(), "a wait is HandleMap's own frame")
+
+	var random := RandomNumberGenerator.new()
+	random.seed = 7
+	var resting: Vector2i = wanderer.cell
+	for _frame: int in 240:
+		world.advance_object_steps_pass(random)
+	assert_eq(wanderer.cell, resting, "a frozen object decides nothing")
+
+	while not world.pending_script_wait().is_empty():
+		world.advance_scripted_steps_pass()
+		world.advance_script_wait_frame()
+	assert_false(wanderer.frozen, "UnfreezeAllObjects runs when the wait ends")
+	var moved: bool = false
+	for _frame: int in 240:
+		world.advance_object_steps_pass(random)
+		if wanderer.cell != resting:
+			moved = true
+			break
+	assert_true(moved, "and it wanders again")
 
 
 ## The player's half of the same thing, plus the walk frame that goes with it.

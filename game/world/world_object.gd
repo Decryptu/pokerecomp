@@ -103,9 +103,14 @@ var weird_tree: bool = false
 var queued_steps: Array = []
 ## True while the trail above belongs to a script rather than to the movement
 ## templates, which is what tells the two drivers apart:
-## Gen2WorldAPI.advance_object_steps_pass() decides movement and is refused while a
-## script runs, advance_scripted_steps_pass() only draws and is not.
+## Gen2WorldAPI.advance_object_steps_pass() decides movement and skips a frozen
+## object, advance_scripted_steps_pass() only draws and is not gated at all.
 var scripted_steps: bool = false
+## OBJECT_FLAGS2 FROZEN_F. `HandleStepType` returns before every step function
+## for a frozen object, so it neither steps, nor spends its wait, nor decides;
+## `FreezeAllOtherObjects` is the only thing in the game that sets it and
+## `ApplyMovement` is its only caller.
+var frozen: bool = false
 ## Frames this object waits before its movement template decides again. The
 ## source keeps this in OBJECT_STEP_DURATION while the object sits in
 ## STEP_TYPE_SLEEP (engine/overworld/map_objects.asm, StepFunction_Sleep).
