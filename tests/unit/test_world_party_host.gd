@@ -170,6 +170,67 @@ func test_a_gift_takes_the_nickname_the_prompt_answered() -> void:
 	assert_eq(_save.party[2].nickname, "SPARKY")
 
 
+## `CheckPartyFullAfterContest` is not a question: it copies `wContestMon` into
+## the party, names it, writes LANDMARK_NATIONAL_PARK over the caught location
+## and clears the stash. BUGCONTEST_CAUGHT_MON is the answer with a party slot.
+func test_the_contest_catch_comes_home_and_is_named() -> void:
+	_world.state.set_contest_mon({"species": 25, "level": 9, "hp": 4, "dvs": 0x9888})
+	_set_script(0x6230)
+	var waiting: Array = _world.dispatch_script_events(Vector2i(2, 2))
+	assert_eq(waiting[0]["status"], &"waiting")
+	assert_eq(_world.pending_runtime_request()["kind"], &"contest_mon_requested")
+
+	var result: Dictionary = Gen2WorldHost.complete_runtime_request(
+		_world, {"nickname": "BUZZ"}, _save, false, _random
+	)
+	assert_true(result["ok"])
+	assert_eq(result["script_value"], Gen2WorldPartyHost.BUGCONTEST_CAUGHT_MON)
+	assert_eq(_save.party.size(), 3)
+	var caught: Gen2SaveMon = _save.party[2]
+	assert_eq(caught.species, 25)
+	assert_eq(caught.level, 9)
+	assert_eq(caught.nickname, "BUZZ")
+	assert_eq(caught.hp, 4, "the health it was standing there with")
+	assert_eq(
+		caught.caught_location, Gen2WorldPartyHost.LANDMARK_NATIONAL_PARK,
+		"the map the results are collected on is overwritten"
+	)
+	assert_true(_world.state.contest_mon().is_empty(), "wContestMon is cleared")
+
+
+## `.TryAddToBox` with room: the answer is BUGCONTEST_BOXED_MON, which is what
+## makes the script print `ContestResults_PartyFullText`. The port used to answer
+## BUGCONTEST_CAUGHT_MON here, because it read a full party and a full box.
+func test_a_full_party_boxes_the_contest_catch_and_says_so() -> void:
+	while _save.party.size() < Gen2SaveData.MAX_PARTY:
+		_save.party.append(Gen2SaveMon.from_dict(_save.party[0].to_dict()))
+	_world.state.set_contest_mon({"species": 25, "level": 9, "hp": 4, "dvs": 0x9888})
+	_set_script(0x6230)
+	_world.dispatch_script_events(Vector2i(2, 2))
+	var result: Dictionary = Gen2WorldHost.complete_runtime_request(
+		_world, {}, _save, false, _random
+	)
+	assert_true(result["ok"])
+	assert_eq(result["script_value"], Gen2WorldPartyHost.BUGCONTEST_BOXED_MON)
+	assert_eq(_save.party.size(), Gen2SaveData.MAX_PARTY)
+	assert_eq(_save.boxes[0].slots[0].species, 25)
+	assert_true(_world.state.contest_mon().is_empty())
+
+
+## `.DidntCatchAnything`: no `wContestMonSpecies`, BUGCONTEST_NO_CATCH, and
+## nothing written.
+func test_no_contest_catch_answers_no_catch_and_writes_nothing() -> void:
+	_set_script(0x6230)
+	_world.dispatch_script_events(Vector2i(2, 2))
+	var before: int = _save.party.size()
+	var result: Dictionary = Gen2WorldHost.complete_runtime_request(
+		_world, {}, _save, false, _random
+	)
+	assert_true(result["ok"])
+	assert_eq(result["script_value"], Gen2WorldPartyHost.BUGCONTEST_NO_CATCH)
+	assert_eq(_save.party.size(), before)
+
+
 ## `.skip_nickname` copies `wMonOrItemNameBuffer` over `sBoxMonNicknames` behind
 ## `InitNickname`, so a boxed gift always ends up with the species name.
 func test_a_boxed_gift_keeps_the_species_name_over_the_answer() -> void:
@@ -974,6 +1035,11 @@ func _add_party_scripts() -> void:
 	scripts[Gen2WorldScript.pointer_key(Fixture.BANK, 0x6200)] = [0x2D, 25, 5, 0, 0, 0x91]
 	scripts[Gen2WorldScript.pointer_key(Fixture.BANK, 0x6210)] = [0x2E, 25, 5, 0x91]
 	scripts[Gen2WorldScript.pointer_key(Fixture.BANK, 0x6220)] = [0x96, 0, 0x91]
+	## `special CheckPartyFullAfterContest`, which is
+	## `BugContestResults_DidNotLeaveMons`' own first command.
+	scripts[Gen2WorldScript.pointer_key(Fixture.BANK, 0x6230)] = [
+		Gen2WorldScript.SPECIAL, 21, 0, 0x91,
+	]
 	RomCache.write_json(RomCache.world_scripts_path(Fixture.directory()), scripts)
 
 

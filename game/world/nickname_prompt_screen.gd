@@ -27,8 +27,13 @@ enum Phase {
 var _data: GameData = null
 ## `wStringBuffer1`, which is the species name until the player replaces it.
 var _species_name: String = ""
-## `_WasSentToBillsPCText` when the gift landed in the box, empty otherwise.
-var _after_text: String = ""
+## `_WasSentToBillsPCText`/`_BallSentToPCText` when the Pokemon landed in the
+## box, empty otherwise. A format, because both read the name buffer the naming
+## screen has just written rather than the species name the question asked with.
+var _after_text_format: String = ""
+## `_CaughtAskNicknameText` unless the caller names `PokeBallEffect`'s own
+## `_AskGiveNicknameText` instead.
+var _question: String = ""
 var _phase: int = Phase.DONE
 var _yes: bool = true
 var _answer: String = ""
@@ -39,10 +44,17 @@ var _menu: TextureRect = null
 var _naming: Gen2NamingScreenScreen = null
 
 
-func set_context(data: GameData, species_name: String, after_text: String = "") -> void:
+func set_context(
+	data: GameData,
+	species_name: String,
+	after_text_format: String = "",
+	question: String = ""
+) -> void:
 	_data = data
 	_species_name = species_name
-	_after_text = after_text
+	_after_text_format = after_text_format
+	_question = question if not question.is_empty() \
+		else Gen2WorldPartyHost.caught_nickname_question(species_name)
 
 
 func _ready() -> void:
@@ -58,7 +70,7 @@ func _ready() -> void:
 	_text_box.visible = true
 	## `_CaughtAskNicknameText` ends in `done`, so the last page draws no arrow:
 	## what waits is the `YesNoBox` behind it.
-	_text_box.show_text(Gen2WorldPartyHost.caught_nickname_question(_species_name), false)
+	_text_box.show_text(_question, false)
 
 
 func phase() -> int:
@@ -208,12 +220,12 @@ func _on_named(entered: String) -> void:
 
 
 func _after_question() -> void:
-	if _after_text.is_empty():
+	if _after_text_format.is_empty():
 		_finish()
 		return
 	_phase = Phase.AFTER_TEXT
 	_text_box.visible = true
-	_text_box.show_text(_after_text)
+	_text_box.show_text(_after_text_format % _answer)
 
 
 func _finish() -> void:

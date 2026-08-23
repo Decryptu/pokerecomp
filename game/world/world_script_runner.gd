@@ -965,6 +965,9 @@ func complete_runtime_request(result: Dictionary) -> Dictionary:
 		## `UnownPuzzle` answers `wSolvedUnownPuzzle`, which is zero for a board
 		## left on START and one for a solved one.
 		&"unown_puzzle_requested",
+		## `CheckPartyFullAfterContest`'s own three answers, which
+		## `BugContestResults_DidNotLeaveMons` branches on twice.
+		&"contest_mon_requested",
 	]:
 		if not bool(result.get("ok", false)):
 			return _fail(
@@ -2937,12 +2940,13 @@ func _execute_special(special: int) -> Dictionary:
 		SPECIAL_CONTEST_RETURN_MONS:
 			_emit_runtime_event(&"contest_mons_returned", {"special": special})
 		SPECIAL_CHECK_PARTY_FULL_AFTER_CONTEST:
-			## `CheckPartyFullAfterContest` answers whether the Pokemon caught in
-			## the contest can be taken home, which is a party slot or a box slot.
-			var after_party: Dictionary = _request.get("party", {})
-			if after_party.is_empty():
-				return {"ok": false, "reason": &"missing_party_summary", "special": special}
-			_script_value = 1 if bool(after_party.get("storage_full", false)) else 0
+			## `CheckPartyFullAfterContest` does not only answer where the
+			## Pokemon caught in the contest would go: it takes it home, asks
+			## `GiveANickname_YesNo` about it and clears `wContestMon`. The
+			## answer is the party host's, since a nickname is a screen.
+			return _stage_runtime_request(&"contest_mon_requested", {
+				"special": special,
+			})
 		SPECIAL_BUG_CONTEST_JUDGING:
 			## The judging prints three placings and leaves the player's own in
 			## wScriptVar, which the results script branches on.
