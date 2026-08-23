@@ -236,11 +236,15 @@ static func from_data(data: GameData) -> Gen2IntroMoviePage:
 
 
 ## The whole 160x144 screen for one frame of [param movie].
+##
+## One [method Gen2PicImage.canvas] for the frame: the movie is redrawn sixty
+## times a second and a per-pixel [method Image.set_pixel] costs a binding call
+## and a [Color] for every one of the 23,040.
 func draw(movie: Gen2IntroMovie) -> Image:
-	var image := Image.create(WIDTH, HEIGHT, false, Image.FORMAT_RGBA8)
+	var pixels: PackedInt32Array = Gen2PicImage.canvas(WIDTH, HEIGHT)
 	if movie == null:
-		return image
-	var background: Array = _draw_background(image, movie)
+		return Gen2PicImage.canvas_image(pixels, WIDTH, HEIGHT)
+	var background: Array = _draw_background(pixels, movie)
 	var behind: PackedByteArray = background[0]
 	var forced: PackedByteArray = background[1]
 	# The lower OAM index wins a pixel, so a slot only paints where no earlier
@@ -248,8 +252,8 @@ func draw(movie: Gen2IntroMovie) -> Image:
 	var taken := PackedByteArray()
 	taken.resize(WIDTH * HEIGHT)
 	for entry: Dictionary in shadow_oam(movie):
-		_draw_sprite(image, movie, entry, behind, forced, taken)
-	return image
+		_draw_sprite(pixels, movie, entry, behind, forced, taken)
+	return Gen2PicImage.canvas_image(pixels, WIDTH, HEIGHT)
 
 
 ## Every live struct expanded into the shadow OAM the hardware would hold, in
@@ -300,7 +304,7 @@ func shadow_oam(movie: Gen2IntroMovie) -> Array[Dictionary]:
 ## The BG map, sampled through `hSCY` and the scanline's own `hSCX`. Both are
 ## bytes and the map is 256 pixels square, so the sampling wraps rather than
 ## clipping.
-func _draw_background(image: Image, movie: Gen2IntroMovie) -> Array:
+func _draw_background(pixels: PackedInt32Array, movie: Gen2IntroMovie) -> Array:
 	var behind := PackedByteArray()
 	# The same indices where the tile's own attribute carries the priority bit,
 	# which wins over every sprite rather than only over the ones marked
@@ -314,9 +318,12 @@ func _draw_background(image: Image, movie: Gen2IntroMovie) -> Array:
 	behind.resize(WIDTH * HEIGHT)
 	forced.resize(WIDTH * HEIGHT)
 	var screen: PackedByteArray = movie.screen_tilemap()
-	var palettes: Array[PackedColorArray] = []
+	var tables: Array[PackedInt32Array] = []
 	for slot: int in Gen2IntroMovie.BG_PALETTES:
-		palettes.append(movie.palette(slot))
+		var palette: PackedColorArray = movie.palette(slot)
+		tables.append(
+			PackedInt32Array() if palette.is_empty() else Gen2PicImage.lookup(palette)
+		)
 	var low: PackedByteArray = _sheet(movie, movie.sheet("bg"))
 	var low_first: int = movie.sheet_first_tile("bg")
 	var high: PackedByteArray = _sheet(movie, movie.sheet("bg_high"))
@@ -330,13 +337,22 @@ func _draw_background(image: Image, movie: Gen2IntroMovie) -> Array:
 	var overlay_first: int = int(overlay[0]) if overlay.size() == 3 else 0
 	var overlay_count: int = int(overlay[1]) if overlay.size() == 3 else 0
 	var scy: int = movie.scroll().y
+	## `hSCX` is constant across a scanline, so the map cell, its attribute and
+	## its sheet are resolved once per run of pixels inside one tile rather than
+	## once per pixel: twenty-one lookups a line instead of a hundred and sixty.
 	for y: int in HEIGHT:
 		var scx: int = movie.scroll_x_at(y)
 		var map_y: int = (y + scy) & 0xFF
+		@warning_ignore("integer_division")
 		var row: int = (map_y / TILE) % MAP_ROWS
 		var in_tile_y: int = map_y % TILE
-		for x: int in WIDTH:
+		var line: int = y * WIDTH
+		var x: int = 0
+		while x < WIDTH:
 			var map_x: int = (x + scx) & 0xFF
+			var in_tile_x: int = map_x % TILE
+			var run: int = mini(TILE - in_tile_x, WIDTH - x)
+			@warning_ignore("integer_division")
 			var column: int = (map_x / TILE) % MAP_COLUMNS
 			var cell: int = row * MAP_COLUMNS + column
 			var tile: int = map[cell]
@@ -355,24 +371,37 @@ func _draw_background(image: Image, movie: Gen2IntroMovie) -> Array:
 			elif tile >= HIGH_TILE:
 				strip = high
 				index = tile - HIGH_TILE + high_first
-			var palette: PackedColorArray = palettes[byte & ATTR_PALETTE]
-			if palette.is_empty():
+			var table: PackedInt32Array = tables[byte & ATTR_PALETTE]
+			if table.is_empty():
+				x += run
 				continue
-			var pixel: int = _pixel(
-				strip, index, map_x % TILE, in_tile_y,
-				bool(byte & ATTR_XFLIP), bool(byte & ATTR_YFLIP)
-			)
-			behind[y * WIDTH + x] = pixel
-			if byte & ATTR_PRIORITY != 0:
-				forced[y * WIDTH + x] = pixel
-			image.set_pixel(x, y, palette[pixel])
+			var flip_x: bool = bool(byte & ATTR_XFLIP)
+			@warning_ignore("integer_division")
+			var stride: int = strip.size() / TILE
+			# What `_pixel` answers for a tile the sheet does not reach.
+			var from: int = -1
+			if index >= 0 and (index + 1) * TILE <= stride:
+				from = ((TILE - 1 - in_tile_y) if bool(byte & ATTR_YFLIP) else in_tile_y) \
+					* stride + index * TILE
+			var priority: bool = (byte & ATTR_PRIORITY) != 0
+			for step: int in run:
+				var source_x: int = in_tile_x + step
+				var pixel: int = 0 if from < 0 else strip[
+					from + ((TILE - 1 - source_x) if flip_x else source_x)
+				]
+				var at_pixel: int = line + x + step
+				behind[at_pixel] = pixel
+				if priority:
+					forced[at_pixel] = pixel
+				pixels[at_pixel] = table[pixel]
+			x += run
 	return [behind, forced]
 
 
 ## One shadow-OAM entry, off the sheet its struct was loaded into. The position
 ## is already the OAM byte, so it is only moved off OAM's own (8, 16) origin.
 func _draw_sprite(
-	image: Image, movie: Gen2IntroMovie, entry: Dictionary,
+	pixels: PackedInt32Array, movie: Gen2IntroMovie, entry: Dictionary,
 	behind: PackedByteArray, forced: PackedByteArray, taken: PackedByteArray
 ) -> void:
 	var tile: int = int(entry["tile"])
@@ -400,7 +429,7 @@ func _draw_sprite(
 	if palette.size() <= TRANSPARENT_INDEX:
 		return
 	_blit_sprite_tile(
-		image, strip, palette, tile,
+		pixels, strip, palette, tile,
 		Vector2i(int(entry["x"]) - OAM_ORIGIN.x, int(entry["y"]) - OAM_ORIGIN.y),
 		bool(entry["flip_x"]), bool(entry["flip_y"]), taken,
 		behind if bool(entry.get("priority", false)) else forced
@@ -413,42 +442,37 @@ func _draw_sprite(
 ## priority bit otherwise. The claim comes first: a sprite that loses the pixel
 ## to the background still wins it against the sprites behind it.
 func _blit_sprite_tile(
-	image: Image, strip: PackedByteArray, palette: PackedColorArray, tile: int,
-	at: Vector2i, flip_x: bool, flip_y: bool, taken: PackedByteArray,
+	pixels: PackedInt32Array, strip: PackedByteArray, palette: PackedColorArray,
+	tile: int, at: Vector2i, flip_x: bool, flip_y: bool, taken: PackedByteArray,
 	behind: PackedByteArray
 ) -> void:
+	var table: PackedInt32Array = Gen2PicImage.lookup(palette)
+	@warning_ignore("integer_division")
+	var stride: int = strip.size() / TILE
 	for row: int in TILE:
 		var y: int = at.y + row
 		if y < 0 or y >= HEIGHT:
 			continue
+		var from: int = -1
+		if tile >= 0 and (tile + 1) * TILE <= stride:
+			from = ((TILE - 1 - row) if flip_y else row) * stride + tile * TILE
+		if from < 0:
+			continue
+		var line: int = y * WIDTH
 		for column: int in TILE:
 			var x: int = at.x + column
 			if x < 0 or x >= WIDTH:
 				continue
-			var pixel: int = _pixel(strip, tile, column, row, flip_x, flip_y)
+			var pixel: int = strip[from + ((TILE - 1 - column) if flip_x else column)]
 			if pixel == TRANSPARENT_INDEX:
 				continue
-			var at_pixel: int = y * WIDTH + x
+			var at_pixel: int = line + x
 			if taken[at_pixel] != 0:
 				continue
 			taken[at_pixel] = 1
 			if not behind.is_empty() and behind[at_pixel] != TRANSPARENT_INDEX:
 				continue
-			image.set_pixel(x, y, palette[pixel])
-
-
-## One pixel of a tile in a horizontal strip of tile indices.
-func _pixel(
-	strip: PackedByteArray, tile: int, x: int, y: int, flip_x: bool, flip_y: bool
-) -> int:
-	if strip.is_empty():
-		return 0
-	var width: int = strip.size() / TILE
-	var column: int = tile * TILE + ((TILE - 1 - x) if flip_x else x)
-	var row: int = (TILE - 1 - y) if flip_y else y
-	if column < 0 or column >= width:
-		return 0
-	return strip[row * width + column]
+			pixels[at_pixel] = table[pixel]
 
 
 func _sheet(movie: Gen2IntroMovie, name: String) -> PackedByteArray:

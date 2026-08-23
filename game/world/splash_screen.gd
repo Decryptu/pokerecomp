@@ -34,6 +34,7 @@ var _title_page: Gen2TitlePage = null
 ## its two chords cannot be expressed as presses.
 var _held: Array[int] = []
 var _background: TextureRect = null
+var _texture: ImageTexture = null
 var _audio: Gen2AudioPlayer = null
 var _image: Image = null
 var _visible_id: StringName = &""
@@ -228,7 +229,11 @@ func _finish() -> void:
 func _refresh() -> void:
 	if _background == null:
 		return
-	_background.texture = ImageTexture.create_from_image(_frame_image())
+	## Updated rather than replaced: the opening redraws every frame, and a new
+	## texture a frame is an allocation and a fresh upload for a picture the same
+	## size as the last one.
+	_texture = Gen2PicImage.refreshed_texture(_texture, _frame_image())
+	_background.texture = _texture
 	_background.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 
 
