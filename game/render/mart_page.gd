@@ -60,6 +60,11 @@ const ROW_STEP: int = 2
 ## `ScrollingMenu_CallFunctions1and2` steps `wMenuData_ScrollingMenuWidth` from
 ## the name before it calls function 2.
 const PRICE_COLUMN: int = NAME_AT.x + 8
+## The cells a shelf row's name is drawn in, up to the column the arrows stand
+## in. Every cartridge item name fits; a shelf line a mod registers is any
+## length, so it is bounded and a long one ends in an ellipsis rather than being
+## drawn over the border.
+const NAME_CELLS: int = LIST_RIGHT - NAME_AT.x
 
 ## `UpdateItemDescription`: `hlcoord 0, 12` with `lb bc, 4, SCREEN_WIDTH - 2`,
 ## so a six-row frame across the screen, and the description at `decoord 1, 14`.
@@ -216,7 +221,7 @@ func _draw_list(indices: PackedByteArray, width: int, state: Dictionary) -> void
 		if bool(row.get("cancel", false)):
 			_text(indices, width, CANCEL, at)
 			continue
-		_text(indices, width, String(row.get("name", "")), at)
+		_text(indices, width, String(row.get("name", "")), at, NAME_CELLS)
 		_text(
 			indices, width, money_string(int(row.get("price", 0))),
 			Vector2i(PRICE_COLUMN, at.y + 1)
@@ -259,8 +264,12 @@ func _draw_quantity(
 	_text(indices, width, money_string(subtotal), SUBTOTAL_AT)
 
 
-func _text(indices: PackedByteArray, width: int, text: String, at: Vector2i) -> void:
-	font.draw_text(text, indices, width, at.x * TILE, at.y * TILE)
+func _text(
+	indices: PackedByteArray, width: int, text: String, at: Vector2i, cells: int = -1
+) -> void:
+	font.draw_text(
+		text, indices, width, at.x * TILE, at.y * TILE, Gen2Text.FONT_MAIN, cells
+	)
 
 
 func _code(indices: PackedByteArray, width: int, code: int, at: Vector2i) -> void:

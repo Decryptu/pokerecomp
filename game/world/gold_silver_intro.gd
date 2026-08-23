@@ -828,9 +828,9 @@ func _update_tilemap_and_bg_map() -> void:
 func _animate_ocean_waves() -> void:
 	if _counter2 & 0x03 == 0x03:
 		return
-	var set: int = (_counter2 & 0x30) >> 4
+	var group: int = (_counter2 & 0x30) >> 4
 	for column: int in MAP_COLUMNS:
-		_bg_map[WAVE_ROW * MAP_COLUMNS + column] = 0x70 + set * 4 + (column & 0x03)
+		_bg_map[WAVE_ROW * MAP_COLUMNS + column] = 0x70 + group * 4 + (column & 0x03)
 
 
 ## `Intro_InitSineLYOverrides`: `BattleAnim_Sine_e` at amplitude 4, one entry per
@@ -917,13 +917,13 @@ func _meta_tiles() -> PackedByteArray:
 
 ## `DrawIntroCharizardGraphic`: eight rows blanked, then a run of ascending tile
 ## numbers laid out at the frame's own width, height and corner.
-func _draw_charizard(frame: int) -> void:
+func _draw_charizard(index: int) -> void:
 	for row: int in CHARIZARD_CLEAR_ROWS:
 		for column: int in COLUMNS:
 			var cell: int = (CHARIZARD_CLEAR_ROW + row) * MAP_COLUMNS + column
 			if cell < _bg_map.size():
 				_bg_map[cell] = 0
-	var entry: Array = CHARIZARD_FRAMES[frame]
+	var entry: Array = CHARIZARD_FRAMES[index]
 	var tile: int = int(entry[0])
 	for row: int in int(entry[2]):
 		for column: int in int(entry[1]):

@@ -52,6 +52,14 @@ const OPTIONS_CURSOR_COLUMN: int = 1
 const OPTIONS_VISIBLE_ROWS: int = 8
 const OPTIONS_VISIBLE_VALUE_ROWS: int = 7
 
+## The cells a row's own words are drawn in, from its column to the last one
+## before the right-hand border. Every cartridge option is written to fit; a
+## mod's name and a view's label are not, so both are drawn bounded and a cut
+## one ends in an ellipsis. Documented in `docs/MODS.md` as the budget a mod
+## names itself to.
+const OPTIONS_LABEL_CELLS: int = COLUMNS - 1 - OPTIONS_LABEL_COLUMN
+const OPTIONS_VALUE_CELLS: int = COLUMNS - 1 - OPTIONS_VALUE_COLUMN
+
 ## `DisplaySaveInfoOnSave`'s `lb de, 4, 0` through `_OffsetMenuHeader`, which
 ## keeps `menu_coords 0, 0, 15, 9`'s span and moves its left edge to column 4.
 const SAVE_INFO_LEFT: int = 4
@@ -255,12 +263,17 @@ func render_options(rows: Array, cursor: int) -> Image:
 	for index: int in rows.size():
 		var row: Dictionary = rows[index]
 		var label_row: int = OPTIONS_FIRST_ROW + 2 * index
-		_text(indices, String(row.get("label", "")), OPTIONS_LABEL_COLUMN, label_row)
+		_text(
+			indices, String(row.get("label", "")), OPTIONS_LABEL_COLUMN, label_row,
+			OPTIONS_LABEL_CELLS
+		)
 		var value: String = String(row.get("value", ""))
 		if value.is_empty():
 			continue
 		_text(indices, ":", OPTIONS_COLON_COLUMN, label_row + 1)
-		_text(indices, value, OPTIONS_VALUE_COLUMN, label_row + 1)
+		_text(
+			indices, value, OPTIONS_VALUE_COLUMN, label_row + 1, OPTIONS_VALUE_CELLS
+		)
 	if cursor >= 0 and cursor < rows.size():
 		font.draw_code(
 			Gen2MenuPage.CURSOR_CODE, indices, Gen2Screen.WIDTH,
@@ -286,8 +299,13 @@ func _render_account(description: String) -> Image:
 	)
 
 
-func _text(indices: PackedByteArray, text: String, column: int, row: int) -> void:
-	font.draw_text(text, indices, Gen2Screen.WIDTH, column * TILE, row * TILE)
+func _text(
+	indices: PackedByteArray, text: String, column: int, row: int, cells: int = -1
+) -> void:
+	font.draw_text(
+		text, indices, Gen2Screen.WIDTH, column * TILE, row * TILE,
+		Gen2Text.FONT_MAIN, cells
+	)
 
 
 ## `PAL_BG_TEXT`, which is what every one of these boxes is drawn with.

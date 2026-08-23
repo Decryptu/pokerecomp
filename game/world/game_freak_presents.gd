@@ -149,8 +149,8 @@ var _logo_palette: int = OBJECT_PALETTE_ORDER
 ## motion is read out of. Without one the sprites sit still and the frame counts
 ## are unchanged, so a caller with no animation layer still spends the right
 ## frames.
-func start(profile: StringName, sine: Gen2BattleAnimData = null) -> void:
-	_profile = profile
+func start(id: StringName, sine: Gen2BattleAnimData = null) -> void:
+	_profile = id
 	_sine = sine
 	_scene = 0
 	_timer = 0

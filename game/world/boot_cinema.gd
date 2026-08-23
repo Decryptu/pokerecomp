@@ -90,10 +90,10 @@ func start(
 	_emit(&"hide_image", {"id": &"boot"})
 
 
-## Whether [param phase] is one this run draws. A phase the host named, or any
+## Whether [param name] is one this run draws. A phase the host named, or any
 ## phase when it named none.
-func is_available(phase: StringName) -> bool:
-	return _available.is_empty() or phase in _available
+func is_available(name: StringName) -> bool:
+	return _available.is_empty() or name in _available
 
 
 func phase() -> StringName:
@@ -308,11 +308,11 @@ func _intro_finished() -> bool:
 	return _gs_movie.finished() if _gs_movie != null else true
 
 
-## Enters the first phase after [param phase] the host can draw, with that
+## Enters the first phase after [param name] the host can draw, with that
 ## phase's own opening events, or finishes when none is left. The events a phase
 ## leaves behind belong to the phase leaving, so a caller emits those first.
-func _enter_after(phase: StringName) -> void:
-	var at: int = PHASE_ORDER.find(phase)
+func _enter_after(name: StringName) -> void:
+	var at: int = PHASE_ORDER.find(name)
 	for index: int in range(at + 1, PHASE_ORDER.size()):
 		var next: StringName = PHASE_ORDER[index]
 		if not is_available(next):

@@ -338,7 +338,7 @@ static func slider(
 	format: Callable = Callable()
 ) -> Control:
 	var spell: Callable = format if format.is_valid() \
-		else func(number: int) -> String: return str(number)
+		else func(amount: int) -> String: return str(amount)
 	var line: HBoxContainer = row(GAP_MD)
 	var bar := HSlider.new()
 	bar.min_value = minimum

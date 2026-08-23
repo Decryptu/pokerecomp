@@ -139,17 +139,39 @@ func draw_code(
 ## [param max_tiles] stops the run short. `PlaceString` has no such bound and
 ## needs none: every cartridge string is written to fit the box it is placed in.
 ## A label a mod supplies is not, so a caller drawing into a fixed width passes
-## the room it has and the rest of the string is dropped rather than written
-## over whatever is beside the box. Negative means no bound.
+## the room it has. Negative means no bound.
+##
+## A bounded run that does not fit ends in the charmap's own "…" rather than
+## stopping mid-word, so a cut value is never read as a whole one: two views
+## labelled "Game Boy Color 2D" and "Game Boy Advance" would otherwise draw the
+## same eight characters. The battle-extra strip has no ellipsis tile under $75,
+## so under that font the run is cut without one.
 func draw_text(
 	text: String, into: PackedByteArray, into_width: int, at_x: int, at_y: int,
 	font: StringName = Gen2Text.FONT_MAIN, max_tiles: int = -1
 ) -> int:
-	var codes: PackedByteArray = Gen2Text.encode(text, font)
-	var drawn: int = codes.size() if max_tiles < 0 else mini(codes.size(), max_tiles)
-	for i: int in drawn:
+	var codes: PackedByteArray = fit(text, max_tiles, font)
+	for i: int in codes.size():
 		draw_code(codes[i], into, into_width, at_x + i * TILE, at_y, font)
-	return drawn
+	return codes.size()
+
+
+## [param text] encoded and cut to [param max_tiles] cells, marked with an
+## ellipsis where anything was dropped. Negative is no bound. Exposed so a
+## caller that measures before it draws asks the same question once.
+static func fit(
+	text: String, max_tiles: int, font: StringName = Gen2Text.FONT_MAIN
+) -> PackedByteArray:
+	var codes: PackedByteArray = Gen2Text.encode(text, font)
+	if max_tiles < 0 or codes.size() <= max_tiles:
+		return codes
+	if max_tiles <= 0:
+		return PackedByteArray()
+	if font == Gen2Text.FONT_BATTLE_EXTRA:
+		return codes.slice(0, max_tiles)
+	var out: PackedByteArray = codes.slice(0, max_tiles - 1)
+	out.append(Gen2Text.ELLIPSIS_CODE)
+	return out
 
 
 ## Draws one tile of one text box border. [param code] is a box-drawing code

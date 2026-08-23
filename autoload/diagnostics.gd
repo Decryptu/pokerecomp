@@ -254,9 +254,9 @@ func _pack_bundle(directory: String) -> Dictionary:
 	var written: int = 0
 	if _pack(packer, "report.txt", report().to_utf8_buffer()):
 		written += 1
-	for name: String in log_files():
-		var bytes: PackedByteArray = FileAccess.get_file_as_bytes("%s/%s" % [DIRECTORY, name])
-		if not bytes.is_empty() and _pack(packer, "logs/%s" % name, bytes):
+	for file: String in log_files():
+		var bytes: PackedByteArray = FileAccess.get_file_as_bytes("%s/%s" % [DIRECTORY, file])
+		if not bytes.is_empty() and _pack(packer, "logs/%s" % file, bytes):
 			written += 1
 	packer.close()
 	return {"ok": true, "message": "", "path": path, "files": written}
@@ -277,9 +277,9 @@ func log_files(directory: String = DIRECTORY) -> PackedStringArray:
 		ProjectSettings.get_setting("debug/file_logging/log_path", "")
 	).get_file()
 	var found: Array[String] = []
-	for name: String in DirAccess.get_files_at(directory):
-		if name.get_extension().to_lower() == "log":
-			found.append(name)
+	for file: String in DirAccess.get_files_at(directory):
+		if file.get_extension().to_lower() == "log":
+			found.append(file)
 	found.sort_custom(func(a: String, b: String) -> bool:
 		if (a == live) != (b == live):
 			return a == live
@@ -462,8 +462,8 @@ func _bundle_directory() -> String:
 	return ProjectSettings.globalize_path("user://")
 
 
-func _pack(packer: ZIPPacker, name: String, bytes: PackedByteArray) -> bool:
-	if packer.start_file(name) != OK:
+func _pack(packer: ZIPPacker, entry: String, bytes: PackedByteArray) -> bool:
+	if packer.start_file(entry) != OK:
 		return false
 	var ok: bool = packer.write_file(bytes) == OK
 	packer.close_file()
