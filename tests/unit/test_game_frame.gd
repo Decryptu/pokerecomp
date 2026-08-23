@@ -1,6 +1,34 @@
 extends GutTest
 
-## How a game screen splits between the hardware screen and the controller.
+## How a game screen splits between the hardware screen and the controller, and
+## what [Gen2Screen] puts in the room SCREEN FILL gives it.
+
+const SCREEN_SCENE: PackedScene = preload("res://game/render/gen2_screen.tscn")
+const WINDOW := Vector2(1152, 648)
+
+
+## A screen in the tree at [param area], with SCREEN FILL as [param fill].
+func _built(fill: bool = true, area: Vector2 = WINDOW) -> Gen2Screen:
+	Gen2OptionsStore.use_test_path()
+	Gen2OptionsStore.current().screen_fill = fill
+	var screen: Gen2Screen = SCREEN_SCENE.instantiate() as Gen2Screen
+	add_child_autofree(screen)
+	# The scene anchors to its frame, which would take the size back off it.
+	screen.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	screen.size = area
+	return screen
+
+
+## A [param width] x [param height] picture of [param field] with a stripe of
+## [param ink] across it, which is the shape of every screen here: a lot of one
+## colour with writing on it.
+func _picture(field: Color, ink: Color, rows: int = 4) -> Image:
+	var image := Image.create_empty(
+		Gen2Screen.WIDTH, Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8
+	)
+	image.fill(field)
+	image.fill_rect(Rect2i(0, 0, Gen2Screen.WIDTH, rows), ink)
+	return image
 
 
 func _screen(area: Vector2, controls: bool) -> Rect2:
@@ -130,3 +158,79 @@ func test_the_expanded_buffer_never_shrinks_below_the_hardware_screen() -> void:
 		Gen2Screen.buffer_for(Vector2(100, 100), 4.0),
 		Vector2i(Gen2Screen.WIDTH, Gen2Screen.HEIGHT),
 	)
+
+
+## SCREEN FILL is read by the screen itself. Every screen in the game gets one of
+## these and none of them asks; a screen written next year does not have to know
+## the setting exists to be responsive in a window that is not 10:9.
+func test_a_screen_takes_the_window_without_being_told() -> void:
+	assert_true(_built(true).expanded, "filled")
+	assert_false(_built(false).expanded, "framed")
+
+
+## And it fills the room it took. A screen laid out in 160x144 has nothing of its
+## own out there, so the default is that the screen paints it rather than leaving
+## a bar; only a view that draws the whole buffer turns this off.
+func test_the_surround_is_filled_unless_a_view_owns_the_buffer() -> void:
+	assert_true(_built(true).interface_masked)
+
+
+## With the screen's own field, taken from the picture that screen drew. The
+## field is what a screen is mostly made of, not what its border happens to be:
+## a cartridge screen puts a box frame or a header strip along its own edge often
+## enough that the edge says black where the screen reads white.
+func test_the_surround_follows_the_picture_a_screen_drew() -> void:
+	var screen: Gen2Screen = _built()
+	var view := TextureRect.new()
+	screen.display(view)
+	Gen2PicImage.show(view, _picture(Color.WHITE, Color.BLACK))
+	assert_eq(screen.surround_color, Color.WHITE)
+
+	Gen2PicImage.show(view, _picture(Color.RED, Color.BLACK))
+	assert_eq(screen.surround_color, Color.RED, "and follows it when it is redrawn")
+
+
+## A layer drawn over another screen is not that screen's field, so it does not
+## answer for it: the pack's cursor sprite would otherwise paint the window.
+func test_a_layer_over_a_screen_does_not_answer_for_it() -> void:
+	var screen: Gen2Screen = _built()
+	var view := TextureRect.new()
+	screen.display(view)
+	Gen2PicImage.show(view, _picture(Color.WHITE, Color.BLACK))
+	var overlay := TextureRect.new()
+	screen.display(overlay)
+	Gen2PicImage.show(overlay, _picture(Color(0, 0, 0, 0), Color.BLACK))
+	assert_eq(screen.surround_color, Color.WHITE, "the screen under it still owns it")
+
+
+## Half the screens here are drawn as a colour rather than as a picture, so the
+## field they stand on is the same seam.
+func test_a_screen_drawn_as_a_colour_says_so_too() -> void:
+	var screen: Gen2Screen = _built()
+	screen.display(Gen2Screen.Field.create(Color.AQUA))
+	await wait_process_frames(2)
+	assert_eq(screen.surround_color, Color.AQUA)
+
+
+## Content laid out in the hardware's own 160x144 goes where that rectangle is.
+## In the buffer's corner it would sit off to one side of the boxes above it,
+## which is what the built-in battle arena did the first time this expanded.
+func test_hardware_sized_content_lands_on_the_interface_rectangle() -> void:
+	var screen: Gen2Screen = _built()
+	var arena := ColorRect.new()
+	screen.display_content(arena)
+	assert_eq(
+		arena.get_parent().position, screen.interface_layer().position,
+		"the layer it went on covers the hardware rectangle",
+	)
+	assert_gt(screen.interface_layer().position.x, 0.0, "which is not the corner")
+
+
+## A view that fills the buffer keeps the buffer's own origin, or the map would
+## be drawn one interface rectangle in from the corner.
+func test_a_buffer_filling_view_keeps_the_buffer_origin() -> void:
+	var screen: Gen2Screen = _built()
+	var map := ColorRect.new()
+	screen.display_content(map, true)
+	assert_eq(map.get_parent(), screen.viewport())
+	assert_eq(screen.viewport().get_children().find(map), 0, "and stays the floor")

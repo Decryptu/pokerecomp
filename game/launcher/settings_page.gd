@@ -97,9 +97,10 @@ func _build() -> void:
 	)))
 	app.add_child(Gen2LauncherUI.muted(
 		_theme,
-		"Fill gives the overworld the whole window instead of black bars, drawing "
-		+ "the connected maps around this one. Menus and boxes stay where the "
-		+ "hardware put them. Zoom with + and - while walking."
+		"Fill gives every screen the whole window instead of black bars. The "
+		+ "overworld draws the connected maps around this one; every other screen "
+		+ "carries its own background out to the edge. Menus and boxes stay where "
+		+ "the hardware put them. Zoom with + and - while walking."
 	))
 	app.add_child(Gen2LauncherUI.field(_theme, "Game speed", Gen2LauncherUI.segmented(
 		_theme, _titles(Gen2Options.GAME_SPEEDS),

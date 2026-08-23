@@ -41,7 +41,7 @@ var _gender: int = Gen2SaveData.GENDER_MALE
 var _player_name: String = ""
 var _phase: int = Phase.ANIMATING
 
-var _background: ColorRect = null
+var _background: Gen2Screen.Field = null
 var _pic: TextureRect = null
 var _pic_palette: PackedColorArray = PackedColorArray()
 ## `Palette_TextBG7`, the palette a `TextboxPalette` region is drawn through, so
@@ -92,10 +92,7 @@ func _ready() -> void:
 	size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 	# `ClearTilemap` leaves the whole screen blank, which is white here the way
 	# every other 1bpp page in this project is.
-	_background = ColorRect.new()
-	_background.color = Color.WHITE
-	_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_background.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
+	_background = Gen2Screen.Field.create(Color.WHITE)
 	add_child(_background)
 
 	_audio = Gen2AudioPlayer.new()

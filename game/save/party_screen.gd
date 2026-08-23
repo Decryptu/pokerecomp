@@ -777,7 +777,7 @@ func _render_hardware() -> void:
 			menu, Rect2i(Vector2i.ZERO, menu.get_size()),
 			box.border_position() * Gen2Font.TILE
 		)
-	_view.texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(_view, image)
 
 
 ## `StatsScreenInit`'s own screen, over the party menu rather than beside it. The
@@ -791,7 +791,7 @@ func _render_stats() -> void:
 	var snapshot: Dictionary = _stats.snapshot()
 	var image: Image = _stats_page.render(snapshot, _data)
 	_blend_stats_pic(image, snapshot)
-	_view.texture = ImageTexture.create_from_image(image)
+	Gen2PicImage.show(_view, image)
 
 
 ## `MoveScreenLoop`'s own screen, which steps its one mon icon per frame the way
@@ -801,9 +801,7 @@ func _render_moves() -> void:
 		_moves_page = Gen2MoveScreenPage.from_data(_data)
 	if _moves_page == null:
 		return
-	_view.texture = ImageTexture.create_from_image(
-		_moves_page.render(_moves.snapshot(), _data)
-	)
+	Gen2PicImage.show(_view, _moves_page.render(_moves.snapshot(), _data))
 
 
 ## `PrepMonFrontpic` centres a seven-tile cell on `hlcoord 0, 0` and sits a

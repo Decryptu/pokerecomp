@@ -11,6 +11,10 @@ extends RefCounted
 ## lookup, and a battle can want several sprites a frame. Node-free, so headless.
 
 const CHANNELS: int = 4
+## Every fourth pixel each way is what [method field_color] counts: two samples
+## per 8x8 tile on each axis.
+const FIELD_STRIDE: int = 4
+const TRANSPARENT := Color(0.0, 0.0, 0.0, 0.0)
 
 ## `PadFrontpic`'s box: every front pic is placed as 7x7 tiles whatever its own
 ## size is.
@@ -392,6 +396,51 @@ static func show(target: TextureRect, image: Image) -> void:
 	if target == null:
 		return
 	target.texture = refreshed_texture(target.texture as ImageTexture, image)
+	Gen2Screen.note_picture(target, image)
+
+
+## What a picture is mostly made of, which is the colour a screen carries out
+## past the hardware rectangle it was laid out in.
+##
+## The picture's own field rather than its border: a cartridge screen puts a box
+## frame or a header strip along its edge often enough that the edge says black
+## where the screen reads white. Sampled on a stride, because tile art is flat in
+## blocks of eight and a quarter of the pixels answers the same question as all
+## of them for a sixteenth of the walk.
+##
+## A picture that is transparent where it is sampled has no field: it is a layer
+## over some other screen's, and answering for that screen would be wrong.
+static func field_color(image: Image, stride: int = FIELD_STRIDE) -> Color:
+	if image == null or image.is_empty() or image.get_format() != Image.FORMAT_RGBA8:
+		return TRANSPARENT
+	var width: int = image.get_width()
+	var height: int = image.get_height()
+	var step: int = maxi(stride, 1)
+	# The bytes rather than `get_pixel`: one binding call per sample is what a
+	# screen redrawn every frame cannot afford, and this runs on every one.
+	var data: PackedByteArray = image.get_data()
+	var counts: Dictionary = {}
+	var best: int = -1
+	var seen: int = 0
+	var y: int = 0
+	while y < height:
+		var row: int = y * width * CHANNELS
+		var x: int = 0
+		while x < width:
+			var at: int = row + x * CHANNELS
+			var key: int = (
+				data[at] << 24 | data[at + 1] << 16 | data[at + 2] << 8 | data[at + 3]
+			)
+			var count: int = int(counts.get(key, 0)) + 1
+			counts[key] = count
+			if count > seen:
+				seen = count
+				best = key
+			x += step
+		y += step
+	if best < 0:
+		return TRANSPARENT
+	return Color.hex(best)
 
 
 ## The texture [param texture] becomes once it holds [param image].

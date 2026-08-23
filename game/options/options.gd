@@ -80,9 +80,11 @@ var music_volume: int = 7
 var sfx_volume: int = 7
 var video_mode: StringName = &"windowed"
 ## SCREEN FILL. The window is not the Game Boy's 10:9 and the black bars around
-## a framed screen are room the overworld can draw map into, so the buffer grows
-## to the window instead ([member Gen2Screen.expanded]). Interface stays inside
-## the 160x144 rectangle centred in it, so nothing the cartridge laid out moves.
+## a framed screen are room this project can draw into, so the buffer grows to
+## the window instead ([member Gen2Screen.expanded]) on every screen. The
+## overworld fills it with map; everything else fills it with its own field.
+## Interface stays inside the 160x144 rectangle centred in it, so nothing the
+## cartridge laid out moves.
 var screen_fill: bool = true
 ## Whole steps of zoom away from the fitting scale, kept between sessions
 ## because it is a view preference rather than part of a run.

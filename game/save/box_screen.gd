@@ -51,7 +51,7 @@ var _scroll: int = 0
 var _prompt: String = PROMPT_CHOOSE
 var _page: Gen2PCBoxPage = null
 var _field: Control = null
-var _backdrop: ColorRect = null
+var _backdrop: Gen2Screen.Field = null
 var _background: TextureRect = null
 var _pic: TextureRect = null
 var _cursor_sprites: Array[TextureRect] = []
@@ -248,9 +248,7 @@ func _build() -> void:
 	screen.display(_field)
 	## The page is drawn with colour 0 transparent so the pic shows through the
 	## cell it is composed into, which leaves the backdrop to fill it.
-	_backdrop = ColorRect.new()
-	_backdrop.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
-	_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_backdrop = Gen2Screen.Field.create(Color.WHITE)
 	_field.add_child(_backdrop)
 	## The pic sits under the page so the listing's border stays drawn over it,
 	## the way the hardware's own window does.

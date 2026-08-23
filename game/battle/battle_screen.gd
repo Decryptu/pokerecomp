@@ -4535,23 +4535,20 @@ func _build_renderer() -> void:
 	_apply_renderer_interface_style()
 
 
-## SCREEN FILL, which a fight takes only when its renderer draws the place
-## rather than a picture.
+## Who fills the buffer SCREEN FILL gave the fight.
 ##
 ## The built-in arena is `_BattleScene`'s own 160x144 and has nothing to put in a
-## wider buffer, exactly like the pack or the PC, so it keeps the bars the
-## setting gives every other laid-out screen. A renderer on the native layer,
-## staged on the map the encounter fired on, has the same world the overworld was
-## filling the window with a frame earlier, and shrinking it to 10:9 for the
-## length of the battle and back is the surface being decided with the view left
-## out of the question.
+## wider buffer, exactly like the pack or the PC, so the screen fills the
+## surround with the arena's own field. A renderer on the native layer, staged on
+## the map the encounter fired on, has the same world the overworld was filling
+## the window with a frame earlier and fills the surface itself, so the mask
+## would only crop it.
 ##
 ## The interface does not move either way: the panels, the bars and the boxes are
 ## hardware pixels laid out in 160x144 and stay in the rectangle
 ## [Gen2Screen] centres in the buffer.
 func _apply_screen_fill() -> void:
-	_screen.expanded = Gen2OptionsStore.current().screen_fill \
-		and not Gen2ModHost.renderer_uses_hardware_viewport(_renderer)
+	_screen.interface_masked = Gen2ModHost.renderer_uses_hardware_viewport(_renderer)
 
 
 ## The text box over a native-layer renderer, the same seam

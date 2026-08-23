@@ -118,10 +118,7 @@ func set_battle_data(data: GameData) -> bool:
 	if _hud == null:
 		return false
 
-	var field := ColorRect.new()
-	field.color = BACKGROUND
-	field.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
-	add_child(field)
+	add_child(Gen2Screen.Field.create(BACKGROUND))
 
 	_enemy_pic = _new_layer()
 	_player_pic = _new_layer()
