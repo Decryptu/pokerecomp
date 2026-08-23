@@ -28,6 +28,9 @@ const MAX_DOWNLOAD_BYTES: int = 96 * 1024 * 1024
 
 var _theme: Gen2LauncherTheme = null
 var _host: Control = null
+## Whether the page is drawn for a narrow screen, where a row's controls go under
+## its name instead of beside it.
+var _compact: bool = false
 var _views: Control = null
 var _list_view: VBoxContainer = null
 var _list: VBoxContainer = null
@@ -188,25 +191,38 @@ func _empty_state() -> Control:
 ## on the mod's own page, which the row itself opens.
 func _card(row: Dictionary) -> Control:
 	var panel: Gen2LauncherCard = Gen2LauncherCard.create(_theme, Gen2LauncherTheme.RADIUS_MD, 18)
+	# A phone is narrower than the icon, the name, the switch and three buttons
+	# laid end to end, so the controls drop under the name rather than off the
+	# card. Everything is the same node either way round; only the box differs.
+	var stack: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_SM)
+	panel.add_child(stack)
 	var line: HBoxContainer = Gen2LauncherUI.row(Gen2LauncherUI.GAP_MD)
-	panel.add_child(line)
+	stack.add_child(line)
 	line.add_child(_icon_square(row))
 
 	var text: VBoxContainer = Gen2LauncherUI.column(1)
 	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	text.alignment = BoxContainer.ALIGNMENT_CENTER
 	line.add_child(text)
-	text.add_child(Gen2LauncherUI.body(_theme, String(row["name"])))
-	text.add_child(Gen2LauncherUI.muted(_theme, _version_line(row)))
+	# An id is one long word and will not wrap, so it is trimmed rather than
+	# allowed to set the width of every row on the page.
+	text.add_child(_clipped(Gen2LauncherUI.body(_theme, String(row["name"]))))
+	text.add_child(_clipped(Gen2LauncherUI.muted(_theme, _version_line(row))))
+
+	var controls: HBoxContainer = line
+	if _compact:
+		controls = Gen2LauncherUI.row(Gen2LauncherUI.GAP_MD)
+		controls.alignment = BoxContainer.ALIGNMENT_END
+		stack.add_child(controls)
 
 	if bool(row["installed"]):
 		var switch: Gen2LauncherToggle = Gen2LauncherToggle.create(_theme, bool(row["enabled"]))
 		switch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		switch.toggled.connect(func(on: bool) -> void: set_enabled(row, on))
-		line.add_child(switch)
+		controls.add_child(switch)
 
 	for button: Control in _action_buttons(row):
-		line.add_child(button)
+		controls.add_child(button)
 
 	var open: Gen2LauncherButton = Gen2LauncherButton.icon_only(
 		_theme, &"chevron", Gen2LauncherButton.Variant.QUIET, 40.0
@@ -221,6 +237,25 @@ func _card(row: Dictionary) -> Control:
 			open_mod(StringName(row["id"]))
 	)
 	return panel
+
+
+## Redrawn for the width the page is being given. Rebuilding is how every
+## launcher pane changes shape, since each is built in code from its state.
+func set_compact(on: bool) -> void:
+	if on == _compact:
+		return
+	_compact = on
+	refresh()
+
+
+## A label that gives up its width rather than pushing the row wider than the
+## card. Its own minimum is what makes a [HBoxContainer] overflow.
+static func _clipped(label: Label) -> Label:
+	label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	label.clip_text = true
+	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	label.custom_minimum_size.x = 0.0
+	return label
 
 
 ## What a row can do: download a mod that is not installed, update one a source

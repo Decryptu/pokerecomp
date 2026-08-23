@@ -5,7 +5,7 @@ extends SceneTree
 ##
 ##   Godot --path . -s res://tools/preview_launcher.gd -- \
 ##       <out.png> [light|dark] [width] [height] [page] [empty|mixed|full] [view] [mod id] \
-##       [scroll] [focus index] [fade step]
+##       [scroll] [focus index] [fade step] [insets]
 ##
 ## `view` opens a sheet (`manage`, `touch`, `binding`, `bugs`, `report`,
 ## `delete_mod`) or
@@ -14,6 +14,11 @@ extends SceneTree
 ## to 4 for one of `FadeOutToWhite`'s own rows: the launcher's leave-the-screen
 ## sheet is stepped rather than tweened, so a still is the only way to see that
 ## it is discrete. See [method Gen2LauncherShell.flash].
+##
+## `insets` is the screen furniture a phone would take, as `left,top,right,bottom`
+## in launcher units, so the notch and home indicator cases can be photographed on
+## a desktop. Give the window a phone's size in points and one of these to see
+## what the phone shows. See [method Gen2LauncherUI.safe_area_insets].
 ##
 ## `scroll` is how far down the page's own scroll to photograph, in pixels, for a
 ## card that does not fit the window. `focus` puts the keyboard on the nth
@@ -60,6 +65,15 @@ func _initialize() -> void:
 	_scroll = int(args[8]) if args.size() > 8 else 0
 	_focus = int(args[9]) if args.size() > 9 else -1
 	_fade = int(args[10]) if args.size() > 10 else 0
+	if args.size() > 11 and not args[11].is_empty():
+		var edges: PackedStringArray = args[11].split(",")
+		if edges.size() == 4:
+			Gen2LauncherUI.preview_insets = {
+				"left": float(edges[0]),
+				"top": float(edges[1]),
+				"right": float(edges[2]),
+				"bottom": float(edges[3]),
+			}
 
 	# Both, because the window already exists by the time a tool script runs and
 	# only the display server moves it.

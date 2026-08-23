@@ -587,6 +587,69 @@ func test_the_about_page_offers_both_ways_to_report_a_bug() -> void:
 	assert_has(opened, Gen2AppVersion.REPOSITORY, "and the project itself on the page")
 
 
+func test_a_narrow_shell_gives_its_dock_discs_a_finger_to_hit() -> void:
+	# The dock is the one row that has to be pressed while walking, so what it
+	# gets from a phone's width is asserted rather than the width itself.
+	var shell: Gen2LauncherShell = Gen2LauncherShell.create(_light)
+	add_child_autofree(shell)
+	# The shell fills whatever it is put in, so the test gives it a rect of its
+	# own rather than a window to fill.
+	shell.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	for id: StringName in [&"a", &"b", &"c", &"d"]:
+		shell.add_page(id, String(id), &"shelf", Control.new())
+	shell.size = Vector2(390, 844)
+	await get_tree().process_frame
+	assert_true(shell.compact, "a phone held upright is not a desktop")
+	for button: Gen2LauncherButton in _buttons_under(shell):
+		assert_gte(
+			button.custom_minimum_size.x,
+			Gen2LauncherUI.TOUCH_TARGET,
+			"every disc is at least a finger wide",
+		)
+	shell.size = Vector2(1280, 800)
+	await get_tree().process_frame
+	assert_false(shell.compact, "and a desktop is not a phone")
+
+
+func test_the_screen_furniture_is_taken_out_of_the_room_a_page_is_given() -> void:
+	# The insets are what a notch and a home indicator cost; the preview seam
+	# stands in for a phone, because the machine running this has neither.
+	Gen2LauncherUI.preview_insets = {"left": 0.0, "top": 59.0, "right": 0.0, "bottom": 34.0}
+	var window: Window = get_tree().root
+	assert_eq(Gen2LauncherUI.safe_area_insets(window)["top"], 59.0)
+	assert_eq(
+		Gen2LauncherUI.dock_reserve(window),
+		Gen2LauncherUI.DOCK_SAFE_BOTTOM + 34.0,
+		"a page's tail clears the dock and the home indicator together",
+	)
+	Gen2LauncherUI.preview_insets = {}
+	assert_eq(Gen2LauncherUI.safe_area_insets(window)["bottom"], 0.0, "and a desktop has neither")
+
+
+func test_a_mod_row_fits_a_phone_rather_than_running_off_its_card() -> void:
+	var page: Gen2ModsPage = Gen2ModsPage.create(_light, null)
+	add_child_autofree(page)
+	page.set_compact(true)
+	await get_tree().process_frame
+	var width: float = 390.0 - 32.0
+	for card: Node in _cards_under(page):
+		assert_lte(
+			(card as Control).get_combined_minimum_size().x,
+			width,
+			"a row asks for no more than a phone has",
+		)
+
+
+## Every card in [param root]'s subtree.
+func _cards_under(root: Node) -> Array[Gen2LauncherCard]:
+	var found: Array[Gen2LauncherCard] = []
+	if root is Gen2LauncherCard:
+		found.append(root)
+	for child: Node in root.get_children():
+		found.append_array(_cards_under(child))
+	return found
+
+
 ## Every button in [param root]'s subtree, which is how a page built in code is
 ## inspected without naming the containers it happens to nest them in.
 func _buttons_under(root: Node) -> Array[Gen2LauncherButton]:

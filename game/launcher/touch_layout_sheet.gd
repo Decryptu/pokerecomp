@@ -60,9 +60,12 @@ func _build() -> void:
 func _toolbar() -> Control:
 	var host := MarginContainer.new()
 	host.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	host.add_theme_constant_override("margin_left", 24)
-	host.add_theme_constant_override("margin_right", 24)
-	host.add_theme_constant_override("margin_top", 20)
+	# The sheet opens against the top edge, which is where a phone keeps its
+	# notch and its clock.
+	var insets: Dictionary = Gen2LauncherUI.safe_area_insets(get_window())
+	host.add_theme_constant_override("margin_left", 24 + int(insets["left"]))
+	host.add_theme_constant_override("margin_right", 24 + int(insets["right"]))
+	host.add_theme_constant_override("margin_top", 20 + int(insets["top"]))
 	var card: Gen2LauncherCard = Gen2LauncherCard.floating(
 		_theme, Gen2LauncherTheme.RADIUS_LG, 18, 30
 	)

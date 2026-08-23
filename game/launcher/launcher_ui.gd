@@ -15,6 +15,93 @@ const MOD_ICON_SIDE: float = 64.0
 ## Empty scroll tail that lets the final control rise clear of the floating dock.
 const DOCK_SAFE_BOTTOM: float = 132.0
 
+## The smallest square a finger can be asked to hit, in launcher units. Apple
+## and Google both name 44 and 48 device-independent points; the larger is used
+## because a dock disc is aimed at while walking.
+const TOUCH_TARGET: float = 48.0
+
+
+## How many window pixels one launcher unit is drawn at, so that a unit is a
+## device-independent point rather than a pixel.
+##
+## Every size the launcher is written in is a desktop pixel, which is a comfortable
+## reading size only because a desktop screen is about 100 pixels to the inch. A
+## phone is three to four times that, so the same numbers arrive at a third of the
+## size and the window measures wide enough to be taken for a desktop. The screen's
+## own backing scale is exactly that ratio, and iOS and Android both report it.
+static func display_density() -> float:
+	if preview_density > 0.0:
+		return preview_density
+	if not OS.has_feature("mobile"):
+		return 1.0
+	var scale: float = DisplayServer.screen_get_scale()
+	if scale > 1.0:
+		return scale
+	# Android reports 1.0 here and puts the ratio in the dots per inch instead,
+	# against the 160 that defines the density-independent pixel.
+	var dpi: int = DisplayServer.screen_get_dpi()
+	return clampf(float(dpi) / 160.0, 1.0, 4.0)
+
+
+## Draws [param window] in launcher units. Set while a launcher screen is on and
+## unset when it leaves, because the game is drawn in cartridge pixels and an
+## integer upscale of a 160x144 screen must be computed against the real ones.
+static func apply_display_density(window: Window, on: bool) -> void:
+	if window == null:
+		return
+	var density: float = display_density() if on else 1.0
+	# A desktop draws in points already, and so does a headless run, whose window
+	# has no size to divide by.
+	var base: Vector2 = Vector2(window.content_scale_size)
+	var pixels: Vector2 = Vector2(window.size)
+	if is_equal_approx(density, 1.0) or base.x <= 0.0 or base.y <= 0.0 or pixels.x <= 0.0:
+		window.content_scale_factor = 1.0
+		return
+	# The project already stretches the window onto its base viewport, and the
+	# factor multiplies that rather than replacing it, so the stretch has to be
+	# divided back out for a unit to land on a point.
+	var stretch: float = minf(pixels.x / base.x, pixels.y / base.y)
+	window.content_scale_factor = clampf(density / maxf(stretch, 0.01), 0.25, 8.0)
+
+
+## What the screen's own furniture takes out of [param window], in launcher
+## units: the notch and the clock above, the home indicator below, and the
+## rounded corners the display server counts into both. Zero everywhere the
+## platform has nothing to say.
+static func safe_area_insets(window: Window) -> Dictionary:
+	var none: Dictionary = {"left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0}
+	if not preview_insets.is_empty():
+		return preview_insets
+	if window == null or not OS.has_feature("mobile"):
+		return none
+	var safe: Rect2i = DisplayServer.get_display_safe_area()
+	var screen: Vector2i = DisplayServer.screen_get_size()
+	if safe.size.x <= 0 or safe.size.y <= 0 or screen.x <= 0 or screen.y <= 0:
+		return none
+	# The safe area is given in screen pixels; a launcher unit is what the window
+	# draws one at.
+	var unit: float = maxf(float(window.size.x) / maxf(window.get_visible_rect().size.x, 1.0), 0.01)
+	return {
+		"left": maxf(float(safe.position.x), 0.0) / unit,
+		"top": maxf(float(safe.position.y), 0.0) / unit,
+		"right": maxf(float(screen.x - safe.end.x), 0.0) / unit,
+		"bottom": maxf(float(screen.y - safe.end.y), 0.0) / unit,
+	}
+
+
+## Preview seams for `tools/preview_launcher.gd`, which runs on a desktop and so
+## is told about a phone rather than asking one. Zero and empty mean ask the
+## display server, which is every real run.
+static var preview_density: float = 0.0
+static var preview_insets: Dictionary = {}
+
+
+## How much a scrolling page keeps clear along its bottom edge: the dock's own
+## room plus whatever the screen takes under it for a home indicator.
+static func dock_reserve(window: Window) -> float:
+	return DOCK_SAFE_BOTTOM + float(safe_area_insets(window)["bottom"])
+
+
 
 static func title(theme: Gen2LauncherTheme, text: String, size: int = Gen2LauncherTheme.FONT_TITLE) -> Label:
 	return _label(text, size, theme.text)
@@ -83,6 +170,10 @@ static func dock_safe_space() -> Control:
 	var gap := Control.new()
 	gap.custom_minimum_size.y = DOCK_SAFE_BOTTOM
 	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# The home indicator's height is only knowable once there is a window to ask.
+	gap.tree_entered.connect(
+		func() -> void: gap.custom_minimum_size.y = dock_reserve(gap.get_window())
+	)
 	return gap
 
 
@@ -268,15 +359,22 @@ static func slider(
 	return line
 
 
-## The one file picker every launcher dialog is built from.
+## The one file picker every launcher dialog is built from. Any new file-picking
+## UI goes through here rather than building its own [FileDialog].
 ##
 ## `use_native_dialog` is asked for unconditionally rather than gated on
 ## `FEATURE_NATIVE_DIALOG_FILE`: [FileDialog] already makes that exact test
 ## before it goes native and falls back to its own window when the platform says
 ## no, so a second gate here can only refuse a picker the platform would have
-## given us. That is what left iOS on the built-in browser, which lists paths
-## `FileAccess.open()` then refuses on every sandboxed platform. Any new
-## file-picking UI goes through here rather than building its own [FileDialog].
+## given us. Android answers it and hands over the system picker, which grants
+## the one file chosen and is why the app declares no storage permission.
+##
+## iOS answers no: `DisplayServerIOS` implements no `file_dialog_show` at the
+## engine pin, so there is no system picker to open and the built-in browser is
+## what appears. Browsing the whole filesystem there lists paths
+## `FileAccess.open()` then refuses, so the browser is rooted at the app's own
+## Documents instead, which is the one place a sandboxed app may read and which
+## `UIFileSharingEnabled` lets the Files app put a cartridge into.
 static func file_picker(
 	theme: Gen2LauncherTheme,
 	title_text: String,
@@ -285,9 +383,18 @@ static func file_picker(
 ) -> FileDialog:
 	var dialog := FileDialog.new()
 	dialog.file_mode = mode
-	dialog.access = FileDialog.ACCESS_FILESYSTEM
+	var native: bool = DisplayServer.has_feature(DisplayServer.FEATURE_NATIVE_DIALOG_FILE)
+	dialog.access = (
+		FileDialog.ACCESS_FILESYSTEM
+		if native or not OS.has_feature("mobile")
+		else FileDialog.ACCESS_USERDATA
+	)
 	dialog.filters = filters
 	dialog.title = title_text
+	if dialog.access == FileDialog.ACCESS_USERDATA:
+		# The browser gives no room to explain itself, and a player looking at an
+		# empty folder needs to be told which folder it is.
+		dialog.title = "%s (this app's Documents folder)" % title_text
 	dialog.use_native_dialog = true
 	dialog.theme = theme.control_theme()
 	return dialog
