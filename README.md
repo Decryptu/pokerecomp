@@ -204,6 +204,21 @@ them runs: no scripts, no walking, no wild encounters, no collision. Only the ma
 you are on is live, exactly as on the cartridge, where a connected map is three
 blocks of scenery copied into the buffer and nothing more.
 
+### Game speed, window and frame rate
+
+Settings > Application carries three more that reach the engine:
+
+| Setting | What it does |
+|---|---|
+| Game speed | Normal, double or half. Everything counted in hardware frames runs at that multiple: walking, animations, text, battle |
+| Window | Windowed, fullscreen or borderless |
+| Frame rate | 30, 60, 120, 144 or uncapped |
+
+**Sound is deliberately outside game speed.** The driver is fed by the audio
+output's own demand rather than by a game frame, so music, effects and cries keep
+the cartridge's tempo and pitch at every setting; only how often the game asks
+for one changes.
+
 Development shortcuts are debug-build only, along with the map and cell readout:
 
 | Scene | Keys |

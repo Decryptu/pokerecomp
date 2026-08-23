@@ -68,7 +68,10 @@ func test_text_speed_is_a_per_character_frame_count() -> void:
 			0.001
 		)
 	options.text_speed = 2
-	assert_almost_eq(options.text_reveal_speed(), 12.0, 0.001, "slow is five frames")
+	assert_almost_eq(
+		options.text_reveal_speed(), 59.7275 / 5.0, 0.001,
+		"slow is five of the hardware's own VBlanks, not five sixtieths of a second",
+	)
 
 
 ## `.fast`: the branch taken when wTextboxFlags' FAST_TEXT_DELAY bit is clear
@@ -124,6 +127,22 @@ func test_every_cartridge_field_survives_a_byte_round_trip() -> void:
 	assert_false(restored.menu_account)
 	assert_eq(restored.textbox_frame, 6)
 	assert_false(restored.fast_text_delay)
+
+
+## Every row of GAME SPEED has a multiplier, and a damaged file's unlisted row
+## plays at the cartridge's own rate rather than stopping the game or racing it.
+func test_every_game_speed_has_a_multiplier_and_an_unknown_one_is_normal() -> void:
+	var options := Gen2Options.new()
+	assert_eq(Gen2Options.GAME_SPEED_SCALES.size(), Gen2Options.GAME_SPEEDS.size())
+	for index: int in Gen2Options.GAME_SPEEDS.size():
+		options.game_speed = Gen2Options.GAME_SPEEDS[index]
+		assert_almost_eq(
+			options.speed_scale(), Gen2Options.GAME_SPEED_SCALES[index], 0.001,
+			String(options.game_speed),
+		)
+	assert_almost_eq(Gen2Options.new().speed_scale(), 1.0, 0.001, "the default")
+	options.game_speed = &"warp"
+	assert_almost_eq(options.speed_scale(), 1.0, 0.001, "an unlisted row")
 
 
 func test_out_of_range_values_are_clamped_rather_than_refused() -> void:

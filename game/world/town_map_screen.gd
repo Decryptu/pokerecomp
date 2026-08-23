@@ -93,8 +93,8 @@ var _nests: Array = []
 var _oam: StringName = OAM_NESTS
 var _select_held: bool = false
 var _nest_icons: Array[TextureRect] = []
-## Leftover of a hardware frame this screen has not counted yet.
-var _elapsed: float = 0.0
+## This screen's hardware-frame clock.
+var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 
 
 func _ready() -> void:
@@ -369,10 +369,9 @@ func current_nests() -> Array:
 
 func _process(delta: float) -> void:
 	if not _open:
+		_frame_clock.reset()
 		return
-	_elapsed += delta
-	while _elapsed >= Gen2WorldAnimation.FRAME_SECONDS:
-		_elapsed -= Gen2WorldAnimation.FRAME_SECONDS
+	for _frame: int in _frame_clock.tick(delta):
 		advance_frame()
 
 

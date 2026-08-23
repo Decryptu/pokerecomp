@@ -8,10 +8,8 @@ extends RefCounted
 ## A palette step is a DMG palette byte, not a rotation: `CopyPals` reads it two
 ## bits at a time and writes the loaded colour each pair names, so a fade is an
 ## index remap of the palette already loaded ([method apply_bgp]). Every count is
-## a `DelayFrames` operand, so a screen stepping this at [constant FRAME_RATE]
-## spends the frames the cartridge spends.
-
-const FRAME_RATE: float = 59.7275
+## a `DelayFrames` operand, so a screen stepping this on
+## [Gen2WorldAnimation.FrameClock] spends the frames the cartridge spends.
 
 ## A step that writes no palette byte, or that does not move the pic.
 const KEEP: int = -1

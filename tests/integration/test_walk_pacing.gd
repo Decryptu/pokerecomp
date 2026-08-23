@@ -181,7 +181,7 @@ func _screen_at(start: Vector2i) -> Gen2WorldScreen:
 	add_child(screen)
 	await get_tree().process_frame
 	screen.set_process(false)
-	screen._frame_elapsed = 0.0
+	screen._frame_clock.reset()
 	return screen
 
 

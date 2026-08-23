@@ -11,6 +11,9 @@ var _player: Gen2AudioPlayer = null
 func before_each() -> void:
 	_player = Player.new()
 	add_child_autofree(_player)
+	# Every case here services the timeline by hand and counts what it cost, so
+	# the node's own pump must not have spent a frame first.
+	_player.set_process(false)
 
 
 ## One looping channel stream, so a started track stays started.
@@ -111,14 +114,80 @@ func test_an_effect_is_playing_until_its_stream_ends() -> void:
 	assert_false(_player.effect_playing())
 
 
-func test_generator_refill_pushes_audio_within_its_output_capacity() -> void:
+## The queue is kept a fixed few frames ahead of the output rather than full, so
+## the rest of the generator's depth is headroom instead of press-to-sound delay.
+func test_the_queue_is_kept_to_its_latency_target_not_to_the_brim() -> void:
 	assert_true(_player.play_record(_record(99), &"map_music")["ok"])
 	_player._service_timeline()
-	var available: int = _player._playback.get_frames_available()
-	var capacity: int = ceili(float(_player._generator.mix_rate) * _player._generator.buffer_length)
-	assert_gt(available, 0)
-	assert_lt(available, capacity)
-	assert_lt(available, Gen2Apu.SAMPLES_PER_FRAME, "the buffer is filled a frame at a time")
+	var capacity: int = _player._capacity
+	var pending: int = capacity - _player._playback.get_frames_available()
+	assert_gt(capacity, 0, "the depth was learned from the stream")
+	assert_eq(
+		_player._timeline_updates, Gen2AudioPlayer.TARGET_FRAMES_MIN,
+		"one driver frame per queued frame and no more",
+	)
+	assert_almost_eq(
+		float(pending),
+		float(Gen2AudioPlayer.TARGET_FRAMES_MIN * Gen2Apu.SAMPLES_PER_FRAME),
+		float(Gen2Apu.SAMPLES_PER_FRAME),
+	)
+	assert_lt(pending, capacity, "the rest of the depth is left as headroom")
+
+	# A second service with nothing consumed adds nothing: the target is a level,
+	# not a rate.
+	_player._service_timeline()
+	assert_eq(_player._timeline_updates, Gen2AudioPlayer.TARGET_FRAMES_MIN)
+
+
+## A device that cannot hold the target says so by running the queue dry, and the
+## target rises for it rather than being chosen per platform by ear.
+func test_an_underrun_raises_the_target_instead_of_needing_a_build_per_target() -> void:
+	assert_true(_player.play_record(_record(99), &"map_music")["ok"])
+	_player._service_timeline()
+	var target: int = _player._target_frames
+	# An empty queue under a depth that is already known, which is what the audio
+	# server leaves behind when it consumed everything and asked for more.
+	_player._player.stop()
+	_player._player.play()
+	_player._playback = _player._player.get_stream_playback() as AudioStreamGeneratorPlayback
+	_player._service_timeline()
+	assert_eq(_player._target_frames, target + 1)
+	assert_eq(int(_player.audio_status()["underruns"]), 1)
+
+
+## An output that takes nothing while the driver has sound for it is a session
+## that went away, whatever `AudioStreamPlayer.playing` says. Every platform can
+## reach some version of it and only some announce one.
+func test_a_dead_output_is_rebuilt_rather_than_pushed_into_forever() -> void:
+	assert_true(_player.play_record(_record(99), &"map_music")["ok"])
+	_player._service_timeline()
+	var first: AudioStreamPlayer = _player._player
+	# The queue is at its target and nothing is consuming it, which is what a
+	# torn-down session looks like from here.
+	for _tick: int in 8:
+		_player._service_timeline(Gen2AudioPlayer.STALL_SECONDS * 0.25)
+	assert_eq(int(_player.audio_status()["output_restarts"]), 1)
+	assert_ne(_player._player, first, "the stream player is a new one")
+	assert_true(_player._player.playing)
+	assert_true(_player.audio_status()["music_active"], "the driver kept the piece")
+
+
+## A resume does not cut a live output: an alt-tab is a FOCUS_IN too. It shortens
+## the watchdog's window, so an output that is still there proves it at once.
+func test_a_resume_shortens_the_watchdog_rather_than_rebuilding_outright() -> void:
+	assert_true(_player.play_record(_record(99), &"map_music")["ok"])
+	_player._service_timeline()
+	_player._notification(Node.NOTIFICATION_APPLICATION_RESUMED)
+	assert_eq(int(_player.audio_status()["output_restarts"]), 0, "nothing was cut")
+	assert_almost_eq(
+		_player._starved_seconds,
+		Gen2AudioPlayer.STALL_SECONDS - Gen2AudioPlayer.RESUME_GRACE_SECONDS,
+		0.001,
+	)
+
+	# An output that is really gone is replaced a tenth of a second later.
+	_player._service_timeline(Gen2AudioPlayer.RESUME_GRACE_SECONDS)
+	assert_eq(int(_player.audio_status()["output_restarts"]), 1)
 
 
 func test_a_fade_walks_the_master_volume_down_and_then_stops() -> void:

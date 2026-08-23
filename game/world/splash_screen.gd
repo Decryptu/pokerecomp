@@ -23,8 +23,6 @@ extends Control
 ## Emitted once the last phase this host can draw has finished.
 signal closed()
 
-const FRAME_RATE: float = Gen2BootCinema.FRAME_RATE
-
 var _cinema: Gen2BootCinema = null
 var _data: GameData = null
 var _page: Gen2CopyrightPage = null
@@ -39,7 +37,7 @@ var _background: TextureRect = null
 var _audio: Gen2AudioPlayer = null
 var _image: Image = null
 var _visible_id: StringName = &""
-var _accumulator: float = 0.0
+var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 var _closed: bool = false
 ## The last `PlayMusic` handed to the driver, which is the only place the
 ## opening's own music can be observed from outside.
@@ -89,10 +87,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	_accumulator += delta * FRAME_RATE
-	var frames: int = int(_accumulator)
-	_accumulator -= float(frames)
-	advance_frames(frames)
+	advance_frames(_frame_clock.tick(delta))
 
 
 ## Runs [param count] source frames. Public so a test or a preview tool can

@@ -227,12 +227,12 @@ var _held_message: String = ""
 ## that the run of frames it just finished owes a press rather than the next
 ## command; see [method _resume_after_frames].
 var _message_awaits_press: bool = false
-## Leftover of a hardware frame the bars and the intro have not counted yet.
-var _frame_elapsed: float = 0.0
+## The bars' and the intro's clock: see [method _process].
+var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 ## The same, for the party page's icons. Kept apart because they animate while
 ## nothing else does, and [method frames_running] must stay false there: a
 ## caller draining frames to a terminal state would never reach one.
-var _icon_elapsed: float = 0.0
+var _icon_clock := Gen2WorldAnimation.FrameClock.new()
 ## What the overworld clock said when the battle started, for the three heals
 ## that read it. Only the world path supplies one; the development drivers below
 ## leave [Gen2Battle] at its own midday default.
@@ -392,16 +392,9 @@ func _process(delta: float) -> void:
 	## that answer would never stop.
 	var running: bool = frames_running()
 	if not running and (_box == null or not _box.visible):
-		_frame_elapsed = 0.0
+		_frame_clock.reset()
 		return
-	## Capped the way [method Gen2WorldScreen._process] caps it: a stall should
-	## drop animation frames, not run a second of them in one host frame.
-	_frame_elapsed = minf(
-		_frame_elapsed + delta,
-		Gen2WorldAnimation.FRAME_SECONDS * float(Gen2WorldAnimation.MAX_CATCHUP_FRAMES),
-	)
-	while _frame_elapsed >= Gen2WorldAnimation.FRAME_SECONDS:
-		_frame_elapsed -= Gen2WorldAnimation.FRAME_SECONDS
+	for _frame: int in _frame_clock.tick(delta):
 		if frames_running():
 			advance_frame()
 		elif _box != null:
@@ -3250,7 +3243,7 @@ func _open_switch_pick(reason: StringName) -> void:
 	## list opens on the first frame of their animation rather than resuming.
 	if _party_page != null:
 		_party_page.reset(_switch_menu.rows)
-	_icon_elapsed = 0.0
+	_icon_clock.reset()
 	## The party menu is the whole screen rather than a box on it, so the battle's
 	## own box goes with the field it belongs to.
 	if _box != null:
@@ -3625,18 +3618,12 @@ func _draw_move_info(row: Dictionary) -> void:
 
 
 ## `PlaySpriteAnimations` over the party page's icons, on the hardware clock the
-## bars use. Capped the same way, so a stall drops passes rather than running a
-## second of them at once.
+## bars use.
 func _advance_party_icons(delta: float) -> void:
 	if _party_page == null or _switch_menu == null or _switch_stage not in [&"pick", &"refused"]:
-		_icon_elapsed = 0.0
+		_icon_clock.reset()
 		return
-	_icon_elapsed = minf(
-		_icon_elapsed + delta,
-		Gen2WorldAnimation.FRAME_SECONDS * float(Gen2WorldAnimation.MAX_CATCHUP_FRAMES),
-	)
-	while _icon_elapsed >= Gen2WorldAnimation.FRAME_SECONDS:
-		_icon_elapsed -= Gen2WorldAnimation.FRAME_SECONDS
+	for _frame: int in _icon_clock.tick(delta):
 		advance_party_icons()
 
 

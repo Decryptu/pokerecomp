@@ -55,8 +55,8 @@ var _page: int = Gen2TrainerCard.PAGE_1
 var _frames: int = 0
 var _background: TextureRect = null
 var _badges: Array = []
-## Leftover of a hardware frame this screen has not counted yet.
-var _elapsed: float = 0.0
+## This screen's hardware-frame clock.
+var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 
 
 ## Optional the way the other overlays are: without a save there is no card, so
@@ -115,9 +115,7 @@ func advance_frame() -> void:
 
 
 func _process(delta: float) -> void:
-	_elapsed += delta
-	while _elapsed >= Gen2WorldAnimation.FRAME_SECONDS:
-		_elapsed -= Gen2WorldAnimation.FRAME_SECONDS
+	for _frame: int in _frame_clock.tick(delta):
 		advance_frame()
 
 

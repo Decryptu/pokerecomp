@@ -149,7 +149,8 @@ var _menu_page: Gen2MenuPage = null
 ## A refusal standing in the menu's own bottom box, which the next A or B
 ## clears. See [constant MESSAGE_NOT_ENOUGH_HP].
 var _message: String = ""
-var _elapsed: float = 0.0
+## This screen's hardware-frame clock.
+var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 ## `OpenPartyStats`' own screen, standing over the whole party menu while it is
 ## up, and the page that draws it.
 var _stats: Gen2MonStatsScreen = null
@@ -692,11 +693,7 @@ func _build_hardware_ui() -> void:
 func _process(delta: float) -> void:
 	if _view == null or _page == null:
 		return
-	_elapsed += delta
-	var frames: int = 0
-	while _elapsed >= Gen2WorldAnimation.FRAME_SECONDS:
-		_elapsed -= Gen2WorldAnimation.FRAME_SECONDS
-		frames += 1
+	var frames: int = _frame_clock.tick(delta)
 	if frames == 0 or _submenu_open or _item_menu_open or _stats != null:
 		return
 	if _moves != null:

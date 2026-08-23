@@ -47,7 +47,7 @@ var _viewport: Gen2Screen = null
 ## the screen that hosts both is the one that can spend those frames.
 var _presentation := Gen2IntroPresentation.new()
 var _after: Callable = Callable()
-var _accumulator: float = 0.0
+var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 var _fading: bool = false
 
 
@@ -83,10 +83,7 @@ func _ready() -> void:
 ## Sub-screens that own frames of their own are driven from here, so the whole
 ## intro runs on one clock.
 func _process(delta: float) -> void:
-	_accumulator += delta * Gen2IntroPresentation.FRAME_RATE
-	var frames: int = int(_accumulator)
-	_accumulator -= float(frames)
-	advance_frames(frames)
+	advance_frames(_frame_clock.tick(delta))
 
 
 ## Spends [param count] source frames: the fade this screen is standing in, or
@@ -225,7 +222,7 @@ func _on_gender_chosen(chosen: int) -> void:
 	_presentation.push_delay(GENDER_TAIL_FRAMES + CLOCK_HEAD_FRAMES)
 	_presentation.push_rotate_four_left()
 	_fading = true
-	_accumulator = 0.0
+	_frame_clock.reset()
 	_after = _drop_gender_screen
 	_presentation.sync()
 	_apply_fade()

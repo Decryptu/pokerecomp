@@ -193,7 +193,7 @@ var _save_lines: Array = []
 var _save_line: int = 0
 var _save_cursor: int = -1
 var _save_frames: int = 0
-var _save_elapsed: float = 0.0
+var _save_clock := Gen2WorldAnimation.FrameClock.new()
 var _save_result: Dictionary = {}
 
 var _options_menu: Gen2WorldOptionsMenu = null
@@ -216,8 +216,8 @@ var _page: Gen2StartMenuPage = null
 ## `LoadPartyMenuGFX`: the target list is the party menu, so it is drawn by the
 ## page that draws the party menu everywhere else.
 var _target_page: Gen2PartyMenuPage = null
-## Leftover of a hardware frame the target list's icons have not counted yet.
-var _target_elapsed: float = 0.0
+## The target list's icon clock.
+var _target_clock := Gen2WorldAnimation.FrameClock.new()
 ## The panel's own two roots, hidden whenever a cartridge screen is up.
 
 
@@ -1388,7 +1388,7 @@ func _open_target_mode() -> void:
 	## is opened, which is what puts the icons on the page at all.
 	if _party_menu_page() != null:
 		_target_page.reset(_party_targets())
-	_target_elapsed = 0.0
+	_target_clock.reset()
 	_render_targets()
 	## `InitPartyMenuGFX` opens every struct on frame -1, so the icons are blank
 	## until `DoNextFrameForAllSprites` has run once; the list is drawn after
@@ -1731,22 +1731,14 @@ func advance_save_frames(count: int) -> void:
 
 func _process(delta: float) -> void:
 	if _mode == Mode.PACK_TARGET:
-		## Capped the way every other hardware-frame pump here caps it: a stall
-		## drops icon passes rather than running a second of them at once.
-		_target_elapsed = minf(
-			_target_elapsed + delta,
-			Gen2WorldAnimation.FRAME_SECONDS * float(Gen2WorldAnimation.MAX_CATCHUP_FRAMES),
-		)
-		while _target_elapsed >= Gen2WorldAnimation.FRAME_SECONDS:
-			_target_elapsed -= Gen2WorldAnimation.FRAME_SECONDS
+		for _frame: int in _target_clock.tick(delta):
 			advance_target_icons()
 		return
-	_target_elapsed = 0.0
+	_target_clock.reset()
 	if _mode != Mode.SAVE_SAVING and _mode != Mode.SAVE_SAVED:
+		_save_clock.reset()
 		return
-	_save_elapsed += delta
-	while _save_elapsed >= Gen2WorldAnimation.FRAME_SECONDS:
-		_save_elapsed -= Gen2WorldAnimation.FRAME_SECONDS
+	for _frame: int in _save_clock.tick(delta):
 		advance_save_frame()
 
 

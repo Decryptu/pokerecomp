@@ -49,7 +49,7 @@ var _view: TextureRect = null
 var _text_box: Gen2TextBox = null
 var _presentation := Gen2IntroPresentation.new()
 var _after: Callable = Callable()
-var _accumulator: float = 0.0
+var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 var _phase: int = Phase.WOKE_UP
 var _hour: int = 10
 var _minute: int = 0
@@ -94,10 +94,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if _text_box != null:
 		_text_box.accelerated = Gen2Button.text_accelerating()
-	_accumulator += delta * Gen2IntroPresentation.FRAME_RATE
-	var frames: int = int(_accumulator)
-	_accumulator -= float(frames)
-	advance_frames(frames)
+	advance_frames(_frame_clock.tick(delta))
 
 
 ## Runs [param count] source frames of whatever the screen is standing in.
@@ -279,7 +276,7 @@ func _hold(frames: int) -> void:
 func _queue(after: Callable) -> void:
 	_after = after
 	_waiting = true
-	_accumulator = 0.0
+	_frame_clock.reset()
 	# The routine writes its first palette before the `DelayFrames` that holds
 	# it, so the frame this is queued on is already in that state.
 	_presentation.sync()

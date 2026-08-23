@@ -8,17 +8,46 @@ extends RefCounted
 ## the indexed tile strip held by GameData.
 
 const TILE_BYTES: int = Gen2Tiles.TILE_BYTES
-## The hardware VBlank, and the project's one definition of it: every overworld
-## timer is counted in these, and [method Gen2WorldScreen.advance_frame] is the
-## single place real time is converted into them.
+## The hardware VBlank, and the project's one definition of it: every timer in
+## the game is counted in these, and [FrameClock] is the single place real time
+## is converted into them.
 const FRAME_SECONDS: float = 1.0 / 59.7275
 ## The most catch-up frames one host frame will run. A stall should drop frames,
 ## not spend the recovery frame walking thousands of commands.
 const MAX_CATCHUP_FRAMES: int = 4
+
 const TIMER_WATER_FRAMES: Array = [0, 1, 2, 3]
 const TIMER_FOUNTAIN_FRAMES: Array = [0, 1, 2, 3, 2, 3, 4, 0]
 const TIMER_TOWER_FRAMES: Array = [0, 1, 2, 3, 4, 3, 2, 1]
 const TIMER_WATER_PALETTE: Array = [0, 1, 2, 1]
+
+## Real seconds into hardware frames, for every screen that spends them.
+##
+## One instance per pump, and the whole conversion: the remainder is banked here
+## so nothing downstream keeps one, and the cap is applied here so no screen can
+## forget it. The app block's GAME SPEED is applied here and nowhere else, which
+## is what keeps it off the sound driver: [Gen2AudioPlayer] fills its generator
+## from the output's own demand rather than from a game frame, so music, effects
+## and cries keep the cartridge's tempo and pitch at every setting.
+class FrameClock extends RefCounted:
+	var _elapsed: float = 0.0
+
+	## Hardware frames owed since the last call. The scale is read every call
+	## because the settings object is shared and edited in place.
+	func tick(delta: float) -> int:
+		_elapsed = minf(
+			_elapsed + delta * Gen2OptionsStore.current().speed_scale(),
+			FRAME_SECONDS * float(MAX_CATCHUP_FRAMES),
+		)
+		var frames: int = int(_elapsed / FRAME_SECONDS)
+		_elapsed -= float(frames) * FRAME_SECONDS
+		return frames
+
+	## Drops the banked remainder, for a pump that was not running: a screen that
+	## comes back owes frames from now rather than from when it stopped.
+	func reset() -> void:
+		_elapsed = 0.0
+
 
 var data: GameData = null
 var map: Gen2WorldMap = null
