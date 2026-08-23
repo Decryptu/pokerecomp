@@ -17,8 +17,11 @@ extends RefCounted
 ## screen that can draw one intercepts the request in front of this list
 ## (`Gen2WorldScreen._open_gift_nickname`) and a driver that cannot settles it
 ## here with the species name, which is what NO answers.
+## `contest_mon_requested` is `CheckPartyFullAfterContest`, which reaches the
+## same routine one caller further on and is intercepted the same way.
 const UNATTENDED_REQUESTS: Array[StringName] = [
 	&"party_heal_requested", &"pokemon_requested", &"trade_requested",
+	&"contest_mon_requested",
 ]
 
 
@@ -35,7 +38,7 @@ static func complete_runtime_request(
 	if request.is_empty():
 		return _unavailable(&"runtime_request_not_pending", {})
 	var kind: StringName = StringName(request.get("kind", &""))
-	if kind in [&"pokemon_requested", &"trade_requested"]:
+	if kind in [&"pokemon_requested", &"trade_requested", &"contest_mon_requested"]:
 		return Gen2WorldPartyHost.complete_runtime_request(
 			world, result, save, persist, random
 		)

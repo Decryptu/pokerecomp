@@ -263,6 +263,15 @@ var _capture_waiting: bool = false
 var _capture_messages: Array[String] = []
 var _capture_terminal: bool = false
 var _capture_result: Dictionary = {}
+## `PokeBallEffect`'s own `AskGiveNicknameText`, which stands over the battle
+## because the whole routine runs inside it. Null while nothing is being named.
+var _capture_nickname_host: Gen2NicknamePromptScreen = null
+## `wStringBuffer1` after `InitName`: the species name until the player answers
+## the naming screen with something else.
+var _capture_nickname: String = ""
+## Whether the prompt for the catch now on screen has already been answered, so
+## the pump finishes the capture instead of asking twice.
+var _capture_nickname_asked: bool = false
 
 ## Where a level-up's move offer has got to, following LearnMove and ForgetMove
 ## (engine/pokemon/learn.asm): [code]&"ask"[/code] is AskForgetMoveText's yes/no,
@@ -706,6 +715,11 @@ func advance_hardware_frame() -> bool:
 	## complete the page forever and never acknowledge it.
 	if _box != null:
 		_box.advance_frame()
+	## The prompt draws its own box, and its `YesNoBox` does not appear until
+	## that box owes nothing, so it is spent a frame at a time like this one.
+	if _capture_nickname_host != null:
+		_capture_nickname_host.advance_frame()
+		return true
 	if _switch_stage in [&"pick", &"refused"]:
 		moved = advance_party_icons()
 		_refresh_menu_layer()
@@ -2418,12 +2432,72 @@ func _capture_failure(reason: StringName) -> Dictionary:
 	return {"ok": false, "reason": reason}
 
 
+## `AskGiveNicknameText`, `YesNoBox` and `NamingScreen`, which `PokeBallEffect`
+## runs for a caught Pokemon whether it went to the party or to the box, and
+## which `.catch_bug_contest_mon` and `.FinishTutorial` both jump past.
+##
+## True while the prompt stands, so the pump that called this waits for it.
+func _open_capture_nickname() -> bool:
+	if _capture_nickname_host != null:
+		return true
+	if _capture_nickname_asked or _data == null or _screen == null:
+		return false
+	if not bool(_capture_result.get("caught", false)) \
+		or bool(_capture_result.get("contest", false)):
+		return false
+	var species_name: String = _name_of(_enemy)
+	if species_name.is_empty():
+		return false
+	_capture_nickname_asked = true
+	_capture_nickname = species_name
+	var host := Gen2NicknamePromptScreen.new()
+	## `.SendToPC` prints `BallSentToPCText` behind the naming and the party
+	## branch prints nothing, which is the one difference between the two.
+	var destination: Dictionary = _capture_result.get("destination", {})
+	host.set_context(
+		_data, species_name,
+		Gen2WorldPartyHost.SENT_TO_BOX_FORMAT \
+			if StringName(destination.get("destination", &"")) == &"box" else "",
+		Gen2WorldPartyHost.capture_nickname_question(species_name)
+	)
+	host.named.connect(_on_capture_named)
+	host.closed.connect(_on_capture_nickname_closed)
+	host.z_index = 30
+	_capture_nickname_host = host
+	_screen.display(host)
+	if _capture_nickname_host == null:
+		return false
+	## The battle's own box is what the prompt stands over, and it is left where
+	## `Text_GotchaMonWasCaught` put it: `ClearSprites` takes the sprites down,
+	## not the box.
+	return true
+
+
+func _on_capture_named(nickname: String) -> void:
+	_capture_nickname = nickname
+
+
+func _on_capture_nickname_closed() -> void:
+	_close_capture_nickname()
+	_continue_after_messages()
+
+
+func _close_capture_nickname() -> void:
+	var host: Gen2NicknamePromptScreen = _capture_nickname_host
+	_capture_nickname_host = null
+	if host != null:
+		Gen2Screen.drop(host)
+
+
 func _clear_capture_action() -> void:
 	_capture_selecting = false
 	_capture_waiting = false
 	_capture_messages.clear()
 	_capture_terminal = false
 	_capture_result.clear()
+	_close_capture_nickname()
+	_capture_nickname = ""
+	_capture_nickname_asked = false
 
 
 func _reset_capture_state() -> void:
@@ -2773,6 +2847,10 @@ func advance() -> void:
 func _continue_after_messages() -> void:
 	if _box == null:
 		return
+	## `PokeBallEffect` does not return until the naming is over, so nothing
+	## behind it runs while the prompt is up.
+	if _capture_nickname_host != null:
+		return
 	## The same waits [method _resume_after_frames] respects: a box still up, a
 	## line held behind a bar, or frames nobody has spent yet.
 	if _intro != null or bars_animating() or fainting() or animation_running():
@@ -2814,7 +2892,13 @@ func _continue_after_messages() -> void:
 		if bool(_capture_result.get("replace_offer", false)) and _switch_stage == &"":
 			_open_yes_no(&"contest_replace", CONTEST_REPLACE_TEXT)
 			return
+		## `.skip_pokedex` reaches `.catch_bug_contest_mon` before either
+		## `AskGiveNicknameText`, so a contest catch is never named.
+		if _open_capture_nickname():
+			return
 		var capture: Dictionary = _capture_result.duplicate(true)
+		if not _capture_nickname.is_empty():
+			capture["nickname"] = _capture_nickname
 		_clear_capture_action()
 		_finish_world_capture(capture)
 		return
@@ -4321,6 +4405,9 @@ func _renderer_input_free() -> bool:
 
 
 func _handle_button(button: int) -> bool:
+	if _capture_nickname_host != null:
+		return _capture_nickname_host.handle_button(button)
+
 	if _forget_stage != &"":
 		_answer_forget(button)
 		return true

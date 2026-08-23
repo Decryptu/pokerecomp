@@ -1715,8 +1715,43 @@ func _open_gift_nickname(request: Dictionary) -> bool:
 	var host := Gen2NicknamePromptScreen.new()
 	host.set_context(
 		_data, species_name,
-		Gen2WorldPartyHost.sent_to_box_text(species_name) if destination == &"box" else ""
+		Gen2WorldPartyHost.SENT_TO_BOX_FORMAT if destination == &"box" else ""
 	)
+	_nickname_answer = species_name
+	host.named.connect(_on_gift_named)
+	host.closed.connect(_on_gift_nickname_closed)
+	host.z_index = 30
+	_nickname_host = host
+	_screen.display(host)
+	if _nickname_host == null:
+		return false
+	_script_prompt = "Nickname"
+	_refresh_labels()
+	return true
+
+
+## `CheckPartyFullAfterContest`'s own `GiveANickname_YesNo`, which is the same
+## question the gift path asks and reaches no "sent to BILL's PC" line: the box
+## branch prints nothing and the script's `ContestResults_PartyFullText` is what
+## BUGCONTEST_BOXED_MON reaches instead.
+##
+## False when the routine reaches no prompt: nothing was caught, and `.BoxFull`,
+## which writes nothing and answers BUGCONTEST_BOXED_MON where it stands.
+func _open_contest_nickname() -> bool:
+	if _nickname_host != null or _world == null or _data == null or _world.state == null:
+		return false
+	var caught: Dictionary = _world.state.contest_mon()
+	var species_name: String = String(
+		_data.species(int(caught.get("species", 0))).get("name", "")
+	)
+	if species_name.is_empty():
+		return false
+	var save: Gen2SaveData = _injected_save if _injected_save != null \
+		else _selected_runtime_save()
+	if Gen2WorldPartyHost.gift_destination(save) == &"full":
+		return false
+	var host := Gen2NicknamePromptScreen.new()
+	host.set_context(_data, species_name)
 	_nickname_answer = species_name
 	host.named.connect(_on_gift_named)
 	host.closed.connect(_on_gift_nickname_closed)
@@ -3271,7 +3306,7 @@ func preview_gift_nickname(species: int = 0, boxed: bool = false) -> void:
 	var host := Gen2NicknamePromptScreen.new()
 	host.set_context(
 		_data, species_name,
-		Gen2WorldPartyHost.sent_to_box_text(species_name) if boxed else ""
+		Gen2WorldPartyHost.SENT_TO_BOX_FORMAT if boxed else ""
 	)
 	_nickname_answer = species_name
 	_nickname_preview = true
@@ -3627,19 +3662,71 @@ func preview_capture() -> void:
 	call_deferred("_preview_capture_throw")
 
 
+## Retried on the next idle frame rather than inside this one: a `call_deferred`
+## made while the queue is flushing is appended to the flush that is running, so
+## a self-deferring retry never lets a frame pass and fills the queue instead.
 func _preview_capture_throw() -> void:
-	if _battle_host == null or _battle_host.capture_target() == null:
-		call_deferred("_preview_capture_throw")
+	if _preview_throw_master_ball():
 		return
+	if _battle_host != null:
+		get_tree().process_frame.connect(
+			_preview_capture_throw, CONNECT_ONE_SHOT | CONNECT_DEFERRED
+		)
+
+
+## True once the throw has been made. False while the battle has no live wild
+## target yet, which is the caller's cue to spend a frame and ask again.
+func _preview_throw_master_ball() -> bool:
+	if _battle_host == null or _battle_host.capture_target() == null:
+		return false
 	var balls: Array[int] = _battle_host.available_capture_balls()
 	var master_index: int = balls.find(Gen2WorldPartyHost.ITEM_MASTER_BALL)
 	if master_index < 0:
-		return
+		return true
 	if not bool(_battle_host.begin_capture().get("ok", false)):
-		return
+		return true
 	_battle_host.select_capture_ball(master_index)
 	_battle_host.throw_capture_ball()
 	_battle_host.finish()
+	return true
+
+
+## Public screenshot driver for `PokeBallEffect`'s own `AskGiveNicknameText`,
+## which stands over the battle rather than over the map: [method
+## preview_capture]'s throw, driven past `Text_GotchaMonWasCaught` to the
+## question. Answers whether the prompt is up.
+func preview_catch_nickname() -> bool:
+	preview_capture()
+	## `DoBattleTransition` stands between the request and the fight, and the
+	## throw needs the fight: the `battle` preview settles it the same way.
+	settle_battle_transition()
+	for _frame: int in CATCH_NICKNAME_FRAMES:
+		if _battle_host == null:
+			return false
+		if _preview_throw_master_ball():
+			break
+		_battle_host.advance_hardware_frame()
+	## `BattleIntroSlidingPics`, the throw line and up to four shakes, each of
+	## them a box that owes frames before the press that clears it.
+	for _frame: int in CATCH_NICKNAME_FRAMES:
+		if _battle_host == null:
+			return false
+		var prompt: Gen2NicknamePromptScreen = _battle_host.get("_capture_nickname_host")
+		if prompt != null:
+			if prompt.question_ready():
+				_script_prompt = "Nickname"
+				_refresh_labels()
+				return true
+		else:
+			_battle_host.finish()
+			_battle_host.advance()
+		_battle_host.advance_hardware_frame()
+	return false
+
+
+## Enough for the battle's own opening, the throw and the shakes, each of which
+## is a box printing at the OPTION screen's own speed.
+const CATCH_NICKNAME_FRAMES: int = 1200
 
 
 ## Public screenshot driver for a resolved imported wild encounter. It uses the
@@ -4028,6 +4115,23 @@ func _on_capture_requested(ball: int) -> void:
 
 ## `UseDisposableItem` inside a battle: the effect has already landed on the
 ## party the battle owns, so all the world does is take the row down by one.
+## `InitNickname` behind `PokeBallEffect`'s own `YesNoBox`. The battle screen
+## owns the question and the keyboard, because the routine runs inside the
+## fight; the row it names is on the save this screen handed the catch.
+func _apply_capture_nickname(capture: Dictionary) -> void:
+	var nickname: String = String(capture.get("nickname", ""))
+	if nickname.is_empty() or _world == null:
+		return
+	var save: Gen2SaveData = _active_battle_save
+	if save == null:
+		return
+	var named: Dictionary = Gen2WorldPartyHost.name_captured_mon(
+		_world, save, capture.get("destination", {}), nickname, _active_battle_persist
+	)
+	if not bool(named.get("ok", false)):
+		_script_prompt = "Nickname refused: %s" % String(named.get("reason", "unknown"))
+
+
 func _on_battle_item_used(item: int, _target: int) -> void:
 	if _world == null or _world.inventory == null:
 		return
@@ -4117,6 +4221,7 @@ func _finish_battle_exit(result: Dictionary, fought_save: Gen2SaveData) -> void:
 					_world.state.park_balls(),
 				]
 			else:
+				_apply_capture_nickname(capture)
 				var species: Dictionary = _data.species(int(capture.get("species", 0)))
 				_script_prompt = "Caught %s" % String(species.get("name", "UNKNOWN"))
 		else:
@@ -5671,6 +5776,9 @@ func _show_script_results(results: Array) -> void:
 					return
 				if StringName(request.get("kind", &"")) == &"pokemon_requested" \
 					and _open_gift_nickname(request):
+					break
+				if StringName(request.get("kind", &"")) == &"contest_mon_requested" \
+					and _open_contest_nickname():
 					break
 				if StringName(request.get("kind", &"")) in \
 					Gen2WorldHost.UNATTENDED_REQUESTS:

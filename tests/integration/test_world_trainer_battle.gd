@@ -571,6 +571,7 @@ func test_master_ball_capture_runs_through_the_real_battle_overlay() -> void:
 	assert_eq(host.battle_snapshot()["message"], caught)
 	host.finish()
 	host.advance()
+	_refuse_capture_nickname(host)
 	await get_tree().process_frame
 	assert_null(_battle_host())
 	assert_eq(_world_screen._world.state.item_quantity(Gen2WorldPartyHost.ITEM_MASTER_BALL), 0)
@@ -945,6 +946,8 @@ func test_a_capture_keeps_the_damage_taken_and_the_pp_spent() -> void:
 	while _battle_child() != null and guard > 0:
 		host.finish()
 		host.advance()
+		if host.get("_capture_nickname_host") != null:
+			_refuse_capture_nickname(host)
 		guard -= 1
 	await get_tree().process_frame
 	assert_null(_battle_child())
@@ -953,6 +956,151 @@ func test_a_capture_keeps_the_damage_taken_and_the_pp_spent() -> void:
 	var after: Gen2SaveMon = save.party[0] as Gen2SaveMon
 	assert_eq(after.hp, starting_hp - 3, "the caught save must carry the damage taken")
 	assert_eq(after.pp[0], starting_pp - 1, "the caught save must carry the PP spent")
+
+
+## `PokeBallEffect`'s own `AskGiveNicknameText`, which is not
+## `GiveANickname_YesNo`'s `_CaughtAskNicknameText`: a caught Pokemon is asked
+## about by name alone. YES reaches `NamingScreen` and `InitName` writes what it
+## stored into the row `TryAddMonToParty` already added.
+func test_a_caught_pokemon_is_named_over_the_battle() -> void:
+	await _open_world(true)
+	var save: Gen2SaveData = _world_screen._injected_save
+	var before: int = save.party.size()
+	assert_true(_world_screen._world.state.apply_changes(
+		{}, {}, {"items": {Gen2WorldPartyHost.ITEM_MASTER_BALL: 1}}
+	)["ok"])
+	var host: Gen2BattleScreen = await _catch_the_wild()
+	var prompt: Gen2NicknamePromptScreen = host.get("_capture_nickname_host")
+	assert_not_null(prompt, "the prompt stands over the battle, not over the map")
+	_settle_capture_nickname_text(host, prompt)
+	assert_eq(prompt.text_lines(), PackedStringArray([
+		"Give a nickname to", "%s?" % _wild_name(),
+	]))
+	assert_eq(prompt.nickname_cursor(), 0, "YesNoBox opens on YES")
+
+	host.press_button(Gen2Button.A)
+	assert_eq(prompt.phase(), Gen2NicknamePromptScreen.Phase.NAMING)
+	var model: Gen2NamingScreen = prompt.naming_screen().model()
+	assert_eq(model.max_length, Gen2NamingScreen.MON_MAX_LENGTH)
+	model.press_a()
+	model.column = Gen2NamingScreen.LAST_COLUMN
+	model.row = model.command_row()
+	host.press_button(Gen2Button.A)
+	await get_tree().process_frame
+
+	assert_null(_battle_host(), "and the fight ends behind it")
+	assert_eq(save.party.size(), before + 1)
+	assert_eq(
+		(save.party[before] as Gen2SaveMon).nickname.length(), 1,
+		"the one letter that was entered"
+	)
+	await get_tree().process_frame
+
+
+## `.skip_nickname` keeps the species name `GetPokemonName` left in
+## `wStringBuffer1`, and B is `YesNoBox`'s own NO.
+func test_no_keeps_the_caught_species_name() -> void:
+	await _open_world(true)
+	var save: Gen2SaveData = _world_screen._injected_save
+	var before: int = save.party.size()
+	assert_true(_world_screen._world.state.apply_changes(
+		{}, {}, {"items": {Gen2WorldPartyHost.ITEM_MASTER_BALL: 1}}
+	)["ok"])
+	var host: Gen2BattleScreen = await _catch_the_wild()
+	_refuse_capture_nickname(host)
+	await get_tree().process_frame
+	assert_null(_battle_host())
+	assert_eq(save.party.size(), before + 1)
+	assert_eq((save.party[before] as Gen2SaveMon).nickname, _wild_name())
+	await get_tree().process_frame
+
+
+## `.SendToPC` prints `BallSentToPCText` behind the naming, and it reads
+## `wMonOrItemNameBuffer`, which `.SkipBoxMonNickname`'s own copy has just filled
+## from `sBoxMonNicknames`: the line names the row, not the species.
+func test_a_boxed_catch_prints_bills_pc_with_the_name_the_keyboard_stored() -> void:
+	await _open_world(true)
+	var save: Gen2SaveData = _world_screen._injected_save
+	while save.party.size() < Gen2SaveData.MAX_PARTY:
+		save.party.append(Gen2SaveMon.from_dict((save.party[0] as Gen2SaveMon).to_dict()))
+	assert_true(_world_screen._world.state.apply_changes(
+		{}, {}, {"items": {Gen2WorldPartyHost.ITEM_MASTER_BALL: 1}}
+	)["ok"])
+	var host: Gen2BattleScreen = await _catch_the_wild()
+	var prompt: Gen2NicknamePromptScreen = host.get("_capture_nickname_host")
+	_settle_capture_nickname_text(host, prompt)
+	host.press_button(Gen2Button.A)
+	var model: Gen2NamingScreen = prompt.naming_screen().model()
+	model.press_a()
+	model.column = Gen2NamingScreen.LAST_COLUMN
+	model.row = model.command_row()
+	host.press_button(Gen2Button.A)
+	assert_eq(prompt.phase(), Gen2NicknamePromptScreen.Phase.AFTER_TEXT)
+	_settle_capture_nickname_text(host, prompt)
+	var entered: String = " ".join(prompt.text_lines()).split(" was")[0]
+	assert_eq(entered.length(), 1, "the one letter that was entered, not the species")
+	assert_eq(
+		" ".join(prompt.text_lines()),
+		Gen2WorldPartyHost.sent_to_box_text(entered).replace("\n", " ")
+	)
+	host.press_button(Gen2Button.A)
+	await get_tree().process_frame
+	assert_null(_battle_host())
+	assert_eq(save.party.size(), Gen2SaveData.MAX_PARTY)
+	assert_eq((save.boxes[0].slots[0] as Gen2SaveMon).nickname, entered)
+	await get_tree().process_frame
+
+
+## A wild encounter, a Master Ball and the "Gotcha!" line pressed past, which is
+## where `AskGiveNicknameText` stands.
+func _catch_the_wild() -> Gen2BattleScreen:
+	_world_screen.preview_wild_encounter()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var host: Gen2BattleScreen = _battle_host()
+	assert_not_null(host)
+	assert_true(host.begin_capture()["ok"])
+	assert_true(host.select_capture_ball(
+		host.available_capture_balls().find(Gen2WorldPartyHost.ITEM_MASTER_BALL)
+	)["ok"])
+	assert_true(host.throw_capture_ball()["ok"])
+	for _message: int in 10:
+		if host.get("_capture_nickname_host") != null:
+			break
+		host.finish()
+		host.advance()
+	return host
+
+
+## `PrintText` owing the box frames, and the `YesNoBox` behind it not appearing
+## until it owes none: each page the text ends on is a press.
+func _settle_capture_nickname_text(
+	host: Gen2BattleScreen, prompt: Gen2NicknamePromptScreen
+) -> void:
+	for _frame: int in 600:
+		if prompt.phase() == Gen2NicknamePromptScreen.Phase.ASK:
+			if prompt.question_ready():
+				return
+		elif not prompt._text_box.is_revealing() and not prompt._text_box.has_pages_left():
+			return
+		if not prompt._text_box.is_revealing() and prompt._text_box.has_pages_left():
+			host.press_button(Gen2Button.A)
+		host.advance_hardware_frame()
+
+
+## `AskGiveNicknameText` behind the "Gotcha!" line, which `PokeBallEffect` prints
+## whether the catch went to the party or to the box. Spends what the box owes,
+## presses past each page it ends on, and answers NO, which is `.skip_nickname`.
+func _refuse_capture_nickname(host: Gen2BattleScreen) -> void:
+	var prompt: Gen2NicknamePromptScreen = host.get("_capture_nickname_host")
+	assert_not_null(prompt, "`AskGiveNicknameText` is drawn over the battle")
+	for _frame: int in 600:
+		if prompt.question_ready():
+			break
+		if not prompt._text_box.is_revealing() and prompt._text_box.has_pages_left():
+			host.press_button(Gen2Button.A)
+		host.advance_hardware_frame()
+	host.press_button(Gen2Button.B)
 
 
 func _event_value(events: Array, event_type: StringName, key: String) -> Variant:
@@ -1468,6 +1616,40 @@ func test_a_boxed_gift_prints_bills_pc_and_keeps_the_species_name() -> void:
 	assert_null(_world_screen.get("_nickname_host"))
 	assert_eq(save.party.size(), Gen2SaveData.MAX_PARTY)
 	assert_eq(save.boxes[0].slots[0].nickname, species_name)
+	await get_tree().process_frame
+
+
+## `.skip_nickname`'s tail runs `PrintText` before its own `CopyBytes`, so
+## `_WasSentToBillsPCText` reads the `wStringBuffer1` `InitName` just filled with
+## the typed name while the row it names is overwritten with the species. The
+## line and the row disagree on the cartridge, and they disagree here.
+func test_a_boxed_gift_names_the_typed_nickname_and_stores_the_species() -> void:
+	_write_givepoke_script()
+	await _open_world(true)
+	var save: Gen2SaveData = _world_screen._injected_save
+	while save.party.size() < Gen2SaveData.MAX_PARTY:
+		save.party.append(Gen2SaveMon.from_dict(save.party[0].to_dict()))
+	var host: Gen2NicknamePromptScreen = _run_givepoke()
+	_settle_nickname_text()
+	_world_screen.press_button(Gen2Button.A)
+	var model: Gen2NamingScreen = host.naming_screen().model()
+	model.press_a()
+	model.column = Gen2NamingScreen.LAST_COLUMN
+	model.row = model.command_row()
+	_world_screen.press_button(Gen2Button.A)
+	assert_eq(host.phase(), Gen2NicknamePromptScreen.Phase.AFTER_TEXT)
+	_settle_nickname_text()
+	var named: String = " ".join(host.text_lines()).split(" was")[0]
+	assert_eq(named.length(), 1, "the line names what the keyboard stored")
+	_world_screen.press_button(Gen2Button.A)
+	assert_null(_world_screen.get("_nickname_host"))
+	var species_name: String = String(
+		_data.species(Fixture.TRAINER_SPECIES).get("name", "")
+	)
+	assert_eq(
+		save.boxes[0].slots[0].nickname, species_name,
+		"and the row behind it keeps the species, which is the cartridge's own bug"
+	)
 	await get_tree().process_frame
 
 

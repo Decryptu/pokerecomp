@@ -100,7 +100,9 @@ extends SceneTree
 ## cell nearest the player, with the cartridge's sparkle over it: try
 ## `crystal 24 3 ... visible_encounter 4 9`), the name of any
 ## `preview_*` driver on the world screen without that prefix (`field_move` is
-## `PartyMenu` with a taught CUT on it, `start_menu`, `capture`, `move_forget`
+## `PartyMenu` with a taught CUT on it, `start_menu`, `capture`,
+## `catch_nickname` (`PokeBallEffect`'s own question, over the battle the throw
+## was made in), `move_forget`
 ## and the rest; a `*_use` name is driven twice, since each call is one step of
 ## its own sequence), or one of
 ## [constant FIELD_ITEMS]' own names, which is the pack's USE on that item: the
@@ -602,6 +604,7 @@ func _process(_delta: float) -> bool:
 			&"battle", &"battle_transition", &"level_evolution", &"egg_hatch",
 			&"name_rater", &"move_deleter", &"move_tutor", &"day_care",
 			&"ice_slide", &"whiteout", &"view_cover", &"gift_nickname",
+			&"catch_nickname",
 		]:
 			## Those kinds drove themselves to the frame they want; every other
 			## kind stages a sprite and then spends the frames it needs.

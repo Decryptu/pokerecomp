@@ -15,6 +15,14 @@ const CAUGHT_EGG_LEVEL: int = 1
 const HATCHED_HAPPINESS: int = 0x78
 ## `LANDMARK_GIFT`, the landmark `SetGiftMonCaughtData` writes instead of a map.
 const LANDMARK_GIFT: int = 0x7E
+## `LANDMARK_NATIONAL_PARK`, which `CheckPartyFullAfterContest` writes over
+## whatever `SetCaughtData` read off the map the results are collected on.
+const LANDMARK_NATIONAL_PARK: int = 13
+
+## `CheckPartyFullAfterContest`'s own three answers.
+const BUGCONTEST_CAUGHT_MON: int = 0
+const BUGCONTEST_BOXED_MON: int = 1
+const BUGCONTEST_NO_CATCH: int = 2
 ## `HatchEggs`' own `cp TOGEPI`, the one species whose hatch sets an event flag.
 const SPECIES_TOGEPI: int = 0xAF
 const EVENT_TOGEPI_HATCHED: int = 84
@@ -136,7 +144,7 @@ static func complete_runtime_request(
 	if request.is_empty():
 		return _failure(&"runtime_request_not_pending", {})
 	var kind: StringName = StringName(request.get("kind", &""))
-	if kind not in [&"pokemon_requested", &"trade_requested"]:
+	if kind not in [&"pokemon_requested", &"trade_requested", &"contest_mon_requested"]:
 		return _failure(&"party_request_not_pending", request)
 	if save == null or world.data == null:
 		return _failure(&"missing_save", request)
@@ -188,6 +196,9 @@ static func complete_runtime_request(
 		"ok": true,
 		"handled": true,
 		"request": request,
+		## What the script read out of wScriptVar, which for
+		## `CheckPartyFullAfterContest` is the branch its caller takes.
+		"script_value": int(transaction.get("script_value", 0)),
 		"transaction": transaction.get("summary", {}).duplicate(true),
 		"results": resumed,
 	}
@@ -689,10 +700,23 @@ static func caught_nickname_question(species_name: String) -> String:
 	]
 
 
-## `_WasSentToBillsPCText`, printed behind the nickname whenever a `givepoke`
-## landed in the box.
+## `_AskGiveNicknameText`, which is `PokeBallEffect`'s own question and not
+## `GiveANickname_YesNo`'s: a caught Pokemon is asked about by name alone, where
+## a received one is [method caught_nickname_question]'s longer line.
+static func capture_nickname_question(species_name: String) -> String:
+	return "Give a nickname to\n%s?" % species_name
+
+
+## `_WasSentToBillsPCText` and `_BallSentToPCText`, which are the same words in
+## the same shape: the gift path reads `wStringBuffer1` and the capture path
+## `wMonOrItemNameBuffer`, and both hold the name the row ended up with rather
+## than the species. Kept as a format so the screen that owns the naming can
+## fill it in with its own answer.
+const SENT_TO_BOX_FORMAT: String = "%s was\nsent to BILL's PC."
+
+
 static func sent_to_box_text(species_name: String) -> String:
-	return "%s was\nsent to BILL's PC." % species_name
+	return SENT_TO_BOX_FORMAT % species_name
 
 
 ## Where `GivePoke` would put one more Pokemon: `TryAddMonToParty` first, then
@@ -940,6 +964,135 @@ static func capture_wild(
 	}
 
 
+## `CheckPartyFullAfterContest`, which is what takes home whatever the Bug
+## Catching Contest caught. `wContestMon` is a party struct already, so the party
+## branch is a copy and the box branch an `InsertPokemonIntoBox`; each stands
+## behind its own `GiveANickname_YesNo`, and `SetCaughtData` is then overwritten
+## with LANDMARK_NATIONAL_PARK, the gender bit kept.
+##
+## Three things a reading gets wrong. `.BoxFull` writes nothing and still answers
+## BUGCONTEST_BOXED_MON, so a full party over a full box loses the catch; the box
+## branch prints no "sent to BILL's PC" line, because the script's own
+## `ContestResults_PartyFullText` is what BUGCONTEST_BOXED_MON reaches; and
+## `wContestMon` is cleared on every branch but that last one.
+static func _apply_contest_mon(
+	world: Gen2WorldAPI,
+	candidate: Gen2SaveData,
+	result: Dictionary,
+	random: RandomNumberGenerator
+) -> Dictionary:
+	var caught: Dictionary = world.state.contest_mon() if world.state != null else {}
+	var species: int = int(caught.get("species", 0))
+	if species <= 0 or world.data.species(species).is_empty():
+		return {
+			"ok": true, "accepted": false, "script_value": BUGCONTEST_NO_CATCH,
+			"reason": &"no_contest_catch",
+			"summary": {"kind": &"contest_mon", "accepted": false},
+		}
+	var boxed: bool = candidate.party.size() >= Gen2SaveData.MAX_PARTY
+	if boxed and not bool(candidate.first_empty_box_slot().get("ok", false)):
+		## `.BoxFull`: nothing is written and the catch is gone, which is the
+		## cartridge's own answer rather than a refusal of this port's.
+		world.state.set_contest_mon({})
+		return {
+			"ok": true, "accepted": false, "script_value": BUGCONTEST_BOXED_MON,
+			"reason": &"storage_full",
+			"summary": {"kind": &"contest_mon", "accepted": false, "species": species},
+		}
+	var mon: Gen2SaveMon = _new_mon(
+		world.data, candidate, species, int(caught.get("level", 1)),
+		int(caught.get("item", 0)), random, false, int(caught.get("dvs", -1))
+	)
+	if mon == null:
+		return {"ok": false, "reason": &"could_not_create_pokemon"}
+	## The health it was standing there with, which is what `ContestScore` read
+	## and what the struct kept.
+	mon.hp = clampi(int(caught.get("hp", mon.hp)), 0, mon.hp)
+	if result.has("nickname"):
+		var chosen: String = String(result["nickname"]).strip_edges()
+		if not chosen.is_empty():
+			mon.nickname = chosen
+	set_caught_data(
+		mon, int(caught.get("level", 1)), world.object_time_of_day,
+		world.player_female(), LANDMARK_NATIONAL_PARK
+	)
+	var placed: Dictionary = candidate.add_party_or_box(mon)
+	if not bool(placed.get("ok", false)):
+		return {"ok": false, "reason": StringName(placed.get("reason", &"storage_full"))}
+	world.state.set_contest_mon({})
+	return {
+		"ok": true,
+		"accepted": true,
+		"script_value": BUGCONTEST_BOXED_MON if boxed else BUGCONTEST_CAUGHT_MON,
+		"register_caught": species,
+		"register_unown": _unown_form(species, mon.dvs, placed),
+		"summary": {
+			"kind": &"contest_mon", "accepted": true, "species": species,
+			"level": int(caught.get("level", 1)),
+			"destination": placed.get("destination", &"party"),
+			"nickname": mon.nickname,
+		},
+	}
+
+
+## `InitNickname`, which `PokeBallEffect` runs once the row is already in the
+## party or the box: `NamingScreen` writes into `wPartyMonNicknames` or
+## `sBoxMonNicknames` rather than into the struct the catch built, so the rename
+## is its own write and not part of [method capture_wild]'s transaction.
+##
+## [param destination] is that method's own answer. Nothing is written when the
+## player kept the species name, which is what NO and an empty entry both leave
+## in `wStringBuffer1`.
+static func name_captured_mon(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	destination: Dictionary,
+	nickname: String,
+	persist: bool = true
+) -> Dictionary:
+	if world == null or save == null or nickname.strip_edges().is_empty():
+		return _failure(&"missing_nickname_context", {})
+	var opened: Dictionary = Gen2WorldTransaction.begin(world, save)
+	if not bool(opened.get("ok", false)):
+		return _failure(StringName(opened["reason"]), opened.get("details", {}))
+	var candidate: Gen2SaveData = opened["candidate"]
+	var mon: Gen2SaveMon = _captured_row(candidate, destination)
+	if mon == null:
+		return _failure(&"captured_row_not_found", destination.duplicate(true))
+	if mon.nickname == nickname:
+		return {"ok": true, "handled": true, "renamed": false}
+	mon.nickname = nickname
+	var before: Gen2WorldSnapshot = world.snapshot()
+	var committed: Dictionary = Gen2WorldTransaction.commit(
+		world, save, candidate, before, persist
+	)
+	if not bool(committed.get("ok", false)):
+		return _failure(StringName(committed["reason"]), committed.get("details", {}))
+	return {"ok": true, "handled": true, "renamed": true, "nickname": nickname}
+
+
+## The row [method capture_wild] just wrote, on either side of
+## `TryAddMonToParty`/`SendMonIntoBox`.
+static func _captured_row(save: Gen2SaveData, destination: Dictionary) -> Gen2SaveMon:
+	if save == null or destination.is_empty():
+		return null
+	match StringName(destination.get("destination", &"")):
+		&"party":
+			var index: int = int(destination.get("party_index", -1))
+			return save.party[index] as Gen2SaveMon \
+				if index >= 0 and index < save.party.size() else null
+		&"box":
+			var box_index: int = int(destination.get("box", -1))
+			if box_index < 0 or box_index >= save.boxes.size():
+				return null
+			var box: Gen2SaveBox = save.boxes[box_index] as Gen2SaveBox
+			var slot: int = int(destination.get("slot", -1))
+			if box == null or slot < 0 or slot >= box.slots.size():
+				return null
+			return box.slots[slot] as Gen2SaveMon
+	return null
+
+
 static func _apply_party_request(
 	world: Gen2WorldAPI,
 	candidate: Gen2SaveData,
@@ -948,6 +1101,8 @@ static func _apply_party_request(
 	random: RandomNumberGenerator
 ) -> Dictionary:
 	var kind: StringName = StringName(request.get("kind", &""))
+	if kind == &"contest_mon_requested":
+		return _apply_contest_mon(world, candidate, result, random)
 	if kind == &"pokemon_requested":
 		var values: Dictionary = request.get("values", {})
 		var is_egg: bool = not values.has("pokemon")
