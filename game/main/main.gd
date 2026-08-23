@@ -175,9 +175,11 @@ func _cartridge_detail(game_id: StringName, data: GameData) -> String:
 	return "Ready. %d save%s" % [ready_slots, "" if ready_slots == 1 else "s"]
 
 
-## Public driver used by tests and by non-interactive tooling.
+## Public driver used by tests and by non-interactive tooling. Awaitable because
+## the import gives the screen one frame to put its progress up before taking
+## the main thread for the rest of the job.
 func import_rom_path(path: String) -> void:
-	_on_file_selected(path)
+	await _on_file_selected(path)
 
 
 ## Installs a mod archive and loads it without a restart, which is safe here
@@ -444,6 +446,14 @@ func preview_sheet(view: StringName) -> void:
 		&"report":
 			select_page(&"about")
 			_about.open_report_sheet()
+		&"toast":
+			# The one message that stays until it is dismissed, over the shelf's
+			# own action row, which is what its dismiss button has to clear.
+			_set_status(
+				&"error",
+				"The last session ended unexpectedly.",
+				"About > Report a bug will save a file with the logs in it.",
+			)
 		&"binding":
 			select_page(&"settings")
 			var sheet: Gen2BindingSheet = Gen2BindingSheet.for_button(
@@ -509,6 +519,10 @@ func _on_file_selected(path: String) -> void:
 	_shelf.set_busy(true)
 	_shell.toast().set_progress(true, 0.0)
 	_set_status(&"busy", "Verifying cartridge...", path.get_file())
+	# The one frame the tree gets for the whole import: the toast has just been
+	# made visible, and a container sorts its children on a deferred call that
+	# would otherwise not be reached until the import had already finished.
+	await get_tree().process_frame
 
 	var identity: Dictionary = RomVerifier.identify(path)
 	if identity["status"] != RomVerifier.Status.OK:
@@ -561,6 +575,10 @@ func _on_import_progress(stage: String, done: int, total: int) -> void:
 	if total > 0:
 		_shell.toast().set_progress(true, float(done) / float(total) * 100.0)
 	_set_status(&"busy", "%s, %d/%d" % [stage.capitalize(), done, total], "")
+	# The import holds the main thread for the whole of its ten to twenty
+	# seconds, so this is the only place the screen it is reporting to can be
+	# repainted at all.
+	_shell.toast().pump()
 
 
 func _finish_import(success: bool, message: String) -> void:

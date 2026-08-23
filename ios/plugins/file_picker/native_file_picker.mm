@@ -19,6 +19,7 @@ static NSString *const kImportsDirectory = @"picked";
 
 @interface GodotDocumentPicker : NSObject <UIDocumentPickerDelegate>
 + (void)cancel;
++ (void)sweep;
 @end
 
 @implementation GodotDocumentPicker
@@ -66,7 +67,16 @@ static NSString *const kImportsDirectory = @"picked";
 	});
 }
 
-// The app's own directory for picked files, emptied first.
+// The app's own directory for picked files, emptied first. Also emptied when the
+// plugin starts: the copy the last session imported from is nobody's until the
+// next pick otherwise, and a cartridge is a couple of megabytes of the player's
+// storage sitting in a folder the Files app shows them.
++ (void)sweep {
+	NSString *user_data = [NSString stringWithUTF8String:OS::get_singleton()->get_user_data_dir().utf8().get_data()];
+	NSURL *directory = [[NSURL fileURLWithPath:user_data] URLByAppendingPathComponent:kImportsDirectory];
+	[[NSFileManager defaultManager] removeItemAtURL:directory error:nil];
+}
+
 - (NSURL *)freshImportsDirectory {
 	NSString *user_data = [NSString stringWithUTF8String:OS::get_singleton()->get_user_data_dir().utf8().get_data()];
 	NSURL *directory = [[NSURL fileURLWithPath:user_data] URLByAppendingPathComponent:kImportsDirectory];
@@ -164,6 +174,7 @@ void NativeFilePicker::_bind_methods() {
 NativeFilePicker::NativeFilePicker() {
 	singleton = this;
 	delegate = [[GodotDocumentPicker alloc] init];
+	[GodotDocumentPicker sweep];
 }
 
 NativeFilePicker::~NativeFilePicker() {

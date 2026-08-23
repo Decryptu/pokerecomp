@@ -8,7 +8,7 @@ extends SceneTree
 ##       [scroll] [focus index] [fade step] [insets]
 ##
 ## `view` opens a sheet (`manage`, `touch`, `binding`, `bugs`, `report`,
-## `delete_mod`) or
+## `delete_mod`), raises the `toast` that stays until it is dismissed, or
 ## picks the mods page's own: `list`, `sources`, or `mod` with an id.
 ## `fade` is which step of the screen transition to photograph, 0 for none and 1
 ## to 4 for one of `FadeOutToWhite`'s own rows: the launcher's leave-the-screen
@@ -98,7 +98,7 @@ func _process(_delta: float) -> bool:
 		if STATES.has(_state):
 			_launcher.preview_slot_states(STATES[_state])
 		_launcher.select_page(StringName(_page))
-		if _view in ["manage", "touch", "binding", "delete_mod", "bugs", "report"]:
+		if _view in ["manage", "touch", "binding", "delete_mod", "bugs", "report", "toast"]:
 			_launcher.preview_sheet(StringName(_view))
 		elif not _view.is_empty():
 			_launcher.preview_mods_view(StringName(_view), StringName(_mod))

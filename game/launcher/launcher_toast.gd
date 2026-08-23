@@ -7,9 +7,16 @@ extends Control
 ## It replaces a permanent status strip: a screen with nothing to report should
 ## look like a screen with nothing to report. Success and information fade out on
 ## their own; a refusal and a running import stay until they are replaced.
+##
+## A message that stays carries a dismiss button, because "until it is replaced"
+## is forever on a screen the player is not about to do anything else on. A
+## running import is the exception: it goes when the import does, and a button
+## offering to hide it would be offering to cancel something it cannot.
 
 ## How long a message that reports no problem stays up.
 const LINGER: float = 3.6
+## The shortest gap between two forced repaints during a blocking job.
+const PUMP_INTERVAL_MS: int = 60
 const ICON: float = 22.0
 
 var _theme: Gen2LauncherTheme = null
@@ -18,7 +25,12 @@ var _icon: Gen2LauncherIcon = null
 var _heading: Label = null
 var _detail: Label = null
 var _progress: ProgressBar = null
+var _close: Gen2LauncherButton = null
 var _timer: SceneTreeTimer = null
+## Wall clock of the last forced redraw, so a blocking import repaints often
+## enough to look alive and rarely enough to stay quick. See [method pump].
+var _last_pump: int = 0
+var _spin: float = 0.0
 ## The one fade in flight. Raising and hiding overlap often enough that two
 ## tweens would otherwise race for the same alpha and the later one would lose.
 var _fade: Tween = null
@@ -50,8 +62,9 @@ func _build() -> void:
 	# so it is drawn on the opposite side of the page from everything under it.
 	_card = Gen2LauncherCard.chip(_theme, Gen2LauncherTheme.RADIUS_MD, 16, 20)
 	_card.custom_minimum_size = Vector2(360, 0)
-	# Nothing in here is clickable, so nothing in here takes a click. The card
-	# is the width of the shelf's action row and sits exactly on top of it.
+	# The card is the width of the shelf's action row and sits exactly on top of
+	# it. It passes a press through to whatever is under it unless the dismiss
+	# button is up, which is the only thing in here that takes one.
 	_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	centre.add_child(_card)
 
@@ -70,6 +83,14 @@ func _build() -> void:
 	_detail = Gen2LauncherUI.muted(_theme, "")
 	_detail.add_theme_color_override("font_color", _theme.with_alpha(_theme.on_surface, 0.75))
 	text.add_child(_detail)
+
+	_close = Gen2LauncherButton.icon_only(
+		_theme, &"close", Gen2LauncherButton.Variant.ON_CHIP, Gen2LauncherUI.TOUCH_TARGET
+	)
+	_close.tooltip_text = "Dismiss"
+	_close.visible = false
+	_close.pressed.connect(hide_message)
+	line.add_child(_close)
 
 	_progress = ProgressBar.new()
 	_progress.max_value = 100.0
@@ -106,10 +127,16 @@ func show_message(kind: StringName, heading: String, detail: String) -> void:
 			colour = _theme.on_chip(_theme.accent)
 			glyph = &"refresh"
 	_icon.set_glyph(glyph, ICON, colour)
+	if kind != &"busy":
+		_spin = 0.0
+		_icon.rotation = 0.0
 	_heading.text = heading
 	_heading.add_theme_color_override("font_color", colour)
 	_detail.text = detail
 	_detail.visible = not detail.is_empty()
+	# Only what stays needs a way out, and only what the player can end. An
+	# import ends itself, and the toast under it is replaced when it does.
+	_close.visible = kind == &"error"
 	_raise()
 	if kind == &"error" or kind == &"busy":
 		_cancel_timer()
@@ -120,6 +147,34 @@ func show_message(kind: StringName, heading: String, detail: String) -> void:
 func set_progress(shown: bool, value: float = 0.0) -> void:
 	_progress.visible = shown
 	_progress.value = value
+
+
+## Repaints the screen from inside a job that is not giving it back.
+##
+## A cartridge import runs to the end on the main thread, so the tree never
+## reaches its next frame and the bar this toast is drawing does not move: the
+## whole ten to twenty seconds looks like a launcher that has stopped. Forcing a
+## frame is what a loading screen does, and the icon is turned by hand because
+## the tree is not running to animate it. Throttled, because the redraw is time
+## taken away from the import it is reporting.
+func pump() -> void:
+	if not _shown or not is_inside_tree() or DisplayServer.get_name() == "headless":
+		return
+	var now: int = Time.get_ticks_msec()
+	if now - _last_pump < PUMP_INTERVAL_MS:
+		return
+	_last_pump = now
+	# Nothing is animating the entrance either, so it is finished rather than
+	# left part way and the toast drawn at whatever alpha it had reached.
+	if _fade != null and _fade.is_valid():
+		_fade.kill()
+	modulate.a = 1.0
+	_card.position.y = 0.0
+	_spin = fmod(_spin + TAU / 8.0, TAU)
+	# The measured size is a layout pass away; the glyph's own is not.
+	_icon.pivot_offset = Vector2(ICON, ICON) * 0.5
+	_icon.rotation = _spin
+	RenderingServer.force_draw()
 
 
 func hide_message() -> void:

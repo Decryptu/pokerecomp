@@ -245,7 +245,9 @@ func _pack_bundle(directory: String) -> Dictionary:
 			return {"ok": false, "message": "That folder could not be opened.", "path": ""}
 		if DirAccess.make_dir_absolute(directory) != OK:
 			return {"ok": false, "message": "That folder could not be opened.", "path": ""}
-	var path: String = "%s/%s%s.zip" % [directory, BUNDLE_PREFIX, _file_stamp()]
+	# path_join rather than a format string: a globalized user:// already ends in
+	# a separator, and the result is read off a phone screen and typed by hand.
+	var path: String = directory.path_join("%s%s.zip" % [BUNDLE_PREFIX, _file_stamp()])
 	var packer := ZIPPacker.new()
 	if packer.open(path) != OK:
 		return {"ok": false, "message": "The report file could not be created.", "path": ""}
