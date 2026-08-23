@@ -93,8 +93,18 @@ func is_editing() -> bool:
 	return _edit_mode
 
 
+## The rectangle the buttons are laid out in: the pad's own, less whatever the
+## screen keeps for itself. A phone counts its notch, its home indicator and its
+## rounded corners as display, so a face button anchored hard against the edge is
+## drawn under glass that no finger reaches through. Every rect, every hit test
+## and every drag is measured from here, so insetting it moves all three.
 func area() -> Rect2:
-	return Rect2(Vector2.ZERO, size)
+	var insets: Dictionary = Gen2LauncherUI.safe_area_insets(get_window())
+	var corner := Vector2(float(insets["left"]), float(insets["top"]))
+	var taken := corner + Vector2(float(insets["right"]), float(insets["bottom"]))
+	if taken.x >= size.x or taken.y >= size.y:
+		return Rect2(Vector2.ZERO, size)
+	return Rect2(corner, size - taken)
 
 
 ## Which button a point in the pad's own coordinates would press. Public so a
@@ -234,10 +244,14 @@ func _edit_pointer(index: int, point: Vector2, pressed: bool) -> void:
 
 
 func _edit_moved(index: int, point: Vector2) -> void:
-	if _dragging == &"" or index != _drag_index or size.x <= 0.0 or size.y <= 0.0:
+	var rect: Rect2 = area()
+	if _dragging == &"" or index != _drag_index or rect.size.x <= 0.0 or rect.size.y <= 0.0:
 		return
 	_layout.set_anchor(
-		Gen2TouchLayout.orientation_of(size), _dragging, (point - _drag_offset) / size, size
+		Gen2TouchLayout.orientation_of(rect.size),
+		_dragging,
+		(point - _drag_offset - rect.position) / rect.size,
+		rect.size,
 	)
 	queue_redraw()
 

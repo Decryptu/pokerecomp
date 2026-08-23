@@ -11,11 +11,16 @@ extends Control
 
 signal page_selected(id: StringName)
 
-## Width below which the launcher writes smaller and pads tighter.
+## Width below which the launcher writes smaller and pads tighter. Measured in
+## launcher units, which are points rather than pixels, so a phone held upright
+## is below it whatever its screen is made of.
 const COMPACT_WIDTH: float = 820.0
 ## Room kept for a message and its detail line above the page.
 const TOAST_HEIGHT: float = 84.0
 const DOCK_OVERLAY_HEIGHT: float = Gen2LauncherUI.DOCK_SAFE_BOTTOM + 22.0
+## The widest a dock disc is allowed to grow into a narrow row. Past this the
+## row reads as four buttons rather than as a dock.
+const DOCK_SIDE_MAX: float = 84.0
 
 var theme_palette: Gen2LauncherTheme = null
 var compact: bool = false
@@ -35,6 +40,7 @@ var _battery: Gen2LauncherBattery = null
 var _top_right: HBoxContainer = null
 var _pages: MarginContainer = null
 var _dock_host: Control = null
+var _dock_centre: CenterContainer = null
 var _dock: HBoxContainer = null
 var _toast: Gen2LauncherToast = null
 var _flash: ColorRect = null
@@ -149,6 +155,17 @@ func _build() -> void:
 	_focus = Gen2FocusGuard.attach(self)
 
 
+## Every launcher screen is drawn in points, and only a launcher screen is: the
+## world upscales a 160x144 screen by a whole number of real pixels, and a
+## window drawn in points would make that number wrong.
+func _enter_tree() -> void:
+	Gen2LauncherUI.apply_display_density(get_window(), true)
+
+
+func _exit_tree() -> void:
+	Gen2LauncherUI.apply_display_density(get_window(), false)
+
+
 ## The wall clock, on the twenty-four hour dial the rest of the project uses.
 func _now() -> String:
 	var clock: Dictionary = Time.get_time_dict_from_system()
@@ -176,13 +193,13 @@ func _build_dock() -> Control:
 	fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_dock_host.add_child(fade)
 
-	var centre := CenterContainer.new()
-	centre.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	centre.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	centre.offset_top = 26.0
+	_dock_centre = CenterContainer.new()
+	_dock_centre.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dock_centre.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_dock_centre.offset_top = 26.0
 	_dock = Gen2LauncherUI.row(Gen2LauncherUI.GAP_MD)
-	centre.add_child(_dock)
-	_dock_host.add_child(centre)
+	_dock_centre.add_child(_dock)
+	_dock_host.add_child(_dock_centre)
 	return _dock_host
 
 
@@ -199,6 +216,10 @@ func add_page(id: StringName, label: String, glyph: StringName, page: Control) -
 	page.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_page_nodes[id] = page
 	_pages.add_child(page)
+	# The layout is settled before the first page exists, so a page is told the
+	# shape it is being added into rather than waiting for the next change of it.
+	if page.has_method("set_compact"):
+		page.call("set_compact", compact)
 	_rebuild_dock()
 	if _current.is_empty():
 		select(id)
@@ -353,6 +374,7 @@ func _rebuild_dock() -> void:
 		button.gui_input.connect(_on_dock_input.bind(id))
 		_dock.add_child(button)
 		_buttons[id] = button
+	_apply_layout()
 	if not _current.is_empty():
 		select(_current)
 
@@ -389,18 +411,18 @@ func _on_dock_input(event: InputEvent, id: StringName) -> void:
 
 
 func _apply_layout() -> void:
+	var insets: Dictionary = Gen2LauncherUI.safe_area_insets(get_window())
 	var wide: bool = size.x >= COMPACT_WIDTH
 	var margin: int = 30 if wide else 16
-	_host.add_theme_constant_override("margin_left", margin)
-	_host.add_theme_constant_override("margin_right", margin)
-	_host.add_theme_constant_override("margin_top", 20 if wide else 14)
+	# The clock and the charge sit on the top row, which a notch or a rounded
+	# corner would otherwise take a bite out of.
+	_host.add_theme_constant_override("margin_left", margin + int(insets["left"]))
+	_host.add_theme_constant_override("margin_right", margin + int(insets["right"]))
+	_host.add_theme_constant_override("margin_top", (20 if wide else 14) + int(insets["top"]))
 	# Pages reach the bezel; each scrolling page owns a safe tail that can move
 	# its final control above the floating dock.
 	_host.add_theme_constant_override("margin_bottom", 0)
-	for key: StringName in _buttons:
-		(_buttons[key] as Gen2LauncherButton).set_side(
-			Gen2LauncherButton.DOCK_SIDE if wide else 68.0
-		)
+	_layout_dock(wide, insets)
 	if compact == not wide and not _entries.is_empty():
 		return
 	compact = not wide
@@ -410,13 +432,37 @@ func _apply_layout() -> void:
 			page.call("set_compact", compact)
 
 
+## The discs take the row they are given rather than a fixed size, so a narrow
+## screen gets the largest disc four of them fit on instead of the smallest one
+## a desktop looked right with. Never below what a finger can hit, which is what
+## the row is for.
+func _layout_dock(wide: bool, insets: Dictionary) -> void:
+	var count: int = maxi(_entries.size(), 1)
+	var gap: float = float(Gen2LauncherUI.GAP_MD)
+	var margin: float = float(30 if wide else 16)
+	var room: float = size.x - float(insets["left"]) - float(insets["right"]) - margin * 2.0
+	var fits: float = (room - gap * float(count - 1)) / float(count)
+	var side: float = (
+		Gen2LauncherButton.DOCK_SIDE
+		if wide
+		else clampf(fits, Gen2LauncherUI.TOUCH_TARGET, DOCK_SIDE_MAX)
+	)
+	for key: StringName in _buttons:
+		(_buttons[key] as Gen2LauncherButton).set_side(side)
+	# The fade and the row above it both stand off the home indicator, so the
+	# bottom disc is reachable rather than half under it.
+	var bottom: float = float(insets["bottom"])
+	_dock_host.offset_top = -(DOCK_OVERLAY_HEIGHT + bottom)
+	_dock_centre.offset_bottom = -bottom
+
+
 ## Just above the page, so the message clears the dock and whatever the page puts
 ## along its own bottom edge. Measured rather than fixed: a short window has far
 ## less room under the page than a tall one.
 func _place_toast() -> void:
 	if _toast == null or _pages == null:
 		return
-	_toast.offset_bottom = -(Gen2LauncherUI.DOCK_SAFE_BOTTOM + 10.0)
+	_toast.offset_bottom = -(Gen2LauncherUI.dock_reserve(get_window()) + 10.0)
 	_toast.offset_top = _toast.offset_bottom - TOAST_HEIGHT
 
 
