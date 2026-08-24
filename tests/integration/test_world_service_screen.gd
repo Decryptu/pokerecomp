@@ -148,8 +148,8 @@ func test_mart_overlay_uses_production_input_and_returns_to_script() -> void:
 	var host: Gen2WorldServiceScreen = _world_screen._service_host
 	assert_not_null(host)
 	## `BuyMenu` owns the whole screen, so this host's own layer steps aside.
-	assert_false(host._service_hardware.visible)
-	assert_not_null(host._mart_hardware)
+	assert_false(host._service_view.visible)
+	assert_not_null(host._mart_view)
 	assert_eq(host._mart_stage, Gen2WorldServiceScreen.MART_LIST)
 	## One item and CANCEL, which is the row `ScrollingMenu` draws past the
 	## list's own terminator.
@@ -467,17 +467,47 @@ func test_only_one_service_layer_is_ever_on_screen() -> void:
 	await _queue_service()
 	var host: Gen2WorldServiceScreen = _world_screen._service_host
 	assert_not_null(host)
-	assert_true(host._service_hardware.visible, "the hardware layer draws the mode")
+	assert_true(host._service_view.visible, "the hardware layer draws the mode")
 	## DEPOSIT ITEM's own list is still the one layer.
 	host.handle_button(Gen2Button.DOWN)
 	host.handle_button(Gen2Button.A)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEM_LIST)
-	assert_true(host._service_hardware.visible)
+	assert_true(host._service_view.visible)
 	## A screen of its own owns all 160x144, so nothing is drawn under it.
 	host._open_town_map(false)
-	assert_false(host._service_hardware.visible)
+	assert_false(host._service_view.visible)
 	host._town_map.close()
 	await get_tree().process_frame
+
+
+## `MenuTextbox` carries `MENU_BACKUP_TILES`: the map stays visible around the
+## box, so the panel is drawn in the screen the map is already in rather than in
+## a second one over it. Two screens over one window each pick their own scale
+## and their own place for the hardware rectangle, and each paints a surround
+## the other did not ask for, which is what cut the map back to 160x144 with
+## black bars around it.
+func test_a_menu_over_the_map_is_drawn_in_the_maps_own_screen() -> void:
+	Gen2OptionsStore.use_test_path()
+	Gen2OptionsStore.current().screen_fill = true
+	_write_pc_request()
+	await _open_world()
+	_world_screen._world.current_map.events["coord_events"][0]["script"] = 0x6190
+	await _queue_service()
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	assert_not_null(host)
+	assert_eq(host._service_hardware, _world_screen._screen, "the map's own screen")
+	assert_eq(
+		host.find_children("*", "Gen2Screen", true, false), [],
+		"and no second one of its own",
+	)
+	assert_eq(
+		Gen2Screen.owner_of(host._service_view), _world_screen._screen,
+		"so the panel is laid out on the same 160x144 the map is drawn in",
+	)
+	## Nothing has said what the world's screen stands on, because the panel is
+	## transparent everywhere but its own box. An untold screen paints no
+	## surround, so what is around the box is the map.
+	assert_false(_world_screen._screen.has_field())
 
 
 ## The other half of the same rule: the radio card is what writes

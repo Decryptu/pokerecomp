@@ -4552,6 +4552,7 @@ func _open_service_host() -> void:
 		return
 	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	host.z_index = 20
+	host.set_screen(_screen)
 	add_child(host)
 	var save: Gen2SaveData = _injected_save if _injected_save != null else _selected_runtime_save()
 	var persist: bool = save != null and _injected_save == null
@@ -4797,6 +4798,7 @@ func _open_pokedex() -> void:
 		_refresh_labels()
 		return
 	host.z_index = 10
+	host.set_screen(_screen)
 	add_child(host)
 	host.closed.connect(_on_pokedex_closed)
 	host.cry_requested.connect(_on_pokedex_cry_requested)
@@ -5045,6 +5047,7 @@ func _open_embedded_party() -> void:
 	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	host.z_index = 20
 	host.mouse_filter = Control.MOUSE_FILTER_STOP
+	host.set_screen(_screen)
 	add_child(host)
 	host.closed.connect(_on_party_closed)
 	host.action_chosen.connect(_on_party_action)
@@ -5518,6 +5521,7 @@ func _open_service_overlay(kind: StringName) -> void:
 		return
 	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	host.z_index = 20
+	host.set_screen(_screen)
 	add_child(host)
 	var save: Gen2SaveData = _injected_save if _injected_save != null else _selected_runtime_save()
 	var persist: bool = save != null and _injected_save == null
@@ -5548,6 +5552,7 @@ func _open_fly_map(request: Dictionary) -> void:
 		return
 	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	host.z_index = 20
+	host.set_screen(_screen)
 	add_child(host)
 	var save: Gen2SaveData = _injected_save if _injected_save != null \
 		else _selected_runtime_save()
@@ -6041,6 +6046,7 @@ func _open_party_selection() -> bool:
 	host.selection_made.connect(_on_party_selection_made)
 	host.sfx_requested.connect(_play_sfx)
 	host.cry_requested.connect(_on_pokedex_cry_requested)
+	host.set_screen(_screen)
 	add_child(host)
 	host.open_selection()
 	_party_host = host

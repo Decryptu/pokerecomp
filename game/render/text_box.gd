@@ -340,6 +340,14 @@ func _enter_of(index: int) -> StringName:
 	return StringName(_pages[index].get("enter", &"page"))
 
 
+## How many of the page at [param index]'s lines `TextScroll` carried up rather
+## than printed, and so how many of them are already on screen.
+func _carried_of(index: int) -> int:
+	if index < 0 or index >= _pages.size():
+		return 0
+	return int(_pages[index].get("carried", 0))
+
+
 ## Starts `TextScroll`'s two steps, with the lines that are on screen moving up
 ## through the interior and off the top of it.
 func _begin_scroll(next_page: int) -> void:
@@ -398,13 +406,21 @@ func _end_scroll() -> void:
 func _start_page() -> void:
 	_lines = []
 	_tiles_on_page = 0
+	## `TextScroll` copies tiles up and `_ContTextNoPause` resumes at
+	## `TEXTBOX_INNERY + 2`, so the lines the scroll carried are already printed
+	## and the reveal starts past them. Typing them again is a line the player
+	## has read appearing to be new.
+	var carried: int = _carried_of(_page)
+	var already: int = 0
 	if _page < _pages.size():
 		for line: String in _pages[_page]["lines"]:
 			var codes: PackedByteArray = Gen2Text.encode(line)
+			if _lines.size() < carried:
+				already += codes.size()
 			_lines.append(codes)
 			_tiles_on_page += codes.size()
 
-	_shown = 0.0
+	_shown = float(already)
 	_blink = 0.0
 	set_process(_tiles_on_page > 0 and not driven)
 	if reveal_speed <= 0.0:

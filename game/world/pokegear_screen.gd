@@ -24,7 +24,6 @@ signal called(contact: int)
 ## Its DELETE row, once the yes/no box has been answered.
 signal deleted(contact: int)
 
-const SCREEN_SCENE: PackedScene = preload("res://game/render/gen2_screen.tscn")
 
 const CARD_CLOCK: StringName = &"clock"
 const CARD_PHONE: StringName = &"phone"
@@ -91,6 +90,8 @@ var _submenu_cursor: int = 0
 var _asking_delete: bool = false
 var _yes_no_cursor: int = 0
 
+## The screen this is drawn in, and the 160x144 layer inside it.
+var _screen: Gen2Screen = null
 var _field: Control = null
 var _background: TextureRect = null
 var _arrow: TextureRect = null
@@ -348,10 +349,10 @@ func render() -> Image:
 
 
 func _build() -> void:
-	var screen: Gen2Screen = SCREEN_SCENE.instantiate() as Gen2Screen
-	screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(screen)
+	var screen: Gen2Screen = Gen2Screen.host_for(self, _screen)
+	if screen == null:
+		return
+	_screen = screen
 	_field = Control.new()
 	_field.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 	_field.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -455,23 +456,36 @@ func _knob_image() -> Image:
 ## through the overworld's first palette the way every icon on these screens is.
 ## Colour zero is transparent, which is what lets one sit over the card.
 func _icon(first: int, columns: int, rows: int, repeat: bool = false) -> Image:
-	var size := Vector2i(columns, rows) * Gen2TownMapPage.TILE
-	var out: PackedInt32Array = Gen2PicImage.canvas(size.x, size.y)
+	var pixels := Vector2i(columns, rows) * Gen2TownMapPage.TILE
+	var out: PackedInt32Array = Gen2PicImage.canvas(pixels.x, pixels.y)
 	var tiles: PackedByteArray = _data.tile_indices("pokegear_sprites") if _data != null \
 		else PackedByteArray()
 	var palette: PackedColorArray = _data.overworld_sprite_palette(0, _time_of_day) \
 		if _data != null else PackedColorArray()
 	if tiles.is_empty() or palette.is_empty():
-		return Gen2PicImage.canvas_image(out, size.x, size.y)
+		return Gen2PicImage.canvas_image(out, pixels.x, pixels.y)
 	@warning_ignore("integer_division")
 	var strip_tiles: int = tiles.size() / Gen2Tiles.TILE_PIXELS
 	var table: PackedInt32Array = Gen2PicImage.lookup(palette)
 	for row: int in rows:
 		for column: int in columns:
 			Gen2PicImage.blit_tile(
-				out, size.x, size.y, tiles, strip_tiles,
+				out, pixels.x, pixels.y, tiles, strip_tiles,
 				first if repeat else first + row * columns + column,
 				column * Gen2TownMapPage.TILE, row * Gen2TownMapPage.TILE,
 				table, false, false, 0
 			)
-	return Gen2PicImage.canvas_image(out, size.x, size.y)
+	return Gen2PicImage.canvas_image(out, pixels.x, pixels.y)
+
+
+## The screen the opener wants this drawn in, handed over before it is added to
+## the tree. Without one the field goes in whichever screen this ends up inside.
+func set_screen(screen: Gen2Screen) -> void:
+	_screen = screen
+
+
+## The field lives in a screen this node may not own, so it goes by hand.
+func _exit_tree() -> void:
+	if _field != null:
+		Gen2Screen.drop(_field)
+		_field = null

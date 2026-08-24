@@ -849,10 +849,14 @@ func _draw() -> void:
 			Vector2((sprite["cell"] as Vector2i) * Gen2WorldAPI.CELL_PIXELS) - camera_pixels,
 		)
 	## `HealMachineAnim` writes OAM at fixed screen pixels rather than over an
-	## object or a cell, so the camera does not move it.
+	## object or a cell, so the camera does not move it. [method screen_offset]
+	## and not the buffer's own corner: a hardware pixel is measured from the
+	## 160x144 rectangle, which SCREEN FILL puts in the middle of something
+	## wider, and the same offset is what `_draw_transition` reads its cells at.
+	var screen: Vector2 = screen_offset()
 	for sprite: Dictionary in _effect_sprites():
 		if bool(sprite.get("screen", false)):
-			_draw_effect_sprite(sprite, Vector2.ZERO)
+			_draw_effect_sprite(sprite, screen)
 	_draw_encounter_pulse(camera_pixels)
 
 

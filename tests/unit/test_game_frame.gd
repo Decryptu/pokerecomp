@@ -203,6 +203,54 @@ func test_a_layer_over_a_screen_does_not_answer_for_it() -> void:
 	assert_eq(screen.surround_color, Color.WHITE, "the screen under it still owns it")
 
 
+## Until something says what the field is, there is no surround to paint.
+## "Not told yet" is not "told it is black": a screen laid out over another one
+## -- a menu box over the map -- has no field of its own, and a band of the
+## default cut the map back to 160x144 with bars around it.
+func test_a_screen_nothing_has_told_paints_no_surround() -> void:
+	var screen: Gen2Screen = _built()
+	assert_false(screen.has_field(), "nothing has said what it stands on")
+	var view := TextureRect.new()
+	screen.display(view)
+	Gen2PicImage.show(view, _picture(Color(0, 0, 0, 0), Color.BLACK))
+	assert_false(screen.has_field(), "and a transparent overlay says nothing")
+
+
+## And it forgets when the screen that told it goes, so the next one starts from
+## untold rather than standing on a colour it never drew.
+func test_the_field_goes_with_the_screen_that_drew_it() -> void:
+	var screen: Gen2Screen = _built()
+	var view := TextureRect.new()
+	screen.display(view)
+	Gen2PicImage.show(view, _picture(Color.WHITE, Color.BLACK))
+	assert_true(screen.has_field())
+	Gen2Screen.drop(view)
+	await wait_process_frames(2)
+	assert_false(screen.has_field())
+
+
+## One window, one screen. A host asks for the screen it is standing in rather
+## than building a second over it: two viewports each pick their own scale and
+## their own place for the hardware rectangle, so an overlay meant to sit on the
+## map is drawn at a different size beside it.
+func test_a_host_inside_a_screen_is_given_that_screen() -> void:
+	var screen: Gen2Screen = _built()
+	var host := Control.new()
+	screen.display(host)
+	assert_eq(Gen2Screen.host_for(host), screen)
+	assert_eq(Gen2Screen.host_for(host, screen), screen, "and a handover wins")
+
+
+## A host opened on its own -- the launcher's PC, a preview -- really does need
+## one, and gets it over itself.
+func test_a_host_outside_every_screen_gets_one_of_its_own() -> void:
+	var host := Control.new()
+	add_child_autofree(host)
+	var screen: Gen2Screen = Gen2Screen.host_for(host)
+	assert_not_null(screen)
+	assert_eq(screen.get_parent(), host)
+
+
 ## Half the screens here are drawn as a colour rather than as a picture, so the
 ## field they stand on is the same seam.
 func test_a_screen_drawn_as_a_colour_says_so_too() -> void:

@@ -98,9 +98,22 @@ func test_a_page_says_how_it_was_reached() -> void:
 	## not.
 	assert_eq(pages[1]["lines"], PackedStringArray(["b"]))
 	assert_eq(pages[2]["lines"], PackedStringArray(["b", "c"]))
+	## And says so, because a carried line was moved up as tiles rather than
+	## typed and must not be typed again.
+	assert_eq(int(pages[1]["carried"]), 0)
+	assert_eq(int(pages[2]["carried"]), 1)
 
 
 const FRAME: float = Gen2TextBox.FRAME_SECONDS
+
+
+## What a box printing [param text] as one page owes, for comparing a scrolled
+## page against a whole one.
+func _owed(text: String) -> int:
+	var box: Gen2TextBox = _box()
+	box.reveal_speed = 30.0
+	box.show_text(text)
+	return box.frames_left()
 
 
 func _box() -> Gen2TextBox:
@@ -174,6 +187,30 @@ func test_a_continuation_scrolls_for_ten_frames_after_its_press() -> void:
 	box._process(FRAME)
 	assert_false(box.is_revealing())
 	assert_false(box.has_pages_left(), "the second page is up")
+
+
+## `TextScroll` copies the interior up a row at a time and `_ContTextNoPause`
+## then writes at `TEXTBOX_INNERY + 2`, so the line that moved to the top is
+## already on screen and the reveal starts on the bottom row. Typing it again is
+## a line the player has read appearing to be new.
+func test_a_scrolled_line_is_not_typed_a_second_time() -> void:
+	var box: Gen2TextBox = _box()
+	box.reveal_speed = 30.0
+	box.show_text("above" + Gen2TextStream.SCROLL_BREAK + "below")
+	for _frame: int in box.frames_left():
+		box.advance_frame()
+	assert_false(box.is_revealing(), "the first page is printed")
+
+	assert_true(box.advance())
+	for _frame: int in Gen2TextBox.SCROLL_STEP_FRAMES * Gen2TextBox.SCROLL_STEPS:
+		box.advance_frame()
+	## Only the bottom row is left to type. A page that re-revealed the line it
+	## carried would owe both rows.
+	var fresh: Gen2TextBox = _box()
+	fresh.reveal_speed = 30.0
+	fresh.show_text("below")
+	assert_eq(box.frames_left(), fresh.frames_left())
+	assert_lt(box.frames_left(), _owed("above below"), "not both rows")
 
 
 ## `_ContTextNoPause` has no `PromptButton` in front of those two scrolls, so

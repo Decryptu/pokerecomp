@@ -15,6 +15,8 @@ const CHANNELS: int = 4
 ## per 8x8 tile on each axis.
 const FIELD_STRIDE: int = 4
 const TRANSPARENT := Color(0.0, 0.0, 0.0, 0.0)
+## The alpha byte a picture the hardware could have drawn carries everywhere.
+const OPAQUE: int = 255
 
 ## `PadFrontpic`'s box: every front pic is placed as 7x7 tiles whatever its own
 ## size is.
@@ -408,8 +410,13 @@ static func show(target: TextureRect, image: Image) -> void:
 ## blocks of eight and a quarter of the pixels answers the same question as all
 ## of them for a sixteenth of the walk.
 ##
-## A picture that is transparent where it is sampled has no field: it is a layer
-## over some other screen's, and answering for that screen would be wrong.
+## A picture with any transparency in it has no field at all. The hardware has no
+## alpha, so a screen's own picture is opaque everywhere; one that is not is a
+## layer drawn over another screen -- a `MENU_BACKUP_TILES` box, a sprite pass
+## composed over a background -- and answering for the screen underneath is what
+## painted a black band over the map. Whether the clear pixels outnumber the
+## drawn ones is not the question: a `PokemonCenterPC` menu with a text box
+## under it covers half the screen and still owns none of it.
 static func field_color(image: Image, stride: int = FIELD_STRIDE) -> Color:
 	if image == null or image.is_empty() or image.get_format() != Image.FORMAT_RGBA8:
 		return TRANSPARENT
@@ -428,6 +435,8 @@ static func field_color(image: Image, stride: int = FIELD_STRIDE) -> Color:
 		var x: int = 0
 		while x < width:
 			var at: int = row + x * CHANNELS
+			if data[at + 3] < OPAQUE:
+				return TRANSPARENT
 			var key: int = (
 				data[at] << 24 | data[at + 1] << 16 | data[at + 2] << 8 | data[at + 3]
 			)

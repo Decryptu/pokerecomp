@@ -28,6 +28,10 @@ extends Control
 
 const WIDTH: int = 160
 const HEIGHT: int = 144
+## Loaded rather than preloaded: this script is the scene's own, and a preload
+## of it here is a cycle. [method host_for] is the only caller and the loader
+## caches after the first.
+const SCENE_PATH: String = "res://game/render/gen2_screen.tscn"
 ## Below one screen pixel per hardware pixel the picture is halved rather than
 ## stepped, which is what puts a whole region in a window.
 const MIN_SCALE: float = 0.25
@@ -95,13 +99,29 @@ var interface_masked: bool = true:
 ## a screen hands a redrawn picture to the node that shows it. A screen with more
 ## art than the hardware framed hands [method set_backdrop] the real thing
 ## instead, and this is what is left for one without.
+##
+## Meaningless until something has said what it is: see [method has_field].
 var surround_color: Color = Color.BLACK:
 	set(value):
-		if surround_color == value:
+		var told: bool = _field_told
+		_field_told = true
+		if surround_color == value and told:
 			return
 		surround_color = value
 		if _mask != null:
 			_mask.queue_redraw()
+
+## Whether anything has said what [member surround_color] is.
+##
+## "Not told yet" is not "told it is black", and the difference is a whole class
+## of bug: a screen laid out over another -- a menu box over the map, a question
+## over a picture -- has no field of its own, and painting the default over the
+## surround cuts whatever it is standing on back to 160x144 with bars around it.
+## An untold screen paints no surround at all.
+var _field_told: bool = false
+## Who told it, so the colour goes when that screen does and the next one starts
+## from untold rather than inheriting a field it never drew.
+var _field_source: Node = null
 
 var _view_size: Vector2i = Vector2i(WIDTH, HEIGHT)
 var _draw_scale: float = 1.0
@@ -270,6 +290,7 @@ func reset_zoom() -> void:
 ## Frees everything on screen, on both layers.
 func clear() -> void:
 	clear_backdrop()
+	clear_field()
 	for parent: Node in [_interface, _content, _native]:
 		for child: Node in parent.get_children():
 			drop(child)
@@ -331,11 +352,7 @@ func interface_origin() -> Vector2i:
 ## The walk rather than a stored reference: a screen is added to whichever host
 ## has one and freed by it, and neither end should have to hold the other.
 ##
-## The outermost one, not the nearest. Half a dozen screens build a screen of
-## their own and are then opened inside another -- the pack, the dex, the town
-## map, the party -- and the inner one is a full-rect [Control] in a 160x144
-## rectangle, so it has no surround at all. The one that does is the one at the
-## window.
+## The outermost one, not the nearest, for a node that is somehow inside two.
 static func owner_of(node: Node) -> Gen2Screen:
 	var at: Node = node
 	var found: Gen2Screen = null
@@ -344,6 +361,34 @@ static func owner_of(node: Node) -> Gen2Screen:
 			found = at
 		at = at.get_parent()
 	return found
+
+
+## The screen a host's own 160x144 view belongs in.
+##
+## [param handed] is the one the opener gave it, for a host mounted beside a
+## screen rather than inside it; failing that the one [param node] is already
+## standing in; failing both a new one over [param node], which is what a host
+## opened on its own -- the launcher's PC, a preview -- really does need.
+##
+## A second screen over a window that already has one is what made the surround
+## ambiguous. Two viewports each pick their own scale and their own place for the
+## hardware rectangle, so an overlay meant to sit on the map is drawn at a
+## different size beside it, and both of them paint a surround the other did not
+## ask for. One window, one screen.
+static func host_for(node: Control, handed: Gen2Screen = null) -> Gen2Screen:
+	if handed != null:
+		return handed
+	var found: Gen2Screen = owner_of(node)
+	if found != null:
+		return found
+	var scene: PackedScene = load(SCENE_PATH) as PackedScene
+	var built: Gen2Screen = scene.instantiate() as Gen2Screen if scene != null else null
+	if built == null:
+		return null
+	built.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	built.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	node.add_child(built)
+	return built
 
 
 ## Real art for the surround, the size of [method view_size], from [param source].
@@ -409,7 +454,7 @@ static func note_field(target: CanvasItem, field: Color) -> void:
 	var screen: Gen2Screen = owner_of(target)
 	if screen == null or not screen.expanded:
 		return
-	screen.surround_color = field
+	screen._take_field(target, field)
 
 
 ## Takes the surround's colour from a picture a screen has just drawn.
@@ -418,8 +463,7 @@ static func note_field(target: CanvasItem, field: Color) -> void:
 ## one place a redrawn picture reaches the node showing it, so the surround
 ## follows a palette fade and a screen swap without either knowing this exists.
 ## Only a picture the size of the hardware screen counts, and only one that is
-## opaque where it is sampled -- a layer drawn over another screen's field is
-## not that screen's field.
+## opaque everywhere it is sampled: see [method Gen2PicImage.field_color].
 ##
 ## Whether the surround is showing is deliberately not a condition. A screen
 ## draws its field on the frame it opens and the host raises the mask on that
@@ -436,7 +480,45 @@ static func note_picture(target: CanvasItem, image: Image) -> void:
 	var field: Color = Gen2PicImage.field_color(image)
 	if field.a <= 0.0:
 		return
-	screen.surround_color = field
+	screen._take_field(target, field)
+
+
+## Whether anything has said what [member surround_color] is. False leaves the
+## surround unpainted: see [member _field_told].
+func has_field() -> bool:
+	return _field_told
+
+
+## Records [param field] and who drew it. A field belongs to one screen at a
+## time, so the last opaque one wins and the colour is forgotten when the node
+## that drew it goes.
+func _take_field(source: Node, field: Color) -> void:
+	surround_color = field
+	if _field_source == source:
+		return
+	_field_source = source
+	if source == null:
+		return
+	var gone: Callable = _on_field_source_gone.bind(source)
+	if not source.tree_exited.is_connected(gone):
+		source.tree_exited.connect(gone, CONNECT_ONE_SHOT)
+
+
+func _on_field_source_gone(source: Node) -> void:
+	if _field_source != source:
+		return
+	clear_field()
+
+
+## Forgets what the surround is, so a screen taken off leaves the next one
+## untold rather than standing on its colour.
+func clear_field() -> void:
+	_field_source = null
+	if not _field_told:
+		return
+	_field_told = false
+	if _mask != null:
+		_mask.queue_redraw()
 
 
 ## Hides a view switch behind the cartridge's own way of going black.
@@ -594,6 +676,10 @@ func _draw_mask() -> void:
 	var whole := Vector2(_view_size)
 	var backdrop: bool = _backdrop != null \
 		and _backdrop.get_size() == Vector2(whole)
+	# Nothing rather than the default: an untold screen is one standing over
+	# another, and a band of black is what cut the map back to 160x144.
+	if not backdrop and not _field_told:
+		return
 	for band: Rect2 in [
 		Rect2(Vector2.ZERO, Vector2(whole.x, inside.position.y)),
 		Rect2(Vector2(0.0, inside.end.y), Vector2(whole.x, whole.y - inside.end.y)),

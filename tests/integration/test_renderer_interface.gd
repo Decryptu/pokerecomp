@@ -130,6 +130,20 @@ func _open_world(source: String) -> Node:
 	return _world_screen._renderer
 
 
+## The built-in [Gen2WorldRenderer], which is what the game draws with unless a
+## mod has been chosen.
+func _open_built_in_world() -> Gen2WorldRenderer:
+	var packed: PackedScene = load("res://game/world/world_screen.tscn")
+	_world_screen = packed.instantiate() as Gen2WorldScreen
+	_world_screen.map_group = Fixture.MAP_GROUP
+	_world_screen.map_number = Fixture.MAP_NUMBER
+	_world_screen.start_cell = Vector2i(7, 6)
+	_world_screen.set_data(_data)
+	add_child(_world_screen)
+	await get_tree().process_frame
+	return _world_screen._renderer as Gen2WorldRenderer
+
+
 func _open_battle() -> Node:
 	assert_true(
 		Gen2ModHost.instance().register_battle_renderer(&"native", _script(NATIVE_SOURCE))["ok"]
@@ -850,6 +864,18 @@ func test_a_native_layer_battle_fills_its_own_surround_and_the_built_in_one_is_f
 	await get_tree().process_frame
 	assert_true(_battle_screen._screen.expanded)
 	assert_true(_battle_screen._screen.interface_masked, "and the screen fills it")
+
+
+## `HealMachineAnim` writes OAM at fixed hardware-screen pixels, and so does
+## `DoBattleTransition`'s own twenty by eighteen grid. Both are drawn from the
+## renderer's own [method Gen2WorldRenderer.screen_offset], which has to be
+## where the screen puts the 160x144 rectangle: the buffer's corner is outside
+## it, and the machine's poke balls were drawn out over the wall.
+func test_a_fixed_screen_pixel_is_the_rectangle_the_interface_is_in() -> void:
+	var renderer: Gen2WorldRenderer = await _open_built_in_world()
+	var screen: Gen2Screen = _world_screen._screen
+	assert_gt(screen.interface_origin().x, 0, "the buffer is wider than the screen")
+	assert_eq(Vector2i(renderer.screen_offset()), screen.interface_origin())
 
 
 ## A hardware-pixel number means nothing on the native layer without the
