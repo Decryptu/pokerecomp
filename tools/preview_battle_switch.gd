@@ -10,7 +10,10 @@ extends SceneTree
 ## [stage] is one of `offer` (the default), `menu`, `move`, `info` (the move
 ## list with a registered battle-information provider's annotations over it:
 ## a mark per row for the effectiveness against the defender, the non-zero stat
-## stages, and a tile of the provider's own for the weather), `contest`, `pack`,
+## stages, and a tile of the provider's own for the weather), `info_pack` and
+## `info_pkmn` (the same battle state, with the modal that covers the
+## annotations open and no provider of this tool's own registered, so a mod
+## under test is the only thing answering), `contest`, `pack`,
 ## `pick`, `use_next`, `replace` and `level_up`, which is the stats box
 ## `.skip_exp_bar_animation` draws beside its grew-to-level line;
 ## [presses] is a `u,d,l,r,a,b` list driven into the menu before the shot, so a
@@ -46,10 +49,16 @@ const PLAYER_LEVEL: int = 30
 ## Four moves on the lead, so `MoveSelectionScreen`'s list is a full one:
 ## TACKLE, GROWL, TAIL_WHIP and BITE (constants/move_constants.asm).
 const LEAD_MOVES: Array[int] = [33, 45, 39, 44]
-## The `info` stage's own four, one per effectiveness the annotation can mark
+## The `info` stages' own four, one per effectiveness the annotation can mark
 ## against Pidgey's NORMAL/FLYING: THUNDERSHOCK is super effective, TACKLE
 ## neutral, VINE WHIP resisted and EARTHQUAKE has no effect at all.
 const INFO_MOVES: Array[int] = [84, 33, 22, 89]
+
+## The stages `BattleMenu`'s own first opening leads into with nothing staged
+## behind it, rather than a question a turn has to reach.
+const MENU_STAGES: Array[String] = [
+	"menu", "move", "info", "info_pack", "info_pkmn", "contest", "pack",
+]
 
 var _screen: Gen2BattleScreen = null
 var _output_path: String = ""
@@ -178,6 +187,13 @@ class Annotations extends RefCounted:
 ## about, or the player's own going down, which is what `AskUseNextPokemon` and
 ## `ForcePlayerMonChoice` follow. SHIFT is forced on rather than read out of the
 ## options file, since the question is the thing being photographed.
+## Whether this stage stands the battle up in the state an information provider
+## has something to say about. Registering a provider is a separate question:
+## see [constant MENU_STAGES].
+func _informing() -> bool:
+	return _stage.begins_with("info")
+
+
 func _open() -> void:
 	var data: GameData = _screen.get("_data")
 	var rng := RandomNumberGenerator.new()
@@ -185,7 +201,7 @@ func _open() -> void:
 
 	var members: Array = []
 	for species: int in PLAYER_SPECIES:
-		var lead: Array[int] = INFO_MOVES if _stage == "info" else LEAD_MOVES
+		var lead: Array[int] = INFO_MOVES if _informing() else LEAD_MOVES
 		members.append(Gen2BattleMon.create(
 			data, species, PLAYER_LEVEL,
 			lead.duplicate() if members.is_empty() else [33]
@@ -226,7 +242,7 @@ func _open() -> void:
 		_screen.set("_pending", battle.take_actions(
 			Gen2Battle.use_move(0), Gen2Battle.use_move(0)
 		))
-	elif _stage not in ["menu", "move", "info", "contest", "pack"]:
+	elif _stage not in MENU_STAGES:
 		_screen.set("_pending", battle.take_actions(
 			Gen2Battle.use_move(0), Gen2Battle.switch_to(1)
 		))
@@ -250,12 +266,13 @@ func _open() -> void:
 
 	## Both menu stages are what the intro leads into with nothing else staged,
 	## which is `BattleMenu`'s own first opening.
-	if _stage in ["menu", "move", "info", "contest", "pack"]:
-		## The annotations are a mod's, over the move list they describe: the
-		## provider is synthetic and everything it is handed, and everything drawn
-		## from what it answers, is the host's.
-		if _stage == "info":
-			Gen2ModHost.instance().register_battle_info(&"preview", Annotations.new())
+	if _stage in MENU_STAGES:
+		## The state an information provider reads, which is the stage rather
+		## than the provider: a seen opponent, weather on, and two stages moved.
+		## Only `info` registers this tool's own, so a capture of a mod's
+		## annotations has exactly one provider answering and cannot attribute
+		## one mod's placements to the other.
+		if _informing():
 			## What `SetSeenMon` would have left behind, since a first sighting is
 			## not something the Pokedex could have told the player about.
 			_screen.set("_enemy_seen_before", true)
@@ -263,14 +280,24 @@ func _open() -> void:
 			battle.weather_turns = 3
 			battle.player.stages["attack"] = 2
 			battle.player.stages["speed"] = -1
+		## The annotations are a mod's, over the move list they describe: the
+		## provider is synthetic and everything it is handed, and everything drawn
+		## from what it answers, is the host's.
+		if _stage == "info":
+			Gen2ModHost.instance().register_battle_info(&"preview", Annotations.new())
 		_drain_to_menu()
 		if _stage in ["move", "info"]:
 			_screen._handle_button(Gen2Button.A)
 		## `BattlePack`'s own list, over the bag the world hands the battle. The
 		## rows are a real cache's items, so the picture reads as the pack.
-		if _stage == "pack":
+		if _stage in ["pack", "info_pack"]:
 			_screen.set_battle_pack(PACK_ITEMS, PACK_QUANTITIES)
 			_screen._handle_button(Gen2Button.DOWN)
+			_screen._handle_button(Gen2Button.A)
+		## `BattleMenu_PKMN`'s party page, the other modal that covers the same
+		## cells: RIGHT from FIGHT is PKMN.
+		if _stage == "info_pkmn":
+			_screen._handle_button(Gen2Button.RIGHT)
 			_screen._handle_button(Gen2Button.A)
 		for press: String in _presses:
 			_screen._handle_button(_button(press))

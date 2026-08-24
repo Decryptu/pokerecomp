@@ -38,7 +38,7 @@ user://mods/<id>/
 | `id` | Lowercase `[a-z0-9][a-z0-9_-]*`; addresses the directory and registry keys |
 | `name` | Shown to the player |
 | `version` | The mod's own version, not the host's |
-| `api_version` | Between `Gen2ModManifest.MIN_API_VERSION` and `API_VERSION`. Declare the oldest host you need: 13 for [an alternate field-move source](#an-alternate-field-move-source), [Repel renewal](#renewing-a-repel), [experience for a capture](#experience-for-a-capture), [battle annotations](#annotating-the-battle) and a start-menu entry's action and visibility, 12 for `Gen2ModHost.view_changed`, 11 for [the battle entrance](#the-entrance) and the battle view's other resolved fields, 10 for [a screen that fills the window](#a-screen-that-fills-the-window) and the maps past this one's edge, 9 for an item that names an evolution method, 8 for a stats-screen page, 7 for an actor's `interact`, `emote` and outbox and for hidden-item requests, 6 for `occupied` in the visible-encounter context, 5 for the run's rules, 4 for types, matchups, mod art and event mutators, 3 for mart rows and named axes, 2 for visible encounters, 1 for everything else |
+| `api_version` | Between `Gen2ModManifest.MIN_API_VERSION` and `API_VERSION`. Declare the oldest host you need: 14 for [an annotation's own interface field](#annotating-the-battle), 13 for [an alternate field-move source](#an-alternate-field-move-source), [Repel renewal](#renewing-a-repel), [experience for a capture](#experience-for-a-capture), [battle annotations](#annotating-the-battle) and a start-menu entry's action and visibility, 12 for `Gen2ModHost.view_changed`, 11 for [the battle entrance](#the-entrance) and the battle view's other resolved fields, 10 for [a screen that fills the window](#a-screen-that-fills-the-window) and the maps past this one's edge, 9 for an item that names an evolution method, 8 for a stats-screen page, 7 for an actor's `interact`, `emote` and outbox and for hidden-item requests, 6 for `occupied` in the visible-encounter context, 5 for the run's rules, 4 for types, matchups, mod art and event mutators, 3 for mart rows and named axes, 2 for visible encounters, 1 for everything else |
 | `entry` | A `.gd` path inside the mod directory, or inside the pack when there is one |
 | `pack` | Optional `.pck` or `.zip` beside `mod.json`, holding the mod's files |
 | `description` | Optional |
@@ -1134,6 +1134,12 @@ A placement is `{"at": Vector2i}` plus one of:
 | `text` | written with the interface's own font, cut at the right edge |
 | `tile` | one 8x8 cell: eight bytes of 1bpp, or sixty-four palette indices |
 
+and one optional flag:
+
+| Key | What it is |
+|---|---|
+| `field` | `true` asks for the cartridge's interface field behind exactly the cells this placement occupies (`api_version` 14) |
+
 so a mod can supply a symbol the cartridge has no glyph for without a Node, a
 renderer or any art of its own. A placement outside the grid, or one whose text
 does not fit, is refused rather than clipped.
@@ -1163,10 +1169,21 @@ The snapshot carries what a subscriber of past events cannot know:
 with Foresight applied, so a mod never copies the type chart, never resolves a
 dual type itself and never rebuilds state from the event stream.
 
+`field` exists because ink alone is only readable where something already put a
+field under it. A mark on the move list or a summary over the command panel has
+one; a stage figure at the top of the screen or a weather glyph beside the enemy
+sits on bare battle scenery, which is white in the built-in arena and arbitrary
+map geometry under a native-layer renderer. The host draws the field in a layer
+of its own immediately below the annotations, at the opacity the selected
+renderer asks its interface to be drawn at, and hides and restores it with the
+ink. A placement without the flag is unchanged, so do not set it where the
+interface already supplies a field.
+
 The layer is refreshed after every event, every view push and every menu change,
-and hidden wherever one of the host's own full-screen subflows owns the same
-cells: the party page, the pack and its sub-lists, the forget offer, the naming
-prompt and the entrance. Two providers claiming one cell is refused rather than
+and hidden from the frame a modal takes the interface: the party page, the pack
+and its sub-lists, ball selection, the forget offer, the naming prompt and the
+entrance. Ownership is answered where the host's own state changes, so a subflow
+added later hides the annotations without a provider being told anything. Two providers claiming one cell is refused rather than
 resolved by load order, so which mod loaded first cannot decide what a player
 sees.
 

@@ -49,6 +49,12 @@ static func from_data(data: GameData) -> Gen2BattleAnnotations:
 
 ## [param placement] as the host will keep it, or `{}` when it cannot be drawn.
 ##
+## `field` is the one optional key: with it set the host draws the cartridge's
+## own interface field behind exactly the cells [method cells] answers, so ink a
+## provider puts on bare battle scenery is readable over a native renderer. It
+## is kept only when it was asked for, so a placement without it is exactly the
+## dictionary an API 13 provider already got back.
+##
 ## Refused rather than clipped: a symbol half off the screen, or a stage summary
 ## running through the border, is worse than one the player never sees, and a
 ## provider that is told nothing about the refusal would keep sending it.
@@ -59,18 +65,25 @@ static func validate(placement: Dictionary) -> Dictionary:
 	var at: Vector2i = at_value
 	if at.x < 0 or at.y < 0 or at.x >= COLUMNS or at.y >= ROWS:
 		return {}
+	var field: bool = bool(placement.get("field", false))
+	var out: Dictionary = {"at": at}
 	if placement.has("tile"):
 		var tile: PackedByteArray = _tile_bytes(placement["tile"])
 		if tile.is_empty():
 			return {}
-		return {"at": at, "tile": tile}
-	var text: String = String(placement.get("text", ""))
-	if text.is_empty():
-		return {}
-	var codes: PackedByteArray = Gen2Font.fit(text, COLUMNS - at.x, FONT)
-	if codes.is_empty():
-		return {}
-	return {"at": at, "text": text, "width": codes.size()}
+		out["tile"] = tile
+	else:
+		var text: String = String(placement.get("text", ""))
+		if text.is_empty():
+			return {}
+		var codes: PackedByteArray = Gen2Font.fit(text, COLUMNS - at.x, FONT)
+		if codes.is_empty():
+			return {}
+		out["text"] = text
+		out["width"] = codes.size()
+	if field:
+		out["field"] = true
+	return out
 
 
 ## Which cells [param placement] occupies, for the ownership check. A validated
@@ -97,6 +110,32 @@ func draw(placements: Array, indices: PackedByteArray, width: int) -> void:
 			String(placement.get("text", "")), indices, width,
 			at.x * TILE, at.y * TILE, FONT, COLUMNS - at.x
 		)
+
+
+## Draws the interface field of the flagged placements in [param placements]
+## into [param indices], the layer that sits immediately below the ink. A cell
+## is filled with [constant INK_INDEX] because the field layer's own palette
+## paints that index in the field colour; an unflagged placement fills nothing.
+func draw_field(placements: Array, indices: PackedByteArray, width: int) -> void:
+	for placement: Dictionary in placements:
+		if not bool(placement.get("field", false)):
+			continue
+		for cell: Vector2i in cells(placement):
+			for row: int in TILE:
+				var start: int = (cell.y * TILE + row) * width + cell.x * TILE
+				if start < 0 or start + TILE > indices.size():
+					continue
+				for column: int in TILE:
+					indices[start + column] = INK_INDEX
+
+
+## Whether any of [param placements] asked for a field, so the host skips
+## building a layer nothing would draw into.
+static func any_field(placements: Array) -> bool:
+	for placement: Dictionary in placements:
+		if bool(placement.get("field", false)):
+			return true
+	return false
 
 
 func _draw_tile(tile: PackedByteArray, indices: PackedByteArray, width: int, at: Vector2i) -> void:

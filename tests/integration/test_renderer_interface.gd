@@ -1013,6 +1013,26 @@ func test_battle_annotations_are_validated_and_owned_per_cell() -> void:
 			continue
 		assert_true(answer.is_empty(), str(refused))
 
+	## `field` is the one optional key: kept only when it was asked for, so an
+	## API 13 placement comes back exactly as it always did, and it never widens
+	## the cells the ownership check reads.
+	var plain: Dictionary = Gen2BattleAnnotations.validate({"text": "ABC", "at": Vector2i(2, 3)})
+	assert_false(plain.has("field"), "an unflagged placement carries nothing extra")
+	assert_eq(plain, {"at": Vector2i(2, 3), "text": "ABC", "width": 3})
+	var flagged: Dictionary = Gen2BattleAnnotations.validate({
+		"text": "ABC", "at": Vector2i(2, 3), "field": true,
+	})
+	assert_true(bool(flagged["field"]))
+	assert_eq(Gen2BattleAnnotations.cells(flagged), Gen2BattleAnnotations.cells(plain))
+	assert_eq(int(flagged["width"]), 3, "the flag is not a cell of its own")
+	assert_true(Gen2BattleAnnotations.any_field([plain, flagged]))
+	assert_false(Gen2BattleAnnotations.any_field([plain]))
+	var tile: Dictionary = Gen2BattleAnnotations.validate({
+		"tile": PackedByteArray([1, 2, 3, 4, 5, 6, 7, 8]), "at": Vector2i(0, 0), "field": 1,
+	})
+	assert_true(bool(tile["field"]), "a truthy value is one flag, not a second shape")
+	assert_eq(Gen2BattleAnnotations.cells(tile).size(), 1)
+
 	var first: Object = _script(BATTLE_INFO_SOURCE).new()
 	var second: Object = _script(BATTLE_INFO_SOURCE).new()
 	first.set("placements", [{"text": "AB", "at": Vector2i(4, 4)}])
@@ -1028,6 +1048,140 @@ func test_battle_annotations_are_validated_and_owned_per_cell() -> void:
 	assert_eq(
 		StringName((host.failures().back() as Dictionary)["reason"]), &"battle_info_cells_taken"
 	)
+
+
+## A modal that takes the interface takes it from the annotations too, on the
+## frame it opens rather than on whatever refresh happens next. Every state the
+## visibility predicate reads writes through a setter, so this walks the four
+## the pack reproduction goes through plus the two the party page opens.
+func test_annotations_are_hidden_the_frame_a_modal_takes_the_interface() -> void:
+	var provider: Object = _script(BATTLE_INFO_SOURCE).new()
+	assert_true(
+		bool(Gen2ModHost.instance().register_battle_info(&"qol", provider).get("ok", false))
+	)
+	provider.set("placements", [{"text": "ATK+2", "at": Vector2i(0, 0)}])
+	await _open_battle()
+	_finish_entrance()
+	var layer: TextureRect = _battle_screen._annotation_layer
+	assert_true(layer.visible, "the battle itself leaves them up")
+
+	## The reproduction: main menu, PACK, and the item refusal that reopens the
+	## list under `It won't have any effect.`.
+	_battle_screen._open_battle_menu()
+	assert_true(layer.visible, "the main menu is a box, not a modal")
+	_battle_screen._pack_selecting = true
+	assert_false(layer.visible, "pack selection, the frame it opens")
+	_battle_screen._pack_selecting = false
+	assert_true(layer.visible, "and back when B closes it")
+
+	for opened: Callable in [
+		func() -> void: _battle_screen._pack_move_selecting = true,
+		func() -> void: _battle_screen._capture_selecting = true,
+		func() -> void: _battle_screen._switch_stage = &"pick",
+		func() -> void: _battle_screen._forget_stage = &"ask",
+	]:
+		opened.call()
+		assert_false(layer.visible, "a modal owns the interface")
+		_battle_screen._pack_move_selecting = false
+		_battle_screen._capture_selecting = false
+		_battle_screen._switch_stage = &""
+		_battle_screen._forget_stage = &""
+		assert_true(layer.visible, "and gives it back")
+
+	## The move list keeps its marks: the useful ordering the layer exists for.
+	_battle_screen._open_move_menu()
+	assert_true(layer.visible, "move-row marks stay over the list")
+
+
+## `field` puts the cartridge's own interface under exactly the cells that asked
+## for it, in a layer of its own below the ink and at the renderer's opacity.
+func test_an_annotation_can_ask_for_the_interface_field_behind_it() -> void:
+	var provider: Object = _script(BATTLE_INFO_SOURCE).new()
+	assert_true(
+		bool(Gen2ModHost.instance().register_battle_info(&"qol", provider).get("ok", false))
+	)
+	provider.set("placements", [
+		{"text": "DEF-1", "at": Vector2i(13, 0), "field": true},
+		{"text": "AB", "at": Vector2i(0, 10)},
+	])
+	await _open_battle()
+	_finish_entrance()
+	var ink: TextureRect = _battle_screen._annotation_layer
+	var field: TextureRect = _battle_screen._annotation_field_layer
+	assert_true(field.visible, "a flagged placement asked for one")
+
+	var interface: Control = _battle_screen._screen.interface_layer()
+	var children: Array = interface.get_children()
+	assert_eq(children.back(), ink, "the ink is still last")
+	assert_eq(children[children.size() - 2], field, "and the field immediately under it")
+
+	var image: Image = field.texture.get_image()
+	assert_eq(image.get_size(), Vector2i(Gen2Screen.WIDTH, Gen2Screen.HEIGHT))
+	var painted: Color = image.get_pixel(13 * 8 + 1, 1)
+	assert_almost_eq(painted.a, 0.75, 0.01, "the renderer's own interface opacity")
+	assert_eq(Color(painted.r, painted.g, painted.b), Color.WHITE)
+	assert_eq(image.get_pixel(13 * 8 - 1, 1).a, 0.0, "nothing to the left of it")
+	assert_eq(image.get_pixel(18 * 8, 1).a, 0.0, "and it stops where the five cells do")
+	assert_eq(image.get_pixel(4, 10 * 8 + 4).a, 0.0, "an unflagged placement gets none")
+
+	## Hidden and restored with the ink, R1's gate included.
+	_battle_screen._pack_selecting = true
+	assert_false(field.visible, "the field goes with the ink")
+	_battle_screen._pack_selecting = false
+	assert_true(field.visible)
+
+	provider.set("placements", [{"text": "DEF-1", "at": Vector2i(13, 0)}])
+	_battle_screen._refresh_annotations()
+	assert_false(field.visible, "and nothing is drawn for an unflagged answer")
+	assert_true(ink.visible)
+
+
+## The switch acknowledgement is battle text and the menu layer covers only half
+## the panel, so the words are kept off the screen while a menu is open. The
+## menu, its cursor and the annotations over it are untouched either way.
+func test_a_view_switch_does_not_print_behind_an_open_menu() -> void:
+	var provider: Object = _script(BATTLE_INFO_SOURCE).new()
+	assert_true(
+		bool(Gen2ModHost.instance().register_battle_info(&"qol", provider).get("ok", false))
+	)
+	provider.set("placements", [{"text": "ATK+2", "at": Vector2i(0, 0)}])
+	await _open_battle()
+	_finish_entrance()
+	assert_true(
+		Gen2ModHost.instance().register_battle_renderer(&"second", _script(NATIVE_SOURCE))["ok"]
+	)
+
+	## The default matchup is two species and no moveset, and `MoveSelectionScreen`
+	## does not open a list for a Pokemon with nothing to pick.
+	var mon: Gen2BattleMon = _battle_screen._battle.mon(Gen2Battle.PLAYER)
+	mon.moves = [1, 0, 0, 0]
+	mon.pp = [35, 0, 0, 0]
+
+	for stage: StringName in [&"main", &"move"]:
+		if stage == &"main":
+			_battle_screen._open_battle_menu()
+		else:
+			_battle_screen._open_move_menu()
+		assert_eq(_battle_screen._menu_stage, stage, "the %s menu opened" % stage)
+		var cursor: int = _battle_screen._menu_position
+		for id: StringName in [&"second", &"native"]:
+			assert_true(bool(_battle_screen.select_view(id).get("ok", false)))
+			_battle_screen._screen.settle_view_cover()
+			assert_false(
+				"".join(_battle_screen._box.text_lines()).contains("Renderer"),
+				"no renderer name is left in the battle text under the %s menu" % stage
+			)
+		assert_eq(_battle_screen._menu_stage, stage, "the menu is where it was")
+		assert_eq(_battle_screen._menu_position, cursor, "and so is its cursor")
+		assert_true(_battle_screen._annotation_layer.visible, "and the marks with it")
+
+	## With no menu open the acknowledgement still prints, so ordinary message
+	## progression is not stalled by the guard.
+	_battle_screen._close_battle_menu()
+	_battle_screen._menu_stage = &""
+	assert_true(bool(_battle_screen.select_view(&"second").get("ok", false)))
+	_battle_screen._screen.settle_view_cover()
+	assert_string_contains("".join(_battle_screen._box.text_lines()), "Renderer")
 
 
 ## Nothing at all without a provider: the layer never appears and the snapshot is
