@@ -36,8 +36,6 @@ signal cry_requested(species: int)
 ## per-caller mode.
 signal selection_made(party_index: int)
 
-const HARDWARE_SCENE: PackedScene = preload("res://game/render/gen2_screen.tscn")
-
 const BACKGROUND: Color = Color("#09111f")
 const PANEL: Color = Color("#14233a")
 const BORDER: Color = Color("#2d4566")
@@ -141,7 +139,9 @@ var _switch_from: int = -1
 var _selecting: bool = false
 var _select_prompt: String = PROMPT_CHOOSE
 
-## The embedded view's own hardware screen and the two pages drawn into it.
+## The hardware screen the embedded view is drawn in, and the two pages drawn
+## into it. Handed over by the opener or found around this node; never a second
+## one over a window that already has one.
 var _hardware: Gen2Screen = null
 var _view: TextureRect = null
 var _page: Gen2PartyMenuPage = null
@@ -673,18 +673,32 @@ func _resolve_save() -> Gen2SaveData:
 
 
 ## `StartMenu_Pokemon`'s screen: the party menu owns all 160x144 of it, so the
-## view goes in a [Gen2Screen] of its own rather than into whatever window-
-## resolution parent added this one.
+## view is laid out in hardware pixels rather than in the window ones of
+## whatever parent added this one. The screen it goes in is the one already at
+## the window ([method Gen2Screen.host_for]), so the list lands exactly on the
+## rectangle the map behind it is drawn in.
 func _build_hardware_ui() -> void:
-	_hardware = HARDWARE_SCENE.instantiate() as Gen2Screen
-	_hardware.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_hardware.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_hardware)
+	_hardware = Gen2Screen.host_for(self, _hardware)
+	if _hardware == null:
+		return
 	_view = TextureRect.new()
 	_view.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_view.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 	_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hardware.display(_view)
+
+
+## The screen the opener wants this drawn in, handed over before it is added to
+## the tree. Without one the view goes in whichever screen this ends up inside.
+func set_screen(screen: Gen2Screen) -> void:
+	_hardware = screen
+
+
+## The view lives in a screen this node may not own, so it goes by hand.
+func _exit_tree() -> void:
+	if _view != null:
+		Gen2Screen.drop(_view)
+		_view = null
 
 
 ## One hardware frame of `PlaySpriteAnimations` over the icons. `FreezeMonIcons`

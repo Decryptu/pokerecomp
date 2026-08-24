@@ -34,7 +34,6 @@ enum Mode { LIST, ENTRY, OPTION, SEARCH, SEARCH_RESULTS, AREA, UNOWN }
 ## The dex is drawn in hardware pixels and the start menu it opens over is
 ## ordinary UI at window resolution, so it carries a [Gen2Screen] of its own the
 ## way [Gen2TownMapScreen] does.
-const SCREEN_SCENE: PackedScene = preload("res://game/render/gen2_screen.tscn")
 
 ## `Pokedex_BlinkArrowCursor` counts its own frames and shows the arrow on the
 ## eight it is off `$8`, so the cursor is up for eight frames and down for eight.
@@ -73,6 +72,8 @@ var _area: Gen2TownMapScreen = null
 
 var _page: Gen2PokedexPage = null
 ## The 160x144 field inside the hardware screen, and the one layer drawn into it.
+## The screen this is drawn in, and the 160x144 layer inside it.
+var _screen: Gen2Screen = null
 var _field: Control = null
 var _background: TextureRect = null
 ## `Pokedex_DisplayChangingModesMessage` and `Pokedex_DisplayTypeNotFoundMessage`
@@ -580,10 +581,10 @@ func advance_frame() -> void:
 
 
 func _build_ui() -> void:
-	var screen: Gen2Screen = SCREEN_SCENE.instantiate() as Gen2Screen
-	screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(screen)
+	var screen: Gen2Screen = Gen2Screen.host_for(self, _screen)
+	if screen == null:
+		return
+	_screen = screen
 	_field = Control.new()
 	_field.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 	_field.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -592,3 +593,16 @@ func _build_ui() -> void:
 	_background.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_field.add_child(_background)
+
+
+## The screen the opener wants this drawn in, handed over before it is added to
+## the tree. Without one the field goes in whichever screen this ends up inside.
+func set_screen(screen: Gen2Screen) -> void:
+	_screen = screen
+
+
+## The field lives in a screen this node may not own, so it goes by hand.
+func _exit_tree() -> void:
+	if _field != null:
+		Gen2Screen.drop(_field)
+		_field = null

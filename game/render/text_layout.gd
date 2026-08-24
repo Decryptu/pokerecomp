@@ -91,12 +91,18 @@ static func lay_out(text: String, columns: int, rows: int) -> Array:
 ## for a press first; `&"scroll"` for `_ContText`, which waits and then runs
 ## `TextScroll` twice; and `&"scroll_nowait"` for `_ContTextNoPause`, which is
 ## the same two scrolls with nothing waited for. The first page is `&"start"`.
+##
+## `carried` is how many of the page's first lines the scroll moved up rather
+## than printed. `TextScroll` copies tiles and `_ContTextNoPause` then writes at
+## `TEXTBOX_INNERY + 2`, so a carried line is already on screen and is never
+## typed a second time.
 static func lay_out_pages(text: String, columns: int, rows: int) -> Array:
 	var out: Array = []
 	if rows <= 0 or columns <= 0:
 		return out
 	var page: PackedStringArray = PackedStringArray()
 	var enter: StringName = &"start"
+	var carried: int = 0
 	var at: int = 0
 	while at <= text.length():
 		var page_at: int = text.find(Gen2TextStream.PAGE_BREAK, at)
@@ -110,25 +116,28 @@ static func lay_out_pages(text: String, columns: int, rows: int) -> Array:
 		for line: String in wrap_lines(segment, columns):
 			page.append(line)
 			if page.size() == rows:
-				out.append({"lines": page, "enter": enter})
+				out.append({"lines": page, "enter": enter, "carried": carried})
 				page = PackedStringArray()
 				enter = &"page"
+				carried = 0
 		if stop < 0:
 			break
 		var scrolled: bool = stop == scroll_at or stop == nowait_at
 		if not page.is_empty():
-			out.append({"lines": page, "enter": enter})
+			out.append({"lines": page, "enter": enter, "carried": carried})
 			page = PackedStringArray()
 		enter = &"page"
+		carried = 0
 		if scrolled:
 			enter = &"scroll" if stop == scroll_at else &"scroll_nowait"
 			if not out.is_empty():
 				var previous: PackedStringArray = out[out.size() - 1]["lines"]
 				if not previous.is_empty():
 					page.append(previous[previous.size() - 1])
+					carried = 1
 		at = stop + 1
 	if not page.is_empty():
-		out.append({"lines": page, "enter": enter})
+		out.append({"lines": page, "enter": enter, "carried": carried})
 	return out
 
 

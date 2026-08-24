@@ -80,6 +80,30 @@ const HIDDEN_ITEMS: Array[Dictionary] = [
 ]
 
 
+## `data/items/fruit_trees.asm`'s whole `FruitTreeItems`, in `FRUITTREE_*` order
+## and byte identical between the two pins, named as `data/items/names.asm` names
+## them. `GetFruitTreeItem` indexes this at the `fruittree` operand less one.
+##
+## Pinned by name rather than by number because the question a player asks about
+## a tree is what the bag then says: `BERRY` really is what four Johto trees and
+## Route 11 bear, Oran and Sitrus being a Gen 3 renaming, and the table has no
+## terminator and no pointer, so nothing but its contents says it decoded at the
+## right offset.
+const FRUIT_TREE_ITEMS: Array[String] = [
+	"BERRY", "BERRY", "BERRY", "BERRY",
+	"PSNCUREBERRY", "PSNCUREBERRY",
+	"BITTER BERRY", "BITTER BERRY",
+	"PRZCUREBERRY", "PRZCUREBERRY",
+	"MYSTERYBERRY", "MYSTERYBERRY",
+	"ICE BERRY", "ICE BERRY",
+	"MINT BERRY", "BURNT BERRY",
+	"RED APRICORN", "BLU APRICORN", "BLK APRICORN", "WHT APRICORN",
+	"PNK APRICORN", "GRN APRICORN", "YLW APRICORN",
+	"BERRY", "PSNCUREBERRY", "BITTER BERRY", "PRZCUREBERRY",
+	"ICE BERRY", "MINT BERRY", "BURNT BERRY",
+]
+
+
 func run(r: RefCounted) -> void:
 	_r = r
 	for game_id: StringName in _r.GAME_IDS:
@@ -90,7 +114,23 @@ func run(r: RefCounted) -> void:
 		_verify_hm07(data, game_id)
 		_verify_route_44(data, game_id)
 		_verify_hidden_items(data, game_id)
+		_verify_fruit_trees(data, game_id)
 		_sweep_the_public_read(data, game_id)
+
+
+## Every tree, read the way the `fruittree` command reads one.
+func _verify_fruit_trees(data: GameData, game_id: StringName) -> void:
+	var names: Array[String] = []
+	for tree: int in range(1, FRUIT_TREE_ITEMS.size() + 1):
+		names.append(data.item_name(data.world_fruit_tree_item(tree)))
+	if not _r.check(
+		names == FRUIT_TREE_ITEMS,
+		"%s fruit trees bear %s." % [game_id, str(names)],
+	):
+		return
+	_r.note("%s: %d fruit trees, each the source's own item." % [
+		game_id, FRUIT_TREE_ITEMS.size(),
+	])
 
 
 ## The one that unblocks the route: picking HM07 up puts Waterfall in the bag,

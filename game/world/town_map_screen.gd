@@ -23,7 +23,6 @@ signal closed()
 ## The region map is drawn in hardware pixels, and the Pokegear's card list it is
 ## opened from is ordinary UI at window resolution, so the screen carries a
 ## [Gen2Screen] of its own rather than trusting whatever it was added to.
-const SCREEN_SCENE: PackedScene = preload("res://game/render/gen2_screen.tscn")
 
 const CURSOR_TILE: int = 0x04
 const ICON_SIZE: int = 16
@@ -77,6 +76,8 @@ var _time_of_day: int = Gen2WorldPalette.TIME_MORNING
 var _frames: int = 0
 var _open: bool = false
 ## The 160x144 field inside the hardware screen, which everything is drawn into.
+## The screen this is drawn in, and the 160x144 layer inside it.
+var _screen: Gen2Screen = null
 var _field: Control = null
 var _background: TextureRect = null
 var _cursor_icon: TextureRect = null
@@ -379,10 +380,10 @@ func _process(delta: float) -> void:
 ## `_TownMap` spawns the player's struct first, which takes the lower shadow-OAM
 ## indices, and a lower index is the one that shows.
 func _build() -> void:
-	var screen: Gen2Screen = SCREEN_SCENE.instantiate() as Gen2Screen
-	screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(screen)
+	var screen: Gen2Screen = Gen2Screen.host_for(self, _screen)
+	if screen == null:
+		return
+	_screen = screen
 	_field = Control.new()
 	_field.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 	_field.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -615,3 +616,16 @@ func _icon_position(landmark: int) -> Vector2i:
 	var entry: Dictionary = _data.landmark(landmark)
 	return Vector2i(int(entry.get("x", 0)), int(entry.get("y", 0))) \
 		- Vector2i(ICON_ORIGIN, ICON_ORIGIN)
+
+
+## The screen the opener wants this drawn in, handed over before it is added to
+## the tree. Without one the field goes in whichever screen this ends up inside.
+func set_screen(screen: Gen2Screen) -> void:
+	_screen = screen
+
+
+## The field lives in a screen this node may not own, so it goes by hand.
+func _exit_tree() -> void:
+	if _field != null:
+		Gen2Screen.drop(_field)
+		_field = null

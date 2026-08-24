@@ -31,9 +31,6 @@ enum MODE {
 ## region map, so the top menu is still there when the box screen closes.
 const BOX_SCENE := preload("res://game/save/box_screen.tscn")
 
-## `BuyMenu`'s own 160x144, which a window-resolution panel cannot host.
-const HARDWARE_SCENE: PackedScene = preload("res://game/render/gen2_screen.tscn")
-
 ## engine/pokegear/pokegear.asm's card order. Each is behind its own
 ## wPokegearFlags bit, named here by the engine flag that carries it, since that
 ## is what the state holds. The clock card needs no flag.
@@ -92,10 +89,9 @@ var _mart: Dictionary = {}
 var _mart_entries: Array = []
 var _mart_quantity: int = 1
 var _mart_purchased: bool = false
-## `BuyMenu`'s screen, which owns all 160x144 the way the region map does: the
+## `BuyMenu`'s own layer, which owns all 160x144 the way the region map does: the
 ## scrolling list's own scroll and cursor, which of `BuyMenuLoop`'s four states
 ## it is in, and the boxes waiting on a press.
-var _mart_hardware: Gen2Screen = null
 var _mart_view: TextureRect = null
 var _mart_page: Gen2MartPage = null
 var _mart_menu_page: Gen2MenuPage = null
@@ -132,6 +128,8 @@ var _pc_after: StringName = &"top"
 var _pc_label: String = ""
 var _boxes: Gen2BoxScreen = null
 
+## The screen every layer here is drawn in: the one the opener handed over, so
+## the menu box stands on the map's own 160x144 rather than beside it.
 var _service_hardware: Gen2Screen = null
 ## Whether the hardware layer holds an image for the mode this host is in, and
 ## whether a screen of its own is standing over both layers. [method
@@ -152,6 +150,22 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build_ui()
+
+
+## The screen this panel's layers are drawn in, handed over before it is added
+## to the tree: the world's own, so a `MenuTextbox` over the map is composited
+## with the map instead of standing in a screen of its own beside it.
+func set_screen(screen: Gen2Screen) -> void:
+	_service_hardware = screen
+
+
+## Both views live in a screen this node may not own, so they go by hand.
+func _exit_tree() -> void:
+	for view: TextureRect in [_service_view, _mart_view]:
+		if view != null:
+			Gen2Screen.drop(view)
+	_service_view = null
+	_mart_view = null
 
 
 ## Opens the host for whatever pending input the world currently exposes.
@@ -291,11 +305,9 @@ func selected_index() -> int:
 
 
 func _build_ui() -> void:
-	_service_hardware = HARDWARE_SCENE.instantiate() as Gen2Screen
-	_service_hardware.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_service_hardware.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_service_hardware.z_index = 4
-	add_child(_service_hardware)
+	_service_hardware = Gen2Screen.host_for(self, _service_hardware)
+	if _service_hardware == null:
+		return
 	_service_view = TextureRect.new()
 	_service_view.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_service_view.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
@@ -333,17 +345,15 @@ func _open_mart(mart: Dictionary) -> void:
 	_mart_scroll = 0
 	_cursor = 0
 	_set_overlay_open(true)
-	if _mart_hardware == null:
-		_mart_hardware = HARDWARE_SCENE.instantiate() as Gen2Screen
-		_mart_hardware.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		_mart_hardware.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_mart_hardware.z_index = 5
-		add_child(_mart_hardware)
+	if _mart_view == null and _service_hardware != null:
 		_mart_view = TextureRect.new()
 		_mart_view.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		_mart_view.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 		_mart_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_mart_hardware.display(_mart_view)
+		## Displayed after the panel's own view, which is [method
+		## Gen2Screen.display]'s z-order: the shop owns all 160x144 while it is
+		## up and the menu behind it is hidden anyway.
+		_service_hardware.display(_mart_view)
 	_show_mart_text(_mart_text("intro"), MART_LIST)
 
 
@@ -581,9 +591,8 @@ func _leave_mart() -> void:
 
 
 func _close_mart() -> void:
-	if _mart_hardware != null:
-		Gen2Screen.drop(_mart_hardware)
-		_mart_hardware = null
+	if _mart_view != null:
+		Gen2Screen.drop(_mart_view)
 		_mart_view = null
 	_set_overlay_open(false)
 
@@ -919,6 +928,7 @@ func _open_boxes() -> void:
 	_set_overlay_open(true)
 	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	host.z_index = 5
+	host.set_screen(_service_hardware)
 	add_child(host)
 	host.set_context(_data, _save, _persist, true)
 	host.closed.connect(_on_boxes_closed)
@@ -967,6 +977,7 @@ func _open_card(card: StringName) -> void:
 	_set_overlay_open(true)
 	_pokegear = Gen2PokegearScreen.new()
 	_pokegear.z_index = 5
+	_pokegear.set_screen(_service_hardware)
 	add_child(_pokegear)
 	_pokegear.closed.connect(_on_card_closed)
 	_pokegear.switched.connect(_on_card_switched)
@@ -1120,6 +1131,7 @@ func open_fly_map(
 	_set_overlay_open(true)
 	_town_map = Gen2TownMapScreen.new()
 	_town_map.z_index = 5
+	_town_map.set_screen(_service_hardware)
 	add_child(_town_map)
 	_town_map.closed.connect(_on_town_map_closed)
 	var visited: Array[int] = []
@@ -1147,6 +1159,7 @@ func _open_town_map(from_request: bool) -> void:
 	_set_overlay_open(true)
 	_town_map = Gen2TownMapScreen.new()
 	_town_map.z_index = 5
+	_town_map.set_screen(_service_hardware)
 	add_child(_town_map)
 	_town_map.closed.connect(_on_town_map_closed)
 	# The Pokegear's own MAP card when the Pokegear opened it, `_TownMap`'s
@@ -1345,8 +1358,8 @@ func _set_overlay_open(open: bool) -> void:
 ## never before a service has opened. Setting it by hand at each entrance is what
 ## left it standing behind whatever the mode drew.
 func _apply_layer_visibility() -> void:
-	if _service_hardware != null:
-		_service_hardware.visible = _mode >= 0 and not _overlay_open and _service_drawn
+	if _service_view != null:
+		_service_view.visible = _mode >= 0 and not _overlay_open and _service_drawn
 
 
 func _is_dial() -> bool:
