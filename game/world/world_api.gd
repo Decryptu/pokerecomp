@@ -609,6 +609,10 @@ func advance_radio_frame() -> bool:
 		state.set_map_music(track)
 	_buenas_password = _radio_show.buenas_password
 	_buenas_password_today = _radio_show.buenas_password_today
+	## `wBuenasPassword` is saved player data rather than a byte the radio owns:
+	## the show draws it, and Buena's own menu reads it a session later.
+	if _buenas_password >= 0:
+		state.set_buenas_password(_buenas_password)
 	return changed_box
 
 
@@ -632,8 +636,43 @@ func _start_radio_show(channel: int) -> void:
 		"kanto_badges": (state.badge_mask(crystal) >> 8) & 0xFF,
 		"lucky_number": _lucky_number,
 	}, radio_random)
-	_radio_show.buenas_password = _buenas_password
+	_radio_show.buenas_password = _buenas_password if _buenas_password >= 0 \
+		else state.buenas_password()
 	_radio_show.buenas_password_today = _buenas_password_today
+
+
+## `PlayRadio`, the radio a `special MapRadio` switches on over the map. The
+## station is the same show the Pokegear card reads, so it goes through
+## `_start_radio_show` rather than growing a second reader; what differs is that
+## nothing tuned a dial, so the knob and the channel the save keeps are left
+## where they stand.
+func play_map_radio(station: int) -> Dictionary:
+	var channel: int = Gen2WorldRadio.map_radio_channel(
+		station,
+		Gen2WorldRadio.is_kanto_landmark(
+			landmark(), Gen2WorldState.is_crystal_profile(data)
+		),
+		object_time_of_day
+	)
+	if channel < 0:
+		return {}
+	_start_radio_show(channel)
+	if _radio_show == null:
+		return {}
+	## `.PlayStation` runs the station's own entry once and then draws its box,
+	## which is the line the player reads before the loop starts.
+	_radio_show.advance_frame()
+	_buenas_password = _radio_show.buenas_password
+	_buenas_password_today = _radio_show.buenas_password_today
+	if _buenas_password >= 0:
+		state.set_buenas_password(_buenas_password)
+	return {
+		"channel": channel,
+		"station": station,
+		"lines": _radio_show.lines(),
+		"music": Gen2WorldRadio.CHANNEL_SONGS[channel] \
+			if channel < Gen2WorldRadio.CHANNEL_SONGS.size() else 0,
+	}
 
 
 ## Closing the radio card. ExitPokegearRadio_HandleMusic restores the map's own
@@ -2268,7 +2307,9 @@ func advance_schedule(random: RandomNumberGenerator = null) -> Dictionary:
 func set_world_clock(day: int, hour: int, minute: int) -> void:
 	var next_day: int = posmod(day, Gen2WorldClock.DAYS_PER_WEEK)
 	if next_day != world_day and state != null:
-		state.reset_daily_flags(Gen2WorldState.is_crystal_profile(data))
+		state.reset_daily_flags(
+			Gen2WorldState.is_crystal_profile(data), schedule_random
+		)
 	world_day = next_day
 	world_hour = posmod(hour, Gen2WorldClock.HOURS_PER_DAY)
 	world_minute = posmod(minute, Gen2WorldClock.MINUTES_PER_HOUR)
@@ -3997,6 +4038,9 @@ func _enqueue_script(request: Dictionary) -> void:
 		## script hangs off: a background event's faced tile or an object's own
 		## square. SnorlaxAwake wants where the player is standing.
 		request["player_cell"] = player_cell
+	## wPlayerID, which `ReadCaughtData` compares a row's OT ID against.
+	if not request.has("player_id") and _player_id >= 0:
+		request["player_id"] = _player_id
 	if not request.has("party") and not _party_summary.is_empty():
 		request["party"] = _party_summary.duplicate()
 	if not request.has("field_move_items"):

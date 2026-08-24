@@ -2442,6 +2442,12 @@ func capture_target() -> Gen2BattleMon:
 	return _battle.enemy if _is_wild_battle() and _battle != null else null
 
 
+## `wBattleType`, which `PokeBallEffect` reads once the catch has landed: a
+## BATTLETYPE_CELEBI catch is the one that raises BATTLERESULT_CAUGHT_CELEBI.
+func capture_battle_type() -> int:
+	return _battle.battle_type if _battle != null else Gen2Battle.BATTLETYPE_NORMAL
+
+
 ## Opens the small wild-battle ball selector. The full bag UI remains a later
 ## world-service host; this boundary exposes only the capture action.
 func begin_capture() -> Dictionary:

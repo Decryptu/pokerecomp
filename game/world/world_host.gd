@@ -22,6 +22,9 @@ extends RefCounted
 const UNATTENDED_REQUESTS: Array[StringName] = [
 	&"party_heal_requested", &"pokemon_requested", &"trade_requested",
 	&"contest_mon_requested",
+	## `GiveDratini` draws nothing at all: it rewrites four move slots in a row
+	## the party already holds and the script runs straight on.
+	&"dratini_moveset_requested",
 ]
 
 
@@ -38,7 +41,12 @@ static func complete_runtime_request(
 	if request.is_empty():
 		return _unavailable(&"runtime_request_not_pending", {})
 	var kind: StringName = StringName(request.get("kind", &""))
-	if kind in [&"pokemon_requested", &"trade_requested", &"contest_mon_requested"]:
+	if kind in [
+		&"pokemon_requested", &"trade_requested", &"contest_mon_requested",
+		## `GiveDratini` writes into a row the party already holds, which is the
+		## same save transaction a gift is.
+		&"dratini_moveset_requested",
+	]:
 		return Gen2WorldPartyHost.complete_runtime_request(
 			world, result, save, persist, random
 		)
@@ -201,6 +209,10 @@ static func _reason_for(kind: StringName) -> StringName:
 			return &"day_care_data_unavailable"
 		&"pc_requested":
 			return &"pc_host_unavailable"
+		&"map_radio_requested":
+			return &"radio_host_unavailable"
+		&"pokedex_entry_requested":
+			return &"pokedex_host_unavailable"
 	return &"runtime_host_unavailable"
 
 
@@ -258,6 +270,20 @@ static func _resolve_data_request(world: Gen2WorldAPI, request: Dictionary) -> D
 			if day_care.is_empty():
 				return {"ok": false, "reason": &"day_care_text_unavailable"}
 			return {"ok": true, "data": {"day_care_text": day_care}}
+		&"map_radio_requested":
+			## `PlayRadio` opens one station and prints its own line; the station
+			## the script named is all the routine needs.
+			return {
+				"ok": true,
+				"data": {"station": int(values.get("station", 0))},
+			}
+		&"pokedex_entry_requested":
+			## `NewPokedexEntry` is the dex page and its cry; the species is what
+			## the prize counter's `setval` named.
+			return {
+				"ok": true,
+				"data": {"species": int(values.get("species", 0))},
+			}
 		&"apricorn_selection_requested":
 			## `FindApricornsInBag` is the whole of the request's data: an empty
 			## bag is the source's own refusal, not a missing host.

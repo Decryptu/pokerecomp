@@ -390,6 +390,10 @@ static func verify_layout(rom: RomFile) -> Dictionary:
 	if not day_care_text["ok"]:
 		return day_care_text
 
+	var special_text: Dictionary = verify_special_text(rom, layout)
+	if not special_text["ok"]:
+		return special_text
+
 	var map_entry_sign: Dictionary = verify_map_entry_sign(rom, layout)
 	if not map_entry_sign["ok"]:
 		return map_entry_sign
@@ -1217,6 +1221,53 @@ static func verify_day_care_text(rom: RomFile, layout: Dictionary) -> Dictionary
 			"message": "The Day-Care man's intro is \"%s\", not his own." % intro,
 		}
 	return {"ok": true, "message": "The Day-Care's texts verified."}
+
+
+## Every `SPECIAL_TEXT_RUNS` run the cartridge ships, checked the way the Name
+## Rater's is: every stub in the run has to decode, and the box each routine
+## opens on has to be its own. A run the layout gives no offset is skipped
+## rather than failed, which is what Gold and Silver's three Crystal-only rows
+## are.
+##
+## `SPECIAL_TEXT_FIRST_BOX` is the identifying line per run, so a wrong pin is
+## caught here rather than by a screen printing the wrong routine's box.
+const SPECIAL_TEXT_FIRST_BOX: Dictionary = {
+	"magikarp": ["measure", "Let me measure"],
+	"lucky_number": ["match_party", "Congratulations!"],
+	"photo_studio": ["which_mon", "Which POKéMON"],
+	"bank_of_mom": ["leaving_1", "Wow, that's a cute"],
+	"poke_seer": ["see_all", "I see all."],
+	"buena_prize": ["ask_which_prize", "Which prize would"],
+}
+
+
+static func verify_special_text(rom: RomFile, layout: Dictionary) -> Dictionary:
+	for run: Variant in RomLayout.SPECIAL_TEXT_RUNS:
+		var run_name: String = String(run)
+		if not RomLayout.has_special_text_run(layout, run_name):
+			continue
+		for name: String in RomLayout.special_text_names(run_name):
+			if read_oak_text(
+				rom, layout, RomLayout.special_text_offset(layout, run_name, name)
+			).is_empty():
+				return {
+					"ok": false,
+					"message": "The %s run's %s text did not decode." % [run_name, name],
+				}
+		var expected: Array = SPECIAL_TEXT_FIRST_BOX.get(run_name, [])
+		if expected.is_empty():
+			continue
+		var opening: String = read_oak_text(
+			rom, layout, RomLayout.special_text_offset(layout, run_name, String(expected[0]))
+		)
+		if not opening.begins_with(String(expected[1])):
+			return {
+				"ok": false,
+				"message": "The %s run opens on \"%s\", not its own box." % [
+					run_name, opening,
+				],
+			}
+	return {"ok": true, "message": "The deferred routines' texts verified."}
 
 
 ## Every stub name across the four runs, in run order.
@@ -4196,6 +4247,8 @@ func import_rom(
 		"name_rater_text": _import_name_rater_text(rom, layout),
 		"move_deleter_text": _import_move_deleter_text(rom, layout),
 		"day_care_text": _import_day_care_text(rom, layout),
+		"special_text": _import_special_text(rom, layout),
+		"special_text_ram": (layout.get("special_text_ram", {}) as Dictionary).duplicate(),
 		"copyright_string": _import_copyright_string(rom, layout),
 		"copyright_palette": _import_copyright_palette(rom, layout),
 		"presents_palettes": _import_presents_palettes(rom, layout),
@@ -4999,6 +5052,24 @@ func _import_day_care_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 		out[name] = read_oak_text(
 			rom, layout, RomLayout.day_care_text_offset(layout, name)
 		)
+	return out
+
+
+## Every `SPECIAL_TEXT_RUNS` run the cartridge ships, keyed by run and then by
+## stub name. A run the cartridge does not ship is left out entirely, so a host
+## asking for one gets nothing rather than a run of empty strings.
+func _import_special_text(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for run: Variant in RomLayout.SPECIAL_TEXT_RUNS:
+		var run_name: String = String(run)
+		if not RomLayout.has_special_text_run(layout, run_name):
+			continue
+		var boxes: Dictionary = {}
+		for name: String in RomLayout.special_text_names(run_name):
+			boxes[name] = read_oak_text(
+				rom, layout, RomLayout.special_text_offset(layout, run_name, name)
+			)
+		out[run_name] = boxes
 	return out
 
 

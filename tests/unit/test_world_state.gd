@@ -570,3 +570,71 @@ func test_step_counters_round_trip_and_default_to_a_fresh_walk() -> void:
 	var legacy := Gen2WorldState.from_dict({"items": {}})
 	assert_eq(legacy.step_count(), 0)
 	assert_eq(legacy.poison_step_count(), 0)
+
+
+## `CheckDailyResetTimer` does more than clear the flag bytes: `wKenjiBreakTimer`
+## is stepped on every day that passes and resampled when it runs out, and the
+## lucky number's own countdown is stepped beside it. A weekday alone cannot say
+## how many days have gone by, so the rollover is where both are moved.
+func test_a_day_passing_steps_the_two_day_counted_timers() -> void:
+	var state := Gen2WorldState.new()
+	var random := RandomNumberGenerator.new()
+	random.seed = 7
+	state.restart_lucky_number_countdown(Gen2WorldClock.FRIDAY)
+	assert_false(state.lucky_number_show_ready(), "a Friday restarts a whole week")
+	for _day: int in Gen2WorldClock.DAYS_PER_WEEK - 1:
+		state.reset_daily_flags(true, random)
+		assert_false(state.lucky_number_show_ready())
+	state.reset_daily_flags(true, random)
+	assert_true(state.lucky_number_show_ready(), "seven days later it comes round")
+	## `SampleKenjiBreakCountdown` is three to six, and a zero timer resamples
+	## rather than going negative.
+	assert_between(state.kenji_break_timer(), 3, 6)
+
+
+## `RestartLuckyNumberCountdown.GetDaysUntilNextFriday`, which answers the days
+## to the coming Friday and seven on a Friday or a Saturday.
+func test_the_lucky_number_countdown_runs_to_the_next_friday() -> void:
+	for row: Array in [[0, 5], [4, 1], [5, 7], [6, 6]]:
+		var state := Gen2WorldState.new()
+		state.restart_lucky_number_countdown(int(row[0]))
+		for _day: int in int(row[1]) - 1:
+			state.reset_daily_flags()
+			assert_false(state.lucky_number_show_ready(), "day %d" % int(row[0]))
+		state.reset_daily_flags()
+		assert_true(state.lucky_number_show_ready(), "day %d" % int(row[0]))
+
+
+## `LoadOrRegenerateLuckyIDNumber`: `sLuckyNumberDay` holds the day plus one, so
+## a stored zero is "never drawn" and a day whose stamp already matches keeps
+## the number it had rather than spending two rolls on a new one.
+func test_todays_lucky_number_is_drawn_once_a_day() -> void:
+	var state := Gen2WorldState.new()
+	var random := RandomNumberGenerator.new()
+	random.seed = 11
+	assert_true(state.refresh_lucky_id_number(3, random))
+	var drawn: int = state.lucky_id_number()
+	assert_false(state.refresh_lucky_id_number(3, random), "the same day draws nothing")
+	assert_eq(state.lucky_id_number(), drawn)
+	assert_true(state.refresh_lucky_id_number(4, random))
+	assert_between(state.lucky_id_number(), 0, 0xFFFF)
+
+
+## Every byte the deferred routines added survives a save and a reload, since
+## each of them is read a session later: the record on the Magikarp house sign,
+## Mom's own flags, the Blue Card and the password the radio drew this morning.
+func test_the_deferred_routines_state_survives_a_round_trip() -> void:
+	var state := Gen2WorldState.new()
+	state.set_best_magikarp(4, 7, "MANIA")
+	state.set_mom_savings_flags(0x81)
+	state.set_blue_card_balance(12)
+	state.set_buenas_password(0x32)
+	state.set_kenji_break_timer(5)
+	state.set_battle_caught_celebi(true)
+	var restored: Gen2WorldState = Gen2WorldState.from_dict(state.to_dict())
+	assert_eq(restored.best_magikarp(), {"feet": 4, "inches": 7, "ot": "MANIA"})
+	assert_eq(restored.mom_savings_flags(), 0x81)
+	assert_eq(restored.blue_card_balance(), 12)
+	assert_eq(restored.buenas_password(), 0x32)
+	assert_eq(restored.kenji_break_timer(), 5)
+	assert_true(restored.battle_caught_celebi())

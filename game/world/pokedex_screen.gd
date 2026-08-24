@@ -17,6 +17,10 @@ extends Control
 ## is the cartridge's own region map, so it opens [Gen2TownMapScreen], which
 ## carries a hardware screen of its own.
 
+## Set by [method open_entry]: `NewPokedexEntry` has no listing behind it, so B
+## on the entry closes the dex rather than going back to one.
+var _entry_only: bool = false
+
 ## Emitted on B from the listing, which is where `DEXSTATE_EXIT` lands.
 signal closed
 
@@ -107,12 +111,29 @@ func open(data: GameData, world: Gen2WorldAPI, start_entry: int = 0) -> bool:
 	return true
 
 
+## `NewPokedexEntry`, which is the entry page for one species with no listing in
+## front of it: `GameCornerPrizeMonCheckDex` and every catch reach the dex this
+## way. Answers false when the species has no entry in this cache's order.
+func open_entry(data: GameData, world: Gen2WorldAPI, species: int) -> bool:
+	if not open(data, world, species):
+		return false
+	if _dex == null or _dex.selected_species() != species:
+		return false
+	_entry_only = true
+	if is_inside_tree() and _background != null:
+		_open_entry_mode()
+	return true
+
+
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build_ui()
 	if _dex != null:
-		_open_list_mode()
+		if _entry_only:
+			_open_entry_mode()
+		else:
+			_open_list_mode()
 
 
 ## `wPrevDexEntry`, so the caller can carry it into the next open() the way the
@@ -191,6 +212,10 @@ func _handle_list(button: int) -> bool:
 func _handle_entry(button: int) -> bool:
 	match button:
 		Gen2Button.B:
+			## `NewPokedexEntry` has no listing under it, so B is what closes it.
+			if _entry_only:
+				closed.emit()
+				return true
 			_open_list_mode()
 			return true
 		Gen2Button.A:

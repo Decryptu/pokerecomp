@@ -883,6 +883,23 @@ func _roll_password() -> void:
 	_password = password_words(_data, buenas_password)
 
 
+## `NUM_PASSWORDS_PER_CATEGORY`, the three words a category holds and the three
+## rows `BuenasPassword`'s menu lists.
+const PASSWORDS_PER_CATEGORY: int = 3
+
+
+## Every word of the category [param password] names, which is the menu Buena
+## puts in front of the player: the answer is which row matches the byte's own
+## low nibble.
+static func buenas_password_words(data: GameData, password: int) -> Array[String]:
+	var out: Array[String] = []
+	if password < 0:
+		return out
+	for word: int in PASSWORDS_PER_CATEGORY:
+		out.append(password_words(data, (password & 0xF0) | word))
+	return out
+
+
 ## The word a `wBuenasPassword` byte names, which Buena's own script reads as
 ## well as the radio.
 static func password_words(data: GameData, password: int) -> String:

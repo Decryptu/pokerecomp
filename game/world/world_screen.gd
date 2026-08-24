@@ -4278,7 +4278,8 @@ func _on_capture_requested(ball: int) -> void:
 		Gen2WorldPartyHost.capture_contest(_world, target, _encounter_random)
 		if _world.bug_contest_active()
 		else Gen2WorldPartyHost.capture_wild(
-			_world, save, target, ball, _encounter_random, 0, _active_battle_persist
+			_world, save, target, ball, _encounter_random, 0, _active_battle_persist,
+			_battle_host.capture_battle_type()
 		)
 	)
 	_battle_host.complete_capture(result)
@@ -5896,6 +5897,8 @@ func _show_script_results(results: Array) -> void:
 				_hide_money_window()
 			elif result_event.get("type", &"") == &"party_happiness_changed":
 				_apply_party_happiness(result_event)
+			elif result_event.get("type", &"") == &"party_member_removed":
+				_remove_party_member(result_event)
 			elif result_event.get("type", &"") == &"screen_shake_requested":
 				if _effects != null:
 					_effects.start_screen_shake(
@@ -6081,6 +6084,15 @@ func _show_script_results(results: Array) -> void:
 				]:
 					_open_service_host()
 					break
+				if StringName(request.get("kind", &"")) == &"map_radio_requested":
+					var radio_results: Array = _handle_map_radio_request(request)
+					if not radio_results.is_empty():
+						_show_script_results(radio_results)
+					break
+				if StringName(request.get("kind", &"")) == &"pokedex_entry_requested":
+					if _open_pokedex_entry(request):
+						break
+					continue
 				if StringName(request.get("kind", &"")) == &"audio_requested":
 					var audio_results: Array = _handle_audio_request(request)
 					if not audio_results.is_empty():
@@ -6273,6 +6285,73 @@ func money_window_open() -> bool:
 ## `HaircutOrGrooming`'s own `call ChangeHappiness`. The row is the runner's,
 ## since the roll that picked it has to belong to the seeded generator; the byte
 ## it changes belongs to the save this screen holds.
+## `RemoveMonFromPartyOrBox` with REMOVE_PARTY, which `ReturnShuckie` runs on
+## the row the player handed back. An event rather than a runtime request: the
+## routine writes wScriptVar and runs straight on, and the removal is the same
+## save write a happiness change is.
+func _remove_party_member(event: Dictionary) -> void:
+	var save: Gen2SaveData = _embedded_party_save()
+	var slot: int = int(event.get("slot", -1))
+	if save == null or slot < 0 or slot >= save.party.size():
+		return
+	save.party.remove_at(slot)
+
+
+## `PlayRadio` over the map: the station's own line in a four-row box, held
+## until A or B, which is what the script's own text pause already is.
+func _handle_map_radio_request(request: Dictionary) -> Array:
+	if _world == null:
+		return []
+	var values: Dictionary = request.get("values", {})
+	var playing: Dictionary = _world.play_map_radio(int(values.get("station", 0)))
+	if playing.is_empty():
+		return _world.complete_runtime_request({"ok": true, "script_value": 0})
+	var lines: PackedStringArray = playing.get("lines", PackedStringArray())
+	var spoken: PackedStringArray = PackedStringArray()
+	for line: String in lines:
+		if not line.strip_edges().is_empty():
+			spoken.append(line)
+	_script_prompt = "\n".join(spoken)
+	return _world.complete_runtime_request({"ok": true, "script_value": 1})
+
+
+## `NewPokedexEntry`, the page and the cry a Game Corner prize opens on the
+## first time its species is caught.
+func _open_pokedex_entry(request: Dictionary) -> bool:
+	if _world == null or _data == null or _pokedex_host != null:
+		return false
+	var species: int = int((request.get("values", {}) as Dictionary).get("species", 0))
+	if species <= 0:
+		return false
+	var host := Gen2PokedexScreen.new()
+	if not host.open_entry(_data, _world, species):
+		host.free()
+		return false
+	host.z_index = 10
+	host.set_screen(_screen)
+	add_child(host)
+	host.closed.connect(_on_pokedex_entry_closed)
+	host.cry_requested.connect(_on_pokedex_cry_requested)
+	host.sfx_requested.connect(_play_sfx)
+	_pokedex_host = host
+	_script_prompt = "Pokedex entry open"
+	_refresh_labels()
+	return true
+
+
+## The entry closing is what resumes the script: `ExitAllMenus` behind
+## `NewPokedexEntry` and then the special's own `ret`.
+func _on_pokedex_entry_closed() -> void:
+	var host: Gen2PokedexScreen = _pokedex_host
+	_pokedex_host = null
+	if host != null:
+		_pokedex_prev_entry = host.previous_entry()
+		Gen2Screen.drop(host)
+	if _world != null and not _world.pending_runtime_request().is_empty():
+		_show_script_results(_world.complete_runtime_request({"ok": true, "script_value": 0}))
+	_refresh_labels()
+
+
 func _apply_party_happiness(event: Dictionary) -> void:
 	var save: Gen2SaveData = _embedded_party_save()
 	var slot: int = int(event.get("slot", -1))
@@ -6342,6 +6421,21 @@ func _on_party_selection_made(party_index: int) -> void:
 				"species": Gen2WorldScriptRunner.SPECIES_EGG if mon.is_egg else mon.species,
 				"nickname": _mon_display_name(mon),
 				"species_name": String(_data.species(mon.species).get("name", "")),
+				## What the three deferred routines read off the row they were
+				## handed: MON_DVS, MON_OT_ID, the OT name, MON_HAPPINESS and
+				## `CheckCurPartyMonFainted`'s own question.
+				"dvs": [(int(mon.dvs) >> 8) & 0xFF, int(mon.dvs) & 0xFF],
+				"ot_id": int(mon.ot_id),
+				"original_trainer": mon.original_trainer,
+				"happiness": int(mon.happiness),
+				"fainted": mon.hp <= 0,
+				## `ReadCaughtData`'s two bytes, unpacked the way the save keeps
+				## them, plus MON_LEVEL for `SeerAdvice`.
+				"level": int(mon.level),
+				"caught_level": int(mon.caught_level),
+				"caught_time": int(mon.caught_time),
+				"caught_gender": int(mon.caught_gender),
+				"caught_location": int(mon.caught_location),
 			}
 	_show_script_results(_world.complete_runtime_request(result))
 	_refresh_labels()
@@ -6776,6 +6870,8 @@ func _refresh_party_summary() -> void:
 	var fainted: Array = []
 	var happiness: Array = []
 	var own_ot: Array = []
+	var held_items: Array = []
+	var id_numbers: Array = []
 	for member: Variant in save.party:
 		if member is Gen2SaveMon:
 			var mon: Gen2SaveMon = member as Gen2SaveMon
@@ -6783,6 +6879,8 @@ func _refresh_party_summary() -> void:
 				has_pokerus = true
 			happiness.append(int(mon.happiness))
 			own_ot.append(_is_own_mon(save, mon))
+			held_items.append(int(mon.item))
+			id_numbers.append(int(mon.ot_id))
 			species.append(int(mon.species))
 			# CheckPartyMove walks every slot's four move slots; zeroes are empty
 			# slots, not moves, so they are dropped rather than searched.
@@ -6817,6 +6915,15 @@ func _refresh_party_summary() -> void:
 			## `CheckOwnMonAnywhere`'s answer for every species at once: a mon in
 			## the party or in any box carrying the player's own ID and OT name.
 			"owned_species": _owned_species(save),
+			## `OmanyteChamber` walks MON_ITEM backwards for a WATER STONE, which
+			## is the one routine that reads a held item off the mirror.
+			"held_items": held_items,
+			## `CheckForLuckyNumberWinners` compares the show's number against
+			## every ID in the party and then against every one in storage, so
+			## the boxes come over as one list the way its three passes add up.
+			"id_numbers": id_numbers,
+			"stored_id_numbers": _stored_id_numbers(save),
+			"stored_species": _stored_species(save),
 		},
 		fainted
 	)
@@ -6827,6 +6934,34 @@ func _refresh_party_summary() -> void:
 func _is_own_mon(save: Gen2SaveData, mon: Gen2SaveMon) -> bool:
 	return int(mon.ot_id) == int(save.player_id) \
 		and mon.original_trainer == save.player_name
+
+
+## Every box slot's OT ID and species, in box then slot order. One list rather
+## than fourteen because `CheckForLuckyNumberWinners` walks the open box and
+## then every other box, which is every stored row exactly once.
+func _stored_id_numbers(save: Gen2SaveData) -> Array:
+	var out: Array = []
+	for box: Variant in save.boxes:
+		if not box is Gen2SaveBox:
+			continue
+		for slot: Variant in (box as Gen2SaveBox).slots:
+			if slot is Gen2SaveMon:
+				out.append(int((slot as Gen2SaveMon).ot_id))
+	return out
+
+
+func _stored_species(save: Gen2SaveData) -> Array:
+	var out: Array = []
+	for box: Variant in save.boxes:
+		if not box is Gen2SaveBox:
+			continue
+		for slot: Variant in (box as Gen2SaveBox).slots:
+			if slot is Gen2SaveMon:
+				var stored: Gen2SaveMon = slot as Gen2SaveMon
+				out.append(
+					Gen2WorldScriptRunner.SPECIES_EGG if stored.is_egg else int(stored.species)
+				)
+	return out
 
 
 ## `CheckOwnMonAnywhere` for every species in one walk. Its own `ret z` on an

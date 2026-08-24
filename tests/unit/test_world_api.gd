@@ -325,6 +325,49 @@ func _write_cache(game_id: String = "testworld") -> void:
 		## `UnownWalls`' four, since the special that draws one names them by
 		## index and a wrong index has to be told from a right one.
 		"unown_walls": ["WALLA", "WALLB", "WALLC", "WALLD"],
+		## The `RomLayout.SPECIAL_TEXT_RUNS` boxes the deferred routines print,
+		## with the `text_ram` markers a real cache carries so a filled buffer is
+		## told from an unfilled one.
+		"special_text": {
+			"magikarp": {
+				"measure": "It measures <RAM_CF6B>.",
+				"record": "<RAM_CF6B> caught by <RAM_DD35>",
+			},
+			"lucky_number": {
+				"match_party": "A match in your party.",
+				"match_pc": "A match in your PC BOX.",
+			},
+			"photo_studio": {
+				"which_mon": "Which one?", "hold_still": "Hold still.",
+				"presto": "All done.", "no_photo": "No picture?",
+				"egg": "An EGG?",
+			},
+			"poke_seer": {
+				"see_all": "I see all.", "cant_tell_a_thing": "I cannot tell.",
+				"name_location": "You met <RAM_D003> at <RAM_D00E>.",
+				"time_level": "It was <RAM_D01F>, level <RAM_D036>.",
+				"trade": "<RAM_D003> came from <RAM_D02A>.",
+				"no_location": "Level <RAM_D036> somewhere.",
+				"egg": "That is an EGG.", "do_nothing": "You did nothing.",
+				"more_care": "More care.", "more_confident": "More confident.",
+				"much_strength": "Much strength.", "mighty": "Mighty.",
+				"impressed": "Impressed.",
+			},
+			"buena_prize": {
+				"ask_which_prize": "Which prize?", "is_that_right": "<RAM_CF6B>?",
+				"here_you_go": "Here you go!", "not_enough_points": "Not enough.",
+				"no_room": "No room.", "come_again": "Come again!",
+			},
+		},
+		## Gold and Silver's own addresses, matching the buffer table above.
+		"special_text_ram": {
+			"magikarp_record_holder": 0xDD35,
+			"seer_nickname": 0xD003,
+			"seer_caught_location": 0xD00E,
+			"seer_time_of_day": 0xD01F,
+			"seer_ot": 0xD02A,
+			"seer_caught_level": 0xD036,
+		},
 	})
 
 
@@ -7813,3 +7856,158 @@ func test_connected_map_objects_are_drawn_but_not_in_the_object_table() -> void:
 		world.object_at(object.cell + (entry["offset"] as Vector2i)),
 		"and standing on nothing this map can walk into",
 	)
+
+
+## `HoOhChamber` reads `wPartySpecies`' first byte and nothing else, and
+## `OmanyteChamber` opens for a WATER STONE in the bag or held by any member.
+## Both are Crystal's own event flags.
+func test_the_two_reading_chambers_open_on_what_the_party_carries() -> void:
+	_write_special_script([
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_HO_OH_CHAMBER, 0,
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_OMANYTE_CHAMBER, 0,
+		Gen2WorldScript.END,
+	])
+	var world: Gen2WorldAPI = _special_world()
+	world.set_party_summary(1, false, [1] as Array[int], [], [], [false], {
+		"held_items": [0], "box_free_space": 20,
+	})
+	assert_eq(_run_special(world)[0]["status"], &"complete")
+	assert_false(world.event_flag_active(
+		Gen2WorldScriptRunner.EVENT_WALL_OPENED_IN_HO_OH_CHAMBER
+	))
+	assert_false(world.event_flag_active(
+		Gen2WorldScriptRunner.EVENT_WALL_OPENED_IN_OMANYTE_CHAMBER
+	))
+
+	var opened: Gen2WorldAPI = _special_world()
+	opened.set_party_summary(
+		1, false, [Gen2WorldScriptRunner.SPECIES_HO_OH] as Array[int], [], [], [false],
+		{"held_items": [Gen2WorldScriptRunner.ITEM_WATER_STONE], "box_free_space": 20}
+	)
+	assert_eq(_run_special(opened)[0]["status"], &"complete")
+	assert_true(opened.event_flag_active(
+		Gen2WorldScriptRunner.EVENT_WALL_OPENED_IN_HO_OH_CHAMBER
+	))
+	assert_true(opened.event_flag_active(
+		Gen2WorldScriptRunner.EVENT_WALL_OPENED_IN_OMANYTE_CHAMBER
+	), "a held WATER STONE opens it as a bagged one does")
+
+
+## `sMysteryGiftTrainerHouseFlag`, which nothing here can ever set: the Trainer
+## House answers zero and its own script turns the player away.
+func test_the_trainer_house_answers_the_flag_no_link_ever_set() -> void:
+	_write_special_script([
+		Gen2WorldScript.SETVAL, 9,
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_TRAINER_HOUSE, 0,
+		Gen2WorldScript.IFEQUAL, 0, 0x40, 0x62,
+		Gen2WorldScript.END,
+	])
+	_write_special_script([
+		Gen2WorldScript.SETVAL, 9,
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_TRAINER_HOUSE, 0,
+		Gen2WorldScript.IFEQUAL, 0, 0x40, 0x62,
+		Gen2WorldScript.END,
+	], {"48:6240": [Gen2WorldScript.SETEVENT, 0x10, 0x00, Gen2WorldScript.END]})
+	var world: Gen2WorldAPI = _special_world()
+	assert_eq(_run_special(world)[0]["status"], &"complete")
+	assert_true(world.event_flag_active(0x10), "the zero branch is the one taken")
+
+
+## `SampleKenjiBreakCountdown` writes three to six days, and `readvar
+## VAR_KENJI_BREAK_TIMER` reads the byte the special has just staged rather than
+## the one still committed.
+func test_the_kenji_countdown_is_written_and_read_back_in_one_run() -> void:
+	_write_special_script([
+		Gen2WorldScript.SPECIAL,
+		Gen2WorldScriptRunner.SPECIAL_SAMPLE_KENJI_BREAK_COUNTDOWN, 0,
+		Gen2WorldScript.READVAR, 0x1A,
+		Gen2WorldScript.IFLESS, 3, 0x40, 0x62,
+		Gen2WorldScript.END,
+	], {"48:6240": [Gen2WorldScript.SETEVENT, 0x11, 0x00, Gen2WorldScript.END]})
+	var world: Gen2WorldAPI = _special_world()
+	assert_eq(_run_special(world)[0]["status"], &"complete")
+	assert_false(world.event_flag_active(0x11), "no roll is below three")
+	assert_between(world.state.kenji_break_timer(), 3, 6)
+
+
+## `writevar` was decoded and never executed, so RadioTower2F's own award of a
+## Blue Card point stopped its script. VAR_BLUECARDBALANCE is a RETVAR_ADDR_DE
+## row, which is the only kind `_GetVarAction` can write back to.
+func test_writevar_awards_a_blue_card_point() -> void:
+	_write_special_script([
+		Gen2WorldScript.READVAR, 0x18,
+		Gen2WorldScript.ADDVAL, 1,
+		Gen2WorldScript.WRITEVAR, 0x18,
+		Gen2WorldScript.END,
+	])
+	var state := Gen2WorldState.new()
+	state.set_blue_card_balance(4)
+	var world: Gen2WorldAPI = _special_world(state)
+	assert_eq(_run_special(world)[0]["status"], &"complete")
+	assert_eq(world.state.blue_card_balance(), 5)
+
+
+## `MagikarpHouseSign` prints the record straight out of the save, with both
+## buffers filled: the length in wStringBuffer1 and the holder's name in the
+## buffer that is at a different address on each profile.
+func test_the_magikarp_sign_prints_the_record_and_its_holder() -> void:
+	_write_special_script([
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_MAGIKARP_HOUSE_SIGN, 0,
+		Gen2WorldScript.END,
+	])
+	var state := Gen2WorldState.new()
+	state.set_best_magikarp(4, 7, "MANIA")
+	var world: Gen2WorldAPI = _special_world(state)
+	var results: Array = _run_special(world)
+	assert_eq(results[0]["status"], &"waiting")
+	assert_eq(results[0]["event"]["text"], "4′7″ caught by MANIA")
+
+
+## `CheckForLuckyNumberWinners` names the row it matched and picks its box by
+## where the row was found.
+func test_the_lucky_number_show_names_the_matching_row() -> void:
+	_write_special_script([
+		Gen2WorldScript.SPECIAL,
+		Gen2WorldScriptRunner.SPECIAL_PRINT_TODAYS_LUCKY_NUMBER, 0,
+		Gen2WorldScript.SPECIAL,
+		Gen2WorldScriptRunner.SPECIAL_CHECK_FOR_LUCKY_NUMBER_WINNERS, 0,
+		Gen2WorldScript.END,
+	])
+	var world: Gen2WorldAPI = _special_world()
+	world.script_random = RandomNumberGenerator.new()
+	world.script_random.seed = 3
+	world.set_party_summary(1, false, [1] as Array[int], [], ["KARP"], [false], {
+		"box_free_space": 20, "id_numbers": [0], "stored_id_numbers": [],
+		"stored_species": [],
+	})
+	var results: Array = _run_special(world)
+	## The party's one ID is zero, so the show matches it only when the drawn
+	## number happens to end in the same digits; either way the run completes and
+	## nothing is written but the buffer.
+	assert_true(results[0]["status"] in [&"complete", &"waiting"], JSON.stringify(results))
+	assert_between(world.state.lucky_id_number(), 0, 0xFFFF)
+	assert_ne(world.state.lucky_number_day(), 0, "the draw stamps the day it was made")
+
+
+## One script at a fixed address, reached by the map's own coordinate event, so
+## every special test above drives the same path a real script does.
+func _write_special_script(bytes: Array, extra: Dictionary = {}) -> void:
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
+	scripts["48:6230"] = bytes
+	for key: Variant in extra:
+		scripts[String(key)] = extra[key]
+	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
+
+
+## The world standing on that coordinate event, with the map patched before it
+## opens: a map read after the world is built is a different object.
+func _special_world(state: Gen2WorldState = null) -> Gen2WorldAPI:
+	var data: GameData = GameData.open_directory(_directory)
+	data.world_map(1, 1).events["coord_events"][0]["script"] = 0x6230
+	return Gen2WorldAPI.open(
+		data, 1, 1, Vector2i(7, 6), state if state != null else Gen2WorldState.new()
+	)
+
+
+func _run_special(world: Gen2WorldAPI) -> Array:
+	return _run_script(world, world.dispatch_script_events())

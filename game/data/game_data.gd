@@ -85,6 +85,8 @@ var _mart_text: Dictionary = {}
 var _name_rater_text: Dictionary = {}
 var _move_deleter_text: Dictionary = {}
 var _day_care_text: Dictionary = {}
+var _special_text: Dictionary = {}
+var _special_text_ram: Dictionary = {}
 var _battle_object_palettes: Dictionary = {}
 var _indices: Dictionary = {}
 var _world_maps: Array = []
@@ -212,6 +214,10 @@ static func open_directory(path: String) -> GameData:
 	data._move_deleter_text = raw_move_deleter_text if raw_move_deleter_text is Dictionary else {}
 	var raw_day_care_text: Variant = manifest.get("day_care_text", {})
 	data._day_care_text = raw_day_care_text if raw_day_care_text is Dictionary else {}
+	var raw_special_text: Variant = manifest.get("special_text", {})
+	data._special_text = raw_special_text if raw_special_text is Dictionary else {}
+	var raw_special_text_ram: Variant = manifest.get("special_text_ram", {})
+	data._special_text_ram = raw_special_text_ram if raw_special_text_ram is Dictionary else {}
 	data._species = data._read_array(RomCache.species_path(path))
 	data._moves = data._read_array(RomCache.moves_path(path))
 	data._tmhm_moves = data._read_int_array(RomCache.tmhm_moves_path(path))
@@ -1637,6 +1643,28 @@ func move_deleter_text(name: String) -> String:
 ## cache imported before them.
 func day_care_text(name: String) -> String:
 	return String(_day_care_text.get(name, ""))
+
+
+## One box of one `RomLayout.SPECIAL_TEXT_RUNS` run, still carrying
+## [Gen2TextStream]'s markers. Empty for a run this cartridge does not ship,
+## which is what a Gold or Silver reader of the three Crystal-only runs gets.
+func special_text(run: String, name: String) -> String:
+	var boxes: Variant = _special_text.get(run, {})
+	return String((boxes as Dictionary).get(name, "")) if boxes is Dictionary else ""
+
+
+## Whether the cartridge shipped [param run] at all, which is not the same
+## question as whether one box of it is empty.
+## The WRAM address a `text_ram` in one of those boxes names, by the name
+## `RomLayout`'s own `special_text_ram` gives it, or -1 on a cartridge that
+## ships no such buffer.
+func special_text_ram(name: String) -> int:
+	return int(_special_text_ram.get(name, -1))
+
+
+func has_special_text(run: String) -> bool:
+	return (_special_text.get(run, {}) as Dictionary).size() > 0 \
+		if _special_text.get(run, {}) is Dictionary else false
 
 
 ## `.MenuDesc`'s line for one start-menu item, by the item's own kind. Empty for

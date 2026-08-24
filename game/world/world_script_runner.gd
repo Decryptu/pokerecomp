@@ -34,6 +34,19 @@ var _staged_special_phone_call: int = 0
 var _has_staged_kurt_apricorn_quantity: bool = false
 var _staged_kurt_apricorn_quantity: int = 0
 var _staged_fruit_trees: Dictionary = {}
+var _has_staged_kenji_break_timer: bool = false
+var _staged_kenji_break_timer: int = 0
+var _has_staged_lucky_number_days_left: bool = false
+var _staged_lucky_number_days_left: int = 0
+## `LoadOrRegenerateLuckyIDNumber` rolls today's number where it is first read,
+## so a runner that reaches one of the three lucky-number specials draws it and
+## stages the pair the way the source writes both SRAM bytes at once.
+var _has_staged_lucky_id_number: bool = false
+var _staged_lucky_id_number: int = 0
+var _staged_lucky_number_day: int = 0
+var _staged_caught_species: Dictionary = {}
+var _staged_best_magikarp: Dictionary = {}
+var _staged_blue_card_balance: int = -1
 var _reset_phone_receive_timer: bool = false
 var _events: Array = []
 var _pending: Dictionary = {}
@@ -86,6 +99,10 @@ var _loaded_battle_type: int = -1
 var _phone_context: Dictionary = {}
 var _phone_started: bool = false
 var _text_buffers: Dictionary = {}
+## The WRAM buffers a deferred routine fills that are not string buffers: the
+## Magikarp record holder's name and the Poke Seer's five. Keyed by address so
+## they reach `TextCommand_RAM` through the same map the string buffers do.
+var _text_ram: Dictionary = {}
 var _rival_name: String = "???"
 ## wPlayerName, mirrored from the selected save the way Gen2WorldAPI mirrors
 ## wPlayerID. `<PLAYER>` is a `CheckDict` entry, so a text carrying one cannot
@@ -413,6 +430,77 @@ const EVENT_PLAYERS_HOUSE_2F_CONSOLE: int = 1857
 const EVENT_PLAYERS_HOUSE_2F_DOLL_1: int = 1858
 const EVENT_PLAYERS_HOUSE_2F_DOLL_2: int = 1859
 const EVENT_PLAYERS_HOUSE_2F_BIG_DOLL: int = 1860
+## `engine/events/unown_walls.asm`'s two reading chambers. Crystal's alone: the
+## other two walls open from a scene script rather than a special.
+const EVENT_WALL_OPENED_IN_HO_OH_CHAMBER: int = 806
+const EVENT_WALL_OPENED_IN_OMANYTE_CHAMBER: int = 808
+
+## The species and items the deferred routines name, by their own constants.
+const SPECIES_HO_OH: int = 250
+const ITEM_WATER_STONE: int = 24
+
+## `engine/events/specials.asm` and the routines behind it, the second group of
+## `tools/checks/specials.gd`'s deferred list.
+const SPECIAL_CHECK_MAGIKARP_LENGTH: int = 25
+const SPECIAL_MAGIKARP_HOUSE_SIGN: int = 26
+const SPECIAL_BANK_OF_MOM: int = 34
+const SPECIAL_MAP_RADIO: int = 40
+const SPECIAL_GAME_CORNER_PRIZE_MON_CHECK_DEX: int = 57
+const SPECIAL_GIVE_SHUCKLE: int = 75
+const SPECIAL_RETURN_SHUCKIE: int = 76
+const SPECIAL_CHECK_FOR_LUCKY_NUMBER_WINNERS: int = 82
+const SPECIAL_CHECK_LUCKY_NUMBER_SHOW_FLAG: int = 83
+const SPECIAL_RESET_LUCKY_NUMBER_SHOW_FLAG: int = 84
+const SPECIAL_PRINT_TODAYS_LUCKY_NUMBER: int = 85
+const SPECIAL_TRAINER_HOUSE: int = 103
+const SPECIAL_PHOTO_STUDIO: int = 104
+const SPECIAL_OMANYTE_CHAMBER: int = 132
+const SPECIAL_HO_OH_CHAMBER: int = 141
+const SPECIAL_CELEBI_SHRINE_EVENT: int = 143
+const SPECIAL_CHECK_CAUGHT_CELEBI: int = 144
+const SPECIAL_POKE_SEER: int = 145
+const SPECIAL_BUENAS_PASSWORD: int = 146
+const SPECIAL_BUENA_PRIZE: int = 147
+const SPECIAL_GIVE_DRATINI: int = 148
+const SPECIAL_SAMPLE_KENJI_BREAK_COUNTDOWN: int = 149
+## The three routines whose whole body is `SelectMonFromParty` and a branch on
+## what came back, by the name `_finish_party_selection` reads them under.
+const PARTY_SELECTION_ROUTINE_OF: Dictionary = {
+	SPECIAL_CHECK_MAGIKARP_LENGTH: &"magikarp_length",
+	SPECIAL_PHOTO_STUDIO: &"photo_studio",
+	SPECIAL_RETURN_SHUCKIE: &"return_shuckie",
+	SPECIAL_POKE_SEER: &"poke_seer",
+}
+## What each of them writes to wScriptVar when the list is backed out of. The
+## four grooming routines and the Photo Studio all answer zero, which is the
+## default; the other two name their own refusal.
+const PARTY_SELECTION_REFUSAL_OF: Dictionary = {
+	&"magikarp_length": Gen2WorldPartyHost.MAGIKARPLENGTH_REFUSED,
+	&"return_shuckie": Gen2WorldPartyHost.SHUCKIE_REFUSED,
+}
+
+## `CelebiShrineEvent`'s own loop: `ld a, 160` into wFrameCounter and
+## `ld c, 2 / call DelayFrames` per pass, so the cutscene stands for twice its
+## own counter. There is no sprite-anim layer outside the intro, so what it owes
+## a script is the wait and the battle type it leaves behind.
+## `engine/events/poke_seer.asm`'s own readings.
+const SEER_UNKNOWN: String = "Unknown"
+const SEER_TIMES: Array[String] = ["Morning", "Day", "Night"]
+## `CAUGHT_EGG_LEVEL` and the level `EGG_LEVEL` says an egg hatches at, which is
+## what the Seer prints for a row stamped with the egg marker.
+const SEER_CAUGHT_EGG_LEVEL: int = 1
+const SEER_EGG_LEVEL: int = 5
+const SEER_LANDMARK_EVENT: int = 0x7F
+## `SeerAdviceTexts`, the levels gained since the catch and the box each band
+## reaches. The last row is the first one again, which is what a wrapped
+## subtraction lands on.
+const SEER_ADVICE: Array = [
+	[9, "more_care"], [29, "more_confident"], [59, "much_strength"],
+	[89, "mighty"], [100, "impressed"], [255, "more_care"],
+]
+
+const CELEBI_SHRINE_PASSES: int = 160
+const CELEBI_SHRINE_FRAMES_PER_PASS: int = 2
 const VARIABLE_SPRITE_BASE: int = 0xF0
 const DECORATION_BLOCKS: Dictionary = {
 	&"bed": {0x02: 0x1B, 0x03: 0x1C, 0x04: 0x1D, 0x05: 0x1E},
@@ -548,6 +636,17 @@ func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 				"source": _request.duplicate(true),
 			}
 			return _waiting_result()
+		if pending_type == &"menu" and _pending.get("special", &"") == &"buenas_password":
+			## `STATICMENU_DISABLE_B`: B does not close the list, so the only way
+			## out is a row. The answer is whether it is the row the byte's own
+			## low nibble names, which `maskbits NUM_PASSWORDS_PER_CATEGORY`
+			## takes off it.
+			if choice < 0:
+				return _waiting_result()
+			var password: int = int(_pending.get("password", 0))
+			_pending = {}
+			_script_value = 1 if choice == (password & 0x3) else 0
+			return advance()
 		if pending_type == &"text" and _pending.get("special", &"") == &"set_day_of_week_confirmation":
 			var confirmation_day: int = int(_pending.get("day", 0))
 			_stage_day_of_week_confirmation(confirmation_day)
@@ -619,6 +718,72 @@ func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 		if pending_type == &"text" and _pending.get("special", &"") == &"strength_used":
 			var used_name: String = String(_pending.get("name", "#MON"))
 			_stage_internal_text("%s can\nmove boulders." % used_name, true)
+			return _waiting_result()
+		## A run of boxes with nothing between them, which is what `PokeSeer`'s
+		## own actions print and what `PhotoStudio` prints once the printer it
+		## cannot reach has answered.
+		if pending_type == &"text" and _pending.has("next_internal_texts"):
+			var chained: Array = (_pending["next_internal_texts"] as Array).duplicate()
+			_pending = {}
+			_finish_after_pending = false
+			if chained.is_empty():
+				return advance()
+			var head: String = String(chained.pop_front())
+			_stage_internal_text(head, false, {} if chained.is_empty() else {
+				"next_internal_texts": chained,
+			})
+			return _waiting_result()
+		if pending_type == &"menu" and _pending.get("special", &"") == &"buena_prize":
+			var prize_special: int = int(_pending.get("prize_special", 0))
+			if choice < 0:
+				## `Buena_PrizeMenu`'s `.cancel`: B leaves the counter, and both
+				## `CloseWindow`s are behind her own parting box.
+				_pending = {}
+				return _buena_prize_box(prize_special, "come_again", true)
+			var prize_row: int = clampi(choice, 0, BUENA_PRIZES.size() - 1)
+			_pending = {}
+			_set_text_buffer(
+				RomLayout.STRING_BUFFER_1,
+				data.item_name(int(BUENA_PRIZES[prize_row][0])) if data != null else "",
+				&"buena_prize", {"special": prize_special, "prize": prize_row}
+			)
+			var confirm_box: String = _special_box("buena_prize", "is_that_right")
+			if confirm_box.is_empty():
+				return _fail(&"missing_special_text", {"special": prize_special})
+			_pending = {
+				"type": &"choice",
+				"command": &"buena_prize_confirm",
+				"choices": [&"yes", &"no"],
+				"text": confirm_box,
+				"special": &"buena_prize_confirm",
+				"prize": prize_row,
+				"prize_special": prize_special,
+				"source": _request.duplicate(true),
+			}
+			return _waiting_result()
+		if pending_type == &"choice" and _pending.get("special", &"") == &"buena_prize_confirm":
+			if choice < 0:
+				return _waiting_result()
+			var confirm_row: int = int(_pending.get("prize", 0))
+			var confirm_special: int = int(_pending.get("prize_special", 0))
+			_pending = {}
+			if choice != 0:
+				return _stage_buena_prize_menu(confirm_special)
+			return _buy_buena_prize(confirm_special, confirm_row)
+		## A box the prize counter printed, which goes back to her list rather
+		## than ending: `.print` falls into `.loop`.
+		if pending_type == &"text" and _pending.has("buena_prize_after_text"):
+			var after_special: int = int(_pending["buena_prize_after_text"])
+			_pending = {}
+			_finish_after_pending = false
+			return _stage_buena_prize_menu(after_special)
+		## `PokeSeer` prints its opening box, waits for a button and only then
+		## opens the list; the box is not the list's own backdrop.
+		if pending_type == &"text" and _pending.has("party_selection_after_text"):
+			var selection: Dictionary = _pending["party_selection_after_text"]
+			_pending = {}
+			_finish_after_pending = false
+			_stage_runtime_request(&"party_selection_requested", selection)
 			return _waiting_result()
 		## describedecoration is a local script in the cartridge. Its text must be
 		## acknowledged before the one decoration that needs a host, the town map,
@@ -968,6 +1133,15 @@ func complete_runtime_request(result: Dictionary) -> Dictionary:
 		## `CheckPartyFullAfterContest`'s own three answers, which
 		## `BugContestResults_DidNotLeaveMons` branches on twice.
 		&"contest_mon_requested",
+		## `PlayRadio` holds until A or B and writes nothing; the station it
+		## opened is the request's own.
+		&"map_radio_requested",
+		## `NewPokedexEntry` behind `GameCornerPrizeMonCheckDex`'s dex writes,
+		## which are staged here rather than in the screen.
+		&"pokedex_entry_requested",
+		## `GiveDratini` rewrites four move slots and answers nothing: every one
+		## of its scripts runs straight on.
+		&"dratini_moveset_requested",
 	]:
 		if not bool(result.get("ok", false)):
 			return _fail(
@@ -1353,6 +1527,8 @@ func _execute(command: Dictionary, frame: Dictionary) -> Dictionary:
 			return _stage_script_memory(int(command["address"]), int(command["value"]))
 		Gen2WorldScript.READVAR:
 			return _read_runtime_variable(int(command["value"]))
+		Gen2WorldScript.WRITEVAR:
+			return _write_runtime_variable(int(command["value"]))
 		Gen2WorldScript.LOADVAR:
 			return _load_runtime_variable(
 				int(command["value"]), int(command["value_2"])
@@ -1555,7 +1731,7 @@ func _execute(command: Dictionary, frame: Dictionary) -> Dictionary:
 		Gen2WorldScript.CHECKFLAG, Gen2WorldScript.CLEARFLAG, Gen2WorldScript.SETFLAG,
 		Gen2WorldScript.WILDON, Gen2WorldScript.WILDOFF,
 		Gen2WorldScript.READMEM,
-		Gen2WorldScript.READVAR, Gen2WorldScript.LOADVAR,
+		Gen2WorldScript.READVAR, Gen2WorldScript.WRITEVAR, Gen2WorldScript.LOADVAR,
 		Gen2WorldScript.CHECKTIME, Gen2WorldScript.SPECIAL,
 		Gen2WorldScript.CHECKITEM, Gen2WorldScript.CHECKPOKE,
 		Gen2WorldScript.ADDCELLNUM, Gen2WorldScript.DELCELLNUM,
@@ -2492,6 +2668,13 @@ func _read_runtime_variable(variable: int) -> Dictionary:
 			_script_value = _kurt_apricorn_quantity()
 		0x17: # VAR_CALLERID
 			_script_value = int(_phone_context.get("caller_id", -1))
+		0x18: # VAR_BLUECARDBALANCE
+			_script_value = _blue_card_balance()
+		0x19: # VAR_BUENAS_PASSWORD
+			_script_value = state.buenas_password() if state != null else 0
+		0x1A: # VAR_KENJI_BREAK_TIMER
+			_script_value = _staged_kenji_break_timer if _has_staged_kenji_break_timer \
+				else (state.kenji_break_timer() if state != null else 0)
 		_:
 			return {
 				"ok": false,
@@ -2499,6 +2682,32 @@ func _read_runtime_variable(variable: int) -> Dictionary:
 				"variable": variable,
 			}
 	return {"ok": true}
+
+
+## `writevar`, which is `_GetVarAction` for a RETVAR_ADDR_DE row and then a
+## store of wScriptVar into the address it answered. Only those rows can be
+## written: every other entry hands back a copy in wStringBuffer2 or runs a
+## routine, so a `writevar` naming one writes nothing the script can read back.
+##
+## Every `writevar` in either game is RadioTower2F's own award of a Blue Card
+## point, which stopped the script here until this existed.
+func _write_runtime_variable(variable: int) -> Dictionary:
+	match variable:
+		0x18: # VAR_BLUECARDBALANCE
+			_staged_blue_card_balance = _script_value & 0xFF
+		_:
+			return {
+				"ok": false,
+				"reason": &"unsupported_runtime_writevar",
+				"variable": variable,
+			}
+	return {"ok": true}
+
+
+func _blue_card_balance() -> int:
+	if _staged_blue_card_balance >= 0:
+		return _staged_blue_card_balance
+	return state.blue_card_balance() if state != null else 0
 
 
 func _load_runtime_variable(variable: int, value: int) -> Dictionary:
@@ -2560,6 +2769,13 @@ func _clock_hour() -> int:
 func _clock_minute() -> int:
 	var clock: Dictionary = _request.get("clock", {})
 	return clampi(int(clock.get("minute", 0)), 0, 59)
+
+
+## `wCurDay`, which is a weekday here rather than a running day count. Every
+## day-counted timer this project keeps is stepped by the rollover instead.
+func _clock_day() -> int:
+	var clock: Dictionary = _request.get("clock", {})
+	return posmod(int(clock.get("day", 0)), Gen2WorldClock.DAYS_PER_WEEK)
 
 
 ## `HealMachineAnim`'s sounds and the frame of its own wait each is played on.
@@ -3017,6 +3233,226 @@ func _execute_special(special: int) -> Dictionary:
 			## `special` is a StringName tag on a pending text, not the index, so
 			## the wall is named under its own key.
 			return _stage_internal_text(wall_word, false, {"unown_wall": _script_value})
+		SPECIAL_SAMPLE_KENJI_BREAK_COUNTDOWN:
+			## `Random` masked to two bits plus three. The same byte is stepped
+			## by `CheckDailyResetTimer` on every day that passes, which is
+			## `Gen2WorldState.reset_daily_flags`; this is the resample its own
+			## script asks for.
+			_staged_kenji_break_timer = Gen2WorldState.kenji_break_countdown(_random)
+			_has_staged_kenji_break_timer = true
+		SPECIAL_TRAINER_HOUSE:
+			## `sMysteryGiftTrainerHouseFlag` straight into wScriptVar. Only a
+			## received Mystery Gift ever sets it and nothing here can receive
+			## one, so the byte is zero and the Trainer House turns the player
+			## away, which is what a cartridge that has never linked does.
+			_script_value = 0
+		SPECIAL_HO_OH_CHAMBER:
+			## `wPartySpecies`' first byte and nothing else: the wall opens for a
+			## party led by Ho-Oh. `GetMapAttributesPointer` in front of it is
+			## marked pointless in the pin and answers nothing.
+			var chamber_party: Dictionary = _request.get("party", {})
+			if chamber_party.is_empty():
+				return {"ok": false, "reason": &"missing_party_summary", "special": special}
+			var chamber_species: Array = chamber_party.get("species", [])
+			if not chamber_species.is_empty() and int(chamber_species[0]) == SPECIES_HO_OH:
+				_staged_flags[EVENT_WALL_OPENED_IN_HO_OH_CHAMBER] = true
+		SPECIAL_OMANYTE_CHAMBER:
+			## A WATER STONE in the bag opens it, and so does one held by any
+			## party member: `.loop` walks the party backwards reading MON_ITEM.
+			## The flag is tested first, so a wall already open spends nothing.
+			if not _event_flag_active(EVENT_WALL_OPENED_IN_OMANYTE_CHAMBER):
+				var stone_party: Dictionary = _request.get("party", {})
+				if stone_party.is_empty():
+					return {
+						"ok": false, "reason": &"missing_party_summary", "special": special,
+					}
+				var opens: bool = _item_quantity(ITEM_WATER_STONE) > 0
+				if not opens:
+					for held: Variant in stone_party.get("held_items", []):
+						if int(held) == ITEM_WATER_STONE:
+							opens = true
+							break
+				if opens:
+					_staged_flags[EVENT_WALL_OPENED_IN_OMANYTE_CHAMBER] = true
+		SPECIAL_CHECK_CAUGHT_CELEBI:
+			## `wBattleResult`'s BATTLERESULT_CAUGHT_CELEBI, which
+			## `PokeBallEffect` sets on a catch made in a BATTLETYPE_CELEBI
+			## fight and nothing else clears until the next battle.
+			_script_value = 1 if state != null and state.battle_caught_celebi() else 0
+		SPECIAL_CELEBI_SHRINE_EVENT:
+			## The whole routine is a sprite-anim cutscene and a battle type.
+			## There is no sprite-anim layer outside the intro, so what it owes a
+			## script is the wait its own loop spends and the type the fight
+			## behind it starts with.
+			_loaded_battle_type = Gen2Battle.BATTLETYPE_CELEBI
+			if not _battle_setup.is_empty():
+				_battle_setup["battle_type"] = Gen2Battle.BATTLETYPE_CELEBI
+			_emit_runtime_event(&"presentation_special_applied", {
+				"special": special, "kind": &"celebi_shrine",
+			})
+			return _stage_frame_wait(
+				CELEBI_SHRINE_PASSES * CELEBI_SHRINE_FRAMES_PER_PASS,
+				{"special": special, "kind": &"celebi_shrine"}
+			)
+		SPECIAL_MAP_RADIO:
+			## `PlayRadio` opens the station wScriptVar names, prints its line in
+			## a four-row box and holds until A or B. It is the Pokegear's own
+			## radio without the Pokegear, so the station is the request and the
+			## host draws it.
+			return _stage_runtime_request(&"map_radio_requested", {
+				"special": special,
+				"station": _script_value,
+			})
+		SPECIAL_CHECK_LUCKY_NUMBER_SHOW_FLAG:
+			## `ScriptReturnCarry`: TRUE once `wLuckyNumberDayTimer` has run out,
+			## which is the Friday the show comes round on.
+			_script_value = 1 if state != null and state.lucky_number_show_ready() else 0
+		SPECIAL_RESET_LUCKY_NUMBER_SHOW_FLAG:
+			## `RestartLuckyNumberCountdown`, then the GAME_OVER bit off the show
+			## flag, then `LoadOrRegenerateLuckyIDNumber`. The bit is the radio
+			## segment's own and this project's radio reads the timer instead, so
+			## what is left is the countdown and the number.
+			_staged_lucky_number_days_left = _lucky_number_days_until_friday()
+			_has_staged_lucky_number_days_left = true
+			_refresh_lucky_id_number()
+		SPECIAL_PRINT_TODAYS_LUCKY_NUMBER:
+			## `PrintNum` with PRINTNUM_LEADINGZEROS over five digits into
+			## wStringBuffer3, which the radio tower's own text prints.
+			_refresh_lucky_id_number()
+			_set_text_buffer(
+				RomLayout.STRING_BUFFER_3, "%05d" % _lucky_id_number(), &"lucky_number",
+				{"special": special}
+			)
+		SPECIAL_CHECK_FOR_LUCKY_NUMBER_WINNERS:
+			## The whole walk is over ID numbers the party mirror carries, so the
+			## routine is the host's arithmetic rather than a screen.
+			var lucky_party: Dictionary = _request.get("party", {})
+			if lucky_party.is_empty():
+				return {"ok": false, "reason": &"missing_party_summary", "special": special}
+			_refresh_lucky_id_number()
+			var winner: Dictionary = Gen2WorldPartyHost.lucky_number_match(
+				_lucky_id_number(),
+				lucky_party.get("id_numbers", []),
+				lucky_party.get("species", []),
+				lucky_party.get("eggs", []),
+				lucky_party.get("stored_id_numbers", []),
+				lucky_party.get("stored_species", [])
+			)
+			_script_value = int(winner.get("script_value", 0))
+			if _script_value == 0:
+				return {"ok": true}
+			## `GetPokemonName` on the matching row's species, into the buffer
+			## both boxes print, and then the box the match's own location picks.
+			var winner_species: int = int(winner.get("species", 0))
+			_cur_party_species = winner_species
+			var winner_name: String = String(
+				data.species(winner_species).get("name", "")
+			) if data != null else ""
+			_set_text_buffer(RomLayout.STRING_BUFFER_1, winner_name, &"lucky_number_winner", {
+				"special": special, "species": winner_species,
+			})
+			var lucky_box: String = _special_box(
+				"lucky_number",
+				"match_pc" if bool(winner.get("in_storage", false)) else "match_party"
+			)
+			if lucky_box.is_empty():
+				return {"ok": false, "reason": &"missing_special_text", "special": special}
+			return _stage_internal_text(lucky_box, false, {"special": special})
+		SPECIAL_MAGIKARP_HOUSE_SIGN:
+			## The record straight out of the save into wMagikarpLength, printed
+			## the way `PrintMagikarpLength` prints it, and the sign's own box.
+			## An unbeaten record is two zero bytes, which is what the sign shows
+			## before anyone has measured one.
+			var record: Dictionary = state.best_magikarp() if state != null else {}
+			_set_text_buffer(RomLayout.STRING_BUFFER_1, Gen2WorldPartyHost.magikarp_length_string(
+				int(record.get("feet", 0)), int(record.get("inches", 0))
+			), &"magikarp_length", {"special": special})
+			_set_text_ram("magikarp_record_holder", String(record.get("ot", "")))
+			var sign_box: String = _special_box("magikarp", "record")
+			if sign_box.is_empty():
+				return {"ok": false, "reason": &"missing_special_text", "special": special}
+			return _stage_internal_text(sign_box, false, {"special": special})
+		SPECIAL_BUENA_PRIZE:
+			## The counter is one loop: the prize list, a yes/no on the row, and
+			## whichever of the four boxes the answer reaches. B on the list is
+			## the only way out and prints her parting line.
+			return _stage_buena_prize_menu(special)
+		SPECIAL_POKE_SEER:
+			## `PrintSeerText SEER_INTRO`, `JoyWaitAorB`, and only then the list.
+			var seer_intro: String = _special_box("poke_seer", "see_all")
+			if seer_intro.is_empty():
+				return {"ok": false, "reason": &"missing_special_text", "special": special}
+			return _stage_internal_text(seer_intro, false, {
+				"special": special,
+				"party_selection_after_text": {
+					"special": special,
+					"routine": PARTY_SELECTION_ROUTINE_OF[special],
+				},
+			})
+		SPECIAL_CHECK_MAGIKARP_LENGTH, SPECIAL_PHOTO_STUDIO, SPECIAL_RETURN_SHUCKIE:
+			## All three open `SelectMonFromParty` and answer on what came back.
+			## `PhotoStudio` prints its own question in front of the list, which
+			## is the one box a script does not carry for it.
+			if special == SPECIAL_PHOTO_STUDIO:
+				var asked: String = _special_box("photo_studio", "which_mon")
+				if asked.is_empty():
+					return {"ok": false, "reason": &"missing_special_text", "special": special}
+				_standing_text = asked
+			return _stage_runtime_request(&"party_selection_requested", {
+				"special": special,
+				"routine": PARTY_SELECTION_ROUTINE_OF[special],
+			})
+		SPECIAL_GIVE_SHUCKLE:
+			## `TryAddMonToParty` with a level 15 SHUCKLE holding a BERRY, named
+			## SHUCKIE under MANIA's own OT and ID, and the daily flag behind it.
+			## A full party is `.NotGiven`, which answers zero and gives nothing:
+			## the box is never reached.
+			return _stage_runtime_request(&"pokemon_requested", {
+				"special": special,
+				"kind": &"give_shuckle",
+				"pokemon": Gen2WorldPartyHost.SHUCKLE,
+				"level": Gen2WorldPartyHost.SHUCKIE_LEVEL,
+				"item": Gen2WorldPartyHost.ITEM_BERRY,
+				"nickname": Gen2WorldPartyHost.SHUCKIE_NICKNAME,
+				"original_trainer": Gen2WorldPartyHost.MANIA_OT_NAME,
+				"ot_id": Gen2WorldPartyHost.MANIA_OT_ID,
+				"party_only": true,
+			})
+		SPECIAL_GIVE_DRATINI:
+			## Not a gift at all: the Dragon Shrine's `givepoke` has already run,
+			## and this rewrites the last DRATINI in the party with one of two
+			## movesets. A wScriptVar above one returns before the search, which
+			## is what the elder's third answer leaves standing.
+			if _script_value > 1:
+				return {"ok": true}
+			return _stage_runtime_request(&"dratini_moveset_requested", {
+				"special": special,
+				"moveset": _script_value,
+			})
+		SPECIAL_GAME_CORNER_PRIZE_MON_CHECK_DEX:
+			## `CheckCaughtMon` on wScriptVar less one, and nothing at all when
+			## it is already caught: the prize counter has handed the Pokemon
+			## over by here, so this is the new-entry screen alone. The species
+			## byte is one high, which is the `dec a` in front of both calls.
+			var prize_species: int = _script_value
+			if prize_species <= 0:
+				return {"ok": false, "reason": &"invalid_prize_species", "special": special}
+			if state != null and state.has_caught_species(prize_species):
+				return {"ok": true}
+			_staged_caught_species[prize_species] = true
+			return _stage_runtime_request(&"pokedex_entry_requested", {
+				"special": special,
+				"species": prize_species,
+			})
+		SPECIAL_BUENAS_PASSWORD:
+			## `DoNthMenu` over the five words of today's category, and the
+			## answer is whether the row matches the low nibble of
+			## `wBuenasPassword`. The category is the high nibble, which is what
+			## the radio show drew this morning.
+			var password: int = _buenas_password()
+			if password < 0:
+				return {"ok": false, "reason": &"missing_buenas_password", "special": special}
+			_stage_buenas_password_menu(password)
 		SPECIAL_RANDOM_UNSEEN_WILD_MON:
 			var rare_species: int = _phone_unseen_rare_species()
 			if rare_species <= 0:
@@ -3088,6 +3524,159 @@ func _apply_maptile_decorations() -> void:
 func _decoration_block(category: StringName, decoration: int) -> int:
 	var category_blocks: Dictionary = DECORATION_BLOCKS.get(category, {})
 	return int(category_blocks.get(decoration, 0))
+
+
+## One `RomLayout.SPECIAL_TEXT_RUNS` box, with the buffers this runner has
+## filled written into it. The imported string still carries
+## [Gen2TextStream]'s markers, which is what lets one cached box serve both the
+## screen that draws it and a text staged straight onto the map.
+func _special_box(run: String, name: String) -> String:
+	if data == null:
+		return ""
+	var text: String = data.special_text(run, name)
+	if text.is_empty():
+		return ""
+	var ram: Dictionary = _text_buffer_ram()
+	for raw_address: Variant in ram:
+		text = Gen2TextStream.fill_all_markers(
+			text,
+			"%s%04X>" % [Gen2TextStream.RAM_MARKER, int(raw_address)],
+			String(ram[raw_address])
+		)
+	if not player_name.is_empty():
+		text = Gen2TextStream.fill_all_markers(text, "<PLAYER", player_name)
+	return text
+
+
+## `data/items/buena_prizes.asm`: the item and what it costs in Blue Card
+## points. `.PrintPrizePoints` prints the cost as one character, so no row can
+## cost more than nine.
+const BUENA_PRIZES: Array = [
+	[2, 2], [14, 2], [36, 3], [32, 3], [27, 5], [28, 5], [29, 5], [31, 5], [26, 5],
+]
+
+
+## `Buena_PlacePrizeMenuBox` and `Buena_PrizeMenu`, plus the question that
+## stands over them. The rows are the prize names with their cost beside them,
+## which is what `SCROLLINGMENU_ITEMS_NORMAL` draws in two columns.
+func _stage_buena_prize_menu(special: int) -> Dictionary:
+	var rows: Array[String] = []
+	for prize: Array in BUENA_PRIZES:
+		rows.append("%s %d" % [
+			data.item_name(int(prize[0])) if data != null else "", int(prize[1]),
+		])
+	var asked: String = _special_box("buena_prize", "ask_which_prize")
+	if asked.is_empty():
+		return _fail(&"missing_special_text", {"special": special})
+	_pending = {
+		"type": &"menu",
+		"command": &"buena_prize",
+		"options": rows,
+		## `db 1` for the row the cursor opens on, and `SCROLLINGMENU`'s own B,
+		## which is how the player leaves.
+		"header": {"default": 1, "data_flags": 0},
+		"text": asked,
+		"special": &"buena_prize",
+		"prize_special": special,
+		"balance": _blue_card_balance(),
+		"source": _request.duplicate(true),
+	}
+	return _waiting_result()
+
+
+## The three refusals and the one purchase, in the order the routine tests them:
+## the balance first, then the bag, and only then the deduction.
+func _buy_buena_prize(special: int, row: int) -> Dictionary:
+	var item: int = int(BUENA_PRIZES[row][0])
+	var cost: int = int(BUENA_PRIZES[row][1])
+	if _blue_card_balance() < cost:
+		return _buena_prize_box(special, "not_enough_points", false)
+	var received: Dictionary = _stage_item_delta(item, 1)
+	if not bool(received.get("ok", false)):
+		return received
+	if _script_value == 0:
+		return _buena_prize_box(special, "no_room", false)
+	_staged_blue_card_balance = _blue_card_balance() - cost
+	return _buena_prize_box(special, "here_you_go", false)
+
+
+## One of the counter's boxes. Every one of them but her parting line falls back
+## into the list, which is `.print`'s own `jr .loop`.
+func _buena_prize_box(special: int, name: String, closing: bool) -> Dictionary:
+	var box: String = _special_box("buena_prize", name)
+	if box.is_empty():
+		return _fail(&"missing_special_text", {"special": special})
+	return _stage_internal_text(box, closing, {"special": special} if closing else {
+		"special": special, "buena_prize_after_text": special,
+	})
+
+
+## `RestartLuckyNumberCountdown.GetDaysUntilNextFriday`, which answers seven on
+## a Friday or a Saturday rather than nought or a negative.
+## One of the WRAM buffers `RomLayout`'s `special_text_ram` names, by that name
+## rather than by its address: Gold and Crystal put the same buffer in different
+## places, and a cartridge that ships no such buffer takes no write.
+func _set_text_ram(name: String, value: String) -> void:
+	if data == null:
+		return
+	var address: int = data.special_text_ram(name)
+	if address >= 0:
+		_text_ram[address] = value
+
+
+func _lucky_number_days_until_friday() -> int:
+	var until: int = Gen2WorldClock.FRIDAY - posmod(
+		_clock_day(), Gen2WorldClock.DAYS_PER_WEEK
+	)
+	return until + Gen2WorldClock.DAYS_PER_WEEK if until <= 0 else until
+
+
+## `LoadOrRegenerateLuckyIDNumber`, staged. `sLuckyNumberDay` holds the day plus
+## one, so a stored zero is "never drawn"; a day whose stamp already matches
+## keeps its number and spends no roll.
+func _refresh_lucky_id_number() -> void:
+	if _has_staged_lucky_id_number:
+		return
+	var stamp: int = (_clock_day() + 1) & 0xFF
+	if state != null and state.lucky_number_day() == stamp:
+		return
+	var low: int = _random.randi() & 0xFF
+	var high: int = _random.randi() & 0xFF
+	_staged_lucky_id_number = ((high << 8) | low) & 0xFFFF
+	_staged_lucky_number_day = stamp
+	_has_staged_lucky_id_number = true
+
+
+func _lucky_id_number() -> int:
+	if _has_staged_lucky_id_number:
+		return _staged_lucky_id_number
+	return state.lucky_id_number() if state != null else 0
+
+
+## `wBuenasPassword`: the high nibble is the category the radio show drew this
+## morning and the low nibble is today's word inside it.
+func _buenas_password() -> int:
+	return state.buenas_password() if state != null else -1
+
+
+## `BuenasPassword`'s own menu: the five words of today's category in a box ten
+## wide, with B disabled, so a player who has tuned in picks one of them and a
+## player who has not is looking at the same five.
+func _stage_buenas_password_menu(password: int) -> void:
+	var words: Array[String] = Gen2RadioShow.buenas_password_words(data, password)
+	_pending = {
+		"type": &"menu",
+		"command": &"buenas_password",
+		"options": words,
+		## `STATICMENU_CURSOR | STATICMENU_DISABLE_B`, and `db 1` for the row the
+		## cursor opens on.
+		"header": {"default": 1, "data_flags": 0},
+		"disable_b": true,
+		"text": _standing_text,
+		"special": &"buenas_password",
+		"password": password,
+		"source": _request.duplicate(true),
+	}
 
 
 func _stage_day_of_week_menu() -> void:
@@ -3319,7 +3908,9 @@ func _finish_party_selection(request: Dictionary, result: Dictionary) -> Diction
 	var routine: StringName = StringName(values.get("routine", &""))
 	var party_index: int = int(result.get("party_index", -1))
 	if party_index < 0:
-		_script_value = 0
+		## `SelectMonFromParty`'s carry. Three of the six routines answer
+		## something other than zero for it, so the refusal is theirs to name.
+		_script_value = int(PARTY_SELECTION_REFUSAL_OF.get(routine, 0))
 		_pending = {}
 		return advance()
 	var species: int = int(result.get("species", 0))
@@ -3331,6 +3922,9 @@ func _finish_party_selection(request: Dictionary, result: Dictionary) -> Diction
 		})
 		_pending = {}
 		return advance()
+	if routine in [&"magikarp_length", &"photo_studio", &"return_shuckie", &"poke_seer"]:
+		_pending = {}
+		return _finish_deferred_party_selection(routine, special, result)
 	if species == SPECIES_EGG:
 		_script_value = 1
 		_pending = {}
@@ -3351,6 +3945,180 @@ func _finish_party_selection(request: Dictionary, result: Dictionary) -> Diction
 	})
 	_pending = {}
 	return advance()
+
+
+## The four routines whose whole body is `SelectMonFromParty` and a branch on
+## the row it answered with. Each writes wScriptVar, and two of them write
+## something else besides.
+func _finish_deferred_party_selection(
+	routine: StringName, special: int, result: Dictionary
+) -> Dictionary:
+	var species: int = int(result.get("species", 0))
+	match routine:
+		&"photo_studio":
+			## `IsAPokemon` is the egg test and nothing else here can fail it, so
+			## the two branches are the egg's line and the shoot.
+			var photo_box: String = _special_box(
+				"photo_studio", "egg" if species == SPECIES_EGG else "hold_still"
+			)
+			if photo_box.is_empty():
+				return {"ok": false, "reason": &"missing_special_text", "special": special}
+			if species == SPECIES_EGG:
+				return _stage_internal_text(photo_box, false, {"special": special})
+			## `PrintPartymon` is a Game Boy Printer transfer, and `hPrinter`
+			## reports an error for every attempt made without one attached, so
+			## `.cancel` is the branch this project can reach and the picture is
+			## never taken.
+			return _stage_internal_text(photo_box, false, {
+				"special": special,
+				"next_internal_texts": [_special_box("photo_studio", "no_photo")],
+			})
+		&"magikarp_length":
+			if species != Gen2WorldPartyHost.SPECIES_MAGIKARP:
+				_script_value = Gen2WorldPartyHost.MAGIKARPLENGTH_NOT_MAGIKARP
+				return advance()
+			var length: Vector2i = Gen2WorldPartyHost.magikarp_length(
+				_dv_bytes(result.get("dvs", [])), int(result.get("ot_id", 0))
+			)
+			_set_text_buffer(
+				RomLayout.STRING_BUFFER_1,
+				Gen2WorldPartyHost.magikarp_length_string(length.x, length.y),
+				&"magikarp_length", {"special": special}
+			)
+			var record: Dictionary = state.best_magikarp() if state != null else {}
+			## `PrintText` runs in front of the comparison, so the Guru says the
+			## measurement whether or not it beats what he has written down.
+			var beats: bool = Gen2WorldPartyHost.magikarp_beats_record(length, record)
+			_script_value = Gen2WorldPartyHost.MAGIKARPLENGTH_BEAT_RECORD if beats \
+				else Gen2WorldPartyHost.MAGIKARPLENGTH_TOO_SHORT
+			if beats:
+				## The two bytes and then `SkipNames`' own eleven, which is the
+				## OT of the row that was measured rather than the player.
+				_staged_best_magikarp = {
+					"feet": length.x,
+					"inches": length.y,
+					"ot": String(result.get("original_trainer", "")),
+				}
+			var measure_box: String = _special_box("magikarp", "measure")
+			if measure_box.is_empty():
+				return {"ok": false, "reason": &"missing_special_text", "special": special}
+			return _stage_internal_text(measure_box, false, {"special": special})
+		&"poke_seer":
+			return _finish_poke_seer(special, result)
+		&"return_shuckie":
+			## Three tests in order and each has its own answer: the species, then
+			## MANIA's ID, then MANIA's OT name. A row that fails any of them is
+			## SHUCKIE_WRONG_MON, which is the same zero a stranger's SHUCKLE
+			## gets.
+			if species != Gen2WorldPartyHost.SHUCKLE \
+				or int(result.get("ot_id", -1)) != Gen2WorldPartyHost.MANIA_OT_ID \
+				or String(result.get("original_trainer", "")) != Gen2WorldPartyHost.MANIA_OT_NAME:
+				_script_value = Gen2WorldPartyHost.SHUCKIE_WRONG_MON
+				return advance()
+			if bool(result.get("fainted", false)):
+				_script_value = Gen2WorldPartyHost.SHUCKIE_FAINTED
+				return advance()
+			if int(result.get("happiness", 0)) >= Gen2WorldPartyHost.SHUCKIE_HAPPY_THRESHOLD:
+				## `.HappyToStayWithYou` writes the answer and removes nothing.
+				_script_value = Gen2WorldPartyHost.SHUCKIE_HAPPY
+				return advance()
+			_script_value = Gen2WorldPartyHost.SHUCKIE_RETURNED
+			_emit_runtime_event(&"party_member_removed", {
+				"special": special,
+				"slot": int(result.get("party_index", -1)),
+				"routine": routine,
+			})
+			return advance()
+	return advance()
+
+
+## `ReadCaughtData` and `SeerAction`, which are one reading of the row and then
+## the boxes that reading picked.
+##
+## Nothing here writes anything: every branch is a run of `PrintText`s and the
+## five buffers they read, so the whole routine is text.
+func _finish_poke_seer(special: int, result: Dictionary) -> Dictionary:
+	if int(result.get("species", 0)) == SPECIES_EGG:
+		return _seer_boxes(special, ["egg"])
+	var caught_level: int = int(result.get("caught_level", 0))
+	var caught_time: int = int(result.get("caught_time", 0))
+	var caught_location: int = int(result.get("caught_location", 0))
+	var caught_gender: int = int(result.get("caught_gender", 0))
+	## `.error`: both caught bytes zero. The level and time share one byte and
+	## the gender and location the other, so a row that has never been stamped
+	## is the one the Seer cannot read.
+	if caught_level == 0 and caught_time == 0 \
+		and caught_location == 0 and caught_gender == 0:
+		return _seer_boxes(special, ["cant_tell_a_thing"])
+	_set_text_ram("seer_nickname", String(result.get("nickname", "")))
+	_set_text_ram("seer_ot", String(result.get("original_trainer", "")))
+	## The level the Seer says, which is `CAUGHT_EGG_LEVEL` read back as the
+	## level an egg hatches at and "???" for a row with no level at all.
+	_set_text_ram("seer_caught_level", "???" if caught_level == 0 else str(
+		SEER_EGG_LEVEL if caught_level == SEER_CAUGHT_EGG_LEVEL else caught_level
+	))
+	_set_text_ram("seer_time_of_day", SEER_UNKNOWN if caught_time == 0 \
+		else SEER_TIMES[mini(caught_time - 1, SEER_TIMES.size() - 1)])
+	## `GetCaughtLocation` is the one reading that can change the action: an
+	## event landmark leaves only the level tellable and a gift leaves nothing.
+	var traded: bool = _seer_was_traded(result)
+	var boxes: PackedStringArray = PackedStringArray()
+	if caught_location == 0:
+		_set_text_ram("seer_caught_location", SEER_UNKNOWN)
+		boxes = PackedStringArray(["trade" if traded else "name_location", "time_level"])
+	elif caught_location == SEER_LANDMARK_EVENT:
+		boxes = PackedStringArray(["no_location"])
+	elif caught_location == Gen2WorldPartyHost.LANDMARK_GIFT:
+		return _seer_boxes(special, ["cant_tell_a_thing"])
+	else:
+		_set_text_ram("seer_caught_location", data.landmark_name(caught_location) \
+			if data != null else SEER_UNKNOWN)
+		boxes = PackedStringArray(["trade" if traded else "name_location", "time_level"])
+	## `SeerAdvice`, which every telling branch ends on: the levels gained since
+	## the row was caught, banded by `SeerAdviceTexts`' own thresholds.
+	var gained: int = (int(result.get("level", 0)) - caught_level) & 0xFF
+	for row: Array in SEER_ADVICE:
+		if gained <= int(row[0]):
+			boxes.append(String(row[1]))
+			break
+	return _seer_boxes(special, boxes)
+
+
+## `ReadCaughtData`'s trade test. wPlayerID is stored high byte first, and the
+## `cp [hl]` behind `ld a, [wPlayerID + 1]` is commented out in the pin: the low
+## byte is loaded and never compared, and `ld a, [hl]` sets no flags, so the
+## `jr nz` after it reads the high byte's own comparison a second time. A row
+## whose high ID byte matches the player's is "met" whatever its low byte says.
+func _seer_was_traded(result: Dictionary) -> bool:
+	var player_id: int = int(_request.get("player_id", 0))
+	return ((int(result.get("ot_id", 0)) >> 8) & 0xFF) != ((player_id >> 8) & 0xFF)
+
+
+func _seer_boxes(special: int, names: Array) -> Dictionary:
+	var texts: Array = []
+	for name: Variant in names:
+		var box: String = _special_box("poke_seer", String(name))
+		if box.is_empty():
+			return {"ok": false, "reason": &"missing_special_text", "special": special}
+		texts.append(box)
+	var head: String = String(texts.pop_front())
+	return _stage_internal_text(head, false, {"special": special} if texts.is_empty() \
+		else {"special": special, "next_internal_texts": texts})
+
+
+## MON_DVS' two bytes off a party-selection answer, whatever shape the host
+## handed them over in.
+func _dv_bytes(raw: Variant) -> PackedByteArray:
+	var out := PackedByteArray([0, 0])
+	if raw is PackedByteArray:
+		var packed: PackedByteArray = raw
+		for index: int in mini(packed.size(), 2):
+			out[index] = packed[index]
+	elif raw is Array:
+		var values: Array = raw
+		for index: int in mini(values.size(), 2):
+			out[index] = int(values[index]) & 0xFF
+	return out
 
 
 func _emit_runtime_event(kind: StringName, values: Dictionary) -> void:
@@ -3951,10 +4719,10 @@ func text_context() -> Dictionary:
 ## through StringBufferPointers rather than the number. Addresses come from the
 ## cartridge, since Gold and Crystal put the buffers in different places.
 func _text_buffer_ram() -> Dictionary:
-	if data == null or _text_buffers.is_empty():
+	if data == null or (_text_buffers.is_empty() and _text_ram.is_empty()):
 		return {}
 	var addresses: Array[int] = data.string_buffer_addresses()
-	var out: Dictionary = {}
+	var out: Dictionary = _text_ram.duplicate()
 	for buffer: Variant in _text_buffers:
 		var index: int = int(buffer)
 		if index >= 0 and index < addresses.size():
@@ -4142,6 +4910,19 @@ func _complete() -> Dictionary:
 		runtime_changes["kurt_apricorn_quantity"] = _staged_kurt_apricorn_quantity
 	if not _staged_fruit_trees.is_empty():
 		runtime_changes["fruit_trees"] = _staged_fruit_trees.duplicate()
+	if _has_staged_kenji_break_timer:
+		runtime_changes["kenji_break_timer"] = _staged_kenji_break_timer
+	if _has_staged_lucky_number_days_left:
+		runtime_changes["lucky_number_days_left"] = _staged_lucky_number_days_left
+	if _has_staged_lucky_id_number:
+		runtime_changes["lucky_id_number"] = _staged_lucky_id_number
+		runtime_changes["lucky_number_day"] = _staged_lucky_number_day
+	if not _staged_caught_species.is_empty():
+		runtime_changes["caught_species"] = _staged_caught_species.duplicate()
+	if not _staged_best_magikarp.is_empty():
+		runtime_changes["best_magikarp"] = _staged_best_magikarp.duplicate()
+	if _staged_blue_card_balance >= 0:
+		runtime_changes["blue_card_balance"] = _staged_blue_card_balance
 	if not _staged_engine_flags.is_empty():
 		runtime_changes["engine_flags"] = _staged_engine_flags.duplicate()
 	if _reset_phone_receive_timer:

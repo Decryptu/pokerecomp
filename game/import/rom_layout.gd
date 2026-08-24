@@ -1410,6 +1410,58 @@ const NAME_RATER_TEXT_ORDER: Array[String] = [
 	"come_again", "perfect_name", "egg", "same_name", "named",
 ]
 
+## The `text_far` stub runs the routines behind `tools/checks/specials.gd`'s
+## deferred list print, by run name, then the layout key and the stub names in
+## the file's own order. One table rather than one accessor per routine: a
+## routine that gets built adds a row here and needs no importer of its own.
+##
+## A run whose layout offset is zero is not on the cartridge. `poke_seer`,
+## `seer_advice` and `buena_prize` are Crystal's alone, and Gold and Silver's
+## `SpecialsPointers` is short enough that no script of theirs can reach one.
+const SPECIAL_TEXT_RUNS: Dictionary = {
+	## `engine/events/magikarp.asm`. Two runs of one: the Guru's measuring box
+	## sits inside `CheckMagikarpLength` and the record sign's at the file's end.
+	"magikarp": [
+		["magikarp_measure_text", ["measure"]],
+		["magikarp_record_text", ["record"]],
+	],
+	## `CheckForLuckyNumberWinners`' two, which differ only in where the match
+	## was found.
+	"lucky_number": [["lucky_number_text", ["match_party", "match_pc"]]],
+	## `engine/events/print_photo.asm`'s five, in `PhotoStudio`'s own file order.
+	"photo_studio": [["photo_studio_text", [
+		"which_mon", "hold_still", "presto", "no_photo", "egg",
+	]]],
+	## `engine/events/mom.asm`'s sixteen, from `MomLeavingText1` to
+	## `MomJustDoWhatYouCanText`. `DSTChecks`' own six sit above them in the file
+	## and are a separate concern: the clock question is already asked by the
+	## two DST specials.
+	"bank_of_mom": [["mom_text", [
+		"leaving_1", "leaving_2", "leaving_3", "is_this_about_your_money",
+		"what_do_you_want_to_do", "store_money", "take_money", "save_money",
+		"havent_saved_that_much", "not_enough_room_in_wallet",
+		"insufficient_funds_in_wallet", "not_enough_room_in_bank",
+		"start_saving_money", "stored_money", "taken_money", "just_do_what_you_can",
+	]]],
+	## `engine/events/poke_seer.asm`. The stubs are laid out in the file's order
+	## rather than `SeerTexts`', which is why `no_location` and `do_nothing` sit
+	## the other way round from the table that indexes them.
+	"poke_seer": [
+		["poke_seer_text", [
+			"see_all", "cant_tell_a_thing", "name_location", "time_level",
+			"trade", "no_location", "egg", "do_nothing",
+		]],
+		["seer_advice_text", [
+			"more_care", "more_confident", "much_strength", "mighty", "impressed",
+		]],
+	],
+	## `BuenaPrize`'s six, in its own file order.
+	"buena_prize": [["buena_prize_text", [
+		"ask_which_prize", "is_that_right", "here_you_go", "not_enough_points",
+		"no_room", "come_again",
+	]]],
+}
+
 ## `engine/events/move_deleter.asm`'s eight, in the file's own order rather than
 ## the routine's: `MoveDeletion` lays them out between `.onlyonemove` and
 ## `.DeleteMove`. Byte identical on all three cartridges as well.
@@ -2268,6 +2320,19 @@ const GOLD_SILVER: Dictionary = {
 	"name_rater_text": 0xFB919,
 	## `MoveDeletion.MoveKnowsOneText`, bank $0b:$43dc in both dumps.
 	"move_deleter_text": 0x2C3DC,
+	## The deferred-routine stub runs, located the same way. Zero is a run the
+	## cartridge does not ship: the Poke Seer, Buena and her prize counter are
+	## Crystal's alone, and no Gold or Silver script reaches their specials.
+	## Gold and Silver's own, and only the one row they ship a routine for.
+	"special_text_ram": {"magikarp_record_holder": 0xDD35},
+	"magikarp_measure_text": 0xFBCAD,
+	"magikarp_record_text": 0xFBDEC,
+	"lucky_number_text": 0xC7BA3,
+	"photo_studio_text": 0x17034,
+	"mom_text": 0x168A8,
+	"poke_seer_text": 0,
+	"seer_advice_text": 0,
+	"buena_prize_text": 0,
 	"fruit_trees": 0x44091,
 	## `SpawnPoints` and `Flypoints`, each located by the byte column that is the
 	## same on all three dumps: the spawn coordinates at a stride of four, and
@@ -2733,6 +2798,27 @@ const CRYSTAL: Dictionary = {
 	"name_rater_text": 0xFB80F,
 	## `MoveDeletion.MoveKnowsOneText`, bank $0b:$45d1.
 	"move_deleter_text": 0x2C5D1,
+	## The deferred-routine stub runs `SPECIAL_TEXT_RUNS` names, each located by
+	## encoding its first box and following the `text_far` that points at it.
+	## The WRAM addresses the runs above name with `text_ram`, beyond the string
+	## buffers `string_buffer_pointers` already carries. Crystal's Poke Seer has
+	## five of its own; the record holder's name is on all three.
+	"special_text_ram": {
+		"magikarp_record_holder": 0xDFEA,
+		"seer_nickname": 0xD003,
+		"seer_caught_location": 0xD00E,
+		"seer_time_of_day": 0xD01F,
+		"seer_ot": 0xD02A,
+		"seer_caught_level": 0xD036,
+	},
+	"magikarp_measure_text": 0xFBBA9,
+	"magikarp_record_text": 0xFBCE8,
+	"lucky_number_text": 0x4D9C9,
+	"photo_studio_text": 0x16E04,
+	"mom_text": 0x16649,
+	"poke_seer_text": 0x4F28C,
+	"seer_advice_text": 0x4F2E8,
+	"buena_prize_text": 0x8B072,
 	"fruit_trees": 0x44097,
 	"spawn_points": 0x152AB,
 	"flypoints": 0x91C5E,
@@ -3282,6 +3368,35 @@ static func move_deleter_text_offset(layout: Dictionary, name: String) -> int:
 	if at < 0 or index < 0:
 		return -1
 	return at + index * TEXT_FAR_STUB_BYTES
+
+
+## Where the `text_far` stub [param name] names sits inside the run [param run]
+## of `SPECIAL_TEXT_RUNS`, or -1 when the cartridge does not ship that run.
+static func special_text_offset(layout: Dictionary, run: String, name: String) -> int:
+	for entry: Array in SPECIAL_TEXT_RUNS.get(run, []) as Array:
+		var index: int = (entry[1] as Array).find(name)
+		if index < 0:
+			continue
+		var at: int = int(layout.get(String(entry[0]), 0))
+		return -1 if at <= 0 else at + index * TEXT_FAR_STUB_BYTES
+	return -1
+
+
+## Every stub name in [param run], in the order the runs list them.
+static func special_text_names(run: String) -> Array[String]:
+	var out: Array[String] = []
+	for entry: Array in SPECIAL_TEXT_RUNS.get(run, []) as Array:
+		for name: Variant in entry[1] as Array:
+			out.append(String(name))
+	return out
+
+
+## Whether the cartridge [param layout] describes ships [param run] at all.
+static func has_special_text_run(layout: Dictionary, run: String) -> bool:
+	for entry: Array in SPECIAL_TEXT_RUNS.get(run, []) as Array:
+		if int(layout.get(String(entry[0]), 0)) <= 0:
+			return false
+	return not (SPECIAL_TEXT_RUNS.get(run, []) as Array).is_empty()
 
 
 ## Where the Name Rater's `text_far` stub [param name] names sits.

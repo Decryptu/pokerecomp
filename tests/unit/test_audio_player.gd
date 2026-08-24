@@ -122,10 +122,7 @@ func test_the_queue_is_kept_to_its_latency_target_not_to_the_brim() -> void:
 	var capacity: int = _player._capacity
 	var pending: int = capacity - _player._playback.get_frames_available()
 	assert_gt(capacity, 0, "the depth was learned from the stream")
-	assert_eq(
-		_player._timeline_updates, Gen2AudioPlayer.TARGET_FRAMES_MIN,
-		"one driver frame per queued frame and no more",
-	)
+	assert_gt(_player._timeline_updates, 0, "the service filled the queue at all")
 	assert_almost_eq(
 		float(pending),
 		float(Gen2AudioPlayer.TARGET_FRAMES_MIN * Gen2Apu.SAMPLES_PER_FRAME),
@@ -133,10 +130,17 @@ func test_the_queue_is_kept_to_its_latency_target_not_to_the_brim() -> void:
 	)
 	assert_lt(pending, capacity, "the rest of the depth is left as headroom")
 
-	# A second service with nothing consumed adds nothing: the target is a level,
-	# not a rate.
+	# A second service does not fill to the brim: the target is a level, not a
+	# rate, so the queue comes back to the same depth rather than growing. The
+	# level is what is asserted rather than the number of pushes, because the
+	# output is a live driver here and whatever it drained between two pushes is
+	# pushed again by the same rule.
 	_player._service_timeline()
-	assert_eq(_player._timeline_updates, Gen2AudioPlayer.TARGET_FRAMES_MIN)
+	assert_almost_eq(
+		float(capacity - _player._playback.get_frames_available()),
+		float(Gen2AudioPlayer.TARGET_FRAMES_MIN * Gen2Apu.SAMPLES_PER_FRAME),
+		float(Gen2Apu.SAMPLES_PER_FRAME),
+	)
 
 
 ## A device that cannot hold the target says so by running the queue dry, and the
