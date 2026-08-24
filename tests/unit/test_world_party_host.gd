@@ -1482,3 +1482,108 @@ func test_the_whiteout_heals_and_halves_the_money_before_it_warps() -> void:
 	assert_true(Gen2WorldPartyHost.party_has_fit_mon(_save))
 	for mon: Gen2SaveMon in _save.party:
 		assert_eq(mon.status, Gen2Status.NONE)
+
+
+## `CalcMagikarpLength`'s own documented table, which is the routine read
+## through `.BCLessThanDE`'s bug: the row is picked on b alone, so every value
+## of b in a band gives that band's x, y and z. One case per band rather than
+## one sampled case, since the bands are what the bug defines.
+func test_a_magikarps_length_follows_the_band_its_high_byte_lands_in() -> void:
+	for row: Array in [
+		[0, 310, 2, 3], [1, 710, 4, 4], [5, 2710, 20, 5], [20, 7710, 50, 6],
+		[50, 17710, 100, 7], [100, 32710, 150, 8], [150, 47710, 150, 9],
+		[200, 57710, 100, 10], [230, 62710, 50, 11], [248, 64710, 20, 12],
+		[253, 65210, 5, 13], [254, 65410, 2, 14],
+	]:
+		var bc: int = (int(row[0]) << 8) | 0x37
+		@warning_ignore("integer_division")
+		var millimetres: int = ((bc - int(row[1])) & 0xFFFF) / int(row[2]) & 0xFF
+		millimetres += 100 * int(row[3])
+		@warning_ignore("integer_division")
+		var inches: int = ((millimetres * 10) & 0xFFFF) / 254
+		@warning_ignore("integer_division")
+		var expected := Vector2i(inches / 12, inches % 12)
+		assert_eq(
+			Gen2WorldPartyHost.magikarp_length(_dvs_for(bc), 0), expected,
+			"b = %d takes x = %d, y = %d, z = %d" % row
+		)
+
+
+## The short branch: `bc` under ten is `c + 190` millimetres and never reaches
+## the table at all.
+func test_the_shortest_magikarp_skips_the_table() -> void:
+	assert_eq(Gen2WorldPartyHost.magikarp_length(_dvs_for(9), 0), Vector2i(0, 7))
+	assert_eq(Gen2WorldPartyHost.magikarp_length(_dvs_for(0), 0), Vector2i(0, 7))
+
+
+## `CompareBytes` over two bytes: an equal length is not a new record, and the
+## feet decide before the inches are looked at.
+func test_a_magikarp_record_is_beaten_only_by_a_strictly_longer_one() -> void:
+	var record: Dictionary = {"feet": 3, "inches": 4}
+	assert_false(Gen2WorldPartyHost.magikarp_beats_record(Vector2i(3, 4), record))
+	assert_false(Gen2WorldPartyHost.magikarp_beats_record(Vector2i(3, 3), record))
+	assert_false(Gen2WorldPartyHost.magikarp_beats_record(Vector2i(2, 11), record))
+	assert_true(Gen2WorldPartyHost.magikarp_beats_record(Vector2i(3, 5), record))
+	assert_true(Gen2WorldPartyHost.magikarp_beats_record(Vector2i(4, 0), record))
+
+
+## `PrintMagikarpLength`'s two `PRINTNUM_LEFTALIGN` numbers, which pad neither.
+func test_a_magikarp_length_prints_both_numbers_unpadded() -> void:
+	assert_eq(Gen2WorldPartyHost.magikarp_length_string(3, 4), "3′4″")
+	assert_eq(Gen2WorldPartyHost.magikarp_length_string(0, 11), "0′11″")
+
+
+## `.CompareLuckyNumberToMonID`'s bands: five digits from the right is a first
+## prize, three or four a second, two a third, and one or none is no match. Both
+## numbers are `PrintNum`'s five digits over two bytes, so every ID here is one
+## the cartridge could hold.
+func test_the_lucky_number_bands_by_matching_digits_from_the_right() -> void:
+	for row: Array in [
+		[12345, 1], [52345, 2], [55345, 2], [55545, 3], [55555, 0], [55550, 0],
+	]:
+		var matched: Dictionary = Gen2WorldPartyHost.lucky_number_match(
+			12345, [int(row[0])], [1], [false], [], []
+		)
+		assert_eq(int(matched["script_value"]), int(row[1]),
+			"%d against 12345" % int(row[0]))
+
+
+## The best match wins wherever it is, and only a box match prints the PC line.
+## `.bettermatch` is reached on an equal score as well as a better one, because
+## `cp b / jr c, .nomatch` jumps only when what is already stored is strictly
+## better: a box row that ties with a party row takes the prize and the PC line
+## with it.
+func test_the_lucky_number_keeps_the_best_match_and_says_where_it_was() -> void:
+	var tied: Dictionary = Gen2WorldPartyHost.lucky_number_match(
+		12345, [52345], [1], [false], [55345], [2]
+	)
+	assert_eq(int(tied["script_value"]), 2)
+	assert_eq(int(tied["species"]), 2, "an equal box match replaces the party one")
+	assert_true(bool(tied["in_storage"]))
+	var boxed: Dictionary = Gen2WorldPartyHost.lucky_number_match(
+		12345, [55545], [1], [false], [12345], [2]
+	)
+	assert_eq(int(boxed["script_value"]), 1)
+	assert_eq(int(boxed["species"]), 2)
+	assert_true(bool(boxed["in_storage"]))
+	assert_eq(
+		int(Gen2WorldPartyHost.lucky_number_match(
+			12345, [12345], [1], [true], [], []
+		)["script_value"]),
+		0,
+		"`cp EGG` skips an egg in the party walk"
+	)
+
+
+## MON_DVS for a wanted `bc`, given a zero trainer ID: the routine rotates each
+## DV byte right twice, so the byte that produces one is the wanted half rotated
+## left twice.
+func _dvs_for(bc: int) -> PackedByteArray:
+	return PackedByteArray([
+		_rotate_left(_rotate_left((bc >> 8) & 0xFF)),
+		_rotate_left(_rotate_left(bc & 0xFF)),
+	])
+
+
+func _rotate_left(value: int) -> int:
+	return ((value << 1) | (value >> 7)) & 0xFF

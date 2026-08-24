@@ -200,6 +200,31 @@ static func station_for(knob: int, context: Dictionary = {}) -> Dictionary:
 
 
 ## The knob position a channel is carried on, or -1 where this profile has none.
+## `PlayRadioStationPointers`, the nine `MAPRADIO_*` rows a `special MapRadio`
+## indexes. Only two of them are reachable: `Radio1Script` names the Pokemon
+## Channel and `Radio2Script` the Lucky Channel, and those two std scripts are
+## every radio on every map.
+##
+## `LoadStation_PokemonChannel` is a branch rather than a station: Kanto reads
+## Places and People, a Johto morning the Pokedex Show, and any other Johto hour
+## Oak's Pokemon Talk.
+const MAP_RADIO_STATIONS: Array[int] = [
+	-1, OAKS_POKEMON_TALK, POKEDEX_SHOW, POKEMON_MUSIC, LUCKY_CHANNEL,
+	UNOWN_RADIO, PLACES_AND_PEOPLE, LETS_ALL_SING, ROCKET_RADIO,
+]
+
+
+static func map_radio_channel(station: int, kanto: bool, time_of_day: int) -> int:
+	if station < 0 or station >= MAP_RADIO_STATIONS.size():
+		return -1
+	if station > 0:
+		return MAP_RADIO_STATIONS[station]
+	if kanto:
+		return PLACES_AND_PEOPLE
+	## `wTimeOfDay`'s own zero is MORN.
+	return POKEDEX_SHOW if time_of_day == 0 else OAKS_POKEMON_TALK
+
+
 static func knob_for_channel(channel: int, crystal: bool = true) -> int:
 	for entry: Dictionary in CHANNELS:
 		if bool(entry.get("crystal_only", false)) and not crystal:

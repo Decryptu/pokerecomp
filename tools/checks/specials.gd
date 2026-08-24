@@ -41,6 +41,10 @@ const EXPECTED_DEFERRED: Dictionary = {
 	130: "Function101231", 134: "BattleTowerAction",
 	136: "Menu_ChallengeExplanationCancel", 139: "BattleTowerMobileError",
 	140: "AskMobileOrCable", 154: "Mobile_SelectThreeMons",
+	## `home/init.asm`'s `Reset`, a soft reset of the console. Its one script
+	## site is BattleTowerBattleRoom.asm, so it belongs to row 2 of the last four
+	## features rather than to a screen of its own.
+	126: "Reset",
 	155: "Function1037eb", 156: "Function10383c", 159: "Function1037c2",
 	160: "CheckMobileAdapterStatusSpecial", 161: "Function103780",
 	162: "Function10387b", 163: "AskRememberPassword",
@@ -48,18 +52,12 @@ const EXPECTED_DEFERRED: Dictionary = {
 	## Screens and facilities with no routine here yet. Each is its own piece of
 	## work, not a dispatch entry: it opens a screen, spends a transaction, or
 	## reads a save field nothing writes.
-	25: "CheckMagikarpLength", 26: "MagikarpHouseSign",
-	34: "BankOfMom", 39: "UnownPrinter", 40: "MapRadio",
-	57: "GameCornerPrizeMonCheckDex",
-	75: "GiveShuckle", 76: "ReturnShuckie",
-	82: "CheckForLuckyNumberWinners",
-	83: "CheckLuckyNumberShowFlag", 84: "ResetLuckyNumberShowFlag",
-	85: "PrintTodaysLuckyNumber", 103: "TrainerHouse",
-	104: "PhotoStudio", 107: "Diploma", 108: "PrintDiploma",
-	126: "Reset", 132: "OmanyteChamber",
-	141: "HoOhChamber", 143: "CelebiShrineEvent", 144: "CheckCaughtCelebi",
-	145: "PokeSeer", 146: "BuenasPassword", 147: "BuenaPrize",
-	148: "GiveDratini", 149: "SampleKenjiBreakCountdown",
+	##
+	## The three printer rows need art no cache carries: `DiplomaGFX` and its two
+	## tilemaps, and `_UnownPrinter`'s own frontpic page. Both are a cache-format
+	## bump away rather than a routine away.
+	34: "BankOfMom", 39: "UnownPrinter",
+	107: "Diploma", 108: "PrintDiploma",
 
 	## Reached by one script row each and by nothing the player can talk to.
 	## `FindPartyMonAboveLevel` is marked `; unused` in the pin's own table.
@@ -84,6 +82,17 @@ const EXPECTED_OUT_OF_TABLE: Dictionary = {&"crystal": 1, &"gold": 0, &"silver":
 const EXPECTED_FADE_FRAMES: Dictionary = {46: 8, 47: 28, 48: 8, 49: 8, 50: 8}
 
 ## `data/events/special_pointers.asm`'s own length, the same in both pins.
+## The three runs Crystal alone ships. `poke_seer`, `seer_advice` and
+## `buena_prize` sit past the end of Gold and Silver's `SpecialsPointers`.
+const CRYSTAL_ONLY_TEXT_RUNS: Array[String] = ["poke_seer", "buena_prize"]
+
+## The `special_text_ram` names a box may fill beyond the string buffers, which
+## is what `Gen2WorldScriptRunner._set_text_ram` writes through.
+const SPECIAL_TEXT_RAM_NAMES: Array[String] = [
+	"magikarp_record_holder", "seer_nickname", "seer_caught_location",
+	"seer_time_of_day", "seer_ot", "seer_caught_level",
+]
+
 const SPECIALS_POINTERS_SIZE: int = 169
 
 var _r: RefCounted = null
@@ -105,6 +114,7 @@ func run(r: RefCounted) -> void:
 		_r.game_id = game_id
 		_verify_corpus(data, game_id == &"crystal")
 		_verify_slow_cry(data)
+		_verify_special_text(data)
 	_r.game_id = &""
 	_verify_deferred_list_is_current()
 
@@ -192,6 +202,52 @@ func _verify_slow_cry(data: GameData) -> void:
 			_r.fail("species %d's own record was edited in place" % species)
 			return
 	_r.check(checked >= 250, "%d species cries read, not 251" % checked)
+
+
+## Every `RomLayout.SPECIAL_TEXT_RUNS` box the cartridge ships, on all three
+## dumps: each has to decode to something, and every `text_ram` marker left in
+## one has to name an address the cache can fill. An unresolved marker is what a
+## wrong pin looks like from the screen that prints the box.
+##
+## A run the cartridge does not ship is checked to be absent rather than empty:
+## Gold and Silver's `SpecialsPointers` is short enough that no script of theirs
+## can reach the Poke Seer, Buena or her prize counter.
+func _verify_special_text(data: GameData) -> void:
+	var fillable: Dictionary = {}
+	for address: int in data.string_buffer_addresses():
+		fillable[address] = true
+	for name: String in SPECIAL_TEXT_RAM_NAMES:
+		var address: int = data.special_text_ram(name)
+		if address >= 0:
+			fillable[address] = true
+	for raw_run: Variant in RomLayout.SPECIAL_TEXT_RUNS:
+		var run: String = String(raw_run)
+		if run in CRYSTAL_ONLY_TEXT_RUNS and data.id != &"crystal":
+			_r.check(
+				not data.has_special_text(run),
+				"%s is on a cartridge whose scripts cannot reach it" % run
+			)
+			continue
+		if not _r.check(data.has_special_text(run), "the %s run is missing" % run):
+			continue
+		for box: String in RomLayout.special_text_names(run):
+			var text: String = data.special_text(run, box)
+			if not _r.check(
+				not text.is_empty(), "%s/%s decoded to nothing" % [run, box]
+			):
+				continue
+			var at: int = text.find(Gen2TextStream.RAM_MARKER)
+			while at >= 0:
+				var end: int = text.find(">", at)
+				var address: int = ("0x%s" % text.substr(
+					at + Gen2TextStream.RAM_MARKER.length(),
+					end - at - Gen2TextStream.RAM_MARKER.length()
+				)).hex_to_int() if end > at else -1
+				_r.check(
+					fillable.has(address),
+					"%s/%s names $%04X, which nothing can fill" % [run, box, address]
+				)
+				at = text.find(Gen2TextStream.RAM_MARKER, at + 1)
 
 
 ## Every cached script on one cartridge, walked for `special` and tallied.

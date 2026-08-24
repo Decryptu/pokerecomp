@@ -95,11 +95,42 @@ const HAPPINESS_TABLE_OVERRUN_OPCODE: int = 0x21
 const ITEM_BERRY: int = 0xAD
 const ITEM_BERRY_JUICE: int = 0x8B
 const SHUCKLE: int = 0xD5
+const SPECIES_MAGIKARP: int = 0x81
+const SPECIES_DRATINI: int = 0x93
 
 ## HAPPINESS_THRESHOLD_1 and HAPPINESS_THRESHOLD_2
 ## (constants/pokemon_data_constants.asm), which pick a HappinessChanges column.
 const HAPPINESS_THRESHOLD_1: int = 100
 const HAPPINESS_THRESHOLD_2: int = 200
+
+## `engine/events/shuckle.asm`. MANIA's own OT and ID are the routine's
+## literals, and `ReturnShuckie` tests all three before it takes the Pokemon
+## back, so a SHUCKLE the player caught themselves is refused.
+const MANIA_OT_ID: int = 518
+const MANIA_OT_NAME: String = "MANIA"
+const SHUCKIE_NICKNAME: String = "SHUCKIE"
+const SHUCKIE_LEVEL: int = 15
+const SHUCKIE_HAPPY_THRESHOLD: int = 150
+## `constants/script_constants.asm`'s own five.
+const SHUCKIE_WRONG_MON: int = 0
+const SHUCKIE_REFUSED: int = 1
+const SHUCKIE_RETURNED: int = 2
+const SHUCKIE_HAPPY: int = 3
+const SHUCKIE_FAINTED: int = 4
+
+## `CheckMagikarpLength`'s own four answers.
+const MAGIKARPLENGTH_NOT_MAGIKARP: int = 0
+const MAGIKARPLENGTH_REFUSED: int = 1
+const MAGIKARPLENGTH_TOO_SHORT: int = 2
+const MAGIKARPLENGTH_BEAT_RECORD: int = 3
+
+## `MagikarpLengths`: the threshold that is also x, and the divisor y. z is the
+## row's index plus two, which is `wTempByteValue` starting at 2.
+const MAGIKARP_LENGTHS: Array = [
+	[110, 1], [310, 2], [710, 4], [2710, 20], [7710, 50], [17710, 100],
+	[32710, 150], [47710, 150], [57710, 100], [62710, 50], [64710, 20],
+	[65210, 5], [65410, 2], [65510, 1],
+]
 
 const CAPTURE_BALLS: Array[int] = [
 	ITEM_POKE_BALL, ITEM_GREAT_BALL, ITEM_ULTRA_BALL, ITEM_MASTER_BALL,
@@ -144,7 +175,10 @@ static func complete_runtime_request(
 	if request.is_empty():
 		return _failure(&"runtime_request_not_pending", {})
 	var kind: StringName = StringName(request.get("kind", &""))
-	if kind not in [&"pokemon_requested", &"trade_requested", &"contest_mon_requested"]:
+	if kind not in [
+		&"pokemon_requested", &"trade_requested", &"contest_mon_requested",
+		&"dratini_moveset_requested",
+	]:
 		return _failure(&"party_request_not_pending", request)
 	if save == null or world.data == null:
 		return _failure(&"missing_save", request)
@@ -891,7 +925,8 @@ static func capture_wild(
 	ball: int,
 	random: RandomNumberGenerator = null,
 	caught_location: int = 0,
-	persist: bool = true
+	persist: bool = true,
+	battle_type: int = Gen2Battle.BATTLETYPE_NORMAL
 ) -> Dictionary:
 	if world == null or save == null or world.data == null or wild == null:
 		return _failure(&"missing_capture_context", {})
@@ -958,6 +993,11 @@ static func capture_wild(
 	## `Script_SpecialBillCall` once the battle is over. Behind the commit, so a
 	## catch that was rolled back owes no phone call.
 	world.state.set_battle_box_full(box_full)
+	## `PokeBallEffect`'s own `cp BATTLETYPE_CELEBI` behind the dex entry: the
+	## bit is raised by the catch rather than by the shrine, and
+	## `CheckCaughtCelebi` reads it once the fight is over.
+	if bool(outcome.get("caught", false)) and battle_type == Gen2Battle.BATTLETYPE_CELEBI:
+		world.state.set_battle_caught_celebi(true)
 	return {
 		"ok": true,
 		"handled": true,
@@ -1123,6 +1163,11 @@ static func _apply_party_request(
 	var kind: StringName = StringName(request.get("kind", &""))
 	if kind == &"contest_mon_requested":
 		return _apply_contest_mon(world, candidate, result, random)
+	if kind == &"pokemon_requested" \
+		and StringName((request.get("values", {}) as Dictionary).get("kind", &"")) == &"give_shuckle":
+		return _apply_give_shuckle(world, candidate, request, random)
+	if kind == &"dratini_moveset_requested":
+		return _apply_dratini_moveset(world, candidate, request)
 	if kind == &"pokemon_requested":
 		var values: Dictionary = request.get("values", {})
 		var is_egg: bool = not values.has("pokemon")
@@ -1972,3 +2017,202 @@ static func apply_pokerus_tick(save: Gen2SaveData, days: int) -> bool:
 		mon.pokerus = (mon.pokerus & 0xF0) + maxi(remaining - days, 0)
 		changed = true
 	return changed
+
+
+## `CalcMagikarpLength`, in feet and inches. [param dvs] is MON_DVS' two bytes
+## and [param player_id] is wPlayerID, read high byte first the way the routine
+## reads it.
+##
+## `.BCLessThanDE`'s `ret c / ret nc` is reproduced rather than fixed: the low
+## byte is never reached, so the row is chosen on the threshold's high byte
+## alone, which is what `MagikarpLengths`' own comment says the table really
+## means. Fixing it would move every length in the game by up to a foot.
+static func magikarp_length(dvs: PackedByteArray, player_id: int) -> Vector2i:
+	var id_high: int = _rotate_right((player_id >> 8) & 0xFF)
+	var id_low: int = _rotate_right(player_id & 0xFF)
+	var b: int = (_rotate_right(_rotate_right(int(dvs[0]) if dvs.size() > 0 else 0))) ^ id_high
+	var c: int = (_rotate_right(_rotate_right(int(dvs[1]) if dvs.size() > 1 else 0))) ^ id_low
+	var bc: int = (b << 8) | c
+	var millimetres: int = 0
+	if b == 0 and c < 10:
+		millimetres = bc + 190
+	else:
+		var matched: bool = false
+		for row: int in MAGIKARP_LENGTHS.size():
+			var threshold: int = int(MAGIKARP_LENGTHS[row][0])
+			if b >= (threshold >> 8) & 0xFF:
+				continue
+			@warning_ignore("integer_division")
+			var quotient: int = ((bc - threshold) & 0xFFFF) / int(MAGIKARP_LENGTHS[row][1])
+			millimetres = (quotient & 0xFF) + 100 * (row + 2)
+			matched = true
+			break
+		if not matched:
+			## The walk fell off the end with the last row's threshold still in
+			## de, which is the subtraction `.next` leaves standing.
+			millimetres = ((bc - int(MAGIKARP_LENGTHS[MAGIKARP_LENGTHS.size() - 1][0])) & 0xFFFF) + 1600
+	## mm to inches is `hl * 10 / 254`, and feet is that over twelve.
+	@warning_ignore("integer_division")
+	var inches: int = ((millimetres * 10) & 0xFFFF) / 254
+	@warning_ignore("integer_division")
+	return Vector2i(inches / 12, inches % 12)
+
+
+## One `rrca`: an 8-bit rotate right through no carry.
+static func _rotate_right(value: int) -> int:
+	return ((value >> 1) | (value << 7)) & 0xFF
+
+
+## `PrintMagikarpLength`'s own string: two `PrintNum`s with
+## PRINTNUM_LEFTALIGN, so neither number is padded, between the feet and inch
+## marks `gfx/font/feet_inches.2bpp` supplies.
+static func magikarp_length_string(feet: int, inches: int) -> String:
+	return "%d′%d″" % [feet, inches]
+
+
+## `CompareBytes` over the two length bytes, which is a strict lexicographic
+## test: an equal length is not a new record.
+static func magikarp_beats_record(length: Vector2i, record: Dictionary) -> bool:
+	var best_feet: int = int(record.get("feet", 0))
+	if length.x != best_feet:
+		return length.x > best_feet
+	return length.y > int(record.get("inches", 0))
+
+
+## `CheckForLuckyNumberWinners`, as one walk over the ID numbers the party
+## mirror carries.
+##
+## [param stored_ids] and [param stored_species] are every box slot in one list,
+## which is what the source's open-box pass plus its `.BoxesLoop` skipping
+## `wCurBox` add up to. Answers `{script_value, species, in_storage}`, where a
+## zero script value is the routine's own "found nothing" and leaves both boxes
+## unprinted.
+static func lucky_number_match(
+	lucky_id: int, party_ids: Array, party_species: Array, party_eggs: Array,
+	stored_ids: Array, stored_species: Array
+) -> Dictionary:
+	var best: int = 0
+	var best_species: int = 0
+	var in_storage: bool = false
+	var wanted: String = "%05d" % (lucky_id & 0xFFFF)
+	for slot: int in party_ids.size():
+		if slot < party_species.size() and int(party_species[slot]) == Gen2WorldScriptRunner.SPECIES_EGG:
+			continue
+		if slot < party_eggs.size() and bool(party_eggs[slot]):
+			continue
+		var scored: int = _lucky_number_score(wanted, int(party_ids[slot]))
+		if scored == 0 or (best != 0 and best < scored):
+			continue
+		best = scored
+		best_species = int(party_species[slot]) if slot < party_species.size() else 0
+		in_storage = false
+	for slot: int in stored_ids.size():
+		if slot < stored_species.size() and int(stored_species[slot]) == Gen2WorldScriptRunner.SPECIES_EGG:
+			continue
+		var boxed: int = _lucky_number_score(wanted, int(stored_ids[slot]))
+		if boxed == 0 or (best != 0 and best < boxed):
+			continue
+		best = boxed
+		best_species = int(stored_species[slot]) if slot < stored_species.size() else 0
+		in_storage = true
+	return {"script_value": best, "species": best_species, "in_storage": in_storage}
+
+
+## `.CompareLuckyNumberToMonID`: both numbers printed with
+## PRINTNUM_LEADINGZEROS over five digits and compared from the last digit
+## backwards, stopping at the first that differs. Five digits is a first prize,
+## three or four a second, two a third, and anything less is no match at all.
+static func _lucky_number_score(wanted: String, mon_id: int) -> int:
+	var theirs: String = "%05d" % (mon_id & 0xFFFF)
+	var matched: int = 0
+	for digit: int in range(4, -1, -1):
+		if wanted[digit] != theirs[digit]:
+			break
+		matched += 1
+	if matched == 5:
+		return 1
+	if matched >= 3:
+		return 2
+	if matched == 2:
+		return 3
+	return 0
+
+
+## `GiveShuckle`. A level 15 SHUCKLE holding a BERRY, named SHUCKIE under
+## MANIA's name and ID, with `SetGiftPartyMonCaughtData`'s CAUGHT_BY_UNKNOWN.
+##
+## `TryAddMonToParty` and nothing else: a full party is `.NotGiven`, which
+## answers zero and never reaches a box. The daily flag behind it is the
+## script's own `setflag`, which has already run by here.
+static func _apply_give_shuckle(
+	world: Gen2WorldAPI,
+	candidate: Gen2SaveData,
+	request: Dictionary,
+	random: RandomNumberGenerator
+) -> Dictionary:
+	if candidate.party.size() >= Gen2SaveData.MAX_PARTY:
+		return {
+			"ok": true, "accepted": false, "script_value": 0, "reason": &"party_full",
+			"summary": {"kind": &"shuckie", "accepted": false, "species": SHUCKLE},
+		}
+	var mon: Gen2SaveMon = _new_mon(
+		world.data, candidate, SHUCKLE, SHUCKIE_LEVEL, ITEM_BERRY, random, false
+	)
+	if mon == null:
+		return {"ok": false, "reason": &"could_not_create_pokemon"}
+	set_caught_data(mon, 0, -1, world.player_female(), LANDMARK_GIFT)
+	mon.ot_id = MANIA_OT_ID
+	mon.original_trainer = MANIA_OT_NAME
+	mon.nickname = SHUCKIE_NICKNAME
+	var appended: Dictionary = _append_mon(candidate, mon, 1, {
+		"kind": &"shuckie", "species": SHUCKLE, "level": SHUCKIE_LEVEL,
+		"item": ITEM_BERRY,
+	})
+	if not bool(appended.get("ok", false)):
+		return {
+			"ok": true, "accepted": false, "script_value": 0, "reason": &"party_full",
+			"summary": {"kind": &"shuckie", "accepted": false, "species": SHUCKLE},
+		}
+	return appended
+
+
+## `GiveDratini`, which gives nothing: it walks the party backwards for the last
+## DRATINI and overwrites its four move slots, each with that move's own full
+## PP. Wrap, Thunder Wave, Twister and Extremespeed for the elder's answer, and
+## a level 15 Dratini's own list for the other. Nothing is written when the
+## party holds no Dratini, and the routine answers nothing either way.
+const DRATINI_MOVESETS: Array = [
+	[35, 86, 239, 245],
+	[35, 43, 86, 239],
+]
+
+
+static func _apply_dratini_moveset(
+	world: Gen2WorldAPI, candidate: Gen2SaveData, request: Dictionary
+) -> Dictionary:
+	var values: Dictionary = request.get("values", {})
+	var moveset: int = clampi(int(values.get("moveset", 0)), 0, DRATINI_MOVESETS.size() - 1)
+	var slot: int = -1
+	for index: int in range(candidate.party.size() - 1, -1, -1):
+		var member: Variant = candidate.party[index]
+		if member is Gen2SaveMon and int((member as Gen2SaveMon).species) == SPECIES_DRATINI:
+			slot = index
+			break
+	if slot < 0:
+		return {
+			"ok": true, "accepted": false, "script_value": 0, "reason": &"no_dratini",
+			"summary": {"kind": &"dratini_moveset", "accepted": false},
+		}
+	var mon: Gen2SaveMon = candidate.party[slot]
+	var taught: Array = []
+	for move_slot: int in DRATINI_MOVESETS[moveset].size():
+		var move: int = int(DRATINI_MOVESETS[moveset][move_slot])
+		mon.moves[move_slot] = move
+		mon.pp[move_slot] = int(world.data.move(move).get("pp", 0))
+		taught.append(move)
+	return {
+		"ok": true, "accepted": true, "script_value": 0,
+		"summary": {
+			"kind": &"dratini_moveset", "accepted": true, "slot": slot, "moves": taught,
+		},
+	}

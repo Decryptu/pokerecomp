@@ -22,6 +22,9 @@ const SECONDS_PER_MINUTE: float = 60.0
 const MINUTES_PER_HOUR: int = 60
 const HOURS_PER_DAY: int = 24
 const DAYS_PER_WEEK: int = 7
+## `constants/wram_constants.asm`'s weekday numbering, SUNDAY first.
+## `RestartLuckyNumberCountdown` is the one routine that names a day.
+const FRIDAY: int = 5
 const MORN_START: int = 4
 const DAY_START: int = 10
 const NITE_START: int = 18

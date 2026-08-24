@@ -141,6 +141,10 @@ var _repel_steps: int = 0
 var _repel_expired: bool = false
 ## `wBattleResult`'s BATTLERESULT_BOX_FULL bit. See [method battle_box_full].
 var _battle_box_full: bool = false
+## `wBattleResult`'s BATTLERESULT_CAUGHT_CELEBI, the sibling of the bit above.
+## `CheckCaughtCelebi` is the one reader, and the Ilex Forest shrine script asks
+## it once the fight is over.
+var _battle_caught_celebi: bool = false
 ## `wWildEncounterCooldown`, which `EnterMap` sets to five and every step
 ## decrements. Scratch on the cartridge rather than saved data, kept here
 ## because this is where the world's own per-step counters live; a state written
@@ -247,6 +251,41 @@ var _picked_fruit_trees: Dictionary = {}
 ## the entry again in its packed pocket array and clears both when the item is
 ## not there, which here is the quantity the item number already answers.
 var _registered_item: int = 0
+## `wLuckyIDNumber`, the five-digit number the Lucky Number Show draws every
+## day, and `sLuckyNumberDay`, which is `wCurDay + 1` on the day it was drawn so
+## that day zero is told from "never drawn"
+## (`LoadOrRegenerateLuckyIDNumber`). Kept together because the pair is what
+## says whether today's number has been rolled yet.
+var _lucky_id_number: int = 0
+var _lucky_number_day: int = 0
+## `wLuckyNumberDayTimer`'s own days-remaining byte.
+## `RestartLuckyNumberCountdown` sets it to the days until the next Friday and
+## the day rollover steps it, which is `CheckDayDependentEventHL`'s answer with
+## no absolute day to subtract.
+var _lucky_number_days_left: int = 0
+## `wKenjiBreakTimer`, three to six days between the Route 27 sailor's breaks.
+## `CheckDailyResetTimer` decrements it on every day that passes and resamples
+## when it reaches zero.
+var _kenji_break_timer: int = 0
+## `wBestMagikarpLengthFeet`, `..Inches` and the record holder's OT name, which
+## `CheckMagikarpLength` writes together and the house's sign prints.
+var _best_magikarp_feet: int = 0
+var _best_magikarp_inches: int = 0
+var _best_magikarp_ot: String = ""
+## `wMomSavingMoney`, whose three bits are whether Mom's bank has been opened at
+## all and how much of a prize she keeps. Her balance itself is
+## `ACCOUNT_MOMS_MONEY`, which the money dictionary already carries.
+var _mom_savings_flags: int = 0
+## `wBuenasPassword`: the high nibble is the category the Lucky Channel drew
+## this morning and the low nibble the word inside it. Saved player data, so a
+## player who heard the show and then saved still knows the password when they
+## reach the Radio Tower.
+var _buenas_password: int = 0
+
+## `wBlueCardBalance`, the points Buena's password earns and her prize counter
+## spends. One byte and uncapped here: `BLUE_CARD_POINT_CAP` is RadioTower2F's
+## own `ifequal` in front of the award, not a rule the byte enforces.
+var _blue_card_balance: int = 0
 
 
 func _init(
@@ -362,6 +401,19 @@ func to_dict() -> Dictionary:
 		"day_care_mons": _day_care_mons_dict(),
 		"steps_to_egg": _steps_to_egg,
 		"day_care_egg": {} if _day_care_egg == null else _day_care_egg.to_dict(),
+		"battle_caught_celebi": _battle_caught_celebi,
+		"lucky_id_number": _lucky_id_number,
+		"lucky_number_day": _lucky_number_day,
+		"lucky_number_days_left": _lucky_number_days_left,
+		"kenji_break_timer": _kenji_break_timer,
+		"best_magikarp": {
+			"feet": _best_magikarp_feet,
+			"inches": _best_magikarp_inches,
+			"ot": _best_magikarp_ot,
+		},
+		"mom_savings_flags": _mom_savings_flags,
+		"blue_card_balance": _blue_card_balance,
+		"buenas_password": _buenas_password,
 	}
 
 
@@ -457,6 +509,23 @@ static func from_dict(raw: Variant) -> Gen2WorldState:
 		for slot: int in mini((stored_mons as Array).size(), 2):
 			restored._day_care_mons[slot] = _mon_from_value((stored_mons as Array)[slot])
 	restored._day_care_egg = _mon_from_value(source.get("day_care_egg", {}))
+	## Absent in a state written before the deferred routines were built. Zero
+	## reads as "never drawn" for the lucky number, "no record" for the Magikarp
+	## house and "Mom has not been asked" for her bank, which is what a save
+	## taken before any of them was reachable says anyway.
+	restored._battle_caught_celebi = bool(source.get("battle_caught_celebi", false))
+	restored._lucky_id_number = int(source.get("lucky_id_number", 0)) & 0xFFFF
+	restored._lucky_number_day = int(source.get("lucky_number_day", 0)) & 0xFF
+	restored._lucky_number_days_left = int(source.get("lucky_number_days_left", 0)) & 0xFF
+	restored._kenji_break_timer = int(source.get("kenji_break_timer", 0)) & 0xFF
+	var record: Variant = source.get("best_magikarp", {})
+	if record is Dictionary:
+		restored._best_magikarp_feet = int((record as Dictionary).get("feet", 0)) & 0xFF
+		restored._best_magikarp_inches = int((record as Dictionary).get("inches", 0)) & 0xFF
+		restored._best_magikarp_ot = String((record as Dictionary).get("ot", ""))
+	restored._mom_savings_flags = int(source.get("mom_savings_flags", 0)) & 0xFF
+	restored._blue_card_balance = int(source.get("blue_card_balance", 0)) & 0xFF
+	restored._buenas_password = int(source.get("buenas_password", 0)) & 0xFF
 	return restored
 
 
@@ -512,6 +581,17 @@ func restore_from_dict(raw: Variant) -> void:
 	_steps_to_egg = restored._steps_to_egg
 	_day_care_egg = restored._day_care_egg
 	_pending_day_care_steps = 0
+	_battle_caught_celebi = restored._battle_caught_celebi
+	_lucky_id_number = restored._lucky_id_number
+	_lucky_number_day = restored._lucky_number_day
+	_lucky_number_days_left = restored._lucky_number_days_left
+	_kenji_break_timer = restored._kenji_break_timer
+	_best_magikarp_feet = restored._best_magikarp_feet
+	_best_magikarp_inches = restored._best_magikarp_inches
+	_best_magikarp_ot = restored._best_magikarp_ot
+	_mom_savings_flags = restored._mom_savings_flags
+	_blue_card_balance = restored._blue_card_balance
+	_buenas_password = restored._buenas_password
 	changed.emit()
 
 
@@ -707,7 +787,9 @@ const DAILY_ENGINE_FLAGS: Array[int] = [
 ]
 
 
-func reset_daily_flags(crystal: bool = true) -> bool:
+func reset_daily_flags(
+	crystal: bool = true, random: RandomNumberGenerator = null
+) -> bool:
 	var did_change: bool = false
 	for crystal_index: int in DAILY_ENGINE_FLAGS:
 		var flag: int = engine_flag(crystal_index, crystal)
@@ -715,9 +797,148 @@ func reset_daily_flags(crystal: bool = true) -> bool:
 			continue
 		_engine_flags.erase(flag)
 		did_change = true
+	## `CheckDailyResetTimer` does not only clear the flag bytes: the same
+	## branch steps `wKenjiBreakTimer` and resamples it when it runs out, so a
+	## day passing is what moves the Route 27 sailor's break along.
+	## The same branch is where every day-counted timer this project keeps is
+	## stepped, since a weekday alone cannot say how many days have passed.
+	if _lucky_number_days_left > 0:
+		_lucky_number_days_left -= 1
+		did_change = true
+	if random != null:
+		var next_timer: int = _kenji_break_timer
+		if next_timer == 0:
+			next_timer = kenji_break_countdown(random)
+		else:
+			next_timer -= 1
+			if next_timer == 0:
+				next_timer = kenji_break_countdown(random)
+		if next_timer != _kenji_break_timer:
+			_kenji_break_timer = next_timer
+			did_change = true
 	if did_change:
 		changed.emit()
 	return did_change
+
+
+## `SampleKenjiBreakCountdown`: `Random` masked to two bits, plus three, so
+## three to six days.
+static func kenji_break_countdown(random: RandomNumberGenerator) -> int:
+	return (random.randi() & 0x3) + 3
+
+
+func kenji_break_timer() -> int:
+	return _kenji_break_timer
+
+
+func set_kenji_break_timer(days: int) -> void:
+	var next: int = clampi(days, 0, 0xFF)
+	if next == _kenji_break_timer:
+		return
+	_kenji_break_timer = next
+	changed.emit()
+
+
+func lucky_id_number() -> int:
+	return _lucky_id_number
+
+
+## `sLuckyNumberDay`, which is the day plus one so that a stored zero says the
+## number has never been drawn.
+func lucky_number_day() -> int:
+	return _lucky_number_day
+
+
+## `LoadOrRegenerateLuckyIDNumber`. `sLuckyNumberDay` holds `wCurDay + 1`, so a
+## stored zero is "no number has ever been drawn" rather than "drawn on day
+## zero", and a day whose stored value already matches keeps the number it had.
+## [param roll] is spent only when a new number is drawn, which is the two
+## `Random` calls the source makes in that branch alone.
+func refresh_lucky_id_number(day: int, random: RandomNumberGenerator) -> bool:
+	var stamp: int = (day + 1) & 0xFF
+	if _lucky_number_day == stamp:
+		return false
+	_lucky_number_day = stamp
+	## The first roll is the low byte and the second the high one: `c` holds the
+	## first and `a`, the second, is stored at `wLuckyIDNumber`, which `PrintNum`
+	## reads big-endian.
+	var low: int = random.randi() & 0xFF
+	var high: int = random.randi() & 0xFF
+	_lucky_id_number = ((high << 8) | low) & 0xFFFF
+	changed.emit()
+	return true
+
+
+## `_CheckLuckyNumberShowFlag`: `CheckDayDependentEventHL` on
+## `wLuckyNumberDayTimer`, which answers carry once the days it was started with
+## have passed. The days remaining are stepped by the day rollover rather than
+## derived from a stored start day, because this project's clock is a weekday
+## and an hour: a seven-day countdown started on a Friday ends on the same
+## weekday, which no difference of two weekdays can tell from no time passing.
+func lucky_number_show_ready() -> bool:
+	return _lucky_number_days_left <= 0
+
+
+## `RestartLuckyNumberCountdown`: `InitNDaysCountdown` with the days until the
+## next Friday, which is seven when today is Friday or Saturday, so the show
+## never comes round again on the day it ran.
+func restart_lucky_number_countdown(day: int) -> void:
+	var until: int = Gen2WorldClock.FRIDAY - posmod(day, Gen2WorldClock.DAYS_PER_WEEK)
+	if until <= 0:
+		until += Gen2WorldClock.DAYS_PER_WEEK
+	_lucky_number_days_left = until
+	changed.emit()
+
+
+func best_magikarp() -> Dictionary:
+	return {
+		"feet": _best_magikarp_feet,
+		"inches": _best_magikarp_inches,
+		"ot": _best_magikarp_ot,
+	}
+
+
+func set_best_magikarp(feet: int, inches: int, ot: String) -> void:
+	_best_magikarp_feet = clampi(feet, 0, 0xFF)
+	_best_magikarp_inches = clampi(inches, 0, 0xFF)
+	_best_magikarp_ot = ot
+	changed.emit()
+
+
+func mom_savings_flags() -> int:
+	return _mom_savings_flags
+
+
+func set_mom_savings_flags(flags: int) -> void:
+	var next: int = flags & 0xFF
+	if next == _mom_savings_flags:
+		return
+	_mom_savings_flags = next
+	changed.emit()
+
+
+func blue_card_balance() -> int:
+	return _blue_card_balance
+
+
+func buenas_password() -> int:
+	return _buenas_password
+
+
+func set_buenas_password(password: int) -> void:
+	var next: int = password & 0xFF
+	if next == _buenas_password:
+		return
+	_buenas_password = next
+	changed.emit()
+
+
+func set_blue_card_balance(points: int) -> void:
+	var next: int = points & 0xFF
+	if next == _blue_card_balance:
+		return
+	_blue_card_balance = next
+	changed.emit()
 
 
 ## True unless [param data] is a verified Gold or Silver cache, matching
@@ -857,6 +1078,17 @@ func just_battled() -> bool:
 ## `Script_reloadmapafterbattle`, which answers it with Bill on the phone.
 ## Runtime only, like the byte it models: `wBattleResult` is scratch, so a save
 ## reloaded after such a catch owes no call.
+func battle_caught_celebi() -> bool:
+	return _battle_caught_celebi
+
+
+func set_battle_caught_celebi(caught: bool) -> void:
+	if caught == _battle_caught_celebi:
+		return
+	_battle_caught_celebi = caught
+	changed.emit()
+
+
 func battle_box_full() -> bool:
 	return _battle_box_full
 
@@ -1640,6 +1872,43 @@ func apply_changes(
 	)
 	if next_kurt_apricorns < 0 or next_kurt_apricorns > 0xFF:
 		return {"ok": false, "reason": &"invalid_kurt_apricorn_quantity"}
+	var next_blue_card: int = int(
+		runtime_changes.get("blue_card_balance", _blue_card_balance)
+	)
+	if next_blue_card < 0 or next_blue_card > 0xFF:
+		return {"ok": false, "reason": &"invalid_blue_card_balance"}
+	var next_mom_savings: int = int(
+		runtime_changes.get("mom_savings_flags", _mom_savings_flags)
+	)
+	if next_mom_savings < 0 or next_mom_savings > 0xFF:
+		return {"ok": false, "reason": &"invalid_mom_savings_flags"}
+	var next_kenji: int = int(runtime_changes.get("kenji_break_timer", _kenji_break_timer))
+	if next_kenji < 0 or next_kenji > 0xFF:
+		return {"ok": false, "reason": &"invalid_kenji_break_timer"}
+	var next_lucky_days: int = int(
+		runtime_changes.get("lucky_number_days_left", _lucky_number_days_left)
+	)
+	if next_lucky_days < 0 or next_lucky_days > 0xFF:
+		return {"ok": false, "reason": &"invalid_lucky_number_timer"}
+	var next_lucky_id: int = int(runtime_changes.get("lucky_id_number", _lucky_id_number))
+	if next_lucky_id < 0 or next_lucky_id > 0xFFFF:
+		return {"ok": false, "reason": &"invalid_lucky_id_number"}
+	var next_lucky_day: int = int(runtime_changes.get("lucky_number_day", _lucky_number_day))
+	if next_lucky_day < 0 or next_lucky_day > 0xFF:
+		return {"ok": false, "reason": &"invalid_lucky_number_day"}
+	var magikarp_change: Variant = runtime_changes.get("best_magikarp", null)
+	if magikarp_change != null and not magikarp_change is Dictionary:
+		return {"ok": false, "reason": &"invalid_best_magikarp"}
+	var next_karp_feet: int = _best_magikarp_feet
+	var next_karp_inches: int = _best_magikarp_inches
+	var next_karp_ot: String = _best_magikarp_ot
+	if magikarp_change is Dictionary:
+		next_karp_feet = int((magikarp_change as Dictionary).get("feet", 0))
+		next_karp_inches = int((magikarp_change as Dictionary).get("inches", 0))
+		next_karp_ot = String((magikarp_change as Dictionary).get("ot", ""))
+		if next_karp_feet < 0 or next_karp_feet > 0xFF \
+			or next_karp_inches < 0 or next_karp_inches > 0xFF:
+			return {"ok": false, "reason": &"invalid_best_magikarp"}
 	var fruit_tree_changes: Dictionary = runtime_changes.get("fruit_trees", {})
 	if not fruit_tree_changes is Dictionary:
 		return {"ok": false, "reason": &"invalid_fruit_trees"}
@@ -1753,6 +2022,8 @@ func apply_changes(
 	var next_just_battled: bool = bool(
 		runtime_changes.get("just_battled", _just_battled)
 	)
+	var karp_changed: bool = next_karp_feet != _best_magikarp_feet \
+		or next_karp_inches != _best_magikarp_inches or next_karp_ot != _best_magikarp_ot
 
 	var did_change: bool = next_flags != _event_flags or next_engine_flags != _engine_flags \
 		or next_scenes != _map_scenes \
@@ -1768,7 +2039,12 @@ func apply_changes(
 		or next_special_phone_call != _pending_special_phone_call \
 		or next_script_memory != _script_memory \
 		or next_kurt_apricorns != _kurt_apricorn_quantity \
-		or next_fruit_trees != _picked_fruit_trees
+		or next_fruit_trees != _picked_fruit_trees \
+		or next_blue_card != _blue_card_balance \
+		or next_mom_savings != _mom_savings_flags \
+		or next_kenji != _kenji_break_timer \
+		or next_lucky_days != _lucky_number_days_left or karp_changed \
+		or next_lucky_id != _lucky_id_number or next_lucky_day != _lucky_number_day
 	_event_flags = next_flags
 	_engine_flags = next_engine_flags
 	_map_scenes = next_scenes
@@ -1789,6 +2065,15 @@ func apply_changes(
 	_script_memory = next_script_memory
 	_kurt_apricorn_quantity = next_kurt_apricorns
 	_picked_fruit_trees = next_fruit_trees
+	_blue_card_balance = next_blue_card
+	_mom_savings_flags = next_mom_savings
+	_kenji_break_timer = next_kenji
+	_lucky_number_days_left = next_lucky_days
+	_lucky_id_number = next_lucky_id
+	_lucky_number_day = next_lucky_day
+	_best_magikarp_feet = next_karp_feet
+	_best_magikarp_inches = next_karp_inches
+	_best_magikarp_ot = next_karp_ot
 	if did_change:
 		changed.emit()
 	return {"ok": true, "changed": did_change}
