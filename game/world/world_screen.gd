@@ -3145,6 +3145,28 @@ func preview_name_rater() -> void:
 	_open_name_rater()
 
 
+## Public screenshot driver for `Mom_WithdrawDepositMenuJoypad`, whose box no
+## fixture cell reaches: her house is not one of the preview maps and the dial
+## stands three questions into her own routine.
+func preview_mom_bank(mode: StringName, saved: int, held: int) -> void:
+	if _world == null or _data == null or _service_host != null:
+		return
+	var host: Gen2WorldServiceScreen = SERVICE_SCENE.instantiate() as Gen2WorldServiceScreen
+	if host == null:
+		return
+	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	host.z_index = 20
+	host.set_screen(_screen)
+	add_child(host)
+	if not host.open_mom_bank(_world, _data, mode, saved, held):
+		Gen2Screen.drop(host)
+		return
+	host.completed.connect(_on_service_completed)
+	host.sfx_requested.connect(_play_sfx)
+	_service_host = host
+	_refresh_labels()
+
+
 ## Public screenshot driver for the Day-Care's five specials, which no cell of
 ## the fixture maps reaches either. [param role] picks the routine; the two signs
 ## and the man outside need state behind them, so a slot is filled and the egg
@@ -6081,6 +6103,7 @@ func _show_script_results(results: Array) -> void:
 					&"mart_requested", &"phone_call_requested",
 					&"special_phone_call_requested", &"town_map_requested",
 					&"apricorn_selection_requested", &"pc_requested",
+					&"mom_bank_dial_requested",
 				]:
 					_open_service_host()
 					break

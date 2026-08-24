@@ -353,6 +353,20 @@ func _write_cache(game_id: String = "testworld") -> void:
 				"much_strength": "Much strength.", "mighty": "Mighty.",
 				"impressed": "Impressed.",
 			},
+			"bank_of_mom": {
+				"leaving_1": "Shall I save money?", "leaving_2": "I will save some.",
+				"leaving_3": "Take care!", "is_this_about_your_money": "Your money?",
+				"what_do_you_want_to_do": "What shall I do?",
+				"store_money": "How much to save?", "take_money": "How much to get?",
+				"save_money": "Shall I keep saving?",
+				"havent_saved_that_much": "You have not saved that much.",
+				"not_enough_room_in_wallet": "Your wallet is full.",
+				"insufficient_funds_in_wallet": "You do not have that much.",
+				"not_enough_room_in_bank": "I cannot hold that much.",
+				"start_saving_money": "I will keep saving.",
+				"stored_money": "Saved it.", "taken_money": "Here it is.",
+				"just_do_what_you_can": "Do what you can.",
+			},
 			"buena_prize": {
 				"ask_which_prize": "Which prize?", "is_that_right": "<RAM_CF6B>?",
 				"here_you_go": "Here you go!", "not_enough_points": "Not enough.",
@@ -7987,6 +8001,234 @@ func test_the_lucky_number_show_names_the_matching_row() -> void:
 	assert_true(results[0]["status"] in [&"complete", &"waiting"], JSON.stringify(results))
 	assert_between(world.state.lucky_id_number(), 0, 0xFFFF)
 	assert_ne(world.state.lucky_number_day(), 0, "the draw stamps the day it was made")
+
+
+## `BankOfMom`'s first visit: `.CheckIfBankInitialized` sets MOM_ACTIVE before
+## the question, so the account is open whichever way it is answered, and
+## `MomLeavingText3` is printed on both branches.
+func test_moms_bank_opens_the_account_whichever_way_the_first_question_goes() -> void:
+	_write_special_script([
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_BANK_OF_MOM, 0,
+		Gen2WorldScript.END,
+	])
+	var saving: Gen2WorldAPI = _special_world()
+	var opened: Array = _run_special(saving)
+	assert_eq(opened[0]["event"]["type"], &"choice")
+	assert_eq(opened[0]["event"]["text"], "Shall I save money?")
+	assert_eq(saving.choose_script_input(0)[0]["event"]["text"], "I will save some.")
+	assert_eq(saving.run_event_queue(true)[0]["event"]["text"], "Take care!")
+	assert_eq(saving.run_event_queue(true)[0]["status"], &"complete")
+	assert_eq(
+		saving.state.mom_savings_flags(),
+		Gen2WorldScriptRunner.MOM_ACTIVE | Gen2WorldScriptRunner.MOM_SAVING_SOME_MONEY
+	)
+
+	var refused: Gen2WorldAPI = _special_world()
+	_run_special(refused)
+	## B is the same NO the second row is, which is `YesNoBox`' own carry.
+	assert_eq(refused.cancel_script_input()[0]["event"]["text"], "Take care!")
+	assert_eq(refused.run_event_queue(true)[0]["status"], &"complete")
+	assert_eq(
+		refused.state.mom_savings_flags(), Gen2WorldScriptRunner.MOM_ACTIVE,
+		"the account is open and keeping nothing"
+	)
+
+
+## `.IsThisAboutYourMoney` and `.AccessBankOfMom`: an account already open goes
+## straight to her four-row menu, and CANCEL and B both reach
+## `.JustDoWhatYouCan` rather than ending the routine where they stand.
+func test_a_second_visit_opens_her_menu_and_both_ways_out_print_her_line() -> void:
+	_write_special_script([
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_BANK_OF_MOM, 0,
+		Gen2WorldScript.END,
+	])
+	for way_out: int in [3, -1]:
+		var world: Gen2WorldAPI = _special_world(_mom_state())
+		assert_eq(_run_special(world)[0]["event"]["text"], "Your money?")
+		var menu: Dictionary = world.choose_script_input(0)[0]["event"]
+		assert_eq(menu["type"], &"menu")
+		assert_eq(menu["text"], "What shall I do?")
+		assert_eq(menu["options"], Gen2WorldScriptRunner.MOM_MENU_ROWS)
+		var left: Array = world.choose_script_input(way_out) if way_out >= 0 \
+			else world.cancel_script_input()
+		assert_eq(left[0]["event"]["text"], "Do what you can.", "way out %d" % way_out)
+		assert_eq(world.run_event_queue(true)[0]["status"], &"complete")
+
+
+## `.StoreMoney`'s tail, which is `CompareMoney`, `GiveMoney` into the buffer,
+## `TakeMoney` out of the wallet and only then the copy into `wMomsMoney`.
+func test_a_deposit_moves_the_money_and_reports_it_behind_the_sound() -> void:
+	_write_special_script([
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_BANK_OF_MOM, 0,
+		Gen2WorldScript.END,
+	])
+	var world: Gen2WorldAPI = _special_world(_mom_state(5000, 300))
+	_run_special(world)
+	world.choose_script_input(0)
+	assert_eq(world.choose_script_input(1)[0]["event"]["text"], "How much to save?")
+	var dial: Dictionary = world.run_event_queue(true)[0]["event"]["request"]
+	assert_eq(dial["kind"], &"mom_bank_dial_requested")
+	assert_eq(dial["values"]["mode"], Gen2WorldMoneyDial.MODE_DEPOSIT)
+	assert_eq(dial["values"]["held"], 5000)
+	assert_eq(dial["values"]["saved"], 300)
+	var sound: Dictionary = world.complete_runtime_request({
+		"ok": true, "amount": 1200,
+	})[0]["event"]["request"]
+	assert_eq(sound["kind"], &"audio_requested")
+	assert_eq(int(sound["values"]["address"]), Gen2WorldScriptRunner.SFX_TRANSACTION)
+	assert_eq(
+		world.complete_runtime_request({"ok": true})[0]["event"]["text"], "Saved it."
+	)
+	assert_eq(world.run_event_queue(true)[0]["status"], &"complete")
+	assert_eq(world.state.money(Gen2WorldScriptRunner.ACCOUNT_YOUR_MONEY), 3800)
+	assert_eq(world.state.money(Gen2WorldScriptRunner.ACCOUNT_MOMS_MONEY), 1500)
+
+
+## `.TakeMoney` is the same routine with the accounts the other way round.
+func test_a_withdrawal_moves_the_money_the_other_way() -> void:
+	_write_special_script([
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_BANK_OF_MOM, 0,
+		Gen2WorldScript.END,
+	])
+	var world: Gen2WorldAPI = _special_world(_mom_state(100, 4000))
+	_run_special(world)
+	world.choose_script_input(0)
+	assert_eq(world.choose_script_input(0)[0]["event"]["text"], "How much to get?")
+	var dial: Dictionary = world.run_event_queue(true)[0]["event"]["request"]
+	assert_eq(dial["values"]["mode"], Gen2WorldMoneyDial.MODE_WITHDRAW)
+	world.complete_runtime_request({"ok": true, "amount": 2500})
+	assert_eq(
+		world.complete_runtime_request({"ok": true})[0]["event"]["text"], "Here it is."
+	)
+	world.run_event_queue(true)
+	assert_eq(world.state.money(Gen2WorldScriptRunner.ACCOUNT_YOUR_MONEY), 2600)
+	assert_eq(world.state.money(Gen2WorldScriptRunner.ACCOUNT_MOMS_MONEY), 1500)
+
+
+## Her four refusals. Each `ret`s with `wJumptableIndex` untouched, so the
+## question is asked again and the dial reopens rather than the routine ending,
+## and a dial left at zero is the same `.CancelDeposit` B is.
+func test_every_refusal_asks_the_same_question_again_and_moves_nothing() -> void:
+	_write_special_script([
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_BANK_OF_MOM, 0,
+		Gen2WorldScript.END,
+	])
+	var ceiling: int = Gen2WorldInventory.MAX_MONEY
+	for row: Array in [
+		[1, 500, 0, 900, "You do not have that much.", "How much to save?"],
+		[1, 500, ceiling - 100, 200, "I cannot hold that much.", "How much to save?"],
+		[0, 0, 500, 900, "You have not saved that much.", "How much to get?"],
+		[0, ceiling - 100, 500, 200, "Your wallet is full.", "How much to get?"],
+	]:
+		var world: Gen2WorldAPI = _special_world(_mom_state(int(row[1]), int(row[2])))
+		_run_special(world)
+		world.choose_script_input(0)
+		world.choose_script_input(int(row[0]))
+		world.run_event_queue(true)
+		var refused: Array = world.complete_runtime_request({
+			"ok": true, "amount": int(row[3]),
+		})
+		assert_eq(refused[0]["event"]["text"], String(row[4]))
+		assert_eq(
+			world.run_event_queue(true)[0]["event"]["text"], String(row[5]),
+			"the refusal falls back into the same question"
+		)
+		world.run_event_queue(true)
+		var cancelled: Array = world.complete_runtime_request({"ok": true, "amount": 0})
+		assert_eq(cancelled[0]["event"]["text"], "Do what you can.")
+		assert_eq(world.run_event_queue(true)[0]["status"], &"complete")
+		assert_eq(world.state.money(Gen2WorldScriptRunner.ACCOUNT_YOUR_MONEY), int(row[1]))
+		assert_eq(world.state.money(Gen2WorldScriptRunner.ACCOUNT_MOMS_MONEY), int(row[2]))
+
+
+## `.StopOrStartSavingMoney`, the CHANGE row: YES writes the one tier her menu
+## offers and NO leaves the account open and keeping nothing.
+func test_the_change_row_turns_her_saving_on_and_off() -> void:
+	_write_special_script([
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_BANK_OF_MOM, 0,
+		Gen2WorldScript.END,
+	])
+	var saving: Gen2WorldAPI = _special_world(_mom_state())
+	_run_special(saving)
+	saving.choose_script_input(0)
+	assert_eq(saving.choose_script_input(2)[0]["event"]["text"], "Shall I keep saving?")
+	assert_eq(saving.choose_script_input(0)[0]["event"]["text"], "I will keep saving.")
+	assert_eq(saving.run_event_queue(true)[0]["status"], &"complete")
+	assert_eq(
+		saving.state.mom_savings_flags(),
+		Gen2WorldScriptRunner.MOM_ACTIVE | Gen2WorldScriptRunner.MOM_SAVING_SOME_MONEY
+	)
+
+	var stopped: Gen2WorldAPI = _special_world(
+		_mom_state(0, 0, Gen2WorldScriptRunner.MOM_ACTIVE | Gen2WorldScriptRunner.MOM_SAVING_SOME_MONEY)
+	)
+	_run_special(stopped)
+	stopped.choose_script_input(0)
+	stopped.choose_script_input(2)
+	assert_eq(stopped.choose_script_input(1)[0]["event"]["text"], "Do what you can.")
+	assert_eq(stopped.run_event_queue(true)[0]["status"], &"complete")
+	assert_eq(stopped.state.mom_savings_flags(), Gen2WorldScriptRunner.MOM_ACTIVE)
+
+
+## `Mom_WithdrawDepositMenuJoypad`'s dial: up and down are `GiveMoney` and
+## `TakeMoney` on the whole amount, so a digit column moves it by its own power
+## of ten and clamps rather than wrapping, and the cursor stops at either end.
+func test_her_dial_steps_by_the_column_it_stands_on_and_clamps() -> void:
+	var dial := Gen2WorldMoneyDial.open(Gen2WorldMoneyDial.MODE_DEPOSIT, 0, 0)
+	assert_eq(dial.cursor, Gen2WorldMoneyDial.DIGITS - 1, "it opens on the ones column")
+	assert_eq(dial.press(Gen2Button.UP), Gen2WorldMoneyDial.PENDING)
+	assert_eq(dial.value, 1)
+	assert_eq(dial.amount_string(), "¥000001")
+	for _step: int in 5:
+		dial.press(Gen2Button.LEFT)
+	assert_eq(dial.cursor, 0)
+	dial.press(Gen2Button.LEFT)
+	assert_eq(dial.cursor, 0, "the cursor stops at the edge rather than wrapping")
+	dial.press(Gen2Button.UP)
+	assert_eq(dial.value, 100001)
+	for _step: int in 9:
+		dial.press(Gen2Button.UP)
+	assert_eq(dial.value, Gen2WorldInventory.MAX_MONEY, "GiveMoney clamps at the ceiling")
+	dial.press(Gen2Button.DOWN)
+	dial.press(Gen2Button.DOWN)
+	dial.press(Gen2Button.DOWN)
+	dial.press(Gen2Button.DOWN)
+	dial.press(Gen2Button.DOWN)
+	dial.press(Gen2Button.DOWN)
+	dial.press(Gen2Button.DOWN)
+	dial.press(Gen2Button.DOWN)
+	dial.press(Gen2Button.DOWN)
+	dial.press(Gen2Button.DOWN)
+	assert_eq(dial.value, 0, "TakeMoney leaves zero rather than borrowing past it")
+	assert_eq(dial.press(Gen2Button.A), Gen2WorldMoneyDial.CONFIRMED)
+	assert_eq(dial.press(Gen2Button.B), Gen2WorldMoneyDial.CANCELLED)
+
+
+## `GiveMoney` writes `MAX_MONEY` and `TakeMoney` writes zero rather than either
+## of them refusing, which is what a script command answers with.
+func test_a_script_cannot_push_an_account_past_either_of_its_ends() -> void:
+	_write_special_script([
+		Gen2WorldScript.GIVEMONEY, 0, 0x99, 0x99, 0x99,
+		Gen2WorldScript.GIVEMONEY, 0, 0x00, 0x50, 0x00,
+		Gen2WorldScript.TAKEMONEY, 0, 0x99, 0x99, 0x99,
+		Gen2WorldScript.TAKEMONEY, 0, 0x00, 0x50, 0x00,
+		Gen2WorldScript.END,
+	])
+	var world: Gen2WorldAPI = _special_world()
+	assert_eq(_run_special(world)[0]["status"], &"complete")
+	assert_eq(world.state.money(Gen2WorldScriptRunner.ACCOUNT_YOUR_MONEY), 0)
+
+
+## The wallet and the flags a visit to her starts from.
+func _mom_state(
+	money: int = 0, saved: int = 0, flags: int = Gen2WorldScriptRunner.MOM_ACTIVE
+) -> Gen2WorldState:
+	var state := Gen2WorldState.new({}, {}, {}, {
+		Gen2WorldScriptRunner.ACCOUNT_YOUR_MONEY: money,
+		Gen2WorldScriptRunner.ACCOUNT_MOMS_MONEY: saved,
+	})
+	state.set_mom_savings_flags(flags)
+	return state
 
 
 ## One script at a fixed address, reached by the map's own coordinate event, so

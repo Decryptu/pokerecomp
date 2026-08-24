@@ -73,7 +73,10 @@ static func complete_runtime_request(
 		}
 	if kind in [&"battle_requested", &"swarm_requested"]:
 		return {"ok": true, "handled": true, "results": world.complete_runtime_request(result)}
-	if kind == &"town_map_requested":
+	## Neither reads cartridge data of its own: the region map's landmark and the
+	## bank dial's amount are the whole answer, and the runner owns what is done
+	## with it.
+	if kind in [&"town_map_requested", &"mom_bank_dial_requested"]:
 		return {
 			"ok": true,
 			"handled": true,

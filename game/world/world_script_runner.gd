@@ -47,6 +47,11 @@ var _staged_lucky_number_day: int = 0
 var _staged_caught_species: Dictionary = {}
 var _staged_best_magikarp: Dictionary = {}
 var _staged_blue_card_balance: int = -1
+var _staged_mom_savings_flags: int = -1
+## `SFX_TRANSACTION` and the `WaitSFX` behind it, which stand between the
+## transfer and the box that reports it.
+var _bank_of_mom_after_sound: int = -1
+var _mom_receipt_box: String = ""
 var _reset_phone_receive_timer: bool = false
 var _events: Array = []
 var _pending: Dictionary = {}
@@ -445,6 +450,37 @@ const SPECIAL_CHECK_MAGIKARP_LENGTH: int = 25
 const SPECIAL_MAGIKARP_HOUSE_SIGN: int = 26
 const SPECIAL_BANK_OF_MOM: int = 34
 const SPECIAL_MAP_RADIO: int = 40
+## `constants/script_constants.asm`'s MOMS_MONEY, the account her bank holds.
+const ACCOUNT_MOMS_MONEY: int = 1
+## `ram_constants.asm`'s wMomSavingMoney. Bit 7 is whether the bank has ever
+## been opened; the low three are how much of a battle prize she keeps, and only
+## MOM_SAVING_SOME_MONEY is ever written, since that is the one tier her menu
+## offers. Nothing spends the tier here: prize money is a deliberate divergence.
+const MOM_ACTIVE: int = 1 << 7
+const MOM_SAVING_SOME_MONEY: int = 1 << 0
+## `BankOfMom.dw`, the jumptable this routine walks. `wJumptableIndex` is the
+## whole of its state, so each index below is one staged box, menu or dial and
+## the loop around `.RunJumptable` is the chain of them.
+const MOM_CHECK_INITIALIZED: int = 0
+const MOM_INITIALIZE: int = 1
+const MOM_IS_THIS_ABOUT_YOUR_MONEY: int = 2
+const MOM_ACCESS_BANK: int = 3
+const MOM_STORE_MONEY: int = 4
+const MOM_TAKE_MONEY: int = 5
+const MOM_STOP_OR_START_SAVING: int = 6
+const MOM_JUST_DO_WHAT_YOU_CAN: int = 7
+## `.AskDST`, which sets JUMPTABLE_EXIT_F and asks nothing: `DSTChecks` is
+## reached from `.IsThisAboutYourMoney` instead.
+const MOM_EXIT: int = 8
+## `BankOfMom_MenuHeader.MenuData`'s four rows and the index each reaches.
+const MOM_MENU_ROWS: Array[String] = ["GET", "SAVE", "CHANGE", "CANCEL"]
+const MOM_MENU_TARGETS: Array[int] = [
+	MOM_TAKE_MONEY, MOM_STORE_MONEY, MOM_STOP_OR_START_SAVING, MOM_JUST_DO_WHAT_YOU_CAN,
+]
+## Which way `Mom_WithdrawDepositMenuJoypad`'s dial moves the money, named by
+## the model that draws it rather than a second time here.
+const MOM_DIAL_DEPOSIT: StringName = Gen2WorldMoneyDial.MODE_DEPOSIT
+const MOM_DIAL_WITHDRAW: StringName = Gen2WorldMoneyDial.MODE_WITHDRAW
 const SPECIAL_GAME_CORNER_PRIZE_MON_CHECK_DEX: int = 57
 const SPECIAL_GIVE_SHUCKLE: int = 75
 const SPECIAL_RETURN_SHUCKIE: int = 76
@@ -621,7 +657,7 @@ func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 		if not acknowledge:
 			return _waiting_result()
 		var pending_type: StringName = StringName(_pending.get("type", &""))
-		if pending_type == &"menu" and _pending.get("special", &"") == &"set_day_of_week":
+		if pending_type == &"menu" and _pending_tag() == &"set_day_of_week":
 			if choice < 0:
 				return _waiting_result()
 			var selected_day: int = posmod(choice, WEEKDAY_NAMES.size())
@@ -636,7 +672,7 @@ func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 				"source": _request.duplicate(true),
 			}
 			return _waiting_result()
-		if pending_type == &"menu" and _pending.get("special", &"") == &"buenas_password":
+		if pending_type == &"menu" and _pending_tag() == &"buenas_password":
 			## `STATICMENU_DISABLE_B`: B does not close the list, so the only way
 			## out is a row. The answer is whether it is the row the byte's own
 			## low nibble names, which `maskbits NUM_PASSWORDS_PER_CATEGORY`
@@ -647,13 +683,11 @@ func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 			_pending = {}
 			_script_value = 1 if choice == (password & 0x3) else 0
 			return advance()
-		if pending_type == &"text" and _pending.get("special", &"") == &"set_day_of_week_confirmation":
+		if pending_type == &"text" and _pending_tag() == &"set_day_of_week_confirmation":
 			var confirmation_day: int = int(_pending.get("day", 0))
 			_stage_day_of_week_confirmation(confirmation_day)
 			return _waiting_result()
-		if pending_type == &"choice" and _pending.get("special", &"") == &"set_day_of_week_confirmation":
-			if choice < 0:
-				return _waiting_result()
+		if pending_type == &"choice" and _pending_tag() == &"set_day_of_week_confirmation":
 			var confirmed_day: int = int(_pending.get("day", 0))
 			_pending = {}
 			if choice == 0:
@@ -664,7 +698,7 @@ func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 			return _waiting_result()
 		## AskStrengthScript's `.AskStrength`: opentext, writetext, yesorno. The
 		## text pause is acknowledged first, then the choice is offered.
-		if pending_type == &"text" and _pending.get("special", &"") == &"strength_ask":
+		if pending_type == &"text" and _pending_tag() == &"strength_ask":
 			_pending = {
 				"type": &"choice",
 				"command": &"yesorno",
@@ -675,9 +709,7 @@ func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 				"source": _request.duplicate(true),
 			}
 			return _waiting_result()
-		if pending_type == &"choice" and _pending.get("special", &"") == &"strength_ask":
-			if choice < 0:
-				return _waiting_result()
+		if pending_type == &"choice" and _pending_tag() == &"strength_ask":
 			var chosen_slot: int = int(_pending.get("slot", -1))
 			_pending = {}
 			## `iftrue Script_UsedStrength`, and a no falls to closetext/end.
@@ -687,7 +719,7 @@ func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 			_stage_strength_used(chosen_slot)
 			return _waiting_result()
 		## FruitTreeScript's promptbutton, behind which its two callasms sit.
-		if pending_type == &"text" and _pending.get("special", &"") == &"fruit_tree":
+		if pending_type == &"text" and _pending_tag() == &"fruit_tree":
 			var fruit_tree: int = int(_pending.get("tree_id", 0))
 			var fruit_item: int = int(_pending.get("item", 0))
 			_pending = {}
@@ -698,7 +730,7 @@ func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 			return _waiting_result()
 		## The tail every item receipt shares behind its own line: the sound, and
 		## then `itemnotify`'s box once the host has played it.
-		if pending_type == &"text" and _pending.get("special", &"") == &"item_received":
+		if pending_type == &"text" and _pending_tag() == &"item_received":
 			var receipt_item: int = int(_pending.get("item", 0))
 			var receipt_sfx: int = int(_pending.get("sfx", 0))
 			var receipt_finish: bool = bool(_pending.get("finish", false))
@@ -707,7 +739,7 @@ func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 			_stage_receipt_tail(receipt_item, receipt_sfx, receipt_finish)
 			return _waiting_result()
 		## `GiveItemScript.Full`, whose `promptbutton` is the acknowledge above.
-		if pending_type == &"text" and _pending.get("special", &"") == &"pocket_is_full":
+		if pending_type == &"text" and _pending_tag() == &"pocket_is_full":
 			var full_item: int = int(_pending.get("item", 0))
 			var full_finish: bool = bool(_pending.get("finish", false))
 			_pending = {}
@@ -715,7 +747,7 @@ func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 			_stage_pocket_is_full(full_item, full_finish)
 			return _waiting_result()
 		## Script_UsedStrength's second writetext, _MoveBoulderText.
-		if pending_type == &"text" and _pending.get("special", &"") == &"strength_used":
+		if pending_type == &"text" and _pending_tag() == &"strength_used":
 			var used_name: String = String(_pending.get("name", "#MON"))
 			_stage_internal_text("%s can\nmove boulders." % used_name, true)
 			return _waiting_result()
@@ -733,7 +765,7 @@ func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 				"next_internal_texts": chained,
 			})
 			return _waiting_result()
-		if pending_type == &"menu" and _pending.get("special", &"") == &"buena_prize":
+		if pending_type == &"menu" and _pending_tag() == &"buena_prize":
 			var prize_special: int = int(_pending.get("prize_special", 0))
 			if choice < 0:
 				## `Buena_PrizeMenu`'s `.cancel`: B leaves the counter, and both
@@ -761,15 +793,71 @@ func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 				"source": _request.duplicate(true),
 			}
 			return _waiting_result()
-		if pending_type == &"choice" and _pending.get("special", &"") == &"buena_prize_confirm":
-			if choice < 0:
-				return _waiting_result()
+		if pending_type == &"choice" and _pending_tag() == &"buena_prize_confirm":
 			var confirm_row: int = int(_pending.get("prize", 0))
 			var confirm_special: int = int(_pending.get("prize_special", 0))
 			_pending = {}
 			if choice != 0:
 				return _stage_buena_prize_menu(confirm_special)
 			return _buy_buena_prize(confirm_special, confirm_row)
+		if pending_type == &"menu" and _pending_tag() == &"bank_of_mom_menu":
+			_pending = {}
+			if choice < 0:
+				return _mom_result(_bank_of_mom(MOM_JUST_DO_WHAT_YOU_CAN))
+			return _mom_result(_bank_of_mom(
+				MOM_MENU_TARGETS[clampi(choice, 0, MOM_MENU_TARGETS.size() - 1)]
+			))
+		if pending_type == &"choice" and _pending_tag() == &"bank_of_mom_choice":
+			var mom_state: int = int(_pending.get("mom_state", MOM_EXIT))
+			var mom_yes: bool = choice == 0
+			_pending = {}
+			match mom_state:
+				MOM_INITIALIZE:
+					## `MomLeavingText3` is printed either way; YES adds the tier
+					## she keeps and NO leaves the account open and saving
+					## nothing.
+					_staged_mom_savings_flags = MOM_ACTIVE \
+						| (MOM_SAVING_SOME_MONEY if mom_yes else 0)
+					if not mom_yes:
+						return _mom_result(_mom_box("leaving_3", MOM_EXIT))
+					var second: String = _special_box("bank_of_mom", "leaving_2")
+					var third: String = _special_box("bank_of_mom", "leaving_3")
+					if second.is_empty() or third.is_empty():
+						return _fail(
+							&"missing_special_text", {"special": SPECIAL_BANK_OF_MOM}
+						)
+					return _mom_result(_stage_internal_text(second, false, {
+						"special": SPECIAL_BANK_OF_MOM, "next_internal_texts": [third],
+					}))
+				MOM_IS_THIS_ABOUT_YOUR_MONEY:
+					return _mom_result(_bank_of_mom(
+						MOM_ACCESS_BANK if mom_yes else MOM_JUST_DO_WHAT_YOU_CAN
+					))
+				MOM_STOP_OR_START_SAVING:
+					_staged_mom_savings_flags = MOM_ACTIVE \
+						| (MOM_SAVING_SOME_MONEY if mom_yes else 0)
+					if not mom_yes:
+						return _mom_result(_bank_of_mom(MOM_JUST_DO_WHAT_YOU_CAN))
+					return _mom_result(_mom_box("start_saving_money", MOM_EXIT))
+			return _fail(&"invalid_bank_of_mom_state", {"state": mom_state})
+		## Her own boxes, each with the jumptable index that follows it.
+		if pending_type == &"text" and _pending.has("bank_of_mom_after_text"):
+			var mom_next: int = int(_pending["bank_of_mom_after_text"])
+			_pending = {}
+			_finish_after_pending = false
+			return _mom_result(_bank_of_mom(mom_next))
+		## `Mom_SetUpDepositMenu` stands behind the question rather than over it.
+		if pending_type == &"text" and _pending.has("bank_of_mom_dial"):
+			var mom_mode: StringName = StringName(_pending["bank_of_mom_dial"])
+			_pending = {}
+			_finish_after_pending = false
+			_stage_runtime_request(&"mom_bank_dial_requested", {
+				"special": SPECIAL_BANK_OF_MOM,
+				"mode": mom_mode,
+				"saved": _money_balance(ACCOUNT_MOMS_MONEY),
+				"held": _money_balance(ACCOUNT_YOUR_MONEY),
+			})
+			return _waiting_result()
 		## A box the prize counter printed, which goes back to her list rather
 		## than ending: `.print` falls into `.loop`.
 		if pending_type == &"text" and _pending.has("buena_prize_after_text"):
@@ -802,7 +890,7 @@ func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 			return _waiting_result() if _pending else advance()
 		## The five Ask*Scripts TryTileCollisionEvent reaches, all one shape:
 		## opentext, writetext, yesorno, iftrue <the move>, closetext, end.
-		if pending_type == &"text" and _pending.get("special", &"") == &"field_move_ask":
+		if pending_type == &"text" and _pending_tag() == &"field_move_ask":
 			_pending = {
 				"type": &"choice",
 				"command": &"yesorno",
@@ -814,9 +902,7 @@ func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 				"source": _request.duplicate(true),
 			}
 			return _waiting_result()
-		if pending_type == &"choice" and _pending.get("special", &"") == &"field_move_ask":
-			if choice < 0:
-				return _waiting_result()
+		if pending_type == &"choice" and _pending_tag() == &"field_move_ask":
 			var asked_move: int = int(_pending.get("move", 0))
 			var asked_slot: int = int(_pending.get("slot", -1))
 			_pending = {}
@@ -830,7 +916,7 @@ func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 				})
 			return _complete()
 		## AskRockSmashScript, the same opentext/writetext/yesorno shape.
-		if pending_type == &"text" and _pending.get("special", &"") == &"rock_smash_ask":
+		if pending_type == &"text" and _pending_tag() == &"rock_smash_ask":
 			_pending = {
 				"type": &"choice",
 				"command": &"yesorno",
@@ -841,9 +927,7 @@ func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 				"source": _request.duplicate(true),
 			}
 			return _waiting_result()
-		if pending_type == &"choice" and _pending.get("special", &"") == &"rock_smash_ask":
-			if choice < 0:
-				return _waiting_result()
+		if pending_type == &"choice" and _pending_tag() == &"rock_smash_ask":
 			var smash_slot: int = int(_pending.get("slot", -1))
 			_pending = {}
 			## `iftrue RockSmashScript`, and a no falls to closetext/end.
@@ -855,7 +939,7 @@ func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 		## RockSmashScript's `closetext`, `special WaitSFX` and
 		## `playsound SFX_STRENGTH`. The rest of the script waits on the sound
 		## the way a trainer's approach waits on its encounter music.
-		if pending_type == &"text" and _pending.get("special", &"") == &"rock_smash_used":
+		if pending_type == &"text" and _pending_tag() == &"rock_smash_used":
 			_pending = {}
 			_rock_smash_after_sound = true
 			_stage_audio_request(&"sound", {"address": SFX_STRENGTH})
@@ -1031,6 +1115,25 @@ func complete_runtime_request(result: Dictionary) -> Dictionary:
 		):
 			return _fail(&"phone_script_missing", phone_script)
 		return advance()
+	if kind == &"mom_bank_dial_requested":
+		if not bool(result.get("ok", false)):
+			return _fail(
+				StringName(result.get("reason", &"mom_bank_dial_failed")), result
+			)
+		var dial_mode: StringName = StringName(
+			(request.get("values", {}) as Dictionary).get("mode", MOM_DIAL_DEPOSIT)
+		)
+		## A cancelled box answers -1, which is `.CancelDeposit`'s own zero
+		## amount one step earlier.
+		var dial_amount: int = int(result.get("amount", -1))
+		_events.append({
+			"type": &"runtime_request_completed",
+			"kind": kind,
+			"request": request.duplicate(true),
+			"result": result.duplicate(true),
+		})
+		_pending = {}
+		return _mom_result(_finish_mom_bank_dial(dial_mode, maxi(dial_amount, 0)))
 	if kind == &"party_selection_requested":
 		if not bool(result.get("ok", false)):
 			return _fail(
@@ -1162,7 +1265,14 @@ func complete_runtime_request(result: Dictionary) -> Dictionary:
 			== &"sound" and _rock_smash_after_sound
 		var notify_after_sound: Dictionary = _item_notify_after_sound \
 			if kind == &"audio_requested" else {}
+		var mom_after_sound: int = _bank_of_mom_after_sound \
+			if kind == &"audio_requested" else -1
 		_pending = {}
+		if mom_after_sound >= 0:
+			_bank_of_mom_after_sound = -1
+			var receipt: String = _mom_receipt_box
+			_mom_receipt_box = ""
+			return _mom_result(_mom_box(receipt, mom_after_sound))
 		if approach_after_audio:
 			_trainer_intro_approach_pending = false
 			_stage_trainer_approach()
@@ -1321,6 +1431,16 @@ func complete_wait() -> Dictionary:
 
 ## Cancels a pending menu or choice without inventing a cartridge option. The
 ## script receives zero, matching the false branch used by yes/no commands.
+## The pendings a built-in routine owns the B of. Everything else staged as a
+## `choice` or a `menu` is the cartridge's own command, whose B is the false
+## answer `cancel_input` writes.
+const CANCEL_OWNED_PENDINGS: Array[StringName] = [
+	&"buena_prize", &"buena_prize_confirm", &"bank_of_mom_menu", &"bank_of_mom_choice",
+	&"strength_ask", &"field_move_ask", &"rock_smash_ask",
+	&"set_day_of_week_confirmation",
+]
+
+
 func cancel_input() -> Dictionary:
 	if _pending.is_empty() or StringName(_pending.get("type", &"")) not in [&"choice", &"menu"]:
 		return {
@@ -1329,6 +1449,13 @@ func cancel_input() -> Dictionary:
 			"reason": &"script_input_not_cancellable",
 		}
 	var pending_type: StringName = StringName(_pending.get("type", &""))
+	## A box one of the built-in routines put up answers its own B rather than
+	## resuming: Buena's counter prints her parting line, Mom falls to
+	## `.JustDoWhatYouCan`, and every `YesNoBox` among them reads it as its NO,
+	## which is the carry the routine returns. A `Script_yesorno` or a
+	## `Script_verticalmenu` the cartridge staged is the false answer below.
+	if _pending_tag() in CANCEL_OWNED_PENDINGS:
+		return advance(true, -1)
 	if pending_type == &"choice" and _pending.has("contact"):
 		_emit_runtime_event(&"phone_number_result", {
 			"contact": int(_pending.get("contact", -1)), "accepted": false,
@@ -2357,19 +2484,20 @@ func _stage_item_delta(item: int, delta: int) -> Dictionary:
 	return {"ok": true}
 
 
+## `GiveMoney` and `TakeMoney` (`engine/events/money.asm`). Neither refuses and
+## neither leaves the account alone: a gift past `MAX_MONEY` writes the ceiling
+## and a payment past the balance writes zero, both returning the carry that
+## only `BankOfMom` reads. `Script_givemoney` and `Script_takemoney` write no
+## wScriptVar of their own, so what they answer is the balance rather than a
+## rejection.
 func _stage_money_delta(account: int, amount: int, give: bool) -> Dictionary:
 	if account < 0 or amount < 0:
 		return {"ok": false, "reason": &"invalid_money_command"}
 	var current: int = _money_balance(account)
-	var next: int = current + amount if give else current - amount
-	if next < 0:
-		_script_value = 0
-		_emit_runtime_event(&"money_change_rejected", {
-			"account": account, "amount": amount, "available": current,
-		})
-		return {"ok": true}
+	var next: int = clampi(
+		current + amount if give else current - amount, 0, Gen2WorldInventory.MAX_MONEY
+	)
 	_staged_money[account] = next
-	_script_value = 1
 	_emit_runtime_event(&"money_changed", {
 		"account": account, "amount": amount, "balance": next,
 		"direction": &"give" if give else &"take",
@@ -2377,19 +2505,15 @@ func _stage_money_delta(account: int, amount: int, give: bool) -> Dictionary:
 	return {"ok": true}
 
 
+## `GiveCoins` and `TakeCoins`, the same pair of ceilings one account over.
 func _stage_coins_delta(amount: int, give: bool) -> Dictionary:
 	if amount < 0:
 		return {"ok": false, "reason": &"invalid_coins_command"}
 	var current: int = _coins_value()
-	var next: int = current + amount if give else current - amount
-	if next < 0:
-		_script_value = 0
-		_emit_runtime_event(&"coins_change_rejected", {
-			"amount": amount, "available": current,
-		})
-		return {"ok": true}
+	var next: int = clampi(
+		current + amount if give else current - amount, 0, Gen2WorldInventory.MAX_COINS
+	)
 	_staged_coins = next
-	_script_value = 1
 	_emit_runtime_event(&"coins_changed", {
 		"amount": amount, "balance": next,
 		"direction": &"give" if give else &"take",
@@ -3372,6 +3496,8 @@ func _execute_special(special: int) -> Dictionary:
 			if sign_box.is_empty():
 				return {"ok": false, "reason": &"missing_special_text", "special": special}
 			return _stage_internal_text(sign_box, false, {"special": special})
+		SPECIAL_BANK_OF_MOM:
+			return _bank_of_mom(MOM_CHECK_INITIALIZED)
 		SPECIAL_BUENA_PRIZE:
 			## The counter is one loop: the prize list, a yes/no on the row, and
 			## whichever of the four boxes the answer reaches. B on the list is
@@ -3609,6 +3735,167 @@ func _buena_prize_box(special: int, name: String, closing: bool) -> Dictionary:
 	return _stage_internal_text(box, closing, {"special": special} if closing else {
 		"special": special, "buena_prize_after_text": special,
 	})
+
+
+## `BankOfMom`'s jumptable, one index at a time (`engine/events/mom.asm`). Every
+## state either prints a box, opens her menu or opens the dial, so the source's
+## `.loop` is the chain of pendings each of them leaves behind.
+##
+## `DSTChecks` is the one branch not built: its own six boxes sit above her
+## sixteen in the file and are the clock question the two DST specials already
+## ask. `.nope` runs it and then falls to `.JustDoWhatYouCan`, which is what a
+## clock nowhere near a boundary does, so that is the branch taken here.
+func _bank_of_mom(index: int) -> Dictionary:
+	match index:
+		MOM_CHECK_INITIALIZED:
+			var flags: int = _mom_savings_flags()
+			if flags & MOM_ACTIVE != 0:
+				return _bank_of_mom(MOM_IS_THIS_ABOUT_YOUR_MONEY)
+			## `.CheckIfBankInitialized` sets the bit before the question, so a
+			## player who says NO has still opened the account.
+			_staged_mom_savings_flags = flags | MOM_ACTIVE
+			return _bank_of_mom(MOM_INITIALIZE)
+		MOM_INITIALIZE:
+			return _mom_yes_no("leaving_1", index)
+		MOM_IS_THIS_ABOUT_YOUR_MONEY:
+			return _mom_yes_no("is_this_about_your_money", index)
+		MOM_ACCESS_BANK:
+			return _stage_mom_menu()
+		MOM_STORE_MONEY:
+			return _mom_dial_box("store_money", MOM_DIAL_DEPOSIT)
+		MOM_TAKE_MONEY:
+			return _mom_dial_box("take_money", MOM_DIAL_WITHDRAW)
+		MOM_STOP_OR_START_SAVING:
+			return _mom_yes_no("save_money", index)
+		MOM_JUST_DO_WHAT_YOU_CAN:
+			return _mom_box("just_do_what_you_can", MOM_EXIT)
+	return _fail(&"invalid_bank_of_mom_state", {"state": index})
+
+
+## `.AccessBankOfMom`: the question, and `VerticalMenu` over the box it left.
+func _stage_mom_menu() -> Dictionary:
+	var asked: String = _special_box("bank_of_mom", "what_do_you_want_to_do")
+	if asked.is_empty():
+		return _fail(&"missing_special_text", {"special": SPECIAL_BANK_OF_MOM})
+	_pending = {
+		"type": &"menu",
+		"command": &"bank_of_mom",
+		"options": MOM_MENU_ROWS.duplicate(),
+		## `db 1`, and STATICMENU_CURSOR without STATICMENU_DISABLE_B: B leaves,
+		## which is `.cancel`.
+		"header": {"default": 1, "data_flags": 0},
+		"text": asked,
+		"special": &"bank_of_mom_menu",
+		"source": _request.duplicate(true),
+	}
+	return _waiting_result()
+
+
+## One of her boxes, with the jumptable index the routine is on once it has been
+## read. Every box but the two the dial stands behind takes this path.
+func _mom_box(name: String, next_state: int) -> Dictionary:
+	var box: String = _special_box("bank_of_mom", name)
+	if box.is_empty():
+		return _fail(&"missing_special_text", {"special": SPECIAL_BANK_OF_MOM})
+	if next_state == MOM_EXIT:
+		return _stage_internal_text(box, false, {"special": SPECIAL_BANK_OF_MOM})
+	return _stage_internal_text(box, false, {"bank_of_mom_after_text": next_state})
+
+
+## `.StoreMoney` and `.TakeMoney` print their question and then open the dial,
+## so the box carries which way the transaction goes rather than an index.
+func _mom_dial_box(name: String, mode: StringName) -> Dictionary:
+	var box: String = _special_box("bank_of_mom", name)
+	if box.is_empty():
+		return _fail(&"missing_special_text", {"special": SPECIAL_BANK_OF_MOM})
+	return _stage_internal_text(box, false, {"bank_of_mom_dial": mode})
+
+
+## One of the three `YesNoBox` questions, over the box the state just printed.
+func _mom_yes_no(name: String, state_index: int) -> Dictionary:
+	var box: String = _special_box("bank_of_mom", name)
+	if box.is_empty():
+		return _fail(&"missing_special_text", {"special": SPECIAL_BANK_OF_MOM})
+	_pending = {
+		"type": &"choice",
+		"command": &"bank_of_mom",
+		"choices": [&"yes", &"no"],
+		"text": box,
+		"special": &"bank_of_mom_choice",
+		"mom_state": state_index,
+		"source": _request.duplicate(true),
+	}
+	return _waiting_result()
+
+
+## `.StoreMoney`'s tail and `.TakeMoney`'s, which differ only in which account is
+## which. Three things the source does that a rewrite loses:
+##
+## - `GiveMoney` here adds into `wStringBuffer2` rather than into an account, so
+##   the ceiling is tested against the balance the transaction would leave and
+##   nothing is written when it fails.
+## - Both refusals `ret` with `wJumptableIndex` unchanged, so her question is
+##   asked again and the dial reopens rather than the routine ending.
+## - A dial left at zero is `.CancelDeposit`, the same branch B takes.
+func _finish_mom_bank_dial(mode: StringName, amount: int) -> Dictionary:
+	var deposit: bool = mode == MOM_DIAL_DEPOSIT
+	var state_index: int = MOM_STORE_MONEY if deposit else MOM_TAKE_MONEY
+	if amount <= 0:
+		return _bank_of_mom(MOM_JUST_DO_WHAT_YOU_CAN)
+	var from_account: int = ACCOUNT_YOUR_MONEY if deposit else ACCOUNT_MOMS_MONEY
+	var to_account: int = ACCOUNT_MOMS_MONEY if deposit else ACCOUNT_YOUR_MONEY
+	if _money_balance(from_account) < amount:
+		return _mom_box(
+			"insufficient_funds_in_wallet" if deposit else "havent_saved_that_much",
+			state_index
+		)
+	if _money_balance(to_account) + amount > Gen2WorldInventory.MAX_MONEY:
+		return _mom_box(
+			"not_enough_room_in_bank" if deposit else "not_enough_room_in_wallet",
+			state_index
+		)
+	_move_mom_money(from_account, to_account, amount)
+	_bank_of_mom_after_sound = MOM_EXIT
+	_mom_receipt_box = "stored_money" if deposit else "taken_money"
+	return _stage_audio_request(&"sound", {"address": SFX_TRANSACTION})
+
+
+## The `TakeMoney`/`GiveMoney` pair the transaction is, without the wScriptVar
+## neither of them writes.
+func _move_mom_money(from_account: int, to_account: int, amount: int) -> void:
+	for row: Array in [[from_account, -amount], [to_account, amount]]:
+		var account: int = int(row[0])
+		var next: int = _money_balance(account) + int(row[1])
+		_staged_money[account] = next
+		_emit_runtime_event(&"money_changed", {
+			"account": account, "amount": amount, "balance": next,
+			"direction": &"give" if int(row[1]) > 0 else &"take",
+		})
+
+
+## `advance` has to answer with a result, where the command loop is what turns a
+## staged pending into one, so every step the routine takes from inside a pending
+## handler is answered through here.
+func _mom_result(staged: Dictionary) -> Dictionary:
+	if staged.has("status") or not bool(staged.get("ok", false)):
+		return staged
+	return advance()
+
+
+## `_pending`'s own `special`, which is a routine's name wherever a handler
+## claims the box and the cartridge's index wherever nothing does. Read as a
+## name, so an index is simply not one: comparing the two is an engine error
+## rather than a false answer.
+func _pending_tag() -> StringName:
+	var tag: Variant = _pending.get("special", &"")
+	return tag if tag is StringName else &""
+
+
+## `wMomSavingMoney` as the routine reads it: staged first, then the save.
+func _mom_savings_flags() -> int:
+	if _staged_mom_savings_flags >= 0:
+		return _staged_mom_savings_flags
+	return state.mom_savings_flags() if state != null else 0
 
 
 ## `RestartLuckyNumberCountdown.GetDaysUntilNextFriday`, which answers seven on
@@ -4923,6 +5210,8 @@ func _complete() -> Dictionary:
 		runtime_changes["best_magikarp"] = _staged_best_magikarp.duplicate()
 	if _staged_blue_card_balance >= 0:
 		runtime_changes["blue_card_balance"] = _staged_blue_card_balance
+	if _staged_mom_savings_flags >= 0:
+		runtime_changes["mom_savings_flags"] = _staged_mom_savings_flags
 	if not _staged_engine_flags.is_empty():
 		runtime_changes["engine_flags"] = _staged_engine_flags.duplicate()
 	if _reset_phone_receive_timer:
