@@ -29,6 +29,8 @@ enum MODE {
 	MENU, MART, PHONE, TOWN_MAP, CARD,
 	APRICORN, PC, PC_ITEMS, PC_ITEM_LIST, PC_TEXT, MOM_BANK,
 	PC_BOXES, PC_BOX_LIST,
+	PC_DECO, PC_DECO_LIST, PC_DECO_SIDE,
+	PC_BOX_SUBMENU,
 }
 
 ## `PokemonCenterPC`'s own box storage, which is the one row that opens a screen
@@ -62,6 +64,23 @@ const MART_LIST: StringName = &"list"
 const MART_QUANTITY: StringName = &"quantity"
 const MART_CONFIRM: StringName = &"confirm"
 const MART_MESSAGE: StringName = &"message"
+## `StandardMart`'s own jumptable, which only `MartDialog` runs: the BUY/SELL/QUIT
+## menu and the three states `SellMenu` adds behind its SELL row. The other four
+## shop types open `BuyMenu` and nothing else.
+const MART_TOP: StringName = &"top"
+const MART_SELL: StringName = &"sell"
+const MART_SELL_QUANTITY: StringName = &"sell_quantity"
+const MART_SELL_CONFIRM: StringName = &"sell_confirm"
+const MART_SELL_STAGES: Array[StringName] = [
+	MART_SELL, MART_SELL_QUANTITY, MART_SELL_CONFIRM,
+]
+## `MenuHeader_BuySell`'s three rows, inline in `engine/items/mart.asm` and
+## reached by no script, so they are this screen's the way [Gen2WorldPC]'s
+## BILL'S PC rows are.
+const MART_TOP_ROWS: Array[String] = ["BUY", "SELL", "QUIT"]
+const MART_TOP_BUY: int = 0
+const MART_TOP_SELL: int = 1
+const MART_TOP_QUIT: int = 2
 ## Which of `GetMartDialogGroup.MartTextFunctionPointers`' groups a variant
 ## reads. The rooftop sale takes the standard group, which is why it has no
 ## prefix of its own; the bargain shop's `MARTTEXT_HOW_MANY` slot is
@@ -72,6 +91,21 @@ const MART_TEXT_PREFIX: Dictionary = {
 }
 ## `PlayTransactionSound`, once the money has been taken.
 const SFX_TRANSACTION: int = 0x22
+## `BillsPC_PlaceEmptyBoxString_SFX`'s own `SFX_WRONG`.
+const SFX_WRONG: int = 0x19
+
+## `BillsPC_ChangeBoxSubmenu.MenuData`'s four rows, inline in `bills_pc.asm` and
+## reached by no script, so they are this screen's the way the machine's own top
+## menu is.
+const BOX_SUBMENU_SWITCH: int = 0
+const BOX_SUBMENU_NAME: int = 1
+const BOX_SUBMENU_PRINT: int = 2
+const BOX_SUBMENU_QUIT: int = 3
+const BOX_SUBMENU_ROWS: Array[String] = ["SWITCH", "NAME", "PRINT", "QUIT"]
+## `.NoMonString`, and `PrintPCBox` behind PRINT: with nothing on the link
+## `CheckPrinterStatus` leaves `wPrinterHandshake` at -1, which is the same
+## PRINTER_ERROR_2 the diploma and the Unown printer answer with.
+const BOX_EMPTY_TEXT: String = "There's no #MON."
 ## `Textbox`'s interior, which is what a mart box's words are wrapped to.
 const MART_TEXT_COLUMNS: int = 18
 const MART_TEXT_ROWS: int = 2
@@ -105,6 +139,9 @@ var _mart_scroll: int = 0
 var _mart_pages: Array = []
 var _mart_after: StringName = MART_LIST
 var _mart_confirm: int = 0
+## `SellMenu`'s own list, which is the pack rather than the shop's stock.
+var _mart_sell_entries: Array = []
+var _mart_top: int = MART_TOP_BUY
 var _apricorns: Gen2WorldApricorn = null
 var _mom_dial: Gen2WorldMoneyDial = null
 ## The same counted blink [Gen2TextBox]'s arrow is, since it is the same
@@ -135,7 +172,25 @@ var _pc_pages: Array = []
 var _pc_sfx: int = -1
 var _pc_after: StringName = &"top"
 var _pc_label: String = ""
+## `_PlayerDecorationMenu`: which category is open, the row waiting on
+## `DecoAction_AskWhichSide`, and `wChangedDecorations`, which is what makes the
+## machine close so the room can redraw.
+var _deco_slot: StringName = &""
+var _deco_pending: int = -1
+var _deco_changed: bool = false
+## Events this screen produced outside the request it is answering, which the
+## map's own callbacks are: they belong at the end of the same result list.
+var _extra_results: Array = []
 var _boxes: Gen2BoxScreen = null
+## `_HallOfFamePC`: the records the machine is walking and which one is up.
+## `LoadHOFTeam`'s carry is what a record with nothing in it answers, so an
+## empty team ends the walk rather than drawing a blank panel.
+var _hof: Gen2HallOfFameScreen = null
+## `BillsPC_ChangeBoxSubmenu`'s `wMenuSelection`, which is the box the list's
+## cursor was on rather than `wCurBox`, and the keyboard its NAME row opens.
+var _box_submenu_index: int = 0
+var _naming: Gen2NamingScreenScreen = null
+var _hof_index: int = 0
 ## `_ChangeBox_MenuHeader`'s `db 4, 0`: four rows of a scrolling list, and where
 ## the window into the fourteen boxes stands.
 const BOX_LIST_ROWS: int = 4
@@ -184,6 +239,12 @@ func set_screen(screen: Gen2Screen) -> void:
 
 ## Both views live in a screen this node may not own, so they go by hand.
 func _exit_tree() -> void:
+	if _hof != null:
+		Gen2Screen.drop(_hof)
+		_hof = null
+	if _naming != null:
+		Gen2Screen.drop(_naming)
+		_naming = null
 	for view: TextureRect in [_service_view, _mart_view]:
 		if view != null:
 			Gen2Screen.drop(view)
@@ -314,6 +375,10 @@ func handle_button(button: int) -> bool:
 		return _pokegear.handle_button(button)
 	## The box screen owns all 160x144 while BILL'S PC is open, the way the
 	## region map does, so the buttons are its own.
+	if _naming != null:
+		return _naming.handle_button(button)
+	if _hof != null:
+		return _hof.handle_button(button)
 	if _boxes != null:
 		return _boxes.handle_button(button)
 	if Gen2Button.is_direction(button):
@@ -407,7 +472,17 @@ func _open_mart(mart: Dictionary) -> void:
 		## Gen2Screen.display]'s z-order: the shop owns all 160x144 while it is
 		## up and the menu behind it is hidden anyway.
 		_service_hardware.display(_mart_view)
-	_show_mart_text(_mart_text("intro"), MART_LIST)
+	_mart_top = MART_TOP_BUY
+	_refresh_mart_sell_entries()
+	## `.HowMayIHelpYou` prints `MartWelcomeText` and hands the loop to
+	## `.TopMenu`; every other shop type prints its own intro over `BuyMenu`.
+	_show_mart_text(_mart_text("intro"), MART_TOP if _mart_standard() else MART_LIST)
+
+
+## Whether this shop is `MartDialog`'s, which is the one that runs
+## `StandardMart`'s BUY/SELL/QUIT loop rather than opening `BuyMenu` alone.
+func _mart_standard() -> bool:
+	return StringName(_mart_source().get("variant", &"")) == &"standard"
 
 
 ## One of the shop's own boxes, by the slot name its group gives it.
@@ -468,8 +543,11 @@ func _advance_mart_text() -> void:
 	if not _mart_pages.is_empty():
 		_render_mart()
 		return
-	if _mart_after == MART_LIST:
-		_mart_stage = MART_LIST
+	if _mart_after == MART_LIST or _mart_after == MART_TOP or _mart_after == MART_SELL:
+		_mart_stage = _mart_after
+		_cursor = 0
+		if _mart_after == MART_TOP:
+			_cursor = _mart_top
 		_render_mart()
 		return
 	_close_mart()
@@ -480,23 +558,28 @@ func _advance_mart_text() -> void:
 ## because `ScrollingMenu_InitFlags` adds it to the row count and `.d_down`
 ## stops scrolling at `size - height`.
 func _mart_row_count() -> int:
-	return _mart_entries.size() + 1 if _mart_entries.size() < Gen2MartPage.LIST_HEIGHT \
-		else Gen2MartPage.LIST_HEIGHT
+	var size: int = _mart_list().size()
+	return size + 1 if size < Gen2MartPage.LIST_HEIGHT else Gen2MartPage.LIST_HEIGHT
+
+
+## Whichever of the shop's stock and the player's pack the stage is showing.
+func _mart_list() -> Array:
+	return _mart_sell_entries if _mart_stage in MART_SELL_STAGES else _mart_entries
 
 
 func _mart_rows() -> Array:
+	var entries: Array = _mart_list()
 	var out: Array = []
 	for row: int in _mart_row_count():
 		var index: int = _mart_scroll + row
-		out.append(
-			{"cancel": true} if index >= _mart_entries.size() else _mart_entries[index]
-		)
+		out.append({"cancel": true} if index >= entries.size() else entries[index])
 	return out
 
 
 func _mart_selection() -> Dictionary:
+	var entries: Array = _mart_list()
 	var index: int = _mart_scroll + _cursor
-	return {} if index >= _mart_entries.size() else _mart_entries[index]
+	return {} if index >= entries.size() else entries[index]
 
 
 func _press_mart(button: int) -> void:
@@ -504,12 +587,20 @@ func _press_mart(button: int) -> void:
 		MART_MESSAGE:
 			if button in [Gen2Button.A, Gen2Button.B]:
 				_advance_mart_text()
+		MART_TOP:
+			_press_mart_top(button)
 		MART_LIST:
 			_press_mart_list(button)
 		MART_QUANTITY:
 			_press_mart_quantity(button)
 		MART_CONFIRM:
 			_press_mart_confirm(button)
+		MART_SELL:
+			_press_mart_sell_list(button)
+		MART_SELL_QUANTITY:
+			_press_mart_sell_quantity(button)
+		MART_SELL_CONFIRM:
+			_press_mart_sell_confirm(button)
 
 
 func _press_mart_list(button: int) -> void:
@@ -550,7 +641,7 @@ func _move_mart_cursor(delta: int) -> void:
 		if _mart_scroll > 0:
 			_mart_scroll -= 1
 	elif next >= rows:
-		if _mart_entries.size() >= _mart_scroll + Gen2MartPage.LIST_HEIGHT:
+		if _mart_list().size() >= _mart_scroll + Gen2MartPage.LIST_HEIGHT:
 			_mart_scroll += 1
 	else:
 		_cursor = next
@@ -639,8 +730,174 @@ func _buy_mart_selection() -> void:
 	}), MART_LIST)
 
 
+## B off the buy or sell list. `.Buy` and `.Sell` both fall into
+## `.AnythingElse`, so a standard shop asks again rather than saying goodbye;
+## only `.Quit` and the four single-list shop types print the come-again box.
 func _leave_mart() -> void:
+	if _mart_standard():
+		_show_mart_text(_mart_text("ask_more"), MART_TOP)
+		return
+	_quit_mart()
+
+
+func _quit_mart() -> void:
 	_show_mart_text(_mart_text("come_again"), &"exit")
+
+
+## `.TopMenu`'s three rows. `VerticalMenu` answers carry on B, which `.quit`
+## takes, so B is QUIT rather than a way back out of the shop.
+func _press_mart_top(button: int) -> void:
+	match button:
+		Gen2Button.UP:
+			_cursor = wrapi(_cursor - 1, 0, MART_TOP_ROWS.size())
+		Gen2Button.DOWN:
+			_cursor = wrapi(_cursor + 1, 0, MART_TOP_ROWS.size())
+		Gen2Button.B:
+			_quit_mart()
+			return
+		Gen2Button.A:
+			_mart_top = _cursor
+			match _cursor:
+				MART_TOP_BUY:
+					_mart_stage = MART_LIST
+					_cursor = 0
+					_mart_scroll = 0
+				MART_TOP_SELL:
+					_open_mart_sell()
+					return
+				_:
+					_quit_mart()
+					return
+	_render_mart()
+
+
+## `.Sell`: `DepositSellPack` over the whole pack. A pack with nothing sellable
+## in it answers `wPackUsedItem` zero at once, which is `SellMenu.quit`, so the
+## shop asks again rather than opening an empty list.
+func _open_mart_sell() -> void:
+	_refresh_mart_sell_entries()
+	if _mart_sell_entries.is_empty():
+		_show_mart_text(_mart_text("ask_more"), MART_TOP)
+		return
+	_mart_stage = MART_SELL
+	_cursor = 0
+	_mart_scroll = 0
+	_mart_quantity = 1
+	_render_mart()
+
+
+## The pack as rows this list can draw, at `GetMartPrice`'s halved price per
+## unit. `SellMenu.TryToSellItem` refuses a key item after it is chosen, so the
+## row is on offer and the refusal is `MartCantBuyText`.
+func _refresh_mart_sell_entries() -> void:
+	_mart_sell_entries = []
+	for pocket: Dictionary in Gen2WorldPack.build(_data, _world.state):
+		for row: Dictionary in pocket.get("items", []):
+			var item: int = int(row.get("item", 0))
+			_mart_sell_entries.append({
+				"item": item,
+				"name": String(row.get("name", "")),
+				"price": Gen2WorldMartHost.sell_price(_data, item),
+				"quantity": int(row.get("quantity", 0)),
+			})
+
+
+func _press_mart_sell_list(button: int) -> void:
+	match button:
+		Gen2Button.UP:
+			_move_mart_cursor(-1)
+		Gen2Button.DOWN:
+			_move_mart_cursor(1)
+		Gen2Button.B:
+			_leave_mart()
+		Gen2Button.A:
+			var entry: Dictionary = _mart_selection()
+			if entry.is_empty():
+				_leave_mart()
+				return
+			if not Gen2WorldMartHost.can_sell(_data, int(entry.get("item", 0))):
+				## `.try_sell`'s `_CheckTossableItem` refusal, which leaves the
+				## list up rather than ending the sale.
+				_show_mart_text(_mart_text("cant_buy"), MART_SELL)
+				return
+			_mart_quantity = 1
+			_mart_pages = Gen2TextLayout.lay_out(
+				_mart_text("sell_how_many"), MART_TEXT_COLUMNS, MART_TEXT_ROWS
+			)
+			_mart_stage = MART_SELL_QUANTITY
+			_render_mart()
+
+
+## `Toss_Sell_Loop` is the same dial the purchase uses, bounded by the stack the
+## player owns rather than by ninety-nine.
+func _press_mart_sell_quantity(button: int) -> void:
+	var maximum: int = maxi(1, int(_mart_selection().get("quantity", 1)))
+	match button:
+		Gen2Button.UP:
+			_mart_quantity = 1 if _mart_quantity >= maximum else _mart_quantity + 1
+		Gen2Button.DOWN:
+			_mart_quantity = maximum if _mart_quantity <= 1 else _mart_quantity - 1
+		Gen2Button.RIGHT:
+			_mart_quantity = mini(_mart_quantity + 10, maximum)
+		Gen2Button.LEFT:
+			_mart_quantity = maxi(_mart_quantity - 10, 1)
+		Gen2Button.B:
+			_mart_stage = MART_SELL
+		Gen2Button.A:
+			_mart_confirm = 0
+			_mart_stage = MART_SELL_CONFIRM
+			_mart_pages = Gen2TextLayout.lay_out(
+				_mart_text("sell_price", {
+					"total": Gen2WorldMartHost.sell_price(
+						_data, int(_mart_selection().get("item", 0)), _mart_quantity
+					),
+					"quantity": _mart_quantity,
+				}),
+				MART_TEXT_COLUMNS, MART_TEXT_ROWS
+			)
+	_render_mart()
+
+
+func _press_mart_sell_confirm(button: int) -> void:
+	match button:
+		Gen2Button.UP, Gen2Button.DOWN:
+			_mart_confirm = 1 - _mart_confirm
+		Gen2Button.B:
+			_mart_stage = MART_SELL
+		Gen2Button.A:
+			if _mart_confirm == 0:
+				_sell_mart_selection()
+				return
+			_mart_stage = MART_SELL
+	_render_mart()
+
+
+## The sale itself, and `MartBoughtText` behind it.
+func _sell_mart_selection() -> void:
+	var entry: Dictionary = _mart_selection()
+	var sold: Dictionary = Gen2WorldMartHost.sell(
+		_world, _save, int(entry.get("item", 0)), _mart_quantity, _persist
+	)
+	if not bool(sold.get("ok", false)):
+		var reason: StringName = StringName(sold.get("reason", &""))
+		if reason == &"item_cannot_be_sold":
+			_show_mart_text(_mart_text("cant_buy"), MART_SELL)
+			return
+		_status = "Sale failed: %s" % String(reason)
+		_mart_stage = MART_SELL
+		_render_mart()
+		return
+	sfx_requested.emit(SFX_TRANSACTION, true)
+	_refresh_mart_sell_entries()
+	_mart_scroll = mini(_mart_scroll, maxi(0, _mart_sell_entries.size() - 1))
+	_cursor = mini(_cursor, maxi(0, _mart_sell_entries.size() - _mart_scroll - 1))
+	_show_mart_text(
+		_mart_text("bought", {
+			"name": sold.get("name", ""), "quantity": _mart_quantity,
+			"total": int(sold.get("total", 0)),
+		}),
+		MART_SELL if not _mart_sell_entries.is_empty() else MART_TOP
+	)
 
 
 func _close_mart() -> void:
@@ -659,33 +916,51 @@ func _render_mart() -> void:
 		return
 	var page: PackedStringArray = _mart_pages[0] if not _mart_pages.is_empty() \
 		else PackedStringArray()
+	var selling: bool = _mart_stage in MART_SELL_STAGES
+	var listing: bool = _mart_stage == MART_LIST or _mart_stage == MART_SELL
 	var image: Image = _mart_page.render({
 		"money": _world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT),
 		"rows": _mart_rows(),
-		"cursor": _cursor if _mart_stage == MART_LIST else -1,
+		"cursor": _cursor if listing else -1,
 		"scrolled": _mart_scroll > 0,
-		"text": "\n".join(page) if _mart_stage != MART_LIST else _mart_description(),
+		"text": "\n".join(page) if not listing else _mart_description(),
 		## `StandardMartAskPurchaseQuantity` closes the dial with `ExitMenu`
 		## before `MartConfirmPurchase` prints, so the box is the quantity
 		## stage's alone.
-		"quantity": _mart_quantity if _mart_stage == MART_QUANTITY else -1,
-		"subtotal": int(_mart_selection().get("price", 0)) * _mart_quantity,
+		"quantity": _mart_quantity \
+			if _mart_stage == MART_QUANTITY or _mart_stage == MART_SELL_QUANTITY else -1,
+		## `DisplaySellingPrice` halves the multiplied total, not each unit's
+		## price, so the two subtotals are not the same arithmetic.
+		"subtotal": Gen2WorldMartHost.sell_price(
+			_data, int(_mart_selection().get("item", 0)), _mart_quantity
+		) if selling else int(_mart_selection().get("price", 0)) * _mart_quantity,
 	})
 	if image == null:
 		return
-	if _mart_stage == MART_CONFIRM:
-		if _mart_menu_page == null:
-			_mart_menu_page = Gen2MenuPage.from_data(_data)
-		if _mart_menu_page != null:
-			var box: Gen2MenuBox = Gen2MenuBox.yes_no()
-			var menu: Image = _mart_menu_page.render(
-				box, ["YES", "NO"], _mart_confirm
-			)
-			image.blend_rect(
-				menu, Rect2i(Vector2i.ZERO, menu.get_size()),
-				box.border_position() * Gen2Font.TILE
-			)
+	if _mart_stage == MART_CONFIRM or _mart_stage == MART_SELL_CONFIRM:
+		_blend_mart_menu(image, Gen2MenuBox.yes_no(), ["YES", "NO"], _mart_confirm)
+	elif _mart_stage == MART_TOP:
+		## `MenuHeader_BuySell`'s `menu_coords 0, 0, 7, 8`.
+		_blend_mart_menu(
+			image,
+			Gen2MenuBox.from_coords(0, 0, 7, 8, Gen2MenuBox.STATICMENU_CURSOR),
+			MART_TOP_ROWS, _cursor
+		)
 	Gen2PicImage.show(_mart_view, image)
+
+
+func _blend_mart_menu(
+	image: Image, box: Gen2MenuBox, rows: Array, cursor: int
+) -> void:
+	if _mart_menu_page == null:
+		_mart_menu_page = Gen2MenuPage.from_data(_data)
+	if _mart_menu_page == null:
+		return
+	var menu: Image = _mart_menu_page.render(box, rows, cursor)
+	image.blend_rect(
+		menu, Rect2i(Vector2i.ZERO, menu.get_size()),
+		box.border_position() * Gen2Font.TILE
+	)
 
 
 ## `UpdateItemDescription`, which prints nothing for the CANCEL row.
@@ -875,6 +1150,29 @@ func open_bills_pc(
 	return true
 
 
+## `special PokemonCenterPC` and `special PlayersHousePC` without a script in
+## front of them, for the screenshot drivers: no preview map carries either cell.
+func open_pc_machine(
+	world: Gen2WorldAPI,
+	data: GameData,
+	save: Gen2SaveData,
+	persist: bool,
+	mode: StringName
+) -> bool:
+	_world = world
+	_data = data
+	_save = save
+	_persist = persist
+	if _world == null or _data == null:
+		_show_error("The PC has no world or cartridge cache.")
+		return false
+	if not Gen2WorldPC.can_open(_save):
+		_show_error("The PC needs a party.")
+		return false
+	_open_pc(mode)
+	return true
+
+
 ## `BillsPC_SeeYa`, and the `.LogOut` behind it: back to the machine's own top
 ## menu, or out of the host when nothing opened this but a start-menu action.
 func _leave_bills_pc() -> void:
@@ -913,6 +1211,7 @@ func _open_pc_items() -> void:
 	_mode = MODE.PC_ITEMS
 	_cursor = 0
 	_pc_action = -1
+	_deco_changed = false
 	_pc_rows = Gen2WorldPC.players_pc_menu(_data, _pc_house)
 	_title = _data.pokecenter_pc_row("players_pc").replace(
 		Gen2WorldPC.PLAYER_MARKER,
@@ -969,13 +1268,10 @@ func _confirm_pc_row() -> void:
 		return
 	var row: int = int(_pc_rows[_cursor].get("row", -1))
 	if _mode == MODE.PC_BOX_LIST:
-		## `BillsPC_ChangeBoxSubmenu`'s SWITCH, which is `wCurBox` and nothing
-		## else. The list stays up, the way `.loop` leaves it.
-		_box_index = clampi(row, 0, Gen2SaveData.BOX_COUNT - 1)
-		if _save != null:
-			_save.current_box = _box_index
-		_refresh_box_counts()
-		_render_rows()
+		_open_box_submenu(clampi(row, 0, Gen2SaveData.BOX_COUNT - 1))
+		return
+	if _mode == MODE.PC_BOX_SUBMENU:
+		_confirm_box_submenu(row)
 		return
 	if _mode == MODE.PC_BOXES:
 		match row:
@@ -985,8 +1281,27 @@ func _confirm_pc_row() -> void:
 				_open_boxes(Gen2BoxScreen.MODE_DEPOSIT)
 			Gen2WorldPC.BILLSPCITEM_CHANGE_BOX:
 				_open_box_list()
+			Gen2WorldPC.BILLSPCITEM_MOVE_WITHOUT_MAIL:
+				_open_boxes(Gen2BoxScreen.MODE_MOVE)
 			Gen2WorldPC.BILLSPCITEM_SEE_YA:
 				_leave_bills_pc()
+		return
+	if _mode == MODE.PC_DECO:
+		var slot: StringName = StringName(_pc_rows[_cursor].get("slot", &""))
+		if slot.is_empty():
+			_leave_decorations()
+		else:
+			_open_decoration_category(slot)
+		return
+	if _mode == MODE.PC_DECO_LIST:
+		_choose_decoration(int(_pc_rows[_cursor].get("deco", 0)))
+		return
+	if _mode == MODE.PC_DECO_SIDE:
+		var side: StringName = StringName(_pc_rows[_cursor].get("side", &""))
+		if side.is_empty():
+			_open_decoration_category(_deco_slot)
+		else:
+			_apply_decoration(_deco_pending, side)
 		return
 	if _mode == MODE.PC:
 		match row:
@@ -996,6 +1311,8 @@ func _confirm_pc_row() -> void:
 				_open_pc_items()
 			Gen2WorldPC.PCPCITEM_OAKS_PC:
 				_open_pc_oak()
+			Gen2WorldPC.PCPCITEM_HALL_OF_FAME:
+				_open_hall_of_fame(0)
 			Gen2WorldPC.PCPCITEM_TURN_OFF:
 				## `TurnOffPC` prints before `.shutdown` runs.
 				_open_pc_text(
@@ -1007,6 +1324,8 @@ func _confirm_pc_row() -> void:
 		Gen2WorldPC.PLAYERSPCITEM_DEPOSIT_ITEM, \
 		Gen2WorldPC.PLAYERSPCITEM_TOSS_ITEM:
 			_open_pc_item_list(row)
+		Gen2WorldPC.PLAYERSPCITEM_DECORATION:
+			_open_decorations()
 		Gen2WorldPC.PLAYERSPCITEM_LOG_OFF:
 			_open_pc(&"pokemon_center")
 		Gen2WorldPC.PLAYERSPCITEM_TURN_OFF:
@@ -1084,6 +1403,96 @@ func _open_pc_oak() -> void:
 	_open_pc_text(boot["pages"], &"top", "PROF.OAK'S PC")
 
 
+## `_PlayerDecorationMenu`'s top menu: only a category the player owns something
+## in, and EXIT.
+func _open_decorations() -> void:
+	_mode = MODE.PC_DECO
+	_cursor = 0
+	_deco_slot = &""
+	_deco_pending = -1
+	_pc_rows = Gen2WorldDecoration.categories(_data, _world.state)
+	_title = _data.pokecenter_pc_row("decoration", true)
+	_summary = ""
+	_status = ""
+	_render_rows()
+
+
+## `PopulateDecoCategoryMenu`: the owned rows, the category's own PUT IT AWAY and
+## CANCEL, which the ornament list is too long to keep.
+func _open_decoration_category(slot: StringName) -> void:
+	var rows: Array = Gen2WorldDecoration.category_rows(_data, _world.state, slot)
+	if rows.is_empty():
+		## `.empty`'s own box. `categories()` drops a category with nothing in
+		## it, so this is only reached by a mod's list emptying under the menu.
+		_open_pc_text(
+			[Gen2WorldDecoration.TEXT_NOTHING_TO_CHOOSE], &"decoration", _title
+		)
+		return
+	_mode = MODE.PC_DECO_LIST
+	_cursor = 0
+	_deco_slot = slot
+	_pc_rows = rows
+	_summary = ""
+	_status = ""
+	_render_rows()
+
+
+## `DecoAction_AskWhichSide` stands between the ornament category and its action;
+## every other category runs straight into `DoDecorationAction2`.
+func _choose_decoration(deco: int) -> void:
+	if deco <= 0:
+		_open_decorations()
+		return
+	if not Gen2WorldDecoration.asks_side(_data, deco):
+		_apply_decoration(deco, &"")
+		return
+	_mode = MODE.PC_DECO_SIDE
+	_cursor = 0
+	_deco_pending = deco
+	_pc_rows = Gen2WorldDecoration.SIDE_ROWS.duplicate()
+	_summary = Gen2WorldDecoration.TEXT_WHICH_SIDE_PUT_AWAY \
+		if Gen2WorldDecoration.is_put_away(_data, deco) \
+		else Gen2WorldDecoration.TEXT_WHICH_SIDE_PUT_ON
+	_status = ""
+	_render_rows()
+
+
+func _apply_decoration(deco: int, side: StringName) -> void:
+	var applied: Dictionary = Gen2WorldDecoration.apply(
+		_world, _save, deco, side, _persist
+	)
+	if not bool(applied.get("ok", false)):
+		_status = "Refused: %s" % String(applied.get("reason", &""))
+		_render_rows()
+		return
+	_deco_changed = _deco_changed or bool(applied.get("changed", false))
+	## `PopulateDecoCategoryMenu` returns to `.top_loop` after one action, so a
+	## category list is opened once per visit rather than looped in.
+	var text: String = String(applied.get("text", ""))
+	if text.is_empty():
+		_open_decorations()
+		return
+	var pages: Array = []
+	for page: PackedStringArray in Gen2TextLayout.lay_out(
+		text, MART_TEXT_COLUMNS, MART_TEXT_ROWS
+	):
+		pages.append("\n".join(page))
+	_open_pc_text(pages, &"decoration", _title)
+
+
+## The way out of the decoration menu, which is the way out of the machine once
+## anything moved: `ToggleMaptileDecorations` and `ToggleDecorationsVisibility`
+## are map callbacks, so the room is only right after they have run again.
+func _leave_decorations() -> void:
+	if not _deco_changed:
+		_open_pc_items()
+		return
+	_deco_changed = false
+	_extra_results = _world.dispatch_callbacks(-1)
+	_world.load_object_masks()
+	_finish_runtime({"ok": true, "script_value": 0})
+
+
 ## A run of the PC's own boxes, acknowledged one at a time.
 func _open_pc_text(pages: Array, after: StringName, label: String) -> void:
 	_mode = MODE.PC_TEXT
@@ -1115,6 +1524,9 @@ func _advance_pc_text() -> void:
 	if _pc_after == &"close":
 		_finish_runtime({"ok": true, "script_value": 0})
 		return
+	if _pc_after == &"decoration":
+		_open_decorations()
+		return
 	_open_pc(&"pokemon_center")
 
 
@@ -1141,19 +1553,101 @@ func _open_bills_pc_menu() -> void:
 
 ## `_ChangeBox`'s scrolling list: every box by name, with what
 ## `BillsPC_PrintBoxCountAndCapacity` prints beside the one the cursor is on.
-## Its own submenu is SWITCH, NAME, PRINT and QUIT; NAME needs box names, which
-## the save model does not carry ([Gen2SaveBox]), and PRINT is `PrintPCBox`
-## behind them, so a row here is the SWITCH the source's default option is.
+## Choosing one opens `BillsPC_ChangeBoxSubmenu`.
 func _open_box_list() -> void:
 	_mode = MODE.PC_BOX_LIST
 	_cursor = _box_index
 	_pc_scroll = clampi(_box_index - BOX_LIST_ROWS + 1, 0, Gen2SaveData.BOX_COUNT - BOX_LIST_ROWS)
 	_pc_rows = []
 	for index: int in Gen2SaveData.BOX_COUNT:
-		_pc_rows.append({"row": index, "name": "BOX %d" % (index + 1)})
+		_pc_rows.append({
+			"row": index,
+			"name": _save.box_name(index) if _save != null else "BOX%d" % (index + 1),
+		})
 	_title = "CHANGE BOX"
 	_summary = "Choose a BOX."
 	_refresh_box_counts()
+	_render_rows()
+
+
+## `BillsPC_ChangeBoxSubmenu`: the four rows over whichever box the list's own
+## cursor was standing on, which is `wMenuSelection`.
+func _open_box_submenu(index: int) -> void:
+	_mode = MODE.PC_BOX_SUBMENU
+	_box_submenu_index = index
+	_cursor = BOX_SUBMENU_SWITCH
+	_pc_rows = []
+	for row: int in BOX_SUBMENU_ROWS.size():
+		_pc_rows.append({"row": row, "name": BOX_SUBMENU_ROWS[row]})
+	_summary = Gen2WorldPC.BILLS_PC_WHAT
+	_status = ""
+	_render_rows()
+
+
+func _confirm_box_submenu(row: int) -> void:
+	match row:
+		BOX_SUBMENU_SWITCH:
+			## `.Switch`: `wCurBox` and nothing else, and the box it is already
+			## on is a `ret z` rather than a second save.
+			if _box_submenu_index != _box_index:
+				_box_index = _box_submenu_index
+				if _save != null:
+					_save.current_box = _box_index
+			_open_box_list()
+		BOX_SUBMENU_NAME:
+			_open_box_naming()
+		BOX_SUBMENU_PRINT:
+			_print_box()
+		_:
+			_open_box_list()
+
+
+## `.Name`: `NamingScreen` with `NAME_BOX`, whose answer is written back over the
+## box's own name. The keyboard is the one the player's name and a nickname use.
+func _open_box_naming() -> void:
+	if _naming != null or _data == null or _save == null:
+		return
+	var host := Gen2NamingScreenScreen.new()
+	if not host.open(
+		_data, _save.box_name(_box_submenu_index),
+		Gen2NamingScreenScreen.KIND_BOX
+	):
+		host.free()
+		_status = "The naming keyboard is not in this cache."
+		_render_rows()
+		return
+	_naming = host
+	_set_overlay_open(true)
+	host.z_index = 5
+	host.closed.connect(_on_box_named)
+	_service_hardware.display(host)
+
+
+## `.Name`'s tail: whatever `NamingScreen_StoreEntry` left is written straight
+## back over the box's name, and an empty entry is the default name again rather
+## than a blank label.
+func _on_box_named(name: String) -> void:
+	if _naming != null:
+		Gen2Screen.drop(_naming)
+		_naming = null
+	_set_overlay_open(false)
+	if _save != null:
+		_save.set_box_name(_box_submenu_index, name)
+	_open_box_list()
+
+
+## `.Print`: `GetBoxCount` first, and then `PrintPCBox` over the box's own mons.
+## There is no printer on the link, so the send answers the same PRINTER_ERROR_2
+## the diploma and the Unown printer do.
+func _print_box() -> void:
+	var box: Gen2SaveBox = _save.boxes[_box_submenu_index] if _save != null \
+		and _box_submenu_index < _save.boxes.size() else null
+	if box == null or box.occupied_count() <= 0:
+		sfx_requested.emit(SFX_WRONG, true)
+		_status = BOX_EMPTY_TEXT
+		_render_rows()
+		return
+	_status = _data.printer_status_string(Gen2DiplomaScreen.STATUS_CONNECTION_ERROR)
 	_render_rows()
 
 
@@ -1199,6 +1693,42 @@ func _on_boxes_cry(species: int) -> void:
 
 ## `Gen2BoxScreen.closed` carries the result its own host would have resumed a
 ## script with; nothing is waiting here, because the PC's request is still open.
+## `_HallOfFamePC.MasterLoop`: one stored team at a time, newest first, until
+## `LoadHOFTeam` runs out of records or B leaves. The panels are the induction's
+## own, which is why this opens the same screen the sequence does.
+func _open_hall_of_fame(index: int) -> void:
+	var records: Array = _save.hall_of_fame if _save != null else []
+	var pages: Array = Gen2HallOfFame.record_pages(
+		_data, records[index]
+	) if index >= 0 and index < records.size() else []
+	if pages.is_empty():
+		## `.absent` and `.invalid` both answer carry, which `.MasterLoop` takes
+		## straight back to the machine's own menu.
+		_open_pc(&"pokemon_center")
+		return
+	var host := Gen2HallOfFameScreen.new()
+	host.viewer = true
+	host.set_context(_data, pages)
+	_hof = host
+	_hof_index = index
+	_set_overlay_open(true)
+	host.z_index = 5
+	host.closed.connect(_on_hall_of_fame_closed)
+	_service_hardware.display(host)
+
+
+func _on_hall_of_fame_closed() -> void:
+	var cancelled: bool = _hof != null and _hof.cancelled
+	if _hof != null:
+		Gen2Screen.drop(_hof)
+		_hof = null
+	_set_overlay_open(false)
+	if cancelled:
+		_open_pc(&"pokemon_center")
+		return
+	_open_hall_of_fame(_hof_index + 1)
+
+
 func _on_boxes_closed(_result: Dictionary) -> void:
 	if _boxes != null:
 		Gen2Screen.drop(_boxes)
@@ -1502,7 +2032,10 @@ func _move_direction(direction: Vector2i) -> void:
 
 
 func _confirm() -> void:
-	if _mode in [MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES, MODE.PC_BOX_LIST]:
+	if _mode in [
+		MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES, MODE.PC_BOX_LIST,
+		MODE.PC_DECO, MODE.PC_DECO_LIST, MODE.PC_DECO_SIDE, MODE.PC_BOX_SUBMENU,
+	]:
 		_confirm_pc_row()
 		return
 	if _mode == MODE.PC_ITEM_LIST:
@@ -1527,6 +2060,9 @@ func _cancel() -> void:
 		_leave_bills_pc()
 	elif _mode == MODE.PC_BOX_LIST:
 		_open_bills_pc_menu()
+	elif _mode == MODE.PC_BOX_SUBMENU:
+		## `VerticalMenu`'s carry, which `.ret c` takes back to `.loop`.
+		_open_box_list()
 	elif _mode == MODE.PC:
 		## `.shutdown`: B off the top menu is the same shut-down TURN OFF is.
 		_finish_runtime({"ok": true, "script_value": 0})
@@ -1537,6 +2073,12 @@ func _cancel() -> void:
 			_open_pc(&"pokemon_center")
 	elif _mode == MODE.PC_ITEM_LIST:
 		_open_pc_items()
+	elif _mode == MODE.PC_DECO:
+		_leave_decorations()
+	elif _mode == MODE.PC_DECO_LIST:
+		_open_decorations()
+	elif _mode == MODE.PC_DECO_SIDE:
+		_open_decoration_category(_deco_slot)
 	elif _mode == MODE.PC_TEXT:
 		## Both `PromptButton` answers advance the box; neither leaves early.
 		_advance_pc_text()
@@ -1578,6 +2120,9 @@ func _finish_runtime(result: Dictionary) -> void:
 
 
 func _finish(results: Array) -> void:
+	if not _extra_results.is_empty():
+		results.append_array(_extra_results)
+		_extra_results = []
 	_mode = -1
 	_close_mart()
 	completed.emit(results)
@@ -1598,7 +2143,11 @@ func _render_rows(override: Array = []) -> void:
 		return
 	var values: Array = override if not override.is_empty() else (
 		_choices if _mode == MODE.MENU \
-		else _pc_rows if _mode in [MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES] \
+		else _pc_rows if _mode in [
+			MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES,
+			MODE.PC_DECO, MODE.PC_DECO_LIST, MODE.PC_DECO_SIDE,
+			MODE.PC_BOX_SUBMENU,
+		] \
 		else _pc_entries if _mode == MODE.PC_ITEM_LIST \
 		else ["Continue"]
 	)
@@ -1680,10 +2229,20 @@ func _service_box() -> Gen2MenuBox:
 			if _menu == null or _menu.kind == &"spinner":
 				return null
 			return _menu.box()
-		MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES:
+		MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES, MODE.PC_DECO_LIST:
 			return _pc_top_box()
+		MODE.PC_DECO:
+			return _deco_category_box()
+		MODE.PC_DECO_SIDE:
+			return _deco_side_box()
 		MODE.PC_BOX_LIST:
 			return _pc_box_list_box()
+		MODE.PC_BOX_SUBMENU:
+			## `.MenuHeader`'s `menu_coords 11, 4, SCREEN_WIDTH - 1, 13`, raised
+			## two rows: the change-box screen it is drawn over on the cartridge
+			## has its own words at rows 14 to 17, and this panel's box is at 11,
+			## which the source's corner would put QUIT behind.
+			return Gen2MenuBox.from_coords(11, 2, 19, 11, Gen2MenuBox.STATICMENU_CURSOR)
 		MODE.PC_ITEM_LIST:
 			return _pc_item_list_box()
 		MODE.APRICORN:
@@ -1712,6 +2271,19 @@ func _pc_box_list_box() -> Gen2MenuBox:
 	return box
 
 
+## `_PlayerDecorationMenu.MenuHeader`'s `menu_coords 5, 0, SCREEN_WIDTH - 1,
+## SCREEN_HEIGHT - 1`.
+func _deco_category_box() -> Gen2MenuBox:
+	return Gen2MenuBox.from_coords(
+		5, 0, 19, 17, Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_WRAP
+	)
+
+
+## `DecoSideMenuHeader`'s `menu_coords 0, 0, 13, 7`.
+func _deco_side_box() -> Gen2MenuBox:
+	return Gen2MenuBox.from_coords(0, 0, 13, 7, Gen2MenuBox.STATICMENU_CURSOR)
+
+
 ## `PCItemsMenuData`'s `menu_coords 4, 1, 18, 10`.
 func _pc_item_list_box() -> Gen2MenuBox:
 	return Gen2MenuBox.from_coords(4, 1, 18, 10, Gen2MenuBox.STATICMENU_CURSOR)
@@ -1732,7 +2304,10 @@ func _apricorn_quantity_box() -> Gen2MenuBox:
 func _option_count() -> int:
 	if _mode == MODE.MENU:
 		return _menu.options.size() if _menu != null else _choices.size()
-	if _mode in [MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES, MODE.PC_BOX_LIST]:
+	if _mode in [
+		MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES, MODE.PC_BOX_LIST,
+		MODE.PC_DECO, MODE.PC_DECO_LIST, MODE.PC_DECO_SIDE, MODE.PC_BOX_SUBMENU,
+	]:
 		return _pc_rows.size()
 	if _mode == MODE.PC_ITEM_LIST:
 		return maxi(1, _pc_entries.size())

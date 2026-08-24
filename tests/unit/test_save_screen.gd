@@ -279,6 +279,67 @@ func test_a_row_opens_the_submenu_and_its_first_row_is_the_transfer() -> void:
 	assert_eq(int(_box_screen.box_snapshot()["loaded"]), Gen2BoxScreen.LOADED_PARTY)
 
 
+## `_MovePKMNWithoutMail`: left and right load another list, the submenu drops
+## RELEASE, and the second A puts the Pokemon where the insert cursor stands.
+func test_move_without_mail_reorders_a_list_and_moves_between_two() -> void:
+	var save: Gen2SaveData = _save_with_two()
+	var third: Gen2BattleMon = Gen2BattleMon.create(
+		_data, Fixture.GEODUDE, 12, [Fixture.GROWL]
+	)
+	save.party.append(Gen2SaveBattleAdapter.from_battle_mon(third))
+	(save.party[2] as Gen2SaveMon).nickname = "THIRD"
+	await _open_box_screen(save, Gen2BoxScreen.MODE_MOVE)
+	## `.Init` loads `wCurBox`, so the screen opens on the box rather than on the
+	## party; left is what walks back to it.
+	assert_eq(int(_box_screen.box_snapshot()["loaded"]), 1)
+	assert_true(_box_screen.handle_button(Gen2Button.LEFT))
+	assert_eq(int(_box_screen.box_snapshot()["loaded"]), Gen2BoxScreen.LOADED_PARTY)
+
+	## The third member to the front of the party.
+	_box_screen.handle_button(Gen2Button.DOWN)
+	_box_screen.handle_button(Gen2Button.DOWN)
+	_box_screen.handle_button(Gen2Button.A)
+	assert_eq(_box_screen.box_snapshot()["submenu"], Gen2BoxScreen.SUBMENU_ROWS_MOVE)
+	_box_screen.handle_button(Gen2Button.A)
+	assert_eq(
+		String(_box_screen.box_snapshot()["prompt"]), Gen2BoxScreen.PROMPT_MOVE_WHERE
+	)
+	_box_screen.handle_button(Gen2Button.UP)
+	_box_screen.handle_button(Gen2Button.UP)
+	_box_screen.handle_button(Gen2Button.A)
+	assert_eq(String((save.party[0] as Gen2SaveMon).nickname), "THIRD")
+	assert_eq(save.party.size(), 3)
+
+	## Left and right load another list, which only this mode answers.
+	assert_true(_box_screen.handle_button(Gen2Button.RIGHT))
+	assert_eq(int(_box_screen.box_snapshot()["loaded"]), 1)
+	assert_true(_box_screen.handle_button(Gen2Button.LEFT))
+	assert_eq(int(_box_screen.box_snapshot()["loaded"]), Gen2BoxScreen.LOADED_PARTY)
+
+	## The same Pokemon into the first box, which is a different list.
+	_box_screen.handle_button(Gen2Button.A)
+	_box_screen.handle_button(Gen2Button.A)
+	_box_screen.handle_button(Gen2Button.RIGHT)
+	_box_screen.handle_button(Gen2Button.A)
+	assert_eq(save.party.size(), 2)
+	assert_not_null(save.boxes[0].slots[0])
+	assert_eq(String((save.boxes[0].slots[0] as Gen2SaveMon).nickname), "THIRD")
+
+
+## `BillsPC_ChangeBoxSubmenu.Name` writes `sBoxNames`, and `SetDefaultBoxNames`
+## spells the default with no space in it.
+func test_a_box_keeps_the_name_it_was_given_and_defaults_without_one() -> void:
+	var save: Gen2SaveData = _save()
+	assert_eq(save.box_name(0), "BOX1")
+	assert_eq(save.box_name(Gen2SaveData.BOX_COUNT - 1), "BOX14")
+	assert_true(save.set_box_name(0, "KANTO"))
+	assert_eq(save.box_name(0), "KANTO")
+	assert_eq(Gen2SaveData.from_dict(save.to_dict()).box_name(0), "KANTO")
+	## An empty entry is the default again rather than a blank label.
+	assert_true(save.set_box_name(0, ""))
+	assert_eq(save.box_name(0), "BOX1")
+
+
 ## `_WithdrawPKMN` opens on `wCurBox` and its submenu says WITHDRAW.
 func test_the_withdraw_list_opens_on_the_current_box() -> void:
 	var save: Gen2SaveData = _save_with_two()

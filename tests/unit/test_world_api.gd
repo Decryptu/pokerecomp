@@ -5,6 +5,10 @@ extends GutTest
 
 var _directory: String = ""
 
+## The species the visible-encounter tests stand a wild on, which is the one the
+## fixture's own grass table offers.
+const VISIBLE_ENCOUNTER_SPECIES: int = 16
+
 
 func before_each() -> void:
 	_directory = RomCache.directory_for(&"testworld", "0123456789abcdef")
@@ -15,6 +19,35 @@ func before_each() -> void:
 
 func after_each() -> void:
 	RomCache.clear(_directory)
+
+
+## Seven `PUT IT AWAY` headers and one decoration each, at the ids the source
+## gives them, so `Gen2WorldDecoration` reads the same shape it reads from a
+## cartridge. Names are the fixture's own.
+func _decoration_fixture() -> Dictionary:
+	var attributes: Array = []
+	for deco: int in 31:
+		attributes.append({
+			"type": 1, "name": 0, "action": 0, "flag": 0, "sprite": 0,
+		})
+	## [id, action, event flag, block or sprite] for the header and the member.
+	for row: Array in [
+		[1, 2, 0, 0], [2, 1, 676, 0x1B],
+		[6, 4, 0, 0], [7, 3, 680, 0x08],
+		[11, 6, 0, 0], [12, 5, 684, 0x20],
+		[15, 8, 0, 0], [16, 7, 687, 0x1F],
+		[20, 10, 0, 0], [21, 9, 691, 0x5C],
+		[25, 12, 0, 0], [26, 11, 719, 0x33],
+		[29, 14, 0, 0], [30, 13, 695, 0x8E],
+	]:
+		attributes[row[0]] = {
+			"type": 1, "name": row[0], "action": row[1], "flag": row[2],
+			"sprite": row[3],
+		}
+	var names: Array = []
+	for part: int in 31:
+		names.append("DECO%d" % part)
+	return {"attributes": attributes, "names": names}
 
 
 func _write_cache(game_id: String = "testworld") -> void:
@@ -325,6 +358,10 @@ func _write_cache(game_id: String = "testworld") -> void:
 		## `UnownWalls`' four, since the special that draws one names them by
 		## index and a wrong index has to be told from a right one.
 		"unown_walls": ["WALLA", "WALLB", "WALLC", "WALLD"],
+		## `DecorationAttributes` in the shape a real cache carries: one row per
+		## category header and one decoration behind it, so a slot's own block or
+		## sprite is read from the table rather than guessed.
+		"decorations": _decoration_fixture(),
 		## The `RomLayout.SPECIAL_TEXT_RUNS` boxes the deferred routines print,
 		## with the `text_ram` markers a real cache carries so a filled buffer is
 		## told from an unfilled one.
@@ -3240,7 +3277,7 @@ func test_describedecoration_runs_locally_and_opens_only_the_town_map_host() -> 
 	var text_pause: Dictionary = runner.advance()
 	assert_eq(text_pause["status"], &"waiting", JSON.stringify(text_pause))
 	assert_eq(text_pause["event"]["type"], &"text", JSON.stringify(text_pause))
-	assert_eq(text_pause["event"]["text"], "It's a town map.")
+	assert_eq(text_pause["event"]["text"], "It's the TOWN MAP.")
 	var map_pause: Dictionary = runner.advance(true)
 	assert_eq(map_pause["status"], &"waiting", JSON.stringify(map_pause))
 	assert_eq(map_pause["event"]["type"], &"runtime_request", JSON.stringify(map_pause))
@@ -7323,6 +7360,97 @@ func test_a_visible_encounter_entry_is_validated_against_the_snapshot() -> void:
 	provider.set("overrides", {})
 	driver.advance_frame()
 	assert_eq(driver.entries().size(), 1)
+
+
+## The optional `glow`: quantized by the host, applied to every colour but the
+## cut-out, and in `_changed` so a view repaints when only the rung moves.
+func test_a_visible_encounter_glow_is_quantized_and_walks_its_own_colours() -> void:
+	var world := _drawable_world()
+	var driver := Gen2WorldEncounters.new()
+	var provider: Object = _pulse_provider()
+	provider.set("dvs", 0)
+	driver.set_providers([provider])
+	driver.set_world(world)
+
+	## Nothing asked for, nothing carried: an entry without a glow costs no
+	## second texture.
+	driver.advance_frame()
+	assert_eq(driver.actor_entries().size(), 1, "the species has an icon to draw")
+	assert_false(driver.entries()[0].has("glow"))
+	var plain: PackedColorArray = driver.actor_entries()[0]["colors"]
+
+	## An amount between two rungs lands on the nearer one, and the walk reaches
+	## colours 1 up rather than the icon's cut-out.
+	provider.set("overrides", {"glow": {"color": Color.GOLD, "amount": 0.6}})
+	driver.advance_frame()
+	assert_almost_eq(float(driver.entries()[0]["glow"]["amount"]), 0.625, 0.0001)
+	var lit: PackedColorArray = driver.actor_entries()[0]["colors"]
+	assert_eq(lit[0], plain[0], "colour 0 is the cut-out and is left alone")
+	for index: int in range(1, plain.size()):
+		assert_eq(lit[index], plain[index].lerp(Color.GOLD, 0.625), "colour %d" % index)
+
+	## A malformed glow costs the glow and not the entry, and an amount that
+	## rounds to nothing is no glow at all.
+	for bad: Variant in [
+		{"color": "gold", "amount": 1.0}, {"amount": 1.0}, "gold",
+		{"color": Color.GOLD, "amount": 0.05},
+		{"color": Color.GOLD, "amount": -4.0},
+	]:
+		provider.set("overrides", {"glow": bad})
+		driver.advance_frame()
+		assert_eq(driver.entries().size(), 1, str(bad))
+		assert_false(driver.entries()[0].has("glow"), str(bad))
+
+	## `GLOW_RUNGS` is the whole of what a mod can reach, however smooth the ramp
+	## it sends: both renderers cache a texture per palette and never evict.
+	var rungs: Dictionary = {}
+	for step: int in 101:
+		provider.set("overrides", {
+			"glow": {"color": Color.GOLD, "amount": float(step) / 100.0},
+		})
+		driver.advance_frame()
+		var glow: Dictionary = driver.entries()[0].get("glow", {})
+		rungs[float(glow.get("amount", 0.0))] = true
+	assert_eq(rungs.size(), Gen2WorldEncounters.GLOW_RUNGS + 1)
+
+
+## `_changed` is what decides whether a view repaints, so a glow that moves while
+## the Pokemon stands still has to be in it.
+func test_a_moving_glow_repaints_a_standing_pokemon() -> void:
+	var world := _world()
+	var driver := Gen2WorldEncounters.new()
+	var provider: Object = _pulse_provider()
+	provider.set("dvs", 0)
+	provider.set("overrides", {"glow": {"color": Color.GOLD, "amount": 1.0}})
+	driver.set_providers([provider])
+	driver.set_world(world)
+	driver.advance_frame()
+
+	assert_false(driver.advance_frame(), "nothing moved")
+	provider.set("overrides", {"glow": {"color": Color.GOLD, "amount": 0.5}})
+	assert_true(driver.advance_frame(), "the rung moved")
+	provider.set("overrides", {"glow": {"color": Color.RED, "amount": 0.5}})
+	assert_true(driver.advance_frame(), "the light moved")
+	provider.set("overrides", {})
+	assert_true(driver.advance_frame(), "the glow went out")
+
+
+## The fixture's own species list carries no rows, so `actor_entries()` finds no
+## icon and draws nothing. This gives the one species the visible-encounter tests
+## stand on an icon and a palette, which is what those two answers are read from.
+func _drawable_world() -> Gen2WorldAPI:
+	## The table is read by position, so the rows in front of the one that
+	## matters have to be there.
+	var species: Array = []
+	for number: int in VISIBLE_ENCOUNTER_SPECIES:
+		species.append({
+			"number": number + 1, "name": "MON%d" % (number + 1), "icon": 1,
+			## `GetMonNormalOrShinyPalettePointer`'s two packed middle colours,
+			## one pair for each of the two answers.
+			"palette": {"normal": [0x1CE7, 0x0C63], "shiny": [0x7FFF, 0x001F]},
+		})
+	RomCache.write_json(RomCache.species_path(_directory), species)
+	return _world()
 
 
 func _pulse_provider() -> Object:

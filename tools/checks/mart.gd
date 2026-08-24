@@ -35,6 +35,11 @@ const EXPECTED_TEXT_OPENINGS: Dictionary = {
 	"bargain_thanks": "Thanks.",
 	"pharmacy_intro": "What's up? Need",
 	"pharmacy_come_again": "All right.",
+	## `SellMenu`'s own four, which the standard shop's SELL row reaches.
+	"sell_how_many": "How many?",
+	"sell_price": "I can pay you",
+	"cant_buy": "Sorry, I can't buy",
+	"bought": "Got ",
 }
 
 ## The three values a mart box leaves a marker for. `hMoneyTemp` is HRAM and
@@ -48,6 +53,10 @@ const EXPECTED_MARKERS: Dictionary = {
 	"bitter_final_price": {"name": 1, "quantity": 1, "total": 1},
 	"pharmacy_final_price": {"name": 1, "quantity": 1, "total": 1},
 	"bargain_final_price": {"name": 1, "quantity": 0, "total": 1},
+	## `MartSellPriceText` names the money alone, since the item is still on the
+	## list the sale was chosen from; `MartBoughtText` names both.
+	"sell_price": {"name": 0, "quantity": 0, "total": 1},
+	"bought": {"name": 1, "quantity": 0, "total": 1},
 }
 
 ## The screen's own width. A name prints from column 2 and its price from

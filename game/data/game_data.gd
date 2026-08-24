@@ -70,6 +70,7 @@ var _title: Dictionary = {}
 var _town_map: Dictionary = {}
 var _oak_ratings: Dictionary = {}
 var _pokecenter_pc: Dictionary = {}
+var _decorations: Dictionary = {}
 var _unown_words: PackedStringArray = PackedStringArray()
 var _unown_walls: PackedStringArray = PackedStringArray()
 var _credits: Dictionary = {}
@@ -182,6 +183,8 @@ static func open_directory(path: String) -> GameData:
 	data._oak_ratings = raw_oak_ratings if raw_oak_ratings is Dictionary else {}
 	var pokecenter_pc: Variant = manifest.get("pokecenter_pc", {})
 	data._pokecenter_pc = pokecenter_pc if pokecenter_pc is Dictionary else {}
+	var decorations: Variant = manifest.get("decorations", {})
+	data._decorations = decorations if decorations is Dictionary else {}
 	var unown_words: Variant = manifest.get("unown_words", [])
 	if unown_words is Array:
 		for word: Variant in unown_words as Array:
@@ -1768,6 +1771,37 @@ func pokecenter_pc_lists(players: bool = false) -> Array:
 func pokecenter_pc_text(name: String) -> String:
 	var texts: Variant = _pokecenter_pc.get("texts", {})
 	return String((texts as Dictionary).get(name, "")) if texts is Dictionary else ""
+
+
+## One `DecorationAttributes` row by its own `DECO_*` id, as
+## [code]{ type, name, action, flag, sprite }[/code]. Empty for an id outside the
+## table and on a cache imported without it.
+func decoration(deco: int) -> Dictionary:
+	var rows: Variant = _decorations.get("attributes", [])
+	if not rows is Array or deco < 0 or deco >= (rows as Array).size():
+		return {}
+	var row: Variant = (rows as Array)[deco]
+	if not row is Dictionary:
+		return {}
+	var out: Dictionary = {}
+	for key: Variant in row as Dictionary:
+		out[String(key)] = int((row as Dictionary)[key])
+	return out
+
+
+func decoration_count() -> int:
+	var rows: Variant = _decorations.get("attributes", [])
+	return (rows as Array).size() if rows is Array else 0
+
+
+## One `DecorationNames` part by its own index, which is what a row's `name`
+## field carries for every type but the poster, doll and big doll: those name a
+## species instead.
+func decoration_name_part(index: int) -> String:
+	var names: Variant = _decorations.get("names", [])
+	if not names is Array or index < 0 or index >= (names as Array).size():
+		return ""
+	return String((names as Array)[index])
 
 
 ## The word `PrintUnownWord` puts under Unown form [param form], A being 1.

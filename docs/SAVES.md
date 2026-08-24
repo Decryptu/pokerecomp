@@ -52,8 +52,11 @@ preallocated, up to `Gen2SaveStore.MAX_SLOTS`; a slot number is still its file
 name, so slots written before this stay where they were. Each save carries its
 own `label`, the player's name for the slot, so an exported file names itself;
 an empty label means fall back to the player name. `current_box` is `wCurBox`,
-which CHANGE BOX writes and both of BILL'S PC's lists read. Box names and
-cartridge SRAM box placement are intentionally outside this model.
+which CHANGE BOX's SWITCH writes and both of BILL'S PC's lists read, and
+`box_names` is `sBoxNames`, which its NAME row writes; an empty name is
+`SetDefaultBoxNames`' own "BOX1" spelling rather than a stored string.
+`hall_of_fame` is `sHallOfFame`, the thirty induction records newest first.
+Cartridge SRAM box placement is intentionally outside this model.
 
 `player_id` is the cartridge's own `wPlayerID`, rolled once when a game starts,
 read from SRAM on import and written back on export. `GetTreeScore` is what reads
@@ -114,10 +117,11 @@ House PC as an embedded overworld overlay, presents one numbered box at a time
 with twenty fixed slots and a party selection column. Depositing uses the
 current box's first free slot, withdrawal requires party capacity, and both go
 through `Gen2SaveStorage` to validate and write a candidate save before the
-shared runtime object changes. The last party member cannot be boxed. The
-current box is transient UI state; box names and SRAM placement stay outside the
-model. Closing the embedded overlay resumes the paused source script with no
-decoration change. Selected runtime saves persist transfers; injected scene-test
+shared runtime object changes. The last party member cannot be boxed. MOVE PKMN W/O MAIL is
+the same screen in `Gen2BoxScreen.MODE_MOVE`, where left and right load the
+party or any box and a chosen Pokemon is inserted at a second cursor. SRAM
+placement stays outside the model. Closing the embedded overlay resumes the
+paused source script, which is where a changed decoration reloads the room. Selected runtime saves persist transfers; injected scene-test
 and development saves use the validated in-memory candidate without writing a
 slot.
 

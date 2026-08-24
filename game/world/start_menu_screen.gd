@@ -37,7 +37,7 @@ signal field_move_chosen(action: Dictionary)
 
 enum Mode {
 	LIST, PACK, PACK_ITEM, PACK_TEACH, PACK_TARGET,
-	PACK_FORGET_ASK, PACK_FORGET, PACK_STOP_LEARNING,
+	PACK_FORGET_ASK, PACK_FORGET, PACK_STOP_LEARNING, PACK_PP_MOVE,
 	PACK_TOSS_QUANTITY, PACK_TOSS_CONFIRM, PACK_GIVE_SWAP,
 	PACK_RESULT, SAVE_ASK, SAVE_OVERWRITE, SAVE_SAVING, SAVE_SAVED,
 	SAVE_FAILED, OPTIONS, MODS, MOD_OPTIONS, FIELD_MOVES,
@@ -60,6 +60,15 @@ const SAVE_SAVING_LINES: Array[String] = [
 	"SAVING… DON'T TURN", "OFF THE POWER.",
 ]
 ## `_SavedTheGameText`, whose `<PLAYER>` is filled from the save.
+## `RestoreThePPOfWhichMoveText`, `PPRestoredText` and the refusal the pack owes
+## PP UP, whose ceiling the save model does not carry. The first two are
+## `text_far` stubs in `data/text/common_2.asm` that no script reaches, so they
+## are this screen's the way the save boxes below are; the third is this port's
+## own words, because the cartridge has no such refusal.
+const RESTORE_PP_WHICH_MOVE: String = "Restore the PP of\nwhich move?"
+const PP_RESTORED: String = "PP was restored."
+const PP_UP_UNSUPPORTED: String = "PP UP has no effect\nin this port yet."
+
 const SAVE_SAVED_LINES: Array[String] = [
 	"%s saved", "the game.",
 ]
@@ -178,6 +187,10 @@ var _pending_entry: Callable = Callable()
 ## because the second teach_tm_hm() call has to name the same Pokémon the first
 ## one refused.
 var _forget_moves: Array = []
+## `RestorePPEffect`'s own `MoveSelectionScreen`: which item asked and which
+## party member it is being used on, held while the move list is up.
+var _pp_item: int = 0
+var _pp_party_index: int = -1
 ## `MoveCantForgetHMText` while the list it was refused on is still open.
 var _forget_refusal: String = ""
 var _forget_cursor: int = 0
@@ -389,7 +402,7 @@ func _move(direction: Vector2i) -> void:
 			if direction.y != 0 or direction.x != 0:
 				_forget_confirm_cursor = 1 - _forget_confirm_cursor
 				_render_forget_ask()
-		Mode.PACK_FORGET:
+		Mode.PACK_FORGET, Mode.PACK_PP_MOVE:
 			## w2DMenuNumCols is 1, so only vertical input moves the move list.
 			if direction.y != 0 and not _forget_moves.is_empty():
 				_forget_cursor = wrapi(
@@ -482,6 +495,8 @@ func _confirm() -> void:
 			_confirm_forget_ask()
 		Mode.PACK_FORGET:
 			_confirm_forget()
+		Mode.PACK_PP_MOVE:
+			_confirm_pp_move()
 		Mode.PACK_STOP_LEARNING:
 			_confirm_stop_learning()
 		Mode.PACK_TOSS_CONFIRM:
@@ -559,6 +574,9 @@ func _cancel() -> void:
 		## No to "Stop learning?" is `jp .loop`, back to ForgetMove's ask.
 		Mode.PACK_STOP_LEARNING:
 			_open_forget_ask()
+		## B in `MoveSelectionScreen` is `jr nz, .loop`, back to the party list.
+		Mode.PACK_PP_MOVE:
+			_open_target_mode()
 		Mode.PACK_TARGET:
 			_open_item_mode()
 		## B at the yes/no is `YesNoBox`'s no, which is the carry `TossMenu`
@@ -1540,7 +1558,7 @@ func _render_targets() -> void:
 	_render_hardware()
 
 
-func _use_selected_item(party_index: int) -> void:
+func _use_selected_item(party_index: int, move_slot: int = -1) -> void:
 	var item: Dictionary = _selected_item()
 	if item.is_empty():
 		return
@@ -1549,10 +1567,21 @@ func _use_selected_item(party_index: int) -> void:
 		return
 	var number: int = int(item.get("item", 0))
 	var result: Dictionary = Gen2WorldPartyHost.use_item(
-		_world, _pack_save, number, party_index, _pack_persist
+		_world, _pack_save, number, party_index, _pack_persist, move_slot
 	)
 	if not bool(result.get("ok", false)):
+		if StringName(result.get("reason", &"")) == &"move_slot_required":
+			_open_pp_move_list(number, party_index)
+			return
 		_show_pack_result(_use_refusal(StringName(result.get("reason", &"")), number), false)
+		return
+	if StringName(result.get("effect", &"")) == &"rare_candy":
+		## `RareCandyEffect` prints its level-up box and then runs
+		## `LearnLevelMoves`, whose full-moveset case is the same `ForgetMove` the
+		## TM path opens.
+		_forget_party_index = party_index
+		_evolution_offers.assign(result.get("move_offers", []))
+		_show_pack_result(_use_summary(item, result), true, _offer_next_evolution_move)
 		return
 	if StringName(result.get("effect", &"")) == &"evolution":
 		_forget_party_index = party_index
@@ -1609,6 +1638,12 @@ func _use_summary(item: Dictionary, result: Dictionary) -> String:
 		return "%s will repel weak Pokemon for %d steps." % [
 			item_name, int(result.get("repel_steps", 0)),
 		]
+	if int(result.get("level", 0)) > 0:
+		return "%s grew to level %d!" % [
+			_target_name(_forget_party_index), int(result.get("level", 0)),
+		]
+	if int(result.get("restored", 0)) > 0:
+		return PP_RESTORED
 	var healed: int = int(result.get("healed", 0))
 	if healed > 0:
 		return "%s restored %d HP." % [item_name, healed]
@@ -1632,7 +1667,35 @@ func _use_refusal(reason: StringName, item: int) -> String:
 			return "It won't have any effect."
 		&"insufficient_item_quantity":
 			return "You have none of those."
+		&"pp_up_unsupported":
+			return PP_UP_UNSUPPORTED
 	return "Can't use that here: %s" % String(reason)
+
+
+## `RestoreThePPOfWhichMoveText` and `MoveSelectionScreen` behind it. The list is
+## the target's own moves; the item is spent when one is chosen.
+func _open_pp_move_list(item: int, party_index: int) -> void:
+	var mon: Gen2SaveMon = _pack_save.party[party_index] \
+		if _pack_save != null and party_index >= 0 \
+		and party_index < _pack_save.party.size() else null
+	_forget_moves = Gen2MoveForget.options(_data, mon.moves) if mon != null else []
+	if _forget_moves.is_empty():
+		_show_pack_result(_use_refusal(&"item_has_no_effect", item), false)
+		return
+	_mode = Mode.PACK_PP_MOVE
+	_pp_item = item
+	_pp_party_index = party_index
+	_forget_cursor = 0
+	_forget_refusal = ""
+	_render_hardware()
+
+
+func _confirm_pp_move() -> void:
+	if _forget_cursor < 0 or _forget_cursor >= _forget_moves.size():
+		return
+	_use_selected_item(
+		_pp_party_index, int(_forget_moves[_forget_cursor].get("slot", -1))
+	)
 
 
 ## `TossMenu`: the ask, then `SelectQuantityToToss`, which is the same dial the
@@ -1989,6 +2052,8 @@ func box_text() -> String:
 		Mode.PACK_FORGET:
 			return _forget_refusal if not _forget_refusal.is_empty() \
 				else Gen2MoveForget.which_text()
+		Mode.PACK_PP_MOVE:
+			return RESTORE_PP_WHICH_MOVE
 		Mode.PACK_RESULT:
 			return _pack_result_text()
 	return ""
@@ -2055,7 +2120,7 @@ func _hardware_image() -> Image:
 					_toss_prompt.value if _toss_prompt != null else 1
 				)
 			)
-		Mode.PACK_FORGET:
+		Mode.PACK_FORGET, Mode.PACK_PP_MOVE:
 			var moves: Array = []
 			for entry: Dictionary in _forget_moves:
 				moves.append(String(entry.get("name", "")))

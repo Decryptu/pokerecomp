@@ -92,6 +92,24 @@ const HAPPINESS_PROBABILITIES: Dictionary = {
 const STRING_BUFFER_1: Dictionary = {true: 0xD073, false: 0xCF6B}
 const HAPPINESS_TABLE_OVERRUN_OPCODE: int = 0x21
 
+## `RareCandyEffect` and `RestorePPEffect`'s own five. PP UP is the sixth and
+## has no branch: `ApplyPPUp` raises a ceiling the save model does not carry, so
+## the pack refuses it and says why (see `use_item`).
+const ITEM_RARE_CANDY: int = 0x20
+const ITEM_PP_UP: int = 0x3E
+const ITEM_ETHER: int = 0x3F
+const ITEM_MAX_ETHER: int = 0x40
+const ITEM_ELIXER: int = 0x41
+const ITEM_MAX_ELIXER: int = 0x15
+## `RestorePP.restore_some`'s own `ld c, 10`, and `.restore_all`, which the two
+## MAX rows take.
+const PP_RESTORE_STEP: int = 10
+const PP_RESTORE_ITEMS: Dictionary = {
+	ITEM_ETHER: false, ITEM_MAX_ETHER: false,
+	ITEM_ELIXER: true, ITEM_MAX_ELIXER: true,
+}
+const PP_RESTORE_MAX_ITEMS: Array[int] = [ITEM_MAX_ETHER, ITEM_MAX_ELIXER]
+
 const ITEM_BERRY: int = 0xAD
 const ITEM_BERRY_JUICE: int = 0x8B
 const SHUCKLE: int = 0xD5
@@ -381,12 +399,16 @@ static func _party_member(save: Gen2SaveData, index: int) -> Gen2SaveMon:
 ## Applies a field item to a save and the live world as one candidate transaction.
 ## The current slice covers source party item effects, including EvoStoneEffect's
 ## candidate evolution and the HP delta applied by EvolvePokemon.
+## [param move_slot] is `MoveSelectionScreen`'s answer, which only ETHER and MAX
+## ETHER ask for: those two refuse with `move_slot_required` until the caller has
+## one, the way [method teach_tm_hm] refuses with `moveset_full`.
 static func use_item(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
 	item: int,
 	party_index: int = -1,
-	persist: bool = true
+	persist: bool = true,
+	move_slot: int = -1
 ) -> Dictionary:
 	if world == null or save == null or world.data == null:
 		return _failure(&"missing_save", {})
@@ -396,7 +418,9 @@ static func use_item(
 	if not bool(opened.get("ok", false)):
 		return _failure(StringName(opened["reason"]), opened.get("details", {}))
 	var candidate: Gen2SaveData = opened["candidate"]
-	var effect: Dictionary = _apply_item_effect(world.data, candidate, item, party_index)
+	var effect: Dictionary = _apply_item_effect(
+		world.data, candidate, item, party_index, move_slot, world.map_time_of_day()
+	)
 	if not bool(effect.get("ok", false)):
 		return _failure(StringName(effect.get("reason", &"item_has_no_effect")), effect)
 	var before: Gen2WorldSnapshot = world.snapshot()
@@ -430,6 +454,8 @@ static func use_item(
 		"move_offers": effect.get("move_offers", []).duplicate(),
 		"bitter": bool(effect.get("bitter", false)),
 		"stat": String(effect.get("stat", "")),
+		"level": int(effect.get("level", 0)),
+		"restored": int(effect.get("restored", 0)),
 	}
 
 
@@ -1430,7 +1456,8 @@ static func _trade_gender_matches(
 
 
 static func _apply_item_effect(
-	data: GameData, save: Gen2SaveData, item: int, party_index: int
+	data: GameData, save: Gen2SaveData, item: int, party_index: int,
+	move_slot: int = -1, time_of_day: int = -1
 ) -> Dictionary:
 	var definition: Dictionary = data.item(item)
 	if definition.is_empty():
@@ -1447,6 +1474,16 @@ static func _apply_item_effect(
 	var mon: Gen2SaveMon = save.party[party_index]
 	if mon == null or mon.is_egg:
 		return {"ok": false, "reason": &"invalid_party_member"}
+	if item == ITEM_RARE_CANDY:
+		return _apply_rare_candy(data, mon, time_of_day)
+	if PP_RESTORE_ITEMS.has(item):
+		return _apply_pp_restore(data, mon, item, move_slot)
+	if item == ITEM_PP_UP:
+		## `ApplyPPUp` raises `PP_UP_MASK`, the top two bits of a move's own PP
+		## byte, which [Gen2SaveMon] does not keep: its `pp` is the current value
+		## alone and every `max_pp` in the game is the move's base. Building this
+		## is a save-format addition.
+		return {"ok": false, "reason": &"pp_up_unsupported", "item": item}
 	var evolution: Dictionary = _apply_item_evolution(data, mon, item)
 	if not evolution.is_empty():
 		return evolution
@@ -1482,6 +1519,95 @@ static func _apply_item_effect(
 		"ok": true, "effect": &"party_item", "healed": healed,
 		"status_cleared": cleared,
 	})
+
+
+## `RareCandyEffect`: one level, `CalcExpAtLevel` back onto the experience,
+## `UpdateStatsAfterItem`'s max-HP delta added to the current HP,
+## `LevelUpHappinessMod`, `LearnLevelMoves` and then `EvolvePokemon` with
+## `wForceEvolution` clear. `MAX_LEVEL` is `NoEffectMessage` rather than a clamp.
+##
+## The happiness row is `HAPPINESS_GAINLEVEL` flat: `LevelUpHappinessMod`'s
+## at-home row compares the caught landmark against the *battle's* landmark, and
+## a field item is not in one.
+static func _apply_rare_candy(
+	data: GameData, mon: Gen2SaveMon, time_of_day: int
+) -> Dictionary:
+	if mon.level >= Gen2Experience.MAX_LEVEL:
+		return {"ok": false, "reason": &"item_has_no_effect"}
+	var before_max_hp: int = _max_hp(data, mon)
+	mon.level += 1
+	mon.exp = Gen2Experience.total_exp_at(
+		int(data.species(mon.species).get(
+			"growth_rate", Gen2Experience.GROWTH_MEDIUM_FAST
+		)), mon.level
+	)
+	mon.hp += maxi(0, _max_hp(data, mon) - before_max_hp)
+	mon.happiness = change_happiness(
+		data, mon.happiness, Gen2Battle.HAPPINESS_GAINLEVEL
+	)
+	## `LearnLevelMoves`: an empty slot takes the move unasked and a full moveset
+	## is what the caller has to open `ForgetMove` for.
+	var move_offers: Array[int] = []
+	for move: int in data.moves_learned_at(mon.species, mon.level):
+		if mon.moves.has(move):
+			continue
+		var empty: int = mon.moves.find(0)
+		if empty < 0:
+			move_offers.append(move)
+			continue
+		mon.moves[empty] = move
+		mon.pp[empty] = int(data.move(move).get("pp", 0))
+	var levelled: Dictionary = {
+		"ok": true, "effect": &"rare_candy", "level": mon.level,
+		"move_offers": move_offers,
+	}
+	var battle_mon: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(data, mon)
+	if battle_mon == null or time_of_day < 0:
+		return levelled
+	var row: Dictionary = Gen2Evolution.level_evolution(data, battle_mon, time_of_day)
+	if row.is_empty():
+		return levelled
+	var evolved: Dictionary = apply_evolution(data, mon, row)
+	if evolved.is_empty():
+		return levelled
+	## `EvolvePokemon` runs behind the level-up box, so the caller owes both: the
+	## moves the level taught are already written and the evolution's own offers
+	## follow them.
+	var offers: Array = move_offers.duplicate()
+	offers.append_array(evolved.get("move_offers", []))
+	evolved["move_offers"] = offers
+	evolved["level"] = mon.level
+	return evolved
+
+
+## `RestorePPEffect`: MAX ETHER and MAX ELIXER fill a move, ETHER and ELIXER add
+## ten, and the two ELIXERs walk all four slots where the two ETHERs need the
+## slot `MoveSelectionScreen` chose. A move already at its ceiling is
+## `.dont_restore`, and nothing restored at all is `WontHaveAnyEffectMessage`.
+static func _apply_pp_restore(
+	data: GameData, mon: Gen2SaveMon, item: int, move_slot: int
+) -> Dictionary:
+	var all_moves: bool = bool(PP_RESTORE_ITEMS[item])
+	if not all_moves and (move_slot < 0 or move_slot >= Gen2SaveMon.MAX_MOVES):
+		return {"ok": false, "reason": &"move_slot_required", "item": item}
+	var full: bool = item in PP_RESTORE_MAX_ITEMS
+	var restored: int = 0
+	for slot: int in Gen2SaveMon.MAX_MOVES:
+		if not all_moves and slot != move_slot:
+			continue
+		var move: int = int(mon.moves[slot])
+		if move <= 0:
+			continue
+		var maximum: int = int(data.move(move).get("pp", 0))
+		var current: int = int(mon.pp[slot])
+		if current >= maximum:
+			continue
+		var next: int = maximum if full else mini(maximum, current + PP_RESTORE_STEP)
+		restored += next - current
+		mon.pp[slot] = next
+	if restored <= 0:
+		return {"ok": false, "reason": &"item_has_no_effect"}
+	return {"ok": true, "effect": &"restore_pp", "restored": restored}
 
 
 ## `VitaminEffect`. The cap is a refusal rather than a clamp.

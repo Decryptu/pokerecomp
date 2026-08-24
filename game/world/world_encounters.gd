@@ -40,6 +40,27 @@ const PULSE_FRAMES: int = 600
 ## The four `Gen2WorldSprite` facings.
 const MAX_FACING: int = Gen2WorldSprite.FACING_RIGHT
 
+## How many steps an entry's `glow` amount is rounded onto, and the palette
+## colour it leaves alone.
+##
+## The rung count is the host's rather than the mod's on purpose. Both world
+## renderers cache one sprite texture per distinct set of four colours and
+## neither evicts (`world_renderer.gd:_actor_texture` keys on `hash(colors)`), so
+## a glow interpolated freely would leave a texture behind on every frame the map
+## is up. Nine amounts is nine palettes per species, and the key carries a facing
+## and a frame beside them: eight of those, so seventy-two textures for a species
+## that glows and none for one that does not.
+##
+## Eight rather than four because a mark meant to be subtle has to keep a cycle
+## after the rounding. A glow whose peak is under half the walk, which is what
+## reads as a breath rather than a recolour, has four steps left on eighths and
+## one on quarters.
+##
+## Colour 0 is the icon's cut-out ([method Gen2PicImage.lookup] gives it alpha
+## zero), so walking it would change the cache key and no pixel.
+const GLOW_RUNGS: int = 8
+const GLOW_CUTOUT_COLOR: int = 0
+
 var _providers: Array = []
 var _world: Gen2WorldAPI = null
 var _anim_data: Gen2BattleAnimData = null
@@ -107,8 +128,8 @@ func advance_frame() -> bool:
 
 
 ## The validated population, each entry `{id, cell, facing, species, level, dvs,
-## shiny}`. `shiny` is the host's own answer from the DVs; a provider that sends
-## one is refused.
+## shiny, pulse}` and an optional `glow`. `shiny` is the host's own answer from
+## the DVs; a provider that sends one is refused.
 func entries() -> Array:
 	return _entries
 
@@ -128,8 +149,12 @@ func actor_entries() -> Array:
 			"facing": int(entry["facing"]),
 			"position_cells": Vector2(entry["cell"]),
 			# `GetMonNormalOrShinyPalettePointer`: the species' own four colours,
-			# which is what makes a shiny one visible before the battle starts.
-			"colors": _world.data.palette(int(entry["species"]), bool(entry["shiny"])),
+			# which is what makes a shiny one visible before the battle starts,
+			# walked toward an entry's own light when it asked for one.
+			"colors": glow_palette(
+				_world.data.palette(int(entry["species"]), bool(entry["shiny"])),
+				entry.get("glow", {})
+			),
 		})
 	return out
 
@@ -333,7 +358,7 @@ func _validate(raw: Variant) -> Dictionary:
 	var dvs: int = int(row.get("dvs", 0))
 	if dvs < 0 or dvs > 0xFFFF:
 		return {}
-	return {
+	var entry: Dictionary = {
 		"id": id,
 		"cell": cell,
 		"facing": clampi(int(row.get("facing", Gen2WorldSprite.FACING_DOWN)), 0, MAX_FACING),
@@ -343,6 +368,48 @@ func _validate(raw: Variant) -> Dictionary:
 		"shiny": Gen2Stats.is_shiny(dvs),
 		"pulse": bool(row.get("pulse", false)),
 	}
+	var glow: Dictionary = _glow(row.get("glow", null))
+	if not glow.is_empty():
+		entry["glow"] = glow
+	return entry
+
+
+## An entry's optional `{color, amount}`, with the amount rounded onto
+## [constant GLOW_RUNGS]. A malformed one costs the glow and not the entry: it is
+## presentation, and a wild without one is still a wild the host can vouch for.
+## An amount that rounds to nothing answers empty, so an entry not glowing this
+## frame carries no key and asks for no second texture.
+static func _glow(raw: Variant) -> Dictionary:
+	if not raw is Dictionary:
+		return {}
+	var row: Dictionary = raw
+	if not row.get("color", null) is Color:
+		return {}
+	var amount: float = float(row.get("amount", 0.0))
+	if not is_finite(amount):
+		return {}
+	var rung: int = roundi(clampf(amount, 0.0, 1.0) * GLOW_RUNGS)
+	if rung <= 0:
+		return {}
+	return {"color": row["color"] as Color, "amount": float(rung) / float(GLOW_RUNGS)}
+
+
+## One entry's palette with its glow applied: every colour but the cut-out walked
+## toward the light by the quantized amount. Public because a renderer drawing
+## the population itself resolves the same palette.
+static func glow_palette(
+	colors: PackedColorArray, glow: Dictionary
+) -> PackedColorArray:
+	if glow.is_empty():
+		return colors
+	var light: Color = glow["color"]
+	var amount: float = float(glow["amount"])
+	var out: PackedColorArray = colors.duplicate()
+	for index: int in out.size():
+		if index == GLOW_CUTOUT_COLOR:
+			continue
+		out[index] = out[index].lerp(light, amount)
+	return out
 
 
 ## Which method's eligible list [param cell] is in, empty when neither.
@@ -414,6 +481,18 @@ func _changed(before: Array, after: Array) -> bool:
 		var now: Dictionary = after[index]
 		if was["cell"] != now["cell"] or int(was["facing"]) != int(now["facing"]) \
 			or int(was["species"]) != int(now["species"]) \
-			or bool(was["shiny"]) != bool(now["shiny"]):
+			or bool(was["shiny"]) != bool(now["shiny"]) \
+			or _glow_changed(was.get("glow", {}), now.get("glow", {})):
 			return true
 	return false
+
+
+## A glow that moves while nothing else does still has to repaint, or the
+## Pokemon stands at whichever rung it was on when it last stepped.
+static func _glow_changed(was: Dictionary, now: Dictionary) -> bool:
+	if was.is_empty() != now.is_empty():
+		return true
+	if was.is_empty():
+		return false
+	return not is_equal_approx(float(was["amount"]), float(now["amount"])) \
+		or Color(was["color"]) != Color(now["color"])

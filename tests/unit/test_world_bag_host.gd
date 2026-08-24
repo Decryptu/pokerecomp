@@ -163,8 +163,8 @@ func test_the_pc_tosses_its_own_stack() -> void:
 	assert_eq(_world.state.item_quantity(POTION), 2, "the bag is not touched")
 
 
-## `.ChooseWhichPCListToUse`, and the HALL OF FAME row this project drops for
-## want of saved induction records.
+## `.ChooseWhichPCListToUse`: the Pokedex adds PROF.OAK'S PC and the induction
+## adds HALL OF FAME.
 func test_the_top_menu_grows_with_the_dex_and_the_hall_of_fame() -> void:
 	var rows: Callable = func() -> Array:
 		var out: Array = []
@@ -186,10 +186,47 @@ func test_the_top_menu_grows_with_the_dex_and_the_hall_of_fame() -> void:
 
 	_world.state.set_hall_of_fame(true)
 	assert_eq(Gen2WorldPC.top_menu_list(_world.state), Gen2WorldPC.PCPC_POSTGAME)
-	assert_false(
-		Gen2WorldPC.PCPCITEM_HALL_OF_FAME in rows.call(),
-		"the induction viewer has no records to read"
+	assert_true(Gen2WorldPC.PCPCITEM_HALL_OF_FAME in rows.call())
+
+
+## `GetHallOfFameParty` and `AddHallOfFameEntry`: eggs are skipped, the newest
+## team is at the front, and `wHallOfFameCount` counts the inductions rather
+## than the records.
+func test_an_induction_records_the_party_newest_first() -> void:
+	(_save.party[0] as Gen2SaveMon).nickname = "FIRST"
+	var records: Array = Gen2HallOfFame.inducted([], _save)
+	assert_eq(records.size(), 1)
+	assert_eq(int(records[0]["win_count"]), 1)
+	assert_eq(int(records[0]["mons"].size()), _save.party.size())
+	assert_eq(String(records[0]["mons"][0]["nickname"]), "FIRST")
+
+	(_save.party[0] as Gen2SaveMon).nickname = "SECOND"
+	records = Gen2HallOfFame.inducted(records, _save)
+	assert_eq(records.size(), 2)
+	assert_eq(int(records[0]["win_count"]), 2)
+	assert_eq(String(records[0]["mons"][0]["nickname"]), "SECOND")
+	assert_eq(String(records[1]["mons"][0]["nickname"]), "FIRST")
+	assert_eq(Gen2HallOfFame.win_count(records), 2)
+
+	## `sHallOfFame` holds thirty and the oldest falls off the end.
+	for _pass: int in Gen2HallOfFame.MAX_RECORDS:
+		records = Gen2HallOfFame.inducted(records, _save)
+	assert_eq(records.size(), Gen2HallOfFame.MAX_RECORDS)
+	assert_eq(Gen2HallOfFame.win_count(records), 2 + Gen2HallOfFame.MAX_RECORDS)
+
+	## `_HallOfFamePC.DisplayMonAndStrings` draws the count on every panel of the
+	## record it belongs to, which is the one line an induction has no room for.
+	var pages: Array = Gen2HallOfFame.record_pages(_data, records[0])
+	assert_eq(pages.size(), records[0]["mons"].size())
+	assert_eq(int(pages[0]["win_count"]), Gen2HallOfFame.win_count(records))
+	assert_eq(
+		Gen2SaveData.from_dict(_save.to_dict()).hall_of_fame.size(), 0,
+		"nothing is stored until an induction writes it"
 	)
+	_save.hall_of_fame = records
+	var reopened: Gen2SaveData = Gen2SaveData.from_dict(_save.to_dict())
+	assert_eq(reopened.hall_of_fame.size(), Gen2HallOfFame.MAX_RECORDS)
+	assert_eq(String(reopened.hall_of_fame[0]["mons"][0]["nickname"]), "SECOND")
 
 
 ## `PlayersPCMenuData.WhichPC`: the bedroom's list ends in TURN OFF, a Pokemon
@@ -280,3 +317,114 @@ func test_a_registration_lasts_while_the_item_is_owned() -> void:
 	_world.state.apply_changes({}, {}, {"items": {KEY_ITEM: 0}})
 	assert_eq(Gen2WorldBagHost.registered_item(_world), 0)
 	assert_eq(_world.state.registered_item(), 0, "the check clears it where it looks")
+
+
+## `.FindCategoriesWithOwnedDecos`: only a category with an owned decoration is
+## on the top menu, and EXIT is its last row whether or not anything is.
+func test_the_decoration_menu_offers_only_categories_with_something_in_them() -> void:
+	var categories: Array = Gen2WorldDecoration.categories(_data, _world.state)
+	assert_eq(categories.size(), 1, JSON.stringify(categories))
+	assert_eq(String(categories[0]["name"]), Gen2WorldDecoration.CATEGORY_EXIT)
+
+	Gen2WorldDecoration.set_owned(_data, _world.state, Fixture.DECO_FEATHERY_BED)
+	categories = Gen2WorldDecoration.categories(_data, _world.state)
+	assert_eq(categories.size(), 2, JSON.stringify(categories))
+	assert_eq(StringName(categories[0]["slot"]), Gen2WorldDecoration.SLOT_BED)
+
+
+## `FindOwnedDecosInCategory` appends the category's PUT IT AWAY and then
+## CANCEL, so an owned row is never the whole list.
+func test_a_category_list_ends_in_put_it_away_and_cancel() -> void:
+	Gen2WorldDecoration.set_owned(_data, _world.state, Fixture.DECO_FEATHERY_BED)
+	var rows: Array = Gen2WorldDecoration.category_rows(
+		_data, _world.state, Gen2WorldDecoration.SLOT_BED
+	)
+	assert_eq(rows.size(), 3, JSON.stringify(rows))
+	assert_eq(int(rows[0]["deco"]), Fixture.DECO_FEATHERY_BED)
+	assert_true(Gen2WorldDecoration.is_put_away(_data, int(rows[1]["deco"])))
+	assert_eq(int(rows[2]["deco"]), 0)
+
+
+## `DecoAction_TrySetItUp` and `DecoAction_TryPutItAway` over one slot, and the
+## `.alreadythere` refusal that leaves it where it is.
+func test_setting_a_decoration_up_and_putting_it_away_move_one_slot() -> void:
+	Gen2WorldDecoration.set_owned(_data, _world.state, Fixture.DECO_FEATHERY_BED)
+	var refused: Dictionary = Gen2WorldDecoration.apply(
+		_world, _save, Fixture.DECO_SURF_PIKACHU_DOLL,
+		Gen2WorldDecoration.SLOT_LEFT_ORNAMENT, false
+	)
+	assert_eq(
+		StringName(refused.get("reason", &"")), &"decoration_not_owned",
+		"an unowned row cannot be set up"
+	)
+
+	var set_up: Dictionary = Gen2WorldDecoration.apply(
+		_world, _save, Fixture.DECO_FEATHERY_BED, &"", false
+	)
+	assert_true(bool(set_up["ok"]), str(set_up))
+	assert_true(bool(set_up["changed"]))
+	assert_eq(
+		_world.state.maptile_decoration(Gen2WorldDecoration.SLOT_BED),
+		Fixture.DECO_FEATHERY_BED
+	)
+
+	var again: Dictionary = Gen2WorldDecoration.apply(
+		_world, _save, Fixture.DECO_FEATHERY_BED, &"", false
+	)
+	assert_false(bool(again["changed"]))
+	assert_eq(String(again["text"]), Gen2WorldDecoration.TEXT_ALREADY_SET_UP)
+
+	var put_away: Dictionary = Gen2WorldDecoration.apply(
+		_world, _save, _put_away_row(Gen2WorldDecoration.SLOT_BED), &"", false
+	)
+	assert_true(bool(put_away["changed"]))
+	assert_eq(_world.state.maptile_decoration(Gen2WorldDecoration.SLOT_BED), 0)
+	assert_eq(
+		String(
+			Gen2WorldDecoration.apply(
+				_world, _save, _put_away_row(Gen2WorldDecoration.SLOT_BED), &"", false
+			)["text"]
+		),
+		Gen2WorldDecoration.TEXT_NOTHING_TO_PUT_AWAY
+	)
+
+
+## `DecoAction_setupornament` asks which side, and
+## `DecoAction_SetItUp_Ornament.getwhichside` takes the same doll off the other
+## one rather than standing two of it.
+func test_an_ornament_takes_a_side_and_leaves_the_other() -> void:
+	Gen2WorldDecoration.set_owned(_data, _world.state, Fixture.DECO_PIKACHU_DOLL)
+	assert_true(Gen2WorldDecoration.asks_side(_data, Fixture.DECO_PIKACHU_DOLL))
+	assert_eq(
+		StringName(
+			Gen2WorldDecoration.apply(
+				_world, _save, Fixture.DECO_PIKACHU_DOLL, &"", false
+			)["reason"]
+		),
+		&"decoration_side_required"
+	)
+
+	assert_true(bool(Gen2WorldDecoration.apply(
+		_world, _save, Fixture.DECO_PIKACHU_DOLL,
+		Gen2WorldDecoration.SLOT_LEFT_ORNAMENT, false
+	)["ok"]))
+	assert_true(bool(Gen2WorldDecoration.apply(
+		_world, _save, Fixture.DECO_PIKACHU_DOLL,
+		Gen2WorldDecoration.SLOT_RIGHT_ORNAMENT, false
+	)["ok"]))
+	assert_eq(
+		_world.state.maptile_decoration(Gen2WorldDecoration.SLOT_LEFT_ORNAMENT), 0,
+		"the doll left the side it was on"
+	)
+	assert_eq(
+		_world.state.maptile_decoration(Gen2WorldDecoration.SLOT_RIGHT_ORNAMENT),
+		Fixture.DECO_PIKACHU_DOLL
+	)
+
+
+func _put_away_row(slot: StringName) -> int:
+	for deco: int in _data.decoration_count():
+		if Gen2WorldDecoration.slot_of(_data, deco) == slot \
+			and Gen2WorldDecoration.is_put_away(_data, deco):
+			return deco
+	return -1

@@ -338,6 +338,10 @@ static func verify_layout(rom: RomFile) -> Dictionary:
 	if not pokecenter_pc["ok"]:
 		return pokecenter_pc
 
+	var decorations: Dictionary = verify_decorations(rom, layout)
+	if not decorations["ok"]:
+		return decorations
+
 	var unown_words: Dictionary = verify_unown_words(rom, layout)
 	if not unown_words["ok"]:
 		return unown_words
@@ -1144,6 +1148,34 @@ static func verify_pokecenter_pc(rom: RomFile, layout: Dictionary) -> Dictionary
 				"message": "The Pokemon Center PC's %s text did not decode." % name,
 			}
 	return {"ok": true, "message": "The Pokemon Center PC verified."}
+
+
+## `DecorationAttributes` and the `DecorationNames` run behind it, identified by
+## structure: every row's type has to be one of the six, the table's own last
+## row is the silver trophy, and all twenty-six names have to decode.
+static func verify_decorations(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var rows: Array = read_decoration_attributes(rom, layout)
+	if rows.size() != RomLayout.DECORATION_COUNT:
+		return {"ok": false, "message": "The decoration attributes are outside the cartridge."}
+	for row: Dictionary in rows:
+		var type: int = int(row.get("type", 0))
+		if type < 1 or type > Gen2WorldDecoration.TYPE_BIG_DOLL:
+			return {
+				"ok": false,
+				"message": "A decoration row carries type %d." % type,
+			}
+	var names: PackedStringArray = read_decoration_names(rom, layout)
+	if names.size() != RomLayout.DECORATION_NAME_COUNT:
+		return {"ok": false, "message": "The decoration names are outside the cartridge."}
+	for name: String in names:
+		if name.strip_edges().is_empty():
+			return {"ok": false, "message": "A decoration name did not decode."}
+	if names[0] != "CANCEL" or names[1] != "PUT IT AWAY":
+		return {
+			"ok": false,
+			"message": "The decoration names open \"%s\", not CANCEL." % names[0],
+		}
+	return {"ok": true, "message": "Decorations verified."}
 
 
 ## `engine/items/mart.asm`'s own `text_far` stubs, identified by content: all
@@ -4288,6 +4320,7 @@ func import_rom(
 		"gs_intro": _import_gs_intro(rom, layout),
 		"oak_ratings": _import_oak_ratings(rom, layout),
 		"pokecenter_pc": _import_pokecenter_pc(rom, layout),
+		"decorations": _import_decorations(rom, layout),
 		"unown_puzzle": _import_unown_puzzle(rom, layout),
 		"diploma": _import_diploma(rom, layout),
 		"printer_strings": _import_printer_strings(rom, layout),
@@ -5535,6 +5568,50 @@ func _import_pokecenter_pc(rom: RomFile, layout: Dictionary) -> Dictionary:
 		)
 	out["texts"] = texts
 	return out
+
+
+## `DecorationAttributes`, one row per `DECO_*` id. The event flag is the row's
+## own little-endian word; the sprite byte is a block for the four map-tile
+## categories and a `SPRITE_*` for the three object ones.
+static func read_decoration_attributes(rom: RomFile, layout: Dictionary) -> Array:
+	var at: int = int(layout.get("decorations", -1))
+	var size: int = RomLayout.DECORATION_ATTRIBUTE_SIZE
+	if at < 0 or not rom.in_bounds(at, RomLayout.DECORATION_COUNT * size):
+		return []
+	var out: Array = []
+	for index: int in RomLayout.DECORATION_COUNT:
+		var row: int = at + index * size
+		out.append({
+			"type": rom.u8(row),
+			"name": rom.u8(row + 1),
+			"action": rom.u8(row + 2),
+			"flag": rom.u8(row + 3) | (rom.u8(row + 4) << 8),
+			"sprite": rom.u8(row + 5),
+		})
+	return out
+
+
+## `DecorationNames`, the parts `GetDecoName` joins into a decoration's own name.
+static func read_decoration_names(rom: RomFile, layout: Dictionary) -> PackedStringArray:
+	var at: int = int(layout.get("decorations", -1))
+	if at < 0:
+		return PackedStringArray()
+	at += RomLayout.DECORATION_NAMES_AT
+	if not rom.in_bounds(
+		at, RomLayout.DECORATION_NAME_COUNT * RomLayout.DECORATION_NAME_MAX_BYTES
+	):
+		return PackedStringArray()
+	return Gen2Text.decode_sequence(
+		rom.bytes(), at, RomLayout.DECORATION_NAME_COUNT,
+		RomLayout.DECORATION_NAME_MAX_BYTES
+	)
+
+
+func _import_decorations(rom: RomFile, layout: Dictionary) -> Dictionary:
+	return {
+		"attributes": read_decoration_attributes(rom, layout),
+		"names": Array(read_decoration_names(rom, layout)),
+	}
 
 
 ## `Pokegear_LoadGFX`'s three LZ runs, each as one strip of tiles.

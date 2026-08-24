@@ -3,7 +3,7 @@ extends RefCounted
 
 ## Scene-free mart transactions over imported lists and mutable world state.
 ## The UI owns selection; this class owns validation, money, inventory and save
-## writeback for one purchase.
+## writeback for one purchase off `BuyMenu` or one sale off `SellMenu`.
 
 const MONEY_ACCOUNT: int = 0
 const MAX_ITEM_STACK: int = 99
@@ -171,6 +171,76 @@ static func purchase(
 		"total": total,
 		"balance": balance - total,
 		"owned": next_quantity,
+	}
+
+
+## `SellMenu.TryToSellItem`: `CheckItemMenu`'s nibble decides first, and the
+## three `.cant_buy` rows are the ones no cartridge item carries; what actually
+## refuses a key item is `_CheckTossableItem` behind them.
+static func can_sell(data: GameData, item: int) -> bool:
+	if data == null:
+		return false
+	var definition: Dictionary = data.item(item)
+	if definition.is_empty():
+		return false
+	var menu: int = int(definition.get("field_menu", 0))
+	if menu >= 1 and menu < Gen2WorldPack.ITEMMENU_CURRENT:
+		return false
+	return Gen2WorldPack.can_toss(data, item)
+
+
+## `DisplaySellingPrice`: the whole stack is multiplied and then halved, so the
+## shift is on the total rather than on each unit's price.
+static func sell_price(data: GameData, item: int, quantity: int = 1) -> int:
+	if data == null or quantity <= 0:
+		return 0
+	return (int(data.item(item).get("price", 0)) * quantity) >> 1
+
+
+## `SellMenu.okay_to_sell`: the stack leaves the pack through `TossItem` and
+## `GiveMoney` puts the halved price in, clamped to `MAX_MONEY` the way every
+## other gift is.
+static func sell(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	item: int,
+	quantity: int = 1,
+	persist: bool = true
+) -> Dictionary:
+	if world == null or world.data == null or world.state == null:
+		return _failure(&"missing_world", {})
+	var definition: Dictionary = world.data.item(item)
+	if definition.is_empty():
+		return _failure(&"unknown_item", {"item": item})
+	if not can_sell(world.data, item):
+		return _failure(&"item_cannot_be_sold", {"item": item})
+	var owned: int = world.state.item_quantity(item)
+	if quantity < 1 or quantity > owned:
+		return _failure(&"invalid_sell_quantity", {
+			"item": item, "quantity": quantity, "owned": owned,
+		})
+	var balance: int = world.state.money(MONEY_ACCOUNT)
+	var total: int = sell_price(world.data, item, quantity)
+	var before: Gen2WorldSnapshot = world.snapshot()
+	var applied: Dictionary = world.state.apply_changes({}, {}, {
+		"items": {item: owned - quantity},
+		"money": {
+			MONEY_ACCOUNT: mini(balance + total, Gen2WorldInventory.MAX_MONEY),
+		},
+	})
+	if not bool(applied.get("ok", false)):
+		return _failure(&"sale_state_failed", applied)
+	var committed: Dictionary = Gen2WorldTransaction.run(world, save, before, persist)
+	if not bool(committed.get("ok", false)):
+		return committed
+	return {
+		"ok": true,
+		"item": item,
+		"name": String(definition.get("name", "UNKNOWN")),
+		"quantity": quantity,
+		"total": total,
+		"balance": world.state.money(MONEY_ACCOUNT),
+		"owned": owned - quantity,
 	}
 
 

@@ -385,6 +385,111 @@ func test_sacred_ash_is_refused_and_kept_while_nothing_has_fainted() -> void:
 	assert_eq(_world.state.item_quantity(0x9C), 1)
 
 
+## `RareCandyEffect`: one level, `CalcExpAtLevel` back onto the experience, and
+## the max-HP delta added to the current HP rather than a heal.
+func test_a_rare_candy_adds_one_level_and_the_maximum_it_brought_with_it() -> void:
+	_world.state.apply_changes({}, {}, {"items": {Gen2WorldPartyHost.ITEM_RARE_CANDY: 1}})
+	var mon: Gen2SaveMon = _save.party[0]
+	mon.hp = 1
+	var level: int = mon.level
+	var before_max: int = Gen2SaveBattleAdapter.to_battle_mon(_data, mon).max_hp()
+
+	var result: Dictionary = Gen2WorldPartyHost.use_item(
+		_world, _save, Gen2WorldPartyHost.ITEM_RARE_CANDY, 0, false
+	)
+
+	assert_true(bool(result["ok"]), JSON.stringify(result))
+	assert_eq(_save.party[0].level, level + 1)
+	assert_eq(int(result["level"]), level + 1)
+	var after_max: int = Gen2SaveBattleAdapter.to_battle_mon(_data, _save.party[0]).max_hp()
+	assert_eq(_save.party[0].hp, 1 + (after_max - before_max))
+	assert_eq(
+		_save.party[0].exp,
+		Gen2Experience.total_exp_at(
+			int(_data.species(_save.party[0].species).get(
+				"growth_rate", Gen2Experience.GROWTH_MEDIUM_FAST
+			)),
+			level + 1
+		)
+	)
+	assert_eq(_world.state.item_quantity(Gen2WorldPartyHost.ITEM_RARE_CANDY), 0)
+
+
+## `cp MAX_LEVEL / jp nc, NoEffectMessage`: a refusal, so the candy is kept.
+func test_a_rare_candy_is_refused_at_the_level_cap() -> void:
+	_world.state.apply_changes({}, {}, {"items": {Gen2WorldPartyHost.ITEM_RARE_CANDY: 1}})
+	_save.party[0].level = Gen2Experience.MAX_LEVEL
+	_save.party[0].exp = Gen2Experience.total_exp_at(
+		int(_data.species(_save.party[0].species).get(
+			"growth_rate", Gen2Experience.GROWTH_MEDIUM_FAST
+		)),
+		Gen2Experience.MAX_LEVEL
+	)
+	var result: Dictionary = Gen2WorldPartyHost.use_item(
+		_world, _save, Gen2WorldPartyHost.ITEM_RARE_CANDY, 0, false
+	)
+	assert_false(bool(result["ok"]))
+	assert_eq(StringName(result["reason"]), &"item_has_no_effect")
+	assert_eq(_world.state.item_quantity(Gen2WorldPartyHost.ITEM_RARE_CANDY), 1)
+
+
+## `RestorePP`: ten for an ETHER and the whole ceiling for a MAX, the ETHERs on
+## the slot `MoveSelectionScreen` chose and the ELIXERs on all four. A move
+## already full is `.dont_restore`, and nothing restored at all is a refusal.
+func test_the_pp_restorers_fill_one_move_or_all_four() -> void:
+	_world.state.apply_changes({}, {}, {"items": {
+		Gen2WorldPartyHost.ITEM_ETHER: 1, Gen2WorldPartyHost.ITEM_MAX_ETHER: 1,
+		Gen2WorldPartyHost.ITEM_ELIXER: 1,
+	}})
+	var mon: Gen2SaveMon = _save.party[0]
+	## The fixture's species carry no learnset, so the development save's party
+	## knows nothing: the moves are written here rather than assumed.
+	mon.moves = [1, 0, 0, 0]
+	var maximum: int = int(_data.move(1).get("pp", 0))
+	assert_gt(maximum, 0, "the fixture's first move has PP")
+
+	## An ETHER with no slot chosen is the caller's cue to open the move list.
+	mon.pp = [0, 0, 0, 0]
+	var asked: Dictionary = Gen2WorldPartyHost.use_item(
+		_world, _save, Gen2WorldPartyHost.ITEM_ETHER, 0, false
+	)
+	assert_eq(StringName(asked["reason"]), &"move_slot_required")
+	assert_eq(_world.state.item_quantity(Gen2WorldPartyHost.ITEM_ETHER), 1)
+
+	var ether: Dictionary = Gen2WorldPartyHost.use_item(
+		_world, _save, Gen2WorldPartyHost.ITEM_ETHER, 0, false, 0
+	)
+	assert_true(bool(ether["ok"]), JSON.stringify(ether))
+	assert_eq(_save.party[0].pp[0], mini(maximum, Gen2WorldPartyHost.PP_RESTORE_STEP))
+
+	var maxed: Dictionary = Gen2WorldPartyHost.use_item(
+		_world, _save, Gen2WorldPartyHost.ITEM_MAX_ETHER, 0, false, 0
+	)
+	assert_true(bool(maxed["ok"]), JSON.stringify(maxed))
+	assert_eq(_save.party[0].pp[0], maximum)
+
+	## Every move already full is `WontHaveAnyEffectMessage`, and the ELIXER
+	## stays in the pack.
+	var refused: Dictionary = Gen2WorldPartyHost.use_item(
+		_world, _save, Gen2WorldPartyHost.ITEM_ELIXER, 0, false
+	)
+	assert_false(bool(refused["ok"]))
+	assert_eq(StringName(refused["reason"]), &"item_has_no_effect")
+	assert_eq(_world.state.item_quantity(Gen2WorldPartyHost.ITEM_ELIXER), 1)
+
+
+## PP UP raises `PP_UP_MASK`, which [Gen2SaveMon] does not carry: the pack says
+## so rather than pretending the item did nothing.
+func test_pp_up_names_the_save_field_it_needs() -> void:
+	_world.state.apply_changes({}, {}, {"items": {Gen2WorldPartyHost.ITEM_PP_UP: 1}})
+	var result: Dictionary = Gen2WorldPartyHost.use_item(
+		_world, _save, Gen2WorldPartyHost.ITEM_PP_UP, 0, false
+	)
+	assert_false(bool(result["ok"]))
+	assert_eq(StringName(result["reason"]), &"pp_up_unsupported")
+	assert_eq(_world.state.item_quantity(Gen2WorldPartyHost.ITEM_PP_UP), 1)
+
+
 ## `VitaminEffect`: ten added to the high byte of one stat experience word,
 ## which is 2,560 flat, and HAPPINESS_USEDITEM. `UpdateStatsAfterItem` writes
 ## MON_MAXHP and the stats, never MON_HP, so the maximum rises and the member is

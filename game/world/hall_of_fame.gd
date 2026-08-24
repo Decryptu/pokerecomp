@@ -22,6 +22,13 @@ const MAX_MONS: int = 6
 const PAGE_MON: StringName = &"mon"
 const PAGE_PLAYER: StringName = &"player"
 
+## `sHallOfFame`'s own thirty records and `HOF_MASTER_COUNT`, which is where
+## `wHallOfFameCount` stops rather than wrapping.
+const MAX_RECORDS: int = 30
+const MASTER_COUNT: int = 200
+## `hof_mon`'s nickname field, which is `MON_NAME_LENGTH - 1`.
+const MAX_NICKNAME: int = 10
+
 
 ## The pages, in AnimateHallOfFame's order: every non-egg party member, then the
 ## player. An empty or egg-only party still answers the player's page, matching
@@ -95,3 +102,104 @@ static func _mon_page(data: GameData, mon: Gen2SaveMon) -> Dictionary:
 		"unown_form": Gen2Stats.unown_letter(mon.dvs) \
 			if mon.species == RomLayout.UNOWN_SPECIES else 0,
 	}
+
+
+## `GetHallOfFameParty` and `AddHallOfFameEntry`: the party as a stored record,
+## eggs skipped, in front of whatever was already kept, with the thirtieth
+## falling off the end. The win count is `wHallOfFameCount` after its own
+## increment, which stops at `HOF_MASTER_COUNT` rather than wrapping.
+static func inducted(records: Array, save: Gen2SaveData) -> Array:
+	if save == null:
+		return records.duplicate(true)
+	var mons: Array = []
+	for mon: Gen2SaveMon in save.party:
+		if mons.size() >= MAX_MONS:
+			break
+		if mon == null or mon.is_egg:
+			continue
+		mons.append({
+			"species": mon.species,
+			"ot_id": mon.ot_id,
+			"dvs": mon.dvs,
+			"level": mon.level,
+			"nickname": mon.nickname.substr(0, MAX_NICKNAME),
+		})
+	var out: Array = records.duplicate(true)
+	out.push_front({"win_count": mini(win_count(records) + 1, MASTER_COUNT), "mons": mons})
+	out.resize(mini(out.size(), MAX_RECORDS))
+	return out
+
+
+## `wHallOfFameCount`, which the newest record carries: every induction stores
+## the count it was made at.
+static func win_count(records: Array) -> int:
+	if records.is_empty() or not records[0] is Dictionary:
+		return 0
+	return int((records[0] as Dictionary).get("win_count", 0))
+
+
+## One stored record as the panels `_HallOfFamePC.DisplayTeam` walks. Unlike an
+## induction there is no player panel behind them: the viewer's `.b_button` is
+## the only way out.
+static func record_pages(data: GameData, record: Dictionary) -> Array:
+	var out: Array = []
+	if data == null:
+		return out
+	var raw_mons: Variant = record.get("mons", [])
+	if not raw_mons is Array:
+		return out
+	for raw: Variant in raw_mons as Array:
+		if not raw is Dictionary:
+			continue
+		var mon: Dictionary = raw
+		var species: int = int(mon.get("species", 0))
+		var species_name: String = String(data.species(species).get("name", ""))
+		var nickname: String = String(mon.get("nickname", ""))
+		var dvs: int = int(mon.get("dvs", 0))
+		out.append({
+			"kind": PAGE_MON,
+			"species": species,
+			"dex_number": species,
+			"species_name": species_name,
+			"nickname": nickname if not nickname.is_empty() else species_name,
+			"level": int(mon.get("level", 0)),
+			"ot_id": int(mon.get("ot_id", 0)),
+			"gender": Gen2BattleMon.gender_for(data, species, dvs),
+			"unown_form": Gen2Stats.unown_letter(dvs) \
+				if species == RomLayout.UNOWN_SPECIES else 0,
+			## `.print_num_hof`'s "-Time Famer", which is the one line the viewer
+			## draws that an induction does not.
+			"win_count": int(record.get("win_count", 0)),
+		})
+	return out
+
+
+## The stored shape, checked rather than trusted: JSON numbers come back as
+## floats and a hand-edited save can carry anything.
+static func parse_records(raw: Variant) -> Array:
+	var out: Array = []
+	if not raw is Array:
+		return out
+	for raw_record: Variant in raw as Array:
+		if not raw_record is Dictionary or out.size() >= MAX_RECORDS:
+			continue
+		var record: Dictionary = raw_record
+		var mons: Array = []
+		var raw_mons: Variant = record.get("mons", [])
+		if raw_mons is Array:
+			for raw_mon: Variant in raw_mons as Array:
+				if not raw_mon is Dictionary or mons.size() >= MAX_MONS:
+					continue
+				var mon: Dictionary = raw_mon
+				mons.append({
+					"species": int(mon.get("species", 0)) & 0xFF,
+					"ot_id": int(mon.get("ot_id", 0)) & 0xFFFF,
+					"dvs": int(mon.get("dvs", 0)) & 0xFFFF,
+					"level": clampi(int(mon.get("level", 0)), 0, Gen2Experience.MAX_LEVEL),
+					"nickname": String(mon.get("nickname", "")).substr(0, MAX_NICKNAME),
+				})
+		out.append({
+			"win_count": clampi(int(record.get("win_count", 0)), 0, MASTER_COUNT),
+			"mons": mons,
+		})
+	return out

@@ -11,12 +11,12 @@ extends RefCounted
 ## boundary is [Gen2WorldTransaction], the same one the mart, Kurt and the bag
 ## go through.
 ##
-## Two of the source's rows are absent from the lists this returns rather than
-## offered and refused, because neither has anything behind it: HALL OF FAME is
-## `_HallOfFamePC`'s viewer over saved induction records and MAIL BOX is
-## `_PlayerMailBoxMenu`'s over `wMailbox`, and the save model keeps neither.
-## DECORATION is the third: `_PlayerDecorationMenu` browses the owned-decoration
-## flags, and [Gen2WorldState] holds only the four decorations already placed.
+## One of the source's rows is absent from the lists this returns rather than
+## offered and refused, because it has nothing behind it: MAIL BOX is
+## `_PlayerMailBoxMenu`'s over `wMailbox`, which the save model does not keep.
+## DECORATION is [Gen2WorldDecoration]'s and HALL OF FAME is
+## [Gen2HallOfFame]'s viewer over [member Gen2SaveData.hall_of_fame]; both are
+## offered.
 
 ## `PokemonCenterPC.Jumptable` indexes.
 const PCPCITEM_PLAYERS_PC: int = 0
@@ -53,10 +53,8 @@ const PLAYER_MARKER: String = "<PLAYER>"
 
 ## The rows above with nothing behind them, dropped from every list rather than
 ## offered and refused. See the class comment for what each needs first.
-const UNBUILT_TOP_MENU_ROWS: Array[int] = [PCPCITEM_HALL_OF_FAME]
-const UNBUILT_PLAYERS_PC_ROWS: Array[int] = [
-	PLAYERSPCITEM_MAIL_BOX, PLAYERSPCITEM_DECORATION,
-]
+const UNBUILT_TOP_MENU_ROWS: Array[int] = []
+const UNBUILT_PLAYERS_PC_ROWS: Array[int] = [PLAYERSPCITEM_MAIL_BOX]
 
 
 ## `_BillsPC.MenuData`'s five rows, in its `.Jumptable`'s own order. Inline menu
@@ -76,11 +74,10 @@ const BILLS_PC_ROWS: Array[String] = [
 const BILLS_PC_WHAT: String = "What?"
 const BILLS_PC_NEEDS_POKEMON: String = "You gotta have\n#MON to call!"
 
-## MOVE PKMN W/O MAIL is `_MovePKMNWithoutMail`, a screen of its own with its own
-## joypad (`MoveMonWithoutMail_DPad`) and its own save-before-you-start step; the
-## row is dropped rather than offered and refused, the way the three rows above
-## are.
-const UNBUILT_BILLS_PC_ROWS: Array[int] = [BILLSPCITEM_MOVE_WITHOUT_MAIL]
+## Every row of the machine's own menu is built: MOVE PKMN W/O MAIL is
+## [Gen2BoxScreen]'s `MODE_MOVE`, which is `_MovePKMNWithoutMail`'s own two
+## joypad passes over the same listing.
+const UNBUILT_BILLS_PC_ROWS: Array[int] = []
 
 
 ## The top menu behind BILL'S PC, as `{row, name}` in the source's own order.

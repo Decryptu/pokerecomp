@@ -25,6 +25,14 @@ const MON_TOP_BOX: Rect2i = Rect2i(0, 0, 20, 5)
 const MON_BOTTOM_BOX: Rect2i = Rect2i(0, 12, 20, 6)
 const CAPTION: Vector2i = Vector2i(1, 2)
 const CAPTION_TEXT: String = "New Hall of Famer!"
+## `_HallOfFamePC.DisplayMonAndStrings` draws this caption instead: `.TimeFamer`
+## at `hlcoord 1, 2` and then `PrintNum` `lb bc, 1, 3` over `hlcoord 2, 2`, so
+## the count is right-aligned in three columns and the words start at column 5.
+## `.HOFMaster` is its unreachable sibling: `cp HOF_MASTER_COUNT + 1` needs 201
+## and `wHallOfFameCount` stops at 200 (`docs/bugs_and_glitches.md`).
+const FAMER_TEXT: String = "-Time Famer"
+const FAMER_COUNT: Vector2i = Vector2i(2, 2)
+const FAMER_DIGITS: int = 3
 
 ## `hlcoord 6, 5`, and the pic is seven tiles square.
 const PIC_AT: Vector2i = Vector2i(6, 5)
@@ -117,7 +125,12 @@ func _draw_mon(page: Dictionary, indices: PackedByteArray) -> void:
 	var width: int = COLUMNS * TILE
 	_box(indices, width, MON_TOP_BOX)
 	_box(indices, width, MON_BOTTOM_BOX)
-	_text(indices, width, CAPTION_TEXT, CAPTION)
+	if page.has("win_count"):
+		_text(indices, width, "%*d%s" % [
+			FAMER_DIGITS, int(page["win_count"]), FAMER_TEXT,
+		], FAMER_COUNT)
+	else:
+		_text(indices, width, CAPTION_TEXT, CAPTION)
 
 	_code(indices, width, CODE_NUMERO, DEX_LABEL)
 	_code(indices, width, CODE_DOT, DEX_LABEL + Vector2i(1, 0))

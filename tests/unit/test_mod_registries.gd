@@ -370,8 +370,21 @@ func test_the_shipped_example_mod_registers_everything_it_documents() -> void:
 	# 3: a named axis, whose two halves both registered rather than colliding
 	# with the cartridge's eight.
 	assert_eq(host.actions().size(), 2)
-	# 2: a visible-encounter population.
+	# 2: a visible-encounter population, and 15: its own glow, which is a field
+	# on the entry rather than anything the mod draws.
 	assert_eq(host.visible_encounter_ids().size(), 1)
+	var population: Object = host.visible_encounter_providers()[0]
+	population.call("set_context", {
+		"generation": 1, "run_seed": 1,
+		"eligible": {"grass": PackedVector2Array([Vector2(4, 4)])},
+		"tables": {"grass": {"slots": [
+			{"species": 25, "min_level": 3, "max_level": 3},
+		]}},
+	})
+	population.call("advance_frame")
+	var wanderers: Array = population.call("encounters")
+	assert_eq(wanderers.size(), 1)
+	assert_gt(float((wanderers[0] as Dictionary)["glow"]["amount"]), 0.0)
 	# 13: the five read-only policies that change how the game is played.
 	assert_eq(host.field_move_source_ids().size(), 1)
 	assert_eq(host.repel_renewal_ids().size(), 1)

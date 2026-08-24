@@ -16,6 +16,8 @@ const MAX_PLAYER_NAME: int = 10
 ## [member player_name], so a slot always has something to show.
 const MAX_LABEL: int = 24
 const BOX_COUNT: int = 14
+## `BOX_NAME_LENGTH - 1`, the same cap the naming screen writes one under.
+const MAX_BOX_NAME: int = 8
 const BOX_CAPACITY: int = Gen2SaveBox.CAPACITY
 
 ## `constants/wram_constants.asm`: `PLAYERGENDER_FEMALE_F` is bit 0 of
@@ -66,6 +68,18 @@ var boxes_shape_valid: bool = true
 ## opens on. Like the `run` block it defaults rather than versioning: a slot
 ## written before it existed is one whose current box is the first.
 var current_box: int = 0
+## `sHallOfFame`, newest first: `AddHallOfFameEntry` shifts every record down and
+## writes the new team at the front, and the thirtieth falls off. A record is
+## `{ win_count, mons }`, and a mon is what `hof_mon` keeps: species, OT id, DVs,
+## level and nickname. Like `current_box` and the `run` block this defaults
+## rather than versioning; an empty list is the truth about a slot written
+## before it existed.
+var hall_of_fame: Array = []
+## `sBoxNames`, which is its own array in SRAM rather than part of a box: one
+## eight-character name per box, `BillsPC_ChangeBoxSubmenu`'s NAME row writes
+## one and `SetDefaultBoxNames` fills them all at a new game. Empty is that
+## default, which [method box_name] spells rather than storing.
+var box_names: Array = []
 
 
 func _init() -> void:
@@ -94,6 +108,8 @@ func to_dict() -> Dictionary:
 		"party": saved_party,
 		"boxes": saved_boxes,
 		"current_box": current_box,
+		"hall_of_fame": hall_of_fame.duplicate(true),
+		"box_names": box_names.duplicate(),
 		"world": world.to_dict() if world != null else {},
 		"mods": mods.duplicate(true),
 		"run": {
@@ -125,6 +141,13 @@ static func from_dict(raw: Variant) -> Gen2SaveData:
 	out.game_time = Gen2GameTime.parse(source.get("game_time", {}))
 	out.label = String(source.get("label", ""))
 	out.current_box = clampi(int(source.get("current_box", 0)), 0, BOX_COUNT - 1)
+	out.hall_of_fame = Gen2HallOfFame.parse_records(source.get("hall_of_fame", []))
+	var raw_box_names: Variant = source.get("box_names", [])
+	if raw_box_names is Array:
+		for index: int in mini((raw_box_names as Array).size(), BOX_COUNT):
+			out.box_names.append(
+				String((raw_box_names as Array)[index]).substr(0, MAX_BOX_NAME)
+			)
 	var raw_party: Variant = source.get("party", [])
 	if raw_party is Array:
 		for raw_mon: Variant in raw_party as Array:
@@ -327,3 +350,23 @@ static func _valid_mod_id(id: String) -> bool:
 	var regex := RegEx.new()
 	regex.compile("^[a-z0-9][a-z0-9_-]*$")
 	return regex.search(id) != null
+
+
+## `GetBoxName`, with `SetDefaultBoxNames`' own spelling behind it: the default
+## is "BOX" and the number with no space between them.
+func box_name(index: int) -> String:
+	if index < 0 or index >= BOX_COUNT:
+		return ""
+	var stored: String = String(box_names[index]) if index < box_names.size() else ""
+	return stored if not stored.is_empty() else "BOX%d" % (index + 1)
+
+
+## `BillsPC_ChangeBoxSubmenu.Name`, which writes `wBoxNameBuffer` back over the
+## box's own name. An empty name is the default again rather than a blank label.
+func set_box_name(index: int, name: String) -> bool:
+	if index < 0 or index >= BOX_COUNT:
+		return false
+	while box_names.size() < BOX_COUNT:
+		box_names.append("")
+	box_names[index] = name.substr(0, MAX_BOX_NAME)
+	return true

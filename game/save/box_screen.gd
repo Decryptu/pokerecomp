@@ -48,9 +48,23 @@ const PARTY_NAME: String = "PARTY PKMN"
 ## `wBillsPC_LoadedBox`: zero is the party and the boxes follow it.
 const LOADED_PARTY: int = 0
 
-## Which of `_BillsPC.Jumptable`'s two list rows opened this screen.
+## Which of `_BillsPC.Jumptable`'s three list rows opened this screen.
 const MODE_DEPOSIT: int = 0
 const MODE_WITHDRAW: int = 1
+## `_MovePKMNWithoutMail`, which is neither list: left and right load any of the
+## party and the fourteen boxes, and A twice moves a Pokemon from one place in
+## one of them to another place in another.
+const MODE_MOVE: int = 2
+## Its two `.Joypad` passes: choosing the Pokemon and choosing where it goes.
+const MOVE_PHASE_CHOOSE: int = 0
+const MOVE_PHASE_INSERT: int = 1
+## `PCString_MoveToWhere` and `PCString_TheresNoRoom`.
+const PROMPT_MOVE_WHERE: String = "Move to where?"
+const PROMPT_NO_ROOM: String = "There's no room."
+## `.MenuData`'s own three rows, which drop the RELEASE the other two lists have.
+const SUBMENU_ROWS_MOVE: Array[String] = ["MOVE", "STATS", "CANCEL"]
+const SUBMENU_MOVE_STATS: int = 1
+const SUBMENU_MOVE_CANCEL: int = 2
 
 ## `BillsPCDepositMenuHeader` and `BillsPC_Withdraw.MenuHeader`, the same
 ## `menu_coords 9, 4, SCREEN_WIDTH - 1, 13` over the listing, and the yes/no
@@ -95,6 +109,12 @@ var _prompt: String = PROMPT_CHOOSE
 ## `_DepositPKMN` or `_WithdrawPKMN`, and the submenu, the release yes/no and
 ## the stats screen either of them can put over the listing.
 var _mode: int = MODE_DEPOSIT
+## `wJumptableIndex`'s two joypad passes and the backup `.Move` takes of where
+## the Pokemon came from, which `.b_button_2` puts back.
+var _move_phase: int = MOVE_PHASE_CHOOSE
+var _move_from_loaded: int = LOADED_PARTY
+var _move_from_index: int = -1
+var _move_backup: Array = []
 var _submenu_open: bool = false
 var _submenu_cursor: int = 0
 var _release_open: bool = false
@@ -137,11 +157,15 @@ func set_context(
 	_embedded = embedded
 	_data = data
 	_save = save
-	_mode = MODE_WITHDRAW if mode == MODE_WITHDRAW else MODE_DEPOSIT
+	_mode = mode if mode in [MODE_DEPOSIT, MODE_WITHDRAW, MODE_MOVE] else MODE_DEPOSIT
 	_box_index = clampi(box_index, 0, Gen2SaveData.BOX_COUNT - 1)
 	## `.Init` writes `wBillsPC_LoadedBox` itself, so which list is up is the
-	## mode's rather than anything the last screen left behind.
+	## mode's rather than anything the last screen left behind. MOVE PKMN W/O
+	## MAIL opens on `wCurBox`, which is the box the machine is already on.
 	_loaded = LOADED_PARTY if _mode == MODE_DEPOSIT else _box_index + 1
+	_move_phase = MOVE_PHASE_CHOOSE
+	_move_from_index = -1
+	_move_backup = []
 	_cursor = 0
 	_scroll = 0
 	_prompt = PROMPT_CHOOSE
@@ -309,6 +333,13 @@ func handle_button(button: int) -> bool:
 			_press_up()
 		Gen2Button.DOWN:
 			_press_down()
+		Gen2Button.LEFT, Gen2Button.RIGHT:
+			## `MoveMonWithoutMail_DPad`'s carry: left and right load the list
+			## before or after this one, and the cursor starts again at its top.
+			## They belong to MOVE PKMN W/O MAIL alone and do nothing elsewhere.
+			if _mode != MODE_MOVE:
+				return false
+			_load_neighbour(-1 if button == Gen2Button.LEFT else 1)
 		Gen2Button.A:
 			_confirm()
 		Gen2Button.B:
@@ -367,6 +398,8 @@ func _handle_release_button(button: int) -> bool:
 
 ## The submenu's own four rows, whose first is named for the list that is loaded.
 func _submenu_labels() -> Array:
+	if _mode == MODE_MOVE:
+		return SUBMENU_ROWS_MOVE
 	return SUBMENU_ROWS_WITHDRAW if _loaded != LOADED_PARTY else SUBMENU_ROWS
 
 
@@ -388,6 +421,24 @@ func _close_submenu(draw: bool = true) -> void:
 
 
 func _confirm_submenu() -> void:
+	if _mode == MODE_MOVE:
+		match _submenu_cursor:
+			SUBMENU_TRANSFER:
+				## `.Move`: `BillsPC_CheckMail_PreventBlackout` first, and then
+				## the second joypad pass over whichever list is loaded then.
+				var refusal: String = _blackout_refusal()
+				if not refusal.is_empty():
+					_close_submenu(false)
+					_prompt = refusal
+					_refresh()
+					return
+				_close_submenu(false)
+				_begin_move()
+			SUBMENU_MOVE_STATS:
+				_open_stats()
+			_:
+				_close_submenu()
+		return
 	match _submenu_cursor:
 		SUBMENU_TRANSFER:
 			var refusal: String = _blackout_refusal()
@@ -779,7 +830,7 @@ func _cursor_image(
 func _box_name() -> String:
 	if _loaded == LOADED_PARTY:
 		return PARTY_NAME
-	return "BOX %d" % (_box_index + 1)
+	return _save.box_name(_box_index) if _save != null else ""
 
 
 func _mon_snapshot(box: int, slot: int, mon: Gen2SaveMon) -> Dictionary:
@@ -828,6 +879,9 @@ func _press_down() -> void:
 ## A on the CANCEL row leaves, the way `.a_button`'s `cp -1` does; on any other
 ## row it opens the submenu.
 func _confirm() -> void:
+	if _mode == MODE_MOVE and _move_phase == MOVE_PHASE_INSERT:
+		_insert_moved_mon()
+		return
 	var all_rows: Array = rows()
 	var at: int = _cursor + _scroll
 	if at < 0 or at >= all_rows.size() or bool((all_rows[at] as Dictionary)["cancel"]):
@@ -835,6 +889,66 @@ func _confirm() -> void:
 		return
 	_sync_selection()
 	_open_submenu()
+
+
+## `MoveMonWithoutMail_DPad`: the party is `wBillsPC_LoadedBox` zero and the
+## fourteen boxes follow it, wrapping either way.
+func _load_neighbour(step: int) -> void:
+	_loaded = wrapi(_loaded + step, 0, Gen2SaveData.BOX_COUNT + 1)
+	if _loaded != LOADED_PARTY:
+		_box_index = _loaded - 1
+	_cursor = 0
+	_scroll = 0
+	_selected_box_slot = -1
+	_selected_party_index = -1
+	_refresh()
+
+
+## `.Move`: the list and the row the Pokemon came from are backed up, and the
+## second pass begins wherever the first one left off.
+func _begin_move() -> void:
+	_move_from_loaded = _loaded
+	_move_from_index = _cursor + _scroll
+	_move_backup = [_loaded, _cursor, _scroll]
+	_move_phase = MOVE_PHASE_INSERT
+	_prompt = PROMPT_MOVE_WHERE
+	_refresh()
+
+
+## `.a_button_2`: `BillsPC_CheckSpaceInDestination` and then
+## `MovePKMNWithoutMail_InsertMon`, which puts the Pokemon where the cursor
+## stands and shifts everything behind it down.
+func _insert_moved_mon() -> void:
+	var result: Dictionary = Gen2SaveStorage.move_mon(
+		_save, _data, _move_from_loaded, _move_from_index, _loaded,
+		_cursor + _scroll, _persist
+	)
+	if not bool(result.get("ok", false)):
+		## `.no_space` steps the jumptable back one, which leaves the insert
+		## cursor where it was with the box's own refusal printed under it.
+		_prompt = PROMPT_NO_ROOM if StringName(
+			result.get("reason", &"")
+		) == &"no_room_in_destination" else _refusal(result, PROMPT_NO_ROOM)
+		_refresh()
+		return
+	_end_move()
+
+
+## `.Cancel` and `.b_button_2` alike: the first pass again, on the list the
+## Pokemon was chosen from.
+func _end_move() -> void:
+	if _move_backup.size() == 3:
+		_loaded = int(_move_backup[0])
+		_cursor = int(_move_backup[1])
+		_scroll = int(_move_backup[2])
+		if _loaded != LOADED_PARTY:
+			_box_index = _loaded - 1
+	_move_phase = MOVE_PHASE_CHOOSE
+	_move_from_index = -1
+	_move_backup = []
+	_prompt = PROMPT_CHOOSE
+	_clamp_cursor()
+	_refresh()
 
 
 ## After a transfer the list is one row shorter, so the cursor comes back inside
@@ -851,6 +965,9 @@ func _clamp_cursor() -> void:
 
 
 func _back() -> void:
+	if _mode == MODE_MOVE and _move_phase == MOVE_PHASE_INSERT:
+		_end_move()
+		return
 	if _embedded:
 		close_embedded()
 		return

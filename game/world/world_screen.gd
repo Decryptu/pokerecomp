@@ -2875,9 +2875,20 @@ func preview_effect_sprites(kind: StringName = &"effects") -> void:
 ## the player, asking for its pulse. The provider is the synthetic one below;
 ## everything else is the host's own path.
 func preview_visible_encounter() -> void:
+	_preview_visible_encounter(false)
+
+
+## The same population wearing an entry's own `glow` instead: ordinary DVs, so
+## the mark is the one a mod puts on a Pokemon worth stopping for rather than
+## the shiny's palette and sparkle.
+func preview_visible_encounter_glow() -> void:
+	_preview_visible_encounter(true)
+
+
+func _preview_visible_encounter(glow: bool) -> void:
 	if _world == null or _encounters == null or _renderer == null:
 		return
-	_encounters.set_providers([PreviewEncounters.new(_world)])
+	_encounters.set_providers([PreviewEncounters.new(_world, glow)])
 	advance_frames(2)
 	_script_prompt = "Debug visible encounter preview"
 	_renderer.refresh()
@@ -2888,10 +2899,14 @@ func preview_visible_encounter() -> void:
 class PreviewEncounters extends RefCounted:
 	## `CheckShininess`: the attack mask and three tens.
 	const SHINY_DVS: int = (2 << 12) | (10 << 8) | (10 << 4) | 10
+	## The light and the walk a glowing entry asks for, at the top rung so the
+	## picture is the mark at its strongest rather than a frame of a breath.
+	const GLOW_COLOR := Color(1.0, 0.87, 0.35)
+	const GLOW_AMOUNT: float = 0.5
 
 	var _entries: Array = []
 
-	func _init(world: Gen2WorldAPI) -> void:
+	func _init(world: Gen2WorldAPI, glow: bool = false) -> void:
 		var cells: Dictionary = world.visible_encounter_cells()
 		var tables: Dictionary = world.active_encounter_tables()
 		for method: Variant in cells:
@@ -2903,14 +2918,17 @@ class PreviewEncounters extends RefCounted:
 					nearest = cell
 			if nearest.x < 0 or slots.is_empty():
 				continue
-			_entries.append({
+			var entry: Dictionary = {
 				"id": StringName("preview_%s" % method),
 				"cell": Vector2i(nearest),
 				"species": int(slots[0]["species"]),
 				"level": int(slots[0]["min_level"]),
-				"dvs": SHINY_DVS,
-				"pulse": true,
-			})
+				"dvs": 0 if glow else SHINY_DVS,
+				"pulse": not glow,
+			}
+			if glow:
+				entry["glow"] = {"color": GLOW_COLOR, "amount": GLOW_AMOUNT}
+			_entries.append(entry)
 
 	func set_context(_context: Dictionary) -> void:
 		pass
@@ -3281,6 +3299,56 @@ func preview_bills_pc() -> void:
 		return
 	_injected_save = save
 	_open_bills_pc()
+
+
+## Public screenshot drivers for the two PCs, whose cells no preview map has:
+## the Pokemon Center's machine and the bedroom's own item PC, which is the one
+## that carries DECORATION.
+## The machine's own list grows with the story, and its last row is postgame:
+## `.ChooseWhichPCListToUse` asks for the Pokedex and then the induction. Neither
+## has happened on a preview save, so this drives `halloffame`'s own two writes
+## first rather than photographing a list that is missing two of its rows.
+func preview_pokemon_center_pc() -> void:
+	var save: Gen2SaveData = _embedded_party_save()
+	if _world != null and save != null and save.hall_of_fame.is_empty():
+		_world.state.set_engine_flag(Gen2WorldState.ENGINE_POKEDEX, true)
+		_world.state.set_hall_of_fame(true)
+		save.hall_of_fame = Gen2HallOfFame.inducted(save.hall_of_fame, save)
+	## `_embedded_party_save` builds a development save when nothing is injected,
+	## so the seeded one has to be the save the host is then handed.
+	_injected_save = save
+	_preview_pc(&"pokemon_center")
+
+
+func preview_players_pc() -> void:
+	_preview_pc(&"players_house")
+
+
+func _preview_pc(mode: StringName) -> void:
+	if _world == null or _data == null or _service_host != null:
+		return
+	var save: Gen2SaveData = _embedded_party_save()
+	if save == null or save.party.is_empty():
+		_script_prompt = "The PC preview needs a party"
+		_refresh_labels()
+		return
+	_injected_save = save
+	var host: Gen2WorldServiceScreen = SERVICE_SCENE.instantiate() as Gen2WorldServiceScreen
+	if host == null:
+		return
+	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	host.z_index = 20
+	host.set_screen(_screen)
+	add_child(host)
+	if not host.open_pc_machine(_world, _data, save, false, mode):
+		Gen2Screen.drop(host)
+		return
+	host.completed.connect(_on_service_completed)
+	host.sfx_requested.connect(_play_sfx)
+	host.cry_requested.connect(_play_species_cry)
+	_service_host = host
+	_script_prompt = "PC open"
+	_refresh_labels()
 
 
 ## Public screenshot driver for `Mom_WithdrawDepositMenuJoypad`, whose box no
@@ -4907,6 +4975,10 @@ func open_hall_of_fame() -> void:
 		_refresh_labels()
 		return
 	var pages: Array = Gen2HallOfFame.pages(_data, save, _world.state)
+	## `AddHallOfFameEntry` runs behind `SaveGameData` and in front of the
+	## animation, so the team is stored whether or not the player watches it;
+	## the snapshot itself is written when the sequence ends.
+	save.hall_of_fame = Gen2HallOfFame.inducted(save.hall_of_fame, save)
 	## No anchor preset: this is a child of the 160x144 Gen2Screen and sizes
 	## itself in native pixels, the way the story picture does.
 	var host := Gen2HallOfFameScreen.new()
