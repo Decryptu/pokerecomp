@@ -3764,10 +3764,11 @@ func _buena_prize_box(special: int, name: String, closing: bool) -> Dictionary:
 ## state either prints a box, opens her menu or opens the dial, so the source's
 ## `.loop` is the chain of pendings each of them leaves behind.
 ##
-## `DSTChecks` is the one branch not built: its own six boxes sit above her
-## sixteen in the file and are the clock question the two DST specials already
-## ask. `.nope` runs it and then falls to `.JustDoWhatYouCan`, which is what a
-## clock nowhere near a boundary does, so that is the branch taken here.
+## `DSTChecks` is the one branch not built, and it is a save-format bump: `.nope`
+## asks whether to move the clock an hour, which needs a saved `wDST` bit and the
+## `wStartHour`/`wStartDay` shift behind it, and nothing here carries either. The
+## branch taken instead is `.JustDoWhatYouCan`, which is what a clock nowhere
+## near a boundary reaches.
 func _bank_of_mom(index: int) -> Dictionary:
 	match index:
 		MOM_CHECK_INITIALIZED:
