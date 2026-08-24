@@ -452,6 +452,42 @@ func test_world_host_resolves_imported_mart_audio_and_phone_records() -> void:
 	assert_eq(special_world.state.pending_special_phone_call(), 1)
 
 
+## `Script_SpecialBillCall`: `LoadCallerScript` takes the contact's *caller*
+## script, which is `PHONE_CONTACT_SCRIPT2` and not the one an incoming call
+## runs, and nothing gates the ring in front of it.
+func test_an_event_call_rings_the_contact_caller_script() -> void:
+	_write_service_cache()
+	var data: GameData = GameData.open_directory(_directory)
+	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(7, 6))
+	var contact: Dictionary = data.world_phone_contact(0)
+	var resolved: Dictionary = Gen2WorldPhoneHost.resolve_caller(data, 0)
+	assert_true(bool(resolved["ok"]), JSON.stringify(resolved))
+	assert_eq(resolved["script"], contact["caller_script"])
+	assert_ne(resolved["script"], contact["callee_script"])
+
+	var started: Array = world.request_caller_phone_call(0)
+	assert_true(bool(started[0]["ok"]), JSON.stringify(started))
+	assert_true(world.phone_ring_active())
+	assert_eq(world.pending_phone_ring()["phone"]["role"], &"caller")
+	assert_false(Gen2WorldPhoneHost.resolve_caller(data, 999)["ok"])
+
+
+## `CheckSpecialPhoneCall` is `CountStep`'s first test and answers with carry,
+## which reaches `.doscript`: the step the phone is about to ring on is counted
+## for nothing, poison phase included.
+func test_a_pending_special_call_stops_the_step_being_counted() -> void:
+	_write_service_cache()
+	var data: GameData = GameData.open_directory(_directory)
+	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(7, 6))
+	assert_true(world.state.set_pending_special_phone_call(1))
+	assert_true(world.special_phone_call_ready())
+	assert_false(world.count_step(), "the step the call rings on is not counted")
+	assert_eq(world.state.poison_step_count(), 0)
+	world.state.set_pending_special_phone_call(0)
+	assert_true(world.count_step())
+	assert_eq(world.state.poison_step_count(), 1)
+
+
 ## Spends [param frames] hardware frames of the two-ring sequence and returns
 ## whatever finishing it produced.
 func _spend_phone_ring(world: Gen2WorldAPI, frames: int) -> Array:
@@ -5738,6 +5774,18 @@ func test_reloading_the_current_map_rebuilds_live_objects_without_moving_player(
 	assert_eq(reloaded["kind"], &"reload_map")
 	assert_eq(world.player_cell, before)
 	assert_eq(world.objects.size(), 1)
+
+
+## `EnterMap`'s one entry-method branch: MAPSETUP_RELOADMAP zeroes
+## `wPoisonStepCount`, so the four-step poison phase starts again after every
+## battle, `reloadmap` and the catch tutorial.
+func test_reloading_the_current_map_starts_the_poison_phase_again() -> void:
+	var world: Gen2WorldAPI = _world(Vector2i(5, 6))
+	for _step: int in Gen2WorldState.POISON_STEP_PHASE - 1:
+		world.count_step()
+	assert_eq(world.state.poison_step_count(), Gen2WorldState.POISON_STEP_PHASE - 1)
+	assert_true(world.reload_current_map()["ok"])
+	assert_eq(world.state.poison_step_count(), 0)
 
 
 func test_world_battle_requires_an_explicit_outcome() -> void:

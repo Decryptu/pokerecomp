@@ -953,6 +953,33 @@ func test_a_full_party_capture_uses_the_first_pc_box_slot() -> void:
 	assert_eq(result["destination"]["destination"], &"box")
 
 
+## `.SendToPC`'s own `cp MONS_PER_BOX`, which raises BATTLERESULT_BOX_FULL for
+## `Script_reloadmapafterbattle` to answer with Bill on the phone. Only the
+## catch that fills the box raises it; the one before it does not, and a catch
+## that reached the party never does.
+func test_the_catch_that_fills_a_box_raises_the_box_full_result() -> void:
+	while _save.party.size() < Gen2SaveData.MAX_PARTY:
+		_save.party.append(Gen2SaveMon.from_dict(_save.party[0].to_dict()))
+	var box: Gen2SaveBox = _save.boxes[0]
+	for slot: int in Gen2SaveBox.CAPACITY - 2:
+		box.slots[slot] = Gen2SaveMon.from_dict(_save.party[0].to_dict())
+	var wild: Gen2BattleMon = Gen2BattleMon.create(
+		_data, 25, 5, _data.moves_at_level(25, 5), 0x1234
+	)
+	_world.state.apply_changes({}, {}, {"items": {0x01: 2}})
+	var first: Dictionary = Gen2WorldPartyHost.capture_wild(
+		_world, _save, wild, 0x01, _random, 42, false
+	)
+	assert_true(bool(first["caught"]))
+	assert_false(bool(first["box_full"]), "one slot is still free")
+	assert_false(_world.state.battle_box_full())
+	var second: Dictionary = Gen2WorldPartyHost.capture_wild(
+		_world, _save, wild, 0x01, _random, 42, false
+	)
+	assert_true(bool(second["box_full"]), JSON.stringify(second))
+	assert_true(_world.state.battle_box_full())
+
+
 ## `GeneratePartyMonStats`' `.registerunowndex`: the letter comes off the DVs
 ## that were caught, and it is entered once however many of that form are caught.
 func test_catching_an_unown_into_the_party_enters_its_letter_in_the_unown_dex() -> void:

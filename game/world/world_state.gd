@@ -139,6 +139,8 @@ var _repel_steps: int = 0
 ## Set by the step that took `_repel_steps` from one to zero and cleared by
 ## whoever spends it. See [method take_repel_expired].
 var _repel_expired: bool = false
+## `wBattleResult`'s BATTLERESULT_BOX_FULL bit. See [method battle_box_full].
+var _battle_box_full: bool = false
 ## `wWildEncounterCooldown`, which `EnterMap` sets to five and every step
 ## decrements. Scratch on the cartridge rather than saved data, kept here
 ## because this is where the world's own per-step counters live; a state written
@@ -149,8 +151,8 @@ var _wild_encounter_cooldown: int = 0
 ## counters that wrap. `wStepCount` wrapping to zero is what `jr nz` reads to
 ## reach `StepHappiness`, and `wHappinessStepCount`'s `and 1` makes that act on
 ## every second visit, so the party gains a point every 512 steps.
-## `wPoisonStepCount` has no reader here yet: field poison is not built, and the
-## byte is counted anyway so the reader that arrives needs no migration.
+## `wPoisonStepCount` is what `CountStep`'s own `cp 4` reads before it calls
+## `DoPoisonStep`, and `EnterMap` zeroes it on MAPSETUP_RELOADMAP alone.
 var _step_count: int = 0
 var _poison_step_count: int = 0
 var _happiness_step_count: int = 0
@@ -850,6 +852,22 @@ func just_battled() -> bool:
 	return _just_battled
 
 
+## `wBattleResult`'s BATTLERESULT_BOX_FULL bit, raised by `.SendToPC` when the
+## caught Pokemon was the one that filled its box and read by
+## `Script_reloadmapafterbattle`, which answers it with Bill on the phone.
+## Runtime only, like the byte it models: `wBattleResult` is scratch, so a save
+## reloaded after such a catch owes no call.
+func battle_box_full() -> bool:
+	return _battle_box_full
+
+
+func set_battle_box_full(full: bool) -> void:
+	if full == _battle_box_full:
+		return
+	_battle_box_full = full
+	changed.emit()
+
+
 ## `wMapMusic`: the track that is playing, not the track the current map asks
 ## for. The two differ whenever a radio station is tuned.
 func used_flash() -> bool:
@@ -1130,7 +1148,22 @@ func picked_fruit_trees() -> Dictionary:
 ## `CountStep`: the two step counters, the Repel countdown, and `StepHappiness`
 ## on the pass `wStepCount` wraps. One call per step the player finishes, from
 ## wherever the step was taken.
-func count_step() -> void:
+##
+## `DoRepelStep` stands in front of the counters, and the step a Repel runs out
+## on reaches `.doscript` with carry: nothing below that test is charged, so
+## that step counts for neither poison, happiness, an egg nor the Day-Care.
+## Answers whether the step was counted.
+func count_step() -> bool:
+	if _repel_steps > 0:
+		_repel_steps -= 1
+		if _repel_steps == 0:
+			## Where a renewal offer belongs: every way of taking a step reaches
+			## CountStep, so this is the only place the edge exists. Runtime
+			## only, and never saved: a save reloaded on the step a Repel ended
+			## has no offer owed.
+			_repel_expired = true
+			changed.emit()
+			return false
 	_poison_step_count = (_poison_step_count + 1) & 0xFF
 	_step_count = (_step_count + 1) & 0xFF
 	if _step_count == 0:
@@ -1143,14 +1176,8 @@ func count_step() -> void:
 	## step; a step that hatches jumps over it, which the spender settles because
 	## only it knows whether an egg came out.
 	_pending_day_care_steps += 1
-	if _repel_steps > 0:
-		_repel_steps -= 1
-		## The one step a Repel runs out on, which is where a renewal offer
-		## belongs: every way of taking a step reaches CountStep, so this is the
-		## only place the edge exists. Runtime only, and never saved: a save
-		## reloaded on the step a Repel ended has no offer owed.
-		_repel_expired = _repel_steps == 0
 	changed.emit()
+	return true
 
 
 func step_count() -> int:

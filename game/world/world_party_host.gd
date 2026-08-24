@@ -917,6 +917,7 @@ static func capture_wild(
 	var outcome: Dictionary = _capture_outcome(world.data, wild, ball, generator)
 	var candidate: Gen2SaveData = opened["candidate"]
 	var destination: Dictionary = {}
+	var box_full: bool = false
 	if bool(outcome.get("caught", false)):
 		var captured: Gen2SaveMon = _captured_mon(world.data, save, wild, generator)
 		if captured == null:
@@ -934,6 +935,7 @@ static func capture_wild(
 			return _failure(StringName(destination.get("reason", &"storage_full")), {
 				"ball": ball, "outcome": outcome,
 			})
+		box_full = _fills_its_box(candidate, destination)
 	var before: Gen2WorldSnapshot = world.snapshot()
 	## After the snapshot the rollback below restores, so a refused candidate
 	## save takes the dex flag back with the ball.
@@ -951,6 +953,11 @@ static func capture_wild(
 	)
 	if not bool(committed.get("ok", false)):
 		return _failure(StringName(committed["reason"]), committed.get("details", {}))
+	## `.SendToPC`'s own `cp MONS_PER_BOX`: the catch that fills a box raises
+	## BATTLERESULT_BOX_FULL, which `Script_reloadmapafterbattle` answers with
+	## `Script_SpecialBillCall` once the battle is over. Behind the commit, so a
+	## catch that was rolled back owes no phone call.
+	world.state.set_battle_box_full(box_full)
 	return {
 		"ok": true,
 		"handled": true,
@@ -961,7 +968,20 @@ static func capture_wild(
 		"wobbles": int(outcome.get("wobbles", 0)),
 		"species": wild.species,
 		"destination": destination.duplicate(true),
+		"box_full": box_full,
 	}
+
+
+## `.SendToPC`'s `ld a, [sBoxCount] / cp MONS_PER_BOX`, read after the deposit:
+## the box the catch landed in has no room left. The save model keeps no
+## current-box pointer, so the box asked about is the one the deposit picked,
+## which is what [method Gen2SaveData.box_free_space] already answers scripts
+## with.
+static func _fills_its_box(save: Gen2SaveData, destination: Dictionary) -> bool:
+	if save == null or StringName(destination.get("destination", &"")) != &"box":
+		return false
+	var box: Gen2SaveBox = save.boxes[int(destination.get("box", -1))] as Gen2SaveBox
+	return box != null and box.occupied_count() >= Gen2SaveBox.CAPACITY
 
 
 ## `CheckPartyFullAfterContest`, which is what takes home whatever the Bug

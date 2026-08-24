@@ -2347,6 +2347,32 @@ func request_incoming_phone_call(
 	return _start_phone_ring(request)
 
 
+## `Script_SpecialBillCall`: `LoadCallerScript PHONE_BILL` and then
+## `Script_ReceivePhoneCall`, which is the same two rings an incoming call
+## spends. Nothing gates it, so the only caller is the event that owes it.
+func request_caller_phone_call(contact_id: int) -> Array:
+	if phone_ring_active():
+		return [{"ok": true, "status": &"phone_ring", "event": pending_phone_ring()}]
+	if current_map == null:
+		return [{"ok": false, "status": &"phone_unavailable", "reason": &"missing_map"}]
+	var resolved: Dictionary = Gen2WorldPhoneHost.resolve_caller(data, contact_id)
+	if not bool(resolved.get("ok", false)):
+		return [{
+			"ok": false, "status": &"phone_unavailable",
+			"reason": resolved.get("reason", &"phone_unavailable"),
+		}]
+	return _start_phone_ring({
+		"kind": &"phone_incoming",
+		"map_group": current_map.group,
+		"map_number": current_map.number,
+		"bank": int(resolved["script"]["bank"]),
+		"script": int(resolved["script"]["address"]),
+		"phone": resolved["phone"],
+		"contact": resolved["contact"],
+		"reset_receive_timer": true,
+	})
+
+
 ## Queues a source-style special call. The pending call remains in world state
 ## until the imported phone script clears VAR_SPECIALPHONECALL.
 func request_special_phone_call(call_id: int) -> Array:
@@ -2372,6 +2398,29 @@ func request_special_phone_call(call_id: int) -> Array:
 		"reset_receive_timer": true,
 	}
 	return _start_phone_ring(request, 30)
+
+
+## `CheckSpecialPhoneCall`'s own carry, without starting the call: a pending
+## call whose condition holds ends the step at `CountStep`'s first test, so
+## [method count_step] charges nothing on the step the phone rings.
+func special_phone_call_ready() -> bool:
+	if state == null or current_map == null:
+		return false
+	var call_id: int = state.pending_special_phone_call()
+	if call_id <= 0:
+		return false
+	return bool(Gen2WorldPhoneHost.resolve_special(
+		data, current_map, call_id, world_hour
+	).get("ok", false))
+
+
+## `CountStep` whole: the two guards in front of the counters, which every step
+## taken here goes through. A special call about to ring and a Repel that has
+## just worn off each reach `.doscript`, and neither step is counted.
+func count_step() -> bool:
+	if state == null or special_phone_call_ready():
+		return false
+	return state.count_step()
 
 
 ## Checks the pending special call before ordinary step effects, matching the
@@ -5411,7 +5460,7 @@ func move_result(direction: Vector2i) -> Dictionary:
 		kind = &"water_move"
 	player_cell = destination
 	player_facing = facing_for_direction(direction)
-	state.count_step()
+	count_step()
 	_advance_followers(-1, from_cell)
 	_do_step(direction)
 	_start_player_step(direction, _step_frames_for_movement())
@@ -5515,7 +5564,7 @@ func _forced_step(direction: Vector2i, destination: Vector2i) -> Dictionary:
 	var from_cell: Vector2i = player_cell
 	player_cell = destination
 	player_facing = facing_for_direction(direction)
-	state.count_step()
+	count_step()
 	_advance_followers(-1, from_cell)
 	_do_step(direction)
 	_start_player_step(direction, STEP_PASSES_WALK)
@@ -5624,7 +5673,7 @@ func _try_ledge_hop(direction: Vector2i) -> Dictionary:
 	var from_cell: Vector2i = player_cell
 	player_cell = landing
 	player_facing = facing_for_direction(direction)
-	state.count_step()
+	count_step()
 	_advance_followers(-1, from_cell)
 	_do_step(direction)
 	_start_player_step(direction * 2, STEP_PASSES_HOP, true)
@@ -6438,6 +6487,11 @@ func reload_current_map() -> Dictionary:
 	# EnterMap and takes its five-step cooldown with it: that is what stops a
 	# second wild the step after the first.
 	state.set_wild_encounter_cooldown(Gen2WorldState.WILD_ENCOUNTER_COOLDOWN_STEPS)
+	# `EnterMap`'s one entry-method branch: `hMapEntryMethod` is
+	# MAPSETUP_RELOADMAP here and nowhere else, and that method alone zeroes
+	# `wPoisonStepCount`. So a battle, a `reloadmap` and the catch tutorial each
+	# start the four-step poison phase again, and a warp or a door does not.
+	state.clear_poison_step_count()
 	_load_objects()
 	return {"ok": true, "kind": &"reload_map", "map": map_id(), "cell": player_cell}
 
