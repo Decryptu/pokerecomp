@@ -136,6 +136,9 @@ var _coins: int = 0
 var _phone_contacts: Dictionary = {}
 var _just_battled: bool = false
 var _repel_steps: int = 0
+## Set by the step that took `_repel_steps` from one to zero and cleared by
+## whoever spends it. See [method take_repel_expired].
+var _repel_expired: bool = false
 ## `wWildEncounterCooldown`, which `EnterMap` sets to five and every step
 ## decrements. Scratch on the cartridge rather than saved data, kept here
 ## because this is where the world's own per-step counters live; a state written
@@ -1069,6 +1072,18 @@ func repel_steps() -> int:
 	return _repel_steps
 
 
+## Whether a step has taken an active Repel to zero and nobody has spent the
+## fact yet. Held rather than cleared by the read, so an offer that lands on a
+## step already owned by a warp, a script or a battle waits for one that can
+## spend it instead of being lost.
+func repel_expired() -> bool:
+	return _repel_expired
+
+
+func clear_repel_expired() -> void:
+	_repel_expired = false
+
+
 func set_repel_steps(steps: int) -> void:
 	var next_steps: int = maxi(0, steps)
 	if next_steps == _repel_steps:
@@ -1130,6 +1145,11 @@ func count_step() -> void:
 	_pending_day_care_steps += 1
 	if _repel_steps > 0:
 		_repel_steps -= 1
+		## The one step a Repel runs out on, which is where a renewal offer
+		## belongs: every way of taking a step reaches CountStep, so this is the
+		## only place the edge exists. Runtime only, and never saved: a save
+		## reloaded on the step a Repel ended has no offer owed.
+		_repel_expired = _repel_steps == 0
 	changed.emit()
 
 

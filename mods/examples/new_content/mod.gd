@@ -43,6 +43,7 @@ func register(host: Gen2ModHost, manifest: Gen2ModManifest) -> void:
 	_walk_something_behind_the_player(host, manifest.id)
 	_add_a_stats_page(host, manifest.id)
 	_rebalance(host, manifest.id)
+	_play_differently(host, manifest)
 	_watch(host, manifest.id)
 
 
@@ -442,6 +443,157 @@ class Population:
 				# Pokemon that is not shiny.
 				"pulse": true,
 			})
+
+
+## The five registrations that change HOW the game is played rather than what is
+## in it (`api_version` 13). Each is a read-only policy: the mod answers a
+## question and the host owns the transaction, the screen and the text.
+func _play_differently(host: Gen2ModHost, manifest: Gen2ModManifest) -> void:
+	## An HM's field move without a party member who knows it. The host resolves
+	## which item teaches which move, whether it is in the bag, the badge, the
+	## tile and everything the move then does.
+	host.register_field_move_source(manifest.id, FieldMoves.new())
+	## The step an active Repel runs out on. The mod picks the weakest item it
+	## owns; the prompt, the bag and the encounter ordering are the host's.
+	host.register_repel_renewal(manifest.id, RepelRenewal.new())
+	## Experience for a successful capture. Save bound, so the manifest
+	## `register` was handed is the capability rather than the id.
+	host.register_catch_experience(manifest, CatchExperience.new())
+	## Read-only annotations on the battle interface, over whichever renderer is
+	## selected. The snapshot carries the exact effectiveness of each move, so
+	## nothing here copies the type chart.
+	host.register_battle_info(manifest.id, BattleInfo.new())
+	## A start-menu row that opens one of the HOST's screens: a mod never
+	## receives one, so it names the opening and says when the row should be
+	## there at all. The host applies its own party gate after the predicate.
+	host.register_menu_entry(Gen2ModHost.MENU_START, manifest.id, {
+		"label": "PC",
+		"action": Gen2ModHost.START_ACTION_OPEN_BILLS_PC,
+		"visible": func(_context: Dictionary) -> bool: return true,
+	})
+
+
+## One question, per move. That is the whole of what an alternate field-move
+## source decides.
+class FieldMoves:
+	extends RefCounted
+
+	func allows_field_move(_move: int) -> bool:
+		return true
+
+
+## Which owned Repel to spend, out of a copy of the bag. The weakest first, so
+## a MAX REPEL is kept for when it is wanted.
+class RepelRenewal:
+	extends RefCounted
+
+	const REPEL: int = 0x14
+	const SUPER_REPEL: int = 0x2A
+	const MAX_REPEL: int = 0x2B
+
+	func repel_to_use(inventory: Dictionary) -> int:
+		for item: int in [REPEL, SUPER_REPEL, MAX_REPEL]:
+			if int(inventory.get(item, 0)) > 0:
+				return item
+		return 0
+
+
+## Read on every throw rather than once, so a switch the player turns off
+## mid-run is off from the next capture.
+class CatchExperience:
+	extends RefCounted
+
+	func awards_catch_experience() -> bool:
+		return true
+
+
+## What the battle looks like with the type chart already applied. The snapshot
+## is plain values; the answer is placements on the cartridge's own 20x18 grid.
+class BattleInfo:
+	extends RefCounted
+
+	## The three marks, as tiles rather than text: the interface font has no `+`
+	## and its `▲` is a code the main font does not carry, so a symbol the
+	## cartridge never printed is supplied here. Eight bytes of 1bpp, one a row,
+	## bit 7 leftmost. A circle with a centre dot for super effective, a triangle
+	## for resisted and an X for no effect at all.
+	const MARK_SUPER: Array[int] = [0x3C, 0x42, 0x81, 0x99, 0x99, 0x81, 0x42, 0x3C]
+	const MARK_RESISTED: Array[int] = [0x00, 0x10, 0x38, 0x38, 0x7C, 0x7C, 0xFE, 0x00]
+	const MARK_IMMUNE: Array[int] = [0x00, 0x42, 0x24, 0x18, 0x18, 0x24, 0x42, 0x00]
+	## Where the weather sits: a free corner above the enemy's panel.
+	const WEATHER_AT: Vector2i = Vector2i(0, 0)
+
+	func annotate_battle(snapshot: Dictionary) -> Array:
+		var out: Array = []
+		out.append_array(_effectiveness(snapshot))
+		out.append_array(_stages(snapshot))
+		out.append_array(_weather(snapshot))
+		return out
+
+	## One symbol a row, and only for an opponent this save had already seen:
+	## the first meeting is not something a Pokedex could have told the player.
+	func _effectiveness(snapshot: Dictionary) -> Array:
+		var out: Array = []
+		if String(snapshot.get("menu_stage", "")) != "move" 			or not bool(snapshot.get("enemy_seen_before", false)):
+			return out
+		var neutral: int = int(snapshot.get("neutral", 10))
+		for index: int in (snapshot.get("move_rows", []) as Array).size():
+			var row: Dictionary = (snapshot["move_rows"] as Array)[index]
+			var against: int = int(row.get("effectiveness", neutral))
+			if against == neutral:
+				continue
+			var mark: Array[int] = MARK_IMMUNE if against == 0 else (
+				MARK_SUPER if against > neutral else MARK_RESISTED
+			)
+			## Where the host says `MoveSelectionScreen`'s rows are, and the one
+			## column of a row nothing else is written in.
+			var at: Vector2i = (snapshot["move_rows_at"] as Vector2i) \
+				+ (snapshot["move_rows_step"] as Vector2i) * index
+			out.append({
+				"tile": mark, "at": Vector2i(int(snapshot["move_rows_right"]), at.y),
+			})
+		return out
+
+	## The seven keys `Gen2BattleMon.stages` carries, said the way a player reads
+	## them. The interface font has no `+`: the charmap's own arrows are what a
+	## direction is written with, and a mod wanting a `+` supplies it as a tile.
+	const STAGE_LABELS: Dictionary = {
+		"attack": "ATK", "defense": "DEF", "speed": "SPD",
+		"sp_attack": "SP.A", "sp_defense": "SP.D",
+		"accuracy": "ACC", "evasion": "EVA",
+	}
+
+	## Only the stages that moved, said beside the side they affect.
+	func _stages(snapshot: Dictionary) -> Array:
+		var out: Array = []
+		var rows: Array = [
+			["player_stages", Vector2i(0, 8)], ["enemy_stages", Vector2i(0, 1)],
+		]
+		for row: Array in rows:
+			var at: Vector2i = row[1]
+			for key: String in (snapshot.get(row[0], {}) as Dictionary):
+				var stage: int = int((snapshot[row[0]] as Dictionary)[key])
+				if stage == 0:
+					continue
+				## No sign on a raised stage: `-` is the only one the cartridge
+				## font has, so a bare number is the unambiguous reading.
+				out.append({
+					"text": "%s%d" % [STAGE_LABELS.get(key, key.to_upper()), stage],
+					"at": at,
+				})
+				at += Vector2i(0, 1)
+		return out
+
+	## A tile of the mod's own, since the cartridge has no weather glyph: eight
+	## bytes of 1bpp, one a row, bit 7 leftmost. A [PackedByteArray] is not a
+	## constant expression in GDScript, so the rows are and the array is built
+	## where it is asked for.
+	const SUN_ROWS: Array[int] = [0x18, 0x3C, 0x7E, 0xFF, 0xFF, 0x7E, 0x3C, 0x18]
+
+	func _weather(snapshot: Dictionary) -> Array:
+		if not Gen2Weather.is_active(int(snapshot.get("weather", 0))):
+			return []
+		return [{"tile": SUN_ROWS, "at": WEATHER_AT}]
 
 
 ## Changing what the cartridge shipped, rather than adding to it. A patch names

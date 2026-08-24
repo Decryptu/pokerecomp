@@ -1376,6 +1376,27 @@ func test_a_won_battle_can_be_paid_for_without_being_fought() -> void:
 	assert_gt(battle.player.level, before, "134 experience is more than one level at five")
 
 
+## A capture is worth the same as a faint and is not one: the caught Pokemon is
+## filed rather than beaten, so its HP is left where the throw left it while the
+## award, the stat experience and the level up are the pass a faint takes.
+func test_a_capture_can_be_paid_for_without_the_opponent_fainting() -> void:
+	var battle: Gen2Battle = Gen2Battle.create_parties(
+		_data, Gen2Party.of(_mon(Fixture.PIKACHU, 5, [Fixture.THUNDERBOLT])),
+		Gen2Party.of(_mon(Fixture.BULBASAUR, 20, [Fixture.TACKLE])), _rng
+	)
+	battle.enemy.hp = 3
+	var before: int = battle.player.level
+	var events: Array = battle.award_capture_experience()
+
+	var gains: Array = _of_type(events, Gen2Battle.EXP_GAINED)
+	assert_eq(gains.size(), 1)
+	assert_eq(gains[0]["amount"], 182, "the wild award, with no trainer bonus on it")
+	assert_eq(_of_type(events, Gen2Battle.STAT_EXP_GAINED).size(), 1)
+	assert_gt(battle.player.level, before)
+	assert_eq(battle.enemy.hp, 3, "caught, not fainted")
+	assert_false(battle.is_over())
+
+
 ## Base experience is the seventh byte of the same block as the base stats, and
 ## `.EvenlyDivideExpAmongParticipants` divides the whole block in one loop before
 ## `GiveExperiencePoints` reads any of it. So the award divides too, and it

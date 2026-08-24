@@ -38,7 +38,7 @@ user://mods/<id>/
 | `id` | Lowercase `[a-z0-9][a-z0-9_-]*`; addresses the directory and registry keys |
 | `name` | Shown to the player |
 | `version` | The mod's own version, not the host's |
-| `api_version` | Between `Gen2ModManifest.MIN_API_VERSION` and `API_VERSION`. Declare the oldest host you need: 12 for `Gen2ModHost.view_changed`, 11 for [the battle entrance](#the-entrance) and the battle view's other resolved fields, 10 for [a screen that fills the window](#a-screen-that-fills-the-window) and the maps past this one's edge, 9 for an item that names an evolution method, 8 for a stats-screen page, 7 for an actor's `interact`, `emote` and outbox and for hidden-item requests, 6 for `occupied` in the visible-encounter context, 5 for the run's rules, 4 for types, matchups, mod art and event mutators, 3 for mart rows and named axes, 2 for visible encounters, 1 for everything else |
+| `api_version` | Between `Gen2ModManifest.MIN_API_VERSION` and `API_VERSION`. Declare the oldest host you need: 13 for [an alternate field-move source](#an-alternate-field-move-source), [Repel renewal](#renewing-a-repel), [experience for a capture](#experience-for-a-capture), [battle annotations](#annotating-the-battle) and a start-menu entry's action and visibility, 12 for `Gen2ModHost.view_changed`, 11 for [the battle entrance](#the-entrance) and the battle view's other resolved fields, 10 for [a screen that fills the window](#a-screen-that-fills-the-window) and the maps past this one's edge, 9 for an item that names an evolution method, 8 for a stats-screen page, 7 for an actor's `interact`, `emote` and outbox and for hidden-item requests, 6 for `occupied` in the visible-encounter context, 5 for the run's rules, 4 for types, matchups, mod art and event mutators, 3 for mart rows and named axes, 2 for visible encounters, 1 for everything else |
 | `entry` | A `.gd` path inside the mod directory, or inside the pack when there is one |
 | `pack` | Optional `.pck` or `.zip` beside `mod.json`, holding the mod's files |
 | `description` | Optional |
@@ -1072,6 +1072,104 @@ The map and tileset are numbers, which is what `GameData.world_map()` and
 the `GameData` it already has. A battle started outside the world, which is
 every development driver, supplies none and the method is not called.
 
+## Experience for a capture
+
+`register_catch_experience(manifest, provider)` makes a successful wild capture
+award the caught Pokemon's experience. `PokeBallEffect` awards none, so this is
+an addition rather than a correction, and it is off until a provider says
+otherwise:
+
+```gdscript
+class Policy:
+	func awards_catch_experience() -> bool:
+		return enabled
+```
+
+Registered with the manifest `register()` was handed, the way
+[a save lifecycle](#holding-a-run-rather-than-an-installation) is: the run is
+what the policy belongs to. It is read on every throw, so switching a setting off
+mid-run is off from the next one.
+
+The award is the engine's own `_give_experience_for`, the pass a faint takes, so
+participants, held Exp. Share splitting, stat experience, level ups, move offers,
+happiness, evolution eligibility and the EXP-bar events are one implementation.
+The opponent is not pretended to have fainted. Everything it produces is spent
+between the Gotcha line and the nickname prompt, so nothing is filed with a level
+up still owed, and the party the experience landed on reaches the save before the
+world files the catch.
+
+The catching tutorial and a Bug Contest catch are excluded: neither is an
+ordinary capture.
+
+## Annotating the battle
+
+`register_battle_info(id, provider)` draws read-only annotations on the hardware
+interface, over whichever battle renderer is selected. A provider receives a
+fresh plain snapshot and answers placements on the cartridge's own 20x18 tile
+grid:
+
+```gdscript
+class Info:
+	func annotate_battle(snapshot: Dictionary) -> Array:
+		var out: Array = []
+		if String(snapshot["menu_stage"]) != "move" or not snapshot["enemy_seen_before"]:
+			return out
+		for index: int in (snapshot["move_rows"] as Array).size():
+			var row: Dictionary = snapshot["move_rows"][index]
+			var mark: Array = _mark(int(row["effectiveness"]), int(snapshot["neutral"]))
+			if mark.is_empty():
+				continue
+			var at: Vector2i = (snapshot["move_rows_at"] as Vector2i) \
+				+ (snapshot["move_rows_step"] as Vector2i) * index
+			out.append({
+				"tile": mark, "at": Vector2i(int(snapshot["move_rows_right"]), at.y),
+			})
+		return out
+```
+
+A placement is `{"at": Vector2i}` plus one of:
+
+| Key | What it is |
+|---|---|
+| `text` | written with the interface's own font, cut at the right edge |
+| `tile` | one 8x8 cell: eight bytes of 1bpp, or sixty-four palette indices |
+
+so a mod can supply a symbol the cartridge has no glyph for without a Node, a
+renderer or any art of its own. A placement outside the grid, or one whose text
+does not fit, is refused rather than clipped.
+
+The interface font is the cartridge's, which is what a `tile` is for: there is no
+`+` in the charmap at all, and its `▲` is a code `_LoadFontsExtra2` parks in a run
+the main font does not carry. `-` is the only sign a string can print, so a stage
+summary reads `ATK2`/`SPD-1`, and a mark for super effective, resisted or immune
+is supplied as a tile. The example mod's three are a circle with a centre dot, a
+triangle and an X.
+
+The snapshot carries what a subscriber of past events cannot know:
+
+| Key | |
+|---|---|
+| `player_stages`, `enemy_stages` | `Gen2BattleMon.stages`, live |
+| `player_species`, `enemy_species`, `player_level`, `enemy_level` | who is standing |
+| `enemy_types`, `enemy_identified` | the defender, and whether Foresight named it |
+| `enemy_seen_before` | whether this save had seen the opponent before this battle |
+| `weather`, `weather_turns` | what is on and how much is left |
+| `hud_visible`, `enemy_hud_visible`, `player_hud_visible`, `menu_stage`, `menu_position`, `move_cursor` | what is on screen |
+| `move_rows` | the move list, each row with its exact `effectiveness` |
+| `move_rows_at`, `move_rows_step`, `move_rows_right` | where `MoveSelectionScreen` puts its rows, so a provider annotating them never writes the menu's coordinates down |
+| `neutral` | what `effectiveness` compares against |
+
+`effectiveness` is `GameData.type_effectiveness` over the defender's own types
+with Foresight applied, so a mod never copies the type chart, never resolves a
+dual type itself and never rebuilds state from the event stream.
+
+The layer is refreshed after every event, every view push and every menu change,
+and hidden wherever one of the host's own full-screen subflows owns the same
+cells: the party page, the pack and its sub-lists, the forget offer, the naming
+prompt and the entrance. Two providers claiming one cell is refused rather than
+resolved by load order, so which mod loaded first cannot decide what a player
+sees.
+
 ## Logical world state and optional mod pose
 
 The game stays logically grid-based. The player and NPCs occupy walk cells,
@@ -1284,6 +1382,68 @@ entry, the host runs it.
 
 Which cell to name is the mod's own business.
 
+## An alternate field-move source
+
+`register_field_move_source(id, provider)` says that an HM's field move may be
+used without a party member who knows it. The provider is read only and answers
+one question:
+
+```gdscript
+class Anywhere:
+	func allows_field_move(move: int) -> bool:
+		return true
+```
+
+That is the whole of what a mod decides. The host owns everything else:
+
+| Question | Where the host answers it |
+|---|---|
+| Which item teaches which move | `GetTMHMItemMove`, so a mod writes no HM table |
+| Whether it is in the bag | the live world's own items |
+| Whether the badge is in hand | each `Try*OW`'s own `CheckBadge`, in source order |
+| Whether the tile allows it | the staged request the party submenu already reaches |
+| What the move then does | the same commit, animation and script |
+
+The party is always asked first, so a game with no provider resolves every field
+move exactly as it always has, and a Pokemon that knows the move keeps its own
+submenu row. Only the seven HM moves have an alternate source: CUT, FLY, SURF,
+STRENGTH, FLASH, WHIRLPOOL and WATERFALL. Rock Smash is a TM.
+
+The source is carried through every entrance rather than one: the party submenu,
+`Gen2WorldAPI`'s staged request and complete pairs, the A-button prompts at a
+tree, water, a whirlpool and a waterfall, the Strength boulder script, Flash, and
+Fly's region map. A move with no Pokemon behind it prints the host's own
+`<PLAYER> used CUT!` and surfs on the ordinary sprite.
+
+FLY and FLASH are chosen from no tile and no party member, so the start menu
+grows a **MOVES** row for them: one entry per HM move the bag can supply, the
+party does not know and the badge allows. It is absent whenever that list is
+empty, which is every game with no provider registered.
+
+## Renewing a Repel
+
+`register_repel_renewal(id, provider)` is offered the step an active Repel runs
+out on, before the encounter roll:
+
+```gdscript
+class Weakest:
+	func repel_to_use(inventory: Dictionary) -> int:
+		for item: int in [ITEM_REPEL, ITEM_SUPER_REPEL, ITEM_MAX_REPEL]:
+			if int(inventory.get(item, 0)) > 0:
+				return item
+		return 0
+```
+
+`inventory` is a copy of the bag as `{item: quantity}`. Answering an item number
+puts the cartridge's own YES/NO box over the map; YES runs the pack's own field
+item transaction, so exactly one item is spent and its own step count applied,
+and NO changes nothing. Answering 0 changes nothing at all, which is what an
+empty bag and an unregistered host both do.
+
+The question is the step's own player event, so no wild is rolled underneath it.
+An offer landing on a step a script, a warp, an overlay or a battle already owns
+waits for a step that can spend it rather than being lost.
+
 ## Measured against the voxel mod
 
 [DramaticShapeVoxelMod](https://github.com/DramaticShape/DramaticShapeVoxelMod)
@@ -1352,8 +1512,28 @@ func register(host: Gen2ModHost, manifest: Gen2ModManifest) -> void:
 	})
 ```
 
-A start-menu entry without a handler still appears, marked unavailable. A
-pocket's number has to be at or
+A start-menu entry may name a host **action** instead of a handler, for a row
+whose work is opening a screen a mod never receives:
+
+```gdscript
+host.register_menu_entry(Gen2ModHost.MENU_START, manifest.id, {
+	"label": "PC",
+	"action": Gen2ModHost.START_ACTION_OPEN_BILLS_PC,
+	"visible": func(context: Dictionary) -> bool: return enabled,
+})
+```
+
+`Gen2ModHost.START_ACTIONS` is the allow list; `OPEN_BILLS_PC` opens Bill's
+storage through the same box screen the Pokemon Center's machine does, and its B
+returns through the ordinary start-menu flow. An optional `visible(context)`
+predicate is asked with a copy of `{party_count, pokedex, pokegear}` and leaves
+the row ABSENT rather than present and refused, which is what the cartridge's own
+gated rows do. The host applies its own gate after the predicate, so a row cannot
+be shown where the game would refuse it: `OPEN_BILLS_PC` needs a party, which is
+`PC_CheckPartyForPokemon`.
+
+A start-menu entry with neither an action nor a handler still appears, marked
+unavailable. A pocket's number has to be at or
 above `Gen2ModHost.FIRST_MOD_POCKET`: 1 to 4 are the cartridge's ITEM, KEY_ITEM,
 BALL and TM_HM, and an item joins the pocket its own definition names. Two mods
 claiming the same entry id is refused with `duplicate_menu_entry` rather than one

@@ -182,9 +182,18 @@ var _card_flip_host: Gen2CardFlipScreen = null
 ## What `DayCareManOutside` left in wScriptVar, held between the screen finishing
 ## and the request completing. -1 while no routine has written one.
 var _day_care_script_value: int = -1
+## The renewal question a Repel running out asks, which the cartridge has no
+## line for: Gen II never offers one. Authored here beside the save menu's own
+## four, and the item is the one a registered provider chose rather than the one
+## that wore off.
+const REPEL_RENEWAL_TEXT: String = "REPEL wore off!\nUse a %s?"
+
 ## Whether a field-move message is on screen waiting for its acknowledge. The
 ## world is idle while it is, the same way a script text pause holds it.
 var _field_move_text: bool = false
+## The item the standing renewal question would spend, 0 while none is up. See
+## [method _offer_repel_renewal].
+var _repel_renewal_item: int = 0
 ## `PlayerEventScriptPointers`: an engine script the overworld runs on its own
 ## rather than out of a map. Each entry is one `writetext`/`waitbutton` pair and
 ## [member _player_event_after] is whatever the script does past its last one,
@@ -2262,6 +2271,11 @@ func _after_map_settled() -> bool:
 		_show_script_results(contest_over)
 		return true
 	_show_script_results([])
+	## `CountStep`'s Repel countdown reaching zero, offered before
+	## `RandomEncounter` and taking the step's own player event, so nothing is met
+	## underneath the question.
+	if _offer_repel_renewal():
+		return true
 	## While a provider is active the step takes no roll of its own: a wild is
 	## met by walking into one. Everything else that reaches a wild, a script, a
 	## rod, Headbutt, Rock Smash, Sweet Scent and the contest, keeps its own path.
@@ -2285,6 +2299,47 @@ func _after_map_settled() -> bool:
 			"encounter": encounter.duplicate(true),
 		})
 	return true
+
+
+## The renewal offer a Repel running out owes, or false when nothing is owed.
+##
+## Nothing at all without a registered provider: an unregistered host answers 0
+## and the step rolls exactly as it always did. The fact is held rather than
+## consumed on the step it happened, so an offer landing on a step a warp, a
+## script or a battle already owns waits for one that can spend it.
+func _offer_repel_renewal() -> bool:
+	if _world == null or _data == null or not _world.repel_expired():
+		return false
+	## A Repel used by hand while the offer waited has already answered it.
+	if _world.repel_steps() > 0:
+		_world.clear_repel_expired()
+		return false
+	var item: int = Gen2ModHost.instance().repel_renewal_item(_world.state.items())
+	if item <= 0:
+		_world.clear_repel_expired()
+		return false
+	if _service_host != null or _overlay_open() or _field_move_text:
+		return false
+	var name: String = _data.item_name(item)
+	if not _open_host_prompt(REPEL_RENEWAL_TEXT % (name if not name.is_empty() else "REPEL")):
+		return false
+	_world.clear_repel_expired()
+	_repel_renewal_item = item
+	return true
+
+
+## YES to the renewal: the pack's own field-item transaction, so exactly one item
+## is spent and its own step count applied. A mod never touches the bag.
+func _renew_repel(item: int) -> void:
+	_repel_renewal_item = 0
+	var save: Gen2SaveData = _injected_save if _injected_save != null \
+		else _selected_runtime_save()
+	if save == null or _world == null:
+		return
+	## An injected save is a development or test one, so its item use stays in
+	## memory, the same split the start menu's own pack makes.
+	Gen2WorldPartyHost.use_item(_world, save, item, -1, _injected_save == null)
+	_refresh_labels()
 
 
 ## `MapSetupScript_Door` while it is running, for a test or a preview tool that
@@ -3477,6 +3532,80 @@ func preview_mod_views() -> void:
 	_start_menu_host.handle_button(Gen2Button.A)
 
 
+## Public screenshot driver for the MOVES entry, which needs a registered
+## field-move source before it exists at all: one call opens the menu on the row
+## and a second opens the list of moves the bag can supply.
+##
+## The provider and the HM are synthetic, exactly as [method preview_pet_actor]'s
+## actor is; the row, the list and the move behind it are the host's own.
+func preview_field_moves_menu() -> void:
+	if _world == null or _data == null:
+		return
+	if _start_menu_host == null:
+		Gen2ModHost.instance().register_field_move_source(
+			&"preview", PreviewFieldMoves.new()
+		)
+		var crystal: bool = Gen2WorldState.is_crystal_profile(_data)
+		for move: int in Gen2WorldFieldMove.HM_FIELD_MOVES:
+			var item: int = _preview_hm_item(move)
+			if item > 0:
+				_world.state.apply_changes({}, {}, {"items": {item: 1}})
+			## The row lists only what the badge allows, so a development world
+			## with no badges would offer nothing at all.
+			var badge: int = Gen2WorldFieldMove.badge_for_move(move)
+			if badge >= 0:
+				_world.state.set_engine_flag(Gen2WorldState.badge_flag(badge, crystal))
+		_injected_save = _embedded_party_save()
+		_open_start_menu()
+	if _start_menu_host == null:
+		return
+	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_FIELD_MOVES):
+		return
+	_start_menu_host.handle_button(Gen2Button.A)
+
+
+## `GetTMHMItemMove` walked backwards: the HM whose own move is [param move], or
+## 0. Only a preview needs the inverse, so it is here rather than beside the
+## lookup every other caller uses.
+func _preview_hm_item(move: int) -> int:
+	for number: int in range(RomLayout.TMHM_TM_COUNT + 1, _data.tmhm_moves().size() + 1):
+		if _data.tmhm_move(number) == move:
+			return RomLayout.item_for_tmhm_number(number, _data.tmhm_moves().size())
+	return 0
+
+
+## What a registered field-move source is, in the fewest lines that make the
+## MOVES row appear.
+class PreviewFieldMoves extends RefCounted:
+	func allows_field_move(_move: int) -> bool:
+		return true
+
+
+## Public screenshot driver for the renewal question a Repel running out asks,
+## which likewise needs a registered provider before it exists. The bag, the
+## countdown and the box are the host's; only the provider is synthetic.
+func preview_repel_renewal() -> void:
+	if _world == null or _data == null or _service_host != null:
+		return
+	Gen2ModHost.instance().register_repel_renewal(&"preview", PreviewRepel.new())
+	_injected_save = _embedded_party_save()
+	_world.state.apply_changes({}, {}, {
+		"items": {PreviewRepel.REPEL: 2}, "repel_steps": 1,
+	})
+	_world.state.count_step()
+	if not _offer_repel_renewal():
+		_script_prompt = "Repel renewal preview: nothing to offer"
+		_refresh_labels()
+
+
+## What a registered renewal provider is: the weakest Repel owned.
+class PreviewRepel extends RefCounted:
+	const REPEL: int = 0x14
+
+	func repel_to_use(inventory: Dictionary) -> int:
+		return REPEL if int(inventory.get(REPEL, 0)) > 0 else 0
+
+
 ## Public screenshot driver for `_Option`, which is what the start menu's own
 ## OPTION row opens. One call, since the picture wanted is the settings screen
 ## and not the row that reaches it.
@@ -3502,7 +3631,10 @@ func _walk_start_menu_to(kind: StringName) -> bool:
 	if _start_menu_host == null:
 		return false
 	var menu: Variant = _start_menu_host.get("_menu")
-	for _row: int in Gen2WorldStartMenu.SOURCE_ENTRIES.size():
+	## The menu's own length, not the source list's: MOVES, MODS and whatever
+	## mods registered all sit ahead of EXIT, so a list built from the eight
+	## source rows can be longer than eight and a row past that was unreachable.
+	for _row: int in maxi(int(menu.size()), 1):
 		if menu.selected_kind() == kind:
 			return true
 		_start_menu_host.handle_button(Gen2Button.DOWN)
@@ -4232,6 +4364,11 @@ func _finish_battle_exit(result: Dictionary, fought_save: Gen2SaveData) -> void:
 			_data, fought_save, _world, _encounter_random
 		)
 		_persist_after_battle(fought_save)
+	elif bool((result.get("capture", {}) as Dictionary).get("experience_awarded", false)):
+		## A capture commits its own transaction when the ball lands, which is
+		## before a registered policy's experience exists. The party the battle
+		## synced back carries it, so this is where it reaches disk.
+		_persist_after_battle(fought_save)
 	var resumed: Array = _world.complete_runtime_request(result)
 	if resumed.is_empty():
 		## `WildBattleScript` is `randomwildmon`, `startbattle`,
@@ -4738,6 +4875,7 @@ func _open_start_menu_host(entry: Callable) -> void:
 	host.action_chosen.connect(_on_start_menu_action)
 	host.closed.connect(_on_start_menu_closed)
 	host.field_item_used.connect(_on_field_item_used)
+	host.field_move_chosen.connect(_on_start_menu_field_move)
 	host.evolution_animation_requested.connect(_on_pack_evolution)
 	host.sfx_requested.connect(_play_sfx)
 	_start_menu_host = host
@@ -4764,8 +4902,11 @@ func _on_start_menu_action(kind: StringName) -> void:
 	_reopen_start_menu = kind in [
 		Gen2WorldStartMenu.ITEM_POKEMON, Gen2WorldStartMenu.ITEM_POKEGEAR,
 		Gen2WorldStartMenu.ITEM_PLAYER, Gen2WorldStartMenu.ITEM_POKEDEX,
+		Gen2ModHost.START_ACTION_OPEN_BILLS_PC,
 	]
 	match kind:
+		Gen2ModHost.START_ACTION_OPEN_BILLS_PC:
+			_open_bills_pc()
 		Gen2WorldStartMenu.ITEM_POKEMON:
 			_open_embedded_party()
 		Gen2WorldStartMenu.ITEM_POKEGEAR:
@@ -5081,6 +5222,26 @@ func _on_party_action(action: Dictionary) -> void:
 	_party_host = null
 	if host != null:
 		Gen2Screen.drop(host)
+	_run_party_action(action)
+
+
+## The start menu's own MOVES row, which offers the HM field moves a registered
+## source supplies and no party member knows. The list closed itself, so this
+## drops the menu the way a party submenu's `.quit` does and runs the move
+## through the one dispatch below.
+func _on_start_menu_field_move(action: Dictionary) -> void:
+	var host: Gen2StartMenuScreen = _start_menu_host
+	_start_menu_host = null
+	if host != null:
+		_start_menu_cursor = host.cursor()
+		Gen2Screen.drop(host)
+	_run_party_action(action)
+
+
+## What a chosen field action does, whichever list chose it. A slot of -1 is a
+## move used from its own HM rather than by a party member, which changes the
+## name in the text and the Surf sprite and nothing else.
+func _run_party_action(action: Dictionary) -> void:
 	# `PokemonActionSubmenu`'s `.quit` reaches `ExitAllMenus`, so a field move
 	# leaves the overworld rather than reopening the menu behind it.
 	_reopen_start_menu = false
@@ -5096,29 +5257,32 @@ func _on_party_action(action: Dictionary) -> void:
 	if StringName(action.get("kind", &"")) != &"field_move":
 		_refresh_labels()
 		return
+	var slot: int = int(action.get("slot", -1))
+	var user: String = String(action.get("name", "")) if action.has("name") \
+		else _prompted_field_move_name(slot)
 	match int(action.get("move", 0)):
 		Gen2WorldFieldMove.MOVE_CUT:
 			var cut: Dictionary = _world.cut_request()
 			if not bool(cut.get("ok", false)):
 				_show_field_move_text(_cut_refusal(StringName(cut.get("reason", &""))))
 				return
-			_show_field_move_text("%s used CUT!" % String(action.get("name", "")))
+			_show_field_move_text("%s used CUT!" % user)
 		Gen2WorldFieldMove.MOVE_SURF:
-			var surf: Dictionary = _world.surf_request(_party_species(int(action.get("slot", -1))))
+			var surf: Dictionary = _world.surf_request(_party_species(slot))
 			if not bool(surf.get("ok", false)):
 				_show_field_move_text(_surf_refusal(StringName(surf.get("reason", &""))))
 				return
-			_show_field_move_text("%s used SURF!" % String(action.get("name", "")))
+			_show_field_move_text("%s used SURF!" % user)
 		Gen2WorldFieldMove.MOVE_STRENGTH:
 			var strength: Dictionary = _world.strength_request(
-				_party_species(int(action.get("slot", -1)))
+				_party_species(slot)
 			)
 			if not bool(strength.get("ok", false)):
 				_show_field_move_text(
 					_strength_refusal(StringName(strength.get("reason", &"")))
 				)
 				return
-			_show_field_move_text("%s used STRENGTH!" % String(action.get("name", "")))
+			_show_field_move_text("%s used STRENGTH!" % user)
 		Gen2WorldFieldMove.MOVE_WHIRLPOOL:
 			var whirlpool: Dictionary = _world.whirlpool_request()
 			if not bool(whirlpool.get("ok", false)):
@@ -5126,7 +5290,7 @@ func _on_party_action(action: Dictionary) -> void:
 					_whirlpool_refusal(StringName(whirlpool.get("reason", &"")))
 				)
 				return
-			_show_field_move_text("%s used WHIRLPOOL!" % String(action.get("name", "")))
+			_show_field_move_text("%s used WHIRLPOOL!" % user)
 		Gen2WorldFieldMove.MOVE_WATERFALL:
 			var waterfall: Dictionary = _world.waterfall_request()
 			if not bool(waterfall.get("ok", false)):
@@ -5134,13 +5298,13 @@ func _on_party_action(action: Dictionary) -> void:
 					_waterfall_refusal(StringName(waterfall.get("reason", &"")))
 				)
 				return
-			_show_field_move_text("%s used WATERFALL!" % String(action.get("name", "")))
+			_show_field_move_text("%s used WATERFALL!" % user)
 		Gen2WorldFieldMove.MOVE_FLASH:
 			var flash: Dictionary = _world.flash_request()
 			if not bool(flash.get("ok", false)):
 				_show_field_move_text(_flash_refusal(StringName(flash.get("reason", &""))))
 				return
-			_show_field_move_text("%s used FLASH!" % String(action.get("name", "")))
+			_show_field_move_text("%s used FLASH!" % user)
 		Gen2WorldFieldMove.MOVE_HEADBUTT:
 			var headbutt: Dictionary = _world.headbutt_request()
 			if not bool(headbutt.get("ok", false)):
@@ -5149,7 +5313,7 @@ func _on_party_action(action: Dictionary) -> void:
 				)
 				return
 			## _UseHeadbuttText is "did a HEADBUTT!", not the "used" the other five share.
-			_show_field_move_text("%s did a HEADBUTT!" % String(action.get("name", "")))
+			_show_field_move_text("%s did a HEADBUTT!" % user)
 		Gen2WorldFieldMove.MOVE_ROCK_SMASH:
 			var rock_smash: Dictionary = _world.rock_smash_request()
 			if not bool(rock_smash.get("ok", false)):
@@ -5157,7 +5321,7 @@ func _on_party_action(action: Dictionary) -> void:
 					_rock_smash_refusal(StringName(rock_smash.get("reason", &"")))
 				)
 				return
-			_show_field_move_text("%s used ROCK SMASH!" % String(action.get("name", "")))
+			_show_field_move_text("%s used ROCK SMASH!" % user)
 		Gen2WorldFieldMove.MOVE_FLY:
 			var fly: Dictionary = _world.fly_request()
 			if not bool(fly.get("ok", false)):
@@ -5175,7 +5339,7 @@ func _on_party_action(action: Dictionary) -> void:
 				## map with no table does.
 				_show_field_move_text("Looks like there's\nnothing here…")
 				return
-			_show_field_move_text("%s used SWEET SCENT!" % String(action.get("name", "")))
+			_show_field_move_text("%s used SWEET SCENT!" % user)
 			var found: Dictionary = scent["encounter"]
 			_start_battle_request({
 				"kind": &"battle_requested",
@@ -5188,7 +5352,7 @@ func _on_party_action(action: Dictionary) -> void:
 				## `.CantUseDigText`, which every refusal of an escape shares.
 				_show_field_move_text("Can't use that here.")
 				return
-			_show_field_move_text("%s used DIG!" % String(action.get("name", "")))
+			_show_field_move_text("%s used DIG!" % user)
 			_refresh_after_escape()
 		Gen2WorldFieldMove.MOVE_TELEPORT:
 			var teleport: Dictionary = _world.teleport_request()
@@ -5510,10 +5674,46 @@ func _open_pokegear() -> void:
 	_open_service_overlay(&"pokegear")
 
 
+## The `OPEN_BILLS_PC` start-menu action: storage on its own, through the same
+## host and the same box screen the Pokemon Center's machine opens. The row is
+## already gated on a party, so a refusal here is a cache or save fault rather
+## than the empty-party one.
+func _open_bills_pc() -> void:
+	_open_service_overlay(&"bills_pc")
+
+
+## The host's own YES/NO over the map: `Script_yesorno`'s box, through the same
+## overlay a scripted one goes through, answered back in
+## [method _on_service_completed].
+func _open_host_prompt(text: String) -> bool:
+	if _service_host != null or _world == null or _data == null:
+		return false
+	var host: Gen2WorldServiceScreen = SERVICE_SCENE.instantiate() as Gen2WorldServiceScreen
+	if host == null:
+		return false
+	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	host.z_index = 20
+	host.set_screen(_screen)
+	add_child(host)
+	var save: Gen2SaveData = _injected_save if _injected_save != null \
+		else _selected_runtime_save()
+	if not host.open_prompt(_world, _data, save, _injected_save == null, text):
+		Gen2Screen.drop(host)
+		return false
+	host.completed.connect(_on_service_completed)
+	host.sfx_requested.connect(_play_sfx)
+	_service_host = host
+	_script_prompt = "A: answer"
+	_refresh_labels()
+	return true
+
+
 func _open_service_overlay(kind: StringName) -> void:
 	if _service_host != null or _world == null or _data == null:
 		return
-	var label: String = "Pokegear" if kind == &"pokegear" else "Phone list"
+	var label: String = {
+		&"pokegear": "Pokegear", &"bills_pc": "Storage",
+	}.get(kind, "Phone list")
 	var host: Gen2WorldServiceScreen = SERVICE_SCENE.instantiate() as Gen2WorldServiceScreen
 	if host == null:
 		_script_prompt = "%s scene unavailable" % label
@@ -5525,8 +5725,11 @@ func _open_service_overlay(kind: StringName) -> void:
 	add_child(host)
 	var save: Gen2SaveData = _injected_save if _injected_save != null else _selected_runtime_save()
 	var persist: bool = save != null and _injected_save == null
-	var opened: bool = host.open_pokegear(_world, _data, save, persist) if kind == &"pokegear" \
+	var opened: bool = (
+		host.open_pokegear(_world, _data, save, persist) if kind == &"pokegear"
+		else host.open_bills_pc(_world, _data, save, persist) if kind == &"bills_pc"
 		else host.open_phone_list(_world, _data, save, persist)
+	)
 	if not opened:
 		Gen2Screen.drop(host)
 		_script_prompt = "%s unavailable" % label
@@ -5568,6 +5771,22 @@ func _open_fly_map(request: Dictionary) -> void:
 	_refresh_labels()
 
 
+## The answer to a host-owned YES/NO, which is not a script result either. Only
+## one question asks one today, so this names it rather than keeping a queue of
+## pending questions nothing else would ever put anything in.
+func _apply_host_choice(results: Array) -> bool:
+	for result: Dictionary in results:
+		if StringName(result.get("kind", &"")) != &"host_choice":
+			continue
+		var item: int = _repel_renewal_item
+		_repel_renewal_item = 0
+		if int(result.get("choice", 1)) == 0 and item > 0:
+			_renew_repel(item)
+		_refresh_labels()
+		return true
+	return false
+
+
 ## The fly map's own answer, which is not a script result: a spawn to warp to, or
 ## -1 for a cancel.
 func _apply_fly_choice(results: Array) -> bool:
@@ -5590,6 +5809,8 @@ func _on_service_completed(results: Array) -> void:
 	_service_host = null
 	if host != null:
 		Gen2Screen.drop(host)
+	if _apply_host_choice(results):
+		return
 	if _apply_fly_choice(results):
 		return
 	# `ExitPokegearRadio_HandleMusic`: only the radio card takes the music off the
@@ -5935,12 +6156,24 @@ func _use_prompted_field_move(move: int, slot: int) -> void:
 
 
 ## GetPartyNickname, which every one of these scripts calls before its own text.
+## A move used from its HM rather than from a party member has no nickname to
+## read, so the line says who did use it: `<PLAYER> used CUT!`.
 func _prompted_field_move_name(slot: int) -> String:
+	if slot < 0:
+		return _player_display_name()
 	var save: Gen2SaveData = _active_party_save()
-	if save == null or slot < 0 or slot >= save.party.size():
+	if save == null or slot >= save.party.size():
 		return "#MON"
 	var member: Variant = save.party[slot]
 	return _mon_display_name(member as Gen2SaveMon) if member is Gen2SaveMon else "#MON"
+
+
+## `PlaceString`'s own `<PLAYER>`, which is `wPlayerName`. A world with no save
+## selected is a screenshot tool or a test and says PLAYER, the same fallback
+## the start menu's STATUS row takes.
+func _player_display_name() -> String:
+	var player: String = _world.player_name() if _world != null else ""
+	return player if not player.is_empty() else "PLAYER"
 
 
 ## `special DisplayCoinCaseBalance`, `..MoneyAndCoinBalance` and

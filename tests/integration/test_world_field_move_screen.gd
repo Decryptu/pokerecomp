@@ -58,6 +58,10 @@ const STD_SMASH_ROCK: int = 15
 ## Any permanent flag: the fixture's rock carries -1 like the real ones, so a
 ## test that wants Mt. Moon Square's behavior gives it one.
 const ROCK_EVENT_FLAG: int = 900
+## `TMHMMoves`' real shape, so `RomLayout.tmhm_number_for_item` addresses the HM
+## rows where the cartridge does.
+const TMHM_TM_COUNT: int = RomLayout.TMHM_TM_COUNT
+const TMHM_ENTRIES: int = TMHM_TM_COUNT + RomLayout.TMHM_HM_COUNT + 3
 
 var _data: GameData = null
 var _world_screen: Gen2WorldScreen = null
@@ -94,6 +98,16 @@ func _write_cut_tree() -> void:
 		elif int(raw.get("number", 0)) == Gen2WorldFieldMove.MOVE_ROCK_SMASH:
 			raw["name"] = "ROCK SMASH"
 	RomCache.write_json(RomCache.moves_path(directory), moves)
+
+	## `TMHMMoves`, so an HM in the bag resolves to the move it teaches through
+	## the cartridge's own table. The filler run is $a0 upward, which carries
+	## none of the seven HM moves.
+	var tmhm: Array = []
+	for index: int in TMHM_ENTRIES:
+		tmhm.append(0xA0 + index)
+	for offset: int in Gen2WorldFieldMove.HM_FIELD_MOVES.size():
+		tmhm[TMHM_TM_COUNT + offset] = Gen2WorldFieldMove.HM_FIELD_MOVES[offset]
+	RomCache.write_json(RomCache.tmhm_moves_path(directory), tmhm)
 
 	var tilesets: Array = RomCache.read_json(RomCache.world_tilesets_path(directory))
 	var tileset: Dictionary = tilesets[0]
@@ -1209,3 +1223,88 @@ func test_a_party_row_needs_both_callables_and_a_free_name() -> void:
 		)["reason"],
 		&"duplicate_party_menu_entry"
 	)
+
+
+## The alternate field-move source a mod registers: an HM in the bag, and no
+## Pokemon that knows the move.
+func _register_field_move_source() -> void:
+	var script := GDScript.new()
+	script.source_code = """extends RefCounted
+func allows_field_move(_move: int) -> bool:
+	return true
+"""
+	script.reload()
+	assert_true(bool(
+		Gen2ModHost.instance().register_field_move_source(&"qol", script.new()).get("ok", false)
+	))
+
+
+func _hm_item(move: int) -> int:
+	return RomLayout.item_for_tmhm_number(
+		TMHM_TM_COUNT + Gen2WorldFieldMove.HM_FIELD_MOVES.find(move) + 1, TMHM_ENTRIES
+	)
+
+
+## A world whose party knows nothing and whose bag holds HM01, which is the
+## Quality of Life mod's own case.
+func _open_hm_world() -> void:
+	_register_field_move_source()
+	await _open_world(true, BattleFixture.TACKLE)
+	assert_true(bool(_world_screen._world.state.apply_changes({}, {}, {
+		"items": {_hm_item(Gen2WorldFieldMove.MOVE_CUT): 1},
+	}).get("ok", false)))
+
+
+## The A press at a tree, which is the runner's own gate rather than the menu's:
+## the HM answers where CheckPartyMove could not, and the line names the player
+## because no Pokemon took part.
+func test_facing_a_cut_tree_with_only_the_hm_asks_and_cuts() -> void:
+	await _open_hm_world()
+	var world: Gen2WorldAPI = _world_screen._world
+	var opened: Array = world.interact()
+	assert_string_contains(String(opened[0]["event"]["text"]), "Want to use CUT?")
+	world.run_event_queue(true)
+	_world_screen._show_script_results(world.choose_script_input(0))
+	assert_eq(_shown_text(), "PLAYER used CUT!")
+	assert_eq(world.block_at(TREE_BLOCK.x, TREE_BLOCK.y), BLOCK_TREE)
+	_world_screen._acknowledge_field_move_text()
+	assert_eq(world.block_at(TREE_BLOCK.x, TREE_BLOCK.y), BLOCK_TREE_CUT)
+	assert_true(world.can_walk_to(TREE_CELL))
+
+
+## Without the HM in the bag the same press is the refusal it always was, so the
+## provider on its own changes nothing.
+func test_the_same_tree_without_the_hm_is_the_source_refusal() -> void:
+	_register_field_move_source()
+	await _open_world(true, BattleFixture.TACKLE)
+	var opened: Array = _world_screen._world.interact()
+	assert_eq(String(opened[0]["event"]["text"]), Gen2WorldScriptRunner.CUT_CAN_TEXT)
+
+
+## The start menu's MOVES row, which is how FLY and FLASH are reached with no
+## tile and no party member: it is absent until the source has something, and
+## choosing a row runs the same field move the party submenu does.
+func test_the_moves_row_appears_only_with_an_offer_and_runs_the_move() -> void:
+	await _open_world(true, BattleFixture.TACKLE)
+	_world_screen._open_start_menu()
+	await get_tree().process_frame
+	assert_false(
+		_world_screen._walk_start_menu_to(Gen2WorldStartMenu.ITEM_FIELD_MOVES),
+		"nothing to offer, no row"
+	)
+	_world_screen._start_menu_host.handle_button(Gen2Button.B)
+
+	await _open_hm_world()
+	var world: Gen2WorldAPI = _world_screen._world
+	_world_screen._open_start_menu()
+	await get_tree().process_frame
+	assert_true(_world_screen._walk_start_menu_to(Gen2WorldStartMenu.ITEM_FIELD_MOVES))
+	_world_screen._start_menu_host.handle_button(Gen2Button.A)
+	assert_eq(_world_screen._start_menu_host.get("_field_move_rows").size(), 1)
+	_world_screen._start_menu_host.handle_button(Gen2Button.A)
+	await get_tree().process_frame
+
+	assert_null(_world_screen._start_menu_host, "the menu closes the way a field move does")
+	assert_eq(_shown_text(), "PLAYER used CUT!")
+	_world_screen._acknowledge_field_move_text()
+	assert_eq(world.block_at(TREE_BLOCK.x, TREE_BLOCK.y), BLOCK_TREE_CUT)

@@ -131,15 +131,19 @@ static func list_box(count: int, contest: bool = false) -> Gen2MenuBox:
 ## The menu over the map: the whole screen, transparent everywhere the map is
 ## still showing. [param description] is `.MenuDesc`'s two lines and is drawn
 ## only when MENU ACCOUNT is on, which is what `.IsMenuAccountOn` decides.
+## [param box] overrides the geometry for a list the cartridge does not have:
+## the MOVES row's own is `PopulateMonMenu`'s wider box, since its rows are move
+## names rather than the eight-character words the source list holds.
 func render_list(
-	labels: Array, cursor: int, description: String = "", contest: bool = false
+	labels: Array, cursor: int, description: String = "", contest: bool = false,
+	frame: Gen2MenuBox = null
 ) -> Image:
 	if menu == null or font == null:
 		return null
 	var image: Image = Image.create_empty(
 		Gen2Screen.WIDTH, Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8
 	)
-	var box: Gen2MenuBox = list_box(labels.size(), contest)
+	var box: Gen2MenuBox = frame if frame != null else list_box(labels.size(), contest)
 	_blit(image, menu.render(box, labels, cursor), box.border_position())
 	if not description.is_empty():
 		_blit(image, _render_account(description), ACCOUNT_AT)

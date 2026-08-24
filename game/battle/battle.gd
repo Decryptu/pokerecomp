@@ -2171,6 +2171,24 @@ func award_win_experience() -> Array:
 	return events
 
 
+## What a successful capture owes when a registered policy says a caught wild is
+## worth its experience. `PokeBallEffect` awards none: the wild is filed and the
+## battle ends, so this is an addition rather than a correction, and it is off
+## until [method Gen2ModHost.awards_catch_experience] answers yes.
+##
+## The same pass a faint takes, so the participant set, the Exp. Share split,
+## stat experience, the level ups, the move offers, the happiness gain, the
+## evolution eligibility and the EXP-bar events are one implementation. The
+## opponent is NOT fainted: it is caught and about to be filed, so its HP is left
+## where the throw left it and only the award runs.
+func award_capture_experience() -> Array:
+	var events: Array = []
+	if data == null or parties.is_empty():
+		return events
+	_give_experience_for(mon(ENEMY), events)
+	return events
+
+
 ## Spends one of the trainer's two items, which costs the turn. The item is gone
 ## whether or not it changed anything, `AI_TryItem` clearing the slot the moment a
 ## check said yes. What the cartridge clears beside it is

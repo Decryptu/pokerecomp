@@ -985,6 +985,78 @@ func party_slot_with_move(move_id: int) -> int:
 	return -1
 
 
+## Which of the two sources a field move is being used from. See
+## [method field_move_source].
+const FIELD_MOVE_SOURCE_PARTY: StringName = &"party"
+const FIELD_MOVE_SOURCE_ITEM: StringName = &"item"
+
+
+## WHERE a field move would be used from, which is the one question every
+## entrance to one asks: `{kind, move, slot, item}`, and `{}` when nothing can
+## use it.
+##
+## The party is asked first and answers exactly what [method
+## party_slot_with_move] did, so with no registered source every field move
+## resolves the way it always has. Only when no slot knows the move is an
+## alternate source considered, and only for the seven HM moves.
+##
+## The badge is deliberately NOT part of this. Every `Try*OW` and every staged
+## request tests its own `CheckBadge` in the source's own order, so a player
+## carrying HM01 without the Hive Badge is told about the badge, exactly as one
+## whose Pokemon knows CUT is.
+func field_move_source(move: int) -> Dictionary:
+	var slot: int = party_slot_with_move(move)
+	if slot >= 0:
+		return {
+			"kind": FIELD_MOVE_SOURCE_PARTY, "move": move, "slot": slot, "item": 0,
+		}
+	var item: int = item_field_move_source(move)
+	if item <= 0:
+		return {}
+	return {"kind": FIELD_MOVE_SOURCE_ITEM, "move": move, "slot": -1, "item": item}
+
+
+## The HM in the bag that teaches [param move] while a registered provider
+## allows that move, or 0. Which item teaches which move is `GetTMHMItemMove`'s
+## answer rather than a second table, so a cartridge whose HMs differ needs
+## nothing here.
+func item_field_move_source(move: int) -> int:
+	if data == null or state == null \
+		or not Gen2WorldFieldMove.is_hm_field_move(move) \
+		or not Gen2ModHost.allows_item_field_move(move):
+		return 0
+	for raw_item: Variant in state.items():
+		var item: int = int(raw_item)
+		if Gen2WorldTMHM.is_hm(item) and Gen2WorldTMHM.move_for_item(data, item) == move:
+			return item
+	return 0
+
+
+## Every HM field move an item can currently supply and the party cannot, as
+## `{move, item, badge}` in [constant Gen2WorldFieldMove.HM_FIELD_MOVES] order.
+##
+## The badge IS applied here, unlike in [method field_move_source]: this is what
+## a menu of usable moves is built from, and a row that can only answer "a new
+## BADGE is required" is not something to offer. A party member that knows the
+## move keeps its own submenu row and is not repeated here.
+func item_field_move_offers() -> Array:
+	var out: Array = []
+	if data == null or state == null:
+		return out
+	var crystal: bool = Gen2WorldState.is_crystal_profile(data)
+	for move: int in Gen2WorldFieldMove.HM_FIELD_MOVES:
+		var source: Dictionary = field_move_source(move)
+		if StringName(source.get("kind", &"")) != FIELD_MOVE_SOURCE_ITEM:
+			continue
+		var badge: int = Gen2WorldFieldMove.badge_for_move(move)
+		if badge >= 0 and not state.is_engine_flag_active(
+			Gen2WorldState.badge_flag(badge, crystal)
+		):
+			continue
+		out.append({"move": move, "item": int(source["item"]), "badge": badge})
+	return out
+
+
 ## Clears the mirror so a stale count cannot answer a later read after the
 ## caller stops refreshing it (for example, closing the injected preview save).
 func clear_party_summary() -> void:
@@ -1083,7 +1155,7 @@ func cut_request() -> Dictionary:
 		return _cut_failure(&"cut_in_progress")
 	## TryCutOW asks CheckPartyMove before the badge; the submenu path cannot
 	## reach here without the move at all.
-	if party_slot_with_move(Gen2WorldFieldMove.MOVE_CUT) < 0:
+	if field_move_source(Gen2WorldFieldMove.MOVE_CUT).is_empty():
 		return _cut_failure(&"move_not_known")
 	var crystal: bool = Gen2WorldState.is_crystal_profile(data)
 	if not state.is_engine_flag_active(
@@ -1168,7 +1240,7 @@ func surf_request(species: int = 0) -> Dictionary:
 		return _surf_failure(&"badge_required")
 	## Surf is the one move whose overworld prompt asks CheckPartyMove after the
 	## badge rather than before it (`TrySurfOW`).
-	if party_slot_with_move(Gen2WorldFieldMove.MOVE_SURF) < 0:
+	if field_move_source(Gen2WorldFieldMove.MOVE_SURF).is_empty():
 		return _surf_failure(&"move_not_known")
 	if movement_mode == MOVEMENT_SURF:
 		return _surf_failure(&"already_surfing")
@@ -1242,7 +1314,7 @@ func whirlpool_request() -> Dictionary:
 	if not _pending_whirlpool.is_empty():
 		return _whirlpool_failure(&"whirlpool_in_progress")
 	## TryWhirlpoolOW asks CheckPartyMove before the badge.
-	if party_slot_with_move(Gen2WorldFieldMove.MOVE_WHIRLPOOL) < 0:
+	if field_move_source(Gen2WorldFieldMove.MOVE_WHIRLPOOL).is_empty():
 		return _whirlpool_failure(&"move_not_known")
 	if not state.is_engine_flag_active(Gen2WorldState.badge_flag(
 		Gen2WorldFieldMove.BADGE_GLACIER, Gen2WorldState.is_crystal_profile(data)
@@ -1316,7 +1388,7 @@ func waterfall_request() -> Dictionary:
 	if not _pending_waterfall.is_empty():
 		return _waterfall_failure(&"waterfall_in_progress")
 	## TryWaterfallOW asks CheckPartyMove before the badge.
-	if party_slot_with_move(Gen2WorldFieldMove.MOVE_WATERFALL) < 0:
+	if field_move_source(Gen2WorldFieldMove.MOVE_WATERFALL).is_empty():
 		return _waterfall_failure(&"move_not_known")
 	if not state.is_engine_flag_active(Gen2WorldState.badge_flag(
 		Gen2WorldFieldMove.BADGE_RISING, Gen2WorldState.is_crystal_profile(data)
@@ -1405,7 +1477,7 @@ func flash_request() -> Dictionary:
 		return _flash_failure(&"missing_map")
 	if not _pending_flash.is_empty():
 		return _flash_failure(&"flash_in_progress")
-	if party_slot_with_move(Gen2WorldFieldMove.MOVE_FLASH) < 0:
+	if field_move_source(Gen2WorldFieldMove.MOVE_FLASH).is_empty():
 		return _flash_failure(&"move_not_known")
 	## The badge is checked before the map, so a player without it is told about
 	## the badge even standing in the dark.
@@ -2140,6 +2212,17 @@ func set_repel_steps(steps: int) -> void:
 
 func repel_steps() -> int:
 	return state.repel_steps()
+
+
+## Whether a step has run an active Repel out and nobody has spent the fact yet.
+## See [method Gen2WorldState.repel_expired].
+func repel_expired() -> bool:
+	return state != null and state.repel_expired()
+
+
+func clear_repel_expired() -> void:
+	if state != null:
+		state.clear_repel_expired()
 
 
 func set_swarm_map(
@@ -3867,6 +3950,18 @@ func _enqueue_script(request: Dictionary) -> void:
 		request["player_cell"] = player_cell
 	if not request.has("party") and not _party_summary.is_empty():
 		request["party"] = _party_summary.duplicate()
+	if not request.has("field_move_items"):
+		## The scene-free runner reads `CheckPartyMove` off the party mirror and
+		## can reach neither the bag nor the mod host, so the alternate source is
+		## resolved here and handed over the way collision and the clock are.
+		## Absent when nothing supplies one, which is every unmodded game.
+		var alternates: Dictionary = {}
+		for move: int in Gen2WorldFieldMove.HM_FIELD_MOVES:
+			var item: int = item_field_move_source(move)
+			if item > 0:
+				alternates[move] = item
+		if not alternates.is_empty():
+			request["field_move_items"] = alternates
 	if not request.has("player_name") and not _player_name.is_empty():
 		request["player_name"] = _player_name
 	if not request.has("object_event_flags"):
@@ -5817,7 +5912,7 @@ func warp_to_spawn(index: int) -> Dictionary:
 func fly_request() -> Dictionary:
 	if current_map == null:
 		return _fly_failure(&"missing_map")
-	if party_slot_with_move(Gen2WorldFieldMove.MOVE_FLY) < 0:
+	if field_move_source(Gen2WorldFieldMove.MOVE_FLY).is_empty():
 		return _fly_failure(&"move_not_known")
 	if not state.is_engine_flag_active(Gen2WorldState.badge_flag(
 		Gen2WorldFieldMove.BADGE_STORM, Gen2WorldState.is_crystal_profile(data)

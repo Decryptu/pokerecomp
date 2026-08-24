@@ -262,6 +262,19 @@ var _capture_selecting: bool = false
 var _capture_waiting: bool = false
 var _capture_messages: Array[String] = []
 var _capture_terminal: bool = false
+## Whether this capture's experience award has already run. See
+## [method _spend_capture_experience].
+var _capture_experience_spent: bool = false
+## The layer registered battle-information providers draw on, and the page that
+## writes their placements. See [method info_snapshot].
+var _annotation_layer: TextureRect = null
+var _annotations: Gen2BattleAnnotations = null
+## What the layer is currently holding, so it is rebuilt only when a provider
+## would answer something different. Same shape as [member _menu_drawn].
+var _annotations_drawn: String = ""
+## Whether the enemy species was in this save's Pokedex before the battle began,
+## read once at the start because the first sight of it registers immediately.
+var _enemy_seen_before: bool = false
 var _capture_result: Dictionary = {}
 ## `PokeBallEffect`'s own `AskGiveNicknameText`, which stands over the battle
 ## because the whole routine runs inside it. Null while nothing is being named.
@@ -628,6 +641,13 @@ func _ready() -> void:
 	_level_up_layer.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_level_up_layer.visible = false
 	_screen.display(_level_up_layer)
+	## Last, so a registered provider's annotations sit over every box and menu
+	## the interface draws, whichever renderer is under all of it.
+	_annotations = Gen2BattleAnnotations.from_data(_data)
+	_annotation_layer = TextureRect.new()
+	_annotation_layer.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_annotation_layer.visible = false
+	_screen.display(_annotation_layer)
 	_apply_renderer_interface_style()
 
 	## Whatever this screen was opened on its own for. A battle inside the
@@ -921,6 +941,11 @@ func start_world_battle(
 	_player_level = player_party_ready.active_mon().level
 	_enemy = enemy_party_ready.active_mon().species
 	_enemy_level = enemy_party_ready.active_mon().level
+	## Read before anything registers this sight: `SetSeenMon` runs as the
+	## opponent appears, so after the first frame the answer is always yes.
+	_enemy_seen_before = save != null and save.world != null \
+		and save.world.world_state != null \
+		and save.world.world_state.has_seen_species(_enemy)
 	_init_battle_display()
 	_play_battle_music()
 
@@ -2120,6 +2145,107 @@ func battle_snapshot() -> Dictionary:
 	}
 
 
+## The plain reading a registered battle-information provider annotates from.
+##
+## Everything such a provider could otherwise only guess at from past events:
+## both sides' live stat stages, the weather and what is left of it, who is
+## standing, what is on screen, whether this opponent had been seen in this save
+## before the fight, and the move rows with the exact effectiveness of each
+## against the defender.
+##
+## The effectiveness is [method GameData.type_effectiveness] over the defender's
+## own [method Gen2BattleMon.types], carrying Foresight's identified state, so a
+## provider never copies the type chart, never resolves a dual type itself and
+## never rebuilds state from the event stream.
+func info_snapshot() -> Dictionary:
+	var player: Gen2BattleMon = _battle.mon(Gen2Battle.PLAYER) if _battle != null else null
+	var enemy: Gen2BattleMon = _battle.mon(Gen2Battle.ENEMY) if _battle != null else null
+	var defending: Array = enemy.types() if enemy != null else []
+	var identified: bool = enemy != null and Gen2Substatus.has(
+		enemy.substatus, Gen2Substatus.IDENTIFIED
+	)
+	var rows: Array = []
+	for row: Dictionary in _move_rows:
+		var out: Dictionary = row.duplicate(true)
+		out["effectiveness"] = _data.type_effectiveness(
+			int(row.get("type", 0)), defending, identified
+		) if _data != null else RomLayout.MATCHUP_EFFECTIVE
+		rows.append(out)
+	return {
+		"ready": is_ready(),
+		"player_species": _player, "enemy_species": _enemy,
+		"player_level": _player_level, "enemy_level": _enemy_level,
+		"player_stages": player.stages.duplicate() if player != null else {},
+		"enemy_stages": enemy.stages.duplicate() if enemy != null else {},
+		"enemy_types": defending.duplicate(),
+		"enemy_identified": identified,
+		"enemy_seen_before": _enemy_seen_before,
+		"weather": _battle.weather if _battle != null else Gen2Weather.NONE,
+		"weather_turns": _battle.weather_turns if _battle != null else 0,
+		"hud_visible": _hud_visible(),
+		"enemy_hud_visible": _enemy_hud_visible and _anim_hud_hidden != Gen2Battle.ENEMY,
+		"player_hud_visible": _player_hud_visible and _anim_hud_hidden != Gen2Battle.PLAYER,
+		"menu_stage": _menu_stage,
+		"menu_position": _menu_position,
+		"move_cursor": _move_cursor,
+		"move_rows": rows,
+		## Where `MoveSelectionScreen` puts its first row and how far apart the
+		## rest are, so a provider annotating the list never has to know the
+		## menu's own coordinates, and the box's right-hand column, which is the
+		## one cell of a row nothing else is written in.
+		"move_rows_at": Gen2BattleMenu.move_box().item_position(0),
+		"move_rows_step": Gen2BattleMenu.move_box().item_position(1) \
+			- Gen2BattleMenu.move_box().item_position(0),
+		"move_rows_right": Gen2BattleMenu.MOVE_RIGHT - 1,
+		## `EFFECTIVE` itself, so a provider compares against the engine's own
+		## neutral rather than repeating the number.
+		"neutral": RomLayout.MATCHUP_EFFECTIVE,
+	}
+
+
+## Whether the annotation layer may draw at all. Hidden wherever one of the
+## host's own full-screen subflows owns the same cells: the party page, the pack
+## and its two sub-lists, the forget offer, the naming prompt and the entrance,
+## each of which is the whole interface rather than a box in it.
+func _annotations_visible() -> bool:
+	return _renderer_ready and _annotations != null and _intro == null \
+		and _capture_nickname_host == null and _switch_stage == &"" \
+		and not _pack_selecting and not _pack_move_selecting and _forget_stage == &""
+
+
+## Rebuilds the annotation layer when what a provider would answer has changed.
+## Cheap to call on every push: with no provider registered the signature is
+## empty for the whole battle and nothing is ever drawn.
+func _refresh_annotations() -> void:
+	if _annotation_layer == null:
+		return
+	if not _annotations_visible() or Gen2ModHost.instance().battle_info_ids().is_empty():
+		_annotation_layer.visible = false
+		_annotations_drawn = ""
+		return
+	var placements: Array = Gen2ModHost.instance().battle_info_placements(info_snapshot())
+	var signature: String = str(placements)
+	if signature == _annotations_drawn:
+		_annotation_layer.visible = not placements.is_empty()
+		return
+	_annotations_drawn = signature
+	if placements.is_empty():
+		_annotation_layer.visible = false
+		return
+	var indices := PackedByteArray()
+	indices.resize(Gen2Screen.WIDTH * Gen2Screen.HEIGHT)
+	_annotations.draw(placements, indices, Gen2Screen.WIDTH)
+	_show_layer_image(
+		_annotation_layer,
+		Gen2PicImage.from_indices(
+			indices, Gen2Screen.WIDTH, Gen2Screen.HEIGHT,
+			Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK])),
+			true
+		),
+		Vector2i.ZERO
+	)
+
+
 ## Supplies the battle with the overworld's own clock reading, which Morning Sun,
 ## Synthesis and Moonlight are the only things to read. Set before the request is
 ## started; a battle begun without it stands at midday.
@@ -2489,7 +2615,27 @@ func _close_capture_nickname() -> void:
 		Gen2Screen.drop(host)
 
 
+## `PokeBallEffect` gives no experience of its own: this is what a registered
+## policy adds, and with none registered it answers false and the capture flow
+## above is the one the cartridge has.
+##
+## The catching tutorial and a Bug Contest catch are excluded: neither is an
+## ordinary capture, and the contest's is a score rather than a Pokemon kept.
+func _spend_capture_experience() -> bool:
+	if _capture_experience_spent or _battle == null or _world_battle_tutorial \
+		or bool(_capture_result.get("contest", false)) \
+		or not Gen2ModHost.awards_catch_experience():
+		return false
+	_capture_experience_spent = true
+	_pending.append_array(_battle.award_capture_experience())
+	if _pending.is_empty():
+		return false
+	_show_next_event()
+	return true
+
+
 func _clear_capture_action() -> void:
+	_capture_experience_spent = false
 	_capture_selecting = false
 	_capture_waiting = false
 	_capture_messages.clear()
@@ -2892,6 +3038,17 @@ func _continue_after_messages() -> void:
 		if bool(_capture_result.get("replace_offer", false)) and _switch_stage == &"":
 			_open_yes_no(&"contest_replace", CONTEST_REPLACE_TEXT)
 			return
+		## A registered policy's award and every level up, move offer and
+		## evolution flag behind it, spent between `Text_GotchaMonWasCaught` and
+		## `AskGiveNicknameText` so nothing is filed with a level up still owed.
+		if _spend_capture_experience():
+			return
+		if _capture_experience_spent:
+			if not _pending.is_empty():
+				_show_next_event()
+				return
+			if _open_move_learn():
+				return
 		## `.skip_pokedex` reaches `.catch_bug_contest_mon` before either
 		## `AskGiveNicknameText`, so a contest catch is never named.
 		if _open_capture_nickname():
@@ -2899,6 +3056,11 @@ func _continue_after_messages() -> void:
 		var capture: Dictionary = _capture_result.duplicate(true)
 		if not _capture_nickname.is_empty():
 			capture["nickname"] = _capture_nickname
+		if _capture_experience_spent:
+			## The experience landed on the party the battle owns, so the save
+			## the world holds needs it before that world files the catch.
+			sync_live_party()
+			capture["experience_awarded"] = true
 		_clear_capture_action()
 		_finish_world_capture(capture)
 		return
@@ -3596,6 +3758,9 @@ func _refresh_menu_layer() -> void:
 	if signature == _menu_drawn:
 		return
 	_menu_drawn = signature
+	## The move rows and which one the cursor is on are part of the snapshot, so
+	## the annotations move with the menu as well as with the battle.
+	_refresh_annotations()
 
 	if _info_layer != null:
 		_info_layer.visible = false
@@ -3848,6 +4013,10 @@ func _apply_event(event: Dictionary) -> void:
 	var before_player_max: int = _player_max_hp
 	var before_exp: int = _exp
 	_apply_event_state(event)
+	## Stages, weather, Haze, a Baton Pass and a switch all land here and only
+	## some of them move a bar, so the annotations follow the event rather than
+	## waiting for the next view push.
+	_refresh_annotations()
 	if StringName(event["type"]) == Gen2Battle.EXP_GAINED:
 		_start_exp_bar(event, before_exp)
 		return
@@ -4706,6 +4875,10 @@ func _push_view() -> void:
 	})
 	if _box != null:
 		_box.raster_scx = _box_raster_offsets()
+	## Every state change a provider could annotate reaches this, so the layer is
+	## refreshed here rather than at each of the twenty callers: a turn, a switch,
+	## Haze, a Baton Pass and a weather change are all one push.
+	_refresh_annotations()
 
 
 ## What is standing on one side's square and how far it is from standing on it,

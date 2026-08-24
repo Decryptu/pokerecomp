@@ -3402,11 +3402,12 @@ func _stage_strength_boulder() -> Dictionary:
 	var party: Dictionary = _request.get("party", {})
 	if party.is_empty():
 		return {"ok": false, "reason": &"missing_party_summary", "standard_index": STD_STRENGTH_BOULDER}
-	var slot: int = _party_slot_with_move(Gen2WorldFieldMove.MOVE_STRENGTH)
+	var source: Dictionary = _field_move_source(Gen2WorldFieldMove.MOVE_STRENGTH)
+	var slot: int = int(source.get("slot", -1))
 	var has_badge: bool = _engine_flag_active(
 		Gen2WorldState.badge_flag(Gen2WorldFieldMove.BADGE_PLAIN, _crystal_commands())
 	)
-	if slot < 0 or not has_badge:
+	if source.is_empty() or not has_badge:
 		_script_value = STRENGTH_OW_UNABLE
 		return _stage_internal_text(STRENGTH_MAY_MOVE_TEXT, true)
 	if _engine_flag_active(Gen2WorldState.strength_active_flag(_crystal_commands())):
@@ -3579,13 +3580,34 @@ func _party_slot_with_move(move: int) -> int:
 	return -1
 
 
+## The same question [method Gen2WorldAPI.field_move_source] answers, on the two
+## facts a scene-free runner has: the party mirror, and the alternate sources the
+## world resolved and handed over in `field_move_items`. Empty when neither
+## supplies the move, which is what every gate here refuses on.
+func _field_move_source(move: int) -> Dictionary:
+	var slot: int = _party_slot_with_move(move)
+	if slot >= 0:
+		return {"slot": slot, "item": 0}
+	var item: int = int((_request.get("field_move_items", {}) as Dictionary).get(move, 0))
+	return {"slot": -1, "item": item} if item > 0 else {}
+
+
+## `GetPartyNickname`, or the player's own name for a move used from an HM: no
+## Pokemon took part, so the line the source names its user in says who did.
+func _field_move_user_name(slot: int) -> String:
+	if slot < 0:
+		var player: String = String(_request.get("player_name", ""))
+		return player if not player.is_empty() else "PLAYER"
+	var names: Array = _request.get("party", {}).get("names", [])
+	return String(names[slot]) if slot < names.size() else "#MON"
+
+
 ## SetStrengthFlag plus Script_UsedStrength's two texts. The cry and its three
 ## frame pause are presentation the runner does not own, so the two writetexts
 ## become two pauses back to back, which is what a reader sees either way.
 func _stage_strength_used(slot: int) -> Dictionary:
 	_staged_engine_flags[Gen2WorldState.strength_active_flag(_crystal_commands())] = true
-	var names: Array = _request.get("party", {}).get("names", [])
-	var name: String = String(names[slot]) if slot >= 0 and slot < names.size() else "#MON"
+	var name: String = _field_move_user_name(slot)
 	_pending = {
 		"type": &"text",
 		"text": "%s used\nSTRENGTH!" % name,
@@ -3616,9 +3638,10 @@ func _stage_field_move_prompt() -> Dictionary:
 	if party.is_empty():
 		return {"ok": false, "reason": &"missing_party_summary", "kind": &"field_move_prompt"}
 	var move: int = int(_request.get("move", 0))
-	var slot: int = _party_slot_with_move(move)
+	var source: Dictionary = _field_move_source(move)
+	var slot: int = int(source.get("slot", -1))
 	var badge: int = _field_move_prompt_badge(move)
-	var allowed: bool = slot >= 0
+	var allowed: bool = not source.is_empty()
 	if allowed and badge >= 0:
 		allowed = _engine_flag_active(
 			Gen2WorldState.badge_flag(badge, _crystal_commands())
@@ -3717,8 +3740,7 @@ func _stage_smash_rock() -> Dictionary:
 
 ## RockSmashScript's `callasm GetPartyNickname` and `writetext UseRockSmashText`.
 func _stage_rock_smash_used(slot: int) -> Dictionary:
-	var names: Array = _request.get("party", {}).get("names", [])
-	var name: String = String(names[slot]) if slot >= 0 and slot < names.size() else "#MON"
+	var name: String = _field_move_user_name(slot)
 	_pending = {
 		"type": &"text",
 		"text": ROCK_SMASH_USED_TEXT % name,

@@ -127,6 +127,13 @@ var _pc_sfx: int = -1
 var _pc_after: StringName = &"top"
 var _pc_label: String = ""
 var _boxes: Gen2BoxScreen = null
+## Whether storage was opened without the Pokemon Center machine around it, so
+## its B leaves the host rather than stepping back to a menu. See
+## [method open_bills_pc].
+var _bills_pc_only: bool = false
+## Whether the menu on screen is the host's own question rather than a script's.
+## See [method open_prompt].
+var _host_prompt: bool = false
 
 ## The screen every layer here is drawn in: the one the opener handed over, so
 ## the menu box stands on the map's own 160x144 rather than beside it.
@@ -314,6 +321,30 @@ func _build_ui() -> void:
 	_service_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_service_hardware.display(_service_view)
 	_apply_layer_visibility()
+
+
+## A YES/NO the HOST asks rather than one a script staged: the same
+## `Script_yesorno` box in the same place, answered back to whoever opened this
+## instead of into the script runner. [method completed] carries one
+## `{kind: &"host_choice", choice}` row, choice 0 for YES and 1 for NO, and -1
+## when it was cancelled.
+func open_prompt(
+	world: Gen2WorldAPI,
+	data: GameData,
+	save: Gen2SaveData,
+	persist: bool,
+	text: String
+) -> bool:
+	_world = world
+	_data = data
+	_save = save
+	_persist = persist
+	if _world == null or _data == null:
+		_show_error("Prompt has no world or cartridge cache.")
+		return false
+	_host_prompt = true
+	_open_menu({"text": text, "choices": Gen2WorldMenu.YES_NO_KEYS})
+	return true
 
 
 func _open_menu(input: Dictionary) -> void:
@@ -703,6 +734,31 @@ func _finish_apricorns() -> void:
 	_finish_runtime({"ok": true, "item": answer["item"], "quantity": answer["quantity"]})
 
 
+## BILL'S PC on its own, without the machine's top menu in front of it: the
+## opening a registered start-menu action asks for. `PC_CheckPartyForPokemon` is
+## the same refusal the machine has, applied here rather than trusted.
+func open_bills_pc(
+	world: Gen2WorldAPI,
+	data: GameData,
+	save: Gen2SaveData = null,
+	persist: bool = false
+) -> bool:
+	_world = world
+	_data = data
+	_save = save
+	_persist = persist
+	if _world == null or _data == null:
+		_show_error("Storage has no world or cartridge cache.")
+		return false
+	if not Gen2WorldPC.can_open(_save):
+		_show_error("Storage needs a party.")
+		return false
+	_mode = MODE.PC
+	_bills_pc_only = true
+	_open_boxes()
+	return _boxes != null
+
+
 ## `PokemonCenterPC`'s top menu, or `_PlayersHousePC`'s item PC when the script
 ## asked for the bedroom's. `PC_CheckPartyForPokemon` is the one refusal either
 ## has before it opens.
@@ -941,6 +997,11 @@ func _on_boxes_closed(_result: Dictionary) -> void:
 		Gen2Screen.drop(_boxes)
 		_boxes = null
 	_set_overlay_open(false)
+	## Storage opened on its own has no machine behind it to step back to, so its
+	## B leaves the host entirely and the caller reopens whatever it came from.
+	if _bills_pc_only:
+		_finish([])
+		return
 	_open_pc(&"pokemon_center")
 
 
@@ -1272,11 +1333,19 @@ func _cancel() -> void:
 
 
 func _finish_input(choice: int) -> void:
+	if _host_prompt:
+		_finish([{"kind": &"host_choice", "choice": choice}])
+		return
 	var results: Array = _world.choose_script_input(choice)
 	_finish(results)
 
 
 func _finish_input_cancelled() -> void:
+	if _host_prompt:
+		## `YesNoBox`'s B is its NO, not a third answer: the caller is told the
+		## same thing the second row would have told it.
+		_finish([{"kind": &"host_choice", "choice": 1}])
+		return
 	var results: Array = _world.cancel_script_input()
 	_finish(results)
 

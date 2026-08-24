@@ -33,6 +33,11 @@ const ITEM_PLAYER: StringName = &"player"
 const ITEM_SAVE: StringName = &"save"
 const ITEM_OPTION: StringName = &"option"
 const ITEM_EXIT: StringName = &"exit"
+## Not the cartridge's either. Appears only while a registered field-move source
+## has an HM move to offer that no party member knows and the badge is in hand,
+## so a game with no such source shows the source menu exactly. It sits ahead of
+## MODS because it is a way of playing rather than a setting.
+const ITEM_FIELD_MOVES: StringName = &"field_moves"
 ## Not the cartridge's. Appears only when an installed mod registered a setting,
 ## so a player with no mods, or none that configure anything, sees the source
 ## menu exactly. It sits after OPTION and before the entries mods registered
@@ -85,6 +90,7 @@ static func build(
 	pokegear_obtained: bool,
 	previous_cursor: int = 0,
 	player_name: String = "",
+	field_moves: bool = false,
 ) -> Gen2WorldStartMenu:
 	var menu := Gen2WorldStartMenu.new()
 	var passes: Dictionary = {
@@ -98,13 +104,19 @@ static func build(
 		if not String(gate).is_empty() and not bool(passes.get(gate, false)):
 			continue
 		if entry["kind"] == ITEM_EXIT:
+			if field_moves:
+				rows.append(_entry(ITEM_FIELD_MOVES, "MOVES", true))
 			## The entry carries the host's own VIEW row as well as the mods'
 			## settings, so a player with a view to switch to reaches it with no
 			## mod having registered anything.
 			if not Gen2ModHost.instance().option_mod_ids().is_empty() \
 				or Gen2ModHost.instance().view_ids().size() > 1:
 				rows.append(_entry(ITEM_MODS, "MODS", true))
-			rows.append_array(Gen2ModHost.instance().menu_entries(Gen2ModHost.MENU_START))
+			rows.append_array(Gen2ModHost.instance().start_menu_entries({
+				"party_count": party_count,
+				"pokedex": pokedex_obtained,
+				"pokegear": pokegear_obtained,
+			}))
 		var label: String = String(entry["label"])
 		## `PlaceString` reads `wPlayerName` for `<PLAYER>`, so the STATUS row
 		## says the player's own name and never those eight characters.
@@ -134,6 +146,7 @@ static func from_world(world: Gen2WorldAPI, previous_cursor: int = 0) -> Gen2Wor
 		world.state.is_engine_flag_active(ENGINE_POKEGEAR),
 		previous_cursor,
 		world.player_name(),
+		not world.item_field_move_offers().is_empty(),
 	)
 	menu.load_descriptions(world.data)
 	return menu

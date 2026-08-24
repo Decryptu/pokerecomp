@@ -7,7 +7,10 @@ extends SceneTree
 ##
 ##   Godot --path . -s res://tools/preview_battle_switch.gd -- crystal /tmp/s.png [stage] [presses] [passes]
 ##
-## [stage] is one of `offer` (the default), `menu`, `move`, `contest`, `pack`,
+## [stage] is one of `offer` (the default), `menu`, `move`, `info` (the move
+## list with a registered battle-information provider's annotations over it:
+## a mark per row for the effectiveness against the defender, the non-zero stat
+## stages, and a tile of the provider's own for the weather), `contest`, `pack`,
 ## `pick`, `use_next`, `replace` and `level_up`, which is the stats box
 ## `.skip_exp_bar_animation` draws beside its grew-to-level line;
 ## [presses] is a `u,d,l,r,a,b` list driven into the menu before the shot, so a
@@ -43,6 +46,10 @@ const PLAYER_LEVEL: int = 30
 ## Four moves on the lead, so `MoveSelectionScreen`'s list is a full one:
 ## TACKLE, GROWL, TAIL_WHIP and BITE (constants/move_constants.asm).
 const LEAD_MOVES: Array[int] = [33, 45, 39, 44]
+## The `info` stage's own four, one per effectiveness the annotation can mark
+## against Pidgey's NORMAL/FLYING: THUNDERSHOCK is super effective, TACKLE
+## neutral, VINE WHIP resisted and EARTHQUAKE has no effect at all.
+const INFO_MOVES: Array[int] = [84, 33, 22, 89]
 
 var _screen: Gen2BattleScreen = null
 var _output_path: String = ""
@@ -103,6 +110,70 @@ func _process(_delta: float) -> bool:
 	return true
 
 
+## What a registered battle-information provider is, in the fewest lines that
+## draw all three things one can put on the interface: a mark per move row, the
+## stages that moved, and a tile the cartridge has no glyph for.
+class Annotations extends RefCounted:
+	## The two corners a battle leaves empty: above the enemy's picture, and the
+	## cell in front of its panel. Where an annotation goes is the mod's own
+	## business; these two are chosen so the capture reads.
+	const STAGES_AT := Vector2i(13, 0)
+	const WEATHER_AT := Vector2i(0, 5)
+	## Eight bytes of 1bpp, one a row, bit 7 leftmost.
+	const SUN_ROWS: Array[int] = [0x18, 0x3C, 0x7E, 0xFF, 0xFF, 0x7E, 0x3C, 0x18]
+	## The three marks, as tiles rather than text: the interface font has no `+`
+	## and its `▲` is a code the main font does not carry, so a symbol the
+	## cartridge never printed is supplied here. Eight bytes of 1bpp, one a row,
+	## bit 7 leftmost. A circle with a centre dot for super effective, a triangle
+	## for resisted and an X for no effect at all.
+	const MARK_SUPER: Array[int] = [0x3C, 0x42, 0x81, 0x99, 0x99, 0x81, 0x42, 0x3C]
+	const MARK_RESISTED: Array[int] = [0x00, 0x10, 0x38, 0x38, 0x7C, 0x7C, 0xFE, 0x00]
+	const MARK_IMMUNE: Array[int] = [0x00, 0x42, 0x24, 0x18, 0x18, 0x24, 0x42, 0x00]
+
+	## The seven keys `Gen2BattleMon.stages` carries, said the way a player reads
+	## them. The interface font has no `+`: the charmap's own arrows are what a
+	## direction is written with, and a mod wanting a `+` supplies it as a tile.
+	const STAGE_LABELS: Dictionary = {
+		"attack": "ATK", "defense": "DEF", "speed": "SPD",
+		"sp_attack": "SP.A", "sp_defense": "SP.D",
+		"accuracy": "ACC", "evasion": "EVA",
+	}
+
+	func annotate_battle(snapshot: Dictionary) -> Array:
+		var out: Array = []
+		var neutral: int = int(snapshot.get("neutral", 10))
+		if String(snapshot.get("menu_stage", "")) == "move" \
+			and bool(snapshot.get("enemy_seen_before", false)):
+			for index: int in (snapshot.get("move_rows", []) as Array).size():
+				var row: Dictionary = (snapshot["move_rows"] as Array)[index]
+				var against: int = int(row.get("effectiveness", neutral))
+				if against == neutral:
+					continue
+				var mark: Array[int] = MARK_IMMUNE if against == 0 else (
+					MARK_SUPER if against > neutral else MARK_RESISTED
+				)
+				## Where the host says the rows are, rather than where
+				## `MoveSelectionScreen` happens to put them today.
+				var at: Vector2i = (snapshot["move_rows_at"] as Vector2i) \
+					+ (snapshot["move_rows_step"] as Vector2i) * index
+				out.append({
+					"tile": mark, "at": Vector2i(int(snapshot["move_rows_right"]), at.y),
+				})
+		var line: Vector2i = STAGES_AT
+		for key: String in (snapshot.get("player_stages", {}) as Dictionary):
+			var stage: int = int((snapshot["player_stages"] as Dictionary)[key])
+			if stage == 0:
+				continue
+			out.append({
+				"text": "%s%d" % [STAGE_LABELS.get(key, key.to_upper()), stage],
+				"at": line,
+			})
+			line += Vector2i(0, 1)
+		if Gen2Weather.is_active(int(snapshot.get("weather", 0))):
+			out.append({"tile": SUN_ROWS, "at": WEATHER_AT})
+		return out
+
+
 ## The trainer's second Pokémon coming in, which is what `OfferSwitch` asks
 ## about, or the player's own going down, which is what `AskUseNextPokemon` and
 ## `ForcePlayerMonChoice` follow. SHIFT is forced on rather than read out of the
@@ -114,9 +185,10 @@ func _open() -> void:
 
 	var members: Array = []
 	for species: int in PLAYER_SPECIES:
+		var lead: Array[int] = INFO_MOVES if _stage == "info" else LEAD_MOVES
 		members.append(Gen2BattleMon.create(
 			data, species, PLAYER_LEVEL,
-			LEAD_MOVES.duplicate() if members.is_empty() else [33]
+			lead.duplicate() if members.is_empty() else [33]
 		))
 	var enemy: Gen2Party = Gen2TrainerParty.build(data, TRAINER_CLASS, 0)
 	if enemy == null or enemy.size() < 2:
@@ -154,7 +226,7 @@ func _open() -> void:
 		_screen.set("_pending", battle.take_actions(
 			Gen2Battle.use_move(0), Gen2Battle.use_move(0)
 		))
-	elif _stage not in ["menu", "move", "contest", "pack"]:
+	elif _stage not in ["menu", "move", "info", "contest", "pack"]:
 		_screen.set("_pending", battle.take_actions(
 			Gen2Battle.use_move(0), Gen2Battle.switch_to(1)
 		))
@@ -178,9 +250,21 @@ func _open() -> void:
 
 	## Both menu stages are what the intro leads into with nothing else staged,
 	## which is `BattleMenu`'s own first opening.
-	if _stage in ["menu", "move", "contest", "pack"]:
+	if _stage in ["menu", "move", "info", "contest", "pack"]:
+		## The annotations are a mod's, over the move list they describe: the
+		## provider is synthetic and everything it is handed, and everything drawn
+		## from what it answers, is the host's.
+		if _stage == "info":
+			Gen2ModHost.instance().register_battle_info(&"preview", Annotations.new())
+			## What `SetSeenMon` would have left behind, since a first sighting is
+			## not something the Pokedex could have told the player about.
+			_screen.set("_enemy_seen_before", true)
+			battle.weather = Gen2Weather.SUN
+			battle.weather_turns = 3
+			battle.player.stages["attack"] = 2
+			battle.player.stages["speed"] = -1
 		_drain_to_menu()
-		if _stage == "move":
+		if _stage in ["move", "info"]:
 			_screen._handle_button(Gen2Button.A)
 		## `BattlePack`'s own list, over the bag the world hands the battle. The
 		## rows are a real cache's items, so the picture reads as the pack.
@@ -232,11 +316,16 @@ func _drain_to_level_up() -> void:
 
 
 ## The same drain, stopping at `BattleMenu` rather than at a switch question.
+## `BattleMenu`'s own first opening. The menu is looked for after the frames the
+## entrance owes have been spent and before the next press, not before both: the
+## check used to stand in front of the whole iteration, so the press that opened
+## the menu was followed by one more that chose FIGHT, and every stage below
+## photographed a turn instead of the list it asked for.
 func _drain_to_menu() -> void:
 	for _press: int in 60:
+		_settle()
 		if String(_screen.battle_snapshot()["menu_stage"]) != "":
 			return
-		_settle()
 		_screen.finish()
 		_screen.advance()
 
