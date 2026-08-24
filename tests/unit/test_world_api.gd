@@ -8231,6 +8231,47 @@ func _mom_state(
 	return state
 
 
+## `Diploma` and `PrintDiploma` are the same page under two loops, and neither
+## writes anything a script reads: what the request carries is which loop.
+func test_the_two_diploma_specials_differ_only_in_the_loop_they_open() -> void:
+	for row: Array in [
+		[Gen2WorldScriptRunner.SPECIAL_DIPLOMA, false],
+		[Gen2WorldScriptRunner.SPECIAL_PRINT_DIPLOMA, true],
+	]:
+		_write_special_script([
+			Gen2WorldScript.SPECIAL, int(row[0]), 0,
+			Gen2WorldScript.SETEVENT, 0x12, 0x00,
+			Gen2WorldScript.END,
+		])
+		var world: Gen2WorldAPI = _special_world()
+		var opened: Array = _run_special(world)
+		var request: Dictionary = opened[0]["event"]["request"]
+		assert_eq(request["kind"], &"diploma_requested")
+		assert_eq(bool(request["values"]["printing"]), bool(row[1]))
+		var resumed: Array = world.complete_runtime_request({"ok": true})
+		assert_eq(resumed[0]["status"], &"complete")
+		assert_true(world.event_flag_active(0x12), "the script runs on behind the page")
+
+
+## `_UnownPrinter`'s own `ld a, [wUnownDex] / and a / ret z`: the count is the
+## whole of what the request carries, so the host and the runner refuse on the
+## same byte.
+func test_the_unown_printer_carries_the_dex_count_it_refuses_on() -> void:
+	_write_special_script([
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_UNOWN_PRINTER, 0,
+		Gen2WorldScript.END,
+	])
+	for caught: int in [0, 3]:
+		var state := Gen2WorldState.new()
+		for form: int in range(1, caught + 1):
+			state.update_unown_dex(form)
+		var world: Gen2WorldAPI = _special_world(state)
+		var request: Dictionary = _run_special(world)[0]["event"]["request"]
+		assert_eq(request["kind"], &"unown_printer_requested")
+		assert_eq(int(request["values"]["caught"]), caught)
+		assert_eq(world.complete_runtime_request({"ok": true})[0]["status"], &"complete")
+
+
 ## One script at a fixed address, reached by the map's own coordinate event, so
 ## every special test above drives the same path a real script does.
 func _write_special_script(bytes: Array, extra: Dictionary = {}) -> void:

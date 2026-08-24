@@ -53,10 +53,6 @@ const EXPECTED_DEFERRED: Dictionary = {
 	## work, not a dispatch entry: it opens a screen, spends a transaction, or
 	## reads a save field nothing writes.
 	##
-	## The three printer rows need art no cache carries: `DiplomaGFX` and its two
-	## tilemaps, and `_UnownPrinter`'s own frontpic page. Both are a cache-format
-	## bump away rather than a routine away.
-	39: "UnownPrinter", 107: "Diploma", 108: "PrintDiploma",
 
 	## Reached by one script row each and by nothing the player can talk to.
 	## `FindPartyMonAboveLevel` is marked `; unused` in the pin's own table.

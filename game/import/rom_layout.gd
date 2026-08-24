@@ -1182,6 +1182,31 @@ const UNOWN_PUZZLE_BORDER_TILES: int = 8
 const PREDEFPAL_UNOWN_PUZZLE: int = 0x4C
 
 
+## `PlaceDiplomaOnScreen`'s art (`engine/events/diploma.asm`): `DiplomaGFX` is
+## one LZ strip and the two tilemaps behind it are whole screens of tile
+## numbers, uncompressed and laid out in the file's own order. Identical on all
+## three cartridges.
+const DIPLOMA_TILES: int = 112
+const DIPLOMA_TILEMAP_BYTES: int = 360
+
+## `PalPacket_Diploma`'s first entry, and the only one the page is drawn in:
+## `_CGB_Unused0D` is SCGB_DIPLOMA's own layout and its `WipeAttrmap` puts every
+## cell on palette 0.
+const PREDEFPAL_DIPLOMA: int = 0x1B
+
+## `PrinterStatusStringPointers`' eight strings in table order, by the status
+## each names. `null` is the empty string a status of zero prints, which is what
+## `PlacePrinterStatusString` returns early on rather than drawing.
+const PRINTER_STATUS_STRINGS: Array[String] = [
+	"null", "checking_link", "transmitting", "printing",
+	"error_1", "error_2", "error_3", "error_4",
+]
+
+## `_UnownPrinter`'s two `Request1bpp` glyphs, which the menu prints as `♂` and
+## `♀`: a bold A for PRINT and a bold B for CANCEL.
+const UNOWN_PRINTER_GLYPH_TILES: int = 2
+
+
 ## `_SlotMachine`'s own data run (engine/games/slot_machine.asm), as
 ## (cache name, kind, size). `strip` is a raw byte run of that many bytes and
 ## `lz` a compressed one of that many tiles. `Reel1Tilemap` pins the lot: the
@@ -2163,6 +2188,13 @@ const GOLD_SILVER: Dictionary = {
 	# `_UnownPuzzle`'s art, the same two pins as Crystal's at Gold and Silver's
 	# own addresses. Both cartridges carry it at the same offsets.
 	"unown_puzzle": {"tile_borders": 0xE1F30, "section": 0xE1FD2},
+	# `DiplomaGFX` and the two tilemaps behind it, at Gold and Silver's own
+	# address; located the way Crystal's is.
+	"diploma": 0xE0105,
+	# `UnownDexATile` behind `UnownDexVacantString`, and `GBPrinterStrings`
+	# behind `PrinterStatusStringPointers`' first entry.
+	"unown_printer_glyphs": 0x16FCC,
+	"printer_strings": 0x1C00C5,
 	# `_SlotMachine`'s run at Gold and Silver's own addresses, which are the same
 	# on both. The bet text sits at the end of bank $65 and the four behind it at
 	# the top of $66, which a byte walk crosses without noticing.
@@ -2655,6 +2687,17 @@ const CRYSTAL: Dictionary = {
 	# `UnownPuzzleCursorGFX` are the two pinned addresses; the walk in
 	# `UNOWN_PUZZLE_SECTION` reaches the five behind the cursor.
 	"unown_puzzle": {"tile_borders": 0xE1723, "section": 0xE17C5},
+	# `DiplomaGFX`, which `PlaceDiplomaOnScreen` decompresses and whose two
+	# `SCREEN_AREA` tilemaps are laid out behind it with nothing between them.
+	# Located off `.GameFreak`, the last of `PrintDiplomaPage2`'s own two
+	# strings: `db "GAME FREAK@"` is eleven bytes and the INCBIN follows it.
+	"diploma": 0x1DD805,
+	# `UnownDexATile`, the two 1bpp tiles `_UnownPrinter` requests into the
+	# menu's own A and B glyphs, seven bytes behind `UnownDexVacantString`.
+	"unown_printer_glyphs": 0x16D9C,
+	# `GBPrinterStrings`, which is `GBPrinterString_Null`'s own `"@"` with the
+	# other seven terminated strings behind it in table order.
+	"printer_strings": 0x1DC275,
 	# `_SlotMachine`'s data run and the sixteen palettes `_CGB_SlotMachine`
 	# copies. `section` is `Reel1Tilemap`, which walks the whole run; the three
 	# text pins are the stub blocks at the end of `Slots_AskBet`,

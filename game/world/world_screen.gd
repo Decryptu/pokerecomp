@@ -177,6 +177,8 @@ var _move_tutor_script_value: int = Gen2MoveTutor.SCRIPT_VALUE_CANCELLED
 ## do, so the save it was handed is kept beside it only to write nothing else.
 var _day_care_host: Gen2DayCareScreen = null
 var _unown_puzzle_host: Gen2UnownPuzzleScreen = null
+var _diploma_host: Gen2DiplomaScreen = null
+var _unown_printer_host: Gen2UnownPrinterScreen = null
 var _slot_machine_host: Gen2SlotMachineScreen = null
 var _card_flip_host: Gen2CardFlipScreen = null
 ## What `DayCareManOutside` left in wScriptVar, held between the screen finishing
@@ -632,7 +634,8 @@ func _apply_interface_mask() -> void:
 		or _name_rater_host != null or _move_deleter_host != null
 		or _move_tutor_host != null or _day_care_host != null
 		or _unown_puzzle_host != null or _slot_machine_host != null
-		or _card_flip_host != null
+		or _card_flip_host != null or _diploma_host != null
+		or _unown_printer_host != null
 	)
 	_screen.interface_masked = _screen.expanded and owned \
 		and Gen2ModHost.renderer_uses_hardware_viewport(_renderer)
@@ -1055,7 +1058,8 @@ func _overlay_open() -> bool:
 		or _name_rater_host != null or _move_deleter_host != null \
 		or _move_tutor_host != null \
 		or _day_care_host != null or _unown_puzzle_host != null \
-		or _slot_machine_host != null or _card_flip_host != null
+		or _slot_machine_host != null or _card_flip_host != null \
+		or _diploma_host != null or _unown_printer_host != null
 
 
 ## Wandering objects keep to themselves while anything else owns the world: a
@@ -1185,6 +1189,15 @@ func _handle_button(button: int) -> bool:
 	## The Day-Care's five, one screen with the same shape again.
 	if _day_care_host != null:
 		_day_care_host.handle_button(button)
+		return true
+	## `special UnownPrinter`, which owns the whole screen until B off its list.
+	if _unown_printer_host != null:
+		_unown_printer_host.handle_button(button)
+		return true
+	## `special Diploma`, which owns the whole screen until a button, and
+	## `special PrintDiploma`, which owns it until B.
+	if _diploma_host != null:
+		_diploma_host.handle_button(button)
 		return true
 	## `special UnownPuzzle`, which owns the whole screen until START or the
 	## last piece.
@@ -1909,6 +1922,86 @@ func _on_name_rater_closed() -> void:
 ## `special UnownPuzzle`. `FadeToMenu` in front of it and `ExitAllMenus` behind
 ## it are what the host's own overlay already is: the board covers the map and
 ## the map is redrawn when it closes.
+## `_Diploma`'s page, or `_PrintDiploma`'s with the printer's own status box
+## over it. The screen owns both loops; this only hands it the two things the
+## page prints that the cache does not carry.
+func _open_diploma(request: Dictionary) -> bool:
+	if _diploma_host != null or _world == null or _data == null:
+		return false
+	var host := Gen2DiplomaScreen.new()
+	host.z_index = 30
+	## Displayed before it draws: `Gen2PicImage.show` hands the picture to the
+	## screen the node stands in, and a node not in one yet tells it nothing, so
+	## the surround would keep the map behind a page that fills the hardware.
+	_screen.display(host)
+	var save: Gen2SaveData = _injected_save if _injected_save != null \
+		else _selected_runtime_save()
+	var clock: Gen2GameTime = save.game_time if save != null else null
+	if not host.open(
+		_data, _player_display_name(),
+		{
+			"hours": clock.hours if clock != null else 0,
+			"minutes": clock.minutes if clock != null else 0,
+		},
+		bool((request.get("values", {}) as Dictionary).get("printing", false))
+	):
+		Gen2Screen.drop(host)
+		_script_prompt = "Diploma unavailable: diploma_art_unavailable"
+		return false
+	host.closed.connect(_on_diploma_closed)
+	host.music_requested.connect(_play_music_track)
+	_diploma_host = host
+	## Here as well as on the next frame: a screen opened by a driver that spends
+	## no frame would otherwise stand with the map around it.
+	_apply_interface_mask()
+	_script_prompt = "Diploma"
+	_refresh_labels()
+	return true
+
+
+func _on_diploma_closed() -> void:
+	var host: Gen2DiplomaScreen = _diploma_host
+	_diploma_host = null
+	if host != null:
+		Gen2Screen.drop(host)
+	## `Printer_RestartMapMusic`, and `ExitAllMenus` behind both specials.
+	_play_current_map_music()
+	_show_script_results(_world.complete_runtime_request({"ok": true}))
+
+
+## `_UnownPrinter`'s browser. The dex count comes from the request rather than
+## from here, so the runner and the screen answer the same `ret z`.
+func _open_unown_printer(request: Dictionary) -> bool:
+	if _unown_printer_host != null or _world == null or _data == null:
+		return false
+	var host := Gen2UnownPrinterScreen.new()
+	host.z_index = 30
+	_screen.display(host)
+	if not host.open(
+		_data, int((request.get("values", {}) as Dictionary).get("caught", 0))
+	):
+		Gen2Screen.drop(host)
+		_script_prompt = "Unown printer unavailable: no Unown caught"
+		return false
+	host.closed.connect(_on_unown_printer_closed)
+	host.music_requested.connect(_play_music_track)
+	_unown_printer_host = host
+	_apply_interface_mask()
+	_script_prompt = "Unown printer"
+	_refresh_labels()
+	return true
+
+
+func _on_unown_printer_closed() -> void:
+	var host: Gen2UnownPrinterScreen = _unown_printer_host
+	_unown_printer_host = null
+	if host != null:
+		Gen2Screen.drop(host)
+	## `RestartMapMusic` behind `.pressed_b`, and `ReturnToMapFromSubmenu`.
+	_play_current_map_music()
+	_show_script_results(_world.complete_runtime_request({"ok": true}))
+
+
 func _open_unown_puzzle(request: Dictionary) -> bool:
 	if _unown_puzzle_host != null or _world == null or _data == null:
 		return false
@@ -3143,6 +3236,31 @@ func preview_name_rater() -> void:
 	_injected_save = save
 	_world.set_player_id(save.player_id)
 	_open_name_rater()
+
+
+## Public screenshot driver for `_UnownPrinter`, which no fixture cell reaches
+## and which a world with no caught Unown never opens: [param slot] is the
+## browser's own cursor and [param printing] the page A sends.
+func preview_unown_printer(slot: int = 0, printing: bool = false) -> void:
+	if not _open_unown_printer({"values": {"caught": 1}}):
+		return
+	if _unown_printer_host == null:
+		return
+	for _step: int in maxi(slot, 0):
+		_unown_printer_host.handle_button(Gen2Button.RIGHT)
+	if printing:
+		_unown_printer_host.handle_button(Gen2Button.A)
+
+
+## Public screenshot driver for `_Diploma` and `_PrintDiploma`, which no fixture
+## cell reaches: the diploma is one flag deep into the Hall of Fame's own script.
+## [param page] is 1 or 2, and 2 is the page only a printer that answered would
+## have reached.
+func preview_diploma(printing: bool = false, page: int = 1) -> void:
+	if not _open_diploma({"values": {"printing": printing}}):
+		return
+	if _diploma_host != null and page != 1:
+		_diploma_host.preview_page(page)
 
 
 ## Public screenshot driver for `Mom_WithdrawDepositMenuJoypad`, whose box no
@@ -6066,6 +6184,20 @@ func _show_script_results(results: Array) -> void:
 						)),
 					}))
 					return
+				if StringName(request.get("kind", &"")) == &"unown_printer_requested":
+					if _open_unown_printer(request):
+						break
+					## `ret z` on an empty dex, and the same answer for a cache
+					## with no glyphs: the script runs straight on.
+					_show_script_results(_world.complete_runtime_request({"ok": true}))
+					return
+				if StringName(request.get("kind", &"")) == &"diploma_requested":
+					if _open_diploma(request):
+						break
+					## A cache with no diploma art answers the script the way a
+					## page that has been read does: it writes nothing either.
+					_show_script_results(_world.complete_runtime_request({"ok": true}))
+					return
 				if StringName(request.get("kind", &"")) == &"unown_puzzle_requested":
 					if _open_unown_puzzle(request):
 						break
@@ -6714,6 +6846,18 @@ func _fade_to_map_music() -> void:
 ## the track a tuned radio station left there survives until the player leaves
 ## the map. Restarting a piece that is already playing is a presentation
 ## difference from the source, which compares before it restarts.
+## One music track by its own index, for a screen that starts its own: the
+## printer's is the first, and `_play_current_map_music` is what puts the map's
+## back.
+func _play_music_track(index: int) -> void:
+	if _audio_player == null or _data == null:
+		return
+	var record: Dictionary = _data.world_audio(&"music", index)
+	if record.is_empty():
+		return
+	_audio_player.play_record(record, &"map_music", _audio_assets())
+
+
 func _play_current_map_music() -> void:
 	if _audio_player == null or _data == null or _world == null or _world.current_map == null:
 		return

@@ -76,6 +76,12 @@ extends SceneTree
 ## into the prompt to photograph, 1 its question with the YES/NO up and 2 the
 ## `WasSentToBillsPCText` behind NO, and the second the species, plus 1000 for
 ## the box branch that prints that line),
+## `unown_printer` (`_UnownPrinter`'s ALPH RUINS STAMP browser, which no fixture
+## cell reaches: the first number is the slot, 26 being the vacant one, and the
+## second is 1 for the page A sends to a printer that is not there),
+## `diploma` (`_Diploma`'s page: the first number is 1 for `_PrintDiploma`'s
+## loop, which stands the printer's own connection error over it, and the second
+## is the page, where 2 is the one only a printer that answered reaches),
 ## `mom_bank` (`Mom_WithdrawDepositMenuJoypad`'s dial, which no fixture cell
 ## reaches: the first number is the wallet in hundreds and the second her own
 ## balance in hundreds, plus 1000 for the WITHDRAW header),
@@ -594,6 +600,15 @@ func _process(_delta: float) -> bool:
 					break
 		elif _kind == &"pokepic":
 			_screen.preview_pokepic(POKEPIC_SPECIES)
+		elif _kind == &"unown_printer":
+			## `_UnownPrinter`'s browser: the first number is the slot, where 26
+			## is the vacant one, and the second is 1 for the page A sends.
+			_screen.preview_unown_printer(maxi(_cell.x, 0), _cell.y >= 1)
+		elif _kind == &"diploma":
+			## `_Diploma`'s page, `_PrintDiploma`'s with the printer's own status
+			## box over it, and page 2 behind a printer that answered: the first
+			## number is 1 for the printing loop and the second the page.
+			_screen.preview_diploma(_cell.x >= 1, maxi(_cell.y, 1))
 		elif _kind == &"mom_bank":
 			## `Mom_SetUpDepositMenu` and its withdraw twin, which no fixture
 			## cell reaches: her house is not a preview map and the dial stands

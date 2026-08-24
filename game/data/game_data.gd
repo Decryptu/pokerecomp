@@ -75,6 +75,8 @@ var _unown_walls: PackedStringArray = PackedStringArray()
 var _credits: Dictionary = {}
 var _intro_movie: Dictionary = {}
 var _unown_puzzle: Dictionary = {}
+var _diploma: Dictionary = {}
+var _printer_strings: Dictionary = {}
 var _slots: Dictionary = {}
 var _slots_text: Dictionary = {}
 var _card_flip: Dictionary = {}
@@ -194,6 +196,10 @@ static func open_directory(path: String) -> GameData:
 	data._intro_movie = intro_movie if intro_movie is Dictionary else {}
 	var unown_puzzle: Variant = manifest.get("unown_puzzle", {})
 	data._unown_puzzle = unown_puzzle if unown_puzzle is Dictionary else {}
+	var diploma: Variant = manifest.get("diploma", {})
+	data._diploma = diploma if diploma is Dictionary else {}
+	var printer_strings: Variant = manifest.get("printer_strings", {})
+	data._printer_strings = printer_strings if printer_strings is Dictionary else {}
 	var slots: Variant = manifest.get("slots", {})
 	data._slots = slots if slots is Dictionary else {}
 	var raw_slots_text: Variant = manifest.get("slots_text", {})
@@ -1889,6 +1895,40 @@ func unown_puzzle_palette() -> PackedColorArray:
 	for packed: Variant in _unown_puzzle.get("palette", []) as Array:
 		colors.append(Gen2Palette.from_packed(int(packed)))
 	return colors
+
+
+## `DiplomaGFX`'s own strip, and one of `PlaceDiplomaOnScreen`'s two tilemaps by
+## its page number. A cache imported before format 84 carries neither, which is
+## what `has_diploma` answers for.
+func has_diploma() -> bool:
+	return not (_diploma.get("page1", []) as Array).is_empty()
+
+
+func diploma_indices() -> PackedByteArray:
+	return tile_indices("diploma")
+
+
+func diploma_tilemap(page: int) -> PackedByteArray:
+	var out := PackedByteArray()
+	for code: Variant in _diploma.get("page%d" % page, []) as Array:
+		out.append(int(code))
+	return out
+
+
+## PREDEFPAL_DIPLOMA, the one palette SCGB_DIPLOMA's own layout gives every cell
+## of the page.
+func diploma_palette() -> PackedColorArray:
+	var colors := PackedColorArray()
+	for packed: Variant in _diploma.get("palette", []) as Array:
+		colors.append(Gen2Palette.from_packed(int(packed)))
+	return colors
+
+
+## One `GBPrinterStrings` entry by the status it names, or the empty string,
+## which is what a status of zero prints and what a cache too old to carry the
+## run answers for every name.
+func printer_status_string(name: String) -> String:
+	return String(_printer_strings.get(name, ""))
 
 
 ## Whether the cache carries `_SlotMachine`'s art, which is the whole of what

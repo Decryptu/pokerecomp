@@ -449,6 +449,7 @@ const ITEM_WATER_STONE: int = 24
 const SPECIAL_CHECK_MAGIKARP_LENGTH: int = 25
 const SPECIAL_MAGIKARP_HOUSE_SIGN: int = 26
 const SPECIAL_BANK_OF_MOM: int = 34
+const SPECIAL_UNOWN_PRINTER: int = 39
 const SPECIAL_MAP_RADIO: int = 40
 ## `constants/script_constants.asm`'s MOMS_MONEY, the account her bank holds.
 const ACCOUNT_MOMS_MONEY: int = 1
@@ -490,6 +491,8 @@ const SPECIAL_RESET_LUCKY_NUMBER_SHOW_FLAG: int = 84
 const SPECIAL_PRINT_TODAYS_LUCKY_NUMBER: int = 85
 const SPECIAL_TRAINER_HOUSE: int = 103
 const SPECIAL_PHOTO_STUDIO: int = 104
+const SPECIAL_DIPLOMA: int = 107
+const SPECIAL_PRINT_DIPLOMA: int = 108
 const SPECIAL_OMANYTE_CHAMBER: int = 132
 const SPECIAL_HO_OH_CHAMBER: int = 141
 const SPECIAL_CELEBI_SHRINE_EVENT: int = 143
@@ -1245,6 +1248,9 @@ func complete_runtime_request(result: Dictionary) -> Dictionary:
 		## `GiveDratini` rewrites four move slots and answers nothing: every one
 		## of its scripts runs straight on.
 		&"dratini_moveset_requested",
+		## `_Diploma`, `_PrintDiploma` and `_UnownPrinter` write nothing either:
+		## the page stands until a button and the script runs on behind it.
+		&"diploma_requested", &"unown_printer_requested",
 	]:
 		if not bool(result.get("ok", false)):
 			return _fail(
@@ -3498,6 +3504,23 @@ func _execute_special(special: int) -> Dictionary:
 			return _stage_internal_text(sign_box, false, {"special": special})
 		SPECIAL_BANK_OF_MOM:
 			return _bank_of_mom(MOM_CHECK_INITIALIZED)
+		SPECIAL_UNOWN_PRINTER:
+			## `ld a, [wUnownDex] / and a / ret z`: with no Unown caught the
+			## routine draws nothing at all, which the host answers for since it
+			## is the one that holds the dex.
+			return _stage_runtime_request(&"unown_printer_requested", {
+				"special": special,
+				"caught": state.unown_caught_count() if state != null else 0,
+			})
+		SPECIAL_DIPLOMA, SPECIAL_PRINT_DIPLOMA:
+			## `_Diploma` draws `PlaceDiplomaOnScreen`'s page and waits for a
+			## button; `_PrintDiploma` draws the same page and then holds in
+			## `SendScreenToPrinter`. Neither writes anything a script reads, so
+			## the request carries only which of the two loops is standing.
+			return _stage_runtime_request(&"diploma_requested", {
+				"special": special,
+				"printing": special == SPECIAL_PRINT_DIPLOMA,
+			})
 		SPECIAL_BUENA_PRIZE:
 			## The counter is one loop: the prize list, a yes/no on the row, and
 			## whichever of the four boxes the answer reaches. B on the list is
