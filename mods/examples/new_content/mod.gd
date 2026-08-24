@@ -580,6 +580,12 @@ class BattleInfo:
 				out.append({
 					"text": "%s%d" % [STAGE_LABELS.get(key, key.to_upper()), stage],
 					"at": at,
+					## Bare battle scenery under it: white in the built-in arena
+					## and whatever a native renderer staged in the others, so
+					## the host is asked for the interface field behind these
+					## cells. The move-row marks above ask for none, because
+					## `MoveSelectionScreen`'s own box is already under them.
+					"field": true,
 				})
 				at += Vector2i(0, 1)
 		return out
@@ -593,7 +599,7 @@ class BattleInfo:
 	func _weather(snapshot: Dictionary) -> Array:
 		if not Gen2Weather.is_active(int(snapshot.get("weather", 0))):
 			return []
-		return [{"tile": SUN_ROWS, "at": WEATHER_AT}]
+		return [{"tile": SUN_ROWS, "at": WEATHER_AT, "field": true}]
 
 
 ## Changing what the cartridge shipped, rather than adding to it. A patch names

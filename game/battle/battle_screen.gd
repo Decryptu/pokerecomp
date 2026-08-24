@@ -144,7 +144,10 @@ var _injected_data: GameData = null
 ## only has to satisfy Gen2ModHost.BATTLE_RENDERER_METHODS, not extend the
 ## built-in one.
 var _renderer: Node = null
-var _renderer_ready: bool = false
+var _renderer_ready: bool = false:
+	set(value):
+		_renderer_ready = value
+		_gate_annotations()
 
 ## The battle behind the screen, and the two Pokémon in it. The display state
 ## below is what is currently drawn, which is not always where the battle has
@@ -179,7 +182,10 @@ var _faints: Array[Dictionary] = []
 ## The running [Gen2ExpBarAnimation], or null when the exp bar is not filling.
 var _exp_bar: Gen2ExpBarAnimation = null
 ## The running [Gen2BattleIntro], or null once the pics have slid into place.
-var _intro: Gen2BattleIntro = null
+var _intro: Gen2BattleIntro = null:
+	set(value):
+		_intro = value
+		_gate_annotations()
 ## What `BattleStartMessage` will say. It is held for the whole slide, because
 ## `InitBattleDisplay` returns before it is called and the box drawn before the
 ## slide is an empty one.
@@ -246,19 +252,28 @@ var _world_context: Gen2BattleWorldContext = null
 var _pack_rows: Array[int] = []
 var _pack_quantities: Dictionary = {}
 var _pack_index: int = 0
-var _pack_selecting: bool = false
+var _pack_selecting: bool = false:
+	set(value):
+		_pack_selecting = value
+		_gate_annotations()
 var _pack_item: int = 0
 ## `RestorePPEffect`'s own `.loop`, which asks which move before it restores
 ## anything. Only the three items that fill one slot ever open it.
 var _pack_move_slots: Array = []
 var _pack_move_index: int = 0
 var _pack_move_target: int = -1
-var _pack_move_selecting: bool = false
+var _pack_move_selecting: bool = false:
+	set(value):
+		_pack_move_selecting = value
+		_gate_annotations()
 
 var _capture_balls: Array[int] = []
 var _capture_quantities: Dictionary = {}
 var _capture_ball_index: int = 0
-var _capture_selecting: bool = false
+var _capture_selecting: bool = false:
+	set(value):
+		_capture_selecting = value
+		_gate_annotations()
 var _capture_waiting: bool = false
 var _capture_messages: Array[String] = []
 var _capture_terminal: bool = false
@@ -268,7 +283,14 @@ var _capture_experience_spent: bool = false
 ## The layer registered battle-information providers draw on, and the page that
 ## writes their placements. See [method info_snapshot].
 var _annotation_layer: TextureRect = null
+## The interface field the flagged placements asked for, drawn under the ink.
+## See [method _refresh_annotations].
+var _annotation_field_layer: TextureRect = null
 var _annotations: Gen2BattleAnnotations = null
+## What [method _annotations_visible] last answered when the layer was built, so
+## a modal that opens or closes is noticed by [method _gate_annotations] rather
+## than by whichever caller happened to remember to refresh.
+var _annotations_ungated: bool = false
 ## What the layer is currently holding, so it is rebuilt only when a provider
 ## would answer something different. Same shape as [member _menu_drawn].
 var _annotations_drawn: String = ""
@@ -278,7 +300,10 @@ var _enemy_seen_before: bool = false
 var _capture_result: Dictionary = {}
 ## `PokeBallEffect`'s own `AskGiveNicknameText`, which stands over the battle
 ## because the whole routine runs inside it. Null while nothing is being named.
-var _capture_nickname_host: Gen2NicknamePromptScreen = null
+var _capture_nickname_host: Gen2NicknamePromptScreen = null:
+	set(value):
+		_capture_nickname_host = value
+		_gate_annotations()
 ## `wStringBuffer1` after `InitName`: the species name until the player answers
 ## the naming screen with something else.
 var _capture_nickname: String = ""
@@ -290,7 +315,10 @@ var _capture_nickname_asked: bool = false
 ## (engine/pokemon/learn.asm): [code]&"ask"[/code] is AskForgetMoveText's yes/no,
 ## [code]&"list"[/code] ForgetMove's own .loop, [code]&"stop"[/code]
 ## LearnMove.cancel's StopLearningMoveText. Empty when nothing is pending.
-var _forget_stage: StringName = &""
+var _forget_stage: StringName = &"":
+	set(value):
+		_forget_stage = value
+		_gate_annotations()
 var _forget_moves: Array = []
 var _forget_cursor: int = 0
 var _forget_confirm_cursor: int = 0
@@ -300,7 +328,10 @@ var _forget_confirm_cursor: int = 0
 ## same place, and [code]&"pick"[/code] the party menu `SetUpBattlePartyMenu`
 ## puts up behind either, which Baton Pass and a replacement open straight into.
 ## Empty when none of them is on screen.
-var _switch_stage: StringName = &""
+var _switch_stage: StringName = &"":
+	set(value):
+		_switch_stage = value
+		_gate_annotations()
 ## Which question the list is answering: [code]&"offer"[/code] is `OfferSwitch`'s
 ## YES, [code]&"baton_pass"[/code] the target `ForcePickSwitchMonInBattle` asks
 ## for inside the move, and [code]&"replace"[/code] `ForcePlayerMonChoice` after
@@ -313,7 +344,10 @@ var _switch_offer: Gen2WorldMenu = null
 ## `BattleMenu`'s own loop: [code]&"main"[/code] is FIGHT/PKMN/PACK/RUN,
 ## [code]&"move"[/code] `MoveSelectionScreen`'s list and [code]&"refused"[/code]
 ## the line it prints over that list before reopening it.
-var _menu_stage: StringName = &""
+var _menu_stage: StringName = &"":
+	set(value):
+		_menu_stage = value
+		_gate_annotations()
 ## `wBattleMenuCursorPosition`, which is written back after every visit and so
 ## opens on whatever was chosen last.
 var _menu_position: int = Gen2BattleMenu.FIGHT
@@ -644,6 +678,14 @@ func _ready() -> void:
 	## Last, so a registered provider's annotations sit over every box and menu
 	## the interface draws, whichever renderer is under all of it.
 	_annotations = Gen2BattleAnnotations.from_data(_data)
+	## Immediately below the ink, so a placement that asked for a field gets the
+	## cartridge's own interface behind exactly its cells and nothing else. The
+	## built-in arena already has a white background and so is unchanged by it;
+	## a native-layer renderer has the map there, and its own interface opacity.
+	_annotation_field_layer = TextureRect.new()
+	_annotation_field_layer.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_annotation_field_layer.visible = false
+	_screen.display(_annotation_field_layer)
 	_annotation_layer = TextureRect.new()
 	_annotation_layer.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_annotation_layer.visible = false
@@ -2205,12 +2247,27 @@ func info_snapshot() -> Dictionary:
 
 ## Whether the annotation layer may draw at all. Hidden wherever one of the
 ## host's own full-screen subflows owns the same cells: the party page, the pack
-## and its two sub-lists, the forget offer, the naming prompt and the entrance,
-## each of which is the whole interface rather than a box in it.
+## and its two sub-lists, ball selection, the forget offer, the naming prompt and
+## the entrance, each of which is the whole interface rather than a box in it.
 func _annotations_visible() -> bool:
 	return _renderer_ready and _annotations != null and _intro == null \
 		and _capture_nickname_host == null and _switch_stage == &"" \
-		and not _pack_selecting and not _pack_move_selecting and _forget_stage == &""
+		and not _pack_selecting and not _pack_move_selecting \
+		and not _capture_selecting and _forget_stage == &""
+
+
+## Rebuilds the layer the frame a modal takes the interface or gives it back.
+##
+## Every state [method _annotations_visible] reads writes through a setter that
+## reaches here, so ownership is answered where it changes rather than at each
+## caller that opens a subflow: a modal built next year hides the annotations by
+## being made of the same flags, and nothing has to remember to refresh.
+func _gate_annotations() -> void:
+	if _annotation_layer == null:
+		return
+	if _annotations_visible() == _annotations_ungated:
+		return
+	_refresh_annotations()
 
 
 ## Rebuilds the annotation layer when what a provider would answer has changed.
@@ -2219,18 +2276,22 @@ func _annotations_visible() -> bool:
 func _refresh_annotations() -> void:
 	if _annotation_layer == null:
 		return
-	if not _annotations_visible() or Gen2ModHost.instance().battle_info_ids().is_empty():
-		_annotation_layer.visible = false
-		_annotations_drawn = ""
+	_annotations_ungated = _annotations_visible()
+	if not _annotations_ungated or Gen2ModHost.instance().battle_info_ids().is_empty():
+		_hide_annotations()
 		return
 	var placements: Array = Gen2ModHost.instance().battle_info_placements(info_snapshot())
 	var signature: String = str(placements)
 	if signature == _annotations_drawn:
-		_annotation_layer.visible = not placements.is_empty()
+		var shown: bool = not placements.is_empty()
+		_annotation_layer.visible = shown
+		if _annotation_field_layer != null:
+			_annotation_field_layer.visible = shown \
+				and Gen2BattleAnnotations.any_field(placements)
 		return
 	_annotations_drawn = signature
 	if placements.is_empty():
-		_annotation_layer.visible = false
+		_hide_annotations()
 		return
 	var indices := PackedByteArray()
 	indices.resize(Gen2Screen.WIDTH * Gen2Screen.HEIGHT)
@@ -2244,6 +2305,42 @@ func _refresh_annotations() -> void:
 		),
 		Vector2i.ZERO
 	)
+	_refresh_annotation_field(placements)
+
+
+## The field layer under the ink: the cells the flagged placements own, painted
+## in the same white the cartridge's own boxes are and at the opacity the
+## selected renderer asks its interface to be drawn at, which is 1.0 for the
+## built-in arena and for anything on the hardware viewport.
+func _refresh_annotation_field(placements: Array) -> void:
+	if _annotation_field_layer == null:
+		return
+	if not Gen2BattleAnnotations.any_field(placements):
+		_annotation_field_layer.visible = false
+		return
+	var indices := PackedByteArray()
+	indices.resize(Gen2Screen.WIDTH * Gen2Screen.HEIGHT)
+	_annotations.draw_field(placements, indices, Gen2Screen.WIDTH)
+	var opacity: float = Gen2ModHost.renderer_interface_opacity(_renderer)
+	var field := Color(Color.WHITE, opacity)
+	_show_layer_image(
+		_annotation_field_layer,
+		Gen2PicImage.from_indices(
+			indices, Gen2Screen.WIDTH, Gen2Screen.HEIGHT,
+			PackedColorArray([field, field, field, field]),
+			true
+		),
+		Vector2i.ZERO
+	)
+
+
+## Both annotation layers away together: the field exists only to sit under ink
+## that is being drawn, so it never outlives it by a frame.
+func _hide_annotations() -> void:
+	_annotation_layer.visible = false
+	if _annotation_field_layer != null:
+		_annotation_field_layer.visible = false
+	_annotations_drawn = ""
 
 
 ## Supplies the battle with the overworld's own clock reading, which Morning Sun,
@@ -4735,6 +4832,10 @@ func _apply_renderer_interface_style() -> void:
 		return
 	_box.field_opacity = Gen2ModHost.renderer_interface_opacity(_renderer)
 	_push_text_box_rect()
+	## The annotation field is the same interface over the same renderer, so it
+	## is repainted with the box rather than left at the last renderer's opacity.
+	_annotations_drawn = ""
+	_refresh_annotations()
 
 
 func _push_text_box_rect() -> void:
@@ -4765,10 +4866,34 @@ func _on_native_size_changed(size_pixels: Vector2i) -> void:
 func select_view(id: StringName) -> Dictionary:
 	var result: Dictionary = Gen2ModHost.instance().select_view(id)
 	if not bool(result.get("ok", false)):
-		show_message("Renderer unavailable: %s" % String(result.get("reason", "unknown")))
+		_report_view("Renderer unavailable: %s" % String(result.get("reason", "unknown")))
 		return result
-	show_message("Renderer: %s" % Gen2ModHost.instance().view_label(id))
+	_report_view("Renderer: %s" % Gen2ModHost.instance().view_label(id))
 	return result
+
+
+## Says what a view switch did, unless a menu is holding the interface.
+##
+## The acknowledgement is battle text, and the menu layer above it covers the
+## box's right-hand half rather than the whole panel, so a line printed under an
+## open menu leaks its first glyphs out beside the list. The cartridge's own
+## transition cover already says the switch happened; the words are development
+## chrome and are worth less than the menu underneath them staying intact. Said
+## through the same log the refusals use, so nothing is silently dropped.
+func _report_view(message: String) -> void:
+	if _menu_owns_interface():
+		print_verbose(message)
+		return
+	show_message(message)
+
+
+## Whether one of the interface's own menus is on screen and holding the lower
+## panel. Not the same question as [method _annotations_visible], which is about
+## the cells a full-screen subflow takes: the main and move menus own the panel
+## a battle message would print into while leaving the annotations correct.
+func _menu_owns_interface() -> bool:
+	return _menu_stage != &"" or _switch_stage != &"" or _forget_stage != &"" \
+		or _pack_selecting or _pack_move_selecting or _capture_selecting
 
 
 ## The same one switch the overworld takes: see
@@ -4782,7 +4907,7 @@ func cycle_view() -> Dictionary:
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	var ids: Array[StringName] = host.view_ids()
 	if ids.size() < 2:
-		show_message("No other renderer is registered")
+		_report_view("No other renderer is registered")
 		return {"ok": false, "reason": &"single_renderer"}
 	var at: int = ids.find(host.selected_view())
 	return select_view(ids[posmod(at + 1, ids.size())])
