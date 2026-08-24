@@ -11,12 +11,10 @@ extends RefCounted
 ## boundary is [Gen2WorldTransaction], the same one the mart, Kurt and the bag
 ## go through.
 ##
-## One of the source's rows is absent from the lists this returns rather than
-## offered and refused, because it has nothing behind it: MAIL BOX is
-## `_PlayerMailBoxMenu`'s over `wMailbox`, which the save model does not keep.
-## DECORATION is [Gen2WorldDecoration]'s and HALL OF FAME is
-## [Gen2HallOfFame]'s viewer over [member Gen2SaveData.hall_of_fame]; both are
-## offered.
+## Every row of both lists is built. MAIL BOX is `_PlayerMailBoxMenu` over
+## [member Gen2SaveData.mailbox] and its own submenu below, DECORATION is
+## [Gen2WorldDecoration]'s and HALL OF FAME is [Gen2HallOfFame]'s viewer over
+## [member Gen2SaveData.hall_of_fame].
 
 ## `PokemonCenterPC.Jumptable` indexes.
 const PCPCITEM_PLAYERS_PC: int = 0
@@ -54,7 +52,7 @@ const PLAYER_MARKER: String = "<PLAYER>"
 ## The rows above with nothing behind them, dropped from every list rather than
 ## offered and refused. See the class comment for what each needs first.
 const UNBUILT_TOP_MENU_ROWS: Array[int] = []
-const UNBUILT_PLAYERS_PC_ROWS: Array[int] = [PLAYERSPCITEM_MAIL_BOX]
+const UNBUILT_PLAYERS_PC_ROWS: Array[int] = []
 
 
 ## `_BillsPC.MenuData`'s five rows, in its `.Jumptable`'s own order. Inline menu
@@ -73,6 +71,25 @@ const BILLS_PC_ROWS: Array[String] = [
 ## that no script reaches either.
 const BILLS_PC_WHAT: String = "What?"
 const BILLS_PC_NEEDS_POKEMON: String = "You gotta have\n#MON to call!"
+
+## `MailboxPC.SubMenuData`'s four rows, inline menu strings the way BILL'S PC's
+## own five are, and the five `text_far` stubs `.PutInPack` and `.AttachMail`
+## print through. Kept here rather than imported for the same reason: nothing
+## points at them, so there is no table to walk.
+const MAILBOXITEM_READ: int = 0
+const MAILBOXITEM_PUT_IN_PACK: int = 1
+const MAILBOXITEM_ATTACH: int = 2
+const MAILBOXITEM_CANCEL: int = 3
+const MAILBOX_ROWS: Array[String] = [
+	"READ MAIL", "PUT IN PACK", "ATTACH MAIL", "CANCEL",
+]
+const MAILBOX_EMPTY: String = "There's no MAIL\nhere."
+const MAILBOX_MESSAGE_LOST: String = "The MAIL's message\nwill be lost. OK?"
+const MAILBOX_PACK_FULL: String = "The PACK is full."
+const MAILBOX_CLEARED: String = "The cleared MAIL\nwas put away."
+const MAILBOX_ALREADY_HOLDING: String = "It's already hold-\ning an item."
+const MAILBOX_EGG: String = "An EGG can't hold\nany MAIL."
+const MAILBOX_MOVED: String = "The MAIL was moved\nfrom the MAILBOX."
 
 ## Every row of the machine's own menu is built: MOVE PKMN W/O MAIL is
 ## [Gen2BoxScreen]'s `MODE_MOVE`, which is `_MovePKMNWithoutMail`'s own two
@@ -290,6 +307,122 @@ static func _transfer(
 		"bag": changes["items"][item],
 		"pc": changes["pc_items"][item],
 	})
+
+
+## `MailboxPC`'s own rows: one per stored message, printed by
+## `MailboxPC_PrintMailAuthor`, which is the author and nothing else.
+static func mailbox_entries(save: Gen2SaveData) -> Array:
+	var out: Array = []
+	if save == null:
+		return out
+	for index: int in save.mailbox.size():
+		var mail: Gen2SaveMail = save.mailbox[index]
+		out.append({"row": index, "name": mail.author if mail != null else ""})
+	return out
+
+
+## `MonMailAction`'s TAKE and its `SendMailToPC`. The mail leaves the party
+## member with its item; nothing in the bag or the world moves, so the only
+## change is to the save.
+static func mailbox_send(
+	world: Gen2WorldAPI, save: Gen2SaveData, slot: int, persist: bool = true
+) -> Dictionary:
+	var opened: Dictionary = Gen2WorldTransaction.begin(world, save)
+	if not bool(opened.get("ok", false)):
+		return opened
+	var candidate: Gen2SaveData = opened["candidate"]
+	if not Gen2SaveMail.send_to_pc(candidate, slot):
+		## `.MailboxFull` is the one refusal the routine has; a member holding
+		## no mail cannot reach the row that calls it.
+		return Gen2WorldTransaction.failure(&"mailbox_full", {"slot": slot})
+	return _committed(world, save, candidate, persist, {"slot": slot})
+
+
+## `.PutInPack`: the message is lost, its `Type` byte becomes an ordinary item
+## in the bag, and the mailbox entry is deleted behind it. `ReceiveItem` is
+## asked first, so a full pack leaves the message where it is.
+static func mailbox_to_pack(
+	world: Gen2WorldAPI, save: Gen2SaveData, index: int, persist: bool = true
+) -> Dictionary:
+	var opened: Dictionary = Gen2WorldTransaction.begin(world, save)
+	if not bool(opened.get("ok", false)):
+		return opened
+	var candidate: Gen2SaveData = opened["candidate"]
+	if index < 0 or index >= candidate.mailbox.size():
+		return Gen2WorldTransaction.failure(&"unknown_mail", {"index": index})
+	var item: int = (candidate.mailbox[index] as Gen2SaveMail).item
+	var room: Dictionary = Gen2WorldPack.receive_check(
+		world.data, world.state.items(), item, 1
+	)
+	if not bool(room.get("ok", false)):
+		return Gen2WorldTransaction.failure(
+			StringName(room.get("reason", &"pack_full")), {"item": item}
+		)
+	var before: Gen2WorldSnapshot = world.snapshot()
+	var applied: Dictionary = world.state.apply_changes({}, {}, {
+		"items": {item: world.state.item_quantity(item) + 1},
+	})
+	if not bool(applied.get("ok", false)):
+		return Gen2WorldTransaction.failure(&"pc_state_failed", applied)
+	Gen2SaveMail.delete_from_pc(candidate, index)
+	var committed: Dictionary = Gen2WorldTransaction.commit(
+		world, save, candidate, before, persist
+	)
+	if not bool(committed.get("ok", false)):
+		return committed
+	return {
+		"ok": true, "item": item,
+		"name": String(world.data.item(item).get("name", "UNKNOWN")),
+	}
+
+
+## `.AttachMail`, once `PartyMenuSelect` has picked a member. The two refusals
+## in front of it are the caller's, because both print and go back to the same
+## list: an egg cannot hold mail and a member already holding an item is not
+## asked to swap.
+static func mailbox_attach(
+	world: Gen2WorldAPI, save: Gen2SaveData, index: int, slot: int,
+	persist: bool = true
+) -> Dictionary:
+	var opened: Dictionary = Gen2WorldTransaction.begin(world, save)
+	if not bool(opened.get("ok", false)):
+		return opened
+	var candidate: Gen2SaveData = opened["candidate"]
+	var refusal: StringName = attach_refusal(candidate, slot)
+	if refusal != &"":
+		return Gen2WorldTransaction.failure(refusal, {"slot": slot})
+	if not Gen2SaveMail.move_from_pc_to_party(candidate, index, slot):
+		return Gen2WorldTransaction.failure(&"unknown_mail", {"index": index})
+	return _committed(world, save, candidate, persist, {"slot": slot, "index": index})
+
+
+## `.AttachMail`'s own two branches: `cp EGG` and the held-item test.
+static func attach_refusal(save: Gen2SaveData, slot: int) -> StringName:
+	if save == null or slot < 0 or slot >= save.party.size():
+		return &"unknown_member"
+	var mon: Gen2SaveMon = save.party[slot]
+	if mon == null:
+		return &"unknown_member"
+	if mon.is_egg:
+		return &"egg"
+	return &"already_holding" if mon.item != 0 else &""
+
+
+## A candidate the caller has already changed, written through the same
+## boundary the item transactions use. The world is unchanged, so the snapshot
+## a refusal would restore is the live one.
+static func _committed(
+	world: Gen2WorldAPI, save: Gen2SaveData, candidate: Gen2SaveData,
+	persist: bool, answer: Dictionary
+) -> Dictionary:
+	var committed: Dictionary = Gen2WorldTransaction.commit(
+		world, save, candidate, world.snapshot(), persist
+	)
+	if not bool(committed.get("ok", false)):
+		return committed
+	var out: Dictionary = answer.duplicate()
+	out["ok"] = true
+	return out
 
 
 static func _commit(

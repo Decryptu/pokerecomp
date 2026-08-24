@@ -47,6 +47,25 @@ func _write_cache() -> void:
 				codes.append(first + row * RomLayout.NAME_INPUT_COLUMNS + column)
 			rows.append(_spread(codes))
 		tables.append(rows)
+	## `mail_input_chars.asm`'s two behind them, ten columns rather than nine.
+	for table: int in RomLayout.MAIL_INPUT_TABLES:
+		var first: int = RomLayout.MAIL_INPUT_UPPER_A if table == 0 \
+			else RomLayout.MAIL_INPUT_LOWER_A
+		var rows: Array = []
+		for row: int in RomLayout.MAIL_INPUT_TABLE_ROWS:
+			if row == RomLayout.MAIL_INPUT_TABLE_ROWS - 1:
+				rows.append(Array(
+					RomLayout.MAIL_INPUT_COMMAND_UPPER if table == 0
+					else RomLayout.MAIL_INPUT_COMMAND_LOWER
+				))
+				continue
+			var codes: Array[int] = []
+			for column: int in RomLayout.MAIL_INPUT_COLUMNS:
+				codes.append(first + row * RomLayout.MAIL_INPUT_COLUMNS + column)
+				if column < RomLayout.MAIL_INPUT_COLUMNS - 1:
+					codes.append(SPACE)
+			rows.append(codes)
+		tables.append(rows)
 	RomCache.write_json(RomCache.name_input_chars_path(_directory), tables)
 	for path: String in [
 		RomCache.species_path(_directory), RomCache.moves_path(_directory),
@@ -349,3 +368,65 @@ func test_a_screen_without_keyboards_reads_no_character() -> void:
 	assert_eq(screen.last_character(), 0)
 	assert_eq(screen.press_a(), Gen2NamingScreen.RESULT_LETTER)
 	assert_eq(screen.length, 0, "nothing is added when there is nothing to read")
+
+
+## `_ComposeMailMessage`'s own keyboard: six rows, ten columns and the command
+## row at row 5, against `NamingScreen`'s five and nine.
+func test_the_mail_keyboard_is_six_rows_of_ten() -> void:
+	var mail: Gen2NamingScreen = Gen2NamingScreen.for_mail(_data)
+	assert_true(mail.is_mail)
+	assert_eq(mail.row_count(), RomLayout.MAIL_INPUT_TABLE_ROWS)
+	assert_eq(mail.command_row(), RomLayout.MAIL_INPUT_TABLE_ROWS - 1)
+	assert_eq(mail.last_column(), Gen2NamingScreen.MAIL_LAST_COLUMN)
+	assert_eq(mail.rows().size(), RomLayout.MAIL_INPUT_TABLE_ROWS)
+	assert_eq(mail.keyboard(), Gen2NamingScreen.Keyboard.MAIL_UPPER)
+	mail.press_select()
+	assert_eq(mail.keyboard(), Gen2NamingScreen.Keyboard.MAIL_LOWER)
+	## `.start` sets VAR1 to $9 and VAR2 to $5, which is the tenth column.
+	mail.press_start()
+	assert_eq(mail.column, Gen2NamingScreen.MAIL_LAST_COLUMN)
+	assert_eq(mail.row, RomLayout.MAIL_INPUT_TABLE_ROWS - 1)
+
+
+## `.InitBlankMail`'s `ld [hl], '<NEXT>'`, and the `wNamingScreenMaxNameLength`
+## of MAIL_MSG_LENGTH + 1 behind it.
+func test_a_mail_buffer_opens_with_the_break_already_in_it() -> void:
+	var mail: Gen2NamingScreen = Gen2NamingScreen.for_mail(_data)
+	assert_eq(mail.max_length, Gen2SaveMail.BUFFER_LENGTH)
+	assert_eq(mail.buffer.size(), Gen2SaveMail.BUFFER_LENGTH + 1)
+	assert_eq(mail.buffer[Gen2SaveMail.LINE_LENGTH], Gen2SaveMail.LINE_BREAK)
+	assert_eq(mail.buffer[Gen2SaveMail.BUFFER_LENGTH], Gen2NamingScreen.TERMINATOR)
+	assert_eq(mail.buffer[0], Gen2NamingScreen.UNDERLINE)
+
+
+## `.a`'s and `.b`'s tails: an entry that lands on the line break steps over it
+## in whichever direction it arrived from, and the break is written back.
+func test_the_line_break_is_stepped_over_in_both_directions() -> void:
+	var mail: Gen2NamingScreen = Gen2NamingScreen.for_mail(_data)
+	for _index: int in Gen2SaveMail.LINE_LENGTH:
+		mail.column = 0
+		mail.row = 0
+		mail.press_a()
+	assert_eq(mail.length, Gen2SaveMail.LINE_LENGTH + 1, "the break took its own slot")
+	assert_eq(mail.buffer[Gen2SaveMail.LINE_LENGTH], Gen2SaveMail.LINE_BREAK)
+	assert_eq(mail.buffer[Gen2SaveMail.LINE_LENGTH + 1], Gen2NamingScreen.UNDERLINE)
+
+	mail.press_b()
+	assert_eq(mail.length, Gen2SaveMail.LINE_LENGTH - 1)
+	assert_eq(mail.buffer[Gen2SaveMail.LINE_LENGTH], Gen2SaveMail.LINE_BREAK)
+	assert_eq(mail.buffer[Gen2SaveMail.LINE_LENGTH - 1], Gen2NamingScreen.UNDERLINE)
+
+
+## `NamingScreen_StoreEntry` over a mail buffer: every marker becomes a
+## terminator and the break stays where it is, which is what makes the second
+## line reachable by `PlaceString` at all.
+func test_a_stored_mail_entry_keeps_its_break_and_terminates_the_rest() -> void:
+	var mail: Gen2NamingScreen = Gen2NamingScreen.for_mail(_data)
+	mail.column = 0
+	mail.row = 0
+	mail.press_a()
+	var stored: PackedByteArray = mail.stored_entry()
+	assert_eq(stored.size(), Gen2SaveMail.BUFFER_LENGTH)
+	assert_eq(stored[0], RomLayout.MAIL_INPUT_UPPER_A)
+	assert_eq(stored[1], Gen2NamingScreen.TERMINATOR)
+	assert_eq(int(stored[Gen2SaveMail.LINE_LENGTH]), Gen2SaveMail.LINE_BREAK)

@@ -10,6 +10,9 @@ const Fixture := preload("res://tests/integration/world_trainer_fixture.gd")
 
 const POTION: int = 7
 const KEY_ITEM: int = 8
+## `MailItems`' first entry, at its real number: `ItemIsMail` checks the number,
+## so a stand-in would not be mail at all.
+const FLOWER_MAIL: int = 158
 
 var _data: GameData = null
 var _world: Gen2WorldAPI = null
@@ -20,7 +23,7 @@ func before_each() -> void:
 	_data = Fixture.build()
 	_write_items()
 	_data = GameData.open_directory(Fixture.directory())
-	var state := Gen2WorldState.new({}, {}, {POTION: 5, KEY_ITEM: 1}, {0: 500})
+	var state := Gen2WorldState.new({}, {}, {POTION: 5, KEY_ITEM: 1, FLOWER_MAIL: 1}, {0: 500})
 	_world = Gen2WorldAPI.open(
 		_data, Fixture.MAP_GROUP, Fixture.MAP_NUMBER, Vector2i(7, 6), state
 	)
@@ -43,6 +46,11 @@ func _write_items() -> void:
 				raw["pocket"] = Gen2WorldPack.TYPE_ITEM
 				raw["permissions"] = Gen2WorldPack.CANT_SELECT
 				raw["field_menu"] = Gen2WorldPack.ITEMMENU_PARTY
+			FLOWER_MAIL:
+				raw["name"] = "FLOWER MAIL"
+				raw["pocket"] = Gen2WorldPack.TYPE_ITEM
+				raw["permissions"] = Gen2WorldPack.CANT_SELECT
+				raw["field_menu"] = Gen2WorldPack.ITEMMENU_NOUSE
 			KEY_ITEM:
 				raw["name"] = "BICYCLE"
 				raw["pocket"] = Gen2WorldPack.TYPE_KEY_ITEM
@@ -428,3 +436,121 @@ func _put_away_row(slot: StringName) -> int:
 			and Gen2WorldDecoration.is_put_away(_data, deco):
 			return deco
 	return -1
+
+
+## `GivePartyItem`'s tail: a mail item is only handed over with the message
+## `ComposeMailMessage` wrote, and the message travels on the record.
+func test_mail_is_only_given_with_a_message_behind_it() -> void:
+	var refused: Dictionary = Gen2WorldBagHost.give_to_party(
+		_world, _save, FLOWER_MAIL, 0, false, false
+	)
+	assert_false(bool(refused["ok"]))
+	assert_eq(refused["reason"], &"mail_not_written")
+	assert_eq(_world.state.item_quantity(FLOWER_MAIL), 1)
+
+	var mail: Gen2SaveMail = Gen2SaveMail.compose(
+		Gen2SaveMail.blank_message(), "GOLD", 0x1234, 1, FLOWER_MAIL
+	)
+	var given: Dictionary = Gen2WorldBagHost.give_to_party(
+		_world, _save, FLOWER_MAIL, 0, false, false, mail
+	)
+	assert_true(bool(given["ok"]), str(given))
+	assert_eq(_world.state.item_quantity(FLOWER_MAIL), 0)
+	assert_eq((_save.party[0] as Gen2SaveMon).item, FLOWER_MAIL)
+	assert_eq((_save.party[0] as Gen2SaveMon).mail.author, "GOLD")
+
+
+## `.please_remove_mail`, which is asked in front of `PokemonAskSwapItemText`:
+## a held mail is not offered as a swap at all.
+func test_a_member_holding_mail_is_refused_rather_than_asked_to_swap() -> void:
+	var mon: Gen2SaveMon = _save.party[0]
+	mon.item = FLOWER_MAIL
+	mon.mail = Gen2SaveMail.compose(
+		Gen2SaveMail.blank_message(), "GOLD", 0x1234, mon.species, FLOWER_MAIL
+	)
+	for swap: bool in [false, true]:
+		var result: Dictionary = Gen2WorldBagHost.give_to_party(
+			_world, _save, POTION, 0, swap, false
+		)
+		assert_false(bool(result["ok"]))
+		assert_eq(result["reason"], &"holding_mail")
+	assert_eq(_world.state.item_quantity(POTION), 5)
+
+
+## `TakePartyItem` puts the item in the bag and says nothing about the message,
+## so the message goes with it: a record left holding mail with no item is one
+## the MAIL row could still read.
+func test_taking_a_mail_item_takes_its_message_with_it() -> void:
+	var mon: Gen2SaveMon = _save.party[0]
+	mon.item = FLOWER_MAIL
+	mon.mail = Gen2SaveMail.compose(
+		Gen2SaveMail.blank_message(), "GOLD", 0x1234, mon.species, FLOWER_MAIL
+	)
+	var result: Dictionary = Gen2WorldBagHost.take_from_party(_world, _save, 0, false)
+	assert_true(bool(result["ok"]), str(result))
+	assert_eq((_save.party[0] as Gen2SaveMon).item, 0)
+	assert_null((_save.party[0] as Gen2SaveMon).mail)
+	assert_eq(_world.state.item_quantity(FLOWER_MAIL), 2)
+
+
+## `SendMailToPC`, `DeleteMailFromPC` and `MoveMailFromPCToParty`, which is the
+## whole of what MAIL BOX moves.
+func test_mail_moves_between_a_member_and_the_mailbox() -> void:
+	var mon: Gen2SaveMon = _save.party[0]
+	mon.item = FLOWER_MAIL
+	mon.mail = Gen2SaveMail.compose(
+		Gen2SaveMail.blank_message(), "GOLD", 0x1234, mon.species, FLOWER_MAIL
+	)
+	assert_true(Gen2SaveMail.any_mon_holding_mail(_save))
+	var sent: Dictionary = Gen2WorldPC.mailbox_send(_world, _save, 0, false)
+	assert_true(bool(sent["ok"]), str(sent))
+	assert_eq(_save.mailbox.size(), 1)
+	assert_eq((_save.party[0] as Gen2SaveMon).item, 0)
+	assert_null((_save.party[0] as Gen2SaveMon).mail)
+	assert_false(Gen2SaveMail.any_mon_holding_mail(_save))
+
+	## `.AttachMail` refuses a member already holding an item without moving
+	## anything, which is `.MailAlreadyHoldingItemText`.
+	(_save.party[0] as Gen2SaveMon).item = POTION
+	var refused: Dictionary = Gen2WorldPC.mailbox_attach(_world, _save, 0, 0, false)
+	assert_false(bool(refused["ok"]))
+	assert_eq(refused["reason"], &"already_holding")
+	assert_eq(_save.mailbox.size(), 1)
+
+	(_save.party[0] as Gen2SaveMon).item = 0
+	var attached: Dictionary = Gen2WorldPC.mailbox_attach(_world, _save, 0, 0, false)
+	assert_true(bool(attached["ok"]), str(attached))
+	assert_eq(_save.mailbox.size(), 0)
+	assert_eq((_save.party[0] as Gen2SaveMon).item, FLOWER_MAIL)
+	assert_eq((_save.party[0] as Gen2SaveMon).mail.author, "GOLD")
+
+
+## `.PutInPack`: `ReceiveItem` first, so a full pack leaves the message where it
+## is, and the mailbox entry is only deleted once the item has arrived.
+func test_putting_mail_in_the_pack_deletes_it_and_keeps_the_item() -> void:
+	_save.mailbox.append(Gen2SaveMail.compose(
+		Gen2SaveMail.blank_message(), "GOLD", 0x1234, 1, FLOWER_MAIL
+	))
+	var result: Dictionary = Gen2WorldPC.mailbox_to_pack(_world, _save, 0, false)
+	assert_true(bool(result["ok"]), str(result))
+	assert_eq(result["item"], FLOWER_MAIL)
+	assert_eq(_save.mailbox.size(), 0)
+	assert_eq(_world.state.item_quantity(FLOWER_MAIL), 2)
+
+
+## `GetMailboxCount` against `MAILBOX_CAPACITY`, which is `SendMailToPC`'s only
+## refusal.
+func test_a_full_mailbox_refuses_the_next_message() -> void:
+	for _index: int in Gen2SaveMail.CAPACITY:
+		_save.mailbox.append(Gen2SaveMail.compose(
+			Gen2SaveMail.blank_message(), "GOLD", 0x1234, 1, FLOWER_MAIL
+		))
+	var mon: Gen2SaveMon = _save.party[0]
+	mon.item = FLOWER_MAIL
+	mon.mail = Gen2SaveMail.compose(
+		Gen2SaveMail.blank_message(), "GOLD", 0x1234, mon.species, FLOWER_MAIL
+	)
+	var sent: Dictionary = Gen2WorldPC.mailbox_send(_world, _save, 0, false)
+	assert_false(bool(sent["ok"]))
+	assert_eq(sent["reason"], &"mailbox_full")
+	assert_eq((_save.party[0] as Gen2SaveMon).item, FLOWER_MAIL)

@@ -235,6 +235,13 @@ var _mod_option_cursor: int = 0
 ## own screen rather than one of this node's; without one, nothing is drawn at
 ## all, which is what a test or the launcher gets.
 var _screen: Gen2Screen = null
+## `ComposeMailMessage`: the keyboard GIVE opens for a mail item, and what it
+## wrote, held until [method _give_selected_item] runs the transaction with it.
+var _naming: Gen2NamingScreenScreen = null
+var _pending_mail: Gen2SaveMail = null
+var _mail_item: int = 0
+var _mail_target: int = -1
+var _mail_swap: bool = false
 var _view: TextureRect = null
 var _page: Gen2StartMenuPage = null
 ## `LoadPartyMenuGFX`: the target list is the party menu, so it is drawn by the
@@ -354,6 +361,10 @@ func _select_pack_item(item: int) -> bool:
 
 
 func handle_button(button: int) -> bool:
+	## The mail keyboard owns all 160x144 while it is up, the way BILL'S PC's
+	## own does over the box screen.
+	if _naming != null:
+		return _naming.handle_button(button)
 	## `BuySellToss_InterpretJoypad` reads the joypad itself and answers with a
 	## carry, so the dial takes the whole button rather than a direction and an
 	## A/B split, the way [Gen2WorldApricorn] feeds it.
@@ -1138,9 +1149,16 @@ func _give_selected_item(party_index: int, swap: bool = false) -> void:
 	if not Gen2WorldPack.can_hold(_data, number):
 		_show_pack_result(Gen2WorldPack.cant_hold_text(), false)
 		return
+	## `GivePartyItem` writes the item and then runs `ComposeMailMessage`; here
+	## the message is written first, because the transaction is what commits and
+	## a cancelled entry has to leave the bag alone.
+	if Gen2HeldItem.is_mail(number) and _pending_mail == null:
+		_open_mail_composer(number, party_index, swap)
+		return
 	var result: Dictionary = Gen2WorldBagHost.give_to_party(
-		_world, _pack_save, number, party_index, swap, _pack_persist
+		_world, _pack_save, number, party_index, swap, _pack_persist, _pending_mail
 	)
+	_pending_mail = null
 	if bool(result.get("ok", false)):
 		var target_name: String = _target_name(party_index)
 		var held_name: String = String(result.get("held_name", ""))
@@ -1160,8 +1178,50 @@ func _give_selected_item(party_index: int, swap: bool = false) -> void:
 	_show_pack_result(_give_refusal(reason, party_index), false)
 
 
+## `_ComposeMailMessage` over the party menu's own screen. The entry is the
+## caller's, so it is written here and handed to the transaction; B on the
+## keyboard is not a way out of the screen, so an empty message is a message.
+func _open_mail_composer(item: int, party_index: int, swap: bool) -> void:
+	if _naming != null or _screen == null:
+		return
+	var host := Gen2NamingScreenScreen.new()
+	if not host.open(_data, "", Gen2NamingScreenScreen.KIND_MAIL):
+		host.free()
+		_show_pack_result("The mail keyboard is not in this cache.", false)
+		return
+	_naming = host
+	_mail_item = item
+	_mail_target = party_index
+	_mail_swap = swap
+	host.z_index = 5
+	host.closed.connect(_on_mail_composed)
+	_screen.display(host)
+
+
+## `ComposeMailMessage`'s tail: the stored entry, the player's own name and ID,
+## the species that is about to hold it and the item itself.
+func _on_mail_composed(_name: String) -> void:
+	var entry: PackedByteArray = _naming.model().stored_entry() if _naming != null 		else Gen2SaveMail.blank_message()
+	if _naming != null:
+		Gen2Screen.drop(_naming)
+		_naming = null
+	var species: int = 0
+	if _pack_save != null and _mail_target >= 0 and _mail_target < _pack_save.party.size():
+		species = (_pack_save.party[_mail_target] as Gen2SaveMon).species
+	_pending_mail = Gen2SaveMail.compose(
+		entry,
+		_pack_save.player_name if _pack_save != null else "",
+		_pack_save.player_id if _pack_save != null else 0,
+		species, _mail_item
+	)
+	_give_selected_item(_mail_target, _mail_swap)
+
+
 func _give_refusal(reason: StringName, party_index: int) -> String:
 	match reason:
+		&"holding_mail":
+			## `.please_remove_mail`, the one refusal a swap is not offered for.
+			return "Please remove the\nMAIL first."
 		&"cannot_hold_egg":
 			return Gen2WorldPack.egg_cant_hold_text()
 		&"item_cannot_be_held":
@@ -2011,6 +2071,9 @@ func _exit_tree() -> void:
 	if _view != null:
 		Gen2Screen.drop(_view)
 		_view = null
+	if _naming != null:
+		Gen2Screen.drop(_naming)
+		_naming = null
 
 
 ## Whichever of the cartridge's screens this mode is. `_hardware_image()` answers

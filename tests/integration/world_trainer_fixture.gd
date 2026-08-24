@@ -153,6 +153,26 @@ static func _write_name_input_chars(directory: String) -> void:
 					codes.append(Gen2Text.SPACE)
 			rows.append(codes)
 		tables.append(rows)
+	## `mail_input_chars.asm`'s two, appended the way the importer appends them:
+	## ten columns two bytes apart, six rows, and the command row last.
+	for table: int in RomLayout.MAIL_INPUT_TABLES:
+		var first: int = RomLayout.MAIL_INPUT_UPPER_A if table == 0 \
+			else RomLayout.MAIL_INPUT_LOWER_A
+		var rows: Array = []
+		for row: int in RomLayout.MAIL_INPUT_TABLE_ROWS:
+			if row == RomLayout.MAIL_INPUT_TABLE_ROWS - 1:
+				rows.append(Array(
+					RomLayout.MAIL_INPUT_COMMAND_UPPER if table == 0
+					else RomLayout.MAIL_INPUT_COMMAND_LOWER
+				))
+				continue
+			var codes: Array[int] = []
+			for column: int in RomLayout.MAIL_INPUT_COLUMNS:
+				codes.append(first + row * RomLayout.MAIL_INPUT_COLUMNS + column)
+				if column < RomLayout.MAIL_INPUT_COLUMNS - 1:
+					codes.append(Gen2Text.SPACE)
+			rows.append(codes)
+		tables.append(rows)
 	RomCache.write_json(RomCache.name_input_chars_path(directory), tables)
 
 
@@ -934,6 +954,11 @@ static func _write_battle_graphics(directory: String, manifest: Dictionary) -> v
 		"pokedex_slowpoke": [RomLayout.POKEDEX_SLOWPOKE_TILES, 2],
 		"unown_font": [RomLayout.UNOWN_FONT_TILES, 3],
 		"footprints": [RomLayout.FOOTPRINT_SLOTS * RomLayout.FOOTPRINT_TILES, 1],
+		## `gfx/mail.asm`'s one run and `_ComposeMailMessage.MailIcon`. The run
+		## is at its real length so every `Load*MailGFX` program can address it;
+		## a flat fill of ink is what makes each type's own tiles visible.
+		"mail_gfx": [RomLayout.MAIL_GFX_TILES, Gen2Tiles.INK],
+		"mail_icon": [RomLayout.MAIL_ICON_TILES, 2],
 	}
 	## The font and the frames are the two sheets addressed by character code
 	## rather than by slot, so both need their real first code. A frames sheet
@@ -966,6 +991,14 @@ static func _write_battle_graphics(directory: String, manifest: Dictionary) -> v
 		],
 		"badge": [0x7FFF, 0x5ABA, 0x49EF, 0x0000],
 	}
+	## `MailItems` and `LoadMailPalettes.MailPals`, at their real numbers: the
+	## item number is what `MailGFXPointers` is walked with, so a stand-in there
+	## would reach the wrong type.
+	manifest["mail_items"] = Gen2MailPage.ITEM_NUMBERS.duplicate()
+	var mail_palettes: Array = []
+	for index: int in RomLayout.MAIL_PALETTE_COUNT:
+		mail_palettes.append([0x7FFF, 0x2A9F + index, 0x195A, 0x0000])
+	manifest["mail_palettes"] = mail_palettes
 	## `_CGB_Pokedex`'s three: PREDEFPAL_POKEDEX and the two the screen loads
 	## beside it (gfx/pokedex/question_mark.pal and cursor.pal).
 	manifest["pokedex_palettes"] = {

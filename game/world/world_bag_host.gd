@@ -60,16 +60,20 @@ static func toss(
 ## a Pokemon already holding something is refused with nothing written, which is
 ## where the source stops to ask.
 ##
-## `ItemIsMail` is [method Gen2HeldItem.is_mail], but nothing here composes a
-## message, so `.please_remove_mail` and `ComposeMailMessage` are unreachable and
-## no item is refused for being mail.
+## `ItemIsMail` is [method Gen2HeldItem.is_mail] and it is read twice here.
+## `.please_remove_mail` refuses in front of the swap, because a message cannot
+## be taken off with the item that carries it; and `GivePartyItem` runs
+## `ComposeMailMessage` when the item being given is mail, which is a screen
+## rather than a transaction, so the caller writes it and hands the finished
+## [param mail] in.
 static func give_to_party(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
 	item: int,
 	party_index: int,
 	swap: bool = false,
-	persist: bool = true
+	persist: bool = true,
+	mail: Gen2SaveMail = null
 ) -> Dictionary:
 	if world == null or world.data == null or world.state == null:
 		return Gen2WorldTransaction.failure(&"missing_world", {})
@@ -91,11 +95,19 @@ static func give_to_party(
 	if mon.is_egg:
 		return Gen2WorldTransaction.failure(&"cannot_hold_egg", {"party_index": party_index})
 	var held: int = mon.item
+	## `.please_remove_mail`, which is asked before `.already_holding_item`: a
+	## held mail is not offered as a swap at all.
+	if Gen2HeldItem.is_mail(held):
+		return Gen2WorldTransaction.failure(&"holding_mail", {"party_index": party_index})
 	if held > 0 and not swap:
 		return Gen2WorldTransaction.failure(&"already_holding", {
 			"party_index": party_index, "held": held,
 			"held_name": world.data.item_name(held),
 		})
+	## `GivePartyItem`'s own tail: a mail item with no message behind it would
+	## be a held item the MAIL row could not read.
+	if Gen2HeldItem.is_mail(item) and mail == null:
+		return Gen2WorldTransaction.failure(&"mail_not_written", {"item": item})
 	var changes: Dictionary = {item: owned - 1}
 	if held > 0:
 		## `GiveItemToPokemon` runs before `ReceiveItemFromPokemon`, so the entry
@@ -109,6 +121,7 @@ static func give_to_party(
 			return Gen2WorldTransaction.failure(&"bag_full", room)
 		changes[held] = int(remaining.get(held, 0)) + 1
 	mon.item = item
+	mon.mail = mail
 	var before: Gen2WorldSnapshot = world.snapshot()
 	var applied: Dictionary = world.state.apply_changes({}, {}, {"items": changes})
 	if not bool(applied.get("ok", false)):
@@ -149,6 +162,11 @@ static func take_from_party(
 	if not bool(room.get("ok", false)):
 		return Gen2WorldTransaction.failure(&"bag_full", room)
 	mon.item = 0
+	## `TakePartyItem` asks `ItemIsMail` and does nothing with the answer: the
+	## message goes into the bag with the item and is gone. Here the message is
+	## on the record rather than in a slot of SRAM, so it is cleared rather than
+	## left behind as mail nothing holds.
+	mon.mail = null
 	var before: Gen2WorldSnapshot = world.snapshot()
 	var applied: Dictionary = world.state.apply_changes({}, {}, {
 		"items": {held: world.state.item_quantity(held) + 1},

@@ -7,6 +7,7 @@ const Fixture := preload("res://tests/integration/world_trainer_fixture.gd")
 
 ## `ITEM_REPEL`, whose effect `UseItem` keys on the item number for.
 const REPEL: int = 0x14
+const FLOWER_MAIL: int = 158
 ## ITEMMENU_CLOSE rows at their real numbers: two `.Field` runs here and one it
 ## does not, which is what says the pack quits on the effect rather than on the
 ## menu nibble.
@@ -92,6 +93,14 @@ func _write_pack_item() -> void:
 				raw["pocket"] = Gen2WorldPack.TYPE_KEY_ITEM
 				raw["permissions"] = Gen2WorldPack.CANT_TOSS
 				raw["field_menu"] = Gen2WorldPack.ITEMMENU_CLOSE
+			FLOWER_MAIL:
+				## `MailItems`' first entry at its real number, with FLOWER
+				## MAIL's own row: `ItemIsMail` checks the number, so a stand-in
+				## would not be mail at all.
+				raw["name"] = "FLOWER MAIL"
+				raw["pocket"] = Gen2WorldPack.TYPE_ITEM
+				raw["permissions"] = Gen2WorldPack.CANT_SELECT
+				raw["field_menu"] = Gen2WorldPack.ITEMMENU_NOUSE
 	RomCache.write_json(RomCache.items_path(Fixture.directory()), items)
 
 
@@ -1975,3 +1984,39 @@ func test_a_list_longer_than_the_screen_is_scrolled_rather_than_drawn_past_it() 
 	assert_eq(host._menu.cursor, rows - 1)
 	assert_eq(host._list_scroll, rows - visible)
 	Gen2ModHost.reset()
+
+
+## `GivePartyItem`: a mail item opens `_ComposeMailMessage` before anything is
+## written, and the finished entry goes onto the record with the item.
+func test_giving_mail_writes_a_message_before_it_leaves_the_bag() -> void:
+	await _open_world()
+	var mail_item: int = FLOWER_MAIL
+	_world_screen._world.state.apply_changes({}, {}, {"items": {7: 0, mail_item: 1}})
+	var host: Gen2StartMenuScreen = await _open_pack()
+	_choose_action(host, Gen2WorldPack.ACTION_GIVE)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_TARGET)
+
+	host.handle_button(Gen2Button.A)
+	## Nothing has moved yet: the keyboard is what stands between the choice and
+	## the transaction.
+	var naming: Gen2NamingScreenScreen = host.get("_naming")
+	assert_not_null(naming)
+	assert_true(naming.model().is_mail)
+	assert_eq(_world_screen._world.state.item_quantity(mail_item), 1)
+
+	## One letter, then END, which is the last column of the command row.
+	naming.model().column = 0
+	naming.model().row = 0
+	host.handle_button(Gen2Button.A)
+	naming.model().press_start()
+	host.handle_button(Gen2Button.A)
+
+	assert_null(host.get("_naming"))
+	var save: Gen2SaveData = _world_screen._injected_save
+	var mon: Gen2SaveMon = save.party[0]
+	assert_eq(mon.item, mail_item)
+	assert_not_null(mon.mail)
+	assert_eq(mon.mail.item, mail_item)
+	assert_eq(mon.mail.author, save.player_name)
+	assert_eq(mon.mail.species, mon.species)
+	assert_eq(_world_screen._world.state.item_quantity(mail_item), 0)

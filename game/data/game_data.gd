@@ -58,6 +58,8 @@ var _stats_screen_palettes: Dictionary = {}
 var _player_palettes: Dictionary = {}
 var _transition_palettes: Dictionary = {}
 var _card_palettes: Dictionary = {}
+var _mail_palettes: Array = []
+var _mail_items: Array = []
 var _pokedex_palettes: Dictionary = {}
 var _pack: Dictionary = {}
 var _pc_palette: Array = []
@@ -160,6 +162,10 @@ static func open_directory(path: String) -> GameData:
 	data._player_palettes = manifest.get("player_palettes", {})
 	data._transition_palettes = manifest.get("transition_palettes", {})
 	data._card_palettes = manifest.get("card_palettes", {})
+	var mail_palettes: Variant = manifest.get("mail_palettes", [])
+	data._mail_palettes = mail_palettes if mail_palettes is Array else []
+	var mail_items: Variant = manifest.get("mail_items", [])
+	data._mail_items = mail_items if mail_items is Array else []
 	data._pokedex_palettes = manifest.get("pokedex_palettes", {})
 	data._pack = manifest.get("pack", {})
 	var raw_pc_palette: Variant = manifest.get("pc_palette", [])
@@ -1347,6 +1353,29 @@ func name_input_chars(table: int) -> Array:
 		for code: Variant in row:
 			codes.append(int(code))
 		out.append(codes)
+	return out
+
+
+## `MailItems`, the ten item numbers `ItemIsMail` answers for. Empty on a cache
+## written before mail was imported, which is what [method Gen2HeldItem.is_mail]
+## falls back to its own pin for.
+func mail_items() -> Array:
+	var out: Array = []
+	for number: Variant in _mail_items:
+		out.append(int(number))
+	return out
+
+
+## One of `LoadMailPalettes.MailPals`' ten, in `MailGFXPointers` order and whole:
+## the read-mail screen draws every one of its four colours, unlike the pairs
+## `LoadPalette_White_Col1_Col2_Black` expands.
+func mail_palette(index: int) -> PackedColorArray:
+	if index < 0 or index >= _mail_palettes.size():
+		return Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+	var stored: Array = _mail_palettes[index]
+	var out := PackedColorArray()
+	for word: Variant in stored:
+		out.append(Gen2Palette.from_packed(int(word)))
 	return out
 
 

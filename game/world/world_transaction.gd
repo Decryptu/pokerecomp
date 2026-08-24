@@ -95,6 +95,10 @@ static func copy_into(target: Gen2SaveData, source: Gen2SaveData) -> void:
 	target.label = source.label
 	target.party = source.party.duplicate(true)
 	target.boxes = source.boxes
+	target.current_box = source.current_box
+	target.hall_of_fame = source.hall_of_fame.duplicate(true)
+	target.box_names = source.box_names.duplicate()
+	target.mailbox = source.mailbox.duplicate()
 	target.world = source.world
 	target.mods = source.mods.duplicate(true)
 	target.run_seed = source.run_seed

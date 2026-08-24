@@ -11,12 +11,15 @@ extends RefCounted
 ## NAMINGSCREEN_UNDERLINE and NAMINGSCREEN_MIDDLELINE rather than a String,
 ## because every routine here reads and writes those two markers.
 
-## The four keyboards in block order, which is the order they are imported in.
+## The six keyboards in block order, which is the order they are imported in:
+## `data/text/name_input_chars.asm`'s four and `mail_input_chars.asm`'s two.
 enum Keyboard {
 	NAME_LOWER,
 	BOX_LOWER,
 	NAME_UPPER,
 	BOX_UPPER,
+	MAIL_UPPER,
+	MAIL_LOWER,
 }
 
 ## `naming_screen.asm`'s own three: the cursor under the entry, the dashes it
@@ -49,18 +52,32 @@ const BOX_MAX_LENGTH: int = 8
 ## `MON_NAME_LENGTH - 1`, which `.StoreMonIconParams` writes. A nickname uses
 ## the player's keyboard and entry row and differs only in how long it may be.
 const MON_MAX_LENGTH: int = 10
+## `.initwNamingScreenMaxNameLength`'s `MAIL_MSG_LENGTH + 1`: two lines and the
+## `<NEXT>` between them, which is a buffer position the cursor steps over
+## rather than a character anything can type.
+const MAIL_MAX_LENGTH: int = Gen2SaveMail.BUFFER_LENGTH
+const MAIL_LINE_LENGTH: int = Gen2SaveMail.LINE_LENGTH
+const MAIL_LINE_BREAK: int = Gen2SaveMail.LINE_BREAK
 
 ## The cursor's own columns, which is every second byte of a row.
 const COLUMNS: int = RomLayout.NAME_INPUT_COLUMNS
 const COLUMN_STRIDE: int = RomLayout.NAME_INPUT_COLUMN_STRIDE
-## `.LetterEntries` has nine entries, so the last column is 8.
+## `.LetterEntries` has nine entries, so the last column is 8. Mail's own
+## `ComposeMail_AnimateCursor.LetterEntries` has ten.
 const LAST_COLUMN: int = COLUMNS - 1
-## `.CaseDelEnd` snaps the cursor to three groups three columns apart.
+const MAIL_COLUMNS: int = RomLayout.MAIL_INPUT_COLUMNS
+const MAIL_LAST_COLUMN: int = MAIL_COLUMNS - 1
+## `.CaseDelEnd` snaps the cursor to three groups three columns apart, on both
+## screens: mail's own table repeats $00, $30 and $60 the same way.
 const COMMAND_GROUP: int = 3
 
 ## `NamingScreen_IsTargetBox`: a box keyboard is six rows and a name keyboard
 ## five, so the command row is row 5 or row 4.
 var is_box: bool = false
+## `_ComposeMailMessage` rather than `NamingScreen`: a six-row, ten-column
+## keyboard of its own, a two-line entry with a fixed break in the middle, and
+## no prompt. Everything else on the screen is the same walk.
+var is_mail: bool = false
 ## wNamingScreenLetterCase. 0 is upper, which is what NamingScreen_InitText
 ## loads before anything has been pressed.
 var upper_case: bool = true
@@ -91,6 +108,20 @@ static func for_mon(data: GameData) -> Gen2NamingScreen:
 	return _build(data, false, MON_MAX_LENGTH)
 
 
+## `_ComposeMailMessage`, whose destination buffer is a mail message rather than
+## a name.
+static func for_mail(data: GameData) -> Gen2NamingScreen:
+	var screen := Gen2NamingScreen.new()
+	screen.is_mail = true
+	screen.max_length = MAIL_MAX_LENGTH
+	if data != null:
+		for table: int in Keyboard.size():
+			screen._tables.append(data.name_input_chars(table))
+	screen.init_name_entry()
+	screen.init_cursor()
+	return screen
+
+
 static func _build(data: GameData, box: bool, limit: int) -> Gen2NamingScreen:
 	var screen := Gen2NamingScreen.new()
 	screen.is_box = box
@@ -119,11 +150,17 @@ func init_name_entry() -> void:
 	buffer[0] = UNDERLINE
 	buffer[max_length] = TERMINATOR
 	length = 0
+	## `.InitBlankMail`'s own last two instructions, after the shared entry: the
+	## break is written once and every later pass puts it back.
+	if is_mail:
+		buffer[MAIL_LINE_LENGTH] = MAIL_LINE_BREAK
 
 
 ## `NamingScreen_ApplyTextInputMode`'s table selection: the case picks the pair
 ## and NamingScreen_IsTargetBox picks which of the pair.
 func keyboard() -> int:
+	if is_mail:
+		return Keyboard.MAIL_UPPER if upper_case else Keyboard.MAIL_LOWER
 	var table: int = Keyboard.NAME_UPPER if upper_case else Keyboard.NAME_LOWER
 	return table + 1 if is_box else table
 
@@ -137,7 +174,7 @@ func rows() -> Array:
 
 ## `ld b, $5` / `ld b, $6`: the number of rows the live keyboard has.
 func row_count() -> int:
-	return 6 if is_box else 5
+	return 6 if is_box or is_mail else 5
 
 
 ## Which row the case switch, DEL and END sit on.
@@ -167,6 +204,11 @@ func last_character() -> int:
 	var codes: Array = table[row]
 	var at: int = column * COLUMN_STRIDE
 	return int(codes[at]) if at >= 0 and at < codes.size() else 0
+
+
+## The rightmost column of the live keyboard, which is what both wraps run to.
+func last_column() -> int:
+	return MAIL_LAST_COLUMN if is_mail else LAST_COLUMN
 
 
 ## `NamingScreen_AnimateCursor`'s `.GetDPad`. Horizontal movement on the command
@@ -201,6 +243,7 @@ func press_a() -> StringName:
 		# TryAddCharacter's carry falls straight into `.start`, so filling the
 		# last slot puts the cursor on END rather than leaving it on a letter.
 		press_start()
+	_step_over_line_break(true)
 	return RESULT_LETTER
 
 
@@ -212,12 +255,26 @@ func press_b() -> void:
 	buffer[length] = UNDERLINE
 	if length + 1 < buffer.size() and buffer[length + 1] == UNDERLINE:
 		buffer[length + 1] = MIDDLELINE
+	_step_over_line_break(false)
+
+
+## `_ComposeMailMessage`'s `.a` and `.b` tails: the `<NEXT>` at
+## `MAIL_LINE_LENGTH` is a buffer position rather than a character, so an entry
+## that lands on it steps past it in whichever direction it arrived from and
+## writes the break back. Both tails run only when the length is exactly the
+## line length, so nothing else on either screen is touched.
+func _step_over_line_break(forwards: bool) -> void:
+	if not is_mail or length != MAIL_LINE_LENGTH:
+		return
+	length += 1 if forwards else -1
+	buffer[length] = UNDERLINE
+	buffer[MAIL_LINE_LENGTH] = MAIL_LINE_BREAK
 
 
 ## `.start`: the cursor jumps to END, which is the last column of the command
 ## row.
 func press_start() -> void:
-	column = LAST_COLUMN
+	column = last_column()
 	row = command_row()
 
 
@@ -229,6 +286,18 @@ func press_select() -> void:
 
 ## `NamingScreen_StoreEntry`: every marker still in the buffer becomes a
 ## terminator, so the name is what was typed and nothing behind it.
+## `NamingScreen_StoreEntry` whole: the buffer at its own length with every
+## marker turned into a terminator and everything else left where it is. Mail
+## needs the whole buffer rather than the run in front of the first marker,
+## because its `<NEXT>` sits inside it and its second line sits behind that.
+func stored_entry() -> PackedByteArray:
+	var out := PackedByteArray()
+	for index: int in max_length:
+		var code: int = buffer[index]
+		out.append(TERMINATOR if code == MIDDLELINE or code == UNDERLINE else code)
+	return out
+
+
 func stored_codes() -> PackedByteArray:
 	var out := PackedByteArray()
 	for index: int in max_length:
@@ -267,7 +336,7 @@ func _right() -> void:
 		var next: int = 0 if command == COMMAND_END else command
 		column = next * COMMAND_GROUP
 		return
-	column = 0 if column >= LAST_COLUMN else column + 1
+	column = 0 if column >= last_column() else column + 1
 
 
 func _left() -> void:
@@ -277,7 +346,7 @@ func _left() -> void:
 		var next: int = 4 if command == COMMAND_CASE else command
 		column = (next - 2) * COMMAND_GROUP
 		return
-	column = LAST_COLUMN if column <= 0 else column - 1
+	column = last_column() if column <= 0 else column - 1
 
 
 func _down() -> void:

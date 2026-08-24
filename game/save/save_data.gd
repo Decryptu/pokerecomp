@@ -80,12 +80,25 @@ var hall_of_fame: Array = []
 ## one and `SetDefaultBoxNames` fills them all at a new game. Empty is that
 ## default, which [method box_name] spells rather than storing.
 var box_names: Array = []
+## `sMailboxCount` and `sMailboxes`: the messages the player has sent to the PC,
+## newest last, at most [constant Gen2SaveMail.CAPACITY]. Like `box_names` this
+## defaults rather than versioning; an empty list is the truth about a slot
+## written before mail existed.
+var mailbox: Array = []
 
 
 func _init() -> void:
 	game_time = Gen2GameTime.new()
 	for _box_index: int in BOX_COUNT:
 		boxes.append(Gen2SaveBox.new())
+
+
+func _mailbox_dicts() -> Array:
+	var out: Array = []
+	for mail: Gen2SaveMail in mailbox:
+		if mail != null:
+			out.append(mail.to_dict())
+	return out
 
 
 func to_dict() -> Dictionary:
@@ -110,6 +123,7 @@ func to_dict() -> Dictionary:
 		"current_box": current_box,
 		"hall_of_fame": hall_of_fame.duplicate(true),
 		"box_names": box_names.duplicate(),
+		"mailbox": _mailbox_dicts(),
 		"world": world.to_dict() if world != null else {},
 		"mods": mods.duplicate(true),
 		"run": {
@@ -148,6 +162,12 @@ static func from_dict(raw: Variant) -> Gen2SaveData:
 			out.box_names.append(
 				String((raw_box_names as Array)[index]).substr(0, MAX_BOX_NAME)
 			)
+	var raw_mailbox: Variant = source.get("mailbox", [])
+	if raw_mailbox is Array:
+		for raw_mail: Variant in (raw_mailbox as Array).slice(0, Gen2SaveMail.CAPACITY):
+			var mail: Gen2SaveMail = Gen2SaveMail.from_dict(raw_mail)
+			if mail != null:
+				out.mailbox.append(mail)
 	var raw_party: Variant = source.get("party", [])
 	if raw_party is Array:
 		for raw_mon: Variant in raw_party as Array:
@@ -318,6 +338,9 @@ func copy_from(source: Gen2SaveData) -> bool:
 	party = copied.party
 	boxes = copied.boxes
 	current_box = copied.current_box
+	hall_of_fame = copied.hall_of_fame.duplicate(true)
+	box_names = copied.box_names.duplicate()
+	mailbox = copied.mailbox.duplicate()
 	world = copied.world
 	mods = copied.mods.duplicate(true)
 	run_seed = copied.run_seed
