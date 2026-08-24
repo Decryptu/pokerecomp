@@ -456,26 +456,26 @@ func _knob_image() -> Image:
 ## through the overworld's first palette the way every icon on these screens is.
 ## Colour zero is transparent, which is what lets one sit over the card.
 func _icon(first: int, columns: int, rows: int, repeat: bool = false) -> Image:
-	var size := Vector2i(columns, rows) * Gen2TownMapPage.TILE
-	var out: PackedInt32Array = Gen2PicImage.canvas(size.x, size.y)
+	var pixels := Vector2i(columns, rows) * Gen2TownMapPage.TILE
+	var out: PackedInt32Array = Gen2PicImage.canvas(pixels.x, pixels.y)
 	var tiles: PackedByteArray = _data.tile_indices("pokegear_sprites") if _data != null \
 		else PackedByteArray()
 	var palette: PackedColorArray = _data.overworld_sprite_palette(0, _time_of_day) \
 		if _data != null else PackedColorArray()
 	if tiles.is_empty() or palette.is_empty():
-		return Gen2PicImage.canvas_image(out, size.x, size.y)
+		return Gen2PicImage.canvas_image(out, pixels.x, pixels.y)
 	@warning_ignore("integer_division")
 	var strip_tiles: int = tiles.size() / Gen2Tiles.TILE_PIXELS
 	var table: PackedInt32Array = Gen2PicImage.lookup(palette)
 	for row: int in rows:
 		for column: int in columns:
 			Gen2PicImage.blit_tile(
-				out, size.x, size.y, tiles, strip_tiles,
+				out, pixels.x, pixels.y, tiles, strip_tiles,
 				first if repeat else first + row * columns + column,
 				column * Gen2TownMapPage.TILE, row * Gen2TownMapPage.TILE,
 				table, false, false, 0
 			)
-	return Gen2PicImage.canvas_image(out, size.x, size.y)
+	return Gen2PicImage.canvas_image(out, pixels.x, pixels.y)
 
 
 ## The screen the opener wants this drawn in, handed over before it is added to
