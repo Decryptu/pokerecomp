@@ -1540,14 +1540,23 @@ host.register_menu_entry(Gen2ModHost.MENU_START, manifest.id, {
 })
 ```
 
-`Gen2ModHost.START_ACTIONS` is the allow list; `OPEN_BILLS_PC` opens Bill's
-storage through the same box screen the Pokemon Center's machine does, and its B
+`Gen2ModHost.START_ACTIONS` is the allow list; `OPEN_BILLS_PC` opens BILL'S PC
+at the same top menu the Pokemon Center's machine reaches, and its SEE YA! or B
 returns through the ordinary start-menu flow. An optional `visible(context)`
 predicate is asked with a copy of `{party_count, pokedex, pokegear}` and leaves
 the row ABSENT rather than present and refused, which is what the cartridge's own
 gated rows do. The host applies its own gate after the predicate, so a row cannot
 be shown where the game would refuse it: `OPEN_BILLS_PC` needs a party, which is
 `PC_CheckPartyForPokemon`.
+
+**The start menu shows eight rows at once and scrolls past that.** A fully
+unlocked save already fills those eight (POKEDEX, POKEMON, PACK, POKEGEAR, the
+player's name, SAVE, OPTION, EXIT), so the MODS row and every registered row are
+reached by scrolling: the box stays the height of the screen, the window follows
+the cursor, and the cursor still wraps at both ends, so any row is reachable in
+either direction and EXIT is one press up from the top one. The Bug Contest's own
+list starts two rows lower and shows seven. A mod may register any number of
+rows; only how many are on screen at once is fixed.
 
 A start-menu entry with neither an action nor a handler still appears, marked
 unavailable. A pocket's number has to be at or

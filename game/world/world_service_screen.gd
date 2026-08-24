@@ -20,10 +20,15 @@ signal completed(results: Array)
 ## The wait itself is not spent (see `HANDOFF.md`'s `WaitSFX` row); what it
 ## carries is that the sound is heard.
 signal sfx_requested(index: int, waited: bool)
+## `PlayMonCry2` from a screen this one opens, the box screen's stats page today.
+## Passed on for the same reason [signal sfx_requested] is: the world screen owns
+## the one player.
+signal cry_requested(species: int)
 
 enum MODE {
 	MENU, MART, PHONE, TOWN_MAP, CARD,
 	APRICORN, PC, PC_ITEMS, PC_ITEM_LIST, PC_TEXT, MOM_BANK,
+	PC_BOXES, PC_BOX_LIST,
 }
 
 ## `PokemonCenterPC`'s own box storage, which is the one row that opens a screen
@@ -131,6 +136,13 @@ var _pc_sfx: int = -1
 var _pc_after: StringName = &"top"
 var _pc_label: String = ""
 var _boxes: Gen2BoxScreen = null
+## `_ChangeBox_MenuHeader`'s `db 4, 0`: four rows of a scrolling list, and where
+## the window into the fourteen boxes stands.
+const BOX_LIST_ROWS: int = 4
+var _pc_scroll: int = 0
+## `wCurBox`, which CHANGE BOX writes and both lists read. It is the save's, so
+## the box a deposit lands in outlives the machine being switched off.
+var _box_index: int = 0
 ## Whether storage was opened without the Pokemon Center machine around it, so
 ## its B leaves the host rather than stepping back to a menu. See
 ## [method open_bills_pc].
@@ -858,10 +870,18 @@ func open_bills_pc(
 	if not Gen2WorldPC.can_open(_save):
 		_show_error("Storage needs a party.")
 		return false
-	_mode = MODE.PC
 	_bills_pc_only = true
-	_open_boxes()
-	return _boxes != null
+	_open_bills_pc_menu()
+	return true
+
+
+## `BillsPC_SeeYa`, and the `.LogOut` behind it: back to the machine's own top
+## menu, or out of the host when nothing opened this but a start-menu action.
+func _leave_bills_pc() -> void:
+	if _bills_pc_only:
+		_finish([])
+		return
+	_open_pc(&"pokemon_center")
 
 
 ## `PokemonCenterPC`'s top menu, or `_PlayersHousePC`'s item PC when the script
@@ -948,10 +968,30 @@ func _confirm_pc_row() -> void:
 	if _cursor < 0 or _cursor >= _pc_rows.size():
 		return
 	var row: int = int(_pc_rows[_cursor].get("row", -1))
+	if _mode == MODE.PC_BOX_LIST:
+		## `BillsPC_ChangeBoxSubmenu`'s SWITCH, which is `wCurBox` and nothing
+		## else. The list stays up, the way `.loop` leaves it.
+		_box_index = clampi(row, 0, Gen2SaveData.BOX_COUNT - 1)
+		if _save != null:
+			_save.current_box = _box_index
+		_refresh_box_counts()
+		_render_rows()
+		return
+	if _mode == MODE.PC_BOXES:
+		match row:
+			Gen2WorldPC.BILLSPCITEM_WITHDRAW:
+				_open_boxes(Gen2BoxScreen.MODE_WITHDRAW)
+			Gen2WorldPC.BILLSPCITEM_DEPOSIT:
+				_open_boxes(Gen2BoxScreen.MODE_DEPOSIT)
+			Gen2WorldPC.BILLSPCITEM_CHANGE_BOX:
+				_open_box_list()
+			Gen2WorldPC.BILLSPCITEM_SEE_YA:
+				_leave_bills_pc()
+		return
 	if _mode == MODE.PC:
 		match row:
 			Gen2WorldPC.PCPCITEM_BILLS_PC:
-				_open_boxes()
+				_open_bills_pc_menu()
 			Gen2WorldPC.PCPCITEM_PLAYERS_PC:
 				_open_pc_items()
 			Gen2WorldPC.PCPCITEM_OAKS_PC:
@@ -1078,9 +1118,63 @@ func _advance_pc_text() -> void:
 	_open_pc(&"pokemon_center")
 
 
-## BILL'S PC. The panel steps aside for the box screen the way it does for the
-## region map, so the top menu is still there when the boxes close.
-func _open_boxes() -> void:
+## `_BillsPC`, the top menu the two lists and the box picker sit behind.
+## `.CheckCanUsePC` is the one refusal it has, and it is the machine's own.
+func _open_bills_pc_menu() -> void:
+	if not Gen2WorldPC.can_open(_save):
+		## `.CheckCanUsePC` prints and returns to `PokemonCenterPC`'s own loop.
+		## The start-menu action never reaches this: [method open_bills_pc]
+		## refuses the same test before the host is opened at all.
+		_open_pc_text([Gen2WorldPC.BILLS_PC_NEEDS_POKEMON], &"top", "BILL's PC")
+		return
+	_mode = MODE.PC_BOXES
+	_cursor = 0
+	_box_index = clampi(
+		_save.current_box if _save != null else 0, 0, Gen2SaveData.BOX_COUNT - 1
+	)
+	_pc_rows = Gen2WorldPC.bills_pc_menu()
+	_title = _data.pokecenter_pc_row("bills_pc")
+	_summary = Gen2WorldPC.BILLS_PC_WHAT
+	_status = ""
+	_render_rows()
+
+
+## `_ChangeBox`'s scrolling list: every box by name, with what
+## `BillsPC_PrintBoxCountAndCapacity` prints beside the one the cursor is on.
+## Its own submenu is SWITCH, NAME, PRINT and QUIT; NAME needs box names, which
+## the save model does not carry ([Gen2SaveBox]), and PRINT is `PrintPCBox`
+## behind them, so a row here is the SWITCH the source's default option is.
+func _open_box_list() -> void:
+	_mode = MODE.PC_BOX_LIST
+	_cursor = _box_index
+	_pc_scroll = clampi(_box_index - BOX_LIST_ROWS + 1, 0, Gen2SaveData.BOX_COUNT - BOX_LIST_ROWS)
+	_pc_rows = []
+	for index: int in Gen2SaveData.BOX_COUNT:
+		_pc_rows.append({"row": index, "name": "BOX %d" % (index + 1)})
+	_title = "CHANGE BOX"
+	_summary = "Choose a BOX."
+	_refresh_box_counts()
+	_render_rows()
+
+
+## `GetBoxCount` for the row the cursor stands on, over MONS_PER_BOX.
+func _refresh_box_counts() -> void:
+	var index: int = clampi(_cursor, 0, Gen2SaveData.BOX_COUNT - 1)
+	var box: Gen2SaveBox = _save.boxes[index] if _save != null \
+		and index < _save.boxes.size() else null
+	var count: int = 0
+	if box != null:
+		for slot: int in Gen2SaveBox.CAPACITY:
+			if slot < box.slots.size() and box.slots[slot] != null:
+				count += 1
+	_status = "%d/%d PKMN, CURRENT BOX %d" % [
+		count, Gen2SaveBox.CAPACITY, _box_index + 1,
+	]
+
+
+## BILL'S PC's own two lists. The panel steps aside for the box screen the way it
+## does for the region map, so the menu is still there when the boxes close.
+func _open_boxes(mode: int) -> void:
 	var host: Gen2BoxScreen = BOX_SCENE.instantiate() as Gen2BoxScreen
 	if host == null or _save == null:
 		_status = "Box storage needs a validated save."
@@ -1091,8 +1185,16 @@ func _open_boxes() -> void:
 	host.z_index = 5
 	host.set_screen(_service_hardware)
 	add_child(host)
-	host.set_context(_data, _save, _persist, true)
+	host.set_context(_data, _save, _persist, true, mode, _box_index)
+	host.cry_requested.connect(_on_boxes_cry)
 	host.closed.connect(_on_boxes_closed)
+
+
+## The box screen's stats page plays a cry, and this screen owns no player: the
+## world screen is what turns [signal sfx_requested] into sound, and a cry is not
+## one, so it is passed on rather than dropped silently.
+func _on_boxes_cry(species: int) -> void:
+	cry_requested.emit(species)
 
 
 ## `Gen2BoxScreen.closed` carries the result its own host would have resumed a
@@ -1102,12 +1204,9 @@ func _on_boxes_closed(_result: Dictionary) -> void:
 		Gen2Screen.drop(_boxes)
 		_boxes = null
 	_set_overlay_open(false)
-	## Storage opened on its own has no machine behind it to step back to, so its
-	## B leaves the host entirely and the caller reopens whatever it came from.
-	if _bills_pc_only:
-		_finish([])
-		return
-	_open_pc(&"pokemon_center")
+	## `BillsPC_DepositMenu` and `BillsPC_WithdrawMenu` both `CloseWindow` back
+	## into `.UseBillsPC`'s own loop, which is the top menu.
+	_open_bills_pc_menu()
 
 
 func _open_phone(request: Dictionary, data: Dictionary) -> void:
@@ -1374,6 +1473,13 @@ func _move_cursor(delta: int) -> void:
 	_cursor = wrapi(_cursor + delta, 0, count)
 	if _mode == MODE.PC_ITEM_LIST:
 		_pc_quantity = 1
+	if _mode == MODE.PC_BOX_LIST:
+		## `ScrollingMenu` keeps the cursor inside its own window and moves the
+		## window under it, and `BillsPC_PrintBoxCountAndCapacity` runs per row
+		## rather than per choice.
+		_pc_scroll = clampi(_pc_scroll, _cursor - BOX_LIST_ROWS + 1, _cursor)
+		_pc_scroll = clampi(_pc_scroll, 0, maxi(0, count - BOX_LIST_ROWS))
+		_refresh_box_counts()
 	_render_rows()
 
 
@@ -1396,7 +1502,7 @@ func _move_direction(direction: Vector2i) -> void:
 
 
 func _confirm() -> void:
-	if _mode in [MODE.PC, MODE.PC_ITEMS]:
+	if _mode in [MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES, MODE.PC_BOX_LIST]:
 		_confirm_pc_row()
 		return
 	if _mode == MODE.PC_ITEM_LIST:
@@ -1416,7 +1522,12 @@ func _confirm() -> void:
 
 
 func _cancel() -> void:
-	if _mode == MODE.PC:
+	if _mode == MODE.PC_BOXES:
+		## `.cancel`: B off the top menu is the same way out SEE YA! is.
+		_leave_bills_pc()
+	elif _mode == MODE.PC_BOX_LIST:
+		_open_bills_pc_menu()
+	elif _mode == MODE.PC:
 		## `.shutdown`: B off the top menu is the same shut-down TURN OFF is.
 		_finish_runtime({"ok": true, "script_value": 0})
 	elif _mode == MODE.PC_ITEMS:
@@ -1479,9 +1590,15 @@ func _render_rows(override: Array = []) -> void:
 		## One value at a time, the way the dial itself shows it.
 		override = [_choices[clampi(_cursor, 0, _choices.size() - 1)]] if not _choices.is_empty() \
 			else []
+	if _mode == MODE.PC_BOX_LIST and override.is_empty():
+		## The window `ScrollingMenu` draws, and the cursor's place inside it.
+		_render_service_page(
+			_pc_rows.slice(_pc_scroll, _pc_scroll + BOX_LIST_ROWS), _cursor - _pc_scroll
+		)
+		return
 	var values: Array = override if not override.is_empty() else (
 		_choices if _mode == MODE.MENU \
-		else _pc_rows if _mode in [MODE.PC, MODE.PC_ITEMS] \
+		else _pc_rows if _mode in [MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES] \
 		else _pc_entries if _mode == MODE.PC_ITEM_LIST \
 		else ["Continue"]
 	)
@@ -1490,7 +1607,7 @@ func _render_rows(override: Array = []) -> void:
 
 ## `PhoneCall`'s ringing box and `PC_DisplayText`'s plain `MenuTextbox` print
 ## neither one, so those two draw no rows at all here.
-func _render_service_page(values: Array) -> void:
+func _render_service_page(values: Array, cursor: int = -1) -> void:
 	if _service_view == null or _data == null:
 		_service_drawn = false
 		_apply_layer_visibility()
@@ -1514,7 +1631,8 @@ func _render_service_page(values: Array) -> void:
 			labels.append(String(value))
 	var image: Image = _mom_bank_image() if _mode == MODE.MOM_BANK \
 		else _dial_image() if _is_dial() else _service_page.render(
-		_title, _summary, labels, _cursor, _status, _service_box()
+		_title, _summary, labels, _cursor if cursor < 0 else cursor, _status,
+		_service_box()
 	)
 	if image != null:
 		Gen2PicImage.show(_service_view, image)
@@ -1562,8 +1680,10 @@ func _service_box() -> Gen2MenuBox:
 			if _menu == null or _menu.kind == &"spinner":
 				return null
 			return _menu.box()
-		MODE.PC, MODE.PC_ITEMS:
+		MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES:
 			return _pc_top_box()
+		MODE.PC_BOX_LIST:
+			return _pc_box_list_box()
 		MODE.PC_ITEM_LIST:
 			return _pc_item_list_box()
 		MODE.APRICORN:
@@ -1578,6 +1698,18 @@ func _pc_top_box() -> Gen2MenuBox:
 	return Gen2MenuBox.from_coords(
 		0, 0, 15, 12, Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_WRAP
 	)
+
+
+## `_ChangeBox_MenuHeader`'s `menu_coords 1, 5, 9, 12`, which is four rows of a
+## scrolling list rather than all fourteen at once.
+func _pc_box_list_box() -> Gen2MenuBox:
+	var box: Gen2MenuBox = Gen2MenuBox.from_coords(
+		1, 5, 9, 5 + BOX_LIST_ROWS + 2, Gen2MenuBox.STATICMENU_CURSOR
+	)
+	## `ScrollingMenu` writes its rows one apart, where `VerticalMenu` writes
+	## them two.
+	box.row_step = 1
+	return box
 
 
 ## `PCItemsMenuData`'s `menu_coords 4, 1, 18, 10`.
@@ -1600,7 +1732,7 @@ func _apricorn_quantity_box() -> Gen2MenuBox:
 func _option_count() -> int:
 	if _mode == MODE.MENU:
 		return _menu.options.size() if _menu != null else _choices.size()
-	if _mode in [MODE.PC, MODE.PC_ITEMS]:
+	if _mode in [MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES, MODE.PC_BOX_LIST]:
 		return _pc_rows.size()
 	if _mode == MODE.PC_ITEM_LIST:
 		return maxi(1, _pc_entries.size())

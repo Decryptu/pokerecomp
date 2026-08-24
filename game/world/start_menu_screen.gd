@@ -134,6 +134,9 @@ var _pack_result: String = ""
 ## `wItemsPocketScrollPosition` and its three siblings: which entry the visible
 ## five start at. Held per pocket, the way the source holds one variable each.
 var _pack_scroll: Array[int] = [0, 0, 0, 0]
+## Which row of the start menu's own list is at the top of the box. See
+## [method _scroll_list_to_cursor].
+var _list_scroll: int = 0
 var _pack_cursors: Array[int] = [0, 0, 0, 0]
 var _pack_page: Gen2PackPage = null
 var _pack_result_ok: bool = false
@@ -367,6 +370,7 @@ func _move(direction: Vector2i) -> void:
 			## The source's .MenuData omits STATICMENU_ENABLE_LEFT_RIGHT, so
 			## only vertical input moves the top-level list.
 			if direction.x == 0 and _menu != null and _menu.move(direction.y):
+				_scroll_list_to_cursor()
 				_render_list()
 		Mode.PACK:
 			if direction.x != 0:
@@ -609,7 +613,28 @@ func _confirm_list() -> void:
 
 func _open_list_mode() -> void:
 	_mode = Mode.LIST
+	## The row the menu reopens on is the one it was left on, which may be past
+	## the window a previous open left behind.
+	_scroll_list_to_cursor()
 	_render_list()
+
+
+## The window the list is drawn through. The box is the height of the screen and
+## the cartridge's own eight rows fill it exactly, so a `MENU_START` entry a mod
+## registers is a row past the bottom; `_move_pack_cursor` solves the same thing
+## for a pocket, and this is its twin. `STATICMENU_WRAP` still wraps the cursor,
+## and the window follows it round, so EXIT is one press up from the top row.
+func _scroll_list_to_cursor() -> void:
+	if _menu == null:
+		_list_scroll = 0
+		return
+	var visible: int = Gen2StartMenuPage.visible_rows(
+		_world != null and _world.bug_contest_active()
+	)
+	_list_scroll = clampi(
+		clampi(_list_scroll, _menu.cursor - visible + 1, _menu.cursor),
+		0, maxi(_menu.size() - visible, 0)
+	)
 
 
 func _render_list() -> void:
@@ -1980,6 +2005,8 @@ func _hardware_image() -> Image:
 		Mode.LIST:
 			if _menu == null:
 				return null
+			var contest: bool = _world != null and _world.bug_contest_active()
+			var visible: int = Gen2StartMenuPage.visible_rows(contest)
 			var labels: Array = []
 			for entry: Variant in _menu.items():
 				labels.append(String((entry as Dictionary).get("label", "")))
@@ -1988,8 +2015,8 @@ func _hardware_image() -> Image:
 			var description: String = _menu.selected_description() \
 				if Gen2OptionsStore.current().menu_account else ""
 			return _page.render_list(
-				labels, _menu.cursor, description,
-				_world != null and _world.bug_contest_active()
+				labels.slice(_list_scroll, _list_scroll + visible),
+				_menu.cursor - _list_scroll, description, contest
 			)
 		Mode.SAVE_ASK, Mode.SAVE_OVERWRITE, Mode.SAVE_SAVING, Mode.SAVE_SAVED, \
 		Mode.SAVE_FAILED:

@@ -259,13 +259,9 @@ func _pic_layer(
 ) -> PackedByteArray:
 	var out: PackedByteArray = _new_buffer()
 	var box: int = side * TILE
-	if pixels.size() < box * box:
+	var strip: int = pic_stride(pixels, side)
+	if strip <= 0:
 		return out
-	# The strip is `side` tiles tall and as wide as it has tiles, so a pic
-	# carrying `AnimateFrontpic`'s frames behind its own box is the same buffer
-	# with more columns and the same `column * side + row` addressing.
-	@warning_ignore("integer_division")
-	var strip: int = pixels.size() / box
 	@warning_ignore("integer_division")
 	var banked: int = (strip / TILE) * side
 	var square: int = side * side
@@ -390,6 +386,19 @@ static func substitute_pixels(strip: PackedByteArray, player_side: bool) -> Pack
 			for column: int in TILE:
 				out[to + column] = strip[from + column]
 	return out
+
+
+## The row stride of a buffer [method padded_pic] produced. The box is square
+## and `AnimateFrontpic`'s frames sit behind it in the same rows, so a pic that
+## carries them is wider than its own box and every row of it is that wide.
+## Zero when the buffer is not one, which is a caller with nothing to draw.
+static func pic_stride(pixels: PackedByteArray, side: int) -> int:
+	var box: int = side * TILE
+	if box <= 0 or pixels.size() < box * box:
+		return 0
+	@warning_ignore("integer_division")
+	var strip: int = pixels.size() / box
+	return strip
 
 
 ## [param front] is whether `PadFrontpic` runs over this one: a back pic fills
@@ -766,10 +775,17 @@ func _battler_tile(vram: int) -> PackedByteArray:
 		else Gen2BattleScreenMap.PLAYER_SIDE
 	var base: int = Gen2BattleScreenMap.ENEMY_BASE_TILE if enemy \
 		else Gen2BattleScreenMap.PLAYER_BASE_TILE
-	var pixels: PackedByteArray = _enemy_pixels if enemy else _player_pixels
-	var index: int = vram - base
-	var box: int = side * TILE
-	if index < 0 or index >= side * side or pixels.size() < box * box:
+	return pic_tile(_enemy_pixels if enemy else _player_pixels, side, vram - base)
+
+
+## One tile of a buffer [method padded_pic] produced, numbered `column * side +
+## row` the way `PlaceGraphic` numbers a picture's own box. Static because the
+## same read is what `tools/checks/pokepic.gd` sweeps a corpus with: it is the
+## one place a battler moved as objects and the same battler drawn as tilemap
+## can disagree.
+static func pic_tile(pixels: PackedByteArray, side: int, index: int) -> PackedByteArray:
+	var strip: int = pic_stride(pixels, side)
+	if index < 0 or index >= side * side or strip <= 0:
 		return PackedByteArray()
 
 	@warning_ignore("integer_division")
@@ -778,7 +794,7 @@ func _battler_tile(vram: int) -> PackedByteArray:
 	var out: PackedByteArray = PackedByteArray()
 	out.resize(TILE * TILE)
 	for row: int in TILE:
-		var from: int = (top + row) * box + left
+		var from: int = (top + row) * strip + left
 		for column: int in TILE:
 			out[row * TILE + column] = pixels[from + column]
 	return out

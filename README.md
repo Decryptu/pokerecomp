@@ -146,7 +146,7 @@ Facing something and pressing A is the other way to every field move: a cut
 tree, a whirlpool, a waterfall, a headbutt tree and open water each offer their
 move in the cartridge's own order and words. Fruit trees bear once a day, Poke
 Balls and hidden items are picked up by facing them, and the imported Players
-House PC opens box storage. Walking into a new area raises Crystal's own map name
+House PC opens the item PC, while a Pokemon Center's opens BILL'S PC beside it. Walking into a new area raises Crystal's own map name
 sign for sixty frames, which Gold and Silver never had.
 
 Icons come from [Lucide](https://lucide.dev). See

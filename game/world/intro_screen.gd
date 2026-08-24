@@ -292,6 +292,9 @@ func _on_speech_finished(player_name: String) -> void:
 		created.world.world_day = int(_clock["day"])
 		created.world.world_hour = int(_clock["hour"])
 		created.world.world_minute = int(_clock["minute"])
+		## `InitClock` is what sets the RTC, so the time the player just dialled
+		## in is the time as of now rather than as of the snapshot's own stamp.
+		created.world.world_clock_stamp = Gen2WorldClock.host_seconds()
 	## Before the write: a mod holding a run snapshots what built it into the
 	## save's own namespace, and that has to be in the bytes on disk.
 	GameRuntime.announce_new_save(created)

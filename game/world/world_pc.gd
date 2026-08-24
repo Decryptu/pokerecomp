@@ -59,6 +59,40 @@ const UNBUILT_PLAYERS_PC_ROWS: Array[int] = [
 ]
 
 
+## `_BillsPC.MenuData`'s five rows, in its `.Jumptable`'s own order. Inline menu
+## strings inside `bills_pc_top.asm` that no script points at, so nothing imports
+## them and they are the host's, the way [Gen2BoxScreen]'s own two are.
+const BILLSPCITEM_WITHDRAW: int = 0
+const BILLSPCITEM_DEPOSIT: int = 1
+const BILLSPCITEM_CHANGE_BOX: int = 2
+const BILLSPCITEM_MOVE_WITHOUT_MAIL: int = 3
+const BILLSPCITEM_SEE_YA: int = 4
+const BILLS_PC_ROWS: Array[String] = [
+	"WITHDRAW PKMN", "DEPOSIT PKMN", "CHANGE BOX", "MOVE PKMN W/O MAIL", "SEE YA!",
+]
+## `_PCWhatText` and `_PCGottaHavePokemonText`, the two lines `.LogIn` and
+## `.CheckCanUsePC` print. Both are `text_far` stubs in `data/text/common_2.asm`
+## that no script reaches either.
+const BILLS_PC_WHAT: String = "What?"
+const BILLS_PC_NEEDS_POKEMON: String = "You gotta have\n#MON to call!"
+
+## MOVE PKMN W/O MAIL is `_MovePKMNWithoutMail`, a screen of its own with its own
+## joypad (`MoveMonWithoutMail_DPad`) and its own save-before-you-start step; the
+## row is dropped rather than offered and refused, the way the three rows above
+## are.
+const UNBUILT_BILLS_PC_ROWS: Array[int] = [BILLSPCITEM_MOVE_WITHOUT_MAIL]
+
+
+## The top menu behind BILL'S PC, as `{row, name}` in the source's own order.
+static func bills_pc_menu() -> Array:
+	var out: Array = []
+	for row: int in BILLS_PC_ROWS.size():
+		if row in UNBUILT_BILLS_PC_ROWS:
+			continue
+		out.append({"row": row, "name": BILLS_PC_ROWS[row]})
+	return out
+
+
 ## `.ChooseWhichPCListToUse`: the Pokedex first, then `wHallOfFameCount`, which
 ## is the induction flag here because the save model counts no records.
 static func top_menu_list(state: Gen2WorldState) -> int:

@@ -126,15 +126,25 @@ func test_pokemon_center_pc_opens_the_top_menu_and_bills_pc_behind_it() -> void:
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC)
 	assert_eq(int(host._pc_rows[0]["row"]), Gen2WorldPC.PCPCITEM_BILLS_PC)
 
+	## `_BillsPC`'s own top menu stands between the machine and the lists, and
+	## its DEPOSIT row is what opens the party one.
+	host.handle_button(Gen2Button.A)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOXES)
+	assert_eq(int(host._pc_rows[0]["row"]), Gen2WorldPC.BILLSPCITEM_WITHDRAW)
+	host.handle_button(Gen2Button.DOWN)
 	host.handle_button(Gen2Button.A)
 	var boxes: Gen2BoxScreen = host._boxes
 	assert_not_null(boxes)
+	assert_eq(int(boxes.box_snapshot()["loaded"]), Gen2BoxScreen.LOADED_PARTY)
 	assert_eq(boxes.box_snapshot()["boxes"].size(), Gen2SaveData.BOX_COUNT)
 	boxes.close_embedded()
 	await get_tree().process_frame
 	assert_null(host._boxes)
-	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOXES)
 
+	## B off the top menu is SEE YA!, and B off the machine's own shuts it down.
+	host.handle_button(Gen2Button.B)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC)
 	host.handle_button(Gen2Button.B)
 	await get_tree().process_frame
 	assert_null(_world_screen._service_host)

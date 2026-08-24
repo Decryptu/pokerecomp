@@ -77,6 +77,51 @@ static func withdraw_box_to_party(
 	}, persist)
 
 
+## `RemoveMonFromPartyOrBox` behind `BillsPCDepositFuncRelease` and Bill's PC's
+## own `.release`: the same atomic write the two transfers make, with nothing on
+## the other end of it. Both of the source's refusals are the caller's, since
+## both are boxes it prints before the yes/no: `BillsPC_IsMonAnEgg` and, for the
+## party alone, `BillsPC_CheckMail_PreventBlackout`.
+static func release_party_member(
+	save: Gen2SaveData, data: GameData, party_index: int, persist: bool = true
+) -> Dictionary:
+	var candidate_result: Dictionary = _candidate(save, data)
+	if not bool(candidate_result.get("ok", false)):
+		return candidate_result
+	var candidate: Gen2SaveData = candidate_result["save"]
+	if party_index < 0 or party_index >= candidate.party.size():
+		return _failure(&"invalid_party_index")
+	if candidate.party.size() <= 1:
+		return _failure(&"last_party_member")
+	candidate.party.remove_at(party_index)
+	return _commit(save, data, candidate, {
+		"kind": &"release_party", "party_index": party_index,
+	}, persist)
+
+
+static func release_box_slot(
+	save: Gen2SaveData, data: GameData, box_index: int, box_slot: int,
+	persist: bool = true
+) -> Dictionary:
+	var candidate_result: Dictionary = _candidate(save, data)
+	if not bool(candidate_result.get("ok", false)):
+		return candidate_result
+	var candidate: Gen2SaveData = candidate_result["save"]
+	if box_index < 0 or box_index >= candidate.boxes.size():
+		return _failure(&"invalid_box_index")
+	if box_slot < 0 or box_slot >= Gen2SaveBox.CAPACITY:
+		return _failure(&"invalid_box_slot")
+	var box: Gen2SaveBox = candidate.boxes[box_index]
+	if box == null or box_slot >= box.slots.size():
+		return _failure(&"invalid_box_shape")
+	if box.slots[box_slot] == null:
+		return _failure(&"empty_box_slot")
+	box.slots[box_slot] = null
+	return _commit(save, data, candidate, {
+		"kind": &"release_box", "box": box_index, "slot": box_slot,
+	}, persist)
+
+
 static func _candidate(save: Gen2SaveData, data: GameData) -> Dictionary:
 	if save == null or data == null:
 		return _failure(&"missing_save_context")

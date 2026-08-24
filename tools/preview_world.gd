@@ -82,6 +82,10 @@ extends SceneTree
 ## `diploma` (`_Diploma`'s page: the first number is 1 for `_PrintDiploma`'s
 ## loop, which stands the printer's own connection error over it, and the second
 ## is the page, where 2 is the one only a printer that answered reaches),
+## `bills_pc` (`_BillsPC`'s top menu and the lists behind it, which no preview
+## cell reaches: the first number is how many rows down the menu to stand and the
+## second how many A presses to spend, so `crystal 24 6 ... bills_pc 1 2` is the
+## DEPOSIT list with its submenu up),
 ## `mom_bank` (`Mom_WithdrawDepositMenuJoypad`'s dial, which no fixture cell
 ## reaches: the first number is the wallet in hundreds and the second her own
 ## balance in hundreds, plus 1000 for the WITHDRAW header),
@@ -609,6 +613,34 @@ func _process(_delta: float) -> bool:
 			## box over it, and page 2 behind a printer that answered: the first
 			## number is 1 for the printing loop and the second the page.
 			_screen.preview_diploma(_cell.x >= 1, maxi(_cell.y, 1))
+		elif _kind == &"start_menu":
+			## `SetUpMenuItems`' own gates opened, because the list worth
+			## photographing is the eight rows a finished save carries: they fill
+			## the box exactly, so the host's MODS row and any a mod registered
+			## are what the window has to be scrolled to. The first number is how
+			## many rows down to walk before the picture.
+			_screen.get("_world").state.set_engine_flag(
+				Gen2WorldStartMenu.ENGINE_POKEDEX, true
+			)
+			_screen.get("_world").state.set_engine_flag(
+				Gen2WorldStartMenu.ENGINE_POKEGEAR, true
+			)
+			_screen.preview_start_menu()
+			for _down: int in maxi(_cell.x, 0):
+				_screen.press_button(Gen2Button.DOWN)
+				_screen.advance_frame()
+		elif _kind == &"bills_pc":
+			## `_BillsPC`, which no preview cell reaches: the first number is how
+			## many rows down the top menu to stand and the second how many A
+			## presses to spend from there, so `1 1` is the DEPOSIT list and
+			## `1 2` its submenu on the first party member.
+			_screen.preview_bills_pc()
+			for _down: int in maxi(_cell.x, 0):
+				_screen.press_button(Gen2Button.DOWN)
+				_screen.advance_frame()
+			for _press: int in maxi(_cell.y, 0):
+				_screen.press_button(Gen2Button.A)
+				_screen.advance_frame()
 		elif _kind == &"mom_bank":
 			## `Mom_SetUpDepositMenu` and its withdraw twin, which no fixture
 			## cell reaches: her house is not a preview map and the dial stands
@@ -636,7 +668,7 @@ func _process(_delta: float) -> bool:
 			&"battle", &"battle_transition", &"level_evolution", &"egg_hatch",
 			&"name_rater", &"move_deleter", &"move_tutor", &"day_care",
 			&"ice_slide", &"whiteout", &"view_cover", &"gift_nickname",
-			&"catch_nickname", &"mom_bank",
+			&"catch_nickname", &"mom_bank", &"bills_pc", &"start_menu",
 		]:
 			## Those kinds drove themselves to the frame they want; every other
 			## kind stages a sprite and then spends the frames it needs.

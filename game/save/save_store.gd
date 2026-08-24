@@ -75,6 +75,11 @@ static func save(save_data: Gen2SaveData, data: GameData) -> Dictionary:
 	if DirAccess.make_dir_recursive_absolute(directory) != OK:
 		return _failure("could not create the save directory")
 
+	## The cartridge's RTC keeps running while the machine is off, so the file
+	## records the host second it was written at and the world it reopens catches
+	## up to what has passed since (`Gen2WorldClock.catch_up`).
+	if save_data.world != null:
+		save_data.world.world_clock_stamp = Gen2WorldClock.host_seconds()
 	var document: String = _wrap(JSON.stringify(save_data.to_dict(), "\t"))
 	var primary: Dictionary = _write_file(path, document)
 	if not primary["ok"]:

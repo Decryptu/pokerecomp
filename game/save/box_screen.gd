@@ -1,36 +1,80 @@
 class_name Gen2BoxScreen
 extends Control
 
-## Bill's PC, on the hardware's own grid.
+## Bill's PC's two lists, on the hardware's own grid.
 ##
-## [Gen2PCBoxPage] is the picture and `engine/pokemon/bills_pc.asm` is the model:
-## `wBillsPC_LoadedBox` picks the party or one box, `CopyBoxmonSpecies` builds
-## the list it walks with a CANCEL row on the end, and
-## `BillsPC_PressUp`/`Down`/`Left`/`Right` are the cursor, the scroll and the box
-## the D-pad changes.
+## [Gen2PCBoxPage] is the picture and `engine/pokemon/bills_pc.asm` is the model.
+## `_DepositPKMN` and `_WithdrawPKMN` are this one screen with a different list
+## loaded: `wBillsPC_LoadedBox` is the party for one and the current box for the
+## other, `CopyBoxmonSpecies` builds the list with a CANCEL row on the end, and
+## `Withdraw_UpDown` walks it. `_BillsPC`'s own top menu is the panel's
+## ([Gen2WorldServiceScreen]), which is what opens this in either mode.
 ##
-## What the source splits between DEPOSIT, WITHDRAW and MOVE WITHOUT MAIL is one
-## screen here: A on a party row deposits and A on a box row withdraws, through
-## [Gen2SaveStorage]'s atomic transfers. The submenus behind those rows (STATS,
-## RELEASE, MOVE) are not built; nothing calls them and the storage boundary is
-## what the PC exists for.
+## A on a row opens the submenu both jumptables reach: the transfer, STATS,
+## RELEASE and CANCEL. Left and right do nothing, because the only routine that
+## reads them is `MoveMonWithoutMail_DPad`, and MOVE PKMN W/O MAIL is a screen of
+## its own that is not built.
 
 signal closed(result: Dictionary)
+## `PlayMonCry2` from the stats screen this one can open, played by whoever owns
+## the audio player: nothing here reaches [Gen2AudioPlayer].
+signal cry_requested(species: int)
 
 ## The PC is drawn in hardware pixels and the panel it is opened from is ordinary
 ## UI at window resolution, so the screen carries a [Gen2Screen] of its own, the
 ## way [Gen2TownMapScreen] does.
 
-## `PCString_ChooseaPKMN` and `.PartyPKMN`. Both are engine strings inside
+## `PCString_*` and `.PartyPKMN`. All of them are engine strings inside
 ## `bills_pc.asm` that no script points at, so nothing imports them and they are
 ## the host's, like the contest judging lines. "PKMN" is the two tiles `<PK>` and
 ## `<MN>`, which is what [method Gen2Text.encode] makes of it; "#" is the POKé
 ## ligature and has no tile in either font.
 const PROMPT_CHOOSE: String = "Choose a PKMN."
+const PROMPT_WHATS_UP: String = "What's up?"
+const PROMPT_RELEASE: String = "Release PKMN?"
+const PROMPT_LAST_MON: String = "It's your last PKMN!"
+const PROMPT_NO_USABLE: String = "No more usable PKMN!"
+const PROMPT_BOX_FULL: String = "The BOX is full."
+const PROMPT_PARTY_FULL: String = "The party's full!"
+const PROMPT_NO_EGGS: String = "No releasing EGGS!"
+const PROMPT_STORED: String = "Stored %s!"
+const PROMPT_GOT: String = "Got %s!"
+## `ReleasePKMN_ByePKMN` prints `PCString_ReleasedPKMN` for eighty frames and
+## then this one for fifty. Nothing here spends frames, so the line left on the
+## page is the one the source leaves on it.
+const PROMPT_BYE: String = "Bye, %s!"
 const PARTY_NAME: String = "PARTY PKMN"
 
 ## `wBillsPC_LoadedBox`: zero is the party and the boxes follow it.
 const LOADED_PARTY: int = 0
+
+## Which of `_BillsPC.Jumptable`'s two list rows opened this screen.
+const MODE_DEPOSIT: int = 0
+const MODE_WITHDRAW: int = 1
+
+## `BillsPCDepositMenuHeader` and `BillsPC_Withdraw.MenuHeader`, the same
+## `menu_coords 9, 4, SCREEN_WIDTH - 1, 13` over the listing, and the yes/no
+## `lb bc, 14, 11` puts under it. `_YesNoBox` adds five and four to the corner it
+## is handed.
+const SUBMENU_FLAGS: int = Gen2MenuBox.STATICMENU_CURSOR
+const SUBMENU_AT: Rect2i = Rect2i(9, 4, 10, 9)
+const RELEASE_AT: Vector2i = Vector2i(14, 11)
+const RELEASE_SPAN: Vector2i = Vector2i(5, 4)
+const RELEASE_OPTIONS: Array[String] = ["YES", "NO"]
+
+## `BillsPCDepositJumptable` and `BillsPC_Withdraw.dw`: the same four rows, whose
+## first is the transfer the loaded list implies.
+const SUBMENU_TRANSFER: int = 0
+const SUBMENU_STATS: int = 1
+const SUBMENU_RELEASE: int = 2
+const SUBMENU_CANCEL: int = 3
+const SUBMENU_ROWS: Array[String] = ["DEPOSIT", "STATS", "RELEASE", "CANCEL"]
+const SUBMENU_ROWS_WITHDRAW: Array[String] = ["WITHDRAW", "STATS", "RELEASE", "CANCEL"]
+
+## `BillsPC_CheckMail_PreventBlackout`'s own `cp $3` against
+## `wBillsPC_NumMonsInBox`, which `CopyBoxmonSpecies` leaves one over the party
+## count because the CANCEL row is in it.
+const BLACKOUT_ROWS: int = 3
 
 var _data: GameData = null
 var _data_override: GameData = null
@@ -48,6 +92,16 @@ var _scroll: int = 0
 ## The line the bottom box carries, which is `PCString_ChooseaPKMN` until a
 ## transfer answers.
 var _prompt: String = PROMPT_CHOOSE
+## `_DepositPKMN` or `_WithdrawPKMN`, and the submenu, the release yes/no and
+## the stats screen either of them can put over the listing.
+var _mode: int = MODE_DEPOSIT
+var _submenu_open: bool = false
+var _submenu_cursor: int = 0
+var _release_open: bool = false
+var _release_cursor: int = 0
+var _stats: Gen2MonStatsScreen = null
+var _stats_page: Gen2StatsScreenPage = null
+var _menu_page: Gen2MenuPage = null
 var _page: Gen2PCBoxPage = null
 ## The screen this is drawn in, and the 160x144 layer inside it.
 var _screen: Gen2Screen = null
@@ -74,7 +128,8 @@ func _ready() -> void:
 ## Supplies the cache/save context. Embedded overworld use can keep the same
 ## atomic storage operations in memory while a selected runtime save persists.
 func set_context(
-	data: GameData, save: Gen2SaveData, persist: bool = true, embedded: bool = false
+	data: GameData, save: Gen2SaveData, persist: bool = true, embedded: bool = false,
+	mode: int = MODE_DEPOSIT, box_index: int = 0
 ) -> void:
 	_data_override = data
 	_save_override = save
@@ -82,6 +137,14 @@ func set_context(
 	_embedded = embedded
 	_data = data
 	_save = save
+	_mode = MODE_WITHDRAW if mode == MODE_WITHDRAW else MODE_DEPOSIT
+	_box_index = clampi(box_index, 0, Gen2SaveData.BOX_COUNT - 1)
+	## `.Init` writes `wBillsPC_LoadedBox` itself, so which list is up is the
+	## mode's rather than anything the last screen left behind.
+	_loaded = LOADED_PARTY if _mode == MODE_DEPOSIT else _box_index + 1
+	_cursor = 0
+	_scroll = 0
+	_prompt = PROMPT_CHOOSE
 	if is_inside_tree():
 		if _page == null:
 			_page = Gen2PCBoxPage.from_data(_data)
@@ -106,6 +169,11 @@ func box_snapshot() -> Dictionary:
 		"cursor": _cursor,
 		"scroll": _scroll,
 		"prompt": _prompt,
+		"mode": _mode,
+		"submenu": _submenu_labels() if _submenu_open else [],
+		"submenu_cursor": _submenu_cursor if _submenu_open else -1,
+		"release": _release_cursor if _release_open else -1,
+		"stats": _stats != null,
 		"boxes": boxes,
 	}
 
@@ -115,7 +183,7 @@ func select_box(box_index: int) -> bool:
 		return false
 	_box_index = box_index
 	_selected_box_slot = -1
-	if _loaded != LOADED_PARTY:
+	if _mode == MODE_WITHDRAW:
 		_loaded = box_index + 1
 	_cursor = 0
 	_scroll = 0
@@ -141,56 +209,106 @@ func select_party_member(index: int) -> bool:
 	return true
 
 
+## `DepositPokemon`. A transaction reason never reaches the page: the source
+## prints one of its own strings for each refusal it has, and one it has none for
+## is one the joypad cannot ask for.
 func deposit_selected_party() -> bool:
 	if _save == null or _selected_party_index < 0:
-		_prompt = "Choose a party PKMN."
+		_prompt = PROMPT_CHOOSE
 		_refresh()
 		return false
+	var name: String = _display_name(_save.party[_selected_party_index] as Gen2SaveMon)
 	var result: Dictionary = Gen2SaveStorage.deposit_party_to_box(
 		_save, _data, _selected_party_index, _box_index, -1, _persist
 	)
 	if not bool(result.get("ok", false)):
-		_prompt = String(result.get("message", result.get("reason", "Deposit refused.")))
+		_prompt = _refusal(result, PROMPT_BOX_FULL)
 		_refresh()
 		return false
-	_prompt = "Stored in BOX %d." % (int(result["box"]) + 1)
+	_prompt = PROMPT_STORED % name
 	_selected_party_index = -1
 	_clamp_cursor()
 	_refresh()
 	return true
 
 
+## `TryWithdrawPokemon`, whose one refusal is `PCString_PartyFull`.
 func withdraw_selected_box() -> bool:
 	if _save == null or _selected_box_slot < 0:
-		_prompt = "Choose a stored PKMN."
+		_prompt = PROMPT_CHOOSE
 		_refresh()
 		return false
+	var box: Gen2SaveBox = _save.boxes[_box_index] if _box_index < _save.boxes.size() else null
+	var name: String = _display_name(
+		box.slots[_selected_box_slot] as Gen2SaveMon if box != null else null
+	)
 	var result: Dictionary = Gen2SaveStorage.withdraw_box_to_party(
 		_save, _data, _box_index, _selected_box_slot, _persist
 	)
 	if not bool(result.get("ok", false)):
-		_prompt = String(result.get("message", result.get("reason", "Withdrawal refused.")))
+		_prompt = _refusal(result, PROMPT_PARTY_FULL)
 		_refresh()
 		return false
-	_prompt = "Taken out of BOX %d." % (_box_index + 1)
+	_prompt = PROMPT_GOT % name
 	_selected_box_slot = -1
 	_clamp_cursor()
 	_refresh()
 	return true
 
 
-## `_StatsScreenDPad` and its siblings: up and down walk the list, left and right
-## change the loaded box, A takes the row the cursor stands on and B leaves.
+## `.release`, behind the yes/no both submenus put up. The party's own blackout
+## check has already run: the source asks it before the question, not after.
+func release_selected() -> bool:
+	if _save == null:
+		return false
+	var mon: Gen2SaveMon = _selected_mon()
+	var name: String = _display_name(mon)
+	var result: Dictionary = Gen2SaveStorage.release_party_member(
+		_save, _data, _selected_party_index, _persist
+	) if _loaded == LOADED_PARTY else Gen2SaveStorage.release_box_slot(
+		_save, _data, _box_index, _selected_box_slot, _persist
+	)
+	if not bool(result.get("ok", false)):
+		_prompt = _refusal(result, PROMPT_LAST_MON)
+		_refresh()
+		return false
+	_prompt = PROMPT_BYE % name
+	_selected_party_index = -1
+	_selected_box_slot = -1
+	_clamp_cursor()
+	_refresh()
+	return true
+
+
+## The line a refused transaction prints. Every reason the joypad can produce has
+## a string of its own; anything else is a damaged save reaching a screen that
+## cannot say so, and takes the caller's own line rather than a symbol name.
+func _refusal(result: Dictionary, fallback: String) -> String:
+	match StringName(result.get("reason", &"")):
+		&"box_full", &"box_slot_occupied":
+			return PROMPT_BOX_FULL
+		&"party_full":
+			return PROMPT_PARTY_FULL
+		&"last_party_member":
+			return PROMPT_LAST_MON
+	return fallback
+
+
+## `Withdraw_UpDown` and the two jumptables around it: up and down walk the list,
+## A takes the row the cursor stands on and B leaves. Left and right belong to
+## MOVE PKMN W/O MAIL alone and do nothing here.
 func handle_button(button: int) -> bool:
+	if _stats != null:
+		return _stats.handle_button(button)
+	if _release_open:
+		return _handle_release_button(button)
+	if _submenu_open:
+		return _handle_submenu_button(button)
 	match button:
 		Gen2Button.UP:
 			_press_up()
 		Gen2Button.DOWN:
 			_press_down()
-		Gen2Button.LEFT:
-			_press_left()
-		Gen2Button.RIGHT:
-			_press_right()
 		Gen2Button.A:
 			_confirm()
 		Gen2Button.B:
@@ -198,6 +316,156 @@ func handle_button(button: int) -> bool:
 		_:
 			return false
 	return true
+
+
+## `VerticalMenu` over the listing. Its B is the CANCEL row, which is
+## `BillsPCDepositFuncCancel`: back to the list, nothing done.
+func _handle_submenu_button(button: int) -> bool:
+	match button:
+		Gen2Button.UP:
+			_submenu_cursor = wrapi(_submenu_cursor - 1, 0, _submenu_labels().size())
+		Gen2Button.DOWN:
+			_submenu_cursor = wrapi(_submenu_cursor + 1, 0, _submenu_labels().size())
+		Gen2Button.A:
+			_confirm_submenu()
+			return true
+		Gen2Button.B:
+			_close_submenu()
+			return true
+		_:
+			return false
+	_refresh()
+	return true
+
+
+## `PlaceYesNoBox`, whose B is its NO.
+func _handle_release_button(button: int) -> bool:
+	match button:
+		Gen2Button.UP:
+			_release_cursor = wrapi(_release_cursor - 1, 0, RELEASE_OPTIONS.size())
+		Gen2Button.DOWN:
+			_release_cursor = wrapi(_release_cursor + 1, 0, RELEASE_OPTIONS.size())
+		Gen2Button.A:
+			_release_open = false
+			if _release_cursor == 0:
+				_close_submenu(false)
+				release_selected()
+			else:
+				_prompt = PROMPT_WHATS_UP
+				_refresh()
+			return true
+		Gen2Button.B:
+			_release_open = false
+			_prompt = PROMPT_WHATS_UP
+			_refresh()
+			return true
+		_:
+			return false
+	_refresh()
+	return true
+
+
+## The submenu's own four rows, whose first is named for the list that is loaded.
+func _submenu_labels() -> Array:
+	return SUBMENU_ROWS_WITHDRAW if _loaded != LOADED_PARTY else SUBMENU_ROWS
+
+
+## `.WhatsUp`/`.PrepSubmenu`: the string changes and the cursor opens on the
+## transfer row, which is `ld a, $1 / ld [wMenuCursorY], a`.
+func _open_submenu() -> void:
+	_submenu_open = true
+	_submenu_cursor = 0
+	_prompt = PROMPT_WHATS_UP
+	_refresh()
+
+
+func _close_submenu(draw: bool = true) -> void:
+	_submenu_open = false
+	_release_open = false
+	_prompt = PROMPT_CHOOSE
+	if draw:
+		_refresh()
+
+
+func _confirm_submenu() -> void:
+	match _submenu_cursor:
+		SUBMENU_TRANSFER:
+			var refusal: String = _blackout_refusal()
+			if not refusal.is_empty():
+				_close_submenu(false)
+				_prompt = refusal
+				_refresh()
+				return
+			_close_submenu(false)
+			if _loaded == LOADED_PARTY:
+				deposit_selected_party()
+			else:
+				withdraw_selected_box()
+		SUBMENU_STATS:
+			_open_stats()
+		SUBMENU_RELEASE:
+			var blocked: String = _blackout_refusal()
+			if blocked.is_empty() and _selected_mon() != null \
+					and (_selected_mon() as Gen2SaveMon).is_egg:
+				## `BillsPC_IsMonAnEgg`, which the box side checks on its own and
+				## the party side reaches behind the blackout check.
+				blocked = PROMPT_NO_EGGS
+			if not blocked.is_empty():
+				_close_submenu(false)
+				_prompt = blocked
+				_refresh()
+				return
+			_release_open = true
+			_release_cursor = 0
+			_prompt = PROMPT_RELEASE
+			_refresh()
+		_:
+			_close_submenu()
+
+
+## `BillsPC_CheckMail_PreventBlackout`, which guards the party list's transfer
+## and its release alike. Its mail branch is unreachable here: no item is mail
+## until `ItemIsMail`'s list is imported (see [method _mon_state]).
+func _blackout_refusal() -> String:
+	if _loaded != LOADED_PARTY or _save == null:
+		return ""
+	if rows().size() < BLACKOUT_ROWS:
+		return PROMPT_LAST_MON
+	if _all_others_fainted():
+		return PROMPT_NO_USABLE
+	return ""
+
+
+## `CheckCurPartyMonFainted`: whether every party member but the chosen one has
+## no HP left.
+func _all_others_fainted() -> bool:
+	for index: int in _save.party.size():
+		if index == _selected_party_index:
+			continue
+		var mon: Gen2SaveMon = _save.party[index]
+		if mon != null and mon.hp > 0:
+			return false
+	return true
+
+
+## `BillsPC_StatsScreen`, which is `StatsScreenInit` over this screen and hands
+## control back on the way out.
+func _open_stats() -> void:
+	var mon: Gen2SaveMon = _selected_mon()
+	if mon == null or _data == null:
+		return
+	_stats = Gen2MonStatsScreen.create(_data, [mon])
+	_stats.closed.connect(_close_stats)
+	_stats.cry_requested.connect(func(species: int) -> void: cry_requested.emit(species))
+	_stats.announce()
+	_refresh()
+
+
+## The submenu is still up behind it, which is where `.stats` returns.
+func _close_stats() -> void:
+	_stats = null
+	_prompt = PROMPT_WHATS_UP
+	_refresh()
 
 
 ## The list `CopyBoxmonSpecies` builds: every occupied slot of the loaded list,
@@ -276,6 +544,9 @@ func _refresh() -> void:
 	var mon: Gen2SaveMon = _selected_mon()
 	if _page == null or _background == null:
 		return
+	if _stats != null:
+		_refresh_stats()
+		return
 	var visible_rows: Array = []
 	var all_rows: Array = rows()
 	for index: int in Gen2PCBoxPage.LIST_HEIGHT:
@@ -288,6 +559,7 @@ func _refresh() -> void:
 		"prompt": _prompt,
 		"mon": _mon_state(mon),
 	})
+	_draw_menus(indices)
 	var palette: PackedColorArray = _interface_palette()
 	if _backdrop != null:
 		_backdrop.color = palette[0]
@@ -296,7 +568,86 @@ func _refresh() -> void:
 	))
 	_background.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 	_refresh_pic(mon)
-	_refresh_cursor(all_rows.size())
+	## `.WhatsUp` and `.PrepSubmenu` both open with `ClearSprites`, and the
+	## picture is tilemap rather than OAM, so only the ring goes.
+	_refresh_cursor(0 if _submenu_open else all_rows.size())
+
+
+## The submenu, and the release yes/no under it, into the page's own buffer:
+## `VerticalMenu` and `PlaceYesNoBox` draw over the tilemap that is already up.
+func _draw_menus(indices: PackedByteArray) -> void:
+	if not _submenu_open:
+		return
+	if _menu_page == null:
+		_menu_page = Gen2MenuPage.from_data(_data)
+	if _menu_page == null:
+		return
+	var width: int = Gen2Screen.WIDTH
+	_menu_page.draw(
+		Gen2MenuBox.from_coords(
+			SUBMENU_AT.position.x, SUBMENU_AT.position.y,
+			SUBMENU_AT.position.x + SUBMENU_AT.size.x,
+			SUBMENU_AT.position.y + SUBMENU_AT.size.y, SUBMENU_FLAGS
+		),
+		_submenu_labels(), _submenu_cursor, indices, width
+	)
+	if not _release_open:
+		return
+	_menu_page.draw(
+		Gen2MenuBox.from_coords(
+			RELEASE_AT.x, RELEASE_AT.y,
+			RELEASE_AT.x + RELEASE_SPAN.x, RELEASE_AT.y + RELEASE_SPAN.y,
+			SUBMENU_FLAGS | Gen2MenuBox.STATICMENU_NO_TOP_SPACING
+		),
+		RELEASE_OPTIONS, _release_cursor, indices, width
+	)
+
+
+## `StatsScreenInit` over this screen, drawn the way the party menu draws it: the
+## front pic has a palette of its own and is composed on top of the page.
+func _refresh_stats() -> void:
+	if _stats_page == null:
+		_stats_page = Gen2StatsScreenPage.from_data(_data)
+	if _stats_page == null:
+		return
+	var snapshot: Dictionary = _stats.snapshot()
+	var image: Image = _stats_page.render(snapshot, _data)
+	if image == null:
+		return
+	Gen2PicImage.show(_background, image)
+	_background.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
+	if _backdrop != null:
+		_backdrop.color = Color.WHITE
+	_refresh_stats_pic(snapshot)
+	_refresh_cursor(0)
+
+
+## `PrepMonFrontpic`'s cell, the same one [method _refresh_pic] places a listing
+## picture in, at the stats screen's own corner.
+func _refresh_stats_pic(snapshot: Dictionary) -> void:
+	if _pic == null:
+		return
+	_pic.texture = null
+	var species: int = int(snapshot.get("species", 0))
+	if species <= 0 or _data == null:
+		return
+	var egg: bool = bool(snapshot.get("egg", false))
+	var pic: Dictionary = _data.egg_pic() if egg else _data.species_pic(species)
+	if pic.is_empty():
+		return
+	var art: Image = Gen2PicImage.from_atlas(
+		_data.atlas_indices(pic["atlas"]), _data.atlas(pic["atlas"]), pic,
+		_data.egg_palette() if egg \
+			else _data.palette(species, bool(snapshot.get("shiny", false)))
+	)
+	if art == null:
+		return
+	Gen2PicImage.show(_pic, art)
+	_pic.size = Vector2(art.get_size())
+	var cell: int = Gen2StatsScreenPage.pic_size()
+	_pic.position = Vector2(Gen2StatsScreenPage.pic_position()) + Vector2(
+		float(cell - art.get_width()) * 0.5, float(cell - art.get_height())
+	)
 
 
 ## `_CGB_BillsPC`'s background palette, PREDEFPAL_POKEDEX, which the Pokedex
@@ -474,30 +825,8 @@ func _press_down() -> void:
 	_refresh()
 
 
-## `BillsPC_PressLeft`/`Right`, which wrap the party and every box round.
-func _press_left() -> void:
-	_load(_loaded - 1 if _loaded > LOADED_PARTY else Gen2SaveData.BOX_COUNT)
-
-
-func _press_right() -> void:
-	_load(_loaded + 1 if _loaded < Gen2SaveData.BOX_COUNT else LOADED_PARTY)
-
-
-func _load(loaded: int) -> void:
-	_loaded = loaded
-	if _loaded != LOADED_PARTY:
-		_box_index = _loaded - 1
-	_cursor = 0
-	_scroll = 0
-	_selected_box_slot = -1
-	_selected_party_index = -1
-	_prompt = PROMPT_CHOOSE
-	_sync_selection()
-	_refresh()
-
-
-## A on the CANCEL row leaves, the way `.Cancel` does; on any other row it is the
-## transfer the loaded list implies.
+## A on the CANCEL row leaves, the way `.a_button`'s `cp -1` does; on any other
+## row it opens the submenu.
 func _confirm() -> void:
 	var all_rows: Array = rows()
 	var at: int = _cursor + _scroll
@@ -505,10 +834,7 @@ func _confirm() -> void:
 		_back()
 		return
 	_sync_selection()
-	if _loaded == LOADED_PARTY:
-		deposit_selected_party()
-		return
-	withdraw_selected_box()
+	_open_submenu()
 
 
 ## After a transfer the list is one row shorter, so the cursor comes back inside

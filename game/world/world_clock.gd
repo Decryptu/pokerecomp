@@ -14,6 +14,12 @@ extends RefCounted
 ## rather than by waiting for them
 ## ([method Gen2WorldScreen.advance_world_time]).
 ##
+## The clock keeps its own time while the game is not running, which is what a
+## cartridge's RTC does: a snapshot records the host second its time was written
+## at, and [method catch_up] moves the saved time on by what has passed since.
+## Without that a save resumed at the hour it was written at, so a player who set
+## the clock in the morning never saw a night.
+##
 ## The clock does not move roaming Pokémon: the cartridge advances those during
 ## map setup, so [method Gen2WorldAPI.advance_schedule] is driven by a map change
 ## rather than elapsed time.
@@ -33,6 +39,11 @@ const NITE_START: int = 18
 ## The prefix, so the switch is written once.
 const PIN_ARGUMENT: String = "--clock="
 
+## `Time.get_unix_time_from_system()`, or the second a test names in its place.
+## A run's own clock cannot be asked to be somewhere else: this is set by a test
+## and by nothing that ships.
+static var host_seconds_override: float = -1.0
+
 var day: int = 0
 var hour: int = 0
 var minute: int = 0
@@ -48,6 +59,37 @@ func _init(start_hour: int = 0, start_minute: int = 0, start_day: int = 0) -> vo
 	day = posmod(start_day, DAYS_PER_WEEK)
 	hour = posmod(start_hour, HOURS_PER_DAY)
 	minute = posmod(start_minute, MINUTES_PER_HOUR)
+
+
+static func host_seconds() -> float:
+	return host_seconds_override if host_seconds_override >= 0.0 \
+		else Time.get_unix_time_from_system()
+
+
+## The clock [param day], [param hour] and [param minute] a snapshot carries,
+## moved on by the real seconds between the host second it was written at
+## ([param stamp]) and now. The same time back when there is no stamp, which is a
+## save written before one was kept, or when the stamp is ahead of now, which is
+## a host clock that has been put back: neither is a reason to run the world's
+## own clock backwards.
+static func catch_up(
+	day_value: int, hour: int, minute: int, stamp: float, now: float = -1.0
+) -> Dictionary:
+	var here: float = now if now >= 0.0 else host_seconds()
+	var elapsed: float = here - stamp
+	if stamp <= 0.0 or elapsed <= 0.0:
+		return {"day": day_value, "hour": hour, "minute": minute}
+	@warning_ignore("integer_division")
+	var minutes: int = int(elapsed / SECONDS_PER_MINUTE) \
+		+ minute + hour * MINUTES_PER_HOUR \
+		+ day_value * MINUTES_PER_HOUR * HOURS_PER_DAY
+	var day_minutes: int = MINUTES_PER_HOUR * HOURS_PER_DAY
+	@warning_ignore("integer_division")
+	return {
+		"day": (minutes / day_minutes) % DAYS_PER_WEEK,
+		"hour": (minutes % day_minutes) / MINUTES_PER_HOUR,
+		"minute": minutes % MINUTES_PER_HOUR,
+	}
 
 
 func time_of_day() -> int:
