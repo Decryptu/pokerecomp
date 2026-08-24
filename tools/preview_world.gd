@@ -98,7 +98,12 @@ extends SceneTree
 ## with bit 4 clear has none on it),
 ## `visible_encounter` (a shiny of the map's own table standing on the eligible
 ## cell nearest the player, with the cartridge's sparkle over it: try
-## `crystal 24 3 ... visible_encounter 4 9`), the name of any
+## `crystal 24 3 ... visible_encounter 4 9`),
+## `field_moves_menu` (the start menu's MOVES row, and the list of HM moves the
+## bag can supply behind it, both of which need a registered field-move source
+## before they exist: driven twice, since each call is one step),
+## `repel_renewal` (the question a Repel running out asks, which needs a
+## registered renewal provider), the name of any
 ## `preview_*` driver on the world screen without that prefix (`field_move` is
 ## `PartyMenu` with a taught CUT on it, `start_menu`, `capture`,
 ## `catch_nickname` (`PokeBallEffect`'s own question, over the battle the throw

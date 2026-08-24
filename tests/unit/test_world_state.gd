@@ -523,6 +523,26 @@ func test_count_step_spends_a_repel_step_and_stops_at_zero() -> void:
 	assert_eq(state.repel_steps(), 0)
 
 
+## The one step a Repel runs out on, which is where a renewal offer belongs.
+## Held rather than cleared by the read, so an offer landing on a step a warp or
+## a script already owns waits for one that can spend it.
+func test_the_step_that_runs_a_repel_out_is_an_edge_the_reader_holds() -> void:
+	var state := Gen2WorldState.new({}, {}, {}, {}, 0, {}, 2)
+	state.count_step()
+	assert_false(state.repel_expired(), "one step left is not an edge")
+	state.count_step()
+	assert_true(state.repel_expired())
+	assert_true(state.repel_expired(), "reading it does not spend it")
+	state.count_step()
+	assert_true(state.repel_expired(), "a step with no Repel does not clear it either")
+	state.clear_repel_expired()
+	assert_false(state.repel_expired())
+	## A walk with no Repel on at all never raises it.
+	var walking := Gen2WorldState.new()
+	walking.count_step()
+	assert_false(walking.repel_expired())
+
+
 ## The three counters are saved beside the Repel countdown. A state written
 ## before they existed carries none of the keys and restores as a fresh walk.
 func test_step_counters_round_trip_and_default_to_a_fresh_walk() -> void:

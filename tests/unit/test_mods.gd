@@ -1767,3 +1767,153 @@ func test_a_fetched_icon_is_cached_and_read_back_without_the_network() -> void:
 	assert_true(Gen2ModArt.cache_icon(url, bytes, directory))
 	assert_false(Gen2ModArt.wants_fetch(url, directory), "and not fetched twice")
 	assert_not_null(Gen2ModArt.cached_icon(url, directory))
+
+
+## The four object registrations added for the Quality of Life seams all go
+## through one shape, so the rules are checked once rather than four times: a
+## RefCounted that is never a Node, every method the host will call, and one
+## claim per id.
+func test_the_four_provider_registrations_share_one_set_of_rules() -> void:
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	var manifest: Gen2ModManifest = _loaded_manifest()
+	var node := Node2D.new()
+	var empty := GDScript.new()
+	empty.source_code = "extends RefCounted\n"
+	empty.reload()
+	var rows: Array = [
+		[&"field", Gen2ModHost.FIELD_MOVE_SOURCE_METHODS[0],
+			func(id: StringName, p: Object) -> Dictionary:
+				return host.register_field_move_source(id, p)],
+		[&"repel", Gen2ModHost.REPEL_PROVIDER_METHODS[0],
+			func(id: StringName, p: Object) -> Dictionary:
+				return host.register_repel_renewal(id, p)],
+		[&"info", Gen2ModHost.BATTLE_INFO_METHODS[0],
+			func(id: StringName, p: Object) -> Dictionary:
+				return host.register_battle_info(id, p)],
+		[manifest.id, Gen2ModHost.CATCH_EXPERIENCE_METHODS[0],
+			func(_id: StringName, p: Object) -> Dictionary:
+				return host.register_catch_experience(manifest, p)],
+	]
+	for row: Array in rows:
+		var id: StringName = row[0]
+		var method: String = row[1]
+		var register: Callable = row[2]
+		assert_eq(
+			StringName(register.call(id, node)["reason"]), &"provider_is_a_node", method
+		)
+		var missing: Dictionary = register.call(id, empty.new())
+		assert_eq(StringName(missing["reason"]), &"provider_missing_methods", method)
+		assert_string_contains(String(missing["detail"]), method)
+		var whole := GDScript.new()
+		whole.source_code = "extends RefCounted\nfunc %s(_a = null):\n\treturn 0\n" % method
+		whole.reload()
+		assert_true(bool(register.call(id, whole.new()).get("ok", false)), method)
+		assert_eq(
+			StringName(register.call(id, whole.new())["reason"]), &"duplicate_provider", method
+		)
+	node.free()
+	assert_eq(host.field_move_source_ids(), [&"field"])
+	assert_eq(host.repel_renewal_ids(), [&"repel"])
+	assert_eq(host.battle_info_ids(), [&"info"])
+	assert_eq(host.catch_experience_ids(), [manifest.id])
+
+	## The catch policy is save bound, so a manifest this host never discovered
+	## is not the capability even with the right id.
+	var stranger := Gen2ModManifest.new()
+	stranger.id = manifest.id
+	var same := GDScript.new()
+	same.source_code = "extends RefCounted\nfunc awards_catch_experience() -> bool:\n\treturn true\n"
+	same.reload()
+	assert_eq(
+		StringName(host.register_catch_experience(stranger, same.new())["reason"]),
+		&"unknown_mod_save_owner"
+	)
+
+
+## The three static answers a game with no mods must reach without building a
+## host, and what each says once one is registered.
+func test_the_field_move_repel_and_catch_answers_are_off_until_a_mod_registers() -> void:
+	Gen2ModHost.reset()
+	assert_false(Gen2ModHost.allows_item_field_move(Gen2WorldFieldMove.MOVE_CUT))
+	assert_false(Gen2ModHost.awards_catch_experience())
+
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	var manifest: Gen2ModManifest = _loaded_manifest()
+	var source := GDScript.new()
+	source.source_code = """extends RefCounted
+func allows_field_move(move: int) -> bool:
+	return move == %d
+""" % Gen2WorldFieldMove.MOVE_SURF
+	source.reload()
+	assert_true(bool(host.register_field_move_source(&"field", source.new()).get("ok", false)))
+	assert_true(Gen2ModHost.allows_item_field_move(Gen2WorldFieldMove.MOVE_SURF))
+	assert_false(Gen2ModHost.allows_item_field_move(Gen2WorldFieldMove.MOVE_CUT))
+
+	var policy := GDScript.new()
+	policy.source_code = """extends RefCounted
+var on: bool = false
+func awards_catch_experience() -> bool:
+	return on
+"""
+	policy.reload()
+	var provider: Object = policy.new()
+	assert_true(bool(host.register_catch_experience(manifest, provider).get("ok", false)))
+	assert_false(Gen2ModHost.awards_catch_experience(), "read every throw, not once")
+	provider.set("on", true)
+	assert_true(Gen2ModHost.awards_catch_experience())
+
+	var repel := GDScript.new()
+	repel.source_code = """extends RefCounted
+func repel_to_use(inventory: Dictionary) -> int:
+	return 0x2A if int(inventory.get(0x2A, 0)) > 0 else 0
+"""
+	repel.reload()
+	assert_true(bool(host.register_repel_renewal(&"repel", repel.new()).get("ok", false)))
+	assert_eq(host.repel_renewal_item({}), 0, "an empty bag renews nothing")
+	assert_eq(host.repel_renewal_item({0x2A: 3}), 0x2A)
+
+
+## A start-menu row that opens one of the host's own screens names the opening
+## rather than performing it, and says when it should be there at all.
+func test_a_start_menu_entry_can_name_a_host_action_and_hide_itself() -> void:
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	assert_eq(
+		StringName(host.register_menu_entry(Gen2ModHost.MENU_START, &"bad", {
+			"label": "PC", "action": &"OPEN_ANYTHING",
+		})["reason"]),
+		&"unknown_menu_action"
+	)
+	assert_eq(
+		StringName(host.register_menu_entry(Gen2ModHost.MENU_START, &"bad", {
+			"label": "PC", "action": Gen2ModHost.START_ACTION_OPEN_BILLS_PC,
+			"visible": "not a callable",
+		})["reason"]),
+		&"invalid_menu_visibility"
+	)
+	## A closure captures a local by value, so what the predicate reads has to be
+	## something the test can mutate.
+	var visibility: Dictionary = {"shown": true}
+	var predicate: Callable = func(_context: Dictionary) -> bool:
+		return bool(visibility["shown"])
+	assert_true(bool(host.register_menu_entry(Gen2ModHost.MENU_START, &"pc", {
+		"label": "PC", "action": Gen2ModHost.START_ACTION_OPEN_BILLS_PC,
+		"visible": predicate,
+	}).get("ok", false)))
+	assert_true(bool((host.menu_entries(Gen2ModHost.MENU_START)[0] as Dictionary)["available"]),
+		"a named action is what makes the row available")
+
+	## The host's own gate runs after the predicate: no party, no storage.
+	assert_eq(host.start_menu_entries({"party_count": 0}).size(), 0)
+	assert_eq(host.start_menu_entries({"party_count": 1}).size(), 1)
+	visibility["shown"] = false
+	assert_eq(host.start_menu_entries({"party_count": 1}).size(), 0)
+
+
+## An entry that registered no predicate is always listed, which is every entry
+## written before one existed.
+func test_a_start_menu_entry_without_a_predicate_is_always_listed() -> void:
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	assert_true(bool(host.register_menu_entry(Gen2ModHost.MENU_START, &"atlas", {
+		"label": "ATLAS", "handler": func() -> void: pass,
+	}).get("ok", false)))
+	assert_eq(host.start_menu_entries({"party_count": 0}).size(), 1)

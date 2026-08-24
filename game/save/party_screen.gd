@@ -855,8 +855,16 @@ func _submenu_box() -> Gen2MenuBox:
 			ITEM_MENU_BOX.position.x, ITEM_MENU_BOX.position.y,
 			ITEM_MENU_BOX.end.x, ITEM_MENU_BOX.end.y, Gen2MenuBox.STATICMENU_CURSOR
 		)
+	return mon_menu_box(_submenu_items.size())
+
+
+## `.GetTopCoord`'s own box for [param count] rows, which is where the cartridge
+## prints the field-move names `MonMenuOptions` carries. Static because the start
+## menu's MOVES row draws the same names and must not print them in a narrower
+## box: WATERFALL is nine characters and the source list's words are eight.
+static func mon_menu_box(count: int) -> Gen2MenuBox:
 	return Gen2MenuBox.from_coords(
-		SUBMENU_LEFT, SUBMENU_BOTTOM + 1 - 2 * (_submenu_items.size() + 1),
+		SUBMENU_LEFT, SUBMENU_BOTTOM + 1 - 2 * (maxi(count, 0) + 1),
 		SUBMENU_RIGHT, SUBMENU_BOTTOM, Gen2MenuBox.STATICMENU_CURSOR
 	)
 

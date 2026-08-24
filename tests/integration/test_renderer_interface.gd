@@ -940,3 +940,116 @@ func test_a_world_that_cannot_be_built_says_so_with_the_readout_off() -> void:
 	assert_true(_world_screen._caption.visible, "the reason is shown")
 	assert_true(_world_screen._hint.visible, "and so is what to do about it")
 	assert_eq(_world_screen._caption.text, "No imported cache")
+
+
+## A read-only battle-information provider: the annotations a mod draws over the
+## interface, on the snapshot the host hands it.
+const BATTLE_INFO_SOURCE: String = """extends RefCounted
+
+var snapshots: Array = []
+var placements: Array = []
+
+func annotate_battle(snapshot: Dictionary) -> Array:
+	snapshots.append(snapshot)
+	return placements
+"""
+
+
+## The layer is over the whole interface, drawn only where a provider put
+## something, and the snapshot carries what the event stream cannot say.
+func test_a_battle_information_provider_annotates_over_the_interface() -> void:
+	var provider: Object = _script(BATTLE_INFO_SOURCE).new()
+	assert_true(
+		bool(Gen2ModHost.instance().register_battle_info(&"qol", provider).get("ok", false))
+	)
+	provider.set("placements", [
+		{"text": "ATK+2", "at": Vector2i(0, 0)},
+		## Eight bytes is a 1bpp tile: a solid one, so every pixel of the cell is
+		## ink and none of it is the transparent index.
+		{"tile": PackedByteArray([255, 255, 255, 255, 255, 255, 255, 255]),
+			"at": Vector2i(19, 0)},
+	])
+	await _open_battle()
+	## The entrance owns the whole interface, so the layer waits for it: nothing
+	## the annotations describe is on screen while the pictures are still sliding.
+	assert_false(_battle_screen._annotation_layer.visible, "not during the entrance")
+	_finish_entrance()
+	var layer: TextureRect = _battle_screen._annotation_layer
+	assert_true(layer.visible, "a provider that answered something is drawn")
+	## Last of the interface's children, so nothing the screen draws covers it.
+	var interface: Control = _battle_screen._screen.interface_layer()
+	assert_eq(interface.get_children().back(), layer)
+
+	var image: Image = layer.texture.get_image()
+	assert_eq(image.get_size(), Vector2i(Gen2Screen.WIDTH, Gen2Screen.HEIGHT))
+	assert_eq(image.get_pixel(19 * 8 + 4, 4).a, 1.0, "the mod's own tile is ink")
+	assert_eq(image.get_pixel(100, 100).a, 0.0, "everywhere else is transparent")
+
+	var snapshot: Dictionary = (provider.get("snapshots") as Array).back()
+	for key: String in [
+		"player_stages", "enemy_stages", "enemy_types", "enemy_identified",
+		"enemy_seen_before", "weather", "weather_turns", "move_rows", "neutral",
+		"hud_visible", "menu_stage",
+	]:
+		assert_true(snapshot.has(key), key)
+	assert_eq(int(snapshot["neutral"]), RomLayout.MATCHUP_EFFECTIVE)
+
+
+## A placement the grid cannot hold is refused rather than clipped, and a second
+## provider cannot take a cell the first already owns.
+func test_battle_annotations_are_validated_and_owned_per_cell() -> void:
+	for refused: Dictionary in [
+		{"text": "X", "at": Vector2i(20, 0)},
+		{"text": "X", "at": Vector2i(0, 18)},
+		{"text": "", "at": Vector2i(0, 0)},
+		{"at": Vector2i(0, 0)},
+		{"tile": PackedByteArray([1, 2, 3]), "at": Vector2i(0, 0)},
+		{"text": "X", "at": Vector2i(0, 0)},
+	]:
+		var answer: Dictionary = Gen2BattleAnnotations.validate(refused)
+		if refused.get("text", "") == "X" and refused["at"] == Vector2i(0, 0):
+			assert_false(answer.is_empty(), "the one that does fit")
+			assert_eq(Gen2BattleAnnotations.cells(answer), [Vector2i(0, 0)])
+			continue
+		assert_true(answer.is_empty(), str(refused))
+
+	var first: Object = _script(BATTLE_INFO_SOURCE).new()
+	var second: Object = _script(BATTLE_INFO_SOURCE).new()
+	first.set("placements", [{"text": "AB", "at": Vector2i(4, 4)}])
+	second.set("placements", [
+		{"text": "C", "at": Vector2i(5, 4)}, {"text": "D", "at": Vector2i(6, 4)},
+	])
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	assert_true(bool(host.register_battle_info(&"first", first).get("ok", false)))
+	assert_true(bool(host.register_battle_info(&"second", second).get("ok", false)))
+	var drawn: Array = host.battle_info_placements({})
+	assert_eq(drawn.size(), 2, "the overlapping one is dropped, the free one kept")
+	assert_eq((drawn[1] as Dictionary)["at"], Vector2i(6, 4))
+	assert_eq(
+		StringName((host.failures().back() as Dictionary)["reason"]), &"battle_info_cells_taken"
+	)
+
+
+## Nothing at all without a provider: the layer never appears and the snapshot is
+## never built.
+func test_the_annotation_layer_stays_off_with_no_provider_registered() -> void:
+	await _open_battle()
+	_finish_entrance()
+	assert_false(_battle_screen._annotation_layer.visible)
+
+
+## `BattleIntroSlidingPics` and the entrance behind it, both spent, so the
+## interface is standing where the annotations go over it.
+func _finish_entrance() -> void:
+	var guard: int = 600
+	while _battle_screen._intro != null and guard > 0:
+		guard -= 1
+		_battle_screen.advance_intro()
+	while _battle_screen.entrance_running() and guard > 0:
+		guard -= 1
+		_battle_screen.advance_frame()
+		if _battle_screen.frames_running() or not _battle_screen.entrance_running():
+			continue
+		_battle_screen.finish()
+		_battle_screen.advance()
+	assert_gt(guard, 0, "the entrance finished")

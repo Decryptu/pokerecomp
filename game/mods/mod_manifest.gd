@@ -37,10 +37,17 @@ const FILENAME: String = "mod.json"
 ## layer needs it: whether the host claims the zoom keys and paints its letterbox
 ## over that layer is a behaviour no mod can feature-detect.
 ##
+## 13 is the five registrations that let a mod change how the game is played
+## without reaching a screen: [method Gen2ModHost.register_field_move_source],
+## [method Gen2ModHost.register_repel_renewal],
+## [method Gen2ModHost.register_catch_experience],
+## [method Gen2ModHost.register_battle_info], and a start-menu entry's own
+## [constant Gen2ModHost.START_ACTIONS] plus its `visible` predicate.
+##
 ## An optional `icon` or `thumbnail` is deliberately NOT a contract change: a
 ## host that has never heard of either ignores the field, so a mod that ships
 ## art still installs on an older launcher and simply has no face there.
-const API_VERSION: int = 12
+const API_VERSION: int = 13
 ## The oldest contract this host still answers. See [constant API_VERSION].
 const MIN_API_VERSION: int = 1
 ## Ids address directories and registry keys, so they stay to a plain lowercase

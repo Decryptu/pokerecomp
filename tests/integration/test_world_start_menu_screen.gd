@@ -1827,3 +1827,108 @@ func _first_member_name(save: Gen2SaveData) -> String:
 	if not mon.nickname.is_empty():
 		return mon.nickname
 	return String(_data.species(mon.species).get("name", ""))
+
+
+## A registered start-menu row that names a host action rather than a handler:
+## Bill's storage, opened through the same box screen the Pokemon Center's own
+## machine opens, and returning through the ordinary reopen.
+func test_a_registered_pc_row_opens_storage_and_returns_to_the_menu() -> void:
+	Gen2ModHost.reset()
+	assert_true(bool(Gen2ModHost.instance().register_menu_entry(
+		Gen2ModHost.MENU_START, &"qol", {
+			"label": "PC", "action": Gen2ModHost.START_ACTION_OPEN_BILLS_PC,
+		}
+	).get("ok", false)))
+	await _open_world()
+	_world_screen._open_start_menu()
+	await get_tree().process_frame
+	assert_true(_world_screen._walk_start_menu_to(&"qol"))
+	_world_screen._start_menu_host.handle_button(Gen2Button.A)
+	await get_tree().process_frame
+
+	assert_null(_world_screen._start_menu_host)
+	var service: Gen2WorldServiceScreen = _world_screen._service_host
+	assert_not_null(service, "the row opened the host itself, not the mod")
+	assert_not_null(service.get("_boxes"), "straight into storage, with no machine in front")
+
+	service.get("_boxes").emit_signal("closed", {})
+	await get_tree().process_frame
+	assert_null(_world_screen._service_host)
+	assert_not_null(_world_screen._start_menu_host, "closing returns through the normal flow")
+	Gen2ModHost.reset()
+
+
+## A registered Repel renewal: the step that runs an active Repel out asks
+## before the encounter roll, and YES spends exactly one item through the pack's
+## own transaction.
+func test_a_repel_running_out_offers_a_renewal_and_yes_spends_one() -> void:
+	Gen2ModHost.reset()
+	var script := GDScript.new()
+	script.source_code = """extends RefCounted
+func repel_to_use(inventory: Dictionary) -> int:
+	return %d if int(inventory.get(%d, 0)) > 0 else 0
+""" % [REPEL, REPEL]
+	script.reload()
+	assert_true(bool(
+		Gen2ModHost.instance().register_repel_renewal(&"qol", script.new()).get("ok", false)
+	))
+	await _open_world()
+	var world: Gen2WorldAPI = _world_screen._world
+	world.state.apply_changes({}, {}, {"items": {REPEL: 2}, "repel_steps": 1})
+	world.state.count_step()
+	assert_eq(world.repel_steps(), 0)
+	assert_true(world.repel_expired())
+
+	assert_true(_world_screen._after_map_settled())
+	var service: Gen2WorldServiceScreen = _world_screen._service_host
+	assert_not_null(service, "the question is the step's own player event")
+	assert_false(world.repel_expired(), "and it is spent once")
+	assert_string_contains(String(service.get("_summary")), "REPEL")
+
+	service.handle_button(Gen2Button.A)
+	await get_tree().process_frame
+	assert_null(_world_screen._service_host)
+	assert_eq(world.state.item_quantity(REPEL), 1, "one item, through the pack's own USE")
+	assert_eq(world.repel_steps(), 100, "and its own step count")
+	Gen2ModHost.reset()
+
+
+## NO changes nothing, and neither does an empty bag or a step with no Repel on.
+func test_a_declined_renewal_and_an_empty_bag_both_change_nothing() -> void:
+	Gen2ModHost.reset()
+	var script := GDScript.new()
+	script.source_code = """extends RefCounted
+func repel_to_use(inventory: Dictionary) -> int:
+	return %d if int(inventory.get(%d, 0)) > 0 else 0
+""" % [REPEL, REPEL]
+	script.reload()
+	Gen2ModHost.instance().register_repel_renewal(&"qol", script.new())
+	await _open_world()
+	var world: Gen2WorldAPI = _world_screen._world
+
+	## An empty bag: the provider answers nothing and the step rolls as it did.
+	world.state.apply_changes({}, {}, {"repel_steps": 1})
+	world.state.count_step()
+	assert_false(_world_screen._offer_repel_renewal())
+	assert_false(world.repel_expired(), "answered and spent, with no question asked")
+
+	world.state.apply_changes({}, {}, {"items": {REPEL: 2}, "repel_steps": 1})
+	world.state.count_step()
+	assert_true(_world_screen._offer_repel_renewal())
+	_world_screen._service_host.handle_button(Gen2Button.B)
+	await get_tree().process_frame
+	assert_eq(world.state.item_quantity(REPEL), 2, "NO takes nothing")
+	assert_eq(world.repel_steps(), 0)
+	Gen2ModHost.reset()
+
+
+## Nothing at all without a provider, which is every unmodded game.
+func test_a_repel_running_out_asks_nothing_with_no_provider_registered() -> void:
+	Gen2ModHost.reset()
+	await _open_world()
+	var world: Gen2WorldAPI = _world_screen._world
+	world.state.apply_changes({}, {}, {"items": {REPEL: 2}, "repel_steps": 1})
+	world.state.count_step()
+	assert_false(_world_screen._offer_repel_renewal())
+	assert_null(_world_screen._service_host)
+	assert_eq(world.state.item_quantity(REPEL), 2)

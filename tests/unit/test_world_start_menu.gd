@@ -315,3 +315,38 @@ func _tile_is(image: Image, tile: Vector2i, color: Color) -> bool:
 			if image.get_pixel(tile.x * Gen2Font.TILE + x, tile.y * Gen2Font.TILE + y) != color:
 				return false
 	return true
+
+
+## MOVES is not the cartridge's either: it appears only where a registered
+## field-move source has something the party cannot already reach, and it sits
+## ahead of MODS and of the entries mods registered themselves.
+func test_moves_appears_only_when_a_field_move_source_has_something_to_offer() -> void:
+	Gen2ModHost.reset()
+	var without: Gen2WorldStartMenu = Gen2WorldStartMenu.build(0, false, false)
+	assert_false(_kinds(without).has(Gen2WorldStartMenu.ITEM_FIELD_MOVES))
+
+	Gen2ModHost.instance().register_menu_entry(
+		Gen2ModHost.MENU_START, &"atlas", {"label": "Atlas"}
+	)
+	var menu: Gen2WorldStartMenu = Gen2WorldStartMenu.build(0, false, false, 0, "", true)
+	assert_eq(_kinds(menu), [
+		Gen2WorldStartMenu.ITEM_PACK, Gen2WorldStartMenu.ITEM_PLAYER,
+		Gen2WorldStartMenu.ITEM_SAVE, Gen2WorldStartMenu.ITEM_OPTION,
+		Gen2WorldStartMenu.ITEM_FIELD_MOVES, &"atlas", Gen2WorldStartMenu.ITEM_EXIT,
+	])
+	assert_true(bool(menu.items()[4].get("available", false)))
+	Gen2ModHost.reset()
+
+
+## A registered row can hide itself, and the host's own gate runs after the
+## mod's: a PC row is absent before the first Pokemon rather than refused.
+func test_a_registered_entry_can_be_absent_rather_than_refused() -> void:
+	Gen2ModHost.reset()
+	assert_true(bool(Gen2ModHost.instance().register_menu_entry(
+		Gen2ModHost.MENU_START, &"pc", {
+			"label": "PC", "action": Gen2ModHost.START_ACTION_OPEN_BILLS_PC,
+		}
+	).get("ok", false)))
+	assert_false(_kinds(Gen2WorldStartMenu.build(0, false, false)).has(&"pc"))
+	assert_true(_kinds(Gen2WorldStartMenu.build(1, false, false)).has(&"pc"))
+	Gen2ModHost.reset()

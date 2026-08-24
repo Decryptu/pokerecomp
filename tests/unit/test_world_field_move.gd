@@ -91,7 +91,15 @@ const ENVIRONMENT_DUNGEON: int = 7
 var _directory: String = ""
 
 
+## `TMHMMoves`' real shape, so `RomLayout.tmhm_number_for_item` addresses the HM
+## rows where the cartridge does. The seven HM moves are written in
+## [constant Gen2WorldFieldMove.HM_FIELD_MOVES] order at HM01 onward.
+const TMHM_TM_COUNT: int = RomLayout.TMHM_TM_COUNT
+const TMHM_ENTRIES: int = TMHM_TM_COUNT + RomLayout.TMHM_HM_COUNT + 3
+
+
 func before_each() -> void:
+	Gen2ModHost.reset()
 	_directory = RomCache.directory_for(&"testfieldmove", "0123456789abcdef")
 	RomCache.clear(_directory)
 	RomCache.prepare(_directory)
@@ -100,6 +108,7 @@ func before_each() -> void:
 
 func after_each() -> void:
 	RomCache.clear(_directory)
+	Gen2ModHost.reset()
 
 
 func _write_cache() -> void:
@@ -160,6 +169,16 @@ func _write_cache() -> void:
 			"asleep": {"morn": [ASLEEP_SPECIES], "day": [ASLEEP_SPECIES], "nite": []},
 		},
 	})
+	## `TMHMMoves`, so an alternate field-move source resolves an HM to the move
+	## it teaches through the cartridge's own table rather than a second one.
+	## The filler run is $a0 upward, which carries none of the seven HM moves.
+	var tmhm: Array = []
+	for index: int in TMHM_ENTRIES:
+		tmhm.append(0xA0 + index)
+	for offset: int in Gen2WorldFieldMove.HM_FIELD_MOVES.size():
+		tmhm[TMHM_TM_COUNT + offset] = Gen2WorldFieldMove.HM_FIELD_MOVES[offset]
+	RomCache.write_json(RomCache.tmhm_moves_path(_directory), tmhm)
+
 	RomCache.write_json(RomCache.manifest_path(_directory), {
 		"format_version": RomCache.FORMAT_VERSION,
 		"game_id": "testfieldmove",
@@ -1714,3 +1733,120 @@ func test_the_visited_flypoints_are_the_engine_flags_of_their_own_spawns() -> vo
 	# Gold and Silver ship no ENGINE_MOBILE_SYSTEM, so the whole run sits one
 	# lower there.
 	assert_eq(Gen2WorldState.flypoint_flag(0, false), 50)
+
+
+## `Gen2WorldFieldMove.HM_FIELD_MOVES` order, so the fixture's HM rows and the
+## item numbers below agree without a second table.
+func _hm_item(move: int) -> int:
+	return RomLayout.item_for_tmhm_number(
+		TMHM_TM_COUNT + Gen2WorldFieldMove.HM_FIELD_MOVES.find(move) + 1, TMHM_ENTRIES
+	)
+
+
+## A provider that allows every HM move, which is what the Quality of Life mod's
+## own switch amounts to when it is on.
+func _register_source(moves: Array = Gen2WorldFieldMove.HM_FIELD_MOVES) -> void:
+	var script := GDScript.new()
+	script.source_code = """extends RefCounted
+var allowed: Array = []
+func allows_field_move(move: int) -> bool:
+	return allowed.has(move)
+"""
+	script.reload()
+	var provider: Object = script.new()
+	provider.set("allowed", moves.duplicate())
+	assert_true(bool(
+		Gen2ModHost.instance().register_field_move_source(&"qol", provider).get("ok", false)
+	))
+
+
+func _give(world: Gen2WorldAPI, item: int, quantity: int = 1) -> void:
+	assert_true(bool(
+		world.state.apply_changes({}, {}, {"items": {item: quantity}}).get("ok", false)
+	))
+
+
+## The party is asked first and answers what CheckPartyMove always did, so a
+## world with nothing registered resolves every field move exactly as before.
+func test_the_party_is_the_only_field_move_source_until_one_is_registered() -> void:
+	var world: Gen2WorldAPI = _world(1, true, true)
+	var source: Dictionary = world.field_move_source(Gen2WorldFieldMove.MOVE_CUT)
+	assert_eq(StringName(source["kind"]), Gen2WorldAPI.FIELD_MOVE_SOURCE_PARTY)
+	assert_eq(int(source["slot"]), 0)
+
+	var without: Gen2WorldAPI = _world(1, true, false)
+	_give(without, _hm_item(Gen2WorldFieldMove.MOVE_CUT))
+	assert_true(without.field_move_source(Gen2WorldFieldMove.MOVE_CUT).is_empty(),
+		"the HM in the bag is nothing without a provider")
+	assert_eq(without.item_field_move_source(Gen2WorldFieldMove.MOVE_CUT), 0)
+	assert_eq(without.cut_request()["reason"], &"move_not_known")
+	assert_eq(without.item_field_move_offers(), [])
+
+
+## The HM in the bag is the source only where the party has none, and the item is
+## resolved through the cartridge's own TM/HM table.
+func test_an_hm_in_the_bag_answers_where_no_party_member_knows_the_move() -> void:
+	_register_source()
+	var world: Gen2WorldAPI = _world(1, true, false)
+	assert_true(world.field_move_source(Gen2WorldFieldMove.MOVE_CUT).is_empty(),
+		"a provider alone is not a source: the HM has to be in the bag")
+	_give(world, _hm_item(Gen2WorldFieldMove.MOVE_CUT))
+	var source: Dictionary = world.field_move_source(Gen2WorldFieldMove.MOVE_CUT)
+	assert_eq(StringName(source["kind"]), Gen2WorldAPI.FIELD_MOVE_SOURCE_ITEM)
+	assert_eq(int(source["slot"]), -1)
+	assert_eq(int(source["item"]), _hm_item(Gen2WorldFieldMove.MOVE_CUT))
+	assert_true(bool(world.cut_request().get("ok", false)))
+
+	## A party member that knows the move keeps the answer, so its own submenu
+	## row is what the player reaches and the MOVES row does not repeat it.
+	_knowing_party(world, Gen2WorldFieldMove.MOVE_CUT)
+	assert_eq(
+		StringName(world.field_move_source(Gen2WorldFieldMove.MOVE_CUT)["kind"]),
+		Gen2WorldAPI.FIELD_MOVE_SOURCE_PARTY
+	)
+	assert_eq(world.item_field_move_offers(), [])
+
+
+## A provider answering for one move does not open the other six.
+func test_the_provider_is_asked_per_move() -> void:
+	_register_source([Gen2WorldFieldMove.MOVE_SURF])
+	var world: Gen2WorldAPI = _world(1, true, false)
+	_give(world, _hm_item(Gen2WorldFieldMove.MOVE_CUT))
+	_give(world, _hm_item(Gen2WorldFieldMove.MOVE_SURF))
+	assert_true(world.field_move_source(Gen2WorldFieldMove.MOVE_CUT).is_empty())
+	assert_eq(
+		StringName(world.field_move_source(Gen2WorldFieldMove.MOVE_SURF)["kind"]),
+		Gen2WorldAPI.FIELD_MOVE_SOURCE_ITEM
+	)
+	## Rock Smash is TM08 in both pins, so it is not an HM move at all.
+	assert_false(Gen2WorldFieldMove.is_hm_field_move(Gen2WorldFieldMove.MOVE_ROCK_SMASH))
+
+
+## The badge is not part of resolving the source: each Try*OW keeps its own
+## CheckBadge in the source's order, so an HM without its badge is refused with
+## the badge line exactly as a Pokemon that knows the move is.
+func test_an_hm_without_its_badge_is_refused_for_the_badge_not_the_move() -> void:
+	_register_source()
+	var world: Gen2WorldAPI = _world(1, false, false)
+	_give(world, _hm_item(Gen2WorldFieldMove.MOVE_CUT))
+	assert_false(world.field_move_source(Gen2WorldFieldMove.MOVE_CUT).is_empty())
+	assert_eq(world.cut_request()["reason"], &"badge_required")
+
+
+## The MOVES row's own list, which is the one place the badge IS applied: a row
+## that could only answer "a new BADGE is required" is not offered.
+func test_the_menu_offers_only_moves_the_badge_allows() -> void:
+	_register_source()
+	var world: Gen2WorldAPI = _world(1, false, false)
+	_give(world, _hm_item(Gen2WorldFieldMove.MOVE_CUT))
+	assert_eq(world.item_field_move_offers(), [], "no Hive Badge, no CUT row")
+
+	world.state.set_engine_flag(Gen2WorldState.badge_flag(
+		Gen2WorldFieldMove.BADGE_HIVE, Gen2WorldState.is_crystal_profile(world.data)
+	))
+	var offers: Array = world.item_field_move_offers()
+	assert_eq(offers.size(), 1)
+	assert_eq(int((offers[0] as Dictionary)["move"]), Gen2WorldFieldMove.MOVE_CUT)
+	assert_eq(
+		int((offers[0] as Dictionary)["item"]), _hm_item(Gen2WorldFieldMove.MOVE_CUT)
+	)

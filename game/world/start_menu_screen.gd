@@ -31,13 +31,16 @@ signal evolution_animation_requested(plan: Dictionary, after: Callable)
 ## `PlaySFX`, which this screen has no driver of its own for: the world that
 ## hosts it owns the player. `SFX_SAVE` is the only one it asks for.
 signal sfx_requested(sfx: int, waited: bool)
+## A field move chosen off the MOVES row, in the same shape a party member's own
+## submenu emits: the world runs the one and the other through one path.
+signal field_move_chosen(action: Dictionary)
 
 enum Mode {
 	LIST, PACK, PACK_ITEM, PACK_TEACH, PACK_TARGET,
 	PACK_FORGET_ASK, PACK_FORGET, PACK_STOP_LEARNING,
 	PACK_TOSS_QUANTITY, PACK_TOSS_CONFIRM, PACK_GIVE_SWAP,
 	PACK_RESULT, SAVE_ASK, SAVE_OVERWRITE, SAVE_SAVING, SAVE_SAVED,
-	SAVE_FAILED, OPTIONS, MODS, MOD_OPTIONS,
+	SAVE_FAILED, OPTIONS, MODS, MOD_OPTIONS, FIELD_MOVES,
 }
 
 ## `SaveMenu`'s four texts, out of `data/text/common_3.asm` on Crystal and
@@ -223,6 +226,12 @@ var _page: Gen2StartMenuPage = null
 var _target_page: Gen2PartyMenuPage = null
 ## The target list's icon clock.
 var _target_clock := Gen2WorldAnimation.FrameClock.new()
+
+
+## The MOVES row's own list: `{move, item, badge}` as
+## [method Gen2WorldAPI.item_field_move_offers] answered when it was opened.
+var _field_move_rows: Array = []
+var _field_move_cursor: int = 0
 
 
 func _ready() -> void:
@@ -438,6 +447,11 @@ func _move(direction: Vector2i) -> void:
 				_render_mod_options()
 			elif direction.x != 0:
 				_adjust_mod_option(rows, direction.x)
+		Mode.FIELD_MOVES:
+			if direction.y != 0 and not _field_move_rows.is_empty():
+				_field_move_cursor = wrapi(
+					_field_move_cursor + signi(direction.y), 0, _field_move_rows.size()
+				)
 
 
 func _confirm() -> void:
@@ -510,6 +524,8 @@ func _confirm() -> void:
 		## exception: pressing it is the whole setting.
 		Mode.MOD_OPTIONS:
 			_press_mod_option()
+		Mode.FIELD_MOVES:
+			_confirm_field_move()
 
 
 func _cancel() -> void:
@@ -550,7 +566,7 @@ func _cancel() -> void:
 		Mode.SAVE_FAILED:
 			_cancel_save()
 		## `_Option.joypad_loop` exits on PAD_START | PAD_B from any row.
-		Mode.OPTIONS, Mode.MODS:
+		Mode.OPTIONS, Mode.MODS, Mode.FIELD_MOVES:
 			_open_list_mode()
 		Mode.MOD_OPTIONS:
 			_open_mods_mode()
@@ -570,15 +586,23 @@ func _confirm_list() -> void:
 			_open_options_mode()
 		Gen2WorldStartMenu.ITEM_MODS:
 			_open_mods_mode()
+		Gen2WorldStartMenu.ITEM_FIELD_MOVES:
+			_open_field_moves_mode()
 		Gen2WorldStartMenu.ITEM_EXIT:
 			closed.emit()
 		Gen2WorldStartMenu.ITEM_POKEDEX, Gen2WorldStartMenu.ITEM_POKEMON, \
 		Gen2WorldStartMenu.ITEM_POKEGEAR, Gen2WorldStartMenu.ITEM_PLAYER:
 			action_chosen.emit(_menu.selected_kind())
 		_:
-			# A Gen2ModHost-registered entry. Its handler is what made it
-			# available at all, so this cannot reach an entry without one.
-			var handler: Variant = _menu.selected_item().get("handler", null)
+			# A Gen2ModHost-registered entry. Either it names a host action, which
+			# only the world screen can perform, or it carries the handler that
+			# made it available at all; this cannot reach one with neither.
+			var entry: Dictionary = _menu.selected_item()
+			var action: StringName = StringName(entry.get("action", &""))
+			if action != &"":
+				action_chosen.emit(action)
+				return
+			var handler: Variant = entry.get("handler", null)
 			if handler is Callable:
 				(handler as Callable).call()
 
@@ -672,6 +696,37 @@ func _cycle_view(step: int) -> void:
 
 func _render_mods() -> void:
 	_render_hardware()
+
+
+## The MOVES entry: one row per HM field move the bag can supply and no party
+## member knows. Only reachable while there is at least one, which is what puts
+## the entry in the list at all.
+func _open_field_moves_mode() -> void:
+	_mode = Mode.FIELD_MOVES
+	_field_move_rows = _world.item_field_move_offers() if _world != null else []
+	_field_move_cursor = clampi(_field_move_cursor, 0, maxi(_field_move_rows.size() - 1, 0))
+
+
+## `PokemonActionSubmenu`'s own exit: the menu closes and the move runs. The
+## action is the party submenu's shape with no slot in it, so the world's one
+## dispatch decides what the move does and the source's own text names the
+## player rather than a Pokemon.
+func _confirm_field_move() -> void:
+	if _field_move_cursor < 0 or _field_move_cursor >= _field_move_rows.size():
+		return
+	var row: Dictionary = _field_move_rows[_field_move_cursor]
+	field_move_chosen.emit({
+		"kind": &"field_move", "move": int(row["move"]), "slot": -1,
+		"item": int(row.get("item", 0)),
+	})
+
+
+## The name of each offered move, which is the cartridge's own.
+func _field_move_labels() -> Array:
+	var out: Array = []
+	for row: Dictionary in _field_move_rows:
+		out.append(String(_data.move(int(row["move"])).get("name", "")) if _data != null else "")
+	return out
 
 
 ## The name the player installed, falling back to the id for a mod registered
@@ -1988,6 +2043,12 @@ func _hardware_image() -> Image:
 				return null
 			return _target_page.render(
 				_party_targets(), _target_cursor, _target_prompt()
+			)
+		Mode.FIELD_MOVES:
+			var moves: Array = _field_move_labels()
+			return _page.render_list(
+				moves, _field_move_cursor, "", false,
+				Gen2PartyScreen.mon_menu_box(moves.size())
 			)
 		Mode.MODS:
 			var rows: Array = []

@@ -142,8 +142,22 @@ const CUT_BLOCKS_FOREST: Dictionary = {
 }
 
 
+## The seven moves an HM teaches, which are the only ones an alternate source
+## can stand in for: a registered [Gen2ModHost] field-move source says such a
+## move is available while its own HM is in the bag, and nothing else in the
+## overworld comes from an item. Rock Smash is TM08 in both pins and is not one.
+const HM_FIELD_MOVES: Array[int] = [
+	MOVE_CUT, MOVE_FLY, MOVE_SURF, MOVE_STRENGTH, MOVE_FLASH,
+	MOVE_WHIRLPOOL, MOVE_WATERFALL,
+]
+
+
 static func is_field_move(move: int) -> bool:
 	return FIELD_MOVES.has(move)
+
+
+static func is_hm_field_move(move: int) -> bool:
+	return HM_FIELD_MOVES.has(move)
 
 
 ## GetSurfType through ChrisStateSprites. The source keeps the Pikachu variant

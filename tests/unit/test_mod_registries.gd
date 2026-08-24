@@ -275,7 +275,16 @@ func test_the_shipped_example_mod_registers_everything_it_documents() -> void:
 	var manifest: Dictionary = Gen2ModManifest.read("res://mods/examples/new_content")
 	assert_true(bool(manifest.get("ok", false)), "example manifest reads")
 	var host: Gen2ModHost = Gen2ModHost.instance()
-	assert_true(bool(host.load_mod(manifest["manifest"]).get("ok", false)))
+	## Discovered rather than only read: a save-bound registration takes the
+	## manifest object THIS host discovered as the capability, so a copy with the
+	## same id grants nothing.
+	host.discover("res://mods/examples")
+	var discovered: Gen2ModManifest = null
+	for candidate: Gen2ModManifest in host.manifests():
+		if candidate.id == &"new_content":
+			discovered = candidate
+	assert_not_null(discovered)
+	assert_true(bool(host.load_mod(discovered).get("ok", false)))
 
 	var overlay: Gen2ContentOverlay = host.content_overlay()
 	assert_false(overlay.is_empty())
@@ -363,6 +372,40 @@ func test_the_shipped_example_mod_registers_everything_it_documents() -> void:
 	assert_eq(host.actions().size(), 2)
 	# 2: a visible-encounter population.
 	assert_eq(host.visible_encounter_ids().size(), 1)
+	# 13: the five read-only policies that change how the game is played.
+	assert_eq(host.field_move_source_ids().size(), 1)
+	assert_eq(host.repel_renewal_ids().size(), 1)
+	assert_eq(host.catch_experience_ids().size(), 1)
+	assert_eq(host.battle_info_ids().size(), 1)
+	assert_true(Gen2ModHost.allows_item_field_move(Gen2WorldFieldMove.MOVE_FLY))
+	assert_true(Gen2ModHost.awards_catch_experience())
+	assert_eq(host.repel_renewal_item({0x2B: 1}), 0x2B, "the only one owned")
+	## A start-menu row naming a host action, gated on the host's own party test
+	## after the mod's predicate.
+	assert_eq(host.start_menu_entries({"party_count": 0}).size(), 0)
+	var rows: Array = host.start_menu_entries({"party_count": 1})
+	assert_eq(rows.size(), 1)
+	assert_eq(
+		StringName((rows[0] as Dictionary)["action"]),
+		Gen2ModHost.START_ACTION_OPEN_BILLS_PC
+	)
+	## An annotation placed where the grid can hold it, said in the interface's
+	## own coordinates.
+	var drawn: Array = host.battle_info_placements({
+		"menu_stage": "move", "enemy_seen_before": true, "neutral": 10,
+		"weather": Gen2Weather.SUN, "player_stages": {"attack": 2}, "enemy_stages": {},
+		"move_rows": [{"effectiveness": 20}, {"effectiveness": 10}],
+		## Where the host says the rows are, which is what a provider annotating
+		## them reads instead of writing the menu's coordinates down.
+		"move_rows_at": Vector2i(5, 13), "move_rows_step": Vector2i(0, 1),
+		"move_rows_right": 18,
+	})
+	assert_eq(drawn.size(), 3, "one mark, one stage line and the weather tile")
+	assert_eq((drawn[0] as Dictionary)["at"], Vector2i(18, 13))
+	assert_true((drawn[0] as Dictionary).has("tile"), "the mark is a tile of the mod's own")
+	assert_eq(String((drawn[1] as Dictionary)["text"]), "ATK2")
+	assert_true((drawn.back() as Dictionary).has("tile"))
+
 	# 4: one presentation mutator, which may not change the routing key.
 	var dressed: Dictionary = Gen2ModHost.publish(Gen2ModHost.CHANNEL_WORLD, {
 		"status": &"waiting", "event": {"type": &"text", "text": "PIKACHU!"},

@@ -26,6 +26,7 @@ func before_each() -> void:
 	## machine's own installed options, left behind.
 	Gen2OptionsStore.use_test_path()
 	DirAccess.remove_absolute(Gen2OptionsStore.path())
+	Gen2ModHost.reset()
 
 
 func after_each() -> void:
@@ -34,6 +35,8 @@ func after_each() -> void:
 		_world_screen = null
 	RomCache.clear(Fixture.directory())
 	RomCache.clear(Fixture.directory(&"gold"))
+	_clear_mod_root()
+	Gen2ModHost.reset()
 
 
 func _open_world(with_save: bool = false, seed_value: int = 0) -> void:
@@ -1710,3 +1713,125 @@ func test_the_last_member_fainting_to_poison_opens_the_whiteout() -> void:
 		_world_screen.press_button(Gen2Button.A)
 	assert_false(_world_screen._field_move_text, "and the last press runs it")
 	assert_true(mon.hp > 0, "Script_Whiteout's own `special HealParty`")
+
+
+## Where a save-bound mod policy is registered from: the manifest `register()`
+## was handed is the capability, so the host has to have discovered it.
+const MOD_ROOT: String = "user://mod_tests_capture"
+
+
+func _clear_mod_root() -> void:
+	var directory: DirAccess = DirAccess.open("%s/qol" % MOD_ROOT)
+	if directory != null:
+		for file: String in directory.get_files():
+			DirAccess.remove_absolute("%s/qol/%s" % [MOD_ROOT, file])
+	DirAccess.remove_absolute("%s/qol" % MOD_ROOT)
+	DirAccess.remove_absolute(MOD_ROOT)
+
+
+func _register_catch_experience() -> void:
+	var directory: String = "%s/qol" % MOD_ROOT
+	DirAccess.make_dir_recursive_absolute(directory)
+	var manifest: FileAccess = FileAccess.open("%s/mod.json" % directory, FileAccess.WRITE)
+	manifest.store_string(JSON.stringify({
+		"id": "qol", "name": "QoL", "version": "1.0.0",
+		"api_version": Gen2ModManifest.API_VERSION, "entry": "mod.gd",
+	}))
+	manifest.close()
+	var entry: FileAccess = FileAccess.open("%s/mod.gd" % directory, FileAccess.WRITE)
+	entry.store_string("extends RefCounted\n\nfunc register(_host, _manifest) -> void:\n\tpass\n")
+	entry.close()
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	host.discover(MOD_ROOT)
+	host.load_discovered()
+	var policy := GDScript.new()
+	policy.source_code = "extends RefCounted\nfunc awards_catch_experience() -> bool:\n\treturn true\n"
+	policy.reload()
+	assert_true(bool(
+		host.register_catch_experience(host.manifests()[0], policy.new()).get("ok", false)
+	))
+
+
+## `PokeBallEffect` awards nothing; a registered policy makes the capture worth
+## what the faint would have been, and spends the whole award between the Gotcha
+## line and the nickname prompt so nothing is filed with a level up still owed.
+func test_a_registered_policy_pays_a_capture_between_gotcha_and_the_nickname() -> void:
+	_register_catch_experience()
+	await _open_world(true)
+	assert_true(bool(_world_screen._world.state.apply_changes(
+		{}, {}, {"items": {Gen2WorldPartyHost.ITEM_MASTER_BALL: 1}}
+	).get("ok", false)))
+	_world_screen.preview_wild_encounter()
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var host: Gen2BattleScreen = _battle_host()
+	assert_not_null(host)
+	var fought: Gen2SaveData = host.get("_source_save")
+	var before: int = (fought.party[0] as Gen2SaveMon).exp
+	assert_true(host.begin_capture()["ok"])
+	assert_true(host.select_capture_ball(1)["ok"])
+	assert_true(host.throw_capture_ball()["ok"])
+
+	var caught: String = "Gotcha! %s was caught!" % _wild_name()
+	var messages: Array = []
+	## The award moves the EXP bar, and nothing behind a moving bar is shown, so
+	## this spends the screen's own frames the way a player waiting does.
+	for _frame: int in 900:
+		var line: String = String(host.battle_snapshot()["message"])
+		if messages.is_empty() or messages.back() != line:
+			messages.append(line)
+		if host.get("_capture_nickname_host") != null:
+			break
+		if host.bars_animating() or host.frames_running():
+			host.advance_hardware_frame()
+			continue
+		host.finish()
+		host.advance()
+
+	var gotcha_at: int = messages.find(caught)
+	assert_gt(gotcha_at, -1, JSON.stringify(messages))
+	var paid_at: int = -1
+	for index: int in messages.size():
+		if String(messages[index]).contains("EXP. Points!"):
+			paid_at = index
+			break
+	assert_gt(paid_at, gotcha_at, "the award is spent after the Gotcha line")
+	assert_not_null(host.get("_capture_nickname_host"), "and before the nickname prompt")
+
+	_refuse_capture_nickname(host)
+	await get_tree().process_frame
+	assert_null(_battle_host())
+	## The award landed on the party the battle owns, and the battle synced it
+	## back before the world filed the catch.
+	assert_gt((fought.party[0] as Gen2SaveMon).exp, before)
+
+
+## With no policy registered the capture is the cartridge's: no experience line
+## between the Gotcha and the nickname.
+func test_a_capture_pays_nothing_with_no_policy_registered() -> void:
+	await _open_world()
+	assert_true(bool(_world_screen._world.state.apply_changes(
+		{}, {}, {"items": {Gen2WorldPartyHost.ITEM_MASTER_BALL: 1}}
+	).get("ok", false)))
+	_world_screen.preview_wild_encounter()
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var host: Gen2BattleScreen = _battle_host()
+	assert_true(host.begin_capture()["ok"])
+	assert_true(host.select_capture_ball(1)["ok"])
+	assert_true(host.throw_capture_ball()["ok"])
+	for _frame: int in 900:
+		assert_false(
+			String(host.battle_snapshot()["message"]).contains("EXP. Points!"),
+			"nothing is paid"
+		)
+		if host.get("_capture_nickname_host") != null:
+			break
+		if host.bars_animating() or host.frames_running():
+			host.advance_hardware_frame()
+			continue
+		host.finish()
+		host.advance()
+	assert_false(bool(host.get("_capture_experience_spent")))

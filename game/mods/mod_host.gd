@@ -138,12 +138,26 @@ const MENU_PACK_POCKET: StringName = &"pack_pocket"
 const MENU_MART: StringName = &"mart"
 const MENU_IDS: Array[StringName] = [MENU_START, MENU_PACK_POCKET, MENU_MART]
 
+## What a start-menu entry may ask the HOST to do, instead of a Callable of its
+## own. A mod never receives a screen, so a row that has to open one names the
+## opening rather than performing it, and the host applies its own gate on top.
+const START_ACTION_OPEN_BILLS_PC: StringName = &"OPEN_BILLS_PC"
+const START_ACTIONS: Array[StringName] = [START_ACTION_OPEN_BILLS_PC]
+
 ## The event channels a mod may watch. Both carry the typed dictionaries the
 ## engine already produces, published where the screen reads them, so a
 ## subscriber sees exactly the events a player sees and in the same order.
 const CHANNEL_WORLD: StringName = &"world"
 const CHANNEL_BATTLE: StringName = &"battle"
 const CHANNELS: Array[StringName] = [CHANNEL_WORLD, CHANNEL_BATTLE]
+## The methods each object registration is checked for. A renderer's are above;
+## an actor's and a visible-encounter provider's live on the class that drives
+## them. These four have no driver class of their own.
+const FIELD_MOVE_SOURCE_METHODS: Array[String] = ["allows_field_move"]
+const REPEL_PROVIDER_METHODS: Array[String] = ["repel_to_use"]
+const CATCH_EXPERIENCE_METHODS: Array[String] = ["awards_catch_experience"]
+const BATTLE_INFO_METHODS: Array[String] = ["annotate_battle"]
+
 ## Pocket type numbers 1 to 4 are the cartridge's ITEM, KEY_ITEM, BALL and TM_HM,
 ## so a registered pocket has to claim a number above them, the same reservation
 ## [constant Gen2ContentOverlay.FIRST_MOD_NUMBER] makes for content.
@@ -204,6 +218,12 @@ var _hidden_item_requests: Array[Vector2i] = []
 ## Mod id to the visible-encounter provider it registered, held the way an actor
 ## is. See [method register_visible_encounters].
 var _visible_encounters: Dictionary = {}
+## Mod id to the provider it registered, each held the way an actor is: the
+## registration is the whole contract and the host drives what it was handed.
+var _field_move_sources: Dictionary = {}
+var _repel_renewals: Dictionary = {}
+var _catch_experience: Dictionary = {}
+var _battle_info: Dictionary = {}
 var _battle_renderers: Dictionary = {}
 ## The one id the player's view is chosen by, read from [Gen2ModState] when the
 ## host is built and written back whenever it changes. It is a bare id and may
@@ -308,23 +328,9 @@ func create_world_renderer() -> Node:
 ## What an actor draws is presentation and takes part in nothing else. See
 ## [Gen2WorldActors] for the contract and `docs/MODS.md` for the entry shape.
 func register_world_actor(id: StringName, actor: Object) -> Dictionary:
-	if String(id).is_empty() or actor == null:
-		return {"ok": false, "reason": &"invalid_actor"}
-	if actor is Node:
-		return {"ok": false, "reason": &"actor_is_a_node", "detail": String(id)}
-	var missing: Array[String] = []
-	for method: String in Gen2WorldActors.ACTOR_METHODS:
-		if not actor.has_method(method):
-			missing.append(method)
-	if not missing.is_empty():
-		return {
-			"ok": false, "reason": &"actor_missing_methods",
-			"detail": "%s: %s" % [id, ", ".join(missing)],
-		}
-	if _world_actors.has(id):
-		return {"ok": false, "reason": &"duplicate_actor", "detail": String(id)}
-	_world_actors[id] = actor
-	return {"ok": true, "id": id}
+	return _register_provider(
+		_world_actors, Gen2WorldActors.ACTOR_METHODS, id, actor, "actor"
+	)
 
 
 ## Asks the world screen to pick up the hidden item at [param cell] on the map
@@ -381,22 +387,39 @@ func world_actors() -> Array:
 ## what meeting one starts are all the host's, and while at least one provider is
 ## registered the ordinary post-step roll is off. See [Gen2WorldEncounters].
 func register_visible_encounters(id: StringName, provider: Object) -> Dictionary:
+	return _register_provider(
+		_visible_encounters, Gen2WorldEncounters.PROVIDER_METHODS, id, provider
+	)
+
+
+## The one shape every object registration takes: an id, a [RefCounted] that is
+## never a [Node], the methods the host will call on it, and one claim per id.
+## [param noun] names the thing in the refusal, so an actor is refused as an
+## actor and a provider as a provider.
+func _register_provider(
+	registry: Dictionary, methods: Array[String], id: StringName, provider: Object,
+	noun: String = "provider"
+) -> Dictionary:
 	if String(id).is_empty() or provider == null:
-		return {"ok": false, "reason": &"invalid_provider"}
+		return {"ok": false, "reason": StringName("invalid_%s" % noun)}
 	if provider is Node:
-		return {"ok": false, "reason": &"provider_is_a_node", "detail": String(id)}
+		return {
+			"ok": false, "reason": StringName("%s_is_a_node" % noun), "detail": String(id),
+		}
 	var missing: Array[String] = []
-	for method: String in Gen2WorldEncounters.PROVIDER_METHODS:
+	for method: String in methods:
 		if not provider.has_method(method):
 			missing.append(method)
 	if not missing.is_empty():
 		return {
-			"ok": false, "reason": &"provider_missing_methods",
+			"ok": false, "reason": StringName("%s_missing_methods" % noun),
 			"detail": "%s: %s" % [id, ", ".join(missing)],
 		}
-	if _visible_encounters.has(id):
-		return {"ok": false, "reason": &"duplicate_provider", "detail": String(id)}
-	_visible_encounters[id] = provider
+	if registry.has(id):
+		return {
+			"ok": false, "reason": StringName("duplicate_%s" % noun), "detail": String(id),
+		}
+	registry[id] = provider
 	return {"ok": true, "id": id}
 
 
@@ -407,6 +430,154 @@ func visible_encounter_ids() -> Array:
 ## Every registered provider, in registration order.
 func visible_encounter_providers() -> Array:
 	return _visible_encounters.values()
+
+
+## Registers an alternate FIELD MOVE SOURCE under [param id]: a read-only policy
+## saying that an HM's own field move may be used without a party member who
+## knows it.
+##
+## [param provider] is a [RefCounted] answering
+## [constant FIELD_MOVE_SOURCE_METHODS]: `allows_field_move(move)`, one question
+## per move, answered true or false. That is the whole of what a mod decides.
+## Which item teaches which move, whether it is in the bag, whether the badge is
+## in hand, whether the tile in front allows it and everything the move then
+## does are the host's, in [method Gen2WorldAPI.field_move_source] and the
+## staged requests behind it.
+func register_field_move_source(id: StringName, provider: Object) -> Dictionary:
+	return _register_provider(
+		_field_move_sources, FIELD_MOVE_SOURCE_METHODS, id, provider
+	)
+
+
+func field_move_source_ids() -> Array:
+	return _field_move_sources.keys()
+
+
+## Whether any registered provider allows [param move] to come from its HM.
+## Static and null-safe on the instance for the reason [method publish] is: this
+## sits on the path every field move takes, and a game with no mods must not
+## build a host to answer no.
+static func allows_item_field_move(move: int) -> bool:
+	if _instance == null:
+		return false
+	for provider: Object in _instance._field_move_sources.values():
+		if bool(provider.call("allows_field_move", move)):
+			return true
+	return false
+
+
+## Registers a REPEL RENEWAL provider under [param id]: which owned Repel to
+## offer when an active one runs out on a step.
+##
+## [param provider] is a [RefCounted] answering
+## [constant REPEL_PROVIDER_METHODS]: `repel_to_use(inventory)` is handed a
+## read-only `{item: quantity}` copy of the bag and answers one item number, or
+## 0 for none. Which of the three to prefer is the mod's; the prompt, the
+## transaction, the step count and the encounter ordering are the host's.
+func register_repel_renewal(id: StringName, provider: Object) -> Dictionary:
+	return _register_provider(_repel_renewals, REPEL_PROVIDER_METHODS, id, provider)
+
+
+func repel_renewal_ids() -> Array:
+	return _repel_renewals.keys()
+
+
+## The item the first provider to answer would spend, or 0. [param inventory] is
+## copied per provider, so answering cannot change what the next one is asked.
+func repel_renewal_item(inventory: Dictionary) -> int:
+	for provider: Object in _repel_renewals.values():
+		var item: int = int(provider.call("repel_to_use", inventory.duplicate(true)))
+		if item > 0:
+			return item
+	return 0
+
+
+## Registers a CATCH EXPERIENCE policy for [param manifest]'s own run: whether a
+## successful wild capture awards the caught Pokemon's experience.
+##
+## Save bound, so [param manifest] is the capability the way it is for
+## [method register_save_lifecycle]: a manifest this host did not discover
+## registers nothing. [param provider] answers
+## [constant CATCH_EXPERIENCE_METHODS]' `awards_catch_experience()`, which is
+## read every capture rather than once, so a mod that switched its own option
+## off mid-run is off from the next throw.
+func register_catch_experience(manifest: Gen2ModManifest, provider: Object) -> Dictionary:
+	if not _owns_manifest(manifest):
+		return {"ok": false, "reason": &"unknown_mod_save_owner"}
+	return _register_provider(
+		_catch_experience, CATCH_EXPERIENCE_METHODS, manifest.id, provider
+	)
+
+
+func catch_experience_ids() -> Array:
+	return _catch_experience.keys()
+
+
+## Whether a capture should award experience right now. Static and null-safe for
+## the reason [method allows_item_field_move] is.
+static func awards_catch_experience() -> bool:
+	if _instance == null:
+		return false
+	for provider: Object in _instance._catch_experience.values():
+		if bool(provider.call("awards_catch_experience")):
+			return true
+	return false
+
+
+## Registers a BATTLE INFORMATION provider under [param id]: read-only
+## annotations drawn on the hardware interface over whichever battle renderer is
+## selected.
+##
+## [param provider] answers [constant BATTLE_INFO_METHODS]'
+## `annotate_battle(snapshot)` with an array of placements on the 20x18 tile
+## grid, each `{"at": Vector2i}` plus either a `text` string or a `tile` of 8x8
+## pixel indices. The snapshot is [method Gen2BattleScreen.info_snapshot]: both
+## sides' stages, the weather, the move rows with their exact effectiveness
+## against the defender, and what is on screen. A provider computes nothing the
+## host already knows.
+func register_battle_info(id: StringName, provider: Object) -> Dictionary:
+	return _register_provider(_battle_info, BATTLE_INFO_METHODS, id, provider)
+
+
+func battle_info_ids() -> Array:
+	return _battle_info.keys()
+
+
+## Every provider's placements for [param snapshot], validated and with
+## overlapping ownership refused rather than resolved by load order: a cell a
+## later provider claims after an earlier one is dropped and reported, so which
+## mod loaded first cannot decide what a player sees.
+func battle_info_placements(snapshot: Dictionary) -> Array:
+	var out: Array = []
+	var claimed: Dictionary = {}
+	for id: StringName in _battle_info:
+		var answered: Variant = (_battle_info[id] as Object).call(
+			"annotate_battle", snapshot.duplicate(true)
+		)
+		if answered is not Array:
+			continue
+		for raw: Variant in answered as Array:
+			if raw is not Dictionary:
+				continue
+			var placement: Dictionary = Gen2BattleAnnotations.validate(raw as Dictionary)
+			if placement.is_empty():
+				continue
+			var cells: Array = Gen2BattleAnnotations.cells(placement)
+			var taken: StringName = &""
+			for cell: Vector2i in cells:
+				if claimed.has(cell) and StringName(claimed[cell]) != id:
+					taken = StringName(claimed[cell])
+					break
+			if taken != &"":
+				_failures.append({
+					"ok": false, "reason": &"battle_info_cells_taken",
+					"detail": "%s: %s owns %s" % [id, taken, cells[0]], "id": id,
+				})
+				continue
+			for cell: Vector2i in cells:
+				claimed[cell] = id
+			out.append(placement)
+	return out
 
 
 ## Registers a battle renderer under [param id]. See
@@ -530,10 +701,22 @@ func register_menu_entry(menu: StringName, id: StringName, entry: Dictionary) ->
 				return {"ok": false, "reason": &"invalid_mart_filter", "detail": String(id)}
 			registered["available"] = available
 	else:
-		var handler: Variant = entry.get("handler", null)
-		registered["available"] = handler is Callable and (handler as Callable).is_valid()
-		if bool(registered["available"]):
-			registered["handler"] = handler
+		var action: StringName = StringName(entry.get("action", &""))
+		if String(action).is_empty():
+			var handler: Variant = entry.get("handler", null)
+			registered["available"] = handler is Callable and (handler as Callable).is_valid()
+			if bool(registered["available"]):
+				registered["handler"] = handler
+		elif not START_ACTIONS.has(action):
+			return {"ok": false, "reason": &"unknown_menu_action", "detail": String(action)}
+		else:
+			registered["action"] = action
+			registered["available"] = true
+		if entry.has("visible"):
+			var visible: Variant = entry["visible"]
+			if not visible is Callable or not (visible as Callable).is_valid():
+				return {"ok": false, "reason": &"invalid_menu_visibility", "detail": String(id)}
+			registered["visible"] = visible
 	var entries: Array = _menu_entries.get(menu, [])
 	for existing: Dictionary in entries:
 		if StringName(existing.get("kind", &"")) == id:
@@ -627,6 +810,34 @@ func stats_pages() -> Array:
 func menu_entries(menu: StringName) -> Array:
 	var entries: Array = _menu_entries.get(menu, [])
 	return entries.duplicate(true)
+
+
+## The start-menu entries [param context] leaves visible, in registration order.
+##
+## An entry that registered no `visible` predicate is always listed, which is
+## every entry written before this existed. One that did is asked with a copy of
+## the context, so deciding whether to appear cannot change the menu being built;
+## answering false leaves the row ABSENT rather than present and refused, which
+## is what the cartridge's own gated rows do. The host applies its own gate after
+## the predicate, so a mod cannot show a row the game would refuse.
+func start_menu_entries(context: Dictionary) -> Array:
+	var out: Array = []
+	for entry: Dictionary in menu_entries(MENU_START):
+		var visible: Variant = entry.get("visible", null)
+		if visible is Callable and not bool((visible as Callable).call(context.duplicate(true))):
+			continue
+		if not _start_action_allowed(StringName(entry.get("action", &"")), context):
+			continue
+		out.append(entry)
+	return out
+
+
+## The host's own gate on an allow-listed action, asked after the mod's
+## predicate. `PC_CheckPartyForPokemon` is the whole of what Bill's PC has.
+static func _start_action_allowed(action: StringName, context: Dictionary) -> bool:
+	if action == START_ACTION_OPEN_BILLS_PC:
+		return int(context.get("party_count", 0)) > 0
+	return true
 
 
 ## The extra shelf rows available in this mart, after source rows with the same
