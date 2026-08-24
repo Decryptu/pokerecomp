@@ -2875,9 +2875,20 @@ func preview_effect_sprites(kind: StringName = &"effects") -> void:
 ## the player, asking for its pulse. The provider is the synthetic one below;
 ## everything else is the host's own path.
 func preview_visible_encounter() -> void:
+	_preview_visible_encounter(false)
+
+
+## The same population wearing an entry's own `glow` instead: ordinary DVs, so
+## the mark is the one a mod puts on a Pokemon worth stopping for rather than
+## the shiny's palette and sparkle.
+func preview_visible_encounter_glow() -> void:
+	_preview_visible_encounter(true)
+
+
+func _preview_visible_encounter(glow: bool) -> void:
 	if _world == null or _encounters == null or _renderer == null:
 		return
-	_encounters.set_providers([PreviewEncounters.new(_world)])
+	_encounters.set_providers([PreviewEncounters.new(_world, glow)])
 	advance_frames(2)
 	_script_prompt = "Debug visible encounter preview"
 	_renderer.refresh()
@@ -2888,10 +2899,14 @@ func preview_visible_encounter() -> void:
 class PreviewEncounters extends RefCounted:
 	## `CheckShininess`: the attack mask and three tens.
 	const SHINY_DVS: int = (2 << 12) | (10 << 8) | (10 << 4) | 10
+	## The light and the walk a glowing entry asks for, at the top rung so the
+	## picture is the mark at its strongest rather than a frame of a breath.
+	const GLOW_COLOR := Color(1.0, 0.87, 0.35)
+	const GLOW_AMOUNT: float = 0.5
 
 	var _entries: Array = []
 
-	func _init(world: Gen2WorldAPI) -> void:
+	func _init(world: Gen2WorldAPI, glow: bool = false) -> void:
 		var cells: Dictionary = world.visible_encounter_cells()
 		var tables: Dictionary = world.active_encounter_tables()
 		for method: Variant in cells:
@@ -2903,14 +2918,17 @@ class PreviewEncounters extends RefCounted:
 					nearest = cell
 			if nearest.x < 0 or slots.is_empty():
 				continue
-			_entries.append({
+			var entry: Dictionary = {
 				"id": StringName("preview_%s" % method),
 				"cell": Vector2i(nearest),
 				"species": int(slots[0]["species"]),
 				"level": int(slots[0]["min_level"]),
-				"dvs": SHINY_DVS,
-				"pulse": true,
-			})
+				"dvs": 0 if glow else SHINY_DVS,
+				"pulse": not glow,
+			}
+			if glow:
+				entry["glow"] = {"color": GLOW_COLOR, "amount": GLOW_AMOUNT}
+			_entries.append(entry)
 
 	func set_context(_context: Dictionary) -> void:
 		pass

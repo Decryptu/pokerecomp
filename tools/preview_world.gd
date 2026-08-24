@@ -118,6 +118,9 @@ extends SceneTree
 ## `visible_encounter` (a shiny of the map's own table standing on the eligible
 ## cell nearest the player, with the cartridge's sparkle over it: try
 ## `crystal 24 3 ... visible_encounter 4 9`),
+## `visible_encounter_glow` (the same population with ordinary DVs wearing an
+## entry's own `glow` instead, which is the mark a mod puts on a Pokemon worth
+## stopping for: `crystal 24 3 ... visible_encounter_glow 4 9`),
 ## `field_moves_menu` (the start menu's MOVES row, and the list of HM moves the
 ## bag can supply behind it, both of which need a registered field-move source
 ## before they exist: driven twice, since each call is one step),

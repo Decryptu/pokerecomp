@@ -38,7 +38,7 @@ user://mods/<id>/
 | `id` | Lowercase `[a-z0-9][a-z0-9_-]*`; addresses the directory and registry keys |
 | `name` | Shown to the player |
 | `version` | The mod's own version, not the host's |
-| `api_version` | Between `Gen2ModManifest.MIN_API_VERSION` and `API_VERSION`. Declare the oldest host you need: 14 for [an annotation's own interface field](#annotating-the-battle), 13 for [an alternate field-move source](#an-alternate-field-move-source), [Repel renewal](#renewing-a-repel), [experience for a capture](#experience-for-a-capture), [battle annotations](#annotating-the-battle) and a start-menu entry's action and visibility, 12 for `Gen2ModHost.view_changed`, 11 for [the battle entrance](#the-entrance) and the battle view's other resolved fields, 10 for [a screen that fills the window](#a-screen-that-fills-the-window) and the maps past this one's edge, 9 for an item that names an evolution method, 8 for a stats-screen page, 7 for an actor's `interact`, `emote` and outbox and for hidden-item requests, 6 for `occupied` in the visible-encounter context, 5 for the run's rules, 4 for types, matchups, mod art and event mutators, 3 for mart rows and named axes, 2 for visible encounters, 1 for everything else |
+| `api_version` | Between `Gen2ModManifest.MIN_API_VERSION` and `API_VERSION`. Declare the oldest host you need: 15 for [a visible encounter's glow](#visible-wild-encounters), 14 for [an annotation's own interface field](#annotating-the-battle), 13 for [an alternate field-move source](#an-alternate-field-move-source), [Repel renewal](#renewing-a-repel), [experience for a capture](#experience-for-a-capture), [battle annotations](#annotating-the-battle) and a start-menu entry's action and visibility, 12 for `Gen2ModHost.view_changed`, 11 for [the battle entrance](#the-entrance) and the battle view's other resolved fields, 10 for [a screen that fills the window](#a-screen-that-fills-the-window) and the maps past this one's edge, 9 for an item that names an evolution method, 8 for a stats-screen page, 7 for an actor's `interact`, `emote` and outbox and for hidden-item requests, 6 for `occupied` in the visible-encounter context, 5 for the run's rules, 4 for types, matchups, mod art and event mutators, 3 for mart rows and named axes, 2 for visible encounters, 1 for everything else |
 | `entry` | A `.gd` path inside the mod directory, or inside the pack when there is one |
 | `pack` | Optional `.pck` or `.zip` beside `mod.json`, holding the mod's files |
 | `description` | Optional |
@@ -1326,15 +1326,28 @@ Each entry of `encounters()`:
 | `species`, `level` | Must be offered by that table |
 | `dvs` | The packed DV word, carried into the battle unchanged |
 | `pulse` | Optional. Ask for the shiny sparkle over this entry |
+| `glow` | Optional `{color: Color, amount: float}`. Walks the Pokemon's own colours toward `color` by `amount`, leaving colour 0 alone: it is the icon's cut-out. Presentation only, and it changes no DV, no battle and no roll |
 
 Anything else is dropped rather than drawn, including an entry that names
-`shiny`: shininess is `CheckShininess` over the DVs and is the host's answer.
+`shiny`: shininess is `CheckShininess` over the DVs and is the host's answer. A
+malformed `glow` costs the glow rather than the entry.
 At most `Gen2WorldEncounters.MAX_ENTRIES` entries are drawn in a frame.
+
+`amount` is rounded onto `Gen2WorldEncounters.GLOW_RUNGS` steps by the host, so
+nine values between nothing and the full walk are all a mod can reach. That is
+not a nicety: both world renderers cache one sprite texture per distinct set of
+four colours and **neither evicts**, so a smoothly interpolated glow would leave
+a texture behind on every frame the map was up. Send whatever cycle you like;
+what reaches the palette is the nearest rung, and an amount that rounds to
+nothing is no glow at all. Eighths rather than quarters so that a mark meant to
+be subtle still has a cycle after the rounding: a peak under half the walk keeps
+four steps on eighths and one on quarters.
 
 What the host does with a valid population:
 
 - Draws it through the actor layer, with the SPECIES' own four colours, shiny or
-  not, so a renderer reading `set_actors` gets it for free.
+  not and glowing or not, so a renderer reading `set_actors` gets it for free:
+  the palette arrives in the same per-entry `colors` override a shiny's does.
 - Turns the ordinary post-step roll off while any provider is registered.
   Scripted, fishing, Headbutt, Rock Smash, Sweet Scent and Bug Contest
   encounters keep their own paths.

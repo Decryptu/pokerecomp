@@ -373,9 +373,18 @@ class Population:
 	## is allowed on at all.
 	const POPULATION: int = 3
 
+	## The light an entry's own colours are walked toward, and how far, on the
+	## breath below. `api_version` 15: the host rounds the amount onto
+	## `Gen2WorldEncounters.GLOW_RUNGS` and applies it where it already resolves
+	## the species' palette, so nothing here draws a pixel and both views get it.
+	const GLOW_COLOR := Color(1.0, 0.87, 0.35)
+	const GLOW_PEAK: float = 0.5
+	const GLOW_PERIOD_FRAMES: int = 48
+
 	var _context: Dictionary = {}
 	var _entries: Array = []
 	var _generation: int = -1
+	var _frame: int = 0
 
 	func set_context(context: Dictionary) -> void:
 		_context = context
@@ -386,8 +395,17 @@ class Population:
 		_generation = int(context.get("generation", -1))
 		_repopulate()
 
+	## A raised cosine over `GLOW_PERIOD_FRAMES`, so a wanderer breathes gold
+	## rather than wearing a badge. Send whatever curve you like: what reaches
+	## the palette is the nearest of the host's own rungs, and an amount that
+	## rounds to nothing carries no glow at all.
 	func advance_frame() -> void:
-		pass
+		_frame += 1
+		var phase: float = TAU * float(_frame % GLOW_PERIOD_FRAMES) \
+			/ float(GLOW_PERIOD_FRAMES)
+		var amount: float = 0.5 * (1.0 - cos(phase)) * GLOW_PEAK
+		for entry: Dictionary in _entries:
+			entry["glow"] = {"color": GLOW_COLOR, "amount": amount}
 
 	func encounters() -> Array:
 		return _entries

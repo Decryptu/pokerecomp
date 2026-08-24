@@ -44,10 +44,21 @@ const FILENAME: String = "mod.json"
 ## [method Gen2ModHost.register_battle_info], and a start-menu entry's own
 ## [constant Gen2ModHost.START_ACTIONS] plus its `visible` predicate.
 ##
+## 15 added a visible encounter's own `glow`, the optional
+## `{color, amount}` on an `encounters()` entry that walks the Pokemon's four
+## colours toward a light. It is presentation and changes no DV, no battle and
+## no roll; the host rounds the amount onto
+## [constant Gen2WorldEncounters.GLOW_RUNGS] itself, because both renderers cache
+## a sprite texture per set of four colours and neither evicts. Nine amounts, so
+## a subtle glow still has a cycle after the rounding.
+##
 ## An optional `icon` or `thumbnail` is deliberately NOT a contract change: a
 ## host that has never heard of either ignores the field, so a mod that ships
-## art still installs on an older launcher and simply has no face there.
-const API_VERSION: int = 14
+## art still installs on an older launcher and simply has no face there. A glow
+## is the same shape in the other direction: a mod may send one to a host that
+## drops it and the Pokemon simply does not glow, which is why `api_version` 15
+## is only needed by a mod that requires the mark to appear.
+const API_VERSION: int = 15
 ## The oldest contract this host still answers. See [constant API_VERSION].
 const MIN_API_VERSION: int = 1
 ## Ids address directories and registry keys, so they stay to a plain lowercase
