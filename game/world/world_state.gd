@@ -293,6 +293,11 @@ var _buenas_password: int = 0
 ## own `ifequal` in front of the award, not a rule the byte enforces.
 var _blue_card_balance: int = 0
 
+## `SECTION "SRAM Battle Tower"`, which the cartridge keeps beside the save
+## rather than inside it because a challenge can be saved and left between
+## battles. Never null; see [Gen2BattleTower].
+var _battle_tower: Gen2BattleTower = Gen2BattleTower.new()
+
 
 func _init(
 	initial_event_flags: Dictionary = {}, initial_map_scenes: Dictionary = {},
@@ -420,6 +425,7 @@ func to_dict() -> Dictionary:
 		"mom_savings_flags": _mom_savings_flags,
 		"blue_card_balance": _blue_card_balance,
 		"buenas_password": _buenas_password,
+		"battle_tower": _battle_tower.to_dict(),
 	}
 
 
@@ -532,6 +538,9 @@ static func from_dict(raw: Variant) -> Gen2WorldState:
 	restored._mom_savings_flags = int(source.get("mom_savings_flags", 0)) & 0xFF
 	restored._blue_card_balance = int(source.get("blue_card_balance", 0)) & 0xFF
 	restored._buenas_password = int(source.get("buenas_password", 0)) & 0xFF
+	## Defaults rather than versioning: a slot written before the tower existed
+	## reads as one with no challenge in it, which is the truth about it.
+	restored._battle_tower = Gen2BattleTower.from_dict(source.get("battle_tower", {}))
 	return restored
 
 
@@ -598,7 +607,15 @@ func restore_from_dict(raw: Variant) -> void:
 	_mom_savings_flags = restored._mom_savings_flags
 	_blue_card_balance = restored._blue_card_balance
 	_buenas_password = restored._buenas_password
+	_battle_tower = restored._battle_tower
 	changed.emit()
+
+
+## The live Battle Tower record, which callers edit in place: every write to it
+## is a write to SRAM the cartridge would have made straight away, and there is
+## no transaction between the receptionist and the section.
+func battle_tower() -> Gen2BattleTower:
+	return _battle_tower
 
 
 func maptile_decoration(category: StringName) -> int:

@@ -298,6 +298,10 @@ static func verify_layout(rom: RomFile) -> Dictionary:
 	if not mail["ok"]:
 		return mail
 
+	var battle_tower: Dictionary = verify_battle_tower(rom, layout)
+	if not battle_tower["ok"]:
+		return battle_tower
+
 	var intro_text: Dictionary = verify_intro_text(rom, layout)
 	if not intro_text["ok"]:
 		return intro_text
@@ -2481,6 +2485,226 @@ static func verify_mail(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return {"ok": true, "message": "Mail tables, graphics and palettes verified."}
 
 
+## `BattleTowerTrainers`' two ends, which is what says the run is the run.
+## `data/battle_tower/classes.asm` opens on HANSON and closes on WONG.
+const BATTLETOWER_PINNED_NAMES: Dictionary = {0: "HANSON", 69: "WONG"}
+## `MON_LEVEL`'s own offset inside a party-mon struct.
+const BATTLETOWER_MON_LEVEL: int = 31
+## `Strings_L10ToL100`'s eleventh row and `MenuData_ChallengeExplanationCancel`'s
+## three, decoded.
+const BATTLETOWER_LEVEL_CANCEL: String = "CANCEL"
+const BATTLETOWER_CHALLENGE_MENU_ROWS: Array = ["Challenge", "Explanation", "Cancel"]
+
+
+## `MenuData_ChallengeExplanationCancel`'s three rows.
+static func read_challenge_menu_rows(rom: RomFile, layout: Dictionary) -> PackedStringArray:
+	if not RomLayout.has_battle_tower(layout):
+		return PackedStringArray()
+	var at: int = int(RomLayout.battle_tower(layout)["challenge_menu"]) + 2
+	return Gen2Text.decode_sequence(
+		rom.slice(at, RomLayout.OAK_TEXT_MAX_BYTES), 0,
+		RomLayout.BATTLETOWER_CHALLENGE_MENU_ROWS, RomLayout.OAK_TEXT_MAX_BYTES
+	)
+
+
+## The whole Battle Tower block: the 70 trainers, the ten level groups of 21
+## Pokemon as the party-mon structs they are, the two per-class tables, the 120
+## trainer lines, the level menu's own rows and the challenge menu's three.
+##
+## Empty on Gold and Silver, which is what [GameData] answers "no tower" from.
+func _import_battle_tower(rom: RomFile, layout: Dictionary) -> Dictionary:
+	if not RomLayout.has_battle_tower(layout):
+		return {}
+	var entry: Dictionary = RomLayout.battle_tower(layout)
+	var trainers: Array = []
+	for index: int in RomLayout.BATTLETOWER_NUM_UNIQUE_TRAINERS:
+		var row: int = int(entry["trainers"]) + index * RomLayout.BATTLETOWER_TRAINER_ROW_BYTES
+		trainers.append({
+			"name": Gen2Text.decode_fixed(
+				rom.slice(row, RomLayout.BATTLETOWER_TRAINER_NAME_BYTES), 0,
+				RomLayout.BATTLETOWER_TRAINER_NAME_BYTES
+			),
+			"class": rom.u8(row + RomLayout.BATTLETOWER_TRAINER_NAME_BYTES),
+		})
+	var groups: Array = []
+	for group: int in RomLayout.BATTLETOWER_LEVEL_GROUPS:
+		var rows: Array = []
+		for index: int in RomLayout.BATTLETOWER_NUM_UNIQUE_MON:
+			rows.append({RomCache.BYTES_KEY: Array(rom.slice(
+				RomLayout.battle_tower_mon_offset(layout, group, index),
+				RomLayout.BATTLETOWER_MON_BYTES
+			))})
+		groups.append(rows)
+	var texts: Dictionary = {}
+	for kind: int in RomLayout.BATTLETOWER_TEXT_KINDS.size():
+		var male: Array = []
+		var female: Array = []
+		for trainer: int in RomLayout.BATTLETOWER_MALE_TEXTS:
+			male.append(read_oak_text(
+				rom, layout, RomLayout.battle_tower_text_offset(layout, false, trainer, kind)
+			))
+		for trainer: int in RomLayout.BATTLETOWER_FEMALE_TEXTS:
+			female.append(read_oak_text(
+				rom, layout, RomLayout.battle_tower_text_offset(layout, true, trainer, kind)
+			))
+		texts[RomLayout.BATTLETOWER_TEXT_KINDS[kind]] = {"male": male, "female": female}
+	var levels: Array = []
+	for index: int in RomLayout.BATTLETOWER_LEVEL_ROWS:
+		levels.append(Gen2Text.decode_fixed(
+			rom.slice(
+				int(entry["level_strings"]) + index * RomLayout.BATTLETOWER_LEVEL_ROW_BYTES,
+				RomLayout.BATTLETOWER_LEVEL_ROW_BYTES
+			), 0, RomLayout.BATTLETOWER_LEVEL_ROW_BYTES
+		).strip_edges())
+	var menu_text: Dictionary = {}
+	for name: String in RomLayout.BATTLETOWER_MENU_TEXT_ORDER:
+		var at: int = int((entry["text"] as Dictionary)[name])
+		var decoded: Dictionary = Gen2WorldScript.decode_text(
+			rom.slice(at, RomLayout.OAK_TEXT_MAX_BYTES)
+		)
+		menu_text[name] = String(decoded["text"]) if bool(decoded.get("ok", false)) else ""
+	var genders: Array = []
+	var sprites: Array = []
+	for index: int in RomLayout.trainer_class_count(layout) - 1:
+		genders.append(rom.u8(int(entry["class_genders"]) + index))
+		sprites.append(rom.u8(int(entry["class_sprites"]) + index))
+	return {
+		"trainers": trainers,
+		"mons": groups,
+		"class_genders": genders,
+		"class_sprites": sprites,
+		"texts": texts,
+		"level_rows": levels,
+		"menu_rows": Array(read_challenge_menu_rows(rom, layout)),
+		"menu_text": menu_text,
+	}
+
+
+## The Battle Tower's seven pins, each against something only the right offset
+## carries: the first and last of `BattleTowerTrainers`' 70 names with every
+## class byte in range, `BattleTowerMons`' first row and every row's level
+## agreeing with the level group it sits in, the two per-class tables' own
+## widths and values, all 120 `text_far` stubs, `Strings_L10ToL100`'s CANCEL row
+## and `MenuData_ChallengeExplanationCancel`'s three rows.
+##
+## A cartridge with no tower answers ok: Gold and Silver ship no map, routine or
+## table for it, so an absent block is the truth about them.
+static func verify_battle_tower(rom: RomFile, layout: Dictionary) -> Dictionary:
+	if not RomLayout.has_battle_tower(layout):
+		return {"ok": true, "message": "The cartridge has no Battle Tower."}
+	var entry: Dictionary = RomLayout.battle_tower(layout)
+	var classes: int = RomLayout.trainer_class_count(layout)
+
+	var trainers: int = int(entry["trainers"])
+	var trainer_bytes: int = RomLayout.BATTLETOWER_NUM_UNIQUE_TRAINERS \
+		* RomLayout.BATTLETOWER_TRAINER_ROW_BYTES
+	if not rom.in_bounds(trainers, trainer_bytes):
+		return {"ok": false, "message": "BattleTowerTrainers is outside the cartridge."}
+	for index: int in RomLayout.BATTLETOWER_NUM_UNIQUE_TRAINERS:
+		var row: int = trainers + index * RomLayout.BATTLETOWER_TRAINER_ROW_BYTES
+		var trainer_class: int = rom.u8(row + RomLayout.BATTLETOWER_TRAINER_NAME_BYTES)
+		if trainer_class < 1 or trainer_class > classes:
+			return {
+				"ok": false,
+				"message": "BattleTowerTrainers row %d has class %d, outside 1..%d." % [
+					index, trainer_class, classes,
+				],
+			}
+	for index: int in BATTLETOWER_PINNED_NAMES:
+		var name: String = Gen2Text.decode_fixed(
+			rom.slice(
+				trainers + int(index) * RomLayout.BATTLETOWER_TRAINER_ROW_BYTES,
+				RomLayout.BATTLETOWER_TRAINER_NAME_BYTES
+			), 0, RomLayout.BATTLETOWER_TRAINER_NAME_BYTES
+		)
+		if name != String(BATTLETOWER_PINNED_NAMES[index]):
+			return {
+				"ok": false,
+				"message": "BattleTowerTrainers row %d is \"%s\", expected \"%s\"." % [
+					index, name, BATTLETOWER_PINNED_NAMES[index],
+				],
+			}
+
+	var mon_bytes: int = RomLayout.BATTLETOWER_LEVEL_GROUPS \
+		* RomLayout.BATTLETOWER_NUM_UNIQUE_MON * RomLayout.BATTLETOWER_MON_BYTES
+	if not rom.in_bounds(int(entry["mons"]), mon_bytes):
+		return {"ok": false, "message": "BattleTowerMons runs past the cartridge."}
+	for group: int in RomLayout.BATTLETOWER_LEVEL_GROUPS:
+		# `LoadRandomBattleTowerMon` indexes the group by `wBTChoiceOfLvlGroup`
+		# alone, so a group whose rows are not all its own level is the offset
+		# being wrong rather than the data being odd.
+		var level: int = (group + 1) * 10
+		for index: int in RomLayout.BATTLETOWER_NUM_UNIQUE_MON:
+			var at: int = RomLayout.battle_tower_mon_offset(layout, group, index)
+			var species: int = rom.u8(at)
+			if species < 1 or species > RomLayout.SPECIES_COUNT:
+				return {
+					"ok": false,
+					"message": "BattleTowerMons %d/%d is species %d." % [group, index, species],
+				}
+			if rom.u8(at + BATTLETOWER_MON_LEVEL) != level:
+				return {
+					"ok": false,
+					"message": "BattleTowerMons %d/%d is level %d, expected %d." % [
+						group, index, rom.u8(at + BATTLETOWER_MON_LEVEL), level,
+					],
+				}
+
+	for key: String in ["class_genders", "class_sprites"]:
+		if not rom.in_bounds(int(entry[key]), classes - 1):
+			return {"ok": false, "message": "The Battle Tower %s table is outside the cartridge." % key}
+	for index: int in classes - 1:
+		if rom.u8(int(entry["class_genders"]) + index) > 1:
+			return {
+				"ok": false,
+				"message": "BTTrainerClassGenders entry %d is not MALE or FEMALE." % index,
+			}
+		if rom.u8(int(entry["class_sprites"]) + index) == 0:
+			return {"ok": false, "message": "BTTrainerClassSprites entry %d is zero." % index}
+
+	var stubs: int = (RomLayout.BATTLETOWER_MALE_TEXTS + RomLayout.BATTLETOWER_FEMALE_TEXTS) \
+		* RomLayout.BATTLETOWER_TEXT_KINDS.size()
+	if not rom.in_bounds(int(entry["trainer_text"]), stubs * RomLayout.TEXT_FAR_STUB_BYTES):
+		return {"ok": false, "message": "The Battle Tower text stubs run past the cartridge."}
+	for index: int in stubs:
+		var stub: int = int(entry["trainer_text"]) + index * RomLayout.TEXT_FAR_STUB_BYTES
+		if rom.u8(stub) != Gen2TextStream.TX_FAR \
+			or rom.u8(stub + RomLayout.TEXT_FAR_STUB_BYTES - 1) != Gen2TextStream.TX_END:
+			return {"ok": false, "message": "Battle Tower text stub %d is not a text_far." % index}
+
+	var levels: int = int(entry["level_strings"])
+	var level_bytes: int = RomLayout.BATTLETOWER_LEVEL_ROWS * RomLayout.BATTLETOWER_LEVEL_ROW_BYTES
+	if not rom.in_bounds(levels, level_bytes):
+		return {"ok": false, "message": "Strings_L10ToL100 is outside the cartridge."}
+	var cancel: String = Gen2Text.decode_fixed(
+		rom.slice(
+			levels + RomLayout.BATTLETOWER_LEVEL_GROUPS * RomLayout.BATTLETOWER_LEVEL_ROW_BYTES,
+			RomLayout.BATTLETOWER_LEVEL_ROW_BYTES
+		), 0, RomLayout.BATTLETOWER_LEVEL_ROW_BYTES
+	)
+	if cancel != BATTLETOWER_LEVEL_CANCEL:
+		return {
+			"ok": false,
+			"message": "Strings_L10ToL100 ends on \"%s\", expected \"%s\"." % [
+				cancel, BATTLETOWER_LEVEL_CANCEL,
+			],
+		}
+
+	var menu: int = int(entry["challenge_menu"])
+	if not rom.in_bounds(menu, 2) \
+		or rom.u8(menu + 1) != RomLayout.BATTLETOWER_CHALLENGE_MENU_ROWS:
+		return {"ok": false, "message": "The challenge menu does not have three rows."}
+	var rows: Array = Array(read_challenge_menu_rows(rom, layout))
+	if rows != BATTLETOWER_CHALLENGE_MENU_ROWS:
+		return {
+			"ok": false,
+			"message": "The challenge menu reads %s, expected %s." % [
+				rows, BATTLETOWER_CHALLENGE_MENU_ROWS,
+			],
+		}
+	return {"ok": true, "message": "Battle Tower tables, texts and menus verified."}
+
+
 static func verify_name_input_chars(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var at: int = int(layout.get("name_input_chars", -1))
 	if not rom.in_bounds(at, RomLayout.NAME_INPUT_BLOCK_BYTES):
@@ -4311,6 +4535,13 @@ func import_rom(
 		RomCache.blob_path(RomCache.pic_anims_path(directory)), pic_anims
 	):
 		result["message"] = "Could not write pic animation data."
+		return result
+	var battle_tower: Dictionary = _import_battle_tower(rom, layout)
+	if not battle_tower.is_empty() and not RomCache.write_section(
+		RomCache.battle_tower_path(directory),
+		RomCache.blob_path(RomCache.battle_tower_path(directory)), battle_tower
+	):
+		result["message"] = "Could not write Battle Tower data."
 		return result
 	if not RomCache.write_json(RomCache.moves_path(directory), moves):
 		result["message"] = "Could not write move data."

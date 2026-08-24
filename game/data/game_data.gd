@@ -126,6 +126,7 @@ var _world_spawns: Dictionary = {}
 var _world_audio: Dictionary = {}
 var _battle_anims_section: Dictionary = {}
 var _pic_anims_section: Dictionary = {}
+var _battle_tower_section: Dictionary = {}
 ## Which of the sections above have been read. A section that is genuinely empty
 ## is indistinguishable from one that has not been read yet, so the answer is
 ## recorded rather than inferred from the value.
@@ -2719,6 +2720,33 @@ func pic_animation(number: int, unown_form: int = 0) -> Dictionary:
 	}
 
 
+## The whole Battle Tower block, empty on a cartridge that has no tower:
+## { trainers, mons, class_genders, class_sprites, texts, level_rows, menu_rows,
+## menu_text }. See [Gen2BattleTower], which is the only reader.
+func battle_tower() -> Dictionary:
+	if _claim_section("battle_tower"):
+		_battle_tower_section = _read_section(RomCache.battle_tower_path(directory), false)
+	return _battle_tower_section
+
+
+## Whether this cartridge ships a Battle Tower at all. Gold and Silver do not.
+func has_battle_tower() -> bool:
+	return not battle_tower().is_empty()
+
+
+## One `BattleTowerMons` row as the party-mon struct plus nickname it is:
+## [param group] is `wBTChoiceOfLvlGroup - 1` and [param index] the row inside
+## it. Empty when either is outside the table.
+func battle_tower_mon(group: int, index: int) -> PackedByteArray:
+	var groups: Variant = battle_tower().get("mons", [])
+	if not groups is Array or group < 0 or group >= (groups as Array).size():
+		return PackedByteArray()
+	var rows: Variant = (groups as Array)[group]
+	if not rows is Array or index < 0 or index >= (rows as Array).size():
+		return PackedByteArray()
+	return _payload_bytes((rows as Array)[index], _blob("battle_tower"))
+
+
 func _pic_anims() -> Dictionary:
 	if _claim_section("pic_anims"):
 		_pic_anims_section = _read_section(RomCache.pic_anims_path(directory), false)
@@ -2790,6 +2818,8 @@ func _section_json_path(section: String) -> String:
 			return RomCache.battle_anims_path(directory)
 		"pic_anims":
 			return RomCache.pic_anims_path(directory)
+		"battle_tower":
+			return RomCache.battle_tower_path(directory)
 		"overworld_effects":
 			return RomCache.overworld_effects_path(directory)
 	return ""

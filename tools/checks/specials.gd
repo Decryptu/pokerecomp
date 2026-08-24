@@ -23,28 +23,21 @@ extends RefCounted
 ## in both directions: an index here that the runner now handles fails, so the
 ## row is deleted with the work rather than left behind.
 const EXPECTED_DEFERRED: Dictionary = {
-	## HANDOFF's "Deliberately deferred": link play, the Mobile Adapter GB,
-	## Mystery Gift and the Battle Tower. None of the four has a path to a
-	## modern platform or a save section this project reads.
+	## HANDOFF's "Deliberately deferred": link play, the Mobile Adapter GB and
+	## Mystery Gift. None of the three has a peer to talk to on a modern
+	## platform. The Battle Tower's own seven rows have left this list.
 	1: "SetBitsForLinkTradeRequest", 2: "WaitForLinkedFriend",
-	3: "CheckLinkTimeout_Receptionist", 4: "TryQuickSave",
+	3: "CheckLinkTimeout_Receptionist",
 	5: "CheckBothSelectedSameRoom", 6: "FailedLinkToPast", 7: "CloseLink",
 	8: "WaitForOtherPlayerToExit", 9: "SetBitsForBattleRequest",
 	10: "SetBitsForTimeCapsuleRequest", 11: "CheckTimeCapsuleCompatibility",
 	12: "EnterTimeCapsule", 13: "TradeCenter", 14: "Colosseum", 15: "TimeCapsule",
 	16: "CableClubCheckWhichChris", 17: "CheckMysteryGift",
 	18: "GetMysteryGiftItem", 19: "UnlockMysteryGift", 88: "DisplayLinkRecord",
-	116: "BattleTowerRoomMenu", 119: "BattleTowerBattle",
-	122: "LoadOpponentTrainerAndPokemonWithOTSprite",
-	124: "CheckForBattleTowerRules", 125: "GiveOddEgg",
+	125: "GiveOddEgg",
 	127: "Function1011f1", 128: "Function101220", 129: "Function101225",
-	130: "Function101231", 134: "BattleTowerAction",
-	136: "Menu_ChallengeExplanationCancel", 139: "BattleTowerMobileError",
+	130: "Function101231", 139: "BattleTowerMobileError",
 	140: "AskMobileOrCable", 154: "Mobile_SelectThreeMons",
-	## `home/init.asm`'s `Reset`, a soft reset of the console. Its one script
-	## site is BattleTowerBattleRoom.asm, so it belongs to row 2 of the last four
-	## features rather than to a screen of its own.
-	126: "Reset",
 	155: "Function1037eb", 156: "Function10383c", 159: "Function1037c2",
 	160: "CheckMobileAdapterStatusSpecial", 161: "Function103780",
 	162: "Function10387b", 163: "AskRememberPassword",
@@ -79,7 +72,7 @@ const EXPECTED_FADE_FRAMES: Dictionary = {46: 8, 47: 28, 48: 8, 49: 8, 50: 8}
 ## `data/events/special_pointers.asm`'s own length, the same in both pins.
 ## The three runs Crystal alone ships. `poke_seer`, `seer_advice` and
 ## `buena_prize` sit past the end of Gold and Silver's `SpecialsPointers`.
-const CRYSTAL_ONLY_TEXT_RUNS: Array[String] = ["poke_seer", "buena_prize"]
+const CRYSTAL_ONLY_TEXT_RUNS: Array[String] = ["poke_seer", "buena_prize", "battle_tower"]
 
 ## The `special_text_ram` names a box may fill beyond the string buffers, which
 ## is what `Gen2WorldScriptRunner._set_text_ram` writes through.

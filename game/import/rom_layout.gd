@@ -1501,6 +1501,21 @@ const SPECIAL_TEXT_RUNS: Dictionary = {
 			"more_care", "more_confident", "much_strength", "mighty", "impressed",
 		]],
 	],
+	## `engine/events/battle_tower/rules.asm`'s eight, which are three runs
+	## because `BattleTower_PleaseReturnWhenReady`'s own three instructions sit
+	## between the first two and `_CheckForBattleTowerRules` between the second
+	## and the third. The last run is the mobile challenge's two rules ahead of
+	## the local one's four, which is the file's order rather than either
+	## routine's table.
+	"battle_tower": [
+		["battle_tower_excuse_text", ["excuse_me"]],
+		["battle_tower_ready_text", ["return_when_ready"]],
+		["battle_tower_rule_text", [
+			"need_at_least_three", "egg_does_not_qualify",
+			"only_three_may_be_entered", "must_all_be_different_kinds",
+			"must_not_hold_the_same_items", "you_cant_take_an_egg",
+		]],
+	],
 	## `BuenaPrize`'s six, in its own file order.
 	"buena_prize": [["buena_prize_text", [
 		"ask_which_prize", "is_that_right", "here_you_go", "not_enough_points",
@@ -1960,6 +1975,43 @@ const MAIL_GFX_TILES: int = MAIL_GFX_BYTES / TILE_BYTES_1BPP
 ## icon over the entry.
 const MAIL_ICON_TILES: int = 8
 
+## constants/battle_tower_constants.asm. A challenge is seven trainers deep and
+## three Pokemon wide, and both tables the cartridge samples from are 21 rows of
+## a level group. `BATTLETOWER_NUM_UNIQUE_TRAINERS` is 70, and only Crystal 1.1
+## can reach past the first 21: `LoadOpponentTrainerAndPokemon`'s Crystal 1.0
+## branch masks with `BATTLETOWER_NUM_UNIQUE_MON` instead.
+const BATTLETOWER_PARTY_LENGTH: int = 3
+const BATTLETOWER_STREAK_LENGTH: int = 7
+const BATTLETOWER_NUM_UNIQUE_MON: int = 21
+const BATTLETOWER_NUM_UNIQUE_TRAINERS: int = 70
+const BATTLETOWER_LEVEL_GROUPS: int = 10
+## `bt_trainer` is `dname` plus the class byte, so a row is `NAME_LENGTH - 1`
+## characters and one more.
+const BATTLETOWER_TRAINER_NAME_BYTES: int = 10
+const BATTLETOWER_TRAINER_ROW_BYTES: int = BATTLETOWER_TRAINER_NAME_BYTES + 1
+## `NICKNAMED_MON_STRUCT_LENGTH`, the party-mon struct with its nickname behind
+## it, which is exactly what `LoadRandomBattleTowerMon` copies per slot.
+const BATTLETOWER_MON_BYTES: int = 48 + 11
+## `BattleTowerText`'s two arrays. A male class draws from 25 texts and a female
+## from 15, and each trainer owns a greeting, a loss line and a win line, laid
+## out in the file in that order per trainer. One pin walks all 120 stubs.
+const BATTLETOWER_MALE_TEXTS: int = 25
+const BATTLETOWER_FEMALE_TEXTS: int = 15
+const BATTLETOWER_TEXT_KINDS: Array[String] = ["greeting", "loss", "win"]
+## `Strings_L10ToL100`: ten level rows and CANCEL, each eight bytes with two
+## terminators. `Strings_Ll0ToL40` is the same run's first four rows plus its own
+## CANCEL, so the short menu is a slice rather than a second pin.
+const BATTLETOWER_LEVEL_ROW_BYTES: int = 8
+const BATTLETOWER_LEVEL_ROWS: int = BATTLETOWER_LEVEL_GROUPS + 1
+## `MenuData_ChallengeExplanationCancel`: the flags byte, the row count and three
+## terminated strings.
+const BATTLETOWER_CHALLENGE_MENU_ROWS: int = 3
+## The four boxes `_BattleTowerRoomMenu` prints, which are plain texts in the
+## mobile bank rather than `text_far` stubs.
+const BATTLETOWER_MENU_TEXT_ORDER: Array[String] = [
+	"what_level", "party_mon_tops_this_level", "uber_restriction", "cancel_challenge",
+]
+
 ## constants/item_constants.asm. TM01 is $bf and HM01 $f3, but the run is not
 ## contiguous: ITEM_C3 and ITEM_DC are dummy items inside it, which is why
 ## GetTMHMNumber skips them rather than subtracting.
@@ -2190,6 +2242,8 @@ const GOLD_SILVER: Dictionary = {
 	# belong to are Crystal bg events, where pokegold's cells carry the puzzle
 	# sign, and neither `DisplayUnownWords` nor the words are in the dump.
 	"unown_walls": -1,
+	## Gold and Silver have no Battle Tower map, routine or table at all.
+	"battle_tower": {},
 	# The credits. `gfx` was located by converting the pinned gfx/credits PNGs
 	# and matching the bytes: the border and the four mon sheets are one
 	# contiguous run in `credits.asm`'s own INCBIN order and `CreditsScript`
@@ -2454,6 +2508,11 @@ const GOLD_SILVER: Dictionary = {
 	"poke_seer_text": 0,
 	"seer_advice_text": 0,
 	"buena_prize_text": 0,
+	## The Battle Tower's three stub runs, which Gold and Silver ship no routine
+	## to reach; see the `battle_tower` block in the Crystal layout.
+	"battle_tower_excuse_text": 0,
+	"battle_tower_ready_text": 0,
+	"battle_tower_rule_text": 0,
 	"fruit_trees": 0x44091,
 	## `SpawnPoints` and `Flypoints`, each located by the byte column that is the
 	## same on all three dumps: the spawn coordinates at a stride of four, and
@@ -2873,6 +2932,33 @@ const CRYSTAL: Dictionary = {
 		"palettes": 0x8D05,
 		"icon": 0x11EF4,
 	},
+	# The Battle Tower, which Gold and Silver have no map, routine or table for.
+	# `trainers` is `BattleTowerTrainers`' 70 rows, `mons` the ten level groups
+	# of 21 nicknamed party-mon structs, `class_genders` and `class_sprites` the
+	# two per-class tables `BattleTowerText` and
+	# `LoadOpponentTrainerAndPokemonWithOTSprite` index, `trainer_text` the 120
+	# `text_far` stubs behind `BTMaleTrainerTexts`, `level_strings`
+	# `Strings_L10ToL100` and `challenge_menu`
+	# `MenuData_ChallengeExplanationCancel`. Each hits once.
+	#
+	# `BattleTowerTrainerData` is deliberately not here: its 36 bytes per trainer
+	# are the mobile greeting's easy-chat word pairs, which `Function17042c`
+	# alone walks, and nothing on the local challenge reads them.
+	"battle_tower": {
+		"trainers": 0x1F814E,
+		"mons": 0x1F8450,
+		"class_genders": 0x11F2F0,
+		"class_sprites": 0x170B90,
+		"trainer_text": 0x11F42E,
+		"level_strings": 0x119D0C,
+		"challenge_menu": 0x17D297,
+		"text": {
+			"what_level": 0x11ABA5,
+			"party_mon_tops_this_level": 0x11AAF0,
+			"uber_restriction": 0x11AB0F,
+			"cancel_challenge": 0x11AB4A,
+		},
+	},
 	# Battle animations; see the Gold and Silver block above for how these were
 	# located. All five tables sit in the same two banks in every dump and only
 	# the addresses within them move.
@@ -2960,6 +3046,10 @@ const CRYSTAL: Dictionary = {
 	"poke_seer_text": 0x4F28C,
 	"seer_advice_text": 0x4F2E8,
 	"buena_prize_text": 0x8B072,
+	## `engine/events/battle_tower/rules.asm`'s three stub runs; Crystal only.
+	"battle_tower_excuse_text": 0x8B22C,
+	"battle_tower_ready_text": 0x8B238,
+	"battle_tower_rule_text": 0x8B23D,
 	"fruit_trees": 0x44097,
 	"spawn_points": 0x152AB,
 	"flypoints": 0x91C5E,
@@ -3179,6 +3269,31 @@ static func name_input_table_offset(layout: Dictionary, table: int) -> int:
 static func mail_input_table_offset(layout: Dictionary, table: int) -> int:
 	return int((layout["mail"] as Dictionary)["input_chars"]) \
 		+ table * MAIL_INPUT_TABLE_ROWS * MAIL_INPUT_ROW_BYTES
+
+
+## The Battle Tower's own block, empty on a cartridge that has no tower.
+static func battle_tower(layout: Dictionary) -> Dictionary:
+	return layout.get("battle_tower", {}) as Dictionary
+
+
+static func has_battle_tower(layout: Dictionary) -> bool:
+	return not battle_tower(layout).is_empty()
+
+
+## `BattleTowerMons` row [param index] of level group [param group], which is
+## `AddNTimes` twice: once over a whole group and once over the row.
+static func battle_tower_mon_offset(layout: Dictionary, group: int, index: int) -> int:
+	return int(battle_tower(layout)["mons"]) \
+		+ (group * BATTLETOWER_NUM_UNIQUE_MON + index) * BATTLETOWER_MON_BYTES
+
+
+## One of the 120 `text_far` stubs, addressed the way `BattleTowerText` reaches
+## it: the male array first, then the female one, and within a trainer the
+## greeting, the loss line and the win line.
+static func battle_tower_text_offset(layout: Dictionary, female: bool, trainer: int, kind: int) -> int:
+	var base: int = int(battle_tower(layout)["trainer_text"])
+	var row: int = (BATTLETOWER_MALE_TEXTS if female else 0) + trainer
+	return base + (row * BATTLETOWER_TEXT_KINDS.size() + kind) * TEXT_FAR_STUB_BYTES
 
 
 ## `data/text_buffers.asm`'s StringBufferPointers, in `text_buffer` argument

@@ -6239,6 +6239,23 @@ func _show_script_results(results: Array) -> void:
 				open_hall_of_fame()
 			elif result_event.get("type", &"") == &"credits_requested":
 				open_credits()
+			elif result_event.get("type", &"") == &"soft_reset_requested":
+				## `special Reset` restarts the console, which is how a saved and
+				## left Battle Tower challenge leaves the battle room. The save
+				## has already been written by the action in front of it.
+				persist_world_snapshot()
+				get_tree().change_scene_to_file.call_deferred(
+					"res://game/world/intro_screen.tscn"
+				)
+				return
+			elif result_event.get("type", &"") == &"battle_tower_opponent_loaded":
+				## `LoadOpponentTrainerAndPokemonWithOTSprite`'s tail, which
+				## writes the sampled class's sprite into `wMapObjects` and loads
+				## it: the opponent is chosen at random and has to appear as
+				## whoever was drawn.
+				_world.set_object_sprite(
+					int(result_event.get("object", 0)), int(result_event.get("sprite", 0))
+				)
 			elif result_event.get("type", &"") == &"field_move_confirmed":
 				## `iftrue Script_Cut` and its four counterparts. The move is the
 				## host's, and it is the same staged request and acknowledge the
@@ -6357,6 +6374,16 @@ func _show_script_results(results: Array) -> void:
 					})
 					_script_prompt = _bug_contest_placings_text(judged)
 					_show_script_results(judged_results)
+					return
+				if StringName(request.get("kind", &"")) == &"quick_save_requested":
+					## `TryQuickSave` writes the save where it stands and answers
+					## TRUE; a write that fails answers FALSE, which is the same
+					## "no" the source gives a player who declines.
+					var written: Dictionary = persist_world_snapshot()
+					_show_script_results(_world.complete_runtime_request({
+						"ok": true,
+						"script_value": 1 if bool(written.get("ok", false)) else 0,
+					}))
 					return
 				if StringName(request.get("kind", &"")) == &"party_selection_requested":
 					if _open_party_selection():
@@ -7256,6 +7283,7 @@ func _refresh_party_summary() -> void:
 	var happiness: Array = []
 	var own_ot: Array = []
 	var held_items: Array = []
+	var levels: Array = []
 	var id_numbers: Array = []
 	for member: Variant in save.party:
 		if member is Gen2SaveMon:
@@ -7265,6 +7293,7 @@ func _refresh_party_summary() -> void:
 			happiness.append(int(mon.happiness))
 			own_ot.append(_is_own_mon(save, mon))
 			held_items.append(int(mon.item))
+			levels.append(int(mon.level))
 			id_numbers.append(int(mon.ot_id))
 			species.append(int(mon.species))
 			# CheckPartyMove walks every slot's four move slots; zeroes are empty
@@ -7303,6 +7332,10 @@ func _refresh_party_summary() -> void:
 			## `OmanyteChamber` walks MON_ITEM backwards for a WATER STONE, which
 			## is the one routine that reads a held item off the mirror.
 			"held_items": held_items,
+			## `BattleTower_LevelCheck` walks MON_LEVEL against the level group
+			## the player chose, and `BattleTower_UbersCheck` walks it beside
+			## the species list.
+			"levels": levels,
 			## `CheckForLuckyNumberWinners` compares the show's number against
 			## every ID in the party and then against every one in storage, so
 			## the boxes come over as one list the way its three passes add up.

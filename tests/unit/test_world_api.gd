@@ -8422,3 +8422,83 @@ func _special_world(state: Gen2WorldState = null) -> Gen2WorldAPI:
 
 func _run_special(world: Gen2WorldAPI) -> Array:
 	return _run_script(world, world.dispatch_script_events())
+
+
+## `BattleTowerAction` is one special reached with a `setval` in front of it, and
+## its jumptable both reads and writes wScriptVar. The three rows the tower's own
+## scripts open with: the state is set, read back, and the streak reset.
+func test_the_battle_tower_action_reads_and_writes_the_sram_section() -> void:
+	_write_special_script([
+		Gen2WorldScript.SETVAL, Gen2BattleTower.ACTION_SET_WON_CHALLENGE,
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_BATTLE_TOWER_ACTION, 0,
+		Gen2WorldScript.SETVAL, Gen2BattleTower.ACTION_GET_CHALLENGE_STATE,
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_BATTLE_TOWER_ACTION, 0,
+		Gen2WorldScript.WRITEMEM, 0xA0, 0xD1,
+		Gen2WorldScript.END,
+	])
+	var state := Gen2WorldState.new()
+	state.battle_tower().beaten = 5
+	state.battle_tower().trainers[0] = 12
+	var world: Gen2WorldAPI = _special_world(state)
+	assert_eq(_final_status(_run_special(world)), &"complete")
+	assert_eq(state.battle_tower().challenge_state, Gen2BattleTower.WON_CHALLENGE)
+	assert_eq(
+		state.script_memory(0xD1A0), Gen2BattleTower.WON_CHALLENGE,
+		"the read leaves the state in wScriptVar"
+	)
+
+	_write_special_script([
+		Gen2WorldScript.SETVAL, Gen2BattleTower.ACTION_RESET_DATA,
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_BATTLE_TOWER_ACTION, 0,
+		Gen2WorldScript.END,
+	])
+	var reset: Gen2WorldAPI = _special_world(state)
+	assert_eq(_final_status(_run_special(reset)), &"complete")
+	assert_eq(state.battle_tower().beaten, 0)
+	assert_eq(state.battle_tower().trainers[0], Gen2BattleTower.NO_TRAINER)
+
+
+## `SaveBattleTowerLevelGroup` and `LoadBattleTowerLevelGroup` are the two halves
+## of one byte: the room menu writes WRAM, only the save at the end of a session
+## copies it into SRAM, and a resumed challenge reads it back.
+func test_the_chosen_room_only_reaches_sram_when_the_session_is_saved() -> void:
+	_write_special_script([
+		Gen2WorldScript.SETVAL, Gen2BattleTower.ACTION_SAVE_LEVEL_GROUP,
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_BATTLE_TOWER_ACTION, 0,
+		Gen2WorldScript.END,
+	])
+	var state := Gen2WorldState.new()
+	state.battle_tower().chosen_group = 6
+	assert_eq(state.battle_tower().level_group, 0, "nothing has been saved yet")
+	assert_eq(_final_status(_run_special(_special_world(state))), &"complete")
+	assert_eq(state.battle_tower().level_group, 6)
+
+	_write_special_script([
+		Gen2WorldScript.SETVAL, Gen2BattleTower.ACTION_LOAD_LEVEL_GROUP,
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_BATTLE_TOWER_ACTION, 0,
+		Gen2WorldScript.WRITEMEM, 0xA0, 0xD1,
+		Gen2WorldScript.END,
+	])
+	state.battle_tower().chosen_group = 0
+	assert_eq(_final_status(_run_special(_special_world(state))), &"complete")
+	assert_eq(state.battle_tower().chosen_group, 6)
+	assert_eq(state.script_memory(0xD1A0), 6)
+
+
+## `Reset` is `home/init.asm`'s own soft reset, and nothing follows it in any
+## script: the room's save-and-quit branch ends there.
+func test_the_battle_tower_reset_ends_the_script_and_asks_for_a_restart() -> void:
+	_write_special_script([
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_RESET, 0,
+		Gen2WorldScript.SETEVENT, 0x12, 0x00,
+		Gen2WorldScript.END,
+	])
+	var world: Gen2WorldAPI = _special_world()
+	var results: Array = _run_special(world)
+	var asked: bool = false
+	for result: Dictionary in results:
+		for event: Dictionary in result.get("events", []):
+			if event.get("type", &"") == &"soft_reset_requested":
+				asked = true
+	assert_true(asked, "the console restarts")
+	assert_false(world.event_flag_active(0x12), "nothing behind it runs")

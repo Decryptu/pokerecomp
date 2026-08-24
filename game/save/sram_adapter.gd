@@ -353,7 +353,7 @@ static func _read_save(
 		var species: int = int(raw[species_start + index])
 		if species <= 0 or species == 0xFF:
 			return null
-		var mon: Gen2SaveMon = _read_mon(raw, mons_start + index * PARTYMON_SIZE)
+		var mon: Gen2SaveMon = read_party_mon(raw, mons_start + index * PARTYMON_SIZE)
 		if mon == null or mon.species != species:
 			return null
 		mon.original_trainer = Gen2Text.decode_fixed(raw, ot_start + index * NAME_LENGTH, NAME_LENGTH)
@@ -364,7 +364,9 @@ static func _read_save(
 	return save
 
 
-static func _read_mon(raw: PackedByteArray, start: int) -> Gen2SaveMon:
+## One party-mon struct, which is the same 48 bytes wherever it is stored: a
+## save file's party, a box's, and `BattleTowerMons`' own rows.
+static func read_party_mon(raw: PackedByteArray, start: int) -> Gen2SaveMon:
 	if start < 0 or start + PARTYMON_SIZE > raw.size():
 		return null
 	var mon := Gen2SaveMon.new()
