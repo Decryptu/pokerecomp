@@ -8,8 +8,10 @@ extends Control
 ## at a time and then shows the player's own with `ProfOaksPCRating` printed into
 ## it, and finally runs the credits. What is here is that walk, advanced by A.
 ## The credits, the backpic and frontpic slides and the palette rotations are
-## not, and neither is the persisted Hall of Fame record, which has no save field
-## to go in.
+## not.
+##
+## `_HallOfFamePC` reuses the same walk over a stored record ([member viewer]);
+## the record itself is [member Gen2SaveData.hall_of_fame].
 ##
 ## The source pauses 60 frames per panel and moves on by itself. This waits for
 ## a key instead: there is no animation to watch yet, so a timer would only be a
@@ -23,6 +25,13 @@ signal closed()
 signal rating_reached(sfx: int)
 
 const BACKDROP: Color = Color.WHITE
+
+## Whether this is `_HallOfFamePC`'s viewer rather than `AnimateHallOfFame`'s
+## induction: only the viewer answers B and START.
+var viewer: bool = false
+## Whether B closed it, which is `.b_button`'s carry and the way out of the
+## machine's own loop.
+var cancelled: bool = false
 
 var _data: GameData = null
 var _pages: Array = []
@@ -65,11 +74,25 @@ func current_page() -> Dictionary:
 
 ## A moves on, matching every other text pause in the overworld. There is no way
 ## back: the cartridge's panels do not rewind either.
+##
+## `_HallOfFamePC.DisplayTeam` adds two: B leaves the viewer, which is what
+## [member cancelled] says afterwards, and START skips the rest of this team.
+## `AnimateHallOfFame` reads neither, so an induction ignores them.
 func handle_button(button: int) -> bool:
-	if button != Gen2Button.A:
+	if button == Gen2Button.A:
+		advance()
+		return true
+	if not viewer:
 		return false
-	advance()
-	return true
+	if button == Gen2Button.B:
+		cancelled = true
+		closed.emit()
+		return true
+	if button == Gen2Button.START:
+		_index = _pages.size()
+		closed.emit()
+		return true
+	return false
 
 
 func advance() -> void:

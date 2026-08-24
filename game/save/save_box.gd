@@ -3,9 +3,10 @@ extends RefCounted
 
 ## One persistent Generation 2 PC box.
 ##
-## A box is deliberately only a fixed ordered set of save Pokémon. Box names,
-## current-box UI state and cartridge SRAM placement remain outside this
-## project model until they have a canonical owner.
+## A box is only a fixed ordered set of save Pokémon. Its name and which box is
+## current are [Gen2SaveData]'s, the way `sBoxNames` and `wCurBox` are their own
+## bytes on the cartridge rather than part of a box; SRAM placement remains
+## outside this project model.
 
 const CAPACITY: int = 20
 

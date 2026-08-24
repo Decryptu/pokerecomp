@@ -541,12 +541,6 @@ const SEER_ADVICE: Array = [
 const CELEBI_SHRINE_PASSES: int = 160
 const CELEBI_SHRINE_FRAMES_PER_PASS: int = 2
 const VARIABLE_SPRITE_BASE: int = 0xF0
-const DECORATION_BLOCKS: Dictionary = {
-	&"bed": {0x02: 0x1B, 0x03: 0x1C, 0x04: 0x1D, 0x05: 0x1E},
-	&"carpet": {0x07: 0x08, 0x08: 0x0B, 0x09: 0x0E, 0x0A: 0x11},
-	&"plant": {0x0C: 0x20, 0x0D: 0x21, 0x0E: 0x22},
-	&"poster": {0x10: 0x1F, 0x11: 0x23, 0x12: 0x24, 0x13: 0x25},
-}
 
 
 static func begin(
@@ -2670,15 +2664,23 @@ const DECO_TOWN_MAP: int = 0x10
 const DECO_PIKACHU_POSTER: int = 0x11
 const DECO_CLEFAIRY_POSTER: int = 0x12
 const DECO_JIGGLYPUFF_POSTER: int = 0x13
+## Which `wDeco*` slot each of the three name-a-decoration descriptions reads.
+const DECODESC_SLOTS: Dictionary = {
+	DECODESC_LEFT_DOLL: Gen2WorldDecoration.SLOT_LEFT_ORNAMENT,
+	DECODESC_RIGHT_DOLL: Gen2WorldDecoration.SLOT_RIGHT_ORNAMENT,
+	DECODESC_CONSOLE: Gen2WorldDecoration.SLOT_CONSOLE,
+}
 
 
 func _stage_decoration_description(description: int) -> Dictionary:
 	match description:
 		DECODESC_POSTER:
-			var poster: int = state.maptile_decoration(&"poster") if state != null else 0
+			var poster: int = state.maptile_decoration(
+				Gen2WorldDecoration.SLOT_POSTER
+			) if state != null else 0
 			match poster:
 				DECO_TOWN_MAP:
-					_stage_internal_text("It's a town map.", false)
+					_stage_internal_text("It's the TOWN MAP.", false)
 					_pending["special_after_text"] = SPECIAL_OVERWORLD_TOWN_MAP
 					return {"ok": true}
 				DECO_PIKACHU_POSTER:
@@ -2688,11 +2690,16 @@ func _stage_decoration_description(description: int) -> Dictionary:
 				DECO_JIGGLYPUFF_POSTER:
 					return _stage_internal_text("It's a poster of a\ncute JIGGLYPUFF.", false)
 				_:
+					## `DecorationDesc_NullPoster` is an `end` and prints nothing.
 					return {"ok": true}
 		DECODESC_BIG_DOLL:
 			return _stage_internal_text("A giant doll! It's\nfluffy and cuddly.", false)
 		DECODESC_LEFT_DOLL, DECODESC_RIGHT_DOLL, DECODESC_CONSOLE:
-			return _stage_internal_text("It's an adorable decoration.", false)
+			## `DecorationDesc_OrnamentOrConsole` names whatever stands in that
+			## slot; the box is one text with the name written into it.
+			return _stage_internal_text("It's an adorable\n%s." % Gen2WorldDecoration.decoration_name(
+				data, state.maptile_decoration(DECODESC_SLOTS[description]) if state != null else 0
+			), false)
 	return _fail(&"invalid_decoration_description", {"description": description})
 
 
@@ -3312,19 +3319,28 @@ func _execute_special(special: int) -> Dictionary:
 				"decorations": state.maptile_decorations() if state != null else {},
 			})
 		SPECIAL_TOGGLE_DECORATIONS_VISIBILITY:
-			## With the default zero decoration selections, ToggleDecorationVisibility
-			## sets each object event flag and the renderer removes those objects.
-			for flag: int in [
-				EVENT_PLAYERS_HOUSE_2F_CONSOLE,
-				EVENT_PLAYERS_HOUSE_2F_DOLL_1,
-				EVENT_PLAYERS_HOUSE_2F_DOLL_2,
-				EVENT_PLAYERS_HOUSE_2F_BIG_DOLL,
-			]:
-				_staged_flags[flag] = true
+			## `ToggleDecorationVisibility` per slot: an empty slot sets the
+			## object's event flag and the renderer removes it, and a filled one
+			## clears the flag and writes the decoration's own variable sprite.
+			var shown: Dictionary = {}
+			for row: Dictionary in Gen2WorldDecoration.OBJECT_SLOTS:
+				var deco: int = state.maptile_decoration(
+					StringName(row["slot"])
+				) if state != null else 0
+				var sprite: int = int(data.decoration(deco).get("sprite", 0)) \
+					if data != null and deco > 0 else 0
+				_staged_flags[int(row["flag"])] = sprite <= 0
+				if sprite <= 0:
+					continue
+				shown[int(row["variable_sprite"])] = sprite
+				_emit_runtime_event(&"variable_sprite_changed", {
+					"variable_sprite": int(row["variable_sprite"]),
+					"sprite": sprite,
+				})
 			_emit_runtime_event(&"decoration_callback_applied", {
 				"special": special,
 				"kind": &"toggle_decorations_visibility",
-				"defaults": true,
+				"sprites": shown,
 			})
 		SPECIAL_SLOT_MACHINE:
 			return _stage_runtime_request(&"slot_machine_requested", {
@@ -3648,31 +3664,32 @@ func _execute_special(special: int) -> Dictionary:
 ## (engine/overworld/decorations.asm). Coordinates are changeblock coordinates;
 ## Gen2WorldAPI applies their padded-buffer conversion.
 func _apply_maptile_decorations() -> void:
-	var decorations: Dictionary = state.maptile_decorations() if state != null else {}
-	var bed_block: int = _decoration_block(&"bed", int(decorations.get(&"bed", 0)))
-	var plant_block: int = _decoration_block(&"plant", int(decorations.get(&"plant", 0)))
-	var poster_block: int = _decoration_block(&"poster", int(decorations.get(&"poster", 0)))
-	var carpet_block: int = _decoration_block(&"carpet", int(decorations.get(&"carpet", 0)))
-	if bed_block > 0:
-		_emit_runtime_event(&"map_block_changed", {"x": 0, "y": 4, "block": bed_block})
-	if plant_block > 0:
-		_emit_runtime_event(&"map_block_changed", {"x": 7, "y": 4, "block": plant_block})
-	if poster_block > 0:
-		_emit_runtime_event(&"map_block_changed", {"x": 6, "y": 0, "block": poster_block})
+	for slot: StringName in Gen2WorldDecoration.MAPTILE_AT:
+		var block: int = _decoration_block(slot)
+		if block <= 0:
+			continue
+		var at: Vector2i = Gen2WorldDecoration.MAPTILE_AT[slot]
+		_emit_runtime_event(&"map_block_changed", {"x": at.x, "y": at.y, "block": block})
+	var carpet_block: int = _decoration_block(Gen2WorldDecoration.SLOT_CARPET)
 	if carpet_block > 0:
-		for row: Dictionary in [
-			{"x": 0, "y": 0, "block": carpet_block},
-			{"x": 0, "y": 2, "block": carpet_block + 1},
-			{"x": 2, "y": 2, "block": carpet_block + 2},
-			{"x": 4, "y": 2, "block": carpet_block + 1},
-		]:
-			_emit_runtime_event(&"map_block_changed", row)
-	_staged_flags[EVENT_PLAYERS_ROOM_POSTER] = poster_block > 0
+		for row: int in Gen2WorldDecoration.CARPET_AT.size():
+			var at: Vector2i = Gen2WorldDecoration.CARPET_AT[row]
+			_emit_runtime_event(&"map_block_changed", {
+				"x": at.x, "y": at.y,
+				"block": carpet_block + Gen2WorldDecoration.CARPET_BLOCK_STEP[row],
+			})
+	## `SetPosterVisibility` is the one slot that also masks a bg event.
+	_staged_flags[EVENT_PLAYERS_ROOM_POSTER] = \
+		_decoration_block(Gen2WorldDecoration.SLOT_POSTER) > 0
 
 
-func _decoration_block(category: StringName, decoration: int) -> int:
-	var category_blocks: Dictionary = DECORATION_BLOCKS.get(category, {})
-	return int(category_blocks.get(decoration, 0))
+## `_GetDecorationSprite`: the block a slot's own decoration stamps, which is the
+## imported row's `DECOATTR_SPRITE`. Zero when the slot is empty.
+func _decoration_block(slot: StringName) -> int:
+	if state == null or data == null:
+		return 0
+	var deco: int = state.maptile_decoration(slot)
+	return int(data.decoration(deco).get("sprite", 0)) if deco > 0 else 0
 
 
 ## One `RomLayout.SPECIAL_TEXT_RUNS` box, with the buffers this runner has

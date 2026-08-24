@@ -41,7 +41,9 @@ extends SceneTree
 ## ESCAPE, WATER and LIGHT, as `crystal 3 24 ... unown_wall 3 1`),
 ## `cut` (`OWCutAnimation`'s two halves and the jump shadow), `mart`
 ## (`BuyMenu`, talked open from the cell in front of a shop's counter, as
-## `crystal 1 8 ... mart 3 3`), `pokepic`
+## `crystal 1 8 ... mart 3 3`), `mart_sell` (the same shop's SELL row, which is
+## `DepositSellPack` on the cartridge and this port's own list of the pack),
+## `pokepic`
 ## (`Script_pokepic`'s box over the map, holding Chikorita),
 ## `pet_actor` (a mod's world actor one cell in front of the player, pressed with
 ## A so it wears the heart `showemote` puts over a map object),
@@ -86,6 +88,10 @@ extends SceneTree
 ## cell reaches: the first number is how many rows down the menu to stand and the
 ## second how many A presses to spend, so `crystal 24 6 ... bills_pc 1 2` is the
 ## DEPOSIT list with its submenu up),
+## `players_pc` and `pokemon_center_pc` (the bedroom's item PC and the Pokemon
+## Center's machine, driven the same way: `crystal 24 6 ... players_pc 3 1` is
+## the decoration menu and `crystal 24 6 ... pokemon_center_pc 3 1` the Hall of
+## Fame viewer on a save that has been inducted),
 ## `mom_bank` (`Mom_WithdrawDepositMenuJoypad`'s dial, which no fixture cell
 ## reaches: the first number is the wallet in hundreds and the second her own
 ## balance in hundreds, plus 1000 for the WITHDRAW header),
@@ -527,7 +533,7 @@ func _process(_delta: float) -> bool:
 				_screen.press_button(Gen2Button.A)
 				for _frame: int in 20:
 					_screen.advance_frame()
-		elif _kind == &"mart":
+		elif _kind == &"mart" or _kind == &"mart_sell":
 			## The clerk behind the counter, talked to from the cell in front of
 			## him: his `pokemart` is what opens `BuyMenu`, so the shop is
 			## reached the way a player reaches it. The presses are the dialog's
@@ -536,6 +542,11 @@ func _process(_delta: float) -> bool:
 			_screen.interact()
 			for _press: int in MART_PRESSES:
 				_screen.press_button(Gen2Button.A)
+			## `StandardMart`'s BUY/SELL/QUIT loop is what the welcome box hands
+			## the shop to. `mart` takes its BUY row, `mart_sell` the one below.
+			if _kind == &"mart_sell":
+				_screen.press_button(Gen2Button.DOWN)
+			_screen.press_button(Gen2Button.A)
 		elif _kind == &"warp":
 			## `MapSetupScript_Door` at its whitest: the step onto the warp tile
 			## and then `FadeOutToWhite`'s last order, which is the frame the map
@@ -629,12 +640,12 @@ func _process(_delta: float) -> bool:
 			for _down: int in maxi(_cell.x, 0):
 				_screen.press_button(Gen2Button.DOWN)
 				_screen.advance_frame()
-		elif _kind == &"bills_pc":
+		elif _kind in [&"bills_pc", &"players_pc", &"pokemon_center_pc"]:
 			## `_BillsPC`, which no preview cell reaches: the first number is how
 			## many rows down the top menu to stand and the second how many A
 			## presses to spend from there, so `1 1` is the DEPOSIT list and
 			## `1 2` its submenu on the first party member.
-			_screen.preview_bills_pc()
+			_screen.call(SCREEN_DRIVER % _kind)
 			for _down: int in maxi(_cell.x, 0):
 				_screen.press_button(Gen2Button.DOWN)
 				_screen.advance_frame()
@@ -668,7 +679,8 @@ func _process(_delta: float) -> bool:
 			&"battle", &"battle_transition", &"level_evolution", &"egg_hatch",
 			&"name_rater", &"move_deleter", &"move_tutor", &"day_care",
 			&"ice_slide", &"whiteout", &"view_cover", &"gift_nickname",
-			&"catch_nickname", &"mom_bank", &"bills_pc", &"start_menu",
+			&"catch_nickname", &"mom_bank", &"bills_pc", &"players_pc",
+			&"pokemon_center_pc", &"start_menu",
 		]:
 			## Those kinds drove themselves to the frame they want; every other
 			## kind stages a sprite and then spends the frames it needs.

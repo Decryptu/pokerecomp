@@ -235,8 +235,14 @@ var _radio_channel: int = -1
 ## and `wRadioTuningKnob` rather than in the Pokedex's own cleared block: the
 ## dex takes its mode from here on opening and writes the mode back on exit.
 var _last_dex_mode: int = RomLayout.DEXMODE_NEW
-## wDecoBed, wDecoCarpet, wDecoPlant and wDecoPoster. Values are decoration
-## ids from data/decorations/decorations.asm, not the blocks they stamp.
+## The eight `wDeco*` slots, four of which stamp a block into the bedroom and
+## four of which fill a variable sprite. Values are decoration ids from
+## data/decorations/decorations.asm, not the blocks or sprites they stamp.
+## [Gen2WorldDecoration] owns what each one means.
+const MAPTILE_DECORATION_SLOTS: Array[StringName] = [
+	&"bed", &"carpet", &"plant", &"poster",
+	&"console", &"big_doll", &"left_ornament", &"right_ornament",
+]
 var _maptile_decorations: Dictionary = {}
 ## `wKurtApricornQuantity`. Saved player data, not scratch: `SelectApricornForKurt`
 ## writes it and `VAR_KURT_APRICORNS` is read a day later, by a different script
@@ -348,7 +354,7 @@ func _init(
 		var value: int = int(initial_script_memory[raw_address]) & 0xFF
 		if address > 0 and value != 0 and _script_memory.size() < SCRIPT_MEMORY_CAPACITY:
 			_script_memory[address] = value
-	for category: StringName in [&"bed", &"carpet", &"plant", &"poster"]:
+	for category: StringName in MAPTILE_DECORATION_SLOTS:
 		var decoration: int = int(initial_maptile_decorations.get(category, 0))
 		if decoration > 0 and decoration <= 0xFF:
 			_maptile_decorations[category] = decoration
@@ -604,7 +610,7 @@ func maptile_decorations() -> Dictionary:
 
 
 func set_maptile_decoration(category: StringName, decoration: int) -> bool:
-	if category not in [&"bed", &"carpet", &"plant", &"poster"] \
+	if category not in MAPTILE_DECORATION_SLOTS \
 		or decoration < 0 or decoration > 0xFF:
 		return false
 	if maptile_decoration(category) == decoration:

@@ -12,10 +12,12 @@ extends Control
 ## nothing else, so a caller that never sees this signal has no name to take.
 signal closed(name: String)
 
-## `wNamingScreenType`'s two that a screen here opens. Both are the player's
-## keyboard; NAME_MON differs only in `MON_NAME_LENGTH - 1` behind it.
+## `wNamingScreenType`'s three that a screen here opens. All three are the
+## player's keyboard; NAME_MON and NAME_BOX differ only in the length cap behind
+## them.
 const KIND_PLAYER: StringName = &"player"
 const KIND_MON: StringName = &"mon"
+const KIND_BOX: StringName = &"box"
 
 var _screen: Gen2NamingScreen = null
 var _page: Gen2NamingScreenPage = null
@@ -52,6 +54,8 @@ func open(data: GameData, prompt: String, kind: StringName = KIND_PLAYER) -> boo
 static func _model(data: GameData, kind: StringName) -> Gen2NamingScreen:
 	if kind == KIND_MON:
 		return Gen2NamingScreen.for_mon(data)
+	if kind == KIND_BOX:
+		return Gen2NamingScreen.for_box(data)
 	return Gen2NamingScreen.for_player(data)
 
 

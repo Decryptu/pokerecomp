@@ -1383,6 +1383,19 @@ const POKECENTER_PC_TEXT_AT: Dictionary = {
 	"closed": 0x446,
 }
 
+## `DecorationAttributes`: one six-byte row per decoration, indexed by the
+## `DECO_*` constant itself, so row 0 is the CANCEL entry and each category's
+## own id is its PUT IT AWAY row. `DecorationNames` follows the table at
+## `DECORATION_NAMES_AT` on all three cartridges; the attribute table is byte
+## identical between the two pins and the name run is not, since Gold and Silver
+## spell the third console "NINTENDO64".
+const DECORATION_COUNT: int = 53
+const DECORATION_ATTRIBUTE_SIZE: int = 6
+const DECORATION_NAMES_AT: int = 0x13E
+const DECORATION_NAME_COUNT: int = 26
+## `list_start TEXTBOX_INNERW - 1`: seventeen characters and the terminator.
+const DECORATION_NAME_MAX_BYTES: int = 18
+
 ## Every `text_far` stub `engine/items/mart.asm` prints through, as its distance
 ## from `MartHowManyText`. `GetMartDialogGroup.MartTextFunctionPointers` is what
 ## groups them: the rooftop sale reads the standard group, the bargain shop asks
@@ -1413,12 +1426,19 @@ const MART_TEXT_AT: Dictionary = {
 	"pharmacy_pack_full": 0x096,
 	"pharmacy_no_money": 0x09B,
 	"pharmacy_come_again": 0x0A0,
+	## `SellMenu`'s own four, which sit between the shop groups above and
+	## `MartWelcomeText`: `UnusedDummyString`'s six bytes are the gap between
+	## `sell_price` and `welcome`.
+	"sell_how_many": 0x165,
+	"sell_price": 0x16A,
 	"welcome": 0x175,
 	"thanks": 0x192,
 	"no_money": 0x197,
 	"pack_full": 0x19C,
+	"cant_buy": 0x1A1,
 	"come_again": 0x1A6,
 	"ask_more": 0x1AB,
+	"bought": 0x1B0,
 }
 
 ## A `text_far` stub is `TX_FAR`, a two-byte address, a bank byte and a
@@ -2104,6 +2124,10 @@ const GOLD_SILVER: Dictionary = {
 	# both were located by matching the row run's own bytes, which are unique in
 	# a dump.
 	"pokecenter_pc": 0x158D1,
+	# `DecorationAttributes`, located by assembling the whole 53-row table from
+	# the source's own constants and matching it, which hits once per dump.
+	# `DecorationNames` is `DECORATION_NAMES_AT` behind it.
+	"decorations": 0x26C2B,
 	# `UnownWords`, located by encoding the twenty-six words in the Unown font's
 	# own codes and matching the whole run, which hits once per dump; the table
 	# is the fifty-four bytes in front of it.
@@ -2616,6 +2640,7 @@ const CRYSTAL: Dictionary = {
 	# See the Gold and Silver block above; the run is byte identical and only its
 	# address moves.
 	"pokecenter_pc": 0x155FA,
+	"decorations": 0x26A4F,
 	# See the Gold and Silver block above; the words are byte identical and only
 	# their address moves.
 	"unown_words": 0xFBA5A,

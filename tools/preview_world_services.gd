@@ -10,6 +10,8 @@ extends SceneTree
 ##   Godot --path . -s res://tools/preview_world_services.gd -- /tmp/oak.png oak_pc
 ##   Godot --path . -s res://tools/preview_world_services.gd -- /tmp/pc.png pc
 ##   Godot --path . -s res://tools/preview_world_services.gd -- /tmp/pc.png pc a,down,a
+##   Godot --path . -s res://tools/preview_world_services.gd -- /tmp/deco.png decoration
+##   Godot --path . -s res://tools/preview_world_services.gd -- /tmp/hof.png hall_of_fame
 ##   Godot --path . -s res://tools/preview_world_services.gd -- /tmp/unown.png unown_dex
 ##
 ## `presses` drives the overlay with its own buttons before the shot, which is
@@ -23,6 +25,10 @@ const Fixture := preload("res://tests/integration/world_trainer_fixture.gd")
 ## The forms the Unown dex preview has caught, in catching order rather than
 ## alphabetically, since that is the whole of what the screen lists.
 const UNOWN_CAUGHT: Array[int] = [6, 21, 1, 14, 26]
+
+## `EVENT_DECO_CHARMANDER_DOLL`, the first doll `data/items/mom_phone.asm` lets
+## Mom's savings buy.
+const DECO_FLAG_CHARMANDER_DOLL: int = 700
 
 const APRICORNS: Dictionary = {
 	0x55: "RED APRICORN", 0x59: "BLU APRICORN", 0x5C: "YLW APRICORN",
@@ -72,6 +78,14 @@ func _initialize() -> void:
 	if _kind == &"pokegear":
 		state.set_engine_flag(Gen2WorldState.ENGINE_PHONE_CARD, true)
 		state.set_engine_flag(Gen2WorldState.ENGINE_RADIO_CARD, true)
+	if _kind == &"decoration":
+		## `InitializeEventsScript`'s two owned decorations plus the doll Mom's
+		## savings buy first, so the category menu has more than one row.
+		Gen2WorldSpawn.apply_initial_decorations(state)
+		state.set_event_flag(DECO_FLAG_CHARMANDER_DOLL, true)
+	if _kind == &"hall_of_fame":
+		state.set_engine_flag(Gen2WorldState.ENGINE_POKEDEX, true)
+		state.set_hall_of_fame(true)
 	if _kind == &"unown_dex":
 		state.set_engine_flag(Gen2WorldState.ENGINE_POKEDEX, true)
 		## What the Ruins of Alph research centre leaves behind: the upgraded
@@ -84,6 +98,8 @@ func _initialize() -> void:
 	)
 	var save := Gen2SaveStore.create_development_save(_data, 0)
 	save.world = world.snapshot()
+	if _kind == &"hall_of_fame":
+		save.hall_of_fame = Gen2HallOfFame.inducted([], save)
 	_screen.set_data(_data)
 	_screen.set_save(save)
 	root.add_child(_screen)
@@ -160,6 +176,9 @@ func _write_service_cache() -> void:
 		if number == 7:
 			raw["name"] = "ITEM7"
 			raw["price"] = 120
+			## `SellMenu` reads the pack, which groups by the item's own type
+			## byte: an unclassified row is in no pocket and cannot be sold.
+			raw["pocket"] = Gen2WorldPack.TYPE_ITEM
 		elif APRICORNS.has(number):
 			raw["name"] = String(APRICORNS[number])
 	RomCache.write_json(RomCache.items_path(_fixture_directory), items)
@@ -178,7 +197,7 @@ func _write_service_cache() -> void:
 		Gen2WorldScript.SPECIAL,
 		Gen2WorldScriptRunner.SPECIAL_POKEMON_CENTER_PC, 0x00,
 		Gen2WorldScript.END,
-	] if _kind == &"pc" else [
+	] if _kind in [&"pc", &"decoration", &"hall_of_fame"] else [
 		0x94, 0, 0x00, 0x40, 0x91,
 	]
 	RomCache.write_json(RomCache.world_scripts_path(_fixture_directory), scripts)

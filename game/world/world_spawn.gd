@@ -12,6 +12,10 @@ const START_MONEY: int = 3000
 ## InitDecorations (engine/overworld/decorations.asm): DECO_FEATHERY_BED and
 ## DECO_TOWN_MAP. The other two maptile slots remain zero.
 const INITIAL_MAPTILE_DECORATIONS: Dictionary = {&"bed": 0x02, &"poster": 0x10}
+## `InitializeEventsScript` owns the two flags that say the player *has* those
+## two, which is what puts them on `_PlayerDecorationMenu`'s own lists:
+## `EVENT_DECO_BED_1` and `EVENT_DECO_POSTER_1`.
+const INITIAL_DECORATION_FLAGS: Array[int] = [676, 687]
 
 
 static func new_game_snapshot(data: GameData) -> Gen2WorldSnapshot:
@@ -45,3 +49,5 @@ static func apply_initial_decorations(state: Gen2WorldState) -> void:
 		state.set_maptile_decoration(
 			category, int(INITIAL_MAPTILE_DECORATIONS[category])
 		)
+	for flag: int in INITIAL_DECORATION_FLAGS:
+		state.set_event_flag(flag, true)

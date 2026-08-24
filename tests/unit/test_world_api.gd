@@ -17,6 +17,35 @@ func after_each() -> void:
 	RomCache.clear(_directory)
 
 
+## Seven `PUT IT AWAY` headers and one decoration each, at the ids the source
+## gives them, so `Gen2WorldDecoration` reads the same shape it reads from a
+## cartridge. Names are the fixture's own.
+func _decoration_fixture() -> Dictionary:
+	var attributes: Array = []
+	for deco: int in 31:
+		attributes.append({
+			"type": 1, "name": 0, "action": 0, "flag": 0, "sprite": 0,
+		})
+	## [id, action, event flag, block or sprite] for the header and the member.
+	for row: Array in [
+		[1, 2, 0, 0], [2, 1, 676, 0x1B],
+		[6, 4, 0, 0], [7, 3, 680, 0x08],
+		[11, 6, 0, 0], [12, 5, 684, 0x20],
+		[15, 8, 0, 0], [16, 7, 687, 0x1F],
+		[20, 10, 0, 0], [21, 9, 691, 0x5C],
+		[25, 12, 0, 0], [26, 11, 719, 0x33],
+		[29, 14, 0, 0], [30, 13, 695, 0x8E],
+	]:
+		attributes[row[0]] = {
+			"type": 1, "name": row[0], "action": row[1], "flag": row[2],
+			"sprite": row[3],
+		}
+	var names: Array = []
+	for part: int in 31:
+		names.append("DECO%d" % part)
+	return {"attributes": attributes, "names": names}
+
+
 func _write_cache(game_id: String = "testworld") -> void:
 	RomCache.write_json(RomCache.species_path(_directory), [])
 	RomCache.write_json(RomCache.moves_path(_directory), [])
@@ -325,6 +354,10 @@ func _write_cache(game_id: String = "testworld") -> void:
 		## `UnownWalls`' four, since the special that draws one names them by
 		## index and a wrong index has to be told from a right one.
 		"unown_walls": ["WALLA", "WALLB", "WALLC", "WALLD"],
+		## `DecorationAttributes` in the shape a real cache carries: one row per
+		## category header and one decoration behind it, so a slot's own block or
+		## sprite is read from the table rather than guessed.
+		"decorations": _decoration_fixture(),
 		## The `RomLayout.SPECIAL_TEXT_RUNS` boxes the deferred routines print,
 		## with the `text_ram` markers a real cache carries so a filled buffer is
 		## told from an unfilled one.
@@ -3240,7 +3273,7 @@ func test_describedecoration_runs_locally_and_opens_only_the_town_map_host() -> 
 	var text_pause: Dictionary = runner.advance()
 	assert_eq(text_pause["status"], &"waiting", JSON.stringify(text_pause))
 	assert_eq(text_pause["event"]["type"], &"text", JSON.stringify(text_pause))
-	assert_eq(text_pause["event"]["text"], "It's a town map.")
+	assert_eq(text_pause["event"]["text"], "It's the TOWN MAP.")
 	var map_pause: Dictionary = runner.advance(true)
 	assert_eq(map_pause["status"], &"waiting", JSON.stringify(map_pause))
 	assert_eq(map_pause["event"]["type"], &"runtime_request", JSON.stringify(map_pause))

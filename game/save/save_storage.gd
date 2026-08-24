@@ -122,6 +122,87 @@ static func release_box_slot(
 	}, persist)
 
 
+## `MovePKMNWithoutMail_InsertMon`'s four branches in one: the mon leaves
+## [param from_index] of one list and is inserted at [param to_index] of the
+## other, everything behind it shifting down. A list is the party when it is
+## `Gen2BoxScreen.LOADED_PARTY` and the box before it otherwise, which is
+## `wBillsPC_LoadedBox`'s own numbering.
+##
+## `BillsPC_CheckSpaceInDestination` is the one refusal, and only for a move
+## between two lists: a reorder inside one cannot overflow it.
+static func move_mon(
+	save: Gen2SaveData,
+	data: GameData,
+	from_loaded: int,
+	from_index: int,
+	to_loaded: int,
+	to_index: int,
+	persist: bool = true,
+) -> Dictionary:
+	var candidate_result: Dictionary = _candidate(save, data)
+	if not bool(candidate_result.get("ok", false)):
+		return candidate_result
+	var candidate: Gen2SaveData = candidate_result["save"]
+	var source: Array = _loaded_list(candidate, from_loaded)
+	if source.is_empty() and from_index != 0:
+		return _failure(&"invalid_loaded_list")
+	if from_index < 0 or from_index >= source.size():
+		return _failure(&"invalid_source_slot")
+	var mon: Gen2SaveMon = source[from_index]
+	if mon == null:
+		return _failure(&"missing_pokemon")
+	if from_loaded == to_loaded:
+		var reordered: Array = source.duplicate()
+		reordered.remove_at(from_index)
+		reordered.insert(clampi(to_index, 0, reordered.size()), mon)
+		_write_loaded_list(candidate, from_loaded, reordered)
+	else:
+		var destination: Array = _loaded_list(candidate, to_loaded)
+		var capacity: int = Gen2SaveData.MAX_PARTY 			if to_loaded == Gen2BoxScreen.LOADED_PARTY else Gen2SaveBox.CAPACITY
+		if destination.size() >= capacity:
+			return _failure(&"no_room_in_destination")
+		if from_loaded == Gen2BoxScreen.LOADED_PARTY and source.size() <= 1:
+			return _failure(&"last_party_member")
+		var without: Array = source.duplicate()
+		without.remove_at(from_index)
+		destination = destination.duplicate()
+		destination.insert(clampi(to_index, 0, destination.size()), mon)
+		_write_loaded_list(candidate, from_loaded, without)
+		_write_loaded_list(candidate, to_loaded, destination)
+	return _commit(save, data, candidate, {
+		"kind": &"move_mon",
+		"from_loaded": from_loaded, "from_index": from_index,
+		"to_loaded": to_loaded, "to_index": to_index,
+	}, persist)
+
+
+## One `wBillsPC_LoadedBox` list as the packed array the source treats it as:
+## the party is already one and a box's own occupied slots are read in order.
+static func _loaded_list(save: Gen2SaveData, loaded: int) -> Array:
+	if loaded == Gen2BoxScreen.LOADED_PARTY:
+		return save.party
+	var box: Gen2SaveBox = save.boxes[loaded - 1] 		if loaded - 1 >= 0 and loaded - 1 < save.boxes.size() else null
+	if box == null:
+		return []
+	var out: Array = []
+	for slot: int in Gen2SaveBox.CAPACITY:
+		if slot < box.slots.size() and box.slots[slot] != null:
+			out.append(box.slots[slot])
+	return out
+
+
+static func _write_loaded_list(save: Gen2SaveData, loaded: int, members: Array) -> void:
+	if loaded == Gen2BoxScreen.LOADED_PARTY:
+		save.party = members.duplicate()
+		return
+	var box: Gen2SaveBox = save.boxes[loaded - 1] 		if loaded - 1 >= 0 and loaded - 1 < save.boxes.size() else null
+	if box == null:
+		return
+	box.slots.fill(null)
+	for slot: int in mini(members.size(), Gen2SaveBox.CAPACITY):
+		box.slots[slot] = members[slot]
+
+
 static func _candidate(save: Gen2SaveData, data: GameData) -> Dictionary:
 	if save == null or data == null:
 		return _failure(&"missing_save_context")

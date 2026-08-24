@@ -69,6 +69,25 @@ const CREDITS_BLOCK_INDEXES: int = 4
 const TRAINER_CLASS: int = 1
 const TRAINER_SPECIES: int = 16
 const TRAINER_SPRITE: int = 1
+## The decoration table's own length here, which is one past the second ornament
+## rather than the cartridge's fifty-three.
+const DECORATION_ROWS: int = 32
+## [id, action, event flag, block or sprite] per row the fixture fills. The ids
+## and the actions are the source's; the flags are `EVENT_DECO_*` and the last
+## column is a block for the first four categories and a sprite for the rest.
+const DECORATION_FIXTURE: Array[Array] = [
+	[1, 2, 0, 0], [2, 1, 676, 0x1B],
+	[6, 4, 0, 0], [7, 3, 680, 0x08],
+	[11, 6, 0, 0], [12, 5, 684, 0x20],
+	[15, 8, 0, 0], [16, 7, 687, 0x1F],
+	[20, 10, 0, 0], [21, 9, 691, 0x5C],
+	[25, 12, 0, 0], [26, 11, 719, 0x33],
+	[29, 14, 0, 0], [30, 13, 695, 0x8E], [31, 13, 696, 0x34],
+]
+## The two the fixture's own tests reach for by name.
+const DECO_FEATHERY_BED: int = 2
+const DECO_PIKACHU_DOLL: int = 30
+const DECO_SURF_PIKACHU_DOLL: int = 31
 
 
 ## Every caller but the Gold/Silver profile tests uses the default id, so the
@@ -96,6 +115,7 @@ static func build(game_id: StringName = GAME_ID) -> GameData:
 	_write_move_deleter_text(manifest)
 	_write_day_care_text(manifest)
 	_write_pokecenter_pc(manifest)
+	_write_decorations(manifest)
 	_write_unown_words(manifest)
 	_write_unown_puzzle(directory, manifest)
 	_write_slots(directory, manifest)
@@ -667,6 +687,25 @@ const SLOT_REELS: Array = [
 		0x04, 0x08, 0x10, 0x14, 0x0C, 0x00, 0x0C, 0x08,
 	],
 ]
+
+
+## `DecorationAttributes` in the shape a real cache carries: the seven category
+## headers at the ids the source gives them, one decoration behind each, and the
+## ornament category's second member, since two on one category is what
+## `DecoAction_AskWhichSide` and the CANCEL row's own cut-off need. The names are
+## the fixture's own.
+static func _write_decorations(manifest: Dictionary) -> void:
+	var attributes: Array = []
+	var names: Array = []
+	for deco: int in DECORATION_ROWS:
+		attributes.append({"type": 1, "name": deco, "action": 0, "flag": 0, "sprite": 0})
+		names.append("DECO%d" % deco)
+	for row: Array in DECORATION_FIXTURE:
+		attributes[int(row[0])] = {
+			"type": 1, "name": int(row[0]), "action": int(row[1]),
+			"flag": int(row[2]), "sprite": int(row[3]),
+		}
+	manifest["decorations"] = {"attributes": attributes, "names": names}
 
 
 static func _write_pokecenter_pc(manifest: Dictionary) -> void:

@@ -75,6 +75,37 @@ func test_mart_purchase_refuses_insufficient_money_without_mutation() -> void:
 	assert_eq(_save.world.world_state.money(), 500)
 
 
+## `SellMenu.okay_to_sell`: the stack leaves the pack and `GiveMoney` puts
+## `Sell_HalvePrice`'s answer in, which halves the multiplied total rather than
+## each unit's price.
+func test_mart_sale_pays_half_the_multiplied_price_and_empties_the_stack() -> void:
+	_world.state.apply_changes({}, {}, {"items": {7: 3}})
+	assert_eq(Gen2WorldMartHost.sell_price(_data, 7, 1), 60)
+	assert_eq(Gen2WorldMartHost.sell_price(_data, 7, 3), 180)
+
+	var sold: Dictionary = Gen2WorldMartHost.sell(_world, _save, 7, 3, false)
+	assert_true(bool(sold["ok"]), str(sold))
+	assert_eq(int(sold["total"]), 180)
+	assert_eq(_world.state.item_quantity(7), 0)
+	assert_eq(_world.state.money(), 680)
+	assert_eq(_save.world.world_state.money(), 680)
+
+
+## `.try_sell`'s `_CheckTossableItem` refusal, and the quantity guard in front
+## of it, neither of which touches the world.
+func test_mart_sale_refuses_an_untossable_item_and_an_impossible_quantity() -> void:
+	var before: Dictionary = _world.snapshot().to_dict()
+	var too_many: Dictionary = Gen2WorldMartHost.sell(_world, _save, 7, 9, false)
+	assert_eq(StringName(too_many["reason"]), &"invalid_sell_quantity")
+
+	_world.state.apply_changes({}, {}, {"items": {8: 1}})
+	assert_false(Gen2WorldMartHost.can_sell(_data, 8))
+	var refused: Dictionary = Gen2WorldMartHost.sell(_world, _save, 8, 1, false)
+	assert_eq(StringName(refused["reason"]), &"item_cannot_be_sold")
+	_world.state.apply_changes({}, {}, {"items": {8: 0}})
+	assert_eq(_world.snapshot().to_dict(), before)
+
+
 func test_mart_dialog_resolves_all_imported_shop_variants() -> void:
 	var standard: Dictionary = Gen2WorldMartHost.resolve_mart(
 		_data, Gen2WorldMartHost.MARTTYPE_STANDARD, 0
@@ -494,6 +525,10 @@ func _write_services_at(directory: String) -> void:
 		if int(raw.get("number", 0)) == 7:
 			raw["name"] = "ITEM7"
 			raw["price"] = 120
+		## `ITEMATTR_PERMISSIONS`' can't-toss bit, which is what `SellMenu`'s
+		## `_CheckTossableItem` refuses a key item with.
+		if int(raw.get("number", 0)) == 8:
+			raw["permissions"] = RomLayout.ITEM_ATTRIBUTE_CANT_TOSS
 	RomCache.write_json(RomCache.items_path(directory), items)
 	RomCache.write_json(RomCache.world_marts_path(directory), {
 		"marts": [{"index": 0, "bank": Fixture.BANK, "address": 0x4000, "items": [7, 8]}],
