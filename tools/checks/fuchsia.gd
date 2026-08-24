@@ -155,7 +155,8 @@ func _verify_chain(data: GameData, game_id: StringName, crystal: bool) -> void:
 			]
 		)
 		print("%s %s: %d cells, %d sight lines, %s owed." % [
-			game_id, label, region.size(), lines.size(), owed if not owed.is_empty() else "none",
+			game_id, label, region.size(), lines.size(),
+			str(owed) if not owed.is_empty() else "none",
 		])
 
 

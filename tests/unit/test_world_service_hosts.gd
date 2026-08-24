@@ -436,8 +436,8 @@ func test_name_rater_special_stages_a_request_carrying_all_ten_boxes() -> void:
 	assert_true(resolved["ok"], JSON.stringify(resolved))
 	var lines: Dictionary = resolved["data"]["name_rater_text"]
 	assert_eq(lines.size(), RomLayout.NAME_RATER_TEXT_ORDER.size())
-	for name: String in RomLayout.NAME_RATER_TEXT_ORDER:
-		assert_false(String(lines[name]).is_empty(), name)
+	for row_name: String in RomLayout.NAME_RATER_TEXT_ORDER:
+		assert_false(String(lines[row_name]).is_empty(), row_name)
 
 
 ## A cache imported before format 76 carries none of the boxes, and inventing
@@ -500,8 +500,8 @@ func test_move_deleter_special_stages_a_request_carrying_all_eight_boxes() -> vo
 	assert_true(resolved["ok"], JSON.stringify(resolved))
 	var lines: Dictionary = resolved["data"]["move_deleter_text"]
 	assert_eq(lines.size(), RomLayout.MOVE_DELETER_TEXT_ORDER.size())
-	for name: String in RomLayout.MOVE_DELETER_TEXT_ORDER:
-		assert_false(String(lines[name]).is_empty(), name)
+	for row_name: String in RomLayout.MOVE_DELETER_TEXT_ORDER:
+		assert_false(String(lines[row_name]).is_empty(), row_name)
 
 
 func test_move_deleter_refuses_a_cache_without_his_boxes() -> void:

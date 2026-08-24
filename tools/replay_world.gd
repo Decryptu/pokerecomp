@@ -209,7 +209,7 @@ func _check_route(data: GameData, route: Dictionary, requested_frames: int) -> i
 	if not bool(recorded.get("ok", false)):
 		_report(data, route, "open", String(recorded.get("reason", "unavailable")))
 		return 1
-	var log: Array = recorded["log"]
+	var log_lines: Array = recorded["log"]
 	var expected: String = recorded["state"]
 	## A route the input never moved would pass every comparison below on a world
 	## that did nothing, which is the same trap `_drain_story`'s require_events
@@ -243,7 +243,7 @@ func _check_route(data: GameData, route: Dictionary, requested_frames: int) -> i
 			host_fps = 30.0
 		elif label == "144fps":
 			host_fps = 144.0
-		var run: Dictionary = await _run(data, route, seed_value, frames, log, false, host_fps)
+		var run: Dictionary = await _run(data, route, seed_value, frames, log_lines, false, host_fps)
 		if not bool(run.get("ok", false)):
 			_report(data, route, label, String(run.get("reason", "unavailable")))
 			failures += 1
@@ -252,12 +252,12 @@ func _check_route(data: GameData, route: Dictionary, requested_frames: int) -> i
 			_report(data, route, label, _first_difference(expected, String(run["state"])))
 			failures += 1
 			continue
-		if label == "replay" and JSON.stringify(run["log"]) != JSON.stringify(log):
+		if label == "replay" and JSON.stringify(run["log"]) != JSON.stringify(log_lines):
 			_report(data, route, label, "the replay consumed a different log")
 			failures += 1
 			continue
 		print("%-8s %-16s %-7s %d frames, %d input entries%s" % [
-			data.id, route["name"], label, frames, log.size(),
+			data.id, route["name"], label, frames, log_lines.size(),
 			", %d battles" % int(run["battles"]) if int(run["battles"]) > 0 else "",
 		])
 	return failures
@@ -271,7 +271,7 @@ func _run(
 	route: Dictionary,
 	seed_value: int,
 	frames: int,
-	log: Array,
+	log_lines: Array,
 	recording: bool,
 	host_fps: float = 0.0,
 	adaptive: bool = false,
@@ -314,7 +314,7 @@ func _run(
 	var initial: String = JSON.stringify(screen._world.snapshot().to_dict(), "\t")
 	var initial_money: int = screen._world.state.money()
 
-	screen.replay_input(log)
+	screen.replay_input(log_lines)
 	if recording:
 		screen.record_input()
 	var battles: int = 0
@@ -350,7 +350,7 @@ func _run(
 		"outcome": outcome,
 		"money": money,
 		"world": world,
-		"log": log if not recording else consumed,
+		"log": log_lines if not recording else consumed,
 	}
 
 
@@ -444,20 +444,20 @@ func _program(seed_value: int, frames: int, errand: bool = false) -> Array:
 		return _errand_program(frames)
 	var random := RandomNumberGenerator.new()
 	random.seed = seed_value
-	var log: Array = []
+	var log_lines: Array = []
 	var frame: int = 1
 	while frame <= frames:
 		if random.randi_range(0, 9) == 0:
-			log.append({"frame": frame, "kind": "press", "button": Gen2Button.A})
+			log_lines.append({"frame": frame, "kind": "press", "button": Gen2Button.A})
 			frame += random.randi_range(2, 8)
 			continue
 		var direction: int = DIRECTIONS[random.randi_range(0, DIRECTIONS.size() - 1)]
 		for _held: int in random.randi_range(4, 40):
 			if frame > frames:
 				break
-			log.append({"frame": frame, "kind": "hold", "button": direction})
+			log_lines.append({"frame": frame, "kind": "hold", "button": direction})
 			frame += 1
-	return log
+	return log_lines
 
 
 ## One walk step in the hardware frames this tool spends, which is the pass
@@ -476,24 +476,24 @@ func _walk_frames() -> int:
 ## the walk rate is, and the turn into the counter is a press the wall refuses to
 ## move on.
 func _errand_program(frames: int) -> Array:
-	var log: Array = []
+	var log_lines: Array = []
 	var walk: int = mini(frames, (MART_DOOR.y - MART_COUNTER.y) * _walk_frames())
 	for frame: int in range(1, walk + 1):
-		log.append({"frame": frame, "kind": "hold", "button": Gen2Button.UP})
+		log_lines.append({"frame": frame, "kind": "hold", "button": Gen2Button.UP})
 	## Clear of the walk rather than up against it: `move_player` refuses a press
 	## while the last step is still in flight, and a turn that is refused leaves
 	## the player facing the wall behind the counter instead of the clerk.
 	if walk + _walk_frames() * 3 <= frames:
-		log.append({
+		log_lines.append({
 			"frame": walk + _walk_frames() * 3,
 			"kind": "press",
 			"button": Gen2Button.LEFT,
 		})
 	var frame: int = walk + _walk_frames() * 5
 	while frame <= frames:
-		log.append({"frame": frame, "kind": "press", "button": Gen2Button.A})
+		log_lines.append({"frame": frame, "kind": "press", "button": Gen2Button.A})
 		frame += 8
-	return log
+	return log_lines
 
 
 ## `String.hash()` moves by one between two names that differ in their last

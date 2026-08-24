@@ -29,7 +29,7 @@ func after_each() -> void:
 ## beats and the two pic moves are real frame counts, so a test drives them
 ## rather than skipping them; there is no clock in a GUT run.
 func _settle(limit: int = 40) -> void:
-	for _pass: int in limit:
+	for _step: int in limit:
 		if _screen.animation_frames_left() == 0:
 			return
 		_screen.advance_frames(_screen.animation_frames_left())
@@ -244,7 +244,7 @@ func test_a_female_intro_takes_the_female_default() -> void:
 	add_child_autofree(female)
 	female.open(_data, Gen2SaveData.GENDER_FEMALE)
 	for _step: int in 200:
-		for _pass: int in 40:
+		for _frame: int in 40:
 			if female.animation_frames_left() == 0:
 				break
 			female.advance_frames(female.animation_frames_left())
@@ -253,7 +253,7 @@ func test_a_female_intro_takes_the_female_default() -> void:
 		female.handle_button(Gen2Button.A)
 	female.handle_button(Gen2Button.START)
 	female.handle_button(Gen2Button.A)
-	for _pass: int in 40:
+	for _step: int in 40:
 		female.advance_frames(female.animation_frames_left())
 	assert_eq(female.player_name(), Gen2OakSpeech.DEFAULT_FEMALE)
 

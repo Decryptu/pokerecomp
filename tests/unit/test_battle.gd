@@ -2528,12 +2528,12 @@ func test_struggling_counts_as_a_turn_even_though_it_spends_no_pp() -> void:
 ## settled.
 func test_a_quick_claw_can_beat_a_faster_pokemon_to_the_punch() -> void:
 	var claimed: int = 0
-	for seed: int in 200:
+	for seed_value: int in 200:
 		var battle: Gen2Battle = _battle(
 			_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE]),
 			_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE])
 		)
-		battle.rng.seed = seed
+		battle.rng.seed = seed_value
 		battle.mon(Gen2Battle.PLAYER).item = Fixture.QUICK_CLAW
 
 		if battle.order({Gen2Battle.PLAYER: Fixture.TACKLE, Gen2Battle.ENEMY: Fixture.TACKLE})[0] \
@@ -2550,8 +2550,8 @@ func test_a_quick_claw_never_overrides_priority() -> void:
 		_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE])
 	)
 	battle.mon(Gen2Battle.PLAYER).item = Fixture.QUICK_CLAW
-	for seed: int in 50:
-		battle.rng.seed = seed
+	for seed_value: int in 50:
+		battle.rng.seed = seed_value
 		# Counter is priority 0 against Tackle's 1, so the player is last however
 		# the claw rolls.
 		var acting: Array = battle.order({
@@ -2565,12 +2565,12 @@ func test_a_quick_claw_never_overrides_priority() -> void:
 func test_two_quick_claws_roll_the_enemys_first() -> void:
 	var enemy_first: int = 0
 	var player_first: int = 0
-	for seed: int in 300:
+	for seed_value: int in 300:
 		var battle: Gen2Battle = _battle(
 			_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE]),
 			_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
 		)
-		battle.rng.seed = seed
+		battle.rng.seed = seed_value
 		battle.mon(Gen2Battle.PLAYER).item = Fixture.QUICK_CLAW
 		battle.mon(Gen2Battle.ENEMY).item = Fixture.QUICK_CLAW
 
@@ -2593,8 +2593,8 @@ func test_no_quick_claw_leaves_the_order_to_speed() -> void:
 		_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE]),
 		_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE])
 	)
-	for seed: int in 30:
-		battle.rng.seed = seed
+	for seed_value: int in 30:
+		battle.rng.seed = seed_value
 		assert_eq(
 			battle.order({
 				Gen2Battle.PLAYER: Fixture.TACKLE, Gen2Battle.ENEMY: Fixture.TACKLE,
@@ -3143,8 +3143,8 @@ func test_an_x_accuracy_makes_the_enemys_moves_stop_missing() -> void:
 	Gen2AIItems.apply(battle.enemy, Gen2AIItems.X_ACCURACY)
 
 	var landed: int = 0
-	for seed: int in 32:
-		battle.rng.seed = seed
+	for seed_value: int in 32:
+		battle.rng.seed = seed_value
 		battle.player.substatus = Gen2Substatus.NONE
 		battle.player.confusion_turns = 0
 		# Both back to full, or Geodude faints partway through; and its PP back,

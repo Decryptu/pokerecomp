@@ -33,6 +33,9 @@ func _initialize() -> void:
 		push_error("Usage: -s tools/preview_overworld_sprites.gd -- <game> <output.png>")
 		quit(1)
 		return
+	if Gen2ToolPath.refuses(args[1]):
+		quit(2)
+		return
 	var data: GameData = GameData.open(StringName(args[0]))
 	if data == null:
 		push_error("No cache for %s. Import roms/%s.gbc first." % [args[0], args[0]])

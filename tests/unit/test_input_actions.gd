@@ -12,7 +12,7 @@ func after_each() -> void:
 
 func _key(code: int) -> InputEventKey:
 	var event := InputEventKey.new()
-	event.physical_keycode = code
+	event.physical_keycode = code as Key
 	event.pressed = true
 	return event
 

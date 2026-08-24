@@ -338,13 +338,13 @@ func test_the_counter_runs_down_a_step_at_a_time_and_offers_an_egg() -> void:
 	Gen2WorldDayCare.init_breeding(state, _data, "RED", 1, _seeded(9))
 	var random: RandomNumberGenerator = _seeded(4)
 	var steps: int = state.steps_to_egg()
-	for _pass: int in steps - 1:
+	for _step: int in steps - 1:
 		assert_false(Gen2WorldDayCare.step(state, _data, random))
 	assert_eq(state.steps_to_egg(), 1)
 	# The pass that empties the counter re-rolls it and rolls for the egg; it may
 	# refuse, so the walk runs until one is offered rather than asserting on one.
 	var offered: bool = false
-	for _pass: int in 4000:
+	for _step: int in 4000:
 		if Gen2WorldDayCare.step(state, _data, random):
 			offered = true
 			break

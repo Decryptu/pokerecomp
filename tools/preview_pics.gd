@@ -42,6 +42,9 @@ func _initialize() -> void:
 
 	var game: StringName = StringName(positional[0])
 	var out_path: String = positional[1]
+	if Gen2ToolPath.refuses(out_path):
+		quit(2)
+		return
 	var atlas_name: String = positional[2] if positional.size() > 2 else "front"
 
 	var directory: String = _find_cache(game)
@@ -50,15 +53,15 @@ func _initialize() -> void:
 		quit(1)
 		return
 
-	var manifest: Dictionary = RomCache.read_manifest(directory)
-	var atlases: Dictionary = manifest.get("atlases", {})
-	var sheets: Dictionary = manifest.get("tiles", {})
+	var _manifest: Dictionary = RomCache.read_manifest(directory)
+	var atlases: Dictionary = _manifest.get("atlases", {})
+	var sheets: Dictionary = _manifest.get("tiles", {})
 
 	var image: Image = null
 	if sheets.has(atlas_name):
 		image = _render_sheet(directory, sheets[atlas_name], atlas_name)
 	elif atlases.has(atlas_name):
-		image = _render(directory, manifest, atlases[atlas_name], atlas_name, shiny)
+		image = _render(directory, _manifest, atlases[atlas_name], atlas_name, shiny)
 	else:
 		push_error("Nothing named %s in this cache." % atlas_name)
 		quit(1)
@@ -126,7 +129,7 @@ func _render_sheet(directory: String, sheet: Dictionary, name: String) -> Image:
 
 
 func _render(
-	directory: String, manifest: Dictionary, atlas: Dictionary, name: String, shiny: bool
+	directory: String, _manifest: Dictionary, atlas: Dictionary, name: String, shiny: bool
 ) -> Image:
 	var indices: PackedByteArray = RomCache.read_indices(RomCache.pic_path(directory, name))
 	var width: int = int(atlas["width"])

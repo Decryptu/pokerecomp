@@ -66,19 +66,19 @@ const SHADOW_OAM_SPRITES: int = 40
 func run(r: RefCounted) -> void:
 	_r = r
 	for game_id: StringName in _r.GAME_IDS:
-		var data: GameData = GameData.open(game_id)
-		if data == null:
+		var _data: GameData = GameData.open(game_id)
+		if _data == null:
 			_r.fail("%s cache is unavailable. Import roms/%s.gbc first." % [game_id, game_id])
 			continue
-		var crystal: bool = Gen2WorldState.is_crystal_profile(data)
-		_verify_landmarks(game_id, data, crystal)
-		_verify_regions(game_id, data)
-		_verify_palettes(game_id, data, crystal)
-		_verify_cursor_walk(game_id, data, crystal)
-		_verify_page(game_id, data, crystal)
-		_verify_nests(game_id, data, crystal)
-		_verify_flypoints(game_id, data)
-		_verify_cards(game_id, data)
+		var crystal: bool = Gen2WorldState.is_crystal_profile(_data)
+		_verify_landmarks(game_id, _data, crystal)
+		_verify_regions(game_id, _data)
+		_verify_palettes(game_id, _data, crystal)
+		_verify_cursor_walk(game_id, _data, crystal)
+		_verify_page(game_id, _data, crystal)
+		_verify_nests(game_id, _data, crystal)
+		_verify_flypoints(game_id, _data)
+		_verify_cards(game_id, _data)
 
 
 ## `Flypoints` and `SpawnPoints` against the cache they were imported beside:
@@ -92,10 +92,10 @@ func run(r: RefCounted) -> void:
 ## per row reaches each of the region's twelve and comes back to where it
 ## started, and every cursor lands on a landmark the region map draws an icon
 ## for.
-func _verify_fly_walk(game_id: StringName, data: GameData) -> void:
-	var crystal: bool = Gen2WorldState.is_crystal_profile(data)
+func _verify_fly_walk(game_id: StringName, _data: GameData) -> void:
+	var crystal: bool = Gen2WorldState.is_crystal_profile(_data)
 	var visited: Array[int] = []
-	for index: int in data.flypoint_count():
+	for index: int in _data.flypoint_count():
 		visited.append(index)
 	for in_kanto: bool in [false, true]:
 		var map: Gen2TownMap = Gen2TownMap.fly(
@@ -105,8 +105,8 @@ func _verify_fly_walk(game_id: StringName, data: GameData) -> void:
 		var seen: Dictionary = {}
 		for _press: int in RomLayout.KANTO_FLYPOINT:
 			seen[map.cursor] = true
-			var landmark: int = int(data.flypoint(map.cursor).get("landmark", -1))
-			var point: Dictionary = data.landmark(landmark)
+			var landmark: int = int(_data.flypoint(map.cursor).get("landmark", -1))
+			var point: Dictionary = _data.landmark(landmark)
 			_r.check(
 				not point.is_empty(),
 				"%s: flypoint %d names landmark %d, which the map cannot draw." % [
@@ -129,29 +129,29 @@ func _verify_fly_walk(game_id: StringName, data: GameData) -> void:
 		)
 
 
-func _verify_flypoints(game_id: StringName, data: GameData) -> void:
+func _verify_flypoints(game_id: StringName, _data: GameData) -> void:
 	if not _r.check(
-		data.flypoint_count() == RomLayout.FLYPOINT_COUNT,
+		_data.flypoint_count() == RomLayout.FLYPOINT_COUNT,
 		"%s: %d flypoints, not %d." % [
-			game_id, data.flypoint_count(), RomLayout.FLYPOINT_COUNT,
+			game_id, _data.flypoint_count(), RomLayout.FLYPOINT_COUNT,
 		]
 	):
 		return
 	if not _r.check(
-		data.spawn_point_count() == RomLayout.SPAWN_COUNT,
+		_data.spawn_point_count() == RomLayout.SPAWN_COUNT,
 		"%s: %d spawn points, not %d." % [
-			game_id, data.spawn_point_count(), RomLayout.SPAWN_COUNT,
+			game_id, _data.spawn_point_count(), RomLayout.SPAWN_COUNT,
 		]
 	):
 		return
 
 	var seen: Dictionary = {}
-	for index: int in data.flypoint_count():
-		var row: Dictionary = data.flypoint(index)
+	for index: int in _data.flypoint_count():
+		var row: Dictionary = _data.flypoint(index)
 		var landmark: int = int(row["landmark"])
 		var spawn: int = int(row["spawn"])
 		_r.check(
-			landmark > 0 and landmark < data.landmark_count(),
+			landmark > 0 and landmark < _data.landmark_count(),
 			"%s: flypoint %d names landmark %d, which this cartridge does not ship." % [
 				game_id, index, landmark,
 			]
@@ -161,9 +161,9 @@ func _verify_flypoints(game_id: StringName, data: GameData) -> void:
 			"%s: flypoint %d repeats landmark %d." % [game_id, index, landmark]
 		)
 		seen[landmark] = true
-		var point: Dictionary = data.spawn_point(spawn)
+		var point: Dictionary = _data.spawn_point(spawn)
 		_r.check(
-			not point.is_empty() and data.world_map(
+			not point.is_empty() and _data.world_map(
 				int(point["map_group"]), int(point["map_number"])
 			) != null,
 			"%s: flypoint %d lands on spawn %d, which names no map." % [
@@ -173,88 +173,88 @@ func _verify_flypoints(game_id: StringName, data: GameData) -> void:
 		# Johto first, Kanto behind it: `FlyMap` picks a region's cursor range
 		# off that split alone.
 		_r.check(
-			(landmark < Gen2WorldRadio.kanto_landmark(Gen2WorldState.is_crystal_profile(data)))
+			(landmark < Gen2WorldRadio.kanto_landmark(Gen2WorldState.is_crystal_profile(_data)))
 				== (index < RomLayout.KANTO_FLYPOINT),
 			"%s: flypoint %d is on the wrong side of the region split." % [game_id, index]
 		)
-	for index: int in data.spawn_point_count():
-		var point: Dictionary = data.spawn_point(index)
+	for index: int in _data.spawn_point_count():
+		var point: Dictionary = _data.spawn_point(index)
 		_r.check(
-			data.world_map(int(point["map_group"]), int(point["map_number"])) != null,
+			_data.world_map(int(point["map_group"]), int(point["map_number"])) != null,
 			"%s: spawn %d names map %d.%d, which this cartridge does not ship." % [
 				game_id, index, int(point["map_group"]), int(point["map_number"]),
 			]
 		)
-	_verify_fly_walk(game_id, data)
+	_verify_fly_walk(game_id, _data)
 	print("%s: %d flypoints over %d spawn points, %d of them Johto." % [
-		game_id, data.flypoint_count(), data.spawn_point_count(), RomLayout.KANTO_FLYPOINT,
+		game_id, _data.flypoint_count(), _data.spawn_point_count(), RomLayout.KANTO_FLYPOINT,
 	])
 
 
-func _verify_landmarks(game_id: StringName, data: GameData, crystal: bool) -> void:
+func _verify_landmarks(game_id: StringName, _data: GameData, crystal: bool) -> void:
 	var wanted: int = RomLayout.LANDMARK_COUNT if crystal \
 		else RomLayout.LANDMARK_COUNT_GOLD_SILVER
 	if not _r.check(
-		data.landmark_count() == wanted,
-		"%s: %d landmarks, expected %d." % [game_id, data.landmark_count(), wanted]
+		_data.landmark_count() == wanted,
+		"%s: %d landmarks, expected %d." % [game_id, _data.landmark_count(), wanted]
 	):
 		return
 	_r.check(
-		data.landmark_name(LANDMARK_SPECIAL) == "SPECIAL",
-		"%s: landmark 0 is %s, not SPECIAL." % [game_id, data.landmark_name(LANDMARK_SPECIAL)]
+		_data.landmark_name(LANDMARK_SPECIAL) == "SPECIAL",
+		"%s: landmark 0 is %s, not SPECIAL." % [game_id, _data.landmark_name(LANDMARK_SPECIAL)]
 	)
 	# The whole profile split, as one row: Crystal inserts BATTLE TOWER after the
 	# Lighthouse and everything past it is one higher.
 	_r.check(
-		data.landmark_name(BATTLE_TOWER - 1) == LIGHTHOUSE_NAME,
+		_data.landmark_name(BATTLE_TOWER - 1) == LIGHTHOUSE_NAME,
 		"%s: landmark %d is %s, not %s." % [
-			game_id, BATTLE_TOWER - 1, data.landmark_name(BATTLE_TOWER - 1), LIGHTHOUSE_NAME,
+			game_id, BATTLE_TOWER - 1, _data.landmark_name(BATTLE_TOWER - 1), LIGHTHOUSE_NAME,
 		]
 	)
 	var after: String = BATTLE_TOWER_NAME if crystal else ROUTE_40_NAME
 	_r.check(
-		data.landmark_name(BATTLE_TOWER) == after,
+		_data.landmark_name(BATTLE_TOWER) == after,
 		"%s: landmark %d is %s, not %s." % [
-			game_id, BATTLE_TOWER, data.landmark_name(BATTLE_TOWER), after,
+			game_id, BATTLE_TOWER, _data.landmark_name(BATTLE_TOWER), after,
 		]
 	)
 	_r.check(
-		data.landmark_name(data.landmark_count() - 1) == "FAST SHIP",
+		_data.landmark_name(_data.landmark_count() - 1) == "FAST SHIP",
 		"%s: the last landmark is %s, not FAST SHIP." % [
-			game_id, data.landmark_name(data.landmark_count() - 1),
+			game_id, _data.landmark_name(_data.landmark_count() - 1),
 		]
 	)
 	_r.check(
-		_breaks(data, BROKEN_NAME),
+		_breaks(_data, BROKEN_NAME),
 		"%s: landmark %d carries no line break." % [game_id, BROKEN_NAME]
 	)
 	_r.check(
-		not _breaks(data, UNBROKEN_NAME),
+		not _breaks(_data, UNBROKEN_NAME),
 		"%s: landmark %d carries a line break it should not." % [game_id, UNBROKEN_NAME]
 	)
-	for index: int in range(1, data.landmark_count()):
-		var entry: Dictionary = data.landmark(index)
+	for index: int in range(1, _data.landmark_count()):
+		var entry: Dictionary = _data.landmark(index)
 		var x: int = int(entry.get("x", -1))
 		var y: int = int(entry.get("y", -1))
 		if not _r.check(
 			x >= ICON_ORIGIN and x + ICON_ORIGIN <= Gen2Screen.WIDTH \
 				and y >= ICON_ORIGIN and y + ICON_ORIGIN <= Gen2Screen.HEIGHT,
 			"%s: landmark %d (%s) is at (%d,%d); its icon hangs off the screen." % [
-				game_id, index, data.landmark_name(index), x, y,
+				game_id, index, _data.landmark_name(index), x, y,
 			]
 		):
 			return
 
 
 ## Whether a landmark's name carries the `<BSP>` the region map breaks on.
-func _breaks(data: GameData, landmark: int) -> bool:
-	var codes: PackedByteArray = data.landmark(landmark).get("codes", PackedByteArray())
+func _breaks(_data: GameData, landmark: int) -> bool:
+	var codes: PackedByteArray = _data.landmark(landmark).get("codes", PackedByteArray())
 	return Gen2TownMapPage.NAME_BREAK_CODES[0] in codes
 
 
-func _verify_regions(game_id: StringName, data: GameData) -> void:
+func _verify_regions(game_id: StringName, _data: GameData) -> void:
 	for region: String in ["johto", "kanto"]:
-		var cells: PackedByteArray = data.town_map_region(region)
+		var cells: PackedByteArray = _data.town_map_region(region)
 		if not _r.check(
 			cells.size() == RomLayout.TOWN_MAP_REGION_CELLS,
 			"%s: the %s map is %d cells, expected %d." % [
@@ -270,9 +270,9 @@ func _verify_regions(game_id: StringName, data: GameData) -> void:
 				break
 
 
-func _verify_palettes(game_id: StringName, data: GameData, crystal: bool) -> void:
+func _verify_palettes(game_id: StringName, _data: GameData, crystal: bool) -> void:
 	for slot: int in RomLayout.TOWN_MAP_PALETTES:
-		var colors: PackedColorArray = data.town_map_palette(slot)
+		var colors: PackedColorArray = _data.town_map_palette(slot)
 		if not _r.check(
 			colors.size() == RomLayout.TOWN_MAP_PALETTE_COLORS,
 			"%s: region palette %d has %d colours." % [game_id, slot, colors.size()]
@@ -284,13 +284,13 @@ func _verify_palettes(game_id: StringName, data: GameData, crystal: bool) -> voi
 		)
 	# `TownMapPals`' table stops at $60; the font above it takes palette 0.
 	_r.check(
-		data.town_map_palette_of(RomLayout.TOWN_MAP_PALETTE_MAP_LIMIT) == 0,
+		_data.town_map_palette_of(RomLayout.TOWN_MAP_PALETTE_MAP_LIMIT) == 0,
 		"%s: a tile past the palette map is not on palette 0." % game_id
 	)
 	# `FemalePokegearPals` differs from the male run in its city palette alone,
 	# and only Crystal ships one.
-	var male: PackedColorArray = data.town_map_palette(Gen2TownMapPage.CITY_PALETTE)
-	var female: PackedColorArray = data.town_map_palette(Gen2TownMapPage.CITY_PALETTE, true)
+	var male: PackedColorArray = _data.town_map_palette(Gen2TownMapPage.CITY_PALETTE)
+	var female: PackedColorArray = _data.town_map_palette(Gen2TownMapPage.CITY_PALETTE, true)
 	_r.check(
 		(male != female) == crystal,
 		"%s: the female city palette %s the male one." % [
@@ -301,7 +301,7 @@ func _verify_palettes(game_id: StringName, data: GameData, crystal: bool) -> voi
 
 ## `.pressed_up` and `.pressed_down` walk the whole window and wrap at both ends,
 ## so a full lap visits every landmark in it exactly once and comes home.
-func _verify_cursor_walk(game_id: StringName, data: GameData, crystal: bool) -> void:
+func _verify_cursor_walk(game_id: StringName, _data: GameData, crystal: bool) -> void:
 	for opened: bool in [false, true]:
 		for landmark: int in [Gen2TownMap.JOHTO_LANDMARK, Gen2WorldRadio.kanto_landmark(crystal)]:
 			var map := Gen2TownMap.create(landmark, crystal, opened)
@@ -340,8 +340,8 @@ func _verify_cursor_walk(game_id: StringName, data: GameData, crystal: bool) -> 
 
 ## The page against the real art: every tile a region map or a frame names has to
 ## resolve out of the two sheets, and both screens have to compose.
-func _verify_page(game_id: StringName, data: GameData, crystal: bool) -> void:
-	var page: Gen2TownMapPage = Gen2TownMapPage.from_data(data)
+func _verify_page(game_id: StringName, _data: GameData, crystal: bool) -> void:
+	var page: Gen2TownMapPage = Gen2TownMapPage.from_data(_data)
 	if not _r.check(page != null and page.ready(), "%s: the region map art is missing." % game_id):
 		return
 	# The two objects the screen draws come off strips of their own.
@@ -350,7 +350,7 @@ func _verify_page(game_id: StringName, data: GameData, crystal: bool) -> void:
 		["fast_ship", RomLayout.FAST_SHIP_TILES],
 	]:
 		_r.check(
-			data.tile_indices(String(sheet[0])).size()
+			_data.tile_indices(String(sheet[0])).size()
 				== int(sheet[1]) * Gen2Tiles.TILE_PIXELS,
 			"%s: the %s strip is not %d tiles." % [game_id, sheet[0], int(sheet[1])]
 		)
@@ -362,12 +362,12 @@ func _verify_page(game_id: StringName, data: GameData, crystal: bool) -> void:
 			var landmark: int = BROKEN_NAME if region == "johto" \
 				else Gen2WorldRadio.kanto_landmark(crystal)
 			var map: PackedInt32Array = page.tilemap(
-				data.town_map_region(region),
-				data.landmark(landmark).get("codes", PackedByteArray()),
+				_data.town_map_region(region),
+				_data.landmark(landmark).get("codes", PackedByteArray()),
 				screen,
 				[&"map", &"phone", &"radio"] as Array,
 			)
-			var image: Image = page.image(data, map)
+			var image: Image = page.image(_data, map)
 			_r.check(
 				image.get_width() == Gen2Screen.WIDTH \
 					and image.get_height() == Gen2Screen.HEIGHT,
@@ -378,19 +378,19 @@ func _verify_page(game_id: StringName, data: GameData, crystal: bool) -> void:
 ## `FindNest` over the whole species range, which is the only sweep that can say
 ## the merged encounter tables kept their regions: a Johto walk that reached a
 ## Kanto row would put a nest on the wrong map.
-func _verify_nests(game_id: StringName, data: GameData, crystal: bool) -> void:
+func _verify_nests(game_id: StringName, _data: GameData, crystal: bool) -> void:
 	_r.check(
-		data.tile_indices("dex_nest_icon").size()
+		_data.tile_indices("dex_nest_icon").size()
 			== RomLayout.DEX_NEST_ICON_TILES * Gen2Tiles.TILE_PIXELS,
 		"%s: the dex nest icon is not one tile." % game_id
 	)
 	var kanto_first: int = Gen2WorldRadio.kanto_landmark(crystal)
-	var roaming: Array = data.world_roaming_mons()
+	var roaming: Array = _data.world_roaming_mons()
 	var deepest: int = 0
 	for species: int in range(1, RomLayout.SPECIES_COUNT + 1):
 		for region: int in Gen2TownMap.REGION_NAMES.size():
 			var list: Array = Gen2WorldEncounter.nests(
-				data, species, Gen2TownMap.region_name(region), roaming
+				_data, species, Gen2TownMap.region_name(region), roaming
 			)
 			deepest = maxi(deepest, list.size())
 			var seen: Dictionary = {}
@@ -419,17 +419,17 @@ func _verify_nests(game_id: StringName, data: GameData, crystal: bool) -> void:
 	for index: int in roaming.size():
 		var mon: Dictionary = roaming[index]
 		var species: int = int(mon["species"])
-		var map: Gen2WorldMap = data.world_map(int(mon["map_group"]), int(mon["map_number"]))
+		var map: Gen2WorldMap = _data.world_map(int(mon["map_group"]), int(mon["map_number"]))
 		var wanted: Array = [] if index >= Gen2WorldEncounter.ROAM_NEST_MONS \
 			else [map.location]
 		_r.check(
-			Gen2WorldEncounter.nests(data, species, "johto", roaming) == wanted,
+			Gen2WorldEncounter.nests(_data, species, "johto", roaming) == wanted,
 			"%s: roamer %d (species %d) does not nest on %s." % [
 				game_id, index, species, str(wanted),
 			]
 		)
 		_r.check(
-			Gen2WorldEncounter.nests(data, species, "kanto", roaming).is_empty(),
+			Gen2WorldEncounter.nests(_data, species, "kanto", roaming).is_empty(),
 			"%s: roamer %d (species %d) nests in Kanto." % [game_id, index, species]
 		)
 
@@ -438,15 +438,15 @@ func _verify_nests(game_id: StringName, data: GameData, crystal: bool) -> void:
 ## a whole screen out of the two sheets, both Pokegear texts as the source's own
 ## words, and the page drawing all three. The tilemaps and the texts are byte
 ## identical on the three cartridges, so the pins below are the same everywhere.
-func _verify_cards(game_id: StringName, data: GameData) -> void:
-	var page: Gen2TownMapPage = Gen2TownMapPage.from_data(data)
+func _verify_cards(game_id: StringName, _data: GameData) -> void:
+	var page: Gen2TownMapPage = Gen2TownMapPage.from_data(_data)
 	if not _r.check(
 		page != null and page.cards_ready(),
 		"%s: the cache holds no Pokegear card tilemaps." % game_id
 	):
 		return
 	for card: String in RomLayout.POKEGEAR_CARD_ORDER:
-		var cells: PackedByteArray = data.pokegear_card(StringName(card))
+		var cells: PackedByteArray = _data.pokegear_card(StringName(card))
 		if not _r.check(
 			cells.size() == RomLayout.POKEGEAR_CARD_CELLS,
 			"%s: the %s card is %d cells, wanted %d." % [
@@ -462,7 +462,7 @@ func _verify_cards(game_id: StringName, data: GameData) -> void:
 			):
 				break
 	for pin: Array in CARD_PINS:
-		var cells: PackedByteArray = data.pokegear_card(StringName(pin[0]))
+		var cells: PackedByteArray = _data.pokegear_card(StringName(pin[0]))
 		var at: Vector2i = pin[1]
 		var cell: int = int(cells[at.y * Gen2TownMapPage.COLUMNS + at.x])
 		_r.check(
@@ -473,9 +473,9 @@ func _verify_cards(game_id: StringName, data: GameData) -> void:
 		)
 	for name: String in CARD_TEXTS:
 		_r.check(
-			data.pokegear_text(name) == String(CARD_TEXTS[name]),
+			_data.pokegear_text(name) == String(CARD_TEXTS[name]),
 			"%s: Pokegear text %s reads \"%s\"." % [
-				game_id, name, data.pokegear_text(name).replace("\n", "|"),
+				game_id, name, _data.pokegear_text(name).replace("\n", "|"),
 			]
 		)
 	## `PrintHoursMins` and `_GearTodayText` on the card the cartridge draws

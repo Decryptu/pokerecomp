@@ -4721,9 +4721,9 @@ func test_a_writetext_says_whether_its_text_owes_a_press() -> void:
 		data.world_map(1, 1).events["coord_events"][0]["script"] = int(expected["script"])
 		var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(8, 6))
 		assert_eq(world.dispatch_script_events(Vector2i(7, 6))[0]["status"], &"waiting")
-		var pending: Dictionary = world.pending_script_input()
-		assert_eq(StringName(pending.get("type", &"")), &"text")
-		assert_eq(bool(pending.get("prompt", true)), bool(expected["prompt"]),
+		var waiting: Dictionary = world.pending_script_input()
+		assert_eq(StringName(waiting.get("type", &"")), &"text")
+		assert_eq(bool(waiting.get("prompt", true)), bool(expected["prompt"]),
 			"script %04X" % int(expected["script"]))
 
 
@@ -6478,7 +6478,7 @@ func test_a_warp_clears_the_turning_direction() -> void:
 
 
 func _finish_step(world: Gen2WorldAPI) -> void:
-	for _pass: int in 64:
+	for _step: int in 64:
 		if not world.player_step_in_progress():
 			return
 		world.advance_player_step_pass()
@@ -7578,7 +7578,7 @@ func test_a_catalogued_site_hands_over_what_a_mod_patched() -> void:
 	assert_eq(int(request["values"]["level"]), 3)
 
 	## The battle is answered and the give runs behind it, into its own
-	## acknowledge text, which is where the script is left waiting.
+	## acknowledge text, which is where the script is left pending.
 	var after: Array = world.complete_runtime_request({
 		"ok": true, "outcome": Gen2WorldBattleAdapter.OUTCOME_WON,
 	})

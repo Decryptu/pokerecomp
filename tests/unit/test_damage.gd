@@ -424,11 +424,11 @@ func test_the_scope_lens_makes_criticals_more_common() -> void:
 	var rng := RandomNumberGenerator.new()
 	var plain: int = 0
 	var lensed: int = 0
-	for seed: int in 2000:
-		rng.seed = seed
+	for seed_value: int in 2000:
+		rng.seed = seed_value
 		if Gen2Damage.roll_critical(_data.move(Fixture.TACKLE), rng):
 			plain += 1
-		rng.seed = seed
+		rng.seed = seed_value
 		if Gen2Damage.roll_critical(_data.move(Fixture.TACKLE), rng, false, true):
 			lensed += 1
 	assert_gt(lensed, plain * 3 / 2, "level 1 is 32 in 256 against level 0's 17")

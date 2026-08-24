@@ -97,19 +97,19 @@ static func directory(game_id: StringName = GAME_ID) -> String:
 
 
 static func build(game_id: StringName = GAME_ID) -> GameData:
-	var directory: String = directory(game_id)
-	var base: GameData = BattleFixture.build(directory)
+	var cache_directory: String = directory(game_id)
+	var base: GameData = BattleFixture.build(cache_directory)
 	assert(base != null)
 
-	var manifest: Dictionary = RomCache.read_manifest(directory)
+	var manifest: Dictionary = RomCache.read_manifest(cache_directory)
 	# GameData.id, and therefore Gen2WorldScriptRunner's command profile, comes
 	# straight from this field, so the trainer script bytes below must match it.
 	var crystal_commands: bool = game_id != &"gold" and game_id != &"silver"
-	_write_trainers(directory)
-	_write_world(directory, crystal_commands)
-	_write_overworld_graphics(directory)
-	_write_battle_graphics(directory, manifest)
-	_write_splash_graphics(directory, manifest, game_id == RomRegistry.CRYSTAL)
+	_write_trainers(cache_directory)
+	_write_world(cache_directory, crystal_commands)
+	_write_overworld_graphics(cache_directory)
+	_write_battle_graphics(cache_directory, manifest)
+	_write_splash_graphics(cache_directory, manifest, game_id == RomRegistry.CRYSTAL)
 	_write_menu_text(manifest)
 	_write_name_rater_text(manifest)
 	_write_move_deleter_text(manifest)
@@ -117,23 +117,23 @@ static func build(game_id: StringName = GAME_ID) -> GameData:
 	_write_pokecenter_pc(manifest)
 	_write_decorations(manifest)
 	_write_unown_words(manifest)
-	_write_unown_puzzle(directory, manifest)
-	_write_slots(directory, manifest)
-	_write_card_flip(directory, manifest)
-	_write_credits(directory, manifest, crystal_commands)
-	_write_name_input_chars(directory)
-	_write_intro_text(directory, crystal_commands)
+	_write_unown_puzzle(cache_directory, manifest)
+	_write_slots(cache_directory, manifest)
+	_write_card_flip(cache_directory, manifest)
+	_write_credits(cache_directory, manifest, crystal_commands)
+	_write_name_input_chars(cache_directory)
+	_write_intro_text(cache_directory, crystal_commands)
 	manifest["game_id"] = String(game_id)
 	manifest["sha1"] = SHA1
 	manifest["complete"] = true
-	RomCache.write_json(RomCache.manifest_path(directory), manifest)
-	return GameData.open_directory(directory)
+	RomCache.write_json(RomCache.manifest_path(cache_directory), manifest)
+	return GameData.open_directory(cache_directory)
 
 
 ## The four naming keyboards with the real block's shape and command rows, the
 ## letters generated. What is under a letter key decides nothing in
 ## `naming_screen.asm`; the command row and the row counts decide everything.
-static func _write_name_input_chars(directory: String) -> void:
+static func _write_name_input_chars(cache_directory: String) -> void:
 	var tables: Array = []
 	for table: int in RomLayout.NAME_INPUT_TABLE_ROWS.size():
 		var first: int = RomLayout.NAME_INPUT_LOWER_A if table < 2 else RomLayout.NAME_INPUT_UPPER_A
@@ -173,14 +173,14 @@ static func _write_name_input_chars(directory: String) -> void:
 					codes.append(Gen2Text.SPACE)
 			rows.append(codes)
 		tables.append(rows)
-	RomCache.write_json(RomCache.name_input_chars_path(directory), tables)
+	RomCache.write_json(RomCache.name_input_chars_path(cache_directory), tables)
 
 
 ## The intro's own texts, synthetic. Every rule that reads them cares only that
 ## a text is there and how many pages it wraps to, so the words are stand-ins.
 ## The gender text is Crystal only, the way `init_gender.asm` is: a Gold or
 ## Silver fixture leaves the key out and the gender screen refuses to open.
-static func _write_intro_text(directory: String, crystal: bool) -> void:
+static func _write_intro_text(cache_directory: String, crystal: bool) -> void:
 	var text: Dictionary = {
 		"oak_1": "Oak one.\n\nOak one page two.",
 		"oak_2": "Oak two.",
@@ -191,11 +191,11 @@ static func _write_intro_text(directory: String, crystal: bool) -> void:
 	}
 	if crystal:
 		text["gender"] = "Are you a boy?\nOr are you a girl?"
-	RomCache.write_json(RomCache.intro_text_path(directory), text)
+	RomCache.write_json(RomCache.intro_text_path(cache_directory), text)
 
 
-static func _write_trainers(directory: String) -> void:
-	RomCache.write_json(RomCache.trainers_path(directory), [{
+static func _write_trainers(cache_directory: String) -> void:
+	RomCache.write_json(RomCache.trainers_path(cache_directory), [{
 		"number": 1,
 		"name": "LEADER",
 		"palette": [0x1234, 0x5678],
@@ -220,7 +220,7 @@ static func _write_trainers(directory: String) -> void:
 	}])
 
 
-static func _write_world(directory: String, crystal_commands: bool = true) -> void:
+static func _write_world(cache_directory: String, crystal_commands: bool = true) -> void:
 	var blocks: Array = []
 	blocks.resize(MAP_WIDTH_BLOCKS * MAP_HEIGHT_BLOCKS)
 	blocks.fill(0)
@@ -305,7 +305,7 @@ static func _write_world(directory: String, crystal_commands: bool = true) -> vo
 		"x": HOME_WARP_CELL.x, "y": HOME_WARP_CELL.y, "destination": 1,
 		"map_group": MAP_GROUP, "map_number": MAP_NUMBER,
 	}]}
-	RomCache.write_json(RomCache.world_maps_path(directory), [map, home_map])
+	RomCache.write_json(RomCache.world_maps_path(cache_directory), [map, home_map])
 	var grass_slots: Array = []
 	for _slot: int in RomLayout.WILD_GRASS_SLOT_COUNT:
 		grass_slots.append({"level": 5, "species": TRAINER_SPECIES})
@@ -313,7 +313,7 @@ static func _write_world(directory: String, crystal_commands: bool = true) -> vo
 	var home_key: String = "%d:%d" % [
 		Gen2WorldSpawn.NEW_BARK_GROUP, Gen2WorldSpawn.PLAYERS_HOUSE_2F,
 	]
-	RomCache.write_json(RomCache.world_encounters_path(directory), {
+	RomCache.write_json(RomCache.world_encounters_path(cache_directory), {
 		"grass": {"1:1": {
 			"map": "1:1", "region": "johto", "rates": [255, 255, 255], "slots": grass_times,
 		}},
@@ -355,17 +355,17 @@ static func _write_world(directory: String, crystal_commands: bool = true) -> vo
 		raw.call(0x60), 3, # catchtutorial
 		raw.call(0x90), # end
 	]
-	RomCache.write_json(RomCache.world_scripts_path(directory), {
+	RomCache.write_json(RomCache.world_scripts_path(cache_directory), {
 		Gen2WorldScript.pointer_key(BANK, TRAINER_SCRIPT): script,
 		Gen2WorldScript.pointer_key(BANK, TUTORIAL_SCRIPT): tutorial_script,
 	})
-	RomCache.write_json(RomCache.world_text_path(directory), {
+	RomCache.write_json(RomCache.world_text_path(cache_directory), {
 		Gen2WorldScript.pointer_key(BANK, SEEN_TEXT): _text("RIVAL noticed you."),
 		Gen2WorldScript.pointer_key(BANK, WIN_TEXT): _text("YOU WON."),
 		Gen2WorldScript.pointer_key(BANK, LOSS_TEXT): _text("YOU LOST."),
 	})
-	RomCache.write_json(RomCache.world_standard_scripts_path(directory), {})
-	RomCache.write_json(RomCache.world_movements_path(directory), {})
+	RomCache.write_json(RomCache.world_standard_scripts_path(cache_directory), {})
+	RomCache.write_json(RomCache.world_movements_path(cache_directory), {})
 
 	var meta: Array = []
 	for tile: int in RomLayout.MAP_BLOCK_TILE_WIDTH * RomLayout.MAP_BLOCK_TILE_WIDTH:
@@ -373,7 +373,7 @@ static func _write_world(directory: String, crystal_commands: bool = true) -> vo
 	var palette_map: Array = []
 	palette_map.resize((RomLayout.TILESET_TILE_COUNT + 1) / 2)
 	palette_map.fill(0)
-	RomCache.write_json(RomCache.world_tilesets_path(directory), [{
+	RomCache.write_json(RomCache.world_tilesets_path(cache_directory), [{
 		"number": 0,
 		"block_count": 1,
 		"tile_count": RomLayout.TILESET_TILE_COUNT,
@@ -385,12 +385,12 @@ static func _write_world(directory: String, crystal_commands: bool = true) -> vo
 	var palettes: Array = []
 	for _group: int in 42:
 		palettes.append([0x7FFF, 0x421F, 0x2108, 0])
-	RomCache.write_json(RomCache.world_palettes_path(directory), palettes)
-	RomCache.write_json(RomCache.world_animation_assets_path(directory), {})
+	RomCache.write_json(RomCache.world_palettes_path(cache_directory), palettes)
+	RomCache.write_json(RomCache.world_animation_assets_path(cache_directory), {})
 
 
-static func _write_overworld_graphics(directory: String) -> void:
-	RomCache.write_json(RomCache.overworld_sprites_path(directory), [{
+static func _write_overworld_graphics(cache_directory: String) -> void:
+	RomCache.write_json(RomCache.overworld_sprites_path(cache_directory), [{
 		"number": TRAINER_SPRITE,
 		"address": 0x4000,
 		"bank": BANK,
@@ -402,28 +402,28 @@ static func _write_overworld_graphics(directory: String) -> void:
 	var palettes: Array = []
 	for _group: int in RomLayout.OVERWORLD_SPRITE_PALETTE_GROUP_COUNT:
 		palettes.append([0x7FFF, 0x421F, 0x2108, 0])
-	RomCache.write_json(RomCache.overworld_sprite_palettes_path(directory), palettes)
+	RomCache.write_json(RomCache.overworld_sprite_palettes_path(cache_directory), palettes)
 
 	var tiles: PackedByteArray = PackedByteArray()
 	tiles.resize(RomLayout.TILESET_TILE_COUNT * Gen2Tiles.TILE_PIXELS)
 	tiles.fill(1)
-	RomCache.write_indices(RomCache.world_tile_path(directory, 0), tiles)
+	RomCache.write_indices(RomCache.world_tile_path(cache_directory, 0), tiles)
 
 	var sprite: PackedByteArray = PackedByteArray()
 	sprite.resize(4 * Gen2Tiles.TILE_PIXELS)
 	sprite.fill(1)
-	RomCache.write_indices(RomCache.overworld_sprite_path(directory, TRAINER_SPRITE), sprite)
+	RomCache.write_indices(RomCache.overworld_sprite_path(cache_directory, TRAINER_SPRITE), sprite)
 
 	## `MonMenuIcons`, one row per species: every one of them icon 1, which is
 	## all anything drawing a party icon or a visible encounter needs here.
 	var menu_icons: PackedByteArray = PackedByteArray()
 	menu_icons.resize(RomLayout.SPECIES_COUNT)
 	menu_icons.fill(1)
-	RomCache.write_indices(RomCache.mon_menu_icons_path(directory), menu_icons)
+	RomCache.write_indices(RomCache.mon_menu_icons_path(cache_directory), menu_icons)
 	var icon: PackedByteArray = PackedByteArray()
 	icon.resize(8 * Gen2Tiles.TILE_PIXELS)
 	icon.fill(1)
-	RomCache.write_indices(RomCache.overworld_icon_path(directory, 1), icon)
+	RomCache.write_indices(RomCache.overworld_icon_path(cache_directory, 1), icon)
 
 
 ## `engine/events/name_rater.asm`'s ten boxes, shortened but keeping the two
@@ -574,7 +574,7 @@ static func _write_unown_words(manifest: Dictionary) -> void:
 ## right length per name, since the doubling and the borders are arithmetic over
 ## whatever is in them. Each strip is filled with a different index so a tile
 ## drawn from the wrong one is visible rather than merely different.
-static func _write_unown_puzzle(directory: String, manifest: Dictionary) -> void:
+static func _write_unown_puzzle(cache_directory: String, manifest: Dictionary) -> void:
 	var sheets: Dictionary = manifest.get("tiles", {})
 	var rows: Array = [["tile_borders", RomLayout.UNOWN_PUZZLE_BORDER_TILES]]
 	rows.append(["cursor", 4])
@@ -590,7 +590,7 @@ static func _write_unown_puzzle(directory: String, manifest: Dictionary) -> void
 		indices.resize(tile_count * Gen2Tiles.TILE_PIXELS)
 		indices.fill(fill % 4)
 		fill += 1
-		RomCache.write_indices(RomCache.tile_path(directory, key), indices)
+		RomCache.write_indices(RomCache.tile_path(cache_directory, key), indices)
 		sheets[key] = {
 			"width": tile_count * Gen2Tiles.TILE_WIDTH,
 			"height": Gen2Tiles.TILE_HEIGHT,
@@ -608,7 +608,7 @@ static func _write_unown_puzzle(directory: String, manifest: Dictionary) -> void
 ## from the cache is a run of the right length per name, since every symbol is
 ## addressed by tile number. The reels *are* the cartridge's, because the rules
 ## read them.
-static func _write_slots(directory: String, manifest: Dictionary) -> void:
+static func _write_slots(cache_directory: String, manifest: Dictionary) -> void:
 	var sheets: Dictionary = manifest.get("tiles", {})
 	var fill: int = 1
 	for row: Array in RomLayout.SLOTS_SECTION:
@@ -620,7 +620,7 @@ static func _write_slots(directory: String, manifest: Dictionary) -> void:
 		indices.resize(tile_count * Gen2Tiles.TILE_PIXELS)
 		indices.fill(fill % 4)
 		fill += 1
-		RomCache.write_indices(RomCache.tile_path(directory, name), indices)
+		RomCache.write_indices(RomCache.tile_path(cache_directory, name), indices)
 		sheets[name] = {
 			"width": tile_count * Gen2Tiles.TILE_WIDTH,
 			"height": Gen2Tiles.TILE_HEIGHT,
@@ -651,7 +651,7 @@ static func _write_slots(directory: String, manifest: Dictionary) -> void:
 ## the slot machine's are: the strips are runs of the right length rather than
 ## the cartridge's picture, and the board is the cartridge's own tilemap shape,
 ## since the lamp column is what the screen writes into.
-static func _write_card_flip(directory: String, manifest: Dictionary) -> void:
+static func _write_card_flip(cache_directory: String, manifest: Dictionary) -> void:
 	var sheets: Dictionary = manifest.get("tiles", {})
 	var fill: int = 1
 	for row: Array in RomLayout.CARD_FLIP_SECTION:
@@ -661,7 +661,7 @@ static func _write_card_flip(directory: String, manifest: Dictionary) -> void:
 		indices.resize(tile_count * Gen2Tiles.TILE_PIXELS)
 		indices.fill(fill % 4)
 		fill += 1
-		RomCache.write_indices(RomCache.tile_path(directory, name), indices)
+		RomCache.write_indices(RomCache.tile_path(cache_directory, name), indices)
 		sheets[name] = {
 			"width": tile_count * Gen2Tiles.TILE_WIDTH,
 			"height": Gen2Tiles.TILE_HEIGHT,
@@ -767,7 +767,7 @@ static func _write_pokecenter_pc(manifest: Dictionary) -> void:
 ## way the cartridges do: Crystal gives a scene three palettes and sixteen banner
 ## blocks, Gold and Silver one palette and thirteen.
 static func _write_credits(
-	directory: String, manifest: Dictionary, crystal: bool
+	cache_directory: String, manifest: Dictionary, crystal: bool
 ) -> void:
 	var frames: Array = []
 	if crystal:
@@ -842,7 +842,7 @@ static func _write_credits(
 				var y: int = pixel / Gen2Tiles.TILE_WIDTH
 				indices[y * count * Gen2Tiles.TILE_WIDTH
 					+ tile * Gen2Tiles.TILE_WIDTH + pixel % Gen2Tiles.TILE_WIDTH] = index
-		RomCache.write_indices(RomCache.tile_path(directory, String(entry[0])), indices)
+		RomCache.write_indices(RomCache.tile_path(cache_directory, String(entry[0])), indices)
 		sheets[String(entry[0])] = {
 			"width": count * Gen2Tiles.TILE_WIDTH,
 			"height": Gen2Tiles.TILE_HEIGHT,
@@ -858,7 +858,7 @@ static func _write_credits(
 ## The words below name the strip's own first tiles, so the ink index matters and
 ## the picture does not.
 static func _write_splash_graphics(
-	directory: String, manifest: Dictionary, crystal: bool
+	cache_directory: String, manifest: Dictionary, crystal: bool
 ) -> void:
 	var sheets: Dictionary = manifest.get("tiles", {})
 	## The 1bpp logo carries `Gen2Tiles.INK`, since that is the only index a 1bpp
@@ -881,7 +881,7 @@ static func _write_splash_graphics(
 		var indices: PackedByteArray = PackedByteArray()
 		indices.resize(tile_count * Gen2Tiles.TILE_PIXELS)
 		indices.fill(int(counts[name][1]))
-		RomCache.write_indices(RomCache.tile_path(directory, name), indices)
+		RomCache.write_indices(RomCache.tile_path(cache_directory, name), indices)
 		sheets[name] = {
 			"width": tile_count * Gen2Tiles.TILE_WIDTH,
 			"height": Gen2Tiles.TILE_HEIGHT,
@@ -902,7 +902,7 @@ static func _write_splash_graphics(
 	manifest["presents_palettes"] = palettes
 
 
-static func _write_battle_graphics(directory: String, manifest: Dictionary) -> void:
+static func _write_battle_graphics(cache_directory: String, manifest: Dictionary) -> void:
 	var sheets: Dictionary = {}
 	var sheet_tiles: Dictionary = {
 		"exp_bar": [RomLayout.EXP_BAR_TILES, 2],
@@ -975,7 +975,7 @@ static func _write_battle_graphics(directory: String, manifest: Dictionary) -> v
 		var indices: PackedByteArray = PackedByteArray()
 		indices.resize(tile_count * Gen2Tiles.TILE_PIXELS)
 		indices.fill(int(sheet_tiles[name][1]))
-		RomCache.write_indices(RomCache.tile_path(directory, name), indices)
+		RomCache.write_indices(RomCache.tile_path(cache_directory, name), indices)
 		sheets[name] = {
 			"width": tile_count * Gen2Tiles.TILE_WIDTH,
 			"height": Gen2Tiles.TILE_HEIGHT,
@@ -1036,7 +1036,7 @@ static func _write_battle_graphics(directory: String, manifest: Dictionary) -> v
 	atlas_indices.fill(1)
 	var atlases: Dictionary = manifest.get("atlases", {})
 	for name: String in ["front", "back"]:
-		RomCache.write_indices(RomCache.pic_path(directory, name), atlas_indices)
+		RomCache.write_indices(RomCache.pic_path(cache_directory, name), atlas_indices)
 		atlases[name] = {
 			"width": atlas_width,
 			"height": rows * cell,

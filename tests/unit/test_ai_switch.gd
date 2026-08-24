@@ -151,8 +151,8 @@ func test_the_bench_pokemon_immune_to_the_last_move_is_the_one_chosen() -> void:
 func test_a_class_with_no_switch_bit_never_leaves() -> void:
 	var battle: Gen2Battle = _wants_out()
 
-	for seed: int in 32:
-		_rng.seed = seed
+	for seed_value: int in 32:
+		_rng.seed = seed_value
 		assert_false(bool(Gen2AISwitch.decide(battle, 0, _rng)["switch"]))
 
 
@@ -163,8 +163,8 @@ func test_the_three_frequencies_act_at_their_own_rates() -> void:
 	var rates: Dictionary = {}
 	for frequency: int in [OFTEN, SOMETIMES, RARELY]:
 		var switched: int = 0
-		for seed: int in 128:
-			_rng.seed = seed
+		for seed_value: int in 128:
+			_rng.seed = seed_value
 			if bool(Gen2AISwitch.decide(battle, frequency, _rng)["switch"]):
 				switched += 1
 		rates[frequency] = switched
@@ -184,8 +184,8 @@ func test_the_last_pokemon_standing_cannot_leave() -> void:
 	battle.party(Gen2Battle.ENEMY).at(2).hp = 0
 
 	assert_eq(int(Gen2AISwitch.evaluate(battle)["tier"]), 0, "nobody to switch to")
-	for seed: int in 32:
-		_rng.seed = seed
+	for seed_value: int in 32:
+		_rng.seed = seed_value
 		assert_false(bool(Gen2AISwitch.decide(battle, OFTEN, _rng)["switch"]))
 
 
@@ -199,8 +199,8 @@ func test_a_trapped_or_mean_looked_enemy_does_not_switch() -> void:
 		else:
 			battle.player.substatus |= Gen2Substatus.CANT_RUN
 
-		for seed: int in 16:
-			_rng.seed = seed
+		for seed_value: int in 16:
+			_rng.seed = seed_value
 			var action: Dictionary = Gen2BattleAI.choose_action(battle, OFTEN, 0, _rng)
 			assert_ne(
 				StringName(action["type"]), Gen2Battle.ACTION_SWITCH, String(setup)
@@ -220,8 +220,8 @@ func test_a_locked_in_enemy_neither_switches_nor_uses_an_item() -> void:
 		battle.enemy_items = [Gen2AIItems.X_ATTACK]
 		battle.enemy.substatus |= flag
 
-		for seed: int in 16:
-			_rng.seed = seed
+		for seed_value: int in 16:
+			_rng.seed = seed_value
 			var action: Dictionary = Gen2BattleAI.choose_action(battle, OFTEN, 0, _rng)
 			assert_eq(
 				StringName(action["type"]), Gen2Battle.ACTION_MOVE,

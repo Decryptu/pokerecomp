@@ -110,7 +110,7 @@ func _read_question() -> void:
 	await get_tree().process_frame
 
 
-func _press(button: int) -> void:
+func _step(button: int) -> void:
 	_settle_bars()
 	# A press cannot finish a printing page, so the page is read first, which is
 	# what a player waits through.
@@ -146,9 +146,9 @@ func test_no_sends_the_trainer_out_and_leaves_the_player_standing() -> void:
 	await _advance_to("offer")
 	await _read_question()
 
-	await _press(Gen2Button.DOWN)
+	await _step(Gen2Button.DOWN)
 	assert_eq(_cursor(), 1)
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.A)
 
 	assert_eq(_stage(), "", "the question is answered")
 	assert_eq(battle.awaiting_switch_offer(), -1)
@@ -164,7 +164,7 @@ func test_b_is_the_same_answer_as_no() -> void:
 	await _advance_to("offer")
 	await _read_question()
 
-	await _press(Gen2Button.B)
+	await _step(Gen2Button.B)
 	assert_eq(_stage(), "")
 	assert_eq(battle.party(Gen2Battle.PLAYER).active, 0)
 
@@ -177,15 +177,15 @@ func test_yes_opens_the_party_list_and_the_chosen_row_switches() -> void:
 	await _advance_to("offer")
 	await _read_question()
 
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.A)
 	assert_eq(_stage(), "pick")
 	assert_true(_layer().visible)
 	assert_eq(_layer().position, Vector2.ZERO, "the list is the whole screen")
 	assert_false((_screen.get("_box") as Gen2TextBox).visible, "and the battle's box is not")
 
-	await _press(Gen2Button.DOWN)
+	await _step(Gen2Button.DOWN)
 	assert_eq(_cursor(), 1)
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.A)
 
 	assert_eq(_stage(), "")
 	assert_eq(battle.party(Gen2Battle.PLAYER).active, 1, "the player switched too")
@@ -200,9 +200,9 @@ func test_the_one_already_out_is_refused_and_the_list_comes_back() -> void:
 	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.switch_to(1)])
 	await _advance_to("offer")
 	await _read_question()
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.A)
 
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.A)
 	assert_eq(_stage(), "refused")
 	assert_true(
 		String(_screen.battle_snapshot()["message"]).contains("is already out"),
@@ -212,7 +212,7 @@ func test_the_one_already_out_is_refused_and_the_list_comes_back() -> void:
 
 	## One press, which is the one `StdBattleTextbox` was waiting for: the line is
 	## read first and a press cannot shorten the reading.
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.A)
 	assert_eq(_stage(), "pick", "the list is redrawn")
 	assert_true(_layer().visible)
 
@@ -223,9 +223,9 @@ func test_cancelling_the_list_is_the_same_answer_as_no() -> void:
 	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.switch_to(1)])
 	await _advance_to("offer")
 	await _read_question()
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.A)
 
-	await _press(Gen2Button.B)
+	await _step(Gen2Button.B)
 	assert_eq(_stage(), "")
 	assert_eq(battle.party(Gen2Battle.PLAYER).active, 0)
 	assert_eq(battle.party(Gen2Battle.ENEMY).active, 1)
@@ -264,19 +264,19 @@ func test_baton_pass_opens_a_list_that_cannot_be_backed_out_of() -> void:
 	assert_true(bool(_screen.battle_snapshot()["switch_forced"]))
 	assert_eq(battle.awaiting_baton_pass(), Gen2Battle.PLAYER)
 
-	await _press(Gen2Button.B)
+	await _step(Gen2Button.B)
 	assert_eq(_stage(), "pick", "B is swallowed")
 	assert_eq(battle.awaiting_baton_pass(), Gen2Battle.PLAYER)
 
 	## Two rows and CANCEL, so two presses down reach it.
-	await _press(Gen2Button.DOWN)
-	await _press(Gen2Button.DOWN)
+	await _step(Gen2Button.DOWN)
+	await _step(Gen2Button.DOWN)
 	assert_eq(_cursor(), 2)
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.A)
 	assert_eq(_stage(), "pick", "and so is the CANCEL row")
 
-	await _press(Gen2Button.UP)
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.UP)
+	await _step(Gen2Button.A)
 	assert_eq(_stage(), "")
 	assert_eq(battle.awaiting_baton_pass(), -1)
 	assert_eq(battle.party(Gen2Battle.PLAYER).active, 1, "the pass landed on the row chosen")
@@ -341,7 +341,7 @@ func test_a_wild_faint_asks_whether_to_use_the_next_pokemon() -> void:
 	assert_true(_layer().visible)
 	assert_eq(_cursor(), 0, "YesNoMenuHeader opens on YES")
 
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.A)
 	assert_eq(_stage(), "pick", "ForcePlayerMonChoice, with no press in between")
 	assert_eq(String(_screen.battle_snapshot()["switch_reason"]), "replace")
 	assert_true(bool(_screen.battle_snapshot()["switch_forced"]))
@@ -355,7 +355,7 @@ func test_no_runs_from_the_wild_battle_instead_of_replacing() -> void:
 	await _advance_to("use_next")
 	await _read_question()
 
-	await _press(Gen2Button.B)
+	await _step(Gen2Button.B)
 	assert_eq(_stage(), "")
 	assert_true(battle.has_fled())
 	assert_true(bool(_screen.battle_snapshot()["battle_over"]))
@@ -369,18 +369,18 @@ func test_a_trainer_faint_opens_a_replacement_list_with_no_way_out() -> void:
 	await _advance_to("pick")
 
 	assert_eq(String(_screen.battle_snapshot()["switch_reason"]), "replace")
-	await _press(Gen2Button.B)
+	await _step(Gen2Button.B)
 	assert_eq(_stage(), "pick", "B is swallowed")
 
 	## Two rows and CANCEL, so two presses down reach a row that refuses too.
-	await _press(Gen2Button.DOWN)
-	await _press(Gen2Button.DOWN)
+	await _step(Gen2Button.DOWN)
+	await _step(Gen2Button.DOWN)
 	assert_eq(_cursor(), 2)
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.A)
 	assert_eq(_stage(), "pick")
 
-	await _press(Gen2Button.UP)
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.UP)
+	await _step(Gen2Button.A)
 	assert_eq(_stage(), "")
 	assert_eq(battle.party(Gen2Battle.PLAYER).active, 1)
 	assert_false(battle.awaiting_replacement())
@@ -393,7 +393,7 @@ func test_the_fainted_row_is_refused_and_the_list_comes_back() -> void:
 	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
 	await _advance_to("pick")
 
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.A)
 	assert_eq(_stage(), "refused")
 	assert_true(
 		String(_screen.battle_snapshot()["message"]).contains("no will to battle"),
@@ -401,7 +401,7 @@ func test_the_fainted_row_is_refused_and_the_list_comes_back() -> void:
 	)
 	assert_true(battle.must_replace(Gen2Battle.PLAYER), "and nothing was answered")
 
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.A)
 	assert_eq(_stage(), "pick", "the list is redrawn")
 	assert_true(bool(_screen.battle_snapshot()["switch_forced"]), "still with no way out")
 
@@ -418,8 +418,8 @@ func test_shift_offers_a_switch_when_the_trainer_replaces_its_own_faint() -> voi
 	assert_eq(battle.party(Gen2Battle.ENEMY).active, 0, "nobody is out yet")
 
 	await _read_question()
-	await _press(Gen2Button.DOWN)
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.DOWN)
+	await _step(Gen2Button.A)
 	assert_eq(_stage(), "")
 	assert_eq(battle.party(Gen2Battle.ENEMY).active, 1)
 	assert_eq(battle.party(Gen2Battle.PLAYER).active, 0, "and the player stayed")
@@ -480,15 +480,15 @@ func test_the_battle_menu_walks_its_two_by_two_and_does_not_wrap() -> void:
 	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
 	await _advance_to_menu()
 
-	await _press(Gen2Button.LEFT)
+	await _step(Gen2Button.LEFT)
 	assert_eq(int(_screen.battle_snapshot()["menu_position"]), Gen2BattleMenu.FIGHT)
-	await _press(Gen2Button.RIGHT)
+	await _step(Gen2Button.RIGHT)
 	assert_eq(int(_screen.battle_snapshot()["menu_position"]), Gen2BattleMenu.PKMN)
-	await _press(Gen2Button.DOWN)
+	await _step(Gen2Button.DOWN)
 	assert_eq(int(_screen.battle_snapshot()["menu_position"]), Gen2BattleMenu.RUN)
-	await _press(Gen2Button.DOWN)
+	await _step(Gen2Button.DOWN)
 	assert_eq(int(_screen.battle_snapshot()["menu_position"]), Gen2BattleMenu.RUN)
-	await _press(Gen2Button.LEFT)
+	await _step(Gen2Button.LEFT)
 	assert_eq(int(_screen.battle_snapshot()["menu_position"]), Gen2BattleMenu.PACK)
 
 
@@ -499,16 +499,16 @@ func test_fight_opens_the_move_list_and_the_chosen_row_is_the_move_used() -> voi
 	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
 	await _advance_to_menu()
 
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.A)
 	assert_eq(_menu_stage(), "move")
 	var rows: Array = _screen.battle_snapshot()["move_rows"]
 	assert_eq(rows.size(), 2, "two moves, two rows")
 	assert_eq(int((rows[0] as Dictionary)["move"]), BattleFixture.TACKLE)
 
-	await _press(Gen2Button.DOWN)
+	await _step(Gen2Button.DOWN)
 	assert_eq(int(_screen.battle_snapshot()["move_cursor"]), 1)
 	var before: int = battle.mon(Gen2Battle.PLAYER).pp_left(1)
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.A)
 
 	assert_eq(_menu_stage(), "", "the list is gone once the turn is taken")
 	assert_eq(battle.mon(Gen2Battle.PLAYER).pp_left(1), before - 1, "GROWL was used")
@@ -519,14 +519,14 @@ func test_the_move_cursor_wraps_and_b_goes_back_to_the_menu() -> void:
 	var battle: Gen2Battle = _menu_battle()
 	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
 	await _advance_to_menu()
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.A)
 
-	await _press(Gen2Button.UP)
+	await _step(Gen2Button.UP)
 	assert_eq(int(_screen.battle_snapshot()["move_cursor"]), 1, "wrapped to the last row")
-	await _press(Gen2Button.DOWN)
+	await _step(Gen2Button.DOWN)
 	assert_eq(int(_screen.battle_snapshot()["move_cursor"]), 0)
 
-	await _press(Gen2Button.B)
+	await _step(Gen2Button.B)
 	assert_eq(_menu_stage(), "main", "B leaves the list for the menu behind it")
 
 
@@ -538,8 +538,8 @@ func test_a_move_with_no_pp_is_refused_and_the_list_comes_back() -> void:
 	await _advance_to_menu()
 	battle.mon(Gen2Battle.PLAYER).pp[0] = 0
 
-	await _press(Gen2Button.A)
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.A)
+	await _step(Gen2Button.A)
 	assert_eq(_menu_stage(), "refused")
 	assert_true(
 		String(_screen.battle_snapshot()["message"]).contains("no PP left"),
@@ -551,7 +551,7 @@ func test_a_move_with_no_pp_is_refused_and_the_list_comes_back() -> void:
 		box.finish()
 		if box.has_pages_left():
 			box.advance()
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.A)
 	assert_eq(_menu_stage(), "move", "and the list is back")
 
 
@@ -561,10 +561,10 @@ func test_run_leaves_the_wild_battle() -> void:
 	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
 	await _advance_to_menu()
 
-	await _press(Gen2Button.DOWN)
-	await _press(Gen2Button.RIGHT)
+	await _step(Gen2Button.DOWN)
+	await _step(Gen2Button.RIGHT)
 	assert_eq(int(_screen.battle_snapshot()["menu_position"]), Gen2BattleMenu.RUN)
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.A)
 	assert_eq(_menu_stage(), "")
 	assert_false(_screen.get("_pending").is_empty(), "the run is a turn's worth of events")
 
@@ -576,19 +576,19 @@ func test_pkmn_opens_a_party_list_that_can_be_cancelled_back_to_the_menu() -> vo
 	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
 	await _advance_to_menu()
 
-	await _press(Gen2Button.RIGHT)
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.RIGHT)
+	await _step(Gen2Button.A)
 	assert_eq(_stage(), "pick")
 	assert_eq(String(_screen.battle_snapshot()["switch_reason"]), "player")
 	assert_false(bool(_screen.battle_snapshot()["switch_forced"]), "and it can be left")
 
-	await _press(Gen2Button.B)
+	await _step(Gen2Button.B)
 	assert_eq(_stage(), "")
 	assert_eq(_menu_stage(), "main", "cancelling is a jp BattleMenu")
 
-	await _press(Gen2Button.A)
-	await _press(Gen2Button.DOWN)
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.A)
+	await _step(Gen2Button.DOWN)
+	await _step(Gen2Button.A)
 	assert_eq(battle.party(Gen2Battle.PLAYER).active, 1, "the bench member came in")
 
 
@@ -601,7 +601,7 @@ func test_a_renderer_is_not_offered_input_while_a_menu_is_up() -> void:
 	await _advance_to("offer")
 	assert_false(_screen._renderer_input_free())
 	await _read_question()
-	await _press(Gen2Button.B)
+	await _step(Gen2Button.B)
 	assert_true(_screen._renderer_input_free())
 
 
@@ -622,17 +622,17 @@ func test_the_pack_uses_an_item_on_the_chosen_member_and_spends_the_turn() -> vo
 	var bench: Gen2BattleMon = battle.party(Gen2Battle.PLAYER).at(1)
 	bench.hp = 1
 
-	await _press(Gen2Button.DOWN)
+	await _step(Gen2Button.DOWN)
 	assert_eq(int(_screen.battle_snapshot()["menu_position"]), Gen2BattleMenu.PACK)
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.A)
 	assert_true(bool(_screen.get("_pack_selecting")), "the pack list is up")
 	assert_eq(_screen.selected_pack_item(), BattleFixture.POTION)
 
 	# The party list `UseItem_SelectMon` opens, and the bench member on it.
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.A)
 	assert_eq(_stage(), "pick")
-	await _press(Gen2Button.DOWN)
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.DOWN)
+	await _step(Gen2Button.A)
 
 	assert_eq(bench.hp, 21, "the potion landed on the bench member")
 	assert_eq(spent, [[BattleFixture.POTION, 1]], "and the world was told to spend it")
@@ -649,16 +649,16 @@ func test_the_item_target_list_takes_the_one_out_and_backs_out_to_the_pack() -> 
 	_screen.set_battle_pack([BattleFixture.POTION], {BattleFixture.POTION: 1})
 	battle.mon(Gen2Battle.PLAYER).hp = 1
 
-	await _press(Gen2Button.DOWN)
-	await _press(Gen2Button.A)
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.DOWN)
+	await _step(Gen2Button.A)
+	await _step(Gen2Button.A)
 	assert_eq(_stage(), "pick")
-	await _press(Gen2Button.B)
+	await _step(Gen2Button.B)
 	assert_eq(_stage(), "", "the list is gone")
 	assert_true(bool(_screen.get("_pack_selecting")), "and the pack is back")
 
-	await _press(Gen2Button.A)
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.A)
+	await _step(Gen2Button.A)
 	## Healed to 21 and then hit, because the item spends the turn and the enemy
 	## still moves in it.
 	assert_gt(battle.mon(Gen2Battle.PLAYER).hp, 1, "used on the one that is out")
@@ -673,13 +673,13 @@ func test_an_x_item_needs_no_target_and_b_closes_the_pack() -> void:
 	await _advance_to_menu()
 	_screen.set_battle_pack([BattleFixture.X_ATTACK], {BattleFixture.X_ATTACK: 1})
 
-	await _press(Gen2Button.DOWN)
-	await _press(Gen2Button.A)
-	await _press(Gen2Button.B)
+	await _step(Gen2Button.DOWN)
+	await _step(Gen2Button.A)
+	await _step(Gen2Button.B)
 	assert_eq(_menu_stage(), "main", "B is a jp BattleMenu")
 
-	await _press(Gen2Button.A)
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.A)
+	await _step(Gen2Button.A)
 	assert_eq(battle.mon(Gen2Battle.PLAYER).stage("attack"), 1)
 	assert_eq(_stage(), "", "no target list for an item used on the one that is out")
 
@@ -695,14 +695,14 @@ func test_an_ether_asks_which_move_and_fills_that_slot() -> void:
 	user.pp[0] = 0
 	user.pp[1] = 0
 
-	await _press(Gen2Button.DOWN)
-	await _press(Gen2Button.A)
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.DOWN)
+	await _step(Gen2Button.A)
+	await _step(Gen2Button.A)
 	assert_eq(_stage(), "pick")
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.A)
 	assert_true(bool(_screen.get("_pack_move_selecting")), "the move list is up")
 
-	await _press(Gen2Button.RIGHT)
-	await _press(Gen2Button.A)
+	await _step(Gen2Button.RIGHT)
+	await _step(Gen2Button.A)
 	assert_eq(user.pp_left(0), 0, "the slot it was not used on")
 	assert_gt(user.pp_left(1), 0, "and the one it was")

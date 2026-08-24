@@ -269,11 +269,11 @@ func shadow_oam(movie: Gen2IntroMovie) -> Array[Dictionary]:
 		var index: int = int(sprite["set"])
 		if index < 0 or index >= OAM_SETS.size():
 			continue
-		var set: Dictionary = OAM_SETS[index]
+		var ordering: Dictionary = OAM_SETS[index]
 		var at: Vector2i = sprite["at"]
 		var flip_x: bool = bool(sprite["flip_x"])
 		var flip_y: bool = bool(sprite["flip_y"])
-		for part: Array in set["parts"]:
+		for part: Array in ordering["parts"]:
 			# `UpdateAnimFrame` stops at `wShadowOAMEnd` rather than growing.
 			if out.size() >= SHADOW_OAM_SPRITES:
 				return out
@@ -291,7 +291,7 @@ func shadow_oam(movie: Gen2IntroMovie) -> Array[Dictionary]:
 				# offset past the screen wraps rather than clamping.
 				"y": (at.y + dy) & 0xFF,
 				"x": (at.x + dx) & 0xFF,
-				"tile": (int(sprite["vtile"]) + int(set["vtile"]) + int(part[2])) & 0xFF,
+				"tile": (int(sprite["vtile"]) + int(ordering["vtile"]) + int(part[2])) & 0xFF,
 				"palette": attrs & ATTR_PALETTE,
 				"flip_x": bool(attrs & ATTR_XFLIP) != flip_x,
 				"flip_y": bool(attrs & ATTR_YFLIP) != flip_y,
@@ -475,7 +475,7 @@ func _blit_sprite_tile(
 			pixels[at_pixel] = table[pixel]
 
 
-func _sheet(movie: Gen2IntroMovie, name: String) -> PackedByteArray:
+func _sheet(_movie: Gen2IntroMovie, name: String) -> PackedByteArray:
 	if name.is_empty() or _data == null:
 		return PackedByteArray()
 	if _sheets.has(name):

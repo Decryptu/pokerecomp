@@ -657,12 +657,12 @@ func _scroll_list_to_cursor() -> void:
 	if _menu == null:
 		_list_scroll = 0
 		return
-	var visible: int = Gen2StartMenuPage.visible_rows(
+	var shown: int = Gen2StartMenuPage.visible_rows(
 		_world != null and _world.bug_contest_active()
 	)
 	_list_scroll = clampi(
-		clampi(_list_scroll, _menu.cursor - visible + 1, _menu.cursor),
-		0, maxi(_menu.size() - visible, 0)
+		clampi(_list_scroll, _menu.cursor - shown + 1, _menu.cursor),
+		0, maxi(_menu.size() - shown, 0)
 	)
 
 
@@ -2134,7 +2134,7 @@ func _hardware_image() -> Image:
 			if _menu == null:
 				return null
 			var contest: bool = _world != null and _world.bug_contest_active()
-			var visible: int = Gen2StartMenuPage.visible_rows(contest)
+			var shown: int = Gen2StartMenuPage.visible_rows(contest)
 			var labels: Array = []
 			for entry: Variant in _menu.items():
 				labels.append(String((entry as Dictionary).get("label", "")))
@@ -2143,7 +2143,7 @@ func _hardware_image() -> Image:
 			var description: String = _menu.selected_description() \
 				if Gen2OptionsStore.current().menu_account else ""
 			return _page.render_list(
-				labels.slice(_list_scroll, _list_scroll + visible),
+				labels.slice(_list_scroll, _list_scroll + shown),
 				_menu.cursor - _list_scroll, description, contest
 			)
 		Mode.SAVE_ASK, Mode.SAVE_OVERWRITE, Mode.SAVE_SAVING, Mode.SAVE_SAVED, \

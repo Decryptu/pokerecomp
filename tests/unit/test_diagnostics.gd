@@ -15,8 +15,8 @@ func _diagnostics() -> Gen2Diagnostics:
 
 func after_each() -> void:
 	if DirAccess.dir_exists_absolute(SCRATCH):
-		for name: String in DirAccess.get_files_at(SCRATCH):
-			DirAccess.remove_absolute("%s/%s" % [SCRATCH, name])
+		for row_name: String in DirAccess.get_files_at(SCRATCH):
+			DirAccess.remove_absolute("%s/%s" % [SCRATCH, row_name])
 		DirAccess.remove_absolute(SCRATCH)
 
 
@@ -109,9 +109,9 @@ func test_the_bundle_holds_the_report_and_the_log_files() -> void:
 	assert_true(names.has("report.txt"))
 	assert_string_contains(reader.read_file("report.txt").get_string_from_utf8(), "pokerecomp")
 	var logs: int = 0
-	for name: String in names:
+	for row_name: String in names:
 		# The reader lists the folder itself as an entry too.
-		if name.begins_with("logs/") and not name.ends_with("/"):
+		if row_name.begins_with("logs/") and not row_name.ends_with("/"):
 			logs += 1
 	assert_eq(logs, expected, "every kept log file is packed")
 	reader.close()
@@ -176,13 +176,13 @@ func test_files_written_in_the_same_second_still_order_newest_first() -> void:
 		ProjectSettings.get_setting("debug/file_logging/log_path", "")
 	).get_file()
 	var stem: String = live.get_basename()
-	for name: String in [
+	for row_name: String in [
 		"%s2026-08-01T00.00.03.log" % stem,
 		"%s2026-08-01T00.00.01.log" % stem,
 		live,
 		"%s2026-08-01T00.00.02.log" % stem,
 	]:
-		var file: FileAccess = FileAccess.open("%s/%s" % [SCRATCH, name], FileAccess.WRITE)
+		var file: FileAccess = FileAccess.open("%s/%s" % [SCRATCH, row_name], FileAccess.WRITE)
 		file.store_string("x")
 		file = null
 	var order: PackedStringArray = _diagnostics().log_files(SCRATCH)
@@ -198,3 +198,33 @@ func test_the_marker_reads_a_crash_and_nothing_else() -> void:
 	assert_false(Gen2Diagnostics.unclean_marker('{"clean": true}'))
 	assert_false(Gen2Diagnostics.unclean_marker(""), "a first launch is not a crash")
 	assert_false(Gen2Diagnostics.unclean_marker("{ half writ"), "nor is a torn file")
+
+
+## `Gen2ToolPath`: a tool runs with `--path <this project>`, so a relative output
+## path lands in the checkout rather than where the command was run. The test is
+## where a path resolves, not how it is spelt, which is what a guard written on
+## prefixes gets wrong: `res://out.png` is absolute to `is_absolute_path()` and
+## lands in the project all the same.
+func test_an_output_path_inside_the_project_is_refused() -> void:
+	for path: String in [
+		"", "out.png", "./out.png", "sub/out.png", "res://out.png",
+		"res://tools/out.png",
+		ProjectSettings.globalize_path("res://").path_join("out.png"),
+	]:
+		assert_ne(
+			Gen2ToolPath.refusal(path), "", "%s is inside the project" % path
+		)
+
+
+## The paths a tool is supposed to be given. A sibling directory whose name
+## merely starts the same way is not inside the project, which is what the
+## separator in the comparison is for.
+func test_an_output_path_outside_the_project_is_allowed() -> void:
+	var project: String = ProjectSettings.globalize_path("res://").simplify_path()
+	for path: String in [
+		"/tmp/out.png", "user://out.png", "user://logs/out.txt",
+		"%s-notes/out.png" % project, project.get_base_dir().path_join("out.png"),
+	]:
+		assert_eq(
+			Gen2ToolPath.refusal(path), "", "%s is outside the project" % path
+		)

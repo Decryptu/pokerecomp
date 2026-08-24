@@ -48,11 +48,6 @@ var _mod: String = ""
 var _scroll: int = 0
 var _focus: int = -1
 var _fade: int = 0
-## Forced frames seen during an import, and which one is photographed: late
-## enough that the bar has something on it, early enough to be inside the job.
-var _forced: int = 0
-var _captured: bool = false
-const FORCED_FRAME_WANTED: int = 34
 
 
 func _initialize() -> void:
@@ -62,6 +57,9 @@ func _initialize() -> void:
 		quit(1)
 		return
 	_output = args[0]
+	if Gen2ToolPath.refuses(_output):
+		quit(2)
+		return
 	var mode: String = args[1] if args.size() > 1 else "light"
 	var width: int = int(args[2]) if args.size() > 2 else 1280
 	var height: int = int(args[3]) if args.size() > 3 else 800

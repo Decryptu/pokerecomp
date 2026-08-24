@@ -33,8 +33,8 @@ func _clear(path: String = ROOT) -> void:
 	var directory: DirAccess = DirAccess.open(path)
 	if directory == null:
 		return
-	for name: String in directory.get_directories():
-		_clear("%s/%s" % [path, name])
+	for row_name: String in directory.get_directories():
+		_clear("%s/%s" % [path, row_name])
 	for file: String in directory.get_files():
 		DirAccess.remove_absolute("%s/%s" % [path, file])
 	DirAccess.remove_absolute(path)
@@ -817,9 +817,9 @@ func test_a_declared_pack_that_is_absent_is_refused_by_name() -> void:
 ## not a resource pack at all, is refused before a mount is attempted.
 func test_a_pack_that_points_outside_the_mod_is_refused() -> void:
 	for pack: String in ["../other.pck", "/tmp/other.pck", "nested/other.pck", "res://x.pck"]:
-		var source: Dictionary = _valid_manifest()
-		source["pack"] = pack
-		_write_manifest(source)
+		var escaping: Dictionary = _valid_manifest()
+		escaping["pack"] = pack
+		_write_manifest(escaping)
 		assert_eq(
 			Gen2ModManifest.read(_directory)["reason"], &"pack_escapes_mod",
 			"pack %s must be refused" % pack
@@ -1492,7 +1492,9 @@ func test_two_sources_listing_one_mod_leave_it_under_the_first() -> void:
 ## what those measure without appearing anywhere in their output, so they
 ## discover mods and run none.
 func test_a_tool_run_lists_the_mods_it_finds_and_runs_none_of_them() -> void:
-	assert_false(GameRuntime.mods_are_allowed(), "this run is headless and script-driven")
+	assert_false(
+		Gen2GameRuntime.mods_are_allowed(), "this run is headless and script-driven"
+	)
 	_write_dependency_mod("%s/quiet" % Gen2ModHost.ROOT, "quiet", "1.0.0")
 	assert_eq(GameRuntime.load_mods(), [], "nothing was run")
 	assert_true(

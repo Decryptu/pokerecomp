@@ -574,8 +574,8 @@ func _advance_mart_text() -> void:
 ## because `ScrollingMenu_InitFlags` adds it to the row count and `.d_down`
 ## stops scrolling at `size - height`.
 func _mart_row_count() -> int:
-	var size: int = _mart_list().size()
-	return size + 1 if size < Gen2MartPage.LIST_HEIGHT else Gen2MartPage.LIST_HEIGHT
+	var rows: int = _mart_list().size()
+	return rows + 1 if rows < Gen2MartPage.LIST_HEIGHT else Gen2MartPage.LIST_HEIGHT
 
 
 ## Whichever of the shop's stock and the player's pack the stage is showing.
@@ -1653,13 +1653,13 @@ func _open_box_naming() -> void:
 ## `.Name`'s tail: whatever `NamingScreen_StoreEntry` left is written straight
 ## back over the box's name, and an empty entry is the default name again rather
 ## than a blank label.
-func _on_box_named(name: String) -> void:
+func _on_box_named(entered: String) -> void:
 	if _naming != null:
 		Gen2Screen.drop(_naming)
 		_naming = null
 	_set_overlay_open(false)
 	if _save != null:
-		_save.set_box_name(_box_submenu_index, name)
+		_save.set_box_name(_box_submenu_index, entered)
 	_open_box_list()
 
 

@@ -11,6 +11,9 @@ var _frames: int = 0
 func _initialize() -> void:
 	var args: PackedStringArray = OS.get_cmdline_user_args()
 	_output = args[0]
+	if Gen2ToolPath.refuses(_output):
+		quit(2)
+		return
 	var mode: String = args[1] if args.size() > 1 else "light"
 	var options: Gen2Options = Gen2OptionsStore.current()
 	options.ui_theme = StringName(mode)

@@ -319,10 +319,10 @@ func shadow_oam(movie: Gen2GoldSilverIntro) -> Array[Dictionary]:
 		var index: int = int(sprite["set"])
 		if index < 0 or index >= OAM_SETS.size():
 			continue
-		var set: Dictionary = OAM_SETS[index]
+		var ordering: Dictionary = OAM_SETS[index]
 		var at: Vector2i = sprite["at"]
 		var flip_x: bool = bool(sprite["flip_x"])
-		for part: Array in set["parts"]:
+		for part: Array in ordering["parts"]:
 			# `UpdateAnimFrame` stops at `wShadowOAMEnd` rather than growing.
 			if out.size() >= SHADOW_OAM_SPRITES:
 				return out
@@ -337,7 +337,7 @@ func shadow_oam(movie: Gen2GoldSilverIntro) -> Array[Dictionary]:
 				# offset past the screen wraps rather than clamping.
 				"y": (at.y + int(part[0])) & 0xFF,
 				"x": (at.x + dx) & 0xFF,
-				"tile": (int(sprite["vtile"]) + int(set["vtile"]) + int(part[2])) & 0xFF,
+				"tile": (int(sprite["vtile"]) + int(ordering["vtile"]) + int(part[2])) & 0xFF,
 				"palette": 1 if attrs & ATTR_PALETTE else 0,
 				"flip_x": bool(attrs & ATTR_XFLIP) != flip_x,
 				"flip_y": bool(attrs & ATTR_YFLIP),

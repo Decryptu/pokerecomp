@@ -165,8 +165,8 @@ static func open_directory(path: String) -> GameData:
 	data._card_palettes = manifest.get("card_palettes", {})
 	var mail_palettes: Variant = manifest.get("mail_palettes", [])
 	data._mail_palettes = mail_palettes if mail_palettes is Array else []
-	var mail_items: Variant = manifest.get("mail_items", [])
-	data._mail_items = mail_items if mail_items is Array else []
+	var raw_mail_items: Variant = manifest.get("mail_items", [])
+	data._mail_items = raw_mail_items if raw_mail_items is Array else []
 	data._pokedex_palettes = manifest.get("pokedex_palettes", {})
 	data._pack = manifest.get("pack", {})
 	var raw_pc_palette: Variant = manifest.get("pc_palette", [])

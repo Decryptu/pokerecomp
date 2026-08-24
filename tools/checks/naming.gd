@@ -153,7 +153,7 @@ func _flatten(data: GameData) -> PackedByteArray:
 ## The block offset is profile split but the bytes are not, in any of the three
 ## dumps, so a decode that differs anywhere means one offset is wrong.
 func _verify_identical() -> void:
-	var reference: StringName = &""
+	var expected: StringName = &""
 	for game_id: StringName in _blocks:
 		var block: PackedByteArray = _blocks[game_id]
 		_r.check(
@@ -162,12 +162,12 @@ func _verify_identical() -> void:
 				game_id, block.size(), RomLayout.NAME_INPUT_BLOCK_BYTES,
 			]
 		)
-		if reference == &"":
-			reference = game_id
+		if expected == &"":
+			expected = game_id
 			continue
 		_r.check(
-			block == PackedByteArray(_blocks[reference]),
-			"%s: block differs from %s, which ships it byte identical." % [game_id, reference]
+			block == PackedByteArray(_blocks[expected]),
+			"%s: block differs from %s, which ships it byte identical." % [game_id, expected]
 		)
 	if not _blocks.is_empty():
 		print("Name input block: %d bytes, identical in %d games." % [

@@ -63,19 +63,19 @@ func test_the_silhouette_and_flash_registers_flood_one_colour() -> void:
 ## callback `PlaySpriteAnimations` answers, and every frameset entry names an
 ## OAM set the page holds.
 func test_every_object_resolves_to_a_frameset_and_an_oam_set() -> void:
-	for name: StringName in Gen2GoldSilverIntro.OBJECTS:
-		var row: Dictionary = Gen2GoldSilverIntro.OBJECTS[name]
+	for row_name: StringName in Gen2GoldSilverIntro.OBJECTS:
+		var row: Dictionary = Gen2GoldSilverIntro.OBJECTS[row_name]
 		assert_true(
-			Gen2GoldSilverIntro.FRAMESETS.has(StringName(row["frameset"])), String(name)
+			Gen2GoldSilverIntro.FRAMESETS.has(StringName(row["frameset"])), String(row_name)
 		)
-	for name: StringName in Gen2GoldSilverIntro.FRAMESETS:
-		var frameset: Dictionary = Gen2GoldSilverIntro.FRAMESETS[name]
-		assert_false((frameset["frames"] as Array).is_empty(), String(name))
+	for row_name: StringName in Gen2GoldSilverIntro.FRAMESETS:
+		var frameset: Dictionary = Gen2GoldSilverIntro.FRAMESETS[row_name]
+		assert_false((frameset["frames"] as Array).is_empty(), String(row_name))
 		for entry: Array in frameset["frames"]:
 			assert_between(
-				int(entry[0]), 0, Gen2GoldSilverIntroPage.OAM_SETS.size() - 1, String(name)
+				int(entry[0]), 0, Gen2GoldSilverIntroPage.OAM_SETS.size() - 1, String(row_name)
 			)
-			assert_gt(int(entry[1]), 0, "%s lasts n + 1 frames" % name)
+			assert_gt(int(entry[1]), 0, "%s lasts n + 1 frames" % row_name)
 
 
 ## The three `Intro_GetMonFrontpic` calls and the vtile each is decompressed to,
@@ -83,8 +83,8 @@ func test_every_object_resolves_to_a_frameset_and_an_oam_set() -> void:
 func test_the_starters_are_the_three_johto_ones_at_their_own_vtiles() -> void:
 	var species: Array[int] = []
 	var vtiles: Array[int] = []
-	for name: StringName in Gen2GoldSilverIntro.STARTERS:
-		var row: Dictionary = Gen2GoldSilverIntro.STARTERS[name]
+	for row_name: StringName in Gen2GoldSilverIntro.STARTERS:
+		var row: Dictionary = Gen2GoldSilverIntro.STARTERS[row_name]
 		species.append(int(row["species"]))
 		vtiles.append(int(row["vtile"]))
 	assert_eq(species, [152, 155, 158] as Array[int], "Chikorita, Cyndaquil, Totodile")

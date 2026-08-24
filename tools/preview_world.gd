@@ -239,6 +239,10 @@ func _initialize() -> void:
 		quit(1)
 		return
 
+	if Gen2ToolPath.refuses(args[3]):
+		quit(2)
+		return
+
 	var data: GameData = GameData.open(StringName(args[0]))
 	if args.size() >= 5 and args[4] == "live":
 		if data == null:

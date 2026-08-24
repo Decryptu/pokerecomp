@@ -64,10 +64,10 @@ func _run() -> void:
 
 	## Held from the eleventh frame on, which is where the cartridge trace
 	## presses, and released once the run has spent its frames.
-	var log: Array = []
+	var log_lines: Array = []
 	for frame: int in range(STANDING_FRAMES, frames):
-		log.append({"frame": frame, "kind": "hold", "button": direction})
-	screen.replay_input(log)
+		log_lines.append({"frame": frame, "kind": "hold", "button": direction})
+	screen.replay_input(log_lines)
 
 	var lines: PackedStringArray = PackedStringArray([
 		"# frame cam_x cam_y x y screen_x screen_y facing walk_frame"
@@ -76,6 +76,9 @@ func _run() -> void:
 		screen.advance_frame()
 		lines.append(_sample(screen._world, frame))
 	var out: String = args[7]
+	if Gen2ToolPath.refuses(out):
+		quit(2)
+		return
 	FileAccess.open(out, FileAccess.WRITE).store_string("\n".join(lines) + "\n")
 	print("wrote %d frames to %s" % [frames, out])
 	root.remove_child(screen)

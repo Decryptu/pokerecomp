@@ -147,11 +147,11 @@ func _scripts_under(root: String) -> Array[String]:
 	var queue: Array[String] = [root]
 	while not queue.is_empty():
 		var directory: String = queue.pop_front()
-		for name: String in DirAccess.get_directories_at(directory):
-			queue.append("%s/%s" % [directory, name])
-		for name: String in DirAccess.get_files_at(directory):
-			if name.ends_with(".gd"):
-				found.append("%s/%s" % [directory, name])
+		for row_name: String in DirAccess.get_directories_at(directory):
+			queue.append("%s/%s" % [directory, row_name])
+		for row_name: String in DirAccess.get_files_at(directory):
+			if row_name.ends_with(".gd"):
+				found.append("%s/%s" % [directory, row_name])
 	return found
 
 
@@ -227,7 +227,7 @@ func test_a_mod_icon_keeps_its_square_whether_or_not_the_mod_has_a_picture() -> 
 	for square: Control in [blank, drawn]:
 		assert_eq(
 			square.custom_minimum_size, Vector2(side, side),
-			"a name starts at the same place with or without an icon"
+			"a row_name starts at the same place with or without an icon"
 		)
 	assert_eq(
 		(drawn as TextureRect).stretch_mode, TextureRect.STRETCH_KEEP_ASPECT_CENTERED,

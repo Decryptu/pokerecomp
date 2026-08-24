@@ -55,17 +55,17 @@ func _write_cache() -> void:
 	var first_codes: Dictionary = {
 		"font": RomLayout.FONT_FIRST_CODE, "frames": RomLayout.FRAME_FIRST_CODE,
 	}
-	for name: String in written:
-		var tiles: int = written[name]
+	for row_name: String in written:
+		var tiles: int = written[row_name]
 		var indices: PackedByteArray = PackedByteArray()
 		indices.resize(tiles * Gen2Tiles.TILE_WIDTH * Gen2Tiles.TILE_HEIGHT)
-		indices.fill(2 if name == "battle_font" else 3)
-		RomCache.write_indices(RomCache.tile_path(_directory, name), indices)
-		sheets[name] = {
+		indices.fill(2 if row_name == "battle_font" else 3)
+		RomCache.write_indices(RomCache.tile_path(_directory, row_name), indices)
+		sheets[row_name] = {
 			"width": tiles * Gen2Tiles.TILE_WIDTH,
 			"height": Gen2Tiles.TILE_HEIGHT,
 			"tiles": tiles,
-			"first_code": int(first_codes.get(name, 0)),
+			"first_code": int(first_codes.get(row_name, 0)),
 			"bits": 1,
 		}
 
@@ -133,7 +133,7 @@ func _rows(count: int = 2) -> Array:
 func _animated(rows: Array, cursor: int, passes: int) -> Image:
 	var page: Gen2PartyMenuPage = _page()
 	page.reset(rows)
-	for _pass: int in passes:
+	for _step: int in passes:
 		page.advance(rows, cursor)
 	return page.render(rows, cursor, Gen2BattleSwitchMenu.prompt_text())
 
@@ -468,7 +468,7 @@ func test_every_page_indicator_is_a_two_by_two_block() -> void:
 ## 6, so nothing on the upper half moves and five pages is the ceiling.
 func test_a_fourth_page_grows_the_indicator_run_leftward_and_moves_the_arrow() -> void:
 	assert_true(bool(Gen2ModHost.instance().register_stats_page(
-		&"testmod", {"build": func(_page: Dictionary) -> Array: return []}
+		&"testmod", {"build": func(_built: Dictionary) -> Array: return []}
 	)["ok"]))
 	assert_eq(
 		Gen2StatsScreenPage.page_indicators(4),

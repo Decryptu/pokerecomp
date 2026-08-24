@@ -86,7 +86,7 @@ const SPECIALS_POINTERS_SIZE: int = 169
 var _r: RefCounted = null
 ## Which indices the runner answers, derived from the runner rather than kept
 ## beside it: a second copy of the match would go stale the first time one is
-## built, which is the whole failure this topic exists to catch.
+## built, which is the whole failure this run exists to catch.
 var _handled: Dictionary = {}
 
 
@@ -209,19 +209,19 @@ func _verify_special_text(data: GameData) -> void:
 		if address >= 0:
 			fillable[address] = true
 	for raw_run: Variant in RomLayout.SPECIAL_TEXT_RUNS:
-		var run: String = String(raw_run)
-		if run in CRYSTAL_ONLY_TEXT_RUNS and data.id != &"crystal":
+		var subject: String = String(raw_run)
+		if subject in CRYSTAL_ONLY_TEXT_RUNS and data.id != &"crystal":
 			_r.check(
-				not data.has_special_text(run),
-				"%s is on a cartridge whose scripts cannot reach it" % run
+				not data.has_special_text(subject),
+				"%s is on a cartridge whose scripts cannot reach it" % subject
 			)
 			continue
-		if not _r.check(data.has_special_text(run), "the %s run is missing" % run):
+		if not _r.check(data.has_special_text(subject), "the %s subject is missing" % subject):
 			continue
-		for box: String in RomLayout.special_text_names(run):
-			var text: String = data.special_text(run, box)
+		for box: String in RomLayout.special_text_names(subject):
+			var text: String = data.special_text(subject, box)
 			if not _r.check(
-				not text.is_empty(), "%s/%s decoded to nothing" % [run, box]
+				not text.is_empty(), "%s/%s decoded to nothing" % [subject, box]
 			):
 				continue
 			var at: int = text.find(Gen2TextStream.RAM_MARKER)
@@ -233,7 +233,7 @@ func _verify_special_text(data: GameData) -> void:
 				)).hex_to_int() if end > at else -1
 				_r.check(
 					fillable.has(address),
-					"%s/%s names $%04X, which nothing can fill" % [run, box, address]
+					"%s/%s names $%04X, which nothing can fill" % [subject, box, address]
 				)
 				at = text.find(Gen2TextStream.RAM_MARKER, at + 1)
 

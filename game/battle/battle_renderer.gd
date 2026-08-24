@@ -258,7 +258,6 @@ func _pic_layer(
 	vbank1: PackedByteArray = PackedByteArray(), animated: bool = false
 ) -> PackedByteArray:
 	var out: PackedByteArray = _new_buffer()
-	var box: int = side * TILE
 	var strip: int = pic_stride(pixels, side)
 	if strip <= 0:
 		return out

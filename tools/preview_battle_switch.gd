@@ -75,6 +75,9 @@ func _initialize() -> void:
 		quit(1)
 		return
 	_output_path = args[1]
+	if Gen2ToolPath.refuses(_output_path):
+		quit(2)
+		return
 	_stage = args[2] if args.size() > 2 else "offer"
 	if args.size() > 3:
 		_presses = args[3].split(",", false)

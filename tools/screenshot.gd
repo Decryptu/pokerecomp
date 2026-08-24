@@ -34,6 +34,9 @@ func _initialize() -> void:
 
 	var scene_path: String = args[0]
 	_output_path = args[1]
+	if Gen2ToolPath.refuses(_output_path):
+		quit(2)
+		return
 	if args.size() >= 3:
 		_frames_to_wait = maxi(1, int(args[2]))
 

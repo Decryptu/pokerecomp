@@ -219,14 +219,14 @@ func _write_class_names(data: PackedByteArray, at: int) -> void:
 	var count: int = RomLayout.trainer_class_count(_layout)
 	var cursor: int = at
 	for trainer_class: int in range(1, count + 1):
-		var name: String = "LASS"
+		var row_name: String = "LASS"
 		if trainer_class == 1:
-			name = RomImporter.TRAINER_FIRST_CLASS
+			row_name = RomImporter.TRAINER_FIRST_CLASS
 		elif trainer_class == RomImporter.TRAINER_MIDDLE_CLASS:
-			name = RomImporter.TRAINER_MIDDLE_CLASS_NAME
+			row_name = RomImporter.TRAINER_MIDDLE_CLASS_NAME
 		elif trainer_class == count:
-			name = String(_layout["trainer_last_class"])
-		var encoded: PackedByteArray = Gen2Text.encode(name)
+			row_name = String(_layout["trainer_last_class"])
+		var encoded: PackedByteArray = Gen2Text.encode(row_name)
 		encoded.append(Gen2Text.TERMINATOR)
 		_write(data, cursor, encoded)
 		cursor += encoded.size()
@@ -1454,8 +1454,8 @@ func test_the_pokegear_cards_decode_as_tile_then_length() -> void:
 	_write(data, int((_layout["town_map"] as Dictionary)["cards"]), _cards())
 	var cards: Dictionary = RomImporter.read_pokegear_cards(_rom(data), _layout)
 	assert_eq(cards.size(), RomLayout.POKEGEAR_CARD_ORDER.size())
-	for name: String in RomLayout.POKEGEAR_CARD_ORDER:
-		var cells: PackedByteArray = cards[name]
+	for row_name: String in RomLayout.POKEGEAR_CARD_ORDER:
+		var cells: PackedByteArray = cards[row_name]
 		assert_eq(cells.size(), RomLayout.POKEGEAR_CARD_CELLS)
 		assert_eq(cells[0], Gen2TownMapPage.CARD_BLANK_TILE)
 

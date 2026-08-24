@@ -62,17 +62,17 @@ const EXPECTED_PRIZE_PRICES: Dictionary = {
 func run(r: RefCounted) -> void:
 	_r = r
 	_r.each_game(func() -> void:
-		var catalog: Gen2WorldCatalog = _r.data.catalog()
-		_verify_census(catalog)
-		_verify_starters(catalog)
-		_verify_statics(catalog)
-		_verify_prizes(catalog)
-		_verify_badges(catalog)
-		_verify_ids(catalog)
-		_verify_patching(catalog)
-		_verify_links(catalog)
-		_verify_progression(catalog)
-		_verify_sidecar(catalog)
+		var _catalog: Gen2WorldCatalog = _r.data.catalog()
+		_verify_census(_catalog)
+		_verify_starters(_catalog)
+		_verify_statics(_catalog)
+		_verify_prizes(_catalog)
+		_verify_badges(_catalog)
+		_verify_ids(_catalog)
+		_verify_patching(_catalog)
+		_verify_links(_catalog)
+		_verify_progression(_catalog)
+		_verify_sidecar(_catalog)
 	)
 
 
@@ -81,14 +81,14 @@ func run(r: RefCounted) -> void:
 ## [method GameData.catalog] handed back. So this asks the other question, that
 ## a restored catalog and a freshly scanned one are the same catalog, every row,
 ## every link and every kind's order.
-func _verify_sidecar(catalog: Gen2WorldCatalog) -> void:
+func _verify_sidecar(_catalog: Gen2WorldCatalog) -> void:
 	var written: Variant = RomCache.read_json(
 		RomCache.world_catalog_path(_r.data.directory)
 	)
-	if not _r.check(written is Dictionary, "the import wrote no catalog sidecar."):
+	if not _r.check(written is Dictionary, "the import wrote no _catalog sidecar."):
 		return
 	var restored: Gen2WorldCatalog = Gen2WorldCatalog.from_dict(_r.data, written)
-	if not _r.check(restored != null, "the catalog sidecar does not restore."):
+	if not _r.check(restored != null, "the _catalog sidecar does not restore."):
 		return
 	var scanned: Gen2WorldCatalog = Gen2WorldCatalog.build(_r.data)
 	_r.check(
@@ -108,12 +108,12 @@ func _verify_sidecar(catalog: Gen2WorldCatalog) -> void:
 				return
 
 
-func _verify_census(catalog: Gen2WorldCatalog) -> void:
-	var found: Array = [catalog.size()]
+func _verify_census(_catalog: Gen2WorldCatalog) -> void:
+	var found: Array = [_catalog.size()]
 	for kind: StringName in Gen2WorldCatalog.KINDS:
-		found.append(catalog.ids(kind).size())
+		found.append(_catalog.ids(kind).size())
 	var expected: Array = EXPECTED_CENSUS[_r.game_id]
-	_r.note("catalog %d rows: %s." % [catalog.size(), str(found.slice(1))])
+	_r.note("catalog %d rows: %s." % [_catalog.size(), str(found.slice(1))])
 	_r.check(
 		found == expected,
 		"census is %s, not the pinned %s." % [str(found), str(expected)]
@@ -123,23 +123,23 @@ func _verify_census(catalog: Gen2WorldCatalog) -> void:
 ## The one shape only Elm's three balls take: a `pokepic` of the species a
 ## `givepoke` in the same script hands over. If that stops being unique, this is
 ## where it shows.
-func _verify_starters(catalog: Gen2WorldCatalog) -> void:
-	var found: Array[int] = catalog.possible_starters()
+func _verify_starters(_catalog: Gen2WorldCatalog) -> void:
+	var found: Array[int] = _catalog.possible_starters()
 	found.sort()
 	var wanted: Array[int] = [CHIKORITA, CYNDAQUIL, TOTODILE]
 	_r.check(
 		found == wanted, "starters are %s, not the three Elm offers." % str(found)
 	)
-	for row: Dictionary in catalog.rows(Gen2WorldCatalog.KIND_STARTER):
+	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_STARTER):
 		_r.check(
 			int(row["level"]) == 5,
 			"a starter is offered at level %d rather than 5." % int(row["level"])
 		)
 
 
-func _verify_statics(catalog: Gen2WorldCatalog) -> void:
+func _verify_statics(_catalog: Gen2WorldCatalog) -> void:
 	var levels: Dictionary = {}
-	for row: Dictionary in catalog.rows(Gen2WorldCatalog.KIND_STATIC):
+	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_STATIC):
 		var species: int = int(row["species"])
 		var list: Array = levels.get(species, [])
 		list.append(int(row["level"]))
@@ -160,9 +160,9 @@ func _verify_statics(catalog: Gen2WorldCatalog) -> void:
 
 ## A prize is a give site with a `takecoins` behind it, and the price has to be
 ## the one for THAT branch rather than the first one in the vendor's script.
-func _verify_prizes(catalog: Gen2WorldCatalog) -> void:
+func _verify_prizes(_catalog: Gen2WorldCatalog) -> void:
 	var prices: Array = []
-	for row: Dictionary in catalog.rows(Gen2WorldCatalog.KIND_PRIZE):
+	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_PRIZE):
 		prices.append(int(row["price"]))
 	_r.check(
 		prices == EXPECTED_PRIZE_PRICES[_r.game_id],
@@ -175,12 +175,12 @@ func _verify_prizes(catalog: Gen2WorldCatalog) -> void:
 ## Sixteen badges exist and each is granted somewhere. Gold and Silver set two of
 ## them from a second script as well, which is why the row count is not the badge
 ## count and why the test is over the SET rather than the list.
-func _verify_badges(catalog: Gen2WorldCatalog) -> void:
+func _verify_badges(_catalog: Gen2WorldCatalog) -> void:
 	var seen: Dictionary = {}
-	for row: Dictionary in catalog.rows(Gen2WorldCatalog.KIND_BADGE):
+	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_BADGE):
 		seen[int(row["badge"])] = true
 		_r.check(
-			catalog.is_progression(row), "badge %d is not progression." % int(row["badge"])
+			_catalog.is_progression(row), "badge %d is not progression." % int(row["badge"])
 		)
 	var badges: Array = seen.keys()
 	badges.sort()
@@ -194,9 +194,9 @@ func _verify_badges(catalog: Gen2WorldCatalog) -> void:
 
 ## An id has to name one site and be recomputable from the site's own address,
 ## since that is what a runtime reader does. Both directions, over every row.
-func _verify_ids(catalog: Gen2WorldCatalog) -> void:
+func _verify_ids(_catalog: Gen2WorldCatalog) -> void:
 	var seen: Dictionary = {}
-	for row: Dictionary in catalog.rows():
+	for row: Dictionary in _catalog.rows():
 		var id: int = int(row["id"])
 		if seen.has(id):
 			_r.check(false, "id %d names two sites." % id)
@@ -216,15 +216,15 @@ func _verify_ids(catalog: Gen2WorldCatalog) -> void:
 ## The four fields whose effect is not at the command the site is: a starter's
 ## picture, and a prize's two coin commands. A patch that reached the `givepoke`
 ## alone would show one Pokemon and hand over another.
-func _verify_links(catalog: Gen2WorldCatalog) -> void:
-	for row: Dictionary in catalog.rows(Gen2WorldCatalog.KIND_STARTER):
+func _verify_links(_catalog: Gen2WorldCatalog) -> void:
+	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_STARTER):
 		_r.check(
 			row.has("picture_address"),
 			"a starter has no linked pokepic, so its ball would show the old one."
 		)
 		if not row.has("picture_address"):
 			return
-		var linked: Dictionary = catalog.link_at(
+		var linked: Dictionary = _catalog.link_at(
 			int(row["bank"]), int(row["picture_address"])
 		)
 		_r.check(
@@ -232,18 +232,18 @@ func _verify_links(catalog: Gen2WorldCatalog) -> void:
 				and StringName(linked.get("role", &"")) == &"picture",
 			"a starter's pokepic does not link back to it."
 		)
-	for row: Dictionary in catalog.rows(Gen2WorldCatalog.KIND_PRIZE):
+	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_PRIZE):
 		for key: String in ["check_address", "take_address"]:
 			_r.check(row.has(key), "a prize has no linked %s." % key)
 			if not row.has(key):
 				return
-			var linked: Dictionary = catalog.link_at(int(row["bank"]), int(row[key]))
+			var linked: Dictionary = _catalog.link_at(int(row["bank"]), int(row[key]))
 			_r.check(
 				int(linked.get("id", -1)) == int(row["id"])
 					and StringName(linked.get("role", &"")) == &"price",
 				"a prize's %s does not link back to it." % key
 			)
-	var shops: Array = catalog.rows(Gen2WorldCatalog.KIND_SHOP)
+	var shops: Array = _catalog.rows(Gen2WorldCatalog.KIND_SHOP)
 	var stocked: int = 0
 	for row: Dictionary in shops:
 		if not (row.get("items", []) as Array).is_empty():
@@ -254,7 +254,7 @@ func _verify_links(catalog: Gen2WorldCatalog) -> void:
 
 ## The cartridge's own placement finishes, and one that hides Surf behind Surf
 ## does not. The second is the whole reason the validator exists.
-func _verify_progression(catalog: Gen2WorldCatalog) -> void:
+func _verify_progression(_catalog: Gen2WorldCatalog) -> void:
 	var data: GameData = GameData.open(_r.game_id)
 	if data == null:
 		return
@@ -268,13 +268,13 @@ func _verify_progression(catalog: Gen2WorldCatalog) -> void:
 	])
 
 	var surf_item: int = 0
-	for item: int in catalog.field_hm_items():
-		if catalog.move_for_hm_item(item) == Gen2WorldFieldMove.MOVE_SURF:
+	for item: int in _catalog.field_hm_items():
+		if _catalog.move_for_hm_item(item) == Gen2WorldFieldMove.MOVE_SURF:
 			surf_item = item
 	var walk: Gen2WorldReachability = Gen2WorldReachability.build(data)
 	var dry: Dictionary = walk.reachable(Gen2WorldProgression.START_MAP, {})
 	var behind: int = -1
-	for row: Dictionary in catalog.rows(Gen2WorldCatalog.KIND_ITEM):
+	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_ITEM):
 		if not row.has("map"):
 			continue
 		var key: int = Gen2WorldReachability.map_key(
@@ -288,7 +288,7 @@ func _verify_progression(catalog: Gen2WorldCatalog) -> void:
 		return
 	## Surf on a shore only Surf reaches, and nowhere else.
 	var patches: Dictionary = {behind: {"item": surf_item}}
-	for row: Dictionary in catalog.rows(Gen2WorldCatalog.KIND_ITEM):
+	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_ITEM):
 		if int(row["item"]) == surf_item and int(row["id"]) != behind:
 			patches[int(row["id"])] = {"item": RomLayout.ITEM_TM01}
 	var locked: Dictionary = Gen2WorldProgression.validate(data, patches)
@@ -310,7 +310,7 @@ func _verify_progression(catalog: Gen2WorldCatalog) -> void:
 
 ## The whole point of the catalog: a patch has to reach the row a runtime reader
 ## gets. Done on an overlay of this check's own, so the shared one is untouched.
-func _verify_patching(catalog: Gen2WorldCatalog) -> void:
+func _verify_patching(_catalog: Gen2WorldCatalog) -> void:
 	var overlay := Gen2ContentOverlay.new()
 	var data: GameData = GameData.open(_r.game_id)
 	if data == null:

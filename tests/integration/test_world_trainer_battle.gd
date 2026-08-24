@@ -89,8 +89,8 @@ func _trigger_trainer() -> void:
 		_world_screen.advance_frame()
 		if _battle_child() != null:
 			break
-		var pending: Dictionary = _world_screen._world.pending_script_input()
-		if StringName(pending.get("type", &"")) in [&"text", &"button"]:
+		var waiting: Dictionary = _world_screen._world.pending_script_input()
+		if StringName(waiting.get("type", &"")) in [&"text", &"button"]:
 			_world_screen._advance_script_input()
 	await get_tree().process_frame
 	## Only that the overlay opened: the entrance is left where each test wants
@@ -266,8 +266,8 @@ func test_trainer_approach_step_interpolates_the_objects_position() -> void:
 			lowest_magnitude = mini(lowest_magnitude, magnitude)
 		else:
 			was_stepping = false
-		var pending: Dictionary = _world_screen._world.pending_script_input()
-		if StringName(pending.get("type", &"")) in [&"text", &"button"]:
+		var waiting: Dictionary = _world_screen._world.pending_script_input()
+		if StringName(waiting.get("type", &"")) in [&"text", &"button"]:
 			_world_screen._advance_script_input()
 	await get_tree().process_frame
 	assert_not_null(_battle_host())
@@ -408,9 +408,9 @@ func test_a_battle_is_spent_and_steered_by_the_world_that_opened_it() -> void:
 	## the funnel is what makes a recorded log complete.
 	_world_screen.record_input()
 	assert_true(_world_screen.press_button(Gen2Button.A))
-	var log: Array = _world_screen.input_recording()
-	assert_eq(log.size(), 1, "the world recorded the battle's own press")
-	assert_eq(int(log[0]["button"]), Gen2Button.A)
+	var recorded: Array = _world_screen.input_recording()
+	assert_eq(recorded.size(), 1, "the world recorded the battle's own press")
+	assert_eq(int(recorded[0]["button"]), Gen2Button.A)
 
 
 ## Two runs of the same fight from the same seed decide the same things, which is
@@ -1251,8 +1251,8 @@ func test_the_battle_track_is_chosen_before_the_transition_on_one_driver() -> vo
 		_world_screen.advance_frame()
 		if _world_screen.battle_transition_running():
 			break
-		var pending: Dictionary = _world_screen._world.pending_script_input()
-		if StringName(pending.get("type", &"")) in [&"text", &"button"]:
+		var waiting: Dictionary = _world_screen._world.pending_script_input()
+		if StringName(waiting.get("type", &"")) in [&"text", &"button"]:
 			_world_screen._advance_script_input()
 	assert_true(_world_screen.battle_transition_running())
 	var chosen: int = Gen2WorldBattleAdapter.music_for(
@@ -1289,8 +1289,8 @@ func test_a_battle_runs_its_transition_before_the_overlay_exists() -> void:
 		_world_screen.advance_frame()
 		if _world_screen.battle_transition_running():
 			break
-		var pending: Dictionary = _world_screen._world.pending_script_input()
-		if StringName(pending.get("type", &"")) in [&"text", &"button"]:
+		var waiting: Dictionary = _world_screen._world.pending_script_input()
+		if StringName(waiting.get("type", &"")) in [&"text", &"button"]:
 			_world_screen._advance_script_input()
 	assert_true(
 		_world_screen.battle_transition_running(),
@@ -1776,7 +1776,7 @@ func test_a_registered_policy_pays_a_capture_between_gotcha_and_the_nickname() -
 	var caught: String = "Gotcha! %s was caught!" % _wild_name()
 	var messages: Array = []
 	## The award moves the EXP bar, and nothing behind a moving bar is shown, so
-	## this spends the screen's own frames the way a player waiting does.
+	## this spends the screen's own frames the way a player pending does.
 	for _frame: int in 900:
 		var line: String = String(host.battle_snapshot()["message"])
 		if messages.is_empty() or messages.back() != line:

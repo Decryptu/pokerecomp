@@ -123,10 +123,35 @@ it cannot hold sixty anywhere.
 
 The GDScript analyzer runs only inside the editor: no CLI mode prints its
 warnings, `--check-only` suppresses them, and file logging records the running
-game rather than the editor. Read them with `tools/dump_editor_errors.gd` from
-Editor > File > Run, which writes `user://editor_errors.txt` and tallies the
-warning codes; the panel holds what the session has analysed, so reload the
-project first for a full sweep. The tree stays at zero entries.
+game rather than the editor. There are two ways to read it and they answer
+different questions. The tree stays at zero entries either way.
+
+```bash
+Godot --headless --editor --path . -- --warning-scan [path ...]
+```
+
+`addons/warning_scan` opens each named script in the editor's own script editor
+and prints what the analyser says, as `file:line CODE message`, then a tally and
+how many scripts it analysed; it exits 1 when there were any. Paths may be files
+or directories, `res://` or `user://`, and default to the project's script trees.
+Because the paths are explicit and the count is printed, silence means clean
+rather than unread, which is what the panel alone could never say. It reports the
+first warning per script: fix it, run again, and the next one appears. Without
+the flag the plugin does nothing, so an ordinary editor session is untouched.
+
+`tools/dump_editor_errors.gd` is the other half, run from Editor > File > Run:
+it writes the Debugger panel's whole list to `user://editor_errors.txt`, engine
+errors included, and is where a running game's warnings arrive, which is how a
+mod's `user://` scripts are seen. The panel holds what the session has analysed,
+so reload the project first for a full sweep.
+
+A tool that takes an output path guards it with `Gen2ToolPath.refuses()` before
+doing any work. A tool runs with `--path <this project>`, so a relative path
+resolves against the checkout rather than the directory the command was run in: a
+bare `out.png` is written into the project and the editor makes an `.import` file
+beside it. The test is where the path resolves, not how it is spelt, since
+`res://out.png` is absolute to `is_absolute_path()` and lands in the project all
+the same. `user://` is allowed.
 
 `integer_division` is the one warning turned off in `project.godot`: this is
 8-bit hardware arithmetic throughout, where `a / b` on two integers is the

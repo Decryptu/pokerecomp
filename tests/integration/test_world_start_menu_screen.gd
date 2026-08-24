@@ -871,10 +871,10 @@ func test_tmhm_use_reports_an_incompatible_species() -> void:
 ## Fills the first party member's four move slots so LearnMove's scan finds no
 ## zero and reaches ForgetMove. Slot 1 is SURF, HM03, the row .hmmove refuses.
 func _fill_moveset(with_hm: bool = true) -> Gen2SaveMon:
-	var mon: Gen2SaveMon = _world_screen._injected_save.party[0]
-	mon.moves = [1, 0x39 if with_hm else 2, 3, 4]
-	mon.pp = [10, 10, 10, 10]
-	return mon
+	var _mon: Gen2SaveMon = _world_screen._injected_save.party[0]
+	_mon.moves = [1, 0x39 if with_hm else 2, 3, 4]
+	_mon.pp = [10, 10, 10, 10]
+	return _mon
 
 
 ## Walks the pack to the TEACH prompt and answers yes, which reaches the party
@@ -896,7 +896,7 @@ func _reach_forget_ask() -> Gen2StartMenuScreen:
 func test_a_full_moveset_opens_forget_move_and_a_choice_replaces_that_slot() -> void:
 	_write_tmhm_item()
 	await _open_world()
-	var mon: Gen2SaveMon = _fill_moveset()
+	var _mon: Gen2SaveMon = _fill_moveset()
 	var host: Gen2StartMenuScreen = await _reach_forget_ask()
 
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_FORGET_ASK)
@@ -1131,9 +1131,9 @@ func _select(host: Gen2StartMenuScreen, kind: StringName) -> void:
 func _open_pack_with_a_hurt_party() -> Gen2StartMenuScreen:
 	await _open_world()
 	var save: Gen2SaveData = _world_screen.get("_injected_save")
-	var mon: Gen2SaveMon = save.party[0]
-	mon.hp = maxi(mon.hp - 15, 1)
-	mon.nickname = "TESTMON"
+	var _mon: Gen2SaveMon = save.party[0]
+	_mon.hp = maxi(_mon.hp - 15, 1)
+	_mon.nickname = "TESTMON"
 	_world_screen._open_start_menu()
 	await get_tree().process_frame
 	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
@@ -1832,10 +1832,10 @@ func test_a_registered_item_is_used_by_the_select_button() -> void:
 ## What the party list shows for the first member: `GetCurNickname`, which falls
 ## back to the species name the fixture gave it.
 func _first_member_name(save: Gen2SaveData) -> String:
-	var mon: Gen2SaveMon = save.party[0]
-	if not mon.nickname.is_empty():
-		return mon.nickname
-	return String(_data.species(mon.species).get("name", ""))
+	var _mon: Gen2SaveMon = save.party[0]
+	if not _mon.nickname.is_empty():
+		return _mon.nickname
+	return String(_data.species(_mon.species).get("name", ""))
 
 
 ## A registered start-menu row that names a host action rather than a handler:
@@ -2013,10 +2013,10 @@ func test_giving_mail_writes_a_message_before_it_leaves_the_bag() -> void:
 
 	assert_null(host.get("_naming"))
 	var save: Gen2SaveData = _world_screen._injected_save
-	var mon: Gen2SaveMon = save.party[0]
-	assert_eq(mon.item, mail_item)
-	assert_not_null(mon.mail)
-	assert_eq(mon.mail.item, mail_item)
-	assert_eq(mon.mail.author, save.player_name)
-	assert_eq(mon.mail.species, mon.species)
+	var _mon: Gen2SaveMon = save.party[0]
+	assert_eq(_mon.item, mail_item)
+	assert_not_null(_mon.mail)
+	assert_eq(_mon.mail.item, mail_item)
+	assert_eq(_mon.mail.author, save.player_name)
+	assert_eq(_mon.mail.species, _mon.species)
 	assert_eq(_world_screen._world.state.item_quantity(mail_item), 0)

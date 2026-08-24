@@ -47,7 +47,7 @@ func _open(button: int) -> Gen2BindingSheet:
 
 func _key(code: int, pressed: bool = true) -> InputEventKey:
 	var event := InputEventKey.new()
-	event.physical_keycode = code
+	event.physical_keycode = code as Key
 	event.pressed = pressed
 	return event
 
@@ -176,7 +176,7 @@ func test_a_stick_binds_when_it_returns_to_centre() -> void:
 
 func _motion(axis: int, value: float) -> InputEventJoypadMotion:
 	var event := InputEventJoypadMotion.new()
-	event.axis = axis
+	event.axis = axis as JoyAxis
 	event.axis_value = value
 	return event
 
@@ -287,16 +287,16 @@ func test_arrows_stay_inside_an_open_sheet() -> void:
 	inside[0].grab_focus()
 	for step: int in 12:
 		guard.move_focus(Vector2.DOWN)
-		var owner: Control = _host.get_viewport().gui_get_focus_owner()
+		var focused: Control = _host.get_viewport().gui_get_focus_owner()
 		assert_true(
-			owner == sheet or sheet.is_ancestor_of(owner),
+			focused == sheet or sheet.is_ancestor_of(focused),
 			"down %d stayed in the sheet" % step
 		)
 	for step: int in 12:
 		guard.move_focus(Vector2.UP)
-		var owner: Control = _host.get_viewport().gui_get_focus_owner()
+		var focused: Control = _host.get_viewport().gui_get_focus_owner()
 		assert_true(
-			owner == sheet or sheet.is_ancestor_of(owner), "up %d" % step
+			focused == sheet or sheet.is_ancestor_of(focused), "up %d" % step
 		)
 	sheet.close()
 	await get_tree().process_frame

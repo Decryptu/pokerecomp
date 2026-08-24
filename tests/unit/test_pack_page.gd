@@ -75,7 +75,7 @@ func test_a_row_is_a_name_a_count_and_the_cursor() -> void:
 	var name_codes: PackedByteArray = Gen2Text.encode("AB")
 	assert_eq(
 		map[2 * Gen2PackPage.COLUMNS + Gen2PackPage.NAME_COLUMN], int(name_codes[0]),
-		"the name starts in column 8 of row 2"
+		"the row_name starts in column 8 of row 2"
 	)
 	assert_eq(
 		map[3 * Gen2PackPage.COLUMNS + 17], Gen2PackPage.TIMES_CODE,
@@ -169,15 +169,15 @@ func _name_piece(pocket: int) -> PackedByteArray:
 
 func _write_cache() -> void:
 	var sheets: Dictionary = {}
-	for name: String in ["font", "frames"]:
-		var tiles: int = RomLayout.FONT_TILES if name == "font" \
+	for row_name: String in ["font", "frames"]:
+		var tiles: int = RomLayout.FONT_TILES if row_name == "font" \
 			else RomLayout.FRAME_COUNT * RomLayout.FRAME_TILES
 		var indices := PackedByteArray()
 		indices.resize(tiles * Gen2Tiles.TILE_PIXELS)
 		indices.fill(3)
-		RomCache.write_indices(RomCache.tile_path(_directory, name), indices)
-		sheets[name] = _sheet_entry(tiles, RomLayout.FONT_FIRST_CODE \
-			if name == "font" else RomLayout.FRAME_FIRST_CODE)
+		RomCache.write_indices(RomCache.tile_path(_directory, row_name), indices)
+		sheets[row_name] = _sheet_entry(tiles, RomLayout.FONT_FIRST_CODE \
+			if row_name == "font" else RomLayout.FRAME_FIRST_CODE)
 
 	var menu := PackedByteArray()
 	menu.resize(RomLayout.PACK_MENU_TILES * Gen2Tiles.TILE_PIXELS)
@@ -187,18 +187,18 @@ func _write_cache() -> void:
 
 	# Piece p is filled with index p, and the female sheet with the piece after
 	# it, so which sheet and which piece reached the screen are both readable.
-	for name: String in ["pack_pockets", "pack_pockets_female"]:
+	for row_name: String in ["pack_pockets", "pack_pockets_female"]:
 		var strip := PackedByteArray()
 		var width: int = RomLayout.PACK_TILES * Gen2Tiles.TILE_WIDTH
 		strip.resize(width * Gen2Tiles.TILE_HEIGHT)
-		var shift: int = 1 if name.ends_with("female") else 0
+		var shift: int = 1 if row_name.ends_with("female") else 0
 		for row: int in Gen2Tiles.TILE_HEIGHT:
 			for column: int in width:
 				@warning_ignore("integer_division")
 				var piece: int = column / (RomLayout.PACK_POCKET_TILES * Gen2Tiles.TILE_WIDTH)
 				strip[row * width + column] = (piece + shift) % RomLayout.PACK_POCKETS
-		RomCache.write_indices(RomCache.tile_path(_directory, name), strip)
-		sheets[name] = _sheet_entry(RomLayout.PACK_TILES, 0)
+		RomCache.write_indices(RomCache.tile_path(_directory, row_name), strip)
+		sheets[row_name] = _sheet_entry(RomLayout.PACK_TILES, 0)
 
 	var names: Array = []
 	for pocket: int in RomLayout.PACK_POCKETS:

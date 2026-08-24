@@ -20,8 +20,8 @@ func after_each() -> void:
 		DirAccess.remove_absolute(path)
 
 
-func _write_file(name: String, size: int, fill: int = 0) -> String:
-	var path: String = "%s/%s" % [SCRATCH_DIR, name]
+func _write_file(row_name: String, size: int, fill: int = 0) -> String:
+	var path: String = "%s/%s" % [SCRATCH_DIR, row_name]
 	var file: FileAccess = FileAccess.open(path, FileAccess.WRITE)
 	var buffer: PackedByteArray = []
 	buffer.resize(size)

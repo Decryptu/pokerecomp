@@ -98,9 +98,9 @@ func test_name_rater_treats_an_empty_or_unchanged_entry_as_unchanged() -> void:
 		var settled: Dictionary = Gen2NameRater.ending_for_entry(entered, "SPARKY")
 		assert_eq(settled["ending"], Gen2NameRater.ENDING_SAME_NAME, entered)
 		assert_eq(settled["nickname"], "SPARKY", entered)
-	var renamed: Dictionary = Gen2NameRater.ending_for_entry("BOLT", "SPARKY")
-	assert_eq(renamed["ending"], Gen2NameRater.ENDING_FINISHED)
-	assert_eq(renamed["nickname"], "BOLT")
+	var was_renamed: Dictionary = Gen2NameRater.ending_for_entry("BOLT", "SPARKY")
+	assert_eq(was_renamed["ending"], Gen2NameRater.ENDING_FINISHED)
+	assert_eq(was_renamed["nickname"], "BOLT")
 
 
 ## `GetNicknamenameLength` stops at MON_NAME_LENGTH - 1, so two entries that
@@ -675,7 +675,7 @@ func test_a_stone_will_not_evolve_an_everstone_holder_from_the_pack() -> void:
 ## than one, since the branch behind the gate is a roll: before the city, no
 ## draw converts anything.
 func test_a_shuckle_holding_a_berry_makes_juice_only_past_goldenrod() -> void:
-	var flag: int = _world.state.engine_flag(
+	var flag: int = Gen2WorldState.engine_flag(
 		Gen2WorldState.ENGINE_REACHED_GOLDENROD, true
 	)
 	assert_false(_world.state.is_engine_flag_active(flag), "the fixture starts short of it")
@@ -708,7 +708,7 @@ func _juice_run(seed_value: int) -> bool:
 ## spread, and nothing is infected de novo while one is standing, so the strain
 ## every seed can produce is the carrier's own rather than a fresh roll.
 func test_a_carrier_spreads_its_own_strain_and_blocks_a_new_infection() -> void:
-	_world.state.set_engine_flag(_world.state.engine_flag(
+	_world.state.set_engine_flag(Gen2WorldState.engine_flag(
 		Gen2WorldState.ENGINE_REACHED_GOLDENROD, true
 	), true)
 	var spread: int = 0

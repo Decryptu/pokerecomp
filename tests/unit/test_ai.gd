@@ -36,8 +36,8 @@ func test_types_discourages_a_move_the_defender_is_immune_to() -> void:
 	# every time, tie-break or no.
 	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.THUNDERBOLT, Fixture.TACKLE])
 	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		var slot: int = Gen2BattleAI.choose_slot(
 			pikachu, geodude, _data, RomLayout.AI_TYPES, _rng
 		)
@@ -47,8 +47,8 @@ func test_types_discourages_a_move_the_defender_is_immune_to() -> void:
 func test_offensive_discourages_a_move_with_no_power() -> void:
 	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.HAZE, Fixture.TACKLE])
 	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		var slot: int = Gen2BattleAI.choose_slot(
 			pikachu, geodude, _data, RomLayout.AI_OFFENSIVE, _rng
 		)
@@ -60,8 +60,8 @@ func test_status_dismisses_a_status_move_the_defender_is_immune_to() -> void:
 	# every Electric move in this fixture's chart, paralysis included.
 	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.THUNDER_WAVE, Fixture.TACKLE])
 	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		var slot: int = Gen2BattleAI.choose_slot(
 			pikachu, geodude, _data, RomLayout.AI_STATUS, _rng
 		)
@@ -72,8 +72,8 @@ func test_basic_discourages_confuse_against_an_already_confused_target() -> void
 	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.SUPERSONIC, Fixture.TACKLE])
 	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
 	geodude.substatus = Gen2Substatus.CONFUSED
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		var slot: int = Gen2BattleAI.choose_slot(
 			pikachu, geodude, _data, RomLayout.AI_BASIC, _rng
 		)
@@ -84,8 +84,8 @@ func test_basic_discourages_a_status_move_against_an_already_statused_target() -
 	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.THUNDER_WAVE, Fixture.TACKLE])
 	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
 	geodude.status = Gen2Status.POISON
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		var slot: int = Gen2BattleAI.choose_slot(
 			pikachu, geodude, _data, RomLayout.AI_BASIC, _rng
 		)
@@ -99,8 +99,8 @@ func test_smart_toxic_is_discouraged_against_a_target_already_hurt() -> void:
 	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.TOXIC, Fixture.TACKLE])
 	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
 	geodude.hp = 1
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		var slot: int = Gen2BattleAI.choose_slot(
 			pikachu, geodude, _data, RomLayout.AI_SMART, _rng
 		)
@@ -111,8 +111,8 @@ func test_smart_belly_drum_is_discouraged_once_attack_is_already_maxed_out() -> 
 	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.BELLY_DRUM, Fixture.TACKLE])
 	pikachu.stages["attack"] = 3
 	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		var slot: int = Gen2BattleAI.choose_slot(
 			pikachu, geodude, _data, RomLayout.AI_SMART, _rng
 		)
@@ -122,8 +122,8 @@ func test_smart_belly_drum_is_discouraged_once_attack_is_already_maxed_out() -> 
 func test_smart_skull_bash_is_discouraged_above_a_quarter_hp() -> void:
 	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.SKULL_BASH, Fixture.TACKLE])
 	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		var slot: int = Gen2BattleAI.choose_slot(
 			pikachu, geodude, _data, RomLayout.AI_SMART, _rng
 		)
@@ -143,8 +143,8 @@ func test_aggressive_prefers_whichever_move_deals_more_damage() -> void:
 	assert_ne(ember_damage, slash_damage, "the scenario needs the two moves to actually differ")
 	var stronger_slot: int = 0 if ember_damage > slash_damage else 1
 
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		var slot: int = Gen2BattleAI.choose_slot(
 			charmander, bulbasaur, _data, RomLayout.AI_AGGRESSIVE, _rng
 		)
@@ -165,8 +165,8 @@ func test_risky_encourages_whichever_move_would_actually_ko() -> void:
 
 	# Set HP strictly between the two: Ember KOs, Slash does not.
 	bulbasaur.hp = slash_damage + 1
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		var slot: int = Gen2BattleAI.choose_slot(
 			charmander, bulbasaur, _data, RomLayout.AI_RISKY, _rng
 		)
@@ -190,8 +190,8 @@ func test_setup_only_ever_encourages_a_stat_up_move_on_the_first_turn() -> void:
 
 	var encouraged: bool = false
 	var left_alone: bool = false
-	for seed: int in 100:
-		_rng.seed = seed
+	for seed_value: int in 100:
+		_rng.seed = seed_value
 		var scores: Array = [20, 20, 20, 20]
 		Gen2BattleAI._apply_setup(scores, pikachu, geodude, _data, _rng, 0, 5, Gen2Weather.NONE)
 		if scores[0] < 20:
@@ -204,8 +204,8 @@ func test_setup_only_ever_encourages_a_stat_up_move_on_the_first_turn() -> void:
 	# Past the first turn, the same move should never be encouraged, only ever
 	# discouraged or left alone.
 	var discouraged_late: bool = false
-	for seed: int in 100:
-		_rng.seed = seed
+	for seed_value: int in 100:
+		_rng.seed = seed_value
 		var scores: Array = [20, 20, 20, 20]
 		Gen2BattleAI._apply_setup(scores, pikachu, geodude, _data, _rng, 3, 5, Gen2Weather.NONE)
 		assert_true(scores[0] >= 20, "a stat-up move past turn one is never encouraged")
@@ -240,8 +240,8 @@ func test_basic_discourages_disable_against_an_already_disabled_target() -> void
 	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.DISABLE_MOVE, Fixture.TACKLE])
 	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
 	geodude.disabled_slot = 0
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		var slot: int = Gen2BattleAI.choose_slot(
 			pikachu, geodude, _data, RomLayout.AI_BASIC, _rng
 		)
@@ -252,8 +252,8 @@ func test_basic_discourages_encore_against_an_already_encored_target() -> void:
 	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.ENCORE_MOVE, Fixture.TACKLE])
 	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
 	geodude.encored_slot = 0
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		var slot: int = Gen2BattleAI.choose_slot(
 			pikachu, geodude, _data, RomLayout.AI_BASIC, _rng
 		)
@@ -270,8 +270,8 @@ func test_basic_discourages_attract_between_the_same_gender() -> void:
 	var defender: Gen2BattleMon = Gen2BattleMon.create(
 		_data, Fixture.BULBASAUR, 50, [Fixture.TACKLE], Gen2Stats.pack_dvs(0, 0, 0, 0)
 	)
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		var slot: int = Gen2BattleAI.choose_slot(attacker, defender, _data, RomLayout.AI_BASIC, _rng)
 		assert_eq(slot, 1, "the same gender can never fall for Attract")
 
@@ -282,8 +282,8 @@ func test_basic_discourages_attract_against_a_genderless_target() -> void:
 	)
 	# Species 6 is not named in the fixture, so it reads genderless.
 	var defender: Gen2BattleMon = Gen2BattleMon.create(_data, 6, 50, [Fixture.TACKLE])
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		var slot: int = Gen2BattleAI.choose_slot(attacker, defender, _data, RomLayout.AI_BASIC, _rng)
 		assert_eq(slot, 1, "a genderless target can never fall for Attract")
 
@@ -292,8 +292,8 @@ func test_basic_discourages_mist_and_focus_energy_used_a_second_time() -> void:
 	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.MIST_MOVE, Fixture.TACKLE])
 	pikachu.substatus |= Gen2Substatus.MIST
 	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		var slot: int = Gen2BattleAI.choose_slot(
 			pikachu, geodude, _data, RomLayout.AI_BASIC, _rng
 		)
@@ -301,8 +301,8 @@ func test_basic_discourages_mist_and_focus_energy_used_a_second_time() -> void:
 
 	var pikachu2: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.FOCUS_ENERGY_MOVE, Fixture.TACKLE])
 	pikachu2.substatus |= Gen2Substatus.FOCUS_ENERGY
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		var slot: int = Gen2BattleAI.choose_slot(
 			pikachu2, geodude, _data, RomLayout.AI_BASIC, _rng
 		)
@@ -319,8 +319,8 @@ func test_basic_discourages_setting_weather_that_is_already_up() -> void:
 	]:
 		var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [int(pair[0]), Fixture.TACKLE])
 		var charmander: Gen2BattleMon = _mon(Fixture.CHARMANDER, 50, [Fixture.TACKLE])
-		for seed: int in 5:
-			_rng.seed = seed
+		for seed_value: int in 5:
+			_rng.seed = seed_value
 			var slot: int = Gen2BattleAI.choose_slot(
 				pikachu, charmander, _data, RomLayout.AI_BASIC, _rng, 0, 0, int(pair[1])
 			)
@@ -333,8 +333,8 @@ func test_basic_discourages_a_second_mean_look_from_the_same_pokemon() -> void:
 	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.MEAN_LOOK, Fixture.TACKLE])
 	var charmander: Gen2BattleMon = _mon(Fixture.CHARMANDER, 50, [Fixture.TACKLE])
 	pikachu.substatus |= Gen2Substatus.CANT_RUN
-	for seed: int in 5:
-		_rng.seed = seed
+	for seed_value: int in 5:
+		_rng.seed = seed_value
 		assert_eq(
 			Gen2BattleAI.choose_slot(pikachu, charmander, _data, RomLayout.AI_BASIC, _rng), 1
 		)
@@ -384,12 +384,12 @@ func test_smart_reads_the_weather_for_solarbeam() -> void:
 
 	var sunny: Array = []
 	var rainy: Array = []
-	for seed: int in 40:
-		_rng.seed = seed
+	for seed_value: int in 40:
+		_rng.seed = seed_value
 		sunny.append(Gen2BattleAI.choose_slot(
 			pikachu, charmander, _data, RomLayout.AI_SMART, _rng, 0, 0, Gen2Weather.SUN
 		))
-		_rng.seed = seed
+		_rng.seed = seed_value
 		rainy.append(Gen2BattleAI.choose_slot(
 			pikachu, charmander, _data, RomLayout.AI_SMART, _rng, 0, 0, Gen2Weather.RAIN
 		))
@@ -406,8 +406,8 @@ func test_smart_discourages_thunder_in_sun_only() -> void:
 	var charmander: Gen2BattleMon = _mon(Fixture.CHARMANDER, 50, [Fixture.TACKLE])
 
 	var discouraged: int = 0
-	for seed: int in 40:
-		_rng.seed = seed
+	for seed_value: int in 40:
+		_rng.seed = seed_value
 		if Gen2BattleAI.choose_slot(
 			pikachu, charmander, _data, RomLayout.AI_SMART, _rng, 0, 0, Gen2Weather.SUN
 		) == 1:
@@ -415,8 +415,8 @@ func test_smart_discourages_thunder_in_sun_only() -> void:
 
 	assert_gt(discouraged, 20, "sun has to push Thunder aside most of the time")
 
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		var scores: Array = [Gen2BattleAI.DEFAULT_SCORE, Gen2BattleAI.DEFAULT_SCORE]
 		Gen2BattleAI._apply_smart(
 			scores, pikachu, charmander, _data, _rng, 0, 0, Gen2Weather.RAIN
@@ -429,8 +429,8 @@ func test_smart_discourages_thunder_in_sun_only() -> void:
 func test_smart_will_not_raise_a_sandstorm_against_a_rock_type() -> void:
 	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.SANDSTORM, Fixture.TACKLE])
 	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		var scores: Array = [Gen2BattleAI.DEFAULT_SCORE, Gen2BattleAI.DEFAULT_SCORE]
 		Gen2BattleAI._apply_smart(scores, pikachu, geodude, _data, _rng, 0, 0, Gen2Weather.NONE)
 		assert_eq(int(scores[0]), Gen2BattleAI.DEFAULT_SCORE + 2)
@@ -479,8 +479,8 @@ func test_smart_will_not_bind_a_target_twice() -> void:
 	charmander.trapped_turns = 3
 
 	var raised: int = 0
-	for seed: int in 40:
-		_rng.seed = seed
+	for seed_value: int in 40:
+		_rng.seed = seed_value
 		var scores: Array = [Gen2BattleAI.DEFAULT_SCORE, Gen2BattleAI.DEFAULT_SCORE]
 		Gen2BattleAI._apply_smart(scores, pikachu, charmander, _data, _rng, 0, 0, Gen2Weather.NONE)
 		assert_gte(int(scores[0]), Gen2BattleAI.DEFAULT_SCORE, "a bound target is never encouraged")
@@ -495,8 +495,8 @@ func test_smart_binds_a_fresh_target_but_not_on_its_last_legs() -> void:
 
 	var healthy: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.WRAP, Fixture.TACKLE])
 	var lowered: int = 0
-	for seed: int in 40:
-		_rng.seed = seed
+	for seed_value: int in 40:
+		_rng.seed = seed_value
 		var scores: Array = [Gen2BattleAI.DEFAULT_SCORE, Gen2BattleAI.DEFAULT_SCORE]
 		Gen2BattleAI._apply_smart(scores, healthy, charmander, _data, _rng, 0, 0, Gen2Weather.NONE)
 		if int(scores[0]) < Gen2BattleAI.DEFAULT_SCORE:
@@ -506,8 +506,8 @@ func test_smart_binds_a_fresh_target_but_not_on_its_last_legs() -> void:
 	# `AICheckEnemyQuarterHP` gates the encouragement on the user's own health.
 	var spent: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.WRAP, Fixture.TACKLE])
 	spent.hp = 1
-	for seed: int in 20:
-		_rng.seed = seed
+	for seed_value: int in 20:
+		_rng.seed = seed_value
 		var scores: Array = [Gen2BattleAI.DEFAULT_SCORE, Gen2BattleAI.DEFAULT_SCORE]
 		Gen2BattleAI._apply_smart(scores, spent, charmander, _data, _rng, 0, 0, Gen2Weather.NONE)
 		assert_eq(int(scores[0]), Gen2BattleAI.DEFAULT_SCORE, "nothing to hold it there with")
@@ -518,8 +518,8 @@ func test_smart_binds_a_fresh_target_but_not_on_its_last_legs() -> void:
 func test_smart_heal_is_discouraged_while_the_ai_is_healthy() -> void:
 	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.RECOVER, Fixture.TACKLE])
 	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		var slot: int = Gen2BattleAI.choose_slot(
 			pikachu, geodude, _data, RomLayout.AI_SMART, _rng
 		)
@@ -532,8 +532,8 @@ func test_smart_heal_is_encouraged_once_the_ai_is_nearly_out() -> void:
 	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.MORNING_SUN, Fixture.TACKLE])
 	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
 	var chose_heal: int = 0
-	for seed: int in 20:
-		_rng.seed = seed
+	for seed_value: int in 20:
+		_rng.seed = seed_value
 		pikachu.hp = 1
 		if Gen2BattleAI.choose_slot(pikachu, geodude, _data, RomLayout.AI_SMART, _rng) == 0:
 			chose_heal += 1
@@ -547,8 +547,8 @@ func test_basic_treats_a_second_perish_song_as_redundant() -> void:
 	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
 	geodude.substatus |= Gen2Substatus.PERISH
 
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		var slot: int = Gen2BattleAI.choose_slot(
 			pikachu, geodude, _data, RomLayout.AI_BASIC, _rng
 		)
@@ -561,8 +561,8 @@ func test_smart_discourages_perish_song_with_nobody_on_the_bench() -> void:
 	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.PERISH_SONG, Fixture.TACKLE])
 	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
 
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		var slot: int = Gen2BattleAI.choose_slot(
 			pikachu, geodude, _data, RomLayout.AI_SMART, _rng
 		)
@@ -578,8 +578,8 @@ func test_smart_encourages_perish_song_against_a_player_that_cannot_run() -> voi
 
 	var encouraged: bool = false
 	var left_alone: bool = false
-	for seed: int in 100:
-		_rng.seed = seed
+	for seed_value: int in 100:
+		_rng.seed = seed_value
 		var scores: Array = [20, 20, 20, 20]
 		Gen2BattleAI._apply_smart(
 			scores, pikachu, geodude, _data, _rng, 0, 0, Gen2Weather.NONE,
@@ -600,8 +600,8 @@ func test_smart_discourages_perish_song_only_while_the_matchup_holds() -> void:
 	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.PERISH_SONG])
 	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
 
-	for seed: int in 100:
-		_rng.seed = seed
+	for seed_value: int in 100:
+		_rng.seed = seed_value
 		var losing: Array = [20, 20, 20, 20]
 		Gen2BattleAI._apply_smart(
 			losing, pikachu, geodude, _data, _rng, 0, 0, Gen2Weather.NONE,
@@ -611,8 +611,8 @@ func test_smart_discourages_perish_song_only_while_the_matchup_holds() -> void:
 
 	var discouraged: bool = false
 	var left_alone: bool = false
-	for seed: int in 100:
-		_rng.seed = seed
+	for seed_value: int in 100:
+		_rng.seed = seed_value
 		var scores: Array = [20, 20, 20, 20]
 		Gen2BattleAI._apply_smart(
 			scores, pikachu, geodude, _data, _rng, 0, 0, Gen2Weather.NONE,
@@ -633,8 +633,8 @@ func test_basic_treats_a_second_substitute_as_redundant() -> void:
 	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
 	pikachu.substatus |= Gen2Substatus.SUBSTITUTE
 
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		assert_eq(
 			Gen2BattleAI.choose_slot(pikachu, geodude, _data, RomLayout.AI_BASIC, _rng), 1
 		)
@@ -646,8 +646,8 @@ func test_basic_treats_a_second_leech_seed_as_redundant() -> void:
 	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
 	geodude.substatus |= Gen2Substatus.LEECH_SEED
 
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		assert_eq(
 			Gen2BattleAI.choose_slot(pikachu, geodude, _data, RomLayout.AI_BASIC, _rng), 1
 		)
@@ -658,8 +658,8 @@ func test_basic_treats_a_second_spikes_as_redundant() -> void:
 	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.SPIKES, Fixture.TACKLE])
 	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
 
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		assert_eq(
 			Gen2BattleAI.choose_slot(
 				pikachu, geodude, _data, RomLayout.AI_BASIC, _rng, 0, 0,
@@ -677,8 +677,8 @@ func test_basic_reproduces_the_nightmare_redundancy_bug() -> void:
 	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.NIGHTMARE, Fixture.TACKLE])
 	var awake: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
 
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		assert_eq(
 			Gen2BattleAI.choose_slot(pikachu, awake, _data, RomLayout.AI_BASIC, _rng), 1,
 			"an unstatused target really is the redundant case"
@@ -687,8 +687,8 @@ func test_basic_reproduces_the_nightmare_redundancy_bug() -> void:
 	var burned: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
 	burned.status = Gen2Status.BURN
 	var kept: int = 0
-	for seed: int in 20:
-		_rng.seed = seed
+	for seed_value: int in 20:
+		_rng.seed = seed_value
 		if Gen2BattleAI.choose_slot(pikachu, burned, _data, RomLayout.AI_BASIC, _rng) == 0:
 			kept += 1
 	assert_gt(kept, 0, "a burn is not sleep, and the AI is not discouraged anyway")
@@ -696,8 +696,8 @@ func test_basic_reproduces_the_nightmare_redundancy_bug() -> void:
 	var dreaming: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
 	dreaming.status = Gen2Status.BURN
 	dreaming.substatus |= Gen2Substatus.NIGHTMARE
-	for seed: int in 10:
-		_rng.seed = seed
+	for seed_value: int in 10:
+		_rng.seed = seed_value
 		assert_eq(
 			Gen2BattleAI.choose_slot(pikachu, dreaming, _data, RomLayout.AI_BASIC, _rng), 1,
 			"a target already dreaming is redundant on the second clause"
@@ -825,7 +825,7 @@ func test_smart_leaves_endure_alone_under_a_quarter_with_no_reversal() -> void:
 	geodude.hp = geodude.max_hp() / 8
 
 	var spread: Array = _smart_spread(geodude, pikachu)
-	assert_eq(int(spread[2]), 100, "untouched on every seed")
+	assert_eq(int(spread[2]), 100, "untouched on every seed_value")
 
 
 ## `AIHasMoveEffect` for `EFFECT_REVERSAL`: three points on, which is the
@@ -1243,15 +1243,15 @@ func test_the_cautious_bug_abandons_the_slots_after_a_missed_roll() -> void:
 	# Every one of the four is residual, so the fix discourages all four whenever
 	# no roll misses and never leaves a gap; with the bug a miss stops the walk.
 	var abandoned: bool = false
-	for seed: int in 60:
+	for seed_value: int in 60:
 		Gen2Rules.install(null)
-		_rng.seed = seed
+		_rng.seed = seed_value
 		var fixed: Array = Gen2BattleAI.score_slots(
 			pikachu, geodude, _data, RomLayout.AI_CAUTIOUS, _rng, 1
 		)
 		rules.set_flag(&"cautious_ai_abandons_remaining_moves", true)
 		Gen2Rules.install(rules)
-		_rng.seed = seed
+		_rng.seed = seed_value
 		var hardware: Array = Gen2BattleAI.score_slots(
 			pikachu, geodude, _data, RomLayout.AI_CAUTIOUS, _rng, 1
 		)

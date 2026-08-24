@@ -73,15 +73,15 @@ static func host_seconds() -> float:
 ## a host clock that has been put back: neither is a reason to run the world's
 ## own clock backwards.
 static func catch_up(
-	day_value: int, hour: int, minute: int, stamp: float, now: float = -1.0
+	day_value: int, hour_value: int, minute_value: int, stamp: float, now: float = -1.0
 ) -> Dictionary:
 	var here: float = now if now >= 0.0 else host_seconds()
 	var elapsed: float = here - stamp
 	if stamp <= 0.0 or elapsed <= 0.0:
-		return {"day": day_value, "hour": hour, "minute": minute}
+		return {"day": day_value, "hour": hour_value, "minute": minute_value}
 	@warning_ignore("integer_division")
 	var minutes: int = int(elapsed / SECONDS_PER_MINUTE) \
-		+ minute + hour * MINUTES_PER_HOUR \
+		+ minute_value + hour_value * MINUTES_PER_HOUR \
 		+ day_value * MINUTES_PER_HOUR * HOURS_PER_DAY
 	var day_minutes: int = MINUTES_PER_HOUR * HOURS_PER_DAY
 	@warning_ignore("integer_division")

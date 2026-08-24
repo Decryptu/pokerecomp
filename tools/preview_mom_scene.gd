@@ -63,6 +63,9 @@ func _initialize() -> void:
 	_game = game
 	if args.size() > 1:
 		_output_path = args[1]
+		if Gen2ToolPath.refuses(_output_path):
+			quit(2)
+			return
 	if args.size() > 2:
 		_capture_frame = maxi(1, int(args[2]))
 

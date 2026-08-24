@@ -30,6 +30,9 @@ func _initialize() -> void:
 		push_error("Usage: preview_mail.gd -- <game> <output.png> [type|all]")
 		quit(1)
 		return
+	if Gen2ToolPath.refuses(args[1]):
+		quit(2)
+		return
 
 	var data: GameData = GameData.open(StringName(args[0]))
 	if data == null:
