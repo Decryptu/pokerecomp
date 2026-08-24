@@ -70,6 +70,17 @@ func test_crystal_trainer_and_tutorial_commands_use_the_pinned_layout() -> void:
 	assert_eq(tutorial["name"], &"catchtutorial")
 	assert_eq(tutorial["value"], 3)
 
+	## `battletowertext`, raw $a4, whose operand is a BATTLETOWERTEXT_* index.
+	## Gold and Silver's command table stops at $a1, so their $a4 is nothing.
+	var tower_text: Dictionary = Gen2WorldScript.command_at(
+		PackedByteArray([0xA4, 2]), 0, true
+	)
+	assert_true(tower_text["ok"])
+	assert_eq(tower_text["name"], &"battletowertext")
+	assert_eq(tower_text["width"], 2)
+	assert_eq(tower_text["value"], 2)
+	assert_false(Gen2WorldScript.command_at(PackedByteArray([0xA4, 2]), 0, false)["ok"])
+
 
 func test_raw_opcode_shifts_only_at_and_above_the_farjumptext_insertion() -> void:
 	# Below the shift boundary both profiles agree on the raw byte.

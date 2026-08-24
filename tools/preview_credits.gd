@@ -47,6 +47,9 @@ func _initialize() -> void:
 	frames.sort()
 
 	_output_path = args[1]
+	if Gen2ToolPath.refuses(_output_path):
+		quit(2)
+		return
 	if args.size() > 3 and args[3] == "live":
 		_spent = int(frames[frames.size() - 1])
 		_open_world(data)

@@ -781,6 +781,9 @@ static func command_at(
 					command["map_group"] = int(data[offset + 2])
 					command["map_number"] = int(data[offset + 3])
 					return command
+				0xA4: # battletowertext, a BATTLETOWERTEXT_* index
+					command["value"] = int(data[offset + 1])
+					return command
 				0xA8: # wait, in units of six frames
 					command["value"] = int(data[offset + 1])
 					return command

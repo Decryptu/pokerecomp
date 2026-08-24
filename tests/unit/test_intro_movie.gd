@@ -144,7 +144,7 @@ func test_the_perspective_band_is_reported_a_pass_ahead() -> void:
 	while movie.waiting():
 		movie.advance_frame()
 	var band: Array[int] = []
-	for _pass: int in 4:
+	for _step: int in 4:
 		band.append(movie.scroll_x_at(96))
 		movie.advance_frame()
 	# The scene's own first pass has not run on the frame its delay ends; every

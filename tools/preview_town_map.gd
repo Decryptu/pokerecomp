@@ -46,6 +46,9 @@ func _initialize() -> void:
 		)
 		quit(1)
 		return
+	if Gen2ToolPath.refuses(args[1]):
+		quit(2)
+		return
 
 	var data: GameData = GameData.open(StringName(args[0]))
 	if data == null:

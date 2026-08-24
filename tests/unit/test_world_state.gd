@@ -638,3 +638,92 @@ func test_the_deferred_routines_state_survives_a_round_trip() -> void:
 	assert_eq(restored.buenas_password(), 0x32)
 	assert_eq(restored.kenji_break_timer(), 5)
 	assert_true(restored.battle_caught_celebi())
+
+
+## `SECTION "SRAM Battle Tower"`: a challenge saved between two battles has to
+## come back with the room it chose, the trainers it has already met and the
+## reward it drew, or the streak restarts against the same opponents.
+func test_a_battle_tower_challenge_survives_a_round_trip() -> void:
+	var state := Gen2WorldState.new()
+	var tower: Gen2BattleTower = state.battle_tower()
+	tower.challenge_state = Gen2BattleTower.CHALLENGE_IN_PROGRESS
+	tower.beaten = 3
+	tower.chosen_group = 7
+	tower.level_group = 7
+	tower.trainers = [12, 40, 3, 0xFF, 0xFF, 0xFF, 0xFF]
+	tower.save_file_flags = Gen2BattleTower.FLAG_EXPLANATION_READ
+	tower.reward = Gen2BattleTower.MIN_REWARD
+	tower.previous_mons = [135, 197, 6]
+	var restored: Gen2WorldState = Gen2WorldState.from_dict(state.to_dict())
+	var back: Gen2BattleTower = restored.battle_tower()
+	assert_eq(back.challenge_state, Gen2BattleTower.CHALLENGE_IN_PROGRESS)
+	assert_eq(back.beaten, 3)
+	assert_eq(back.chosen_group, 7)
+	assert_eq(back.level_group, 7)
+	assert_eq(back.trainers, [12, 40, 3, 0xFF, 0xFF, 0xFF, 0xFF])
+	assert_eq(back.save_file_flags, Gen2BattleTower.FLAG_EXPLANATION_READ)
+	assert_eq(back.reward, Gen2BattleTower.MIN_REWARD)
+	assert_eq(back.previous_mons, [135, 197, 6])
+
+
+## A slot written before the tower existed reads as one with no challenge in it,
+## which is the truth about it: nothing versions for this, the way `box_names`
+## and the Hall of Fame do not.
+func test_a_slot_with_no_battle_tower_record_reads_as_no_challenge() -> void:
+	var raw: Dictionary = Gen2WorldState.new().to_dict()
+	raw.erase("battle_tower")
+	var tower: Gen2BattleTower = Gen2WorldState.from_dict(raw).battle_tower()
+	assert_eq(tower.challenge_state, Gen2BattleTower.NO_CHALLENGE)
+	assert_eq(tower.beaten, 0)
+	assert_eq(tower.trainers.size(), Gen2BattleTower.STREAK_LENGTH)
+	assert_eq(tower.trainers[0], Gen2BattleTower.NO_TRAINER)
+
+
+## `ResetBattleTowerTrainersSRAM` clears the streak and its count and nothing
+## else: `Script_ChooseChallenge` runs it every time the counter is approached,
+## and a cleared explanation flag would make the receptionist explain the tower
+## again on every visit.
+func test_resetting_the_streak_keeps_the_explanation_and_the_room() -> void:
+	var tower := Gen2BattleTower.new()
+	tower.beaten = 4
+	tower.trainers[0] = 12
+	tower.level_group = 5
+	tower.save_file_flags = Gen2BattleTower.FLAG_EXPLANATION_READ
+	tower.reset_trainers()
+	assert_eq(tower.beaten, 0)
+	assert_eq(tower.trainers[0], Gen2BattleTower.NO_TRAINER)
+	assert_eq(tower.level_group, 5)
+	assert_eq(tower.save_file_flags, Gen2BattleTower.FLAG_EXPLANATION_READ)
+
+
+## `BattleTower_GiveReward`'s own shape, which is not "is there room": a pack
+## under `MAX_ITEMS` always has room for a new row, and a full one only when it
+## already carries the reward with fewer than 95 of it.
+func test_a_full_pack_turns_the_reward_into_a_potion() -> void:
+	var tower := Gen2BattleTower.new()
+	tower.reward = Gen2BattleTower.MIN_REWARD
+	assert_eq(tower.reward_for({1: 1}), Gen2BattleTower.MIN_REWARD)
+	var full: Dictionary = {}
+	for item: int in Gen2WorldPack.MAX_ITEMS:
+		full[item + 1] = 1
+	assert_eq(tower.reward_for(full), Gen2BattleTower.REWARD_FULL_PACK)
+	full.erase(1)
+	full[Gen2BattleTower.MIN_REWARD] = 94
+	assert_eq(tower.reward_for(full), Gen2BattleTower.MIN_REWARD)
+	full[Gen2BattleTower.MIN_REWARD] = 95
+	assert_eq(tower.reward_for(full), Gen2BattleTower.REWARD_FULL_PACK)
+
+
+## LUCKY_PUNCH sits inside `BATTLETOWER_MIN_REWARD`..`BATTLETOWER_MAX_REWARD`
+## without being a reward, so the roll that lands on it is drawn again.
+func test_the_reward_is_a_stat_booster_and_never_the_lucky_punch() -> void:
+	var tower := Gen2BattleTower.new()
+	var seen: Dictionary = {}
+	for seed_value: int in 200:
+		var random := RandomNumberGenerator.new()
+		random.seed = seed_value
+		var item: int = tower.choose_reward(random)
+		assert_between(item, Gen2BattleTower.MIN_REWARD, Gen2BattleTower.MAX_REWARD)
+		assert_ne(item, Gen2BattleTower.LUCKY_PUNCH)
+		seen[item] = true
+	assert_eq(seen.size(), Gen2BattleTower.MAX_REWARD - Gen2BattleTower.MIN_REWARD)

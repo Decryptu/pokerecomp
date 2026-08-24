@@ -12,14 +12,14 @@ func _files(dir_path: String, extension: String, out: PackedStringArray) -> void
 	if dir == null:
 		return
 	dir.list_dir_begin()
-	var name: String = dir.get_next()
-	while name != "":
-		var full: String = "%s/%s" % [dir_path, name]
+	var row_name: String = dir.get_next()
+	while row_name != "":
+		var full: String = "%s/%s" % [dir_path, row_name]
 		if dir.current_is_dir():
 			_files(full, extension, out)
-		elif name.ends_with(extension):
+		elif row_name.ends_with(extension):
 			out.append(full)
-		name = dir.get_next()
+		row_name = dir.get_next()
 	dir.list_dir_end()
 
 

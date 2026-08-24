@@ -154,7 +154,7 @@ func test_the_ending_text_waits_on_the_scripts_own_waitbutton() -> void:
 
 func test_the_party_list_is_select_mon_from_party() -> void:
 	await _open_world()
-	await _reach_party()
+	_reach_party()
 	var party: Gen2PartyScreen = _host().party_screen()
 	assert_not_null(party)
 	assert_eq(party._prompt(), Gen2PartyScreen.PROMPT_CHOOSE)
@@ -167,7 +167,7 @@ func test_the_party_list_is_select_mon_from_party() -> void:
 ## `PartyMenuSelect`'s carry: B over the list is the same `.cancel` a NO is.
 func test_cancelling_the_party_list_ends_on_come_again() -> void:
 	await _open_world()
-	await _reach_party()
+	_reach_party()
 	_host().party_screen().handle_button(Gen2Button.B)
 	assert_null(_host())
 	assert_eq(
@@ -181,7 +181,7 @@ func test_cancelling_the_party_list_ends_on_come_again() -> void:
 func test_a_traded_member_ends_on_perfect_name_with_its_nickname_filled() -> void:
 	await _open_world()
 	_world_screen.active_save().party[0].ot_id += 1
-	await _reach_party()
+	_reach_party()
 	_host().party_screen().handle_button(Gen2Button.A)
 	assert_null(_host())
 	var shown: String = " ".join(_world_screen._text_box.text_lines())
@@ -194,7 +194,7 @@ func test_a_traded_member_ends_on_perfect_name_with_its_nickname_filled() -> voi
 func test_an_egg_ends_on_the_egg_text() -> void:
 	await _open_world()
 	_world_screen.active_save().party[0].is_egg = true
-	await _reach_party()
+	_reach_party()
 	_host().party_screen().handle_button(Gen2Button.A)
 	assert_null(_host())
 	assert_eq(
@@ -206,7 +206,7 @@ func test_an_egg_ends_on_the_egg_text() -> void:
 ## The whole line through, ending in the `CopyBytes` into the party row.
 func test_a_new_name_is_written_to_the_party_row() -> void:
 	await _open_world()
-	await _reach_party()
+	_reach_party()
 	_host().party_screen().handle_button(Gen2Button.A)
 	_settle()
 	assert_eq(_host().phase(), Gen2NameRaterScreen.Phase.BETTER_ASK)
@@ -232,7 +232,7 @@ func test_a_new_name_is_written_to_the_party_row() -> void:
 ## row keeps the name it had.
 func test_an_empty_entry_leaves_the_row_alone() -> void:
 	await _open_world()
-	await _reach_party()
+	_reach_party()
 	_host().party_screen().handle_button(Gen2Button.A)
 	_settle()
 	_world_screen.press_button(Gen2Button.A)
@@ -318,7 +318,7 @@ func test_a_member_with_one_move_is_refused_before_the_list() -> void:
 ## the list neither cycles between members nor holds a move.
 func test_the_move_list_neither_cycles_nor_swaps() -> void:
 	await _open_deleter_world()
-	await _reach_move_list()
+	_reach_move_list()
 	var moves: Gen2MoveScreen = _deleter().move_screen()
 	assert_not_null(moves)
 	assert_false(moves.handle_button(Gen2Button.RIGHT))
@@ -330,7 +330,7 @@ func test_the_move_list_neither_cycles_nor_swaps() -> void:
 ## text is the script's.
 func test_a_deleted_move_takes_its_pp_with_it() -> void:
 	await _open_deleter_world()
-	await _reach_move_list()
+	_reach_move_list()
 	_deleter().move_screen().handle_button(Gen2Button.DOWN)
 	_deleter().move_screen().handle_button(Gen2Button.A)
 	assert_eq(_deleter().phase(), Gen2MoveDeleterScreen.Phase.DELETE_ASK)
@@ -349,7 +349,7 @@ func test_a_deleted_move_takes_its_pp_with_it() -> void:
 ## NO on the second question is `.declined`, and nothing is written.
 func test_no_on_the_confirmation_leaves_the_moves_alone() -> void:
 	await _open_deleter_world()
-	await _reach_move_list()
+	_reach_move_list()
 	_deleter().move_screen().handle_button(Gen2Button.A)
 	_settle_deleter()
 	_world_screen.press_button(Gen2Button.B)

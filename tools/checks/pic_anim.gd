@@ -86,7 +86,7 @@ func _check_record(record: Dictionary, species: int, form: int) -> int:
 		return 0
 
 	# The run the cartridge loads: the padded box, then `w * h` tiles behind it.
-	var run: int = BOX_TILES + height * height
+	var subject: int = BOX_TILES + height * height
 	var list: Array = record["frames"] as Array
 	for index: int in list.size():
 		var frame: PackedByteArray = list[index]
@@ -104,8 +104,8 @@ func _check_record(record: Dictionary, species: int, form: int) -> int:
 		var reaches: bool = false
 		for at: int in range(mask_bytes, frame.size()):
 			var tile: int = RomLayout.pic_anim_box_tile(int(frame[at]), height)
-			_r.check(tile < run, "%s frame %d names tile %d, past the %d loaded." % [
-				where, index, tile, run
+			_r.check(tile < subject, "%s frame %d names tile %d, past the %d loaded." % [
+				where, index, tile, subject
 			])
 			# `PokeAnim_SetVBank1`'s reason: the block's own 49 is `AppearUser`'s
 			# `$31` for the player's back pic, so an animated square has to be
@@ -116,7 +116,7 @@ func _check_record(record: Dictionary, species: int, form: int) -> int:
 
 	for mirrored: bool in [false, true]:
 		for kind: int in Gen2PicAnimation.SCENES:
-			_run_scene(record, kind, mirrored, run, where)
+			_run_scene(record, kind, mirrored, subject, where)
 	return list.size()
 
 
@@ -124,7 +124,7 @@ func _check_record(record: Dictionary, species: int, form: int) -> int:
 ## box the animation leaves has to be drawable, which is the only thing the
 ## renderer asks of it.
 func _run_scene(
-	record: Dictionary, kind: int, mirrored: bool, run: int, where: String
+	record: Dictionary, kind: int, mirrored: bool, subject: int, where: String
 ) -> void:
 	var animation := Gen2PicAnimation.new(record, kind, mirrored)
 	var spent: int = 0
@@ -132,9 +132,9 @@ func _run_scene(
 		animation.advance()
 		spent += 1
 		for tile: int in animation.box:
-			if tile >= run:
+			if tile >= subject:
 				_r.check(false, "%s scene %d draws tile %d, past the %d loaded." % [
-					where, kind, tile, run
+					where, kind, tile, subject
 				])
 				return
 	_r.check(animation.finished(), "%s scene %d did not end within %d frames." % [

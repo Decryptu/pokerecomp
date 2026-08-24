@@ -217,7 +217,7 @@ func test_an_induction_records_the_party_newest_first() -> void:
 	assert_eq(Gen2HallOfFame.win_count(records), 2)
 
 	## `sHallOfFame` holds thirty and the oldest falls off the end.
-	for _pass: int in Gen2HallOfFame.MAX_RECORDS:
+	for _step: int in Gen2HallOfFame.MAX_RECORDS:
 		records = Gen2HallOfFame.inducted(records, _save)
 	assert_eq(records.size(), Gen2HallOfFame.MAX_RECORDS)
 	assert_eq(Gen2HallOfFame.win_count(records), 2 + Gen2HallOfFame.MAX_RECORDS)

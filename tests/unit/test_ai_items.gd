@@ -42,8 +42,8 @@ func _use_rate(
 	item: int, mon: Gen2BattleMon, flags: int, turns_taken: int, seeds: int = 64
 ) -> int:
 	var used: int = 0
-	for seed: int in seeds:
-		_rng.seed = seed
+	for seed_value: int in seeds:
+		_rng.seed = seed_value
 		if Gen2AIItems.choose(mon, [item], flags, turns_taken, _rng) == item:
 			used += 1
 	return used

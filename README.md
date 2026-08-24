@@ -50,9 +50,13 @@ Inspired by [gen1recomp](https://github.com/bryanthaboi/gen1recomp).
 > Silver: every Johto badge with the errand behind it, then Kanto, all sixteen
 > badges, the Hall of Fame with Prof Oak's rating, and the credits.
 >
-> Missing: link play and Mystery Gift, the Battle Tower, and a
-> handful of pixel-level divergences still being chased in the opening movies
-> and title screen against a real cartridge.
+> The Battle Tower is a full seven-trainer challenge: the room list, the party
+> rules, the sampled opponents with their own lines, the save between battles and
+> the prize at the end.
+>
+> Missing: link play and Mystery Gift, and a handful of pixel-level divergences
+> still being chased in the opening movies and title screen against a real
+> cartridge.
 
 ## Getting started
 

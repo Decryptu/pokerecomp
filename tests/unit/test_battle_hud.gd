@@ -32,18 +32,18 @@ func _write_cache(with_sheets: bool = true) -> void:
 			"font": [RomLayout.FONT_TILES, 3],
 			"frames": [RomLayout.FRAME_COUNT * RomLayout.FRAME_TILES, 3],
 		}
-		for name: String in written:
-			var tiles: int = written[name][0]
-			var value: int = written[name][1]
+		for row_name: String in written:
+			var tiles: int = written[row_name][0]
+			var value: int = written[row_name][1]
 			var indices: PackedByteArray = PackedByteArray()
 			indices.resize(tiles * Gen2Tiles.TILE_WIDTH * Gen2Tiles.TILE_HEIGHT)
 			indices.fill(value)
-			RomCache.write_indices(RomCache.tile_path(_directory, name), indices)
-			sheets[name] = {
+			RomCache.write_indices(RomCache.tile_path(_directory, row_name), indices)
+			sheets[row_name] = {
 				"width": tiles * Gen2Tiles.TILE_WIDTH,
 				"height": Gen2Tiles.TILE_HEIGHT,
 				"tiles": tiles,
-				"first_code": RomLayout.FONT_FIRST_CODE if name == "font" else 0,
+				"first_code": RomLayout.FONT_FIRST_CODE if row_name == "font" else 0,
 				"bits": 1,
 			}
 
@@ -157,7 +157,7 @@ func test_the_hud_draws_its_panels_where_the_hardware_puts_them() -> void:
 	hud.draw_enemy(screen, Gen2Screen.WIDTH, "PIDGEY", 5)
 	hud.draw_player(screen, Gen2Screen.WIDTH, "CYNDAQUIL", 5, 18, 18)
 
-	assert_ne(_ink_in_row(screen, Gen2BattleHud.ENEMY_NAME.y), 0, "the enemy's name row")
+	assert_ne(_ink_in_row(screen, Gen2BattleHud.ENEMY_NAME.y), 0, "the enemy's row_name row")
 	assert_ne(_ink_in_row(screen, Gen2BattleHud.PLAYER_BAR.y), 0, "the player's bar row")
 	assert_eq(_ink_in_row(screen, Gen2TextBox.STANDARD_TOP), 0, "nothing in the text box")
 	assert_eq(_ink_in_row(screen, 5), 0, "nothing between the two panels")

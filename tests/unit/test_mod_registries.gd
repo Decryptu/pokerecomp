@@ -33,8 +33,8 @@ func _note(turn: Gen2Turn) -> void:
 	_ran.append(turn.move_number)
 
 
-func _watch(event: Dictionary) -> void:
-	_seen.append(event)
+func _watch(queued_event: Dictionary) -> void:
+	_seen.append(queued_event)
 
 
 func test_a_registered_command_runs_inside_a_real_move_sequence() -> void:
@@ -125,13 +125,13 @@ func test_two_mods_claiming_one_effect_is_refused() -> void:
 func test_a_subscriber_sees_published_events_and_cannot_write_through_them() -> void:
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	assert_true(bool(host.subscribe(Gen2ModHost.CHANNEL_BATTLE, MOD, _watch).get("ok", false)))
-	var event: Dictionary = {"type": Gen2Battle.HIT, "damage": 12}
-	Gen2ModHost.publish(Gen2ModHost.CHANNEL_BATTLE, event)
+	var queued_event: Dictionary = {"type": Gen2Battle.HIT, "damage": 12}
+	Gen2ModHost.publish(Gen2ModHost.CHANNEL_BATTLE, queued_event)
 	assert_eq(_seen.size(), 1)
 	assert_eq(int(_seen[0]["damage"]), 12)
 	# The subscriber holds a copy, so writing to it reaches nothing.
 	(_seen[0] as Dictionary)["damage"] = 999
-	assert_eq(int(event["damage"]), 12)
+	assert_eq(int(queued_event["damage"]), 12)
 	# And the other channel is a different conversation.
 	Gen2ModHost.publish(Gen2ModHost.CHANNEL_WORLD, {"status": &"waiting"})
 	assert_eq(_seen.size(), 1)
@@ -144,9 +144,9 @@ func test_an_event_mutator_rewrites_presentation_and_not_the_routing_key() -> vo
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	assert_true(bool(host.register_event_mutator(
 		Gen2ModHost.CHANNEL_BATTLE, MOD,
-		func(event: Dictionary) -> Dictionary:
-			event["damage"] = 1
-			return event
+		func(queued_event: Dictionary) -> Dictionary:
+			queued_event["damage"] = 1
+			return queued_event
 	).get("ok", false)))
 	assert_true(bool(host.subscribe(Gen2ModHost.CHANNEL_BATTLE, MOD, _watch).get("ok", false)))
 
@@ -169,13 +169,13 @@ func test_a_mutator_that_changes_the_key_or_answers_with_nothing_is_ignored() ->
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	host.register_event_mutator(
 		Gen2ModHost.CHANNEL_BATTLE, MOD,
-		func(event: Dictionary) -> Dictionary:
-			event["type"] = Gen2Battle.ANIMATION
-			return event
+		func(mutated: Dictionary) -> Dictionary:
+			mutated["type"] = Gen2Battle.ANIMATION
+			return mutated
 	)
-	var event: Dictionary = {"type": Gen2Battle.HIT, "damage": 12}
+	var queued_event: Dictionary = {"type": Gen2Battle.HIT, "damage": 12}
 	assert_eq(
-		StringName(Gen2ModHost.publish(Gen2ModHost.CHANNEL_BATTLE, event)["type"]),
+		StringName(Gen2ModHost.publish(Gen2ModHost.CHANNEL_BATTLE, queued_event)["type"]),
 		StringName(Gen2Battle.HIT),
 		"a rewrite cannot turn one screen operation into another"
 	)
@@ -187,7 +187,7 @@ func test_a_mutator_that_changes_the_key_or_answers_with_nothing_is_ignored() ->
 	assert_eq(
 		Gen2ModHost.publish(Gen2ModHost.CHANNEL_WORLD, {"status": &"waiting"}),
 		{"status": &"waiting"},
-		"and a mutator answering with nothing leaves the event alone"
+		"and a mutator answering with nothing leaves the queued_event alone"
 	)
 
 

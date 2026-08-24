@@ -215,9 +215,9 @@ func _walked(path: PackedInt32Array) -> Vector2i:
 
 
 ## A table driven to `.PlaceYourBet`, which is where the cursor exists at all.
-func _bet_ready(seed: int) -> Gen2CardFlip:
+func _bet_ready(seed_value: int) -> Gen2CardFlip:
 	var rng := RandomNumberGenerator.new()
-	rng.seed = seed
+	rng.seed = seed_value
 	var board := PackedByteArray()
 	board.resize(RomLayout.CARD_FLIP_TILEMAP_BYTES)
 	var game: Gen2CardFlip = Gen2CardFlip.create(board, 100, rng)
@@ -324,9 +324,9 @@ func _verify_cards(game_id: StringName, data: GameData) -> void:
 ## running off the end of `wDeck`.
 func _verify_games(game_id: StringName, data: GameData) -> void:
 	var deals: int = 0
-	for run: int in GAMES:
+	for game_run: int in GAMES:
 		var rng := RandomNumberGenerator.new()
-		rng.seed = run + 1
+		rng.seed = game_run + 1
 		var page: Gen2CardFlipPage = Gen2CardFlipPage.from_data(data)
 		if page == null:
 			return
@@ -338,7 +338,7 @@ func _verify_games(game_id: StringName, data: GameData) -> void:
 		## driver that presses A the instant the prompt appears always takes the
 		## top one. Holding a different number of frames per run is what reaches
 		## `wCardFlipWhichCard` 1 at all.
-		var hold: int = run % (Gen2CardFlip.TOGGLE_FRAMES * 2)
+		var hold: int = game_run % (Gen2CardFlip.TOGGLE_FRAMES * 2)
 		var held: int = 0
 		for _frame: int in GAME_FRAME_CAP:
 			if game.finished():
@@ -371,7 +371,7 @@ func _verify_games(game_id: StringName, data: GameData) -> void:
 			if game.deck() != deck:
 				deck = game.deck()
 				seen = {}
-			if not _verify_deal(game_id, run, game, seen):
+			if not _verify_deal(game_id, game_run, game, seen):
 				return
 	_r.note("%s: %d games, %d cards dealt, every deck a permutation." % [
 		game_id, GAMES, deals
@@ -380,7 +380,7 @@ func _verify_games(game_id: StringName, data: GameData) -> void:
 
 ## One deal: the shuffle behind it and the card it turned over.
 func _verify_deal(
-	game_id: StringName, run: int, game: Gen2CardFlip, seen: Dictionary
+	game_id: StringName, game_run: int, game: Gen2CardFlip, seen: Dictionary
 ) -> bool:
 	var deck: PackedByteArray = game.deck()
 	var present: Dictionary = {}
@@ -389,18 +389,18 @@ func _verify_deal(
 	if not _r.check(
 		present.size() == Gen2CardFlip.DECK_SIZE,
 		"%s: game %d shuffled a deck of %d distinct cards." % [
-			game_id, run, present.size()
+			game_id, game_run, present.size()
 		]
 	):
 		return false
 	var card: int = game.face_up_card()
 	if not _r.check(
 		not seen.has(card),
-		"%s: game %d dealt card %d twice before a shuffle." % [game_id, run, card]
+		"%s: game %d dealt card %d twice before a shuffle." % [game_id, game_run, card]
 	):
 		return false
 	seen[card] = true
 	return _r.check(
 		game.discarded()[card] != 0,
-		"%s: game %d turned card %d over without discarding it." % [game_id, run, card]
+		"%s: game %d turned card %d over without discarding it." % [game_id, game_run, card]
 	)

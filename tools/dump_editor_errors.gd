@@ -10,7 +10,12 @@ extends EditorScript
 ## panel is the only way to read them outside it.
 ##
 ## The panel holds what this editor session has analysed, so a full sweep is
-## Project > Reload Current Project first, then this.
+## Project > Reload Current Project first, then this. It is also where a running
+## game's warnings arrive, which is how a mod's `user://` scripts are seen.
+##
+## For the analyser alone, with no editor to drive, see
+## `addons/warning_scan/plugin.gd`: it opens named scripts headlessly and prints
+## what the analyser says about each.
 
 const OUTPUT_PATH: String = "user://editor_errors.txt"
 

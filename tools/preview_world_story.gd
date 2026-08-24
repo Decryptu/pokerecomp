@@ -3056,13 +3056,13 @@ func _glacier_badge_path(
 			"reason": "Route 38 back to Ecruteak failed: %s" % to_ecruteak.get("reason", ""),
 		}
 
-	var to_route_42: Dictionary = _gate_leg(
+	var route_42_path: Dictionary = _gate_leg(
 		world, save, random, data, Vector2i(35, 26), 2, 5
 	)
-	if not bool(to_route_42.get("ok", false)):
+	if not bool(route_42_path.get("ok", false)):
 		return {
 			"ok": false, "path": path,
-			"reason": "Ecruteak to Route 42 failed: %s" % to_route_42.get("reason", ""),
+			"reason": "Ecruteak to Route 42 failed: %s" % route_42_path.get("reason", ""),
 		}
 	# Route 42's halves do not join on foot. Its west side ends at x=13 and its
 	# only other land exit is Mt Mortar's door at (10,5), which opens into a cave
@@ -4004,16 +4004,16 @@ func _goldenrod_crossing(
 ) -> Dictionary:
 	var westbound: bool = heading == "west"
 	if westbound:
-		var to_route_42: Dictionary = _walk_connection_resolving(
+		var mahogany_leg: Dictionary = _walk_connection_resolving(
 			world, "west", 2, 5, save, random, data
 		)
 		var _r42_entry: Dictionary = _drain_story(
 			world, world.dispatch_map_entry(), save, random, data
 		)
-		if not bool(to_route_42.get("ok", false)):
+		if not bool(mahogany_leg.get("ok", false)):
 			return {
 				"ok": false, "path": path,
-				"reason": "Mahogany to Route 42 failed: %s" % to_route_42.get("reason", ""),
+				"reason": "Mahogany to Route 42 failed: %s" % mahogany_leg.get("reason", ""),
 			}
 		# The same two lakes _glacier_badge_path() crossed eastward, taken from
 		# the far shore each time.
@@ -4119,13 +4119,13 @@ func _goldenrod_crossing(
 					leg[0], leg[1], leg[2], walked.get("reason", ""),
 				],
 			}
-	var to_route_42: Dictionary = _gate_leg(
+	var route_42_path: Dictionary = _gate_leg(
 		world, save, random, data, Vector2i(35, 26), 2, 5
 	)
-	if not bool(to_route_42.get("ok", false)):
+	if not bool(route_42_path.get("ok", false)):
 		return {
 			"ok": false, "path": path,
-			"reason": "Ecruteak to Route 42 failed: %s" % to_route_42.get("reason", ""),
+			"reason": "Ecruteak to Route 42 failed: %s" % route_42_path.get("reason", ""),
 		}
 	var west_lake: Dictionary = _lake_crossing(
 		world, save, random, data,

@@ -90,21 +90,21 @@ const SHOW_SEEDS: int = 20
 func run(r: RefCounted) -> void:
 	_r = r
 	for game_id: StringName in _r.GAME_IDS:
-		var data: GameData = GameData.open(game_id)
-		if data == null:
+		var _data: GameData = GameData.open(game_id)
+		if _data == null:
 			_r.fail("%s cache is unavailable. Import roms/%s.gbc first." % [game_id, game_id])
 			continue
-		var crystal: bool = Gen2WorldState.is_crystal_profile(data)
-		_verify_stations(data, game_id, crystal)
-		_verify_music_records(data, game_id, crystal)
-		_verify_shows(data, game_id, crystal)
-		_verify_big_object_census(data, game_id)
-		_verify_snorlax(data, game_id, crystal)
-		_verify_route_2(data, game_id, crystal)
+		var crystal: bool = Gen2WorldState.is_crystal_profile(_data)
+		_verify_stations(_data, game_id, crystal)
+		_verify_music_records(_data, game_id, crystal)
+		_verify_shows(_data, game_id, crystal)
+		_verify_big_object_census(_data, game_id)
+		_verify_snorlax(_data, game_id, crystal)
+		_verify_route_2(_data, game_id, crystal)
 
 
 ## RadioChannels, its three profile splits and the music each station commits.
-func _verify_stations(data: GameData, game_id: StringName, crystal: bool) -> void:
+func _verify_stations(_data: GameData, game_id: StringName, crystal: bool) -> void:
 	var vermilion: int = LANDMARK_VERMILION_CITY if crystal else LANDMARK_VERMILION_CITY - 1
 	var new_bark: int = LANDMARK_NEW_BARK_TOWN
 	var kanto: Dictionary = {"landmark": vermilion, "crystal": crystal, "expn_card": true}
@@ -155,9 +155,9 @@ func _verify_stations(data: GameData, game_id: StringName, crystal: bool) -> voi
 ## can catch that a unit test cannot: a line whose `text_ram` buffer the cache
 ## does not fill, so it prints an empty name, and a segment that never leaves
 ## the box it wrote.
-func _verify_shows(data: GameData, game_id: StringName, crystal: bool) -> void:
+func _verify_shows(_data: GameData, game_id: StringName, crystal: bool) -> void:
 	var caught: Array = []
-	for species: int in range(1, data.species_count() + 1):
+	for species: int in range(1, _data.species_count() + 1):
 		caught.append(species)
 	var visited: Dictionary = {}
 	var lines_seen: int = 0
@@ -170,7 +170,7 @@ func _verify_shows(data: GameData, game_id: StringName, crystal: bool) -> void:
 			random.seed = seed_index
 			# Both sides of NITE_HOUR, so Buena's off-air arm is walked too.
 			var hour: int = 20 if seed_index % 2 == 0 else 9
-			var show: Gen2RadioShow = Gen2RadioShow.start(data, channel, {
+			var show: Gen2RadioShow = Gen2RadioShow.start(_data, channel, {
 				"crystal": crystal, "weekday": seed_index % 7, "hour": hour,
 				"caught": caught, "hall_of_fame": seed_index % 3 == 0,
 				"kanto_badges": 0xFF if seed_index % 3 == 0 else 0,
@@ -222,13 +222,13 @@ func _verify_shows(data: GameData, game_id: StringName, crystal: bool) -> void:
 
 ## Every station's track has to be a real imported music record, or tuning to it
 ## would leave the overworld silent.
-func _verify_music_records(data: GameData, game_id: StringName, crystal: bool) -> void:
+func _verify_music_records(_data: GameData, game_id: StringName, crystal: bool) -> void:
 	for channel: int in Gen2WorldRadio.CHANNEL_SONGS.size():
 		if channel == Gen2WorldRadio.BUENAS_PASSWORD and not crystal:
 			continue
 		var song: int = Gen2WorldRadio.CHANNEL_SONGS[channel]
 		_r.check(
-			not data.world_audio(&"music", song).is_empty(),
+			not _data.world_audio(&"music", song).is_empty(),
 			"%s: channel %d wants music record %d, which this cache lacks." % [
 				game_id, channel, song,
 			]
@@ -237,9 +237,9 @@ func _verify_music_records(data: GameData, game_id: StringName, crystal: bool) -
 
 ## data/sprites/map_objects.asm gives BIG_OBJECT to three SpriteMovementData
 ## rows, and exactly two objects in either game use one.
-func _verify_big_object_census(data: GameData, game_id: StringName) -> void:
+func _verify_big_object_census(_data: GameData, game_id: StringName) -> void:
 	var found: Array = []
-	for map: Gen2WorldMap in data.world_maps():
+	for map: Gen2WorldMap in _data.world_maps():
 		for row: Variant in map.events.get("objects", []):
 			if not row is Dictionary:
 				continue
@@ -263,8 +263,8 @@ func _verify_big_object_census(data: GameData, game_id: StringName) -> void:
 
 ## The Snorlax itself: what it fills, what it seals, and the whole radio chain
 ## driven against the real cache.
-func _verify_snorlax(data: GameData, game_id: StringName, crystal: bool) -> void:
-	var sealed: Gen2WorldAPI = _open(data, VERMILION_GROUP, VERMILION_CITY, PORT_LANDING)
+func _verify_snorlax(_data: GameData, game_id: StringName, crystal: bool) -> void:
+	var sealed: Gen2WorldAPI = _open(_data, VERMILION_GROUP, VERMILION_CITY, PORT_LANDING)
 	if sealed == null:
 		return
 	_r.check(
@@ -315,16 +315,16 @@ func _verify_snorlax(data: GameData, game_id: StringName, crystal: bool) -> void
 			]
 		)
 
-	_verify_wake(data, game_id, crystal)
+	_verify_wake(_data, game_id, crystal)
 
 
 ## The chain end to end: tune 20.0 next to it, talk to it, win, and watch the
 ## cave mouth open.
-func _verify_wake(data: GameData, game_id: StringName, crystal: bool) -> void:
+func _verify_wake(_data: GameData, game_id: StringName, crystal: bool) -> void:
 	var state := Gen2WorldState.new()
 	state.set_engine_flag(Gen2WorldState.ENGINE_RADIO_CARD, true)
 	state.set_engine_flag(Gen2WorldState.ENGINE_EXPN_CARD, true)
-	var world: Gen2WorldAPI = _open(data, VERMILION_GROUP, VERMILION_CITY, TALK_FROM, state)
+	var world: Gen2WorldAPI = _open(_data, VERMILION_GROUP, VERMILION_CITY, TALK_FROM, state)
 	if world == null:
 		return
 	_r.check(
@@ -334,7 +334,7 @@ func _verify_wake(data: GameData, game_id: StringName, crystal: bool) -> void:
 
 	# Talking to it before the radio is tuned takes SnorlaxAwake's false branch.
 	world.player_facing = Gen2WorldSprite.FACING_UP
-	var asleep: Dictionary = _drain(world, world.interact(), data)
+	var asleep: Dictionary = _drain(world, world.interact(), _data)
 	_r.check(
 		not world.event_flag_active(EVENT_FOUGHT_SNORLAX)
 			and int(asleep.get("battles", 0)) == 0,
@@ -354,7 +354,7 @@ func _verify_wake(data: GameData, game_id: StringName, crystal: bool) -> void:
 	)
 
 	world.player_facing = Gen2WorldSprite.FACING_UP
-	var awake: Dictionary = _drain(world, world.interact(), data)
+	var awake: Dictionary = _drain(world, world.interact(), _data)
 	_r.check(
 		int(awake.get("battles", 0)) == 1
 			and int(awake.get("species", 0)) == SPECIES_SNORLAX
@@ -398,8 +398,8 @@ func _verify_wake(data: GameData, game_id: StringName, crystal: bool) -> void:
 ## of Route 2 closed by two cut trees, and cutting the northern one reaches both
 ## the Pewter and the Viridian crossing. Everything west of Kanto hangs off this,
 ## so it is checked here rather than left as an assertion in prose.
-func _verify_route_2(data: GameData, game_id: StringName, crystal: bool) -> void:
-	var world: Gen2WorldAPI = _open(data, ROUTE_2_GROUP, ROUTE_2, CAVE_LANDING)
+func _verify_route_2(_data: GameData, game_id: StringName, crystal: bool) -> void:
+	var world: Gen2WorldAPI = _open(_data, ROUTE_2_GROUP, ROUTE_2, CAVE_LANDING)
 	if world == null:
 		return
 	var cave: int = DIGLETTS_CAVE if crystal else DIGLETTS_CAVE_GOLD_SILVER
@@ -442,7 +442,7 @@ func _verify_route_2(data: GameData, game_id: StringName, crystal: bool) -> void
 	cutter.set_engine_flag(
 		Gen2WorldState.badge_flag(Gen2WorldFieldMove.BADGE_HIVE, crystal), true
 	)
-	var opened: Gen2WorldAPI = _open(data, ROUTE_2_GROUP, ROUTE_2, CAVE_LANDING, cutter)
+	var opened: Gen2WorldAPI = _open(_data, ROUTE_2_GROUP, ROUTE_2, CAVE_LANDING, cutter)
 	if opened == null:
 		return
 	opened.player_cell = ROUTE_2_OPENING_APPROACH
@@ -487,7 +487,7 @@ func _reaches_edge(world: Gen2WorldAPI, region: Dictionary, axis: Vector2i) -> b
 
 
 ## Runs a script to its end, answering the one battle it can reach with a win.
-func _drain(world: Gen2WorldAPI, results: Array, data: GameData) -> Dictionary:
+func _drain(world: Gen2WorldAPI, results: Array, _data: GameData) -> Dictionary:
 	var out: Dictionary = {"battles": 0, "species": 0, "level": 0, "battle_type": -1}
 	var guard: int = 0
 	while guard < 64:
@@ -518,10 +518,10 @@ func _drain(world: Gen2WorldAPI, results: Array, data: GameData) -> Dictionary:
 
 
 func _open(
-	data: GameData, group: int, number: int, cell: Vector2i, state: Gen2WorldState = null
+	_data: GameData, group: int, number: int, cell: Vector2i, state: Gen2WorldState = null
 ) -> Gen2WorldAPI:
 	var world: Gen2WorldAPI = Gen2WorldAPI.open(
-		data, group, number, cell, state if state != null else Gen2WorldState.new()
+		_data, group, number, cell, state if state != null else Gen2WorldState.new()
 	)
 	if world == null:
 		_r.fail("map %d/%d is missing." % [group, number])

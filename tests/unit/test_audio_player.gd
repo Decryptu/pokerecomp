@@ -120,15 +120,15 @@ func test_the_queue_is_kept_to_its_latency_target_not_to_the_brim() -> void:
 	assert_true(_player.play_record(_record(99), &"map_music")["ok"])
 	_player._service_timeline()
 	var capacity: int = _player._capacity
-	var pending: int = capacity - _player._playback.get_frames_available()
+	var waiting: int = capacity - _player._playback.get_frames_available()
 	assert_gt(capacity, 0, "the depth was learned from the stream")
 	assert_gt(_player._timeline_updates, 0, "the service filled the queue at all")
 	assert_almost_eq(
-		float(pending),
+		float(waiting),
 		float(Gen2AudioPlayer.TARGET_FRAMES_MIN * Gen2Apu.SAMPLES_PER_FRAME),
 		float(Gen2Apu.SAMPLES_PER_FRAME),
 	)
-	assert_lt(pending, capacity, "the rest of the depth is left as headroom")
+	assert_lt(waiting, capacity, "the rest of the depth is left as headroom")
 
 	# A second service does not fill to the brim: the target is a level, not a
 	# rate, so the queue comes back to the same depth rather than growing. The

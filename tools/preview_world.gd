@@ -67,6 +67,11 @@ extends SceneTree
 ## `map_name_sign` (`InitMapNameSign`'s window, raised by walking west off the
 ## map's edge onto its neighbour: `crystal 24 4 ... map_name_sign 1 8` crosses
 ## New Bark Town into Route 29),
+## `battle_tower` (`BattleTower1FReceptionistScript`, talked to from the cell
+## below her: the first number is how many A presses to spend and the second how
+## many DOWN presses, so `crystal 22 11 ... battle_tower@7,7 5 0` is the
+## Challenge / Explanation / Cancel menu and `... battle_tower@7,7 6 2` the level
+## list standing on its third room),
 ## `yes_no` (`Script_yesorno`'s box, over the map's first script run to the
 ## choice it ends on: `crystal 26 3 ... yes_no 31 6` is Cherrygrove's guide),
 ## `name_rater` and `move_deleter` (`special NameRater` and `special
@@ -206,6 +211,9 @@ const SCREEN_DRIVER: String = "preview_%s"
 ## welcome the buy screen opens on. One more reaches the list, two the quantity
 ## dial and three the yes/no.
 const MART_PRESSES: int = 1
+## Frames spent between two presses of a driven menu, so the box a press opened
+## owes nothing before the next one lands: nothing shortens a printing text.
+const TEXT_SETTLE_FRAMES: int = 20
 
 const STAGED_FRAMES: int = 2
 const STAGED_FRAMES_CUT: int = 12
@@ -229,6 +237,10 @@ func _initialize() -> void:
 	if args.size() < 4:
 		push_error("Usage: preview_world.gd -- <game> <group> <map> <output.png> [live]")
 		quit(1)
+		return
+
+	if Gen2ToolPath.refuses(args[3]):
+		quit(2)
 		return
 
 	var data: GameData = GameData.open(StringName(args[0]))
@@ -331,6 +343,22 @@ func _build_live(data: GameData, group: int, number: int, cell: Vector2i) -> voi
 
 ## Spends whatever one of the two routines' boxes still owes, plus the frame
 ## `advance_frame` reads it on: `PrintText` returning is what opens a `YesNoBox`.
+## Three legal entrants at the level the room list opens on, so the driven
+## receptionist reaches the level menu rather than the rules refusal.
+func _stage_battle_tower_party() -> void:
+	var save: Gen2SaveData = _screen.active_save()
+	if save == null:
+		save = Gen2SaveStore.create_development_save(_screen._data, 0)
+		_screen.set_save(save)
+	save.party = []
+	for slot: int in Gen2BattleTower.PARTY_LENGTH:
+		var mon: Gen2SaveMon = Gen2SaveBattleAdapter.from_battle_mon(
+			Gen2BattleMon.create(_screen._data, 155 + slot * 3, 10, [33])
+		)
+		save.party.append(mon)
+	_screen._refresh_party_summary()
+
+
 func _settle_mon_special(host_property: String) -> void:
 	for _frame: int in MON_SPECIAL_FRAME_CAP:
 		var routine: Control = _screen.get(host_property)
@@ -522,6 +550,30 @@ func _process(_delta: float) -> bool:
 					break
 				_screen.press_button(Gen2Button.A)
 				_settle_mon_special(host_property)
+		elif _kind == &"battle_tower":
+			## `BattleTower1FReceptionistScript` from the cell below her, which
+			## is where `Script_WalkToBattleTowerElevator` puts the player back.
+			## The first number is how many A presses to spend, which walks the
+			## welcome box, the explanation question and the Challenge /
+			## Explanation / Cancel menu; the second is how many DOWN presses to
+			## spend on whichever menu is up, so `battle_tower 6 2` stands on the
+			## third room of the level list.
+			## `_CheckForBattleTowerRules` refuses anything but three different
+			## species holding three different items, and the development save's
+			## party is not one, so the challenge would never open a room.
+			_stage_battle_tower_party()
+			_screen.press_button(Gen2Button.UP)
+			_screen.interact()
+			for _frame: int in TEXT_SETTLE_FRAMES:
+				_screen.advance_frame()
+			for _press: int in maxi(_cell.x, 0):
+				_screen.press_button(Gen2Button.A)
+				for _frame: int in TEXT_SETTLE_FRAMES:
+					_screen.advance_frame()
+			for _press: int in maxi(_cell.y, 0):
+				_screen.press_button(Gen2Button.DOWN)
+				for _frame: int in TEXT_SETTLE_FRAMES:
+					_screen.advance_frame()
 		elif _kind == &"yes_no":
 			## `Script_yesorno`'s own box: the NPC beside the player is talked
 			## to and each page answered until the choice the script ends on is

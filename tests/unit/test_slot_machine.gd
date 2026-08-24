@@ -39,9 +39,9 @@ func _strips() -> Array[PackedByteArray]:
 	return out
 
 
-func _machine(coins: int = 200, lucky: bool = false, seed: int = 1) -> Gen2SlotMachine:
+func _machine(coins: int = 200, lucky: bool = false, seed_value: int = 1) -> Gen2SlotMachine:
 	var rng := RandomNumberGenerator.new()
-	rng.seed = seed
+	rng.seed = seed_value
 	return Gen2SlotMachine.create(_strips(), coins, lucky, rng)
 
 
@@ -115,9 +115,9 @@ func test_cancelling_the_menu_leaves_the_game() -> void:
 ## for, and `SLOTS_NO_BIAS` matches nothing: an unbiased spin cannot pay.
 func test_an_unbiased_spin_never_lines_anything_up() -> void:
 	var unbiased: int = 0
-	for seed: int in 24:
-		var machine: Gen2SlotMachine = _machine(200, false, seed)
-		assert_true(_spin(machine, 3), "spin %d must reach its payout" % seed)
+	for seed_value: int in 24:
+		var machine: Gen2SlotMachine = _machine(200, false, seed_value)
+		assert_true(_spin(machine, 3), "spin %d must reach its payout" % seed_value)
 		if machine.bias() != Gen2SlotMachine.SLOTS_NO_BIAS:
 			continue
 		unbiased += 1
@@ -131,8 +131,8 @@ func test_an_unbiased_spin_never_lines_anything_up() -> void:
 ## `Slots_GetPayout.PayoutTable` against `wCoins`, over whichever seeds pay.
 func test_a_match_pays_its_own_table_row() -> void:
 	var paid: int = 0
-	for seed: int in 64:
-		var machine: Gen2SlotMachine = _machine(200, true, seed)
+	for seed_value: int in 64:
+		var machine: Gen2SlotMachine = _machine(200, true, seed_value)
 		assert_true(_spin(machine, 3))
 		var matched: int = machine.matched()
 		if matched == Gen2SlotMachine.SLOTS_NO_MATCH:

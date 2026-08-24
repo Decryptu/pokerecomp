@@ -150,9 +150,9 @@ func test_roaming_selection_uses_the_land_roll_before_normal_slots() -> void:
 		"slots": slots,
 	}
 	var found: Dictionary = {}
-	for seed: int in range(1, 512):
+	for seed_value: int in range(1, 512):
 		var random := RandomNumberGenerator.new()
-		random.seed = seed
+		random.seed = seed_value
 		found = Gen2WorldEncounter.resolve(
 			record, Gen2WorldEncounter.METHOD_GRASS, Gen2WorldPalette.TIME_DAY,
 			random, true, {

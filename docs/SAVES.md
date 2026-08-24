@@ -168,6 +168,12 @@ Mail is on the record rather than in a slot of its own: `Gen2SaveMon.mail` is
 behind `sMailboxCount`. Both default rather than versioning, so a slot written
 before mail existed reads as a party holding none and an empty mailbox.
 
+`SECTION "SRAM Battle Tower"` rides in the world snapshot rather than in the
+save proper, which is where the cartridge keeps it too: a challenge can be saved
+and left between battles, so `Gen2WorldState.battle_tower()` carries the state,
+the streak of trainers already met, the chosen room, the save-file flags and the
+prize drawn for the run. It defaults rather than versioning the way mail does.
+
 Original SRAM also contains player, map, checksum, PC box, Hall of Fame and
 Crystal-specific regions. The first model imports only party data; the optional
 project world snapshot is a separate canonical runtime shape and does not claim

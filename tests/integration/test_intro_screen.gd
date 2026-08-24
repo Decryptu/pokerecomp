@@ -67,7 +67,7 @@ func _settle_splash(limit: int = 800) -> void:
 ## fades, pic moves and `DelayFrames` are real frame counts, so a test drives
 ## them rather than skipping them; there is no clock in a GUT run.
 func _settle(limit: int = 40) -> void:
-	for _pass: int in limit:
+	for _step: int in limit:
 		var owed: int = _screen.animation_frames_left()
 		if owed == 0:
 			return

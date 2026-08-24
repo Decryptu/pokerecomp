@@ -63,6 +63,9 @@ func _initialize() -> void:
 		quit(1)
 		return
 	if args.size() > 2:
+		if Gen2ToolPath.refuses(args[2]):
+			quit(2)
+			return
 		_shot_prefix = args[2].get_basename()
 	if args.size() > 3:
 		for value: String in args[3].split(","):

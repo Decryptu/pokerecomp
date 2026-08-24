@@ -921,7 +921,7 @@ func test_multi_hit_lands_between_two_and_five_times() -> void:
 		_rng.seed = seed_value
 		var turn: Gen2Turn = _run_move(_battle(), Fixture.MULTI_HIT_MOVE)
 		var hits: int = _of_type(turn.events, Gen2Battle.HIT).size()
-		assert_between(hits, 2, 5, "seed %d" % seed_value)
+		assert_between(hits, 2, 5, "seed_value %d" % seed_value)
 		assert_eq(int(_first(turn.events, Gen2Battle.HIT_TIMES)["times"]), hits)
 
 
@@ -1070,7 +1070,7 @@ func test_psywave_stays_inside_its_own_range() -> void:
 		_rng.seed = seed_value
 		Gen2EffectCommands.run(Gen2EffectCommands.FIXED_DAMAGE, turn)
 		Gen2EffectCommands.run(Gen2EffectCommands.RESET_TYPE_MATCHUP, turn)
-		assert_between(turn.damage, 1, upper - 1, "seed %d" % seed_value)
+		assert_between(turn.damage, 1, upper - 1, "seed_value %d" % seed_value)
 
 
 func test_ohko_rolls_its_own_accuracy_and_leaves_the_damage_to_applydamage() -> void:
@@ -1625,8 +1625,8 @@ func test_brightpowder_takes_its_parameter_off_the_accuracy() -> void:
 	battle.enemy.item = Fixture.BRIGHTPOWDER
 
 	var missed: int = 0
-	for seed: int in 200:
-		battle.rng.seed = seed
+	for seed_value: int in 200:
+		battle.rng.seed = seed_value
 		var turn: Gen2Turn = _turn(battle, Fixture.TACKLE)
 		Gen2EffectCommands.run(Gen2EffectCommands.CHECK_HIT, turn)
 		if turn.missed:
@@ -1636,8 +1636,8 @@ func test_brightpowder_takes_its_parameter_off_the_accuracy() -> void:
 	assert_lt(missed, 40, "twenty in 255, not more")
 
 	battle.enemy.item = 0
-	for seed: int in 50:
-		battle.rng.seed = seed
+	for seed_value: int in 50:
+		battle.rng.seed = seed_value
 		var turn: Gen2Turn = _turn(battle, Fixture.TACKLE)
 		Gen2EffectCommands.run(Gen2EffectCommands.CHECK_HIT, turn)
 		assert_false(turn.missed, "and without it the same move never misses")
@@ -1650,8 +1650,8 @@ func test_kings_rock_flinches_out_of_its_own_parameter() -> void:
 	battle.player.item = Fixture.KINGS_ROCK
 
 	var flinched: int = 0
-	for seed: int in 256:
-		battle.rng.seed = seed
+	for seed_value: int in 256:
+		battle.rng.seed = seed_value
 		battle.enemy.substatus = Gen2Substatus.NONE
 		var turn: Gen2Turn = _turn(battle, Fixture.TACKLE)
 		Gen2EffectCommands.run(Gen2EffectCommands.KINGS_ROCK, turn)
@@ -1705,9 +1705,9 @@ func test_only_the_lists_the_cartridge_gives_kings_rock_have_it() -> void:
 ## which is what leaves the Pokémon on one hit point rather than none.
 func test_a_focus_band_can_hold_a_pokemon_on_one_hit_point() -> void:
 	var survived: int = 0
-	for seed: int in 200:
+	for seed_value: int in 200:
 		var battle: Gen2Battle = _battle()
-		battle.rng.seed = seed
+		battle.rng.seed = seed_value
 		battle.enemy.item = Fixture.FOCUS_BAND
 		battle.enemy.hp = 1
 		var turn: Gen2Turn = _turn(battle, Fixture.TACKLE)
@@ -1728,8 +1728,8 @@ func test_a_focus_band_changes_nothing_about_a_hit_that_was_not_lethal() -> void
 	battle.enemy.item = Fixture.FOCUS_BAND
 	var before: int = battle.enemy.hp
 
-	for seed: int in 50:
-		battle.rng.seed = seed
+	for seed_value: int in 50:
+		battle.rng.seed = seed_value
 		battle.enemy.hp = before
 		var turn: Gen2Turn = _turn(battle, Fixture.TACKLE)
 		turn.damage = 5
@@ -2260,7 +2260,7 @@ func test_triple_kick_lands_one_two_or_three_times() -> void:
 		battle.enemy.hp = 30000
 		var turn: Gen2Turn = _run_move(battle, Fixture.TRIPLE_KICK, false, {"accuracy": 255})
 		var kicks: int = _of_type(turn.events, Gen2Battle.HIT).size()
-		assert_between(kicks, 1, 3, "seed %d" % seed_value)
+		assert_between(kicks, 1, 3, "seed_value %d" % seed_value)
 		assert_eq(int(_first(turn.events, Gen2Battle.HIT_TIMES)["times"]), kicks)
 		seen[kicks] = true
 	assert_gt(seen.size(), 1, "forty seeds should not all give the same count")
@@ -2314,7 +2314,7 @@ func test_a_rampage_rolls_its_length_once_and_not_again_each_turn() -> void:
 func test_false_swipe_leaves_the_target_standing_on_one() -> void:
 	var battle: Gen2Battle = _battle()
 	battle.enemy.hp = 3
-	var turn: Gen2Turn = _run_move(battle, Fixture.FALSE_SWIPE)
+	_run_move(battle, Fixture.FALSE_SWIPE)
 	assert_eq(battle.enemy.hp, 1)
 	assert_false(battle.enemy.is_fainted())
 
@@ -2322,7 +2322,7 @@ func test_false_swipe_leaves_the_target_standing_on_one() -> void:
 func test_false_swipe_leaves_a_hit_it_could_not_have_killed_alone() -> void:
 	var battle: Gen2Battle = _battle()
 	var full: int = battle.enemy.max_hp()
-	var turn: Gen2Turn = _run_move(battle, Fixture.FALSE_SWIPE)
+	_run_move(battle, Fixture.FALSE_SWIPE)
 	assert_lt(battle.enemy.hp, full, "it still hurts")
 	assert_gt(battle.enemy.hp, 1, "and was not cut down to one")
 
@@ -2848,9 +2848,9 @@ func test_a_doll_refuses_a_stat_drop_and_a_kings_rock() -> void:
 ## spends. "Hung on" is printed over a Pokémon that was never in danger.
 func test_a_focus_band_still_fires_in_front_of_a_doll() -> void:
 	var fired: int = 0
-	for seed: int in 200:
+	for seed_value: int in 200:
 		var battle: Gen2Battle = _battle()
-		battle.rng.seed = seed
+		battle.rng.seed = seed_value
 		_raise_enemy_substitute(battle)
 		battle.enemy.substitute_hp = 200
 		battle.enemy.item = Fixture.FOCUS_BAND
@@ -3172,7 +3172,7 @@ func test_the_first_protect_of_a_chain_always_lands() -> void:
 		var turn: Gen2Turn = _run_move(battle, Fixture.PROTECT)
 		assert_true(
 			Gen2Substatus.has(battle.player.substatus, Gen2Substatus.PROTECT),
-			"seed %d" % seed_value
+			"seed_value %d" % seed_value
 		)
 		assert_eq(_of_type(turn.events, Gen2Battle.PROTECTED_ITSELF).size(), 1)
 		assert_eq(_of_type(turn.events, Gen2Battle.MOVE_FAILED).size(), 0)
@@ -3782,7 +3782,7 @@ func test_a_locked_on_move_cannot_miss() -> void:
 		# Evasion at the ceiling, which would otherwise cut a 90% move to a third.
 		battle.enemy.stages["evasion"] = 6
 		var turn: Gen2Turn = _run_move(battle, Fixture.SCREECH)
-		assert_false(turn.missed, "seed %d" % seed_value)
+		assert_false(turn.missed, "seed_value %d" % seed_value)
 
 
 ## `.LockOn` names three moves that still cannot reach a target above them, and
@@ -3793,10 +3793,9 @@ func test_a_locked_on_move_cannot_miss() -> void:
 ## to; the test below owns that half.
 func test_a_locked_on_flying_target_is_still_missed_by_the_ground_moves() -> void:
 	for move: int in [Fixture.EARTHQUAKE, Fixture.MAGNITUDE]:
-		var battle: Gen2Battle = _battle()
-		battle.enemy.substatus |= Gen2Substatus.LOCK_ON | Gen2Substatus.FLYING
-		var turn: Gen2Turn = _run_move(battle, move)
-		assert_true(turn.missed, "move %d" % move)
+		var grounded: Gen2Battle = _battle()
+		grounded.enemy.substatus |= Gen2Substatus.LOCK_ON | Gen2Substatus.FLYING
+		assert_true(_run_move(grounded, move).missed, "move %d" % move)
 
 	# The same target is reached by anything else, since the lock-on is read in
 	# front of the hidden check.
@@ -3841,7 +3840,7 @@ func test_spite_takes_two_to_five_pp_off_the_targets_last_move() -> void:
 
 		var event: Dictionary = _first(turn.events, Gen2Battle.PP_REDUCED)
 		var amount: int = int(event["amount"])
-		assert_between(amount, 2, 5, "seed %d" % seed_value)
+		assert_between(amount, 2, 5, "seed_value %d" % seed_value)
 		assert_eq(int(event["slot"]), 0)
 		assert_eq(int(event["move"]), Fixture.TACKLE)
 		assert_eq(battle.enemy.pp_left(0), 35 - amount)
@@ -4061,7 +4060,7 @@ func test_a_wild_pokemon_always_teleports_and_still_draws_the_roll() -> void:
 		var before: int = battle.rng.state
 		var turn: Gen2Turn = _run_enemy_move(battle, Fixture.TELEPORT)
 
-		assert_true(battle.is_over(), "seed %d" % seed_value)
+		assert_true(battle.is_over(), "seed_value %d" % seed_value)
 		assert_eq(battle.forced_out_side(), Gen2Battle.ENEMY)
 		assert_eq(_of_type(turn.events, Gen2Battle.FLED_FROM_BATTLE).size(), 1)
 		assert_ne(battle.rng.state, before, "the roll is drawn and thrown away")

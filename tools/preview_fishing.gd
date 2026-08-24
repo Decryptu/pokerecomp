@@ -28,6 +28,9 @@ func _initialize() -> void:
 		quit(1)
 		return
 	_output_path = args[0]
+	if Gen2ToolPath.refuses(_output_path):
+		quit(2)
+		return
 	if args.size() >= 4:
 		_data = GameData.open(StringName(args[1]))
 		if _data == null:

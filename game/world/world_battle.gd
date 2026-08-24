@@ -63,6 +63,19 @@ static func prepare(
 				return _failure(&"invalid_trainer", {
 					"trainer_class": trainer_class, "trainer_index": trainer_index,
 				})
+		&"battle_tower":
+			## `ReadBTTrainerParty` copies a whole `wOTPartyMon` block out of the
+			## sampled record rather than building one from a trainer table, so
+			## the party arrives with the request and nothing is rolled here.
+			trainer_class = int(values.get("trainer_class", 0))
+			var members: Array = []
+			for raw_mon: Variant in values.get("enemy_party", []) as Array:
+				var saved: Gen2SaveMon = Gen2SaveMon.from_dict(raw_mon)
+				var member: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(data, saved)
+				if member == null:
+					return _failure(&"invalid_battle_tower_mon", {"mon": raw_mon})
+				members.append(member)
+			enemy_party = Gen2Party.create(members)
 		_:
 			return _failure(&"unsupported_battle_kind", {"kind": kind})
 
@@ -70,8 +83,8 @@ static func prepare(
 		return _failure(&"missing_enemy_party")
 	var generator := random if random != null else RandomNumberGenerator.new()
 	var battle: Gen2Battle = Gen2Battle.create_parties(
-		data, player_party, enemy_party, generator, kind == &"trainer", player_badges,
-		battle_rules
+		data, player_party, enemy_party, generator,
+		kind == &"trainer" or kind == &"battle_tower", player_badges, battle_rules
 	)
 	if battle == null:
 		return _failure(&"battle_setup_failed")

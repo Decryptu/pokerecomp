@@ -230,15 +230,15 @@ func _open_overworld(fill: bool = true) -> Dictionary:
 	## Walked rather than stood still: a standing player redraws nothing, and
 	## what a map costs is the camera moving over it. The turn every two seconds
 	## keeps the walk on the spawn map.
-	var log: Array = []
+	var log_lines: Array = []
 	for frame: int in WARMUP_FRAMES + BATTLE_FRAMES:
 		@warning_ignore("integer_division")
 		var leg: int = (frame / 120) % 4
-		log.append({
+		log_lines.append({
 			"frame": frame, "kind": "hold",
 			"button": [Gen2Button.DOWN, Gen2Button.RIGHT, Gen2Button.UP, Gen2Button.LEFT][leg],
 		})
-	screen.replay_input(log)
+	screen.replay_input(log_lines)
 	return {"node": screen, "step": func() -> void: screen.advance_frame()}
 
 

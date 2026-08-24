@@ -241,7 +241,7 @@ func deposit_selected_party() -> bool:
 		_prompt = PROMPT_CHOOSE
 		_refresh()
 		return false
-	var name: String = _display_name(_save.party[_selected_party_index] as Gen2SaveMon)
+	var mon_name: String = _display_name(_save.party[_selected_party_index] as Gen2SaveMon)
 	var result: Dictionary = Gen2SaveStorage.deposit_party_to_box(
 		_save, _data, _selected_party_index, _box_index, -1, _persist
 	)
@@ -249,7 +249,7 @@ func deposit_selected_party() -> bool:
 		_prompt = _refusal(result, PROMPT_BOX_FULL)
 		_refresh()
 		return false
-	_prompt = PROMPT_STORED % name
+	_prompt = PROMPT_STORED % mon_name
 	_selected_party_index = -1
 	_clamp_cursor()
 	_refresh()
@@ -263,7 +263,7 @@ func withdraw_selected_box() -> bool:
 		_refresh()
 		return false
 	var box: Gen2SaveBox = _save.boxes[_box_index] if _box_index < _save.boxes.size() else null
-	var name: String = _display_name(
+	var mon_name: String = _display_name(
 		box.slots[_selected_box_slot] as Gen2SaveMon if box != null else null
 	)
 	var result: Dictionary = Gen2SaveStorage.withdraw_box_to_party(
@@ -273,7 +273,7 @@ func withdraw_selected_box() -> bool:
 		_prompt = _refusal(result, PROMPT_PARTY_FULL)
 		_refresh()
 		return false
-	_prompt = PROMPT_GOT % name
+	_prompt = PROMPT_GOT % mon_name
 	_selected_box_slot = -1
 	_clamp_cursor()
 	_refresh()
@@ -286,7 +286,7 @@ func release_selected() -> bool:
 	if _save == null:
 		return false
 	var mon: Gen2SaveMon = _selected_mon()
-	var name: String = _display_name(mon)
+	var mon_name: String = _display_name(mon)
 	var result: Dictionary = Gen2SaveStorage.release_party_member(
 		_save, _data, _selected_party_index, _persist
 	) if _loaded == LOADED_PARTY else Gen2SaveStorage.release_box_slot(
@@ -296,7 +296,7 @@ func release_selected() -> bool:
 		_prompt = _refusal(result, PROMPT_LAST_MON)
 		_refresh()
 		return false
-	_prompt = PROMPT_BYE % name
+	_prompt = PROMPT_BYE % mon_name
 	_selected_party_index = -1
 	_selected_box_slot = -1
 	_clamp_cursor()
@@ -412,11 +412,11 @@ func _open_submenu() -> void:
 	_refresh()
 
 
-func _close_submenu(draw: bool = true) -> void:
+func _close_submenu(redraw: bool = true) -> void:
 	_submenu_open = false
 	_release_open = false
 	_prompt = PROMPT_CHOOSE
-	if draw:
+	if redraw:
 		_refresh()
 
 

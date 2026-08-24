@@ -296,9 +296,9 @@ func test_golds_trail_alternates_its_two_pictures_and_silvers_does_not() -> void
 		for sprite: Dictionary in gold.sprites():
 			if StringName(sprite["kind"]) != Gen2TitleScene.SPRITE_TRAIL:
 				continue
-			var set: int = int(sprite["tile"])
-			if sets.is_empty() or sets[sets.size() - 1] != set:
-				sets.append(set)
+			var ordering: int = int(sprite["tile"])
+			if sets.is_empty() or sets[sets.size() - 1] != ordering:
+				sets.append(ordering)
 			break
 	# Every trail on screen is on the same phase, since they are spawned on a
 	# four-frame cadence and the frameset's cycle is four frames long.

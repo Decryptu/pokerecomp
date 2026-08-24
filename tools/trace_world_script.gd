@@ -50,6 +50,9 @@ func _run() -> void:
 		push_error("usage: <game> <group> <map> <x> <y> <dir:count,...> <frames> <out.txt>")
 		quit(2)
 		return
+	if Gen2ToolPath.refuses(args[7]):
+		quit(2)
+		return
 	var data: GameData = GameData.open(StringName(args[0]))
 	if data == null:
 		push_error("no imported cache for %s" % args[0])

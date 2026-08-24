@@ -450,10 +450,10 @@ func _resume_after_name() -> void:
 	_enter_next_beat()
 
 
-func _hide_speech(hidden: bool) -> void:
+func _hide_speech(was_hidden: bool) -> void:
 	for node: CanvasItem in [_background, _pic, _text_box]:
 		if node != null:
-			node.visible = not hidden
+			node.visible = not was_hidden
 
 
 ## `Intro_PrepTrainerPic` and `PrepMonFrontpic` both fill a seven-tile box at
@@ -580,8 +580,8 @@ func _start_audio() -> void:
 func _show_shrink_pic(which: int) -> void:
 	if _pic == null or _data == null:
 		return
-	var name: String = RomLayout.SHRINK_PIC_NAMES[which]
-	var indices: PackedByteArray = _data.tile_indices(name)
+	var pic_name: String = RomLayout.SHRINK_PIC_NAMES[which]
+	var indices: PackedByteArray = _data.tile_indices(pic_name)
 	var side: int = RomLayout.SHRINK_PIC_COLUMNS * TILE
 	if indices.size() < side * side:
 		return

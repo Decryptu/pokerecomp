@@ -179,10 +179,10 @@ func _matchup(
 	}
 
 
-func _species(number: int, name: String, normal: int, shiny: int) -> Dictionary:
+func _species(number: int, row_name: String, normal: int, shiny: int) -> Dictionary:
 	return {
 		"number": number,
-		"name": name,
+		"name": row_name,
 		"stats": {"hp": 45, "attack": 49},
 		"types": [0, 3],
 		"front_tiles": [1, 1],

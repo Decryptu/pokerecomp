@@ -162,9 +162,9 @@ func test_starting_a_new_game_stages_the_slot_and_writes_nothing() -> void:
 		"no slot on disk until the intro finishes"
 	)
 	assert_eq(GameRuntime.selected_game_id, _data.id)
-	var pending: Dictionary = GameRuntime.take_pending_new_game()
-	assert_eq(int(pending["slot"]), 0)
-	assert_eq(String(pending["label"]), "Run one")
+	var waiting: Dictionary = GameRuntime.take_pending_new_game()
+	assert_eq(int(waiting["slot"]), 0)
+	assert_eq(String(waiting["label"]), "Run one")
 
 
 ## The only name the launcher takes is the save's own. The field is the slot

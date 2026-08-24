@@ -47,6 +47,11 @@ var _staged_lucky_number_day: int = 0
 var _staged_caught_species: Dictionary = {}
 var _staged_best_magikarp: Dictionary = {}
 var _staged_blue_card_balance: int = -1
+## `wBT_OTTrainer`, which `LoadOpponentTrainerAndPokemon` fills and both
+## `BattleTowerBattle` and `battletowertext` read back.
+var _battle_tower_opponent: Dictionary = {}
+## `wBT_TrainerTextIndex`, the personality the greeting rolled. -1 until one has.
+var _battle_tower_text_index: int = -1
 var _staged_mom_savings_flags: int = -1
 ## `SFX_TRANSACTION` and the `WaitSFX` behind it, which stand between the
 ## transfer and the box that reports it.
@@ -197,6 +202,42 @@ const SPECIAL_SELECT_APRICORN_FOR_KURT: int = 86
 ## tables disagree on, so `special_index()` leaves it alone. `MoveDeletion` owns
 ## the same shape `NameRater` does, one house further on, so it is one host
 ## request as well.
+## The Battle Tower's own six specials, Crystal's alone. `BattleTowerAction` is
+## one routine reached with a `setval` in front of it, `BattleTowerRoomMenu` and
+## `Menu_ChallengeExplanationCancel` are the two menus the receptionist opens,
+## `LoadOpponentTrainerAndPokemon...` samples the next opponent and
+## `BattleTowerBattle` fights it. `CheckForBattleTowerRules` is the party check
+## in front of the whole challenge.
+const SPECIAL_BATTLE_TOWER_ROOM_MENU: int = 116
+const SPECIAL_BATTLE_TOWER_BATTLE: int = 119
+const SPECIAL_LOAD_BATTLE_TOWER_OPPONENT: int = 122
+const SPECIAL_CHECK_BATTLE_TOWER_RULES: int = 124
+const SPECIAL_BATTLE_TOWER_ACTION: int = 134
+const SPECIAL_CHALLENGE_MENU: int = 136
+## `TryQuickSave`, which the challenge asks for before it starts, and `Reset`,
+## `home/init.asm`'s own soft reset of the console. Both are in the link block of
+## `SpecialsPointers` and neither is link play: the tower is the only thing in
+## either corpus that reaches them.
+const SPECIAL_TRY_QUICK_SAVE: int = 4
+const SPECIAL_RESET: int = 126
+## `Menu_ChallengeExplanationCancel`'s own answers: the three rows are 1 to 3 and
+## B is 4, which is why `Script_Menu_ChallengeExplanationCancel` tests only 1 and
+## 2 and treats everything else as leaving.
+const CHALLENGE_MENU_CHALLENGE: int = 1
+const CHALLENGE_MENU_EXPLANATION: int = 2
+const CHALLENGE_MENU_CANCEL: int = 4
+## What `special BattleTowerRoomMenu` leaves in wScriptVar: zero for a chosen
+## room, `$a` for a cancelled menu. `Script_ChooseChallenge` branches on both and
+## treats anything else as the mobile error it cannot reach here.
+const ROOM_MENU_CHOSEN: int = 0
+const ROOM_MENU_CANCELLED: int = 0x0A
+## `wcd49`, which `BattleTower_UbersCheck` copies the offending member's name
+## into and `Text_UberRestriction` prints as `text_ram`.
+const BATTLE_TOWER_NAME_BUFFER: int = 0xCD49
+## `wNrOfBeatenBattleTowerTrainers`, the WRAM copy the room script `readmem`s
+## after each win.
+const BEATEN_TRAINERS_ADDRESS: int = 0xCF64
+
 const SPECIAL_MOVE_DELETION: int = 33
 ## MoveTutor, 131, Crystal's alone: pokegold's SpecialsPointers has no row for
 ## it and no Gold or Silver script reaches one. `MoveTutor` owns the party list
@@ -669,6 +710,19 @@ func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 				"source": _request.duplicate(true),
 			}
 			return _waiting_result()
+		if pending_type == &"menu" and _pending_tag() == &"battle_tower_challenge_menu":
+			## `Function17d246`: a row answers its own one-based number and B
+			## answers the same 4 the routine writes before it opens the menu.
+			_pending = {}
+			_script_value = CHALLENGE_MENU_CANCEL if choice < 0 else choice + 1
+			return advance()
+		if pending_type == &"menu" and _pending_tag() == &"battle_tower_room_menu":
+			return _resolve_room_menu(choice)
+		## The two refusals the room menu prints put its jumptable back at zero
+		## rather than leaving the routine, so the menu opens again behind them.
+		if pending_type == &"text" and _pending_tag() == &"battle_tower_room_refusal":
+			_pending = {}
+			return _stage_room_menu()
 		if pending_type == &"menu" and _pending_tag() == &"buenas_password":
 			## `STATICMENU_DISABLE_B`: B does not close the list, so the only way
 			## out is a row. The answer is whether it is the row the byte's own
@@ -1245,6 +1299,9 @@ func complete_runtime_request(result: Dictionary) -> Dictionary:
 		## `_Diploma`, `_PrintDiploma` and `_UnownPrinter` write nothing either:
 		## the page stands until a button and the script runs on behind it.
 		&"diploma_requested", &"unown_printer_requested",
+		## `TryQuickSave` answers TRUE for a save that was written and FALSE for
+		## one that was not, which is the branch both of its sites read.
+		&"quick_save_requested",
 	]:
 		if not bool(result.get("ok", false)):
 			return _fail(
@@ -1314,8 +1371,28 @@ func complete_runtime_request(result: Dictionary) -> Dictionary:
 	if String(outcome).is_empty():
 		return _fail(&"invalid_battle_outcome", result)
 	var battle_values: Dictionary = request.get("values", {})
+	if outcome == Gen2WorldBattleAdapter.OUTCOME_LOST \
+		and StringName(battle_values.get("kind", &"")) == &"battle_tower":
+		## The tower's own loss: `RunBattleTowerTrainer` heals the party and
+		## returns, and the room script warps the player out. There is no
+		## `reloadmapafterbattle` anywhere in it, so nothing blacks out.
+		_battle_tower_opponent = {}
+		_script_value = BATTLE_RESULT_LOSE
+		_events.append({
+			"type": &"battle_lost",
+			"outcome": outcome,
+			"battle_tower": true,
+			"request": request.duplicate(true),
+			"result": result.duplicate(true),
+		})
+		_pending = {}
+		return advance()
 	if outcome == Gen2WorldBattleAdapter.OUTCOME_LOST and bool(battle_values.get("can_lose", false)):
-		_script_value = 0
+		## `Script_startbattle` writes `wBattleResult & ~BATTLERESULT_BITMASK`
+		## whatever the battle type was, so a lost CANLOSE battle answers LOSE.
+		## Cherrygrove's three sites are the only ones in either corpus and their
+		## two branches print the same text, which is what hid a zero here.
+		_script_value = BATTLE_RESULT_LOSE
 		_events.append({
 			"type": &"battle_lost",
 			"outcome": outcome,
@@ -1371,6 +1448,28 @@ func complete_runtime_request(result: Dictionary) -> Dictionary:
 	if outcome != Gen2WorldBattleAdapter.OUTCOME_WON:
 		return _fail(StringName("battle_%s" % outcome), result)
 
+	if StringName(battle_values.get("kind", &"")) == &"battle_tower":
+		## `RunBattleTowerTrainer`'s win branch: the SRAM count is read back into
+		## `wNrOfBeatenBattleTowerTrainers`, which the room script's `readmem`
+		## then compares against the streak length, and the same number plus
+		## `'1'` goes into wStringBuffer3 for "Next up, opponent no. N".
+		var beaten: int = _battle_tower().beaten
+		var counted: Dictionary = _stage_script_memory(BEATEN_TRAINERS_ADDRESS, beaten)
+		if not bool(counted.get("ok", true)):
+			return counted
+		_set_text_buffer(
+			RomLayout.STRING_BUFFER_3, str(beaten + 1), &"battle_tower_opponent"
+		)
+		_battle_tower_opponent = {}
+		_script_value = BATTLE_RESULT_WIN
+		_events.append({
+			"type": &"battle_completed",
+			"outcome": outcome,
+			"request": request.duplicate(true),
+			"result": result.duplicate(true),
+		})
+		_pending = {}
+		return advance()
 	_stage_just_battled(true)
 	## Script_startbattle leaves `wBattleResult & ~BATTLERESULT_BITMASK` in
 	## wScriptVar, and WIN is zero there, so the eight corpus scripts that put
@@ -2339,6 +2438,10 @@ func _execute_later_command(source_opcode: int, command: Dictionary, bank: int) 
 			_events.append({"type": &"credits_requested"})
 		0xA1:
 			return _stage_warp_facing_request(command)
+		0xA2:
+			## Crystal's own `battletowertext`, raw $a4. Gold and Silver's
+			## command table stops at $a1, so nothing of theirs reaches here.
+			return _stage_battle_tower_text(int(command.get("value", 1)))
 	## The commands whose case above falls out of the match rather than returning
 	## a result of its own. The four that now wait (`showemote`, `earthquake`,
 	## `pause` and `deactivatefacing`) return from inside it and are not here.
@@ -2982,6 +3085,38 @@ func _execute_special(special: int) -> Dictionary:
 				"special": special,
 				"mode": &"pokemon_center",
 			})
+		SPECIAL_BATTLE_TOWER_ACTION:
+			## `jumptable .dw, wScriptVar`: the `setval` in front of the special
+			## names the row, and the row's own answer replaces it.
+			var answered: int = _battle_tower().action(_script_value, {
+				"party": _battle_tower_party(),
+				"pack": _pack_items(),
+				"save_is_yours": true,
+				"random": _battle_tower_random(0),
+			})
+			if answered >= 0:
+				_script_value = answered
+			return {"ok": true}
+		SPECIAL_CHECK_BATTLE_TOWER_RULES:
+			return _check_battle_tower_rules()
+		SPECIAL_TRY_QUICK_SAVE:
+			return _stage_runtime_request(&"quick_save_requested", {"special": special})
+		SPECIAL_RESET:
+			## The console restarting, which is how a saved-and-left challenge
+			## leaves the battle room. Nothing follows it in any script.
+			_events.append({"type": &"soft_reset_requested"})
+			_pending = {}
+			_active = false
+			_completed = true
+			return {"ok": true}
+		SPECIAL_CHALLENGE_MENU:
+			return _stage_challenge_menu()
+		SPECIAL_BATTLE_TOWER_ROOM_MENU:
+			return _stage_room_menu()
+		SPECIAL_LOAD_BATTLE_TOWER_OPPONENT:
+			return _load_battle_tower_opponent()
+		SPECIAL_BATTLE_TOWER_BATTLE:
+			return _stage_battle_tower_battle()
 		SPECIAL_SET_DAY_OF_WEEK:
 			_stage_day_of_week_menu()
 			return {"ok": true}
@@ -3927,6 +4062,271 @@ func _mom_result(staged: Dictionary) -> Dictionary:
 ## claims the box and the cartridge's index wherever nothing does. Read as a
 ## name, so an index is simply not one: comparing the two is an engine error
 ## rather than a false answer.
+## `BattleTowerRoomMenu_UpdatePickLevelMenu`'s `.a_button` and `.b_button`: the
+## CANCEL row and B both leave with `$a` in wScriptVar, and a level row is
+## refused by either check before it is stored.
+func _resolve_room_menu(choice: int) -> Dictionary:
+	var groups: int = int(_pending.get("groups", RomLayout.BATTLETOWER_LEVEL_GROUPS))
+	_pending = {}
+	if choice < 0 or choice >= groups:
+		_script_value = ROOM_MENU_CANCELLED
+		return advance()
+	var tower: Gen2BattleTower = _battle_tower()
+	tower.chosen_group = choice + 1
+	var party: Dictionary = _battle_tower_party()
+	if Gen2BattleTower.level_check(party, tower.chosen_group) >= 0:
+		return _stage_room_menu_refusal("party_mon_tops_this_level")
+	var uber: int = Gen2BattleTower.ubers_check(party, tower.chosen_group)
+	if uber >= 0:
+		var names: Array = (_request.get("party", {}) as Dictionary).get("names", [])
+		return _stage_room_menu_refusal(
+			"uber_restriction", String(names[uber]) if uber < names.size() else ""
+		)
+	_script_value = ROOM_MENU_CHOSEN
+	return advance()
+
+
+## The Battle Tower's own SRAM section, which the runner writes in place: every
+## byte of it is one the cartridge writes through `OpenSRAM` straight away, with
+## no transaction between the receptionist and the section.
+func _battle_tower() -> Gen2BattleTower:
+	return state.battle_tower() if state != null else Gen2BattleTower.new()
+
+
+## The tower's own generator. `Random` is the cartridge's one RNG and this
+## runner is scene free, so the seed comes in with the request and each draw
+## takes its own offset: the opponent, its three lines and the reward are four
+## separate rolls in the source and must not repeat here.
+func _battle_tower_random(offset: int) -> RandomNumberGenerator:
+	var random := RandomNumberGenerator.new()
+	random.seed = int(_request.get("battle_tower_seed", randi())) + offset
+	return random
+
+
+## The item pocket as `BattleTower_GiveReward` walks it, staged rows over the
+## saved ones. A row staged to zero is one the script has just spent and is not
+## in the pack any more.
+func _pack_items() -> Dictionary:
+	var pack: Dictionary = state.items() if state != null else {}
+	for item: Variant in _staged_items:
+		var quantity: int = int(_staged_items[item])
+		if quantity > 0:
+			pack[item] = quantity
+		else:
+			pack.erase(item)
+	return pack
+
+
+## The cartridge's own Battle Tower block, empty when there is no cache behind
+## the runner at all, which is what the specials probe runs with.
+func _battle_tower_data() -> Dictionary:
+	return data.battle_tower() if data != null else {}
+
+
+## The party facts the tower's own checks read, off the read-only mirror.
+func _battle_tower_party() -> Dictionary:
+	var party: Dictionary = _request.get("party", {})
+	return {
+		"species": party.get("species", []),
+		"levels": party.get("levels", []),
+		"held_items": party.get("held_items", []),
+		"eggs": party.get("eggs", []),
+	}
+
+
+## `_CheckForBattleTowerRules`: every rule is run rather than stopping at the
+## first failure, so a party can fail more than one and the receptionist says so
+## once per failure. `BattleTower_PleaseReturnWhenReady` closes the run.
+##
+## wScriptVar is TRUE when something failed, which is what
+## `ifnotequal FALSE, Script_WaitButton` refuses the challenge on.
+func _check_battle_tower_rules() -> Dictionary:
+	var failures: Array = Gen2BattleTower.rule_failures(_battle_tower_party())
+	if failures.is_empty():
+		_script_value = 0
+		return {"ok": true}
+	_script_value = 1
+	## `ld [hl], '3'` at the top of the routine: the box that names how many may
+	## be entered prints the number out of `wStringBuffer2` rather than spelling
+	## it, so a party of the wrong size is told the rule and not just refused.
+	_set_text_buffer(
+		RomLayout.STRING_BUFFER_2, str(Gen2BattleTower.PARTY_LENGTH), &"battle_tower_rules"
+	)
+	var boxes: Array = [_special_box("battle_tower", "excuse_me")]
+	for failure: String in failures:
+		boxes.append(_special_box("battle_tower", failure))
+	boxes.append(_special_box("battle_tower", "return_when_ready"))
+	for box: String in boxes:
+		if box.is_empty():
+			return _fail(
+				&"missing_special_text", {"special": SPECIAL_CHECK_BATTLE_TOWER_RULES}
+			)
+	var head: String = String(boxes.pop_front())
+	return _stage_internal_text(head, false, {
+		"special": &"battle_tower_rules", "next_internal_texts": boxes,
+	})
+
+
+## `Menu_ChallengeExplanationCancel`, a three-row `VerticalMenu` whose rows are
+## the cartridge's own strings. A row answers its own one-based number and B
+## answers 4, which is why the script tests only Challenge and Explanation.
+func _stage_challenge_menu() -> Dictionary:
+	var rows: Array = (_battle_tower_data().get("menu_rows", []) as Array).duplicate()
+	if rows.size() != RomLayout.BATTLETOWER_CHALLENGE_MENU_ROWS:
+		return _fail(&"missing_battle_tower_menu", {"special": SPECIAL_CHALLENGE_MENU})
+	_pending = {
+		"type": &"menu",
+		"command": &"challenge_menu",
+		"options": rows,
+		## `MenuHeader_ChallengeExplanationCancel`: `menu_coords 0, 0, 14, 7`,
+		## `db 1` for the row the cursor opens on, and its own two menu flags.
+		"header": {
+			"default": 1,
+			"data_flags": Gen2MenuBox.STATICMENU_CURSOR | Gen2WorldMenu.STATICMENU_WRAP,
+			"left": 0, "top": 0, "right": 14, "bottom": 7,
+		},
+		## `Script_Menu_ChallengeExplanationCancel` writes its question and then
+		## opens the menu over it, so the box already on screen is the prompt.
+		"text": _standing_text,
+		"special": &"battle_tower_challenge_menu",
+		"source": _request.duplicate(true),
+	}
+	return _waiting_result()
+
+
+## `BattleTowerRoomMenu_PlacePickLevelMenu`: four rooms before the Hall of Fame
+## and all ten after it, CANCEL behind either.
+func _stage_room_menu() -> Dictionary:
+	var rows: Array = (_battle_tower_data().get("level_rows", []) as Array).duplicate()
+	if rows.size() != RomLayout.BATTLETOWER_LEVEL_ROWS:
+		return _fail(&"missing_battle_tower_menu", {"special": SPECIAL_BATTLE_TOWER_ROOM_MENU})
+	var groups: int = RomLayout.BATTLETOWER_LEVEL_GROUPS if _hall_of_fame_entered() \
+		else Gen2BattleTower.PRE_HALL_OF_FAME_GROUPS
+	var options: Array = rows.slice(0, groups)
+	options.append(rows[RomLayout.BATTLETOWER_LEVEL_GROUPS])
+	_pending = {
+		"type": &"menu",
+		"command": &"battle_tower_room",
+		"options": options,
+		## `MenuHeader_119cf7`'s own `menu_coords 12, 7, SCREEN_WIDTH - 1,
+		## TEXTBOX_Y - 1`, the window `BattleTowerRoomMenu_PlacePickLevelMenu`
+		## opens beside the message it prints.
+		"header": {
+			"default": 1,
+			"data_flags": Gen2MenuBox.STATICMENU_CURSOR | Gen2WorldMenu.STATICMENU_WRAP,
+			"left": 12, "top": 7, "right": 19, "bottom": 11,
+		},
+		"text": String((_battle_tower_data().get("menu_text", {}) as Dictionary).get(
+			"what_level", ""
+		)),
+		"special": &"battle_tower_room_menu",
+		"groups": groups,
+		"source": _request.duplicate(true),
+	}
+	return _waiting_result()
+
+
+func _hall_of_fame_entered() -> bool:
+	return state != null and state.hall_of_fame()
+
+
+## One of the room menu's two refusals, printed and then followed by the menu
+## again: `BattleTowerRoomMenu_DelayRestartMenu` puts the jumptable back at zero
+## rather than leaving the routine.
+func _stage_room_menu_refusal(name: String, buffer_name: String = "") -> Dictionary:
+	var text: String = String(
+		(_battle_tower_data().get("menu_text", {}) as Dictionary).get(name, "")
+	)
+	if text.is_empty():
+		return _fail(
+			&"missing_special_text", {"special": SPECIAL_BATTLE_TOWER_ROOM_MENU}
+		)
+	if not buffer_name.is_empty():
+		## `Text_UberRestriction` is `text_ram wcd49`, which
+		## `BattleTower_UbersCheck` fills with the offending member's name.
+		text = Gen2TextStream.fill_all_markers(
+			text, "%s%04X>" % [Gen2TextStream.RAM_MARKER, BATTLE_TOWER_NAME_BUFFER],
+			buffer_name
+		)
+	return _stage_internal_text(text, false, {
+		"special": &"battle_tower_room_refusal",
+	})
+
+
+## `LoadOpponentTrainerAndPokemonWithOTSprite`. The sampled trainer and team go
+## into the runner's own `wBT_OTTrainer`, and the sprite the class carries is
+## given to the map object `wScriptVar` names, which the battle room's own
+## `setval BATTLETOWERBATTLEROOM_YOUNGSTER` chose.
+func _load_battle_tower_opponent() -> Dictionary:
+	var opponent: Dictionary = _battle_tower().load_opponent(data, _battle_tower_random(1))
+	if opponent.is_empty():
+		return _fail(
+			&"missing_battle_tower_data", {"special": SPECIAL_LOAD_BATTLE_TOWER_OPPONENT}
+		)
+	var mons: Array = []
+	for mon: Gen2SaveMon in opponent["mons"] as Array:
+		mons.append(mon.to_dict())
+	_battle_tower_opponent = {
+		"trainer": int(opponent["trainer"]),
+		"name": String(opponent["name"]),
+		"class": int(opponent["class"]),
+		"mons": mons,
+	}
+	_events.append({
+		"type": &"battle_tower_opponent_loaded",
+		"object": _script_value,
+		"sprite": Gen2BattleTower.class_sprite(data, int(opponent["class"])),
+		"trainer": int(opponent["trainer"]),
+		"trainer_class": int(opponent["class"]),
+		"name": String(opponent["name"]),
+	})
+	return {"ok": true}
+
+
+## `BattleTowerBattle`, which is `RunBattleTowerTrainer` around one
+## `predef StartBattle`: the party is healed on the way in and on the way out,
+## SET MODE is forced for the fight, and `wBattleResult` is what the room script
+## reads afterwards.
+func _stage_battle_tower_battle() -> Dictionary:
+	if _battle_tower_opponent.is_empty():
+		return _fail(
+			&"missing_battle_tower_opponent", {"special": SPECIAL_BATTLE_TOWER_BATTLE}
+		)
+	## `CopyBTTrainer_FromBT_OT_TowBT_OTTemp` runs in front of the battle, so the
+	## challenge is in progress and the trainer counted before a blow is struck.
+	var tower: Gen2BattleTower = _battle_tower()
+	tower.challenge_state = Gen2BattleTower.CHALLENGE_IN_PROGRESS
+	tower.beaten = mini(tower.beaten + 1, Gen2BattleTower.STREAK_LENGTH)
+	return _stage_runtime_request(&"battle_requested", {
+		"kind": &"battle_tower",
+		"special": SPECIAL_BATTLE_TOWER_BATTLE,
+		## `set BATTLE_SHIFT, [hl]` for the length of the fight and
+		## `farcall HealParty` on both sides of it.
+		"force_switch_mode": true,
+		"heal_party": true,
+		"trainer_class": int(_battle_tower_opponent["class"]),
+		"trainer_name": String(_battle_tower_opponent["name"]),
+		"enemy_party": (_battle_tower_opponent["mons"] as Array).duplicate(true),
+	})
+
+
+## `battletowertext`, which is `BattleTowerText` for the opponent's own class:
+## the greeting rolls a personality and the win and loss lines read the same one
+## back, so all three come from one trainer rather than three.
+func _stage_battle_tower_text(kind: int) -> Dictionary:
+	if _battle_tower_opponent.is_empty():
+		return _fail(&"missing_battle_tower_opponent", {"kind": kind})
+	var line: Dictionary = _battle_tower().trainer_line(
+		data, int(_battle_tower_opponent["class"]), clampi(kind - 1, 0, 2),
+		_battle_tower_random(1 + kind), _battle_tower_text_index
+	)
+	_battle_tower_text_index = int(line["index"])
+	var text: String = String(line["text"])
+	if text.is_empty():
+		return _fail(&"missing_battle_tower_text", {"kind": kind})
+	return _stage_internal_text(text, false)
+
+
 func _pending_tag() -> StringName:
 	var tag: Variant = _pending.get("special", &"")
 	return tag if tag is StringName else &""

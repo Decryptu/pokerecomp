@@ -6597,6 +6597,23 @@ func _day_care_species(sprite_number: int) -> int:
 ## it, so a save that has not met Sudowoodo really does stand two copies of the
 ## player's sprite on that route. An object that should not be there at all is
 ## masked by [method load_object_masks], not by this fallback.
+## `LoadOpponentTrainerAndPokemonWithOTSprite`'s tail: it writes a sprite number
+## straight into `wMapObjects` and calls `GetUsedSprite`, because the Battle
+## Tower's opponent is drawn at random and its object event carries a placeholder
+## instead. The overworld sprite is replaced in place; nothing else about the
+## object moves.
+func set_object_sprite(index: int, sprite_number: int) -> Dictionary:
+	if index < 0 or index >= objects.size() or sprite_number <= 0:
+		return {"ok": false, "reason": &"invalid_object_sprite", "object": index}
+	var object: Gen2WorldObject = objects[index] as Gen2WorldObject
+	object.sprite_number = sprite_number
+	var icon_number: int = _mon_icon_for_sprite(sprite_number)
+	object.sprite = data.overworld_icon(icon_number) if icon_number > 0 \
+		else data.overworld_sprite(sprite_number)
+	set_object_time(object_hour, object_time_of_day)
+	return {"ok": true, "object": index, "sprite": sprite_number}
+
+
 func _object_from_event(index: int, value: Dictionary) -> Gen2WorldObject:
 	var sprite_number: int = _resolved_sprite(int(value.get("sprite", 0)))
 	var sprite: Gen2WorldSprite = null

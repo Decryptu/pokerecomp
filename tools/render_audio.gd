@@ -25,6 +25,9 @@ func _initialize() -> void:
 	var kind: StringName = StringName(arguments[1])
 	var frames: int = int(arguments[3])
 	var prefix: String = arguments[4]
+	if Gen2ToolPath.refuses(prefix):
+		quit(2)
+		return
 	var stereo: bool = arguments.size() > 5 and arguments[5] == "1"
 
 	var data: GameData = GameData.open(game)
@@ -40,11 +43,11 @@ func _initialize() -> void:
 	if arguments[2] == "all":
 		var index: int = 1 if kind == &"mon_cry" else 0
 		while true:
-			var record: Dictionary = _record(data, kind, index)
-			if record.is_empty():
+			var swept: Dictionary = _record(data, kind, index)
+			if swept.is_empty():
 				break
-			_report(kind, index, record)
-			if not _render(record, kind, assets, frames, stereo, "%s_%d" % [prefix, index]):
+			_report(kind, index, swept)
+			if not _render(swept, kind, assets, frames, stereo, "%s_%d" % [prefix, index]):
 				quit(1)
 				return
 			index += 1
@@ -52,13 +55,13 @@ func _initialize() -> void:
 		quit(0)
 		return
 
-	var record: Dictionary = _record(data, kind, int(arguments[2]))
-	if record.is_empty():
-		printerr("No %s record %s in the %s cache." % [kind, arguments[2], game])
+	var entry: Dictionary = _record(data, kind, int(arguments[2]))
+	if entry.is_empty():
+		printerr("No %s entry %s in the %s cache." % [kind, arguments[2], game])
 		quit(1)
 		return
-	_report(kind, int(arguments[2]), record)
-	if not _render(record, kind, assets, frames, stereo, prefix):
+	_report(kind, int(arguments[2]), entry)
+	if not _render(entry, kind, assets, frames, stereo, prefix):
 		quit(1)
 		return
 	print("%s.wav: %d frames" % [prefix, frames])
@@ -73,20 +76,20 @@ func _record(data: GameData, kind: StringName, index: int) -> Dictionary:
 
 ## `mon_cry` resolves through `PokemonCries`, so the parameters it picked are
 ## worth printing: a parity run has to hand the same two to the other side.
-func _report(kind: StringName, index: int, record: Dictionary) -> void:
+func _report(kind: StringName, index: int, entry: Dictionary) -> void:
 	if kind != &"mon_cry":
 		return
 	print("species %d: cry index %d pitch %d length %d" % [
-		index, int(record.get("index", -1)),
-		int(record.get("cry_pitch", 0)), int(record.get("cry_length", 0)),
+		index, int(entry.get("index", -1)),
+		int(entry.get("cry_pitch", 0)), int(entry.get("cry_length", 0)),
 	])
 
 
 func _render(
-	record: Dictionary, kind: StringName, assets: Dictionary, frames: int,
+	entry: Dictionary, kind: StringName, assets: Dictionary, frames: int,
 	stereo: bool, prefix: String
 ) -> bool:
-	var result: Dictionary = Gen2AudioRender.render(record, kind, assets, frames, stereo, true)
+	var result: Dictionary = Gen2AudioRender.render(entry, kind, assets, frames, stereo, true)
 	if not bool(result.get("ok", false)):
 		printerr("Render failed: %s" % result.get("reason", "unknown"))
 		return false

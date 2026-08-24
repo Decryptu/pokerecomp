@@ -197,7 +197,7 @@ func _run(game_id: StringName, data: GameData) -> void:
 			sampled = false
 	_r.check(
 		movie.finished(),
-		"%s: the intro movie never set its exit bit." % game_id
+		"%s: the intro movie never ordering its exit bit." % game_id
 	)
 	_r.check(
 		movie.frame() == EXPECTED_FRAMES,
@@ -227,6 +227,6 @@ func _run(game_id: StringName, data: GameData) -> void:
 func _sprite_count(movie: Gen2IntroMovie) -> int:
 	var total: int = 0
 	for sprite: Dictionary in movie.sprites():
-		var set: Dictionary = Gen2IntroMoviePage.OAM_SETS[int(sprite["set"])]
-		total += (set["parts"] as Array).size()
+		var ordering: Dictionary = Gen2IntroMoviePage.OAM_SETS[int(sprite["set"])]
+		total += (ordering["parts"] as Array).size()
 	return total

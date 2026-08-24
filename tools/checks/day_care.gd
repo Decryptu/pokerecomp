@@ -51,8 +51,8 @@ func run(r: RefCounted) -> void:
 ## say the pin is that run and not its neighbour.
 func _verify_texts(game_id: StringName, data: GameData) -> void:
 	var found: int = 0
-	for run: Array in RomLayout.DAY_CARE_TEXT_RUNS:
-		for raw_name: Variant in run[1] as Array:
+	for subject: Array in RomLayout.DAY_CARE_TEXT_RUNS:
+		for raw_name: Variant in subject[1] as Array:
 			var name: String = String(raw_name)
 			var text: String = data.day_care_text(name)
 			if _r.check(
