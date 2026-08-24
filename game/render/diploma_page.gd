@@ -94,9 +94,9 @@ func _draw_status(indices: PackedByteArray, status: String) -> void:
 	## blanked rather than showing through: the certificate's own lines sit in
 	## the same rows this box covers.
 	for row: int in STATUS_BOX_SIZE.y * TILE:
-		var line: int = (STATUS_BOX_AT.y * TILE + row) * WIDTH + STATUS_BOX_AT.x * TILE
+		var start: int = (STATUS_BOX_AT.y * TILE + row) * WIDTH + STATUS_BOX_AT.x * TILE
 		for column: int in STATUS_BOX_SIZE.x * TILE:
-			indices[line + column] = 0
+			indices[start + column] = 0
 	font.draw_box(
 		Gen2OptionsStore.current().textbox_frame, indices, WIDTH,
 		STATUS_BOX_AT.x * TILE, STATUS_BOX_AT.y * TILE,

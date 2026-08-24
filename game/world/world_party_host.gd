@@ -2147,7 +2147,7 @@ static func _lucky_number_score(wanted: String, mon_id: int) -> int:
 static func _apply_give_shuckle(
 	world: Gen2WorldAPI,
 	candidate: Gen2SaveData,
-	request: Dictionary,
+	_request: Dictionary,
 	random: RandomNumberGenerator
 ) -> Dictionary:
 	if candidate.party.size() >= Gen2SaveData.MAX_PARTY:

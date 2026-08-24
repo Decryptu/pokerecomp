@@ -2418,8 +2418,8 @@ func _offer_repel_renewal() -> bool:
 		return false
 	if _service_host != null or _overlay_open() or _field_move_text:
 		return false
-	var name: String = _data.item_name(item)
-	if not _open_host_prompt(REPEL_RENEWAL_TEXT % (name if not name.is_empty() else "REPEL")):
+	var repel: String = _data.item_name(item)
+	if not _open_host_prompt(REPEL_RENEWAL_TEXT % (repel if not repel.is_empty() else "REPEL")):
 		return false
 	_world.clear_repel_expired()
 	_repel_renewal_item = item
