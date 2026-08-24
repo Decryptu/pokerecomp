@@ -210,14 +210,23 @@ func test_a_trapped_or_mean_looked_enemy_does_not_switch() -> void:
 ## `CheckEnemyLockedIn` returns out of the whole routine, so a charging Pokémon
 ## neither switches nor is handed an item.
 func test_a_locked_in_enemy_neither_switches_nor_uses_an_item() -> void:
-	var battle: Gen2Battle = _wants_out()
-	battle.enemy_items = [Gen2AIItems.X_ATTACK]
-	battle.enemy.substatus |= Gen2Substatus.CHARGING
+	## All four bits the routine's three tests read, Bide's among them: it is
+	## `wEnemySubStatus3`'s own `1 << SUBSTATUS_BIDE`, beside CHARGED and RAMPAGE.
+	for flag: int in [
+		Gen2Substatus.CHARGING, Gen2Substatus.RECHARGING,
+		Gen2Substatus.RAMPAGING, Gen2Substatus.ROLLOUT, Gen2Substatus.BIDE,
+	]:
+		var battle: Gen2Battle = _wants_out()
+		battle.enemy_items = [Gen2AIItems.X_ATTACK]
+		battle.enemy.substatus |= flag
 
-	for seed: int in 16:
-		_rng.seed = seed
-		var action: Dictionary = Gen2BattleAI.choose_action(battle, OFTEN, 0, _rng)
-		assert_eq(StringName(action["type"]), Gen2Battle.ACTION_MOVE)
+		for seed: int in 16:
+			_rng.seed = seed
+			var action: Dictionary = Gen2BattleAI.choose_action(battle, OFTEN, 0, _rng)
+			assert_eq(
+				StringName(action["type"]), Gen2Battle.ACTION_MOVE,
+				"substatus bit %d" % flag
+			)
 
 
 ## A wild battle has no trainer behind it, so neither half of the routine runs.

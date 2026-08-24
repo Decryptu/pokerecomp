@@ -147,11 +147,13 @@ static func _can_leave(battle: Gen2Battle) -> bool:
 	return battle.mon(Gen2Battle.ENEMY).trapped_turns <= 0
 
 
-## `CheckEnemyLockedIn`. Bide is not implemented and so is not among these.
+## `CheckEnemyLockedIn`: the four substatus bits its three tests read, BIDE
+## among them (`wEnemySubStatus3`'s `1 << SUBSTATUS_BIDE`). A trainer storing
+## Bide picks no move and does not switch.
 static func _locked_in(mon: Gen2BattleMon) -> bool:
 	for flag: int in [
 		Gen2Substatus.RECHARGING, Gen2Substatus.CHARGING,
-		Gen2Substatus.RAMPAGING, Gen2Substatus.ROLLOUT,
+		Gen2Substatus.RAMPAGING, Gen2Substatus.ROLLOUT, Gen2Substatus.BIDE,
 	]:
 		if Gen2Substatus.has(mon.substatus, flag):
 			return true
