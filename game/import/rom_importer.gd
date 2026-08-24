@@ -378,6 +378,10 @@ static func verify_layout(rom: RomFile) -> Dictionary:
 	if not printer["ok"]:
 		return printer
 
+	var link_border: Dictionary = verify_link_border(rom, layout)
+	if not link_border["ok"]:
+		return link_border
+
 	var card_flip: Dictionary = verify_card_flip(rom, layout)
 	if not card_flip["ok"]:
 		return card_flip
@@ -1693,6 +1697,41 @@ static func verify_printer(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if int(layout.get("unown_printer_glyphs", -1)) < 0:
 		return {"ok": false, "message": "No pin for the Unown printer's own glyphs."}
 	return {"ok": true, "message": "The diploma and the printer verified."}
+
+
+## `LinkCommsBorderGFX`. The walk in [method read_link_border] is most of it: a
+## tilemap that indexes past the block refuses there. What is left is the pair
+## of facts that say which cartridge's border this is, since the two are laid
+## out differently: Crystal's block carries `_LinkTextbox`'s own eight tiles at
+## `$30` and a whole screen behind it, and Gold and Silver's is nine tiles with
+## no tilemap at all.
+static func verify_link_border(rom: RomFile, layout: Dictionary) -> Dictionary:
+	if int(layout.get("link_border", -1)) < 0:
+		return {"ok": false, "message": "No pin for the trade screen's border."}
+	var section: Dictionary = read_link_border(rom, layout)
+	if section.is_empty():
+		return {"ok": false, "message": "The trade screen's border does not walk."}
+	var crystal: bool = rom.id == &"crystal"
+	if section.has("screen") != crystal:
+		return {
+			"ok": false,
+			"message": "The trade border %s a screen tilemap." % [
+				"carries" if section.has("screen") else "carries no",
+			],
+		}
+	if not crystal:
+		return {"ok": true, "message": "The trade screen's border verified."}
+	## `_LinkTextbox`'s `.PlaceBorder` writes `$30` at the top left and `$37` at
+	## the bottom right, so those eight tiles are a box and not blank.
+	var box: PackedByteArray = (section["tiles"] as PackedByteArray).slice(
+		RomLayout.LINK_TEXTBOX_FIRST_TILE * Gen2Tiles.TILE_BYTES,
+		(RomLayout.LINK_TEXTBOX_FIRST_TILE + RomLayout.LINK_TEXTBOX_TILES) \
+			* Gen2Tiles.TILE_BYTES
+	)
+	for byte: int in box:
+		if byte != 0:
+			return {"ok": true, "message": "The trade screen's border verified."}
+	return {"ok": false, "message": "The trade border's own textbox tiles are blank."}
 
 
 ## `_SlotMachine`. The section walk is most of the check; what is left is the
@@ -4651,6 +4690,7 @@ func import_rom(
 		"day_care_text": _import_day_care_text(rom, layout),
 		"special_text": _import_special_text(rom, layout),
 		"special_text_ram": (layout.get("special_text_ram", {}) as Dictionary).duplicate(),
+		"other_player_link_mode": int(layout.get("other_player_link_mode", -1)),
 		"copyright_string": _import_copyright_string(rom, layout),
 		"copyright_palette": _import_copyright_palette(rom, layout),
 		"presents_palettes": _import_presents_palettes(rom, layout),
@@ -4664,6 +4704,7 @@ func import_rom(
 		"decorations": _import_decorations(rom, layout),
 		"unown_puzzle": _import_unown_puzzle(rom, layout),
 		"diploma": _import_diploma(rom, layout),
+		"link_border": _import_link_border(rom, layout),
 		"printer_strings": _import_printer_strings(rom, layout),
 		"slots": _import_slots(rom, layout),
 		"slots_text": _import_slots_text(rom, layout),
@@ -6451,6 +6492,72 @@ func _import_diploma(rom: RomFile, layout: Dictionary) -> Dictionary:
 	}
 
 
+## `LinkCommsBorderGFX` and, on Crystal alone, the three tilemaps behind it.
+## Uncompressed, so this is a bounds check and a walk: every code in the screen
+## tilemap has to name a tile the block actually carries, which is what says the
+## pin is the border rather than some other run of bytes.
+static func read_link_border(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var at: int = int(layout.get("link_border", -1))
+	if at < 0:
+		return {}
+	var tiles: int = RomLayout.LINK_BORDER_TILES_CRYSTAL if rom.id == &"crystal" \
+		else RomLayout.LINK_BORDER_TILES_GOLD_SILVER
+	if not rom.in_bounds(at, tiles * Gen2Tiles.TILE_BYTES):
+		return {}
+	var out: Dictionary = {
+		"tiles": rom.slice(at, tiles * Gen2Tiles.TILE_BYTES), "count": tiles,
+	}
+	var maps_at: int = int(layout.get("link_trade_tilemaps", -1))
+	if maps_at < 0:
+		return out
+	var screen: int = RomLayout.LINK_TRADE_TILEMAP_BYTES
+	var strip: int = RomLayout.LINK_TRADE_CABLE_ROWS_BYTES
+	if not rom.in_bounds(maps_at, screen + strip * 2):
+		return {}
+	out["screen"] = rom.slice(maps_at, screen)
+	out["cable_top"] = rom.slice(maps_at + screen, strip)
+	out["cable_bottom"] = rom.slice(maps_at + screen + strip, strip)
+	for key: String in ["screen", "cable_top", "cable_bottom"]:
+		for code: int in out[key] as PackedByteArray:
+			if code >= tiles:
+				return {}
+	return out
+
+
+func _import_link_border(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var section: Dictionary = read_link_border(rom, layout)
+	if section.is_empty():
+		return {}
+	var out: Dictionary = {"tiles": int(section["count"])}
+	for key: String in ["screen", "cable_top", "cable_bottom"]:
+		if section.has(key):
+			out[key] = Array(section[key] as PackedByteArray)
+	return out
+
+
+## The border's own strip, written the way the diploma's is.
+func _import_link_border_sheet(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var section: Dictionary = read_link_border(rom, layout)
+	if section.is_empty():
+		return {}
+	var tiles: int = int(section["count"])
+	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
+	if not RomCache.write_indices(
+		RomCache.tile_path(directory, "link_border"),
+		Gen2Tiles.decode_2bpp_strip(section["tiles"], 0, tiles)
+	):
+		return {}
+	return {
+		"link_border": {
+			"width": tiles * Gen2Tiles.TILE_WIDTH,
+			"height": Gen2Tiles.TILE_HEIGHT,
+			"tiles": tiles,
+			"first_code": 0,
+			"bits": 2,
+		},
+	}
+
+
 func _import_printer_strings(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return read_printer_strings(rom, layout)
 
@@ -6873,6 +6980,7 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 	written.merge(_import_slots_sheets(rom, layout), true)
 	written.merge(_import_card_flip_sheets(rom, layout), true)
 	written.merge(_import_diploma_sheet(rom, layout), true)
+	written.merge(_import_link_border_sheet(rom, layout), true)
 	var done: int = 0
 	for name: String in sheets:
 		var sheet: Dictionary = sheets[name]

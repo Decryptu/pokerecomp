@@ -1190,6 +1190,26 @@ const PREDEFPAL_UNOWN_PUZZLE: int = 0x4C
 const DIPLOMA_TILES: int = 112
 const DIPLOMA_TILEMAP_BYTES: int = 360
 
+
+## `LinkCommsBorderGFX`, the trade screen's own border, and the tilemaps behind
+## it. The two cartridges draw the same screen out of very different amounts of
+## data: Gold and Silver load nine tiles to `vTiles2 tile $76` and let
+## `PlaceTradeScreenTextbox` draw two ordinary boxes with them, while Crystal
+## loads seventy tiles to `vTiles2` and lays a whole screen of them down from
+## `MobileTradeBorderTilemap` with the two cable rows written over its top and
+## bottom. `_LinkTextbox`'s own eight corner and edge tiles are `$30` to `$37`
+## of Crystal's block, which is what `LinkComms_LoadPleaseWaitTextboxBorderGFX`
+## copies to `$76` when only the box is wanted.
+const LINK_BORDER_TILES_CRYSTAL: int = 70
+const LINK_BORDER_TILES_GOLD_SILVER: int = 9
+## `_LinkTextbox`'s `$30`, the first of the eight tiles it draws a box from.
+const LINK_TEXTBOX_FIRST_TILE: int = 0x30
+const LINK_TEXTBOX_TILES: int = 8
+## `MobileTradeBorderTilemap` is a whole screen; the two cable strips are two
+## rows each.
+const LINK_TRADE_TILEMAP_BYTES: int = 360
+const LINK_TRADE_CABLE_ROWS_BYTES: int = 40
+
 ## `PalPacket_Diploma`'s first entry, and the only one the page is drawn in:
 ## `_CGB_Unused0D` is SCGB_DIPLOMA's own layout and its `WipeAttrmap` puts every
 ## cell on palette 0.
@@ -1515,6 +1535,15 @@ const SPECIAL_TEXT_RUNS: Dictionary = {
 			"only_three_may_be_entered", "must_all_be_different_kinds",
 			"must_not_hold_the_same_items", "you_cant_take_an_egg",
 		]],
+	],
+	## The trade screen's own three, which is every box `LinkTrade` prints that
+	## is not an inline `db` string. Three runs of one rather than one of three:
+	## `.String_Stats_Trade`'s sixteen bytes sit between the first two stubs and
+	## the third is in `LinkTrade` itself, a page further down the file.
+	"link": [
+		["link_cant_battle_text", ["cant_battle"]],
+		["link_abnormal_mon_text", ["abnormal_mon"]],
+		["link_ask_trade_text", ["ask_trade"]],
 	],
 	## `BuenaPrize`'s six, in its own file order.
 	"buena_prize": [["buena_prize_text", [
@@ -2323,6 +2352,11 @@ const GOLD_SILVER: Dictionary = {
 	# `DiplomaGFX` and the two tilemaps behind it, at Gold and Silver's own
 	# address; located the way Crystal's is.
 	"diploma": 0xE0105,
+	# `LinkCommsBorderGFX`, which is nine tiles here and carries no tilemap:
+	# `PlaceTradeScreenTextbox` draws the trade screen's two boxes with
+	# `LinkTextboxAtHL` instead. The same address on Gold and on Silver.
+	"link_border": 0x29D5B,
+	"link_trade_tilemaps": -1,
 	# `UnownDexATile` behind `UnownDexVacantString`, and `GBPrinterStrings`
 	# behind `PrinterStatusStringPointers`' first entry.
 	"unown_printer_glyphs": 0x16FCC,
@@ -2499,7 +2533,19 @@ const GOLD_SILVER: Dictionary = {
 	## cartridge does not ship: the Poke Seer, Buena and her prize counter are
 	## Crystal's alone, and no Gold or Silver script reaches their specials.
 	## Gold and Silver's own, and only the one row they ship a routine for.
-	"special_text_ram": {"magikarp_record_holder": 0xDD35},
+	"special_text_ram": {
+		"magikarp_record_holder": 0xDD35,
+		## `wBufferTrademonNickname`, which `_LinkAskTradeForText` names with a
+		## `text_ram` whose address is in the text data itself.
+		"trademon_nickname": 0xCEEF,
+	},
+	## Gold and Silver's own WRAM address for the same byte; their link block sits
+	## a page lower than Crystal's.
+	"other_player_link_mode": 0xCE51,
+	## The same three stubs at Gold and Silver's own addresses, the same on both.
+	"link_cant_battle_text": 0x289A8,
+	"link_abnormal_mon_text": 0x289BD,
+	"link_ask_trade_text": 0x28D51,
 	"magikarp_measure_text": 0xFBCAD,
 	"magikarp_record_text": 0xFBDEC,
 	"lucky_number_text": 0xC7BA3,
@@ -2841,6 +2887,14 @@ const CRYSTAL: Dictionary = {
 	# Located off `.GameFreak`, the last of `PrintDiplomaPage2`'s own two
 	# strings: `db "GAME FREAK@"` is eleven bytes and the INCBIN follows it.
 	"diploma": 0x1DD805,
+	# `LinkCommsBorderGFX` and, sixty-eight bytes of code behind it,
+	# `MobileTradeBorderTilemap` with the two cable strips laid out after it.
+	# Located off the border tiles themselves, which are a byte-exact match for
+	# `gfx/trade/border_tiles.png`; the tilemaps are pinned separately because
+	# `__LoadTradeScreenBorderGFX`, `LoadMobileTradeBorderTilemap` and
+	# `TestMobileTradeBorderTilemap` sit between the two.
+	"link_border": 0x16CFC1,
+	"link_trade_tilemaps": 0x16D465,
 	# `UnownDexATile`, the two 1bpp tiles `_UnownPrinter` requests into the
 	# menu's own A and B glyphs, seven bytes behind `UnownDexVacantString`.
 	"unown_printer_glyphs": 0x16D9C,
@@ -3037,7 +3091,15 @@ const CRYSTAL: Dictionary = {
 		"seer_time_of_day": 0xD01F,
 		"seer_ot": 0xD02A,
 		"seer_caught_level": 0xD036,
+		"trademon_nickname": 0xD004,
 	},
+	## `wOtherPlayerLinkMode`, the byte all three receptionist scripts `readmem`
+	## after `CheckLinkTimeout_Receptionist`. Located off those three `readmem`s
+	## themselves, which are the only three in either corpus that name it.
+	"other_player_link_mode": 0xCF51,
+	"link_cant_battle_text": 0x28AAF,
+	"link_abnormal_mon_text": 0x28AC4,
+	"link_ask_trade_text": 0x28EB8,
 	"magikarp_measure_text": 0xFBBA9,
 	"magikarp_record_text": 0xFBCE8,
 	"lucky_number_text": 0x4D9C9,

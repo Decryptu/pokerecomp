@@ -79,6 +79,8 @@ var _credits: Dictionary = {}
 var _intro_movie: Dictionary = {}
 var _unown_puzzle: Dictionary = {}
 var _diploma: Dictionary = {}
+var _link_border: Dictionary = {}
+var _other_player_link_mode: int = -1
 var _printer_strings: Dictionary = {}
 var _slots: Dictionary = {}
 var _slots_text: Dictionary = {}
@@ -208,6 +210,9 @@ static func open_directory(path: String) -> GameData:
 	data._unown_puzzle = unown_puzzle if unown_puzzle is Dictionary else {}
 	var diploma: Variant = manifest.get("diploma", {})
 	data._diploma = diploma if diploma is Dictionary else {}
+	var link_border: Variant = manifest.get("link_border", {})
+	data._link_border = link_border if link_border is Dictionary else {}
+	data._other_player_link_mode = int(manifest.get("other_player_link_mode", -1))
 	var printer_strings: Variant = manifest.get("printer_strings", {})
 	data._printer_strings = printer_strings if printer_strings is Dictionary else {}
 	var slots: Variant = manifest.get("slots", {})
@@ -1986,6 +1991,36 @@ func diploma_palette() -> PackedColorArray:
 	for packed: Variant in _diploma.get("palette", []) as Array:
 		colors.append(Gen2Palette.from_packed(int(packed)))
 	return colors
+
+
+## `LinkCommsBorderGFX`'s own strip and, on Crystal alone, the three tilemaps
+## the trade screen is laid out from. A cache imported before the border existed
+## carries neither, which is what [method has_link_border] answers for; a cache
+## that carries the strip but no screen is Gold or Silver, whose trade screen is
+## two `LinkTextboxAtHL` boxes rather than a tilemap.
+## `wOtherPlayerLinkMode`, whose address the two cartridges do not share: the
+## three receptionist scripts `readmem` it by their own profile's address, so a
+## runner writing Crystal's would leave Gold's read as zero and send every
+## player down the "can't link to the past" branch.
+func other_player_link_mode_address() -> int:
+	return _other_player_link_mode
+
+
+func has_link_border() -> bool:
+	return int(_link_border.get("tiles", 0)) > 0
+
+
+func link_border_indices() -> PackedByteArray:
+	return tile_indices("link_border")
+
+
+## `MobileTradeBorderTilemap`, `CableTradeBorderTopTilemap` and
+## `CableTradeBorderBottomTilemap` by name, empty on Gold and Silver.
+func link_border_tilemap(name: String) -> PackedByteArray:
+	var out := PackedByteArray()
+	for code: Variant in _link_border.get(name, []) as Array:
+		out.append(int(code))
+	return out
 
 
 ## One `GBPrinterStrings` entry by the status it names, or the empty string,

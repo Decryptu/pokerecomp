@@ -63,10 +63,13 @@ static func prepare(
 				return _failure(&"invalid_trainer", {
 					"trainer_class": trainer_class, "trainer_index": trainer_index,
 				})
-		&"battle_tower":
+		&"battle_tower", &"link_battle":
 			## `ReadBTTrainerParty` copies a whole `wOTPartyMon` block out of the
 			## sampled record rather than building one from a trainer table, so
 			## the party arrives with the request and nothing is rolled here.
+			## A link battle is the same shape one caller further out:
+			## `Link_PrepPartyData_Gen2` sends whole party structs and the other
+			## Game Boy's arrive the same way, with no trainer class behind them.
 			trainer_class = int(values.get("trainer_class", 0))
 			var members: Array = []
 			for raw_mon: Variant in values.get("enemy_party", []) as Array:
@@ -84,7 +87,7 @@ static func prepare(
 	var generator := random if random != null else RandomNumberGenerator.new()
 	var battle: Gen2Battle = Gen2Battle.create_parties(
 		data, player_party, enemy_party, generator,
-		kind == &"trainer" or kind == &"battle_tower", player_badges, battle_rules
+		kind in [&"trainer", &"battle_tower", &"link_battle"], player_badges, battle_rules
 	)
 	if battle == null:
 		return _failure(&"battle_setup_failed")

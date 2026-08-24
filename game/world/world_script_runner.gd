@@ -220,6 +220,43 @@ const SPECIAL_CHALLENGE_MENU: int = 136
 ## either corpus that reaches them.
 const SPECIAL_TRY_QUICK_SAVE: int = 4
 const SPECIAL_RESET: int = 126
+
+## The cable club's own block of `SpecialsPointers`, in index order. Three
+## scripts reach it: the trade and battle receptionists on POKECENTER_2F, which
+## share one shape, and the Time Capsule's, which asks for no room at all. The
+## last three are the rooms themselves, reached from the console each one is
+## built around, and `CableClubCheckWhichChris` is the callback that decides
+## which of the two identical friends is standing in it.
+const SPECIAL_SET_BITS_FOR_LINK_TRADE_REQUEST: int = 1
+const SPECIAL_WAIT_FOR_LINKED_FRIEND: int = 2
+const SPECIAL_CHECK_LINK_TIMEOUT_RECEPTIONIST: int = 3
+const SPECIAL_CHECK_BOTH_SELECTED_SAME_ROOM: int = 5
+const SPECIAL_FAILED_LINK_TO_PAST: int = 6
+const SPECIAL_CLOSE_LINK: int = 7
+const SPECIAL_WAIT_FOR_OTHER_PLAYER_TO_EXIT: int = 8
+const SPECIAL_SET_BITS_FOR_BATTLE_REQUEST: int = 9
+const SPECIAL_SET_BITS_FOR_TIME_CAPSULE_REQUEST: int = 10
+const SPECIAL_CHECK_TIME_CAPSULE_COMPATIBILITY: int = 11
+const SPECIAL_ENTER_TIME_CAPSULE: int = 12
+const SPECIAL_TRADE_CENTER: int = 13
+const SPECIAL_COLOSSEUM: int = 14
+const SPECIAL_TIME_CAPSULE: int = 15
+const SPECIAL_CABLE_CLUB_CHECK_WHICH_CHRIS: int = 16
+## `DisplayLinkRecord`, the sign beside the three receptionists. It is in the
+## same block and it is not link play: it reads `sLinkBattleStats` and draws it,
+## which is one page over a save field the link battle writes.
+const SPECIAL_DISPLAY_LINK_RECORD: int = 88
+## `CheckMobileAdapterStatusSpecial`, which both Crystal receptionists ask before
+## anything else. It is the Mobile Adapter's, and its FALSE is what reaches the
+## cable club: a script that cannot answer it stops in front of the whole room.
+const SPECIAL_CHECK_MOBILE_ADAPTER_STATUS: int = 160
+## Which `wLinkMode` each room's console writes on the way into
+## `LinkCommunications`.
+const LINK_ROOM_MODES: Dictionary = {
+	SPECIAL_TRADE_CENTER: Gen2LinkSession.LINK_TRADECENTER,
+	SPECIAL_COLOSSEUM: Gen2LinkSession.LINK_COLOSSEUM,
+	SPECIAL_TIME_CAPSULE: Gen2LinkSession.LINK_TIMECAPSULE,
+}
 ## `Menu_ChallengeExplanationCancel`'s own answers: the three rows are 1 to 3 and
 ## B is 4, which is why `Script_Menu_ChallengeExplanationCancel` tests only 1 and
 ## 2 and treats everything else as leaving.
@@ -1302,6 +1339,10 @@ func complete_runtime_request(result: Dictionary) -> Dictionary:
 		## `TryQuickSave` answers TRUE for a save that was written and FALSE for
 		## one that was not, which is the branch both of its sites read.
 		&"quick_save_requested",
+		## `_DisplayLinkRecord` draws one page and holds for a button, and the
+		## three link rooms' own consoles run their exchange and come back to a
+		## `newloadmap`. Neither writes anything the script reads.
+		&"link_record_requested", &"link_room_requested",
 	]:
 		if not bool(result.get("ok", false)):
 			return _fail(
@@ -3111,6 +3152,84 @@ func _execute_special(special: int) -> Dictionary:
 			return {"ok": true}
 		SPECIAL_CHALLENGE_MENU:
 			return _stage_challenge_menu()
+		SPECIAL_SET_BITS_FOR_LINK_TRADE_REQUEST, SPECIAL_SET_BITS_FOR_BATTLE_REQUEST:
+			_link_session().request_room(
+				Gen2LinkSession.CABLECLUBROOM_TRADECENTER \
+					if special == SPECIAL_SET_BITS_FOR_LINK_TRADE_REQUEST \
+					else Gen2LinkSession.CABLECLUBROOM_COLOSSEUM
+			)
+		SPECIAL_SET_BITS_FOR_TIME_CAPSULE_REQUEST:
+			## The Time Capsule asks for `CABLECLUBROOM_NULL`, which is why its
+			## own script never reaches `CheckBothSelectedSameRoom` on a branch
+			## that could pass.
+			_link_session().request_time_capsule()
+		SPECIAL_WAIT_FOR_LINKED_FRIEND:
+			_script_value = _link_session().wait_for_linked_friend(_link_transport())
+			if _script_value == 0:
+				return {"ok": true}
+			return _stage_frame_wait(
+				Gen2LinkSession.WAIT_FOR_FRIEND_CONNECTED_FRAMES,
+				{"special": special, "kind": &"link_wait"}
+			)
+		SPECIAL_CHECK_LINK_TIMEOUT_RECEPTIONIST:
+			var session: Gen2LinkSession = _link_session()
+			_script_value = session.check_link_timeout(_link_transport())
+			## The `readmem wOtherPlayerLinkMode` every one of the three scripts
+			## runs on the next line reads this byte and not wScriptVar.
+			var stored: Dictionary = _stage_script_memory(
+				data.other_player_link_mode_address() if data != null else -1,
+				session.other_player_link_mode
+			)
+			if not bool(stored.get("ok", true)):
+				return stored
+			return _stage_frame_wait(
+				Gen2LinkSession.CHECK_LINK_TIMEOUT_FRAMES,
+				{"special": special, "kind": &"link_wait"}
+			)
+		SPECIAL_CHECK_BOTH_SELECTED_SAME_ROOM:
+			_script_value = _link_session().check_both_selected_same_room(_link_transport())
+		SPECIAL_FAILED_LINK_TO_PAST:
+			_link_session().failed_link_to_past(_link_transport())
+			return _stage_frame_wait(
+				Gen2LinkSession.FAILED_LINK_TO_PAST_FRAMES,
+				{"special": special, "kind": &"link_wait"}
+			)
+		SPECIAL_CLOSE_LINK:
+			_link_session().close_link(_link_transport())
+			return _stage_frame_wait(
+				Gen2LinkSession.CLOSE_LINK_FRAMES,
+				{"special": special, "kind": &"link_wait"}
+			)
+		SPECIAL_WAIT_FOR_OTHER_PLAYER_TO_EXIT:
+			_link_session().wait_for_other_player_to_exit(_link_transport())
+			return _stage_frame_wait(
+				Gen2LinkSession.WAIT_FOR_OTHER_PLAYER_FRAMES,
+				{"special": special, "kind": &"link_wait"}
+			)
+		SPECIAL_CHECK_TIME_CAPSULE_COMPATIBILITY:
+			return _check_time_capsule_compatibility()
+		SPECIAL_ENTER_TIME_CAPSULE:
+			_link_session().enter_time_capsule(_link_transport())
+			return _stage_frame_wait(
+				Gen2LinkSession.ENTER_TIME_CAPSULE_FRAMES,
+				{"special": special, "kind": &"link_wait"}
+			)
+		SPECIAL_TRADE_CENTER, SPECIAL_COLOSSEUM, SPECIAL_TIME_CAPSULE:
+			return _stage_link_room(special)
+		SPECIAL_CHECK_MOBILE_ADAPTER_STATUS:
+			## `CheckMobileAdapterStatusSpecial` answers whether a Mobile Adapter
+			## GB is plugged in, and none is: there is no such peripheral on any
+			## platform this runs on. FALSE is what both Crystal receptionists
+			## branch on to reach `.NoMobile`, which is the cable club proper,
+			## so this is the answer that opens the room rather than the one that
+			## closes it.
+			_script_value = 0
+		SPECIAL_CABLE_CLUB_CHECK_WHICH_CHRIS:
+			_script_value = _link_session().which_chris(_link_transport())
+		SPECIAL_DISPLAY_LINK_RECORD:
+			## `_DisplayLinkRecord` draws `sLinkBattleStats` and holds for A or
+			## B. It writes nothing, so the script runs straight on behind it.
+			return _stage_runtime_request(&"link_record_requested", {"special": special})
 		SPECIAL_BATTLE_TOWER_ROOM_MENU:
 			return _stage_room_menu()
 		SPECIAL_LOAD_BATTLE_TOWER_OPPONENT:
@@ -4091,6 +4210,60 @@ func _resolve_room_menu(choice: int) -> Dictionary:
 ## no transaction between the receptionist and the section.
 func _battle_tower() -> Gen2BattleTower:
 	return state.battle_tower() if state != null else Gen2BattleTower.new()
+
+
+func _link_session() -> Gen2LinkSession:
+	return state.link_session() if state != null else Gen2LinkSession.new()
+
+
+func _link_transport() -> Gen2LinkTransport:
+	return state.link_transport() if state != null else Gen2LinkTransport.new()
+
+
+## `CheckTimeCapsuleCompatibility`. The three failures each name a party member
+## in wStringBuffer1 and the move failure names the move in front of it, which
+## is `GetMoveName` and `CopyName1` before `GetIncompatibleMonName`.
+func _check_time_capsule_compatibility() -> Dictionary:
+	var party: Dictionary = _request.get("party", {})
+	if party.is_empty():
+		return {
+			"ok": false, "reason": &"missing_party_summary",
+			"special": SPECIAL_CHECK_TIME_CAPSULE_COMPATIBILITY,
+		}
+	var verdict: Dictionary = Gen2LinkSession.time_capsule_compatibility(party)
+	_script_value = int(verdict["value"])
+	if _script_value == Gen2LinkSession.TIME_CAPSULE_OK:
+		return {"ok": true}
+	if _script_value == Gen2LinkSession.TIME_CAPSULE_MOVE_TOO_NEW and data != null:
+		_set_text_buffer(
+			RomLayout.STRING_BUFFER_1,
+			String(data.move(int(verdict["move"])).get("name", "")),
+			&"time_capsule_move", {"move": int(verdict["move"])}
+		)
+	var names: Array = party.get("names", [])
+	var slot: int = int(verdict["slot"])
+	if slot >= 0 and slot < names.size():
+		_set_text_buffer(
+			RomLayout.STRING_BUFFER_3, String(names[slot]), &"time_capsule_mon",
+			{"slot": slot, "species": int(verdict["species"])}
+		)
+	return {"ok": true}
+
+
+## `TradeCenter`, `Colosseum` and `TimeCapsule`, which are one routine each
+## around `LinkCommunications`: the room sets `wLinkMode` and then runs the
+## exchange the console in front of the player is for. The exchange itself is a
+## host request, because it is a party swap or a battle rather than anything the
+## script can settle.
+func _stage_link_room(special: int) -> Dictionary:
+	var session: Gen2LinkSession = _link_session()
+	session.open_room(LINK_ROOM_MODES[special])
+	return _stage_runtime_request(&"link_room_requested", {
+		"special": special,
+		"link_mode": session.link_mode,
+		"peer": session.peer.duplicate(true),
+		"connection": session.connection_status,
+	})
 
 
 ## The tower's own generator. `Random` is the cartridge's one RNG and this

@@ -71,7 +71,13 @@ static func complete_runtime_request(
 			"request": request.duplicate(true),
 			"results": resumed,
 		}
-	if kind in [&"battle_requested", &"swarm_requested"]:
+	## `_DisplayLinkRecord` draws a page over a save field and writes nothing,
+	## and a room console with no cable on the other end has nothing to exchange:
+	## both run to completion where they are staged, the way the unattended
+	## requests above do. A screen that can draw either intercepts the request in
+	## front of this.
+	if kind in [&"battle_requested", &"swarm_requested",
+		&"link_record_requested", &"link_room_requested"]:
 		return {"ok": true, "handled": true, "results": world.complete_runtime_request(result)}
 	## Neither reads cartridge data of its own: the region map's landmark and the
 	## bank dial's amount are the whole answer, and the runner owns what is done

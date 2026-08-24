@@ -54,9 +54,16 @@ Inspired by [gen1recomp](https://github.com/bryanthaboi/gen1recomp).
 > rules, the sampled opponents with their own lines, the save between battles and
 > the prize at the end.
 >
-> Missing: link play and Mystery Gift, and a handful of pixel-level divergences
-> still being chased in the opening movies and title screen against a real
-> cartridge.
+> The Cable Club is open. There is no cable on a modern machine, so the second
+> player is your own other save file: the three receptionists, the Trade Center's
+> two-list trade screen with the swap and the trade evolution behind it, the
+> Colosseum's link battle, and the link record on the sign between them. With one
+> save file the receptionist says your friend is not ready, which is what a
+> single Game Boy has always been told.
+>
+> Missing: Mystery Gift, the trade animation, and a handful of pixel-level
+> divergences still being chased in the opening movies and title screen against a
+> real cartridge.
 
 ## Getting started
 
