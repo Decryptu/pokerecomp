@@ -362,6 +362,10 @@ static func verify_layout(rom: RomFile) -> Dictionary:
 	if not slots["ok"]:
 		return slots
 
+	var printer: Dictionary = verify_printer(rom, layout)
+	if not printer["ok"]:
+		return printer
+
 	var card_flip: Dictionary = verify_card_flip(rom, layout)
 	if not card_flip["ok"]:
 		return card_flip
@@ -1625,6 +1629,31 @@ static func verify_unown_puzzle(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if RomLayout.predef_palette_offset(layout, RomLayout.PREDEFPAL_UNOWN_PUZZLE) < 0:
 		return {"ok": false, "message": "No PredefPals pin for the Unown puzzle palette."}
 	return {"ok": true, "message": "Unown puzzle verified."}
+
+## The diploma's art and the printer's own two runs. The section walks are most
+## of the check: a tilemap indexing past `DiplomaGFX` and a status run whose
+## first entry is not the empty string both refuse there. What is left is the
+## line the second status prints, which is what says the table is in its own
+## order rather than some other run of eight strings.
+static func verify_printer(rom: RomFile, layout: Dictionary) -> Dictionary:
+	if int(layout.get("diploma", -1)) < 0:
+		return {"ok": true, "message": "No diploma on this cartridge."}
+	if read_diploma_section(rom, layout).is_empty():
+		return {"ok": false, "message": "The diploma's art and tilemaps do not walk."}
+	var strings: Dictionary = read_printer_strings(rom, layout)
+	if strings.is_empty():
+		return {"ok": false, "message": "The printer's status strings do not walk."}
+	if not String(strings.get("checking_link", "")).contains("CHECKING LINK"):
+		return {
+			"ok": false,
+			"message": "The printer's status run opens on \"%s\"." % strings.get(
+				"checking_link", ""
+			),
+		}
+	if int(layout.get("unown_printer_glyphs", -1)) < 0:
+		return {"ok": false, "message": "No pin for the Unown printer's own glyphs."}
+	return {"ok": true, "message": "The diploma and the printer verified."}
+
 
 ## `_SlotMachine`. The section walk is most of the check; what is left is the
 ## three reel strips, which repeat their own first three symbols, and the seven
@@ -4260,6 +4289,8 @@ func import_rom(
 		"oak_ratings": _import_oak_ratings(rom, layout),
 		"pokecenter_pc": _import_pokecenter_pc(rom, layout),
 		"unown_puzzle": _import_unown_puzzle(rom, layout),
+		"diploma": _import_diploma(rom, layout),
+		"printer_strings": _import_printer_strings(rom, layout),
 		"slots": _import_slots(rom, layout),
 		"slots_text": _import_slots_text(rom, layout),
 		"card_flip": _import_card_flip(rom, layout),
@@ -5901,6 +5932,99 @@ func _import_card_flip_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return read_card_flip_texts(rom, layout)
 
 
+## `PlaceDiplomaOnScreen`'s art: `DiplomaGFX` decompressed, and the two whole
+## screens of tile numbers laid out behind its stream. The art itself is what
+## says the address is right, since each tilemap has to index inside it.
+##
+## Returns {tiles, page1, page2}, or an empty Dictionary if any part does not
+## land on its own size.
+static func read_diploma_section(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var at: int = int(layout.get("diploma", -1))
+	if at < 0:
+		return {}
+	var lz := Gen2Lz.new()
+	var raw: PackedByteArray = lz.decompress(rom.bytes(), at)
+	if lz.failed or raw.size() != RomLayout.DIPLOMA_TILES * Gen2Tiles.TILE_BYTES:
+		return {}
+	var maps_at: int = at + lz.consumed
+	var bytes: int = RomLayout.DIPLOMA_TILEMAP_BYTES
+	if not rom.in_bounds(maps_at, bytes * 2):
+		return {}
+	var out: Dictionary = {"tiles": raw}
+	for page: int in 2:
+		var map: PackedByteArray = rom.slice(maps_at + page * bytes, bytes)
+		for code: int in map:
+			if code >= RomLayout.DIPLOMA_TILES:
+				return {}
+		out["page%d" % (page + 1)] = map
+	return out
+
+
+## The eight `GBPrinterStrings`, walked from the empty one a status of zero
+## names. `PlaceFarString` prints them with the same `next` line breaks a box
+## carries, so they are decoded rather than kept as bytes.
+static func read_printer_strings(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var at: int = int(layout.get("printer_strings", -1))
+	if at < 0:
+		return {}
+	var out: Dictionary = {}
+	for name: String in RomLayout.PRINTER_STATUS_STRINGS:
+		var length: int = 0
+		while rom.in_bounds(at + length) and rom.u8(at + length) != Gen2Text.TERMINATOR:
+			length += 1
+			if length > RomLayout.OAK_TEXT_MAX_BYTES:
+				return {}
+		out[name] = Gen2Text.decode(rom.bytes(), at, length)
+		at += length + 1
+	## `GBPrinterString_Null` is the one that prints nothing, and a run pinned
+	## one byte out would put a whole line there.
+	if not String(out.get("null", "?")).is_empty():
+		return {}
+	return out
+
+
+func _import_diploma(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var section: Dictionary = read_diploma_section(rom, layout)
+	if section.is_empty():
+		return {}
+	var palette: Array = _import_predef_palette(
+		rom, layout, RomLayout.PREDEFPAL_DIPLOMA
+	)
+	if palette.is_empty():
+		return {}
+	return {
+		"page1": Array(section["page1"] as PackedByteArray),
+		"page2": Array(section["page2"] as PackedByteArray),
+		"palette": palette,
+	}
+
+
+func _import_printer_strings(rom: RomFile, layout: Dictionary) -> Dictionary:
+	return read_printer_strings(rom, layout)
+
+
+## `DiplomaGFX`'s own strip, written the way the splash's Ditto is.
+func _import_diploma_sheet(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var section: Dictionary = read_diploma_section(rom, layout)
+	if section.is_empty():
+		return {}
+	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
+	if not RomCache.write_indices(
+		RomCache.tile_path(directory, "diploma"),
+		Gen2Tiles.decode_2bpp_strip(section["tiles"], 0, RomLayout.DIPLOMA_TILES)
+	):
+		return {}
+	return {
+		"diploma": {
+			"width": RomLayout.DIPLOMA_TILES * Gen2Tiles.TILE_WIDTH,
+			"height": Gen2Tiles.TILE_HEIGHT,
+			"tiles": RomLayout.DIPLOMA_TILES,
+			"first_code": 0,
+			"bits": 2,
+		},
+	}
+
+
 ## `GameFreakDittoGFX`, the one LZ run in the splash. `GameFreakPresentsInit`
 ## splits it over `vTiles0` and `vTiles1` as 128 tiles each, and the OAM sets
 ## index the result with a stride of $10, so it is kept as one strip of 256 and
@@ -6218,6 +6342,16 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 			"bits": 2,
 		}
 
+	## `UnownDexATile` and `UnownDexBTile`, the two 1bpp glyphs `_UnownPrinter`
+	## requests into `♂` and `♀` before it prints its own menu.
+	if int(layout.get("unown_printer_glyphs", -1)) >= 0:
+		sheets["unown_printer_glyphs"] = {
+			"offset": int(layout["unown_printer_glyphs"]),
+			"tiles": RomLayout.UNOWN_PRINTER_GLYPH_TILES,
+			"first_code": 0,
+			"bits": 1,
+		}
+
 	## `PokedexNestIconGFX`, the AREA screen's own object tile.
 	if RomLayout.dex_nest_icon_offset(layout) >= 0:
 		sheets["dex_nest_icon"] = {
@@ -6272,6 +6406,7 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 	written.merge(_import_unown_puzzle_sheets(rom, layout), true)
 	written.merge(_import_slots_sheets(rom, layout), true)
 	written.merge(_import_card_flip_sheets(rom, layout), true)
+	written.merge(_import_diploma_sheet(rom, layout), true)
 	var done: int = 0
 	for name: String in sheets:
 		var sheet: Dictionary = sheets[name]

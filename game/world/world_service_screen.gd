@@ -23,7 +23,7 @@ signal sfx_requested(index: int, waited: bool)
 
 enum MODE {
 	MENU, MART, PHONE, TOWN_MAP, CARD,
-	APRICORN, PC, PC_ITEMS, PC_ITEM_LIST, PC_TEXT,
+	APRICORN, PC, PC_ITEMS, PC_ITEM_LIST, PC_TEXT, MOM_BANK,
 }
 
 ## `PokemonCenterPC`'s own box storage, which is the one row that opens a screen
@@ -101,6 +101,10 @@ var _mart_pages: Array = []
 var _mart_after: StringName = MART_LIST
 var _mart_confirm: int = 0
 var _apricorns: Gen2WorldApricorn = null
+var _mom_dial: Gen2WorldMoneyDial = null
+## The same counted blink [Gen2TextBox]'s arrow is, since it is the same
+## `hVBlankCounter` bit: sixteen frames with the digit and sixteen without.
+var _mom_blink: float = 0.0
 var _pokegear_cards: Array = []
 var _town_map: Gen2TownMapScreen = null
 ## The clock, phone or radio card while one is open, which is a hardware-
@@ -202,6 +206,9 @@ func open_pending(
 	if StringName(request.get("kind", &"")) == &"town_map_requested":
 		_open_town_map(true)
 		return true
+	if StringName(request.get("kind", &"")) == &"mom_bank_dial_requested":
+		_open_mom_bank(request.get("values", {}))
+		return true
 	var resolved: Dictionary = Gen2WorldHost.resolve_runtime_request(_world, request)
 	if not bool(resolved.get("ok", false)):
 		_show_error("Service unavailable: %s" % String(resolved.get("reason", "unknown")))
@@ -287,6 +294,9 @@ func handle_button(button: int) -> bool:
 		return true
 	if _mode == MODE.MART:
 		_press_mart(button)
+		return true
+	if _mode == MODE.MOM_BANK:
+		_press_mom_bank(button)
 		return true
 	if _mode == MODE.CARD and _pokegear != null:
 		return _pokegear.handle_button(button)
@@ -732,6 +742,101 @@ func _finish_apricorns() -> void:
 	var answer: Dictionary = _apricorns.result()
 	_apricorns = null
 	_finish_runtime({"ok": true, "item": answer["item"], "quantity": answer["quantity"]})
+
+
+## `Mom_SetUpDepositMenu` and `Mom_SetUpWithdrawMenu` over
+## `Mom_WithdrawDepositMenuJoypad`. The model owns the amount and the cursor;
+## this owns the box and the blink.
+##
+## `Mom_Wait10Frames` stands between the box and the joypad so a press that
+## opened it cannot be read as a press on it. The world screen spends the press
+## that reaches here, so those ten frames are not held: what they are for is
+## already true.
+func _open_mom_bank(values: Dictionary) -> void:
+	_mode = MODE.MOM_BANK
+	_mom_dial = Gen2WorldMoneyDial.open(
+		StringName(values.get("mode", Gen2WorldMoneyDial.MODE_DEPOSIT)),
+		int(values.get("saved", 0)), int(values.get("held", 0))
+	)
+	_mom_blink = 0.0
+	_title = "MOM"
+	_summary = ""
+	_status = ""
+	set_process(true)
+	_render_rows()
+
+
+func _press_mom_bank(button: int) -> void:
+	if _mom_dial == null:
+		_finish_mom_bank(-1)
+		return
+	match _mom_dial.press(button):
+		Gen2WorldMoneyDial.CONFIRMED:
+			_finish_mom_bank(_mom_dial.value)
+		Gen2WorldMoneyDial.CANCELLED:
+			_finish_mom_bank(-1)
+		_:
+			_render_rows()
+
+
+func _finish_mom_bank(amount: int) -> void:
+	_mom_dial = null
+	set_process(false)
+	_finish_runtime({"ok": true, "amount": amount})
+
+
+## The digit under the cursor is drawn for sixteen frames in every thirty-two,
+## so only a crossing of the half period is redrawn.
+func _process(_delta: float) -> void:
+	if _mode != MODE.MOM_BANK or _mom_dial == null:
+		return
+	var was_up: bool = _mom_cursor_up()
+	_mom_blink = fmod(
+		_mom_blink + Gen2TextBox.FRAME_SECONDS,
+		Gen2TextBox.FRAME_SECONDS * float(Gen2TextBox.CURSOR_BLINK_FRAMES) * 2.0
+	)
+	if _mom_cursor_up() != was_up:
+		_render_rows()
+
+
+func _mom_cursor_up() -> bool:
+	return _mom_blink < Gen2TextBox.FRAME_SECONDS * float(Gen2TextBox.CURSOR_BLINK_FRAMES)
+
+
+func _mom_bank_image() -> Image:
+	if _mom_dial == null:
+		return null
+	var drawn: Dictionary = Gen2MartPage.bank_window(
+		_data, Gen2WorldMoneyDial.WORD_OF[_mom_dial.mode],
+		_mom_dial.saved, _mom_dial.held, _mom_dial.amount_string(),
+		_mom_dial.cursor, _mom_cursor_up()
+	)
+	if drawn.is_empty():
+		return null
+	var image := Image.create_empty(
+		Gen2Screen.WIDTH, Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8
+	)
+	var part: Image = drawn["image"]
+	image.blit_rect(
+		part, Rect2i(Vector2i.ZERO, part.get_size()),
+		(drawn["at"] as Vector2i) * Gen2Font.TILE
+	)
+	return image
+
+
+## The dial with no script behind it, for the screenshot driver: the routine's
+## boxes are the runner's and reach it through `open_pending`, and this is the
+## one picture that has to be looked at.
+func open_mom_bank(
+	world: Gen2WorldAPI, data: GameData, mode: StringName, saved: int, held: int
+) -> bool:
+	_world = world
+	_data = data
+	if _world == null or _data == null:
+		_show_error("Mom's bank has no world or cartridge cache.")
+		return false
+	_open_mom_bank({"mode": mode, "saved": saved, "held": held})
+	return true
 
 
 ## BILL'S PC on its own, without the machine's top menu in front of it: the
@@ -1407,7 +1512,8 @@ func _render_service_page(values: Array) -> void:
 			labels.append(label)
 		else:
 			labels.append(String(value))
-	var image: Image = _dial_image() if _is_dial() else _service_page.render(
+	var image: Image = _mom_bank_image() if _mode == MODE.MOM_BANK \
+		else _dial_image() if _is_dial() else _service_page.render(
 		_title, _summary, labels, _cursor, _status, _service_box()
 	)
 	if image != null:

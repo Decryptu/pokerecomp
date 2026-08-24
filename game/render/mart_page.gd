@@ -48,6 +48,17 @@ const BALANCES_MONEY_AT: Vector2i = Vector2i(12, 1)
 const BALANCES_COIN_LABEL_AT: Vector2i = Vector2i(6, 3)
 const BALANCES_COIN_AT: Vector2i = Vector2i(15, 3)
 
+## `Mom_ContinueMenuSetup`'s own box and the three rows it prints in.
+## `hlcoord 13, 6` plus `wMomBankDigitCursorPosition` is the digit the cursor
+## blanks, which is the amount's first digit column.
+const BANK_AT: Vector2i = Vector2i(0, 0)
+const BANK_SIZE: Vector2i = Vector2i(20, 8)
+const BANK_LABEL_COLUMN: int = 1
+const BANK_VALUE_COLUMN: int = 12
+const BANK_DIGIT_COLUMN: int = 13
+const BANK_DIGITS: int = 6
+const BANK_ROWS: Array[int] = [2, 4, 6]
+
 ## `MenuHeader_Buy`: `menu_coords 1, 3, SCREEN_WIDTH - 1, TEXTBOX_Y - 1`, four
 ## rows of eight columns. `ScrollingMenu_InitFlags` puts the cursor on the left
 ## border coordinate itself and steps `$20`, which is two rows.
@@ -196,6 +207,53 @@ static func balance_window(
 	return {
 		"image": image.get_region(Rect2i(at * TILE, box * TILE)),
 		"at": at,
+	}
+
+
+## `Mom_ContinueMenuSetup`'s box (`engine/events/mom.asm`), drawn here for the
+## reason the three balance windows are: it is a money box, and `PrintNum` with
+## PRINTNUM_MONEY is what fills all four of them.
+##
+## `Textbox` at `hlcoord 0, 0` with `lb bc, 6, 18`, so eight rows and the whole
+## screen's width; SAVED against her balance, HELD against the player's and the
+## transaction's own word against the amount being typed.
+## `Mom_WithdrawDepositMenuJoypad` blanks the digit the cursor stands on for
+## sixteen frames in every thirty-two, which is `hVBlankCounter`'s bit 4, so an
+## off half of the blink is a missing digit rather than a mark beside one.
+static func bank_window(
+	data: GameData, word: String, saved: int, held: int, amount: String,
+	cursor: int, cursor_up: bool
+) -> Dictionary:
+	var page: Gen2MartPage = Gen2MartPage.from_data(data)
+	if page == null:
+		return {}
+	var width: int = Gen2Screen.WIDTH
+	var indices := PackedByteArray()
+	indices.resize(width * Gen2Screen.HEIGHT)
+	page.font.draw_box(
+		page.frame_style, indices, width,
+		BANK_AT.x * TILE, BANK_AT.y * TILE, BANK_SIZE.x, BANK_SIZE.y
+	)
+	var rows: Array = [
+		["SAVED", money_string(saved)], ["HELD", money_string(held)], [word, amount],
+	]
+	for index: int in rows.size():
+		var row: Array = rows[index]
+		var line: int = BANK_ROWS[index]
+		page._text(indices, width, String(row[0]), Vector2i(BANK_LABEL_COLUMN, line))
+		page._text(indices, width, String(row[1]), Vector2i(BANK_VALUE_COLUMN, line))
+	if not cursor_up:
+		page._text(
+			indices, width, " ",
+			Vector2i(BANK_DIGIT_COLUMN + clampi(cursor, 0, BANK_DIGITS - 1), BANK_ROWS[2])
+		)
+	var image: Image = Gen2PicImage.from_indices(
+		indices, width, Gen2Screen.HEIGHT,
+		Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+	)
+	return {
+		"image": image.get_region(Rect2i(BANK_AT * TILE, BANK_SIZE * TILE)),
+		"at": BANK_AT,
 	}
 
 

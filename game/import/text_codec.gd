@@ -255,6 +255,8 @@ static func _characters() -> Dictionary:
 	table[0xE8] = "."
 	table[0xE9] = "&"
 	table[0xEA] = "é"
+	## `charmap "←", $df`, which `UnownDexMenuString` prints beside PREVIOUS.
+	table[0xDF] = "←"
 	table[0xEB] = "→"
 	table[UP_ARROW_CODE] = "▲"
 	table[0xEC] = "▷"

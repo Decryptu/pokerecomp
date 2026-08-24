@@ -1043,30 +1043,30 @@ const FIELD_MOVE_SOURCE_ITEM: StringName = &"item"
 ## request tests its own `CheckBadge` in the source's own order, so a player
 ## carrying HM01 without the Hive Badge is told about the badge, exactly as one
 ## whose Pokemon knows CUT is.
-func field_move_source(move: int) -> Dictionary:
-	var slot: int = party_slot_with_move(move)
+func field_move_source(move_id: int) -> Dictionary:
+	var slot: int = party_slot_with_move(move_id)
 	if slot >= 0:
 		return {
-			"kind": FIELD_MOVE_SOURCE_PARTY, "move": move, "slot": slot, "item": 0,
+			"kind": FIELD_MOVE_SOURCE_PARTY, "move": move_id, "slot": slot, "item": 0,
 		}
-	var item: int = item_field_move_source(move)
+	var item: int = item_field_move_source(move_id)
 	if item <= 0:
 		return {}
-	return {"kind": FIELD_MOVE_SOURCE_ITEM, "move": move, "slot": -1, "item": item}
+	return {"kind": FIELD_MOVE_SOURCE_ITEM, "move": move_id, "slot": -1, "item": item}
 
 
 ## The HM in the bag that teaches [param move] while a registered provider
 ## allows that move, or 0. Which item teaches which move is `GetTMHMItemMove`'s
 ## answer rather than a second table, so a cartridge whose HMs differ needs
 ## nothing here.
-func item_field_move_source(move: int) -> int:
+func item_field_move_source(move_id: int) -> int:
 	if data == null or state == null \
-		or not Gen2WorldFieldMove.is_hm_field_move(move) \
-		or not Gen2ModHost.allows_item_field_move(move):
+		or not Gen2WorldFieldMove.is_hm_field_move(move_id) \
+		or not Gen2ModHost.allows_item_field_move(move_id):
 		return 0
 	for raw_item: Variant in state.items():
 		var item: int = int(raw_item)
-		if Gen2WorldTMHM.is_hm(item) and Gen2WorldTMHM.move_for_item(data, item) == move:
+		if Gen2WorldTMHM.is_hm(item) and Gen2WorldTMHM.move_for_item(data, item) == move_id:
 			return item
 	return 0
 
@@ -1083,16 +1083,16 @@ func item_field_move_offers() -> Array:
 	if data == null or state == null:
 		return out
 	var crystal: bool = Gen2WorldState.is_crystal_profile(data)
-	for move: int in Gen2WorldFieldMove.HM_FIELD_MOVES:
-		var source: Dictionary = field_move_source(move)
+	for move_id: int in Gen2WorldFieldMove.HM_FIELD_MOVES:
+		var source: Dictionary = field_move_source(move_id)
 		if StringName(source.get("kind", &"")) != FIELD_MOVE_SOURCE_ITEM:
 			continue
-		var badge: int = Gen2WorldFieldMove.badge_for_move(move)
+		var badge: int = Gen2WorldFieldMove.badge_for_move(move_id)
 		if badge >= 0 and not state.is_engine_flag_active(
 			Gen2WorldState.badge_flag(badge, crystal)
 		):
 			continue
-		out.append({"move": move, "item": int(source["item"]), "badge": badge})
+		out.append({"move": move_id, "item": int(source["item"]), "badge": badge})
 	return out
 
 
@@ -4049,10 +4049,10 @@ func _enqueue_script(request: Dictionary) -> void:
 		## resolved here and handed over the way collision and the clock are.
 		## Absent when nothing supplies one, which is every unmodded game.
 		var alternates: Dictionary = {}
-		for move: int in Gen2WorldFieldMove.HM_FIELD_MOVES:
-			var item: int = item_field_move_source(move)
+		for move_id: int in Gen2WorldFieldMove.HM_FIELD_MOVES:
+			var item: int = item_field_move_source(move_id)
 			if item > 0:
-				alternates[move] = item
+				alternates[move_id] = item
 		if not alternates.is_empty():
 			request["field_move_items"] = alternates
 	if not request.has("player_name") and not _player_name.is_empty():
