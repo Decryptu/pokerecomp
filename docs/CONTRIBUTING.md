@@ -145,7 +145,11 @@ the whole corpus, and settle every disagreement against pret.
   during a call can corrupt the VM. Use
   `godot --headless --check-only --script res://path.gd`.
 - New scripts need an editor scan before they resolve; edits to existing ones do
-  not: `godot --headless --editor --path . --quit`.
+  not: `godot --headless --editor --path . --quit`. The class index lives in
+  `.godot/`, which is a build cache and not committed, so the gap is visible to
+  anything else resolving against this checkout: a mod repository parsing its
+  own scripts with `--check-only --path <this>` fails on the file that names the
+  new class, not on its own. Run the scan in the commit that adds the class.
 - Defer `_ready()` scene changes with `change_scene_to_file.call_deferred(path)`.
 - A bare `PanelContainer` is transparent; give modals a
   `theme_override_styles/panel` `StyleBoxFlat`.
