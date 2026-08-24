@@ -11,7 +11,9 @@ extends RefCounted
 ## Positions are `NamingScreen_InitText` and `NamingScreen_ApplyTextInputMode`'s
 ## own. The layout is the same shape on both keyboards and differs only in where
 ## the two `ClearBox` calls land and how many rows are printed, which is the
-## whole of `NamingScreen_IsTargetBox` here.
+## whole of `NamingScreen_IsTargetBox` here. `_ComposeMailMessage.InitCharset`
+## is the third layout: the same tiles and the same cursor over a wider
+## keyboard, a two-line entry and an icon instead of a prompt.
 ##
 ## Node-free: it writes indices into a buffer, so a page can be drawn and read
 ## back headless.
@@ -40,9 +42,21 @@ const PROMPT_AT: Vector2i = Vector2i(5, 2)
 const ENTRY_AT_NAME: Vector2i = Vector2i(5, 6)
 const ENTRY_AT_BOX: Vector2i = Vector2i(5, 4)
 ## `hlcoord 2, 8` and `hlcoord 2, 6`: where the live keyboard's first row prints.
+## `.PlaceMailCharset`'s own is `hlcoord 1, 7`.
 const KEYBOARD_LEFT: int = 2
 const KEYBOARD_TOP_NAME: int = 8
 const KEYBOARD_TOP_BOX: int = 6
+const KEYBOARD_LEFT_MAIL: int = 1
+const KEYBOARD_TOP_MAIL: int = 7
+## `.Update`'s `hlcoord 2, 2`, the one `PlaceString` the whole buffer goes
+## through: `<NEXT>` drops two rows at the string's own starting column, so the
+## second line lands at (2, 4) without the routine naming it.
+const ENTRY_AT_MAIL: Vector2i = Vector2i(2, 2)
+## `.InitBlankMail`'s `depixel 3, 2` for the mail icon, which is a party-icon
+## struct: the coordinate less shadow OAM's own origin is the top-left tile.
+const MAIL_ICON_AT: Vector2i = Vector2i(1, 1)
+## The first `.Frameset_PartyMon` entry, four tiles of the eight loaded.
+const MAIL_ICON_TILES: int = 4
 ## The cursor steps two tiles per column and two per row, so a keyboard cell is
 ## two tiles wide even where its character is one.
 const CELL: int = 2
@@ -67,6 +81,10 @@ const COMMAND_CURSOR_STEP: int = 6
 ## bottom row, cleared separately because the run above it stops short of it.
 const CLEARED_NAME: Array = [[1, 1, 6, 18], [1, 8, 7, 18], [1, 16, 1, 18]]
 const CLEARED_BOX: Array = [[1, 1, 4, 18], [1, 6, 9, 18], [1, 16, 1, 18]]
+## `.InitCharset`: the border runs over rows 0 to 5 alone, everything below it
+## is blanked outright, and one `ClearBox` opens the entry inside the border.
+const MAIL_BORDER_ROWS: int = 6
+const CLEARED_MAIL: Array = [[1, 1, 4, 18]]
 
 const BLANK_TILE: int = -1
 
@@ -74,6 +92,8 @@ var font: Gen2Font = null
 
 var _tiles: Dictionary = {}
 var _cursor_tiles: Dictionary = {}
+## `_ComposeMailMessage.MailIcon`, drawn only by the mail screen.
+var _icon_tiles: Dictionary = {}
 
 
 static func from_data(data: GameData) -> Gen2NamingScreenPage:
@@ -92,10 +112,13 @@ static func from_data(data: GameData) -> Gen2NamingScreenPage:
 	out._load_sheet(
 		data, "naming_cursor", out._cursor_tiles, CURSOR_CORNER_TILE, RomLayout.NAMING_CURSOR_TILES
 	)
+	out._load_sheet(data, "mail_icon", out._icon_tiles, 0, MAIL_ICON_TILES)
 	return out
 
 
 ## Whether the cache carried every sheet this page needs.
+## The mail icon is not in this list: it is one sprite over the compose screen
+## and no keyboard needs it, so a cache without it draws every screen here.
 func ready() -> bool:
 	return font != null and _tiles.size() == 3 and _cursor_tiles.size() == 2
 
@@ -106,51 +129,103 @@ func draw(screen: Gen2NamingScreen, prompt: String) -> PackedByteArray:
 	var map: PackedInt32Array = PackedInt32Array()
 	map.resize(COLUMNS * ROWS)
 	map.fill(BORDER_TILE)
-	for box: Array in (CLEARED_BOX if screen.is_box else CLEARED_NAME):
+	if screen.is_mail:
+		_clear(map, 0, MAIL_BORDER_ROWS, ROWS - MAIL_BORDER_ROWS, COLUMNS)
+	for box: Array in _cleared(screen):
 		_clear(map, int(box[0]), int(box[1]), int(box[2]), int(box[3]))
 
-	_string(map, prompt, PROMPT_AT)
+	## `_ComposeMailMessage` prints no prompt of its own: the icon over the
+	## entry is what says whose mail is being written.
+	if not screen.is_mail:
+		_string(map, prompt, PROMPT_AT)
 	_entry(map, screen)
 	_keyboard(map, screen)
 
 	var indices: PackedByteArray = _compose(map)
+	if screen.is_mail:
+		_mail_icon(indices)
 	_cursor(indices, screen)
 	return indices
+
+
+func _cleared(screen: Gen2NamingScreen) -> Array:
+	if screen.is_mail:
+		return CLEARED_MAIL
+	return CLEARED_BOX if screen.is_box else CLEARED_NAME
+
+
+## The party-icon struct `.InitBlankMail` spawns, at its first frameset entry.
+## It is an object, so index 0 stays see-through the way the cursor does.
+func _mail_icon(indices: PackedByteArray) -> void:
+	for quadrant: int in MAIL_ICON_TILES:
+		_blit(
+			indices, _icon_tiles, quadrant, MAIL_ICON_AT, false, false, true,
+			Vector2i((quadrant & 1) * TILE, (quadrant >> 1) * TILE)
+		)
 
 
 ## The name being typed, printed as the raw buffer rather than as text: the two
 ## markers are tiles, not characters, and `.UpdateStringEntry` prints the whole
 ## buffer every frame rather than only what has been entered.
 func _entry(map: PackedInt32Array, screen: Gen2NamingScreen) -> void:
+	if screen.is_mail:
+		_mail_entry(map, screen)
+		return
 	var at: Vector2i = ENTRY_AT_BOX if screen.is_box else ENTRY_AT_NAME
 	for index: int in screen.max_length:
 		_put(map, at + Vector2i(index, 0), screen.buffer[index])
 
 
+## `.Update`'s one `PlaceString` over the whole mail buffer. The break is a
+## `<NEXT>`, which drops two rows and returns to the string's own column, so it
+## occupies a buffer position and no tile.
+func _mail_entry(map: PackedInt32Array, screen: Gen2NamingScreen) -> void:
+	var at: Vector2i = ENTRY_AT_MAIL
+	var column: int = 0
+	for index: int in screen.max_length:
+		var code: int = screen.buffer[index]
+		if code == Gen2SaveMail.LINE_BREAK:
+			at.y += 2
+			column = 0
+			continue
+		_put(map, Vector2i(at.x + column, at.y), code)
+		column += 1
+
+
 ## The live keyboard, 17 tiles a row two rows apart, which is what
 ## `NamingScreen_ApplyTextInputMode`'s `ld de, 2 * SCREEN_WIDTH - $11` steps.
 func _keyboard(map: PackedInt32Array, screen: Gen2NamingScreen) -> void:
-	var top: int = KEYBOARD_TOP_BOX if screen.is_box else KEYBOARD_TOP_NAME
+	var top: int = _keyboard_top(screen)
+	var left: int = _keyboard_left(screen)
 	var rows: Array = screen.rows()
 	for row: int in rows.size():
 		var codes: Array = rows[row]
 		for column: int in codes.size():
-			_put(map, Vector2i(KEYBOARD_LEFT + column, top + row * CELL), int(codes[column]))
+			_put(map, Vector2i(left + column, top + row * CELL), int(codes[column]))
+
+
+func _keyboard_top(screen: Gen2NamingScreen) -> int:
+	if screen.is_mail:
+		return KEYBOARD_TOP_MAIL
+	return KEYBOARD_TOP_BOX if screen.is_box else KEYBOARD_TOP_NAME
+
+
+func _keyboard_left(screen: Gen2NamingScreen) -> int:
+	return KEYBOARD_LEFT_MAIL if screen.is_mail else KEYBOARD_LEFT
 
 
 ## The bracket over whatever the cursor is on. A letter takes the plain
 ## frameset, the command row the big one, and `NamingScreen_AnimateCursor` snaps
 ## the big one to its command group rather than leaving it on the raw column.
 func _cursor(indices: PackedByteArray, screen: Gen2NamingScreen) -> void:
-	var top: int = KEYBOARD_TOP_BOX if screen.is_box else KEYBOARD_TOP_NAME
-	var at := Vector2i(
-		KEYBOARD_LEFT + screen.column * CELL, top + screen.row * CELL
-	)
+	var top: int = _keyboard_top(screen)
+	var left: int = _keyboard_left(screen)
+	var at := Vector2i(left + screen.column * CELL, top + screen.row * CELL)
 	var width: int = CELL
 	var command: int = screen.cursor_command()
 	if command != Gen2NamingScreen.COMMAND_NONE:
 		width = COMMAND_CURSOR_WIDTH
-		at.x = KEYBOARD_LEFT + (command - 1) * COMMAND_CURSOR_STEP
+		at.x = left + (command - 1) * COMMAND_CURSOR_STEP
 	_bracket(indices, at, width)
 
 

@@ -16,6 +16,9 @@ extends RefCounted
 
 const TERMINATOR: int = 0x50
 const SPACE: int = 0x7F
+## `'<NEXT>'`, the line break `_ComposeMailMessage` writes into the middle of a
+## mail buffer and `PlaceString` drops two rows on.
+const NEXT_LINE: int = 0x4E
 
 ## `_LoadStandardFont`'s strip, and `_LoadFontsBattleExtra`'s, which
 ## `engine/events/halloffame.asm` calls before it prints a panel.
@@ -331,7 +334,7 @@ static func _characters() -> Dictionary:
 	table[0x22] = "\n"
 	table[0x4B] = "\n"
 	table[0x4C] = "\n"
-	table[0x4E] = "\n"
+	table[NEXT_LINE] = "\n"
 	table[0x4F] = "\n"
 	table[0x51] = "\n\n"
 	table[0x55] = "\n"

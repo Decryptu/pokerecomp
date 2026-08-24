@@ -98,8 +98,11 @@ const PIKACHU: int = 25
 const METAL_POWDER_ITEM: int = 35
 const DITTO: int = 132
 
-## `MailItems` (data/items/mail_items.asm), pinned rather than imported for want
-## of a locator. `BattleCommand_Thief` is the only reader.
+## `MailItems` (data/items/mail_items.asm). Pinned rather than read from
+## [GameData] because the battle engine takes no cache; the table is imported
+## beside it and `tools/checks/mail.gd` holds the two together on all three
+## cartridges, so a wrong pin here is a red check rather than a silent
+## disagreement.
 const MAIL_ITEMS: Array[int] = [158, 181, 182, 183, 184, 185, 186, 187, 188, 189]
 
 ## Metal Powder's half again, floored the way `srl a; add c` floors it.

@@ -77,9 +77,14 @@ func _verify_shape(game_id: StringName, data: GameData) -> void:
 					game_id, table, row.size(), RomLayout.NAME_INPUT_ROW_BYTES,
 				]
 			)
+	## The two mail keyboards follow in the same cache file and are 19 bytes a
+	## row rather than 17, so a name block read one table too long shows up as a
+	## fifth table of the wrong width. `tools/checks/mail.gd` owns the pair.
+	var mail: Array = data.name_input_chars(EXPECTED_ROWS.size())
 	_r.check(
-		data.name_input_chars(EXPECTED_ROWS.size()).is_empty(),
-		"%s: a fifth keyboard was read out of a four-table block." % game_id
+		mail.size() == RomLayout.MAIL_INPUT_TABLE_ROWS
+			and (mail[0] as Array).size() == RomLayout.MAIL_INPUT_ROW_BYTES,
+		"%s: the table after the four keyboards is not a mail keyboard." % game_id
 	)
 
 

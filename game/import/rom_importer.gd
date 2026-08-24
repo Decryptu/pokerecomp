@@ -294,6 +294,10 @@ static func verify_layout(rom: RomFile) -> Dictionary:
 	if not name_input["ok"]:
 		return name_input
 
+	var mail: Dictionary = verify_mail(rom, layout)
+	if not mail["ok"]:
+		return mail
+
 	var intro_text: Dictionary = verify_intro_text(rom, layout)
 	if not intro_text["ok"]:
 		return intro_text
@@ -2373,6 +2377,110 @@ static func verify_string_buffer_pointers(rom: RomFile, layout: Dictionary) -> D
 	return {"ok": true, "pointers": pointers}
 
 
+## `MailItems` (data/items/mail_items.asm), pinned here rather than read off the
+## cartridge so the check disagrees with a wrong offset instead of agreeing with
+## it. FLOWER_MAIL is the odd one out; the other nine are consecutive.
+const MAIL_ITEM_NUMBERS: Array[int] = [158, 181, 182, 183, 184, 185, 186, 187, 188, 189]
+## `gfx/mail/morph_mail_divider.1bpp`, the eight bytes `gfx/mail.asm` opens on,
+## and the eight `gfx/mail/portraitmail_border.1bpp` ends on. Both are one flat
+## tile, which is what makes the ends of a 1,360-byte run checkable at all.
+const MAIL_GFX_FIRST_TILE: Array[int] = [0x00, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00]
+const MAIL_GFX_LAST_TILE: Array[int] = [0x27, 0x27, 0x27, 0x27, 0x27, 0x27, 0x27, 0x27]
+## `gfx/mail/mail.pal`'s first colour per row, encoded. The fourth colour of
+## every row is black, which is checked as a run rather than pinned per row.
+const MAIL_PALETTE_FIRST: Array[int] = [
+	0x2FF4, 0x7E8F, 0x7E38, 0x473F, 0x7F53, 0x727F, 0x5E33, 0x7F47, 0x57F5, 0x7F47,
+]
+
+
+## The five mail pins, each against something only the right offset carries:
+## `MailItems`' own eleven bytes, the two mail keyboards at both ends the way
+## the name keyboards are checked, the flat tiles `gfx/mail.asm` begins and ends
+## on, and `mail.pal`'s first colour per row with black behind every one.
+##
+## The icon is checked for bounds alone: eight 2bpp tiles of a picture with no
+## structure a wrong offset would fail, and `tools/checks/mail.gd` is what looks
+## at it.
+static func verify_mail(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var entry: Dictionary = layout.get("mail", {})
+	if entry.is_empty():
+		return {"ok": false, "message": "The cartridge has no mail block."}
+
+	var items: int = int(entry.get("items", -1))
+	if not rom.in_bounds(items, RomLayout.MAIL_ITEM_COUNT + 1):
+		return {"ok": false, "message": "MailItems is outside the cartridge."}
+	for index: int in RomLayout.MAIL_ITEM_COUNT:
+		if rom.u8(items + index) != MAIL_ITEM_NUMBERS[index]:
+			return {
+				"ok": false,
+				"message": "MailItems entry %d is $%02X, expected $%02X." % [
+					index, rom.u8(items + index), MAIL_ITEM_NUMBERS[index],
+				],
+			}
+	if rom.u8(items + RomLayout.MAIL_ITEM_COUNT) != RomLayout.MAIL_ITEM_END:
+		return {"ok": false, "message": "MailItems does not end in -1."}
+
+	var chars: int = int(entry.get("input_chars", -1))
+	var block: int = RomLayout.MAIL_INPUT_TABLES * RomLayout.MAIL_INPUT_TABLE_ROWS \
+		* RomLayout.MAIL_INPUT_ROW_BYTES
+	if not rom.in_bounds(chars, block):
+		return {"ok": false, "message": "Mail input tables are outside the cartridge."}
+	for table: int in RomLayout.MAIL_INPUT_TABLES:
+		var start: int = RomLayout.mail_input_table_offset(layout, table)
+		var first: int = RomLayout.MAIL_INPUT_UPPER_A if table == 0 else RomLayout.MAIL_INPUT_LOWER_A
+		for column: int in RomLayout.MAIL_INPUT_COLUMNS:
+			var expected: int = first + column
+			var stored: int = rom.u8(start + column * RomLayout.NAME_INPUT_COLUMN_STRIDE)
+			if stored != expected:
+				return {
+					"ok": false,
+					"message": "Mail input table %d letter %d is $%02X, expected $%02X." % [
+						table, column, stored, expected,
+					],
+				}
+		var command: int = start + (RomLayout.MAIL_INPUT_TABLE_ROWS - 1) \
+			* RomLayout.MAIL_INPUT_ROW_BYTES
+		var expected_row: Array[int] = (
+			RomLayout.MAIL_INPUT_COMMAND_UPPER if table == 0
+			else RomLayout.MAIL_INPUT_COMMAND_LOWER
+		)
+		if Array(rom.slice(command, RomLayout.MAIL_INPUT_ROW_BYTES)) != Array(expected_row):
+			return {"ok": false, "message": "Mail input table %d has no command row." % table}
+
+	var gfx: int = int(entry.get("gfx", -1))
+	if not rom.in_bounds(gfx, RomLayout.MAIL_GFX_BYTES):
+		return {"ok": false, "message": "Mail graphics run past the cartridge."}
+	var ends: Dictionary = {
+		gfx: MAIL_GFX_FIRST_TILE,
+		gfx + RomLayout.MAIL_GFX_BYTES - RomLayout.TILE_BYTES_1BPP: MAIL_GFX_LAST_TILE,
+	}
+	for at: int in ends:
+		if Array(rom.slice(at, RomLayout.TILE_BYTES_1BPP)) != Array(ends[at] as Array):
+			return {"ok": false, "message": "Mail graphics tile at $%X is not its own." % at}
+
+	var palettes: int = int(entry.get("palettes", -1))
+	var palette_bytes: int = RomLayout.MAIL_PALETTE_COUNT * RomLayout.MAIL_PALETTE_COLOURS * 2
+	if not rom.in_bounds(palettes, palette_bytes):
+		return {"ok": false, "message": "Mail palettes are outside the cartridge."}
+	for index: int in RomLayout.MAIL_PALETTE_COUNT:
+		var at_row: int = palettes + index * RomLayout.MAIL_PALETTE_COLOURS * 2
+		if rom.u16le(at_row) != MAIL_PALETTE_FIRST[index]:
+			return {
+				"ok": false,
+				"message": "Mail palette %d opens on $%04X, expected $%04X." % [
+					index, rom.u16le(at_row), MAIL_PALETTE_FIRST[index],
+				],
+			}
+		if rom.u16le(at_row + (RomLayout.MAIL_PALETTE_COLOURS - 1) * 2) != 0:
+			return {"ok": false, "message": "Mail palette %d does not end in black." % index}
+
+	if not rom.in_bounds(
+		int(entry.get("icon", -1)), RomLayout.MAIL_ICON_TILES * RomLayout.TILE_BYTES_2BPP
+	):
+		return {"ok": false, "message": "The mail icon is outside the cartridge."}
+	return {"ok": true, "message": "Mail tables, graphics and palettes verified."}
+
+
 static func verify_name_input_chars(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var at: int = int(layout.get("name_input_chars", -1))
 	if not rom.in_bounds(at, RomLayout.NAME_INPUT_BLOCK_BYTES):
@@ -4300,6 +4408,8 @@ func import_rom(
 		"move_screen_palette": _import_move_screen_palette(rom, layout),
 		"stats_screen_palettes": _import_stats_screen_palettes(rom, layout),
 		"card_palettes": _import_card_palettes(rom, layout),
+		"mail_palettes": _import_mail_palettes(rom, layout),
+		"mail_items": _import_mail_items(rom, layout),
 		"pokedex_palettes": _import_pokedex_palettes(rom, layout),
 		"pc_palette": _import_pc_palette(rom, layout),
 		"gender_screen_palette": _import_gender_screen_palette(rom, layout),
@@ -4609,6 +4719,40 @@ func _import_name_input_chars(rom: RomFile, layout: Dictionary) -> Array:
 			var at: int = start + row * RomLayout.NAME_INPUT_ROW_BYTES
 			rows.append(Array(rom.slice(at, RomLayout.NAME_INPUT_ROW_BYTES)))
 		out.append(rows)
+	## data/text/mail_input_chars.asm's two, appended so one cache file carries
+	## every keyboard the naming screen can be on. A mail row is 19 bytes and a
+	## name row 17, which is the only difference in how they are read.
+	for table: int in RomLayout.MAIL_INPUT_TABLES:
+		var mail_start: int = RomLayout.mail_input_table_offset(layout, table)
+		var mail_rows: Array = []
+		for row: int in RomLayout.MAIL_INPUT_TABLE_ROWS:
+			var at: int = mail_start + row * RomLayout.MAIL_INPUT_ROW_BYTES
+			mail_rows.append(Array(rom.slice(at, RomLayout.MAIL_INPUT_ROW_BYTES)))
+		out.append(mail_rows)
+	return out
+
+
+## `MailItems`, the ten numbers in front of its -1. `ItemIsMail` is the only
+## reader and [method Gen2HeldItem.is_mail] is its pin; `tools/checks/mail.gd`
+## is what holds the two to each other on every cartridge.
+func _import_mail_items(rom: RomFile, layout: Dictionary) -> Array:
+	var at: int = int((layout["mail"] as Dictionary)["items"])
+	return Array(rom.slice(at, RomLayout.MAIL_ITEM_COUNT))
+
+
+## `LoadMailPalettes.MailPals`, four packed words per mail type in
+## `MailGFXPointers` order. Stored packed the way the other palette tables are,
+## so the colour a page draws with is the cartridge's own word.
+func _import_mail_palettes(rom: RomFile, layout: Dictionary) -> Array:
+	var at: int = int((layout["mail"] as Dictionary)["palettes"])
+	var out: Array = []
+	for index: int in RomLayout.MAIL_PALETTE_COUNT:
+		var colours: Array = []
+		for colour: int in RomLayout.MAIL_PALETTE_COLOURS:
+			colours.append(
+				rom.u16le(at + (index * RomLayout.MAIL_PALETTE_COLOURS + colour) * 2)
+			)
+		out.append(colours)
 	return out
 
 
@@ -6276,6 +6420,20 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 		"naming_cursor": {
 			"offset": RomLayout.naming_cursor_offset(layout),
 			"tiles": RomLayout.NAMING_CURSOR_TILES,
+			"first_code": 0,
+			"bits": 2,
+		},
+		## `gfx/mail.asm`, one flat 1bpp run the ten `Load*MailGFX` routines
+		## index by byte, and `_ComposeMailMessage.MailIcon`'s eight 2bpp tiles.
+		"mail_gfx": {
+			"offset": int((layout["mail"] as Dictionary)["gfx"]),
+			"tiles": RomLayout.MAIL_GFX_TILES,
+			"first_code": 0,
+			"bits": 1,
+		},
+		"mail_icon": {
+			"offset": int((layout["mail"] as Dictionary)["icon"]),
+			"tiles": RomLayout.MAIL_ICON_TILES,
 			"first_code": 0,
 			"bits": 2,
 		},

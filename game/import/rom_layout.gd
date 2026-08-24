@@ -161,8 +161,9 @@ const ICON_EGG: int = 28
 
 ## `HeldItemIcons` is `gfx/stats/mail.2bpp` and `gfx/stats/item.2bpp`, the two
 ## tiles `GetIconGFX` loads behind every icon's eight. `ItemIsMail` is
-## [method Gen2HeldItem.is_mail]; the mail icon is still drawn by no party menu
-## here, and `SPRITE_ANIM_FRAMESET_PARTY_MON_WITH_MAIL` is unreachable.
+## [method Gen2HeldItem.is_mail], and `.SpawnItemIcon` is what picks between
+## the two: `SPRITE_ANIM_FRAMESET_PARTY_MON_WITH_MAIL` for a held mail and
+## `..._WITH_ITEM` for anything else.
 const HELD_ITEM_ICON_TILES: int = 2
 const HELD_ITEM_ICON_MAIL: int = 0
 const HELD_ITEM_ICON_ITEM: int = 1
@@ -1906,6 +1907,59 @@ const NAME_INPUT_COMMAND_UPPER: Array[int] = [
 	0x8B, 0x7F, 0x7F, 0x7F, 0x84, 0x8D, 0x83, 0x7F,
 ]
 
+## data/text/mail_input_chars.asm's two keyboards, stored the same way and
+## behind their own pin: `_ComposeMailMessage`'s code sits between them and the
+## four above, so the block is not walked from `name_input_chars`. A mail row is
+## 19 bytes rather than 17 and every table is 6 rows, `.PlaceMailCharset`'s own
+## `ld b, 6` over `ld c, SCREEN_WIDTH - 1`.
+const MAIL_INPUT_ROW_BYTES: int = 19
+const MAIL_INPUT_TABLE_ROWS: int = 6
+const MAIL_INPUT_TABLES: int = 2
+## `ComposeMail_AnimateCursor.LetterEntries` has ten entries and steps $10, so a
+## mail column is every second byte the way a name column is.
+const MAIL_INPUT_COLUMNS: int = 10
+## The first row of each keyboard, which is what pins the block: "A B C ..." and
+## "a b c ...", encoded.
+const MAIL_INPUT_UPPER_A: int = 0x80
+const MAIL_INPUT_LOWER_A: int = 0xA0
+## The command row of each mail keyboard, which is what the other end of the
+## block is pinned on. Table 0 is uppercase and its switch says "lower".
+const MAIL_INPUT_COMMAND_UPPER: Array[int] = [
+	0xAB, 0xAE, 0xB6, 0xA4, 0xB1, 0x7F, 0x7F, 0x83, 0x84, 0x8B,
+	0x7F, 0x7F, 0x7F, 0x84, 0x8D, 0x83, 0x7F, 0x7F, 0x7F,
+]
+const MAIL_INPUT_COMMAND_LOWER: Array[int] = [
+	0x94, 0x8F, 0x8F, 0x84, 0x91, 0x7F, 0x7F, 0x83, 0x84, 0x8B,
+	0x7F, 0x7F, 0x7F, 0x84, 0x8D, 0x83, 0x7F, 0x7F, 0x7F,
+]
+
+## constants/item_data_constants.asm's mail block. `MAIL_STRUCT_LENGTH` is $2f:
+## two lines, the `<NEXT>` between them, the author, a nationality word, the
+## author's ID, the species and the mail type.
+const MAIL_LINE_LENGTH: int = 0x10
+const MAIL_MSG_LENGTH: int = 2 * MAIL_LINE_LENGTH
+const MAILBOX_CAPACITY: int = 10
+const MAIL_STRUCT_LENGTH: int = 0x2F
+## `PLAYER_NAME_LENGTH`, the field's own width. Both writers copy
+## `NAME_LENGTH - 1` bytes into it, so the two bytes of `Nationality` behind it
+## carry the tail of the name and no nationality; see [Gen2SaveMail].
+const MAIL_AUTHOR_FIELD: int = 8
+const MAIL_AUTHOR_LENGTH: int = 10
+
+## `MailItems`, ten numbers and the -1 behind them.
+const MAIL_ITEM_COUNT: int = 10
+const MAIL_ITEM_END: int = 0xFF
+## `MailGFXPointers` order, which is also `LoadMailPalettes.MailPals`': the
+## *MAIL_INDEX constants at the head of engine/pokemon/mail_2.asm.
+const MAIL_PALETTE_COUNT: int = 10
+const MAIL_PALETTE_COLOURS: int = 4
+## `gfx/mail.asm`, one uncompressed 1bpp run the load routines index by byte.
+const MAIL_GFX_BYTES: int = 1360
+const MAIL_GFX_TILES: int = MAIL_GFX_BYTES / TILE_BYTES_1BPP
+## `_ComposeMailMessage.MailIcon`, the eight tiles the screen spawns as a party
+## icon over the entry.
+const MAIL_ICON_TILES: int = 8
+
 ## constants/item_constants.asm. TM01 is $bf and HM01 $f3, but the run is not
 ## contiguous: ITEM_C3 and ITEM_DC are dummy items inside it, which is why
 ## GetTMHMNumber skips them rather than subtracting.
@@ -2298,6 +2352,17 @@ const GOLD_SILVER: Dictionary = {
 		"select_gfx": 0xE3BF8,
 		"mail_gfx": 0xE3C18,
 		"orange_palette": 0x95CD,
+	},
+	# Mail. `items` is `MailItems`' own eleven bytes, `input_chars` the two
+	# `MailEntry_*` keyboards assembled whole, `gfx` the 1,360 bytes
+	# `gfx/mail.asm` INCBINs in one run, `palettes` `gfx/mail/mail.pal` encoded
+	# and `icon` `gfx/naming_screen/mail.2bpp`. Each hits once per dump.
+	"mail": {
+		"items": 0xBBAF7,
+		"input_chars": 0x125B6,
+		"gfx": 0xBB59D,
+		"palettes": 0x92C1,
+		"icon": 0x122C1,
 	},
 	# Battle animations. `BattleAnimations` was located by matching
 	# `BattleAnim_Pound` whole (d1 01 e0 01 31 d0 08 88 38 00 06 d0 01 88 38 00
@@ -2800,6 +2865,14 @@ const CRYSTAL: Dictionary = {
 		"mail_gfx": 0xE349D,
 		"orange_palette": 0x9036,
 	},
+	# Mail; see the Gold and Silver block above for how these were located.
+	"mail": {
+		"items": 0xB9E80,
+		"input_chars": 0x121DD,
+		"gfx": 0xB9926,
+		"palettes": 0x8D05,
+		"icon": 0x11EF4,
+	},
 	# Battle animations; see the Gold and Silver block above for how these were
 	# located. All five tables sit in the same two banks in every dump and only
 	# the addresses within them move.
@@ -3098,6 +3171,14 @@ static func name_input_table_offset(layout: Dictionary, table: int) -> int:
 	for before: int in table:
 		at += NAME_INPUT_TABLE_ROWS[before] * NAME_INPUT_ROW_BYTES
 	return at
+
+
+## Where [param table] of the two mail keyboards starts. The pair is stored back
+## to back the way the four name keyboards are, and every mail table is the same
+## six rows.
+static func mail_input_table_offset(layout: Dictionary, table: int) -> int:
+	return int((layout["mail"] as Dictionary)["input_chars"]) \
+		+ table * MAIL_INPUT_TABLE_ROWS * MAIL_INPUT_ROW_BYTES
 
 
 ## `data/text_buffers.asm`'s StringBufferPointers, in `text_buffer` argument

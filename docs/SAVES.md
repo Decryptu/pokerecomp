@@ -163,7 +163,12 @@ item, four moves, OT ID, three-byte experience, five stat-experience words, DVs,
 PP, happiness, Pokerus, caught data and level. `party_struct` adds status,
 current/max HP and five derived stats.
 
-Original SRAM also contains player, map, checksum, PC box, mail, Hall of Fame and
+Mail is on the record rather than in a slot of its own: `Gen2SaveMon.mail` is
+`sPartyMail`'s entry for that member and `Gen2SaveData.mailbox` is `sMailboxes`
+behind `sMailboxCount`. Both default rather than versioning, so a slot written
+before mail existed reads as a party holding none and an empty mailbox.
+
+Original SRAM also contains player, map, checksum, PC box, Hall of Fame and
 Crystal-specific regions. The first model imports only party data; the optional
 project world snapshot is a separate canonical runtime shape and does not claim
 to reproduce unsupported SRAM bytes.

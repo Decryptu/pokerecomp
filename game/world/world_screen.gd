@@ -196,6 +196,28 @@ var _field_move_text: bool = false
 ## The item the standing renewal question would spend, 0 while none is up. See
 ## [method _offer_repel_renewal].
 var _repel_renewal_item: int = 0
+## `MonMailAction`'s own two questions and the member whose mail they are about.
+## `.take` asks `.MailAskSendToPCText` and, when that is refused, `.RemoveMail
+## ToBag` asks `.MailLoseMessageText`: two `YesNoBox`es in a row, so which one is
+## open has to be remembered as well as who it is about.
+const MAIL_TAKE_NONE: int = 0
+const MAIL_TAKE_ASK_PC: int = 1
+const MAIL_TAKE_ASK_BAG: int = 2
+var _mail_take_slot: int = -1
+var _mail_take_stage: int = MAIL_TAKE_NONE
+var _mail_take_name: String = ""
+## `ReadPartyMonMail`'s screen, which the MAIL submenu opens over the party list.
+var _mail_host: Gen2MailScreen = null
+
+## `MonMailAction`'s six `text_far` stubs, in `data/text/common_2.asm`. Kept
+## here rather than imported for the same reason BILL'S PC's own two are: no
+## script points at them, so there is no table to walk.
+const MAIL_ASK_SEND_TO_PC_TEXT: String = "Send the removed\nMAIL to your PC?"
+const MAIL_SENT_TO_PC_TEXT: String = "The MAIL was sent\nto your PC."
+const MAILBOX_FULL_TEXT: String = "Your PC's MAILBOX\nis full."
+const MAIL_LOSE_MESSAGE_TEXT: String = "The MAIL will lose\nits message. OK?"
+const MAIL_NO_SPACE_TEXT: String = "There's no space\nfor removing MAIL."
+const MAIL_DETACHED_TEXT: String = "MAIL detached from\n%s."
 ## `PlayerEventScriptPointers`: an engine script the overworld runs on its own
 ## rather than out of a map. Each entry is one `writetext`/`waitbutton` pair and
 ## [member _player_event_after] is whatever the script does past its last one,
@@ -640,7 +662,7 @@ func _apply_interface_mask() -> void:
 		or _move_tutor_host != null or _day_care_host != null
 		or _unown_puzzle_host != null or _slot_machine_host != null
 		or _card_flip_host != null or _diploma_host != null
-		or _unown_printer_host != null
+		or _unown_printer_host != null or _mail_host != null
 	)
 	_screen.interface_masked = _screen.expanded and owned \
 		and Gen2ModHost.renderer_uses_hardware_viewport(_renderer)
@@ -1064,7 +1086,8 @@ func _overlay_open() -> bool:
 		or _move_tutor_host != null \
 		or _day_care_host != null or _unown_puzzle_host != null \
 		or _slot_machine_host != null or _card_flip_host != null \
-		or _diploma_host != null or _unown_printer_host != null
+		or _diploma_host != null or _unown_printer_host != null \
+		or _mail_host != null
 
 
 ## Wandering objects keep to themselves while anything else owns the world: a
@@ -1227,6 +1250,11 @@ func _handle_button(button: int) -> bool:
 		return true
 	if _credits_host != null:
 		_credits_host.handle_button(button)
+		return true
+	## `ReadPartyMonMail`, which `MonMailAction` opens over the party list and
+	## comes back to: it owns the screen while it is up.
+	if _mail_host != null:
+		_mail_host.handle_button(button)
 		return true
 	if _party_host != null:
 		_party_host.handle_button(button)
@@ -5510,6 +5538,9 @@ func _run_party_action(action: Dictionary) -> void:
 	if StringName(action.get("kind", &"")) == &"mon_item":
 		_run_mon_item_action(action)
 		return
+	if StringName(action.get("kind", &"")) == &"mon_mail":
+		_run_mon_mail_action(action)
+		return
 	if StringName(action.get("kind", &"")) == &"heal_transfer":
 		_run_heal_transfer(action)
 		return
@@ -5737,6 +5768,88 @@ func _run_mon_item_action(action: Dictionary) -> void:
 					action_name, String(result.get("reason", "")),
 				]
 			)
+
+
+## `MonMailAction`'s READ and TAKE, once the party submenu has chosen. READ is
+## `ReadPartyMonMail` over the list; TAKE is `.MailAskSendToPCText` and, if that
+## is refused, `.MailLoseMessageText` and the bag.
+func _run_mon_mail_action(action: Dictionary) -> void:
+	var slot: int = int(action.get("slot", -1))
+	var save: Gen2SaveData = _embedded_party_save()
+	if save == null or slot < 0 or slot >= save.party.size():
+		return
+	var mon: Gen2SaveMon = save.party[slot]
+	if mon == null or mon.mail == null:
+		return
+	if StringName(action.get("option", &"")) == Gen2PartyScreen.OPTION_MAIL_READ:
+		_open_mail_reader(mon.mail)
+		return
+	_mail_take_slot = slot
+	_mail_take_name = String(action.get("name", ""))
+	_mail_take_stage = MAIL_TAKE_ASK_PC
+	if not _open_host_prompt(MAIL_ASK_SEND_TO_PC_TEXT):
+		_mail_take_slot = -1
+
+
+func _open_mail_reader(mail: Gen2SaveMail) -> void:
+	if _mail_host != null:
+		return
+	var host := Gen2MailScreen.new()
+	host.set_context(_data, mail)
+	_mail_host = host
+	host.z_index = 20
+	host.closed.connect(_on_mail_reader_closed)
+	_screen.display(host)
+	_apply_interface_mask()
+	_refresh_labels()
+
+
+## `.read` answers 0, which `.choosemenu` takes back to the party list. Here the
+## list has already closed, because [method _on_party_action] drops it before it
+## dispatches: every party action in this project is answered over the map, and
+## this one is not the place to make an exception.
+func _on_mail_reader_closed() -> void:
+	if _mail_host != null:
+		Gen2Screen.drop(_mail_host)
+		_mail_host = null
+	_apply_interface_mask()
+	_refresh_labels()
+
+
+## The answer to whichever of `MonMailAction`'s two questions is open.
+func _answer_mail_take(accepted: bool) -> void:
+	var slot: int = _mail_take_slot
+	var stage: int = _mail_take_stage
+	_mail_take_slot = -1
+	_mail_take_stage = MAIL_TAKE_NONE
+	var save: Gen2SaveData = _embedded_party_save()
+	if save == null or slot < 0:
+		return
+	if stage == MAIL_TAKE_ASK_PC:
+		if not accepted:
+			## `.RemoveMailToBag`, which is the second question rather than a
+			## way out.
+			_mail_take_slot = slot
+			_mail_take_stage = MAIL_TAKE_ASK_BAG
+			if not _open_host_prompt(MAIL_LOSE_MESSAGE_TEXT):
+				_mail_take_slot = -1
+			return
+		var sent: Dictionary = Gen2WorldPC.mailbox_send(
+			_world, save, slot, _injected_save == null
+		)
+		_show_field_move_text(
+			MAIL_SENT_TO_PC_TEXT if bool(sent.get("ok", false)) else MAILBOX_FULL_TEXT
+		)
+		return
+	if not accepted:
+		return
+	var taken: Dictionary = Gen2WorldBagHost.take_from_party(
+		_world, save, slot, _injected_save == null
+	)
+	if not bool(taken.get("ok", false)):
+		_show_field_move_text(MAIL_NO_SPACE_TEXT)
+		return
+	_show_field_move_text(MAIL_DETACHED_TEXT % _mail_take_name)
 
 
 ## `Softboiled_MilkDrinkFunction`'s two halves, once the party menu has picked
@@ -6040,9 +6153,14 @@ func _apply_host_choice(results: Array) -> bool:
 	for result: Dictionary in results:
 		if StringName(result.get("kind", &"")) != &"host_choice":
 			continue
+		var accepted: bool = int(result.get("choice", 1)) == 0
+		if _mail_take_slot >= 0:
+			_answer_mail_take(accepted)
+			_refresh_labels()
+			return true
 		var item: int = _repel_renewal_item
 		_repel_renewal_item = 0
-		if int(result.get("choice", 1)) == 0 and item > 0:
+		if accepted and item > 0:
 			_renew_repel(item)
 		_refresh_labels()
 		return true

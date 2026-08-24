@@ -18,6 +18,11 @@ signal closed(name: String)
 const KIND_PLAYER: StringName = &"player"
 const KIND_MON: StringName = &"mon"
 const KIND_BOX: StringName = &"box"
+## `_ComposeMailMessage`, which is not a `wNamingScreenType` at all: its own
+## routine with its own keyboard. A caller that opens this one reads the raw
+## buffer off [method model] rather than the `closed` argument, since a mail
+## message is two fixed-width lines and a break rather than a name.
+const KIND_MAIL: StringName = &"mail"
 
 var _screen: Gen2NamingScreen = null
 var _page: Gen2NamingScreenPage = null
@@ -56,6 +61,8 @@ static func _model(data: GameData, kind: StringName) -> Gen2NamingScreen:
 		return Gen2NamingScreen.for_mon(data)
 	if kind == KIND_BOX:
 		return Gen2NamingScreen.for_box(data)
+	if kind == KIND_MAIL:
+		return Gen2NamingScreen.for_mail(data)
 	return Gen2NamingScreen.for_player(data)
 
 

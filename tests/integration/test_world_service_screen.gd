@@ -103,6 +103,7 @@ func test_players_house_pc_opens_the_item_pc_and_resumes_the_waiting_script() ->
 		Gen2WorldPC.PLAYERSPCITEM_WITHDRAW_ITEM,
 		Gen2WorldPC.PLAYERSPCITEM_DEPOSIT_ITEM,
 		Gen2WorldPC.PLAYERSPCITEM_TOSS_ITEM,
+		Gen2WorldPC.PLAYERSPCITEM_MAIL_BOX,
 		Gen2WorldPC.PLAYERSPCITEM_DECORATION,
 		Gen2WorldPC.PLAYERSPCITEM_TURN_OFF,
 	])
@@ -891,8 +892,8 @@ func test_the_decoration_row_sets_a_decoration_up_and_closes_the_machine() -> vo
 	assert_not_null(host)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEMS)
 
-	## WITHDRAW, DEPOSIT, TOSS, then DECORATION.
-	for _step: int in 3:
+	## WITHDRAW, DEPOSIT, TOSS, MAIL BOX, then DECORATION.
+	for _step: int in 4:
 		host.handle_button(Gen2Button.DOWN)
 	host.handle_button(Gen2Button.A)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_DECO)
@@ -916,3 +917,83 @@ func test_the_decoration_row_sets_a_decoration_up_and_closes_the_machine() -> vo
 	await get_tree().process_frame
 	assert_null(_world_screen._service_host, "a changed room closes the machine")
 	assert_false(_world_screen._world.script_input_waiting())
+
+
+## `_PlayerMailBoxMenu`: `InitMail` answers zero when the mailbox is empty, so
+## the row prints `.EmptyMailboxText` instead of opening a list.
+func test_an_empty_mailbox_prints_its_own_line_and_opens_no_list() -> void:
+	_write_pc_request()
+	await _open_world()
+	_world_screen._world.current_map.events["coord_events"][0]["script"] = 0x6190
+	await _queue_service()
+
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	assert_not_null(host)
+	for _step: int in 3:
+		host.handle_button(Gen2Button.DOWN)
+	host.handle_button(Gen2Button.A)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEMS)
+	assert_eq(host._status, Gen2WorldPC.MAILBOX_EMPTY)
+
+
+## `MailboxPC`: the list prints one author a message, the submenu is
+## `.SubMenuData`'s four rows, and READ MAIL opens `ReadAnyMail` over it.
+func test_the_mailbox_lists_its_authors_and_reads_one() -> void:
+	_write_pc_request()
+	await _open_world()
+	_world_screen._world.current_map.events["coord_events"][0]["script"] = 0x6190
+	var save: Gen2SaveData = _world_screen._embedded_party_save()
+	save.mailbox.append(Gen2SaveMail.compose(
+		Gen2SaveMail.blank_message(), "GOLD", 0x1234, 1, Gen2MailPage.ITEM_NUMBERS[0]
+	))
+	await _queue_service()
+
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	assert_not_null(host)
+	for _step: int in 3:
+		host.handle_button(Gen2Button.DOWN)
+	host.handle_button(Gen2Button.A)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_MAILBOX)
+	assert_eq(host._pc_rows.size(), 1)
+	assert_eq(String(host._pc_rows[0]["name"]), "GOLD")
+
+	host.handle_button(Gen2Button.A)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_MAIL_SUBMENU)
+	assert_eq(host._pc_rows.size(), Gen2WorldPC.MAILBOX_ROWS.size())
+
+	host.handle_button(Gen2Button.A)
+	assert_not_null(host._mail_reader)
+	## `.loop` returns on A or B and on nothing else.
+	assert_false(host.handle_button(Gen2Button.DOWN))
+	assert_true(host.handle_button(Gen2Button.A))
+	assert_null(host._mail_reader)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_MAILBOX)
+
+
+## `.PutInPack`: the question first, then `ReceiveItem`, then the entry is
+## deleted and `.MailClearedPutAwayText` printed.
+func test_putting_a_message_in_the_pack_empties_the_mailbox() -> void:
+	_write_pc_request()
+	await _open_world()
+	_world_screen._world.current_map.events["coord_events"][0]["script"] = 0x6190
+	var save: Gen2SaveData = _world_screen._embedded_party_save()
+	var item: int = Gen2MailPage.ITEM_NUMBERS[0]
+	save.mailbox.append(Gen2SaveMail.compose(
+		Gen2SaveMail.blank_message(), "GOLD", 0x1234, 1, item
+	))
+	await _queue_service()
+
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	for _step: int in 3:
+		host.handle_button(Gen2Button.DOWN)
+	host.handle_button(Gen2Button.A)
+	host.handle_button(Gen2Button.A)
+	host.handle_button(Gen2Button.DOWN)
+	host.handle_button(Gen2Button.A)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_MAIL_CONFIRM)
+	assert_eq(host._summary, Gen2WorldPC.MAILBOX_MESSAGE_LOST)
+
+	host.handle_button(Gen2Button.A)
+	assert_eq(save.mailbox.size(), 0)
+	assert_eq(_world_screen._world.state.item_quantity(item), 1)
+	assert_eq(host._status, Gen2WorldPC.MAILBOX_CLEARED)

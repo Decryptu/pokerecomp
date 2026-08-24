@@ -60,6 +60,12 @@ const OPTION_MOVE: StringName = &"move"
 ## `GiveTakeItemMenuData`'s own two rows, which ITEM opens rather than answers.
 const OPTION_GIVE: StringName = &"give"
 const OPTION_TAKE: StringName = &"take"
+## `MONMENUITEM_MAIL`, which `GetMonSubmenuItems` puts where ITEM would be when
+## `ItemIsMail` answers for the held item, and `MonMailAction`'s own three rows.
+const OPTION_MAIL: StringName = &"mail"
+const OPTION_MAIL_READ: StringName = &"mail_read"
+const OPTION_MAIL_TAKE: StringName = &"mail_take"
+const OPTION_MAIL_QUIT: StringName = &"mail_quit"
 ## engine/pokemon/mon_submenu.asm's NUM_MONMENU_ITEMS: a list already this long
 ## drops CANCEL rather than growing.
 const MAX_SUBMENU_ITEMS: int = 8
@@ -104,6 +110,9 @@ const SUBMENU_BOTTOM: int = 17
 ## `GiveTakeItemMenuData`'s `menu_coords 12, 12, SCREEN_WIDTH - 1,
 ## SCREEN_HEIGHT - 1`, which is a fixed box rather than a grown one.
 const ITEM_MENU_BOX: Rect2i = Rect2i(12, 12, 7, 5)
+## `MonMailAction.MenuHeader`'s `menu_coords 12, 10, SCREEN_WIDTH - 1,
+## SCREEN_HEIGHT - 1`, one row taller than GIVE/TAKE's.
+const MAIL_MENU_BOX: Rect2i = Rect2i(12, 10, 7, 7)
 
 var _data: GameData = null
 var _data_override: GameData = null
@@ -126,6 +135,9 @@ var _submenu_open: bool = false
 ## Whether the rows on screen are ITEM's GIVE/TAKE box rather than the mon's own
 ## submenu, which is what B goes back to.
 var _item_menu_open: bool = false
+## Which fixed box that submenu is drawn in: GIVE/TAKE's or `MonMailAction`'s,
+## which is one row taller and two rows higher.
+var _fixed_menu_box: Rect2i = ITEM_MENU_BOX
 ## `.SelectMilkDrinkRecipient`: which party member is giving its health away, and
 ## which of the two moves asked. -1 and 0 when no recipient list is open.
 var _heal_user: int = -1
@@ -239,9 +251,6 @@ func party_snapshot() -> Dictionary:
 ## acted on: the screens STATS and MOVE open are built, so a row that cannot be
 ## chosen no longer exists here.
 ##
-## The MAIL branch is not reproduced: ItemIsMail tests the held item against
-## data/items/mail_items.asm, and this project has no mail, so ITEM is always
-## the entry in that position.
 ## [param slot] is one-based and [param in_battle] is whether the list belongs to
 ## a turn: both only decide which mod rows are offered, and neither changes a
 ## cartridge row.
@@ -273,7 +282,12 @@ static func submenu_items_for(
 	## out, so the row is offered whatever the party holds.
 	items.append(_option_entry(OPTION_SWITCH, "SWITCH"))
 	items.append(_option_entry(OPTION_MOVE, "MOVE"))
-	items.append(_option_entry(OPTION_ITEM, "ITEM"))
+	## `GetMonSubmenuItems`: `ItemIsMail` decides between the two rows, so a
+	## member holding mail has no ITEM row at all.
+	if Gen2HeldItem.is_mail(mon.item):
+		items.append(_option_entry(OPTION_MAIL, "MAIL"))
+	else:
+		items.append(_option_entry(OPTION_ITEM, "ITEM"))
 	## After every cartridge action and before CANCEL, which is the source's own
 	## last row and the way out of the box. A mod cannot displace one: the list
 	## still stops at `NUM_MONMENU_ITEMS`, so rows past it are simply not offered.
@@ -300,6 +314,16 @@ static func item_menu_items() -> Array:
 	return [
 		{"kind": &"mon_item", "option": OPTION_GIVE, "label": "GIVE"},
 		{"kind": &"mon_item", "option": OPTION_TAKE, "label": "TAKE"},
+	]
+
+
+## `MonMailAction.MenuData`'s three rows. READ opens `ReadPartyMonMail` and
+## TAKE is `SendMailToPC` or the bag, both of which need the live world.
+static func mail_menu_items() -> Array:
+	return [
+		{"kind": &"mon_mail", "option": OPTION_MAIL_READ, "label": "READ"},
+		{"kind": &"mon_mail", "option": OPTION_MAIL_TAKE, "label": "TAKE"},
+		{"kind": &"mon_mail", "option": OPTION_MAIL_QUIT, "label": "QUIT"},
 	]
 
 
@@ -423,6 +447,17 @@ func _confirm() -> void:
 				"slot": _member_cursor,
 				"name": _display_name(_save.party[_member_cursor]),
 			})
+		&"mon_mail":
+			## `.done` answers 3, which `.choosemenu` takes back to the list.
+			if StringName(entry.get("option", &"")) == OPTION_MAIL_QUIT:
+				_open_submenu()
+				return
+			action_chosen.emit({
+				"kind": &"mon_mail",
+				"option": StringName(entry.get("option", &"")),
+				"slot": _member_cursor,
+				"name": _display_name(_save.party[_member_cursor]),
+			})
 		&"mod_party_action":
 			## The handler is the mod's, and the slot is the only thing it is
 			## told: the menu closes behind it the way a field move's does.
@@ -438,6 +473,8 @@ func _confirm() -> void:
 			match StringName(entry.get("option", &"")):
 				OPTION_ITEM:
 					_open_item_menu()
+				OPTION_MAIL:
+					_open_mail_menu()
 				OPTION_SWITCH:
 					_begin_switch()
 				OPTION_STATS:
@@ -612,6 +649,15 @@ func _open_item_menu() -> void:
 	_submenu_items = item_menu_items()
 	_submenu_cursor = 0
 	_item_menu_open = true
+	_fixed_menu_box = ITEM_MENU_BOX
+	_refresh()
+
+
+func _open_mail_menu() -> void:
+	_submenu_items = mail_menu_items()
+	_submenu_cursor = 0
+	_item_menu_open = true
+	_fixed_menu_box = MAIL_MENU_BOX
 	_refresh()
 
 
@@ -847,13 +893,13 @@ func _blend_stats_pic(image: Image, snapshot: Dictionary) -> void:
 	image.blit_rect(art, Rect2i(Vector2i.ZERO, art.get_size()), origin)
 
 
-## `.GetTopCoord` for the mon's own submenu, and `GiveTakeItemMenuData`'s fixed
-## box for the GIVE/TAKE it opens.
+## `.GetTopCoord` for the mon's own submenu, and the fixed box whichever of
+## `GiveTakeItemMenuData` and `MonMailAction.MenuHeader` is open over it.
 func _submenu_box() -> Gen2MenuBox:
 	if _item_menu_open:
 		return Gen2MenuBox.from_coords(
-			ITEM_MENU_BOX.position.x, ITEM_MENU_BOX.position.y,
-			ITEM_MENU_BOX.end.x, ITEM_MENU_BOX.end.y, Gen2MenuBox.STATICMENU_CURSOR
+			_fixed_menu_box.position.x, _fixed_menu_box.position.y,
+			_fixed_menu_box.end.x, _fixed_menu_box.end.y, Gen2MenuBox.STATICMENU_CURSOR
 		)
 	return mon_menu_box(_submenu_items.size())
 
@@ -954,6 +1000,14 @@ func _build_ui() -> void:
 	_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	footer.add_child(_status)
+
+
+## A caller's own refusal in this list's box, for a selection the list itself
+## cannot judge. `_PlayerMailBoxMenu`'s `.AttachMail` is the shape: it prints
+## `.MailEggText` or `.MailAlreadyHoldingItemText` and jumps back to
+## `.try_again`, which is this list still open behind the box.
+func say(message: String) -> void:
+	_say(message)
 
 
 ## A refusal, in whichever box this view has: the menu's own bottom one when it

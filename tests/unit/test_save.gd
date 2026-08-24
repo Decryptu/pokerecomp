@@ -921,3 +921,61 @@ func test_export_updates_both_copies_and_preserves_trailing_bytes() -> void:
 	assert_true(backup_import["ok"], backup_import["message"])
 	assert_eq(backup_import["copy"], "backup")
 	assert_eq((backup_import["save"] as Gen2SaveData).player_name, "BLUE")
+
+
+## `sPartyMail` and `sMailboxes`, both of which default rather than versioning:
+## a slot written before mail existed reads as a party holding none and an empty
+## mailbox, which is exactly what it was.
+func test_mail_round_trips_on_a_member_and_in_the_mailbox() -> void:
+	var save := Gen2SaveData.new()
+	save.game_id = &"savetest"
+	var mon := Gen2SaveMon.new()
+	mon.species = Fixture.CUBONE
+	mon.item = Fixture.FLOWER_MAIL
+	var entry: PackedByteArray = Gen2SaveMail.blank_message()
+	var text: PackedByteArray = Gen2Text.encode("HELLO")
+	for index: int in text.size():
+		entry[index] = text[index]
+	mon.mail = Gen2SaveMail.compose(entry, "GOLD", 0x1234, mon.species, mon.item)
+	save.party = [mon]
+	save.mailbox = [Gen2SaveMail.compose(entry, "KRIS", 0x4321, 1, Fixture.FLOWER_MAIL)]
+
+	var restored: Gen2SaveData = Gen2SaveData.from_dict(save.to_dict())
+	assert_not_null(restored)
+	var carried: Gen2SaveMail = (restored.party[0] as Gen2SaveMon).mail
+	assert_not_null(carried)
+	assert_eq(carried.author, "GOLD")
+	assert_eq(carried.author_id, 0x1234)
+	assert_eq(carried.item, Fixture.FLOWER_MAIL)
+	assert_eq(carried.line(0), "HELLO")
+	assert_eq(carried.line(1), "")
+	assert_eq(restored.mailbox.size(), 1)
+	assert_eq((restored.mailbox[0] as Gen2SaveMail).author, "KRIS")
+
+	## A record with no mail keeps none rather than an empty message.
+	mon.mail = null
+	assert_null((Gen2SaveData.from_dict(save.to_dict()).party[0] as Gen2SaveMon).mail)
+
+
+## `copy_from` replaces the shared runtime save in place, and every field it
+## forgets is one a transaction silently throws away: the mailbox, the Hall of
+## Fame, the box names and the current box all live only in memory between two
+## writes.
+func test_copying_a_save_in_place_keeps_every_field() -> void:
+	var save := Gen2SaveData.new()
+	save.game_id = &"savetest"
+	var source := Gen2SaveData.new()
+	source.game_id = &"savetest"
+	source.current_box = 3
+	source.box_names = ["ALPHA"]
+	source.hall_of_fame = [{"win_count": 1, "mons": []}]
+	source.mailbox = [Gen2SaveMail.compose(
+		Gen2SaveMail.blank_message(), "GOLD", 0x1234, 1, Fixture.FLOWER_MAIL
+	)]
+
+	assert_true(save.copy_from(source))
+	assert_eq(save.current_box, 3)
+	assert_eq(save.box_names, ["ALPHA"])
+	assert_eq(save.hall_of_fame.size(), 1)
+	assert_eq(save.mailbox.size(), 1)
+	assert_eq((save.mailbox[0] as Gen2SaveMail).author, "GOLD")

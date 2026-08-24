@@ -31,12 +31,16 @@ enum MODE {
 	PC_BOXES, PC_BOX_LIST,
 	PC_DECO, PC_DECO_LIST, PC_DECO_SIDE,
 	PC_BOX_SUBMENU,
+	PC_MAILBOX, PC_MAIL_SUBMENU, PC_MAIL_CONFIRM,
 }
 
 ## `PokemonCenterPC`'s own box storage, which is the one row that opens a screen
 ## rather than a list. It is added as a child the way the MAP card adds the
 ## region map, so the top menu is still there when the box screen closes.
 const BOX_SCENE := preload("res://game/save/box_screen.tscn")
+## `.AttachMail`'s own `PartyMenuSelect`, which is the same list the day care
+## and the move tutor open.
+const PARTY_SCENE: PackedScene = preload("res://game/save/party_screen.tscn")
 
 ## engine/pokegear/pokegear.asm's card order. Each is behind its own
 ## wPokegearFlags bit, named here by the engine flag that carries it, since that
@@ -191,6 +195,11 @@ var _hof: Gen2HallOfFameScreen = null
 var _box_submenu_index: int = 0
 var _naming: Gen2NamingScreenScreen = null
 var _hof_index: int = 0
+## `MailboxPC`: `wCurMessageIndex`, the message a submenu is acting on, the
+## reader `.ReadMail` opens and the party list `.AttachMail` opens.
+var _mail_index: int = 0
+var _mail_reader: Gen2MailScreen = null
+var _mail_party: Gen2PartyScreen = null
 ## `_ChangeBox_MenuHeader`'s `db 4, 0`: four rows of a scrolling list, and where
 ## the window into the fourteen boxes stands.
 const BOX_LIST_ROWS: int = 4
@@ -242,6 +251,9 @@ func _exit_tree() -> void:
 	if _hof != null:
 		Gen2Screen.drop(_hof)
 		_hof = null
+	if _mail_reader != null:
+		Gen2Screen.drop(_mail_reader)
+		_mail_reader = null
 	if _naming != null:
 		Gen2Screen.drop(_naming)
 		_naming = null
@@ -381,6 +393,10 @@ func handle_button(button: int) -> bool:
 		return _hof.handle_button(button)
 	if _boxes != null:
 		return _boxes.handle_button(button)
+	if _mail_reader != null:
+		return _mail_reader.handle_button(button)
+	if _mail_party != null:
+		return _mail_party.handle_button(button)
 	if Gen2Button.is_direction(button):
 		_move_direction(Gen2Button.vector(button))
 		return true
@@ -1303,6 +1319,15 @@ func _confirm_pc_row() -> void:
 		else:
 			_apply_decoration(_deco_pending, side)
 		return
+	if _mode == MODE.PC_MAILBOX:
+		_open_mail_submenu(row)
+		return
+	if _mode == MODE.PC_MAIL_SUBMENU:
+		_confirm_mail_submenu(row)
+		return
+	if _mode == MODE.PC_MAIL_CONFIRM:
+		_confirm_mail_to_pack(row == 0)
+		return
 	if _mode == MODE.PC:
 		match row:
 			Gen2WorldPC.PCPCITEM_BILLS_PC:
@@ -1324,6 +1349,8 @@ func _confirm_pc_row() -> void:
 		Gen2WorldPC.PLAYERSPCITEM_DEPOSIT_ITEM, \
 		Gen2WorldPC.PLAYERSPCITEM_TOSS_ITEM:
 			_open_pc_item_list(row)
+		Gen2WorldPC.PLAYERSPCITEM_MAIL_BOX:
+			_open_mailbox()
 		Gen2WorldPC.PLAYERSPCITEM_DECORATION:
 			_open_decorations()
 		Gen2WorldPC.PLAYERSPCITEM_LOG_OFF:
@@ -1668,6 +1695,141 @@ func _refresh_box_counts() -> void:
 
 ## BILL'S PC's own two lists. The panel steps aside for the box screen the way it
 ## does for the region map, so the menu is still there when the boxes close.
+## `_PlayerMailBoxMenu`: `InitMail` answers zero when `sMailboxCount` is, and
+## the routine prints `.EmptyMailboxText` instead of opening the list.
+func _open_mailbox() -> void:
+	_pc_rows = Gen2WorldPC.mailbox_entries(_save)
+	if _pc_rows.is_empty():
+		_status = Gen2WorldPC.MAILBOX_EMPTY
+		_mode = MODE.PC_ITEMS
+		_pc_rows = Gen2WorldPC.players_pc_menu(_data, _pc_house)
+		_render_rows()
+		return
+	_mode = MODE.PC_MAILBOX
+	## `MailboxPC` keeps `wCurMessageIndex` across the submenu, so the list
+	## reopens on the message that was just acted on rather than at the top.
+	_cursor = clampi(_mail_index, 0, _pc_rows.size() - 1)
+	_title = _data.pokecenter_pc_row("mail_box", true)
+	_summary = ""
+	_status = ""
+	_render_rows()
+
+
+func _open_mail_submenu(index: int) -> void:
+	_mail_index = clampi(index, 0, maxi(0, _save.mailbox.size() - 1))
+	_mode = MODE.PC_MAIL_SUBMENU
+	_cursor = 0
+	_pc_rows = []
+	for row: int in Gen2WorldPC.MAILBOX_ROWS.size():
+		_pc_rows.append({"row": row, "name": Gen2WorldPC.MAILBOX_ROWS[row]})
+	_status = ""
+	_render_rows()
+
+
+func _confirm_mail_submenu(row: int) -> void:
+	match row:
+		Gen2WorldPC.MAILBOXITEM_READ:
+			_open_mail_reader()
+		Gen2WorldPC.MAILBOXITEM_PUT_IN_PACK:
+			_open_mail_confirm()
+		Gen2WorldPC.MAILBOXITEM_ATTACH:
+			_open_mail_attach()
+		_:
+			_open_mailbox()
+
+
+## `.PutInPack`'s `.MailMessageLostText` and the `YesNoBox` under it.
+func _open_mail_confirm() -> void:
+	_mode = MODE.PC_MAIL_CONFIRM
+	_cursor = 0
+	_pc_rows = [{"row": 0, "name": "YES"}, {"row": 1, "name": "NO"}]
+	_summary = Gen2WorldPC.MAILBOX_MESSAGE_LOST
+	_status = ""
+	_render_rows()
+
+
+func _confirm_mail_to_pack(accepted: bool) -> void:
+	_summary = ""
+	if not accepted:
+		_open_mailbox()
+		return
+	var applied: Dictionary = Gen2WorldPC.mailbox_to_pack(
+		_world, _save, _mail_index, _persist
+	)
+	_open_mailbox()
+	if not bool(applied.get("ok", false)):
+		## `ReceiveItem`'s own failure, which is `.MailPackFullText`.
+		_status = Gen2WorldPC.MAILBOX_PACK_FULL
+		return
+	_status = Gen2WorldPC.MAILBOX_CLEARED
+
+
+func _open_mail_reader() -> void:
+	var mail: Gen2SaveMail = _save.mailbox[_mail_index] 		if _mail_index >= 0 and _mail_index < _save.mailbox.size() else null
+	var host := Gen2MailScreen.new()
+	host.set_context(_data, mail)
+	_mail_reader = host
+	_set_overlay_open(true)
+	host.z_index = 5
+	host.closed.connect(_on_mail_reader_closed)
+	_service_hardware.display(host)
+
+
+func _on_mail_reader_closed() -> void:
+	if _mail_reader != null:
+		Gen2Screen.drop(_mail_reader)
+		_mail_reader = null
+	_set_overlay_open(false)
+	## `.ReadMail` ends in `CloseSubmenu`, which is back into `MailboxPC.loop`.
+	_open_mailbox()
+
+
+func _open_mail_attach() -> void:
+	var host: Gen2PartyScreen = PARTY_SCENE.instantiate() as Gen2PartyScreen
+	if host == null or _save == null:
+		_status = "Attaching mail needs a validated save."
+		return
+	_mail_party = host
+	_set_overlay_open(true)
+	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	host.mouse_filter = Control.MOUSE_FILTER_STOP
+	host.z_index = 5
+	host.set_screen(_service_hardware)
+	add_child(host)
+	host.set_context(_data, _save, true)
+	host.selection_made.connect(_on_mail_attach_selected)
+	host.open_selection()
+
+
+## `.try_again`: the egg and held-item refusals print and reopen the same list,
+## so only a member that can take the mail leaves it.
+func _on_mail_attach_selected(party_index: int) -> void:
+	if party_index >= 0:
+		var refusal: StringName = Gen2WorldPC.attach_refusal(_save, party_index)
+		if refusal != &"":
+			_mail_party.say(
+				Gen2WorldPC.MAILBOX_EGG if refusal == &"egg"
+				else Gen2WorldPC.MAILBOX_ALREADY_HOLDING
+			)
+			return
+	_close_mail_attach()
+	if party_index < 0:
+		_open_mailbox()
+		return
+	var applied: Dictionary = Gen2WorldPC.mailbox_attach(
+		_world, _save, _mail_index, party_index, _persist
+	)
+	_open_mailbox()
+	_status = Gen2WorldPC.MAILBOX_MOVED if bool(applied.get("ok", false)) 		else "Refused: %s" % String(applied.get("reason", ""))
+
+
+func _close_mail_attach() -> void:
+	if _mail_party != null:
+		Gen2Screen.drop(_mail_party)
+		_mail_party = null
+	_set_overlay_open(false)
+
+
 func _open_boxes(mode: int) -> void:
 	var host: Gen2BoxScreen = BOX_SCENE.instantiate() as Gen2BoxScreen
 	if host == null or _save == null:
@@ -2035,6 +2197,7 @@ func _confirm() -> void:
 	if _mode in [
 		MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES, MODE.PC_BOX_LIST,
 		MODE.PC_DECO, MODE.PC_DECO_LIST, MODE.PC_DECO_SIDE, MODE.PC_BOX_SUBMENU,
+		MODE.PC_MAILBOX, MODE.PC_MAIL_SUBMENU, MODE.PC_MAIL_CONFIRM,
 	]:
 		_confirm_pc_row()
 		return
@@ -2073,6 +2236,15 @@ func _cancel() -> void:
 			_open_pc(&"pokemon_center")
 	elif _mode == MODE.PC_ITEM_LIST:
 		_open_pc_items()
+	elif _mode == MODE.PC_MAILBOX:
+		## `ScrollingMenu`'s PAD_B, which is `.exit` and the way back to the
+		## menu `_PlayerMailBoxMenu` was called from.
+		_open_pc_items()
+	elif _mode == MODE.PC_MAIL_SUBMENU:
+		## `VerticalMenu`'s carry, which `.subexit` takes back to `.loop`.
+		_open_mailbox()
+	elif _mode == MODE.PC_MAIL_CONFIRM:
+		_confirm_mail_to_pack(false)
 	elif _mode == MODE.PC_DECO:
 		_leave_decorations()
 	elif _mode == MODE.PC_DECO_LIST:
@@ -2147,6 +2319,7 @@ func _render_rows(override: Array = []) -> void:
 			MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES,
 			MODE.PC_DECO, MODE.PC_DECO_LIST, MODE.PC_DECO_SIDE,
 			MODE.PC_BOX_SUBMENU,
+			MODE.PC_MAILBOX, MODE.PC_MAIL_SUBMENU, MODE.PC_MAIL_CONFIRM,
 		] \
 		else _pc_entries if _mode == MODE.PC_ITEM_LIST \
 		else ["Continue"]
@@ -2231,6 +2404,15 @@ func _service_box() -> Gen2MenuBox:
 			return _menu.box()
 		MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES, MODE.PC_DECO_LIST:
 			return _pc_top_box()
+		MODE.PC_MAILBOX:
+			## `.TopMenuHeader`'s `menu_coords 8, 1, SCREEN_WIDTH - 2, 10`.
+			return Gen2MenuBox.from_coords(8, 1, 18, 10, Gen2MenuBox.STATICMENU_CURSOR)
+		MODE.PC_MAIL_SUBMENU:
+			## `.SubMenuHeader`'s `menu_coords 0, 0, 13, 9`.
+			return Gen2MenuBox.from_coords(0, 0, 13, 9, Gen2MenuBox.STATICMENU_CURSOR)
+		MODE.PC_MAIL_CONFIRM:
+			## `YesNoBox`'s own box, which `.PutInPack` opens over its question.
+			return Gen2MenuBox.yes_no()
 		MODE.PC_DECO:
 			return _deco_category_box()
 		MODE.PC_DECO_SIDE:
@@ -2307,6 +2489,7 @@ func _option_count() -> int:
 	if _mode in [
 		MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES, MODE.PC_BOX_LIST,
 		MODE.PC_DECO, MODE.PC_DECO_LIST, MODE.PC_DECO_SIDE, MODE.PC_BOX_SUBMENU,
+		MODE.PC_MAILBOX, MODE.PC_MAIL_SUBMENU, MODE.PC_MAIL_CONFIRM,
 	]:
 		return _pc_rows.size()
 	if _mode == MODE.PC_ITEM_LIST:

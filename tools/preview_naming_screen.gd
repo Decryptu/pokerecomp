@@ -6,6 +6,9 @@ extends SceneTree
 ##
 ##   Godot --path . -s res://tools/preview_naming_screen.gd -- crystal /tmp/name.png [presses]
 ##
+## A `mail` argument after the presses opens `_ComposeMailMessage` instead: the
+## same screen class over its own six-row keyboard and two-line entry.
+##
 ## [presses] is a button script driving the screen before the capture: `r`, `l`,
 ## `u`, `d` for the d-pad, `a`, `b`, `s` for START and `c` for SELECT. So
 ## `aaardc` types three letters, steps right and down and flips the case.
@@ -45,8 +48,12 @@ func _initialize() -> void:
 
 	root.set_content_scale_size(WINDOW_SIZE)
 	root.size = WINDOW_SIZE
+	var mail: bool = args.has("mail")
 	_screen = Gen2NamingScreenScreen.new()
-	if not _screen.open(data, "YOUR NAME?"):
+	if not _screen.open(
+		data, "" if mail else "YOUR NAME?",
+		Gen2NamingScreenScreen.KIND_MAIL if mail else Gen2NamingScreenScreen.KIND_PLAYER
+	):
 		push_error("The %s cache carries no naming screen data." % args[0])
 		quit(1)
 		return
@@ -54,7 +61,7 @@ func _initialize() -> void:
 	root.add_child(_screen)
 	current_scene = _screen
 
-	var presses: String = args[2] if args.size() > 2 else ""
+	var presses: String = args[2] if args.size() > 2 and args[2] != "mail" else ""
 	for key: String in presses:
 		if BUTTONS.has(key):
 			_screen.handle_button(int(BUTTONS[key]))

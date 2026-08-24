@@ -39,6 +39,9 @@ var status: int = Gen2Status.NONE
 var nickname: String = ""
 var original_trainer: String = ""
 var is_egg: bool = false
+## `sPartyMail`'s own entry for this member, or null when the held item is not
+## mail. Kept on the record rather than on the party slot; see [Gen2SaveMail].
+var mail: Gen2SaveMail = null
 
 
 func to_dict() -> Dictionary:
@@ -66,6 +69,7 @@ func to_dict() -> Dictionary:
 		"nickname": nickname,
 		"original_trainer": original_trainer,
 		"is_egg": is_egg,
+		"mail": mail.to_dict() if mail != null else {},
 	}
 
 
@@ -99,6 +103,11 @@ static func from_dict(raw: Variant) -> Gen2SaveMon:
 	out.nickname = String(source.get("nickname", ""))
 	out.original_trainer = String(source.get("original_trainer", ""))
 	out.is_egg = bool(source.get("is_egg", false))
+	## An empty object is a record written before mail existed and one written
+	## for a member holding none: both mean no mail, which needs no version.
+	var stored_mail: Variant = source.get("mail", {})
+	if stored_mail is Dictionary and not (stored_mail as Dictionary).is_empty():
+		out.mail = Gen2SaveMail.from_dict(stored_mail)
 	return out
 
 

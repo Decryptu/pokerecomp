@@ -83,10 +83,11 @@ const ICON_FRAME_TILES: int = 4
 const ICON_SPEEDS: Array[int] = [0x00, 0x40, 0x80]
 const ICON_BOBS: Array[int] = [-2, -1, 0]
 
-## `.SpawnItemIcon`'s marker, `HeldItemIcons`' second tile, over the icon's own
-## bottom-left one. Its mail sibling is unreachable here (see
-## [constant RomLayout.HELD_ITEM_ICON_MAIL]).
+## `.SpawnItemIcon`'s marker over the icon's own bottom-left one, which is
+## `HeldItemIcons`' first tile for a held mail ($08 in
+## `.OAMData_PartyMonWithMail1`) and its second for anything else ($09).
 const ICON_ITEM_TILE: int = RomLayout.HELD_ITEM_ICON_ITEM
+const ICON_MAIL_TILE: int = RomLayout.HELD_ITEM_ICON_MAIL
 const ICON_ITEM_QUADRANT: int = 2
 
 ## `PlaceStatusString`'s three-letter strings, in the order
@@ -200,6 +201,7 @@ func reset(rows: Array) -> void:
 				int(member.get("species", 0)), bool(member.get("egg", false))
 			) if data != null else PackedByteArray(),
 			"item": int(member.get("item", 0)) != 0,
+			"mail": Gen2HeldItem.is_mail(int(member.get("item", 0))),
 			"speed": speed,
 			"frame": -1,
 			"duration": 0,
@@ -274,7 +276,7 @@ func _blend_icons(pixels: PackedInt32Array, count: int) -> void:
 			var tile: int = first + quadrant
 			if quadrant == ICON_ITEM_QUADRANT and bool(icon["item"]) and not held.is_empty():
 				source = held
-				tile = ICON_ITEM_TILE
+				tile = ICON_MAIL_TILE if bool(icon["mail"]) else ICON_ITEM_TILE
 			blend_tile(
 				pixels, source, tile, colors,
 				at + Vector2i((quadrant & 1) * ICON_TILE, (quadrant >> 1) * ICON_TILE)
