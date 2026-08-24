@@ -2248,13 +2248,18 @@ func _after_map_settled() -> bool:
 	## `CountStep`, and only then `RandomEncounter`. A poison pass that reaches a
 	## script answers with carry, so the step it runs on rolls no wild, and
 	## `CheckTimeEvents` below is a caller further on.
-	if _spend_poison_steps():
-		return true
+	##
+	## `CheckSpecialPhoneCall` is `CountStep`'s first test and stands in front of
+	## the counters, so the step a special call rings on is charged nothing:
+	## [method Gen2WorldAPI.count_step] already refused it, and the poison pass
+	## below reads the counter that refusal left standing.
 	var special_attempt: Dictionary = _world.try_special_phone_call()
 	var special_results: Array = special_attempt.get("results", [])
 	if bool(special_attempt.get("attempted", false)) and not special_results.is_empty():
 		_zero_map_name_sign_timer()
 		_show_script_results(special_results)
+		return true
+	if _spend_poison_steps():
 		return true
 	var phone_attempt: Dictionary = _world.try_receive_phone_call(_encounter_random)
 	var phone_results: Array = phone_attempt.get("results", [])
@@ -4416,7 +4421,23 @@ func _finish_battle_exit(result: Dictionary, fought_save: Gen2SaveData) -> void:
 	## a battle leaves through a map reload, and that reload is what puts the
 	## map's own track back over the one `PlayBattleMusic` started.
 	_play_current_map_music()
+	_start_box_full_call()
 	_refresh_labels()
+
+
+## `Script_reloadmapafterbattle`'s `.was_wild` branch: a catch that filled its
+## box staged `Script_SpecialBillCall` with `LoadMemScript`, so Bill rings once
+## the map is back. The flag is spent whether or not the call could be placed,
+## which is what clearing `wBattleResult` on the way out of the script does.
+func _start_box_full_call() -> void:
+	if _world == null or not _world.state.battle_box_full():
+		return
+	_world.state.set_battle_box_full(false)
+	var results: Array = _world.request_caller_phone_call(
+		Gen2WorldPhoneHost.CONTACT_BILL
+	)
+	if not results.is_empty() and bool(results[0].get("ok", false)):
+		_show_script_results(results)
 
 
 ## `EvoStoneEffect`'s evolution, which the pack has already applied: only the
@@ -5830,6 +5851,9 @@ func _show_script_results(results: Array) -> void:
 	var waiting: bool = false
 	var failed: bool = false
 	var map_changed: bool = false
+	## `Script_reloadmap`'s own entry method, which a warp does not share: only
+	## this one re-enters the map the player is already standing on.
+	var map_reloaded: bool = false
 	var clock_changed: bool = false
 	var blacked_out: bool = false
 	for source_result: Dictionary in results:
@@ -5896,6 +5920,7 @@ func _show_script_results(results: Array) -> void:
 				clock_changed = true
 			elif result_event.get("type", &"") == &"battle_map_reload_requested":
 				map_changed = true
+				map_reloaded = true
 			elif result_event.get("type", &"") == &"blackout":
 				## `Script_reloadmapafterbattle`'s LOSE branch, which is
 				## `ScriptJump Script_BattleWhiteout` and ends the script: the
@@ -6080,7 +6105,11 @@ func _show_script_results(results: Array) -> void:
 			## A warp redraws the whole tilemap, so a balance window a script
 			## left standing goes with it the way `closetext`'s redraw takes it.
 			_hide_money_window()
-			_world.reload_current_map()
+			## A warp has already run `_apply_map`, which is `EnterMap` whole;
+			## re-entering it here would take MAPSETUP_RELOADMAP's own poison
+			## reset on a step that never asked for one.
+			if map_reloaded:
+				_world.reload_current_map()
 			_animation.configure(_world, _render_time_of_day())
 			_set_renderer_world()
 			_renderer.set_time_of_day(_render_time_of_day())

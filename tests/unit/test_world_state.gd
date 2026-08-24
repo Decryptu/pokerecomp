@@ -543,6 +543,21 @@ func test_the_step_that_runs_a_repel_out_is_an_edge_the_reader_holds() -> void:
 	assert_false(walking.repel_expired())
 
 
+## `DoRepelStep` stands in front of the counters and its wear-off answers with
+## carry, so `CountStep` reaches `.doscript` and charges the step to nothing:
+## not the poison phase, not the step count, not the Day-Care.
+func test_the_step_a_repel_runs_out_on_is_counted_for_nothing() -> void:
+	var state := Gen2WorldState.new({}, {}, {}, {}, 0, {}, 2)
+	assert_true(state.count_step(), "a step with the Repel still on is counted")
+	assert_eq(state.poison_step_count(), 1)
+	assert_false(state.count_step(), "the step it wears off on is not")
+	assert_eq(state.poison_step_count(), 1)
+	assert_eq(state.step_count(), 1)
+	assert_eq(state.take_pending_day_care_steps(), 1)
+	assert_true(state.count_step(), "the step after it is counted again")
+	assert_eq(state.poison_step_count(), 2)
+
+
 ## The three counters are saved beside the Repel countdown. A state written
 ## before they existed carries none of the keys and restores as a fresh walk.
 func test_step_counters_round_trip_and_default_to_a_fresh_walk() -> void:

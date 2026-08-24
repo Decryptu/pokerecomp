@@ -187,6 +187,38 @@ static func registered_contact_summaries(data: GameData, state: Gen2WorldState) 
 	return summaries
 
 
+## `PHONE_BILL`, the one contact an event rather than the player or the timer
+## can put on the line. Third in `PhoneContacts` on all three cartridges.
+const CONTACT_BILL: int = 3
+
+
+## `LoadCallerScript`: the contact's own *caller* script, which is
+## `PHONE_CONTACT_SCRIPT2` and the one `Script_ReceivePhoneCall`'s `memcall`
+## runs. No entrance, timer, roll, registration or time test stands in front of
+## it: the event that asks for the call has already decided there is one.
+static func resolve_caller(data: GameData, contact_id: int) -> Dictionary:
+	if data == null:
+		return _phone_unavailable(&"phone_data_unavailable")
+	var contact: Dictionary = data.world_phone_contact(contact_id)
+	if contact.is_empty():
+		return _phone_unavailable(&"phone_contact_missing")
+	var script: Dictionary = contact.get("caller_script", {})
+	if script.is_empty():
+		return _phone_unavailable(&"phone_caller_script_missing")
+	return {
+		"ok": true,
+		"contact": contact.duplicate(true),
+		"contact_id": contact_id,
+		"role": &"caller",
+		"script": script.duplicate(true),
+		"phone": {
+			"contact_id": contact_id,
+			"caller_id": contact_id,
+			"role": &"caller",
+		},
+	}
+
+
 static func resolve_special(
 	data: GameData, map: Gen2WorldMap, call_id: int, _hour: int
 ) -> Dictionary:
