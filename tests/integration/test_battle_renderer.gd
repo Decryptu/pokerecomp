@@ -759,3 +759,37 @@ func test_a_wild_opponent_is_its_own_picture_from_the_first_frame() -> void:
 		&"trainer",
 		"the player is a person at the same moment",
 	)
+
+
+## `anim_battlergfx_*` stands an object in for the picture's bottom rows, and it
+## reads the same padded buffer the tilemap layer draws from. A Crystal front pic
+## carries `AnimateFrontpic`'s frames in those same rows, so the buffer is wider
+## than the box and the stride is its own: with the box's, every line of the
+## object came from further along the line above it and the picture's feet were
+## scrambled.
+func test_a_battler_object_tile_is_read_over_the_pics_own_strip() -> void:
+	await _open_battle()
+	var renderer: Gen2BattleRenderer = _battle_screen._renderer
+	var side: int = Gen2BattleScreenMap.ENEMY_SIDE
+	var box: int = side * Gen2Font.TILE
+	# Two animation columns behind the box, and every pixel says where it stands.
+	var strip: int = box + 2 * Gen2Font.TILE
+	var pixels: PackedByteArray = PackedByteArray()
+	pixels.resize(box * strip)
+	for y: int in box:
+		for x: int in strip:
+			pixels[y * strip + x] = (y * strip + x) & 0xFF
+	renderer._enemy_pixels = pixels
+
+	assert_eq(Gen2BattleRenderer.pic_stride(pixels, side), strip)
+	# The picture's own bottom row, which is `.LoadFeet`'s first enemy tile.
+	var tile: int = Gen2BattleScreenMap.ENEMY_BASE_TILE + side - 1
+	var read: PackedByteArray = renderer._battler_tile(tile)
+	assert_eq(read.size(), Gen2Font.TILE * Gen2Font.TILE)
+	for line: int in Gen2Font.TILE:
+		for column: int in Gen2Font.TILE:
+			assert_eq(
+				int(read[line * Gen2Font.TILE + column]),
+				int(pixels[((side - 1) * Gen2Font.TILE + line) * strip + column]),
+				"pixel %d,%d of the feet" % [column, line]
+			)

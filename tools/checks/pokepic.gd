@@ -40,6 +40,7 @@ func _check_game() -> void:
 	var size: Vector2i = box.border_size() * Gen2Font.TILE
 	var sizes: Dictionary = {}
 	var drawn: int = 0
+	var animated: int = 0
 	for species: int in range(FIRST_SPECIES, LAST_SPECIES + 1):
 		var image: Image = Gen2PokepicPage.render(_r.data, species, map)
 		if not _r.check(image != null, "species %d draws no box." % species):
@@ -57,8 +58,9 @@ func _check_game() -> void:
 		sizes[tiles] = int(sizes.get(tiles, 0)) + 1
 		_check_placement(image, species, tiles)
 		_check_battle_block(pic, species, tiles)
-	_r.note("pokepic %d of %d species, sizes %s" % [
-		drawn, LAST_SPECIES - FIRST_SPECIES + 1, sizes
+		animated += 1 if _check_battler_feet(pic, species) else 0
+	_r.note("pokepic %d of %d species, sizes %s, %d animated strips" % [
+		drawn, LAST_SPECIES - FIRST_SPECIES + 1, sizes, animated
 	])
 
 
@@ -149,6 +151,42 @@ func _check_battle_block(pic: Dictionary, species: int, tiles: Vector2i) -> void
 		not outside,
 		"species %d draws outside its own pic in the battle block." % species
 	)
+
+
+## `anim_battlergfx_2row` stands objects in for the picture's bottom two rows and
+## reads them out of the same buffer the tilemap draws from. A Crystal front pic
+## carries `AnimateFrontpic`'s frames behind its own box in those same rows, so
+## the buffer is wider than the box and its stride is its own: read at the box's,
+## every line of the feet comes from further along the line above it and the
+## picture's feet are scrambled. Returns whether this species has frames behind
+## it, which is the only case that can show it.
+func _check_battler_feet(pic: Dictionary, species: int) -> bool:
+	var side: int = Gen2BattleScreenMap.ENEMY_SIDE
+	var box: int = side * Gen2Font.TILE
+	var square: PackedByteArray = Gen2BattleRenderer.padded_pic(_r.data, pic, side, true)
+	var strip: PackedByteArray = Gen2BattleRenderer.padded_pic(
+		_r.data, pic, side, true, _r.data.species_pic_animation(species)
+	)
+	var stride: int = Gen2BattleRenderer.pic_stride(strip, side)
+	if not _r.check(
+		stride >= box and square.size() == box * box,
+		"species %d has no battle strip to move as objects." % species
+	):
+		return false
+	## `.LoadHead`'s own source: vTiles2 $05 and $06 of every column, which is the
+	## bottom two tiles of each. Read through the renderer's own tile addressing,
+	## against the same tile of a buffer that has no frames behind it.
+	for column: int in side:
+		for row: int in range(side - 2, side):
+			var index: int = column * side + row
+			if Gen2BattleRenderer.pic_tile(strip, side, index) \
+				== Gen2BattleRenderer.pic_tile(square, side, index):
+				continue
+			_r.fail(
+				"species %d reads tile %d of its feet off the strip." % [species, index]
+			)
+			return stride > box
+	return stride > box
 
 
 ## Whether [param area] of a battle block holds a pixel that is not colour 0.

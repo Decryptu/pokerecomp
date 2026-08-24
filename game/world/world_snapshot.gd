@@ -16,6 +16,14 @@ var world_day: int = 0
 var world_hour: int = 6
 var world_minute: int = 0
 var dst_enabled: bool = false
+## The host second this save was written at, stamped by [method Gen2SaveStore.save]
+## rather than taken here: a snapshot is compared frame for frame by
+## `tools/replay_world.gd`, and a wall clock inside one would make two identical
+## runs differ. It is what lets a world opened later catch up to the time that
+## passed while the game was closed (`Gen2WorldClock.catch_up`); zero in a save
+## written before it was kept, which reads as "resume where it stopped" rather
+## than as 1970.
+var world_clock_stamp: float = 0.0
 ## What a replay needs beside the state: the seed the world's generators were
 ## built from and how many hardware frames it has been pumped for. Both are zero
 ## in a snapshot written before either existed, which reads as "not reproducible"
@@ -64,6 +72,7 @@ func to_dict() -> Dictionary:
 		"player_sprite_number": player_sprite_number,
 		"clock": [world_day, world_hour, world_minute],
 		"dst_enabled": dst_enabled,
+		"world_clock_stamp": world_clock_stamp,
 		"random_seed": random_seed,
 		"frame_number": frame_number,
 		"last_spawn_map": [last_spawn_map.x, last_spawn_map.y],
@@ -96,6 +105,7 @@ static func from_dict(raw: Variant) -> Gen2WorldSnapshot:
 		out.world_hour = int(clock[1])
 		out.world_minute = int(clock[2])
 	out.dst_enabled = bool(source.get("dst_enabled", false))
+	out.world_clock_stamp = maxf(0.0, float(source.get("world_clock_stamp", 0.0)))
 	out.random_seed = int(source.get("random_seed", 0))
 	out.frame_number = maxi(0, int(source.get("frame_number", 0)))
 	out.last_spawn_map = _vector_from_value(source.get("last_spawn_map", [-1, -1]))

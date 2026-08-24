@@ -397,7 +397,12 @@ func _build_world() -> void:
 				"The saved map or player position is not valid for this cache.",
 			)
 			return
-		var saved_clock: Dictionary = selected_save.world.world_clock()
+		## The RTC ran while the game was closed, so a save opens at the time it
+		## was written at plus the real seconds since (`Gen2WorldClock.catch_up`).
+		var saved_clock: Dictionary = Gen2WorldClock.catch_up(
+			selected_save.world.world_day, selected_save.world.world_hour,
+			selected_save.world.world_minute, selected_save.world.world_clock_stamp
+		)
 		initial_day = int(saved_clock.get("day", initial_day))
 		initial_hour = int(saved_clock.get("hour", initial_hour))
 		initial_minute = int(saved_clock.get("minute", initial_minute))
@@ -3263,6 +3268,21 @@ func preview_diploma(printing: bool = false, page: int = 1) -> void:
 		_diploma_host.preview_page(page)
 
 
+## Public screenshot driver for `_BillsPC`, whose top menu no preview cell
+## reaches: every PC on a preview map is a script's, and the machine wants a
+## party before it opens at all.
+func preview_bills_pc() -> void:
+	if _world == null or _data == null or _service_host != null:
+		return
+	var save: Gen2SaveData = _embedded_party_save()
+	if save == null or save.party.is_empty():
+		_script_prompt = "BILL'S PC preview needs a party"
+		_refresh_labels()
+		return
+	_injected_save = save
+	_open_bills_pc()
+
+
 ## Public screenshot driver for `Mom_WithdrawDepositMenuJoypad`, whose box no
 ## fixture cell reaches: her house is not one of the preview maps and the dial
 ## stands three questions into her own routine.
@@ -3281,6 +3301,7 @@ func preview_mom_bank(mode: StringName, saved: int, held: int) -> void:
 		return
 	host.completed.connect(_on_service_completed)
 	host.sfx_requested.connect(_play_sfx)
+	host.cry_requested.connect(_play_species_cry)
 	_service_host = host
 	_refresh_labels()
 
@@ -3645,6 +3666,9 @@ func preview_start_menu() -> void:
 		return
 	if _start_menu_host == null:
 		_injected_save = _embedded_party_save()
+		## `SetUpMenuItems` reads the world's own party count for the #MON row,
+		## and the picture wants the full list rather than a saveless one.
+		_refresh_party_summary()
 		_open_start_menu()
 		return
 	_start_menu_host.handle_button(Gen2Button.DOWN)
@@ -4862,6 +4886,7 @@ func _open_service_host() -> void:
 		return
 	host.completed.connect(_on_service_completed)
 	host.sfx_requested.connect(_play_sfx)
+	host.cry_requested.connect(_play_species_cry)
 	_service_host = host
 	_script_prompt = "Service host open"
 	_refresh_labels()
@@ -5864,6 +5889,7 @@ func _open_host_prompt(text: String) -> bool:
 		return false
 	host.completed.connect(_on_service_completed)
 	host.sfx_requested.connect(_play_sfx)
+	host.cry_requested.connect(_play_species_cry)
 	_service_host = host
 	_script_prompt = "A: answer"
 	_refresh_labels()
@@ -5899,6 +5925,7 @@ func _open_service_overlay(kind: StringName) -> void:
 		return
 	host.completed.connect(_on_service_completed)
 	host.sfx_requested.connect(_play_sfx)
+	host.cry_requested.connect(_play_species_cry)
 	_service_host = host
 	_script_prompt = "%s open" % label
 	_refresh_labels()
@@ -5928,6 +5955,7 @@ func _open_fly_map(request: Dictionary) -> void:
 		return
 	host.completed.connect(_on_service_completed)
 	host.sfx_requested.connect(_play_sfx)
+	host.cry_requested.connect(_play_species_cry)
 	_service_host = host
 	_script_prompt = "Fly: choose a town"
 	_refresh_labels()

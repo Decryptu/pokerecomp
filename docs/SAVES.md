@@ -18,7 +18,11 @@ Save format version 6 stores:
   mode, event flags, map scenes, inventory quantities, money, coins, phone
   contacts, seen species, repel steps, swarm state, roaming positions, source
   engine flags, the script memory bytes `readmem`/`loadmem` address, the current
-  day/hour/minute clock and the daylight-saving flag;
+  day/hour/minute clock, the host second that clock was written at and the
+  daylight-saving flag. The stamp is what makes the clock a real-time one across
+  sessions: a world opens at the saved time plus the seconds that have passed
+  since, because the cartridge's RTC keeps running while the machine is off
+  (`Gen2WorldClock.catch_up`);
 - imported-save and party-transaction identity fields: OT ID, nickname, OT,
   happiness, Pokerus and caught data;
 - the trainer card's own fields: `player_id`, the player's `gender` and the play
@@ -47,8 +51,9 @@ The validator checks the selected `GameData`. Slots live under
 preallocated, up to `Gen2SaveStore.MAX_SLOTS`; a slot number is still its file
 name, so slots written before this stay where they were. Each save carries its
 own `label`, the player's name for the slot, so an exported file names itself;
-an empty label means fall back to the player name. Box names, current-box UI
-state and cartridge SRAM box placement are intentionally outside this model.
+an empty label means fall back to the player name. `current_box` is `wCurBox`,
+which CHANGE BOX writes and both of BILL'S PC's lists read. Box names and
+cartridge SRAM box placement are intentionally outside this model.
 
 `player_id` is the cartridge's own `wPlayerID`, rolled once when a game starts,
 read from SRAM on import and written back on export. `GetTreeScore` is what reads
@@ -62,9 +67,11 @@ zero `player_id`, version 4 gains a male gender and a 0:00 timer, version 5 gain
 an empty mod namespace. Migration preserves a missing world snapshot as missing;
 it does not invent a map, player position or event state, and it does not roll an
 ID, since that would change an existing save's headbutt encounters. The `run`
-block joined version 6 after it shipped and is not a version of its own: it
-defaults to no seed, mod list, settings snapshot or rules, which is the truth
-about a slot written before it existed; such a slot adopts the installation's
+block joined version 6 after it shipped and is not a version of its own, and so
+did `current_box` and the world snapshot's clock stamp: each defaults rather than
+versioning, to no seed, mod list, settings snapshot or rules, to the first box,
+and to a clock that resumes where it stopped, which is the truth about a slot
+written before they existed; such a slot adopts the installation's
 rules once, when it is first activated. The next successful save writes version 6.
 
 ## Player flow

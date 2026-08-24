@@ -83,10 +83,10 @@ func _open_party_screen(save: Gen2SaveData) -> void:
 	await get_tree().process_frame
 
 
-func _open_box_screen(save: Gen2SaveData) -> void:
+func _open_box_screen(save: Gen2SaveData, mode: int = Gen2BoxScreen.MODE_DEPOSIT) -> void:
 	var packed: PackedScene = load("res://game/save/box_screen.tscn")
 	_box_screen = packed.instantiate()
-	_box_screen.set_context(_data, save)
+	_box_screen.set_context(_data, save, true, false, mode)
 	add_child(_box_screen)
 	await get_tree().process_frame
 
@@ -257,24 +257,76 @@ func test_box_screen_lists_the_party_with_a_cancel_row() -> void:
 	assert_eq(int(snapshot["cursor"]) + int(snapshot["scroll"]), rows.size() - 1)
 
 
-## `BillsPC_PressRight` walks the party and every box round, and the row the
-## cursor stands on is what a transfer takes.
-func test_box_screen_walks_boxes_and_deposits_the_row_under_the_cursor() -> void:
+## `.a_button` opens `.Submenu` rather than moving anything, and its first row is
+## the transfer the loaded list implies. Left and right are `MoveMonWithoutMail_
+## DPad`'s alone, so neither reaches this screen.
+func test_a_row_opens_the_submenu_and_its_first_row_is_the_transfer() -> void:
 	var save: Gen2SaveData = _save_with_two()
 	await _open_box_screen(save)
 	_box_screen.handle_button(Gen2Button.DOWN)
 	_box_screen.handle_button(Gen2Button.A)
+	var open: Dictionary = _box_screen.box_snapshot()
+	assert_eq(open["submenu"], Gen2BoxScreen.SUBMENU_ROWS)
+	assert_eq(String(open["prompt"]), Gen2BoxScreen.PROMPT_WHATS_UP)
+	assert_eq(save.party.size(), 2, "nothing moved on the way in")
+
+	_box_screen.handle_button(Gen2Button.A)
 	assert_eq(save.party.size(), 1)
 	assert_not_null(save.boxes[0].slots[0])
-	_box_screen.handle_button(Gen2Button.RIGHT)
+	assert_eq(String(_box_screen.box_snapshot()["prompt"]), "Stored GEODUDE!")
+
+	assert_false(_box_screen.handle_button(Gen2Button.RIGHT))
+	assert_eq(int(_box_screen.box_snapshot()["loaded"]), Gen2BoxScreen.LOADED_PARTY)
+
+
+## `_WithdrawPKMN` opens on `wCurBox` and its submenu says WITHDRAW.
+func test_the_withdraw_list_opens_on_the_current_box() -> void:
+	var save: Gen2SaveData = _save_with_two()
+	assert_true(Gen2SaveStorage.deposit_party_to_box(save, _data, 1, 0, -1, false)["ok"])
+	await _open_box_screen(save, Gen2BoxScreen.MODE_WITHDRAW)
 	assert_eq(int(_box_screen.box_snapshot()["loaded"]), 1)
 	assert_eq(String(_box_screen.rows()[0]["name"]), "GEODUDE")
 	_box_screen.handle_button(Gen2Button.A)
+	assert_eq(_box_screen.box_snapshot()["submenu"], Gen2BoxScreen.SUBMENU_ROWS_WITHDRAW)
+	_box_screen.handle_button(Gen2Button.A)
 	assert_eq(save.party.size(), 2)
 	assert_null(save.boxes[0].slots[0])
-	for _press: int in Gen2SaveData.BOX_COUNT:
-		_box_screen.handle_button(Gen2Button.RIGHT)
-	assert_eq(int(_box_screen.box_snapshot()["loaded"]), Gen2BoxScreen.LOADED_PARTY)
+	assert_eq(String(_box_screen.box_snapshot()["prompt"]), "Got GEODUDE!")
+
+
+## `BillsPC_CheckMail_PreventBlackout` is asked before the transfer, so the last
+## party member is refused with `PCString_ItsYourLastPKMN` and no reason symbol
+## ever reaches the page.
+func test_the_last_party_member_is_refused_with_the_sources_own_line() -> void:
+	var save: Gen2SaveData = _save()
+	await _open_box_screen(save)
+	_box_screen.handle_button(Gen2Button.A)
+	_box_screen.handle_button(Gen2Button.A)
+	assert_eq(String(_box_screen.box_snapshot()["prompt"]), Gen2BoxScreen.PROMPT_LAST_MON)
+	assert_eq(save.party.size(), 1)
+	assert_null(save.boxes[0].slots[0])
+
+
+## `.release` behind the submenu's third row, and the yes/no `PlaceYesNoBox`
+## puts under it: NO leaves the mon where it is, YES is `RemoveMonFromPartyOrBox`.
+func test_release_asks_before_it_removes_a_stored_pokemon() -> void:
+	var save: Gen2SaveData = _save_with_two()
+	assert_true(Gen2SaveStorage.deposit_party_to_box(save, _data, 1, 0, -1, false)["ok"])
+	await _open_box_screen(save, Gen2BoxScreen.MODE_WITHDRAW)
+	_box_screen.handle_button(Gen2Button.A)
+	_box_screen.handle_button(Gen2Button.DOWN)
+	_box_screen.handle_button(Gen2Button.DOWN)
+	_box_screen.handle_button(Gen2Button.A)
+	assert_eq(int(_box_screen.box_snapshot()["release"]), 0)
+	assert_eq(String(_box_screen.box_snapshot()["prompt"]), Gen2BoxScreen.PROMPT_RELEASE)
+
+	_box_screen.handle_button(Gen2Button.B)
+	assert_not_null(save.boxes[0].slots[0], "NO leaves it where it is")
+
+	_box_screen.handle_button(Gen2Button.A)
+	_box_screen.handle_button(Gen2Button.A)
+	assert_null(save.boxes[0].slots[0])
+	assert_eq(String(_box_screen.box_snapshot()["prompt"]), "Bye, GEODUDE!")
 
 
 func test_pc_storage_refuses_depositing_the_last_party_member() -> void:

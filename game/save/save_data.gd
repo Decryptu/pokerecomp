@@ -62,6 +62,10 @@ var run_options: Dictionary = {}
 ## adopts the installation's once.
 var run_rules: Gen2Rules = null
 var boxes_shape_valid: bool = true
+## `wCurBox`, which is where a deposit lands and which box BILL'S PC's WITHDRAW
+## opens on. Like the `run` block it defaults rather than versioning: a slot
+## written before it existed is one whose current box is the first.
+var current_box: int = 0
 
 
 func _init() -> void:
@@ -89,6 +93,7 @@ func to_dict() -> Dictionary:
 		"label": label,
 		"party": saved_party,
 		"boxes": saved_boxes,
+		"current_box": current_box,
 		"world": world.to_dict() if world != null else {},
 		"mods": mods.duplicate(true),
 		"run": {
@@ -119,6 +124,7 @@ static func from_dict(raw: Variant) -> Gen2SaveData:
 	out.gender = GENDER_FEMALE if int(source.get("gender", GENDER_MALE)) & 1 else GENDER_MALE
 	out.game_time = Gen2GameTime.parse(source.get("game_time", {}))
 	out.label = String(source.get("label", ""))
+	out.current_box = clampi(int(source.get("current_box", 0)), 0, BOX_COUNT - 1)
 	var raw_party: Variant = source.get("party", [])
 	if raw_party is Array:
 		for raw_mon: Variant in raw_party as Array:
@@ -288,6 +294,7 @@ func copy_from(source: Gen2SaveData) -> bool:
 	label = copied.label
 	party = copied.party
 	boxes = copied.boxes
+	current_box = copied.current_box
 	world = copied.world
 	mods = copied.mods.duplicate(true)
 	run_seed = copied.run_seed

@@ -1849,9 +1849,13 @@ func test_a_registered_pc_row_opens_storage_and_returns_to_the_menu() -> void:
 	assert_null(_world_screen._start_menu_host)
 	var service: Gen2WorldServiceScreen = _world_screen._service_host
 	assert_not_null(service, "the row opened the host itself, not the mod")
-	assert_not_null(service.get("_boxes"), "straight into storage, with no machine in front")
+	assert_eq(
+		service.get("_mode"), Gen2WorldServiceScreen.MODE.PC_BOXES,
+		"straight into BILL'S PC, with no machine in front"
+	)
 
-	service.get("_boxes").emit_signal("closed", {})
+	## SEE YA! off a menu nothing opened but the row leaves the host entirely.
+	service.handle_button(Gen2Button.B)
 	await get_tree().process_frame
 	assert_null(_world_screen._service_host)
 	assert_not_null(_world_screen._start_menu_host, "closing returns through the normal flow")
@@ -1932,3 +1936,42 @@ func test_a_repel_running_out_asks_nothing_with_no_provider_registered() -> void
 	assert_false(_world_screen._offer_repel_renewal())
 	assert_null(_world_screen._service_host)
 	assert_eq(world.state.item_quantity(REPEL), 2)
+
+
+## `SetUpMenuItems` already fills the box: eight rows reach the last row of the
+## screen exactly, so the host's own MODS row and every `MENU_START` entry a mod
+## registers land past it. The list is a window over the rows now, the way the
+## pack's pocket is, and EXIT stays reachable at both ends of the wrap.
+func test_a_list_longer_than_the_screen_is_scrolled_rather_than_drawn_past_it() -> void:
+	Gen2ModHost.reset()
+	for index: int in 4:
+		assert_true(bool(Gen2ModHost.instance().register_menu_entry(
+			Gen2ModHost.MENU_START, StringName("extra%d" % index),
+			{"label": "EXTRA%d" % index}
+		).get("ok", false)))
+	await _open_world()
+	_world_screen._open_start_menu()
+	await get_tree().process_frame
+	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
+	var visible: int = Gen2StartMenuPage.visible_rows()
+	var rows: int = host._menu.size()
+	assert_gt(rows, visible, "the fixture's own list already overflows the box")
+	assert_eq(host._list_scroll, 0, "and it opens at the top of itself")
+
+	## Down to the last row, which is EXIT: the window follows the cursor.
+	for _press: int in rows - 1:
+		host.handle_button(Gen2Button.DOWN)
+	assert_eq(host._menu.selected_kind(), Gen2WorldStartMenu.ITEM_EXIT)
+	assert_eq(host._list_scroll, rows - visible)
+	assert_true(
+		host._menu.cursor - host._list_scroll < visible, "EXIT is inside the window"
+	)
+
+	## `STATICMENU_WRAP` in both directions, with the window going round with it.
+	host.handle_button(Gen2Button.DOWN)
+	assert_eq(host._menu.cursor, 0)
+	assert_eq(host._list_scroll, 0)
+	host.handle_button(Gen2Button.UP)
+	assert_eq(host._menu.cursor, rows - 1)
+	assert_eq(host._list_scroll, rows - visible)
+	Gen2ModHost.reset()
