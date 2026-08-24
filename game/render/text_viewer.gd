@@ -38,10 +38,7 @@ func _ready() -> void:
 		_hint.text = "Run tools/import_rom.gd first."
 		return
 
-	var field := ColorRect.new()
-	field.color = BACKGROUND
-	field.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
-	_screen.display(field)
+	_screen.display(Gen2Screen.Field.create(BACKGROUND))
 
 	_chart = TextureRect.new()
 	_chart.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST

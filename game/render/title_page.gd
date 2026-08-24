@@ -241,6 +241,54 @@ static func from_data(data: GameData) -> Gen2TitlePage:
 	return out
 
 
+## What a screen wider than the hardware's own draws behind it: [param view]
+## pixels of background, with the 160x144 rectangle at [param origin] left to
+## [method draw].
+##
+## Nothing is invented and nothing is stretched. `LoadTitleScreenTilemap` writes
+## all thirty-two columns of the BG map and the hardware only ever shows twenty,
+## so the twelve the screen never reached are the cartridge's own answer to a
+## wider window: sky over the logo's rows, and the cloud bank's four-tile pattern
+## carried on. Past those twelve the band repeats, which is seamless because
+## twelve is three of that pattern; above and below, the first and last rows do,
+## which is the same field either way. Crystal writes no tilemap at all and its
+## map is cleared, so its surround is the colour the cartridge leaves there.
+##
+## Not the whole map through a wider window: it is 256 pixels across and wraps,
+## so a buffer past that would bring the logo back round a second time.
+func draw_backdrop(view: Vector2i, origin: Vector2i) -> Image:
+	var width: int = maxi(view.x, 1)
+	var height: int = maxi(view.y, 1)
+	var pixels: PackedInt32Array = Gen2PicImage.canvas(width, height)
+	var blank: int = 0
+	if not _background.is_empty() and not _background[0].is_empty():
+		blank = Gen2PicImage.lookup(_background[0])[0]
+	pixels.fill(blank)
+	_build_base(blank)
+	if _base.is_empty():
+		return Gen2PicImage.canvas_image(pixels, width, height)
+	# Each buffer column, once: the whole surround is the same twelve columns of
+	# the map over and over, so which map pixel a column reads never changes down
+	# the picture.
+	var columns := PackedInt32Array()
+	columns.resize(width)
+	var band: int = RomLayout.TITLE_TILEMAP_COLUMNS - COLUMNS
+	for x: int in width:
+		var offset: int = x - origin.x
+		@warning_ignore("integer_division")
+		var cell: int = (offset - posmod(offset, TILE)) / TILE
+		columns[x] = (COLUMNS + posmod(cell - COLUMNS, band)) * TILE + posmod(offset, TILE)
+	for y: int in height:
+		# Clamped rather than wrapped: the map holds eighteen rows and the rest
+		# of it was never written, so the row nearest the edge is the field that
+		# edge is standing in.
+		var row: int = clampi(y - origin.y, 0, ROWS * TILE - 1) * MAP_WIDTH
+		var line: int = y * width
+		for x: int in width:
+			pixels[line + x] = _base[row + columns[x]]
+	return Gen2PicImage.canvas_image(pixels, width, height)
+
+
 ## The whole 160x144 screen for one frame of [param scene].
 ##
 ## The background is built at the BG map's own 256 pixels across and then

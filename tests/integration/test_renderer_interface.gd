@@ -232,7 +232,12 @@ func test_a_battle_renderer_rebuilt_mid_scene_stays_below_the_interface() -> voi
 	var viewport: SubViewport = _battle_screen._screen.viewport()
 	var children: Array = viewport.get_children()
 	var interface: Control = _battle_screen._screen.interface_layer()
-	assert_eq(children.find(_battle_screen._renderer), 0, "the renderer is the floor")
+	## The arena is laid out in 160x144, so it is on the content layer that sits
+	## where that rectangle sits rather than in the buffer's corner, and that
+	## layer is the floor.
+	var content: Node = _battle_screen._renderer.get_parent()
+	assert_eq(children.find(content), 0, "the renderer's layer is the floor")
+	assert_eq(content.position, interface.position, "over the same rectangle")
 	assert_eq(_battle_screen._box.get_parent(), interface)
 	assert_true(children.find(interface) > 0)
 	assert_eq(_dropped_on(viewport), 0, "the old view is off the screen, not under the new")
@@ -826,11 +831,14 @@ func _key(code: Key) -> InputEventKey:
 	return event
 
 
-## A fight staged on the map in 3D has as much to fill a window with as the
-## overworld it started from; the built-in arena is a 160x144 scene and has not.
-func test_a_native_layer_battle_fills_the_window_and_the_built_in_one_does_not() -> void:
+## Every screen takes the window SCREEN FILL gives it; who fills the surround is
+## what differs. A fight staged on the map in 3D fills it itself, so the screen
+## leaves it alone; the built-in arena is a 160x144 scene, so the screen fills it
+## with the arena's own field rather than leaving a bar.
+func test_a_native_layer_battle_fills_its_own_surround_and_the_built_in_one_is_filled() -> void:
 	await _open_battle()
 	assert_true(_battle_screen._screen.expanded)
+	assert_false(_battle_screen._screen.interface_masked, "the view has the surface")
 
 	_battle_screen.free()
 	_battle_screen = null
@@ -840,7 +848,8 @@ func test_a_native_layer_battle_fills_the_window_and_the_built_in_one_does_not()
 	_battle_screen.set_data(_data)
 	add_child(_battle_screen)
 	await get_tree().process_frame
-	assert_false(_battle_screen._screen.expanded)
+	assert_true(_battle_screen._screen.expanded)
+	assert_true(_battle_screen._screen.interface_masked, "and the screen fills it")
 
 
 ## A hardware-pixel number means nothing on the native layer without the

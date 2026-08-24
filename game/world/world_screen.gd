@@ -504,7 +504,9 @@ func _build_renderer() -> void:
 		Gen2Screen.drop(_renderer)
 	_renderer = Gen2ModHost.instance().create_world_renderer()
 	if Gen2ModHost.renderer_uses_hardware_viewport(_renderer):
-		_screen.display_content(_renderer)
+		# The map fills whatever buffer SCREEN FILL gave it, so it takes the
+		# buffer's own origin rather than the hardware rectangle inside it.
+		_screen.display_content(_renderer, true)
 	else:
 		_screen.display_native(_renderer)
 		_screen.native_size_changed.connect(_on_native_size_changed)
@@ -576,20 +578,15 @@ func _render_time_of_day() -> int:
 	return _world.map_time_of_day()
 
 
-## SCREEN FILL: the overworld is the one screen with more to show than the
-## hardware framed, so it is the one screen that grows into the window. Every
-## menu, box and cursor over it stays inside the 160x144 rectangle
+## SCREEN FILL: the overworld has more to show than the hardware framed, so it
+## fills the window with map where every other screen fills it with its own
+## field. Every menu, box and cursor over it stays inside the 160x144 rectangle
 ## [Gen2Screen] centres in the buffer.
+##
+## The screen has already read the setting ([Gen2Screen]); what is left here is
+## the zoom, which is the map's alone.
 func _apply_screen_fill() -> void:
 	var options: Gen2Options = Gen2OptionsStore.current()
-	## The bars a framed screen leaves are this scene's own background, so a mask
-	## that stands in for them is painted in the same colour.
-	var background := get_node_or_null(^"Background") as Panel
-	var style := background.get_theme_stylebox(&"panel") as StyleBoxFlat \
-		if background != null else null
-	if style != null:
-		_screen.letterbox_color = style.bg_color
-	_screen.expanded = options.screen_fill
 	if _screen.expanded:
 		_screen.zoom_step = options.zoom_step
 	_on_view_size_changed(_screen.view_size())
@@ -598,9 +595,9 @@ func _apply_screen_fill() -> void:
 
 ## A screen that hides the map takes the whole picture with it: it is laid out
 ## in 160x144 and has nothing to put in a wider buffer, so the surround becomes
-## the letterbox rather than the map behind it. The start menu is not one of
-## these -- it is a box the map is still visible around, as on the cartridge --
-## and neither is a map fade, which fades the whole picture.
+## that screen's own field rather than the map behind it. The start menu is not
+## one of these -- it is a box the map is still visible around, as on the
+## cartridge -- and neither is a map fade, which fades the whole picture.
 ##
 ## `DoBattleTransition` is: it writes twenty by eighteen screen cells and
 ## nothing wider, so a wedge pattern in a filled window would stop where the

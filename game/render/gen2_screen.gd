@@ -14,12 +14,17 @@ extends Control
 ##
 ## [member expanded] widens the buffer instead of framing it. The window is not
 ## 10:9 and never was; the black bars are the shape of a screen this project can
-## draw past, so a view that asks for it is given a surface the size of the whole
-## control and fills it with more world. Interface is unmoved: [method display]
-## puts a screen inside a 160x144 rectangle centred in that surface, so every
-## box, menu and cursor is laid out exactly where the cartridge laid it out and
-## only the surround grows. [member zoom_step] is how many whole pixels a
-## hardware pixel is drawn as, counted from the largest that fits.
+## draw past, so the buffer is the size of the whole control and is filled.
+## Interface is unmoved: [method display] puts a screen inside a 160x144
+## rectangle centred in that surface, so every box, menu and cursor is laid out
+## exactly where the cartridge laid it out and only the surround grows.
+## [member zoom_step] is how many whole pixels a hardware pixel is drawn as,
+## counted from the largest that fits.
+##
+## SCREEN FILL is read here rather than by each screen, and the surround is
+## filled here rather than by each screen, because the two together are what
+## "no screen is letterboxed" means: a screen that says nothing about either is
+## responsive, and one that is written next year is too.
 
 const WIDTH: int = 160
 const HEIGHT: int = 144
@@ -68,13 +73,14 @@ var zoom_step: int = 0:
 
 var _zoom_step: int = 0
 
-## Whether everything outside the 160x144 rectangle is blacked out.
+## Whether the buffer outside the 160x144 rectangle is filled by this screen.
 ##
-## A screen that owns the whole picture -- a battle, the pack, the PC -- is laid
-## out in 160x144 and has nothing to fill a wider buffer with. The surround
-## becomes the letterbox a framed screen has, rather than the map that screen is
-## standing in front of.
-var interface_masked: bool = false:
+## On by default, and the reason a screen written without a thought for the
+## window is still not letterboxed: a screen laid out in 160x144 has nothing of
+## its own to put in a wider buffer, so the surround is its own field and the
+## boxes it draws read as standing in a bigger one. Only a view that fills the
+## whole buffer itself -- the map, a renderer staged on it -- turns this off.
+var interface_masked: bool = true:
 	set(value):
 		if interface_masked == value:
 			return
@@ -82,18 +88,28 @@ var interface_masked: bool = false:
 		if _mask != null:
 			_mask.visible = value
 
-## What [member interface_masked] paints with. The screen does not know what is
-## behind it, and a mask in a different colour from the bars a framed screen
-## leaves would read as a border rather than as the same letterbox; the scene
-## that owns the screen says which colour its own background is.
-var letterbox_color: Color = Color.BLACK:
+## What the surround is painted with: the shown picture's own field, so a screen
+## carries its background out to the window edge wherever it is opened.
+##
+## Followed automatically from [method Gen2PicImage.show], which is the one place
+## a screen hands a redrawn picture to the node that shows it. A screen with more
+## art than the hardware framed hands [method set_backdrop] the real thing
+## instead, and this is what is left for one without.
+var surround_color: Color = Color.BLACK:
 	set(value):
-		letterbox_color = value
+		if surround_color == value:
+			return
+		surround_color = value
 		if _mask != null:
 			_mask.queue_redraw()
 
 var _view_size: Vector2i = Vector2i(WIDTH, HEIGHT)
 var _draw_scale: float = 1.0
+## What [method set_backdrop] was given, drawn instead of [member surround_color]
+## while it is the size of the buffer.
+var _backdrop: ImageTexture = null
+## Whose art it is, so it goes when that screen does.
+var _backdrop_source: Node = null
 
 @onready var _container: SubViewportContainer = %Container
 @onready var _viewport: SubViewport = %Viewport
@@ -101,6 +117,9 @@ var _draw_scale: float = 1.0
 ## The 160x144 rectangle interface is laid out in, moved to the middle of a
 ## wider buffer rather than the buffer's corner.
 var _interface: Control = null
+## Where [method display_content] puts a view laid out in the hardware's own
+## 160x144: the same rectangle [member _interface] covers, below the mask.
+var _content: Control = null
 ## Drawn between the content and the interface: see [member interface_masked].
 var _mask: Control = null
 ## The cover a view switch is hidden behind, above both layers rather than
@@ -121,6 +140,12 @@ func _ready() -> void:
 	# The viewport's size is the container's divided by the shrink factor, and
 	# writing it directly is refused at runtime.
 	resized.connect(_fit)
+	_content = Control.new()
+	_content.name = "Content"
+	_content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_content.size = Vector2(WIDTH, HEIGHT)
+	_content.clip_contents = true
+	_viewport.add_child(_content)
 	_mask = Control.new()
 	_mask.name = "Mask"
 	_mask.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -147,6 +172,11 @@ func _ready() -> void:
 	_cover.draw.connect(_draw_cover)
 	add_child(_cover)
 	set_process(false)
+	# Every screen, rather than the two that remembered to ask: a window is not
+	# 10:9, and a screen that does not fill it leaves bars a player reads as a
+	# fault. What a screen puts in the room is its own business; having the room
+	# is not.
+	expanded = Gen2OptionsStore.current().screen_fill
 	_fit()
 
 
@@ -162,9 +192,16 @@ func display(node: Node) -> void:
 ## placed. A renderer rebuilt mid-screen would otherwise be appended after a live
 ## text box and paint over it.
 ##
-## Its origin is the buffer's own, not the interface rectangle's, so a view that
-## fills an expanded screen draws over all of it.
-func display_content(node: Node) -> void:
+## [param fills_buffer] is a view that draws the whole expanded surface, and gets
+## the buffer's own origin. A view that does not is laid out in the hardware's
+## 160x144 like everything else here, so it goes where that rectangle is and is
+## clipped to it; in the buffer's corner it would sit off to one side with the
+## boxes above it somewhere else. That is the default, because it is the answer
+## for a view that was written without the question in mind.
+func display_content(node: Node, fills_buffer: bool = false) -> void:
+	if not fills_buffer:
+		_content.add_child(node)
+		return
 	_viewport.add_child(node)
 	_viewport.move_child(node, 0)
 
@@ -232,11 +269,12 @@ func reset_zoom() -> void:
 
 ## Frees everything on screen, on both layers.
 func clear() -> void:
-	for parent: Node in [_interface, _native]:
+	clear_backdrop()
+	for parent: Node in [_interface, _content, _native]:
 		for child: Node in parent.get_children():
 			drop(child)
 	for child: Node in _viewport.get_children():
-		if child != _interface:
+		if child != _interface and child != _content and child != _mask:
 			drop(child)
 
 
@@ -277,6 +315,128 @@ func viewport() -> SubViewport:
 ## interface sits, which is above whatever [method display_content] drew.
 func interface_layer() -> Control:
 	return _interface
+
+
+## Where the hardware's own 160x144 sits inside the buffer, in buffer pixels.
+##
+## What a screen drawing a backdrop has to leave alone: the picture it hands
+## [method set_backdrop] is the buffer's size, and this is the hole its own
+## frame is already filling.
+func interface_origin() -> Vector2i:
+	return Vector2i(_interface.position) if _interface != null else Vector2i.ZERO
+
+
+## The screen [param node] is drawn on, or null outside one.
+##
+## The walk rather than a stored reference: a screen is added to whichever host
+## has one and freed by it, and neither end should have to hold the other.
+##
+## The outermost one, not the nearest. Half a dozen screens build a screen of
+## their own and are then opened inside another -- the pack, the dex, the town
+## map, the party -- and the inner one is a full-rect [Control] in a 160x144
+## rectangle, so it has no surround at all. The one that does is the one at the
+## window.
+static func owner_of(node: Node) -> Gen2Screen:
+	var at: Node = node
+	var found: Gen2Screen = null
+	while at != null:
+		if at is Gen2Screen:
+			found = at
+		at = at.get_parent()
+	return found
+
+
+## Real art for the surround, the size of [method view_size], from [param source].
+##
+## A flat [member surround_color] is what a screen laid out in 160x144 has to
+## offer; a screen whose background is more than one colour -- the title's sky
+## over its cloud bank -- draws the whole buffer instead and hands it here. Only
+## the surround is taken from it, so the hardware rectangle stays exactly the
+## picture the cartridge drew.
+##
+## Dropped with [param source], so the screen after it does not inherit its sky.
+func set_backdrop(source: Node, image: Image) -> void:
+	if image == null or Vector2i(image.get_width(), image.get_height()) != _view_size:
+		if _backdrop_source == source:
+			clear_backdrop()
+		return
+	_backdrop = Gen2PicImage.refreshed_texture(_backdrop, image)
+	if _backdrop_source != source:
+		_backdrop_source = source
+		if source != null and not source.tree_exited.is_connected(_on_backdrop_source_gone):
+			source.tree_exited.connect(_on_backdrop_source_gone, CONNECT_ONE_SHOT)
+	if _mask != null:
+		_mask.queue_redraw()
+
+
+func clear_backdrop() -> void:
+	_backdrop = null
+	_backdrop_source = null
+	if _mask != null:
+		_mask.queue_redraw()
+
+
+func _on_backdrop_source_gone() -> void:
+	clear_backdrop()
+
+
+## The 160x144 field a screen stands on when it is a colour rather than a
+## picture: a [ColorRect] that says what colour it is, so the screen around it
+## carries the same one out to the window.
+##
+## [method Gen2PicImage.show] is that seam for a screen drawn as a picture and
+## this is the other half of it. It reports on every draw rather than on a
+## setter, so a fade that recolours the field takes the surround with it without
+## the screen doing the fade knowing this exists.
+class Field extends ColorRect:
+	static func create(of_color: Color) -> Field:
+		var out := Field.new()
+		out.color = of_color
+		out.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		out.size = Vector2(WIDTH, HEIGHT)
+		return out
+
+	func _draw() -> void:
+		Gen2Screen.note_field(self, color)
+
+
+## Takes the surround's colour from a field a screen has just drawn.
+static func note_field(target: CanvasItem, field: Color) -> void:
+	if target == null or field.a <= 0.0:
+		return
+	if Vector2i(target.get_rect().size) != Vector2i(WIDTH, HEIGHT):
+		return
+	var screen: Gen2Screen = owner_of(target)
+	if screen == null or not screen.expanded:
+		return
+	screen.surround_color = field
+
+
+## Takes the surround's colour from a picture a screen has just drawn.
+##
+## Called from [method Gen2PicImage.show] rather than by each screen: that is the
+## one place a redrawn picture reaches the node showing it, so the surround
+## follows a palette fade and a screen swap without either knowing this exists.
+## Only a picture the size of the hardware screen counts, and only one that is
+## opaque where it is sampled -- a layer drawn over another screen's field is
+## not that screen's field.
+##
+## Whether the surround is showing is deliberately not a condition. A screen
+## draws its field on the frame it opens and the host raises the mask on that
+## same frame, in the other order; a colour only recorded while the mask was
+## already up would be the colour of the screen before this one.
+static func note_picture(target: CanvasItem, image: Image) -> void:
+	if target == null or image == null:
+		return
+	if image.get_width() != WIDTH or image.get_height() != HEIGHT:
+		return
+	var screen: Gen2Screen = owner_of(target)
+	if screen == null or not screen.expanded:
+		return
+	var field: Color = Gen2PicImage.field_color(image)
+	if field.a <= 0.0:
+		return
+	screen.surround_color = field
 
 
 ## Hides a view switch behind the cartridge's own way of going black.
@@ -421,13 +581,19 @@ func _draw_cover() -> void:
 			)
 
 
-## The letterbox, drawn rather than left empty: four rectangles around the
-## 160x144 the interface is laid out in. Not a filled surface, because the
-## middle is not always the interface's -- a battle transition is the renderer's
-## own screen and has to stay visible inside it.
+## The surround, drawn rather than left empty: four rectangles around the 160x144
+## the interface is laid out in. Not a filled surface, because the middle is not
+## always the interface's -- a battle transition is the renderer's own screen and
+## has to stay visible inside it.
+##
+## A backdrop the size of the buffer is drawn through the same four bands, so a
+## screen with real art out there paints it and a screen without paints its own
+## field colour.
 func _draw_mask() -> void:
 	var inside := Rect2(_interface.position, Vector2(WIDTH, HEIGHT))
 	var whole := Vector2(_view_size)
+	var backdrop: bool = _backdrop != null \
+		and _backdrop.get_size() == Vector2(whole)
 	for band: Rect2 in [
 		Rect2(Vector2.ZERO, Vector2(whole.x, inside.position.y)),
 		Rect2(Vector2(0.0, inside.end.y), Vector2(whole.x, whole.y - inside.end.y)),
@@ -437,8 +603,12 @@ func _draw_mask() -> void:
 			Vector2(whole.x - inside.end.x, inside.size.y),
 		),
 	]:
-		if band.size.x > 0.0 and band.size.y > 0.0:
-			_mask.draw_rect(band, letterbox_color, true)
+		if band.size.x <= 0.0 or band.size.y <= 0.0:
+			continue
+		if backdrop:
+			_mask.draw_texture_rect_region(_backdrop, band, band)
+		else:
+			_mask.draw_rect(band, surround_color, true)
 
 
 func _min_zoom_step() -> int:
@@ -502,6 +672,8 @@ func _fit() -> void:
 		_interface.position = ((Vector2(view - Vector2i(WIDTH, HEIGHT)) * 0.5)
 			/ float(Gen2Tiles.TILE_WIDTH)).floor() * float(Gen2Tiles.TILE_WIDTH)
 		_interface.size = Vector2(WIDTH, HEIGHT)
+		_content.position = _interface.position
+		_content.size = _interface.size
 
 	_draw_scale = scale_now
 	if view != _view_size:

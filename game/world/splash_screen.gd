@@ -34,11 +34,12 @@ var _title_page: Gen2TitlePage = null
 ## its two chords cannot be expressed as presses.
 var _held: Array[int] = []
 var _background: TextureRect = null
-var _texture: ImageTexture = null
 var _audio: Gen2AudioPlayer = null
 var _image: Image = null
 var _visible_id: StringName = &""
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
+## The buffer the title's backdrop was drawn for, zero while there is none.
+var _backdrop_view: Vector2i = Vector2i.ZERO
 var _closed: bool = false
 ## The last `PlayMusic` handed to the driver, which is the only place the
 ## opening's own music can be observed from outside.
@@ -229,12 +230,41 @@ func _finish() -> void:
 func _refresh() -> void:
 	if _background == null:
 		return
-	## Updated rather than replaced: the opening redraws every frame, and a new
-	## texture a frame is an allocation and a fresh upload for a picture the same
-	## size as the last one.
-	_texture = Gen2PicImage.refreshed_texture(_texture, _frame_image())
-	_background.texture = _texture
+	## Through `show` like every other screen, which is also what tells the
+	## screen behind this one what colour its surround is.
+	Gen2PicImage.show(_background, _frame_image())
 	_background.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
+	_refresh_backdrop()
+
+
+## The title screen's own sky, out to the edge of a window that is not 10:9.
+##
+## Only the title has more background than the hardware framed; the other three
+## phases are a cleared field, which the screen already takes from the picture
+## itself. Rebuilt when the buffer changes size rather than per frame: the
+## background it draws does not move, and the frames that do are sprites over it.
+func _refresh_backdrop() -> void:
+	var screen: Gen2Screen = Gen2Screen.owner_of(self)
+	if screen == null:
+		return
+	if _visible_id != &"title" or _title_page == null:
+		if _backdrop_view != Vector2i.ZERO:
+			_backdrop_view = Vector2i.ZERO
+			screen.clear_backdrop()
+		return
+	if not screen.view_size_changed.is_connected(_on_view_size_changed):
+		screen.view_size_changed.connect(_on_view_size_changed)
+	if _backdrop_view == screen.view_size():
+		return
+	_backdrop_view = screen.view_size()
+	screen.set_backdrop(
+		self, _title_page.draw_backdrop(_backdrop_view, screen.interface_origin())
+	)
+
+
+func _on_view_size_changed(_size: Vector2i) -> void:
+	_backdrop_view = Vector2i.ZERO
+	_refresh_backdrop()
 
 
 ## What the current phase draws: the copyright graphic, one frame of the

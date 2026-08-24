@@ -79,7 +79,7 @@ var _flashes_left: int = 0
 var _animation: Gen2PicAnimation = null
 var _animation_pixels: PackedByteArray = PackedByteArray()
 
-var _backdrop: ColorRect = null
+var _backdrop: Gen2Screen.Field = null
 var _pic: TextureRect = null
 var _text_box: Gen2TextBox = null
 
@@ -150,10 +150,7 @@ func handle_button(button: int) -> bool:
 
 
 func _build() -> void:
-	_backdrop = ColorRect.new()
-	_backdrop.color = Color.WHITE
-	_backdrop.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
-	_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_backdrop = Gen2Screen.Field.create(Color.WHITE)
 	_backdrop.visible = false
 	add_child(_backdrop)
 

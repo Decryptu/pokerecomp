@@ -12,6 +12,11 @@ var _r: RefCounted = null
 ## Silver's 2,355, and the title screen's music lands just behind either.
 const OPENING_FRAME_CAP: int = 6000
 
+## The twelve BG-map columns the hardware screen never reaches, in pixels: what
+## the title draws around itself and how far it repeats.
+const BAND: int = (RomLayout.TITLE_TILEMAP_COLUMNS - Gen2TitlePage.COLUMNS) \
+	* Gen2Tiles.TILE_WIDTH
+
 const REQUIRED_SECTIONS: Dictionary = {
 	"maps": RomCache.WORLD_MAPS,
 	"tilesets": RomCache.WORLD_TILESETS,
@@ -93,6 +98,7 @@ func _validate(game_id: StringName) -> bool:
 				failures.append("missing_audio_record_payload:%s:%d" % [kind, index])
 
 	failures.append_array(_audit_opening_music(data))
+	failures.append_array(_audit_title_backdrop(data))
 
 	var script_audit: Dictionary = _audit_scripts(data, game_id == &"crystal")
 	for reason: String in script_audit["failures"]:
@@ -115,6 +121,41 @@ func _validate(game_id: StringName) -> bool:
 		return true
 	print("  opening_lane=invalid failures=%s" % JSON.stringify(failures))
 	return false
+
+
+## What the title screen puts around itself in a window that is not 10:9.
+##
+## `LoadTitleScreenTilemap` writes all thirty-two columns of the BG map and the
+## hardware shows twenty, so the surround is the twelve the screen never reached,
+## repeated. Two things would break it and neither is visible in a 160x144
+## capture: the band being anything but those twelve columns, which brings the
+## logo round a second time, and the vertical edges wrapping rather than
+## clamping, which puts the cloud bank above the sky.
+func _audit_title_backdrop(data: GameData) -> Array[String]:
+	var out: Array[String] = []
+	var page: Gen2TitlePage = Gen2TitlePage.from_data(data)
+	if page == null:
+		return ["missing_title_art"]
+	## A window wider and taller than the hardware's, on the block grid the
+	## screen rounds a buffer up to.
+	var view := Vector2i(Gen2Screen.WIDTH + 4 * BAND, Gen2Screen.HEIGHT + 64)
+	var origin := Vector2i(2 * BAND, 32)
+	var backdrop: Image = page.draw_backdrop(view, origin)
+	if backdrop.get_size() != view:
+		return ["title_backdrop_size:%s" % backdrop.get_size()]
+	## Every row, not a sampled one: the sky rows are that one field tile whatever
+	## the band is, and only the cloud bank's four-tile pattern says how wide it
+	## really is.
+	for x: int in BAND:
+		for y: int in view.y:
+			if backdrop.get_pixel(x, y) != backdrop.get_pixel(x + BAND, y):
+				out.append("title_surround_not_the_unseen_band:%d,%d" % [x, y])
+				break
+	for y: int in view.y:
+		var inside: int = clampi(y, origin.y, origin.y + Gen2Screen.HEIGHT - 1)
+		if backdrop.get_pixel(0, y) != backdrop.get_pixel(0, inside):
+			out.append("title_surround_row_not_clamped:%d" % y)
+	return out
 
 
 func _audit_scripts(data: GameData, crystal: bool) -> Dictionary:

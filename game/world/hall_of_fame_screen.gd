@@ -81,11 +81,7 @@ func advance() -> void:
 
 
 func _build() -> void:
-	var backdrop := ColorRect.new()
-	backdrop.color = BACKDROP
-	backdrop.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
-	backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(backdrop)
+	add_child(Gen2Screen.Field.create(BACKDROP))
 
 	## The pic sits under the page so the bottom box's border stays drawn over
 	## it, the way the hardware's window does.

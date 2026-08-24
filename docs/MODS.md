@@ -766,8 +766,11 @@ world have to agree.
 
 A window is not the Game Boy's 10:9. **SCREEN FILL** (`Gen2Options.screen_fill`,
 on by default, Settings > Application > Screen) grows the drawn surface to the
-whole control instead of framing 160x144 inside it, and the overworld fills it
-with more map: see [The maps past this one's edge](#the-maps-past-this-ones-edge).
+whole control instead of framing 160x144 inside it. Every screen takes it; what
+differs is who fills it. The overworld fills it with more map: see
+[The maps past this one's edge](#the-maps-past-this-ones-edge). A screen laid out
+in 160x144 has nothing of its own out there, so the screen fills the surround
+with that screen's own field, taken from the picture it drew.
 
 **Everything the cartridge laid out stays put.** Text boxes, menus and the start
 menu go inside a 160x144 rectangle centred in the surface and clipped to it, so
@@ -779,7 +782,7 @@ a mod reading `set_text_box_rect` reads the same numbers it always did.
 | `Gen2Screen.view_size() -> Vector2i` | The drawn surface in hardware pixels |
 | `Gen2Screen.view_size_changed(size)` | Emitted when it changes |
 | `Gen2Screen.interface_layer() -> Control` | The 160x144 rectangle, positioned in surface pixels |
-| `Gen2Screen.interface_masked` | Whether the screen is painting its own letterbox |
+| `Gen2Screen.interface_masked` | Whether the screen is painting the surround itself |
 | `Gen2Screen.screen_rect() -> Rect2i` | The 160x144 screen in native-layer pixels, which is what `set_screen_rect` pushes |
 
 **`set_native_size` may now be the whole control.** It was always "the screen's
@@ -799,26 +802,26 @@ A view that answered `uses_hardware_viewport()` false has no hardware pixel, so
 the screen does not claim those events and they reach `handle_world_input` and a
 mod's own registered actions as usual. Its zoom is its camera's.
 
-**The letterbox is not painted over the native layer.** When a screen laid out in
+**The surround is not painted over the native layer.** When a screen laid out in
 160x144 takes the picture -- the pack, the party, the PC, the dex, the trainer
 card, an evolution, a hatch, the day-care, the slot machine, card flip, a battle,
-and `DoBattleTransition` -- the surround becomes bars rather than the world
-behind it. That mask is drawn inside the hardware viewport, which composites over
-the native layer, so raising it would crop a view that had already filled the
-whole surface. It is not raised there. `set_interface_masked(masked)` is how such
-a renderer closes its own surround instead, and the transition is the case it
-exists for: twenty by eighteen cells cannot be widened, so a wedge reaching the
+and `DoBattleTransition` -- the surround becomes that screen's own field rather
+than the world behind it. It is drawn inside the hardware viewport, which
+composites over the native layer, so raising it would crop a view that had
+already filled the whole surface. It is not raised there.
+`set_interface_masked(masked)` is how such a renderer closes its own surround
+instead, and the transition is the case it exists for: twenty by eighteen cells cannot be widened, so a wedge reaching the
 edge of a filled window is a shape only the view drawing that window can draw. A
 renderer that does not take it keeps drawing what it was drawing.
 `mods/examples/voxel_preview` draws the four bands around `set_screen_rect`'s
 rectangle, which is the same shape the screen paints for a hardware-pixel view.
 
-**A battle fills the window when its renderer draws the place.** `_BattleScene`
-is a 160x144 picture with nothing to put in a wider surface, so the built-in
-arena keeps the bars. A battle renderer on the native layer, staged on the map
-the encounter fired on, has the same world the overworld was filling the window
-with a frame earlier, and takes the setting with it. The HUD does not move either
-way: the panels, the bars and the boxes are hardware pixels in that same centred
+**A battle fills the window either way; who fills it differs.** `_BattleScene`
+is a 160x144 picture with nothing to put in a wider surface, so the screen fills
+the surround with the arena's own field. A battle renderer on the native layer,
+staged on the map the encounter fired on, has the same world the overworld was
+filling the window with a frame earlier and fills the surface itself, so the
+screen leaves it alone. The HUD does not move either way: the panels, the bars and the boxes are hardware pixels in that same centred
 rectangle.
 
 `Gen2Options.zoom_step` is the ladder's position, persisted because it is a view

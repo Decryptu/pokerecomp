@@ -2,31 +2,44 @@ extends SceneTree
 
 ## Captures the new-game opening screens against a real cache.
 ##
-##   Godot --path . -s res://tools/preview_intro.gd -- <game> <out.png> [what] [steps]
+##   Godot --path . -s res://tools/preview_intro.gd -- <game> <out.png> [what] [steps] [WxH]
 ##
-## `what` is `copyright`, `presents`, `gender`, `clock`, `speech` or `shrink`; `steps` is how many source frames or
+## `what` is `copyright`, `presents`, `title`, `gender`, `clock`, `speech` or
+## `shrink`; `steps` is how many source frames or
 ## advances to run first, so any beat of `OakSpeech` can be photographed. Several
 ## comma-separated steps write one file each, suffixed with the step, which is
 ## how a whole fade is looked at without paying for a process per frame. The
 ## screens are built directly rather than through `intro_screen.tscn`, which
 ## reads `GameRuntime` and so cannot compile under `-s`.
 ##
+## `WxH` photographs the opening in a real window through [Gen2Screen] instead,
+## which is the only way to see what SCREEN FILL puts around a screen laid out in
+## 160x144:
+##
+##   ... gold /tmp/title.png title 0 1920x1080
+##
 ## Opens a window: rendering needs a display.
 
 ## Captured at hardware resolution, so a frame here compares to an emulator
 ## frame pixel for pixel rather than by eye.
 const WINDOW_SIZE := Vector2i(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
+const SCREEN_SCENE: String = "res://game/render/gen2_screen.tscn"
 const FRAMES_BEFORE_CAPTURE: int = 6
 ## The copyright half in front of the GameFreak animation: `DelayFrames 10`, the
 ## screen for a hundred, and the frame `SplashScreen` clears it on.
 const PRESENTS_FIRST_FRAME: int = Gen2BootCinema.COPYRIGHT_PRELUDE_FRAMES \
 	+ Gen2BootCinema.COPYRIGHT_HOLD_FRAMES
+## Enough frames for the copyright, the GameFreak logo and both intro movies,
+## which `title` spends before it is on the screen it was asked for.
+const TITLE_GUARD: int = 20000
 
 var _output_path: String = ""
 var _what: String = "gender"
 var _steps: Array[Vector2i] = [Vector2i.ZERO]
 var _at: int = 0
 var _screen: Control = null
+## The window to photograph in; the hardware's own unless a caller names one.
+var _window: Vector2i = WINDOW_SIZE
 var _elapsed: int = 0
 var _presses_run: int = 0
 var _frames_run: int = 0
@@ -37,7 +50,7 @@ func _initialize() -> void:
 	if args.size() < 2:
 		push_error(
 			"Usage: preview_intro.gd -- <game> <out.png> "
-			+ "[copyright|presents|gender|clock|speech|shrink] [step]"
+			+ "[copyright|presents|title|gender|clock|speech|shrink] [step] [WxH]"
 		)
 		quit(1)
 		return
@@ -45,6 +58,10 @@ func _initialize() -> void:
 	_output_path = args[1]
 	if args.size() > 2:
 		_what = args[2]
+	if args.size() > 4:
+		var shape: PackedStringArray = args[4].split("x", false)
+		if shape.size() == 2:
+			_window = Vector2i(maxi(int(shape[0]), 1), maxi(int(shape[1]), 1))
 	if args.size() > 3:
 		_steps = []
 		for value: String in args[3].split(","):
@@ -66,23 +83,35 @@ func _initialize() -> void:
 		quit(1)
 		return
 
-	# CONTENT_SCALE_MODE_VIEWPORT makes the root viewport itself 160x144, so the
-	# captured texture is the hardware frame rather than a magnified window.
+	# CONTENT_SCALE_MODE_VIEWPORT makes the root viewport exactly the size asked
+	# for, so the captured texture is the hardware frame rather than a magnified
+	# window, or the window shape being photographed whatever the display allows.
 	root.content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
-	root.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_KEEP
-	root.set_content_scale_size(WINDOW_SIZE)
+	root.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_KEEP \
+		if _window == WINDOW_SIZE else Window.CONTENT_SCALE_ASPECT_IGNORE
+	root.set_content_scale_size(_window)
 	_screen = _build(data)
 	if _screen == null:
 		quit(1)
 		return
-	# The window is already one hardware screen across, so the sub-screens are
-	# added to it directly rather than through [Gen2Screen]'s scaling viewport.
-	root.add_child(_screen)
-	current_scene = _screen
+	if _window == WINDOW_SIZE:
+		# The window is already one hardware screen across, so the sub-screens
+		# are added to it directly rather than through [Gen2Screen]'s scaling
+		# viewport.
+		root.add_child(_screen)
+		current_scene = _screen
+		return
+	var host: Gen2Screen = (load(SCREEN_SCENE) as PackedScene).instantiate()
+	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_child(host)
+	current_scene = host
+	# Deferred: `_initialize` runs before the tree serves a frame, so the screen
+	# has not built the layer a sub-screen goes on yet.
+	host.display.call_deferred(_screen)
 
 
 func _build(data: GameData) -> Control:
-	if _what == "copyright" or _what == "presents":
+	if _what in ["copyright", "presents", "title"]:
 		var splash := Gen2SplashScreen.new()
 		if not splash.open(data):
 			push_error("This cache carries no copyright screen.")
@@ -116,12 +145,18 @@ func _build(data: GameData) -> Control:
 ## gender screen `x` is cursor moves instead; in `speech` mode it is frames, so
 ## the opening fades can be stepped through without a press.
 func _drive(step: Vector2i) -> void:
-	if _what == "copyright" or _what == "presents":
+	if _what in ["copyright", "presents", "title"]:
 		# `SplashScreen` reads no button over the copyright, so both halves of a
 		# step are frames: the screen appears on the tenth and is cleared a
 		# hundred later, and the GameFreak animation runs straight on from there.
-		# `presents` counts from the frame that animation starts on.
+		# `presents` counts from the frame that animation starts on, and `title`
+		# from the first frame `TitleScreenMain` is up.
 		var splash: Gen2SplashScreen = _screen as Gen2SplashScreen
+		if _what == "title":
+			while splash.visible_image() != &"title" and _frames_run < TITLE_GUARD:
+				splash.advance_frames(1)
+				_frames_run += 1
+			_frames_run = 0
 		var offset: int = PRESENTS_FIRST_FRAME if _what == "presents" else 0
 		while _frames_run < offset + step.x + step.y:
 			splash.advance_frames(1)
