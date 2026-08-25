@@ -500,6 +500,10 @@ func _build_world() -> void:
 	## time of day resolves to.
 	_encounters = Gen2WorldEncounters.new()
 	_encounters.set_providers(Gen2ModHost.instance().visible_encounter_providers())
+	## What [method Gen2ModHost.inventory] reads while this world is open. Bound
+	## here rather than handed the world, so a mod is given the copy and never a
+	## way to write the bag.
+	Gen2ModHost.instance().set_inventory_source(_mod_inventory)
 	_encounters.set_world(_world, anim_data)
 	_actors.set_encounters(_encounters)
 	var rods: Array[StringName] = _world.available_fishing_rods()
@@ -855,6 +859,7 @@ func advance_frame() -> void:
 		_renderer.refresh()
 	_spend_actor_requests()
 	_spend_hidden_item_requests()
+	_spend_item_gift_requests()
 	if map_pass and _objects_may_move() \
 		and _world.advance_object_steps_pass(_object_random) \
 		and _renderer != null:
@@ -7283,6 +7288,33 @@ func _spend_actor_requests() -> void:
 	for request: Dictionary in _actors.take_requests():
 		if StringName(request["kind"]) == Gen2WorldActors.REQUEST_CRY:
 			_play_species_cry(int(request["species"]))
+
+
+func _mod_inventory() -> Dictionary:
+	return _world.state.items() if _world != null else {}
+
+
+## A mod's item-gift asks, spent the way its hidden-item asks are and on the same
+## gate: `verbosegiveitem`'s own transaction through the ordinary script path, so
+## the fanfare, the box and the pacing are the world screen's exactly as they are
+## for a give the map itself makes.
+##
+## One per frame, since the first one's box owns the world until it is pressed
+## past, and the rest wait in the host's queue.
+func _spend_item_gift_requests() -> void:
+	if _world == null or not _world_idle_for_mod_request():
+		return
+	var gifts: Array[Dictionary] = Gen2ModHost.instance().take_item_gift_requests()
+	for index: int in gifts.size():
+		var results: Array = _world.give_item_gift(
+			int(gifts[index].get("item", 0)), int(gifts[index].get("quantity", 1))
+		)
+		if results.is_empty():
+			continue
+		_zero_map_name_sign_timer()
+		_show_script_results(results)
+		Gen2ModHost.instance().requeue_item_gifts(gifts.slice(index + 1))
+		return
 
 
 ## A mod's hidden-item asks, spent on the first world frame nothing else owns.

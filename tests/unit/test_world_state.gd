@@ -106,6 +106,43 @@ func test_badge_mask_follows_source_order_on_both_profiles() -> void:
 	assert_eq(gold.badge_mask(false), (1 << 0) | (1 << 15))
 
 
+## `wUnlockedUnowns` sits directly after `wKantoBadges` in the engine-flag
+## table, so it carries the badges' own one-index profile shift, and it is what
+## `CheckUnownLetter` refuses a rolled wild Unown's letter against.
+func test_the_unlocked_unown_sets_follow_the_badges_onto_both_profiles() -> void:
+	var crystal := Gen2WorldState.new()
+	assert_eq(crystal.unlocked_unowns(), 0)
+	crystal.set_engine_flag(Gen2WorldState.ENGINE_UNLOCKED_UNOWNS_FIRST)
+	crystal.set_engine_flag(Gen2WorldState.ENGINE_UNLOCKED_UNOWNS_FIRST + 3)
+	assert_eq(crystal.unlocked_unowns(), (1 << 0) | (1 << 3))
+
+	var gold := Gen2WorldState.new()
+	gold.set_engine_flag(Gen2WorldState.ENGINE_UNLOCKED_UNOWNS_FIRST - 1)
+	assert_eq(gold.unlocked_unowns(false), 1 << 0)
+	## The Crystal index on a Gold table would land one row late, on L-R.
+	assert_eq(gold.unlocked_unowns(), 0)
+
+
+## `CheckUnownLetter` walks only the sets whose bit is set, so a letter is
+## unlocked when ANY unlocked set holds it. A save with nothing solved holds no
+## letter at all, and a negative mask is the no-gate a caller with no save passes.
+func test_an_unown_letter_is_unlocked_by_any_set_that_holds_it() -> void:
+	assert_true(Gen2WorldState.unown_letter_unlocked(1, 0b0001), "A in A-K")
+	assert_false(Gen2WorldState.unown_letter_unlocked(12, 0b0001), "L is not")
+	assert_true(Gen2WorldState.unown_letter_unlocked(12, 0b0011), "L once L-R is up")
+	assert_true(Gen2WorldState.unown_letter_unlocked(26, 0b1000), "Z in X-Z")
+	for letter: int in range(1, 27):
+		assert_false(Gen2WorldState.unown_letter_unlocked(letter, 0), "nothing solved")
+		assert_true(Gen2WorldState.unown_letter_unlocked(letter, -1), "no gate")
+	## The four sets are the whole alphabet with no letter in two of them.
+	var seen: Dictionary = {}
+	for one_set: Array in Gen2WorldState.UNOWN_LETTER_SETS:
+		for letter: int in one_set:
+			assert_false(seen.has(letter), "letter %d is in two sets" % letter)
+			seen[letter] = true
+	assert_eq(seen.size(), RomLayout.UNOWN_FORMS)
+
+
 ## BIKEFLAGS_STRENGTH_ACTIVE_F sits three flags ahead of ENGINE_ZEPHYRBADGE, so
 ## it carries the same one-index profile shift the badges do, and it must not be
 ## confused with a badge in either direction.

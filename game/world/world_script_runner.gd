@@ -452,6 +452,9 @@ const HEADBUTT_ASK_TEXT: String = \
 ## `end` frame still has to sit in the CPU's switchable window for _push_frame,
 ## so it is put at its base; nothing ever reads the address back.
 const FIELD_MOVE_PROMPT_FRAME: int = RomFile.BANK_SIZE
+## A mod's item gift has no source address either, and for a stronger reason: no
+## script anywhere gives that item. Shares the base for the reason above.
+const ITEM_GIFT_FRAME: int = RomFile.BANK_SIZE
 ## data/text/common_2.asm's _FoundItemText, less its <PLAYER>; see
 ## _stage_item_ball(). The source line break sits before the item name.
 const FOUND_ITEM_TEXT: String = "Found\n%s!"
@@ -681,6 +684,16 @@ static func begin(
 		)
 		if started:
 			runner._stage_field_move_prompt()
+	elif StringName(request.get("kind", &"")) == &"item_gift":
+		## A mod's ask through [method Gen2ModHost.request_item_gift]. There is
+		## no script behind it at all, not even two bytes of data, so the frame
+		## is the same bare `end` an item ball's is and the staging call is
+		## `verbosegiveitem` with nothing in front of it.
+		started = runner._push_frame(bank, ITEM_GIFT_FRAME, PackedByteArray([
+			Gen2WorldScript.raw_opcode(Gen2WorldScript.GOLD_END, runner._crystal_commands())
+		]))
+		if started:
+			runner._stage_item_gift()
 	elif StringName(request.get("kind", &"")) in [&"item_ball", &"hidden_item"]:
 		## Neither pointer is code, so the frame that stands in for it is a bare
 		## `end` and the staging call replays FindItemInBallScript or
@@ -5491,6 +5504,25 @@ func _stage_pocket_is_full(item: int, finish_after: bool) -> Dictionary:
 	return _stage_internal_text(
 		POCKET_FULL_TEXT % Gen2WorldPack.source_pocket_name(data, item), finish_after
 	)
+
+
+## `Script_verbosegiveitem` with no script around it, which is what a mod's ask
+## through [method Gen2ModHost.request_item_gift] is: the same STRING_BUFFER_4
+## fill, the same bag write and the same GiveItemScript tail the 0x9D command
+## runs, finishing after the last box rather than resuming a caller, since there
+## is no caller.
+func _stage_item_gift() -> Dictionary:
+	var item: int = int(_request.get("item", 0))
+	var item_name: String = data.item_name(item) if data != null else ""
+	if item <= 0 or item_name.is_empty():
+		return _fail(&"invalid_item_gift", {"item": item})
+	_set_text_buffer(
+		RomLayout.STRING_BUFFER_4, item_name, &"item_name", {"item": item}
+	)
+	var given: Dictionary = _stage_item_delta(item, maxi(1, int(_request.get("quantity", 1))))
+	if not bool(given.get("ok", true)):
+		return given
+	return _stage_give_item_script(item, item_name)
 
 
 ## `GiveItemScript`, which is the whole of `verbosegiveitem` past the receive:

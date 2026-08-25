@@ -51,7 +51,119 @@ func run(r: RefCounted) -> void:
 		_verify_gate_errand()
 		_census()
 		_verify_wild_patch_indices()
+		_verify_rolled_dvs()
 	)
+
+
+## How many wilds the DV sweep builds per cartridge. Big enough for the shiny
+## count to be a measurement rather than a coincidence: 1 in 8192 a wild, so a
+## sweep this size finds one about half the time and the check below is on the
+## spread rather than on a shiny turning up.
+const DV_SWEEP_WILDS: int = 4096
+## Species and level the sweep builds, chosen for being in all three caches and
+## for not being UNOWN, whose letter gate is swept separately below.
+const DV_SWEEP_SPECIES: int = 19
+const DV_SWEEP_LEVEL: int = 5
+
+
+## `LoadEnemyMon`'s `.InitDVs` against the real caches: every wild the game
+## builds now rolls its own DVs, where before only a visible encounter carried
+## any and all eight other sources entered at 15/15/15/15. The sweep is the
+## point, the way the census above is: one wild proves nothing about a roll.
+##
+## Four claims, in the source's own order of precedence:
+##
+## - a request carrying `dvs` keeps them, which is the visible encounter and the
+##   roamer's stored word;
+## - `BATTLETYPE_FORCESHINY` writes `ATKDEFDV_SHINY`/`SPDSPCDV_SHINY`, which is
+##   the red Gyarados and is a shiny;
+## - an ordinary wild spreads over the whole 16-bit word rather than sitting on
+##   one number, and every nibble reaches both ends of 0 to 15;
+## - a wild UNOWN takes only a letter the puzzle has unlocked, per set.
+func _verify_rolled_dvs() -> void:
+	var party: Gen2Party = Gen2WorldBattleAdapter.fallback_party(_r.data)
+	if not _r.check(party != null, "no party could be built for the DV sweep."):
+		return
+	var generator := RandomNumberGenerator.new()
+	generator.seed = 20260825
+
+	var carried: int = Gen2Stats.pack_dvs(2, 10, 10, 10)
+	_r.check(
+		_dv_word(party, generator, {"dvs": carried}) == carried,
+		"a wild carrying its own DVs was rolled over."
+	)
+	_r.check(
+		_dv_word(party, generator, {
+			"battle_type": Gen2Battle.BATTLETYPE_FORCESHINY,
+		}) == Gen2Stats.SHINY_DVS,
+		"a forced-shiny wild did not get the shiny word."
+	)
+
+	var words: Dictionary = {}
+	var lowest: Array[int] = [15, 15, 15, 15]
+	var highest: Array[int] = [0, 0, 0, 0]
+	var shinies: int = 0
+	for _wild: int in DV_SWEEP_WILDS:
+		var word: int = _dv_word(party, generator, {})
+		words[word] = true
+		if Gen2Stats.is_shiny(word):
+			shinies += 1
+		var nibbles: Array[int] = [
+			Gen2Stats.attack_dv(word), Gen2Stats.defense_dv(word),
+			Gen2Stats.speed_dv(word), Gen2Stats.special_dv(word),
+		]
+		for index: int in nibbles.size():
+			lowest[index] = mini(lowest[index], nibbles[index])
+			highest[index] = maxi(highest[index], nibbles[index])
+	_r.check(
+		words.size() > DV_SWEEP_WILDS / 2,
+		"%d wilds drew only %d distinct DV words." % [DV_SWEEP_WILDS, words.size()]
+	)
+	_r.check(
+		lowest == [0, 0, 0, 0] and highest == [15, 15, 15, 15],
+		"a DV nibble never reached both ends: %s to %s." % [lowest, highest]
+	)
+	_r.note(
+		"wild DVs: %d words over %d rolls, %d shiny" % [words.size(), DV_SWEEP_WILDS, shinies]
+	)
+
+	## `CheckUnownLetter`, one set at a time. A save with nothing solved meets no
+	## wild UNOWN at all, so no mask of zero is swept here.
+	for set_index: int in Gen2WorldState.UNOWN_LETTER_SETS.size():
+		var allowed: Array = Gen2WorldState.UNOWN_LETTER_SETS[set_index]
+		var seen: Dictionary = {}
+		for _wild: int in 256:
+			seen[Gen2Stats.unown_letter(Gen2WorldBattleAdapter.wild_dvs(
+				{"unlocked_unowns": 1 << set_index}, Gen2Battle.BATTLETYPE_NORMAL,
+				RomLayout.UNOWN_SPECIES, generator
+			))] = true
+		for letter: int in seen:
+			_r.check(
+				letter in allowed,
+				"set %d let UNOWN letter %d through." % [set_index, letter]
+			)
+		_r.check(
+			seen.size() == allowed.size(),
+			"set %d reached %d of its %d letters." % [set_index, seen.size(), allowed.size()]
+		)
+
+
+## One wild built through the whole adapter, so the sweep measures the path a
+## battle takes rather than the roll on its own.
+func _dv_word(
+	party: Gen2Party, generator: RandomNumberGenerator, extra: Dictionary
+) -> int:
+	var values: Dictionary = {
+		"kind": &"wild", "pokemon": DV_SWEEP_SPECIES, "level": DV_SWEEP_LEVEL,
+	}
+	values.merge(extra, true)
+	var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(
+		_r.data, {"values": values}, party, generator
+	)
+	if not bool(prepared.get("ok", false)):
+		_r.fail("a wild could not be prepared: %s" % prepared.get("reason", ""))
+		return -1
+	return (prepared["battle"] as Gen2Battle).enemy.dvs
 
 
 ## The National Park gate, where a contest is entered. Same ids on both

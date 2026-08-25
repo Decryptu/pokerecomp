@@ -14,8 +14,10 @@ extends SceneTree
 ## `info_pkmn` (the same battle state, with the modal that covers the
 ## annotations open and no provider of this tool's own registered, so a mod
 ## under test is the only thing answering), `contest`, `pack`,
-## `pick`, `use_next`, `replace` and `level_up`, which is the stats box
-## `.skip_exp_bar_animation` draws beside its grew-to-level line;
+## `pick`, `use_next`, `replace`, `level_up`, which is the stats box
+## `.skip_exp_bar_animation` draws beside its grew-to-level line, and `shiny`
+## and `normal`, the same wild entered through the world's own path with and
+## without the shiny DV word, which is the pair `CGB_BattleColors` is read from;
 ## [presses] is a `u,d,l,r,a,b` list driven into the menu before the shot, so a
 ## cursor row or a refusal can be photographed; [passes] is how many sprite
 ## passes the party page's icons are given, which is what moves the chosen row's
@@ -53,6 +55,16 @@ const LEAD_MOVES: Array[int] = [33, 45, 39, 44]
 ## against Pidgey's NORMAL/FLYING: THUNDERSHOCK is super effective, TACKLE
 ## neutral, VINE WHIP resisted and EARTHQUAKE has no effect at all.
 const INFO_MOVES: Array[int] = [84, 33, 22, 89]
+
+## The `shiny` and `normal` stages' wild: GYARADOS, whose ordinary blue and whose
+## shiny red are the furthest apart of any pair the cartridge draws, and the one
+## the game itself forces (`BATTLETYPE_FORCESHINY` at the Lake of Rage).
+const SHINY_SPECIES: int = 130
+const SHINY_LEVEL: int = 30
+## The two stages that go through `start_world_battle` rather than a staged
+## `_battle`, because the palette is chosen in `_init_battle_display` and only
+## the world path runs it.
+const WORLD_STAGES: Array[String] = ["shiny", "normal"]
 
 ## The stages `BattleMenu`'s own first opening leads into with nothing staged
 ## behind it, rather than a question a turn has to reach.
@@ -201,6 +213,41 @@ func _open() -> void:
 	var data: GameData = _screen.get("_data")
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 3
+
+	## The wild the world starts, entered the way a step into the grass does:
+	## `BATTLETYPE_FORCESHINY` is what writes the shiny word, so the picture is
+	## the cartridge's own forced shiny rather than a number typed in here.
+	if _stage in WORLD_STAGES:
+		var values: Dictionary = {
+			"kind": &"wild", "pokemon": SHINY_SPECIES, "level": SHINY_LEVEL,
+		}
+		if _stage == "shiny":
+			values["battle_type"] = Gen2Battle.BATTLETYPE_FORCESHINY
+		else:
+			## Named rather than rolled, so the two pictures differ in the four
+			## numbers alone: an unnamed wild would roll and could be anything.
+			values["dvs"] = Gen2BattleMon.PERFECT_DVS
+		_screen.start_world_battle({"values": values})
+		## Both sides in one picture: `CGB_BattleColors` reads `CheckShininess`
+		## for the back pic as well, and the player's own party is the only place
+		## a shiny back pic can come from. Written after the battle is built and
+		## the display re-read, since the palette is chosen there.
+		var started: Gen2Battle = _screen.get("_battle")
+		if started != null:
+			started.player.dvs = Gen2Stats.SHINY_DVS if _stage == "shiny" \
+				else Gen2BattleMon.PERFECT_DVS
+			_screen._init_battle_display()
+		_drain_to_menu()
+		## The second `_init_battle_display` leaves a shorter event queue behind
+		## it, so the drain can land a press further in than it does without one.
+		## Backed out rather than counted, so both stages photograph the same
+		## screen and the two pictures differ in the palettes alone.
+		for _press: int in 4:
+			if String(_screen.battle_snapshot()["menu_stage"]) == "main":
+				break
+			_screen._handle_button(Gen2Button.B)
+			_settle()
+		return
 
 	var members: Array = []
 	for species: int in PLAYER_SPECIES:

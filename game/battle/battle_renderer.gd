@@ -162,8 +162,9 @@ func _draw_pics() -> void:
 	var map_key: PackedByteArray = map.duplicate()
 
 	var enemy: int = int(_view.get("enemy_species", 0))
+	var enemy_shiny: bool = bool(_view.get("enemy_shiny", false))
 	var enemy_palette: PackedColorArray = _battler_palette(
-		enemy, Gen2BattleAnimBackground.PAL_BG_ENEMY
+		enemy, Gen2BattleAnimBackground.PAL_BG_ENEMY, enemy_shiny
 	)
 	# `GetFrontpicPalettePointer` reads `wTrainerClass` rather than a species
 	# when the square is holding a trainer, which it is until that trainer has
@@ -189,8 +190,9 @@ func _draw_pics() -> void:
 			enemy_palette
 		)
 	var player: int = int(_view.get("player_species", 0))
+	var player_shiny: bool = bool(_view.get("player_shiny", false))
 	var player_palette: PackedColorArray = _battler_palette(
-		player, Gen2BattleAnimBackground.PAL_BG_PLAYER
+		player, Gen2BattleAnimBackground.PAL_BG_PLAYER, player_shiny
 	)
 	# `GetPlayerOrMonPalettePointer`'s `and a / jp nz`: a zero species is the
 	# player standing there, and the palette is the player's own.
@@ -499,11 +501,15 @@ static func _append_animation(
 
 ## A battler pic's own palette, permuted by whatever DMG byte the animation's
 ## last `BattleAnimRequestPals` left on that palette slot.
-func _battler_palette(species: int, slot: int) -> PackedColorArray:
+##
+## `CGB_BattleColors` reads `CheckShininess` on both sides, so the shiny palette
+## is the picture's for the whole fight and not just the gold sweep the entrance
+## plays over it.
+func _battler_palette(species: int, slot: int, shiny: bool) -> PackedColorArray:
 	var grayscale: PackedColorArray = _grayscale()
 	if not grayscale.is_empty():
 		return grayscale
-	return _remap(_data.palette(species), _palette_map("bg_palette_maps", slot))
+	return _remap(_data.palette(species, shiny), _palette_map("bg_palette_maps", slot))
 
 
 ## `_CGB_BattleGrayscale`'s palette while the view says the battle is still in

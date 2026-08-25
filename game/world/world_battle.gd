@@ -31,6 +31,15 @@ static func prepare(
 	var enemy_party: Gen2Party = null
 	var trainer_class: int = 0
 	var trainer_index: int = 0
+	# wBattleType, which a `loadvar VAR_BATTLETYPE` before `startbattle` sets.
+	# Read before the party is built, since `LoadEnemyMon` branches a wild's DVs
+	# on it. Running is the only other thing that reads it so far, and four of
+	# its values are what make Celebi, Suicune and the Rocket trap battles
+	# inescapable.
+	var battle_type: int = int(values.get("battle_type", Gen2Battle.BATTLETYPE_NORMAL))
+	# `BattleRandom`, so a wild's DVs come out of the run's own sequence and a
+	# replay of the same seed meets the same Pokemon.
+	var generator := random if random != null else RandomNumberGenerator.new()
 
 	match kind:
 		&"wild":
@@ -40,12 +49,9 @@ static func prepare(
 				return _failure(&"invalid_wild_species", {"species": species})
 			if level < 1 or level > Gen2Experience.MAX_LEVEL:
 				return _failure(&"invalid_wild_level", {"level": level})
-			# `LoadEnemyMon` rolls `wEnemyMonDVs` unless the caller already has
-			# them; a visible encounter chose its own before the player met it,
-			# and shininess is a fact about those four numbers alone.
 			var wild_mon: Gen2BattleMon = Gen2BattleMon.create(
 				data, species, level, data.moves_at_level(species, level),
-				int(values.get("dvs", Gen2BattleMon.PERFECT_DVS))
+				wild_dvs(values, battle_type, species, generator)
 			)
 			# LoadEnemyMon's .TreeMon branch: a headbutt encounter whose species
 			# is in CheckSleepingTreeMon's list for the current time of day
@@ -84,17 +90,13 @@ static func prepare(
 
 	if enemy_party == null or enemy_party.is_wiped():
 		return _failure(&"missing_enemy_party")
-	var generator := random if random != null else RandomNumberGenerator.new()
 	var battle: Gen2Battle = Gen2Battle.create_parties(
 		data, player_party, enemy_party, generator,
 		kind in [&"trainer", &"battle_tower", &"link_battle"], player_badges, battle_rules
 	)
 	if battle == null:
 		return _failure(&"battle_setup_failed")
-	# wBattleType, which a `loadvar VAR_BATTLETYPE` before `startbattle` sets.
-	# Running is the only thing that reads it so far, and four of its values are
-	# what make Celebi, Suicune and the Rocket trap battles inescapable.
-	battle.battle_type = int(values.get("battle_type", Gen2Battle.BATTLETYPE_NORMAL))
+	battle.battle_type = battle_type
 
 	return {
 		"ok": true,
@@ -106,6 +108,79 @@ static func prepare(
 		"trainer_index": trainer_index,
 		"trainer_battle": kind == &"trainer",
 	}
+
+
+## `LoadEnemyMon`'s `.InitDVs` for a wild, which is the whole of what decides
+## whether the Pokemon in the grass is shiny, has a bad stat or answers a
+## different Hidden Power. Every wild reached this with 15/15/15/15 before,
+## because only the visible-encounter provider ever put `dvs` in the request and
+## the other eight sources (grass, surf, fishing, Headbutt, Rock Smash, the Bug
+## Contest, a static `loadwildmon`, a roamer) carried none.
+##
+## Rolled here rather than in each of those callers: this is the one place a
+## wild is built, and [param generator] is the battle's own, so an encounter
+## stays inside the run's reproducible sequence.
+##
+## Three cases keep an answer of their own, in the source's order:
+##
+## - a request already carrying `dvs` keeps it, which is what leaves the
+##   Pokemon a player walked up to the one they saw, and is also `.Roaming`'s
+##   stored word once the roamer's struct has been initialised;
+## - [constant Gen2Battle.BATTLETYPE_FORCESHINY] writes
+##   [constant Gen2Stats.SHINY_DVS] rather than rolling. This is the red
+##   Gyarados, which nothing read the type for until now;
+## - a wild UNOWN rerolls until its letter is one the Ruins of Alph puzzle has
+##   unlocked, which is `CheckUnownLetter`'s `jr c, .GenerateDVs`. The source
+##   notes the loop never ends if a forced shiny is also an Unown, so the shiny
+##   branch stays in front of it here the way it is there.
+static func wild_dvs(
+	values: Dictionary, battle_type: int, species: int, generator: RandomNumberGenerator
+) -> int:
+	if values.has("dvs"):
+		return int(values["dvs"])
+	if battle_type == Gen2Battle.BATTLETYPE_FORCESHINY:
+		return Gen2Stats.SHINY_DVS
+	var rolls: int = Gen2ModHost.shiny_roll_count({
+		"species": species,
+		"level": int(values.get("level", 0)),
+		"method": StringName(values.get("method", &"")),
+		"map_group": int(values.get("map_group", -1)),
+		"map_number": int(values.get("map_number", -1)),
+	})
+	## -1 is what an unstamped request means, and is every caller that is not the
+	## world screen: no gate, which is how a preview tool or a test keeps the
+	## letter it rolled.
+	var unlocked: int = int(values.get("unlocked_unowns", -1))
+	var word: int = _roll_dvs(generator, species, unlocked)
+	## The charm's extra rolls sit past the source, which takes one: the first
+	## shiny is kept and otherwise the last stands, so 0 and 1 are both vanilla.
+	for _extra: int in maxi(0, rolls - 1):
+		if Gen2Stats.is_shiny(word):
+			break
+		word = _roll_dvs(generator, species, unlocked)
+	return word
+
+
+## Two `BattleRandom` bytes, high byte first, rerolled while the letter they give
+## a wild Unown is locked, which is `CheckUnownLetter`'s `jr c, .GenerateDVs`.
+##
+## Unbounded the way the source's is, and safe for the same reason: the mask is
+## narrowed to the four real sets first, and every one of them holds letters, so
+## any mask left standing is one a roll reaches. A mask of nothing is the save
+## that has solved no puzzle, and there the gate is dropped rather than looped
+## on: `ChooseWildEncounter` refuses a wild Unown outright on that save, so a
+## caller reaching here with one has already left the cartridge's own path.
+static func _roll_dvs(
+	generator: RandomNumberGenerator, species: int, unlocked_unowns: int
+) -> int:
+	var gated: bool = species == RomLayout.UNOWN_SPECIES and unlocked_unowns > 0
+	var mask: int = unlocked_unowns & ((1 << Gen2WorldState.UNOWN_LETTER_SETS.size()) - 1)
+	while true:
+		var word: int = (generator.randi_range(0, 255) << 8) | generator.randi_range(0, 255)
+		if not gated or mask == 0 \
+			or Gen2WorldState.unown_letter_unlocked(Gen2Stats.unown_letter(word), mask):
+			return word
+	return 0
 
 
 ## `PlayBattleMusic`'s track, off the request alone.

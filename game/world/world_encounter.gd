@@ -86,6 +86,12 @@ static func resolve(
 	var level: int = int((selected as Dictionary).get("level", 0))
 	if species < 1 or species > RomLayout.SPECIES_COUNT or level < 1 or level > RomLayout.MAX_LEVEL:
 		return {}
+	## `ChooseWildEncounter`'s last test, after `ValidateTempWildMonSpecies` and
+	## on the drawn slot rather than the table: a wild UNOWN is refused outright
+	## while `wUnlockedUnowns` is zero, which is every save before the first
+	## Ruins of Alph puzzle. The step finds nothing; it does not draw again.
+	if species == RomLayout.UNOWN_SPECIES and int(options.get("unlocked_unowns", -1)) == 0:
+		return {}
 
 	var level_roll: int = -1
 	if method == METHOD_SURF:

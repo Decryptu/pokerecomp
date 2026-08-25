@@ -393,6 +393,30 @@ func test_the_shipped_example_mod_registers_everything_it_documents() -> void:
 	assert_true(Gen2ModHost.allows_item_field_move(Gen2WorldFieldMove.MOVE_FLY))
 	assert_true(Gen2ModHost.awards_catch_experience())
 	assert_eq(host.repel_renewal_item({0x2B: 1}), 0x2B, "the only one owned")
+	## 16: how many DV words one wild is drawn with, and the bag the provider
+	## reads the charm out of. No world is open here, so the bag is empty and the
+	## example answers the cartridge's own single roll.
+	assert_eq(host.shiny_rolls_ids().size(), 1)
+	assert_eq(host.inventory(), {}, "no world open")
+	assert_eq(Gen2ModHost.shiny_roll_count({"species": 25}), 1, "the charm is not held")
+	host.set_inventory_source(Callable(self, "_charmed_bag"))
+	assert_eq(host.inventory(), {0x19: 1})
+	assert_eq(Gen2ModHost.shiny_roll_count({"species": 25}), 3, "held")
+	host.set_inventory_source(Callable())
+	## 16: an item gift, queued rather than answered the way a hidden item's ask
+	## is, and drained in order.
+	host.request_item_gift(0x19, 2)
+	host.request_item_gift(0x14)
+	host.request_item_gift(0, 1)
+	var gifts: Array[Dictionary] = host.take_item_gift_requests()
+	assert_eq(gifts, [{"item": 0x19, "quantity": 2}, {"item": 0x14, "quantity": 1}])
+	assert_eq(host.take_item_gift_requests(), [], "the drain empties the queue")
+	host.request_item_gift(0x2B)
+	host.requeue_item_gifts(gifts)
+	var order: Array = []
+	for gift: Dictionary in host.take_item_gift_requests():
+		order.append(int(gift["item"]))
+	assert_eq(order, [0x19, 0x14, 0x2B], "what could not be spent goes back in front")
 	## A start-menu row naming a host action, gated on the host's own party test
 	## after the mod's predicate.
 	assert_eq(host.start_menu_entries({"party_count": 0}).size(), 0)
@@ -513,3 +537,9 @@ func test_the_last_rows_effects_stay_replaceable() -> void:
 		assert_true(bool(Gen2ModHost.instance().register_move_effect(
 			MOD, effect, [Gen2EffectCommands.END_MOVE]
 		)["ok"]), "effect %d" % effect)
+
+
+## The bag [method Gen2ModHost.inventory] reads while the test stands in for an
+## open world: the example mod's charm, and nothing else.
+func _charmed_bag() -> Dictionary:
+	return {0x19: 1}

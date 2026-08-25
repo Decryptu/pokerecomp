@@ -166,8 +166,8 @@ func test_invalid_battle_identifiers_are_structured_failures() -> void:
 
 
 ## A visible encounter chose its DVs before the player met it, so the battle is
-## built with those four numbers rather than a fresh roll. Nothing else names
-## `dvs`, and what does not gets the perfect word it always got.
+## built with those four numbers rather than a fresh roll. This is also
+## `.Roaming`'s stored word: the caller that has one puts it in the request.
 func test_a_wild_request_carries_its_own_dvs_into_the_battle() -> void:
 	var shiny: int = Gen2Stats.pack_dvs(2, 10, 10, 10)
 	var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(
@@ -178,13 +178,118 @@ func test_a_wild_request_carries_its_own_dvs_into_the_battle() -> void:
 	assert_eq((prepared["battle"] as Gen2Battle).enemy.dvs, shiny)
 	assert_true(Gen2Stats.is_shiny((prepared["battle"] as Gen2Battle).enemy.dvs))
 
-	var rolled: Dictionary = Gen2WorldBattleAdapter.prepare(
-		_data, {"values": {"kind": &"wild", "pokemon": SPECIES_TWO, "level": 5}},
-		_player_party()
+
+## `LoadEnemyMon`'s `.GenerateDVs`: a wild that carries none is rolled two bytes
+## off the BATTLE's own generator rather than handed 15/15/15/15, which is what
+## every encounter source but the visible-encounter provider used to get. Off
+## that generator and no other, so the same seed meets the same Pokemon.
+func test_a_wild_with_no_dvs_is_rolled_off_the_battles_own_generator() -> void:
+	var words: Array[int] = []
+	for _attempt: int in 2:
+		var generator := RandomNumberGenerator.new()
+		generator.seed = 20260825
+		var run: Array[int] = []
+		for _wild: int in 8:
+			var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(
+				_data, {"values": {"kind": &"wild", "pokemon": SPECIES_TWO, "level": 5}},
+				_player_party(), generator
+			)
+			assert_true(bool(prepared["ok"]), String(prepared.get("reason", "")))
+			run.append((prepared["battle"] as Gen2Battle).enemy.dvs)
+		if words.is_empty():
+			words = run
+		else:
+			assert_eq(run, words, "the same seed draws the same eight words")
+	## Not the perfect word, and not one word eight times: the point of the roll.
+	assert_false(words.all(func(word: int) -> bool:
+		return word == Gen2BattleMon.PERFECT_DVS
+	), "no wild is perfect any more")
+	assert_gt(words.reduce(func(seen: Dictionary, word: int) -> Dictionary:
+		seen[word] = true
+		return seen
+	, {}).size(), 1, "eight rolls are not one number")
+
+
+## `.NotRoaming`'s forced-shiny branch, which writes `ATKDEFDV_SHINY` and
+## `SPDSPCDV_SHINY` rather than rolling. This is the red Gyarados, and nothing
+## read the battle type for its DVs before.
+func test_a_forced_shiny_wild_is_shiny() -> void:
+	var generator := RandomNumberGenerator.new()
+	generator.seed = 7
+	var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(
+		_data, {"values": {
+			"kind": &"wild", "pokemon": SPECIES_TWO, "level": 30,
+			"battle_type": Gen2Battle.BATTLETYPE_FORCESHINY,
+		}}, _player_party(), generator
 	)
-	assert_eq(
-		(rolled["battle"] as Gen2Battle).enemy.dvs, Gen2BattleMon.PERFECT_DVS
-	)
+	assert_true(bool(prepared["ok"]), String(prepared.get("reason", "")))
+	assert_eq((prepared["battle"] as Gen2Battle).enemy.dvs, Gen2Stats.SHINY_DVS)
+	assert_true(Gen2Stats.is_shiny((prepared["battle"] as Gen2Battle).enemy.dvs))
+
+
+## `register_shiny_rolls`: the host draws up to the count the provider asks for
+## and keeps the first shiny word, so a charmed run meets one far sooner than
+## 1 in 8192. Measured rather than asserted on one wild, since a single roll
+## proves nothing about a count.
+func test_a_shiny_rolls_provider_draws_more_words_per_wild() -> void:
+	var vanilla: int = _shiny_wilds(64)
+	Gen2ModHost.instance().register_shiny_rolls(&"test_charm", ShinyRollsStub.new())
+	var charmed: int = _shiny_wilds(64)
+	Gen2ModHost.reset()
+	## The stub asks for more than MAX_SHINY_ROLLS, so the host draws its own
+	## ceiling of 1024: one wild in eight, and about eight shinies over 64. One
+	## roll a wild is one in 8192, so vanilla's 64 find none in almost every run.
+	assert_eq(vanilla, 0, "one roll a wild finds no shiny in 64")
+	assert_gt(charmed, 0, "1024 rolls a wild does")
+
+
+## A wild UNOWN rerolls while its letter is locked, which is `CheckUnownLetter`'s
+## `jr c, .GenerateDVs`. The mask is the save's `wUnlockedUnowns` and reaches
+## here on the request, since the adapter has no save.
+func test_a_wild_unown_only_takes_an_unlocked_letter() -> void:
+	## The roll rather than a whole battle: this cartridge-free suite has no
+	## UNOWN to build a party member out of, and the gate is in the word.
+	var generator := RandomNumberGenerator.new()
+	generator.seed = 99
+	for _wild: int in 32:
+		## X-Z alone, the last set and the smallest.
+		var word: int = Gen2WorldBattleAdapter.wild_dvs(
+			{"unlocked_unowns": 0b1000}, Gen2Battle.BATTLETYPE_NORMAL,
+			RomLayout.UNOWN_SPECIES, generator
+		)
+		var letter: int = Gen2Stats.unown_letter(word)
+		assert_true(letter in [24, 25, 26], "letter %d is not in X-Z" % letter)
+	## No mask stamped is no gate, which is every caller that is not the world
+	## screen: the letters it draws are not all in one set.
+	var ungated: Dictionary = {}
+	for _wild: int in 32:
+		ungated[Gen2Stats.unown_letter(Gen2WorldBattleAdapter.wild_dvs(
+			{}, Gen2Battle.BATTLETYPE_NORMAL, RomLayout.UNOWN_SPECIES, generator
+		))] = true
+	assert_gt(ungated.size(), 3, "an ungated roll reaches past one set")
+
+
+## How many of [param count] rolled wilds came out shiny, off one seeded
+## generator so the two halves of the test above draw the same sequence.
+func _shiny_wilds(count: int) -> int:
+	var generator := RandomNumberGenerator.new()
+	generator.seed = 4242
+	var shinies: int = 0
+	for _wild: int in count:
+		var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(
+			_data, {"values": {"kind": &"wild", "pokemon": SPECIES_TWO, "level": 5}},
+			_player_party(), generator
+		)
+		if Gen2Stats.is_shiny((prepared["battle"] as Gen2Battle).enemy.dvs):
+			shinies += 1
+	return shinies
+
+
+class ShinyRollsStub:
+	extends RefCounted
+
+	func shiny_rolls(_context: Dictionary) -> int:
+		return 4096
 
 
 ## `PlayBattleMusic` runs in front of `DoBattleTransition`, so the track has to
