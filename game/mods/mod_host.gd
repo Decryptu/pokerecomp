@@ -1954,6 +1954,16 @@ func _owns_manifest(manifest: Gen2ModManifest) -> bool:
 ## switched off is skipped silently and is not a failure, and a mod for another
 ## cartridge is a recorded refusal the launcher can show.
 func load_discovered() -> Array:
+	## Idempotent, because a second call is not additive: every entry script
+	## would run again and [method load_mod] would replace the object the first
+	## registration's callables are bound to, so the follower's party row and
+	## every other bound callable would then be called on a freed instance. A
+	## caller that wants a fresh load resets the host first, which is what
+	## [method Gen2GameRuntime.reload_mods] does.
+	if not _loaded.is_empty():
+		var already: Array = _loaded.keys()
+		already.sort()
+		return already
 	var loaded: Array = []
 	var pending: Array[StringName] = []
 	var failed: Dictionary = {}
