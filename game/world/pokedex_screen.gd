@@ -49,6 +49,15 @@ const CHANGING_MODES_FRAMES: int = 64
 ## constants/sfx_constants.asm.
 const SFX_CHANGE_DEX_MODE: int = 0x15
 
+## `AnimateDexSearchSlowpoke`: twenty-five steps of seven frames each, then
+## thirty-two more with the Slowpoke back on its first frame. The whole run is
+## spent between BEGIN SEARCH and the results, the way the source spends it.
+const _SEARCH_ANIMATION_FRAMES: int = \
+	Gen2PokedexPage.SLOWPOKE_STEPS * Gen2PokedexPage.SLOWPOKE_FRAME_HOLD
+const SEARCH_FRAMES: int = _SEARCH_ANIMATION_FRAMES + Gen2PokedexPage.SLOWPOKE_SETTLE
+## `Pokedex_DisplayTypeNotFoundMessage`'s own `ld c, $80`.
+const TYPE_NOT_FOUND_FRAMES: int = 0x80
+
 ## `DexEntryScreen_ArrowCursorData`'s four positions, in its own order. PRNT
 ## wants a printer, which is deliberately out, so it is drawn and refuses.
 const ENTRY_BUTTONS: Array[String] = ["PAGE", "AREA", "CRY", "PRNT"]
@@ -66,11 +75,21 @@ var _option_cursor: int = 0
 ## The entry screen's own `wDexArrowCursorPosIndex`, which
 ## `Pokedex_ReinitDexEntryScreen` puts back on PAGE for each new entry.
 var _entry_cursor: int = 0
+## `wPrevDexEntryJumptableIndex`, the listing an entry screen was opened from.
+var _entry_from: Mode = Mode.LIST
 var _mode_rows: Array = []
 ## Frames still owed to `Pokedex_DisplayChangingModesMessage`. The routine is a
 ## pair of blocking `DelayFrames`, so nothing else on this screen runs while it
 ## is above zero, the arrow's own blink included.
 var _changing_modes_frames: int = 0
+## Frames still owed to `AnimateDexSearchSlowpoke`, which holds the search screen
+## the same way. Zero whenever no search is being spent.
+var _search_frames: int = 0
+## What `Pokedex_SearchForMons` answered, held until the animation is spent.
+var _search_result: int = 0
+## Frames still owed to `Pokedex_DisplayTypeNotFoundMessage`, which holds its own
+## two lines up for $80 frames before the search screen is drawn clean again.
+var _message_frames: int = 0
 
 var _area: Gen2TownMapScreen = null
 
@@ -156,7 +175,8 @@ func current_mode() -> Mode:
 
 
 func handle_button(button: int) -> bool:
-	if _dex == null or _changing_modes_frames > 0:
+	if _dex == null or _changing_modes_frames > 0 or _search_frames > 0 \
+		or _message_frames > 0:
 		return false
 	if _mode == Mode.AREA:
 		return _area.handle_button(button)
@@ -192,7 +212,7 @@ func _handle_list(button: int) -> bool:
 		Gen2Button.A:
 			if _dex.can_open_entry():
 				_dex.open_entry()
-				_open_entry_mode()
+				_open_entry_mode(Mode.LIST)
 			return true
 		Gen2Button.SELECT:
 			_open_option_mode()
@@ -217,6 +237,13 @@ func _handle_entry(button: int) -> bool:
 			## `NewPokedexEntry` has no listing under it, so B is what closes it.
 			if _entry_only:
 				closed.emit()
+				return true
+			## `wPrevDexEntryJumptableIndex`, which `Pokedex_UpdateMainScreen`
+			## and `Pokedex_UpdateSearchResultsScreen` each write before they
+			## open an entry: B goes back to whichever listing that was, not
+			## always the main one.
+			if _entry_from == Mode.SEARCH_RESULTS:
+				_open_search_results_mode()
 				return true
 			_open_list_mode()
 			return true
@@ -355,8 +382,9 @@ func _open_list_mode() -> void:
 	_refresh()
 
 
-func _open_entry_mode() -> void:
+func _open_entry_mode(from: Mode = Mode.LIST) -> void:
 	_message = ""
+	_entry_from = from
 	_mode = Mode.ENTRY
 	_entry_cursor = 0
 	_refresh()
@@ -428,12 +456,11 @@ func _confirm_search_row() -> void:
 			_dex.move_search_type(Gen2Button.RIGHT)
 			_refresh()
 		Gen2Pokedex.SEARCH_ROW_BEGIN:
-			if _dex.begin_search() > 0:
-				_open_search_results_mode()
-				return
-			## `.MenuAction_BeginSearch`'s no-result branch redraws the search
-			## screen under its own message rather than leaving it.
-			_message = Gen2Pokedex.TYPE_NOT_FOUND_TEXT
+			## `.MenuAction_BeginSearch` searches first and only then spends
+			## `AnimateDexSearchSlowpoke`, so the count is already known while
+			## the Slowpoke is still moving.
+			_search_result = _dex.begin_search()
+			_search_frames = SEARCH_FRAMES
 			_refresh()
 		Gen2Pokedex.SEARCH_ROW_CANCEL:
 			_open_list_mode()
@@ -450,7 +477,7 @@ func _handle_search_results(button: int) -> bool:
 		Gen2Button.A:
 			if _dex.can_open_entry():
 				_dex.open_entry()
-				_open_entry_mode()
+				_open_entry_mode(Mode.SEARCH_RESULTS)
 			return true
 	if _dex.move_listing(button):
 		_refresh()
@@ -464,8 +491,23 @@ func _handle_search_results(button: int) -> bool:
 ## than its Update, so the search is not remembered.
 func _open_search_mode() -> void:
 	_message = ""
+	_message_frames = 0
+	_search_frames = 0
+	_search_result = 0
 	_mode = Mode.SEARCH
 	_dex.open_search()
+	_refresh()
+
+
+## What `.MenuAction_BeginSearch` does once `AnimateDexSearchSlowpoke` is spent:
+## a result opens the results screen, and none redraws the search screen under
+## `Pokedex_DisplayTypeNotFoundMessage`'s own two lines.
+func _finish_search() -> void:
+	if _search_result > 0:
+		_open_search_results_mode()
+		return
+	_message = Gen2Pokedex.TYPE_NOT_FOUND_TEXT
+	_message_frames = TYPE_NOT_FOUND_FRAMES
 	_refresh()
 
 
@@ -505,11 +547,14 @@ func render() -> Image:
 				)
 			))
 		Mode.SEARCH:
-			return _page.image(_page.search_map(
-				_dex.search_type_name(_dex.search_type_1),
-				_dex.search_type_name(_dex.search_type_2),
-				_dex.search_cursor if cursor == 0 else -1, _message
-			))
+			return _page.search_image(
+				_page.search_map(
+					_dex.search_type_string(_dex.search_type_1),
+					_dex.search_type_string(_dex.search_type_2),
+					_dex.search_cursor if cursor == 0 else -1, _message
+				),
+				_slowpoke_frame()
+			)
 		Mode.UNOWN:
 			return _page.image(
 				_page.unown_map(
@@ -526,14 +571,36 @@ func render() -> Image:
 				_page.search_results_background(
 					_dex.search_result_count, _search_type_line()
 				),
-				_page.results_window_map(_dex.rows(), cursor), true, _selected_pic(),
-				Gen2PokedexPage.RESULTS_WINDOW_ROWS
+				_page.results_window_map(_dex.rows()), true, _selected_pic(),
+				Gen2PokedexPage.RESULTS_WINDOW_ROWS, _listing_cursor(),
+				Vector2i.ZERO, true
 			)
+	# The listing's own cursor is an object frame rather than the arrow the other
+	# screens blink, so it is up on every frame the listing is.
+	var old_mode: bool = _dex.mode == RomLayout.DEXMODE_OLD
 	return _page.image_main(
 		_page.main_background(_dex.seen_count(), _dex.caught_count()),
-		_page.window_map(_dex.rows(), _dex.mode == RomLayout.DEXMODE_OLD, cursor),
-		_dex.mode == RomLayout.DEXMODE_OLD, _selected_pic()
+		_page.window_map(_dex.rows(), old_mode), old_mode, _selected_pic(),
+		Gen2PokedexPage.ROWS, _listing_cursor(),
+		Vector2i(_dex.cursor + _dex.scroll, _dex.listing_end)
 	)
+
+
+## `wDexListingCursor`, or -1 for a screen being read: `ClearSprites` is what
+## every other state opens with, and a readout draws no cursor at all.
+func _listing_cursor() -> int:
+	return -1 if _read_only else _dex.cursor
+
+
+## Which `AnimateDexSearchSlowpoke` frame the search screen is showing.
+## `Pokedex_InitSearchScreen` leaves `wDexSearchSlowpokeFrame` at zero, and the
+## animation runs only while a search is being spent.
+func _slowpoke_frame() -> int:
+	if _search_frames <= 0 or _search_frames <= Gen2PokedexPage.SLOWPOKE_SETTLE:
+		return 0
+	var spent: int = _SEARCH_ANIMATION_FRAMES - (_search_frames - Gen2PokedexPage.SLOWPOKE_SETTLE)
+	@warning_ignore("integer_division")
+	return (spent / Gen2PokedexPage.SLOWPOKE_FRAME_HOLD) % Gen2PokedexPage.SLOWPOKE_FRAMES
 
 
 ## `Pokedex_InitDexEntryScreen`, which loads the species' footprint before it
@@ -559,7 +626,11 @@ func _selected_pic() -> Image:
 		var forms: Array[int] = _dex.unown_forms()
 		if _dex.unown_cursor < 0 or _dex.unown_cursor >= forms.size():
 			return null
-		return _pic_image(_data.unown_pic(forms[_dex.unown_cursor] - 1), species)
+		# `ld a, UNOWN / ld [wCurPartySpecies], a`, so the box is drawn through
+		# UNOWN's palette whatever the listing was left on.
+		return _pic_image(
+			_data.unown_pic(forms[_dex.unown_cursor] - 1), RomLayout.UNOWN_SPECIES
+		)
 	# `Pokedex_CheckSeen`, which is what `can_open_entry` already answers for the
 	# selected row.
 	if species <= 0 or not _dex.can_open_entry():
@@ -572,14 +643,26 @@ func _selected_pic() -> Image:
 	return _pic_image(_data.species_pic(species), species)
 
 
-## One imported pic through `LoadPalette_White_Col1_Col2_Black`'s own four
-## colours, or the Slowpoke picture when the cache does not hold it.
+## One imported pic, or the question mark when the cache does not hold it.
+##
+## `_CGB_Pokedex` fills the picture box's attrmap with palette 1, and which
+## palette that is turns on `wCurPartySpecies`: the two listing screens set it to
+## `-1` and get `PokedexQuestionMarkPalette`, so every species is drawn in the
+## dex's own green there, while the entry screen and the Unown screen set it to
+## the species and get `LoadPalette_White_Col1_Col2_Black`'s four.
 func _pic_image(pic: Dictionary, species: int) -> Image:
 	if pic.is_empty():
 		return _page.unseen_pic()
-	return Gen2PicImage.from_atlas(
-		_data.atlas_indices(pic["atlas"]), _data.atlas(pic["atlas"]), pic,
-		_data.palette(species)
+	var listing: bool = _mode == Mode.LIST or _mode == Mode.SEARCH_RESULTS
+	var palette: PackedColorArray = _data.pokedex_palette("question_mark") \
+		if listing else _data.palette(species)
+	if palette.size() < Gen2Palette.COLORS_PER_PIC:
+		return _page.unseen_pic()
+	return Gen2PokedexPage.pad_pic(
+		Gen2PicImage.from_atlas(
+			_data.atlas_indices(pic["atlas"]), _data.atlas(pic["atlas"]), pic, palette
+		),
+		palette[0]
 	)
 
 
@@ -608,6 +691,20 @@ func advance_frame() -> void:
 			sfx_requested.emit(SFX_CHANGE_DEX_MODE)
 		elif _changing_modes_frames == 0:
 			_open_list_mode()
+		return
+	if _message_frames > 0:
+		_message_frames -= 1
+		if _message_frames == 0:
+			_message = ""
+			_refresh()
+		return
+	if _search_frames > 0:
+		var frame: int = _slowpoke_frame()
+		_search_frames -= 1
+		if _search_frames == 0:
+			_finish_search()
+		elif _slowpoke_frame() != frame:
+			_refresh()
 		return
 	_blink = (_blink + 1) % (CURSOR_BLINK_FRAMES * 2)
 	if _blink == 0 or _blink == CURSOR_BLINK_FRAMES:

@@ -223,8 +223,8 @@ static func open_directory(path: String) -> GameData:
 	if unown_walls is Array:
 		for wall: Variant in unown_walls as Array:
 			data._unown_walls.append(String(wall))
-	var odd_eggs: Variant = manifest.get("odd_eggs", [])
-	data._odd_eggs = odd_eggs if odd_eggs is Array else []
+	var eggs: Variant = manifest.get("odd_eggs", [])
+	data._odd_eggs = eggs if eggs is Array else []
 	var credits: Variant = manifest.get("credits", {})
 	data._credits = credits if credits is Dictionary else {}
 	var intro_movie: Variant = manifest.get("intro_movie", {})

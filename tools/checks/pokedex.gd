@@ -27,6 +27,15 @@ const SHEET_FIRST: int = Gen2PokedexPage.SHEET_FIRST_TILE
 ## rather than a species that has none.
 const SPECIES: int = RomLayout.FOOTPRINT_SPECIES
 
+## `PokedexTypeSearchStrings` (data/types/search_strings.asm) verbatim, minus its
+## terminator. [method Gen2Pokedex.search_type_string] centres the imported name
+## instead of holding this table, so this is where the two are made to agree.
+const SEARCH_STRINGS: Array[String] = [
+	"  ----  ", " NORMAL ", "  FIRE  ", " WATER  ", " GRASS  ", "ELECTRIC",
+	"  ICE   ", "FIGHTING", " POISON ", " GROUND ", " FLYING ", "PSYCHIC ",
+	"  BUG   ", "  ROCK  ", " GHOST  ", " DRAGON ", "  DARK  ", " STEEL  ",
+]
+
 
 func run(r: RefCounted) -> void:
 	_r = r
@@ -57,6 +66,7 @@ func _validate(game_id: StringName) -> String:
 	for sheet: Array in [
 		["pokedex", RomLayout.POKEDEX_TILES],
 		["pokedex_slowpoke", RomLayout.POKEDEX_SLOWPOKE_TILES],
+		["pokedex_question_mark", RomLayout.POKEDEX_QUESTION_MARK_TILES],
 		["unown_font", RomLayout.UNOWN_FONT_TILES],
 		["footprints", RomLayout.FOOTPRINT_SLOTS * RomLayout.FOOTPRINT_TILES],
 	]:
@@ -133,12 +143,36 @@ func _validate(game_id: StringName) -> String:
 		])
 		return ""
 
-	print("%s: sheet=%d slowpoke=%d unown_font=%d footprints=%d species=%d" % [
+	# `Pokedex_PlaceTypeString` reads a fixed-width table, so the two search rows
+	# and the results screen's line are only right if the centring answers it.
+	var dex: Gen2Pokedex = Gen2Pokedex.open(data, null, RomLayout.DEXMODE_NEW)
+	for value: int in SEARCH_STRINGS.size():
+		var drawn: String = dex.search_type_string(value)
+		if drawn != SEARCH_STRINGS[value]:
+			print("FAIL %s: search string %d is \"%s\", wanted \"%s\"" % [
+				game_id, value, drawn, SEARCH_STRINGS[value],
+			])
+			return ""
+
+	# The question mark is a picture, so a strip of the right length is not
+	# enough: an offset that landed on a neighbouring run would still be 49
+	# tiles. Its own lit pixels are counted, and the digest below pins the art.
+	var question: PackedByteArray = data.tile_indices("pokedex_question_mark")
+	var question_colours: Dictionary = {}
+	for index: int in question.size():
+		question_colours[question[index]] = true
+	if question_colours.size() < 2:
+		print("FAIL %s: the question mark pic is one flat colour" % game_id)
+		return ""
+
+	print("%s: sheet=%d slowpoke=%d question_mark=%d unown_font=%d footprints=%d species=%d" % [
 		game_id, RomLayout.POKEDEX_TILES, RomLayout.POKEDEX_SLOWPOKE_TILES,
+		RomLayout.POKEDEX_QUESTION_MARK_TILES,
 		RomLayout.UNOWN_FONT_TILES, SPECIES, RomLayout.SPECIES_COUNT,
 	])
-	return "%s/%s/%s" % [
+	return "%s/%s/%s/%s" % [
 		indices.slice(0, 4096).hex_encode().sha1_text().substr(0, 8),
 		data.tile_indices("pokedex").slice(0, 928).hex_encode().sha1_text().substr(0, 8),
 		data.tile_indices("unown_font").hex_encode().sha1_text().substr(0, 8),
+		question.hex_encode().sha1_text().substr(0, 8),
 	]

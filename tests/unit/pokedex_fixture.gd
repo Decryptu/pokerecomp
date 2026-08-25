@@ -113,6 +113,7 @@ static func _tiles(path: String) -> Dictionary:
 		["font", RomLayout.FONT_TILES, 3, RomLayout.FONT_FIRST_CODE],
 		["pokedex", RomLayout.POKEDEX_TILES, 1, 0],
 		["pokedex_slowpoke", RomLayout.POKEDEX_SLOWPOKE_TILES, 2, 0],
+		["pokedex_question_mark", RomLayout.POKEDEX_QUESTION_MARK_TILES, 2, 0],
 		["unown_font", RomLayout.UNOWN_FONT_TILES, 3, 0],
 		["footprints", RomLayout.FOOTPRINT_SLOTS * RomLayout.FOOTPRINT_TILES, 1, 0],
 	]:

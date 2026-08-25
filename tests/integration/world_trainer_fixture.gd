@@ -1004,12 +1004,14 @@ static func _write_battle_graphics(cache_directory: String, manifest: Dictionary
 		"dex_nest_icon": [RomLayout.DEX_NEST_ICON_TILES, 3],
 		## `'▲'`, the single tile a scrolling menu draws its own arrow from.
 		"up_arrow": [1, 3],
-		## `Pokedex_LoadGFX`'s two runs, `UnownFont` and the footprint grid, at
+		## `Pokedex_LoadGFX`'s two runs, `LoadQuestionMarkPic`'s pic, `UnownFont`
+		## and the footprint grid, at
 		## their real lengths so the dex page can address every tile a layout
 		## names. Flat fills like the rest: what a test checks is where each
 		## lands.
 		"pokedex": [RomLayout.POKEDEX_TILES, 1],
 		"pokedex_slowpoke": [RomLayout.POKEDEX_SLOWPOKE_TILES, 2],
+		"pokedex_question_mark": [RomLayout.POKEDEX_QUESTION_MARK_TILES, 2],
 		"unown_font": [RomLayout.UNOWN_FONT_TILES, 3],
 		"footprints": [RomLayout.FOOTPRINT_SLOTS * RomLayout.FOOTPRINT_TILES, 1],
 		## `gfx/mail.asm`'s one run and `_ComposeMailMessage.MailIcon`. The run

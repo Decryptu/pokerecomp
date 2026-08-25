@@ -421,10 +421,10 @@ func _cant_battle_message() -> Array:
 
 ## One of the trade screen's three imported boxes, with its buffers filled and
 ## its lines split the way the box would page them.
-func _special_text(name: String, buffers: Dictionary) -> Array:
+func _special_text(box: String, buffers: Dictionary) -> Array:
 	if _data == null:
 		return []
-	var text: String = _data.special_text("link", name)
+	var text: String = _data.special_text("link", box)
 	for name_or_address: Variant in buffers:
 		var address: int = _data.special_text_ram(String(name_or_address)) \
 			if name_or_address is String else int(name_or_address)

@@ -1654,10 +1654,25 @@ func test_a_dex_search_reaches_its_results_and_back() -> void:
 	dex.handle_button(Gen2Button.DOWN)
 	dex.handle_button(Gen2Button.DOWN)
 	dex.handle_button(Gen2Button.A)
+	## `.MenuAction_BeginSearch` spends `AnimateDexSearchSlowpoke` between the
+	## search and the results, and nothing reaches the screen while it runs.
+	assert_eq(dex.current_mode(), Gen2PokedexScreen.Mode.SEARCH)
+	assert_false(dex.handle_button(Gen2Button.B), "the animation holds the screen")
+	for _frame: int in Gen2PokedexScreen.SEARCH_FRAMES:
+		dex.advance_frame()
 	assert_eq(dex.current_mode(), Gen2PokedexScreen.Mode.SEARCH_RESULTS)
 	assert_eq(model.search_result_count, 1)
 	assert_eq(model.listing_height, Gen2Pokedex.SEARCH_RESULTS_HEIGHT)
 	assert_eq(model.selected_species(), Fixture.TRAINER_SPECIES)
+
+	## `wPrevDexEntryJumptableIndex`: an entry opened from the results goes back
+	## to them, not to the main listing.
+	_world_screen._world.state.set_species_seen(Fixture.TRAINER_SPECIES)
+	dex.handle_button(Gen2Button.A)
+	assert_eq(dex.current_mode(), Gen2PokedexScreen.Mode.ENTRY)
+	dex.handle_button(Gen2Button.B)
+	assert_eq(dex.current_mode(), Gen2PokedexScreen.Mode.SEARCH_RESULTS)
+	assert_eq(model.listing_height, Gen2Pokedex.SEARCH_RESULTS_HEIGHT)
 
 	dex.handle_button(Gen2Button.B)
 	assert_eq(dex.current_mode(), Gen2PokedexScreen.Mode.SEARCH)

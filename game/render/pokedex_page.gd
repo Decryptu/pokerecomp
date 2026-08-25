@@ -32,6 +32,9 @@ const HEIGHT: int = ROWS * TILE
 ## Where `PokedexLZ` lands, which is what a sheet tile number is offset by.
 const SHEET_FIRST_TILE: int = 0x31
 
+## `Pokedex_PlaceFrontpicAtHL`'s own box, which is also `PadFrontpic`'s.
+const PIC_COLUMNS: int = 7
+
 ## `Pokedex_FillBackgroundColor2`'s fill, and the tile every cleared cell is.
 const BACKGROUND_TILE: int = 0x32
 
@@ -88,6 +91,98 @@ const NUMBER_DOT: int = 0x5D
 const HEIGHT_FEET: int = 0x5E
 const HEIGHT_INCHES: int = 0x5F
 
+## The objects, which come out of `PokedexSlowpokeLZ` rather than the background
+## sheet: `Pokedex_PutScrollbarOAM`'s knob, the search screen's Slowpoke and the
+## seven tiles the listing cursor's frame is built from.
+const SCROLLBAR_TILE: int = 0x0F
+## `DoDexSearchSlowpokeFrame.SlowpokeSpriteData`: three by three tiles at
+## (9,11), with the frame's own offset added to each tile number.
+const SLOWPOKE_AT := Vector2i(9, 11)
+const SLOWPOKE_TILES: Array[int] = [
+	0x00, 0x01, 0x02, 0x10, 0x11, 0x12, 0x20, 0x21, 0x22,
+]
+## `AnimateDexSearchSlowpoke.FrameIDs`: five frames, each held seven frames, run
+## twenty-five times through and then left on frame 0 for thirty-two more.
+const SLOWPOKE_FRAMES: int = 5
+const SLOWPOKE_FRAME_HOLD: int = 7
+const SLOWPOKE_STEPS: int = 25
+const SLOWPOKE_SETTLE: int = 32
+
+## `Pokedex_LoadCursorOAM`'s own rows, as (x tile, y tile, dx, dy, tile, x flip,
+## y flip). The y of every row is `wDexListingCursor` * 16 lower, which is what
+## `and $7 / swap a` adds.
+const CURSOR_NEW_MODE: Array = [
+	[9, 3, -1, 3, 0x30, false, false], [9, 2, -1, 3, 0x31, false, false],
+	[10, 2, -1, 3, 0x32, false, false], [11, 2, -1, 3, 0x32, false, false],
+	[12, 2, -1, 3, 0x33, false, false], [16, 2, 0, 3, 0x33, true, false],
+	[17, 2, 0, 3, 0x32, true, false], [18, 2, 0, 3, 0x32, true, false],
+	[19, 2, 0, 3, 0x31, true, false], [19, 3, 0, 3, 0x30, true, false],
+	[9, 4, -1, 3, 0x30, false, true], [9, 5, -1, 3, 0x31, false, true],
+	[10, 5, -1, 3, 0x32, false, true], [11, 5, -1, 3, 0x32, false, true],
+	[12, 5, -1, 3, 0x33, false, true], [16, 5, 0, 3, 0x33, true, true],
+	[17, 5, 0, 3, 0x32, true, true], [18, 5, 0, 3, 0x32, true, true],
+	[19, 5, 0, 3, 0x31, true, true], [19, 4, 0, 3, 0x30, true, true],
+]
+## `Pokedex_PutOldModeCursorOAM.CursorOAM`, which is two columns wider because
+## DEXMODE_OLD's listing has no scroll bar, and sits three pixels higher.
+const CURSOR_OLD_MODE: Array = [
+	[9, 3, -1, 0, 0x30, false, false], [9, 2, -1, 0, 0x31, false, false],
+	[10, 2, -1, 0, 0x32, false, false], [11, 2, -1, 0, 0x32, false, false],
+	[12, 2, -1, 0, 0x32, false, false], [13, 2, -1, 0, 0x33, false, false],
+	[16, 2, -2, 0, 0x33, true, false], [17, 2, -2, 0, 0x32, true, false],
+	[18, 2, -2, 0, 0x32, true, false], [19, 2, -2, 0, 0x32, true, false],
+	[20, 2, -2, 0, 0x31, true, false], [20, 3, -2, 0, 0x30, true, false],
+	[9, 4, -1, 0, 0x30, false, true], [9, 5, -1, 0, 0x31, false, true],
+	[10, 5, -1, 0, 0x32, false, true], [11, 5, -1, 0, 0x32, false, true],
+	[12, 5, -1, 0, 0x32, false, true], [13, 5, -1, 0, 0x33, false, true],
+	[16, 5, -2, 0, 0x33, true, true], [17, 5, -2, 0, 0x32, true, true],
+	[18, 5, -2, 0, 0x32, true, true], [19, 5, -2, 0, 0x32, true, true],
+	[20, 5, -2, 0, 0x31, true, true], [20, 4, -2, 0, 0x30, true, true],
+]
+## `.CursorAtTopOAM`, which DEXMODE_OLD swaps in for a cursor on the top row: the
+## frame's own top edge would otherwise be drawn above the listing.
+const CURSOR_OLD_MODE_TOP: Array = [
+	[9, 3, -1, 0, 0x30, false, false], [9, 2, -1, 0, 0x34, false, false],
+	[10, 2, -1, 0, 0x35, false, false], [11, 2, -1, 0, 0x35, false, false],
+	[12, 2, -1, 0, 0x35, false, false], [13, 2, -1, 0, 0x36, false, false],
+	[16, 2, -2, 0, 0x36, true, false], [17, 2, -2, 0, 0x35, true, false],
+	[18, 2, -2, 0, 0x35, true, false], [19, 2, -2, 0, 0x35, true, false],
+	[20, 2, -2, 0, 0x34, true, false], [20, 3, -2, 0, 0x30, true, false],
+	[9, 4, -1, 0, 0x30, false, true], [9, 5, -1, 0, 0x31, false, true],
+	[10, 5, -1, 0, 0x32, false, true], [11, 5, -1, 0, 0x32, false, true],
+	[12, 5, -1, 0, 0x32, false, true], [13, 5, -1, 0, 0x33, false, true],
+	[16, 5, -2, 0, 0x33, true, true], [17, 5, -2, 0, 0x32, true, true],
+	[18, 5, -2, 0, 0x32, true, true], [19, 5, -2, 0, 0x32, true, true],
+	[20, 5, -2, 0, 0x31, true, true], [20, 4, -2, 0, 0x30, true, true],
+]
+## `Pokedex_UpdateSearchResultsCursorOAM.CursorOAM`, the wide frame at the new
+## mode's own three-pixel drop.
+const CURSOR_RESULTS: Array = [
+	[9, 3, -1, 3, 0x30, false, false], [9, 2, -1, 3, 0x31, false, false],
+	[10, 2, -1, 3, 0x32, false, false], [11, 2, -1, 3, 0x32, false, false],
+	[12, 2, -1, 3, 0x32, false, false], [13, 2, -1, 3, 0x33, false, false],
+	[16, 2, -2, 3, 0x33, true, false], [17, 2, -2, 3, 0x32, true, false],
+	[18, 2, -2, 3, 0x32, true, false], [19, 2, -2, 3, 0x32, true, false],
+	[20, 2, -2, 3, 0x31, true, false], [20, 3, -2, 3, 0x30, true, false],
+	[9, 4, -1, 3, 0x30, false, true], [9, 5, -1, 3, 0x31, false, true],
+	[10, 5, -1, 3, 0x32, false, true], [11, 5, -1, 3, 0x32, false, true],
+	[12, 5, -1, 3, 0x32, false, true], [13, 5, -1, 3, 0x33, false, true],
+	[16, 5, -2, 3, 0x33, true, true], [17, 5, -2, 3, 0x32, true, true],
+	[18, 5, -2, 3, 0x32, true, true], [19, 5, -2, 3, 0x32, true, true],
+	[20, 5, -2, 3, 0x31, true, true], [20, 4, -2, 3, 0x30, true, true],
+]
+## How much one row of the listing moves the cursor frame, which is
+## `Pokedex_LoadCursorOAM`'s `swap a` on the low three bits.
+const CURSOR_ROW_HEIGHT: int = 16
+## `Pokedex_PutScrollbarOAM`'s own three numbers: the knob's column and the top
+## and bottom of the run it slides down.
+const SCROLLBAR_X: int = 161
+const SCROLLBAR_MIN_Y: int = 20
+const SCROLLBAR_RANGE: int = 121
+## `dbsprite` writes an object's own bytes with no origin added, and the hardware
+## counts them from (8, 16), so a row reaches the screen eight and sixteen less.
+const OAM_ORIGIN := Vector2i(8, 16)
+
 ## `Pokedex_PlaceCaughtSymbolIfCaught`'s own tile, which is a character.
 const CAUGHT_SYMBOL: int = 0x4F
 ## `Pokedex_BlinkArrowCursor`'s two, which are characters as well.
@@ -122,6 +217,14 @@ var _sheet: PackedByteArray = PackedByteArray()
 var _footprints: PackedByteArray = PackedByteArray()
 var _unown_font: PackedByteArray = PackedByteArray()
 var _palette: PackedColorArray = PackedColorArray()
+## `PokedexSlowpokeLZ`, which `Pokedex_LoadGFX` decompresses to `vTiles0`: the
+## objects, not a background sheet. Its 55 tiles carry the search screen's five
+## Slowpoke frames, the scroll bar's knob and the listing cursor's frame.
+var _objects: PackedByteArray = PackedByteArray()
+var _object_palette: PackedColorArray = PackedColorArray()
+## `LoadQuestionMarkPic`'s own 7x7 pic and the palette it is drawn through.
+var _question_mark: PackedByteArray = PackedByteArray()
+var _question_mark_palette: PackedColorArray = PackedColorArray()
 
 
 ## [param data] supplies the glyphs and the three strips; a cache without them
@@ -138,11 +241,17 @@ static func from_data(data: GameData) -> Gen2PokedexPage:
 	out._footprints = data.tile_indices("footprints")
 	out._unown_font = data.tile_indices("unown_font")
 	out._palette = data.pokedex_palette("interface")
+	out._objects = data.tile_indices("pokedex_slowpoke")
+	out._object_palette = data.pokedex_palette("cursor")
+	out._question_mark = data.tile_indices("pokedex_question_mark")
+	out._question_mark_palette = data.pokedex_palette("question_mark")
 	return out
 
 
 func ready() -> bool:
 	return font != null and not _sheet.is_empty() and not _footprints.is_empty() \
+		and not _objects.is_empty() and not _question_mark.is_empty() \
+		and _object_palette.size() == Gen2Palette.COLORS_PER_PIC \
 		and _palette.size() == Gen2Palette.COLORS_PER_PIC
 
 
@@ -213,9 +322,8 @@ func search_results_background(count: int, type_line: String) -> PackedInt32Arra
 ## [param rows] is [method Gen2Pokedex.rows]' own shape: `number`, `name`,
 ## `seen` and `caught` per visible entry. [param old_mode] swaps the scroll bar
 ## for the two tiles that replace it and is what prints a dex number above each
-## name; [param cursor] is which row the arrow stands on, or -1 while it blinks
-## off.
-func window_map(rows: Array, old_mode: bool, cursor: int) -> PackedInt32Array:
+## name.
+func window_map(rows: Array, old_mode: bool) -> PackedInt32Array:
 	var map := PackedInt32Array()
 	map.resize(WINDOW_COLUMNS * ROWS)
 	map.fill(CURSOR_BLANK)
@@ -236,31 +344,33 @@ func window_map(rows: Array, old_mode: bool, cursor: int) -> PackedInt32Array:
 		map[(row + 1) * WINDOW_COLUMNS + 11] = NO_SCROLL if old_mode else SCROLL
 	map[(ROWS - 2) * WINDOW_COLUMNS + 11] = NO_SCROLL_BOTTOM if old_mode else SCROLL_BOTTOM
 
-	_window_rows(map, rows, old_mode, cursor)
+	_window_rows(map, rows, old_mode)
 	return map
 
 
 ## `Pokedex_PrintListing`, which both listing screens share: one entry every two
-## rows from row 2, the caught symbol one cell ahead of the name, and the arrow
-## in column 0.
-func _window_rows(
-	map: PackedInt32Array, rows: Array, old_mode: bool, cursor: int
-) -> void:
+## rows from row 2, at column 0.
+##
+## `.PrintEntry` reaches the name by one `inc hl` from that column, and the
+## caught symbol is what it writes into the cell it steps over, so a name runs
+## from column 1 to column 10 and the scroll bar's column 11 is clear of it.
+## DEXMODE_OLD's number is three digits at column 0 of the row above. The cursor
+## is not in this map at all: it is the object frame `Pokedex_LoadCursorOAM`
+## draws over the whole screen.
+func _window_rows(map: PackedInt32Array, rows: Array, old_mode: bool) -> void:
 	for index: int in rows.size():
 		var entry: Dictionary = rows[index]
 		var row: int = 2 + index * 2
 		if row >= ROWS:
 			break
 		if old_mode:
-			_window_number(map, 1, row - 1, int(entry.get("number", 0)))
+			_window_number(map, 0, row - 1, int(entry.get("number", 0)))
 		if not bool(entry.get("seen", false)):
-			_window_text(map, 2, row, Gen2Pokedex.NOT_SEEN_NAME)
+			_window_text(map, 1, row, Gen2Pokedex.NOT_SEEN_NAME)
 			continue
 		if bool(entry.get("caught", false)):
-			map[row * WINDOW_COLUMNS + 1] = CAUGHT_SYMBOL
-		_window_text(map, 2, row, String(entry.get("name", "")))
-	if cursor >= 0 and cursor < rows.size():
-		map[(2 + cursor * 2) * WINDOW_COLUMNS] = CURSOR_CODE
+			map[row * WINDOW_COLUMNS] = CAUGHT_SYMBOL
+		_window_text(map, 1, row, String(entry.get("name", "")))
 
 
 ## How much of the results window reaches the screen; see [method
@@ -270,7 +380,7 @@ const RESULTS_WINDOW_ROWS: int = 11
 
 ## `DrawPokedexSearchResultsWindow`: two stacked frames rather than the main
 ## screen's one, with the four-row listing in the upper.
-func results_window_map(rows: Array, cursor: int) -> PackedInt32Array:
+func results_window_map(rows: Array) -> PackedInt32Array:
 	var map := PackedInt32Array()
 	map.resize(WINDOW_COLUMNS * ROWS)
 	map.fill(CURSOR_BLANK)
@@ -290,7 +400,7 @@ func results_window_map(rows: Array, cursor: int) -> PackedInt32Array:
 		map[bottom * WINDOW_COLUMNS + 11] = NO_SCROLL_BOTTOM
 	map[5] = WINDOW_LEFT_JOINT
 	map[10 * WINDOW_COLUMNS + 5] = WINDOW_LEFT_JOINT_BOTTOM
-	_window_rows(map, rows, false, cursor)
+	_window_rows(map, rows, false)
 	return map
 
 
@@ -404,8 +514,11 @@ func search_map(
 		_put(map, 17, row, ARROW_RIGHT)
 	_text(map, 3, 4, "TYPE1")
 	_text(map, 3, 6, "TYPE2")
-	_text(map, 10, 4, type_1)
-	_text(map, 10, 6, type_2)
+	# `Pokedex_PlaceSearchScreenTypeStrings` clears a four by eight box at (9,3)
+	# and places each `PokedexTypeSearchStrings` entry at (9,4) and (9,6). The
+	# entries are eight cells wide, so the name is centred by the table itself.
+	_text(map, 9, 4, type_1)
+	_text(map, 9, 6, type_2)
 	_text(map, 3, 13, "BEGIN SEARCH!!")
 	_text(map, 3, 15, "CANCEL")
 	if cursor >= 0 and cursor < SEARCH_CURSOR_ROWS.size():
@@ -437,7 +550,9 @@ func unown_map(forms: Array, cursor: int, word: String = "") -> PackedInt32Array
 		var at: Array = UNOWN_COORDS[index]
 		_put(map, int(at[0]), int(at[1]), UNOWN_FIRST_CHAR + form - 1)
 		if index == cursor:
-			_put(map, int(at[2]), int(at[3]), CURSOR_CODE)
+			# `ld c, FIRST_UNOWN_CHAR + NUM_UNOWN`: the twenty-seventh tile of
+			# `UnownFont` is a diamond, not the arrow the other screens blink.
+			_put(map, int(at[2]), int(at[3]), UNOWN_CURSOR_CHAR)
 	# `PrintUnownWord` clears twelve cells at (4,15) and prints the cursor's own
 	# word into them.
 	_fill(map, 4, 15, 12, CURSOR_BLANK)
@@ -449,6 +564,8 @@ func unown_map(forms: Array, cursor: int, word: String = "") -> PackedInt32Array
 ## `UnownFont` inverted into the dex sheet's own numbering, so a form's cell is a
 ## sheet tile rather than a character.
 const UNOWN_FIRST_CHAR: int = RomLayout.UNOWN_FONT_FIRST_TILE
+## `FIRST_UNOWN_CHAR + NUM_UNOWN`, the diamond that follows the alphabet.
+const UNOWN_CURSOR_CHAR: int = UNOWN_FIRST_CHAR + RomLayout.UNOWN_FORMS
 ## `UnownModeLetterAndCursorCoords`, as (letter x, letter y, cursor x, cursor y)
 ## per form in catching order.
 const UNOWN_COORDS: Array = [
@@ -472,13 +589,33 @@ func image(map: PackedInt32Array, pic: Image = null, pic_at: Vector2i = Vector2i
 			_blit_tile(indices, WIDTH, map[row * COLUMNS + column], column * TILE, row * TILE)
 	var out: Image = Gen2PicImage.from_indices(indices, WIDTH, HEIGHT, _palette)
 	if pic != null:
-		# `_PrepMonFrontpic` centres a pic in its seven-tile cell and sits it on
-		# the cell's floor, so a 5x5 species is not drawn in the corner.
-		var cell: int = 7 * TILE
-		out.blend_rect(pic, Rect2i(Vector2i.ZERO, pic.get_size()), Vector2i(
-			pic_at.x * TILE + (cell - pic.get_width()) / 2,
-			pic_at.y * TILE + cell - pic.get_height()
-		))
+		out.blit_rect(
+			pic, Rect2i(Vector2i.ZERO, pic.get_size()), pic_at * TILE
+		)
+	return out
+
+
+## `PadFrontpic`, which is what makes every species fill the same seven by seven
+## box: one blank column on the left, the picture sitting on the box's floor, and
+## the rest filled with colour 0. A 5x5 species is padded to 7x7 before the copy,
+## so the box is never the screen's own background showing through.
+static func pad_pic(pic: Image, background: Color) -> Image:
+	var side: int = PIC_COLUMNS * TILE
+	var out: Image = Image.create_empty(side, side, false, Image.FORMAT_RGBA8)
+	out.fill(background)
+	if pic == null:
+		return out
+	out.blit_rect(pic, Rect2i(Vector2i.ZERO, pic.get_size()), Vector2i(
+		0 if pic.get_width() >= side else TILE, side - pic.get_height()
+	))
+	return out
+
+
+## The search screen and the Slowpoke object `DoDexSearchSlowpokeFrame` puts over
+## it, which is the one screen here whose objects are not a cursor.
+func search_image(map: PackedInt32Array, frame: int) -> Image:
+	var out: Image = image(map)
+	_draw_slowpoke(out, frame)
 	return out
 
 
@@ -486,9 +623,14 @@ func image(map: PackedInt32Array, pic: Image = null, pic_at: Vector2i = Vector2i
 ## scrolled left by [constant MAIN_SCX] and the listing window blitted over it at
 ## its own `hWX`. Both layers wrap at the background map's 256 pixels, which is
 ## why the background is drawn wide and sampled rather than blitted.
+## [param cursor] is `wDexListingCursor`, which the object frame is drawn around,
+## and [param scrollbar] the (position, listing end) pair
+## `Pokedex_PutScrollbarOAM` slides its knob by. A cursor below zero draws
+## neither, which is what `ClearSprites` leaves on a screen being read.
 func image_main(
 	background: PackedInt32Array, window: PackedInt32Array, old_mode: bool,
-	pic: Image = null, window_rows: int = ROWS
+	pic: Image = null, window_rows: int = ROWS, cursor: int = -1,
+	scrollbar: Vector2i = Vector2i.ZERO, results: bool = false
 ) -> Image:
 	var out: Image = image(background, pic)
 	var scrolled: Image = Image.create(WIDTH, HEIGHT, false, out.get_format())
@@ -513,25 +655,135 @@ func image_main(
 		Rect2i(0, 0, mini(layer.get_width(), WIDTH - at), window_rows * TILE),
 		Vector2i(at, 0)
 	)
+	_draw_listing_objects(scrolled, old_mode, cursor, scrollbar, results)
 	return scrolled
 
 
-## The Slowpoke picture, which is what `Pokedex_LoadSelectedMonTiles` puts in the
-## box for a species that has not been seen.
+## `Pokedex_UpdateCursorOAM` and `Pokedex_UpdateSearchResultsCursorOAM`: the
+## frame around the selected row, and the scroll bar's knob behind it. Both are
+## objects rather than tiles, which is why the listing's own names start in
+## column 1 of the window with nothing in front of them.
+func _draw_listing_objects(
+	onto: Image, old_mode: bool, cursor: int, scrollbar: Vector2i, results: bool
+) -> void:
+	if cursor < 0:
+		return
+	var buffer := PackedByteArray()
+	buffer.resize(WIDTH * HEIGHT)
+	var frame: Array = CURSOR_NEW_MODE
+	if old_mode:
+		frame = CURSOR_OLD_MODE_TOP if cursor == 0 else CURSOR_OLD_MODE
+	elif results:
+		frame = CURSOR_RESULTS
+	_copy_oam(buffer, frame, Vector2i(0, (cursor & 7) * CURSOR_ROW_HEIGHT))
+	# `Pokedex_UpdateCursorOAM` puts the scroll bar's knob out only in the two
+	# modes that draw a scroll bar, and the results screen draws none either.
+	if not old_mode and not results:
+		_put_scrollbar(buffer, scrollbar.x, scrollbar.y)
+	onto.blend_rect(
+		Gen2PicImage.from_indices(buffer, WIDTH, HEIGHT, _object_palette, true),
+		Rect2i(0, 0, WIDTH, HEIGHT), Vector2i.ZERO
+	)
+
+
+## `Pokedex_PutScrollbarOAM`: the knob's own y counts the selected position out
+## of [param listing_end] over the 121 pixels it can slide, and the last position
+## is pinned to the bottom rather than computed.
+func _put_scrollbar(into: PackedByteArray, position: int, listing_end: int) -> void:
+	if listing_end <= 0:
+		return
+	var offset: int = SCROLLBAR_RANGE
+	if position != listing_end - 1:
+		@warning_ignore("integer_division")
+		offset = (position * SCROLLBAR_RANGE) / listing_end
+	_blit_object(
+		into, SCROLLBAR_TILE,
+		Vector2i(SCROLLBAR_X - OAM_ORIGIN.x, SCROLLBAR_MIN_Y + offset - OAM_ORIGIN.y),
+		false, false
+	)
+
+
+## `DoDexSearchSlowpokeFrame`, whose nine tiles each take the frame number times
+## three. Drawn over the search screen, which is where its own OAM sits.
+func _draw_slowpoke(onto: Image, frame: int) -> void:
+	var buffer := PackedByteArray()
+	buffer.resize(WIDTH * HEIGHT)
+	for index: int in SLOWPOKE_TILES.size():
+		@warning_ignore("integer_division")
+		var at := Vector2i(
+			(SLOWPOKE_AT.x + index % 3) * TILE - OAM_ORIGIN.x,
+			(SLOWPOKE_AT.y + index / 3) * TILE - OAM_ORIGIN.y
+		)
+		_blit_object(buffer, SLOWPOKE_TILES[index] + frame * 3, at, false, false)
+	onto.blend_rect(
+		Gen2PicImage.from_indices(buffer, WIDTH, HEIGHT, _object_palette, true),
+		Rect2i(0, 0, WIDTH, HEIGHT), Vector2i.ZERO
+	)
+
+
+## `Pokedex_LoadCursorOAM`, which walks a table adding the cursor's own offset to
+## every row's y.
+func _copy_oam(into: PackedByteArray, objects: Array, offset: Vector2i) -> void:
+	for object: Array in objects:
+		_blit_object(
+			into, int(object[4]),
+			Vector2i(
+				int(object[0]) * TILE + int(object[2]) + offset.x - OAM_ORIGIN.x,
+				int(object[1]) * TILE + int(object[3]) + offset.y - OAM_ORIGIN.y
+			),
+			bool(object[5]), bool(object[6])
+		)
+
+
+## One eight by eight object out of `PokedexSlowpokeLZ`. Index zero is the
+## hardware's transparent colour and is not drawn.
+func _blit_object(
+	into: PackedByteArray, tile: int, at: Vector2i, flip_x: bool, flip_y: bool
+) -> void:
+	@warning_ignore("integer_division")
+	var slots: int = _objects.size() / TILE / TILE
+	if tile < 0 or tile >= slots:
+		return
+	var width: int = slots * TILE
+	for row: int in TILE:
+		var y: int = at.y + (TILE - 1 - row if flip_y else row)
+		if y < 0 or y >= HEIGHT:
+			continue
+		for pixel: int in TILE:
+			var x: int = at.x + (TILE - 1 - pixel if flip_x else pixel)
+			if x < 0 or x >= WIDTH:
+				continue
+			var index: int = _objects[row * width + tile * TILE + pixel]
+			if index == 0:
+				continue
+			into[y * WIDTH + x] = index
+
+
+## `Pokedex_LoadSelectedMonTiles`'s `.QuestionMark`, which is what an unseen
+## species' box is drawn with: `LoadQuestionMarkPic` decompresses
+## `gfx/pokedex/question_mark.2bpp.lz` and copies its 7 * 7 tiles into the pic
+## slot. Column major, like every pic, and drawn through the dex's own
+## `question_mark` palette rather than a species one.
 ##
-## Nothing, until the cache carries the picture. `Pokedex_LoadSelectedMonTiles`
-## sends an unseen species to `.QuestionMark`, which is `LoadQuestionMarkPic` and
-## `gfx/pokedex/question_mark.2bpp.lz`: a 7x7 question mark, and a sheet no
-## importer reads. `PokedexSlowpokeLZ`, which this used to draw, is a different
-## asset entirely -- five Slowpoke reading a book, decompressed to `vTiles0`
-## rather than to the pic slot -- and drawing 49 of its 55 tiles as a picture put
-## a rectangle of scrambled tiles in the box on every unseen row.
-##
-## An empty box is what the cartridge's own box looks like before its pic
-## arrives, and is the honest answer until the blob is located; see
-## `RomLayout.POKEDEX_TILES` for how its neighbours were found.
+## Not `PokedexSlowpokeLZ`, which this used to draw: that is a different asset
+## entirely, five Slowpoke reading a book decompressed to `vTiles0` for the
+## search screen and the listing's objects.
 func unseen_pic() -> Image:
-	return null
+	if _question_mark.is_empty() or _question_mark_palette.size() != Gen2Palette.COLORS_PER_PIC:
+		return null
+	var side: int = RomLayout.POKEDEX_QUESTION_MARK_COLUMNS * TILE
+	var indices := PackedByteArray()
+	indices.resize(side * side)
+	@warning_ignore("integer_division")
+	var width: int = _question_mark.size() / TILE
+	for slot: int in RomLayout.POKEDEX_QUESTION_MARK_TILES:
+		@warning_ignore("integer_division")
+		var column: int = slot / RomLayout.POKEDEX_QUESTION_MARK_COLUMNS
+		var row: int = slot % RomLayout.POKEDEX_QUESTION_MARK_COLUMNS
+		Gen2Font.blit_slot(
+			_question_mark, width, slot, indices, side, column * TILE, row * TILE
+		)
+	return Gen2PicImage.from_indices(indices, side, side, _question_mark_palette)
 
 
 ## `Pokedex_LoadCurrentFootprint`, as the four tiles the entry screen's grid
@@ -593,9 +845,11 @@ func _place_pic_corner(map: PackedInt32Array, x: int, y: int) -> void:
 
 ## `.Title`'s own three pieces: the SELECT picture, the name, and the START one.
 func _title(map: PackedInt32Array, y: int, label: String) -> void:
+	# `.Title` is `db $3b, " OPTION ", $3c`: the second picture follows the
+	# string's own trailing space rather than replacing it.
 	_put(map, 0, y, SELECT_OPTION[0])
 	_text(map, 1, y, " %s " % label)
-	_put(map, 2 + label.length(), y, START_SEARCH[0])
+	_put(map, 3 + label.length(), y, START_SEARCH[0])
 
 
 func _column(map: PackedInt32Array, x: int, y: int, height: int, tile: int) -> void:
@@ -629,17 +883,12 @@ func _number(
 	map: PackedInt32Array, x: int, y: int, value: int, width: int,
 	leading_zeros: bool = false, decimals: int = 0
 ) -> void:
-	var text: String = String.num_int64(maxi(value, 0))
 	if leading_zeros:
-		text = text.lpad(width, "0")
-	else:
-		text = text.lpad(width, " ")
-	if decimals > 0 and text.length() > decimals:
-		text = "%s.%s" % [
-			text.substr(0, text.length() - decimals),
-			text.substr(text.length() - decimals),
-		]
-	_text(map, x, y, text)
+		_text(map, x, y, String.num_int64(maxi(value, 0)).lpad(width, "0").right(width))
+		return
+	# `.PrintDigit` latches as `e` runs out, so the digit in front of the point
+	# is printed whether or not it is a zero: a weight of 8 reads "   0.8".
+	_text(map, x, y, Gen2Pokedex.print_num(value, width, width - decimals))
 
 
 ## One dex entry's page, wrapped into the five rows `ClearBox` cleared for it.
