@@ -19,9 +19,8 @@ var _r: RefCounted = null
 const FIRST_SPECIES: int = 1
 const LAST_SPECIES: int = 251
 
-## New Bark Town, whose group is untouched by the Gold and Silver map-id shifts
-## (`HANDOFF.md`, "What a Gold/Silver leg costs"). Any map would do: what the
-## box reads off one is its eight background palettes.
+## New Bark Town, whose group is untouched by the Gold and Silver map-id shifts.
+## Any map would do: what the box reads off one is its eight background palettes.
 const MAP_GROUP: int = 24
 const MAP_NUMBER: int = 4
 

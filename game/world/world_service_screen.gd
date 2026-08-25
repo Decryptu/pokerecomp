@@ -17,8 +17,7 @@ signal completed(results: Array)
 ## [param waited] is `WaitPlaySFX`, or a `WaitSFX` spent in front of the sound
 ## by hand: the cartridge holds there until the four effect channels are free,
 ## so the request can never be the one `PlaySFX`'s own priority gate refuses.
-## The wait itself is not spent (see `HANDOFF.md`'s `WaitSFX` row); what it
-## carries is that the sound is heard.
+## The wait itself is not spent; what it carries is that the sound is heard.
 signal sfx_requested(index: int, waited: bool)
 ## `PlayMonCry2` from a screen this one opens, the box screen's stats page today.
 ## Passed on for the same reason [signal sfx_requested] is: the world screen owns

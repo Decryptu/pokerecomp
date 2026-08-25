@@ -1625,8 +1625,6 @@ func advance_bars() -> bool:
 	return moved
 
 
-# ------------------------------------------------- battle animations ----
-
 ## `_PlayBattleAnim`'s own framing, as steps the screen walks a frame at a time.
 ## Each is a dictionary carrying its own `kind`; the delays are
 ## `BattleAnimDelayFrame` counts and `script` is `RunBattleAnimScript`.
@@ -5131,37 +5129,15 @@ func _push_view() -> void:
 	_refresh_annotations()
 
 
-## What is standing on one side's square, whether it is on it, how far it is from
-## resting there and how big it is drawn, for a renderer that stages the fight
-## somewhere other than a 20x18 tile page.
+## What is standing on one side's square, whether it is on it, how far it is
+## from resting there and how big it is drawn. `docs/MODS.md` documents the
+## block; this is where it is filled.
 ##
-## Every other field describing a battler says it in the terms the hardware draws
-## it in: the opening slide is a scanline scroll, the walk off is columns going
-## blank in `bg_map`, the player mid-slide is eighteen OAM entries, a faint sinks
-## the picture a tile row at a time inside the map, a resize script restamps it
-## out of smaller subsamplings, and every per-battler deformation is a scanline
-## window over that side's own rows. A view with no background plane has none of
-## those and would have to rebuild host state to read any of them, which is lossy
-## as well as duplicated: a resize script's arrangement and a faint sink read the
-## same at the tile level. These four values are that state said plainly.
-##
-## [code]kind[/code] is what the square holds: [code]&"trainer"[/code] a person,
-## [code]&"mon"[/code] a Pokemon, and [code]&"none"[/code] the stretch between
-## the trainer walking off and the ball putting a Pokemon there.
-## [code]visible[/code] is whether the picture is on the square at all, which
-## `BattleBGEffect_HideMon` and `..._RemoveMon` are what take it off.
-## [code]offset_pixels[/code] is how far that picture is from its resting square,
-## and one number covers every movement because they are all the same thing: the
-## opening slide brings a picture in, `SlideBattlePicOut` takes it off,
-## `MonFaintedAnimation` sinks it, `RemoveMon` pushes it aside and the window
-## effects lunge, shake and sink it. Zero is standing still.
-## [code]scale[/code] is the side of the square `BattleBGEffect_RunPicResizeScript`
-## last placed over the side of the whole picture, so the ball shrink of a recall
-## and the grow of a send-out are one number; 1 is the whole picture.
-##
-## Every value is read out of state the screen already runs rather than simulated
-## again: `faint_step`, `slide_step`, the resize scripts and the scanline window
-## are what drive the map, and this reports what they drove it with.
+## Every other battler field says it in the terms the hardware draws it in, so a
+## renderer with no background plane would have to rebuild host state to read a
+## faint, a recall or a deformation. These four say it plainly instead, read out
+## of the state the screen already runs (`faint_step`, `slide_step`, the resize
+## scripts and the scanline window) rather than simulated again.
 func battler_side(side: int) -> Dictionary:
 	var player_side: bool = side == Gen2Battle.PLAYER
 	var backpic: String = _player_backpic if player_side else ""

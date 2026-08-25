@@ -312,8 +312,6 @@ static func run(
 	return true
 
 
-# ---------------------------------------------------------------- helpers ----
-
 ## `BattleBGEffects_IncAnonJumptableIndex`.
 static func _inc(effect: Gen2BattleAnimBgEffect) -> void:
 	effect.jumptable_index = (effect.jumptable_index + 1) & 0xFF
@@ -466,8 +464,6 @@ static func _wavy_screen_fx(background: Gen2BattleAnimBackground) -> void:
 	background.ly_overrides_backup[at] = first
 
 
-# -------------------------------------------------------- palette effects ----
-
 ## `BattleBGEffect_FlashContinue`: the turn byte is how long a flash lasts and
 ## the parameter how many are left.
 static func _flash(
@@ -579,8 +575,6 @@ static func _fade_mons_to_black_repeating(
 			background.load_enemy_pals(Gen2BattleAnimBackground.PALETTE_IDENTITY)
 			effect.end()
 
-
-# -------------------------------------------------------- tilemap effects ----
 
 ## `BattleBGEffect_HideMon`: the battler's own box blanked, then four frames of
 ## nothing while the tilemap reaches VRAM.
@@ -801,8 +795,6 @@ static func _remove_mon(
 				return
 			effect.jumptable_index = 0x1
 
-
-# ------------------------------------------------------- scanline effects ----
 
 ## `BattleBGEffect_Surf`, which opens no window of its own: it rides the one
 ## `start_water` set, and does nothing until it exists.

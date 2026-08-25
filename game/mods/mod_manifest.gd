@@ -13,67 +13,9 @@ extends RefCounted
 
 const FILENAME: String = "mod.json"
 ## Bumped when the host contract changes in a way an existing mod would notice.
-## 2 added [method Gen2ModHost.register_visible_encounters].
-## 3 added mart rows and named action axes.
-## 4 added types, type matchups and mod-supplied art as content, and
-## [method Gen2ModHost.register_event_mutator].
-## 5 added [member Gen2WorldAPI.rules], the run's own divergence flags.
-## 6 added `occupied` to the visible-encounter context, which is the only way a
-## provider can tell that a cell has an NPC or an item ball standing on it.
-## 7 gave a world actor an optional `interact` and an optional `take_requests`
-## outbox, an optional `emote` on a `sprites()` entry, and the host
-## [method Gen2ModHost.request_hidden_item] over
-## [method Gen2WorldAPI.hidden_items].
-## 8 added [method Gen2ModHost.register_stats_page], a page of a Pokémon's stats
-## screen past the cartridge's own three.
-## 9 added the evolution an item causes, on the item record itself.
-## 10 is the screen that fills the window: the connection graph past the
-## cartridge's three-block margin ([method Gen2WorldAPI.map_placements],
-## [method Gen2WorldAPI.expanded_block_at],
-## [method Gen2WorldAPI.connected_map_objects]), the wider drawn surface
-## ([member Gen2WorldAPI.view_pixels]) and
-## [constant Gen2ModHost.RENDERER_INTERFACE_MASK_METHOD] beside
-## [constant Gen2ModHost.RENDERER_SCREEN_RECT_METHOD]. A view on the native
-## layer needs it: whether the host claims the zoom keys and paints its letterbox
-## over that layer is a behaviour no mod can feature-detect.
-##
-## 13 is the five registrations that let a mod change how the game is played
-## without reaching a screen: [method Gen2ModHost.register_field_move_source],
-## [method Gen2ModHost.register_repel_renewal],
-## [method Gen2ModHost.register_catch_experience],
-## [method Gen2ModHost.register_battle_info], and a start-menu entry's own
-## [constant Gen2ModHost.START_ACTIONS] plus its `visible` predicate.
-##
-## 15 added a visible encounter's own `glow`, the optional
-## `{color, amount}` on an `encounters()` entry that walks the Pokemon's four
-## colours toward a light. It is presentation and changes no DV, no battle and
-## no roll; the host rounds the amount onto
-## [constant Gen2WorldEncounters.GLOW_RUNGS] itself, because both renderers cache
-## a sprite texture per set of four colours and neither evicts. Nine amounts, so
-## a subtle glow still has a cycle after the rounding.
-##
-## An optional `icon` or `thumbnail` is deliberately NOT a contract change: a
-## host that has never heard of either ignores the field, so a mod that ships
-## art still installs on an older launcher and simply has no face there. A glow
-## is the same shape in the other direction: a mod may send one to a host that
-## drops it and the Pokemon simply does not glow, which is why `api_version` 15
-## is only needed by a mod that requires the mark to appear.
-##
-## 16 is the shiny seam, three registrations a mod that changes what comes out of
-## the grass needs: [method Gen2ModHost.register_shiny_rolls], the count of DV
-## words one wild is drawn with; [method Gen2ModHost.request_item_gift], which is
-## [method Gen2ModHost.request_hidden_item]'s twin for an item no map gives; and
-## [method Gen2ModHost.inventory], the live bag a non-renderer mod otherwise has
-## no way to read. Only the first two are contract: a mod may feature-detect the
-## bag but not a roll it never sees taken.
-##
-## 17 is the one break in the list. `view["entrance"]` is gone and
-## `view["battlers"]` stands in its place, carrying the same five fields plus
-## `visible` and `scale`: everything that happens to a battler after the entrance
-## used to be readable only as `bg_map` edits, and the two blocks describe the
-## same thing at different moments. Carrying both would have meant a renderer
-## reading one for the opening and the other for the fight, so the fold is the
-## contract. See [method Gen2BattleScreen.battler_side].
+## What each version added is in the commit history; `docs/MODS.md` documents the
+## current contract only. An optional field a mod may send and an older host may
+## drop is deliberately not a bump.
 const API_VERSION: int = 18
 ## The oldest contract this host still answers. See [constant API_VERSION].
 const MIN_API_VERSION: int = 1

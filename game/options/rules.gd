@@ -6,9 +6,9 @@ extends RefCounted
 ##
 ## Separate from [Gen2Options], which is the installation's own settings: a rule
 ## changes what the engine DOES, so it belongs to the run that produced a save
-## rather than to whichever machine is playing it. `HANDOFF.md`'s divergence table
-## is what becomes named flags here, one at a time, each with a live branch on
-## both sides and a test on each.
+## rather than to whichever machine is playing it. A divergence becomes a named
+## flag here one at a time, each with a live branch on both sides and a test on
+## each.
 ##
 ## Every flag is named for the cartridge's behaviour and answers "reproduce the
 ## hardware", so a flag that is off is this project's own corrected answer. That
@@ -71,7 +71,7 @@ const FLAG_TEXT: Dictionary = {
 	},
 }
 
-## `HANDOFF.md`'s mutual recoil faint row is deliberately NOT here: the award pass
+## The mutual recoil faint is deliberately NOT a flag: the award pass
 ## already refuses a fainted recipient, so clearing the participant as
 ## `UpdateFaintedPlayerMon` does changes no outcome that can be observed. It
 ## becomes a flag when turn-event ordering makes the difference visible, and a

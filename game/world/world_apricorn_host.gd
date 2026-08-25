@@ -8,7 +8,7 @@ extends RefCounted
 ## The source routine collects every bag stack of the item, sorts them and
 ## empties them in turn ("Compatible with multiple stacks"). The flat item model
 ## holds one stack per item, so the walk collapses to a single `Kurt_GetRidOfItem`.
-## HANDOFF's item-stack divergence covers it.
+## Nothing observable differs until the save model can hold two stacks of one item.
 
 static func complete_runtime_request(
 	world: Gen2WorldAPI,

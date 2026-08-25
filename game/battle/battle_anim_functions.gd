@@ -172,8 +172,6 @@ static func run(
 	return true
 
 
-# ---------------------------------------------------------------- helpers ----
-
 ## `BattleAnim_IncAnonJumptableIndex`.
 static func _inc(object: Gen2BattleAnimObject) -> void:
 	object.jumptable_index = (object.jumptable_index + 1) & 0xFF
@@ -270,8 +268,6 @@ static func _ball_palette(player: Gen2BattleAnimPlayer, object: Gen2BattleAnimOb
 			return
 	object.palette = BALL_COLOR_DEFAULT
 
-
-# -------------------------------------------------------------- callbacks ----
 
 ## `BattleAnimFunc_Null`, which is not a no-op: its second state deletes the
 ## object, and that is how `anim_incobj` retires the sixty-two rows that use it.

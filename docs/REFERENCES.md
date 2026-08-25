@@ -1,10 +1,10 @@
 # External source references
 
-This project uses the pret disassemblies as authoritative references when
-matching original game behavior. Ports and other recompilations are secondary:
-read them for approach, settle behavior against pret. All of them are
-comparison sources, not project content. Do not copy ROMs, extracted cartridge data, or a complete external
-checkout into the project history.
+The pret disassemblies are the authoritative reference for original game
+behaviour. Ports and other recompilations are secondary: read them for approach,
+settle behaviour against pret. All are comparison sources, never project
+content. Never copy a ROM, extracted cartridge data or a whole external checkout
+into the project history.
 
 ## Pinned repositories
 
@@ -18,10 +18,8 @@ checkouts the fetch and status scripts manage.
 | Gold and Silver | [pret/pokegold](https://github.com/pret/pokegold) | `a0dad0957ac8a9ffa67e950ee3ab6715a212ded5` | Maps, scripts, events, data, battle behavior |
 | Crystal, C port | [DanZC/suiCune](https://github.com/DanZC/suiCune) | `201d70028249b3297c441be195489e579bbf231a` | Secondary reference only: a C99 rewrite of pokecrystal, useful for how a routine reads once the GameBoy hardware assumptions are removed. Behavior is settled against pret, never against this port. |
 
-The lock file is the machine-readable source of truth; revisions are pinned so
-source comparisons stay reproducible. The branch name recorded there is the
-upstream branch used when each revision was pinned, never a substitute for the
-commit hash.
+The lock file is the source of truth. The branch name recorded there is the
+upstream branch the revision was pinned from, never a substitute for the hash.
 
 ## Local checkout workflow
 
@@ -34,11 +32,11 @@ bash tools/reference_status.sh --remote
 ```
 
 The fetch script clones a missing repository, fetches the locked revision and
-checks it out detached. An existing checkout must have the expected origin and
-no local edits: the script refuses to replace local work or silently move to
-another revision. The status script reports each checkout as missing, dirty, at
-the wrong revision or ready; `--remote` also reports when the recorded upstream
-branch has moved past the pin.
+checks it out detached. An existing checkout must have the expected origin and no
+local edits; the script refuses to replace local work or move to another
+revision. The status script reports each checkout as missing, dirty, at the wrong
+revision or ready. `--remote` also reports when the recorded upstream branch has
+moved past the pin.
 
 The default checkout root is `.references/`, ignored by the project and safe to
 remove and recreate. Set `GEN2_REFERENCE_ROOT`, or pass a first argument to
@@ -49,8 +47,8 @@ GEN2_REFERENCE_ROOT=/path/to/reference-cache bash tools/fetch_reference_sources.
 bash tools/reference_status.sh /path/to/reference-cache
 ```
 
-Updating a pin is deliberate maintenance: inspect the source changes, update
-`references.lock`, and record why.
+Updating a pin is deliberate: inspect the changes, update `references.lock`, and
+record why.
 
 ## Source lookup guide
 
@@ -68,7 +66,7 @@ The two repositories use closely related paths. Check the matching path in
 | Wild encounters | `data/wild/*.asm`, `data/wild/fish.asm` |
 | Trainer parties and data | `data/trainers/parties.asm`, the matching trainer data files |
 
-When a source fact changes runtime behavior, record the file and symbol next to
+When a source fact changes runtime behaviour, record the file and symbol next to
 the implementation, plus the pinned commit if the fact is revision-specific.
-Source-derived data stays outside tracked files unless it is a small, verified
+Source-derived data stays out of tracked files unless it is a small, verified
 runtime table or test fixture the project requires.

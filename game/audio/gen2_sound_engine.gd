@@ -241,8 +241,6 @@ func registered_bank_count() -> int:
 	return _banks.size()
 
 
-# ---------------------------------------------------------------- entry points
-
 
 ## `_InitSound`.
 func init_sound() -> void:
@@ -453,8 +451,6 @@ func any_channel_active() -> bool:
 	return music_channels_active() or sfx_active()
 
 
-# ------------------------------------------------------------------ per frame
-
 
 ## `_UpdateSound`.
 func update_sound() -> void:
@@ -657,8 +653,6 @@ func _fade_music() -> void:
 		level -= 1
 	volume = (level << 4) | level
 
-
-# ------------------------------------------------------------- note machinery
 
 
 func _load_note() -> void:

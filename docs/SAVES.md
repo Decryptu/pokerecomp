@@ -17,11 +17,11 @@ Save format version 6 stores:
 - an optional validated world snapshot: map ID, player cell, facing, movement
   mode, event flags, map scenes, inventory quantities, money, coins, phone
   contacts, seen species, repel steps, swarm state, roaming positions, source
-  engine flags, the script memory bytes `readmem`/`loadmem` address, the current
+  engine flags, the script memory bytes `readmem`/`loadmem` address, the
   day/hour/minute clock, the host second that clock was written at and the
-  daylight-saving flag. The stamp is what makes the clock a real-time one across
-  sessions: a world opens at the saved time plus the seconds that have passed
-  since, because the cartridge's RTC keeps running while the machine is off
+  daylight-saving flag. The stamp makes the clock real-time across sessions: a
+  world opens at the saved time plus the seconds that have passed since, because
+  the cartridge's RTC keeps running while the machine is off
   (`Gen2WorldClock.catch_up`);
 - imported-save and party-transaction identity fields: OT ID, nickname, OT,
   happiness, Pokerus and caught data;
@@ -34,48 +34,37 @@ Save format version 6 stores:
   reopened, and the gameplay rules it is played under (`run_rules`: which of the
   cartridge's own bugs are reproduced, and the trainer-AI difficulty);
 - `is_egg` for received eggs. An egg keeps its party slot and is skipped when
-  the battle party is built, matching the cartridge refusing it as a combatant
-  rather than removing it; the writeback puts it back in the same slot. Its
-  `happiness` byte is its hatch counter, which is what `GiveEgg` writes and what
-  `DoEggStep` drains: the walk takes one cycle off every egg in the party every
-  256 steps, and the first to reach zero hatches where it stands. A script's
-  `giveegg` and the Day-Care both hand one out.
+  the battle party is built, the way the cartridge refuses it as a combatant
+  rather than removing it. Its `happiness` byte is its hatch counter, written by
+  `GiveEgg` and drained by `DoEggStep`: one cycle off every egg in the party
+  every 256 steps, and the first to reach zero hatches where it stands.
 
-Derived battle stats are recalculated on load. Volatile state, including stages,
-confusion, recharge, Disable, Encore, trapping, Fly, Dig, Rollout and rampage,
-is never saved, and neither is the battle's own weather or its screens. A held
-item is not
-volatile: a berry eaten in a battle is gone from the party afterwards.
-The validator checks the selected `GameData`. Slots live under
-`user://save_slots` per game revision and are created on demand rather than
-preallocated, up to `Gen2SaveStore.MAX_SLOTS`; a slot number is still its file
-name, so slots written before this stay where they were. Each save carries its
-own `label`, the player's name for the slot, so an exported file names itself;
-an empty label means fall back to the player name. `current_box` is `wCurBox`,
-which CHANGE BOX's SWITCH writes and both of BILL'S PC's lists read, and
-`box_names` is `sBoxNames`, which its NAME row writes; an empty name is
-`SetDefaultBoxNames`' own "BOX1" spelling rather than a stored string.
-`hall_of_fame` is `sHallOfFame`, the thirty induction records newest first.
+Derived battle stats are recalculated on load. Volatile state is never saved:
+stages, confusion, recharge, Disable, Encore, trapping, Fly, Dig, Rollout,
+rampage, weather and screens. A held item is not volatile, so a berry eaten in a
+battle is gone from the party afterwards.
+
+Slots live under `user://save_slots` per game revision, created on demand up to
+`Gen2SaveStore.MAX_SLOTS`. A slot number is its file name. Each save carries a
+`label`, the player's name for the slot, so an exported file names itself; an
+empty label falls back to the player name.
+
+| Field | Source |
+|---|---|
+| `player_id` | `wPlayerID`, rolled once when a game starts, read from SRAM on import and written back on export. `GetTreeScore` reads it: half of a headbutt tree's encounter tier comes from the trainer ID |
+| `gender` | Crystal's `wPlayerGender`. Always male on Gold and Silver, which ship neither the byte nor Kris |
+| `current_box` | `wCurBox`, written by CHANGE BOX's SWITCH and read by both of BILL'S PC's lists |
+| `box_names` | `sBoxNames`, written by its NAME row. An empty name means `SetDefaultBoxNames`' own "BOX1" spelling rather than a stored string |
+| `hall_of_fame` | `sHallOfFame`, the thirty induction records newest first |
+
 Cartridge SRAM box placement is intentionally outside this model.
 
-`player_id` is the cartridge's own `wPlayerID`, rolled once when a game starts,
-read from SRAM on import and written back on export. `GetTreeScore` is what reads
-it: half of a headbutt tree's encounter tier comes from the trainer ID. `gender`
-is Crystal's `wPlayerGender` and is always male on Gold and Silver, which ship
-neither the byte nor Kris.
-
-Older project saves migrate in memory one version step at a time: version 1
-gains fourteen empty boxes, version 2 gains an empty label, version 3 gains a
-zero `player_id`, version 4 gains a male gender and a 0:00 timer, version 5 gains
-an empty mod namespace. Migration preserves a missing world snapshot as missing;
-it does not invent a map, player position or event state, and it does not roll an
-ID, since that would change an existing save's headbutt encounters. The `run`
-block joined version 6 after it shipped and is not a version of its own, and so
-did `current_box` and the world snapshot's clock stamp: each defaults rather than
-versioning, to no seed, mod list, settings snapshot or rules, to the first box,
-and to a clock that resumes where it stopped, which is the truth about a slot
-written before they existed; such a slot adopts the installation's
-rules once, when it is first activated. The next successful save writes version 6.
+Older project saves migrate in memory one version step at a time up to 6, and
+the next successful save writes 6. Migration invents nothing: a missing world
+snapshot stays missing, and no trainer ID is rolled, since that would change an
+existing save's headbutt encounters. Fields added inside version 6 default
+rather than versioning, and a slot written before the run block adopts the
+installation's rules once, on first activation.
 
 ## Player flow
 
@@ -85,15 +74,11 @@ the lowest free number, and rejects failed `.sav` imports before calling
 `Gen2SaveStore.save`, so partial data cannot replace a slot. A game with no
 saves lists none and has nothing selected.
 
-New games accept up to ten encoded characters and start with an empty party,
-matching Crystal's new-game initialization. When the source home map exists,
-they start at map group 24, map 7, cell 3,3 with 3000 money, from Crystal's
-`SPAWN_HOME` and `START_MONEY`. The imported Elm's Lab scripts offer Chikorita,
-Cyndaquil or Totodile at level 5 holding Berry; the party host creates the first
-save Pokémon only after the player confirms the source choice. The party screen
-shows all six positions, current and maximum HP and persistent status, and
-starts the development battle only once `GameRuntime` holds the same validated
-slot.
+New games accept up to ten encoded characters and start with an empty party.
+When the source home map exists they start at map group 24, map 7, cell 3,3 with
+3000 money, from Crystal's `SPAWN_HOME` and `START_MONEY`. The imported Elm's Lab
+scripts offer Chikorita, Cyndaquil or Totodile at level 5 holding Berry; the
+party host creates the first save Pokemon only after the player confirms.
 
 After battle messages finish, `Gen2SaveBattleAdapter` writes player name,
 Pokémon identity, held item, happiness, Pokerus, caught data, nickname, OT, HP,
@@ -103,27 +88,26 @@ discarded.
 Overworld writeback is transactional. A confirmed win saves after result
 messages finish; a loss never overwrites the slot, and the host validates and
 reconstructs the source save party before returning blackout recovery. Continue
-enters the overworld only with a validated snapshot; the start menu's SAVE
-writes map, player, items, currency, events, source engine flags and schedule
-state through
-`Gen2SaveStore`, with item and currency references checked against the selected
-cache. Daily engine flags reset when the saved world day changes while story
-flags such as Hall of Fame persist. Saves without a snapshot keep the configured
-development entry, since migration invents no world position, and
-`Gen2WorldAPI.open_snapshot()` restores a saved position without clamping it.
+enters the overworld only with a validated snapshot. The start menu's SAVE writes
+map, player, items, currency, events, source engine flags and schedule state
+through `Gen2SaveStore`, with item and currency references checked against the
+selected cache. Daily engine flags reset when the saved world day changes; story
+flags such as Hall of Fame persist. `Gen2WorldAPI.open_snapshot()` restores a
+saved position without clamping it.
 
-`box_screen.tscn`, opened from the party screen or from the imported Players
-House PC as an embedded overworld overlay, presents one numbered box at a time
-with twenty fixed slots and a party selection column. Depositing uses the
-current box's first free slot, withdrawal requires party capacity, and both go
-through `Gen2SaveStorage` to validate and write a candidate save before the
-shared runtime object changes. The last party member cannot be boxed. MOVE PKMN W/O MAIL is
-the same screen in `Gen2BoxScreen.MODE_MOVE`, where left and right load the
-party or any box and a chosen Pokemon is inserted at a second cursor. SRAM
-placement stays outside the model. Closing the embedded overlay resumes the
-paused source script, which is where a changed decoration reloads the room. Selected runtime saves persist transfers; injected scene-test
-and development saves use the validated in-memory candidate without writing a
-slot.
+`box_screen.tscn`, opened from the party screen or from the Players House PC as
+an embedded overworld overlay, presents one numbered box at a time with twenty
+fixed slots and a party selection column. Depositing uses the current box's first
+free slot, withdrawal requires party capacity, and both go through
+`Gen2SaveStorage` to validate and write a candidate save before the shared
+runtime object changes. The last party member cannot be boxed.
+
+MOVE PKMN W/O MAIL is the same screen in `Gen2BoxScreen.MODE_MOVE`, where left
+and right load the party or any box and a chosen Pokemon is inserted at a second
+cursor. Closing the overlay resumes the paused source script, which is where a
+changed decoration reloads the room. Selected runtime saves persist transfers;
+scene-test and development saves use the validated in-memory candidate without
+writing a slot.
 
 Party-owned overworld transactions modify a candidate `Gen2SaveData` and the
 live world snapshot first. Gifts, eggs, NPC trades, source `HealParty` recovery,
@@ -168,16 +152,16 @@ Mail is on the record rather than in a slot of its own: `Gen2SaveMon.mail` is
 behind `sMailboxCount`. Both default rather than versioning, so a slot written
 before mail existed reads as a party holding none and an empty mailbox.
 
-`SECTION "SRAM Battle Tower"` rides in the world snapshot rather than in the
-save proper, which is where the cartridge keeps it too: a challenge can be saved
-and left between battles, so `Gen2WorldState.battle_tower()` carries the state,
-the streak of trainers already met, the chosen room, the save-file flags and the
-prize drawn for the run. It defaults rather than versioning the way mail does.
+`SECTION "SRAM Battle Tower"` rides in the world snapshot rather than the save
+proper, which is where the cartridge keeps it too, since a challenge can be saved
+and left between battles. `Gen2WorldState.battle_tower()` carries the state, the
+streak of trainers already met, the chosen room, the save-file flags and the
+prize drawn for the run.
 
 Original SRAM also contains player, map, checksum, PC box, Hall of Fame and
-Crystal-specific regions. The first model imports only party data; the optional
-project world snapshot is a separate canonical runtime shape and does not claim
-to reproduce unsupported SRAM bytes.
+Crystal-specific regions. This model imports only party data; the world snapshot
+is a separate runtime shape and does not claim to reproduce unsupported SRAM
+bytes.
 
 ## Cartridge SRAM boundary
 
@@ -190,14 +174,13 @@ rewritten with little-endian 16-bit checksums.
 
 It maps player name and six-party fields: species, item, moves, OT ID,
 experience, stat experience, DVs, PP, happiness, Pokerus, caught data, level,
-status, current HP, nickname and OT. Derived stats are rebuilt from selected
+status, current HP, nickname and OT. Derived stats are rebuilt from the selected
 `GameData`; other bytes remain untouched. Export requires an existing valid SRAM
-image and does not invent unsupported map or event state. It also refuses a save
-carrying mod content: every species, item and move on the hardware is one byte,
-and `Gen2ContentOverlay.FIRST_MOD_NUMBER` sits past that, so truncating one would
-write a different Pokemon into a real cartridge. Crystal's player gender rides
-along in `sCrystalData`, its own section outside both save copies, of which only
-bit 0 is written.
+image and invents no map or event state. It refuses a save carrying mod content:
+every species, item and move on the hardware is one byte and
+`Gen2ContentOverlay.FIRST_MOD_NUMBER` sits past that, so truncating one would
+write a different Pokemon into a real cartridge. Crystal's player gender rides in
+`sCrystalData`, outside both save copies; only bit 0 is written.
 
 | Profile | Primary data | Checksum | Party | Backup |
 |---|---|---|---|---|

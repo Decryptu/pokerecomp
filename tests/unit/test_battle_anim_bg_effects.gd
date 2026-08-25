@@ -65,8 +65,6 @@ func _background() -> Gen2BattleAnimBackground:
 	return _player.background()
 
 
-# --------------------------------------------------------- the profile split ----
-
 ## pokegold ships no `BATTLE_BG_EFFECT_BODY_SLAM`, so its list is one shorter and
 ## every id from $25 on names a different effect. Nothing normalises between the
 ## two, which is why both tables are held whole.
@@ -127,8 +125,6 @@ func test_only_crystal_rewinds_the_tilemap_push() -> void:
 	assert_eq(_background().bg_map_third, 2)
 
 
-# ------------------------------------------------------------------ the pool ----
-
 ## `QueueBGEffect` takes the first free slot and a sixth effect simply is not
 ## queued, the way an eleventh object is not spawned.
 func test_five_effects_run_at_once_and_a_sixth_is_refused() -> void:
@@ -164,8 +160,6 @@ func test_incbgeffect_finds_a_live_effect_by_its_id() -> void:
 	player.advance_frame()
 	assert_eq(effect.jumptable_index, before + 1)
 
-
-# ---------------------------------------------------------------- the screen ----
 
 ## `BGEffect_FillLYOverridesBackup` writes one value across the window and
 ## nothing outside it.
@@ -242,8 +236,6 @@ func test_rollout_moves_the_first_object_against_the_screen() -> void:
 	assert_eq(_background().scy, 0x04)
 
 
-# --------------------------------------------------------------- the palettes ----
-
 ## The hue walks end when their list does, and `alternate_hues` is the one that
 ## takes an object palette with it.
 func test_a_hue_walk_ends_on_its_own_list() -> void:
@@ -310,8 +302,6 @@ func test_a_fade_reaches_one_side_of_the_field() -> void:
 	)
 
 
-# ---------------------------------------------------------------- the tilemap ----
-
 ## `BattleBGEffect_HideMon` blanks the battler's own box and then spends four
 ## frames doing nothing while the tilemap reaches VRAM.
 func test_hiding_a_mon_blanks_its_box_and_then_waits() -> void:
@@ -366,8 +356,6 @@ func test_a_mon_entering_is_stamped_at_three_sizes() -> void:
 	assert_eq(background.tile_at(12, 0), 0x00, "then the whole seven-by-seven")
 	assert_eq(background.tile_at(18, 6), 0x30)
 
-
-# ------------------------------------------------------------------- helpers ----
 
 ## A player whose script is [param body], so the queueing commands can be driven
 ## through the interpreter rather than called directly.

@@ -336,7 +336,7 @@ var breed_random: RandomNumberGenerator = null
 var _radio_show: Gen2RadioShow = null
 ## `wBuenasPassword` and `DAILYFLAGS2_BUENAS_PASSWORD_F`, and `wLuckyIDNumber`.
 ## None of the three is in the save model, so each is rolled once per world and
-## kept here; see HANDOFF.md's divergence row.
+## kept here rather than persisted.
 var _buenas_password: int = -1
 var _buenas_password_today: bool = false
 var _lucky_number: int = -1

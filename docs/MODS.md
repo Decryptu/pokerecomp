@@ -1,25 +1,20 @@
 # Mods
 
-A mod is interpreted GDScript in a directory under `user://mods/`. iOS forbids
-JIT and loading native code at runtime, so a distributed mod cannot be a
-compiled extension.
+A mod is interpreted GDScript in a directory under `user://mods/`. It is
+interpreted because iOS forbids JIT and native code at runtime.
 
-Mods never touch scene nodes or engine internals. A mod is handed
-`Gen2ModHost`, registers what it provides, and returns. Everything it can reach
-is cartridge content through `GameData` or live world state through
-`Gen2WorldAPI`, both of which are scene-free.
+A mod never touches scene nodes or engine internals. It is handed a
+`Gen2ModHost`, registers what it provides, and returns. It reads cartridge
+content through `GameData` and live world state through `Gen2WorldAPI`. Both are
+scene-free.
 
-`GameRuntime` discovers and loads every installed mod before the first screen
-exists, creating `user://mods/` when it is absent. The launcher lists what
-loaded and names anything it refused.
+`GameRuntime` loads every installed mod before the first screen exists. The
+launcher lists what loaded and names what it refused. A mod that fails to load is
+reported through `Gen2ModHost.failures()` and skipped; the others still run.
 
 A mod can be switched off without uninstalling it. `Gen2ModState` keeps the
-disabled ids in `user://mods_disabled.json`, and only `load_discovered()`
-consults them: a disabled mod is still discovered and still listed, it just
-does not run, and that is not a refusal. Disabled ids are stored rather than
-enabled ones, so a newly installed mod runs without an entry being written for
-it and a damaged file means everything runs rather than nothing. Uninstalling
-drops the id, so reinstalling later does not find it silently off.
+disabled ids in `user://mods_disabled.json`. A disabled mod is still discovered
+and still listed, it just does not run.
 
 ## Layout
 
@@ -35,46 +30,36 @@ user://mods/<id>/
 
 | Field | Meaning |
 |---|---|
-| `id` | Lowercase `[a-z0-9][a-z0-9_-]*`; addresses the directory and registry keys |
+| `id` | Lowercase `[a-z0-9][a-z0-9_-]*`. Addresses the directory and the registry keys |
 | `name` | Shown to the player |
-| `version` | The mod's own version, not the host's |
-| `api_version` | Between `Gen2ModManifest.MIN_API_VERSION` and `API_VERSION`. Declare the oldest host you need: 18 for [a hidden-item ask that collapses](#hidden-items-a-mod-can-see-and-ask-for) and [a refused annotation being reported](#annotating-the-battle), 17 for [the battlers block](#the-battlers), 16 for [the shiny seam](#how-many-times-a-wilds-dvs-are-rolled), [an item gift](#asking-the-host-to-hand-an-item-over) and [reading the bag](#reading-the-bag), 15 for [a visible encounter's glow](#visible-wild-encounters), 14 for [an annotation's own interface field](#annotating-the-battle), 13 for [an alternate field-move source](#an-alternate-field-move-source), [Repel renewal](#renewing-a-repel), [experience for a capture](#experience-for-a-capture), [battle annotations](#annotating-the-battle) and a start-menu entry's action and visibility, 12 for `Gen2ModHost.view_changed`, 11 for the battle view's other resolved fields, 10 for [a screen that fills the window](#a-screen-that-fills-the-window) and the maps past this one's edge, 9 for an item that names an evolution method, 8 for a stats-screen page, 7 for an actor's `interact`, `emote` and outbox and for hidden-item requests, 6 for `occupied` in the visible-encounter context, 5 for the run's rules, 4 for types, matchups, mod art and event mutators, 3 for mart rows and named axes, 2 for visible encounters, 1 for everything else |
+| `version` | The mod's own version. Strict `major.minor.patch` |
+| `api_version` | The contract this mod is written against. Current: `Gen2ModManifest.API_VERSION`, 18. A host accepts 1 to 18 |
 | `entry` | A `.gd` path inside the mod directory, or inside the pack when there is one |
 | `pack` | Optional `.pck` or `.zip` beside `mod.json`, holding the mod's files |
 | `description` | Optional |
-| `icon` | Optional path to the icon, when it is not one of the conventional names |
-| `thumbnail` | Optional path to the thumbnail, same |
-| `dependencies` | Optional object from required mod ids to SemVer ranges |
-| `games` | Optional list of cartridge ids the mod is for |
+| `icon`, `thumbnail` | Optional paths, when the art is not at a conventional name |
+| `dependencies` | Optional map of required mod ids to SemVer ranges |
+| `games` | Optional list of cartridge ids: `gold`, `silver`, `crystal` |
 
-Neither art field is an `api_version` change: a host that has never heard of
-one ignores it, so a mod shipping art still installs on an older launcher and
-simply has no face there.
+Dependency ranges accept an exact version, `*`, wildcards (`1.x`, `1.4.*`),
+comparison chains (`>=1.2.0 <2.0.0`), and caret or tilde ranges. Dependencies
+load first. A missing, disabled, incompatible or failed dependency is refused by
+name, and so is every member of a dependency cycle.
 
-`version` is a strict `major.minor.patch` number. Dependency ranges accept an
-exact version, `*`, component wildcards such as `1.x` or `1.4.*`, comparison
-chains such as `>=1.2.0 <2.0.0`, and caret or tilde ranges such as `^1.2.3` and
-`~1.2.3`. Dependencies load first. A missing, disabled, incompatible or failed
-dependency, and every member of a dependency cycle, is refused by name before
-the dependent entry script runs.
-
-`games` is `RomRegistry` ids: `["gold", "silver", "crystal"]`. Absent or empty
-means every cartridge the host knows, which is what a manifest written before
-this existed says. A cartridge the mod does not name refuses the mod at load, by
-name, and the launcher's card prints what a mod is for before Play is pressed.
-Ids the host has never heard of are not refused when the manifest is read: a mod
-that also names a cartridge a later launcher will ship has to install today, and
-naming only such an id simply means it never runs here. There is no generation
-shorthand, because a generation is not a fact the registry holds about a dump,
-and a list of ids stays right when the launcher gains one.
+`games` absent or empty means every cartridge. A cartridge the mod does not name
+refuses the mod at load, and the launcher's card shows the list before Play. An
+id this host has never heard of is not refused when the manifest is read, so a
+mod naming a future cartridge still installs.
 
 An entry that is absolute, contains `..` or is not GDScript is refused before
-anything runs. Manifests are read without executing mod code, so a launcher can
+anything runs. Manifests are read without executing mod code, so the launcher can
 list what is installed and say why something was rejected.
+
+### Packs
 
 A mod may ship its scripts and resources in a resource pack instead of loose
 files. `pack` names a `.pck` or `.zip` beside `mod.json`, exported from
-`res://mods/<id>/`, and `entry` is then a path inside that root:
+`res://mods/<id>/`. `entry` is then a path inside that root:
 
 ```
 user://mods/voxel/
@@ -82,12 +67,13 @@ user://mods/voxel/
   content.zip   mods/voxel/mod.gd, mods/voxel/renderer.gd, ...
 ```
 
-`mod.json` itself stays a plain file, so the launcher lists a packed mod and can
-refuse it without mounting anything. The pack is mounted only when the mod
-actually loads, with `replace_files` false, so it can add paths and never land on
-one the game itself ships. A pack that names a path rather than a file beside the
-manifest, or that is neither `.pck` nor `.zip`, is refused when the manifest is
-read.
+`mod.json` stays a plain file, so the launcher can list and refuse a packed mod
+without mounting it. The pack is mounted only when the mod loads, with
+`replace_files` false, so it can add paths but never override the game's own. A
+`pack` that is not a `.pck` or `.zip` file beside the manifest is refused when the
+manifest is read.
+
+### The entry script
 
 ```gdscript
 extends RefCounted
@@ -96,25 +82,23 @@ func register(host: Gen2ModHost, manifest: Gen2ModManifest) -> void:
 	host.register_world_renderer(manifest.id, load("%s/renderer.gd" % manifest.directory), "Voxel")
 ```
 
-A mod that fails to load is reported through `Gen2ModHost.failures()` and
-skipped. One broken mod does not stop the others and does not stop the game.
+### Examples
 
-Two example mods are in `mods/examples/`, to copy into `user://mods/`:
+Two example mods are in `mods/examples/`. Copy either into `user://mods/`.
 
 | Mod | Shows |
 |---|---|
-| `voxel_preview/` | A world renderer. Switch it on from its page in the launcher, from the start menu's MODS entry, or with `V` in the overworld; it reads the same collision, block and palette data the 2D view reads and extrudes geometry from it, on the native layer with a translucent text box and one registered setting |
-| `new_content/` | Every non-renderer surface in one file: a type and two matchups, a species with its own art, a move, a move effect, an item with its pocket and mart shelf, a named control axis, a visible-encounter population that reads the run's rules, two rebalancing patches, both event channels and the world channel's presentation mutator |
+| `voxel_preview/` | A world renderer. Switch it on from its launcher page, from the start menu's MODS entry, or with `V` in the overworld. It extrudes geometry from the same collision, block and palette data the 2D view reads, on the native layer, with a translucent text box and one registered setting |
+| `new_content/` | Every non-renderer surface in one file: a type and two matchups, a species with its own art, a move, a move effect, an item with its pocket and mart shelf, a named control axis, a visible-encounter population, two rebalancing patches, both event channels and a presentation mutator |
 
-The repository examples are development material and are excluded from every
-export preset. A distributed build contains the loader but no preinstalled mod;
-players install their own copies under `user://mods/`.
+The examples are excluded from every export preset. A distributed build ships the
+loader and no mod.
 
 ## Installing
 
 The launcher takes a `.zip` on every platform, through **Install** on its mods
-page or by dropping the archive on the window where the OS offers that. The archive holds
-one mod, at its root or in a single folder:
+page or by dropping the archive on the window. The archive holds one mod, at its
+root or in a single folder:
 
 ```
 voxel_preview.zip
@@ -124,77 +108,66 @@ voxel_preview.zip
 ```
 
 An archive is refused whole if it has no `mod.json`, holds more than one mod
-folder, declares another `api_version`, or names a path that would write outside
-its own folder. Nothing is written until all of that passes, so a refusal leaves
-what is already installed untouched. Reimporting a mod that is present asks
-first, and replacing one removes files the new version dropped rather than
-leaving them behind.
+folder, declares an `api_version` this host does not answer, or names a path that
+would write outside its own folder. Nothing is written until all of that passes,
+so a refusal leaves what is installed untouched. Reimporting a mod that is present
+asks first, and replacing one removes files the new version dropped.
 
-Mods do not load in a headless run or one driving a `-s` tool script: a check, a
-test tier or a screenshot would otherwise be measuring a renderer or a shuffled
-table without saying so. Such a run still discovers mods, so a listing is right,
-and `--mods` on the command line puts them back for a run that is about a mod:
+An installed mod loads immediately, without a restart. So does a change to the
+list: switching one on or off, deleting one, or choosing a different cartridge
+reloads every mod against a fresh host. Mods load the same way in an exported
+build as in the editor.
+
+`user://mods/` is `app_userdata/pokerecomp/mods` on desktop, the app's
+`Documents/mods` on iOS (visible in the Files app), and internal app storage on
+Android.
+
+### Headless runs
+
+A headless run and a `-s` tool run load no mods, so a check, a test or a
+screenshot measures the game rather than whatever is installed. Such a run still
+discovers mods. Pass `--mods` for a run that is about a mod:
 
 ```bash
 godot --headless --path . --quit-after 30 --mods
 ```
 
 `--clock=HH:MM` pins the world clock for the run, over the export defaults and
-over a save's own, and holds it there: every world opened believes it is that
-time, so a renderer can be photographed at a chosen hour through the production
-path. `--clock=HH:MM:D` names the day of the week with it. A renderer reads world
-state and must not write it, which is why this is a switch rather than a call.
+over a save's own. `--clock=HH:MM:D` adds the day of the week. Use it to
+photograph a renderer at a chosen hour through the production path.
 
 ```bash
 godot --path . -s res://tools/preview_world.gd --clock=06:00 -- crystal 24 3 \
   /tmp/dawn.png live effects 20 8
 ```
 
-Mods load the same way in an exported build as in the editor: the entry script
-is plain GDScript read at runtime, even though the game's own scripts ship as
-binary tokens. An installed mod loads immediately, without a restart, and so
-does a change to the list: switching one on or off, deleting one, or choosing a
-different cartridge reloads every mod against a fresh host.
+## Icon and thumbnail
 
-`user://mods/` is the platform's `app_userdata/pokerecomp/mods` on desktop, the
-app's `Documents/mods` on iOS (reachable in the Files app, since the export sets
-`UIFileSharingEnabled`), and internal app storage on Android, where the system
-file picker is how an archive gets in.
-
-## An icon and a thumbnail
-
-Both are optional, and a mod that wants either declares nothing: dropping the
-file at the mod root is the whole of it.
+Both are optional. Dropping the file at the mod root is the whole of it.
 
 | | File tried, in order | Size | Drawn by |
 |---|---|---|---|
 | Icon | `icon.png`, `icon.webp`, `icon.jpg` | 32x32, square | The launcher's list row and mod page |
 | Thumbnail | `thumbnail.webp`, `thumb.webp`, `thumbnail.png`, `thumb.png` | 1280x720 | Nothing in the game; a listing site |
 
-A manifest may name another path with `icon` or `thumbnail`, which is what a mod
-keeping its art in a subdirectory needs. The path stays inside the mod folder on
-the same rule as `entry`, and one that climbs out is refused as
-`art_escapes_mod`.
+The manifest may name another path with `icon` or `thumbnail`, for art kept in a
+subdirectory. The path must stay inside the mod folder; one that climbs out is
+refused as `art_escapes_mod`.
 
-32x32 is the party-icon grid the cartridge itself draws on, and the launcher
-draws an icon at a whole multiple of it with nearest filtering, so the pixels
-stay square. Anything up to `Gen2ModArt.MAX_ICON_SIDE` on a side is accepted and
-never stretched to fill its box; past that, or past a megabyte, or not a PNG,
-WebP or JPEG by its own magic, it is ignored and the row keeps the generic
-glyph. A mod's art comes out of a stranger's archive, so every one of those is
-an ordinary answer rather than an error.
+An icon is drawn at a whole multiple of 32x32 with nearest filtering, so the
+pixels stay square. Anything up to `Gen2ModArt.MAX_ICON_SIDE` is accepted and
+never stretched. Past that, past a megabyte, or not a PNG, WebP or JPEG by its own
+magic, it is ignored and the row keeps the generic glyph.
 
-An index row may carry `icon` and `thumbnail` as https URLs. That is how a mod
-has a face while it is still only listed: the launcher fetches each one once, on
-its own request so an icon never delays a download or a feed, and keeps it under
-`user://mod_icon_cache/` so a listing browsed offline still has faces. An
-installed copy's own file always wins over the URL.
+An index row may carry `icon` and `thumbnail` as https URLs, so a mod has a face
+before it is installed. The launcher fetches each once and caches it under
+`user://mod_icon_cache/`. An installed copy's own file always wins.
 
 ## Publishing a source
 
-A source is a JSON feed listing mods that stay in their authors' own
-repositories. Anyone can publish one, and the game follows none until a player
-adds it, because following a source is trusting whoever publishes it.
+A source is a JSON feed listing mods that stay in their authors' repositories.
+Anyone can publish one. The game follows none until a player adds it, because
+following a source means trusting whoever publishes it.
 
 ```json
 {
@@ -215,74 +188,50 @@ adds it, because following a source is trusting whoever publishes it.
 }
 ```
 
-`schema_version` must be exactly the version the build reads, because a later
-format may reuse a field name for something else. Feeds and downloads are https
-only: over plain http anyone on the path could rewrite where a download points.
-A row with no `id`, no usable `download`, or an id that is not a legal mod id is
-dropped, and the rest of the listing still works. `icon` and `thumbnail` are
-optional and held to the same https rule; one that is not is dropped on its own
-rather than costing the row.
-
-`games` repeats the manifest's own list of cartridge ids, so a listing says what
-a mod is for before anyone downloads it: the launcher prints it on the mod's page
-and a site can filter on it. It is optional, and a row without one means every
-cartridge, as an empty list in a manifest does. Only the shape is checked, a
-malformed id being dropped on its own; the manifest inside the archive is still
-what decides where the mod runs.
+- `schema_version` must be exactly the version the build reads.
+- Feeds and downloads are https only.
+- A row with no `id`, no usable `download`, or an illegal id is dropped; the rest
+  of the listing still works. A bad `icon` or `thumbnail` costs only itself.
+- `games` repeats the manifest's list so a listing says what a mod is for. Only
+  the shape is checked. The manifest inside the archive still decides.
 
 Pasting `owner/repo`, the repository page, a site root or the feed file all
-resolve to the same feed, `https://<owner>.github.io/<repo>/index.json` for a
+resolve to the same feed: `https://<owner>.github.io/<repo>/index.json` for a
 GitHub slug.
 
 A listed mod installs through the same path an imported `.zip` does, and its
-manifest id must match the one the feed advertised, so a listing grants a mod
-nothing that picking the same file by hand would not.
+manifest id must match the one the feed advertised.
 
-A row whose `version` is newer than the installed copy's says so and offers
-**Update** rather than **Reinstall**, and the status line counts how many the
-listing offers. Both sides have to be strict `major.minor.patch` numbers to be
-compared: a version a feed made up is reported as uncomparable rather than
-guessed at, and a listing older than the installed copy is neither an update nor
-an error.
+A row whose `version` is newer than the installed copy offers **Update** rather
+than **Reinstall**. Both sides must be strict `major.minor.patch` numbers to
+compare; anything else is reported as uncomparable.
 
-Each feed's last listing that parsed is kept under `user://mod_index_cache/`. It
-is what the mod list is built from, so the list opens instantly and offline and
-the network is only ever asked when the player asks for it, on **Sources**. A
-fetch that fails leaves the copy on disk up with its age said on the status
-line. Unfollowing a source drops its cached copy with it.
+Each feed's last listing that parsed is cached under `user://mod_index_cache/`.
+The mod list is built from the cache, so it opens instantly and offline; the
+network is asked only on **Sources**. Unfollowing a source drops its cache.
 
-The launcher's mod list is grouped by where each mod came from: a source that
-lists a mod's id owns it, and a mod no source lists came from a file. That is
-the whole rule and nothing records it, which is what makes removal mean two
-different things. Removing a mod a source lists uninstalls it and leaves the row
-behind offering the download again; removing one that came from a file deletes
-the only copy there was, and is confirmed first. A mod listed by two sources
-belongs to the first one followed, so it is on screen once.
+The launcher groups the mod list by origin: a source that lists a mod's id owns
+it, and a mod no source lists came from a file. Removing a source's mod
+uninstalls it and leaves the row offering the download again. Removing a file's
+mod deletes the only copy, and is confirmed first. A mod listed by two sources
+belongs to the first source followed.
 
 ## Adding content
 
-`mods/examples/new_content/` is every non-renderer surface of the contract in one
-file: it declares the current `api_version` and its newest surface is 9's, and
-it registers a type and two chart exceptions, a species
-with its own decoded art, a move and its effect, an item with a pack pocket, a
-mart shelf and an evolution it causes, a named control axis, a world actor that
-walks behind the player, a fourth page on the stats screen and a visible-encounter population that reads the
-run's rules and refuses a cell something is standing on, patches two cartridge
-rows, watches both event channels and rewrites the world channel's presentation.
-Copy it and read it beside this section.
+`mods/examples/new_content/` is every non-renderer surface in one file. Copy it
+and read it beside this section.
 
-A content number is per kind and starts at `Gen2ContentOverlay.FIRST_MOD_NUMBER`,
-which is 256. Every cartridge number fits in a byte, so a number that does not is
-unambiguously not the cartridge's, and a mod's own numbers mean the same thing on
-Gold, Silver and Crystal. Five kinds are numbered this way: `KIND_SPECIES`,
-`KIND_MOVE`, `KIND_ITEM`, `KIND_TRAINER` and `KIND_TYPE`.
+A content number is per kind and starts at `Gen2ContentOverlay.FIRST_MOD_NUMBER`
+(256). Every cartridge number fits in a byte, so a larger number is
+unambiguously a mod's and means the same thing on all three cartridges. Five
+kinds are numbered this way: `KIND_SPECIES`, `KIND_MOVE`, `KIND_ITEM`,
+`KIND_TRAINER` and `KIND_TYPE`.
 
-A type is the one kind numbered from zero, the cartridge's own chart being
-zero-based, so `patch_content(KIND_TYPE, id, 0, ...)` renames NORMAL and a defined
-type sits past 256 like the rest. It carries a `name` and `physical`, which is
-which stat pair it uses: Generation II splits by type number rather than per move,
-and a number past the chart has nothing to compare against, so a defined type has
-to say. Special is the default.
+Types are the exception: the cartridge chart is zero-based, so
+`patch_content(KIND_TYPE, id, 0, ...)` renames NORMAL, and a defined type still
+sits past 256. A defined type must carry `name` and `physical`, because Gen II
+splits physical and special by type number and a number past the chart has
+nothing to compare against. Special is the default.
 
 ```gdscript
 host.register_content(Gen2ContentOverlay.KIND_SPECIES, manifest.id, 256, {
@@ -292,18 +241,22 @@ host.register_content(Gen2ContentOverlay.KIND_SPECIES, manifest.id, 256, {
 })
 ```
 
-A definition is partial. Whatever it leaves out comes from the kind's defaults,
-which exist because readers index these rows directly: `palette.normal` and
-`front_tiles` are read without asking whether they are there, so a definition
-that omitted either would crash the reader rather than draw wrong.
+A definition is partial; whatever it leaves out comes from the kind's defaults.
+Everything a species carries is a field on the one row, so its learnset,
+evolution, egg moves and TM compatibility are part of the definition rather than
+four more registrations. Every content read goes through `GameData._content()`,
+so the engine reads a mod species exactly as it reads Pikachu.
 
-Everything a species carries is a field on the one row, so a learnset, an
-evolution, its egg moves and TM compatibility are part of the definition rather
-than four more registrations. The engine then reads them the way it reads Pikachu's, because
-every content read in the game goes through one place, `GameData._content()`.
+Two mods claiming one number is refused and named rather than decided by load
+order. `Gen2ContentOverlay.owner_of()` says which mod holds a number.
 
-An item may name the evolution using it causes (`api_version` 9), which is the
-one effect a definition can give a field item:
+`species_count()`, `move_count()` and `trainer_count()` are the cartridge's own
+runs. Mod numbers are listed with `Gen2ContentOverlay.defined_numbers(kind)`.
+
+### Items that evolve
+
+An item may name the evolution it causes, which is the one effect a definition
+can give a field item:
 
 ```gdscript
 host.register_content(Gen2ContentOverlay.KIND_ITEM, manifest.id, 256, {
@@ -313,20 +266,18 @@ host.register_content(Gen2ContentOverlay.KIND_ITEM, manifest.id, 256, {
 })
 ```
 
-A fact rather than a callback: the host runs that method's own predicate over the
-chosen Pokemon and then the whole of `EvolveAfterBattle`'s tail, so the adapter,
-the HP delta, a consumed held item and the moves the new species offers stay in
-one place instead of a copy per mod. `EVOLVE_TRADE` and `EVOLVE_ITEM` are the two
-methods a field item can name; an optional `"parameter"` beside the method is the
-stone `EVOLVE_ITEM` looks for, defaulting to the item's own number. An item that
-names no `evolution` behaves exactly as it did, cartridge stones included.
+The host runs that method's own predicate and then the whole of
+`EvolveAfterBattle`'s tail, so the adapter, the HP delta, a consumed held item and
+the new moves stay in one place. `EVOLVE_TRADE` and `EVOLVE_ITEM` are the two
+methods available; an optional `"parameter"` is the stone `EVOLVE_ITEM` looks for,
+defaulting to the item's own number. An item with no `evolution` behaves as before.
 
 ### Art
 
-The pic atlases hold exactly the cartridge's own slots, so a defined species or
-trainer class has no cell to point at and supplies decoded indices instead: two
-bits a pixel, row-major, in the same 0-3 index space the cache stores, and exactly
-`tiles * tiles * 64` of them.
+The pic atlases hold exactly the cartridge's slots, so a defined species or
+trainer class supplies decoded indices instead: two bits a pixel, row-major, in
+the same 0-3 index space the cache stores, and exactly `tiles * tiles * 64` of
+them.
 
 ```gdscript
 host.register_content(Gen2ContentOverlay.KIND_SPECIES, manifest.id, 256, {
@@ -337,28 +288,39 @@ host.register_content(Gen2ContentOverlay.KIND_SPECIES, manifest.id, 256, {
 })
 ```
 
-A species drawing its own `pics` stands still when it is sent out: the wobble is
-`AnimateFrontpic`, whose frames are the tiles the cartridge packs behind the
-picture, and a supplied one has none. The cry still plays, which is the source's
-own `.cry_no_anim` branch.
+A species drawing its own `pics` stands still when sent out: the wobble is
+`AnimateFrontpic`, whose frames the cartridge packs behind the picture. The cry
+still plays.
 
 A trainer class names one `pic` rather than two. An `icon` is the party menu's
-own strip, the eight tiles of its two 2x2 frames, or one of the cartridge's icon
-numbers to borrow a picture that already exists. Art left out is not an error: a
-species with no `pics` draws whatever its atlas slot holds, which for a number
-past 251 is nothing, and `GameData.species_pic()` answers both kinds in one shape
-so no screen has to know which it got.
+strip, the eight tiles of its two 2x2 frames, or a cartridge icon number. Art left
+out is not an error; `GameData.species_pic()` answers both kinds in one shape.
 
-`patch_content()` changes a row the cartridge does have. Only the fields named
-change, and a Dictionary field merges, so patching one stat leaves the other five
+A mod species gets no Pokedex entry unless it replaces a cartridge one: both dex
+order tables are cartridge data of exactly 251 entries. Mod content also cannot
+leave the project's own save, because the hardware stores a species, item or move
+in one byte; `Gen2SramAdapter` refuses to export a save carrying any of it.
+
+### Patching cartridge rows
+
+`patch_content()` changes a row the cartridge does have. Only the named fields
+change, and a Dictionary field merges, so patching one stat leaves the others
 alone. A patch of a number this cartridge lacks changes nothing rather than
-inventing a row, which is what keeps a mod that patches Crystal's MYSTICALMAN
-from conjuring one on Gold.
+inventing a row.
 
-`KIND_ENCOUNTER` and `KIND_FISHING` are the cartridge's wild tables. They are
-patched and never defined, since a mod can add neither a map nor a map header,
-and their numbers are table coordinates rather than content numbers. Patch them
-through the two helpers rather than counting the coordinate out yourself:
+A type matchup is patched by its pair and is patch-only, since the cartridge chart
+is a sparse table of exceptions and an absent pair is already neutral.
+`multiplier` is in tenths, the way the damage formula divides.
+
+```gdscript
+host.patch_type_matchup(manifest.id, 256, RomLayout.TYPE_NORMAL, {
+	"multiplier": RomLayout.MATCHUP_SUPER_EFFECTIVE,
+})
+```
+
+`KIND_ENCOUNTER` and `KIND_FISHING` are the wild tables. They are patch-only,
+since a mod can add neither a map nor a map header. Use the helpers rather than
+counting table coordinates:
 
 ```gdscript
 host.patch_encounter(manifest.id, &"grass", 3, 2, {
@@ -368,49 +330,30 @@ host.patch_encounter(manifest.id, &"grass", 3, 2, {
 host.patch_fishing_group(manifest.id, 1, {"rods": [...]})
 ```
 
-A type matchup is patched by its pair rather than by a number, and is patch-only:
-the cartridge chart is a sparse table of exceptions, so an absent pair is already
-neutral and there is no row to define. `multiplier` is in tenths, the way the
-damage formula divides, and `negated_by_foresight` is the Ghost immunities' own
-rule.
+The method is one of `grass`, `surf`, `swarm_grass` and `swarm_water`. `slots`
+and `rates` replace whole. The patched row is what every reader gets, including
+the region walk `FindNest` uses.
 
-```gdscript
-host.patch_type_matchup(manifest.id, 256, RomLayout.TYPE_NORMAL, {
-	"multiplier": RomLayout.MATCHUP_SUPER_EFFECTIVE,
-})
-```
+The four wild sources beside the map tables are patched by index:
 
-An encounter row is what `GameData.world_encounter(method, group, number)`
-answers, and the patched row is what every reader gets, including the region
-walk `FindNest` uses. The method is one of `grass`, `surf`, `swarm_grass` and
-`swarm_water`. `slots` and `rates` are arrays and replace whole; patching a map
-this cartridge lacks changes nothing, exactly as a species patch does.
+| Helper | Row |
+|---|---|
+| `patch_treemon_set(id, set, fields)` | `GameData.treemon_set(set)`, shared by Headbutt and Rock Smash |
+| `patch_bug_contest_mon(id, index, fields)` | One `ContestMons` row |
+| `patch_roaming_mon(id, index, fields)` | One roaming Pokemon |
+| `patch_fishing_time_group(id, index, fields)` | One day/night fishing substitution |
 
-The four wild sources beside the map tables are patched the same way, each by its
-own index in the cartridge's own table:
-
-| Helper | Row | Index |
-|---|---|---|
-| `patch_treemon_set(id, set, fields)` | `GameData.treemon_set(set)`, which Headbutt and Rock Smash share | The set number `treemon_set_for_map` answers |
-| `patch_bug_contest_mon(id, index, fields)` | One `ContestMons` row | Its position in the list |
-| `patch_roaming_mon(id, index, fields)` | One roaming Pokemon | Its position in the list |
-| `patch_fishing_time_group(id, index, fields)` | One day/night fishing substitution | Its position in the list |
-
-Name only what changes. A contest row's `percent` is both the choice roll's
-weight and part of what the judging reads, a rod entry's `threshold` is the bite,
-and a roaming mon's `map_group`/`map_number` are where it currently is, which the
-roamer's own movement writes; a patch naming `species` and `level` leaves all
-three exactly as the cartridge has them. Every runtime reader goes through
-`GameData`, so a patched row reaches the encounter roll, the treemon draw, the
-Pokedex nest search and a visible encounter's context alike.
+Name only what changes. A contest row's `percent` is both the choice weight and
+part of the judging. A rod entry's `threshold` is the bite. A roaming mon's
+`map_group`/`map_number` are where it is now, written by the roamer's own
+movement, so a patch naming `species` and `level` leaves them alone.
 
 ## The gameplay catalog
 
-Everything else a cartridge hands out is a SITE in a script or a map event, not a
+Everything else a cartridge hands out is a site in a script or a map event, not a
 table: a starter, a gift, a static battle, a trade, a Game Corner prize, an item
-on the ground, a badge and a shop. `GameData.catalog()` decodes them once and
-gives each a stable id, so a mod places rewards without holding a single script
-address of its own.
+on the ground, a badge, a shop. `GameData.catalog()` decodes them once and gives
+each a stable id, so a mod places rewards without holding a script address.
 
 ```gdscript
 var catalog := data.catalog()
@@ -420,37 +363,38 @@ for row in catalog.rows(Gen2WorldCatalog.KIND_STATIC):
 
 | Kind | A row carries | Decoded from |
 |---|---|---|
-| `KIND_STARTER` | `species`, `level`, `item` | A `givepoke` whose script also shows the same species with `pokepic`, which only Elm's three balls do |
+| `KIND_STARTER` | `species`, `level`, `item` | A `givepoke` whose script also shows the species with `pokepic`, which only Elm's three balls do |
 | `KIND_GIFT` | `species`, `level`, `item` | Any other `givepoke` or `giveegg` |
-| `KIND_PRIZE` | `species`, `level`, `price` | A give site in a script that spends `takecoins`, priced by the branch's own take |
+| `KIND_PRIZE` | `species`, `level`, `price` | A give site that spends `takecoins`, priced by the branch's own take |
 | `KIND_STATIC` | `species`, `level` | A `loadwildmon` with the `startbattle` that makes it one |
 | `KIND_TRADE` | `trade`, `species`, `requested_species` | A `trade` command and the record it names |
-| `KIND_ITEM` | `item`, `quantity`, `hidden` | `giveitem`, `verbosegiveitem`, an `itemball` object and a `hiddenitem` bg event |
+| `KIND_ITEM` | `item`, `quantity`, `hidden` | `giveitem`, `verbosegiveitem`, an `itemball` object, a `hiddenitem` bg event |
 | `KIND_BADGE` | `badge`, `engine_flag` | A `setflag` of a badge's engine flag |
-| `KIND_SHOP` | `mart`, `dialog`, `items` | A `pokemart` command. `items` is the resolved shelf, `{item, price}` per row, so a mod can move one row of one shop without inventing a mart |
+| `KIND_SHOP` | `mart`, `dialog`, `items` | A `pokemart` command. `items` is the resolved shelf, `{item, price}` per row |
 
-Every row also carries `id`, `kind`, its `bank` and `address` (or its `map` and
-`event_index`), the `map` it stands on where the host could attribute one, and
+Every row also carries `id`, `kind`, its `bank` and `address` (or `map` and
+`event_index`), the `map` it stands on where one could be attributed, and
 `requires`: the events, engine flags and items the script tested before reaching
-the site, read from the site's own branch rather than the whole blob.
+the site.
 
 `patch_check(id, fields)` changes a field of a row. It cannot replace the script:
-the site still sets its own completion flag, prints its own dialogue, takes its
-own money and runs its own battle, and only the number it hands over is the
-mod's. Two mods patching one id is refused by the overlay's own ownership rule,
-not by load order.
+the site still sets its own flag, prints its own dialogue, takes its own money and
+runs its own battle. Two mods patching one id is refused.
 
-A field is effective at its whole TRANSACTION, not at one command of it. The
-host links the commands a site's numbers also reach:
+A field is effective at its whole transaction, not at one command:
 
 | Patch | Also drives |
 |---|---|
-| a starter's `species` | the `pokepic` its ball shows, so the picture and the Pokemon cannot disagree |
-| a prize's `price` | its `checkcoins` affordability branch and its `takecoins` deduction, as one transaction |
-| a trade's `species` / `requested_species` | both halves of the trade, carried beside the cartridge record rather than written into it, so a second site naming that record is unaffected |
-| a shop's `items` | the shelf the counter sells, as `{item, price}` rows |
+| a starter's `species` | the `pokepic` its ball shows |
+| a prize's `price` | its `checkcoins` branch and its `takecoins` deduction |
+| a trade's `species` / `requested_species` | both halves of the trade, carried beside the cartridge record so another site naming that record is unaffected |
+| a shop's `items` | the shelf the counter sells |
 
-## Proving a placement finishes
+The catalog is derived, not imported, so it needs no cache bump and no re-import.
+`tools/checks/catalog.gd` pins both the census and the semantics on all three
+cartridges.
+
+### Proving a placement finishes
 
 A shuffle of badges and key items can write a seed nobody can beat.
 `host.validate_placement(data, patches)` answers before anything is installed:
@@ -461,53 +405,30 @@ if not result["ok"]:
 	print(result["missing"])   # {check, kind, requirement}
 ```
 
-`patches` is the same `{check_id: fields}` shape `patch_check` takes one row at a
-time. The answer is `{ok, reached, critical, missing}`, deterministic, and it
-installs nothing: a failed seed leaves the game exactly as it was, so a generator
-retries against `missing` rather than guessing.
+`patches` is the same `{check_id: fields}` shape `patch_check` takes. The answer
+is `{ok, reached, critical, missing}`, deterministic, and it installs nothing, so
+a generator retries against `missing`.
 
-`missing.requirement` is one of `{map}`, `{item}` or `{badge}`, which is the
-first thing that never became satisfiable. Behind it:
+`missing.requirement` is `{map}`, `{item}` or `{badge}`: the first thing that
+never became satisfiable. Behind it:
 
-- `Gen2WorldReachability` floods each map's own collision grid from the cells a
-  player arrives on, so an exit only Surf reaches is a Surf exit, and asks the
-  same tile questions the overworld does.
-- An HM is only a way past anything once its badge is in hand; the badge each
-  field move needs is `Gen2WorldFieldMove.badge_for_move`.
+- `Gen2WorldReachability` floods each map's collision grid from the cells a player
+  arrives on, asking the same tile questions the overworld does.
+- An HM is a way past something only once its badge is in hand
+  (`Gen2WorldFieldMove.badge_for_move`).
 - `catalog.possible_starters()`, `catalog.field_hm_items()` and
-  `catalog.is_progression(row)` are the same facts for a mod doing its own
-  planning.
+  `catalog.is_progression(row)` are the same facts for a mod planning its own.
 
-What it does NOT model, stated so a mod does not read more into a pass than is
-there: it is MAP-granular rather than cell-exact, and story `checkevent` guards
-are treated as satisfiable because a placement does not move the scripts that
-set them. Both are deliberate and both err toward passing a seed rather than
-rejecting a good one. A site the catalog could not attribute to a map is taken
-as standing where the player already is.
-
-The catalog is DERIVED, not imported, so it needs no cache-format bump and no
-re-import. It is also a decode of a corpus: `tools/checks/catalog.gd` pins both
-the census and the semantics on all three cartridges, because a decode that
-drifts into something still plausible is what a count alone cannot see.
-
-Counts: `species_count()`, `move_count()` and `trainer_count()` are the
-cartridge's own runs. Mod numbers are not part of them and are enumerated with
-`Gen2ContentOverlay.defined_numbers(kind)`.
-
-Two mods claiming one number is refused and named, rather than decided by load
-order. `Gen2ContentOverlay.owner_of()` says which mod won a number.
-
-What content does not get: a pic. The atlases are decoded from the cartridge and
-hold its own 251 slots, so a defined species draws nothing until a renderer draws
-it. `Gen2SramAdapter` cannot export a mod species to a real `.sav` either, since
-the cartridge stores a species in one byte; the project's own save is JSON and
-carries them fine.
+It does not model everything. It is map-granular rather than cell-exact, and story
+`checkevent` guards are treated as satisfiable because a placement does not move
+the scripts that set them. Both err toward passing a seed. A site with no
+attributed map is taken as standing where the player already is.
 
 ## Adding a move effect
 
-A move's effect byte is a number until something answers for it.
-`Gen2MoveEffect` holds the cartridge's lists and `Gen2EffectCommands` the steps
-one is built from; a registration is a list of those steps.
+A move's effect byte is a number until something answers for it. `Gen2MoveEffect`
+holds the cartridge's lists and `Gen2EffectCommands` the steps one is built from.
+A registration is a list of steps.
 
 ```gdscript
 host.register_move_effect(manifest.id, 0xF0, [
@@ -522,47 +443,39 @@ host.register_move_effect(manifest.id, 0xF0, [
 ])
 ```
 
-A list naming a step nobody wrote is refused at registration, where the mod's id
-is still in hand, rather than pushing an error in the middle of a turn.
-`register_effect_command()` adds a step of your own, as a Callable taking the
-`Gen2Turn`; it cannot take a name the engine already uses, so a registration can
-never quietly change what every move in the game does.
+A list naming an unknown step is refused at registration rather than mid-turn.
+`register_effect_command()` adds a step of your own, a Callable taking the
+`Gen2Turn`. It cannot take a name the engine already uses.
 
-A registered effect replaces the cartridge's list for that byte, which is how a
-mod rewrites Sleep rather than only adding to the table.
-`Gen2MoveEffect.RESERVED_EFFECTS` is the exception: the multi-hit, fixed-damage,
-Rollout, Selfdestruct, time-based heal and the two screen bytes are read back off
-the turn by their own commands, so replacing one would leave that command
-answering for a list it is no longer in.
+A registered effect replaces the cartridge's list for that byte, so a mod can
+rewrite Sleep. `Gen2MoveEffect.RESERVED_EFFECTS` is the exception: the multi-hit,
+fixed-damage, Rollout, Selfdestruct, time-based heal and two screen bytes are read
+back off the turn by their own commands.
 
 ## Watching what happens
 
 `subscribe(channel, id, handler)` on `Gen2ModHost.CHANNEL_WORLD` or
-`CHANNEL_BATTLE` calls `handler` with each event dictionary as the screen showing
-it reads it, so a subscriber sees what the player sees, in that order.
+`CHANNEL_BATTLE` calls `handler` with each event dictionary as the screen reads
+it, so a subscriber sees what the player sees, in order.
 
-A subscriber reads only: the handler is given a copy and nothing reads its return
-value, so watching cannot make two mods fight over the same state. Events are
-published from the screens, so a headless tool or a test driving the engine
-directly fires none.
+A subscriber only reads: the handler gets a copy and its return value is ignored.
+Events are published from the screens, so a headless tool or a test driving the
+engine directly fires none.
 
 `register_event_mutator(channel, id, handler)` is the other half. The turn or the
-script has already committed its state by the time these events reach the screen,
-so the handler may rewrite what is SHOWN - text, animation, display values - and
-is handed the whole event to return a changed copy of. Two things it cannot do:
-change the routing key (`type` on the battle channel, `status` on the world one),
-which would turn one screen operation into another, and share the channel. One
-mutator per channel, because composing two rewrites in load order would make the
-picture depend on which mod loaded first. A handler that returns anything else
-leaves the event alone, and subscribers see the mutated event, not the original.
+script has already committed its state by then, so the handler may rewrite what is
+*shown* (text, animation, display values) and returns a changed copy of the whole
+event. Two limits: it cannot change the routing key (`type` on the battle channel,
+`status` on the world one), and there is one mutator per channel, so the picture
+never depends on load order. A handler returning anything else leaves the event
+alone. Subscribers see the mutated event.
 
 ## Replacing the world renderer
 
-Nothing about the world requires that the drawing be 2D: maps are node-free
-`RefCounted` records, each tileset is one addressable atlas, animated tiles
-replace atlas slots rather than map rectangles, and collision is a raw
-permission byte per 2x2 walk cell. A renderer that extrudes geometry from that
-same data is a registration, not a fork.
+Nothing about the world requires 2D drawing. Maps are node-free `RefCounted`
+records, each tileset is one addressable atlas, animated tiles replace atlas slots
+rather than map rectangles, and collision is a permission byte per 2x2 walk cell.
+A renderer that extrudes geometry from that data is a registration, not a fork.
 
 A registered renderer is a `Node` providing:
 
@@ -573,167 +486,144 @@ A registered renderer is a `Node` providing:
 | `refresh()` | The player, an object or an event changed something |
 | `refresh_animation()` | A tileset animation command changed tile data |
 
-Registration is refused, by name, if any of these is missing or the script is
-not a `Node`, rather than failing on the first drawn frame.
+Registration is refused by name if any is missing or the script is not a `Node`.
 
 Six methods are optional, on either renderer kind:
 
 | Method | Effect |
 |---|---|
-| `uses_hardware_viewport() -> bool` | Answering false moves the renderer off the 160x144 hardware viewport onto the screen's own rectangle at window resolution |
+| `uses_hardware_viewport() -> bool` | False moves the renderer off the 160x144 hardware viewport onto the screen's own rectangle at window resolution |
 | `set_native_size(size: Vector2i)` | The native layer's size in window pixels, on creation and on every window change |
-| `interface_opacity() -> float` | How opaque the screen draws the field of its own text box, 0 to 1 |
-| `set_text_box_rect(rect: Rect2i)` | Where that box is, in hardware pixels, on every change and empty when none is on screen |
-| `set_interface_masked(masked: bool)` | A screen laid out in 160x144 has taken the picture, or given it back. See [A screen that fills the window](#a-screen-that-fills-the-window) |
-| `set_screen_rect(rect: Rect2i)` | Where the hardware's 160x144 screen sits inside the native layer, beside every `set_native_size` |
+| `interface_opacity() -> float` | How opaque the screen draws the field of its text box, 0 to 1 |
+| `set_text_box_rect(rect: Rect2i)` | Where that box is, in hardware pixels. Pushed on every change, empty when none is up |
+| `set_interface_masked(masked: bool)` | A screen laid out in 160x144 has taken the picture, or given it back |
+| `set_screen_rect(rect: Rect2i)` | Where the 160x144 screen sits inside the native layer. Pushed beside every `set_native_size` |
 
-A view built out of geometry cannot be drawn into a 160x144 buffer and then
-magnified, so the second layer is what makes a 3D or HD renderer possible at
-all. Text boxes and menus stay hardware pixels over the top: the world gains
-resolution, the interface stays a Game Boy.
+A view built out of geometry cannot be drawn into a 160x144 buffer and magnified,
+so the native layer is what makes a 3D or HD renderer possible. Text boxes and
+menus stay hardware pixels over the top: the world gains resolution, the interface
+stays a Game Boy.
 
-The box is drawn opaque, as the cartridge draws it. `interface_opacity()` asks
-for the field behind it to be drawn through, and only the field: the frame and
-the glyphs stay ink, so nothing a renderer asks for makes text harder to read.
-Around 0.75 reads well over a map. It is honoured only for a renderer that
-answered `uses_hardware_viewport()` false, since one drawing in hardware pixels
-paints the background itself and a hole would show the window behind the screen.
+The box is drawn opaque. `interface_opacity()` asks for the field behind it to be
+drawn through, and only the field: the frame and glyphs stay ink. Around 0.75
+reads well over a map. It is honoured only for a renderer that answered
+`uses_hardware_viewport()` false.
 
-`set_text_box_rect` is the same box measured rather than styled, pushed on every
-change including the empty rectangle when it goes away. The standard box is
-twenty by six at row twelve, but a box can be any size and is not always up.
-
-The world's own menus are not this box: the start menu, party and PC are
-window-resolution panels with their own scrim, so a renderer neither sees nor
-styles them. The pack's listing inside that panel is the cartridge's own screen,
-drawn by `Gen2PackPage`, and is not this box either. `Gen2MenuPage` is the cartridge box path, used by the naming and
+The world's own menus are not this box. The start menu, party and PC are
+window-resolution panels with their own scrim, which a renderer neither sees nor
+styles. The pack listing inside that panel is drawn by `Gen2PackPage` and is not
+this box either. `Gen2MenuPage` is the cartridge box path, used by the naming and
 gender screens, neither of which is ever over a renderer.
 
-A world renderer has a third:
+A world renderer has one more:
 
 | Method | Effect |
 |---|---|
-| `handle_world_input(event: InputEvent) -> bool` | Every input event the world screen did not use. Answering true consumes it |
+| `handle_world_input(event: InputEvent) -> bool` | Every input event the world screen did not use. True consumes it |
 
-The screen claims what it needs and offers the rest, so camera pitch, first
-person and free-roam are all reachable while a movement or interaction key never
-arrives: a renderer reads world state and must not write it, and moving the
-player is writing it. Free-roam movement is the pose layer below, not this. An
-open overlay, a running script, a battle or a trainer approach takes the event
-first, exactly as it does for the screen's own keys.
+The screen claims what it needs and offers the rest, so camera pitch, first person
+and free-roam are reachable while a movement or interaction key never arrives: a
+renderer reads world state and must not write it, and moving the player is writing
+it. An open overlay, a running script, a battle or a trainer approach takes the
+event first.
 
-Implement this rather than Godot's `_input` or `_unhandled_input`. A node in the
-tree is offered events before the screen decides what it needs, so a renderer
-reading them directly races the gameplay keys instead of taking what is left of
-them.
+Implement this rather than Godot's `_input` or `_unhandled_input`, which would
+race the gameplay keys instead of taking what is left of them.
 
 ### The tileset atlas
 
-`GameData.world_tileset_indices(number)` is one tileset's graphics as a single
-indexed strip, `Gen2WorldTileset.tile_count` tiles wide and eight tall, one byte
-of colour index per pixel. Every number a block can name indexes it directly:
-`Gen2WorldTileset.tile_index(block, tile)` is the strip slot, and
-`Gen2WorldPalette.tile_palettes()` answers one palette per slot in the same
-order.
+`GameData.world_tileset_indices(number)` is one tileset's graphics as an indexed
+strip, `Gen2WorldTileset.tile_count` tiles wide and eight tall, one byte of colour
+index per pixel. Every number a block can name indexes it directly:
+`Gen2WorldTileset.tile_index(block, tile)` is the slot, and
+`Gen2WorldPalette.tile_palettes()` answers one palette per slot in the same order.
 
-The cartridge loads a tileset's graphics as two blocks of 96 tiles into separate
-VRAM banks, and a metatile byte with the high bit set names the second. The strip
-carries both, at the cartridge's own numbering: block 0 at 0 to 95, block 1 at
-128 to 223, and the 32 tiles between them are the font's, always blank here. A
-tileset that ships only one block leaves 128 to 223 blank. Nothing needs to know
-which block a tile came from; the number is enough.
+The cartridge loads a tileset as two blocks of 96 tiles into separate VRAM banks,
+and a metatile byte with the high bit set names the second. The strip carries both
+at the cartridge's numbering: block 0 at 0-95, block 1 at 128-223, and the 32 tiles
+between are the font's, always blank here. A tileset shipping one block leaves
+128-223 blank.
 
-`Gen2WorldAnimation` rewrites slots in this strip, so a renderer texturing from
-it follows water and flowers without knowing an animation ran. That is also why
-geometry cut from the strip is cut from one arbitrary frame:
-`tile_frames(tile)` answers every frame a tile is ever drawn as, in play order,
-each entry that tile's sixty-four palette indices row by row, with the tileset's
-own tile first and an empty array for a tile no command touches. It does not
-advance the live sequence, since the running game shares the object. Ask it once
-per animated tile when a map resolves, and let a mesh span the union.
+`Gen2WorldAnimation` rewrites slots in this strip, so a renderer texturing from it
+follows water and flowers for free. Geometry cut from the strip is cut from one
+arbitrary frame, so `tile_frames(tile)` answers every frame a tile is ever drawn
+as, in play order, each entry that tile's 64 palette indices row by row, with the
+tileset's own tile first and an empty array for a tile no command touches. It does
+not advance the live sequence. Ask it once per animated tile when a map resolves
+and let a mesh span the union.
 
 ### Asking what a cell is
 
 `Gen2WorldAPI.collision_code_at(cell)` is the raw cartridge byte, and
 `Gen2WorldCollision` answers what the source asks of it. Read a predicate rather
 than a tile number: a pin by drawing is per tile id and per tileset, and the
-cartridge's own answer is per cell.
+cartridge's answer is per cell.
 
 | Call | Source |
 |---|---|
 | `permission_for(code)`, `is_walkable(code)` | `CollisionPermissionTable` |
 | `talks(code)` | The same table's `TALK` bit |
-| `grass_kind(code)`, `is_grass(code)`, `is_long_grass(code)` | `SetTallGrassFlags`, which is `CheckSuperTallGrassTile` then `CheckGrassTile` |
+| `grass_kind(code)`, `is_grass(code)`, `is_long_grass(code)` | `SetTallGrassFlags` |
 | `allows_hop(code, direction)` | `.TryJump` |
 | `is_warp_tile(code)`, `is_pit_tile(code)` | `CheckWarpCollision`, `CheckPitTile` |
 | `side_wall_face_mask(code)` | `GetMovementPermissions` |
 
-`grass_kind` returns `GRASS_NONE`, `GRASS_TALL` or `GRASS_LONG`, because the
-cartridge keeps the two apart: the long grass is its own pair of codes and the
-Bug Contest doubles its encounter rate. It is `IN_GRASS_F`, not the encounter
-gate; `CheckGrassCollision` is that one and it includes water, since one routine
-gates a surf roll too.
+`grass_kind` returns `GRASS_NONE`, `GRASS_TALL` or `GRASS_LONG`: long grass is its
+own pair of codes and the Bug Contest doubles its encounter rate. It is
+`IN_GRASS_F`, not the encounter gate; `CheckGrassCollision` is that one and it
+includes water.
 
-### The drawn block of a map that is not open
+### Blocks past the loaded map
 
-`Gen2WorldAPI.drawn_block_at(x, y)` is the block a coordinate is drawn from
-rather than the block that is stored there: `LoadMetatiles` substitutes the
-map's border block for a `$00` byte, and `FillMapConnections` fills three blocks
-of padding around the map with a neighbour's art where a connection reaches.
+`Gen2WorldAPI.drawn_block_at(x, y)` is the block a coordinate is *drawn* from
+rather than the block stored there: `LoadMetatiles` substitutes the border block
+for a `$00` byte, and `FillMapConnections` fills three blocks of padding around
+the map with a neighbour's art.
 
 A caller with no world reads the same fold through
 `Gen2WorldAPI.drawn_block_for(data, map, x, y)`. That is what a battle has: a
-`Gen2BattleWorldContext` names the map and hands over no world, deliberately, so
-an arena built from `GameData` records asks the static. The instance method calls
-through to it, so the strip geometry and the north/south/west/east order at an
-overlapping corner exist once. `tools/checks/drawn_blocks.gd` sweeps every map
-of every cache over its whole padded rectangle and refuses a disagreement.
+`Gen2BattleWorldContext` names the map and hands over no world.
+`tools/checks/drawn_blocks.gd` sweeps every map of every cache over its padded
+rectangle and refuses a disagreement.
 
-Live `changeblock` edits are the loaded world's own and are not visible to the
-static form, which is correct for a map nobody is standing on.
-`Gen2WorldAPI.block_revision` counts them, and a map load, so a view caching the
-block buffer knows when to read it again rather than rebuilding per frame.
-
-### The maps past this one's edge
+Live `changeblock` edits belong to the loaded world and are not visible to the
+static form. `Gen2WorldAPI.block_revision` counts them, and a map load, so a view
+caching the block buffer knows when to read it again.
 
 `ChangeMap` copies a map into the middle of `wOverworldMapBlocks`, three blocks
-wider than the map on every side. That margin is `BUFFER_BLOCKS`, it is what a
-connection strip fills, and it is everything the cartridge holds: past it there
-is nothing at all, which is why a 20x18 screen never needed more.
-
-A view wider than that does. The connection graph is walked instead, and the
-whole neighbouring maps are placed in this map's own block coordinates.
+wider on every side (`BUFFER_BLOCKS`). Past that margin the cartridge holds
+nothing, which is why a 20x18 screen never needed more. A wider view walks the
+connection graph instead, placing whole neighbouring maps in this map's block
+coordinates.
 
 | Call | Value |
 |---|---|
-| `map_placements() -> Dictionary` | `"group:number"` to `{map, origin}` for every map the graph reaches from the loaded one, nearest first. The loaded map is not in it: it is the origin |
+| `map_placements() -> Dictionary` | `"group:number"` to `{map, origin}` for every map the graph reaches, nearest first. The loaded map is the origin and is not in it |
 | `placements_around(data, map, hops) -> Dictionary` | The same for a map nobody is standing on |
-| `connection_origin_blocks(source, target, connection) -> Vector2i` | Where one connection puts one map, which is the arithmetic the two above and the strip share |
-| `expanded_block_at(x, y) -> int` | `drawn_block_at` inside the buffer, byte for byte; past it, whichever placed map covers the coordinate, and the border block where none does |
-| `in_hardware_buffer(map, x, y) -> bool` | Which of those two answers a coordinate takes |
+| `connection_origin_blocks(source, target, connection) -> Vector2i` | Where one connection puts one map |
+| `expanded_block_at(x, y) -> int` | `drawn_block_at` inside the buffer; past it, whichever placed map covers the coordinate, and the border block where none does |
+| `in_hardware_buffer(map, x, y) -> bool` | Which of those two a coordinate takes |
 
-`PLACEMENT_HOPS` and `PLACEMENT_LIMIT` bound the walk at three hops and 24 maps,
-which is as much as the furthest zoom shows.
+`PLACEMENT_HOPS` and `PLACEMENT_LIMIT` bound the walk at three hops and 24 maps.
 
-`expanded_block_at` is the whole answer for a renderer with one tileset atlas
-only if it never leaves this map's tileset. It does: a placed map is numbered in
-its OWN tileset, so a block read across a tileset boundary is a different
-picture with the same number. Read `map_placements()` and check
-`Gen2WorldMap.tileset` against the loaded one where that matters;
+`expanded_block_at` is enough for a renderer with one tileset atlas only while it
+stays in this map's tileset. A placed map is numbered in its *own* tileset, so a
+block read across a boundary is a different picture with the same number. Read
+`map_placements()` and compare `Gen2WorldMap.tileset` where that matters;
 `GameData.world_tileset(number)` resolves the rest, and `Gen2WorldMap.blocks` and
 `border_block` are public.
 
 `connected_map_objects() -> Array` is the people standing on those maps, as
 `{object, offset}` with the offset in walk cells. They are read-only copies and
-deliberately not part of `Gen2WorldAPI.objects`: `ReadObjectEvents` fills
-`wMapObjects` from the loaded map alone, so on the cartridge a connected map's
+deliberately not part of `Gen2WorldAPI.objects`: on the cartridge a connected map's
 people do not exist until its own map load builds them. They take the event-flag
 and visible-hours tests and nothing else. No step, no script, no sight, no
 collision, no encounter, and they cannot be talked to.
 
 ## Framing the view
 
-`Gen2WorldAPI` offers a camera; it does not impose one.
+`Gen2WorldAPI` offers a camera; it does not impose one. A renderer framing its own
+view can ignore all six calls.
 
 | Method | Value |
 |---|---|
@@ -741,255 +631,190 @@ collision, no encounter, and they cannot be talked to.
 | `visible_origin_cells() -> Vector2` | The framed view's top-left in fractional walk cells, centred on that position and clamped to the map |
 | `visible_origin_cell() -> Vector2i` | The hardware page origin, which follows the committed cell |
 | `view_pixels: Vector2i` | The drawn surface in hardware pixels, `VIEW_PIXELS` (160x144) unless a screen asked for more |
-| `view_origin_pixels() -> Vector2` | That surface's top-left in world pixels, which is `visible_origin_cells()` scaled when the surface is the hardware's own |
-| `player_view_pixel() -> Vector2i` | The player's pixel inside it, which is `player_pixel_position()` plus half of whatever surround a wider surface added |
+| `view_origin_pixels() -> Vector2` | That surface's top-left in world pixels |
+| `player_view_pixel() -> Vector2i` | The player's pixel inside it |
 
 The extra a wider surface adds is spread evenly around the screen the cartridge
-would have drawn, so the player keeps the place `PLAYER_VIEW_CELL` puts him in
-and only the surround grows. A renderer framing its own view can ignore all six.
+would have drawn, so the player keeps the place `PLAYER_VIEW_CELL` puts him in.
 
 `player_cell` commits at the start of a step, so the hardware page origin moves a
-whole cell the instant one begins. That is what the 160x144 tile page wants and
-what a camera does not: following it pans a step early.
-`visible_origin_cells()` frames the interpolated position instead, and the two
-agree whenever no step is in flight. A renderer that frames its own view, which
-is what a free camera is, can ignore all three and read
-`player_position_cells()` and `map_size_cells()` directly.
+whole cell the instant one begins. A camera following it pans a step early;
+`visible_origin_cells()` frames the interpolated position instead. The two agree
+whenever no step is in flight.
 
 The host constructs a renderer per world, so the view can change while the game
-runs. `Gen2WorldScreen.select_view()` is that switch, and `cycle_view()` is what
-`V` is bound to: the map, the player and any running script are untouched,
-because a renderer reads world state and must not write it. Two views of one
-world have to agree.
+runs. `Gen2WorldScreen.select_view()` is that switch and `cycle_view()` is what
+`V` is bound to. The map, the player and any running script are untouched.
 
 ## A screen that fills the window
 
 A window is not the Game Boy's 10:9. **SCREEN FILL** (`Gen2Options.screen_fill`,
 on by default, Settings > Application > Screen) grows the drawn surface to the
 whole control instead of framing 160x144 inside it. Every screen takes it; what
-differs is who fills it. The overworld fills it with more map: see
-[The maps past this one's edge](#the-maps-past-this-ones-edge). A screen laid out
-in 160x144 has nothing of its own out there, so the screen fills the surround
-with that screen's own field, taken from the picture it drew.
+differs is who fills it. The overworld fills it with more map. A screen laid out
+in 160x144 has nothing out there, so the screen fills the surround with that
+screen's own field, taken from the picture it drew.
 
-**Everything the cartridge laid out stays put.** Text boxes, menus and the start
-menu go inside a 160x144 rectangle centred in the surface and clipped to it, so
-a mod reading `set_text_box_rect` reads the same numbers it always did.
+Everything the cartridge laid out stays put. Text boxes, menus and the start menu
+go inside a 160x144 rectangle centred in the surface and clipped to it, so a mod
+reading `set_text_box_rect` reads the numbers it always did.
 
 | Read | Value |
 |---|---|
 | `Gen2Screen.expanded` | Whether this screen grew to its control |
 | `Gen2Screen.view_size() -> Vector2i` | The drawn surface in hardware pixels |
 | `Gen2Screen.view_size_changed(size)` | Emitted when it changes |
-| `Gen2Screen.interface_layer() -> Control` | The 160x144 rectangle, positioned in surface pixels |
+| `Gen2Screen.interface_layer() -> Control` | The 160x144 rectangle, in surface pixels |
 | `Gen2Screen.interface_masked` | Whether the screen is painting the surround itself |
-| `Gen2Screen.screen_rect() -> Rect2i` | The 160x144 screen in native-layer pixels, which is what `set_screen_rect` pushes |
+| `Gen2Screen.screen_rect() -> Rect2i` | The 160x144 screen in native-layer pixels |
 
-**`set_native_size` may now be the whole control.** It was always "the screen's
-rectangle at window resolution"; framed, that rectangle was a whole multiple of
-160x144, and expanded it is not. A renderer that sized itself to what it was
-handed needed no edit for this.
+`set_native_size` may be the whole control, which is not a whole multiple of
+160x144. A renderer that sized itself to what it was handed needs no change.
 
-**`set_screen_rect` is where the Game Boy screen is inside it**, pushed beside
-every `set_native_size`. That is what turns a hardware-pixel number into a place
-on the surface, `set_text_box_rect`'s rectangle first: framed, the mapping was
-the surface itself, and filled it is not. A hardware pixel `p` lands at
-`rect.position + p * rect.size / Vector2i(160, 144)`.
+`set_screen_rect` turns a hardware-pixel number into a place on the surface. A
+hardware pixel `p` lands at `rect.position + p * rect.size / Vector2i(160, 144)`.
 
-**A native-layer renderer keeps the zoom keys.** `+`, `-`, `0` and the wheel step
-`Gen2Screen.zoom_step`, and that ladder counts screen pixels per HARDWARE pixel.
-A view that answered `uses_hardware_viewport()` false has no hardware pixel, so
-the screen does not claim those events and they reach `handle_world_input` and a
-mod's own registered actions as usual. Its zoom is its camera's.
+A native-layer renderer keeps the zoom keys. `+`, `-`, `0` and the wheel step
+`Gen2Screen.zoom_step`, which counts screen pixels per *hardware* pixel. A view
+that answered `uses_hardware_viewport()` false has no hardware pixel, so those
+events reach `handle_world_input` and a mod's registered actions instead.
+`Gen2Options.zoom_step` persists the ladder position.
 
-**The surround is not painted over the native layer.** When a screen laid out in
-160x144 takes the picture -- the pack, the party, the PC, the dex, the trainer
-card, an evolution, a hatch, the day-care, the slot machine, card flip, a battle,
-and `DoBattleTransition` -- the surround becomes that screen's own field rather
-than the world behind it. It is drawn inside the hardware viewport, which
-composites over the native layer, so raising it would crop a view that had
-already filled the whole surface. It is not raised there.
-`set_interface_masked(masked)` is how such a renderer closes its own surround
-instead, and the transition is the case it exists for: twenty by eighteen cells cannot be widened, so a wedge reaching the
-edge of a filled window is a shape only the view drawing that window can draw. A
-renderer that does not take it keeps drawing what it was drawing.
-`mods/examples/voxel_preview` draws the four bands around `set_screen_rect`'s
-rectangle, which is the same shape the screen paints for a hardware-pixel view.
+The surround is not painted over the native layer. When a screen laid out in
+160x144 takes the picture (the pack, party, PC, dex, trainer card, an evolution, a
+hatch, the day-care, the slot machine, card flip, a battle, `DoBattleTransition`)
+the surround becomes that screen's field. It is drawn inside the hardware
+viewport, which composites over the native layer, so raising it would crop a view
+that had filled the surface. `set_interface_masked(masked)` is how a renderer
+closes its own surround instead. `mods/examples/voxel_preview` draws the four bands
+around `set_screen_rect`'s rectangle.
 
-**A battle fills the window either way; who fills it differs.** `_BattleScene`
-is a 160x144 picture with nothing to put in a wider surface, so the screen fills
-the surround with the arena's own field. A battle renderer on the native layer,
-staged on the map the encounter fired on, has the same world the overworld was
-filling the window with a frame earlier and fills the surface itself, so the
-screen leaves it alone. The HUD does not move either way: the panels, the bars and the boxes are hardware pixels in that same centred
-rectangle.
-
-`Gen2Options.zoom_step` is the ladder's position, persisted because it is a view
-preference rather than part of a run.
+A battle fills the window either way. `_BattleScene` is a 160x144 picture, so the
+screen fills the surround with the arena's own field. A battle renderer on the
+native layer already has the world the overworld was filling the window with, so
+it fills the surface itself and the screen leaves it alone. The HUD does not move
+either way.
 
 ## Choosing the view
 
-**Choosing a view is one choice.** `Gen2ModHost.select_view(id)` takes a mod id,
-not a surface, and applies to whichever of the two renderer kinds that id
-registered. Registering a world renderer and a battle renderer under one id is
-how a mod says the two are one view of one world; a mod registering only one
-keeps the built-in renderer on the other, and `gen2` selects both.
+Choosing a view is one choice. `Gen2ModHost.select_view(id)` takes a mod id, not a
+surface, and applies to whichever renderer kinds that id registered. Registering a
+world renderer and a battle renderer under one id says the two are one view of one
+world. A mod registering only one keeps the built-in renderer on the other.
+`gen2` selects both.
 
 | Method | Value |
 |---|---|
-| `view_ids() -> Array[StringName]` | Every id that registered a renderer of either kind, `gen2` first and the rest in load order |
-| `view_label(id) -> String` | The label the registration gave, drawn in eight cells (see "What a name is drawn in") |
+| `view_ids() -> Array[StringName]` | Every id that registered a renderer of either kind, `gen2` first, then load order |
+| `view_label(id) -> String` | The label the registration gave |
 | `view_surfaces(id) -> Dictionary` | `{world, battle}`, which of the two that id draws |
 | `selected_view() -> StringName` | The chosen id, whether or not its mod is loaded |
 | `select_view(id) -> Dictionary` | Chooses it, and persists the choice |
-| `view_changed(id)` | Signal, emitted whenever the chosen id actually changes |
+| `view_changed(id)` | Signal, emitted whenever the chosen id changes |
 
-The choice is stored per installation in `user://mods_disabled.json` beside the
-disabled list, so it survives a restart the way a mod's own options do, and it is
-resolved every time a surface builds a renderer rather than once at load: a
-stored id whose mod is uninstalled or switched off draws with the built-in
-renderer and is not refused, and starts drawing again the moment the mod
-registers.
+The choice is stored per installation in `user://mods_disabled.json` and resolved
+every time a surface builds a renderer. A stored id whose mod is uninstalled or
+switched off draws with the built-in renderer, is not refused, and starts drawing
+again the moment the mod registers.
 
-**Every way of choosing reaches the same live screen.** `select_view` announces
-the change on `view_changed`, and the world and battle screens rebuild what they
-are drawing with on it, so the launcher's mod page, the start menu's own VIEW
-row and `V` are one path. A mod neither needs nor should hold a screen; it may
-connect to the signal to hear about a switch.
+Every way of choosing reaches the same live screen: `select_view` announces the
+change on `view_changed` and both screens rebuild on it, so the launcher's mod
+page, the start menu's VIEW row and `V` are one path. A mod neither needs nor
+should hold a screen; it may connect to the signal.
 
-### What a name is drawn in
+Players reach the view from three places: the mod's launcher page, the VIEW row at
+the top of the start menu's MODS entry (present as soon as more than one view is
+registered), and `V` where `Gen2DebugKeys` is enabled. A mod must not register a
+view button of its own.
 
-The start menu is the hardware's twenty-cell screen, so a name a mod registers
-is drawn into a fixed budget and a longer one ends in the charmap's own "…":
+The switch is covered. Building a renderer can stall a whole frame, and nothing on
+one thread can animate over its own freeze. `Gen2Screen.play_view_cover` closes
+with `StartTrainerBattle_SpeckleToBlack`'s scatter on the renderer still running,
+builds the new one while the screen is black, and opens with the same frames
+backwards.
 
-| Row | Cells | What is drawn there |
+### Name lengths
+
+The start menu is the hardware's twenty-cell screen, so a registered name is drawn
+into a fixed budget and a longer one ends in the charmap's "…":
+
+| Row | Cells | What is drawn |
 |---|---|---|
 | A mod's name in the MODS list | 17 | The manifest's `name` |
-| A setting's `label`, and the VIEW row's own | 17 | `register_option`'s `label` |
+| A setting's `label`, and the VIEW row's | 17 | `register_option`'s `label` |
 | A setting's value, and a view's label | 8 | The chosen rung's label, a button's `press_label`, or `view_label` |
 
-The built-in view is labelled "GBC 2D" for that reason. A name that has to read
-whole in the start menu is written to those budgets; a longer one still works
-and is shown cut, rather than drawn through the panel's border as it was before.
 The numbers are `Gen2StartMenuPage.OPTIONS_LABEL_CELLS` and
-`OPTIONS_VALUE_CELLS`. The launcher draws the full name either way.
-
-**Players reach the view from three places.** The mod's page in the launcher,
-where they already change what a mod does; the VIEW row at the top of the start
-menu's MODS entry, which is the host's own row and appears as soon as more than
-one view is registered, whether or not any mod registered a setting; and `V`
-where [Gen2DebugKeys] is enabled. A mod must not register a view button of its
-own: the host holds the one selection, and a mod's copy of it would be a second
-answer to the same question.
-
-**The switch is covered.** Building a renderer is a stall -- meshing a map can
-land whole on one frame -- and nothing on one thread can animate over its own
-freeze. `Gen2Screen.play_view_cover` closes with
-`StartTrainerBattle_SpeckleToBlack`'s own scatter on the renderer that is still
-running, builds the new one on the frame the screen is fully black, and opens
-with the same frames backwards. It is around the switch rather than at a caller,
-so every one of the three gets it, and renderers need nothing new: the outgoing
-one is asked for no frame it would not have drawn anyway.
+`OPTIONS_VALUE_CELLS`. The built-in view is labelled "GBC 2D" to fit. The launcher
+draws the full name either way.
 
 ## Replacing the battle renderer
 
-The same boundary covers battle presentation. `Gen2BattleScreen` owns the
-battle, the events and the text box; it decides nothing about how a Pokémon,
-a panel or a bar is drawn. A registered battle renderer is a `Node` providing:
+`Gen2BattleScreen` owns the battle, the events and the text box. It decides
+nothing about how a Pokemon, a panel or a bar is drawn. A registered battle
+renderer is a `Node` providing:
 
 | Method | Called when |
 |---|---|
-| `set_battle_data(data) -> bool` | The screen is ready, before the first view; a false return leaves the screen not ready |
-| `set_view(view: Dictionary)` | The screen has new plain display values to show |
+| `set_battle_data(data) -> bool` | The screen is ready, before the first view. False leaves the screen not ready |
+| `set_view(view: Dictionary)` | The screen has new display values to show |
 | `refresh()` | The renderer should redraw its current view |
 
-`view` carries `enemy_species`, `player_species`, `enemy_unown_form`,
-`player_unown_form`, `enemy_substitute`, `player_substitute`, `enemy_name`,
-`player_name`, `enemy_level`, `player_level`, `battle_kind`, `trainer_class`,
-`trainer_index`, `trainer_name`, `enemy_hp`, `enemy_max_hp`, `player_hp`,
-`player_max_hp`, `enemy_shiny`, `player_shiny`, `exp_pixels`, `raster_scx`,
-`raster_scy`, `battlers`,
-`intro_sprites`, `grayscale`, `enemy_trainer_pic`, `player_backpic`,
-`player_backpic_palette`, `enemy_hud_visible`, `player_hud_visible`,
-`trainer_hud_balls`, `trainer_hud_border`, `bg_map`, `bg_vbank1`,
-`bg_palette_maps`, `ob_palette_maps`, `anim_sprites`, `anim_tiles` and
-`hud_visible`: plain values read out of a resolved battle event, never the
-battle engine itself, the same rule `Gen2BattleScreen`'s own setters already
-followed.
+Registration uses the same refusal rules as a world renderer, and shares both
+optional methods (`uses_hardware_viewport()`, `set_native_size()`), the view
+selection above, and the `V` cycle.
 
-`battle_kind` is `wild` or `trainer` and the three fields after it say who the
-fight is against, which the species and levels do not. A wild battle carries
-class 0, index 0 and an empty name, the way `wOtherTrainerClass` is zero there.
-A class number is what `GameData.trainer_pic()` and `trainer_name()` take, so a
-renderer standing the opponent behind their Pokémon draws the cartridge's own
-picture of them; `trainer_name` is the trainer's own name from the party record,
-not the class name. `exp_pixels` is a
-count out of 64, which is `PlaceExpBar`'s own unit; the exp bar is never a
-ratio, because `CalcExpBar` has already done the division and rounded it the
-cartridge's way.
+`view` carries plain values read out of a resolved battle event, never the battle
+engine itself:
 
-`enemy_shiny` and `player_shiny` say the individual on that square is shiny, so
-its picture is drawn in the shiny palette rather than the species one:
-`GameData.palette(number, shiny)` is the accessor both take, the same call
-`_CGB_BattleColors` makes through `GetMonNormalOrShinyPalettePointer`. They are
-about the individual and not the species, so they cannot be derived from
-`enemy_species` and `player_species`; a renderer that ignores them draws every
-shiny in normal colours. Both are `api_version` 11, pushed with the rest of the
-resolved battle fields.
+| Group | Fields |
+|---|---|
+| Who is standing | `enemy_species`, `player_species`, `enemy_name`, `player_name`, `enemy_level`, `player_level`, `enemy_shiny`, `player_shiny`, `enemy_unown_form`, `player_unown_form`, `enemy_substitute`, `player_substitute` |
+| The fight | `battle_kind` (`wild` or `trainer`), `trainer_class`, `trainer_index`, `trainer_name` |
+| Bars | `enemy_hp`, `enemy_max_hp`, `player_hp`, `player_max_hp`, `exp_pixels` |
+| HUD | `hud_visible`, `enemy_hud_visible`, `player_hud_visible`, `trainer_hud_balls`, `trainer_hud_border` |
+| Entrance | `battlers`, `intro_sprites`, `grayscale`, `enemy_trainer_pic`, `player_backpic`, `player_backpic_palette` |
+| Hardware | `raster_scx`, `raster_scy`, `bg_map`, `bg_vbank1`, `bg_palette_maps`, `ob_palette_maps`, `anim_sprites`, `anim_tiles` |
 
-`raster_scx` is the background's own horizontal scroll, one value per scanline
-in the order the hardware draws them, and empty whenever the background is
-sitting still, which is every frame outside the opening slide. An offset is a
-distance to look *right* into a background map 256 pixels wide against the
-screen's 160, so a larger one puts the drawn content further left and the map's
-blank columns wrap in behind it. `Gen2Raster.scroll(image, offsets, 256)` is
-that operation and is what the built-in renderer applies to each of its layers;
-a renderer that ignores the field simply draws no slide. `raster_scy`
-is the same thing vertically, which only a battle animation ever asks for;
-`Gen2Raster.scroll_rows(image, offsets, 256)` is that operation.
+Notes on the less obvious ones:
 
-The last six fields are the battle animation layer. `bg_map` is `wTilemap`, a
-20 by 18 grid of tile ids naming which tile of which battler's picture sits in
-each cell: `$00` up is the enemy's front pic and `$31` up the player's back pic,
-each `base + column * side + row`, and everything else is blank. A renderer
-draws the two pictures out of that map rather than at a fixed corner, because
-the map is what a battle animation edits, and `Gen2BattleScreenMap` is where the
-constants and the plain seeding live. `bg_palette_maps` and `ob_palette_maps`
-are eight DMG palette bytes each: colour `i` of palette `n` is drawn as colour
-`(byte >> i * 2) & 3` of whatever the battle loaded, which is `CopyPals`. A
-renderer that ignores all of it draws a battle with no animation in it.
+- A wild battle carries class 0, index 0 and an empty name. `trainer_class` is
+  what `GameData.trainer_pic()` and `trainer_name()` take; `trainer_name` is the
+  trainer's own name from the party record, not the class name.
+- `exp_pixels` is a count out of 64, `PlaceExpBar`'s own unit, never a ratio.
+- `enemy_unown_form` and `player_unown_form` are one-based letters for Unown and 0
+  otherwise. Non-zero means `GameData.unown_pic(form - 1, back)` in place of
+  `species_pic(number, back)`.
+- The two HP values and `exp_pixels` are the *drawn* values, not the committed
+  ones: a hit drains the bar over roughly a second and `set_view` is called on
+  every step. A renderer wanting a moving bar needs no work; one wanting the final
+  number should wait for the animation to end.
+- `anim_sprites` is `wShadowOAM` as the animation left it, up to forty
+  `{y, x, tile, attributes}` entries with the hardware's byte values: OAM
+  subtracts sixteen and eight, so a `y` or `x` of zero is off screen.
+- `anim_tiles` says where each tile of the animation window came from, as
+  `{gfx, tile}` counted from `Gen2BattleAnimObject.BASE_TILE`. An OAM tile id below
+  that base is not an animation tile.
+- `hud_visible` is false for the length of a move animation
+  (`BattleAnimClearHud` / `BattleAnimRestoreHuds`).
+- `grayscale` is true for the entrance slide, since `GetSGBLayout
+  SCGB_BATTLE_COLORS` runs only once `BattleIntroSlidingPics` returns.
+- `intro_sprites` is the eighteen `{tile, x, y}` of the player's head and
+  shoulders during the slide, empty outside it.
 
-`anim_sprites` is `wShadowOAM` as the animation left it, up to forty
-`{ y, x, tile, attributes }` entries with the hardware's own byte values: OAM
-subtracts sixteen and eight, so a `y` or `x` of zero is off screen, and the
-attributes carry the x and y flips and the object palette slot. `anim_tiles`
-says where each tile of the animation window came from, as
-`{ gfx, tile }` counted from `Gen2BattleAnimObject.BASE_TILE`, so an OAM tile id
-below that base is not an animation tile at all. `hud_visible` is false for the
-length of a move animation, which is `BattleAnimClearHud` taking the panels and
-both bars off the map and `BattleAnimRestoreHuds` putting them back.
+A renderer that ignores the hardware group draws a battle with no animation in it.
 
 ### The battlers
 
-A fight does not open with two Pokémon standing on the field. Two *trainers*
-slide in from opposite sides, the opponent sends out first, the player's back
-pic walks off, and a ball puts a Pokémon where each trainer was standing. Every
-field so far says that in the terms the hardware draws it in: the slide is a
-scanline scroll (`raster_scx`), the walk off is columns going blank in `bg_map`,
-and the player mid-slide is eighteen OAM entries (`intro_sprites`).
+A fight does not open with two Pokemon standing on the field. Two trainers slide
+in from opposite sides, the opponent sends out first, the player's back pic walks
+off, and a ball puts a Pokemon where each trainer stood. Everything that happens
+to a battler after that (a faint sinking the picture, a Fly or Dig user blanked
+for a turn, a recall, a send-out, and every deformation from Tackle to Vibrate) is
+a background-plane effect on the cartridge.
 
-Nothing that happens to a battler *after* the entrance is any different. A faint
-sinks the picture a tile row at a time inside `bg_map`; a Fly, Dig, Bounce,
-Teleport or Whirlwind user is blanked out of it for a turn; a recall and a
-send-out restamp it out of progressively smaller subsamplings of itself; and
-every per-battler deformation, Tackle, Withdraw, Psychic, DoubleTeam, AcidArmor,
-Wobble, Flail, WaveDeformMon, BounceDown and Vibrate, is a scanline window over
-that side's own rows.
-
-A renderer with no background plane has none of that, and reconstructing it by
-scanning a 20 by 18 grid every frame is both duplicated work and lossy: a resize
-script's arrangement and a faint sink read the same at the tile level. So
-`battlers` is all of it said plainly, one entry per side, on every frame:
+A renderer with no background plane has none of that, so `battlers` states it
+plainly, one entry per side, on every frame:
 
 ```gdscript
 view["battlers"] = {
@@ -1000,131 +825,66 @@ view["battlers"] = {
         "species": 0,                    # 0 unless kind is mon
         "visible": true,                 # false while the picture is off the square
         "offset_pixels": Vector2(142.0, 0.0),
-        "scale": Vector2.ONE,            # the resize script's own steps otherwise
+        "scale": Vector2.ONE,            # the resize script's steps otherwise
     },
     "enemy": { ... the same seven, with trainer_class carrying the class },
 }
 ```
 
-`kind` is what the square holds, and it is the whole of what a view drawing
-`player_species` from the first frame is missing: `&"trainer"` a person,
-`&"mon"` a Pokémon, and `&"none"` the stretch between the trainer walking off
-and the ball arriving. `backpic` is what `GameData.player_backpic(kind)` and
-`player_palette(kind)` take, `trainer_class` what `GameData.trainer_pic(number)`
-and `trainer_palette(number)` take, and `species` what `species_pic()` takes, so
-whichever one is set names a picture the renderer can resolve. A wild opponent
-is never a trainer and slides in as its own front pic.
+- `kind` is what the square holds. `&"none"` is the stretch between the trainer
+  walking off and the ball arriving. `backpic` feeds
+  `GameData.player_backpic(kind)` and `player_palette(kind)`, `trainer_class`
+  feeds `trainer_pic()` and `trainer_palette()`, `species` feeds `species_pic()`.
+  A wild opponent is never a trainer and slides in as its own front pic.
+- `visible` is whether the picture is on the square at all
+  (`BattleBGEffect_HideMon`, `..._RemoveMon`). Not the same question as `kind`:
+  `&"none"` is a square nobody stands on, `visible` false a picture taken away
+  from one somebody does.
+- `offset_pixels` is how far the picture stands from its resting square. Zero is
+  standing still. The player comes in from the right and leaves left, the opponent
+  the other way, and a faint is positive downwards. The whole-screen scroll is not
+  in it; `raster_scx` and `raster_scy` already carry that. For WaveDeformMon and
+  Psychic, which stretch rather than move, it is the mean of the window.
+- `scale` is the side of the square `BattleBGEffect_RunPicResizeScript` last placed
+  over the side of the whole picture, so a recall's shrink and a send-out's grow
+  are one number. `Vector2.ONE` is every frame outside a resize. The cartridge
+  subsamples rather than scales, so a renderer drawing a real scaled picture draws
+  it better than the hardware did.
 
-`visible` is whether the picture is on the square at all.
-`BattleBGEffect_HideMon` is what takes it off for a vanished turn and
-`..._RemoveMon` for a recall, and it stays off until a send-out puts a whole
-picture back. It is not the same question as `kind`: `&"none"` is a square
-nobody is standing on, `visible` false a picture that has been taken away from
-one somebody is.
+A renderer reading only `kind`, the three picture fields and `offset_pixels` draws
+a correct battle.
 
-`offset_pixels` is how far that picture stands from its resting square, and one
-number covers every movement because they are all the same thing: the slide
-brings a picture in, `SlideBattlePicOut` takes it off, `MonFaintedAnimation`
-sinks it, `RemoveMon` pushes it aside, and the window effects lunge, shake and
-sink it. Zero is standing still. The player comes in from the right and leaves to
-the left and the opponent the other way, so the sign is the direction, and a
-faint is positive downwards. The whole-screen scroll is not in it: `raster_scx`
-and `raster_scy` already carry that, and this is what is left after it. Two
-effects stretch the picture rather than move it, WaveDeformMon and Psychic, and
-for those the number is the mean of the window rather than an exact answer.
-
-`scale` is the side of the square `BattleBGEffect_RunPicResizeScript` last placed
-over the side of the whole picture, so the ball shrink of a recall and the grow
-of a send-out are one number. `Vector2.ONE` is the whole picture, which is every
-frame outside a resize. The cartridge subsamples rather than scales, dropping
-rows and columns, so a renderer drawing a real scaled picture is drawing it
-better than the hardware did rather than differently.
-
-A renderer that reads only `kind`, the three picture fields and `offset_pixels`
-draws exactly what it drew before this block existed.
-
-`intro_sprites` is the eighteen `{ tile, x, y }` of the player's own head and
-shoulders during the slide, drawn as OAM because those three tile rows fall in
-the band the opponent scrolls; it is empty outside the slide. `grayscale` is
-true for the same stretch, since `GetSGBLayout SCGB_BATTLE_COLORS` runs only
-once `BattleIntroSlidingPics` has returned. `enemy_trainer_pic` and
-`player_backpic` are which picture is on each square, zero and empty once a
-Pokémon has taken it, and `player_backpic_palette` is the `chris`, `kris` or
-`dude` whose colours the back pic is drawn in. `enemy_hud_visible` and
-`player_hud_visible` are the two panels one at a time, against `hud_visible`'s
-summary of both; `trainer_hud_balls` and `trainer_hud_border` are
-`BattleStart_TrainerHuds`' party balls and the frame they hang in, both empty
-once the fight has started. `enemy_substitute` and `player_substitute` say the
-doll is on the square rather than the Pokémon, which is the overworld
-substitute sprite rather than any species pic; `enemy_unown_form` and
-`player_unown_form` are one-based letters for Unown and nothing for every other
-species, and a non-zero one means `GameData.unown_pic(form - 1, back)` in place
-of `species_pic(number, back)`. `bg_vbank1` is `wAttrmap` bit
-3 over the screen, the VRAM bank each cell's tile number is read from, which
-only the enemy's own pic animation ever sets.
-
-`battlers` is `api_version` 17 and replaces `entrance`, which carried the first
-five fields alone and is gone: the two describe the same thing at different
-moments in one fight, and a renderer reading one for the opening and the other
-for the rest would have had to hold both. The twelve fields named in this section
-are `api_version` 11.
-Before it they were pushed and undeclared, and one more was declared and never
-true: `player_pic_visible` was a literal `true` in every view, because the
-premise behind it is wrong. `CopyBackpic` puts the player's back pic on the
-tilemap before `InitBattleDisplay` reaches the slide, so it is on the map
-throughout. The field is gone; `battlers` is what answers the question it was
-asked for.
-
-The two HP values and `exp_pixels` are the *drawn* ones, not the committed ones:
-a hit drains the bar over roughly a second the way the cartridge does, an award
-fills the exp bar over one, and `set_view` is called again on every step of
-either. A renderer that wants a bar to move needs no work; one that wants the
-final number should wait for the animation to end rather than reading the view,
-since mid-animation it is deliberately not the real value.
-
-Registration uses the same refusal rules as a world renderer, and shares both
-optional methods (`uses_hardware_viewport()`, `set_native_size()`), the one view
-selection above, and the `V` cycle, bound in `Gen2BattleScreen` the way
-`Gen2WorldScreen` binds it.
+### Where the battle is
 
 A battle renderer has two optional methods of its own:
 
 | Method | Effect |
 |---|---|
-| `set_world_context(context: Gen2BattleWorldContext)` | Where the battle is being fought, once per battle, after `set_battle_data` and before the first view |
-| `handle_battle_input(event: InputEvent) -> bool` | Every input event the battle screen did not use. Answering true consumes it |
+| `set_world_context(context: Gen2BattleWorldContext)` | Where the battle is fought. Once per battle, after `set_battle_data` and before the first view |
+| `handle_battle_input(event: InputEvent) -> bool` | Every input event the battle screen did not use. True consumes it |
 
-`handle_battle_input` is `handle_world_input`'s twin and follows the same rule:
-the screen claims what it needs and offers the rest, so a renderer can steer a
-camera and can never take a gameplay press. A `Gen2Button` is routed to whatever
-owns the screen before this is reached, on both sides, so the text box, the
-forget-move list, the pack's own rows and ball selection each take their press
-first and what arrives here is pointer and stick motion. Those three also
-withhold everything else while they are up, because a press there means
-something by itself. A draining bar, the opening slide and a move animation do
-not: none of them reads input, and a camera that stalls whenever a bar drains is
-not a camera.
+`handle_battle_input` follows `handle_world_input`'s rule: the screen claims what
+it needs and offers the rest. A `Gen2Button` is routed to whatever owns the screen
+first, so the text box, the forget-move list, the pack rows and ball selection each
+take their press and what arrives here is pointer and stick motion. Those three
+also withhold everything else while up. A draining bar, the opening slide and a
+move animation do not, since none reads input.
 
-`view` says what is on the field and nothing about the place, which is right for
-the cartridge's white field and leaves a renderer staging the fight on the map
-with nowhere to stage it. `Gen2BattleWorldContext` is that place, and it carries
-`map_id` (group and number), `tileset`, `player_cell`, `player_facing` and
-`time_of_day`, the last being the row the world was *drawn* with rather than the
-clock's, so a battle entered from an unlit cave is staged in the dark.
+`view` says what is on the field and nothing about the place.
+`Gen2BattleWorldContext` is the place: `map_id` (group and number), `tileset`,
+`player_cell`, `player_facing` and `time_of_day`, the last being the row the world
+was *drawn* with, so a battle entered from an unlit cave is staged in the dark.
 
-It is a copy taken when the battle starts, not a handle on the world: a renderer
-cannot reach live world state through it, and the two screens stay independent.
-The map and tileset are numbers, which is what `GameData.world_map()` and
-`world_tileset()` take, so a renderer resolves whatever records it wants through
-the `GameData` it already has. A battle started outside the world, which is
-every development driver, supplies none and the method is not called.
+It is a copy taken when the battle starts, not a handle: a renderer cannot reach
+live world state through it. The map and tileset are numbers for
+`GameData.world_map()` and `world_tileset()`. A battle started outside the world,
+which is every development driver, supplies none and the method is not called.
 
 ## Experience for a capture
 
 `register_catch_experience(manifest, provider)` makes a successful wild capture
-award the caught Pokemon's experience. `PokeBallEffect` awards none, so this is
-an addition rather than a correction, and it is off until a provider says
-otherwise:
+award the caught Pokemon's experience. `PokeBallEffect` awards none, so this adds
+rather than corrects, and it is off until a provider says otherwise:
 
 ```gdscript
 class Policy:
@@ -1132,28 +892,23 @@ class Policy:
 		return enabled
 ```
 
-Registered with the manifest `register()` was handed, the way
-[a save lifecycle](#holding-a-run-rather-than-an-installation) is: the run is
-what the policy belongs to. It is read on every throw, so switching a setting off
-mid-run is off from the next one.
+Registered with the manifest `register()` was handed, because the run is what the
+policy belongs to. It is read on every throw, so switching a setting off mid-run
+takes effect from the next one.
 
-The award is the engine's own `_give_experience_for`, the pass a faint takes, so
-participants, held Exp. Share splitting, stat experience, level ups, move offers,
+The award is the engine's own `_give_experience_for`, the same pass a faint takes,
+so participants, Exp. Share splitting, stat experience, level ups, move offers,
 happiness, evolution eligibility and the EXP-bar events are one implementation.
-The opponent is not pretended to have fainted. Everything it produces is spent
-between the Gotcha line and the nickname prompt, so nothing is filed with a level
-up still owed, and the party the experience landed on reaches the save before the
-world files the catch.
+The opponent is not pretended to have fainted. Everything is spent between the
+Gotcha line and the nickname prompt.
 
-The catching tutorial and a Bug Contest catch are excluded: neither is an
-ordinary capture.
+The catching tutorial and a Bug Contest catch are excluded.
 
 ## Annotating the battle
 
 `register_battle_info(id, provider)` draws read-only annotations on the hardware
-interface, over whichever battle renderer is selected. A provider receives a
-fresh plain snapshot and answers placements on the cartridge's own 20x18 tile
-grid:
+interface, over whichever battle renderer is selected. A provider receives a plain
+snapshot and answers placements on the cartridge's 20x18 tile grid:
 
 ```gdscript
 class Info:
@@ -1174,173 +929,150 @@ class Info:
 		return out
 ```
 
-A placement the grid cannot hold is refused rather than clipped, and the refusal
-reaches `Gen2ModHost.failures()` with the mod's id and why (`api_version` 18). A column that grows
-by a row per active stat stage runs off the bottom only when several are up at
-once, so what a player would otherwise see is a row quietly missing. It is
-recorded once per distinct refusal, not once a frame.
-
 A placement is `{"at": Vector2i}` plus one of:
 
 | Key | What it is |
 |---|---|
-| `text` | written with the interface's own font, cut at the right edge |
-| `tile` | one 8x8 cell: eight bytes of 1bpp, or sixty-four palette indices |
+| `text` | Written with the interface's own font, cut at the right edge |
+| `tile` | One 8x8 cell: eight bytes of 1bpp, or sixty-four palette indices |
 
 and one optional flag:
 
 | Key | What it is |
 |---|---|
-| `field` | `true` asks for the cartridge's interface field behind exactly the cells this placement occupies (`api_version` 14) |
+| `field` | `true` asks for the cartridge's interface field behind exactly the cells this placement occupies |
 
-so a mod can supply a symbol the cartridge has no glyph for without a Node, a
-renderer or any art of its own. A placement outside the grid, or one whose text
-does not fit, is refused rather than clipped.
+A placement outside the grid, or whose text does not fit, is refused rather than
+clipped, and the refusal reaches `Gen2ModHost.failures()` with the mod's id and
+why. It is recorded once per distinct refusal, not once a frame. Two providers
+claiming one cell is refused rather than resolved by load order.
 
-The interface font is the cartridge's, which is what a `tile` is for: there is no
-`+` in the charmap at all, and its `▲` is a code `_LoadFontsExtra2` parks in a run
-the main font does not carry. `-` is the only sign a string can print, so a stage
-summary reads `ATK2`/`SPD-1`, and a mark for super effective, resisted or immune
-is supplied as a tile. The example mod's three are a circle with a centre dot, a
-triangle and an X.
+The interface font is the cartridge's, which is what `tile` is for: there is no
+`+` in the charmap and `-` is the only sign a string can print, so a stage summary
+reads `ATK2`/`SPD-1` and a super-effective, resisted or immune mark is supplied as
+a tile. The example mod's three are a circle with a centre dot, a triangle and an
+X.
+
+Use `field` where ink would sit on bare battle scenery: a stage figure at the top
+of the screen or a weather glyph beside the enemy. A mark on the move list or over
+the command panel already has a field and should not set it. The host draws the
+field just below the annotations, at the opacity the selected renderer asks its
+interface to be drawn at.
 
 The snapshot carries what a subscriber of past events cannot know:
 
 | Key | |
 |---|---|
 | `player_stages`, `enemy_stages` | `Gen2BattleMon.stages`, live |
-| `player_species`, `enemy_species`, `player_level`, `enemy_level` | who is standing |
-| `enemy_types`, `enemy_identified` | the defender, and whether Foresight named it |
-| `enemy_seen_before` | whether this save had seen the opponent before this battle |
-| `weather`, `weather_turns` | what is on and how much is left |
-| `hud_visible`, `enemy_hud_visible`, `player_hud_visible`, `menu_stage`, `menu_position`, `move_cursor` | what is on screen |
-| `move_rows` | the move list, each row with its exact `effectiveness` |
-| `move_rows_at`, `move_rows_step`, `move_rows_right` | where `MoveSelectionScreen` puts its rows, so a provider annotating them never writes the menu's coordinates down |
-| `neutral` | what `effectiveness` compares against |
+| `player_species`, `enemy_species`, `player_level`, `enemy_level` | Who is standing |
+| `enemy_types`, `enemy_identified` | The defender, and whether Foresight named it |
+| `enemy_seen_before` | Whether this save had seen the opponent before this battle |
+| `weather`, `weather_turns` | What is on and how much is left |
+| `hud_visible`, `enemy_hud_visible`, `player_hud_visible`, `menu_stage`, `menu_position`, `move_cursor` | What is on screen |
+| `move_rows` | The move list, each row with its exact `effectiveness` |
+| `move_rows_at`, `move_rows_step`, `move_rows_right` | Where `MoveSelectionScreen` puts its rows |
+| `neutral` | What `effectiveness` compares against |
 
-`effectiveness` is `GameData.type_effectiveness` over the defender's own types
-with Foresight applied, so a mod never copies the type chart, never resolves a
-dual type itself and never rebuilds state from the event stream.
+`effectiveness` is `GameData.type_effectiveness` over the defender's types with
+Foresight applied, so a mod never copies the type chart.
 
-`field` exists because ink alone is only readable where something already put a
-field under it. A mark on the move list or a summary over the command panel has
-one; a stage figure at the top of the screen or a weather glyph beside the enemy
-sits on bare battle scenery, which is white in the built-in arena and arbitrary
-map geometry under a native-layer renderer. The host draws the field in a layer
-of its own immediately below the annotations, at the opacity the selected
-renderer asks its interface to be drawn at, and hides and restores it with the
-ink. A placement without the flag is unchanged, so do not set it where the
-interface already supplies a field.
+The layer is refreshed after every event, view push and menu change, and hidden
+from the frame a modal takes the interface: the party page, the pack and its
+sub-lists, ball selection, the forget offer, the naming prompt and the entrance.
 
-The layer is refreshed after every event, every view push and every menu change,
-and hidden from the frame a modal takes the interface: the party page, the pack
-and its sub-lists, ball selection, the forget offer, the naming prompt and the
-entrance. Ownership is answered where the host's own state changes, so a subflow
-added later hides the annotations without a provider being told anything. Two providers claiming one cell is refused rather than
-resolved by load order, so which mod loaded first cannot decide what a player
-sees.
-
-## Logical world state and optional mod pose
+## World state and mod pose
 
 The game stays logically grid-based. The player and NPCs occupy walk cells,
-movement commits one cell at a time in the four cardinal directions, and
-interactions use the current logical cell plus one cardinal facing. Animating a
-sprite between cells does not change that model.
+movement commits one cell at a time in four cardinal directions, and interactions
+use the current logical cell plus one cardinal facing. Animating a sprite between
+cells does not change that.
 
-A movement mod may add a more precise pose for smooth, analog, first-person or
-3D movement, with a sub-cell position and an arbitrary facing angle. It is an
-extra layer, not a replacement: the core world stays responsible for collision,
-cell transitions, map triggers, warps and script or NPC interactions, and a mod
-must not overwrite the authoritative cell or bypass those boundaries.
+A movement mod may add a more precise pose for smooth, analog, first-person or 3D
+movement, with a sub-cell position and an arbitrary facing angle. It is an extra
+layer, not a replacement. The core world stays responsible for collision, cell
+transitions, map triggers, warps and interactions, and a mod must not overwrite the
+authoritative cell or bypass those boundaries.
 
-When a mod requests an interaction it projects its pose back onto the normal
-rules: resolve a deterministic logical cell, quantize the facing angle to one of
-the four source directions using the source tie-breaking, and pass both to the
-existing interaction path. Smooth movement then leaves an NPC in the
-neighbouring cell interacting exactly as it would on the cartridge.
+When a mod requests an interaction it projects its pose back onto the normal rules:
+resolve a deterministic logical cell, quantize the facing angle to one of the four
+source directions using the source tie-breaking, and pass both to the existing
+interaction path.
 
 ## Putting one sprite in the world
 
 A mod that wants a follower, a pet, a marker over an object or a ghost of a
-previous run does not need a renderer: it registers a world **actor** and the
-built-in view draws it with the map's own objects.
+previous run registers a world **actor**, and the built-in view draws it with the
+map's own objects.
 
 ```gdscript
 func register(host: Gen2ModHost, manifest: Gen2ModManifest) -> void:
     host.register_world_actor(manifest.id, Follower.new())
 ```
 
-The actor is a `RefCounted` and never a `Node`, because it is a pose and not a
-view. Three methods, refused by name at registration the way a renderer's are:
+An actor is a `RefCounted` and never a `Node`, because it is a pose and not a view.
+Three methods, refused by name at registration:
 
 | Method | Called when |
 |---|---|
 | `set_world(world: Gen2WorldAPI)` | The map changed, or the view was created |
 | `advance_frame()` | Once per world frame, after the player's step advanced |
-| `sprites() -> Array` | What to draw now. A read: it is asked once a frame however many times the screen redraws |
+| `sprites() -> Array` | What to draw now. Asked once a frame however many times the screen redraws |
 
-Two more are **optional** (`api_version` 7) and offered only to an actor that
-defines them, so every actor already written keeps working:
+Two more are optional and offered only to an actor that defines them:
 
 | Method | Called when |
 |---|---|
-| `interact(cell: Vector2i, facing: int) -> bool` | A press of A that no cartridge object, background event or tile branch answered. `cell` is the player's faced cell and `facing` the player's own; the first actor answering true consumes the press |
+| `interact(cell: Vector2i, facing: int) -> bool` | A press of A that no cartridge object, background event or tile branch answered. The first actor answering true consumes the press |
 | `take_requests() -> Array` | The actor's one-shot outbox, drained once a world frame and emptied by the drain |
 
-`interact` is offered **only** after `Gen2WorldAPI.interact()` answered nothing at
-all, so a mod can never shadow a cartridge interaction. Only the actor's own pose
-changes, so no player event is spent, and a pose the press changed is on screen
-on the frame it was pressed.
+`interact` is offered only after `Gen2WorldAPI.interact()` answered nothing, so a
+mod can never shadow a cartridge interaction. Only the actor's pose changes, so no
+player event is spent.
 
-`take_requests` is where an **edge** goes; `sprites()` is where a **pose** goes.
-The one kind so far is `{"kind": &"cry", "species": n}`, played through the same
-player a script's `cry` command and the Pokedex CRY button use. A mod may not
-play a sound, so it asks and the host spends it, which is the bargain the shiny
-pulse already has; no dedup window is needed, since the mod asks once. Anything
-else in the outbox is dropped.
+`take_requests` is where an edge goes; `sprites()` is where a pose goes. The one
+request kind is `{"kind": &"cry", "species": n}`, played through the same player a
+script's `cry` command uses. A mod may not play a sound, so it asks and the host
+spends it. Anything else in the outbox is dropped.
 
-Each entry of `sprites()` is a dictionary naming cartridge art and nothing else:
+Each entry of `sprites()` names cartridge art and nothing else:
 
 | Key | Meaning |
 |---|---|
 | `icon` | An `IconPointers` row, as `GameData.mon_menu_icon(species)` answers it |
-| `sprite` | An `OverworldSprites` row instead, for an NPC or an object picture |
-| `facing` | `Gen2WorldSprite.FACING_*`. Right is the left picture mirrored, as on the cartridge |
-| `position_cells` | Where to draw it, in fractional walk cells, the unit `player_position_cells()` is in |
-| `colors` | Optional. Four colours to draw the sprite in instead of the map's own sprite palette. What a visible encounter wears, so a shiny one is a shiny one before the battle starts |
-| `emote` | Optional (`api_version` 7). `Gen2WorldActors.EMOTE_SHOCK` through `EMOTE_GRASS_RUSTLE`, drawn two rows above the sprite exactly as `SpawnEmote` puts one over a map object. State rather than an edge: it is up for as long as the entry keeps asking, so the mod owns the duration and the host owns the pixels, and a renderer reading `set_actors` gets it for free. An index outside the twelve is no emote rather than a wrong sheet |
+| `sprite` | An `OverworldSprites` row instead, for an NPC or object picture |
+| `facing` | `Gen2WorldSprite.FACING_*`. Right is the left picture mirrored |
+| `position_cells` | Where to draw it, in fractional walk cells |
+| `colors` | Optional. Four colours instead of the map's sprite palette. What a visible encounter wears, so a shiny one is shiny before the battle starts |
+| `emote` | Optional. `Gen2WorldActors.EMOTE_SHOCK` through `EMOTE_GRASS_RUSTLE`, drawn two rows above the sprite as `SpawnEmote` puts one over a map object. It is state, not an edge: up for as long as the entry keeps asking. An index outside the twelve is no emote |
 
-The host resolves the strip, the palette, the time of day and the icon's own
-two-frame animation (`.Frameset_PartyMon`'s rate), so a mod never composes
-pixels. An entry naming art the cache does not carry is dropped rather than
-drawn as a placeholder.
+The host resolves the strip, the palette, the time of day and the icon's two-frame
+animation, so a mod never composes pixels. An entry naming art the cache does not
+carry is dropped.
 
-An actor's sprite is **presentation**: it occupies no cell, blocks nothing,
-nobody talks to it, no trainer sees it and it is in no snapshot. That is what
-lets it exist at all, since world state is the one thing a mod must not write.
-Actors are sorted into the object pass by the row they stand on, so a follower
-one cell below an NPC is drawn over it.
+An actor's sprite is presentation. It occupies no cell, blocks nothing, nobody
+talks to it, no trainer sees it and it is in no snapshot. Actors are sorted into
+the object pass by the row they stand on, so a follower one cell below an NPC is
+drawn over it.
 
-A registered world renderer that wants to draw them takes them through the
-optional `set_actors(actors: Gen2WorldActors)`, which is handed the same
-resolved list the built-in view draws.
+A world renderer that wants to draw them takes the optional
+`set_actors(actors: Gen2WorldActors)`, handed the same resolved list.
 
 ### The map fades
 
-A warp spends `MapSetupScript_Door`'s two fades, sixteen frames in which no
-input is read. A renderer is offered each step of them through the optional
+A warp spends `MapSetupScript_Door`'s two fades, sixteen frames in which no input
+is read. A renderer is offered each step through the optional
 `set_fade(order: int, white_fill: bool)`: `order` is the palette order
 `DmgToCgbTimePals` applies to every palette on screen, and `white_fill` is
-`FillWhiteBGColor`, which the way out runs and the way in does not. The identity
-order (`Gen2WorldPalette.FADE_IDENTITY`) is every other frame of the game. A
-renderer that does not define it cuts to the new map on the frame the cartridge
-is at its whitest; the host spends the frames either way.
+`FillWhiteBGColor`, which only the way out runs. The identity order
+(`Gen2WorldPalette.FADE_IDENTITY`) is every other frame of the game. A renderer
+that does not define it cuts to the new map on the whitest frame; the host spends
+the frames either way.
 
 ## Visible wild encounters
 
-A mod that wants wild Pokemon standing on the map instead of a roll on every
-step registers a **provider** (`api_version` 2). It owns the population and
-nothing else; every rule a cartridge owns stays in `Gen2WorldAPI`.
+A mod that wants wild Pokemon standing on the map instead of a roll on every step
+registers a provider. It owns the population and nothing else; every rule a
+cartridge owns stays in `Gen2WorldAPI`.
 
 ```gdscript
 func register(host: Gen2ModHost, manifest: Gen2ModManifest) -> void:
@@ -1352,9 +1084,9 @@ registration:
 
 | Method | Called when |
 |---|---|
-| `set_context(context: Dictionary)` | The map changed, and again whenever the player's pose moves |
+| `set_context(context: Dictionary)` | The map changed, and whenever the player's pose moves |
 | `advance_frame()` | Once per hardware frame |
-| `encounters() -> Array` | The population now. A read, asked once a frame |
+| `encounters() -> Array` | The population now. Asked once a frame |
 | `battle_finished(id: StringName, result: Dictionary)` | A battle this provider's entry started ended |
 
 The context is a snapshot, never a live handle:
@@ -1362,152 +1094,120 @@ The context is a snapshot, never a live handle:
 | Key | Meaning |
 |---|---|
 | `map` | `Vector2i(group, number)` |
-| `eligible` | `{grass, surf}` to `PackedVector2Array` of cells a wild may stand on. `CanEncounterWildMon` per cell: the grass test, the cave and dungeon branch that skips it, and the ice refusal |
-| `occupied` | `PackedVector2Array` of the walk cells the map's own objects hold this frame: NPCs, item balls and every other map object, all four cells of a big one, and both cells an object mid-step is drawn across. Refreshed with `player`, not with `map`. Deliberately apart from `eligible`, which is a cartridge rule and never moves: an entry outside `eligible` is dropped, so folding the two together would delete a wild an NPC walks over. Refusing an occupied cell is the provider's own choice. The player's cell is not in it; `player` is where that is |
-| `tables` | `{grass, surf}` to `{source, slots}`, the table a roll would read right now, with the swarm's and the Bug Contest's substitutions already made and the time of day already picked. A slot is `{species, min_level, max_level}` |
+| `eligible` | `{grass, surf}` to `PackedVector2Array` of cells a wild may stand on. `CanEncounterWildMon` per cell |
+| `occupied` | The walk cells the map's own objects hold this frame: NPCs, item balls, all four cells of a big object, and both cells of one mid-step. Refreshed with `player`, not with `map`. An entry outside `eligible` is dropped, so the two are deliberately separate. Refusing an occupied cell is the provider's choice. The player's cell is not in it |
+| `tables` | `{grass, surf}` to `{source, slots}`, the table a roll would read now, with swarm and Bug Contest substitutions and the time of day already applied. A slot is `{species, min_level, max_level}` |
 | `player` | `{cell, facing}` |
-| `run_seed` | The run's own seed, so a population is reproducible |
-| `generation` | Bumped on every map change: a context with an older one is stale |
+| `run_seed` | The run's seed, so a population is reproducible |
+| `generation` | Bumped on every map change; an older one means the context is stale |
 
 Each entry of `encounters()`:
 
 | Key | Meaning |
 |---|---|
-| `id` | Stable across frames. It is what a battle result is reported back under |
-| `cell` | Must be in `eligible`; which method it is in decides which table it is checked against |
+| `id` | Stable across frames. What a battle result is reported under |
+| `cell` | Must be in `eligible`. Which method it is in decides which table it is checked against |
 | `facing` | `Gen2WorldSprite.FACING_*` |
 | `species`, `level` | Must be offered by that table |
 | `dvs` | The packed DV word, carried into the battle unchanged |
 | `pulse` | Optional. Ask for the shiny sparkle over this entry |
-| `glow` | Optional `{color: Color, amount: float}`. Walks the Pokemon's own colours toward `color` by `amount`, leaving colour 0 alone: it is the icon's cut-out. Presentation only, and it changes no DV, no battle and no roll |
+| `glow` | Optional `{color: Color, amount: float}`. Walks the Pokemon's colours toward `color` by `amount`, leaving colour 0 alone. Presentation only |
 
-Anything else is dropped rather than drawn, including an entry that names
-`shiny`: shininess is `CheckShininess` over the DVs and is the host's answer. A
-malformed `glow` costs the glow rather than the entry.
-At most `Gen2WorldEncounters.MAX_ENTRIES` entries are drawn in a frame.
+Anything else is dropped, including an entry naming `shiny`: shininess is
+`CheckShininess` over the DVs and is the host's answer. A malformed `glow` costs
+the glow rather than the entry. At most `Gen2WorldEncounters.MAX_ENTRIES` entries
+are drawn in a frame.
 
-`amount` is rounded onto `Gen2WorldEncounters.GLOW_RUNGS` steps by the host, so
-nine values between nothing and the full walk are all a mod can reach. That is
-not a nicety: both world renderers cache one sprite texture per distinct set of
-four colours and **neither evicts**, so a smoothly interpolated glow would leave
-a texture behind on every frame the map was up. Send whatever cycle you like;
-what reaches the palette is the nearest rung, and an amount that rounds to
-nothing is no glow at all. Eighths rather than quarters so that a mark meant to
-be subtle still has a cycle after the rounding: a peak under half the walk keeps
-four steps on eighths and one on quarters.
+`amount` is rounded onto `Gen2WorldEncounters.GLOW_RUNGS` steps, so nine values
+are all a mod can reach. Both world renderers cache one sprite texture per distinct
+set of four colours and neither evicts, so a smoothly interpolated glow would leak
+a texture every frame. Send whatever cycle you like; the nearest rung is what
+reaches the palette.
 
 What the host does with a valid population:
 
-- Draws it through the actor layer, with the SPECIES' own four colours, shiny or
-  not and glowing or not, so a renderer reading `set_actors` gets it for free:
-  the palette arrives in the same per-entry `colors` override a shiny's does.
+- Draws it through the actor layer with the species' own four colours, shiny or
+  not and glowing or not, so a renderer reading `set_actors` gets it for free.
 - Turns the ordinary post-step roll off while any provider is registered.
-  Scripted, fishing, Headbutt, Rock Smash, Sweet Scent and Bug Contest
-  encounters keep their own paths.
+  Scripted, fishing, Headbutt, Rock Smash, Sweet Scent and Bug Contest encounters
+  keep their own paths.
 - Starts the normal wild battle when the player steps onto an entry, with that
-  entry's exact species, level and DVs, then calls `battle_finished`. Whether
-  the entry survives that is the provider's one rule to document.
-- Discards the population, its sprites and any running pulse on a map change,
-  before the new map is drawn.
-- Plays `ANIM_SEND_OUT_MON` with the shiny param over a pulsing shiny entry,
-  anchored to it and with no battle field behind it, sound included. The host
-  deduplicates: a request inside `Gen2WorldEncounters.PULSE_FRAMES` of the last
-  one is dropped, so a provider may ask on spawn and every ten seconds without
-  touching a node or the audio service. A pulse on an ordinary Pokemon draws
-  nothing.
+  entry's exact species, level and DVs, then calls `battle_finished`. Whether the
+  entry survives is the provider's rule to document.
+- Discards the population, its sprites and any running pulse on a map change.
+- Plays `ANIM_SEND_OUT_MON` with the shiny param over a pulsing shiny entry, sound
+  included. A request inside `Gen2WorldEncounters.PULSE_FRAMES` of the last one is
+  dropped, so a provider may ask on spawn and every ten seconds. A pulse on an
+  ordinary Pokemon draws nothing.
 
 A world renderer that wants to draw the sparkle itself takes the optional
-`set_encounters(encounters: Gen2WorldEncounters)`; the population itself already
-arrives through `set_actors`.
+`set_encounters(encounters: Gen2WorldEncounters)`.
 
 ### The earthquake
 
 `Gen2WorldEffects.offset()` is `StepFunction_ScreenShake`, in hardware pixels and
-positive downward. It reaches hSCY on the cartridge and hSCY alone, so it is the
-**background's** offset and moves no sprite: the built-in view adds it to the
-camera the map quads are placed at and to nothing else. A renderer taking
-`set_effects` applies it the same way, or ignores it and does not shake.
+positive downward. It reaches hSCY alone, so it is the *background's* offset and
+moves no sprite. A renderer taking `set_effects` applies it to the camera the map
+is placed at, or ignores it and does not shake.
 
-## Hidden items a mod can see, and ask for
+## Hidden items
 
-A mod that wants something of its own to pick a hidden item up, a follower
-walking over one or a detector drawing them, reads them and **asks** for one
-(`api_version` 7). It never takes one: taking one writes the bag, the event flag
-and the save, and runs `hiddenitem`'s own `verbosegiveitem` with its FOUND text,
-its fanfare and its pack-full branch, all of which is world state a mod must not
-write.
+A mod that wants a follower or a detector to pick up a hidden item reads them and
+**asks** for one. It never takes one: taking one writes the bag, the event flag and
+the save, and runs `hiddenitem`'s own `verbosegiveitem` with its FOUND text,
+fanfare and pack-full branch.
 
 `Gen2WorldAPI.hidden_items()` is the read: one entry per `BGEVENT_ITEM` on the
-current map, taken or not. Scene-free, like `visible_encounter_cells()` beside
-it, so a probe can walk a map and print them with no game running.
+current map, taken or not. Scene-free, so a probe can walk a map with no game
+running.
 
 | Key | Meaning |
 |---|---|
 | `cell` | Where the record sits |
-| `item` | The item it gives, with the gameplay catalog's patch already applied |
-| `flag` | Its own event flag, which is the site's completion |
+| `item` | The item it gives, with the catalog's patch applied |
+| `flag` | Its event flag, which is the site's completion |
 | `taken` | `event_flag_active(flag)`. The Itemfinder's own test |
 
-`Gen2ModHost.request_hidden_item(cell)` is the ask. The mod names a cell and
-reads nothing back: the host validates it against that same list and, on the
-next world frame nothing else owns, runs the map's **own** script through the
-ordinary path, so the text box, the fanfare and the pacing are the world
-screen's exactly as they are for a player walking onto the cell. It is the same
-bargain a visible-encounter provider has with a wild battle: the mod names the
-entry, the host runs it.
+`Gen2ModHost.request_hidden_item(cell)` is the ask. The mod names a cell and reads
+nothing back. The host validates it against that list and, on the next free world
+frame, runs the map's own script through the ordinary path, so the text box, the
+fanfare and the pacing are the world screen's.
 
-- An ask for a cell with no record, or one whose flag is already set, does
-  nothing. `CheckBGEventFlag` is the host's test, not the mod's, and a set flag
-  now drops the ask when it is made rather than when it is spent.
-- An ask for a cell already in the queue is dropped too (`api_version` 18), so a
-  provider may read `hidden_items()` every frame and name what it stands on
-  without keeping its own set of what it has already asked for. The pack-full branch leaves the flag
-  clear and prints its box, and asking again after it is free and correct.
-- One is spent per frame, since the first one's script owns the world until its
-  box is pressed past; the rest wait in the queue in order.
+- An ask for a cell with no record, or whose flag is set, does nothing.
+- An ask for a cell already queued is dropped, so a provider may read
+  `hidden_items()` every frame and name what it stands on without tracking its own
+  asks. The pack-full branch leaves the flag clear, so asking again later works.
+- One is spent per frame; the rest wait in order.
 - An ask made inside a battle, a text box, a warp or an overlay is spent when the
   world can spend it rather than dropped.
 
-Which cell to name is the mod's own business.
+## Asking the host for an item
 
-## Asking the host to hand an item over
+`Gen2ModHost.request_item_gift(item, quantity)` is the twin for an item no map
+gives. The mod names an item and reads nothing back; on the next free world frame
+the host runs `verbosegiveitem`'s transaction: the bag write, the fanfare, the
+received line, the pocket line and the pack-full branch. The queue behaves exactly
+as a hidden item's. An unknown item number does nothing.
 
-`Gen2ModHost.request_item_gift(item, quantity)` is `request_hidden_item`'s twin
-for an item **no map gives** (`api_version` 16). The mod names an item and reads
-nothing back; on the next world frame nothing else owns, the host runs
-`verbosegiveitem`'s own transaction: the bag write, the fanfare, the received
-line, the pocket line and the pack-full branch.
-
-Everything on that list is world state a mod must not write, and the box, the
-sound and the pacing are a screen it cannot see. The queue behaves exactly as a
-hidden item's does, and for the same reasons: one spent per frame, an ask made
-inside a battle, a text box, a warp or an overlay spent when the world can spend
-it rather than dropped, and the rest waiting in order. An item number the
-cartridge does not know does nothing.
-
-Use it where the mod can **see** the moment but the script has no give site in
-it: `special Diploma` reaches the world channel as a `diploma_requested` runtime
-request, and the designer's script is `writetext`, `special Diploma`, `setevent`
-with nothing to patch. `patch_check` changes the number an existing site hands
-out; this is for when there is no site.
+Use it where the mod can see the moment but the script has no give site:
+`special Diploma` reaches the world channel as a `diploma_requested` runtime
+request, and the script is `writetext`, `special Diploma`, `setevent` with nothing
+to patch. `patch_check` changes the number an existing site hands out; this is for
+when there is no site.
 
 ## Reading the bag
 
-`Gen2ModHost.inventory()` answers the live world's own `{item: quantity}`, the
-same copy a Repel provider is handed, and `{}` when no world is open
-(`api_version` 16). Read only, and a copy.
+`Gen2ModHost.inventory()` answers the live world's `{item: quantity}`, and `{}`
+when no world is open. Read only, and a copy.
 
-One narrow accessor rather than a handle on `Gen2WorldAPI`, because a
-non-renderer mod is deliberately given no world: "do I hold this key item" is a
-question every gameplay mod has and the whole world is not the answer to it.
+It is one narrow accessor rather than a handle on `Gen2WorldAPI`, because a
+non-renderer mod is deliberately given no world.
 
-## How many times a wild's DVs are rolled
+## Shiny rolls
 
-Every wild the game builds rolls its own DVs, off the battle's own generator, the
-way `LoadEnemyMon` does: shininess, a bad stat and which Hidden Power it answers
-are all facts about those four numbers. `register_shiny_rolls(id, provider)` says
-how many words one wild is drawn with, which is the later games' charm
-(`api_version` 16):
+Every wild the game builds rolls its own DVs off the battle's generator, the way
+`LoadEnemyMon` does. `register_shiny_rolls(id, provider)` says how many words one
+wild is drawn with, which is the later games' charm:
 
 ```gdscript
 class Held:
@@ -1515,36 +1215,31 @@ class Held:
 		return 3 if int(Gen2ModHost.instance().inventory().get(SHINY_CHARM, 0)) > 0 else 1
 ```
 
-The host draws up to that many, keeps the first that `Gen2Stats.is_shiny`
-accepts and otherwise keeps the last, and clamps to
-`Gen2ModHost.MAX_SHINY_ROLLS`. 0 and 1 both mean the cartridge's own single
-roll, which is also what an unregistered host does.
+The host draws up to that many, keeps the first that `Gen2Stats.is_shiny` accepts
+and otherwise the last, and clamps to `Gen2ModHost.MAX_SHINY_ROLLS`. 0 and 1 both
+mean the cartridge's single roll.
 
 | `context` key | Meaning |
 |---|---|
 | `species` | What is about to be built |
 | `level` | Its level, already chosen |
-| `method` | The encounter method, empty for a wild with no method behind it |
+| `method` | The encounter method, empty where there is none |
 | `map_group`, `map_number` | Where, or -1 apiece |
 
-It carries no bag: `inventory()` is the live one, and a snapshot per wild would
-be a staler answer than the mod can get for itself.
+It carries no bag; `inventory()` is the live one.
 
-Three wilds keep an answer of their own and no provider is asked: one whose
-request already carries `dvs`, which is the Pokemon a visible encounter's player
-walked up to; `BATTLETYPE_FORCESHINY`, which is the red Gyarados and is written
-rather than rolled; and a roaming Pokemon, which keeps its stored word. A wild
-UNOWN rerolls until its letter is one the Ruins of Alph puzzle has unlocked.
+Three wilds keep their own answer and no provider is asked: one whose request
+already carries `dvs` (the Pokemon a visible encounter's player walked up to),
+`BATTLETYPE_FORCESHINY` (the red Gyarados), and a roaming Pokemon, which keeps its
+stored word. A wild UNOWN rerolls until its letter is one the Ruins of Alph puzzle
+has unlocked.
 
-**Two providers compose by the largest answer**, rather than by registration
-order: two charms have an obvious join, and refusing the second by name would
-make installing both an error over a number.
+Two providers compose by the largest answer rather than by registration order.
 
 ## An alternate field-move source
 
-`register_field_move_source(id, provider)` says that an HM's field move may be
-used without a party member who knows it. The provider is read only and answers
-one question:
+`register_field_move_source(id, provider)` says an HM's field move may be used
+without a party member who knows it. The provider is read only:
 
 ```gdscript
 class Anywhere:
@@ -1552,36 +1247,35 @@ class Anywhere:
 		return true
 ```
 
-That is the whole of what a mod decides. The host owns everything else:
+The host owns everything else:
 
 | Question | Where the host answers it |
 |---|---|
-| Which item teaches which move | `GetTMHMItemMove`, so a mod writes no HM table |
-| Whether it is in the bag | the live world's own items |
-| Whether the badge is in hand | each `Try*OW`'s own `CheckBadge`, in source order |
-| Whether the tile allows it | the staged request the party submenu already reaches |
-| What the move then does | the same commit, animation and script |
+| Which item teaches which move | `GetTMHMItemMove` |
+| Whether it is in the bag | The live world's items |
+| Whether the badge is in hand | Each `Try*OW`'s own `CheckBadge` |
+| Whether the tile allows it | The staged request the party submenu reaches |
+| What the move then does | The same commit, animation and script |
 
-The party is always asked first, so a game with no provider resolves every field
-move exactly as it always has, and a Pokemon that knows the move keeps its own
-submenu row. Only the seven HM moves have an alternate source: CUT, FLY, SURF,
-STRENGTH, FLASH, WHIRLPOOL and WATERFALL. Rock Smash is a TM.
+The party is asked first, so a game with no provider resolves every field move
+exactly as before, and a Pokemon that knows the move keeps its submenu row. Only
+the seven HM moves have an alternate source: CUT, FLY, SURF, STRENGTH, FLASH,
+WHIRLPOOL and WATERFALL. Rock Smash is a TM.
 
-The source is carried through every entrance rather than one: the party submenu,
-`Gen2WorldAPI`'s staged request and complete pairs, the A-button prompts at a
-tree, water, a whirlpool and a waterfall, the Strength boulder script, Flash, and
-Fly's region map. A move with no Pokemon behind it prints the host's own
-`<PLAYER> used CUT!` and surfs on the ordinary sprite.
+The source is carried through every entrance: the party submenu, `Gen2WorldAPI`'s
+staged request and complete pairs, the A-button prompts at a tree, water, a
+whirlpool and a waterfall, the Strength boulder script, Flash, and Fly's region
+map. A move with no Pokemon behind it prints `<PLAYER> used CUT!` and surfs on the
+ordinary sprite.
 
-FLY and FLASH are chosen from no tile and no party member, so the start menu
-grows a **MOVES** row for them: one entry per HM move the bag can supply, the
-party does not know and the badge allows. It is absent whenever that list is
-empty, which is every game with no provider registered.
+FLY and FLASH are chosen from no tile and no party member, so the start menu grows
+a **MOVES** row: one entry per HM move the bag can supply, the party does not know
+and the badge allows. It is absent when that list is empty.
 
 ## Renewing a Repel
 
-`register_repel_renewal(id, provider)` is offered the step an active Repel runs
-out on, before the encounter roll:
+`register_repel_renewal(id, provider)` is offered the step an active Repel runs out
+on, before the encounter roll:
 
 ```gdscript
 class Weakest:
@@ -1592,86 +1286,75 @@ class Weakest:
 		return 0
 ```
 
-`inventory` is a copy of the bag as `{item: quantity}`. Answering an item number
-puts the cartridge's own YES/NO box over the map; YES runs the pack's own field
-item transaction, so exactly one item is spent and its own step count applied,
-and NO changes nothing. Answering 0 changes nothing at all, which is what an
-empty bag and an unregistered host both do.
+`inventory` is a copy of the bag. Answering an item number puts the cartridge's
+YES/NO box over the map; YES runs the pack's own field item transaction, so exactly
+one item is spent and its step count applied. Answering 0 changes nothing.
 
-The question is the step's own player event, so no wild is rolled underneath it.
-An offer landing on a step a script, a warp, an overlay or a battle already owns
-waits for a step that can spend it rather than being lost.
+The question is the step's own player event, so no wild is rolled underneath it. An
+offer landing on a step a script, warp, overlay or battle owns waits for a step
+that can spend it.
 
-## Measured against the voxel mod
+## What a renderer mod needs
 
-[DramaticShapeVoxelMod](https://github.com/DramaticShape/DramaticShapeVoxelMod)
-is the reference for what a renderer mod has to be able to do: a voxel diorama
-with selectable camera pitch, first and third person, VR, reflections and a day
-cycle, shipping no cartridge art. Everything it needs is in the contract above.
-Geometry comes from collision permissions, the block grid and the tileset atlas;
-the view runs at window resolution; animated tiles follow because
-`Gen2WorldAnimation` replaces atlas slots rather than map rectangles.
+[DramaticShapeVoxelMod](https://github.com/DramaticShape/DramaticShapeVoxelMod) is
+the reference for what a renderer mod has to be able to do: a voxel diorama with
+selectable camera pitch, first and third person, VR, reflections and a day cycle,
+shipping no cartridge art. Everything it needs is in the contract above.
 
-Movement is the one part worth naming. `Gen2WorldAPI.player_step_offset_cells()`
-and `Gen2WorldObject.step_offset_cells()` return an in-flight step as a
-fractional cell, from one cell behind the committed cell down to zero. The
-logical cell commits at the start of the step; the fraction is presentation only
-and never reaches collision, events or the snapshot. `applymovement` applies its
-whole stream at once, so a scripted path commits together and the offset trails
-by as many cells as are left to draw; `advance_scripted_steps_pass()` drains
-that trail, 16 overworld passes a step for the slow commands, 8 for plain, 4 for
-bike speed. A pass is two hardware frames
-(`Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS`, `MaxOverworldDelay`), so a plain step
-covers its cell in sixteen of them. `Gen2WorldObject.frame` is the cartridge's
-`Facings` index, 0 to 3, changing every four passes the way
-`SetFacingStepAction` does.
-`mods/examples/voxel_preview/` reads all of it.
+Movement is the part worth naming. `Gen2WorldAPI.player_step_offset_cells()` and
+`Gen2WorldObject.step_offset_cells()` return an in-flight step as a fractional
+cell, from one cell behind the committed cell down to zero. The logical cell
+commits at the start of the step; the fraction is presentation only and never
+reaches collision, events or the snapshot.
+
+`applymovement` applies its whole stream at once, so a scripted path commits
+together and the offset trails by as many cells as are left to draw;
+`advance_scripted_steps_pass()` drains that trail, 16 overworld passes a step for
+the slow commands, 8 for plain, 4 for bike speed. A pass is two hardware frames
+(`Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS`, `MaxOverworldDelay`).
+`Gen2WorldObject.frame` is the cartridge's `Facings` index, 0 to 3, changing every
+four passes.
 
 A hop is the one step with a second axis.
 `Gen2WorldAPI.player_height_offset_pixels()` and
-`Gen2WorldObject.height_offset_pixels()` return how far above the ground the
-sprite is drawn, in world pixels and positive upward, which is
-`UpdateJumpPosition`'s own `.y_offsets` table over the step's frames. It is zero
-at rest, zero on every ordinary step, and zero again on the frame the hop
-completes; only a ledge hop and the three `jump_step` movement commands raise it,
-and each of those covers two cells over twice its command's frames. Presentation
-only, like the horizontal offset beside it: the cell, the collision, the triggers
-and the snapshot are at the landing cell for the whole arc.
+`Gen2WorldObject.height_offset_pixels()` return how far above the ground the sprite
+is drawn, in world pixels and positive upward, which is `UpdateJumpPosition`'s
+`.y_offsets` table over the step's frames. It is zero at rest, on every ordinary
+step, and on the frame the hop completes. Only a ledge hop and the three
+`jump_step` commands raise it, each covering two cells. Presentation only: the
+cell, the collision, the triggers and the snapshot are at the landing cell for the
+whole arc.
 
 Not covered: the teleport, skyfall and dig step types. `teleport_from`,
 `teleport_to`, `skyfall` and `step_dig` reach the caller as a
 `movement_command_requested` event and change nothing. None moves a cell on the
-cartridge either, each being a spin, a rise or a fall over a fixed frame count
-(`StepFunction_TeleportFrom` and its neighbours), so each is a pose a renderer
-has to be told about rather than an offset it can read.
+cartridge either, so each is a pose a renderer has to be told about rather than an
+offset it can read.
 
-**Per-block height is deliberately not a host boundary.** A renderer resolves
-shape from the collision permissions, the block grid and the tileset, all
-already public, and keeps whatever table it needs beside its own resolver. A
-host-side one would be a second place for the same facts.
+Per-block height is deliberately not a host boundary. A renderer resolves shape
+from the collision permissions, the block grid and the tileset, all already public.
 
 ## Adding a menu entry
 
 `register_menu_entry(menu, id, entry)` appends to a menu the game builds. The
-cartridge's own entries are never registered, so a mod can add but not reorder
-or remove them.
+cartridge's own entries are never registered, so a mod can add but not reorder or
+remove them.
 
 | Menu | Where the entry lands | `entry` keys |
 |---|---|---|
-| `Gen2ModHost.MENU_START` | the start menu, immediately before EXIT | `label`, optional `handler: Callable` |
-| `Gen2ModHost.MENU_PACK_POCKET` | after the pack's four source pockets | `label`, `pocket` |
-| `Gen2ModHost.MENU_MART` | after a mart's cartridge shelf | `label`, `item`, optional `price`, optional `available(mart)` |
+| `Gen2ModHost.MENU_START` | The start menu, immediately before EXIT | `label`, optional `handler: Callable` |
+| `Gen2ModHost.MENU_PACK_POCKET` | After the pack's four source pockets | `label`, `pocket` |
+| `Gen2ModHost.MENU_MART` | After a mart's cartridge shelf | `label`, `item`, optional `price`, optional `available(mart)` |
 
 ```gdscript
-func register(host: Gen2ModHost, manifest: Gen2ModManifest) -> void:
-	host.register_menu_entry(Gen2ModHost.MENU_START, manifest.id, {
-		"label": "Atlas",
-		"handler": func() -> void: print("opened"),
-	})
+host.register_menu_entry(Gen2ModHost.MENU_START, manifest.id, {
+	"label": "Atlas",
+	"handler": func() -> void: print("opened"),
+})
 ```
 
-A start-menu entry may name a host **action** instead of a handler, for a row
-whose work is opening a screen a mod never receives:
+A start-menu entry may name a host **action** instead of a handler, for a row whose
+work is opening a screen a mod never receives:
 
 ```gdscript
 host.register_menu_entry(Gen2ModHost.MENU_START, manifest.id, {
@@ -1681,41 +1364,35 @@ host.register_menu_entry(Gen2ModHost.MENU_START, manifest.id, {
 })
 ```
 
-`Gen2ModHost.START_ACTIONS` is the allow list; `OPEN_BILLS_PC` opens BILL'S PC
-at the same top menu the Pokemon Center's machine reaches, and its SEE YA! or B
-returns through the ordinary start-menu flow. An optional `visible(context)`
-predicate is asked with a copy of `{party_count, pokedex, pokegear}` and leaves
-the row ABSENT rather than present and refused, which is what the cartridge's own
-gated rows do. The host applies its own gate after the predicate, so a row cannot
-be shown where the game would refuse it: `OPEN_BILLS_PC` needs a party, which is
-`PC_CheckPartyForPokemon`.
+`Gen2ModHost.START_ACTIONS` is the allow list. `OPEN_BILLS_PC` opens BILL'S PC at
+the same top menu the Pokemon Center's machine reaches. An optional
+`visible(context)` predicate is asked with a copy of
+`{party_count, pokedex, pokegear}` and leaves the row *absent* rather than present
+and refused. The host applies its own gate after the predicate, so a row cannot be
+shown where the game would refuse it: `OPEN_BILLS_PC` needs a party.
 
-**The start menu shows eight rows at once and scrolls past that.** A fully
-unlocked save already fills those eight (POKEDEX, POKEMON, PACK, POKEGEAR, the
-player's name, SAVE, OPTION, EXIT), so the MODS row and every registered row are
-reached by scrolling: the box stays the height of the screen, the window follows
-the cursor, and the cursor still wraps at both ends, so any row is reachable in
-either direction and EXIT is one press up from the top one. The Bug Contest's own
-list starts two rows lower and shows seven. A mod may register any number of
-rows; only how many are on screen at once is fixed.
+The start menu shows eight rows at once and scrolls past that. A fully unlocked
+save already fills those eight, so the MODS row and every registered row are
+reached by scrolling: the window follows the cursor, and the cursor wraps at both
+ends. The Bug Contest's list starts two rows lower and shows seven. A mod may
+register any number of rows.
 
 A start-menu entry with neither an action nor a handler still appears, marked
-unavailable. A pocket's number has to be at or
-above `Gen2ModHost.FIRST_MOD_POCKET`: 1 to 4 are the cartridge's ITEM, KEY_ITEM,
-BALL and TM_HM, and an item joins the pocket its own definition names. Two mods
-claiming the same entry id is refused with `duplicate_menu_entry` rather than one
-silently winning.
+unavailable. A pocket's number must be at or above `Gen2ModHost.FIRST_MOD_POCKET`;
+1 to 4 are the cartridge's ITEM, KEY_ITEM, BALL and TM_HM, and an item joins the
+pocket its own definition names. Two mods claiming one entry id is refused with
+`duplicate_menu_entry`.
 
 A mart filter receives the resolved mart dictionary, including `mart_id`,
-`dialog_id` and `variant`. Its row is omitted when the filter answers false or
-the source shelf already sells that item. Selection still goes through the
-ordinary mart transaction, including money, stack limits and save validation.
+`dialog_id` and `variant`. Its row is omitted when the filter answers false or the
+source shelf already sells that item. Selection goes through the ordinary mart
+transaction, including money, stack limits and save validation.
 
 ## Adding a row to a party member's menu
 
-`register_party_member_menu(id, entry)` appends to the box a party slot opens.
-Both halves are Callables taking the ONE-based slot, because a row here is about
-a member rather than about the menu:
+`register_party_member_menu(id, entry)` appends to the box a party slot opens. Both
+halves are Callables taking the one-based slot, because a row here is about a
+member rather than about the menu:
 
 ```gdscript
 host.register_party_member_menu(manifest.id, {
@@ -1726,22 +1403,19 @@ host.register_party_member_menu(manifest.id, {
 })
 ```
 
-Rows land after every cartridge action and before CANCEL, which is the way out
-of the box; a mod cannot displace or reorder a cartridge row, and the list still
-stops at the source's own `NUM_MONMENU_ITEMS`. A label answering an empty string
-drops its own row, which is how a row is shown conditionally. Choosing one calls
-the handler and closes the menu, the way a field move does.
+Rows land after every cartridge action and before CANCEL. The list still stops at
+the source's `NUM_MONMENU_ITEMS`. A label answering an empty string drops its own
+row, which is how a row is shown conditionally. Choosing one calls the handler and
+closes the menu.
 
-Not offered for an egg, and not offered inside a battle: a battle's party list is
-a switch, and a row running a mod's action in the middle of a turn would be world
-state changing while the turn owns it.
+Not offered for an egg, and not inside a battle, where the party list is a switch.
 
 ## Adding a page to the stats screen
 
 `register_stats_page(id, {"build": Callable})` adds a page after the cartridge's
-pink, green and blue. `build` takes the screen's snapshot and answers placements
-on its own 20x18 tile grid; the host writes them with the screen's font, so the
-page needs no node, no renderer and no art:
+pink, green and blue. `build` takes the screen's snapshot and answers placements on
+its own 20x18 tile grid; the host writes them with the screen's font, so the page
+needs no node, renderer or art:
 
 ```gdscript
 host.register_stats_page(manifest.id, {
@@ -1756,70 +1430,64 @@ host.register_stats_page(manifest.id, {
 
 | Placement | Draws |
 |---|---|
-| `{"text": String, "at": Vector2i}` | the string at that tile |
-| `{"divider": int}` | the pink and blue pages' own vertical divider down that column |
+| `{"text": String, "at": Vector2i}` | The string at that tile |
+| `{"divider": int}` | The pink and blue pages' vertical divider down that column |
 
-The lower half is rows 8 to 17 and a placement outside it is dropped, which is
-what keeps a page off the upper half's name, level and front pic. The snapshot is
-`Gen2MonStatsScreen.snapshot`, which carries `dvs` (the packed word,
-`Gen2Stats.attack_dv` and friends read it) and `stat_exp` (keyed `hp`, `attack`,
-`defense`, `speed`, `special`) beside everything the cartridge pages print.
+The lower half is rows 8 to 17 and a placement outside it is dropped, which keeps a
+page off the upper half's name, level and front pic. The snapshot is
+`Gen2MonStatsScreen.snapshot`, which carries `dvs` (the packed word, read with
+`Gen2Stats.attack_dv` and friends) and `stat_exp` (keyed `hp`, `attack`, `defense`,
+`speed`, `special`) beside everything the cartridge pages print.
 
-Pages turn with LEFT and RIGHT and wrap, A on the last page leaves the screen,
-and the 2x2 page indicators are centred against the right arrow with the left
-arrow moving to meet them. Five pages is the ceiling
-(`Gen2StatsScreenPage.MAX_PAGES`): a sixth block reaches the front pic. Past it
-registration is refused with `stats_pages_full`, and a second mod claiming one id
-with `duplicate_stats_page`. An egg has no pages at all, so a registered one is
-not reached for it, the way the cartridge's own are not.
+Pages turn with LEFT and RIGHT and wrap, A on the last page leaves the screen, and
+the 2x2 page indicators are centred against the right arrow. Five pages is the
+ceiling (`Gen2StatsScreenPage.MAX_PAGES`); past it registration is refused with
+`stats_pages_full`, and a second mod claiming one id with `duplicate_stats_page`.
+An egg has no pages at all.
 
 ## Holding a run rather than an installation
 
 A mod whose settings decide what a whole playthrough looks like has a problem
-`read_save_data` alone does not solve: an installation option changed mid-run
-would silently rewrite the save being played, and opening another save could not
-restore the settings that made it. `register_save_lifecycle(manifest, provider)`
-is the seam for that.
+`read_save_data` alone does not solve: an installation option changed mid-run would
+silently rewrite the save being played, and opening another save could not restore
+the settings that made it. `register_save_lifecycle(manifest, provider)` is the
+seam for that.
 
-The `manifest` is the object `register()` was handed, and it IS the capability:
+The `manifest` is the object `register()` was handed, and it *is* the capability:
 the host keeps it beside the provider, so a callback reaches
 `read_save_data`/`write_save_data` for its own namespace and no other mod's. A
 manifest this host never discovered registers nothing.
 
 | Method | Called when |
 |---|---|
-| `save_created(save)` | A save has just been made, before it is written. Snapshot whatever the run is built from into your namespace here |
-| `save_activated(save)` | That save is about to be played. `save` is `null` for a DEVELOPMENT run, one started with no selected slot |
+| `save_created(save)` | A save has just been made, before it is written. Snapshot whatever the run is built from |
+| `save_activated(save)` | That save is about to be played. `save` is `null` for a development run |
 | `save_deactivated()` | The save was closed |
 
-Ordering, which is the part that matters:
+Ordering:
 
 1. The host drops every lifecycle mod's overlay contributions, in one pass.
 2. `save_activated` runs, in registration order.
 
-So a provider always starts from the cartridge, two slots cannot leak patches
-into one another, and a provider that fails leaves nothing installed rather than
-the previous run's shuffle. `save_deactivated` clears afterwards, so nothing
-stays patched by a run nobody is playing.
+So a provider always starts from the cartridge, two slots cannot leak patches into
+one another, and a provider that fails leaves nothing installed.
 
-Save the compact INPUTS plus an algorithm version, not the generated plan: a plan
+Save the compact *inputs* plus an algorithm version, not the generated plan: a plan
 can exceed the 64 KiB namespace and duplicates cartridge rows anyway. A save
-carrying no snapshot has no run and should stay vanilla rather than adopt today's
-options.
+carrying no snapshot has no run and should stay vanilla.
 
 Registered settings need none of that. The host snapshots them onto the save
-itself (`Gen2SaveData.run_options`) when it is created, binds that snapshot while
-the slot is played, and puts a change made mid-run into the save rather than into
-the installation. So `host.option()` answers with what THIS run is played with,
-the launcher edits the installation with no slot open, and a slot written before
-the snapshot existed adopts the installation once, when it is first activated.
+(`Gen2SaveData.run_options`) when it is created, binds that snapshot while the slot
+is played, and puts a mid-run change into the save rather than the installation. So
+`host.option()` answers with what *this* run is played with, the launcher edits the
+installation with no slot open, and a slot written before the snapshot existed
+adopts the installation once, on first activation.
 
 ## Reading the run's rules
 
 `world.rules` is a `Gen2Rules`: which of the cartridge's own bugs this run
 reproduces, and its trainer-AI difficulty. Read it, do not write it. A rule that
-changed mid-run would make the save it produced unreproducible, which is the
-whole reason the rules belong to the run rather than to the installation.
+changed mid-run would make the save it produced unreproducible.
 
 ```gdscript
 if world.rules.reproduces(&"metal_powder_overflow"):
@@ -1828,22 +1496,21 @@ if world.rules.difficulty == Gen2Rules.DIFFICULTY_HARD:
 	...
 ```
 
-`Gen2Rules.FLAGS` is every flag this build names, mapped to what it does by
-default. Each is named for the HARDWARE's behaviour, so a flag that is on means
-the cartridge's bug is reproduced and off means this project's corrected answer is
-used. An unknown flag answers false rather than failing, so a mod written against
-a later build still runs.
+`Gen2Rules.FLAGS` is every flag this build names, mapped to its default. Each is
+named for the *hardware's* behaviour, so a flag that is on means the cartridge's
+bug is reproduced and off means this project's corrected answer is used. An unknown
+flag answers false rather than failing, so a mod written against a later build
+still runs.
 
 The same object is on a battle (`battle.rules`), and exactly one set is installed
-at a time (`Gen2Rules.active()`) because the damage formula and the experience
+at a time (`Gen2Rules.active()`), because the damage formula and the experience
 curves are statics with no engine object to read it off.
 
 ## Adding a setting
 
-`register_option(id, option)` describes one setting: a ladder of values, a
-number in a range, or a button. The
-game and the launcher each build a surface from that one registration, so a mod
-writes no settings screen and the two can never disagree.
+`register_option(id, option)` describes one setting: a ladder of values, a number
+in a range, or a button. The game and the launcher each build a surface from that
+one registration, so a mod writes no settings screen.
 
 ```gdscript
 host.register_option(manifest.id, {
@@ -1857,65 +1524,56 @@ host.register_option(manifest.id, {
 |---|---|
 | `key` | Addresses the setting within the mod |
 | `label` | Shown to the player |
-| `kind` | Optional; `Gen2ModHost.OPTION_LADDER` (the default), `OPTION_NUMBER` or `OPTION_BUTTON` |
+| `kind` | Optional. `Gen2ModHost.OPTION_LADDER` (default), `OPTION_NUMBER` or `OPTION_BUTTON` |
 | `values` | The rungs, at least one. A toggle is a two-rung ladder. Ladder only |
-| `labels` | Optional; what each rung is shown as, defaulting to the values |
+| `labels` | Optional. What each rung is shown as, defaulting to the values |
 | `minimum`, `maximum` | The range, inclusive. Number only |
-| `step` | Optional; what one press moves the value by, defaulting to 1. Number only |
-| `default` | Optional; the rung or the number used until the player picks one, defaulting to the first rung or the minimum |
-| `press_label` | Optional; what a button setting's control reads, defaulting to `Go`. Button only |
+| `step` | Optional. What one press moves the value by, default 1. Number only |
+| `default` | Optional. The rung or number used until the player picks one |
+| `press_label` | Optional. What a button's control reads, default `Go`. Button only |
 
-A **number** setting is one whole value in a range rather than a ladder with
-every rung written out: a randomizer's seed is one field with ten thousand
-values, and dialling it as four one-digit ladders spends four menu rows on one
-value. Set it with `set_option(id, key, value)`, clamped into the range as
-registered now, or step it with `adjust_option(id, key, delta)`, which is what
-both surfaces call and which steps a ladder just as well. The launcher draws it
-as a field that can be typed into; the start menu steps it left and right.
+A **number** setting is one whole value in a range: a randomizer's seed is one
+field with ten thousand values, and dialling it as four one-digit ladders would
+spend four menu rows. Set it with `set_option(id, key, value)`, clamped into the
+range, or step it with `adjust_option(id, key, delta)`, which both surfaces call
+and which steps a ladder just as well. The launcher draws it as a typed field; the
+start menu steps it left and right.
 
 A **button** setting is a press rather than a ladder, for something with no value
-to keep: "recentre the camera now" is an action, not a rung. It stores nothing,
-`press_option(id, key)` is what both surfaces call, and `option_changed` carries
-a null value to say the press is the whole setting.
+to keep. It stores nothing, `press_option(id, key)` is what both surfaces call, and
+`option_changed` carries a null value.
 
-Read it back with `host.option(id, key)`, or `option_index(id, key)` for the
-rung, which is -1 for anything that is not a ladder.
-A mod that has to rebuild something on a change connects to `option_changed(id,
-key, value)` rather than polling. The host keeps the entry object `register` was
-called on for as long as the mod is loaded, so connecting a signal to it is safe
-and a mod does not have to hold itself in a static variable: `mods/examples/voxel_preview/` registers a
-camera setting in `mod.gd` and its renderer reads it once and then listens.
+Read it back with `host.option(id, key)`, or `option_index(id, key)` for the rung,
+which is -1 for anything that is not a ladder. Connect to
+`option_changed(id, key, value)` rather than polling. The host keeps the entry
+object `register` was called on for as long as the mod is loaded, so connecting a
+signal to it is safe and a mod does not have to hold itself in a static variable.
 
-The two surfaces are a **MODS** entry in the start menu, beside the pack and the
-save, and rows on that mod's card in the launcher's mods page. The entry appears
-only when at least one loaded mod registered a setting, so a player with no mods
-sees the cartridge's menu exactly.
+The two surfaces are a **MODS** entry in the start menu and rows on that mod's card
+in the launcher. The entry appears only when at least one loaded mod registered a
+setting.
 
-A change is committed the moment it is made, the way the cartridge's own OPTION
-menu writes each press to `wOptions`. With no slot open it lands in
-`user://mod_options.json`, keyed by mod id: that file is the installation's own
-values and the template a new run is created from. While a slot is played the
-change belongs to the slot instead (`run_options`, see "Holding a run rather than
-an installation"), because a draw distance that moved under a loaded save would
-make that save's own recorded walk unreproducible. Only values are stored, never
-what a setting means, so a mod that drops a rung in a later version finds its
-stored value refused and its default used instead, and uninstalling a mod drops
-what it stored.
+A change is committed the moment it is made. With no slot open it lands in
+`user://mod_options.json`, keyed by mod id: that file is the installation's values
+and the template a new run is created from. While a slot is played the change
+belongs to the slot (`run_options`). Only values are stored, never what a setting
+means, so a mod that drops a rung in a later version finds its stored value refused
+and its default used. Uninstalling a mod drops what it stored.
 
-Per-slot state belongs in the save instead. A discovered manifest can use
+Per-slot state belongs in the save. A discovered manifest uses
 `host.read_save_data(manifest, save)` and
-`host.write_save_data(manifest, save, value)` to access only its own namespace.
-Both sides deep-copy dictionaries, and writes larger than 64 KiB of UTF-8 JSON
-are refused. The manifest object itself is the capability: constructing another
-manifest with the same id does not grant access to that mod's state.
+`host.write_save_data(manifest, save, value)` for its own namespace. Both sides
+deep-copy dictionaries, and writes larger than 64 KiB of UTF-8 JSON are refused.
+The manifest object is the capability: constructing another manifest with the same
+id grants nothing.
 
 ## Adding a control
 
-`register_action(id, action)` declares a control of the mod's own. A mod cannot
-see the cartridge's eight, and the screen claims every one of them before a
-renderer is offered anything, so reading raw keycodes out of
-`handle_world_input` produces controls that cannot be rebound, collide silently
-with the d-pad, and do not exist on a touchscreen at all.
+`register_action(id, action)` declares a control of the mod's own. A mod cannot see
+the cartridge's eight, and the screen claims every one of them before a renderer is
+offered anything, so reading raw keycodes out of `handle_world_input` produces
+controls that cannot be rebound, collide silently with the d-pad, and do not exist
+on a touchscreen.
 
 ```gdscript
 host.register_action(manifest.id, {
@@ -1928,10 +1586,9 @@ host.register_action(manifest.id, {
 |---|---|
 | `key` | Addresses the control within the mod |
 | `label` | Shown wherever the control is listed or drawn |
-| `default` | Optional; bindings in `Gen2InputActions`' own shape |
+| `default` | Optional. Bindings in `Gen2InputActions`' own shape |
 
-`default` takes the same three kinds the eight take, so a mod's control binds to
-a key by physical position, a pad button, or a stick axis past the same deadzone:
+`default` takes the same three kinds the cartridge's eight take:
 
 ```gdscript
 {"kind": "key",        "code": <physical keycode>}
@@ -1939,13 +1596,12 @@ a key by physical position, a pad button, or a stick axis past the same deadzone
 {"kind": "pad_axis",   "code": <JoyAxis>, "sign": -1 or 1}
 ```
 
-A default already bound to one of the eight is **dropped and reported**, because
-such a binding would never once fire: the screen takes those first. The action
-still registers, unbound on that slot, and the refusal reaches
-`Gen2ModHost.failures()` and the launcher. `W`, `A`, `S` and `D` are the d-pad's
-own default keys.
+A default already bound to one of the eight is dropped and reported, because it
+would never fire. The action still registers, unbound on that slot, and the refusal
+reaches `Gen2ModHost.failures()` and the launcher. `W`, `A`, `S` and `D` are the
+d-pad's default keys.
 
-Three ways to read one, none of them an `InputEvent`:
+Read one without an `InputEvent`:
 
 | Call | For |
 |---|---|
@@ -1955,30 +1611,18 @@ Three ways to read one, none of them an `InputEvent`:
 | `action_axis(id, negative, positive) -> float` | Two named actions as one signed axis |
 | `action_vector(id, left, right, up, down) -> Vector2` | Two named axes, limited to unit length |
 
-`action_strength` is what makes an analogue control analogue: a stick bound to an
-action answers its travel past the deadzone, so a camera on the right stick moves
-at the rate the player is pushing it, while a key answers 0 or 1. Cameras can
-compose four such actions through `action_vector`; a two-finger drag remains a
-raw `handle_world_input` or `handle_battle_input` leftover.
+`action_strength` is what makes an analogue control analogue: a stick answers its
+travel past the deadzone while a key answers 0 or 1. A two-finger drag remains a raw
+`handle_world_input` or `handle_battle_input` leftover.
 
 Everything a registered control reaches is reachable without a keyboard:
 
-- the launcher's **controls** card lists a loaded mod's actions in their own
-  group under the eight, and rebinds them through the same sheet;
-- the on-screen controller can carry them. Off by default, because a mod must
-  not cover the screen of a player who never asked for one; switched on from the
+- The launcher's **controls** card lists a loaded mod's actions in their own group
+  under the eight, and rebinds them through the same sheet.
+- The on-screen controller can carry them. Off by default; switched on from the
   same card, each is a pill the player drags where they like, per orientation,
   beside A and B.
 
-An event reaches a mod's action only where the screen would have offered a
-renderer one, so an open menu, a running script, a battle or a trainer approach
-takes the press first.
-
-## Not built yet
-
-A mod species does not appear in the Pokedex: both dex order tables are cartridge
-data of exactly 251 entries, and nothing splices `defined_numbers()` into them,
-though a mod species that replaces a cartridge one does carry its own dex entry.
-Mod content cannot leave the project's own save either: every species, item and
-move on the hardware is one byte, so `Gen2SramAdapter` refuses to export a save
-carrying any of it rather than truncating a number into a different Pokemon.
+An event reaches a mod's action only where the screen would have offered a renderer
+one, so an open menu, a running script, a battle or a trainer approach takes the
+press first.
