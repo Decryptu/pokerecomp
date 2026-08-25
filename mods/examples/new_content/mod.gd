@@ -347,6 +347,11 @@ class Pet:
 	## And the other half a follower wants: a hidden item under the cell it is
 	## standing on. The mod reads the map and names the cell; taking one is the
 	## HOST's, because it writes the bag, the flag and the save.
+	##
+	## Asked from the read every frame and not remembered: the host drops an ask
+	## for a cell already queued or already taken (`api_version` 18), so a mod
+	## keeping its own set of what it has named would be holding a copy of host
+	## state, and would never retry a cell the pack-full branch left clear.
 	func _pick_up_what_it_walked_over() -> void:
 		if _world == null:
 			return

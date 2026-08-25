@@ -74,7 +74,7 @@ const FILENAME: String = "mod.json"
 ## same thing at different moments. Carrying both would have meant a renderer
 ## reading one for the opening and the other for the fight, so the fold is the
 ## contract. See [method Gen2BattleScreen.battler_side].
-const API_VERSION: int = 17
+const API_VERSION: int = 18
 ## The oldest contract this host still answers. See [constant API_VERSION].
 const MIN_API_VERSION: int = 1
 ## Ids address directories and registry keys, so they stay to a plain lowercase

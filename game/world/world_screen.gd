@@ -513,6 +513,7 @@ func _build_world() -> void:
 	## here rather than handed the world, so a mod is given the copy and never a
 	## way to write the bag.
 	Gen2ModHost.instance().set_inventory_source(_mod_inventory)
+	Gen2ModHost.instance().set_hidden_items_source(_mod_hidden_items)
 	_encounters.set_world(_world, anim_data)
 	_actors.set_encounters(_encounters)
 	var rods: Array[StringName] = _world.available_fishing_rods()
@@ -7387,6 +7388,12 @@ func _spend_actor_requests() -> void:
 
 func _mod_inventory() -> Dictionary:
 	return _world.state.items() if _world != null else {}
+
+
+## What [method Gen2ModHost.request_hidden_item] collapses an ask against: the
+## open map's own rows, with `taken` already answered off the event flag.
+func _mod_hidden_items() -> Array:
+	return _world.hidden_items() if _world != null else []
 
 
 ## A mod's item-gift asks, spent the way its hidden-item asks are and on the same
