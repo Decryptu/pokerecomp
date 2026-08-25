@@ -306,11 +306,6 @@ var _sound_schedule_frame: int = 0
 var _interface_owned: bool = false
 var _interface_owned_pushed: bool = false
 
-## The lower display and whatever puts it on real hardware. Both null on a
-## machine with one screen, which is every desktop and most phones.
-var _second_screen: Gen2SecondScreen = null
-var _second_screen_host: Gen2SecondScreenHost = null
-
 @onready var _screen: Gen2Screen = %Screen
 @onready var _caption: Label = %Caption
 @onready var _hint: Label = %Hint
@@ -553,33 +548,26 @@ func _build_world() -> void:
 	var entry_results: Array = _world.dispatch_map_entry()
 	if not entry_results.is_empty():
 		_show_script_results(entry_results)
-	_build_second_screen()
+	_hand_over_second_screen()
 	_refresh_labels()
 
 
-## The lower display, where the build is running on hardware that has one.
+## Hands this world to the lower display, where the build has one.
 ##
-## It mirrors this world and takes no button, so it is built here rather than
-## anywhere a page is opened: the pages on it are the START menu's, and which of
-## them exist is the START menu's gate rather than this screen's business.
-## [method Gen2SecondScreenHost.attach] answers null on every machine with no
-## second display, which is the ordinary case and not a failure.
-func _build_second_screen() -> void:
-	if _second_screen != null:
-		return
-	var view := Gen2SecondScreen.new()
-	view.name = "SecondScreen"
-	add_child(view)
-	view.set_world(_data, _world, active_save())
-	var host: Gen2SecondScreenHost = Gen2SecondScreenHost.attach(
-		view, Gen2OptionsStore.current().second_screen
-	)
-	if host == null:
-		Gen2Screen.drop(view)
-		return
-	add_child(host)
-	_second_screen = view
-	_second_screen_host = host
+## The display itself belongs to [Gen2GameRuntime] and is up in the launcher too;
+## all this screen owns is which world is on it. Handed back on the way out, so
+## closing a game puts the launcher's own mark back rather than leaving the last
+## frame of a world nobody is playing.
+func _hand_over_second_screen() -> void:
+	var runtime: Gen2GameRuntime = Gen2GameRuntime.instance()
+	if runtime != null:
+		runtime.set_second_screen_world(_data, _world, active_save())
+
+
+func _exit_tree() -> void:
+	var runtime: Gen2GameRuntime = Gen2GameRuntime.instance()
+	if runtime != null:
+		runtime.set_second_screen_world(null, null, null)
 
 
 ## Builds the view for the selected renderer and attaches it to the layer that
@@ -841,8 +829,6 @@ func advance_frame() -> void:
 		_world.advance_frame_counter()
 		if _replaying_input:
 			_apply_replayed_input(_world.frame_number)
-	if _second_screen != null:
-		_second_screen.refresh()
 	_advance_game_time_frame()
 	## Before everything the map draws: the fade owns the frame the map swaps on,
 	## and nothing else runs while `RunMapSetupScript` is spending its own.

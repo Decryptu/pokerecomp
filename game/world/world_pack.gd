@@ -161,8 +161,13 @@ static func source_pocket_name(data: GameData, item: int) -> String:
 ##
 ## Here rather than in the screen that scrolls them, because the pack listing is
 ## drawn on more than one screen and only one of them owns a cursor.
+##
+## [param cancel] is the row that closes the pack. A screen that cannot be closed
+## because nothing on it takes a button asks for the listing without it, the way
+## [method Gen2PartyMenuPage.render] is asked for one without its own CANCEL.
 static func list_rows(
-	data: GameData, pocket_type: int, items: Array, scroll: int = 0
+	data: GameData, pocket_type: int, items: Array, scroll: int = 0,
+	cancel: bool = true
 ) -> Array:
 	var tmhm: bool = pocket_type == TYPE_TM_HM
 	var out: Array = []
@@ -171,7 +176,8 @@ static func list_rows(
 		if index > items.size():
 			break
 		if index == items.size():
-			out.append({"kind": Gen2PackPage.ROW_CANCEL})
+			if cancel:
+				out.append({"kind": Gen2PackPage.ROW_CANCEL})
 			break
 		var entry: Dictionary = items[index]
 		var item: int = int(entry.get("item", 0))

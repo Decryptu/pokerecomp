@@ -27,11 +27,11 @@ const VIEWABLE: Array[StringName] = [
 ## A species icon is two tiles by two, the size every 16x16 object the cartridge
 ## draws is. A crop out of a screen's own sheet is whatever that picture is:
 ## `PackGFX`'s bag is 32 by 20 and no smaller rectangle of it reads as a bag.
-## [constant ICON_MAX] is the tallest any of them is, which is what the tab row
-## has to be able to hold.
+## [constant ICON_MAX] is the tallest any of them is, which is what the tab row's
+## interior has to hold above the open tab's underline.
 const ICON_TILE: int = 8
 const ICON_SIZE: int = ICON_TILE * 2
-const ICON_MAX: int = 20
+const ICON_MAX: int = 18
 
 ## Where each tab's icon is cut from: the cache's own sheet name, the top-left
 ## pixel in that sheet's own grid, how many tiles wide that grid is, and how many
@@ -40,7 +40,7 @@ const ICON_MAX: int = 20
 ##
 ## | Tab | Icon |
 ## |---|---|
-## | #DEX | the caught marker on the dex listing, which is one tile and so is drawn at two |
+## | #DEX | the caught marker, as `HUDBallIcons` draws it: the same ball the dex listing puts beside a caught row, off the sheet that draws it on white rather than on the dex's black field |
 ## | PACK | the middle of `PackGFX`'s five-by-three bag |
 ## | GEAR | `.PlacePokegearCardIcon`'s MAP icon, tile $40 less [constant RomLayout.POKEGEAR_FIRST_TILE] |
 ## | player | the head of `GetCardPic`'s own player picture |
@@ -48,17 +48,17 @@ const ICON_MAX: int = 20
 ## #MON has no entry: its icon is the party's lead, read live.
 const ICONS: Dictionary = {
 	Gen2WorldStartMenu.ITEM_POKEDEX: {
-		"sheet": "pokedex", "at": Vector2i(112, 8), "size": Vector2i(8, 8),
-		"stride": 16, "scale": 2,
+		"sheet": "ball_icons", "at": Vector2i(0, 0), "size": Vector2i(8, 8),
+		"stride": 4, "scale": 2,
 	},
 	Gen2WorldStartMenu.ITEM_PACK: {
-		"sheet": "pack", "at": Vector2i(4, 2), "size": Vector2i(32, 20), "stride": 5,
+		"sheet": "pack", "at": Vector2i(4, 3), "size": Vector2i(32, 18), "stride": 5,
 	},
 	Gen2WorldStartMenu.ITEM_POKEGEAR: {
 		"sheet": "pokegear", "at": Vector2i(0, 8), "stride": 16,
 	},
 	Gen2WorldStartMenu.ITEM_PLAYER: {
-		"sheet": "card_pic", "at": Vector2i(12, 0), "size": Vector2i(24, 20), "stride": 5,
+		"sheet": "card_pic", "at": Vector2i(12, 1), "size": Vector2i(24, 18), "stride": 5,
 	},
 }
 
@@ -175,7 +175,7 @@ static func icon(
 	return _crop(
 		strip, int(row["stride"]), row.get("at", Vector2i.ZERO),
 		row.get("size", Vector2i(ICON_SIZE, ICON_SIZE)),
-		int(row.get("scale", 1)), colors, -1
+		int(row.get("scale", 1)), colors, int(row.get("transparent", -1))
 	)
 
 
@@ -259,7 +259,11 @@ static func _sheet(data: GameData, name: String, female: bool) -> PackedByteArra
 static func _palette(data: GameData, kind: StringName, female: bool) -> PackedColorArray:
 	match kind:
 		Gen2WorldStartMenu.ITEM_POKEDEX:
-			return data.pokedex_palette("interface")
+			## `HUDBallIcons` is two colours, drawn through whatever the HUD's
+			## own palette is; the marker is black on white wherever it appears.
+			return Gen2Palette.pic_palette(
+				PackedColorArray([Color.WHITE, Color.BLACK])
+			)
 		Gen2WorldStartMenu.ITEM_PACK:
 			var pack: PackedColorArray = data.pack_palette(PACK_PICTURE_PALETTE, female)
 			return pack if not pack.is_empty() else data.pack_palette(PACK_PICTURE_PALETTE)

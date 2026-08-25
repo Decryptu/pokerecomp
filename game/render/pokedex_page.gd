@@ -117,17 +117,14 @@ const ARROW_LEFT: int = 0x3D
 const ARROW_RIGHT: int = 0x3E
 
 var font: Gen2Font = null
-## The dex sheet, the Slowpoke picture and the footprint strip, each as the
-## cache's own index buffer.
+## The dex sheet and the footprint strip, each as the cache's own index buffer.
 var _sheet: PackedByteArray = PackedByteArray()
-var _slowpoke: PackedByteArray = PackedByteArray()
 var _footprints: PackedByteArray = PackedByteArray()
 var _unown_font: PackedByteArray = PackedByteArray()
 var _palette: PackedColorArray = PackedColorArray()
-var _question_mark: PackedColorArray = PackedColorArray()
 
 
-## [param data] supplies the glyphs and all three sheets; a cache without them
+## [param data] supplies the glyphs and the three strips; a cache without them
 ## answers null rather than drawing a screen of blanks.
 static func from_data(data: GameData) -> Gen2PokedexPage:
 	if data == null:
@@ -138,11 +135,9 @@ static func from_data(data: GameData) -> Gen2PokedexPage:
 	var out := Gen2PokedexPage.new()
 	out.font = glyphs
 	out._sheet = data.tile_indices("pokedex")
-	out._slowpoke = data.tile_indices("pokedex_slowpoke")
 	out._footprints = data.tile_indices("footprints")
 	out._unown_font = data.tile_indices("unown_font")
 	out._palette = data.pokedex_palette("interface")
-	out._question_mark = data.pokedex_palette("question_mark")
 	return out
 
 
@@ -522,23 +517,21 @@ func image_main(
 
 
 ## The Slowpoke picture, which is what `Pokedex_LoadSelectedMonTiles` puts in the
-## box for a species that has not been seen. Drawn through its own palette, the
-## one `_CGB_Pokedex` fills the 7x7 box with.
+## box for a species that has not been seen.
+##
+## Nothing, until the cache carries the picture. `Pokedex_LoadSelectedMonTiles`
+## sends an unseen species to `.QuestionMark`, which is `LoadQuestionMarkPic` and
+## `gfx/pokedex/question_mark.2bpp.lz`: a 7x7 question mark, and a sheet no
+## importer reads. `PokedexSlowpokeLZ`, which this used to draw, is a different
+## asset entirely -- five Slowpoke reading a book, decompressed to `vTiles0`
+## rather than to the pic slot -- and drawing 49 of its 55 tiles as a picture put
+## a rectangle of scrambled tiles in the box on every unseen row.
+##
+## An empty box is what the cartridge's own box looks like before its pic
+## arrives, and is the honest answer until the blob is located; see
+## `RomLayout.POKEDEX_TILES` for how its neighbours were found.
 func unseen_pic() -> Image:
-	if _slowpoke.is_empty():
-		return null
-	var colors: PackedColorArray = _question_mark if _question_mark.size() \
-		== Gen2Palette.COLORS_PER_PIC else _palette
-	var side: int = 7 * TILE
-	var indices := PackedByteArray()
-	indices.resize(side * side)
-	for tile: int in mini(RomLayout.POKEDEX_SLOWPOKE_TILES, 49):
-		@warning_ignore("integer_division")
-		Gen2Font.blit_slot(
-			_slowpoke, _slowpoke.size() / TILE, tile, indices, side,
-			(tile / 7) * TILE, (tile % 7) * TILE
-		)
-	return Gen2PicImage.from_indices(indices, side, side, colors)
+	return null
 
 
 ## `Pokedex_LoadCurrentFootprint`, as the four tiles the entry screen's grid

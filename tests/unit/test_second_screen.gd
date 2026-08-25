@@ -90,7 +90,7 @@ func test_the_signature_follows_the_tab_set_and_the_chosen_tab() -> void:
 ## hardware pixel is a square block of panel pixels and the leftover is a bar
 ## rather than a resampled picture.
 func test_the_canvas_fills_a_panel_at_a_whole_scale() -> void:
-	## The AYN Thor's lower display. 1080 / 172 is 6, and 1240 / 6 is 206.
+	## The AYN Thor's lower display. 1080 / 178 is 6, and 1240 / 6 is 206.
 	assert_eq(
 		Gen2SecondScreenHost.canvas_for(Vector2i(1240, 1080)), Vector2i(206, 180)
 	)
@@ -163,3 +163,54 @@ func test_a_touch_off_the_canvas_lands_on_no_tab() -> void:
 
 func test_a_row_with_no_tabs_takes_no_touch() -> void:
 	assert_eq(Gen2SecondScreen.tab_index_at(Vector2(100.0, 150.0), CANVAS, 0), -1)
+
+
+## Every engine callback that could deliver a press to a page without the page
+## being asked for it. A screen that declares none of these cannot act on input
+## the second display never routes to it, whatever else it is doing.
+const INPUT_CALLBACKS: Array[String] = [
+	"_input", "_unhandled_input", "_unhandled_key_input", "_gui_input",
+	"_shortcut_input",
+]
+
+## The pages the lower display hosts, as their own scripts.
+const HOSTED: Array[String] = [
+	"res://game/world/pokedex_screen.gd",
+	"res://game/save/party_screen.gd",
+	"res://game/world/town_map_screen.gd",
+	"res://game/world/pokegear_screen.gd",
+	"res://game/world/trainer_card_screen.gd",
+]
+
+
+## The read-only promise, asserted where it is actually kept: none of the pages
+## the lower display shows reads input at all. Each is driven by its host calling
+## `handle_button`, and the lower display calls nothing.
+##
+## This is the test that fails the day someone gives one of these screens an
+## input callback of its own, which is the one change that would let a page on
+## the panel act on a press meant for the game.
+func test_no_hosted_page_reads_input() -> void:
+	for path: String in HOSTED:
+		var script: Script = load(path) as Script
+		assert_not_null(script, path)
+		if script == null:
+			continue
+		var declared: Array[String] = []
+		for entry: Dictionary in script.get_script_method_list():
+			declared.append(String(entry.get("name", "")))
+		for callback: String in INPUT_CALLBACKS:
+			assert_false(
+				declared.has(callback),
+				"%s declares %s" % [path.get_file(), callback]
+			)
+
+
+## The launcher's own page is drawn at the panel's resolution rather than in the
+## hardware canvas, and how big it is drawn is a whole multiple of the launcher's
+## units. A desktop window smaller than one unit's worth still gets one.
+func test_the_launcher_page_scales_by_whole_units() -> void:
+	assert_eq(Gen2SecondScreen.idle_scale(Vector2i(1240, 1080)), 2)
+	assert_eq(Gen2SecondScreen.idle_scale(Vector2i(824, 720)), 1)
+	assert_eq(Gen2SecondScreen.idle_scale(Vector2i(64, 64)), 1)
+	assert_eq(Gen2SecondScreen.idle_scale(Vector2i(1920, 1620)), 3)

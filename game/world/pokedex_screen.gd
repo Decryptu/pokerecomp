@@ -87,6 +87,8 @@ var _message: String = ""
 ## `wDexArrowCursorBlinkCounter`, and the leftover of a hardware frame this
 ## screen has not counted yet.
 var _blink: int = 0
+## Whether this is being read rather than driven. See [method set_read_only].
+var _read_only: bool = false
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 
 
@@ -491,7 +493,9 @@ func render() -> Image:
 		return Image.create_empty(
 			Gen2Screen.WIDTH, Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8
 		)
-	var cursor: int = -1 if _blink >= CURSOR_BLINK_FRAMES else 0
+	## `Pokedex_BlinkArrowCursor`'s own off phase, and the same answer on every
+	## frame for a screen that is being read rather than walked.
+	var cursor: int = -1 if _read_only or _blink >= CURSOR_BLINK_FRAMES else 0
 	match _mode:
 		Mode.OPTION:
 			return _page.image(_page.option_map(
@@ -627,6 +631,13 @@ func _build_ui() -> void:
 
 ## The screen the opener wants this drawn in, handed over before it is added to
 ## the tree. Without one the field goes in whichever screen this ends up inside.
+## Draws the listing with no arrow on it, for a display that shows the dex
+## without being able to walk it. The blink is left running: it costs nothing and
+## the flag is checked where the arrow is placed.
+func set_read_only(on: bool) -> void:
+	_read_only = on
+
+
 func set_screen(screen: Gen2Screen) -> void:
 	_screen = screen
 

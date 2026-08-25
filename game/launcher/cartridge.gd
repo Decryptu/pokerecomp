@@ -41,6 +41,9 @@ var _art: TextureRect = null
 var _bay: Control = null
 var _bay_icon: Gen2LauncherIcon = null
 var _bay_label: Label = null
+## The icon and the name inside an empty bay, hidden together by
+## [method set_bay_prompt].
+var _bay_prompt: VBoxContainer = null
 var _hover: bool = false
 var _side_fade: ShaderMaterial = null
 var _bay_side_fade: ShaderMaterial = null
@@ -94,7 +97,8 @@ func _build() -> void:
 	_bay.draw.connect(_draw_bay)
 	add_child(_bay)
 
-	var invitation: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_SM)
+	_bay_prompt = Gen2LauncherUI.column(Gen2LauncherUI.GAP_SM)
+	var invitation: VBoxContainer = _bay_prompt
 	invitation.alignment = BoxContainer.ALIGNMENT_CENTER
 	invitation.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	invitation.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -124,6 +128,16 @@ func _build() -> void:
 	add_child(_art)
 
 	set_imported(false)
+
+
+## Hides the download icon and the cartridge's name inside an empty bay, leaving
+## the silhouette alone.
+##
+## For a caller that wants the shape rather than the invitation: the lower
+## display draws one to say no game is running, and nothing can be dropped on it.
+func set_bay_prompt(on: bool) -> void:
+	if _bay_prompt != null:
+		_bay_prompt.visible = on
 
 
 func set_imported(state: bool) -> void:

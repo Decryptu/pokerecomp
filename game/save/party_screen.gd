@@ -161,6 +161,8 @@ var _menu_page: Gen2MenuPage = null
 ## A refusal standing in the menu's own bottom box, which the next A or B
 ## clears. See [constant MESSAGE_NOT_ENOUGH_HP].
 var _message: String = ""
+## Whether this is being read rather than driven. See [method set_read_only].
+var _read_only: bool = false
 ## This screen's hardware-frame clock.
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 ## `OpenPartyStats`' own screen, standing over the whole party menu while it is
@@ -734,6 +736,20 @@ func _build_hardware_ui() -> void:
 	_hardware.display(_view)
 
 
+## Draws the party as a readout rather than as a menu: no cursor, no CANCEL row
+## and an empty bottom box.
+##
+## For a display that shows the party without being able to choose from it. The
+## three are one switch rather than three because they are one fact: an arrow, a
+## way out and a question are all furniture for a press that cannot happen here.
+func set_read_only(on: bool) -> void:
+	if _read_only == on:
+		return
+	_read_only = on
+	if is_inside_tree():
+		_render_hardware()
+
+
 ## The screen the opener wants this drawn in, handed over before it is added to
 ## the tree. Without one the view goes in whichever screen this ends up inside.
 func set_screen(screen: Gen2Screen) -> void:
@@ -826,7 +842,11 @@ func _render_hardware() -> void:
 		return
 	var rows: Array = _rows()
 	var image: Image = _page.render(
-		rows, _cursor_row(), _prompt(), _switch_from < 0, _switch_from
+		rows,
+		-1 if _read_only else _cursor_row(),
+		"" if _read_only else _prompt(),
+		_switch_from < 0 and not _read_only,
+		_switch_from,
 	)
 	if image == null:
 		return

@@ -2,16 +2,19 @@ extends SceneTree
 
 ## Photographs the lower display against a real cache.
 ##
-##   Godot --path . -s res://tools/preview_second_screen.gd -- <game> <out.png> [tab] [progress] [panel]
+##   Godot --path . -s res://tools/preview_second_screen.gd -- <game> <out.png> [tab] [progress] [panel] [theme]
 ##
-## `tab` is one of `pokedex`, `pokemon`, `pack`, `pokegear`, `player`, or `all`
-## to write one file per open tab with the tab's name before the extension.
+## `tab` is one of `pokedex`, `pokemon`, `pack`, `pokegear`, `player`, `idle` for
+## the picture the panel shows with no world on it, or `all` to write one file per
+## open tab with the tab's name before the extension.
 ## `progress` is how far the run has got, which is the only thing that decides
 ## which tabs exist: `start` is a player who has just left their bedroom,
 ## `starter` has Elm's Pokemon, `gear` has the Pokegear and the MAP card, and
 ## `full` has everything the START menu can offer. `panel` is a lower display's
 ## own pixel size, `WIDTHxHEIGHT`, which chooses the canvas the way a real one
-## would; the default is the AYN Thor's 1240x1080.
+## would; the default is the AYN Thor's 1240x1080. `theme` is `light` or `dark`,
+## which only the idle page reads: it is launcher UI and wears the launcher's own
+## appearance.
 ##
 ## The picture written is the canvas itself, one file pixel per hardware pixel,
 ## so a diff against it is exact. Look at it with an image viewer that does not
@@ -28,6 +31,9 @@ const DEFAULT_PANEL := Vector2i(1240, 1080)
 const MAP_GROUP: int = 24
 const MAP_NUMBER: int = 4
 const START_CELL := Vector2i(13, 6)
+
+## The panel with no world on it, which is what the launcher shows.
+const TAB_IDLE: StringName = &"idle"
 
 const TABS: Array[StringName] = [
 	Gen2WorldStartMenu.ITEM_POKEDEX,
@@ -91,6 +97,9 @@ func _initialize() -> void:
 		var parts: PackedStringArray = args[4].split("x")
 		if parts.size() == 2:
 			_panel = Vector2i(int(parts[0]), int(parts[1]))
+	if args.size() > 5 and Gen2Options.UI_THEMES.has(StringName(args[5])):
+		Gen2OptionsStore.use_test_path()
+		Gen2OptionsStore.current().ui_theme = StringName(args[5])
 	if not PROGRESS.has(_progress):
 		push_error("Unknown progress %s; one of %s" % [_progress, PROGRESS.keys()])
 		quit(1)
@@ -123,10 +132,14 @@ func _initialize() -> void:
 	root.set_content_scale_size(WINDOW_SIZE)
 	root.size = WINDOW_SIZE
 	_view = Gen2SecondScreen.new()
+	_view.panel_size = _panel
 	_view.canvas_size = Gen2SecondScreenHost.canvas_for(_panel)
 	root.add_child(_view)
 	_view.size = Vector2(_view.canvas_size)
-	_view.set_world(data, world, save)
+	if _tab == TAB_IDLE:
+		_view.set_world(null, null, null)
+	else:
+		_view.set_world(data, world, save)
 	_pending = [_tab] if _tab != &"all" else TABS.duplicate()
 	current_scene = _view
 
@@ -163,6 +176,10 @@ func _process(_delta: float) -> bool:
 		quit(0)
 		return true
 	var kind: StringName = StringName(_pending.pop_front())
+	if kind == TAB_IDLE:
+		_armed = kind
+		_wait = 2
+		return false
 	if _view.select_tab(kind):
 		_armed = kind
 		## The page is built now and the viewport carries it a frame later, which
