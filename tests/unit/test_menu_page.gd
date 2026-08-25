@@ -198,3 +198,49 @@ func test_a_row_too_wide_for_its_box_is_cut_at_the_border() -> void:
 			_ink_in_tile(indices, Vector2i(column, box.item_position(0).y)),
 			"nothing past the border at column %d" % column
 		)
+
+
+## `ScrollingMenu_UpdateDisplay`'s two arrows, both written over the box's
+## right-hand border: `▼` whenever `SCROLLINGMENU_DISPLAY_ARROWS` is set, and
+## `▲` only past the first row. The frame is already drawn in both corners, so
+## each is read as a corner that differs from the same box without arrows.
+func _arrow_box(scroll: int) -> Gen2MenuBox:
+	var box: Gen2MenuBox = _box()
+	box.scrolling_arrows = true
+	box.scroll = scroll
+	return box
+
+
+func _tile(indices: PackedByteArray, at: Vector2i) -> PackedByteArray:
+	var out := PackedByteArray()
+	for row: int in TILE:
+		var start: int = (at.y * TILE + row) * WIDTH + at.x * TILE
+		out.append_array(indices.slice(start, start + TILE))
+	return out
+
+
+## `[top-right, bottom-right]` for a box drawn with [param scroll], against the
+## same box with no arrows at all.
+func _arrow_corners(scroll: int) -> Array[bool]:
+	var plain: PackedByteArray = _blank()
+	_page.draw(_box(), OPTIONS, 0, plain, WIDTH)
+	var drawn: PackedByteArray = _blank()
+	var box: Gen2MenuBox = _arrow_box(scroll)
+	_page.draw(box, OPTIONS, 0, drawn, WIDTH)
+	return [
+		_tile(drawn, Vector2i(box.right, box.top)) != _tile(plain, Vector2i(box.right, box.top)),
+		_tile(drawn, Vector2i(box.right, box.bottom))
+			!= _tile(plain, Vector2i(box.right, box.bottom)),
+	]
+
+
+func test_the_down_arrow_is_drawn_whatever_the_scroll_is() -> void:
+	var corners: Array[bool] = _arrow_corners(0)
+	assert_true(corners[1], "the down arrow does not wait for rows below the window")
+	assert_false(corners[0], "wMenuScrollPosition is zero, so the up arrow waits")
+
+
+func test_the_up_arrow_waits_for_the_window_to_leave_the_top() -> void:
+	var corners: Array[bool] = _arrow_corners(1)
+	assert_true(corners[0])
+	assert_true(corners[1])

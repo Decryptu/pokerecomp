@@ -216,6 +216,18 @@ var _mail_party: Gen2PartyScreen = null
 ## `_ChangeBox_MenuHeader`'s `db 4, 0`: four rows of a scrolling list, and where
 ## the window into the fourteen boxes stands.
 const BOX_LIST_ROWS: int = 4
+## The `db rows` byte of every scrolling menu this screen hosts, which is how
+## many of its list a window shows at once. `wMenuScrollPosition` is one value
+## here, the way it is one address on the cartridge: only one of these lists is
+## ever open.
+const SCROLLING_ROWS: Dictionary = {
+	MODE.PC_BOX_LIST: BOX_LIST_ROWS,
+	## `MailboxPC.TopMenuData`, `.PCItemsMenuData` and
+	## `_PlayerDecorationMenu.ScrollingMenuData`.
+	MODE.PC_MAILBOX: 4,
+	MODE.PC_ITEM_LIST: 4,
+	MODE.PC_DECO_LIST: 8,
+}
 var _pc_scroll: int = 0
 ## `wCurBox`, which CHANGE BOX writes and both lists read. It is the save's, so
 ## the box a deposit lands in outlives the machine being switched off.
@@ -2256,14 +2268,29 @@ func _move_cursor(delta: int) -> void:
 	_cursor = wrapi(_cursor + delta, 0, count)
 	if _mode == MODE.PC_ITEM_LIST:
 		_pc_quantity = 1
+	## `ScrollingMenu` keeps the cursor inside its own window and moves the
+	## window under it.
+	var rows: int = _scrolling_rows()
+	if rows > 0:
+		_pc_scroll = clampi(_pc_scroll, _cursor - rows + 1, _cursor)
+		_pc_scroll = clampi(_pc_scroll, 0, maxi(0, count - rows))
 	if _mode == MODE.PC_BOX_LIST:
-		## `ScrollingMenu` keeps the cursor inside its own window and moves the
-		## window under it, and `BillsPC_PrintBoxCountAndCapacity` runs per row
-		## rather than per choice.
-		_pc_scroll = clampi(_pc_scroll, _cursor - BOX_LIST_ROWS + 1, _cursor)
-		_pc_scroll = clampi(_pc_scroll, 0, maxi(0, count - BOX_LIST_ROWS))
+		## `BillsPC_PrintBoxCountAndCapacity` runs per row rather than per
+		## choice.
 		_refresh_box_counts()
 	_render_rows()
+
+
+## How many rows this mode's list shows at once, or zero for a menu that is not
+## a `ScrollingMenu` and draws all of its options.
+func _scrolling_rows() -> int:
+	if _mode == MODE.MENU:
+		## A scripted `verticalmenu` declares as many rows as it has options, so
+		## only a list longer than its own window is one.
+		if _menu == null or _menu.rows >= _menu.options.size():
+			return 0
+		return _menu.rows
+	return int(SCROLLING_ROWS.get(_mode, 0))
 
 
 func _move_direction(direction: Vector2i) -> void:
@@ -2398,12 +2425,6 @@ func _render_rows(override: Array = []) -> void:
 		## One value at a time, the way the dial itself shows it.
 		override = [_choices[clampi(_cursor, 0, _choices.size() - 1)]] if not _choices.is_empty() \
 			else []
-	if _mode == MODE.PC_BOX_LIST and override.is_empty():
-		## The window `ScrollingMenu` draws, and the cursor's place inside it.
-		_render_service_page(
-			_pc_rows.slice(_pc_scroll, _pc_scroll + BOX_LIST_ROWS), _cursor - _pc_scroll
-		)
-		return
 	var values: Array = override if not override.is_empty() else (
 		_choices if _mode == MODE.MENU \
 		else _pc_rows if _mode in [
@@ -2415,6 +2436,15 @@ func _render_rows(override: Array = []) -> void:
 		else _pc_entries if _mode == MODE.PC_ITEM_LIST \
 		else ["Continue"]
 	)
+	var rows: int = _scrolling_rows()
+	if rows > 0 and override.is_empty():
+		## The window `ScrollingMenu` draws, and the cursor's place inside it.
+		## Clamped here rather than at each way in: a list reopened on a row it
+		## was left on (`wCurMessageIndex`, `wCurBox`) starts scrolled to it.
+		_pc_scroll = clampi(_pc_scroll, _cursor - rows + 1, _cursor)
+		_pc_scroll = clampi(_pc_scroll, 0, maxi(0, values.size() - rows))
+		_render_service_page(values.slice(_pc_scroll, _pc_scroll + rows), _cursor - _pc_scroll)
+		return
 	_render_service_page(values)
 
 
@@ -2442,9 +2472,14 @@ func _render_service_page(values: Array, cursor: int = -1) -> void:
 			labels.append(label)
 		else:
 			labels.append(String(value))
+	## `_PlayerDecorationMenu`'s list reaches row 16 and the routine prints no
+	## box under it, so the category's name is the list's own title row on the
+	## cartridge rather than a speech box the list would be drawn over.
+	var quiet: bool = _mode == MODE.PC_DECO_LIST
 	var image: Image = _mom_bank_image() if _mode == MODE.MOM_BANK \
 		else _dial_image() if _is_dial() else _service_page.render(
-		_title, _summary, labels, _cursor if cursor < 0 else cursor, _status,
+		"" if quiet else _title, "" if quiet else _summary, labels,
+		_cursor if cursor < 0 else cursor, "" if quiet else _status,
 		_service_box(), _service_note()
 	)
 	if image != null:
@@ -2505,9 +2540,13 @@ func _service_box() -> Gen2MenuBox:
 		MODE.MENU:
 			if _menu == null or _menu.kind == &"spinner":
 				return null
-			return _menu.box()
-		MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES, MODE.PC_DECO_LIST:
+			var menu_box: Gen2MenuBox = _menu.box()
+			menu_box.scroll = _pc_scroll
+			return menu_box
+		MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES:
 			return _pc_top_box()
+		MODE.PC_DECO_LIST:
+			return _deco_list_box()
 		MODE.ELEVATOR:
 			## `Elevator_MenuHeader`'s `menu_coords 12, 1, 18, 9`.
 			##
@@ -2517,13 +2556,18 @@ func _service_box() -> Gen2MenuBox:
 			## a second row before the first item. A scrolling menu therefore has
 			## no top spacing, and this box's fourth floor sits on its own border
 			## without it.
-			return Gen2MenuBox.from_coords(
+			var elevator_box: Gen2MenuBox = Gen2MenuBox.from_coords(
 				12, 1, 18, 9,
 				Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_NO_TOP_SPACING
 			)
+			elevator_box.scrolling_arrows = true
+			elevator_box.scroll = _elevator_scroll
+			return elevator_box
 		MODE.PC_MAILBOX:
 			## `.TopMenuHeader`'s `menu_coords 8, 1, SCREEN_WIDTH - 2, 10`.
-			return Gen2MenuBox.from_coords(8, 1, 18, 10, Gen2MenuBox.STATICMENU_CURSOR)
+			return _scrolling_box(
+				Gen2MenuBox.from_coords(8, 1, 18, 10, Gen2MenuBox.STATICMENU_CURSOR)
+			)
 		MODE.PC_MAIL_SUBMENU:
 			## `.SubMenuHeader`'s `menu_coords 0, 0, 13, 9`.
 			return Gen2MenuBox.from_coords(0, 0, 13, 9, Gen2MenuBox.STATICMENU_CURSOR)
@@ -2585,12 +2629,36 @@ func _deco_side_box() -> Gen2MenuBox:
 
 ## `PCItemsMenuData`'s `menu_coords 4, 1, 18, 10`.
 func _pc_item_list_box() -> Gen2MenuBox:
-	return Gen2MenuBox.from_coords(4, 1, 18, 10, Gen2MenuBox.STATICMENU_CURSOR)
+	return _scrolling_box(
+		Gen2MenuBox.from_coords(4, 1, 18, 10, Gen2MenuBox.STATICMENU_CURSOR)
+	)
+
+
+## `_PlayerDecorationMenu.ScrollingMenuHeader`'s `menu_coords 1, 1, SCREEN_WIDTH
+## - 2, SCREEN_HEIGHT - 2`. The category list above it is a `VerticalMenu` with
+## its own coords, and this list used to be drawn in the PC's top-menu box.
+func _deco_list_box() -> Gen2MenuBox:
+	return _scrolling_box(
+		Gen2MenuBox.from_coords(1, 1, 18, 16, Gen2MenuBox.STATICMENU_CURSOR)
+	)
+
+
+## `SCROLLINGMENU_DISPLAY_ARROWS` and the window this screen's one
+## `wMenuScrollPosition` stands at.
+func _scrolling_box(box: Gen2MenuBox) -> Gen2MenuBox:
+	box.scrolling_arrows = true
+	box.scroll = _pc_scroll
+	return box
 
 
 ## `Kurt_SelectApricorn.MenuHeader`'s `menu_coords 1, 1, 13, 10`.
 func _apricorn_select_box() -> Gen2MenuBox:
-	return Gen2MenuBox.from_coords(1, 1, 13, 10, Gen2MenuBox.STATICMENU_CURSOR)
+	var box: Gen2MenuBox = Gen2MenuBox.from_coords(
+		1, 1, 13, 10, Gen2MenuBox.STATICMENU_CURSOR
+	)
+	box.scrolling_arrows = true
+	box.scroll = _apricorns.scroll if _apricorns != null else 0
+	return box
 
 
 ## `Kurt_SelectQuantity.MenuHeader`'s `menu_coords 6, 9, SCREEN_WIDTH - 1, 12`.

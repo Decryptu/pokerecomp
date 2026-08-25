@@ -47,6 +47,10 @@ var box_right: int = YES_NO_RIGHT
 var box_bottom: int = YES_NO_BOTTOM
 ## `Place2DMenuItemStrings`' own column spacing, a `2d` menu's `db spacing`.
 var _spacing: int = 0
+## `SCROLLINGMENU_DISPLAY_ARROWS`. No imported `verticalmenu` header carries it:
+## every `ScrollingMenu` in the game is opened by a routine rather than by a
+## script, and Buena's prize list is the one this runner stages itself.
+var scrolling_arrows: bool = false
 
 
 static func from_input(input: Dictionary) -> Gen2WorldMenu:
@@ -71,6 +75,7 @@ static func from_input(input: Dictionary) -> Gen2WorldMenu:
 	menu.box_top = int(header.get("top", YES_NO_TOP))
 	menu.box_right = int(header.get("right", YES_NO_RIGHT))
 	menu.box_bottom = int(header.get("bottom", YES_NO_BOTTOM))
+	menu.scrolling_arrows = bool(header.get("arrows", false))
 	return menu
 
 
@@ -80,6 +85,7 @@ static func from_input(input: Dictionary) -> Gen2WorldMenu:
 ## here is one column with no spacing.
 func box() -> Gen2MenuBox:
 	var out := Gen2MenuBox.from_coords(box_left, box_top, box_right, box_bottom, flags)
+	out.scrolling_arrows = scrolling_arrows
 	if kind == &"2d":
 		out.columns = maxi(1, columns)
 		out.column_spacing = _spacing

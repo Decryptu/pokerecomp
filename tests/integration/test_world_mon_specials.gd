@@ -1,6 +1,6 @@
 extends GutTest
 
-## Scene integration for the two specials that open `SelectMonFromParty`:
+## Scene integration for the routines that open `SelectMonFromParty`:
 ## `NameRater` and `MoveDeletion`. Each is its own line through the overworld,
 ## two `YesNoBox`es, the party list, and an ending text.
 ##
@@ -603,3 +603,152 @@ func test_a_balance_window_stands_over_the_map_until_closetext() -> void:
 	assert_true(_world_screen.money_window_open())
 	_world_screen.press_button(Gen2Button.A)
 	assert_false(_world_screen.money_window_open())
+
+
+## `Route35GoldenrodGate`'s `givepokemail GiftSpearowMail` and Route 31's
+## `checkpokemail ReceivedSpearowMailText`, which are one site each in either
+## corpus and the whole of Randy's Spearow errand. Both point at bytes that sit
+## behind the script naming them rather than at a pointer of their own, so the
+## fixture lays them out the same way.
+const MAIL_ITEM: int = 158
+const MAIL_LINE_1: String = "DARK CAVE leads"
+const MAIL_LINE_2: String = "to another road"
+
+
+func _mail_message(first: String, second: String) -> PackedByteArray:
+	var out := PackedByteArray()
+	out.append_array(Gen2Text.encode(first))
+	out.append(Gen2Text.NEXT_LINE)
+	out.append_array(Gen2Text.encode(second))
+	out.append(Gen2Text.TERMINATOR)
+	out.resize(Gen2SaveMail.MESSAGE_LENGTH)
+	return out
+
+
+## `[opcode, pointer, waitbutton, end]` and the operand bytes behind them, at an
+## address inside this script's own cached slice.
+func _write_mail_script(opcode: int, payload: PackedByteArray) -> void:
+	var address: int = Fixture.TUTORIAL_SCRIPT + 5
+	var bytes: Array = [
+		opcode, address & 0xFF, (address >> 8) & 0xFF,
+		Gen2WorldScript.WAITBUTTON,
+		Gen2WorldScript.END,
+	]
+	bytes.append_array(Array(payload))
+	var directory: String = Fixture.directory()
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(directory))
+	scripts[Gen2WorldScript.pointer_key(Fixture.BANK, Fixture.TUTORIAL_SCRIPT)] = bytes
+	RomCache.write_json(RomCache.world_scripts_path(directory), scripts)
+
+
+## Trims the development save's party down to its first member, so
+## `CheckCurPartyMonFainted` has nobody left to walk home with.
+func _leave_one_member() -> void:
+	var save: Gen2SaveData = _world_screen.active_save()
+	save.party.resize(1)
+	_world_screen._refresh_party_summary()
+
+
+func _carry_mail(mon: Gen2SaveMon, message: PackedByteArray) -> void:
+	mon.item = MAIL_ITEM
+	mon.mail = Gen2SaveMail.from_script(
+		message, mon.original_trainer, mon.ot_id, mon.species, MAIL_ITEM
+	)
+	_world_screen._refresh_party_summary()
+
+
+func _run_mail_script(opcode: int, payload: PackedByteArray) -> void:
+	_write_mail_script(opcode, payload)
+	await _open_world()
+	_run_script()
+
+
+## `GivePokeMail` hangs the item on the last party member and copies the
+## script's own bytes into its mail row. The author is the member's OT rather
+## than the player's name, which is what `wPartyMonOTs` is.
+func test_givepokemail_writes_the_item_and_the_message_onto_the_last_member() -> void:
+	var message: PackedByteArray = _mail_message(MAIL_LINE_1, MAIL_LINE_2)
+	var payload := PackedByteArray([MAIL_ITEM])
+	payload.append_array(message)
+	await _run_mail_script(Gen2WorldScript.GIVEPOKEMAIL, payload)
+	var save: Gen2SaveData = _world_screen.active_save()
+	var last: Gen2SaveMon = save.party[save.party.size() - 1]
+	assert_eq(last.item, MAIL_ITEM)
+	assert_not_null(last.mail)
+	assert_eq(last.mail.item, MAIL_ITEM)
+	assert_eq(last.mail.author, last.original_trainer)
+	assert_eq(last.mail.author_id, last.ot_id)
+	## The break sits behind a fifteen-letter line here, where the naming screen
+	## would put it at `LINE_LENGTH`: the split is found, not assumed.
+	assert_eq(last.mail.line(0), MAIL_LINE_1)
+	assert_eq(last.mail.line(1), MAIL_LINE_2)
+
+
+## The five `POKEMAIL_*` answers Route 31 branches on, in the order
+## `CheckPokeMail` tests them.
+func test_checkpokemail_answers_refused_when_the_list_is_backed_out_of() -> void:
+	await _run_mail_script(
+		Gen2WorldScript.CHECKPOKEMAIL, _mail_message(MAIL_LINE_1, MAIL_LINE_2)
+	)
+	assert_not_null(_selection_list())
+	_selection_list().handle_button(Gen2Button.B)
+	assert_eq(
+		_world_screen._world._active_script._script_value,
+		Gen2WorldPartyHost.POKEMAIL_REFUSED
+	)
+
+
+func test_checkpokemail_answers_no_mail_for_an_empty_hand() -> void:
+	await _run_mail_script(
+		Gen2WorldScript.CHECKPOKEMAIL, _mail_message(MAIL_LINE_1, MAIL_LINE_2)
+	)
+	_selection_list().handle_button(Gen2Button.A)
+	assert_eq(
+		_world_screen._world._active_script._script_value,
+		Gen2WorldPartyHost.POKEMAIL_NO_MAIL
+	)
+
+
+func test_checkpokemail_answers_wrong_mail_for_another_message() -> void:
+	await _run_mail_script(
+		Gen2WorldScript.CHECKPOKEMAIL, _mail_message(MAIL_LINE_1, MAIL_LINE_2)
+	)
+	_carry_mail(
+		_world_screen.active_save().party[0], _mail_message(MAIL_LINE_1, "somewhere else")
+	)
+	_selection_list().handle_button(Gen2Button.A)
+	assert_eq(
+		_world_screen._world._active_script._script_value,
+		Gen2WorldPartyHost.POKEMAIL_WRONG_MAIL
+	)
+	assert_eq(_world_screen.active_save().party.size(), 2, "nothing is handed over")
+
+
+## `CheckCurPartyMonFainted` is read past the compare, so the right mail on the
+## only member who can still walk is still refused.
+func test_checkpokemail_answers_last_mon_when_no_other_member_can_fight() -> void:
+	var message: PackedByteArray = _mail_message(MAIL_LINE_1, MAIL_LINE_2)
+	await _run_mail_script(Gen2WorldScript.CHECKPOKEMAIL, message)
+	_leave_one_member()
+	_carry_mail(_world_screen.active_save().party[0], message)
+	_selection_list().handle_button(Gen2Button.A)
+	assert_eq(
+		_world_screen._world._active_script._script_value,
+		Gen2WorldPartyHost.POKEMAIL_LAST_MON
+	)
+	assert_eq(_world_screen.active_save().party.size(), 1)
+
+
+func test_checkpokemail_hands_the_member_over_on_the_right_message() -> void:
+	var message: PackedByteArray = _mail_message(MAIL_LINE_1, MAIL_LINE_2)
+	await _run_mail_script(Gen2WorldScript.CHECKPOKEMAIL, message)
+	var save: Gen2SaveData = _world_screen.active_save()
+	var mate: Gen2SaveMon = save.party[1]
+	_carry_mail(save.party[0], message)
+	_selection_list().handle_button(Gen2Button.A)
+	assert_eq(
+		_world_screen._world._active_script._script_value,
+		Gen2WorldPartyHost.POKEMAIL_CORRECT
+	)
+	assert_eq(save.party.size(), 1, "RemoveMonFromPartyOrBox with REMOVE_PARTY")
+	assert_eq(save.party[0], mate, "the slot behind the errand moves up")

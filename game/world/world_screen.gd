@@ -6491,6 +6491,8 @@ func _show_script_results(results: Array) -> void:
 				_apply_party_happiness(result_event)
 			elif result_event.get("type", &"") == &"party_member_removed":
 				_remove_party_member(result_event)
+			elif result_event.get("type", &"") == &"party_mail_given":
+				_give_party_mail(result_event)
 			elif result_event.get("type", &"") == &"screen_shake_requested":
 				if _effects != null:
 					_effects.start_screen_shake(
@@ -6914,6 +6916,29 @@ func money_window_open() -> bool:
 ## the row the player handed back. An event rather than a runtime request: the
 ## routine writes wScriptVar and runs straight on, and the removal is the same
 ## save write a happiness change is.
+## `GivePokeMail`: the item onto the member's own MON_ITEM and the script's
+## message into its `sPartyMail` row, whose author, ID and species are the
+## member's own. An event rather than a runtime request, for the same reason the
+## removal below is one: the routine answers nothing and runs straight on.
+func _give_party_mail(event: Dictionary) -> void:
+	var save: Gen2SaveData = _embedded_party_save()
+	var slot: int = int(event.get("slot", -1))
+	if save == null or slot < 0 or slot >= save.party.size():
+		return
+	var mon: Gen2SaveMon = save.party[slot] as Gen2SaveMon
+	if mon == null:
+		return
+	var item: int = int(event.get("item", 0))
+	mon.item = item
+	var message := PackedByteArray()
+	for code: Variant in (event.get("message", []) as Array):
+		message.append(int(code) & 0xFF)
+	mon.mail = Gen2SaveMail.from_script(
+		message, mon.original_trainer, int(mon.ot_id),
+		int(event.get("species", mon.species)), item
+	)
+
+
 func _remove_party_member(event: Dictionary) -> void:
 	var save: Gen2SaveData = _embedded_party_save()
 	var slot: int = int(event.get("slot", -1))
@@ -7035,6 +7060,12 @@ func _on_party_selection_made(party_index: int) -> void:
 		_refresh_labels()
 		return
 	var result: Dictionary = {"ok": true, "party_index": -1}
+	## `CheckCurPartyMonFainted` walks `wPartyMon1HP` for every slot but the
+	## chosen one, so the whole column travels with the row that was picked.
+	var party_fainted: Array = []
+	if save != null:
+		for member: Variant in save.party:
+			party_fainted.append(member is Gen2SaveMon and (member as Gen2SaveMon).hp <= 0)
 	if save != null and party_index >= 0 and party_index < save.party.size():
 		var mon: Gen2SaveMon = save.party[party_index] as Gen2SaveMon
 		if mon != null:
@@ -7054,6 +7085,10 @@ func _on_party_selection_made(party_index: int) -> void:
 				"original_trainer": mon.original_trainer,
 				"happiness": int(mon.happiness),
 				"fainted": mon.hp <= 0,
+				## MON_ITEM and the `sPartyMail` row behind it, which
+				## `CheckPokeMail` reads in that order.
+				"item": int(mon.item),
+				"mail_message": Array(mon.mail.message) if mon.mail != null else [],
 				## `ReadCaughtData`'s two bytes, unpacked the way the save keeps
 				## them, plus MON_LEVEL for `SeerAdvice`.
 				"level": int(mon.level),
@@ -7061,6 +7096,7 @@ func _on_party_selection_made(party_index: int) -> void:
 				"caught_time": int(mon.caught_time),
 				"caught_gender": int(mon.caught_gender),
 				"caught_location": int(mon.caught_location),
+				"party_fainted": party_fainted,
 			}
 	_show_script_results(_world.complete_runtime_request(result))
 	_refresh_labels()

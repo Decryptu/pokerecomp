@@ -603,6 +603,7 @@ const PARTY_SELECTION_ROUTINE_OF: Dictionary = {
 const PARTY_SELECTION_REFUSAL_OF: Dictionary = {
 	&"magikarp_length": Gen2WorldPartyHost.MAGIKARPLENGTH_REFUSED,
 	&"return_shuckie": Gen2WorldPartyHost.SHUCKIE_REFUSED,
+	&"check_poke_mail": Gen2WorldPartyHost.POKEMAIL_REFUSED,
 }
 
 ## `CelebiShrineEvent`'s own loop: `ld a, 160` into wFrameCounter and
@@ -2040,8 +2041,10 @@ func _execute(command: Dictionary, frame: Dictionary) -> Dictionary:
 			## routine runs, whether or not the party had room for it.
 			_cur_party_species = int(command.get("pokemon", 0))
 			return _stage_runtime_request(&"pokemon_requested", command)
-		Gen2WorldScript.GIVEPOKEMAIL, Gen2WorldScript.CHECKPOKEMAIL:
-			return _stage_runtime_request(&"mail_requested", command)
+		Gen2WorldScript.GIVEPOKEMAIL:
+			return _give_poke_mail(command)
+		Gen2WorldScript.CHECKPOKEMAIL:
+			return _check_poke_mail(command)
 		Gen2WorldScript.GOLD_FACEPLAYER, Gen2WorldScript.FACEPLAYER:
 			if Gen2WorldScript.is_faceplayer(opcode, _crystal_commands()):
 				pass
@@ -4096,9 +4099,16 @@ func _stage_buena_prize_menu(special: int) -> Dictionary:
 		"type": &"menu",
 		"command": &"buena_prize",
 		"options": rows,
-		## `db 1` for the row the cursor opens on, and `SCROLLINGMENU`'s own B,
-		## which is how the player leaves.
-		"header": {"default": 1, "data_flags": 0},
+		## `.MenuHeader`'s `menu_coords 1, 1, 16, 9` and its `db 4, 13`, then
+		## `db 1` for the row the cursor opens on. `ScrollingMenu` always draws
+		## its own cursor and this list is a row longer than its window, which
+		## is what the flags and the row count stand for here.
+		"header": {
+			"default": 1,
+			"data_flags": Gen2MenuBox.STATICMENU_CURSOR,
+			"left": 1, "top": 1, "right": 16, "bottom": 9,
+			"rows": 4, "arrows": true,
+		},
 		"text": asked,
 		"special": &"buena_prize",
 		"prize_special": special,
@@ -4927,9 +4937,12 @@ func _finish_party_selection(request: Dictionary, result: Dictionary) -> Diction
 		})
 		_pending = {}
 		return advance()
-	if routine in [&"magikarp_length", &"photo_studio", &"return_shuckie", &"poke_seer"]:
+	if routine in [
+		&"magikarp_length", &"photo_studio", &"return_shuckie", &"poke_seer",
+		&"check_poke_mail",
+	]:
 		_pending = {}
-		return _finish_deferred_party_selection(routine, special, result)
+		return _finish_deferred_party_selection(routine, special, result, values)
 	if species == SPECIES_EGG:
 		_script_value = 1
 		_pending = {}
@@ -4956,7 +4969,7 @@ func _finish_party_selection(request: Dictionary, result: Dictionary) -> Diction
 ## the row it answered with. Each writes wScriptVar, and two of them write
 ## something else besides.
 func _finish_deferred_party_selection(
-	routine: StringName, special: int, result: Dictionary
+	routine: StringName, special: int, result: Dictionary, values: Dictionary = {}
 ) -> Dictionary:
 	var species: int = int(result.get("species", 0))
 	match routine:
@@ -5010,6 +5023,8 @@ func _finish_deferred_party_selection(
 			return _stage_internal_text(measure_box, false, {"special": special})
 		&"poke_seer":
 			return _finish_poke_seer(special, result)
+		&"check_poke_mail":
+			return _finish_check_poke_mail(result, values)
 		&"return_shuckie":
 			## Three tests in order and each has its own answer: the species, then
 			## MANIA's ID, then MANIA's OT name. A row that fails any of them is
@@ -5035,6 +5050,114 @@ func _finish_deferred_party_selection(
 			})
 			return advance()
 	return advance()
+
+
+## `Script_givepokemail`, which copies the pointer's `db item` and the
+## `MAIL_MSG_LENGTH` bytes behind it into `wMonMailMessageBuffer`, and
+## `GivePokeMail`, which hangs both on the last party member. Nothing is asked
+## and nothing is answered: the routine writes no wScriptVar and cannot fail, so
+## the write is an event the way a happiness change is.
+##
+## The mail's author, ID and species are the member's own `wPartyMonOTs`,
+## `wPartyMon1ID` and `wCurPartySpecies`, so the screen reads the first two off
+## the row it is writing and the runner carries the third, which the `givepoke`
+## in front of this one left standing.
+func _give_poke_mail(command: Dictionary) -> Dictionary:
+	var bytes: PackedByteArray = _mail_bytes(int(command.get("address", 0)))
+	if bytes.size() < Gen2SaveMail.MESSAGE_LENGTH + 1:
+		return {"ok": false, "reason": &"missing_mail_data", "command": command}
+	var party: Dictionary = _request.get("party", {})
+	if party.is_empty():
+		return {"ok": false, "reason": &"missing_party_summary", "command": command}
+	var count: int = int(party.get("count", 0))
+	if count <= 0:
+		return {"ok": false, "reason": &"empty_party", "command": command}
+	_emit_runtime_event(&"party_mail_given", {
+		"slot": count - 1,
+		"item": int(bytes[0]),
+		"message": Array(bytes.slice(1, Gen2SaveMail.MESSAGE_LENGTH + 1)),
+		"species": _cur_party_species,
+	})
+	return {"ok": true}
+
+
+## `Script_checkpokemail`, whose whole body is `CheckPokeMail`: the party list,
+## then the held item, then the message byte for byte. The list is the same
+## staged selection the Seer and the haircut open.
+func _check_poke_mail(command: Dictionary) -> Dictionary:
+	var bytes: PackedByteArray = _mail_bytes(int(command.get("address", 0)))
+	if bytes.is_empty():
+		return {"ok": false, "reason": &"missing_mail_data", "command": command}
+	return _stage_runtime_request(&"party_selection_requested", {
+		"routine": &"check_poke_mail",
+		"expected": Array(bytes),
+	})
+
+
+## The bytes a `givepokemail` or `checkpokemail` points at, in the running
+## script's own bank (`wScriptBank`). Both sit behind the script that names
+## them rather than at a pointer key of their own, which is what
+## [method GameData.world_script_at] reaches.
+func _mail_bytes(address: int) -> PackedByteArray:
+	if data == null:
+		return PackedByteArray()
+	return data.world_script_at(int(_request.get("bank", 0)), address)
+
+
+## `CheckPokeMail` past its `farcall SelectMonFromParty`: the four refusals in
+## the order the routine tests them, and the removal the fifth answer pays for.
+func _finish_check_poke_mail(result: Dictionary, values: Dictionary) -> Dictionary:
+	var slot: int = int(result.get("party_index", -1))
+	if not Gen2HeldItem.is_mail(int(result.get("item", 0))):
+		## `ItemIsMail` on MON_ITEM, which an egg and an empty hand both fail.
+		_script_value = Gen2WorldPartyHost.POKEMAIL_NO_MAIL
+		return advance()
+	var expected: PackedByteArray = _byte_array(values.get("expected", []))
+	var carried: PackedByteArray = _byte_array(result.get("mail_message", []))
+	if not _mail_message_matches(expected, carried):
+		_script_value = Gen2WorldPartyHost.POKEMAIL_WRONG_MAIL
+		return advance()
+	## `CheckCurPartyMonFainted`: carry when every other slot is fainted, so
+	## handing this one over would black the player out. An egg is HP 0 and
+	## counts as fainted here, which is the routine reading `wPartyMon1HP` and
+	## nothing else.
+	var fainted: Array = result.get("party_fainted", [])
+	var healthy_elsewhere: bool = false
+	for index: int in fainted.size():
+		if index != slot and not bool(fainted[index]):
+			healthy_elsewhere = true
+			break
+	if not healthy_elsewhere:
+		_script_value = Gen2WorldPartyHost.POKEMAIL_LAST_MON
+		return advance()
+	_script_value = Gen2WorldPartyHost.POKEMAIL_CORRECT
+	_emit_runtime_event(&"party_member_removed", {
+		"slot": slot,
+		"routine": &"check_poke_mail",
+	})
+	return advance()
+
+
+## The compare loop's own two exits: the expected message's `'@'` ends it as a
+## match, and any other difference inside `MAIL_MSG_LENGTH` bytes does not.
+func _mail_message_matches(expected: PackedByteArray, carried: PackedByteArray) -> bool:
+	for index: int in Gen2SaveMail.MESSAGE_LENGTH:
+		var wanted: int = expected[index] if index < expected.size() else Gen2Text.TERMINATOR
+		if wanted == Gen2Text.TERMINATOR:
+			return true
+		if index >= carried.size() or carried[index] != wanted:
+			return false
+	return true
+
+
+func _byte_array(raw: Variant) -> PackedByteArray:
+	var out := PackedByteArray()
+	if raw is PackedByteArray:
+		return raw as PackedByteArray
+	if raw is Array:
+		for value: Variant in raw as Array:
+			out.append(int(value) & 0xFF)
+	return out
 
 
 ## `ReadCaughtData` and `SeerAction`, which are one reading of the row and then
