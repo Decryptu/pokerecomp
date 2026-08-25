@@ -1446,12 +1446,18 @@ func _apply_entrance_step(what: StringName) -> void:
 	_push_view()
 
 
-## `Battle_GetTrainerName`, which is the class and the trainer's own name. A wild
-## battle has neither, and the one line that names an opponent without a trainer
-## behind it is a link battle's, which this project does not open.
+## `Battle_GetTrainerName`, which is the class and the trainer's own name, and
+## `.linkbattle`, which is the other player's name with no class in front of it:
+## a link battle is the one opponent with a name and no trainer behind it. A wild
+## battle has neither.
 func _enemy_battler_label() -> String:
-	if _enemy_trainer_class <= 0 or _data == null:
+	if _data == null:
 		return "Enemy"
+	if _enemy_trainer_class <= 0:
+		## `wOTPlayerName`, which the request carries: a link opponent is not in
+		## any trainer table, so there is nothing to look the name up in.
+		var linked: String = String(_world_battle_request.get("trainer_name", ""))
+		return linked if not linked.is_empty() else "Enemy"
 	return "%s %s" % [
 		_data.trainer_name(_enemy_trainer_class), _enemy_trainer_name(),
 	]

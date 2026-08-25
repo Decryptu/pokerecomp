@@ -97,6 +97,7 @@ static func copy_into(target: Gen2SaveData, source: Gen2SaveData) -> void:
 	target.boxes = source.boxes
 	target.current_box = source.current_box
 	target.hall_of_fame = source.hall_of_fame.duplicate(true)
+	target.link_record = source.link_record.duplicate(true)
 	target.box_names = source.box_names.duplicate()
 	target.mailbox = source.mailbox.duplicate()
 	target.world = source.world
@@ -109,6 +110,13 @@ static func copy_into(target: Gen2SaveData, source: Gen2SaveData) -> void:
 	## `game_time` is the one field the live save owns rather than the candidate:
 	## `Gen2WorldScreen._advance_game_time_frame` has been counting frames into it
 	## since the candidate was cloned, and copying the clone back loses them.
+	##
+	## This list is deliberately named field by field rather than delegated to
+	## [method Gen2SaveData.copy_from], which round-trips through `to_dict` and
+	## would rebuild every party member and renormalize the mod keys on every
+	## commit. `test_the_transaction_write_back_carries_every_field_but_the_live_clock`
+	## is what keeps the two lists in step: a field added to the save and
+	## forgotten here fails there.
 
 
 static func failure(reason: StringName, details: Dictionary) -> Dictionary:

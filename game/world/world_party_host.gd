@@ -296,6 +296,119 @@ static func heal_party(
 
 
 
+## The link trade's own commit, which is `LinkTrade`'s `.do_trade` tail: the
+## offered slot leaves through `RemoveMonFromPartyOrBox` and the received
+## Pokemon is appended by `AddTempmonToParty`, so it lands at the END of the
+## party rather than in the slot that was emptied. That is the one place the
+## link trade differs from the in-game one, which writes into the vacated slot.
+##
+## `wForceEvolution` is set over the append, so a species that evolves by trade
+## evolves here and nowhere else. Mail travels with each Pokemon because it hangs
+## off the row: `sPartyMail` is shifted by the same removal.
+##
+## [param incoming] is the peer's [Gen2SaveMon] dictionary; [param peer] names
+## the trainer it came from, for the dex and for the box the caller prints.
+static func commit_link_trade(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	offered_slot: int,
+	incoming: Dictionary,
+	peer: Dictionary = {},
+	persist: bool = true
+) -> Dictionary:
+	if world == null or save == null or world.data == null:
+		return _failure(&"missing_save", {})
+	var opened: Dictionary = Gen2WorldTransaction.begin(world, save)
+	if not bool(opened.get("ok", false)):
+		return _failure(StringName(opened["reason"]), opened.get("details", {}))
+	var candidate: Gen2SaveData = opened["candidate"]
+	if offered_slot < 0 or offered_slot >= candidate.party.size():
+		return _failure(&"invalid_trade_slot", {"slot": offered_slot})
+	var received: Gen2SaveMon = Gen2SaveMon.from_dict(incoming)
+	if received == null or received.species <= 0:
+		return _failure(&"invalid_trade_partner_mon", {})
+	## `ValidateOTTrademon` and `CheckAnyOtherAliveMonsForTrade`, both of which
+	## the trade screen has already run: they are run again here because this is
+	## the boundary that writes, and a caller that skipped them must not.
+	if not Gen2LinkSession.validate_ot_trademon(
+		incoming, received.species, received.is_egg,
+		int(peer.get("link_mode", Gen2LinkSession.LINK_TRADECENTER))
+	):
+		return _failure(&"abnormal_trade_partner_mon", {})
+	var party_rows: Array = []
+	for mon: Gen2SaveMon in candidate.party:
+		party_rows.append(mon.to_dict())
+	if not Gen2LinkSession.any_other_alive_mons_for_trade(
+		party_rows, offered_slot, incoming
+	):
+		return _failure(&"trade_would_leave_no_battler", {"slot": offered_slot})
+
+	var given: Gen2SaveMon = candidate.party[offered_slot]
+	var given_species: int = given.species
+	candidate.party.remove_at(offered_slot)
+	candidate.party.append(received)
+	var evolution: Dictionary = {}
+	if not received.is_egg:
+		var battle_mon: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(
+			world.data, received
+		)
+		if battle_mon != null:
+			var row: Dictionary = Gen2Evolution.trade_evolution(world.data, battle_mon)
+			if not row.is_empty():
+				evolution = apply_evolution(world.data, received, row)
+
+	var before: Gen2WorldSnapshot = world.snapshot()
+	_register_caught(world, received.species)
+	_register_unown(world, _unown_form(
+		received.species, received.dvs, {"destination": &"party"}
+	))
+	var committed: Dictionary = Gen2WorldTransaction.commit(
+		world, save, candidate, before, persist
+	)
+	if not bool(committed.get("ok", false)):
+		return _failure(StringName(committed["reason"]), committed.get("details", {}))
+	return {
+		"ok": true,
+		"handled": true,
+		"given_species": given_species,
+		"given_slot": offered_slot,
+		"received_species": received.species,
+		"received_slot": save.party.size() - 1,
+		"partner": String(peer.get("name", "")),
+		"evolution": evolution.duplicate(true),
+	}
+
+
+## `AddLastLinkBattleToLinkRecord`, which runs after a Colosseum battle and is
+## the only writer of `sLinkBattleStats`. Its own transaction, because the record
+## is a save field and the battle that produced it is over.
+static func record_link_battle(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	opponent: Dictionary,
+	result: StringName,
+	persist: bool = true
+) -> Dictionary:
+	if world == null or save == null or world.data == null:
+		return _failure(&"missing_save", {})
+	if result not in [&"wins", &"losses", &"draws"]:
+		return _failure(&"invalid_link_battle_result", {"result": result})
+	var opened: Dictionary = Gen2WorldTransaction.begin(world, save)
+	if not bool(opened.get("ok", false)):
+		return _failure(StringName(opened["reason"]), opened.get("details", {}))
+	var candidate: Gen2SaveData = opened["candidate"]
+	candidate.link_record = Gen2LinkSession.add_battle_to_record(
+		candidate.link_record, opponent, result
+	)
+	var before: Gen2WorldSnapshot = world.snapshot()
+	var committed: Dictionary = Gen2WorldTransaction.commit(
+		world, save, candidate, before, persist
+	)
+	if not bool(committed.get("ok", false)):
+		return _failure(StringName(committed["reason"]), committed.get("details", {}))
+	return {"ok": true, "handled": true, "record": save.link_record.duplicate(true)}
+
+
 ## `HealParty`'s own walk, without the transaction around it: full HP, no status
 ## and full PP for every party member that is not an egg. Answers how many rows
 ## it moved, or -1 for a row the battle adapter cannot read.

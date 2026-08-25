@@ -23,23 +23,18 @@ extends RefCounted
 ## in both directions: an index here that the runner now handles fails, so the
 ## row is deleted with the work rather than left behind.
 const EXPECTED_DEFERRED: Dictionary = {
-	## HANDOFF's "Deliberately deferred": link play, the Mobile Adapter GB and
-	## Mystery Gift. None of the three has a peer to talk to on a modern
-	## platform. The Battle Tower's own seven rows have left this list.
-	1: "SetBitsForLinkTradeRequest", 2: "WaitForLinkedFriend",
-	3: "CheckLinkTimeout_Receptionist",
-	5: "CheckBothSelectedSameRoom", 6: "FailedLinkToPast", 7: "CloseLink",
-	8: "WaitForOtherPlayerToExit", 9: "SetBitsForBattleRequest",
-	10: "SetBitsForTimeCapsuleRequest", 11: "CheckTimeCapsuleCompatibility",
-	12: "EnterTimeCapsule", 13: "TradeCenter", 14: "Colosseum", 15: "TimeCapsule",
-	16: "CableClubCheckWhichChris", 17: "CheckMysteryGift",
-	18: "GetMysteryGiftItem", 19: "UnlockMysteryGift", 88: "DisplayLinkRecord",
+	## The Mobile Adapter GB and Mystery Gift, neither of which has a peer to
+	## talk to on a modern platform. The cable club's own sixteen rows have left
+	## this list with the Battle Tower's seven, and so has `DisplayLinkRecord`,
+	## which sat in the link block without being link play.
+	17: "CheckMysteryGift",
+	18: "GetMysteryGiftItem", 19: "UnlockMysteryGift",
 	125: "GiveOddEgg",
 	127: "Function1011f1", 128: "Function101220", 129: "Function101225",
 	130: "Function101231", 139: "BattleTowerMobileError",
 	140: "AskMobileOrCable", 154: "Mobile_SelectThreeMons",
 	155: "Function1037eb", 156: "Function10383c", 159: "Function1037c2",
-	160: "CheckMobileAdapterStatusSpecial", 161: "Function103780",
+	161: "Function103780",
 	162: "Function10387b", 163: "AskRememberPassword",
 
 	## Screens and facilities with no routine here yet. Each is its own piece of
@@ -79,6 +74,8 @@ const CRYSTAL_ONLY_TEXT_RUNS: Array[String] = ["poke_seer", "buena_prize", "batt
 const SPECIAL_TEXT_RAM_NAMES: Array[String] = [
 	"magikarp_record_holder", "seer_nickname", "seer_caught_location",
 	"seer_time_of_day", "seer_ot", "seer_caught_level",
+	## `wBufferTrademonNickname`, which `_LinkAskTradeForText` names.
+	"trademon_nickname",
 ]
 
 const SPECIALS_POINTERS_SIZE: int = 169

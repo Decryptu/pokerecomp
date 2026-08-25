@@ -298,6 +298,15 @@ var _blue_card_balance: int = 0
 ## battles. Never null; see [Gen2BattleTower].
 var _battle_tower: Gen2BattleTower = Gen2BattleTower.new()
 
+## `SECTION "Link Battle Data"`'s WRAM half and the cable behind it. Neither is
+## in [method to_dict]: the cartridge keeps none of `wLinkMode`,
+## `wChosenCableClubRoom` or the serial registers across a reset, and a transport
+## is injected by whoever owns the peer rather than saved with the world. A
+## slot loaded from disk therefore starts outside the cable club, which is the
+## truth about it.
+var _link_session: Gen2LinkSession = Gen2LinkSession.new()
+var _link_transport: Gen2LinkTransport = Gen2LinkTransport.new()
+
 
 func _init(
 	initial_event_flags: Dictionary = {}, initial_map_scenes: Dictionary = {},
@@ -616,6 +625,23 @@ func restore_from_dict(raw: Variant) -> void:
 ## no transaction between the receptionist and the section.
 func battle_tower() -> Gen2BattleTower:
 	return _battle_tower
+
+
+## The live link session, which callers edit in place the way they do the tower's
+## record: every write is one the cartridge would have made to WRAM straight
+## away.
+func link_session() -> Gen2LinkSession:
+	return _link_session
+
+
+func link_transport() -> Gen2LinkTransport:
+	return _link_transport
+
+
+## Injects the cable. A null transport is no cable at all, which is what the
+## receptionist's "your friend is not ready" answers.
+func set_link_transport(transport: Gen2LinkTransport) -> void:
+	_link_transport = transport if transport != null else Gen2LinkTransport.new()
 
 
 func maptile_decoration(category: StringName) -> int:

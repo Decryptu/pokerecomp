@@ -142,6 +142,15 @@ var _service_host: Gen2WorldServiceScreen = null
 var _start_menu_host: Gen2StartMenuScreen = null
 var _party_host: Gen2PartyScreen = null
 var _hall_of_fame_host: Gen2HallOfFameScreen = null
+## `LinkCommunications`' own screen: the Trade Center's two-list menu and the
+## link record sign. The Colosseum runs through the battle host instead.
+var _link_host: Gen2LinkScreen = null
+## The peer a Colosseum battle is being fought against, for the record
+## `AddLastLinkBattleToLinkRecord` writes when it ends.
+var _link_battle_peer: Dictionary = {}
+## Which save slot the cable was last built for. The peer is another file on
+## disk, so it is read once per slot rather than on every party refresh.
+var _link_transport_slot: int = -2
 var _credits_host: Gen2CreditsScreen = null
 ## `EvolveAfterBattle`'s own screen, opened on the overworld after a battle that
 ## was won and by an evolution stone from the pack.
@@ -655,6 +664,7 @@ func _apply_interface_mask() -> void:
 		_battle_transition != null
 		or _battle_host != null or _service_host != null or _party_host != null
 		or _hall_of_fame_host != null or _trainer_card_host != null
+		or _link_host != null
 		or _pokedex_host != null or _credits_host != null
 		or _evolution_host != null or _hatch_host != null
 		or _nickname_host != null
@@ -909,6 +919,10 @@ func advance_frame() -> void:
 	## `DelayFrames` counts are spent from this pump.
 	if _evolution_host != null:
 		_evolution_host.advance_frame()
+	## `LinkCommunications` spends its own `DelayFrames` inside the map's loop
+	## too, which is what the trade screen's waits are counted from.
+	if _link_host != null:
+		_link_host.advance_frame()
 	if _hatch_host != null:
 		_hatch_host.advance_frame()
 	if _nickname_host != null:
@@ -1079,6 +1093,7 @@ func _overlay_open() -> bool:
 		or _battle_host != null or _service_host != null \
 		or _start_menu_host != null or _party_host != null \
 		or _hall_of_fame_host != null or _trainer_card_host != null \
+		or _link_host != null \
 		or _pokedex_host != null or _credits_host != null \
 		or _evolution_host != null or _hatch_host != null \
 		or _nickname_host != null \
@@ -1245,6 +1260,9 @@ func _handle_button(button: int) -> bool:
 	## Before the PC and the party overlay because the Hall of Fame is the one
 	## overlay a script opens with nothing behind it: there is no map to go back
 	## to until it has finished, and it takes no cancel.
+	if _link_host != null:
+		_link_host.handle_button(button)
+		return true
 	if _hall_of_fame_host != null:
 		_hall_of_fame_host.handle_button(button)
 		return true
@@ -4321,6 +4339,10 @@ func _build_battle_transition(request: Dictionary) -> Gen2BattleTransition:
 	var values: Dictionary = request.get("values", {})
 	if bool(values.get("tutorial", false)):
 		return null
+	## A link battle starts from `LinkCommunications`' own screen rather than
+	## from the map, so there is no map for `DoBattleTransition` to wipe away.
+	if bool(values.get("link", false)):
+		return null
 	var environment: int = _world.current_map.environment if _world.current_map != null else 0
 	## `cp CAVE / cp ENVIRONMENT_5 / cp DUNGEON`, the three the flash and the
 	## wavy outro belong to.
@@ -4591,6 +4613,8 @@ func _on_battle_finished(result: Dictionary) -> void:
 	if _world == null:
 		return
 	_last_battle_outcome = StringName(result.get("outcome", &""))
+	if not _link_battle_peer.is_empty():
+		_record_link_battle(result)
 	var pay_day_money: int = int(result.get("pay_day_money", 0))
 	if pay_day_money > 0 and StringName(result.get("outcome", &"")) == Gen2WorldBattleAdapter.OUTCOME_WON:
 		_world.state.apply_changes({}, {}, {"money": {
@@ -4608,6 +4632,27 @@ func _on_battle_finished(result: Dictionary) -> void:
 		)
 		return
 	_finish_battle_exit(result, fought_save)
+
+
+## `AddLastLinkBattleToLinkRecord`, which runs on the way out of a Colosseum
+## battle and nowhere else. A draw is what `wBattleResult` says when neither
+## side was wiped out.
+func _record_link_battle(result: Dictionary) -> void:
+	var peer: Dictionary = _link_battle_peer
+	_link_battle_peer = {}
+	var outcome: StringName = StringName(result.get("outcome", &""))
+	var key: StringName = &"draws"
+	if outcome == Gen2WorldBattleAdapter.OUTCOME_WON:
+		key = &"wins"
+	elif outcome == Gen2WorldBattleAdapter.OUTCOME_LOST:
+		key = &"losses"
+	var save: Gen2SaveData = _active_battle_save
+	if save == null:
+		return
+	Gen2WorldPartyHost.record_link_battle(
+		_world, save, {"name": peer.get("name", ""), "id": peer.get("id", 0)},
+		key, _active_battle_persist
+	)
 
 
 ## `EvolveAfterBattle`'s `wEvolvableFlags`, read only on a battle that was won.
@@ -5022,6 +5067,114 @@ func open_hall_of_fame() -> void:
 	_play_hall_of_fame_music()
 	_script_prompt = "Hall of Fame"
 	_refresh_labels()
+
+
+## `TradeCenter`, `Colosseum` and `TimeCapsule`, which are the same
+## `LinkCommunications` opening with a different exchange behind it: the two
+## trade rooms open this screen and the Colosseum opens a battle against the
+## peer's own party. Answers whether the request was taken over; a false leaves
+## it for the host, which settles a room with no cable on the other end.
+func _open_link_room(request: Dictionary) -> bool:
+	var values: Dictionary = request.get("values", {})
+	if int(values.get("link_mode", 0)) == Gen2LinkSession.LINK_COLOSSEUM:
+		return _start_link_battle(request)
+	return _open_link_screen(Gen2LinkScreen.MODE_TRADE)
+
+
+## `Colosseum`, which is `LinkCommunications` and then one battle against the
+## party that came back. The transport supplies the peer's choices, and the
+## record is written where `AddLastLinkBattleToLinkRecord` writes it.
+func _start_link_battle(request: Dictionary) -> bool:
+	var peer: Dictionary = _link_transport().peer
+	var party: Array = peer.get("party", [])
+	if party.is_empty():
+		return false
+	_link_battle_peer = peer.duplicate(true)
+	_start_battle_request({
+		"kind": &"link_room_requested",
+		"values": {
+			"kind": &"link_battle",
+			"special": int((request.get("values", {}) as Dictionary).get("special", 0)),
+			## `wLinkMode` is non-zero for the whole fight, which is what makes
+			## the switch menu the player's own rather than the AI's.
+			"link": true,
+			"trainer_name": String(peer.get("name", "")),
+			"enemy_party": party.duplicate(true),
+		},
+	})
+	return true
+
+
+func _open_link_screen(screen_mode: int) -> bool:
+	if _link_host != null or _world == null or _data == null:
+		return false
+	var host := Gen2LinkScreen.new()
+	host.set_context(
+		_data, _world, _selected_runtime_save() if _injected_save == null \
+			else _injected_save,
+		_link_transport(), screen_mode, _injected_save == null
+	)
+	host.closed.connect(_on_link_screen_closed)
+	_link_host = host
+	_screen.display(host)
+	if _link_host == null:
+		## A cartridge whose cache has no trade border closes on `_ready()`.
+		return false
+	_script_prompt = "Link record" if screen_mode == Gen2LinkScreen.MODE_RECORD \
+		else "Trade Center"
+	_refresh_labels()
+	return true
+
+
+func _on_link_screen_closed() -> void:
+	var host: Gen2LinkScreen = _link_host
+	_link_host = null
+	if host != null:
+		Gen2Screen.drop(host)
+	_show_script_results(_world.complete_runtime_request({"ok": true}))
+	if _renderer != null:
+		_renderer.refresh()
+	_refresh_labels()
+
+
+## The cable, on the same refresh the party mirror rides. There is no cable on
+## this platform and the only second party that exists on one machine is the
+## player's own other save file, so that is the peer: the first other occupied
+## slot of the same cartridge. No other slot is no cable, which is what the
+## receptionist's "your friend is not ready" answers.
+func _refresh_link_transport(save: Gen2SaveData) -> void:
+	if _world == null or _world.state == null or _data == null:
+		return
+	if _injected_save != null:
+		## A driver that brought its own save brought its own peer too, or none;
+		## a slot on disk is not this run's to reach for.
+		return
+	## Once per slot. This rides the party mirror's refresh, which runs whenever
+	## the party changes; reading another save file that often would put disk
+	## access in the middle of a battle, and the peer cannot change while this
+	## slot is the one being played.
+	if _link_transport_slot == save.slot:
+		return
+	_link_transport_slot = save.slot
+	for slot: int in Gen2SaveStore.occupied_slots(save.game_id, save.rom_sha1):
+		if slot == save.slot:
+			continue
+		var loaded: Dictionary = Gen2SaveStore.load_result(
+			save.game_id, save.rom_sha1, slot, _data
+		)
+		if not bool(loaded.get("ok", false)):
+			continue
+		_world.state.set_link_transport(
+			Gen2LinkTransport.to_save(loaded["save"] as Gen2SaveData)
+		)
+		return
+	_world.state.set_link_transport(null)
+
+
+func _link_transport() -> Gen2LinkTransport:
+	if _world == null or _world.state == null:
+		return Gen2LinkTransport.new()
+	return _world.state.link_transport()
 
 
 ## HallOfFame calls SaveGameData before the animation, so the record is written
@@ -6375,6 +6528,14 @@ func _show_script_results(results: Array) -> void:
 					_script_prompt = _bug_contest_placings_text(judged)
 					_show_script_results(judged_results)
 					return
+				if StringName(request.get("kind", &"")) == &"link_record_requested":
+					if _open_link_screen(Gen2LinkScreen.MODE_RECORD):
+						break
+					continue
+				if StringName(request.get("kind", &"")) == &"link_room_requested":
+					if _open_link_room(request):
+						break
+					continue
 				if StringName(request.get("kind", &"")) == &"quick_save_requested":
 					## `TryQuickSave` writes the save where it stands and answers
 					## TRUE; a write that fails answers FALSE, which is the same
@@ -7274,6 +7435,7 @@ func _refresh_party_summary() -> void:
 	_world.set_player_id(save.player_id)
 	_world.set_player_name(save.player_name)
 	_world.set_player_gender(save.gender == Gen2SaveData.GENDER_FEMALE)
+	_refresh_link_transport(save)
 	var has_pokerus: bool = false
 	var species: Array[int] = []
 	var moves: Array = []

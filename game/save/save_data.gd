@@ -85,6 +85,12 @@ var box_names: Array = []
 ## defaults rather than versioning; an empty list is the truth about a slot
 ## written before mail existed.
 var mailbox: Array = []
+## `sLinkBattleStats`: the three totals `_DisplayLinkRecord` prints across the
+## top and the five per-opponent rows under them, kept in the order
+## `AddLastLinkBattleToLinkRecord` sorts them. Like `mailbox` and `box_names`
+## this defaults rather than versioning; a slot written before link play reads
+## as one that has never linked, which is the truth about it.
+var link_record: Dictionary = Gen2LinkSession.normalize_record({})
 
 
 func _init() -> void:
@@ -122,6 +128,7 @@ func to_dict() -> Dictionary:
 		"boxes": saved_boxes,
 		"current_box": current_box,
 		"hall_of_fame": hall_of_fame.duplicate(true),
+		"link_record": link_record.duplicate(true),
 		"box_names": box_names.duplicate(),
 		"mailbox": _mailbox_dicts(),
 		"world": world.to_dict() if world != null else {},
@@ -156,6 +163,7 @@ static func from_dict(raw: Variant) -> Gen2SaveData:
 	out.label = String(source.get("label", ""))
 	out.current_box = clampi(int(source.get("current_box", 0)), 0, BOX_COUNT - 1)
 	out.hall_of_fame = Gen2HallOfFame.parse_records(source.get("hall_of_fame", []))
+	out.link_record = Gen2LinkSession.normalize_record(source.get("link_record", {}))
 	var raw_box_names: Variant = source.get("box_names", [])
 	if raw_box_names is Array:
 		for index: int in mini((raw_box_names as Array).size(), BOX_COUNT):
@@ -339,6 +347,7 @@ func copy_from(source: Gen2SaveData) -> bool:
 	boxes = copied.boxes
 	current_box = copied.current_box
 	hall_of_fame = copied.hall_of_fame.duplicate(true)
+	link_record = copied.link_record.duplicate(true)
 	box_names = copied.box_names.duplicate()
 	mailbox = copied.mailbox.duplicate()
 	world = copied.world
