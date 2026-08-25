@@ -28,6 +28,21 @@ signal deleted(contact: int)
 const CARD_CLOCK: StringName = &"clock"
 const CARD_PHONE: StringName = &"phone"
 const CARD_RADIO: StringName = &"radio"
+## The MAP card, which is [Gen2TownMapScreen] rather than a card drawn here.
+const CARD_MAP: StringName = &"map"
+
+## engine/pokegear/pokegear.asm's card order. Each is behind its own
+## wPokegearFlags bit, named by the engine flag that carries it, since that is
+## what the state holds. The clock card needs no flag.
+##
+## Here rather than in the screen that lists them, because the Pokegear is not
+## the only thing that has to know which cards a player owns.
+const CARDS: Array[Dictionary] = [
+	{"card": CARD_CLOCK, "name": "CLOCK"},
+	{"card": CARD_MAP, "name": "MAP", "flag": Gen2WorldState.ENGINE_MAP_CARD},
+	{"card": CARD_PHONE, "name": "PHONE", "flag": Gen2WorldState.ENGINE_PHONE_CARD},
+	{"card": CARD_RADIO, "name": "RADIO", "flag": Gen2WorldState.ENGINE_RADIO_CARD},
+]
 
 ## `InitPokegearModeIndicatorArrow`'s `depixel 4, 2, 4, 0`, less the hardware's
 ## own OAM offsets and `.OAMData_RedWalk`'s `dbsprite -1, -1`, plus the card's
@@ -96,6 +111,29 @@ var _field: Control = null
 var _background: TextureRect = null
 var _arrow: TextureRect = null
 var _knob_icon: TextureRect = null
+
+
+## [constant CARDS] filtered to what [param state] says the player owns, in
+## source order. An absent state owns the clock alone, which is what the
+## cartridge starts with.
+static func owned_cards(state: Gen2WorldState) -> Array:
+	var out: Array = []
+	for entry: Dictionary in CARDS:
+		if entry.has("flag") and (
+			state == null or not state.is_engine_flag_active(int(entry["flag"]))
+		):
+			continue
+		out.append(entry)
+	return out
+
+
+## The same list as card ids alone, which is what [method Gen2TownMapScreen.open]
+## takes for its card row.
+static func owned_card_ids(state: Gen2WorldState) -> Array:
+	var out: Array = []
+	for entry: Dictionary in owned_cards(state):
+		out.append(StringName(entry.get("card", &"")))
+	return out
 
 
 func _ready() -> void:

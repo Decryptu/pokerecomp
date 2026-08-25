@@ -46,3 +46,7 @@ export_credentials.cfg
 # Built iOS plugin libraries. The sources beside them are tracked; the binaries
 # are produced by tools/build_ios_plugin.sh against the engine checkout.
 /ios/plugins/*/*.a
+
+# The same for the Android plugin: the Kotlin beside it is tracked, the library
+# is produced by tools/build_android_plugin.sh.
+/addons/second_screen/bin/

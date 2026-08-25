@@ -56,6 +56,11 @@ const GAME_SPEEDS: Array[StringName] = [&"normal", &"double", &"half"]
 ## GAME_SPEEDS]. See [method speed_scale].
 const GAME_SPEED_SCALES: Array[float] = [1.0, 2.0, 0.5]
 const FPS_CHOICES: Array[int] = [30, 60, 120, 144, 0]
+## What a second display is offered. `auto` uses a real lower panel where the
+## platform reports one and does nothing anywhere else; `window` opens a desktop
+## window as well, which is how the panel is looked at on a machine that has no
+## such hardware; `off` never builds one.
+const SECOND_SCREENS: Array[StringName] = [&"auto", &"window", &"off"]
 const UI_THEMES: Array[StringName] = [&"light", &"dark"]
 ## `auto` shows the on-screen controller while the player is using the
 ## touchscreen and hides it the moment they press a key or a pad. `never` is for
@@ -90,6 +95,8 @@ var screen_fill: bool = true
 ## because it is a view preference rather than part of a run.
 var zoom_step: int = 0
 var max_fps: int = 60
+## See [constant SECOND_SCREENS] and [Gen2SecondScreenHost].
+var second_screen: StringName = &"auto"
 var game_speed: StringName = &"normal"
 var ui_theme: StringName = &"light"
 ## Button bindings, in the shape [Gen2InputActions] stores. Held as data rather
@@ -209,6 +216,7 @@ func to_dict() -> Dictionary:
 		"screen_fill": screen_fill,
 		"zoom_step": zoom_step,
 		"max_fps": max_fps,
+		"second_screen": String(second_screen),
 		"game_speed": String(game_speed),
 		"ui_theme": String(ui_theme),
 		"rules": rules.to_dict(),
@@ -247,6 +255,7 @@ static func parse(raw: Variant) -> Gen2Options:
 	options.ui_theme = _one_of(row.get("ui_theme", ""), UI_THEMES)
 	var fps: int = int(row.get("max_fps", 60))
 	options.max_fps = fps if FPS_CHOICES.has(fps) else 60
+	options.second_screen = _one_of(row.get("second_screen", ""), SECOND_SCREENS)
 	options.rules = Gen2Rules.parse(row.get("rules"))
 	options.controls = Gen2InputActions.sanitize(row.get("controls"))
 	options.mod_controls = Gen2InputActions.sanitize_mod_controls(row.get("mod_controls"))

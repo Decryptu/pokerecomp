@@ -912,45 +912,13 @@ func _render_pack() -> void:
 	_render_hardware()
 
 
-## The five rows `ScrollingMenu_UpdateDisplay` writes, out of the pocket's own
-## items and the CANCEL row after them. The TM/HM pocket is
-## `TMHM_DisplayPocketItems`, which prints the TM number and the move it teaches
-## rather than the item's name.
 func _pack_rows() -> Array:
-	var items: Array = _current_pocket_items()
-	var tmhm: bool = int(_current_pocket().get("pocket", 0)) == Gen2WorldPack.TYPE_TM_HM
-	var scroll: int = _pack_scroll[_pack_pocket_index]
-	var out: Array = []
-	for offset: int in Gen2PackPage.LIST_HEIGHT:
-		var index: int = scroll + offset
-		if index > items.size():
-			break
-		if index == items.size():
-			out.append({"kind": Gen2PackPage.ROW_CANCEL})
-			break
-		var entry: Dictionary = items[index]
-		var item: int = int(entry.get("item", 0))
-		## `PlaceMenuItemQuantity` asks `_CheckTossableItem`, so a key item and
-		## an HM carry no count on this screen.
-		var row: Dictionary = {
-			"kind": Gen2PackPage.ROW_ITEM,
-			"name": String(entry.get("name", "")),
-			"quantity": int(entry.get("quantity", 0)),
-			"show_quantity": Gen2WorldPack.can_toss(_data, item),
-		}
-		if tmhm:
-			var number: int = RomLayout.tmhm_number_for_item(
-				item, _data.tmhm_moves().size() if _data != null else 0
-			)
-			var hm: bool = Gen2WorldTMHM.is_hm(item)
-			row["kind"] = Gen2PackPage.ROW_TM
-			row["hm"] = hm
-			row["number"] = number - RomLayout.TMHM_TM_COUNT if hm else number
-			row["name"] = _data.move(
-				Gen2WorldTMHM.move_for_item(_data, item)
-			).get("name", "") if _data != null else ""
-		out.append(row)
-	return out
+	return Gen2WorldPack.list_rows(
+		_data,
+		int(_current_pocket().get("pocket", 0)),
+		_current_pocket_items(),
+		_pack_scroll[_pack_pocket_index],
+	)
 
 
 ## The pack as the cartridge draws it. `UpdateItemDescription` prints the item's
@@ -1042,12 +1010,7 @@ func _pack_result_text() -> String:
 func _pack_description() -> String:
 	if _pack_cursor_on_cancel() or _data == null:
 		return ""
-	var item: int = int(_selected_item().get("item", 0))
-	if Gen2WorldTMHM.is_tm_hm(item):
-		return String(_data.move(
-			Gen2WorldTMHM.move_for_item(_data, item)
-		).get("description", ""))
-	return String(_data.item(item).get("description", ""))
+	return Gen2WorldPack.row_description(_data, int(_selected_item().get("item", 0)))
 
 
 ## `wPlayerGender`, which picks Kris's pack and her own palettes.
