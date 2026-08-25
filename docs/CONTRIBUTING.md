@@ -108,6 +108,20 @@ An optional `<method> <times> [int arg]` drives a scene before capture. Keep
 state changes as callable methods, not only input branches, so screens stay
 inspectable without a key press.
 
+`tools/record_clip.gd` is the moving picture the screenshot is a still of: one
+overworld clip to a video, mods and all, for a trailer rather than for a check.
+Godot's Movie Maker pins the frame delta, so the world spends exactly one
+hardware frame per recorded frame and the same arguments give the same clip:
+
+```bash
+godot --path . --mods --write-movie /tmp/clip.avi --fixed-fps 60 \
+  -s res://tools/record_clip.gd -- crystal 24 3 cell=20,10 hold=left seconds=5
+```
+
+Buttons are scripted per hardware frame through `Gen2WorldScreen.replay_input`,
+and its `probe=` modes answer where a walk may go and what a seed puts on the
+map before a clip is shot. The header has the options and the ffmpeg line.
+
 `tools/profile.gd` answers what a drawn frame costs, per screen, in
 milliseconds. It needs a window too, and it turns the frame cap and the vertical
 sync off so the number is the work rather than the monitor:

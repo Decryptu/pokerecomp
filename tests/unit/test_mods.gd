@@ -191,6 +191,25 @@ func test_a_mod_for_another_cartridge_is_refused_by_name_and_not_run() -> void:
 		assert_ne(StringName(failure["reason"]), &"incompatible_game")
 
 
+func test_loading_the_discovered_mods_twice_registers_them_once() -> void:
+	_write_dependency_mod("%s/core" % ROOT, "core", "1.0.0")
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	host.discover(ROOT)
+	assert_eq(host.load_discovered(), [&"core"])
+	var entry: Object = host.mod_entry(&"core")
+	var rows: int = host.menu_entries(host.MENU_START).size()
+
+	assert_eq(host.load_discovered(), [&"core"], "the second call says the same")
+	assert_eq(
+		host.menu_entries(host.MENU_START).size(), rows,
+		"and registered nothing a second time"
+	)
+	assert_eq(
+		host.mod_entry(&"core"), entry,
+		"the object a registration's callables are bound to is not replaced"
+	)
+
+
 func test_retargeting_keeps_live_mods_when_the_enabled_set_is_unchanged() -> void:
 	_write_dependency_mod("%s/every_game" % ROOT, "everygame", "1.0.0")
 	var host: Gen2ModHost = Gen2ModHost.instance()
