@@ -105,6 +105,9 @@ var _seed: int = 1
 var _warmup: int = WARMUP_FRAMES
 ## The frame the screen was built on, which every count below is relative to.
 var _built_at: int = 0
+## Whether this clip holds a direction at all, which is what [method
+## _input_arrived] can check for.
+var _holds_scripted: bool = false
 
 
 func _initialize() -> void:
@@ -285,8 +288,19 @@ func _process(_delta: float) -> bool:
 		if _probe == &"walk":
 			_print_path()
 		_restore_selected_view()
-		quit(0)
+		quit(0 if _input_arrived() else 1)
 		return true
+	return false
+
+
+## Whether the buttons this clip scripted reached the world. Holds are the half
+## the world records, and they are also the half a stuck clip loses, so a clip
+## that scripted one and consumed none is refused rather than written.
+func _input_arrived() -> bool:
+	if not _holds_scripted or _screen.input_recording().size() > 0:
+		return true
+	push_error("The scripted input never reached the world: the clip is the "
+		+ "player standing still. Record it again.")
 	return false
 
 
@@ -315,10 +329,17 @@ func _world_frame() -> int:
 ## _open], because the frames it names are counted from this frame and the
 ## warm-up's length in hardware frames is not known until it is over.
 func _start() -> void:
+	## Never off a world that is not there yet. `_world_frame` answers zero for
+	## one, and a base of zero names frames the world spent during the warm-up:
+	## every entry is then already in the past and the clip comes out with the
+	## player standing still, which is what a stuck clip every few runs was.
+	var world: Gen2WorldAPI = _screen.get("_world")
+	if world == null:
+		return
 	## The NEXT hardware frame, not this one: `advance_frame` counts before it
 	## reads the replay, so an entry named for the frame already spent is never
 	## applied and `do=0:<button>` was dropped in silence.
-	_base = _world_frame() + 1
+	_base = world.frame_number + 1
 	## The recorded frame the clip proper starts on, which is what the video is
 	## trimmed to. Printed rather than assumed: the mod load in front of it is
 	## as long as it is, and a caller cannot know that in advance.
@@ -326,7 +347,16 @@ func _start() -> void:
 	for frame: int in _actions:
 		_pending.append(frame)
 	_pending.sort()
-	_screen.replay_input(_input_log())
+	var log_entries: Array = _input_log()
+	for entry: Dictionary in log_entries:
+		if String(entry.get("kind", "")) == "hold":
+			_holds_scripted = true
+			break
+	_screen.replay_input(log_entries)
+	## What the world actually consumed, against what was handed to it. A clip
+	## is minutes of machine time and its failure looks exactly like a clip of
+	## somebody standing still, so it is checked rather than watched for.
+	_screen.record_input()
 
 
 ## The frame after the screen was built: the readout off, and the view the
