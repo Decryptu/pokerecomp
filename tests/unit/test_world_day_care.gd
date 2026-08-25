@@ -332,6 +332,48 @@ func test_the_egg_takes_the_parents_defence_dv() -> void:
 	)
 
 
+## The Gen 2 shiny-breeding chain, which falls out of `.GotDVs` rather than being
+## a rule of its own: the egg inherits the Defense DV and the Special DV's low
+## three bits from the chosen parent, so a shiny parent hands over Defense 10 and
+## the two bits that make Special 10 or 2. What is left to roll is the Attack
+## DV's shiny bit, the Speed DV and the Special DV's top bit, which is about one
+## egg in sixty-four. Measured rather than asserted on one egg.
+func test_a_shiny_parent_breeds_shiny_at_the_source_rate() -> void:
+	var shinies: int = 0
+	var eggs: int = 512
+	var random: RandomNumberGenerator = _seeded(11)
+	var shiny_parent: Gen2SaveMon = _mon(CUBONE, Gen2Stats.SHINY_DVS)
+	var plain_parent: Gen2SaveMon = _mon(CUBONE, MALE_DVS)
+	var from_shiny: int = 0
+	for _egg: int in eggs:
+		var word: int = Gen2WorldDayCare.inherited_dvs(
+			_data, CUBONE, Gen2BattleMon.random_dvs(random),
+			shiny_parent, plain_parent
+		)
+		## The half of the inheritance the parent is chosen for, whichever parent
+		## the gender check picked: this is what makes the rate a real one.
+		if Gen2Stats.defense_dv(word) == Gen2Stats.defense_dv(Gen2Stats.SHINY_DVS):
+			from_shiny += 1
+		if Gen2Stats.is_shiny(word):
+			shinies += 1
+	assert_gt(from_shiny, 0, "the shiny parent is chosen sometimes")
+	## One in 8192 without the inheritance, so 512 eggs finding any at all is the
+	## chain working; the band is wide because 512 draws of a 1-in-64 event is a
+	## count around eight and this is a seeded measurement, not a probability.
+	assert_gt(shinies, 0, "%d of %d eggs came out shiny" % [shinies, eggs])
+	assert_lt(shinies, eggs / 4, "and it is not every egg")
+
+	## Two plain parents and the chain is not there: the Defense DV they hand
+	## over is not the shiny one, so no roll of the rest can produce it.
+	var plain: int = 0
+	for _egg: int in eggs:
+		if Gen2Stats.is_shiny(Gen2WorldDayCare.inherited_dvs(
+			_data, CUBONE, Gen2BattleMon.random_dvs(random), plain_parent, plain_parent
+		)):
+			plain += 1
+	assert_eq(plain, 0, "two plain parents cannot pass on a Defense DV of 10")
+
+
 func test_the_counter_runs_down_a_step_at_a_time_and_offers_an_egg() -> void:
 	var state: Gen2WorldState = _state()
 	_breeding_pair(state)

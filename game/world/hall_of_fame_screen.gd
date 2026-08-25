@@ -150,7 +150,7 @@ func _refresh_pic(page: Dictionary) -> void:
 		return
 	var image: Image = Gen2PicImage.from_atlas(
 		_data.atlas_indices(pic["atlas"]), _data.atlas(pic["atlas"]), pic,
-		_data.palette(species)
+		_data.palette(species, bool(page.get("shiny", false)))
 	)
 	Gen2PicImage.show(_pic, image)
 	_pic.size = Vector2(image.get_size())

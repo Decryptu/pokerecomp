@@ -112,6 +112,13 @@ func remaining() -> int:
 	return maxi(_hatches.size() - _index, 0)
 
 
+## `SCGB_EVOLUTION`, which `HatchEggs` asks for: what hatched is drawn in its own
+## colours. Read off the record rather than the party, the way the species is:
+## the screen deliberately lags the transaction that wrote it.
+func _hatch_shiny() -> bool:
+	return bool(current_hatch().get("shiny", false))
+
+
 func current_hatch() -> Dictionary:
 	if _index < 0 or _index >= _hatches.size():
 		return {}
@@ -470,7 +477,7 @@ func _draw_species(species: int) -> void:
 	if pic.is_empty():
 		_pic.texture = null
 		return
-	_blit(pic, _data.palette(species), HATCHLING_AT)
+	_blit(pic, _data.palette(species, _hatch_shiny()), HATCHLING_AT)
 
 
 func _blit(pic: Dictionary, colours: PackedColorArray, at: Vector2i) -> void:
@@ -515,7 +522,8 @@ func _draw_animation_box() -> void:
 				for x: int in TILE:
 					indices[to + x] = _animation_pixels[from + x]
 	var image: Image = Gen2PicImage.from_indices(
-		indices, side, side, _data.palette(int(current_hatch().get("species", 0)))
+		indices, side, side,
+		_data.palette(int(current_hatch().get("species", 0)), _hatch_shiny())
 	)
 	Gen2PicImage.show(_pic, image)
 	_pic.size = Vector2(image.get_size())

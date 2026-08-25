@@ -101,6 +101,10 @@ static func _mon_page(data: GameData, mon: Gen2SaveMon) -> Dictionary:
 		## `wUnownLetter`: an Unown in the Hall of Fame is its own letter, not A.
 		"unown_form": Gen2Stats.unown_letter(mon.dvs) \
 			if mon.species == RomLayout.UNOWN_SPECIES else 0,
+		## `SCGB_PLAYER_OR_MON_FRONTPIC_PALS`, which is the layout the Hall of
+		## Fame asks for and which reaches `GetMonNormalOrShinyPalettePointer`.
+		## The other fact about the DV word the pic needs, so it rides beside it.
+		"shiny": Gen2Stats.is_shiny(mon.dvs),
 	}
 
 
@@ -167,6 +171,7 @@ static func record_pages(data: GameData, record: Dictionary) -> Array:
 			"gender": Gen2BattleMon.gender_for(data, species, dvs),
 			"unown_form": Gen2Stats.unown_letter(dvs) \
 				if species == RomLayout.UNOWN_SPECIES else 0,
+			"shiny": Gen2Stats.is_shiny(dvs),
 			## `.print_num_hof`'s "-Time Famer", which is the one line the viewer
 			## draws that an induction does not.
 			"win_count": int(record.get("win_count", 0)),

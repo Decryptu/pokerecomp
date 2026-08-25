@@ -106,6 +106,12 @@ func remaining() -> int:
 	return maxi(_plans.size() - _index, 0)
 
 
+## `SCGB_EVOLUTION`, which the sequence asks for: both pictures are the one DV
+## word, since an evolution changes the species and not the four numbers.
+func _plan_shiny() -> bool:
+	return bool(current_plan().get("shiny", false))
+
+
 func current_plan() -> Dictionary:
 	if _index < 0 or _index >= _plans.size():
 		return {}
@@ -412,7 +418,7 @@ func _draw_species(species: int) -> void:
 		return
 	var image: Image = Gen2PicImage.from_atlas(
 		_data.atlas_indices(pic["atlas"]), _data.atlas(pic["atlas"]), pic,
-		_data.palette(species)
+		_data.palette(species, _plan_shiny())
 	)
 	Gen2PicImage.show(_pic, image)
 	_pic.size = Vector2(image.get_size())
@@ -457,7 +463,7 @@ func _draw_animation_box() -> void:
 					indices[to + x] = _animation_pixels[from + x]
 	var image: Image = Gen2PicImage.from_indices(
 		indices, side, side,
-		_data.palette(int(current_plan().get("new_species", 0)))
+		_data.palette(int(current_plan().get("new_species", 0)), _plan_shiny())
 	)
 	Gen2PicImage.show(_pic, image)
 	_pic.size = Vector2(image.get_size())

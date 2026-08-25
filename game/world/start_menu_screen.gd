@@ -1656,6 +1656,9 @@ func _use_selected_item(party_index: int, move_slot: int = -1) -> void:
 			"new_species": int(result.get("new_species", 0)),
 			"evolving_name": String(result.get("evolving_name", "")),
 			"statused": Gen2Evolution.is_statused(_pack_save.party[party_index]),
+			## The stone does not touch the DV word either, so the plan carries
+			## the same answer the level path's does. See `Gen2Evolution.plans`.
+			"shiny": Gen2Stats.is_shiny(_pack_save.party[party_index].dvs),
 			"can_cancel": false,
 		}, _offer_next_evolution_move)
 		return

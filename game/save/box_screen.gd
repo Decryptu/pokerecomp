@@ -773,7 +773,11 @@ func _refresh_pic(mon: Gen2SaveMon) -> void:
 		return
 	var image: Image = Gen2PicImage.from_atlas(
 		_data.atlas_indices(pic["atlas"]), _data.atlas(pic["atlas"]), pic,
-		_data.palette(mon.species)
+		## `_CGB_BillsPC` reaches `GetMonNormalOrShinyPalettePointer`, so the
+		## selected Pokemon is drawn shiny here the way it is on its own stats
+		## page. The headless page beside this one already asked; the live node
+		## did not, which is the same screen answering two ways.
+		_data.palette(mon.species, Gen2Stats.is_shiny(mon.dvs))
 	)
 	Gen2PicImage.show(_pic, image)
 	_pic.size = Vector2(image.get_size())

@@ -38,6 +38,21 @@ func test_pages_follow_the_party_and_end_with_the_player() -> void:
 	var pages: Array = Gen2HallOfFame.pages(_data, _save([1, 4]))
 	assert_eq(pages.size(), 2 + RATING_PAGES)
 	assert_eq(StringName(pages[0]["kind"]), Gen2HallOfFame.PAGE_MON)
+	## `SCGB_PLAYER_OR_MON_FRONTPIC_PALS`, which the Hall of Fame asks for and
+	## which reaches `GetMonNormalOrShinyPalettePointer`: a shiny is inducted in
+	## its own colours, the same DV word the letter beside it comes from.
+	assert_false(bool(pages[0]["shiny"]), "the fixture's party is not shiny")
+
+	var shiny_save: Gen2SaveData = _save([1, 4])
+	shiny_save.party[0].dvs = Gen2Stats.SHINY_DVS
+	var shiny_pages: Array = Gen2HallOfFame.pages(_data, shiny_save)
+	assert_true(bool(shiny_pages[0]["shiny"]))
+	assert_false(bool(shiny_pages[1]["shiny"]), "and only the one that is")
+	## The stored records take the same road: an induction is written and read
+	## back, so a shiny in the viewer is drawn shiny however long ago it won.
+	var stored: Array = Gen2HallOfFame.inducted([], shiny_save)
+	var replayed: Array = Gen2HallOfFame.record_pages(_data, stored[0])
+	assert_true(bool(replayed[0]["shiny"]), "the stored record kept it")
 	assert_eq(int(pages[0]["species"]), 1)
 	assert_eq(int(pages[0]["dex_number"]), 1)
 	assert_eq(int(pages[1]["species"]), 4)

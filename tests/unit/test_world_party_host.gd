@@ -1367,6 +1367,10 @@ func test_hatching_writes_the_row_the_source_writes() -> void:
 	assert_eq(mon.caught_level, Gen2WorldPartyHost.CAUGHT_EGG_LEVEL)
 	assert_eq(mon.caught_location, _world.landmark())
 	assert_true(_world.state.has_caught_species(1), "SetSeenAndCaughtMon runs here")
+	## `HatchEggs` asks for `SCGB_EVOLUTION`, which is a shiny-reading layout, so
+	## the row the screen draws from says which colours the hatchling wears. A
+	## bred shiny is first seen here and nowhere earlier.
+	assert_eq(bool(summary.get("shiny", false)), Gen2Stats.is_shiny(mon.dvs))
 	assert_true(Gen2WorldPartyHost.hatch_egg(_world, _save, 0).is_empty(),
 		"a hatched row is not an egg any more")
 

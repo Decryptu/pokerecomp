@@ -133,6 +133,22 @@ func test_a_statused_party_member_is_planned_without_its_cry() -> void:
 	)[0]["statused"]))
 
 
+## `SCGB_EVOLUTION` reaches `GetMonNormalOrShinyPalettePointer`, so both pictures
+## the sequence draws are the shiny ones. An evolution changes the species and
+## not the DV word, so the plan carries one answer for both.
+func test_an_evolution_plan_says_whether_the_pictures_are_shiny() -> void:
+	var save: Gen2SaveData = _save_with([Fixture.BULBASAUR], 16)
+	save.party[0].dvs = Gen2Stats.SHINY_DVS
+	assert_true(bool(Gen2Evolution.after_battle(
+		_data, save, [0], Gen2WorldPalette.TIME_DAY
+	)[0]["shiny"]))
+
+	save.party[0].dvs = Gen2BattleMon.PERFECT_DVS
+	assert_false(bool(Gen2Evolution.after_battle(
+		_data, save, [0], Gen2WorldPalette.TIME_DAY
+	)[0]["shiny"]), "the perfect word is not a shiny one")
+
+
 ## An EGG keeps its party slot without being a combatant, so the flag the battle
 ## set for battle slot 0 belongs to party slot 1 when an egg is in front of it.
 func test_an_egg_shifts_the_flag_off_the_battle_party_indices() -> void:
