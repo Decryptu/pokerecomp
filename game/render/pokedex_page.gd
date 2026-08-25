@@ -282,7 +282,7 @@ func results_window_map(rows: Array, cursor: int) -> PackedInt32Array:
 	# `DrawPokedexSearchResultsWindow` draws a second frame over rows 11 to 17,
 	# which at `hWX` $4a would cut `.BottomWindowText` in the background box in
 	# half. Only the listing's own frame is drawn until the oracle says what the
-	# hardware puts there; see HANDOFF.md.
+	# hardware puts there.
 	for frame: Array in [[0, 10]]:
 		var top: int = int(frame[0])
 		var bottom: int = int(frame[1])

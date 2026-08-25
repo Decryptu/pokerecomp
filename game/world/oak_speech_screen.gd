@@ -365,7 +365,8 @@ func _print_text() -> void:
 
 
 ## `OakText2`'s `text_asm` plays the cry once the words are up. The source's
-## `WaitSFX` after it is not modelled; see `HANDOFF.md`.
+## `WaitSFX` after it is not modelled: nothing here holds the script until the
+## four effect channels are free.
 func _play_cry_if_due() -> void:
 	if _cry_played or _index >= _beats.size() or _text_box == null:
 		return

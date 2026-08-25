@@ -8,7 +8,7 @@ extends RefCounted
 ## The source routine walks `_TossItem`'s pocket jumptable to find which packed
 ## array the item lives in and calls `RemoveItemFromPocket` on it. The flat item
 ## model has one stack per item and no pocket arrays, so the whole walk is a
-## subtraction; HANDOFF's item-stack divergence covers the difference.
+## subtraction. Nothing observable differs until a save can hold two stacks.
 ##
 ## The commit boundary is [Gen2WorldTransaction], the same one the mart, Kurt
 ## and the party hosts go through.

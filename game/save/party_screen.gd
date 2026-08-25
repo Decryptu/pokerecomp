@@ -95,8 +95,8 @@ const SFX_SWITCH_POKEMON: int = 0x20
 
 ## `_PokemonNotEnoughHPText` and `_ItemCantUseOnMonText`, the two refusals the
 ## heal transfer prints. Both are a `MenuTextbox` over the menu on the cartridge
-## and stand in the menu's own bottom box here, which is the divergence
-## `HANDOFF.md` records; the A or B they wait for is the same.
+## and stand in the menu's own bottom box here. The A or B they wait for is the
+## same.
 const MESSAGE_NOT_ENOUGH_HP: String = "Not enough HP…"
 const MESSAGE_NO_EFFECT: String = "It won't have any effect."
 

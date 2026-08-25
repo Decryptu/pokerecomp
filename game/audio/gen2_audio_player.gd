@@ -290,7 +290,7 @@ func effect_playing() -> bool:
 ## count across two frames instead of trusting that answer, and stops waiting when
 ## it has not moved. `AudioStreamPlayer.playing` is not that test: the dummy audio
 ## driver reports true and consumes nothing. See `Gen2BattleScreen`'s
-## `ANIM_WAIT_SFX` and `HANDOFF.md`'s `WaitSFX` row.
+## `ANIM_WAIT_SFX`.
 func timeline_updates() -> int:
 	return _timeline_updates
 

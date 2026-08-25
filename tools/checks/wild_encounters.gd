@@ -272,8 +272,7 @@ const FACING_STEPS: Array[Vector2i] = [
 
 ## Every object on the map faced and talked to, answering with the first one
 ## whose script says anything. The officer's cell is not pinned: the two gates
-## differ between the profiles in nothing else, and a hand-named cell is what
-## `HANDOFF.md`'s route habits warn about.
+## differ in nothing else, and a hand-named cell breaks on the other profile.
 func _talk_to_officer(world: Gen2WorldAPI) -> Array:
 	for index: int in world.objects.size():
 		var object: Gen2WorldObject = world.objects[index]

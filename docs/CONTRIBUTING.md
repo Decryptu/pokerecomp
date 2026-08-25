@@ -2,8 +2,7 @@
 
 Read [the README](../README.md) first. This file holds the rules and the traps.
 It does not describe the architecture: every source finding, constant and
-contract lives next to the code that enforces it, and a second copy here would
-only go stale.
+contract lives next to the code that enforces it.
 
 ## Keep cartridge data out
 
@@ -34,7 +33,7 @@ tools still read it with `FileAccess`. Do not delete it.
 | `audio/` | The cartridge's own driver over an emulated APU |
 | `autoload/diagnostics.gd` | The log sink, the crash marker and the report bundle |
 
-Four boundaries are load-bearing and not obvious from one file:
+Five boundaries are load-bearing and not obvious from one file:
 
 - **Raw byte runs never go into JSON.** A decimal array costs ~4 bytes on disk
   and ~26 resident per cartridge byte. Use `RomCache.write_payload_map()` or
@@ -46,12 +45,10 @@ Four boundaries are load-bearing and not obvious from one file:
   takes `handle_button(button)`, so a test presses a button, not a key.
 - **Anything printed is already in the bug report.** `Gen2Diagnostics` installs
   a [Logger] with `OS.add_logger`, so every `print`, `push_warning`,
-  `push_error` and runtime error, in the game, a tool or a mod, reaches the
-  session log and the report a player attaches to an issue. Never add a second
-  reporting path beside a message; add the message. `Gen2Diagnostics.note()` is
-  the same print with a topic on it, for a fact a reader of the log needs, and
-  `trace()` is the one for a breadcrumb, which is kept out of a check or a tool
-  run so its output stays readable.
+  `push_error` and runtime error reaches the session log and the report a player
+  attaches to an issue. Never add a second reporting path beside a message; add
+  the message. `Gen2Diagnostics.note()` is the same print with a topic on it;
+  `trace()` is for a breadcrumb and is kept out of check and tool runs.
 - **Reach an autoload by its static accessor**, `Gen2InputRuntime.instance()` or
   `Gen2GameRuntime.instance()`, never the `InputRuntime`/`GameRuntime` global. A
   script handed to `-s` compiles before the tree exists, so naming one by
@@ -108,10 +105,10 @@ An optional `<method> <times> [int arg]` drives a scene before capture. Keep
 state changes as callable methods, not only input branches, so screens stay
 inspectable without a key press.
 
-`tools/record_clip.gd` is the moving picture the screenshot is a still of: one
-overworld clip to a video, mods and all, for a trailer rather than for a check.
-Godot's Movie Maker pins the frame delta, so the world spends exactly one
-hardware frame per recorded frame and the same arguments give the same clip:
+`tools/record_clip.gd` records one overworld clip to video, mods and all, for a
+trailer rather than for a check. Godot's Movie Maker pins the frame delta, so the
+world spends exactly one hardware frame per recorded frame and the same arguments
+give the same clip:
 
 ```bash
 godot --path . --mods --write-movie /tmp/clip.avi --fixed-fps 60 \
@@ -123,8 +120,8 @@ and its `probe=` modes answer where a walk may go and what a seed puts on the
 map before a clip is shot. The header has the options and the ffmpeg line.
 
 `tools/profile.gd` answers what a drawn frame costs, per screen, in
-milliseconds. It needs a window too, and it turns the frame cap and the vertical
-sync off so the number is the work rather than the monitor:
+milliseconds. It needs a window, and turns the frame cap and vsync off so the
+number is the work rather than the monitor:
 
 ```bash
 godot --path . -s res://tools/profile.gd -- all crystal 600
@@ -132,49 +129,42 @@ godot --path . -s res://tools/profile.gd -- all crystal 600
 
 Each subject is driven by counted hardware frames with the screen's own
 `_process` off, so a row is comparable between two runs on one machine. Between
-machines only the ratio carries; a subject over 16.7 ms on the machine measuring
-it cannot hold sixty anywhere.
+machines only the ratio carries.
 
 The GDScript analyzer runs only inside the editor: no CLI mode prints its
-warnings, `--check-only` suppresses them, and file logging records the running
-game rather than the editor. There are two ways to read it and they answer
-different questions. The tree stays at zero entries either way.
+warnings and `--check-only` suppresses them. Two ways to read it, both required
+to stay at zero.
 
 ```bash
 Godot --headless --editor --path . -- --warning-scan [path ...]
 ```
 
-`addons/warning_scan` opens each named script in the editor's own script editor
-and prints what the analyser says, as `file:line CODE message`, then a tally and
-how many scripts it analysed; it exits 1 when there were any. Paths may be files
-or directories, `res://` or `user://`, and default to the project's script trees.
-Because the paths are explicit and the count is printed, silence means clean
-rather than unread, which is what the panel alone could never say. It reports the
-first warning per script: fix it, run again, and the next one appears. Without
-the flag the plugin does nothing, so an ordinary editor session is untouched.
+`addons/warning_scan` opens each named script in the editor's script editor and
+prints `file:line CODE message`, then a tally and how many scripts it analysed;
+it exits 1 when there were any. Paths may be files or directories, `res://` or
+`user://`, and default to the project's script trees. It reports the first
+warning per script: fix it, run again, and the next appears. Without the flag the
+plugin does nothing.
 
-`tools/dump_editor_errors.gd` is the other half, run from Editor > File > Run:
-it writes the Debugger panel's whole list to `user://editor_errors.txt`, engine
-errors included, and is where a running game's warnings arrive, which is how a
-mod's `user://` scripts are seen. The panel holds what the session has analysed,
-so reload the project first for a full sweep.
+`tools/dump_editor_errors.gd` is the other half, run from Editor > File > Run.
+It writes the Debugger panel's whole list to `user://editor_errors.txt`, engine
+errors included, which is how a mod's `user://` scripts are seen. The panel holds
+what the session has analysed, so reload the project first for a full sweep.
 
 A tool that takes an output path guards it with `Gen2ToolPath.refuses()` before
-doing any work. A tool runs with `--path <this project>`, so a relative path
-resolves against the checkout rather than the directory the command was run in: a
-bare `out.png` is written into the project and the editor makes an `.import` file
-beside it. The test is where the path resolves, not how it is spelt, since
-`res://out.png` is absolute to `is_absolute_path()` and lands in the project all
-the same. `user://` is allowed.
+doing any work. A tool runs with `--path <this project>`, so a bare `out.png`
+lands in the checkout and the editor makes an `.import` beside it. The test is
+where the path resolves, not how it is spelt: `res://out.png` is absolute to
+`is_absolute_path()` and lands in the project all the same. `user://` is allowed.
 
 `integer_division` is the one warning turned off in `project.godot`: this is
 8-bit hardware arithmetic throughout, where `a / b` on two integers is the
 intended operation, and a float result is written with an explicit `float()`.
 
-Before rewriting or finishing a subsystem, read the verification method: port
-the state machine rather than approximating its output, find a second executable
-implementation to diff against, pick an artefact that compares exactly, sweep
-the whole corpus, and settle every disagreement against pret.
+Before rewriting or finishing a subsystem: port the state machine rather than
+approximating its output, find a second executable implementation to diff
+against, pick an artefact that compares exactly, sweep the whole corpus, and
+settle every disagreement against pret.
 
 ## Pitfalls
 
@@ -184,11 +174,9 @@ the whole corpus, and settle every disagreement against pret.
   during a call can corrupt the VM. Use
   `godot --headless --check-only --script res://path.gd`.
 - New scripts need an editor scan before they resolve; edits to existing ones do
-  not: `godot --headless --editor --path . --quit`. The class index lives in
-  `.godot/`, which is a build cache and not committed, so the gap is visible to
-  anything else resolving against this checkout: a mod repository parsing its
-  own scripts with `--check-only --path <this>` fails on the file that names the
-  new class, not on its own. Run the scan in the commit that adds the class.
+  not: `godot --headless --editor --path . --quit`. The class index lives in the
+  uncommitted `.godot/`, so anything else resolving against this checkout sees
+  the gap. Run the scan in the commit that adds the class.
 - Defer `_ready()` scene changes with `change_scene_to_file.call_deferred(path)`.
 - A bare `PanelContainer` is transparent; give modals a
   `theme_override_styles/panel` `StyleBoxFlat`.
@@ -214,8 +202,7 @@ the whole corpus, and settle every disagreement against pret.
 
 ## Writing and file budget
 
-The repository is kept small on purpose. A reader's time and a machine's are
-both finite, and both were being spent on restatement.
+The repository is kept small on purpose.
 
 **Extend, do not add.** A new feature belongs in the file that already owns its
 subject. Before creating any file, name the existing one it cannot go in.
@@ -228,14 +215,11 @@ subject. Before creating any file, name the existing one it cannot go in.
   at a second layer buys nothing and costs the suite. Keep slow work
   (real caches, whole-movie runs, frame sweeps) out of the default suite.
 - **Docs.** State each fact once, where it is enforced, and link instead of
-  repeating. Source findings and constants go next to the code, contracts in
-  `docs/`, status in `HANDOFF.md`.
+  repeating. Source findings and constants go next to the code; contracts go in
+  `docs/`.
 - **Comments.** A source symbol plus a one-line reason. Comment non-obvious
   constraints and quirks; never restate the line below. No section banners, no
-  doc comment on a self-evident function. Net new comment lines should stay a
-  small fraction of net new code lines. `rom_layout.gd` is the one exemption and
-  says why in its own header: a comment recording how an offset was located is
-  the evidence for that number, not an explanation of the code.
+  doc comment on a self-evident function. `rom_layout.gd` is the one exemption:
+  a comment recording how an offset was located is the evidence for that number.
 
-When something changes, replace the old text. Never append a correction, and
-never let a file grow just because work happened.
+When something changes, replace the old text. Never append a correction.

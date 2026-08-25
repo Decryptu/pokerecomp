@@ -26,6 +26,5 @@ Write "not source-derived" for tooling, docs, launcher or export work.
 
 - [ ] No ROM-derived, generated, cache or local-only file is staged
 - [ ] `git diff --cached --check` is clean
-- [ ] `HANDOFF.md` updated if deliberate behavior, scaffolding or known breaks changed
-- [ ] Defects met along the way are fixed here or recorded in `HANDOFF.md` open work
+- [ ] Defects met along the way are fixed here
 - [ ] Docs updated if a contract in `docs/` changed

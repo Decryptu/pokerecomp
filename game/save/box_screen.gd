@@ -749,7 +749,7 @@ func _mon_state(mon: Gen2SaveMon) -> Dictionary:
 		"species_name": String(_data.species(mon.species).get("name", "")),
 		"item": mon.item,
 		## `ItemIsMail` reads a list no importer reads, so no item is mail here
-		## and the mail marker is unreachable; see HANDOFF.md.
+		## and the mail marker is unreachable.
 		"mail": false,
 	}
 

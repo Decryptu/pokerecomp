@@ -75,7 +75,7 @@ static func find_in_bag(data: GameData, state: Gen2WorldState) -> Array:
 
 ## `Kurt_GetQuantityOfApricorn`. The source walks every stack of the item and
 ## clamps the total; the flat item model holds one stack, so only the clamp is
-## left. See HANDOFF's item-stack divergence.
+## left.
 static func quantity_of(state: Gen2WorldState, item: int) -> int:
 	if state == null:
 		return 0

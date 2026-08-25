@@ -50,8 +50,6 @@ func _run(object: Gen2BattleAnimObject) -> void:
 	assert_true(Gen2BattleAnimFunctions.run(_player, object))
 
 
-# ---------------------------------------------------------------- helpers ----
-
 ## `BattleAnim_Sine` at the quarter turn is the whole amplitude, because
 ## `BattleAnimSineWave`'s sixteenth entry is $0100 and not $00ff. An eight-bit
 ## re-derivation of the table is short by one here and everywhere it is scaled.
@@ -110,8 +108,6 @@ func test_a_coordinate_wraps_rather_than_clamping() -> void:
 	_run(object)
 	assert_eq(object.x, 0x08)
 
-
-# -------------------------------------------------------------- callbacks ----
 
 ## `BattleAnimFunc_Null` is not a no-op: its second state deletes the object,
 ## which is how `anim_incobj` retires the sixty-two rows that use it.

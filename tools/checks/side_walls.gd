@@ -10,8 +10,8 @@ var _r: RefCounted = null
 ##
 ## The real-cartridge counterpart to the side-wall cases in
 ## tests/unit/test_world_collision.gd and tests/unit/test_world_api.gd, which
-## use synthetic caches. It also pins the map census HANDOFF.md's open-work
-## entry measured against these caches, so a future cache change is loud.
+## use synthetic caches. It also pins the map census, so a future cache change
+## is loud.
 ##
 ##   Godot --headless --path . -s res://tools/validate.gd -- side_walls
 
@@ -91,8 +91,8 @@ func _verify_codes(game_id: StringName) -> void:
 	)
 
 
-## Pins HANDOFF.md's map census so a future cache change is loud rather than
-## silently changing which cells this feature affects.
+## Pins the map census so a future cache change is loud rather than silently
+## changing which cells this feature affects.
 func _verify_census(game_id: StringName, data: GameData) -> void:
 	var expected: Dictionary = EXPECTED_CENSUS[game_id]
 	var counts: Dictionary = {}

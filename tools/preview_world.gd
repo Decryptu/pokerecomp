@@ -4,145 +4,76 @@ extends SceneTree
 ##
 ##   Godot --headless --path . -s res://tools/preview_world.gd -- gold 1 1 /tmp/world.png
 ##
-## A fifth `live` argument photographs the real screen on that map instead, with
-## the sprites the engine draws over an object staged on it: an emote over the
-## first visible object, the boulder dust, the grass rustle and the headbutt
-## tree. That mode drives the screen's own path and needs a display, so it runs
-## without `--headless`:
+## A fifth `live` argument photographs the real screen on that map instead. It
+## drives the screen's own path and needs a display, so it runs without
+## `--headless`:
 ##
 ##   Godot --path . -s res://tools/preview_world.gd -- crystal 26 2 /tmp/out.png live [kind] [x y] [WxH] [touch]
 ##
-## `kind` may carry the player's own cell as `<kind>@x,y`, which is what a kind
-## reading the two numbers as something else needs: `battle_transition@5,7`.
+## The two numbers after `kind` are that kind's own arguments; where a kind reads
+## them as something else, the player's cell is written on the kind itself as
+## `<kind>@x,y`, for example `battle_transition@5,7`.
 ##
-## `WxH` is the window to photograph in, for the two shapes a phone has, and
-## `touch` draws the on-screen controller with it, which is the only way to see
-## how [Gen2GameFrame] splits a portrait screen:
+## Extra flags, in any order after the kind:
+##
+## | Flag | Effect |
+## | `WxH` | The window to photograph in, for a phone's two shapes |
+## | `touch` | Draw the on-screen controller, the only way to see how [Gen2GameFrame] splits a portrait screen |
+## | `framed` | The 160x144 letterbox the hardware had, instead of SCREEN FILL |
+## | `zoom=<n>` | The zoom ladder; `zoom=-3` is the whole-region survey |
+## | `view=<mod id>` | A registered renderer instead of the built-in one. Needs `--mods` in front of the `--` |
 ##
 ##   ... live effects 4 4 430x932 touch
-##
-## `zoom=<n>` and `framed` are the SCREEN FILL controls: `framed` photographs the
-## 160x144 letterbox the hardware had, and `zoom=-3` the whole-region survey:
-##
-##   ... live effects 4 4 1920x1080 zoom=-3
-##
-## `view=<mod id>` photographs a registered renderer instead of the built-in one,
-## which needs `--mods` in front of the `--` so the mods are actually loaded:
-##
 ##   Godot --path . -s res://tools/preview_world.gd --mods -- crystal 26 2 \
-##     /tmp/out.png live effects 4 4 1920x1080 view=voxel3d
+##     /tmp/out.png live effects 4 4 1920x1080 zoom=-3 view=voxel3d
 ##
-## `kind` is `effects` (the emote, the dust, the rustle and the headbutt tree),
-## `battle` (the wild fight `preview_battle_request` starts, settled past its
-## transition into the fight itself, which is the picture a battle renderer
-## staged on the map draws),
-## `unown_wall` (`DisplayUnownWords`' box, read off a Ruins of Alph chamber's
-## own wall pattern from the cell below it: maps 23 to 26 of group 3 say HO-OH,
-## ESCAPE, WATER and LIGHT, as `crystal 3 24 ... unown_wall 3 1`),
-## `cut` (`OWCutAnimation`'s two halves and the jump shadow), `mart`
-## (`BuyMenu`, talked open from the cell in front of a shop's counter, as
-## `crystal 1 8 ... mart 3 3`), `mart_sell` (the same shop's SELL row, which is
-## `DepositSellPack` on the cartridge and this port's own list of the pack),
-## `pokepic`
-## (`Script_pokepic`'s box over the map, holding Chikorita),
-## `pet_actor` (a mod's world actor one cell in front of the player, pressed with
-## A so it wears the heart `showemote` puts over a map object),
-## `warp` (`MapSetupScript_Door` at its whitest: the player is walked up onto the
-## warp tile named by the two numbers below it, and the picture is
-## `FadeOutToWhite`'s last order, which is the frame the new map is loaded on:
-## `crystal 24 7 ... warp 7 1` is the bedroom staircase),
-## `script_fade` (one of the five fade specials over the map, as
-## `crystal 24 4 ... script_fade 46 6`: the first number is the special and the
-## second how many of its frames to spend before the picture),
-## `door` (`.CheckWarp`'s carpet: the player is walked down onto an interior
-## door's mat and photographed standing on it, which the step itself no longer
-## warps: `crystal 24 6 ... door 6 5` is the front door of the player's house),
-## `ice_slide` (`DoPlayerMovement.CheckForced`'s run: the player is walked in
-## one direction until the step lands on ice and the frames after that are the
-## slide's own, with nothing held, as `crystal 3 61 ... ice_slide@16,8 2 40`,
-## whose first number is the direction in down, up, left, right order and whose
-## second is how many of the slide's frames to spend),
-## `ledge` (the ledge hop at the top of its arc, walking south from the cell the
-## two numbers name until one allows the hop: `crystal 24 4 ... ledge 5 4`),
-## `map_name_sign` (`InitMapNameSign`'s window, raised by walking west off the
-## map's edge onto its neighbour: `crystal 24 4 ... map_name_sign 1 8` crosses
-## New Bark Town into Route 29),
-## `battle_tower` (`BattleTower1FReceptionistScript`, talked to from the cell
-## below her: the first number is how many A presses to spend and the second how
-## many DOWN presses, so `crystal 22 11 ... battle_tower@7,7 5 0` is the
-## Challenge / Explanation / Cancel menu and `... battle_tower@7,7 6 2` the level
-## list standing on its third room),
-## `yes_no` (`Script_yesorno`'s box, over the map's first script run to the
-## choice it ends on: `crystal 26 3 ... yes_no 31 6` is Cherrygrove's guide),
-## `name_rater` and `move_deleter` (`special NameRater` and `special
-## MoveDeletion`, which no fixture cell reaches: the first number is how many
-## presses into the routine to photograph, so 0 is the introduction, 2 its last
-## page with the YES/NO up, and 4 the party list),
-## `gift_nickname` (`GiveANickname_YesNo`, which no fixture cell reaches because
-## a `givepoke` is somebody's map script: the first number is how many presses
-## into the prompt to photograph, 1 its question with the YES/NO up and 2 the
-## `WasSentToBillsPCText` behind NO, and the second the species, plus 1000 for
-## the box branch that prints that line),
-## `unown_printer` (`_UnownPrinter`'s ALPH RUINS STAMP browser, which no fixture
-## cell reaches: the first number is the slot, 26 being the vacant one, and the
-## second is 1 for the page A sends to a printer that is not there),
-## `diploma` (`_Diploma`'s page: the first number is 1 for `_PrintDiploma`'s
-## loop, which stands the printer's own connection error over it, and the second
-## is the page, where 2 is the one only a printer that answered reaches),
-## `bills_pc` (`_BillsPC`'s top menu and the lists behind it, which no preview
-## cell reaches: the first number is how many rows down the menu to stand and the
-## second how many A presses to spend, so `crystal 24 6 ... bills_pc 1 2` is the
-## DEPOSIT list with its submenu up),
-## `players_pc` and `pokemon_center_pc` (the bedroom's item PC and the Pokemon
-## Center's machine, driven the same way: `crystal 24 6 ... players_pc 3 1` is
-## the decoration menu and `crystal 24 6 ... pokemon_center_pc 3 1` the Hall of
-## Fame viewer on a save that has been inducted),
-## `mom_bank` (`Mom_WithdrawDepositMenuJoypad`'s dial, which no fixture cell
-## reaches: the first number is the wallet in hundreds and the second her own
-## balance in hundreds, plus 1000 for the WITHDRAW header),
-## `move_tutor` (`special MoveTutor`, driven the same way, except that it opens
-## on `ChooseMonToLearnTMHM` rather than on a box: 0 is that list),
-## `day_care` (the Day-Care's five specials, driven the same way: the first
-## number is how many presses in and the second which routine, 0 the man,
-## 1 the lady, 2 the man outside, 3 and 4 the two signs),
-## `slot_machine` (`special SlotMachine`, which no fixture cell reaches: the
-## first number is how many frames into the game to photograph and the second
-## the bet, 1 to 3, plus 4 for the lucky machine),
-## `tile_anim` (the map after the first number's worth of `AnimateTileset`
-## frames, which is how the water, the flowers, the lava and the cave scroll are
-## photographed at a chosen point in their cycle: `crystal 3 37 ... tile_anim 60`
-## is Union Cave a second in),
-## `card_flip` (`special CardFlip`, which no fixture cell reaches: the first
-## number is how many frames into the game to photograph and the second the
-## balance in hundreds of coins),
-## `unown_puzzle` (`special UnownPuzzle`'s board, which no fixture cell reaches:
-## the first number is how many frames in to photograph and the second which
-## picture, 0 Kabuto, 1 Omanyte, 2 Aerodactyl and 3 Ho-Oh, or 4 to 7 for the
-## same four solved; the empty cursor blinks off `hVBlankCounter`, so a frame
-## with bit 4 clear has none on it),
-## `visible_encounter` (a shiny of the map's own table standing on the eligible
-## cell nearest the player, with the cartridge's sparkle over it: try
-## `crystal 24 3 ... visible_encounter 4 9`),
-## `visible_encounter_glow` (the same population with ordinary DVs wearing an
-## entry's own `glow` instead, which is the mark a mod puts on a Pokemon worth
-## stopping for: `crystal 24 3 ... visible_encounter_glow 4 9`),
-## `field_moves_menu` (the start menu's MOVES row, and the list of HM moves the
-## bag can supply behind it, both of which need a registered field-move source
-## before they exist: driven twice, since each call is one step),
-## `repel_renewal` (the question a Repel running out asks, which needs a
-## registered renewal provider), the name of any
-## `preview_*` driver on the world screen without that prefix (`field_move` is
-## `PartyMenu` with a taught CUT on it, `start_menu`, `capture`,
-## `catch_nickname` (`PokeBallEffect`'s own question, over the battle the throw
-## was made in), `move_forget`
-## and the rest; a `*_use` name is driven twice, since each call is one step of
-## its own sequence), or one of
-## [constant FIELD_ITEMS]' own names, which is the pack's USE on that item: the
-## Itemfinder closes the pack over the world's answer, the Coin Case prints
+## Kinds, with what their two numbers mean. A kind saying "no fixture cell" is
+## driven directly because no map cell reaches it.
+##
+## | Kind | Numbers | Draws |
+## | `effects` | cell | The emote, boulder dust, grass rustle and headbutt tree over the first visible object |
+## | `battle` | cell | The wild fight `preview_battle_request` starts, settled past its transition |
+## | `cut` | cell | `OWCutAnimation`'s two halves and the jump shadow |
+## | `tile_anim` | frames | The map that many `AnimateTileset` frames in: water, flowers, lava, cave scroll |
+## | `unown_wall` | cell | `DisplayUnownWords`' box, read off the chamber wall above the cell. Group 3 maps 23 to 26 say HO-OH, ESCAPE, WATER, LIGHT |
+## | `mart`, `mart_sell` | cell in front of the counter | `BuyMenu`, and the SELL row (`DepositSellPack`) |
+## | `pokepic` | cell | `Script_pokepic`'s box over the map, holding Chikorita |
+## | `pet_actor` | cell | A mod's world actor one cell ahead, pressed with A so it wears a `showemote` heart |
+## | `warp` | warp tile | `MapSetupScript_Door` at its whitest, which is the frame the new map loads on |
+## | `script_fade` | special, frames | One of the five fade specials over the map |
+## | `door` | door mat | `.CheckWarp`'s carpet, standing on an interior door's mat |
+## | `ice_slide` | direction, frames | `DoPlayerMovement.CheckForced`'s run. Direction is down, up, left, right |
+## | `ledge` | start cell | The ledge hop at the top of its arc, walking south until one allows it |
+## | `map_name_sign` | cell | `InitMapNameSign`'s window, raised by walking west onto the neighbouring map |
+## | `yes_no` | script, presses | `Script_yesorno`'s box over the map's script |
+## | `battle_tower` | A presses, DOWN presses | `BattleTower1FReceptionistScript`, talked to from the cell below her |
+## | `name_rater`, `move_deleter` | presses | `special NameRater` / `special MoveDeletion`. 0 is the introduction, 2 the last page with YES/NO, 4 the party list |
+## | `gift_nickname` | presses, species | `GiveANickname_YesNo`. 1 is the question, 2 the `WasSentToBillsPCText` behind NO. Add 1000 to the species for the box branch |
+## | `unown_printer` | slot, page | `_UnownPrinter`'s ALPH RUINS STAMP browser. Slot 26 is the vacant one; page 1 is what A sends to a printer that is not there |
+## | `diploma` | loop, page | `_Diploma`'s page. 1 stands `_PrintDiploma`'s connection error over it; page 2 needs a printer that answered |
+## | `bills_pc` | rows down, A presses | `_BillsPC`'s top menu and the lists behind it |
+## | `players_pc`, `pokemon_center_pc` | rows down, A presses | The bedroom's item PC and the Pokemon Center's machine |
+## | `mom_bank` | wallet, balance, both in hundreds | `Mom_WithdrawDepositMenuJoypad`'s dial. Add 1000 for the WITHDRAW header |
+## | `move_tutor` | presses | `special MoveTutor`. 0 is `ChooseMonToLearnTMHM`'s list, not a box |
+## | `day_care` | presses, routine | 0 the man, 1 the lady, 2 the man outside, 3 and 4 the two signs |
+## | `slot_machine` | frames, bet | `special SlotMachine`. Bet is 1 to 3, plus 4 for the lucky machine |
+## | `card_flip` | frames, coins in hundreds | `special CardFlip` |
+## | `unown_puzzle` | frames, picture | `special UnownPuzzle`. 0 Kabuto, 1 Omanyte, 2 Aerodactyl, 3 Ho-Oh, or 4 to 7 solved. The cursor blinks off `hVBlankCounter`, so a frame with bit 4 clear has none |
+## | `visible_encounter` | cell | A shiny of the map's own table on the eligible cell nearest the player, with the sparkle over it |
+## | `visible_encounter_glow` | cell | The same population with ordinary DVs wearing an entry's `glow` |
+## | `field_moves_menu` | cell | The start menu's MOVES row and the HM list behind it. Needs a registered field-move source, and is driven twice |
+## | `repel_renewal` | cell | The question a Repel running out asks. Needs a registered renewal provider |
+##
+## A kind may also be the name of any `preview_*` driver on the world screen
+## without that prefix: `field_move` (`PartyMenu` with a taught CUT),
+## `start_menu`, `capture`, `catch_nickname` (`PokeBallEffect`'s question over
+## the battle the throw was made in), `move_forget` and the rest. A `*_use` name
+## is driven twice, since each call is one step of its own sequence.
+##
+## Or one of [constant FIELD_ITEMS]' names, which is the pack's USE on that item:
+## the Itemfinder closes the pack over the world's answer, the Coin Case prints
 ## inside the pack, and the three in [constant FACE_UP_FIRST] each need their own
-## map and the cell below their target. The two numbers are the cell
-## the player stands on, which is how the grass a standing object is drawn behind
-## is photographed.
+## map and the cell below their target.
 
 ## `.forced_dpad`'s own order, which the first number indexes.
 const ICE_SLIDE_BUTTONS: Array[int] = [

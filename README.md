@@ -33,42 +33,30 @@ Inspired by [gen1recomp](https://github.com/bryanthaboi/gen1recomp).
 >   blackout recovery, object lifecycle, followers, block edits, emotes, surf,
 >   ledge hops, grass, fishing, roaming, repel and wild encounters, plus the
 >   service overlay (marts, Kurt's errand, phone dispatch, music and cries).
->   Everything the overworld times is a hardware frame count spent by one clock,
->   so a seed, an input log and a frame number reproduce a walk exactly.
-> - **A screen that fills the window.** The map is drawn past the Game Boy's
->   160x144 to whatever shape the window is, with the connected maps around it
->   drawn seamlessly and no black bars. Zoom out far enough and a region is on
->   screen at once. See [Screen fill](#screen-fill).
+>   Everything is counted in hardware frames spent by one clock, so a seed, an
+>   input log and a frame number reproduce a walk exactly.
+> - **A screen that fills the window.** The map is drawn past 160x144 to whatever
+>   shape the window is, with the connected maps around it and no black bars.
+>   See [Screen fill](#screen-fill).
 > - **Saves.** Three slots, `.sav` import, and a 14-box PC with 20 slots a box.
 >   Every party transaction commits through a validated candidate save.
 > - **Mods.** A mod under `user://mods/` can add or rebalance content, register
 >   move effects, watch the world and battle event channels, add menu entries and
->   controls, and replace the world or battle renderer, which is what a 3D or HD
->   view needs.
+>   controls, and replace the world or battle renderer.
+> - **The story.** All three cartridges walk from Elm's lab to Red on Mt. Silver:
+>   every Johto badge and its errand, then Kanto, all sixteen badges, the Hall of
+>   Fame with Prof Oak's rating, and the credits.
+> - **The Battle Tower.** A full seven-trainer challenge: the room list, the
+>   party rules, the sampled opponents, the save between battles and the prize.
+> - **The Cable Club and Mystery Gift.** There is no cable on a modern machine,
+>   so the second player is your own other save file. The three receptionists,
+>   the Trade Center, the Colosseum's link battle, the link record, and Mystery
+>   Gift's five gifts a day all work between two of your saves. With one save
+>   file you are told your friend is not ready, which is what one Game Boy has
+>   always been told.
 >
-> The story preview walks all three cartridges from Elm's lab to Red on Mt.
-> Silver: every Johto badge with the errand behind it, then Kanto, all sixteen
-> badges, the Hall of Fame with Prof Oak's rating, and the credits.
->
-> The Battle Tower is a full seven-trainer challenge: the room list, the party
-> rules, the sampled opponents with their own lines, the save between battles and
-> the prize at the end.
->
-> The Cable Club is open. There is no cable on a modern machine, so the second
-> player is your own other save file: the three receptionists, the Trade Center's
-> two-list trade screen with the swap and the trade evolution behind it, the
-> Colosseum's link battle, and the link record on the sign between them. With one
-> save file the receptionist says your friend is not ready, which is what a
-> single Game Boy has always been told.
->
-> Mystery Gift works the same way. Carrie in GOLDENROD DEPT. STORE 5F unlocks
-> it, the row then appears beside a save slot, and the infrared partner is your
-> other save file: five gifts a day, one per person, and the officer on the
-> POKEMON CENTER's second floor hands over whatever arrived. With one save file
-> the exchange times out, which is what one Game Boy has always seen.
->
-> Missing: the trade animation, and a handful of pixel-level divergences still
-> being chased in the opening movies and title screen against a real cartridge.
+> Missing: the trade animation, and some pixel-level divergences in the opening
+> movies and title screen.
 
 ## Getting started
 
@@ -136,34 +124,33 @@ godot --headless --path . --quit-after 30
 
 The launcher is a shelf of three cartridges. An unimported bay is drawn in the
 cartridge's own outline: drop a dump on it, or click to browse. Mods, settings
-and about are in the dock underneath. It has a light and a dark appearance and
-the same layout works on a phone.
+and about are in the dock underneath. Light and dark, and the same layout works
+on a phone.
 
 Play opens the save screen: validated slots, naming, export and import, `.sav`
 import, party inspection, and a save editor that cannot produce a save the game
 will not load. A new game opens on the cartridge's own splash, GameFreak
 animation, intro movie and title screen, then the gender question and Oak's
-speech. Continue enters the overworld, where the start menu's SAVE writes its
-map, inventory, event and clock snapshot. See [docs/SAVES.md](docs/SAVES.md).
+speech. Continue enters the overworld. See [docs/SAVES.md](docs/SAVES.md).
 
-The start menu wires every source entry: Pokedex, Pokemon, Pack, Pokegear,
-Player, Save, Options and Exit. Options is the cartridge's own seven-row OPTION
-screen over the same values the launcher's settings edit, so the two cannot
-disagree. Pokedex has the three source orderings, type search and the
-`<MON>'S NEST` area map. Pokegear draws all four of its cards on the hardware
-tile grid, clock, map, phone and radio, each with its own dial, list and mode
-arrow, and a tuned station keeps playing after it closes, which is how the Poke
-Flute channel wakes Vermilion's Snorlax. Pack opens each item's own submenu: USE,
-GIVE, TOSS and SEL, which registers an item to the SELECT button and uses it
-from the map. The party submenu offers all eight field moves to a Pokemon that
-knows one, and ITEM gives or takes what it holds.
+The start menu wires every source entry:
+
+| Entry | What is there |
+|---|---|
+| Pokedex | The three source orderings, type search and the `<MON>'S NEST` area map |
+| Pokemon | The party, its submenu, all eight field moves, and ITEM to give or take |
+| Pack | Each item's own submenu: USE, GIVE, TOSS and SEL, which binds an item to SELECT |
+| Pokegear | Clock, map, phone and radio on the hardware tile grid. A tuned station keeps playing after it closes, which is how the Poke Flute channel wakes Vermilion's Snorlax |
+| Player, Save, Exit | The trainer card, the map/inventory/event/clock snapshot, and the way out |
+| Options | The cartridge's seven-row OPTION screen over the same values the launcher's settings edit |
 
 Facing something and pressing A is the other way to every field move: a cut
 tree, a whirlpool, a waterfall, a headbutt tree and open water each offer their
 move in the cartridge's own order and words. Fruit trees bear once a day, Poke
-Balls and hidden items are picked up by facing them, and the imported Players
-House PC opens the item PC, while a Pokemon Center's opens BILL'S PC beside it. Walking into a new area raises Crystal's own map name
-sign for sixty frames, which Gold and Silver never had.
+Balls and hidden items are picked up by facing them, and the Players House PC
+opens the item PC while a Pokemon Center's opens BILL'S PC. Walking into a new
+area raises Crystal's map name sign for sixty frames, which Gold and Silver
+never had.
 
 Icons come from [Lucide](https://lucide.dev). See
 [docs/THIRD_PARTY.md](docs/THIRD_PARTY.md).
@@ -197,28 +184,26 @@ orientation.
 ### Screen fill
 
 A window is not the Game Boy's 10:9, and the black bars around a framed screen
-are room the overworld can draw into. Settings > Application > Screen offers
-two answers:
+are room the overworld can draw into. Settings > Application > Screen:
 
 | Screen | What it draws |
 |---|---|
 | Fill (default) | The map covers the whole window at any shape, and the maps connected to this one are drawn around it |
 | Framed | The 160x144 screen at a whole scale, centred, with black bars, as the hardware had |
 
-Everything laid out on the screen -- text boxes, menus, the start menu, the
-cursor -- stays inside the 160x144 rectangle in the middle of it, exactly where
-the cartridge put it. Only the surround grows.
+Everything laid out on the screen (text boxes, menus, the start menu, the
+cursor) stays inside the 160x144 rectangle in the middle of it, where the
+cartridge put it. Only the surround grows.
 
 While walking, `+` and `-` zoom, `0` returns to the fitting scale, and the mouse
-wheel does the same. Those keys count screen pixels per Game Boy pixel, so a mod
-drawing the world in 3D keeps them for its own camera and the game leaves them
-alone. Zooming out past one screen pixel per map pixel is a survey
-of the region: the connection graph places the maps around this one and the map
-header's own border block fills what no map covers. The maps around you are a
-picture. Their people stand where their map puts them and nothing else about
-them runs: no scripts, no walking, no wild encounters, no collision. Only the map
-you are on is live, exactly as on the cartridge, where a connected map is three
-blocks of scenery copied into the buffer and nothing more.
+wheel does the same. They count screen pixels per Game Boy pixel, so a mod
+drawing the world in 3D keeps them for its own camera.
+
+Zoom out far enough and a region is on screen at once: the connection graph
+places the maps around this one and the border block fills what no map covers.
+Those maps are a picture. Their people stand where their map puts them and
+nothing else runs: no scripts, no walking, no wild encounters, no collision.
+Only the map you are on is live, exactly as on the cartridge.
 
 ### Game speed, window and frame rate
 
@@ -230,16 +215,14 @@ Settings > Application carries three more that reach the engine:
 | Window | Windowed, fullscreen or borderless |
 | Frame rate | 30, 60, 120, 144 or uncapped |
 
-**Sound is deliberately outside game speed.** The driver is fed by the audio
+Sound is deliberately outside game speed. The driver is fed by the audio
 output's own demand rather than by a game frame, so music, effects and cries keep
-the cartridge's tempo and pitch at every setting; only how often the game asks
-for one changes.
+the cartridge's tempo and pitch at every setting.
 
 Development shortcuts are debug-build only, along with the map and cell readout.
-That readout carries the frame rate beside the cell: `fps` is host frames drawn,
-`hw` the hardware frames the pump actually spent, which is 59.7 a second on a
-machine keeping up, and `worst` the longest single frame of the last second,
-which is where a stutter shows and an average hides it.
+That readout carries `fps` (host frames drawn), `hw` (hardware frames the pump
+spent, 59.7 a second when keeping up) and `worst` (the longest single frame of
+the last second, where a stutter shows and an average hides it).
 
 | Scene | Keys |
 |---|---|
@@ -347,31 +330,26 @@ not compiled extensions. The project is therefore GDScript-first. See
 
 ## Reporting a bug
 
-The launcher's About page has a **Report a bug** button with both routes on it.
-Either works:
+The launcher's About page has a **Report a bug** button. Either route works:
 
-- [Open an issue](https://github.com/Decryptu/pokerecomp/issues/new), if you use
-  an issue tracker.
-- [Ask on Discord](https://discord.gg/twkrHkHprk), if you would rather not.
+- [Open an issue](https://github.com/Decryptu/pokerecomp/issues/new)
+- [Ask on Discord](https://discord.gg/twkrHkHprk)
 
 Say which cartridge, where you were and what you did. A screenshot settles most
 of it.
 
-The sheet behind that button also has **Save a report file**, which writes one
-`.zip` to your downloads folder and opens the folder on it. It holds the build,
-your machine, your settings, the mods you have installed and the last few
-session logs, and nothing else: no save data and no other file from your
-computer. **Copy the details** puts the same thing without the logs on the
-clipboard, which is the version that fits in a chat message. Attach the file if
-the game crashed or looked wrong; it is the difference between a report someone
-can act on and one nobody can reproduce.
+The same sheet has **Save a report file**, which writes one `.zip` to your
+downloads folder. It holds the build, your machine, your settings, your installed
+mods and the last few session logs, and nothing else: no save data, no other file
+from your computer. **Copy the details** is the same thing without the logs, for
+a chat message. Attach the file if the game crashed or looked wrong.
 
-The launcher says so at the next launch when a session did not shut down
-cleanly. Logs live under `logs/` in the same directory as your saves:
+The launcher tells you at the next launch when a session did not shut down
+cleanly. Logs live under `logs/` beside your saves:
 `%APPDATA%\Godot\app_userdata\pokerecomp` on Windows,
 `~/Library/Application Support/Godot/app_userdata/pokerecomp` on macOS,
 `~/.local/share/godot/app_userdata/pokerecomp` on Linux. Old ones are deleted as
-new ones arrive, so they never grow without bound.
+new ones arrive.
 
 ## Contributing
 
