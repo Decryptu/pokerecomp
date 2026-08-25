@@ -910,7 +910,10 @@ static func _write_battle_graphics(cache_directory: String, manifest: Dictionary
 		"enemy_hud": [RomLayout.ENEMY_HUD_TILES, 2],
 		"player_hud": [RomLayout.PLAYER_HUD_TILES, 3],
 		"font": [RomLayout.FONT_TILES, 3],
-		"frames": [RomLayout.FRAME_COUNT * RomLayout.FRAME_TILES, 3],
+		## A different index from the font's, so a glyph written over the box's
+		## own border (`ScrollingMenu_UpdateDisplay`'s two arrows) is visible as
+		## something other than the frame it replaces.
+		"frames": [RomLayout.FRAME_COUNT * RomLayout.FRAME_TILES, 2],
 		## The trainer card's own sheets. Flat fills like the rest of these: the
 		## card's layout is what a test checks, and real artwork would say
 		## nothing about it.
@@ -945,7 +948,7 @@ static func _write_battle_graphics(cache_directory: String, manifest: Dictionary
 		"pokegear_sprites": [RomLayout.POKEGEAR_SPRITE_TILES, 3],
 		"dex_nest_icon": [RomLayout.DEX_NEST_ICON_TILES, 3],
 		## `'▲'`, the single tile a scrolling menu draws its own arrow from.
-		"up_arrow": [1, 2],
+		"up_arrow": [1, 3],
 		## `Pokedex_LoadGFX`'s two runs, `UnownFont` and the footprint grid, at
 		## their real lengths so the dex page can address every tile a layout
 		## names. Flat fills like the rest: what a test checks is where each

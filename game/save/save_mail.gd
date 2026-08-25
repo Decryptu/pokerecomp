@@ -78,17 +78,45 @@ static func compose(
 	return out
 
 
+## `GivePokeMail`, which copies a script's own bytes into the mail struct and
+## blanks nothing first: the message is whatever the pointer holds, and the
+## author, ID and species are read off the party member rather than the player.
+static func from_script(
+	bytes: PackedByteArray, author_name: String, id: int, held_by: int, mail_item: int
+) -> Gen2SaveMail:
+	var out := Gen2SaveMail.new()
+	var buffer: PackedByteArray = blank_message()
+	for index: int in mini(bytes.size(), BUFFER_LENGTH):
+		buffer[index] = bytes[index]
+	out.message = buffer
+	out.author = author_name.substr(0, AUTHOR_LENGTH)
+	out.author_id = id & 0xFFFF
+	out.species = held_by
+	out.item = mail_item
+	return out
+
+
 ## One of the two lines as text, decoded up to its terminator. `MailGFX_Place
-## Message` prints the whole buffer with one `PlaceString`, and `<NEXT>` is what
-## splits it; this is that split for a caller that wants the halves.
+## Message` prints the whole buffer with one `PlaceString` and `<NEXT>` is what
+## splits it, so the break is found rather than assumed: a script's own mail
+## (`GiftSpearowMail`) writes it behind a fifteen-letter line, where the naming
+## screen's fixed fields put it at `LINE_LENGTH`.
 func line(index: int) -> String:
-	var at: int = index * (LINE_LENGTH + 1)
+	var at: int = 0
+	var wanted: int = index
+	while wanted > 0:
+		if at >= message.size() or message[at] == TERMINATOR:
+			return ""
+		if message[at] == LINE_BREAK:
+			wanted -= 1
+		at += 1
 	var codes := PackedByteArray()
-	for offset: int in LINE_LENGTH:
-		var code: int = message[at + offset] if at + offset < message.size() else TERMINATOR
+	while at < message.size():
+		var code: int = message[at]
 		if code == TERMINATOR or code == LINE_BREAK:
 			break
 		codes.append(code)
+		at += 1
 	return Gen2Text.decode(codes, 0, codes.size())
 
 

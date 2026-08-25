@@ -93,6 +93,7 @@ const WORDING: Dictionary = {
 	&"save_provider_missing_methods": "A save provider is missing methods it needs (%s).",
 	&"duplicate_save_provider": "%s registered two save providers.",
 	&"battle_info_cells_taken": "Two mods both annotate the same battle cells (%s).",
+	&"battle_info_placement_refused": "A battle annotation will not fit the screen (%s).",
 	&"invalid_party_menu_entry": "A mod registered a party member row with no id.",
 	&"party_menu_entry_missing_callable": "A party member row has nothing to call: %s.",
 	&"duplicate_party_menu_entry": "Two mods both registered the party member row \"%s\".",

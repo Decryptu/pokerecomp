@@ -65,6 +65,16 @@ const SAMPLE_LINE_1: String = "AAAABBBBCCCCDDDD"
 const SAMPLE_LINE_2: String = "QRSTUV"
 const SAMPLE_AUTHOR: String = "GOLD"
 
+## Randy's Spearow errand, which is every `givepokemail` and `checkpokemail` in
+## either corpus: `Route35GoldenrodGate` hands KENYA over carrying
+## `GiftSpearowMail` and Route 31's own man reads `ReceivedSpearowMailText`
+## back. Both operands are `db` bytes behind the script that names them rather
+## than pointers of their own, and the errand only finishes if the two messages
+## are the same bytes.
+const ERRAND_ITEM: int = 158
+const ERRAND_BREAK: String = "<NEXT>"
+const ERRAND_MESSAGE: String = "DARK CAVE leads" + ERRAND_BREAK + "to another road"
+
 var _blocks: Dictionary = {}
 var _palettes: Dictionary = {}
 var _items: Dictionary = {}
@@ -77,8 +87,72 @@ func run(r: RefCounted) -> void:
 		_verify_keyboards()
 		_verify_palettes()
 		_verify_pages()
+		_verify_errand()
 	)
 	_verify_identical()
+
+
+## Every `givepokemail` and `checkpokemail` on this cartridge, decoded out of
+## the cached scripts and read the way [Gen2WorldScriptRunner] reads them.
+func _verify_errand() -> void:
+	var found: Dictionary = {}
+	for raw_key: Variant in _r.data.world_script_keys():
+		var parts: PackedStringArray = String(raw_key).split(":")
+		if parts.size() != 2:
+			continue
+		var bank: int = int(parts[0])
+		var bytes: PackedByteArray = _r.data.world_script(
+			bank, ("0x%s" % parts[1]).hex_to_int()
+		)
+		var offset: int = 0
+		while offset < bytes.size():
+			var command: Dictionary = Gen2WorldScript.command_at(bytes, offset, _r.crystal)
+			if not bool(command.get("ok", false)):
+				break
+			var opcode: int = int(command["opcode"])
+			if opcode == Gen2WorldScript.GIVEPOKEMAIL 				or opcode == Gen2WorldScript.CHECKPOKEMAIL:
+				var payload: PackedByteArray = _r.data.world_script_at(
+					bank, int(command["address"])
+				)
+				found[String(command["name"])] = _errand_message(payload, opcode)
+			if not Gen2WorldScript.continues_after(opcode, _r.crystal):
+				break
+			offset += int(command["width"])
+	for name: String in ["givepokemail", "checkpokemail"]:
+		_r.check(found.has(name), "no %s is reachable in either corpus." % name)
+	for name: Variant in found:
+		_r.check(
+			String(found[name]) == ERRAND_MESSAGE,
+			"%s carries \"%s\", not \"%s\"." % [name, found[name], ERRAND_MESSAGE]
+		)
+	_r.note("Randy's errand: %d mail pointers, %s." % [
+		found.size(), ERRAND_MESSAGE.replace(ERRAND_BREAK, " / ")
+	])
+
+
+## The message half of one operand, decoded with `<NEXT>` kept: `givepokemail`
+## opens on `db item` and `checkpokemail` on the message itself.
+func _errand_message(payload: PackedByteArray, opcode: int) -> String:
+	var at: int = 0
+	if opcode == Gen2WorldScript.GIVEPOKEMAIL:
+		if payload.is_empty():
+			return ""
+		_r.check(
+			int(payload[0]) == ERRAND_ITEM,
+			"givepokemail hands over item %d, not FLOWER_MAIL." % int(payload[0])
+		)
+		at = 1
+	var out: String = ""
+	for index: int in Gen2SaveMail.MESSAGE_LENGTH:
+		if at + index >= payload.size():
+			break
+		var code: int = payload[at + index]
+		if code == Gen2Text.TERMINATOR:
+			return out
+		out += ERRAND_BREAK if code == Gen2Text.NEXT_LINE \
+			else Gen2Text.decode(PackedByteArray([code]), 0, 1)
+	_r.check(false, "a mail operand runs past MAIL_MSG_LENGTH with no terminator.")
+	return out
 
 
 ## `MailItems` against the number list `ItemIsMail`'s only caller here reads.

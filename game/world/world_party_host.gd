@@ -23,6 +23,13 @@ const LANDMARK_NATIONAL_PARK: int = 13
 const BUGCONTEST_CAUGHT_MON: int = 0
 const BUGCONTEST_BOXED_MON: int = 1
 const BUGCONTEST_NO_CATCH: int = 2
+## `CheckPokeMail`'s five answers (`constants/script_constants.asm`), which
+## Route 31's Randy branches on once each.
+const POKEMAIL_WRONG_MAIL: int = 0
+const POKEMAIL_CORRECT: int = 1
+const POKEMAIL_REFUSED: int = 2
+const POKEMAIL_NO_MAIL: int = 3
+const POKEMAIL_LAST_MON: int = 4
 ## `HatchEggs`' own `cp TOGEPI`, the one species whose hatch sets an event flag.
 const SPECIES_TOGEPI: int = 0xAF
 const EVENT_TOGEPI_HATCHED: int = 84

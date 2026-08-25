@@ -461,6 +461,7 @@ func test_every_refusal_reason_the_mod_layer_produces_has_player_wording() -> vo
 		&"duplicate_party_menu_entry", &"party_menu_entry_missing_callable",
 		&"invalid_party_menu_entry", &"duplicate_stats_page",
 		&"stats_page_missing_callable", &"stats_pages_full",
+		&"battle_info_cells_taken", &"battle_info_placement_refused",
 	]:
 		var text: String = Gen2ModRefusal.text({"reason": reason, "detail": "x/y.zip"})
 		assert_false(text.begins_with(String(reason)), "worded: %s" % reason)
@@ -543,3 +544,70 @@ func test_the_last_rows_effects_stay_replaceable() -> void:
 ## open world: the example mod's charm, and nothing else.
 func _charmed_bag() -> Dictionary:
 	return {0x19: 1}
+
+
+## `battle_info_placements` refuses a placement the 20x18 grid cannot hold, and
+## says so: a provider whose column grows by a row per active stat stage runs off
+## the bottom only when several are up at once, and a row quietly missing is what
+## a player sees. Once per distinct refusal, because this runs every frame off a
+## snapshot a provider is a pure function of.
+class _OffGrid:
+	extends RefCounted
+
+	var placements: Array = []
+
+	func annotate_battle(_snapshot: Dictionary) -> Array:
+		return placements
+
+
+func test_a_battle_annotation_the_grid_refuses_is_reported_once() -> void:
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	var provider := _OffGrid.new()
+	provider.placements = [
+		{"at": Vector2i(0, Gen2BattleAnnotations.ROWS), "text": "ATK2"},
+		{"at": Vector2i(0, 0), "text": "OK"},
+	]
+	assert_true(bool(host.register_battle_info(MOD, provider)["ok"]))
+	var before: int = host.failures().size()
+	var drawn: Array = host.battle_info_placements({})
+	assert_eq(drawn.size(), 1, "the placement that fits is still drawn")
+	var failures: Array = host.failures()
+	assert_eq(failures.size(), before + 1)
+	var refusal: Dictionary = failures.back()
+	assert_eq(StringName(refusal["reason"]), &"battle_info_placement_refused")
+	assert_eq(StringName(refusal["id"]), MOD)
+	assert_string_contains(String(refusal["detail"]), "off_grid")
+	## The next frame is the same snapshot and the same answer, and says nothing.
+	host.battle_info_placements({})
+	host.battle_info_placements({})
+	assert_eq(host.failures().size(), before + 1, "one entry, not one a frame")
+
+
+## `request_hidden_item` collapses an ask for a cell already queued and one whose
+## own event flag is already set, so a provider may ask from its own read of
+## `hidden_items()` every frame without keeping a private set of what it has
+## named. A cell left clear by the pack-full branch stays askable.
+func test_a_hidden_item_ask_collapses_on_the_queue_and_on_the_flag() -> void:
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	host.set_hidden_items_source(Callable(self, "_hidden_item_rows"))
+	for _frame: int in 60:
+		host.request_hidden_item(Vector2i(3, 4))
+		host.request_hidden_item(Vector2i(9, 9))
+	assert_eq(
+		host.take_hidden_item_requests(), [Vector2i(3, 4)] as Array[Vector2i],
+		"the taken cell is dropped and the other queued once"
+	)
+	## What a drain could not spend goes back without doubling a cell the mod
+	## asked for again on the frame the queue was empty.
+	host.request_hidden_item(Vector2i(3, 4))
+	host.requeue_hidden_items([Vector2i(3, 4)] as Array[Vector2i])
+	assert_eq(host.take_hidden_item_requests(), [Vector2i(3, 4)] as Array[Vector2i])
+
+
+## `(9, 9)` has been picked up; `(3, 4)` has not, which is also what the
+## pack-full branch leaves behind.
+func _hidden_item_rows() -> Array:
+	return [
+		{"cell": Vector2i(3, 4), "item": 1, "flag": 10, "taken": false},
+		{"cell": Vector2i(9, 9), "item": 2, "flag": 11, "taken": true},
+	]

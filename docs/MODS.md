@@ -38,7 +38,7 @@ user://mods/<id>/
 | `id` | Lowercase `[a-z0-9][a-z0-9_-]*`; addresses the directory and registry keys |
 | `name` | Shown to the player |
 | `version` | The mod's own version, not the host's |
-| `api_version` | Between `Gen2ModManifest.MIN_API_VERSION` and `API_VERSION`. Declare the oldest host you need: 17 for [the battlers block](#the-battlers), 16 for [the shiny seam](#how-many-times-a-wilds-dvs-are-rolled), [an item gift](#asking-the-host-to-hand-an-item-over) and [reading the bag](#reading-the-bag), 15 for [a visible encounter's glow](#visible-wild-encounters), 14 for [an annotation's own interface field](#annotating-the-battle), 13 for [an alternate field-move source](#an-alternate-field-move-source), [Repel renewal](#renewing-a-repel), [experience for a capture](#experience-for-a-capture), [battle annotations](#annotating-the-battle) and a start-menu entry's action and visibility, 12 for `Gen2ModHost.view_changed`, 11 for the battle view's other resolved fields, 10 for [a screen that fills the window](#a-screen-that-fills-the-window) and the maps past this one's edge, 9 for an item that names an evolution method, 8 for a stats-screen page, 7 for an actor's `interact`, `emote` and outbox and for hidden-item requests, 6 for `occupied` in the visible-encounter context, 5 for the run's rules, 4 for types, matchups, mod art and event mutators, 3 for mart rows and named axes, 2 for visible encounters, 1 for everything else |
+| `api_version` | Between `Gen2ModManifest.MIN_API_VERSION` and `API_VERSION`. Declare the oldest host you need: 18 for [a hidden-item ask that collapses](#hidden-items-a-mod-can-see-and-ask-for) and [a refused annotation being reported](#annotating-the-battle), 17 for [the battlers block](#the-battlers), 16 for [the shiny seam](#how-many-times-a-wilds-dvs-are-rolled), [an item gift](#asking-the-host-to-hand-an-item-over) and [reading the bag](#reading-the-bag), 15 for [a visible encounter's glow](#visible-wild-encounters), 14 for [an annotation's own interface field](#annotating-the-battle), 13 for [an alternate field-move source](#an-alternate-field-move-source), [Repel renewal](#renewing-a-repel), [experience for a capture](#experience-for-a-capture), [battle annotations](#annotating-the-battle) and a start-menu entry's action and visibility, 12 for `Gen2ModHost.view_changed`, 11 for the battle view's other resolved fields, 10 for [a screen that fills the window](#a-screen-that-fills-the-window) and the maps past this one's edge, 9 for an item that names an evolution method, 8 for a stats-screen page, 7 for an actor's `interact`, `emote` and outbox and for hidden-item requests, 6 for `occupied` in the visible-encounter context, 5 for the run's rules, 4 for types, matchups, mod art and event mutators, 3 for mart rows and named axes, 2 for visible encounters, 1 for everything else |
 | `entry` | A `.gd` path inside the mod directory, or inside the pack when there is one |
 | `pack` | Optional `.pck` or `.zip` beside `mod.json`, holding the mod's files |
 | `description` | Optional |
@@ -427,7 +427,7 @@ for row in catalog.rows(Gen2WorldCatalog.KIND_STATIC):
 | `KIND_TRADE` | `trade`, `species`, `requested_species` | A `trade` command and the record it names |
 | `KIND_ITEM` | `item`, `quantity`, `hidden` | `giveitem`, `verbosegiveitem`, an `itemball` object and a `hiddenitem` bg event |
 | `KIND_BADGE` | `badge`, `engine_flag` | A `setflag` of a badge's engine flag |
-| `KIND_SHOP` | `mart`, `dialog` | A `pokemart` command |
+| `KIND_SHOP` | `mart`, `dialog`, `items` | A `pokemart` command. `items` is the resolved shelf, `{item, price}` per row, so a mod can move one row of one shop without inventing a mart |
 
 Every row also carries `id`, `kind`, its `bank` and `address` (or its `map` and
 `event_index`), the `map` it stands on where the host could attribute one, and
@@ -1174,6 +1174,12 @@ class Info:
 		return out
 ```
 
+A placement the grid cannot hold is refused rather than clipped, and the refusal
+reaches `Gen2ModHost.failures()` with the mod's id and why (`api_version` 18). A column that grows
+by a row per active stat stage runs off the bottom only when several are up at
+once, so what a player would otherwise see is a row quietly missing. It is
+recorded once per distinct refusal, not once a frame.
+
 A placement is `{"at": Vector2i}` plus one of:
 
 | Key | What it is |
@@ -1451,7 +1457,12 @@ bargain a visible-encounter provider has with a wild battle: the mod names the
 entry, the host runs it.
 
 - An ask for a cell with no record, or one whose flag is already set, does
-  nothing. `CheckBGEventFlag` is the host's test, not the mod's.
+  nothing. `CheckBGEventFlag` is the host's test, not the mod's, and a set flag
+  now drops the ask when it is made rather than when it is spent.
+- An ask for a cell already in the queue is dropped too (`api_version` 18), so a
+  provider may read `hidden_items()` every frame and name what it stands on
+  without keeping its own set of what it has already asked for. The pack-full branch leaves the flag
+  clear and prints its box, and asking again after it is free and correct.
 - One is spent per frame, since the first one's script owns the world until its
   box is pressed past; the rest wait in the queue in order.
 - An ask made inside a battle, a text box, a warp or an overlay is spent when the

@@ -144,6 +144,22 @@ static func open(game_id: StringName) -> GameData:
 	return open_directory(RomCache.directory_for(game_id, rom_hash))
 
 
+## Opens whichever of the two [param argument] names: a directory
+## [method RomCache.is_usable] accepts is a cache path, and anything else is a
+## [RomRegistry] id. Null when neither resolves.
+##
+## For a tool whose command line carries one string and cannot say which form it
+## is. Which of the two an argument means is a fact about the cache layout and
+## the registry, so it is answered here rather than sniffed by every tool that
+## would otherwise copy it and go stale when the cache naming moves. [member id]
+## is filled off the manifest either way. Named for its argument rather than
+## `open_any`, which already means the first cartridge that has a cache at all.
+static func open_argument(argument: String) -> GameData:
+	if RomCache.is_usable(argument):
+		return open_directory(argument)
+	return open(StringName(argument))
+
+
 ## Opens a cache directory, or null if it is missing, incomplete, or was written
 ## by an importer whose format this build does not read.
 static func open_directory(path: String) -> GameData:

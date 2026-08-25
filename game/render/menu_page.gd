@@ -9,13 +9,18 @@ extends RefCounted
 
 const TILE: int = Gen2Font.TILE
 
-## `charmap.asm`: `"▶"` is $ed, which is what `Place2DMenuCursor` writes.
+## `charmap.asm`: `"▶"` is $ed, which is what `Place2DMenuCursor` writes, and
+## `"▼"` is $ee. `"▲"` is the one code no font strip carries: it sits in the run
+## the battle font owns, so it comes off its own imported tile.
 const CURSOR_CODE: int = 0xED
+const DOWN_ARROW_CODE: int = 0xEE
 
 ## `Textbox` draws with wTextboxFrame, so a menu wears the player's chosen frame.
 var frame_style: int = 0
 
 var font: Gen2Font = null
+## `FontsExtra2_UpArrowGFX`, the single tile `"▲"` is drawn from.
+var _up_arrow: PackedByteArray = PackedByteArray()
 
 
 static func from_data(data: GameData) -> Gen2MenuPage:
@@ -25,6 +30,7 @@ static func from_data(data: GameData) -> Gen2MenuPage:
 	var out := Gen2MenuPage.new()
 	out.font = glyphs
 	out.frame_style = Gen2OptionsStore.current().textbox_frame
+	out._up_arrow = data.tile_indices("up_arrow")
 	return out
 
 
@@ -73,6 +79,26 @@ func draw(
 	if cursor >= 0 and cursor < options.size() and box.has_flag(Gen2MenuBox.STATICMENU_CURSOR):
 		var arrow: Vector2i = box.cursor_position(cursor)
 		font.draw_code(CURSOR_CODE, indices, width, arrow.x * TILE, arrow.y * TILE)
+
+	_scroll_arrows(box, indices, width)
+
+
+## `ScrollingMenu_UpdateDisplay`'s two `Coord2Tile` writes, both onto the box's
+## right-hand border. `▼` is written whenever the flag is set, whatever is left
+## below the window; `▲` waits for `wMenuScrollPosition` to leave zero.
+func _scroll_arrows(box: Gen2MenuBox, indices: PackedByteArray, width: int) -> void:
+	if not box.scrolling_arrows:
+		return
+	font.draw_code(
+		DOWN_ARROW_CODE, indices, width, box.right * TILE, box.bottom * TILE
+	)
+	## A cache imported without the tile leaves the corner empty rather than
+	## drawing a wrong one.
+	if box.scroll <= 0 or _up_arrow.size() < TILE * TILE:
+		return
+	Gen2Font.blit_slot(
+		_up_arrow, TILE, 0, indices, width, box.right * TILE, box.top * TILE
+	)
 
 
 ## The same menu as an image of its frame alone, for a screen that composes

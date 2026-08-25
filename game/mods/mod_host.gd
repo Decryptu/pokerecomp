@@ -229,6 +229,9 @@ var _item_gift_requests: Array[Dictionary] = []
 ## while a world is open. A Callable rather than a handle on [Gen2WorldAPI]: a
 ## mod is given the copy and never the world.
 var _inventory_source: Callable = Callable()
+## The open map's `{cell, item, flag, taken}` rows, for the ask that collapses.
+## See [method set_hidden_items_source].
+var _hidden_items_source: Callable = Callable()
 ## Mod id to the visible-encounter provider it registered, held the way an actor
 ## is. See [method register_visible_encounters].
 var _visible_encounters: Dictionary = {}
@@ -262,6 +265,10 @@ var _subscribers: Dictionary = {}
 ## mod happened to load first.
 var _event_mutators: Dictionary = {}
 var _failures: Array = []
+## Which battle-annotation refusals have already reached [member _failures].
+## `battle_info_placements` runs once a frame off a snapshot, so without this
+## one bad placement would append sixty entries a second.
+var _battle_info_reported: Dictionary = {}
 
 
 ## The shared host. Created with the built-in renderers already registered, so a
@@ -359,8 +366,33 @@ func register_world_actor(id: StringName, actor: Object) -> Dictionary:
 ## [method Gen2WorldAPI.hidden_items] and runs the map's own script on the next
 ## world frame it is idle for, so an ask inside a battle, a text box or a warp is
 ## spent when the world can spend it. Which cell to name is the mod's business.
+##
+## An ask for a cell already queued, or one whose `CheckBGEventFlag` is already
+## set, is dropped here rather than at spend time. A provider reading
+## [method Gen2WorldAPI.hidden_items] every frame and naming what it stands on
+## would otherwise queue sixty asks a second for one cell, and would have to keep
+## a private set of what it has already named: a copy of state the host holds. It
+## is dropped and not refused, because the pack-full branch leaves the flag clear
+## and the mod has no way to tell that cell from one it has never asked about, so
+## asking again has to stay free and correct.
 func request_hidden_item(cell: Vector2i) -> void:
+	if _hidden_item_requests.has(cell) or _hidden_item_taken(cell):
+		return
 	_hidden_item_requests.append(cell)
+
+
+## Whether [param cell]'s own event flag is already set on the open map. False
+## with no world open, which is the honest answer for a queue nothing can spend.
+func _hidden_item_taken(cell: Vector2i) -> bool:
+	if not _hidden_items_source.is_valid():
+		return false
+	for raw: Variant in _hidden_items_source.call() as Array:
+		if raw is not Dictionary:
+			continue
+		var record: Dictionary = raw
+		if Vector2i(record.get("cell", Vector2i.ZERO)) == cell:
+			return bool(record.get("taken", false))
+	return false
 
 
 ## Drained by [Gen2WorldScreen], once, on the frame it spends them.
@@ -375,7 +407,13 @@ func take_hidden_item_requests() -> Array[Vector2i]:
 func requeue_hidden_items(cells: Array[Vector2i]) -> void:
 	if cells.is_empty():
 		return
-	_hidden_item_requests = cells + _hidden_item_requests
+	var out: Array[Vector2i] = cells.duplicate()
+	## A mod may have asked again on the frame the drain emptied the queue, so
+	## the merge collapses the same way an ask does.
+	for cell: Vector2i in _hidden_item_requests:
+		if not out.has(cell):
+			out.append(cell)
+	_hidden_item_requests = out
 
 
 ## Asks the world screen to hand [param item] over, [param quantity] of it,
@@ -417,6 +455,13 @@ func requeue_item_gifts(gifts: Array[Dictionary]) -> void:
 ## default: the launcher and every screen that is not the world have no bag.
 func set_inventory_source(source: Callable) -> void:
 	_inventory_source = source
+
+
+## Where [method request_hidden_item] reads the open map's own
+## [method Gen2WorldAPI.hidden_items] from, set the same way and for the same
+## reason: the flag behind a cell is the world's and a mod is given the copy.
+func set_hidden_items_source(source: Callable) -> void:
+	_hidden_items_source = source
 
 
 ## The live world's own `{item: quantity}`, the copy a
@@ -657,6 +702,11 @@ func battle_info_ids() -> Array:
 ## overlapping ownership refused rather than resolved by load order: a cell a
 ## later provider claims after an earlier one is dropped and reported, so which
 ## mod loaded first cannot decide what a player sees.
+##
+## A placement the grid refuses is reported by name too. A provider is a pure
+## function of a snapshot and this runs once a frame, so each distinct refusal
+## is recorded once: repeating it sixty times a second would bury every other
+## failure the launcher lists.
 func battle_info_placements(snapshot: Dictionary) -> Array:
 	var out: Array = []
 	var claimed: Dictionary = {}
@@ -669,9 +719,16 @@ func battle_info_placements(snapshot: Dictionary) -> Array:
 		for raw: Variant in answered as Array:
 			if raw is not Dictionary:
 				continue
-			var placement: Dictionary = Gen2BattleAnnotations.validate(raw as Dictionary)
-			if placement.is_empty():
+			var checked: Dictionary = Gen2BattleAnnotations.validated(raw as Dictionary)
+			if not bool(checked["ok"]):
+				_report_battle_info_refusal(
+					id, &"battle_info_placement_refused",
+					"%s: %s at %s" % [
+						id, checked["reason"], raw.get("at", "no cell"),
+					]
+				)
 				continue
+			var placement: Dictionary = checked["placement"]
 			var cells: Array = Gen2BattleAnnotations.cells(placement)
 			var taken: StringName = &""
 			for cell: Vector2i in cells:
@@ -679,15 +736,24 @@ func battle_info_placements(snapshot: Dictionary) -> Array:
 					taken = StringName(claimed[cell])
 					break
 			if taken != &"":
-				_failures.append({
-					"ok": false, "reason": &"battle_info_cells_taken",
-					"detail": "%s: %s owns %s" % [id, taken, cells[0]], "id": id,
-				})
+				_report_battle_info_refusal(
+					id, &"battle_info_cells_taken",
+					"%s: %s owns %s" % [id, taken, cells[0]]
+				)
 				continue
 			for cell: Vector2i in cells:
 				claimed[cell] = id
 			out.append(placement)
 	return out
+
+
+## One entry per distinct refusal, however many frames it survives.
+func _report_battle_info_refusal(id: StringName, reason: StringName, detail: String) -> void:
+	var key: String = "%s|%s" % [reason, detail]
+	if _battle_info_reported.has(key):
+		return
+	_battle_info_reported[key] = true
+	_failures.append({"ok": false, "reason": reason, "detail": detail, "id": id})
 
 
 ## Registers a battle renderer under [param id]. See
@@ -1764,6 +1830,7 @@ static func _renderer_takes_input(renderer: Node, method: String, event: InputEv
 func discover(root: String = ROOT) -> Array:
 	_manifests = {}
 	_failures = []
+	_battle_info_reported = {}
 	var directory: DirAccess = DirAccess.open(root)
 	if directory == null:
 		return []

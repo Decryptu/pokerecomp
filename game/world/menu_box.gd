@@ -34,6 +34,14 @@ var column_spacing: int = 0
 ## `w2DMenuCursorOffsets`' high nybble, which is `ROW_STEP` for every menu built
 ## from a header and one for `MoveSelectionScreen`'s own hand-built list.
 var row_step: int = ROW_STEP
+## `SCROLLINGMENU_DISPLAY_ARROWS` and `wMenuScrollPosition`, which
+## `ScrollingMenu_UpdateDisplay` reads together: `▼` at the box's bottom-right
+## whenever the flag is set, and `▲` at its top-right only past the first row.
+## A field of its own rather than a bit in [member flags], because the source's
+## one flags byte is read as `STATICMENU_*` by `VerticalMenu` and as
+## `SCROLLINGMENU_*` by `ScrollingMenu`, and the two sets overlap.
+var scrolling_arrows: bool = false
+var scroll: int = 0
 
 
 

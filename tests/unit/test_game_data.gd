@@ -221,6 +221,21 @@ func test_a_missing_cache_does_not_open() -> void:
 	assert_null(GameData.open_directory("user://nothing_here"))
 
 
+## One opener for a tool whose command line carries one string and cannot say
+## which of the two forms it is: a probe handed a cache path used to have it
+## taken as a game id, which opened somebody else's cartridge and read as a
+## failed run rather than a wrong argument.
+func test_one_opener_takes_a_cache_path_or_a_registry_id() -> void:
+	_write_cache()
+	var by_path: GameData = GameData.open_argument(_directory)
+	assert_not_null(by_path)
+	assert_eq(by_path.species_count(), 2)
+	assert_eq(by_path.directory, _directory, "the path form is not re-resolved")
+	## Not a usable cache directory and not a registry id either.
+	assert_null(GameData.open_argument("user://nothing_here"))
+	assert_null(GameData.open_argument("no_such_cartridge"))
+
+
 ## A cache written by an older importer is discarded rather than migrated, which
 ## is what a format bump is for. Written against the version rather than a
 ## number so the next bump does not have to edit this.

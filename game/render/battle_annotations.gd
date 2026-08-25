@@ -56,34 +56,49 @@ static func from_data(data: GameData) -> Gen2BattleAnnotations:
 ## dictionary an API 13 provider already got back.
 ##
 ## Refused rather than clipped: a symbol half off the screen, or a stage summary
-## running through the border, is worse than one the player never sees, and a
-## provider that is told nothing about the refusal would keep sending it.
+## running through the border, is worse than one the player never sees.
 static func validate(placement: Dictionary) -> Dictionary:
+	var checked: Dictionary = validated(placement)
+	return checked["placement"] if bool(checked["ok"]) else {}
+
+
+## The same check with the refusal named, for a caller that has somewhere to
+## report it: `{"ok": bool, "reason": StringName, "placement": Dictionary}`. A
+## provider told nothing about a refusal keeps sending it, and a column that
+## grows with the number of active stat stages runs off the bottom of the screen
+## only when several are up at once, so the news has to reach the mod.
+static func validated(placement: Dictionary) -> Dictionary:
 	var at_value: Variant = placement.get("at", null)
 	if at_value is not Vector2i:
-		return {}
+		return _refused(&"no_cell")
 	var at: Vector2i = at_value
 	if at.x < 0 or at.y < 0 or at.x >= COLUMNS or at.y >= ROWS:
-		return {}
+		return _refused(&"off_grid")
 	var field: bool = bool(placement.get("field", false))
 	var out: Dictionary = {"at": at}
 	if placement.has("tile"):
 		var tile: PackedByteArray = _tile_bytes(placement["tile"])
 		if tile.is_empty():
-			return {}
+			return _refused(&"bad_tile")
 		out["tile"] = tile
 	else:
 		var text: String = String(placement.get("text", ""))
 		if text.is_empty():
-			return {}
+			return _refused(&"empty_text")
 		var codes: PackedByteArray = Gen2Font.fit(text, COLUMNS - at.x, FONT)
 		if codes.is_empty():
-			return {}
+			## `Gen2Font.fit` answers nothing for a string that will not fit the
+			## columns left of the border, which is the running-through case.
+			return _refused(&"text_does_not_fit")
 		out["text"] = text
 		out["width"] = codes.size()
 	if field:
 		out["field"] = true
-	return out
+	return {"ok": true, "reason": &"", "placement": out}
+
+
+static func _refused(reason: StringName) -> Dictionary:
+	return {"ok": false, "reason": reason, "placement": {}}
 
 
 ## Which cells [param placement] occupies, for the ownership check. A validated
