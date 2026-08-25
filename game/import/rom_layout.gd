@@ -1428,6 +1428,23 @@ const DECORATION_COUNT: int = 53
 const DECORATION_ATTRIBUTE_SIZE: int = 6
 const DECORATION_NAMES_AT: int = 0x13E
 const DECORATION_NAME_COUNT: int = 26
+## `engine/events/mom_phone.asm`'s own block, pinned at `Mom_GetScriptPointer`'s
+## two inline scripts: four `writetext`s and an `end` each, thirteen bytes apart,
+## with `MomItems_1` `MOM_ITEMS_AT` behind them and `MomItems_2` five rows past
+## that. One address finds all four, and the deltas are the same on all three
+## cartridges because the whole block is byte identical bar the item ids.
+const MOM_DOLL_SCRIPT_AT: int = 0x0D
+const MOM_ITEMS_AT: int = 0x39
+const MOM_ITEM_SIZE: int = 8
+## `MomItems_1` is what she picks from at random once the balance lands exactly
+## on a `MOM_MONEY` boundary; `MomItems_2` is the ladder she walks in order.
+const MOM_ITEMS_1_COUNT: int = 5
+const MOM_ITEMS_2_COUNT: int = 10
+## `constants/misc_constants.asm`' `MOM_MONEY`, the step the trigger balance
+## climbs by.
+const MOM_MONEY: int = 2300
+
+
 ## `DecorationIDs`, the `DECOFLAG_*` order `GetDecorationID` indexes: forty-five
 ## decoration ids and the `-1` that ends the run. It is not the id order, because
 ## the dolls come in front of the big dolls here and behind them there, so it is
@@ -2325,6 +2342,9 @@ const GOLD_SILVER: Dictionary = {
 	# `DecorationIDs`, located by matching all forty-six ids and the terminator,
 	# which hits once per dump.
 	"decoration_ids": 0x270FE,
+	# `Mom_GetScriptPointer.ItemScript`, located by its own five command bytes
+	# with `MomItems_1` at the pinned distance behind it, which hits once per dump.
+	"mom_phone": 0xFCE98,
 	# `UnownWords`, located by encoding the twenty-six words in the Unown font's
 	# own codes and matching the whole run, which hits once per dump; the table
 	# is the fifty-four bytes in front of it.
@@ -2900,6 +2920,9 @@ const CRYSTAL: Dictionary = {
 	# See the Gold and Silver block above; the table is byte identical and only
 	# its address moves.
 	"decoration_ids": 0x26F2B,
+	# See the Gold and Silver block above; only the address and the `end` opcode
+	# in the two scripts move.
+	"mom_phone": 0xFD0FD,
 	# See the Gold and Silver block above; the words are byte identical and only
 	# their address moves.
 	"unown_words": 0xFBA5A,

@@ -114,7 +114,7 @@ static func read_services(
 	if not bool(menus.get("ok", false)):
 		return menus
 	var phone_scripts: int = _collect_phone_scripts(
-		rom, phone["data"], scripts, text_data, movement_data
+		rom, layout, phone["data"], scripts, text_data, movement_data
 	)
 	return {
 		"ok": true,
@@ -555,6 +555,7 @@ static func _read_phone_non_trainer_names(rom: RomFile, layout: Dictionary) -> D
 
 static func _collect_phone_scripts(
 	rom: RomFile,
+	layout: Dictionary,
 	phone: Dictionary,
 	scripts: Dictionary,
 	text_data: Dictionary,
@@ -572,6 +573,15 @@ static func _collect_phone_scripts(
 		var pointer: Dictionary = special_call.get("script", {})
 		Gen2WorldImporter.collect_script(
 			rom, int(pointer.get("bank", -1)), int(pointer.get("address", -1)),
+			scripts, text_data, movement_data
+		)
+	## `Mom_GetScriptPointer`'s two, which no table points at: the routine writes
+	## the pointer into `wCallerContact` itself, so they are roots of their own.
+	var mom: Dictionary = RomImporter.read_mom_phone(rom, layout)
+	for field: String in ["item_script", "doll_script"]:
+		var mom_pointer: Dictionary = mom.get(field, {})
+		Gen2WorldImporter.collect_script(
+			rom, int(mom_pointer.get("bank", -1)), int(mom_pointer.get("address", -1)),
 			scripts, text_data, movement_data
 		)
 	var metadata: Dictionary = phone.get("metadata", {})

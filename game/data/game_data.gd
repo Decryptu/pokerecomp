@@ -73,6 +73,7 @@ var _town_map: Dictionary = {}
 var _oak_ratings: Dictionary = {}
 var _pokecenter_pc: Dictionary = {}
 var _decorations: Dictionary = {}
+var _mom_phone: Dictionary = {}
 var _unown_words: PackedStringArray = PackedStringArray()
 var _unown_walls: PackedStringArray = PackedStringArray()
 var _odd_eggs: Array = []
@@ -212,6 +213,8 @@ static func open_directory(path: String) -> GameData:
 	data._pokecenter_pc = pokecenter_pc if pokecenter_pc is Dictionary else {}
 	var decorations: Variant = manifest.get("decorations", {})
 	data._decorations = decorations if decorations is Dictionary else {}
+	var mom_phone: Variant = manifest.get("mom_phone", {})
+	data._mom_phone = mom_phone if mom_phone is Dictionary else {}
 	var unown_words: Variant = manifest.get("unown_words", [])
 	if unown_words is Array:
 		for word: Variant in unown_words as Array:
@@ -1878,6 +1881,29 @@ func decoration(deco: int) -> Dictionary:
 func decoration_count() -> int:
 	var rows: Variant = _decorations.get("attributes", [])
 	return (rows as Array).size() if rows is Array else 0
+
+
+## One `momitem` row as `{ trigger, cost, kind, item }`. [param set_number] is
+## `wWhichMomItemSet`: 0 is `MomItems_2`, the ladder, and anything else is
+## `MomItems_1`, the five she picks between. Empty for a row outside its list.
+func mom_item(set_number: int, index: int) -> Dictionary:
+	var rows: Variant = _mom_phone.get("items_2" if set_number == 0 else "items_1", [])
+	if not rows is Array or index < 0 or index >= (rows as Array).size():
+		return {}
+	var row: Variant = (rows as Array)[index]
+	return (row as Dictionary).duplicate() if row is Dictionary else {}
+
+
+func mom_item_count(set_number: int) -> int:
+	var rows: Variant = _mom_phone.get("items_2" if set_number == 0 else "items_1", [])
+	return (rows as Array).size() if rows is Array else 0
+
+
+## `Mom_GetScriptPointer`'s two answers, as the `{ bank, address }` every phone
+## script carries. [param doll] picks `.DollScript` over `.ItemScript`.
+func mom_phone_script(doll: bool) -> Dictionary:
+	var script: Variant = _mom_phone.get("doll_script" if doll else "item_script", {})
+	return (script as Dictionary).duplicate() if script is Dictionary else {}
 
 
 ## `DecorationIDs`: the decoration a `DECOFLAG_*` index names, or 0 for an index

@@ -1463,11 +1463,36 @@ static func _collect_text(rom: RomFile, bank: int, address: int, text_data: Dict
 		if bytes[index] != Gen2WorldScript.TEXT_TERMINATOR \
 			and bytes[index] != Gen2WorldScript.TEXT_PROMPT:
 			continue
-		text_data[key] = Array(bytes.slice(0, index + 1))
+		var bounded: PackedByteArray = bytes.slice(0, index + 1)
+		text_data[key] = Array(bounded)
+		_collect_far_texts(rom, bounded, text_data)
 		return
 	# Preserve an unterminated bounded slice for diagnostics. Runtime decoding
 	# still fails explicitly instead of reading into an adjacent resource.
+	# A `text_far` stub always lands here: it ends in `TX_END` rather than in one
+	# of the two run terminators, so it is the whole of what this branch holds.
 	text_data[key] = Array(bytes)
+	_collect_far_texts(rom, bytes, text_data)
+
+
+## `TextCommand_FAR` banks in and prints another text whole, so a `text_far` stub
+## is unreadable without its target. Following the command is what collects the
+## other half; nothing else in the cache points at it, since it is reached from
+## inside a text rather than from a script.
+static func _collect_far_texts(
+	rom: RomFile, bytes: PackedByteArray, text_data: Dictionary
+) -> void:
+	var at: int = 0
+	while at + 3 < bytes.size():
+		if bytes[at] == Gen2TextStream.TX_END:
+			return
+		if bytes[at] != Gen2TextStream.TX_FAR:
+			at += 1
+			continue
+		_collect_text(
+			rom, int(bytes[at + 3]), bytes[at + 1] | (bytes[at + 2] << 8), text_data
+		)
+		at += 4
 
 
 static func _valid_coord(x: int, y: int, width: int, height: int) -> bool:

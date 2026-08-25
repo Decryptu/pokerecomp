@@ -2459,10 +2459,78 @@ func request_incoming_phone_call(
 	return _start_phone_ring(request)
 
 
+## `MomTriesToBuySomething` whole: the decision, the purchase and the call, in
+## the source's order. [param random_row] is `RandomRange` over `MomItems_1`,
+## passed in the way every other roll here is.
+##
+## Answers `{ ok, bought, reason, results }`. `bought` is false when nothing was
+## due, and the trigger balance the walk climbed to is still stored, because
+## `.AddMoney` writes it before `.less_than` returns.
+func mom_purchase(random_row: int = 0) -> Dictionary:
+	if data == null or state == null:
+		return {"ok": false, "reason": &"mom_data_unavailable", "results": []}
+	var resolved: Dictionary = Gen2WorldMomPhone.resolve(
+		data, state, current_map, random_row
+	)
+	if not bool(resolved.get("ok", false)):
+		if resolved.has("trigger_balance"):
+			state.set_mom_purchase(
+				state.mom_item_index(), state.mom_item_set(),
+				int(resolved["trigger_balance"])
+			)
+		return {
+			"ok": true, "bought": false,
+			"reason": resolved.get("reason", &"mom_bought_nothing"), "results": [],
+		}
+	var item: int = int(resolved["item"])
+	var doll: bool = bool(resolved["doll"])
+	## `Mom_GiveItemOrDoll`. The item half is `ReceiveItem` into `wNumPCItems`,
+	## and a full PC returns before `MomBuysItem_DeductFunds`, so she keeps the
+	## money and tries the same row again next time.
+	if doll:
+		Gen2WorldDecoration.set_owned(data, state, item)
+	else:
+		var held: int = state.pc_item_quantity(item)
+		if held == 0 and state.pc_items().size() >= Gen2WorldPack.MAX_PC_ITEMS:
+			return {"ok": true, "bought": false, "reason": &"pc_full", "results": []}
+		var stored: Dictionary = state.apply_changes({}, {}, {
+			"pc_items": {item: mini(held + 1, Gen2WorldPack.MAX_ITEM_STACK)},
+		})
+		if not bool(stored.get("ok", false)):
+			return {"ok": true, "bought": false, "reason": &"pc_full", "results": []}
+	## `MomBuysItem_DeductFunds`, and then `.ASMFunction`'s three writes.
+	var savings: int = state.money(Gen2WorldScriptRunner.ACCOUNT_MOMS_MONEY)
+	state.apply_changes({}, {}, {
+		"money": {
+			Gen2WorldScriptRunner.ACCOUNT_MOMS_MONEY:
+				maxi(savings - int(resolved["cost"]), 0),
+		},
+	})
+	state.set_mom_purchase(
+		int(resolved["next_index"]), int(resolved["set"]),
+		int(resolved["trigger_balance"])
+	)
+	return {
+		"ok": true,
+		"bought": true,
+		"doll": doll,
+		"item": item,
+		"cost": int(resolved["cost"]),
+		"results": request_caller_phone_call(
+			Gen2WorldMomPhone.CONTACT_MOM, data.mom_phone_script(doll)
+		),
+	}
+
+
 ## `Script_SpecialBillCall`: `LoadCallerScript PHONE_BILL` and then
 ## `Script_ReceivePhoneCall`, which is the same two rings an incoming call
 ## spends. Nothing gates it, so the only caller is the event that owes it.
-func request_caller_phone_call(contact_id: int) -> Array:
+## [param script_override] is `Mom_GetScriptPointer`'s own answer: her call is
+## the one place the contact's `PHONE_CONTACT_SCRIPT2` is written before the ring
+## rather than read out of the table.
+func request_caller_phone_call(
+	contact_id: int, script_override: Dictionary = {}
+) -> Array:
 	if phone_ring_active():
 		return [{"ok": true, "status": &"phone_ring", "event": pending_phone_ring()}]
 	if current_map == null:
@@ -2473,12 +2541,15 @@ func request_caller_phone_call(contact_id: int) -> Array:
 			"ok": false, "status": &"phone_unavailable",
 			"reason": resolved.get("reason", &"phone_unavailable"),
 		}]
+	var script: Dictionary = resolved["script"]
+	if not script_override.is_empty():
+		script = script_override
 	return _start_phone_ring({
 		"kind": &"phone_incoming",
 		"map_group": current_map.group,
 		"map_number": current_map.number,
-		"bank": int(resolved["script"]["bank"]),
-		"script": int(resolved["script"]["address"]),
+		"bank": int(script.get("bank", 0)),
+		"script": int(script.get("address", 0)),
 		"phone": resolved["phone"],
 		"contact": resolved["contact"],
 		"reset_receive_timer": true,

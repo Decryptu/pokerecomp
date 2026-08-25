@@ -87,7 +87,13 @@ func _validate(game_id: StringName) -> bool:
 	var raw_bytes: Dictionary = {}
 	for raw_key: Variant in (text_value as Dictionary):
 		var raw_text: PackedByteArray = _pointer_bytes(data, String(raw_key), true)
-		var decoded: Dictionary = Gen2WorldScript.decode_text(raw_text)
+		## The same `far` resolver [Gen2WorldScriptRunner] builds. Without it every
+		## `text_far` stub reads as unresolved, which counted the cache's own
+		## shape as a defect and hid the ones that really are.
+		var decoded: Dictionary = Gen2TextStream.decode(raw_text, 0, {
+			"far": func(bank: int, address: int) -> PackedByteArray:
+				return data.world_text(bank, address),
+		})
 		if not bool(decoded.get("ok", false)):
 			invalid_text += 1
 			var reason: String = String(decoded.get("reason", "unknown"))
