@@ -97,10 +97,11 @@ var _map := Vector2i.ZERO
 var _cell := Vector2i(-1, -1)
 var _hour: int = -1
 var _seed: int = 1
-## Frames spent before the clip proper, which the video is trimmed by. Shortened
-## for a clip whose subject happens on the map's own first frames: the visible
-## encounter mod fires its shiny sparkle when the plan is built and then only
-## every ten seconds.
+## Frames spent before the clip proper, which the video is trimmed by. Raised
+## for a clip waiting on something the map spends on its own clock rather than on
+## a button: the visible-encounter mod's shiny sparkle is one, and it runs for
+## about seventy frames every six hundred, so a clip that wants it starts a
+## little before one of those.  is where the number is read off.
 var _warmup: int = WARMUP_FRAMES
 ## The frame the screen was built on, which every count below is relative to.
 var _built_at: int = 0
@@ -314,7 +315,10 @@ func _world_frame() -> int:
 ## _open], because the frames it names are counted from this frame and the
 ## warm-up's length in hardware frames is not known until it is over.
 func _start() -> void:
-	_base = _world_frame()
+	## The NEXT hardware frame, not this one: `advance_frame` counts before it
+	## reads the replay, so an entry named for the frame already spent is never
+	## applied and `do=0:<button>` was dropped in silence.
+	_base = _world_frame() + 1
 	## The recorded frame the clip proper starts on, which is what the video is
 	## trimmed to. Printed rather than assumed: the mod load in front of it is
 	## as long as it is, and a caller cannot know that in advance.
