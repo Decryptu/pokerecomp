@@ -231,7 +231,6 @@ var _transient_object_visibility_overrides: Dictionary = {}
 var _object_position_overrides: Dictionary = {}
 var _object_facing_overrides: Dictionary = {}
 var _object_followers: Dictionary = {}
-var _variable_sprites: Dictionary = {}
 ## `LoadMapObjects` runs `MAPCALLBACK_OBJECTS` and then `LoadObjectMasks`, so a
 ## map load owes its masks once the callbacks it queued have run and not before:
 ## the flag one of them writes is read by the other. Raised by every map load and
@@ -4246,7 +4245,10 @@ func _apply_script_object_events(raw_events: Variant) -> Array:
 				or sprite <= 0:
 				generated.append({"type": &"variable_sprite_change_failed"})
 				continue
-			_variable_sprites[variable_sprite] = sprite
+			state.set_variable_sprite(variable_sprite, sprite)
+			## The table is `wPlayerData`, not the loaded map, so the people
+			## SCREEN FILL draws on the maps next door resolve through it too.
+			_connected_objects = []
 			reload_objects = true
 			generated.append({
 				"type": &"variable_sprite_changed",
@@ -6592,7 +6594,7 @@ func _resolved_sprite(sprite_number: int) -> int:
 			return resolved if _day_care_species(resolved) > 0 else SPRITE_CHRIS
 		if resolved < Gen2WorldScriptRunner.VARIABLE_SPRITE_BASE:
 			return resolved
-		var assigned: int = int(_variable_sprites.get(resolved, 0))
+		var assigned: int = state.variable_sprite(resolved) if state != null else 0
 		if assigned == 0:
 			return SPRITE_CHRIS
 		resolved = assigned
@@ -6622,15 +6624,13 @@ func _day_care_species(sprite_number: int) -> int:
 ## `GetMonSprite`'s `.Variable` branch reads wVariableSprites and falls through
 ## to `.NoBreedmon` on a zero slot, whose `ld a, WALKING_SPRITE` is 1 and so
 ## `SPRITE_CHRIS` by coincidence of two constant lists
-## (engine/overworld/overworld.asm). So an object whose variable sprite no
-## script has assigned yet is drawn, occupies its cell and is talkable.
-## Copycat's House 2F is where it matters: SPRITE_COPYCAT is $fb and only the
-## Copycat's own script assigns it, so without this she could not be reached to
-## run it. Route 37's twins are the same rule seen from the other end: their
-## SPRITE_WEIRD_TREE is Sudowoodo's slot and only Route 36's own script assigns
-## it, so a save that has not met Sudowoodo really does stand two copies of the
-## player's sprite on that route. An object that should not be there at all is
-## masked by [method load_object_masks], not by this fallback.
+## (engine/overworld/overworld.asm). Reaching that fallback is the exception and
+## not the rule: `Gen2WorldState.INITIAL_VARIABLE_SPRITES` is what
+## `InitializeEventsScript` leaves in nine of the slots and
+## `ToggleDecorationsVisibility` fills the other four, so every slot any map
+## stands an object on has a row. An object drawn as the player means the table
+## lost one. An object that should not be there at all is masked by [method
+## load_object_masks], not by this fallback.
 ## `LoadOpponentTrainerAndPokemonWithOTSprite`'s tail: it writes a sprite number
 ## straight into `wMapObjects` and calls `GetUsedSprite`, because the Battle
 ## Tower's opponent is drawn at random and its object event carries a placeholder

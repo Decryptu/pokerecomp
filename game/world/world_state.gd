@@ -305,6 +305,37 @@ var _buenas_password: int = 0
 ## own `ifequal` in front of the award, not a rule the byte enforces.
 var _blue_card_balance: int = 0
 
+## `wVariableSprites`, the sixteen `SPRITE_VARS` slots `GetMonSprite` resolves a
+## variable sprite through. It sits inside `wPlayerData`, which `SaveData` copies
+## whole into `sPlayerData`, so the table is saved and restored: an assignment
+## made in one session is still there in the next. Keeping it on the world
+## instead cost the port every one of them on reload, which drew the nine
+## `InitializeEventsScript` rows as `SPRITE_CHRIS` (see [constant
+## INITIAL_VARIABLE_SPRITES]).
+var _variable_sprites: Dictionary = {}
+
+## `InitializeEventsScript` (engine/events/std_scripts.asm), which the player's
+## bedroom runs once at new game behind `EVENT_INITIALIZED_EVENTS`. A fresh state
+## starts with these for the same reason [method Gen2WorldSpawn.apply_initial_decorations]
+## exists: every state the game can be in has run it, and a slot with no row is
+## `.NoBreedmon`'s `WALKING_SPRITE`, which is the player.
+##
+## The four `SPRITE_CONSOLE`..`SPRITE_BIG_DOLL` slots are deliberately absent:
+## `ToggleDecorationsVisibility` fills those on every entry to the bedroom, so
+## they are the one group that needs no default. The numbers are the same on all
+## three cartridges (constants/sprite_constants.asm).
+const INITIAL_VARIABLE_SPRITES: Dictionary = {
+	0xF4: 0x52,  # SPRITE_WEIRD_TREE      -> SPRITE_SUDOWOODO
+	0xF5: 0x04,  # SPRITE_OLIVINE_RIVAL   -> SPRITE_RIVAL
+	0xF6: 0x35,  # SPRITE_AZALEA_ROCKET   -> SPRITE_ROCKET
+	0xF7: 0x0A,  # SPRITE_FUCHSIA_GYM_1   -> SPRITE_JANINE
+	0xF8: 0x0A,  # SPRITE_FUCHSIA_GYM_2   -> SPRITE_JANINE
+	0xF9: 0x0A,  # SPRITE_FUCHSIA_GYM_3   -> SPRITE_JANINE
+	0xFA: 0x0A,  # SPRITE_FUCHSIA_GYM_4   -> SPRITE_JANINE
+	0xFB: 0x28,  # SPRITE_COPYCAT         -> SPRITE_LASS
+	0xFC: 0x28,  # SPRITE_JANINE_IMPERSONATOR -> SPRITE_LASS
+}
+
 ## `SECTION "SRAM Battle Tower"`, which the cartridge keeps beside the save
 ## rather than inside it because a challenge can be saved and left between
 ## battles. Never null; see [Gen2BattleTower].
@@ -393,6 +424,7 @@ func _init(
 		var decoration: int = int(initial_maptile_decorations.get(category, 0))
 		if decoration > 0 and decoration <= 0xFF:
 			_maptile_decorations[category] = decoration
+	_variable_sprites = INITIAL_VARIABLE_SPRITES.duplicate()
 
 
 ## JSON-safe representation of the mutable overworld state. Cartridge records
@@ -455,6 +487,7 @@ func to_dict() -> Dictionary:
 		"mom_savings_flags": _mom_savings_flags,
 		"blue_card_balance": _blue_card_balance,
 		"buenas_password": _buenas_password,
+		"variable_sprites": _variable_sprites.duplicate(),
 		"battle_tower": _battle_tower.to_dict(),
 	}
 
@@ -571,6 +604,16 @@ static func from_dict(raw: Variant) -> Gen2WorldState:
 	## Defaults rather than versioning: a slot written before the tower existed
 	## reads as one with no challenge in it, which is the truth about it.
 	restored._battle_tower = Gen2BattleTower.from_dict(source.get("battle_tower", {}))
+	## Absent in a state written before the table was saved. Those slots are
+	## whatever `InitializeEventsScript` left, which is what the constructor
+	## already seeded, so an old save needs no migration.
+	var stored_sprites: Variant = source.get("variable_sprites", {})
+	if stored_sprites is Dictionary:
+		for raw_slot: Variant in stored_sprites as Dictionary:
+			restored.set_variable_sprite(
+				int(raw_slot), int((stored_sprites as Dictionary)[raw_slot])
+			)
+
 	return restored
 
 
@@ -637,6 +680,7 @@ func restore_from_dict(raw: Variant) -> void:
 	_mom_savings_flags = restored._mom_savings_flags
 	_blue_card_balance = restored._blue_card_balance
 	_buenas_password = restored._buenas_password
+	_variable_sprites = restored._variable_sprites.duplicate()
 	_battle_tower = restored._battle_tower
 	changed.emit()
 
@@ -673,6 +717,29 @@ func set_mystery_gift(section: Dictionary) -> void:
 ## receptionist's "your friend is not ready" answers.
 func set_link_transport(transport: Gen2LinkTransport) -> void:
 	_link_transport = transport if transport != null else Gen2LinkTransport.new()
+
+
+## `GetMonSprite`'s `.Variable` read. Zero is `.NoBreedmon`, whose
+## `ld a, WALKING_SPRITE` the caller resolves.
+func variable_sprite(slot: int) -> int:
+	return int(_variable_sprites.get(slot, 0))
+
+
+func variable_sprites() -> Dictionary:
+	return _variable_sprites.duplicate()
+
+
+## `Script_variablesprite`: one byte written into the table. A zero is refused
+## rather than stored, because the table's own zero means "unassigned".
+func set_variable_sprite(slot: int, sprite: int) -> bool:
+	if slot < Gen2WorldScriptRunner.VARIABLE_SPRITE_BASE or slot > 0xFF \
+		or sprite <= 0 or sprite > 0xFF:
+		return false
+	if variable_sprite(slot) == sprite:
+		return true
+	_variable_sprites[slot] = sprite
+	changed.emit()
+	return true
 
 
 func maptile_decoration(category: StringName) -> int:

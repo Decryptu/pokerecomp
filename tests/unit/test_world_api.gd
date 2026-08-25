@@ -5135,14 +5135,14 @@ func test_magnet_train_special_reports_its_direction_and_writes_nothing() -> voi
 
 ## GetMonSprite's `.Variable` branch reads wVariableSprites and falls through to
 ## `.NoBreedmon` when the slot is still zero, which answers SPRITE_CHRIS rather
-## than nothing (engine/overworld/overworld.asm). Copycat's House 2F is where it
-## matters: SPRITE_COPYCAT is $fb and only her own script assigns it, so without
-## the fallback she could not be reached to run it.
+## than nothing (engine/overworld/overworld.asm). Slot $fd carries no row in
+## either corpus, so it is the one that still reaches the fallback: every slot a
+## map stands an object on is seeded or filled, which is the test below.
 func test_an_unassigned_variable_sprite_still_occupies_and_is_talkable() -> void:
 	var data: GameData = GameData.open_directory(_directory)
 	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(7, 6))
 	var objects: Array = world.current_map.events["objects"]
-	objects[0]["sprite"] = Gen2WorldScriptRunner.VARIABLE_SPRITE_BASE + 0x0B
+	objects[0]["sprite"] = Gen2WorldScriptRunner.VARIABLE_SPRITE_BASE + 0x0D
 	objects[0]["x"] = 7
 	objects[0]["y"] = 5
 	world.reload_current_map()
@@ -5150,7 +5150,41 @@ func test_an_unassigned_variable_sprite_still_occupies_and_is_talkable() -> void
 	var standing: Gen2WorldObject = world.object_at(Vector2i(7, 5))
 
 	assert_not_null(standing, "an unassigned variable sprite left the cell empty")
+	assert_eq(standing.sprite_number, Gen2WorldAPI.SPRITE_CHRIS)
 	assert_false(world.can_walk_to(Vector2i(7, 5)), "it did not occupy its cell")
+
+
+## `wVariableSprites` is inside `wPlayerData`, which `SaveData` copies whole into
+## `sPlayerData` (ram/wram.asm, engine/menus/save.asm), so a row assigned in one
+## session opens the next one still assigned. Keeping the table on the loaded
+## world instead drew Route 40's swimmers, Azalea's Rockets and the Copycat as
+## the player on every reload.
+func test_a_variablesprite_assignment_survives_a_save() -> void:
+	var data: GameData = GameData.open_directory(_directory)
+	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(7, 6))
+	var objects: Array = world.current_map.events["objects"]
+	objects[0]["sprite"] = Gen2WorldScriptRunner.VARIABLE_SPRITE_BASE + 0x05
+	objects[0]["x"] = 7
+	objects[0]["y"] = 5
+	world.reload_current_map()
+
+	# InitializeEventsScript's own row for SPRITE_OLIVINE_RIVAL.
+	assert_eq(world.object_at(Vector2i(7, 5)).sprite_number, 0x04)
+
+	world.state.set_variable_sprite(
+		Gen2WorldScriptRunner.VARIABLE_SPRITE_BASE + 0x05, 0x31
+	)
+	var reopened: Gen2WorldState = Gen2WorldState.from_dict(world.state.to_dict())
+	var next_session: Gen2WorldAPI = Gen2WorldAPI.open(
+		data, 1, 1, Vector2i(7, 6), reopened
+	)
+	next_session.current_map.events["objects"][0]["sprite"] = \
+		Gen2WorldScriptRunner.VARIABLE_SPRITE_BASE + 0x05
+	next_session.current_map.events["objects"][0]["x"] = 7
+	next_session.current_map.events["objects"][0]["y"] = 5
+	next_session.reload_current_map()
+
+	assert_eq(next_session.object_at(Vector2i(7, 5)).sprite_number, 0x31)
 
 
 ## `GetMonSprite`'s two `.BreedMon` branches read wBreedMon1Species and

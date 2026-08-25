@@ -13,9 +13,9 @@ var _r: RefCounted = null
 ## maps/GoldenrodMagnetTrainStation.asm.
 ##
 ## Three findings carry the leg. The Copycat is a variable sprite, SPRITE_COPYCAT
-## ($fb), that only her own script ever assigns, so she is on the map before
-## anything has given her a sprite; GetMonSprite answers SPRITE_CHRIS for an
-## unassigned variable sprite, which is what puts her in her cell at all. Each
+## ($fb), whose row is InitializeEventsScript's SPRITE_LASS until her own script
+## overwrites it; GetMonSprite answers SPRITE_CHRIS for a slot with no row at
+## all, which is what a lost table looks like. Each
 ## station is two regions with no walkable seam: row 9 is solid, so the lobby
 ## never reaches the platform and the only way onto a train is the officer's own
 ## `applymovement`, which is a forced step. And the errand is a three-legged
@@ -171,8 +171,9 @@ func _verify_copycat(data: GameData, game_id: StringName) -> void:
 		standing == 1,
 		"%s: %d Copycats stand on %s, not one." % [game_id, standing, COPYCAT_CELL]
 	)
-	# She is there with no variablesprite having run yet, which is the whole
-	# reason an unassigned variable sprite has to resolve to something.
+	# She is there before her own script assigns her sprite, wearing
+	# InitializeEventsScript's SPRITE_LASS default; without a row she would be
+	# the player, which is what an unassigned slot resolves to.
 	_r.check(
 		world.object_at(COPYCAT_CELL) != null,
 		"%s: nothing occupies the Copycat's cell %s before her script assigns her sprite." % [
