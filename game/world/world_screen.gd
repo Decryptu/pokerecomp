@@ -2419,6 +2419,9 @@ func _after_map_settled() -> bool:
 		return true
 	if _spend_poison_steps():
 		return true
+	## `CountStep`'s last line, which the poison branch above jumps over when it
+	## reaches a script of its own.
+	_world.do_bike_step()
 	var phone_attempt: Dictionary = _world.try_receive_phone_call(_encounter_random)
 	var phone_results: Array = phone_attempt.get("results", [])
 	if bool(phone_attempt.get("attempted", false)) and not phone_results.is_empty():
@@ -4551,11 +4554,16 @@ func _open_battle_host(request: Dictionary) -> void:
 	_refresh_labels()
 
 
-## `LoadEnemyMon`'s dex write. The flag lands on live world state, so the next
-## snapshot carries it exactly as the cartridge's next save does.
-func _on_enemy_seen(species: int) -> void:
-	if _world != null and _world.state != null:
-		_world.state.set_species_seen(species)
+## `LoadEnemyMon`'s dex write, and the `wFirstUnownSeen` write beside it: the
+## letter of the first Unown the save meets is stored whether it is caught or
+## only seen. Both land on live world state, so the next snapshot carries them
+## exactly as the cartridge's next save does.
+func _on_enemy_seen(species: int, unown_form: int) -> void:
+	if _world == null or _world.state == null:
+		return
+	_world.state.set_species_seen(species)
+	if species == RomLayout.UNOWN_SPECIES:
+		_world.state.note_first_unown_seen(unown_form)
 
 
 func _on_capture_requested(ball: int) -> void:
@@ -4632,6 +4640,7 @@ func _on_battle_finished(result: Dictionary) -> void:
 	if _world == null:
 		return
 	_last_battle_outcome = StringName(result.get("outcome", &""))
+	_record_roam_battle(result)
 	if not _link_battle_peer.is_empty():
 		_record_link_battle(result)
 	var pay_day_money: int = int(result.get("pay_day_money", 0))
@@ -4651,6 +4660,35 @@ func _on_battle_finished(result: Dictionary) -> void:
 		)
 		return
 	_finish_battle_exit(result, fought_save)
+
+
+## `BattleEnd_HandleRoamMons`, which `ExitBattle` reaches on the way out of any
+## battle and which does nothing unless `wBattleType` is `BATTLETYPE_ROAMING`.
+## A caught or defeated roamer empties its struct; anything else stores the HP
+## and the DVs the fight leaves behind, so the next encounter is the same
+## Pokemon on the bar the player left it on.
+func _record_roam_battle(result: Dictionary) -> void:
+	if _world == null or _world.state == null:
+		return
+	## `prepare()` answers the values dictionary itself under `request`, which is
+	## the same shape `win_text` and `loss_text` are read out of.
+	var values: Variant = result.get("request", {})
+	if not values is Dictionary:
+		return
+	if int((values as Dictionary).get("battle_type", 0)) != Gen2Battle.BATTLETYPE_ROAMING:
+		return
+	var enemy: Variant = result.get("enemy", {})
+	if not enemy is Dictionary or (enemy as Dictionary).is_empty():
+		return
+	var outcome: StringName = StringName(result.get("outcome", &""))
+	var won: bool = outcome in [
+		Gen2WorldBattleAdapter.OUTCOME_WON, Gen2WorldBattleAdapter.OUTCOME_CAUGHT,
+	]
+	_world.state.note_roam_battle_end(
+		int((enemy as Dictionary).get("species", 0)), won,
+		int((enemy as Dictionary).get("hp", 0)),
+		int((enemy as Dictionary).get("dvs", 0)),
+	)
 
 
 ## `AddLastLinkBattleToLinkRecord`, which runs on the way out of a Colosseum
@@ -5066,6 +5104,9 @@ func open_hall_of_fame() -> void:
 		_script_prompt = "Hall of Fame needs a save"
 		_refresh_labels()
 		return
+	## `HallOfFame`'s own second instruction, in front of everything the sequence
+	## draws: the next CONTINUE spawns at New Bark Town rather than in the Hall.
+	_world.spawn_after_champion = Gen2WorldSnapshot.SPAWN_AFTER_LANCE
 	var pages: Array = Gen2HallOfFame.pages(_data, save, _world.state)
 	## `AddHallOfFameEntry` runs behind `SaveGameData` and in front of the
 	## animation, so the team is stored whether or not the player watches it;
@@ -6410,6 +6451,10 @@ func _show_script_results(results: Array) -> void:
 				## so nothing is waiting to be resumed when this opens.
 				open_hall_of_fame()
 			elif result_event.get("type", &"") == &"credits_requested":
+				## `Script_credits` farcalls `RedCredits`, whose own
+				## `ld a, SPAWN_RED` puts the next CONTINUE on Mount Silver.
+				if _world != null:
+					_world.spawn_after_champion = Gen2WorldSnapshot.SPAWN_AFTER_RED
 				open_credits()
 			elif result_event.get("type", &"") == &"soft_reset_requested":
 				## `special Reset` restarts the console, which is how a saved and

@@ -510,6 +510,35 @@ func test_resolved_wild_encounter_reaches_the_real_battle_overlay() -> void:
 	assert_eq(host.battle_snapshot()["message"], "Wild %s\nappeared!" % _wild_name())
 
 
+## `BattleEnd_HandleRoamMons` reached through the screen that owns it: the shape
+## the battle overlay reports a finished fight in is what the write-back reads,
+## so a roamer run from keeps its HP and one defeated empties its struct.
+func test_a_finished_roaming_battle_writes_the_struct_back() -> void:
+	await _open_world()
+	var state: Gen2WorldState = _world_screen._world.state
+	state.ensure_roaming_mons(
+		[{"species": Fixture.TRAINER_SPECIES, "level": 40, "map_group": 1, "map_number": 1}]
+	)
+	var finished: Dictionary = {
+		"ok": true,
+		"outcome": Gen2WorldBattleAdapter.OUTCOME_RAN,
+		"request": {
+			"kind": &"wild", "pokemon": Fixture.TRAINER_SPECIES, "level": 40,
+			"battle_type": Gen2Battle.BATTLETYPE_ROAMING,
+		},
+		"enemy": {"species": Fixture.TRAINER_SPECIES, "hp": 12, "dvs": 0x1234},
+	}
+	_world_screen._on_battle_finished(finished)
+	assert_eq(int(state.roaming_mons()[0]["hp"]), 12)
+	assert_eq(int(state.roaming_mons()[0]["dvs"]), 0x1234)
+
+	finished["outcome"] = Gen2WorldBattleAdapter.OUTCOME_WON
+	finished["enemy"] = {"species": Fixture.TRAINER_SPECIES, "hp": 0, "dvs": 0x1234}
+	_world_screen._on_battle_finished(finished)
+	assert_eq(int(state.roaming_mons()[0]["species"]), 0)
+	assert_eq(state.roaming_mons_on(1, 1).size(), 0)
+
+
 func test_catch_tutorial_uses_the_real_battle_overlay_without_persistent_capture() -> void:
 	await _open_world()
 	var balls_before: int = _world_screen._world.state.item_quantity(

@@ -764,3 +764,97 @@ func test_the_reward_is_a_stat_booster_and_never_the_lucky_punch() -> void:
 		assert_ne(item, Gen2BattleTower.LUCKY_PUNCH)
 		seen[item] = true
 	assert_eq(seen.size(), Gen2BattleTower.MAX_REWARD - Gen2BattleTower.MIN_REWARD)
+
+
+## `BattleEnd_HandleRoamMons`: a roamer that was run from keeps the HP and the
+## DVs the fight left it on, and one that was caught or defeated is emptied so
+## `CheckEncounterRoamMon` can never select the slot again.
+func test_a_roamer_keeps_its_hp_and_dvs_between_encounters() -> void:
+	var state := Gen2WorldState.new()
+	state.ensure_roaming_mons(
+		[{"species": 243, "level": 40, "map_group": 1, "map_number": 1}]
+	)
+	assert_true(state.note_roam_battle_end(243, false, 37, 0xABCD))
+	var restored: Gen2WorldState = Gen2WorldState.from_dict(state.to_dict())
+	var kept: Dictionary = restored.roaming_mons()[0]
+	assert_eq(int(kept["hp"]), 37)
+	assert_eq(int(kept["dvs"]), 0xABCD)
+
+	assert_true(restored.note_roam_battle_end(243, true, 0, 0xABCD))
+	var emptied: Dictionary = restored.roaming_mons()[0]
+	assert_eq(int(emptied["species"]), 0)
+	assert_eq(int(emptied["hp"]), 0)
+	assert_eq(int(emptied["map_group"]), Gen2WorldState.ROAM_MAP_N_A)
+	assert_eq(
+		restored.roaming_mons_on(1, 1).size(), 0,
+		"an emptied slot is on no map"
+	)
+
+
+## `UpdateRoamMons` skips a struct whose map group is GROUP_N_A, so a beaten
+## roamer is never walked back onto the map.
+func test_a_beaten_roamer_is_not_walked() -> void:
+	var state := Gen2WorldState.new()
+	state.ensure_roaming_mons(
+		[{"species": 243, "level": 40, "map_group": 1, "map_number": 1}]
+	)
+	state.note_roam_battle_end(243, true, 0, 0)
+	var rows: Array = [{
+		"map_group": 1, "map_number": 1,
+		"connections": [{"map_group": 1, "map_number": 2}],
+	}]
+	var generator := RandomNumberGenerator.new()
+	generator.seed = 7
+	assert_eq(state.advance_roaming(rows, generator), [])
+	assert_eq(int(state.roaming_mons()[0]["map_group"]), Gen2WorldState.ROAM_MAP_N_A)
+
+
+## `wStatusFlags`' flash bit is saved player data, so a cave lit before a save is
+## still lit when the slot is opened again.
+func test_flash_survives_a_snapshot() -> void:
+	var state := Gen2WorldState.new()
+	state.set_used_flash(true)
+	assert_true(Gen2WorldState.from_dict(state.to_dict()).used_flash())
+	var without: Dictionary = state.to_dict()
+	without.erase("used_flash")
+	assert_false(Gen2WorldState.from_dict(without).used_flash())
+
+
+## `DoBikeStep`: the counter is saved, the call is queued the first counted step
+## past 1024, and the counter saturates rather than wrapping.
+func test_the_bike_shop_call_is_queued_after_1024_saved_steps() -> void:
+	var state := Gen2WorldState.new()
+	for _step: int in Gen2WorldState.BIKE_SHOP_CALL_STEPS - 1:
+		assert_false(state.do_bike_step(true, true))
+	assert_eq(state.bike_step(), Gen2WorldState.BIKE_SHOP_CALL_STEPS - 1)
+
+	var reopened: Gen2WorldState = Gen2WorldState.from_dict(state.to_dict())
+	assert_eq(reopened.bike_step(), Gen2WorldState.BIKE_SHOP_CALL_STEPS - 1)
+	assert_false(
+		reopened.do_bike_step(false, true), "a step off the bike counts nothing"
+	)
+	assert_false(
+		reopened.do_bike_step(true, false), "a map with no service counts nothing"
+	)
+	assert_true(reopened.do_bike_step(true, true))
+	assert_eq(reopened.pending_special_phone_call(), Gen2WorldState.SPECIALCALL_BIKESHOP)
+	assert_false(
+		reopened.do_bike_step(true, true), "a queued call is not overwritten"
+	)
+
+
+## The first Unown a save meets is what every Pokedex entry for UNOWN is drawn
+## as, whether it was caught or only seen, and it is written once.
+func test_the_first_unown_seen_is_kept_and_written_once() -> void:
+	var state := Gen2WorldState.new()
+	state.note_first_unown_seen(9)
+	state.update_unown_dex(3)
+	assert_eq(state.first_unown_seen(), 9)
+	assert_eq(state.unown_dex(), [3] as Array[int])
+	assert_eq(Gen2WorldState.from_dict(state.to_dict()).first_unown_seen(), 9)
+
+	## A state written before the byte was kept falls back to the first form
+	## caught rather than to form A.
+	var without: Dictionary = state.to_dict()
+	without.erase("first_unown_seen")
+	assert_eq(Gen2WorldState.from_dict(without).first_unown_seen(), 3)

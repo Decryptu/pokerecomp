@@ -60,6 +60,13 @@ static func prepare(
 			# Gold and Silver never say true, having neither routine nor data.
 			if wild_mon != null and bool(values.get("asleep", false)):
 				wild_mon.status = Gen2WorldTreemon.SLEEP_TURNS
+			## `LoadEnemyMon`'s second `BATTLETYPE_ROAMING` branch: a roamer whose
+			## struct has been initialised comes back on the stored HP rather than
+			## on a full bar, which is what makes chipping one down between
+			## encounters worth doing. The uninitialised case carries no `hp` and
+			## keeps the stats it was just built with.
+			if wild_mon != null and int(values.get("hp", 0)) > 0:
+				wild_mon.hp = clampi(int(values["hp"]), 1, wild_mon.max_hp())
 			enemy_party = Gen2Party.of(wild_mon)
 		&"trainer":
 			trainer_class = int(values.get("trainer_group", 0))

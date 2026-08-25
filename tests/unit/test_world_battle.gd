@@ -179,6 +179,35 @@ func test_a_wild_request_carries_its_own_dvs_into_the_battle() -> void:
 	assert_true(Gen2Stats.is_shiny((prepared["battle"] as Gen2Battle).enemy.dvs))
 
 
+## `LoadEnemyMon`'s second BATTLETYPE_ROAMING branch: a roamer whose struct has
+## been initialised comes back on the HP the last fight left it on rather than on
+## a full bar, and a full-bar request is left alone.
+func test_a_roamer_returns_on_the_hp_its_struct_carries() -> void:
+	var chipped: Dictionary = Gen2WorldBattleAdapter.prepare(
+		_data, {"values": {
+			"kind": &"wild", "pokemon": SPECIES_TWO, "level": 40,
+			"battle_type": Gen2Battle.BATTLETYPE_ROAMING, "hp": 7, "dvs": 0xABCD,
+		}},
+		_player_party()
+	)
+	assert_true(bool(chipped["ok"]), String(chipped.get("reason", "")))
+	var enemy: Gen2BattleMon = (chipped["battle"] as Gen2Battle).enemy
+	assert_eq(enemy.hp, 7)
+	assert_eq(enemy.dvs, 0xABCD)
+	assert_gt(enemy.max_hp(), 7, "only the current HP is stored")
+
+	var fresh: Dictionary = Gen2WorldBattleAdapter.prepare(
+		_data, {"values": {
+			"kind": &"wild", "pokemon": SPECIES_TWO, "level": 40,
+			"battle_type": Gen2Battle.BATTLETYPE_ROAMING,
+		}},
+		_player_party()
+	)
+	assert_true(bool(fresh["ok"]), String(fresh.get("reason", "")))
+	var full: Gen2BattleMon = (fresh["battle"] as Gen2Battle).enemy
+	assert_eq(full.hp, full.max_hp())
+
+
 ## `LoadEnemyMon`'s `.GenerateDVs`: a wild that carries none is rolled two bytes
 ## off the BATTLE's own generator rather than handed 15/15/15/15, which is what
 ## every encounter source but the visible-encounter provider used to get. Off

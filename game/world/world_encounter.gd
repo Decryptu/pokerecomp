@@ -70,10 +70,21 @@ static func resolve(
 			var roaming_level: int = int(roaming["level"])
 			if _blocked_by_repel(roaming_level, options):
 				return {}
-			return _wild_result(
+			var roamer: Dictionary = _wild_result(
 				method, SOURCE_ROAMING, -1, int(roaming["species"]), roaming_level,
 				rate, encounter_roll, -1, force_encounter, roaming_roll, roaming_index
 			)
+			## `CheckEncounterRoamMon`'s own `ld a, BATTLETYPE_ROAMING`, and the
+			## two struct fields `LoadEnemyMon` branches on it for: a roamer whose
+			## HP byte is still zero rolls its DVs on this encounter and keeps
+			## them, and one that has been fought before comes back on the HP the
+			## last fight left it at.
+			var values: Dictionary = roamer["values"]
+			values["battle_type"] = Gen2Battle.BATTLETYPE_ROAMING
+			if int(roaming.get("hp", 0)) > 0:
+				values["hp"] = int(roaming["hp"])
+				values["dvs"] = int(roaming.get("dvs", 0))
+			return roamer
 
 	var slots: Array = _slots(record, method, time_of_day)
 	var slot: int = _choose_slot(generator, method)
@@ -358,12 +369,20 @@ static func _resolve_roaming(
 	var mon: Variant = (mons as Array)[selected_index]
 	if not mon is Dictionary:
 		return result
+	## `CheckEncounterRoamMon` compares the map bytes alone, and a roamer that has
+	## been caught or defeated carries `GROUP_N_A` in them, so the compare is what
+	## keeps the emptied slot out of an encounter. The species test is this port's
+	## own: a record the cache seeded with no species is not a Pokemon either.
+	if int((mon as Dictionary).get("species", 0)) <= 0:
+		return result
 	if int((mon as Dictionary).get("map_group", -1)) != map_group \
 		or int((mon as Dictionary).get("map_number", -1)) != map_number:
 		return result
 	result["index"] = selected_index
 	result["species"] = int((mon as Dictionary).get("species", 0))
 	result["level"] = int((mon as Dictionary).get("level", 0))
+	result["hp"] = int((mon as Dictionary).get("hp", 0))
+	result["dvs"] = int((mon as Dictionary).get("dvs", 0))
 	return result
 
 

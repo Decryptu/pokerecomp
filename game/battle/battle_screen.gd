@@ -10,7 +10,7 @@ signal item_used(item: int, target: int)
 ## enemy sent out sets it, a trainer's party as much as a wild, so this is the
 ## event rather than the battle result. The host owns the flag, since the battle
 ## engine is scene-free and holds no world state.
-signal enemy_seen(species: int)
+signal enemy_seen(species: int, unown_form: int)
 
 ## Owns the battle, the events and the text box; decides nothing about how they
 ## are drawn. A [Gen2Battle] resolves the turn and answers with events; this
@@ -3384,8 +3384,22 @@ func _finish_world_battle() -> void:
 		result["evolvable"] = _battle.evolvable_indices()
 	if outcome == Gen2WorldBattleAdapter.OUTCOME_LOST:
 		result["recovery"] = _world_battle_recovery.duplicate(true)
+	result["enemy"] = _enemy_battler_record()
 	_world_battle_completion_sent = true
 	battle_finished.emit(result)
+
+
+## What `BattleEnd_HandleRoamMons` reads out of `wEnemyMon` on the way out of a
+## wild battle: the species it was, the HP it is leaving on and the DVs it was
+## built with. Empty when there is no enemy to read, which is every path that
+## ends before one exists.
+func _enemy_battler_record() -> Dictionary:
+	if _battle == null:
+		return {}
+	var enemy: Gen2BattleMon = _battle.party(Gen2Battle.ENEMY).active_mon()
+	if enemy == null:
+		return {}
+	return {"species": enemy.species, "hp": enemy.hp, "dvs": enemy.dvs}
 
 
 func _finish_world_capture(capture: Dictionary) -> void:
@@ -3397,6 +3411,7 @@ func _finish_world_capture(capture: Dictionary) -> void:
 		"outcome": Gen2WorldBattleAdapter.OUTCOME_CAUGHT,
 		"request": _world_battle_request.duplicate(true),
 		"capture": capture.duplicate(true),
+		"enemy": _enemy_battler_record(),
 	})
 
 
@@ -4251,7 +4266,7 @@ func _apply_event_state(event: Dictionary) -> void:
 			# here does. The level is part of that: a trainer's own party is not
 			# all one level the way the invented one used to be.
 			if int(event["side"]) == Gen2Battle.ENEMY:
-				enemy_seen.emit(int(event["species"]))
+				enemy_seen.emit(int(event["species"]), int(event.get("unown_form", 0)))
 				_enemy = int(event["species"])
 				_enemy_unown_form = int(event.get("unown_form", 0))
 				_enemy_shiny = bool(event.get("shiny", false))

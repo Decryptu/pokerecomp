@@ -286,6 +286,12 @@ func unown_unlocked() -> bool:
 
 ## `Pokedex_DrawUnownModeBG`'s own walk: the forms caught, in catching order.
 ## `wDexUnownCount` is its length.
+## `wFirstUnownSeen`, the letter `Pokedex_LoadSelectedMonTiles` draws an UNOWN
+## row with.
+func first_unown_seen() -> int:
+	return _state.first_unown_seen() if _state != null else 0
+
+
 func unown_forms() -> Array[int]:
 	return _state.unown_dex() if _state != null else [] as Array[int]
 
