@@ -61,9 +61,14 @@ Inspired by [gen1recomp](https://github.com/bryanthaboi/gen1recomp).
 > save file the receptionist says your friend is not ready, which is what a
 > single Game Boy has always been told.
 >
-> Missing: Mystery Gift, the trade animation, and a handful of pixel-level
-> divergences still being chased in the opening movies and title screen against a
-> real cartridge.
+> Mystery Gift works the same way. Carrie in GOLDENROD DEPT. STORE 5F unlocks
+> it, the row then appears beside a save slot, and the infrared partner is your
+> other save file: five gifts a day, one per person, and the officer on the
+> POKEMON CENTER's second floor hands over whatever arrived. With one save file
+> the exchange times out, which is what one Game Boy has always seen.
+>
+> Missing: the trade animation, and a handful of pixel-level divergences still
+> being chased in the opening movies and title screen against a real cartridge.
 
 ## Getting started
 

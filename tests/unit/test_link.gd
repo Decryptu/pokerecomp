@@ -313,3 +313,127 @@ func _save() -> Gen2SaveData:
 	var save: Gen2SaveData = Gen2SaveStore.create_development_save(_data, 0)
 	save.world = _live_world.snapshot()
 	return save
+
+
+## Mystery Gift is a second peer rather than the cable: `mystery_gift.asm`
+## never touches `wLinkMode` and keeps its own SRAM block, so what follows is
+## that block and the decision over it. The real-cartridge counterpart is
+## `tools/checks/mystery_gift.gd`, which sweeps both gift tables and every box
+## on all three dumps.
+
+
+## `UnlockMysteryGift` is the one thing that clears the locked byte, and the
+## main menu reads the backup pair rather than the working one: the row appears
+## on the session after Carrie, because only a save copies one into the other.
+func test_the_mystery_gift_row_appears_only_after_a_save() -> void:
+	var section: Dictionary = Gen2MysteryGift.default_section()
+	assert_false(Gen2MysteryGift.menu_row_unlocked(section))
+	assert_true(Gen2MysteryGift.unlock(section))
+	assert_false(
+		Gen2MysteryGift.menu_row_unlocked(section),
+		"Carrie clears sMysteryGiftUnlocked, not sNumDailyMysteryGiftPartnerIDs"
+	)
+	Gen2MysteryGift.backup(section)
+	assert_true(Gen2MysteryGift.menu_row_unlocked(section))
+
+
+## The gift lands in the backup pair, which is where a save wrote it from, so
+## `RestoreMysteryGift` is what carries a gift received at the menu into the
+## file the counter reads.
+func test_a_gift_reaches_the_loaded_file_through_the_backup_pair() -> void:
+	var section: Dictionary = Gen2MysteryGift.default_section()
+	Gen2MysteryGift.unlock(section)
+	section["backup_item"] = 0xAD
+	assert_eq(Gen2MysteryGift.check_value(section), 0, "nothing is waiting yet")
+	Gen2MysteryGift.restore(section)
+	assert_eq(
+		Gen2MysteryGift.check_value(section), 0xAE,
+		"CheckMysteryGift answers the item plus one"
+	)
+	Gen2MysteryGift.clear_item(section)
+	assert_eq(Gen2MysteryGift.check_value(section), 0)
+
+
+## `DoMysteryGiftIfDayHasPassed`: the limit lifts when the day the countdown
+## started on is behind us, and not before. A locked file keeps its -1, or the
+## first midnight would put the menu row up on its own.
+func test_the_daily_limit_lifts_only_once_a_day_has_passed() -> void:
+	var section: Dictionary = Gen2MysteryGift.default_section()
+	Gen2MysteryGift.unlock(section)
+	Gen2MysteryGift.backup(section)
+	section["daily_partners"] = Gen2MysteryGift.MAX_PARTNERS
+	Gen2MysteryGift.start_countdown(section, 3)
+	assert_false(Gen2MysteryGift.begin_session(section, 3))
+	assert_eq(int(section["daily_partners"]), Gen2MysteryGift.MAX_PARTNERS)
+	assert_true(Gen2MysteryGift.begin_session(section, 4))
+	assert_eq(int(section["daily_partners"]), 0)
+
+	var locked: Dictionary = Gen2MysteryGift.default_section()
+	Gen2MysteryGift.start_countdown(locked, 3)
+	assert_false(Gen2MysteryGift.begin_session(locked, 5))
+	assert_false(
+		Gen2MysteryGift.menu_row_unlocked(locked),
+		"a midnight does not unlock a file Carrie has never spoken to"
+	)
+
+
+## A window with nobody in it is a real path rather than a stub: the exchange
+## times out and `.CommunicationError` puts the prompt back up rather than
+## leaving the screen.
+func test_an_empty_infrared_window_times_out_into_the_retry_box() -> void:
+	var transport := Gen2MysteryGiftTransport.new()
+	assert_false(transport.connected())
+	assert_eq(transport.status(), Gen2MysteryGift.MG_TIMED_OUT)
+	var result: Dictionary = Gen2MysteryGift.exchange(
+		Gen2MysteryGift.default_section(), transport, {}, {}
+	)
+	assert_eq(result["outcome"], Gen2MysteryGift.OUTCOME_COMM_ERROR)
+	assert_true(result["retry"], "the routine loops back to its own prompt")
+
+
+## `.AddMysteryGiftPartnerID` runs in front of the gift rather than behind it,
+## so a partner whose decoration this side already owns still counts against
+## both daily limits.
+func test_a_partner_counts_even_when_the_decoration_was_already_received() -> void:
+	var section: Dictionary = Gen2MysteryGift.default_section()
+	Gen2MysteryGift.unlock(section)
+	section["daily_partners"] = 0
+	section["decorations_received"] = [7]
+	var transport := Gen2MysteryGiftTransport.new()
+	transport.peer = {
+		"game_version": 1, "id": 0x0BAD, "name": "KRIS", "sent_deco": 1,
+		"which_item": 0, "which_deco": 0, "backup_item": 0,
+	}
+	var result: Dictionary = Gen2MysteryGift.exchange(
+		section, transport, {}, {"items": [0xAD], "decos": [7]}
+	)
+	assert_eq(result["outcome"], Gen2MysteryGift.OUTCOME_SENT)
+	assert_eq(int(section["backup_item"]), 0xAD)
+	assert_eq(int(section["daily_partners"]), 1)
+	assert_eq(section["partner_ids"], [0x0BAD])
+	assert_eq(
+		int(section["trainer_house_flag"]), 1,
+		"a linked file is what opens the Trainer House"
+	)
+
+
+## A rolled sample is always a row of the table it names, whichever of the four
+## weighted bands it lands in: the last band answers 32 or 33 and no band can
+## reach past the thirty-seven rows.
+func test_every_staged_roll_names_a_row_of_its_own_table() -> void:
+	var random := RandomNumberGenerator.new()
+	random.seed = 7
+	var section: Dictionary = Gen2MysteryGift.default_section()
+	var save := Gen2SaveData.new()
+	save.player_id = 0xBEEF
+	var bands: Dictionary = {}
+	for _roll: int in 512:
+		var staged: Dictionary = Gen2MysteryGift.stage_player_data(
+			save, section, 30, random
+		)
+		for key: String in ["which_item", "which_deco"]:
+			var index: int = int(staged[key])
+			assert_between(index, 0, RomLayout.MYSTERY_GIFT_TABLE_ROWS - 1)
+			bands[index / 8] = true
+	assert_true(bands.has(0), "the common band is reached")
+	assert_true(bands.has(4), "the rarest band is reached")

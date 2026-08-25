@@ -1187,6 +1187,20 @@ const PREDEFPAL_UNOWN_PUZZLE: int = 0x4C
 ## one LZ strip and the two tilemaps behind it are whole screens of tile
 ## numbers, uncompressed and laid out in the file's own order. Identical on all
 ## three cartridges.
+## `MysteryGiftItems` and `MysteryGiftDecos`, which are the same length and sit
+## next to each other in both pins: thirty-seven rows each, and an index past
+## either end is `MysteryGiftFallbackItem`.
+const MYSTERY_GIFT_TABLE_ROWS: int = 37
+## `LoadMysteryGiftBackgroundGFX`'s `ld bc, wBGMapBufferEnd - wBGMapBuffer`: 120
+## 1bpp bytes, which `FarCopyBytesDouble` turns into fifteen tiles whose second
+## plane is then filled with $ff. Gold and Silver only.
+const MYSTERY_GIFT_BACKGROUND_BYTES: int = 0x78
+## `LoadMysteryGiftGFX2`'s own `ld bc, 14 tiles`. Gold and Silver only.
+const MYSTERY_GIFT_GFX2_TILES: int = 14
+## The four colours of a `.pal` include, which is what `_CGB_MysteryGift` copies
+## straight into `wBGPals1`.
+const MYSTERY_GIFT_PALETTE_COLORS: int = 4
+
 const DIPLOMA_TILES: int = 112
 const DIPLOMA_TILEMAP_BYTES: int = 360
 
@@ -1545,6 +1559,14 @@ const SPECIAL_TEXT_RUNS: Dictionary = {
 		["link_abnormal_mon_text", ["abnormal_mon"]],
 		["link_ask_trade_text", ["ask_trade"]],
 	],
+	## `DoMysteryGift`'s eight, one contiguous run behind
+	## `.String_PressAToLink_BToCancel`. Every box the routine can end on is
+	## here: the two refusals in front of the gift, the two daily limits, the
+	## two the exchange itself fails with, and the two the gift arrives in.
+	"mystery_gift": [["mystery_gift_text", [
+		"canceled", "comm_error", "retrieve", "friend_not_ready",
+		"five_a_day", "one_a_day", "sent", "sent_home",
+	]]],
 	## `BuenaPrize`'s six, in its own file order.
 	"buena_prize": [["buena_prize_text", [
 		"ask_which_prize", "is_that_right", "here_you_go", "not_enough_points",
@@ -2357,6 +2379,17 @@ const GOLD_SILVER: Dictionary = {
 	# `LinkTextboxAtHL` instead. The same address on Gold and on Silver.
 	"link_border": 0x29D5B,
 	"link_trade_tilemaps": -1,
+	# `InitMysteryGiftLayout` at Gold and Silver's own addresses, which is three
+	# art runs rather than Crystal's one: thirty-two tiles of `MysteryGiftGFX`,
+	# `MysteryGiftBackgroundGFX`'s 1bpp question mark and border doubled into
+	# fifteen, and `MysteryGiftGFX2`'s fourteen. The single palette is
+	# `_CGB_MysteryGift`'s own, against Crystal's two.
+	"mystery_gift": {
+		"gfx": 0xFD0C9, "tiles": 0x20,
+		"background": 0x17079, "gfx2": 0x170F1,
+		"prompt": 0x29F01, "palette": 0x9AAA, "palettes": 1,
+		"items": 0x2C530, "decos": 0x2C555,
+	},
 	# `UnownDexATile` behind `UnownDexVacantString`, and `GBPrinterStrings`
 	# behind `PrinterStatusStringPointers`' first entry.
 	"unown_printer_glyphs": 0x16FCC,
@@ -2538,6 +2571,12 @@ const GOLD_SILVER: Dictionary = {
 		## `wBufferTrademonNickname`, which `_LinkAskTradeForText` names with a
 		## `text_ram` whose address is in the text data itself.
 		"trademon_nickname": 0xCEEF,
+		## The two names `_MysteryGiftSentText` and `_MysteryGiftSentHomeText`
+		## spell: the partner who sent the gift and the player it came home to.
+		## Gold and Silver's Mystery Gift block sits a page below Crystal's, the
+		## way their link block does.
+		"mystery_gift_partner_name": 0xC803,
+		"mystery_gift_player_name": 0xC853,
 	},
 	## Gold and Silver's own WRAM address for the same byte; their link block sits
 	## a page lower than Crystal's.
@@ -2546,6 +2585,7 @@ const GOLD_SILVER: Dictionary = {
 	"link_cant_battle_text": 0x289A8,
 	"link_abnormal_mon_text": 0x289BD,
 	"link_ask_trade_text": 0x28D51,
+	"mystery_gift_text": 0x29F31,
 	"magikarp_measure_text": 0xFBCAD,
 	"magikarp_record_text": 0xFBDEC,
 	"lucky_number_text": 0xC7BA3,
@@ -2893,6 +2933,18 @@ const CRYSTAL: Dictionary = {
 	# `gfx/trade/border_tiles.png`; the tilemaps are pinned separately because
 	# `__LoadTradeScreenBorderGFX`, `LoadMobileTradeBorderTilemap` and
 	# `TestMobileTradeBorderTilemap` sit between the two.
+	# `InitMysteryGiftLayout`'s own `ld bc, $43 tiles`, uncompressed and
+	# straight into vTiles2, so the pin is a bounds check against the run the
+	# routine indexes rather than a decompression. `_CGB_MysteryGift` copies two
+	# palettes where Gold and Silver copy one. Located off
+	# `.String_PressAToLink_BToCancel`, the inline `db` string a page in front of
+	# the eight `text_far` stubs, which is the only plain text in the routine.
+	"mystery_gift": {
+		"gfx": 0x105258, "tiles": 0x43,
+		"background": -1, "gfx2": -1,
+		"prompt": 0x1049CD, "palette": 0x95E0, "palettes": 2,
+		"items": 0x2C725, "decos": 0x2C74A,
+	},
 	"link_border": 0x16CFC1,
 	"link_trade_tilemaps": 0x16D465,
 	# `UnownDexATile`, the two 1bpp tiles `_UnownPrinter` requests into the
@@ -3092,6 +3144,8 @@ const CRYSTAL: Dictionary = {
 		"seer_ot": 0xD02A,
 		"seer_caught_level": 0xD036,
 		"trademon_nickname": 0xD004,
+		"mystery_gift_partner_name": 0xC903,
+		"mystery_gift_player_name": 0xC953,
 	},
 	## `wOtherPlayerLinkMode`, the byte all three receptionist scripts `readmem`
 	## after `CheckLinkTimeout_Receptionist`. Located off those three `readmem`s
@@ -3100,6 +3154,7 @@ const CRYSTAL: Dictionary = {
 	"link_cant_battle_text": 0x28AAF,
 	"link_abnormal_mon_text": 0x28AC4,
 	"link_ask_trade_text": 0x28EB8,
+	"mystery_gift_text": 0x1049FD,
 	"magikarp_measure_text": 0xFBBA9,
 	"magikarp_record_text": 0xFBCE8,
 	"lucky_number_text": 0x4D9C9,

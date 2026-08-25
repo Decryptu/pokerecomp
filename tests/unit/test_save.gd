@@ -316,6 +316,11 @@ func test_the_transaction_write_back_carries_every_field_but_the_live_clock() ->
 	var rules := Gen2Rules.new()
 	rules.difficulty = Gen2Rules.DIFFICULTY_HARD
 	candidate.run_rules = rules
+	## `mystery_gift` is the newest field in the list this test guards, and the
+	## list is named field by field rather than delegated, so it has to differ
+	## or a dropped copy would still compare equal.
+	candidate.mystery_gift = Gen2MysteryGift.default_section()
+	candidate.mystery_gift["backup_item"] = 0xAD
 	live.game_time.frames = 12
 
 	Gen2WorldTransaction.copy_into(live, candidate)
@@ -979,3 +984,31 @@ func test_copying_a_save_in_place_keeps_every_field() -> void:
 	assert_eq(save.hall_of_fame.size(), 1)
 	assert_eq(save.mailbox.size(), 1)
 	assert_eq((save.mailbox[0] as Gen2SaveMail).author, "GOLD")
+
+
+## `sMysteryGiftData` defaults rather than versioning, the way `mailbox` and
+## `box_names` do: a slot written before Mystery Gift existed reads as one that
+## has never linked, which is the truth about it.
+func test_a_save_without_a_mystery_gift_block_reads_as_locked() -> void:
+	var raw: Dictionary = _save().to_dict()
+	raw.erase("mystery_gift")
+	var restored: Gen2SaveData = Gen2SaveData.from_dict(raw)
+	assert_not_null(restored)
+	assert_eq(int(restored.mystery_gift["item"]), 0)
+	assert_false(Gen2MysteryGift.menu_row_unlocked(restored.mystery_gift))
+
+
+## The block round-trips through the file, which is what carries a gift
+## received at the menu into the game that collects it.
+func test_a_mystery_gift_block_round_trips_through_the_file() -> void:
+	var save: Gen2SaveData = _save()
+	Gen2MysteryGift.unlock(save.mystery_gift)
+	save.mystery_gift["item"] = 0xAD
+	save.mystery_gift["partner_ids"] = [0x1234]
+	save.mystery_gift["decorations_received"] = [7]
+	save.mystery_gift["partner_name"] = "KRIS"
+	Gen2MysteryGift.backup(save.mystery_gift)
+	assert_eq(int(save.mystery_gift["backup_item"]), 0xAD)
+	var restored: Gen2SaveData = Gen2SaveData.from_dict(save.to_dict())
+	assert_not_null(restored)
+	assert_eq(restored.mystery_gift, save.mystery_gift)

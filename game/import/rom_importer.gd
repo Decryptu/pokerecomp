@@ -298,6 +298,10 @@ static func verify_layout(rom: RomFile) -> Dictionary:
 	if not mail["ok"]:
 		return mail
 
+	var mystery_gift: Dictionary = verify_mystery_gift(rom, layout)
+	if not mystery_gift["ok"]:
+		return mystery_gift
+
 	var battle_tower: Dictionary = verify_battle_tower(rom, layout)
 	if not battle_tower["ok"]:
 		return battle_tower
@@ -1286,6 +1290,7 @@ const SPECIAL_TEXT_FIRST_BOX: Dictionary = {
 	"bank_of_mom": ["leaving_1", "Wow, that's a cute"],
 	"poke_seer": ["see_all", "I see all."],
 	"buena_prize": ["ask_which_prize", "Which prize would"],
+	"mystery_gift": ["canceled", "The link has been"],
 }
 
 
@@ -2444,6 +2449,24 @@ const MAIL_PALETTE_FIRST: Array[int] = [
 ## The icon is checked for bounds alone: eight 2bpp tiles of a picture with no
 ## structure a wrong offset would fail, and `tools/checks/mail.gd` is what looks
 ## at it.
+## `data/items/mystery_gift_items.asm` and
+## `data/decorations/mystery_gift_decos.asm`, resolved through their own
+## constant blocks rather than read back out of a dump: these are what say the
+## two pins are the tables and not some other pair of adjacent runs. Identical
+## in both disassemblies.
+const MYSTERY_GIFT_ITEM_NUMBERS: Array[int] = [
+	0xAD, 0x4E, 0x54, 0x50, 0x4F, 0x4A, 0x29, 0x33, 0x31, 0x53, 0x2C, 0x35,
+	0x21, 0xB9, 0xBA, 0xBC, 0x6D, 0xAE, 0x27, 0x04, 0x2A, 0x2B, 0x41, 0x3F,
+	0x18, 0x16, 0x22, 0x17, 0x40, 0x15, 0x28, 0x8C, 0x1A, 0x3E, 0x20, 0xBB,
+	0xBD,
+]
+const MYSTERY_GIFT_DECO_NUMBERS: Array[int] = [
+	0x16, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20, 0x21, 0x22, 0x0D, 0x0E,
+	0x10, 0x23, 0x25, 0x26, 0x08, 0x09, 0x0F, 0x11, 0x17, 0x19, 0x01, 0x02,
+	0x04, 0x05, 0x06, 0x07, 0x0A, 0x12, 0x29, 0x0C, 0x2A, 0x14, 0x03, 0x24,
+	0x27,
+]
+
 static func verify_mail(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var entry: Dictionary = layout.get("mail", {})
 	if entry.is_empty():
@@ -4704,6 +4727,7 @@ func import_rom(
 		"decorations": _import_decorations(rom, layout),
 		"unown_puzzle": _import_unown_puzzle(rom, layout),
 		"diploma": _import_diploma(rom, layout),
+		"mystery_gift": _import_mystery_gift(rom, layout),
 		"link_border": _import_link_border(rom, layout),
 		"printer_strings": _import_printer_strings(rom, layout),
 		"slots": _import_slots(rom, layout),
@@ -6421,6 +6445,153 @@ static func read_card_flip_texts(rom: RomFile, layout: Dictionary) -> Dictionary
 	return out
 
 
+## `InitMysteryGiftLayout`'s art, the two gift tables beside it and the prompt
+## the screen opens on. Each is checked against something only the right offset
+## carries: the tables against their own constant blocks, the art against the
+## highest tile the routine indexes, and the prompt against its first line.
+static func verify_mystery_gift(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var entry: Dictionary = layout.get("mystery_gift", {})
+	if entry.is_empty():
+		return {"ok": false, "message": "The cartridge has no Mystery Gift block."}
+
+	for table: Array in [
+		["items", MYSTERY_GIFT_ITEM_NUMBERS], ["decos", MYSTERY_GIFT_DECO_NUMBERS],
+	]:
+		var at: int = int(entry.get(String(table[0]), -1))
+		var expected: Array[int] = table[1]
+		if not rom.in_bounds(at, RomLayout.MYSTERY_GIFT_TABLE_ROWS):
+			return {
+				"ok": false,
+				"message": "MysteryGift %s is outside the cartridge." % table[0],
+			}
+		for index: int in RomLayout.MYSTERY_GIFT_TABLE_ROWS:
+			if rom.u8(at + index) != expected[index]:
+				return {
+					"ok": false,
+					"message": "MysteryGift %s row %d is $%02X, expected $%02X." % [
+						table[0], index, rom.u8(at + index), expected[index],
+					],
+				}
+
+	var gfx: int = int(entry.get("gfx", -1))
+	var bytes: int = int(entry.get("tiles", 0)) * Gen2Tiles.TILE_BYTES
+	if bytes <= 0 or not rom.in_bounds(gfx, bytes):
+		return {"ok": false, "message": "MysteryGiftGFX runs past the cartridge."}
+	for name: String in ["background", "gfx2"]:
+		var at: int = int(entry.get(name, -1))
+		if at < 0:
+			continue
+		var run: int = (
+			RomLayout.MYSTERY_GIFT_BACKGROUND_BYTES if name == "background"
+			else RomLayout.MYSTERY_GIFT_GFX2_TILES * Gen2Tiles.TILE_BYTES
+		)
+		if not rom.in_bounds(at, run):
+			return {
+				"ok": false,
+				"message": "MysteryGift %s runs past the cartridge." % name,
+			}
+
+	var palette: int = int(entry.get("palette", -1))
+	var colors: int = int(entry.get("palettes", 0)) \
+		* RomLayout.MYSTERY_GIFT_PALETTE_COLORS
+	if colors <= 0 or not rom.in_bounds(palette, colors * 2):
+		return {"ok": false, "message": "The Mystery Gift palette is out of bounds."}
+	## Every `.pal` include opens on white, and a run pinned one word out does
+	## not.
+	if rom.u16le(palette) != 0x7FFF:
+		return {
+			"ok": false,
+			"message": "The Mystery Gift palette opens on $%04X, not white." % \
+				rom.u16le(palette),
+		}
+
+	var prompt: String = read_mystery_gift_prompt(rom, layout)
+	if not prompt.begins_with("Press A to"):
+		return {
+			"ok": false,
+			"message": "The Mystery Gift prompt reads \"%s\"." % prompt,
+		}
+	return {"ok": true, "message": "The Mystery Gift block verified."}
+
+
+## `.String_PressAToLink_BToCancel`, an inline `db` string rather than a
+## `text_far` stub, so it is walked to its own terminator.
+static func read_mystery_gift_prompt(rom: RomFile, layout: Dictionary) -> String:
+	var at: int = int((layout.get("mystery_gift", {}) as Dictionary).get("prompt", -1))
+	if at < 0:
+		return ""
+	var length: int = 0
+	while rom.in_bounds(at + length) and rom.u8(at + length) != Gen2Text.TERMINATOR:
+		length += 1
+		if length > RomLayout.OAK_TEXT_MAX_BYTES:
+			return ""
+	return Gen2Text.decode(rom.bytes(), at, length)
+
+
+## The Mystery Gift screen's whole cache section: the two gift tables, the
+## prompt, the palette `_CGB_MysteryGift` copies, and every tile
+## `InitMysteryGiftLayout` puts on screen. Gold and Silver's three art runs are
+## flattened into one strip here, in the order the routine loads them into
+## vTiles2, so the page indexes one block on all three cartridges.
+static func read_mystery_gift_section(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var entry: Dictionary = layout.get("mystery_gift", {})
+	if entry.is_empty():
+		return {}
+	var tiles: PackedByteArray = rom.slice(
+		int(entry.get("gfx", 0)), int(entry.get("tiles", 0)) * Gen2Tiles.TILE_BYTES
+	)
+	var background: int = int(entry.get("background", -1))
+	if background >= 0:
+		## `FarCopyBytesDouble` writes each 1bpp byte into both planes and the
+		## loop behind it then fills plane 1 with $ff, so the tile that lands in
+		## vTiles2 is the source byte and $ff alternating.
+		var raw: PackedByteArray = rom.slice(
+			background, RomLayout.MYSTERY_GIFT_BACKGROUND_BYTES
+		)
+		for byte: int in raw:
+			tiles.append(byte)
+			tiles.append(0xFF)
+	var gfx2: int = int(entry.get("gfx2", -1))
+	if gfx2 >= 0:
+		tiles.append_array(rom.slice(
+			gfx2, RomLayout.MYSTERY_GIFT_GFX2_TILES * Gen2Tiles.TILE_BYTES
+		))
+		## `ld hl, vTiles2 tile $3d / ld a, $ff / ByteFill`: the solid tile the
+		## screen is filled with sits one past the last run Gold and Silver
+		## load, so it is appended here rather than left for the page to invent.
+		for _byte: int in Gen2Tiles.TILE_BYTES:
+			tiles.append(0xFF)
+	var colors: Array = []
+	for index: int in int(entry.get("palettes", 0)) \
+			* RomLayout.MYSTERY_GIFT_PALETTE_COLORS:
+		colors.append(rom.u16le(int(entry.get("palette", 0)) + index * 2))
+	return {
+		"tiles": tiles,
+		"palette": colors,
+		"prompt": read_mystery_gift_prompt(rom, layout),
+		"items": Array(rom.slice(
+			int(entry.get("items", 0)), RomLayout.MYSTERY_GIFT_TABLE_ROWS
+		)),
+		"decos": Array(rom.slice(
+			int(entry.get("decos", 0)), RomLayout.MYSTERY_GIFT_TABLE_ROWS
+		)),
+	}
+
+
+func _import_mystery_gift(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var section: Dictionary = read_mystery_gift_section(rom, layout)
+	if section.is_empty():
+		return {}
+	return {
+		"tiles": Array(section["tiles"] as PackedByteArray),
+		"palette": (section["palette"] as Array).duplicate(),
+		"prompt": String(section["prompt"]),
+		"items": (section["items"] as Array).duplicate(),
+		"decos": (section["decos"] as Array).duplicate(),
+	}
+
+
+
 func _import_card_flip_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return read_card_flip_texts(rom, layout)
 
@@ -6583,6 +6754,30 @@ func _import_diploma_sheet(rom: RomFile, layout: Dictionary) -> Dictionary:
 		},
 	}
 
+
+## The Mystery Gift screen's own strip, written the way the diploma's is.
+## Crystal's is one run and Gold and Silver's is three, so the count is what
+## the section actually assembled rather than a constant.
+func _import_mystery_gift_sheet(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var section: Dictionary = read_mystery_gift_section(rom, layout)
+	if section.is_empty():
+		return {}
+	var tiles: int = (section["tiles"] as PackedByteArray).size() / Gen2Tiles.TILE_BYTES
+	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
+	if not RomCache.write_indices(
+		RomCache.tile_path(directory, "mystery_gift"),
+		Gen2Tiles.decode_2bpp_strip(section["tiles"], 0, tiles)
+	):
+		return {}
+	return {
+		"mystery_gift": {
+			"width": tiles * Gen2Tiles.TILE_WIDTH,
+			"height": Gen2Tiles.TILE_HEIGHT,
+			"tiles": tiles,
+			"first_code": 0,
+			"bits": 2,
+		},
+	}
 
 ## `GameFreakDittoGFX`, the one LZ run in the splash. `GameFreakPresentsInit`
 ## splits it over `vTiles0` and `vTiles1` as 128 tiles each, and the OAM sets
@@ -6981,6 +7176,7 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 	written.merge(_import_card_flip_sheets(rom, layout), true)
 	written.merge(_import_diploma_sheet(rom, layout), true)
 	written.merge(_import_link_border_sheet(rom, layout), true)
+	written.merge(_import_mystery_gift_sheet(rom, layout), true)
 	var done: int = 0
 	for name: String in sheets:
 		var sheet: Dictionary = sheets[name]

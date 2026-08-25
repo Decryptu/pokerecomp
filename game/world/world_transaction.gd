@@ -100,6 +100,7 @@ static func copy_into(target: Gen2SaveData, source: Gen2SaveData) -> void:
 	target.link_record = source.link_record.duplicate(true)
 	target.box_names = source.box_names.duplicate()
 	target.mailbox = source.mailbox.duplicate()
+	target.mystery_gift = source.mystery_gift.duplicate(true)
 	target.world = source.world
 	target.mods = source.mods.duplicate(true)
 	target.run_seed = source.run_seed
