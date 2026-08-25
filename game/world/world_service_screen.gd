@@ -50,16 +50,6 @@ const BOX_SCENE := preload("res://game/save/box_screen.tscn")
 ## and the move tutor open.
 const PARTY_SCENE: PackedScene = preload("res://game/save/party_screen.tscn")
 
-## engine/pokegear/pokegear.asm's card order. Each is behind its own
-## wPokegearFlags bit, named here by the engine flag that carries it, since that
-## is what the state holds. The clock card needs no flag.
-const POKEGEAR_CARDS: Array[Dictionary] = [
-	{"card": &"clock", "name": "CLOCK"},
-	{"card": &"map", "name": "MAP", "flag": Gen2WorldState.ENGINE_MAP_CARD},
-	{"card": &"phone", "name": "PHONE", "flag": Gen2WorldState.ENGINE_PHONE_CARD},
-	{"card": &"radio", "name": "RADIO", "flag": Gen2WorldState.ENGINE_RADIO_CARD},
-]
-
 ## `wPokegearRadioMusicPlaying`, which is what `ExitPokegearRadio_HandleMusic`
 ## branches on: zero while nothing in this overlay has touched the music, and
 ## one of the source's own two values once the radio card has.
@@ -387,13 +377,7 @@ func _open_pokegear(
 	if _world == null or _data == null:
 		_show_error("%s has no world or cartridge cache." % label)
 		return false
-	_pokegear_cards = []
-	for card: Dictionary in POKEGEAR_CARDS:
-		var owned: bool = not card.has("flag") \
-			or _world.state.is_engine_flag_active(int(card["flag"]))
-		if not owned:
-			continue
-		_pokegear_cards.append(card)
+	_pokegear_cards = Gen2PokegearScreen.owned_cards(_world.state)
 	return true
 
 
@@ -2223,9 +2207,7 @@ func _open_town_map(from_request: bool) -> void:
 	_town_map.closed.connect(_on_town_map_closed)
 	# The Pokegear's own MAP card when the Pokegear opened it, `_TownMap`'s
 	# corner box when `OverworldTownMap` did.
-	var owned: Array = []
-	for card: Dictionary in _pokegear_cards:
-		owned.append(StringName(card.get("card", &"")))
+	var owned: Array = Gen2PokegearScreen.owned_card_ids(_world.state)
 	var screen: StringName = Gen2TownMap.SCREEN_TOWN_MAP if from_request \
 		else Gen2TownMap.SCREEN_POKEGEAR_CARD
 	var opened: bool = _town_map.open(

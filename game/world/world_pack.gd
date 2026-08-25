@@ -154,6 +154,60 @@ static func source_pocket_name(data: GameData, item: int) -> String:
 	return pocket_name(pocket)
 
 
+## The five rows `ScrollingMenu_UpdateDisplay` writes, out of one pocket's own
+## items and the CANCEL row after them. The TM/HM pocket is
+## `TMHM_DisplayPocketItems`, which prints the TM number and the move it teaches
+## rather than the item's name.
+##
+## Here rather than in the screen that scrolls them, because the pack listing is
+## drawn on more than one screen and only one of them owns a cursor.
+static func list_rows(
+	data: GameData, pocket_type: int, items: Array, scroll: int = 0
+) -> Array:
+	var tmhm: bool = pocket_type == TYPE_TM_HM
+	var out: Array = []
+	for offset: int in Gen2PackPage.LIST_HEIGHT:
+		var index: int = scroll + offset
+		if index > items.size():
+			break
+		if index == items.size():
+			out.append({"kind": Gen2PackPage.ROW_CANCEL})
+			break
+		var entry: Dictionary = items[index]
+		var item: int = int(entry.get("item", 0))
+		## `PlaceMenuItemQuantity` asks `_CheckTossableItem`, so a key item and
+		## an HM carry no count on this screen.
+		var row: Dictionary = {
+			"kind": Gen2PackPage.ROW_ITEM,
+			"name": String(entry.get("name", "")),
+			"quantity": int(entry.get("quantity", 0)),
+			"show_quantity": can_toss(data, item),
+		}
+		if tmhm:
+			var number: int = RomLayout.tmhm_number_for_item(
+				item, data.tmhm_moves().size() if data != null else 0
+			)
+			var hm: bool = Gen2WorldTMHM.is_hm(item)
+			row["kind"] = Gen2PackPage.ROW_TM
+			row["hm"] = hm
+			row["number"] = number - RomLayout.TMHM_TM_COUNT if hm else number
+			row["name"] = data.move(
+				Gen2WorldTMHM.move_for_item(data, item)
+			).get("name", "") if data != null else ""
+		out.append(row)
+	return out
+
+
+## What `UpdateItemDescription` prints under a listing: the item's own text, or
+## the move's on a TM or an HM, which is what `TMHM_ItemDescription` reads.
+static func row_description(data: GameData, item: int) -> String:
+	if data == null or item <= 0:
+		return ""
+	if Gen2WorldTMHM.is_tm_hm(item):
+		return String(data.move(Gen2WorldTMHM.move_for_item(data, item)).get("description", ""))
+	return String(data.item(item).get("description", ""))
+
+
 static func pocket_name(pocket_type: int) -> String:
 	if POCKET_NAMES.has(pocket_type):
 		return String(POCKET_NAMES[pocket_type])

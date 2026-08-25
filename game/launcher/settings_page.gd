@@ -95,6 +95,21 @@ func _build() -> void:
 			_options.screen_fill = index == 1
 			_persist()
 	)))
+	app.add_child(Gen2LauncherUI.field(_theme, "Second screen", Gen2LauncherUI.segmented(
+		_theme, _titles(Gen2Options.SECOND_SCREENS),
+		maxi(Gen2Options.SECOND_SCREENS.find(_options.second_screen), 0),
+		func(index: int) -> void:
+			_options.second_screen = Gen2Options.SECOND_SCREENS[index]
+			_persist()
+	)))
+	app.add_child(Gen2LauncherUI.muted(
+		_theme,
+		"A handheld with a lower panel gets the map, the team, the pack, the "
+		+ "Pokedex and the trainer card on it, with a row of tabs to pick between "
+		+ "them. It is a view: nothing on it takes a button, and a page appears "
+		+ "only once the START menu would have offered it. Window opens the same "
+		+ "panel in a desktop window instead."
+	))
 	app.add_child(Gen2LauncherUI.muted(
 		_theme,
 		"Fill gives every screen the whole window instead of black bars. The "

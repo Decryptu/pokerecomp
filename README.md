@@ -155,6 +155,21 @@ never had.
 Icons come from [Lucide](https://lucide.dev). See
 [docs/THIRD_PARTY.md](docs/THIRD_PARTY.md).
 
+### The second screen
+
+A handheld with two displays -- the AYN Thor and its kind -- puts five of those
+entries on the lower one, with a row of tabs cut from the cartridge's own art
+under them: the Pokedex, the party, the pack, the Pokegear's map and the trainer
+card.
+
+It is a view. The only thing on it that takes a touch is the tab row, and a tab
+is there exactly when the START menu's own gate would have offered its row, so
+the team page appears with the starter and the Pokegear page with the phone
+call. Nothing on the lower screen can change the game.
+
+Settings > Second screen switches it off, or opens the same panel in a desktop
+window on a machine with no such hardware.
+
 ## Controls
 
 The games are played with the eight buttons the hardware had. A key, a
@@ -303,7 +318,7 @@ Exit code `0` means all tests passed. Run one script with `-gselect=<name>`.
 | `game/` | Feature folders with colocated scenes and scripts |
 | `autoload/` | Project singletons |
 | `assets/` | Authored or freely licensed assets; `assets/brand/` has its own README |
-| `addons/` | Third-party plugins |
+| `addons/` | Third-party plugins, and this project's own Android editor plugin |
 | `tests/` | `unit/` is the fast tier, `integration/` drives real screens |
 | `tools/` | Headless developer scripts; `tools/checks/` are validate topics |
 | `roms/` | User cartridges, excluded from Git and Godot imports |
@@ -323,6 +338,11 @@ godot --headless --path . --export-release "Linux" builds/linux/pokerecomp.x86_6
 Tests, tools and GUT are excluded, and `roms/` and the `user://` cache are not
 reachable from an export. Signing identities are placeholders: set the bundle
 identifiers, Android SDK paths and Apple team ID before publishing.
+
+Android builds through gradle, because the second display is reached by a
+platform plugin and a plugin needs one. Install the Android build template from
+the editor, or pass `--install-android-build-template` alongside the export, and
+build the plugin with `tools/build_android_plugin.sh` first.
 
 iOS forbids JIT and runtime native code, so mods must be interpreted GDScript,
 not compiled extensions. The project is therefore GDScript-first. See
