@@ -7497,6 +7497,119 @@ func test_a_visible_encounter_glow_is_quantized_and_walks_its_own_colours() -> v
 	assert_eq(rungs.size(), Gen2WorldEncounters.GLOW_RUNGS + 1)
 
 
+## The tables move while one map is up, and a provider that mints an entry after
+## the map change plans against whatever it was last handed. So they are pushed
+## when they move, without a new generation, and a population already admitted is
+## not deleted by the move.
+func test_a_populations_tables_are_refreshed_without_discarding_it() -> void:
+	var world := _world()
+	var driver := Gen2WorldEncounters.new()
+	var provider: Object = _table_provider()
+	driver.set_providers([provider])
+	driver.set_world(world)
+	driver.advance_frame()
+	assert_eq(driver.entries().size(), 1, "the map's own day species stands")
+	var generation: int = int((provider.get("context") as Dictionary)["generation"])
+	assert_eq(
+		int((provider.get("context")["tables"][Gen2WorldEncounter.METHOD_GRASS]
+			as Dictionary)["slots"][0]["species"]),
+		16
+	)
+
+	## A swarm is one of the three movers, and it changes what a roll would read
+	## without changing the map.
+	world.set_swarm_map(Vector2i(1, 1))
+	driver.advance_frame()
+	var swarmed: Dictionary = provider.get("context")["tables"][
+		Gen2WorldEncounter.METHOD_GRASS
+	]
+	assert_eq(StringName(swarmed["source"]), Gen2WorldEncounter.SOURCE_SWARM)
+	assert_eq(int((swarmed["slots"] as Array)[0]["species"]), 19)
+	assert_eq(
+		int((provider.get("context") as Dictionary)["generation"]), generation,
+		"an hour or a swarm is not a map change"
+	)
+
+	## The one the mod already placed keeps standing: revalidating it against the
+	## table that just moved would empty the route in a single frame.
+	assert_eq(driver.entries().size(), 1)
+	assert_eq(int(driver.entries()[0]["species"]), 16)
+
+	## A NEW entry is checked against the table in force now, which is what stops
+	## a day species being spawned at night with nothing reporting a fault.
+	provider.set("rows", [
+		{"id": &"one", "cell": Vector2i(5, 10), "species": 16, "level": 5, "dvs": 0},
+		{"id": &"two", "cell": Vector2i(5, 10), "species": 16, "level": 5, "dvs": 0},
+		{"id": &"three", "cell": Vector2i(5, 10), "species": 19, "level": 5, "dvs": 0},
+	])
+	driver.advance_frame()
+	var ids: Array = []
+	for entry: Dictionary in driver.entries():
+		ids.append(StringName(entry["id"]))
+	assert_eq(ids, [&"one", &"three"], "the standing one and the swarm's own")
+
+	## And an id the provider stopped sending is checked again if it comes back,
+	## rather than carrying its admission forever.
+	provider.set("rows", [
+		{"id": &"three", "cell": Vector2i(5, 10), "species": 19, "level": 5, "dvs": 0},
+	])
+	driver.advance_frame()
+	provider.set("rows", [
+		{"id": &"one", "cell": Vector2i(5, 10), "species": 16, "level": 5, "dvs": 0},
+	])
+	driver.advance_frame()
+	assert_eq(driver.entries().size(), 0, "off the table it left")
+
+	## `wildoff` moves the other half of the snapshot, and a script may run it in
+	## the middle of a walk. The sweep is taken again and the population standing
+	## on it goes: an admission is against a table, not against a map that has
+	## switched wild encounters off.
+	world.set_swarm_map(Vector2i(1, 1), false)
+	provider.set("rows", [
+		{"id": &"one", "cell": Vector2i(5, 10), "species": 16, "level": 5, "dvs": 0},
+	])
+	driver.advance_frame()
+	assert_eq(driver.entries().size(), 1, "the day species is back on the map's table")
+	world.state.set_wild_encounters_off(true)
+	driver.advance_frame()
+	assert_eq(
+		((provider.get("context")["eligible"] as Dictionary)[
+			Gen2WorldEncounter.METHOD_GRASS
+		] as PackedVector2Array).size(),
+		0, "the sweep is empty while wilds are off"
+	)
+	assert_eq(driver.entries().size(), 0, "and nothing stands on it")
+	world.state.set_wild_encounters_off(false)
+	driver.advance_frame()
+	assert_eq(driver.entries().size(), 1, "`wildon` puts the map back")
+
+
+## A provider whose population and recorded context the caller owns.
+func _table_provider() -> Object:
+	var script := GDScript.new()
+	script.source_code = """extends RefCounted
+
+var context: Dictionary = {}
+var rows: Array = [{
+	"id": &"one", "cell": Vector2i(5, 10), "species": 16, "level": 5, "dvs": 0,
+}]
+
+func set_context(value: Dictionary) -> void:
+	context = value
+
+func advance_frame() -> void:
+	pass
+
+func encounters() -> Array:
+	return rows
+
+func battle_finished(_id, _result) -> void:
+	pass
+"""
+	script.reload()
+	return script.new()
+
+
 ## `_changed` is what decides whether a view repaints, so a glow that moves while
 ## the Pokemon stands still has to be in it.
 func test_a_moving_glow_repaints_a_standing_pokemon() -> void:

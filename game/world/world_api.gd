@@ -2140,6 +2140,26 @@ func visible_encounter_cells() -> Dictionary:
 	return out
 
 
+## `wildoff`. The only thing that empties [method visible_encounter_cells] while
+## one map is up, and a script may run it at any point in a walk.
+func wild_encounters_off() -> bool:
+	return state.wild_encounters_off()
+
+
+## What [method active_encounter_tables] resolves against, and nothing else: the
+## hour the objects are drawn at, the Bug Contest and a swarm on this map. Three
+## reads rather than two table builds, so a caller may ask on every frame whether
+## the tables have moved without building one to find out.
+func encounter_tables_key() -> Array:
+	if current_map == null or data == null:
+		return []
+	return [
+		object_time_of_day,
+		bug_contest_active(),
+		state.swarm_active_on(current_map.group, current_map.number),
+	]
+
+
 ## The wild table each method would resolve against right now, with the Bug
 ## Contest's and the swarm's substitutions already made and the time of day
 ## already picked. `slots` is the flat list of `{species, min_level, max_level}`
@@ -2521,7 +2541,7 @@ func count_step() -> bool:
 func do_bike_step() -> bool:
 	if state == null or current_map == null:
 		return false
-	var flag: int = state.engine_flag(
+	var flag: int = Gen2WorldState.engine_flag(
 		Gen2WorldState.ENGINE_BIKE_SHOP_CALL, Gen2WorldState.is_crystal_profile(data)
 	)
 	var armed: bool = movement_mode == MOVEMENT_BIKE and state.is_engine_flag_active(flag)

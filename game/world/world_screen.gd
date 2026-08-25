@@ -861,10 +861,21 @@ func advance_frame() -> void:
 	## `player_step_offset_cells()` sees this frame rather than the last one's.
 	## Before the actors, which draw its population: a wild that moved this frame
 	## has to be in the sprite list the actor layer collects after it.
-	if _encounters != null and _encounters.advance_frame():
+	##
+	## Gated on the same predicate the map's own objects step behind, so a
+	## provider's frame count is the time the player spent on the overworld: a
+	## population stands still behind a battle, a menu, a text box and a fade,
+	## which is what the map does with its objects. Not the pass's: a wild is
+	## drawn between cells like an object mid-step, and the source moves those on
+	## every frame.
+	if _encounters != null and _objects_may_move() and _encounters.advance_frame():
 		_play_encounter_sounds()
 		if _renderer != null:
 			_renderer.refresh()
+	## Deliberately not gated with it: an actor owns no state the host validates
+	## and is drawn only on the frames the map is, so an animation running behind
+	## an overlay costs a mod nothing and freezing one would strand a walk cycle
+	## mid-step.
 	if _actors != null and _actors.advance_frame() and _renderer != null:
 		_renderer.refresh()
 	_spend_actor_requests()

@@ -16,7 +16,7 @@ const FILENAME: String = "mod.json"
 ## What each version added is in the commit history; `docs/MODS.md` documents the
 ## current contract only. An optional field a mod may send and an older host may
 ## drop is deliberately not a bump.
-const API_VERSION: int = 18
+const API_VERSION: int = 19
 ## The oldest contract this host still answers. See [constant API_VERSION].
 const MIN_API_VERSION: int = 1
 ## Ids address directories and registry keys, so they stay to a plain lowercase

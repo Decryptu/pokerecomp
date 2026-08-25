@@ -33,7 +33,7 @@ user://mods/<id>/
 | `id` | Lowercase `[a-z0-9][a-z0-9_-]*`. Addresses the directory and the registry keys |
 | `name` | Shown to the player |
 | `version` | The mod's own version. Strict `major.minor.patch` |
-| `api_version` | The contract this mod is written against. Current: `Gen2ModManifest.API_VERSION`, 18. A host accepts 1 to 18 |
+| `api_version` | The contract this mod is written against. Current: `Gen2ModManifest.API_VERSION`, 19. A host accepts 1 to 19 |
 | `entry` | A `.gd` path inside the mod directory, or inside the pack when there is one |
 | `pack` | Optional `.pck` or `.zip` beside `mod.json`, holding the mod's files |
 | `description` | Optional |
@@ -1084,8 +1084,8 @@ registration:
 
 | Method | Called when |
 |---|---|
-| `set_context(context: Dictionary)` | The map changed, and whenever the player's pose moves |
-| `advance_frame()` | Once per hardware frame |
+| `set_context(context: Dictionary)` | The map changed, and whenever the player's pose, the occupancy or the tables move |
+| `advance_frame()` | Once per hardware frame the overworld is running. Not while a battle, a menu, an overlay, a text box, a map fade or a trainer's approach owns the world, which is when the map's own objects stand still too. A provider counting its own calls is counting the time the player spent walking around |
 | `encounters() -> Array` | The population now. Asked once a frame |
 | `battle_finished(id: StringName, result: Dictionary)` | A battle this provider's entry started ended |
 
@@ -1094,9 +1094,9 @@ The context is a snapshot, never a live handle:
 | Key | Meaning |
 |---|---|
 | `map` | `Vector2i(group, number)` |
-| `eligible` | `{grass, surf}` to `PackedVector2Array` of cells a wild may stand on. `CanEncounterWildMon` per cell |
+| `eligible` | `{grass, surf}` to `PackedVector2Array` of cells a wild may stand on. `CanEncounterWildMon` per cell. Taken again, and pushed, if a script runs `wildoff` or `wildon` while the map is up |
 | `occupied` | The walk cells the map's own objects hold this frame: NPCs, item balls, all four cells of a big object, and both cells of one mid-step. Refreshed with `player`, not with `map`. An entry outside `eligible` is dropped, so the two are deliberately separate. Refusing an occupied cell is the provider's choice. The player's cell is not in it |
-| `tables` | `{grass, surf}` to `{source, slots}`, the table a roll would read now, with swarm and Bug Contest substitutions and the time of day already applied. A slot is `{species, min_level, max_level}` |
+| `tables` | `{grass, surf}` to `{source, slots}`, the table a roll would read now, with swarm and Bug Contest substitutions and the time of day already applied. A slot is `{species, min_level, max_level}`. Refreshed while the map is up, whenever the hour, a swarm or the Bug Contest moves what a roll would read |
 | `player` | `{cell, facing}` |
 | `run_seed` | The run's seed, so a population is reproducible |
 | `generation` | Bumped on every map change; an older one means the context is stale |
@@ -1134,6 +1134,11 @@ What the host does with a valid population:
 - Starts the normal wild battle when the player steps onto an entry, with that
   entry's exact species, level and DVs, then calls `battle_finished`. Whether the
   entry survives is the provider's rule to document.
+- Keeps an entry it already admitted while it keeps standing on the same cell's
+  method with the same species and level, even after the tables move under it. A
+  route entered in daylight therefore turns over to its night species as each
+  wild is replaced, rather than emptying at six. A new entry is checked against
+  the tables in force now, so `generation` never moves for an hour boundary.
 - Discards the population, its sprites and any running pulse on a map change.
 - Plays `ANIM_SEND_OUT_MON` with the shiny param over a pulsing shiny entry, sound
   included. A request inside `Gen2WorldEncounters.PULSE_FRAMES` of the last one is
