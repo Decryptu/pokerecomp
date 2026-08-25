@@ -170,12 +170,12 @@ static func box_text(
 		"mystery_gift_partner_name": partner,
 		"mystery_gift_player_name": player,
 	}
-	for name: String in buffers:
-		var address: int = data.special_text_ram(name)
+	for buffer: String in buffers:
+		var address: int = data.special_text_ram(buffer)
 		if address >= 0:
 			text = Gen2TextStream.fill_all_markers(
 				text, "%s%04X>" % [Gen2TextStream.RAM_MARKER, address],
-				String(buffers[name])
+				String(buffers[buffer])
 			)
 	var buffer_1: Array[int] = data.string_buffer_addresses()
 	if buffer_1.size() > RomLayout.STRING_BUFFER_1:

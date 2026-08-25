@@ -6300,6 +6300,10 @@ func _import_pokedex_sheets(rom: RomFile, layout: Dictionary) -> Dictionary:
 	for run: Array in [
 		["pokedex", int(entry["gfx"]), RomLayout.POKEDEX_TILES],
 		["pokedex_slowpoke", int(entry["slowpoke"]), RomLayout.POKEDEX_SLOWPOKE_TILES],
+		[
+			"pokedex_question_mark", int(entry["question_mark"]),
+			RomLayout.POKEDEX_QUESTION_MARK_TILES,
+		],
 	]:
 		var name: String = String(run[0])
 		var tiles: int = int(run[2])

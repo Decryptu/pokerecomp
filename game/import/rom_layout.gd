@@ -672,12 +672,15 @@ const CARD_PIC_TILES: int = CARD_PIC_COLUMNS * CARD_PIC_ROWS
 ## tiles `Pokedex_LoadGFX` decompresses to `vTiles2 tile $31` and
 ## `PokedexSlowpokeLZ` the 55 it decompresses to `vTiles0` straight after.
 ##
-## Not what an unseen species is drawn as, whatever this comment used to say:
-## `Pokedex_LoadSelectedMonTiles` sends that case to `LoadQuestionMarkPic` and
-## `gfx/pokedex/question_mark.2bpp.lz`, which no offset here names yet.
-## Both were located by compressing the pinned `gfx/pokedex` PNGs with pret's
-## `tools/lzcompress` flags: each hits once per dump and the second follows the
-## first, which is the source's own order.
+## Neither is what an unseen species is drawn as: `Pokedex_LoadSelectedMonTiles`
+## sends that case to `LoadQuestionMarkPic` and `gfx/pokedex/question_mark.2bpp.lz`,
+## which is `question_mark` below.
+## The first two were located by compressing the pinned `gfx/pokedex` PNGs with
+## pret's `tools/lzcompress` flags: each hits once per dump and the second follows
+## the first, which is the source's own order. The question mark's own PNG would
+## not match a compressed stream in any tile order or polarity, so it was found
+## by its shape instead: exactly one LZ run in each dump decompresses to 49
+## tiles and nothing else does, and all three carry the same picture.
 ##
 ## `Footprints` is 1bpp and uncompressed, 251 species of four tiles stored as
 ## eight top halves then the eight matching bottoms, which is why a bottom half
@@ -685,6 +688,10 @@ const CARD_PIC_TILES: int = CARD_PIC_COLUMNS * CARD_PIC_ROWS
 ## matches once per dump and is byte identical on all three.
 const POKEDEX_TILES: int = 58
 const POKEDEX_SLOWPOKE_TILES: int = 55
+## `LoadQuestionMarkPic`, whose `ld c, 7 * 7` is what the copy out of `sScratch`
+## sends to the pic slot. Column major, the way every pic is stored.
+const POKEDEX_QUESTION_MARK_TILES: int = 49
+const POKEDEX_QUESTION_MARK_COLUMNS: int = 7
 ## `Pokedex_GetAndPlaceFootprint` asks for two 1bpp tiles at a time, twice.
 const FOOTPRINT_TILES: int = 4
 const FOOTPRINT_HALF_TILES: int = 2
@@ -2513,6 +2520,7 @@ const GOLD_SILVER: Dictionary = {
 		# the addresses differ.
 		"gfx": 0x41511,
 		"slowpoke": 0x416B3,
+		"question_mark": 0x1C0C40,
 		"footprints": 0xF930E,
 		"interface_palette": 0xA34D,
 		"unown_font": 0xFB30E,
@@ -3082,6 +3090,7 @@ const CRYSTAL: Dictionary = {
 		# way `trainer_card.badge_palette` pins PREDEFPAL_CGB_BADGE.
 		"gfx": 0x4150E,
 		"slowpoke": 0x416B0,
+		"question_mark": 0x1DE0E1,
 		"footprints": 0xF9434,
 		"interface_palette": 0x9EDE,
 		"unown_font": 0x1DC000,

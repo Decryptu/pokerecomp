@@ -221,6 +221,10 @@ func test_the_measurements_are_punctuated_the_way_print_num_punctuates_them() ->
 	assert_eq(Gen2Pokedex.weight_text(150), "  15.0", "Bulbasaur")
 	assert_eq(Gen2Pokedex.weight_text(10140), "1014.0", "Snorlax")
 	assert_eq(Gen2Pokedex.weight_text(2), "   0.2")
+	# A call whose decimal nibble is zero writes no point at all, and the last
+	# digit is then the one that always prints: `SEEN` reads "  0" at zero.
+	assert_eq(Gen2Pokedex.print_num(0, 3, 3), "  0")
+	assert_eq(Gen2Pokedex.print_num(21, 3, 3), " 21")
 
 
 ## `Pokedex_NextOrPreviousDexEntry` keeps moving until it reaches a species that
@@ -566,8 +570,8 @@ func test_the_picture_box_names_its_tiles_down_each_column() -> void:
 func test_the_listing_window_swaps_its_scroll_bar_in_old_mode() -> void:
 	var page: Gen2PokedexPage = _page()
 	var rows: Array = _dex([1, 2], [2]).rows()
-	var new_mode: PackedInt32Array = page.window_map(rows, false, 0)
-	var old_mode: PackedInt32Array = page.window_map(rows, true, 0)
+	var new_mode: PackedInt32Array = page.window_map(rows, false)
+	var old_mode: PackedInt32Array = page.window_map(rows, true)
 	var columns: int = Gen2PokedexPage.WINDOW_COLUMNS
 	assert_eq(new_mode[11], Gen2PokedexPage.SCROLL_TOP)
 	assert_eq(old_mode[11], Gen2PokedexPage.NO_SCROLL_TOP)
@@ -581,13 +585,19 @@ func test_a_listing_row_marks_caught_and_hides_an_unseen_name() -> void:
 	var page: Gen2PokedexPage = _page()
 	var order: Array = Fixture.new_order()
 	var caught: int = int(order[0])
-	var map: PackedInt32Array = page.window_map(_dex([caught], [caught]).rows(), false, 0)
+	var map: PackedInt32Array = page.window_map(_dex([caught], [caught]).rows(), false)
 	var columns: int = Gen2PokedexPage.WINDOW_COLUMNS
-	assert_eq(map[2 * columns], Gen2PokedexPage.CURSOR_CODE, "the arrow is in column 0")
-	assert_eq(map[2 * columns + 1], Gen2PokedexPage.CAUGHT_SYMBOL)
 	assert_eq(
-		map[4 * columns + 2], Gen2Text.encode(Gen2Pokedex.NOT_SEEN_NAME)[0],
+		map[2 * columns], Gen2PokedexPage.CAUGHT_SYMBOL,
+		"the caught symbol is the cell `.PrintEntry` steps over, which is column 0",
+	)
+	assert_eq(
+		map[4 * columns + 1], Gen2Text.encode(Gen2Pokedex.NOT_SEEN_NAME)[0],
 		"the second row has not been seen",
+	)
+	assert_eq(
+		map[4 * columns + 11], Gen2PokedexPage.SCROLL,
+		"a ten-letter name still stops short of the scroll bar's column",
 	)
 
 
@@ -653,5 +663,54 @@ func test_the_unown_screen_places_its_letters_and_word() -> void:
 		_cell(map, 4, 10), RomLayout.UNOWN_FONT_FIRST_TILE + 8,
 		"I caught second, in the second cell",
 	)
-	assert_eq(_cell(map, 3, 10), Gen2PokedexPage.CURSOR_CODE)
+	assert_eq(
+		_cell(map, 3, 10), Gen2PokedexPage.UNOWN_CURSOR_CHAR,
+		"`ld c, FIRST_UNOWN_CHAR + NUM_UNOWN` is a diamond, not the arrow",
+	)
 	assert_eq(_cell(map, 4, 15), Gen2Text.encode("ESCAPE")[0])
+
+
+## `.Title` is `db $3b, " OPTION ", $3c`, so the second button picture follows
+## the string's own trailing space rather than replacing it.
+func test_a_title_bar_keeps_the_space_in_front_of_its_second_picture() -> void:
+	var map: PackedInt32Array = _page().option_map(false, 0)
+	assert_eq(_cell(map, 0, 1), Gen2PokedexPage.SELECT_OPTION[0])
+	assert_eq(_cell(map, 8, 1), Gen2Text.encode(" ")[0], "OPTION's trailing space")
+	assert_eq(_cell(map, 9, 1), Gen2PokedexPage.START_SEARCH[0])
+
+
+## `Pokedex_PlaceSearchScreenTypeStrings` places a fixed-width
+## `PokedexTypeSearchStrings` entry at (9,4) and (9,6), so the name is centred by
+## the table rather than left where a variable-width one would start.
+func test_the_search_screen_centres_both_type_names_in_their_own_field() -> void:
+	var dex: Gen2Pokedex = _dex([])
+	for value: int in range(0, Gen2Pokedex.SEARCH_TYPE_MAX + 1):
+		var drawn: String = dex.search_type_string(value)
+		assert_eq(drawn.length(), Gen2Pokedex.SEARCH_TYPE_WIDTH, drawn)
+		assert_eq(drawn.strip_edges(), dex.search_type_name(value))
+		var left: int = drawn.length() - drawn.lstrip(" ").length()
+		var right: int = drawn.length() - drawn.rstrip(" ").length()
+		assert_true(right >= left and right - left <= 1, "the odd cell is on the right")
+	var map: PackedInt32Array = _page().search_map(
+		dex.search_type_string(Gen2Pokedex.SEARCH_TYPE_NONE),
+		dex.search_type_string(1), Gen2Pokedex.SEARCH_ROW_TYPE_1
+	)
+	assert_eq(_cell(map, 11, 4), Gen2Text.encode("-")[0], "\"  ----  \" starts at 9")
+
+
+## `PadFrontpic` fills the seven by seven box, so an unseen row's question mark
+## and a five-wide species both cover it entirely.
+func test_a_picture_fills_its_whole_box() -> void:
+	var side: int = Gen2PokedexPage.PIC_COLUMNS * Gen2PokedexPage.TILE
+	var question: Image = _page().unseen_pic()
+	assert_not_null(question, "the cache carries LoadQuestionMarkPic's own pic")
+	assert_eq(question.get_size(), Vector2i(side, side))
+	var padded: Image = Gen2PokedexPage.pad_pic(
+		Image.create_empty(40, 40, false, Image.FORMAT_RGBA8), Color.RED
+	)
+	assert_eq(padded.get_size(), Vector2i(side, side))
+	assert_eq(padded.get_pixel(0, 0), Color.RED, "the blank column PadFrontpic fills")
+	assert_eq(
+		padded.get_pixel(side - 1, side - 1), Color.RED,
+		"a narrow pic is one column in and sits on the box's floor",
+	)

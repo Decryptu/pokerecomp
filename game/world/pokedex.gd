@@ -74,6 +74,9 @@ const SEARCH_TYPE_MAX: int = 17
 ## and the only value the second row can hold that the first cannot.
 const SEARCH_TYPE_NONE: int = 0
 const SEARCH_TYPE_NONE_NAME: String = "----"
+## `POKEDEX_TYPE_STRING_LENGTH` less the terminator, which is how wide every
+## entry of `PokedexTypeSearchStrings` is.
+const SEARCH_TYPE_WIDTH: int = 8
 
 ## `Pokedex_UpdateSearchScreen.ArrowCursorData`'s four rows. The two type rows
 ## are the ones left and right change, which is `Pokedex_UpdateSearchMonType`'s
@@ -224,13 +227,16 @@ func init_cursor_position() -> void:
 	if prev_entry > RomLayout.SPECIES_COUNT and not _order.has(prev_entry):
 		return
 	var index: int = 0
-	if listing_end >= listing_height + 1:
-		for step: int in listing_end - listing_height:
+	# Both walks count in sevens whatever `wDexListingHeight` holds: `cp $8`,
+	# `sub $7` and `ld c, $7` are the routine's own literals, and the search
+	# results screen's four never reach it.
+	if listing_end >= LISTING_HEIGHT + 1:
+		for step: int in listing_end - LISTING_HEIGHT:
 			if _order[index] == prev_entry:
 				return
 			index += 1
 			scroll += 1
-	for step: int in listing_height:
+	for step: int in LISTING_HEIGHT:
 		if index < _order.size() and _order[index] == prev_entry:
 			return
 		index += 1
@@ -493,16 +499,19 @@ static func print_num(value: int, digits: int, before_point: int) -> String:
 	var text: String = ""
 	var padded: String = String.num_int64(maxi(value, 0)).lpad(digits, "0").right(digits)
 	var printed: bool = false
+	## The high nibble of `c` is what puts a point in at all, so a call that
+	## leaves it zero prints a plain field and latches on its last digit alone.
+	var point_at: int = before_point - 1 if before_point < digits else -1
 	for index: int in digits:
 		var digit: String = padded[index]
 		## `dec e` reaching zero on this digit, which is the last one in front
-		## of the point.
-		if index == before_point - 1:
+		## of the point, or the last of all when there is no point.
+		if index == point_at or index == digits - 1:
 			printed = true
 		if digit != "0":
 			printed = true
 		text += digit if printed else " "
-		if index == before_point - 1:
+		if index == point_at:
 			text += "."
 	return text
 
@@ -564,6 +573,17 @@ func search_type_name(value: int) -> String:
 	if value <= SEARCH_TYPE_NONE or value > SEARCH_TYPES.size():
 		return SEARCH_TYPE_NONE_NAME
 	return _data.type_name(SEARCH_TYPES[value - 1]) if _data != null else ""
+
+
+## `PokedexTypeSearchStrings`' own entry for a search row: the type's name
+## centred in [constant SEARCH_TYPE_WIDTH] cells, with the odd cell on the right.
+## Named rather than imported for the same reason [constant SEARCH_TYPES] is, and
+## pinned entry by entry in tests/unit/test_pokedex.gd.
+func search_type_string(value: int) -> String:
+	var name: String = search_type_name(value)
+	@warning_ignore("integer_division")
+	var left: int = (SEARCH_TYPE_WIDTH - name.length()) / 2
+	return name.lpad(name.length() + maxi(left, 0)).rpad(SEARCH_TYPE_WIDTH)
 
 
 ## `Pokedex_UpdateSearchMonType`, which reads left and right on the two type rows

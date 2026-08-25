@@ -18,6 +18,8 @@ const NEW_BARK_GROUP: int = 24
 const NEW_BARK_MAP: int = 7
 ## How far down the dex the preview's save has been filled.
 const SEEN: int = 251
+## The one species left out of it, so the listing has an unseen row to draw.
+const UNSEEN: int = 1
 
 const BUTTONS: Dictionary = {
 	"u": Gen2Button.UP, "d": Gen2Button.DOWN,
@@ -30,10 +32,15 @@ const BUTTONS: Dictionary = {
 ## have to know the walk.
 const ROUTES: Dictionary = {
 	"list": "",
+	# BULBASAUR's own row, which is the one that is not seen: `NewPokedexOrder`
+	# holds it at position 226, which is thirty-two pages down and one row on.
+	"unseen": "r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,d",
 	"entry": "a",
 	"option": "sel",
 	"search": "start",
-	"results": "start,d,d,a",
+	# BEGIN SEARCH spends `AnimateDexSearchSlowpoke` before the results open, so
+	# the walk has to wait it out.
+	"results": "start,d,d,a,f%d" % Gen2PokedexScreen.SEARCH_FRAMES,
 	"unown": "sel,d,d,d,a",
 }
 
@@ -96,9 +103,14 @@ func _initialize() -> void:
 ## A world whose dex is filled far enough to draw every row state: seen up to
 ## [constant SEEN], caught on every second one, and the Unown dex unlocked so the
 ## OPTION screen offers its fourth row.
+##
+## [constant UNSEEN] is left out so one row is the not-seen one, which is the
+## only row that draws `LoadQuestionMarkPic`'s picture.
 static func _state() -> Gen2WorldState:
 	var state := Gen2WorldState.new({}, {}, {}, {})
 	for species: int in range(1, SEEN + 1):
+		if species == UNSEEN:
+			continue
 		state.set_species_seen(species)
 		if species % 2 == 0:
 			state.set_species_caught(species)
