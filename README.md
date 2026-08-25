@@ -158,14 +158,18 @@ Icons come from [Lucide](https://lucide.dev). See
 ### The second screen
 
 A handheld with two displays -- the AYN Thor and its kind -- puts five of those
-entries on the lower one, with a row of tabs cut from the cartridge's own art
-under them: the Pokedex, the party, the pack, the Pokegear's map and the trainer
-card.
+entries on the lower one: the Pokedex, the party, the pack, the Pokegear's map
+and the trainer card. Under them is a menu box in the frame the player chose,
+with a tab for each, drawn with the cartridge's own art.
 
-It is a view. The only thing on it that takes a touch is the tab row, and a tab
-is there exactly when the START menu's own gate would have offered its row, so
-the team page appears with the starter and the Pokegear page with the phone
-call. Nothing on the lower screen can change the game.
+It is a view. The only thing on it that takes a touch is the tab row; no page on
+it reads input at all, and none of them is a copy, so what is on the lower screen
+is the same screen the START menu opens. A tab is there exactly when that menu's
+own gate would have offered its row, so the team page appears with the starter
+and the Pokegear page with the phone call.
+
+Outside a game the panel shows the project's own mark: the pages belong to a
+world, and there is no world behind the launcher.
 
 Settings > Second screen switches it off, or opens the same panel in a desktop
 window on a machine with no such hardware.

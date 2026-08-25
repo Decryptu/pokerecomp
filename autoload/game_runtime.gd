@@ -77,6 +77,10 @@ func take_pending_new_game() -> Dictionary:
 var _save: Gen2SaveData = null
 var _save_key: String = ""
 var _loaded_mods: Array = []
+## The lower display and whatever puts it on real hardware. Both null on a
+## machine with one screen, which is every desktop and most phones.
+var _second_screen: Gen2SecondScreen = null
+var _second_screen_host: Gen2SecondScreenHost = null
 
 
 ## Loads installed mods before any screen exists.
@@ -87,7 +91,59 @@ var _loaded_mods: Array = []
 ## reported while there is still a launcher to report it in.
 func _ready() -> void:
 	apply_display_options(Gen2OptionsStore.current())
+	_attach_second_screen()
 	load_mods()
+
+
+## Brings the lower display up for the whole process rather than for the world.
+##
+## Here rather than in [Gen2WorldScreen] because a handheld with two panels has
+## two panels in the launcher as well, and a black one reads as a fault. The
+## screen shows the project's own mark until a world is handed to it and again
+## when that world closes; [method set_second_screen_world] is the one way it
+## changes hands.
+##
+## Refused on anything but a player's own launch, for the reason
+## [method apply_display_options] gives: a check or a screenshot driver must not
+## open a window of its own.
+func _attach_second_screen() -> void:
+	if not is_player_launch():
+		return
+	var view := Gen2SecondScreen.new()
+	view.name = "SecondScreen"
+	add_child(view)
+	var host: Gen2SecondScreenHost = Gen2SecondScreenHost.attach(
+		view, Gen2OptionsStore.current().second_screen
+	)
+	if host == null:
+		Gen2Screen.drop(view)
+		return
+	add_child(host)
+	_second_screen = view
+	_second_screen_host = host
+
+
+## The world the lower display mirrors, or nothing for the launcher's own mark.
+## Called by the screen that owns a world when it is built and again when it goes.
+func set_second_screen_world(
+	data: GameData, world: Gen2WorldAPI, save: Gen2SaveData
+) -> void:
+	if _second_screen != null:
+		_second_screen.set_world(data, world, save)
+
+
+## The lower display, or null on a machine with one screen. For a caller that has
+## to photograph it.
+func second_screen() -> Gen2SecondScreen:
+	return _second_screen
+
+
+## Follows the world without the world having to say so: the gates are three
+## numbers and [method Gen2SecondScreen.refresh] does nothing on a frame where
+## none of them moved.
+func _process(_delta: float) -> void:
+	if _second_screen != null:
+		_second_screen.refresh()
 
 
 ## Puts the app block's window and frame-rate settings into the engine.

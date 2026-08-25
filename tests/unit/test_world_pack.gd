@@ -293,3 +293,35 @@ func test_a_registered_pocket_follows_the_source_cycle() -> void:
 	assert_eq(pockets.size(), 5)
 	assert_eq(pockets[4]["name"], "Relics")
 	assert_eq((pockets[4]["items"] as Array)[0]["item"], ITEM_UNCLASSIFIED)
+
+
+## `ScrollingMenu_UpdateDisplay`'s CANCEL row closes the pack, and a screen that
+## cannot be closed asks for the listing without it. The rows either side of it
+## are the same either way.
+func test_the_listing_can_be_asked_for_without_its_cancel_row() -> void:
+	var pockets: Array = Gen2WorldPack.build(
+		_data, Gen2WorldState.new({}, {}, {ITEM_POTION: 3})
+	)
+	var items: Array = (pockets[0] as Dictionary)["items"]
+	var driven: Array = Gen2WorldPack.list_rows(_data, Gen2WorldPack.TYPE_ITEM, items)
+	assert_eq(driven.size(), 2, "one item and the row that closes the pack")
+	assert_eq(StringName(driven[1]["kind"]), Gen2PackPage.ROW_CANCEL)
+	var read: Array = Gen2WorldPack.list_rows(
+		_data, Gen2WorldPack.TYPE_ITEM, items, 0, false
+	)
+	assert_eq(read.size(), 1, "the item alone")
+	assert_eq(read[0], driven[0], "the item's own row is untouched")
+
+
+## A pocket with nothing in it is the CANCEL row and nothing else, so asking for
+## it without one is an empty listing rather than a listing of one blank.
+func test_an_empty_pocket_read_without_cancel_is_empty() -> void:
+	var pockets: Array = Gen2WorldPack.build(_data, Gen2WorldState.new({}, {}, {}))
+	var items: Array = (pockets[0] as Dictionary)["items"]
+	assert_eq(
+		Gen2WorldPack.list_rows(_data, Gen2WorldPack.TYPE_ITEM, items).size(), 1
+	)
+	assert_eq(
+		Gen2WorldPack.list_rows(_data, Gen2WorldPack.TYPE_ITEM, items, 0, false).size(),
+		0
+	)

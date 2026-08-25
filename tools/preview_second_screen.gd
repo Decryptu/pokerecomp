@@ -4,8 +4,9 @@ extends SceneTree
 ##
 ##   Godot --path . -s res://tools/preview_second_screen.gd -- <game> <out.png> [tab] [progress] [panel]
 ##
-## `tab` is one of `pokedex`, `pokemon`, `pack`, `pokegear`, `player`, or `all`
-## to write one file per open tab with the tab's name before the extension.
+## `tab` is one of `pokedex`, `pokemon`, `pack`, `pokegear`, `player`, `idle` for
+## the picture the panel shows with no world on it, or `all` to write one file per
+## open tab with the tab's name before the extension.
 ## `progress` is how far the run has got, which is the only thing that decides
 ## which tabs exist: `start` is a player who has just left their bedroom,
 ## `starter` has Elm's Pokemon, `gear` has the Pokegear and the MAP card, and
@@ -28,6 +29,9 @@ const DEFAULT_PANEL := Vector2i(1240, 1080)
 const MAP_GROUP: int = 24
 const MAP_NUMBER: int = 4
 const START_CELL := Vector2i(13, 6)
+
+## The panel with no world on it, which is what the launcher shows.
+const TAB_IDLE: StringName = &"idle"
 
 const TABS: Array[StringName] = [
 	Gen2WorldStartMenu.ITEM_POKEDEX,
@@ -126,7 +130,10 @@ func _initialize() -> void:
 	_view.canvas_size = Gen2SecondScreenHost.canvas_for(_panel)
 	root.add_child(_view)
 	_view.size = Vector2(_view.canvas_size)
-	_view.set_world(data, world, save)
+	if _tab == TAB_IDLE:
+		_view.set_world(null, null, null)
+	else:
+		_view.set_world(data, world, save)
 	_pending = [_tab] if _tab != &"all" else TABS.duplicate()
 	current_scene = _view
 
@@ -163,6 +170,10 @@ func _process(_delta: float) -> bool:
 		quit(0)
 		return true
 	var kind: StringName = StringName(_pending.pop_front())
+	if kind == TAB_IDLE:
+		_armed = kind
+		_wait = 2
+		return false
 	if _view.select_tab(kind):
 		_armed = kind
 		## The page is built now and the viewport carries it a frame later, which

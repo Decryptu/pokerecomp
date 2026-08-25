@@ -670,7 +670,11 @@ const CARD_PIC_TILES: int = CARD_PIC_COLUMNS * CARD_PIC_ROWS
 
 ## The Pokedex's graphics (engine/pokedex/pokedex.asm). `PokedexLZ` is the 58
 ## tiles `Pokedex_LoadGFX` decompresses to `vTiles2 tile $31` and
-## `PokedexSlowpokeLZ` the 55 at `vTiles0` that an unseen species is drawn as.
+## `PokedexSlowpokeLZ` the 55 it decompresses to `vTiles0` straight after.
+##
+## Not what an unseen species is drawn as, whatever this comment used to say:
+## `Pokedex_LoadSelectedMonTiles` sends that case to `LoadQuestionMarkPic` and
+## `gfx/pokedex/question_mark.2bpp.lz`, which no offset here names yet.
 ## Both were located by compressing the pinned `gfx/pokedex` PNGs with pret's
 ## `tools/lzcompress` flags: each hits once per dump and the second follows the
 ## first, which is the source's own order.
