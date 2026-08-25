@@ -560,6 +560,11 @@ func _selected_pic() -> Image:
 	# selected row.
 	if species <= 0 or not _dex.can_open_entry():
 		return _page.unseen_pic()
+	# `ld a, [wFirstUnownSeen] / ld [wUnownLetter], a` in front of `GetMonFrontpic`:
+	# every UNOWN row in the listing and its entry are drawn as the first Unown
+	# this save met, not as form A.
+	if species == RomLayout.UNOWN_SPECIES and _dex.first_unown_seen() > 0:
+		return _pic_image(_data.unown_pic(_dex.first_unown_seen() - 1), species)
 	return _pic_image(_data.species_pic(species), species)
 
 

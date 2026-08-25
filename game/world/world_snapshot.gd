@@ -5,6 +5,13 @@ extends RefCounted
 ## Cartridge content is looked up from GameData when this snapshot is opened.
 
 const FORMAT_VERSION: int = 1
+## `constants/ram_constants.asm`'s two `wSpawnAfterChampion` values, and the
+## `SpawnPoints` indices `PostCreditsSpawn` and `SpawnAfterRed` send each to.
+const SPAWN_AFTER_NONE: int = 0
+const SPAWN_AFTER_LANCE: int = 1
+const SPAWN_AFTER_RED: int = 2
+const SPAWN_NEW_BARK: int = 14
+const SPAWN_MT_SILVER: int = 26
 
 var format_version: int = FORMAT_VERSION
 var map_id: Vector2i = Vector2i(-1, -1)
@@ -37,6 +44,12 @@ var frame_number: int = 0
 ## which reads as a game that has entered no Pokemon Center and no cave.
 var last_spawn_map: Vector2i = Vector2i(-1, -1)
 var dig_warp: Dictionary = {}
+## `wSpawnAfterChampion`, saved player data on both pins: `HallOfFame` writes
+## `SPAWN_LANCE` and `RedCredits` writes `SPAWN_RED`, and the CONTINUE that opens
+## the slot next puts the player at New Bark Town or Mount Silver instead of
+## where the credits caught them, then clears the byte. Zero in a snapshot
+## written before it existed, which reads as a save no credits have rolled on.
+var spawn_after_champion: int = SPAWN_AFTER_NONE
 var world_state: Gen2WorldState = Gen2WorldState.new()
 
 
@@ -58,6 +71,7 @@ static func from_world(world: Gen2WorldAPI) -> Gen2WorldSnapshot:
 	out.frame_number = world.frame_number
 	out.last_spawn_map = world.last_spawn_map
 	out.dig_warp = world.dig_warp.duplicate()
+	out.spawn_after_champion = world.spawn_after_champion
 	out.world_state = Gen2WorldState.from_dict(world.state.to_dict())
 	return out
 
@@ -77,6 +91,7 @@ func to_dict() -> Dictionary:
 		"frame_number": frame_number,
 		"last_spawn_map": [last_spawn_map.x, last_spawn_map.y],
 		"dig_warp": dig_warp.duplicate(),
+		"spawn_after_champion": spawn_after_champion,
 		"world_state": world_state.to_dict() if world_state != null else {},
 	}
 
@@ -116,6 +131,10 @@ static func from_dict(raw: Variant) -> Gen2WorldSnapshot:
 			"map_group": int((raw_dig as Dictionary).get("map_group", 0)),
 			"map_number": int((raw_dig as Dictionary).get("map_number", 0)),
 		}
+	out.spawn_after_champion = clampi(
+		int(source.get("spawn_after_champion", SPAWN_AFTER_NONE)),
+		SPAWN_AFTER_NONE, SPAWN_AFTER_RED
+	)
 	out.world_state = Gen2WorldState.from_dict(source.get("world_state", {}))
 	return out
 
@@ -130,3 +149,14 @@ static func _vector_from_value(value: Variant) -> Vector2i:
 	if value is Dictionary:
 		return Vector2i(int((value as Dictionary).get("x", -1)), int((value as Dictionary).get("y", -1)))
 	return Vector2i(-1, -1)
+
+
+## `.SpawnAfterE4` and `.AfterRed`: the spawn a CONTINUE puts the player at
+## instead of the map the slot was written on, or -1 when the byte is clear.
+func continue_spawn_index() -> int:
+	match spawn_after_champion:
+		SPAWN_AFTER_LANCE:
+			return SPAWN_NEW_BARK
+		SPAWN_AFTER_RED:
+			return SPAWN_MT_SILVER
+	return -1

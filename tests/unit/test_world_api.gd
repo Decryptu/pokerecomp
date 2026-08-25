@@ -6166,6 +6166,22 @@ func test_world_snapshot_round_trips_the_surfing_player_sprite() -> void:
 	)
 
 
+## `wSpawnAfterChampion` is saved with the snapshot, and `continue_spawn_index`
+## is the `.SpawnAfterE4`/`.AfterRed` pair. The warp it drives is covered where
+## the spawn table is, in `test_world_field_move.gd`.
+func test_the_post_champion_spawn_byte_round_trips() -> void:
+	var data: GameData = GameData.open_directory(_directory)
+	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(8, 6))
+	world.spawn_after_champion = Gen2WorldSnapshot.SPAWN_AFTER_RED
+	var decoded := Gen2WorldSnapshot.from_dict(world.snapshot().to_dict())
+	assert_eq(decoded.spawn_after_champion, Gen2WorldSnapshot.SPAWN_AFTER_RED)
+	assert_eq(decoded.continue_spawn_index(), Gen2WorldSnapshot.SPAWN_MT_SILVER)
+	decoded.spawn_after_champion = Gen2WorldSnapshot.SPAWN_AFTER_LANCE
+	assert_eq(decoded.continue_spawn_index(), Gen2WorldSnapshot.SPAWN_NEW_BARK)
+	decoded.spawn_after_champion = Gen2WorldSnapshot.SPAWN_AFTER_NONE
+	assert_eq(decoded.continue_spawn_index(), -1)
+
+
 func test_explicit_fishing_uses_the_current_map_fish_group() -> void:
 	var world := _world(Vector2i(8, 6))
 	var encounter: Dictionary = world.encounter_request(

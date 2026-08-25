@@ -137,12 +137,22 @@ func _write_cache() -> void:
 		_map(ESCAPE_CAVE, TILESET_NO_ENTRY, 0, ENVIRONMENT_CAVE),
 		_map(ESCAPE_POKECENTER, TILESET_POKECENTER, 0, ENVIRONMENT_INDOOR),
 	])
-	# `SpawnPoints`, with the town as the one spawn this cache carries.
+	# `SpawnPoints`, with the town as the one spawn this cache carries and the
+	# Pokemon Center standing in for SPAWN_NEW_BARK, which is the row a
+	# post-champion CONTINUE reads. The rows between them name a map no cache
+	# holds, so nothing but those two resolves.
+	var spawns: Array = [{
+		"map_group": 1, "map_number": ESCAPE_TOWN,
+		"x": SPAWN_CELL.x, "y": SPAWN_CELL.y,
+	}]
+	while spawns.size() < Gen2WorldSnapshot.SPAWN_NEW_BARK:
+		spawns.append({"map_group": 99, "map_number": 99, "x": 0, "y": 0})
+	spawns.append({
+		"map_group": 1, "map_number": ESCAPE_POKECENTER,
+		"x": SPAWN_CELL.x, "y": SPAWN_CELL.y,
+	})
 	RomCache.write_json(RomCache.world_spawns_path(_directory), {
-		"spawns": [{
-			"map_group": 1, "map_number": ESCAPE_TOWN,
-			"x": SPAWN_CELL.x, "y": SPAWN_CELL.y,
-		}],
+		"spawns": spawns,
 		"flypoints": [],
 	})
 
@@ -1850,3 +1860,28 @@ func test_the_menu_offers_only_moves_the_badge_allows() -> void:
 	assert_eq(
 		int((offers[0] as Dictionary)["item"]), _hm_item(Gen2WorldFieldMove.MOVE_CUT)
 	)
+
+
+## `.SpawnAfterE4`: a slot whose `wSpawnAfterChampion` is SPAWN_LANCE opens at
+## New Bark Town rather than where the credits caught the player, and
+## `PostCreditsSpawn` clears the byte so the next CONTINUE is ordinary.
+func test_a_post_champion_slot_continues_at_new_bark() -> void:
+	var world: Gen2WorldAPI = _escape_world()
+	world.spawn_after_champion = Gen2WorldSnapshot.SPAWN_AFTER_LANCE
+	var encoded: Dictionary = world.snapshot().to_dict()
+	var data: GameData = GameData.open_directory(_directory)
+	var restored: Gen2WorldAPI = Gen2WorldAPI.open_snapshot(
+		data, Gen2WorldSnapshot.from_dict(encoded)
+	)
+	assert_not_null(restored)
+	assert_eq(restored.map_id(), Vector2i(1, ESCAPE_POKECENTER))
+	assert_eq(restored.player_cell, SPAWN_CELL)
+	assert_eq(restored.spawn_after_champion, Gen2WorldSnapshot.SPAWN_AFTER_NONE)
+
+	## The byte a snapshot written before it existed does not carry, which opens
+	## on the map the slot was written on.
+	encoded.erase("spawn_after_champion")
+	var legacy: Gen2WorldAPI = Gen2WorldAPI.open_snapshot(
+		data, Gen2WorldSnapshot.from_dict(encoded)
+	)
+	assert_eq(legacy.map_id(), world.map_id())

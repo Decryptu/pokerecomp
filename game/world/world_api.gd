@@ -208,6 +208,9 @@ var last_spawn_map: Vector2i = Vector2i(-1, -1)
 ## the player last came into a cave through, which is where Dig and an Escape
 ## Rope put them back. Empty until one is walked.
 var dig_warp: Dictionary = {}
+## `wSpawnAfterChampion`, which the induction and Red's credits write and the
+## next CONTINUE spends; see [member Gen2WorldSnapshot.spawn_after_champion].
+var spawn_after_champion: int = Gen2WorldSnapshot.SPAWN_AFTER_NONE
 ## `wPrevLandmark`, which is not saved on the cartridge either: `NewGame` writes
 ## New Bark Town into it and `FinishContinueFunction` sets SHOWN_MAP_NAME_SIGN so
 ## the map a loaded game opens on raises no sign. Opening a world is both of
@@ -432,6 +435,15 @@ static func open_snapshot(
 	out.frame_number = world_snapshot.frame_number
 	out.last_spawn_map = world_snapshot.last_spawn_map
 	out.dig_warp = world_snapshot.dig_warp.duplicate()
+	## `.SpawnAfterE4` and `.AfterRed`, which stand between `ClockContinue` and
+	## `FinishContinueFunction`: the map the slot was written on is loaded and
+	## then left, so everything a map load owes has already run when the spawn
+	## warp happens. `PostCreditsSpawn` clears the byte behind itself.
+	out.spawn_after_champion = world_snapshot.spawn_after_champion
+	var spawn: int = world_snapshot.continue_spawn_index()
+	if spawn >= 0:
+		out.spawn_after_champion = Gen2WorldSnapshot.SPAWN_AFTER_NONE
+		out.warp_to_spawn(spawn)
 	return out
 
 
@@ -2468,6 +2480,24 @@ func count_step() -> bool:
 	if state == null or special_phone_call_ready():
 		return false
 	return state.count_step()
+
+
+## `DoBikeStep`, which `CountStep` reaches behind the poison branch: the three
+## gates in front of the counter, and the flag the queued call is paid for with.
+## Answers whether the bike shop owner's call was queued.
+func do_bike_step() -> bool:
+	if state == null or current_map == null:
+		return false
+	var flag: int = state.engine_flag(
+		Gen2WorldState.ENGINE_BIKE_SHOP_CALL, Gen2WorldState.is_crystal_profile(data)
+	)
+	var armed: bool = movement_mode == MOVEMENT_BIKE and state.is_engine_flag_active(flag)
+	if not state.do_bike_step(
+		armed, Gen2WorldPhoneHost.map_has_phone_service(current_map)
+	):
+		return false
+	state.set_engine_flag(flag, false)
+	return true
 
 
 ## Checks the pending special call before ordinary step effects, matching the

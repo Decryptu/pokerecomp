@@ -168,6 +168,61 @@ func test_roaming_selection_uses_the_land_roll_before_normal_slots() -> void:
 	assert_eq(found["level"], 40)
 
 
+## `CheckEncounterRoamMon` reads the struct rather than a species list: a roamer
+## whose HP byte is still zero rolls fresh DVs, one that has been fought before
+## comes back on its stored HP and DVs, and one that has been caught or defeated
+## carries no species and is never selected.
+func test_a_roaming_encounter_carries_the_struct_the_last_fight_left() -> void:
+	var slots: Array = []
+	for _time_of_day: int in RomLayout.WILD_TIME_COUNT:
+		var day_slots: Array = []
+		for _slot: int in RomLayout.WILD_GRASS_SLOT_COUNT:
+			day_slots.append({"level": 5, "species": 16})
+		slots.append(day_slots)
+	var record: Dictionary = {"rates": [255, 255, 255], "slots": slots}
+
+	var fresh: Dictionary = _first_roaming_encounter(
+		record, [{"species": 0xF3, "level": 40, "map_group": 1, "map_number": 1}]
+	)
+	assert_eq(fresh["source"], Gen2WorldEncounter.SOURCE_ROAMING)
+	assert_eq(
+		int(fresh["values"]["battle_type"]), Gen2Battle.BATTLETYPE_ROAMING
+	)
+	assert_false(
+		(fresh["values"] as Dictionary).has("dvs"),
+		"an uninitialised struct rolls its DVs in the battle"
+	)
+
+	var fought: Dictionary = _first_roaming_encounter(record, [{
+		"species": 0xF3, "level": 40, "map_group": 1, "map_number": 1,
+		"hp": 37, "dvs": 0xABCD,
+	}])
+	assert_eq(int(fought["values"]["hp"]), 37)
+	assert_eq(int(fought["values"]["dvs"]), 0xABCD)
+
+	assert_true(_first_roaming_encounter(record, [{
+		"species": 0, "level": 40,
+		"map_group": Gen2WorldState.ROAM_MAP_N_A,
+		"map_number": Gen2WorldState.ROAM_MAP_N_A,
+	}]).is_empty(), "an emptied struct is never selected")
+
+
+## The first roaming encounter the seeds 1..511 produce, or empty when none of
+## them selects the roamer.
+func _first_roaming_encounter(record: Dictionary, mons: Array) -> Dictionary:
+	for seed_value: int in range(1, 512):
+		var random := RandomNumberGenerator.new()
+		random.seed = seed_value
+		var found: Dictionary = Gen2WorldEncounter.resolve(
+			record, Gen2WorldEncounter.METHOD_GRASS, Gen2WorldPalette.TIME_DAY,
+			random, true,
+			{"map_group": 1, "map_number": 1, "roaming_mons": mons}
+		)
+		if found.get("source", &"") == Gen2WorldEncounter.SOURCE_ROAMING:
+			return found
+	return {}
+
+
 func test_layout_exposes_swarm_fishing_and_roaming_tables() -> void:
 	var gold: Dictionary = RomLayout.for_id(RomRegistry.GOLD)
 	var crystal: Dictionary = RomLayout.for_id(RomRegistry.CRYSTAL)

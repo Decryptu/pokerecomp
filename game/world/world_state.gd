@@ -26,6 +26,21 @@ const EGG_STEP_PHASE: int = 0x80
 ## `DoPoisonStep`, counted in steps rather than in frames.
 const POISON_STEP_PHASE: int = 4
 const PHONE_RECEIVE_DELAYS: Array[int] = [20, 10, 5, 3]
+## `SPECIALCALL_BIKESHOP` (`constants/phone_constants.asm`), the same index on
+## both pins.
+const SPECIALCALL_BIKESHOP: int = 6
+## `DoBikeStep`'s own `cp HIGH(1024)` on the high byte, and the `$ffff` its two
+## `cp 255` tests saturate the counter at.
+const BIKE_SHOP_CALL_STEPS: int = 1024
+const MAX_BIKE_STEP: int = 0xFFFF
+## `wStatusFlags2`' `STATUSFLAGS2_BIKE_SHOP_CALL_F`, which the bike shop owner
+## sets when he takes the player's number and which `DoBikeStep` clears behind
+## the call it queues. Crystal index; see the badge comment for the split.
+const ENGINE_BIKE_SHOP_CALL: int = 20
+const ENGINE_BIKE_SHOP_CALL_GOLD_SILVER: int = 19
+## `GROUP_N_A`/`MAP_N_A`, which `BattleEnd_HandleRoamMons` writes over a
+## roamer's map bytes once it has been caught or defeated.
+const ROAM_MAP_N_A: int = -1
 ## `StoreSwarmMapIndices`' own two arguments, `constants/script_constants.asm`.
 const SWARM_DUNSPARCE: int = 0
 const SWARM_YANMA: int = 1
@@ -226,6 +241,12 @@ var _caught_species: Dictionary = {}
 ## where an empty one is a zero; here the list is as long as it is full, so its
 ## size is `.count_unown`'s own answer.
 var _unown_dex: Array[int] = []
+## `wFirstUnownSeen`, the letter every Pokedex entry for UNOWN is drawn with:
+## `Pokedex_LoadSelectedMonTiles` copies it into `wUnownLetter` before it asks
+## for the front picture. Written once, by whichever of the first sighting and
+## the first party addition comes first, and saved with the rest of
+## `wPokemonData`. Zero is a save that has met no Unown.
+var _first_unown_seen: int = 0
 var _phone_receive_cycle: int = 0
 var _phone_receive_minutes: int = PHONE_RECEIVE_DELAYS[0]
 var _pending_special_phone_call: int = 0
@@ -235,10 +256,16 @@ var _script_memory: Dictionary = {}
 ## and compares against it, and because a tuned radio station overwrites it and
 ## survives the Pokegear closing. `SnorlaxAwake` reads exactly that byte.
 ## `wStatusFlags`' `STATUSFLAGS_FLASH_F`. Its own byte on the cartridge rather
-## than an engine flag, and it does not survive walking out into the open:
+## than an engine flag, saved with the rest of `wPlayerData` the way its
+## byte-neighbours here are, and it does not survive walking out into the open:
 ## `ResetFlashIfOutOfCave` clears it on entering a ROUTE or a TOWN, so a lit cave
 ## goes dark again the moment the player leaves and comes back.
 var _used_flash: bool = false
+
+## `wBikeStep`, the two bytes `DoBikeStep` counts a bike ride in. Saved player
+## data on the cartridge, and the whole of how far off the bike shop owner's
+## call still is.
+var _bike_step: int = 0
 
 var _map_music: int = MUSIC_NONE
 var _radio_knob: int = Gen2WorldRadio.KNOB_MIN
@@ -457,10 +484,13 @@ func to_dict() -> Dictionary:
 		"seen_species": _seen_species.duplicate(),
 		"caught_species": _caught_species.duplicate(),
 		"unown_dex": _unown_dex.duplicate(),
+		"first_unown_seen": _first_unown_seen,
 		"phone_receive_cycle": _phone_receive_cycle,
 		"phone_receive_minutes": _phone_receive_minutes,
 		"pending_special_phone_call": _pending_special_phone_call,
 		"script_memory": _script_memory.duplicate(),
+		"used_flash": _used_flash,
+		"bike_step": _bike_step,
 		"map_music": _map_music,
 		"radio_knob": _radio_knob,
 		"radio_channel": _radio_channel,
@@ -536,6 +566,14 @@ static func from_dict(raw: Variant) -> Gen2WorldState:
 	restored._swarm_maps[SWARM_YANMA] = _vector_from_value(
 		source.get("yanma_swarm_map", [-1, -1])
 	)
+	## Absent in a state written before the byte was saved, which reads as a cave
+	## that has not been lit. `ResetFlashIfOutOfCave` clears it on the next ROUTE
+	## or TOWN either way, so an old save loses at most one cave's light.
+	restored._used_flash = bool(source.get("used_flash", false))
+	## Absent in a state written before the counter was kept, which reads as a
+	## ride that has not started: zero is what a new game holds and the only
+	## reader is the 1024-step threshold below it.
+	restored._bike_step = clampi(int(source.get("bike_step", 0)), 0, MAX_BIKE_STEP)
 	restored._map_music = maxi(0, int(source.get("map_music", MUSIC_NONE)))
 	restored.set_radio_knob(int(source.get("radio_knob", Gen2WorldRadio.KNOB_MIN)))
 	restored._radio_channel = int(source.get("radio_channel", -1))
@@ -550,6 +588,11 @@ static func from_dict(raw: Variant) -> Gen2WorldState:
 	## one: the flag that unlocks the mode is an engine flag and survives on its
 	## own, so an old save shows the mode with nothing listed under it, which is
 	## what a player who has caught none would see anyway.
+	## Read before the forms below, because [method update_unown_dex] writes this
+	## byte too: a state that carries one keeps it, and one written before the
+	## byte was kept falls back to the first form caught, which is the same
+	## answer for every save whose first Unown was caught rather than only met.
+	restored.note_first_unown_seen(int(source.get("first_unown_seen", 0)))
 	var stored_unown: Variant = source.get("unown_dex", [])
 	if stored_unown is Array:
 		for raw_form: Variant in stored_unown as Array:
@@ -634,6 +677,8 @@ func restore_from_dict(raw: Variant) -> void:
 	_phone_contacts = restored._phone_contacts.duplicate()
 	_just_battled = restored._just_battled
 	_repel_steps = restored._repel_steps
+	_used_flash = restored._used_flash
+	_bike_step = restored._bike_step
 	_wild_encounter_cooldown = restored._wild_encounter_cooldown
 	_step_count = restored._step_count
 	_poison_step_count = restored._poison_step_count
@@ -651,6 +696,7 @@ func restore_from_dict(raw: Variant) -> void:
 	_seen_species = restored._seen_species.duplicate()
 	_caught_species = restored._caught_species.duplicate()
 	_unown_dex = restored._unown_dex.duplicate()
+	_first_unown_seen = restored._first_unown_seen
 	_phone_receive_cycle = restored._phone_receive_cycle
 	_phone_receive_minutes = restored._phone_receive_minutes
 	_pending_special_phone_call = restored._pending_special_phone_call
@@ -1585,6 +1631,36 @@ func count_step() -> bool:
 	return true
 
 
+## `DoBikeStep`, which `CountStep` reaches behind the poison branch. The caller
+## answers the three gates in front of the counter, since only it knows the map
+## and the player's state: [param armed] is `STATUSFLAGS2_BIKE_SHOP_CALL_F` and
+## the bike, and [param in_service] is `GetMapPhoneService`.
+##
+## The counter saturates at `$ffff` rather than wrapping, which is what the two
+## `cp 255` tests do, and the call is queued the first counted step past 1024
+## that finds no other special call already waiting. Answers whether the call was
+## queued.
+func do_bike_step(armed: bool, in_service: bool) -> bool:
+	if not armed or not in_service:
+		return false
+	if _bike_step < MAX_BIKE_STEP:
+		_bike_step += 1
+		changed.emit()
+	if _bike_step < BIKE_SHOP_CALL_STEPS:
+		return false
+	## `.NoCall`: a call already queued is not overwritten, and the flag stays
+	## set so the next step tries again.
+	if _pending_special_phone_call != 0:
+		return false
+	_pending_special_phone_call = SPECIALCALL_BIKESHOP
+	changed.emit()
+	return true
+
+
+func bike_step() -> int:
+	return _bike_step
+
+
 func step_count() -> int:
 	return _step_count
 
@@ -1771,6 +1847,8 @@ func roaming_mons_on(map_group: int, map_number: int) -> Array:
 	var out: Array = []
 	for index: int in _roaming_mons.size():
 		var mon: Dictionary = _roaming_mons[index]
+		if int(mon.get("species", 0)) <= 0:
+			continue
 		if int(mon.get("map_group", -1)) != map_group or int(mon.get("map_number", -1)) != map_number:
 			continue
 		var value: Dictionary = mon.duplicate(true)
@@ -1819,9 +1897,26 @@ func set_species_caught(species: int, caught: bool = true) -> void:
 func update_unown_dex(form: int) -> void:
 	if form < 1 or form > RomLayout.UNOWN_FORMS:
 		return
+	## `.registerunowndex`'s own tail: the `wFirstUnownSeen` write sits behind the
+	## `UpdateUnownDex` call and runs whether or not the form was new.
+	note_first_unown_seen(form)
 	if form in _unown_dex or _unown_dex.size() >= RomLayout.UNOWN_FORMS:
 		return
 	_unown_dex.append(form)
+
+
+## The three `wFirstUnownSeen` writes, which are one test: a letter is stored
+## only while the byte is still zero, so the first Unown the save meets is the
+## one every dex entry is drawn as.
+func note_first_unown_seen(form: int) -> void:
+	if _first_unown_seen != 0 or form < 1 or form > RomLayout.UNOWN_FORMS:
+		return
+	_first_unown_seen = form
+	changed.emit()
+
+
+func first_unown_seen() -> int:
+	return _first_unown_seen
 
 
 ## The forms caught, in catching order. `Pokedex_DrawUnownModeBG` walks exactly
@@ -1872,6 +1967,11 @@ func advance_roaming(map_rows: Array, random: RandomNumberGenerator = null) -> A
 	for index: int in _roaming_mons.size():
 		var mon: Dictionary = _roaming_mons[index]
 		var current := Vector2i(int(mon.get("map_group", -1)), int(mon.get("map_number", -1)))
+		## `UpdateRoamMons`' own `cp GROUP_N_A / jr z`: a roamer that has been
+		## caught or defeated is skipped rather than walked, and skipping it
+		## spends none of `.Update`'s draws either.
+		if current.x == ROAM_MAP_N_A:
+			continue
 		var target: Vector2i = _roaming_target(map_rows, current, generator)
 		if target == Vector2i(-1, -1):
 			continue
@@ -1913,11 +2013,42 @@ func _copy_roaming_mons(source: Array) -> Array:
 	for raw: Variant in source:
 		if raw is Dictionary:
 			var mon: Dictionary = (raw as Dictionary).duplicate(true)
-			for field: String in ["species", "level", "map_group", "map_number"]:
+			for field: String in ["species", "level", "map_group", "map_number", "hp", "dvs"]:
 				if mon.has(field):
 					mon[field] = int(mon[field])
 			out.append(mon)
 	return out
+
+
+## `BattleEnd_HandleRoamMons`, which every roaming battle ends through. A win,
+## which is the source's word for caught or defeated alike, empties the struct:
+## `GetRoamMonHP` writes 0, the two map bytes become `GROUP_N_A`/`MAP_N_A` and
+## the species byte becomes 0, so `CheckEncounterRoamMon` can never select that
+## slot again. Any other ending stores the HP the fight left the roamer on.
+##
+## [param dvs] is the word `LoadEnemyMon`'s `.Roaming` rolled on the first
+## encounter and read back on every later one; it is stored beside the HP so a
+## roamer keeps the Pokemon it was, shininess included. Answers whether the
+## record moved.
+func note_roam_battle_end(species: int, won: bool, hp: int, dvs: int) -> bool:
+	for index: int in _roaming_mons.size():
+		var mon: Dictionary = _roaming_mons[index]
+		if int(mon.get("species", 0)) != species:
+			continue
+		if won:
+			mon["species"] = 0
+			mon["hp"] = 0
+			mon["map_group"] = ROAM_MAP_N_A
+			mon["map_number"] = ROAM_MAP_N_A
+		else:
+			## The struct's HP is one byte, and `GetRoamMonHP` stores
+			## `wEnemyMonHP + 1` alone: a roamer above 255 HP would wrap, and at
+			## level 40 none of the three can reach it.
+			mon["hp"] = clampi(hp, 0, 0xFF)
+			mon["dvs"] = dvs & 0xFFFF
+		changed.emit()
+		return true
+	return false
 
 
 func _roaming_target(
