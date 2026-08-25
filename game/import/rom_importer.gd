@@ -1195,6 +1195,23 @@ static func verify_decorations(rom: RomFile, layout: Dictionary) -> Dictionary:
 			"ok": false,
 			"message": "The decoration names open \"%s\", not CANCEL." % names[0],
 		}
+	## Every `DECOFLAG_*` has to name a set-up row of the table above it: a
+	## header or the CANCEL row would make `SetSpecificDecorationFlag` own a
+	## category instead of a decoration, and that is what a wrong offset gives.
+	var ids: Array = read_decoration_ids(rom, layout)
+	if ids.size() != RomLayout.DECORATION_ID_COUNT:
+		return {"ok": false, "message": "The decoration ids are outside the cartridge."}
+	for deco: int in ids:
+		if deco < 0 or deco >= rows.size():
+			return {"ok": false, "message": "A decoration id names row %d." % deco}
+		var pair: Variant = Gen2WorldDecoration.ACTIONS.get(
+			int((rows[deco] as Dictionary).get("action", 0)), null
+		)
+		if not (pair is Array and bool((pair as Array)[1])):
+			return {
+				"ok": false,
+				"message": "Decoration id %d is not a set-up row." % deco,
+			}
 	return {"ok": true, "message": "Decorations verified."}
 
 
@@ -2365,6 +2382,8 @@ const PACK_TEXT_OPENINGS: Dictionary = {
 	"sacred_ash": "<PLAYER>'s POKéMON",
 	"squirtbottle": "<PLAYER> sprinkled",
 	"coin_case": "Coins:",
+	"blue_card": "You now have",
+	"sent_trophy_home": "There was a trophy",
 }
 ## The first and last of `.PokedexDesc` through `.QuitDesc`, which is what says a
 ## nine-string run is that run and not another one in the same bank. As decoded
@@ -6106,6 +6125,21 @@ static func read_decoration_attributes(rom: RomFile, layout: Dictionary) -> Arra
 	return out
 
 
+## `DecorationIDs`, the decoration each `DECOFLAG_*` index names. Empty when the
+## run does not end in the source's own `-1`, which is what a wrong offset gives.
+static func read_decoration_ids(rom: RomFile, layout: Dictionary) -> Array:
+	var at: int = int(layout.get("decoration_ids", -1))
+	var count: int = RomLayout.DECORATION_ID_COUNT
+	if at < 0 or not rom.in_bounds(at, count + 1):
+		return []
+	if rom.u8(at + count) != 0xFF:
+		return []
+	var out: Array = []
+	for index: int in count:
+		out.append(rom.u8(at + index))
+	return out
+
+
 ## `DecorationNames`, the parts `GetDecoName` joins into a decoration's own name.
 static func read_decoration_names(rom: RomFile, layout: Dictionary) -> PackedStringArray:
 	var at: int = int(layout.get("decorations", -1))
@@ -6126,6 +6160,7 @@ func _import_decorations(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return {
 		"attributes": read_decoration_attributes(rom, layout),
 		"names": Array(read_decoration_names(rom, layout)),
+		"ids": read_decoration_ids(rom, layout),
 	}
 
 

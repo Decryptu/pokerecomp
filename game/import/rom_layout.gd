@@ -1428,6 +1428,12 @@ const DECORATION_COUNT: int = 53
 const DECORATION_ATTRIBUTE_SIZE: int = 6
 const DECORATION_NAMES_AT: int = 0x13E
 const DECORATION_NAME_COUNT: int = 26
+## `DecorationIDs`, the `DECOFLAG_*` order `GetDecorationID` indexes: forty-five
+## decoration ids and the `-1` that ends the run. It is not the id order, because
+## the dolls come in front of the big dolls here and behind them there, so it is
+## a table rather than a rule. Its own address is pinned per cartridge, since the
+## name run in front of it is a different length on Gold and Silver.
+const DECORATION_ID_COUNT: int = 45
 ## `list_start TEXTBOX_INNERW - 1`: seventeen characters and the terminator.
 const DECORATION_NAME_MAX_BYTES: int = 18
 
@@ -2206,6 +2212,10 @@ const GOLD_SILVER: Dictionary = {
 		# the table: the arbitrary code execution pokegold's own comment names.
 		# There is no text to be faithful to, so it is not imported.
 		"coin_case": -1,
+		# `_BlueCardBalanceText` is Crystal's alone: Buena and her Blue Card are
+		# not in these two, so the item, the effect entry and the text are absent.
+		"blue_card": -1,
+		"sent_trophy_home": 0x19862A,
 	},
 	"intro_text": {
 		"oak_1": 0x195624,
@@ -2312,6 +2322,9 @@ const GOLD_SILVER: Dictionary = {
 	# the source's own constants and matching it, which hits once per dump.
 	# `DecorationNames` is `DECORATION_NAMES_AT` behind it.
 	"decorations": 0x26C2B,
+	# `DecorationIDs`, located by matching all forty-six ids and the terminator,
+	# which hits once per dump.
+	"decoration_ids": 0x270FE,
 	# `UnownWords`, located by encoding the twenty-six words in the Unown font's
 	# own codes and matching the whole run, which hits once per dump; the table
 	# is the fifty-four bytes in front of it.
@@ -2800,6 +2813,8 @@ const CRYSTAL: Dictionary = {
 		"sacred_ash": 0x1C0B65,
 		"squirtbottle": 0x1C0B3B,
 		"coin_case": 0x1C5C7B,
+		"blue_card": 0x1C5C5E,
+		"sent_trophy_home": 0x1C5D03,
 	},
 	"intro_text": {
 		"oak_1": 0x1C1D35,
@@ -2882,6 +2897,9 @@ const CRYSTAL: Dictionary = {
 	# address moves.
 	"pokecenter_pc": 0x155FA,
 	"decorations": 0x26A4F,
+	# See the Gold and Silver block above; the table is byte identical and only
+	# its address moves.
+	"decoration_ids": 0x26F2B,
 	# See the Gold and Silver block above; the words are byte identical and only
 	# their address moves.
 	"unown_words": 0xFBA5A,

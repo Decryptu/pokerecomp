@@ -1880,6 +1880,15 @@ func decoration_count() -> int:
 	return (rows as Array).size() if rows is Array else 0
 
 
+## `DecorationIDs`: the decoration a `DECOFLAG_*` index names, or 0 for an index
+## outside the run. Zero is the CANCEL row, which owns nothing.
+func decoration_id_for_flag(index: int) -> int:
+	var ids: Variant = _decorations.get("ids", [])
+	if not ids is Array or index < 0 or index >= (ids as Array).size():
+		return 0
+	return int((ids as Array)[index])
+
+
 ## One `DecorationNames` part by its own index, which is what a row's `name`
 ## field carries for every type but the poster, doll and big doll: those name a
 ## species instead.
