@@ -79,6 +79,7 @@ var _credits: Dictionary = {}
 var _intro_movie: Dictionary = {}
 var _unown_puzzle: Dictionary = {}
 var _diploma: Dictionary = {}
+var _mystery_gift: Dictionary = {}
 var _link_border: Dictionary = {}
 var _other_player_link_mode: int = -1
 var _printer_strings: Dictionary = {}
@@ -210,6 +211,8 @@ static func open_directory(path: String) -> GameData:
 	data._unown_puzzle = unown_puzzle if unown_puzzle is Dictionary else {}
 	var diploma: Variant = manifest.get("diploma", {})
 	data._diploma = diploma if diploma is Dictionary else {}
+	var mystery_gift: Variant = manifest.get("mystery_gift", {})
+	data._mystery_gift = mystery_gift if mystery_gift is Dictionary else {}
 	var link_border: Variant = manifest.get("link_border", {})
 	data._link_border = link_border if link_border is Dictionary else {}
 	data._other_player_link_mode = int(manifest.get("other_player_link_mode", -1))
@@ -1991,6 +1994,37 @@ func diploma_palette() -> PackedColorArray:
 	for packed: Variant in _diploma.get("palette", []) as Array:
 		colors.append(Gen2Palette.from_packed(int(packed)))
 	return colors
+
+
+## `InitMysteryGiftLayout`'s art and the two gift tables beside it. A cache
+## imported before format 89 carries none of it, which is what
+## [method has_mystery_gift] answers for.
+func has_mystery_gift() -> bool:
+	return not (_mystery_gift.get("items", []) as Array).is_empty()
+
+
+func mystery_gift_indices() -> PackedByteArray:
+	return tile_indices("mystery_gift")
+
+
+## `_CGB_MysteryGift`'s own copy into `wBGPals1`: two palettes on Crystal and
+## one on Gold and Silver.
+func mystery_gift_palette() -> PackedColorArray:
+	var colors := PackedColorArray()
+	for packed: Variant in _mystery_gift.get("palette", []) as Array:
+		colors.append(Gen2Palette.from_packed(int(packed)))
+	return colors
+
+
+## `.String_PressAToLink_BToCancel`, the box the screen opens on.
+func mystery_gift_prompt() -> String:
+	return String(_mystery_gift.get("prompt", ""))
+
+
+## `MysteryGiftItems` or `MysteryGiftDecos`, whichever
+## `wMysteryGiftPartnerSentDeco` names.
+func mystery_gift_table(decorations: bool) -> Array:
+	return (_mystery_gift.get("decos" if decorations else "items", []) as Array).duplicate()
 
 
 ## `LinkCommsBorderGFX`'s own strip and, on Crystal alone, the three tilemaps

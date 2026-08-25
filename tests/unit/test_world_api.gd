@@ -8535,3 +8535,96 @@ func test_the_battle_tower_reset_ends_the_script_and_asks_for_a_restart() -> voi
 				asked = true
 	assert_true(asked, "the console restarts")
 	assert_false(world.event_flag_active(0x12), "nothing behind it runs")
+
+
+## `CheckMysteryGift` is a scene script, so it has to answer on the frame the
+## map loads rather than wait on a host: an empty section is zero and a waiting
+## gift is the item plus one, which is the byte POKECENTER_2F branches on.
+func test_check_mystery_gift_answers_the_waiting_item_plus_one() -> void:
+	_write_special_script([
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_CHECK_MYSTERY_GIFT, 0,
+		Gen2WorldScript.IFEQUAL, 0, 0x50, 0x62,
+		Gen2WorldScript.SETEVENT, 31, 0,
+		Gen2WorldScript.END,
+	], {"48:6250": [Gen2WorldScript.END]})
+	for waiting: int in [0, 0xAD]:
+		var state := Gen2WorldState.new()
+		state.mystery_gift()["item"] = waiting
+		var world: Gen2WorldAPI = _special_world(state)
+		_run_special(world)
+		assert_eq(
+			world.state.is_event_flag_active(31), waiting != 0,
+			"a waiting item is the branch the officer appears on"
+		)
+
+
+## `GetMysteryGiftItem`: the gift into the bag and its own received box, and
+## `.no_room`'s refusal leaves the byte where it is so the player can come back
+## for it. Both branches are the same script row with a different pack.
+func test_get_mystery_gift_item_keeps_the_gift_when_the_pack_is_full() -> void:
+	_write_special_script([
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_GET_MYSTERY_GIFT_ITEM, 0,
+		Gen2WorldScript.END,
+	])
+	var state := Gen2WorldState.new()
+	state.mystery_gift()["item"] = Gen2WorldPartyHost.ITEM_POKE_BALL
+	var world: Gen2WorldAPI = _special_world(state)
+	_run_special(world)
+	## The received box is `GetMysteryGiftItem`'s own `PrintText`, so the script
+	## is waiting on it and the bag is not written until it is acknowledged.
+	world.run_event_queue(true)
+	assert_eq(int(world.state.mystery_gift()["item"]), 0, "a received gift is cleared")
+	assert_true(
+		world.state.item_quantity(Gen2WorldPartyHost.ITEM_POKE_BALL) > 0,
+		"the gift reached the bag"
+	)
+
+	var full := Gen2WorldState.new({}, {}, {
+		Gen2WorldPartyHost.ITEM_POKE_BALL: Gen2WorldPack.MAX_ITEM_STACK,
+	})
+	full.mystery_gift()["item"] = Gen2WorldPartyHost.ITEM_POKE_BALL
+	var refused: Gen2WorldAPI = _special_world(full)
+	_run_special(refused)
+	refused.run_event_queue(true)
+	assert_eq(
+		int(refused.state.mystery_gift()["item"]), Gen2WorldPartyHost.ITEM_POKE_BALL,
+		"a full pack leaves the gift at the counter"
+	)
+
+
+## `UnlockMysteryGift` clears the locked byte once and never touches a section
+## that already has a gift in it, which is what stops Carrie throwing one away.
+func test_unlock_mystery_gift_clears_the_locked_byte_once() -> void:
+	_write_special_script([
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_UNLOCK_MYSTERY_GIFT, 0,
+		Gen2WorldScript.END,
+	])
+	var state := Gen2WorldState.new()
+	var world: Gen2WorldAPI = _special_world(state)
+	_run_special(world)
+	assert_eq(int(world.state.mystery_gift()["unlocked"]), 0)
+
+	world.state.mystery_gift()["item"] = 0xAD
+	_run_special(_special_world(world.state))
+	assert_eq(
+		int(world.state.mystery_gift()["item"]), 0xAD,
+		"an unlocked section keeps whatever is waiting in it"
+	)
+
+
+## `GetTrainerName`'s CAL branch reads `sMysteryGiftTrainerHouseFlag`, and the
+## Trainer House's own special hands the same byte to its script: a player who
+## has never received a gift is turned away.
+func test_the_trainer_house_reads_the_mystery_gift_flag() -> void:
+	_write_special_script([
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_TRAINER_HOUSE, 0,
+		Gen2WorldScript.IFEQUAL, 0, 0x50, 0x62,
+		Gen2WorldScript.SETEVENT, 31, 0,
+		Gen2WorldScript.END,
+	], {"48:6250": [Gen2WorldScript.END]})
+	for linked: int in [0, 1]:
+		var state := Gen2WorldState.new()
+		state.mystery_gift()["trainer_house_flag"] = linked
+		var world: Gen2WorldAPI = _special_world(state)
+		_run_special(world)
+		assert_eq(world.state.is_event_flag_active(31), linked == 1)

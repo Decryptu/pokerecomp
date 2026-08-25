@@ -136,6 +136,12 @@ var _money_window: StringName = &""
 const PHONE_CONTACT_GOT: int = 0
 const PHONE_CONTACTS_FULL: int = 1
 const PHONE_CONTACT_REFUSED: int = 2
+## Mystery Gift's whole script surface (`engine/link/mystery_gift.asm`). The
+## exchange itself is not a special: it happens at the main menu with no file
+## loaded, and what a script can reach is the gift it left behind.
+const SPECIAL_CHECK_MYSTERY_GIFT: int = 17
+const SPECIAL_GET_MYSTERY_GIFT_ITEM: int = 18
+const SPECIAL_UNLOCK_MYSTERY_GIFT: int = 19
 ## The Bug Catching Contest's own six, all below the index where Gold and
 ## Silver's table diverges except the contestant draw, which special_index()
 ## normalizes (engine/events/special_pointers.asm).
@@ -2606,6 +2612,39 @@ func _execute_object_command(source_opcode: int, command: Dictionary) -> Diction
 	return {"ok": true}
 
 
+## The live `sMysteryGiftData`, which [Gen2WorldState] mirrors out of the save
+## so a scene script reaching `CheckMysteryGift` on a map-load frame has an
+## answer rather than a request to wait on.
+func _mystery_gift_section() -> Dictionary:
+	if state == null:
+		return Gen2MysteryGift.default_section()
+	return state.mystery_gift()
+
+
+## `GetMysteryGiftItem`: the waiting item into the bag, its own received box,
+## and `wScriptVar` for the officer's `iffalse`. `.no_room` closes SRAM without
+## clearing the byte, so a full pack leaves the gift where it is and the player
+## can come back for it.
+func _stage_mystery_gift_item(special: int) -> Dictionary:
+	var section: Dictionary = _mystery_gift_section()
+	var item: int = Gen2MysteryGift.take_item(section)
+	if item <= 0:
+		_script_value = 0
+		return {"ok": true}
+	var given: Dictionary = _stage_item_delta(item, 1)
+	if not bool(given.get("ok", true)):
+		return given
+	if _script_value == 0:
+		return {"ok": true}
+	Gen2MysteryGift.clear_item(section)
+	var item_name: String = data.item_name(item) if data != null else ""
+	_set_text_buffer(
+		RomLayout.STRING_BUFFER_4, item_name, &"item_name", {"item": item}
+	)
+	return _stage_internal_text(RECEIVED_ITEM_TEXT % item_name, false, {
+		"special": special, "item": item,
+	})
+
 func _stage_item_delta(item: int, delta: int) -> Dictionary:
 	if item > 0:
 		_last_item = item
@@ -3654,11 +3693,22 @@ func _execute_special(special: int) -> Dictionary:
 			_staged_kenji_break_timer = Gen2WorldState.kenji_break_countdown(_random)
 			_has_staged_kenji_break_timer = true
 		SPECIAL_TRAINER_HOUSE:
-			## `sMysteryGiftTrainerHouseFlag` straight into wScriptVar. Only a
-			## received Mystery Gift ever sets it and nothing here can receive
-			## one, so the byte is zero and the Trainer House turns the player
-			## away, which is what a cartridge that has never linked does.
-			_script_value = 0
+			## `sMysteryGiftTrainerHouseFlag` straight into wScriptVar: a
+			## player who has never received a Mystery Gift is turned away, and
+			## one who has fights CAL under the partner's name.
+			_script_value = int(_mystery_gift_section().get("trainer_house_flag", 0))
+		SPECIAL_CHECK_MYSTERY_GIFT:
+			## Zero when nothing is waiting and the item plus one when something
+			## is. POKECENTER_2F's scene script branches on the zero, and the
+			## officer it puts on the floor is what hands the gift over.
+			_script_value = Gen2MysteryGift.check_value(_mystery_gift_section())
+		SPECIAL_UNLOCK_MYSTERY_GIFT:
+			## Carrie's own row on GOLDENROD DEPT. STORE 5F, behind a
+			## `GameboyCheck` this project always passes: there is no Game Boy
+			## here that is not a colour one.
+			Gen2MysteryGift.unlock(_mystery_gift_section())
+		SPECIAL_GET_MYSTERY_GIFT_ITEM:
+			return _stage_mystery_gift_item(special)
 		SPECIAL_HO_OH_CHAMBER:
 			## `wPartySpecies`' first byte and nothing else: the wall opens for a
 			## party led by Ho-Oh. `GetMapAttributesPointer` in front of it is

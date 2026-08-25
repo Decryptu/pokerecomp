@@ -29,6 +29,13 @@ var _name_input: LineEdit = null
 var _export_dialog: Gen2LauncherFilePicker = null
 var _slot_import_dialog: Gen2LauncherFilePicker = null
 var _file_dialog: Gen2LauncherFilePicker = null
+## `MysteryGift`'s own screen, which is a main-menu row on the cartridge and
+## belongs here for the same reason its SRAM block sits outside the checksummed
+## save: the exchange happens with no file loaded, and the two slots this
+## screen already lists are the only two Mystery Gift blocks on one machine.
+var _mystery_gift: Gen2MysteryGiftScreen = null
+var _mystery_gift_hardware: Gen2Screen = null
+var _mystery_gift_clock := Gen2WorldAnimation.FrameClock.new()
 
 
 func _ready() -> void:
@@ -358,6 +365,15 @@ func _refresh_details() -> void:
 		body.add_child(save_actions)
 		save_actions.add_child(_action("Continue", Gen2LauncherButton.Variant.PRIMARY, &"play", _continue_selected))
 		save_actions.add_child(_action("Party", Gen2LauncherButton.Variant.NEUTRAL, &"", _open_party))
+		## `MainMenu_GetWhichMenu`: the row is on the menu once
+		## `sNumDailyMysteryGiftPartnerIDs` is no longer -1, which is the byte a
+		## save wrote rather than the one Carrie cleared, so it appears on the
+		## session after the explanation rather than during it.
+		if Gen2MysteryGift.menu_row_unlocked(save.mystery_gift):
+			save_actions.add_child(_action(
+				"Mystery Gift", Gen2LauncherButton.Variant.NEUTRAL, &"",
+				_open_mystery_gift
+			))
 		save_actions.add_child(_action("Import .sav", Gen2LauncherButton.Variant.NEUTRAL, &"", _request_import))
 		save_actions.add_child(_action("Replace", Gen2LauncherButton.Variant.NEUTRAL, &"", _request_new_game))
 		_add_party_summary(body, save)
@@ -602,6 +618,92 @@ func _continue_selected() -> void:
 	Gen2LauncherAudio.play(&"power")
 	await _shell.flash(false)
 	get_tree().change_scene_to_file.call_deferred("res://game/world/world_screen.tscn")
+
+
+## `MainMenu_MysteryGift`: `UpdateTime`, the day countdown, and then the
+## screen. The partner is the first other occupied slot of the same cartridge,
+## which is `IR_SENDER`'s Game Boy here; no other slot is nobody in the window,
+## and the exchange times out the way the routine does with one console.
+func _open_mystery_gift() -> void:
+	var save: Gen2SaveData = _load_selected_save()
+	if _data == null or save == null or _mystery_gift != null:
+		return
+	var random := RandomNumberGenerator.new()
+	var host := Gen2MysteryGiftScreen.new()
+	host.set_context(
+		_data, save, _mystery_gift_transport(save, random),
+		_mystery_gift_dex_caught(save), _mystery_gift_day(save), random
+	)
+	host.closed.connect(_close_mystery_gift.bind(save))
+	_mystery_gift = host
+	_mystery_gift_hardware = Gen2Screen.host_for(self, _mystery_gift_hardware)
+	_mystery_gift_hardware.display(host)
+	set_process(true)
+
+
+## The other slot's own block, staged the moment the window opens: the roll is
+## that save's rather than this one's, which is what makes the item it offers
+## its own.
+func _mystery_gift_transport(
+	save: Gen2SaveData, random: RandomNumberGenerator
+) -> Gen2MysteryGiftTransport:
+	for slot: int in Gen2SaveStore.occupied_slots(_data.id, _data.sha1):
+		if slot == save.slot:
+			continue
+		var loaded: Dictionary = Gen2SaveStore.load_result(
+			_data.id, _data.sha1, slot, _data
+		)
+		if not bool(loaded.get("ok", false)):
+			continue
+		var peer: Gen2SaveData = loaded["save"] as Gen2SaveData
+		return Gen2MysteryGiftTransport.to_save(
+			peer, _mystery_gift_dex_caught(peer), random
+		)
+	return Gen2MysteryGiftTransport.new()
+
+
+## Which day the countdown behind the daily limit is measured in. A slot carries
+## the world day it was saved on; one with no world yet is day zero, which is
+## where a new game starts.
+func _mystery_gift_day(save: Gen2SaveData) -> int:
+	return save.world.world_day if save.world != null else 0
+
+
+## `CountSetBits` over `wPokedexCaught`, which is what a partner's block carries
+## and nothing here reads back. A slot with no world has caught nothing.
+func _mystery_gift_dex_caught(save: Gen2SaveData) -> int:
+	if save.world == null or save.world.world_state == null:
+		return 0
+	return save.world.world_state.caught_count()
+
+
+func _close_mystery_gift(save: Gen2SaveData) -> void:
+	var host: Gen2MysteryGiftScreen = _mystery_gift
+	_mystery_gift = null
+	if host != null:
+		Gen2Screen.drop(host)
+	set_process(false)
+	## The section is the file's, so a gift that arrived is written back before
+	## the screen is forgotten.
+	Gen2SaveStore.save(save, _data)
+	_refresh()
+
+
+func _process(delta: float) -> void:
+	if _mystery_gift == null:
+		return
+	for _frame: int in _mystery_gift_clock.tick(delta):
+		_mystery_gift.advance_frame()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if _mystery_gift == null:
+		return
+	var button: int = Gen2Button.pressed_in(event)
+	if button == Gen2Button.NONE:
+		return
+	get_viewport().set_input_as_handled()
+	_mystery_gift.handle_button(button)
 
 
 func _open_party() -> void:

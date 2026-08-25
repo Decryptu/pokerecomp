@@ -23,12 +23,10 @@ extends RefCounted
 ## in both directions: an index here that the runner now handles fails, so the
 ## row is deleted with the work rather than left behind.
 const EXPECTED_DEFERRED: Dictionary = {
-	## The Mobile Adapter GB and Mystery Gift, neither of which has a peer to
-	## talk to on a modern platform. The cable club's own sixteen rows have left
-	## this list with the Battle Tower's seven, and so has `DisplayLinkRecord`,
-	## which sat in the link block without being link play.
-	17: "CheckMysteryGift",
-	18: "GetMysteryGiftItem", 19: "UnlockMysteryGift",
+	## The Mobile Adapter GB, which is a real Game Boy peripheral with no path
+	## to a modern platform. The cable club's own sixteen rows have left this
+	## list with the Battle Tower's seven, `DisplayLinkRecord`, which sat in the
+	## link block without being link play, and Mystery Gift's three.
 	125: "GiveOddEgg",
 	127: "Function1011f1", 128: "Function101220", 129: "Function101225",
 	130: "Function101231", 139: "BattleTowerMobileError",
@@ -76,6 +74,9 @@ const SPECIAL_TEXT_RAM_NAMES: Array[String] = [
 	"seer_time_of_day", "seer_ot", "seer_caught_level",
 	## `wBufferTrademonNickname`, which `_LinkAskTradeForText` names.
 	"trademon_nickname",
+	## `wMysteryGiftPartnerName` and `wMysteryGiftPlayerName`, the two names
+	## `_MysteryGiftSentText` and `_MysteryGiftSentHomeText` spell.
+	"mystery_gift_partner_name", "mystery_gift_player_name",
 ]
 
 const SPECIALS_POINTERS_SIZE: int = 169

@@ -319,6 +319,15 @@ var _battle_tower: Gen2BattleTower = Gen2BattleTower.new()
 var _link_session: Gen2LinkSession = Gen2LinkSession.new()
 var _link_transport: Gen2LinkTransport = Gen2LinkTransport.new()
 
+## `sMysteryGiftData`, mirrored here so the three specials can read and write it
+## the way `OpenSRAM` does rather than through a runtime request: a scene script
+## reaches `CheckMysteryGift` on the frame the map loads and has nothing to wait
+## on. It is deliberately outside [method to_dict], because the section is not
+## part of the checksummed save on the cartridge either: [Gen2SaveData] owns it
+## and `RestoreMysteryGift` and `BackupMysteryGift` are what move it in and out
+## ([method Gen2MysteryGift.restore], [method Gen2MysteryGift.backup]).
+var _mystery_gift: Dictionary = Gen2MysteryGift.default_section()
+
 
 func _init(
 	initial_event_flags: Dictionary = {}, initial_map_scenes: Dictionary = {},
@@ -648,6 +657,16 @@ func link_session() -> Gen2LinkSession:
 
 func link_transport() -> Gen2LinkTransport:
 	return _link_transport
+
+
+## The live Mystery Gift section, edited in place the way the tower's record is.
+func mystery_gift() -> Dictionary:
+	return _mystery_gift
+
+
+## `RestoreMysteryGift`'s destination: the section a save slot carried.
+func set_mystery_gift(section: Dictionary) -> void:
+	_mystery_gift = Gen2MysteryGift.normalize(section)
 
 
 ## Injects the cable. A null transport is no cable at all, which is what the

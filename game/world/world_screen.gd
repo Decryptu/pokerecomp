@@ -437,6 +437,15 @@ func _build_world() -> void:
 		initial_day = int(saved_clock.get("day", initial_day))
 		initial_hour = int(saved_clock.get("hour", initial_hour))
 		initial_minute = int(saved_clock.get("minute", initial_minute))
+		## `TryLoadSaveFile`'s own `RestoreMysteryGift`, and `Continue`'s
+		## `CopyMysteryGiftReceivedDecorationsToPC` behind it: a gift received
+		## at the menu with no file open reaches the file here, and a
+		## decoration that came with one reaches the PC.
+		_world.state.set_mystery_gift(selected_save.mystery_gift)
+		Gen2MysteryGift.restore(_world.state.mystery_gift())
+		Gen2MysteryGift.copy_decorations_to_pc(
+			_world.state.mystery_gift(), _data, _world.state
+		)
 	elif selected_save != null:
 		var saveless_state := Gen2WorldState.new()
 		Gen2WorldSpawn.apply_initial_decorations(saveless_state)
@@ -2786,6 +2795,11 @@ func persist_world_snapshot() -> Dictionary:
 	if save == null:
 		return {"ok": false, "reason": &"missing_save"}
 	save.world = _world.snapshot()
+	## `BackupMysteryGift`, which every one of `SaveGameData`'s three entrances
+	## runs: the working pair goes to the backup pair, and the backup pair is
+	## what the file carries.
+	Gen2MysteryGift.backup(_world.state.mystery_gift())
+	save.mystery_gift = _world.state.mystery_gift().duplicate(true)
 	if _injected_save != null:
 		return {"ok": true, "kind": &"world_snapshot_saved", "save": save}
 	return Gen2SaveStore.save(save, _data)
