@@ -185,6 +185,10 @@ static func after_battle(
 			# `.check_statused`'s `CheckFaintedFrzSlp`, which costs the cry and the
 			# closing `AnimateFrontpic` both.
 			"statused": is_statused(mon),
+			# `SCGB_EVOLUTION` reaches `GetMonNormalOrShinyPalettePointer`, and
+			# an evolution changes the species rather than the DV word, so both
+			# pictures the sequence draws are the same answer.
+			"shiny": Gen2Stats.is_shiny(mon.dvs),
 			# `.pressed_b` reads `wForceEvolution`: a level evolution is not
 			# forced, so B cancels it, and an item's is and B does nothing.
 			"can_cancel": true,

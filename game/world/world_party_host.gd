@@ -2091,6 +2091,10 @@ static func hatch_egg(
 	return {
 		"kind": &"hatch", "party_index": index, "species": mon.species,
 		"level": mon.level, "nickname": mon.nickname,
+		## `HatchEggs` asks for `SCGB_EVOLUTION`, which reaches
+		## `GetMonNormalOrShinyPalettePointer`: what comes out of the egg is
+		## drawn in its own colours, and a bred shiny is first seen here.
+		"shiny": Gen2Stats.is_shiny(mon.dvs),
 	}
 
 

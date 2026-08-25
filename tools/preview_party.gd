@@ -3,7 +3,11 @@ extends SceneTree
 ## Captures the window-resolution save overlays against a real cache: the party,
 ## the PC boxes and the start menu's pack.
 ##
-##   Godot --path . -s res://tools/preview_party.gd -- <game> <out.png> [party|box|pack|select|stats] [presses]
+##   Godot --path . -s res://tools/preview_party.gd -- <game> <out.png> [party|box|pack|select|stats] [presses] [shiny]
+##
+## A final `shiny` makes the lead shiny. The PC's pic and the stats page draw it;
+## the party menu's icons deliberately do not, which is the cartridge's own
+## answer and is what the three captures together say.
 ##
 ## `presses` is a comma-separated button list driven into the overlay before the
 ## shot, the way `preview_world_services.gd` photographs a second page: `d` is
@@ -36,6 +40,7 @@ const BUTTONS: Dictionary = {
 
 var _output_path: String = ""
 var _what: String = "party"
+var _shiny: bool = false
 var _programs: Array[String] = [""]
 var _at: int = 0
 var _screen: Control = null
@@ -61,10 +66,11 @@ func _initialize() -> void:
 		return
 	if args.size() > 2:
 		_what = args[2]
-	if args.size() > 3:
+	if args.size() > 3 and args[3] != "shiny":
 		_programs = []
 		for program: String in args[3].split(";"):
 			_programs.append(program)
+	_shiny = args.has("shiny")
 
 	var directory: String = _find_cache(game)
 	if directory.is_empty():
@@ -103,6 +109,13 @@ func _build(data: GameData) -> Control:
 	if save == null:
 		push_error("Could not build a development save for %s." % data.id)
 		return null
+	## `_CGB_BillsPC` and `_CGB_StatsScreenHPPals` both reach
+	## `GetMonNormalOrShinyPalettePointer`, and the party menu's own layout
+	## deliberately does not: one lead made shiny photographs all three answers
+	## at once, which is the only way to see that the middle screen is right and
+	## the icons beside it are right to stay as they are.
+	if _shiny and not save.party.is_empty():
+		save.party[0].dvs = Gen2Stats.SHINY_DVS
 	if _what == "box":
 		var boxes := Gen2BoxScreen.new()
 		boxes.set_context(data, save, false, true)

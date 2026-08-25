@@ -6,6 +6,9 @@ extends SceneTree
 ##
 ##   Godot --path . -s res://tools/preview_hall_of_fame.gd -- crystal /tmp/hof.png [page]
 ##
+## A fourth argument of `shiny` makes the lead shiny, which is the one thing
+## about the panel a check cannot read off the buffer.
+##
 ## [page] is how many times to advance before the capture, so 0 is the first
 ## party member and the last pages are the player's own panel with each box
 ## `ProfOaksPCRating` prints into it.
@@ -17,6 +20,7 @@ const SETTLE_FRAMES: int = 18
 var _screen: Gen2WorldScreen = null
 var _output_path: String = ""
 var _advance: int = 0
+var _shiny: bool = false
 var _frames: int = 0
 
 
@@ -31,6 +35,7 @@ func _initialize() -> void:
 		quit(2)
 		return
 	_advance = int(args[2]) if args.size() > 2 else 0
+	_shiny = args.size() > 3 and args[3] == "shiny"
 
 	var data: GameData = GameData.open(StringName(args[0]))
 	if data == null:
@@ -53,6 +58,12 @@ func _initialize() -> void:
 	_screen.map_number = spawn.map_id.y
 	_screen.start_cell = spawn.player_cell
 	save.world = spawn
+	## `SCGB_PLAYER_OR_MON_FRONTPIC_PALS` reaches
+	## `GetMonNormalOrShinyPalettePointer`, so the panel is one of the five
+	## screens a shiny is drawn shiny on. The lead is made shiny and the rest are
+	## left alone, which is what makes one capture the comparison.
+	if _shiny and not save.party.is_empty():
+		save.party[0].dvs = Gen2Stats.SHINY_DVS
 	_screen.set_data(data)
 	_screen.set_save(save)
 	root.add_child(_screen)

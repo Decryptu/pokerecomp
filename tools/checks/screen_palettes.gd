@@ -20,6 +20,21 @@ var _r: RefCounted = null
 ##
 ##   Godot --headless --path . -s res://tools/validate.gd -- screen_palettes
 
+## Every screen the source draws a Pokemon's SHINY colours on, by the layout it
+## asks for: `_CGB_BattleColors`, `_CGB_StatsScreenHPPals`, `_CGB_BillsPC`,
+## `_CGB_Evolution` (which breeding's hatch asks for too) and
+## `_CGB_PlayerOrMonFrontpicPals` (the Hall of Fame and the trade animation).
+## Every one of them reaches `GetMonNormalOrShinyPalettePointer`.
+##
+## Named here because the list is the point: `_CGB_Pokedex` and `_CGB_PartyMenu`
+## are NOT on it, so the dex and the party menu's icons are drawn in ordinary
+## colours on the cartridge and must not be "fixed" here.
+const SHINY_LAYOUTS: Array[String] = [
+	"battle", "stats screen", "Bill's PC", "evolution and hatch",
+	"Hall of Fame and trade",
+]
+
+
 ## `data/pokemon/base_stats/`'s own range.
 const FIRST_SPECIES: int = 1
 const LAST_SPECIES: int = 251
@@ -48,12 +63,46 @@ const SOURCE_MOVE_BOXES: Array = [[11, 1, 9, 2, 1]]
 const HP_FRACTIONS: Array[float] = [1.0, 0.3, 0.05]
 
 
+## `PokemonPalettes` is two four-colour entries per species, normal then shiny,
+## and `GetMonNormalOrShinyPalettePointer` picks the second by stepping four
+## bytes on. Every screen in [constant SHINY_LAYOUTS] asks for one or the other,
+## so a species whose shiny entry never reached the cache would draw its ordinary
+## colours on all five however carefully each one asked.
+##
+## Swept rather than sampled: the pair is per species and the importer reads them
+## from one table, so one missing entry is the whole failure mode.
+func _verify_shiny_palettes() -> void:
+	var flat: int = 0
+	var missing: int = 0
+	for species: int in range(FIRST_SPECIES, LAST_SPECIES + 1):
+		var normal: PackedColorArray = _r.data.palette(species, false)
+		var shiny: PackedColorArray = _r.data.palette(species, true)
+		if normal.size() != Gen2Palette.COLORS_PER_PIC \
+			or shiny.size() != Gen2Palette.COLORS_PER_PIC:
+			missing += 1
+			continue
+		## The two middle colours are the Pokemon; 0 and 3 are white and black on
+		## every entry, which is why a pair differing only there would be a
+		## palette that is not really a shiny one.
+		if normal[1] == shiny[1] and normal[2] == shiny[2]:
+			flat += 1
+	_r.check(missing == 0, "%d species have no four-colour palette pair." % missing)
+	_r.check(
+		flat == 0,
+		"%d species draw the same two colours shiny as normal." % flat
+	)
+	_r.note("shiny palettes: %d species, %d layouts read them" % [
+		LAST_SPECIES - FIRST_SPECIES + 1, SHINY_LAYOUTS.size(),
+	])
+
+
 func run(r: RefCounted) -> void:
 	_r = r
 	_r.each_game(_check_game)
 
 
 func _check_game() -> void:
+	_verify_shiny_palettes()
 	var page: Gen2StatsScreenPage = Gen2StatsScreenPage.from_data(_r.data)
 	if not _r.check(page != null, "the stats screen page will not build."):
 		return
