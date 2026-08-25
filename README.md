@@ -168,8 +168,10 @@ is the same screen the START menu opens. A tab is there exactly when that menu's
 own gate would have offered its row, so the team page appears with the starter
 and the Pokegear page with the phone call.
 
-Outside a game the panel shows the project's own mark: the pages belong to a
-world, and there is no world behind the launcher.
+Outside a game the panel shows a launcher page of its own: an empty cartridge
+bay, the project's name and a line saying nothing is running, on the same field
+and in the same light or dark appearance the shelf above it wears. The pages
+belong to a world, and there is no world behind the launcher.
 
 Settings > Second screen switches it off, or opens the same panel in a desktop
 window on a machine with no such hardware.

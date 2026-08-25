@@ -68,7 +68,7 @@ func _build() -> void:
 	theme = theme_palette.control_theme()
 
 	_backdrop = TextureRect.new()
-	_backdrop.texture = _page_gradient()
+	_backdrop.texture = theme_palette.backdrop_texture()
 	_backdrop.stretch_mode = TextureRect.STRETCH_SCALE
 	_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -464,19 +464,6 @@ func _place_toast() -> void:
 		return
 	_toast.offset_bottom = -(Gen2LauncherUI.dock_reserve(get_window()) + 10.0)
 	_toast.offset_top = _toast.offset_bottom - TOAST_HEIGHT
-
-
-func _page_gradient() -> GradientTexture2D:
-	var ramp := Gradient.new()
-	ramp.set_color(0, theme_palette.backdrop_top)
-	ramp.set_color(1, theme_palette.backdrop_bottom)
-	var texture := GradientTexture2D.new()
-	texture.gradient = ramp
-	texture.fill_from = Vector2(0.15, 0.0)
-	texture.fill_to = Vector2(0.85, 1.0)
-	texture.width = 64
-	texture.height = 64
-	return texture
 
 
 func _dock_gradient() -> GradientTexture2D:

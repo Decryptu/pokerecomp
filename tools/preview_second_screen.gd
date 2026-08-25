@@ -2,7 +2,7 @@ extends SceneTree
 
 ## Photographs the lower display against a real cache.
 ##
-##   Godot --path . -s res://tools/preview_second_screen.gd -- <game> <out.png> [tab] [progress] [panel]
+##   Godot --path . -s res://tools/preview_second_screen.gd -- <game> <out.png> [tab] [progress] [panel] [theme]
 ##
 ## `tab` is one of `pokedex`, `pokemon`, `pack`, `pokegear`, `player`, `idle` for
 ## the picture the panel shows with no world on it, or `all` to write one file per
@@ -12,7 +12,9 @@ extends SceneTree
 ## `starter` has Elm's Pokemon, `gear` has the Pokegear and the MAP card, and
 ## `full` has everything the START menu can offer. `panel` is a lower display's
 ## own pixel size, `WIDTHxHEIGHT`, which chooses the canvas the way a real one
-## would; the default is the AYN Thor's 1240x1080.
+## would; the default is the AYN Thor's 1240x1080. `theme` is `light` or `dark`,
+## which only the idle page reads: it is launcher UI and wears the launcher's own
+## appearance.
 ##
 ## The picture written is the canvas itself, one file pixel per hardware pixel,
 ## so a diff against it is exact. Look at it with an image viewer that does not
@@ -95,6 +97,9 @@ func _initialize() -> void:
 		var parts: PackedStringArray = args[4].split("x")
 		if parts.size() == 2:
 			_panel = Vector2i(int(parts[0]), int(parts[1]))
+	if args.size() > 5 and Gen2Options.UI_THEMES.has(StringName(args[5])):
+		Gen2OptionsStore.use_test_path()
+		Gen2OptionsStore.current().ui_theme = StringName(args[5])
 	if not PROGRESS.has(_progress):
 		push_error("Unknown progress %s; one of %s" % [_progress, PROGRESS.keys()])
 		quit(1)
@@ -127,6 +132,7 @@ func _initialize() -> void:
 	root.set_content_scale_size(WINDOW_SIZE)
 	root.size = WINDOW_SIZE
 	_view = Gen2SecondScreen.new()
+	_view.panel_size = _panel
 	_view.canvas_size = Gen2SecondScreenHost.canvas_for(_panel)
 	root.add_child(_view)
 	_view.size = Vector2(_view.canvas_size)

@@ -117,6 +117,25 @@ static func active() -> Gen2LauncherTheme:
 	return for_mode(Gen2OptionsStore.current().ui_theme)
 
 
+## The field every launcher page is drawn on: the backdrop's two colours on the
+## same diagonal, as a texture a [TextureRect] can stretch to any shape.
+##
+## On the theme rather than in the shell, because the shell is not the only thing
+## that draws a launcher page: the lower display draws one too, and a second copy
+## of these four numbers would drift from this one.
+func backdrop_texture() -> GradientTexture2D:
+	var ramp := Gradient.new()
+	ramp.set_color(0, backdrop_top)
+	ramp.set_color(1, backdrop_bottom)
+	var texture := GradientTexture2D.new()
+	texture.gradient = ramp
+	texture.fill_from = Vector2(0.15, 0.0)
+	texture.fill_to = Vector2(0.85, 1.0)
+	texture.width = 64
+	texture.height = 64
+	return texture
+
+
 func is_dark() -> bool:
 	return mode == DARK
 

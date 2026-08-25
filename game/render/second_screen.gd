@@ -41,19 +41,46 @@ const INK: int = 3
 const PAPER: int = 0
 const FIELD_COLOR := Color(0.0, 0.0, 0.0, 1.0)
 
-## The picture the panel shows with no world on it, and how big it is drawn. The
-## application's own icon, which is the one mark this project has that belongs to
-## no cartridge.
-const IDLE_ART: String = "res://app_icon.png"
-const IDLE_SIZE: int = 96
+## What the panel shows with no world on it, drawn in the launcher's own
+## language rather than the cartridge's: an empty cartridge silhouette, the
+## project's name and a line saying nothing is running.
+##
+## The launcher measures in points, so the design is written in these units and
+## drawn at whatever whole multiple of them the panel is; a launcher unit is
+## about a point at [constant IDLE_UNITS] on a handheld's lower display.
+const IDLE_UNITS: int = 540
+## The silhouette's height in launcher units, and the panel this screen assumes
+## before a host has said what it really is.
+const IDLE_CARTRIDGE: float = 200.0
+const IDLE_PANEL := Vector2i(1240, 1080)
+## The line under the name, which is the whole of what this page says.
+const IDLE_LINE: String = "No game running"
 
 ## Emitted after the shown page changes, so a host knows a still picture is worth
 ## sending again even when nothing is animating.
 signal page_changed(kind: StringName)
+## Emitted after the drawn surface has been rebuilt. A host that only copies a
+## still picture when it changes listens to this; one copying an animating page
+## every tick does not need it.
+signal redrawn()
 
 ## The whole drawn surface, in hardware pixels. Never smaller than
 ## [constant CANVAS_MIN]: the page is a fixed 160x144 and the tab row has to hold
 ## an icon.
+## The display this is shown on, in its own pixels. Only the idle screen is drawn
+## at this size: it is launcher UI rather than hardware pixels, and type laid out
+## in a 206-pixel canvas and blown up six times is unreadable.
+var panel_size: Vector2i = IDLE_PANEL:
+	set(value):
+		var clamped := Vector2i(maxi(value.x, 64), maxi(value.y, 64))
+		if panel_size == clamped:
+			return
+		panel_size = clamped
+		if _idle != null:
+			_build_page()
+		else:
+			_relayout()
+
 var canvas_size: Vector2i = CANVAS_MIN:
 	set(value):
 		var clamped := Vector2i(
@@ -75,9 +102,9 @@ var _strip: Control = null
 ## The row's own box: the cartridge's frame around the white every menu box has,
 ## redrawn when the row changes rather than every frame.
 var _strip_art: TextureRect = null
-## The launcher's own picture, kept so a canvas resized after it was built moves
-## it to the middle of the new one.
-var _idle: TextureRect = null
+## The launcher's own page, kept so a panel resized after it was built is filled
+## by it.
+var _idle: Control = null
 ## The page on screen, whichever of the cartridge's screens it is, and which tab
 ## built it. Kept so a rebuild is skipped when the answer would be the same node.
 var _page: Node = null
@@ -293,10 +320,32 @@ func _build() -> void:
 	_build_page()
 
 
+## Whether the panel is showing the launcher's own page rather than one of the
+## cartridge's. The two are drawn at different resolutions, so this decides the
+## viewport's size as well as what is in it.
+func idle() -> bool:
+	return _tabs.is_empty()
+
+
+## Whether what is drawn changes by itself. Every page the cartridge owns has
+## something moving on it -- the party's icons bob, the card's colon blinks, the
+## region map's player walks -- and the launcher's own page has nothing.
+func animated() -> bool:
+	return not idle()
+
+
 func _relayout() -> void:
 	if _viewport == null:
 		return
-	_viewport.size = canvas_size
+	var quiet: bool = idle()
+	_viewport.size = panel_size if quiet else canvas_size
+	if _screen != null:
+		_screen.visible = not quiet
+	if _strip != null:
+		_strip.visible = not quiet
+	if quiet:
+		_place_idle()
+		return
 	var field: ColorRect = _viewport.get_node_or_null(^"Field") as ColorRect
 	if field != null:
 		field.size = Vector2(canvas_size)
@@ -387,17 +436,17 @@ func _place_icons() -> void:
 		)
 
 
-## On the canvas rather than in the page's 160x144: this is not one of the
-## cartridge's screens, so it is centred on the whole panel. Placed here rather
-## than where it is built, because the host sets the canvas after this screen is
-## in the tree and the picture has to follow it.
+## The launcher's page fills the panel, and the panel's size is settled by the
+## host after this screen is already in the tree, so the size is applied here
+## rather than where the page is built.
 func _place_idle() -> void:
 	if _idle == null:
 		return
-	_idle.position = Vector2(
-		floorf((canvas_size.x - IDLE_SIZE) * 0.5),
-		floorf((canvas_size.y - IDLE_SIZE) * 0.5),
-	)
+	_idle.position = Vector2.ZERO
+	_idle.size = Vector2(panel_size)
+	for child: Node in _idle.get_children():
+		if child is Control:
+			(child as Control).size = Vector2(panel_size)
 
 
 func _cell(index: int) -> Rect2:
@@ -520,40 +569,86 @@ func _build_page() -> void:
 			_page = _build_pokegear()
 		Gen2WorldStartMenu.ITEM_PLAYER:
 			_page = _build_trainer_card()
-	_redraw_strip()
+	_relayout()
 	page_changed.emit(_page_kind)
+	redrawn.emit()
 
 
 ## What the panel shows with no world on it: the launcher is up, or a game has
 ## just been closed, and the game's own pages are not a thing that exists yet.
 ##
-## The project's own mark rather than a cartridge's, because at this point there
-## may be no cartridge: the shelf is a list of bays and one of them is empty. It
-## is drawn into the page's own rectangle so the panel is the same shape either
-## way.
+## Drawn in the launcher's own language rather than the cartridge's, because at
+## this point there may be no cartridge: the shelf is a list of bays and one of
+## them is empty. It is the shelf's own silhouette for a slot with nothing in it,
+## with the project's name under it, on the same field every launcher page has.
+##
+## Laid out in the panel's own pixels at a whole multiple of the launcher's
+## units, so the type is rasterised at the size it is shown rather than blown up
+## from a 206-pixel canvas.
 func _build_idle() -> Node:
-	var texture: Texture2D = load(IDLE_ART) as Texture2D
-	var picture: Image = texture.get_image() if texture != null else null
-	if picture == null:
-		return null
-	picture = picture.duplicate() as Image
-	if picture.get_format() != Image.FORMAT_RGBA8:
-		picture.convert(Image.FORMAT_RGBA8)
-	## Resampled once, here, rather than by the panel: this is the one thing on
-	## the lower screen that is not made of hardware pixels, and a smooth mark
-	## shrunk with a filter reads better than a whole-number one of a mark that
-	## was never on a tile grid.
-	picture.resize(IDLE_SIZE, IDLE_SIZE, Image.INTERPOLATE_LANCZOS)
-	var rect := TextureRect.new()
-	rect.name = "Idle"
-	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	rect.size = Vector2(IDLE_SIZE, IDLE_SIZE)
-	Gen2PicImage.show(rect, picture)
-	_viewport.add_child(rect)
-	_idle = rect
+	var skin: Gen2LauncherTheme = Gen2LauncherTheme.active()
+	var units: int = idle_scale(panel_size)
+	var page := Control.new()
+	page.name = "Idle"
+	page.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	page.size = Vector2(panel_size)
+	page.theme = skin.control_theme()
+
+	var backdrop := TextureRect.new()
+	backdrop.texture = skin.backdrop_texture()
+	backdrop.stretch_mode = TextureRect.STRETCH_SCALE
+	backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	backdrop.size = Vector2(panel_size)
+	page.add_child(backdrop)
+
+	var centre := CenterContainer.new()
+	centre.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	centre.size = Vector2(panel_size)
+	page.add_child(centre)
+
+	var column: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_MD * units)
+	column.alignment = BoxContainer.ALIGNMENT_CENTER
+	var holder := CenterContainer.new()
+	## Any id: the silhouette is the same shape for all three and its prompt, which
+	## is the only part that names one, is off.
+	var slot: Gen2Cartridge = Gen2Cartridge.create(skin, RomRegistry.ORDER[0])
+	slot.set_imported(false)
+	## The shape, not the invitation: an empty bay on the shelf asks for a dump
+	## to be dropped on it, and nothing can be dropped on a panel.
+	slot.set_bay_prompt(false)
+	var tall: float = IDLE_CARTRIDGE * float(units)
+	slot.custom_minimum_size = Vector2(tall * Gen2Cartridge.ASPECT, tall)
+	holder.add_child(slot)
+	column.add_child(holder)
+	column.add_child(_idle_label(
+		skin, ProjectSettings.get_setting("application/config/name", "pokerecomp"),
+		Gen2LauncherTheme.FONT_TITLE * units, skin.text
+	))
+	column.add_child(_idle_label(
+		skin, IDLE_LINE, Gen2LauncherTheme.FONT_SMALL * units, skin.muted
+	))
+	centre.add_child(column)
+
+	_viewport.add_child(page)
+	_idle = page
 	_place_idle()
-	return rect
+	return page
+
+
+## The whole multiple of the launcher's own units this panel is. One on anything
+## smaller than [constant IDLE_UNITS] tall, which is a desktop window rather than
+## a handheld's lower display.
+static func idle_scale(panel: Vector2i) -> int:
+	return maxi(int(round(float(panel.y) / float(IDLE_UNITS))), 1)
+
+
+static func _idle_label(
+	skin: Gen2LauncherTheme, text: String, points: int, colour: Color
+) -> Label:
+	var label: Label = Gen2LauncherUI.title(skin, text, points)
+	label.add_theme_color_override("font_color", colour)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	return label
 
 
 func _build_pokedex() -> Node:

@@ -42,11 +42,20 @@ const WINDOW_PANEL := Vector2i(1240, 1080)
 ## laptop. The panel itself gets six.
 const WINDOW_SCALE: int = 4
 
-## The panel is a still page most of the time and a slow animation the rest, so
-## it is copied at half the host's rate rather than every drawn frame. The
-## trainer card's colon and the party's icons are the only things on it that
-## move, and both are slower than this.
+## An animating page is copied at half the host's rate rather than every drawn
+## frame. The trainer card's colon, the party's icons and the region map's player
+## are the only things on the panel that move, and all three are slower than this.
+##
+## A still page is not copied on a clock at all: it is sent for a few frames after
+## the screen says it has redrawn, and not again. That matters because the
+## launcher's own page is drawn at the panel's full resolution rather than in
+## hardware pixels, and one of those is 5.4 MB where a hardware-pixel canvas is
+## 148 KB.
 const PANEL_HZ: float = 30.0
+## How many frames a still page is sent for after it changes. More than one,
+## because the viewport draws what it was given on the frame after it was given
+## it: sending once and stopping put a blank panel up and left it there.
+const PANEL_SETTLE_FRAMES: int = 4
 
 const BACKEND_NONE: StringName = &"none"
 const BACKEND_PANEL: StringName = &"panel"
@@ -58,6 +67,8 @@ var _view: Gen2SecondScreen = null
 var _plugin: Object = null
 var _window: Window = null
 var _since_present: float = 0.0
+## Frames a still page is still owed. See [constant PANEL_SETTLE_FRAMES].
+var _settle: int = PANEL_SETTLE_FRAMES
 
 
 ## Attaches [param view] to whatever second display this build can reach, or
@@ -158,6 +169,10 @@ func _attach_panel() -> bool:
 		_plugin = null
 		return false
 	backend = BACKEND_PANEL
+	## Connected before the sizes are set, so the redraw those two cause is the
+	## first thing this hears rather than something it missed.
+	_view.redrawn.connect(_on_view_redrawn)
+	_view.panel_size = size
 	_view.canvas_size = canvas_for(size)
 	## The control draws nothing on the game's own window: the panel is fed by
 	## the viewport inside it, which has a size of its own and keeps drawing.
@@ -172,6 +187,7 @@ func _attach_window() -> bool:
 		return false
 	_view.canvas_size = canvas_for(WINDOW_PANEL)
 	var canvas: Vector2i = _view.canvas_size
+	_view.panel_size = canvas * WINDOW_SCALE
 	_window = Window.new()
 	_window.title = "pokerecomp: second screen"
 	_window.size = canvas * WINDOW_SCALE
@@ -208,10 +224,24 @@ static func canvas_for(panel: Vector2i) -> Vector2i:
 func _process(delta: float) -> void:
 	if backend != BACKEND_PANEL or _view == null or _plugin == null:
 		return
+	if not _view.animated():
+		if _settle <= 0:
+			return
+		_settle -= 1
+		_present()
+		return
 	_since_present += delta
 	if _since_present < 1.0 / PANEL_HZ:
 		return
 	_since_present = 0.0
+	_present()
+
+
+func _on_view_redrawn() -> void:
+	_settle = PANEL_SETTLE_FRAMES
+
+
+func _present() -> void:
 	var picture: Image = _view.frame()
 	if picture == null:
 		return

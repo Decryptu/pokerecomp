@@ -204,3 +204,13 @@ func test_no_hosted_page_reads_input() -> void:
 				declared.has(callback),
 				"%s declares %s" % [path.get_file(), callback]
 			)
+
+
+## The launcher's own page is drawn at the panel's resolution rather than in the
+## hardware canvas, and how big it is drawn is a whole multiple of the launcher's
+## units. A desktop window smaller than one unit's worth still gets one.
+func test_the_launcher_page_scales_by_whole_units() -> void:
+	assert_eq(Gen2SecondScreen.idle_scale(Vector2i(1240, 1080)), 2)
+	assert_eq(Gen2SecondScreen.idle_scale(Vector2i(824, 720)), 1)
+	assert_eq(Gen2SecondScreen.idle_scale(Vector2i(64, 64)), 1)
+	assert_eq(Gen2SecondScreen.idle_scale(Vector2i(1920, 1620)), 3)
