@@ -362,6 +362,19 @@ func _write_cache(game_id: String = "testworld") -> void:
 		## category header and one decoration behind it, so a slot's own block or
 		## sprite is read from the table rather than guessed.
 		"decorations": _decoration_fixture(),
+		## `MomItems_1`, `MomItems_2` and `Mom_GetScriptPointer`'s two answers, in
+		## the shape a real cache carries. Two ladder rows are enough for a walk
+		## that has to stop after the last one, and the doll row is decoration 30,
+		## the one this fixture's own table owns.
+		"mom_phone": {
+			"items_1": [{"trigger": 0, "cost": 90, "kind": 1, "item": 7}],
+			"items_2": [
+				{"trigger": 900, "cost": 600, "kind": 1, "item": 7},
+				{"trigger": 10000, "cost": 1800, "kind": 2, "item": 30},
+			],
+			"item_script": {"bank": 48, "address": 0x4234},
+			"doll_script": {"bank": 48, "address": 0x5678},
+		},
 		## The `RomLayout.SPECIAL_TEXT_RUNS` boxes the deferred routines print,
 		## with the `text_ram` markers a real cache carries so a filled buffer is
 		## told from an unfilled one.
@@ -483,6 +496,14 @@ func _write_service_cache() -> void:
 			"callee_script": {"bank": 48, "address": 0x5678},
 			"callee_time": Gen2WorldPhoneHost.TIME_ANY,
 			"caller_time": Gen2WorldPhoneHost.TIME_ANY,
+		}, {
+			## `PHONE_MOM`, whose row exists so the ring has a contact; the script
+			## her call runs is `Mom_GetScriptPointer`'s, not this one.
+			"index": Gen2WorldMomPhone.CONTACT_MOM,
+			"caller_script": {"bank": 48, "address": 0x4234},
+			"callee_script": {"bank": 48, "address": 0x5678},
+			"callee_time": Gen2WorldPhoneHost.TIME_ANY,
+			"caller_time": Gen2WorldPhoneHost.TIME_ANY,
 		}],
 		"special_calls": [{"index": 0, "condition_kind": "anywhere", "contact": 0,
 			"script": {"bank": 48, "address": 0x7000}}],
@@ -564,6 +585,99 @@ func test_an_event_call_rings_the_contact_caller_script() -> void:
 	assert_true(world.phone_ring_active())
 	assert_eq(world.pending_phone_ring()["phone"]["role"], &"caller")
 	assert_false(Gen2WorldPhoneHost.resolve_caller(data, 999)["ok"])
+
+
+## `CheckBalance_MomItem2`'s ladder half: she buys the next `MomItems_2` row the
+## moment her savings reach its trigger, one row at a time, and never goes back.
+## An item lands in the PC, a doll in the room, and `MomBuysItem_DeductFunds`
+## takes the cost out of her savings rather than out of the player's.
+func test_mom_buys_the_next_ladder_row_when_her_savings_reach_it() -> void:
+	_write_service_cache()
+	var data: GameData = GameData.open_directory(_directory)
+	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(7, 6))
+	var savings: int = Gen2WorldScriptRunner.ACCOUNT_MOMS_MONEY
+
+	world.state.apply_changes({}, {}, {"money": {savings: 800}})
+	var early: Dictionary = world.mom_purchase()
+	assert_false(bool(early["bought"]), JSON.stringify(early))
+	assert_eq(world.state.money(savings), 800, "and nothing is spent")
+
+	world.state.apply_changes({}, {}, {"money": {savings: 900}})
+	var bought: Dictionary = world.mom_purchase()
+	assert_true(bool(bought["bought"]), JSON.stringify(bought))
+	assert_false(bool(bought["doll"]))
+	assert_eq(world.state.pc_item_quantity(7), 1, "ReceiveItem into wNumPCItems")
+	assert_eq(world.state.money(savings), 300, "900 less the row's 600")
+	assert_eq(world.state.mom_item_index(), 1, ".ASMFunction's inc [hl]")
+	assert_true(world.phone_ring_active(), "and she rings about it")
+
+
+## The doll half of `Mom_GiveItemOrDoll`, which is `DecorationFlagAction_c` on a
+## `DECO_*` id rather than on a `DECOFLAG_*`: the row names the decoration.
+func test_mom_buys_a_doll_straight_into_the_room() -> void:
+	_write_service_cache()
+	var data: GameData = GameData.open_directory(_directory)
+	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(7, 6))
+	var savings: int = Gen2WorldScriptRunner.ACCOUNT_MOMS_MONEY
+	world.state.set_mom_purchase(1, 0, world.state.mom_item_trigger_balance())
+	world.state.apply_changes({}, {}, {"money": {savings: 10000}})
+
+	var bought: Dictionary = world.mom_purchase()
+	assert_true(bool(bought["bought"]), JSON.stringify(bought))
+	assert_true(bool(bought["doll"]))
+	assert_true(Gen2WorldDecoration.owns(data, world.state, 30))
+	assert_eq(world.state.money(savings), 8200)
+	assert_eq(world.state.mom_item_index(), 2, "past the last ladder row")
+
+	## `CheckBalance_MomItem2` falls straight through once the ladder is spent.
+	world.state.apply_changes({}, {}, {"money": {savings: 8201}})
+	assert_false(bool(world.mom_purchase()["bought"]))
+
+
+## `.check_have_2300`: past the ladder, the trigger balance climbs by
+## `MOM_MONEY` until it reaches her savings, and she buys one of `MomItems_1` at
+## random only when it lands on them exactly. The climb is stored either way,
+## because `.AddMoney` writes it before `.less_than` returns.
+func test_mom_picks_at_random_only_on_a_mom_money_boundary() -> void:
+	_write_service_cache()
+	var data: GameData = GameData.open_directory(_directory)
+	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(7, 6))
+	var savings: int = Gen2WorldScriptRunner.ACCOUNT_MOMS_MONEY
+	world.state.set_mom_purchase(2, 0, RomLayout.MOM_MONEY)
+
+	world.state.apply_changes({}, {}, {"money": {savings: 5000}})
+	assert_false(bool(world.mom_purchase()["bought"]), "5000 is not a multiple")
+	assert_eq(
+		world.state.mom_item_trigger_balance(), RomLayout.MOM_MONEY * 3,
+		"and the walk's own climb is kept"
+	)
+
+	world.state.set_mom_purchase(2, 0, RomLayout.MOM_MONEY)
+	world.state.apply_changes({}, {}, {"money": {savings: RomLayout.MOM_MONEY * 4}})
+	var bought: Dictionary = world.mom_purchase()
+	assert_true(bool(bought["bought"]), JSON.stringify(bought))
+	assert_eq(world.state.mom_item_index(), 2, "a random pick leaves the ladder alone")
+	assert_eq(world.state.mom_item_set(), 1)
+	assert_eq(
+		world.state.mom_item_trigger_balance(), RomLayout.MOM_MONEY * 5,
+		"and the next boundary is one step past the one she landed on"
+	)
+
+
+## `GetMapPhoneService`, which is the routine's second test: she cannot ring from
+## a map a phone does not reach, so nothing is bought there either.
+func test_mom_buys_nothing_where_the_phone_has_no_service() -> void:
+	_write_service_cache()
+	var data: GameData = GameData.open_directory(_directory)
+	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(7, 6))
+	world.current_map.phone_flag = 1
+	world.state.apply_changes(
+		{}, {}, {"money": {Gen2WorldScriptRunner.ACCOUNT_MOMS_MONEY: 900}}
+	)
+	var refused: Dictionary = world.mom_purchase()
+	assert_false(bool(refused["bought"]))
+	assert_eq(StringName(refused["reason"]), &"phone_service_unavailable")
+	assert_eq(world.state.mom_item_index(), 0)
 
 
 ## `CheckSpecialPhoneCall` is `CountStep`'s first test and answers with carry,

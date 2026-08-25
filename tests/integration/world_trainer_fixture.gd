@@ -71,7 +71,7 @@ const TRAINER_SPECIES: int = 16
 const TRAINER_SPRITE: int = 1
 ## The decoration table's own length here, which is one past the second ornament
 ## rather than the cartridge's fifty-three.
-const DECORATION_ROWS: int = 32
+const DECORATION_ROWS: int = 34
 ## [id, action, event flag, block or sprite] per row the fixture fills. The ids
 ## and the actions are the source's; the flags are `EVENT_DECO_*` and the last
 ## column is a block for the first four categories and a sprite for the rest.
@@ -83,11 +83,14 @@ const DECORATION_FIXTURE: Array[Array] = [
 	[20, 10, 0, 0], [21, 9, 691, 0x5C],
 	[25, 12, 0, 0], [26, 11, 719, 0x33],
 	[29, 14, 0, 0], [30, 13, 695, 0x8E], [31, 13, 696, 0x34],
+	[32, 13, 717, 0x5E], [33, 13, 718, 0x5F],
 ]
 ## The two the fixture's own tests reach for by name.
 const DECO_FEATHERY_BED: int = 2
 const DECO_PIKACHU_DOLL: int = 30
 const DECO_SURF_PIKACHU_DOLL: int = 31
+const DECO_GOLD_TROPHY_DOLL: int = 32
+const DECO_SILVER_TROPHY_DOLL: int = 33
 
 
 ## Every caller but the Gold/Silver profile tests uses the default id, so the
@@ -587,6 +590,8 @@ static func _write_menu_text(manifest: Dictionary) -> void:
 		"toss_ask": "Throw away how\nmany?",
 		"toss_ask_quantity": "Throw away <NUM_D009>\n<RAM_CF7E>(S)?",
 		"toss_threw": "Threw away\n<RAM_CF7E>(S).",
+		"blue_card": "You now have\n<NUM_DC4B> points.",
+		"sent_trophy_home": "There was a trophy\ninside!\ue000<RAM_D47D> sent the\ntrophy home.",
 	}
 
 
@@ -757,7 +762,25 @@ static func _write_decorations(manifest: Dictionary) -> void:
 			"type": 1, "name": int(row[0]), "action": int(row[1]),
 			"flag": int(row[2]), "sprite": int(row[3]),
 		}
-	manifest["decorations"] = {"attributes": attributes, "names": names}
+	## `DecorationIDs`, the `DECOFLAG_*` order. The fixture's set-up rows come
+	## first, in id order, and the two trophy dolls sit at the source's own 43 and
+	## 44 so the trophy boxes reach them; the run between is the CANCEL row, which
+	## is what an index no fixture decoration answers gives on a cartridge too.
+	var ids: Array = []
+	for _index: int in RomLayout.DECORATION_ID_COUNT:
+		ids.append(0)
+	var flag_index: int = 0
+	for row: Array in DECORATION_FIXTURE:
+		var deco: int = int(row[0])
+		if deco == DECO_GOLD_TROPHY_DOLL or deco == DECO_SILVER_TROPHY_DOLL:
+			continue
+		var pair: Variant = Gen2WorldDecoration.ACTIONS.get(int(row[1]), null)
+		if pair is Array and bool((pair as Array)[1]):
+			ids[flag_index] = deco
+			flag_index += 1
+	ids[Gen2WorldDecoration.DECOFLAG_GOLD_TROPHY_DOLL] = DECO_GOLD_TROPHY_DOLL
+	ids[Gen2WorldDecoration.DECOFLAG_SILVER_TROPHY_DOLL] = DECO_SILVER_TROPHY_DOLL
+	manifest["decorations"] = {"attributes": attributes, "names": names, "ids": ids}
 
 
 static func _write_pokecenter_pc(manifest: Dictionary) -> void:

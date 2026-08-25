@@ -101,6 +101,22 @@ const EXPECTED_CATEGORIES: Dictionary = {
 }
 
 
+## `DecorationIDs`, transcribed from the source's own list rather than read off
+## the table this check reads: the flag order is not the id order, since the
+## dolls come in front of the big dolls here and behind them there.
+const EXPECTED_IDS: Array[int] = [
+	2, 3, 4, 5,
+	7, 8, 9, 10,
+	12, 13, 14,
+	16, 17, 18, 19,
+	21, 22, 23, 24,
+	30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+	48, 49, 50,
+	26, 27, 28,
+	51, 52,
+]
+
+
 func run(r: RefCounted) -> void:
 	_r = r
 	_r.each_game(_verify_game)
@@ -116,9 +132,35 @@ func _verify_game() -> void:
 	for deco: int in EXPECTED.size():
 		_verify_row(data, deco)
 	_verify_categories(data)
-	_r.note("%d decoration rows in %d categories" % [
-		EXPECTED.size(), EXPECTED_CATEGORIES.size(),
+	_verify_ids(data)
+	_r.note("%d decoration rows in %d categories, %d flag indices" % [
+		EXPECTED.size(), EXPECTED_CATEGORIES.size(), EXPECTED_IDS.size(),
 	])
+
+
+## `GetDecorationID`, which is the whole of what `SetSpecificDecorationFlag` and
+## Mystery Gift's copy walk do before they touch a flag. The two trophy dolls sit
+## past `NUM_NON_TROPHY_DECOS`, which is the reason the walk stops short of them.
+func _verify_ids(data: GameData) -> void:
+	for index: int in EXPECTED_IDS.size():
+		var deco: int = Gen2WorldDecoration.decoration_for_flag(data, index)
+		_r.check(
+			deco == EXPECTED_IDS[index],
+			"flag %d names decoration %d, not %d" % [index, deco, EXPECTED_IDS[index]]
+		)
+	_r.check(
+		Gen2WorldDecoration.decoration_for_flag(data, EXPECTED_IDS.size()) == 0,
+		"the run past the table's end answers a decoration"
+	)
+	_r.check(
+		Gen2WorldDecoration.decoration_for_flag(
+			data, Gen2WorldDecoration.DECOFLAG_GOLD_TROPHY_DOLL
+		) == 51
+		and Gen2WorldDecoration.decoration_for_flag(
+			data, Gen2WorldDecoration.DECOFLAG_SILVER_TROPHY_DOLL
+		) == 52,
+		"the two trophy boxes do not reach their own dolls"
+	)
 
 
 func _verify_row(data: GameData, deco: int) -> void:

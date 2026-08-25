@@ -201,7 +201,9 @@ static func receive_decoration(section: Dictionary, deco: int) -> bool:
 
 ## `CopyMysteryGiftReceivedDecorationsToPC`, run once per Continue: every flag
 ## the array carries becomes the decoration's own event flag, which is where
-## ownership lives ([Gen2WorldDecoration]). The array is not cleared, so the
+## ownership lives ([Gen2WorldDecoration]). The array holds `DECOFLAG_*` indices
+## and the walk is `SetSpecificDecorationFlag`, so `GetDecorationID` maps each
+## one onto a decoration first. The array is not cleared, so the
 ## walk is idempotent and a decoration received while a different slot was
 ## loaded still arrives.
 static func copy_decorations_to_pc(
@@ -209,7 +211,7 @@ static func copy_decorations_to_pc(
 ) -> int:
 	var given: int = 0
 	for deco: int in section.get("decorations_received", []) as Array:
-		if Gen2WorldDecoration.set_owned(data, state, deco):
+		if Gen2WorldDecoration.set_owned_by_flag(data, state, deco):
 			given += 1
 	return given
 

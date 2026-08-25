@@ -24,6 +24,7 @@ func run(r: RefCounted) -> void:
 			continue
 		_contacts(game_id, data)
 		_special_calls(game_id, data)
+		_mom_purchases(game_id, data)
 
 
 ## Every row carries both scripts, and `PHONE_BILL` resolves through the seam
@@ -56,6 +57,120 @@ func _contacts(game_id: StringName, data: GameData) -> void:
 			game_id, String(bill.get("reason", &"unknown")),
 		]
 	)
+
+
+## `MomTriesToBuySomething`'s whole block against `data/items/mom_phone.asm`.
+##
+## The two tables are pinned here rather than read off the cache, so a wrong
+## address fails on content: the ladder's ten triggers and costs, the five she
+## picks between, and which of each is a doll. Both scripts have to reach Mom's
+## own four lines through the `text_far` each `writetext` names, which is the
+## seam a stub collected without its target used to leave blank.
+const EXPECTED_LADDER: Array[Array] = [
+	[900, 600, 1, "SUPER POTION"],
+	[4000, 270, 1, "REPEL"],
+	[7000, 600, 1, "SUPER POTION"],
+	[10000, 1800, 2, "CHARMANDER DOLL"],
+	[15000, 3000, 1, "MOON STONE"],
+	[19000, 600, 1, "SUPER POTION"],
+	[30000, 4800, 2, "CLEFAIRY DOLL"],
+	[40000, 900, 1, "HYPER POTION"],
+	[50000, 8000, 2, "PIKACHU DOLL"],
+	[100000, 22800, 2, "BIG SNORLAX"],
+]
+const EXPECTED_RANDOM: Array[Array] = [
+	[0, 600, 1, "SUPER POTION"],
+	[0, 90, 1, "ANTIDOTE"],
+	[0, 180, 1, "POKé BALL"],
+	[0, 450, 1, "ESCAPE ROPE"],
+	[0, 500, 1, "GREAT BALL"],
+]
+## Her four lines, in `.ItemScript`'s order and then `.DollScript`'s. The first
+## and third are shared, which is what says both pointers were read right.
+const EXPECTED_SCRIPTS: Dictionary = {
+	false: ["Hi, ", "I found a useful", "I bought it with", "It's in your PC."],
+	true: ["Hi, ", "While shopping", "I bought it with", "It's in your room."],
+}
+
+
+func _mom_purchases(game_id: StringName, data: GameData) -> void:
+	for row: Array in [[0, EXPECTED_LADDER], [1, EXPECTED_RANDOM]]:
+		var set_number: int = int(row[0])
+		var expected: Array = row[1]
+		if not _r.check(
+			data.mom_item_count(set_number) == expected.size(),
+			"%s: MomItems set %d holds %d rows, not %d." % [
+				game_id, set_number, data.mom_item_count(set_number), expected.size(),
+			]
+		):
+			continue
+		for index: int in expected.size():
+			_mom_row(game_id, data, set_number, index, expected[index] as Array)
+	for doll: bool in [false, true]:
+		_mom_script(game_id, data, doll)
+	_r.note("%s: Mom's %d ladder rows and %d random rows, both scripts" % [
+		game_id, EXPECTED_LADDER.size(), EXPECTED_RANDOM.size(),
+	])
+
+
+func _mom_row(
+	game_id: StringName, data: GameData, set_number: int, index: int, expected: Array
+) -> void:
+	var actual: Dictionary = data.mom_item(set_number, index)
+	var kind: int = int(actual.get("kind", 0))
+	var item: int = int(actual.get("item", 0))
+	var name: String = Gen2WorldDecoration.decoration_name(data, item) 		if kind == Gen2WorldMomPhone.KIND_DOLL else data.item_name(item)
+	_r.check(
+		int(actual.get("trigger", -1)) == int(expected[0])
+			and int(actual.get("cost", -1)) == int(expected[1])
+			and kind == int(expected[2]) and name == String(expected[3]),
+		"%s: MomItems set %d row %d is %s (%s), not %s." % [
+			game_id, set_number, index, JSON.stringify(actual), name, str(expected),
+		]
+	)
+
+
+func _mom_script(game_id: StringName, data: GameData, doll: bool) -> void:
+	var pointer: Dictionary = data.mom_phone_script(doll)
+	if not _r.check(
+		not pointer.is_empty(),
+		"%s: Mom's %s script is absent." % [game_id, "doll" if doll else "item"]
+	):
+		return
+	var bank: int = int(pointer["bank"])
+	var bytes: PackedByteArray = data.world_script(bank, int(pointer["address"]))
+	var crystal: bool = Gen2WorldState.is_crystal_profile(data)
+	var lines: Array[String] = []
+	var offset: int = 0
+	while offset < bytes.size():
+		var command: Dictionary = Gen2WorldScript.command_at(bytes, offset, crystal)
+		if not bool(command.get("ok", false)):
+			break
+		if String(command.get("name", "")) == "writetext":
+			lines.append(String(Gen2TextStream.decode(
+				data.world_text(bank, int(command["address"])), 0, {
+					"far": func(far_bank: int, address: int) -> PackedByteArray:
+						return data.world_text(far_bank, address),
+				}
+			).get("text", "")))
+		offset += int(command["width"])
+		if not Gen2WorldScript.continues_after(int(command["opcode"]), crystal):
+			break
+	var expected: Array = EXPECTED_SCRIPTS[doll]
+	if not _r.check(
+		lines.size() == expected.size(),
+		"%s: Mom's %s script says %d lines, not %d." % [
+			game_id, "doll" if doll else "item", lines.size(), expected.size(),
+		]
+	):
+		return
+	for index: int in expected.size():
+		_r.check(
+			lines[index].begins_with(String(expected[index])),
+			"%s: Mom's %s line %d is \"%s\"." % [
+				game_id, "doll" if doll else "item", index, lines[index],
+			]
+		)
 
 
 ## `CheckSpecialPhoneCall` walks this list by index, so every row must name a

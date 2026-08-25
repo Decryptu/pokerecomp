@@ -254,6 +254,10 @@ var _start_menu_cursor: int = 0
 var _reopen_start_menu: bool = false
 var _trainer_approach: Dictionary = {}
 var _active_battle_save: Gen2SaveData = null
+## `wBattleScriptFlags` bit 7, which `Script_loadtrainer` sets and
+## `Script_reloadmapafterbattle` reads: a trainer fight is the branch
+## `MomTriesToBuySomething` sits on, a wild one the branch Bill does.
+var _active_battle_trainer: bool = false
 ## How many battles this run has started, which is what a replay compares beside
 ## the party: a route that fought and one that walked past the grass reach
 ## different states for the same reason.
@@ -4505,6 +4509,7 @@ func _open_battle_host(request: Dictionary) -> void:
 	var save: Gen2SaveData = _injected_save if _injected_save != null else _selected_runtime_save()
 	_active_battle_save = save
 	_active_battle_persist = save != null and _injected_save == null
+	_active_battle_trainer = StringName(values.get("kind", &"")) == &"trainer"
 	_battles_fought += 1
 	var host: Gen2BattleScreen = BATTLE_SCENE.instantiate() as Gen2BattleScreen
 	host.set_data(_data)
@@ -4797,6 +4802,7 @@ func _finish_battle_exit(result: Dictionary, fought_save: Gen2SaveData) -> void:
 	## map's own track back over the one `PlayBattleMusic` started.
 	_play_current_map_music()
 	_start_box_full_call()
+	_start_mom_purchase_call()
 	_refresh_labels()
 
 
@@ -4812,6 +4818,21 @@ func _start_box_full_call() -> void:
 		Gen2WorldPhoneHost.CONTACT_BILL
 	)
 	if not results.is_empty() and bool(results[0].get("ok", false)):
+		_show_script_results(results)
+
+
+## `Script_reloadmapafterbattle`'s other branch. Bill rings after a wild battle
+## that filled the box; Mom rings after a trainer battle, if her savings have
+## reached the next thing she is buying. The two are exclusive on the cartridge
+## because one bit decides which, so the flag is read here and nowhere else.
+func _start_mom_purchase_call() -> void:
+	if _world == null or not _active_battle_trainer:
+		return
+	_active_battle_trainer = false
+	var bought: Dictionary = _world.mom_purchase(_encounter_random.randi())
+	var results: Array = bought.get("results", [])
+	if bool(bought.get("bought", false)) and not results.is_empty() \
+		and bool((results[0] as Dictionary).get("ok", false)):
 		_show_script_results(results)
 
 

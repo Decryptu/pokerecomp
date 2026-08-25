@@ -245,6 +245,15 @@ const ITEM_ESCAPE_ROPE: int = 0x13
 ## prints its count inside the pack and closes nothing, so it has no field
 ## effect and the screen answers it where the other CURRENT rows are answered.
 const ITEM_COIN_CASE: int = 0x36
+## `BlueCardEffect`, the Coin Case's twin: `MenuTextboxWaitButton` over the
+## balance. Crystal's alone, because Buena is.
+const ITEM_BLUE_CARD: int = 0x74
+## `NormalBoxEffect` and `GorgeousBoxEffect`, which are `OpenBox` twice over: the
+## `DECOFLAG_*` each one sets, and then the same box and the same `UseDisposableItem`.
+const TROPHY_BOXES: Dictionary = {
+	0xA7: Gen2WorldDecoration.DECOFLAG_SILVER_TROPHY_DOLL,
+	0xA8: Gen2WorldDecoration.DECOFLAG_GOLD_TROPHY_DOLL,
+}
 const ITEM_ITEMFINDER: int = 0x37
 const ITEM_SACRED_ASH: int = 0x9C
 const ITEM_CARD_KEY: int = 0x7F

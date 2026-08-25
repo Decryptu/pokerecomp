@@ -13,6 +13,11 @@ const FLOWER_MAIL: int = 158
 ## menu nibble.
 const ITEMFINDER: int = 0x37
 const CARD_KEY: int = 0x7F
+## `BLUE_CARD`, `NORMAL_BOX` and `GORGEOUS_BOX`, the three `.Current` rows that
+## are not a repel and not the Coin Case.
+const BLUE_CARD: int = Gen2WorldPack.ITEM_BLUE_CARD
+const NORMAL_BOX: int = 0xA7
+const GORGEOUS_BOX: int = 0xA8
 const OLD_ROD: int = Gen2WorldInventory.ITEM_OLD_ROD
 
 ## The least a registered world renderer can be, for the VIEW row's own case.
@@ -93,6 +98,21 @@ func _write_pack_item() -> void:
 				raw["pocket"] = Gen2WorldPack.TYPE_KEY_ITEM
 				raw["permissions"] = Gen2WorldPack.CANT_TOSS
 				raw["field_menu"] = Gen2WorldPack.ITEMMENU_CLOSE
+			BLUE_CARD:
+				raw["name"] = "BLUE CARD"
+				raw["pocket"] = Gen2WorldPack.TYPE_KEY_ITEM
+				raw["permissions"] = Gen2WorldPack.CANT_SELECT | Gen2WorldPack.CANT_TOSS
+				raw["field_menu"] = Gen2WorldPack.ITEMMENU_CURRENT
+			NORMAL_BOX:
+				raw["name"] = "NORMAL BOX"
+				raw["pocket"] = Gen2WorldPack.TYPE_ITEM
+				raw["permissions"] = Gen2WorldPack.CANT_SELECT
+				raw["field_menu"] = Gen2WorldPack.ITEMMENU_CURRENT
+			GORGEOUS_BOX:
+				raw["name"] = "GORGEOUS BOX"
+				raw["pocket"] = Gen2WorldPack.TYPE_ITEM
+				raw["permissions"] = Gen2WorldPack.CANT_SELECT
+				raw["field_menu"] = Gen2WorldPack.ITEMMENU_CURRENT
 			FLOWER_MAIL:
 				## `MailItems`' first entry at its real number, with FLOWER
 				## MAIL's own row: `ItemIsMail` checks the number, so a stand-in
@@ -1798,6 +1818,55 @@ func test_select_says_an_item_may_be_registered_when_none_is() -> void:
 	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_RESULT)
 	assert_eq(String(host.get("_pack_result")), Gen2WorldPack.may_register_text())
+
+
+## `BlueCardEffect`: `MenuTextboxWaitButton` over `_BlueCardBalanceText` and
+## nothing else, so the count is shown and the card is not spent.
+func test_the_blue_card_shows_its_balance_and_is_not_spent() -> void:
+	await _open_world()
+	_world_screen._world.state.apply_changes({}, {}, {"items": {BLUE_CARD: 1}})
+	_world_screen._world.state.set_blue_card_balance(7)
+	var host: Gen2StartMenuScreen = await _open_pack(Gen2WorldPack.TYPE_KEY_ITEM)
+	host.set("_pack_cursor", 0)
+	_choose_action(host, Gen2WorldPack.ACTION_USE)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_RESULT)
+	assert_eq(String(host.get("_pack_result")), "You now have\n 7 points.")
+	assert_eq(
+		_world_screen._world.state.item_quantity(BLUE_CARD), 1,
+		"nothing in the routine reaches UseDisposableItem"
+	)
+
+
+## `NormalBoxEffect` and `GorgeousBoxEffect`, which are `OpenBox` twice over:
+## `SetSpecificDecorationFlag` on the box's own `DECOFLAG_*`, and then
+## `UseDisposableItem`. `GetDecorationID` is what makes the two land on different
+## dolls, since the flag order and the id order are not the same list.
+func test_a_trophy_box_sets_its_own_doll_and_is_spent() -> void:
+	await _open_world()
+	var state: Gen2WorldState = _world_screen._world.state
+	state.apply_changes({}, {}, {"items": {NORMAL_BOX: 1, GORGEOUS_BOX: 1}})
+	var data: GameData = _world_screen._world.data
+	assert_false(
+		Gen2WorldDecoration.owns(data, state, Fixture.DECO_SILVER_TROPHY_DOLL)
+	)
+
+	var host: Gen2StartMenuScreen = await _open_pack()
+	var rows: Array = host._current_pocket_items()
+	for index: int in rows.size():
+		if int((rows[index] as Dictionary).get("item", 0)) == NORMAL_BOX:
+			host.set("_pack_cursor", index)
+			break
+	_choose_action(host, Gen2WorldPack.ACTION_USE)
+	assert_string_contains(String(host.get("_pack_result")), "There was a trophy")
+	assert_true(
+		Gen2WorldDecoration.owns(data, state, Fixture.DECO_SILVER_TROPHY_DOLL),
+		"NORMAL BOX is DECOFLAG_SILVER_TROPHY_DOLL"
+	)
+	assert_false(
+		Gen2WorldDecoration.owns(data, state, Fixture.DECO_GOLD_TROPHY_DOLL),
+		"and it is the only one it sets"
+	)
+	assert_eq(state.item_quantity(NORMAL_BOX), 0, "UseDisposableItem")
 
 
 ## `RegisterItem` and `UseRegisteredItem`'s `.Current`, which is the whole

@@ -353,6 +353,9 @@ static func verify_layout(rom: RomFile) -> Dictionary:
 	var decorations: Dictionary = verify_decorations(rom, layout)
 	if not decorations["ok"]:
 		return decorations
+	var mom_phone: Dictionary = verify_mom_phone(rom, layout)
+	if not mom_phone["ok"]:
+		return mom_phone
 
 	var unown_words: Dictionary = verify_unown_words(rom, layout)
 	if not unown_words["ok"]:
@@ -1195,7 +1198,54 @@ static func verify_decorations(rom: RomFile, layout: Dictionary) -> Dictionary:
 			"ok": false,
 			"message": "The decoration names open \"%s\", not CANCEL." % names[0],
 		}
+	## Every `DECOFLAG_*` has to name a set-up row of the table above it: a
+	## header or the CANCEL row would make `SetSpecificDecorationFlag` own a
+	## category instead of a decoration, and that is what a wrong offset gives.
+	var ids: Array = read_decoration_ids(rom, layout)
+	if ids.size() != RomLayout.DECORATION_ID_COUNT:
+		return {"ok": false, "message": "The decoration ids are outside the cartridge."}
+	for deco: int in ids:
+		if deco < 0 or deco >= rows.size():
+			return {"ok": false, "message": "A decoration id names row %d." % deco}
+		var pair: Variant = Gen2WorldDecoration.ACTIONS.get(
+			int((rows[deco] as Dictionary).get("action", 0)), null
+		)
+		if not (pair is Array and bool((pair as Array)[1])):
+			return {
+				"ok": false,
+				"message": "Decoration id %d is not a set-up row." % deco,
+			}
 	return {"ok": true, "message": "Decorations verified."}
+
+
+## `MomTriesToBuySomething`'s block, identified by content at both ends: the two
+## scripts have to be four `writetext`s and an `end`, and the ladder behind them
+## has to climb, since `CheckBalance_MomItem2` walks `MomItems_2` in order and a
+## row out of order would make her skip one forever.
+static func verify_mom_phone(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var block: Dictionary = read_mom_phone(rom, layout)
+	if block.is_empty():
+		return {"ok": false, "message": "Mom's phone block is outside the cartridge."}
+	var at: int = int(layout["mom_phone"])
+	for offset: int in [0, RomLayout.MOM_DOLL_SCRIPT_AT]:
+		for command: int in 4:
+			if rom.u8(at + offset + command * 3) != Gen2WorldScript.WRITETEXT:
+				return {
+					"ok": false,
+					"message": "Mom's script at +%d is not four writetexts." % offset,
+				}
+	var last: int = -1
+	for row: Dictionary in block["items_2"] as Array:
+		var trigger: int = int(row["trigger"])
+		if trigger <= last:
+			return {"ok": false, "message": "Mom's ladder does not climb."}
+		last = trigger
+	for key: String in ["items_1", "items_2"]:
+		for row: Dictionary in block[key] as Array:
+			var kind: int = int(row["kind"])
+			if kind < Gen2WorldMomPhone.KIND_ITEM or kind > Gen2WorldMomPhone.KIND_DOLL:
+				return {"ok": false, "message": "A momitem row carries kind %d." % kind}
+	return {"ok": true, "message": "Mom's phone block verified."}
 
 
 ## `engine/items/mart.asm`'s own `text_far` stubs, identified by content: all
@@ -2365,6 +2415,8 @@ const PACK_TEXT_OPENINGS: Dictionary = {
 	"sacred_ash": "<PLAYER>'s POKéMON",
 	"squirtbottle": "<PLAYER> sprinkled",
 	"coin_case": "Coins:",
+	"blue_card": "You now have",
+	"sent_trophy_home": "There was a trophy",
 }
 ## The first and last of `.PokedexDesc` through `.QuitDesc`, which is what says a
 ## nine-string run is that run and not another one in the same bank. As decoded
@@ -4799,6 +4851,7 @@ func import_rom(
 		"oak_ratings": _import_oak_ratings(rom, layout),
 		"pokecenter_pc": _import_pokecenter_pc(rom, layout),
 		"decorations": _import_decorations(rom, layout),
+		"mom_phone": read_mom_phone(rom, layout),
 		"unown_puzzle": _import_unown_puzzle(rom, layout),
 		"diploma": _import_diploma(rom, layout),
 		"mystery_gift": _import_mystery_gift(rom, layout),
@@ -6106,6 +6159,21 @@ static func read_decoration_attributes(rom: RomFile, layout: Dictionary) -> Arra
 	return out
 
 
+## `DecorationIDs`, the decoration each `DECOFLAG_*` index names. Empty when the
+## run does not end in the source's own `-1`, which is what a wrong offset gives.
+static func read_decoration_ids(rom: RomFile, layout: Dictionary) -> Array:
+	var at: int = int(layout.get("decoration_ids", -1))
+	var count: int = RomLayout.DECORATION_ID_COUNT
+	if at < 0 or not rom.in_bounds(at, count + 1):
+		return []
+	if rom.u8(at + count) != 0xFF:
+		return []
+	var out: Array = []
+	for index: int in count:
+		out.append(rom.u8(at + index))
+	return out
+
+
 ## `DecorationNames`, the parts `GetDecoName` joins into a decoration's own name.
 static func read_decoration_names(rom: RomFile, layout: Dictionary) -> PackedStringArray:
 	var at: int = int(layout.get("decorations", -1))
@@ -6122,10 +6190,49 @@ static func read_decoration_names(rom: RomFile, layout: Dictionary) -> PackedStr
 	)
 
 
+## A dump offset as the `{ bank, address }` pair every other script pointer here
+## carries, so a script pinned by content reads the same as one read out of a
+## table. `RomFile.linear` is the inverse.
+static func _banked_pointer(offset: int) -> Dictionary:
+	var bank: int = offset / RomFile.BANK_SIZE
+	var address: int = offset % RomFile.BANK_SIZE
+	return {"bank": bank, "address": address if bank == 0 else address + RomFile.BANK_SIZE}
+
+
+## `MomItems_1` and `MomItems_2`, and the two scripts `Mom_GetScriptPointer`
+## answers with. A row is `momitem`: a three-byte big-endian trigger, a
+## three-byte cost, `MOMITEM_KIND` and either an item number or a `DECO_*` id.
+static func read_mom_phone(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var at: int = int(layout.get("mom_phone", -1))
+	if at < 0:
+		return {}
+	var size: int = RomLayout.MOM_ITEM_SIZE
+	var rows: int = RomLayout.MOM_ITEMS_1_COUNT + RomLayout.MOM_ITEMS_2_COUNT
+	var table: int = at + RomLayout.MOM_ITEMS_AT
+	if not rom.in_bounds(table, rows * size):
+		return {}
+	var lists: Array = [[], []]
+	for index: int in rows:
+		var row: int = table + index * size
+		(lists[0 if index < RomLayout.MOM_ITEMS_1_COUNT else 1] as Array).append({
+			"trigger": (rom.u8(row) << 16) | (rom.u8(row + 1) << 8) | rom.u8(row + 2),
+			"cost": (rom.u8(row + 3) << 16) | (rom.u8(row + 4) << 8) | rom.u8(row + 5),
+			"kind": rom.u8(row + 6),
+			"item": rom.u8(row + 7),
+		})
+	return {
+		"items_1": lists[0],
+		"items_2": lists[1],
+		"item_script": _banked_pointer(at),
+		"doll_script": _banked_pointer(at + RomLayout.MOM_DOLL_SCRIPT_AT),
+	}
+
+
 func _import_decorations(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return {
 		"attributes": read_decoration_attributes(rom, layout),
 		"names": Array(read_decoration_names(rom, layout)),
+		"ids": read_decoration_ids(rom, layout),
 	}
 
 

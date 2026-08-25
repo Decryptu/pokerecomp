@@ -1282,6 +1282,14 @@ func _confirm_use() -> void:
 			if number == Gen2WorldPack.ITEM_COIN_CASE:
 				_show_pack_result(_coin_case_text(), true)
 				return
+			## `BlueCardEffect` is the same routine over a different text and a
+			## different counter, and it closes nothing either.
+			if number == Gen2WorldPack.ITEM_BLUE_CARD:
+				_show_pack_result(_blue_card_text(), true)
+				return
+			if Gen2WorldPack.TROPHY_BOXES.has(number):
+				_open_trophy_box(number)
+				return
 			_use_selected_item(-1)
 		Gen2WorldPack.ITEMMENU_CLOSE:
 			_use_field_item(number)
@@ -1842,6 +1850,45 @@ func _coin_case_text() -> String:
 		return "Coins:\n%4d" % _coins()
 	return Gen2TextStream.fill_marker(
 		text, Gen2TextStream.NUMBER_MARKER, "%4d" % _coins()
+	)
+
+
+## `_BlueCardBalanceText`, whose `text_decimal wBlueCardBalance, 1, 2` is the one
+## byte [Gen2WorldState] keeps for Buena's points.
+func _blue_card_text() -> String:
+	var text: String = _data.menu_text("blue_card") if _data != null else ""
+	var balance: int = _world.state.blue_card_balance() \
+		if _world != null and _world.state != null else 0
+	if text.is_empty():
+		return "You now have\n%2d points." % balance
+	return Gen2TextStream.fill_marker(
+		text, Gen2TextStream.NUMBER_MARKER, "%2d" % balance
+	)
+
+
+## `OpenBox`: `SetSpecificDecorationFlag` on the box's own `DECOFLAG_*`, the one
+## text, and `UseDisposableItem`. Nothing can refuse it, so the flag is set and
+## the box is spent whether or not the trophy was already owned.
+func _open_trophy_box(item: int) -> void:
+	if _world == null or _world.state == null or _data == null:
+		_show_pack_result("No world is loaded.", false)
+		return
+	Gen2WorldDecoration.set_owned_by_flag(
+		_data, _world.state, int(Gen2WorldPack.TROPHY_BOXES[item])
+	)
+	if _world.inventory != null:
+		_world.inventory.change_item_quantity(item, -1)
+	_show_pack_result(_trophy_text(), true)
+
+
+## `_SentTrophyHomeText`, whose second paragraph names `wPlayerName`.
+func _trophy_text() -> String:
+	var text: String = _data.menu_text("sent_trophy_home") if _data != null else ""
+	if text.is_empty():
+		return "There was a trophy\ninside!"
+	return Gen2TextStream.fill_all_markers(
+		text, Gen2TextStream.RAM_MARKER,
+		_pack_save.player_name if _pack_save != null else ""
 	)
 
 

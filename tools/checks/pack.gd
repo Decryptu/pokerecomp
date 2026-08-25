@@ -203,6 +203,32 @@ func _verify_field_effects(game_id: StringName, data: GameData) -> void:
 				== Gen2WorldPack.ITEMMENU_CURRENT,
 		"%s: the COIN CASE is not ITEMMENU_CURRENT." % game_id
 	)
+	## The whole of `.Current` past the three repels: the Coin Case above, the
+	## two trophy boxes, and the Blue Card, which is Crystal's alone because
+	## Buena is. A row here that the cache does not make CURRENT is a row the
+	## pack would answer with `.Oak`.
+	var current_rows: Array[int] = [Gen2WorldPack.ITEM_COIN_CASE]
+	current_rows.append_array(Gen2WorldPack.TROPHY_BOXES.keys())
+	if Gen2WorldState.is_crystal_profile(data):
+		current_rows.append(Gen2WorldPack.ITEM_BLUE_CARD)
+	for number: int in current_rows:
+		_r.check(
+			Gen2WorldPack.field_use_kind(data, number) == Gen2WorldPack.ITEMMENU_CURRENT,
+			"%s: $%02X (%s) is not ITEMMENU_CURRENT." % [
+				game_id, number, data.item_name(number),
+			]
+		)
+	for number: int in Gen2WorldPack.TROPHY_BOXES:
+		var deco: int = Gen2WorldDecoration.decoration_for_flag(
+			data, int(Gen2WorldPack.TROPHY_BOXES[number])
+		)
+		_r.check(
+			Gen2WorldDecoration.slot_of(data, deco) \
+				== Gen2WorldDecoration.SLOT_LEFT_ORNAMENT,
+			"%s: $%02X opens on decoration %d, which is not a doll." % [
+				game_id, number, deco,
+			]
+		)
 
 
 ## The three key items whose effect is a `farsjump` at a named map script, each

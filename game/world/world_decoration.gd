@@ -192,8 +192,32 @@ static func owns(data: GameData, state: Gen2WorldState, deco: int) -> bool:
 	return state.is_event_flag_active(int(row.get("flag", -1)))
 
 
-## `SetSpecificDecorationFlag`, which is what a doll Mom buys and a trophy the
-## Bug Contest awards go through.
+## `DecorationIDs` indices the code names for itself. The two trophy dolls sit
+## past `NUM_NON_TROPHY_DECOS`, which is why Mystery Gift can never send one.
+const DECOFLAG_GOLD_TROPHY_DOLL: int = 43
+const DECOFLAG_SILVER_TROPHY_DOLL: int = 44
+
+
+## `GetDecorationID`: which decoration a `DECOFLAG_*` index names. The two orders
+## are not the same, and neither is a rule: the flag order runs the dolls in
+## front of the big dolls where the id order runs them behind, and the flag order
+## has no header rows in it at all. Answers 0, the CANCEL row, for an index the
+## imported table does not carry.
+static func decoration_for_flag(data: GameData, flag_index: int) -> int:
+	return data.decoration_id_for_flag(flag_index) if data != null else 0
+
+
+## `SetSpecificDecorationFlag`, the one entry every gift takes: Mystery Gift's
+## own copy walk, and the two trophy boxes. Its argument is a `DECOFLAG_*`, so it
+## runs `GetDecorationID` first.
+static func set_owned_by_flag(
+	data: GameData, state: Gen2WorldState, flag_index: int, owned: bool = true
+) -> bool:
+	return set_owned(data, state, decoration_for_flag(data, flag_index), owned)
+
+
+## `DecorationFlagAction SET_FLAG` on a decoration id, which is what
+## `SetSpecificDecorationFlag` reaches once the index is resolved.
 static func set_owned(
 	data: GameData, state: Gen2WorldState, deco: int, owned: bool = true
 ) -> bool:

@@ -332,6 +332,15 @@ var _buenas_password: int = 0
 ## own `ifequal` in front of the award, not a rule the byte enforces.
 var _blue_card_balance: int = 0
 
+## `wWhichMomItem`, `wWhichMomItemSet` and `wMomItemTriggerBalance`, the three
+## `MomTriesToBuySomething` reads and writes. The index walks `MomItems_2` in
+## order and never goes back; the set is 0 for that ladder and 1 plus a row for
+## the five she picks from at random; the balance is the next `MOM_MONEY`
+## boundary her savings have to land on exactly.
+var _mom_item_index: int = 0
+var _mom_item_set: int = 0
+var _mom_item_trigger_balance: int = RomLayout.MOM_MONEY
+
 ## `wVariableSprites`, the sixteen `SPRITE_VARS` slots `GetMonSprite` resolves a
 ## variable sprite through. It sits inside `wPlayerData`, which `SaveData` copies
 ## whole into `sPlayerData`, so the table is saved and restored: an assignment
@@ -515,6 +524,9 @@ func to_dict() -> Dictionary:
 			"ot": _best_magikarp_ot,
 		},
 		"mom_savings_flags": _mom_savings_flags,
+		"mom_item_index": _mom_item_index,
+		"mom_item_set": _mom_item_set,
+		"mom_item_trigger_balance": _mom_item_trigger_balance,
 		"blue_card_balance": _blue_card_balance,
 		"buenas_password": _buenas_password,
 		"variable_sprites": _variable_sprites.duplicate(),
@@ -642,6 +654,15 @@ static func from_dict(raw: Variant) -> Gen2WorldState:
 		restored._best_magikarp_inches = int((record as Dictionary).get("inches", 0)) & 0xFF
 		restored._best_magikarp_ot = String((record as Dictionary).get("ot", ""))
 	restored._mom_savings_flags = int(source.get("mom_savings_flags", 0)) & 0xFF
+	restored._mom_item_index = maxi(int(source.get("mom_item_index", 0)), 0)
+	restored._mom_item_set = maxi(int(source.get("mom_item_set", 0)), 0)
+	## `NewGame` writes `MOM_MONEY` here rather than zero, so a save from before
+	## the field existed reads as a new game rather than as a balance she has
+	## already passed.
+	restored._mom_item_trigger_balance = clampi(
+		int(source.get("mom_item_trigger_balance", RomLayout.MOM_MONEY)),
+		0, Gen2WorldInventory.MAX_MONEY
+	)
 	restored._blue_card_balance = int(source.get("blue_card_balance", 0)) & 0xFF
 	restored._buenas_password = int(source.get("buenas_password", 0)) & 0xFF
 	## Defaults rather than versioning: a slot written before the tower existed
@@ -724,6 +745,9 @@ func restore_from_dict(raw: Variant) -> void:
 	_best_magikarp_inches = restored._best_magikarp_inches
 	_best_magikarp_ot = restored._best_magikarp_ot
 	_mom_savings_flags = restored._mom_savings_flags
+	_mom_item_index = restored._mom_item_index
+	_mom_item_set = restored._mom_item_set
+	_mom_item_trigger_balance = restored._mom_item_trigger_balance
 	_blue_card_balance = restored._blue_card_balance
 	_buenas_password = restored._buenas_password
 	_variable_sprites = restored._variable_sprites.duplicate()
@@ -1138,6 +1162,34 @@ func set_mom_savings_flags(flags: int) -> void:
 
 func blue_card_balance() -> int:
 	return _blue_card_balance
+
+
+func mom_item_index() -> int:
+	return _mom_item_index
+
+
+func mom_item_set() -> int:
+	return _mom_item_set
+
+
+func mom_item_trigger_balance() -> int:
+	return _mom_item_trigger_balance
+
+
+## The three written together, because `MomTriesToBuySomething` never moves one
+## without the others: the balance climbs while the set is chosen, and the index
+## advances only on the ladder.
+func set_mom_purchase(index: int, set_number: int, trigger_balance: int) -> void:
+	var next_index: int = maxi(index, 0)
+	var next_set: int = maxi(set_number, 0)
+	var next_balance: int = clampi(trigger_balance, 0, Gen2WorldInventory.MAX_MONEY)
+	if next_index == _mom_item_index and next_set == _mom_item_set \
+		and next_balance == _mom_item_trigger_balance:
+		return
+	_mom_item_index = next_index
+	_mom_item_set = next_set
+	_mom_item_trigger_balance = next_balance
+	changed.emit()
 
 
 func buenas_password() -> int:
