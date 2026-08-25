@@ -49,11 +49,6 @@ const PLAYERSPC_HOUSE: int = 1
 ## keeps the cartridge's marker rather than a placeholder.
 const PLAYER_MARKER: String = "<PLAYER>"
 
-## The rows above with nothing behind them, dropped from every list rather than
-## offered and refused. See the class comment for what each needs first.
-const UNBUILT_TOP_MENU_ROWS: Array[int] = []
-const UNBUILT_PLAYERS_PC_ROWS: Array[int] = []
-
 
 ## `_BillsPC.MenuData`'s five rows, in its `.Jumptable`'s own order. Inline menu
 ## strings inside `bills_pc_top.asm` that no script points at, so nothing imports
@@ -91,18 +86,12 @@ const MAILBOX_ALREADY_HOLDING: String = "It's already hold-\ning an item."
 const MAILBOX_EGG: String = "An EGG can't hold\nany MAIL."
 const MAILBOX_MOVED: String = "The MAIL was moved\nfrom the MAILBOX."
 
-## Every row of the machine's own menu is built: MOVE PKMN W/O MAIL is
-## [Gen2BoxScreen]'s `MODE_MOVE`, which is `_MovePKMNWithoutMail`'s own two
-## joypad passes over the same listing.
-const UNBUILT_BILLS_PC_ROWS: Array[int] = []
-
-
 ## The top menu behind BILL'S PC, as `{row, name}` in the source's own order.
+## Every row of it is built: MOVE PKMN W/O MAIL is [Gen2BoxScreen]'s `MODE_MOVE`,
+## which is `_MovePKMNWithoutMail`'s own two joypad passes over the same listing.
 static func bills_pc_menu() -> Array:
 	var out: Array = []
 	for row: int in BILLS_PC_ROWS.size():
-		if row in UNBUILT_BILLS_PC_ROWS:
-			continue
 		out.append({"row": row, "name": BILLS_PC_ROWS[row]})
 	return out
 
@@ -121,18 +110,14 @@ static func top_menu_list(state: Gen2WorldState) -> int:
 static func top_menu(
 	data: GameData, state: Gen2WorldState, player_name: String = ""
 ) -> Array:
-	return _rows(
-		data, false, _list(data, false, top_menu_list(state)),
-		UNBUILT_TOP_MENU_ROWS, player_name
-	)
+	return _rows(data, false, _list(data, false, top_menu_list(state)), player_name)
 
 
 ## The item PC's own rows. [param house] picks `PLAYERSPC_HOUSE`, which is what
 ## `_PlayersHousePC` passes and the Pokemon Center's `PlayersPC` does not.
 static func players_pc_menu(data: GameData, house: bool) -> Array:
 	return _rows(
-		data, true, _list(data, true, PLAYERSPC_HOUSE if house else PLAYERSPC_NORMAL),
-		UNBUILT_PLAYERS_PC_ROWS, ""
+		data, true, _list(data, true, PLAYERSPC_HOUSE if house else PLAYERSPC_NORMAL), ""
 	)
 
 
@@ -150,15 +135,14 @@ static func _list(data: GameData, players: bool, index: int) -> Array:
 ## `PlaceNthMenuStrings`: each list entry names a jumptable row, and the row
 ## names its own string.
 static func _rows(
-	data: GameData, players: bool, list: Array, unbuilt: Array[int],
-	player_name: String
+	data: GameData, players: bool, list: Array, player_name: String
 ) -> Array:
 	var order: Array[String] = RomLayout.POKECENTER_PC_PLAYERS_ORDER if players \
 		else RomLayout.POKECENTER_PC_ROWS
 	var out: Array = []
 	for raw_row: Variant in list:
 		var row: int = int(raw_row)
-		if row < 0 or row >= order.size() or row in unbuilt:
+		if row < 0 or row >= order.size():
 			continue
 		var name: String = data.pokecenter_pc_row(String(order[row]), players)
 		if name.is_empty():

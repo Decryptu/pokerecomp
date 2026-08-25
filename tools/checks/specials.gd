@@ -27,13 +27,15 @@ const EXPECTED_DEFERRED: Dictionary = {
 	## to a modern platform. The cable club's own sixteen rows have left this
 	## list with the Battle Tower's seven, `DisplayLinkRecord`, which sat in the
 	## link block without being link play, and Mystery Gift's three.
-	125: "GiveOddEgg",
+	##
+	## The bank a routine sits in decides nothing: `GiveOddEgg` and
+	## `AskRememberPassword` sat here for being mobile neighbours, and both are
+	## reached by an ordinary NPC. Read the call sites before adding a row.
 	127: "Function1011f1", 128: "Function101220", 129: "Function101225",
 	130: "Function101231", 139: "BattleTowerMobileError",
 	140: "AskMobileOrCable", 154: "Mobile_SelectThreeMons",
 	155: "Function1037eb", 156: "Function10383c", 159: "Function1037c2",
-	161: "Function103780",
-	162: "Function10387b", 163: "AskRememberPassword",
+	161: "Function103780", 162: "Function10387b",
 
 	## Screens and facilities with no routine here yet. Each is its own piece of
 	## work, not a dispatch entry: it opens a screen, spends a transaction, or

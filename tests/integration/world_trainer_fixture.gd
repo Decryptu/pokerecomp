@@ -117,6 +117,7 @@ static func build(game_id: StringName = GAME_ID) -> GameData:
 	_write_pokecenter_pc(manifest)
 	_write_decorations(manifest)
 	_write_unown_words(manifest)
+	_write_odd_eggs(manifest, crystal_commands)
 	_write_unown_puzzle(cache_directory, manifest)
 	_write_slots(cache_directory, manifest)
 	_write_card_flip(cache_directory, manifest)
@@ -128,6 +129,37 @@ static func build(game_id: StringName = GAME_ID) -> GameData:
 	manifest["complete"] = true
 	RomCache.write_json(RomCache.manifest_path(cache_directory), manifest)
 	return GameData.open_directory(cache_directory)
+
+
+## Two `OddEggs` rows with the real table's shape: a cumulative probability
+## word, the 48-byte party-mon struct and the `dname` EGG behind it. Gold and
+## Silver ship none, which is what the empty list stands for.
+static func _write_odd_eggs(manifest: Dictionary, crystal: bool) -> void:
+	if not crystal:
+		manifest["odd_eggs"] = []
+		return
+	var rows: Array = []
+	var probabilities: Array[int] = [0x7FFF, RomLayout.ODD_EGG_PROBABILITY_TOTAL]
+	var species: Array[int] = [25, 133]
+	for index: int in probabilities.size():
+		var bytes: PackedByteArray = PackedByteArray()
+		bytes.resize(RomLayout.NICKNAMED_MON_BYTES)
+		bytes.fill(0)
+		bytes[0] = species[index]
+		bytes[31] = RomLayout.ODD_EGG_LEVEL
+		## The struct carries its own experience, and a row whose level and
+		## experience disagree is what `Gen2WorldTransaction` refuses.
+		var exp: int = RomLayout.ODD_EGG_LEVEL ** 3
+		bytes[8] = (exp >> 16) & 0xFF
+		bytes[9] = (exp >> 8) & 0xFF
+		bytes[10] = exp & 0xFF
+		## `dname` pads the whole name field with the terminator behind the word.
+		var nickname: PackedByteArray = Gen2Text.encode(RomLayout.ODD_EGG_NICKNAME)
+		for step: int in Gen2SramAdapter.MON_NAME_LENGTH:
+			bytes[Gen2SramAdapter.PARTYMON_SIZE + step] = nickname[step] \
+				if step < nickname.size() else Gen2Text.TERMINATOR
+		rows.append({"probability": probabilities[index], "bytes": Array(bytes)})
+	manifest["odd_eggs"] = rows
 
 
 ## The four naming keyboards with the real block's shape and command rows, the

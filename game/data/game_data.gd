@@ -75,6 +75,7 @@ var _pokecenter_pc: Dictionary = {}
 var _decorations: Dictionary = {}
 var _unown_words: PackedStringArray = PackedStringArray()
 var _unown_walls: PackedStringArray = PackedStringArray()
+var _odd_eggs: Array = []
 var _credits: Dictionary = {}
 var _intro_movie: Dictionary = {}
 var _unown_puzzle: Dictionary = {}
@@ -219,6 +220,8 @@ static func open_directory(path: String) -> GameData:
 	if unown_walls is Array:
 		for wall: Variant in unown_walls as Array:
 			data._unown_walls.append(String(wall))
+	var odd_eggs: Variant = manifest.get("odd_eggs", [])
+	data._odd_eggs = odd_eggs if odd_eggs is Array else []
 	var credits: Variant = manifest.get("credits", {})
 	data._credits = credits if credits is Dictionary else {}
 	var intro_movie: Variant = manifest.get("intro_movie", {})
@@ -1902,6 +1905,26 @@ func unown_wall_word(index: int) -> String:
 	if index < 0 or index >= _unown_walls.size():
 		return ""
 	return _unown_walls[index]
+
+
+## `OddEggProbabilities` and `OddEggs` as one table: the cumulative word the
+## roll is compared against, and the nicknamed-mon bytes the row hands over.
+## Empty on Gold and Silver, which ship no Odd Egg.
+func odd_eggs() -> Array:
+	return _odd_eggs
+
+
+## Row [param index] of that table as the Pokemon it is, or null outside it.
+func odd_egg_mon(index: int) -> Gen2SaveMon:
+	if index < 0 or index >= _odd_eggs.size():
+		return null
+	var row: Variant = _odd_eggs[index]
+	if not row is Dictionary:
+		return null
+	var bytes: Variant = (row as Dictionary).get("bytes", [])
+	if not bytes is Array:
+		return null
+	return Gen2SramAdapter.read_nicknamed_mon(PackedByteArray(bytes as Array), 0)
 
 
 ## `OakRatings`, as [code]{ threshold, sfx, text }[/code] rows in table order.
