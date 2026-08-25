@@ -12,6 +12,11 @@ extends SceneTree
 ## can be photographed; `<side>` is 0 for the player's own and 1 for the
 ## enemy's; `<frames>` is how many frames into the animation to stop.
 ##
+## `<move> catch` throws a ball instead of taking a turn, which is
+## `ANIM_THROW_POKE_BALL` and the whole of a capture: the ball, the poof, the
+## opponent going into it, three wobbles and then the click or the break free.
+## `<side>` picks the ending, 0 caught and 1 broken free.
+##
 ## `<move> 0` photographs the entrance instead, which is `BattleStartMessage` and
 ## the opening of `DoBattle` rather than a turn: a wild one, or a trainer's with
 ## `<side>` at 1, and `<frames>` counted from the frame the pics stop sliding.
@@ -41,6 +46,9 @@ const MAX_STEPS: int = 4096
 ## it. A person is what the cartridge waits for; a fixed count is what makes two
 ## runs of this tool the same run.
 const PRESS_AFTER: int = 40
+## `<move> catch` throws a ball instead of taking a turn. It is not a move
+## number, so it cannot collide with one.
+const CATCH_MOVE: int = -1
 
 var _screen: Gen2BattleScreen = null
 var _output_path: String = ""
@@ -70,7 +78,7 @@ func _initialize() -> void:
 	if Gen2ToolPath.refuses(_output_path):
 		quit(2)
 		return
-	_move = int(args[2])
+	_move = CATCH_MOVE if args[2] == "catch" else int(args[2])
 	_side_is_enemy = int(args[3]) != 0
 	if args[4].contains("-"):
 		var span: PackedStringArray = args[4].split("-", false)
@@ -270,11 +278,34 @@ func _settle_entrance() -> void:
 		_screen.advance()
 
 
+## `PokeBallEffect`'s own throw, which is not a turn: `ANIM_THROW_POKE_BALL` is
+## played by the item rather than by a move, and `<side>` decides whether the
+## Pokemon is caught or gets out, since only `anim_checkpokeball` tells the two
+## endings apart.
+func _drive_capture() -> bool:
+	_screen.show_matchup(16, 155, 20, 20)
+	while _screen.intro_running():
+		_screen.advance_frame()
+	_settle_entrance()
+	## The ball selector belongs to a wild battle a world screen opened, and this
+	## driver has no world. What is being photographed is the animation the
+	## resolved throw plays, so it is asked for the way `complete_capture` asks
+	## for it: a POKE BALL, three wobbles, and the ending `<side>` names.
+	_screen._begin_capture_animation(
+		Gen2WorldPartyHost.ITEM_POKE_BALL, 3, not _side_is_enemy
+	)
+	for _frame: int in _frames_in:
+		_screen.advance_frame()
+	return true
+
+
 ## Settles the intro, teaches both Pokemon the move, takes the turn and walks the
 ## event queue to the first animation on the requested side.
 func _drive() -> bool:
 	if _move == 0:
 		return _drive_entrance()
+	if _move == CATCH_MOVE:
+		return _drive_capture()
 	_screen.show_matchup(16, 155, 20, 20)
 	while _screen.intro_running():
 		_screen.advance_frame()

@@ -38,7 +38,7 @@ user://mods/<id>/
 | `id` | Lowercase `[a-z0-9][a-z0-9_-]*`; addresses the directory and registry keys |
 | `name` | Shown to the player |
 | `version` | The mod's own version, not the host's |
-| `api_version` | Between `Gen2ModManifest.MIN_API_VERSION` and `API_VERSION`. Declare the oldest host you need: 16 for [the shiny seam](#how-many-times-a-wilds-dvs-are-rolled), [an item gift](#asking-the-host-to-hand-an-item-over) and [reading the bag](#reading-the-bag), 15 for [a visible encounter's glow](#visible-wild-encounters), 14 for [an annotation's own interface field](#annotating-the-battle), 13 for [an alternate field-move source](#an-alternate-field-move-source), [Repel renewal](#renewing-a-repel), [experience for a capture](#experience-for-a-capture), [battle annotations](#annotating-the-battle) and a start-menu entry's action and visibility, 12 for `Gen2ModHost.view_changed`, 11 for [the battle entrance](#the-entrance) and the battle view's other resolved fields, 10 for [a screen that fills the window](#a-screen-that-fills-the-window) and the maps past this one's edge, 9 for an item that names an evolution method, 8 for a stats-screen page, 7 for an actor's `interact`, `emote` and outbox and for hidden-item requests, 6 for `occupied` in the visible-encounter context, 5 for the run's rules, 4 for types, matchups, mod art and event mutators, 3 for mart rows and named axes, 2 for visible encounters, 1 for everything else |
+| `api_version` | Between `Gen2ModManifest.MIN_API_VERSION` and `API_VERSION`. Declare the oldest host you need: 17 for [the battlers block](#the-battlers), 16 for [the shiny seam](#how-many-times-a-wilds-dvs-are-rolled), [an item gift](#asking-the-host-to-hand-an-item-over) and [reading the bag](#reading-the-bag), 15 for [a visible encounter's glow](#visible-wild-encounters), 14 for [an annotation's own interface field](#annotating-the-battle), 13 for [an alternate field-move source](#an-alternate-field-move-source), [Repel renewal](#renewing-a-repel), [experience for a capture](#experience-for-a-capture), [battle annotations](#annotating-the-battle) and a start-menu entry's action and visibility, 12 for `Gen2ModHost.view_changed`, 11 for the battle view's other resolved fields, 10 for [a screen that fills the window](#a-screen-that-fills-the-window) and the maps past this one's edge, 9 for an item that names an evolution method, 8 for a stats-screen page, 7 for an actor's `interact`, `emote` and outbox and for hidden-item requests, 6 for `occupied` in the visible-encounter context, 5 for the run's rules, 4 for types, matchups, mod art and event mutators, 3 for mart rows and named axes, 2 for visible encounters, 1 for everything else |
 | `entry` | A `.gd` path inside the mod directory, or inside the pack when there is one |
 | `pack` | Optional `.pck` or `.zip` beside `mod.json`, holding the mod's files |
 | `description` | Optional |
@@ -907,7 +907,8 @@ a panel or a bar is drawn. A registered battle renderer is a `Node` providing:
 `player_unown_form`, `enemy_substitute`, `player_substitute`, `enemy_name`,
 `player_name`, `enemy_level`, `player_level`, `battle_kind`, `trainer_class`,
 `trainer_index`, `trainer_name`, `enemy_hp`, `enemy_max_hp`, `player_hp`,
-`player_max_hp`, `exp_pixels`, `raster_scx`, `raster_scy`, `entrance`,
+`player_max_hp`, `enemy_shiny`, `player_shiny`, `exp_pixels`, `raster_scx`,
+`raster_scy`, `battlers`,
 `intro_sprites`, `grayscale`, `enemy_trainer_pic`, `player_backpic`,
 `player_backpic_palette`, `enemy_hud_visible`, `player_hud_visible`,
 `trainer_hud_balls`, `trainer_hud_border`, `bg_map`, `bg_vbank1`,
@@ -926,6 +927,15 @@ not the class name. `exp_pixels` is a
 count out of 64, which is `PlaceExpBar`'s own unit; the exp bar is never a
 ratio, because `CalcExpBar` has already done the division and rounded it the
 cartridge's way.
+
+`enemy_shiny` and `player_shiny` say the individual on that square is shiny, so
+its picture is drawn in the shiny palette rather than the species one:
+`GameData.palette(number, shiny)` is the accessor both take, the same call
+`_CGB_BattleColors` makes through `GetMonNormalOrShinyPalettePointer`. They are
+about the individual and not the species, so they cannot be derived from
+`enemy_species` and `player_species`; a renderer that ignores them draws every
+shiny in normal colours. Both are `api_version` 11, pushed with the rest of the
+resolved battle fields.
 
 `raster_scx` is the background's own horizontal scroll, one value per scanline
 in the order the hardware draws them, and empty whenever the background is
@@ -959,27 +969,40 @@ below that base is not an animation tile at all. `hud_visible` is false for the
 length of a move animation, which is `BattleAnimClearHud` taking the panels and
 both bars off the map and `BattleAnimRestoreHuds` putting them back.
 
-### The entrance
+### The battlers
 
 A fight does not open with two Pokémon standing on the field. Two *trainers*
 slide in from opposite sides, the opponent sends out first, the player's back
 pic walks off, and a ball puts a Pokémon where each trainer was standing. Every
 field so far says that in the terms the hardware draws it in: the slide is a
 scanline scroll (`raster_scx`), the walk off is columns going blank in `bg_map`,
-and the player mid-slide is eighteen OAM entries (`intro_sprites`). A renderer
-with no background plane has none of those three, so `entrance` is the same
-state said plainly, one entry per side:
+and the player mid-slide is eighteen OAM entries (`intro_sprites`).
+
+Nothing that happens to a battler *after* the entrance is any different. A faint
+sinks the picture a tile row at a time inside `bg_map`; a Fly, Dig, Bounce,
+Teleport or Whirlwind user is blanked out of it for a turn; a recall and a
+send-out restamp it out of progressively smaller subsamplings of itself; and
+every per-battler deformation, Tackle, Withdraw, Psychic, DoubleTeam, AcidArmor,
+Wobble, Flail, WaveDeformMon, BounceDown and Vibrate, is a scanline window over
+that side's own rows.
+
+A renderer with no background plane has none of that, and reconstructing it by
+scanning a 20 by 18 grid every frame is both duplicated work and lossy: a resize
+script's arrangement and a faint sink read the same at the tile level. So
+`battlers` is all of it said plainly, one entry per side, on every frame:
 
 ```gdscript
-view["entrance"] = {
+view["battlers"] = {
     "player": {
         "kind": &"trainer",              # or &"mon", or &"none"
         "backpic": "kris",               # "" unless kind is trainer
         "trainer_class": 0,              # always 0 on the player's side
         "species": 0,                    # 0 unless kind is mon
+        "visible": true,                 # false while the picture is off the square
         "offset_pixels": Vector2(142.0, 0.0),
+        "scale": Vector2.ONE,            # the resize script's own steps otherwise
     },
-    "enemy": { ... the same five, with trainer_class carrying the class },
+    "enemy": { ... the same seven, with trainer_class carrying the class },
 }
 ```
 
@@ -992,13 +1015,33 @@ and `trainer_palette(number)` take, and `species` what `species_pic()` takes, so
 whichever one is set names a picture the renderer can resolve. A wild opponent
 is never a trainer and slides in as its own front pic.
 
-`offset_pixels` is how far that picture stands from its resting square, and it
-covers both movements with one number because both are one thing: the slide
-brings a picture in from off the field and `SlideBattlePicOut` takes it off
-again. Zero is standing still, which is every frame outside an entrance. The
-player comes in from the right and leaves to the left and the opponent the other
-way, so the sign is the direction. A renderer that ignores the block draws
-exactly what it draws today.
+`visible` is whether the picture is on the square at all.
+`BattleBGEffect_HideMon` is what takes it off for a vanished turn and
+`..._RemoveMon` for a recall, and it stays off until a send-out puts a whole
+picture back. It is not the same question as `kind`: `&"none"` is a square
+nobody is standing on, `visible` false a picture that has been taken away from
+one somebody is.
+
+`offset_pixels` is how far that picture stands from its resting square, and one
+number covers every movement because they are all the same thing: the slide
+brings a picture in, `SlideBattlePicOut` takes it off, `MonFaintedAnimation`
+sinks it, `RemoveMon` pushes it aside, and the window effects lunge, shake and
+sink it. Zero is standing still. The player comes in from the right and leaves to
+the left and the opponent the other way, so the sign is the direction, and a
+faint is positive downwards. The whole-screen scroll is not in it: `raster_scx`
+and `raster_scy` already carry that, and this is what is left after it. Two
+effects stretch the picture rather than move it, WaveDeformMon and Psychic, and
+for those the number is the mean of the window rather than an exact answer.
+
+`scale` is the side of the square `BattleBGEffect_RunPicResizeScript` last placed
+over the side of the whole picture, so the ball shrink of a recall and the grow
+of a send-out are one number. `Vector2.ONE` is the whole picture, which is every
+frame outside a resize. The cartridge subsamples rather than scales, dropping
+rows and columns, so a renderer drawing a real scaled picture is drawing it
+better than the hardware did rather than differently.
+
+A renderer that reads only `kind`, the three picture fields and `offset_pixels`
+draws exactly what it drew before this block existed.
 
 `intro_sprites` is the eighteen `{ tile, x, y }` of the player's own head and
 shoulders during the slide, drawn as OAM because those three tile rows fall in
@@ -1020,12 +1063,16 @@ of `species_pic(number, back)`. `bg_vbank1` is `wAttrmap` bit
 3 over the screen, the VRAM bank each cell's tile number is read from, which
 only the enemy's own pic animation ever sets.
 
-`entrance` and the twelve fields named in this section are `api_version` 11.
+`battlers` is `api_version` 17 and replaces `entrance`, which carried the first
+five fields alone and is gone: the two describe the same thing at different
+moments in one fight, and a renderer reading one for the opening and the other
+for the rest would have had to hold both. The twelve fields named in this section
+are `api_version` 11.
 Before it they were pushed and undeclared, and one more was declared and never
 true: `player_pic_visible` was a literal `true` in every view, because the
 premise behind it is wrong. `CopyBackpic` puts the player's back pic on the
 tilemap before `InitBattleDisplay` reaches the slide, so it is on the map
-throughout. The field is gone; `entrance` is what answers the question it was
+throughout. The field is gone; `battlers` is what answers the question it was
 asked for.
 
 The two HP values and `exp_pixels` are the *drawn* ones, not the committed ones:

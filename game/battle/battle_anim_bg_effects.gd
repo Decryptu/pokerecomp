@@ -591,10 +591,12 @@ static func _hide_mon(
 	match effect.jumptable_index:
 		0:
 			_inc(effect)
-			if _player_side(player, effect):
+			var hidden_side: bool = _player_side(player, effect)
+			if hidden_side:
 				background.clear_box(2, 6, 6, 6)
 			else:
 				background.clear_box(12, 0, 7, 7)
+			background.report_battler(hidden_side, false)
 			# Crystal alone rewinds the push; pokegold leaves whichever third
 			# was in flight.
 			if player.profile() == &"crystal":
@@ -660,9 +662,18 @@ static func _run_pic_resize_script(
 					return
 				if square == -2:
 					_resize_clear_box(background, int(row[1]), int(row[2]))
+					## The scripts alternate a placement with the clear that
+					## takes it away again, so whichever ran last is what is on
+					## the square: `RESIZE_RETURN_*` ends on a clear and the
+					## picture is gone, `RESIZE_ENTER_*` on a placement.
+					background.report_battler(_player_side(player, effect), false)
 					continue
 				if square != -3:
 					_resize_place_graphic(background, square, int(row[1]), int(row[2]))
+					var side: bool = _player_side(player, effect)
+					background.report_battler(side, true, float(
+						RESIZE_SIZES[square]
+					) / float(int(Gen2BattleAnimBackground.BATTLER_SQUARE[side])))
 				_inc(effect)
 				background.bg_map_mode = 1
 				return
@@ -771,6 +782,16 @@ static func _remove_mon(
 			background.bg_map_mode = 1
 			_inc(effect)
 			effect.param = (effect.param - 1) & 0xFF
+			## The enemy's picture leaves to the right and the player's to the
+			## left, one tile column per step, which is the same sign the
+			## entrance's own walk off carries.
+			var removed_side: bool = effect.battle_turn != 0
+			var step: float = -float(Gen2Tiles.TILE_WIDTH) if removed_side \
+				else float(Gen2Tiles.TILE_WIDTH)
+			background.report_battler(
+				removed_side, effect.param != 0, -1.0,
+				(background.battler_shift[removed_side] as Vector2) + Vector2(step, 0.0)
+			)
 		2, 3:
 			_inc(effect)
 		4:

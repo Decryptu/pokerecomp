@@ -250,3 +250,34 @@ func test_decode_command_reports_operands_and_branch_targets() -> void:
 	assert_false(
 		bool(Gen2BattleAnimScript.decode_command(region, BASE, BASE - 1).get("ok", false))
 	)
+
+
+## `BattleAnimCmd_CheckPokeball` is `GetPokeBallWobble` into `wBattleAnimVar`,
+## which `BattleAnim_ThrowPokeBall.Loop` branches on: 0 keeps wobbling, 1 clicks
+## shut, 2 breaks free. `PokeBallEffect` has already decided which, and writes
+## `wWildMon` and `wThrownBallWobbleCount` before it plays the animation, so the
+## queue is the answers rather than a roll taken here.
+func test_check_pokeball_answers_the_queue_and_then_a_break_free() -> void:
+	var answers: Array[int] = [
+		Gen2BattleAnimScript.WOBBLE_NEXT, Gen2BattleAnimScript.WOBBLE_CAUGHT,
+	]
+	# check_pokeball, wait 1, check_pokeball, wait 1, check_pokeball, ret
+	var bytes: Array = [0xDB, 0x01, 0xDB, 0x01, 0xDB, 0xFF]
+	var script: Gen2BattleAnimScript = Gen2BattleAnimScript.create(
+		_region(bytes), BASE, BASE, 0, answers
+	)
+
+	script.advance_frame()
+	assert_eq(script.variable(), Gen2BattleAnimScript.WOBBLE_NEXT)
+	# `anim_wait 1` costs the frame it is read on and the frame it counts down,
+	# so each check lands two frames after the last.
+	script.advance_frame()
+	script.advance_frame()
+	assert_eq(script.variable(), Gen2BattleAnimScript.WOBBLE_CAUGHT)
+	script.advance_frame()
+	script.advance_frame()
+	assert_eq(
+		script.variable(), Gen2BattleAnimScript.WOBBLE_ESCAPED,
+		"`.finished` with `wWildMon` zero, which is the escape",
+	)
+	assert_eq(answers.size(), 2, "the caller's own array is not spent")

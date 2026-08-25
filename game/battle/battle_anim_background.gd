@@ -100,6 +100,91 @@ var bg_map_third: int = 0
 ## `wSurfWaveBGEffect`.
 var surf_wave: PackedByteArray = PackedByteArray()
 
+## What the tilemap effects did to each battler's picture, said plainly beside
+## the map they said it in. Keyed by `player_side`, the same bool the effects
+## already carry.
+##
+## `BattleBGEffect_HideMon`, `..._RemoveMon` and `..._RunPicResizeScript` are the
+## three that move or take away a whole picture, and all three say it by editing
+## `wTilemap`: a renderer with no background plane cannot read a shrink or a
+## removal back out of a 20x18 grid of tile ids, because a resize script's
+## arrangement and a faint sink look the same there. These three are that state
+## said plainly, and [method Gen2BattleScreen.battler_side] is what composes them
+## with the entrance, the faint and the scanline window into one block per side.
+##
+## `visible` is whether a picture is on the square at all, `shift` how far
+## `RemoveMon` has pushed it off in pixels, and `scale` the side of the square
+## the resize script last placed over the side of the whole picture.
+var battler_visible: Dictionary = {true: true, false: true}
+var battler_shift: Dictionary = {true: Vector2.ZERO, false: Vector2.ZERO}
+var battler_scale: Dictionary = {true: 1.0, false: 1.0}
+
+## `.BGSquares`' seven and six: the whole picture on each side, which every other
+## square of the resize scripts is a subsampling of.
+const BATTLER_SQUARE: Dictionary = {true: 6, false: 7}
+
+
+## `BGEffect_DisplaceLYOverridesBackup`'s own `$90`, a scanline scrolled to a row
+## the picture is not on. Those lines carry no displacement to average.
+const LY_OFF_SCREEN: int = 0x90
+## `SetLCDStatCustoms` opens the player's window at `$2d` or `$2f` and the
+## opponent's at `$00`, so where a window starts is what says whose it is.
+const PLAYER_WINDOW_TOP: int = 0x2D
+
+
+## How far the open scanline window has moved one side's picture, in pixels.
+##
+## Every per-battler deformation is one window over that side's own rows:
+## Tackle, Withdraw, Dig, Psychic, DoubleTeam, AcidArmor, Wobble, Flail,
+## WaveDeformMon, BounceDown and Vibrate all move a battler by writing scroll
+## values into it. The mean of the window on the axis `hLCDCPointer` names is
+## what this reports, with the whole-screen scroll taken off because `raster_scx`
+## and `raster_scy` already carry that. A scroll of n draws the content n pixels
+## further left or up, so the picture's own offset is its negation, and a row
+## pushed off with `$90` is not part of the mean: the rows that are left carry
+## the displacement, which is what makes a Withdraw read as a sink.
+##
+## WaveDeformMon and Psychic stretch the picture rather than move it, and there
+## the mean is the honest summary of one rather than an exact answer.
+func battler_window_offset(player_side: bool) -> Vector2:
+	if lcdc_pointer != LCDC_SCX and lcdc_pointer != LCDC_SCY:
+		return Vector2.ZERO
+	var first: int = ly_override_start & 0xFF
+	var count: int = (ly_override_end - ly_override_start) & 0xFF
+	var mine: bool = first >= PLAYER_WINDOW_TOP if player_side \
+		else first < PLAYER_WINDOW_TOP
+	if count == 0 or not mine:
+		return Vector2.ZERO
+	var base: int = scx if lcdc_pointer == LCDC_SCX else scy
+	var total: float = 0.0
+	var lines: int = 0
+	for step: int in count:
+		var line: int = (first + step) & (LY_PAGE - 1)
+		if line >= SCREEN_LINES:
+			continue
+		var value: int = int(ly_overrides[line])
+		if value == LY_OFF_SCREEN:
+			continue
+		total += float(value - 256 if value > 127 else value) - float(base)
+		lines += 1
+	if lines == 0:
+		return Vector2.ZERO
+	var offset: float = -total / float(lines)
+	return Vector2(offset, 0.0) if lcdc_pointer == LCDC_SCX \
+		else Vector2(0.0, offset)
+
+
+## One tilemap effect's report. [param player_side] is the effect's own side.
+func report_battler(
+	player_side: bool, visible: bool, scale: float = -1.0,
+	shift: Vector2 = Vector2.INF
+) -> void:
+	battler_visible[player_side] = visible
+	if scale >= 0.0:
+		battler_scale[player_side] = scale
+	if shift != Vector2.INF:
+		battler_shift[player_side] = shift
+
 
 func _init() -> void:
 	ly_overrides.resize(LY_PAGE)

@@ -113,6 +113,13 @@ const IF_PARAM_EQUAL: StringName = &"if_param_equal"
 const IF_VAR_EQUAL: StringName = &"if_var_equal"
 const SET_VAR: StringName = &"set_var"
 const INC_VAR: StringName = &"inc_var"
+const CHECK_POKEBALL: StringName = &"check_pokeball"
+
+## `GetPokeBallWobble`'s three answers, which `BattleAnim_ThrowPokeBall.Loop`
+## branches on: keep wobbling, click shut, or break free.
+const WOBBLE_NEXT: int = 0
+const WOBBLE_CAUGHT: int = 1
+const WOBBLE_ESCAPED: int = 2
 
 ## How many commands one frame may run before the script is abandoned.
 ##
@@ -138,6 +145,12 @@ var _loops: int = 0
 var _delay: int = 0
 var _var: int = 0
 var _param: int = 0
+## `GetPokeBallWobble`'s answers in the order it will give them, which the caller
+## has already decided: the throw is resolved before it is drawn, the way
+## `PokeBallEffect` sets `wWildMon` and `wThrownBallWobbleCount` in front of
+## `PlayBattleAnim`. An empty queue is `.finished` with `wWildMon` zero, which is
+## a break free.
+var _wobbles: Array[int] = []
 var _stopped: bool = false
 var _failed: bool = false
 
@@ -148,13 +161,15 @@ var _failed: bool = false
 ## [param param] is `wBattleAnimParam`, which the caller sets before playing;
 ## `wBattleAnimVar` starts at zero because `ClearBattleAnims` clears it.
 static func create(
-	region: PackedByteArray, base_address: int, start_address: int, param: int = 0
+	region: PackedByteArray, base_address: int, start_address: int, param: int = 0,
+	wobbles: Array[int] = []
 ) -> Gen2BattleAnimScript:
 	var script := Gen2BattleAnimScript.new()
 	script._region = region
 	script._base_address = base_address
 	script._address = start_address
 	script._param = param & 0xFF
+	script._wobbles = wobbles.duplicate()
 	script._stopped = not script._holds(start_address)
 	script._failed = script._stopped
 	return script
@@ -296,6 +311,11 @@ func _execute(command: Dictionary) -> bool:
 			_var = int(operands[0])
 		INC_VAR:
 			_var = (_var + 1) & 0xFF
+		CHECK_POKEBALL:
+			## `BattleAnimCmd_CheckPokeball`, which is `GetPokeBallWobble` into
+			## `wBattleAnimVar`. The roll itself is not taken here: the catch is
+			## already decided, and this is the sequence it decided.
+			_var = _wobbles.pop_front() if not _wobbles.is_empty() else WOBBLE_ESCAPED
 	return false
 
 
