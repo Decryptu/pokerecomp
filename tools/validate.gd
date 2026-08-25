@@ -25,6 +25,7 @@ const GROUPS: Dictionary = {
 	&"terrain": [
 		&"ledge_hops", &"ice_slides", &"side_walls", &"drawn_blocks", &"story_map_ids",
 		&"map_data",
+		&"backup_warp",
 	],
 	&"johto": [
 		&"radio_tower", &"rising_badge", &"command_queues", &"item_balls",

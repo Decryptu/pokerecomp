@@ -602,6 +602,27 @@ func _process(_delta: float) -> bool:
 			if _kind == &"mart_sell":
 				_screen.press_button(Gen2Button.DOWN)
 			_screen.press_button(Gen2Button.A)
+		elif _kind == &"elevator":
+			## The floor panel, read from the cell below it: `bg_event 3, 0`'s
+			## own `elevator` is what opens the floor list. The car has to know
+			## where it is standing first, which is what `warpmod` gives it, so
+			## the map's own script is left to run before the panel is read.
+			## The number is how many DOWN presses to spend on the list.
+			var car: Gen2WorldAPI = _screen.get("_world")
+			var door: Dictionary = (car.current_map.events.get("warps", []) as Array)[0]
+			## `.FindCurrentFloor` matches the backup warp's map, which walking
+			## into the car through its own -1 door is what writes. A preview
+			## opens the map instead of walking to it, so the floor the door
+			## names stands in for the one the player came from.
+			car.backup_warp = {
+				"warp": 1,
+				"map_group": int(door["map_group"]),
+				"map_number": int(door["map_number"]),
+			}
+			_screen.press_button(Gen2Button.UP)
+			_screen.interact()
+			for _press: int in maxi(_cell.x, 0):
+				_screen.press_button(Gen2Button.DOWN)
 		elif _kind == &"warp":
 			## `MapSetupScript_Door` at its whitest: the step onto the warp tile
 			## and then `FadeOutToWhite`'s last order, which is the frame the map

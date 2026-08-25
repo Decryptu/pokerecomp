@@ -1102,7 +1102,7 @@ static func capture_wild(
 		## passes 0 and takes the map's.
 		set_caught_data(
 			captured, wild.level, world.object_time_of_day, world.player_female(),
-			caught_location if caught_location > 0 else world.landmark()
+			caught_location if caught_location > 0 else world.landmark_backup()
 		)
 		destination = candidate.add_party_or_box(captured)
 		if not bool(destination.get("ok", false)):
@@ -1328,7 +1328,7 @@ static func _apply_party_request(
 		## `SetEggMonCaughtData` when it hatches; a plain `givepoke` takes
 		## `SetCaughtData`, the map the player is standing on.
 		set_caught_data(
-			mon, level, world.object_time_of_day, world.player_female(), world.landmark()
+			mon, level, world.object_time_of_day, world.player_female(), world.landmark_backup()
 		)
 		if is_egg:
 			## `GiveEgg` is `TryAddMonToParty` and nothing else, so a full party
@@ -2071,7 +2071,7 @@ static func hatch_egg(
 		return {}
 	set_caught_data(
 		mon, CAUGHT_EGG_LEVEL, world.object_time_of_day,
-		world.player_female(), world.landmark()
+		world.player_female(), world.landmark_backup()
 	)
 	mon.is_egg = false
 	# `ld [hl], $78`: the counter the walk drained becomes the hatchling's own

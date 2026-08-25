@@ -218,6 +218,8 @@ static func _reason_for(kind: StringName) -> StringName:
 			return &"day_care_data_unavailable"
 		&"pc_requested":
 			return &"pc_host_unavailable"
+		&"elevator_requested":
+			return &"elevator_host_unavailable"
 		&"map_radio_requested":
 			return &"radio_host_unavailable"
 		&"pokedex_entry_requested":
@@ -253,6 +255,34 @@ static func _resolve_data_request(world: Gen2WorldAPI, request: Dictionary) -> D
 			return {
 				"ok": true,
 				"data": {"mart": mart, "mart_id": mart_id, "dialog": dialog_id},
+			}
+		&"elevator_requested":
+			var floors: Dictionary = Gen2WorldScript.decode_elevator_floors(
+				world.data.world_script_at(
+					int(values.get("bank", 0)), int(values.get("address", 0))
+				)
+			)
+			if not bool(floors.get("ok", false)):
+				return {
+					"ok": false,
+					"reason": StringName(floors.get("reason", &"elevator_data_unavailable")),
+				}
+			## `.FindCurrentFloor` walks the list for the row whose map is the
+			## backup warp's, and quits the whole routine when none is: the car
+			## does not know where it is standing, so it does not move.
+			var rows: Array = floors["floors"]
+			var current: int = -1
+			for index: int in rows.size():
+				var row: Dictionary = rows[index]
+				if int(row["map_group"]) == int(world.backup_warp.get("map_group", -1)) \
+					and int(row["map_number"]) == int(world.backup_warp.get("map_number", -1)):
+					current = index
+					break
+			if current < 0:
+				return {"ok": false, "reason": &"elevator_floor_unknown"}
+			return {
+				"ok": true,
+				"data": {"elevator": {"floors": rows, "current": current}},
 			}
 		&"name_rater_requested":
 			var lines: Dictionary = name_rater_texts(world.data)

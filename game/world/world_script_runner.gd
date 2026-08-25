@@ -1274,6 +1274,32 @@ func complete_runtime_request(result: Dictionary) -> Dictionary:
 		})
 		_pending = {}
 		return advance()
+	if kind == &"elevator_requested":
+		## `Script_elevator` zeroes `wScriptVar` before the call and writes TRUE
+		## only past `ret c`, so a cancelled ride and a car with no floor to
+		## match both leave the script's own FALSE branch standing.
+		if not bool(result.get("ok", false)):
+			return _fail(StringName(result.get("reason", &"elevator_failed")), result)
+		var rode: bool = result.has("floor") and result["floor"] is Dictionary
+		if rode:
+			## `Elevator_GoToFloor` copies the chosen row's last three bytes
+			## straight over `wBackupWarpNumber`, and the -1 warp out of the car
+			## is what spends them.
+			var floor_row: Dictionary = result["floor"]
+			_emit_runtime_event(&"backup_warp_changed", {
+				"warp": int(floor_row.get("warp", 0)),
+				"map_group": int(floor_row.get("map_group", 0)),
+				"map_number": int(floor_row.get("map_number", 0)),
+			})
+		_script_value = 1 if rode else 0
+		_events.append({
+			"type": &"runtime_request_completed",
+			"kind": kind,
+			"request": request.duplicate(true),
+			"result": result.duplicate(true),
+		})
+		_pending = {}
+		return advance()
 	if kind == &"trainer_approach_requested":
 		if not bool(result.get("ok", false)):
 			return _fail(
@@ -1715,6 +1741,17 @@ func _execute(command: Dictionary, frame: Dictionary) -> Dictionary:
 				return {"ok": true}
 			var jump_result: Dictionary = _replace_frame(pointer_bank, pointer_address)
 			return jump_result
+		Gen2WorldScript.WARPMOD:
+			## `Script_warpmod` writes `wBackupWarpNumber`, `wBackupMapGroup` and
+			## `wBackupMapNumber` outright, which is how a map whose only exit is
+			## a -1 warp is given one before the player can reach it: both dept
+			## store elevators and the Fast Ship's cabin are entered by a script
+			## that runs this first.
+			_emit_runtime_event(&"backup_warp_changed", {
+				"warp": int(command.get("warp_id", 0)),
+				"map_group": int(command.get("map_group", 0)),
+				"map_number": int(command.get("map_number", 0)),
+			})
 		Gen2WorldScript.BLACKOUTMOD:
 			## `Script_blackoutmod` writes `wLastSpawnMapGroup` and
 			## `wLastSpawnMapNumber`, which is the pair `GetWhiteoutSpawn` reads
@@ -2420,7 +2457,11 @@ func _execute_later_command(source_opcode: int, command: Dictionary, bank: int) 
 				mart["items"] = command["mart_items"]
 			return _stage_runtime_request(&"mart_requested", mart)
 		0x94:
+			## `Script_elevator` hands `Elevator` the pointer in `de` and the
+			## running script's own bank in `b`, which is where the `elevfloor`
+			## list lives.
 			return _stage_runtime_request(&"elevator_requested", {
+				"bank": bank,
 				"address": int(command.get("address", 0)),
 			})
 		0x95:

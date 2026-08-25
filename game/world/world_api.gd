@@ -151,6 +151,11 @@ static func passes_in_frames(passes: int) -> int:
 ## screen. The two National Park gates are `GROUP_ROUTE_35_NATIONAL_PARK_GATE`'s
 ## maps 15 and 17, which `.CheckNationalParkGate` names because their
 ## environment is not `GATE`.
+## A `warp_event`'s destination byte for `-1`, which names [member backup_warp]
+## rather than a warp on the map beside it. Six warp events across five maps
+## carry it: POKECENTER_2F's stairs, both dept store elevators' two doors and
+## FAST_SHIP_1F's cabin.
+const BACKUP_WARP_DESTINATION: int = 0xFF
 const MAP_NAME_SIGN_NO_LANDMARK: int = -1
 ## `wLandmarkSignTimer`, decremented once per `PlaceMapNameSign` and so once
 ## per overworld pass, which is two hardware frames.
@@ -208,6 +213,13 @@ var last_spawn_map: Vector2i = Vector2i(-1, -1)
 ## the player last came into a cave through, which is where Dig and an Escape
 ## Rope put them back. Empty until one is walked.
 var dig_warp: Dictionary = {}
+## `wBackupWarpNumber`, `wBackupMapGroup` and `wBackupMapNumber`: where a warp
+## whose destination is -1 sends the player, and whose landmark a map with
+## `LANDMARK_SPECIAL` borrows. `GetWarpDestCoords`'s `.backup` writes it on
+## arriving at such a warp and `Script_warpmod` writes it outright; empty is a
+## game that has walked through none, which is what a slot written before this
+## existed truthfully says.
+var backup_warp: Dictionary = {}
 ## `wSpawnAfterChampion`, which the induction and Red's credits write and the
 ## next CONTINUE spends; see [member Gen2WorldSnapshot.spawn_after_champion].
 var spawn_after_champion: int = Gen2WorldSnapshot.SPAWN_AFTER_NONE
@@ -435,6 +447,7 @@ static func open_snapshot(
 	out.frame_number = world_snapshot.frame_number
 	out.last_spawn_map = world_snapshot.last_spawn_map
 	out.dig_warp = world_snapshot.dig_warp.duplicate()
+	out.backup_warp = world_snapshot.backup_warp.duplicate()
 	## `.SpawnAfterE4` and `.AfterRed`, which stand between `ClockContinue` and
 	## `FinishContinueFunction`: the map the slot was written on is loaded and
 	## then left, so everything a map load owes has already run when the spawn
@@ -484,12 +497,32 @@ func map_id() -> Vector2i:
 	return Vector2i(current_map.group, current_map.number) if current_map != null else Vector2i(-1, -1)
 
 
-## GetWorldMapLocation: the current map's own landmark. LANDMARK_SPECIAL means
-## the map borrows the landmark of the one the player warped in from, which only
-## the six Cable Club rooms do; none of them is implemented, so the fallback has
-## no caller and is deliberately not modelled.
+## GetWorldMapLocation: the current map's own landmark, with no fallback. Every
+## reader but `InitMapNameSign` wants [method landmark_backup] instead.
 func landmark() -> int:
 	return current_map.location if current_map != null else Gen2WorldRadio.LANDMARK_SPECIAL
+
+
+## The same lookup with the `LANDMARK_SPECIAL` fallback `RegionCheck`,
+## `IsInJohto`, `FlyMap`, `Pokedex_GetLandmark` and both `TownMap_*` routines
+## spell out: a map with no landmark of its own borrows [member backup_warp]'s.
+##
+## Six maps carry `LANDMARK_SPECIAL` and only one of them is ordinary: POKECENTER_2F
+## is every Pokemon Center's own upstairs, so the region a radio, a battle track,
+## the town map and the dex area screen answer with is the backup's on every visit
+## to one. The other five are the cable club's rooms.
+##
+## `SetCaughtData` tests POKECENTER_2F by name rather than the landmark, and the
+## two agree everywhere a caught mon can be made: nothing is caught in the five
+## cable club rooms, and a traded mon carries its own data.
+func landmark_backup() -> int:
+	var here: int = landmark()
+	if here != Gen2WorldRadio.LANDMARK_SPECIAL or backup_warp.is_empty() or data == null:
+		return here
+	var backup: Gen2WorldMap = data.world_map(
+		int(backup_warp["map_group"]), int(backup_warp["map_number"])
+	)
+	return backup.location if backup != null else here
 
 
 ## `InitMapNameSign`'s own `wCurLandmark`: a gate borrows nobody's name, so its
@@ -565,7 +598,7 @@ func radio_context() -> Dictionary:
 	var tower: int = Gen2WorldState.ENGINE_ROCKETS_IN_RADIO_TOWER if crystal \
 		else Gen2WorldState.ENGINE_ROCKETS_IN_RADIO_TOWER_GOLD_SILVER
 	return {
-		"landmark": landmark(),
+		"landmark": landmark_backup(),
 		"crystal": crystal,
 		"expn_card": state.is_engine_flag_active(Gen2WorldState.ENGINE_EXPN_CARD),
 		"rocket_signal": state.is_engine_flag_active(Gen2WorldState.ENGINE_ROCKET_SIGNAL),
@@ -661,7 +694,7 @@ func play_map_radio(station: int) -> Dictionary:
 	var channel: int = Gen2WorldRadio.map_radio_channel(
 		station,
 		Gen2WorldRadio.is_kanto_landmark(
-			landmark(), Gen2WorldState.is_crystal_profile(data)
+			landmark_backup(), Gen2WorldState.is_crystal_profile(data)
 		),
 		object_time_of_day
 	)
@@ -4693,6 +4726,14 @@ func _apply_result_events(result: Dictionary) -> Dictionary:
 			last_spawn_map = Vector2i(
 				int(event.get("map_group", 0)), int(event.get("map_number", 0))
 			)
+		## `Script_warpmod`'s own three writes, the same field a -1 warp's
+		## arrival records for itself.
+		if StringName(event.get("type", &"")) == &"backup_warp_changed":
+			backup_warp = {
+				"warp": int(event.get("warp", 0)),
+				"map_group": int(event.get("map_group", 0)),
+				"map_number": int(event.get("map_number", 0)),
+			}
 	return result
 
 
@@ -4802,7 +4843,32 @@ func try_warp(cell: Vector2i = player_cell) -> Dictionary:
 			"from_cell": cell,
 		}
 
+	## `CopyWarpData`'s own `cp -1`: a warp whose destination byte is -1 names no
+	## warp and no map of its own, and the three bytes at `wBackupWarpNumber` are
+	## read contiguously in its place. The map named beside such a byte is a
+	## placeholder (POKECENTER_2F names itself), so it is replaced too.
 	var destination_index: int = int(source_warp.get("destination", 0)) - 1
+	if int(source_warp.get("destination", 0)) == BACKUP_WARP_DESTINATION:
+		if backup_warp.is_empty():
+			return {
+				"ok": false,
+				"kind": &"warp",
+				"reason": &"no_backup_warp",
+				"from_map": map_id(),
+				"from_cell": cell,
+			}
+		destination_index = int(backup_warp["warp"]) - 1
+		target_group = int(backup_warp["map_group"])
+		target_number = int(backup_warp["map_number"])
+		target_map = data.world_map(target_group, target_number) if data != null else null
+		if target_map == null:
+			return {
+				"ok": false,
+				"kind": &"warp",
+				"reason": &"missing_map",
+				"from_map": map_id(),
+				"from_cell": cell,
+			}
 	var target_warps: Array = target_map.events.get("warps", [])
 	if destination_index < 0 or destination_index >= target_warps.size():
 		return {
@@ -4826,6 +4892,16 @@ func try_warp(cell: Vector2i = player_cell) -> Dictionary:
 	var target_warp: Dictionary = (target_warps[destination_index] as Dictionary).duplicate(true)
 	var from_map: Vector2i = map_id()
 	var from_cell: Vector2i = cell
+	## `GetWarpDestCoords`'s `.backup`, which runs on arrival: a warp that is
+	## itself a -1 warp records the warp and the map the player came from, and
+	## that is what walking back out of it spends. Behind the read above, as in
+	## the source, so a -1 warp taken back out of a -1 warp reads the old value.
+	if int(target_warp.get("destination", 0)) == BACKUP_WARP_DESTINATION:
+		var walked: int = warp_index_at(cell)
+		if walked > 0:
+			backup_warp = {
+				"warp": walked, "map_group": from_map.x, "map_number": from_map.y,
+			}
 	# `wPrevWarp` is the warp walked through, which is what a Dig or an Escape
 	# Rope comes back out of.
 	_apply_map(
@@ -6058,7 +6134,7 @@ func fly_request() -> Dictionary:
 		"kind": &"fly_requested",
 		"move": Gen2WorldFieldMove.MOVE_FLY,
 		"in_kanto": Gen2WorldRadio.is_kanto_landmark(
-			landmark(), Gen2WorldState.is_crystal_profile(data)
+			landmark_backup(), Gen2WorldState.is_crystal_profile(data)
 		),
 		"visited": visited_flypoints(),
 	}

@@ -340,6 +340,35 @@ func world_script(bank: int, address: int) -> PackedByteArray:
 	)
 
 
+## The cached bytes from [param address] onward, whether or not a slice starts
+## there: a `elevfloor` list sits behind the script that names it and is inside
+## that script's own slice rather than at a key of its own. Empty when no cached
+## slice in [param bank] covers the address.
+func world_script_at(bank: int, address: int) -> PackedByteArray:
+	var exact: PackedByteArray = world_script(bank, address)
+	if not exact.is_empty():
+		return exact
+	## Slices overlap: every script is cached as a fixed span from its own start,
+	## so several can cover one address and the useful one is whichever reaches
+	## furthest past it.
+	var prefix: String = "%d:" % bank
+	var best: PackedByteArray = PackedByteArray()
+	for key: Variant in _scripts():
+		var name: String = String(key)
+		if not name.begins_with(prefix):
+			continue
+		var start: int = name.substr(prefix.length()).hex_to_int()
+		if address < start:
+			continue
+		var bytes: PackedByteArray = _payload_bytes(_scripts()[key], _blob("scripts"))
+		if address >= start + bytes.size():
+			continue
+		var reach: PackedByteArray = bytes.slice(address - start)
+		if reach.size() > best.size():
+			best = reach
+	return best
+
+
 ## One imported menu header referenced by an overworld script.
 func world_menu(bank: int, address: int) -> Dictionary:
 	var value: Variant = _menus().get(Gen2WorldScript.pointer_key(bank, address), {})

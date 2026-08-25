@@ -421,3 +421,43 @@ func test_conditional_enders_do_not_stop_a_linear_walk() -> void:
 			Gen2WorldScript.continues_after(opcode, false),
 			"gold %02X stops" % opcode
 		)
+
+
+## `elevfloor`'s `db floor, warp` then `map_id`'s `db group, number`, opened by a
+## count and closed by a `db -1`. Celadon's six floors are the shape.
+func test_elevator_floors_decode_until_the_terminator() -> void:
+	var decoded: Dictionary = Gen2WorldScript.decode_elevator_floors(PackedByteArray([
+		2, 4, 4, 21, 5, 5, 3, 21, 6, 0xFF,
+	]))
+	assert_true(decoded["ok"])
+	assert_eq(decoded["bytes"], 10)
+	assert_eq(decoded["floors"], [
+		{"floor": 4, "warp": 4, "map_group": 21, "map_number": 5},
+		{"floor": 5, "warp": 3, "map_group": 21, "map_number": 6},
+	])
+
+
+## A list whose count outruns its rows is refused rather than read past: the
+## bytes behind an `elevfloor` list are the next record, not another floor.
+func test_elevator_floors_refuse_a_short_or_unterminated_list() -> void:
+	assert_eq(
+		Gen2WorldScript.decode_elevator_floors(PackedByteArray([2, 4, 4, 21, 5, 0xFF]))["reason"],
+		&"short_elevator_list"
+	)
+	assert_eq(
+		Gen2WorldScript.decode_elevator_floors(PackedByteArray([1, 4, 4, 21, 5, 4]))["reason"],
+		&"unterminated_elevator_list"
+	)
+	assert_eq(
+		Gen2WorldScript.decode_elevator_floors(PackedByteArray([0]))["reason"],
+		&"unsupported_elevator_count"
+	)
+
+
+## `Script_elevator` hands `Elevator` the running script's own bank, so the
+## `elevfloor` list is collected out of that bank the way a cmdqueue entry is.
+func test_reference_scan_reports_elevator_pointers() -> void:
+	var references: Dictionary = Gen2WorldScript.scan_references(
+		PackedByteArray([0x95, 0x6F, 0x67, 0x90]), 21, 0x6728, true
+	)
+	assert_eq(references["elevators"], [{"bank": 21, "address": 0x676F}])

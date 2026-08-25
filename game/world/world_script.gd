@@ -131,6 +131,11 @@ const MAX_TEXT_BYTES: int = 1024
 ## constants/script_constants.asm's cmdqueue block. An entry is
 ## `dbw type, address` plus two filler bytes; four fit in wCmdQueue.
 const CMDQUEUE_ENTRY_SIZE: int = 5
+## `elevfloor` (macros/scripts/maps.asm): `db floor, warp` then `map_id`'s
+## `db group, number`. The list opens with a floor count and ends on a `db -1`.
+const ELEVATOR_FLOOR_SIZE: int = 4
+const ELEVATOR_TERMINATOR: int = 0xFF
+const MAX_ELEVATOR_FLOORS: int = 16
 const CMDQUEUE_CAPACITY: int = 4
 const CMDQUEUE_NULL: int = 0
 const CMDQUEUE_STONETABLE: int = 2
@@ -910,6 +915,7 @@ static func scan_references(
 	var texts: Array = []
 	var movements: Array = []
 	var command_queues: Array = []
+	var elevators: Array = []
 	var at: int = 0
 	var command_count: int = 0
 	while at < data.size() and command_count < MAX_COMMANDS:
@@ -955,13 +961,18 @@ static func scan_references(
 				## writecmdqueue points at a cmdqueue entry, which is data rather
 				## than script, so it is collected as its own kind.
 				command_queues.append({"bank": bank, "address": int(command["address"])})
+			0x94:
+				## elevator points at an `elevfloor` list, which is data rather
+				## than script, and `Elevator.LoadPointer` reads it out of the
+				## map scripts bank the command itself sits in.
+				elevators.append({"bank": bank, "address": int(command["address"])})
 		at += int(command["width"])
 		command_count += 1
 		if not continues_after(opcode, crystal_commands):
 			break
 	return {
 		"scripts": scripts, "texts": texts, "movements": movements,
-		"command_queues": command_queues,
+		"command_queues": command_queues, "elevators": elevators,
 	}
 
 
@@ -1004,6 +1015,36 @@ static func decode_stone_table(data: PackedByteArray) -> Dictionary:
 		})
 		at += STONETABLE_ROW_SIZE
 	return {"ok": false, "reason": &"unterminated_stone_table", "rows": rows}
+
+
+## Decodes an `elevfloor` list: the floor count, then one row per floor until
+## the `db -1`. `Elevator.LoadFloors` reads the count and walks the rows at a
+## four-byte stride, and `Elevator_GoToFloor` copies a row's last three bytes
+## straight over `wBackupWarpNumber`, which is what the warp out of the car
+## then spends.
+static func decode_elevator_floors(data: PackedByteArray) -> Dictionary:
+	if data.is_empty():
+		return {"ok": false, "reason": &"short_elevator_list"}
+	var count: int = data[0]
+	if count <= 0 or count > MAX_ELEVATOR_FLOORS:
+		return {"ok": false, "reason": &"unsupported_elevator_count", "count": count}
+	var floors: Array = []
+	var at: int = 1
+	while floors.size() < count:
+		if at >= data.size() or data[at] == ELEVATOR_TERMINATOR:
+			return {"ok": false, "reason": &"short_elevator_list", "floors": floors}
+		if at + ELEVATOR_FLOOR_SIZE > data.size():
+			return {"ok": false, "reason": &"short_elevator_list", "floors": floors}
+		floors.append({
+			"floor": data[at],
+			"warp": data[at + 1],
+			"map_group": data[at + 2],
+			"map_number": data[at + 3],
+		})
+		at += ELEVATOR_FLOOR_SIZE
+	if at >= data.size() or data[at] != ELEVATOR_TERMINATOR:
+		return {"ok": false, "reason": &"unterminated_elevator_list", "floors": floors}
+	return {"ok": true, "floors": floors, "bytes": at + 1}
 
 
 ## A world text with nothing to substitute into it. Anything carrying a name,

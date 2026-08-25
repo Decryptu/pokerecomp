@@ -2745,8 +2745,9 @@ const LANDMARK_VICTORY_ROAD: int = 0x58
 ## landmark above it, because `cp LANDMARK_VICTORY_ROAD / jr c, .kanto` only
 ## takes the Kanto branch below that row.
 ##
-## The `LANDMARK_SPECIAL` backup lookup in front of it is the six Cable Club
-## rooms and is deliberately not modelled; see [method Gen2WorldAPI.landmark].
+## The `LANDMARK_SPECIAL` backup lookup in front of it is
+## [method Gen2WorldAPI.landmark_backup], which every caller of this resolves
+## the landmark through.
 static func region_is_kanto(landmark_id: int, crystal: bool = true) -> bool:
 	if landmark_id == Gen2WorldRadio.fast_ship_landmark(crystal):
 		return false

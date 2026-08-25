@@ -1508,6 +1508,10 @@ const SPECIAL_TEXT_RUNS: Dictionary = {
 	## `CheckForLuckyNumberWinners`' two, which differ only in where the match
 	## was found.
 	"lucky_number": [["lucky_number_text", ["match_party", "match_pc"]]],
+	## `Elevator_AskWhichFloor`'s one. Not a `special` at all: the elevator is a
+	## script command, and the run is here because this table is where a routine
+	## reaches its own `text_far` stubs.
+	"elevator": [["elevator_text", ["which_floor"]]],
 	## `engine/events/print_photo.asm`'s five, in `PhotoStudio`'s own file order.
 	"photo_studio": [["photo_studio_text", [
 		"which_mon", "hold_still", "presto", "no_photo", "egg",
@@ -2589,6 +2593,7 @@ const GOLD_SILVER: Dictionary = {
 	"magikarp_measure_text": 0xFBCAD,
 	"magikarp_record_text": 0xFBDEC,
 	"lucky_number_text": 0xC7BA3,
+	"elevator_text": 0x138CF,
 	"photo_studio_text": 0x17034,
 	"mom_text": 0x168A8,
 	"poke_seer_text": 0,
@@ -3158,6 +3163,7 @@ const CRYSTAL: Dictionary = {
 	"magikarp_measure_text": 0xFBBA9,
 	"magikarp_record_text": 0xFBCE8,
 	"lucky_number_text": 0x4D9C9,
+	"elevator_text": 0x1350D,
 	"photo_studio_text": 0x16E04,
 	"mom_text": 0x16649,
 	"poke_seer_text": 0x4F28C,

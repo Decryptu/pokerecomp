@@ -32,7 +32,16 @@ enum MODE {
 	PC_DECO, PC_DECO_LIST, PC_DECO_SIDE,
 	PC_BOX_SUBMENU,
 	PC_MAILBOX, PC_MAIL_SUBMENU, PC_MAIL_CONFIRM,
+	ELEVATOR,
 }
+
+## `ElevatorFloorNames`, in `FLOOR_*` order (constants/script_constants.asm).
+const FLOOR_NAMES: Array[String] = [
+	"B4F", "B3F", "B2F", "B1F", "1F", "2F", "3F", "4F", "5F", "6F",
+	"7F", "8F", "9F", "10F", "11F", "ROOF",
+]
+## `Elevator_MenuData`'s `db 4, 0`: four rows of floors are shown at a time.
+const ELEVATOR_ROWS: int = 4
 
 ## `PokemonCenterPC`'s own box storage, which is the one row that opens a screen
 ## rather than a list. It is added as a child the way the MAP card adds the
@@ -146,6 +155,10 @@ var _mart_confirm: int = 0
 ## `SellMenu`'s own list, which is the pack rather than the shop's stock.
 var _mart_sell_entries: Array = []
 var _mart_top: int = MART_TOP_BUY
+## `wCurElevatorFloors` and `wElevatorOriginFloor`: the list the host resolved
+## and the row `.FindCurrentFloor` matched, plus this screen's own scroll.
+var _elevator: Dictionary = {}
+var _elevator_scroll: int = 0
 var _apricorns: Gen2WorldApricorn = null
 var _mom_dial: Gen2WorldMoneyDial = null
 ## The same counted blink [Gen2TextBox]'s arrow is, since it is the same
@@ -309,6 +322,9 @@ func open_pending(
 		&"apricorn_selection_requested":
 			_open_apricorns()
 			return true
+		&"elevator_requested":
+			_open_elevator(resolved.get("data", {}).get("elevator", {}))
+			return true
 		&"pc_requested":
 			_open_pc(StringName(resolved.get("data", {}).get("pc", {}).get("mode", &"")))
 			return true
@@ -376,6 +392,9 @@ func handle_button(button: int) -> bool:
 		return false
 	if _mode == MODE.APRICORN:
 		_press_apricorns(button)
+		return true
+	if _mode == MODE.ELEVATOR:
+		_press_elevator(button)
 		return true
 	if _mode == MODE.MART:
 		_press_mart(button)
@@ -448,6 +467,78 @@ func open_prompt(
 	_host_prompt = true
 	_open_menu({"text": text, "choices": Gen2WorldMenu.YES_NO_KEYS})
 	return true
+
+
+## `Elevator_AskWhichFloor`: the floor list in `Elevator_MenuHeader`'s box with
+## `Elevator_GetCurrentFloorText`'s own small box beside it. `.LoadPointer` and
+## `.FindCurrentFloor` already ran on the host side, so this is the menu alone.
+func _open_elevator(elevator: Dictionary) -> void:
+	_mode = MODE.ELEVATOR
+	_elevator = elevator.duplicate(true)
+	_elevator_scroll = 0
+	## `ld a, 1` is the header's default option, and `xor a / ld
+	## [wMenuScrollPosition], a` puts the window at the top whatever floor the
+	## car is on.
+	_cursor = 0
+	_title = ""
+	_status = ""
+	_summary = _elevator_prompt()
+	_render_elevator()
+
+
+## `_AskFloorElevatorText`, or this host's own wording on a cache imported
+## before the stub was read.
+func _elevator_prompt() -> String:
+	var line: String = String(_data.special_text("elevator", "which_floor")) \
+		if _data != null else ""
+	return line if not line.is_empty() else "Which floor?"
+
+
+func _elevator_floors() -> Array:
+	return _elevator.get("floors", [])
+
+
+static func _floor_name(index: int) -> String:
+	return FLOOR_NAMES[index] if index >= 0 and index < FLOOR_NAMES.size() else "?"
+
+
+func _render_elevator() -> void:
+	var rows: Array = []
+	var floors: Array = _elevator_floors()
+	for row: int in ELEVATOR_ROWS:
+		var index: int = _elevator_scroll + row
+		if index >= floors.size():
+			break
+		rows.append(_floor_name(int((floors[index] as Dictionary)["floor"])))
+	_render_service_page(rows, _cursor - _elevator_scroll)
+
+
+func _press_elevator(button: int) -> void:
+	var floors: Array = _elevator_floors()
+	if button == Gen2Button.B:
+		## `.cancel`'s `scf`, which `Script_elevator`'s `ret c` leaves as FALSE.
+		_finish_runtime({"ok": true})
+		return
+	if button == Gen2Button.A:
+		if _cursor < 0 or _cursor >= floors.size():
+			return
+		## `Elevator`'s own `cp [hl] / jr z, .quit`: choosing the floor the car
+		## is already on is a cancel, not a ride.
+		if _cursor == int(_elevator.get("current", -1)):
+			_finish_runtime({"ok": true})
+			return
+		_finish_runtime({"ok": true, "floor": (floors[_cursor] as Dictionary).duplicate()})
+		return
+	if button == Gen2Button.UP:
+		_cursor = maxi(0, _cursor - 1)
+	elif button == Gen2Button.DOWN:
+		_cursor = mini(floors.size() - 1, _cursor + 1)
+	else:
+		return
+	_elevator_scroll = clampi(
+		_elevator_scroll, maxi(0, _cursor - ELEVATOR_ROWS + 1), _cursor
+	)
+	_render_elevator()
 
 
 func _open_menu(input: Dictionary) -> void:
@@ -2096,7 +2187,7 @@ func open_fly_map(
 		visited.append(int(index))
 	var opened: bool = _town_map.open_fly(
 		_data,
-		_world.landmark(),
+		_world.landmark_backup(),
 		bool(request.get("in_kanto", false)),
 		visited,
 		_save != null and _save.gender == Gen2SaveData.GENDER_FEMALE,
@@ -2128,7 +2219,7 @@ func _open_town_map(from_request: bool) -> void:
 		else Gen2TownMap.SCREEN_POKEGEAR_CARD
 	var opened: bool = _town_map.open(
 		_data,
-		_world.landmark(),
+		_world.landmark_backup(),
 		_world.state.hall_of_fame(),
 		screen,
 		owned,
@@ -2354,12 +2445,25 @@ func _render_service_page(values: Array, cursor: int = -1) -> void:
 	var image: Image = _mom_bank_image() if _mode == MODE.MOM_BANK \
 		else _dial_image() if _is_dial() else _service_page.render(
 		_title, _summary, labels, _cursor if cursor < 0 else cursor, _status,
-		_service_box()
+		_service_box(), _service_note()
 	)
 	if image != null:
 		Gen2PicImage.show(_service_view, image)
 	_service_drawn = image != null
 	_apply_layer_visibility()
+
+
+## `Elevator_GetCurrentFloorText`'s own box, which no other mode draws.
+func _service_note() -> PackedStringArray:
+	if _mode != MODE.ELEVATOR:
+		return PackedStringArray()
+	var floors: Array = _elevator_floors()
+	var current: int = int(_elevator.get("current", -1))
+	if current < 0 or current >= floors.size():
+		return PackedStringArray()
+	return PackedStringArray([
+		"Now on:", _floor_name(int((floors[current] as Dictionary)["floor"])),
+	])
 
 
 ## An overlay owns all 160x144 while it is up: the mart, box storage, a Pokegear
@@ -2404,6 +2508,19 @@ func _service_box() -> Gen2MenuBox:
 			return _menu.box()
 		MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES, MODE.PC_DECO_LIST:
 			return _pc_top_box()
+		MODE.ELEVATOR:
+			## `Elevator_MenuHeader`'s `menu_coords 12, 1, 18, 9`.
+			##
+			## `ScrollingMenu_UpdateDisplay` reaches its first row with
+			## `MenuBoxCoord2Tile / ld bc, SCREEN_WIDTH + 1`, which is one row
+			## down and one column right, where `_InitVerticalMenuCursor` spends
+			## a second row before the first item. A scrolling menu therefore has
+			## no top spacing, and this box's fourth floor sits on its own border
+			## without it.
+			return Gen2MenuBox.from_coords(
+				12, 1, 18, 9,
+				Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_NO_TOP_SPACING
+			)
 		MODE.PC_MAILBOX:
 			## `.TopMenuHeader`'s `menu_coords 8, 1, SCREEN_WIDTH - 2, 10`.
 			return Gen2MenuBox.from_coords(8, 1, 18, 10, Gen2MenuBox.STATICMENU_CURSOR)

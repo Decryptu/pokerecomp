@@ -44,6 +44,12 @@ var frame_number: int = 0
 ## which reads as a game that has entered no Pokemon Center and no cave.
 var last_spawn_map: Vector2i = Vector2i(-1, -1)
 var dig_warp: Dictionary = {}
+## `wBackupWarpNumber`, `wBackupMapGroup` and `wBackupMapNumber`, which
+## `SavePlayerData` copies into `sCurMapData` alongside the dig warp: where the
+## stairs out of a Pokemon Center's second floor lead and whose landmark that
+## floor borrows. Empty in a snapshot written before it existed, which reads as
+## a game that has walked through no such warp.
+var backup_warp: Dictionary = {}
 ## `wSpawnAfterChampion`, saved player data on both pins: `HallOfFame` writes
 ## `SPAWN_LANCE` and `RedCredits` writes `SPAWN_RED`, and the CONTINUE that opens
 ## the slot next puts the player at New Bark Town or Mount Silver instead of
@@ -71,6 +77,7 @@ static func from_world(world: Gen2WorldAPI) -> Gen2WorldSnapshot:
 	out.frame_number = world.frame_number
 	out.last_spawn_map = world.last_spawn_map
 	out.dig_warp = world.dig_warp.duplicate()
+	out.backup_warp = world.backup_warp.duplicate()
 	out.spawn_after_champion = world.spawn_after_champion
 	out.world_state = Gen2WorldState.from_dict(world.state.to_dict())
 	return out
@@ -91,6 +98,7 @@ func to_dict() -> Dictionary:
 		"frame_number": frame_number,
 		"last_spawn_map": [last_spawn_map.x, last_spawn_map.y],
 		"dig_warp": dig_warp.duplicate(),
+		"backup_warp": backup_warp.duplicate(),
 		"spawn_after_champion": spawn_after_champion,
 		"world_state": world_state.to_dict() if world_state != null else {},
 	}
@@ -124,13 +132,8 @@ static func from_dict(raw: Variant) -> Gen2WorldSnapshot:
 	out.random_seed = int(source.get("random_seed", 0))
 	out.frame_number = maxi(0, int(source.get("frame_number", 0)))
 	out.last_spawn_map = _vector_from_value(source.get("last_spawn_map", [-1, -1]))
-	var raw_dig: Variant = source.get("dig_warp", {})
-	if raw_dig is Dictionary and not (raw_dig as Dictionary).is_empty():
-		out.dig_warp = {
-			"warp": int((raw_dig as Dictionary).get("warp", 0)),
-			"map_group": int((raw_dig as Dictionary).get("map_group", 0)),
-			"map_number": int((raw_dig as Dictionary).get("map_number", 0)),
-		}
+	out.dig_warp = _warp_from_value(source.get("dig_warp", {}))
+	out.backup_warp = _warp_from_value(source.get("backup_warp", {}))
 	out.spawn_after_champion = clampi(
 		int(source.get("spawn_after_champion", SPAWN_AFTER_NONE)),
 		SPAWN_AFTER_NONE, SPAWN_AFTER_RED
@@ -141,6 +144,18 @@ static func from_dict(raw: Variant) -> Gen2WorldSnapshot:
 
 func world_clock() -> Dictionary:
 	return {"day": world_day, "hour": world_hour, "minute": world_minute}
+
+
+## The three-byte warp-and-map triple `dig_warp` and `backup_warp` both keep.
+static func _warp_from_value(value: Variant) -> Dictionary:
+	if not value is Dictionary or (value as Dictionary).is_empty():
+		return {}
+	var source: Dictionary = value
+	return {
+		"warp": int(source.get("warp", 0)),
+		"map_group": int(source.get("map_group", 0)),
+		"map_number": int(source.get("map_number", 0)),
+	}
 
 
 static func _vector_from_value(value: Variant) -> Vector2i:

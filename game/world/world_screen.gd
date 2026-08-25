@@ -4473,7 +4473,7 @@ func _apply_battle_transition() -> void:
 func _play_battle_music(request: Dictionary) -> void:
 	if _audio_player == null or _data == null:
 		return
-	var landmark: int = _world.landmark() if _world != null \
+	var landmark: int = _world.landmark_backup() if _world != null \
 		else Gen2WorldRadio.LANDMARK_SPECIAL
 	var track: int = Gen2WorldBattleAdapter.music_for(
 		request, landmark, time_of_day, Gen2WorldState.is_crystal_profile(_data)
@@ -6705,7 +6705,7 @@ func _show_script_results(results: Array) -> void:
 					&"mart_requested", &"phone_call_requested",
 					&"special_phone_call_requested", &"town_map_requested",
 					&"apricorn_selection_requested", &"pc_requested",
-					&"mom_bank_dial_requested",
+					&"mom_bank_dial_requested", &"elevator_requested",
 				]:
 					_open_service_host()
 					break
