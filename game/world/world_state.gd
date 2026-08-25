@@ -49,6 +49,18 @@ const ENGINE_UNOWN_DEX: int = 12
 ## The one entry pokegold does not ship, and so the index every profile split in
 ## this table is measured from. See engine_flag().
 const ENGINE_MOBILE_SYSTEM: int = 16
+## `wUnlockedUnowns`, one engine flag per puzzle: the four `UnlockedUnownLetterSets`
+## in source order, A-K first. `CheckUnownLetter` refuses a letter no unlocked set
+## holds, and `ChooseWildEncounter` refuses a wild UNOWN outright while none is
+## set. Crystal indices; engine_flag() moves them for Gold and Silver.
+const ENGINE_UNLOCKED_UNOWNS_FIRST: int = 43
+## The letters each set holds, 1 being A, in the order the table names them.
+const UNOWN_LETTER_SETS: Array = [
+	[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+	[12, 13, 14, 15, 16, 17, 18],
+	[19, 20, 21, 22, 23],
+	[24, 25, 26],
+]
 ## The three wPokegearFlags/wStatusFlags bits the radio card reads
 ## (data/events/engine_flags.asm). Only the last is profile split, since it sits
 ## in the wStatusFlags2 run after Crystal's extra entry.
@@ -730,6 +742,32 @@ func hall_of_fame() -> bool:
 
 func set_hall_of_fame(active: bool = true) -> void:
 	set_engine_flag(ENGINE_HALL_OF_FAME, active)
+
+
+## The `wUnlockedUnowns` byte this save holds, one bit per set, as
+## `CheckUnownLetter` and `ChooseWildEncounter` read it.
+func unlocked_unowns(crystal: bool = true) -> int:
+	var mask: int = 0
+	for set_index: int in UNOWN_LETTER_SETS.size():
+		if is_engine_flag_active(
+			engine_flag(ENGINE_UNLOCKED_UNOWNS_FIRST + set_index, crystal)
+		):
+			mask |= 1 << set_index
+	return mask
+
+
+## `CheckUnownLetter`: whether [param letter] (1 being A) is in any set
+## [param unlocked] has the bit for. A negative mask is no gate at all, which is
+## what a caller with no save behind it passes.
+static func unown_letter_unlocked(letter: int, unlocked: int) -> bool:
+	if unlocked < 0:
+		return true
+	for set_index: int in UNOWN_LETTER_SETS.size():
+		if (unlocked & (1 << set_index)) == 0:
+			continue
+		if letter in (UNOWN_LETTER_SETS[set_index] as Array):
+			return true
+	return false
 
 
 ## `crystal` selects which game's engine flag table this state's raw flag

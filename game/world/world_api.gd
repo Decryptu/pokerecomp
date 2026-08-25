@@ -2234,6 +2234,13 @@ func encounter_request(
 			"lead_level": lead_level,
 			"map_music": state.map_music(),
 			"cleanse_tag": cleanse_tag,
+			## `ChooseWildEncounter`'s own `ld a, [wUnlockedUnowns] / and a`, and
+			## the guard that keeps `CheckUnownLetter`'s reroll answerable: on a
+			## save that has solved no Ruins of Alph puzzle there is no letter to
+			## give an Unown, so the step finds nothing rather than a Pokemon.
+			"unlocked_unowns": state.unlocked_unowns(
+				Gen2WorldState.is_crystal_profile(data)
+			),
 		}
 	)
 	if resolved.is_empty():
@@ -4016,12 +4023,13 @@ func _script_address_for_event(event: Dictionary) -> int:
 
 
 func _enqueue_script(request: Dictionary) -> void:
-	## A field-move prompt is the one queued request with no address of its own:
-	## the source reaches its Ask*Script through CallScript on a link-time
-	## address the pins do not resolve, so the runner synthesizes the body from
-	## the request kind the way it does for an item ball.
+	## The two queued requests with no address of their own, both of which the
+	## runner synthesizes a body for the way it does for an item ball: a
+	## field-move prompt, whose Ask*Script the source reaches through CallScript
+	## on a link-time address the pins do not resolve, and a mod's item gift,
+	## which no script anywhere makes.
 	if int(request.get("script", 0)) <= 0 \
-		and StringName(request.get("kind", &"")) != &"field_move_prompt":
+		and StringName(request.get("kind", &"")) not in [&"field_move_prompt", &"item_gift"]:
 		return
 	if not request.has("collision"):
 		var cell_value: Variant = request.get("cell", player_cell)
@@ -6287,6 +6295,32 @@ func take_hidden_item(cell: Vector2i) -> Array:
 		_enqueue_script(request)
 		return run_event_queue(false)
 	return []
+
+
+## `verbosegiveitem`'s own transaction for [param item], queued and run through
+## the ordinary script path, so the bag write, the save, the received line, the
+## fanfare and the pack-full branch are all the host's exactly as they are for a
+## give the map makes. Answers the script results [method take_hidden_item] does,
+## and an empty array when the item is not one the cartridge knows or when a
+## script is already running.
+##
+## There is no cell, no event flag and no map behind it: this is the give a mod
+## asked for through [method Gen2ModHost.request_item_gift], and the mod named
+## the item and nothing else.
+func give_item_gift(item: int, quantity: int = 1) -> Array:
+	if current_map == null or _active_script != null or not _script_queue.is_empty():
+		return []
+	if item <= 0 or data == null or data.item_name(item).is_empty():
+		return []
+	_enqueue_script({
+		"kind": &"item_gift",
+		"map_group": current_map.group,
+		"map_number": current_map.number,
+		"bank": int(current_map.events.get("bank", 0)),
+		"item": item,
+		"quantity": maxi(1, quantity),
+	})
+	return run_event_queue(false)
 
 
 func hidden_item_nearby() -> bool:

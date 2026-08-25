@@ -474,6 +474,10 @@ func _play_differently(host: Gen2ModHost, manifest: Gen2ModManifest) -> void:
 	## The step an active Repel runs out on. The mod picks the weakest item it
 	## owns; the prompt, the bag and the encounter ordering are the host's.
 	host.register_repel_renewal(manifest.id, RepelRenewal.new())
+	## How many DV words one wild is drawn with, which is the later games' charm.
+	## The count is the mod's; the roll, the generator and the ceiling are the
+	## host's, so an encounter stays inside the run's reproducible sequence.
+	host.register_shiny_rolls(manifest.id, ShinyRolls.new())
 	## Experience for a successful capture. Save bound, so the manifest
 	## `register` was handed is the capability rather than the id.
 	host.register_catch_experience(manifest, CatchExperience.new())
@@ -514,6 +518,19 @@ class RepelRenewal:
 			if int(inventory.get(item, 0)) > 0:
 				return item
 		return 0
+
+
+## How many words a wild's DVs are drawn from. 1 is the cartridge's own roll.
+class ShinyRolls:
+	extends RefCounted
+
+	## The charm's own item number, read from the LIVE bag rather than from a
+	## snapshot the context could carry: a mod that was handed the bag per wild
+	## would answer for a bag one encounter out of date.
+	const SHINY_CHARM: int = 0x19
+
+	func shiny_rolls(_context: Dictionary) -> int:
+		return 3 if int(Gen2ModHost.instance().inventory().get(SHINY_CHARM, 0)) > 0 else 1
 
 
 ## Read on every throw rather than once, so a switch the player turns off

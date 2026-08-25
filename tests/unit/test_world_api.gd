@@ -6603,6 +6603,39 @@ func test_a_hidden_item_is_dispatched_from_its_three_data_bytes() -> void:
 	assert_true(world.event_flag_active(20))
 
 
+## A mod's ask through `Gen2ModHost.request_item_gift`, which has no cell, no
+## event flag and no script at all behind it: `verbosegiveitem`'s own
+## transaction and nothing else, so the received line, the sound and the pocket
+## line are the host's exactly as they are for a give a map makes.
+func test_an_item_gift_runs_verbosegiveitem_with_no_script_behind_it() -> void:
+	var data: GameData = GameData.open_directory(_directory)
+	var world := Gen2WorldAPI.open(data, 1, 1, Vector2i(8, 7))
+
+	var results: Array = world.give_item_gift(3, 2)
+	assert_eq(results.size(), 1, JSON.stringify(results))
+	assert_eq(results[0]["source"]["kind"], &"item_gift")
+	assert_eq(results[0]["status"], &"waiting", JSON.stringify(results[0]))
+	## GiveItemScript's own `_ReceivedItemText`, whose STRING_BUFFER_4 the
+	## staging filled: without the fill the name never resolves.
+	assert_eq(results[0]["event"]["text"], "Received\n%s." % _item_name(3))
+
+	_receipt_sound(world, &"special_sound")
+	var finished: Array = _receipt_notify(world, 3)
+	assert_eq(finished[0]["status"], &"complete", JSON.stringify(finished[0]))
+	assert_eq(world.state.items().get(3, 0), 2)
+
+
+## An item number the cartridge does not know is refused where the ask is spent
+## rather than running a give of nothing, which is the one validation the host
+## does on a mod's behalf.
+func test_an_item_gift_of_an_unknown_item_does_nothing() -> void:
+	var data: GameData = GameData.open_directory(_directory)
+	var world := Gen2WorldAPI.open(data, 1, 1, Vector2i(8, 7))
+	assert_eq(world.give_item_gift(0, 1), [])
+	assert_eq(world.give_item_gift(0xFFFF, 1), [])
+	assert_true(world.state.items().is_empty())
+
+
 func test_a_full_item_pocket_leaves_a_hidden_item_flag_clear() -> void:
 	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
 	scripts["48:61A0"] = [20, 0, 3, Gen2WorldScript.END]

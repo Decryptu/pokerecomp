@@ -38,7 +38,7 @@ user://mods/<id>/
 | `id` | Lowercase `[a-z0-9][a-z0-9_-]*`; addresses the directory and registry keys |
 | `name` | Shown to the player |
 | `version` | The mod's own version, not the host's |
-| `api_version` | Between `Gen2ModManifest.MIN_API_VERSION` and `API_VERSION`. Declare the oldest host you need: 15 for [a visible encounter's glow](#visible-wild-encounters), 14 for [an annotation's own interface field](#annotating-the-battle), 13 for [an alternate field-move source](#an-alternate-field-move-source), [Repel renewal](#renewing-a-repel), [experience for a capture](#experience-for-a-capture), [battle annotations](#annotating-the-battle) and a start-menu entry's action and visibility, 12 for `Gen2ModHost.view_changed`, 11 for [the battle entrance](#the-entrance) and the battle view's other resolved fields, 10 for [a screen that fills the window](#a-screen-that-fills-the-window) and the maps past this one's edge, 9 for an item that names an evolution method, 8 for a stats-screen page, 7 for an actor's `interact`, `emote` and outbox and for hidden-item requests, 6 for `occupied` in the visible-encounter context, 5 for the run's rules, 4 for types, matchups, mod art and event mutators, 3 for mart rows and named axes, 2 for visible encounters, 1 for everything else |
+| `api_version` | Between `Gen2ModManifest.MIN_API_VERSION` and `API_VERSION`. Declare the oldest host you need: 16 for [the shiny seam](#how-many-times-a-wilds-dvs-are-rolled), [an item gift](#asking-the-host-to-hand-an-item-over) and [reading the bag](#reading-the-bag), 15 for [a visible encounter's glow](#visible-wild-encounters), 14 for [an annotation's own interface field](#annotating-the-battle), 13 for [an alternate field-move source](#an-alternate-field-move-source), [Repel renewal](#renewing-a-repel), [experience for a capture](#experience-for-a-capture), [battle annotations](#annotating-the-battle) and a start-menu entry's action and visibility, 12 for `Gen2ModHost.view_changed`, 11 for [the battle entrance](#the-entrance) and the battle view's other resolved fields, 10 for [a screen that fills the window](#a-screen-that-fills-the-window) and the maps past this one's edge, 9 for an item that names an evolution method, 8 for a stats-screen page, 7 for an actor's `interact`, `emote` and outbox and for hidden-item requests, 6 for `occupied` in the visible-encounter context, 5 for the run's rules, 4 for types, matchups, mod art and event mutators, 3 for mart rows and named axes, 2 for visible encounters, 1 for everything else |
 | `entry` | A `.gd` path inside the mod directory, or inside the pack when there is one |
 | `pack` | Optional `.pck` or `.zip` beside `mod.json`, holding the mod's files |
 | `description` | Optional |
@@ -1411,6 +1411,76 @@ entry, the host runs it.
   world can spend it rather than dropped.
 
 Which cell to name is the mod's own business.
+
+## Asking the host to hand an item over
+
+`Gen2ModHost.request_item_gift(item, quantity)` is `request_hidden_item`'s twin
+for an item **no map gives** (`api_version` 16). The mod names an item and reads
+nothing back; on the next world frame nothing else owns, the host runs
+`verbosegiveitem`'s own transaction: the bag write, the fanfare, the received
+line, the pocket line and the pack-full branch.
+
+Everything on that list is world state a mod must not write, and the box, the
+sound and the pacing are a screen it cannot see. The queue behaves exactly as a
+hidden item's does, and for the same reasons: one spent per frame, an ask made
+inside a battle, a text box, a warp or an overlay spent when the world can spend
+it rather than dropped, and the rest waiting in order. An item number the
+cartridge does not know does nothing.
+
+Use it where the mod can **see** the moment but the script has no give site in
+it: `special Diploma` reaches the world channel as a `diploma_requested` runtime
+request, and the designer's script is `writetext`, `special Diploma`, `setevent`
+with nothing to patch. `patch_check` changes the number an existing site hands
+out; this is for when there is no site.
+
+## Reading the bag
+
+`Gen2ModHost.inventory()` answers the live world's own `{item: quantity}`, the
+same copy a Repel provider is handed, and `{}` when no world is open
+(`api_version` 16). Read only, and a copy.
+
+One narrow accessor rather than a handle on `Gen2WorldAPI`, because a
+non-renderer mod is deliberately given no world: "do I hold this key item" is a
+question every gameplay mod has and the whole world is not the answer to it.
+
+## How many times a wild's DVs are rolled
+
+Every wild the game builds rolls its own DVs, off the battle's own generator, the
+way `LoadEnemyMon` does: shininess, a bad stat and which Hidden Power it answers
+are all facts about those four numbers. `register_shiny_rolls(id, provider)` says
+how many words one wild is drawn with, which is the later games' charm
+(`api_version` 16):
+
+```gdscript
+class Held:
+	func shiny_rolls(context: Dictionary) -> int:
+		return 3 if int(Gen2ModHost.instance().inventory().get(SHINY_CHARM, 0)) > 0 else 1
+```
+
+The host draws up to that many, keeps the first that `Gen2Stats.is_shiny`
+accepts and otherwise keeps the last, and clamps to
+`Gen2ModHost.MAX_SHINY_ROLLS`. 0 and 1 both mean the cartridge's own single
+roll, which is also what an unregistered host does.
+
+| `context` key | Meaning |
+|---|---|
+| `species` | What is about to be built |
+| `level` | Its level, already chosen |
+| `method` | The encounter method, empty for a wild with no method behind it |
+| `map_group`, `map_number` | Where, or -1 apiece |
+
+It carries no bag: `inventory()` is the live one, and a snapshot per wild would
+be a staler answer than the mod can get for itself.
+
+Three wilds keep an answer of their own and no provider is asked: one whose
+request already carries `dvs`, which is the Pokemon a visible encounter's player
+walked up to; `BATTLETYPE_FORCESHINY`, which is the red Gyarados and is written
+rather than rolled; and a roaming Pokemon, which keeps its stored word. A wild
+UNOWN rerolls until its letter is one the Ruins of Alph puzzle has unlocked.
+
+**Two providers compose by the largest answer**, rather than by registration
+order: two charms have an obvious join, and refusing the second by name would
+make installing both an error over a number.
 
 ## An alternate field-move source
 

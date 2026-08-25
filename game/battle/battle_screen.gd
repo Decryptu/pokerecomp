@@ -382,6 +382,8 @@ var _player: int = 1
 ## Drawn values like the two above: they follow the events rather than the party.
 var _enemy_unown_form: int = 0
 var _player_unown_form: int = 0
+var _enemy_shiny: bool = false
+var _player_shiny: bool = false
 var _enemy_level: int = 5
 var _player_level: int = 5
 var _enemy_hp: int = 0
@@ -947,8 +949,17 @@ func start_world_battle(
 		badge_mask = save.world.world_state.badge_mask(crystal)
 	if badge_mask < 0:
 		badge_mask = 0
+	## `wUnlockedUnowns`, which `CheckUnownLetter` gates a rolled wild Unown's
+	## letter on. Stamped here because the adapter is scene-free and this is the
+	## one path that has the save; a request without it takes whatever it rolled.
+	var stamped: Dictionary = request.duplicate(true)
+	if save != null and save.world != null and save.world.world_state != null:
+		var stamped_values: Variant = stamped.get("values", stamped)
+		if stamped_values is Dictionary:
+			(stamped_values as Dictionary)["unlocked_unowns"] = \
+				save.world.world_state.unlocked_unowns(crystal)
 	var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(
-		_data, request, player_party, _rng, badge_mask, _injected_rules
+		_data, stamped, player_party, _rng, badge_mask, _injected_rules
 	)
 	if not bool(prepared.get("ok", false)):
 		_emit_world_battle_failure(
@@ -1158,6 +1169,8 @@ func _init_battle_display() -> void:
 	## the same way the species above do; every later change is a send-out.
 	_enemy_unown_form = Gen2Battle.unown_form_of(_battle.enemy)
 	_player_unown_form = Gen2Battle.unown_form_of(_battle.player)
+	_enemy_shiny = Gen2Stats.is_shiny(_battle.enemy.dvs)
+	_player_shiny = Gen2Stats.is_shiny(_battle.player.dvs)
 	_close_switch()
 	_clear_level_up_box()
 	_reseed_bg_map()
@@ -4166,11 +4179,13 @@ func _apply_event_state(event: Dictionary) -> void:
 				enemy_seen.emit(int(event["species"]))
 				_enemy = int(event["species"])
 				_enemy_unown_form = int(event.get("unown_form", 0))
+				_enemy_shiny = bool(event.get("shiny", false))
 				_enemy_level = int(event["level"])
 				set_hp(int(event["hp"]), int(event["max_hp"]), _player_hp, _player_max_hp)
 			else:
 				_player = int(event["species"])
 				_player_unown_form = int(event.get("unown_form", 0))
+				_player_shiny = bool(event.get("shiny", false))
 				_player_level = int(event["level"])
 				set_hp(_enemy_hp, _enemy_max_hp, int(event["hp"]), int(event["max_hp"]))
 			# A send-out draws a picture through `GetBattleMonBackpic` or
@@ -4944,6 +4959,8 @@ func _push_view() -> void:
 		"enemy_species": _enemy, "player_species": _player,
 		"enemy_unown_form": _enemy_unown_form,
 		"player_unown_form": _player_unown_form,
+		"enemy_shiny": _enemy_shiny,
+		"player_shiny": _player_shiny,
 		## Whose picture is the substitute's doll rather than the Pokémon's own.
 		"enemy_substitute": bool(_substitute_pic[Gen2Battle.ENEMY]),
 		"player_substitute": bool(_substitute_pic[Gen2Battle.PLAYER]),

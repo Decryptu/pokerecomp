@@ -58,7 +58,15 @@ const FILENAME: String = "mod.json"
 ## is the same shape in the other direction: a mod may send one to a host that
 ## drops it and the Pokemon simply does not glow, which is why `api_version` 15
 ## is only needed by a mod that requires the mark to appear.
-const API_VERSION: int = 15
+##
+## 16 is the shiny seam, three registrations a mod that changes what comes out of
+## the grass needs: [method Gen2ModHost.register_shiny_rolls], the count of DV
+## words one wild is drawn with; [method Gen2ModHost.request_item_gift], which is
+## [method Gen2ModHost.request_hidden_item]'s twin for an item no map gives; and
+## [method Gen2ModHost.inventory], the live bag a non-renderer mod otherwise has
+## no way to read. Only the first two are contract: a mod may feature-detect the
+## bag but not a roll it never sees taken.
+const API_VERSION: int = 16
 ## The oldest contract this host still answers. See [constant API_VERSION].
 const MIN_API_VERSION: int = 1
 ## Ids address directories and registry keys, so they stay to a plain lowercase

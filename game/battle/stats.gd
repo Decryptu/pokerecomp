@@ -49,6 +49,11 @@ const DV_SPECIAL_SHIFT: int = 0
 ## [method is_shiny].
 const SHINY_ATK_MASK: int = 0b0010
 const SHINY_DV: int = 10
+## `ATKDEFDV_SHINY` and `SPDSPCDV_SHINY` as one word: 14/10/10/10, which is
+## what `BATTLETYPE_FORCESHINY` writes instead of rolling, and is the red
+## Gyarados. Any Attack DV [constant SHINY_ATK_MASK] accepts would do; this is
+## the pair the source picked.
+const SHINY_DVS: int = 0xEAAA
 
 
 ## The cartridge's square root: the first entry of a table of squares not

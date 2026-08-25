@@ -157,6 +157,13 @@ const FIELD_MOVE_SOURCE_METHODS: Array[String] = ["allows_field_move"]
 const REPEL_PROVIDER_METHODS: Array[String] = ["repel_to_use"]
 const CATCH_EXPERIENCE_METHODS: Array[String] = ["awards_catch_experience"]
 const BATTLE_INFO_METHODS: Array[String] = ["annotate_battle"]
+const SHINY_ROLLS_METHODS: Array[String] = ["shiny_rolls"]
+
+## The most DV words the host will draw for one wild, whatever a provider asks
+## for. A roll is cheap, but the count is a mod's number and the ceiling is the
+## host's: the odds are 1 in 8192 a word, so this is already a shiny about one
+## wild in eight.
+const MAX_SHINY_ROLLS: int = 1024
 
 ## Pocket type numbers 1 to 4 are the cartridge's ITEM, KEY_ITEM, BALL and TM_HM,
 ## so a registered pocket has to claim a number above them, the same reservation
@@ -215,6 +222,13 @@ var _world_actors: Dictionary = {}
 ## Cells a mod asked the host to pick a hidden item up from. See
 ## [method request_hidden_item].
 var _hidden_item_requests: Array[Vector2i] = []
+## `{item, quantity}` a mod asked the host to hand over. See
+## [method request_item_gift].
+var _item_gift_requests: Array[Dictionary] = []
+## What [method inventory] reads the live bag through, set by the world screen
+## while a world is open. A Callable rather than a handle on [Gen2WorldAPI]: a
+## mod is given the copy and never the world.
+var _inventory_source: Callable = Callable()
 ## Mod id to the visible-encounter provider it registered, held the way an actor
 ## is. See [method register_visible_encounters].
 var _visible_encounters: Dictionary = {}
@@ -224,6 +238,7 @@ var _field_move_sources: Dictionary = {}
 var _repel_renewals: Dictionary = {}
 var _catch_experience: Dictionary = {}
 var _battle_info: Dictionary = {}
+var _shiny_rolls: Dictionary = {}
 var _battle_renderers: Dictionary = {}
 ## The one id the player's view is chosen by, read from [Gen2ModState] when the
 ## host is built and written back whenever it changes. It is a bare id and may
@@ -363,6 +378,60 @@ func requeue_hidden_items(cells: Array[Vector2i]) -> void:
 	_hidden_item_requests = cells + _hidden_item_requests
 
 
+## Asks the world screen to hand [param item] over, [param quantity] of it,
+## through `verbosegiveitem`'s own transaction: the bag write, the fanfare, the
+## received line, the pocket line and the pack-full branch. A REQUEST and never
+## the act, for the reason [method request_hidden_item] is one, and answering
+## nothing for the same reason: a mod names an item and the host runs the screen.
+##
+## Queued the way a hidden item's ask is, so one made inside a battle, a text
+## box, a warp or an overlay is spent on the first world frame nothing else owns
+## rather than dropped. An item number the cartridge does not know is refused
+## when the queue is spent, not here.
+##
+## Unlike a hidden item there is no cell, no event flag and no map: this is the
+## give a script would have made, from a mod that has no script.
+func request_item_gift(item: int, quantity: int = 1) -> void:
+	if item <= 0 or quantity <= 0:
+		return
+	_item_gift_requests.append({"item": item, "quantity": quantity})
+
+
+## Drained by [Gen2WorldScreen], once, on the frame it spends them.
+func take_item_gift_requests() -> Array[Dictionary]:
+	var out: Array[Dictionary] = _item_gift_requests
+	_item_gift_requests = []
+	return out
+
+
+## What a drain could not spend this frame, put back in front of anything asked
+## for since. See [method requeue_hidden_items].
+func requeue_item_gifts(gifts: Array[Dictionary]) -> void:
+	if gifts.is_empty():
+		return
+	_item_gift_requests = gifts + _item_gift_requests
+
+
+## Where [method inventory] reads from while a world is open, set by
+## [Gen2WorldScreen] and cleared when it closes. An empty Callable is the honest
+## default: the launcher and every screen that is not the world have no bag.
+func set_inventory_source(source: Callable) -> void:
+	_inventory_source = source
+
+
+## The live world's own `{item: quantity}`, the copy a
+## [method register_repel_renewal] provider is handed, and empty when no world is
+## open. Read only, and a copy: writing the bag is the host's.
+##
+## One narrow accessor rather than a handle on [Gen2WorldAPI], because a
+## non-renderer mod is deliberately given no world at all.
+func inventory() -> Dictionary:
+	if not _inventory_source.is_valid():
+		return {}
+	var bag: Variant = _inventory_source.call()
+	return (bag as Dictionary).duplicate(true) if bag is Dictionary else {}
+
+
 func world_actor_ids() -> Array:
 	return _world_actors.keys()
 
@@ -482,14 +551,55 @@ func repel_renewal_ids() -> Array:
 	return _repel_renewals.keys()
 
 
-## The item the first provider to answer would spend, or 0. [param inventory] is
-## copied per provider, so answering cannot change what the next one is asked.
-func repel_renewal_item(inventory: Dictionary) -> int:
+## The item the first provider to answer would spend, or 0. [param bag] is copied
+## per provider, so answering cannot change what the next one is asked. Named for
+## what it holds rather than for [method inventory], which is a mod's own read of
+## the same thing and would shadow this parameter.
+func repel_renewal_item(bag: Dictionary) -> int:
 	for provider: Object in _repel_renewals.values():
-		var item: int = int(provider.call("repel_to_use", inventory.duplicate(true)))
+		var item: int = int(provider.call("repel_to_use", bag.duplicate(true)))
 		if item > 0:
 			return item
 	return 0
+
+
+## Registers a SHINY ROLLS provider under [param id]: how many DV words the host
+## draws for one wild before it settles, which is the later games' charm.
+##
+## [param provider] answers [constant SHINY_ROLLS_METHODS]' `shiny_rolls(context)`
+## with a whole number. The host draws up to that many words off the battle's own
+## generator, keeps the first [method Gen2Stats.is_shiny] accepts and otherwise
+## keeps the last, and clamps to [constant MAX_SHINY_ROLLS]. 0 and 1 both mean
+## the cartridge's own single roll, which is also what an unregistered host does.
+##
+## [param context] carries `species`, `level`, `method`, `map_group` and
+## `map_number`, so an answer may vary by encounter. It does not carry the bag:
+## [method inventory] is what a mod asks the bag with, and asking it here would
+## give a provider one snapshot per wild rather than the live one.
+##
+## Two providers COMPOSE BY THE LARGEST ANSWER rather than by registration order,
+## which is what [method shiny_roll_count] takes. Refusing the second by name
+## would make two charms an install error over a number that has an obvious
+## join; a mod that wants fewer rolls than another mod asked for is asking for
+## something the host cannot honestly give both of.
+func register_shiny_rolls(id: StringName, provider: Object) -> Dictionary:
+	return _register_provider(_shiny_rolls, SHINY_ROLLS_METHODS, id, provider)
+
+
+func shiny_rolls_ids() -> Array:
+	return _shiny_rolls.keys()
+
+
+## The largest count any provider asks for, clamped, or 1 when none does. Static
+## and null-safe the way [method allows_item_field_move] is: it is read where a
+## wild is built, which runs with no host in a test and in every tool.
+static func shiny_roll_count(context: Dictionary) -> int:
+	if _instance == null:
+		return 1
+	var rolls: int = 1
+	for provider: Object in _instance._shiny_rolls.values():
+		rolls = maxi(rolls, int(provider.call("shiny_rolls", context.duplicate(true))))
+	return clampi(rolls, 1, MAX_SHINY_ROLLS)
 
 
 ## Registers a CATCH EXPERIENCE policy for [param manifest]'s own run: whether a
