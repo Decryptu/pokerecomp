@@ -215,8 +215,18 @@ var _slides: Array[Dictionary] = []
 ## way the walk goes: the player leaves to the left and the opponent to the
 ## right. Kept after the walk ends rather than dropped with the slide's entry,
 ## because the picture stays off the square until the ball puts a Pokemon there;
-## that stretch is the `none` [method _entrance_side] reports.
+## that stretch is the `none` [method battler_side] reports.
 var _slid_pixels: Dictionary = {Gen2Battle.PLAYER: 0.0, Gen2Battle.ENEMY: 0.0}
+## What the tilemap effects last did to each battler's picture, carried past the
+## animation that did it: `BattleBGEffect_HideMon` leaves a Fly or Dig user off
+## the field for a turn, and `..._RemoveMon` leaves a recalled Pokemon off the
+## square until the next send-out. The anim background reports both while it runs
+## and this is where they outlive it; see [method battler_side].
+var _battler_visible: Dictionary = {Gen2Battle.PLAYER: true, Gen2Battle.ENEMY: true}
+var _battler_scale: Dictionary = {Gen2Battle.PLAYER: 1.0, Gen2Battle.ENEMY: 1.0}
+var _battler_shift: Dictionary = {
+	Gen2Battle.PLAYER: Vector2.ZERO, Gen2Battle.ENEMY: Vector2.ZERO,
+}
 ## `AnimateFrontpic` over the enemy's square, or null when none is running.
 var _frontpic: Gen2PicAnimation = null
 ## `wAttrmap` bit 3, which `PokeAnim_SetVBank1` sets over that square while the
@@ -1234,7 +1244,7 @@ func advance_intro() -> bool:
 		# then `hGraphicStartTile = $31` / `hlcoord 2, 6` / `PlaceGraphic`, which
 		# puts back the two tile rows its `ClearBox` took off before the slide.
 		_intro = null
-		Gen2BattleScreenMap.stamp(_bg_map, true)
+		_restamp_battler(true)
 		_push_view()
 		_build_entrance()
 		_advance_entrance()
@@ -1645,6 +1655,9 @@ var _substitute_pic: Dictionary = {Gen2Battle.PLAYER: false, Gen2Battle.ENEMY: f
 ## `wFXAnimID` is a word: an id past this is not a move and skips the whole
 ## battle-scene, hud and after-anim half of `BattleAnimRunScript`.
 const ANIM_MOVE_LIMIT: int = 0x100
+## `ANIM_THROW_POKE_BALL`, the first entry past the moves
+## (constants/move_constants.asm).
+const ANIM_THROW_POKE_BALL: int = 0x100
 
 ## `SendOutMonText`'s four texts, in [constant Gen2Battle.SEND_OUT_GO]'s order.
 const SEND_OUT_LINES: Array[String] = [
@@ -1852,7 +1865,7 @@ func _run_next_anim_step() -> void:
 				_set_substitute_pic(
 					Gen2Battle.ENEMY if enemy_turn else Gen2Battle.PLAYER, false
 				)
-				Gen2BattleScreenMap.stamp(_bg_map, not enemy_turn)
+				_restamp_battler(not enemy_turn)
 				_push_view()
 	_anim = null
 	_anim_event = {}
@@ -1868,9 +1881,11 @@ func _run_next_anim_step() -> void:
 func _start_script(index: int) -> bool:
 	if _anim_data == null:
 		return false
+	var wobbles: Array[int] = []
+	wobbles.assign(_anim_event.get("wobbles", []))
 	_anim = Gen2BattleAnimPlayer.create(
 		_anim_data, index, bool(_anim_event.get("enemy_turn", false)),
-		int(_anim_event.get("param", 0))
+		int(_anim_event.get("param", 0)), wobbles
 	)
 	if _anim == null:
 		return false
@@ -1897,7 +1912,31 @@ func _after_anim_frame() -> void:
 						else Gen2Battle.PLAYER,
 					StringName(command["name"]) == Gen2BattleAnimScript.RAISE_SUB
 				)
+	_carry_battler_reports()
 	_push_view()
+
+
+## The anim background's own report, lifted onto the screen so it outlives the
+## animation the way the tilemap it was written beside does.
+func _carry_battler_reports() -> void:
+	if _anim == null:
+		return
+	var background: Gen2BattleAnimBackground = _anim.background()
+	for player_side: bool in [true, false]:
+		var side: int = Gen2Battle.PLAYER if player_side else Gen2Battle.ENEMY
+		_battler_visible[side] = bool(background.battler_visible[player_side])
+		_battler_scale[side] = float(background.battler_scale[player_side])
+		_battler_shift[side] = background.battler_shift[player_side] as Vector2
+
+
+## `PlaceGraphic` putting a whole picture back on a square, which is the one
+## thing that undoes every report above.
+func _restamp_battler(player_side: bool) -> void:
+	Gen2BattleScreenMap.stamp(_bg_map, player_side)
+	var side: int = Gen2Battle.PLAYER if player_side else Gen2Battle.ENEMY
+	_battler_visible[side] = true
+	_battler_scale[side] = 1.0
+	_battler_shift[side] = Vector2.ZERO
 
 
 func _end_script() -> void:
@@ -2625,14 +2664,50 @@ func complete_capture(result: Dictionary) -> Dictionary:
 			_capture_ball_index = mini(_capture_ball_index, maxi(_capture_balls.size() - 1, 0))
 
 	var wobbles: int = clampi(int(result.get("wobbles", 0)), 0, 3)
+	var caught: bool = bool(result.get("caught", false))
 	for _wobble: int in wobbles:
 		_capture_messages.append("The ball shook!")
-	if bool(result.get("caught", false)):
+	if caught:
 		_capture_messages.append("Gotcha! %s was caught!" % _name_of(_enemy))
 		_capture_terminal = true
 	else:
 		_capture_messages.append("%s broke free!" % _name_of(_enemy))
+	_begin_capture_animation(result_ball, wobbles, caught)
 	return result
+
+
+## `PokeBallEffect`'s own `PlayBattleAnim` on `ANIM_THROW_POKE_BALL`, which is
+## the throw, the poof, the opponent going into the ball, the wobbles and the
+## click or the break free: one script, not five.
+##
+## The catch is already resolved when this runs, the way the source resolves it
+## in front of the animation and hands the drawing `wWildMon` and
+## `wThrownBallWobbleCount` rather than a roll. `anim_checkpokeball` is what
+## reads them, so the queue is `GetPokeBallWobble`'s answers in order.
+##
+## The opponent leaving the field and coming back are `BATTLE_BG_EFFECT_RETURN_MON`
+## and `..._ENTER_MON` inside the script, which is why nothing here touches the
+## picture: both report through [method battler_side] like every other resize.
+func _begin_capture_animation(ball: int, wobbles: int, caught: bool) -> void:
+	if ball <= 0:
+		return
+	var answers: Array[int] = []
+	for _wobble: int in wobbles:
+		answers.append(Gen2BattleAnimScript.WOBBLE_NEXT)
+	answers.append(
+		Gen2BattleAnimScript.WOBBLE_CAUGHT if caught \
+			else Gen2BattleAnimScript.WOBBLE_ESCAPED
+	)
+	_begin_animation({
+		## `.not_kurt_ball`: every ball Kurt makes is drawn as a POKE BALL,
+		## which is what the `cp POKE_BALL + 1` in front of it decides.
+		"param": mini(ball, Gen2WorldPartyHost.ITEM_POKE_BALL),
+		"index": ANIM_THROW_POKE_BALL,
+		## `xor a / ldh [hBattleTurn]`: the throw is the player's, so the
+		## script's `BG_EFFECT_TARGET` is the opponent.
+		"enemy_turn": false,
+		"wobbles": answers,
+	})
 
 
 func _show_capture_selection() -> void:
@@ -5010,8 +5085,13 @@ func _push_view() -> void:
 		## `BattleStart_TrainerHuds`' party balls and the frame they hang in.
 		"trainer_hud_balls": _hud_balls,
 		"trainer_hud_border": _hud_border,
-		## `wTilemap` and the video state an animation writes over it.
-		"bg_map": _bg_map,
+		## `wTilemap` and the video state an animation writes over it. The
+		## running animation's own copy is the live one: `RunBattleAnimScript`
+		## hands the tilemap in and takes it back out, and every effect that
+		## blanks, sinks or resizes a picture edits it a frame at a time, so a
+		## view given the screen's copy meanwhile watched an animation happen to
+		## a picture that never moved.
+		"bg_map": _anim.background().bg_map if _anim != null else _bg_map,
 		"bg_vbank1": _bg_vbank1,
 		"bg_palette_maps": _background_maps(&"bg"),
 		"ob_palette_maps": _background_maps(&"ob"),
@@ -5020,11 +5100,12 @@ func _push_view() -> void:
 		## Whether both panels are on the map, which is the summary of the two
 		## keys above rather than a third state.
 		"hud_visible": _hud_visible(),
-		## Who is standing on each square and how far off it they are, resolved:
-		## see [method _entrance_side].
-		"entrance": {
-			"player": _entrance_side(Gen2Battle.PLAYER),
-			"enemy": _entrance_side(Gen2Battle.ENEMY),
+		## Who is standing on each square, whether the picture is on it, how far
+		## it is from resting there and how big it is drawn: see
+		## [method battler_side].
+		"battlers": {
+			"player": battler_side(Gen2Battle.PLAYER),
+			"enemy": battler_side(Gen2Battle.ENEMY),
 		},
 	})
 	if _box != null:
@@ -5035,24 +5116,38 @@ func _push_view() -> void:
 	_refresh_annotations()
 
 
-## What is standing on one side's square and how far it is from standing on it,
-## for a renderer that stages the fight somewhere other than a 20x18 tile page.
+## What is standing on one side's square, whether it is on it, how far it is from
+## resting there and how big it is drawn, for a renderer that stages the fight
+## somewhere other than a 20x18 tile page.
 ##
-## Every other field describing the entrance says it in the terms the hardware
-## draws it in: the slide in is a scanline scroll, the walk off is columns going
-## blank in `bg_map`, and the player mid-slide is eighteen OAM entries. A view
-## with no background plane has none of those three and would have to rebuild
-## host state to read either movement. These three values are that state said
-## plainly.
+## Every other field describing a battler says it in the terms the hardware draws
+## it in: the opening slide is a scanline scroll, the walk off is columns going
+## blank in `bg_map`, the player mid-slide is eighteen OAM entries, a faint sinks
+## the picture a tile row at a time inside the map, a resize script restamps it
+## out of smaller subsamplings, and every per-battler deformation is a scanline
+## window over that side's own rows. A view with no background plane has none of
+## those and would have to rebuild host state to read any of them, which is lossy
+## as well as duplicated: a resize script's arrangement and a faint sink read the
+## same at the tile level. These four values are that state said plainly.
 ##
 ## [code]kind[/code] is what the square holds: [code]&"trainer"[/code] a person,
 ## [code]&"mon"[/code] a Pokemon, and [code]&"none"[/code] the stretch between
 ## the trainer walking off and the ball putting a Pokemon there.
-## [code]offset_pixels[/code] is how far that picture is from its resting square
-## and covers both movements with one number, because both are one thing: the
-## opening slide brings a picture in and `SlideBattlePicOut` takes it off again.
-## Zero is standing still, which is every frame outside an entrance.
-func _entrance_side(side: int) -> Dictionary:
+## [code]visible[/code] is whether the picture is on the square at all, which
+## `BattleBGEffect_HideMon` and `..._RemoveMon` are what take it off.
+## [code]offset_pixels[/code] is how far that picture is from its resting square,
+## and one number covers every movement because they are all the same thing: the
+## opening slide brings a picture in, `SlideBattlePicOut` takes it off,
+## `MonFaintedAnimation` sinks it, `RemoveMon` pushes it aside and the window
+## effects lunge, shake and sink it. Zero is standing still.
+## [code]scale[/code] is the side of the square `BattleBGEffect_RunPicResizeScript`
+## last placed over the side of the whole picture, so the ball shrink of a recall
+## and the grow of a send-out are one number; 1 is the whole picture.
+##
+## Every value is read out of state the screen already runs rather than simulated
+## again: `faint_step`, `slide_step`, the resize scripts and the scanline window
+## are what drive the map, and this reports what they drove it with.
+func battler_side(side: int) -> Dictionary:
 	var player_side: bool = side == Gen2Battle.PLAYER
 	var backpic: String = _player_backpic if player_side else ""
 	var trainer_class: int = 0 if player_side else _enemy_trainer_pic
@@ -5079,8 +5174,31 @@ func _entrance_side(side: int) -> Dictionary:
 		"backpic": backpic if kind == &"trainer" else "",
 		"trainer_class": trainer_class if kind == &"trainer" else 0,
 		"species": species if kind == &"mon" else 0,
-		"offset_pixels": Vector2(offset, 0.0),
+		"visible": bool(_battler_visible[side]),
+		"offset_pixels": Vector2(offset, 0.0) + Vector2(_battler_shift[side]) \
+			+ _faint_offset(side) + _window_offset(player_side),
+		"scale": Vector2.ONE * float(_battler_scale[side]),
 	}
+
+
+## `MonFaintedAnimation`'s outer loop, which takes the block's rows from the row
+## above: seven steps of one tile row each, so the picture sinks a tile a step.
+func _faint_offset(side: int) -> Vector2:
+	for faint: Dictionary in _faints:
+		var player_side: bool = side == Gen2Battle.PLAYER
+		if bool(faint["player_side"]) != player_side:
+			continue
+		return Vector2(0.0, float(int(faint["step"]) * Gen2Tiles.TILE_HEIGHT))
+	return Vector2.ZERO
+
+
+## The scanline window over one side's own rows, which is how every per-battler
+## deformation moves a picture; [method Gen2BattleAnimBackground.battler_window_offset]
+## owns the reading and this is the frame it is asked on.
+func _window_offset(player_side: bool) -> Vector2:
+	if _anim == null:
+		return Vector2.ZERO
+	return _anim.background().battler_window_offset(player_side)
 
 
 ## The background scroll for the whole screen: the intro's own bands, or an

@@ -118,6 +118,7 @@ func run(r: RefCounted) -> void:
 		_play_every_animation(game_id, data)
 		_verify_tackle_frames(game_id, data)
 		_verify_the_entrance(game_id, data)
+		_verify_the_thrown_ball(game_id, data)
 		_verify_the_transition(game_id, data)
 
 
@@ -126,6 +127,11 @@ func run(r: RefCounted) -> void:
 ## `.Shiny` is the inverted flash and the palette cycle. The beta body the fan
 ## falls through to runs `BATTLE_BG_EFFECT_BETA_SEND_OUT_MON2` ($2b), which is
 ## how a parameter that never reached the interpreter shows up here.
+## `ANIM_THROW_POKE_BALL` (constants/move_constants.asm), and the POKE BALL
+## `.not_kurt_ball` draws every ball Kurt makes as.
+const THROW_BALL_INDEX: int = 0x100
+const THROW_BALL_PARAM: int = 0x05
+
 const SEND_OUT_EFFECTS: Dictionary = {0: [0x0B], 1: [0x01, 0x06]}
 ## And how long each takes: the two `anim_wait`s of `.Normal` and the ten of
 ## `.Shiny`, plus the frame each batch of commands between them spends.
@@ -197,6 +203,67 @@ func _verify_tackle_frames(game_id: StringName, data: GameData) -> void:
 		)
 		print("%s: TACKLE draws %s over %d frames on the %s side." % [
 			game_id, runs, frames, "enemy" if enemy_turn else "player",
+		])
+
+
+## `ANIM_THROW_POKE_BALL`, which is the whole of a capture: the ball, the poof,
+## `BATTLE_BG_EFFECT_RETURN_MON` taking the opponent off the field, the wobble
+## loop, and either `.Click` or `.BreakFree`'s `..._ENTER_MON` putting it back.
+##
+## Only `anim_checkpokeball` decides which way the loop leaves, so the two
+## endings are two runs of the same script with two answers, and the sweep above
+## reaches neither: with no answers queued the loop takes the escape on its
+## first turn and the click body is never decoded.
+##
+## What is checked is what a renderer with no background plane reads, which is
+## the resize scripts reporting through the battler block rather than the
+## tilemap: the opponent is on its square, goes off it, and comes back only when
+## it got out.
+func _verify_the_thrown_ball(game_id: StringName, data: GameData) -> void:
+	var anims: Gen2BattleAnimData = Gen2BattleAnimData.from_game_data(data)
+	if not _r.check(anims != null, "%s: no battle animation data in the cache." % game_id):
+		return
+	for caught: bool in [true, false]:
+		var answers: Array[int] = [
+			Gen2BattleAnimScript.WOBBLE_NEXT, Gen2BattleAnimScript.WOBBLE_NEXT,
+			Gen2BattleAnimScript.WOBBLE_CAUGHT if caught \
+				else Gen2BattleAnimScript.WOBBLE_ESCAPED,
+		]
+		var player: Gen2BattleAnimPlayer = Gen2BattleAnimPlayer.create(
+			anims, THROW_BALL_INDEX, false, THROW_BALL_PARAM, answers
+		)
+		if not _r.check(
+			player != null, "%s: the thrown ball would not start." % game_id
+		):
+			continue
+		var background: Gen2BattleAnimBackground = player.background()
+		background.set_bg_map(Gen2BattleScreenMap.seeded())
+		var frames: int = 0
+		var vanished: bool = false
+		var smallest: float = 1.0
+		while player.advance_frame() and frames < MAX_FRAMES:
+			frames += 1
+			if not bool(background.battler_visible[false]):
+				vanished = true
+			smallest = minf(smallest, float(background.battler_scale[false]))
+		_r.check(
+			vanished,
+			"%s: the thrown ball never took the opponent off its square." % game_id
+		)
+		_r.check(
+			smallest < 1.0,
+			"%s: the opponent never shrank into the ball; the resize script"
+			% game_id + " reported %f as its smallest square." % smallest
+		)
+		_r.check(
+			bool(background.battler_visible[false]) != caught,
+			"%s: a %s Pokemon is %s on its square when the script ends." % [
+				game_id, "caught" if caught else "freed",
+				"still" if caught else "not",
+			]
+		)
+		print("%s: the thrown ball runs %d frames and the opponent %s." % [
+			game_id, frames, "stays in the ball" if caught else "comes back out",
 		])
 
 

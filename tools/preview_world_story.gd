@@ -411,8 +411,8 @@ const SAFFRON_COPYCAT_HOUSE_DOOR: Vector2i = Vector2i(9, 11)
 const COPYCAT_HOUSE_STAIRS_UP: Vector2i = Vector2i(2, 0)
 const COPYCAT_HOUSE_STAIRS_DOWN: Vector2i = Vector2i(3, 0)
 const COPYCAT_HOUSE_EXIT: Vector2i = Vector2i(2, 7)
-## She is a variable sprite only her own script assigns, so she stands here with
-## no sprite of her own until the first talk runs `variablesprite`.
+## She is a variable sprite wearing InitializeEventsScript's SPRITE_LASS until
+## the first talk runs her own `variablesprite`.
 const COPYCAT_FACE: Vector2i = Vector2i(5, 3)
 const SAFFRON_ROUTE_6_GATE_DOOR: Vector2i = Vector2i(16, 33)
 const ROUTE_6_GATE_SOUTH_DOOR: Vector2i = Vector2i(4, 7)

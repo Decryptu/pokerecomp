@@ -66,7 +66,15 @@ const FILENAME: String = "mod.json"
 ## [method Gen2ModHost.inventory], the live bag a non-renderer mod otherwise has
 ## no way to read. Only the first two are contract: a mod may feature-detect the
 ## bag but not a roll it never sees taken.
-const API_VERSION: int = 16
+##
+## 17 is the one break in the list. `view["entrance"]` is gone and
+## `view["battlers"]` stands in its place, carrying the same five fields plus
+## `visible` and `scale`: everything that happens to a battler after the entrance
+## used to be readable only as `bg_map` edits, and the two blocks describe the
+## same thing at different moments. Carrying both would have meant a renderer
+## reading one for the opening and the other for the fight, so the fold is the
+## contract. See [method Gen2BattleScreen.battler_side].
+const API_VERSION: int = 17
 ## The oldest contract this host still answers. See [constant API_VERSION].
 const MIN_API_VERSION: int = 1
 ## Ids address directories and registry keys, so they stay to a plain lowercase

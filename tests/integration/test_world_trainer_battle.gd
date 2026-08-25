@@ -145,6 +145,16 @@ func _battle_host() -> Gen2BattleScreen:
 
 ## The same overlay with the slide spent and nothing else, which is where the
 ## line `BattleStartMessage` prints is still on screen.
+## The frames a screen owes, spent the way the screen's own `_process` spends
+## them. A capture owes some now: `PokeBallEffect` draws the throw between the
+## text that says it was thrown and the text that says what happened.
+func _settle_frames(host: Gen2BattleScreen) -> void:
+	var guard: int = 4000
+	while host.frames_running() and guard > 0:
+		host.advance_frame()
+		guard -= 1
+
+
 func _battle_opening() -> Gen2BattleScreen:
 	var host: Gen2BattleScreen = _battle_child()
 	if host == null:
@@ -559,6 +569,7 @@ func test_master_ball_capture_runs_through_the_real_battle_overlay() -> void:
 	assert_true(host.begin_capture()["ok"])
 	assert_true(host.select_capture_ball(1)["ok"])
 	assert_true(host.throw_capture_ball()["ok"])
+	_settle_frames(host)
 	assert_eq(
 		host.battle_snapshot()["message"],
 		"You threw a %s!" % _data.item_name(Gen2WorldPartyHost.ITEM_MASTER_BALL)
@@ -593,6 +604,7 @@ func test_failed_capture_shows_break_free_and_returns_to_battle() -> void:
 	assert_not_null(host)
 	assert_true(host.begin_capture()["ok"])
 	assert_true(host.throw_capture_ball()["ok"])
+	_settle_frames(host)
 	assert_eq(
 		host.battle_snapshot()["message"],
 		"You threw a %s!" % _data.item_name(Gen2WorldPartyHost.ITEM_POKE_BALL)
@@ -945,6 +957,7 @@ func test_a_capture_keeps_the_damage_taken_and_the_pp_spent() -> void:
 	assert_true(host.begin_capture()["ok"])
 	assert_true(host.select_capture_ball(1)["ok"])
 	assert_true(host.throw_capture_ball()["ok"])
+	_settle_frames(host)
 	var guard: int = 12
 	while _battle_child() != null and guard > 0:
 		host.finish()
@@ -1067,6 +1080,7 @@ func _catch_the_wild() -> Gen2BattleScreen:
 		host.available_capture_balls().find(Gen2WorldPartyHost.ITEM_MASTER_BALL)
 	)["ok"])
 	assert_true(host.throw_capture_ball()["ok"])
+	_settle_frames(host)
 	for _message: int in 10:
 		if host.get("_capture_nickname_host") != null:
 			break
@@ -1772,6 +1786,7 @@ func test_a_registered_policy_pays_a_capture_between_gotcha_and_the_nickname() -
 	assert_true(host.begin_capture()["ok"])
 	assert_true(host.select_capture_ball(1)["ok"])
 	assert_true(host.throw_capture_ball()["ok"])
+	_settle_frames(host)
 
 	var caught: String = "Gotcha! %s was caught!" % _wild_name()
 	var messages: Array = []
@@ -1822,6 +1837,7 @@ func test_a_capture_pays_nothing_with_no_policy_registered() -> void:
 	assert_true(host.begin_capture()["ok"])
 	assert_true(host.select_capture_ball(1)["ok"])
 	assert_true(host.throw_capture_ball()["ok"])
+	_settle_frames(host)
 	for _frame: int in 900:
 		assert_false(
 			String(host.battle_snapshot()["message"]).contains("EXP. Points!"),
@@ -1835,3 +1851,50 @@ func test_a_capture_pays_nothing_with_no_policy_registered() -> void:
 		host.finish()
 		host.advance()
 	assert_false(bool(host.get("_capture_experience_spent")))
+
+
+## `PokeBallEffect` plays `ANIM_THROW_POKE_BALL` between the throw text and the
+## result text, and that one script is the whole capture: the ball, the poof, the
+## opponent going into it through `BATTLE_BG_EFFECT_RETURN_MON`, the wobbles that
+## `anim_checkpokeball` counts out, and the click or the break free. Nothing
+## played it here, so no renderer could draw a capture and the built-in one drew
+## nothing either.
+##
+## This fixture ships no animation layer, so what it can say is that the screen
+## asks for the animation and spends its frames. What the script then draws is
+## swept against real caches by `tools/checks/battle_anims.gd`.
+func test_a_thrown_ball_asks_for_the_throw_animation() -> void:
+	await _open_world()
+	_data.species(Fixture.TRAINER_SPECIES)["catch_rate"] = 1
+	_world_screen._encounter_random.seed = 1
+	_world_screen.preview_wild_encounter()
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var host: Gen2BattleScreen = _battle_host()
+	assert_not_null(host)
+	assert_true(host.begin_capture()["ok"])
+	assert_true(host.throw_capture_ball()["ok"])
+
+	assert_true(host.animation_running(), "the throw is drawn, not only printed")
+	assert_eq(int(host._anim_event["index"]), Gen2BattleScreen.ANIM_THROW_POKE_BALL)
+	assert_eq(
+		int(host._anim_event["param"]), Gen2WorldPartyHost.ITEM_POKE_BALL,
+		"`.not_kurt_ball`: the ball the script is told to draw",
+	)
+	assert_false(
+		bool(host._anim_event["enemy_turn"]),
+		"`xor a / ldh [hBattleTurn]`: the throw is the player's",
+	)
+	# `GetPokeBallWobble` answers `next` for each shake and then `escaped`, which
+	# is what `.Loop` branches on. The catch is decided before it is drawn.
+	var answers: Array = host._anim_event["wobbles"]
+	assert_eq(
+		answers.back(), Gen2BattleAnimScript.WOBBLE_ESCAPED,
+		"a Pokemon that got out is drawn getting out",
+	)
+	for step: int in answers.size() - 1:
+		assert_eq(int(answers[step]), Gen2BattleAnimScript.WOBBLE_NEXT)
+
+	_settle_frames(host)
+	assert_false(host.animation_running(), "and its frames are spent")

@@ -111,7 +111,8 @@ var enemy_off_field: bool = false
 ## animation. [param param] is `wBattleAnimParam` and [param enemy_turn] is
 ## `hBattleTurn`, the two inputs set before `PlayBattleAnim`.
 static func create(
-	anim_data: Gen2BattleAnimData, index: int, on_enemy_turn: bool = false, param: int = 0
+	anim_data: Gen2BattleAnimData, index: int, on_enemy_turn: bool = false,
+	param: int = 0, wobbles: Array[int] = []
 ) -> Gen2BattleAnimPlayer:
 	if anim_data == null:
 		return null
@@ -134,7 +135,7 @@ static func create(
 		player._bg_effects[slot] = Gen2BattleAnimBgEffect.new()
 	player._background = Gen2BattleAnimBackground.new()
 	player._script = Gen2BattleAnimScript.create(
-		region["data"], int(region["address"]), address, param
+		region["data"], int(region["address"]), address, param, wobbles
 	)
 	return player
 

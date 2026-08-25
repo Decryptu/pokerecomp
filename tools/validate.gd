@@ -44,7 +44,7 @@ const GROUPS: Dictionary = {
 		&"pack", &"unown_dex", &"pokedex", &"pc", &"mart", &"evolutions",
 		&"mon_specials", &"specials", &"day_care", &"unown_puzzle", &"slots",
 		&"card_flip", &"move_effects", &"phone", &"decorations", &"mail",
-		&"mystery_gift",
+		&"mystery_gift", &"variable_sprites",
 		&"battle_tower",
 	],
 	&"trainers": [&"crystal_route30_trainer", &"gold_route30_trainer"],

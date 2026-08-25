@@ -540,7 +540,7 @@ func test_a_battle_opens_on_the_slide_and_says_nothing_until_it_is_done() -> voi
 	## the opponent comes in from the left. Both are drawn without colour:
 	## `SCGB_BATTLE_GRAYSCALE` is set where the battle is entered and
 	## `SCGB_BATTLE_COLORS` only after the slide returns.
-	var entering: Dictionary = view["entrance"]
+	var entering: Dictionary = view["battlers"]
 	assert_gt(
 		(entering["player"] as Dictionary)["offset_pixels"].x, 0.0,
 		"the back pic slides in too, from the right"
@@ -570,7 +570,7 @@ func test_a_battle_opens_on_the_slide_and_says_nothing_until_it_is_done() -> voi
 		"the start message waited for the slide"
 	)
 	var settled: Dictionary = _battle_screen._renderer._view
-	var standing: Dictionary = settled["entrance"]
+	var standing: Dictionary = settled["battlers"]
 	assert_eq(
 		(standing["player"] as Dictionary)["offset_pixels"], Vector2.ZERO,
 		"both are on their squares once the slide has returned"
@@ -660,7 +660,7 @@ func test_the_doll_is_what_a_substituted_side_draws() -> void:
 	assert_eq(renderer._player_pixels, own)
 
 
-## The whole entrance as `view["entrance"]` reports it, one side at a time: who
+## The whole entrance as `view["battlers"]` reports it, one side at a time: who
 ## is standing on each square, and how far off it they are.
 ##
 ## This is the field a renderer with no background plane has instead of the
@@ -689,7 +689,7 @@ func test_the_entrance_says_who_is_on_each_square_and_how_far_off_it() -> void:
 		guard -= 1
 		for who: String in kinds:
 			var side: Dictionary = (
-				_battle_screen._renderer._view["entrance"] as Dictionary
+				_battle_screen._renderer._view["battlers"] as Dictionary
 			)[who]
 			var kind: StringName = StringName(side["kind"])
 			if (kinds[who] as Array).is_empty() or (kinds[who] as Array).back() != kind:
@@ -729,7 +729,7 @@ func test_the_entrance_says_who_is_on_each_square_and_how_far_off_it() -> void:
 
 	# Nothing is moving once the fight has started, and both squares name the
 	# Pokemon standing on them rather than the people who brought them.
-	var fighting: Dictionary = _battle_screen._renderer._view["entrance"]
+	var fighting: Dictionary = _battle_screen._renderer._view["battlers"]
 	for who: String in ["player", "enemy"]:
 		var side: Dictionary = fighting[who]
 		assert_eq(side["offset_pixels"], Vector2.ZERO, who)
@@ -746,14 +746,14 @@ func test_a_wild_opponent_is_its_own_picture_from_the_first_frame() -> void:
 	_battle_screen.show_matchup(16, 155, 7, 9)
 
 	var enemy: Dictionary = (
-		_battle_screen._renderer._view["entrance"] as Dictionary
+		_battle_screen._renderer._view["battlers"] as Dictionary
 	)["enemy"]
 	assert_eq(StringName(enemy["kind"]), &"mon")
 	assert_eq(int(enemy["species"]), 16)
 	assert_lt((enemy["offset_pixels"] as Vector2).x, 0.0, "and it is still sliding in")
 	assert_eq(
 		StringName((
-			(_battle_screen._renderer._view["entrance"] as Dictionary)["player"]
+			(_battle_screen._renderer._view["battlers"] as Dictionary)["player"]
 			as Dictionary
 		)["kind"]),
 		&"trainer",
@@ -793,3 +793,110 @@ func test_a_battler_object_tile_is_read_over_the_pics_own_strip() -> void:
 				int(pixels[((side - 1) * Gen2Font.TILE + line) * strip + column]),
 				"pixel %d,%d of the feet" % [column, line]
 			)
+
+
+## `MonFaintedAnimation` sinks a picture a tile row at a time inside `bg_map`,
+## which a renderer with no background plane cannot read: seven of those steps
+## and a slide off the square are the same columns and rows moving. The block
+## says it as one number.
+func test_a_faint_sinks_the_battlers_own_offset() -> void:
+	await _open_battle()
+	_battle_screen.show_matchup(16, 155, 7, 9)
+	_settle_intro()
+
+	var before: Vector2 = (
+		(_battle_screen._renderer._view["battlers"] as Dictionary)["enemy"]
+		as Dictionary
+	)["offset_pixels"]
+	assert_eq(before, Vector2.ZERO, "the opponent is standing on its square")
+
+	_battle_screen._begin_faint(Gen2Battle.ENEMY)
+	var steps: int = 0
+	var deepest: float = 0.0
+	var guard: int = 200
+	while _battle_screen.fainting() and guard > 0:
+		_battle_screen.advance_faint()
+		guard -= 1
+		steps += 1
+		deepest = maxf(deepest, float((
+			(_battle_screen._renderer._view["battlers"] as Dictionary)["enemy"]
+			as Dictionary
+		)["offset_pixels"].y))
+
+	assert_gt(steps, 0, "the faint ran")
+	assert_eq(
+		deepest,
+		float((Gen2BattleScreenMap.FAINT_STEPS - 1) * Gen2Tiles.TILE_HEIGHT),
+		"the picture sank a tile row a step and never rose",
+	)
+	assert_eq(
+		(
+			(_battle_screen._renderer._view["battlers"] as Dictionary)["player"]
+			as Dictionary
+		)["offset_pixels"],
+		Vector2.ZERO,
+		"and the other side did not move",
+	)
+
+
+## `BattleBGEffect_HideMon` blanks a battler's own box and `..._RunPicResizeScript`
+## restamps it out of smaller subsamplings of itself. Both are `bg_map` edits and
+## nothing else, so `visible` and `scale` are the only way a card on a 3D stage
+## can know a Fly user is gone or a recall is shrinking.
+func test_hiding_and_resizing_a_battler_are_reported_plainly() -> void:
+	await _open_battle()
+	_battle_screen.show_matchup(16, 155, 7, 9)
+	_settle_intro()
+	var standing: Dictionary = (
+		_battle_screen._renderer._view["battlers"] as Dictionary
+	)["enemy"]
+	assert_true(bool(standing["visible"]))
+	assert_eq(standing["scale"], Vector2.ONE)
+
+	var background := Gen2BattleAnimBackground.new()
+	background.report_battler(false, false)
+	assert_false(bool(background.battler_visible[false]))
+	# `RESIZE_RETURN_ENEMY`'s smallest square is BGSQUARE_THREE against a whole
+	# picture of seven, which is the last thing on the square before the clear
+	# that ends the script.
+	background.report_battler(false, true, 3.0 / 7.0)
+	assert_true(bool(background.battler_visible[false]))
+	assert_almost_eq(float(background.battler_scale[false]), 3.0 / 7.0, 0.001)
+	assert_eq(
+		float(background.battler_visible.size()), 2.0,
+		"the report is one entry a side and no more",
+	)
+
+
+## Every per-battler deformation moves its picture through one scanline window
+## over that side's own rows, which is `SetLCDStatCustoms`' `$2f`..`$5e` for the
+## player and `$00`..`$36` for the opponent. A renderer with no background plane
+## reads the window's mean instead, and the two sides must not read each other's.
+func test_the_scanline_window_reports_the_side_it_is_open_over() -> void:
+	var background := Gen2BattleAnimBackground.new()
+	background.lcdc_pointer = Gen2BattleAnimBackground.LCDC_SCX
+	background.ly_override_start = 0x2F
+	background.ly_override_end = 0x5E
+	# `Tackle_MoveForward`'s own eight pixels, as the signed byte the window
+	# holds: the player lunges right, so the scroll is negative.
+	background.fill_ly_backup(0xF8)
+	background.push_ly_overrides()
+
+	assert_eq(background.battler_window_offset(true), Vector2(8.0, 0.0))
+	assert_eq(
+		background.battler_window_offset(false), Vector2.ZERO,
+		"the opponent is not in the player's window",
+	)
+
+	# `BattleBGEffect_Withdraw` pushes the top of the window off with `$90` and
+	# holds the rest at the negated displacement, which reads as a sink.
+	var sinking := Gen2BattleAnimBackground.new()
+	sinking.lcdc_pointer = Gen2BattleAnimBackground.LCDC_SCY
+	sinking.ly_override_start = 0x00
+	sinking.ly_override_end = 0x36
+	sinking.displace_ly_backup(4)
+	sinking.push_ly_overrides()
+
+	var sunk: Vector2 = sinking.battler_window_offset(false)
+	assert_eq(sunk.x, 0.0, "a vertical window moves nothing sideways")
+	assert_eq(sunk.y, 5.0, "the rows still on screen carry the whole push")
