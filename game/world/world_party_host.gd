@@ -233,11 +233,14 @@ static func complete_runtime_request(
 	_register_unown(world, int(transaction.get("register_unown", 0)))
 	var completion_result: Dictionary = {
 		"ok": true,
-		"script_value": int(transaction.get("script_value", 0)),
 		"accepted": bool(transaction.get("accepted", false)),
 		"reason": transaction.get("reason", &""),
 		"transaction": transaction.get("summary", {}).duplicate(true),
 	}
+	## Only a routine with an `ld [wScriptVar], a` in it answers one, which is
+	## what [Gen2WorldScriptRunner] leaves the value alone for.
+	if transaction.has("script_value"):
+		completion_result["script_value"] = int(transaction["script_value"])
 	var resumed: Array = world.complete_runtime_request(completion_result)
 	if resumed.is_empty() or not bool(resumed[0].get("ok", false)):
 		return _failure(&"runtime_request_failed", {
@@ -1312,6 +1315,9 @@ static func _apply_party_request(
 	if kind == &"pokemon_requested" \
 		and StringName((request.get("values", {}) as Dictionary).get("kind", &"")) == &"give_shuckle":
 		return _apply_give_shuckle(world, candidate, request, random)
+	if kind == &"pokemon_requested" \
+		and StringName((request.get("values", {}) as Dictionary).get("kind", &"")) == &"give_odd_egg":
+		return _apply_give_odd_egg(world, candidate, request, random)
 	if kind == &"dratini_moveset_requested":
 		return _apply_dratini_moveset(world, candidate, request)
 	if kind == &"pokemon_requested":
@@ -1479,7 +1485,9 @@ static func _append_mon(
 		}
 	return {
 		"ok": true, "accepted": true, "script_value": script_value,
-		"register_caught": 0 if StringName(summary.get("kind", &"")) == &"egg" else mon.species,
+		## `AddPartyMon` registers what it added, and an egg registers nothing:
+		## `SetSeenAndCaughtMon` sits behind the species byte, which is EGG.
+		"register_caught": 0 if mon.is_egg else mon.species,
 		"register_unown": 0 if mon.is_egg else _unown_form(mon.species, mon.dvs, destination),
 		"summary": summary.merged({
 			"accepted": true, "destination": destination.duplicate(true),
@@ -2423,6 +2431,66 @@ static func _apply_give_shuckle(
 			"ok": true, "accepted": false, "script_value": 0, "reason": &"party_full",
 			"summary": {"kind": &"shuckie", "accepted": false, "species": SHUCKLE},
 		}
+	return appended
+
+
+## `_GiveOddEgg`. `.loop` walks `OddEggProbabilities` comparing the random word
+## against each cumulative entry high byte first, and takes the row the word is
+## no greater than; the table closes on $ffff, so a word always lands. The last
+## entry is only reached by a word equal to $ffff, which is what `.done`'s own
+## break on $ffff leaves.
+static func odd_egg_row(rolled: int, probabilities: Array) -> int:
+	for index: int in probabilities.size():
+		if rolled <= int(probabilities[index]):
+			return index
+	return maxi(0, probabilities.size() - 1)
+
+
+## The Day-Care Man's Odd Egg. `AddMobileMonToParty` appends the row as it
+## stands, with `wTempOddEggNickname` as the OT and the row's own `dname` as the
+## nickname, so nothing about it is rolled except which of the fourteen it is.
+##
+## The party-full refusal is the script's own `readvar VAR_PARTYCOUNT` ahead of
+## the special, so the routine is never entered with a full party and appending
+## cannot fail; it is answered here as well because a mod can call the special
+## directly.
+static func _apply_give_odd_egg(
+	world: Gen2WorldAPI,
+	candidate: Gen2SaveData,
+	_request: Dictionary,
+	random: RandomNumberGenerator
+) -> Dictionary:
+	var rows: Array = world.data.odd_eggs() if world.data != null else []
+	if rows.is_empty():
+		return {"ok": false, "reason": &"no_odd_eggs"}
+	var probabilities: Array = []
+	for row: Variant in rows:
+		probabilities.append(int((row as Dictionary).get("probability", 0)))
+	## `call Random` fills hRandomAdd and hRandomSub, and `.loop` reads the pair
+	## as one big-endian word: hRandomSub is the high byte.
+	var index: int = odd_egg_row(
+		(_random_byte(random) << 8) | _random_byte(random), probabilities
+	)
+	var mon: Gen2SaveMon = world.data.odd_egg_mon(index)
+	if mon == null:
+		return {"ok": false, "reason": &"could_not_create_pokemon"}
+	## The struct names PICHU or another baby; what makes the party slot an egg
+	## is `wMobileMonMiscSpecies`, which `_GiveOddEgg` sets to EGG and
+	## `AddMobileMonToParty` writes into `wPartySpecies` beside the struct.
+	mon.is_egg = true
+	mon.original_trainer = RomLayout.ODD_EGG_OT_NAME
+	if candidate.party.size() >= Gen2SaveData.MAX_PARTY:
+		return {
+			"ok": true, "accepted": false, "reason": &"party_full",
+			"summary": {"kind": &"odd_egg", "accepted": false, "species": mon.species},
+		}
+	var appended: Dictionary = _append_mon(candidate, mon, 0, {
+		"kind": &"odd_egg", "species": mon.species, "level": mon.level,
+		"row": index, "item": mon.item,
+	})
+	## The routine has no `ld [wScriptVar], a`, so the script keeps the value the
+	## `readvar VAR_PARTYCOUNT` in front of it left.
+	appended.erase("script_value")
 	return appended
 
 

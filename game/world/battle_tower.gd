@@ -357,21 +357,11 @@ func _first_free_mon(data: GameData, group: int, team: Array) -> Gen2SaveMon:
 	return null
 
 
-## One `BattleTowerMons` row. The bytes are a party-mon struct with its nickname
-## behind it, which is the same struct a save file's party is written in, so
-## [Gen2SramAdapter] reads it rather than a second parser.
+## One `BattleTowerMons` row, which is the nicknamed-mon struct
+## [method Gen2SramAdapter.read_nicknamed_mon] reads wherever a ROM table stores
+## a whole Pokemon.
 static func _read_mon(data: GameData, group: int, index: int) -> Gen2SaveMon:
-	var bytes: PackedByteArray = data.battle_tower_mon(group, index)
-	if bytes.size() < RomLayout.BATTLETOWER_MON_BYTES:
-		return null
-	var mon: Gen2SaveMon = Gen2SramAdapter.read_party_mon(bytes, 0)
-	if mon == null:
-		return null
-	mon.nickname = Gen2Text.decode_fixed(
-		bytes, RomLayout.BATTLETOWER_MON_BYTES - Gen2SramAdapter.MON_NAME_LENGTH,
-		Gen2SramAdapter.MON_NAME_LENGTH
-	)
-	return mon
+	return Gen2SramAdapter.read_nicknamed_mon(data.battle_tower_mon(group, index), 0)
 
 
 ## `BattleTowerText`: a male class draws from 25 lines and a female from 15, and

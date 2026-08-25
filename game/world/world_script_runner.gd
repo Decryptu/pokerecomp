@@ -580,6 +580,27 @@ const SPECIAL_TRAINER_HOUSE: int = 103
 const SPECIAL_PHOTO_STUDIO: int = 104
 const SPECIAL_DIPLOMA: int = 107
 const SPECIAL_PRINT_DIPLOMA: int = 108
+## `_GiveOddEgg`. The special itself sits in the mobile bank, but nothing in it
+## is mobile: `DayCareManScript_Inside` calls it and the routine reads a ROM
+## table and appends a party member.
+const SPECIAL_GIVE_ODD_EGG: int = 125
+## `AskRememberPassword`. In the mobile bank beside `GiveOddEgg` and no more
+## mobile than it is: `Buena` in RadioTower2F calls it to ask whether the player
+## remembers today's password, and the routine is a yes/no box in a corner.
+const SPECIAL_ASK_REMEMBER_PASSWORD: int = 163
+## `.DoMenu`'s `lb bc, 14, 7` with `YesNoMenuHeader`'s own width and height
+## added, which puts the box in the bottom-right rather than the standard
+## `menu_coords 10, 5, 15, 9`.
+const ASK_REMEMBER_PASSWORD_BOX: Dictionary = {
+	"default": 1, "left": 14, "top": 7, "right": 19, "bottom": 11,
+}
+## `ld c, 15 / call DelayFrames` and `Buena_ExitMenu`'s own `DelayFrame`, spent
+## after the answer and before the script reads it.
+const ASK_REMEMBER_PASSWORD_CLOSE_FRAMES: int = 16
+## `EGG_TICKET`, which `_GiveOddEgg` tosses one of on its way past. The
+## international cartridges ship no way to hold one, so the toss is a no-op
+## every time a player reaches it.
+const ITEM_EGG_TICKET: int = 81
 const SPECIAL_OMANYTE_CHAMBER: int = 132
 const SPECIAL_HO_OH_CHAMBER: int = 141
 const SPECIAL_CELEBI_SHRINE_EVENT: int = 143
@@ -1023,6 +1044,11 @@ func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 					"move": asked_move, "slot": asked_slot,
 				})
 			return _complete()
+		if pending_type == &"choice" and _pending_tag() == &"ask_remember_password":
+			_pending = {}
+			_script_value = 1 if choice == 0 else 0
+			_stage_frame_wait(ASK_REMEMBER_PASSWORD_CLOSE_FRAMES)
+			return _waiting_result()
 		## AskRockSmashScript, the same opentext/writetext/yesorno shape.
 		if pending_type == &"text" and _pending_tag() == &"rock_smash_ask":
 			_pending = {
@@ -1622,6 +1648,7 @@ func complete_wait() -> Dictionary:
 ## answer `cancel_input` writes.
 const CANCEL_OWNED_PENDINGS: Array[StringName] = [
 	&"buena_prize", &"buena_prize_confirm", &"bank_of_mom_menu", &"bank_of_mom_choice",
+	&"ask_remember_password",
 	&"strength_ask", &"field_move_ask", &"rock_smash_ask",
 	&"set_day_of_week_confirmation",
 ]
@@ -3942,6 +3969,35 @@ func _execute_special(special: int) -> Dictionary:
 				"nickname": Gen2WorldPartyHost.SHUCKIE_NICKNAME,
 				"original_trainer": Gen2WorldPartyHost.MANIA_OT_NAME,
 				"ot_id": Gen2WorldPartyHost.MANIA_OT_ID,
+				"party_only": true,
+			})
+		SPECIAL_ASK_REMEMBER_PASSWORD:
+			## The box alone: the question is the `writetext` in front of it, and
+			## the answer is `yesorno`'s own, YES writing 1 and B writing 0.
+			_pending = {
+				"type": &"choice",
+				"command": &"yesorno",
+				"choices": [&"yes", &"no"],
+				"text": _standing_text,
+				"special": &"ask_remember_password",
+				"header": ASK_REMEMBER_PASSWORD_BOX.duplicate(),
+				"source": _request.duplicate(true),
+			}
+			return _waiting_result()
+		SPECIAL_GIVE_ODD_EGG:
+			## `AddMobileMonToParty` with one of `OddEggs`' fourteen rows, rolled
+			## against `OddEggProbabilities`. `TossKeyItem` runs first and
+			## removes nothing when the pack holds no ticket; it writes no
+			## wScriptVar either way, so the toss's own answer is put back.
+			if _item_quantity(ITEM_EGG_TICKET) > 0:
+				var kept: int = _script_value
+				var tossed: Dictionary = _stage_item_delta(ITEM_EGG_TICKET, -1)
+				_script_value = kept
+				if not bool(tossed.get("ok", true)):
+					return tossed
+			return _stage_runtime_request(&"pokemon_requested", {
+				"special": special,
+				"kind": &"give_odd_egg",
 				"party_only": true,
 			})
 		SPECIAL_GIVE_DRATINI:

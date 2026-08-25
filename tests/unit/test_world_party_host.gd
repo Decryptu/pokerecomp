@@ -170,6 +170,60 @@ func test_a_gift_takes_the_nickname_the_prompt_answered() -> void:
 	assert_eq(_save.party[2].nickname, "SPARKY")
 
 
+## `_GiveOddEgg` and `AddMobileMonToParty`: the row it rolls is appended as it
+## stands, an egg under `.Odd`'s own OT, and the script carries on.
+func test_the_odd_egg_is_appended_as_the_row_it_rolled() -> void:
+	_set_script(0x6240)
+	_world.dispatch_script_events(Vector2i(2, 2))
+	assert_eq(_world.pending_runtime_request()["kind"], &"pokemon_requested")
+	var result: Dictionary = Gen2WorldHost.complete_runtime_request(
+		_world, {}, _save, false, _random
+	)
+	assert_true(result["ok"])
+	assert_eq(result["results"][0]["status"], &"complete")
+	assert_eq(_save.party.size(), 3)
+	var egg: Gen2SaveMon = _save.party[2]
+	assert_true(egg.is_egg)
+	assert_eq(egg.level, RomLayout.ODD_EGG_LEVEL)
+	assert_eq(egg.nickname, RomLayout.ODD_EGG_NICKNAME)
+	assert_eq(egg.original_trainer, RomLayout.ODD_EGG_OT_NAME)
+	assert_eq(result["transaction"]["kind"], &"odd_egg")
+
+
+## An egg registers nothing in the Pokedex: `AddPartyMon` reads the species byte,
+## which `AddMobileMonToParty` wrote EGG into.
+func test_the_odd_egg_registers_no_species_as_caught() -> void:
+	_set_script(0x6240)
+	_world.dispatch_script_events(Vector2i(2, 2))
+	Gen2WorldHost.complete_runtime_request(_world, {}, _save, false, _random)
+	assert_false(_world.state.has_caught_species(_save.party[2].species))
+
+
+## `.loop` takes the first cumulative word the roll is no greater than, so the
+## edges of a band belong to it and the word above it belongs to the next.
+func test_the_odd_egg_roll_takes_the_first_word_it_does_not_exceed() -> void:
+	var probabilities: Array = [0x1000, 0x2000, 0xFFFF]
+	assert_eq(Gen2WorldPartyHost.odd_egg_row(0, probabilities), 0)
+	assert_eq(Gen2WorldPartyHost.odd_egg_row(0x1000, probabilities), 0)
+	assert_eq(Gen2WorldPartyHost.odd_egg_row(0x1001, probabilities), 1)
+	assert_eq(Gen2WorldPartyHost.odd_egg_row(0x2000, probabilities), 1)
+	assert_eq(Gen2WorldPartyHost.odd_egg_row(0xFFFF, probabilities), 2)
+
+
+## The script's own `readvar VAR_PARTYCOUNT` refuses ahead of the special, so a
+## full party is only reachable by calling it directly, and it gives nothing.
+func test_a_full_party_is_given_no_odd_egg() -> void:
+	while _save.party.size() < Gen2SaveData.MAX_PARTY:
+		_save.party.append(Gen2SaveMon.from_dict(_save.party[0].to_dict()))
+	_set_script(0x6240)
+	_world.dispatch_script_events(Vector2i(2, 2))
+	var result: Dictionary = Gen2WorldHost.complete_runtime_request(
+		_world, {}, _save, false, _random
+	)
+	assert_true(result["ok"])
+	assert_eq(_save.party.size(), Gen2SaveData.MAX_PARTY)
+
+
 ## `CheckPartyFullAfterContest` is not a question: it copies `wContestMon` into
 ## the party, names it, writes LANDMARK_NATIONAL_PARK over the caught location
 ## and clears the stash. BUGCONTEST_CAUGHT_MON is the answer with a party slot.
@@ -1171,6 +1225,10 @@ func _add_party_scripts() -> void:
 	## `BugContestResults_DidNotLeaveMons`' own first command.
 	scripts[Gen2WorldScript.pointer_key(Fixture.BANK, 0x6230)] = [
 		Gen2WorldScript.SPECIAL, 21, 0, 0x91,
+	]
+	## `special GiveOddEgg`, `DayCareManScript_Inside`'s own.
+	scripts[Gen2WorldScript.pointer_key(Fixture.BANK, 0x6240)] = [
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_GIVE_ODD_EGG, 0, 0x91,
 	]
 	RomCache.write_json(RomCache.world_scripts_path(Fixture.directory()), scripts)
 

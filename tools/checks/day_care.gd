@@ -44,7 +44,58 @@ func run(r: RefCounted) -> void:
 		_verify_compatibility(game_id, data)
 		_verify_egg_moves(game_id, data)
 		_verify_fill_moves(game_id, data)
+		_verify_odd_eggs(game_id, data)
 	_r.game_id = &""
+
+
+## The Day-Care Man's own gift, Crystal's alone. Every row decodes as the
+## nicknamed-mon struct it is, the probabilities rise to $ffff, and every share
+## of the roll lands on a row: rolling each entry's own word and the one below
+## it walks both edges of `.loop`'s comparison rather than sampling the middle.
+func _verify_odd_eggs(game_id: StringName, data: GameData) -> void:
+	var rows: Array = data.odd_eggs()
+	if game_id != &"crystal":
+		_r.check(rows.is_empty(), "%s: ships %d Odd Eggs." % [game_id, rows.size()])
+		return
+	if not _r.check(
+		rows.size() == RomLayout.ODD_EGG_COUNT,
+		"%s: %d Odd Eggs, not %d." % [game_id, rows.size(), RomLayout.ODD_EGG_COUNT]
+	):
+		return
+	var probabilities: Array = []
+	for row: Variant in rows:
+		probabilities.append(int((row as Dictionary).get("probability", 0)))
+	for index: int in rows.size():
+		var mon: Gen2SaveMon = data.odd_egg_mon(index)
+		if not _r.check(mon != null, "%s: Odd Egg %d does not decode." % [game_id, index]):
+			continue
+		_r.check(
+			not data.species(mon.species).is_empty(),
+			"%s: Odd Egg %d names species %d." % [game_id, index, mon.species]
+		)
+		_r.check(
+			mon.level == RomLayout.ODD_EGG_LEVEL,
+			"%s: Odd Egg %d is level %d." % [game_id, index, mon.level]
+		)
+		_r.check(
+			mon.nickname == RomLayout.ODD_EGG_NICKNAME,
+			"%s: Odd Egg %d is nicknamed \"%s\"." % [game_id, index, mon.nickname]
+		)
+		_r.check(
+			Gen2WorldPartyHost.odd_egg_row(probabilities[index], probabilities) == index,
+			"%s: the word %d does not land on Odd Egg %d." % [
+				game_id, probabilities[index], index,
+			]
+		)
+		var below: int = probabilities[index - 1] + 1 if index > 0 else 0
+		_r.check(
+			Gen2WorldPartyHost.odd_egg_row(below, probabilities) == index,
+			"%s: the word %d does not land on Odd Egg %d." % [game_id, below, index]
+		)
+	_r.check(
+		probabilities[-1] == RomLayout.ODD_EGG_PROBABILITY_TOTAL,
+		"%s: the Odd Egg probabilities close on %d." % [game_id, probabilities[-1]]
+	)
 
 
 ## Every stub of the four runs decodes, and one per run carries the words that

@@ -1611,6 +1611,29 @@ const DAY_CARE_COMPATIBILITY_TEXT_ORDER: Array[String] = [
 	"brimming_with_energy", "no_interest", "appears_to_care", "friendly",
 	"shows_interest",
 ]
+## `NICKNAMED_MON_STRUCT_LENGTH`: a whole Pokemon as a ROM table stores one,
+## the 48-byte party-mon struct with its nickname behind it.
+## [method Gen2SramAdapter.read_nicknamed_mon] is what reads a row of either
+## table that uses it.
+const NICKNAMED_MON_BYTES: int = 48 + 11
+
+## `data/events/odd_eggs.asm`, Crystal's alone: `OddEggProbabilities`' fourteen
+## cumulative words followed by `OddEggs`' fourteen nicknamed-mon rows. The two
+## are one run, so one address reaches both.
+const ODD_EGG_COUNT: int = 14
+const ODD_EGG_PROBABILITY_BYTES: int = 2
+const ODD_EGG_MONS_OFFSET: int = ODD_EGG_COUNT * ODD_EGG_PROBABILITY_BYTES
+## `.Odd`, the name `_GiveOddEgg` copies into `wTempOddEggNickname` and then
+## hands `AddMobileMonToParty` as the OT. The nickname is the row's own, which
+## every row spells EGG.
+const ODD_EGG_OT_NAME: String = "ODD"
+## Every row's own `dname`, and the level and hatch counter all fourteen share.
+const ODD_EGG_NICKNAME: String = "EGG"
+const ODD_EGG_LEVEL: int = 5
+## `odd_egg_prob`'s last cumulative word: the macro asserts the percentages sum
+## to 100, and 100 * $ffff / 100 is $ffff.
+const ODD_EGG_PROBABILITY_TOTAL: int = 0xFFFF
+
 ## Which pin each name is walked from, and at what index into it.
 const DAY_CARE_TEXT_RUNS: Array = [
 	["day_care_text", DAY_CARE_TEXT_ORDER],
@@ -2046,7 +2069,7 @@ const BATTLETOWER_TRAINER_NAME_BYTES: int = 10
 const BATTLETOWER_TRAINER_ROW_BYTES: int = BATTLETOWER_TRAINER_NAME_BYTES + 1
 ## `NICKNAMED_MON_STRUCT_LENGTH`, the party-mon struct with its nickname behind
 ## it, which is exactly what `LoadRandomBattleTowerMon` copies per slot.
-const BATTLETOWER_MON_BYTES: int = 48 + 11
+const BATTLETOWER_MON_BYTES: int = NICKNAMED_MON_BYTES
 ## `BattleTowerText`'s two arrays. A male class draws from 25 texts and a female
 ## from 15, and each trainer owns a greeting, a loss line and a win line, laid
 ## out in the file in that order per trainer. One pin walks all 120 stubs.
@@ -2297,6 +2320,9 @@ const GOLD_SILVER: Dictionary = {
 	# belong to are Crystal bg events, where pokegold's cells carry the puzzle
 	# sign, and neither `DisplayUnownWords` nor the words are in the dump.
 	"unown_walls": -1,
+	## `OddEggs` and its probabilities are Crystal's alone: Gold and Silver have
+	## no `GiveOddEgg` special and no Day-Care Man who offers one.
+	"odd_eggs": -1,
 	## Gold and Silver have no Battle Tower map, routine or table at all.
 	"battle_tower": {},
 	# The credits. `gfx` was located by converting the pinned gfx/credits PNGs
@@ -3169,6 +3195,7 @@ const CRYSTAL: Dictionary = {
 	"poke_seer_text": 0x4F28C,
 	"seer_advice_text": 0x4F2E8,
 	"buena_prize_text": 0x8B072,
+	"odd_eggs": 0x1FB552,
 	## `engine/events/battle_tower/rules.asm`'s three stub runs; Crystal only.
 	"battle_tower_excuse_text": 0x8B22C,
 	"battle_tower_ready_text": 0x8B238,

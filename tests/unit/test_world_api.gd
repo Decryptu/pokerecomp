@@ -8596,6 +8596,58 @@ func test_the_unown_printer_carries_the_dex_count_it_refuses_on() -> void:
 		assert_eq(world.complete_runtime_request({"ok": true})[0]["status"], &"complete")
 
 
+## `AskRememberPassword` is Buena's own yes/no box, not a mobile routine: the
+## question is the `writetext` in front of it, YES writes 1 into wScriptVar and
+## both NO and B write 0, and the box stands where `.DoMenu` puts it.
+func test_buenas_password_box_answers_yes_no_where_the_routine_puts_it() -> void:
+	for answer: int in [0, 1, -1]:
+		_write_special_script([
+			Gen2WorldScript.SPECIAL,
+			Gen2WorldScriptRunner.SPECIAL_ASK_REMEMBER_PASSWORD, 0,
+			Gen2WorldScript.WRITEMEM, 0xA0, 0xD1,
+			Gen2WorldScript.END,
+		])
+		var state := Gen2WorldState.new()
+		var world: Gen2WorldAPI = _special_world(state)
+		world.dispatch_script_events()
+		var pending: Dictionary = world.pending_script_input()
+		assert_eq(StringName(pending.get("type", &"")), &"choice")
+		var menu: Gen2WorldMenu = Gen2WorldMenu.from_input(pending)
+		assert_eq(menu.box_left, 14)
+		assert_eq(menu.box_top, 7)
+		assert_eq(menu.box_right, 19)
+		assert_eq(menu.box_bottom, 11)
+		var answered: Array = world.cancel_script_input() if answer < 0 \
+			else world.choose_script_input(answer)
+		assert_eq(
+			_final_status(_run_script(world, answered)), &"complete",
+			"the box closes and the script carries on"
+		)
+		assert_eq(
+			state.script_memory(0xD1A0), 1 if answer == 0 else 0,
+			"YES is the only answer that writes 1"
+		)
+
+
+## `ld c, 15 / call DelayFrames` and `Buena_ExitMenu`'s own `DelayFrame` are
+## spent between the answer and the branch the script takes on it.
+func test_buenas_password_box_spends_its_own_close_frames() -> void:
+	_write_special_script([
+		Gen2WorldScript.SPECIAL,
+		Gen2WorldScriptRunner.SPECIAL_ASK_REMEMBER_PASSWORD, 0,
+		Gen2WorldScript.END,
+	])
+	var world: Gen2WorldAPI = _special_world()
+	world.dispatch_script_events()
+	world.choose_script_input(0)
+	var wait: Dictionary = world.pending_script_wait()
+	assert_eq(StringName(wait.get("wait", &"")), Gen2WorldScriptRunner.WAIT_FRAMES)
+	assert_eq(
+		int(wait.get("frames", 0)),
+		Gen2WorldScriptRunner.ASK_REMEMBER_PASSWORD_CLOSE_FRAMES
+	)
+
+
 ## One script at a fixed address, reached by the map's own coordinate event, so
 ## every special test above drives the same path a real script does.
 func _write_special_script(bytes: Array, extra: Dictionary = {}) -> void:

@@ -362,6 +362,10 @@ static func verify_layout(rom: RomFile) -> Dictionary:
 	if not unown_walls["ok"]:
 		return unown_walls
 
+	var odd_eggs: Dictionary = verify_odd_eggs(rom, layout)
+	if not odd_eggs["ok"]:
+		return odd_eggs
+
 	var intro_movie: Dictionary = verify_intro_movie(rom, layout)
 	if not intro_movie["ok"]:
 		return intro_movie
@@ -1424,6 +1428,76 @@ static func verify_unown_walls(rom: RomFile, layout: Dictionary) -> Dictionary:
 			return {"ok": false, "message": "Two Unown walls read \"%s\"." % word}
 		seen[word] = true
 	return {"ok": true, "message": "Unown walls verified."}
+
+
+## `data/events/odd_eggs.asm`: fourteen cumulative probability words followed by
+## fourteen nicknamed-mon rows. Each row is stored as the bytes it is, because
+## [method Gen2SramAdapter.read_nicknamed_mon] is what reads one and a second
+## decoder here would be the copy that goes stale. Empty on a cartridge with no
+## Odd Egg.
+static func read_odd_eggs(rom: RomFile, layout: Dictionary) -> Array:
+	var at: int = int(layout.get("odd_eggs", -1))
+	var span: int = RomLayout.ODD_EGG_MONS_OFFSET \
+		+ RomLayout.ODD_EGG_COUNT * RomLayout.NICKNAMED_MON_BYTES
+	if at < 0 or not rom.in_bounds(at, span):
+		return []
+	var out: Array = []
+	for index: int in RomLayout.ODD_EGG_COUNT:
+		out.append({
+			## `.loop` compares the random word against this entry and takes the
+			## row when the word is no greater, so the words are cumulative and
+			## the last is $ffff.
+			"probability": rom.u16le(at + index * RomLayout.ODD_EGG_PROBABILITY_BYTES),
+			"bytes": Array(rom.slice(
+				at + RomLayout.ODD_EGG_MONS_OFFSET
+					+ index * RomLayout.NICKNAMED_MON_BYTES,
+				RomLayout.NICKNAMED_MON_BYTES
+			)),
+		})
+	return out
+
+
+## The table's own shape is the pin: the probabilities rise and close on $ffff,
+## and every row is a level 5 baby with the nickname EGG that `dname` writes.
+static func verify_odd_eggs(rom: RomFile, layout: Dictionary) -> Dictionary:
+	if int(layout.get("odd_eggs", -1)) < 0:
+		return {"ok": true, "message": "No Odd Egg in this dump."}
+	var rows: Array = read_odd_eggs(rom, layout)
+	if rows.size() != RomLayout.ODD_EGG_COUNT:
+		return {"ok": false, "message": "The Odd Egg table is outside the ROM."}
+	var previous: int = 0
+	for index: int in rows.size():
+		var row: Dictionary = rows[index]
+		var probability: int = int(row["probability"])
+		if probability <= previous:
+			return {
+				"ok": false,
+				"message": "Odd Egg %d's probability %d does not rise." % [index, probability],
+			}
+		previous = probability
+		var mon: Gen2SaveMon = Gen2SramAdapter.read_nicknamed_mon(
+			PackedByteArray(row["bytes"]), 0
+		)
+		if mon == null or mon.species <= 0 or mon.species > RomLayout.SPECIES_COUNT:
+			return {"ok": false, "message": "Odd Egg %d names no species." % index}
+		if mon.level != RomLayout.ODD_EGG_LEVEL:
+			return {
+				"ok": false,
+				"message": "Odd Egg %d is level %d, not %d." % [
+					index, mon.level, RomLayout.ODD_EGG_LEVEL,
+				],
+			}
+		if mon.nickname != RomLayout.ODD_EGG_NICKNAME:
+			return {
+				"ok": false,
+				"message": "Odd Egg %d is nicknamed \"%s\"." % [index, mon.nickname],
+			}
+	if previous != RomLayout.ODD_EGG_PROBABILITY_TOTAL:
+		return {
+			"ok": false,
+			"message": "The Odd Egg probabilities close on %d, not $ffff." % previous,
+		}
+	return {"ok": true, "message": "Odd Eggs verified."}
 
 
 ## One of the two row runs, in the source's own order. Empty when the run is out
@@ -4736,6 +4810,7 @@ func import_rom(
 		"card_flip_text": _import_card_flip_text(rom, layout),
 		"unown_words": Array(read_unown_words(rom, layout)),
 		"unown_walls": Array(read_unown_walls(rom, layout)),
+		"odd_eggs": read_odd_eggs(rom, layout),
 		"credits": _import_credits(rom, layout),
 		"text_bg_palette": _import_text_bg_palette(rom, layout),
 		"battle_object_palettes": _import_battle_object_palettes(rom, layout),
