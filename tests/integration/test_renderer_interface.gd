@@ -514,6 +514,15 @@ func test_a_visible_encounter_provider_is_driven_validated_drawn_and_fought() ->
 	## reported back to the provider when the fight ends.
 	assert_eq(_world_screen._battle_encounter_id, &"a")
 
+	## R54's whole point: the pump that spends a provider's frames is the world
+	## screen's, and it spends the battle's frames too. A provider is stepped on
+	## the frames the map's own objects step on and no others, so a despawn
+	## countdown measures the time the player spent walking rather than the
+	## thirty seconds a fight took.
+	var fighting: int = int(provider.get("frames"))
+	_world_screen.advance_frames(8)
+	assert_eq(int(provider.get("frames")), fighting, "the fight spends no wild's frame")
+
 	_world_screen._on_battle_finished({"outcome": Gen2WorldBattleAdapter.OUTCOME_RAN})
 	var reported: Array = provider.get("results")
 	assert_eq(reported.size(), 1)

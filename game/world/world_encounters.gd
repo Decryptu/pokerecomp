@@ -74,6 +74,17 @@ var _entries: Array = []
 ## one after the entry itself is gone.
 var _owners: Dictionary = {}
 var _frame: int = 0
+## What the context's `tables` were resolved against, so the frame that moves
+## them can be told from the ones that do not.
+## See [method Gen2WorldAPI.encounter_tables_key].
+var _tables_key: Array = []
+## Whether `wildoff` was on when the eligible sweep in the context was taken. A
+## script may run it in the middle of a walk, and it empties the sweep.
+var _encounters_off: bool = false
+## Entry id to the `[method, species, level]` it was admitted under, rebuilt from
+## the population every frame. What keeps a wild standing when the tables move
+## out from under it.
+var _admitted: Dictionary = {}
 ## Entry id to the frame its last pulse started on.
 var _pulsed: Dictionary = {}
 var _pulse: Gen2BattleAnimPlayer = null
@@ -118,7 +129,7 @@ func advance_frame() -> bool:
 		return false
 	_frame += 1
 	_frame_commands = []
-	_push_player_pose()
+	_push_context_changes()
 	for provider: Object in _providers:
 		provider.call("advance_frame")
 	var before: Array = _entries
@@ -236,10 +247,13 @@ func battle_finished(id: StringName, result: Variant) -> void:
 func _reset() -> void:
 	_entries = []
 	_owners = {}
+	_admitted = {}
 	_pulsed = {}
 	_pulse = null
 	_pulse_id = &""
 	_frame_commands = []
+	_tables_key = _world.encounter_tables_key() if _world != null else []
+	_encounters_off = _world.wild_encounters_off() if _world != null else false
 	_context = _build_context()
 	for provider: Object in _providers:
 		provider.call("set_context", _context.duplicate(true))
@@ -293,21 +307,49 @@ func _occupied_cells() -> PackedVector2Array:
 	return out
 
 
-## The pose moves and the map does not, so the sweep and the tables are not taken
-## again: a provider is handed the same context with `player` and `occupied`
-## refreshed, and only when one of the two has actually changed. An object walks
-## while the player stands still, so the occupancy is on this pass rather than on
-## the map change.
-func _push_player_pose() -> void:
+## What moves while one map is up: the player's pose, the cells the map's own
+## objects hold, the tables, and `wildoff`. An object walks while the player
+## stands still, so the occupancy is on this pass rather than on the map change.
+##
+## The eligible sweep is the whole map and is taken only when `wildoff` is
+## toggled, which is the one thing that moves it: `CanEncounterWildMon`'s answer
+## for a cell is the terrain's and stands as long as the map does. A script may
+## run `wildoff` at any point in a walk, and an entry standing on a cell it just
+## emptied is dropped by [method _validate] rather than grandfathered: a wild is
+## admitted against a table, never against a map that has switched wilds off.
+##
+## The tables move without the map: six o'clock, a swarm arriving, and the Bug
+## Contest starting or ending each change what a roll would read. A provider that
+## mints an entry LATER than the map change plans it against whatever it was
+## handed, so a stale snapshot would spawn a day species at night and
+## [method _table_offers] would agree with it. `generation` is deliberately not
+## bumped: that means "the map changed, discard everything", and an hour boundary
+## is not a map change.
+##
+## Pushed once, so a frame that moves two of the three costs one call.
+func _push_context_changes() -> void:
 	if _world == null or _context.is_empty():
 		return
+	var changed: bool = false
 	var pose: Dictionary = {"cell": _world.player_cell, "facing": _world.player_facing}
 	var occupied: PackedVector2Array = _occupied_cells()
-	if _context.get("player", {}) == pose \
-	and _context.get("occupied", PackedVector2Array()) == occupied:
+	if _context.get("player", {}) != pose \
+	or _context.get("occupied", PackedVector2Array()) != occupied:
+		_context["player"] = pose
+		_context["occupied"] = occupied
+		changed = true
+	var off: bool = _world.wild_encounters_off()
+	if off != _encounters_off:
+		_encounters_off = off
+		_context["eligible"] = _world.visible_encounter_cells()
+		changed = true
+	var key: Array = _world.encounter_tables_key()
+	if key != _tables_key:
+		_tables_key = key
+		_context["tables"] = _world.active_encounter_tables()
+		changed = true
+	if not changed:
 		return
-	_context["player"] = pose
-	_context["occupied"] = occupied
 	for provider: Object in _providers:
 		provider.call("set_context", _context.duplicate(true))
 
@@ -315,7 +357,11 @@ func _push_player_pose() -> void:
 func _collect() -> void:
 	_entries = []
 	if _world == null or _world.data == null:
+		_admitted = {}
 		return
+	## Rebuilt rather than added to, so an entry a provider stopped sending is
+	## checked against the tables again if it ever comes back.
+	var admitted: Dictionary = {}
 	var seen: Dictionary = {}
 	for provider: Object in _providers:
 		var answer: Variant = provider.call("encounters")
@@ -323,15 +369,20 @@ func _collect() -> void:
 			continue
 		for raw: Variant in answer as Array:
 			if _entries.size() >= MAX_ENTRIES:
-				return
+				break
 			var entry: Dictionary = _validate(raw)
 			if entry.is_empty() or seen.has(entry["id"]):
 				continue
 			seen[entry["id"]] = true
+			admitted[entry["id"]] = entry["admission"]
+			entry.erase("admission")
 			_owners[entry["id"]] = provider
 			_entries.append(entry)
 			if bool(entry["pulse"]):
 				_start_pulse(entry)
+		if _entries.size() >= MAX_ENTRIES:
+			break
+	_admitted = admitted
 
 
 ## One entry against the context it was given. An id, a cell inside the eligible
@@ -353,7 +404,13 @@ func _validate(raw: Variant) -> Dictionary:
 		return {}
 	var species: int = int(row.get("species", 0))
 	var level: int = int(row.get("level", 0))
-	if not _table_offers(method, species, level):
+	## A wild admitted legally stays admitted while it keeps standing where it
+	## was. The tables move under a standing population at six o'clock and on a
+	## swarm, and revalidating against the new ones would empty the route on the
+	## hour instead of letting it turn over as each Pokemon leaves.
+	var admission: Array = [method, species, level]
+	if _admitted.get(id, null) != admission \
+		and not _table_offers(method, species, level):
 		return {}
 	var dvs: int = int(row.get("dvs", 0))
 	if dvs < 0 or dvs > 0xFFFF:
@@ -367,6 +424,8 @@ func _validate(raw: Variant) -> Dictionary:
 		"dvs": dvs,
 		"shiny": Gen2Stats.is_shiny(dvs),
 		"pulse": bool(row.get("pulse", false)),
+		## Read and dropped by [method _collect]; never reaches a caller.
+		"admission": admission,
 	}
 	var glow: Dictionary = _glow(row.get("glow", null))
 	if not glow.is_empty():
