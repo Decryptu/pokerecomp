@@ -43,7 +43,7 @@ static func capture(
 	out.tileset = world.current_map.tileset
 	out.player_cell = world.player_cell
 	out.player_facing = world.player_facing
-	out.landmark = world.landmark()
+	out.landmark = world.landmark_backup()
 	out.time_of_day = clampi(
 		drawn_time_of_day if drawn_time_of_day >= 0 else world.map_time_of_day(), 0, 3
 	)

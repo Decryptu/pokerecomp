@@ -273,7 +273,7 @@ func _open_area() -> void:
 	host.z_index = 10
 	add_child(host)
 	if not host.open_dex_area(
-		_data, species, nests, _world.landmark(), _world.state.hall_of_fame(),
+		_data, species, nests, _world.landmark_backup(), _world.state.hall_of_fame(),
 		_world.player_female(), _world.map_time_of_day()
 	):
 		Gen2Screen.drop(host)
