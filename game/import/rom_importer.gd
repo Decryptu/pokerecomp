@@ -4039,6 +4039,22 @@ static func verify_battle_graphics(rom: RomFile, layout: Dictionary) -> Dictiona
 	if not levels["ok"]:
 		return levels
 
+	## `MinimizePic`, against [constant RomLayout.MINIMIZE_PIC_ROWS].
+	var minimize: PackedByteArray = Gen2Tiles.decode_2bpp_strip(
+		data, int(layout["minimize_pic"]), RomLayout.MINIMIZE_TILES
+	)
+	for row: int in Gen2Tiles.TILE_HEIGHT:
+		for column: int in Gen2Tiles.TILE_WIDTH:
+			var index: int = minimize[row * Gen2Tiles.TILE_WIDTH + column]
+			var lit: bool = (RomLayout.MINIMIZE_PIC_ROWS[row] >> (7 - column)) & 1 == 1
+			if index != (3 if lit else 0):
+				return {
+					"ok": false,
+					"message": "Minimize pic: row %d column %d is colour %d." % [
+						row, column, index,
+					],
+				}
+
 	## `StatsScreenPageTilesGFX` carries no progression to sweep, so it is
 	## checked on the two tiles the source names by shape: tile 0 is the
 	## vertical divider, two lit columns on every row, and tile 14 is the `'⁂'`
@@ -7067,6 +7083,14 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 		"ball_icons": {
 			"offset": int(layout["ball_icons"]),
 			"tiles": RomLayout.BALL_ICON_TILES,
+			"first_code": 0,
+			"bits": 2,
+		},
+		## `MinimizePic`, the one tile `CopyMinimizePic` drops into a blank box
+		## for a Pokemon that has used Minimize.
+		"minimize": {
+			"offset": int(layout["minimize_pic"]),
+			"tiles": RomLayout.MINIMIZE_TILES,
 			"first_code": 0,
 			"bits": 2,
 		},

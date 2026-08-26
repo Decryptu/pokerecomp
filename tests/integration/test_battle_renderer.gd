@@ -660,6 +660,71 @@ func test_the_doll_is_what_a_substituted_side_draws() -> void:
 	assert_eq(renderer._player_pixels, own)
 
 
+## `GetBattleMonBackpic` tests `SUBSTATUS_SUBSTITUTE` before `wPlayerMinimized`,
+## so a doll stands in front of the dot and the dot is what is underneath when
+## the doll comes off. Nothing takes the dot off but a send-out.
+func test_the_dot_is_what_a_minimized_side_draws_and_a_doll_stands_in_front_of_it() -> void:
+	await _open_battle()
+	_battle_screen.show_matchup(16, 155, 7, 9)
+	_settle_intro()
+	var renderer: Gen2BattleRenderer = _battle_screen._renderer
+	var own: PackedByteArray = renderer._player_pixels.duplicate()
+	var dot: PackedByteArray = Gen2BattleRenderer.minimize_pixels(
+		_data.tile_indices("minimize"), true
+	)
+
+	_battle_screen._apply_event({
+		"type": Gen2Battle.MINIMIZED, "side": Gen2Battle.PLAYER,
+	})
+	assert_ne(renderer._player_pixels, own, "the dot replaced the picture")
+	assert_eq(renderer._player_pixels, dot)
+	assert_eq(renderer._enemy_pixels_key[4], false, "and only that side's")
+
+	_battle_screen._apply_event({
+		"type": Gen2Battle.SUBSTITUTE_PIC, "side": Gen2Battle.PLAYER, "raised": true,
+	})
+	assert_eq(
+		renderer._player_pixels,
+		Gen2BattleRenderer.substitute_pixels(
+			_data.overworld_sprite_indices(Gen2BattleRenderer.SUBSTITUTE_SPRITE), true
+		),
+		"the doll is in front"
+	)
+	_battle_screen._apply_event({
+		"type": Gen2Battle.SUBSTITUTE_PIC, "side": Gen2Battle.PLAYER, "raised": false,
+	})
+	assert_eq(renderer._player_pixels, dot, "and the dot is underneath")
+
+
+## `BattleCommand_Transform` copies the species and the DVs onto the actor, and
+## every reload of the square after it draws the target: the Pokemon on the
+## field is the one it copied, not the one that used the move.
+func test_a_transformed_side_draws_the_species_it_copied() -> void:
+	await _open_battle()
+	_battle_screen.show_matchup(16, 155, 7, 9)
+	_settle_intro()
+	var renderer: Gen2BattleRenderer = _battle_screen._renderer
+	assert_eq(int(renderer._player_pixels_key[0]), 155)
+
+	_battle_screen._apply_event({
+		"type": Gen2Battle.TRANSFORMED, "side": Gen2Battle.PLAYER, "target": Gen2Battle.ENEMY,
+		"species": 16, "unown_form": 0, "shiny": true,
+	})
+	assert_eq(
+		int(renderer._player_pixels_key[0]), 16, "the copied species is what is drawn"
+	)
+	assert_true(bool(renderer._view["player_shiny"]), "and the copied DVs are what shine")
+	assert_false(bool(renderer._view["enemy_shiny"]), "the target's own square is untouched")
+
+	# A send-out is the one thing that puts the user's own picture back.
+	_battle_screen._apply_event({
+		"type": Gen2Battle.SENT_OUT, "side": Gen2Battle.PLAYER, "species": 155,
+		"level": 7, "hp": 20, "max_hp": 20,
+	})
+	assert_eq(int(renderer._player_pixels_key[0]), 155)
+	assert_false(bool(renderer._view["player_shiny"]))
+
+
 ## The whole entrance as `view["battlers"]` reports it, one side at a time: who
 ## is standing on each square, and how far off it they are.
 ##

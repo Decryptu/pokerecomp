@@ -702,7 +702,18 @@ func _battle_dump() -> PackedByteArray:
 	_write_battle_object_palettes(data)
 	_write_stats_screen_palettes(data)
 	_write_stats_tiles(data)
+	_write_minimize_pic(data)
 	return data
+
+
+## `MinimizePic`, the one tile whose own shape is what pins its address.
+func _write_minimize_pic(data: PackedByteArray) -> void:
+	var tile: PackedByteArray = PackedByteArray()
+	tile.resize(Gen2Tiles.TILE_BYTES)
+	for row: int in Gen2Tiles.TILE_HEIGHT:
+		tile[row * 2] = RomLayout.MINIMIZE_PIC_ROWS[row]
+		tile[row * 2 + 1] = RomLayout.MINIMIZE_PIC_ROWS[row]
+	_write(data, int(_layout["minimize_pic"]), tile)
 
 
 ## `StatsScreenPageTilesGFX`, which sits immediately before the enemy HUD: the
@@ -837,6 +848,17 @@ func test_stats_tiles_that_are_not_where_the_enemy_hud_says_fail() -> void:
 	var result: Dictionary = RomImporter.verify_battle_graphics(_rom(data), _layout)
 	assert_false(result["ok"])
 	assert_string_contains(String(result["message"]), "vertical divider")
+
+
+## The dot is drawn in colour 3, so a tile with one plane of it is a shape that
+## still decodes and is not `MinimizePic`.
+func test_a_minimize_pic_drawn_in_the_wrong_colour_fails() -> void:
+	var data: PackedByteArray = _battle_dump()
+	for row: int in Gen2Tiles.TILE_HEIGHT:
+		data[int(_layout["minimize_pic"]) + row * 2 + 1] = 0x00
+	var result: Dictionary = RomImporter.verify_battle_graphics(_rom(data), _layout)
+	assert_false(result["ok"])
+	assert_string_contains(String(result["message"]), "Minimize pic")
 
 
 func test_stats_tiles_missing_their_shiny_icon_fail() -> void:

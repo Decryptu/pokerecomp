@@ -977,8 +977,14 @@ static func _transform(turn: Gen2Turn) -> void:
 		turn.emit(Gen2Battle.MOVE_FAILED)
 		turn.end()
 		return
+	# `BattleAnimCmd_Transform` draws the copied species out of the copied DVs,
+	# so the letter and the shine are the target's from here on and not the
+	# user's own. Display values, the way a send-out's are.
 	turn.emit(Gen2Battle.TRANSFORMED, {
 		"species": turn.attacker().species, "target": turn.target,
+		"unown_form": Gen2Stats.unown_letter(turn.attacker().dvs) \
+			if turn.attacker().species == RomLayout.UNOWN_SPECIES else 0,
+		"shiny": Gen2Stats.is_shiny(turn.attacker().dvs),
 	})
 
 
@@ -3694,6 +3700,11 @@ static func _stat_change(command: StringName, turn: Gen2Turn) -> void:
 	# carrying the ordinary `EFFECT_EVASION_UP` like Double Team.
 	if targets_user and turn.stat_moved and turn.move_number == MINIMIZE_MOVE:
 		turn.battle.mon(side).minimized = true
+		# The rest of `MinimizeDropSub`: `DropPlayerSub` reloads the square at
+		# once, and with the byte set it answers with the dot from here on. Its
+		# other half, taking a raised doll off the picture, is undone by the
+		# `raisesub` two commands later in every list that reaches here.
+		turn.emit(Gen2Battle.MINIMIZED, {"side": side})
 
 
 ## Minimize's move number, which is the whole of what `MinimizeDropSub` compares
