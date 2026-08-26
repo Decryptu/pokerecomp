@@ -1,20 +1,99 @@
 extends GutTest
 
-## Development-only trees must never reach a distributable pack. This audits
-## every preset, so adding a platform cannot quietly restore example mods.
+## Everything a release is published from. Two things go wrong here silently:
+## a development tree reaching a distributable pack, and metadata drifting apart
+## between the places a store reads it. Both are audited across every preset, so
+## adding a platform cannot quietly restore example mods or skip a version.
+
+const PRESETS: String = "res://export_presets.cfg"
+
+## Preset names `.github/workflows/release.yml` exports by. Renaming one in the
+## editor would leave the workflow asking for a preset that is not there, and
+## the failure would arrive on a tag rather than on a pull request.
+const PUBLISHED: Array[String] = [
+	"Windows Desktop", "macOS", "Linux", "Android", "iOS",
+	"Linux ARM64", "Windows Desktop ARM64",
+]
+
+## Preset section to the option keys under it that must equal the app version.
+const VERSION_KEYS: Dictionary = {
+	"preset.1.options": ["application/short_version", "application/version"],
+	"preset.3.options": ["version/name"],
+	"preset.4.options": ["application/short_version", "application/version"],
+}
+
+
+func _presets() -> ConfigFile:
+	var file := ConfigFile.new()
+	assert_eq(file.load(PRESETS), OK, "export_presets.cfg must parse")
+	return file
+
 
 func test_every_export_preset_excludes_tests_tools_and_repository_mods() -> void:
-	var text: String = FileAccess.get_file_as_string("res://export_presets.cfg")
-	var preset_count: int = 0
+	var text: String = FileAccess.get_file_as_string(PRESETS)
 	var current: String = ""
 	for line: String in text.split("\n"):
 		if line.begins_with("[preset.") and not line.contains(".options]"):
 			current = line
-			preset_count += 1
 			continue
 		if not line.begins_with("exclude_filter="):
 			continue
 		assert_ne(current, "", "an exclusion belongs to a preset")
 		for excluded: String in ["tests/*", "tools/*", "addons/gut/*", "mods/*"]:
 			assert_string_contains(line, excluded, "preset %s excludes %s" % [current, excluded])
-	assert_eq(preset_count, 5)
+
+
+func test_the_published_presets_are_all_present_and_named_as_the_release_asks() -> void:
+	var file: ConfigFile = _presets()
+	var found: Array[String] = []
+	for section: String in file.get_sections():
+		if section.ends_with(".options"):
+			continue
+		found.append(String(file.get_value(section, "name", "")))
+	found.sort()
+	var expected: Array[String] = PUBLISHED.duplicate()
+	expected.sort()
+	assert_eq(found, expected)
+
+
+## A desktop download is one file. An executable published beside a separate
+## `.pck` is a download a player can take half of and then report as broken.
+func test_every_desktop_preset_embeds_its_pack() -> void:
+	var file: ConfigFile = _presets()
+	for section: String in file.get_sections():
+		if not file.has_section_key(section, "binary_format/embed_pck"):
+			continue
+		assert_true(bool(file.get_value(section, "binary_format/embed_pck")), section)
+
+
+func test_every_export_preset_states_the_app_version() -> void:
+	var file: ConfigFile = _presets()
+	for section: String in VERSION_KEYS:
+		for key: String in VERSION_KEYS[section]:
+			assert_eq(
+				String(file.get_value(section, key, "")),
+				Gen2AppVersion.VERSION,
+				"%s/%s" % [section, key]
+			)
+
+
+func test_the_project_settings_state_the_app_version() -> void:
+	assert_eq(String(ProjectSettings.get_setting("application/config/version", "")),
+		Gen2AppVersion.VERSION)
+
+
+## Android refuses an in-place update whose version code did not rise, so the
+## code is a function of the version rather than a number bumped by hand.
+func test_the_android_version_code_derives_from_the_app_version() -> void:
+	var parts: Array[int] = Gen2UpdateCheck.parse_version(Gen2AppVersion.VERSION)
+	assert_eq(parts.size(), 3, "the app version is major.minor.patch")
+	var expected: int = parts[0] * 10000 + parts[1] * 100 + parts[2]
+	assert_eq(int(_presets().get_value("preset.3.options", "version/code", 0)), expected)
+
+
+## An Apple team id names a personal developer account and this repository is
+## public. The release IPA is unsigned and needs none; a device build pastes one
+## in and does not commit it.
+func test_the_ios_preset_carries_no_signing_identity() -> void:
+	assert_eq(String(_presets().get_value("preset.4.options",
+		"application/app_store_team_id", "")), "")
