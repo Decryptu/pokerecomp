@@ -4814,6 +4814,33 @@ func test_follow_names_the_leader_first_so_the_player_can_be_the_follower() -> v
 	assert_eq(world.player_cell, from + Vector2i(1, 0), "the player followed into its trail")
 
 
+## `FollowNotExact` moves object1 beside object2 immediately, taking X before Y.
+func test_follow_not_exact_places_an_object_follower_beside_its_leader() -> void:
+	RomCache.write_json(RomCache.world_scripts_path(_directory), {
+		"48:6080": [0x77, 0, 2, 0x91],
+	})
+	var data: GameData = GameData.open_directory(_directory)
+	data.world_map(1, 1).events["coord_events"][0]["script"] = 0x6080
+	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(10, 9))
+	var follower: Gen2WorldObject = world.objects[0]
+	assert_eq(follower.cell, Vector2i(5, 6))
+	assert_eq(_final_status(_run_script(world, world.dispatch_script_events(Vector2i(7, 6)))),
+		&"complete")
+	assert_eq(follower.cell, Vector2i(9, 9), "X takes precedence when both axes differ")
+
+
+func test_follow_not_exact_places_the_player_follower_beside_its_leader() -> void:
+	RomCache.write_json(RomCache.world_scripts_path(_directory), {
+		"48:6080": [0x77, 2, 0, 0x91],
+	})
+	var data: GameData = GameData.open_directory(_directory)
+	data.world_map(1, 1).events["coord_events"][0]["script"] = 0x6080
+	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(10, 9))
+	assert_eq(_final_status(_run_script(world, world.dispatch_script_events(Vector2i(7, 6)))),
+		&"complete")
+	assert_eq(world.player_cell, Vector2i(6, 6), "the second operand is the follower")
+
+
 ## `Script_writetext` is `MapTextbox` and returns. A text ending in `<DONE>`
 ## owes no press of its own, so the `waitbutton` behind the command is what the
 ## script holds on; one ending in `<PROMPT>` owes its own.
@@ -8724,9 +8751,9 @@ func test_buenas_password_box_answers_yes_no_where_the_routine_puts_it() -> void
 		var state := Gen2WorldState.new()
 		var world: Gen2WorldAPI = _special_world(state)
 		world.dispatch_script_events()
-		var pending: Dictionary = world.pending_script_input()
-		assert_eq(StringName(pending.get("type", &"")), &"choice")
-		var menu: Gen2WorldMenu = Gen2WorldMenu.from_input(pending)
+		var pending_input: Dictionary = world.pending_script_input()
+		assert_eq(StringName(pending_input.get("type", &"")), &"choice")
+		var menu: Gen2WorldMenu = Gen2WorldMenu.from_input(pending_input)
 		assert_eq(menu.box_left, 14)
 		assert_eq(menu.box_top, 7)
 		assert_eq(menu.box_right, 19)

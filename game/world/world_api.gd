@@ -4428,19 +4428,11 @@ func _apply_script_object_events(raw_events: Variant) -> Array:
 			})
 			continue
 		if event_type == &"object_follow":
-			var follow_key: String = _object_key(
-				int(event.get("map_group", -1)), int(event.get("map_number", -1)),
-				int(event.get("object_index", -1))
-			)
 			## `wObjectFollow_Leader` and `wObjectFollow_Follower` are one byte
 			## each, and `SetFollowerIfVisible` runs `ResetFollower` before it
 			## writes: a second `follow` replaces the pair rather than adding to
 			## it.
-			_object_followers.clear()
-			_object_followers[follow_key] = {
-				"target_index": int(event.get("target_index", -1)),
-				"exact": bool(event.get("exact", true)),
-			}
+			_start_object_follow(event)
 			continue
 		if event_type == &"object_stop_follow":
 			_object_followers.clear()
@@ -5506,6 +5498,51 @@ func _remember_object_position(object: Gen2WorldObject) -> void:
 	_object_facing_overrides[key] = object.facing
 
 
+## `StartFollow` resets the old pair before either visibility check.
+## `FollowNotExact` additionally places the follower beside the leader at once,
+## taking the X axis first (engine/overworld/player_object.asm).
+func _start_object_follow(event: Dictionary) -> void:
+	_object_followers.clear()
+	if current_map == null:
+		return
+	var map_group: int = int(event.get("map_group", -1))
+	var map_number: int = int(event.get("map_number", -1))
+	if map_group != current_map.group or map_number != current_map.number:
+		return
+	var follower_index: int = int(event.get("object_index", -2))
+	var leader_index: int = int(event.get("target_index", -2))
+	if not _follow_object_is_visible(follower_index) or not _follow_object_is_visible(leader_index):
+		return
+	var exact: bool = bool(event.get("exact", true))
+	var follow_key: String = _object_key(map_group, map_number, follower_index)
+	_object_followers[follow_key] = {"target_index": leader_index, "exact": exact}
+	if exact:
+		return
+	var leader_cell: Vector2i = player_cell if leader_index < 0 \
+		else (objects[leader_index] as Gen2WorldObject).cell
+	var follower_cell: Vector2i = player_cell if follower_index < 0 \
+		else (objects[follower_index] as Gen2WorldObject).cell
+	if follower_cell.x != leader_cell.x:
+		follower_cell = leader_cell + Vector2i(signi(follower_cell.x - leader_cell.x), 0)
+	elif follower_cell.y != leader_cell.y:
+		follower_cell = leader_cell + Vector2i(0, signi(follower_cell.y - leader_cell.y))
+	if follower_index < 0:
+		player_cell = follower_cell
+	else:
+		var follower: Gen2WorldObject = objects[follower_index]
+		follower.cell = follower_cell
+		_remember_object_position(follower)
+
+
+func _follow_object_is_visible(object_index: int) -> bool:
+	if object_index < 0:
+		return object_index == -1
+	if object_index >= objects.size():
+		return false
+	var object: Gen2WorldObject = objects[object_index]
+	return object.active and not object.deleted
+
+
 ## Every follower of [param leader_index] steps into the cell that leader has
 ## just left. `follow` names the leader first and the follower second, and the
 ## follower may be the player, so this is driven by an object's scripted step as
@@ -5563,6 +5600,9 @@ func _step_follower(follower_index: int, target_cell: Vector2i, exact: bool) -> 
 		# cutting a diagonal corner.
 		direction = Vector2i(signi(delta.x), 0) if abs(delta.x) >= abs(delta.y) \
 			else Vector2i(0, signi(delta.y))
+	elif not exact and delta.x != 0:
+		# MovementFunction_FollowNotExact checks X before Y.
+		direction = Vector2i(signi(delta.x), 0)
 	elif abs(delta.x) >= abs(delta.y):
 		direction = Vector2i(signi(delta.x), 0)
 	else:
