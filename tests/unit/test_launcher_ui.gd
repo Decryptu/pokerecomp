@@ -687,6 +687,16 @@ func test_a_narrow_shell_gives_its_dock_discs_a_finger_to_hit() -> void:
 			Gen2LauncherUI.TOUCH_TARGET,
 			"every disc is at least a finger wide",
 		)
+		assert_lte(button.custom_minimum_size.x, Gen2LauncherShell.PHONE_PORTRAIT_DOCK_SIDE)
+	shell.size = Vector2(844, 390)
+	await get_tree().process_frame
+	assert_true(shell.compact, "a phone held sideways is still a phone")
+	for button: Gen2LauncherButton in _buttons_under(shell):
+		assert_between(
+			button.custom_minimum_size.x,
+			Gen2LauncherUI.TOUCH_TARGET,
+			Gen2LauncherShell.PHONE_LANDSCAPE_DOCK_SIDE,
+		)
 	shell.size = Vector2(1280, 800)
 	await get_tree().process_frame
 	assert_false(shell.compact, "and a desktop is not a phone")
@@ -700,7 +710,8 @@ func test_the_screen_furniture_is_taken_out_of_the_room_a_page_is_given() -> voi
 	assert_eq(Gen2LauncherUI.safe_area_insets(window)["top"], 59.0)
 	assert_eq(
 		Gen2LauncherUI.dock_reserve(window),
-		Gen2LauncherUI.DOCK_SAFE_BOTTOM + 34.0,
+		Gen2LauncherShell.dock_side_for(window.get_visible_rect().size, 4, Gen2LauncherUI.preview_insets)
+			+ Gen2LauncherUI.DOCK_VERTICAL_PADDING + 34.0,
 		"a page's tail clears the dock and the home indicator together",
 	)
 	Gen2LauncherUI.preview_insets = {}
@@ -719,6 +730,17 @@ func test_a_mod_row_fits_a_phone_rather_than_running_off_its_card() -> void:
 			width,
 			"a row asks for no more than a phone has",
 		)
+	var download_card: Gen2LauncherCard = page._card({
+		"id": "listed_mod",
+		"name": "Listed mod",
+		"version": "1.0.0",
+		"installed": false,
+		"enabled": false,
+		"update": Gen2ModIndex.UNKNOWN,
+	}) as Gen2LauncherCard
+	page.add_child(download_card)
+	var stack: VBoxContainer = download_card.get_child(0) as VBoxContainer
+	assert_eq(stack.get_child_count(), 1, "the download stays on the content row")
 
 
 ## Every card in [param root]'s subtree.

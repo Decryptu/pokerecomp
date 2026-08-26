@@ -17,10 +17,13 @@ signal page_selected(id: StringName)
 const COMPACT_WIDTH: float = 820.0
 ## Room kept for a message and its detail line above the page.
 const TOAST_HEIGHT: float = 84.0
-const DOCK_OVERLAY_HEIGHT: float = Gen2LauncherUI.DOCK_SAFE_BOTTOM + 22.0
+const DOCK_FADE_TOP: float = 22.0
 ## The widest a dock disc is allowed to grow into a narrow row. Past this the
 ## row reads as four buttons rather than as a dock.
 const DOCK_SIDE_MAX: float = 84.0
+const PHONE_PORTRAIT_DOCK_SIDE: float = 64.0
+const PHONE_LANDSCAPE_DOCK_SIDE: float = 56.0
+const PHONE_LANDSCAPE_HEIGHT: float = 600.0
 
 var theme_palette: Gen2LauncherTheme = null
 var compact: bool = false
@@ -184,7 +187,7 @@ func _build_dock() -> Control:
 	_dock_host = Control.new()
 	_dock_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_dock_host.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	_dock_host.offset_top = -DOCK_OVERLAY_HEIGHT
+	_dock_host.offset_top = -(Gen2LauncherButton.DOCK_SIDE + Gen2LauncherUI.DOCK_VERTICAL_PADDING + DOCK_FADE_TOP)
 
 	var fade := TextureRect.new()
 	fade.texture = _dock_gradient()
@@ -412,7 +415,8 @@ func _on_dock_input(event: InputEvent, id: StringName) -> void:
 
 func _apply_layout() -> void:
 	var insets: Dictionary = Gen2LauncherUI.safe_area_insets(get_window())
-	var wide: bool = size.x >= COMPACT_WIDTH
+	var phone_landscape: bool = size.x > size.y and size.y < PHONE_LANDSCAPE_HEIGHT
+	var wide: bool = size.x >= COMPACT_WIDTH and not phone_landscape
 	var margin: int = 30 if wide else 16
 	# The clock and the charge sit on the top row, which a notch or a rounded
 	# corner would otherwise take a bite out of.
@@ -437,23 +441,32 @@ func _apply_layout() -> void:
 ## a desktop looked right with. Never below what a finger can hit, which is what
 ## the row is for.
 func _layout_dock(wide: bool, insets: Dictionary) -> void:
-	var count: int = maxi(_entries.size(), 1)
-	var gap: float = float(Gen2LauncherUI.GAP_MD)
-	var margin: float = float(30 if wide else 16)
-	var room: float = size.x - float(insets["left"]) - float(insets["right"]) - margin * 2.0
-	var fits: float = (room - gap * float(count - 1)) / float(count)
-	var side: float = (
-		Gen2LauncherButton.DOCK_SIDE
-		if wide
-		else clampf(fits, Gen2LauncherUI.TOUCH_TARGET, DOCK_SIDE_MAX)
-	)
+	var side: float = dock_side_for(size, maxi(_entries.size(), 1), insets)
 	for key: StringName in _buttons:
 		(_buttons[key] as Gen2LauncherButton).set_side(side)
 	# The fade and the row above it both stand off the home indicator, so the
 	# bottom disc is reachable rather than half under it.
 	var bottom: float = float(insets["bottom"])
-	_dock_host.offset_top = -(DOCK_OVERLAY_HEIGHT + bottom)
+	_dock_host.offset_top = -(side + Gen2LauncherUI.DOCK_VERTICAL_PADDING + DOCK_FADE_TOP + bottom)
 	_dock_centre.offset_bottom = -bottom
+
+
+## A phone is identified by its short axis as well as its width. In landscape,
+## width alone looks desktop-sized even though the dock is competing with a
+## short cartridge stage for height.
+static func dock_side_for(viewport_size: Vector2, count: int, insets: Dictionary) -> float:
+	var phone_landscape: bool = viewport_size.x > viewport_size.y \
+		and viewport_size.y < PHONE_LANDSCAPE_HEIGHT
+	var compact_layout: bool = viewport_size.x < COMPACT_WIDTH or phone_landscape
+	if not compact_layout:
+		return Gen2LauncherButton.DOCK_SIDE
+	var margin: float = 16.0
+	var room: float = viewport_size.x - float(insets.get("left", 0.0)) \
+		- float(insets.get("right", 0.0)) - margin * 2.0
+	var gap: float = float(Gen2LauncherUI.GAP_MD)
+	var fits: float = (room - gap * float(maxi(count, 1) - 1)) / float(maxi(count, 1))
+	var cap: float = PHONE_LANDSCAPE_DOCK_SIDE if phone_landscape else PHONE_PORTRAIT_DOCK_SIDE
+	return clampf(fits, Gen2LauncherUI.TOUCH_TARGET, minf(cap, DOCK_SIDE_MAX))
 
 
 ## Just above the page, so the message clears the dock and whatever the page puts

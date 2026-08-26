@@ -391,3 +391,16 @@ jobs:
           notes="$(sed "s/{VERSION}/${v}/g" .github/release-notes.md)"
           gh release create "${{ needs.version.outputs.tag }}" \
             --title "$v" --notes "$notes" staged/*
+
+      - name: Announce on Discord
+        env:
+          DISCORD_RELEASE_WEBHOOK: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
+        run: |
+          set -euo pipefail
+          [ -n "${DISCORD_RELEASE_WEBHOOK:-}" ] \
+            || { echo "::error::DISCORD_RELEASE_WEBHOOK is not set"; exit 1; }
+          release_url="${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.version.outputs.tag }}"
+          curl --fail-with-body --silent --show-error \
+            -H 'Content-Type: application/json' \
+            --data "$(jq -cn --arg content "$release_url" '{content: $content}')" \
+            "$DISCORD_RELEASE_WEBHOOK"

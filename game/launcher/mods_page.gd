@@ -217,9 +217,8 @@ func _empty_state() -> Control:
 ## on the mod's own page, which the row itself opens.
 func _card(row: Dictionary) -> Control:
 	var panel: Gen2LauncherCard = Gen2LauncherCard.create(_theme, Gen2LauncherTheme.RADIUS_MD, 18)
-	# A phone is narrower than the icon, the name, the switch and three buttons
-	# laid end to end, so the controls drop under the name rather than off the
-	# card. Everything is the same node either way round; only the box differs.
+	# Labels surrender their width before actions do, so the icon, text and the
+	# row's controls stay on one line even on a portrait phone.
 	var stack: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_SM)
 	panel.add_child(stack)
 	var line: HBoxContainer = Gen2LauncherUI.row(Gen2LauncherUI.GAP_MD)
@@ -236,10 +235,6 @@ func _card(row: Dictionary) -> Control:
 	text.add_child(_clipped(Gen2LauncherUI.muted(_theme, _version_line(row))))
 
 	var controls: HBoxContainer = line
-	if _compact:
-		controls = Gen2LauncherUI.row(Gen2LauncherUI.GAP_MD)
-		controls.alignment = BoxContainer.ALIGNMENT_END
-		stack.add_child(controls)
 
 	if bool(row["installed"]):
 		var switch: Gen2LauncherToggle = Gen2LauncherToggle.create(_theme, bool(row["enabled"]))
