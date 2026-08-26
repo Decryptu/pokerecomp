@@ -125,3 +125,38 @@ func test_a_loaded_header_keeps_its_own_flags() -> void:
 	})
 	assert_eq(menu.flags, 0)
 	assert_false(menu.box().has_flag(Gen2MenuBox.STATICMENU_CURSOR))
+
+
+## `BattleTowerRoomMenu_UpdatePickLevelMenu`'s `.d_up` increments the room index
+## and `.d_down` decrements it, so UP walks L:10 towards CANCEL: the opposite of
+## every other menu here. Both wrap, and neither branch reads the flags byte.
+func test_the_room_menu_runs_the_other_way_and_wraps_without_the_flag() -> void:
+	var menu: Gen2WorldMenu = Gen2WorldMenu.from_input({
+		"menu_kind": &"room", "header": {"data_flags": 0, "default": 1},
+		"options": [" L:10 ", " L:20 ", " L:30 ", " L:40 ", "CANCEL"],
+	})
+	assert_eq(menu.selected_index(), 0)
+	assert_true(menu.move(Vector2i.UP))
+	assert_eq(menu.selected_value(), " L:20 ", "UP is `.d_up`'s inc")
+	assert_true(menu.move(Vector2i.DOWN))
+	assert_true(menu.move(Vector2i.DOWN))
+	assert_eq(menu.selected_value(), "CANCEL", "and `.d_down` restarts at the last")
+	assert_true(menu.move(Vector2i.UP))
+	assert_eq(menu.selected_value(), " L:10 ", "past the last, `.d_up` restarts at 1")
+
+
+## `MenuHeader_119cf7` carries `db 0`: no cursor, and the two arrows instead.
+func test_the_room_menu_box_wears_the_arrows_rather_than_a_cursor() -> void:
+	var box: Gen2MenuBox = Gen2WorldMenu.from_input({
+		"menu_kind": &"room", "header": {
+			"data_flags": 0, "default": 1,
+			"left": 12, "top": 7, "right": 19, "bottom": 11,
+		},
+		"options": ["CANCEL"],
+	}).box()
+	assert_true(box.pick_arrows)
+	assert_false(box.has_flag(Gen2MenuBox.STATICMENU_CURSOR))
+	assert_eq(
+		box.item_position(0), Vector2i(13, 9),
+		"`hlcoord 13, 9`, which is the box's own text start with top spacing"
+	)

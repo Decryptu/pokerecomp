@@ -81,6 +81,31 @@ func draw(
 		font.draw_code(CURSOR_CODE, indices, width, arrow.x * TILE, arrow.y * TILE)
 
 	_scroll_arrows(box, indices, width)
+	_pick_arrows(box, indices, width)
+
+
+## `BattleTowerRoomMenu_UpdatePickLevelMenu`'s two `PlaceString` calls of
+## `String_119d07`, three spaces and a `▼`, at `hlcoord 13, 8` and `hlcoord 13,
+## 10` inside a `menu_coords 12, 7, 19, 11` box: the arrow column is four in
+## from the border and the rows are the interior's first and last. The upper
+## tile is the same glyph under the attrmap's $40, so it is drawn from the
+## bottom row up rather than from a second imported tile.
+func _pick_arrows(box: Gen2MenuBox, indices: PackedByteArray, width: int) -> void:
+	if not box.pick_arrows:
+		return
+	var column: int = (box.left + 4) * TILE
+	font.draw_code(DOWN_ARROW_CODE, indices, width, column, (box.bottom - 1) * TILE)
+	var tile := PackedByteArray()
+	tile.resize(TILE * TILE)
+	font.draw_code(DOWN_ARROW_CODE, tile, TILE, 0, 0)
+	@warning_ignore("integer_division")
+	var height: int = indices.size() / width
+	for y: int in TILE:
+		var to_y: int = (box.top + 1) * TILE + y
+		if to_y < 0 or to_y >= height:
+			continue
+		for x: int in TILE:
+			indices[to_y * width + column + x] = tile[(TILE - 1 - y) * TILE + x]
 
 
 ## `ScrollingMenu_UpdateDisplay`'s two `Coord2Tile` writes, both onto the box's

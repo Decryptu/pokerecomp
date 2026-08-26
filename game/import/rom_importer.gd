@@ -2736,6 +2736,10 @@ func _import_battle_tower(rom: RomFile, layout: Dictionary) -> Dictionary:
 				rom, layout, RomLayout.battle_tower_text_offset(layout, true, trainer, kind)
 			))
 		texts[RomLayout.BATTLETOWER_TEXT_KINDS[kind]] = {"male": male, "female": female}
+	## Kept with its own padding rather than trimmed:
+	## `BattleTowerRoomMenu_UpdatePickLevelMenu` places the row straight at
+	## `hlcoord 13, 9`, so the leading space of `" L:10 "` is the column the
+	## level stands in and `"CANCEL"` has none.
 	var levels: Array = []
 	for index: int in RomLayout.BATTLETOWER_LEVEL_ROWS:
 		levels.append(Gen2Text.decode_fixed(
@@ -2743,7 +2747,7 @@ func _import_battle_tower(rom: RomFile, layout: Dictionary) -> Dictionary:
 				int(entry["level_strings"]) + index * RomLayout.BATTLETOWER_LEVEL_ROW_BYTES,
 				RomLayout.BATTLETOWER_LEVEL_ROW_BYTES
 			), 0, RomLayout.BATTLETOWER_LEVEL_ROW_BYTES
-		).strip_edges())
+		))
 	var menu_text: Dictionary = {}
 	for name: String in RomLayout.BATTLETOWER_MENU_TEXT_ORDER:
 		var at: int = int((entry["text"] as Dictionary)[name])

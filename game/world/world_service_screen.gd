@@ -2402,8 +2402,8 @@ func _finish(results: Array) -> void:
 ## The rows this mode is offering, which is all [method _render_service_page]
 ## needs: there is no second list to keep in step with it any more.
 func _render_rows(override: Array = []) -> void:
-	if _is_dial() and override.is_empty():
-		## One value at a time, the way the dial itself shows it.
+	if _is_single_row() and override.is_empty():
+		## One value at a time, the way the dial and the room menu each show it.
 		override = [_choices[clampi(_cursor, 0, _choices.size() - 1)]] if not _choices.is_empty() \
 			else []
 	var values: Array = override if not override.is_empty() else (
@@ -2499,6 +2499,14 @@ func _apply_layer_visibility() -> void:
 
 func _is_dial() -> bool:
 	return _mode == MODE.MENU and _menu != null and _menu.kind == &"spinner"
+
+
+## The two menus that show one row rather than a list: `SetDayOfWeek`'s dial and
+## `BattleTowerRoomMenu_UpdatePickLevelMenu`'s room, which prints the chosen
+## level at `hlcoord 13, 9` between the two arrows and nothing else.
+func _is_single_row() -> bool:
+	return _is_dial() \
+		or (_mode == MODE.MENU and _menu != null and _menu.kind == &"room")
 
 
 ## `SetDayOfWeek`'s `.loop`: the box, the two arrows, the one weekday string at

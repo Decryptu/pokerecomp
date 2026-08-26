@@ -53,9 +53,13 @@ const EXPECTED_FIRST_MONS: Array = [
 ]
 
 ## `Strings_L10ToL100` and `MenuData_ChallengeExplanationCancel`, decoded.
+## `Strings_L10ToL100`, with the padding each eight-byte row carries: the level
+## rows open with a space and CANCEL does not, which is the column each stands
+## in when `BattleTowerRoomMenu_UpdatePickLevelMenu` places it at `hlcoord 13,
+## 9`.
 const EXPECTED_LEVEL_ROWS: Array[String] = [
-	"L:10", "L:20", "L:30", "L:40", "L:50", "L:60", "L:70", "L:80", "L:90",
-	"L:100", "CANCEL",
+	" L:10 ", " L:20 ", " L:30 ", " L:40 ", " L:50 ", " L:60 ", " L:70 ",
+	" L:80 ", " L:90 ", " L:100", "CANCEL",
 ]
 const EXPECTED_MENU_ROWS: Array[String] = ["Challenge", "Explanation", "Cancel"]
 
