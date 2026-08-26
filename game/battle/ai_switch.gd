@@ -272,15 +272,17 @@ static func _enemy_move_adjustment(
 
 
 ## `FindAliveEnemyMons`' carry flag, which is the only part of it three of the
-## smart-scoring handlers want: whether the AI has anybody left to send in.
-static func has_bench(battle: Gen2Battle) -> bool:
-	return not _alive_others(battle).is_empty()
+## smart-scoring handlers want: whether [param side] has anybody left to send in.
+## The player's own answer is `AICheckLastPlayerMon`, the same walk of the other
+## party, which Selfdestruct and a Ghost's Curse both read.
+static func has_bench(battle: Gen2Battle, side: int = Gen2Battle.ENEMY) -> bool:
+	return not _alive_others(battle, side).is_empty()
 
 
 ## `FindAliveEnemyMons`: every party index still standing except the one that is
 ## out. Empty means there is nothing to switch to and nothing to think about.
-static func _alive_others(battle: Gen2Battle) -> Array:
-	var party: Gen2Party = battle.party(Gen2Battle.ENEMY)
+static func _alive_others(battle: Gen2Battle, side: int = Gen2Battle.ENEMY) -> Array:
+	var party: Gen2Party = battle.party(side)
 	var out: Array = []
 	for index: int in party.size():
 		if index == party.active:

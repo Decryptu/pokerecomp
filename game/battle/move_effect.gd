@@ -145,6 +145,10 @@ const GUST_MOVE: int = 16
 const WHIRLWIND_MOVE: int = 18
 const THUNDER_MOVE: int = 87
 const TWISTER_MOVE: int = 239
+
+## Icy Wind's number, which `AI_Smart_SpeedDownHit` compares its move animation
+## against: the only move of the effect the routine will act on.
+const ICY_WIND_MOVE: int = 196
 const EARTHQUAKE_MOVE: int = 89
 const FISSURE_MOVE: int = 90
 const MAGNITUDE_MOVE: int = 222
@@ -1788,6 +1792,19 @@ const STAT_RUN_LENGTH: int = 7
 ## The second of that run, `EFFECT_DEFENSE_DOWN_HIT`, which is the only one whose
 ## list differs from its six neighbours.
 const DEFENSE_DOWN_HIT: int = STAT_DOWN_HIT_BASE + 1
+
+## The three members of the stat runs `AI_Smart` names by hand, and the one
+## effect nothing on the run shares a handler with.
+const ACCURACY_DOWN: int = STAT_DOWN_BASE + 5
+const SP_DEF_UP_2: int = STAT_UP_2_BASE + 4
+const SPEED_DOWN_HIT: int = STAT_DOWN_HIT_BASE + 2
+
+## `EFFECT_UNUSED_2B`, `EFFECT_DEFROST_OPPONENT` and `EFFECT_PRIORITY_HIT`. The
+## first two are on no move in either pin and are here because `AI_Smart` has a
+## handler for each; a mod naming one on its own move reaches them.
+const UNUSED_2B: int = 43
+const DEFROST_OPPONENT: int = 96
+const PRIORITY_HIT: int = 103
 
 ## `EFFECT_EVASION_UP`, the seventh of the raise run and the one list of the
 ## twenty-eight whose doll commands are not where its neighbours put them.

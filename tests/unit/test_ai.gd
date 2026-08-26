@@ -193,7 +193,9 @@ func test_setup_only_ever_encourages_a_stat_up_move_on_the_first_turn() -> void:
 	for seed_value: int in 100:
 		_rng.seed = seed_value
 		var scores: Array = [20, 20, 20, 20]
-		Gen2BattleAI._apply_setup(scores, pikachu, geodude, _data, _rng, 0, 5, Gen2Weather.NONE)
+		Gen2BattleAI._apply_setup(
+			scores, Gen2BattleAI.Context.of(pikachu, geodude, _data, _rng, 0, 5, Gen2Weather.NONE)
+		)
 		if scores[0] < 20:
 			encouraged = true
 		elif scores[0] == 20:
@@ -207,7 +209,9 @@ func test_setup_only_ever_encourages_a_stat_up_move_on_the_first_turn() -> void:
 	for seed_value: int in 100:
 		_rng.seed = seed_value
 		var scores: Array = [20, 20, 20, 20]
-		Gen2BattleAI._apply_setup(scores, pikachu, geodude, _data, _rng, 3, 5, Gen2Weather.NONE)
+		Gen2BattleAI._apply_setup(
+			scores, Gen2BattleAI.Context.of(pikachu, geodude, _data, _rng, 3, 5, Gen2Weather.NONE)
+		)
 		assert_true(scores[0] >= 20, "a stat-up move past turn one is never encouraged")
 		if scores[0] > 20:
 			discouraged_late = true
@@ -221,7 +225,7 @@ func test_opportunist_only_discourages_stall_moves_once_hp_is_low() -> void:
 	# Full HP: Opportunist has nothing to say.
 	var scores: Array = [20, 20, 20, 20]
 	Gen2BattleAI._apply_opportunist(
-		scores, pikachu, geodude, _data, _rng, 0, 0, Gen2Weather.NONE
+		scores, Gen2BattleAI.Context.of(pikachu, geodude, _data, _rng, 0, 0, Gen2Weather.NONE)
 	)
 	assert_eq(scores, [20, 20, 20, 20], "a healthy mon has no reason to stop stalling")
 
@@ -230,7 +234,7 @@ func test_opportunist_only_discourages_stall_moves_once_hp_is_low() -> void:
 	pikachu.hp = 1
 	scores = [20, 20, 20, 20]
 	Gen2BattleAI._apply_opportunist(
-		scores, pikachu, geodude, _data, _rng, 0, 0, Gen2Weather.NONE
+		scores, Gen2BattleAI.Context.of(pikachu, geodude, _data, _rng, 0, 0, Gen2Weather.NONE)
 	)
 	assert_eq(scores[0], 21)
 	assert_eq(scores[1], 20, "Tackle is not a stall move and is left alone")
@@ -348,16 +352,14 @@ func test_smart_mean_look_reads_health_bench_and_target_state() -> void:
 
 	var lone: Array = [20, 20, 20, 20]
 	Gen2BattleAI._apply_smart(
-		lone, pikachu, charmander, _data, _rng, 0, 0, Gen2Weather.NONE,
-		Gen2Screens.NONE, Gen2Screens.NONE, false, Gen2AISwitch.BASE_SCORE
+		lone, Gen2BattleAI.Context.of(pikachu, charmander, _data, _rng, 0, 0, Gen2Weather.NONE, Gen2Screens.NONE, Gen2Screens.NONE, false, Gen2AISwitch.BASE_SCORE)
 	)
 	assert_eq(int(lone[0]), 30, "a lone user cannot leave behind a Mean Look")
 
 	pikachu.hp = pikachu.max_hp() / 4
 	var hurt: Array = [20, 20, 20, 20]
 	Gen2BattleAI._apply_smart(
-		hurt, pikachu, charmander, _data, _rng, 0, 0, Gen2Weather.NONE,
-		Gen2Screens.NONE, Gen2Screens.NONE, true, Gen2AISwitch.BASE_SCORE
+		hurt, Gen2BattleAI.Context.of(pikachu, charmander, _data, _rng, 0, 0, Gen2Weather.NONE, Gen2Screens.NONE, Gen2Screens.NONE, true, Gen2AISwitch.BASE_SCORE)
 	)
 	assert_eq(int(hurt[0]), 30, "a user below half health should not trap")
 
@@ -368,8 +370,7 @@ func test_smart_mean_look_reads_health_bench_and_target_state() -> void:
 		_rng.seed = seed_value
 		var scores: Array = [20, 20, 20, 20]
 		Gen2BattleAI._apply_smart(
-			scores, pikachu, charmander, _data, _rng, 0, 0, Gen2Weather.NONE,
-			Gen2Screens.NONE, Gen2Screens.NONE, true, Gen2AISwitch.BASE_SCORE - 1
+			scores, Gen2BattleAI.Context.of(pikachu, charmander, _data, _rng, 0, 0, Gen2Weather.NONE, Gen2Screens.NONE, Gen2Screens.NONE, true, Gen2AISwitch.BASE_SCORE - 1)
 		)
 		wanted[int(scores[0])] = true
 	assert_true(wanted.has(17), "an identified target reaches Mean Look's strong branch")
@@ -419,7 +420,7 @@ func test_smart_discourages_thunder_in_sun_only() -> void:
 		_rng.seed = seed_value
 		var scores: Array = [Gen2BattleAI.DEFAULT_SCORE, Gen2BattleAI.DEFAULT_SCORE]
 		Gen2BattleAI._apply_smart(
-			scores, pikachu, charmander, _data, _rng, 0, 0, Gen2Weather.RAIN
+			scores, Gen2BattleAI.Context.of(pikachu, charmander, _data, _rng, 0, 0, Gen2Weather.RAIN)
 		)
 		assert_eq(int(scores[0]), Gen2BattleAI.DEFAULT_SCORE, "rain says nothing about Thunder")
 
@@ -432,7 +433,9 @@ func test_smart_will_not_raise_a_sandstorm_against_a_rock_type() -> void:
 	for seed_value: int in 10:
 		_rng.seed = seed_value
 		var scores: Array = [Gen2BattleAI.DEFAULT_SCORE, Gen2BattleAI.DEFAULT_SCORE]
-		Gen2BattleAI._apply_smart(scores, pikachu, geodude, _data, _rng, 0, 0, Gen2Weather.NONE)
+		Gen2BattleAI._apply_smart(
+			scores, Gen2BattleAI.Context.of(pikachu, geodude, _data, _rng, 0, 0, Gen2Weather.NONE)
+		)
 		assert_eq(int(scores[0]), Gen2BattleAI.DEFAULT_SCORE + 2)
 
 
@@ -444,7 +447,9 @@ func test_smart_weighs_rain_dance_by_the_targets_type() -> void:
 	for pair: Array in [[Fixture.MAGCARGO, -2], [Fixture.BULBASAUR, 3]]:
 		var target: Gen2BattleMon = _mon(int(pair[0]), 50, [Fixture.TACKLE])
 		var scores: Array = [Gen2BattleAI.DEFAULT_SCORE, Gen2BattleAI.DEFAULT_SCORE]
-		Gen2BattleAI._apply_smart(scores, pikachu, target, _data, _rng, 0, 0, Gen2Weather.NONE)
+		Gen2BattleAI._apply_smart(
+			scores, Gen2BattleAI.Context.of(pikachu, target, _data, _rng, 0, 0, Gen2Weather.NONE)
+		)
 		assert_eq(
 			int(scores[0]), Gen2BattleAI.DEFAULT_SCORE + int(pair[1]),
 			"species %d" % int(pair[0])
@@ -457,7 +462,9 @@ func test_smart_will_not_set_weather_it_has_no_move_for() -> void:
 	var barren: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.RAIN_DANCE, Fixture.TACKLE])
 	var bulbasaur: Gen2BattleMon = _mon(Fixture.BULBASAUR, 50, [Fixture.TACKLE])
 	var scores: Array = [Gen2BattleAI.DEFAULT_SCORE, Gen2BattleAI.DEFAULT_SCORE]
-	Gen2BattleAI._apply_smart(scores, barren, bulbasaur, _data, _rng, 0, 0, Gen2Weather.NONE)
+	Gen2BattleAI._apply_smart(
+		scores, Gen2BattleAI.Context.of(barren, bulbasaur, _data, _rng, 0, 0, Gen2Weather.NONE)
+	)
 	assert_eq(int(scores[0]), Gen2BattleAI.DEFAULT_SCORE + 3)
 
 	# Thunder is on `RainDanceMoves`, so the same Pokémon with it in a slot no
@@ -467,7 +474,9 @@ func test_smart_will_not_set_weather_it_has_no_move_for() -> void:
 	)
 	armed.pp[2] = 0
 	var reasons: Array = [Gen2BattleAI.DEFAULT_SCORE, Gen2BattleAI.DEFAULT_SCORE, 0]
-	Gen2BattleAI._apply_smart(reasons, armed, bulbasaur, _data, _rng, 0, 0, Gen2Weather.NONE)
+	Gen2BattleAI._apply_smart(
+		reasons, Gen2BattleAI.Context.of(armed, bulbasaur, _data, _rng, 0, 0, Gen2Weather.NONE)
+	)
 	assert_lt(int(reasons[0]), Gen2BattleAI.DEFAULT_SCORE + 3)
 
 
@@ -482,7 +491,9 @@ func test_smart_will_not_bind_a_target_twice() -> void:
 	for seed_value: int in 40:
 		_rng.seed = seed_value
 		var scores: Array = [Gen2BattleAI.DEFAULT_SCORE, Gen2BattleAI.DEFAULT_SCORE]
-		Gen2BattleAI._apply_smart(scores, pikachu, charmander, _data, _rng, 0, 0, Gen2Weather.NONE)
+		Gen2BattleAI._apply_smart(
+			scores, Gen2BattleAI.Context.of(pikachu, charmander, _data, _rng, 0, 0, Gen2Weather.NONE)
+		)
 		assert_gte(int(scores[0]), Gen2BattleAI.DEFAULT_SCORE, "a bound target is never encouraged")
 		if int(scores[0]) > Gen2BattleAI.DEFAULT_SCORE:
 			raised += 1
@@ -498,7 +509,9 @@ func test_smart_binds_a_fresh_target_but_not_on_its_last_legs() -> void:
 	for seed_value: int in 40:
 		_rng.seed = seed_value
 		var scores: Array = [Gen2BattleAI.DEFAULT_SCORE, Gen2BattleAI.DEFAULT_SCORE]
-		Gen2BattleAI._apply_smart(scores, healthy, charmander, _data, _rng, 0, 0, Gen2Weather.NONE)
+		Gen2BattleAI._apply_smart(
+			scores, Gen2BattleAI.Context.of(healthy, charmander, _data, _rng, 0, 0, Gen2Weather.NONE)
+		)
 		if int(scores[0]) < Gen2BattleAI.DEFAULT_SCORE:
 			lowered += 1
 	assert_gt(lowered, 0, "a fresh target is worth binding")
@@ -509,7 +522,9 @@ func test_smart_binds_a_fresh_target_but_not_on_its_last_legs() -> void:
 	for seed_value: int in 20:
 		_rng.seed = seed_value
 		var scores: Array = [Gen2BattleAI.DEFAULT_SCORE, Gen2BattleAI.DEFAULT_SCORE]
-		Gen2BattleAI._apply_smart(scores, spent, charmander, _data, _rng, 0, 0, Gen2Weather.NONE)
+		Gen2BattleAI._apply_smart(
+			scores, Gen2BattleAI.Context.of(spent, charmander, _data, _rng, 0, 0, Gen2Weather.NONE)
+		)
 		assert_eq(int(scores[0]), Gen2BattleAI.DEFAULT_SCORE, "nothing to hold it there with")
 
 
@@ -582,8 +597,7 @@ func test_smart_encourages_perish_song_against_a_player_that_cannot_run() -> voi
 		_rng.seed = seed_value
 		var scores: Array = [20, 20, 20, 20]
 		Gen2BattleAI._apply_smart(
-			scores, pikachu, geodude, _data, _rng, 0, 0, Gen2Weather.NONE,
-			Gen2Screens.NONE, Gen2Screens.NONE, true, Gen2AISwitch.BASE_SCORE
+			scores, Gen2BattleAI.Context.of(pikachu, geodude, _data, _rng, 0, 0, Gen2Weather.NONE, Gen2Screens.NONE, Gen2Screens.NONE, true, Gen2AISwitch.BASE_SCORE)
 		)
 		if int(scores[0]) < 20:
 			encouraged = true
@@ -604,8 +618,7 @@ func test_smart_discourages_perish_song_only_while_the_matchup_holds() -> void:
 		_rng.seed = seed_value
 		var losing: Array = [20, 20, 20, 20]
 		Gen2BattleAI._apply_smart(
-			losing, pikachu, geodude, _data, _rng, 0, 0, Gen2Weather.NONE,
-			Gen2Screens.NONE, Gen2Screens.NONE, true, Gen2AISwitch.BASE_SCORE - 1
+			losing, Gen2BattleAI.Context.of(pikachu, geodude, _data, _rng, 0, 0, Gen2Weather.NONE, Gen2Screens.NONE, Gen2Screens.NONE, true, Gen2AISwitch.BASE_SCORE - 1)
 		)
 		assert_eq(int(losing[0]), 20, "a losing matchup neither rolls nor nudges")
 
@@ -615,8 +628,7 @@ func test_smart_discourages_perish_song_only_while_the_matchup_holds() -> void:
 		_rng.seed = seed_value
 		var scores: Array = [20, 20, 20, 20]
 		Gen2BattleAI._apply_smart(
-			scores, pikachu, geodude, _data, _rng, 0, 0, Gen2Weather.NONE,
-			Gen2Screens.NONE, Gen2Screens.NONE, true, Gen2AISwitch.BASE_SCORE
+			scores, Gen2BattleAI.Context.of(pikachu, geodude, _data, _rng, 0, 0, Gen2Weather.NONE, Gen2Screens.NONE, Gen2Screens.NONE, true, Gen2AISwitch.BASE_SCORE)
 		)
 		if int(scores[0]) > 20:
 			discouraged = true
@@ -713,8 +725,7 @@ func _smart_scores(
 	_rng.seed = seed_value
 	var scores: Array = [20, 20, 20, 20]
 	Gen2BattleAI._apply_smart(
-		scores, attacker, defender, _data, _rng, 0, 0, Gen2Weather.NONE,
-		Gen2Screens.NONE, Gen2Screens.NONE, false, Gen2AISwitch.BASE_SCORE
+		scores, Gen2BattleAI.Context.of(attacker, defender, _data, _rng, 0, 0, Gen2Weather.NONE, Gen2Screens.NONE, Gen2Screens.NONE, false, Gen2AISwitch.BASE_SCORE)
 	)
 	return scores
 
@@ -872,15 +883,13 @@ func test_smart_discourages_a_force_switch_while_the_matchup_is_holding() -> voi
 
 	var scores: Array = [20, 20, 20, 20]
 	Gen2BattleAI._apply_smart(
-		scores, geodude, pikachu, _data, _rng, 0, 0, Gen2Weather.NONE,
-		Gen2Screens.NONE, Gen2Screens.NONE, true, Gen2AISwitch.BASE_SCORE
+		scores, Gen2BattleAI.Context.of(geodude, pikachu, _data, _rng, 0, 0, Gen2Weather.NONE, Gen2Screens.NONE, Gen2Screens.NONE, true, Gen2AISwitch.BASE_SCORE)
 	)
 	assert_eq(int(scores[0]), 21, "a neutral pairing is no reason to blow it away")
 
 	var losing: Array = [20, 20, 20, 20]
 	Gen2BattleAI._apply_smart(
-		losing, geodude, pikachu, _data, _rng, 0, 0, Gen2Weather.NONE,
-		Gen2Screens.NONE, Gen2Screens.NONE, true, Gen2AISwitch.BASE_SCORE - 1
+		losing, Gen2BattleAI.Context.of(geodude, pikachu, _data, _rng, 0, 0, Gen2Weather.NONE, Gen2Screens.NONE, Gen2Screens.NONE, true, Gen2AISwitch.BASE_SCORE - 1)
 	)
 	assert_eq(int(losing[0]), 20, "a pairing going badly is left alone")
 
@@ -1038,9 +1047,12 @@ func test_smart_lock_on_dismisses_itself_once_the_target_is_aimed_at() -> void:
 		Gen2BattleAI.DEFAULT_SCORE + Gen2BattleAI.DISCOURAGE_MOVE,
 		"aiming again is wasted"
 	)
-	assert_eq(int(scores[1]), Gen2BattleAI.DEFAULT_SCORE - 2,
-		"Disable stores 140, under the 180 the threshold compares against"
-	)
+	# Each slot is handed its own effect's handler as well, so Disable is read
+	# twice: Lock On encourages it by two for storing 140, under the 180 its
+	# threshold compares against, and `AI_Smart_Disable` puts one back because a
+	# powerless Disable against a player who has shown nothing worth taking away
+	# falls through to `.discourage`.
+	assert_eq(int(scores[1]), Gen2BattleAI.DEFAULT_SCORE - 1)
 	assert_eq(int(scores[2]), Gen2BattleAI.DEFAULT_SCORE,
 		"Screech stores 216 and never needed the help"
 	)
@@ -1280,3 +1292,391 @@ func test_cautious_leaves_the_first_turn_alone_under_both_rules() -> void:
 				Gen2BattleAI.UNUSABLE_SCORE, Gen2BattleAI.UNUSABLE_SCORE]
 		)
 	Gen2Rules.install(null)
+
+
+## `AI_Smart`'s own jumptable, transcribed from `engine/battle/ai/scoring.asm`
+## rather than read off the implementation: every effect the cartridge hands a
+## handler to. An entry missing here is a move the AI plays blind.
+const SMART_EFFECT_NUMBERS: Array[int] = [
+	1, 3, 7, 8, 9, 16, 17, 23, 25, 26, 28, 32, 33, 35, 38, 39, 40, 42, 43, 49,
+	54, 65, 67, 70, 79, 80, 81, 82, 84, 86, 89, 90, 91, 92, 93, 94, 96, 97, 98,
+	99, 100, 102, 103, 105, 106, 107, 108, 109, 111, 113, 114, 115, 116, 117,
+	118, 119, 120, 124, 126, 127, 128, 129, 132, 133, 134, 135, 136, 137, 142,
+	143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 155,
+]
+
+
+## `AI_Redundant`'s own table, transcribed the same way: the effects it will
+## call a wasted turn.
+const REDUNDANT_EFFECT_NUMBERS: Array[int] = [
+	8, 32, 35, 46, 47, 49, 57, 65, 79, 84, 86, 90, 92, 97, 106, 107, 112, 113,
+	114, 115, 118, 120, 124, 132, 133, 134, 136, 137, 148, 153,
+]
+
+
+## The effect numbers one scoring layer names, read out of the file and resolved
+## through [Gen2MoveEffect]'s own constants.
+func _dispatched_effects(function: String) -> Array[int]:
+	var source: String = FileAccess.get_file_as_string("res://game/battle/ai.gd")
+	assert_false(source.is_empty(), "the scoring file has to be readable")
+	var body: String = source.substr(source.find("static func %s(" % function))
+	body = body.substr(0, body.find("\n\n\nstatic func "))
+
+	var constants: Dictionary = (
+		load("res://game/battle/move_effect.gd") as GDScript
+	).get_script_constant_map()
+	var handled: Array[int] = []
+	for piece: String in body.split("Gen2MoveEffect."):
+		var name: String = piece.split(":")[0].split(",")[0].split(" ")[0] \
+			.split(")")[0].strip_edges()
+		if not constants.has(name):
+			continue
+		var number: int = int(constants[name])
+		if not handled.has(number):
+			handled.append(number)
+	handled.sort()
+	return handled
+
+
+## Every row of `AI_Basic`'s redundancy table has an arm.
+func test_every_redundancy_row_has_a_handler() -> void:
+	var handled: Array[int] = _dispatched_effects("_apply_basic")
+	# Six rows are dispatched through a table rather than an arm, so the two
+	# tables count as dispatch too.
+	for effect: int in Gen2BattleAI.SCREEN_FOR_EFFECT.keys():
+		handled.append(int(effect))
+	for effect: int in Gen2BattleAI.WEATHER_FOR_EFFECT.keys():
+		handled.append(int(effect))
+	var missing: Array[int] = []
+	for number: int in REDUNDANT_EFFECT_NUMBERS:
+		if not handled.has(number):
+			missing.append(number)
+	assert_eq(missing, [] as Array[int], "every AI_Redundant row needs an arm")
+
+
+## The one assertion that cannot be made by running a single pairing: which
+## effects `_apply_smart` dispatches at all. The arms are read out of the file
+## and resolved through [Gen2MoveEffect]'s own constants, so a renamed constant
+## fails here rather than silently dropping a row.
+func test_every_smart_jumptable_entry_has_a_handler() -> void:
+	var handled: Array[int] = _dispatched_effects("_apply_smart")
+	var missing: Array[int] = []
+	for number: int in SMART_EFFECT_NUMBERS:
+		if not handled.has(number):
+			missing.append(number)
+	assert_eq(missing, [] as Array[int], "every AI_Smart row needs an arm")
+
+
+## One context per assertion, so a handler is read on its own rather than
+## through whichever trainer class happens to carry AI_SMART.
+func _smart(
+	attacker: Gen2BattleMon, defender: Gen2BattleMon, def_turns: int = 1,
+	has_bench: bool = false, defender_has_bench: bool = false,
+	defender_used_moves: Array = [], bench_status_mask: int = Gen2Status.NONE,
+	attacker_screens: int = Gen2Screens.NONE
+) -> Array:
+	var scores: Array = [
+		Gen2BattleAI.DEFAULT_SCORE, Gen2BattleAI.DEFAULT_SCORE,
+		Gen2BattleAI.DEFAULT_SCORE, Gen2BattleAI.DEFAULT_SCORE,
+	]
+	Gen2BattleAI._apply_smart(
+		scores, Gen2BattleAI.Context.of(
+			attacker, defender, _data, _rng, 1, def_turns, Gen2Weather.NONE,
+			attacker_screens, Gen2Screens.NONE, has_bench,
+			Gen2AISwitch.BASE_SCORE, defender_has_bench, defender_used_moves,
+			bench_status_mask
+		)
+	)
+	return scores
+
+
+## `AI_Smart_Ohko`: the move refuses above the user's own level, so the AI
+## refuses first, and a healthy target is not worth the accuracy either.
+func test_smart_ohko_reads_level_then_health() -> void:
+	var low: Gen2BattleMon = _mon(Fixture.PIKACHU, 20, [Fixture.OHKO_MOVE])
+	var tall: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
+	assert_eq(
+		int(_smart(low, tall)[0]),
+		Gen2BattleAI.DEFAULT_SCORE + Gen2BattleAI.DISCOURAGE_MOVE,
+		"a higher level dismisses it outright"
+	)
+
+	var high: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.OHKO_MOVE])
+	var short: Gen2BattleMon = _mon(Fixture.GEODUDE, 20, [Fixture.TACKLE])
+	assert_eq(int(_smart(high, short)[0]), Gen2BattleAI.DEFAULT_SCORE,
+		"a target above half is left alone"
+	)
+	short.hp = 1
+	# `AICheckPlayerHalfHP / ret c / inc [hl]`, and pret's own comment agrees:
+	# the discouragement is for a target *below* half, where an ordinary attack
+	# would finish it without the accuracy.
+	assert_eq(int(_smart(high, short)[0]), Gen2BattleAI.DEFAULT_SCORE + 1)
+
+
+## `AI_Smart_SuperFang` and `AI_Smart_LeechSeed`, one HP threshold each: halving
+## what is nearly gone, or seeding it, buys nothing.
+func test_smart_super_fang_and_leech_seed_read_the_target_health() -> void:
+	var pikachu: Gen2BattleMon = _mon(
+		Fixture.PIKACHU, 50, [Fixture.SUPER_FANG_MOVE, Fixture.LEECH_SEED]
+	)
+	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
+	assert_eq(
+		_smart(pikachu, geodude).slice(0, 2),
+		[Gen2BattleAI.DEFAULT_SCORE, Gen2BattleAI.DEFAULT_SCORE],
+		"a healthy target leaves both alone"
+	)
+
+	geodude.hp = 1
+	assert_eq(
+		_smart(pikachu, geodude).slice(0, 2),
+		[Gen2BattleAI.DEFAULT_SCORE + 1, Gen2BattleAI.DEFAULT_SCORE + 1]
+	)
+
+
+## `AI_Smart_Substitute`: a doll costs a quarter of the maximum, so anything
+## below half dismisses it rather than discouraging it.
+func test_smart_substitute_is_dismissed_below_half() -> void:
+	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.SUBSTITUTE])
+	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
+	assert_eq(int(_smart(pikachu, geodude)[0]), Gen2BattleAI.DEFAULT_SCORE)
+	pikachu.hp = 1
+	assert_eq(
+		int(_smart(pikachu, geodude)[0]),
+		Gen2BattleAI.DEFAULT_SCORE + Gen2BattleAI.DISCOURAGE_MOVE
+	)
+
+
+## `AI_Smart_Selfdestruct`: `FindAliveEnemyMons` sets carry on the *last* mon,
+## which is the reading that decides the whole routine.
+func test_smart_selfdestruct_trades_only_when_there_is_nothing_to_trade() -> void:
+	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.SELFDESTRUCT])
+	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
+	pikachu.hp = 1
+
+	assert_eq(
+		int(_smart(pikachu, geodude, 1, false, true)[0]),
+		Gen2BattleAI.DEFAULT_SCORE + 3,
+		"the last mon against a player who still has a bench refuses"
+	)
+	assert_eq(
+		int(_smart(pikachu, geodude, 1, false, false)[0]),
+		Gen2BattleAI.DEFAULT_SCORE,
+		"nearly gone and both sides on their last, it is a fair trade"
+	)
+
+	pikachu.hp = pikachu.max_hp()
+	assert_eq(
+		int(_smart(pikachu, geodude, 1, true, false)[0]),
+		Gen2BattleAI.DEFAULT_SCORE + 3,
+		"a healthy mon has better things to do"
+	)
+
+
+## `AI_Smart_HealBell`: dismissed with nothing to cure, encouraged with the one
+## that is out statused, and the party mask is what tells the two apart.
+func test_smart_heal_bell_reads_the_whole_party() -> void:
+	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.HEAL_BELL])
+	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
+	assert_eq(
+		int(_smart(pikachu, geodude)[0]),
+		Gen2BattleAI.DEFAULT_SCORE + Gen2BattleAI.DISCOURAGE_MOVE,
+		"nobody statused, nothing to ring for"
+	)
+	assert_eq(
+		int(_smart(pikachu, geodude, 1, false, false, [], Gen2Status.BURN)[0]),
+		Gen2BattleAI.DEFAULT_SCORE,
+		"a burned bench member is worth a bell but not an encouragement"
+	)
+
+	pikachu.status = Gen2Status.BURN
+	assert_eq(
+		int(_smart(pikachu, geodude, 1, false, false, [], Gen2Status.BURN)[0]),
+		Gen2BattleAI.DEFAULT_SCORE - 1
+	)
+
+
+## `AI_Smart_PriorityHit`: for going second, never against a target that cannot
+## be reached, and encouraged only when it would actually finish the job.
+func test_smart_priority_hit_is_for_going_second() -> void:
+	var slow: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.QUICK_ATTACK])
+	var fast: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.TACKLE])
+	assert_eq(int(_smart(slow, fast)[0]), Gen2BattleAI.DEFAULT_SCORE,
+		"a target it cannot yet kill is left alone"
+	)
+
+	fast.substatus = Gen2Substatus.FLYING
+	assert_eq(
+		int(_smart(slow, fast)[0]),
+		Gen2BattleAI.DEFAULT_SCORE + Gen2BattleAI.DISCOURAGE_MOVE,
+		"nothing reaches a Pokémon in the air"
+	)
+
+	fast.substatus = Gen2Substatus.NONE
+	fast.hp = 1
+	assert_eq(int(_smart(slow, fast)[0]), Gen2BattleAI.DEFAULT_SCORE - 3)
+
+	assert_eq(int(_smart(fast, slow)[0]), Gen2BattleAI.DEFAULT_SCORE,
+		"the faster side returns before it reads anything"
+	)
+
+
+## `AI_Smart_Fly` and `AI_Smart_FutureSight`: the same two flags read from in
+## front, for three points and two.
+func test_smart_fly_and_future_sight_punish_a_semi_invulnerable_target() -> void:
+	var pikachu: Gen2BattleMon = _mon(
+		Fixture.PIKACHU, 50, [Fixture.FLY, Fixture.FUTURE_SIGHT]
+	)
+	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
+	assert_eq(
+		_smart(pikachu, geodude).slice(0, 2),
+		[Gen2BattleAI.DEFAULT_SCORE, Gen2BattleAI.DEFAULT_SCORE]
+	)
+
+	geodude.substatus = Gen2Substatus.UNDERGROUND
+	assert_eq(
+		_smart(pikachu, geodude).slice(0, 2),
+		[Gen2BattleAI.DEFAULT_SCORE - 3, Gen2BattleAI.DEFAULT_SCORE - 2]
+	)
+
+
+## `AI_Smart_Earthquake` and `AI_Smart_Gust`: the remembered move is the gate,
+## and the flag decides whether it is a punish or a guess.
+func test_smart_earthquake_reads_the_remembered_dig() -> void:
+	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.EARTHQUAKE])
+	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.DIG])
+	assert_eq(int(_smart(pikachu, geodude)[0]), Gen2BattleAI.DEFAULT_SCORE,
+		"no remembered Dig, nothing to punish"
+	)
+
+	geodude.last_counter_move = Fixture.DIG
+	geodude.substatus = Gen2Substatus.UNDERGROUND
+	assert_eq(int(_smart(pikachu, geodude)[0]), Gen2BattleAI.DEFAULT_SCORE - 2)
+
+
+## `AI_Smart_Counter` and `AI_Smart_MirrorCoat`: one routine reading opposite
+## halves of the physical/special split out of `wPlayerUsedMoves`.
+func test_smart_counter_and_mirror_coat_split_the_remembered_moves() -> void:
+	var pikachu: Gen2BattleMon = _mon(
+		Fixture.PIKACHU, 50, [Fixture.COUNTER, Fixture.MIRROR_COAT]
+	)
+	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
+
+	# Tackle is Normal and Thunderbolt is Electric, so one is physical and the
+	# other special: three of each is what the routine's own threshold wants.
+	var physical: Array = [Fixture.TACKLE]
+	assert_eq(int(_smart(pikachu, geodude, 1, false, false, physical)[1]),
+		Gen2BattleAI.DEFAULT_SCORE + 1,
+		"nothing special remembered, so Mirror Coat is a guess"
+	)
+	assert_eq(int(_smart(pikachu, geodude, 1, false, false, [])[0]),
+		Gen2BattleAI.DEFAULT_SCORE + 1,
+		"nothing remembered at all discourages both"
+	)
+
+
+## `AI_Smart_Encore`: only from in front, and never with nothing to lock into.
+func test_smart_encore_needs_speed_and_a_remembered_move() -> void:
+	var slow: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.ENCORE_MOVE])
+	var fast: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.ENCORE_MOVE])
+	assert_eq(int(_smart(slow, fast)[0]), Gen2BattleAI.DEFAULT_SCORE + 3)
+
+	assert_eq(
+		int(_smart(fast, slow)[0]),
+		Gen2BattleAI.DEFAULT_SCORE + Gen2BattleAI.DISCOURAGE_MOVE,
+		"a player that has done nothing yet dismisses it"
+	)
+
+
+## `AI_Smart_Curse`'s Ghost half: never twice on the same target.
+func test_smart_ghost_curse_refuses_a_cursed_target() -> void:
+	var gastly: Gen2BattleMon = _mon(Fixture.GASTLY, 50, [Fixture.CURSE])
+	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
+	geodude.substatus = Gen2Substatus.CURSE
+	assert_eq(
+		int(_smart(gastly, geodude)[0]),
+		Gen2BattleAI.DEFAULT_SCORE + Gen2BattleAI.DISCOURAGE_MOVE
+	)
+
+	geodude.substatus = Gen2Substatus.NONE
+	assert_eq(int(_smart(gastly, geodude, 1, false, true)[0]),
+		Gen2BattleAI.DEFAULT_SCORE + 4,
+		"the last Ghost against a player with a bench refuses hardest"
+	)
+
+
+## `AI_Smart_HiddenPower`: the enemy's own DVs decide the type and the power,
+## and both have to be worth it.
+func test_smart_hidden_power_reads_the_users_own_dvs() -> void:
+	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.HIDDEN_POWER])
+	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
+	var resolved: Dictionary = Gen2Damage.hidden_power(pikachu.dvs)
+	var matchup: int = _data.type_effectiveness(int(resolved["type"]), geodude.types())
+	var expected: int = Gen2BattleAI.DEFAULT_SCORE
+	if matchup < RomLayout.MATCHUP_EFFECTIVE or int(resolved["power"]) < 50:
+		expected += 1
+	elif matchup > RomLayout.MATCHUP_EFFECTIVE or int(resolved["power"]) >= 70:
+		expected -= 1
+	assert_eq(int(_smart(pikachu, geodude)[0]), expected)
+
+
+## `AI_Smart_SpDefenseUp2`: Amnesia is for a healthy mon that has not already
+## spent the stages, and the two thresholds are one apart.
+func test_smart_amnesia_reads_health_then_stages() -> void:
+	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.AMNESIA])
+	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
+	pikachu.hp = 1
+	assert_eq(int(_smart(pikachu, geodude)[0]), Gen2BattleAI.DEFAULT_SCORE + 1)
+
+	pikachu.hp = pikachu.max_hp()
+	pikachu.stages["sp_defense"] = 4
+	assert_eq(int(_smart(pikachu, geodude)[0]), Gen2BattleAI.DEFAULT_SCORE + 1)
+
+	pikachu.stages["sp_defense"] = 2
+	assert_eq(int(_smart(pikachu, geodude)[0]), Gen2BattleAI.DEFAULT_SCORE,
+		"two stages in it stops asking"
+	)
+
+
+## `AI_Smart_Stomp` and `AI_Smart_Attract`, both an 80% pass: what has to be
+## visible is that either side of the roll is reachable.
+func test_smart_stomp_and_attract_are_reachable_both_ways() -> void:
+	var pikachu: Gen2BattleMon = _mon(
+		Fixture.PIKACHU, 50, [Fixture.STOMP, Fixture.ATTRACT_MOVE]
+	)
+	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
+	geodude.minimized = true
+
+	var stomps: Array = []
+	var attracts: Array = []
+	for seed_value: int in 40:
+		_rng.seed = seed_value
+		var scores: Array = _smart(pikachu, geodude, 0)
+		if not stomps.has(scores[0]):
+			stomps.append(scores[0])
+		if not attracts.has(scores[1]):
+			attracts.append(scores[1])
+	stomps.sort()
+	attracts.sort()
+	assert_eq(stomps, [Gen2BattleAI.DEFAULT_SCORE - 1, Gen2BattleAI.DEFAULT_SCORE])
+	assert_eq(attracts, [Gen2BattleAI.DEFAULT_SCORE - 1, Gen2BattleAI.DEFAULT_SCORE])
+
+
+## `AI_Smart_RapidSpin`: three things stuck to the enemy's own side, and the
+## screens flag is the one that is not on the Pokémon.
+func test_smart_rapid_spin_reads_the_enemys_own_side() -> void:
+	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.RAPID_SPIN])
+	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
+	for seed_value: int in 40:
+		_rng.seed = seed_value
+		assert_eq(int(_smart(pikachu, geodude)[0]), Gen2BattleAI.DEFAULT_SCORE)
+
+	var seen: Array = []
+	for seed_value: int in 40:
+		_rng.seed = seed_value
+		var score: int = int(
+			_smart(pikachu, geodude, 1, false, false, [], Gen2Status.NONE, Gen2Screens.SPIKES)[0]
+		)
+		if not seen.has(score):
+			seen.append(score)
+	seen.sort()
+	assert_eq(seen, [Gen2BattleAI.DEFAULT_SCORE - 2, Gen2BattleAI.DEFAULT_SCORE])

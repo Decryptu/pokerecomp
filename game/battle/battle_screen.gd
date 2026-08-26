@@ -2941,8 +2941,22 @@ func _enemy_slot() -> int:
 		_battle.mon(Gen2Battle.ENEMY).turns_taken, _battle.mon(Gen2Battle.PLAYER).turns_taken,
 		_battle.weather,
 		_battle.screens[Gen2Battle.ENEMY], _battle.screens[Gen2Battle.PLAYER],
-		Gen2AISwitch.has_bench(_battle), Gen2AISwitch.matchup_score(_battle)
+		Gen2AISwitch.has_bench(_battle), Gen2AISwitch.matchup_score(_battle),
+		Gen2AISwitch.has_bench(_battle, Gen2Battle.PLAYER), _battle.player_used_moves,
+		_party_status_mask(Gen2Battle.ENEMY)
 	)
+
+
+## `AI_Smart_HealBell`'s walk of `wOTPartyMon1HP`: every living party member's
+## status byte ored together, the one that is out included.
+func _party_status_mask(side: int) -> int:
+	var party: Gen2Party = _battle.party(side)
+	var mask: int = Gen2Status.NONE
+	for index: int in party.size():
+		var member: Gen2BattleMon = party.at(index)
+		if member != null and not member.is_fainted():
+			mask |= member.status
+	return mask
 
 
 ## What the enemy does with the turn, which is a move unless its trainer reaches
