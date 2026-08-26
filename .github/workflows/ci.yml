@@ -30,6 +30,26 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # A workflow that names an action version which does not exist fails at
+      # "Set up job", and release.yml only runs on a tag, so without this the
+      # first place anyone learns of it is a release that never built.
+      - name: Every action version resolves
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for ref in $(grep -rhoE 'actions/[a-z-]+@v[0-9.]+' .github/workflows/ \
+                        | sort -u); do
+            if gh api "repos/${ref%@*}/git/ref/tags/${ref#*@}" >/dev/null 2>&1; then
+              echo "ok       $ref"
+            else
+              echo "::error::$ref does not resolve"
+              missing=1
+            fi
+          done
+          exit $missing
+
       - name: Cache Godot binary
         id: godot-cache
         uses: actions/cache@v6
