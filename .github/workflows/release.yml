@@ -55,9 +55,15 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+  templates:
+    needs: version
+    uses: ./.github/workflows/export-templates.yml
+    with:
+      ref: ${{ needs.version.outputs.tag }}
+
   linux-windows-android:
     name: linux, windows and android
-    needs: version
+    needs: [version, templates]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -85,9 +91,21 @@ jobs:
           mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_TEMPLATE_DIR}"
           cp -R /tmp/tpz/templates/. "$HOME/.local/share/godot/export_templates/${GODOT_TEMPLATE_DIR}/"
 
-      # class_name resolution is what makes the presets exportable at all, and
-      # this is the first step to run the binary: swallowing its exit code here
-      # is what left a killed Godot to be reported later as a failed export.
+      # Only the names built here are replaced, so nothing can lose a target:
+      # a stock template stays until something takes its place.
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: templates-{linux-x86_64,linux-arm64,windows,android}
+          path: /tmp/templates
+          merge-multiple: true
+      - name: Overlay the project's own export templates
+        run: |
+          set -euo pipefail
+          dir="$HOME/.local/share/godot/export_templates/${GODOT_TEMPLATE_DIR}"
+          before=$(du -sk "$dir" | cut -f1)
+          cp -f /tmp/templates/* "$dir/"
+          echo "template directory: ${before} kB -> $(du -sk "$dir" | cut -f1) kB"
+
       - name: Import
         run: |
           set -euo pipefail
@@ -150,12 +168,12 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: linux-windows-android
+          name: dist-linux-windows-android
           path: dist/*
 
   apple:
     name: macos and ios
-    needs: version
+    needs: [version, templates]
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -180,6 +198,28 @@ jobs:
           unzip -q /tmp/templates.tpz -d /tmp/tpz
           mkdir -p "$HOME/Library/Application Support/Godot/export_templates/${GODOT_TEMPLATE_DIR}"
           cp -R /tmp/tpz/templates/. "$HOME/Library/Application Support/Godot/export_templates/${GODOT_TEMPLATE_DIR}/"
+
+      # macOS is a whole template; iOS is one static library inside the stock
+      # archive, because that template is an Xcode project around several
+      # xcframeworks and the export only ever reaches for the release device
+      # slice.
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: templates-{macos,ios}
+          path: /tmp/templates
+          merge-multiple: true
+      - name: Overlay the project's own export templates
+        run: |
+          set -euo pipefail
+          dir="$HOME/Library/Application Support/Godot/export_templates/${GODOT_TEMPLATE_DIR}"
+          before=$(du -sk "$dir" | cut -f1)
+          cp -f /tmp/templates/macos.zip "$dir/macos.zip"
+          slice=libgodot.ios.release.xcframework/ios-arm64
+          mkdir -p "/tmp/ios/$slice"
+          cp /tmp/templates/libgodot.ios.release.a "/tmp/ios/$slice/libgodot.a"
+          # `zip` replaces a member that is already there.
+          ( cd /tmp/ios && zip -q "$dir/ios.zip" "$slice/libgodot.a" )
+          echo "template directory: ${before} kB -> $(du -sk "$dir" | cut -f1) kB"
 
       - name: Import
         run: |
@@ -237,7 +277,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: apple
+          name: dist-apple
           path: dist/*
 
   publish:
@@ -251,6 +291,7 @@ jobs:
 
       - uses: actions/download-artifact@v8
         with:
+          pattern: dist-*
           path: staged
           merge-multiple: true
 

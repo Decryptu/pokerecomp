@@ -1,0 +1,143 @@
+name: export templates
+
+# Builds the engine every published download is wrapped around.
+#
+# Stock export templates carry every renderer and every importable format,
+# unstripped, and they are around nine tenths of a download's weight.
+# `tools/build_export_templates.sh` builds the same pin without the parts
+# nothing here can execute, and says which and why.
+#
+# `release.yml` calls this. It also runs on its own, because building the engine
+# is the slow half of a release and a tag is a bad place to find out that a
+# toolchain moved: dispatch it first, watch it go green, and the release that
+# follows takes the cache.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Commit, branch or tag to build from"
+        required: true
+        type: string
+  # The engine is rebuilt when the flag set moves, which is the one change that
+  # can break a release without touching a line of the game.
+  pull_request:
+    paths:
+      - tools/build_export_templates.sh
+      - .github/workflows/export-templates.yml
+  # A cache nothing reads for seven days is deleted, and a release would then
+  # pay the whole build again without anything having changed. Restoring it is
+  # what keeps it, so this runs weekly and finishes in seconds.
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit, branch or tag to build from"
+        required: false
+        type: string
+
+env:
+  GODOT_VERSION: 4.8-dev3
+  # A development snapshot is tagged nowhere in the engine repository, so the
+  # pin is the commit the stock templates name themselves after:
+  # `4.8.dev3.official.51105ccbe`. The build checks that it still agrees.
+  GODOT_COMMIT: 51105ccbe58381774ecd7a7486d564b202a5192e
+
+jobs:
+  build:
+    name: ${{ matrix.host }}
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - host: linux-x86_64
+            runs-on: ubuntu-latest
+            targets: linux-x86_64
+          # A public repository gets Arm runners, so this is a native build
+          # rather than a cross toolchain nobody can test.
+          - host: linux-arm64
+            runs-on: ubuntu-24.04-arm
+            targets: linux-arm64
+          - host: windows
+            runs-on: windows-latest
+            targets: windows-x86_64 windows-arm64
+          - host: macos
+            runs-on: macos-latest
+            targets: macos
+          - host: ios
+            runs-on: macos-latest
+            targets: ios
+          - host: android
+            runs-on: ubuntu-latest
+            targets: android
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      # Building the engine costs the better part of an hour and the result only
+      # changes when the pin or the flag set does, so the key carries both.
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: templates
+          key: templates-${{ matrix.host }}-${{ env.GODOT_VERSION }}-${{ hashFiles('tools/build_export_templates.sh') }}
+
+      - uses: actions/setup-java@v6
+        if: steps.cache.outputs.cache-hit != 'true' && matrix.host == 'android'
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install the toolchain
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          case "${{ runner.os }}" in
+            Linux)
+              sudo apt-get update
+              # What a linuxbsd build links against. The Android target needs
+              # none of it, but the package set is cheap next to the build.
+              sudo apt-get install -y scons \
+                libx11-dev libxcursor-dev libxinerama-dev libxi-dev \
+                libxrandr-dev libwayland-dev libxkbcommon-dev libudev-dev \
+                libasound2-dev libpulse-dev libgl1-mesa-dev
+              ;;
+            macOS) brew install scons ;;
+            Windows) python -m pip install --disable-pip-version-check scons ;;
+          esac
+
+      - name: Build
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          git init -q godot-src
+          git -C godot-src remote add origin https://github.com/godotengine/godot.git
+          git -C godot-src fetch -q --depth 1 origin "$GODOT_COMMIT"
+          git -C godot-src checkout -q FETCH_HEAD
+
+          # A pin that has drifted from the version the release installs stock
+          # templates for would mix two engines in one download. Only the
+          # series can be checked: a snapshot number is stamped by the engine's
+          # own release process and is nowhere in the source.
+          pin=$(python3 -c "import runpy; v = runpy.run_path('godot-src/version.py'); print('%s.%s' % (v['major'], v['minor']))")
+          if [ "$pin" != "${GODOT_VERSION%%-*}" ]; then
+            echo "::error::the pinned commit is Godot $pin, the release installs stock $GODOT_VERSION templates"
+            exit 1
+          fi
+
+          jobs=$(python3 -c 'import os; print(os.cpu_count())')
+          SCONSFLAGS="-j$jobs" \
+            tools/build_export_templates.sh godot-src templates ${{ matrix.targets }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: templates-${{ matrix.host }}
+          path: templates/*
+          retention-days: 1
