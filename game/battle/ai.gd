@@ -51,36 +51,36 @@ class Context extends RefCounted:
 	## The same argument list [method Gen2BattleAI.score_slots] takes, so one
 	## layer can be run on its own without restating the whole page.
 	static func of(
-		attacker: Gen2BattleMon,
-		defender: Gen2BattleMon,
-		data: GameData,
-		rng: RandomNumberGenerator,
-		atk_turns: int = 0,
-		def_turns: int = 0,
-		weather: int = Gen2Weather.NONE,
-		attacker_screens: int = Gen2Screens.NONE,
-		defender_screens: int = Gen2Screens.NONE,
-		has_bench: bool = false,
-		matchup_score: int = Gen2AISwitch.BASE_SCORE,
-		defender_has_bench: bool = false,
-		defender_used_moves: Array = [],
-		bench_status_mask: int = Gen2Status.NONE
+		p_attacker: Gen2BattleMon,
+		p_defender: Gen2BattleMon,
+		p_data: GameData,
+		p_rng: RandomNumberGenerator,
+		p_atk_turns: int = 0,
+		p_def_turns: int = 0,
+		p_weather: int = Gen2Weather.NONE,
+		p_attacker_screens: int = Gen2Screens.NONE,
+		p_defender_screens: int = Gen2Screens.NONE,
+		p_has_bench: bool = false,
+		p_matchup_score: int = Gen2AISwitch.BASE_SCORE,
+		p_defender_has_bench: bool = false,
+		p_defender_used_moves: Array = [],
+		p_bench_status_mask: int = Gen2Status.NONE
 	) -> Context:
 		var out := Context.new()
-		out.attacker = attacker
-		out.defender = defender
-		out.data = data
-		out.rng = rng
-		out.atk_turns = atk_turns
-		out.def_turns = def_turns
-		out.weather = weather
-		out.attacker_screens = attacker_screens
-		out.defender_screens = defender_screens
-		out.has_bench = has_bench
-		out.matchup_score = matchup_score
-		out.defender_has_bench = defender_has_bench
-		out.defender_used_moves.assign(defender_used_moves)
-		out.bench_status_mask = bench_status_mask
+		out.attacker = p_attacker
+		out.defender = p_defender
+		out.data = p_data
+		out.rng = p_rng
+		out.atk_turns = p_atk_turns
+		out.def_turns = p_def_turns
+		out.weather = p_weather
+		out.attacker_screens = p_attacker_screens
+		out.defender_screens = p_defender_screens
+		out.has_bench = p_has_bench
+		out.matchup_score = p_matchup_score
+		out.defender_has_bench = p_defender_has_bench
+		out.defender_used_moves.assign(p_defender_used_moves)
+		out.bench_status_mask = p_bench_status_mask
 		return out
 
 
