@@ -274,6 +274,9 @@ const STEEL_WING: int = 211
 const SACRED_FIRE: int = 221
 const STOMP: int = 23
 const MINIMIZE: int = 107
+const QUICK_ATTACK: int = 98
+const AMNESIA: int = 133
+const ICY_WIND: int = 196
 const SPLASH: int = 150
 const SWAGGER: int = 207
 
@@ -756,6 +759,12 @@ static func _moves() -> Array:
 		# `MinimizeDropSub` has to compare the move number: nothing about the
 		# effect byte tells it from Double Team.
 		MINIMIZE: ["MINIMIZE", 0, NORMAL, 255, 20, Gen2MoveEffect.STAT_UP_BASE + 6, 0],
+		# The three rows `AI_Smart` reads by hand: a priority move, the one
+		# special-defence raise it scores, and the only move of the speed-down
+		# effect its handler will act on.
+		QUICK_ATTACK: ["QUICK ATTACK", 40, NORMAL, 255, 30, Gen2MoveEffect.PRIORITY_HIT, 0],
+		AMNESIA: ["AMNESIA", 0, PSYCHIC_TYPE, 255, 20, Gen2MoveEffect.SP_DEF_UP_2, 0],
+		ICY_WIND: ["ICY WIND", 55, ICE, 242, 15, Gen2MoveEffect.SPEED_DOWN_HIT, 256],
 		SPLASH: ["SPLASH", 0, NORMAL, 255, 40, Gen2MoveEffect.SPLASH, 0],
 		SWAGGER: ["SWAGGER", 0, NORMAL, 229, 15, Gen2MoveEffect.SWAGGER, 255],
 		# The last row of the effects table. All nine store an accuracy of 255, so
