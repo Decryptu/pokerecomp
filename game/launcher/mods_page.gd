@@ -45,6 +45,13 @@ var _listings: Dictionary = {}
 var _pending: Dictionary = {}
 var _busy: bool = false
 var _check_queue: Array[String] = []
+## Feeds this page has already tried to read on its own, so a source whose
+## server is down is attempted once rather than on every rebuild of the list.
+var _read_once: Dictionary = {}
+## Whether the queue being drained is the page reading a source nobody asked it
+## to. It says nothing when it finishes; a player who pressed the button gets a
+## count either way.
+var _reading_quietly: bool = false
 var _check_updates_button: Gen2LauncherButton = null
 ## Its own request, because the page's other one is serialised behind `_busy`
 ## and an icon must never make a player wait for a download or a feed.
@@ -142,6 +149,25 @@ func refresh() -> void:
 		_detail.set_row(_row_for(_detail.mod_id()))
 	if _sources != null:
 		_sources.refresh()
+	_read_unread_sources()
+
+
+## Reads a source that has never been read, once. Every build follows this
+## project's own index, and without this it would list nothing until the player
+## thought to press Check for updates.
+func _read_unread_sources() -> void:
+	if _busy or not _check_queue.is_empty() or not is_inside_tree():
+		return
+	for source: Dictionary in Gen2ModIndex.followed():
+		var feed: String = String(source["feed"])
+		if not _listings.has(feed) and not _read_once.has(feed):
+			_read_once[feed] = true
+			_check_queue.append(feed)
+	if _check_queue.is_empty():
+		return
+	_reading_quietly = true
+	_check_updates_button.set_disabled_state(true)
+	_check_next_source()
 
 
 func _relist() -> void:
@@ -180,7 +206,7 @@ func _empty_state() -> Control:
 	icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	box.add_child(icon)
 	var line: Label = Gen2LauncherUI.muted(
-		_theme, "No mods yet. Install a .zip, or follow a source to browse one."
+		_theme, "No mods yet. Install a .zip, or read a source to browse what it lists."
 	)
 	line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(line)
@@ -400,11 +426,11 @@ func fetch_feed(feed: String) -> void:
 func check_for_updates() -> void:
 	if _busy or not _check_queue.is_empty():
 		return
+	# Never empty: every build follows this project's own index.
 	for source: Dictionary in Gen2ModIndex.followed():
+		_read_once[String(source["feed"])] = true
 		_check_queue.append(String(source["feed"]))
-	if _check_queue.is_empty():
-		_status("Follow a source before checking for updates.", _theme.muted)
-		return
+	_reading_quietly = false
 	_check_updates_button.set_disabled_state(true)
 	_status("Checking mod sources for updates...", _theme.muted)
 	_check_next_source()
@@ -413,7 +439,11 @@ func check_for_updates() -> void:
 func _check_next_source() -> void:
 	if _check_queue.is_empty():
 		_check_updates_button.set_disabled_state(false)
+		var quietly: bool = _reading_quietly
+		_reading_quietly = false
 		refresh()
+		if quietly:
+			return
 		var count: int = available_update_count()
 		_status(
 			"%d mod update%s available. Choose its download button to install." % [
@@ -641,6 +671,9 @@ func _icon_square(row: Dictionary) -> Control:
 ## is asked for then. Nothing else here starts a request on its own.
 func _ready() -> void:
 	_fetch_next_icon()
+	# The page is built before it is in the tree, so the first `refresh` cannot
+	# make a request. This is the one that reads the built-in source.
+	_read_unread_sources()
 
 
 func _fetch_next_icon() -> void:

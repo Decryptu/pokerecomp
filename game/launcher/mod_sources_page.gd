@@ -76,18 +76,8 @@ func _build() -> void:
 
 func refresh() -> void:
 	Gen2LauncherUI.clear(_list)
-	var sources: Array[Dictionary] = Gen2ModIndex.followed()
-	if sources.is_empty():
-		var empty: Gen2LauncherCard = Gen2LauncherCard.well(
-			_theme, Gen2LauncherTheme.RADIUS_MD, 28
-		)
-		var line: Label = Gen2LauncherUI.muted(_theme, "No source followed yet.")
-		line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		empty.add_child(line)
-		_list.add_child(empty)
-		_list.add_child(Gen2LauncherUI.dock_safe_space())
-		return
-	for source: Dictionary in sources:
+	# Never empty: the project's own index is followed by every build.
+	for source: Dictionary in Gen2ModIndex.followed():
 		_list.add_child(_card(source))
 	_list.add_child(Gen2LauncherUI.dock_safe_space())
 
@@ -110,12 +100,14 @@ func _card(source: Dictionary) -> Control:
 	update.pressed.connect(func() -> void: refresh_requested.emit(feed))
 	line.add_child(update)
 
-	var forget: Gen2LauncherButton = Gen2LauncherButton.icon_only(
-		_theme, &"trash", Gen2LauncherButton.Variant.DANGER, 40.0
-	)
-	forget.tooltip_text = "Stop following this source"
-	forget.pressed.connect(func() -> void: _unfollow(feed))
-	line.add_child(forget)
+	# The built-in one is part of the build, so there is no button to drop it.
+	if not Gen2ModIndex.is_built_in_source(feed):
+		var forget: Gen2LauncherButton = Gen2LauncherButton.icon_only(
+			_theme, &"trash", Gen2LauncherButton.Variant.DANGER, 40.0
+		)
+		forget.tooltip_text = "Stop following this source"
+		forget.pressed.connect(func() -> void: _unfollow(feed))
+		line.add_child(forget)
 	return panel
 
 

@@ -9,8 +9,11 @@ extends RefCounted
 ## required to match, so appearing in a feed buys a mod no trust that picking
 ## the same file by hand would not.
 ##
-## No index ships with the game and none is ever added on its own. Following one
-## is the player trusting whoever publishes it, so it is always their act.
+## One index ships with the game: this project's own, in [constant
+## BUILT_IN_FEED]. It is a listing and nothing more, so a build carrying it has
+## installed nothing and downloaded nothing until the player picks a mod out of
+## it. Every other index is the player trusting a publisher we did not choose
+## for them, so adding one is always their act and only theirs.
 ##
 ## Everything above "fetching" is pure: no HTTP, no filesystem. The feed format
 ## is a contract with people we will never meet, so its rules are worth testing
@@ -24,7 +27,17 @@ const MAX_FEED_BYTES: int = 4 * 1024 * 1024
 ## Entries beyond this are ignored rather than refused, so one over-long feed
 ## does not make the whole index unusable.
 const MAX_ENTRIES: int = 500
-## The indexes this player follows. Small enough to keep beside the mods rather
+## The project's own index, followed by every build. It is not in
+## [constant FOLLOWED_PATH] and cannot be unfollowed: a player who upgrades from
+## a build without it gets it too, which storing it once on first run would not
+## do.
+const BUILT_IN_FEED: String = \
+	"https://raw.githubusercontent.com/Decryptu/pokerecomp-decrypt-mods/main/index.json"
+## What the sources page calls it. The feed names itself as well, but a source
+## that has never been read has to be listed before anything has been fetched.
+const BUILT_IN_LABEL: String = "Decrypt's pokerecomp mods"
+
+## The indexes this player added. Small enough to keep beside the mods rather
 ## than wait for a general settings model.
 const FOLLOWED_PATH: String = "user://mod_indexes.json"
 ## Where a fetched feed is kept, one file per feed. A cached listing is what a
@@ -326,10 +339,29 @@ static func _label_for(url: String) -> String:
 	return label.trim_suffix("/")
 
 
-## The indexes the player follows, oldest first. Empty until they add one: the
-## game ships following nobody, because following an index is trusting whoever
-## publishes it and that is not a choice to make on their behalf.
+## Whether [param feed] is the one this project publishes, which is followed by
+## every build and cannot be dropped.
+##
+## Not `is_built_in`: [method Script.is_built_in] takes no arguments and a class
+## name is a [Script], so that spelling resolves to Godot's and answers false
+## everywhere without an error.
+static func is_built_in_source(feed: String) -> bool:
+	return feed == BUILT_IN_FEED
+
+
+## The indexes the player follows, the built-in one first and the rest oldest
+## first. Everything after the first row is theirs: following an index is
+## trusting whoever publishes it, and that is not a choice to make for them.
 static func followed(path: String = FOLLOWED_PATH) -> Array[Dictionary]:
+	var rows: Array[Dictionary] = [{"feed": BUILT_IN_FEED, "label": BUILT_IN_LABEL}]
+	rows.append_array(_added(path))
+	return rows
+
+
+## Only the rows the player added, which is all [constant FOLLOWED_PATH] holds.
+## Following and unfollowing both work on these, so the built-in one is never
+## written into a player's file and today's URL is not frozen there.
+static func _added(path: String) -> Array[Dictionary]:
 	var rows: Array[Dictionary] = []
 	if not FileAccess.file_exists(path):
 		return rows
@@ -340,7 +372,7 @@ static func followed(path: String = FOLLOWED_PATH) -> Array[Dictionary]:
 		if not raw is Dictionary:
 			continue
 		var feed: String = String((raw as Dictionary).get("feed", ""))
-		if feed.begins_with("https://"):
+		if feed.begins_with("https://") and not is_built_in_source(feed):
 			rows.append({"feed": feed, "label": String((raw as Dictionary).get("label", feed))})
 	return rows
 
@@ -351,18 +383,20 @@ static func follow(input: String, path: String = FOLLOWED_PATH) -> Dictionary:
 	var resolved: Dictionary = resolve_source(input)
 	if not bool(resolved.get("ok", false)):
 		return resolved
-	var rows: Array[Dictionary] = followed(path)
-	for row: Dictionary in rows:
+	for row: Dictionary in followed(path):
 		if row["feed"] == resolved["feed"]:
 			return {"ok": true, "feed": resolved["feed"], "label": row["label"], "added": false}
+	var rows: Array[Dictionary] = _added(path)
 	rows.append({"feed": resolved["feed"], "label": resolved["label"]})
 	_store(rows, path)
 	return {"ok": true, "feed": resolved["feed"], "label": resolved["label"], "added": true}
 
 
 static func unfollow(feed: String, path: String = FOLLOWED_PATH) -> void:
+	if is_built_in_source(feed):
+		return
 	var kept: Array[Dictionary] = []
-	for row: Dictionary in followed(path):
+	for row: Dictionary in _added(path):
 		if row["feed"] != feed:
 			kept.append(row)
 	_store(kept, path)

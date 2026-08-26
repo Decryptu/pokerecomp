@@ -1119,23 +1119,62 @@ func test_index_feed_drops_unusable_rows_without_losing_the_rest() -> void:
 func test_following_an_index_persists_it_and_never_duplicates_a_feed() -> void:
 	var store: String = "%s/indexes.json" % ROOT
 	DirAccess.make_dir_recursive_absolute(ROOT)
-	# Ships following nobody: an index is the player trusting a publisher.
-	assert_eq(Gen2ModIndex.followed(store).size(), 0)
+	# One source ships: this project's own. Everything after it is the player's.
+	assert_eq(Gen2ModIndex.followed(store).size(), 1)
+	assert_eq(Gen2ModIndex.followed(store)[0]["feed"], Gen2ModIndex.BUILT_IN_FEED)
 
 	var added: Dictionary = Gen2ModIndex.follow("someone/mods", store)
 	assert_true(added["ok"])
 	assert_true(added["added"])
-	assert_eq(Gen2ModIndex.followed(store).size(), 1)
-	assert_eq(Gen2ModIndex.followed(store)[0]["label"], "someone/mods")
+	assert_eq(Gen2ModIndex.followed(store).size(), 2)
+	assert_eq(Gen2ModIndex.followed(store)[1]["label"], "someone/mods")
 
 	# The same feed reached by another URL shape is still the same feed.
 	var again: Dictionary = Gen2ModIndex.follow("https://github.com/someone/mods", store)
 	assert_true(again["ok"])
 	assert_false(again["added"])
-	assert_eq(Gen2ModIndex.followed(store).size(), 1)
+	assert_eq(Gen2ModIndex.followed(store).size(), 2)
 
 	Gen2ModIndex.unfollow(added["feed"], store)
-	assert_eq(Gen2ModIndex.followed(store).size(), 0)
+	assert_eq(Gen2ModIndex.followed(store).size(), 1)
+
+
+## A build that lost its own source would list nothing on a fresh install, and
+## an upgrade that only seeded it once would never reach a player who already
+## has a followed-list file.
+func test_the_built_in_source_is_in_every_build_and_cannot_be_dropped() -> void:
+	var store: String = "%s/built_in.json" % ROOT
+	DirAccess.make_dir_recursive_absolute(ROOT)
+	assert_true(Gen2ModIndex.BUILT_IN_FEED.begins_with("https://"))
+	assert_true(Gen2ModIndex.is_built_in_source(Gen2ModIndex.BUILT_IN_FEED))
+	assert_false(Gen2ModIndex.is_built_in_source("https://example.com/index.json"))
+	# Resolving its own URL must land on itself, or the row and the fetch would
+	# be two different feeds.
+	assert_eq(
+		String(Gen2ModIndex.resolve_source(Gen2ModIndex.BUILT_IN_FEED)["feed"]),
+		Gen2ModIndex.BUILT_IN_FEED,
+	)
+
+	Gen2ModIndex.unfollow(Gen2ModIndex.BUILT_IN_FEED, store)
+	assert_eq(Gen2ModIndex.followed(store).size(), 1, "unfollowing it does nothing")
+
+	var again: Dictionary = Gen2ModIndex.follow(Gen2ModIndex.BUILT_IN_FEED, store)
+	assert_true(again["ok"])
+	assert_false(again["added"], "following it again adds nothing")
+	assert_false(FileAccess.file_exists(store), "and nothing is written for it")
+
+	# A file that names it anyway, from a build that stored it, lists it once.
+	var file: FileAccess = FileAccess.open(store, FileAccess.WRITE)
+	file.store_string(JSON.stringify([
+		{"feed": Gen2ModIndex.BUILT_IN_FEED, "label": "stale label"},
+		{"feed": "https://example.com/index.json", "label": "theirs"},
+	]))
+	file.close()
+	var rows: Array[Dictionary] = Gen2ModIndex.followed(store)
+	assert_eq(rows.size(), 2)
+	assert_eq(rows[0]["label"], Gen2ModIndex.BUILT_IN_LABEL)
+	assert_eq(rows[1]["label"], "theirs")
+	DirAccess.remove_absolute(store)
 
 
 ## A listing is kept so browsing what the player follows does not depend on the
@@ -1193,7 +1232,7 @@ func test_following_a_refused_url_stores_nothing() -> void:
 	var store: String = "%s/indexes.json" % ROOT
 	DirAccess.make_dir_recursive_absolute(ROOT)
 	assert_false(Gen2ModIndex.follow("http://mods.example.com/", store)["ok"])
-	assert_eq(Gen2ModIndex.followed(store).size(), 0)
+	assert_eq(Gen2ModIndex.followed(store).size(), 1, "the built-in one and nothing else")
 
 
 func test_menu_entries_are_registered_per_menu_and_kept_in_order() -> void:
