@@ -20,8 +20,6 @@ GDScript, not an emulator, static recompilation or disassembly. A user-supplied
 cartridge dump is SHA-1 verified, decoded once into a cache, then released. No
 game data ships here: bring your own ROM.
 
-Inspired by [gen1recomp](https://github.com/bryanthaboi/gen1recomp).
-
 ## Download
 
 **[Latest release](https://github.com/Decryptu/pokerecomp/releases/latest)** ships
