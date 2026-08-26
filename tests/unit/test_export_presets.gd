@@ -97,3 +97,61 @@ func test_the_android_version_code_derives_from_the_app_version() -> void:
 func test_the_ios_preset_carries_no_signing_identity() -> void:
 	assert_eq(String(_presets().get_value("preset.4.options",
 		"application/app_store_team_id", "")), "")
+
+
+## Directories no preset ships, so a heavy import under one costs a player
+## nothing. `addons/gut/` is the only third-party tree with imported art in it.
+const NOT_SHIPPED: Array[String] = [
+	"res://tests/", "res://tools/", "res://addons/gut/", "res://artifacts/",
+	"res://mods/", "res://roms/",
+]
+
+## Below this an import's fixed overhead dominates and a ratio means nothing.
+const AUDITED_FROM_BYTES: int = 32 * 1024
+
+## What an import may cost over its own source. Godot's default texture mode is
+## lossless, and re-encoding an already-lossy source losslessly is what this
+## catches: three cartridge photographs of 140 KiB each once reached the pack as
+## 1.2 MiB apiece, which was two thirds of everything the player downloaded.
+const MOST_TIMES_ITS_SOURCE: float = 4.0
+
+
+func _shipped_imports(from: String, into: Array[String]) -> void:
+	for name: String in DirAccess.get_directories_at(from):
+		var sub: String = from.path_join(name) + "/"
+		if name.begins_with(".") or NOT_SHIPPED.has(sub):
+			continue
+		_shipped_imports(sub.trim_suffix("/"), into)
+	for name: String in DirAccess.get_files_at(from):
+		if name.ends_with(".import"):
+			into.append(from.path_join(name))
+
+
+## Swept over every source the presets ship rather than over the four files that
+## went wrong, because the next one will be a different four.
+func test_no_imported_asset_costs_much_more_than_its_own_source() -> void:
+	var imports: Array[String] = []
+	_shipped_imports("res://", imports)
+	assert_gt(imports.size(), 0, "the sweep found something to audit")
+	var audited: int = 0
+	for import_path: String in imports:
+		var source: String = import_path.trim_suffix(".import")
+		var config := ConfigFile.new()
+		if config.load(import_path) != OK:
+			continue
+		var imported: String = String(config.get_value("remap", "path", ""))
+		if imported.is_empty() or not FileAccess.file_exists(imported):
+			continue
+		var source_bytes: int = _bytes(source)
+		if source_bytes < AUDITED_FROM_BYTES:
+			continue
+		audited += 1
+		var ratio: float = float(_bytes(imported)) / float(source_bytes)
+		assert_lt(ratio, MOST_TIMES_ITS_SOURCE,
+			"%s imports to %.2f times its %d bytes" % [source, ratio, source_bytes])
+	assert_gt(audited, 0, "the sweep audited something over the floor")
+
+
+func _bytes(path: String) -> int:
+	var file := FileAccess.open(path, FileAccess.READ)
+	return 0 if file == null else int(file.get_length())

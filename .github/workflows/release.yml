@@ -55,9 +55,78 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+  # Stock export templates are most of a published build's weight, and most of
+  # what they carry cannot run here. These are the same engine with the
+  # unreachable half left out; `tools/build_export_templates.sh` says which and
+  # why. Only the targets built here are overlaid, so anything not listed keeps
+  # the stock template.
+  templates:
+    name: export templates (${{ matrix.host }})
+    needs: version
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 240
+    strategy:
+      matrix:
+        include:
+          - host: linux
+            runs-on: ubuntu-latest
+            targets: linux-x86_64 windows-x86_64 android
+          - host: apple
+            runs-on: macos-latest
+            targets: macos
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+
+      # Building the engine costs the better part of an hour, and the result
+      # only changes when the pin or the flag set does. The key carries both.
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: templates
+          key: templates-${{ matrix.host }}-${{ env.GODOT_VERSION }}-${{ hashFiles('tools/build_export_templates.sh') }}
+
+      - uses: actions/setup-java@v6
+        if: steps.cache.outputs.cache-hit != 'true' && matrix.host == 'linux'
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install the toolchains
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.host }}" = linux ]; then
+            sudo apt-get update
+            # mingw is what cross-builds the Windows template; the rest is what
+            # a linuxbsd build links against.
+            sudo apt-get install -y scons mingw-w64 \
+              libx11-dev libxcursor-dev libxinerama-dev libxi-dev libxrandr-dev \
+              libwayland-dev libxkbcommon-dev libudev-dev libasound2-dev \
+              libpulse-dev libgl1-mesa-dev
+          else
+            brew install scons
+          fi
+
+      - name: Build them
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch "${GODOT_VERSION}" \
+            https://github.com/godotengine/godot.git /tmp/godot
+          SCONSFLAGS="-j$(getconf _NPROCESSORS_ONLN)" \
+            tools/build_export_templates.sh /tmp/godot templates ${{ matrix.targets }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: templates-${{ matrix.host }}
+          path: templates/*
+          retention-days: 1
+
   linux-windows-android:
     name: linux, windows and android
-    needs: version
+    needs: [version, templates]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -84,6 +153,20 @@ jobs:
           # the release tag: 4.8.dev3 rather than 4.8-dev3.
           mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_TEMPLATE_DIR}"
           cp -R /tmp/tpz/templates/. "$HOME/.local/share/godot/export_templates/${GODOT_TEMPLATE_DIR}/"
+
+      # Only the names built above are replaced; every other target keeps the
+      # stock template it was just given.
+      - uses: actions/download-artifact@v8
+        with:
+          name: templates-linux
+          path: /tmp/templates
+      - name: Overlay the project's own export templates
+        run: |
+          set -euo pipefail
+          dir="$HOME/.local/share/godot/export_templates/${GODOT_TEMPLATE_DIR}"
+          before=$(du -sk "$dir" | cut -f1)
+          cp -f /tmp/templates/* "$dir/"
+          echo "template directory: ${before} kB -> $(du -sk "$dir" | cut -f1) kB"
 
       # class_name resolution is what makes the presets exportable at all, and
       # this is the first step to run the binary: swallowing its exit code here
@@ -150,12 +233,12 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: linux-windows-android
+          name: dist-linux-windows-android
           path: dist/*
 
   apple:
     name: macos and ios
-    needs: version
+    needs: [version, templates]
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -180,6 +263,20 @@ jobs:
           unzip -q /tmp/templates.tpz -d /tmp/tpz
           mkdir -p "$HOME/Library/Application Support/Godot/export_templates/${GODOT_TEMPLATE_DIR}"
           cp -R /tmp/tpz/templates/. "$HOME/Library/Application Support/Godot/export_templates/${GODOT_TEMPLATE_DIR}/"
+
+      # Only the names built above are replaced; every other target keeps the
+      # stock template it was just given.
+      - uses: actions/download-artifact@v8
+        with:
+          name: templates-apple
+          path: /tmp/templates
+      - name: Overlay the project's own export templates
+        run: |
+          set -euo pipefail
+          dir="$HOME/Library/Application Support/Godot/export_templates/${GODOT_TEMPLATE_DIR}"
+          before=$(du -sk "$dir" | cut -f1)
+          cp -f /tmp/templates/* "$dir/"
+          echo "template directory: ${before} kB -> $(du -sk "$dir" | cut -f1) kB"
 
       - name: Import
         run: |
@@ -237,7 +334,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: apple
+          name: dist-apple
           path: dist/*
 
   publish:
@@ -251,6 +348,7 @@ jobs:
 
       - uses: actions/download-artifact@v8
         with:
+          pattern: dist-*
           path: staged
           merge-multiple: true
 

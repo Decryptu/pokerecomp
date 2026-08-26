@@ -380,6 +380,16 @@ sideloader can sign it with the player's own Apple ID. `.github/workflows/releas
 builds every target from a `v*` tag and refuses to publish an `.ipa` that carries
 a signature.
 
+A published build carries the engine, and stock export templates ship every
+renderer and every importable format whether or not this project can reach
+them: they are around nine tenths of a download.
+`tools/build_export_templates.sh` builds the same engine without the parts
+nothing here can execute, and `release.yml` overlays what it builds onto the
+stock set, so a target it does not cover keeps the stock template. What may go
+is bounded by the mod API rather than by the game: a mod is interpreted GDScript
+with the whole engine in front of it, so 3D, audio formats and image formats all
+stay in even though the game itself draws in 2D.
+
 Android builds through gradle, because the second display is reached by a
 platform plugin and a plugin needs one. Install the Android build template from
 the editor, or pass `--install-android-build-template` alongside the export, and
