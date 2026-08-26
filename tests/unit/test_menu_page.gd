@@ -244,3 +244,28 @@ func test_the_up_arrow_waits_for_the_window_to_leave_the_top() -> void:
 	var corners: Array[bool] = _arrow_corners(1)
 	assert_true(corners[0])
 	assert_true(corners[1])
+
+
+## `BattleTowerRoomMenu_UpdatePickLevelMenu` writes `String_119d07` at
+## `hlcoord 13, 8` and `hlcoord 13, 10` and turns the upper tile over with the
+## attrmap's own $40, so the two arrows are one glyph drawn twice.
+func test_the_room_menus_upper_arrow_is_the_lower_one_turned_over() -> void:
+	var box: Gen2MenuBox = Gen2MenuBox.from_coords(12, 7, 19, 11, 0)
+	box.pick_arrows = true
+	var indices: PackedByteArray = _blank()
+	_page.draw(box, [" L:10 "], -1, indices, WIDTH)
+	assert_true(_ink_in_tile(indices, Vector2i(16, 8)), "the flipped arrow")
+	assert_true(_ink_in_tile(indices, Vector2i(16, 10)), "and `String_119d07`'s own")
+	for row: int in TILE:
+		for column: int in TILE:
+			var top: int = (8 * TILE + row) * WIDTH + 16 * TILE + column
+			var bottom: int = (10 * TILE + TILE - 1 - row) * WIDTH + 16 * TILE + column
+			assert_eq(indices[top], indices[bottom], "row %d column %d" % [row, column])
+
+
+## A box without the field draws neither, which is every other menu in the game.
+func test_no_arrows_without_the_room_menus_own_field() -> void:
+	var indices: PackedByteArray = _blank()
+	_page.draw(Gen2MenuBox.from_coords(12, 7, 19, 11, 0), [" L:10 "], -1, indices, WIDTH)
+	assert_false(_ink_in_tile(indices, Vector2i(16, 8)))
+	assert_false(_ink_in_tile(indices, Vector2i(16, 10)))

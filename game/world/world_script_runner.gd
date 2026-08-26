@@ -4552,12 +4552,16 @@ func _stage_room_menu() -> Dictionary:
 		"type": &"menu",
 		"command": &"battle_tower_room",
 		"options": options,
-		## `MenuHeader_119cf7`'s own `menu_coords 12, 7, SCREEN_WIDTH - 1,
-		## TEXTBOX_Y - 1`, the window `BattleTowerRoomMenu_PlacePickLevelMenu`
-		## opens beside the message it prints.
+		## `BattleTowerRoomMenu_PlacePickLevelMenu` draws one room at a time
+		## between two arrows rather than a list under a cursor, so this menu is
+		## its own kind. `MenuHeader_119cf7` carries `menu_coords 12, 7,
+		## SCREEN_WIDTH - 1, TEXTBOX_Y - 1` and `db 0` for its flags: no cursor
+		## and no title, which puts the room name at `hlcoord 13, 9` where
+		## `BattleTowerRoomMenu_UpdatePickLevelMenu` places it.
+		"menu_kind": &"room",
 		"header": {
 			"default": 1,
-			"data_flags": Gen2MenuBox.STATICMENU_CURSOR | Gen2WorldMenu.STATICMENU_WRAP,
+			"data_flags": 0,
 			"left": 12, "top": 7, "right": 19, "bottom": 11,
 		},
 		"text": String((_battle_tower_data().get("menu_text", {}) as Dictionary).get(

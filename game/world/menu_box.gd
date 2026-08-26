@@ -42,6 +42,12 @@ var row_step: int = ROW_STEP
 ## `SCROLLINGMENU_*` by `ScrollingMenu`, and the two sets overlap.
 var scrolling_arrows: bool = false
 var scroll: int = 0
+## `BattleTowerRoomMenu_UpdatePickLevelMenu`, the one menu in the game that
+## shows a single row between two arrows instead of a list under a cursor. Both
+## are the `▼` of `String_119d07`, placed at `hlcoord 13, 8` and `hlcoord 13,
+## 10`; the upper one is the same tile with the attrmap's own $40, which is the
+## BG map's vertical flip.
+var pick_arrows: bool = false
 
 
 

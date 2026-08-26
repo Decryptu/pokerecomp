@@ -12,6 +12,7 @@ extends SceneTree
 ##   Godot --path . -s res://tools/preview_world_services.gd -- /tmp/pc.png pc a,down,a
 ##   Godot --path . -s res://tools/preview_world_services.gd -- /tmp/deco.png decoration
 ##   Godot --path . -s res://tools/preview_world_services.gd -- /tmp/hof.png hall_of_fame
+##   Godot --path . -s res://tools/preview_world_services.gd -- /tmp/room.png battle_tower_room
 ##   Godot --path . -s res://tools/preview_world_services.gd -- /tmp/unown.png unown_dex
 ##
 ## `presses` drives the overlay with its own buttons before the shot, which is
@@ -203,6 +204,10 @@ func _write_service_cache() -> void:
 		Gen2WorldScriptRunner.SPECIAL_POKEMON_CENTER_PC, 0x00,
 		Gen2WorldScript.END,
 	] if _kind in [&"pc", &"decoration", &"hall_of_fame"] else [
+		Gen2WorldScript.SPECIAL,
+		Gen2WorldScriptRunner.SPECIAL_BATTLE_TOWER_ROOM_MENU, 0x00,
+		Gen2WorldScript.END,
+	] if _kind == &"battle_tower_room" else [
 		0x94, 0, 0x00, 0x40, 0x91,
 	]
 	RomCache.write_json(RomCache.world_scripts_path(_fixture_directory), scripts)
@@ -215,3 +220,18 @@ func _write_service_cache() -> void:
 		events["coord_events"] = [{"x": 7, "y": 6, "script": 0x6320}]
 		raw["events"] = events
 	RomCache.write_json(RomCache.world_maps_path(_fixture_directory), maps)
+	if _kind == &"battle_tower_room":
+		_write_battle_tower_cache()
+
+
+## `Strings_L10ToL100` and `Text_WhatLevelDoYouWantToChallenge`, the two records
+## `BattleTowerRoomMenu_PlacePickLevelMenu` needs, written into the fixture the
+## way the mart's own row is: the rest of the tower is not on screen here.
+func _write_battle_tower_cache() -> void:
+	RomCache.write_json(RomCache.battle_tower_path(_fixture_directory), {
+		"level_rows": [
+			" L:10 ", " L:20 ", " L:30 ", " L:40 ", " L:50 ", " L:60 ", " L:70 ",
+			" L:80 ", " L:90 ", " L:100", "CANCEL",
+		],
+		"menu_text": {"what_level": "What level do you want to challenge?"},
+	})

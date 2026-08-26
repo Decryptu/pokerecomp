@@ -86,6 +86,7 @@ static func from_input(input: Dictionary) -> Gen2WorldMenu:
 func box() -> Gen2MenuBox:
 	var out := Gen2MenuBox.from_coords(box_left, box_top, box_right, box_bottom, flags)
 	out.scrolling_arrows = scrolling_arrows
+	out.pick_arrows = kind == &"room"
 	if kind == &"2d":
 		out.columns = maxi(1, columns)
 		out.column_spacing = _spacing
@@ -99,6 +100,8 @@ func move(direction: Vector2i) -> bool:
 		return _move_2d(direction)
 	if direction.x != 0:
 		return false
+	if kind == &"room":
+		return _move_room(direction.y)
 	return _move_vertical(direction.y)
 
 
@@ -122,6 +125,18 @@ func column() -> int:
 
 func horizontal_enabled() -> bool:
 	return kind == &"2d" or (flags & STATICMENU_ENABLE_LEFT_RIGHT) != 0
+
+
+## `BattleTowerRoomMenu_UpdatePickLevelMenu`'s `.d_up` and `.d_down`, which run
+## the other way round from every other menu here: the index is one-based, `up`
+## increments it and restarts at 1 past the last room, and `down` decrements it
+## and restarts at the last room past 1. So UP walks L:10 towards CANCEL. Both
+## wrap whatever the flags say, since neither branch consults them.
+func _move_room(delta: int) -> bool:
+	if delta == 0:
+		return false
+	cursor = posmod(cursor - signi(delta), options.size())
+	return true
 
 
 func _move_vertical(delta: int) -> bool:
