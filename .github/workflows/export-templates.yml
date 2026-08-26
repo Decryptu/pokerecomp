@@ -83,8 +83,11 @@ jobs:
 
       # Building the engine costs the better part of an hour and the result only
       # changes when the pin or the flag set does, so the key carries both.
+      # v6, matching ci.yml: v4 runs on Node 20, which GitHub is removing from
+      # its runners. v5 and v6 are runtime and packaging changes only, so the
+      # caches v4 wrote still restore.
       - id: cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: templates
           key: templates-${{ matrix.host }}-${{ env.GODOT_VERSION }}-${{ hashFiles('tools/build_export_templates.sh') }}
@@ -109,7 +112,13 @@ jobs:
                 libxrandr-dev libwayland-dev libxkbcommon-dev libudev-dev \
                 libasound2-dev libpulse-dev libgl1-mesa-dev
               ;;
-            macOS) brew install scons ;;
+            # The runner image ships an untrusted aws/tap, and Homebrew warns
+            # about it on every install whatever is being installed. Dropping
+            # the tap is the fix Homebrew itself names; nothing here wants it.
+            macOS)
+              brew untap aws/tap 2>/dev/null || true
+              brew install scons
+              ;;
             Windows) python -m pip install --disable-pip-version-check scons ;;
           esac
 

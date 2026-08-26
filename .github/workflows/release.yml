@@ -260,6 +260,9 @@ jobs:
       - name: Build the iOS file picker plugin
         run: |
           set -euo pipefail
+          # See export-templates.yml: the image's untrusted aws/tap makes
+          # Homebrew warn on every install until it is dropped.
+          brew untap aws/tap 2>/dev/null || true
           brew install scons
           # The plugin is linked into the templates `export-templates.yml`
           # builds, so a pin that has drifted from that one is two engines.
