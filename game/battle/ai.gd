@@ -1508,15 +1508,10 @@ static func _apply_opportunist(scores: Array, c: Context) -> void:
 ## ([constant RECKLESS_EFFECTS]) or does one point of damage that is really a
 ## fixed-damage move ([code]power < 2[/code]).
 ##
-## The estimate is [constant Gen2Damage.MAX_VARIATION] with no critical, the top
-## of a hit's real range. `AIDamageCalc` special-cases fixed-damage effects this
-## engine does not implement, so those use the ordinary formula: that shifts how
-## hard they rank, not which move is strongest.
+## The estimate is [method _estimate_damage], which is `AIDamageCalc` itself.
 static func _apply_aggressive(scores: Array, c: Context) -> void:
 	var attacker: Gen2BattleMon = c.attacker
-	var defender: Gen2BattleMon = c.defender
 	var data: GameData = c.data
-	var defender_screens: int = c.defender_screens
 	var best_slot: int = -1
 	var best_damage: int = -1
 	for slot: int in Gen2BattleMon.MAX_MOVES:
@@ -1525,7 +1520,7 @@ static func _apply_aggressive(scores: Array, c: Context) -> void:
 		var move: Dictionary = _move_at(attacker, data, slot)
 		if _power(move) <= 0:
 			continue
-		var damage: int = _estimate_damage(attacker, defender, move, defender_screens)
+		var damage: int = _estimate_damage(c, move)
 		if damage >= best_damage:
 			best_damage = damage
 			best_slot = slot
@@ -1544,16 +1539,30 @@ static func _apply_aggressive(scores: Array, c: Context) -> void:
 		_discourage(scores, slot, 1)
 
 
-## The AI's own damage prediction, which is `EnemyAttackDamage` and
-## `BattleCommand_DamageCalc` themselves rather than an approximation of them, so
-## it reads the player's screens exactly as a real hit would.
-static func _estimate_damage(
-	attacker: Gen2BattleMon, defender: Gen2BattleMon, move: Dictionary,
-	defender_screens: int = Gen2Screens.NONE
-) -> int:
+## `AIDamageCalc`: the AI's own damage prediction, which is `EnemyAttackDamage`
+## and `BattleCommand_DamageCalc` themselves rather than an approximation of
+## them, so it reads the player's screens exactly as a real hit would.
+##
+## [constant Gen2Damage.CONSTANT_DAMAGE_EFFECTS] leaves the formula alone and
+## answers with `BattleCommand_ConstantDamage`'s own number, the same one the hit
+## will deal. All six of those moves carry a power the AI's callers test, so the
+## branch is live: without it Seismic Toss and Night Shade are read at power 1
+## and Super Fang at 1, and an aggressive or risky trainer plays them blind.
+##
+## [param constant] is what `AI_Smart_PriorityHit` is missing: it inlines the
+## three formula calls and never consults the list.
+##
+## Psywave's prediction really does roll, `BattleCommand_ConstantDamage` calling
+## `BattleRandom` inside the estimate, so the roll is spent here too. The
+## cartridge spends it on the battle's stream rather than the AI's; this engine
+## injects one generator for both, which is the same object either way.
+static func _estimate_damage(c: Context, move: Dictionary, constant: bool = true) -> int:
+	var effect: int = _effect(move)
+	if constant and Gen2Damage.CONSTANT_DAMAGE_EFFECTS.has(effect):
+		return Gen2Damage.constant_damage(effect, c.attacker, c.defender, move, c.rng)
 	return int(Gen2Damage.calculate_with(
-		attacker, defender, move, false, Gen2Damage.MAX_VARIATION,
-		false, Gen2Weather.NONE, defender_screens
+		c.attacker, c.defender, move, false, Gen2Damage.MAX_VARIATION,
+		Gen2Weather.NONE, c.defender_screens
 	)["damage"])
 
 
@@ -1613,7 +1622,6 @@ static func _apply_risky(scores: Array, c: Context) -> void:
 	var defender: Gen2BattleMon = c.defender
 	var data: GameData = c.data
 	var rng: RandomNumberGenerator = c.rng
-	var defender_screens: int = c.defender_screens
 	for slot: int in Gen2BattleMon.MAX_MOVES:
 		if not attacker.can_use(slot):
 			continue
@@ -1627,7 +1635,7 @@ static func _apply_risky(scores: Array, c: Context) -> void:
 			if _roll(rng, 79):
 				continue
 
-		if _estimate_damage(attacker, defender, move, defender_screens) >= defender.hp:
+		if _estimate_damage(c, move) >= defender.hp:
 			_encourage(scores, slot, 5)
 
 
@@ -1964,7 +1972,7 @@ static func _smart_priority_hit(scores: Array, slot: int, c: Context) -> void:
 		_discourage(scores, slot)
 		return
 	var move: Dictionary = _move_at(c.attacker, c.data, slot)
-	if _estimate_damage(c.attacker, c.defender, move, c.defender_screens) > c.defender.hp:
+	if _estimate_damage(c, move, false) > c.defender.hp:
 		_encourage(scores, slot, 3)
 
 

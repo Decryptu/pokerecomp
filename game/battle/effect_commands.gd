@@ -2180,13 +2180,6 @@ static func _fixed_damage(turn: Gen2Turn) -> void:
 	var defender: Gen2BattleMon = turn.defender()
 
 	match turn.effect():
-		Gen2MoveEffect.LEVEL_DAMAGE:
-			turn.damage = attacker.level
-		Gen2MoveEffect.PSYWAVE:
-			turn.damage = Gen2Damage.psywave_damage(attacker.level, turn.rng())
-		Gen2MoveEffect.SUPER_FANG:
-			@warning_ignore("integer_division")
-			turn.damage = maxi(defender.hp / 2, 1)
 		Gen2MoveEffect.REVERSAL:
 			# `.reversal` is the one branch that does not hand back a number: it
 			# picks a power off how much health is left and then runs
@@ -2198,8 +2191,10 @@ static func _fixed_damage(turn: Gen2Turn) -> void:
 			)
 			_damage_stats(turn)
 			_damage_calc(turn)
-		_: # STATIC_DAMAGE: Sonicboom and Dragon Rage deal exactly their own power.
-			turn.damage = int(turn.move.get("power", 0))
+		_:
+			turn.damage = Gen2Damage.constant_damage(
+				turn.effect(), attacker, defender, turn.move, turn.rng()
+			)
 
 
 ## How much an attacker's own level adds to an OHKO move's accuracy, doubled
@@ -2598,9 +2593,9 @@ static func _mist(turn: Gen2Turn) -> void:
 	turn.emit(Gen2Battle.MIST_SET)
 
 
-## Raises the user's critical rate until a switch: [method _damage_calc] and
-## [method _multi_hit] read the flag through [method Gen2Damage.calculate]'s
-## [code]focus_energy[/code] argument. A second use fails without re-applying.
+## Raises the user's critical rate until a switch: [method _critical] reads the
+## flag through [method Gen2Damage.roll_critical]'s [code]focus_energy[/code]
+## argument, once per hit. A second use fails without re-applying.
 static func _focus_energy(turn: Gen2Turn) -> void:
 	var mon: Gen2BattleMon = turn.attacker()
 	if Gen2Substatus.has(mon.substatus, Gen2Substatus.FOCUS_ENERGY):

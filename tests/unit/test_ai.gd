@@ -151,6 +151,47 @@ func test_aggressive_prefers_whichever_move_deals_more_damage() -> void:
 		assert_eq(slot, stronger_slot, "the harder-hitting move should win every time")
 
 
+func test_aggressive_reads_a_constant_damage_move_at_its_real_number() -> void:
+	# `AIDamageCalc` sends `ConstantDamageEffects` through
+	# `BattleCommand_ConstantDamage`, so Seismic Toss is read at the user's level
+	# rather than at its stored power of 1. Through the formula it looks like the
+	# weakest move on the set and Tackle wins.
+	var pikachu: Gen2BattleMon = _mon(
+		Fixture.PIKACHU, 50, [Fixture.TACKLE, Fixture.LEVEL_DAMAGE_MOVE]
+	)
+	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
+	var tackle_damage: int = int(Gen2Damage.calculate_with(
+		pikachu, geodude, _data.move(Fixture.TACKLE), false, Gen2Damage.MAX_VARIATION
+	)["damage"])
+	assert_lt(tackle_damage, 50, "the scenario needs Seismic Toss to be the harder hit")
+
+	for seed_value: int in 10:
+		_rng.seed = seed_value
+		var slot: int = Gen2BattleAI.choose_slot(
+			pikachu, geodude, _data, RomLayout.AI_AGGRESSIVE, _rng
+		)
+		assert_eq(slot, 1, "fifty points beats Tackle against a Rock/Ground defender")
+
+
+func test_risky_sees_the_ko_a_constant_damage_move_would_land() -> void:
+	var pikachu: Gen2BattleMon = _mon(
+		Fixture.PIKACHU, 50, [Fixture.TACKLE, Fixture.LEVEL_DAMAGE_MOVE]
+	)
+	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
+	var tackle_damage: int = int(Gen2Damage.calculate_with(
+		pikachu, geodude, _data.move(Fixture.TACKLE), false, Gen2Damage.MAX_VARIATION
+	)["damage"])
+	# Strictly between the two hits: Seismic Toss finishes it, Tackle does not.
+	geodude.hp = maxi(tackle_damage + 1, 1)
+	assert_lt(geodude.hp, 51, "the scenario needs Seismic Toss to be the only KO")
+	for seed_value: int in 10:
+		_rng.seed = seed_value
+		var slot: int = Gen2BattleAI.choose_slot(
+			pikachu, geodude, _data, RomLayout.AI_RISKY, _rng
+		)
+		assert_eq(slot, 1, "only Seismic Toss takes the last hit point")
+
+
 func test_risky_encourages_whichever_move_would_actually_ko() -> void:
 	var charmander: Gen2BattleMon = _mon(Fixture.CHARMANDER, 50, [Fixture.EMBER, Fixture.SLASH])
 	var bulbasaur: Gen2BattleMon = _mon(Fixture.BULBASAUR, 50, [Fixture.TACKLE])
