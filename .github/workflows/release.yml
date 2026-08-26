@@ -187,11 +187,13 @@ jobs:
           v="${{ needs.version.outputs.version }}"
           apk="dist/pokerecomp-${v}-android.apk"
           dex=$(unzip -Z1 "$apk" '*.dex')
-          if ! unzip -p "$apk" $dex | grep -qa SecondScreen; then
+          # Counted rather than `grep -qa`, for the SIGPIPE reason above.
+          found=$(unzip -p "$apk" $dex | grep -ca SecondScreen || true)
+          if [ "$found" -eq 0 ]; then
             echo "::error::the APK carries no second-screen plugin; the AAR did not link"
             exit 1
           fi
-          echo "second screen ✓"
+          echo "second screen ✓ ($found)"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -327,11 +329,16 @@ jobs:
           rm -rf "$RUNNER_TEMP/audit" && mkdir -p "$RUNNER_TEMP/audit"
           unzip -q "dist/pokerecomp-${v}-ios.ipa" -d "$RUNNER_TEMP/audit"
           binary="$RUNNER_TEMP/audit/Payload/pokerecomp.app/pokerecomp"
-          if ! strings -a "$binary" | grep -q NativeFilePicker; then
+          # `grep -q` stops at the first match and the writer upstream then dies
+          # of SIGPIPE, which `pipefail` reports as the whole pipeline failing.
+          # A gate written that way refuses every build, including the ones that
+          # are right. Count instead: `grep -c` reads to the end.
+          found=$(strings -a "$binary" | grep -c NativeFilePicker || true)
+          if [ "$found" -eq 0 ]; then
             echo "::error::the IPA carries no NativeFilePicker; the plugin did not link"
             exit 1
           fi
-          echo "system file picker ✓"
+          echo "system file picker ✓ ($found)"
 
       # A signed IPA would be a private leak in a public download, so the gate
       # is here rather than in the release notes.
