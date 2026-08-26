@@ -62,9 +62,15 @@ for t in "$@"; do
     linux-x86_64)
       build linuxbsd arch=x86_64
       cp "$src/bin/godot.linuxbsd.template_release.x86_64" "$out/linux_release.x86_64" ;;
+    linux-arm64)
+      build linuxbsd arch=arm64
+      cp "$src/bin/godot.linuxbsd.template_release.arm64" "$out/linux_release.arm64" ;;
     windows-x86_64)
       build windows arch=x86_64
       cp "$src/bin/godot.windows.template_release.x86_64.exe" "$out/windows_release_x86_64.exe" ;;
+    windows-arm64)
+      build windows arch=arm64
+      cp "$src/bin/godot.windows.template_release.arm64.exe" "$out/windows_release_arm64.exe" ;;
     macos)
       build macos arch=arm64
       build macos arch=x86_64
@@ -80,6 +86,13 @@ for t in "$@"; do
       chmod +x "$src/bin/macos_template.app/Contents/MacOS/godot_macos_release.universal"
       rm -f "$out/macos.zip"
       ( cd "$src/bin" && zip -qry "$out/macos.zip" macos_template.app ) ;;
+    # Only the release device slice is rebuilt. The iOS template is an Xcode
+    # project around several xcframeworks, and the export only ever reaches for
+    # this one, so the workflow splices it into the stock archive rather than
+    # reassembling a project this cannot test.
+    ios)
+      build ios arch=arm64 ios_simulator=no
+      cp "$src/bin/libgodot.ios.template_release.arm64.a" "$out/libgodot.ios.release.a" ;;
     android)
       build android arch=arm64 generate_android_binary=no
       build android arch=arm32 generate_android_binary=no
