@@ -19,6 +19,11 @@ PLUGIN="$ROOT/addons/second_screen"
 # with the pin in DEVICES.md.
 GODOT_TAG="${GODOT_TAG:-4.8-dev3}"
 GODOT_LIB_VERSION="${GODOT_LIB_VERSION:-4.8.dev3}"
+# Built through a wrapper at a pinned Gradle rather than whatever gradle is on
+# the machine: 9.6 removed an internal API the Android plugin below still uses,
+# and a CI runner picking up 9.7 failed a release while this machine's 9.5
+# passed. Bump this with AGP, and only together.
+GRADLE_VERSION="${GRADLE_VERSION:-9.5}"
 NAMESPACE="io.github.decryptu.pokerecomp.secondscreen"
 PACKAGE_PATH="io/github/decryptu/pokerecomp/secondscreen"
 
@@ -89,9 +94,20 @@ kotlin { jvmToolchain(17) }
 dependencies { compileOnly files('godot-lib.aar') }
 GRADLE
 
-( cd "$WORK" && gradle --quiet --no-daemon assembleRelease )
+# The wrapper is generated in an empty directory, because `gradle wrapper` in
+# this one would configure the project first and hit the very incompatibility
+# the wrapper exists to avoid.
+WRAPPER="$(mktemp -d)"
+trap 'rm -rf "$WORK" "$WRAPPER"' EXIT
+# Gradle 9 refuses `wrapper` where there is no build at all, and an empty
+# settings file is a build with nothing in it.
+: > "$WRAPPER/settings.gradle"
+( cd "$WRAPPER" && gradle --quiet --no-daemon wrapper --gradle-version "$GRADLE_VERSION" )
+cp -R "$WRAPPER/gradle" "$WRAPPER/gradlew" "$WORK/"
+
+( cd "$WORK" && ./gradlew --quiet --no-daemon assembleRelease )
 
 mkdir -p "$PLUGIN/bin"
 OUT="$PLUGIN/bin/second_screen.aar"
 cp "$WORK/build/outputs/aar/second_screen-release.aar" "$OUT"
-echo "  $(basename "$OUT")  $(du -h "$OUT" | tr -s '\t' ' ' | cut -d' ' -f1)"
+echo "  $(basename "$OUT")  $(du -h "$OUT" | awk '{print $1}')"

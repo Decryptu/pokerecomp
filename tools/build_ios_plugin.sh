@@ -40,9 +40,12 @@ build_one() {
 		object="$work/$(basename "$source").o"
 		local arc=()
 		[ "${source##*.}" = "mm" ] && arc=(-fobjc-arc)
+		# `"${arc[@]}"` on an empty array is an unbound variable under `set -u`
+		# in bash 3.2, which is the bash a macOS runner has and this machine
+		# does not. The `+` form expands to nothing instead.
 		xcrun --sdk iphoneos clang++ -c "$source" -o "$object" \
 			-arch arm64 -isysroot "$SDK" "-miphoneos-version-min=$MIN_IOS" \
-			-std=gnu++17 -fno-exceptions -fblocks "${arc[@]}" \
+			-std=gnu++17 -fno-exceptions -fblocks ${arc[@]+"${arc[@]}"} \
 			"${defines[@]}" -I "$GODOT_SOURCE" -I "$GODOT_SOURCE/platform/ios" \
 			-I "$plugin_dir" \
 			-Wall -Werror=return-type -Wno-unused-parameter
@@ -50,7 +53,7 @@ build_one() {
 	done
 	xcrun --sdk iphoneos libtool -static -o "$out" "${objects[@]}"
 	rm -rf "$work"
-	echo "  $(basename "$out")  $(du -h "$out" | tr -s '\t' ' ' | cut -d' ' -f1)"
+	echo "  $(basename "$out")  $(du -h "$out" | awk '{print $1}')"
 }
 
 for plugin_dir in "$ROOT"/ios/plugins/*/; do
