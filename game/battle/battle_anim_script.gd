@@ -114,6 +114,14 @@ const IF_VAR_EQUAL: StringName = &"if_var_equal"
 const SET_VAR: StringName = &"set_var"
 const INC_VAR: StringName = &"inc_var"
 const CHECK_POKEBALL: StringName = &"check_pokeball"
+## The three that write the actor's own picture. `BattleAnimCmd_Minimize` and
+## `..._Transform` write `vTiles0` and `..._UpdateActorPic` copies it onto the
+## square; `..._MinimizeOpp` writes the square itself and is reached from
+## `DropPlayerSub` rather than from any animation.
+const MINIMIZE: StringName = &"minimize"
+const MINIMIZE_OPP: StringName = &"minimize_opp"
+const UPDATE_ACTOR_PIC: StringName = &"update_actor_pic"
+const TRANSFORM: StringName = &"transform"
 
 ## `GetPokeBallWobble`'s three answers, which `BattleAnim_ThrowPokeBall.Loop`
 ## branches on: keep wobbling, click shut, or break free.

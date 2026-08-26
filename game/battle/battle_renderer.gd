@@ -73,6 +73,11 @@ const SUBSTITUTE_SPRITE: int = 0x4C
 const SUBSTITUTE_AT: Dictionary = {false: Vector2i(2, 5), true: Vector2i(2, 4)}
 const SUBSTITUTE_FIRST_TILE: Dictionary = {false: 0, true: 4}
 
+## `GetMinimizePic` reads the same way, and drops its one tile a column right of
+## the doll's own: `sScratch + (3 * 7 + 5) tiles` on the enemy's box and
+## `sScratch + (3 * 6 + 4) tiles` on the player's.
+const MINIMIZE_AT: Dictionary = {false: Vector2i(3, 5), true: Vector2i(3, 4)}
+
 ## One 56x56 and one 48x48 index buffer, the two pics padded out to their own
 ## boxes, rebuilt only when the picture drawn changes.
 var _enemy_pixels: PackedByteArray = PackedByteArray()
@@ -306,6 +311,7 @@ func _ensure_pixels() -> void:
 	var enemy_key: Array = [
 		int(_view.get("enemy_species", 0)), bool(_view.get("enemy_substitute", false)),
 		int(_view.get("enemy_unown_form", 0)), int(_view.get("enemy_trainer_pic", 0)),
+		bool(_view.get("enemy_minimized", false)),
 	]
 	if enemy_key != _enemy_pixels_key:
 		if int(enemy_key[3]) > 0:
@@ -314,6 +320,8 @@ func _ensure_pixels() -> void:
 			)
 		elif bool(enemy_key[1]):
 			_enemy_pixels = _substitute_pic(false)
+		elif bool(enemy_key[4]):
+			_enemy_pixels = _minimize_pic(false)
 		else:
 			# `GetAnimatedFrontpic` is what the enemy's square is loaded with,
 			# so its frames stand behind the picture in the same run.
@@ -326,6 +334,7 @@ func _ensure_pixels() -> void:
 	var player_key: Array = [
 		int(_view.get("player_species", 0)), bool(_view.get("player_substitute", false)),
 		int(_view.get("player_unown_form", 0)), String(_view.get("player_backpic", "")),
+		bool(_view.get("player_minimized", false)),
 	]
 	if player_key != _player_pixels_key:
 		if not String(player_key[3]).is_empty():
@@ -335,6 +344,8 @@ func _ensure_pixels() -> void:
 			)
 		elif bool(player_key[1]):
 			_player_pixels = _substitute_pic(true)
+		elif bool(player_key[4]):
+			_player_pixels = _minimize_pic(true)
 		else:
 			_player_pixels = padded_pic(_data,
 				_battler_pic(int(player_key[0]), int(player_key[2]), true),
@@ -354,6 +365,29 @@ func _battler_pic(species: int, unown_form: int, back: bool) -> Dictionary:
 
 func _substitute_pic(player_side: bool) -> PackedByteArray:
 	return substitute_pixels(_data.overworld_sprite_indices(SUBSTITUTE_SPRITE), player_side)
+
+
+func _minimize_pic(player_side: bool) -> PackedByteArray:
+	return minimize_pixels(_data.tile_indices("minimize"), player_side)
+
+
+## `GetMinimizePic`: a blank box with `MinimizePic`'s single tile copied into it.
+## Static for the same reason [method substitute_pixels] is.
+static func minimize_pixels(tile: PackedByteArray, player_side: bool) -> PackedByteArray:
+	var side: int = Gen2BattleScreenMap.PLAYER_SIDE if player_side \
+		else Gen2BattleScreenMap.ENEMY_SIDE
+	var box: int = side * TILE
+	var out: PackedByteArray = PackedByteArray()
+	out.resize(box * box)
+	if tile.size() < TILE * TILE:
+		return out
+
+	var at: Vector2i = MINIMIZE_AT[player_side]
+	for row: int in TILE:
+		var to: int = (at.y * TILE + row) * box + at.x * TILE
+		for column: int in TILE:
+			out[to + column] = tile[row * TILE + column]
+	return out
 
 
 ## `GetSubstitutePic`: a blank box with four tiles of [param strip], the monster

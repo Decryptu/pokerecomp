@@ -1650,6 +1650,22 @@ const ANIM_SFX: StringName = &"sfx"
 ## which draws a fresh picture either way.
 var _substitute_pic: Dictionary = {Gen2Battle.PLAYER: false, Gen2Battle.ENEMY: false}
 
+## The second answer the same three writers give. `GetBattleMonBackpic` tests
+## `SUBSTATUS_SUBSTITUTE` first and `wPlayerMinimized` only after it, so a doll
+## stands in front of the dot and the dot is what is underneath when it comes
+## off. Written by [constant Gen2Battle.MINIMIZED] and cleared by a send-out.
+var _minimize_pic: Dictionary = {Gen2Battle.PLAYER: false, Gen2Battle.ENEMY: false}
+
+## `BattleAnimCmd_Minimize` writes `vTiles0`, which is off screen, and
+## `..._UpdateActorPic` copies it onto the square 48 frames later. The dot is
+## already on by then, `BattleCommand_StatUp` having set the byte two commands
+## before the animation, so this only keeps the two halves of the source's own
+## pair together. `BattleAnim_Transform` is the other user of the pair and no
+## list here reaches it: `BattleCommand_Transform` calls `LoadMoveAnim` inline
+## rather than through an `anim` command, and this port's Transform prints
+## without an animation.
+var _staged_minimize_pic: bool = false
+
 ## `wFXAnimID` is a word: an id past this is not a move and skips the whole
 ## battle-scene, hud and after-anim half of `BattleAnimRunScript`.
 const ANIM_MOVE_LIMIT: int = 0x100
@@ -1806,6 +1822,21 @@ func _set_substitute_pic(side: int, raised: bool) -> void:
 	_push_view()
 
 
+## The dot `GetMinimizePic` answers with, which outlives the animation that drew
+## it: nothing takes it off until the Pokemon leaves the field.
+func _set_minimize_pic(side: int, minimized: bool) -> void:
+	if bool(_minimize_pic.get(side, false)) == minimized:
+		return
+	_minimize_pic[side] = minimized
+	_push_view()
+
+
+## `hBattleTurn` inside an animation: whose animation this is.
+func _anim_actor() -> int:
+	return Gen2Battle.ENEMY if bool(_anim_event.get("enemy_turn", false)) \
+		else Gen2Battle.PLAYER
+
+
 func _step(kind: StringName, values: Dictionary) -> void:
 	var entry: Dictionary = values.duplicate()
 	entry["kind"] = kind
@@ -1906,10 +1937,20 @@ func _after_anim_frame() -> void:
 				# tiles, and the actor is `hBattleTurn`, which is whose animation
 				# this is.
 				_set_substitute_pic(
-					Gen2Battle.ENEMY if bool(_anim_event.get("enemy_turn", false))
-						else Gen2Battle.PLAYER,
+					_anim_actor(),
 					StringName(command["name"]) == Gen2BattleAnimScript.RAISE_SUB
 				)
+			Gen2BattleAnimScript.MINIMIZE:
+				_staged_minimize_pic = true
+			Gen2BattleAnimScript.UPDATE_ACTOR_PIC:
+				if _staged_minimize_pic:
+					_staged_minimize_pic = false
+					_set_minimize_pic(_anim_actor(), true)
+			Gen2BattleAnimScript.MINIMIZE_OPP:
+				# `GetMinimizePic` straight into `vTiles2`. No animation script
+				# names it: `DropPlayerSub` and `DropEnemySub` are its only
+				# callers, and both are the reload the byte already answers.
+				_set_minimize_pic(_anim_actor(), true)
 	_carry_battler_reports()
 	_push_view()
 
@@ -4270,6 +4311,20 @@ func _apply_event_state(event: Dictionary) -> void:
 			_begin_faint(int(event["side"]))
 		Gen2Battle.SUBSTITUTE_PIC:
 			_set_substitute_pic(int(event["side"]), bool(event["raised"]))
+		Gen2Battle.MINIMIZED:
+			_set_minimize_pic(int(event["side"]), true)
+		Gen2Battle.TRANSFORMED:
+			# `BattleCommand_Transform` copies the species and the DVs onto the
+			# actor, and every reload of the square after it draws the target.
+			if int(event["side"]) == Gen2Battle.ENEMY:
+				_enemy = int(event["species"])
+				_enemy_unown_form = int(event.get("unown_form", 0))
+				_enemy_shiny = bool(event.get("shiny", false))
+			else:
+				_player = int(event["species"])
+				_player_unown_form = int(event.get("unown_form", 0))
+				_player_shiny = bool(event.get("shiny", false))
+			_push_view()
 		Gen2Battle.CRY:
 			_play_entrance_cry(int(event["side"]), int(event["species"]))
 		Gen2Battle.SENT_OUT:
@@ -4294,6 +4349,9 @@ func _apply_event_state(event: Dictionary) -> void:
 			# `GetEnemyMonFrontpic`, and the doll it would answer with belongs to
 			# a Substitute that switching has already taken away.
 			_set_substitute_pic(int(event["side"]), false)
+			# `wPlayerMinimized` is one of the bytes a send-out zeroes, so the
+			# fresh picture is the Pokemon's own however the last one left.
+			_set_minimize_pic(int(event["side"]), false)
 			_reseed_bg_map()
 			_refresh_exp_bar()
 		Gen2Battle.EXP_GAINED:
@@ -5066,6 +5124,10 @@ func _push_view() -> void:
 		## Whose picture is the substitute's doll rather than the Pokémon's own.
 		"enemy_substitute": bool(_substitute_pic[Gen2Battle.ENEMY]),
 		"player_substitute": bool(_substitute_pic[Gen2Battle.PLAYER]),
+		## And whose is the dot `GetMinimizePic` draws, which a doll stands in
+		## front of for as long as one is up.
+		"enemy_minimized": bool(_minimize_pic[Gen2Battle.ENEMY]),
+		"player_minimized": bool(_minimize_pic[Gen2Battle.PLAYER]),
 		"enemy_name": _name_of(_enemy), "player_name": _name_of(_player),
 		"enemy_level": _enemy_level, "player_level": _player_level,
 		## Who the fight is against, which the values above do not say. A wild

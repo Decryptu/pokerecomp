@@ -629,6 +629,13 @@ const BALL_ICON_FIRST_TILE: int = 0x31
 ## `BattleTransitionTiles`, the two `DoBattleTransition` fills the screen with,
 ## and the two four-colour palettes it draws them and the whole map in.
 const BATTLE_TRANSITION_TILES: int = 2
+## `MinimizePic`, the single tile `CopyMinimizePic` drops into an otherwise blank
+## box: the dot a minimized Pokemon is drawn as for as long as it stays in.
+const MINIMIZE_TILES: int = 1
+## Its eight rows, lit pixels set, transcribed off `gfx/battle/minimize.png`: a
+## solid diamond in colour 3 and nothing else. One tile has no neighbour to slide
+## against, so its own shape is the whole of what pins the address.
+const MINIMIZE_PIC_ROWS: Array[int] = [0x00, 0x00, 0x18, 0x3C, 0x7E, 0x3C, 0x24, 0x00]
 const TRANSITION_PALETTE_NAMES: Array[String] = ["day", "dark"]
 const TRANSITION_PALETTE_COLORS: int = 4
 ## `GetTrainerBackpic`: the player's own 6x6 picture, the one standing on the
@@ -2280,6 +2287,9 @@ const GOLD_SILVER: Dictionary = {
 	# `LoadBallIconGFX`'s four ball icons and `BattleTransitionTiles`' two, both
 	# uncompressed 2bpp runs read straight off the address.
 	"ball_icons": 0x2C1A4,
+	# `MinimizePic`, one uncompressed 2bpp tile; its sixteen bytes occur once in
+	# each of the three dumps.
+	"minimize_pic": 0xCC6C8,
 	# `BattleTransitionTiles` and the two palettes `LoadPokeBallGraphics` floods
 	# every background tile with, the second of which is the darkness palset's.
 	"battle_transition": {
@@ -2882,6 +2892,7 @@ const CRYSTAL: Dictionary = {
 	"exp_bar": 0xF8B10,
 	# See the Gold and Silver block above.
 	"ball_icons": 0x2C172,
+	"minimize_pic": 0xCC725,
 	"battle_transition": {
 		"tiles": 0x8C2F4, "palette": 0x8C6A1, "dark_palette": 0x8C6A9,
 	},

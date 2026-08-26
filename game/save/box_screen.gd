@@ -34,6 +34,9 @@ const PROMPT_WHATS_UP: String = "What's up?"
 const PROMPT_RELEASE: String = "Release PKMN?"
 const PROMPT_LAST_MON: String = "It's your last PKMN!"
 const PROMPT_NO_USABLE: String = "No more usable PKMN!"
+## `PCString_RemoveMail`, the third thing `BillsPC_CheckMail_PreventBlackout`
+## refuses on.
+const PROMPT_REMOVE_MAIL: String = "Remove MAIL."
 const PROMPT_BOX_FULL: String = "The BOX is full."
 const PROMPT_PARTY_FULL: String = "The party's full!"
 const PROMPT_NO_EGGS: String = "No releasing EGGS!"
@@ -475,8 +478,8 @@ func _confirm_submenu() -> void:
 
 
 ## `BillsPC_CheckMail_PreventBlackout`, which guards the party list's transfer
-## and its release alike. Its mail branch is unreachable here: no item is mail
-## until `ItemIsMail`'s list is imported (see [method _mon_state]).
+## and its release alike, in its own order: the last Pokemon, then a party with
+## nothing else standing, then mail.
 func _blackout_refusal() -> String:
 	if _loaded != LOADED_PARTY or _save == null:
 		return ""
@@ -484,14 +487,21 @@ func _blackout_refusal() -> String:
 		return PROMPT_LAST_MON
 	if _all_others_fainted():
 		return PROMPT_NO_USABLE
+	# `wBillsPC_MonHasMail`, which `BillsPC_PrintMonInfo` writes for the row the
+	# cursor stands on rather than for a stored selection.
+	var mon: Gen2SaveMon = _selected_mon()
+	if mon != null and not mon.is_egg and Gen2HeldItem.is_mail(mon.item):
+		return PROMPT_REMOVE_MAIL
 	return ""
 
 
 ## `CheckCurPartyMonFainted`: whether every party member but the chosen one has
-## no HP left.
+## no HP left. `wCurPartyMon` is `wBillsPC_CursorPosition` plus the scroll, so
+## the one left out is the row under the cursor.
 func _all_others_fainted() -> bool:
+	var chosen: int = _cursor + _scroll
 	for index: int in _save.party.size():
-		if index == _selected_party_index:
+		if index == chosen:
 			continue
 		var mon: Gen2SaveMon = _save.party[index]
 		if mon != null and mon.hp > 0:
@@ -748,9 +758,9 @@ func _mon_state(mon: Gen2SaveMon) -> Dictionary:
 		"gender": _gender_glyph(Gen2BattleMon.gender_for(_data, mon.species, mon.dvs)),
 		"species_name": String(_data.species(mon.species).get("name", "")),
 		"item": mon.item,
-		## `ItemIsMail` reads a list no importer reads, so no item is mail here
-		## and the mail marker is unreachable.
-		"mail": false,
+		## `ItemIsMail`, which picks the mail icon `$5c` over the item icon `$5d`
+		## and is what `wBillsPC_MonHasMail` records for the blackout guard.
+		"mail": Gen2HeldItem.is_mail(mon.item),
 	}
 
 

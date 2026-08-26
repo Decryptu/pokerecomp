@@ -114,6 +114,7 @@ func run(r: RefCounted) -> void:
 		_verify_palettes(game_id, data)
 		_verify_gfx(game_id, data)
 		_verify_substitute_pic(game_id, data)
+		_verify_minimize_pic(game_id, data)
 		_run_every_animation(game_id, data)
 		_play_every_animation(game_id, data)
 		_verify_tackle_frames(game_id, data)
@@ -468,6 +469,51 @@ func _verify_the_sliding_intro(game_id: StringName, data: GameData) -> void:
 ## tiles of `MonsterSpriteGFX` in an otherwise empty box, at the one place the
 ## routine copies them to. Nothing else in the box may carry ink, since the
 ## routine zeroes it first and the battler's own picture is gone while it is up.
+## `GetMinimizePic`, the same shape one tile smaller: `MinimizePic` alone in an
+## otherwise empty box, a column right of where the doll sits. The tile's own
+## content is pinned by `RomImporter.verify_layout`; what this sweeps is where it
+## lands on each side of each cartridge.
+func _verify_minimize_pic(game_id: StringName, data: GameData) -> void:
+	var tile: PackedByteArray = data.tile_indices("minimize")
+	if not _r.check(
+		tile.size() == Gen2Font.TILE * Gen2Font.TILE,
+		"%s: the minimize tile is %d pixels, not %d." % [
+			game_id, tile.size(), Gen2Font.TILE * Gen2Font.TILE,
+		]
+	):
+		return
+	for player_side: bool in [false, true]:
+		var side: int = Gen2BattleScreenMap.PLAYER_SIDE if player_side \
+			else Gen2BattleScreenMap.ENEMY_SIDE
+		var box: int = side * Gen2Font.TILE
+		var pixels: PackedByteArray = Gen2BattleRenderer.minimize_pixels(tile, player_side)
+		if not _r.check(
+			pixels.size() == box * box,
+			"%s: the dot's box is %d pixels, not %d." % [game_id, pixels.size(), box * box]
+		):
+			continue
+		var at: Vector2i = Gen2BattleRenderer.MINIMIZE_AT[player_side]
+		var dot := Rect2i(at * Gen2Font.TILE, Vector2i(Gen2Font.TILE, Gen2Font.TILE))
+		var inside: int = 0
+		var outside: int = 0
+		for y: int in box:
+			for x: int in box:
+				if pixels[y * box + x] == 0:
+					continue
+				if dot.has_point(Vector2i(x, y)):
+					inside += 1
+				else:
+					outside += 1
+		_r.check(inside == 18, "%s: the dot is %d lit pixels, not 18." % [game_id, inside])
+		_r.check(
+			outside == 0,
+			"%s: %d lit pixels outside the dot's own tile." % [game_id, outside]
+		)
+		print("%s: the %s dot is %d lit pixels at %s of a %dx%d box." % [
+			game_id, "player's" if player_side else "enemy's", inside, at, side, side,
+		])
+
+
 func _verify_substitute_pic(game_id: StringName, data: GameData) -> void:
 	var strip: PackedByteArray = data.overworld_sprite_indices(
 		Gen2BattleRenderer.SUBSTITUTE_SPRITE

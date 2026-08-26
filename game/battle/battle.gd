@@ -317,6 +317,13 @@ const SUBSTITUTE_FADED: StringName = &"substitute_faded"
 ## battle state. An animated drop is the animation's own `anim_dropsub`.
 const SUBSTITUTE_PIC: StringName = &"substitute_pic"
 
+## `MinimizeDropSub`, `BattleCommand_StatUp`'s tail: the byte
+## `wPlayerMinimized`/`wEnemyMinimized` that reloads the actor's square as
+## `GetMinimizePic`'s dot, and keeps reloading it as that for as long as the
+## Pokemon stays in. Cleared by a send-out the way every other volatile is, so
+## there is no event for the other direction.
+const MINIMIZED: StringName = &"minimized"
+
 ## Leech Seed, on the Pokémon that was seeded rather than the one that seeded it.
 ## [constant LEECH_SEED_SAPPED] carries the healed side under `to`, `to_amount`,
 ## `to_hp` and `to_max_hp`, since one event moves health across the field.

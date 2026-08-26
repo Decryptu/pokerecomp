@@ -2517,8 +2517,12 @@ func test_the_doubling_lands_behind_the_spread_rather_than_in_front_of_it() -> v
 func test_minimize_is_what_makes_a_stomp_hurt_twice_as_much() -> void:
 	var battle: Gen2Battle = _battle()
 	assert_false(battle.enemy.minimized)
-	_run_enemy_move(battle, Fixture.MINIMIZE)
+	var turn: Gen2Turn = _run_enemy_move(battle, Fixture.MINIMIZE)
 	assert_true(battle.enemy.minimized, "the flag is set off the move number")
+	# `MinimizeDropSub`'s other half: the square is reloaded as the dot.
+	var pics: Array = _of_type(turn.events, Gen2Battle.MINIMIZED)
+	assert_eq(pics.size(), 1)
+	assert_eq(int(pics[0]["side"]), Gen2Battle.ENEMY)
 
 	var plain: Gen2Battle = _battle()
 	var against_plain: Gen2Turn = _run_move(plain, Fixture.STOMP)
@@ -4573,7 +4577,15 @@ func test_transform_copies_the_active_battle_struct_but_not_hp_level_or_status()
 	assert_eq(user.level, old_level)
 	assert_eq(user.status, Gen2Status.BURN)
 	assert_true(Gen2Substatus.has(user.substatus, Gen2Substatus.TRANSFORMED))
-	assert_eq(_of_type(turn.events, Gen2Battle.TRANSFORMED).size(), 1)
+	var transformed: Array = _of_type(turn.events, Gen2Battle.TRANSFORMED)
+	assert_eq(transformed.size(), 1)
+	# `BattleAnimCmd_Transform` draws the copied species out of the copied DVs,
+	# so both display values are the target's rather than the user's.
+	assert_eq(int(transformed[0]["species"]), target.species)
+	assert_eq(
+		bool(transformed[0]["shiny"]), Gen2Stats.is_shiny(target.dvs),
+		"the shine follows the DVs Transform copied"
+	)
 
 
 func test_transform_restores_party_data_on_switch_and_save_writeback() -> void:
