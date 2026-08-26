@@ -107,19 +107,18 @@ func test_mod_page_builds_a_visible_logical_focus_route() -> void:
 	_launcher.select_page(&"mods")
 	await get_tree().process_frame
 	await get_tree().process_frame
-	var check: Control = _focus_owner()
-	assert_not_null(check)
-	assert_string_contains(check.tooltip_text, "Check all followed sources")
-	var right: NodePath = check.focus_neighbor_right
+	var install: Control = _focus_owner()
+	assert_not_null(install)
+	assert_eq(install.tooltip_text, "Install a mod .zip")
+	var right: NodePath = install.focus_neighbor_right
 	assert_false(right.is_empty(), "the page explicitly names the next control")
-	var next: Control = check.get_node(right) as Control
-	assert_eq(next.tooltip_text, "Install a mod .zip", "right follows the visible action row")
-	next.grab_focus()
-	var down: NodePath = next.focus_neighbor_bottom
+	var next: Control = install.get_node(right) as Control
+	assert_eq(next.text, "Sources", "right follows the visible action row")
+	var down: NodePath = install.focus_neighbor_bottom
 	assert_false(down.is_empty(), "down enters the page rather than losing focus")
-	var below: Control = next.get_node(down) as Control
+	var below: Control = install.get_node(down) as Control
 	assert_true(below.is_visible_in_tree())
-	assert_ne(below, check)
+	assert_ne(below, install)
 
 
 ## A mouse needs no ring, and putting one up would move it away from whatever

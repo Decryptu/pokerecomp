@@ -53,6 +53,7 @@ var _read_once: Dictionary = {}
 ## count either way.
 var _reading_quietly: bool = false
 var _check_updates_button: Gen2LauncherButton = null
+var _install_button: Gen2LauncherButton = null
 ## Its own request, because the page's other one is serialised behind `_busy`
 ## and an icon must never make a player wait for a download or a feed.
 var _icons: HTTPRequest = null
@@ -116,12 +117,12 @@ func _build() -> void:
 	_check_updates_button.tooltip_text = "Check all followed sources for mod updates"
 	_check_updates_button.pressed.connect(check_for_updates)
 	actions.add_child(_check_updates_button)
-	var install: Gen2LauncherButton = Gen2LauncherButton.create(
+	_install_button = Gen2LauncherButton.create(
 		_theme, "Install", Gen2LauncherButton.Variant.PRIMARY, &"plus"
 	)
-	install.tooltip_text = "Install a mod .zip"
-	install.pressed.connect(func() -> void: install_requested.emit())
-	actions.add_child(install)
+	_install_button.tooltip_text = "Install a mod .zip"
+	_install_button.pressed.connect(func() -> void: install_requested.emit())
+	actions.add_child(_install_button)
 	var sources: Gen2LauncherButton = Gen2LauncherButton.create(
 		_theme, "Sources", Gen2LauncherButton.Variant.NEUTRAL, &"download"
 	)
@@ -133,6 +134,12 @@ func _build() -> void:
 	_list = Gen2LauncherUI.column(Gen2LauncherUI.GAP_MD)
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_list)
+
+
+## The page's primary action is stable while the source check starts and stops
+## in the background, so entering with a pad never depends on network timing.
+func focus_target() -> Control:
+	return _install_button
 
 
 ## Rebuilds the list from what is installed and what the followed sources last
