@@ -77,6 +77,7 @@ jobs:
           curl -fsSL "$base/Godot_v${GODOT_VERSION}_linux.x86_64.zip" -o /tmp/godot.zip
           unzip -q /tmp/godot.zip -d /tmp/godot
           sudo install -m755 "/tmp/godot/Godot_v${GODOT_VERSION}_linux.x86_64" /usr/local/bin/godot
+          echo "GODOT=/usr/local/bin/godot" >> "$GITHUB_ENV"
           curl -fsSL "$base/Godot_v${GODOT_VERSION}_export_templates.tpz" -o /tmp/templates.tpz
           unzip -q /tmp/templates.tpz -d /tmp/tpz
           # The directory is named by version.txt inside the archive, never by
@@ -84,9 +85,14 @@ jobs:
           mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_TEMPLATE_DIR}"
           cp -R /tmp/tpz/templates/. "$HOME/.local/share/godot/export_templates/${GODOT_TEMPLATE_DIR}/"
 
-      # class_name resolution is what makes the presets exportable at all.
+      # class_name resolution is what makes the presets exportable at all, and
+      # this is the first step to run the binary: swallowing its exit code here
+      # is what left a killed Godot to be reported later as a failed export.
       - name: Import
-        run: godot --headless --editor --path . --quit || true
+        run: |
+          set -euo pipefail
+          "$GODOT" --headless --editor --path . --quit
+          [ -d .godot ] || { echo "::error::import produced no .godot"; exit 1; }
 
       # The Android preset builds through gradle, and Godot reads the SDK and
       # JDK locations from editor settings rather than from the environment.
@@ -126,7 +132,7 @@ jobs:
           export_one() {
             local preset="$1" out="$2"
             mkdir -p "$(dirname "$out")"
-            godot --headless --path . --export-release "$preset" "$out"
+            "$GODOT" --headless --path . --export-release "$preset" "$out"
             [ -s "$out" ] || { echo "::error::$preset produced nothing at $out"; exit 1; }
           }
           export_one "Linux"                 "dist/pokerecomp-${v}-linux-x86_64"
@@ -136,7 +142,7 @@ jobs:
           # --install-android-build-template unpacks the gradle project the
           # preset builds through; it only acts alongside an export.
           mkdir -p dist
-          godot --headless --path . --install-android-build-template \
+          "$GODOT" --headless --path . --install-android-build-template \
             --export-release "Android" "dist/pokerecomp-${v}-android.apk"
           [ -s "dist/pokerecomp-${v}-android.apk" ] || { echo "::error::no APK"; exit 1; }
           chmod +x "dist/pokerecomp-${v}-linux-x86_64" "dist/pokerecomp-${v}-linux-arm64"
@@ -163,14 +169,23 @@ jobs:
           base="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}"
           curl -fsSL "$base/Godot_v${GODOT_VERSION}_macos.universal.zip" -o /tmp/godot.zip
           unzip -q /tmp/godot.zip -d /tmp/godot
-          sudo install -m755 "/tmp/godot/Godot.app/Contents/MacOS/Godot" /usr/local/bin/godot
+          # The executable is signed as part of Godot.app. Copying it out of the
+          # bundle invalidates that signature and Gatekeeper answers with
+          # SIGKILL, so the bundle is kept whole and called through.
+          sudo rm -rf /Applications/Godot.app
+          sudo cp -R "/tmp/godot/Godot.app" /Applications/Godot.app
+          sudo xattr -dr com.apple.quarantine /Applications/Godot.app
+          echo "GODOT=/Applications/Godot.app/Contents/MacOS/Godot" >> "$GITHUB_ENV"
           curl -fsSL "$base/Godot_v${GODOT_VERSION}_export_templates.tpz" -o /tmp/templates.tpz
           unzip -q /tmp/templates.tpz -d /tmp/tpz
           mkdir -p "$HOME/Library/Application Support/Godot/export_templates/${GODOT_TEMPLATE_DIR}"
           cp -R /tmp/tpz/templates/. "$HOME/Library/Application Support/Godot/export_templates/${GODOT_TEMPLATE_DIR}/"
 
       - name: Import
-        run: godot --headless --editor --path . --quit || true
+        run: |
+          set -euo pipefail
+          "$GODOT" --headless --editor --path . --quit
+          [ -d .godot ] || { echo "::error::import produced no .godot"; exit 1; }
 
       # Ad-hoc signed, not notarized: no Apple account is involved and none can
       # be, because the certificate would name one. Gatekeeper asks the player
@@ -180,7 +195,7 @@ jobs:
           set -euo pipefail
           v="${{ needs.version.outputs.version }}"
           mkdir -p dist
-          godot --headless --path . --export-release "macOS" "dist/pokerecomp-${v}-macos.zip"
+          "$GODOT" --headless --path . --export-release "macOS" "dist/pokerecomp-${v}-macos.zip"
           [ -s "dist/pokerecomp-${v}-macos.zip" ] || { echo "::error::no macOS zip"; exit 1; }
 
       # The published IPA is unsigned on purpose: AltStore and SideStore re-sign
@@ -194,7 +209,7 @@ jobs:
           v="${{ needs.version.outputs.version }}"
           sed -i '' 's/app_store_team_id=""/app_store_team_id="0000000000"/' export_presets.cfg
           mkdir -p build/ios
-          godot --headless --path . --export-release "iOS" build/ios/pokerecomp.ipa
+          "$GODOT" --headless --path . --export-release "iOS" build/ios/pokerecomp.ipa
           git checkout export_presets.cfg
 
           xcodebuild -project build/ios/pokerecomp.xcodeproj -scheme pokerecomp \
