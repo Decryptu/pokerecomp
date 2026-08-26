@@ -19,6 +19,12 @@ on:
         description: "Commit, branch or tag to build from"
         required: true
         type: string
+  # The engine is rebuilt when the flag set moves, which is the one change that
+  # can break a release without touching a line of the game.
+  pull_request:
+    paths:
+      - tools/build_export_templates.sh
+      - .github/workflows/export-templates.yml
   workflow_dispatch:
     inputs:
       ref:
