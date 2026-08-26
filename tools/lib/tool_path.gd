@@ -47,3 +47,19 @@ static func refusal(path: String) -> String:
 	return "refusing %s: it would be written to %s, inside the project. %s" % [
 		path, full, "Give a path outside it, or a user:// one.",
 	]
+
+
+## The picture a preview tool is about to write, or null with the reason printed.
+##
+## `--headless` has no viewport texture, so `get_image()` answers null there and
+## a tool run that way otherwise calls `save_png` on it once a frame until
+## `godot.sh`'s wall clock cap. Every tool here is a windowed run; this is what
+## says so out loud. The draw is folded in because a capture with no forced draw
+## photographs the frame before the one that was just driven.
+static func capture(root: Window) -> Image:
+	RenderingServer.force_draw()
+	var texture: ViewportTexture = root.get_texture()
+	var image: Image = texture.get_image() if texture != null else null
+	if image == null:
+		print("no picture to capture: run this tool without --headless")
+	return image

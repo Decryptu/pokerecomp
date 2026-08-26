@@ -32,7 +32,15 @@ extends SceneTree
 ## spent before it; a cartridge trace is aligned to the slide's end, so use it
 ## for a recording and not for a diff.
 ##
-## Both flags may be given, in either order.
+## `miss` forces the turn to miss instead, by putting the target's evasion at the
+## top and the user's accuracy at the bottom, and photographs the field once the
+## whole turn has been drawn rather than a counted frame inside an animation.
+## That is what `BattleCommand_FailureText`'s `.fly_dig` is read on: a two-turn
+## move is charged first, so the picture in the shot is the one the miss put back.
+## The printed `battler_visible` pair is the reading; the picture alone cannot
+## tell a square that was never emptied from one that was filled again.
+##
+## All three flags may be given, in any order.
 
 const WINDOW_SIZE := Vector2i(1152, 648)
 ## Enough frames for the scene to lay out before anything is driven, and enough
@@ -63,6 +71,7 @@ var _held: int = 0
 var _last_trace: String = ""
 var _scene_off: bool = false
 var _with_intro: bool = false
+var _miss: bool = false
 var _frames: int = 0
 
 
@@ -93,6 +102,8 @@ func _initialize() -> void:
 				_scene_off = true
 			"with_intro":
 				_with_intro = true
+			"miss":
+				_miss = true
 			_:
 				push_error("Unknown flag %s" % flag)
 				quit(1)
@@ -136,8 +147,10 @@ func _process(_delta: float) -> bool:
 	if _frames < SETTLE_FRAMES + DRAW_FRAMES:
 		return false
 
-	RenderingServer.force_draw()
-	var image: Image = root.get_texture().get_image()
+	var image: Image = Gen2ToolPath.capture(root)
+	if image == null:
+		quit(1)
+		return true
 	var error: Error = image.save_png(_output_path)
 	if error != OK:
 		push_error("Could not write %s (error %d)" % [_output_path, error])
@@ -180,8 +193,10 @@ func _shoot_range() -> bool:
 		# this driver's frames, and an uncomposited one hands back the last
 		# picture that was: a whole capture can come out as one frame repeated.
 		# Drawing on demand is what makes a run of this tool reproducible.
-		RenderingServer.force_draw()
-		var image: Image = root.get_texture().get_image()
+		var image: Image = Gen2ToolPath.capture(root)
+		if image == null:
+			quit(1)
+			return true
 		var error: Error = image.save_png("%s_f%d.png" % [_prefix(), _cursor])
 		if error != OK:
 			push_error("Could not write frame %d (error %d)" % [_cursor, error])
@@ -301,6 +316,40 @@ func _drive_capture() -> bool:
 
 ## Settles the intro, teaches both Pokemon the move, takes the turn and walks the
 ## event queue to the first animation on the requested side.
+## A turn that cannot land, drawn to its end. The stages are the whole of the
+## forcing: `.StatModifiers` multiplies the two together, so six down against six
+## up leaves nothing on the dice.
+func _drive_miss(battle: Gen2Battle) -> bool:
+	battle.mon(Gen2Battle.ENEMY if not _side_is_enemy else Gen2Battle.PLAYER) \
+		.change_stage("evasion", 6)
+	battle.mon(Gen2Battle.PLAYER if not _side_is_enemy else Gen2Battle.ENEMY) \
+		.change_stage("accuracy", -6)
+	## A charge move spends its first turn going up, so the miss wanted is the
+	## second one. Nothing else takes two.
+	for _turn: int in 2:
+		_screen.take_turn_with(0, 0)
+		for _step: int in MAX_STEPS:
+			if _screen.frames_running():
+				# The same emptying `_drive` does: nothing is listening, and
+				# `WaitSFX` would otherwise wait on real time.
+				if _screen._audio_player != null:
+					_screen._audio_player.stop_all()
+				_screen.advance_frame()
+				continue
+			if _screen._pending.is_empty():
+				break
+			_screen.finish()
+			_screen.advance()
+		if not Gen2Substatus.has(
+			battle.mon(Gen2Battle.ENEMY if _side_is_enemy else Gen2Battle.PLAYER).substatus,
+			Gen2Substatus.FLYING | Gen2Substatus.UNDERGROUND
+		):
+			break
+	for _frame: int in _frames_in:
+		_screen.advance_frame()
+	return true
+
+
 func _drive() -> bool:
 	if _move == 0:
 		return _drive_entrance()
@@ -316,6 +365,8 @@ func _drive() -> bool:
 		var mon: Gen2BattleMon = battle.mon(side)
 		mon.moves[0] = _move
 		mon.pp[0] = 40
+	if _miss:
+		return _drive_miss(battle)
 	_screen.take_turn_with(0, 0)
 
 	for _step: int in MAX_STEPS:

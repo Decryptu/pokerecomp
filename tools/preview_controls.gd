@@ -92,8 +92,10 @@ func _process(_delta: float) -> bool:
 		return false
 	if _frames < 18:
 		return false
-	RenderingServer.force_draw()
-	var image: Image = root.get_texture().get_image()
+	var image: Image = Gen2ToolPath.capture(root)
+	if image == null:
+		quit(1)
+		return true
 	var error: Error = image.save_png(_output_path)
 	RomCache.clear(_fixture_directory)
 	if error != OK:

@@ -378,6 +378,12 @@ const SEND_OUT_ANIM_SHINY: int = 1
 ## `AppearUserLowerSub` after Fly and Dig.
 const ANIMATION: StringName = &"animation"
 
+## `AppearUser` on its own, with no animation behind it: the user's picture is
+## stamped back into the map it was taken out of. `BattleCommand_FailureText`'s
+## `.fly_dig` is the one route in, a missed or unaffecting Fly or Dig, which is
+## why it is an event of its own rather than an [constant ANIMATION] flag.
+const APPEAR_USER: StringName = &"appear_user"
+
 ## What a side does with its turn. Switching is settled before priority is looked
 ## at, which is why it is an action rather than a very fast move.
 const ACTION_MOVE: StringName = &"move"

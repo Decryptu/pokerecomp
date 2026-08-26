@@ -204,8 +204,10 @@ func _process(_delta: float) -> bool:
 	if _elapsed == FRAMES_BEFORE_CAPTURE:
 		_drive(_programs[_at])
 		return false
-	RenderingServer.force_draw()
-	var image: Image = root.get_texture().get_image()
+	var image: Image = Gen2ToolPath.capture(root)
+	if image == null:
+		quit(1)
+		return true
 	var path: String = _output_path
 	if _programs.size() > 1:
 		path = "%s_%d.%s" % [
