@@ -116,3 +116,56 @@ func test_a_two_hundred_with_a_damaged_body_is_unreadable() -> void:
 func test_an_oversized_response_is_refused_before_parsing() -> void:
 	var huge: String = "x".repeat(Gen2UpdateCheck.MAX_RESPONSE_BYTES + 1)
 	assert_false(Gen2UpdateCheck.parse_release(huge)["ok"])
+
+
+## The release metadata below is stated once per export target and read by
+## stores, not by this code, so nothing else can notice it drifting. A release
+## whose presets disagree with [Gen2AppVersion] ships builds the update check
+## then calls newer or older than themselves.
+
+const PRESETS: String = "res://export_presets.cfg"
+
+## Preset section to the option keys under it that must equal the app version.
+const VERSION_KEYS: Dictionary = {
+	"preset.1.options": ["application/short_version", "application/version"],
+	"preset.3.options": ["version/name"],
+	"preset.4.options": ["application/short_version", "application/version"],
+}
+
+
+func _presets() -> ConfigFile:
+	var file := ConfigFile.new()
+	assert_eq(file.load(PRESETS), OK, "export_presets.cfg must parse")
+	return file
+
+
+func test_every_export_preset_states_the_app_version() -> void:
+	var file: ConfigFile = _presets()
+	for section: String in VERSION_KEYS:
+		for key: String in VERSION_KEYS[section]:
+			assert_eq(
+				String(file.get_value(section, key, "")),
+				Gen2AppVersion.VERSION,
+				"%s/%s" % [section, key]
+			)
+
+
+func test_the_project_settings_state_the_app_version() -> void:
+	assert_eq(String(ProjectSettings.get_setting("application/config/version", "")),
+		Gen2AppVersion.VERSION)
+
+
+## Android refuses an in-place update whose version code did not rise, so the
+## code is a function of the version rather than a number bumped by hand.
+func test_the_android_version_code_derives_from_the_app_version() -> void:
+	var parts: Array[int] = Gen2UpdateCheck.parse_version(Gen2AppVersion.VERSION)
+	assert_eq(parts.size(), 3, "the app version is major.minor.patch")
+	var expected: int = parts[0] * 10000 + parts[1] * 100 + parts[2]
+	assert_eq(int(_presets().get_value("preset.3.options", "version/code", 0)), expected)
+
+
+## An Apple team id names a personal developer account. The release IPA is
+## unsigned and needs none; a device build pastes one in and never commits it.
+func test_the_ios_preset_carries_no_signing_identity() -> void:
+	assert_eq(String(_presets().get_value("preset.4.options",
+		"application/app_store_team_id", "")), "")
