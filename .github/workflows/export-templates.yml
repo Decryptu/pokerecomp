@@ -112,16 +112,16 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          git init -q /tmp/godot
-          git -C /tmp/godot remote add origin https://github.com/godotengine/godot.git
-          git -C /tmp/godot fetch -q --depth 1 origin "$GODOT_COMMIT"
-          git -C /tmp/godot checkout -q FETCH_HEAD
+          git init -q godot-src
+          git -C godot-src remote add origin https://github.com/godotengine/godot.git
+          git -C godot-src fetch -q --depth 1 origin "$GODOT_COMMIT"
+          git -C godot-src checkout -q FETCH_HEAD
 
           # A pin that has drifted from the version the release installs stock
           # templates for would mix two engines in one download. Only the
           # series can be checked: a snapshot number is stamped by the engine's
           # own release process and is nowhere in the source.
-          pin=$(python3 -c "import runpy; v = runpy.run_path('/tmp/godot/version.py'); print('%s.%s' % (v['major'], v['minor']))")
+          pin=$(python3 -c "import runpy; v = runpy.run_path('godot-src/version.py'); print('%s.%s' % (v['major'], v['minor']))")
           if [ "$pin" != "${GODOT_VERSION%%-*}" ]; then
             echo "::error::the pinned commit is Godot $pin, the release installs stock $GODOT_VERSION templates"
             exit 1
@@ -129,7 +129,7 @@ jobs:
 
           jobs=$(python3 -c 'import os; print(os.cpu_count())')
           SCONSFLAGS="-j$jobs" \
-            tools/build_export_templates.sh /tmp/godot templates ${{ matrix.targets }}
+            tools/build_export_templates.sh godot-src templates ${{ matrix.targets }}
 
       - uses: actions/upload-artifact@v7
         with:

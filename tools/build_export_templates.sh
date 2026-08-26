@@ -94,6 +94,9 @@ for t in "$@"; do
       build ios arch=arm64 ios_simulator=no
       cp "$src/bin/libgodot.ios.template_release.arm64.a" "$out/libgodot.ios.release.a" ;;
     android)
+      # Stock templates carry Swappy, and Godot refuses an Android build
+      # without it rather than quietly shipping one that stutters.
+      ( cd "$src" && python3 misc/scripts/install_swappy_android.py )
       build android arch=arm64 generate_android_binary=no
       build android arch=arm32 generate_android_binary=no
       ( cd "$src/platform/android/java" && ./gradlew generateGodotTemplates )
