@@ -173,6 +173,14 @@ var _world_battle_completion_sent: bool = false
 var _world_battle_terminal_text_shown: bool = false
 var _world_battle_recovery_shown: bool = false
 var _world_battle_recovery: Dictionary = {}
+## `.give_money` and `CheckPayDay`, the two credits the way out of a won battle
+## pays. Computed once by [method _earnings] and then read by the snapshot
+## [method _save_battle_result] writes, by the line that announces the prize and
+## by the completion result the world credits its live state from, so no two of
+## the three can disagree about what the fight was worth.
+var _earnings_computed: Dictionary = {}
+var _prize_text_shown: bool = false
+var _pay_day_text_shown: bool = false
 var _last_message: String = ""
 ## A running [Gen2HpBarAnimation] per side. A side with no entry is not moving.
 var _bars: Dictionary = {}
@@ -830,6 +838,9 @@ func show_matchup(enemy: int, player: int, enemy_level: int = 5, player_level: i
 	_world_battle_completion_sent = false
 	_world_battle_terminal_text_shown = false
 	_world_battle_recovery_shown = false
+	_earnings_computed = {}
+	_prize_text_shown = false
+	_pay_day_text_shown = false
 	_world_battle_recovery = {}
 	_enemy = _wrap_species(enemy)
 	_player = _wrap_species(player)
@@ -866,6 +877,9 @@ func show_trainer(
 	_world_battle_completion_sent = false
 	_world_battle_terminal_text_shown = false
 	_world_battle_recovery_shown = false
+	_earnings_computed = {}
+	_prize_text_shown = false
+	_pay_day_text_shown = false
 	_world_battle_recovery = {}
 	var enemy_party: Gen2Party = Gen2TrainerParty.build(_data, trainer_class, index)
 	if enemy_party == null:
@@ -907,6 +921,9 @@ func show_saved_party(save: Gen2SaveData) -> bool:
 	_world_battle_completion_sent = false
 	_world_battle_terminal_text_shown = false
 	_world_battle_recovery_shown = false
+	_earnings_computed = {}
+	_prize_text_shown = false
+	_pay_day_text_shown = false
 	_world_battle_recovery = {}
 	var player_party: Gen2Party = Gen2SaveBattleAdapter.to_battle_party(_data, save)
 	var enemy_party: Gen2Party = _party_from(DEFAULT_ENEMY, DEFAULT_LEVEL)
@@ -984,6 +1001,9 @@ func start_world_battle(
 	_world_battle_completion_sent = false
 	_world_battle_terminal_text_shown = false
 	_world_battle_recovery_shown = false
+	_earnings_computed = {}
+	_prize_text_shown = false
+	_pay_day_text_shown = false
 	_world_battle_recovery = {}
 	_pending = []
 	_save_slot = save.slot if save != null else -1
@@ -997,7 +1017,6 @@ func start_world_battle(
 	## `LevelUpHappinessMod` compares it against the winner's caught location.
 	_battle.landmark = _world_context.landmark if _world_context != null \
 		else Gen2Battle.LANDMARK_NONE
-	_battle.init_enemy_trainer(_enemy_trainer_class)
 	var player_party_ready: Gen2Party = prepared["player_party"]
 	var enemy_party_ready: Gen2Party = prepared["enemy_party"]
 	_player = player_party_ready.active_mon().species
@@ -3336,6 +3355,10 @@ func _continue_after_messages() -> void:
 			# `wBattleResult` is DRAW and the party is still standing.
 			if _show_world_battle_terminal_text():
 				return
+			## `.give_money` is the next thing `BattleWon` does once
+			## `PrintWinLossText` has been answered.
+			if _show_prize_money_text():
+				return
 			## `LostBattle`'s `.not_canlose` is the grayscale and a `ret`: the
 			## battle prints nothing about blacking out, because `_WhitedOutText`
 			## belongs to `Script_Whiteout` on the overworld. What is checked
@@ -3344,6 +3367,11 @@ func _continue_after_messages() -> void:
 				if not _prepare_world_battle_recovery():
 					return
 				_world_battle_recovery_shown = true
+		## `CheckPayDay` is `.HandleEndOfBattle`'s, outside the battle loop and
+		## behind whichever of the two win or loss texts was printed. A wild
+		## battle reaches it with no `_world_battle_active` in front of it.
+		if _show_pay_day_text():
+			return
 		if _save_battle_result() and _world_battle_active:
 			_finish_world_battle()
 		return
@@ -3384,14 +3412,13 @@ func _save_battle_result() -> bool:
 		_data.id, _data.sha1, _save_slot, _battle.party(Gen2Battle.PLAYER), "", _source_save
 	)
 	# The world host credits its live state from the completion result below;
-	# mirror the same award into the snapshot being written now so Pay Day is not
-	# lost between the battle save and that callback.
-	if save != null and save.world != null and save.world.world_state != null \
-			and _battle.pay_day_money > 0:
-		var balance: int = save.world.world_state.money(0)
-		save.world.world_state.apply_changes({}, {}, {"money": {
-			0: mini(balance + _battle.pay_day_money, Gen2WorldInventory.MAX_MONEY),
-		}})
+	# mirror the same award into the snapshot being written now so neither the
+	# prize nor the Pay Day money is lost between the battle save and that
+	# callback.
+	if save != null and save.world != null:
+		Gen2WorldBattleAdapter.credit_earnings(
+			save.world.world_state, _earnings()["money"]
+		)
 	var result: Dictionary = Gen2SaveStore.save(save, _data)
 	if not result["ok"]:
 		push_error("Could not save battle result: %s" % result["message"])
@@ -3429,8 +3456,11 @@ func _finish_world_battle() -> void:
 		"save_written": _save_written,
 	}
 	if outcome == Gen2WorldBattleAdapter.OUTCOME_WON:
-		if _battle.pay_day_money > 0:
-			result["pay_day_money"] = _battle.pay_day_money
+		## `.give_money` and `CheckPayDay` as one credit per account, so the
+		## world applies exactly what the save already carries.
+		var earned: Dictionary = _earnings()["money"]
+		if not earned.is_empty():
+			result["money_awarded"] = earned.duplicate()
 		## `ExitBattle`'s `and $f / ret nz`: `wEvolvableFlags` is only ever read
 		## after a battle that was WON, so a fight that was lost or run from
 		## carries nothing for the overworld's own `EvolveAfterBattle` to walk.
@@ -3466,6 +3496,58 @@ func _finish_world_capture(capture: Dictionary) -> void:
 		"capture": capture.duplicate(true),
 		"enemy": _enemy_battler_record(),
 	})
+
+
+## [method Gen2WorldBattleAdapter.earnings] for this battle, worked out once so
+## the snapshot [method _save_battle_result] writes, the line that announces the
+## prize and the completion result the world credits its live state from cannot
+## disagree about what the fight was worth.
+func _earnings() -> Dictionary:
+	if _earnings_computed.is_empty():
+		_earnings_computed = Gen2WorldBattleAdapter.earnings(
+			_battle,
+			_source_save.world.world_state
+			if _source_save != null and _source_save.world != null else null,
+			_battle != null and not _battle.has_fled() \
+				and _battle.winner() == Gen2Battle.PLAYER
+		)
+	return _earnings_computed
+
+
+## `GotMoneyForWinningText` and the three `.SentToMomTexts`, printed by
+## `.give_money` right behind `PrintWinLossText`.
+func _show_prize_money_text() -> bool:
+	if _prize_text_shown:
+		return false
+	_prize_text_shown = true
+	var earned: Dictionary = _earnings()
+	if int(earned["prize_shown"]) <= 0:
+		return false
+	var got: String = "%s got ¥%d\nfor winning!" % [
+		_player_label(), int(earned["prize_shown"]),
+	]
+	match StringName(earned["prize_line"]):
+		Gen2Battle.PRIZE_SENT_SOME_TO_MOM:
+			show_message("%s\nSent some to MOM!" % got)
+		Gen2Battle.PRIZE_SENT_HALF_TO_MOM:
+			show_message("Sent half to MOM!")
+		Gen2Battle.PRIZE_SENT_ALL_TO_MOM:
+			show_message("Sent all to MOM!")
+		_:
+			show_message(got)
+	return true
+
+
+## `BattleText_PlayerPickedUpPayDayMoney`, which `CheckPayDay` prints once the
+## coins have been added.
+func _show_pay_day_text() -> bool:
+	if _pay_day_text_shown:
+		return false
+	_pay_day_text_shown = true
+	if int(_earnings()["pay_day"]) <= 0:
+		return false
+	show_message("%s picked up\n¥%d!" % [_player_label(), int(_earnings()["pay_day"])])
+	return true
 
 
 func _show_world_battle_terminal_text() -> bool:

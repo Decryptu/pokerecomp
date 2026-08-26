@@ -7,7 +7,8 @@ extends SceneTree
 ##
 ##   Godot --path . -s res://tools/preview_battle_switch.gd -- crystal /tmp/s.png [stage] [presses] [passes]
 ##
-## [stage] is one of `offer` (the default), `menu`, `move`, `info` (the move
+## [stage] is one of `offer` (the default), `prize` (a trainer battle fought to
+## its win, photographed on `GotMoneyForWinningText`), `menu`, `move`, `info` (the move
 ## list with a registered battle-information provider's annotations over it:
 ## a mark per row for the effectiveness against the defender, the non-zero stat
 ## stages, and a tile of the provider's own for the weather), `info_pack` and
@@ -64,7 +65,12 @@ const SHINY_LEVEL: int = 30
 ## The two stages that go through `start_world_battle` rather than a staged
 ## `_battle`, because the palette is chosen in `_init_battle_display` and only
 ## the world path runs it.
-const WORLD_STAGES: Array[String] = ["shiny", "normal"]
+const WORLD_STAGES: Array[String] = ["shiny", "normal", "prize"]
+
+## The `prize` stage's held item, AMULET_COIN (constants/item_constants.asm).
+## `CheckAmuletCoin` doubles the reward off it, so the figure in the picture is
+## `.DoubleReward`'s rather than the plain one.
+const AMULET_COIN: int = 0x5B
 
 ## The stages `BattleMenu`'s own first opening leads into with nothing staged
 ## behind it, rather than a question a turn has to reach.
@@ -217,6 +223,43 @@ func _open() -> void:
 	## The wild the world starts, entered the way a step into the grass does:
 	## `BATTLETYPE_FORCESHINY` is what writes the shiny word, so the picture is
 	## the cartridge's own forced shiny rather than a number typed in here.
+	if _stage == "prize":
+		## `GotMoneyForWinningText`, which `.give_money` prints behind
+		## `PrintWinLossText`. The fight is won rather than staged: the reward
+		## is `ComputeTrainerReward`'s, off the party the request built.
+		_screen.start_world_battle({"values": {
+			"kind": &"trainer", "trainer_group": TRAINER_CLASS, "trainer_id": 0,
+		}})
+		var fight: Gen2Battle = _screen.get("_battle")
+		fight.player.item = AMULET_COIN
+		_screen.set("_pending", fight.entrance_events(Gen2Battle.PLAYER))
+		_drain_to_menu()
+		## Each of Falkner's two is put on one hit point and knocked out by the
+		## lead's first move. The switch offer his bench opens is declined, since
+		## what is being photographed is the line behind the last faint.
+		for _step: int in 400:
+			_settle()
+			var snapshot: Dictionary = _screen.battle_snapshot()
+			if "for winning" in String(snapshot["message"]):
+				## The box is still revealing on the frame it is spotted, and
+				## the figure is the whole point of the picture.
+				_read_question()
+				_settle()
+				return
+			if String(snapshot["switch_stage"]) != "":
+				_read_question()
+				_screen._handle_button(Gen2Button.B)
+				continue
+			if String(snapshot["menu_stage"]) == "main" and not fight.is_over():
+				fight.enemy.hp = 1
+				_screen.set("_pending", fight.take_actions(
+					Gen2Battle.use_move(0), Gen2Battle.use_move(0)
+				))
+			_screen.finish()
+			_screen.advance()
+		push_error("the prize line was never reached")
+		return
+
 	if _stage in WORLD_STAGES:
 		var values: Dictionary = {
 			"kind": &"wild", "pokemon": SHINY_SPECIES, "level": SHINY_LEVEL,

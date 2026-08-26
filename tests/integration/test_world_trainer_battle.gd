@@ -29,6 +29,13 @@ func before_each() -> void:
 	Gen2ModHost.reset()
 
 
+## `<PLAYER>` in `GotMoneyForWinningText`. A battle opened with no save behind it
+## has no name to read, so `NewGame`'s own default stands in; the saved fixture
+## carries the name [method _open_world] gives it.
+const UNSAVED_PLAYER: String = Gen2OakSpeech.DEFAULT_MALE
+const SAVED_PLAYER: String = "TEST"
+
+
 func after_each() -> void:
 	if is_instance_valid(_world_screen):
 		_world_screen.free()
@@ -302,6 +309,12 @@ func test_victory_displays_imported_text_reloads_objects_and_keeps_player_cell()
 	var result_text: Dictionary = host.battle_snapshot()
 	assert_eq(result_text["message"], "YOU WON.")
 
+	## `.give_money` prints behind `PrintWinLossText`, so the win takes one more
+	## press: 25 base times the last member's level of 5, four quarters over.
+	host.finish()
+	host.advance()
+	assert_eq(host.battle_snapshot()["message"], "%s got ¥500\nfor winning!" % UNSAVED_PLAYER)
+
 	host.finish()
 	host.advance()
 	await get_tree().process_frame
@@ -351,6 +364,12 @@ func test_gold_profile_victory_commits_beaten_flag_and_reloads_objects() -> void
 		host.hurt_enemy()
 	host = _battle_host()
 	assert_eq(host.battle_snapshot()["message"], "YOU WON.")
+
+	## `.give_money` prints behind `PrintWinLossText`, so the win takes one more
+	## press: 25 base times the last member's level of 5, four quarters over.
+	host.finish()
+	host.advance()
+	assert_eq(host.battle_snapshot()["message"], "%s got ¥500\nfor winning!" % UNSAVED_PLAYER)
 
 	host.finish()
 	host.advance()
@@ -848,6 +867,12 @@ func test_a_trainer_battle_fights_and_writes_back_with_an_egg_in_the_party() -> 
 		host.hurt_enemy()
 	host = _battle_host()
 	assert_eq(host.battle_snapshot()["message"], "YOU WON.")
+	## `.give_money` prints behind `PrintWinLossText`, so the win takes one more
+	## press: 25 base times the last member's level of 5, four quarters over.
+	host.finish()
+	host.advance()
+	assert_eq(host.battle_snapshot()["message"], "%s got ¥500\nfor winning!" % SAVED_PLAYER)
+
 	host.finish()
 	host.advance()
 	await get_tree().process_frame

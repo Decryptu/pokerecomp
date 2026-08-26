@@ -543,9 +543,10 @@ const ACCOUNT_MOMS_MONEY: int = 1
 ## `ram_constants.asm`'s wMomSavingMoney. Bit 7 is whether the bank has ever
 ## been opened; the low three are how much of a battle prize she keeps, and only
 ## MOM_SAVING_SOME_MONEY is ever written, since that is the one tier her menu
-## offers. Nothing spends the tier here: prize money is a deliberate divergence.
+## offers. [method Gen2Battle.prize_money_split] is what spends the tier.
 const MOM_ACTIVE: int = 1 << 7
 const MOM_SAVING_SOME_MONEY: int = 1 << 0
+const MOM_SAVING_MONEY_MASK: int = 0b111
 ## `BankOfMom.dw`, the jumptable this routine walks. `wJumptableIndex` is the
 ## whole of its state, so each index below is one staged box, menu or dial and
 ## the loop around `.RunJumptable` is the chain of them.

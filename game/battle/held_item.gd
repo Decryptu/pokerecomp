@@ -54,7 +54,8 @@ const QUICK_CLAW: int = 74
 ## King's Rock: a chance to make an ordinary attack flinch.
 const FLINCH: int = 75
 
-## Amulet Coin: prize money, which [Gen2Battle] does not pay.
+## Amulet Coin: `CheckAmuletCoin` at every player send-out, which doubles both
+## `.give_money`'s prize and `CheckPayDay`'s coins.
 const AMULET_COIN: int = 76
 
 ## BrightPowder: its parameter comes straight off the attacker's accuracy.

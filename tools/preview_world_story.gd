@@ -54,8 +54,9 @@ const APRICORN_WHT: int = 0x61
 ## the Route 44 door and the first staircase (`maps/IcePath1F.asm`). Three of its
 ## four neighbours are wall, so (30,7) facing right is the only approach.
 const HM07_APPROACH: Vector2i = Vector2i(30, 7)
-## How many balls the route buys is its own choice, not the cartridge's, and the
-## source start money is the whole budget: no battle here pays prize money.
+## How many balls the route buys is its own choice, not the cartridge's. The
+## budget is the source start money plus what the fights on the way pay: the
+## walk credits `.give_money`'s prize the way the battle screen would.
 ## `MartViolet` sells Poké Balls and `MartBlackthorn` does not, so the two catches
 ## before Goldenrod are stocked in Violet and Dratini's far lower catch rate is
 ## answered with the cheapest ball Blackthorn does stock.
@@ -9235,9 +9236,6 @@ func _party_species(save: Gen2SaveData) -> Array:
 	return values
 
 
-## The whole read-only mirror in one call, so every leg answers VAR_PARTYCOUNT,
-## CheckPokerus, checkpoke and CheckPartyMove the same way. Pokerus is false
-## throughout: nothing on this route gives it.
 ## The experience a won trainer battle pays, since this walk answers every one of
 ## them with a win rather than fighting it. [method Gen2Battle.award_win_experience]
 ## is the engine's own split, level up, evolution and move learning; the fought
@@ -9619,7 +9617,16 @@ func _drain_story(
 					last_reason = String(levelled.get("reason", "experience write-back failed"))
 					last_details = JSON.stringify(levelled)
 					break
+				## `.give_money` and `CheckPayDay`, the other thing a win pays.
+				## This walk answers the request itself instead of opening a
+				## battle screen, so it credits the same accounts that screen
+				## would have.
+				var earned: Dictionary = Gen2WorldBattleAdapter.earnings(
+					prepared.get("battle", null), world.state, true
+				)
+				Gen2WorldBattleAdapter.credit_earnings(world.state, earned["money"])
 				battles.append({
+					"money": (earned["money"] as Dictionary).duplicate(),
 					"trainer_class": int(prepared.get("trainer_class", 0)),
 					"trainer_index": int(prepared.get("trainer_index", 0)),
 					"enemy_species": int(enemy_party.active_mon().species)

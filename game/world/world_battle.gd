@@ -104,6 +104,13 @@ static func prepare(
 	if battle == null:
 		return _failure(&"battle_setup_failed")
 	battle.battle_type = battle_type
+	## `InitEnemyTrainer` belongs to setting the opponent up rather than to
+	## whoever draws the fight, so every host gets the class's two items, its
+	## gym-leader happiness and `ComputeTrainerReward` from one place. Only a
+	## `kind` of `trainer` reaches `ComputeTrainerReward`: `ReadTrainerParty`
+	## returns in front of it for the Battle Tower and for a link partner.
+	if trainer_class > 0:
+		battle.init_enemy_trainer(trainer_class, kind == &"trainer")
 
 	return {
 		"ok": true,
@@ -140,6 +147,66 @@ static func prepare(
 ##   unlocked, which is `CheckUnownLetter`'s `jr c, .GenerateDVs`. The source
 ##   notes the loop never ends if a forced shiny is also an Unown, so the shiny
 ##   branch stays in front of it here the way it is there.
+## `BattleWon.give_money` and `CheckPayDay`, the two credits the way out of a
+## won battle pays, worked out once for whichever host fought it.
+##
+## Both are a win's own: `.give_money` is reached from the trainer branch of
+## `BattleWon`, and `CheckPayDay` sits behind `.HandleEndOfBattle`'s
+## `and $f / ret nz`, so a loss, a draw and a run all pay nothing. [param won] is
+## that `wBattleResult` test, passed in rather than read off the battle: a host
+## that settles a fight by fiat rather than playing it knows its own outcome.
+## [param state] is read for Mom's savings tier and her balance, never written.
+##
+## Returns `money` keyed by account, the figure `GotMoneyForWinningText` prints,
+## which of its four lines that is, and the Pay Day coins.
+static func earnings(battle: Gen2Battle, state: Gen2WorldState, won: bool) -> Dictionary:
+	var result: Dictionary = {
+		"money": {}, "prize_shown": 0, "prize_line": &"", "pay_day": 0,
+	}
+	if battle == null or not won:
+		return result
+	var wallet: int = 0
+	var to_mom: int = 0
+	if battle.battle_reward > 0:
+		var split: Dictionary = Gen2Battle.prize_money_split(
+			battle.battle_reward,
+			battle.amulet_coin,
+			state.mom_savings_flags() if state != null else 0,
+			state.money(Gen2WorldScriptRunner.ACCOUNT_MOMS_MONEY) if state != null else 0,
+			Gen2WorldInventory.MAX_MONEY,
+		)
+		wallet += int(split["wallet"])
+		to_mom += int(split["mom"])
+		result["prize_shown"] = int(split["shown"])
+		result["prize_line"] = split["line"]
+	## `CheckPayDay` doubles the coins with the same Amulet Coin the prize used,
+	## and does it whether or not there was a trainer to pay a prize.
+	if battle.pay_day_money > 0:
+		var coins: int = battle.pay_day_money
+		if battle.amulet_coin:
+			coins = Gen2Battle.double_reward(coins)
+		result["pay_day"] = coins
+		wallet += coins
+	if wallet > 0:
+		(result["money"] as Dictionary)[Gen2WorldScriptRunner.ACCOUNT_YOUR_MONEY] = wallet
+	if to_mom > 0:
+		(result["money"] as Dictionary)[Gen2WorldScriptRunner.ACCOUNT_MOMS_MONEY] = to_mom
+	return result
+
+
+## `AddBattleMoneyToAccount`, which caps each account at `MAX_MONEY` on its own.
+## [param money] is [method earnings]' own dictionary.
+static func credit_earnings(state: Gen2WorldState, money: Dictionary) -> void:
+	if state == null or money.is_empty():
+		return
+	var balances: Dictionary = {}
+	for account: int in money:
+		balances[account] = mini(
+			state.money(account) + int(money[account]), Gen2WorldInventory.MAX_MONEY
+		)
+	state.apply_changes({}, {}, {"money": balances})
+
+
 static func wild_dvs(
 	values: Dictionary, battle_type: int, species: int, generator: RandomNumberGenerator
 ) -> int:
