@@ -27,6 +27,10 @@ permissions:
 env:
   GODOT_VERSION: 4.8-dev3
   GODOT_TEMPLATE_DIR: 4.8.dev3
+  # The engine the iOS plugin compiles against. It must be the commit
+  # `export-templates.yml` builds the templates from, since the plugin is linked
+  # into them and the two have to agree about what a header declares.
+  GODOT_COMMIT: 51105ccbe58381774ecd7a7486d564b202a5192e
 
 jobs:
   version:
@@ -127,6 +131,17 @@ jobs:
           export/android/java_sdk_path = "$JAVA_HOME"
           EOF
 
+      # `addons/second_screen/bin/` is gitignored, so a checkout has no AAR and
+      # the Android exporter answers a plugin with no binary the way the iOS one
+      # does: it drops it and the build succeeds anyway. 0.1.0 shipped that way
+      # and no handheld with a lower panel got one. Checked for after the export.
+      - name: Build the Android second-screen plugin
+        run: |
+          set -euo pipefail
+          export ANDROID_HOME="$ANDROID_SDK_ROOT"
+          tools/build_android_plugin.sh
+          ls -l addons/second_screen/bin/*.aar
+
       - name: Materialize the Android signing key
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 }}
@@ -165,6 +180,18 @@ jobs:
           [ -s "dist/pokerecomp-${v}-android.apk" ] || { echo "::error::no APK"; exit 1; }
           chmod +x "dist/pokerecomp-${v}-linux-x86_64" "dist/pokerecomp-${v}-linux-arm64"
           ls -lh dist
+
+      - name: Refuse an APK with no second-screen plugin in it
+        run: |
+          set -euo pipefail
+          v="${{ needs.version.outputs.version }}"
+          apk="dist/pokerecomp-${v}-android.apk"
+          dex=$(unzip -Z1 "$apk" '*.dex')
+          if ! unzip -p "$apk" $dex | grep -qa SecondScreen; then
+            echo "::error::the APK carries no second-screen plugin; the AAR did not link"
+            exit 1
+          fi
+          echo "second screen ✓"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -221,6 +248,34 @@ jobs:
           ( cd /tmp/ios && zip -q "$dir/ios.zip" "$slice/libgodot.a" )
           echo "template directory: ${before} kB -> $(du -sk "$dir" | cut -f1) kB"
 
+      # iOS has no system file picker at this engine pin, so `ios/plugins` ships
+      # one and every import on that platform goes through it. Its libraries are
+      # gitignored, a checkout therefore has none, and the exporter answers a
+      # plugin whose binary is missing by quietly dropping it: the build still
+      # succeeds and ships the engine's own browser, which on iOS can only list
+      # the app's own data. That is a release nobody can import a cartridge
+      # with, so the plugin is built here and checked for after the export.
+      - name: Build the iOS file picker plugin
+        run: |
+          set -euo pipefail
+          brew install scons
+          # The plugin is linked into the templates `export-templates.yml`
+          # builds, so a pin that has drifted from that one is two engines.
+          grep -q "GODOT_COMMIT: $GODOT_COMMIT" .github/workflows/export-templates.yml \
+            || { echo "::error::the plugin pin disagrees with the template pin"; exit 1; }
+          git init -q .references/godot
+          git -C .references/godot remote add origin https://github.com/godotengine/godot.git
+          git -C .references/godot fetch -q --depth 1 origin "$GODOT_COMMIT"
+          git -C .references/godot checkout -q FETCH_HEAD
+          # Three headers the engine's own build generates and a plain checkout
+          # does not have. Nothing else of the engine is built.
+          ( cd .references/godot && scons platform=ios target=template_debug arch=arm64 \
+              core/extension/gdextension_interface.gen.h \
+              core/extension/ext_wrappers.gen.h \
+              core/disabled_classes.gen.h )
+          tools/build_ios_plugin.sh
+          ls -l ios/plugins/*/*.a
+
       - name: Import
         run: |
           set -euo pipefail
@@ -261,6 +316,22 @@ jobs:
           rm -rf "$RUNNER_TEMP/ipa" && mkdir -p "$RUNNER_TEMP/ipa/Payload"
           cp -R "$app" "$RUNNER_TEMP/ipa/Payload/"
           (cd "$RUNNER_TEMP/ipa" && zip -qry "$GITHUB_WORKSPACE/dist/pokerecomp-${v}-ios.ipa" Payload)
+
+      # 0.1.0 shipped without it and every player's only picker was a browser
+      # of the app's own empty data. Nothing else can notice: the exporter drops
+      # an invalid plugin silently, and the preset still says it is on.
+      - name: Refuse an IPA with no system file picker in it
+        run: |
+          set -euo pipefail
+          v="${{ needs.version.outputs.version }}"
+          rm -rf "$RUNNER_TEMP/audit" && mkdir -p "$RUNNER_TEMP/audit"
+          unzip -q "dist/pokerecomp-${v}-ios.ipa" -d "$RUNNER_TEMP/audit"
+          binary="$RUNNER_TEMP/audit/Payload/pokerecomp.app/pokerecomp"
+          if ! strings -a "$binary" | grep -q NativeFilePicker; then
+            echo "::error::the IPA carries no NativeFilePicker; the plugin did not link"
+            exit 1
+          fi
+          echo "system file picker ✓"
 
       # A signed IPA would be a private leak in a public download, so the gate
       # is here rather than in the release notes.
