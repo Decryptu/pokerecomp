@@ -11,7 +11,8 @@ extends RefCounted
 ## The cartridge's four commands are [method damage_stats], [method damage_calc],
 ## [method stab_damage] and [method apply_variation], run one at a time by
 ## [Gen2EffectCommands] because half a dozen effects write between two of them.
-## [method calculate] and [method calculate_with] are the composition.
+## [method calculate_with] is the composition, for a caller with no list to put
+## the four in.
 
 ## The cap lands before the minimum is added, so the biggest hit is 999 and the
 ## smallest that connects at all is 2.
@@ -52,27 +53,6 @@ const STAT_BYTE_MAX: int = 0xFF
 const TRUNCATE_SHIFT: int = 4
 
 
-## A hit, rolled.
-static func calculate(
-	attacker: Gen2BattleMon,
-	defender: Gen2BattleMon,
-	move: Dictionary,
-	rng: RandomNumberGenerator,
-	focus_energy: bool = false,
-	defense_halved: bool = false,
-	weather: int = Gen2Weather.NONE,
-	defender_screens: int = Gen2Screens.NONE,
-	foresight: bool = false
-) -> Dictionary:
-	var scope_lens: bool = attacker != null \
-		and Gen2HeldItem.effect_of(attacker.data, attacker.item) == Gen2HeldItem.CRITICAL_UP
-	return calculate_with(
-		attacker, defender, move,
-		roll_critical(move, rng, focus_energy, scope_lens),
-		roll_variation(rng), defense_halved, weather, defender_screens, foresight
-	)
-
-
 ## A hit with both rolls decided: deterministic, and the whole formula, for a
 ## caller (the AI, a test) that has no list to put the four steps in. Present,
 ## Triple Kick, Fury Cutter and Rollout each write between two of them, which is
@@ -83,13 +63,16 @@ static func calculate(
 ## always the one damage used (see [method GameData.type_effectiveness]);
 ## [code]immune[/code] is a matchup of zero, which is a miss rather than a hit
 ## for nothing.
+##
+## Selfdestruct's halved defense comes off the move's own effect byte here, the
+## way `BattleCommand_DamageCalc` reads it, so a caller predicting a hit gets the
+## same number the hit will deal.
 static func calculate_with(
 	attacker: Gen2BattleMon,
 	defender: Gen2BattleMon,
 	move: Dictionary,
 	critical: bool,
 	variation: int,
-	defense_halved: bool = false,
 	weather: int = Gen2Weather.NONE,
 	defender_screens: int = Gen2Screens.NONE,
 	foresight: bool = false
@@ -107,7 +90,8 @@ static func calculate_with(
 	)
 	var damage: int = damage_calc(
 		attacker, int(move.get("power", 0)), int(stats[0]), int(stats[1]),
-		defense_halved, move_type, critical
+		int(move.get("effect", 0)) == Gen2MoveEffect.SELFDESTRUCT,
+		move_type, critical
 	)
 
 	var stabbed: Dictionary = stab_damage(
@@ -438,6 +422,41 @@ static func hidden_power(dvs: int) -> Dictionary:
 	if move_type >= RomLayout.TYPE_UNUSED_START:
 		move_type += RomLayout.TYPE_UNUSED_END - RomLayout.TYPE_UNUSED_START
 	return {"type": move_type, "power": power}
+
+
+## `ConstantDamageEffects`: the four effects whose damage skips the formula
+## entirely. Reversal shares `BattleCommand_ConstantDamage` and not this list,
+## because it sets a power and runs the formula after it.
+const CONSTANT_DAMAGE_EFFECTS: Array[int] = [
+	Gen2MoveEffect.SUPER_FANG, Gen2MoveEffect.STATIC_DAMAGE,
+	Gen2MoveEffect.LEVEL_DAMAGE, Gen2MoveEffect.PSYWAVE,
+]
+
+
+## `BattleCommand_ConstantDamage`'s four listed arms, shared by the hit itself
+## and by `AIDamageCalc`, which routes the same four effects here rather than
+## through the formula. [param defender] is whoever the hit lands on, which is
+## the only mon Super Fang reads.
+##
+## A null [param rng] is a prediction rather than a hit, and answers Psywave with
+## the top of its range the way [constant MAX_VARIATION] does for the formula.
+static func constant_damage(
+	effect: int, attacker: Gen2BattleMon, defender: Gen2BattleMon,
+	move: Dictionary, rng: RandomNumberGenerator = null
+) -> int:
+	match effect:
+		Gen2MoveEffect.LEVEL_DAMAGE:
+			return attacker.level
+		Gen2MoveEffect.PSYWAVE:
+			if rng == null:
+				@warning_ignore("integer_division")
+				return maxi(attacker.level / 2 + attacker.level - 1, 1)
+			return psywave_damage(attacker.level, rng)
+		Gen2MoveEffect.SUPER_FANG:
+			@warning_ignore("integer_division")
+			return maxi(defender.hp / 2, 1)
+	# STATIC_DAMAGE: Sonicboom and Dragon Rage deal exactly their own power.
+	return int(move.get("power", 0))
 
 
 ## Psywave: one up to but excluding one and a half times the level, the halving

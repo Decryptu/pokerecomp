@@ -9384,13 +9384,12 @@ func _weakening_member(battle: Gen2Battle, party: Gen2Party, target: Gen2BattleM
 		var slot: int = _throttled_slot(battle, member, target)
 		if slot < 0:
 			continue
-		var hit: Dictionary = Gen2Damage.calculate_with(
-			member, target, battle.data.move(int(member.moves[slot])),
-			true, Gen2Damage.MAX_VARIATION
+		var damage: int = _worst_case_damage(
+			member, target, battle.data.move(int(member.moves[slot]))
 		)
-		if int(hit.get("damage", 0)) > best_damage:
+		if damage > best_damage:
 			best = index
-			best_damage = int(hit.get("damage", 0))
+			best_damage = damage
 	return best
 
 
@@ -9407,16 +9406,31 @@ func _throttled_slot(battle: Gen2Battle, attacker: Gen2BattleMon, target: Gen2Ba
 		var move: Dictionary = battle.data.move(int(attacker.moves[slot]))
 		if move.is_empty() or int(move.get("power", 0)) <= 0:
 			continue
-		var hit: Dictionary = Gen2Damage.calculate_with(
-			attacker, target, move, true, Gen2Damage.MAX_VARIATION
-		)
-		var damage: int = int(hit.get("damage", 0))
-		if bool(hit.get("immune", false)) or damage >= target.hp:
+		var damage: int = _worst_case_damage(attacker, target, move)
+		if damage < 0 or damage >= target.hp:
 			continue
 		if best < 0 or damage > best_damage:
 			best = slot
 			best_damage = damage
 	return best
+
+
+## The hardest [param move] could hit for: a critical at
+## [constant Gen2Damage.MAX_VARIATION], or the constant number for the four
+## effects that skip the formula, whose stored power is 1 and whose real hit is
+## the user's level or half the target. Answers -1 when the target is immune.
+func _worst_case_damage(
+	attacker: Gen2BattleMon, target: Gen2BattleMon, move: Dictionary
+) -> int:
+	var effect: int = int(move.get("effect", 0))
+	if Gen2Damage.CONSTANT_DAMAGE_EFFECTS.has(effect):
+		return Gen2Damage.constant_damage(effect, attacker, target, move)
+	var hit: Dictionary = Gen2Damage.calculate_with(
+		attacker, target, move, true, Gen2Damage.MAX_VARIATION
+	)
+	if bool(hit.get("immune", false)):
+		return -1
+	return int(hit.get("damage", 0))
 
 
 ## What the wild does with the turn. `_random_slot`'s own answer

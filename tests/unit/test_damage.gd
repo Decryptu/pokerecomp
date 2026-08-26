@@ -179,15 +179,20 @@ func test_a_move_with_no_power_never_crits() -> void:
 		assert_false(Gen2Damage.roll_critical(_data.move(Fixture.GROWL), rng))
 
 
+## `BattleCommand_DamageCalc` reads the effect byte itself rather than taking the
+## halving from its caller, so every prediction of the hit gets it too. The
+## comparison is the same move with an effect that halves nothing.
 func test_selfdestruct_halves_defense_before_the_formula() -> void:
 	var attacker: Gen2BattleMon = _mon(Fixture.PIKACHU)
 	var defender: Gen2BattleMon = _mon(Fixture.BULBASAUR)
 	var move: Dictionary = _data.move(Fixture.SELFDESTRUCT)
+	var plain: Dictionary = move.duplicate()
+	plain["effect"] = Gen2MoveEffect.NORMAL_HIT_EFFECT
 	var ordinary: Dictionary = Gen2Damage.calculate_with(
-		attacker, defender, move, false, Gen2Damage.MAX_VARIATION, false
+		attacker, defender, plain, false, Gen2Damage.MAX_VARIATION
 	)
 	var halved: Dictionary = Gen2Damage.calculate_with(
-		attacker, defender, move, false, Gen2Damage.MAX_VARIATION, true
+		attacker, defender, move, false, Gen2Damage.MAX_VARIATION
 	)
 	assert_gt(int(halved["damage"]), int(ordinary["damage"]))
 
@@ -208,8 +213,7 @@ func test_the_weather_multiplies_before_stab_and_the_matchup() -> void:
 		[Gen2Weather.SANDSTORM, 54],
 	]:
 		var hit: Dictionary = Gen2Damage.calculate_with(
-			attacker, defender, _data.move(Fixture.EMBER), false, Gen2Damage.MAX_VARIATION,
-			false, int(pair[0])
+			attacker, defender, _data.move(Fixture.EMBER), false, Gen2Damage.MAX_VARIATION, int(pair[0])
 		)
 		assert_eq(int(hit["damage"]), int(pair[1]), "weather %d" % int(pair[0]))
 
@@ -253,8 +257,7 @@ func test_struggle_is_outside_the_weather_as_well() -> void:
 		attacker, defender, _data.move(Fixture.STRUGGLE), false, Gen2Damage.MAX_VARIATION
 	)
 	var sunny: Dictionary = Gen2Damage.calculate_with(
-		attacker, defender, _data.move(Fixture.STRUGGLE), false, Gen2Damage.MAX_VARIATION,
-		false, Gen2Weather.SUN
+		attacker, defender, _data.move(Fixture.STRUGGLE), false, Gen2Damage.MAX_VARIATION, Gen2Weather.SUN
 	)
 	assert_eq(int(sunny["damage"]), int(plain["damage"]))
 
@@ -451,11 +454,11 @@ func test_light_screen_doubles_the_special_defence_a_special_move_divides_by() -
 	)
 	var screened: Dictionary = Gen2Damage.calculate_with(
 		attacker, defender, move, false, Gen2Damage.MAX_VARIATION,
-		false, Gen2Weather.NONE, Gen2Screens.LIGHT_SCREEN
+		Gen2Weather.NONE, Gen2Screens.LIGHT_SCREEN
 	)
 	var wrong_screen: Dictionary = Gen2Damage.calculate_with(
 		attacker, defender, move, false, Gen2Damage.MAX_VARIATION,
-		false, Gen2Weather.NONE, Gen2Screens.REFLECT
+		Gen2Weather.NONE, Gen2Screens.REFLECT
 	)
 
 	assert_eq(bare["damage"], 27)
@@ -473,11 +476,11 @@ func test_reflect_is_the_physical_screen_and_light_screen_guards_nothing_physica
 	)["damage"])
 	var reflected: int = int(Gen2Damage.calculate_with(
 		attacker, defender, move, false, Gen2Damage.MAX_VARIATION,
-		false, Gen2Weather.NONE, Gen2Screens.REFLECT
+		Gen2Weather.NONE, Gen2Screens.REFLECT
 	)["damage"])
 	var light: int = int(Gen2Damage.calculate_with(
 		attacker, defender, move, false, Gen2Damage.MAX_VARIATION,
-		false, Gen2Weather.NONE, Gen2Screens.LIGHT_SCREEN
+		Gen2Weather.NONE, Gen2Screens.LIGHT_SCREEN
 	)["damage"])
 
 	assert_lt(reflected, bare)
@@ -500,7 +503,7 @@ func test_a_critical_that_ignores_the_stages_ignores_the_screen_with_them() -> v
 	)["damage"])
 	var critical_screened: int = int(Gen2Damage.calculate_with(
 		attacker, defender, move, true, Gen2Damage.MAX_VARIATION,
-		false, Gen2Weather.NONE, Gen2Screens.LIGHT_SCREEN
+		Gen2Weather.NONE, Gen2Screens.LIGHT_SCREEN
 	)["damage"])
 
 	assert_eq(critical_screened, critical_bare, "the critical went through the screen")
@@ -513,7 +516,7 @@ func test_a_critical_that_ignores_the_stages_ignores_the_screen_with_them() -> v
 	)["damage"])
 	var kept_screened: int = int(Gen2Damage.calculate_with(
 		attacker, defender, move, true, Gen2Damage.MAX_VARIATION,
-		false, Gen2Weather.NONE, Gen2Screens.LIGHT_SCREEN
+		Gen2Weather.NONE, Gen2Screens.LIGHT_SCREEN
 	)["damage"])
 
 	assert_lt(kept_screened, kept_bare, "this critical kept the screen")
