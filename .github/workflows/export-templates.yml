@@ -25,6 +25,11 @@ on:
     paths:
       - tools/build_export_templates.sh
       - .github/workflows/export-templates.yml
+  # A cache nothing reads for seven days is deleted, and a release would then
+  # pay the whole build again without anything having changed. Restoring it is
+  # what keeps it, so this runs weekly and finishes in seconds.
+  schedule:
+    - cron: "17 4 * * 1"
   workflow_dispatch:
     inputs:
       ref:
