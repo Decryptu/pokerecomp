@@ -133,8 +133,10 @@ func _process(_delta: float) -> bool:
 		_launcher.preview_fade_step(_fade)
 	if _frames < 26:
 		return false
-	RenderingServer.force_draw()
-	var image: Image = root.get_texture().get_image()
+	var image: Image = Gen2ToolPath.capture(root)
+	if image == null:
+		quit(1)
+		return true
 	if image.save_png(_output) != OK:
 		push_error("Could not write %s" % _output)
 		quit(1)

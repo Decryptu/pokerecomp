@@ -2457,6 +2457,62 @@ func test_a_missed_jump_kick_costs_its_user_an_eighth_of_the_miss() -> void:
 	assert_eq(battle.player.hp, before - int(crashed["amount"]))
 
 
+## `BattleCommand_FailureText`'s `.fly_dig`: the branch is the only thing that
+## brings the user's picture back when the release turn does not land, and
+## without it a missed Fly leaves the user off the screen for the rest of the
+## battle.
+func test_a_missed_fly_brings_its_user_back_down() -> void:
+	var battle: Gen2Battle = _battle()
+	_run_move(battle, Fixture.FLY)
+	assert_true(Gen2Substatus.has(battle.player.substatus, Gen2Substatus.FLYING))
+	battle.enemy.change_stage("evasion", 6)
+	battle.player.change_stage("accuracy", -6)
+	var release: Gen2Turn = _run_move(battle, Fixture.FLY)
+	assert_true(release.missed)
+	assert_false(Gen2Substatus.has(battle.player.substatus, Gen2Substatus.FLYING))
+	assert_eq(_of_type(release.events, Gen2Battle.APPEAR_USER).size(), 1)
+
+
+## The same branch reached by an immunity rather than by the roll: `stab` writes
+## the same `wAttackMissed`, and Ground against a Flying-type is the one pairing
+## a two-turn move can walk into.
+func test_a_dig_that_cannot_affect_its_target_still_comes_up() -> void:
+	var battle: Gen2Battle = Gen2Battle.create(
+		_data,
+		Gen2BattleMon.create(_data, Fixture.PIKACHU, 50, [Fixture.DIG]),
+		Gen2BattleMon.create(_data, Fixture.HOOTHOOT, 50, [Fixture.TACKLE]),
+		_rng
+	)
+	_run_move(battle, Fixture.DIG)
+	assert_true(Gen2Substatus.has(battle.player.substatus, Gen2Substatus.UNDERGROUND))
+	var release: Gen2Turn = _run_move(battle, Fixture.DIG)
+	assert_eq(_of_type(release.events, Gen2Battle.NO_EFFECT).size(), 1)
+	assert_false(Gen2Substatus.has(battle.player.substatus, Gen2Substatus.UNDERGROUND))
+	assert_eq(_of_type(release.events, Gen2Battle.APPEAR_USER).size(), 1)
+
+
+## `.multihit` puts the user's own doll back after a miss, and it names three
+## effects. Triple Kick and Beat Up drop the doll in front of the same `checkhit`
+## and are not named, so their miss leaves it down: `docs/bugs_and_glitches.md`'s
+## Beat Up entry, mirrored rather than fixed.
+func test_a_missed_multi_hit_puts_the_users_doll_back_and_two_do_not() -> void:
+	for row: Array in [
+		[Fixture.MULTI_HIT_MOVE, 1], [Fixture.TWINEEDLE_MOVE, 1],
+		[Fixture.TRIPLE_KICK, 0], [Fixture.BEAT_UP, 0],
+	]:
+		var battle: Gen2Battle = _battle()
+		battle.player.substatus |= Gen2Substatus.SUBSTITUTE
+		battle.enemy.change_stage("evasion", 6)
+		battle.player.change_stage("accuracy", -6)
+		var turn: Gen2Turn = _run_move(battle, int(row[0]))
+		assert_true(turn.missed, "move %d missed" % int(row[0]))
+		var raised: int = 0
+		for event: Dictionary in _of_type(turn.events, Gen2Battle.ANIMATION):
+			if int(event["param"]) == Gen2EffectCommands.SUBSTITUTE_ANIM_RAISE:
+				raised += 1
+		assert_eq(raised, int(row[1]), "move %d raises" % int(row[0]))
+
+
 func test_a_jump_kick_that_connects_costs_nothing() -> void:
 	var battle: Gen2Battle = _battle()
 	var before: int = battle.player.hp

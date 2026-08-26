@@ -2265,6 +2265,13 @@ func animation_snapshot() -> Dictionary:
 		"after_anim": int(_anim_event.get("after_anim", 0)),
 		"sprites": (_anim.sprites() as Array).size() if _anim != null else 0,
 		"hud_visible": _hud_visible(),
+		## Whether each square still carries its picture. An animation may leave
+		## one off, and `AppearUser` is the only thing that puts a whole one back,
+		## so a driver photographing a turn has to be able to read it.
+		"battler_visible": [
+			bool(_battler_visible[Gen2Battle.PLAYER]),
+			bool(_battler_visible[Gen2Battle.ENEMY]),
+		],
 	}
 
 
@@ -4313,6 +4320,19 @@ func _show_next_event() -> void:
 			_apply_event(event)
 			_anim_plan = []
 			_step(ANIM_WAIT_SFX, {})
+			_run_next_anim_step()
+			if animation_running():
+				return
+			continue
+		if StringName(event["type"]) == Gen2Battle.APPEAR_USER:
+			## `AppearUser` alone: no script and no frames, just the picture back
+			## in the map. It goes through the plan anyway, since that is where
+			## the step knows which side it is putting back.
+			_anim_plan = []
+			_anim_event = {
+				"enemy_turn": int(event.get("side", Gen2Battle.PLAYER)) == Gen2Battle.ENEMY,
+			}
+			_step(ANIM_APPEAR_USER, {})
 			_run_next_anim_step()
 			if animation_running():
 				return

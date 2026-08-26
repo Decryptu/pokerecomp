@@ -79,8 +79,10 @@ func _process(_delta: float) -> bool:
 				_screen._hall_of_fame_host.advance()
 	if _frames < SETTLE_FRAMES:
 		return false
-	RenderingServer.force_draw()
-	var image: Image = root.get_texture().get_image()
+	var image: Image = Gen2ToolPath.capture(root)
+	if image == null:
+		quit(1)
+		return true
 	var error: Error = image.save_png(_output_path)
 	if error != OK:
 		push_error("Could not write %s (error %d)" % [_output_path, error])

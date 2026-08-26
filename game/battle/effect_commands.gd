@@ -145,6 +145,15 @@ const CONTINUES_AFTER_MISS: Array[int] = [
 	Gen2MoveEffect.SELFDESTRUCT, Gen2MoveEffect.ROLLOUT, Gen2MoveEffect.FURY_CUTTER,
 ]
 
+## The effects `BattleCommand_FailureText`'s `.multihit` names, and the whole of
+## what puts a missing user's own doll back. Beat Up and Triple Kick lower the
+## doll in front of the same `checkhit` and are not named, so a miss leaves both
+## of them standing in front of a dropped Substitute: `docs/bugs_and_glitches.md`'s
+## Beat Up entry, mirrored rather than fixed.
+const MULTI_HIT_RAISES_SUB: Array[int] = [
+	Gen2MoveEffect.MULTI_HIT, Gen2MoveEffect.DOUBLE_HIT, Gen2MoveEffect.TWINEEDLE,
+]
+
 ## The two effects `BattleCommand_CheckHit`'s `.DrainSub` turns into a miss when
 ## the target is behind a Substitute, and the whole of what that branch names.
 const DRAINING_EFFECTS: Array[int] = [
@@ -1451,7 +1460,9 @@ static func _check_immune(turn: Gen2Turn) -> void:
 	if not turn.immune:
 		return
 	turn.emit(Gen2Battle.NO_EFFECT, {"target": turn.target})
-	turn.end()
+	## An immune target is `BattleCommand_Stab`'s own `wAttackMissed`, so the
+	## same tail is owed: a Dig aimed at a Flying-type is the one that reaches it.
+	_failure_text(turn)
 
 
 ## Dream Eater's own rule is folded into this shared check rather than being a
@@ -1461,7 +1472,7 @@ static func _check_hit(turn: Gen2Turn) -> void:
 		turn.missed = true
 		turn.emit(Gen2Battle.NO_EFFECT, {"target": turn.target})
 		if not CONTINUES_AFTER_MISS.has(turn.effect()):
-			turn.end()
+			_failure_text(turn)
 		return
 
 	# `.DreamEater`, first.
@@ -1470,7 +1481,7 @@ static func _check_hit(turn: Gen2Turn) -> void:
 		turn.missed = true
 		turn.emit(Gen2Battle.MISSED, {"target": turn.target})
 		if not CONTINUES_AFTER_MISS.has(turn.effect()):
-			turn.end()
+			_failure_text(turn)
 		return
 
 	# `.Protect`, second, and ahead of everything but the Dream Eater question.
@@ -1482,9 +1493,8 @@ static func _check_hit(turn: Gen2Turn) -> void:
 		turn.missed = true
 		turn.emit(Gen2Battle.PROTECTING_ITSELF, {"target": turn.target})
 		turn.emit(Gen2Battle.MISSED, {"target": turn.target})
-		_jump_kick_crash(turn)
 		if not CONTINUES_AFTER_MISS.has(turn.effect()):
-			turn.end()
+			_failure_text(turn)
 		return
 
 	# `.DrainSub`, third: nothing drains out of a doll, so the two effects that
@@ -1493,7 +1503,7 @@ static func _check_hit(turn: Gen2Turn) -> void:
 		turn.missed = true
 		turn.emit(Gen2Battle.MISSED, {"target": turn.target})
 		if not CONTINUES_AFTER_MISS.has(turn.effect()):
-			turn.end()
+			_failure_text(turn)
 		return
 
 	# `.LockOn`, fourth. The flag is the target's, not the aimer's, and is spent on
@@ -1515,9 +1525,8 @@ static func _check_hit(turn: Gen2Turn) -> void:
 		and not _can_hit_hidden(turn.move_number, turn.defender().substatus):
 		turn.missed = true
 		turn.emit(Gen2Battle.MISSED, {"target": turn.target})
-		_jump_kick_crash(turn)
 		if not CONTINUES_AFTER_MISS.has(turn.effect()):
-			turn.end()
+			_failure_text(turn)
 		return
 
 	# `.ThunderRain`, ahead of the stat modifiers and the roll: Thunder never
@@ -1560,12 +1569,35 @@ static func _check_hit(turn: Gen2Turn) -> void:
 	# `BattleCommand_FailureText` is about to take an eighth of it off the user.
 	turn.missed = true
 	turn.emit(Gen2Battle.MISSED, {"target": turn.target})
-	_jump_kick_crash(turn)
 	if not CONTINUES_AFTER_MISS.has(turn.effect()):
+		_failure_text(turn)
+
+
+## `BattleCommand_FailureText`, the half of it that is state rather than words.
+## Which line a miss says is the standing divergence; what it leaves behind is
+## not, and two of its three branches were missing here.
+##
+## `.fly_dig` reads `BATTLE_VARS_MOVE_ANIM` rather than the effect byte, so it is
+## the move that names it. `checkcharge` has already cleared both bits on the
+## release turn, which is what makes `AppearUserRaiseSub` the branch's substance:
+## a missed Fly or Dig owes the picture back, and nothing here paid it. Whether
+## it shows depends on what the charge animation left behind, which
+## [method Gen2BattleScreen.animation_snapshot]'s `battler_visible` reports.
+static func _failure_text(turn: Gen2Turn) -> void:
+	_jump_kick_crash(turn)
+	if turn.move_number in [Gen2MoveEffect.FLY_MOVE, Gen2MoveEffect.DIG_MOVE]:
+		var user: Gen2BattleMon = turn.attacker()
+		user.substatus &= ~(Gen2Substatus.FLYING | Gen2Substatus.UNDERGROUND)
+		turn.emit(Gen2Battle.APPEAR_USER)
+		_raise_sub(turn)
 		turn.end()
+		return
+	if MULTI_HIT_RAISES_SUB.has(turn.effect()):
+		_raise_sub(turn)
+	turn.end()
 
 
-## The tail of `BattleCommand_FailureText`: a missed Jump Kick costs its user an
+## `GetFailureResultText`'s own tail: a missed Jump Kick costs its user an
 ## eighth of the damage it would have dealt, never less than one. Nothing is taken
 ## against an immune target, the routine returning on a modifier of zero, and the
 ## effect byte gates the block: Jump Kick points at `NormalHit` like any other

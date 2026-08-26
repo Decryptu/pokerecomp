@@ -36,8 +36,10 @@ func _process(_delta: float) -> bool:
 	_frames += 1
 	if _frames < 26:
 		return false
-	RenderingServer.force_draw()
-	var image: Image = root.get_texture().get_image()
+	var image: Image = Gen2ToolPath.capture(root)
+	if image == null:
+		quit(1)
+		return true
 	image.save_png(_output)
 	print("Wrote %s" % _output)
 	quit()
