@@ -464,6 +464,64 @@ func test_a_scroll_pane_only_stops_a_pad_when_there_is_more_to_see() -> void:
 	assert_eq(pane.focus_mode, Control.FOCUS_ALL, "one with more to see takes focus")
 
 
+## Every launcher page is a column of buttons, and a button is
+## `MOUSE_FILTER_STOP`, which is where `_gui_call_input` ends a pointer event.
+## The engine's own touch drag never sees one, so a phone could read a page and
+## not reach the bottom of it.
+func test_a_finger_scrolls_a_pane_full_of_buttons_without_pressing_one() -> void:
+	var pane: Gen2LauncherScroll = Gen2LauncherScroll.create()
+	var column: VBoxContainer = Gen2LauncherUI.column()
+	pane.add_child(column)
+	add_child_autofree(pane)
+	pane.position = Vector2.ZERO
+	pane.size = Vector2(200, 120)
+	var pressed: Array[String] = []
+	for index: int in range(8):
+		var button: Gen2LauncherButton = Gen2LauncherButton.create(_light, "row %d" % index)
+		button.custom_minimum_size = Vector2(0, 60)
+		button.pressed.connect(func() -> void: pressed.append(button.text))
+		column.add_child(button)
+	await wait_seconds(0.2)
+	assert_eq(pane.scroll_vertical, 0)
+
+	var at := Vector2(60, 30)
+	_finger(_finger_touch(at, true))
+	# Short of the deadzone the pane stays put, so a tap is still a tap.
+	_finger(_finger_drag(at, Vector2(0, -6)))
+	assert_eq(pane.scroll_vertical, 0, "a finger that barely moves is not a scroll")
+	_finger(_finger_drag(at + Vector2(0, -6), Vector2(0, -40)))
+	_finger(_finger_touch(at + Vector2(0, -46), false))
+	# 40 rather than 46: the travel spent reaching the deadzone is what told the
+	# pane this was a scroll, and is not also scrolled.
+	assert_eq(pane.scroll_vertical, 40, "the pane follows the finger")
+	assert_eq(pressed, [], "and the button it started on is let go of")
+
+	# A tap that never becomes a drag still presses.
+	_finger(_finger_touch(at, true))
+	_finger(_finger_touch(at, false))
+	assert_eq(pressed.size(), 1, "a tap on the same button still presses it")
+
+
+func _finger(event: InputEvent) -> void:
+	get_tree().root.push_input(event, true)
+
+
+func _finger_touch(at: Vector2, down: bool) -> InputEventScreenTouch:
+	var touch := InputEventScreenTouch.new()
+	touch.index = 0
+	touch.position = at
+	touch.pressed = down
+	return touch
+
+
+func _finger_drag(from: Vector2, by: Vector2) -> InputEventScreenDrag:
+	var drag := InputEventScreenDrag.new()
+	drag.index = 0
+	drag.position = from + by
+	drag.relative = by
+	return drag
+
+
 func test_arrow_keys_move_the_selection_and_wrap() -> void:
 	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false)
 	add_child_autofree(page)
