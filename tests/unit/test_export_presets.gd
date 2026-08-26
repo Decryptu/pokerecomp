@@ -82,6 +82,13 @@ func test_the_project_settings_state_the_app_version() -> void:
 		Gen2AppVersion.VERSION)
 
 
+func test_a_published_release_is_announced_without_committing_the_webhook() -> void:
+	var workflow: String = FileAccess.get_file_as_string("res://.github/workflows/release.yml")
+	assert_string_contains(workflow, "secrets.DISCORD_RELEASE_WEBHOOK")
+	assert_string_contains(workflow, "github.repository }}/releases/tag/")
+	assert_false(workflow.contains("discord.com/api/webhooks/"), "the credential stays in secrets")
+
+
 ## Android refuses an in-place update whose version code did not rise, so the
 ## code is a function of the version rather than a number bumped by hand.
 func test_the_android_version_code_derives_from_the_app_version() -> void:

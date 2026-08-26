@@ -3,20 +3,12 @@
 
 ## Fixed in this release
 
-- **iOS: an empty slot opened the app's own empty folder instead of the system
-  file picker.** The picker this project ships for iOS was never built for a
-  published download, so 0.1.0 carried none. Every download now has it, and a
-  build that loses it is refused rather than published.
-- **Android: handhelds with a lower panel got no second screen.** The same
-  hole: the plugin was never built for a published APK.
-- **Touch: a finger could not scroll the launcher's pages.** A drag that began
-  on any button did nothing, which is most of every page. Both iOS and Android.
-- **Android: the app had no network permission at all.** No update check, no mod
-  source, no mod icon. Every one of those worked in the editor and in none of
-  the published APKs.
-- **The mod list starts with this project's own source in it.** A source is a
-  listing: nothing is installed or downloaded until you pick a mod out of it,
-  and the list is read once, by itself, the first time you open the page.
+- **The mobile dock now leaves room for the launcher.** Portrait buttons no
+  longer expand to fill the row, and a phone held sideways stays on the compact
+  layout instead of being mistaken for a desktop. Cartridge art gets the freed
+  space on iOS and Android.
+- **Mod downloads stay on the mod's information row.** The download icon no
+  longer creates an otherwise empty second row in every card.
 
 **This release ships no game data.** pokerecomp is not an emulator: it rebuilds
 everything from a Game Boy Color cartridge you dump yourself, and verifies the

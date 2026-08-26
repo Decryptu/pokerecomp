@@ -12,8 +12,8 @@ const GAP_LG: int = 22
 ## The side a mod's icon is drawn at: a whole multiple of its native 32, so the
 ## cartridge's own pixels stay square.
 const MOD_ICON_SIDE: float = 64.0
-## Empty scroll tail that lets the final control rise clear of the floating dock.
-const DOCK_SAFE_BOTTOM: float = 132.0
+## Room around a dock disc before the page may put its final control underneath.
+const DOCK_VERTICAL_PADDING: float = 28.0
 
 ## The smallest square a finger can be asked to hit, in launcher units. Apple
 ## and Google both name 44 and 48 device-independent points; the larger is used
@@ -99,7 +99,9 @@ static var preview_insets: Dictionary = {}
 ## How much a scrolling page keeps clear along its bottom edge: the dock's own
 ## room plus whatever the screen takes under it for a home indicator.
 static func dock_reserve(window: Window) -> float:
-	return DOCK_SAFE_BOTTOM + float(safe_area_insets(window)["bottom"])
+	var viewport_size: Vector2 = window.get_visible_rect().size if window != null else Vector2.ZERO
+	return Gen2LauncherShell.dock_side_for(viewport_size, 4, safe_area_insets(window)) \
+		+ DOCK_VERTICAL_PADDING + float(safe_area_insets(window)["bottom"])
 
 
 
@@ -168,7 +170,7 @@ static func spacer() -> Control:
 
 static func dock_safe_space() -> Control:
 	var gap := Control.new()
-	gap.custom_minimum_size.y = DOCK_SAFE_BOTTOM
+	gap.custom_minimum_size.y = Gen2LauncherButton.DOCK_SIDE + DOCK_VERTICAL_PADDING
 	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# The home indicator's height is only knowable once there is a window to ask.
 	gap.tree_entered.connect(

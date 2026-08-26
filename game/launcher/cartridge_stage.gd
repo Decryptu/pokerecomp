@@ -38,7 +38,7 @@ var selected: int = 0
 ## Space owned by controls above and by the floating dock below. The cartridge
 ## is measured in what remains, so neither can be pushed outside a short window.
 var top_inset: float = 0.0
-var bottom_inset: float = Gen2LauncherUI.DOCK_SAFE_BOTTOM
+var bottom_inset: float = Gen2LauncherButton.DOCK_SIDE + Gen2LauncherUI.DOCK_VERTICAL_PADDING
 
 var _theme: Gen2LauncherTheme = null
 var _cartridges: Array[Gen2Cartridge] = []
@@ -283,6 +283,7 @@ func _shortest(delta: float) -> float:
 func _place_all() -> void:
 	if _cartridges.is_empty() or size.x <= 0.0:
 		return
+	bottom_inset = Gen2LauncherUI.dock_reserve(get_window())
 	var usable_height: float = maxf(size.y - top_inset - bottom_inset, 1.0)
 	var hero_height: float = minf(
 		clampf(usable_height * 0.88, MIN_HEIGHT, MAX_HEIGHT), usable_height
