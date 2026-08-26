@@ -1,0 +1,256 @@
+name: release
+
+# Builds every published target from a tag and attaches them to a GitHub
+# release. CI has no cartridge, so a build ships the importer and no game data;
+# the player brings their own ROM the way a source checkout does.
+#
+# The version is not stamped here. `Gen2AppVersion.VERSION` is the one place it
+# is written and `tests/unit/test_update_check.gd` holds the export presets to
+# it, so this workflow only refuses a tag that disagrees.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build, e.g. v0.1.0"
+        required: true
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  GODOT_VERSION: 4.8-dev3
+  GODOT_TEMPLATE_DIR: 4.8.dev3
+
+jobs:
+  version:
+    name: agree on a version
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.read.outputs.tag }}
+      version: ${{ steps.read.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      # A tag that disagrees with the source would publish builds the launcher's
+      # update check then calls newer or older than themselves.
+      - id: read
+        run: |
+          set -euo pipefail
+          tag="${{ inputs.tag || github.ref_name }}"
+          version="${tag#v}"
+          declared="$(sed -n 's/^const VERSION: String = "\(.*\)"$/\1/p' game/main/app_version.gd)"
+          if [ "$version" != "$declared" ]; then
+            echo "::error::tag $tag says $version, game/main/app_version.gd says $declared"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  linux-windows-android:
+    name: linux, windows and android
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install Godot and its export templates
+        run: |
+          set -euo pipefail
+          base="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}"
+          curl -fsSL "$base/Godot_v${GODOT_VERSION}_linux.x86_64.zip" -o /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          sudo install -m755 "/tmp/godot/Godot_v${GODOT_VERSION}_linux.x86_64" /usr/local/bin/godot
+          curl -fsSL "$base/Godot_v${GODOT_VERSION}_export_templates.tpz" -o /tmp/templates.tpz
+          unzip -q /tmp/templates.tpz -d /tmp/tpz
+          # The directory is named by version.txt inside the archive, never by
+          # the release tag: 4.8.dev3 rather than 4.8-dev3.
+          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_TEMPLATE_DIR}"
+          cp -R /tmp/tpz/templates/. "$HOME/.local/share/godot/export_templates/${GODOT_TEMPLATE_DIR}/"
+
+      # class_name resolution is what makes the presets exportable at all.
+      - name: Import
+        run: godot --headless --editor --path . --quit || true
+
+      # The Android preset builds through gradle, and Godot reads the SDK and
+      # JDK locations from editor settings rather than from the environment.
+      - name: Point Godot at the Android SDK
+        run: |
+          set -euo pipefail
+          settings="$HOME/.config/godot/editor_settings-4.8.tres"
+          mkdir -p "$(dirname "$settings")"
+          cat > "$settings" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "$ANDROID_SDK_ROOT"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          EOF
+
+      - name: Materialize the Android signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KEYSTORE_B64:-}" ]; then
+            echo "::error::ANDROID_RELEASE_KEYSTORE_B64 is not set. See DEVICES.md."
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+
+      - name: Export
+        env:
+          GODOT_ANDROID_KEYSTORE_RELEASE_PATH: ${{ runner.temp }}/release.keystore
+          GODOT_ANDROID_KEYSTORE_RELEASE_USER: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          v="${{ needs.version.outputs.version }}"
+          mkdir -p dist
+          export_one() {
+            local preset="$1" out="$2"
+            mkdir -p "$(dirname "$out")"
+            godot --headless --path . --export-release "$preset" "$out"
+            [ -s "$out" ] || { echo "::error::$preset produced nothing at $out"; exit 1; }
+          }
+          export_one "Linux"                 "dist/pokerecomp-${v}-linux-x86_64"
+          export_one "Linux ARM64"           "dist/pokerecomp-${v}-linux-arm64"
+          export_one "Windows Desktop"       "dist/pokerecomp-${v}-windows-x86_64.exe"
+          export_one "Windows Desktop ARM64" "dist/pokerecomp-${v}-windows-arm64.exe"
+          # --install-android-build-template unpacks the gradle project the
+          # preset builds through; it only acts alongside an export.
+          mkdir -p dist
+          godot --headless --path . --install-android-build-template \
+            --export-release "Android" "dist/pokerecomp-${v}-android.apk"
+          [ -s "dist/pokerecomp-${v}-android.apk" ] || { echo "::error::no APK"; exit 1; }
+          chmod +x "dist/pokerecomp-${v}-linux-x86_64" "dist/pokerecomp-${v}-linux-arm64"
+          ls -lh dist
+
+      - uses: actions/upload-artifact@v8
+        with:
+          name: linux-windows-android
+          path: dist/*
+
+  apple:
+    name: macos and ios
+    needs: version
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+
+      - name: Install Godot and its export templates
+        run: |
+          set -euo pipefail
+          base="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}"
+          curl -fsSL "$base/Godot_v${GODOT_VERSION}_macos.universal.zip" -o /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          sudo install -m755 "/tmp/godot/Godot.app/Contents/MacOS/Godot" /usr/local/bin/godot
+          curl -fsSL "$base/Godot_v${GODOT_VERSION}_export_templates.tpz" -o /tmp/templates.tpz
+          unzip -q /tmp/templates.tpz -d /tmp/tpz
+          mkdir -p "$HOME/Library/Application Support/Godot/export_templates/${GODOT_TEMPLATE_DIR}"
+          cp -R /tmp/tpz/templates/. "$HOME/Library/Application Support/Godot/export_templates/${GODOT_TEMPLATE_DIR}/"
+
+      - name: Import
+        run: godot --headless --editor --path . --quit || true
+
+      # Ad-hoc signed, not notarized: no Apple account is involved and none can
+      # be, because the certificate would name one. Gatekeeper asks the player
+      # to confirm the first launch; the release notes say so.
+      - name: Export macOS
+        run: |
+          set -euo pipefail
+          v="${{ needs.version.outputs.version }}"
+          mkdir -p dist
+          godot --headless --path . --export-release "macOS" "dist/pokerecomp-${v}-macos.zip"
+          [ -s "dist/pokerecomp-${v}-macos.zip" ] || { echo "::error::no macOS zip"; exit 1; }
+
+      # The published IPA is unsigned on purpose: AltStore and SideStore re-sign
+      # it with the player's own Apple ID, and a signed one would carry a
+      # provisioning profile naming the maintainer's developer account. Godot's
+      # exporter refuses an empty team id even project-only, so a placeholder
+      # goes in and nothing ever uses it.
+      - name: Export iOS unsigned
+        run: |
+          set -euo pipefail
+          v="${{ needs.version.outputs.version }}"
+          sed -i '' 's/app_store_team_id=""/app_store_team_id="0000000000"/' export_presets.cfg
+          mkdir -p build/ios
+          godot --headless --path . --export-release "iOS" build/ios/pokerecomp.ipa
+          git checkout export_presets.cfg
+
+          xcodebuild -project build/ios/pokerecomp.xcodeproj -scheme pokerecomp \
+            -configuration Release -sdk iphoneos -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+
+          app="$RUNNER_TEMP/dd/Build/Products/Release-iphoneos/pokerecomp.app"
+          [ -d "$app" ] || { echo "::error::no built .app"; exit 1; }
+          rm -rf "$RUNNER_TEMP/ipa" && mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$app" "$RUNNER_TEMP/ipa/Payload/"
+          (cd "$RUNNER_TEMP/ipa" && zip -qry "$GITHUB_WORKSPACE/dist/pokerecomp-${v}-ios.ipa" Payload)
+
+      # A signed IPA would be a private leak in a public download, so the gate
+      # is here rather than in the release notes.
+      - name: Refuse an IPA that carries an identity
+        run: |
+          set -euo pipefail
+          v="${{ needs.version.outputs.version }}"
+          if unzip -l "dist/pokerecomp-${v}-ios.ipa" \
+              | grep -E 'mobileprovision|_CodeSignature'; then
+            echo "::error::the IPA is signed; it must not be"
+            exit 1
+          fi
+          echo "unsigned ✓"
+
+      - uses: actions/upload-artifact@v8
+        with:
+          name: apple
+          path: dist/*
+
+  publish:
+    name: publish
+    needs: [version, linux-windows-android, apple]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: staged
+          merge-multiple: true
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          v="${{ needs.version.outputs.version }}"
+          cd staged
+          chmod +x "pokerecomp-${v}-linux-x86_64" "pokerecomp-${v}-linux-arm64"
+          sha256sum pokerecomp-* > sha256sums.txt
+          cat sha256sums.txt
+          cd ..
+
+          notes="$(sed "s/{VERSION}/${v}/g" .github/release-notes.md)"
+          gh release create "${{ needs.version.outputs.tag }}" \
+            --title "$v" --notes "$notes" staged/*
