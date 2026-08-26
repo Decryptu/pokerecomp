@@ -166,8 +166,14 @@ before it is installed. The launcher fetches each once and caches it under
 ## Publishing a source
 
 A source is a JSON feed listing mods that stay in their authors' repositories.
-Anyone can publish one. The game follows none until a player adds it, because
-following a source means trusting whoever publishes it.
+Anyone can publish one.
+
+Every build follows this project's own source and nothing else. A feed is a
+listing: following it installs nothing and downloads nothing until a mod is
+picked out of it. Any other source is added by the player, because following one
+means trusting whoever publishes it, and the built-in one is the only publisher
+this project can answer for. It is part of the build and has no button to drop
+it; every other source has one.
 
 ```json
 {
@@ -208,7 +214,8 @@ compare; anything else is reported as uncomparable.
 
 Each feed's last listing that parsed is cached under `user://mod_index_cache/`.
 The mod list is built from the cache, so it opens instantly and offline; the
-network is asked only on **Sources**. Unfollowing a source drops its cache.
+network is asked on **Sources**, and once by the mod list itself for a source it
+has no cached listing for at all. Unfollowing a source drops its cache.
 
 The launcher groups the mod list by origin: a source that lists a mod's id owns
 it, and a mod no source lists came from a file. Removing a source's mod

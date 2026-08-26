@@ -91,6 +91,26 @@ func test_the_android_version_code_derives_from_the_app_version() -> void:
 	assert_eq(int(_presets().get_value("preset.3.options", "version/code", 0)), expected)
 
 
+## The one Android permission this app asks for, and the only one it may.
+## Nothing here reaches a player's files: a cartridge and a mod archive both
+## arrive through the system picker, which grants the one file chosen. The
+## engine adds INTERNET on its own only for a remote-debug build, so a release
+## without this key has no network at all: no update check, no mod source, no
+## icon. 0.1.0 shipped that way.
+func test_the_android_preset_asks_for_the_network_and_nothing_else() -> void:
+	var file: ConfigFile = _presets()
+	assert_true(bool(file.get_value("preset.3.options", "permissions/internet", false)))
+	assert_eq(
+		Array(file.get_value("preset.3.options", "permissions/custom_permissions",
+			PackedStringArray())),
+		[],
+	)
+	for key: String in file.get_section_keys("preset.3.options"):
+		if not key.begins_with("permissions/") or key.ends_with("custom_permissions"):
+			continue
+		assert_eq(key, "permissions/internet", "%s is asked for and must not be" % key)
+
+
 ## An Apple team id names a personal developer account and this repository is
 ## public. The release IPA is unsigned and needs none; a device build pastes one
 ## in and does not commit it.
@@ -117,14 +137,14 @@ const MOST_TIMES_ITS_SOURCE: float = 4.0
 
 
 func _shipped_imports(from: String, into: Array[String]) -> void:
-	for name: String in DirAccess.get_directories_at(from):
-		var sub: String = from.path_join(name) + "/"
-		if name.begins_with(".") or NOT_SHIPPED.has(sub):
+	for entry: String in DirAccess.get_directories_at(from):
+		var sub: String = from.path_join(entry) + "/"
+		if entry.begins_with(".") or NOT_SHIPPED.has(sub):
 			continue
 		_shipped_imports(sub.trim_suffix("/"), into)
-	for name: String in DirAccess.get_files_at(from):
-		if name.ends_with(".import"):
-			into.append(from.path_join(name))
+	for entry: String in DirAccess.get_files_at(from):
+		if entry.ends_with(".import"):
+			into.append(from.path_join(entry))
 
 
 ## Swept over every source the presets ship rather than over the four files that
