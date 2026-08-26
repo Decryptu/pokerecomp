@@ -4413,6 +4413,111 @@ func test_a_gym_leader_raises_the_whole_standing_party_at_the_start() -> void:
 	assert_eq(battle.party(Gen2Battle.PLAYER).at(1).happiness, before, "a fainted member is skipped")
 
 
+## `ComputeTrainerReward`: `wCurPartyLevel` is still the last member's when
+## `ReadTrainerParty` reaches it, so the reward is the class base times the
+## level of whoever is sent out last. Falkner is 25 and his Pidgeotto is 9,
+## which is the ¥900 the gym pays once `.give_money` has quadrupled it.
+func test_a_trainer_reward_is_the_base_times_the_last_members_level() -> void:
+	var battle: Gen2Battle = _party_battle(
+		[_mon(Fixture.CHARMANDER, 5, [Fixture.TACKLE])],
+		[_mon(Fixture.GEODUDE, 7, [Fixture.TACKLE]),
+		_mon(Fixture.GEODUDE, 9, [Fixture.TACKLE])]
+	)
+	battle.init_enemy_trainer(Fixture.FALKNER)
+	assert_eq(battle.battle_reward, Fixture.FALKNER_BASE_REWARD * 9)
+	assert_eq(
+		int(Gen2Battle.prize_money_split(battle.battle_reward, false, 0, 0, 999999)["shown"]),
+		900
+	)
+
+
+## `ReadTrainerParty` returns in front of `ComputeTrainerReward` for the Battle
+## Tower and for a link partner, and neither win branch reaches `.give_money`.
+func test_the_battle_tower_and_a_link_partner_are_worth_nothing() -> void:
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.CHARMANDER, 5, [Fixture.TACKLE]),
+		_mon(Fixture.GEODUDE, 9, [Fixture.TACKLE])
+	)
+	battle.init_enemy_trainer(Fixture.FALKNER, false)
+	assert_eq(battle.battle_reward, 0)
+
+
+## `.give_money` hands out four quarters. With Mom saving nothing they all reach
+## the wallet and the line is `GotMoneyForWinningText`.
+func test_a_whole_prize_reaches_the_wallet() -> void:
+	var split: Dictionary = Gen2Battle.prize_money_split(225, false, 0, 0, 999999)
+	assert_eq(int(split["wallet"]), 900)
+	assert_eq(int(split["mom"]), 0)
+	assert_eq(int(split["shown"]), 900)
+	assert_eq(StringName(split["line"]), Gen2Battle.PRIZE_KEPT_IT_ALL)
+
+
+## The Amulet Coin doubles the quarter before it is handed out, so the whole
+## prize and the figure the line prints are both doubled.
+func test_the_amulet_coin_doubles_the_prize() -> void:
+	var split: Dictionary = Gen2Battle.prize_money_split(225, true, 0, 0, 999999)
+	assert_eq(int(split["wallet"]), 1800)
+	assert_eq(int(split["shown"]), 1800)
+
+
+## The three savings tiers, which are how many of the four quarters Mom keeps.
+## `cp (1 << SOME) | (1 << HALF)` then `inc a` is why both bits mean four rather
+## than three.
+func test_moms_savings_take_their_share_of_the_quarters() -> void:
+	var flags: int = Gen2WorldScriptRunner.MOM_ACTIVE
+	var some: Dictionary = Gen2Battle.prize_money_split(
+		225, false, flags | Gen2WorldScriptRunner.MOM_SAVING_SOME_MONEY, 0, 999999
+	)
+	assert_eq(int(some["wallet"]), 675)
+	assert_eq(int(some["mom"]), 225)
+	assert_eq(StringName(some["line"]), Gen2Battle.PRIZE_SENT_SOME_TO_MOM)
+
+	var half: Dictionary = Gen2Battle.prize_money_split(225, false, flags | 0b010, 0, 999999)
+	assert_eq(int(half["wallet"]), 450)
+	assert_eq(int(half["mom"]), 450)
+	assert_eq(StringName(half["line"]), Gen2Battle.PRIZE_SENT_HALF_TO_MOM)
+
+	var all: Dictionary = Gen2Battle.prize_money_split(225, false, flags | 0b011, 0, 999999)
+	assert_eq(int(all["wallet"]), 0)
+	assert_eq(int(all["mom"]), 900)
+	assert_eq(StringName(all["line"]), Gen2Battle.PRIZE_SENT_ALL_TO_MOM)
+
+
+## `.CheckMaxedOutMomMoney`: an account already at `MAX_MONEY` is sent nothing
+## and said nothing about, whatever the savings bits say.
+func test_a_full_account_at_moms_keeps_the_whole_prize() -> void:
+	var split: Dictionary = Gen2Battle.prize_money_split(
+		225, false,
+		Gen2WorldScriptRunner.MOM_ACTIVE | Gen2WorldScriptRunner.MOM_SAVING_SOME_MONEY,
+		999999, 999999
+	)
+	assert_eq(int(split["wallet"]), 900)
+	assert_eq(int(split["mom"]), 0)
+	assert_eq(StringName(split["line"]), Gen2Battle.PRIZE_KEPT_IT_ALL)
+
+
+## `.DoubleReward`'s three-byte shift saturates rather than wrapping.
+func test_a_doubled_reward_saturates_at_three_bytes() -> void:
+	assert_eq(Gen2Battle.double_reward(0x800000), 0xFFFFFF)
+
+
+## `CheckAmuletCoin`, which `SendOutPlayerMon` runs and so the opening entrance
+## does too. It only ever writes a one, so the flag survives the holder leaving.
+func test_the_amulet_coin_is_read_at_a_player_entrance_and_sticks() -> void:
+	var battle: Gen2Battle = _party_battle(
+		[_mon(Fixture.CHARMANDER, 5, [Fixture.TACKLE]),
+		_mon(Fixture.GEODUDE, 5, [Fixture.TACKLE])],
+		[_mon(Fixture.GEODUDE, 5, [Fixture.TACKLE])]
+	)
+	battle.entrance_events(Gen2Battle.PLAYER)
+	assert_false(battle.amulet_coin, "nobody is holding one")
+	battle.party(Gen2Battle.PLAYER).at(0).item = Fixture.AMULET_COIN
+	battle.entrance_events(Gen2Battle.PLAYER)
+	assert_true(battle.amulet_coin)
+	battle.send_out(Gen2Battle.PLAYER, 1)
+	assert_true(battle.amulet_coin, "nothing clears it")
+
+
 ## `IsGymLeader` answers no for every other class, so an ordinary trainer moves
 ## nothing. Class 9 is RIVAL1.
 func test_an_ordinary_trainer_moves_no_happiness() -> void:

@@ -602,9 +602,29 @@ var _future_sight: Dictionary = {
 	ENEMY: {"count": 0, "damage": 0},
 }
 
+## `GotMoneyForWinningText` and `.SentToMomTexts`, which
+## [method prize_money_split] picks between. The screen owns the words.
+const PRIZE_KEPT_IT_ALL: StringName = &"kept_it_all"
+const PRIZE_SENT_SOME_TO_MOM: StringName = &"sent_some_to_mom"
+const PRIZE_SENT_HALF_TO_MOM: StringName = &"sent_half_to_mom"
+const PRIZE_SENT_ALL_TO_MOM: StringName = &"sent_all_to_mom"
+const PRIZE_MOM_LINES: Array[StringName] = [
+	PRIZE_SENT_SOME_TO_MOM, PRIZE_SENT_HALF_TO_MOM, PRIZE_SENT_ALL_TO_MOM,
+]
+
 ## `wPayDayMoney`, capped to its three-byte storage. Awarding it belongs to the
 ## world completion boundary; the move command only scatters the coins.
 var pay_day_money: int = 0
+
+## `wBattleReward`, `ComputeTrainerReward`'s base reward times the level of the
+## last party member `ReadTrainerParty` loaded. A quarter of what a win pays:
+## `.give_money` credits it four times over.
+var battle_reward: int = 0
+
+## `wAmuletCoin`. `CheckAmuletCoin` sets it at every player send-out and clears
+## it nowhere, so one Amulet Coin doubles the reward and the Pay Day money for
+## the rest of the battle whatever is holding it later.
+var amulet_coin: bool = false
 
 ## `wEvolvableFlags`, cleared by `FindFirstAliveMonAndStartBattle` and set per
 ## party member that gained a level. `ExitBattle` hands it to `EvolveAfterBattle`
@@ -707,7 +727,11 @@ static func use_item(item: int) -> Dictionary:
 ## `InitEnemyTrainer`: the class's own `TRNATTR_ITEM1` and `TRNATTR_ITEM2` into
 ## the two working slots, and then `IsGymLeader`'s own party walk. `NO_ITEM` is
 ## zero and is not carried.
-func init_enemy_trainer(trainer_class: int) -> void:
+##
+## [param rewarded] is false for the two opponents `ReadTrainerParty` returns in
+## front of, the Battle Tower's and a link partner's: neither reaches
+## `ComputeTrainerReward`, and neither win branch pays money either.
+func init_enemy_trainer(trainer_class: int, rewarded: bool = true) -> void:
 	enemy_items = []
 	if data == null or trainer_class <= 0:
 		return
@@ -716,7 +740,25 @@ func init_enemy_trainer(trainer_class: int) -> void:
 		var item: int = int(attributes.get(key, 0))
 		if item != 0:
 			enemy_items.append(item)
+	_compute_trainer_reward(int(attributes.get("base_reward", 0)) if rewarded else 0)
 	_gain_gym_battle_happiness(trainer_class)
+
+
+## `ComputeTrainerReward`, which `ReadTrainerParty` runs once the whole party is
+## in: `wCurPartyLevel` is still the last member's, so a reward is the class's
+## base times the level of whoever the trainer sends out last rather than of
+## whoever is strongest. `Multiply`'s product is read two bytes wide.
+func _compute_trainer_reward(base_reward: int) -> void:
+	battle_reward = 0
+	if base_reward <= 0:
+		return
+	var mons: Array = party(ENEMY).mons
+	if mons.is_empty():
+		return
+	var last: Gen2BattleMon = mons[mons.size() - 1]
+	if last == null:
+		return
+	battle_reward = (base_reward * last.level) & 0xFFFF
 
 
 ## `InitEnemyTrainer`'s `.partyloop`, which runs on the frame the trainer's pic
@@ -1352,6 +1394,8 @@ func entrance_events(side: int, ball: bool = true) -> Array:
 	var entering: Gen2BattleMon = mon(side)
 	if entering == null:
 		return []
+	if side == PLAYER:
+		_check_amulet_coin()
 	var enemy_turn: bool = side == ENEMY
 	var out: Array = []
 	if ball:
@@ -1369,6 +1413,58 @@ func entrance_events(side: int, ball: bool = true) -> Array:
 		return out
 	out.append({"type": CRY, "side": side, "species": entering.species})
 	return out
+
+
+## `CheckAmuletCoin`, run by `SendOutPlayerMon` and so by the opening entrance
+## too. It only ever writes a one, which is why the flag is sticky.
+func _check_amulet_coin() -> void:
+	if amulet_coin or data == null:
+		return
+	var entering: Gen2BattleMon = mon(PLAYER)
+	if entering == null:
+		return
+	if Gen2HeldItem.effect_of(data, entering.item) == Gen2HeldItem.AMULET_COIN:
+		amulet_coin = true
+
+
+## `.DoubleReward` and `CheckPayDay`'s copy of it: a three-byte shift that
+## saturates rather than wrapping.
+static func double_reward(amount: int) -> int:
+	return mini(amount * 2, 0xFFFFFF)
+
+
+## `BattleWon.give_money`, the whole of what a beaten trainer pays.
+##
+## [param reward] is [member battle_reward], a quarter of the prize: the Amulet
+## Coin doubles that quarter, four quarters are handed out one at a time, and
+## the two `.DoubleReward` calls at `.done` put the total back for the line that
+## announces it. [param mom_flags] is `wMomSavingMoney`.
+##
+## Returns the two credits, the figure the line prints and which line it is.
+static func prize_money_split(
+	reward: int, amulet: bool, mom_flags: int, moms_money: int, max_money: int
+) -> Dictionary:
+	var quarter: int = double_reward(reward) if amulet else reward
+	## `.CheckMaxedOutMomMoney`: a full account sends her nothing and says
+	## nothing, whatever the savings bits are.
+	var saving: int = mom_flags & Gen2WorldScriptRunner.MOM_SAVING_MONEY_MASK
+	var to_mom: int = 0
+	if moms_money < max_money:
+		## `cp (1 << SOME) | (1 << HALF)` then `inc a`: both bits together mean
+		## all four quarters, which is why the count is not the mask.
+		to_mom = 4 if saving == 3 else mini(saving, 4)
+	var shown: int = double_reward(double_reward(quarter))
+	var line: StringName = PRIZE_KEPT_IT_ALL
+	if to_mom > 0 and saving > 0:
+		## `dec a` indexes `.SentToMomTexts`, three entries long. A savings mask
+		## of 4 would read past it; no script writes one.
+		line = PRIZE_MOM_LINES[mini(saving, 3) - 1]
+	return {
+		"wallet": quarter * (4 - to_mom),
+		"mom": quarter * to_mom,
+		"shown": shown,
+		"line": line,
+	}
 
 
 ## `Call_PlayBattleAnim` rather than `PlayFXAnimID`: `WaitBGMap` in place of the

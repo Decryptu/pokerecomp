@@ -4679,11 +4679,13 @@ func _on_battle_finished(result: Dictionary) -> void:
 	_record_roam_battle(result)
 	if not _link_battle_peer.is_empty():
 		_record_link_battle(result)
-	var pay_day_money: int = int(result.get("pay_day_money", 0))
-	if pay_day_money > 0 and StringName(result.get("outcome", &"")) == Gen2WorldBattleAdapter.OUTCOME_WON:
-		_world.state.apply_changes({}, {}, {"money": {
-			0: mini(_world.state.money(0) + pay_day_money, Gen2WorldInventory.MAX_MONEY),
-		}})
+	## `.give_money`'s prize and `CheckPayDay`'s coins, worked out once by the
+	## battle screen and handed over per account: this is the live state, and the
+	## snapshot that screen wrote already carries the same credit.
+	var awarded: Variant = result.get("money_awarded", {})
+	if awarded is Dictionary \
+			and StringName(result.get("outcome", &"")) == Gen2WorldBattleAdapter.OUTCOME_WON:
+		Gen2WorldBattleAdapter.credit_earnings(_world.state, awarded as Dictionary)
 	## `ExitBattle`'s own tail, in its order: `CheckPayDay`, then
 	## `EvolveAfterBattle`, then `GivePokerusAndConvertBerries`, and only then
 	## does the map come back. The evolution owns frames, so the rest of the exit

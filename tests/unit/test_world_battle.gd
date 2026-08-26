@@ -51,6 +51,12 @@ func _write_cache() -> void:
 	RomCache.write_json(RomCache.matchups_path(_directory), [])
 	RomCache.write_json(RomCache.trainers_path(_directory), [{
 		"number": 1, "name": "ACE", "palette": [0x1234, 0x5678], "dvs": 0xFFFF,
+		## `TrainerClassAttributes`' base reward, which `ComputeTrainerReward`
+		## multiplies by the last party member's level. 25 is Falkner's row.
+		"attributes": {
+			"item1": 0, "item2": 0, "base_reward": 25,
+			"ai_move_weights": 0, "ai_item_switch": 0,
+		},
 		"trainers": [{
 			"name": "ACE", "type": RomLayout.TRAINER_MON_NORMAL,
 			"party": [{"level": 5, "species": SPECIES_TWO, "item": 0, "moves": []}],
@@ -365,4 +371,64 @@ func test_the_battle_track_is_answerable_from_the_request_alone() -> void:
 			{"values": 5}, Gen2Battle.LANDMARK_NONE, Gen2WorldPalette.TIME_DAY
 		),
 		Gen2Battle.MUSIC_NONE
+	)
+
+
+## `InitEnemyTrainer` and `ComputeTrainerReward` belong to preparing the
+## opponent, so a host that answers a fight without drawing it gets the same
+## reward the battle screen would. 25 times the last member's level of 5.
+func test_a_prepared_trainer_carries_its_reward() -> void:
+	var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(
+		_data,
+		{"kind": &"battle_requested", "values": {
+			"kind": &"trainer", "trainer_group": 1, "trainer_id": 0,
+		}},
+		_player_party(), RandomNumberGenerator.new()
+	)
+	assert_true(prepared["ok"])
+	assert_eq((prepared["battle"] as Gen2Battle).battle_reward, 125)
+
+
+## `.give_money`'s four quarters and `CheckPayDay`'s coins as one credit per
+## account, which is the whole of what a won battle pays.
+func test_earnings_credit_the_wallet_with_the_prize_and_the_coins() -> void:
+	var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(
+		_data,
+		{"kind": &"battle_requested", "values": {
+			"kind": &"trainer", "trainer_group": 1, "trainer_id": 0,
+		}},
+		_player_party(), RandomNumberGenerator.new()
+	)
+	var battle: Gen2Battle = prepared["battle"]
+	battle.pay_day_money = 40
+	var earned: Dictionary = Gen2WorldBattleAdapter.earnings(battle, null, true)
+	assert_eq(
+		int((earned["money"] as Dictionary)[Gen2WorldScriptRunner.ACCOUNT_YOUR_MONEY]), 540
+	)
+	assert_eq(int(earned["prize_shown"]), 500)
+	assert_eq(int(earned["pay_day"]), 40)
+	assert_eq(StringName(earned["prize_line"]), Gen2Battle.PRIZE_KEPT_IT_ALL)
+
+	## `CheckAmuletCoin`'s one flag doubles both.
+	battle.amulet_coin = true
+	var doubled: Dictionary = Gen2WorldBattleAdapter.earnings(battle, null, true)
+	assert_eq(
+		int((doubled["money"] as Dictionary)[Gen2WorldScriptRunner.ACCOUNT_YOUR_MONEY]), 1080
+	)
+	assert_eq(int(doubled["pay_day"]), 80)
+
+
+## A loss, a draw and a run all reach `and $f / ret nz` and pay nothing.
+func test_a_battle_that_was_not_won_pays_nothing() -> void:
+	var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(
+		_data,
+		{"kind": &"battle_requested", "values": {
+			"kind": &"trainer", "trainer_group": 1, "trainer_id": 0,
+		}},
+		_player_party(), RandomNumberGenerator.new()
+	)
+	var battle: Gen2Battle = prepared["battle"]
+	battle.pay_day_money = 40
+	assert_true(
+		(Gen2WorldBattleAdapter.earnings(battle, null, false)["money"] as Dictionary).is_empty()
 	)

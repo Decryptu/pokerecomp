@@ -358,6 +358,7 @@ const QUICK_CLAW: int = 73
 const KINGS_ROCK: int = 82
 const BRIGHTPOWDER: int = 3
 const FOCUS_BAND: int = 119
+const AMULET_COIN: int = 0x5B
 const LEFTOVERS: int = 146
 const GOLD_BERRY: int = 174
 const MYSTERYBERRY: int = 150
@@ -434,7 +435,7 @@ static func build(directory: String, id: String = "testgame") -> GameData:
 	RomCache.write_json(RomCache.items_path(directory), _items())
 	RomCache.write_json(RomCache.types_path(directory), _types())
 	RomCache.write_json(RomCache.matchups_path(directory), _matchups())
-	RomCache.write_json(RomCache.trainers_path(directory), [])
+	RomCache.write_json(RomCache.trainers_path(directory), _trainers())
 	RomCache.write_json(RomCache.happiness_changes_path(directory), HAPPINESS_CHANGES)
 	## `TMHMMoves` with one entry, which is what the fixture's TM flag byte
 	## names: enough for `CanLearnTMHMMove` to have a table to answer from.
@@ -823,6 +824,7 @@ const HELD_ITEMS: Dictionary = {
 	KINGS_ROCK: ["KING'S ROCK", Gen2HeldItem.FLINCH, 30],
 	BRIGHTPOWDER: ["BRIGHTPOWDER", Gen2HeldItem.BRIGHTPOWDER, 20],
 	FOCUS_BAND: ["FOCUS BAND", Gen2HeldItem.FOCUS_BAND, 30],
+	AMULET_COIN: ["AMULET COIN", Gen2HeldItem.AMULET_COIN, 0],
 	# The berries, with the HP each of the two restoring ones puts back. The
 	# plain BERRY at [constant BERRY_ITEM] is the ten-point one.
 	LEFTOVERS: ["LEFTOVERS", Gen2HeldItem.LEFTOVERS, 10],
@@ -833,6 +835,27 @@ const HELD_ITEMS: Dictionary = {
 	MIRACLEBERRY: ["MIRACLEBERRY", Gen2HeldItem.HEAL_STATUS, 0],
 	BITTER_BERRY: ["BITTER BERRY", Gen2HeldItem.HEAL_CONFUSION, 0],
 }
+
+
+## `TrainerClassAttributes`' first row, FALKNER, with its real base reward, so
+## `ComputeTrainerReward` has a class to multiply. Every other class answers the
+## empty entry `trainer()` gives a number the cache does not carry.
+const FALKNER: int = 1
+const FALKNER_BASE_REWARD: int = 25
+
+
+static func _trainers() -> Array:
+	return [{
+		"number": FALKNER,
+		"name": "FALKNER",
+		"palette": [0, 0],
+		"trainers": [],
+		"attributes": {
+			"item1": 0, "item2": 0, "base_reward": FALKNER_BASE_REWARD,
+			"ai_move_weights": 0, "ai_item_switch": 0,
+		},
+		"dvs": [],
+	}]
 
 
 static func _items() -> Array:
