@@ -34,6 +34,10 @@ on:
 
 env:
   GODOT_VERSION: 4.8-dev3
+  # A development snapshot is tagged nowhere in the engine repository, so the
+  # pin is the commit the stock templates name themselves after:
+  # `4.8.dev3.official.51105ccbe`. The build checks that it still agrees.
+  GODOT_COMMIT: 51105ccbe58381774ecd7a7486d564b202a5192e
 
 jobs:
   build:
@@ -108,8 +112,21 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          git clone --depth 1 --branch "$GODOT_VERSION" \
-            https://github.com/godotengine/godot.git /tmp/godot
+          git init -q /tmp/godot
+          git -C /tmp/godot remote add origin https://github.com/godotengine/godot.git
+          git -C /tmp/godot fetch -q --depth 1 origin "$GODOT_COMMIT"
+          git -C /tmp/godot checkout -q FETCH_HEAD
+
+          # A pin that has drifted from the version the release installs stock
+          # templates for would mix two engines in one download. Only the
+          # series can be checked: a snapshot number is stamped by the engine's
+          # own release process and is nowhere in the source.
+          pin=$(python3 -c "import runpy; v = runpy.run_path('/tmp/godot/version.py'); print('%s.%s' % (v['major'], v['minor']))")
+          if [ "$pin" != "${GODOT_VERSION%%-*}" ]; then
+            echo "::error::the pinned commit is Godot $pin, the release installs stock $GODOT_VERSION templates"
+            exit 1
+          fi
+
           jobs=$(python3 -c 'import os; print(os.cpu_count())')
           SCONSFLAGS="-j$jobs" \
             tools/build_export_templates.sh /tmp/godot templates ${{ matrix.targets }}
