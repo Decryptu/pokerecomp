@@ -384,11 +384,17 @@ A published build carries the engine, and stock export templates ship every
 renderer and every importable format whether or not this project can reach
 them: they are around nine tenths of a download.
 `tools/build_export_templates.sh` builds the same engine without the parts
-nothing here can execute, and `release.yml` overlays what it builds onto the
-stock set, so a target it does not cover keeps the stock template. What may go
-is bounded by the mod API rather than by the game: a mod is interpreted GDScript
-with the whole engine in front of it, so 3D, audio formats and image formats all
-stay in even though the game itself draws in 2D.
+nothing here can execute, and `.github/workflows/export-templates.yml` builds
+one for every published target. `release.yml` calls it and overlays the result,
+so a name it does not carry keeps the stock template. What may go is bounded by
+the mod API rather than by the game: a mod is interpreted GDScript with the
+whole engine in front of it, so 3D, audio formats and image formats all stay in
+even though the game itself draws in 2D.
+
+The engine is the slow half of a release, so that workflow also runs on its own,
+and on a pull request that moves the flag set. iOS rebuilds the release device
+slice alone, spliced into the stock archive: that template is an Xcode project
+around several xcframeworks and the export reaches for nothing else.
 
 Android builds through gradle, because the second display is reached by a
 platform plugin and a plugin needs one. Install the Android build template from
