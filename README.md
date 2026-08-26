@@ -6,7 +6,9 @@
   <img src="https://img.shields.io/badge/Godot-4.8.dev3-478CBF?style=flat-square&logo=godotengine&logoColor=white" alt="Godot 4.8.dev3">
   <img src="https://img.shields.io/badge/GDScript-355570?style=flat-square&logo=godotengine&logoColor=white" alt="GDScript">
   <img src="https://img.shields.io/badge/platforms-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux%20%C2%B7%20Android%20%C2%B7%20iOS-8f8c98?style=flat-square" alt="Platforms">
-  <img src="https://img.shields.io/badge/status-early-e0a138?style=flat-square" alt="Status: early">
+  <img src="https://img.shields.io/badge/arm64-Windows%20%C2%B7%20Linux%20%C2%B7%20Apple-8f8c98?style=flat-square" alt="arm64">
+  <img src="https://img.shields.io/badge/status-alpha-e0a138?style=flat-square" alt="Status: alpha">
+  <a href="https://github.com/Decryptu/pokerecomp/releases/latest"><img src="https://img.shields.io/github/v/release/Decryptu/pokerecomp?style=flat-square&color=4c9a5a&label=download" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-MIT-7d59d4?style=flat-square" alt="MIT licence"></a>
   <a href="https://discord.gg/twkrHkHprk"><img src="https://img.shields.io/badge/Discord-join%20the%20community-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://x.com/DecryptTV"><img src="https://img.shields.io/badge/follow-%40DecryptTV-000000?style=flat-square&logo=x&logoColor=white" alt="X"></a>
@@ -20,9 +22,38 @@ game data ships here: bring your own ROM.
 
 Inspired by [gen1recomp](https://github.com/bryanthaboi/gen1recomp).
 
-> ### Status: early
+## Download
+
+**[Latest release](https://github.com/Decryptu/pokerecomp/releases/latest)** ships
+one file per platform. `sha256sums.txt` covers every one of them.
+
+| You have | File |
+|---|---|
+| Windows | `pokerecomp-<version>-windows-x86_64.exe` |
+| Windows on ARM | `pokerecomp-<version>-windows-arm64.exe` |
+| macOS | `pokerecomp-<version>-macos.zip` |
+| Linux | `pokerecomp-<version>-linux-x86_64` |
+| Linux on a Pi, an SBC or an ARM handheld | `pokerecomp-<version>-linux-arm64` |
+| Android, handhelds included | `pokerecomp-<version>-android.apk` |
+| iPhone or iPad | `pokerecomp-<version>-ios.ipa` |
+
+Nothing is signed with a paid certificate, so each platform asks once:
+
+- **Windows**: *More info*, then *Run anyway*.
+- **macOS**: right-click the app, *Open*, then *Open* again.
+- **Linux**: `chmod +x` the file, then run it.
+- **Android**: allow installing from this source.
+- **iOS**: the `.ipa` is deliberately **unsigned**. Install it with
+  [AltStore](https://altstore.io) or [SideStore](https://sidestore.io), which
+  sign it on your own machine with your own Apple ID. A free Apple ID works and
+  needs re-signing weekly.
+
+The About page tells you when a newer release exists. It does not install it:
+download the new file and replace the old one. Saves live elsewhere and survive.
+
+> ### Status: alpha
 >
-> Not a complete game yet. What works today:
+> Playable, not finished. What works today:
 >
 > - **Import.** Every table below, resolved by a scene-free host without
 >   reopening the ROM.
@@ -334,16 +365,20 @@ Exit code `0` means all tests passed. Run one script with `-gselect=<name>`.
 ## Platforms
 
 Windows, macOS, Linux, Android and iOS use GL Compatibility.
-`export_presets.cfg` covers all five and writes into `builds/`. Install the
-matching export templates first, then:
+`export_presets.cfg` covers seven presets, x86_64 and arm64 for Windows and
+Linux, and writes into `builds/`. Install the matching export templates first,
+then:
 
 ```bash
 godot --headless --path . --export-release "Linux" builds/linux/pokerecomp.x86_64
 ```
 
 Tests, tools and GUT are excluded, and `roms/` and the `user://` cache are not
-reachable from an export. Signing identities are placeholders: set the bundle
-identifiers, Android SDK paths and Apple team ID before publishing.
+reachable from an export. **No signing identity is committed**: the iOS preset's
+team id is deliberately empty, because a published `.ipa` is unsigned so that a
+sideloader can sign it with the player's own Apple ID. `.github/workflows/release.yml`
+builds every target from a `v*` tag and refuses to publish an `.ipa` that carries
+a signature.
 
 Android builds through gradle, because the second display is reached by a
 platform plugin and a plugin needs one. Install the Android build template from
