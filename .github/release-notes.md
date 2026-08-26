@@ -1,3 +1,17 @@
+<!-- The "Fixed" section is rewritten for each release; everything below it is
+     the standing text and only takes {VERSION}. -->
+
+## Fixed in this release
+
+- **iOS: an empty slot opened the app's own empty folder instead of the system
+  file picker.** The picker this project ships for iOS was never built for a
+  published download, so 0.1.0 carried none. Every download now has it, and a
+  build that loses it is refused rather than published.
+- **Android: handhelds with a lower panel got no second screen.** The same
+  hole: the plugin was never built for a published APK.
+- **Touch: a finger could not scroll the launcher's pages.** A drag that began
+  on any button did nothing, which is most of every page. Both iOS and Android.
+
 **This release ships no game data.** pokerecomp is not an emulator: it rebuilds
 everything from a Game Boy Color cartridge you dump yourself, and verifies the
 file before using it. Bring your own Crystal, Gold or Silver ROM.
