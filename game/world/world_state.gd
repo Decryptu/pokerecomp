@@ -1490,6 +1490,10 @@ func consume_wild_encounter_cooldown() -> bool:
 ## `wStatusFlags2`' own bit, so it sits past `ENGINE_MOBILE_SYSTEM` and shifts on
 ## Gold and Silver like every other flag there.
 const ENGINE_BUG_CONTEST_TIMER: int = 17
+## `ENGINE_SAFARI_ZONE`, the next entry of the same `wStatusFlags2` run.
+## `WarpToSpawnPoint` clears it beside the contest timer, and nothing in either
+## pin sets it: Gen 2 ships no Safari Zone.
+const ENGINE_SAFARI_ZONE: int = 18
 ## Five entries further down the same run (data/events/engine_flags.asm), so it
 ## shifts on Gold and Silver the way every flag past ENGINE_MOBILE_SYSTEM does.
 const ENGINE_REACHED_GOLDENROD: int = 22

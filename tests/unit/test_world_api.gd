@@ -826,6 +826,34 @@ func test_phone_special_ids_match_the_source_phone_routines() -> void:
 	assert_eq(_event_value(result[0]["events"], &"phone_special_requested", "kind", 3), &"random_phone_mon")
 
 
+## `special WarpToSpawnPoint`, whose whole body is two `res` on `wStatusFlags2`.
+## The port's own escapes call it directly; this is the entry a decoded script
+## reaches it by, and the four scripts that carry it are engine ones.
+func test_the_spawn_point_special_clears_the_contest_and_safari_flags() -> void:
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
+	scripts["48:6270"] = [
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_WARP_TO_SPAWN_POINT, 0,
+		Gen2WorldScript.END,
+	]
+	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
+	var data: GameData = GameData.open_directory(_directory)
+	data.world_map(1, 1).events["coord_events"][0]["script"] = 0x6270
+	var world := Gen2WorldAPI.open(data, 1, 1, Vector2i(7, 6))
+	var crystal: bool = Gen2WorldState.is_crystal_profile(world.data)
+	var timer: int = Gen2WorldState.engine_flag(
+		Gen2WorldState.ENGINE_BUG_CONTEST_TIMER, crystal
+	)
+	var safari: int = Gen2WorldState.engine_flag(
+		Gen2WorldState.ENGINE_SAFARI_ZONE, crystal
+	)
+	world.state.set_engine_flag(timer)
+	world.state.set_engine_flag(safari)
+	var result: Array = world.dispatch_script_events()
+	assert_eq(result[0]["status"], &"complete", JSON.stringify(result))
+	assert_false(world.state.is_engine_flag_active(timer))
+	assert_false(world.state.is_engine_flag_active(safari))
+
+
 func test_map_decoration_specials_stamp_the_selected_room_blocks() -> void:
 	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
 	scripts["48:6250"] = [

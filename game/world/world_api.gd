@@ -213,6 +213,10 @@ var last_spawn_map: Vector2i = Vector2i(-1, -1)
 ## the player last came into a cave through, which is where Dig and an Escape
 ## Rope put them back. Empty until one is walked.
 var dig_warp: Dictionary = {}
+## Whether the escape just taken ran `Script_AbortBugContest` with a contest
+## running. Not saved: it is read by the host on the same frame the warp is
+## applied, and a save written after that has the restored party in it.
+var _contest_abort_pending: bool = false
 ## `wBackupWarpNumber`, `wBackupMapGroup` and `wBackupMapNumber`: where a warp
 ## whose destination is -1 sends the player, and whose landmark a map with
 ## `LANDMARK_SPECIAL` borrows. `GetWarpDestCoords`'s `.backup` writes it on
@@ -2040,12 +2044,21 @@ func check_bug_contest_timer() -> Array:
 		over = &"out_of_balls"
 	if over == &"":
 		return []
-	var entry: Dictionary = data.world_standard_script(STD_BUG_CONTEST_RESULTS_WARP)
+	return queue_bug_contest_results(over)
+
+
+## `jumpstd BugContestResultsWarpScript`, which three readings reach: the timer
+## above, the last ball, and `Script_Whiteout`'s own `iftrue .bug_contest`.
+## Answers the queued results, or an empty Array when the cache holds no such
+## standard script.
+func queue_bug_contest_results(reason: StringName) -> Array:
+	var entry: Dictionary = data.world_standard_script(STD_BUG_CONTEST_RESULTS_WARP) \
+		if data != null else {}
 	if entry.is_empty():
 		return []
 	_enqueue_script({
 		"kind": &"bug_contest_over",
-		"reason": over,
+		"reason": reason,
 		"map_group": current_map.group if current_map != null else -1,
 		"map_number": current_map.number if current_map != null else -1,
 		"cell": player_cell,
@@ -4381,6 +4394,10 @@ func _apply_script_object_events(raw_events: Variant) -> Array:
 				"second_species": state.contest_second_party_species(),
 			})
 			continue
+		if event_type == &"warp_to_spawn_point":
+			warp_to_spawn_point()
+			generated.append({"type": &"warp_to_spawn_point"})
+			continue
 		if event_type == &"contest_mons_returned":
 			state.set_contest_second_party_species(0)
 			generated.append({"type": &"contest_mons_returned"})
@@ -6222,6 +6239,50 @@ func whiteout_spawn() -> int:
 	return index if index >= 0 else RomLayout.SPAWN_HOME
 
 
+## `Script_AbortBugContest`, which is `checkflag ENGINE_BUG_CONTEST_TIMER`, the
+## once-a-day flag and `special ContestReturnMons`. The mons themselves are the
+## party host's, so this answers whether they are owed rather than moving them.
+func abort_bug_contest() -> Dictionary:
+	if not bug_contest_active():
+		return {"ok": true, "kind": &"bug_contest_abort", "aborted": false}
+	var crystal: bool = Gen2WorldState.is_crystal_profile(data)
+	state.set_engine_flag(
+		Gen2WorldState.engine_flag(Gen2WorldState.ENGINE_DAILY_BUG_CONTEST, crystal), true
+	)
+	return {"ok": true, "kind": &"bug_contest_abort", "aborted": true}
+
+
+## `WarpToSpawnPoint`, whose whole body is two `res` on `wStatusFlags2`. It is
+## the timer flag rather than the contest's balls or its clock that a running
+## contest is known by, so clearing it is what ends one.
+func warp_to_spawn_point() -> Dictionary:
+	var crystal: bool = Gen2WorldState.is_crystal_profile(data)
+	for flag: int in [
+		Gen2WorldState.ENGINE_SAFARI_ZONE, Gen2WorldState.ENGINE_BUG_CONTEST_TIMER,
+	]:
+		state.set_engine_flag(Gen2WorldState.engine_flag(flag, crystal), false)
+	return {"ok": true, "kind": &"warp_to_spawn_point"}
+
+
+## The two-line tail every escape from a map shares: `farscall
+## Script_AbortBugContest` then `special WarpToSpawnPoint`, in `.FlyScript`,
+## `.UsedDigOrEscapeRopeScript`, `.TeleportScript` and `Script_Whiteout`. It
+## lives on the two warps below rather than on each of the four callers, because
+## those two warps are the whole of what an escape does here.
+func _escape_map_tail() -> void:
+	if bool(abort_bug_contest().get("aborted", false)):
+		_contest_abort_pending = true
+	warp_to_spawn_point()
+
+
+## Whether the escape just taken aborted a running contest, read once. The party
+## the contest masked off belongs to the save, so the host is what puts it back.
+func take_contest_abort() -> bool:
+	var pending: bool = _contest_abort_pending
+	_contest_abort_pending = false
+	return pending
+
+
 ## `EnterMapSpawnPoint` plus the map load behind it: the player put down at
 ## spawn [param index], facing the way a warp leaves them. Answers the same
 ## record a warp does, or a refusal when the cache holds no such spawn.
@@ -6238,6 +6299,7 @@ func warp_to_spawn(index: int) -> Dictionary:
 		return {"ok": false, "kind": &"spawn_warp", "reason": &"missing_map"}
 	var from_map: Vector2i = map_id()
 	var from_cell: Vector2i = player_cell
+	_escape_map_tail()
 	_apply_map(target_map, target_tileset, Vector2i(int(point["x"]), int(point["y"])))
 	return {
 		"ok": true,
@@ -6331,8 +6393,9 @@ static func _sweet_scent_failure(reason: StringName) -> Dictionary:
 ## being a spawn point, and it checks no badge at all.
 ##
 ## The warp is applied here rather than staged, because `.TeleportScript` is the
-## source's own script and everything in it but `WarpToSpawnPoint` is animation
-## this project has no frames for.
+## source's own script and everything in it but its shared tail is animation
+## this project has no frames for. That tail is [method _escape_map_tail], which
+## [method warp_to_spawn] runs.
 func teleport_request() -> Dictionary:
 	if current_map == null:
 		return _teleport_failure(&"missing_map")
@@ -6765,6 +6828,7 @@ func warp_to_dig_point() -> Dictionary:
 	var destination: Dictionary = warps[index]
 	var from_map: Vector2i = map_id()
 	var from_cell: Vector2i = player_cell
+	_escape_map_tail()
 	_apply_map(
 		target_map, target_tileset,
 		Vector2i(int(destination["x"]), int(destination["y"]))

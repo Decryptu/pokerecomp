@@ -1044,6 +1044,66 @@ func test_pokegear_reaches_the_existing_phone_list() -> void:
 	assert_not_null(_world_screen._service_host)
 
 
+## `StartMenu_Quit`: the Bug Catching Contest's own row asks
+## `_StartMenuContestEndText` and queues `BugCatchingContestReturnToGateScript`.
+func test_the_contest_quit_row_asks_before_it_retires() -> void:
+	await _open_world()
+	var world: Gen2WorldAPI = _world_screen._world
+	world.state.set_engine_flag(Gen2WorldState.engine_flag(
+		Gen2WorldState.ENGINE_BUG_CONTEST_TIMER,
+		Gen2WorldState.is_crystal_profile(world.data)
+	))
+	_world_screen._open_start_menu()
+	await get_tree().process_frame
+	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
+	_select(host, Gen2WorldStartMenu.ITEM_QUIT)
+	host.handle_button(Gen2Button.A)
+	await get_tree().process_frame
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.QUIT_ASK)
+	## `jr c, .DontEndContest`: NO is the second column and goes back to the list.
+	host.handle_button(Gen2Button.RIGHT)
+	host.handle_button(Gen2Button.A)
+	await get_tree().process_frame
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.LIST)
+	assert_true(world.bug_contest_active(), "still catching")
+
+	## `StartMenu_PrintBugContestStatus`' three values. `wContestMon` still zero
+	## is the empty name the box prints `None` for, and no LEVEL row with it.
+	assert_eq(host.call("_contest_status"), {"name": "", "level": 0, "balls": 0})
+	world.state.set_park_balls(17)
+	world.state.set_contest_mon({"species": 10, "level": 12, "max_hp": 30})
+	var status: Dictionary = host.call("_contest_status")
+	assert_eq(int(status["balls"]), 17)
+	assert_eq(int(status["level"]), 12)
+	assert_false(String(status["name"]).is_empty())
+	assert_not_null(host.call("_hardware_image"), "the box is drawn")
+
+	## `Script_AbortBugContest`'s `special ContestReturnMons` through the screen:
+	## the members `ContestDropOffMons` masked off come back when an escape ends
+	## the contest, which is the one seam every escape refreshes through.
+	var save: Gen2SaveData = _world_screen._injected_save
+	while save.party.size() < 2:
+		save.party.append(Gen2SaveMon.from_dict(save.party[0].to_dict()))
+	## The gate's `special ContestDropOffMons` as the runner emits it, which is
+	## what masks the party on the way into the park.
+	_world_screen._show_script_results(
+		[{"events": [{"type": &"contest_mons_dropped_off", "second_species": 0}]}]
+	)
+	assert_eq(save.party.size(), 1, "masked for the contest")
+	## An Escape Rope out, which is the same tail Fly and Teleport spend: the
+	## fixture map is its own dig warp, so the walk stays on one map.
+	world.dig_warp = {
+		"warp": 1, "map_group": world.map_id().x, "map_number": world.map_id().y,
+	}
+	assert_true(
+		bool(world.warp_to_dig_point().get("ok", false)), "the fixture has no warp 1"
+	)
+	_world_screen.call("_refresh_after_escape")
+	assert_eq(save.party.size(), 2, "ContestReturnMons put the rest back")
+	assert_true(save.contest_stashed_party.is_empty())
+	assert_false(world.bug_contest_active())
+
+
 func test_save_writes_a_snapshot_to_the_injected_save_without_touching_disk() -> void:
 	await _open_world()
 	var save: Gen2SaveData = _world_screen._injected_save

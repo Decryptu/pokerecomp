@@ -895,7 +895,8 @@ const MENU_DESCRIPTION_COUNT: int = 9
 ## has not found its terminator and is not the table.
 const MENU_DESCRIPTION_MAX: int = 64
 ## The order the strings are laid out in, as the start menu's own item kinds.
-## `quit` is the Bug Contest's, which this project never shows.
+## `quit` is the Bug Catching Contest's, which stands where `save` does while
+## one runs ([constant Gen2WorldStartMenu.ITEM_QUIT]).
 const MENU_DESCRIPTION_ORDER: Array[StringName] = [
 	&"pokedex", &"pokemon", &"pack", &"pokegear", &"player", &"save", &"option",
 	&"exit", &"quit",

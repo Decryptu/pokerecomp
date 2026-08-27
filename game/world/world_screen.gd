@@ -1757,6 +1757,16 @@ func _finish_whiteout() -> void:
 	if _world == null:
 		return
 	var save: Gen2SaveData = active_save()
+	## `Script_Whiteout` tests `ENGINE_BUG_CONTEST_TIMER` after `special
+	## HealParty` and before `HalveMoney`, so blacking out inside the Bug
+	## Catching Contest is judged rather than paid for: no money is halved, the
+	## spawn is not read, and the results gate is what the player wakes up in.
+	if _world.bug_contest_active():
+		Gen2WorldPartyHost.heal_party_rows(_world.data, save)
+		_zero_map_name_sign_timer()
+		_script_prompt = ""
+		_show_script_results(_world.queue_bug_contest_results(&"whiteout"))
+		return
 	var recovered: Dictionary = Gen2WorldPartyHost.whiteout(
 		_world, save, _injected_save == null
 	)
@@ -5469,6 +5479,11 @@ func _on_start_menu_action(kind: StringName) -> void:
 			_open_trainer_card()
 		Gen2WorldStartMenu.ITEM_POKEDEX:
 			_open_pokedex()
+		Gen2WorldStartMenu.ITEM_QUIT:
+			## `StartMenu_Quit`'s `FarQueueScript
+			## BugCatchingContestReturnToGateScript` and the 4 it returns, which
+			## is `.ExitMenuRunScript`: the menu closes and the script runs.
+			_show_script_results(_world.queue_bug_contest_results(&"retired"))
 	_refresh_labels()
 
 
@@ -6499,6 +6514,13 @@ func _show_script_results(results: Array) -> void:
 			elif result_event.get("type", &"") == &"presentation_special_applied" \
 				and StringName(result_event.get("kind", &"")) == &"palette_fade":
 				_start_script_fade(result_event)
+			elif result_event.get("type", &"") == &"contest_mons_dropped_off":
+				## `ContestDropOffMons` masks the party to its lead; the world
+				## state keeps the stashed species byte and the save keeps the
+				## members themselves.
+				Gen2WorldPartyHost.contest_drop_off_mons(_active_party_save())
+			elif result_event.get("type", &"") == &"contest_mons_returned":
+				Gen2WorldPartyHost.contest_return_mons(_active_party_save())
 			elif result_event.get("type", &"") == &"hall_of_fame_requested":
 				## An event, not a runtime request: `halloffame` commits its flag
 				## and runs on, and the source's own `end` is the next command,
@@ -6826,6 +6848,10 @@ func _show_script_results(results: Array) -> void:
 func _refresh_after_escape() -> void:
 	if _world == null:
 		return
+	## `Script_AbortBugContest`'s `special ContestReturnMons`, which the warp
+	## itself cannot run: the masked party members are the save's.
+	if _world.take_contest_abort():
+		Gen2WorldPartyHost.contest_return_mons(_active_party_save())
 	_animation.configure(_world, _render_time_of_day())
 	_set_renderer_world()
 	if _renderer != null:

@@ -636,7 +636,23 @@ func _process(_delta: float) -> bool:
 			## photographing is the eight rows a finished save carries: they fill
 			## the box exactly, so the host's MODS row and any a mod registered
 			## are what the window has to be scrolled to. The first number is how
-			## many rows down to walk before the picture.
+			## many rows down to walk before the picture, and a second number of
+			## 1 or more runs the Bug Catching Contest, which is the list
+			## `SetUpMenuItems` drops PACK from and puts QUIT in SAVE's slot.
+			if _cell.y >= 1:
+				var contest_world: Gen2WorldAPI = _screen.get("_world")
+				contest_world.state.set_engine_flag(Gen2WorldState.engine_flag(
+					Gen2WorldState.ENGINE_BUG_CONTEST_TIMER,
+					Gen2WorldState.is_crystal_profile(contest_world.data)
+				))
+				contest_world.state.set_park_balls(Gen2WorldBugContest.BALLS)
+				## A second number of 2 or more has something caught, which is
+				## the LEVEL row `StartMenu_PrintBugContestStatus` skips while
+				## `wContestMon` is still zero.
+				if _cell.y >= 2:
+					contest_world.state.set_contest_mon({
+						"species": 10, "level": 7, "max_hp": 22, "hp": 22,
+					})
 			_screen.get("_world").state.set_engine_flag(
 				Gen2WorldStartMenu.ENGINE_POKEDEX, true
 			)

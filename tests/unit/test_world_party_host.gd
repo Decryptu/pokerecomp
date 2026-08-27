@@ -1096,6 +1096,45 @@ func test_master_ball_captures_a_wild_mon_and_records_catch_metadata() -> void:
 	assert_eq(_world.state.item_quantity(0x01), 0)
 
 
+## `BugContest_SetCaughtContestMon`: the first catch is kept outright, and a
+## second one is only offered, with the Pokemon already held named by
+## `DisplayAlreadyCaughtText` rather than the new one.
+func test_a_second_contest_catch_is_offered_and_names_the_one_already_held() -> void:
+	_world.state.set_park_balls(20)
+	var first: Gen2BattleMon = Gen2BattleMon.create(
+		_data, 25, 5, _data.moves_at_level(25, 5), 0x1234
+	)
+	first.hp = 1
+	var caught: Dictionary = Gen2WorldPartyHost.capture_contest(_world, first, _random)
+	assert_true(bool(caught["ok"]), JSON.stringify(caught))
+	if bool(caught["caught"]):
+		assert_false(bool(caught.get("replace_offer", false)), "nothing to replace")
+		assert_eq(int(_world.state.contest_mon()["species"]), 25)
+	_world.state.set_contest_mon({"species": 10, "level": 5, "max_hp": 21})
+
+	var second: Gen2BattleMon = Gen2BattleMon.create(
+		_data, 25, 7, _data.moves_at_level(25, 7), 0x1234
+	)
+	## A Park Ball on a full-health wild almost never lands; the rate is the
+	## catch's own and not what this is about.
+	second.hp = 1
+	var offered: Dictionary = {}
+	for _throw: int in 2000:
+		_world.state.set_park_balls(20)
+		offered = Gen2WorldPartyHost.capture_contest(_world, second, _random)
+		if bool(offered.get("caught", false)):
+			break
+	assert_true(bool(offered.get("caught", false)), "no park ball ever landed")
+	assert_true(bool(offered["replace_offer"]))
+	assert_eq(int(offered["stock_species"]), 10, "the line names the one held")
+	assert_eq(int(offered["stock_level"]), 5)
+	assert_eq(int(offered["stock_max_hp"]), 21)
+	assert_eq(
+		int(_world.state.contest_mon()["species"]), 10,
+		"the state is left alone until the question is answered"
+	)
+
+
 func test_a_full_party_capture_uses_the_first_pc_box_slot() -> void:
 	while _save.party.size() < Gen2SaveData.MAX_PARTY:
 		_save.party.append(Gen2SaveMon.from_dict(_save.party[0].to_dict()))
@@ -1567,6 +1606,64 @@ func test_the_tutor_asks_before_replacing_a_full_moveset_and_charges_nothing() -
 	assert_eq(int(replaced["forgot"]), 3)
 	assert_eq(_save.party[0].moves, [1, 2, MT03_MOVE, 4])
 	assert_eq(_save.party[0].happiness, 71)
+
+
+## `ContestDropOffMons` and `ContestReturnMons` (engine/events/bug_contest/
+## contest_2.asm): the party masked to its lead for the length of a contest, and
+## the count recomputed when it is put back.
+func test_the_contest_mask_moves_the_party_aside_and_puts_it_back_in_order() -> void:
+	while _save.party.size() > 1:
+		_save.party.remove_at(1)
+	var second: Gen2SaveMon = Gen2SaveMon.new()
+	second.species = 10
+	second.level = 7
+	var third: Gen2SaveMon = Gen2SaveMon.new()
+	third.species = 13
+	third.level = 8
+	_save.party.append(second)
+	_save.party.append(third)
+	var lead: Gen2SaveMon = _save.party[0]
+
+	assert_eq(Gen2WorldPartyHost.contest_drop_off_mons(_save), 10, "wPartySpecies + 1")
+	assert_eq(_save.party.size(), 1, "wPartyCount is 1 for the whole contest")
+	assert_eq(_save.party[0], lead)
+	assert_eq(_save.contest_stashed_party.size(), 2)
+
+	## A second call with a stash standing would lose it; the gate cannot reach
+	## this twice and a mod calling the special can.
+	assert_eq(Gen2WorldPartyHost.contest_drop_off_mons(_save), 0)
+	assert_eq(_save.contest_stashed_party.size(), 2)
+
+	assert_eq(Gen2WorldPartyHost.contest_return_mons(_save), 2)
+	assert_eq(_save.party, [lead, second, third])
+	assert_true(_save.contest_stashed_party.is_empty())
+	assert_eq(Gen2WorldPartyHost.contest_return_mons(_save), 0, "nothing owed twice")
+
+
+func test_a_one_member_party_needs_no_contest_mask() -> void:
+	while _save.party.size() > 1:
+		_save.party.remove_at(1)
+	assert_eq(Gen2WorldPartyHost.contest_drop_off_mons(_save), 0)
+	assert_eq(_save.party.size(), 1)
+	assert_true(_save.contest_stashed_party.is_empty())
+
+
+func test_the_masked_party_survives_a_save_round_trip() -> void:
+	while _save.party.size() > 1:
+		_save.party.remove_at(1)
+	var second: Gen2SaveMon = Gen2SaveMon.new()
+	second.species = 10
+	second.level = 7
+	_save.party.append(second)
+	Gen2WorldPartyHost.contest_drop_off_mons(_save)
+	var restored: Gen2SaveData = Gen2SaveData.from_dict(_save.to_dict())
+	assert_eq(restored.party.size(), 1)
+	assert_eq(restored.contest_stashed_party.size(), 1)
+	assert_eq(int(restored.contest_stashed_party[0].species), 10)
+	## A slot written before the mask existed reads as one outside a contest.
+	var older: Dictionary = _save.to_dict()
+	older.erase("contest_stashed_party")
+	assert_true(Gen2SaveData.from_dict(older).contest_stashed_party.is_empty())
 
 
 ## `DoPoisonStep`'s `.DamageMonIfPoisoned`: one HP off a poisoned member that is

@@ -299,6 +299,10 @@ var _capture_messages: Array[String] = []
 ## before the nickname prompt opens.
 var _capture_caught_event: Dictionary = {}
 var _capture_terminal: bool = false
+## Whether `DisplayAlreadyCaughtText` has been said for this throw. The line
+## comes once, before the switch question, and the question is asked again on
+## every pump until it is answered.
+var _contest_already_caught_said: bool = false
 ## Whether this capture's experience award has already run. See
 ## [method _spend_capture_experience].
 var _capture_experience_spent: bool = false
@@ -2744,6 +2748,13 @@ func complete_capture(result: Dictionary) -> Dictionary:
 		_capture_messages.append("The ball shook!")
 	if caught:
 		_capture_messages.append("Gotcha! %s was caught!" % _name_of(_enemy))
+		## `.catch_bug_contest_mon` runs after `Text_GotchaMonWasCaught`, and
+		## `BugContest_SetCaughtContestMon`'s `.firstcatch` says a second line.
+		## A catch that has one to replace says `DisplayAlreadyCaughtText`
+		## instead, which comes with the switch question rather than here.
+		if bool(result.get("contest", false)) \
+			and not bool(result.get("replace_offer", false)):
+			_capture_messages.append("Caught %s!" % _name_of(_enemy))
 		_capture_terminal = true
 		_capture_caught_event = _caught_event(result)
 	else:
@@ -2964,6 +2975,7 @@ func _clear_capture_action() -> void:
 	_capture_messages.clear()
 	_capture_caught_event = {}
 	_capture_terminal = false
+	_contest_already_caught_said = false
 	_capture_result.clear()
 	_close_capture_nickname()
 	_capture_nickname = ""
@@ -3378,6 +3390,13 @@ func _continue_after_messages() -> void:
 		## `BugContest_SetCaughtContestMon` asks before replacing the Pokemon
 		## already caught, over the same `PlaceYesNoBox` a switch offer uses.
 		if bool(_capture_result.get("replace_offer", false)) and _switch_stage == &"":
+			## `DisplayAlreadyCaughtText` before `DisplayCaughtContestMonStats`
+			## and the box: the line about the one already held is prompted past
+			## first, and the question is asked over the comparison.
+			if not _contest_already_caught_said:
+				_contest_already_caught_said = true
+				show_message(CONTEST_ALREADY_CAUGHT_TEXT % _contest_stock_name())
+				return
 			_open_yes_no(&"contest_replace", CONTEST_REPLACE_TEXT)
 			return
 		## A registered policy's award and every level up, move offer and
@@ -3950,7 +3969,11 @@ func _answer_switch(button: int) -> void:
 ## `BugContest_SetCaughtContestMon`'s own `PlaceYesNoBox`, which `ret c` reads as
 ## keeping the Pokemon already caught. The answer rides out on the capture
 ## result, since what it decides is world state rather than battle state.
-const CONTEST_REPLACE_TEXT: String = "Replace the one you caught?"
+## `_ContestAskSwitchText`, which is what `PlaceYesNoBox` stands under.
+const CONTEST_REPLACE_TEXT: String = "Switch #MON?"
+## `_ContestAlreadyCaughtText`, said first and prompted past.
+## `DisplayAlreadyCaughtText` names the Pokemon already held.
+const CONTEST_ALREADY_CAUGHT_TEXT: String = "You already caught\na %s."
 
 
 func _answer_contest_replace(button: int) -> void:
@@ -5492,6 +5515,12 @@ func _box_raster_offsets() -> PackedInt32Array:
 		return PackedInt32Array()
 	var top: int = Gen2TextBox.STANDARD_TOP * Gen2Font.TILE
 	return _intro.offsets().slice(top, top + _box.rows * Gen2Font.TILE)
+
+
+## The Pokemon `wContestMon` already holds, which is what
+## `DisplayAlreadyCaughtText` names and the comparison's STOCK box shows.
+func _contest_stock_name() -> String:
+	return _name_of(int(_capture_result.get("stock_species", 0)))
 
 
 func _name_of(species: int) -> String:

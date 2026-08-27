@@ -40,7 +40,7 @@ enum Mode {
 	PACK_FORGET_ASK, PACK_FORGET, PACK_STOP_LEARNING, PACK_PP_MOVE,
 	PACK_TOSS_QUANTITY, PACK_TOSS_CONFIRM, PACK_GIVE_SWAP,
 	PACK_RESULT, SAVE_ASK, SAVE_OVERWRITE, SAVE_SAVING, SAVE_SAVED,
-	SAVE_FAILED, OPTIONS, MODS, MOD_OPTIONS, FIELD_MOVES,
+	SAVE_FAILED, QUIT_ASK, OPTIONS, MODS, MOD_OPTIONS, FIELD_MOVES,
 }
 
 ## `SaveMenu`'s four texts, out of `data/text/common_3.asm` on Crystal and
@@ -53,6 +53,12 @@ const SAVE_ASK_LINES: Array[String] = [
 ## `AlreadyASaveFileText`. `AnotherSaveFileText` is its sibling for a save file
 ## belonging to another player, and `CompareLoadedAndSavedPlayerID` cannot
 ## reach it here: a world is always played from the slot it was started in.
+## `_StartMenuContestEndText`, which `StartMenu_Quit` asks over the same
+## `YesNoMenuHeader` box the save question uses. Authored here beside the save
+## texts for the same reason: no importer reads either.
+const QUIT_ASK_LINES: Array[String] = [
+	"Would you like to", "end the Contest?",
+]
 const SAVE_OVERWRITE_LINES: Array[String] = [
 	"There is already a", "save file. Is it", "OK to overwrite?",
 ]
@@ -444,7 +450,7 @@ func _move(direction: Vector2i) -> void:
 				_render_targets()
 		## `VerticalMenu` over `YesNoMenuHeader`, which is only up while a
 		## question is; the two timed modes read no joypad at all.
-		Mode.SAVE_ASK, Mode.SAVE_OVERWRITE:
+		Mode.SAVE_ASK, Mode.SAVE_OVERWRITE, Mode.QUIT_ASK:
 			if _save_cursor >= 0 and (direction.x != 0 or direction.y != 0):
 				_save_cursor = 1 - _save_cursor
 				_render_save()
@@ -537,7 +543,7 @@ func _confirm() -> void:
 			else:
 				_open_pack_mode(false)
 		Mode.SAVE_ASK, Mode.SAVE_OVERWRITE, Mode.SAVE_SAVING, Mode.SAVE_SAVED, \
-		Mode.SAVE_FAILED:
+		Mode.SAVE_FAILED, Mode.QUIT_ASK:
 			_confirm_save()
 		## Options_Cancel is the only handler that reads A.
 		Mode.OPTIONS:
@@ -596,7 +602,7 @@ func _cancel() -> void:
 		Mode.PACK_TOSS_CONFIRM, Mode.PACK_GIVE_SWAP:
 			_open_pack_mode(false)
 		Mode.SAVE_ASK, Mode.SAVE_OVERWRITE, Mode.SAVE_SAVING, Mode.SAVE_SAVED, \
-		Mode.SAVE_FAILED:
+		Mode.SAVE_FAILED, Mode.QUIT_ASK:
 			_cancel_save()
 		## `_Option.joypad_loop` exits on PAD_START | PAD_B from any row.
 		Mode.OPTIONS, Mode.MODS, Mode.FIELD_MOVES:
@@ -615,6 +621,8 @@ func _confirm_list() -> void:
 			_open_pack_mode()
 		Gen2WorldStartMenu.ITEM_SAVE:
 			_open_save_confirm_mode()
+		Gen2WorldStartMenu.ITEM_QUIT:
+			_enter_save_mode(Mode.QUIT_ASK, QUIT_ASK_LINES, 0)
 		Gen2WorldStartMenu.ITEM_OPTION:
 			_open_options_mode()
 		Gen2WorldStartMenu.ITEM_MODS:
@@ -638,6 +646,22 @@ func _confirm_list() -> void:
 			var handler: Variant = entry.get("handler", null)
 			if handler is Callable:
 				(handler as Callable).call()
+
+
+## `StartMenu_PrintBugContestStatus`' three values: `wContestMon` and its level,
+## and `wParkBallsRemaining`. An unset `wContestMon` is the empty name the page
+## prints `.NoneString` for.
+func _contest_status() -> Dictionary:
+	if _world == null:
+		return {}
+	var caught: Dictionary = _world.state.contest_mon()
+	var species: int = int(caught.get("species", 0))
+	return {
+		"name": String(_world.data.species(species).get("name", "")) \
+			if species > 0 and _world.data != null else "",
+		"level": int(caught.get("level", 0)),
+		"balls": _world.state.park_balls(),
+	}
 
 
 func _open_list_mode() -> void:
@@ -1941,6 +1965,14 @@ func _confirm_save() -> void:
 	match _mode:
 		## `.refused` on NO, which is the carry `StartMenu_Save` answers with 0:
 		## back to the list rather than out of the menu.
+		## `StartMenu_Quit`'s `jr c, .DontEndContest`, which is the same 0 the
+		## save question answers NO with: back to the list. YES queues
+		## `BugCatchingContestReturnToGateScript`, which is the world's.
+		Mode.QUIT_ASK:
+			if _save_cursor == 1:
+				_open_list_mode()
+			else:
+				action_chosen.emit(Gen2WorldStartMenu.ITEM_QUIT)
 		Mode.SAVE_ASK:
 			if _save_cursor == 1:
 				_open_list_mode()
@@ -2157,10 +2189,11 @@ func _hardware_image() -> Image:
 				if Gen2OptionsStore.current().menu_account else ""
 			return _page.render_list(
 				labels.slice(_list_scroll, _list_scroll + shown),
-				_menu.cursor - _list_scroll, description, contest
+				_menu.cursor - _list_scroll, description, contest, null,
+				_contest_status() if contest else {}
 			)
 		Mode.SAVE_ASK, Mode.SAVE_OVERWRITE, Mode.SAVE_SAVING, Mode.SAVE_SAVED, \
-		Mode.SAVE_FAILED:
+		Mode.SAVE_FAILED, Mode.QUIT_ASK:
 			return _page.render_save(_save_state())
 		Mode.OPTIONS:
 			if _options_menu == null:

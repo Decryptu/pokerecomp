@@ -263,6 +263,43 @@ func _verify_gate_errand() -> void:
 	)
 	_r.note("the contest ended on map %s." % str(world.map_id()))
 
+	## The other way a contest ends: `farscall Script_AbortBugContest` and
+	## `special WarpToSpawnPoint`, which Fly, Dig, an Escape Rope and Teleport
+	## all share. Run against the same cache rather than a fixture, because the
+	## flag indices split by profile.
+	var crystal: bool = Gen2WorldState.is_crystal_profile(world.data)
+	var timer: int = Gen2WorldState.engine_flag(
+		Gen2WorldState.ENGINE_BUG_CONTEST_TIMER, crystal
+	)
+	var daily: int = Gen2WorldState.engine_flag(
+		Gen2WorldState.ENGINE_DAILY_BUG_CONTEST, crystal
+	)
+	world.state.set_engine_flag(daily, false)
+	world.state.set_engine_flag(timer)
+	world.state.set_engine_flag(
+		Gen2WorldState.engine_flag(Gen2WorldState.ENGINE_SAFARI_ZONE, crystal)
+	)
+	var escaped: Dictionary = world.warp_to_spawn(RomLayout.SPAWN_HOME)
+	_r.check(
+		bool(escaped.get("ok", false)),
+		"an escape to SPAWN_HOME answered %s." % str(escaped.get("reason", ""))
+	)
+	_r.check(
+		not world.state.is_engine_flag_active(timer),
+		"WarpToSpawnPoint left the contest timer set."
+	)
+	_r.check(
+		not world.state.is_engine_flag_active(
+			Gen2WorldState.engine_flag(Gen2WorldState.ENGINE_SAFARI_ZONE, crystal)
+		),
+		"WarpToSpawnPoint left STATUSFLAGS2_SAFARI_GAME_F set."
+	)
+	_r.check(
+		world.state.is_engine_flag_active(daily),
+		"Script_AbortBugContest did not spend the day's contest."
+	)
+	_r.check(world.take_contest_abort(), "the masked party was not owed back.")
+
 
 ## The step each facing looks along, in FACING_* order.
 const FACING_STEPS: Array[Vector2i] = [

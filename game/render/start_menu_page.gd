@@ -21,6 +21,19 @@ const LIST_LEFT: int = 10
 const LIST_RIGHT: int = COLUMNS - 1
 const LIST_TOP: int = 0
 const LIST_CONTEST_TOP: int = 2
+## `StartMenu_DrawBugContestStatusBox`'s `Textbox` at `hlcoord 0, 0` with
+## `b = 5` and `c = 17`, which draws a frame two cells wider and taller than
+## its own span. It is why `.ContestMenuHeader` starts two rows down.
+const CONTEST_BOX_SIZE: Vector2i = Vector2i(19, 7)
+## `StartMenu_PrintBugContestStatus`' own `hlcoord`s, in its own order.
+const CONTEST_CAUGHT_AT: Vector2i = Vector2i(1, 1)
+const CONTEST_NAME_AT: Vector2i = Vector2i(8, 1)
+const CONTEST_LEVEL_AT: Vector2i = Vector2i(1, 3)
+## `Print8BitNumLeftAlign` starts one cell past where `PlaceString` left off,
+## and "LEVEL" is five cells from column 1.
+const CONTEST_LEVEL_NUMBER_AT: Vector2i = Vector2i(7, 3)
+const CONTEST_BALLS_AT: Vector2i = Vector2i(1, 5)
+const CONTEST_BALLS_NUMBER_AT: Vector2i = Vector2i(8, 5)
 ## `.MenuData`'s own flags.
 const LIST_FLAGS: int = (
 	Gen2MenuBox.STATICMENU_CURSOR
@@ -147,7 +160,7 @@ static func list_box(count: int, contest: bool = false) -> Gen2MenuBox:
 ## names rather than the eight-character words the source list holds.
 func render_list(
 	labels: Array, cursor: int, description: String = "", contest: bool = false,
-	frame: Gen2MenuBox = null
+	frame: Gen2MenuBox = null, status: Dictionary = {}
 ) -> Image:
 	if menu == null or font == null:
 		return null
@@ -155,6 +168,11 @@ func render_list(
 		Gen2Screen.WIDTH, Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8
 	)
 	var box: Gen2MenuBox = frame if frame != null else list_box(labels.size(), contest)
+	if contest:
+		## `.DrawBugContestStatusBox` and `.DrawBugContestStatus`, both of which
+		## the flag alone decides. Drawn before the list, because the list's box
+		## sits two rows into it.
+		_blit(image, _render_contest_status(status), Vector2i.ZERO)
 	_blit(image, menu.render(box, labels, cursor), box.border_position())
 	if not description.is_empty():
 		_blit(image, _render_account(description), ACCOUNT_AT)
@@ -255,6 +273,40 @@ func _render_save_textbox(state: Dictionary) -> Image:
 		)
 	return Gen2PicImage.from_indices(
 		indices, width, SAVE_TEXTBOX_SIZE.y * TILE, _palette()
+	)
+
+
+## `StartMenu_PrintBugContestStatus`: what has been caught, its level and how
+## many park balls are left. [param status] carries `name`, `level` and `balls`;
+## an empty name is `wContestMon` still zero, which prints `.NoneString` and
+## skips the LEVEL row entirely.
+func _render_contest_status(status: Dictionary) -> Image:
+	var width: int = CONTEST_BOX_SIZE.x * TILE
+	var indices := PackedByteArray()
+	indices.resize(width * CONTEST_BOX_SIZE.y * TILE)
+	font.draw_box(
+		frame_style, indices, width, 0, 0, CONTEST_BOX_SIZE.x, CONTEST_BOX_SIZE.y
+	)
+	var caught: String = String(status.get("name", ""))
+	for entry: Array in [
+		["CAUGHT", CONTEST_CAUGHT_AT],
+		[caught if not caught.is_empty() else "None", CONTEST_NAME_AT],
+		["BALLS:", CONTEST_BALLS_AT],
+		["%d" % maxi(int(status.get("balls", 0)), 0), CONTEST_BALLS_NUMBER_AT],
+	]:
+		var at: Vector2i = entry[1]
+		font.draw_text(String(entry[0]), indices, width, at.x * TILE, at.y * TILE)
+	if not caught.is_empty():
+		font.draw_text(
+			"LEVEL", indices, width,
+			CONTEST_LEVEL_AT.x * TILE, CONTEST_LEVEL_AT.y * TILE
+		)
+		font.draw_text(
+			"%d" % maxi(int(status.get("level", 0)), 0), indices, width,
+			CONTEST_LEVEL_NUMBER_AT.x * TILE, CONTEST_LEVEL_NUMBER_AT.y * TILE
+		)
+	return Gen2PicImage.from_indices(
+		indices, width, CONTEST_BOX_SIZE.y * TILE, _palette()
 	)
 
 
