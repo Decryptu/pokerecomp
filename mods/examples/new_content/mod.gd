@@ -504,6 +504,83 @@ func _play_differently(host: Gen2ModHost, manifest: Gen2ModManifest) -> void:
 		"action": Gen2ModHost.START_ACTION_OPEN_BILLS_PC,
 		"visible": func(_context: Dictionary) -> bool: return true,
 	})
+	_watch_the_run(host, manifest)
+
+
+## What the run has achieved, what a mod does with it, and how it says so.
+##
+## Three seams, and they are one example because they are used together. The
+## progress reading is every field the host already holds, as state the run has
+## REACHED rather than a moment it passed, which is what lets a mod installed
+## onto a save already played read what that save has. The page lists it. The
+## notice says when a field moved.
+func _watch_the_run(host: Gen2ModHost, manifest: Gen2ModManifest) -> void:
+	## The page. The mod answers rows and nothing else: the host draws them with
+	## the screen's own frame and font, so a page needs no node and no art.
+	host.register_page(manifest.id, {"title": "BADGES", "rows": _badge_rows})
+	## A second start-menu row, naming the page it opens. `page` is what lets a
+	## mod with more than one row point one of them at its page.
+	host.register_menu_entry(Gen2ModHost.MENU_START, &"new_content_badges", {
+		"label": "BADGES",
+		"action": Gen2ModHost.START_ACTION_OPEN_MOD_PAGE,
+		"page": manifest.id,
+	})
+	_notice_id = manifest.id
+	host.progress_changed.connect(_on_progress_changed)
+
+
+var _notice_id: StringName = &""
+## The last reading, so what moved is the difference rather than a copy of host
+## state: a mod keeping its own count could not answer for a save it was
+## installed onto, which is the whole reason the reading exists.
+var _seen_badges: int = -1
+
+
+## One row per badge, locked until it is won. `Gen2ModHost.progress` is the
+## reading; `badges` is a Crystal-ordered mask whichever cartridge is open, so
+## nothing here touches the Gold and Silver flag table.
+func _badge_rows() -> Array:
+	var mask: int = int(Gen2ModHost.instance().progress().get(&"badges", 0))
+	var out: Array = []
+	for badge: int in 8:
+		out.append({
+			"label": BADGE_NAMES[badge],
+			"detail": "WON" if (mask & (1 << badge)) != 0 else "",
+			"icon": {"badge": badge},
+			"locked": (mask & (1 << badge)) == 0,
+		})
+	return out
+
+
+const BADGE_NAMES: Array[String] = [
+	"ZEPHYRBADGE", "HIVEBADGE", "PLAINBADGE", "FOGBADGE",
+	"MINERALBADGE", "STORMBADGE", "GLACIERBADGE", "RISINGBADGE",
+]
+
+
+## A banner over the map when a badge is won. The first reading of a run is the
+## save being opened rather than anything happening in it, so it is adopted
+## silently: that is the difference between installing a mod onto a played save
+## and playing the moment it awards.
+func _on_progress_changed(progress: Dictionary) -> void:
+	var mask: int = int(progress.get(&"badges", 0))
+	var was: int = _seen_badges
+	_seen_badges = mask
+	if was < 0:
+		return
+	for badge: int in BADGE_NAMES.size():
+		var bit: int = 1 << badge
+		if (mask & bit) == 0 or (was & bit) != 0:
+			continue
+		## Refused rather than clipped when a line will not fit, and answered
+		## with a reason either way. `get_badge` is one of the sounds the host
+		## lends; the shiny sparkle is deliberately not among them.
+		Gen2ModHost.instance().request_notice(_notice_id, {
+			"title": "BADGE WON",
+			"line": BADGE_NAMES[badge],
+			"icon": {"badge": badge},
+			"sound": &"get_badge",
+		})
 
 
 ## One question, per move. That is the whole of what an alternate field-move

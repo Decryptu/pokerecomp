@@ -133,6 +133,8 @@ var _money_window: TextureRect = null
 var _party_selection: Dictionary = {}
 var _battle_host: Gen2BattleScreen = null
 var _trainer_card_host: Gen2TrainerCardScreen = null
+## `START_ACTION_OPEN_MOD_PAGE`'s screen, which is a mod's own list.
+var _mod_page_host: Gen2ModPageScreen = null
 var _pokedex_host: Gen2PokedexScreen = null
 ## `wPrevDexEntry`, which is plain WRAM rather than saved data: it survives the
 ## dex closing and reopening for as long as the game runs, the way the start
@@ -518,6 +520,7 @@ func _build_world() -> void:
 	## way to write the bag.
 	Gen2ModHost.instance().set_inventory_source(_mod_inventory)
 	Gen2ModHost.instance().set_hidden_items_source(_mod_hidden_items)
+	Gen2ModHost.instance().set_progress_source(_mod_progress)
 	_encounters.set_world(_world, anim_data)
 	_actors.set_encounters(_encounters)
 	var rods: Array[StringName] = _world.available_fishing_rods()
@@ -565,6 +568,7 @@ func _hand_over_second_screen() -> void:
 
 
 func _exit_tree() -> void:
+	Gen2ModHost.instance().set_progress_source(Callable())
 	var runtime: Gen2GameRuntime = Gen2GameRuntime.instance()
 	if runtime != null:
 		runtime.set_second_screen_world(null, null, null)
@@ -701,6 +705,7 @@ func _apply_interface_mask() -> void:
 		_battle_transition != null
 		or _battle_host != null or _service_host != null or _party_host != null
 		or _hall_of_fame_host != null or _trainer_card_host != null
+		or _mod_page_host != null
 		or _link_host != null
 		or _pokedex_host != null or _credits_host != null
 		or _evolution_host != null or _hatch_host != null
@@ -845,6 +850,9 @@ func advance_frame() -> void:
 	## frame carried is spent from the next one.
 	if map_pass:
 		_advance_map_name_sign_pass()
+		## One reading a world pass, which is the rate the overworld itself runs
+		## at. Costs nothing while no mod is watching.
+		Gen2ModHost.instance().refresh_progress()
 	_raise_map_name_sign()
 	if _effects != null:
 		var effects_moved: bool = _effects.advance_frame()
@@ -904,6 +912,7 @@ func advance_frame() -> void:
 	_spend_actor_requests()
 	_spend_hidden_item_requests()
 	_spend_item_gift_requests()
+	_spend_notice_requests()
 	if map_pass and _objects_may_move() \
 		and _world.advance_object_steps_pass(_object_random) \
 		and _renderer != null:
@@ -1142,6 +1151,7 @@ func _overlay_open() -> bool:
 		or _battle_host != null or _service_host != null \
 		or _start_menu_host != null or _party_host != null \
 		or _hall_of_fame_host != null or _trainer_card_host != null \
+		or _mod_page_host != null \
 		or _link_host != null \
 		or _pokedex_host != null or _credits_host != null \
 		or _evolution_host != null or _hatch_host != null \
@@ -1344,6 +1354,8 @@ func _handle_button(button: int) -> bool:
 		return _pokedex_host.handle_button(button)
 	if _trainer_card_host != null:
 		return _trainer_card_host.handle_button(button)
+	if _mod_page_host != null:
+		return _mod_page_host.handle_button(button)
 	if _start_menu_host != null:
 		return _start_menu_host.handle_button(button)
 	if _service_host != null:
@@ -5457,7 +5469,7 @@ func open_select_menu() -> void:
 	)
 
 
-func _on_start_menu_action(kind: StringName) -> void:
+func _on_start_menu_action(kind: StringName, id: StringName = &"") -> void:
 	var host: Gen2StartMenuScreen = _start_menu_host
 	_start_menu_host = null
 	if host != null:
@@ -5467,10 +5479,13 @@ func _on_start_menu_action(kind: StringName) -> void:
 		Gen2WorldStartMenu.ITEM_POKEMON, Gen2WorldStartMenu.ITEM_POKEGEAR,
 		Gen2WorldStartMenu.ITEM_PLAYER, Gen2WorldStartMenu.ITEM_POKEDEX,
 		Gen2ModHost.START_ACTION_OPEN_BILLS_PC,
+		Gen2ModHost.START_ACTION_OPEN_MOD_PAGE,
 	]
 	match kind:
 		Gen2ModHost.START_ACTION_OPEN_BILLS_PC:
 			_open_bills_pc()
+		Gen2ModHost.START_ACTION_OPEN_MOD_PAGE:
+			_open_mod_page(id)
 		Gen2WorldStartMenu.ITEM_POKEMON:
 			_open_embedded_party()
 		Gen2WorldStartMenu.ITEM_POKEGEAR:
@@ -5624,6 +5639,35 @@ func _open_trainer_card() -> void:
 	host.closed.connect(_on_trainer_card_closed)
 	_trainer_card_host = host
 	_script_prompt = "Trainer card open"
+	_refresh_labels()
+
+
+## `START_ACTION_OPEN_MOD_PAGE`: [param id] is the mod that registered the row,
+## which is the same id its page is registered under.
+func _open_mod_page(id: StringName) -> void:
+	if _mod_page_host != null or _data == null:
+		return
+	var host := Gen2ModPageScreen.new()
+	if not host.open(_data, id):
+		host.free()
+		_script_prompt = "%s registered no page" % id
+		_refresh_labels()
+		return
+	host.z_index = 10
+	_screen.display(host)
+	host.closed.connect(_on_mod_page_closed)
+	_mod_page_host = host
+	_script_prompt = "%s page open" % id
+	_refresh_labels()
+
+
+func _on_mod_page_closed() -> void:
+	var host: Gen2ModPageScreen = _mod_page_host
+	_mod_page_host = null
+	if host != null:
+		Gen2Screen.drop(host)
+	_script_prompt = "Mod page closed"
+	_reopen_start_menu_if_due()
 	_refresh_labels()
 
 
@@ -7469,6 +7513,13 @@ func _mod_inventory() -> Dictionary:
 	return _world.state.items() if _world != null else {}
 
 
+## What [method Gen2ModHost.progress] reads while this world is open. The save is
+## in it because the party, the boxes and the play timer are the save's, and the
+## world screen is the one place that holds both.
+func _mod_progress() -> Dictionary:
+	return Gen2ModProgress.of(_world, active_save())
+
+
 ## What [method Gen2ModHost.request_hidden_item] collapses an ask against: the
 ## open map's own rows, with `taken` already answered off the event flag.
 func _mod_hidden_items() -> Array:
@@ -7519,6 +7570,58 @@ func _spend_hidden_item_requests() -> void:
 		## floor by the drain that could only spend one of them.
 		Gen2ModHost.instance().requeue_hidden_items(requests.slice(index + 1))
 		return
+
+
+## A mod's notice asks, spent the way its hidden-item asks are and on the same
+## gate. One at a time: the banner owns the bottom four rows for its own sixty
+## passes, and raising a second over it would flicker rather than read.
+func _spend_notice_requests() -> void:
+	if _world == null or _data == null or not _world_idle_for_mod_request():
+		return
+	if _map_name_sign_passes > 0:
+		return
+	var notice: Dictionary = Gen2ModHost.instance().take_notice_request()
+	if notice.is_empty():
+		return
+	var image: Image = Gen2MapNameSignPage.render_notice(
+		_data, String(notice.get("title", "")), String(notice.get("line", "")),
+		_world.current_map.environment if _world.current_map != null \
+			else Gen2WorldAPI.ENVIRONMENT_TOWN,
+		_render_time_of_day(),
+		Gen2OptionsStore.current().textbox_frame,
+	)
+	if image == null:
+		return
+	_hide_map_name_sign()
+	_map_name_sign_passes = Gen2WorldAPI.MAP_NAME_SIGN_PASSES
+	_map_name_sign = TextureRect.new()
+	_map_name_sign.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	Gen2PicImage.show(_map_name_sign, image)
+	_map_name_sign.size = image.get_size()
+	_map_name_sign.position = Vector2(0, Gen2MapNameSignPage.TOP)
+	_map_name_sign.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var icon: Image = Gen2MapNameSignPage.render_notice_icon(
+		_data, notice.get("icon", {}) as Dictionary, _render_time_of_day()
+	)
+	if icon != null:
+		var badge := TextureRect.new()
+		badge.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		Gen2PicImage.show(badge, icon)
+		badge.size = icon.get_size()
+		badge.position = Vector2(
+			Gen2MapNameSignPage.NOTICE_ICON_AT * Gen2Font.TILE
+		)
+		_map_name_sign.add_child(badge)
+	## The banner is brought down on the frame after the one that raised it, the
+	## way `PlaceMapNameSign` leaves it.
+	_map_name_sign.visible = false
+	_screen.display(_map_name_sign)
+	var sound: int = Gen2ModHost.notice_sound_index(
+		StringName(notice.get("sound", Gen2ModHost.NOTICE_SOUND_DEFAULT))
+	)
+	if sound >= 0:
+		_play_sfx(sound)
 
 
 ## Nothing of the world's own is running, which is the gate [method interact]

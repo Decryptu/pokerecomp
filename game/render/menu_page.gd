@@ -39,9 +39,9 @@ static func from_data(data: GameData) -> Gen2MenuPage:
 ## cursor draws no arrow, which is what a menu without STATICMENU_CURSOR is.
 ##
 ## [param extras] are `PlaceString` calls the caller makes at absolute tile
-## coordinates, as [code]{"text": String, "at": Vector2i}[/code]: the battle's
-## `MoveInfoBox` writes its type and PP into a plain `Textbox` that way rather
-## than as menu items.
+## coordinates, as [code]{"text": String, "at": Vector2i}[/code] with an optional
+## [code]max_tiles[/code]: the battle's `MoveInfoBox` writes its type and PP into
+## a plain `Textbox` that way rather than as menu items.
 func draw(
 	box: Gen2MenuBox, options: Array, cursor: int,
 	indices: PackedByteArray, width: int, title: String = "", title_indent: int = 0,
@@ -71,9 +71,13 @@ func draw(
 
 	for extra: Dictionary in extras:
 		var extra_at: Vector2i = extra.get("at", Vector2i.ZERO)
+		## Every cartridge string is written to fit where it is placed, so the
+		## bound is optional; a string a mod supplies is not, and unbounded it
+		## runs through the right-hand border.
 		font.draw_text(
 			String(extra.get("text", "")), indices, width,
-			extra_at.x * TILE, extra_at.y * TILE
+			extra_at.x * TILE, extra_at.y * TILE, Gen2Text.FONT_MAIN,
+			int(extra.get("max_tiles", -1))
 		)
 
 	if cursor >= 0 and cursor < options.size() and box.has_flag(Gen2MenuBox.STATICMENU_CURSOR):

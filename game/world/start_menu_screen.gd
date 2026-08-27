@@ -15,7 +15,9 @@ extends Control
 
 ## Emitted for an available entry this screen does not own itself
 ## (Pokedex, Pokemon, Pokegear, Player); the caller opens the matching screen.
-signal action_chosen(kind: StringName)
+## [param id] is the registering mod's own id where the row is a mod's and the
+## action needs to know whose it is, and is empty for every cartridge row.
+signal action_chosen(kind: StringName, id: StringName)
 ## Emitted on Exit or cancel from the top-level list.
 signal closed
 ## `.Field`'s PACKSTATE_QUITRUNSCRIPT: an ITEMMENU_CLOSE item whose effect
@@ -687,7 +689,7 @@ func _confirm_list() -> void:
 			closed.emit()
 		Gen2WorldStartMenu.ITEM_POKEDEX, Gen2WorldStartMenu.ITEM_POKEMON, \
 		Gen2WorldStartMenu.ITEM_POKEGEAR, Gen2WorldStartMenu.ITEM_PLAYER:
-			action_chosen.emit(_menu.selected_kind())
+			action_chosen.emit(_menu.selected_kind(), &"")
 		_:
 			# A Gen2ModHost-registered entry. Either it names a host action, which
 			# only the world screen can perform, or it carries the handler that
@@ -695,7 +697,11 @@ func _confirm_list() -> void:
 			var entry: Dictionary = _menu.selected_item()
 			var action: StringName = StringName(entry.get("action", &""))
 			if action != &"":
-				action_chosen.emit(action)
+				## A page row names the page it opens; every other action needs
+				## only its own name.
+				action_chosen.emit(
+					action, StringName(entry.get("page", entry.get("kind", &"")))
+				)
 				return
 			var handler: Variant = entry.get("handler", null)
 			if handler is Callable:
@@ -2039,7 +2045,7 @@ func _confirm_save() -> void:
 			if _save_cursor == 1:
 				_open_list_mode()
 			else:
-				action_chosen.emit(Gen2WorldStartMenu.ITEM_QUIT)
+				action_chosen.emit(Gen2WorldStartMenu.ITEM_QUIT, &"")
 		Mode.SAVE_ASK:
 			if _save_cursor == 1:
 				_open_list_mode()

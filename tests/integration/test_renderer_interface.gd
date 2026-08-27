@@ -758,6 +758,75 @@ func test_a_mods_hidden_item_request_runs_the_maps_own_script_when_the_world_is_
 	assert_eq(world.state.items().get(3, 0), 0, "The receipt has not been pressed past.")
 
 
+## R60's bargain: the mod names words, an icon and a sound, and the HOST raises
+## the cartridge's own banner over the map for the same sixty passes a landmark
+## sign gets. Held while anything else owns the world, and never two at once.
+func test_a_mods_notice_raises_the_maps_own_banner_when_the_world_is_idle() -> void:
+	var packed: PackedScene = load("res://game/world/world_screen.tscn")
+	_world_screen = packed.instantiate() as Gen2WorldScreen
+	_world_screen.map_group = Fixture.MAP_GROUP
+	_world_screen.map_number = Fixture.MAP_NUMBER
+	_world_screen.start_cell = Vector2i(7, 6)
+	_world_screen.set_data(_data)
+	add_child(_world_screen)
+	await get_tree().process_frame
+	_world_screen.set_process(false)
+
+	assert_true(bool(Gen2ModHost.instance().request_notice(&"testmod", {
+		"title": "BADGE WON", "line": "ZEPHYRBADGE", "icon": {"badge": 0},
+	})["ok"]))
+	assert_true(bool(Gen2ModHost.instance().request_notice(&"testmod", {
+		"title": "SECOND",
+	})["ok"]))
+	_world_screen.advance_frames(2)
+	assert_true(
+		_world_screen.map_name_sign_passes() > 0,
+		"the banner is up for the sign's own passes"
+	)
+	assert_eq(
+		Gen2ModHost.instance().take_notice_request().get("title", ""), "SECOND",
+		"only one was spent; the rest wait rather than flickering over it"
+	)
+
+	## The banner comes down on its own count, exactly as a landmark sign does.
+	_world_screen.advance_frames(Gen2WorldAPI.MAP_NAME_SIGN_PASSES * 2 + 2)
+	assert_eq(_world_screen.map_name_sign_passes(), 0)
+
+
+## R61's bargain: the mod answers rows and the HOST draws the screen, so a page
+## needs no node and no art. The start row is absent until the page exists.
+func test_a_mods_page_opens_from_the_start_menu_and_lists_what_it_answers() -> void:
+	var packed: PackedScene = load("res://game/world/world_screen.tscn")
+	_world_screen = packed.instantiate() as Gen2WorldScreen
+	_world_screen.map_group = Fixture.MAP_GROUP
+	_world_screen.map_number = Fixture.MAP_NUMBER
+	_world_screen.start_cell = Vector2i(7, 6)
+	_world_screen.set_data(_data)
+	add_child(_world_screen)
+	await get_tree().process_frame
+	_world_screen.set_process(false)
+
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	assert_true(bool(host.register_page(&"testmod", {
+		"title": "AWARDS",
+		"rows": func() -> Array:
+			return [
+				{"label": "ZEPHYRBADGE", "detail": "WON", "icon": {"badge": 0}},
+				{"label": "CHAMPION", "locked": true},
+			],
+	})["ok"]))
+	_world_screen._open_mod_page(&"testmod")
+	await get_tree().process_frame
+	var page: Gen2ModPageScreen = _world_screen._mod_page_host
+	assert_not_null(page)
+	assert_eq(page.row_count(), 2)
+	assert_eq(String((page.visible_rows()[1] as Dictionary)["label"]), "CHAMPION")
+	## Nothing of the world may be pressed while the page is up, and B leaves it.
+	assert_true(_world_screen.press_button(Gen2Button.B))
+	await get_tree().process_frame
+	assert_null(_world_screen._mod_page_host)
+
+
 ## A renderer that counts what it was asked to redraw, which is the only way to
 ## say WHEN a change reached the picture rather than whether the pose is right.
 const COUNTING_SOURCE: String = """extends Node2D

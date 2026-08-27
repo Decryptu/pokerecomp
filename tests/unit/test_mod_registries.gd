@@ -418,14 +418,25 @@ func test_the_shipped_example_mod_registers_everything_it_documents() -> void:
 		order.append(int(gift["item"]))
 	assert_eq(order, [0x19, 0x14, 0x2B], "what could not be spent goes back in front")
 	## A start-menu row naming a host action, gated on the host's own party test
-	## after the mod's predicate.
-	assert_eq(host.start_menu_entries({"party_count": 0}).size(), 0)
+	## after the mod's predicate. The BADGES row has no party gate, so an empty
+	## party leaves the PC row alone.
+	var empty: Array = host.start_menu_entries({"party_count": 0})
+	assert_eq(empty.size(), 1)
+	assert_eq(
+		StringName((empty[0] as Dictionary)["action"]),
+		Gen2ModHost.START_ACTION_OPEN_MOD_PAGE
+	)
 	var rows: Array = host.start_menu_entries({"party_count": 1})
-	assert_eq(rows.size(), 1)
+	assert_eq(rows.size(), 2)
 	assert_eq(
 		StringName((rows[0] as Dictionary)["action"]),
 		Gen2ModHost.START_ACTION_OPEN_BILLS_PC
 	)
+	## The example's own page, and the eight rows it lists with no badges won.
+	assert_eq(host.page_ids(), [&"new_content"])
+	var listed: Array = host.page_rows(&"new_content")
+	assert_eq(listed.size(), 8)
+	assert_true(bool((listed[0] as Dictionary)["locked"]))
 	## An annotation placed where the grid can hold it, said in the interface's
 	## own coordinates.
 	var drawn: Array = host.battle_info_placements({
@@ -462,6 +473,9 @@ func test_every_refusal_reason_the_mod_layer_produces_has_player_wording() -> vo
 		&"invalid_party_menu_entry", &"duplicate_stats_page",
 		&"stats_page_missing_callable", &"stats_pages_full",
 		&"battle_info_cells_taken", &"battle_info_placement_refused",
+		&"invalid_mod_page", &"mod_page_missing_callable", &"duplicate_mod_page",
+		&"empty_notice", &"notice_line_too_long", &"unknown_notice_sound",
+		&"invalid_notice_icon", &"notice_queue_full",
 	]:
 		var text: String = Gen2ModRefusal.text({"reason": reason, "detail": "x/y.zip"})
 		assert_false(text.begins_with(String(reason)), "worded: %s" % reason)
@@ -667,3 +681,159 @@ func _hidden_item_rows() -> Array:
 		{"cell": Vector2i(3, 4), "item": 1, "flag": 10, "taken": false},
 		{"cell": Vector2i(9, 9), "item": 2, "flag": 11, "taken": true},
 	]
+
+
+## `request_notice`: queued in order, one banner line wide, refused rather than
+## clipped, and capped so a mod cannot own the map for a minute.
+func test_a_notice_is_measured_queued_and_capped() -> void:
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	assert_true(bool(host.request_notice(MOD, {
+		"title": "ACHIEVEMENT", "line": "Eight badges", "icon": {"badge": 0},
+	})["ok"]))
+	assert_eq(
+		StringName(host.request_notice(&"", {"title": "x"})["reason"]),
+		&"invalid_provider"
+	)
+	assert_eq(
+		StringName(host.request_notice(MOD, {"title": "  ", "line": ""})["reason"]),
+		&"empty_notice"
+	)
+	## Fifteen tiles is one line of the banner past the frame and the icon, and a
+	## sixteenth is refused by name rather than clipped.
+	var width: int = Gen2MapNameSignPage.NOTICE_COLUMNS
+	assert_true(bool(host.request_notice(MOD, {"title": "A".repeat(width)})["ok"]))
+	var wide: Dictionary = host.request_notice(MOD, {"title": "A".repeat(width + 1)})
+	assert_eq(StringName(wide["reason"]), &"notice_line_too_long")
+	assert_eq(
+		StringName(host.request_notice(MOD, {"title": "one\ntwo"})["reason"]),
+		&"notice_line_too_long"
+	)
+	assert_eq(
+		StringName(host.request_notice(MOD, {"title": "x", "sound": &"shine"})["reason"]),
+		&"unknown_notice_sound",
+		"the sparkle is not one of the sounds a notice may borrow"
+	)
+	assert_eq(Gen2ModHost.notice_sound_index(&"item"), 0x01)
+	assert_eq(Gen2ModHost.notice_sound_index(&"none"), -1)
+
+	var first: Dictionary = host.take_notice_request()
+	assert_eq(String(first["title"]), "ACHIEVEMENT")
+	assert_eq(String(first["line"]), "Eight badges")
+	assert_eq(StringName(first["sound"]), Gen2ModHost.NOTICE_SOUND_DEFAULT)
+	assert_eq(String(host.take_notice_request()["title"]), "A".repeat(width))
+	assert_eq(host.take_notice_request(), {})
+
+	for _index: int in Gen2ModHost.MAX_NOTICES:
+		assert_true(bool(host.request_notice(MOD, {"title": "x"})["ok"]))
+	assert_eq(
+		StringName(host.request_notice(MOD, {"title": "x"})["reason"]),
+		&"notice_queue_full"
+	)
+
+
+## `register_page` and `START_ACTION_OPEN_MOD_PAGE`: one page per mod, the rows
+## asked fresh and normalised, and a row naming the action absent until the page
+## behind it exists.
+func test_a_mod_page_is_registered_once_and_gates_its_own_start_row() -> void:
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	var context: Dictionary = {"party_count": 1}
+	assert_true(bool(host.register_menu_entry(Gen2ModHost.MENU_START, MOD, {
+		"label": "AWARDS", "action": Gen2ModHost.START_ACTION_OPEN_MOD_PAGE,
+	})["ok"]))
+	assert_eq(
+		host.start_menu_entries(context).size(), 0,
+		"a row that would open nothing is absent rather than dead"
+	)
+
+	var rows := func() -> Array:
+		return [
+			{"label": "ZEPHYRBADGE", "detail": "Won", "icon": {"badge": 0}},
+			{"label": "  ", "detail": "dropped"},
+			{"label": "CHAMPION", "locked": true, "icon": "not a set of fields"},
+		]
+	assert_eq(
+		StringName(host.register_page(&"", {"rows": rows})["reason"]), &"invalid_mod_page"
+	)
+	assert_eq(
+		StringName(host.register_page(MOD, {"title": "AWARDS"})["reason"]),
+		&"mod_page_missing_callable"
+	)
+	assert_true(bool(host.register_page(MOD, {"title": "AWARDS", "rows": rows})["ok"]))
+	assert_eq(
+		StringName(host.register_page(MOD, {"title": "AGAIN", "rows": rows})["reason"]),
+		&"duplicate_mod_page"
+	)
+	assert_eq(host.page_ids(), [MOD])
+	assert_eq(String(host.page(MOD)["title"]), "AWARDS")
+	assert_false(host.page(MOD).has("rows"), "the mod's own function is not handed out")
+	assert_eq(host.page(&"absent"), {})
+
+	var listed: Array = host.page_rows(MOD)
+	assert_eq(listed.size(), 2, "a row with no label is dropped")
+	assert_eq(String(listed[0]["label"]), "ZEPHYRBADGE")
+	assert_eq(listed[0]["icon"], {"badge": 0})
+	assert_true(bool(listed[1]["locked"]))
+	assert_eq(listed[1]["icon"], {}, "an icon that is not a set of fields is none")
+	assert_eq(host.page_rows(&"absent"), [])
+
+	assert_eq(host.start_menu_entries(context).size(), 1, "the page exists now")
+
+
+## `progress`, `progress_for` and `progress_changed`: the same fields off a live
+## run and off a save nobody has opened yet, a field that moved emitted once, and
+## nothing read at all while no mod is watching.
+func test_the_progress_reading_answers_a_save_and_reports_what_moved() -> void:
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	assert_eq(host.progress(), {}, "no world open")
+
+	var save := Gen2SaveData.new()
+	save.world = Gen2WorldSnapshot.new()
+	var state: Gen2WorldState = save.world.world_state
+	state.set_engine_flag(
+		Gen2WorldState.badge_flag(0), true
+	)
+	state.set_engine_flag(Gen2WorldState.badge_flag(1), true)
+	var mon := Gen2SaveMon.new()
+	mon.species = 25
+	mon.level = 42
+	mon.dvs = Gen2Stats.SHINY_DVS
+	save.party = [mon]
+
+	var reading: Dictionary = host.progress_for(save)
+	assert_eq(int(reading[&"badges"]), 0b11)
+	assert_eq(int(reading[&"badge_count"]), 2)
+	assert_eq(int(reading[&"party_count"]), 1)
+	assert_eq(int(reading[&"kept_count"]), 1, "the boxes are empty")
+	assert_eq(int(reading[&"highest_level"]), 42)
+	assert_eq(int(reading[&"shiny_count"]), 1)
+	assert_false(bool(reading[&"beat_red"]))
+	## A save with no world at all answers what the save itself holds and leaves
+	## every world field out rather than zeroing it.
+	var bare: Dictionary = Gen2ModProgress.of_save(Gen2SaveData.new())
+	assert_false(bare.has(&"badges"))
+	assert_true(bare.has(&"party_count"))
+
+	## Nothing is read while nobody is watching: the party and every box are the
+	## expensive half of a reading.
+	var reads: Array = []
+	var source := func() -> Dictionary:
+		reads.append(true)
+		return Gen2ModProgress.of_save(save)
+	host.set_progress_source(source)
+	host.refresh_progress()
+	assert_eq(reads.size(), 0, "no connection, no reading")
+
+	var seen: Array = []
+	host.progress_changed.connect(func(moved: Dictionary) -> void: seen.append(moved))
+	host.refresh_progress()
+	assert_eq(seen.size(), 1, "the first reading is a move from nothing")
+	host.refresh_progress()
+	assert_eq(seen.size(), 1, "a reading that did not move is not emitted")
+
+	state.set_engine_flag(Gen2WorldState.badge_flag(2), true)
+	host.refresh_progress()
+	assert_eq(seen.size(), 2)
+	assert_eq(int((seen.back() as Dictionary)[&"badge_count"]), 3)
+
+	host.set_progress_source(Callable())
+	assert_eq(host.progress(), {}, "the world closed")
