@@ -45,6 +45,8 @@ func test_marts_phone_audio_and_referenced_menu_are_imported() -> void:
 	assert_eq((phone["special_calls"] as Array).size(), RomLayout.SPECIAL_PHONE_CALL_COUNT)
 	assert_eq(phone["special_calls"][0]["condition_kind"], &"outside")
 	assert_eq(phone["special_calls"][1]["condition_kind"], &"anywhere")
+	assert_eq(phone["metadata"]["hang_up_click"], "Click!")
+	assert_eq(phone["metadata"]["hang_up_ellipse"], "...")
 	assert_eq(phone["metadata"]["max_contacts"], 10)
 	assert_eq(phone["metadata"]["receive_call_delays"], [20, 10, 5, 3])
 	assert_eq(phone["metadata"]["just_talk_script"], {
@@ -273,6 +275,14 @@ func _write_phone(data: PackedByteArray) -> void:
 		_write_u16(data, at, condition)
 		data[at + 2] = 4
 		_write_far(data, at + 3, 5, 0x7400)
+	var call_texts: int = int(_layout["phone_call_texts"])
+	for words: String in ["Click!", "..."]:
+		var text := PackedByteArray([Gen2TextStream.TX_START])
+		text.append_array(Gen2Text.encode(words))
+		text.append(Gen2TextStream.CHAR_DONE)
+		for byte_index: int in text.size():
+			data[call_texts + byte_index] = text[byte_index]
+		call_texts += text.size()
 
 
 func _write_audio(data: PackedByteArray) -> void:

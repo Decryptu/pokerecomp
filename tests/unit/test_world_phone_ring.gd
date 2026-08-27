@@ -28,3 +28,24 @@ func test_special_call_lead_precedes_the_same_two_rings() -> void:
 	_spend(ring, 30)
 	assert_eq(ring.snapshot()["phase"], &"ringing")
 	assert_eq(ring.snapshot()["ring"], 1)
+
+
+## `HangUp`: `HangUp_Beep`'s click, then `HangUp_BoopOn` and `HangUp_BoopOff`
+## three times each, twenty frames apiece and no button anywhere in it.
+func test_hang_up_writes_the_click_then_three_boops() -> void:
+	assert_eq(
+		Gen2WorldPhoneRing.HANG_UP_PHASES.size(), Gen2WorldPhoneRing.HANG_UP_PHASE_COUNT
+	)
+	assert_eq(Gen2WorldPhoneRing.HANG_UP_FRAMES, 140)
+	var phases: Array[StringName] = []
+	for phase_index: int in Gen2WorldPhoneRing.HANG_UP_PHASE_COUNT:
+		phases.append(Gen2WorldPhoneRing.hang_up_phase(
+			phase_index * Gen2WorldPhoneRing.WAIT_FRAMES
+		))
+	assert_eq(phases, Gen2WorldPhoneRing.HANG_UP_PHASES)
+	assert_eq(Gen2WorldPhoneRing.hang_up_phase(19), &"click")
+	assert_eq(Gen2WorldPhoneRing.hang_up_phase(20), &"ellipse")
+	assert_eq(
+		Gen2WorldPhoneRing.hang_up_phase(Gen2WorldPhoneRing.HANG_UP_FRAMES), &"clear",
+		"the last twenty frames are the box HangUp_BoopOff redraws"
+	)

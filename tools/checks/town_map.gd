@@ -56,6 +56,8 @@ const CARD_PINS: Array[Array] = [
 const CARD_TEXTS: Dictionary = {
 	"ask_who": "Whom do you want\nto call?",
 	"press_button": "Press any button\nto exit.",
+	"ellipse": "……",
+	"out_of_service": "You're out of the\nservice area.",
 }
 
 ## `wShadowOAMEnd - wShadowOAM` in sprites, which is what `.nestloop` would run
@@ -348,6 +350,7 @@ func _verify_page(game_id: StringName, _data: GameData, crystal: bool) -> void:
 	for sheet: Array in [
 		["pokegear_sprites", RomLayout.POKEGEAR_SPRITE_TILES],
 		["fast_ship", RomLayout.FAST_SHIP_TILES],
+		["fly_map_label", RomLayout.FLY_MAP_LABEL_TILES],
 	]:
 		_r.check(
 			_data.tile_indices(String(sheet[0])).size()
@@ -356,7 +359,7 @@ func _verify_page(game_id: StringName, _data: GameData, crystal: bool) -> void:
 		)
 	for screen: StringName in [
 		Gen2TownMap.SCREEN_TOWN_MAP, Gen2TownMap.SCREEN_POKEGEAR_CARD,
-		Gen2TownMap.SCREEN_DEX_AREA,
+		Gen2TownMap.SCREEN_DEX_AREA, Gen2TownMap.SCREEN_FLY,
 	]:
 		for region: String in ["johto", "kanto"]:
 			var landmark: int = BROKEN_NAME if region == "johto" \
@@ -367,12 +370,46 @@ func _verify_page(game_id: StringName, _data: GameData, crystal: bool) -> void:
 				screen,
 				[&"map", &"phone", &"radio"] as Array,
 			)
-			var image: Image = page.image(_data, map)
+			var image: Image = page.image(_data, map, false, screen)
 			_r.check(
 				image.get_width() == Gen2Screen.WIDTH \
 					and image.get_height() == Gen2Screen.HEIGHT,
 				"%s: the %s %s screen did not compose." % [game_id, region, screen]
 			)
+			if screen == Gen2TownMap.SCREEN_FLY:
+				_verify_fly_bubble(game_id, region, map)
+
+
+## `TownMapBubble`'s own cells, transcribed here rather than read off the page:
+## the four corners of the label border, the arrow at the right of its middle row
+## and `Where?` in the top left.
+const FLY_BUBBLE_CELLS: Array[Array] = [
+	[Vector2i(1, 0), 0x30], [Vector2i(18, 0), 0x31],
+	[Vector2i(1, 2), 0x32], [Vector2i(18, 2), 0x33],
+	[Vector2i(18, 1), 0x34],
+]
+const FLY_BUBBLE_WHERE_AT: Vector2i = Vector2i(2, 0)
+
+
+func _verify_fly_bubble(game_id: StringName, region: String, map: PackedInt32Array) -> void:
+	for cell: Array in FLY_BUBBLE_CELLS:
+		var at: Vector2i = cell[0]
+		var tile: int = map[at.y * Gen2TownMapPage.COLUMNS + at.x]
+		_r.check(
+			tile == int(cell[1]),
+			"%s: the %s fly bubble has $%02X at (%d,%d), wanted $%02X." % [
+				game_id, region, tile, at.x, at.y, int(cell[1]),
+			]
+		)
+	var where: PackedByteArray = Gen2Text.encode("Where?")
+	for index: int in where.size():
+		var at: Vector2i = FLY_BUBBLE_WHERE_AT + Vector2i(index, 0)
+		_r.check(
+			map[at.y * Gen2TownMapPage.COLUMNS + at.x] == where[index],
+			"%s: the %s fly bubble does not say Where? at (%d,%d)." % [
+				game_id, region, at.x, at.y,
+			]
+		)
 
 
 ## `FindNest` over the whole species range, which is the only sweep that can say

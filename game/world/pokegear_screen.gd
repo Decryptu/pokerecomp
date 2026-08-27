@@ -100,6 +100,9 @@ var _service: bool = true
 ## `PokegearPhoneContactSubmenu` while it is up, and the yes/no box DELETE opens
 ## over it. Both are drawn on the card rather than on a layer of their own, the
 ## way `Textbox` writes into the same tilemap.
+## `PokegearPhone_MakePhoneCall`'s own `PrintText`: whatever the card has said
+## over its opening question, empty when it is asking that question again.
+var _message: String = ""
 var _submenu: Array = []
 var _submenu_cursor: int = 0
 var _asking_delete: bool = false
@@ -173,6 +176,7 @@ func open(
 	_scroll = 0
 	_cursor = 0
 	_close_submenu()
+	_message = ""
 	_open = true
 	visible = true
 	if is_inside_tree() and _background != null:
@@ -209,6 +213,13 @@ func set_contacts(contacts: Array, service: bool) -> void:
 	_refresh()
 
 
+## `PokegearPhone_MakePhoneCall`'s two `PrintText` calls, the refusal and the
+## `……` a placed call opens on. The card keeps its list under the line.
+func say(text: String) -> void:
+	_message = text
+	_refresh()
+
+
 func card() -> StringName:
 	return _card
 
@@ -228,6 +239,13 @@ func selected_contact() -> int:
 func handle_button(button: int) -> bool:
 	if not _open:
 		return false
+	if not _message.is_empty():
+		# `_GearOutOfServiceText` ends on `prompt`, so `PrintText` holds the card
+		# until a button; `PokegearAskWhoCallText` is printed behind it.
+		if button in [Gen2Button.A, Gen2Button.B]:
+			_message = ""
+			_refresh()
+		return true
 	if _asking_delete:
 		_press_yes_no(button)
 		return true
@@ -434,9 +452,13 @@ func _tilemap() -> PackedInt32Array:
 		return _page.radio_tilemap(_owned, _station, _show_lines)
 	if _card != CARD_PHONE:
 		return _page.clock_tilemap(_owned, _weekday, _hour, _minute, _text)
+	var box: String = _text
+	if _asking_delete:
+		box = _delete_text
+	elif not _message.is_empty():
+		box = _message
 	var map: PackedInt32Array = _page.phone_tilemap(
-		_owned, _phone_rows(), _cursor, _service,
-		_delete_text if _asking_delete else _text
+		_owned, _phone_rows(), _cursor, _service, box
 	)
 	if not _submenu.is_empty():
 		# The yes/no box is a window over the submenu rather than a replacement,

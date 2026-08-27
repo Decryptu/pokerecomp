@@ -128,6 +128,21 @@ const PHONE_SUBMENU_CURSOR_COLUMN: int = 10
 const YES_NO_BOX: Array[int] = [14, 7, 19, 11]
 const YES_NO_OPTIONS: Array[String] = ["YES", "NO"]
 
+## `TownMapBubble`, the fly map's own three-row label: a bordered strip across
+## the top with `Where?` on its first row, the chosen flypoint's name on its
+## second and an up/down arrow at its right edge. Its five tiles are
+## `FlyMapLabelBorderGFX`, loaded over the Pokegear sheet's first six.
+const FLY_BUBBLE_CORNERS: Array[Array] = [
+	[Vector2i(1, 0), 0x30], [Vector2i(18, 0), 0x31],
+	[Vector2i(1, 2), 0x32], [Vector2i(18, 2), 0x33],
+]
+const FLY_BUBBLE_ROWS: int = 3
+const FLY_BUBBLE_WHERE: String = "Where?"
+const FLY_BUBBLE_WHERE_AT: Vector2i = Vector2i(2, 0)
+const FLY_BUBBLE_NAME_AT: Vector2i = Vector2i(2, 1)
+const FLY_BUBBLE_ARROW_AT: Vector2i = Vector2i(18, 1)
+const FLY_BUBBLE_ARROW_TILE: int = 0x34
+
 ## `PokegearMap_UpdateLandmarkName`: a 2x12 box cleared at (8,0), the name placed
 ## at (9,0) and the sheet's own marker left in the corner it opened.
 const NAME_BOX_AT: Vector2i = Vector2i(8, 0)
@@ -150,6 +165,9 @@ var frame_style: int = 0
 var _tiles: Dictionary = {}
 ## The three card tilemaps, by the names the cache keys them with.
 var _cards: Dictionary = {}
+## `FlyMapLabelBorderGFX`, which the fly map loads over the first six Pokegear
+## tiles, so it is a second window rather than more of the first.
+var _fly_tiles: Dictionary = {}
 
 
 ## [param data] supplies the glyphs and both graphics sheets; a cache without
@@ -161,8 +179,16 @@ static func from_data(data: GameData) -> Gen2TownMapPage:
 	var out := Gen2TownMapPage.new()
 	out.font = glyphs
 	out.frame_style = Gen2OptionsStore.current().textbox_frame
-	out._load_sheet(data, "town_map", TOWN_MAP_FIRST_TILE, RomLayout.TOWN_MAP_TILES)
-	out._load_sheet(data, "pokegear", POKEGEAR_FIRST_TILE, RomLayout.POKEGEAR_TILES)
+	out._load_sheet(
+		data, "town_map", TOWN_MAP_FIRST_TILE, RomLayout.TOWN_MAP_TILES, out._tiles
+	)
+	out._load_sheet(
+		data, "pokegear", POKEGEAR_FIRST_TILE, RomLayout.POKEGEAR_TILES, out._tiles
+	)
+	out._load_sheet(
+		data, "fly_map_label", RomLayout.FLY_MAP_LABEL_FIRST_TILE,
+		RomLayout.FLY_MAP_LABEL_TILES, out._fly_tiles,
+	)
 	for card: String in RomLayout.POKEGEAR_CARD_ORDER:
 		var cells: PackedByteArray = data.pokegear_card(StringName(card))
 		if cells.size() == RomLayout.POKEGEAR_CARD_CELLS:
@@ -174,7 +200,12 @@ func ready() -> bool:
 	return font != null and _tiles.size() >= RomLayout.TOWN_MAP_TILES + RomLayout.POKEGEAR_TILES
 
 
-func _load_sheet(data: GameData, name: String, first_tile: int, count: int) -> void:
+## [param window] is which VRAM window the strip lands in: the shared one, or the
+## fly map's own six tiles, which stand over the Pokegear sheet rather than
+## beside it.
+func _load_sheet(
+	data: GameData, name: String, first_tile: int, count: int, window: Dictionary
+) -> void:
 	var indices: PackedByteArray = data.tile_indices(name)
 	if indices.is_empty():
 		return
@@ -187,7 +218,7 @@ func _load_sheet(data: GameData, name: String, first_tile: int, count: int) -> v
 		for y: int in TILE:
 			for x: int in TILE:
 				cell[y * TILE + x] = indices[y * width + tile * TILE + x]
-		_tiles[first_tile + tile] = cell
+		window[first_tile + tile] = cell
 
 
 ## The whole screen as tile numbers, in the order the source writes them: the
@@ -214,6 +245,8 @@ func tilemap(
 			_draw_card_icons(map, cards)
 		Gen2TownMap.SCREEN_DEX_AREA:
 			_draw_nest_header(map, name_codes)
+		Gen2TownMap.SCREEN_FLY:
+			_draw_fly_bubble(map, name_codes)
 		_:
 			_draw_town_map_frame(map)
 			_draw_name(map, name_codes)
@@ -403,6 +436,22 @@ func _draw_town_map_frame(map: PackedInt32Array) -> void:
 	_put(map, Vector2i(COLUMNS - 1, TOWN_MAP_FRAME_BAR_AT.y), TOWN_MAP_FRAME_RIGHT_TILE)
 
 
+## `TownMapBubble`. The three rows are blanked first and the corners written
+## into them, so the arrow and both strings stand over a cleared strip.
+func _draw_fly_bubble(map: PackedInt32Array, name_codes: PackedByteArray) -> void:
+	for row: int in FLY_BUBBLE_ROWS:
+		for column: int in range(1, COLUMNS - 1):
+			_put(map, Vector2i(column, row), BLANK_TILE)
+	for corner: Array in FLY_BUBBLE_CORNERS:
+		_put(map, corner[0] as Vector2i, int(corner[1]))
+	_draw_string(map, FLY_BUBBLE_WHERE_AT, FLY_BUBBLE_WHERE)
+	var at: Vector2i = FLY_BUBBLE_NAME_AT
+	for code: int in name_codes:
+		_put(map, at, code)
+		at.x += 1
+	_put(map, FLY_BUBBLE_ARROW_AT, FLY_BUBBLE_ARROW_TILE)
+
+
 func _draw_bar(map: PackedInt32Array, row: int) -> void:
 	for column: int in range(1, COLUMNS - 1):
 		_put(map, Vector2i(column, row), TOWN_MAP_FRAME_TOP_TILE)
@@ -460,7 +509,9 @@ func _draw_name(map: PackedInt32Array, name_codes: PackedByteArray) -> void:
 	_put(map, NAME_BOX_AT, NAME_MARKER_TILE)
 
 
-## `TownMapPals`, as one palette slot per tile.
+## `TownMapPals`, as one palette slot per tile. The attribute map is read off the
+## tile number whatever sheet the tile came from, so the fly map's border takes
+## the Pokegear sheet's own slots.
 func attributes(data: GameData, map: PackedInt32Array) -> PackedInt32Array:
 	var out := PackedInt32Array()
 	out.resize(map.size())
@@ -474,8 +525,11 @@ func attributes(data: GameData, map: PackedInt32Array) -> PackedInt32Array:
 ##
 ## This cannot go through [method Gen2PicImage.from_indices] whole: the screen is
 ## six palettes at once.
-func image(data: GameData, map: PackedInt32Array, female: bool = false) -> Image:
-	var indices: PackedByteArray = compose(map)
+func image(
+	data: GameData, map: PackedInt32Array, female: bool = false,
+	screen: StringName = Gen2TownMap.SCREEN_TOWN_MAP,
+) -> Image:
+	var indices: PackedByteArray = compose(map, screen)
 	var slots: PackedInt32Array = attributes(data, map)
 	var out: PackedInt32Array = Gen2PicImage.canvas(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 	var tables: Array[PackedInt32Array] = []
@@ -504,15 +558,22 @@ func image(data: GameData, map: PackedInt32Array, female: bool = false) -> Image
 ## Resolves every tile number to pixels: the two graphics sheets out of the VRAM
 ## window, a card's text box out of the chosen frame, everything else out of the
 ## font.
-func compose(map: PackedInt32Array) -> PackedByteArray:
+func compose(
+	map: PackedInt32Array, screen: StringName = Gen2TownMap.SCREEN_TOWN_MAP
+) -> PackedByteArray:
 	var width: int = COLUMNS * TILE
 	var indices := PackedByteArray()
 	indices.resize(width * ROWS * TILE)
+	# `_FlyMap`'s `Request1bpp` lands on top of the Pokegear sheet, so its six
+	# tiles answer first and only on that screen.
+	var over: Dictionary = _fly_tiles if screen == Gen2TownMap.SCREEN_FLY else {}
 	for row: int in ROWS:
 		for column: int in COLUMNS:
 			var tile: int = map[row * COLUMNS + column]
 			var at := Vector2i(column * TILE, row * TILE)
-			if _tiles.has(tile):
+			if over.has(tile):
+				_blit(indices, width, over[tile], at)
+			elif _tiles.has(tile):
 				_blit(indices, width, _tiles[tile], at)
 			elif tile >= RomLayout.FRAME_FIRST_CODE \
 				and tile < RomLayout.FRAME_FIRST_CODE + RomLayout.FRAME_TILES:

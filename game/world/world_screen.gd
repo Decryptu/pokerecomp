@@ -42,6 +42,8 @@ const SFX_WATERFALL: int = 0x51
 ## plays (engine/events/field_moves.asm). SFX_HEADBUTT is a battle-move effect
 ## and is referenced by nothing in either pin's overworld code.
 const SFX_HEADBUTT_TREE: int = 0x6D
+## `HangUp_Beep`, the click every phone call ends on.
+const SFX_HANG_UP: int = 0x6B
 ## `.PlayPoisonSFX`, the sound the overworld poison pass plays whether or not
 ## anything fainted to it.
 const SFX_POISON: int = 0x0B
@@ -269,6 +271,9 @@ var _last_battle_outcome: StringName = &""
 ## The audio driver's rendered-frame count as of the last frame, for the one
 ## script wait that reads it. See [method Gen2AudioPlayer.timeline_updates].
 var _audio_rendered_seen: int = 0
+## Which of `HangUp`'s seven writes is on the box, so each is written once
+## rather than every frame of its twenty.
+var _hang_up_phase: StringName = &""
 var _active_battle_persist: bool = false
 var _encounter_random := RandomNumberGenerator.new()
 ## NPC movement rolls from its own generator, so a seeded route keeps the same
@@ -924,6 +929,7 @@ func advance_frame() -> void:
 	# After the trail, because the frame it finishes drawing is the frame the
 	# script waiting on it resumes.
 	if _world != null and not _world.pending_script_wait().is_empty():
+		_draw_hang_up()
 		var wait_results: Array = _world.advance_script_wait_frame()
 		if not wait_results.is_empty():
 			_show_script_results(wait_results)
@@ -7832,6 +7838,33 @@ func _refresh_labels() -> void:
 		_hint.text += "    1-%d: select    F: fish" % rods.size()
 	if not _script_prompt.is_empty():
 		_hint.text += "    " + _script_prompt
+
+
+## `HangUp`'s own three writes, driven off the counted wait `hangup` staged: the
+## click, the `……` and the empty box `HangUp_BoopOff` redraws, twenty frames
+## each. Nothing here waits for a button, so the box is written rather than
+## opened as a page.
+func _draw_hang_up() -> void:
+	var wait: Dictionary = _world.pending_script_wait()
+	if not bool(wait.get("hang_up", false)) or _data == null \
+		or _text_box == null or _text_box.font == null:
+		return
+	var total: int = int(wait.get("frames", 0))
+	var remaining: int = _world.script_wait_remaining()
+	var elapsed: int = 0 if remaining < 0 else total - remaining
+	var phase: StringName = Gen2WorldPhoneRing.hang_up_phase(elapsed)
+	if phase == _hang_up_phase:
+		return
+	_hang_up_phase = phase
+	var metadata: Dictionary = _data.world_phone_metadata()
+	var line: String = ""
+	if phase == &"click":
+		line = String(metadata.get("hang_up_click", ""))
+		_play_sfx(SFX_HANG_UP)
+	elif phase == &"ellipse":
+		line = String(metadata.get("hang_up_ellipse", ""))
+	_text_box.visible = true
+	_text_box.show_text(line, false)
 
 
 func _phone_contact_label(contact: Dictionary) -> String:

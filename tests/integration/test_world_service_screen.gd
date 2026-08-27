@@ -559,6 +559,39 @@ func test_phone_list_starts_the_source_timed_outgoing_ring() -> void:
 	assert_eq(" ".join(_world_screen._text_box.text_lines()), "PHONE SCRIPT")
 
 
+## `PokegearPhone_MakePhoneCall.no_service`: a map the phone cannot reach refuses
+## in front of `MakePhoneCallFromPokegear`, so the card says so over its own list
+## and the call never happens. The button behind the `prompt` puts the opening
+## question back.
+func test_a_map_without_phone_service_refuses_the_call_on_the_card() -> void:
+	_write_phone_request()
+	_data = GameData.open_directory(Fixture.directory())
+	await _open_world()
+	var registered: Dictionary = _world_screen._world.state.apply_changes({}, {}, {
+		"phone_contacts": {0: true},
+	})
+	assert_true(registered["ok"])
+	_world_screen._world.current_map.phone_flag = 1
+	_world_screen._open_phone_list()
+	await get_tree().process_frame
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	assert_not_null(host)
+	assert_true(host.handle_button(Gen2Button.A))
+	assert_true(host.handle_button(Gen2Button.A))
+	await get_tree().process_frame
+	assert_not_null(_world_screen._service_host, "the card stays open")
+	assert_true(
+		_row_text(host._pokegear._tilemap(), Gen2TownMapPage.CARD_TEXT_AT, 19)
+			.begins_with(_data.pokegear_text("out_of_service"))
+	)
+	assert_false(_world_screen._world.phone_ring_active())
+	assert_true(host.handle_button(Gen2Button.A))
+	assert_true(
+		_row_text(host._pokegear._tilemap(), Gen2TownMapPage.CARD_TEXT_AT, 19)
+			.begins_with(_data.pokegear_text("ask_who"))
+	)
+
+
 ## `PokegearPhoneContactSubmenu`'s DELETE row and the yes/no box behind it:
 ## MOM is one of the two `CheckCanDeletePhoneNumber` refuses, so the contact the
 ## fixture registers is offered all three rows and answering YES drops it.

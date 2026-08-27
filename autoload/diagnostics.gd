@@ -255,8 +255,12 @@ func _pack_bundle(directory: String) -> Dictionary:
 	if _pack(packer, "report.txt", report().to_utf8_buffer()):
 		written += 1
 	for file: String in log_files():
-		var bytes: PackedByteArray = FileAccess.get_file_as_bytes("%s/%s" % [DIRECTORY, file])
-		if not bytes.is_empty() and _pack(packer, "logs/%s" % file, bytes):
+		# Empty is a length, not a failure: a session that logged nothing still
+		# rotated a file, and dropping it here left `files` disagreeing with
+		# what [method log_files] named.
+		var full: String = "%s/%s" % [DIRECTORY, file]
+		if FileAccess.file_exists(full) \
+			and _pack(packer, "logs/%s" % file, FileAccess.get_file_as_bytes(full)):
 			written += 1
 	packer.close()
 	return {"ok": true, "message": "", "path": path, "files": written}
