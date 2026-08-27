@@ -1078,6 +1078,27 @@ func test_the_contest_quit_row_asks_before_it_retires() -> void:
 	assert_false(String(status["name"]).is_empty())
 	assert_not_null(host.call("_hardware_image"), "the box is drawn")
 
+	## `Script_AbortBugContest`'s `special ContestReturnMons` through the screen:
+	## the members `ContestDropOffMons` masked off come back when an escape ends
+	## the contest, which is the one seam every escape refreshes through.
+	var save: Gen2SaveData = _world_screen._injected_save
+	while save.party.size() < 2:
+		save.party.append(Gen2SaveMon.from_dict(save.party[0].to_dict()))
+	Gen2WorldPartyHost.contest_drop_off_mons(save)
+	assert_eq(save.party.size(), 1, "masked for the contest")
+	## An Escape Rope out, which is the same tail Fly and Teleport spend: the
+	## fixture map is its own dig warp, so the walk stays on one map.
+	world.dig_warp = {
+		"warp": 1, "map_group": world.map_id().x, "map_number": world.map_id().y,
+	}
+	assert_true(
+		bool(world.warp_to_dig_point().get("ok", false)), "the fixture has no warp 1"
+	)
+	_world_screen.call("_refresh_after_escape")
+	assert_eq(save.party.size(), 2, "ContestReturnMons put the rest back")
+	assert_true(save.contest_stashed_party.is_empty())
+	assert_false(world.bug_contest_active())
+
 
 func test_save_writes_a_snapshot_to_the_injected_save_without_touching_disk() -> void:
 	await _open_world()
