@@ -24,6 +24,20 @@ const LABELS: Dictionary = {
 }
 
 
+## The kind to assume before any event has arrived, from what the machine has.
+##
+## A pad comes first where there is both, because a machine with both is being
+## held by its buttons: a Switch in the hands has a touchscreen nobody is
+## touching, and so does a phone with a controller paired to it. The first real
+## event replaces this answer anyway; what it decides is the first frame.
+static func kind_for_hardware(has_pad: bool, has_touch: bool) -> StringName:
+	if has_pad:
+		return GAMEPAD
+	if has_touch:
+		return TOUCH
+	return KEYBOARD
+
+
 ## The device kind an event came from, or an empty name for an event that says
 ## nothing about one.
 ##

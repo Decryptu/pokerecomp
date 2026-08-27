@@ -204,3 +204,33 @@ func test_a_key_beyond_the_named_pad_buttons_still_reads() -> void:
 	assert_string_contains(
 		Gen2InputActions.describe({"kind": Gen2InputActions.KIND_PAD_BUTTON, "code": 99}), "99"
 	)
+
+
+func test_the_engines_ui_actions_answer_to_a_pad() -> void:
+	# Godot binds ui_accept to three keys and nothing else, so a machine with no
+	# keyboard could move every focus ring and choose nothing under it. The
+	# engine's own events are put back afterwards, the way the scheme is.
+	var stock: Dictionary = {}
+	for action: StringName in Gen2InputActions.UI_PAD_BUTTONS:
+		stock[action] = InputMap.action_get_events(action)
+		InputMap.action_erase_events(action)
+	Gen2InputActions.install(Gen2InputActions.defaults())
+
+	for action: StringName in Gen2InputActions.UI_PAD_BUTTONS:
+		var pad := InputEventJoypadButton.new()
+		pad.device = Gen2InputActions.ALL_DEVICES
+		pad.button_index = int(Gen2InputActions.UI_PAD_BUTTONS[action]) as JoyButton
+		pad.pressed = true
+		assert_true(InputMap.event_is_action(pad, action), "%s answers to its pad button" % action)
+
+	for action: StringName in stock:
+		for event: InputEvent in stock[action]:
+			if not InputMap.action_has_event(action, event):
+				InputMap.action_add_event(action, event)
+
+
+func test_installing_twice_adds_one_ui_pad_binding() -> void:
+	Gen2InputActions.install(Gen2InputActions.defaults())
+	var once: int = InputMap.action_get_events(&"ui_accept").size()
+	Gen2InputActions.install(Gen2InputActions.defaults())
+	assert_eq(InputMap.action_get_events(&"ui_accept").size(), once)

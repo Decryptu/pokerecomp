@@ -43,11 +43,16 @@ env:
   # pin is the commit the stock templates name themselves after:
   # `4.8.dev3.official.51105ccbe`. The build checks that it still agrees.
   GODOT_COMMIT: 51105ccbe58381774ecd7a7486d564b202a5192e
+  # Nintendo ships no Godot platform and upstream carries none, so the Switch
+  # template is built from a fork of the same pin that adds `platform/nx`.
+  GODOT_NX_REMOTE: https://github.com/Decryptu/godot.git
+  GODOT_NX_COMMIT: ada239b4354f12b38a23ab8f6c6b4fa22000485f
 
 jobs:
   build:
     name: ${{ matrix.host }}
     runs-on: ${{ matrix.runs-on }}
+    container: ${{ matrix.container || null }}
     timeout-minutes: 240
     strategy:
       fail-fast: false
@@ -73,6 +78,12 @@ jobs:
           - host: android
             runs-on: ubuntu-latest
             targets: android
+          # devkitA64 and switch-mesa come from devkitPro's own image, which is
+          # the only place they are packaged for CI.
+          - host: switch
+            runs-on: ubuntu-latest
+            container: devkitpro/devkita64:latest
+            targets: switch
     defaults:
       run:
         shell: bash
@@ -102,6 +113,29 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
+          if [ "${{ matrix.host }}" = "switch" ]; then
+            # The devkitPro image ships devkitA64 and the whole switch portlibs
+            # set already, and it is root without sudo. Only SCons is missing.
+            apt-get update
+            apt-get install -y --no-install-recommends scons
+            # The image tag moves, so the libraries the build links are checked
+            # here: a base that has dropped one fails in seconds with its name
+            # rather than at the link step three quarters of an hour later.
+            # switch-mesa answers the first four; the rest are what detect.py
+            # links wherever the matching builtin_* is off.
+            missing=""
+            for lib in libEGL libGLESv2 libglapi libdrm_nouveau \
+                       libz libpng16 libfreetype libbz2 libwebp \
+                       libogg libvorbis libtheora libopusfile libvpx \
+                       libminiupnpc libzstd libpcre2-32 libenet; do
+              [ -f "/opt/devkitpro/portlibs/switch/lib/$lib.a" ] || missing="$missing $lib"
+            done
+            if [ -n "$missing" ]; then
+              echo "::error::devkitpro/devkita64 no longer ships:$missing"
+              exit 1
+            fi
+            exit 0
+          fi
           case "${{ runner.os }}" in
             Linux)
               sudo apt-get update
@@ -126,9 +160,15 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
+          remote="https://github.com/godotengine/godot.git"
+          commit="$GODOT_COMMIT"
+          if [ "${{ matrix.host }}" = "switch" ]; then
+            remote="$GODOT_NX_REMOTE"
+            commit="$GODOT_NX_COMMIT"
+          fi
           git init -q godot-src
-          git -C godot-src remote add origin https://github.com/godotengine/godot.git
-          git -C godot-src fetch -q --depth 1 origin "$GODOT_COMMIT"
+          git -C godot-src remote add origin "$remote"
+          git -C godot-src fetch -q --depth 1 origin "$commit"
           git -C godot-src checkout -q FETCH_HEAD
 
           # A pin that has drifted from the version the release installs stock

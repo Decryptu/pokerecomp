@@ -21,6 +21,23 @@ const DOCK_VERTICAL_PADDING: float = 28.0
 const TOUCH_TARGET: float = 48.0
 
 
+## Whether this display server hands out the screen's own pixels rather than
+## points.
+##
+## A platform that cannot open a second window is one whose window is the whole
+## screen, and every one of them measures in physical pixels: a phone, a tablet,
+## a console. A desktop is already in points and wants no factor at all. Asked of
+## the display server rather than of a list of platform names, so a console this
+## project has not met yet is covered on the day it arrives. A headless run
+## answers no to every feature there is, so it is asked first whether it draws
+## at all; without that a test tier would measure itself as a handheld.
+static func draws_in_screen_pixels() -> bool:
+	return (
+		DisplayServer.window_can_draw()
+		and not DisplayServer.has_feature(DisplayServer.FEATURE_SUBWINDOWS)
+	)
+
+
 ## How many window pixels one launcher unit is drawn at, so that a unit is a
 ## device-independent point rather than a pixel.
 ##
@@ -28,11 +45,13 @@ const TOUCH_TARGET: float = 48.0
 ## reading size only because a desktop screen is about 100 pixels to the inch. A
 ## phone is three to four times that, so the same numbers arrive at a third of the
 ## size and the window measures wide enough to be taken for a desktop. The screen's
-## own backing scale is exactly that ratio, and iOS and Android both report it.
+## own backing scale is exactly that ratio, and iOS and Android both report it. A
+## Switch reports neither a scale nor a phone's density: 237 dots per inch held
+## in the hands, 96 in the dock, which the same formula turns into 1.5 and 1.
 static func display_density() -> float:
 	if preview_density > 0.0:
 		return preview_density
-	if not OS.has_feature("mobile"):
+	if not draws_in_screen_pixels():
 		return 1.0
 	var scale: float = DisplayServer.screen_get_scale()
 	if scale > 1.0:
@@ -78,7 +97,7 @@ static func base_stretch(window: Window) -> float:
 
 static func point_scale(control: Control) -> float:
 	var window: Window = control.get_window()
-	if window == null or (not OS.has_feature("mobile") and preview_density <= 0.0):
+	if window == null or (not draws_in_screen_pixels() and preview_density <= 0.0):
 		return 1.0
 	var pixels_per_unit: float = float(window.size.x) / maxf(window.get_visible_rect().size.x, 1.0)
 	pixels_per_unit *= control.get_global_transform_with_canvas().x.length()
@@ -103,7 +122,7 @@ static func safe_area_insets(window: Window) -> Dictionary:
 	var none: Dictionary = {"left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0}
 	if not preview_insets.is_empty():
 		return preview_insets
-	if window == null or not OS.has_feature("mobile"):
+	if window == null or not draws_in_screen_pixels():
 		return none
 	var safe: Rect2i = DisplayServer.get_display_safe_area()
 	var screen: Vector2i = DisplayServer.screen_get_size()

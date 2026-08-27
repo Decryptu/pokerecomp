@@ -120,6 +120,31 @@ func test_every_file_picker_asks_for_the_systems_own() -> void:
 		assert_false(source.contains("popup_centered") and path.ends_with("save_screen.gd"), path)
 
 
+## A d-pad can descend the engine's browser and cannot climb it: the path field
+## is a LineEdit and eats left and right, so the toolbar's "up" button behind it
+## is unreachable. On a machine with no pointer the browser therefore has to open
+## somewhere the player never needs to leave upwards.
+func test_a_pointerless_browser_opens_at_the_top_of_the_volume() -> void:
+	var start: String = Gen2LauncherFilePicker._pointerless_start_dir()
+	if DisplayServer.has_feature(DisplayServer.FEATURE_MOUSE):
+		assert_eq(start, "", "a pointer can reach the up button, so nothing is forced")
+		return
+	assert_false(start.is_empty(), "a console is given a root")
+	assert_true(
+		OS.get_data_dir().begins_with(start.trim_suffix("/")),
+		"and the root is the volume the user data is on",
+	)
+
+
+func test_the_volume_root_is_the_top_of_a_path_on_any_shape_of_volume() -> void:
+	assert_eq(Gen2LauncherFilePicker.volume_root("/home/a/.local/share"), "/")
+	assert_eq(Gen2LauncherFilePicker.volume_root("/"), "/")
+	# Horizon mounts the SD card as its own volume, named with a colon.
+	assert_eq(Gen2LauncherFilePicker.volume_root("sdmc:/config/godot"), "sdmc:/")
+	assert_eq(Gen2LauncherFilePicker.volume_root("sdmc:/config"), "sdmc:/")
+	assert_eq(Gen2LauncherFilePicker.volume_root("C:/Users/a/AppData"), "C:/")
+
+
 func test_a_picker_reads_its_extensions_out_of_its_own_filters() -> void:
 	# What the system picker is asked to offer comes from the same filter string
 	# the built-in browser uses, so the two can never be told different things.
@@ -817,3 +842,23 @@ func _buttons_under(root: Node) -> Array[Gen2LauncherButton]:
 	for child: Node in root.get_children():
 		found.append_array(_buttons_under(child))
 	return found
+
+
+func test_a_platform_that_cannot_open_a_second_window_draws_in_screen_pixels() -> void:
+	# The question is asked of the display server rather than of a platform name,
+	# so a phone, a tablet and a console are all covered by the same answer, and
+	# a desktop keeps its 1.0 whatever its screen reports. A headless run answers
+	# no to every feature, so it must not read as a handheld: this whole tier
+	# would measure itself at a phone's density.
+	var drawing: bool = DisplayServer.window_can_draw()
+	var subwindows: bool = DisplayServer.has_feature(DisplayServer.FEATURE_SUBWINDOWS)
+	assert_eq(Gen2LauncherUI.draws_in_screen_pixels(), drawing and not subwindows)
+	if not drawing or subwindows:
+		assert_eq(Gen2LauncherUI.display_density(), 1.0, "a desktop is already in points")
+		assert_eq(Gen2LauncherUI.safe_area_insets(get_tree().root)["top"], 0.0)
+
+
+func test_the_preview_density_still_overrides_the_display_server() -> void:
+	Gen2LauncherUI.preview_density = 2.5
+	assert_eq(Gen2LauncherUI.display_density(), 2.5)
+	Gen2LauncherUI.preview_density = 0.0

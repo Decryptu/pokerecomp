@@ -101,6 +101,16 @@ for t in "$@"; do
       build android arch=arm32 generate_android_binary=no
       ( cd "$src/platform/android/java" && ./gradlew generateGodotTemplates )
       cp "$src/bin/android_release.apk" "$out/android_release.apk" ;;
+    # The Switch platform is not in godotengine/godot: the source directory has
+    # to be a checkout that carries platform/nx. devkitA64 and switch-mesa are
+    # what it builds against, and DEVKITPRO is where detect.py looks for both.
+    switch)
+      [ -d "$src/platform/nx" ] || {
+        echo "the source at $src carries no platform/nx; check out the Switch fork" >&2
+        exit 2
+      }
+      build nx arch=arm64
+      cp "$src/bin/godot.nx.template_release.arm64.elf" "$out/switch_release.elf" ;;
     *) echo "unknown target: $t" >&2; exit 2 ;;
   esac
 done

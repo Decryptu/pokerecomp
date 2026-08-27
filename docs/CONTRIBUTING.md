@@ -166,6 +166,37 @@ approximating its output, find a second executable implementation to diff
 against, pick an artefact that compares exactly, sweep the whole corpus, and
 settle every disagreement against pret.
 
+## Switch
+
+Nintendo ships no Godot platform and upstream carries none, so the Switch
+template is built from a fork of the same engine pin that adds `platform/nx`.
+`.github/workflows/export-templates.yml` holds both pins side by side:
+`GODOT_COMMIT` for every other target, `GODOT_NX_REMOTE` and `GODOT_NX_COMMIT`
+for this one. The two must stay on the same Godot series; the build already
+refuses a pin whose `version.py` disagrees with the release's stock templates.
+
+`tools/build_export_templates.sh switch` builds it, against devkitPro's
+devkitA64 and switch-mesa, and writes `switch_release.elf`. The toolchain is
+only packaged for CI as `devkitpro/devkita64`, so the workflow runs that host in
+that container.
+
+There is no export preset. A stock editor knows no NX platform and drops a
+preset it cannot resolve, so the release exports the pack with the Linux preset
+and wraps it with `nacptool` and `elf2nro`, which is what the fork's own export
+plugin does when the editor is built from it. The published zip extracts at the
+root of a microSD and puts one file at `switch/pokerecomp.nro`.
+
+Two things a Switch build changes for every platform, both fixed at the seam
+rather than behind a platform name:
+
+- Godot's `ui_accept` carries three keys and no pad button, so a machine with no
+  keyboard could move every focus ring and choose nothing under it.
+  `Gen2InputActions.UI_PAD_BUTTONS` gives it one.
+- The launcher draws in device-independent points, and a platform that cannot
+  open a second window is one whose window is the whole screen and whose sizes
+  are physical pixels. `Gen2LauncherUI.draws_in_screen_pixels` asks the display
+  server rather than listing platforms.
+
 ## Pitfalls
 
 - GUT silently skips scripts that fail to parse. `test_smoke.gd` loads every

@@ -38,6 +38,18 @@ const DEADZONE: float = 0.5
 ## the controller into the other port.
 const ALL_DEVICES: int = -1
 
+## The pad button Godot's own UI actions are missing.
+##
+## `ui_accept` ships as Enter, Keypad Enter and Space, and `ui_cancel` as Escape
+## alone, so on a machine with no keyboard every focus ring in the launcher can
+## be moved and nothing under it can be chosen. The eight game buttons are the
+## player's to rebind; these two are the engine's, and are added rather than
+## replaced so the keys keep working.
+const UI_PAD_BUTTONS: Dictionary = {
+	&"ui_accept": JOY_BUTTON_A,
+	&"ui_cancel": JOY_BUTTON_B,
+}
+
 ## How many bindings one button may carry. The remap UI shows a fixed number of
 ## slots, and an options file claiming hundreds is a file to clamp, not to obey.
 const MAX_BINDINGS: int = 6
@@ -154,6 +166,27 @@ static func install(scheme: Dictionary) -> void:
 			var event: InputEvent = to_event(binding)
 			if event != null:
 				InputMap.action_add_event(name, event)
+	install_ui_pad_buttons()
+
+
+## Gives [constant UI_PAD_BUTTONS] to the engine's own UI actions. Idempotent:
+## an action that already answers to that button is left alone.
+static func install_ui_pad_buttons() -> void:
+	for action: StringName in UI_PAD_BUTTONS:
+		if not InputMap.has_action(action):
+			continue
+		var code: int = int(UI_PAD_BUTTONS[action])
+		var bound: bool = false
+		for existing: InputEvent in InputMap.action_get_events(action):
+			if existing is InputEventJoypadButton and existing.button_index == code:
+				bound = true
+				break
+		if bound:
+			continue
+		var event := InputEventJoypadButton.new()
+		event.device = ALL_DEVICES
+		event.button_index = code as JoyButton
+		InputMap.action_add_event(action, event)
 
 
 ## Builds the [InputEvent] an [InputMap] entry needs, or null for a binding this
@@ -209,13 +242,13 @@ static func from_event(event: InputEvent) -> Dictionary:
 
 ## The key actually printed where this physical one sits, as a keycode.
 ## `keyboard_get_label_from_physical` returns a key rather than a string, and
-## refuses on a display server with no keyboard to read a layout off: a headless
-## run, and every handheld, whose display server answers no whether or not a
-## keyboard happens to be paired. There is no feature flag to ask instead, and
-## the refusal is an error, so a settings page put fourteen of them into every
-## bug report a phone ever sent.
+## refuses with an error on a display server that reads no keyboard layout: a
+## headless run, every handheld, and the console. Asking how many layouts it has
+## is the same question without the error, and it is answered by every display
+## server rather than by a list of platform names, so a settings page no longer
+## puts fourteen refusals into every bug report a phone or a Switch sends.
 static func _labelled_key(code: int) -> int:
-	if DisplayServer.get_name() == "headless" or OS.has_feature("mobile"):
+	if DisplayServer.keyboard_get_layout_count() <= 0:
 		return code
 	var labelled: int = DisplayServer.keyboard_get_label_from_physical(code)
 	return labelled if labelled != 0 else code

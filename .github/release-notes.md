@@ -34,6 +34,7 @@ file before using it. Bring your own Crystal, Gold or Silver ROM.
 | Linux on a Raspberry Pi, an SBC or an arm64 handheld | `pokerecomp-{VERSION}-linux-arm64` |
 | Android, including handhelds like the Ayn Thor | `pokerecomp-{VERSION}-android.apk` |
 | iPhone or iPad | `pokerecomp-{VERSION}-ios.ipa` |
+| A Nintendo Switch running homebrew | `pokerecomp-{VERSION}-switch.zip` |
 
 Every download is one file. `sha256sums.txt` covers all of them.
 
@@ -50,6 +51,9 @@ Every download is one file. `sha256sums.txt` covers all of them.
   [AltStore](https://altstore.io) or [SideStore](https://sidestore.io), which
   sign it on your own machine with your own Apple ID. A free Apple ID works;
   apps signed that way need re-signing every 7 days.
+- **Switch**: extract the zip at the root of your microSD, so the file lands at
+  `switch/pokerecomp.nro`, and launch **pokerecomp** from the homebrew menu. It
+  needs a console that already runs homebrew; nothing here installs one.
 
 ## Updating
 
