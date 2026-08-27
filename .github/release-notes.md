@@ -3,21 +3,46 @@
 
 ## New in this release
 
-This one is for mod authors. Nothing in the game itself changed, and mods
-written for an older release keep working.
+**pokerecomp runs on a Nintendo Switch.** Upstream Godot has no Switch platform
+and the homebrew ports stopped at 4.1, so the engine was ported onto this
+project's own pin. Extract the zip at the root of a microSD and launch it from
+the homebrew menu. This is the first release to carry it, so tell us what
+breaks.
 
-- **A mod can see a Pokemon being caught.** The battle publishes the catch on
-  its own `Gotcha!` line, with the species, the ball, where it was caught and
-  where it went.
-- **A mod can add a line to a battle.** One line, in the battle's own box, with
-  the game's own pacing. A line that would not fit is refused rather than cut
-  off, and the launcher says which mod asked for it.
-- **Two mods that raise the shiny odds now stack.** Each one's extra rolls are
-  added together instead of the larger one winning.
+Getting it running found four things wrong on every platform, each fixed where
+it belonged rather than behind a platform check:
 
-The mod contract is `api_version` 20. The first mod built on it is a Catch
-Combo: catch the same species over and over and the odds of a shiny climb, the
-way they do in the Let's Go games.
+- A machine with no keyboard could move every focus ring in the launcher and
+  choose nothing under it. A pad now answers accept and cancel everywhere.
+- A device with both a touchscreen and a pad drew an on-screen controller
+  nobody was using, on a phone with a controller paired as much as on a Switch.
+- Sixteen refusals a session went into the log from a guard that named headless
+  and mobile, and a console is neither.
+- The launcher's display density asked whether it was on a phone. What it
+  actually needed to know was whether the window is the whole screen.
+
+**A Bug Catching Contest ends the way the cartridge ends it.** Four escapes and
+the start menu all reached the contest and none of them touched it. Fly, Dig, an
+Escape Rope and Teleport each left the timer running across the warp; the whole
+party competed instead of the lead alone; blacking out inside a contest halved
+your money; and the START menu offered PACK and SAVE where the cartridge offers
+neither, with no QUIT row and no status box. A second catch is now offered over
+the comparison page the cartridge draws, STOCK #MON above THIS #MON, so the
+question is answered by looking rather than by memory.
+
+**SELECT moves an item inside its pocket**, in the pack and in the item PC. Mark
+a row, then place it. Both lists now keep items in the order you picked them up,
+which is what the cartridge does, instead of sorting them by an internal number.
+
+**The save pages fit a phone.** On a screen held upright the save slot panel was
+pushed wider than the window, and everything past Import .sav, Delete included,
+was off the edge with no way to reach it. The party page and the save editor
+were rebuilt in the launcher's own appearance and both reflow to the window they
+are given.
+
+**A and B can be arranged separately** on the on-screen controller. They were one
+cluster on a fixed diagonal; each now has its own place in each orientation, and
+a layout you already arranged is carried over.
 
 **This release ships no game data.** pokerecomp is not an emulator: it rebuilds
 everything from a Game Boy Color cartridge you dump yourself, and verifies the
