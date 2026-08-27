@@ -71,7 +71,7 @@ func _build() -> void:
 	report.add_child(bug)
 
 	var project: VBoxContainer = _card(column, "The project")
-	var links: HBoxContainer = Gen2LauncherUI.row(Gen2LauncherUI.GAP_SM)
+	var links: HFlowContainer = Gen2LauncherUI.actions()
 	project.add_child(links)
 	links.add_child(_link_button(
 		"GitHub", &"github", Gen2AppVersion.REPOSITORY, Gen2LauncherButton.Variant.NEUTRAL

@@ -3,8 +3,11 @@ extends Control
 ## The save editor. Presentation only: every rule lives in [Gen2SaveEditor],
 ## which is what keeps an edit from producing a slot that will not load.
 ##
-## Deliberately built from stock controls with no styling. The look is a later
-## pass, and a plain screen is the one that is cheapest to replace.
+## Stock controls, dressed in the launcher's own appearance: the palette's
+## [method Gen2LauncherTheme.control_theme] styles Button, Label, SpinBox and the
+## rest, so the editor matches the pages it is opened from without a widget of
+## its own. Every row of controls is a wrapping row, because this screen opens at
+## whatever size the window is, a phone held upright included.
 
 ## Kept in the order the tabs are drawn in, so a snapshot names a tab rather
 ## than an index a reader has to count.
@@ -28,6 +31,7 @@ var _dex_field: SpinBox = null
 var _dex_list: ItemList = null
 var _selected_party: int = -1
 var _selected_box: int = 0
+var _palette: Gen2LauncherTheme = null
 
 
 func _ready() -> void:
@@ -128,22 +132,30 @@ func reload_now() -> bool:
 
 
 func _build_ui() -> void:
+	_palette = Gen2LauncherTheme.active()
+	theme = _palette.control_theme()
+	var backdrop := ColorRect.new()
+	backdrop.color = _palette.backdrop_bottom
+	backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(backdrop)
+
 	var margin := MarginContainer.new()
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	for side: String in ["left", "top", "right", "bottom"]:
-		margin.add_theme_constant_override("margin_%s" % side, 8)
+		margin.add_theme_constant_override("margin_%s" % side, Gen2LauncherUI.GAP_LG)
 	add_child(margin)
 
-	var root := VBoxContainer.new()
+	var root: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_MD)
 	margin.add_child(root)
 
-	var header := HBoxContainer.new()
+	var header: HFlowContainer = Gen2LauncherUI.actions()
 	root.add_child(header)
-	var title := Label.new()
-	title.text = "Save editor"
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_child(title)
-	_validity = Label.new()
+	header.add_child(Gen2LauncherUI.title(
+		_palette, "Save editor", Gen2LauncherTheme.FONT_TITLE
+	))
+	_validity = Gen2LauncherUI.tag(_palette, "")
+	_validity.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	header.add_child(_validity)
 	header.add_child(_action("Reload", reload_now))
 	header.add_child(_action("Save", save_now))
@@ -152,33 +164,43 @@ func _build_ui() -> void:
 	_tabs = TabContainer.new()
 	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(_tabs)
-	_tabs.add_child(_build_party_tab())
-	_tabs.add_child(_build_boxes_tab())
-	_tabs.add_child(_build_items_tab())
-	_tabs.add_child(_build_events_tab())
-	_tabs.add_child(_build_map_tab())
-	_tabs.add_child(_build_dex_tab())
+	for page: Control in [
+		_build_party_tab(), _build_boxes_tab(), _build_items_tab(),
+		_build_events_tab(), _build_map_tab(), _build_dex_tab(),
+	]:
+		_tabs.add_child(_scrolled(page))
 	for index: int in TABS.size():
 		_tabs.set_tab_title(index, String(TABS[index]).capitalize())
 
-	_status = Label.new()
-	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_status = Gen2LauncherUI.muted(_palette, "")
 	root.add_child(_status)
 
 
+## A tab's contents, scrolled. A tab is whatever size the window leaves it, so a
+## page that does not fit is reachable rather than clipped.
+func _scrolled(page: Control) -> Control:
+	var scroll: Gen2LauncherScroll = Gen2LauncherScroll.create()
+	scroll.name = page.name
+	page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(page)
+	return scroll
+
+
 func _build_party_tab() -> Control:
-	var page := HBoxContainer.new()
+	## The list and the form sit side by side while both fit and stack when they
+	## do not, which is what a flow container is for.
+	var page: HFlowContainer = Gen2LauncherUI.actions(Gen2LauncherUI.GAP_MD)
 	page.name = "Party"
 
-	var left := VBoxContainer.new()
-	left.custom_minimum_size = Vector2(260, 0)
+	var left: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_SM)
+	left.custom_minimum_size = Vector2(260, 320)
 	page.add_child(left)
 	_party_list = ItemList.new()
 	_party_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_party_list.item_selected.connect(func(index: int) -> void: select_party_member(index))
 	left.add_child(_party_list)
 
-	var add_row := HBoxContainer.new()
+	var add_row: HFlowContainer = Gen2LauncherUI.actions()
 	left.add_child(add_row)
 	var species_field := SpinBox.new()
 	species_field.max_value = 255
@@ -197,16 +219,17 @@ func _build_party_tab() -> Control:
 		_selected_party = -1
 	))
 
-	_party_form = VBoxContainer.new()
+	_party_form = Gen2LauncherUI.column(Gen2LauncherUI.GAP_SM)
+	_party_form.custom_minimum_size = Vector2(260, 0)
 	_party_form.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	page.add_child(_party_form)
 	return page
 
 
 func _build_boxes_tab() -> Control:
-	var page := VBoxContainer.new()
+	var page: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_SM)
 	page.name = "Boxes"
-	var row := HBoxContainer.new()
+	var row: HFlowContainer = Gen2LauncherUI.actions()
 	page.add_child(row)
 	_box_picker = OptionButton.new()
 	for index: int in Gen2SaveData.BOX_COUNT:
@@ -237,16 +260,17 @@ func _build_boxes_tab() -> Control:
 	))
 
 	_box_list = ItemList.new()
+	_box_list.custom_minimum_size = Vector2(0, 320)
 	_box_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	page.add_child(_box_list)
 	return page
 
 
 func _build_items_tab() -> Control:
-	var page := VBoxContainer.new()
+	var page: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_SM)
 	page.name = "Items"
 
-	var money_row := HBoxContainer.new()
+	var money_row: HFlowContainer = Gen2LauncherUI.actions()
 	page.add_child(money_row)
 	money_row.add_child(_label("Money"))
 	_money_field = SpinBox.new()
@@ -263,7 +287,7 @@ func _build_items_tab() -> Control:
 	)
 	money_row.add_child(_coins_field)
 
-	var item_row := HBoxContainer.new()
+	var item_row: HFlowContainer = Gen2LauncherUI.actions()
 	page.add_child(item_row)
 	var item_field := SpinBox.new()
 	item_field.max_value = 255
@@ -284,10 +308,10 @@ func _build_items_tab() -> Control:
 
 
 func _build_events_tab() -> Control:
-	var page := VBoxContainer.new()
+	var page: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_SM)
 	page.name = "Events"
 
-	var badges := HFlowContainer.new()
+	var badges: HFlowContainer = Gen2LauncherUI.actions()
 	page.add_child(badges)
 	_badge_boxes = []
 	for index: int in Gen2WorldState.BADGE_ENGINE_FLAGS.size():
@@ -297,7 +321,7 @@ func _build_events_tab() -> Control:
 		badges.add_child(box)
 		_badge_boxes.append(box)
 
-	var flag_row := HBoxContainer.new()
+	var flag_row: HFlowContainer = Gen2LauncherUI.actions()
 	page.add_child(flag_row)
 	flag_row.add_child(_label("Event flag"))
 	_flag_field = SpinBox.new()
@@ -313,10 +337,10 @@ func _build_events_tab() -> Control:
 
 
 func _build_map_tab() -> Control:
-	var page := VBoxContainer.new()
+	var page: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_SM)
 	page.name = "Map"
 	for field: String in ["group", "number", "x", "y"]:
-		var row := HBoxContainer.new()
+		var row: HFlowContainer = Gen2LauncherUI.actions()
 		page.add_child(row)
 		row.add_child(_label(field.capitalize()))
 		var spin := SpinBox.new()
@@ -326,7 +350,7 @@ func _build_map_tab() -> Control:
 	page.add_child(_action("Move player", _apply_position))
 
 	for field: String in ["day", "hour", "minute"]:
-		var row := HBoxContainer.new()
+		var row: HFlowContainer = Gen2LauncherUI.actions()
 		page.add_child(row)
 		row.add_child(_label(field.capitalize()))
 		var spin := SpinBox.new()
@@ -344,9 +368,9 @@ func _build_map_tab() -> Control:
 
 
 func _build_dex_tab() -> Control:
-	var page := VBoxContainer.new()
+	var page: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_SM)
 	page.name = "Dex"
-	var row := HBoxContainer.new()
+	var row: HFlowContainer = Gen2LauncherUI.actions()
 	page.add_child(row)
 	row.add_child(_label("Species"))
 	_dex_field = SpinBox.new()
@@ -428,7 +452,7 @@ func _refresh_party_form() -> void:
 			"Move %d" % (slot + 1), int(mon.moves[slot]), 0, 255,
 			func(value: int) -> void: _apply(_editor.set_move(mon, slot, value))
 		))
-	var dv_row := HBoxContainer.new()
+	var dv_row: HFlowContainer = Gen2LauncherUI.actions()
 	dv_row.add_child(_label("DVs"))
 	var dv_fields: Array[SpinBox] = []
 	for dv: int in [
@@ -581,8 +605,8 @@ func _action(text: String, handler: Callable) -> Button:
 	return button
 
 
-func _field(text: String, value: int, minimum: int, maximum: int, handler: Callable) -> HBoxContainer:
-	var row := HBoxContainer.new()
+func _field(text: String, value: int, minimum: int, maximum: int, handler: Callable) -> Container:
+	var row: HFlowContainer = Gen2LauncherUI.actions()
 	row.add_child(_label(text))
 	var spin := SpinBox.new()
 	spin.min_value = minimum
