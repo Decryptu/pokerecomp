@@ -645,6 +645,14 @@ func _process(_delta: float) -> bool:
 					Gen2WorldState.ENGINE_BUG_CONTEST_TIMER,
 					Gen2WorldState.is_crystal_profile(contest_world.data)
 				))
+				contest_world.state.set_park_balls(Gen2WorldBugContest.BALLS)
+				## A second number of 2 or more has something caught, which is
+				## the LEVEL row `StartMenu_PrintBugContestStatus` skips while
+				## `wContestMon` is still zero.
+				if _cell.y >= 2:
+					contest_world.state.set_contest_mon({
+						"species": 10, "level": 7, "max_hp": 22, "hp": 22,
+					})
 			_screen.get("_world").state.set_engine_flag(
 				Gen2WorldStartMenu.ENGINE_POKEDEX, true
 			)
