@@ -1,7 +1,7 @@
 [gd_scene load_steps=5 format=3 uid="uid://bqmo4dj64c7yl"]
 
 [ext_resource type="Script" uid="uid://cax5phqs8acmu" path="res://addons/gut/gui/OutputText.gd" id="1"]
-[ext_resource type="Texture2D" uid="uid://bvo0uao7deu0q" path="res://addons/gut/icon.png" id="2_b4xqv"]
+[ext_resource type="Texture2D" uid="uid://u1h6o7ggt0bu" path="res://addons/gut/icon.png" id="2_b4xqv"]
 
 [sub_resource type="DPITexture" id="DPITexture_lygvu"]
 _source = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\"><path fill=\"#ff5d5d\" d=\"M2 1v8.586l1.293-1.293a1 1 0 0 1 1.414 0L7 10.587l2.293-2.293a1 1 0 0 1 1.414 0L13 10.586l1-1V6H9V1H2zm8 0v4h4zm-6 9.414-2 2V15h12v-2.586l-.293.293a1 1 0 0 1-1.414 0L10 10.414l-2.293 2.293a1 1 0 0 1-1.414 0L4 10.414z\"/></svg>

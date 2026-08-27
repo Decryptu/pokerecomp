@@ -21,10 +21,55 @@ func before_each() -> void:
 
 
 func after_each() -> void:
+	Gen2LauncherUI.preview_density = 0.0
+	Gen2LauncherUI.preview_insets = {}
 	if _pad != null and is_instance_valid(_pad):
 		_pad.release_all()
 	Gen2InputRuntime.instance().apply_options(Gen2Options.new())
 	Gen2OptionsStore.use_test_path()
+
+
+func test_touch_geometry_has_the_same_physical_size_in_game_and_settings() -> void:
+	Gen2LauncherUI.preview_density = 3.0
+	var window: Window = get_tree().root
+	var previous_factor: float = window.content_scale_factor
+	var previous_base: Vector2i = window.content_scale_size
+	window.content_scale_size = Vector2i.ZERO
+	for editing: bool in [false, true]:
+		Gen2LauncherUI.apply_display_density(window, editing)
+		assert_eq(window.content_scale_factor, 3.0 if editing else 1.0)
+		_pad.set_edit_mode(editing)
+		var unit: float = Gen2LauncherUI.point_scale(_pad)
+		_pad.size = AREA * unit
+		var pixels_per_unit: float = float(window.size.x) / window.get_visible_rect().size.x
+		var button: Rect2 = _pad.layout().button_rects(
+			_pad.area(), _pad.orientation()
+		)[Gen2Button.A]
+		assert_almost_eq(button.size.x * unit * pixels_per_unit, 56.0 * 3.0, 0.01)
+		assert_eq(_pad.button_at(button.get_center() * unit), Gen2Button.A)
+	window.content_scale_size = previous_base
+	window.content_scale_factor = previous_factor
+
+
+## Held upright the controller sits below the map, so the notch at the top of the
+## screen takes nothing off it while the home indicator under it still does.
+func test_only_the_screen_furniture_the_pad_stands_on_is_reserved() -> void:
+	Gen2LauncherUI.preview_insets = {"left": 0.0, "top": 59.0, "right": 0.0, "bottom": 34.0}
+	var viewport: Vector2 = get_tree().root.get_visible_rect().size
+	_pad.position = Vector2(0.0, 200.0)
+	_pad.size = Vector2(viewport.x, viewport.y - 200.0)
+	var below: Rect2 = _pad.area()
+	assert_eq(below.position.y, 0.0, "the notch is above the controller")
+	assert_almost_eq(below.size.y, _pad.size.y - 34.0, 0.01, "the home indicator is under it")
+	_pad.position = Vector2.ZERO
+	_pad.size = viewport
+	assert_eq(_pad.area().position.y, 59.0, "against the top edge it is reserved")
+
+
+func test_touch_controls_have_a_dark_fill_and_a_light_outline() -> void:
+	assert_lt(Gen2TouchPad.FILL.get_luminance(), 0.1)
+	assert_gte(Gen2TouchPad.FILL.a * Gen2TouchLayout.DEFAULT_OPACITY, 0.5)
+	assert_gt(Gen2TouchPad.BORDER.get_luminance(), 0.9)
 
 
 func _touch(index: int, at: Vector2, pressed: bool) -> void:
@@ -43,11 +88,15 @@ func _drag(index: int, at: Vector2) -> void:
 
 
 func _centre_of(button: int) -> Vector2:
-	return (_pad.layout().button_rects(_pad.area())[button] as Rect2).get_center()
+	return (_pad.layout().button_rects(
+		_pad.area(), _pad.orientation()
+	)[button] as Rect2).get_center()
 
 
 func _dpad(offset: Vector2) -> Vector2:
-	var rect: Rect2 = _pad.layout().group_rect(Gen2TouchLayout.GROUP_PAD, _pad.area())
+	var rect: Rect2 = _pad.layout().group_rect(
+		Gen2TouchLayout.GROUP_PAD, _pad.area(), _pad.orientation()
+	)
 	return rect.get_center() + offset * rect.size * 0.45
 
 
@@ -175,17 +224,14 @@ func test_hiding_the_controller_lets_go_of_what_it_held() -> void:
 ## and nothing is ever pressed.
 func test_edit_mode_drags_a_group_instead_of_pressing_it() -> void:
 	_pad.set_edit_mode(true)
-	var before: Vector2 = _pad.layout().anchor(
-		Gen2TouchLayout.ORIENTATION_PORTRAIT, Gen2TouchLayout.GROUP_PAD
-	)
+	# The arrangement the pad is placing is the window's, not the pad's own shape.
+	var before: Vector2 = _pad.layout().anchor(_pad.orientation(), Gen2TouchLayout.GROUP_PAD)
 
 	_touch(0, _dpad(Vector2.ZERO), true)
 	assert_true(_held().is_empty())
 	_drag(0, _dpad(Vector2.ZERO) + Vector2(0, -120))
 	_touch(0, _dpad(Vector2.ZERO), false)
 
-	var after: Vector2 = _pad.layout().anchor(
-		Gen2TouchLayout.ORIENTATION_PORTRAIT, Gen2TouchLayout.GROUP_PAD
-	)
+	var after: Vector2 = _pad.layout().anchor(_pad.orientation(), Gen2TouchLayout.GROUP_PAD)
 	assert_lt(after.y, before.y)
 	assert_eq(after.x, before.x)

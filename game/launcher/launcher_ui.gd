@@ -52,16 +52,47 @@ static func apply_display_density(window: Window, on: bool) -> void:
 	var density: float = display_density() if on else 1.0
 	# A desktop draws in points already, and so does a headless run, whose window
 	# has no size to divide by.
-	var base: Vector2 = Vector2(window.content_scale_size)
-	var pixels: Vector2 = Vector2(window.size)
-	if is_equal_approx(density, 1.0) or base.x <= 0.0 or base.y <= 0.0 or pixels.x <= 0.0:
+	if is_equal_approx(density, 1.0) or window.size.x <= 0:
 		window.content_scale_factor = 1.0
 		return
 	# The project already stretches the window onto its base viewport, and the
 	# factor multiplies that rather than replacing it, so the stretch has to be
 	# divided back out for a unit to land on a point.
-	var stretch: float = minf(pixels.x / base.x, pixels.y / base.y)
-	window.content_scale_factor = clampf(density / maxf(stretch, 0.01), 0.25, 8.0)
+	window.content_scale_factor = clampf(
+		density / maxf(base_stretch(window), 0.01), 0.25, 8.0
+	)
+
+
+## How many window pixels one unit of the base viewport is drawn at before the
+## density factor above. The game leaves the factor off and is drawn at exactly
+## this, which is what puts a 160x144 screen on whole pixels.
+static func base_stretch(window: Window) -> float:
+	if window == null:
+		return 1.0
+	var base: Vector2 = Vector2(window.content_scale_size)
+	var pixels: Vector2 = Vector2(window.size)
+	if base.x <= 0.0 or base.y <= 0.0 or pixels.x <= 0.0 or pixels.y <= 0.0:
+		return 1.0
+	return minf(pixels.x / base.x, pixels.y / base.y)
+
+
+static func point_scale(control: Control) -> float:
+	var window: Window = control.get_window()
+	if window == null or (not OS.has_feature("mobile") and preview_density <= 0.0):
+		return 1.0
+	var pixels_per_unit: float = float(window.size.x) / maxf(window.get_visible_rect().size.x, 1.0)
+	pixels_per_unit *= control.get_global_transform_with_canvas().x.length()
+	return display_density() / maxf(pixels_per_unit, 0.01)
+
+
+## One launcher unit in the units the game is drawn in. The two differ by the
+## density factor alone, and a rectangle the game works out from a whole multiple
+## of 160x144 is not the same fraction of the screen in both.
+static func game_unit_scale(window: Window) -> float:
+	if window == null:
+		return 1.0
+	var here: float = float(window.size.x) / maxf(window.get_visible_rect().size.x, 1.0)
+	return here / maxf(base_stretch(window), 0.01)
 
 
 ## What the screen's own furniture takes out of [param window], in launcher
@@ -101,8 +132,12 @@ static var preview_insets: Dictionary = {}
 static func dock_reserve(window: Window) -> float:
 	var viewport_size: Vector2 = window.get_visible_rect().size if window != null else Vector2.ZERO
 	return Gen2LauncherShell.dock_side_for(viewport_size, 4, safe_area_insets(window)) \
-		+ DOCK_VERTICAL_PADDING + float(safe_area_insets(window)["bottom"])
+		+ dock_padding(viewport_size) + float(safe_area_insets(window)["bottom"])
 
+
+static func dock_padding(viewport_size: Vector2) -> float:
+	return 12.0 if viewport_size.x > viewport_size.y and viewport_size.y < 600.0 \
+		else DOCK_VERTICAL_PADDING
 
 
 static func title(theme: Gen2LauncherTheme, text: String, size: int = Gen2LauncherTheme.FONT_TITLE) -> Label:

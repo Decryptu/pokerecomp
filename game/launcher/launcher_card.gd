@@ -7,7 +7,38 @@ extends PanelContainer
 ## its child the way any [PanelContainer] does and there is no custom layout to
 ## go wrong.
 
+## A tap on the card itself, for a row whose whole surface opens something.
+signal activated()
+
 var palette: Gen2LauncherTheme = null
+
+var _pointer_down: bool = false
+var _pointer_from: Vector2 = Vector2.ZERO
+
+
+func cancel_press() -> void:
+	_pointer_down = false
+
+
+func _gui_input(event: InputEvent) -> void:
+	if not activated.has_connections() or event.device == InputEvent.DEVICE_ID_EMULATION:
+		return
+	if event is InputEventMouseMotion or event is InputEventScreenDrag:
+		if event.position.distance_to(_pointer_from) >= Gen2LauncherScroll.TOUCH_DEADZONE:
+			cancel_press()
+		return
+	if event is InputEventMouseButton and event.button_index != MOUSE_BUTTON_LEFT:
+		return
+	if not (event is InputEventMouseButton or event is InputEventScreenTouch):
+		return
+	if event.pressed:
+		_pointer_down = true
+		_pointer_from = event.position
+	else:
+		var tapped: bool = _pointer_down and Rect2(Vector2.ZERO, size).has_point(event.position)
+		cancel_press()
+		if tapped and not (event is InputEventScreenTouch and event.canceled):
+			activated.emit()
 
 
 ## A card printed on the page: filled, with a hairline, and no shadow to be cut

@@ -152,10 +152,10 @@ static func _write_odd_eggs(manifest: Dictionary, crystal: bool) -> void:
 		bytes[31] = RomLayout.ODD_EGG_LEVEL
 		## The struct carries its own experience, and a row whose level and
 		## experience disagree is what `Gen2WorldTransaction` refuses.
-		var exp: int = RomLayout.ODD_EGG_LEVEL ** 3
-		bytes[8] = (exp >> 16) & 0xFF
-		bytes[9] = (exp >> 8) & 0xFF
-		bytes[10] = exp & 0xFF
+		var experience: int = RomLayout.ODD_EGG_LEVEL ** 3
+		bytes[8] = (experience >> 16) & 0xFF
+		bytes[9] = (experience >> 8) & 0xFF
+		bytes[10] = experience & 0xFF
 		## `dname` pads the whole name field with the terminator behind the word.
 		var nickname: PackedByteArray = Gen2Text.encode(RomLayout.ODD_EGG_NICKNAME)
 		for step: int in Gen2SramAdapter.MON_NAME_LENGTH:

@@ -1,7 +1,7 @@
 [gd_scene load_steps=4 format=3 uid="uid://4gyyn12um08h"]
 
 [ext_resource type="Script" uid="uid://chnko3073tkcv" path="res://addons/gut/gui/RunResults.gd" id="1"]
-[ext_resource type="Texture2D" uid="uid://bvo0uao7deu0q" path="res://addons/gut/icon.png" id="2_1k8e0"]
+[ext_resource type="Texture2D" uid="uid://u1h6o7ggt0bu" path="res://addons/gut/icon.png" id="2_1k8e0"]
 [ext_resource type="PackedScene" uid="uid://dls5r5f6157nq" path="res://addons/gut/gui/ResultsTree.tscn" id="2_o808v"]
 
 [node name="RunResults" type="Control"]

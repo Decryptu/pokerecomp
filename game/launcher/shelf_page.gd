@@ -102,7 +102,7 @@ func _on_selection_changed(game_id: StringName) -> void:
 
 
 func _action_side() -> float:
-	return 68.0 if _compact else Gen2LauncherButton.DOCK_SIDE
+	return Gen2LauncherUI.TOUCH_TARGET if _compact else Gen2LauncherButton.DOCK_SIDE
 
 
 func _place_manage() -> void:
@@ -110,6 +110,18 @@ func _place_manage() -> void:
 		return
 	var card: Gen2Cartridge = _stage.selected_cartridge()
 	if card == null:
+		return
+	var landscape: bool = _stage.size.x > _stage.size.y and _stage.size.y < 600.0
+	var side: float = Gen2LauncherUI.TOUCH_TARGET if landscape else _action_side()
+	if not is_equal_approx(_manage.size.x, side):
+		_manage.set_side(side)
+	var inset: float = 0.0 if landscape or not _manage.visible else side + Gen2LauncherUI.GAP_LG
+	if not is_equal_approx(_stage.top_inset, inset):
+		_stage.set_top_inset(inset)
+		return
+	if landscape:
+		_manage.position = Vector2(_stage.size.x - side, 0.0)
+		_stage.move_child(_manage, _stage.get_child_count() - 1)
 		return
 	var gap: float = Gen2LauncherUI.GAP_MD + card.size.x * 0.05
 	_manage.position = Vector2(
@@ -134,6 +146,4 @@ func _refresh_action() -> void:
 func _sync_stage_inset() -> void:
 	if _stage == null or _manage == null:
 		return
-	_stage.set_top_inset(
-		_manage.size.y + Gen2LauncherUI.GAP_LG if _manage.visible else 0.0
-	)
+	_place_manage()
