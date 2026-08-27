@@ -13,6 +13,7 @@ const ITEM_MASTER_BALL: int = 2
 const ITEM_BICYCLE: int = 3
 const ITEM_TM01: int = 4
 const ITEM_UNCLASSIFIED: int = 5
+const ITEM_ANTIDOTE: int = 6
 
 var _data: GameData = null
 
@@ -46,6 +47,13 @@ func before_each() -> void:
 				raw["name"] = "ITEM5"
 				raw["pocket"] = 0
 				raw["battle_menu"] = 0
+			## A second item-pocket row, so an order inside one pocket is
+			## observable at all.
+			ITEM_ANTIDOTE:
+				raw["name"] = "ANTIDOTE"
+				raw["pocket"] = Gen2WorldPack.TYPE_ITEM
+				raw["permissions"] = Gen2WorldPack.CANT_SELECT
+				raw["field_menu"] = Gen2WorldPack.ITEMMENU_PARTY
 			ITEM_TM01:
 				raw["name"] = "TM01"
 				raw["pocket"] = Gen2WorldPack.TYPE_TM_HM
@@ -325,3 +333,104 @@ func test_an_empty_pocket_read_without_cancel_is_empty() -> void:
 		Gen2WorldPack.list_rows(_data, Gen2WorldPack.TYPE_ITEM, items, 0, false).size(),
 		0
 	)
+
+
+## SwitchItemsInBag (engine/items/switch_items.asm). wSwitchItem holds the marked
+## row plus one so that zero means none; -1 is that same "none" here.
+func test_the_first_select_only_marks_the_row_the_cursor_is_on() -> void:
+	var answer: Dictionary = Gen2WorldPack.switch_items([10, 20, 30], -1, 2)
+	assert_eq(answer["order"], [10, 20, 30])
+	assert_eq(answer["held"], 2)
+
+
+## `.init` reads the cursor through ItemSwitch_GetNthItem, so the CANCEL row past
+## the last item marks nothing.
+func test_select_on_the_cancel_row_marks_nothing() -> void:
+	var answer: Dictionary = Gen2WorldPack.switch_items([10, 20, 30], -1, 3)
+	assert_eq(answer["held"], -1)
+
+
+## `.trivial`, checked before the terminator is read.
+func test_placing_an_item_on_its_own_row_clears_the_mark_and_moves_nothing() -> void:
+	var answer: Dictionary = Gen2WorldPack.switch_items([10, 20, 30], 1, 1)
+	assert_eq(answer["order"], [10, 20, 30])
+	assert_eq(answer["held"], -1)
+
+
+## `.above` and `.below` are one memmove each, which is a remove and an insert.
+func test_a_held_row_moves_down_to_the_cursor() -> void:
+	var answer: Dictionary = Gen2WorldPack.switch_items([10, 20, 30, 40], 0, 2)
+	assert_eq(answer["order"], [20, 30, 10, 40])
+	assert_eq(answer["held"], -1)
+
+
+func test_a_held_row_moves_up_to_the_cursor() -> void:
+	var answer: Dictionary = Gen2WorldPack.switch_items([10, 20, 30, 40], 3, 1)
+	assert_eq(answer["order"], [10, 40, 20, 30])
+	assert_eq(answer["held"], -1)
+
+
+## The `cp -1 / ret z` after `.trivial`: the mark survives a press on CANCEL, so
+## the next press on a real row still places the item.
+func test_a_press_on_cancel_keeps_the_mark_and_moves_nothing() -> void:
+	var answer: Dictionary = Gen2WorldPack.switch_items([10, 20, 30], 0, 3)
+	assert_eq(answer["order"], [10, 20, 30])
+	assert_eq(answer["held"], 0)
+
+
+## The cartridge has four packed arrays and this port one insertion-ordered map,
+## so a move inside a pocket permutes only the positions that pocket holds.
+func test_a_pocket_reorder_leaves_the_other_pockets_where_they_sit() -> void:
+	var owned: Dictionary = {
+		ITEM_POTION: 1, ITEM_MASTER_BALL: 1, ITEM_BICYCLE: 1, ITEM_TM01: 1,
+	}
+	assert_eq(
+		Gen2WorldPack.reordered_items(owned, [ITEM_BICYCLE, ITEM_POTION]),
+		[ITEM_BICYCLE, ITEM_MASTER_BALL, ITEM_POTION, ITEM_TM01]
+	)
+
+
+func test_a_reorder_naming_rows_the_map_does_not_hold_changes_nothing() -> void:
+	var owned: Dictionary = {ITEM_POTION: 1, ITEM_MASTER_BALL: 1}
+	assert_eq(
+		Gen2WorldPack.reordered_items(owned, [ITEM_POTION, ITEM_BICYCLE]),
+		[ITEM_POTION, ITEM_MASTER_BALL]
+	)
+
+
+## A cartridge pocket is a packed array ReceiveItem appends to, so the listing is
+## in the order the items were received rather than by item number.
+func test_a_pocket_lists_its_items_in_the_order_they_were_received() -> void:
+	var state := Gen2WorldState.new({}, {}, {})
+	state.apply_changes({}, {}, {"items": {ITEM_ANTIDOTE: 1}})
+	state.apply_changes({}, {}, {"items": {ITEM_POTION: 1}})
+	var rows: Array = (Gen2WorldPack.build(_data, state)[0] as Dictionary)["items"]
+	assert_eq([(rows[0] as Dictionary)["item"], (rows[1] as Dictionary)["item"]],
+		[ITEM_ANTIDOTE, ITEM_POTION])
+
+
+## The listing is what a reorder is for, so it follows the map's own key order.
+func test_a_reordered_map_lists_its_pocket_the_new_way() -> void:
+	var state := Gen2WorldState.new({}, {}, {ITEM_ANTIDOTE: 1, ITEM_POTION: 1})
+	var applied: Dictionary = state.apply_changes({}, {}, {
+		"item_order": [ITEM_POTION, ITEM_ANTIDOTE],
+	})
+	assert_true(bool(applied.get("changed", false)))
+	var rows: Array = (Gen2WorldPack.build(_data, state)[0] as Dictionary)["items"]
+	assert_eq([(rows[0] as Dictionary)["item"], (rows[1] as Dictionary)["item"]],
+		[ITEM_POTION, ITEM_ANTIDOTE])
+
+
+## _is_permutation: a list that dropped or repeated a row would change what is
+## owned rather than where it sits.
+func test_an_order_that_is_not_a_permutation_is_refused() -> void:
+	var state := Gen2WorldState.new({}, {}, {ITEM_ANTIDOTE: 1, ITEM_POTION: 1})
+	assert_eq(
+		state.apply_changes({}, {}, {"item_order": [ITEM_POTION, ITEM_POTION]}),
+		{"ok": false, "reason": &"invalid_item_order"}
+	)
+	assert_eq(
+		state.apply_changes({}, {}, {"item_order": [ITEM_POTION]}),
+		{"ok": false, "reason": &"invalid_item_order"}
+	)
+	assert_eq(state.items().keys(), [ITEM_ANTIDOTE, ITEM_POTION])

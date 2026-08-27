@@ -163,8 +163,9 @@ static func can_open(save: Gen2SaveData) -> bool:
 
 
 ## The bag as rows a deposit list can draw, and the PC as rows a withdraw or
-## toss list can. Both are sorted by item number, which is the only order a flat
-## map has; the source's packed arrays keep insertion order instead.
+## toss list can. Both keep the order the map holds, which is the order the
+## items were received: `wPCItems` is a packed array `ReceiveItemFromPC` appends
+## to, and `SwitchItemsInBag` is the only thing that reorders one.
 static func bag_entries(data: GameData, state: Gen2WorldState) -> Array:
 	return _entries(data, state.items() if state != null else {})
 
@@ -177,9 +178,7 @@ static func _entries(data: GameData, owned: Dictionary) -> Array:
 	var out: Array = []
 	if data == null:
 		return out
-	var numbers: Array = owned.keys()
-	numbers.sort()
-	for raw_item: Variant in numbers:
+	for raw_item: Variant in owned.keys():
 		var item: int = int(raw_item)
 		var quantity: int = int(owned[raw_item])
 		if quantity <= 0:

@@ -93,6 +93,10 @@ const MART_TEXT_PREFIX: Dictionary = {
 }
 ## `PlayTransactionSound`, once the money has been taken.
 const SFX_TRANSACTION: int = 0x22
+
+## `PC_PlaySwapItemsSound`, which asks for the same effect twice through
+## `WaitPlaySFX`. Hexadecimal, the way `constants/sfx_constants.asm` counts.
+const SFX_SWITCH_POKEMON: int = 0x20
 ## `BillsPC_PlaceEmptyBoxString_SFX`'s own `SFX_WRONG`.
 const SFX_WRONG: int = 0x19
 
@@ -171,6 +175,8 @@ var _pc_rows: Array = []
 var _pc_house: bool = false
 var _pc_action: int = -1
 var _pc_entries: Array = []
+## `wSwitchItem` less one: the PC row an earlier SELECT marked, or -1 for none.
+var _pc_switch: int = -1
 var _pc_quantity: int = 1
 ## The PC's own text boxes and what happens once the last is acknowledged:
 ## `PROF.OAK'S PC` returns to the top menu and `TURN OFF` shuts the machine down.
@@ -421,7 +427,38 @@ func handle_button(button: int) -> bool:
 		Gen2Button.B:
 			_cancel()
 			return true
+		Gen2Button.SELECT:
+			return _press_pc_item_select()
 	return false
+
+
+## `PCItemsJoypad`'s `.select_1` and `.a_select_2`, which are one press of
+## `SwitchItemsInBag` over `wPCItems`. Only the two lists that show the PC's own
+## items reach it: a deposit is `DepositSellPack`, whose joypad handler has no
+## SELECT in it.
+func _press_pc_item_select() -> bool:
+	if _mode != MODE.PC_ITEM_LIST \
+		or _pc_action == Gen2WorldPC.PLAYERSPCITEM_DEPOSIT_ITEM:
+		return false
+	_apply_pc_switch_press()
+	return true
+
+
+## One press, the same shape [Gen2StartMenuScreen] gives the pack's own SELECT.
+func _apply_pc_switch_press() -> void:
+	var order: Array = []
+	for entry: Dictionary in _pc_entries:
+		order.append(int(entry.get("item", 0)))
+	var answer: Dictionary = Gen2WorldPack.switch_items(order, _pc_switch, _cursor)
+	var next_order: Array = answer["order"]
+	if next_order != order and _world != null:
+		Gen2WorldBagHost.reorder(_world, _save, next_order, true)
+		_refresh_pc_entries()
+		## `PC_PlaySwapItemsSound`, which is the pack's own pair of effects.
+		sfx_requested.emit(SFX_SWITCH_POKEMON, true)
+		sfx_requested.emit(SFX_SWITCH_POKEMON, true)
+	_pc_switch = int(answer["held"])
+	_render_rows()
 
 
 func selected_index() -> int:
@@ -1328,6 +1365,8 @@ func _open_pc_items() -> void:
 ## Whichever of the bag and the PC the chosen action reads.
 func _open_pc_item_list(action: int) -> void:
 	_pc_action = action
+	## `PCItemsJoypad` clears `wSwitchItem` before its loop.
+	_pc_switch = -1
 	_cursor = 0
 	_pc_quantity = 1
 	_refresh_pc_entries()
@@ -2301,6 +2340,11 @@ func _confirm() -> void:
 		_confirm_pc_row()
 		return
 	if _mode == MODE.PC_ITEM_LIST:
+		## `.moving_stuff_around` reads A before anything else, so the A that
+		## would pick a quantity places the held row instead.
+		if _pc_switch >= 0:
+			_apply_pc_switch_press()
+			return
 		_confirm_pc_item()
 		return
 	if _mode == MODE.PC_TEXT:
@@ -2334,6 +2378,11 @@ func _cancel() -> void:
 		else:
 			_open_pc(&"pokemon_center")
 	elif _mode == MODE.PC_ITEM_LIST:
+		## `.b_2`: the mark is dropped and the list stays up.
+		if _pc_switch >= 0:
+			_pc_switch = -1
+			_render_rows()
+			return
 		_open_pc_items()
 	elif _mode == MODE.PC_MAILBOX:
 		## `ScrollingMenu`'s PAD_B, which is `.exit` and the way back to the

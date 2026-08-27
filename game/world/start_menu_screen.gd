@@ -88,6 +88,12 @@ const SAVE_DONE_FRAMES: int = 30
 ## hex).
 const SFX_SAVE: int = 0x25
 
+## `SwitchItemsInBag`' own two, both hexadecimal the way the constants file
+## counts: `.place_insert` asks for SFX_SWITCH_POKEMON twice through
+## `WaitPlaySFX`, and a pocket cycle asks for SFX_SWITCH_POCKETS.
+const SFX_SWITCH_POKEMON: int = 0x20
+const SFX_SWITCH_POCKETS: int = 0x62
+
 ## The pack's five imported texts, by the key `GameData.menu_text` holds each
 ## under. `UseItem`'s two refusals and `TossMenu`'s three; "(S)" is three literal
 ## characters in the charmap rather than a plural rule, so the cartridge really
@@ -153,6 +159,9 @@ var _pack_scroll: Array[int] = [0, 0, 0, 0]
 ## [method _scroll_list_to_cursor].
 var _list_scroll: int = 0
 var _pack_cursors: Array[int] = [0, 0, 0, 0]
+## `wSwitchItem` less one: the row SELECT marked in the pocket the pack is on,
+## or -1 for `SwitchItemsInBag`' own zero.
+var _pack_switch: int = -1
 var _pack_page: Gen2PackPage = null
 var _pack_result_ok: bool = false
 ## `PrintText` waits per page, so a result longer than the box's two rows is
@@ -391,7 +400,43 @@ func handle_button(button: int) -> bool:
 			_cancel()
 			_render_hardware()
 			return true
+		Gen2Button.SELECT:
+			if _mode != Mode.PACK:
+				return false
+			_press_pack_select()
+			_render_hardware()
+			return true
 	return false
+
+
+## `Pack_InterpretJoypad`'s `.select` and `.switching_item`'s own SELECT, which
+## are the same press: the first marks a row and the second places the held item
+## on the row the cursor is on.
+func _press_pack_select() -> void:
+	if _give_target >= 0:
+		## `DepositSellPack` runs its own joypad handler with no `.select` in it,
+		## so a pack opened to pick one item does not reorder anything.
+		return
+	_apply_switch_press()
+
+
+## One press of `SwitchItemsInBag`: the pocket's own rows, the row an earlier
+## SELECT marked and the row the cursor is on. A press that moved something is
+## written through [Gen2WorldBagHost], so the order the player arranged is in the
+## save rather than in this screen.
+func _apply_switch_press() -> void:
+	var order: Array = []
+	for row: Dictionary in _current_pocket_items():
+		order.append(int(row.get("item", 0)))
+	var answer: Dictionary = Gen2WorldPack.switch_items(order, _pack_switch, _pack_cursor)
+	var next_order: Array = answer["order"]
+	if next_order != order and _world != null:
+		Gen2WorldBagHost.reorder(_world, _pack_save, next_order, false, _pack_persist)
+		_open_pack_mode(false)
+		## `.place_insert` asks for the same effect twice through `WaitPlaySFX`.
+		sfx_requested.emit(SFX_SWITCH_POKEMON, true)
+		sfx_requested.emit(SFX_SWITCH_POKEMON, true)
+	_pack_switch = int(answer["held"])
 
 
 func _move(direction: Vector2i) -> void:
@@ -493,6 +538,11 @@ func _confirm() -> void:
 		Mode.LIST:
 			_confirm_list()
 		Mode.PACK:
+			## `.switching_item` reads A before anything else, so the A that
+			## would open an item's submenu places the held item instead.
+			if _pack_switch >= 0:
+				_apply_switch_press()
+				return
 			## `ScrollingMenuJoyAction`'s `.a_button` answers `-1` on the CANCEL
 			## row and falls into `.b_button`, so choosing it leaves the pack.
 			if _pack_cursor_on_cancel():
@@ -569,6 +619,10 @@ func _cancel() -> void:
 		Mode.LIST:
 			closed.emit()
 		Mode.PACK:
+			## `.end_switch`, which drops the mark and leaves the pack open.
+			if _pack_switch >= 0:
+				_pack_switch = -1
+				return
 			if _give_target >= 0:
 				closed.emit()
 			else:
@@ -879,6 +933,9 @@ func _open_pack_mode(reset: bool = true) -> void:
 		_pack_cursor = 0
 		_pack_cursors.fill(0)
 		_pack_scroll.fill(0)
+	## `Pack_Jumptable`'s entry clears `wSwitchItem`, so a pack reopened after a
+	## submenu holds nothing.
+	_pack_switch = -1
 	_pack_pocket_index = clampi(_pack_pocket_index, 0, maxi(_pack_pockets.size() - 1, 0))
 	## The CANCEL row is always there, so an emptied pocket puts the cursor on it
 	## rather than on an item that is gone.
@@ -902,8 +959,14 @@ func _current_pocket_items() -> Array:
 func _cycle_pocket(delta: int) -> void:
 	if _pack_pockets.is_empty():
 		return
+	## `.switching_item` answers left and right with a plain carry, so the pocket
+	## cannot be changed while a row is held.
+	if _pack_switch >= 0:
+		return
 	_pack_cursors[_pack_pocket_index] = _pack_cursor
 	_pack_pocket_index = wrapi(_pack_pocket_index + signi(delta), 0, _pack_pockets.size())
+	## `.d_left` and `.d_right` each play it before they leave.
+	sfx_requested.emit(SFX_SWITCH_POCKETS, false)
 	_pack_cursor = clampi(
 		_pack_cursors[_pack_pocket_index], 0, _current_pocket_items().size()
 	)
@@ -1032,6 +1095,10 @@ func _pack_result_text() -> String:
 
 
 func _pack_description() -> String:
+	## `.select` prints `AskItemMoveText` over the description and nothing
+	## reprints one until the item is placed.
+	if _pack_switch >= 0:
+		return Gen2WorldPack.ask_item_move_text()
 	if _pack_cursor_on_cancel() or _data == null:
 		return ""
 	return Gen2WorldPack.row_description(_data, int(_selected_item().get("item", 0)))

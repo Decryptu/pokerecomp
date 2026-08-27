@@ -997,3 +997,48 @@ func test_putting_a_message_in_the_pack_empties_the_mailbox() -> void:
 	assert_eq(save.mailbox.size(), 0)
 	assert_eq(_world_screen._world.state.item_quantity(item), 1)
 	assert_eq(host._status, Gen2WorldPC.MAILBOX_CLEARED)
+
+
+## `PCItemsJoypad`'s `.select_1` and `.moving_stuff_around` (`SwitchItemsInBag`).
+## The withdraw and toss lists show `wPCItems` and reach it; a deposit is
+## `DepositSellPack`, whose joypad handler has no SELECT in it.
+func test_select_reorders_the_pc_item_list_but_not_the_deposit_list() -> void:
+	_write_pc_request()
+	await _open_world()
+	_world_screen._world.state.apply_changes({}, {}, {
+		"items": {7: 1}, "pc_items": {7: 1, 0x14: 1},
+	})
+	_world_screen._world.current_map.events["coord_events"][0]["script"] = 0x6190
+	_world_screen._show_script_results(
+		_world_screen._world.dispatch_script_events(Vector2i(7, 6))
+	)
+	await get_tree().process_frame
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+
+	## WITHDRAW ITEM, which is the PC's own list.
+	host.handle_button(Gen2Button.A)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEM_LIST)
+	assert_eq(_world_screen._world.state.pc_items().keys(), [7, 0x14])
+	host.handle_button(Gen2Button.SELECT)
+	assert_eq(host._pc_switch, 0)
+	host.handle_button(Gen2Button.DOWN)
+	host.handle_button(Gen2Button.A)
+	assert_eq(host._pc_switch, -1)
+	assert_eq(_world_screen._world.state.pc_items().keys(), [0x14, 7])
+	assert_eq(_pc_list_items(host), [0x14, 7], "and the list is drawn the new way")
+	assert_eq(_world_screen._world.state.pc_item_quantity(7), 1, "nothing withdrawn")
+
+	## DEPOSIT ITEM's own list answers SELECT with nothing.
+	host.handle_button(Gen2Button.B)
+	host.handle_button(Gen2Button.DOWN)
+	host.handle_button(Gen2Button.A)
+	assert_eq(host._pc_action, Gen2WorldPC.PLAYERSPCITEM_DEPOSIT_ITEM)
+	assert_false(host.handle_button(Gen2Button.SELECT))
+	assert_eq(host._pc_switch, -1)
+
+
+func _pc_list_items(host: Gen2WorldServiceScreen) -> Array:
+	var out: Array = []
+	for entry: Dictionary in host._pc_entries:
+		out.append(int(entry.get("item", 0)))
+	return out
