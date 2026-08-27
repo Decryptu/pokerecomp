@@ -1096,6 +1096,41 @@ func test_master_ball_captures_a_wild_mon_and_records_catch_metadata() -> void:
 	assert_eq(_world.state.item_quantity(0x01), 0)
 
 
+## The Nuzlocke's first rule at the one place a ball is ever thrown. The battle
+## claims the area when it opens and leaves it on the world; anything else is an
+## area that already gave up its encounter, and the ball is refused whole: no
+## catch, no dex flag, and the ball still in the bag.
+func test_a_nuzlocke_ball_is_only_thrown_at_the_encounter_that_claimed_the_area() -> void:
+	_world.rules = Gen2Rules.new()
+	_world.rules.challenge = Gen2Rules.CHALLENGE_NUZLOCKE
+	var wild: Gen2BattleMon = Gen2BattleMon.create(
+		_data, 25, 5, _data.moves_at_level(25, 5), 0x1234
+	)
+	## The first encounter here claimed the area and got away, which is what a
+	## second fight on the same map arrives to.
+	assert_true(Gen2Nuzlocke.claim_area(_save.nuzlocke, 42, 19))
+
+	var refused: Dictionary = Gen2WorldPartyHost.capture_wild(
+		_world, _save, wild, 0x01, _random, 42, false
+	)
+	assert_false(bool(refused["ok"]))
+	assert_eq(StringName(refused["reason"]), &"nuzlocke_encounter_spent")
+	assert_eq(_save.party.size(), 2, "nothing was caught")
+	assert_eq(_world.state.item_quantity(0x01), 1, "and the ball is still in the bag")
+
+	_world.nuzlocke_area_open = 42
+	var thrown: Dictionary = Gen2WorldPartyHost.capture_wild(
+		_world, _save, wild, 0x01, _random, 42, false
+	)
+	assert_true(bool(thrown["ok"]))
+	assert_true(bool(thrown["caught"]))
+	assert_eq(_save.party.size(), 3)
+	assert_true(
+		bool((_save.nuzlocke["areas"] as Dictionary)["42"]["caught"]),
+		"and the area records that its Pokemon was taken",
+	)
+
+
 ## `BugContest_SetCaughtContestMon`: the first catch is kept outright, and a
 ## second one is only offered, with the Pokemon already held named by
 ## `DisplayAlreadyCaughtText` rather than the new one.

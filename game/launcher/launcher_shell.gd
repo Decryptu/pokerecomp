@@ -114,6 +114,8 @@ func _build() -> void:
 	_top_right = Gen2LauncherUI.row(Gen2LauncherUI.GAP_MD)
 	_top_right.alignment = BoxContainer.ALIGNMENT_END
 	top.add_child(_top_right)
+	## Hidden until its own probe answers, so a machine that reports no charge
+	## shows a clock and nothing beside it.
 	_battery = Gen2LauncherBattery.create(theme_palette)
 	_battery.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_top_right.add_child(_battery)
@@ -186,11 +188,6 @@ func _exit_tree() -> void:
 func _now() -> String:
 	var clock: Dictionary = Time.get_time_dict_from_system()
 	return "%02d:%02d" % [int(clock["hour"]), int(clock["minute"])]
-
-
-## The charge indicator, so a caller with a real power reading can set it.
-func battery() -> Gen2LauncherBattery:
-	return _battery
 
 
 ## A row of plain discs on the page, with nothing behind them. A bar or a card

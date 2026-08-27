@@ -32,7 +32,10 @@ Save format version 6 stores:
   written, and the registered mod settings the run is played with
   (`run_options`), so a slot cannot silently change draw distance when it is
   reopened, and the gameplay rules it is played under (`run_rules`: which of the
-  cartridge's own bugs are reproduced, and the trainer-AI difficulty);
+  cartridge's own bugs are reproduced, and which challenge the run was created
+  under). A Nuzlocke run also carries a `nuzlocke` block: the areas that have
+  given up their one encounter, what it has lost for good, and whether it is
+  over. A slot whose run has ended is never opened again;
 - `is_egg` for received eggs. An egg keeps its party slot and is skipped when
   the battle party is built, the way the cartridge refuses it as a combatant
   rather than removing it. Its `happiness` byte is its hatch counter, written by

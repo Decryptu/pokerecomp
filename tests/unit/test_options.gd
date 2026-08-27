@@ -189,12 +189,12 @@ func test_the_rules_block_travels_with_the_options_file() -> void:
 	var options := Gen2Options.new()
 	assert_eq(options.rules.mode, Gen2Rules.MODE_CURRENT)
 	options.rules.set_mode(Gen2Rules.MODE_VANILLA)
-	options.rules.difficulty = Gen2Rules.DIFFICULTY_EASY
+	options.rules.set_flag(&"metal_powder_overflow", false)
 
 	var restored: Gen2Options = Gen2Options.parse(options.to_dict())
 	assert_true(restored.rules.matches(options.rules))
 	assert_eq(restored.rules.mode, Gen2Rules.MODE_VANILLA)
-	assert_eq(restored.rules.difficulty, Gen2Rules.DIFFICULTY_EASY)
+	assert_false(restored.rules.reproduces(&"metal_powder_overflow"))
 	assert_eq(
 		Gen2Options.parse({}).rules.mode, Gen2Rules.MODE_CURRENT,
 		"a file written before the block existed plays what shipped"

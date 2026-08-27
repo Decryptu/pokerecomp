@@ -4,9 +4,10 @@ extends SceneTree
 ##
 ##   Godot --path . -s res://tools/preview_saves.gd -- <out.png> [light|dark] [WxH] [page]
 ##
-## [page] is `saves`, `party`, `boxes` or `editor`, the four pages the save slots
-## lead to. They are one command because they are one section and share this
-## harness; each is its own scene.
+## [page] is `saves`, `new`, `party`, `boxes` or `editor`, the pages the save
+## slots lead to. They are one command because they are one section and share
+## this harness; each is its own scene, and `new` is the slot list with the
+## new-game form open on a free slot.
 ##
 ## The size is what says whether a page is responsive, so it is an argument
 ## rather than a constant: a phone portrait and a desktop window are the same
@@ -14,6 +15,8 @@ extends SceneTree
 
 var _output: String = ""
 var _frames: int = 0
+var _screen: Node = null
+var _open_new_game: bool = false
 
 
 func _initialize() -> void:
@@ -50,6 +53,7 @@ func _initialize() -> void:
 	var page: String = args[3] if args.size() > 3 else "saves"
 	var scenes: Dictionary = {
 		"saves": "res://game/save/save_screen.tscn",
+		"new": "res://game/save/save_screen.tscn",
 		"party": "res://game/save/party_screen.tscn",
 		"boxes": "res://game/save/box_screen.tscn",
 		"editor": "res://game/save/save_editor_screen.tscn",
@@ -58,11 +62,19 @@ func _initialize() -> void:
 		push_error("Unknown page %s" % page)
 		quit(2)
 		return
-	root.add_child(load(String(scenes[page])).instantiate())
+	_screen = load(String(scenes[page])).instantiate()
+	root.add_child(_screen)
+	## `_ready` runs on the first frame rather than on `add_child` from here, so
+	## the form is opened once the pane it lives in exists, which is the order a
+	## press on "New slot" arrives in.
+	_open_new_game = page == "new"
 
 
 func _process(_delta: float) -> bool:
 	_frames += 1
+	if _open_new_game:
+		_open_new_game = false
+		_screen.call("open_new_slot")
 	if _frames < 26:
 		return false
 	var image: Image = Gen2ToolPath.capture(root)

@@ -165,6 +165,30 @@ func test_starting_a_new_game_stages_the_slot_and_writes_nothing() -> void:
 	var waiting: Dictionary = GameRuntime.take_pending_new_game()
 	assert_eq(int(waiting["slot"]), 0)
 	assert_eq(String(waiting["label"]), "Run one")
+	assert_eq(
+		StringName(waiting["challenge"]), Gen2Rules.CHALLENGE_VANILLA,
+		"the cartridge's own game unless the form said otherwise",
+	)
+
+
+## The one choice the launcher makes that the game cannot take back. It is
+## staged with the slot rather than read out of the settings file, because the
+## settings file is what the next run starts from and this one is fixed.
+func test_the_new_game_form_stages_the_challenge_it_was_started_under() -> void:
+	await _open_save_screen()
+	assert_true(_screen.create_new_game("Locke", Gen2Rules.CHALLENGE_NUZLOCKE))
+	assert_eq(
+		StringName(GameRuntime.take_pending_new_game()["challenge"]),
+		Gen2Rules.CHALLENGE_NUZLOCKE,
+	)
+
+	assert_true(_screen.open_new_slot())
+	assert_true(_screen.create_new_game("Typo", &"impossible"))
+	assert_eq(
+		StringName(GameRuntime.take_pending_new_game()["challenge"]),
+		Gen2Rules.CHALLENGE_VANILLA,
+		"a challenge this build does not name is the cartridge's own game",
+	)
 
 
 ## The only name the launcher takes is the save's own. The field is the slot
@@ -179,6 +203,30 @@ func test_the_new_game_form_asks_for_a_save_name_not_a_trainer_name() -> void:
 		"a label past the trainer name's limit is still accepted"
 	)
 	GameRuntime.take_pending_new_game()
+
+
+## A finished Nuzlocke is a file to look at rather than a game to walk back
+## into. The row says so, and the seam behind the missing Continue button says
+## so too, so a driver cannot open one either.
+func test_a_finished_nuzlocke_slot_is_never_continued() -> void:
+	var save: Gen2SaveData = _save()
+	save.run_rules = Gen2Rules.new()
+	save.run_rules.challenge = Gen2Rules.CHALLENGE_NUZLOCKE
+	Gen2Nuzlocke.end_run(save.nuzlocke, 12, 3)
+	var write: Dictionary = Gen2SaveStore.save(save, _data)
+	assert_true(write["ok"], write["message"])
+	await _open_save_screen()
+
+	var row: Dictionary = (_screen.save_screen_snapshot()["slots"] as Array)[0]
+	assert_true(bool(row["run_over"]), "the row carries the verdict")
+	assert_eq(String(row["challenge"]), String(Gen2Rules.CHALLENGE_NUZLOCKE))
+
+	assert_true(_screen.select_slot(1))
+	_screen._continue_selected()
+	assert_eq(
+		_screen.save_screen_snapshot()["status"], "This run is over.",
+		"and the world is never opened",
+	)
 
 
 func test_a_save_name_past_its_own_limit_is_refused() -> void:

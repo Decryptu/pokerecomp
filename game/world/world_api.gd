@@ -172,10 +172,16 @@ const MAP_NAME_SIGN_SILENT_LANDMARKS: Array[int] = [
 ]
 
 var data: GameData = null
-## What this run diverges from the cartridge on, and its difficulty. Read-only to
-## a mod: a rule that changed mid-run would make the save it produced
-## unreproducible, which is the whole reason it belongs to the run.
+## What this run diverges from the cartridge on, and which challenge it is played
+## under. Read-only to a mod: a rule that changed mid-run would make the save it
+## produced unreproducible, which is the whole reason it belongs to the run.
 var rules: Gen2Rules = null
+## The landmark whose one Nuzlocke encounter is standing in front of the player
+## right now, or -1 for none. Set by whoever opens a wild battle and read by
+## [method Gen2WorldPartyHost.capture_wild], which is what keeps a ball from
+## being thrown at an area that has already given up its Pokemon. Not part of
+## the snapshot: a run reloaded mid-battle has no encounter open.
+var nuzlocke_area_open: int = -1
 var state: Gen2WorldState = null
 var inventory: Gen2WorldInventory = null
 var current_map: Gen2WorldMap = null

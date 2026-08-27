@@ -1,4 +1,4 @@
-package io.github.decryptu.pokerecomp.secondscreen
+package io.github.decryptu.pokerecomp.androidnative
 
 import android.app.Presentation
 import android.content.Context

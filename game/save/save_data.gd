@@ -105,6 +105,13 @@ var link_record: Dictionary = Gen2LinkSession.normalize_record({})
 ## the menu with no file loaded, and it defaults here the way `mailbox` and
 ## `box_names` do rather than versioning.
 var mystery_gift: Dictionary = Gen2MysteryGift.default_section()
+## What a Nuzlocke run has spent: the areas that have given up their one
+## encounter, the Pokemon it has lost for good, and whether it is over. Only a
+## run whose [member Gen2Rules.challenge] is
+## [constant Gen2Rules.CHALLENGE_NUZLOCKE] ever writes here, and an empty
+## dictionary is the truth about every other slot and about every slot written
+## before the challenge existed. See [Gen2Nuzlocke].
+var nuzlocke: Dictionary = {}
 
 
 func _init() -> void:
@@ -148,6 +155,7 @@ func to_dict() -> Dictionary:
 		"hall_of_fame": hall_of_fame.duplicate(true),
 		"link_record": link_record.duplicate(true),
 		"mystery_gift": mystery_gift.duplicate(true),
+		"nuzlocke": nuzlocke.duplicate(true),
 		"box_names": box_names.duplicate(),
 		"mailbox": _mailbox_dicts(),
 		"world": world.to_dict() if world != null else {},
@@ -184,6 +192,7 @@ static func from_dict(raw: Variant) -> Gen2SaveData:
 	out.hall_of_fame = Gen2HallOfFame.parse_records(source.get("hall_of_fame", []))
 	out.link_record = Gen2LinkSession.normalize_record(source.get("link_record", {}))
 	out.mystery_gift = Gen2MysteryGift.normalize(source.get("mystery_gift", {}))
+	out.nuzlocke = Gen2Nuzlocke.normalize(source.get("nuzlocke", {}))
 	var raw_box_names: Variant = source.get("box_names", [])
 	if raw_box_names is Array:
 		for index: int in mini((raw_box_names as Array).size(), BOX_COUNT):
@@ -374,6 +383,7 @@ func copy_from(source: Gen2SaveData) -> bool:
 	hall_of_fame = copied.hall_of_fame.duplicate(true)
 	link_record = copied.link_record.duplicate(true)
 	mystery_gift = copied.mystery_gift.duplicate(true)
+	nuzlocke = copied.nuzlocke.duplicate(true)
 	box_names = copied.box_names.duplicate()
 	mailbox = copied.mailbox.duplicate()
 	world = copied.world

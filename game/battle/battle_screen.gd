@@ -288,6 +288,9 @@ var _pack_move_selecting: bool = false:
 var _capture_balls: Array[int] = []
 var _capture_quantities: Dictionary = {}
 var _capture_ball_index: int = 0
+## What [method begin_capture] says instead of opening, when the run's rules
+## forbid a catch in this fight. Empty means the selector opens.
+var _capture_refusal: String = ""
 var _capture_selecting: bool = false:
 	set(value):
 		_capture_selecting = value
@@ -895,7 +898,9 @@ func show_trainer(
 	_prize_text_shown = false
 	_pay_day_text_shown = false
 	_world_battle_recovery = {}
-	var enemy_party: Gen2Party = Gen2TrainerParty.build(_data, trainer_class, index)
+	var enemy_party: Gen2Party = Gen2TrainerParty.build(
+		_data, trainer_class, index, _rules()
+	)
 	if enemy_party == null:
 		return
 
@@ -2649,6 +2654,12 @@ func _use_pack_item(item: int, target: int, move_slot: int = -1) -> Dictionary:
 	return used
 
 
+## Refuses the ball selector for this fight and says why. The world sets it when
+## the run's rules have already spent this area's one encounter.
+func set_capture_refusal(message: String) -> void:
+	_capture_refusal = message
+
+
 ## Supplies the wild battle with the supported balls currently owned by the
 ## overworld. The battle scene never reads or mutates world inventory itself.
 func set_capture_balls(balls: Array, quantities: Dictionary = {}) -> void:
@@ -2687,6 +2698,12 @@ func capture_battle_type() -> int:
 func begin_capture() -> Dictionary:
 	if not _is_wild_battle() or _battle == null or _battle.is_over():
 		return _capture_failure(&"capture_not_available")
+	## A Nuzlocke area that has already given up its encounter, said the way the
+	## empty-bag line below is said: the ball is in the bag, the rules are what
+	## refuse it.
+	if not _capture_refusal.is_empty():
+		show_message(_capture_refusal)
+		return _capture_failure(&"capture_refused_by_rules")
 	if _capture_selecting or _capture_waiting or not _capture_messages.is_empty() \
 		or not _capture_result.is_empty():
 		return _capture_failure(&"capture_input_busy")
@@ -2918,7 +2935,9 @@ func _open_capture_nickname() -> bool:
 		_data, species_name,
 		Gen2WorldPartyHost.SENT_TO_BOX_FORMAT \
 			if StringName(destination.get("destination", &"")) == &"box" else "",
-		Gen2WorldPartyHost.capture_nickname_question(species_name)
+		Gen2WorldPartyHost.capture_nickname_question(species_name),
+		## A Nuzlocke nicknames every catch, so the question is not asked.
+		_rules().is_nuzlocke()
 	)
 	host.named.connect(_on_capture_named)
 	host.closed.connect(_on_capture_nickname_closed)
@@ -2986,6 +3005,7 @@ func _reset_capture_state() -> void:
 	_capture_balls.clear()
 	_capture_quantities.clear()
 	_capture_ball_index = 0
+	_capture_refusal = ""
 	_clear_capture_action()
 
 
@@ -3072,8 +3092,8 @@ func _random_slot(side: int) -> int:
 func _enemy_slot() -> int:
 	if _enemy_trainer_class == 0:
 		return _random_slot(Gen2Battle.ENEMY)
-	# The class's own imported mask under the normal difficulty; the other two
-	# rewrite which layers score rather than inventing a level or a stat.
+	# The class's own imported mask under every challenge but hard, which scores
+	# with every layer rather than inventing a level or a stat.
 	var weights: int = _rules().ai_move_weights(
 		int(_data.trainer_attributes(_enemy_trainer_class).get("ai_move_weights", 0))
 	)
@@ -3107,9 +3127,11 @@ func _enemy_action() -> Dictionary:
 	var slot: int = _enemy_slot()
 	if _enemy_trainer_class == 0:
 		return Gen2Battle.use_move(slot)
-	var flags: int = int(
+	## The class's own imported word under every challenge but hard, which moves
+	## each class onto SWITCH_OFTEN.
+	var flags: int = _rules().ai_item_switch(int(
 		_data.trainer_attributes(_enemy_trainer_class).get("ai_item_switch", 0)
-	)
+	))
 	return Gen2BattleAI.choose_action(_battle, flags, slot, _rng)
 
 
@@ -4751,7 +4773,14 @@ func _describe(event: Dictionary) -> String:
 		Gen2Battle.OHKO:
 			return "It's a one-hit KO!"
 		Gen2Battle.FAINTED:
-			return "%s fainted!" % _battler_name(side)
+			var faint_line: String = "%s fainted!" % _battler_name(side)
+			## A Nuzlocke faint is a death, and it is said here rather than on
+			## the map: this is where the player is looking, and the row itself
+			## is taken off the party on the way out of the fight.
+			if side == Gen2Battle.PLAYER and _rules().is_nuzlocke():
+				faint_line += Gen2TextStream.PAGE_BREAK \
+					+ Gen2Nuzlocke.death_text(_battler_name(side))
+			return faint_line
 		Gen2Battle.CANNOT_MOVE:
 			return "%s %s" % [_battler_name(side), STOPPED_BY.get(event["reason"], "cannot move!")]
 		Gen2Battle.WOKE_UP:

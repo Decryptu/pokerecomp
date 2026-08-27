@@ -279,21 +279,21 @@ func test_the_runs_rules_round_trip_and_are_absent_when_never_recorded() -> void
 
 	var rules := Gen2Rules.new()
 	rules.set_mode(Gen2Rules.MODE_VANILLA)
-	rules.difficulty = Gen2Rules.DIFFICULTY_HARD
+	rules.challenge = Gen2Rules.CHALLENGE_NUZLOCKE
 	rules.set_flag(&"metal_powder_overflow", false)
 	save.run_rules = rules
 
 	var restored: Gen2SaveData = Gen2SaveData.from_dict(save.to_dict())
 	assert_not_null(restored.run_rules)
 	assert_true(restored.run_rules.matches(rules))
-	assert_eq(restored.run_rules.difficulty, Gen2Rules.DIFFICULTY_HARD)
+	assert_eq(restored.run_rules.challenge, Gen2Rules.CHALLENGE_NUZLOCKE)
 
 	# A copy is its own object, so editing one slot's rules cannot reach another's.
 	var copy := Gen2SaveData.new()
 	assert_true(copy.copy_from(save))
 	assert_true(copy.run_rules.matches(rules))
-	copy.run_rules.difficulty = Gen2Rules.DIFFICULTY_EASY
-	assert_eq(save.run_rules.difficulty, Gen2Rules.DIFFICULTY_HARD)
+	copy.run_rules.challenge = Gen2Rules.CHALLENGE_VANILLA
+	assert_eq(save.run_rules.challenge, Gen2Rules.CHALLENGE_NUZLOCKE)
 
 
 ## `Gen2WorldTransaction.copy_into` is the write-back every world-owned commit
@@ -314,8 +314,11 @@ func test_the_transaction_write_back_carries_every_field_but_the_live_clock() ->
 	candidate.run_mods = ["probe"]
 	candidate.run_options = {"probe": {"level": 2}}
 	var rules := Gen2Rules.new()
-	rules.difficulty = Gen2Rules.DIFFICULTY_HARD
+	rules.challenge = Gen2Rules.CHALLENGE_HARD
 	candidate.run_rules = rules
+	## The Nuzlocke block is the newest field on the save, and it moves with the
+	## party it describes.
+	candidate.nuzlocke = Gen2Nuzlocke.normalize({"areas": {"3": {"species": 19}}})
 	## `mystery_gift` is the newest field in the list this test guards, and the
 	## list is named field by field rather than delegated, so it has to differ
 	## or a dropped copy would still compare equal.
@@ -332,8 +335,10 @@ func test_the_transaction_write_back_carries_every_field_but_the_live_clock() ->
 	assert_eq(written, expected)
 	assert_eq(live.game_time.frames, 12, "the frames counted since the clone are the live save's")
 	# Its own objects, so the discarded candidate cannot be edited through it.
-	live.run_rules.difficulty = Gen2Rules.DIFFICULTY_EASY
-	assert_eq(candidate.run_rules.difficulty, Gen2Rules.DIFFICULTY_HARD)
+	live.run_rules.challenge = Gen2Rules.CHALLENGE_VANILLA
+	assert_eq(candidate.run_rules.challenge, Gen2Rules.CHALLENGE_HARD)
+	live.nuzlocke["areas"] = {}
+	assert_eq((candidate.nuzlocke["areas"] as Dictionary).size(), 1)
 
 
 ## A slot written before the block existed says so rather than claiming frame

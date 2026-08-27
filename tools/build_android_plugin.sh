@@ -1,20 +1,23 @@
 #!/usr/bin/env bash
-# Builds the Android plugin under addons/second_screen into the AAR the Android
-# exporter links into its gradle build.
+# Builds the Android plugins under addons/android_native into the one AAR the
+# Android exporter links into its gradle build.
 #
 #   tools/build_android_plugin.sh
 #
-# Unlike the iOS plugin beside it, nothing here is compiled against the engine's
-# own headers: an Android plugin is Kotlin against `godot-lib`, and that library
-# is a compile-time dependency only, so one AAR serves both export targets. The
-# library is fetched once into .references/ and cached there.
+# Unlike the iOS plugins beside them, nothing here is compiled against the
+# engine's own headers: an Android plugin is Kotlin against `godot-lib`, and that
+# library is a compile-time dependency only, so one AAR serves both export
+# targets. The library is fetched once into .references/ and cached there.
+#
+# Every Kotlin class under `kotlin/` goes in, and each GodotPlugin needs its own
+# meta-data line in the manifest below.
 #
 # Needs a JDK, gradle and the Android SDK. See DEVICES.md for where each comes
 # from; ANDROID_HOME and JAVA_HOME override the defaults below.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PLUGIN="$ROOT/addons/second_screen"
+PLUGIN="$ROOT/addons/android_native"
 # The engine pin, which is the release the Android library is taken from. Bump
 # with the pin in DEVICES.md.
 GODOT_TAG="${GODOT_TAG:-4.8-dev4}"
@@ -24,8 +27,8 @@ GODOT_LIB_VERSION="${GODOT_LIB_VERSION:-4.8.dev4}"
 # and a CI runner picking up 9.7 failed a release while this machine's 9.5
 # passed. Bump this with AGP, and only together.
 GRADLE_VERSION="${GRADLE_VERSION:-9.5}"
-NAMESPACE="io.github.decryptu.pokerecomp.secondscreen"
-PACKAGE_PATH="io/github/decryptu/pokerecomp/secondscreen"
+NAMESPACE="io.github.decryptu.pokerecomp.androidnative"
+PACKAGE_PATH="io/github/decryptu/pokerecomp/androidnative"
 
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 if [ -z "${JAVA_HOME:-}" ] && [ -x /usr/libexec/java_home ]; then
@@ -61,6 +64,9 @@ cat > "$WORK/src/main/AndroidManifest.xml" <<MANIFEST
         <meta-data
             android:name="org.godotengine.plugin.v2.Gen2SecondScreenPanel"
             android:value="$NAMESPACE.Gen2SecondScreenPlugin" />
+        <meta-data
+            android:name="org.godotengine.plugin.v2.Gen2PlatformPower"
+            android:value="$NAMESPACE.Gen2PowerPlugin" />
     </application>
 </manifest>
 MANIFEST
@@ -73,7 +79,7 @@ dependencyResolutionManagement {
 	repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
 	repositories { google(); mavenCentral() }
 }
-rootProject.name = 'second_screen'
+rootProject.name = 'android_native'
 SETTINGS
 
 cat > "$WORK/build.gradle" <<GRADLE
@@ -108,6 +114,6 @@ cp -R "$WRAPPER/gradle" "$WRAPPER/gradlew" "$WORK/"
 ( cd "$WORK" && ./gradlew --quiet --no-daemon assembleRelease )
 
 mkdir -p "$PLUGIN/bin"
-OUT="$PLUGIN/bin/second_screen.aar"
-cp "$WORK/build/outputs/aar/second_screen-release.aar" "$OUT"
+OUT="$PLUGIN/bin/android_native.aar"
+cp "$WORK/build/outputs/aar/android_native-release.aar" "$OUT"
 echo "  $(basename "$OUT")  $(du -h "$OUT" | awk '{print $1}')"

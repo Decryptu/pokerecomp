@@ -148,16 +148,16 @@ jobs:
           [ -d "$ANDROID_SDK_ROOT/ndk/29.0.14206865" ] || {
             echo "::error::the NDK the exporter checks for is still missing"; exit 1; }
 
-      # `addons/second_screen/bin/` is gitignored, so a checkout has no AAR and
+      # `addons/android_native/bin/` is gitignored, so a checkout has no AAR and
       # the Android exporter answers a plugin with no binary the way the iOS one
       # does: it drops it and the build succeeds anyway. 0.1.0 shipped that way
       # and no handheld with a lower panel got one. Checked for after the export.
-      - name: Build the Android second-screen plugin
+      - name: Build the Android plugins
         run: |
           set -euo pipefail
           export ANDROID_HOME="$ANDROID_SDK_ROOT"
           tools/build_android_plugin.sh
-          ls -l addons/second_screen/bin/*.aar
+          ls -l addons/android_native/bin/*.aar
 
       - name: Materialize the Android signing key
         env:
@@ -200,19 +200,21 @@ jobs:
           chmod +x "dist/pokerecomp-${v}-linux-x86_64" "dist/pokerecomp-${v}-linux-arm64"
           ls -lh dist
 
-      - name: Refuse an APK with no second-screen plugin in it
+      - name: Refuse an APK with either Android plugin missing
         run: |
           set -euo pipefail
           v="${{ needs.version.outputs.version }}"
           apk="dist/pokerecomp-${v}-android.apk"
           dex=$(unzip -Z1 "$apk" '*.dex')
           # Counted rather than `grep -qa`, for the SIGPIPE reason above.
-          found=$(unzip -p "$apk" $dex | grep -ca SecondScreen || true)
-          if [ "$found" -eq 0 ]; then
-            echo "::error::the APK carries no second-screen plugin; the AAR did not link"
-            exit 1
-          fi
-          echo "second screen ✓ ($found)"
+          for class in SecondScreen PlatformPower; do
+            found=$(unzip -p "$apk" $dex | grep -ca "$class" || true)
+            if [ "$found" -eq 0 ]; then
+              echo "::error::the APK carries no $class; the AAR did not link"
+              exit 1
+            fi
+            echo "$class ✓ ($found)"
+          done
 
       - uses: actions/upload-artifact@v7
         with:
@@ -346,7 +348,7 @@ jobs:
       # 0.1.0 shipped without it and every player's only picker was a browser
       # of the app's own empty data. Nothing else can notice: the exporter drops
       # an invalid plugin silently, and the preset still says it is on.
-      - name: Refuse an IPA with no system file picker in it
+      - name: Refuse an IPA with either iOS plugin missing
         run: |
           set -euo pipefail
           v="${{ needs.version.outputs.version }}"
@@ -357,12 +359,14 @@ jobs:
           # of SIGPIPE, which `pipefail` reports as the whole pipeline failing.
           # A gate written that way refuses every build, including the ones that
           # are right. Count instead: `grep -c` reads to the end.
-          found=$(strings -a "$binary" | grep -c NativeFilePicker || true)
-          if [ "$found" -eq 0 ]; then
-            echo "::error::the IPA carries no NativeFilePicker; the plugin did not link"
-            exit 1
-          fi
-          echo "system file picker ✓ ($found)"
+          for symbol in NativeFilePicker NativePower; do
+            found=$(strings -a "$binary" | grep -c "$symbol" || true)
+            if [ "$found" -eq 0 ]; then
+              echo "::error::the IPA carries no $symbol; the plugin did not link"
+              exit 1
+            fi
+            echo "$symbol ✓ ($found)"
+          done
 
       # A signed IPA would be a private leak in a public download, so the gate
       # is here rather than in the release notes.

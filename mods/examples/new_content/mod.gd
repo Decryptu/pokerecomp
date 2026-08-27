@@ -448,12 +448,11 @@ class Population:
 		# back onto the same map meets the same population.
 		var rolls := RandomNumberGenerator.new()
 		rolls.seed = int(_context.get("run_seed", 0)) ^ _generation
-		# `Gen2Rules` is the run's own divergence flags. A run reproducing the
-		# cartridge's bugs is the one that wants the cartridge's density; read
+		# `Gen2Rules` is the run's own divergence flags and its challenge. Read
 		# it, never write it, since a rule that changed mid-run would make the
 		# save it produced unreproducible.
 		var count: int = POPULATION
-		if Gen2Rules.active().difficulty == Gen2Rules.DIFFICULTY_HARD:
+		if Gen2Rules.active().challenge == Gen2Rules.CHALLENGE_HARD:
 			count += 1
 		for at: int in mini(count, cells.size()):
 			var slot: Dictionary = table[rolls.randi_range(0, table.size() - 1)]

@@ -616,3 +616,49 @@ func _open_launcher_keeping_the_marker() -> void:
 	_launcher = (load("res://game/main/main.tscn") as PackedScene).instantiate()
 	add_child(_launcher)
 	await get_tree().process_frame
+
+
+## Godot reports no power state on any platform, so the indicator is only ever
+## drawn once a probe of this project's own has answered. A machine with no
+## battery must show nothing rather than a full cell that is not true.
+func test_the_charge_indicator_is_hidden_until_a_probe_answers() -> void:
+	var battery: Gen2LauncherBattery = Gen2LauncherBattery.create(Gen2LauncherTheme.active())
+	add_child_autofree(battery)
+	battery._apply({})
+	assert_false(battery.reading_available(), "no reading, no indicator")
+
+	battery.set_level(64)
+	assert_true(battery.reading_available())
+	assert_eq(battery.level, 64)
+	assert_false(battery.charging)
+
+	battery.set_level(200, true)
+	assert_eq(battery.level, Gen2LauncherBattery.FULL, "a percentage is clamped")
+	assert_true(battery.charging)
+	battery._apply({})
+	assert_false(battery.reading_available(), "and it goes away again")
+
+
+## The one line every macOS reading is parsed out of. `pmset` prints a header
+## with no percentage in it when the machine has no battery at all.
+func test_the_macos_reading_is_the_number_in_front_of_the_percent_sign() -> void:
+	assert_eq(
+		Gen2LauncherBattery._percent_before_sign(
+			" -InternalBattery-0 (id=22151267)\t89%; discharging; 9:51 remaining"
+		),
+		89,
+	)
+	assert_eq(Gen2LauncherBattery._percent_before_sign("Now drawing from 'AC Power'"), -1)
+	assert_eq(Gen2LauncherBattery._percent_before_sign("%"), -1, "and never a bare sign")
+	assert_eq(Gen2LauncherBattery._percent_before_sign("120%"), Gen2LauncherBattery.FULL)
+
+
+## Every platform this project ships to either has a probe or draws nothing.
+## The two singleton platforms answer nothing on a desktop, which is what keeps
+## a missing plugin from being read as a flat battery.
+func test_only_the_platforms_with_a_probe_shell_out() -> void:
+	assert_true(Gen2LauncherBattery._probe_plugin().is_empty(), "no singleton here")
+	assert_eq(
+		Gen2LauncherBattery._shells_out(), OS.get_name() in ["macOS", "Windows"],
+		"a process is launched for those two and nothing else",
+	)

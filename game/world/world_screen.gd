@@ -1733,6 +1733,10 @@ func _spend_poison_steps() -> bool:
 	## `.CheckWhitedOut` prints every fainted member's line and only then asks
 	## whether anything can still fight, so the whiteout stands behind them all.
 	var lines: PackedStringArray = texts.duplicate()
+	## A Nuzlocke faint is a death here too, and the poison line is the only one
+	## the player sees: the row is taken off the party behind it.
+	for lost: Dictionary in _reap_nuzlocke_faints(save, Gen2Nuzlocke.CAUSE_POISON):
+		lines.append(Gen2Nuzlocke.death_text(Gen2Nuzlocke.grave_name(_data, lost)))
 	if bool(pass_result.get("whiteout", false)):
 		lines.append_array(_whiteout_texts())
 		_show_player_event(lines, _finish_whiteout)
@@ -1755,11 +1759,29 @@ func _persist_after_poison_step(save: Gen2SaveData) -> void:
 	_refresh_labels()
 
 
-## `_WhitedOutText`, with the player name the save carries.
+## `_WhitedOutText`, with the player name the save carries, or the line that
+## replaces it once a Nuzlocke has nothing left to send out.
 func _whiteout_texts() -> PackedStringArray:
 	var save: Gen2SaveData = active_save()
 	var player_name: String = save.player_name if save != null else "<PLAYER>"
+	if _nuzlocke_ends_here(save):
+		return PackedStringArray([Gen2Nuzlocke.run_over_text(player_name)])
 	return PackedStringArray([Gen2WorldPartyHost.whited_out_text(player_name)])
+
+
+## Whether this blackout is the end of a Nuzlocke rather than a walk back to a
+## Pokemon Center. A run whose every Pokemon is dead has nothing to heal: the
+## rule is a full wipe ending the run, storage or no storage.
+##
+## Not inside the Bug Catching Contest. `ContestDropOffMons` masks the rest of
+## the party into [member Gen2SaveData.contest_stashed_party] and leaves one
+## Pokemon standing, so a faint there empties a party that is not the run's:
+## `Script_Whiteout`'s own contest branch judges the contest and gives the
+## others back, and the run carries on with them.
+func _nuzlocke_ends_here(save: Gen2SaveData) -> bool:
+	return _world != null and _world.rules != null and _world.rules.is_nuzlocke() \
+		and save != null and not _world.bug_contest_active() \
+		and not Gen2WorldPartyHost.party_has_fit_mon(save)
 
 
 ## `Script_BattleWhiteout` and `OverworldWhiteoutScript`, which differ only in
@@ -1775,6 +1797,13 @@ func _finish_whiteout() -> void:
 	if _world == null:
 		return
 	var save: Gen2SaveData = active_save()
+	## The Nuzlocke's own ending, in front of everything `Script_Whiteout` does:
+	## nothing is healed, no money is halved and no spawn is read, because the
+	## run is over rather than set back. The slot keeps what it walked to; the
+	## launcher is what the player leaves through.
+	if _nuzlocke_ends_here(save):
+		_end_nuzlocke_run(save)
+		return
 	## `Script_Whiteout` tests `ENGINE_BUG_CONTEST_TIMER` after `special
 	## HealParty` and before `HalveMoney`, so blacking out inside the Bug
 	## Catching Contest is judged rather than paid for: no money is halved, the
@@ -1806,6 +1835,27 @@ func _finish_whiteout() -> void:
 	## `ToggleDecorationsVisibility` on the map the player woke up on.
 	_show_script_results(_world.run_event_queue(false))
 	_refresh_after_escape()
+
+
+## Ends the run for good and writes it down. Nothing else follows: the world is
+## left where it fell, the save records that it is over, and every screen that
+## can open a slot refuses to continue this one.
+func _end_nuzlocke_run(save: Gen2SaveData) -> void:
+	Gen2Nuzlocke.end_run(save.nuzlocke, _world.landmark_backup(), _world.world_day)
+	_script_prompt = "The run is over."
+	_zero_map_name_sign_timer()
+	_refresh_labels()
+	if _data == null or _injected_save != null:
+		return
+	var written: Dictionary = Gen2SaveStore.save(save, _data)
+	if not bool(written.get("ok", false)):
+		push_error("Could not save the run's end: %s" % String(written.get("message", "")))
+	## The one place the overworld hands the screen back. There is nothing left
+	## to play here, and the save screen is where the slot's own epitaph is: it
+	## lists what the run caught and what it lost, and it will not open this one
+	## again.
+	if is_inside_tree():
+		get_tree().change_scene_to_file.call_deferred("res://game/save/save_screen.tscn")
 
 
 ## One player event's lines put up in order, the tail run once the last has been
@@ -1845,7 +1895,7 @@ func _spend_day_care_steps() -> void:
 ## sequence and the nickname alone.
 func _open_hatch(hatches: Array, save: Gen2SaveData) -> void:
 	var host := Gen2EggHatchScreen.new()
-	host.set_context(_data, hatches)
+	host.set_context(_data, hatches, _nuzlocke_names_everything())
 	_hatch_save = save
 	host.named.connect(_on_hatch_named)
 	host.closed.connect(_on_hatch_closed)
@@ -1900,7 +1950,8 @@ func _open_gift_nickname(request: Dictionary) -> bool:
 	var host := Gen2NicknamePromptScreen.new()
 	host.set_context(
 		_data, species_name,
-		Gen2WorldPartyHost.SENT_TO_BOX_FORMAT if destination == &"box" else ""
+		Gen2WorldPartyHost.SENT_TO_BOX_FORMAT if destination == &"box" else "",
+		"", _nuzlocke_names_everything()
 	)
 	_nickname_answer = species_name
 	host.named.connect(_on_gift_named)
@@ -1936,7 +1987,7 @@ func _open_contest_nickname() -> bool:
 	if Gen2WorldPartyHost.gift_destination(save) == &"full":
 		return false
 	var host := Gen2NicknamePromptScreen.new()
-	host.set_context(_data, species_name)
+	host.set_context(_data, species_name, "", "", _nuzlocke_names_everything())
 	_nickname_answer = species_name
 	host.named.connect(_on_gift_named)
 	host.closed.connect(_on_gift_nickname_closed)
@@ -1948,6 +1999,13 @@ func _open_contest_nickname() -> bool:
 	_script_prompt = "Nickname"
 	_refresh_labels()
 	return true
+
+
+## Whether every Pokemon this run receives has to carry a name. The Nuzlocke's
+## third rule, and the one place the answer is spelled: the four prompts that
+## ask the question read it rather than each testing the challenge.
+func _nuzlocke_names_everything() -> bool:
+	return _world != null and _world.rules != null and _world.rules.is_nuzlocke()
 
 
 func _on_gift_named(nickname: String) -> void:
@@ -4594,6 +4652,7 @@ func _open_battle_host(request: Dictionary) -> void:
 	## driver, so its first cry takes the channels the track is holding.
 	_play_battle_music(request)
 	host.start_world_battle(request.duplicate(true), save, badges)
+	_claim_nuzlocke_encounter(host, values, save)
 	## After the fight exists, because starting one clears whatever capture action
 	## was staged: the bag belongs to this battle rather than to the last one.
 	if _world != null and not tutorial:
@@ -4616,6 +4675,53 @@ func _open_battle_host(request: Dictionary) -> void:
 	host.set_process(false)
 	_script_prompt = "Battle in progress"
 	_refresh_labels()
+
+
+## The Nuzlocke's first rule, at the one place every battle is opened.
+##
+## An area gives up one encounter, and it gives it up the moment the Pokemon is
+## met rather than when a ball lands: beating it or running from it spends it
+## just the same, which is the rule's "no second chances". The claim is written
+## to disk here for the same reason a death is, so a reload cannot hand the area
+## back.
+##
+## Two wild battles claim nothing. The Bug Catching Contest has its own park
+## balls and its own judging, and a roamer belongs to no area at all: its
+## landmark is wherever it caught the player, so counting it would spend a route
+## the player never chose to spend.
+func _claim_nuzlocke_encounter(
+	host: Gen2BattleScreen, values: Dictionary, save: Gen2SaveData
+) -> void:
+	if _world == null:
+		return
+	_world.nuzlocke_area_open = -1
+	if _world.rules == null or not _world.rules.is_nuzlocke() or save == null:
+		return
+	if StringName(values.get("kind", &"")) != &"wild" or _world.bug_contest_active():
+		return
+	## The catching tutorial's Pokemon is nobody's encounter: no ball is thrown
+	## by the player and the fight is scripted from both sides.
+	if bool(values.get("tutorial", false)):
+		return
+	if int(values.get("battle_type", Gen2Battle.BATTLETYPE_NORMAL)) \
+		== Gen2Battle.BATTLETYPE_ROAMING:
+		return
+	var landmark: int = _world.landmark_backup()
+	if not Gen2Nuzlocke.claim_area(
+		save.nuzlocke, landmark, int(values.get("pokemon", 0))
+	):
+		host.set_capture_refusal(Gen2Nuzlocke.area_spent_text(_landmark_name(landmark)))
+		return
+	_world.nuzlocke_area_open = landmark
+	_persist_after_battle(save)
+
+
+## The area's own name, as the town map spells it. Empty where the cache has
+## none, which is what the refusal line falls back on.
+func _landmark_name(landmark: int) -> String:
+	if _data == null or landmark < 0:
+		return ""
+	return _data.landmark_name(landmark)
 
 
 ## `LoadEnemyMon`'s dex write, and the `wFirstUnownSeen` write beside it: the
@@ -4793,6 +4899,16 @@ func _after_battle_evolution_plans(result: Dictionary, save: Gen2SaveData) -> Ar
 func _finish_battle_exit(result: Dictionary, fought_save: Gen2SaveData) -> void:
 	if _world == null:
 		return
+	## `InitNickname` behind `PokeBallEffect`'s own `YesNoBox`, spent here rather
+	## than after the map reload below: the row it names is a party index, and
+	## the Nuzlocke pass under it takes rows out.
+	if StringName(result.get("outcome", &"")) == Gen2WorldBattleAdapter.OUTCOME_CAUGHT:
+		var caught: Dictionary = result.get("capture", {})
+		if not bool(caught.get("contest", false)):
+			_apply_capture_nickname(caught)
+	_reap_nuzlocke_faints(fought_save, Gen2Nuzlocke.CAUSE_BATTLE)
+	## The encounter this fight claimed is over, whatever it came to.
+	_world.nuzlocke_area_open = -1
 	if StringName(result.get("outcome", &"")) == Gen2WorldBattleAdapter.OUTCOME_WON:
 		Gen2WorldPartyHost.give_pokerus_and_convert_berries(
 			_data, fought_save, _world, _encounter_random
@@ -4827,7 +4943,6 @@ func _finish_battle_exit(result: Dictionary, fought_save: Gen2SaveData) -> void:
 					_world.state.park_balls(),
 				]
 			else:
-				_apply_capture_nickname(capture)
 				var species: Dictionary = _data.species(int(capture.get("species", 0)))
 				_script_prompt = "Caught %s" % String(species.get("name", "UNKNOWN"))
 		else:
@@ -4853,6 +4968,36 @@ func _finish_battle_exit(result: Dictionary, fought_save: Gen2SaveData) -> void:
 	_start_box_full_call()
 	_start_mom_purchase_call()
 	_refresh_labels()
+
+
+## The Nuzlocke's second rule: a faint is a death, so every party member at zero
+## HP is released and recorded. The battle said the line as each one fell; this
+## is where the row actually goes.
+##
+## Written to disk the moment it happens, whatever the outcome was, which is the
+## whole of the no-resets rule this project can enforce: quitting to the launcher
+## and reopening the slot cannot bring anything back.
+##
+## Answers what it took, so a caller that is about to end the run can say so.
+func _reap_nuzlocke_faints(save: Gen2SaveData, cause: StringName) -> Array:
+	if _world == null or _world.rules == null or not _world.rules.is_nuzlocke():
+		return []
+	var lost: Array = Gen2Nuzlocke.reap(save, cause, _world.landmark_backup())
+	if lost.is_empty():
+		return []
+	if save != null and _data != null and _injected_save == null:
+		var written: Dictionary = Gen2SaveStore.save(save, _data)
+		if not bool(written.get("ok", false)):
+			push_error("Could not save the loss: %s" % String(written.get("message", "")))
+	_refresh_labels()
+	return lost
+
+
+## Whether the run the player is in has ended for good. A Nuzlocke that has lost
+## its last Pokemon can be looked at and exported, never continued.
+func nuzlocke_run_over() -> bool:
+	var save: Gen2SaveData = active_save()
+	return save != null and Gen2Nuzlocke.run_over(save.nuzlocke)
 
 
 ## `Script_reloadmapafterbattle`'s `.was_wild` branch: a catch that filled its

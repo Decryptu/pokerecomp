@@ -1653,13 +1653,17 @@ adopts the installation once, on first activation.
 ## Reading the run's rules
 
 `world.rules` is a `Gen2Rules`: which of the cartridge's own bugs this run
-reproduces, and its trainer-AI difficulty. Read it, do not write it. A rule that
-changed mid-run would make the save it produced unreproducible.
+reproduces, and which challenge it is played under (`Gen2Rules.CHALLENGES`:
+`vanilla`, `hard` or `nuzlocke`). Read it, do not write it. A rule that changed
+mid-run would make the save it produced unreproducible, and the challenge is
+fixed when the save is created.
 
 ```gdscript
 if world.rules.reproduces(&"metal_powder_overflow"):
 	...
-if world.rules.difficulty == Gen2Rules.DIFFICULTY_HARD:
+if world.rules.challenge == Gen2Rules.CHALLENGE_HARD:
+	...
+if world.rules.is_nuzlocke():
 	...
 ```
 

@@ -135,6 +135,8 @@ static func slots_for(game_id: StringName, rom_sha1: String, data: GameData) -> 
 			"label": "",
 			"player_name": "",
 			"message": "Empty",
+			"challenge": String(Gen2Rules.CHALLENGE_VANILLA),
+			"run_over": false,
 		}
 		var result: Dictionary = load_result(game_id, rom_sha1, slot, data)
 		row["valid"] = bool(result["ok"])
@@ -143,6 +145,11 @@ static func slots_for(game_id: StringName, rom_sha1: String, data: GameData) -> 
 			var loaded: Gen2SaveData = result["save"]
 			row["label"] = loaded.label
 			row["player_name"] = loaded.player_name
+			## Which challenge the run is played under and whether it has ended,
+			## so the card can say both without loading the slot a second time.
+			if loaded.run_rules != null:
+				row["challenge"] = String(loaded.run_rules.challenge)
+			row["run_over"] = Gen2Nuzlocke.run_over(loaded.nuzlocke)
 		out.append(row)
 	return out
 
@@ -159,6 +166,8 @@ static func empty_slot_row(slot: int) -> Dictionary:
 		"label": "",
 		"player_name": "",
 		"message": "Empty",
+		"challenge": String(Gen2Rules.CHALLENGE_VANILLA),
+		"run_over": false,
 	}
 
 

@@ -1783,6 +1783,41 @@ func test_the_last_member_fainting_to_poison_opens_the_whiteout() -> void:
 	assert_true(mon.hp > 0, "Script_Whiteout's own `special HealParty`")
 
 
+## The Nuzlocke's own ending, on the same pass the whiteout above walks. A faint
+## is a death, so the row leaves the party rather than being healed, and a party
+## with nothing left is a wipe: the run is over rather than set back to a Center.
+func test_a_nuzlocke_wipe_ends_the_run_instead_of_whiting_out() -> void:
+	await _open_world(true)
+	_world_screen._world.rules = Gen2Rules.new()
+	_world_screen._world.rules.challenge = Gen2Rules.CHALLENGE_NUZLOCKE
+	var save: Gen2SaveData = _world_screen._injected_save
+	var mon: Gen2SaveMon = save.party[0]
+	mon.is_egg = false
+	mon.hp = 1
+	mon.nickname = "CYNDER"
+	mon.status = Gen2Status.POISON
+	var state: Gen2WorldState = _world_screen._world.state
+	for _step: int in Gen2WorldState.POISON_STEP_PHASE:
+		state.count_step()
+
+	assert_true(_world_screen._spend_poison_steps(), "the pass takes the turn")
+	assert_true(save.party.is_empty(), "the faint took the row off the party")
+	assert_eq((save.nuzlocke["graveyard"] as Array).size(), 1)
+	assert_eq(String((save.nuzlocke["graveyard"] as Array)[0]["nickname"]), "CYNDER")
+	var said: String = ""
+	for _press: int in 200:
+		said += "".join(_world_screen._text_box.text_lines())
+		if not _world_screen._field_move_text:
+			break
+		_world_screen.advance_frame()
+		_world_screen.press_button(Gen2Button.A)
+	assert_true(said.contains("gone"), "the loss is said before the verdict")
+	assert_true(said.contains("NUZLOCKE is over"), "and `_WhitedOutText` is replaced")
+	assert_false(_world_screen._field_move_text, "the last press runs it")
+	assert_true(Gen2Nuzlocke.run_over(save.nuzlocke), "the run is written off")
+	assert_true(save.party.is_empty(), "nothing was healed back into it")
+
+
 ## Where a save-bound mod policy is registered from: the manifest `register()`
 ## was handed is the capability, so the host has to have discovered it.
 const MOD_ROOT: String = "user://mod_tests_capture"

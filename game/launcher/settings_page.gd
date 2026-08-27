@@ -170,13 +170,15 @@ func _build() -> void:
 	listing.pressed.connect(_open_rules_sheet)
 	rules.add_child(listing)
 	_refresh_rules()
-	rules.add_child(Gen2LauncherUI.field(_theme, "Trainer AI", Gen2LauncherUI.segmented(
-		_theme, _titles(Gen2Rules.DIFFICULTIES),
-		maxi(Gen2Rules.DIFFICULTIES.find(_options.rules.difficulty), 0),
-		func(index: int) -> void:
-			_options.rules.difficulty = Gen2Rules.DIFFICULTIES[index]
-			_persist()
-	)))
+	## Vanilla, Hard and Nuzlocke are NOT here. A challenge decides what a run
+	## did rather than how this machine plays it, and one that could be switched
+	## off after a death would not be a challenge: it is chosen once, on the
+	## save screen, when the game is created.
+	rules.add_child(Gen2LauncherUI.muted(
+		_theme,
+		"Vanilla, Hard and Nuzlocke are picked when you start a new game, on the "
+		+ "save screen. A run keeps the one it was created with for good."
+	))
 
 	var game: VBoxContainer = _card(column, "In game")
 	game.add_child(Gen2LauncherUI.muted(

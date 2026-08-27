@@ -135,6 +135,32 @@ func test_a_normal_trainers_pokemon_holds_nothing() -> void:
 	assert_eq(party.at(0).item, 0)
 
 
+## Hard is one global rule per number rather than 800 rewritten teams, and this
+## is the one place a trainer's party is built out of the cartridge's tables, so
+## all three land here. The party stays the class's own species in its own order.
+func test_hard_raises_every_trainers_party_at_the_one_place_it_is_built() -> void:
+	var rules := Gen2Rules.new()
+	rules.challenge = Gen2Rules.CHALLENGE_HARD
+	var party: Gen2Party = Gen2TrainerParty.build(_data, 1, 0, rules)
+	assert_not_null(party)
+	assert_eq(party.size(), 2)
+
+	var lead: Gen2BattleMon = party.at(0)
+	assert_eq(lead.species, PIDGEY, "the class's own species, in its own order")
+	assert_eq(lead.level, 8, "level 7 plus 15 percent, floored, never under one")
+	assert_eq(lead.dvs, Gen2BattleMon.PERFECT_DVS)
+	assert_eq(int(lead.stat_exp["attack"]), Gen2Stats.MAX_STAT_EXP)
+	assert_eq(lead.hp, lead.max_hp(), "and it still arrives at full health")
+
+	var vanilla: Gen2BattleMon = Gen2TrainerParty.build(_data, 1, 0).at(0)
+	assert_gt(lead.max_hp(), vanilla.max_hp(), "the raised one is the stronger")
+
+	## A stored-moves trainer keeps exactly its stored moves whatever the level
+	## becomes; only a learnset fill follows the raise.
+	var stored: Gen2BattleMon = Gen2TrainerParty.build(_data, 1, 1, rules).at(0)
+	assert_eq(stored.moves, [GUST, TACKLE])
+
+
 func test_an_unknown_trainer_or_index_answers_null() -> void:
 	assert_null(Gen2TrainerParty.build(_data, 99, 0))
 	assert_null(Gen2TrainerParty.build(_data, 1, 9))

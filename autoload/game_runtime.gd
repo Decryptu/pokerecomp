@@ -22,6 +22,10 @@ var selected_save_slot: int = -1
 ## only then is a save built and written. Abandoning the intro leaves no file.
 var pending_new_game_slot: int = -1
 var pending_new_game_label: String = ""
+## Which challenge the save screen chose for the run that is about to start. It
+## is fixed for the life of the save, so it is staged with the slot rather than
+## read back out of the installation's settings once the intro is over.
+var pending_new_game_challenge: StringName = Gen2Rules.CHALLENGE_VANILLA
 
 ## The autoload, cached after the first lookup.
 static var _instance: Gen2GameRuntime = null
@@ -60,18 +64,30 @@ static func selected_save_or_null() -> Gen2SaveData:
 
 
 ## Stages a new game for [method take_pending_new_game] to pick up.
-func begin_new_game(game_id: StringName, slot: int, label: String) -> void:
+func begin_new_game(
+	game_id: StringName,
+	slot: int,
+	label: String,
+	challenge: StringName = Gen2Rules.CHALLENGE_VANILLA
+) -> void:
 	selected_game_id = game_id
 	pending_new_game_slot = slot
 	pending_new_game_label = label
+	pending_new_game_challenge = challenge if Gen2Rules.CHALLENGES.has(challenge) \
+		else Gen2Rules.CHALLENGE_VANILLA
 
 
 ## The staged slot and label, cleared as it is handed over so a second read
 ## cannot start the intro again.
 func take_pending_new_game() -> Dictionary:
-	var out: Dictionary = {"slot": pending_new_game_slot, "label": pending_new_game_label}
+	var out: Dictionary = {
+		"slot": pending_new_game_slot,
+		"label": pending_new_game_label,
+		"challenge": pending_new_game_challenge,
+	}
 	pending_new_game_slot = -1
 	pending_new_game_label = ""
+	pending_new_game_challenge = Gen2Rules.CHALLENGE_VANILLA
 	return out
 
 var _save: Gen2SaveData = null
@@ -355,9 +371,15 @@ func _activate_rules(save: Gen2SaveData) -> void:
 ## A save that has just been made. The mods are told before it is written, so
 ## whatever a run is built from is in the file the player will load next time,
 ## and the rules it records are the ones it will always be played under.
-func announce_new_save(save: Gen2SaveData) -> void:
+func announce_new_save(save: Gen2SaveData, challenge: StringName = &"") -> void:
 	if save != null and save.run_rules == null:
 		save.run_rules = Gen2OptionsStore.current().rules.duplicate_rules()
+	## The one place a challenge is ever written. The settings screen owns the
+	## divergence flags and nothing else: which challenge a run is played under
+	## is chosen when the save is made and can never move again, because the
+	## state a Nuzlocke or a hard run produced is not the state another would.
+	if save != null and save.run_rules != null and Gen2Rules.CHALLENGES.has(challenge):
+		save.run_rules.challenge = challenge
 	Gen2ModHost.instance().created_save(save)
 	Gen2ModHost.instance().activate_save(save)
 	_activate_rules(save)

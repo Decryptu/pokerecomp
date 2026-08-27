@@ -158,13 +158,46 @@ godot --headless --path . --quit-after 30
 The launcher is a shelf of three cartridges. An unimported bay is drawn in the
 cartridge's own outline: drop a dump on it, or click to browse. Mods, settings
 and about are in the dock underneath. Light and dark, and the same layout works
-on a phone.
+on a phone. The clock and the charge across the top are the machine's own; a
+device whose charge cannot be read shows none rather than a full cell.
 
 Play opens the save screen: validated slots, naming, export and import, `.sav`
 import, party inspection, and a save editor that cannot produce a save the game
-will not load. A new game opens on the cartridge's own splash, GameFreak
-animation, intro movie and title screen, then the gender question and Oak's
-speech. Continue enters the overworld. See [docs/SAVES.md](docs/SAVES.md).
+will not load. A new game asks which mode it is played in, then opens on the
+cartridge's own splash, GameFreak animation, intro movie and title screen, then
+the gender question and Oak's speech. Continue enters the overworld. See
+[docs/SAVES.md](docs/SAVES.md).
+
+### Vanilla, Hard and Nuzlocke
+
+Three modes, built in. No mod to install, nothing to remember to do yourself:
+the game keeps the rules. The mode is chosen when a save is created and is fixed
+for that run, because a challenge that can be switched off after a death is not
+one. Every save made before this update is a Vanilla run.
+
+| Mode | What changes |
+|---|---|
+| **Vanilla** | Nothing. The cartridge's own game. |
+| **Hard** | Every trainer scores with all ten of the game's own AI layers instead of the handful its class carries, switches out often, and brings a party 15% higher with perfect DVs and full stat experience. One global rule each, so the teams are still the ones the cartridge wrote. |
+| **Nuzlocke** | The [challenge](https://bulbapedia.bulbagarden.net/wiki/Nuzlocke_Challenge)'s rules, enforced by the game. |
+
+A Nuzlocke here plays itself by the rules rather than asking you to:
+
+- **One catch per area.** The first wild Pokemon you meet on a route, in a cave
+  or in a town is the only one you may throw a ball at there. It is spent
+  whether you catch it, beat it or run: the ball menu then says so instead of
+  opening. The area is the met location the Pokemon's own summary shows, so a
+  whole cave is one encounter rather than one per floor. Roamers and the Bug
+  Catching Contest belong to no area and spend nothing.
+- **A faint is death.** A Pokemon that faints is released on the way out of the
+  battle and never comes back. It is written to disk the moment it happens, so
+  quitting and reopening the slot cannot undo it.
+- **Every Pokemon is nicknamed.** The YES/NO is skipped and the keyboard opens
+  outright, for a catch, a gift and a hatched egg alike.
+- **A wipe ends the run.** Losing your last Pokemon is not a walk back to a
+  Pokemon Center: nothing is healed, no money is halved, and the slot is
+  finished. It stays on the shelf marked "Run over" with what it caught and
+  what it lost, and it cannot be continued.
 
 The start menu wires every source entry:
 

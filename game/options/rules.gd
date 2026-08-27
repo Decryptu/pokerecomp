@@ -1,14 +1,20 @@
 class_name Gen2Rules
 extends RefCounted
 
-## Which behaviour a run is played under, where this project and the cartridge
-## disagree on purpose.
+## Which behaviour a run is played under: the places this project and the
+## cartridge disagree on purpose, and which challenge the run was created under.
 ##
 ## Separate from [Gen2Options], which is the installation's own settings: a rule
 ## changes what the engine DOES, so it belongs to the run that produced a save
 ## rather than to whichever machine is playing it. A divergence becomes a named
 ## flag here one at a time, each with a live branch on both sides and a test on
 ## each.
+##
+## The two halves differ in one way. A flag is edited in Settings and the next
+## new game takes a copy; [member challenge] is chosen on the save screen when
+## the game is made and never moves again, because a Hard run that could be
+## turned down after a loss, or a Nuzlocke that could be turned off after a
+## death, would be neither. See [Gen2Nuzlocke] for what one of them spends.
 ##
 ## Every flag is named for the cartridge's behaviour and answers "reproduce the
 ## hardware", so a flag that is off is this project's own corrected answer. That
@@ -87,21 +93,36 @@ const MODE_QOL: StringName = &"qol"
 const MODE_CUSTOM: StringName = &"custom"
 const MODES: Array[StringName] = [MODE_CURRENT, MODE_VANILLA, MODE_QOL]
 
-## Which AI layers a trainer scores with. `normal` is the trainer class's own
-## imported mask, which is the cartridge's; the other two rewrite it rather than
-## inventing numbers, since a level or a stat this project made up would not be
-## this cartridge's game any more.
-const DIFFICULTY_EASY: StringName = &"easy"
-const DIFFICULTY_NORMAL: StringName = &"normal"
-const DIFFICULTY_HARD: StringName = &"hard"
-const DIFFICULTIES: Array[StringName] = [DIFFICULTY_EASY, DIFFICULTY_NORMAL, DIFFICULTY_HARD]
+## Which challenge a run is played under, chosen once when the save is created
+## and never again: a run that met a trainer under one of these did not produce
+## the state another would have. [constant CHALLENGE_VANILLA] is the cartridge's
+## own game and is what a slot written before this existed reads as.
+const CHALLENGE_VANILLA: StringName = &"vanilla"
+const CHALLENGE_HARD: StringName = &"hard"
+const CHALLENGE_NUZLOCKE: StringName = &"nuzlocke"
+const CHALLENGES: Array[StringName] = [
+	CHALLENGE_VANILLA, CHALLENGE_HARD, CHALLENGE_NUZLOCKE,
+]
 
-## `easy` keeps `AI_BASIC` alone, which is what the cartridge's own least
-## thoughtful classes carry, and `hard` adds every layer a class does not already
-## have. Neither can produce a mask the scorer does not understand, both being
-## subsets of the imported one's own bits.
-const DIFFICULTY_EASY_WEIGHTS: int = RomLayout.AI_BASIC
-const DIFFICULTY_HARD_WEIGHTS: int = RomLayout.AI_MOVE_WEIGHTS_MASK
+## What a screen calls each challenge. What each one DOES is
+## [method challenge_detail], which builds its line rather than storing it so
+## [constant HARD_LEVEL_BONUS_PERCENT] is stated once.
+const CHALLENGE_TITLES: Dictionary = {
+	CHALLENGE_VANILLA: "Vanilla",
+	CHALLENGE_HARD: "Hard",
+	CHALLENGE_NUZLOCKE: "Nuzlocke",
+}
+
+## How much higher a trainer's Pokemon is under [constant CHALLENGE_HARD], as a
+## percentage of its own level and never less than one level. A global rule
+## rather than a rewritten team per trainer: the cartridge's own parties stay
+## recognisable and every one of the 800-odd trainers is covered by the one
+## number.
+const HARD_LEVEL_BONUS_PERCENT: int = 15
+
+## Every stat's experience filled under [constant CHALLENGE_HARD], which is what
+## a fully trained Pokemon carries. The cartridge gives a trainer's Pokemon none.
+const HARD_STAT_EXP: int = Gen2Stats.MAX_STAT_EXP
 
 ## The rules the engine is playing under right now.
 ##
@@ -113,7 +134,8 @@ const DIFFICULTY_HARD_WEIGHTS: int = RomLayout.AI_MOVE_WEIGHTS_MASK
 static var _active: Gen2Rules = null
 
 var mode: StringName = MODE_CURRENT
-var difficulty: StringName = DIFFICULTY_NORMAL
+## See [constant CHALLENGES]. Fixed for the life of the save that carries it.
+var challenge: StringName = CHALLENGE_VANILLA
 ## Only the flags moved away from [member mode], so a mode change carries every
 ## flag the player never touched.
 var overrides: Dictionary = {}
@@ -189,22 +211,86 @@ func clear_flags() -> void:
 	overrides = {}
 
 
-## The AI layers a trainer class scores with, its imported mask under
-## [constant DIFFICULTY_NORMAL]. Masked to the layers the scorer knows either
-## way, so a patched trainer cannot ask for a bit nothing reads.
+## The AI layers a trainer class scores with, its imported mask everywhere but
+## [constant CHALLENGE_HARD], which adds every layer the class does not already
+## have. Masked to the layers the scorer knows either way, so a patched trainer
+## cannot ask for a bit nothing reads. Hard rewrites the imported mask rather
+## than inventing numbers, since a score this project made up would not be this
+## cartridge's game any more.
 func ai_move_weights(imported: int) -> int:
-	match difficulty:
-		DIFFICULTY_EASY:
-			return DIFFICULTY_EASY_WEIGHTS
-		DIFFICULTY_HARD:
-			return DIFFICULTY_HARD_WEIGHTS
+	if challenge == CHALLENGE_HARD:
+		return RomLayout.AI_MOVE_WEIGHTS_MASK
 	return imported & RomLayout.AI_MOVE_WEIGHTS_MASK
+
+
+## When a trainer class reaches into its bag and how readily it switches out.
+## [constant CHALLENGE_HARD] moves every class onto
+## [constant RomLayout.SWITCH_OFTEN] and leaves the item bits alone: a class with
+## no held items has none to use, and giving it some would be a rewritten team.
+func ai_item_switch(imported: int) -> int:
+	var flags: int = imported & RomLayout.AI_ITEM_SWITCH_MASK
+	if challenge != CHALLENGE_HARD:
+		return flags
+	flags &= ~(RomLayout.SWITCH_RARELY | RomLayout.SWITCH_SOMETIMES)
+	return flags | RomLayout.SWITCH_OFTEN
+
+
+## The level a trainer's Pokemon actually arrives at. One level is the floor, so
+## the rule bites on the level 2 rival as well as on the level 50 champion.
+func trainer_level(level: int) -> int:
+	if challenge != CHALLENGE_HARD or level <= 0:
+		return level
+	@warning_ignore("integer_division")
+	var bonus: int = (level * HARD_LEVEL_BONUS_PERCENT) / 100
+	return mini(level + maxi(bonus, 1), Gen2Experience.MAX_LEVEL)
+
+
+## The DV word a trainer's Pokemon carries: its class's own, or a perfect one
+## under [constant CHALLENGE_HARD].
+func trainer_dvs(imported: int) -> int:
+	return Gen2BattleMon.PERFECT_DVS if challenge == CHALLENGE_HARD else imported
+
+
+## The stat experience a trainer's Pokemon carries. The cartridge gives one
+## none; [constant CHALLENGE_HARD] gives it a full set.
+func trainer_stat_exp() -> Dictionary:
+	if challenge != CHALLENGE_HARD:
+		return {}
+	var out: Dictionary = {}
+	for key: String in Gen2Experience.STAT_EXP_KEYS:
+		out[key] = HARD_STAT_EXP
+	return out
+
+
+func is_nuzlocke() -> bool:
+	return challenge == CHALLENGE_NUZLOCKE
+
+
+## The name a screen shows for [param challenge]. Unknown reads as the
+## cartridge's own game, which is what an unreadable save is played as.
+static func challenge_title(challenge_name: StringName) -> String:
+	return String(CHALLENGE_TITLES.get(challenge_name, CHALLENGE_TITLES[CHALLENGE_VANILLA]))
+
+
+## What [param challenge] actually does, said once here because the launcher is
+## the only thing that says it and a second copy there would go stale.
+static func challenge_detail(challenge_name: StringName) -> String:
+	match challenge_name:
+		CHALLENGE_HARD:
+			return ("Every trainer scores with all ten of the game's own AI layers,"
+				+ " switches out often, and brings a party %d%% higher with perfect"
+				+ " DVs and full stat experience.") % HARD_LEVEL_BONUS_PERCENT
+		CHALLENGE_NUZLOCKE:
+			return ("One catch per area, a faint is permanent, every Pokemon is"
+				+ " nicknamed, and losing the party ends the run for good.")
+	return ("The cartridge's own game. Trainers bring the parties they were"
+		+ " written with and a faint costs nothing but the walk back.")
 
 
 func duplicate_rules() -> Gen2Rules:
 	var out := Gen2Rules.new()
 	out.mode = mode
-	out.difficulty = difficulty
+	out.challenge = challenge
 	out.overrides = overrides.duplicate()
 	return out
 
@@ -212,7 +298,7 @@ func duplicate_rules() -> Gen2Rules:
 func matches(other: Gen2Rules) -> bool:
 	if other == null:
 		return false
-	if difficulty != other.difficulty:
+	if challenge != other.challenge:
 		return false
 	for flag: StringName in FLAGS:
 		if reproduces(flag) != other.reproduces(flag):
@@ -228,7 +314,7 @@ func to_dict() -> Dictionary:
 		flags[String(flag)] = bool(overrides[flag])
 	return {
 		"mode": String(mode),
-		"difficulty": String(difficulty),
+		"challenge": String(challenge),
 		"flags": flags,
 	}
 
@@ -242,8 +328,10 @@ static func parse(raw: Variant) -> Gen2Rules:
 	var row: Dictionary = raw
 	var raw_mode := StringName(String(row.get("mode", "")))
 	out.mode = raw_mode if MODES.has(raw_mode) else MODE_CURRENT
-	var raw_difficulty := StringName(String(row.get("difficulty", "")))
-	out.difficulty = raw_difficulty if DIFFICULTIES.has(raw_difficulty) else DIFFICULTY_NORMAL
+	## A slot written before the challenge existed named a trainer-AI difficulty
+	## here instead, and reads as the cartridge's own game whatever it said.
+	var raw_challenge := StringName(String(row.get("challenge", "")))
+	out.challenge = raw_challenge if CHALLENGES.has(raw_challenge) else CHALLENGE_VANILLA
 	var flags: Variant = row.get("flags", {})
 	if flags is Dictionary:
 		for key: Variant in flags as Dictionary:
