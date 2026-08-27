@@ -420,17 +420,14 @@ jobs:
           v="${{ needs.version.outputs.version }}"
           cp /tmp/switch/switch_release.elf switch_release.elf
           # An NRO icon is a 256x256 JPEG and nothing else; the repository's is
-          # a PNG, so it is converted here rather than committed twice.
-          # ImageMagick 7 renamed `convert` to `magick` and the runner image has
-          # carried one or the other for years, so both are tried by name.
-          if command -v magick >/dev/null; then
-            magick app_icon.png -resize 256x256! -quality 92 app_icon.jpg
-          elif command -v convert >/dev/null; then
-            convert app_icon.png -resize 256x256! -quality 92 app_icon.jpg
-          else
-            echo "::error::no ImageMagick on the runner; the NRO icon cannot be made"
-            exit 1
-          fi
+          # a PNG, so it is converted here rather than committed twice. Godot
+          # does it because Godot is already installed in this job and is the
+          # project's own tool: this step used to reach for whichever of
+          # `magick` and `convert` the runner image carried, and the 0.1.6 build
+          # failed when it carried neither.
+          GODOT_CAP=300 tools/ci_godot.sh "$GODOT" --headless --path . \
+            -s res://tools/make_nro_icon.gd -- "$PWD/app_icon.jpg"
+          [ -s app_icon.jpg ] || { echo "::error::the NRO icon is empty"; exit 1; }
           docker run --rm -v "$PWD:/w" -w /w devkitpro/devkita64:latest bash -c "
             set -euo pipefail
             nacptool --create pokerecomp '${{ github.repository_owner }}' '$v' control.nacp
