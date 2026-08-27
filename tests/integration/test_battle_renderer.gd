@@ -8,9 +8,11 @@ const Fixture := preload("res://tests/integration/world_trainer_fixture.gd")
 
 var _data: GameData = null
 var _battle_screen: Gen2BattleScreen = null
+var _caught: Array[Dictionary] = []
 
 
 func before_each() -> void:
+	_caught = []
 	_forget_view()
 	Gen2ModHost.reset()
 	_data = Fixture.build()
@@ -224,6 +226,53 @@ func handle_battle_input(event) -> bool:
 	_battle_screen._capture_selecting = false
 	_battle_screen._unhandled_input(motion)
 	assert_eq((renderer.get("seen") as Array).size(), 2, "and it stayed shut afterwards")
+
+
+## A capture reaches the battle channel on the box that says `Gotcha!`, and a
+## line a subscriber asks for from that handler is printed next, in front of the
+## nickname prompt.
+func test_a_capture_publishes_and_a_mod_line_lands_behind_it() -> void:
+	await _open_battle()
+	_battle_screen.show_matchup(16, 155, 5, 5)
+	_settle_intro()
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	host.subscribe(Gen2ModHost.CHANNEL_BATTLE, &"catcher", _on_caught_event)
+
+	## Ball 0 is the one throw with no animation to spend, so what is being
+	## measured is the order of the boxes and not the frames between them.
+	## The throw that this result answers took the battle menu down.
+	_battle_screen._menu_stage = &""
+	_battle_screen._capture_waiting = true
+	_battle_screen.complete_capture({
+		"ok": true, "caught": true, "wobbles": 1, "ball": 0, "species": 16,
+		"destination": {"ok": true, "destination": &"box"},
+	})
+
+	_battle_screen._show_next_capture_message()
+	assert_string_contains(String(_battle_screen.battle_snapshot()["message"]), "shook")
+	assert_eq(_caught.size(), 0, "published before the line that says why")
+
+	_battle_screen._show_next_capture_message()
+	assert_string_contains(String(_battle_screen.battle_snapshot()["message"]), "Gotcha!")
+	assert_eq(_caught.size(), 1)
+	assert_eq(int(_caught[0]["species"]), 16)
+	assert_eq(StringName(_caught[0]["destination"]), &"box")
+	assert_false(bool(_caught[0]["tutorial"]))
+	assert_false(bool(_caught[0]["contest"]))
+
+	## The press that took the Gotcha line away, and what runs on from it: the
+	## asked-for line rather than the naming.
+	_battle_screen._message_awaits_press = false
+	_battle_screen._continue_after_messages()
+	assert_eq(String(_battle_screen.battle_snapshot()["message"]), "One for the DEX!")
+	assert_null(_battle_screen._capture_nickname_host, "the prompt waited for it")
+
+
+func _on_caught_event(event: Dictionary) -> void:
+	if StringName(event.get("type", &"")) != Gen2Battle.CAUGHT:
+		return
+	_caught.append(event)
+	Gen2ModHost.instance().request_battle_message(&"catcher", "One for the DEX!")
 
 
 ## A renderer that defines nothing keeps working, and one that answers false

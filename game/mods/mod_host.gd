@@ -225,6 +225,12 @@ var _hidden_item_requests: Array[Vector2i] = []
 ## `{item, quantity}` a mod asked the host to hand over. See
 ## [method request_item_gift].
 var _item_gift_requests: Array[Dictionary] = []
+## `{id, text}` a mod asked the battle to print. See
+## [method request_battle_message].
+var _battle_message_requests: Array[Dictionary] = []
+## Whether a battle screen is up and printing lines. See
+## [method set_battle_messages_open].
+var _battle_messages_open: bool = false
 ## What [method inventory] reads the live bag through, set by the world screen
 ## while a world is open. A Callable rather than a handle on [Gen2WorldAPI]: a
 ## mod is given the copy and never the world.
@@ -450,6 +456,61 @@ func requeue_item_gifts(gifts: Array[Dictionary]) -> void:
 	_item_gift_requests = gifts + _item_gift_requests
 
 
+## One line's worth of the cartridge's own font, printed in the battle's own box
+## with its own pacing and its own press, after the line being shown when the
+## request was made. Asked for from a [constant Gen2Battle.CAUGHT] handler it
+## lands between `Gotcha!` and the nickname prompt.
+##
+## Queued and spent in request order, the way [method request_hidden_item] and
+## [method request_item_gift] are, so a mod never prints over the line the player
+## is reading. Unlike those two it is DROPPED where no battle is showing
+## messages rather than held: a line about a moment that has passed is worse than
+## no line, and a mod that wants one later asks then.
+##
+## Refused rather than clipped when it does not fit one line of
+## [constant Gen2TextBox.STANDARD_COLUMNS], and the refusal reaches
+## [method failures] under [param id] so the launcher says whose it was.
+##
+## A `register_event_mutator` on the battle channel could rewrite an existing
+## line instead, but there is one mutator per channel and a renderer wants it, so
+## adding a line must not cost a mod that seam.
+func request_battle_message(id: StringName, text: String) -> Dictionary:
+	var line: String = text.strip_edges()
+	if String(id).is_empty():
+		return {"ok": false, "reason": &"invalid_provider"}
+	if line.is_empty():
+		return {"ok": false, "reason": &"empty_battle_message", "detail": String(id)}
+	if not _battle_messages_open:
+		return {"ok": false, "reason": &"no_battle_showing_messages", "detail": String(id)}
+	var width: int = Gen2TextBox.STANDARD_COLUMNS - Gen2TextBox.TEXT_LEFT * 2
+	if line.contains("\n") or Gen2Text.encode(line).size() > width:
+		var refusal: Dictionary = {
+			"ok": false, "reason": &"battle_message_too_long",
+			"detail": "%s: %s" % [id, line], "id": id,
+		}
+		_failures.append(refusal)
+		return refusal
+	_battle_message_requests.append({"id": id, "text": line})
+	return {"ok": true}
+
+
+## Drained by [Gen2BattleScreen], one line at a time, on the box it prints it in.
+## Empty when nothing is queued.
+func take_battle_message() -> Dictionary:
+	if _battle_message_requests.is_empty():
+		return {}
+	return _battle_message_requests.pop_front()
+
+
+## Set by [Gen2BattleScreen] for as long as it is in the tree. A request made
+## with no battle up is dropped rather than held, and what a battle left behind
+## goes with it: see [method request_battle_message].
+func set_battle_messages_open(open: bool) -> void:
+	_battle_messages_open = open
+	if not open:
+		_battle_message_requests.clear()
+
+
 ## Where [method inventory] reads from while a world is open, set by
 ## [Gen2WorldScreen] and cleared when it closes. An empty Callable is the honest
 ## default: the launcher and every screen that is not the world have no bag.
@@ -622,11 +683,13 @@ func repel_renewal_item(bag: Dictionary) -> int:
 ## [method inventory] is what a mod asks the bag with, and asking it here would
 ## give a provider one snapshot per wild rather than the live one.
 ##
-## Two providers COMPOSE BY THE LARGEST ANSWER rather than by registration order,
-## which is what [method shiny_roll_count] takes. Refusing the second by name
+## Two providers COMPOSE ADDITIVELY rather than by registration order, which is
+## what [method shiny_roll_count] takes: each provider's answer past the
+## cartridge's own one roll is added to the rest. Refusing the second by name
 ## would make two charms an install error over a number that has an obvious
-## join; a mod that wants fewer rolls than another mod asked for is asking for
-## something the host cannot honestly give both of.
+## join, and taking the largest would silently drop one of them. A provider
+## still answers the total it would give alone, so nothing registered changes
+## and one provider alone answers exactly what it did before.
 func register_shiny_rolls(id: StringName, provider: Object) -> Dictionary:
 	return _register_provider(_shiny_rolls, SHINY_ROLLS_METHODS, id, provider)
 
@@ -635,15 +698,16 @@ func shiny_rolls_ids() -> Array:
 	return _shiny_rolls.keys()
 
 
-## The largest count any provider asks for, clamped, or 1 when none does. Static
-## and null-safe the way [method allows_item_field_move] is: it is read where a
-## wild is built, which runs with no host in a test and in every tool.
+## The cartridge's own roll plus what every provider adds past it, clamped, or 1
+## when none does. Static and null-safe the way [method allows_item_field_move]
+## is: it is read where a wild is built, which runs with no host in a test and in
+## every tool.
 static func shiny_roll_count(context: Dictionary) -> int:
 	if _instance == null:
 		return 1
 	var rolls: int = 1
 	for provider: Object in _instance._shiny_rolls.values():
-		rolls = maxi(rolls, int(provider.call("shiny_rolls", context.duplicate(true))))
+		rolls += maxi(0, int(provider.call("shiny_rolls", context.duplicate(true))) - 1)
 	return clampi(rolls, 1, MAX_SHINY_ROLLS)
 
 

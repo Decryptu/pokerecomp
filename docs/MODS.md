@@ -33,7 +33,7 @@ user://mods/<id>/
 | `id` | Lowercase `[a-z0-9][a-z0-9_-]*`. Addresses the directory and the registry keys |
 | `name` | Shown to the player |
 | `version` | The mod's own version. Strict `major.minor.patch` |
-| `api_version` | The contract this mod is written against. Current: `Gen2ModManifest.API_VERSION`, 19. A host accepts 1 to 19 |
+| `api_version` | The contract this mod is written against. Current: `Gen2ModManifest.API_VERSION`, 20. A host accepts 1 to 20 |
 | `entry` | A `.gd` path inside the mod directory, or inside the pack when there is one |
 | `pack` | Optional `.pck` or `.zip` beside `mod.json`, holding the mod's files |
 | `description` | Optional |
@@ -468,6 +468,13 @@ it, so a subscriber sees what the player sees, in order.
 A subscriber only reads: the handler gets a copy and its return value is ignored.
 Events are published from the screens, so a headless tool or a test driving the
 engine directly fires none.
+
+A capture is on the battle channel too, published with its `Gotcha!` line and so
+before the nickname prompt. `Gen2Battle.CAUGHT` (`caught`) carries `species`,
+`level`, `dvs`, `shiny`, `ball`, `method`, `map_group`, `map_number`,
+`battle_type`, `destination` (`party` or `box`), `tutorial` and `contest`. The
+last two are the catching tutorial and a Bug Contest catch: neither is a Pokemon
+kept, which is why catch experience excludes both.
 
 `register_event_mutator(channel, id, handler)` is the other half. The turn or the
 script has already committed its state by then, so the handler may rewrite what is
@@ -1207,6 +1214,25 @@ request, and the script is `writetext`, `special Diploma`, `setevent` with nothi
 to patch. `patch_check` changes the number an existing site hands out; this is for
 when there is no site.
 
+## Asking the battle to say a line
+
+`Gen2ModHost.request_battle_message(id, text)` prints one line in the battle's own
+box, with its own pacing and its own press, after the line being shown when the
+request was made. Asked for from a `caught` handler it lands between `Gotcha!` and
+the nickname prompt.
+
+- Queued and spent in request order, the way the two asks above are.
+- Dropped where no battle is showing lines, rather than held: a line about a
+  moment that has passed is worse than none. What a battle left queued goes with
+  it.
+- One line of the cartridge's own font, 18 tiles. A longer line, or one carrying a
+  newline, is refused rather than clipped, and the refusal reaches
+  `Gen2ModHost.failures()` under the mod's id.
+
+It returns `{ok: true}` or a refusal, so a mod may say why nothing was printed.
+`register_event_mutator` rewrites an existing line instead; there is one mutator
+per channel, so adding a line does not cost a mod that seam.
+
 ## Reading the bag
 
 `Gen2ModHost.inventory()` answers the live world's `{item: quantity}`, and `{}`
@@ -1246,7 +1272,14 @@ already carries `dvs` (the Pokemon a visible encounter's player walked up to),
 stored word. A wild UNOWN rerolls until its letter is one the Ruins of Alph puzzle
 has unlocked.
 
-Two providers compose by the largest answer rather than by registration order.
+Providers compose additively rather than by registration order: the total is the
+cartridge's own roll plus the sum of what each provider adds past it.
+
+    rolls = 1 + sum over providers of max(0, provider answer - 1)
+
+A provider answers the total it would give alone, so one provider on its own is
+unchanged and a mod written against an older host still reads right. Two mods
+worth 3 and 12 rolls give 14, not 12.
 
 ## An alternate field-move source
 
