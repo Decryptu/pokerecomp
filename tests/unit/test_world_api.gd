@@ -4603,6 +4603,27 @@ func test_a_movement_sleep_holds_the_wait_without_moving_anything() -> void:
 	assert_eq(object.cell, start)
 
 
+## `Script_hangup` is `HangUp` inline, which spends seven twenty-frame waits and
+## asks for no button. Before this the command emitted an event nothing answered
+## and the script ran straight on.
+func test_hangup_holds_the_script_for_the_whole_hang_up_sequence() -> void:
+	_write_service_cache()
+	RomCache.write_json(RomCache.world_scripts_path(_directory), {
+		"48:6070": [0x99, 0x91],
+	})
+	var data: GameData = GameData.open_directory(_directory)
+	data.world_map(1, 1).events["coord_events"][0]["script"] = 0x6070
+	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(7, 6))
+	assert_eq(world.dispatch_script_events()[0]["status"], &"waiting")
+	var wait: Dictionary = world.pending_script_wait()
+	assert_true(bool(wait.get("hang_up", false)))
+	assert_eq(int(wait.get("frames", 0)), Gen2WorldPhoneRing.HANG_UP_FRAMES)
+	for _frame: int in Gen2WorldPhoneRing.HANG_UP_FRAMES - 1:
+		world.advance_script_wait_frame()
+	assert_false(world.pending_script_wait().is_empty(), "one frame of the boop left")
+	assert_eq(_final_status(world.advance_script_wait_frame()), &"complete")
+
+
 ## `Script_pause` delays two frames per counted unit inside the command, and
 ## `Script_deactivatefacing` hands the same count to SCRIPT_WAIT, which
 ## `WaitScript` spends one a frame. Both write wScriptDelay only when their

@@ -464,7 +464,7 @@ func _background_image() -> Image:
 	return _page.image(_data, _page.tilemap(
 		_data.town_map_region(Gen2TownMap.region_name(_map.region())),
 		codes, _map.screen, _cards
-	), _female)
+	), _female, _map.screen)
 
 
 ## The landmark name each map screen puts in its own box, or `GetPokemonName`

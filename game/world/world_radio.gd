@@ -99,8 +99,13 @@ const CHANNELS: Array[Dictionary] = [
 ]
 
 ## The strings LoadStation_* leaves in `de` for UpdateRadioStation to place under
-## the dial, identical in both pins. Rocket Radio really does reuse Let's All
-## Sing's, and Buena's own name is blank until Team Rocket takes the tower.
+## the dial, identical in both pins. `LoadStation_RocketRadio` really does reuse
+## Let's All Sing's, though only `PlayRadioStationPointers` reaches it and a map
+## radio prints no name. `LoadStation_BuenasPassword` answers with
+## `NotBuenasPasswordName`, an empty string, until Team Rocket takes the tower.
+##
+## `.returnafterstation` places this before `PlayRadioShow` runs, so the name is
+## the station the dial is on and never the Rocket broadcast standing in for it.
 const STATION_NAMES: Dictionary = {
 	OAKS_POKEMON_TALK: "OAK's <PK><MN> Talk",
 	POKEDEX_SHOW: "#DEX Show",
@@ -187,6 +192,7 @@ static func station_for(knob: int, context: Dictionary = {}) -> Dictionary:
 	var channel: int = _channel_for_rule(entry, context)
 	if channel < 0:
 		return _no_signal(knob)
+	var name: String = _station_name(channel, context)
 	channel = _rocket_override(channel, context)
 	return {
 		"ok": true,
@@ -195,7 +201,7 @@ static func station_for(knob: int, context: Dictionary = {}) -> Dictionary:
 		"channel": channel,
 		"raw_channel": raw_channel(channel, crystal),
 		"music": CHANNEL_SONGS[channel],
-		"name": String(STATION_NAMES.get(channel, "")),
+		"name": name,
 	}
 
 
@@ -274,6 +280,15 @@ static func _channel_for_rule(entry: Dictionary, context: Dictionary) -> int:
 ## station below the Poke Flute channel broadcasts Rocket Radio instead. The
 ## three at or above it are untouched, which is why the Poke Flute channel still
 ## answers during the takeover.
+## The name the tuned station places, which is `LoadStation_*`'s own `de` and so
+## is read before the Rocket broadcast replaces the programme.
+static func _station_name(channel: int, context: Dictionary) -> String:
+	if channel == BUENAS_PASSWORD \
+		and not bool(context.get("rockets_in_radio_tower", false)):
+		return ""
+	return String(STATION_NAMES.get(channel, ""))
+
+
 static func _rocket_override(channel: int, context: Dictionary) -> int:
 	if channel >= POKE_FLUTE_RADIO:
 		return channel

@@ -2516,7 +2516,14 @@ func _execute_later_command(source_opcode: int, command: Dictionary, bank: int) 
 				"address": int(command.get("address", 0)),
 			})
 		0x98:
-			_emit_runtime_event(&"phone_hangup", {})
+			## `Script_hangup` is `HangUp` inline: seven twenty-frame waits with
+			## its own two lines on the box, and no button anywhere in it.
+			_emit_runtime_event(&"phone_hangup", {
+				"frames": Gen2WorldPhoneRing.HANG_UP_FRAMES,
+			})
+			return _stage_frame_wait(
+				Gen2WorldPhoneRing.HANG_UP_FRAMES, {"hang_up": true}
+			)
 		0x99:
 			return _stage_decoration_description(int(command.get("value", 0)))
 		0x9A:

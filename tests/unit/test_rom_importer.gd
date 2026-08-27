@@ -1498,13 +1498,16 @@ func test_the_pokegear_texts_are_read_in_sequence() -> void:
 	var data: PackedByteArray = _dump()
 	var at: int = int((_layout["town_map"] as Dictionary)["card_texts"])
 	var offset: int = at
-	for words: String in ["WHOM?", "PRESS", "DELETE?"]:
+	for words: String in ["...", "NO SERVICE", "WHOM?", "PRESS", "DELETE?"]:
 		_write(data, offset, _text(words))
 		offset += _text(words).size()
 	var texts: Dictionary = RomImporter.read_pokegear_texts(_rom(data), _layout)
 	assert_eq(
 		texts,
-		{"ask_who": "WHOM?", "press_button": "PRESS", "ask_delete": "DELETE?"}
+		{
+			"ellipse": "...", "out_of_service": "NO SERVICE",
+			"ask_who": "WHOM?", "press_button": "PRESS", "ask_delete": "DELETE?",
+		}
 	)
 	data[at] = 0xFF
 	assert_true(RomImporter.read_pokegear_texts(_rom(data), _layout).is_empty())

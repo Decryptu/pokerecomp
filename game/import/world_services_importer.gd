@@ -373,6 +373,9 @@ static func _read_phone(rom: RomFile, layout: Dictionary) -> Dictionary:
 	)
 	if out_of_area.is_empty() or just_talk.is_empty():
 		return _error("Phone service script pointers are invalid.")
+	var hang_up: Dictionary = _hang_up_texts(rom, layout)
+	if hang_up.is_empty():
+		return _error("The hang-up texts did not decode.")
 
 	return {
 		"ok": true,
@@ -386,9 +389,31 @@ static func _read_phone(rom: RomFile, layout: Dictionary) -> Dictionary:
 				"receive_call_delays": [20, 10, 5, 3],
 				"out_of_area_script": out_of_area,
 				"just_talk_script": just_talk,
+				"hang_up_click": String(hang_up["click"]),
+				"hang_up_ellipse": String(hang_up["ellipse"]),
 			},
 		},
 	}
+
+
+## `HangUp_Beep`'s `PhoneClickText` and `HangUp_BoopOn`'s `PhoneEllipseText`,
+## adjacent in `data/text/common_3.asm` and decoded in that order from the one
+## offset. Both end on `done`, so neither holds the routine for a button.
+static func _hang_up_texts(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var at: int = int(layout.get("phone_call_texts", -1))
+	var window: int = 2 * RomLayout.PHONE_CALL_TEXT_MAX_BYTES
+	if at < 0 or not rom.in_bounds(at, window):
+		return {}
+	var data: PackedByteArray = rom.slice(at, window)
+	var out: Dictionary = {}
+	var offset: int = 0
+	for name: String in ["click", "ellipse"]:
+		var decoded: Dictionary = Gen2TextStream.decode(data, offset)
+		if not bool(decoded.get("ok", false)) or String(decoded["text"]).is_empty():
+			return {}
+		out[name] = String(decoded["text"])
+		offset = int(decoded["bytes"])
+	return out
 
 
 static func _phone_pointer(rom: RomFile, at: int) -> Dictionary:

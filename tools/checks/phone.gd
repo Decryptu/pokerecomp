@@ -25,6 +25,24 @@ func run(r: RefCounted) -> void:
 		_contacts(game_id, data)
 		_special_calls(game_id, data)
 		_mom_purchases(game_id, data)
+		_hang_up_texts(game_id, data)
+
+
+## `HangUp`'s own two lines, transcribed from `data/text/common_3.asm` rather
+## than read off the importer: they are pinned by one offset per cartridge and a
+## wrong one decodes to something rather than to nothing.
+const HANG_UP_TEXTS: Dictionary = {"hang_up_click": "Click!", "hang_up_ellipse": "……"}
+
+
+func _hang_up_texts(game_id: StringName, data: GameData) -> void:
+	var metadata: Dictionary = data.world_phone_metadata()
+	for key: String in HANG_UP_TEXTS:
+		_r.check(
+			String(metadata.get(key, "")) == String(HANG_UP_TEXTS[key]),
+			"%s: %s decoded as %s, wanted %s." % [
+				game_id, key, String(metadata.get(key, "")), String(HANG_UP_TEXTS[key]),
+			]
+		)
 
 
 ## Every row carries both scripts, and `PHONE_BILL` resolves through the seam

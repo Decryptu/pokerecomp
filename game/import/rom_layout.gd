@@ -958,6 +958,13 @@ const TOWN_MAP_REGION_BYTES: int = TOWN_MAP_REGION_CELLS + 1
 ## `KantoMap`, so the region map locates it rather than a fourth offset.
 const DEX_NEST_ICON_TILES: int = 1
 
+## `FlyMapLabelBorderGFX`, the six 1bpp tiles `_FlyMap` loads over `PokegearGFX`
+## at `vTiles2 tile $30`: the bubble's four corners, its up/down arrow and one
+## spare. Uncompressed and directly behind `PokedexNestIconGFX`, so the region
+## map locates it too.
+const FLY_MAP_LABEL_TILES: int = 6
+const FLY_MAP_LABEL_FIRST_TILE: int = POKEGEAR_FIRST_TILE
+
 ## `RadioTilemapRLE`, `PhoneTilemapRLE` and `ClockTilemapRLE`: the other three
 ## Pokegear cards, one contiguous run in that order directly behind
 ## `PokegearSpritesGFX`, byte identical on all three cartridges.
@@ -973,12 +980,18 @@ const POKEGEAR_CARD_TERMINATOR: int = 0xFF
 ## The whole run, which is what bounds the walk over the three.
 const POKEGEAR_CARD_TILEMAP_BYTES: int = 305
 
-## `_PokegearAskWhoCallText` and its two neighbours, adjacent in
+## `_GearEllipseText` and the four texts behind it, adjacent in
 ## `data/text/common_3.asm` and decoded in that order from the one offset: the
-## phone card asks the first when it opens, the clock card says the second, and
-## the phone submenu's DELETE row asks the third.
-const POKEGEAR_TEXT_NAMES: Array[String] = ["ask_who", "press_button", "ask_delete"]
+## two the phone card places while a call is being made or refused, then the
+## question it opens with, the clock card's line, and the DELETE row's question.
+const POKEGEAR_TEXT_NAMES: Array[String] = [
+	"ellipse", "out_of_service", "ask_who", "press_button", "ask_delete",
+]
 const POKEGEAR_TEXT_MAX_BYTES: int = 64
+
+## `PhoneClickText` and `PhoneEllipseText`, the two lines `HangUp` prints. Both
+## are short; the window only has to hold each one whole.
+const PHONE_CALL_TEXT_MAX_BYTES: int = 32
 
 ## `TownMapPals`: a palette per tile id, condensed to nybbles, least significant
 ## first. It covers $00 to $5f; $60 and above take palette 0.
@@ -2329,7 +2342,8 @@ const GOLD_SILVER: Dictionary = {
 	# at every offset and keeping the run reproducing the PNG, and the landmark
 	# table by its x,y pairs at a stride of four, which nothing else matches.
 	# Every hit is unique per dump. `cards` is the three card tilemaps as one run
-	# from the pinned .rle files and `card_texts` the two Pokegear texts. Nested
+	# from the pinned .rle files and `card_texts` the run of five that opens on
+	# `_GearEllipseText`. Nested
 	# like trainer_card, so Gold and Silver's absent female palette stays out of
 	# the flat offset checks.
 	"town_map": {
@@ -2337,7 +2351,7 @@ const GOLD_SILVER: Dictionary = {
 		"pokegear_gfx": 0x1C0E43,
 		"sprites": 0x9149C,
 		"cards": 0x914CC,
-		"card_texts": 0x198089,
+		"card_texts": 0x198066,
 		"fast_ship": 0x90C7C,
 		"johto": 0x91F52,
 		"kanto": 0x920BB,
@@ -2703,6 +2717,9 @@ const GOLD_SILVER: Dictionary = {
 	"special_phone_calls": 0x905F6,
 	"phone_out_of_area_bank": 0x24,
 	"phone_out_of_area_address": 0x4626,
+	# `_PhoneClickText` and the `_PhoneEllipseText` behind it, the two lines
+	# `HangUp` prints. Matched on "Click!" itself, which hits once per dump.
+	"phone_call_texts": 0x1980FC,
 	"phone_just_talk_bank": 0x24,
 	"phone_just_talk_address": 0x462F,
 	# SpecialCallOnlyWhenOutside and SpecialCallWhereverYouAre in engine/phone/phone.asm.
@@ -2924,7 +2941,7 @@ const CRYSTAL: Dictionary = {
 		"pokegear_gfx": 0x1DE2E4,
 		"sprites": 0x914DD,
 		"cards": 0x9150D,
-		"card_texts": 0x1C5847,
+		"card_texts": 0x1C5824,
 		"fast_ship": 0x90CB2,
 		"johto": 0x91FFF,
 		"kanto": 0x92168,
@@ -3279,6 +3296,7 @@ const CRYSTAL: Dictionary = {
 	"special_phone_calls": 0x90627,
 	"phone_out_of_area_bank": 0x24,
 	"phone_out_of_area_address": 0x4657,
+	"phone_call_texts": 0x1C5580,
 	"phone_just_talk_bank": 0x24,
 	"phone_just_talk_address": 0x4660,
 	# Crystal's relocated special-call condition routines.
@@ -3972,6 +3990,13 @@ static func credits_string_offset(rom: RomFile, layout: Dictionary, index: int) 
 static func dex_nest_icon_offset(layout: Dictionary) -> int:
 	var kanto: int = int((layout.get("town_map", {}) as Dictionary).get("kanto", -1))
 	return kanto + TOWN_MAP_REGION_BYTES if kanto >= 0 else -1
+
+
+## `FlyMapLabelBorderGFX`, one 2bpp tile behind the nest icon; -1 for a cartridge
+## with no region map.
+static func fly_map_label_offset(layout: Dictionary) -> int:
+	var nest: int = dex_nest_icon_offset(layout)
+	return nest + DEX_NEST_ICON_TILES * Gen2Tiles.TILE_BYTES if nest >= 0 else -1
 
 
 static func landmark_count(layout: Dictionary) -> int:

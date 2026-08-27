@@ -1175,6 +1175,7 @@ static func _town_map() -> Dictionary:
 		"card_texts": {
 			"ask_who": "WHOM TO CALL?", "press_button": "PRESS A BUTTON",
 			"ask_delete": "DELETE THIS NUMBER?",
+			"ellipse": "...", "out_of_service": "NO SERVICE HERE",
 		},
 	}
 
