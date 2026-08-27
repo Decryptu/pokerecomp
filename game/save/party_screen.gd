@@ -759,7 +759,7 @@ func set_screen(screen: Gen2Screen) -> void:
 ## The view lives in a screen this node may not own, so it goes by hand.
 func _exit_tree() -> void:
 	if _view != null:
-		Gen2Screen.drop(_view)
+		Gen2Screen.drop_on_exit(_view)
 		_view = null
 
 

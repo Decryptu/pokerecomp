@@ -317,6 +317,24 @@ static func drop(node: Node) -> void:
 	node.queue_free()
 
 
+## The same from an [method Node._exit_tree], where the removal above is
+## refused.
+##
+## A parent is blocked from removing a child while it is already removing one,
+## and every screen that hosts a view it does not own drops that view as it
+## leaves: both hang off the same parent, so the parent is mid-removal when the
+## drop arrives and the engine raises an error instead. Hiding is the whole of
+## what the removal was for here, since nothing replaces a view whose screen is
+## going, and [method Node.queue_free] takes it off the tree either way.
+static func drop_on_exit(node: Node) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	var item: CanvasItem = node as CanvasItem
+	if item != null:
+		item.hide()
+	node.queue_free()
+
+
 ## The same for every child of [param parent], which is what a row list being
 ## rebuilt in place wants.
 static func drop_children(parent: Node) -> void:

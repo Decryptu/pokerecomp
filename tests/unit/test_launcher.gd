@@ -40,6 +40,22 @@ func _mods_page() -> Gen2ModsPage:
 	return page
 
 
+## Every page built here would otherwise read the project's own index the moment
+## it entered the tree, and then an icon per row: a runner's user:// is empty, so
+## a warm cache never hides it and the suite makes a live request per page. Seven
+## are built. What a player pressed still reaches the network in any run.
+func test_a_page_fetches_on_its_own_only_for_a_player() -> void:
+	var loose: Gen2ModsPage = autofree(Gen2ModsPage.create(Gen2LauncherTheme.active()))
+	assert_false(loose._may_fetch_unprompted(), "a page off the tree asks for nothing")
+
+	var page: Gen2ModsPage = _mods_page()
+	assert_eq(
+		page._may_fetch_unprompted(),
+		Gen2GameRuntime.is_player_launch(),
+		"in the tree, the launch kind is the whole gate"
+	)
+
+
 func _open_launcher() -> void:
 	# The machine running the tests may itself have crashed last, and the notice
 	# that raises is a toast every other launcher test would then have to

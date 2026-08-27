@@ -742,5 +742,5 @@ func set_screen(screen: Gen2Screen) -> void:
 ## The field lives in a screen this node may not own, so it goes by hand.
 func _exit_tree() -> void:
 	if _field != null:
-		Gen2Screen.drop(_field)
+		Gen2Screen.drop_on_exit(_field)
 		_field = null

@@ -113,7 +113,7 @@ jobs:
       - name: Import
         run: |
           set -euo pipefail
-          "$GODOT" --headless --editor --path . --quit
+          GODOT_CAP=900 tools/ci_godot.sh "$GODOT" --headless --editor --path . --quit
           [ -d .godot ] || { echo "::error::import produced no .godot"; exit 1; }
 
       # The Android preset builds through gradle, and Godot reads the SDK and
@@ -165,7 +165,8 @@ jobs:
           export_one() {
             local preset="$1" out="$2"
             mkdir -p "$(dirname "$out")"
-            "$GODOT" --headless --path . --export-release "$preset" "$out"
+            GODOT_CAP=1200 tools/ci_godot.sh "$GODOT" --headless --path . \
+              --export-release "$preset" "$out"
             [ -s "$out" ] || { echo "::error::$preset produced nothing at $out"; exit 1; }
           }
           export_one "Linux"                 "dist/pokerecomp-${v}-linux-x86_64"
@@ -175,7 +176,8 @@ jobs:
           # --install-android-build-template unpacks the gradle project the
           # preset builds through; it only acts alongside an export.
           mkdir -p dist
-          "$GODOT" --headless --path . --install-android-build-template \
+          GODOT_CAP=1800 tools/ci_godot.sh "$GODOT" --headless --path . \
+            --install-android-build-template \
             --export-release "Android" "dist/pokerecomp-${v}-android.apk"
           [ -s "dist/pokerecomp-${v}-android.apk" ] || { echo "::error::no APK"; exit 1; }
           chmod +x "dist/pokerecomp-${v}-linux-x86_64" "dist/pokerecomp-${v}-linux-arm64"
@@ -284,7 +286,7 @@ jobs:
       - name: Import
         run: |
           set -euo pipefail
-          "$GODOT" --headless --editor --path . --quit
+          GODOT_CAP=900 tools/ci_godot.sh "$GODOT" --headless --editor --path . --quit
           [ -d .godot ] || { echo "::error::import produced no .godot"; exit 1; }
 
       # Ad-hoc signed, not notarized: no Apple account is involved and none can
@@ -295,7 +297,8 @@ jobs:
           set -euo pipefail
           v="${{ needs.version.outputs.version }}"
           mkdir -p dist
-          "$GODOT" --headless --path . --export-release "macOS" "dist/pokerecomp-${v}-macos.zip"
+          GODOT_CAP=1200 tools/ci_godot.sh "$GODOT" --headless --path . \
+            --export-release "macOS" "dist/pokerecomp-${v}-macos.zip"
           [ -s "dist/pokerecomp-${v}-macos.zip" ] || { echo "::error::no macOS zip"; exit 1; }
 
       # The published IPA is unsigned on purpose: AltStore and SideStore re-sign
@@ -309,7 +312,8 @@ jobs:
           v="${{ needs.version.outputs.version }}"
           sed -i '' 's/app_store_team_id=""/app_store_team_id="0000000000"/' export_presets.cfg
           mkdir -p build/ios
-          "$GODOT" --headless --path . --export-release "iOS" build/ios/pokerecomp.ipa
+          GODOT_CAP=1200 tools/ci_godot.sh "$GODOT" --headless --path . \
+            --export-release "iOS" build/ios/pokerecomp.ipa
           git checkout export_presets.cfg
 
           xcodebuild -project build/ios/pokerecomp.xcodeproj -scheme pokerecomp \

@@ -159,11 +159,24 @@ func refresh() -> void:
 	_read_unread_sources()
 
 
+## Whether the page may reach the network without a player having asked it to.
+##
+## [method HTTPRequest.request] refuses, loudly, from a node that is not in the
+## tree, and [method create] builds the whole page before the launcher adds it.
+## The rest is [method Gen2GameRuntime.is_player_launch]: a check, a test tier,
+## a screenshot driver or a replay has nobody to show a listing to, and its
+## user:// is usually empty, so every page it builds would fetch the feed and
+## then an icon per row. The test tier builds seven. What a player pressed --
+## Check for updates, a download -- is not gated here and works in any run.
+func _may_fetch_unprompted() -> bool:
+	return is_inside_tree() and Gen2GameRuntime.is_player_launch()
+
+
 ## Reads a source that has never been read, once. Every build follows this
 ## project's own index, and without this it would list nothing until the player
 ## thought to press Check for updates.
 func _read_unread_sources() -> void:
-	if _busy or not _check_queue.is_empty() or not is_inside_tree():
+	if _busy or not _check_queue.is_empty() or not _may_fetch_unprompted():
 		return
 	for source: Dictionary in Gen2ModIndex.followed():
 		var feed: String = String(source["feed"])
@@ -664,10 +677,9 @@ func _icon_square(row: Dictionary) -> Control:
 	return square
 
 
-## `HTTPRequest.request` refuses, loudly, from a node that is not in the tree,
-## and [method create] builds the whole page before the launcher adds it: the
-## queue is left standing until the page is on screen, and every icon it holds
-## is asked for then. Nothing else here starts a request on its own.
+## The icon queue is left standing until the page is on screen, and every icon
+## it holds is asked for here. Nothing else starts a request on its own; see
+## [method _may_fetch_unprompted] for which runs are allowed to.
 func _ready() -> void:
 	_fetch_next_icon()
 	# The page is built before it is in the tree, so the first `refresh` cannot
@@ -678,7 +690,7 @@ func _ready() -> void:
 func _fetch_next_icon() -> void:
 	if _icon_busy or _icon_queue.is_empty() or _icons == null:
 		return
-	if not is_inside_tree():
+	if not _may_fetch_unprompted():
 		return
 	var url: String = _icon_queue.pop_front()
 	_icon_busy = true
