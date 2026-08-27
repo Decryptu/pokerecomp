@@ -99,6 +99,10 @@ const SFX_TRANSACTION: int = 0x22
 const SFX_SWITCH_POKEMON: int = 0x20
 ## `BillsPC_PlaceEmptyBoxString_SFX`'s own `SFX_WRONG`.
 const SFX_WRONG: int = 0x19
+## `PokegearPhone_MakePhoneCall`'s own `SFX_CALL`, and the `SFX_NO_SIGNAL`
+## `Phone_NoSignal` answers a map with no service with.
+const SFX_CALL: int = 0x6A
+const SFX_NO_SIGNAL: int = 0x6C
 
 ## `BillsPC_ChangeBoxSubmenu.MenuData`'s four rows, inline in `bills_pc.asm` and
 ## reached by no script, so they are this screen's the way the machine's own top
@@ -2158,6 +2162,14 @@ func _on_card_tuned(knob: int) -> void:
 
 
 func _on_card_called(contact: int) -> void:
+	# `.no_service` refuses in front of `MakePhoneCallFromPokegear`, so a map
+	# without service says so on the card and never reaches a phone script.
+	if not Gen2WorldPhoneHost.map_has_phone_service(_world.current_map):
+		sfx_requested.emit(SFX_NO_SIGNAL, false)
+		_pokegear.say(_data.pokegear_text("out_of_service"))
+		return
+	sfx_requested.emit(SFX_CALL, false)
+	_pokegear.say(_data.pokegear_text("ellipse"))
 	var results: Array = _world.request_outgoing_phone_call(contact)
 	_close_card()
 	_mode = -1

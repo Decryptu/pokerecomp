@@ -14,6 +14,22 @@ const WAIT_FRAMES: int = 20
 const RING_FRAMES: int = WAITS_PER_RING * WAIT_FRAMES
 const TOTAL_FRAMES: int = RING_COUNT * RING_FRAMES
 
+## `HangUp`, the same twenty-frame wait counted seven times: `HangUp_Beep`'s
+## `Click!`, then three turns of `HangUp_BoopOn`'s `……` and the empty box
+## `HangUp_BoopOff` redraws over it. Every phone call in the game ends on it and
+## none of it waits for a button.
+const HANG_UP_PHASES: Array[StringName] = [
+	&"click", &"ellipse", &"clear", &"ellipse", &"clear", &"ellipse", &"clear",
+]
+const HANG_UP_PHASE_COUNT: int = 7
+const HANG_UP_FRAMES: int = HANG_UP_PHASE_COUNT * WAIT_FRAMES
+
+
+## Which of the seven `HangUp` writes is on the box [param elapsed] frames in.
+static func hang_up_phase(elapsed: int) -> StringName:
+	var index: int = clampi(elapsed / WAIT_FRAMES, 0, HANG_UP_PHASES.size() - 1)
+	return HANG_UP_PHASES[index]
+
 var _elapsed_frames: int = 0
 var _lead_frames: int = 0
 

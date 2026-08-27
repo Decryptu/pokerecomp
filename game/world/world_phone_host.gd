@@ -141,6 +141,9 @@ static func resolve_outgoing(
 	var contact: Dictionary = data.world_phone_contact(contact_id)
 	if contact.is_empty():
 		return _phone_unavailable(&"phone_contact_missing")
+	# `MakePhoneCallFromPokegear`'s own `.OutOfArea`, which the cartridge cannot
+	# reach from the Pokegear either: `PokegearPhone_MakePhoneCall` refuses in
+	# front of it and says so on the card.
 	if not map_has_phone_service(map):
 		return _out_of_area_result(data, contact, contact_id, &"phone_service_unavailable")
 	if not time_mask_matches(int(contact.get("caller_time", 0)), hour):

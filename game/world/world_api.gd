@@ -5454,6 +5454,12 @@ func advance_script_wait_frame() -> Array:
 	return _complete_script_wait()
 
 
+## How many frames of the counted wait are left, or -1 when none is running or
+## it has not been entered yet. What a host draws the wait's own animation from.
+func script_wait_remaining() -> int:
+	return _script_wait_frames
+
+
 ## Whether anything a script set walking is still being drawn. This is
 ## wStateFlags' SCRIPTED_MOVEMENT_STATE_F: one flag for all of them, cleared by
 ## whichever stream reaches its own `step_end`.

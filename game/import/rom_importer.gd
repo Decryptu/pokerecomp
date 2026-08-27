@@ -970,6 +970,10 @@ static func verify_town_map(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if not bool(nest_check["ok"]):
 		return nest_check
 
+	var label_check: Dictionary = verify_fly_map_label(rom, layout)
+	if not bool(label_check["ok"]):
+		return label_check
+
 	var cards: Dictionary = read_pokegear_cards(rom, layout)
 	if cards.size() != RomLayout.POKEGEAR_CARD_ORDER.size():
 		return {
@@ -1053,6 +1057,36 @@ static func verify_dex_nest_icon(rom: RomFile, layout: Dictionary) -> Dictionary
 					"ok": false,
 					"message": "Dex nest icon row %d is not symmetric." % row,
 				}
+	return {"ok": true, "message": ""}
+
+
+## `FlyMapLabelBorderGFX`, six 1bpp tiles behind the nest icon with no header of
+## their own, so they are identified by their own symmetry: the four corners are
+## one corner mirrored across each axis, and the two arrow tiles are equal and
+## symmetric about their own middle row. Byte identical on all three cartridges.
+static func verify_fly_map_label(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var at: int = RomLayout.fly_map_label_offset(layout)
+	var bytes: int = RomLayout.FLY_MAP_LABEL_TILES * Gen2Tiles.TILE_1BPP_BYTES
+	if not rom.in_bounds(at, bytes):
+		return {"ok": false, "message": "The fly map label border is outside the cartridge."}
+	var tiles: Array[PackedByteArray] = []
+	for tile: int in RomLayout.FLY_MAP_LABEL_TILES:
+		var rows := PackedByteArray()
+		for row: int in Gen2Tiles.TILE_HEIGHT:
+			rows.append(rom.u8(at + tile * Gen2Tiles.TILE_1BPP_BYTES + row))
+		tiles.append(rows)
+	for row: int in Gen2Tiles.TILE_HEIGHT:
+		if _reverse_byte(tiles[0][row]) != tiles[1][row] \
+			or tiles[0][Gen2Tiles.TILE_HEIGHT - 1 - row] != tiles[2][row] \
+			or tiles[1][Gen2Tiles.TILE_HEIGHT - 1 - row] != tiles[3][row] \
+			or tiles[4][row] != tiles[5][row] \
+			or tiles[4][Gen2Tiles.TILE_HEIGHT - 1 - row] != tiles[4][row]:
+			return {
+				"ok": false,
+				"message": "Fly map label row %d is not the border's own shape." % row,
+			}
+	if tiles[0].count(0) == Gen2Tiles.TILE_HEIGHT or tiles[4].count(0) == Gen2Tiles.TILE_HEIGHT:
+		return {"ok": false, "message": "The fly map label border is blank."}
 	return {"ok": true, "message": ""}
 
 
@@ -6277,6 +6311,16 @@ func _import_town_map_sheets(rom: RomFile, layout: Dictionary) -> Dictionary:
 		if not RomCache.write_indices(RomCache.tile_path(directory, name), indices):
 			return {}
 		out[name] = _strip_sheet_entry(tiles)
+	# `_FlyMap`'s own `Request1bpp`, which lands over the first six Pokegear
+	# tiles and so is a sheet of its own rather than part of the run above.
+	var label: PackedByteArray = Gen2Tiles.decode_1bpp_strip(
+		rom.bytes(), RomLayout.fly_map_label_offset(layout), RomLayout.FLY_MAP_LABEL_TILES
+	)
+	if not RomCache.write_indices(
+		RomCache.tile_path(directory, "fly_map_label"), label
+	):
+		return {}
+	out["fly_map_label"] = _strip_sheet_entry(RomLayout.FLY_MAP_LABEL_TILES)
 	return out
 
 

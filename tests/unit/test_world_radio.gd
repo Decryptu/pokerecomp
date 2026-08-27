@@ -82,6 +82,22 @@ func test_the_fast_ship_counts_as_johto() -> void:
 		"Vermilion is one lower there too")
 
 
+## `LoadStation_BuenasPassword` leaves `NotBuenasPasswordName`, a bare `@`, in
+## `de` unless Team Rocket is in the tower, so the dial names the station only
+## while its own programme has been taken off the air.
+func test_buenas_password_is_named_only_while_rockets_hold_the_tower() -> void:
+	assert_eq(
+		String(Gen2WorldRadio.station_for(KNOB_BUENAS, _johto()).get("name", "?")), "",
+		"NotBuenasPasswordName is an empty string"
+	)
+	assert_eq(
+		String(Gen2WorldRadio.station_for(
+			KNOB_BUENAS, _johto({"rockets_in_radio_tower": true})
+		).get("name", "")),
+		"BUENA'S PASSWORD"
+	)
+
+
 func test_gold_and_silver_carry_no_buenas_password_channel() -> void:
 	assert_true(
 		bool(Gen2WorldRadio.station_for(KNOB_BUENAS, _johto()).get("ok", false)),
@@ -134,8 +150,8 @@ func test_the_rocket_takeover_overrides_every_johto_station_below_the_flute() ->
 	)
 	assert_eq(int(seized.get("channel", -1)), Gen2WorldRadio.ROCKET_RADIO,
 		"PlayRadioShow rewrites wCurRadioLine before it jumps")
-	assert_eq(String(seized.get("name", "")), "Let's All Sing!",
-		"LoadStation_RocketRadio really does reuse that name")
+	assert_eq(String(seized.get("name", "")), "#DEX Show",
+		"`.returnafterstation` places the name before PlayRadioShow rewrites the line")
 	# Kanto is exempt, and so is anything at or above the Poke Flute channel.
 	var kanto: Dictionary = Gen2WorldRadio.station_for(
 		KNOB_POKE_FLUTE, _kanto({"rockets_in_radio_tower": true})
