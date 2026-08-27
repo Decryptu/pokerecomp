@@ -36,3 +36,12 @@ func test_every_kind_is_named() -> void:
 	for kind: StringName in Gen2InputDevice.KINDS:
 		assert_false(Gen2InputDevice.label(kind).is_empty(), String(kind))
 	assert_eq(Gen2InputDevice.label(&"nothing"), "")
+
+
+func test_the_first_frame_prefers_a_pad_over_a_touchscreen() -> void:
+	# A Switch in the hands and a phone with a controller both report both, and
+	# on both the player is holding buttons rather than touching glass.
+	assert_eq(Gen2InputDevice.kind_for_hardware(true, true), Gen2InputDevice.GAMEPAD)
+	assert_eq(Gen2InputDevice.kind_for_hardware(true, false), Gen2InputDevice.GAMEPAD)
+	assert_eq(Gen2InputDevice.kind_for_hardware(false, true), Gen2InputDevice.TOUCH)
+	assert_eq(Gen2InputDevice.kind_for_hardware(false, false), Gen2InputDevice.KEYBOARD)

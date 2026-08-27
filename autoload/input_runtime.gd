@@ -66,8 +66,10 @@ func _ready() -> void:
 	# Before any event has arrived the only evidence is the hardware. A phone
 	# should show its controller on the first frame rather than after the first
 	# tap, and a desktop should not show one at all.
-	_device = Gen2InputDevice.TOUCH if DisplayServer.is_touchscreen_available() \
-		else Gen2InputDevice.KEYBOARD
+	_device = Gen2InputDevice.kind_for_hardware(
+		not Input.get_connected_joypads().is_empty(),
+		DisplayServer.is_touchscreen_available(),
+	)
 	apply_options(Gen2OptionsStore.current())
 
 

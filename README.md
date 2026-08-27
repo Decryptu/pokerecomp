@@ -5,7 +5,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Godot-4.8.dev3-478CBF?style=flat-square&logo=godotengine&logoColor=white" alt="Godot 4.8.dev3">
   <img src="https://img.shields.io/badge/GDScript-355570?style=flat-square&logo=godotengine&logoColor=white" alt="GDScript">
-  <img src="https://img.shields.io/badge/platforms-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux%20%C2%B7%20Android%20%C2%B7%20iOS-8f8c98?style=flat-square" alt="Platforms">
+  <img src="https://img.shields.io/badge/platforms-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux%20%C2%B7%20Android%20%C2%B7%20iOS%20%C2%B7%20Switch-8f8c98?style=flat-square" alt="Platforms">
   <img src="https://img.shields.io/badge/arm64-Windows%20%C2%B7%20Linux%20%C2%B7%20Apple-8f8c98?style=flat-square" alt="arm64">
   <img src="https://img.shields.io/badge/status-alpha-e0a138?style=flat-square" alt="Status: alpha">
   <a href="https://github.com/Decryptu/pokerecomp/releases/latest"><img src="https://img.shields.io/github/v/release/Decryptu/pokerecomp?style=flat-square&color=4c9a5a&label=download" alt="Latest release"></a>
@@ -34,6 +34,7 @@ one file per platform. `sha256sums.txt` covers every one of them.
 | Linux on a Pi, an SBC or an ARM handheld | `pokerecomp-<version>-linux-arm64` |
 | Android, handhelds included | `pokerecomp-<version>-android.apk` |
 | iPhone or iPad | `pokerecomp-<version>-ios.ipa` |
+| Nintendo Switch running homebrew | `pokerecomp-<version>-switch.zip` |
 
 Nothing is signed with a paid certificate, so each platform asks once:
 
@@ -45,6 +46,9 @@ Nothing is signed with a paid certificate, so each platform asks once:
   [AltStore](https://altstore.io) or [SideStore](https://sidestore.io), which
   sign it on your own machine with your own Apple ID. A free Apple ID works and
   needs re-signing weekly.
+- **Switch**: extract the zip at the root of your microSD and launch
+  `pokerecomp` from the homebrew menu. It needs a console that already runs
+  homebrew; nothing here installs one.
 
 The About page tells you when a newer release exists. It does not install it:
 download the new file and replace the old one. Saves live elsewhere and survive.
@@ -362,14 +366,20 @@ Exit code `0` means all tests passed. Run one script with `-gselect=<name>`.
 
 ## Platforms
 
-Windows, macOS, Linux, Android and iOS use GL Compatibility.
-`export_presets.cfg` covers seven presets, x86_64 and arm64 for Windows and
+Every platform uses GL Compatibility. `export_presets.cfg` covers seven presets
+for Windows, macOS, Linux, Android and iOS, x86_64 and arm64 for Windows and
 Linux, and writes into `builds/`. Install the matching export templates first,
 then:
 
 ```bash
 godot --headless --path . --export-release "Linux" builds/linux/pokerecomp.x86_64
 ```
+
+The Switch has no preset, because a stock editor knows no such platform and
+would drop one from the file. `.github/workflows/release.yml` exports the pack
+and wraps it with devkitPro's `elf2nro` instead, around a template built from a
+fork of the engine pin that adds `platform/nx`; `docs/CONTRIBUTING.md` has the
+whole lane.
 
 Tests, tools and GUT are excluded, and `roms/` and the `user://` cache are not
 reachable from an export. **No signing identity is committed**: the iOS preset's

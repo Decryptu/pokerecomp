@@ -365,9 +365,90 @@ jobs:
           name: dist-apple
           path: dist/*
 
+  switch:
+    name: switch
+    needs: [version, templates]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+
+      - name: Install Godot and its export templates
+        run: |
+          set -euo pipefail
+          base="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}"
+          curl -fsSL "$base/Godot_v${GODOT_VERSION}_linux.x86_64.zip" -o /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          sudo install -m755 "/tmp/godot/Godot_v${GODOT_VERSION}_linux.x86_64" /usr/local/bin/godot
+          echo "GODOT=/usr/local/bin/godot" >> "$GITHUB_ENV"
+          curl -fsSL "$base/Godot_v${GODOT_VERSION}_export_templates.tpz" -o /tmp/templates.tpz
+          unzip -q /tmp/templates.tpz -d /tmp/tpz
+          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_TEMPLATE_DIR}"
+          cp -R /tmp/tpz/templates/. "$HOME/.local/share/godot/export_templates/${GODOT_TEMPLATE_DIR}/"
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: templates-switch
+          path: /tmp/switch
+
+      - name: Import
+        run: |
+          set -euo pipefail
+          GODOT_CAP=900 tools/ci_godot.sh "$GODOT" --headless --editor --path . --quit
+          [ -d .godot ] || { echo "::error::import produced no .godot"; exit 1; }
+
+      # A stock editor knows no NX platform, so `export_presets.cfg` carries no
+      # Switch preset and this exports the pack alone. Every preset here ships
+      # the same file set, and a pack holds each feature-tagged setting rather
+      # than one platform's answer, so the Linux preset's pack is the game.
+      - name: Export the pack
+        run: |
+          set -euo pipefail
+          mkdir -p romfs dist
+          GODOT_CAP=900 tools/ci_godot.sh "$GODOT" --headless --path . \
+            --export-pack "Linux" "$PWD/romfs/game.pck"
+          [ -s romfs/game.pck ] || { echo "::error::the pack is empty"; exit 1; }
+
+      # nacptool writes the title, author and version hbmenu shows; elf2nro
+      # wraps the template around the pack as a RomFS image. Both are devkitPro
+      # tools and the image is where they are packaged.
+      - name: Wrap the template into an NRO
+        run: |
+          set -euo pipefail
+          v="${{ needs.version.outputs.version }}"
+          cp /tmp/switch/switch_release.elf switch_release.elf
+          # An NRO icon is a 256x256 JPEG and nothing else; the repository's is
+          # a PNG, so it is converted here rather than committed twice.
+          convert app_icon.png -resize 256x256! -quality 92 app_icon.jpg
+          docker run --rm -v "$PWD:/w" -w /w devkitpro/devkita64:latest bash -c "
+            set -euo pipefail
+            nacptool --create pokerecomp '${{ github.repository_owner }}' '$v' control.nacp
+            elf2nro switch_release.elf pokerecomp.nro \
+              --icon=app_icon.jpg --nacp=control.nacp --romfsdir=romfs
+          "
+          [ -s pokerecomp.nro ] || { echo "::error::elf2nro produced nothing"; exit 1; }
+
+      # The zip extracts at the root of a microSD: hbmenu lists what is in
+      # `switch/`, and Ryujinx and the yuzu forks read the same tree.
+      - name: Stage the SD tree
+        run: |
+          set -euo pipefail
+          v="${{ needs.version.outputs.version }}"
+          mkdir -p sd/switch
+          cp pokerecomp.nro sd/switch/pokerecomp.nro
+          ( cd sd && zip -qr "../dist/pokerecomp-${v}-switch.zip" switch )
+          unzip -l "dist/pokerecomp-${v}-switch.zip"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-switch
+          path: dist/*
+
   publish:
     name: publish
-    needs: [version, linux-windows-android, apple]
+    needs: [version, linux-windows-android, apple, switch]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

@@ -43,11 +43,16 @@ env:
   # pin is the commit the stock templates name themselves after:
   # `4.8.dev3.official.51105ccbe`. The build checks that it still agrees.
   GODOT_COMMIT: 51105ccbe58381774ecd7a7486d564b202a5192e
+  # Nintendo ships no Godot platform and upstream carries none, so the Switch
+  # template is built from a fork of the same pin that adds `platform/nx`.
+  GODOT_NX_REMOTE: https://github.com/Decryptu/godot.git
+  GODOT_NX_COMMIT: ada239b4354f12b38a23ab8f6c6b4fa22000485f
 
 jobs:
   build:
     name: ${{ matrix.host }}
     runs-on: ${{ matrix.runs-on }}
+    container: ${{ matrix.container || null }}
     timeout-minutes: 240
     strategy:
       fail-fast: false
@@ -73,6 +78,12 @@ jobs:
           - host: android
             runs-on: ubuntu-latest
             targets: android
+          # devkitA64 and switch-mesa come from devkitPro's own image, which is
+          # the only place they are packaged for CI.
+          - host: switch
+            runs-on: ubuntu-latest
+            container: devkitpro/devkita64:latest
+            targets: switch
     defaults:
       run:
         shell: bash
@@ -102,6 +113,20 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
+          if [ "${{ matrix.host }}" = "switch" ]; then
+            # The devkitPro image carries devkitA64 and nothing else, and it is
+            # root without sudo. switch-mesa is the GLES3 driver; the rest are
+            # what detect.py links when the matching builtin_* is off.
+            dkp-pacman -Sy --noconfirm --needed \
+              switch-pkg-config switch-mesa switch-libdrm_nouveau \
+              switch-zlib switch-libpng switch-freetype switch-bzip2 \
+              switch-libwebp switch-libogg switch-libvorbis switch-libtheora \
+              switch-opusfile switch-libopus switch-libvpx switch-miniupnpc \
+              switch-zstd switch-pcre2 switch-libenet
+            apt-get update
+            apt-get install -y --no-install-recommends git python3 scons
+            exit 0
+          fi
           case "${{ runner.os }}" in
             Linux)
               sudo apt-get update
@@ -126,9 +151,15 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
+          remote="https://github.com/godotengine/godot.git"
+          commit="$GODOT_COMMIT"
+          if [ "${{ matrix.host }}" = "switch" ]; then
+            remote="$GODOT_NX_REMOTE"
+            commit="$GODOT_NX_COMMIT"
+          fi
           git init -q godot-src
-          git -C godot-src remote add origin https://github.com/godotengine/godot.git
-          git -C godot-src fetch -q --depth 1 origin "$GODOT_COMMIT"
+          git -C godot-src remote add origin "$remote"
+          git -C godot-src fetch -q --depth 1 origin "$commit"
           git -C godot-src checkout -q FETCH_HEAD
 
           # A pin that has drifted from the version the release installs stock
