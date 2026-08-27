@@ -421,7 +421,16 @@ jobs:
           cp /tmp/switch/switch_release.elf switch_release.elf
           # An NRO icon is a 256x256 JPEG and nothing else; the repository's is
           # a PNG, so it is converted here rather than committed twice.
-          convert app_icon.png -resize 256x256! -quality 92 app_icon.jpg
+          # ImageMagick 7 renamed `convert` to `magick` and the runner image has
+          # carried one or the other for years, so both are tried by name.
+          if command -v magick >/dev/null; then
+            magick app_icon.png -resize 256x256! -quality 92 app_icon.jpg
+          elif command -v convert >/dev/null; then
+            convert app_icon.png -resize 256x256! -quality 92 app_icon.jpg
+          else
+            echo "::error::no ImageMagick on the runner; the NRO icon cannot be made"
+            exit 1
+          fi
           docker run --rm -v "$PWD:/w" -w /w devkitpro/devkita64:latest bash -c "
             set -euo pipefail
             nacptool --create pokerecomp '${{ github.repository_owner }}' '$v' control.nacp

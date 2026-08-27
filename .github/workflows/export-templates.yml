@@ -114,17 +114,26 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ matrix.host }}" = "switch" ]; then
-            # The devkitPro image carries devkitA64 and nothing else, and it is
-            # root without sudo. switch-mesa is the GLES3 driver; the rest are
-            # what detect.py links when the matching builtin_* is off.
-            dkp-pacman -Sy --noconfirm --needed \
-              switch-pkg-config switch-mesa switch-libdrm_nouveau \
-              switch-zlib switch-libpng switch-freetype switch-bzip2 \
-              switch-libwebp switch-libogg switch-libvorbis switch-libtheora \
-              switch-opusfile switch-libopus switch-libvpx switch-miniupnpc \
-              switch-zstd switch-pcre2 switch-libenet
+            # The devkitPro image ships devkitA64 and the whole switch portlibs
+            # set already, and it is root without sudo. Only SCons is missing.
             apt-get update
-            apt-get install -y --no-install-recommends git python3 scons
+            apt-get install -y --no-install-recommends scons
+            # The image tag moves, so the libraries the build links are checked
+            # here: a base that has dropped one fails in seconds with its name
+            # rather than at the link step three quarters of an hour later.
+            # switch-mesa answers the first four; the rest are what detect.py
+            # links wherever the matching builtin_* is off.
+            missing=""
+            for lib in libEGL libGLESv2 libglapi libdrm_nouveau \
+                       libz libpng16 libfreetype libbz2 libwebp \
+                       libogg libvorbis libtheora libopusfile libvpx \
+                       libminiupnpc libzstd libpcre2-32 libenet; do
+              [ -f "/opt/devkitpro/portlibs/switch/lib/$lib.a" ] || missing="$missing $lib"
+            done
+            if [ -n "$missing" ]; then
+              echo "::error::devkitpro/devkita64 no longer ships:$missing"
+              exit 1
+            fi
             exit 0
           fi
           case "${{ runner.os }}" in
