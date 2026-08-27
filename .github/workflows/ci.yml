@@ -23,9 +23,9 @@ jobs:
   tests:
     name: editor scan and GUT
     runs-on: ubuntu-latest
-    # The whole job is about four minutes. A step that has printed its result
-    # and not exited should fail here rather than sit for GitHub's six-hour
-    # default.
+    # The whole job is about four minutes. This is the backstop behind
+    # `tools/ci_godot.sh`, which caps each Godot run itself: nothing should ever
+    # reach this number, and a job that does is stuck somewhere else.
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
@@ -68,13 +68,29 @@ jobs:
           chmod +x ~/godot/godot
 
       - name: Import and resolve class_name
-        run: ~/godot/godot --headless --editor --path . --quit
-
-      - name: GUT
+        env:
+          GODOT_CAP: 600
         run: |
-          ~/godot/godot --headless --path . \
+          set -euo pipefail
+          tools/ci_godot.sh ~/godot/godot --headless --editor --path . --quit
+          [ -d .godot ] || { echo "::error::import produced no .godot"; exit 1; }
+
+      # The one step whose verdict is in its own output. Godot's teardown races
+      # with the threads a run leaves behind and has not always returned from it
+      # on a Linux runner, twenty minutes after the suite said it passed; that
+      # is now a warning with every thread's stack under it rather than a red
+      # build, and a suite that fails or hangs before printing this line is
+      # still red.
+      - name: GUT
+        env:
+          GODOT_CAP: 900
+          GODOT_DONE: "---- All tests passed! ----"
+        run: |
+          tools/ci_godot.sh ~/godot/godot --headless --path . \
             -s res://addons/gut/gut_cmdln.gd \
             -gdir=res://tests -ginclude_subdirs -gexit
 
       - name: Boot smoke test
-        run: ~/godot/godot --headless --path . --quit-after 30
+        env:
+          GODOT_CAP: 180
+        run: tools/ci_godot.sh ~/godot/godot --headless --path . --quit-after 30

@@ -263,17 +263,17 @@ func set_screen(screen: Gen2Screen) -> void:
 ## Both views live in a screen this node may not own, so they go by hand.
 func _exit_tree() -> void:
 	if _hof != null:
-		Gen2Screen.drop(_hof)
+		Gen2Screen.drop_on_exit(_hof)
 		_hof = null
 	if _mail_reader != null:
-		Gen2Screen.drop(_mail_reader)
+		Gen2Screen.drop_on_exit(_mail_reader)
 		_mail_reader = null
 	if _naming != null:
-		Gen2Screen.drop(_naming)
+		Gen2Screen.drop_on_exit(_naming)
 		_naming = null
 	for view: TextureRect in [_service_view, _mart_view]:
 		if view != null:
-			Gen2Screen.drop(view)
+			Gen2Screen.drop_on_exit(view)
 	_service_view = null
 	_mart_view = null
 
