@@ -131,11 +131,19 @@ func _takes_touches(point: Vector2) -> bool:
 ## call leaves the button live for the release that is still to come, which is
 ## what clears its own record of the finger.
 func _release_pressed_button() -> void:
+	_cancel_card_presses(self)
 	var button: BaseButton = _button_at(self, _touch_from)
 	if button == null or button.disabled:
 		return
 	button.set_disabled(true)
 	button.set_disabled(false)
+
+
+static func _cancel_card_presses(node: Node) -> void:
+	if node is Gen2LauncherCard:
+		node.cancel_press()
+	for child: Node in node.get_children():
+		_cancel_card_presses(child)
 
 
 static func _button_at(node: Node, point: Vector2) -> BaseButton:

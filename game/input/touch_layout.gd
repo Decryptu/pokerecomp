@@ -37,14 +37,12 @@ const ORIENTATION_PORTRAIT: StringName = &"portrait"
 const ORIENTATION_LANDSCAPE: StringName = &"landscape"
 const ORIENTATIONS: Array[StringName] = [ORIENTATION_PORTRAIT, ORIENTATION_LANDSCAPE]
 
-## Unscaled sizes, in window pixels. A finger covers about 9mm, which is roughly
-## 45 pixels on a phone at its native density, so nothing here is smaller than
-## that once the minimum scale is applied.
-const PAD_SIZE: float = 168.0
-const FACE_DIAMETER: float = 84.0
+## Sizes in display-independent points, shared by the game and its layout editor.
+const PAD_SIZE: float = 112.0
+const FACE_DIAMETER: float = 56.0
 ## Centre-to-centre along the diagonal A and B sit on, so they never touch.
-const FACE_SPACING: float = 104.0
-const MENU_SIZE: Vector2 = Vector2(96.0, 38.0)
+const FACE_SPACING: float = 68.0
+const MENU_SIZE: Vector2 = Vector2(80.0, 40.0)
 
 ## Inside this fraction of the d-pad's half-width nothing is pressed, so a thumb
 ## resting dead centre does not pick an arbitrary direction.
@@ -254,7 +252,8 @@ func direction_at(point: Vector2, area: Rect2) -> int:
 	var local: Vector2 = (point - rect.get_center()) / (rect.size * 0.5)
 	if local.length() < PAD_CENTRE_DEAD:
 		return Gen2Button.NONE
-	if absf(local.x) >= absf(local.y):
+	# Equal diagonals keep the horizontal tie-break despite coordinate rounding.
+	if absf(local.x) >= absf(local.y) or is_equal_approx(absf(local.x), absf(local.y)):
 		return Gen2Button.RIGHT if local.x > 0.0 else Gen2Button.LEFT
 	return Gen2Button.DOWN if local.y > 0.0 else Gen2Button.UP
 

@@ -84,6 +84,7 @@ static func icon_only(
 func set_side(side: float) -> void:
 	_side = side
 	custom_minimum_size = Vector2(side, side)
+	size = Vector2(side, side)
 	size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	repaint()

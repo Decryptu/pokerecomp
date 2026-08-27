@@ -22,7 +22,7 @@ const DOCK_FADE_TOP: float = 22.0
 ## row reads as four buttons rather than as a dock.
 const DOCK_SIDE_MAX: float = 84.0
 const PHONE_PORTRAIT_DOCK_SIDE: float = 64.0
-const PHONE_LANDSCAPE_DOCK_SIDE: float = 56.0
+const PHONE_LANDSCAPE_DOCK_SIDE: float = 48.0
 const PHONE_LANDSCAPE_HEIGHT: float = 600.0
 
 var theme_palette: Gen2LauncherTheme = null
@@ -163,9 +163,15 @@ func _build() -> void:
 ## window drawn in points would make that number wrong.
 func _enter_tree() -> void:
 	Gen2LauncherUI.apply_display_density(get_window(), true)
+	get_window().size_changed.connect(_update_density)
+
+
+func _update_density() -> void:
+	Gen2LauncherUI.apply_display_density(get_window(), true)
 
 
 func _exit_tree() -> void:
+	get_window().size_changed.disconnect(_update_density)
 	Gen2LauncherUI.apply_display_density(get_window(), false)
 
 
@@ -426,7 +432,7 @@ func _apply_layout() -> void:
 	# Pages reach the bezel; each scrolling page owns a safe tail that can move
 	# its final control above the floating dock.
 	_host.add_theme_constant_override("margin_bottom", 0)
-	_layout_dock(wide, insets)
+	_layout_dock(insets)
 	if compact == not wide and not _entries.is_empty():
 		return
 	compact = not wide
@@ -440,14 +446,14 @@ func _apply_layout() -> void:
 ## screen gets the largest disc four of them fit on instead of the smallest one
 ## a desktop looked right with. Never below what a finger can hit, which is what
 ## the row is for.
-func _layout_dock(wide: bool, insets: Dictionary) -> void:
+func _layout_dock(insets: Dictionary) -> void:
 	var side: float = dock_side_for(size, maxi(_entries.size(), 1), insets)
 	for key: StringName in _buttons:
 		(_buttons[key] as Gen2LauncherButton).set_side(side)
 	# The fade and the row above it both stand off the home indicator, so the
 	# bottom disc is reachable rather than half under it.
 	var bottom: float = float(insets["bottom"])
-	_dock_host.offset_top = -(side + Gen2LauncherUI.DOCK_VERTICAL_PADDING + DOCK_FADE_TOP + bottom)
+	_dock_host.offset_top = -(side + Gen2LauncherUI.dock_padding(size) + DOCK_FADE_TOP + bottom)
 	_dock_centre.offset_bottom = -bottom
 
 

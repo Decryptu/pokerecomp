@@ -21,10 +21,37 @@ func before_each() -> void:
 
 
 func after_each() -> void:
+	Gen2LauncherUI.preview_density = 0.0
 	if _pad != null and is_instance_valid(_pad):
 		_pad.release_all()
 	Gen2InputRuntime.instance().apply_options(Gen2Options.new())
 	Gen2OptionsStore.use_test_path()
+
+
+func test_touch_geometry_has_the_same_physical_size_in_game_and_settings() -> void:
+	Gen2LauncherUI.preview_density = 3.0
+	var window: Window = get_tree().root
+	var previous_factor: float = window.content_scale_factor
+	var previous_base: Vector2i = window.content_scale_size
+	window.content_scale_size = Vector2i.ZERO
+	for editing: bool in [false, true]:
+		Gen2LauncherUI.apply_display_density(window, editing)
+		assert_eq(window.content_scale_factor, 3.0 if editing else 1.0)
+		_pad.set_edit_mode(editing)
+		var unit: float = Gen2LauncherUI.point_scale(_pad)
+		_pad.size = AREA * unit
+		var pixels_per_unit: float = float(window.size.x) / window.get_visible_rect().size.x
+		var button: Rect2 = _pad.layout().button_rects(_pad.area())[Gen2Button.A]
+		assert_almost_eq(button.size.x * unit * pixels_per_unit, 56.0 * 3.0, 0.01)
+		assert_eq(_pad.button_at(button.get_center() * unit), Gen2Button.A)
+	window.content_scale_size = previous_base
+	window.content_scale_factor = previous_factor
+
+
+func test_touch_controls_have_a_dark_fill_and_a_light_outline() -> void:
+	assert_lt(Gen2TouchPad.FILL.get_luminance(), 0.1)
+	assert_gte(Gen2TouchPad.FILL.a * Gen2TouchLayout.DEFAULT_OPACITY, 0.5)
+	assert_gt(Gen2TouchPad.BORDER.get_luminance(), 0.9)
 
 
 func _touch(index: int, at: Vector2, pressed: bool) -> void:

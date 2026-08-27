@@ -506,6 +506,56 @@ func _finger(event: InputEvent) -> void:
 	get_tree().root.push_input(event, true)
 
 
+func test_a_card_opens_on_release_but_never_after_a_swipe() -> void:
+	var pane: Gen2LauncherScroll = Gen2LauncherScroll.create()
+	var column: VBoxContainer = Gen2LauncherUI.column()
+	pane.add_child(column)
+	add_child_autofree(pane)
+	pane.size = Vector2(200, 180)
+	var opened: Array[int] = []
+	for index: int in range(8):
+		var card: Gen2LauncherCard = Gen2LauncherCard.create(_light)
+		card.custom_minimum_size = Vector2(180, 90)
+		card.activated.connect(func() -> void: opened.append(index))
+		column.add_child(card)
+	await wait_seconds(0.2)
+	var at := Vector2(60, 75)
+	_finger(_finger_touch(at, true))
+	assert_eq(opened.size(), 0, "touch-down must leave time to recognize a swipe")
+	_finger(_finger_drag(at, Vector2(0, -40)))
+	_finger(_finger_touch(at + Vector2(0, -40), false))
+	assert_eq(pane.scroll_vertical, 40)
+	assert_eq(opened.size(), 0, "release still lands on the same card after scrolling")
+	_finger(_finger_touch(at, true))
+	_finger(_finger_touch(at, false))
+	assert_eq(opened.size(), 1, "an ordinary tap still opens the card")
+	_finger(_button(at, true))
+	assert_eq(opened.size(), 1, "mouse-down also waits for release")
+	_finger(_button(at, false))
+	assert_eq(opened.size(), 2)
+
+
+func test_an_icon_button_shrinks_its_actual_rect_without_a_container() -> void:
+	var button: Gen2LauncherButton = Gen2LauncherButton.icon_only(_light, &"dots", 0, 84)
+	add_child_autofree(button)
+	button.set_side(48)
+	assert_eq(button.size, Vector2(48, 48))
+
+
+func test_landscape_keeps_at_least_two_fifths_of_the_stage_for_the_cartridge() -> void:
+	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, true)
+	add_child_autofree(page)
+	page.set_slot_state(&"gold", true, "Ready")
+	for dimensions: Vector2 in [Vector2(568, 240), Vector2(780, 300), Vector2(900, 360)]:
+		page.size = dimensions
+		await wait_seconds(0.1)
+		var stage: Gen2CartridgeStage = page.stage()
+		var card: Gen2Cartridge = stage.selected_cartridge()
+		assert_gte(card.size.y, stage.size.y * 0.4)
+		assert_false(card.get_rect().intersects(page._manage.get_rect()))
+		assert_eq(page._manage.position.y, 0.0)
+
+
 func _finger_touch(at: Vector2, down: bool) -> InputEventScreenTouch:
 	var touch := InputEventScreenTouch.new()
 	touch.index = 0

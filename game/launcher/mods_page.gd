@@ -260,10 +260,7 @@ func _card(row: Dictionary) -> Control:
 	line.add_child(open)
 	# Pressing the row is the same as pressing its chevron. The toggle and the
 	# action are buttons of their own and take their own press first.
-	panel.gui_input.connect(func(event: InputEvent) -> void:
-		if event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
-			open_mod(StringName(row["id"]))
-	)
+	panel.activated.connect(func() -> void: open_mod(StringName(row["id"])))
 	return panel
 
 

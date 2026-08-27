@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://c5om15m2e70qp"]
 
 [ext_resource type="Script" uid="uid://bomsutomy3pdy" path="res://addons/gut/gui/check_for_update.gd" id="1_70x43"]
-[ext_resource type="FontFile" uid="uid://bnh0lslf4yh87" path="res://addons/gut/fonts/CourierPrime-Regular.ttf" id="2_lsin2"]
+[ext_resource type="FontFile" path="res://addons/gut/fonts/CourierPrime-Regular.ttf" id="2_lsin2"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_lsin2"]
 content_margin_left = 20.0

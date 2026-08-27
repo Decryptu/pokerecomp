@@ -66,9 +66,14 @@ func test_the_dpad_reads_by_dominant_axis() -> void:
 ## diagonally, and a press that walked twice would be wrong in a menu as well.
 func test_a_corner_of_the_dpad_gives_one_direction() -> void:
 	var layout: Gen2TouchLayout = _layout()
-	var rect: Rect2 = layout.group_rect(Gen2TouchLayout.GROUP_PAD, PORTRAIT)
-	var corner: Vector2 = rect.get_center() + rect.size * 0.35
-	assert_eq(layout.direction_at(corner, PORTRAIT), Gen2Button.RIGHT)
+	for area: Rect2 in [PORTRAIT, LANDSCAPE]:
+		for factor: float in [0.6, 1.0, 1.8]:
+			layout.scale = factor
+			var rect: Rect2 = layout.group_rect(Gen2TouchLayout.GROUP_PAD, area)
+			for diagonal: Vector2 in [Vector2(1, 1), Vector2(1, -1), Vector2(-1, 1), Vector2(-1, -1)]:
+				var corner: Vector2 = rect.get_center() + rect.size * diagonal * 0.35
+				var expected: int = Gen2Button.RIGHT if diagonal.x > 0 else Gen2Button.LEFT
+				assert_eq(layout.direction_at(corner, area), expected)
 
 
 func test_a_thumb_resting_dead_centre_presses_nothing() -> void:

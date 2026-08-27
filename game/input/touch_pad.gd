@@ -16,10 +16,10 @@ extends Control
 ## layout handed to [method set_layout] is edited in place, which is how the
 ## settings page arranges the live one and has nothing to copy back.
 
-const FILL: Color = Color(1.0, 1.0, 1.0, 0.14)
-const FILL_PRESSED: Color = Color(1.0, 1.0, 1.0, 0.42)
-const BORDER: Color = Color(1.0, 1.0, 1.0, 0.55)
-const GLYPH: Color = Color(1.0, 1.0, 1.0, 0.85)
+const FILL: Color = Color(0.04, 0.06, 0.09, 0.80)
+const FILL_PRESSED: Color = Color(0.30, 0.55, 0.80, 0.95)
+const BORDER: Color = Color(1.0, 1.0, 1.0, 0.95)
+const GLYPH: Color = Color.WHITE
 const EDIT_TINT: Color = Color(0.36, 0.72, 1.0, 0.55)
 const BORDER_WIDTH: float = 2.0
 ## Of the d-pad's own width, for each arm of the cross.
@@ -93,7 +93,7 @@ func is_editing() -> bool:
 	return _edit_mode
 
 
-## The rectangle the buttons are laid out in: the pad's own, less whatever the
+## The rectangle in device-independent points: the pad's own, less whatever the
 ## screen keeps for itself. A phone counts its notch, its home indicator and its
 ## rounded corners as display, so a face button anchored hard against the edge is
 ## drawn under glass that no finger reaches through. Every rect, every hit test
@@ -103,14 +103,15 @@ func area() -> Rect2:
 	var corner := Vector2(float(insets["left"]), float(insets["top"]))
 	var taken := corner + Vector2(float(insets["right"]), float(insets["bottom"]))
 	if taken.x >= size.x or taken.y >= size.y:
-		return Rect2(Vector2.ZERO, size)
-	return Rect2(corner, size - taken)
+		return Rect2(Vector2.ZERO, size / Gen2LauncherUI.point_scale(self))
+	var unit: float = Gen2LauncherUI.point_scale(self)
+	return Rect2(corner / unit, (size - taken) / unit)
 
 
 ## Which button a point in the pad's own coordinates would press. Public so a
 ## test can ask without a touchscreen.
 func button_at(point: Vector2) -> int:
-	return _layout.button_at(point, area())
+	return _layout.button_at(point / Gen2LauncherUI.point_scale(self), area())
 
 
 ## The action a point presses: one of the eight, or a mod's own button, or an
@@ -120,7 +121,7 @@ func action_at(point: Vector2) -> StringName:
 	var button: int = button_at(point)
 	if button != Gen2Button.NONE:
 		return Gen2Button.action(button)
-	return _layout.mod_action_at(point, area())
+	return _layout.mod_action_at(point / Gen2LauncherUI.point_scale(self), area())
 
 
 ## Whether this is the controller in front. A battle opened over the map has one
@@ -228,6 +229,7 @@ func release_all() -> void:
 
 
 func _edit_pointer(index: int, point: Vector2, pressed: bool) -> void:
+	point /= Gen2LauncherUI.point_scale(self)
 	if not pressed:
 		if _dragging != &"" and index == _drag_index:
 			_dragging = &""
@@ -244,6 +246,7 @@ func _edit_pointer(index: int, point: Vector2, pressed: bool) -> void:
 
 
 func _edit_moved(index: int, point: Vector2) -> void:
+	point /= Gen2LauncherUI.point_scale(self)
 	var rect: Rect2 = area()
 	if _dragging == &"" or index != _drag_index or rect.size.x <= 0.0 or rect.size.y <= 0.0:
 		return
@@ -257,6 +260,7 @@ func _edit_moved(index: int, point: Vector2) -> void:
 
 
 func _draw() -> void:
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE * Gen2LauncherUI.point_scale(self))
 	var rect: Rect2 = area()
 	if rect.size.x <= 0.0 or rect.size.y <= 0.0:
 		return

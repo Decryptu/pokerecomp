@@ -21,6 +21,8 @@ var _theme: Gen2LauncherTheme = null
 var _options: Gen2Options = null
 var _pad: Gen2TouchPad = null
 var _orientation: Label = null
+var _toolbar_host: MarginContainer = null
+var _fields: GridContainer = null
 
 
 static func create(palette: Gen2LauncherTheme, options: Gen2Options) -> Gen2TouchLayoutSheet:
@@ -54,11 +56,13 @@ func _build() -> void:
 
 	add_child(_toolbar())
 	resized.connect(_refresh_orientation)
+	ready.connect(_refresh_orientation, CONNECT_ONE_SHOT)
 	_refresh_orientation()
 
 
 func _toolbar() -> Control:
 	var host := MarginContainer.new()
+	_toolbar_host = host
 	host.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	# The sheet opens against the top edge, which is where a phone keeps its
 	# notch and its clock.
@@ -67,7 +71,7 @@ func _toolbar() -> Control:
 	host.add_theme_constant_override("margin_right", 24 + int(insets["right"]))
 	host.add_theme_constant_override("margin_top", 20 + int(insets["top"]))
 	var card: Gen2LauncherCard = Gen2LauncherCard.floating(
-		_theme, Gen2LauncherTheme.RADIUS_LG, 18, 30
+		_theme, Gen2LauncherTheme.RADIUS_LG, 12, 30
 	)
 	host.add_child(card)
 	var column: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_SM)
@@ -87,7 +91,10 @@ func _toolbar() -> Control:
 	_orientation = Gen2LauncherUI.muted(_theme, "")
 	column.add_child(_orientation)
 
-	column.add_child(Gen2LauncherUI.field(_theme, "Size", Gen2LauncherUI.slider(
+	_fields = GridContainer.new()
+	_fields.add_theme_constant_override("h_separation", 24)
+	column.add_child(_fields)
+	_fields.add_child(Gen2LauncherUI.field(_theme, "Size", Gen2LauncherUI.slider(
 		_theme,
 		int(roundf(_options.touch_layout.scale * SCALE_STEPS)),
 		int(Gen2TouchLayout.MIN_SCALE * SCALE_STEPS),
@@ -96,7 +103,7 @@ func _toolbar() -> Control:
 			_options.touch_layout.scale = float(value) / SCALE_STEPS
 			_pad.queue_redraw()
 	)))
-	column.add_child(Gen2LauncherUI.field(_theme, "Opacity", Gen2LauncherUI.slider(
+	_fields.add_child(Gen2LauncherUI.field(_theme, "Opacity", Gen2LauncherUI.slider(
 		_theme,
 		int(roundf(_options.touch_layout.opacity * OPACITY_STEPS)),
 		int(Gen2TouchLayout.MIN_OPACITY * OPACITY_STEPS),
@@ -113,6 +120,12 @@ func _refresh_orientation() -> void:
 		return
 	var landscape: bool = Gen2TouchLayout.orientation_of(size) \
 		== Gen2TouchLayout.ORIENTATION_LANDSCAPE
+	_orientation.visible = not landscape
+	_fields.columns = 2 if landscape else 1
+	var insets: Dictionary = Gen2LauncherUI.safe_area_insets(get_window())
+	_toolbar_host.add_theme_constant_override("margin_left", 24 + int(insets["left"]))
+	_toolbar_host.add_theme_constant_override("margin_right", 24 + int(insets["right"]))
+	_toolbar_host.add_theme_constant_override("margin_top", (8 if landscape else 20) + int(insets["top"]))
 	_orientation.text = (
 		"Drag each group. This is the %s arrangement; turn the device to set the other."
 		% ("sideways" if landscape else "upright")
