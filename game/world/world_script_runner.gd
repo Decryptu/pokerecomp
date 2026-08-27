@@ -149,6 +149,12 @@ const SPECIAL_BUG_CONTEST_JUDGING: int = 20
 const SPECIAL_CHECK_PARTY_FULL_AFTER_CONTEST: int = 21
 const SPECIAL_CONTEST_DROP_OFF_MONS: int = 22
 const SPECIAL_CONTEST_RETURN_MONS: int = 23
+## `WarpToSpawnPoint`, which clears `STATUSFLAGS2_SAFARI_GAME_F` and
+## `STATUSFLAGS2_BUG_CONTEST_TIMER_F` and does no warping at all. The four
+## escape scripts that call it are the port's own
+## ([method Gen2WorldAPI.warp_to_spawn_point]); this is the entry a decoded
+## script reaches it by.
+const SPECIAL_WARP_TO_SPAWN_POINT: int = 0
 const SPECIAL_GIVE_PARK_BALLS: int = 24
 const SPECIAL_SELECT_RANDOM_BUG_CONTESTANTS: int = 71
 const SPECIAL_ACTIVATE_FISHING_SWARM: int = 72
@@ -3670,6 +3676,8 @@ func _execute_special(special: int) -> Dictionary:
 				})
 		SPECIAL_CONTEST_RETURN_MONS:
 			_emit_runtime_event(&"contest_mons_returned", {"special": special})
+		SPECIAL_WARP_TO_SPAWN_POINT:
+			_emit_runtime_event(&"warp_to_spawn_point", {"special": special})
 		SPECIAL_CHECK_PARTY_FULL_AFTER_CONTEST:
 			## `CheckPartyFullAfterContest` does not only answer where the
 			## Pokemon caught in the contest would go: it takes it home, asks

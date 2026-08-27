@@ -1538,6 +1538,53 @@ func test_dig_is_refused_outside_a_cave_and_with_no_warp_recorded() -> void:
 	assert_eq(StringName(unknowing.dig_request()["reason"]), &"move_not_known")
 
 
+## The tail all four escapes share: `farscall Script_AbortBugContest` then
+## `special WarpToSpawnPoint` (engine/events/overworld.asm, engine/events/
+## whiteout.asm). Both warps run it, so every escape gets it.
+func test_an_escape_aborts_a_running_contest_and_clears_both_status_flags() -> void:
+	var world: Gen2WorldAPI = _escape_world()
+	var crystal: bool = Gen2WorldState.is_crystal_profile(world.data)
+	var timer: int = Gen2WorldState.engine_flag(
+		Gen2WorldState.ENGINE_BUG_CONTEST_TIMER, crystal
+	)
+	var safari: int = Gen2WorldState.engine_flag(
+		Gen2WorldState.ENGINE_SAFARI_ZONE, crystal
+	)
+	var daily: int = Gen2WorldState.engine_flag(
+		Gen2WorldState.ENGINE_DAILY_BUG_CONTEST, crystal
+	)
+	world.player_cell = ESCAPE_CAVE_DOOR
+	world.try_warp()
+	world.state.set_engine_flag(timer)
+	world.state.set_engine_flag(safari)
+	world.player_cell = Vector2i(4, 4)
+
+	assert_true(bool(world.dig_request().get("ok", false)))
+	assert_false(world.state.is_engine_flag_active(timer), "the contest is over")
+	assert_false(world.state.is_engine_flag_active(safari))
+	assert_true(
+		world.state.is_engine_flag_active(daily), "one contest a day, aborted or not"
+	)
+	## Read once: the host puts the masked party back on the frame it is told.
+	assert_true(world.take_contest_abort())
+	assert_false(world.take_contest_abort())
+
+
+func test_an_escape_with_no_contest_running_owes_the_party_nothing() -> void:
+	var world: Gen2WorldAPI = _escape_world()
+	var daily: int = Gen2WorldState.engine_flag(
+		Gen2WorldState.ENGINE_DAILY_BUG_CONTEST,
+		Gen2WorldState.is_crystal_profile(world.data)
+	)
+	world.player_cell = ESCAPE_CAVE_DOOR
+	world.try_warp()
+	world.player_cell = Vector2i(4, 4)
+	assert_true(bool(world.escape_rope_request().get("ok", false)))
+	assert_false(world.take_contest_abort())
+	## `Script_AbortBugContest`'s `iffalse .finish` jumps the setflag too.
+	assert_false(world.state.is_engine_flag_active(daily))
+
+
 ## `BikeFunction`: `.CheckEnvironment`, then the two directions of `.TryBike`.
 func test_the_bike_goes_on_and_off_outdoors_and_carries_its_own_music() -> void:
 	var world: Gen2WorldAPI = _escape_world()

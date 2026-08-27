@@ -44,7 +44,7 @@ const EXPECTED_DEFERRED: Dictionary = {
 
 	## Reached by one script row each and by nothing the player can talk to.
 	## `FindPartyMonAboveLevel` is marked `; unused` in the pin's own table.
-	0: "WarpToSpawnPoint", 64: "FindPartyMonAboveLevel",
+	64: "FindPartyMonAboveLevel",
 }
 
 ## Decoded `special` operands that name no `SpecialsPointers` entry. Pinned

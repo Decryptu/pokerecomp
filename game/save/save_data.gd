@@ -42,6 +42,14 @@ var gender: int = GENDER_MALE
 var game_time: Gen2GameTime = null
 var label: String = ""
 var party: Array = []
+## The party members `ContestDropOffMons` masks off while the Bug Catching
+## Contest runs. The cartridge leaves them in `wPartyMon` and drops
+## `wPartyCount` to 1; this project moves them here, so nothing that walks the
+## party has to know about the mask. `ContestReturnMons` puts them back. Like
+## `mailbox` this defaults rather than versioning: an empty list is the truth
+## about a slot written before the mask existed and about every slot outside a
+## contest.
+var contest_stashed_party: Array = []
 var boxes: Array = []
 var world: Gen2WorldSnapshot = null
 ## Per-slot, per-mod JSON objects. This namespace travels with the save.
@@ -117,6 +125,9 @@ func to_dict() -> Dictionary:
 	var saved_party: Array = []
 	for mon: Gen2SaveMon in party:
 		saved_party.append(mon.to_dict() if mon != null else {})
+	var stashed_party: Array = []
+	for mon: Gen2SaveMon in contest_stashed_party:
+		stashed_party.append(mon.to_dict() if mon != null else {})
 	var saved_boxes: Array = []
 	for box: Gen2SaveBox in boxes:
 		saved_boxes.append(box.to_dict() if box != null else [])
@@ -131,6 +142,7 @@ func to_dict() -> Dictionary:
 		"game_time": game_time.to_dict() if game_time != null else Gen2GameTime.new().to_dict(),
 		"label": label,
 		"party": saved_party,
+		"contest_stashed_party": stashed_party,
 		"boxes": saved_boxes,
 		"current_box": current_box,
 		"hall_of_fame": hall_of_fame.duplicate(true),
@@ -188,6 +200,10 @@ static func from_dict(raw: Variant) -> Gen2SaveData:
 	if raw_party is Array:
 		for raw_mon: Variant in raw_party as Array:
 			out.party.append(Gen2SaveMon.from_dict(raw_mon))
+	var raw_stash: Variant = source.get("contest_stashed_party", [])
+	if raw_stash is Array:
+		for raw_mon: Variant in raw_stash as Array:
+			out.contest_stashed_party.append(Gen2SaveMon.from_dict(raw_mon))
 	var raw_boxes: Variant = source.get("boxes", null)
 	out.boxes_shape_valid = raw_boxes is Array and (raw_boxes as Array).size() == BOX_COUNT
 	if raw_boxes is Array:
@@ -352,6 +368,7 @@ func copy_from(source: Gen2SaveData) -> bool:
 	game_time = copied.game_time
 	label = copied.label
 	party = copied.party
+	contest_stashed_party = copied.contest_stashed_party
 	boxes = copied.boxes
 	current_box = copied.current_box
 	hall_of_fame = copied.hall_of_fame.duplicate(true)

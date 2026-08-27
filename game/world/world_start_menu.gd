@@ -8,8 +8,10 @@ extends RefCounted
 ## Pokemon behind a non-zero wPartyCount, Pokegear behind
 ## wPokegearFlags/POKEGEAR_OBTAINED_F.
 ##
-## QUIT never appears because its Bug Contest and link-mode gate is never true
-## here.
+## QUIT stands where SAVE does while the Bug Catching Contest runs, and PACK
+## leaves the list with it: `SetUpMenuItems` reads
+## `STATUSFLAGS2_BUG_CONTEST_TIMER_F` twice, once for each. Link mode is the
+## other half of both gates and has no menu here.
 ##
 ## Entries registered on `Gen2ModHost` are spliced in ahead of EXIT, so a mod can
 ## add a screen without reordering or removing anything the cartridge shipped.
@@ -33,6 +35,9 @@ const ITEM_PLAYER: StringName = &"player"
 const ITEM_SAVE: StringName = &"save"
 const ITEM_OPTION: StringName = &"option"
 const ITEM_EXIT: StringName = &"exit"
+## `STARTMENUITEM_QUIT`, the Bug Catching Contest's own row: it retires from the
+## contest and is judged on what has been caught so far.
+const ITEM_QUIT: StringName = &"quit"
 ## Not the cartridge's either. Appears only while a registered field-move source
 ## has an HM move to offer that no party member knows and the badge is in hand,
 ## so a game with no such source shows the source menu exactly. It sits ahead of
@@ -49,6 +54,9 @@ const ITEM_MODS: StringName = &"mods"
 const GATE_POKEDEX: StringName = &"pokedex"
 const GATE_PARTY: StringName = &"party"
 const GATE_POKEGEAR: StringName = &"pokegear"
+## `bit STATUSFLAGS2_BUG_CONTEST_TIMER_F` the other way round: PACK is dropped
+## while a contest runs, because the only ball a contest throws is the park's.
+const GATE_NO_CONTEST: StringName = &"no_contest"
 
 ## `SetUpMenuItems` in source order, as data rather than a run of appends, so the
 ## host's registered entries can be spliced in without the order becoming a
@@ -61,7 +69,7 @@ const GATE_POKEGEAR: StringName = &"pokegear"
 const SOURCE_ENTRIES: Array[Dictionary] = [
 	{"kind": ITEM_POKEDEX, "label": "#DEX", "available": true, "gate": GATE_POKEDEX},
 	{"kind": ITEM_POKEMON, "label": "#MON", "available": true, "gate": GATE_PARTY},
-	{"kind": ITEM_PACK, "label": "PACK", "available": true, "gate": &""},
+	{"kind": ITEM_PACK, "label": "PACK", "available": true, "gate": GATE_NO_CONTEST},
 	{"kind": ITEM_POKEGEAR, "label": "<POKE>GEAR", "available": true, "gate": GATE_POKEGEAR},
 	{"kind": ITEM_PLAYER, "label": "<PLAYER>", "available": true, "gate": &""},
 	{"kind": ITEM_SAVE, "label": "SAVE", "available": true, "gate": &""},
@@ -91,12 +99,14 @@ static func build(
 	previous_cursor: int = 0,
 	player_name: String = "",
 	field_moves: bool = false,
+	bug_contest: bool = false,
 ) -> Gen2WorldStartMenu:
 	var menu := Gen2WorldStartMenu.new()
 	var passes: Dictionary = {
 		GATE_POKEDEX: pokedex_obtained,
 		GATE_PARTY: party_count > 0,
 		GATE_POKEGEAR: pokegear_obtained,
+		GATE_NO_CONTEST: not bug_contest,
 	}
 	var rows: Array = []
 	for entry: Dictionary in SOURCE_ENTRIES:
@@ -125,9 +135,12 @@ static func build(
 		## rather than printing the marker's own characters.
 		if entry["kind"] == ITEM_PLAYER:
 			label = player_name if not player_name.is_empty() else "PLAYER"
-		rows.append(_entry(
-			StringName(entry["kind"]), label, bool(entry["available"])
-		))
+		## `.write`: the one slot holds SAVE or QUIT, never both.
+		var kind: StringName = StringName(entry["kind"])
+		if kind == ITEM_SAVE and bug_contest:
+			kind = ITEM_QUIT
+			label = "QUIT"
+		rows.append(_entry(kind, label, bool(entry["available"])))
 	menu._items = rows
 	menu.cursor = clampi(previous_cursor, 0, maxi(rows.size() - 1, 0))
 	return menu
@@ -147,6 +160,7 @@ static func from_world(world: Gen2WorldAPI, previous_cursor: int = 0) -> Gen2Wor
 		previous_cursor,
 		world.player_name(),
 		not world.item_field_move_offers().is_empty(),
+		world.bug_contest_active(),
 	)
 	menu.load_descriptions(world.data)
 	return menu

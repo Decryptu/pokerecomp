@@ -1569,6 +1569,64 @@ func test_the_tutor_asks_before_replacing_a_full_moveset_and_charges_nothing() -
 	assert_eq(_save.party[0].happiness, 71)
 
 
+## `ContestDropOffMons` and `ContestReturnMons` (engine/events/bug_contest/
+## contest_2.asm): the party masked to its lead for the length of a contest, and
+## the count recomputed when it is put back.
+func test_the_contest_mask_moves_the_party_aside_and_puts_it_back_in_order() -> void:
+	while _save.party.size() > 1:
+		_save.party.remove_at(1)
+	var second: Gen2SaveMon = Gen2SaveMon.new()
+	second.species = 10
+	second.level = 7
+	var third: Gen2SaveMon = Gen2SaveMon.new()
+	third.species = 13
+	third.level = 8
+	_save.party.append(second)
+	_save.party.append(third)
+	var lead: Gen2SaveMon = _save.party[0]
+
+	assert_eq(Gen2WorldPartyHost.contest_drop_off_mons(_save), 10, "wPartySpecies + 1")
+	assert_eq(_save.party.size(), 1, "wPartyCount is 1 for the whole contest")
+	assert_eq(_save.party[0], lead)
+	assert_eq(_save.contest_stashed_party.size(), 2)
+
+	## A second call with a stash standing would lose it; the gate cannot reach
+	## this twice and a mod calling the special can.
+	assert_eq(Gen2WorldPartyHost.contest_drop_off_mons(_save), 0)
+	assert_eq(_save.contest_stashed_party.size(), 2)
+
+	assert_eq(Gen2WorldPartyHost.contest_return_mons(_save), 2)
+	assert_eq(_save.party, [lead, second, third])
+	assert_true(_save.contest_stashed_party.is_empty())
+	assert_eq(Gen2WorldPartyHost.contest_return_mons(_save), 0, "nothing owed twice")
+
+
+func test_a_one_member_party_needs_no_contest_mask() -> void:
+	while _save.party.size() > 1:
+		_save.party.remove_at(1)
+	assert_eq(Gen2WorldPartyHost.contest_drop_off_mons(_save), 0)
+	assert_eq(_save.party.size(), 1)
+	assert_true(_save.contest_stashed_party.is_empty())
+
+
+func test_the_masked_party_survives_a_save_round_trip() -> void:
+	while _save.party.size() > 1:
+		_save.party.remove_at(1)
+	var second: Gen2SaveMon = Gen2SaveMon.new()
+	second.species = 10
+	second.level = 7
+	_save.party.append(second)
+	Gen2WorldPartyHost.contest_drop_off_mons(_save)
+	var restored: Gen2SaveData = Gen2SaveData.from_dict(_save.to_dict())
+	assert_eq(restored.party.size(), 1)
+	assert_eq(restored.contest_stashed_party.size(), 1)
+	assert_eq(int(restored.contest_stashed_party[0].species), 10)
+	## A slot written before the mask existed reads as one outside a contest.
+	var older: Dictionary = _save.to_dict()
+	older.erase("contest_stashed_party")
+	assert_true(Gen2SaveData.from_dict(older).contest_stashed_party.is_empty())
+
+
 ## `DoPoisonStep`'s `.DamageMonIfPoisoned`: one HP off a poisoned member that is
 ## still standing, and nothing at all off one that is already down.
 func test_a_poison_step_takes_one_hp_off_every_poisoned_member() -> void:

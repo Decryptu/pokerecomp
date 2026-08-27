@@ -24,6 +24,25 @@ func test_default_list_omits_pokedex_pokemon_and_pokegear() -> void:
 	])
 
 
+## `SetUpMenuItems` reads `STATUSFLAGS2_BUG_CONTEST_TIMER_F` twice: PACK is
+## dropped and the SAVE slot holds QUIT instead.
+func test_a_running_contest_drops_pack_and_puts_quit_where_save_was() -> void:
+	var menu: Gen2WorldStartMenu = Gen2WorldStartMenu.build(
+		1, true, true, 0, "GOLD", false, true
+	)
+	var kinds: Array = _kinds(menu)
+	assert_false(kinds.has(Gen2WorldStartMenu.ITEM_PACK), "only park balls throw")
+	assert_false(kinds.has(Gen2WorldStartMenu.ITEM_SAVE))
+	assert_eq(
+		kinds.find(Gen2WorldStartMenu.ITEM_QUIT),
+		kinds.find(Gen2WorldStartMenu.ITEM_PLAYER) + 1,
+		"`.write` fills the one slot SAVE would have"
+	)
+	for entry: Dictionary in menu.items():
+		if entry.get("kind") == Gen2WorldStartMenu.ITEM_QUIT:
+			assert_eq(String(entry.get("label", "")), "QUIT")
+
+
 func test_pokemon_appears_only_with_a_non_empty_party() -> void:
 	var empty: Gen2WorldStartMenu = Gen2WorldStartMenu.build(0, false, false)
 	assert_false(_kinds(empty).has(Gen2WorldStartMenu.ITEM_POKEMON))

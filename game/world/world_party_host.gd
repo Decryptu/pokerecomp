@@ -1023,6 +1023,8 @@ static func whited_out_text(player_name: String) -> String:
 
 ## `Script_Whiteout` past its own text: `HealParty`, `HalveMoney`,
 ## `GetWhiteoutSpawn` and the `WarpToSpawnPoint` behind them, in that order.
+## The last is [method Gen2WorldAPI.warp_to_spawn]'s own tail here, since every
+## escape shares it.
 ##
 ## One routine, because every way of blacking out reaches this one script: a
 ## battle lost anywhere goes through `Script_reloadmapafterbattle`, and the last
@@ -1061,6 +1063,40 @@ static func whiteout(
 		"spawn": spawn,
 		"warp": warped,
 	}
+
+
+## `ContestDropOffMons` past its fainted-lead branch: the party masked to its
+## lead for the length of the Bug Catching Contest. The cartridge drops
+## `wPartyCount` to 1 and writes a terminator over the second species byte,
+## leaving the members themselves in `wPartyMon`; nothing here counts a party by
+## a terminator, so the masked members move to
+## [member Gen2SaveData.contest_stashed_party] instead and the stashed species
+## byte stays as the world state's own.
+##
+## Answers the species `wBugContestSecondPartySpecies` takes, or 0 when the
+## party was one long already.
+static func contest_drop_off_mons(save: Gen2SaveData) -> int:
+	if save == null or save.party.size() <= 1:
+		return 0
+	if not save.contest_stashed_party.is_empty():
+		## A second drop-off with a stash still standing would lose the first
+		## one. The gate cannot reach this twice; a mod calling the special can.
+		return 0
+	var second: Variant = save.party[1]
+	save.contest_stashed_party = save.party.slice(1)
+	save.party = save.party.slice(0, 1)
+	return int((second as Gen2SaveMon).species) if second is Gen2SaveMon else 0
+
+
+## `ContestReturnMons`: the masked members put back and the count recomputed.
+## Answers how many rejoined the party.
+static func contest_return_mons(save: Gen2SaveData) -> int:
+	if save == null or save.contest_stashed_party.is_empty():
+		return 0
+	var returned: int = save.contest_stashed_party.size()
+	save.party.append_array(save.contest_stashed_party)
+	save.contest_stashed_party = []
+	return returned
 
 
 ## Attempts to catch one wild battle mon and consumes the ball on either result.
