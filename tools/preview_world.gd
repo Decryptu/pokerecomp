@@ -63,6 +63,8 @@ extends SceneTree
 ## | `visible_encounter_glow` | cell | The same population with ordinary DVs wearing an entry's `glow` |
 ## | `field_moves_menu` | cell | The start menu's MOVES row and the HM list behind it. Needs a registered field-move source, and is driven twice |
 ## | `repel_renewal` | cell | The question a Repel running out asks. Needs a registered renewal provider |
+## | `mod_notice` | badge | `Gen2ModHost.request_notice`'s banner over the map, wearing that badge |
+## | `mod_page` | badges won | `START_ACTION_OPEN_MOD_PAGE`'s screen, listing the eight Johto badges |
 ##
 ## A kind may also be the name of any `preview_*` driver on the world screen
 ## without that prefix: `field_move` (`PartyMenu` with a taught CUT),
@@ -74,6 +76,13 @@ extends SceneTree
 ## the Itemfinder closes the pack over the world's answer, the Coin Case prints
 ## inside the pack, and the three in [constant FACE_UP_FIRST] each need their own
 ## map and the cell below their target.
+
+## `TrainerCard_JohtoBadgesOAM`'s eight, for the two mod-surface kinds: the only
+## badge art the cartridge has.
+const BADGE_NAMES: Array[String] = [
+	"ZEPHYRBADGE", "HIVEBADGE", "PLAINBADGE", "FOGBADGE",
+	"MINERALBADGE", "STORMBADGE", "GLACIERBADGE", "RISINGBADGE",
+]
 
 ## `.forced_dpad`'s own order, which the first number indexes.
 const ICE_SLIDE_BUTTONS: Array[int] = [
@@ -620,6 +629,40 @@ func _process(_delta: float) -> bool:
 				if _screen.map_name_sign_passes() > 0 \
 					and _screen.map_name_sign_passes() < Gen2WorldAPI.MAP_NAME_SIGN_PASSES:
 					break
+		elif _kind == &"mod_notice":
+			## `Gen2ModHost.request_notice`'s banner, raised over the map the
+			## way `InitMapNameSign` raises the landmark one. The first number
+			## is which badge the icon shows.
+			Gen2ModHost.instance().request_notice(&"preview", {
+				"title": "BADGE WON",
+				"line": BADGE_NAMES[clampi(_cell.x, 0, BADGE_NAMES.size() - 1)],
+				"icon": {"badge": clampi(_cell.x, 0, 7)},
+				"sound": &"none",
+			})
+			for _frame: int in WARP_FRAME_CAP:
+				_screen.advance_frame()
+				if _screen.map_name_sign_passes() > 0 \
+					and _screen.map_name_sign_passes() < Gen2WorldAPI.MAP_NAME_SIGN_PASSES:
+					break
+		elif _kind == &"mod_page":
+			## `START_ACTION_OPEN_MOD_PAGE`'s screen, with the eight Johto
+			## badges listed and the first number saying how many are won.
+			var won: int = clampi(_cell.x, 0, BADGE_NAMES.size())
+			Gen2ModHost.instance().register_page(&"preview", {
+				"title": "BADGES",
+				"rows": func() -> Array:
+					var rows: Array = []
+					for badge: int in BADGE_NAMES.size():
+						rows.append({
+							"label": BADGE_NAMES[badge],
+							"detail": "WON" if badge < won else "",
+							"icon": {"badge": badge},
+							"locked": badge >= won,
+						})
+					return rows,
+			})
+			_screen._open_mod_page(&"preview")
+			_screen.advance_frame()
 		elif _kind == &"pokepic":
 			_screen.preview_pokepic(POKEPIC_SPECIES)
 		elif _kind == &"unown_printer":
@@ -703,7 +746,7 @@ func _process(_delta: float) -> bool:
 			&"name_rater", &"move_deleter", &"move_tutor", &"day_care",
 			&"ice_slide", &"whiteout", &"view_cover", &"gift_nickname",
 			&"catch_nickname", &"mom_bank", &"bills_pc", &"players_pc",
-			&"pokemon_center_pc", &"start_menu",
+			&"pokemon_center_pc", &"start_menu", &"mod_notice", &"mod_page",
 		]:
 			## Those kinds drove themselves to the frame they want; every other
 			## kind stages a sprite and then spends the frames it needs.

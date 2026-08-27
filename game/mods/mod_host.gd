@@ -142,7 +142,12 @@ const MENU_IDS: Array[StringName] = [MENU_START, MENU_PACK_POCKET, MENU_MART]
 ## own. A mod never receives a screen, so a row that has to open one names the
 ## opening rather than performing it, and the host applies its own gate on top.
 const START_ACTION_OPEN_BILLS_PC: StringName = &"OPEN_BILLS_PC"
-const START_ACTIONS: Array[StringName] = [START_ACTION_OPEN_BILLS_PC]
+## Opens the registering mod's own [method register_page], which is the one
+## screen a mod may put behind a start-menu row.
+const START_ACTION_OPEN_MOD_PAGE: StringName = &"OPEN_MOD_PAGE"
+const START_ACTIONS: Array[StringName] = [
+	START_ACTION_OPEN_BILLS_PC, START_ACTION_OPEN_MOD_PAGE,
+]
 
 ## The event channels a mod may watch. Both carry the typed dictionaries the
 ## engine already produces, published where the screen reads them, so a
@@ -194,6 +199,11 @@ signal action_changed(id: StringName, key: StringName, pressed: bool)
 ## what makes one switch of one host state reach the world, the battle and the
 ## key that cycles them; nothing a mod registered changes.
 signal view_changed(id: StringName)
+## Emitted when a field of [method progress] moves, at most once a world pass and
+## only where a field actually changed. A mod that awards something on a badge
+## being won connects to this; one that has to answer for a save it was installed
+## onto reads [method progress_for] in its own `save_activated` instead.
+signal progress_changed(progress: Dictionary)
 
 static var _instance: Gen2ModHost = null
 ## Which mod packs this process has mounted. Static because a resource pack
@@ -228,6 +238,8 @@ var _item_gift_requests: Array[Dictionary] = []
 ## `{id, text}` a mod asked the battle to print. See
 ## [method request_battle_message].
 var _battle_message_requests: Array[Dictionary] = []
+## [method request_notice]'s queue, spent one per free world frame.
+var _notice_requests: Array[Dictionary] = []
 ## Whether a battle screen is up and printing lines. See
 ## [method set_battle_messages_open].
 var _battle_messages_open: bool = false
@@ -235,6 +247,10 @@ var _battle_messages_open: bool = false
 ## while a world is open. A Callable rather than a handle on [Gen2WorldAPI]: a
 ## mod is given the copy and never the world.
 var _inventory_source: Callable = Callable()
+## Where [method progress] reads the live run from, and the last reading
+## [method refresh_progress] compared against.
+var _progress_source: Callable = Callable()
+var _progress: Dictionary = {}
 ## The open map's `{cell, item, flag, taken}` rows, for the ask that collapses.
 ## See [method set_hidden_items_source].
 var _hidden_items_source: Callable = Callable()
@@ -262,6 +278,8 @@ var _party_member_entries: Array = []
 ## `{kind, build}` per registered stats-screen page, in registration order. See
 ## [method register_stats_page].
 var _stats_pages: Array = []
+## [method register_page]'s one page per mod, by the id that registered it.
+var _pages: Dictionary = {}
 ## `{manifest, provider}` per mod told which save is being played, in
 ## registration order. See [method register_save_lifecycle].
 var _save_providers: Array = []
@@ -494,6 +512,91 @@ func request_battle_message(id: StringName, text: String) -> Dictionary:
 	return {"ok": true}
 
 
+## The sounds a notice may ask for, by name, so a mod never names a raw effect
+## number and never reaches one the host has not chosen to lend.
+##
+## `SFX_SHINE` ($5E) is deliberately absent: the sparkle means a shiny Pokemon
+## and nothing else, and a mod firing it for something ordinary teaches a player
+## to distrust it. `item` is `SFX_ITEM`, the jingle `FindItemInBallScript` plays,
+## and is the default.
+const NOTICE_SOUNDS: Dictionary = {
+	&"item": 0x01,
+	&"key_item": 0x91,
+	&"get_badge": 0x9C,
+	&"transaction": 0x22,
+	&"none": -1,
+}
+const NOTICE_SOUND_DEFAULT: StringName = &"item"
+
+## How many notices may wait at once. A queue is spent one per free world frame,
+## so a mod that asked for a hundred would be drawing banners for a minute; past
+## this the ask is refused and the refusal reaches [method failures] by name.
+const MAX_NOTICES: int = 8
+
+
+## Asks the world screen to raise a banner over the map: an icon, a title, a
+## line and a sound. A REQUEST and never the act, the way
+## [method request_hidden_item] is one.
+##
+## Drawn as `PlaceMapNameSign` draws the landmark banner, which is the only thing
+## the cartridge ever puts over a live map. Queued and spent the way a hidden
+## item is: held rather than dropped while a battle, a menu, an overlay, a text
+## box, a warp or a script owns the world, one spent per free world frame, and
+## [constant Gen2WorldAPI.MAP_NAME_SIGN_PASSES] between two so a run of them
+## reads rather than flickers.
+##
+## `title` and `line` are each one line of the cartridge's own font and are
+## REFUSED rather than clipped, the way [method request_battle_message] is.
+## `icon` is the vocabulary an actor's `sprites()` and a battle annotation's
+## `tile` share, resolved by [method Gen2MapNameSignPage.render_notice_icon].
+## `sound` is a [constant NOTICE_SOUNDS] name.
+func request_notice(id: StringName, notice: Dictionary) -> Dictionary:
+	if String(id).is_empty():
+		return {"ok": false, "reason": &"invalid_provider"}
+	var title: String = String(notice.get("title", "")).strip_edges()
+	var line: String = String(notice.get("line", "")).strip_edges()
+	if title.is_empty() and line.is_empty():
+		return _refuse_notice(id, &"empty_notice", String(id))
+	for text: String in [title, line]:
+		if text.contains("\n") \
+			or Gen2Text.encode(text).size() > Gen2MapNameSignPage.NOTICE_COLUMNS:
+			return _refuse_notice(id, &"notice_line_too_long", "%s: %s" % [id, text])
+	var sound: StringName = StringName(notice.get("sound", NOTICE_SOUND_DEFAULT))
+	if not NOTICE_SOUNDS.has(sound):
+		return _refuse_notice(id, &"unknown_notice_sound", "%s: %s" % [id, sound])
+	var icon: Variant = notice.get("icon", {})
+	if icon is not Dictionary:
+		return _refuse_notice(id, &"invalid_notice_icon", String(id))
+	if _notice_requests.size() >= MAX_NOTICES:
+		return _refuse_notice(id, &"notice_queue_full", String(id))
+	_notice_requests.append({
+		"id": id, "title": title, "line": line, "sound": sound,
+		"icon": (icon as Dictionary).duplicate(true),
+	})
+	return {"ok": true}
+
+
+func _refuse_notice(id: StringName, reason: StringName, detail: String) -> Dictionary:
+	var refusal: Dictionary = {
+		"ok": false, "reason": reason, "detail": detail, "id": id,
+	}
+	_failures.append(refusal)
+	return refusal
+
+
+## Drained by [Gen2WorldScreen], one per frame it can spend one on. Empty when
+## nothing is queued.
+func take_notice_request() -> Dictionary:
+	if _notice_requests.is_empty():
+		return {}
+	return _notice_requests.pop_front()
+
+
+## The effect number a notice's sound name stands for, or -1 for silence.
+static func notice_sound_index(sound: StringName) -> int:
+	return int(NOTICE_SOUNDS.get(sound, -1))
+
+
 ## Drained by [Gen2BattleScreen], one line at a time, on the box it prints it in.
 ## Empty when nothing is queued.
 func take_battle_message() -> Dictionary:
@@ -536,6 +639,52 @@ func inventory() -> Dictionary:
 		return {}
 	var bag: Variant = _inventory_source.call()
 	return (bag as Dictionary).duplicate(true) if bag is Dictionary else {}
+
+
+## Where [method progress] reads the live run from, set by [Gen2WorldScreen] and
+## cleared when it closes, the way [method set_inventory_source] is.
+func set_progress_source(source: Callable) -> void:
+	_progress_source = source
+	if not source.is_valid():
+		_progress = {}
+
+
+## What the run being played has achieved: badges, the Hall of Fame, the dex
+## counts, what is kept, money, coins, the play timer. `{}` with no world open.
+##
+## A copy rather than a handle, and read only: every field is state the host
+## owns. See [Gen2ModProgress] for the fields and for why an absent one is absent
+## rather than zero.
+func progress() -> Dictionary:
+	if not _progress_source.is_valid():
+		return {}
+	var reading: Variant = _progress_source.call()
+	return (reading as Dictionary).duplicate(true) if reading is Dictionary else {}
+
+
+## The same off a save rather than off the world, which is what a
+## `save_activated` callback has: the slot has been chosen and no world exists
+## yet. This is the reading that lets a mod installed onto a save already played
+## award what that save has.
+func progress_for(save: Gen2SaveData, data: GameData = null) -> Dictionary:
+	return Gen2ModProgress.of_save(save, data)
+
+
+## Re-reads the live run and emits [signal progress_changed] where a field moved.
+## Called by [Gen2WorldScreen] once a world pass.
+##
+## Nothing is read while nothing is connected: walking the party and every box is
+## the expensive half of a reading, and a build with no mod watching must not pay
+## for it.
+func refresh_progress() -> void:
+	if not _progress_source.is_valid() or not progress_changed.has_connections():
+		return
+	var reading: Variant = _progress_source.call()
+	var next: Dictionary = reading as Dictionary if reading is Dictionary else {}
+	if not Gen2ModProgress.differs(next, _progress):
+		return
+	_progress = next.duplicate(true)
+	progress_changed.emit(_progress.duplicate(true))
 
 
 func world_actor_ids() -> Array:
@@ -952,6 +1101,10 @@ func register_menu_entry(menu: StringName, id: StringName, entry: Dictionary) ->
 		else:
 			registered["action"] = action
 			registered["available"] = true
+			## Which page the row opens, for a mod with more than one row: the
+			## row's own id otherwise, which is the mod's id in every example.
+			if action == START_ACTION_OPEN_MOD_PAGE:
+				registered["page"] = StringName(entry.get("page", id))
 		if entry.has("visible"):
 			var visible: Variant = entry["visible"]
 			if not visible is Callable or not (visible as Callable).is_valid():
@@ -1045,6 +1198,77 @@ func stats_pages() -> Array:
 	return _stats_pages.duplicate()
 
 
+## A screen of the mod's own, listed and drawn by the host: [param entry] carries
+## a `title` and a `rows` Callable answering an Array of
+## `{label, detail, icon, locked}`.
+##
+## The host draws it with the screen's own font and frame, so a mod needs no
+## node, no renderer and no art of its own; `icon` is
+## [method request_notice]'s vocabulary. A `MENU_START` entry registered under
+## the same id naming [constant START_ACTION_OPEN_MOD_PAGE] is what opens it.
+##
+## One page per mod, refused by name for a second, the way a stats page is.
+func register_page(id: StringName, entry: Dictionary) -> Dictionary:
+	if String(id).is_empty():
+		return {"ok": false, "reason": &"invalid_mod_page"}
+	var rows: Variant = entry.get("rows", null)
+	if rows is not Callable or not (rows as Callable).is_valid():
+		return {"ok": false, "reason": &"mod_page_missing_callable", "detail": String(id)}
+	if _pages.has(id):
+		return {"ok": false, "reason": &"duplicate_mod_page", "detail": String(id)}
+	_pages[id] = {
+		"id": id,
+		"title": String(entry.get("title", "")),
+		"rows": rows,
+	}
+	return {"ok": true, "id": id}
+
+
+## The ids with a page, in registration order.
+func page_ids() -> Array:
+	return _pages.keys()
+
+
+## [param id]'s page as `{id, title}`, or `{}` where nothing registered one. The
+## Callable is deliberately not handed out: [method page_rows] is how a screen
+## asks, so the host stays the one caller of a mod's function.
+func page(id: StringName) -> Dictionary:
+	if not _pages.has(id):
+		return {}
+	var entry: Dictionary = _pages[id]
+	return {"id": entry["id"], "title": entry["title"]}
+
+
+## What [param id]'s page lists now, asked fresh: a page is a view of state the
+## mod holds and is answered when it is drawn rather than when it is registered.
+##
+## Every row is normalised here, so a screen never sees a shape a mod invented:
+## a row with no `label` is dropped, `icon` is a Dictionary or absent, and
+## `locked` is a bool. An answer that is not an Array is no rows at all.
+func page_rows(id: StringName) -> Array:
+	if not _pages.has(id):
+		return []
+	var answered: Variant = ((_pages[id] as Dictionary)["rows"] as Callable).call()
+	if answered is not Array:
+		return []
+	var out: Array = []
+	for raw: Variant in answered as Array:
+		if raw is not Dictionary:
+			continue
+		var row: Dictionary = raw
+		var label: String = String(row.get("label", "")).strip_edges()
+		if label.is_empty():
+			continue
+		var icon: Variant = row.get("icon", {})
+		out.append({
+			"label": label,
+			"detail": String(row.get("detail", "")).strip_edges(),
+			"icon": (icon as Dictionary).duplicate(true) if icon is Dictionary else {},
+			"locked": bool(row.get("locked", false)),
+		})
+	return out
+
+
 ## Every entry registered for [param menu], in registration order. The callers
 ## append these to their own source list rather than the other way round.
 func menu_entries(menu: StringName) -> Array:
@@ -1066,17 +1290,22 @@ func start_menu_entries(context: Dictionary) -> Array:
 		var visible: Variant = entry.get("visible", null)
 		if visible is Callable and not bool((visible as Callable).call(context.duplicate(true))):
 			continue
-		if not _start_action_allowed(StringName(entry.get("action", &"")), context):
+		if not _start_action_allowed(entry, context):
 			continue
 		out.append(entry)
 	return out
 
 
 ## The host's own gate on an allow-listed action, asked after the mod's
-## predicate. `PC_CheckPartyForPokemon` is the whole of what Bill's PC has.
-static func _start_action_allowed(action: StringName, context: Dictionary) -> bool:
+## predicate. `PC_CheckPartyForPokemon` is the whole of what Bill's PC has, and a
+## row that would open a page the mod never registered is absent rather than
+## present and dead.
+func _start_action_allowed(entry: Dictionary, context: Dictionary) -> bool:
+	var action: StringName = StringName(entry.get("action", &""))
 	if action == START_ACTION_OPEN_BILLS_PC:
 		return int(context.get("party_count", 0)) > 0
+	if action == START_ACTION_OPEN_MOD_PAGE:
+		return _pages.has(StringName(entry.get("page", entry.get("kind", &""))))
 	return true
 
 

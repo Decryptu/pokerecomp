@@ -33,7 +33,7 @@ user://mods/<id>/
 | `id` | Lowercase `[a-z0-9][a-z0-9_-]*`. Addresses the directory and the registry keys |
 | `name` | Shown to the player |
 | `version` | The mod's own version. Strict `major.minor.patch` |
-| `api_version` | The contract this mod is written against. Current: `Gen2ModManifest.API_VERSION`, 20. A host accepts 1 to 20 |
+| `api_version` | The contract this mod is written against. Current: `Gen2ModManifest.API_VERSION`, 21. A host accepts 1 to 21 |
 | `entry` | A `.gd` path inside the mod directory, or inside the pack when there is one |
 | `pack` | Optional `.pck` or `.zip` beside `mod.json`, holding the mod's files |
 | `description` | Optional |
@@ -1240,6 +1240,128 @@ when no world is open. Read only, and a copy.
 
 It is one narrow accessor rather than a handle on `Gen2WorldAPI`, because a
 non-renderer mod is deliberately given no world.
+
+## Reading the run's progress
+
+`Gen2ModHost.progress()` answers what the run being played has achieved, and `{}`
+when no world is open. `Gen2ModHost.progress_for(save)` answers the same off a
+save, which is what a `save_activated` callback has: the slot has been chosen and
+no world exists yet. Both are copies, and read only.
+
+Every field is a state the run has **reached** rather than a moment it passed, so
+a mod installed onto a save already played reads what that save has. That is the
+difference between "eight badges" and "a badge was awarded": the first is still
+readable and the second is gone.
+
+| Key | Meaning |
+|---|---|
+| `badges` | A sixteen-bit mask, bit `i` being badge `i` in badge order. Crystal's order whichever cartridge is open, so nothing reads the Gold and Silver flag table |
+| `badge_count` | The same mask popcounted, which is `_GetVarAction`'s `.CountBadges` |
+| `hall_of_fame` | `STATUSFLAGS_HALL_OF_FAME_F` |
+| `beat_red` | `wSpawnAfterChampion` is `SPAWN_AFTER_RED` |
+| `seen_count`, `caught_count` | The dex counters |
+| `unown_caught` | How many Unown forms have been caught |
+| `party_count`, `kept_count` | The party, and the party plus the boxes |
+| `highest_level` | The highest level anywhere in either |
+| `shiny_count` | How many of those are shiny |
+| `money`, `coins` | The wallet and the Game Corner |
+| `step_count`, `phone_contacts` | The step counter and the registered numbers |
+| `play_hours`, `play_minutes` | The play timer the trainer card prints |
+
+**An absent field stays absent rather than becoming a zero**, so a mod written
+against a later host reads a missing answer as nothing achieved rather than as an
+achievement lost. A save with no world at all answers the save's own half and
+leaves the world's out.
+
+`signal progress_changed(progress)` is emitted at most once a world pass, and only
+where a field actually moved. Nothing is read at all while nothing is connected:
+walking the party and every box is the expensive half of a reading.
+
+```gdscript
+host.progress_changed.connect(func(progress: Dictionary) -> void:
+	var mask: int = int(progress.get(&"badges", 0))
+	...
+)
+```
+
+The first reading of a run is the save being opened rather than anything
+happening in it. A mod that announces changes adopts that one silently and
+compares against it afterwards.
+
+## A notice over the map
+
+`Gen2ModHost.request_notice(id, notice)` asks the world screen to raise a banner
+over the overworld: an icon, a title, a line and a sound. It is a **request** and
+never the act, the way `request_hidden_item` is.
+
+```gdscript
+host.request_notice(manifest.id, {
+	"title": "BADGE WON",
+	"line": "ZEPHYRBADGE",
+	"icon": {"badge": 0},
+	"sound": &"get_badge",
+})
+```
+
+It is drawn as `PlaceMapNameSign` draws the landmark banner, which is the only
+thing the cartridge ever puts over a live map. Gold and Silver ship neither that
+routine nor its sheet, so those two get the ordinary text-box frame instead.
+
+- Queued and spent the way a hidden item's ask is: held rather than dropped while
+  a battle, a menu, an overlay, a text box, a warp or a script owns the world, one
+  per free world frame, and never over a banner already up.
+- `title` and `line` are each one line of the cartridge's own font and are
+  **refused rather than clipped** past `Gen2MapNameSignPage.NOTICE_COLUMNS`.
+- At most `Gen2ModHost.MAX_NOTICES` may wait; past that the ask is refused by name
+  and the refusal reaches `Gen2ModHost.failures()`.
+- The answer is `{ok: true}` or a refusal with a reason, so a mod can say why
+  nothing was drawn.
+
+`icon` is the vocabulary an actor's `sprites()` and a battle annotation's `tile`
+already share, so a mod never composes pixels:
+
+| Key | Drawn from |
+|---|---|
+| `{"badge": 0..7}` | The trainer card's own badge art, which is the only place the game draws a badge. The Kanto eight reuse the Johto pictures on the cartridge and have none of their own |
+| `{"species": n}` | The party menu's icon for that species |
+| `{"sprite": n}` | An `OverworldSprites` row, facing down |
+| `{"tile": indices}` | A raw 16x16 of palette indices, drawn in the banner's own palette |
+
+`sound` is a name out of the small set the host owns, so a mod never names a raw
+effect number: `item` (the default, the jingle a hidden item plays), `key_item`,
+`get_badge`, `transaction` and `none`.
+
+**`SFX_SHINE` is deliberately not among them.** The sparkle means a shiny Pokémon
+and nothing else, and a mod firing it for something ordinary teaches a player to
+distrust it.
+
+## A page of your own
+
+`Gen2ModHost.register_page(id, {"title": String, "rows": Callable})` gives a mod
+one screen. `rows` answers an Array of `{label, detail, icon, locked}`, asked
+fresh when the page is drawn rather than when it is registered, so a page is a
+view of state the mod holds.
+
+```gdscript
+host.register_page(manifest.id, {"title": "BADGES", "rows": _badge_rows})
+host.register_menu_entry(Gen2ModHost.MENU_START, &"my_badges", {
+	"label": "BADGES",
+	"action": Gen2ModHost.START_ACTION_OPEN_MOD_PAGE,
+	"page": manifest.id,
+})
+```
+
+The host draws it with the screen's own font and frame, so the page needs no
+node, no renderer and no art of its own; `icon` is `request_notice`'s vocabulary.
+A locked row is drawn the way the Pokédex draws an unseen entry.
+
+- One page per mod, refused by name for a second, the way a stats page is.
+- `page` on the menu entry names which page the row opens, and defaults to the
+  row's own id. A row naming `START_ACTION_OPEN_MOD_PAGE` with no page behind it
+  is **absent** from the start menu rather than present and dead.
+- A row with no `label` is dropped, an `icon` that is not a set of fields is no
+  icon, and an answer that is not an Array is no rows.
+- The d-pad scrolls the list and B leaves, the way the trainer card is paged.
 
 ## Shiny rolls
 
