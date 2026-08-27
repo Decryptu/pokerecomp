@@ -92,6 +92,13 @@ const RUN_FAILED: StringName = &"run_failed"
 const RUN_BLOCKED: StringName = &"run_blocked"
 const OVER: StringName = &"over"
 
+## `Text_GotchaMonWasCaught`: the wild is caught and kept. Published rather than
+## printed, because the line beside it is `PokeBallEffect`'s own and not one of
+## the turn's. Carries what identifies the catch: `species`, `level`, `dvs`,
+## `shiny`, `ball`, `method`, `map_group`, `map_number`, `battle_type`,
+## `destination` (&"party" or &"box"), `tutorial` and `contest`.
+const CAUGHT: StringName = &"caught"
+
 ## Experience, once the fainted Pokémon's opponent has somebody to award it to.
 ## Never for [constant ENEMY]: `GiveExperiencePoints` reads the player's party
 ## alone, so a trainer's Pokémon are the reason and never the recipient.

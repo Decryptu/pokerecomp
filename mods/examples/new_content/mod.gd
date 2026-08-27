@@ -33,7 +33,13 @@ const CURIOS_POCKET: int = Gen2ModHost.FIRST_MOD_POCKET
 const PIKACHU: int = 25
 const THUNDERBOLT: int = 85
 
+## This mod's own id, kept because a subscriber is called back long after
+## `register` returned and a request the host records names whose it was.
+var _id: StringName = &""
+
+
 func register(host: Gen2ModHost, manifest: Gen2ModManifest) -> void:
+	_id = manifest.id
 	_add_a_type(host, manifest.id)
 	_add_a_species(host, manifest.id)
 	_add_a_move(host, manifest.id)
@@ -665,6 +671,15 @@ func _watch(host: Gen2ModHost, id: StringName) -> void:
 func _on_battle_event(event: Dictionary) -> void:
 	if StringName(event.get("type", &"")) == Gen2Battle.FAINTED:
 		print("[new_content] side %d fainted" % int(event.get("side", -1)))
+	## A capture arrives with its own `Gotcha!` line, so a line asked for here
+	## lands behind it and in front of the nickname prompt. The tutorial catch
+	## and a Bug Contest catch are excluded: neither is a Pokemon kept.
+	if StringName(event.get("type", &"")) == Gen2Battle.CAUGHT \
+		and not bool(event.get("tutorial", false)) \
+		and not bool(event.get("contest", false)):
+		Gen2ModHost.instance().request_battle_message(
+			_id, "A shiny one!" if bool(event.get("shiny", false)) else "One for the DEX!"
+		)
 
 
 func _on_world_event(event: Dictionary) -> void:

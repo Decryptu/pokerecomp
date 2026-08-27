@@ -294,6 +294,10 @@ var _capture_selecting: bool = false:
 		_gate_annotations()
 var _capture_waiting: bool = false
 var _capture_messages: Array[String] = []
+## The [constant Gen2Battle.CAUGHT] event built by [method complete_capture] and
+## published on the box that prints its Gotcha line, so a subscriber has moved
+## before the nickname prompt opens.
+var _capture_caught_event: Dictionary = {}
 var _capture_terminal: bool = false
 ## Whether this capture's experience award has already run. See
 ## [method _spend_capture_experience].
@@ -674,6 +678,9 @@ func _ready() -> void:
 	## player's boxes, drawn through `PrintLetterDelay` like every other one.
 	var options: Gen2Options = Gen2OptionsStore.current()
 	_box.set_frame_style(options.textbox_frame)
+	## A line a mod asks for is spent in this box, so the queue lives exactly as
+	## long as the box does.
+	Gen2ModHost.instance().set_battle_messages_open(true)
 	_box.reveal_speed = options.text_reveal_speed()
 	_box.item_rect_changed.connect(_push_text_box_rect)
 	_box.visibility_changed.connect(_push_text_box_rect)
@@ -737,6 +744,9 @@ func set_data(data: GameData) -> void:
 func _exit_tree() -> void:
 	if _audio_player != null and not _owns_audio_player:
 		_audio_player.set_low_health_alarm(false)
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	if host != null:
+		host.set_battle_messages_open(false)
 
 
 ## Hands this screen the driver the opening screen is already running, before it
@@ -2735,6 +2745,7 @@ func complete_capture(result: Dictionary) -> Dictionary:
 	if caught:
 		_capture_messages.append("Gotcha! %s was caught!" % _name_of(_enemy))
 		_capture_terminal = true
+		_capture_caught_event = _caught_event(result)
 	else:
 		_capture_messages.append("%s broke free!" % _name_of(_enemy))
 	_begin_capture_animation(result_ball, wobbles, caught)
@@ -2786,6 +2797,56 @@ func _show_next_capture_message() -> void:
 	if _capture_messages.is_empty():
 		return
 	show_message(_capture_messages.pop_front())
+	## `Text_GotchaMonWasCaught` is always the last line of a caught throw, so
+	## the queue running dry on a terminal capture is that box. Published here
+	## rather than in [method complete_capture] because a subscriber asking for a
+	## line of its own owes the same ordering every event gets: after the line
+	## being shown when it asked.
+	if _capture_terminal and _capture_messages.is_empty() \
+		and not _capture_caught_event.is_empty():
+		var event: Dictionary = _capture_caught_event
+		_capture_caught_event = {}
+		Gen2ModHost.publish(Gen2ModHost.CHANNEL_BATTLE, event)
+
+
+## What a capture publishes: the Pokemon kept and the circumstances of the throw.
+## The screen is the one place that holds all three, the resolved result, the
+## wild itself and the request the world made.
+func _caught_event(result: Dictionary) -> Dictionary:
+	var values: Variant = _world_battle_request.get("values", _world_battle_request)
+	var request: Dictionary = values as Dictionary if values is Dictionary else {}
+	var wild: Gen2BattleMon = _battle.enemy if _battle != null else null
+	var dvs: int = wild.dvs if wild != null else 0
+	var destination: Dictionary = result.get("destination", {})
+	return {
+		"type": Gen2Battle.CAUGHT,
+		"species": wild.species if wild != null else int(result.get("species", 0)),
+		"level": wild.level if wild != null else 0,
+		"dvs": dvs,
+		"shiny": Gen2Stats.is_shiny(dvs),
+		"ball": int(result.get("ball", 0)),
+		"method": StringName(request.get("method", &"")),
+		"map_group": int(request.get("map_group", -1)),
+		"map_number": int(request.get("map_number", -1)),
+		"battle_type": _battle.battle_type if _battle != null else 0,
+		"destination": StringName(destination.get("destination", &"party")),
+		"tutorial": _world_battle_tutorial,
+		"contest": bool(result.get("contest", false)),
+	}
+
+
+## The next line a mod asked the battle to print, shown in its own box. Drained
+## one at a time so a mod that asks from the handler of the line it is reading is
+## still spent in order.
+func _show_next_mod_message() -> bool:
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	if host == null:
+		return false
+	var request: Dictionary = host.take_battle_message()
+	if request.is_empty():
+		return false
+	show_message(String(request["text"]))
+	return true
 
 
 func _selected_capture_ball() -> int:
@@ -2901,6 +2962,7 @@ func _clear_capture_action() -> void:
 	_capture_selecting = false
 	_capture_waiting = false
 	_capture_messages.clear()
+	_capture_caught_event = {}
 	_capture_terminal = false
 	_capture_result.clear()
 	_close_capture_nickname()
@@ -3307,6 +3369,10 @@ func _continue_after_messages() -> void:
 		return
 	if not _capture_messages.is_empty():
 		_show_next_capture_message()
+		return
+	## After the line a mod asked from and before the nickname prompt, which is
+	## where a line about the catch reads.
+	if _show_next_mod_message():
 		return
 	if _capture_terminal:
 		## `BugContest_SetCaughtContestMon` asks before replacing the Pokemon

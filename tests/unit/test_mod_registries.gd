@@ -604,6 +604,62 @@ func test_a_hidden_item_ask_collapses_on_the_queue_and_on_the_flag() -> void:
 	assert_eq(host.take_hidden_item_requests(), [Vector2i(3, 4)] as Array[Vector2i])
 
 
+## Two charms are worth what each adds past the cartridge's own roll, not the
+## larger of the two: the Let's Go number for a Shiny Charm carried at a full
+## Catch Combo is 14 and not 12.
+func test_shiny_roll_providers_compose_additively() -> void:
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	assert_true(bool(host.register_shiny_rolls(&"charm", _Rolls.new(3))["ok"]))
+	assert_eq(Gen2ModHost.shiny_roll_count({"species": 25}), 3, "one alone is unchanged")
+	assert_true(bool(host.register_shiny_rolls(&"combo", _Rolls.new(12))["ok"]))
+	assert_eq(Gen2ModHost.shiny_roll_count({"species": 25}), 14)
+	## 0 and 1 both mean the cartridge's own roll, so neither adds anything.
+	assert_true(bool(host.register_shiny_rolls(&"quiet", _Rolls.new(0))["ok"]))
+	assert_eq(Gen2ModHost.shiny_roll_count({"species": 25}), 14, "0 adds nothing")
+
+
+## The line a mod asks the battle to print: queued in order, one line wide, and
+## dropped rather than held where no battle is up.
+func test_a_battle_message_is_queued_measured_and_dropped() -> void:
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	var refused: Dictionary = host.request_battle_message(MOD, "Catch Combo 2!")
+	assert_eq(StringName(refused["reason"]), &"no_battle_showing_messages")
+	assert_eq(host.take_battle_message(), {}, "nothing was queued")
+
+	host.set_battle_messages_open(true)
+	assert_true(bool(host.request_battle_message(MOD, "Catch Combo 2!")["ok"]))
+	assert_true(bool(host.request_battle_message(MOD, "Catch Combo 3!")["ok"]))
+	assert_eq(host.request_battle_message(MOD, "   ")["reason"], &"empty_battle_message")
+
+	## 18 tiles is one line of a standard box, and a nineteenth is refused by
+	## name rather than clipped.
+	var before: int = host.failures().size()
+	var wide: Dictionary = host.request_battle_message(MOD, "1234567890123456789")
+	assert_eq(StringName(wide["reason"]), &"battle_message_too_long")
+	assert_true(bool(host.request_battle_message(MOD, "123456789012345678")["ok"]), "18 fits")
+	var two_lines: Dictionary = host.request_battle_message(MOD, "one\ntwo")
+	assert_eq(StringName(two_lines["reason"]), &"battle_message_too_long")
+	assert_eq(host.failures().size(), before + 2, "both refusals reach the launcher")
+	assert_eq(StringName((host.failures().back() as Dictionary)["id"]), MOD)
+
+	assert_eq(String(host.take_battle_message()["text"]), "Catch Combo 2!")
+	assert_eq(String(host.take_battle_message()["text"]), "Catch Combo 3!")
+	## The battle went away with a line still queued, and it goes with it.
+	host.set_battle_messages_open(false)
+	assert_eq(host.take_battle_message(), {})
+
+
+## Answers one total whatever it is asked, the way a charm does.
+class _Rolls:
+	var _rolls: int = 1
+
+	func _init(rolls: int) -> void:
+		_rolls = rolls
+
+	func shiny_rolls(_context: Dictionary) -> int:
+		return _rolls
+
+
 ## `(9, 9)` has been picked up; `(3, 4)` has not, which is also what the
 ## pack-full branch leaves behind.
 func _hidden_item_rows() -> Array:
