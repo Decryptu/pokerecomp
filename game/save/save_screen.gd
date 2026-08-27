@@ -361,7 +361,7 @@ func _refresh_details() -> void:
 	var save: Gen2SaveData = _load_selected_save()
 	if save != null:
 		body.add_child(Gen2LauncherUI.muted(_palette, "Player: %s" % save.player_name))
-		var save_actions: HBoxContainer = Gen2LauncherUI.row(Gen2LauncherUI.GAP_SM)
+		var save_actions: HFlowContainer = Gen2LauncherUI.actions()
 		body.add_child(save_actions)
 		save_actions.add_child(_action("Continue", Gen2LauncherButton.Variant.PRIMARY, &"play", _continue_selected))
 		save_actions.add_child(_action("Party", Gen2LauncherButton.Variant.NEUTRAL, &"", _open_party))
@@ -381,7 +381,7 @@ func _refresh_details() -> void:
 		return
 
 	body.add_child(Gen2LauncherUI.muted(_palette, _slot_message(row)))
-	var actions: HBoxContainer = Gen2LauncherUI.row(Gen2LauncherUI.GAP_SM)
+	var actions: HFlowContainer = Gen2LauncherUI.actions()
 	body.add_child(actions)
 	actions.add_child(_action("New game", Gen2LauncherButton.Variant.PRIMARY, &"plus", _request_new_game))
 	actions.add_child(_action("Import .sav", Gen2LauncherButton.Variant.NEUTRAL, &"", _request_import))
@@ -396,19 +396,23 @@ func _refresh_details() -> void:
 ## only the last of them is reversible.
 func _add_slot_management(body: VBoxContainer) -> void:
 	body.add_child(Gen2LauncherUI.caption(_palette, "This slot as a file"))
-	var name_row: HBoxContainer = Gen2LauncherUI.row(Gen2LauncherUI.GAP_SM)
+	var name_row: HFlowContainer = Gen2LauncherUI.actions()
 	body.add_child(name_row)
 	var name_input := LineEdit.new()
 	name_input.placeholder_text = "Slot name"
 	name_input.max_length = Gen2SaveData.MAX_LABEL
 	name_input.text = String(_row_for(_selected_slot).get("label", ""))
 	name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	## A wrapping row gives a child its minimum width rather than the line, so
+	## the field says how wide it wants to be and drops the button under it when
+	## the page cannot hold both.
+	name_input.custom_minimum_size = Vector2(220, 0)
 	name_row.add_child(name_input)
 	name_row.add_child(_action("Rename", Gen2LauncherButton.Variant.NEUTRAL, &"", func() -> void:
 		_rename_slot(name_input.text)
 	))
 
-	var file_row: HBoxContainer = Gen2LauncherUI.row(Gen2LauncherUI.GAP_SM)
+	var file_row: HFlowContainer = Gen2LauncherUI.actions()
 	body.add_child(file_row)
 	file_row.add_child(_action("Edit save", Gen2LauncherButton.Variant.NEUTRAL, &"settings", _open_editor))
 	file_row.add_child(_action("Export", Gen2LauncherButton.Variant.NEUTRAL, &"", func() -> void:
@@ -518,7 +522,7 @@ func _build_new_game_form(body: VBoxContainer) -> void:
 	_name_input.custom_minimum_size = Vector2(0, 42)
 	body.add_child(Gen2LauncherUI.caption(_palette, "Save name"))
 	body.add_child(_name_input)
-	var actions: HBoxContainer = Gen2LauncherUI.row(Gen2LauncherUI.GAP_SM)
+	var actions: HFlowContainer = Gen2LauncherUI.actions()
 	body.add_child(actions)
 	actions.add_child(_action("Start game", Gen2LauncherButton.Variant.PRIMARY, &"check", _create_from_form))
 	actions.add_child(_action("Cancel", Gen2LauncherButton.Variant.NEUTRAL, &"", cancel_new_game))

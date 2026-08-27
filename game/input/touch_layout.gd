@@ -1,7 +1,7 @@
 class_name Gen2TouchLayout
 extends RefCounted
 
-## Where the on-screen controller's four clusters sit, how big they are and how
+## Where the on-screen controller's five clusters sit, how big they are and how
 ## much of the screen they hide.
 ##
 ## Geometry only: [Gen2TouchPad] draws and reads touches, and this answers where
@@ -15,20 +15,24 @@ extends RefCounted
 ## one is in the middle of the screen in the other.
 
 const GROUP_PAD: StringName = &"pad"
-const GROUP_FACE: StringName = &"face"
+const GROUP_A: StringName = &"a"
+const GROUP_B: StringName = &"b"
 const GROUP_START: StringName = &"start"
 const GROUP_SELECT: StringName = &"select"
-const GROUPS: Array[StringName] = [GROUP_PAD, GROUP_FACE, GROUP_START, GROUP_SELECT]
+const GROUPS: Array[StringName] = [
+	GROUP_PAD, GROUP_A, GROUP_B, GROUP_START, GROUP_SELECT,
+]
 
-const GROUP_LABELS: Dictionary = {
-	GROUP_PAD: "D-pad",
-	GROUP_FACE: "A and B",
-	GROUP_START: "START",
-	GROUP_SELECT: "SELECT",
-}
+## The name A and B shared while they were one cluster on a fixed diagonal. Read
+## on the way in and never written, so a layout arranged before they came apart
+## still opens where the player left it.
+const GROUP_FACE: StringName = &"face"
 
-## The one button each single-button group carries.
+## The one button each single-button group carries. Every group but the d-pad is
+## one of these: the d-pad is one control with four answers.
 const GROUP_BUTTONS: Dictionary = {
+	GROUP_A: Gen2Button.A,
+	GROUP_B: Gen2Button.B,
 	GROUP_START: Gen2Button.START,
 	GROUP_SELECT: Gen2Button.SELECT,
 }
@@ -40,8 +44,14 @@ const ORIENTATIONS: Array[StringName] = [ORIENTATION_PORTRAIT, ORIENTATION_LANDS
 ## Sizes in display-independent points, shared by the game and its layout editor.
 const PAD_SIZE: float = 112.0
 const FACE_DIAMETER: float = 56.0
-## Centre-to-centre along the diagonal A and B sit on, so they never touch.
+## Centre-to-centre along the diagonal A and B sat on while they were one
+## cluster. Only [method _split_face] reads it now: the two are dragged
+## separately and nothing holds them apart.
 const FACE_SPACING: float = 68.0
+
+## The area a `face` centre is assumed to have been arranged against, in points.
+## A phone held upright, which is the only device that has ever drawn one.
+const MIGRATION_AREA: Vector2 = Vector2(390.0, 844.0)
 const MENU_SIZE: Vector2 = Vector2(80.0, 40.0)
 
 ## Inside this fraction of the d-pad's half-width nothing is pressed, so a thumb
@@ -60,13 +70,15 @@ const MAX_OPACITY: float = 1.0
 const DEFAULT_ANCHORS: Dictionary = {
 	ORIENTATION_PORTRAIT: {
 		GROUP_PAD: Vector2(0.24, 0.50),
-		GROUP_FACE: Vector2(0.76, 0.50),
+		GROUP_B: Vector2(0.86, 0.43),
+		GROUP_A: Vector2(0.68, 0.57),
 		GROUP_SELECT: Vector2(0.38, 0.88),
 		GROUP_START: Vector2(0.62, 0.88),
 	},
 	ORIENTATION_LANDSCAPE: {
 		GROUP_PAD: Vector2(0.12, 0.55),
-		GROUP_FACE: Vector2(0.88, 0.55),
+		GROUP_B: Vector2(0.93, 0.48),
+		GROUP_A: Vector2(0.79, 0.62),
 		GROUP_SELECT: Vector2(0.12, 0.90),
 		GROUP_START: Vector2(0.88, 0.90),
 	},
@@ -192,8 +204,8 @@ func group_size(group: StringName) -> Vector2:
 	match group:
 		GROUP_PAD:
 			return Vector2(PAD_SIZE, PAD_SIZE) * scale
-		GROUP_FACE:
-			return Vector2(FACE_SPACING + FACE_DIAMETER, FACE_SPACING + FACE_DIAMETER) * scale
+		GROUP_A, GROUP_B:
+			return Vector2(FACE_DIAMETER, FACE_DIAMETER) * scale
 		GROUP_START, GROUP_SELECT:
 			return MENU_SIZE * scale
 	# A mod's button is the same pill, since it is one press like those two.
@@ -226,15 +238,6 @@ func group_rect(group: StringName, area: Rect2, placing: StringName = &"") -> Re
 ## it is one control with four answers, which [method direction_at] resolves.
 func button_rects(area: Rect2, placing: StringName = &"") -> Dictionary:
 	var rects: Dictionary = {}
-	var face: Rect2 = group_rect(GROUP_FACE, area, placing)
-	var diameter: float = FACE_DIAMETER * scale
-	# A below and left of B, the diagonal the hardware used.
-	rects[Gen2Button.B] = Rect2(
-		Vector2(face.position.x + face.size.x - diameter, face.position.y), Vector2(diameter, diameter)
-	)
-	rects[Gen2Button.A] = Rect2(
-		Vector2(face.position.x, face.position.y + face.size.y - diameter), Vector2(diameter, diameter)
-	)
 	for group: StringName in GROUP_BUTTONS:
 		rects[GROUP_BUTTONS[group]] = group_rect(group, area, placing)
 	return rects
@@ -313,7 +316,36 @@ static func parse(raw: Variant) -> Gen2TouchLayout:
 				clampf(float((centre as Array)[0]), 0.0, 1.0),
 				clampf(float((centre as Array)[1]), 0.0, 1.0),
 			)
+		layout._split_face(orientation, groups as Dictionary)
 	return layout
+
+
+## A layout written while A and B were one cluster carries a `face` centre and
+## no `a` or `b`. The pair sat on a fixed diagonal inside that cluster, B up and
+## right, A down and left, half [constant FACE_SPACING] from the centre each way,
+## so the two anchors it becomes are the ones the player already had.
+##
+## The offset is in points and an anchor is a fraction of an area this has never
+## been shown, so it is taken against the portrait phone the layout was arranged
+## on. [method group_rect] clamps whatever comes out.
+## [param stored] is what the file itself carried, not the merged anchors: every
+## group has a default, so asking the layout whether it has an `a` would answer
+## yes before the file has said anything.
+func _split_face(orientation: StringName, stored: Dictionary) -> void:
+	var groups: Dictionary = anchors.get(orientation, {})
+	if not stored.has(String(GROUP_FACE)) \
+		or stored.has(String(GROUP_A)) or stored.has(String(GROUP_B)):
+		groups.erase(GROUP_FACE)
+		return
+	var centre: Vector2 = groups[GROUP_FACE]
+	var offset: Vector2 = Vector2(FACE_SPACING, FACE_SPACING) * 0.5 / MIGRATION_AREA
+	groups[GROUP_B] = Vector2(
+		clampf(centre.x + offset.x, 0.0, 1.0), clampf(centre.y - offset.y, 0.0, 1.0)
+	)
+	groups[GROUP_A] = Vector2(
+		clampf(centre.x - offset.x, 0.0, 1.0), clampf(centre.y + offset.y, 0.0, 1.0)
+	)
+	groups.erase(GROUP_FACE)
 
 
 func duplicate_layout() -> Gen2TouchLayout:

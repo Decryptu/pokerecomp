@@ -210,6 +210,35 @@ static func register(
 	return {"ok": true, "item": item, "name": String(definition.get("name", "UNKNOWN"))}
 
 
+## `SwitchItemsInBag` as a committed transaction: one pocket's rows put in
+## [param pocket_order], with the rest of the bag left where it sits.
+##
+## The caller has already run [method Gen2WorldPack.switch_items] to work out the
+## order; this only writes it. `wPCItems` is the same routine over a different
+## list, which [param pc] selects.
+static func reorder(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	pocket_order: Array,
+	pc: bool = false,
+	persist: bool = true
+) -> Dictionary:
+	if world == null or world.data == null or world.state == null:
+		return Gen2WorldTransaction.failure(&"missing_world", {})
+	var owned: Dictionary = world.state.pc_items() if pc else world.state.items()
+	var order: Array[int] = Gen2WorldPack.reordered_items(owned, pocket_order)
+	var before: Gen2WorldSnapshot = world.snapshot()
+	var changes: Dictionary = {}
+	changes["pc_item_order" if pc else "item_order"] = order
+	var applied: Dictionary = world.state.apply_changes({}, {}, changes)
+	if not bool(applied.get("ok", false)):
+		return Gen2WorldTransaction.failure(&"reorder_state_failed", applied)
+	var committed: Dictionary = Gen2WorldTransaction.run(world, save, before, persist)
+	if not bool(committed.get("ok", false)):
+		return committed
+	return {"ok": true, "order": order}
+
+
 ## `CheckRegisteredItem`, which is what SELECT asks first: a registration is only
 ## good while the pack still holds the item, and the check clears it where it
 ## does not. The clear is written straight onto the live state, the way the

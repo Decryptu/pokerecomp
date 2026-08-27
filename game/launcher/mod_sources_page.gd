@@ -51,11 +51,12 @@ func _build() -> void:
 			+ " whoever publishes it.",
 	))
 
-	var add_row: HBoxContainer = Gen2LauncherUI.row(Gen2LauncherUI.GAP_SM)
+	var add_row: HFlowContainer = Gen2LauncherUI.actions()
 	add_child(add_row)
 	_entry = LineEdit.new()
 	_entry.placeholder_text = "owner/repo or https://..."
 	_entry.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_entry.custom_minimum_size = Vector2(220, 0)
 	_entry.text_submitted.connect(func(_text: String) -> void: _follow())
 	add_row.add_child(_entry)
 	var follow: Gen2LauncherButton = Gen2LauncherButton.create(
@@ -90,7 +91,12 @@ func _card(source: Dictionary) -> Control:
 	var text: VBoxContainer = Gen2LauncherUI.column(1)
 	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	line.add_child(text)
-	text.add_child(Gen2LauncherUI.body(_theme, String(source["label"])))
+	## A feed name is as long as its owner made it, and an unwrapped label
+	## reports that whole width as its minimum, which pushes the two buttons off
+	## the card on a narrow window.
+	var label: Label = Gen2LauncherUI.body(_theme, String(source["label"]))
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	text.add_child(label)
 	text.add_child(Gen2LauncherUI.muted(_theme, _listing_line(feed)))
 
 	var update: Gen2LauncherButton = Gen2LauncherButton.icon_only(

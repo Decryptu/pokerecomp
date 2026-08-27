@@ -38,6 +38,15 @@ const WINDOW_SIZE := Vector2i(1152, 648)
 ## was a few frames before the presses.
 const SETTLE_FRAMES: int = 30
 
+## The Pokemon `wContestMon` is holding for the `contest_replace` stage. A
+## CATERPIE in the low levels, which is what a contest is full of.
+## The wild the contest catch is made on, and the one already held.
+const CONTEST_WILD_SPECIES: int = 13
+const CONTEST_WILD_LEVEL: int = 12
+const CONTEST_STOCK_SPECIES: int = 10
+const CONTEST_STOCK_LEVEL: int = 9
+const CONTEST_STOCK_MAX_HP: int = 27
+
 ## `BattlePack`'s rows for the `pack` stage: a potion, a Full Heal and an X
 ## Attack, which are one of each of `UseItem`'s three battle branches
 ## (constants/item_constants.asm).
@@ -65,7 +74,7 @@ const SHINY_LEVEL: int = 30
 ## The two stages that go through `start_world_battle` rather than a staged
 ## `_battle`, because the palette is chosen in `_init_battle_display` and only
 ## the world path runs it.
-const WORLD_STAGES: Array[String] = ["shiny", "normal", "prize"]
+const WORLD_STAGES: Array[String] = ["shiny", "normal", "prize", "contest_replace"]
 
 ## The `prize` stage's held item, AMULET_COIN (constants/item_constants.asm).
 ## `CheckAmuletCoin` doubles the reward off it, so the figure in the picture is
@@ -260,6 +269,47 @@ func _open() -> void:
 			_screen.finish()
 			_screen.advance()
 		push_error("the prize line was never reached")
+		return
+
+	## A Park Ball thrown and caught while `wContestMon` already holds one, which
+	## is the only way to `DisplayAlreadyCaughtText` and the comparison behind
+	## it. A wild through the world's own path, since a capture needs one; the
+	## result is written rather than rolled, because what is photographed is the
+	## page and a real throw would have to be repeated until it stuck.
+	if _stage == "contest_replace":
+		_screen.start_world_battle({"values": {
+			"kind": &"wild", "pokemon": CONTEST_WILD_SPECIES,
+			"level": CONTEST_WILD_LEVEL,
+			"battle_type": Gen2Battle.BATTLETYPE_CONTEST,
+		}})
+		_screen.set_capture_balls(
+			[Gen2WorldPartyHost.ITEM_PARK_BALL],
+			{Gen2WorldPartyHost.ITEM_PARK_BALL: Gen2WorldBugContest.BALLS}
+		)
+		_drain_to_menu()
+		_screen.begin_capture()
+		_screen.select_capture_ball(0)
+		_screen.throw_capture_ball()
+		_screen.complete_capture({
+			"ok": true, "contest": true, "caught": true, "wobbles": 3,
+			"ball": Gen2WorldPartyHost.ITEM_PARK_BALL,
+			"quantity": Gen2WorldBugContest.BALLS - 1,
+			"replace_offer": true,
+			"mon": Gen2WorldPartyHost.contest_mon_from(_screen.capture_target()),
+			"stock_species": CONTEST_STOCK_SPECIES,
+			"stock_level": CONTEST_STOCK_LEVEL,
+			"stock_max_hp": CONTEST_STOCK_MAX_HP,
+		})
+		## The throw's animation, then the shake lines and
+		## `DisplayAlreadyCaughtText`, each prompted past the way a player would.
+		for _press: int in 20:
+			_settle()
+			if String(_screen.battle_snapshot()["switch_stage"]) == "contest_replace":
+				break
+			_screen.finish()
+			_screen.advance()
+		_read_question()
+		_settle_icons()
 		return
 
 	if _stage in WORLD_STAGES:

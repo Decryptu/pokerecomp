@@ -2164,3 +2164,69 @@ func test_giving_mail_writes_a_message_before_it_leaves_the_bag() -> void:
 	assert_eq(_mon.mail.author, save.player_name)
 	assert_eq(_mon.mail.species, _mon.species)
 	assert_eq(_world_screen._world.state.item_quantity(mail_item), 0)
+
+
+## `Pack_InterpretJoypad`'s `.select` and `.switching_item` (`SwitchItemsInBag`,
+## `engine/items/switch_items.asm`): SELECT marks a row and the next A or SELECT
+## places it, which is the only thing that reorders a pocket.
+func test_select_moves_an_item_inside_its_own_pocket() -> void:
+	await _open_world()
+	_world_screen._world.state.apply_changes({}, {}, {
+		"items": {7: 5, REPEL: 1, ITEMFINDER: 1},
+	})
+	var host: Gen2StartMenuScreen = await _open_pack()
+	assert_eq(_pocket_items(host), [7, REPEL], "received order, not sorted")
+
+	host.handle_button(Gen2Button.SELECT)
+	assert_eq(host.get("_pack_switch"), 0)
+	assert_eq(host.call("_pack_description"), "Where should this\nbe moved to?")
+
+	host.handle_button(Gen2Button.DOWN)
+	host.handle_button(Gen2Button.A)
+	assert_eq(host.get("_pack_switch"), -1, "the mark is dropped once it is placed")
+	assert_eq(_pocket_items(host), [REPEL, 7])
+	assert_eq(_world_screen._world.state.items().keys(), [REPEL, 7, ITEMFINDER],
+		"the key item pocket keeps the position it held")
+	assert_eq(_world_screen._world.state.item_quantity(7), 5, "and nothing is spent")
+
+
+## `.trivial` and `.end_switch`: placing a row on itself and B both clear the
+## mark without moving anything, and the pack stays open either way.
+func test_a_held_row_is_dropped_by_b_and_by_its_own_row() -> void:
+	await _open_world()
+	_world_screen._world.state.apply_changes({}, {}, {"items": {7: 5, REPEL: 1}})
+	var host: Gen2StartMenuScreen = await _open_pack()
+
+	host.handle_button(Gen2Button.SELECT)
+	host.handle_button(Gen2Button.A)
+	assert_eq(host.get("_pack_switch"), -1)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK, "no submenu opened")
+	assert_eq(_pocket_items(host), [7, REPEL])
+
+	host.handle_button(Gen2Button.SELECT)
+	host.handle_button(Gen2Button.DOWN)
+	host.handle_button(Gen2Button.B)
+	assert_eq(host.get("_pack_switch"), -1)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK, "and the pack is still up")
+	assert_eq(_pocket_items(host), [7, REPEL])
+
+
+## `.switching_item` answers left and right with a plain carry, so a held row
+## cannot be carried into another pocket.
+func test_a_held_row_blocks_the_pocket_cycle() -> void:
+	await _open_world()
+	_world_screen._world.state.apply_changes({}, {}, {
+		"items": {7: 5, REPEL: 1, ITEMFINDER: 1},
+	})
+	var host: Gen2StartMenuScreen = await _open_pack()
+	host.handle_button(Gen2Button.SELECT)
+	var pocket: int = host.get("_pack_pocket_index")
+	host.handle_button(Gen2Button.RIGHT)
+	assert_eq(host.get("_pack_pocket_index"), pocket)
+
+
+func _pocket_items(host: Gen2StartMenuScreen) -> Array:
+	var out: Array = []
+	for row: Dictionary in host.call("_current_pocket_items"):
+		out.append(int(row.get("item", 0)))
+	return out

@@ -36,20 +36,12 @@ signal cry_requested(species: int)
 ## per-caller mode.
 signal selection_made(party_index: int)
 
-const BACKGROUND: Color = Color("#09111f")
-const PANEL: Color = Color("#14233a")
-const BORDER: Color = Color("#2d4566")
-const TEXT: Color = Color("#f4f7fb")
-const MUTED: Color = Color("#9eacc0")
 
 ## The two `MonMenuOptions` rows that open a second party list rather than
 ## leaving the menu: `MonMenu_Softboiled_MilkDrink` serves both.
 const HEAL_TRANSFER_MOVES: Array[int] = [
 	Gen2WorldFieldMove.MOVE_SOFTBOILED, Gen2WorldFieldMove.MOVE_MILK_DRINK,
 ]
-const ACCENT: Color = Color("#f3c969")
-const SUCCESS: Color = Color("#7bd89a")
-const ERROR: Color = Color("#ef8a8a")
 
 ## data/mon_menu.asm's MONMENUVALUE_* option strings, in that file's order.
 const OPTION_STATS: StringName = &"stats"
@@ -122,8 +114,13 @@ var _embedded: bool = false
 var _cards: VBoxContainer = null
 var _player_label: Label = null
 var _status: Label = null
-var _storage_button: Button = null
-var _battle_button: Button = null
+var _storage_button: Gen2LauncherButton = null
+var _battle_button: Gen2LauncherButton = null
+## The launcher's own appearance, the one [Gen2SaveScreen] is drawn in. The
+## window-resolution view is a launcher page and is built out of its parts, so a
+## theme change and a narrow window both reach it.
+var _palette: Gen2LauncherTheme = null
+var _shell: Gen2LauncherShell = null
 ## The cursor and per-mon submenu. Reachable only through handle_button(),
 ## which only the world screen calls, so the standalone save-screen view keeps
 ## its mouse-driven behavior unchanged.
@@ -707,8 +704,11 @@ func _render_submenu() -> void:
 		var label := Label.new()
 		label.text = ("> " if index == _submenu_cursor else "  ") \
 			+ String(entry.get("label", ""))
-		label.add_theme_color_override("font_color", ACCENT if index == _submenu_cursor else TEXT)
-		label.add_theme_font_size_override("font_size", 18)
+		label.add_theme_color_override(
+			"font_color",
+			_palette.accent if index == _submenu_cursor else _palette.text
+		)
+		label.add_theme_font_size_override("font_size", Gen2LauncherTheme.FONT_BODY)
 		_submenu.add_child(label)
 
 
@@ -947,79 +947,65 @@ func _build_ui() -> void:
 	if _embedded:
 		_build_hardware_ui()
 		return
-	var background := ColorRect.new()
-	background.color = BACKGROUND
-	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(background)
+	_palette = Gen2LauncherTheme.active()
+	theme = _palette.control_theme()
+	_shell = Gen2LauncherShell.create(_palette)
+	add_child(_shell)
 
-	var margin := MarginContainer.new()
-	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 64)
-	margin.add_theme_constant_override("margin_top", 42)
-	margin.add_theme_constant_override("margin_right", 64)
-	margin.add_theme_constant_override("margin_bottom", 42)
-	add_child(margin)
-
-	var content := VBoxContainer.new()
-	content.add_theme_constant_override("separation", 16)
-	margin.add_child(content)
-
-	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation", 18)
-	content.add_child(header)
-	var heading := VBoxContainer.new()
-	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	heading.add_theme_constant_override("separation", 3)
-	header.add_child(heading)
-	var title := Label.new()
-	title.text = "PARTY"
-	title.add_theme_color_override("font_color", TEXT)
-	title.add_theme_font_size_override("font_size", 32)
-	heading.add_child(title)
-	var subtitle := Label.new()
-	subtitle.text = "Player party and persistent condition"
-	subtitle.add_theme_color_override("font_color", MUTED)
-	heading.add_child(subtitle)
-	var back := _button("Close" if _embedded else "Back to save slots", TEXT)
-	back.custom_minimum_size = Vector2(190, 44)
+	var back: Gen2LauncherButton = Gen2LauncherButton.create(
+		_palette, "Save data", Gen2LauncherButton.Variant.QUIET, &"back"
+	)
 	back.pressed.connect(_back)
-	_storage_button = _button("Open PC storage", ACCENT)
-	_storage_button.custom_minimum_size = Vector2(170, 44)
-	_storage_button.pressed.connect(_open_storage)
-	_storage_button.visible = not _embedded
-	header.add_child(_storage_button)
-	header.add_child(back)
+	_shell.add_action(back)
 
-	_player_label = Label.new()
-	_player_label.add_theme_color_override("font_color", ACCENT)
-	_player_label.add_theme_font_size_override("font_size", 18)
-	content.add_child(_player_label)
+	var page: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_LG)
+	var head: HBoxContainer = Gen2LauncherUI.row(Gen2LauncherUI.GAP_MD)
+	page.add_child(head)
+	var heading: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_XS)
+	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(heading)
+	heading.add_child(Gen2LauncherUI.title(
+		_palette, "Party", Gen2LauncherTheme.FONT_DISPLAY
+	))
+	heading.add_child(Gen2LauncherUI.muted(
+		_palette, "Player party and persistent condition"
+	))
+	_player_label = Gen2LauncherUI.caption(_palette, "")
+	_player_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_player_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	head.add_child(_player_label)
 
 	var scroll: Gen2LauncherScroll = Gen2LauncherScroll.create()
-	content.add_child(scroll)
-	_cards = VBoxContainer.new()
-	_cards.add_theme_constant_override("separation", 9)
+	page.add_child(scroll)
+	var body: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_MD)
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(body)
+	_cards = Gen2LauncherUI.column(Gen2LauncherUI.GAP_SM)
 	_cards.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(_cards)
-
-	_submenu = VBoxContainer.new()
-	_submenu.add_theme_constant_override("separation", 4)
+	body.add_child(_cards)
+	_submenu = Gen2LauncherUI.column(Gen2LauncherUI.GAP_XS)
 	_submenu.visible = false
-	content.add_child(_submenu)
+	body.add_child(_submenu)
 
-	var footer := HBoxContainer.new()
-	footer.add_theme_constant_override("separation", 10)
-	content.add_child(footer)
-	_battle_button = _button("Start development battle", ACCENT)
+	## The three things this view offers that no cartridge screen does. A
+	## wrapping row, so a phone held upright drops them onto their own lines
+	## rather than pushing the page off its own width.
+	var actions: HFlowContainer = Gen2LauncherUI.actions()
+	body.add_child(actions)
+	_storage_button = Gen2LauncherButton.create(
+		_palette, "PC storage", Gen2LauncherButton.Variant.NEUTRAL, &"folder"
+	)
+	_storage_button.pressed.connect(_open_storage)
+	actions.add_child(_storage_button)
+	_battle_button = Gen2LauncherButton.create(
+		_palette, "Development battle", Gen2LauncherButton.Variant.PRIMARY, &"play"
+	)
 	_battle_button.pressed.connect(_start_battle)
-	_battle_button.visible = not _embedded
-	footer.add_child(_battle_button)
-	_status = Label.new()
-	_status.add_theme_color_override("font_color", MUTED)
-	_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	footer.add_child(_status)
+	actions.add_child(_battle_button)
+
+	_status = Gen2LauncherUI.muted(_palette, "")
+	body.add_child(_status)
+	_shell.add_page(&"party", "Party", &"save", page)
 
 
 ## A caller's own refusal in this list's box, for a selection the list itself
@@ -1040,7 +1026,7 @@ func _say(message: String) -> void:
 	if _status == null:
 		return
 	_status.text = message
-	_status.add_theme_color_override("font_color", MUTED)
+	_status.add_theme_color_override("font_color", _palette.muted)
 
 
 func _refresh() -> void:
@@ -1054,56 +1040,46 @@ func _refresh() -> void:
 		_player_label.text = "Player: %s" % (_save.player_name if _save != null else "Unavailable")
 	if _data == null or _save == null:
 		_status.text = "No validated save selected."
-		_status.add_theme_color_override("font_color", ERROR)
+		_status.add_theme_color_override("font_color", _palette.error)
 		return
 	for index: int in Gen2SaveData.MAX_PARTY:
 		_cards.add_child(_member_card(index))
 	_render_submenu()
 	_status.text = "Slot %d" % (_save.slot + 1)
-	_status.add_theme_color_override("font_color", SUCCESS)
+	_status.add_theme_color_override("font_color", _palette.success)
 
 
-func _member_card(index: int) -> PanelContainer:
-	var card := PanelContainer.new()
+func _member_card(index: int) -> Control:
 	var selected: bool = index == _member_cursor and index < _party_size()
-	card.add_theme_stylebox_override(
-		"panel", _panel_style(PANEL, ACCENT if selected else BORDER, 8)
+	var card: Gen2LauncherCard = (
+		Gen2LauncherCard.selected(_palette, Gen2LauncherTheme.RADIUS_MD, 16) if selected
+		else Gen2LauncherCard.create(_palette, Gen2LauncherTheme.RADIUS_MD, 16)
 	)
-	var content := HBoxContainer.new()
-	content.add_theme_constant_override("separation", 18)
+	var content: HBoxContainer = Gen2LauncherUI.row(Gen2LauncherUI.GAP_MD)
 	card.add_child(content)
-	var number := Label.new()
-	number.text = "%d" % (index + 1)
-	number.custom_minimum_size = Vector2(28, 0)
-	number.add_theme_color_override("font_color", ACCENT)
-	number.add_theme_font_size_override("font_size", 20)
+	var number: Label = Gen2LauncherUI.title(_palette, "%d" % (index + 1))
+	number.add_theme_color_override("font_color", _palette.accent)
+	number.custom_minimum_size = Vector2(24, 0)
+	number.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	content.add_child(number)
 	if _save == null or index >= _save.party.size():
-		var empty := Label.new()
-		empty.text = "Empty"
-		empty.add_theme_color_override("font_color", MUTED)
-		content.add_child(empty)
+		content.add_child(Gen2LauncherUI.tag(_palette, "Empty"))
 		return card
 	var mon: Gen2SaveMon = _save.party[index]
-	var summary := VBoxContainer.new()
+	var summary: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_XS)
 	summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	summary.add_theme_constant_override("separation", 3)
 	content.add_child(summary)
-	var name_label := Label.new()
-	name_label.text = _display_name(mon)
-	name_label.add_theme_color_override("font_color", TEXT)
-	name_label.add_theme_font_size_override("font_size", 20)
-	summary.add_child(name_label)
-	var details := Label.new()
-	details.text = "%s    Level %d    HP %d/%d" % [
-		_species_name(mon.species), mon.level, mon.hp, _max_hp(mon)
-	]
-	details.add_theme_color_override("font_color", MUTED)
-	summary.add_child(details)
-	var condition := Label.new()
-	condition.text = "Status: %s" % _status_name(mon.status)
+	summary.add_child(Gen2LauncherUI.title(_palette, _display_name(mon)))
+	## Level and HP wrap onto their own line on a narrow page rather than
+	## widening the card past the window.
+	var facts: HFlowContainer = Gen2LauncherUI.actions(Gen2LauncherUI.GAP_MD)
+	summary.add_child(facts)
+	facts.add_child(Gen2LauncherUI.tag(_palette, _species_name(mon.species)))
+	facts.add_child(Gen2LauncherUI.tag(_palette, "Lv.%d" % mon.level))
+	facts.add_child(Gen2LauncherUI.tag(_palette, "HP %d/%d" % [mon.hp, _max_hp(mon)]))
+	var condition: Label = Gen2LauncherUI.caption(_palette, _status_name(mon.status))
 	condition.add_theme_color_override("font_color", _status_color(mon.status))
-	summary.add_child(condition)
+	facts.add_child(condition)
 	return card
 
 
@@ -1139,7 +1115,7 @@ func _status_name(status: int) -> String:
 
 
 func _status_color(status: int) -> Color:
-	return SUCCESS if Gen2Status.name_of(status).is_empty() else ACCENT
+	return _palette.success if Gen2Status.name_of(status).is_empty() else _palette.warning
 
 
 func _start_battle() -> void:
@@ -1166,7 +1142,7 @@ func close_embedded() -> void:
 func _open_storage() -> void:
 	if _data == null or _save == null:
 		_status.text = "No validated save selected."
-		_status.add_theme_color_override("font_color", ERROR)
+		_status.add_theme_color_override("font_color", _palette.error)
 		return
 	if not _select_slot():
 		return
@@ -1181,27 +1157,5 @@ func _select_slot() -> bool:
 	if runtime != null and runtime.select_save_slot(_data.id, _save.slot):
 		return true
 	_status.text = "The selected cartridge is not in the registry."
-	_status.add_theme_color_override("font_color", ERROR)
+	_status.add_theme_color_override("font_color", _palette.error)
 	return false
-
-
-func _button(text: String, colour: Color) -> Button:
-	var button := Button.new()
-	button.text = text
-	button.add_theme_color_override("font_color", colour)
-	button.add_theme_color_override("font_hover_color", Color.WHITE)
-	button.add_theme_font_size_override("font_size", 14)
-	return button
-
-
-func _panel_style(fill: Color, line: Color, radius: int) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = fill
-	style.border_color = line
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(radius)
-	style.content_margin_left = 18
-	style.content_margin_top = 14
-	style.content_margin_right = 18
-	style.content_margin_bottom = 14
-	return style

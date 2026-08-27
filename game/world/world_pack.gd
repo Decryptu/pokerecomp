@@ -108,9 +108,11 @@ static func build(data: GameData, state: Gen2WorldState) -> Array:
 	var owned: Dictionary = state.items()
 	for pocket_type: int in pocket_order():
 		var pocket_items: Array = []
-		var item_numbers: Array = owned.keys()
-		item_numbers.sort()
-		for raw_item: Variant in item_numbers:
+		## The order the map holds, which is the order the items were received:
+		## a cartridge pocket is a packed array `ReceiveItem` appends to, and
+		## `SwitchItemsInBag` is the only thing that ever reorders one. Sorting
+		## here would make SELECT unobservable.
+		for raw_item: Variant in owned.keys():
 			var item: int = int(raw_item)
 			var quantity: int = int(owned[raw_item])
 			if quantity <= 0:
@@ -212,6 +214,80 @@ static func row_description(data: GameData, item: int) -> String:
 	if Gen2WorldTMHM.is_tm_hm(item):
 		return String(data.move(Gen2WorldTMHM.move_for_item(data, item)).get("description", ""))
 	return String(data.item(item).get("description", ""))
+
+
+## `SwitchItemsInBag` (`engine/items/switch_items.asm`), one press of SELECT or
+## of the A that places the held item.
+##
+## [param order] is one pocket's item numbers in list order, [param held] the row
+## an earlier SELECT marked or -1 for none, and [param cursor] the row the press
+## landed on, where a row past the last item is the CANCEL terminator the source
+## reads as -1. Answers the new order and the new held row.
+##
+## The source stores the held row as `wSwitchItem` = row + 1 so that zero means
+## none; -1 is that same "none" here. `.try_combining_stacks` cannot fire: the
+## flat item model has one stack per item, so no two rows ever carry the same
+## item number.
+static func switch_items(order: Array, held: int, cursor: int) -> Dictionary:
+	var moved: Array[int] = []
+	for entry: Variant in order:
+		moved.append(int(entry))
+	if held < 0 or held >= moved.size():
+		## `.init`: the first press only marks. A press on CANCEL marks nothing,
+		## because `ItemSwitch_GetNthItem` would read the terminator.
+		if cursor < 0 or cursor >= moved.size():
+			return {"order": moved, "held": -1}
+		return {"order": moved, "held": cursor}
+	## `.trivial`, which is checked before the terminator is read: placing an
+	## item on its own row clears the mark and moves nothing.
+	if cursor == held:
+		return {"order": moved, "held": -1}
+	## The `cp -1 / ret z` after it. The mark survives, so the next press on a
+	## real row still places the item.
+	if cursor < 0 or cursor >= moved.size():
+		return {"order": moved, "held": held}
+	## `.above` and `.below` are one memmove each with the held item copied
+	## through `wSwitchItemBuffer`, which is a remove and an insert either way.
+	var item: int = moved[held]
+	moved.remove_at(held)
+	moved.insert(cursor, item)
+	return {"order": moved, "held": -1}
+
+
+## The whole item map with one pocket's rows put in [param pocket_order], for
+## [method Gen2WorldState.apply_changes]' `item_order`. The cartridge has four
+## packed arrays and this port one insertion-ordered map, so a move inside a
+## pocket permutes only the positions that pocket already occupies.
+static func reordered_items(owned: Dictionary, pocket_order: Array) -> Array[int]:
+	var wanted: Array[int] = []
+	for entry: Variant in pocket_order:
+		wanted.append(int(entry))
+	var result: Array[int] = []
+	var occupied: int = 0
+	for raw_item: Variant in owned.keys():
+		if wanted.has(int(raw_item)):
+			occupied += 1
+	if occupied != wanted.size():
+		## Not this map's pocket: leave the order alone rather than dropping or
+		## duplicating a row.
+		for raw_item: Variant in owned.keys():
+			result.append(int(raw_item))
+		return result
+	var next: int = 0
+	for raw_item: Variant in owned.keys():
+		var item: int = int(raw_item)
+		if wanted.has(item):
+			result.append(wanted[next])
+			next += 1
+		else:
+			result.append(item)
+	return result
+
+
+## `AskItemMoveText`, printed the moment SELECT marks a row and left up until the
+## item is placed.
+static func ask_item_move_text() -> String:
+	return "Where should this\nbe moved to?"
 
 
 static func pocket_name(pocket_type: int) -> String:

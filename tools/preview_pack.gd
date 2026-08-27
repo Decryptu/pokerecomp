@@ -9,7 +9,7 @@ extends SceneTree
 ## five visible rows and scroll past them, with a development party behind it so
 ## `use` and `give` reach `.Party`'s own list. Those two are the party menu
 ## `GiveItem` and every `.Party` item effect open, so what they photograph is
-## [Gen2PartyMenuPage] with the prompt that entrance writes. [presses] is a `u,d,l,r,a,b` list
+## [Gen2PartyMenuPage] with the prompt that entrance writes. [presses] is a `u,d,l,r,a,b,s` list
 ## driven into the real screen before the shot, so the picture is what the
 ## cartridge's own listing would show after those buttons.
 ##
@@ -22,7 +22,7 @@ const NEW_BARK_MAP: int = 7
 const BUTTONS: Dictionary = {
 	"u": Gen2Button.UP, "d": Gen2Button.DOWN,
 	"l": Gen2Button.LEFT, "r": Gen2Button.RIGHT,
-	"a": Gen2Button.A, "b": Gen2Button.B,
+	"a": Gen2Button.A, "b": Gen2Button.B, "s": Gen2Button.SELECT,
 }
 
 ## Which presses each pocket is reached by, since the pack opens on Items and

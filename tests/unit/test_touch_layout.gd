@@ -178,7 +178,7 @@ func test_a_layout_survives_the_options_file() -> void:
 	layout.scale = 1.4
 	layout.opacity = 0.5
 	layout.set_anchor(
-		Gen2TouchLayout.ORIENTATION_LANDSCAPE, Gen2TouchLayout.GROUP_FACE,
+		Gen2TouchLayout.ORIENTATION_LANDSCAPE, Gen2TouchLayout.GROUP_A,
 		Vector2(0.7, 0.3), LANDSCAPE.size,
 	)
 	var restored: Gen2TouchLayout = Gen2TouchLayout.parse(
@@ -194,7 +194,7 @@ func test_an_unreadable_layout_clamps_to_the_defaults() -> void:
 	var partial: Gen2TouchLayout = Gen2TouchLayout.parse({
 		"scale": 99.0,
 		"opacity": -4.0,
-		"portrait": {"pad": "over there", "face": [2.0, -1.0]},
+		"portrait": {"pad": "over there", "a": [2.0, -1.0]},
 	})
 	assert_eq(partial.scale, Gen2TouchLayout.MAX_SCALE)
 	assert_eq(partial.opacity, Gen2TouchLayout.MIN_OPACITY)
@@ -203,8 +203,68 @@ func test_an_unreadable_layout_clamps_to_the_defaults() -> void:
 		Gen2TouchLayout.DEFAULT_ANCHORS[Gen2TouchLayout.ORIENTATION_PORTRAIT][Gen2TouchLayout.GROUP_PAD],
 	)
 	assert_eq(
-		partial.anchor(Gen2TouchLayout.ORIENTATION_PORTRAIT, Gen2TouchLayout.GROUP_FACE),
+		partial.anchor(Gen2TouchLayout.ORIENTATION_PORTRAIT, Gen2TouchLayout.GROUP_A),
 		Vector2(1.0, 0.0),
+	)
+
+
+## A layout written while A and B were one cluster carries a `face` centre and
+## neither of the two the pad places now. `_split_face` puts them on the diagonal
+## that cluster held them on, B up and right of the old centre and A down and
+## left, so a player who arranged one finds it where they left it.
+func test_a_layout_from_before_a_and_b_came_apart_is_split() -> void:
+	var migrated: Gen2TouchLayout = Gen2TouchLayout.parse({
+		"portrait": {"face": [0.76, 0.50]},
+	})
+	var a: Vector2 = migrated.anchor(
+		Gen2TouchLayout.ORIENTATION_PORTRAIT, Gen2TouchLayout.GROUP_A
+	)
+	var b: Vector2 = migrated.anchor(
+		Gen2TouchLayout.ORIENTATION_PORTRAIT, Gen2TouchLayout.GROUP_B
+	)
+	assert_lt(a.x, b.x, "A stays left of B")
+	assert_gt(a.y, b.y, "and below it")
+	assert_almost_eq((a.x + b.x) * 0.5, 0.76, 0.001, "around the cluster's own centre")
+	assert_almost_eq((a.y + b.y) * 0.5, 0.50, 0.001)
+	assert_false(
+		migrated.to_dict()["portrait"].has("face"), "and the old name is not written back"
+	)
+
+
+## A layout that already names the two is left alone, so a migration cannot run
+## twice and walk the pair apart.
+func test_a_layout_that_already_names_a_and_b_is_not_split_again() -> void:
+	var stored: Dictionary = {
+		"portrait": {"face": [0.10, 0.10], "a": [0.30, 0.60], "b": [0.50, 0.40]},
+	}
+	var parsed: Gen2TouchLayout = Gen2TouchLayout.parse(stored)
+	assert_eq(
+		parsed.anchor(Gen2TouchLayout.ORIENTATION_PORTRAIT, Gen2TouchLayout.GROUP_A),
+		Vector2(0.30, 0.60),
+	)
+	assert_eq(
+		parsed.anchor(Gen2TouchLayout.ORIENTATION_PORTRAIT, Gen2TouchLayout.GROUP_B),
+		Vector2(0.50, 0.40),
+	)
+
+
+## The whole point of the split: each is dragged on its own.
+func test_a_and_b_are_placed_separately() -> void:
+	var layout: Gen2TouchLayout = _layout()
+	var before: Vector2 = layout.anchor(
+		Gen2TouchLayout.ORIENTATION_PORTRAIT, Gen2TouchLayout.GROUP_B
+	)
+	layout.set_anchor(
+		Gen2TouchLayout.ORIENTATION_PORTRAIT, Gen2TouchLayout.GROUP_A,
+		Vector2(0.5, 0.2), PORTRAIT.size,
+	)
+	assert_eq(
+		layout.anchor(Gen2TouchLayout.ORIENTATION_PORTRAIT, Gen2TouchLayout.GROUP_B), before
+	)
+	var rects: Dictionary = layout.button_rects(PORTRAIT)
+	assert_false(
+		(rects[Gen2Button.A] as Rect2).intersects(rects[Gen2Button.B] as Rect2),
+		"and each has a rectangle of its own"
 	)
 
 

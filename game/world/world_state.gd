@@ -2142,6 +2142,31 @@ func _roaming_target(
 	return Vector2i(-1, -1)
 
 
+## Whether [param order] names every key of [param source] exactly once, which
+## is the only shape a reorder may have: a list that dropped or repeated a row
+## would change what is owned rather than where it sits.
+static func _is_permutation(source: Dictionary, order: Array) -> bool:
+	if order.size() != source.size():
+		return false
+	var seen: Dictionary = {}
+	for entry: Variant in order:
+		var key: int = int(entry)
+		if not source.has(key) or seen.has(key):
+			return false
+		seen[key] = true
+	return true
+
+
+## [param source] rebuilt so its keys come out in [param order]. Insertion order
+## is what a pack listing reads, so this is the whole of a reorder.
+static func _reordered(source: Dictionary, order: Array) -> Dictionary:
+	var result: Dictionary = {}
+	for entry: Variant in order:
+		var key: int = int(entry)
+		result[key] = source[key]
+	return result
+
+
 ## Applies a script's staged state as one transaction. Validation happens before
 ## either dictionary is replaced, so a failed script cannot leave half a flag
 ## transition behind.
@@ -2160,9 +2185,18 @@ func apply_changes(
 	for raw_item: Variant in item_changes:
 		if int(raw_item) <= 0 or int(item_changes[raw_item]) < 0:
 			return {"ok": false, "reason": &"invalid_item_quantity"}
+	## `SwitchItemsInBag`' whole effect: the same items in another order. A
+	## quantity map compares equal whatever order it holds, so a reorder has to
+	## be asked for by name or the transaction below would call it no change.
+	var item_order: Variant = runtime_changes.get("item_order", null)
+	if item_order != null and not item_order is Array:
+		return {"ok": false, "reason": &"invalid_item_order"}
 	var pc_item_changes: Dictionary = runtime_changes.get("pc_items", {})
 	if not pc_item_changes is Dictionary:
 		return {"ok": false, "reason": &"invalid_pc_items"}
+	var pc_item_order: Variant = runtime_changes.get("pc_item_order", null)
+	if pc_item_order != null and not pc_item_order is Array:
+		return {"ok": false, "reason": &"invalid_pc_item_order"}
 	for raw_item: Variant in pc_item_changes:
 		if int(raw_item) <= 0 or int(pc_item_changes[raw_item]) < 0:
 			return {"ok": false, "reason": &"invalid_pc_item_quantity"}
@@ -2330,6 +2364,14 @@ func apply_changes(
 			next_pc_items[pc_item] = pc_quantity
 	if next_pc_items.size() > Gen2WorldPack.MAX_PC_ITEMS:
 		return {"ok": false, "reason": &"pc_item_capacity"}
+	if item_order != null:
+		if not _is_permutation(next_items, item_order as Array):
+			return {"ok": false, "reason": &"invalid_item_order"}
+		next_items = _reordered(next_items, item_order as Array)
+	if pc_item_order != null:
+		if not _is_permutation(next_pc_items, pc_item_order as Array):
+			return {"ok": false, "reason": &"invalid_pc_item_order"}
+		next_pc_items = _reordered(next_pc_items, pc_item_order as Array)
 	var next_money: Dictionary = _money.duplicate()
 	for raw_account: Variant in money_changes:
 		var account: int = int(raw_account)
@@ -2388,6 +2430,8 @@ func apply_changes(
 	var did_change: bool = next_flags != _event_flags or next_engine_flags != _engine_flags \
 		or next_scenes != _map_scenes \
 		or next_items != _items or next_pc_items != _pc_items \
+		or next_items.keys() != _items.keys() \
+		or next_pc_items.keys() != _pc_items.keys() \
 		or next_money != _money or next_coins != _coins \
 		or next_contacts != _phone_contacts or next_just_battled != _just_battled \
 		or next_seen_species != _seen_species \

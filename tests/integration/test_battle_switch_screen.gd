@@ -706,3 +706,77 @@ func test_an_ether_asks_which_move_and_fills_that_slot() -> void:
 	await _step(Gen2Button.A)
 	assert_eq(user.pp_left(0), 0, "the slot it was not used on")
 	assert_gt(user.pp_left(1), 0, "and the one it was")
+
+
+## `BugContest_SetCaughtContestMon`: a catch made while `wContestMon` already
+## holds one says `DisplayAlreadyCaughtText`, draws
+## `DisplayCaughtContestMonStats` and asks over it. The comparison is what the
+## question is answered from, so a screen that draws nothing is a question asked
+## blind.
+func test_a_second_contest_catch_is_asked_over_the_comparison() -> void:
+	var battle: Gen2Battle = Gen2Battle.create_parties(
+		_data,
+		Gen2Party.create([_mon(BattleFixture.PIKACHU, [BattleFixture.TACKLE])]),
+		Gen2Party.create([_mon(BattleFixture.GEODUDE, [BattleFixture.TACKLE])]),
+		_rng, false
+	)
+	battle.battle_type = Gen2Battle.BATTLETYPE_CONTEST
+	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
+	_screen.set("_pending", [])
+	## `_is_wild_battle` is what a capture is gated on, and it reads the world's
+	## own request rather than the battle: a contest catch is a wild one.
+	_screen.set("_world_battle_active", true)
+	_screen.set("_world_battle_request", {"values": {"kind": &"wild"}})
+	_screen.set_capture_balls(
+		[Gen2WorldPartyHost.ITEM_PARK_BALL],
+		{Gen2WorldPartyHost.ITEM_PARK_BALL: Gen2WorldBugContest.BALLS}
+	)
+	assert_true(bool(_screen.begin_capture().get("ok", false)))
+	assert_true(bool(_screen.throw_capture_ball().get("ok", false)))
+	_screen.complete_capture({
+		"ok": true, "contest": true, "caught": true, "wobbles": 3,
+		"ball": Gen2WorldPartyHost.ITEM_PARK_BALL,
+		"quantity": Gen2WorldBugContest.BALLS - 1,
+		"replace_offer": true,
+		"mon": Gen2WorldPartyHost.contest_mon_from(_screen.capture_target()),
+		"stock_species": BattleFixture.BULBASAUR,
+		"stock_level": 9,
+		"stock_max_hp": 27,
+	})
+
+	## The throw's own frames, then the shake lines and the already-caught line,
+	## each prompted past the way a player would.
+	for _press: int in 20:
+		_settle_bars()
+		if _stage() == "contest_replace":
+			break
+		_screen.finish()
+		_screen.advance()
+	assert_eq(_stage(), "contest_replace")
+
+	## The page is one image on the menu layer, the way the party page is: the
+	## two boxes and `PlaceYesNoBox`' own go into one tilemap on the cartridge.
+	var box: Gen2TextBox = _screen.get("_box")
+	while box != null and (box.is_revealing() or box.has_pages_left()):
+		box.finish()
+		if box.has_pages_left():
+			box.advance()
+	_screen.call("_refresh_menu_layer")
+	var layer: TextureRect = _screen.get("_menu_layer")
+	assert_true(layer.visible, "the comparison is drawn")
+	assert_eq(layer.position, Vector2.ZERO, "over the field rather than beside it")
+	## `hlcoord 0, 6` plus five border rows, which is where the lower box ends.
+	assert_eq(
+		int(layer.size.y),
+		(Gen2BattleScreen.CONTEST_THIS_TOP + Gen2BattleScreen.CONTEST_STATS_HEIGHT + 1)
+			* Gen2Font.TILE,
+		"and stops above the text box, which this screen draws itself"
+	)
+
+
+## `lb bc, 14, 7` rather than `OfferSwitch`'s `lb bc, 1, 7`: the question stands
+## beside the THIS box, not over the STOCK one.
+func test_the_contest_question_uses_its_own_corner() -> void:
+	assert_eq(Gen2BattleScreen.CONTEST_YES_NO_LEFT, 14)
+	assert_eq(Gen2BattleScreen.CONTEST_YES_NO_TOP, 7)
+	assert_ne(Gen2BattleScreen.CONTEST_YES_NO_LEFT, Gen2BattleScreen.YES_NO_LEFT)

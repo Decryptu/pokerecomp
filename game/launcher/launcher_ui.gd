@@ -173,6 +173,18 @@ static func muted(theme: Gen2LauncherTheme, text: String) -> Label:
 	return label
 
 
+## A muted word that does not wrap, for a line of short facts.
+##
+## [method muted] wraps, and a wrapping label reports almost no minimum width, so
+## one dropped into a flow row or an expanding box is squeezed to a character a
+## line. A fact is short enough to keep whole and long enough to be worth the
+## helper.
+static func tag(theme: Gen2LauncherTheme, text: String) -> Label:
+	var label: Label = muted(theme, text)
+	label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	return label
+
+
 ## A section marker: small, spaced capitals in the faint colour.
 static func caption(theme: Gen2LauncherTheme, text: String) -> Label:
 	var label: Label = _label(text.to_upper(), Gen2LauncherTheme.FONT_TINY, theme.faint)
