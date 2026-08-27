@@ -13,6 +13,14 @@ signal manage_requested(game_id: StringName)
 ## The shell paints its backdrop for the selected cartridge.
 signal selection_changed(game_id: StringName)
 
+## How much of the stage's height the band above the carousel may cost. The band
+## is reserved rather than found, so a short window pays for it out of the
+## cartridge. Past this share the cartridge has given up more than the button is
+## worth and the button goes to the corner instead. A flat height cannot answer
+## this: 600 px cornered the button on a 1920x600 window where the cartridge
+## still had 130 px to spare below it.
+const MANAGE_BAND_SHARE: float = 0.22
+
 var _theme: Gen2LauncherTheme = null
 var _stage: Gen2CartridgeStage = null
 var _manage: Gen2LauncherButton = null
@@ -105,22 +113,35 @@ func _action_side() -> float:
 	return Gen2LauncherUI.TOUCH_TARGET if _compact else Gen2LauncherButton.DOCK_SIDE
 
 
+## Whether a stage of [param stage_size] sends the button to its corner rather
+## than reserving [param band] above the carousel for it. Separate from the
+## placement because the placement needs a real window behind it and this rule
+## is the whole of what went wrong.
+static func corners_manage(stage_size: Vector2, band: float) -> bool:
+	return stage_size.x > stage_size.y and band > stage_size.y * MANAGE_BAND_SHARE
+
+
 func _place_manage() -> void:
 	if _stage == null or _manage == null:
 		return
 	var card: Gen2Cartridge = _stage.selected_cartridge()
 	if card == null:
 		return
-	var landscape: bool = _stage.size.x > _stage.size.y and _stage.size.y < 600.0
-	var side: float = Gen2LauncherUI.TOUCH_TARGET if landscape else _action_side()
+	var band: float = _action_side() + Gen2LauncherUI.GAP_LG
+	var cornered: bool = corners_manage(_stage.size, band)
+	var side: float = Gen2LauncherUI.TOUCH_TARGET if cornered else _action_side()
 	if not is_equal_approx(_manage.size.x, side):
 		_manage.set_side(side)
-	var inset: float = 0.0 if landscape or not _manage.visible else side + Gen2LauncherUI.GAP_LG
+	var inset: float = 0.0 if cornered or not _manage.visible else side + Gen2LauncherUI.GAP_LG
 	if not is_equal_approx(_stage.top_inset, inset):
 		_stage.set_top_inset(inset)
 		return
-	if landscape:
-		_manage.position = Vector2(_stage.size.x - side, 0.0)
+	if cornered:
+		# Clear of the edge, because a disc flush into the corner reads as
+		# something that slipped rather than something placed there.
+		_manage.position = Vector2(
+			_stage.size.x - side - Gen2LauncherUI.GAP_MD, float(Gen2LauncherUI.GAP_MD)
+		)
 		_stage.move_child(_manage, _stage.get_child_count() - 1)
 		return
 	var gap: float = Gen2LauncherUI.GAP_MD + card.size.x * 0.05

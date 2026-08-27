@@ -583,7 +583,12 @@ func test_landscape_keeps_at_least_two_fifths_of_the_stage_for_the_cartridge() -
 		var card: Gen2Cartridge = stage.selected_cartridge()
 		assert_gte(card.size.y, stage.size.y * 0.4)
 		assert_false(card.get_rect().intersects(page._manage.get_rect()))
-		assert_eq(page._manage.position.y, 0.0)
+		# Wherever it lands, it lands on the stage: a disc half over the edge
+		# is a disc half missing.
+		assert_true(
+			Rect2(Vector2.ZERO, stage.size).encloses(page._manage.get_rect()),
+			"the button is on the stage at %s" % dimensions,
+		)
 
 
 func _finger_touch(at: Vector2, down: bool) -> InputEventScreenTouch:
