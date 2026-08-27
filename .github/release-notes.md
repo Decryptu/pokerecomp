@@ -1,14 +1,23 @@
-<!-- The "Fixed" section is rewritten for each release; everything below it is
+<!-- The top section is rewritten for each release; everything below it is
      the standing text and only takes {VERSION}. -->
 
-## Fixed in this release
+## New in this release
 
-- **The mobile dock now leaves room for the launcher.** Portrait buttons no
-  longer expand to fill the row, and a phone held sideways stays on the compact
-  layout instead of being mistaken for a desktop. Cartridge art gets the freed
-  space on iOS and Android.
-- **Mod downloads stay on the mod's information row.** The download icon no
-  longer creates an otherwise empty second row in every card.
+This one is for mod authors. Nothing in the game itself changed, and mods
+written for an older release keep working.
+
+- **A mod can see a Pokemon being caught.** The battle publishes the catch on
+  its own `Gotcha!` line, with the species, the ball, where it was caught and
+  where it went.
+- **A mod can add a line to a battle.** One line, in the battle's own box, with
+  the game's own pacing. A line that would not fit is refused rather than cut
+  off, and the launcher says which mod asked for it.
+- **Two mods that raise the shiny odds now stack.** Each one's extra rolls are
+  added together instead of the larger one winning.
+
+The mod contract is `api_version` 20. The first mod built on it is a Catch
+Combo: catch the same species over and over and the odds of a shiny climb, the
+way they do in the Let's Go games.
 
 **This release ships no game data.** pokerecomp is not an emulator: it rebuilds
 everything from a Game Boy Color cartridge you dump yourself, and verifies the
