@@ -37,13 +37,9 @@ const EXPECTED_DEFERRED: Dictionary = {
 	155: "Function1037eb", 156: "Function10383c", 159: "Function1037c2",
 	161: "Function103780", 162: "Function10387b",
 
-	## Screens and facilities with no routine here yet. Each is its own piece of
-	## work, not a dispatch entry: it opens a screen, spends a transaction, or
-	## reads a save field nothing writes.
-	##
-
-	## Reached by one script row each and by nothing the player can talk to.
-	## `FindPartyMonAboveLevel` is marked `; unused` in the pin's own table.
+	## What is left of the screens and facilities that had no routine here: one
+	## row, and the pin's own table marks it `; unused`. `_FindPartyMonAboveLevel`
+	## is reached by no script in either pin.
 	64: "FindPartyMonAboveLevel",
 }
 
