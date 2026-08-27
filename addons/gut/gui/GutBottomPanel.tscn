@@ -2,12 +2,12 @@
 
 [ext_resource type="Script" uid="uid://dtvnb0xatk0my" path="res://addons/gut/gui/GutBottomPanel.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://0yunjxtaa8iw" path="res://addons/gut/gui/RunAtCursor.tscn" id="3"]
-[ext_resource type="Texture2D" uid="uid://cr6tvdv0ve6cv" path="res://addons/gut/gui/play.png" id="4"]
-[ext_resource type="Texture2D" uid="uid://bvo0uao7deu0q" path="res://addons/gut/icon.png" id="4_xv2r3"]
+[ext_resource type="Texture2D" uid="uid://bdvrfikumgwwa" path="res://addons/gut/gui/play.png" id="4"]
+[ext_resource type="Texture2D" uid="uid://u1h6o7ggt0bu" path="res://addons/gut/icon.png" id="4_xv2r3"]
 [ext_resource type="PackedScene" uid="uid://4gyyn12um08h" path="res://addons/gut/gui/RunResults.tscn" id="5"]
-[ext_resource type="Texture2D" uid="uid://ljc2viafngwd" path="res://addons/gut/images/HSplitContainer.svg" id="5_qdqpf"]
+[ext_resource type="Texture2D" uid="uid://dcewx6eslr04y" path="res://addons/gut/images/HSplitContainer.svg" id="5_qdqpf"]
 [ext_resource type="PackedScene" uid="uid://bqmo4dj64c7yl" path="res://addons/gut/gui/OutputText.tscn" id="6"]
-[ext_resource type="Texture2D" uid="uid://bhew20crsywxr" path="res://addons/gut/images/VSplitContainer.svg" id="6_ot46d"]
+[ext_resource type="Texture2D" uid="uid://cdh6kwdem0k0b" path="res://addons/gut/images/VSplitContainer.svg" id="6_ot46d"]
 [ext_resource type="PackedScene" uid="uid://dj5ve0bq7xa5j" path="res://addons/gut/gui/ShortcutDialog.tscn" id="7_srqj5"]
 [ext_resource type="PackedScene" uid="uid://ckv5eh8xyrwbk" path="res://addons/gut/gui/ShellOutOptions.tscn" id="7_xv2r3"]
 

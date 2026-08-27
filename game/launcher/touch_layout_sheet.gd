@@ -5,8 +5,8 @@ extends Control
 ## and set how large and how solid it is.
 ##
 ## Full screen rather than a card, because the thing being arranged is measured
-## against the whole screen and a preview in a box would place it against the
-## wrong rectangle.
+## against the rectangle the game hands the controller and a preview in a box of
+## its own would place it against the wrong one.
 ##
 ## The layout is per orientation, and this edits the one the window is currently
 ## in. On the device that matters, turning it sideways is how the other is
@@ -47,7 +47,6 @@ func _build() -> void:
 	add_child(dim)
 
 	_pad = Gen2TouchPad.new()
-	_pad.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	# The live layout, not a copy: a drag edits the options object directly, so
 	# there is nothing to write back when the editor closes.
 	_pad.set_layout(_options.touch_layout)
@@ -115,9 +114,26 @@ func _toolbar() -> Control:
 	return host
 
 
+## The rectangle the game will hand the controller, in the sheet's own units.
+## Portrait keeps the map above it, so a cluster dragged to the middle of the
+## whole screen would sit two thirds of the way down in play. The screen is a
+## whole multiple of 160x144, so the split has to be worked out in the units the
+## game measures it in and brought back.
+func _place_pad() -> void:
+	if _pad == null or size.x <= 0.0 or size.y <= 0.0:
+		return
+	var unit: float = Gen2LauncherUI.game_unit_scale(get_window())
+	var controls: Rect2 = Gen2GameFrame.split(
+		size * unit, true, _options.screen_fill
+	)["controls"]
+	_pad.position = controls.position / unit
+	_pad.size = controls.size / unit
+
+
 func _refresh_orientation() -> void:
 	if _orientation == null:
 		return
+	_place_pad()
 	var landscape: bool = Gen2TouchLayout.orientation_of(size) \
 		== Gen2TouchLayout.ORIENTATION_LANDSCAPE
 	_orientation.visible = not landscape
@@ -126,9 +142,10 @@ func _refresh_orientation() -> void:
 	_toolbar_host.add_theme_constant_override("margin_left", 24 + int(insets["left"]))
 	_toolbar_host.add_theme_constant_override("margin_right", 24 + int(insets["right"]))
 	_toolbar_host.add_theme_constant_override("margin_top", (8 if landscape else 20) + int(insets["top"]))
+	var arranging: StringName = _pad.orientation()
 	_orientation.text = (
 		"Drag each group. This is the %s arrangement; turn the device to set the other."
-		% ("sideways" if landscape else "upright")
+		% ("sideways" if arranging == Gen2TouchLayout.ORIENTATION_LANDSCAPE else "upright")
 	)
 
 

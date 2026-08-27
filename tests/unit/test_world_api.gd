@@ -4814,6 +4814,26 @@ func test_follow_names_the_leader_first_so_the_player_can_be_the_follower() -> v
 	assert_eq(world.player_cell, from + Vector2i(1, 0), "the player followed into its trail")
 
 
+## `StartFollow` returns on `SetLeaderIfVisible`'s carry, before the
+## `ResetFollower` inside `SetFollowerIfVisible` ever runs, so naming a leader
+## that is not on the map leaves whoever was already following where they were.
+func test_a_follow_naming_an_absent_leader_leaves_the_standing_pair_alone() -> void:
+	RomCache.write_json(RomCache.world_movements_path(_directory), {
+		"48:6100": [0x0F, 0x0F, 0x47],
+	})
+	RomCache.write_json(RomCache.world_scripts_path(_directory), {
+		"48:6080": [0x70, 2, 0, 0x70, 9, 0, 0x69, 2, 0x00, 0x61, 0x91],
+	})
+	var data: GameData = GameData.open_directory(_directory)
+	data.world_map(1, 1).events["coord_events"][0]["script"] = 0x6080
+	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(4, 6))
+	var leader: Gen2WorldObject = world.objects[0]
+	var from: Vector2i = leader.cell
+	assert_eq(_final_status(_run_script(world, world.dispatch_script_events(Vector2i(7, 6)))),
+		&"complete")
+	assert_eq(world.player_cell, from + Vector2i(1, 0), "the player still followed")
+
+
 ## `FollowNotExact` moves object1 beside object2 immediately, taking X before Y.
 func test_follow_not_exact_places_an_object_follower_beside_its_leader() -> void:
 	RomCache.write_json(RomCache.world_scripts_path(_directory), {

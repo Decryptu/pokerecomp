@@ -7,8 +7,10 @@ extends PanelContainer
 ## its child the way any [PanelContainer] does and there is no custom layout to
 ## go wrong.
 
-var palette: Gen2LauncherTheme = null
+## A tap on the card itself, for a row whose whole surface opens something.
 signal activated()
+
+var palette: Gen2LauncherTheme = null
 
 var _pointer_down: bool = false
 var _pointer_from: Vector2 = Vector2.ZERO

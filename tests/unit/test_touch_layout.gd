@@ -4,6 +4,10 @@ extends GutTest
 
 const PORTRAIT := Rect2(Vector2.ZERO, Vector2(480, 700))
 const LANDSCAPE := Rect2(Vector2.ZERO, Vector2(960, 480))
+## What the game leaves the controller on a phone held upright: the map takes the
+## top, so the strip is wider than it is tall while the arrangement in it is still
+## the upright one.
+const PORTRAIT_STRIP := Rect2(Vector2(0, 477), Vector2(393, 375))
 
 
 func _layout() -> Gen2TouchLayout:
@@ -26,15 +30,26 @@ func test_orientation_follows_the_area() -> void:
 	)
 
 
+## Including the arrangement the rectangle would not have named itself: a default
+## anchor was measured against the whole screen and meets a strip for the first
+## time here, which is where half a face button used to end up off the glass.
 func test_every_group_is_inside_the_area_in_both_orientations() -> void:
 	var layout: Gen2TouchLayout = _layout()
-	for area: Rect2 in [PORTRAIT, LANDSCAPE]:
-		for group: StringName in Gen2TouchLayout.GROUPS:
-			var rect: Rect2 = layout.group_rect(group, area)
-			assert_true(
-				area.encloses(rect),
-				"%s fits %s" % [group, area.size],
-			)
+	var cases: Array = [
+		[PORTRAIT, &""],
+		[LANDSCAPE, &""],
+		[PORTRAIT_STRIP, Gen2TouchLayout.ORIENTATION_PORTRAIT],
+	]
+	for factor: float in [Gen2TouchLayout.MIN_SCALE, 1.0, Gen2TouchLayout.MAX_SCALE]:
+		layout.scale = factor
+		for case: Array in cases:
+			var area: Rect2 = case[0]
+			for group: StringName in Gen2TouchLayout.GROUPS:
+				var rect: Rect2 = layout.group_rect(group, area, case[1])
+				assert_true(
+					area.encloses(rect),
+					"%s fits %s at %s" % [group, area.size, factor],
+				)
 
 
 ## Landscape centres the hardware screen and leaves the margins, so nothing may

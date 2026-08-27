@@ -217,6 +217,19 @@ func test_the_layout_editor_previews_the_controller_it_is_arranging() -> void:
 	assert_true(pad.visible)
 	assert_same(pad.layout(), _options.touch_layout, "it edits the live layout")
 
+	# The rectangle the game hands the controller, not the whole screen. Upright
+	# the map takes the top of it, so a cluster dragged to the middle of the sheet
+	# would sit two thirds of the way down in play; sideways the controller has
+	# the whole screen and the two are the same rectangle.
+	_host.size = Vector2(400, 800)
+	await get_tree().process_frame
+	assert_gt(pad.position.y, 0.0, "the map keeps the top of an upright screen")
+	assert_almost_eq(pad.position.y + pad.size.y, 800.0, 1.0, "the controller reaches the floor")
+	assert_between(pad.size.y / 800.0, 0.4, 0.7)
+	_host.size = Vector2(800, 400)
+	await get_tree().process_frame
+	assert_eq(pad.get_rect(), Rect2(Vector2.ZERO, Vector2(800, 400)))
+
 	sheet.close()
 	await get_tree().process_frame
 

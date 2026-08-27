@@ -153,18 +153,18 @@ func mod_label(action: StringName) -> String:
 
 ## Every mod button's rectangle, keyed by action name. Drawn as the same pill
 ## START and SELECT use, since a mod's control is one press like theirs.
-func mod_button_rects(area: Rect2) -> Dictionary:
+func mod_button_rects(area: Rect2, placing: StringName = &"") -> Dictionary:
 	var rects: Dictionary = {}
 	for action: StringName in mod_groups():
-		rects[action] = group_rect(action, area)
+		rects[action] = group_rect(action, area, placing)
 	return rects
 
 
 ## The mod action a point presses, or an empty name. Asked after the eight, so a
 ## mod's button placed under the d-pad never takes a step.
-func mod_action_at(point: Vector2, area: Rect2) -> StringName:
+func mod_action_at(point: Vector2, area: Rect2, placing: StringName = &"") -> StringName:
 	for action: StringName in mod_groups():
-		if (group_rect(action, area) as Rect2).has_point(point):
+		if (group_rect(action, area, placing) as Rect2).has_point(point):
 			return action
 	return &""
 
@@ -202,18 +202,31 @@ func group_size(group: StringName) -> Vector2:
 	return Vector2.ZERO
 
 
-func group_rect(group: StringName, area: Rect2) -> Rect2:
-	var orientation: StringName = orientation_of(area.size)
+## [param placing] names the arrangement when the caller knows the device better
+## than the rectangle does; empty asks the rectangle, which is what a test with no
+## window has.
+func group_rect(group: StringName, area: Rect2, placing: StringName = &"") -> Rect2:
+	var orientation: StringName = placing if ORIENTATIONS.has(placing) \
+		else orientation_of(area.size)
 	var size: Vector2 = group_size(group)
 	var centre: Vector2 = area.position + anchor(orientation, group) * area.size
-	return Rect2(centre - size * 0.5, size)
+	# Nothing is laid outside the rectangle it is drawn in, whatever the anchor
+	# says. A stored anchor is clamped where it is set, but a default one meets an
+	# area it was never measured against, and half a face button off the glass is
+	# half a button.
+	var half: Vector2 = size * 0.5
+	if area.size.x >= size.x:
+		centre.x = clampf(centre.x, area.position.x + half.x, area.end.x - half.x)
+	if area.size.y >= size.y:
+		centre.y = clampf(centre.y, area.position.y + half.y, area.end.y - half.y)
+	return Rect2(centre - half, size)
 
 
 ## Every pressable rectangle, keyed by [Gen2Button]. The d-pad is not in here:
 ## it is one control with four answers, which [method direction_at] resolves.
-func button_rects(area: Rect2) -> Dictionary:
+func button_rects(area: Rect2, placing: StringName = &"") -> Dictionary:
 	var rects: Dictionary = {}
-	var face: Rect2 = group_rect(GROUP_FACE, area)
+	var face: Rect2 = group_rect(GROUP_FACE, area, placing)
 	var diameter: float = FACE_DIAMETER * scale
 	# A below and left of B, the diagonal the hardware used.
 	rects[Gen2Button.B] = Rect2(
@@ -223,18 +236,18 @@ func button_rects(area: Rect2) -> Dictionary:
 		Vector2(face.position.x, face.position.y + face.size.y - diameter), Vector2(diameter, diameter)
 	)
 	for group: StringName in GROUP_BUTTONS:
-		rects[GROUP_BUTTONS[group]] = group_rect(group, area)
+		rects[GROUP_BUTTONS[group]] = group_rect(group, area, placing)
 	return rects
 
 
 ## The button a point presses, or [constant Gen2Button.NONE]. The d-pad is asked
 ## first, so a finger sliding off it onto an overlapping face button keeps
 ## walking rather than swapping to A halfway through a step.
-func button_at(point: Vector2, area: Rect2) -> int:
-	var direction: int = direction_at(point, area)
+func button_at(point: Vector2, area: Rect2, placing: StringName = &"") -> int:
+	var direction: int = direction_at(point, area, placing)
 	if direction != Gen2Button.NONE:
 		return direction
-	var rects: Dictionary = button_rects(area)
+	var rects: Dictionary = button_rects(area, placing)
 	for button: int in rects:
 		if (rects[button] as Rect2).has_point(point):
 			return button
@@ -245,8 +258,8 @@ func button_at(point: Vector2, area: Rect2) -> int:
 ## direction at a time: the hardware reported diagonals, but nothing in either
 ## game moves diagonally, and a corner press that walked twice would be wrong in
 ## a menu as well as on the map.
-func direction_at(point: Vector2, area: Rect2) -> int:
-	var rect: Rect2 = group_rect(GROUP_PAD, area)
+func direction_at(point: Vector2, area: Rect2, placing: StringName = &"") -> int:
+	var rect: Rect2 = group_rect(GROUP_PAD, area, placing)
 	if not rect.has_point(point):
 		return Gen2Button.NONE
 	var local: Vector2 = (point - rect.get_center()) / (rect.size * 0.5)

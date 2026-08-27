@@ -94,24 +94,53 @@ func is_editing() -> bool:
 
 
 ## The rectangle in device-independent points: the pad's own, less whatever the
-## screen keeps for itself. A phone counts its notch, its home indicator and its
-## rounded corners as display, so a face button anchored hard against the edge is
-## drawn under glass that no finger reaches through. Every rect, every hit test
-## and every drag is measured from here, so insetting it moves all three.
+## screen keeps for itself along the edges the pad actually reaches. A phone
+## counts its notch, its home indicator and its rounded corners as display, so a
+## face button anchored hard against the edge is drawn under glass that no finger
+## reaches through; held upright the controller sits below the map and is nowhere
+## near the notch, so reserving that end of it would only push the buttons down.
+## Every rect, every hit test and every drag is measured from here, so insetting
+## it moves all three.
 func area() -> Rect2:
-	var insets: Dictionary = Gen2LauncherUI.safe_area_insets(get_window())
-	var corner := Vector2(float(insets["left"]), float(insets["top"]))
-	var taken := corner + Vector2(float(insets["right"]), float(insets["bottom"]))
-	if taken.x >= size.x or taken.y >= size.y:
-		return Rect2(Vector2.ZERO, size / Gen2LauncherUI.point_scale(self))
 	var unit: float = Gen2LauncherUI.point_scale(self)
+	var window: Window = get_window()
+	var insets: Dictionary = Gen2LauncherUI.safe_area_insets(window)
+	var viewport: Vector2 = window.get_visible_rect().size if window != null else size
+	var mine := Rect2(global_position, size)
+	var corner := Vector2(
+		_covered(float(insets["left"]) - mine.position.x, float(insets["left"])),
+		_covered(float(insets["top"]) - mine.position.y, float(insets["top"])),
+	)
+	var taken: Vector2 = corner + Vector2(
+		_covered(mine.end.x - viewport.x + float(insets["right"]), float(insets["right"])),
+		_covered(mine.end.y - viewport.y + float(insets["bottom"]), float(insets["bottom"])),
+	)
+	if taken.x >= size.x or taken.y >= size.y:
+		return Rect2(Vector2.ZERO, size / unit)
 	return Rect2(corner / unit, (size - taken) / unit)
+
+
+## How much of a [param band] of screen furniture a pad reaching [param into] it
+## actually stands on: all of it against that edge, none of it away from one.
+static func _covered(into: float, band: float) -> float:
+	return clampf(into, 0.0, band)
+
+
+## Which arrangement is drawn: the way the device is held, not the shape of the
+## rectangle the controller was given. Held upright the map takes the top of the
+## screen and leaves the controller wider than it is tall, which read on its own
+## would lay out the sideways arrangement and put half of it off the glass.
+func orientation() -> StringName:
+	var window: Window = get_window()
+	return Gen2TouchLayout.orientation_of(
+		window.get_visible_rect().size if window != null else size
+	)
 
 
 ## Which button a point in the pad's own coordinates would press. Public so a
 ## test can ask without a touchscreen.
 func button_at(point: Vector2) -> int:
-	return _layout.button_at(point / Gen2LauncherUI.point_scale(self), area())
+	return _layout.button_at(point / Gen2LauncherUI.point_scale(self), area(), orientation())
 
 
 ## The action a point presses: one of the eight, or a mod's own button, or an
@@ -121,7 +150,9 @@ func action_at(point: Vector2) -> StringName:
 	var button: int = button_at(point)
 	if button != Gen2Button.NONE:
 		return Gen2Button.action(button)
-	return _layout.mod_action_at(point / Gen2LauncherUI.point_scale(self), area())
+	return _layout.mod_action_at(
+		point / Gen2LauncherUI.point_scale(self), area(), orientation()
+	)
 
 
 ## Whether this is the controller in front. A battle opened over the map has one
@@ -237,7 +268,7 @@ func _edit_pointer(index: int, point: Vector2, pressed: bool) -> void:
 	if _dragging != &"":
 		return
 	for group: StringName in _placeable_groups():
-		var rect: Rect2 = _layout.group_rect(group, area())
+		var rect: Rect2 = _layout.group_rect(group, area(), orientation())
 		if rect.has_point(point):
 			_dragging = group
 			_drag_index = index
@@ -251,7 +282,7 @@ func _edit_moved(index: int, point: Vector2) -> void:
 	if _dragging == &"" or index != _drag_index or rect.size.x <= 0.0 or rect.size.y <= 0.0:
 		return
 	_layout.set_anchor(
-		Gen2TouchLayout.orientation_of(rect.size),
+		orientation(),
 		_dragging,
 		(point - _drag_offset - rect.position) / rect.size,
 		rect.size,
@@ -265,20 +296,21 @@ func _draw() -> void:
 	if rect.size.x <= 0.0 or rect.size.y <= 0.0:
 		return
 	var alpha: float = _layout.opacity
-	_draw_cross(_layout.group_rect(Gen2TouchLayout.GROUP_PAD, rect), alpha)
-	var rects: Dictionary = _layout.button_rects(rect)
+	var placing: StringName = orientation()
+	_draw_cross(_layout.group_rect(Gen2TouchLayout.GROUP_PAD, rect, placing), alpha)
+	var rects: Dictionary = _layout.button_rects(rect, placing)
 	for button: int in [Gen2Button.A, Gen2Button.B]:
 		_draw_round(rects[button], Gen2Button.label(button), alpha, _is_held(button))
 	for button: int in [Gen2Button.SELECT, Gen2Button.START]:
 		_draw_pill(rects[button], Gen2Button.label(button), alpha, _is_held(button))
-	var mod_rects: Dictionary = _layout.mod_button_rects(rect)
+	var mod_rects: Dictionary = _layout.mod_button_rects(rect, placing)
 	for action: StringName in mod_rects:
 		_draw_pill(
 			mod_rects[action], _layout.mod_label(action), alpha, _held.has(action)
 		)
 	if _edit_mode:
 		for group: StringName in _placeable_groups():
-			draw_rect(_layout.group_rect(group, rect), EDIT_TINT, false, BORDER_WIDTH)
+			draw_rect(_layout.group_rect(group, rect, placing), EDIT_TINT, false, BORDER_WIDTH)
 
 
 ## The cross, as one horizontal and one vertical bar. The held arm is filled
@@ -336,19 +368,24 @@ func _draw_pill(rect: Rect2, text: String, alpha: float, pressed: bool) -> void:
 	_draw_label(rect, text, alpha, rect.size.y * 0.52)
 
 
-func _draw_label(rect: Rect2, text: String, alpha: float, size_pixels: float) -> void:
+## The glyphs are the one thing not drawn through the point transform: a font
+## rasterised at its size in points and then scaled up by it is a small bitmap
+## stretched over a large button.
+func _draw_label(rect: Rect2, text: String, alpha: float, size_points: float) -> void:
 	var font: Font = get_theme_default_font()
 	if font == null or text.is_empty():
 		return
-	var height: int = maxi(8, int(size_pixels))
+	var unit: float = Gen2LauncherUI.point_scale(self)
+	var height: int = maxi(8, int(size_points * unit))
 	var measured: Vector2 = font.get_string_size(
 		text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, height
 	)
 	# draw_string takes a baseline, so the centre has to be walked back by half
 	# the string and up by half the difference between ascent and descent.
-	var baseline: Vector2 = rect.get_center() + Vector2(
+	var baseline: Vector2 = rect.get_center() * unit + Vector2(
 		-measured.x * 0.5, (font.get_ascent(height) - font.get_descent(height)) * 0.5
 	)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	draw_string(
 		font,
 		baseline,
@@ -358,6 +395,7 @@ func _draw_label(rect: Rect2, text: String, alpha: float, size_pixels: float) ->
 		height,
 		_tint(GLYPH, alpha),
 	)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE * unit)
 
 
 func _is_held(button: int) -> bool:

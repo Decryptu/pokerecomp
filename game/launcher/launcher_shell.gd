@@ -161,9 +161,14 @@ func _build() -> void:
 ## Every launcher screen is drawn in points, and only a launcher screen is: the
 ## world upscales a 160x144 screen by a whole number of real pixels, and a
 ## window drawn in points would make that number wrong.
+##
+## The factor is worked out against the window's own size, so turning the device
+## has to redo it.
 func _enter_tree() -> void:
-	Gen2LauncherUI.apply_display_density(get_window(), true)
-	get_window().size_changed.connect(_update_density)
+	var window: Window = get_window()
+	Gen2LauncherUI.apply_display_density(window, true)
+	if window != null and not window.size_changed.is_connected(_update_density):
+		window.size_changed.connect(_update_density)
 
 
 func _update_density() -> void:
@@ -171,8 +176,10 @@ func _update_density() -> void:
 
 
 func _exit_tree() -> void:
-	get_window().size_changed.disconnect(_update_density)
-	Gen2LauncherUI.apply_display_density(get_window(), false)
+	var window: Window = get_window()
+	if window != null and window.size_changed.is_connected(_update_density):
+		window.size_changed.disconnect(_update_density)
+	Gen2LauncherUI.apply_display_density(window, false)
 
 
 ## The wall clock, on the twenty-four hour dial the rest of the project uses.

@@ -546,7 +546,12 @@ func test_landscape_keeps_at_least_two_fifths_of_the_stage_for_the_cartridge() -
 	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, true)
 	add_child_autofree(page)
 	page.set_slot_state(&"gold", true, "Ready")
-	for dimensions: Vector2 in [Vector2(568, 240), Vector2(780, 300), Vector2(900, 360)]:
+	# The last is short enough that the dock alone asks for more than half the
+	# stage, which is what [constant Gen2CartridgeStage.FURNITURE_MAX_SHARE] caps.
+	var sizes: Array[Vector2] = [
+		Vector2(568, 240), Vector2(780, 300), Vector2(900, 360), Vector2(480, 150)
+	]
+	for dimensions: Vector2 in sizes:
 		page.size = dimensions
 		await wait_seconds(0.1)
 		var stage: Gen2CartridgeStage = page.stage()

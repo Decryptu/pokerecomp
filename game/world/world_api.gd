@@ -4429,8 +4429,7 @@ func _apply_script_object_events(raw_events: Variant) -> Array:
 			continue
 		if event_type == &"object_follow":
 			## `wObjectFollow_Leader` and `wObjectFollow_Follower` are one byte
-			## each, and `SetFollowerIfVisible` runs `ResetFollower` before it
-			## writes: a second `follow` replaces the pair rather than adding to
+			## each, so a second `follow` replaces the pair rather than adding to
 			## it.
 			_start_object_follow(event)
 			continue
@@ -5498,11 +5497,13 @@ func _remember_object_position(object: Gen2WorldObject) -> void:
 	_object_facing_overrides[key] = object.facing
 
 
-## `StartFollow` resets the old pair before either visibility check.
-## `FollowNotExact` additionally places the follower beside the leader at once,
-## taking the X axis first (engine/overworld/player_object.asm).
+## `StartFollow` runs `SetLeaderIfVisible` first and returns on its carry, so a
+## leader that is not on the map leaves the pair that was already following
+## alone; only `SetFollowerIfVisible` drops it, through the `ResetFollower` it
+## opens with. `FollowNotExact` additionally places the follower beside the
+## leader at once, taking the X axis first
+## (engine/overworld/map_objects.asm, engine/overworld/player_object.asm).
 func _start_object_follow(event: Dictionary) -> void:
-	_object_followers.clear()
 	if current_map == null:
 		return
 	var map_group: int = int(event.get("map_group", -1))
@@ -5511,7 +5512,10 @@ func _start_object_follow(event: Dictionary) -> void:
 		return
 	var follower_index: int = int(event.get("object_index", -2))
 	var leader_index: int = int(event.get("target_index", -2))
-	if not _follow_object_is_visible(follower_index) or not _follow_object_is_visible(leader_index):
+	if not _follow_object_is_visible(leader_index):
+		return
+	_object_followers.clear()
+	if not _follow_object_is_visible(follower_index):
 		return
 	var exact: bool = bool(event.get("exact", true))
 	var follow_key: String = _object_key(map_group, map_number, follower_index)

@@ -1368,11 +1368,11 @@ func _dispatched_effects(function: String) -> Array[int]:
 	).get_script_constant_map()
 	var handled: Array[int] = []
 	for piece: String in body.split("Gen2MoveEffect."):
-		var name: String = piece.split(":")[0].split(",")[0].split(" ")[0] \
+		var effect: String = piece.split(":")[0].split(",")[0].split(" ")[0] \
 			.split(")")[0].strip_edges()
-		if not constants.has(name):
+		if not constants.has(effect):
 			continue
-		var number: int = int(constants[name])
+		var number: int = int(constants[effect])
 		if not handled.has(number):
 			handled.append(number)
 	handled.sort()
