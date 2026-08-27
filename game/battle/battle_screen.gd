@@ -4317,14 +4317,14 @@ func _draw_contest_stats() -> void:
 ## where its `hlcoord`s put them, measured from the box rather than the screen.
 func _draw_contest_box(
 	indices: PackedByteArray, width: int, top: int,
-	title: String, name: String, level: int, max_hp: int
+	title: String, mon_name: String, level: int, max_hp: int
 ) -> void:
 	var tile: int = Gen2Font.TILE
 	var box: Gen2MenuBox = Gen2MenuBox.from_coords(
 		CONTEST_STATS_LEFT, top, CONTEST_STATS_RIGHT, top + CONTEST_STATS_HEIGHT, 0
 	)
 	_menu_page.draw(box, [], -1, indices, width, "", 0, [
-		{"text": name, "at": CONTEST_NAME_AT + Vector2i(0, top)},
+		{"text": mon_name, "at": CONTEST_NAME_AT + Vector2i(0, top)},
 		{"text": CONTEST_HEALTH, "at": CONTEST_HEALTH_AT + Vector2i(0, top)},
 		{
 			"text": String("%d" % max_hp).lpad(CONTEST_HP_DIGITS, " "),

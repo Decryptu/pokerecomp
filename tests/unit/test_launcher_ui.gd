@@ -185,7 +185,7 @@ func _scripts_under(root: String) -> Array[String]:
 func test_a_settings_row_stacks_rather_than_running_off_a_narrow_page() -> void:
 	var choices: Array = ["Windowed", "Fullscreen", "Borderless"]
 	var control: Control = Gen2LauncherUI.segmented(_light, choices, 0, func(_i: int) -> void: pass)
-	var row: Container = Gen2LauncherUI.field(_light, "Window", control)
+	var row: Control = Gen2LauncherUI.field(_light, "Window", control)
 	var host := Control.new()
 	add_child_autofree(host)
 	host.add_child(row)

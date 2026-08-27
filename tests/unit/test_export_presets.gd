@@ -89,6 +89,43 @@ func test_a_published_release_is_announced_without_committing_the_webhook() -> v
 	assert_false(workflow.contains("discord.com/api/webhooks/"), "the credential stays in secrets")
 
 
+## Four files name the engine, and a release mixes two engines the moment they
+## disagree: the templates come from one commit and the iOS plugin linked into
+## them from another. The 4.8.dev4 bump left `release.yml` behind by itself.
+func test_every_file_that_names_the_engine_names_the_same_one() -> void:
+	var templates: String = FileAccess.get_file_as_string(
+		"res://.github/workflows/export-templates.yml"
+	)
+	var release: String = FileAccess.get_file_as_string("res://.github/workflows/release.yml")
+	var ci: String = FileAccess.get_file_as_string("res://.github/workflows/ci.yml")
+	var android: String = FileAccess.get_file_as_string("res://tools/build_android_plugin.sh")
+	var readme: String = FileAccess.get_file_as_string("res://README.md")
+	var tag: String = _engine_pin(templates, "GODOT_VERSION")
+	var commit: String = _engine_pin(templates, "GODOT_COMMIT")
+	# The tag and the directory the templates unpack into differ by one
+	# character, which is what `release.yml` says and DEVICES.md repeats.
+	var directory: String = tag.replace("-", ".")
+	assert_ne(tag, "", "export-templates.yml names a Godot release")
+	assert_ne(commit, "", "export-templates.yml names a Godot commit")
+	assert_eq(_engine_pin(release, "GODOT_VERSION"), tag)
+	assert_eq(_engine_pin(release, "GODOT_COMMIT"), commit)
+	assert_eq(_engine_pin(release, "GODOT_TEMPLATE_DIR"), directory)
+	assert_eq(_engine_pin(ci, "GODOT_VERSION"), tag)
+	assert_string_contains(android, 'GODOT_TAG="${GODOT_TAG:-%s}"' % tag)
+	assert_string_contains(
+		android, 'GODOT_LIB_VERSION="${GODOT_LIB_VERSION:-%s}"' % directory
+	)
+	assert_string_contains(readme, "Godot-%s-" % directory)
+
+
+## One `key: value` from a workflow's own `env:` block, which is two spaces in.
+static func _engine_pin(workflow: String, key: String) -> String:
+	for line: String in workflow.split("\n"):
+		if line.begins_with("  %s: " % key):
+			return line.split(": ", true, 1)[1].strip_edges()
+	return ""
+
+
 ## Android refuses an in-place update whose version code did not rise, so the
 ## code is a function of the version rather than a number bumped by hand.
 func test_the_android_version_code_derives_from_the_app_version() -> void:

@@ -25,12 +25,12 @@ permissions:
   contents: write
 
 env:
-  GODOT_VERSION: 4.8-dev3
-  GODOT_TEMPLATE_DIR: 4.8.dev3
+  GODOT_VERSION: 4.8-dev4
+  GODOT_TEMPLATE_DIR: 4.8.dev4
   # The engine the iOS plugin compiles against. It must be the commit
   # `export-templates.yml` builds the templates from, since the plugin is linked
   # into them and the two have to agree about what a header declares.
-  GODOT_COMMIT: 51105ccbe58381774ecd7a7486d564b202a5192e
+  GODOT_COMMIT: b56a91878e7c94977e4af978968e41d0670c0a8b
 
 jobs:
   version:
@@ -91,7 +91,7 @@ jobs:
           curl -fsSL "$base/Godot_v${GODOT_VERSION}_export_templates.tpz" -o /tmp/templates.tpz
           unzip -q /tmp/templates.tpz -d /tmp/tpz
           # The directory is named by version.txt inside the archive, never by
-          # the release tag: 4.8.dev3 rather than 4.8-dev3.
+          # the release tag: 4.8.dev4 rather than 4.8-dev4.
           mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_TEMPLATE_DIR}"
           cp -R /tmp/tpz/templates/. "$HOME/.local/share/godot/export_templates/${GODOT_TEMPLATE_DIR}/"
 
@@ -130,6 +130,23 @@ jobs:
           export/android/android_sdk_path = "$ANDROID_SDK_ROOT"
           export/android/java_sdk_path = "$JAVA_HOME"
           EOF
+
+      # 4.8.dev4 refuses the export before gradle runs if any package in its own
+      # list is absent, and a runner image carries whichever NDK it was built
+      # with rather than this one. `sdkmanager` is a no-op for what is already
+      # there, so the whole list is asked for rather than the one that moved.
+      - name: Install the SDK packages the exporter insists on
+        run: |
+          set -euo pipefail
+          # The image names the directory by the tools' own version, not always
+          # `latest`, so the binary is found rather than assumed.
+          sdkmanager=$(find "$ANDROID_SDK_ROOT/cmdline-tools" -name sdkmanager -type f | head -1)
+          [ -n "$sdkmanager" ] || { echo "::error::no sdkmanager in the image"; exit 1; }
+          yes | "$sdkmanager" --licenses > /dev/null
+          "$sdkmanager" "platform-tools" "build-tools;36.1.0" "platforms;android-36" \
+            "ndk;29.0.14206865" "cmake;3.22.1"
+          [ -d "$ANDROID_SDK_ROOT/ndk/29.0.14206865" ] || {
+            echo "::error::the NDK the exporter checks for is still missing"; exit 1; }
 
       # `addons/second_screen/bin/` is gitignored, so a checkout has no AAR and
       # the Android exporter answers a plugin with no binary the way the iOS one
