@@ -2748,6 +2748,13 @@ func complete_capture(result: Dictionary) -> Dictionary:
 		_capture_messages.append("The ball shook!")
 	if caught:
 		_capture_messages.append("Gotcha! %s was caught!" % _name_of(_enemy))
+		## `.catch_bug_contest_mon` runs after `Text_GotchaMonWasCaught`, and
+		## `BugContest_SetCaughtContestMon`'s `.firstcatch` says a second line.
+		## A catch that has one to replace says `DisplayAlreadyCaughtText`
+		## instead, which comes with the switch question rather than here.
+		if bool(result.get("contest", false)) \
+			and not bool(result.get("replace_offer", false)):
+			_capture_messages.append("Caught %s!" % _name_of(_enemy))
 		_capture_terminal = true
 		_capture_caught_event = _caught_event(result)
 	else:
