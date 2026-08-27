@@ -3975,6 +3975,41 @@ const CONTEST_REPLACE_TEXT: String = "Switch #MON?"
 ## `DisplayAlreadyCaughtText` names the Pokemon already held.
 const CONTEST_ALREADY_CAUGHT_TEXT: String = "You already caught\na %s."
 
+## `DisplayCaughtContestMonStats`' two `Textbox` calls, each `hlcoord 0, n` with
+## `ld b, 4 / ld c, 13`: an interior four rows by thirteen columns, so the border
+## runs to column 14 and five rows down from its own top.
+const CONTEST_STATS_LEFT: int = 0
+const CONTEST_STATS_RIGHT: int = 14
+const CONTEST_STOCK_TOP: int = 0
+const CONTEST_THIS_TOP: int = 6
+const CONTEST_STATS_HEIGHT: int = 5
+
+## Where the routine's own `PlaceString` calls land, relative to each box's top.
+## `.Stock` and `.This` are written at column 2 on the border row itself, spaces
+## and all, so the frame is blanked either side of the title.
+const CONTEST_TITLE_AT: Vector2i = Vector2i(2, 0)
+const CONTEST_NAME_AT: Vector2i = Vector2i(1, 2)
+const CONTEST_HEALTH_AT: Vector2i = Vector2i(5, 4)
+const CONTEST_HP_AT: Vector2i = Vector2i(11, 4)
+## `PrintNum` with `lb bc, 2, 3`: three digits out of two bytes, space padded.
+const CONTEST_HP_DIGITS: int = 3
+const CONTEST_STOCK_TITLE: String = " STOCK <PKMN> "
+const CONTEST_THIS_TITLE: String = " THIS <PKMN>  "
+const CONTEST_HEALTH: String = "HEALTH"
+
+## `lb bc, 14, 7` into `PlaceYesNoBox`, which is `YesNoBox`'s own corner rather
+## than `OfferSwitch`'s [constant YES_NO_LEFT]: the question stands beside the
+## THIS box rather than over the STOCK one.
+const CONTEST_YES_NO_LEFT: int = 14
+const CONTEST_YES_NO_TOP: int = 7
+
+## `LoadFontsBattleExtra`, so the page is drawn with the strip `<LV>` lives on,
+## the way the Hall of Fame panel is.
+const CONTEST_FONT: StringName = Gen2Text.FONT_BATTLE_EXTRA
+## `PrintLevel`'s `ld [hl], '<LV>'`, which puts a byte down rather than printing
+## a string, so it is placed as a code the way [Gen2HallOfFamePage] places one.
+const CONTEST_LEVEL_CODE: int = 0x6E
+
 
 func _answer_contest_replace(button: int) -> void:
 	if _offer_still_reading():
@@ -4210,7 +4245,10 @@ func _refresh_menu_layer() -> void:
 	if _battle_menu_layer != null:
 		_battle_menu_layer.visible = false
 	match _switch_stage:
-		&"offer", &"use_next", &"contest_replace":
+		&"contest_replace":
+			_draw_contest_stats()
+			return
+		&"offer", &"use_next":
 			_draw_yes_no_box()
 			return
 		&"pick", &"refused":
@@ -4223,6 +4261,110 @@ func _refresh_menu_layer() -> void:
 			_draw_move_menu()
 		_:
 			_menu_layer.visible = false
+
+
+## `DisplayCaughtContestMonStats`: the screen is cleared and the two boxes are
+## drawn over it, STOCK #MON above THIS #MON, each with a name, a level and a
+## HEALTH number, with `PlaceYesNoBox`' own box beside the lower one.
+##
+## One image on the menu layer, the way the party page is: all three boxes go
+## into the tilemap on the cartridge too, and the text box under them is this
+## screen's own, which is where `ContestAskSwitchText` is already being said.
+func _draw_contest_stats() -> void:
+	if _menu_page == null or _menu_page.font == null:
+		_menu_layer.visible = false
+		return
+	var width: int = Gen2Screen.WIDTH
+	var indices := PackedByteArray()
+	indices.resize(width * Gen2Screen.HEIGHT)
+	var caught: Dictionary = _capture_result.get("mon", {})
+	_draw_contest_box(
+		indices, width, CONTEST_STOCK_TOP, CONTEST_STOCK_TITLE,
+		_contest_stock_name(),
+		int(_capture_result.get("stock_level", 0)),
+		int(_capture_result.get("stock_max_hp", 0))
+	)
+	_draw_contest_box(
+		indices, width, CONTEST_THIS_TOP, CONTEST_THIS_TITLE,
+		_name_of(int(caught.get("species", 0))),
+		int(caught.get("level", 0)),
+		int(caught.get("max_hp", 0))
+	)
+	var box: Gen2MenuBox = Gen2MenuBox.from_coords(
+		CONTEST_YES_NO_LEFT, CONTEST_YES_NO_TOP,
+		CONTEST_YES_NO_LEFT + YES_NO_SPAN.x, CONTEST_YES_NO_TOP + YES_NO_SPAN.y,
+		YES_NO_FLAGS
+	)
+	## The question is read before it is answered, the way every other offer here
+	## is: the box comes up once the line has finished appearing.
+	if not _offer_still_reading():
+		_menu_page.draw(
+			box, YES_NO_OPTIONS,
+			_switch_offer.selected_index() if _switch_offer != null else 0,
+			indices, width
+		)
+	## Only the rows the page occupies. Rows 12 to 17 are the text box's own, and
+	## this screen draws that itself.
+	var rows: int = (CONTEST_THIS_TOP + CONTEST_STATS_HEIGHT + 1) * Gen2Font.TILE
+	var image: Image = Gen2PicImage.from_indices(
+		indices, width, Gen2Screen.HEIGHT,
+		Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+	).get_region(Rect2i(0, 0, width, rows))
+	_show_menu_image(image, Vector2i.ZERO)
+
+
+## One of the two, at [param top]. The strings are the routine's own and land
+## where its `hlcoord`s put them, measured from the box rather than the screen.
+func _draw_contest_box(
+	indices: PackedByteArray, width: int, top: int,
+	title: String, name: String, level: int, max_hp: int
+) -> void:
+	var tile: int = Gen2Font.TILE
+	var box: Gen2MenuBox = Gen2MenuBox.from_coords(
+		CONTEST_STATS_LEFT, top, CONTEST_STATS_RIGHT, top + CONTEST_STATS_HEIGHT, 0
+	)
+	_menu_page.draw(box, [], -1, indices, width, "", 0, [
+		{"text": name, "at": CONTEST_NAME_AT + Vector2i(0, top)},
+		{"text": CONTEST_HEALTH, "at": CONTEST_HEALTH_AT + Vector2i(0, top)},
+		{
+			"text": String("%d" % max_hp).lpad(CONTEST_HP_DIGITS, " "),
+			"at": CONTEST_HP_AT + Vector2i(0, top),
+		},
+	])
+	## The title sits on the border row, and `PlaceString` writes its own leading
+	## and trailing spaces as $7f, which is a tile write like any other and blanks
+	## the frame under them. [method Gen2Font.draw_code] draws nothing for a
+	## space, on purpose, so the cells are cleared here first: without it the
+	## border shows through the gaps either side of STOCK #MON. Drawn after the
+	## box for the same reason the source places it after `Textbox`.
+	var title_at: Vector2i = CONTEST_TITLE_AT + Vector2i(0, top)
+	_blank_tiles(indices, width, title_at, Gen2Text.encoded_length(title))
+	_menu_page.font.draw_text(
+		title, indices, width, title_at.x * tile, title_at.y * tile
+	)
+	## `ld h, b / ld l, c`: `PlaceString` answers the cell after the name it
+	## wrote, and `PrintLevel` starts there.
+	var at: Vector2i = CONTEST_NAME_AT + Vector2i(Gen2Text.encoded_length(name), top)
+	_menu_page.font.draw_code(
+		CONTEST_LEVEL_CODE, indices, width, at.x * tile, at.y * tile, CONTEST_FONT
+	)
+	_menu_page.font.draw_text(
+		str(level), indices, width, (at.x + 1) * tile, at.y * tile, CONTEST_FONT
+	)
+
+
+## [param count] tiles of index 0 from [param at], which is what the source's own
+## $7f blank draws as.
+func _blank_tiles(
+	indices: PackedByteArray, width: int, at: Vector2i, count: int
+) -> void:
+	var tile: int = Gen2Font.TILE
+	for row: int in tile:
+		var start: int = (at.y * tile + row) * width + at.x * tile
+		for column: int in count * tile:
+			var offset: int = start + column
+			if offset >= 0 and offset < indices.size():
+				indices[offset] = 0
 
 
 func _draw_yes_no_box() -> void:
