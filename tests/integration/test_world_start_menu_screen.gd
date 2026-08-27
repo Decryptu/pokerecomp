@@ -1084,7 +1084,11 @@ func test_the_contest_quit_row_asks_before_it_retires() -> void:
 	var save: Gen2SaveData = _world_screen._injected_save
 	while save.party.size() < 2:
 		save.party.append(Gen2SaveMon.from_dict(save.party[0].to_dict()))
-	Gen2WorldPartyHost.contest_drop_off_mons(save)
+	## The gate's `special ContestDropOffMons` as the runner emits it, which is
+	## what masks the party on the way into the park.
+	_world_screen._show_script_results(
+		[{"events": [{"type": &"contest_mons_dropped_off", "second_species": 0}]}]
+	)
 	assert_eq(save.party.size(), 1, "masked for the contest")
 	## An Escape Rope out, which is the same tail Fly and Teleport spend: the
 	## fixture map is its own dig warp, so the walk stays on one map.
