@@ -12,7 +12,9 @@ enum Variant {
 	PRIMARY,
 	## A chip that fills with the accent when it is reached.
 	NEUTRAL,
-	## No fill until hovered. Rows of these read as labels.
+	## A hairline and nothing else until it is reached. The outline is what says
+	## a control rather than a caption: without one "Which bugs..." was read as
+	## the line of text above it.
 	QUIET,
 	## Quiet, but standing on the toast's chip rather than on the page. The
 	## page's own muted ink is all but invisible against a surface that is the
@@ -147,6 +149,7 @@ func repaint() -> void:
 			ink = _theme.on_accent
 		Variant.QUIET:
 			fill = _theme.accent_wash(0.13) if _active else Color(0, 0, 0, 0)
+			border = _theme.accent_wash(0.45) if _active else _theme.line
 			ink = _theme.accent if _active else _theme.muted
 		Variant.ON_CHIP:
 			fill = _theme.with_alpha(_theme.on_surface, 0.16) if reached else Color(0, 0, 0, 0)

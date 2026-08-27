@@ -164,6 +164,9 @@ func _build() -> void:
 	var listing: Gen2LauncherButton = Gen2LauncherButton.create(
 		_theme, "Which bugs...", Gen2LauncherButton.Variant.QUIET
 	)
+	# Wide as its own words, not as the card: a secondary action stretched from
+	# edge to edge reads as a field to type in rather than something to press.
+	listing.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	listing.pressed.connect(_open_rules_sheet)
 	rules.add_child(listing)
 	_refresh_rules()

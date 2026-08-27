@@ -588,6 +588,28 @@ func test_a_crashed_session_is_reported_at_the_next_launch() -> void:
 	)
 
 
+## A wide window is not a short one. The band above the carousel used to be
+## given up on a flat 600 px of stage height, which sent the button to the top
+## right corner of a 1920x600 window where the cartridge still had 130 px to
+## spare underneath it.
+func test_the_cartridge_options_button_only_leaves_the_carousel_when_the_stage_is_short() -> void:
+	var desktop: float = Gen2LauncherButton.DOCK_SIDE + Gen2LauncherUI.GAP_LG
+	var touch: float = Gen2LauncherUI.TOUCH_TARGET + Gen2LauncherUI.GAP_LG
+	for stage: Vector2 in [Vector2(1860, 539), Vector2(2340, 559), Vector2(1220, 739)]:
+		assert_false(
+			Gen2ShelfPage.corners_manage(stage, desktop),
+			"a %s stage has the room" % stage,
+		)
+	assert_false(Gen2ShelfPage.corners_manage(Vector2(812, 335), touch), "a phone held over")
+	# Tall is never cornered, whatever the band costs: the button is above the
+	# carousel on every portrait window and that is where a thumb expects it.
+	assert_false(Gen2ShelfPage.corners_manage(Vector2(390, 700), touch))
+	# Short enough that the band would come out of the cartridge rather than out
+	# of the space around it.
+	assert_true(Gen2ShelfPage.corners_manage(Vector2(1240, 240), touch))
+	assert_true(Gen2ShelfPage.corners_manage(Vector2(1240, 300), desktop))
+
+
 func _open_launcher_keeping_the_marker() -> void:
 	if is_instance_valid(_launcher):
 		_launcher.free()
