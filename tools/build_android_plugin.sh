@@ -17,8 +17,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLUGIN="$ROOT/addons/second_screen"
 # The engine pin, which is the release the Android library is taken from. Bump
 # with the pin in DEVICES.md.
-GODOT_TAG="${GODOT_TAG:-4.8-dev3}"
-GODOT_LIB_VERSION="${GODOT_LIB_VERSION:-4.8.dev3}"
+GODOT_TAG="${GODOT_TAG:-4.8-dev4}"
+GODOT_LIB_VERSION="${GODOT_LIB_VERSION:-4.8.dev4}"
 # Built through a wrapper at a pinned Gradle rather than whatever gradle is on
 # the machine: 9.6 removed an internal API the Android plugin below still uses,
 # and a CI runner picking up 9.7 failed a release while this machine's 9.5

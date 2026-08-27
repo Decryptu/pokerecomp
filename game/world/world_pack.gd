@@ -254,13 +254,13 @@ static func switch_items(order: Array, held: int, cursor: int) -> Dictionary:
 	return {"order": moved, "held": -1}
 
 
-## The whole item map with one pocket's rows put in [param pocket_order], for
+## The whole item map with one pocket's rows put in [param wanted_order], for
 ## [method Gen2WorldState.apply_changes]' `item_order`. The cartridge has four
 ## packed arrays and this port one insertion-ordered map, so a move inside a
 ## pocket permutes only the positions that pocket already occupies.
-static func reordered_items(owned: Dictionary, pocket_order: Array) -> Array[int]:
+static func reordered_items(owned: Dictionary, wanted_order: Array) -> Array[int]:
 	var wanted: Array[int] = []
-	for entry: Variant in pocket_order:
+	for entry: Variant in wanted_order:
 		wanted.append(int(entry))
 	var result: Array[int] = []
 	var occupied: int = 0

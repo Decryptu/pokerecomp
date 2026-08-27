@@ -276,7 +276,7 @@ static func preferred_width(control: Control) -> float:
 
 
 ## Label on the left, control on the right, which is every settings line.
-static func field(theme: Gen2LauncherTheme, text: String, control: Control) -> Container:
+static func field(theme: Gen2LauncherTheme, text: String, control: Control) -> Control:
 	var line := FieldRow.new()
 	var label: Label = body(theme, text)
 	label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -293,9 +293,32 @@ static func field(theme: Gen2LauncherTheme, text: String, control: Control) -> C
 ## cut off rather than reachable, and a settings row is exactly the shape that
 ## outgrows a portrait phone: the label wants its whole text and the control
 ## carries its own minimum width. Stacking is what keeps the control on screen.
-class FieldRow extends Container:
+##
+## A [Container] is not usable here: from 4.8.dev4 the engine answers a
+## container's minimum size itself and never calls a script's
+## [method Control._get_minimum_size], and asking for less than both halves is
+## the whole point of this row.
+class FieldRow extends Control:
+	var _pending: bool = false
+
 	func _init() -> void:
-		resized.connect(update_minimum_size)
+		resized.connect(_queue_layout)
+
+	func _ready() -> void:
+		for half: Control in _halves():
+			half.minimum_size_changed.connect(_queue_layout)
+			half.visibility_changed.connect(_queue_layout)
+		_queue_layout()
+
+	## What [method Container.queue_sort] does: at most one layout per frame,
+	## so a half whose minimum size answers the width it was just given cannot
+	## drive this in circles.
+	func _queue_layout() -> void:
+		update_minimum_size()
+		if _pending:
+			return
+		_pending = true
+		_layout.call_deferred()
 
 	func _halves() -> Array[Control]:
 		var found: Array[Control] = []
@@ -325,25 +348,33 @@ class FieldRow extends Container:
 			return Vector2(control.x, label.y + float(GAP_XS) + control.y)
 		return Vector2(control.x, maxf(label.y, control.y))
 
-	func _notification(what: int) -> void:
-		if what != NOTIFICATION_SORT_CHILDREN:
-			return
+	func _layout() -> void:
+		_pending = false
 		var halves: Array[Control] = _halves()
 		if halves.size() < 2:
 			return
 		var label: Vector2 = halves[0].get_combined_minimum_size()
 		if _stacks(halves):
-			fit_child_in_rect(halves[0], Rect2(0.0, 0.0, size.x, label.y))
-			fit_child_in_rect(halves[1], Rect2(
+			_place(halves[0], Rect2(0.0, 0.0, size.x, label.y))
+			_place(halves[1], Rect2(
 				0.0, label.y + float(GAP_XS), size.x, size.y - label.y - float(GAP_XS)
 			))
 			return
 		var control_width: float = Gen2LauncherUI.preferred_width(halves[1])
 		var label_width: float = maxf(size.x - control_width - float(GAP_MD), 0.0)
-		fit_child_in_rect(halves[0], Rect2(0.0, 0.0, label_width, size.y))
-		fit_child_in_rect(halves[1], Rect2(
-			label_width + float(GAP_MD), 0.0, control_width, size.y
-		))
+		_place(halves[0], Rect2(0.0, 0.0, label_width, size.y))
+		_place(halves[1], Rect2(label_width + float(GAP_MD), 0.0, control_width, size.y))
+
+	## [method Container.fit_child_in_rect] for the flags both halves carry:
+	## the whole width given, however narrow, and their own height centred in
+	## it. The width is not clamped to the minimum, which is what lets a long
+	## label be squeezed rather than widening the page.
+	static func _place(half: Control, rect: Rect2) -> void:
+		var high: float = half.get_combined_minimum_size().y
+		half.position = Vector2(
+			rect.position.x, rect.position.y + floorf((rect.size.y - high) / 2.0)
+		)
+		half.size = Vector2(rect.size.x, high)
 
 
 ## A row of choices in one track, the chosen one filled.

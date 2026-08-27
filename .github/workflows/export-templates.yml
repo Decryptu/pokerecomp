@@ -38,15 +38,15 @@ on:
         type: string
 
 env:
-  GODOT_VERSION: 4.8-dev3
+  GODOT_VERSION: 4.8-dev4
   # A development snapshot is tagged nowhere in the engine repository, so the
   # pin is the commit the stock templates name themselves after:
-  # `4.8.dev3.official.51105ccbe`. The build checks that it still agrees.
-  GODOT_COMMIT: 51105ccbe58381774ecd7a7486d564b202a5192e
+  # `4.8.dev4.official.b56a91878`. The build checks that it still agrees.
+  GODOT_COMMIT: b56a91878e7c94977e4af978968e41d0670c0a8b
   # Nintendo ships no Godot platform and upstream carries none, so the Switch
   # template is built from a fork of the same pin that adds `platform/nx`.
   GODOT_NX_REMOTE: https://github.com/Decryptu/godot.git
-  GODOT_NX_COMMIT: ada239b4354f12b38a23ab8f6c6b4fa22000485f
+  GODOT_NX_COMMIT: e25f31c1248c0955994e865a80d94d32520a53b9
 
 jobs:
   build:
