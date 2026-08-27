@@ -1096,6 +1096,45 @@ func test_master_ball_captures_a_wild_mon_and_records_catch_metadata() -> void:
 	assert_eq(_world.state.item_quantity(0x01), 0)
 
 
+## `BugContest_SetCaughtContestMon`: the first catch is kept outright, and a
+## second one is only offered, with the Pokemon already held named by
+## `DisplayAlreadyCaughtText` rather than the new one.
+func test_a_second_contest_catch_is_offered_and_names_the_one_already_held() -> void:
+	_world.state.set_park_balls(20)
+	var first: Gen2BattleMon = Gen2BattleMon.create(
+		_data, 25, 5, _data.moves_at_level(25, 5), 0x1234
+	)
+	first.hp = 1
+	var caught: Dictionary = Gen2WorldPartyHost.capture_contest(_world, first, _random)
+	assert_true(bool(caught["ok"]), JSON.stringify(caught))
+	if bool(caught["caught"]):
+		assert_false(bool(caught.get("replace_offer", false)), "nothing to replace")
+		assert_eq(int(_world.state.contest_mon()["species"]), 25)
+	_world.state.set_contest_mon({"species": 10, "level": 5, "max_hp": 21})
+
+	var second: Gen2BattleMon = Gen2BattleMon.create(
+		_data, 25, 7, _data.moves_at_level(25, 7), 0x1234
+	)
+	## A Park Ball on a full-health wild almost never lands; the rate is the
+	## catch's own and not what this is about.
+	second.hp = 1
+	var offered: Dictionary = {}
+	for _throw: int in 2000:
+		_world.state.set_park_balls(20)
+		offered = Gen2WorldPartyHost.capture_contest(_world, second, _random)
+		if bool(offered.get("caught", false)):
+			break
+	assert_true(bool(offered.get("caught", false)), "no park ball ever landed")
+	assert_true(bool(offered["replace_offer"]))
+	assert_eq(int(offered["stock_species"]), 10, "the line names the one held")
+	assert_eq(int(offered["stock_level"]), 5)
+	assert_eq(int(offered["stock_max_hp"]), 21)
+	assert_eq(
+		int(_world.state.contest_mon()["species"]), 10,
+		"the state is left alone until the question is answered"
+	)
+
+
 func test_a_full_party_capture_uses_the_first_pc_box_slot() -> void:
 	while _save.party.size() < Gen2SaveData.MAX_PARTY:
 		_save.party.append(Gen2SaveMon.from_dict(_save.party[0].to_dict()))

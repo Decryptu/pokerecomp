@@ -1966,6 +1966,11 @@ static func capture_contest(
 		return result
 	result["mon"] = contest_mon_from(wild)
 	result["replace_offer"] = not world.state.contest_mon().is_empty()
+	## `DisplayAlreadyCaughtText` names the one already held, not the new one:
+	## `ld a, [wContestMon]` into `wNamedObjectIndex` before the farcall.
+	result["stock_species"] = int(world.state.contest_mon().get("species", 0))
+	result["stock_level"] = int(world.state.contest_mon().get("level", 0))
+	result["stock_max_hp"] = int(world.state.contest_mon().get("max_hp", 0))
 	if not bool(result["replace_offer"]):
 		world.state.set_contest_mon(result["mon"])
 	return result
