@@ -142,7 +142,13 @@ jobs:
           # `latest`, so the binary is found rather than assumed.
           sdkmanager=$(find "$ANDROID_SDK_ROOT/cmdline-tools" -name sdkmanager -type f | head -1)
           [ -n "$sdkmanager" ] || { echo "::error::no sdkmanager in the image"; exit 1; }
-          yes | "$sdkmanager" --licenses > /dev/null
+          # Not `yes |`: it never ends, so it is still writing when sdkmanager
+          # stops reading, dies of SIGPIPE and returns 1, which `pipefail`
+          # reports as this whole step failing. Whether that happens is a race
+          # against how much the reader consumes, and it decided a release. A
+          # bounded run of the same answer fits inside the pipe buffer, so the
+          # writer is finished before the reader has to be asked anything.
+          printf 'y\n%.0s' {1..100} | "$sdkmanager" --licenses > /dev/null
           "$sdkmanager" "platform-tools" "build-tools;36.1.0" "platforms;android-36" \
             "ndk;29.0.14206865" "cmake;3.22.1"
           [ -d "$ANDROID_SDK_ROOT/ndk/29.0.14206865" ] || {
