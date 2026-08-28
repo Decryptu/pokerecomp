@@ -223,7 +223,7 @@ static func _box_destination(
 	save: Gen2SaveData, box_index: int, box_slot: int
 ) -> Dictionary:
 	if box_index < 0:
-		return save.first_empty_box_slot()
+		return save.deposit_box_slot()
 	if box_index >= save.boxes.size():
 		return _failure(&"invalid_box_index")
 	var box: Gen2SaveBox = save.boxes[box_index]

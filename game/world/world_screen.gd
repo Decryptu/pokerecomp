@@ -4755,6 +4755,7 @@ func _open_battle_host(request: Dictionary) -> void:
 	host.enemy_seen.connect(_on_enemy_seen)
 	if not tutorial:
 		host.capture_requested.connect(_on_capture_requested)
+		host.dex_entry_requested.connect(_on_battle_dex_entry_requested)
 		host.item_used.connect(_on_battle_item_used)
 	_battle_host = host
 	## Started after the connections and here rather than left to the host's own
@@ -4767,6 +4768,15 @@ func _open_battle_host(request: Dictionary) -> void:
 	_play_battle_music(request)
 	host.start_world_battle(request.duplicate(true), save, badges)
 	_claim_nuzlocke_encounter(host, values, save)
+	## The three dex answers `PokeBallEffect` reads, taken off live state before
+	## the entrance registers the sight it is about to show.
+	if _world != null and _world.state != null:
+		var species: int = int(values.get("pokemon", 0))
+		host.set_dex_context(
+			species > 0 and _world.state.has_seen_species(species),
+			species > 0 and _world.state.has_caught_species(species),
+			_world.state.is_engine_flag_active(Gen2WorldState.ENGINE_POKEDEX)
+		)
 	## After the fight exists, because starting one clears whatever capture action
 	## was staged: the bag belongs to this battle rather than to the last one.
 	if _world != null and not tutorial:
@@ -4872,11 +4882,21 @@ func _on_capture_requested(ball: int) -> void:
 		if _world.bug_contest_active()
 		else Gen2WorldPartyHost.capture_wild(
 			_world, save, target, ball, _encounter_random, 0, _active_battle_persist,
-			_battle_host.capture_battle_type()
+			_battle_host.capture_battle_type(), _battle_host.capture_thrower()
 		)
 	)
 	_battle_host.complete_capture(result)
 	_refresh_labels()
+
+
+## `NewPokedexEntry` behind `Text_GotchaMonWasCaught`: the page stands over the
+## battle, and the battle waits for it. The world opens it because the world owns
+## the dex; a cache with no entry for the species answers straight away.
+func _on_battle_dex_entry_requested(species: int) -> void:
+	if _battle_host == null:
+		return
+	if not _open_pokedex_entry({"values": {"species": species}}):
+		_battle_host.complete_dex_entry()
 
 
 ## `UseDisposableItem` inside a battle: the effect has already landed on the
@@ -7392,6 +7412,12 @@ func _on_pokedex_entry_closed() -> void:
 	if host != null:
 		_pokedex_prev_entry = host.previous_entry()
 		Gen2Screen.drop(host)
+	## A catch's page has a battle behind it rather than a script, and that
+	## battle is what the page returns to.
+	if _battle_host != null:
+		_battle_host.complete_dex_entry()
+		_refresh_labels()
+		return
 	if _world != null and not _world.pending_runtime_request().is_empty():
 		_show_script_results(_world.complete_runtime_request({"ok": true, "script_value": 0}))
 	_refresh_labels()
@@ -8069,7 +8095,7 @@ func _refresh_party_summary() -> void:
 			"lead_fainted": lead == null or lead.hp <= 0,
 			"second_species": int(second.species) if second != null else 0,
 			"storage_full": save.party.size() >= Gen2SaveData.MAX_PARTY \
-				and not bool(save.first_empty_box_slot().get("ok", false)),
+				and not bool(save.deposit_box_slot().get("ok", false)),
 			## `VAR_BOXSPACE`, which Route 29's catching tutorial reads before it
 			## offers to hand a POKé BALL over.
 			"box_free_space": save.box_free_space(),

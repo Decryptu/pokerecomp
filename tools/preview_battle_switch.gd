@@ -7,7 +7,8 @@ extends SceneTree
 ##
 ##   Godot --path . -s res://tools/preview_battle_switch.gd -- crystal /tmp/s.png [stage] [presses] [passes]
 ##
-## [stage] is one of `offer` (the default), `prize` (a trainer battle fought to
+## [stage] is one of `offer` (the default), `balls` (the pack showing every ball
+## a throw can be made with), `prize` (a trainer battle fought to
 ## its win, photographed on `GotMoneyForWinningText`), `menu`, `move`, `info` (the move
 ## list with a registered battle-information provider's annotations over it:
 ## a mark per row for the effectiveness against the defender, the non-zero stat
@@ -53,6 +54,13 @@ const CONTEST_STOCK_MAX_HP: int = 27
 const PACK_ITEMS: Array[int] = [0x12, 0x26, 0x31]
 const PACK_QUANTITIES: Dictionary = {0x12: 3, 0x26: 1, 0x31: 2}
 
+## The `balls` stage's rows: every ball `PokeBallEffect` has an effect for, which
+## is the four ordinary ones plus the seven Kurt makes out of apricorns.
+const BALL_QUANTITIES: Dictionary = {
+	0x05: 12, 0x04: 5, 0x02: 3, 0x01: 1, 0x9D: 2, 0x9F: 2, 0xA0: 2,
+	0xA1: 2, 0xA4: 2, 0xA5: 2, 0xA6: 2,
+}
+
 ## Falkner, and three of the player's own, all at a level where nothing faints
 ## before the question is asked.
 const TRAINER_CLASS: int = 1
@@ -84,7 +92,7 @@ const AMULET_COIN: int = 0x5B
 ## The stages `BattleMenu`'s own first opening leads into with nothing staged
 ## behind it, rather than a question a turn has to reach.
 const MENU_STAGES: Array[String] = [
-	"menu", "move", "info", "info_pack", "info_pkmn", "contest", "pack",
+	"menu", "move", "info", "info_pack", "info_pkmn", "contest", "pack", "balls",
 ]
 
 var _screen: Gen2BattleScreen = null
@@ -437,6 +445,15 @@ func _open() -> void:
 		## rows are a real cache's items, so the picture reads as the pack.
 		if _stage in ["pack", "info_pack"]:
 			_screen.set_battle_pack(PACK_ITEMS, PACK_QUANTITIES)
+			_screen._handle_button(Gen2Button.DOWN)
+			_screen._handle_button(Gen2Button.A)
+		## The BALL pocket of the same list. Every row of
+		## `BallMultiplierFunctionTable` is reachable, so the picture is the
+		## whole of what a player can throw.
+		if _stage == "balls":
+			_screen.set_battle_pack(
+				Gen2WorldPartyHost.capture_ball_items(), BALL_QUANTITIES
+			)
 			_screen._handle_button(Gen2Button.DOWN)
 			_screen._handle_button(Gen2Button.A)
 		## `BattleMenu_PKMN`'s party page, the other modal that covers the same

@@ -315,47 +315,60 @@ static func _empty_boxes() -> Array:
 	return empty_boxes
 
 
-func first_empty_box_slot() -> Dictionary:
-	for box_index: int in boxes.size():
-		var box: Gen2SaveBox = boxes[box_index]
-		if box == null:
-			continue
-		var empty_slot: int = box.first_empty_slot()
-		if empty_slot >= 0:
-			return {"ok": true, "box": box_index, "slot": empty_slot}
-	return {"ok": false, "reason": &"storage_full"}
+## Where a deposit lands, which on the cartridge is only ever the open box:
+## `SendMonIntoBox` and `InsertPokemonIntoBox` both write `sBoxCount` and neither
+## looks at another box. A full open box is refused with the other thirteen still
+## empty, which is what `Ball_BoxIsFullMessage` and `.FailedToGiveMon` say.
+func deposit_box_slot() -> Dictionary:
+	var box_index: int = clampi(current_box, 0, BOX_COUNT - 1)
+	var box: Gen2SaveBox = boxes[box_index] if box_index < boxes.size() else null
+	if box == null:
+		return {"ok": false, "reason": &"storage_full"}
+	var empty_slot: int = box.first_empty_slot()
+	if empty_slot < 0:
+		return {"ok": false, "reason": &"storage_full"}
+	return {"ok": true, "box": box_index, "slot": empty_slot}
 
 
-## `_GetVarAction`'s `.BoxFreeSpace`, which is `MONS_PER_BOX - [sBoxCount]`. The
-## save model keeps no current-box pointer, so the box a deposit would land in is
-## the one [method first_empty_box_slot] picks; a full storage answers 0, which is
-## the same refusal the source's zero gives every script that reads the var.
+## `_GetVarAction`'s `.BoxFreeSpace`, which is `MONS_PER_BOX - [sBoxCount]` on
+## the open box alone. A full one answers 0, which is the same refusal the
+## source's zero gives every script that reads the var.
 func box_free_space() -> int:
-	var destination: Dictionary = first_empty_box_slot()
-	if not bool(destination.get("ok", false)):
+	var box_index: int = clampi(current_box, 0, BOX_COUNT - 1)
+	var box: Gen2SaveBox = boxes[box_index] if box_index < boxes.size() else null
+	if box == null:
 		return 0
-	var box: Gen2SaveBox = boxes[int(destination["box"])]
 	return Gen2SaveBox.CAPACITY - box.occupied_count()
 
 
-func add_party_or_box(mon: Gen2SaveMon) -> Dictionary:
+## `TryAddMonToParty` and then the box behind it. [param to_front] is
+## `SendMonIntoBox`'s own `ShiftBoxMon`, which puts a catch at the head of the
+## box and moves everything already there down one; every other deposit runs
+## `InsertPokemonIntoBox`, which appends.
+func add_party_or_box(mon: Gen2SaveMon, to_front: bool = false) -> Dictionary:
 	if mon == null:
 		return {"ok": false, "reason": &"missing_pokemon"}
 	if party.size() < MAX_PARTY:
 		party.append(mon)
 		return {"ok": true, "destination": &"party", "party_index": party.size() - 1}
-	var destination: Dictionary = first_empty_box_slot()
+	var destination: Dictionary = deposit_box_slot()
 	if not bool(destination.get("ok", false)):
 		return destination
 	var box: Gen2SaveBox = boxes[int(destination["box"])]
-	var placed: Dictionary = box.put(mon, int(destination["slot"]))
+	var target: int = int(destination["slot"])
+	if to_front:
+		for index: int in range(target, 0, -1):
+			box.slots[index] = box.slots[index - 1]
+		target = 0
+		box.slots[0] = null
+	var placed: Dictionary = box.put(mon, target)
 	if not bool(placed.get("ok", false)):
 		return {"ok": false, "reason": placed.get("reason", &"box_insert_failed")}
 	return {
 		"ok": true,
 		"destination": &"box",
 		"box": int(destination["box"]),
-		"slot": int(destination["slot"]),
+		"slot": target,
 	}
 
 

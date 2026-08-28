@@ -432,6 +432,11 @@ const PP_ITEM_AMOUNTS: Dictionary = {
 ## everything else reaches the ordinary speed check.
 const BATTLETYPE_NORMAL: int = 0
 const BATTLETYPE_DEBUG: int = 2
+## The Dude's tutorial, which `PokeBallEffect` catches without a roll.
+const BATTLETYPE_TUTORIAL: int = 3
+## Written by `FishFunction`'s `.goodtofish`. It names the battle-start line and
+## is the one condition `LureBallMultiplier` boosts on.
+const BATTLETYPE_FISH: int = 4
 const BATTLETYPE_CONTEST: int = 6
 const BATTLETYPE_FORCESHINY: int = 7
 ## Named by `PlayBattleMusic` alone: nothing else here branches on it.

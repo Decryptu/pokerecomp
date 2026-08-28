@@ -190,7 +190,12 @@ static func resolve_fishing(
 		"slot_roll": slot_roll,
 		"time_group": time_group,
 		"forced": force_encounter,
-		"values": {"kind": &"wild", "pokemon": species, "level": level},
+		## `.goodtofish`'s own `ld a, BATTLETYPE_FISH`, which names the
+		## battle-start line and is what `LureBallMultiplier` boosts on.
+		"values": {
+			"kind": &"wild", "pokemon": species, "level": level,
+			"battle_type": Gen2Battle.BATTLETYPE_FISH,
+		},
 	}
 
 

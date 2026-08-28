@@ -3972,18 +3972,20 @@ func test_readvar_boxspace_reads_the_party_summary_mirror() -> void:
 	assert_eq(refused["reason"], &"missing_party_summary")
 
 
-## An empty box is the whole box; a storage with no free slot anywhere answers 0,
-## which is the refusal every reader of the var already branches on.
-func test_box_free_space_answers_the_box_a_deposit_would_land_in() -> void:
+## `_GetVarAction`'s `.BoxFreeSpace` is `MONS_PER_BOX - [sBoxCount]`, and
+## `sBoxCount` is the open box alone: a full one answers 0 with the other
+## thirteen still empty, and CHANGE BOX is what the player is expected to do
+## about it.
+func test_box_free_space_answers_the_open_box_and_no_other() -> void:
 	var save: Gen2SaveData = Gen2SaveData.new()
 	assert_eq(save.box_free_space(), Gen2SaveBox.CAPACITY)
 	for slot: int in Gen2SaveBox.CAPACITY:
 		(save.boxes[0] as Gen2SaveBox).put(Gen2SaveMon.new())
+	assert_eq(save.box_free_space(), 0, "box 1 is full and box 2 is not the open one")
+	assert_false(bool(save.deposit_box_slot().get("ok", false)))
+	save.current_box = 1
 	assert_eq(save.box_free_space(), Gen2SaveBox.CAPACITY)
-	for box: Gen2SaveBox in save.boxes:
-		for slot: int in Gen2SaveBox.CAPACITY:
-			box.put(Gen2SaveMon.new())
-	assert_eq(save.box_free_space(), 0)
+	assert_eq(int(save.deposit_box_slot()["box"]), 1)
 
 
 func test_initial_dst_specials_publish_source_confirmation_text_and_commit_state() -> void:
