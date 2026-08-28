@@ -251,6 +251,7 @@ func _build_ui() -> void:
 	)
 	_slot_import_dialog.file_selected.connect(_import_slot_file)
 
+
 func _picker(
 	title: String, mode: FileDialog.FileMode, filters: PackedStringArray
 ) -> Gen2LauncherFilePicker:
@@ -427,6 +428,9 @@ func _add_slot_management(body: VBoxContainer) -> void:
 	body.add_child(file_row)
 	file_row.add_child(_action("Edit save", Gen2LauncherButton.Variant.NEUTRAL, &"settings", _open_editor))
 	file_row.add_child(_action("Export", Gen2LauncherButton.Variant.NEUTRAL, &"", func() -> void:
+		# A suggested name, which the system dialogs offer for editing and which
+		# is the whole name on a machine that browses without a keyboard.
+		_export_dialog.current_file = export_file_name()
 		_export_dialog.show_picker(Vector2i(900, 600))
 	))
 	file_row.add_child(_action("Import", Gen2LauncherButton.Variant.NEUTRAL, &"", func() -> void:
@@ -491,6 +495,19 @@ func _delete_selected_slot() -> void:
 	_selected_slot = -1
 	GameRuntime.reload_selected_save()
 	_refresh()
+
+
+## What an exported slot is called: the cartridge, the slot and the label the
+## player gave it, with anything a file system might refuse taken out.
+func export_file_name() -> String:
+	var parts := PackedStringArray()
+	if _data != null:
+		parts.append(String(_data.id))
+	parts.append("slot-%d" % (_selected_slot + 1))
+	var label: String = String(_row_for(_selected_slot).get("label", "")).strip_edges()
+	if not label.is_empty():
+		parts.append(label)
+	return "%s.json" % "-".join(parts).to_lower().replace(" ", "-").validate_filename()
 
 
 func _export_selected_slot(path: String) -> void:

@@ -130,6 +130,20 @@ func test_save_screen_distinguishes_an_occupied_slot() -> void:
 	assert_eq(_screen.save_screen_snapshot()["selected_slot"], 1)
 
 
+## A console browsing without a keyboard cannot type a name, so the export
+## carries one already. It is also what the system dialogs suggest.
+func test_an_exported_slot_is_named_after_the_cartridge_the_slot_and_its_label() -> void:
+	assert_true(Gen2SaveStore.save(_save(), _data)["ok"])
+	await _open_save_screen()
+	assert_true(_screen.select_slot(1))
+	assert_eq(_screen.export_file_name(), "testgame-slot-2.json")
+	assert_true(Gen2SaveStore.rename_slot(_data.id, _data.sha1, 1, "Run two", _data)["ok"])
+	_screen.set_data(_data)
+	await get_tree().process_frame
+	assert_true(_screen.select_slot(1))
+	assert_eq(_screen.export_file_name(), "testgame-slot-2-run-two.json")
+
+
 func test_save_screen_marks_an_invalid_existing_slot_incompatible() -> void:
 	var path: String = Gen2SaveStore.path_for(_data.id, _data.sha1, 0)
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())

@@ -117,32 +117,110 @@ func test_every_file_picker_asks_for_the_systems_own() -> void:
 			continue
 		assert_false(source.contains("FileDialog.new()"), path)
 		assert_false(source.contains("FEATURE_NATIVE_DIALOG_FILE"), path)
-		assert_false(source.contains("popup_centered") and path.ends_with("save_screen.gd"), path)
 
 
-## A d-pad can descend the engine's browser and cannot climb it: the path field
-## is a LineEdit and eats left and right, so the toolbar's "up" button behind it
-## is unreachable. On a machine with no pointer the browser therefore has to open
-## somewhere the player never needs to leave upwards.
-func test_a_pointerless_browser_opens_at_the_top_of_the_volume() -> void:
-	var start: String = Gen2LauncherFilePicker._pointerless_start_dir()
-	if DisplayServer.has_feature(DisplayServer.FEATURE_MOUSE):
-		assert_eq(start, "", "a pointer can reach the up button, so nothing is forced")
-		return
-	assert_false(start.is_empty(), "a console is given a root")
+## The engine's browser needs a pointer: its path field is a LineEdit a d-pad
+## cannot leave and whose editing kills the process on Horizon, and its list
+## enters a directory on an activation neither a pad nor Ryujinx's touch sends.
+## So a machine with no pointer browses in the launcher's own sheet instead.
+func test_a_pointerless_machine_browses_in_the_launchers_own_sheet() -> void:
+	var dialog: Gen2LauncherFilePicker = Gen2LauncherUI.file_picker(
+		_light, "Choose", FileDialog.FILE_MODE_OPEN_FILE, PackedStringArray(["*.gbc; Dump"])
+	)
+	autofree(dialog)
+	assert_eq(
+		dialog.uses_browse_sheet(),
+		not DisplayServer.has_feature(DisplayServer.FEATURE_MOUSE)
+			and not Gen2LauncherFilePicker.use_native_dialog_here(),
+		"the sheet is for exactly the machines nothing else serves",
+	)
+	# Whatever this machine is, no launcher screen may open a browser of its own.
+	for path: String in _scripts_under("res://game"):
+		if path.ends_with("launcher/launcher_file_picker.gd"):
+			continue
+		assert_false(FileAccess.get_file_as_string(path).contains("popup_centered("), path)
+
+
+func test_the_browse_sheet_opens_at_the_top_of_the_volume_and_stops_there() -> void:
+	var start: String = Gen2BrowseSheet.start_dir()
+	assert_false(start.is_empty(), "a machine with no pointer is given a root")
 	assert_true(
 		OS.get_data_dir().begins_with(start.trim_suffix("/")),
 		"and the root is the volume the user data is on",
 	)
+	assert_eq(Gen2BrowseSheet.parent_of(start), "", "the top of a volume has no up")
+	assert_eq(Gen2BrowseSheet.parent_of("sdmc:/games/dumps"), "sdmc:/games")
+	assert_eq(Gen2BrowseSheet.parent_of("sdmc:/games"), "sdmc:/")
+	assert_eq(Gen2BrowseSheet.parent_of("/home/a/roms"), "/home/a")
+	assert_eq(Gen2BrowseSheet.parent_of("C:/Users"), "C:/")
 
 
 func test_the_volume_root_is_the_top_of_a_path_on_any_shape_of_volume() -> void:
-	assert_eq(Gen2LauncherFilePicker.volume_root("/home/a/.local/share"), "/")
-	assert_eq(Gen2LauncherFilePicker.volume_root("/"), "/")
+	assert_eq(Gen2BrowseSheet.volume_root("/home/a/.local/share"), "/")
+	assert_eq(Gen2BrowseSheet.volume_root("/"), "/")
 	# Horizon mounts the SD card as its own volume, named with a colon.
-	assert_eq(Gen2LauncherFilePicker.volume_root("sdmc:/config/godot"), "sdmc:/")
-	assert_eq(Gen2LauncherFilePicker.volume_root("sdmc:/config"), "sdmc:/")
-	assert_eq(Gen2LauncherFilePicker.volume_root("C:/Users/a/AppData"), "C:/")
+	assert_eq(Gen2BrowseSheet.volume_root("sdmc:/config/godot"), "sdmc:/")
+	assert_eq(Gen2BrowseSheet.volume_root("sdmc:/config"), "sdmc:/")
+	assert_eq(Gen2BrowseSheet.volume_root("C:/Users/a/AppData"), "C:/")
+
+
+func test_the_browse_sheet_lists_directories_first_and_only_the_files_asked_for() -> void:
+	var dir: String = OS.get_user_data_dir().path_join("browse_test")
+	DirAccess.make_dir_recursive_absolute(dir.path_join("saves"))
+	DirAccess.make_dir_recursive_absolute(dir.path_join("dumps"))
+	for entry: String in ["b.gbc", "a.gbc", "notes.txt"]:
+		var file: FileAccess = FileAccess.open(dir.path_join(entry), FileAccess.WRITE)
+		file.store_string("x")
+		file.close()
+	var listed: Array = Gen2BrowseSheet.rows(dir, PackedStringArray(["gbc"]))
+	var names: Array = []
+	for row: Dictionary in listed:
+		names.append(row["name"])
+	assert_eq(names, ["dumps", "saves", "a.gbc", "b.gbc"], "directories first, each sorted")
+	assert_true(bool(listed[0]["directory"]))
+	assert_false(bool(listed[2]["directory"]))
+	assert_eq(String(listed[2]["path"]), dir.path_join("a.gbc"))
+	assert_eq(Gen2BrowseSheet.rows(dir, PackedStringArray()).size(), 5, "no filter means every file")
+	assert_eq(Gen2BrowseSheet.rows(dir.path_join("nowhere"), PackedStringArray()), [])
+	OS.move_to_trash(ProjectSettings.globalize_path(dir))
+
+
+func test_a_browse_sheet_walks_into_a_directory_and_answers_with_a_file() -> void:
+	var dir: String = OS.get_user_data_dir().path_join("browse_walk")
+	DirAccess.make_dir_recursive_absolute(dir.path_join("inner"))
+	var file: FileAccess = FileAccess.open(dir.path_join("inner/rom.gbc"), FileAccess.WRITE)
+	file.store_string("x")
+	file.close()
+	var host := Control.new()
+	add_child_autofree(host)
+	var sheet: Gen2BrowseSheet = Gen2BrowseSheet.browse(
+		_light, "Choose", dir, PackedStringArray(["gbc"])
+	)
+	var answers: Array[String] = []
+	sheet.chosen.connect(func(path: String) -> void: answers.append(path))
+	sheet.open(host)
+	await wait_frames(2)
+	var rows: Array[Button] = _row_buttons(sheet)
+	assert_eq(rows.size(), 1, "the directory is the only row at the top")
+	rows[0].pressed.emit()
+	assert_eq(sheet.directory(), dir.path_join("inner"), "and pressing it descends")
+	rows = _row_buttons(sheet)
+	assert_eq(rows.size(), 1)
+	rows[0].pressed.emit()
+	assert_eq(answers, [dir.path_join("inner/rom.gbc")], "a file row is the answer")
+	OS.move_to_trash(ProjectSettings.globalize_path(dir))
+
+
+func _row_buttons(sheet: Gen2BrowseSheet) -> Array[Button]:
+	var found: Array[Button] = []
+	var queue: Array[Node] = [sheet.body()]
+	while not queue.is_empty():
+		var node: Node = queue.pop_front()
+		for child: Node in node.get_children():
+			if child is Button:
+				found.append(child as Button)
+			queue.append(child)
+	return found
 
 
 func test_a_picker_reads_its_extensions_out_of_its_own_filters() -> void:

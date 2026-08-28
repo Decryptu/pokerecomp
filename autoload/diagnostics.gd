@@ -495,14 +495,11 @@ static func _setting(key: String, fallback: String) -> String:
 static func _file_picker_kind() -> String:
 	if Engine.has_singleton(Gen2LauncherFilePicker.NATIVE_SINGLETON):
 		return "the system picker, through the platform plugin"
-	if DisplayServer.has_feature(DisplayServer.FEATURE_NATIVE_DIALOG_FILE):
+	if Gen2LauncherFilePicker.use_native_dialog_here():
 		return "the system picker, through the engine"
-	# Where it opens is the whole story on a machine with no pointer, whose
-	# d-pad can walk the browser down and never back up.
-	var start: String = Gen2LauncherFilePicker._pointerless_start_dir()
-	if start.is_empty():
+	if DisplayServer.has_feature(DisplayServer.FEATURE_MOUSE):
 		return "the engine's own browser"
-	return "the engine's own browser, opening at %s" % start
+	return "the launcher's own browser, opening at %s" % Gen2BrowseSheet.start_dir()
 
 
 ## Empty on a headless run, and on a machine whose driver never answered.

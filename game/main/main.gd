@@ -22,6 +22,7 @@ var _title_backdrop: Gen2LauncherTitleBackdrop = null
 
 var _file_dialog: Gen2LauncherFilePicker = null
 var _mod_dialog: Gen2LauncherFilePicker = null
+var _preview_browse_dir: String = ""
 var _update_http: HTTPRequest = null
 
 var _importing: bool = false
@@ -458,6 +459,9 @@ func preview_sheet(view: StringName) -> void:
 				"The last session ended unexpectedly.",
 				"About > Report a bug will save a file with the logs in it.",
 			)
+		&"browse":
+			select_page(&"shelf")
+			_file_dialog.show_browse_sheet(_preview_browse_dir)
 		&"binding":
 			select_page(&"settings")
 			var sheet: Gen2BindingSheet = Gen2BindingSheet.for_button(
