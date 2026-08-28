@@ -571,7 +571,9 @@ func test_a_finished_roaming_battle_writes_the_struct_back() -> void:
 	assert_eq(state.roaming_mons_on(1, 1).size(), 0)
 
 
-func test_catch_tutorial_uses_the_real_battle_overlay_without_persistent_capture() -> void:
+## `CatchTutorial`: a whole battle, answered by `DudeAutoInputs` rather than by
+## the player. Nobody presses anything here, so what this drives is frames.
+func test_the_dude_plays_the_catching_tutorial_and_keeps_nothing() -> void:
 	await _open_world()
 	var balls_before: int = _world_screen._world.state.item_quantity(
 		Gen2WorldPartyHost.ITEM_POKE_BALL
@@ -580,13 +582,33 @@ func test_catch_tutorial_uses_the_real_battle_overlay_without_persistent_capture
 	assert_eq(results[0]["status"], &"waiting")
 	assert_eq(results[0]["event"]["request"]["kind"], &"catch_tutorial_requested")
 	_world_screen._show_script_results(results)
-	assert_not_null(_battle_host())
+	var host: Gen2BattleScreen = _battle_child()
+	assert_not_null(host)
+	var party_before: int = _world_screen._active_battle_save.party.size() \
+		if _world_screen._active_battle_save != null else 0
+
+	var messages: Array[String] = []
+	var guard: int = 8000
+	while _world_screen._battle_host != null and guard > 0:
+		guard -= 1
+		var line: String = String(host.battle_snapshot()["message"])
+		if messages.is_empty() or messages.back() != line:
+			messages.append(line)
+		host.advance_hardware_frame()
+	assert_gt(guard, 0, "the tutorial answers itself: %s" % JSON.stringify(messages))
 	await get_tree().process_frame
 	await get_tree().process_frame
-	assert_null(_battle_host())
+
+	assert_true("DUDE used the\nPOKE BALL." in messages, JSON.stringify(messages))
+	assert_true("Gotcha! %s was caught!" % _wild_name() in messages, JSON.stringify(messages))
 	assert_eq(
 		_world_screen._world.state.item_quantity(Gen2WorldPartyHost.ITEM_POKE_BALL),
 		balls_before
+	)
+	assert_eq(
+		_world_screen._active_battle_save.party.size() \
+			if _world_screen._active_battle_save != null else 0,
+		party_before
 	)
 	assert_false(_world_screen._world.state.just_battled())
 

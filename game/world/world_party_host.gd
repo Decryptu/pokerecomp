@@ -194,11 +194,9 @@ const HEAVY_BALL_LIGHT_PENALTY: int = 20
 ## `docs/bugs_and_glitches.md`'s "Heavy Ball uses wrong weight value for three
 ## Pokemon": `HeavyBall_GetDexEntryBank` masks the species without taking one off
 ## first, so 64, 128 and 192 read their own entry's address out of the next bank
-## up. What is there is a different cartridge's business on each build, so these
-## are measured rather than derived: `.claude/oracle/battle/catch_rate.py` says
-## Gold and Silver land on the same row the right weight would and Crystal does
-## not. SUNFLORA is the third and has no answer, because the `.SkipText` walk never
-## finds its terminator and the cartridge locks up.
+## up. Crystal only; pokegold's `HeavyBallMultiplier` decrements first. Both rows
+## are measured (`.claude/oracle/battle/catch_rate.py`). SUNFLORA's walk never
+## ends and the cartridge locks up, so the fall-through below is its guard.
 const HEAVY_BALL_WRONG_BANK: Dictionary = {64: 20, 128: 40}
 
 ## `FleeMons`' first three bytes, which is as far as `FastBallMultiplier`'s
@@ -557,7 +555,6 @@ static func one_fifth_max_hp(data: GameData, mon: Gen2SaveMon) -> int:
 	return _max_hp(data, mon) / 5
 
 
-## A party member by index, or null when the slot is empty.
 static func _party_member(save: Gen2SaveData, index: int) -> Gen2SaveMon:
 	if save == null or index < 0 or index >= save.party.size():
 		return null
@@ -1139,6 +1136,15 @@ static func capture_wild(
 ) -> Dictionary:
 	if world == null or save == null or world.data == null or wild == null:
 		return _failure(&"missing_capture_context", {})
+	## The Dude's throw: `.catch_without_fail` in front of every multiplier, and
+	## `.return_from_capture`'s `cp BATTLETYPE_TUTORIAL / ret z` behind the line.
+	## The ball is his and nothing is kept, so no transaction opens.
+	if battle_type == Gen2Battle.BATTLETYPE_TUTORIAL:
+		return {
+			"ok": true, "caught": true, "ball": ball, "wobbles": 3,
+			"catch_rate": 255, "species": wild.species,
+			"tutorial": true, "persistent": false,
+		}
 	var opened: Dictionary = Gen2WorldTransaction.begin(world, save)
 	if not bool(opened.get("ok", false)):
 		return _failure(StringName(opened["reason"]), opened.get("details", {}))
