@@ -74,98 +74,103 @@ const FRAMESET_THUNDER_WAVE_EXTRA: int = 0x35
 const LCDC_POINTER_SCY: int = Gen2BattleAnimBackground.LCDC_SCY
 
 
+## `BattleAnimFunctions`' own jumptable: the object's function byte and the
+## routine that steps it. A byte the table does not name is one the cartridge
+## has no row for.
+static var FUNCTIONS: Dictionary = {
+	0x00: _null,
+	0x01: _user_to_target,
+	0x02: _user_to_target_disappear,
+	0x03: _move_in_circle,
+	0x04: _wave_to_target,
+	0x05: _throw_to_target,
+	0x06: _throw_to_target_disappear,
+	0x07: _drop,
+	0x08: _user_to_target_spin,
+	0x09: _shake,
+	0x0A: _fire_blast,
+	0x0B: _razor_leaf,
+	0x0C: _bubble,
+	0x0D: _surf,
+	0x0E: _sing,
+	0x0F: _water_gun,
+	0x10: _ember,
+	0x11: _powder,
+	0x12: _poke_ball,
+	0x13: _poke_ball_blocked,
+	0x14: _recover,
+	0x15: _thunder_wave,
+	0x16: _clamp_encore,
+	0x17: _bite,
+	0x18: _solar_beam,
+	0x19: _gust,
+	0x1A: _razor_wind,
+	0x1B: _kick,
+	0x1C: _absorb,
+	0x1D: _egg,
+	0x1E: _move_up,
+	0x1F: _wrap,
+	0x20: _leech_seed,
+	0x21: _sound,
+	0x22: _confuse_ray,
+	0x23: _dizzy,
+	0x24: _amnesia,
+	0x25: _float_up,
+	0x26: _dig,
+	0x27: _string,
+	0x28: _paralyzed,
+	0x29: _spiral_descent,
+	0x2A: _poison_gas,
+	0x2B: _horn,
+	0x2C: _needle,
+	0x2D: _petal_dance,
+	0x2E: _thief_payday,
+	0x2F: _absorb_circle,
+	0x30: _bonemerang,
+	0x31: _shiny,
+	0x32: _sky_attack,
+	0x33: _growth_swords_dance,
+	0x34: _smoke_flame_wheel,
+	0x35: _present_smokescreen,
+	0x36: _strength_seismic_toss,
+	0x37: _speed_line,
+	0x38: _sludge,
+	0x39: _metronome_hand,
+	0x3A: _metronome_sparkle_sketch,
+	0x3B: _agility,
+	0x3C: _sacred_fire,
+	0x3D: _safeguard_protect,
+	0x3E: _lock_on_mind_reader,
+	0x3F: _spikes,
+	0x40: _heal_bell_notes,
+	0x41: _baton_pass,
+	0x42: _conversion,
+	0x43: _encore_belly_drum,
+	0x44: _swagger_morning_sun,
+	0x45: _hidden_power,
+	0x46: _curse,
+	0x47: _perish_song,
+	0x48: _rapid_spin,
+	0x49: _beta_pursuit,
+	0x4A: _rain_sandstorm,
+	0x4B: _anim_obj_b0,
+	0x4C: _psych_up,
+	0x4D: _ancient_power,
+	0x4E: _rock_smash,
+	0x4F: _cotton,
+}
+
+
 ## `DoBattleAnimFrame`. Answers false when [param object]'s callback is outside
 ## the jumptable, which the importer's own range check makes unreachable with
 ## cartridge data and which a hand-built object can still ask for.
 static func run(
 	player: Gen2BattleAnimPlayer, object: Gen2BattleAnimObject
 ) -> bool:
-	var data: Gen2BattleAnimData = player.data()
-	match object.function:
-		0x00: _null(object)
-		0x01: _user_to_target(object)
-		0x02: _user_to_target_disappear(object)
-		0x03: _move_in_circle(data, object)
-		0x04: _wave_to_target(data, object)
-		0x05: _throw_to_target(data, object)
-		0x06: _throw_to_target_disappear(data, object)
-		0x07: _drop(data, object)
-		0x08: _user_to_target_spin(data, object)
-		0x09: _shake(object)
-		0x0A: _fire_blast(data, object)
-		0x0B: _razor_leaf(data, object)
-		0x0C: _bubble(object)
-		0x0D: _surf(player, data, object)
-		0x0E: _sing(data, object)
-		0x0F: _water_gun(data, object)
-		0x10: _ember(object)
-		0x11: _powder(object)
-		0x12: _poke_ball(player, data, object)
-		0x13: _poke_ball_blocked(player, data, object)
-		0x14: _recover(data, object)
-		0x15: _thunder_wave(object)
-		0x16: _clamp_encore(data, object)
-		0x17: _bite(data, object)
-		0x18: _solar_beam(data, object)
-		0x19: _gust(data, object)
-		0x1A: _razor_wind(data, object)
-		0x1B: _kick(data, object)
-		0x1C: _absorb(object)
-		0x1D: _egg(data, object)
-		0x1E: _move_up(object)
-		0x1F: _wrap(object)
-		0x20: _leech_seed(data, object)
-		0x21: _sound(player, data, object)
-		0x22: _confuse_ray(data, object)
-		0x23: _dizzy(data, object)
-		0x24: _amnesia(object)
-		0x25: _float_up(data, object)
-		0x26: _dig(data, object)
-		0x27: _string(object)
-		0x28: _paralyzed(object)
-		0x29: _spiral_descent(data, object)
-		0x2A: _poison_gas(data, object)
-		0x2B: _horn(data, object)
-		0x2C: _needle(data, object)
-		0x2D: _petal_dance(data, object)
-		0x2E: _thief_payday(data, object)
-		0x2F: _absorb_circle(data, object)
-		0x30: _bonemerang(data, object)
-		0x31: _shiny(data, object)
-		0x32: _sky_attack(player, object)
-		0x33: _growth_swords_dance(data, object)
-		0x34: _smoke_flame_wheel(data, object)
-		0x35: _present_smokescreen(data, object)
-		0x36: _strength_seismic_toss(object)
-		0x37: _speed_line(object)
-		0x38: _sludge(object)
-		0x39: _metronome_hand(data, object)
-		0x3A: _metronome_sparkle_sketch(data, object)
-		0x3B: _agility(object)
-		0x3C: _sacred_fire(data, object)
-		0x3D: _safeguard_protect(data, object)
-		0x3E: _lock_on_mind_reader(data, object)
-		0x3F: _spikes(data, object)
-		0x40: _heal_bell_notes(data, object)
-		0x41: _baton_pass(data, object)
-		0x42: _conversion(data, object)
-		0x43: _encore_belly_drum(data, object)
-		0x44: _swagger_morning_sun(data, object)
-		0x45: _hidden_power(data, object)
-		0x46: _curse(object)
-		0x47: _perish_song(data, object)
-		0x48: _rapid_spin(object)
-		0x49: _beta_pursuit(object)
-		0x4A: _rain_sandstorm(object)
-		0x4B: _anim_obj_b0(object)
-		0x4C: _psych_up(data, object)
-		0x4D: _ancient_power(data, object)
-		0x4E: _rock_smash(data, object)
-		0x4F: _cotton(data, object)
-		_: return false
+	if not FUNCTIONS.has(object.function):
+		return false
+	(FUNCTIONS[object.function] as Callable).call(player, player.data(), object)
 	return true
-
-
 ## `BattleAnim_IncAnonJumptableIndex`.
 static func _inc(object: Gen2BattleAnimObject) -> void:
 	object.jumptable_index = (object.jumptable_index + 1) & 0xFF
@@ -265,12 +270,16 @@ static func _ball_palette(player: Gen2BattleAnimPlayer, object: Gen2BattleAnimOb
 
 ## `BattleAnimFunc_Null`, which is not a no-op: its second state deletes the
 ## object, and that is how `anim_incobj` retires the sixty-two rows that use it.
-static func _null(object: Gen2BattleAnimObject) -> void:
+static func _null(
+	_player: Gen2BattleAnimPlayer, _data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index == 1:
 		object.deinit()
 
 
-static func _user_to_target(object: Gen2BattleAnimObject) -> void:
+static func _user_to_target(
+	_player: Gen2BattleAnimPlayer, _data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index != 0:
 		object.deinit()
 		return
@@ -279,7 +288,9 @@ static func _user_to_target(object: Gen2BattleAnimObject) -> void:
 	_step_to_target(object, object.param)
 
 
-static func _user_to_target_disappear(object: Gen2BattleAnimObject) -> void:
+static func _user_to_target_disappear(
+	_player: Gen2BattleAnimPlayer, _data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.x >= 0x84:
 		object.deinit()
 		return
@@ -288,7 +299,9 @@ static func _user_to_target_disappear(object: Gen2BattleAnimObject) -> void:
 
 ## Bit 7 of the parameter starts the object on the other side of the circle and
 ## is then cleared, since the rest of the byte is the radius.
-static func _move_in_circle(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _move_in_circle(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index == 0:
 		_inc(object)
 		object.var1 = 0x00 if (object.param & 0x80) == 0 else 0x20
@@ -298,7 +311,9 @@ static func _move_in_circle(data: Gen2BattleAnimData, object: Gen2BattleAnimObje
 	object.var1 = (object.var1 + 1) & 0xFF
 
 
-static func _wave_to_target(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _wave_to_target(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.x >= 0x88:
 		object.deinit()
 		return
@@ -313,7 +328,9 @@ static func _wave_to_target(data: Gen2BattleAnimData, object: Gen2BattleAnimObje
 ## `BattleAnimFunc_ThrowFromUserToTarget`, whose carry flag is its answer: false
 ## once the object has reached the far side, which is what the disappearing
 ## variant and the Poke Ball both branch on.
-static func _throw_to_target(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> bool:
+static func _throw_to_target(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> bool:
 	if object.x >= 0x88:
 		return false
 	object.x = (object.x + 2) & 0xFF
@@ -325,14 +342,16 @@ static func _throw_to_target(data: Gen2BattleAnimData, object: Gen2BattleAnimObj
 
 
 static func _throw_to_target_disappear(
-	data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+	player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
 ) -> void:
-	if _throw_to_target(data, object):
+	if _throw_to_target(player, data, object):
 		return
 	object.deinit()
 
 
-static func _drop(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _drop(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index == 0:
 		_inc(object)
 		object.var1 = 0x30
@@ -350,7 +369,7 @@ static func _drop(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> voi
 
 
 static func _user_to_target_spin(
-	data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
 ) -> void:
 	if object.jumptable_index == 0:
 		if object.x < 0x80:
@@ -381,7 +400,9 @@ static func _user_to_target_spin(
 	_step_to_target(object, object.param)
 
 
-static func _shake(object: Gen2BattleAnimObject) -> void:
+static func _shake(
+	_player: Gen2BattleAnimPlayer, _data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	match object.jumptable_index:
 		0:
 			_inc(object)
@@ -404,7 +425,9 @@ static func _shake_step(object: Gen2BattleAnimObject) -> void:
 
 ## The parameter is the state to start in, so one object row draws nine
 ## different flames.
-static func _fire_blast(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _fire_blast(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index == 0:
 		object.jumptable_index = object.param
 		if object.jumptable_index != 7:
@@ -445,7 +468,9 @@ static func _fire_blast_circle(data: Gen2BattleAnimData, object: Gen2BattleAnimO
 	object.var1 = (object.var1 + 1) & 0xFF
 
 
-static func _razor_leaf(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _razor_leaf(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	match object.jumptable_index:
 		0:
 			_inc(object)
@@ -520,7 +545,9 @@ static func _scatter_horizontal(param: int) -> int:
 	return 0x200
 
 
-static func _bubble(object: Gen2BattleAnimObject) -> void:
+static func _bubble(
+	_player: Gen2BattleAnimPlayer, _data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	match object.jumptable_index:
 		0:
 			_inc(object)
@@ -599,7 +626,9 @@ static func _surf(
 			object.deinit()
 
 
-static func _sing(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _sing(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index == 0:
 		_inc(object)
 		_reinit(object, FRAMESET_MUSIC_NOTE_1 + object.param)
@@ -612,7 +641,9 @@ static func _sing(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> voi
 	object.y_offset = _sine(data, a, 0x8)
 
 
-static func _water_gun(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _water_gun(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index == 0:
 		_inc(object)
 	match object.jumptable_index:
@@ -643,7 +674,9 @@ static func _water_gun_splash(object: Gen2BattleAnimObject) -> void:
 	_reinit(object, FRAMESET_WATER_GUN_3)
 
 
-static func _ember(object: Gen2BattleAnimObject) -> void:
+static func _ember(
+	_player: Gen2BattleAnimPlayer, _data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	match object.jumptable_index:
 		0:
 			object.jumptable_index = (object.param >> 4) & 0xF
@@ -660,7 +693,9 @@ static func _ember(object: Gen2BattleAnimObject) -> void:
 			pass
 
 
-static func _powder(object: Gen2BattleAnimObject) -> void:
+static func _powder(
+	_player: Gen2BattleAnimPlayer, _data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.y_offset >= 0x38:
 		object.deinit()
 		return
@@ -678,7 +713,7 @@ static func _poke_ball(
 			_ball_palette(player, object)
 			_inc(object)
 		1:
-			if _throw_to_target(data, object):
+			if _throw_to_target(player, data, object):
 				return
 			object.y = (object.y + object.y_offset) & 0xFF
 			_reinit(object, FRAMESET_POKE_BALL_3)
@@ -745,7 +780,7 @@ static func _poke_ball_blocked(
 			_inc(object)
 		1:
 			if object.x < 0x70:
-				_throw_to_target(data, object)
+				_throw_to_target(player, data, object)
 				return
 			_inc(object)
 			_poke_ball_fall(object)
@@ -763,7 +798,9 @@ static func _poke_ball_fall(object: Gen2BattleAnimObject) -> void:
 
 ## The parameter is both the starting angle and the radius, and the radius is
 ## what runs out: the object is deleted once the circle has closed.
-static func _recover(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _recover(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index == 0:
 		_inc(object)
 		object.var2 = object.param & 0xF0
@@ -782,7 +819,9 @@ static func _recover(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> 
 	object.var2 = (object.var2 - 1) & 0xFF
 
 
-static func _thunder_wave(object: Gen2BattleAnimObject) -> void:
+static func _thunder_wave(
+	_player: Gen2BattleAnimPlayer, _data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	match object.jumptable_index:
 		1:
 			_inc(object)
@@ -793,7 +832,9 @@ static func _thunder_wave(object: Gen2BattleAnimObject) -> void:
 
 ## Two hands clapped together twice. The parameter is the distance from the
 ## centre, and its bit 7 picks the mirrored frameset of the pair.
-static func _clamp_encore(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _clamp_encore(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index == 0:
 		_inc(object)
 		object.var2 = object.frameset
@@ -814,7 +855,9 @@ static func _clamp_encore(data: Gen2BattleAnimData, object: Gen2BattleAnimObject
 			object.jumptable_index = 0x1
 
 
-static func _bite(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _bite(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index == 0:
 		_inc(object)
 		object.var1 = 0x30 if (object.param & 0x80) != 0 else 0x10
@@ -834,7 +877,9 @@ static func _bite(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> voi
 			object.jumptable_index = 0x1
 
 
-static func _solar_beam(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _solar_beam(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index == 0:
 		_inc(object)
 		object.var1 = 0x28
@@ -849,7 +894,9 @@ static func _solar_beam(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) 
 	object.var1 = shrink >> 8
 
 
-static func _gust(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _gust(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	match object.jumptable_index:
 		0:
 			_inc(object)
@@ -899,12 +946,16 @@ static func _gust_wobble(data: Gen2BattleAnimData, object: Gen2BattleAnimObject)
 	object.var2 = (object.var2 + 1) & 0xFF
 
 
-static func _razor_wind(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
-	_move_in_circle(data, object)
+static func _razor_wind(
+	player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
+	_move_in_circle(player, data, object)
 	object.var1 = (object.var1 + 0xF) & 0xFF
 
 
-static func _kick(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _kick(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	match object.jumptable_index:
 		0:
 			pass
@@ -943,7 +994,9 @@ static func _rolling_kick(data: Gen2BattleAnimData, object: Gen2BattleAnimObject
 
 ## The mirror of [method _user_to_target_disappear]: back towards the user, with
 ## the same 256-step vertical loop when the nybble is under two.
-static func _absorb(object: Gen2BattleAnimObject) -> void:
+static func _absorb(
+	_player: Gen2BattleAnimPlayer, _data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.x < 0x30:
 		object.deinit()
 		return
@@ -955,7 +1008,9 @@ static func _absorb(object: Gen2BattleAnimObject) -> void:
 
 ## Egg Bomb and Softboiled share fourteen states; the parameter picks which one
 ## the object starts on.
-static func _egg(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _egg(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	match object.jumptable_index:
 		0:
 			object.var1 = 0x28
@@ -1034,14 +1089,18 @@ static func _egg_wave(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) ->
 	_inc(object)
 
 
-static func _move_up(object: Gen2BattleAnimObject) -> void:
+static func _move_up(
+	_player: Gen2BattleAnimPlayer, _data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.y_offset != 0 and object.y_offset < 0xD8:
 		object.deinit()
 		return
 	object.y_offset = (object.y_offset - object.param) & 0xFF
 
 
-static func _wrap(object: Gen2BattleAnimObject) -> void:
+static func _wrap(
+	_player: Gen2BattleAnimPlayer, _data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index != 1:
 		return
 	_reinit(object, object.frameset + 1)
@@ -1049,7 +1108,9 @@ static func _wrap(object: Gen2BattleAnimObject) -> void:
 	object.var1 = 0x8
 
 
-static func _leech_seed(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _leech_seed(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	match object.jumptable_index:
 		0:
 			_inc(object)
@@ -1098,7 +1159,9 @@ static func _sound(
 	object.y_offset = step
 
 
-static func _confuse_ray(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _confuse_ray(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index == 0:
 		_inc(object)
 		object.var2 = object.param & 0x3F
@@ -1121,7 +1184,9 @@ static func _confuse_ray(data: Gen2BattleAnimData, object: Gen2BattleAnimObject)
 	object.x = (object.x + 1) & 0xFF
 
 
-static func _dizzy(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _dizzy(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index == 0:
 		_inc(object)
 		object.var1 = object.frameset
@@ -1140,7 +1205,9 @@ static func _dizzy(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> vo
 	_reinit(object, object.var1 + 1)
 
 
-static func _amnesia(object: Gen2BattleAnimObject) -> void:
+static func _amnesia(
+	_player: Gen2BattleAnimPlayer, _data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	match object.jumptable_index:
 		0:
 			_inc(object)
@@ -1151,7 +1218,9 @@ static func _amnesia(object: Gen2BattleAnimObject) -> void:
 			object.deinit()
 
 
-static func _float_up(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _float_up(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	var a: int = object.var1
 	object.var1 = (object.var1 + 2) & 0xFF
 	object.x_offset = _sine(data, a, 0x4)
@@ -1160,14 +1229,18 @@ static func _float_up(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) ->
 	object.var2 = rise & 0xFF
 
 
-static func _dig(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _dig(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	var a: int = object.var1
 	object.var1 = (object.var1 - 2) & 0xFF
 	object.y_offset = _sine(data, a, 0x10)
 	object.x = (object.x + 1) & 0xFF
 
 
-static func _string(object: Gen2BattleAnimObject) -> void:
+static func _string(
+	_player: Gen2BattleAnimPlayer, _data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index != 0:
 		return
 	_inc(object)
@@ -1178,7 +1251,9 @@ static func _string(object: Gen2BattleAnimObject) -> void:
 
 ## Bit 7 of the parameter picks the mirrored frameset and is then gone: the two
 ## nybbles left are how long between switches and how far each way.
-static func _paralyzed(object: Gen2BattleAnimObject) -> void:
+static func _paralyzed(
+	_player: Gen2BattleAnimPlayer, _data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index == 0:
 		_inc(object)
 		object.var1 = 0x00
@@ -1197,11 +1272,15 @@ static func _paralyzed(object: Gen2BattleAnimObject) -> void:
 	object.x_offset = (-object.x_offset) & 0xFF
 
 
-static func _spiral_descent(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _spiral_descent(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	_descend(data, object, 0x7)
 
 
-static func _petal_dance(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _petal_dance(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	_descend(data, object, 0x3)
 
 
@@ -1222,9 +1301,11 @@ static func _descend(
 	object.var2 = (object.var2 + 1) & 0xFF
 
 
-static func _poison_gas(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _poison_gas(
+	player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index != 0:
-		_spiral_descent(data, object)
+		_spiral_descent(player, data, object)
 		return
 	if object.x >= 0x84:
 		_inc(object)
@@ -1238,7 +1319,9 @@ static func _poison_gas(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) 
 	object.y = (object.y - 1) & 0xFF
 
 
-static func _horn(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _horn(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	match object.jumptable_index:
 		0:
 			object.jumptable_index = object.param
@@ -1265,7 +1348,9 @@ static func _horn_sweep(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) 
 
 ## The parameter's high nybble picks the state and its low nybble the speed, so
 ## one row is both the straight needle and the arcing one.
-static func _needle(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _needle(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	match object.jumptable_index:
 		0:
 			object.jumptable_index = (object.param & 0xF0) >> 4
@@ -1288,7 +1373,9 @@ static func _needle_advance(object: Gen2BattleAnimObject) -> void:
 	_step_to_target(object, object.param)
 
 
-static func _thief_payday(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _thief_payday(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index == 0:
 		_inc(object)
 		object.var1 = 0x28
@@ -1305,7 +1392,9 @@ static func _thief_payday(data: Gen2BattleAnimData, object: Gen2BattleAnimObject
 
 ## A ring that widens on the way in and closes on the way out, the object going
 ## when its radius reaches zero.
-static func _absorb_circle(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _absorb_circle(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	object.y_offset = _sine(data, object.param, object.var1)
 	object.x_offset = _cosine(data, object.param, object.var1)
 	object.param = (object.param + 1) & 0xFF
@@ -1322,7 +1411,9 @@ static func _absorb_circle(data: Gen2BattleAnimData, object: Gen2BattleAnimObjec
 	object.var1 = (object.var1 - 1) & 0xFF
 
 
-static func _bonemerang(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _bonemerang(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index == 0:
 		_inc(object)
 		object.var2 = object.y
@@ -1331,7 +1422,9 @@ static func _bonemerang(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) 
 	object.param = (object.param + 1) & 0xFF
 
 
-static func _shiny(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _shiny(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index != 0:
 		return
 	_inc(object)
@@ -1340,7 +1433,9 @@ static func _shiny(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> vo
 	object.var2 = 0xF
 
 
-static func _sky_attack(player: Gen2BattleAnimPlayer, object: Gen2BattleAnimObject) -> void:
+static func _sky_attack(
+	player: Gen2BattleAnimPlayer, _data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	match object.jumptable_index:
 		0:
 			_inc(object)
@@ -1372,7 +1467,7 @@ static func _sky_attack_palette(
 
 
 static func _growth_swords_dance(
-	data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
 ) -> void:
 	object.y_offset = (_sra(_sra(_sra(_sine(data, object.param, 0x18)))) + object.var2) & 0xFF
 	object.x_offset = _cosine(data, object.param, 0x18)
@@ -1380,11 +1475,15 @@ static func _growth_swords_dance(
 	object.var2 = (object.var2 - 2) & 0xFF
 
 
-static func _smoke_flame_wheel(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _smoke_flame_wheel(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	_rise_in_circle(data, object, 0x7, 0xE8, 1)
 
 
-static func _sacred_fire(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _sacred_fire(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	_rise_in_circle(data, object, 0x3, 0xD0, 2)
 
 
@@ -1406,7 +1505,7 @@ static func _rise_in_circle(
 
 
 static func _present_smokescreen(
-	data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
 ) -> void:
 	match object.jumptable_index:
 		0:
@@ -1433,7 +1532,9 @@ static func _present_bounce(data: Gen2BattleAnimData, object: Gen2BattleAnimObje
 	# unreachable and the bounce never loses height. The cartridge's own.
 
 
-static func _strength_seismic_toss(object: Gen2BattleAnimObject) -> void:
+static func _strength_seismic_toss(
+	_player: Gen2BattleAnimPlayer, _data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	match object.jumptable_index:
 		0:
 			if object.y_offset == 0xE0:
@@ -1457,7 +1558,9 @@ static func _strength_seismic_toss(object: Gen2BattleAnimObject) -> void:
 			_step_to_target(object, 0x4)
 
 
-static func _speed_line(object: Gen2BattleAnimObject) -> void:
+static func _speed_line(
+	_player: Gen2BattleAnimPlayer, _data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index == 0:
 		_inc(object)
 		_reinit(object, FRAMESET_SPEED_LINE_1 + (object.param & 0x7F))
@@ -1467,7 +1570,9 @@ static func _speed_line(object: Gen2BattleAnimObject) -> void:
 	object.x_offset = (object.x_offset + 1) & 0xFF
 
 
-static func _sludge(object: Gen2BattleAnimObject) -> void:
+static func _sludge(
+	_player: Gen2BattleAnimPlayer, _data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	match object.jumptable_index:
 		0:
 			_inc(object)
@@ -1483,7 +1588,9 @@ static func _sludge(object: Gen2BattleAnimObject) -> void:
 			object.y_offset = (object.y_offset - 1) & 0xFF
 
 
-static func _metronome_hand(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _metronome_hand(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	var a: int = object.var1
 	object.var1 = (object.var1 + 2) & 0xFF
 	object.y_offset = _sine(data, a, 0x2)
@@ -1491,7 +1598,7 @@ static func _metronome_hand(data: Gen2BattleAnimData, object: Gen2BattleAnimObje
 
 
 static func _metronome_sparkle_sketch(
-	data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
 ) -> void:
 	if object.y_offset >= 0x20:
 		object.deinit()
@@ -1503,14 +1610,18 @@ static func _metronome_sparkle_sketch(
 	object.y_offset = (object.y_offset + 1) & 0xFF
 
 
-static func _agility(object: Gen2BattleAnimObject) -> void:
+static func _agility(
+	_player: Gen2BattleAnimPlayer, _data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index != 0:
 		object.deinit()
 		return
 	object.x = (object.x + object.param) & 0xFF
 
 
-static func _safeguard_protect(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _safeguard_protect(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	object.y_offset = _sine(data, object.param, 0x18)
 	object.x_offset = _sra(_cosine(data, object.param, 0x18))
 	object.param = (object.param + 1) & 0xFF
@@ -1519,7 +1630,7 @@ static func _safeguard_protect(data: Gen2BattleAnimData, object: Gen2BattleAnimO
 ## Four objects converging on one point, then a wait, then gone. The parameter's
 ## low nybble picks which of the four framesets this one is.
 static func _lock_on_mind_reader(
-	data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
 ) -> void:
 	if object.jumptable_index == 0:
 		_inc(object)
@@ -1549,7 +1660,9 @@ static func _lock_on_wait(object: Gen2BattleAnimObject) -> void:
 	object.deinit()
 
 
-static func _spikes(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _spikes(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	match object.jumptable_index:
 		0:
 			_inc(object)
@@ -1561,7 +1674,9 @@ static func _spikes(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> v
 			_inc(object)
 
 
-static func _heal_bell_notes(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _heal_bell_notes(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index == 0:
 		_inc(object)
 		_reinit(object, FRAMESET_MUSIC_NOTE_1 + object.param)
@@ -1577,7 +1692,9 @@ static func _heal_bell_notes(data: Gen2BattleAnimData, object: Gen2BattleAnimObj
 	object.x = (object.x - 1) & 0xFF
 
 
-static func _baton_pass(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _baton_pass(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.param == 0:
 		return
 	var a: int = object.var1
@@ -1591,7 +1708,9 @@ static func _baton_pass(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) 
 	object.param >>= 1
 
 
-static func _conversion(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _conversion(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	var a: int = object.param
 	object.param = (object.param + 1) & 0xFF
 	object.y_offset = _sine(data, a, object.var1)
@@ -1608,7 +1727,9 @@ static func _conversion(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) 
 	object.deinit()
 
 
-static func _encore_belly_drum(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _encore_belly_drum(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.var1 >= 0x10:
 		object.deinit()
 		return
@@ -1621,7 +1742,7 @@ static func _encore_belly_drum(data: Gen2BattleAnimData, object: Gen2BattleAnimO
 ## The parameter's top two bits are the speed and the rest is the angle, and the
 ## radius is whatever var1 has grown to.
 static func _swagger_morning_sun(
-	data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
 ) -> void:
 	var radius: int = object.var1
 	object.var1 = (radius + ((object.param & 0xC0) >> 6)) & 0xFF
@@ -1630,7 +1751,9 @@ static func _swagger_morning_sun(
 	object.x_offset = _cosine(data, angle, radius)
 
 
-static func _hidden_power(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _hidden_power(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	match object.jumptable_index:
 		0:
 			var a: int = object.param
@@ -1655,7 +1778,9 @@ static func _hidden_power_expand(
 	_step_circle(data, object, object.param, radius)
 
 
-static func _curse(object: Gen2BattleAnimObject) -> void:
+static func _curse(
+	_player: Gen2BattleAnimPlayer, _data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index == 0:
 		return
 	if object.x < 0x30:
@@ -1665,7 +1790,9 @@ static func _curse(object: Gen2BattleAnimObject) -> void:
 	object.y = (object.y + 2) & 0xFF
 
 
-static func _perish_song(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _perish_song(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	var a: int = object.param
 	object.param = (object.param + 2) & 0xFF
 	object.y_offset = (_sra(_sra(_sine(data, a, 0x50))) + object.var1) & 0xFF
@@ -1673,14 +1800,18 @@ static func _perish_song(data: Gen2BattleAnimData, object: Gen2BattleAnimObject)
 	object.x_offset = _cosine(data, a, 0x50)
 
 
-static func _rapid_spin(object: Gen2BattleAnimObject) -> void:
+static func _rapid_spin(
+	_player: Gen2BattleAnimPlayer, _data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.y_offset == 0xD0:
 		object.deinit()
 		return
 	object.y_offset = (object.y_offset - 4) & 0xFF
 
 
-static func _beta_pursuit(object: Gen2BattleAnimObject) -> void:
+static func _beta_pursuit(
+	_player: Gen2BattleAnimPlayer, _data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	match object.jumptable_index:
 		0:
 			if object.param != 0:
@@ -1711,7 +1842,9 @@ static func _beta_pursuit_up(object: Gen2BattleAnimObject) -> void:
 	object.y_offset = (object.y_offset - 4) & 0xFF
 
 
-static func _rain_sandstorm(object: Gen2BattleAnimObject) -> void:
+static func _rain_sandstorm(
+	_player: Gen2BattleAnimPlayer, _data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	match object.jumptable_index:
 		0:
 			object.jumptable_index = object.param
@@ -1732,7 +1865,9 @@ static func _rain_step(object: Gen2BattleAnimObject, sideways: int) -> void:
 
 ## `BattleAnimFunc_AnimObjB0`, which no shipped animation reaches: object $b0 is
 ## in no `anim_obj`. Ported because the jumptable dispatches to it.
-static func _anim_obj_b0(object: Gen2BattleAnimObject) -> void:
+static func _anim_obj_b0(
+	_player: Gen2BattleAnimPlayer, _data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	var de: int = (object.x << 8) | object.var1
 	var high: int = (object.param & 0xF0) | ((object.param & 0xF0) >> 4)
 	var hl: int = ((high << 8) | ((object.param & 0xF) << 4)) & 0xFFFF
@@ -1741,13 +1876,17 @@ static func _anim_obj_b0(object: Gen2BattleAnimObject) -> void:
 	object.var1 = hl & 0xFF
 
 
-static func _psych_up(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _psych_up(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	var a: int = object.param
 	object.param = (object.param + 1) & 0xFF
 	_step_circle(data, object, a, 0x18)
 
 
-static func _ancient_power(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _ancient_power(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.var1 >= 0x20:
 		object.deinit()
 		return
@@ -1756,7 +1895,9 @@ static func _ancient_power(data: Gen2BattleAnimData, object: Gen2BattleAnimObjec
 	object.y_offset = (-_sine(data, a, object.param)) & 0xFF
 
 
-static func _rock_smash(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _rock_smash(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	if object.jumptable_index == 0:
 		# Written straight into the struct rather than through
 		# `ReinitBattleAnimFrameset`, so the frame and duration are not reset.
@@ -1769,7 +1910,9 @@ static func _rock_smash(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) 
 	_arc_horizontal(data, object)
 
 
-static func _cotton(data: Gen2BattleAnimData, object: Gen2BattleAnimObject) -> void:
+static func _cotton(
+	_player: Gen2BattleAnimPlayer, data: Gen2BattleAnimData, object: Gen2BattleAnimObject
+) -> void:
 	var a: int = object.var2
 	object.var2 = (object.var2 + 1) & 0xFF
 	_step_circle(data, object, ((a >> 1) + object.param) & 0xFF, 0x18)

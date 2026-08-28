@@ -581,228 +581,226 @@ static func _apply_offensive(scores: Array, c: Context) -> void:
 			_discourage(scores, slot, 2)
 
 
+## `AI_Smart`'s own jumptable: the move effect and what scores it. An effect the
+## table does not name is one the routine leaves alone.
+static var SMART_HANDLERS: Dictionary = {
+	Gen2MoveEffect.MIRROR_MOVE: _smart_mirror_move,
+	Gen2MoveEffect.MIMIC: _smart_mimic,
+	Gen2MoveEffect.CONVERSION_2: _smart_conversion_2,
+	Gen2MoveEffect.SLEEP: _smart_sleep,
+	Gen2MoveEffect.HAZE: _smart_reset_stats,
+	Gen2MoveEffect.TOXIC: _smart_toxic,
+	Gen2MoveEffect.CONFUSE: _smart_confuse,
+	Gen2MoveEffect.PARALYZE: _smart_paralyze,
+	Gen2MoveEffect.RECHARGE_HIT: _smart_hyper_beam,
+	Gen2MoveEffect.SKULL_BASH: _smart_skull_bash,
+	Gen2MoveEffect.REVERSAL: _smart_skull_bash,
+	Gen2MoveEffect.DESTINY_BOND: _smart_skull_bash,
+	Gen2MoveEffect.FORCE_SWITCH: _smart_force_switch,
+	Gen2MoveEffect.BATON_PASS: _smart_force_switch,
+	Gen2MoveEffect.PROTECT: _smart_protect,
+	Gen2MoveEffect.ENDURE: _smart_endure,
+	Gen2MoveEffect.BELLY_DRUM: _smart_belly_drum,
+	Gen2MoveEffect.PSYCH_UP: _smart_psych_up,
+	Gen2MoveEffect.SOLARBEAM: _smart_solarbeam,
+	Gen2MoveEffect.THUNDER: _smart_thunder,
+	Gen2MoveEffect.SANDSTORM: _smart_sandstorm,
+	Gen2MoveEffect.RAIN_DANCE: _smart_weather_move.bind(
+		RomLayout.TYPE_WATER, RomLayout.TYPE_FIRE, RAIN_DANCE_MOVE_NUMBERS
+	),
+	Gen2MoveEffect.SUNNY_DAY: _smart_weather_move.bind(
+		RomLayout.TYPE_FIRE, RomLayout.TYPE_WATER, SUNNY_DAY_MOVE_NUMBERS
+	),
+	Gen2MoveEffect.TRAP_TARGET: _smart_trap_target,
+	Gen2MoveEffect.HEAL: _smart_heal,
+	Gen2MoveEffect.MORNING_SUN: _smart_heal,
+	Gen2MoveEffect.SYNTHESIS: _smart_heal,
+	Gen2MoveEffect.MOONLIGHT: _smart_heal,
+	Gen2MoveEffect.PERISH_SONG: _smart_perish_song,
+	Gen2MoveEffect.PAIN_SPLIT: _smart_pain_split,
+	Gen2MoveEffect.LOCK_ON: _smart_lock_on,
+	Gen2MoveEffect.SPITE: _smart_spite,
+	Gen2MoveEffect.THIEF: _smart_thief,
+	Gen2MoveEffect.FORESIGHT: _smart_foresight,
+	Gen2MoveEffect.MEAN_LOOK: _smart_mean_look,
+	Gen2MoveEffect.PURSUIT: _smart_pursuit,
+	## `AI_Smart_Snore` is an empty label in front of `AI_Smart_SleepTalk`.
+	Gen2MoveEffect.SLEEP_TALK: _smart_sleep_talk,
+	Gen2MoveEffect.SNORE: _smart_sleep_talk,
+	Gen2MoveEffect.LEECH_HIT: _smart_leech_hit,
+	Gen2MoveEffect.SELFDESTRUCT: _smart_selfdestruct,
+	Gen2MoveEffect.DREAM_EATER: _smart_dream_eater,
+	Gen2MoveEffect.EVASION_UP: _smart_evasion_up,
+	Gen2MoveEffect.ACCURACY_DOWN: _smart_accuracy_down,
+	Gen2MoveEffect.ALWAYS_HIT: _smart_always_hit,
+	Gen2MoveEffect.BIDE: _smart_bide,
+	Gen2MoveEffect.LIGHT_SCREEN: _smart_light_screen,
+	Gen2MoveEffect.REFLECT: _smart_light_screen,
+	Gen2MoveEffect.OHKO: _smart_ohko,
+	Gen2MoveEffect.LEECH_SEED: _smart_leech_seed,
+	Gen2MoveEffect.SUPER_FANG: _smart_super_fang,
+	## `AI_Smart_RazorWind` is an empty label in front of `AI_Smart_Unused2B`.
+	Gen2MoveEffect.RAZOR_WIND: _smart_unused_2b,
+	Gen2MoveEffect.UNUSED_2B: _smart_unused_2b,
+	Gen2MoveEffect.SP_DEF_UP_2: _smart_sp_defense_up_2,
+	Gen2MoveEffect.SPEED_DOWN_HIT: _smart_speed_down_hit,
+	Gen2MoveEffect.SUBSTITUTE: _smart_substitute,
+	Gen2MoveEffect.RAGE: _smart_rage,
+	Gen2MoveEffect.DISABLE: _smart_disable,
+	Gen2MoveEffect.COUNTER: _smart_counter.bind(true),
+	Gen2MoveEffect.MIRROR_COAT: _smart_counter.bind(false),
+	Gen2MoveEffect.ENCORE: _smart_encore,
+	Gen2MoveEffect.DEFROST_OPPONENT: _smart_defrost_opponent,
+	Gen2MoveEffect.HEAL_BELL: _smart_heal_bell,
+	Gen2MoveEffect.PRIORITY_HIT: _smart_priority_hit,
+	Gen2MoveEffect.NIGHTMARE: _smart_nightmare,
+	Gen2MoveEffect.FLAME_WHEEL: _smart_flame_wheel,
+	Gen2MoveEffect.CURSE: _smart_curse,
+	Gen2MoveEffect.ROLLOUT: _smart_rollout,
+	Gen2MoveEffect.FURY_CUTTER: _smart_fury_cutter,
+	## `AI_Smart_Swagger` is an empty label in front of `AI_Smart_Attract`.
+	Gen2MoveEffect.SWAGGER: _smart_attract,
+	Gen2MoveEffect.ATTRACT: _smart_attract,
+	Gen2MoveEffect.SAFEGUARD: _smart_safeguard,
+	## `AI_Smart_Magnitude` is an empty label in front of `AI_Smart_Earthquake`, and
+	## `AI_Smart_Twister` in front of `AI_Smart_Gust`: each pair guesses at the move the
+	## other half of it punishes.
+	Gen2MoveEffect.MAGNITUDE: _smart_ground_or_air.bind(Gen2MoveEffect.DIG_MOVE, Gen2Substatus.UNDERGROUND),
+	Gen2MoveEffect.EARTHQUAKE: _smart_ground_or_air.bind(Gen2MoveEffect.DIG_MOVE, Gen2Substatus.UNDERGROUND),
+	Gen2MoveEffect.TWISTER: _smart_ground_or_air.bind(Gen2MoveEffect.FLY_MOVE, Gen2Substatus.FLYING),
+	Gen2MoveEffect.GUST: _smart_ground_or_air.bind(Gen2MoveEffect.FLY_MOVE, Gen2Substatus.FLYING),
+	Gen2MoveEffect.RAPID_SPIN: _smart_rapid_spin,
+	Gen2MoveEffect.HIDDEN_POWER: _smart_hidden_power,
+	Gen2MoveEffect.FUTURE_SIGHT: _smart_future_sight,
+	Gen2MoveEffect.STOMP: _smart_stomp,
+	Gen2MoveEffect.FLY_OR_DIG: _smart_fly_or_dig,
+}
+
+
 ## [constant RomLayout.AI_SMART]: context-specific scoring, per move effect.
-## See the constant above this function for which effects have a handler.
+## [constant SMART_HANDLERS] is which effects have a handler.
 static func _apply_smart(scores: Array, c: Context) -> void:
-	var attacker: Gen2BattleMon = c.attacker
-	var defender: Gen2BattleMon = c.defender
-	var data: GameData = c.data
-	var rng: RandomNumberGenerator = c.rng
-	var atk_turns: int = c.atk_turns
-	var def_turns: int = c.def_turns
-	var weather: int = c.weather
-	var has_bench: bool = c.has_bench
-	var matchup_score: int = c.matchup_score
 	for slot: int in Gen2BattleMon.MAX_MOVES:
-		if not attacker.can_use(slot):
+		if not c.attacker.can_use(slot):
 			continue
-		match _effect(_move_at(attacker, data, slot)):
-			Gen2MoveEffect.MIRROR_MOVE:
-				_smart_mirror_move(scores, slot, attacker, defender, rng)
-			Gen2MoveEffect.MIMIC:
-				_smart_mimic(scores, slot, attacker, defender, data, rng)
-			Gen2MoveEffect.CONVERSION_2:
-				_smart_conversion_2(scores, slot, defender, rng)
-			Gen2MoveEffect.SLEEP:
-				if not _skip_50_50(rng):
-					_encourage(scores, slot, 2)
-			Gen2MoveEffect.HAZE: # AI_Smart_ResetStats
-				_smart_reset_stats(scores, slot, attacker, defender, rng)
-			Gen2MoveEffect.TOXIC:
-				if not _above_half(defender):
-					_discourage(scores, slot, 1)
-			Gen2MoveEffect.CONFUSE:
-				_smart_confuse(scores, slot, defender, rng)
-			Gen2MoveEffect.PARALYZE:
-				_smart_paralyze(scores, slot, attacker, defender, rng)
-			Gen2MoveEffect.RECHARGE_HIT: # Hyper Beam
-				_smart_hyper_beam(scores, slot, attacker, rng)
-			# `AI_Smart_DestinyBond`, `AI_Smart_Reversal` and `AI_Smart_SkullBash`
-			# are one label and one body in the source, so they are one arm here.
-			Gen2MoveEffect.SKULL_BASH, Gen2MoveEffect.REVERSAL, \
-			Gen2MoveEffect.DESTINY_BOND:
-				if _above_quarter(attacker):
-					_discourage(scores, slot, 1)
-			# `AI_Smart_ForceSwitch`: discourage blowing the player away unless
-			# `CheckPlayerMoveTypeMatchups` says the pairing is going badly, which
-			# is the same score `AI_Smart_PerishSong` reads.
-			# `AI_Smart_BatonPass` is the same body under a second label, so the
-			# two share an arm the way Destiny Bond shares Skull Bash's.
-			Gen2MoveEffect.FORCE_SWITCH, Gen2MoveEffect.BATON_PASS:
-				if matchup_score >= Gen2AISwitch.BASE_SCORE:
-					_discourage(scores, slot, 1)
-			Gen2MoveEffect.PROTECT:
-				_smart_protect(scores, slot, attacker, defender, rng)
-			Gen2MoveEffect.ENDURE:
-				_smart_endure(scores, slot, attacker, data, rng)
-			Gen2MoveEffect.BELLY_DRUM:
-				_smart_belly_drum(scores, slot, attacker)
-			Gen2MoveEffect.PSYCH_UP:
-				_smart_psych_up(scores, slot, attacker, defender, rng)
-			Gen2MoveEffect.SOLARBEAM:
-				_smart_solarbeam(scores, slot, weather, rng)
-			Gen2MoveEffect.THUNDER:
-				_smart_thunder(scores, slot, weather, rng)
-			Gen2MoveEffect.SANDSTORM:
-				_smart_sandstorm(scores, slot, defender, rng)
-			Gen2MoveEffect.RAIN_DANCE:
-				_smart_weather_move(
-					scores, slot, attacker, defender, rng, atk_turns, def_turns,
-					RomLayout.TYPE_WATER, RomLayout.TYPE_FIRE, RAIN_DANCE_MOVE_NUMBERS
-				)
-			Gen2MoveEffect.SUNNY_DAY:
-				_smart_weather_move(
-					scores, slot, attacker, defender, rng, atk_turns, def_turns,
-					RomLayout.TYPE_FIRE, RomLayout.TYPE_WATER, SUNNY_DAY_MOVE_NUMBERS
-				)
-			Gen2MoveEffect.TRAP_TARGET:
-				_smart_trap_target(scores, slot, attacker, defender, def_turns, rng)
-			Gen2MoveEffect.HEAL, Gen2MoveEffect.MORNING_SUN, Gen2MoveEffect.SYNTHESIS, \
-			Gen2MoveEffect.MOONLIGHT:
-				_smart_heal(scores, slot, attacker, rng)
-			Gen2MoveEffect.PERISH_SONG:
-				_smart_perish_song(scores, slot, defender, rng, has_bench, matchup_score)
-			Gen2MoveEffect.PAIN_SPLIT:
-				_smart_pain_split(scores, slot, attacker, defender)
-			Gen2MoveEffect.LOCK_ON:
-				_smart_lock_on(scores, slot, attacker, defender, data, rng)
-			Gen2MoveEffect.SPITE:
-				_smart_spite(scores, slot, attacker, defender, rng)
-			Gen2MoveEffect.THIEF:
-				_discourage(scores, slot, THIEF_PENALTY)
-			Gen2MoveEffect.FORESIGHT:
-				_smart_foresight(scores, slot, attacker, defender, rng)
-			Gen2MoveEffect.MEAN_LOOK:
-				_smart_mean_look(scores, slot, attacker, defender, rng, has_bench, matchup_score)
-			Gen2MoveEffect.PURSUIT:
-				_smart_pursuit(scores, slot, defender, rng)
-			# `AI_Smart_Snore` is an empty label in front of
-			# `AI_Smart_SleepTalk`.
-			Gen2MoveEffect.SLEEP_TALK, Gen2MoveEffect.SNORE:
-				_smart_sleep_talk(scores, slot, attacker)
-			Gen2MoveEffect.LEECH_HIT:
-				_smart_leech_hit(scores, slot, c)
-			Gen2MoveEffect.SELFDESTRUCT:
-				_smart_selfdestruct(scores, slot, c)
-			Gen2MoveEffect.DREAM_EATER:
-				if not _roll(rng, 10):
-					_encourage(scores, slot, 3)
-			Gen2MoveEffect.EVASION_UP:
-				_smart_evasion_up(scores, slot, c)
-			Gen2MoveEffect.ACCURACY_DOWN:
-				_smart_accuracy_down(scores, slot, c)
-			Gen2MoveEffect.ALWAYS_HIT:
-				_smart_always_hit(scores, slot, c)
-			Gen2MoveEffect.BIDE:
-				# `AICheckEnemyMaxHP` and a 10% pass, which is the whole routine.
-				if not _at_max_hp(attacker) and not _roll(rng, 10):
-					_discourage(scores, slot, 1)
-			# `AI_Smart_LightScreen` is an empty label in front of
-			# `AI_Smart_Reflect`, so the two are one body.
-			Gen2MoveEffect.LIGHT_SCREEN, Gen2MoveEffect.REFLECT:
-				if not _at_max_hp(attacker) and not _roll(rng, 8):
-					_discourage(scores, slot, 1)
-			Gen2MoveEffect.OHKO:
-				_smart_ohko(scores, slot, attacker, defender)
-			# `AI_Smart_Toxic` falls into `AI_Smart_LeechSeed`.
-			Gen2MoveEffect.LEECH_SEED:
-				if not _above_half(defender):
-					_discourage(scores, slot, 1)
-			Gen2MoveEffect.SUPER_FANG:
-				if not _above_quarter(defender):
-					_discourage(scores, slot, 1)
-			# `AI_Smart_RazorWind` is an empty label in front of
-			# `AI_Smart_Unused2B`.
-			Gen2MoveEffect.RAZOR_WIND, Gen2MoveEffect.UNUSED_2B:
-				_smart_unused_2b(scores, slot, c)
-			Gen2MoveEffect.SP_DEF_UP_2:
-				_smart_sp_defense_up_2(scores, slot, c)
-			Gen2MoveEffect.SPEED_DOWN_HIT:
-				_smart_speed_down_hit(scores, slot, c)
-			Gen2MoveEffect.SUBSTITUTE:
-				if not _above_half(attacker):
-					_discourage(scores, slot)
-			Gen2MoveEffect.RAGE:
-				_smart_rage(scores, slot, attacker, rng)
-			Gen2MoveEffect.DISABLE:
-				_smart_disable(scores, slot, c)
-			Gen2MoveEffect.COUNTER:
-				_smart_counter(scores, slot, c, true)
-			Gen2MoveEffect.MIRROR_COAT:
-				_smart_counter(scores, slot, c, false)
-			Gen2MoveEffect.ENCORE:
-				_smart_encore(scores, slot, c)
-			Gen2MoveEffect.DEFROST_OPPONENT:
-				if Gen2Status.has(attacker.status, Gen2Status.FREEZE):
-					_encourage(scores, slot, 3)
-			Gen2MoveEffect.HEAL_BELL:
-				_smart_heal_bell(scores, slot, c)
-			Gen2MoveEffect.PRIORITY_HIT:
-				_smart_priority_hit(scores, slot, c)
-			Gen2MoveEffect.NIGHTMARE:
-				if not _skip_50_50(rng):
-					_encourage(scores, slot, 1)
-			Gen2MoveEffect.FLAME_WHEEL:
-				if Gen2Status.has(attacker.status, Gen2Status.FREEZE):
-					_encourage(scores, slot, 5)
-			Gen2MoveEffect.CURSE:
-				_smart_curse(scores, slot, c)
-			Gen2MoveEffect.ROLLOUT:
-				_smart_rollout(scores, slot, c)
-			Gen2MoveEffect.FURY_CUTTER:
-				_smart_fury_cutter(scores, slot, c)
-			# `AI_Smart_Swagger` is an empty label in front of
-			# `AI_Smart_Attract`.
-			Gen2MoveEffect.SWAGGER, Gen2MoveEffect.ATTRACT:
-				_smart_attract(scores, slot, c)
-			Gen2MoveEffect.SAFEGUARD:
-				if not _above_half(defender) and not _skip_80_20(rng):
-					_discourage(scores, slot, 1)
-			# `AI_Smart_Magnitude` is an empty label in front of
-			# `AI_Smart_Earthquake`, and `AI_Smart_Twister` in front of
-			# `AI_Smart_Gust`: each pair guesses at the move the other half of
-			# it punishes.
-			Gen2MoveEffect.MAGNITUDE, Gen2MoveEffect.EARTHQUAKE:
-				_smart_ground_or_air(
-					scores, slot, c, Gen2MoveEffect.DIG_MOVE, Gen2Substatus.UNDERGROUND
-				)
-			Gen2MoveEffect.TWISTER, Gen2MoveEffect.GUST:
-				_smart_ground_or_air(
-					scores, slot, c, Gen2MoveEffect.FLY_MOVE, Gen2Substatus.FLYING
-				)
-			Gen2MoveEffect.RAPID_SPIN:
-				_smart_rapid_spin(scores, slot, c)
-			Gen2MoveEffect.HIDDEN_POWER:
-				_smart_hidden_power(scores, slot, c)
-			Gen2MoveEffect.FUTURE_SIGHT:
-				if _faster(attacker, defender) and _is_semi_invulnerable(defender):
-					_encourage(scores, slot, 2)
-			Gen2MoveEffect.STOMP:
-				if defender.minimized and not _skip_80_20(rng):
-					_encourage(scores, slot, 1)
-			Gen2MoveEffect.FLY_OR_DIG:
-				if _is_semi_invulnerable(defender) and _faster(attacker, defender):
-					_encourage(scores, slot, 3)
+		var effect: int = _effect(_move_at(c.attacker, c.data, slot))
+		if SMART_HANDLERS.has(effect):
+			(SMART_HANDLERS[effect] as Callable).call(scores, slot, c)
 
 
+static func _smart_sleep(scores: Array, slot: int, c: Context) -> void:
+	if not _skip_50_50(c.rng):
+		_encourage(scores, slot, 2)
+
+
+static func _smart_toxic(scores: Array, slot: int, c: Context) -> void:
+	if not _above_half(c.defender):
+		_discourage(scores, slot, 1)
+
+
+## `AI_Smart_DestinyBond`, `AI_Smart_Reversal` and `AI_Smart_SkullBash` are one label
+## and one body in the source, so they are one arm here.
+static func _smart_skull_bash(scores: Array, slot: int, c: Context) -> void:
+	if _above_quarter(c.attacker):
+		_discourage(scores, slot, 1)
+
+
+## `AI_Smart_ForceSwitch`: discourage blowing the player away unless
+## `CheckPlayerMoveTypeMatchups` says the pairing is going badly, which is the same
+## score `AI_Smart_PerishSong` reads. `AI_Smart_BatonPass` is the same body under a
+## second label, so the two share an arm the way Destiny Bond shares Skull Bash's.
+static func _smart_force_switch(scores: Array, slot: int, c: Context) -> void:
+	if c.matchup_score >= Gen2AISwitch.BASE_SCORE:
+		_discourage(scores, slot, 1)
+
+
+static func _smart_thief(scores: Array, slot: int, _c: Context) -> void:
+	_discourage(scores, slot, THIEF_PENALTY)
+
+
+static func _smart_dream_eater(scores: Array, slot: int, c: Context) -> void:
+	if not _roll(c.rng, 10):
+		_encourage(scores, slot, 3)
+
+
+## `AICheckEnemyMaxHP` and a 10% pass, which is the whole routine.
+static func _smart_bide(scores: Array, slot: int, c: Context) -> void:
+	# `AICheckEnemyMaxHP` and a 10% pass, which is the whole routine.
+	if not _at_max_hp(c.attacker) and not _roll(c.rng, 10):
+		_discourage(scores, slot, 1)
+
+
+## `AI_Smart_LightScreen` is an empty label in front of `AI_Smart_Reflect`, so the two
+## are one body.
+static func _smart_light_screen(scores: Array, slot: int, c: Context) -> void:
+	if not _at_max_hp(c.attacker) and not _roll(c.rng, 8):
+		_discourage(scores, slot, 1)
+
+
+## `AI_Smart_Toxic` falls into `AI_Smart_LeechSeed`.
+static func _smart_leech_seed(scores: Array, slot: int, c: Context) -> void:
+	if not _above_half(c.defender):
+		_discourage(scores, slot, 1)
+
+
+static func _smart_super_fang(scores: Array, slot: int, c: Context) -> void:
+	if not _above_quarter(c.defender):
+		_discourage(scores, slot, 1)
+
+
+static func _smart_substitute(scores: Array, slot: int, c: Context) -> void:
+	if not _above_half(c.attacker):
+		_discourage(scores, slot)
+
+
+static func _smart_defrost_opponent(scores: Array, slot: int, c: Context) -> void:
+	if Gen2Status.has(c.attacker.status, Gen2Status.FREEZE):
+		_encourage(scores, slot, 3)
+
+
+static func _smart_nightmare(scores: Array, slot: int, c: Context) -> void:
+	if not _skip_50_50(c.rng):
+		_encourage(scores, slot, 1)
+
+
+static func _smart_flame_wheel(scores: Array, slot: int, c: Context) -> void:
+	if Gen2Status.has(c.attacker.status, Gen2Status.FREEZE):
+		_encourage(scores, slot, 5)
+
+
+static func _smart_safeguard(scores: Array, slot: int, c: Context) -> void:
+	if not _above_half(c.defender) and not _skip_80_20(c.rng):
+		_discourage(scores, slot, 1)
+
+
+static func _smart_future_sight(scores: Array, slot: int, c: Context) -> void:
+	if _faster(c.attacker, c.defender) and _is_semi_invulnerable(c.defender):
+		_encourage(scores, slot, 2)
+
+
+static func _smart_stomp(scores: Array, slot: int, c: Context) -> void:
+	if c.defender.minimized and not _skip_80_20(c.rng):
+		_encourage(scores, slot, 1)
+
+
+static func _smart_fly_or_dig(scores: Array, slot: int, c: Context) -> void:
+	if _is_semi_invulnerable(c.defender) and _faster(c.attacker, c.defender):
+		_encourage(scores, slot, 3)
 ## `AI_Smart_MirrorMove`: without a remembered player move, a faster AI
 ## dismisses Mirror Move because it will act before seeing one. A useful
 ## remembered move gets one 50% encouragement and, when the AI is faster, a
 ## second 90% encouragement.
-static func _smart_mirror_move(
-	scores: Array, slot: int, attacker: Gen2BattleMon, defender: Gen2BattleMon,
-	rng: RandomNumberGenerator
-) -> void:
-	var copied: int = defender.last_counter_move
+static func _smart_mirror_move(scores: Array, slot: int, c: Context) -> void:
+	var copied: int = c.defender.last_counter_move
 	if copied == 0:
-		if _faster(attacker, defender):
+		if _faster(c.attacker, c.defender):
 			_discourage(scores, slot)
 		return
 	if not USEFUL_MOVE_NUMBERS.has(copied):
 		return
-	if not _skip_50_50(rng):
+	if not _skip_50_50(c.rng):
 		_encourage(scores, slot, 1)
-	if _faster(attacker, defender) and not _rolls_under(rng, 25):
+	if _faster(c.attacker, c.defender) and not _rolls_under(c.rng, 25):
 		_encourage(scores, slot, 1)
 
 
@@ -810,33 +808,30 @@ static func _smart_mirror_move(
 ## when faster, and only copy above half health. A resisted last move is
 ## discouraged; a super-effective or source-listed useful one gets its own 50%
 ## encouragement.
-static func _smart_mimic(
-	scores: Array, slot: int, attacker: Gen2BattleMon, defender: Gen2BattleMon,
-	data: GameData, rng: RandomNumberGenerator
-) -> void:
-	var copied: int = defender.last_counter_move
+static func _smart_mimic(scores: Array, slot: int, c: Context) -> void:
+	var copied: int = c.defender.last_counter_move
 	if copied == 0:
-		if _faster(attacker, defender):
+		if _faster(c.attacker, c.defender):
 			_discourage(scores, slot)
 		else:
 			_discourage(scores, slot, 1)
 		return
-	if not _above_half(attacker):
+	if not _above_half(c.attacker):
 		_discourage(scores, slot, 1)
 		return
-	var move: Dictionary = data.move(copied)
+	var move: Dictionary = c.data.move(copied)
 	if move.is_empty():
 		return
-	var effectiveness: int = data.type_effectiveness(
-		int(move.get("type", RomLayout.TYPE_NORMAL)), defender.types(),
-		Gen2Substatus.has(defender.substatus, Gen2Substatus.IDENTIFIED)
+	var effectiveness: int = c.data.type_effectiveness(
+		int(move.get("type", RomLayout.TYPE_NORMAL)), c.defender.types(),
+		Gen2Substatus.has(c.defender.substatus, Gen2Substatus.IDENTIFIED)
 	)
 	if effectiveness < RomLayout.MATCHUP_EFFECTIVE:
 		_discourage(scores, slot, 1)
 		return
-	if effectiveness > RomLayout.MATCHUP_EFFECTIVE and not _skip_50_50(rng):
+	if effectiveness > RomLayout.MATCHUP_EFFECTIVE and not _skip_50_50(c.rng):
 		_encourage(scores, slot, 1)
-	if USEFUL_MOVE_NUMBERS.has(copied) and not _skip_50_50(rng):
+	if USEFUL_MOVE_NUMBERS.has(copied) and not _skip_50_50(c.rng):
 		_encourage(scores, slot, 1)
 
 
@@ -844,8 +839,8 @@ static func _smart_mimic(
 ## of one wakes before the move and is discouraged; every other value gets the
 ## smart layer's encouragement. The basic layer independently discourages the
 ## awake case, leaving it a bad choice overall as on the cartridge.
-static func _smart_sleep_talk(scores: Array, slot: int, attacker: Gen2BattleMon) -> void:
-	if (attacker.status & Gen2Status.SLEEP_MASK) == 1:
+static func _smart_sleep_talk(scores: Array, slot: int, c: Context) -> void:
+	if (c.attacker.status & Gen2Status.SLEEP_MASK) == 1:
 		_discourage(scores, slot, 3)
 	else:
 		_encourage(scores, slot, 3)
@@ -855,51 +850,43 @@ static func _smart_sleep_talk(scores: Array, slot: int, attacker: Gen2BattleMon)
 ## move, the smart layer almost always discourages the very response designed
 ## for it. The no-last-move branch reads past move zero in the cartridge; this
 ## model leaves that undefined lookup neutral rather than inventing ROM bytes.
-static func _smart_conversion_2(
-	scores: Array, slot: int, defender: Gen2BattleMon, rng: RandomNumberGenerator
-) -> void:
-	if defender.last_counter_move != 0 and not _rolls_under(rng, 25):
+static func _smart_conversion_2(scores: Array, slot: int, c: Context) -> void:
+	if c.defender.last_counter_move != 0 and not _rolls_under(c.rng, 25):
 		_discourage(scores, slot, 1)
 
 
 ## `AI_Smart_Solarbeam`: 80% to encourage it greatly in sun, where it needs no
 ## charge turn, and 90% to discourage it greatly in rain, where it also loses
 ## half its damage.
-static func _smart_solarbeam(
-	scores: Array, slot: int, weather: int, rng: RandomNumberGenerator
-) -> void:
-	if weather == Gen2Weather.SUN:
-		if not _skip_80_20(rng):
+static func _smart_solarbeam(scores: Array, slot: int, c: Context) -> void:
+	if c.weather == Gen2Weather.SUN:
+		if not _skip_80_20(c.rng):
 			_encourage(scores, slot, 2)
 		return
-	if weather == Gen2Weather.RAIN and not _roll(rng, 10):
+	if c.weather == Gen2Weather.RAIN and not _roll(c.rng, 10):
 		_discourage(scores, slot, 2)
 
 
 ## `AI_Smart_Thunder`: 90% to discourage it in sun, where its accuracy halves.
 ## Rain is not mentioned, because the accuracy step and `CheckHit` have already
 ## made it certain.
-static func _smart_thunder(
-	scores: Array, slot: int, weather: int, rng: RandomNumberGenerator
-) -> void:
-	if weather == Gen2Weather.SUN and not _roll(rng, 10):
+static func _smart_thunder(scores: Array, slot: int, c: Context) -> void:
+	if c.weather == Gen2Weather.SUN and not _roll(c.rng, 10):
 		_discourage(scores, slot, 1)
 
 
 ## `AI_Smart_Sandstorm`: worthless against a target the sand cannot touch, poor
 ## against one already low, and a 50% encouragement otherwise.
-static func _smart_sandstorm(
-	scores: Array, slot: int, defender: Gen2BattleMon, rng: RandomNumberGenerator
-) -> void:
-	for defending_type: int in defender.types():
+static func _smart_sandstorm(scores: Array, slot: int, c: Context) -> void:
+	for defending_type: int in c.defender.types():
 		if SANDSTORM_IMMUNE_TYPES.has(int(defending_type)):
 			_discourage(scores, slot, 2)
 			return
 
-	if not _above_half(defender):
+	if not _above_half(c.defender):
 		_discourage(scores, slot, 1)
 		return
-	if not _skip_50_50(rng):
+	if not _skip_50_50(c.rng):
 		_encourage(scores, slot, 1)
 
 
@@ -909,31 +896,29 @@ static func _smart_sandstorm(
 ## two types are tested in the cartridge's order, so a Water/Fire target under
 ## Rain Dance is a Water target.
 static func _smart_weather_move(
-	scores: Array, slot: int, attacker: Gen2BattleMon, defender: Gen2BattleMon,
-	rng: RandomNumberGenerator, atk_turns: int, def_turns: int,
-	favours_target: int, disfavours_target: int, wanted_moves: Array
+	scores: Array, slot: int, c: Context, favours_target: int, disfavours_target: int, wanted_moves: Array
 ) -> void:
-	for defending_type: int in defender.types():
+	for defending_type: int in c.defender.types():
 		if int(defending_type) == favours_target:
 			_discourage(scores, slot, 3)
 			return
 		if int(defending_type) == disfavours_target:
-			_good_weather_type(scores, slot, defender, atk_turns, def_turns)
+			_good_weather_type(scores, slot, c.defender, c.atk_turns, c.def_turns)
 			return
 
 	# `AIHasMoveInArray` walks the four slots by move number alone: no PP check
 	# and no usability check, so a wanted move with nothing left in it still
 	# counts as a reason to set the weather.
 	var has_wanted: bool = false
-	for known: Variant in attacker.moves:
+	for known: Variant in c.attacker.moves:
 		if wanted_moves.has(int(known)):
 			has_wanted = true
 			break
 
-	if not has_wanted or not _above_half(defender):
+	if not has_wanted or not _above_half(c.defender):
 		_discourage(scores, slot, 3)
 		return
-	if not _skip_50_50(rng):
+	if not _skip_50_50(c.rng):
 		_encourage(scores, slot, 1)
 
 
@@ -955,95 +940,82 @@ static func _good_weather_type(
 ## The five states it encourages on are Toxic and the four bits
 ## `and 1 << SUBSTATUS_IN_LOVE | 1 << SUBSTATUS_ROLLOUT | 1 << SUBSTATUS_IDENTIFIED
 ## | 1 << SUBSTATUS_NIGHTMARE` tests in one instruction.
-static func _smart_trap_target(
-	scores: Array, slot: int, attacker: Gen2BattleMon, defender: Gen2BattleMon,
-	def_turns: int, rng: RandomNumberGenerator
-) -> void:
-	var worth_it: bool = defender.trapped_turns <= 0 and (
-		defender.toxic_counter > 0
+static func _smart_trap_target(scores: Array, slot: int, c: Context) -> void:
+	var worth_it: bool = c.defender.trapped_turns <= 0 and (
+		c.defender.toxic_counter > 0
 		or Gen2Substatus.has(
-			defender.substatus,
+			c.defender.substatus,
 			Gen2Substatus.ATTRACTED | Gen2Substatus.ROLLOUT
 			| Gen2Substatus.IDENTIFIED | Gen2Substatus.NIGHTMARE
 		)
-		or def_turns == 0
+		or c.def_turns == 0
 	)
 
 	if not worth_it:
-		if not _skip_50_50(rng):
+		if not _skip_50_50(c.rng):
 			_discourage(scores, slot, 1)
 		return
 
-	if not _above_quarter(attacker):
+	if not _above_quarter(c.attacker):
 		return
-	if not _skip_50_50(rng):
+	if not _skip_50_50(c.rng):
 		_encourage(scores, slot, 2)
 
 
-static func _smart_reset_stats(
-	scores: Array, slot: int, attacker: Gen2BattleMon, defender: Gen2BattleMon,
-	rng: RandomNumberGenerator
-) -> void:
+static func _smart_reset_stats(scores: Array, slot: int, c: Context) -> void:
 	var encourage: bool = false
 	for key: String in Gen2BattleMon.STAGED_STATS + Gen2BattleMon.STAGED_ODDS:
-		if attacker.stage(key) < -2:
+		if c.attacker.stage(key) < -2:
 			encourage = true
 			break
 	if not encourage:
 		for key: String in Gen2BattleMon.STAGED_STATS + Gen2BattleMon.STAGED_ODDS:
-			if defender.stage(key) > 2:
+			if c.defender.stage(key) > 2:
 				encourage = true
 				break
 
 	if not encourage:
 		_discourage(scores, slot, 1)
 		return
-	if not _roll(rng, 16):
+	if not _roll(c.rng, 16):
 		_encourage(scores, slot, 1)
 
 
-static func _smart_confuse(
-	scores: Array, slot: int, defender: Gen2BattleMon, rng: RandomNumberGenerator
-) -> void:
-	if _above_half(defender):
+static func _smart_confuse(scores: Array, slot: int, c: Context) -> void:
+	if _above_half(c.defender):
 		return
-	if _roll(rng, 90):
+	if _roll(c.rng, 90):
 		_discourage(scores, slot, 1)
-	if not _above_quarter(defender):
+	if not _above_quarter(c.defender):
 		_discourage(scores, slot, 1)
 
 
-static func _smart_paralyze(
-	scores: Array, slot: int, attacker: Gen2BattleMon, defender: Gen2BattleMon,
-	rng: RandomNumberGenerator
-) -> void:
-	if not _above_quarter(defender):
-		if not _skip_50_50(rng):
+static func _smart_paralyze(scores: Array, slot: int, c: Context) -> void:
+	if not _above_quarter(c.defender):
+		if not _skip_50_50(c.rng):
 			_discourage(scores, slot, 1)
 		return
-	if _faster(attacker, defender):
+	if _faster(c.attacker, c.defender):
 		return
-	if not _above_quarter(attacker):
+	if not _above_quarter(c.attacker):
 		return
-	if not _skip_80_20(rng):
+	if not _skip_80_20(c.rng):
 		_encourage(scores, slot, 2)
 
 
-static func _smart_hyper_beam(
-	scores: Array, slot: int, attacker: Gen2BattleMon, rng: RandomNumberGenerator
-) -> void:
-	if _above_half(attacker):
-		if not _roll(rng, 16):
+static func _smart_hyper_beam(scores: Array, slot: int, c: Context) -> void:
+	if _above_half(c.attacker):
+		if not _roll(c.rng, 16):
 			return
 		_discourage(scores, slot, 1)
-		if _skip_50_50(rng):
+		if _skip_50_50(c.rng):
 			return
 		_discourage(scores, slot, 1)
 		return
 
-	if _above_quarter(attacker):
+	if _above_quarter(c.attacker):
 		return
-	if _skip_50_50(rng):
+	if _skip_50_50(c.rng):
 		return
 	_encourage(scores, slot, 1)
 
@@ -1052,14 +1024,12 @@ static func _smart_hyper_beam(
 ## `AI_Smart_Moonlight` are all labels on: 90% to encourage it greatly below a
 ## quarter health, discourage it above half, and nothing in between. The AI reads
 ## its own health here, never the player's.
-static func _smart_heal(
-	scores: Array, slot: int, attacker: Gen2BattleMon, rng: RandomNumberGenerator
-) -> void:
-	if not _above_quarter(attacker):
-		if not _roll(rng, 10):
+static func _smart_heal(scores: Array, slot: int, c: Context) -> void:
+	if not _above_quarter(c.attacker):
+		if not _roll(c.rng, 10):
 			_encourage(scores, slot, 2)
 		return
-	if _above_half(attacker):
+	if _above_half(c.attacker):
 		_discourage(scores, slot, 1)
 
 
@@ -1069,32 +1039,27 @@ static func _smart_heal(
 ## player held by Mean Look or Spider Web is `.yes`, 50% to encourage. Otherwise
 ## the AI only bothers when the matchup is one it is not losing. The branch that
 ## says yes is the trapped one, not the winning one.
-static func _smart_perish_song(
-	scores: Array, slot: int, defender: Gen2BattleMon, rng: RandomNumberGenerator,
-	has_bench: bool, matchup_score: int
-) -> void:
-	if not has_bench:
+static func _smart_perish_song(scores: Array, slot: int, c: Context) -> void:
+	if not c.has_bench:
 		_discourage(scores, slot, 5)
 		return
 
-	if Gen2Substatus.has(defender.substatus, Gen2Substatus.CANT_RUN):
-		if not _skip_50_50(rng):
+	if Gen2Substatus.has(c.defender.substatus, Gen2Substatus.CANT_RUN):
+		if not _skip_50_50(c.rng):
 			_encourage(scores, slot, 1)
 		return
 
-	if matchup_score < Gen2AISwitch.BASE_SCORE:
+	if c.matchup_score < Gen2AISwitch.BASE_SCORE:
 		return
-	if _skip_50_50(rng):
+	if _skip_50_50(c.rng):
 		return
 	_discourage(scores, slot, 1)
 
 
 ## `AI_Smart_PainSplit`: pointless while the enemy is the healthier of the two,
 ## which is `enemy hp * 2 > player hp` rather than a comparison of fractions.
-static func _smart_pain_split(
-	scores: Array, slot: int, attacker: Gen2BattleMon, defender: Gen2BattleMon
-) -> void:
-	if attacker.hp * 2 > defender.hp:
+static func _smart_pain_split(scores: Array, slot: int, c: Context) -> void:
+	if c.attacker.hp * 2 > c.defender.hp:
 		_discourage(scores, slot, 1)
 
 
@@ -1103,30 +1068,27 @@ static func _smart_pain_split(
 ## knows is encouraged instead and Lock On itself is dismissed, the walk stopping
 ## at the first empty slot. Without it the ladder is health, then speed, then
 ## whether the accuracy is actually a problem.
-static func _smart_lock_on(
-	scores: Array, slot: int, attacker: Gen2BattleMon, defender: Gen2BattleMon,
-	data: GameData, rng: RandomNumberGenerator
-) -> void:
-	if Gen2Substatus.has(defender.substatus, Gen2Substatus.LOCK_ON):
+static func _smart_lock_on(scores: Array, slot: int, c: Context) -> void:
+	if Gen2Substatus.has(c.defender.substatus, Gen2Substatus.LOCK_ON):
 		for other: int in Gen2BattleMon.MAX_MOVES:
-			if other >= attacker.moves.size() or int(attacker.moves[other]) == 0:
+			if other >= c.attacker.moves.size() or int(c.attacker.moves[other]) == 0:
 				break
-			var known: Dictionary = _move_at(attacker, data, other)
+			var known: Dictionary = _move_at(c.attacker, c.data, other)
 			if int(known.get("accuracy", Gen2Accuracy.ALWAYS_HITS)) < LOCK_ON_WANTED_ACCURACY:
 				_encourage(scores, other, 2)
 		_discourage(scores, slot)
 		return
 
-	if not _above_quarter(attacker):
+	if not _above_quarter(c.attacker):
 		_discourage(scores, slot, 1)
 		return
-	if not _above_half(attacker) and not _faster(attacker, defender):
+	if not _above_half(c.attacker) and not _faster(c.attacker, c.defender):
 		_discourage(scores, slot, 1)
 		return
 
 	# `.skip_speed_check`'s ladder, in its order: the first test that matches wins.
-	var evasion: int = defender.stage("evasion")
-	var accuracy: int = attacker.stage("accuracy")
+	var evasion: int = c.defender.stage("evasion")
+	var accuracy: int = c.attacker.stage("accuracy")
 	var wanted: bool = evasion >= 3
 	if not wanted:
 		if evasion >= 1:
@@ -1135,12 +1097,12 @@ static func _smart_lock_on(
 	if not wanted:
 		if accuracy < 0:
 			return
-		if _lock_on_has_wanting_move(attacker, defender, data):
+		if _lock_on_has_wanting_move(c.attacker, c.defender, c.data):
 			return
 		_discourage(scores, slot, 1)
 		return
 
-	if _skip_50_50(rng):
+	if _skip_50_50(c.rng):
 		return
 	_encourage(scores, slot, 2)
 
@@ -1175,33 +1137,30 @@ const LOCK_ON_WANTED_ACCURACY: int = 180
 ##
 ## The target has not moved yet in the first branch, so there is nothing to drain
 ## and the question is only whether the enemy would get to see a move first.
-static func _smart_spite(
-	scores: Array, slot: int, attacker: Gen2BattleMon, defender: Gen2BattleMon,
-	rng: RandomNumberGenerator
-) -> void:
-	var last_move: int = defender.last_counter_move
+static func _smart_spite(scores: Array, slot: int, c: Context) -> void:
+	var last_move: int = c.defender.last_counter_move
 	if last_move == 0:
-		if _faster(attacker, defender):
+		if _faster(c.attacker, c.defender):
 			_discourage(scores, slot)
 			return
-		if _skip_50_50(rng):
+		if _skip_50_50(c.rng):
 			return
 		_discourage(scores, slot, 1)
 		return
 
 	# `.moveloop`, which walks the target's own list and returns without scoring
 	# when the move is not in it.
-	var drained: int = defender.moves.find(last_move)
+	var drained: int = c.defender.moves.find(last_move)
 	if drained < 0:
 		return
 
-	var left: int = defender.pp_left(drained)
+	var left: int = c.defender.pp_left(drained)
 	if left < SPITE_WANTED_PP:
-		if _rolls_under(rng, AI_39_PERCENT_PLUS_ONE):
+		if _rolls_under(c.rng, AI_39_PERCENT_PLUS_ONE):
 			return
 		_encourage(scores, slot, 2)
 		return
-	if left < SPITE_PLENTY_PP and not _rolls_under(rng, AI_39_PERCENT_PLUS_ONE):
+	if left < SPITE_PLENTY_PP and not _rolls_under(c.rng, AI_39_PERCENT_PLUS_ONE):
 		return
 	_discourage(scores, slot, 1)
 
@@ -1220,20 +1179,17 @@ const THIEF_PENALTY: int = 30
 ## `AI_Smart_Foresight`: worth it against a sharply raised evasion, a sharply
 ## lowered accuracy of its own, or a Ghost, which is the only target the flag
 ## opens a type matchup against. Otherwise almost always discouraged.
-static func _smart_foresight(
-	scores: Array, slot: int, attacker: Gen2BattleMon, defender: Gen2BattleMon,
-	rng: RandomNumberGenerator
-) -> void:
-	var wanted: bool = attacker.stage("accuracy") < -2 \
-		or defender.stage("evasion") >= 3 \
-		or defender.types().has(RomLayout.TYPE_GHOST)
+static func _smart_foresight(scores: Array, slot: int, c: Context) -> void:
+	var wanted: bool = c.attacker.stage("accuracy") < -2 \
+		or c.defender.stage("evasion") >= 3 \
+		or c.defender.types().has(RomLayout.TYPE_GHOST)
 	if not wanted:
-		if _roll(rng, FORESIGHT_DISCOURAGE_SKIP_PERCENT):
+		if _roll(c.rng, FORESIGHT_DISCOURAGE_SKIP_PERCENT):
 			return
 		_discourage(scores, slot, 1)
 		return
 
-	if _rolls_under(rng, AI_39_PERCENT_PLUS_ONE):
+	if _rolls_under(c.rng, AI_39_PERCENT_PLUS_ONE):
 		return
 	_encourage(scores, slot, 2)
 
@@ -1242,30 +1198,27 @@ static func _smart_foresight(
 ## with a live bench, or against a player who is already trapped in a costly
 ## state. The Toxic branch is intentionally the cartridge's bug: it encourages
 ## Mean Look because the AI's own Pokémon is badly poisoned.
-static func _smart_mean_look(
-	scores: Array, slot: int, attacker: Gen2BattleMon, defender: Gen2BattleMon,
-	rng: RandomNumberGenerator, has_bench: bool, matchup_score: int
-) -> void:
-	if attacker.hp * 2 < attacker.max_hp():
+static func _smart_mean_look(scores: Array, slot: int, c: Context) -> void:
+	if c.attacker.hp * 2 < c.attacker.max_hp():
 		_discourage(scores, slot)
 		return
-	if not has_bench:
+	if not c.has_bench:
 		_discourage(scores, slot)
 		return
 
-	var strongly_wanted: bool = attacker.toxic_counter > 0 or Gen2Substatus.has(
-		defender.substatus,
+	var strongly_wanted: bool = c.attacker.toxic_counter > 0 or Gen2Substatus.has(
+		c.defender.substatus,
 		Gen2Substatus.ATTRACTED | Gen2Substatus.ROLLOUT
 		| Gen2Substatus.IDENTIFIED | Gen2Substatus.NIGHTMARE
 	)
 	if strongly_wanted:
-		if not _skip_80_20(rng):
+		if not _skip_80_20(c.rng):
 			_encourage(scores, slot, 3)
 		return
 
 	# CheckPlayerMoveTypeMatchups returns 11 when the player has only resisted
 	# attacks. That is the one ordinary case where Mean Look is not discouraged.
-	if matchup_score < Gen2AISwitch.COMFORTABLE_SCORE:
+	if c.matchup_score < Gen2AISwitch.COMFORTABLE_SCORE:
 		_discourage(scores, slot, 1)
 
 
@@ -1276,15 +1229,13 @@ const FORESIGHT_DISCOURAGE_SKIP_PERCENT: int = 8
 
 ## `AI_Smart_Pursuit`: worth two points against a target nearly down, discouraged
 ## against one that is not, since a Pokémon with health left is unlikely to run.
-static func _smart_pursuit(
-	scores: Array, slot: int, defender: Gen2BattleMon, rng: RandomNumberGenerator
-) -> void:
-	if not _above_quarter(defender):
-		if _skip_50_50(rng):
+static func _smart_pursuit(scores: Array, slot: int, c: Context) -> void:
+	if not _above_quarter(c.defender):
+		if _skip_50_50(c.rng):
 			return
 		_encourage(scores, slot, 2)
 		return
-	if _skip_80_20(rng):
+	if _skip_80_20(c.rng):
 		return
 	_discourage(scores, slot, 1)
 
@@ -1294,37 +1245,34 @@ static func _smart_pursuit(
 ## a two-point penalty that an 8% roll skips outright, and `.greatly_discourage`
 ## adds a point and falls into it, so the worst case is three.
 ##
-static func _smart_protect(
-	scores: Array, slot: int, attacker: Gen2BattleMon, defender: Gen2BattleMon,
-	rng: RandomNumberGenerator
-) -> void:
-	if attacker.protect_count != 0:
-		_smart_protect_discourage(scores, slot, rng, true)
+static func _smart_protect(scores: Array, slot: int, c: Context) -> void:
+	if c.attacker.protect_count != 0:
+		_smart_protect_discourage(scores, slot, c, true)
 		return
 
 	# The second test reads `wPlayerSubStatus5`, the flag a Lock On the enemy used
 	# left on the player: with a guaranteed hit already lined up, sitting the turn
 	# out wastes it.
-	if Gen2Substatus.has(defender.substatus, Gen2Substatus.LOCK_ON):
-		_smart_protect_discourage(scores, slot, rng, false)
+	if Gen2Substatus.has(c.defender.substatus, Gen2Substatus.LOCK_ON):
+		_smart_protect_discourage(scores, slot, c, false)
 		return
 
-	var encourage: bool = defender.fury_cutter_count >= PROTECT_FURY_CUTTER_COUNT \
-		or Gen2Substatus.has(defender.substatus, Gen2Substatus.CHARGING) \
-		or defender.toxic_counter > 0 \
-		or Gen2Substatus.has(defender.substatus, Gen2Substatus.LEECH_SEED) \
-		or Gen2Substatus.has(defender.substatus, Gen2Substatus.CURSE)
+	var encourage: bool = c.defender.fury_cutter_count >= PROTECT_FURY_CUTTER_COUNT \
+		or Gen2Substatus.has(c.defender.substatus, Gen2Substatus.CHARGING) \
+		or c.defender.toxic_counter > 0 \
+		or Gen2Substatus.has(c.defender.substatus, Gen2Substatus.LEECH_SEED) \
+		or Gen2Substatus.has(c.defender.substatus, Gen2Substatus.CURSE)
 
 	if not encourage:
 		# The Rollout test is the fall-through, and it is two refusals in one: a
 		# player not rolling at all discourages, and one rolling under three
 		# discourages as well. Only a boosted Rollout reaches `.encourage`.
-		if not Gen2Substatus.has(defender.substatus, Gen2Substatus.ROLLOUT) \
-			or defender.rollout_count < PROTECT_ROLLOUT_COUNT:
-			_smart_protect_discourage(scores, slot, rng, false)
+		if not Gen2Substatus.has(c.defender.substatus, Gen2Substatus.ROLLOUT) \
+			or c.defender.rollout_count < PROTECT_ROLLOUT_COUNT:
+			_smart_protect_discourage(scores, slot, c, false)
 			return
 
-	if _skip_80_20(rng):
+	if _skip_80_20(c.rng):
 		return
 	_encourage(scores, slot, 1)
 
@@ -1337,11 +1285,11 @@ const PROTECT_ROLLOUT_COUNT: int = 3
 ## `.greatly_discourage` falls into `.discourage`, so the extra point is added in
 ## front of the roll that can skip the other two.
 static func _smart_protect_discourage(
-	scores: Array, slot: int, rng: RandomNumberGenerator, greatly: bool
+	scores: Array, slot: int, c: Context, greatly: bool
 ) -> void:
 	if greatly:
 		_discourage(scores, slot, 1)
-	if _roll(rng, PROTECT_DISCOURAGE_SKIP_PERCENT):
+	if _roll(c.rng, PROTECT_DISCOURAGE_SKIP_PERCENT):
 		return
 	_discourage(scores, slot, 2)
 
@@ -1355,24 +1303,21 @@ const PROTECT_DISCOURAGE_SKIP_PERCENT: int = 8
 ## rather than by move number, which is `AIHasMoveEffect`, and Flail carries the
 ## same byte. `.no_reversal` is the other reason: `wEnemySubStatus5`, the flag a
 ## Lock On the player used left on the enemy.
-static func _smart_endure(
-	scores: Array, slot: int, attacker: Gen2BattleMon, data: GameData,
-	rng: RandomNumberGenerator
-) -> void:
-	if attacker.protect_count != 0 or _at_max_hp(attacker):
+static func _smart_endure(scores: Array, slot: int, c: Context) -> void:
+	if c.attacker.protect_count != 0 or _at_max_hp(c.attacker):
 		_discourage(scores, slot, 2)
 		return
-	if _above_quarter(attacker):
+	if _above_quarter(c.attacker):
 		_discourage(scores, slot, 1)
 		return
-	if not _has_move_effect(attacker, data, Gen2MoveEffect.REVERSAL):
-		if not Gen2Substatus.has(attacker.substatus, Gen2Substatus.LOCK_ON):
+	if not _has_move_effect(c.attacker, c.data, Gen2MoveEffect.REVERSAL):
+		if not Gen2Substatus.has(c.attacker.substatus, Gen2Substatus.LOCK_ON):
 			return
-		if _skip_50_50(rng):
+		if _skip_50_50(c.rng):
 			return
 		_encourage(scores, slot, 2)
 		return
-	if _skip_80_20(rng):
+	if _skip_80_20(c.rng):
 		return
 	_encourage(scores, slot, 3)
 
@@ -1392,35 +1337,32 @@ static func _has_move_effect(mon: Gen2BattleMon, data: GameData, effect: int) ->
 	return false
 
 
-static func _smart_belly_drum(scores: Array, slot: int, attacker: Gen2BattleMon) -> void:
-	if attacker.stage("attack") >= 3:
+static func _smart_belly_drum(scores: Array, slot: int, c: Context) -> void:
+	if c.attacker.stage("attack") >= 3:
 		_discourage(scores, slot, 5)
 		return
-	if _at_max_hp(attacker):
+	if _at_max_hp(c.attacker):
 		return
 	_discourage(scores, slot, 1)
-	if not _above_half(attacker):
+	if not _above_half(c.attacker):
 		_discourage(scores, slot, 5)
 
 
-static func _smart_psych_up(
-	scores: Array, slot: int, attacker: Gen2BattleMon, defender: Gen2BattleMon,
-	rng: RandomNumberGenerator
-) -> void:
+static func _smart_psych_up(scores: Array, slot: int, c: Context) -> void:
 	var enemy_sum: int = 0
 	var player_sum: int = 0
 	for key: String in Gen2BattleMon.STAGED_STATS + Gen2BattleMon.STAGED_ODDS:
-		enemy_sum += attacker.stage(key)
-		player_sum += defender.stage(key)
+		enemy_sum += c.attacker.stage(key)
+		player_sum += c.defender.stage(key)
 
 	if enemy_sum >= player_sum:
 		_discourage(scores, slot, 2)
 		return
-	if defender.stage("accuracy") < -1:
+	if c.defender.stage("accuracy") < -1:
 		return
-	if attacker.stage("evasion") > 0:
+	if c.attacker.stage("evasion") > 0:
 		return
-	if _skip_80_20(rng):
+	if _skip_80_20(c.rng):
 		return
 	_encourage(scores, slot, 1)
 
@@ -1720,13 +1662,11 @@ static func _smart_always_hit(scores: Array, slot: int, c: Context) -> void:
 
 ## `AI_Smart_Ohko`: dismissed outright against a higher level, since the move
 ## itself refuses, and discouraged against a target still above half.
-static func _smart_ohko(
-	scores: Array, slot: int, attacker: Gen2BattleMon, defender: Gen2BattleMon
-) -> void:
-	if attacker.level < defender.level:
+static func _smart_ohko(scores: Array, slot: int, c: Context) -> void:
+	if c.attacker.level < c.defender.level:
 		_discourage(scores, slot)
 		return
-	if not _above_half(defender):
+	if not _above_half(c.defender):
 		_discourage(scores, slot, 1)
 
 
@@ -1781,21 +1721,19 @@ static func _smart_speed_down_hit(scores: Array, slot: int, c: Context) -> void:
 
 ## `AI_Smart_Rage`: worth more the longer the counter has been running, and
 ## worth starting only from a healthy mon.
-static func _smart_rage(
-	scores: Array, slot: int, attacker: Gen2BattleMon, rng: RandomNumberGenerator
-) -> void:
-	if not Gen2Substatus.has(attacker.substatus, Gen2Substatus.RAGE):
-		if not _above_half(attacker):
+static func _smart_rage(scores: Array, slot: int, c: Context) -> void:
+	if not Gen2Substatus.has(c.attacker.substatus, Gen2Substatus.RAGE):
+		if not _above_half(c.attacker):
 			_discourage(scores, slot, 1)
-		elif _skip_80_20(rng):
+		elif _skip_80_20(c.rng):
 			_encourage(scores, slot, 1)
 		return
-	if not _skip_50_50(rng):
+	if not _skip_50_50(c.rng):
 		_encourage(scores, slot, 1)
-	if attacker.rage_count < 2:
+	if c.attacker.rage_count < 2:
 		return
 	_encourage(scores, slot, 1)
-	if attacker.rage_count < 3:
+	if c.attacker.rage_count < 3:
 		return
 	_encourage(scores, slot, 1)
 

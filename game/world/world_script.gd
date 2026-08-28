@@ -370,6 +370,101 @@ static func _later_command_width(opcode: int) -> int:
 	return 0
 
 
+## The names Crystal gives the seven raw bytes it inserted, which have no
+## pokegold opcode to resolve through.
+const CRYSTAL_ONLY_COMMAND_NAMES: Dictionary = {
+	0x9F: &"verbosegiveitemvar",
+	0xA4: &"battletowertext",
+	0xA5: &"getlandmarkname",
+	0xA6: &"gettrainerclassname",
+	0xA7: &"getname",
+	0xA8: &"wait",
+	0xA9: &"checksave",
+}
+
+## The commands past $55, on pokegold's numbering, which is what
+## [method source_opcode] normalizes both profiles onto.
+const LATER_COMMAND_NAMES: Dictionary = {
+	0x55: &"pokepic",
+	0x56: &"closepokepic",
+	0x57: &"2dmenu",
+	0x58: &"verticalmenu",
+	0x59: &"loadpikachudata",
+	0x5A: &"randomwildmon",
+	0x5B: &"loadtemptrainer",
+	0x5C: &"loadwildmon",
+	0x5D: &"loadtrainer",
+	0x5E: &"startbattle",
+	0x5F: &"reloadmapafterbattle",
+	0x60: &"catchtutorial",
+	0x61: &"trainertext",
+	0x62: &"trainerflagaction",
+	0x63: &"winlosstext",
+	0x64: &"scripttalkafter",
+	0x65: &"endifjustbattled",
+	0x66: &"checkjustbattled",
+	0x67: &"setlasttalked",
+	0x68: &"applymovement",
+	0x69: &"applymovementlasttalked",
+	0x6A: &"faceplayer",
+	0x6B: &"faceobject",
+	0x6C: &"variablesprite",
+	0x6D: &"disappear",
+	0x6E: &"appear",
+	0x6F: &"follow",
+	0x70: &"stopfollow",
+	0x71: &"moveobject",
+	0x72: &"writeobjectxy",
+	0x73: &"loademote",
+	0x74: &"showemote",
+	0x75: &"turnobject",
+	0x76: &"follownotexact",
+	0x77: &"earthquake",
+	0x78: &"changemapblocks",
+	0x79: &"changeblock",
+	0x7A: &"reloadmap",
+	0x7B: &"refreshmap",
+	0x7C: &"writecmdqueue",
+	0x7D: &"delcmdqueue",
+	0x7E: &"playmusic",
+	0x7F: &"encountermusic",
+	0x80: &"musicfadeout",
+	0x81: &"playmapmusic",
+	0x82: &"dontrestartmapmusic",
+	0x83: &"cry",
+	0x84: &"playsound",
+	0x85: &"waitsfx",
+	0x86: &"warpsound",
+	0x87: &"specialsound",
+	0x88: &"autoinput",
+	0x89: &"newloadmap",
+	0x8A: &"pause",
+	0x8B: &"deactivatefacing",
+	0x8C: &"sdefer",
+	0x8D: &"warpcheck",
+	0x8E: &"stopandsjump",
+	0x8F: &"endcallback",
+	0x90: &"end",
+	0x91: &"reloadend",
+	0x92: &"endall",
+	0x93: &"pokemart",
+	0x94: &"elevator",
+	0x95: &"trade",
+	0x96: &"askforphonenumber",
+	0x97: &"phonecall",
+	0x98: &"hangup",
+	0x99: &"describedecoration",
+	0x9A: &"fruittree",
+	0x9B: &"specialphonecall",
+	0x9C: &"checkphonecall",
+	0x9D: &"verbosegiveitem",
+	0x9E: &"swarm",
+	0x9F: &"halloffame",
+	0xA0: &"credits",
+	0xA1: &"warpfacing",
+}
+
+
 static func _later_command_name(opcode: int, crystal_commands: bool) -> StringName:
 	if opcode < 0x55:
 		return &""
@@ -380,94 +475,9 @@ static func _later_command_name(opcode: int, crystal_commands: bool) -> StringNa
 	## `command_at` read the next command's first byte as a species.
 	if crystal_commands and opcode == PROMPTBUTTON:
 		return &""
-	if crystal_commands:
-		match opcode:
-			0x9F: return &"verbosegiveitemvar"
-			0xA4: return &"battletowertext"
-			0xA5: return &"getlandmarkname"
-			0xA6: return &"gettrainerclassname"
-			0xA7: return &"getname"
-			0xA8: return &"wait"
-			0xA9: return &"checksave"
-	match source_opcode(opcode, crystal_commands):
-		0x55: return &"pokepic"
-		0x56: return &"closepokepic"
-		0x57: return &"2dmenu"
-		0x58: return &"verticalmenu"
-		0x59: return &"loadpikachudata"
-		0x5A: return &"randomwildmon"
-		0x5B: return &"loadtemptrainer"
-		0x5C: return &"loadwildmon"
-		0x5D: return &"loadtrainer"
-		0x5E: return &"startbattle"
-		0x5F: return &"reloadmapafterbattle"
-		0x60: return &"catchtutorial"
-		0x61: return &"trainertext"
-		0x62: return &"trainerflagaction"
-		0x63: return &"winlosstext"
-		0x64: return &"scripttalkafter"
-		0x65: return &"endifjustbattled"
-		0x66: return &"checkjustbattled"
-		0x67: return &"setlasttalked"
-		0x68: return &"applymovement"
-		0x69: return &"applymovementlasttalked"
-		0x6A: return &"faceplayer"
-		0x6B: return &"faceobject"
-		0x6C: return &"variablesprite"
-		0x6D: return &"disappear"
-		0x6E: return &"appear"
-		0x6F: return &"follow"
-		0x70: return &"stopfollow"
-		0x71: return &"moveobject"
-		0x72: return &"writeobjectxy"
-		0x73: return &"loademote"
-		0x74: return &"showemote"
-		0x75: return &"turnobject"
-		0x76: return &"follownotexact"
-		0x77: return &"earthquake"
-		0x78: return &"changemapblocks"
-		0x79: return &"changeblock"
-		0x7A: return &"reloadmap"
-		0x7B: return &"refreshmap"
-		0x7C: return &"writecmdqueue"
-		0x7D: return &"delcmdqueue"
-		0x7E: return &"playmusic"
-		0x7F: return &"encountermusic"
-		0x80: return &"musicfadeout"
-		0x81: return &"playmapmusic"
-		0x82: return &"dontrestartmapmusic"
-		0x83: return &"cry"
-		0x84: return &"playsound"
-		0x85: return &"waitsfx"
-		0x86: return &"warpsound"
-		0x87: return &"specialsound"
-		0x88: return &"autoinput"
-		0x89: return &"newloadmap"
-		0x8A: return &"pause"
-		0x8B: return &"deactivatefacing"
-		0x8C: return &"sdefer"
-		0x8D: return &"warpcheck"
-		0x8E: return &"stopandsjump"
-		0x8F: return &"endcallback"
-		0x90: return &"end"
-		0x91: return &"reloadend"
-		0x92: return &"endall"
-		0x93: return &"pokemart"
-		0x94: return &"elevator"
-		0x95: return &"trade"
-		0x96: return &"askforphonenumber"
-		0x97: return &"phonecall"
-		0x98: return &"hangup"
-		0x99: return &"describedecoration"
-		0x9A: return &"fruittree"
-		0x9B: return &"specialphonecall"
-		0x9C: return &"checkphonecall"
-		0x9D: return &"verbosegiveitem"
-		0x9E: return &"swarm"
-		0x9F: return &"halloffame"
-		0xA0: return &"credits"
-		0xA1: return &"warpfacing"
-	return &""
+	if crystal_commands and CRYSTAL_ONLY_COMMAND_NAMES.has(opcode):
+		return CRYSTAL_ONLY_COMMAND_NAMES[opcode]
+	return LATER_COMMAND_NAMES.get(source_opcode(opcode, crystal_commands), &"")
 
 
 ## Normalizes a raw command byte onto pokegold's numbering, which every width,
@@ -578,6 +588,172 @@ static func read_u16(data: PackedByteArray, offset: int) -> int:
 	return int(data[offset]) | (int(data[offset + 1]) << 8)
 
 
+## The three operand kinds, which are also their widths in bytes: `db`, `dw` and
+## the money commands' own three.
+const OPERAND_U8: int = 1
+const OPERAND_U16: int = 2
+const OPERAND_MONEY: int = 3
+
+## Each command's operands in the order the macro emits them, read from the byte
+## after the opcode. Keyed by the raw byte, for the commands both profiles share.
+const OPERANDS: Dictionary = {
+	SPECIAL: [["value", OPERAND_U16]],
+	IFEQUAL: [["value", OPERAND_U8], ["address", OPERAND_U16]],
+	IFNOTEQUAL: [["value", OPERAND_U8], ["address", OPERAND_U16]],
+	IFGREATER: [["value", OPERAND_U8], ["address", OPERAND_U16]],
+	IFLESS: [["value", OPERAND_U8], ["address", OPERAND_U16]],
+	LOADMEM: [["address", OPERAND_U16], ["value", OPERAND_U8]],
+	CHECKMAPSCENE: [["map_group", OPERAND_U8], ["map_number", OPERAND_U8]],
+	SETMAPSCENE: [
+		["map_group", OPERAND_U8],
+		["map_number", OPERAND_U8],
+		["scene", OPERAND_U8]
+	],
+	SETSCENE: [["scene", OPERAND_U8]],
+	SETVAL: [["value", OPERAND_U8]],
+	ADDVAL: [["value", OPERAND_U8]],
+	RANDOM: [["value", OPERAND_U8]],
+	READVAR: [["value", OPERAND_U8]],
+	WRITEVAR: [["value", OPERAND_U8]],
+	CHECKITEM: [["value", OPERAND_U8]],
+	ADDCELLNUM: [["value", OPERAND_U8]],
+	DELCELLNUM: [["value", OPERAND_U8]],
+	CHECKCELLNUM: [["value", OPERAND_U8]],
+	CHECKTIME: [["value", OPERAND_U8]],
+	CHECKPOKE: [["value", OPERAND_U8]],
+	GETNUM: [["value", OPERAND_U8]],
+	GETCURLANDMARKNAME: [["value", OPERAND_U8]],
+	REANCHORMAP: [["value", OPERAND_U8]],
+	WRITEUNUSEDBYTE: [["value", OPERAND_U8]],
+	LOADVAR: [["value", OPERAND_U8], ["value_2", OPERAND_U8]],
+	GIVEITEM: [["value", OPERAND_U8], ["value_2", OPERAND_U8]],
+	TAKEITEM: [["value", OPERAND_U8], ["value_2", OPERAND_U8]],
+	GIVEEGG: [["value", OPERAND_U8], ["value_2", OPERAND_U8]],
+	GIVEMONEY: [["account", OPERAND_U8], ["amount_bytes", OPERAND_MONEY]],
+	TAKEMONEY: [["account", OPERAND_U8], ["amount_bytes", OPERAND_MONEY]],
+	CHECKMONEY: [["account", OPERAND_U8], ["amount_bytes", OPERAND_MONEY]],
+	GETMONEY: [["account", OPERAND_U8], ["string_buffer", OPERAND_U8]],
+	GETMONNAME: [["pokemon", OPERAND_U8], ["string_buffer", OPERAND_U8]],
+	GETITEMNAME: [["item", OPERAND_U8], ["string_buffer", OPERAND_U8]],
+	GETTRAINERNAME: [
+		["trainer_group", OPERAND_U8],
+		["trainer_id", OPERAND_U8],
+		["string_buffer", OPERAND_U8]
+	],
+	GETSTRING: [["address", OPERAND_U16], ["string_buffer", OPERAND_U8]],
+	CLEAREVENT: [["flag", OPERAND_U16]],
+	SETEVENT: [["flag", OPERAND_U16]],
+	CHECKFLAG: [["flag", OPERAND_U16]],
+	CLEARFLAG: [["flag", OPERAND_U16]],
+	SETFLAG: [["flag", OPERAND_U16]],
+	CHECKEVENT: [["flag", OPERAND_U16]],
+	GIVECOINS: [["value", OPERAND_U16]],
+	TAKECOINS: [["value", OPERAND_U16]],
+	CHECKCOINS: [["value", OPERAND_U16]],
+	BLACKOUTMOD: [["map_group", OPERAND_U8], ["map_number", OPERAND_U8]],
+	WARPMOD: [
+		["warp_id", OPERAND_U8],
+		["map_group", OPERAND_U8],
+		["map_number", OPERAND_U8]
+	],
+	WARP: [
+		["map_group", OPERAND_U8],
+		["map_number", OPERAND_U8],
+		["x", OPERAND_U8],
+		["y", OPERAND_U8]
+	],
+	REPEATTEXT: [["value", OPERAND_U8], ["value_2", OPERAND_U8]],
+	GETCOINS: [["string_buffer", OPERAND_U8]],
+}
+
+## The rows Crystal reads differently: the four commands it inserted, which have
+## no pokegold opcode behind them, and `getcoins`, which takes a second buffer.
+## A row here is the whole answer, so nothing else is read.
+const CRYSTAL_OPERANDS: Dictionary = {
+	0x9F: [["item", OPERAND_U8], ["variable", OPERAND_U8]],
+	0xA0: [
+		["flag", OPERAND_U8], ["map_group", OPERAND_U8], ["map_number", OPERAND_U8]
+	],
+	0xA4: [["value", OPERAND_U8]],
+	0xA8: [["value", OPERAND_U8]],
+	GETCOINS: [["string_buffer", OPERAND_U8], ["string_buffer_2", OPERAND_U8]],
+}
+
+## The commands past the seam, on pokegold's numbering.
+const LATER_OPERANDS: Dictionary = {
+	0x55: [["pokemon", OPERAND_U8]],
+	0x5C: [["pokemon", OPERAND_U8], ["level", OPERAND_U8]],
+	0x5D: [["trainer_group", OPERAND_U8], ["trainer_id", OPERAND_U8]],
+	0x60: [["value", OPERAND_U8]],
+	0x61: [["value", OPERAND_U8]],
+	0x62: [["value", OPERAND_U8]],
+	0x63: [["win_address", OPERAND_U16], ["loss_address", OPERAND_U16]],
+	0x67: [["object_id", OPERAND_U8]],
+	0x68: [["object_id", OPERAND_U8], ["address", OPERAND_U16]],
+	0x69: [["address", OPERAND_U16]],
+	0x6B: [["object_id", OPERAND_U8], ["object_id_2", OPERAND_U8]],
+	0x6C: [["value", OPERAND_U8], ["value_2", OPERAND_U8]],
+	0x6D: [["object_id", OPERAND_U8]],
+	0x6E: [["object_id", OPERAND_U8]],
+	0x72: [["object_id", OPERAND_U8]],
+	0x6F: [["object_id", OPERAND_U8], ["object_id_2", OPERAND_U8]],
+	0x76: [["object_id", OPERAND_U8], ["object_id_2", OPERAND_U8]],
+	0x71: [["object_id", OPERAND_U8], ["x", OPERAND_U8], ["y", OPERAND_U8]],
+	0x74: [["value", OPERAND_U8], ["object_id", OPERAND_U8], ["value_2", OPERAND_U8]],
+	0x75: [["object_id", OPERAND_U8], ["facing", OPERAND_U8]],
+	0x77: [["value", OPERAND_U8]],
+	0x78: [["bank", OPERAND_U8], ["address", OPERAND_U16]],
+	0x88: [["bank", OPERAND_U8], ["address", OPERAND_U16]],
+	0x79: [["x", OPERAND_U8], ["y", OPERAND_U8], ["block", OPERAND_U8]],
+	0x7C: [["address", OPERAND_U16]],
+	0x7E: [["address", OPERAND_U16]],
+	0x8C: [["address", OPERAND_U16]],
+	0x8E: [["address", OPERAND_U16]],
+	0x94: [["address", OPERAND_U16]],
+	0x97: [["address", OPERAND_U16]],
+	0x9B: [["address", OPERAND_U16]],
+	0x7D: [["value", OPERAND_U8]],
+	0x89: [["value", OPERAND_U8]],
+	0x8A: [["value", OPERAND_U8]],
+	0x8B: [["value", OPERAND_U8]],
+	0x80: [["value", OPERAND_U16], ["value_2", OPERAND_U8]],
+	0x83: [["value", OPERAND_U16]],
+	0x84: [["value", OPERAND_U16]],
+	0x93: [["value", OPERAND_U8], ["address", OPERAND_U16]],
+	0x95: [["value", OPERAND_U8]],
+	0x96: [["value", OPERAND_U8]],
+	0x99: [["value", OPERAND_U8]],
+	0x9A: [["value", OPERAND_U8]],
+	0x9D: [["item", OPERAND_U8], ["quantity", OPERAND_U8]],
+	0x9E: [["map_group", OPERAND_U8], ["map_number", OPERAND_U8]],
+	0xA1: [
+		["facing", OPERAND_U8],
+		["map_group", OPERAND_U8],
+		["map_number", OPERAND_U8],
+		["x", OPERAND_U8],
+		["y", OPERAND_U8]
+	],
+}
+
+
+## One command's operands, in the order [constant OPERANDS] lists them.
+static func _read_operands(
+	command: Dictionary, data: PackedByteArray, offset: int, rows: Array
+) -> void:
+	var at: int = offset + 1
+	for row: Array in rows:
+		var kind: int = int(row[1])
+		if kind == OPERAND_U16:
+			command[String(row[0])] = read_u16(data, at)
+		elif kind == OPERAND_MONEY:
+			command[String(row[0])] = PackedByteArray([
+				int(data[at]), int(data[at + 1]), int(data[at + 2])
+			])
+		else:
+			command[String(row[0])] = int(data[at])
+		at += kind
+
+
 static func command_at(
 	data: PackedByteArray, offset: int, crystal_commands: bool = true
 ) -> Dictionary:
@@ -617,185 +793,22 @@ static func command_at(
 		or (crystal_commands and opcode == JUMPTEXT) \
 		or (not crystal_commands and opcode == FARJUMPTEXT):
 		command["address"] = read_u16(data, offset + 1)
-	elif opcode in [FARSCALL, FARSJUMP, FARWRITETEXT, CALLASM] \
+		return command
+	if opcode in [FARSCALL, FARSJUMP, FARWRITETEXT, CALLASM] \
 		or (crystal_commands and opcode == FARJUMPTEXT):
-			command["bank"] = int(data[offset + 1])
-			command["address"] = read_u16(data, offset + 2)
-	else:
-		match opcode:
-			SPECIAL:
-				command["value"] = read_u16(data, offset + 1)
-			IFEQUAL, IFNOTEQUAL, IFGREATER, IFLESS:
-				command["value"] = int(data[offset + 1])
-				command["address"] = read_u16(data, offset + 2)
-			LOADMEM:
-				## `dw address` then `db value`, the reverse of the compare
-				## commands that share its width.
-				command["address"] = read_u16(data, offset + 1)
-				command["value"] = int(data[offset + 3])
-			CHECKMAPSCENE:
-				command["map_group"] = int(data[offset + 1])
-				command["map_number"] = int(data[offset + 2])
-			SETMAPSCENE:
-				command["map_group"] = int(data[offset + 1])
-				command["map_number"] = int(data[offset + 2])
-				command["scene"] = int(data[offset + 3])
-			SETSCENE:
-				command["scene"] = int(data[offset + 1])
-			SETVAL, ADDVAL, RANDOM, READVAR, WRITEVAR, CHECKITEM, ADDCELLNUM, DELCELLNUM, CHECKCELLNUM, CHECKTIME, CHECKPOKE, GETNUM, GETCURLANDMARKNAME, REANCHORMAP, WRITEUNUSEDBYTE:
-				command["value"] = int(data[offset + 1])
-			LOADVAR, GIVEITEM, TAKEITEM, GIVEEGG:
-				command["value"] = int(data[offset + 1])
-				command["value_2"] = int(data[offset + 2])
-			GIVEMONEY, TAKEMONEY, CHECKMONEY:
-				command["account"] = int(data[offset + 1])
-				command["amount_bytes"] = PackedByteArray([
-					int(data[offset + 2]), int(data[offset + 3]), int(data[offset + 4])
-				])
-			GETMONEY:
-				command["account"] = int(data[offset + 1])
-				command["string_buffer"] = int(data[offset + 2])
-			GETCOINS:
-				command["string_buffer"] = int(data[offset + 1])
-				if crystal_commands:
-					command["string_buffer_2"] = int(data[offset + 2])
-			GETMONNAME:
-				command["pokemon"] = int(data[offset + 1])
-				command["string_buffer"] = int(data[offset + 2])
-			GETITEMNAME:
-				command["item"] = int(data[offset + 1])
-				command["string_buffer"] = int(data[offset + 2])
-			GETTRAINERNAME:
-				command["trainer_group"] = int(data[offset + 1])
-				command["trainer_id"] = int(data[offset + 2])
-				command["string_buffer"] = int(data[offset + 3])
-			GETSTRING:
-				command["address"] = read_u16(data, offset + 1)
-				command["string_buffer"] = int(data[offset + 3])
-			CLEAREVENT, SETEVENT, CHECKFLAG, CLEARFLAG, SETFLAG, CHECKEVENT:
-				command["flag"] = read_u16(data, offset + 1)
-			GIVECOINS, TAKECOINS, CHECKCOINS:
-				command["value"] = read_u16(data, offset + 1)
-			BLACKOUTMOD:
-				## `Script_blackoutmod` reads two script bytes into
-				## `wLastSpawnMapGroup` and `wLastSpawnMapNumber`, so its operand
-				## is a map rather than the number those two bytes spell.
-				command["map_group"] = int(data[offset + 1])
-				command["map_number"] = int(data[offset + 2])
-			WARPMOD:
-				command["warp_id"] = int(data[offset + 1])
-				command["map_group"] = int(data[offset + 2])
-				command["map_number"] = int(data[offset + 3])
-			WARP:
-				command["map_group"] = int(data[offset + 1])
-				command["map_number"] = int(data[offset + 2])
-				command["x"] = int(data[offset + 3])
-				command["y"] = int(data[offset + 4])
-			REPEATTEXT:
-				command["value"] = int(data[offset + 1])
-				command["value_2"] = int(data[offset + 2])
-			0x55:
-				if not crystal_commands:
-					command["pokemon"] = int(data[offset + 1])
-		if crystal_commands:
-			match opcode:
-				0x9F: # verbosegiveitemvar
-					command["item"] = int(data[offset + 1])
-					command["variable"] = int(data[offset + 2])
-					return command
-				0xA0: # swarm, which carries a flag byte pokegold's does not
-					command["flag"] = int(data[offset + 1])
-					command["map_group"] = int(data[offset + 2])
-					command["map_number"] = int(data[offset + 3])
-					return command
-				0xA4: # battletowertext, a BATTLETOWERTEXT_* index
-					command["value"] = int(data[offset + 1])
-					return command
-				0xA8: # wait, in units of six frames
-					command["value"] = int(data[offset + 1])
-					return command
-		var source: int = Gen2WorldScript.source_opcode(opcode, crystal_commands)
-		match source:
-			0x55:
-				## Crystal's own $55 is `promptbutton`, one byte and no species;
-				## only pokegold's $55 is `pokepic`. See `_later_command_name`.
-				if command["name"] == &"pokepic":
-					command["pokemon"] = int(data[offset + 1])
-			0x5C:
-				command["pokemon"] = int(data[offset + 1])
-				command["level"] = int(data[offset + 2])
-			0x5D:
-				command["trainer_group"] = int(data[offset + 1])
-				command["trainer_id"] = int(data[offset + 2])
-			0x60, 0x61, 0x62:
-				command["value"] = int(data[offset + 1])
-			0x63:
-				command["win_address"] = read_u16(data, offset + 1)
-				command["loss_address"] = read_u16(data, offset + 3)
-			0x67:
-				command["object_id"] = int(data[offset + 1])
-			0x68:
-				command["object_id"] = int(data[offset + 1])
-				command["address"] = read_u16(data, offset + 2)
-			0x69:
-				command["address"] = read_u16(data, offset + 1)
-			0x6B:
-				command["object_id"] = int(data[offset + 1])
-				command["object_id_2"] = int(data[offset + 2])
-			0x6C:
-				command["value"] = int(data[offset + 1])
-				command["value_2"] = int(data[offset + 2])
-			0x6D, 0x6E, 0x72:
-				command["object_id"] = int(data[offset + 1])
-			0x6F, 0x76:
-				command["object_id"] = int(data[offset + 1])
-				command["object_id_2"] = int(data[offset + 2])
-			0x71:
-				command["object_id"] = int(data[offset + 1])
-				command["x"] = int(data[offset + 2])
-				command["y"] = int(data[offset + 3])
-			0x74:
-				command["value"] = int(data[offset + 1])
-				command["object_id"] = int(data[offset + 2])
-				command["value_2"] = int(data[offset + 3])
-			0x75:
-				command["object_id"] = int(data[offset + 1])
-				command["facing"] = int(data[offset + 2])
-			0x77:
-				command["value"] = int(data[offset + 1])
-			0x78, 0x88:
-				command["bank"] = int(data[offset + 1])
-				command["address"] = read_u16(data, offset + 2)
-			0x79:
-				command["x"] = int(data[offset + 1])
-				command["y"] = int(data[offset + 2])
-				command["block"] = int(data[offset + 3])
-			0x7C, 0x7E, 0x8C, 0x8E, 0x94, 0x97, 0x9B:
-				command["address"] = read_u16(data, offset + 1)
-			0x7D, 0x89, 0x8A, 0x8B:
-				command["value"] = int(data[offset + 1])
-			0x80:
-				command["value"] = read_u16(data, offset + 1)
-				command["value_2"] = int(data[offset + 3])
-			0x83, 0x84:
-				command["value"] = read_u16(data, offset + 1)
-			0x93:
-				command["value"] = int(data[offset + 1])
-				command["address"] = read_u16(data, offset + 2)
-			0x95, 0x96, 0x99, 0x9A:
-				command["value"] = int(data[offset + 1])
-			0x9D:
-				command["item"] = int(data[offset + 1])
-				command["quantity"] = int(data[offset + 2])
-			0x9E:
-				command["map_group"] = int(data[offset + 1])
-				command["map_number"] = int(data[offset + 2])
-			0xA1:
-				command["facing"] = int(data[offset + 1])
-				command["map_group"] = int(data[offset + 2])
-				command["map_number"] = int(data[offset + 3])
-				command["x"] = int(data[offset + 4])
-				command["y"] = int(data[offset + 5])
+		command["bank"] = int(data[offset + 1])
+		command["address"] = read_u16(data, offset + 2)
+		return command
+	if crystal_commands and CRYSTAL_OPERANDS.has(opcode):
+		_read_operands(command, data, offset, CRYSTAL_OPERANDS[opcode])
+		return command
+	_read_operands(command, data, offset, OPERANDS.get(opcode, []))
+	var source: int = source_opcode(opcode, crystal_commands)
+	## Crystal's own $55 is `promptbutton`, one byte and no species; only
+	## pokegold's $55 is `pokepic`. See [method _later_command_name].
+	if source == 0x55 and command["name"] != &"pokepic":
+		return command
+	_read_operands(command, data, offset, LATER_OPERANDS.get(source, []))
 	return command
 
 

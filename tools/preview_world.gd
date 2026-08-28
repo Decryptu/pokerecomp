@@ -298,6 +298,85 @@ func _settle_mon_special(host_property: String) -> void:
 	_screen.advance_frame()
 
 
+## The kinds that drove themselves to the frame they want. Every other kind
+## stages a sprite and then spends the frames it needs.
+const SELF_DRIVEN_KINDS: Array[StringName] = [
+	&"warp", &"door", &"map_name_sign", &"ledge", &"heal_machine",
+	&"battle", &"battle_transition", &"level_evolution", &"egg_hatch",
+	&"name_rater", &"move_deleter", &"move_tutor", &"day_care",
+	&"ice_slide", &"whiteout", &"view_cover", &"gift_nickname",
+	&"catch_nickname", &"mom_bank", &"bills_pc", &"players_pc",
+	&"pokemon_center_pc", &"start_menu", &"mod_notice", &"mod_page",
+	&"reset_question", &"launcher_question",
+]
+
+
+## What stages each preview kind, as the driver that stages it. A kind the table
+## does not name is a field item, one of the screen's own `preview_*` drivers, or
+## an overworld effect sprite, in that order.
+const STAGERS: Dictionary = {
+	&"unown_wall": &"_stage_unown_wall",
+	&"battle": &"_stage_battle",
+	&"battle_transition": &"_stage_battle_transition",
+	&"script_fade": &"_stage_script_fade",
+	&"level_evolution": &"_stage_level_evolution",
+	&"egg_hatch": &"_stage_egg_hatch",
+	&"gift_nickname": &"_stage_gift_nickname",
+	&"whiteout": &"_stage_whiteout",
+	&"unown_puzzle": &"_stage_unown_puzzle",
+	&"slot_machine": &"_stage_slot_machine",
+	&"tile_anim": &"_stage_tile_anim",
+	&"card_flip": &"_stage_card_flip",
+	&"day_care": &"_stage_day_care",
+	&"name_rater": &"_stage_party_routine",
+	&"move_deleter": &"_stage_party_routine",
+	&"move_tutor": &"_stage_party_routine",
+	&"battle_tower": &"_stage_battle_tower",
+	&"yes_no": &"_stage_yes_no",
+	&"mart": &"_stage_mart",
+	&"mart_sell": &"_stage_mart",
+	&"elevator": &"_stage_elevator",
+	&"warp": &"_stage_warp",
+	&"door": &"_stage_door",
+	&"ledge": &"_stage_ledge",
+	&"ice_slide": &"_stage_ice_slide",
+	&"map_name_sign": &"_stage_map_name_sign",
+	&"mod_notice": &"_stage_mod_notice",
+	&"mod_page": &"_stage_mod_page",
+	&"pokepic": &"_stage_pokepic",
+	&"unown_printer": &"_stage_unown_printer",
+	&"diploma": &"_stage_diploma",
+	&"start_menu": &"_stage_start_menu",
+	&"bills_pc": &"_stage_pc",
+	&"players_pc": &"_stage_pc",
+	&"pokemon_center_pc": &"_stage_pc",
+	&"mom_bank": &"_stage_mom_bank",
+}
+
+
+## Puts the screen in the state the picture wants. Called once, on the frame the
+## screen is ready.
+func _stage_kind() -> void:
+	if STAGERS.has(_kind):
+		call(STAGERS[_kind])
+		return
+	if FIELD_ITEMS.has(_kind):
+		if _kind in FACE_UP_FIRST:
+			_screen.move_up()
+		_screen.preview_field_item(int(FIELD_ITEMS[_kind]))
+		return
+	if _screen.has_method(SCREEN_DRIVER % _kind):
+		## The screen's own `preview_*` drivers, by their name without the
+		## prefix. A `*_use` driver is one step per call, so it is called
+		## twice: the first opens the menu and the second answers it.
+		_screen.call(SCREEN_DRIVER % _kind)
+		if String(_kind).ends_with("_use") or String(_kind).ends_with("_question"):
+			_screen.call(SCREEN_DRIVER % _kind)
+		return
+	if not _bare:
+		_screen.preview_effect_sprites(_kind)
+
+
 func _process(_delta: float) -> bool:
 	if _screen == null:
 		return false
@@ -310,428 +389,8 @@ func _process(_delta: float) -> bool:
 	if _frames == 1:
 		_choose_view()
 	if _frames == 2:
-		if _kind == &"unown_wall":
-			## The chamber's own `bg_event ..., BGEVENT_UP`: face the wall from
-			## the cell below it and read it, which is the only way in.
-			_screen.move_up()
-			_screen.interact()
-			## `writetext` is one page: the first press finishes the reveal the
-			## text speed is still spending, and the second ends the page, which
-			## is what runs `special DisplayUnownWords` and puts the box up.
-			_screen.press_button(Gen2Button.A)
-			_screen.press_button(Gen2Button.A)
-		elif _kind == &"battle":
-			## Past the transition and into the fight it opens, which is the one
-			## picture a battle renderer staged on the map draws.
-			_screen.preview_battle_request()
-			_screen.settle_battle_transition()
-			_screen.advance_frames(STAGED_FRAMES)
-		elif _kind == &"battle_transition":
-			## `DoBattleTransition` over the map it runs on. The first of the two
-			## numbers is how many frames into it to photograph rather than a
-			## cell, since a transition is two hundred of them and every one is
-			## a different picture; the second is 1 for a trainer's, which is the
-			## branch that draws the Poke Ball and floods the map.
-			_screen.preview_battle_transition(_cell.x, _cell.y != 0)
-		elif _kind == &"script_fade":
-			## One of the five fade specials over the map it runs on. The first
-			## number is the special (46 `FadeOutToWhite`, 47 `BattleTowerFade`,
-			## 48 `FadeOutToBlack`, 49 `FadeInFromWhite`, 50 `FadeInFromBlack`)
-			## and the second how many of its frames to spend before the
-			## picture, since each of the four rows is a different screen.
-			_screen.preview_script_fade(maxi(_cell.x, 0))
-			for _frame: int in maxi(_cell.y, 0):
-				_screen.advance_frame()
-		elif _kind == &"level_evolution":
-			## `EvolveAfterBattle`'s own screen, which is a few hundred frames of
-			## picture. The first number is how far into it to photograph rather
-			## than a cell, the way `battle_transition`'s is; the box is pressed
-			## past on the frames it is waiting on, since neither `PrintText` nor
-			## `DelayFrames` shortens for a screenshot.
-			_screen.preview_level_evolution()
-			for _frame: int in maxi(_cell.x, 0):
-				_screen.advance_frame()
-				var evolving: Gen2EvolutionScreen = _screen.get("_evolution_host")
-				if evolving == null:
-					break
-				if evolving.awaiting_press():
-					_screen.press_button(Gen2Button.A)
-		elif _kind == &"egg_hatch":
-			## `OverworldHatchEgg`, driven the same way and for the same reason:
-			## the sequence is five hundred frames of picture, so the first
-			## number is how far into it to photograph and the second is the
-			## species inside the egg, 0 for the first the cache holds.
-			_screen.preview_egg_hatch(maxi(_cell.y, 0))
-			for _frame: int in maxi(_cell.x, 0):
-				_screen.advance_frame()
-				var hatching: Gen2EggHatchScreen = _screen.get("_hatch_host")
-				if hatching == null:
-					break
-				if hatching.awaiting_press():
-					_screen.press_button(Gen2Button.A)
-		elif _kind == &"gift_nickname":
-			## `GivePoke`'s own prompt. The presses are spent behind the frames
-			## the box owes, since nothing shortens a printing text; the second
-			## number's thousands digit is the box branch.
-			_screen.preview_gift_nickname(maxi(_cell.y, 0) % 1000, _cell.y >= 1000)
-			_settle_mon_special("_nickname_host")
-			for _press: int in maxi(_cell.x, 0):
-				var prompt: Gen2NicknamePromptScreen = _screen.get("_nickname_host")
-				if prompt == null:
-					break
-				## NO on the question, so the mode photographs the routine's own
-				## boxes; the keyboard behind YES has `preview_naming_screen.gd`.
-				_screen.press_button(
-					Gen2Button.B if prompt.question_ready() else Gen2Button.A
-				)
-				_settle_mon_special("_nickname_host")
-		elif _kind == &"whiteout":
-			## `Script_Whiteout`, which no fixture cell reaches: the party is
-			## poisoned down to its last point and the pass `CountStep` owes is
-			## spent. The first number is how many of its presses to spend, so 0
-			## is the faint line, 1 the first page of `_WhitedOutText` and 3 the
-			## map the player wakes up on.
-			_screen.preview_whiteout()
-			## The box reveals a letter at a time at the OPTION menu's own speed,
-			## so each press is given behind the frames its page costs.
-			for _press: int in maxi(_cell.x, 0) + 1:
-				for _frame: int in 120:
-					_screen.advance_frame()
-				if _press < maxi(_cell.x, 0):
-					_screen.press_button(Gen2Button.A)
-		elif _kind == &"unown_puzzle":
-			## `special UnownPuzzle`, which no fixture cell reaches. The first
-			## number is how many frames into the board to photograph and the
-			## second which picture: 0 Kabuto, 1 Omanyte, 2 Aerodactyl, 3 Ho-Oh.
-			## The empty cursor blinks off `hVBlankCounter`, so a frame with bit
-			## 4 clear photographs a board with no cursor on it.
-			## 4 to 7 are the same four pictures with the board walked into
-			## `.SolvedPuzzleConfiguration` through the screen's own presses,
-			## which is the only way to photograph the assembled picture.
-			_screen.preview_unown_puzzle(
-				maxi(_cell.y, 0) % RomLayout.UNOWN_PUZZLE_PICTURES.size(),
-				maxi(_cell.y, 0) >= RomLayout.UNOWN_PUZZLE_PICTURES.size()
-			)
-			for _frame: int in maxi(_cell.x, 0):
-				if _screen.get("_unown_puzzle_host") == null:
-					break
-				_screen.advance_frame()
-		elif _kind == &"slot_machine":
-			## `special SlotMachine`, which no fixture cell reaches either. The
-			## first number is how many frames into the game to photograph and
-			## the second is the bet, 1 to 3, plus 4 for the lucky machine the
-			## Game Corner's own `random 6` picks one time in six.
-			var slots_bet: int = maxi(_cell.y, 0) % 4
-			_screen.preview_slot_machine(
-				100, maxi(_cell.y, 0) >= 4, maxi(slots_bet, 1), maxi(_cell.x, 0)
-			)
-		elif _kind == &"tile_anim":
-			## `AnimateTileset` runs once a hardware frame, so any frame of a
-			## map's own water, flowers, lava or cave scroll is reachable by
-			## spending them: the first number is how many, and the cell goes in
-			## `tile_anim@x,y` as usual.
-			for _spent: int in maxi(_cell.x, 0):
-				_screen.advance_frame()
-		elif _kind == &"card_flip":
-			## `special CardFlip`, which no fixture cell reaches either. The
-			## first number is how many frames into the game to photograph and
-			## the second the balance in hundreds of coins, 0 meaning 100.
-			_screen.preview_card_flip(
-				maxi(_cell.y, 0) * 100 if _cell.y > 0 else 100, maxi(_cell.x, 0)
-			)
-		elif _kind == &"day_care":
-			## The Day-Care's five, driven the way the two above are. The first
-			## number is how many presses into the routine to photograph and the
-			## second is which routine: 0 the man, 1 the lady, 2 the man outside,
-			## 3 and 4 the two signs.
-			_screen.preview_day_care(DAY_CARE_ROLES[clampi(
-				_cell.y, 0, DAY_CARE_ROLES.size() - 1
-			)])
-			_settle_mon_special("_day_care_host")
-			for _press: int in maxi(_cell.x, 0):
-				if _screen.get("_day_care_host") == null:
-					break
-				_screen.press_button(Gen2Button.A)
-				_settle_mon_special("_day_care_host")
-		elif _kind in [&"name_rater", &"move_deleter", &"move_tutor"]:
-			## `special NameRater` and `special MoveDeletion`, neither of which
-			## any fixture cell reaches. The first number is how many presses
-			## into the routine to photograph: 2 is the introduction's last page
-			## with its YES/NO up, 4 the party list, and so on. Presses are spent
-			## only once the box owes no frames, since nothing shortens a
-			## printing text.
-			match _kind:
-				&"name_rater":
-					_screen.preview_name_rater()
-				&"move_tutor":
-					_screen.preview_move_tutor()
-				_:
-					_screen.preview_move_deleter()
-			var host_property: String = "_%s_host" % _kind
-			_settle_mon_special(host_property)
-			for _press: int in maxi(_cell.x, 0):
-				if _screen.get(host_property) == null:
-					break
-				_screen.press_button(Gen2Button.A)
-				_settle_mon_special(host_property)
-		elif _kind == &"battle_tower":
-			## `BattleTower1FReceptionistScript` from the cell below her, which is
-			## where `Script_WalkToBattleTowerElevator` puts the player back. The
-			## first number is how many A presses to spend, walking the welcome box,
-			## the explanation question and the three-row menu; the second is how many
-			## DOWN presses on whichever menu is up. `_CheckForBattleTowerRules`
-			## refuses anything but three different species holding three different
-			## items, and the development save's party is not one.
-			_stage_battle_tower_party()
-			_screen.press_button(Gen2Button.UP)
-			_screen.interact()
-			for _frame: int in TEXT_SETTLE_FRAMES:
-				_screen.advance_frame()
-			for _press: int in maxi(_cell.x, 0):
-				_screen.press_button(Gen2Button.A)
-				for _frame: int in TEXT_SETTLE_FRAMES:
-					_screen.advance_frame()
-			for _press: int in maxi(_cell.y, 0):
-				_screen.press_button(Gen2Button.DOWN)
-				for _frame: int in TEXT_SETTLE_FRAMES:
-					_screen.advance_frame()
-		elif _kind == &"yes_no":
-			## `Script_yesorno`'s own box: the NPC beside the player is talked
-			## to and each page answered until the choice the script ends on is
-			## up, which is what photographs `YesNoMenuHeader.MenuData`'s
-			## cursor. `crystal 26 3 ... yes_no 31 6` is Cherrygrove's guide.
-			_screen.press_button(Gen2Button.RIGHT)
-			_screen.interact()
-			for _press: int in WARP_FRAME_CAP:
-				if StringName(_screen._world.pending_script_input().get(
-					"command", &"")) == &"yesorno":
-					break
-				_screen.press_button(Gen2Button.A)
-				for _frame: int in 20:
-					_screen.advance_frame()
-		elif _kind == &"mart" or _kind == &"mart_sell":
-			## The clerk behind the counter, talked to from the cell in front of
-			## him: his `pokemart` is what opens `BuyMenu`, so the shop is
-			## reached the way a player reaches it. The presses are the dialog's
-			## own, the welcome box first and then the list.
-			_screen.press_button(Gen2Button.LEFT)
-			_screen.interact()
-			for _press: int in MART_PRESSES:
-				_screen.press_button(Gen2Button.A)
-			## `StandardMart`'s BUY/SELL/QUIT loop is what the welcome box hands
-			## the shop to. `mart` takes its BUY row, `mart_sell` the one below.
-			if _kind == &"mart_sell":
-				_screen.press_button(Gen2Button.DOWN)
-			_screen.press_button(Gen2Button.A)
-		elif _kind == &"elevator":
-			## The floor panel, read from the cell below it: `bg_event 3, 0`'s
-			## own `elevator` is what opens the floor list. The car has to know
-			## where it is standing first, which is what `warpmod` gives it, so
-			## the map's own script is left to run before the panel is read.
-			## The number is how many DOWN presses to spend on the list.
-			var car: Gen2WorldAPI = _screen.get("_world")
-			var door: Dictionary = (car.current_map.events.get("warps", []) as Array)[0]
-			## `.FindCurrentFloor` matches the backup warp's map, which walking
-			## into the car through its own -1 door is what writes. A preview
-			## opens the map instead of walking to it, so the floor the door
-			## names stands in for the one the player came from.
-			car.backup_warp = {
-				"warp": 1,
-				"map_group": int(door["map_group"]),
-				"map_number": int(door["map_number"]),
-			}
-			_screen.press_button(Gen2Button.UP)
-			_screen.interact()
-			for _press: int in maxi(_cell.x, 0):
-				_screen.press_button(Gen2Button.DOWN)
-		elif _kind == &"warp":
-			## `MapSetupScript_Door` at its whitest: the step onto the warp tile
-			## and then `FadeOutToWhite`'s last order, which is the frame the map
-			## is loaded on.
-			for _frame: int in WARP_FRAME_CAP:
-				## The first press turns, the second steps: the player is facing
-				## the room rather than the stairs when the map opens.
-				_screen.move_up()
-				_screen.advance_frame()
-				var fade: Dictionary = _screen.map_fade()
-				if StringName(fade.get("stage", &"")) == &"out" \
-					and int(fade.get("step", 0)) == Gen2WorldPalette.FADE_OUT_ORDERS.size() - 1:
-					break
-		elif _kind == &"door":
-			## `CheckDirectionalWarp`'s carpet: the step onto an interior door's
-			## mat lands and takes no warp, which is what this photographs. The
-			## press after it is `.CheckWarp`, and that is the one that warps.
-			for _frame: int in WARP_FRAME_CAP:
-				_screen.move_down()
-				_screen.advance_frame()
-				if Gen2WorldCollision.is_directional_warp(
-					int(_screen.world_snapshot().get("collision", -1))
-				):
-					## player_cell commits when the step starts, so the frames
-					## the player is still walking are spent before the picture.
-					_screen.advance_frames(
-						Gen2WorldAPI.passes_in_frames(Gen2WorldAPI.STEP_PASSES_WALK)
-					)
-					break
-		elif _kind == &"ledge":
-			## `StepFunction_PlayerJump` at the top of its arc: the player is
-			## walked south until a cell allows the hop below it, and the picture
-			## is the frame `UpdateJumpPosition` draws highest
-			## (`crystal 24 4 ... ledge 5 4`).
-			for _frame: int in WARP_FRAME_CAP:
-				_screen.move_down()
-				_screen.advance_frame()
-				if _screen.player_height_offset_pixels() >= LEDGE_ARC_TOP:
-					break
-		elif _kind == &"ice_slide":
-			## `DoPlayerMovement.CheckForced`: one press starts the run and the
-			## frames after it are the slide's own, since nothing is held. The
-			## first number is the direction in `.forced_dpad` order, down, up,
-			## left, right, and the second how many frames to spend after the
-			## press; the cell goes in `ice_slide@x,y`
-			## (`crystal 3 61 ... ice_slide@11,29 3 40`).
-			var slide_button: int = ICE_SLIDE_BUTTONS[posmod(maxi(_cell.x, 0), 4)]
-			for _press: int in WARP_FRAME_CAP:
-				if _screen.standing_on_ice():
-					break
-				_screen.press_button(slide_button)
-				_screen.advance_frame()
-			for _spent: int in maxi(_cell.y, 0):
-				_screen.advance_frame()
-		elif _kind == &"map_name_sign":
-			## `MapSetupScript_Connection`'s `InitMapNameSign`: walked west off
-			## New Bark Town's edge onto Route 29, photographed while the sign
-			## the crossing raised is still up (`crystal 24 4 ... map_name_sign
-			## 0 6`). The camera and the tile animation both keep running behind
-			## it, which is the whole point of the row.
-			for _frame: int in WARP_FRAME_CAP:
-				_screen.move_left()
-				_screen.advance_frame()
-				if _screen.map_name_sign_passes() > 0 \
-					and _screen.map_name_sign_passes() < Gen2WorldAPI.MAP_NAME_SIGN_PASSES:
-					break
-		elif _kind == &"mod_notice":
-			## `Gen2ModHost.request_notice`'s banner, raised over the map the
-			## way `InitMapNameSign` raises the landmark one. The first number
-			## is which badge the icon shows.
-			Gen2ModHost.instance().request_notice(&"preview", {
-				"title": "BADGE WON",
-				"line": BADGE_NAMES[clampi(_cell.x, 0, BADGE_NAMES.size() - 1)],
-				"icon": {"badge": clampi(_cell.x, 0, 7)},
-				"sound": &"none",
-			})
-			for _frame: int in WARP_FRAME_CAP:
-				_screen.advance_frame()
-				if _screen.map_name_sign_passes() > 0 \
-					and _screen.map_name_sign_passes() < Gen2WorldAPI.MAP_NAME_SIGN_PASSES:
-					break
-		elif _kind == &"mod_page":
-			## `START_ACTION_OPEN_MOD_PAGE`'s screen, with the eight Johto
-			## badges listed and the first number saying how many are won.
-			var won: int = clampi(_cell.x, 0, BADGE_NAMES.size())
-			Gen2ModHost.instance().register_page(&"preview", {
-				"title": "BADGES",
-				"rows": func() -> Array:
-					var rows: Array = []
-					for badge: int in BADGE_NAMES.size():
-						rows.append({
-							"label": BADGE_NAMES[badge],
-							"detail": "WON" if badge < won else "",
-							"icon": {"badge": badge},
-							"locked": badge >= won,
-						})
-					return rows,
-			})
-			_screen._open_mod_page(&"preview")
-			_screen.advance_frame()
-		elif _kind == &"pokepic":
-			_screen.preview_pokepic(POKEPIC_SPECIES)
-		elif _kind == &"unown_printer":
-			## `_UnownPrinter`'s browser: the first number is the slot, where 26
-			## is the vacant one, and the second is 1 for the page A sends.
-			_screen.preview_unown_printer(maxi(_cell.x, 0), _cell.y >= 1)
-		elif _kind == &"diploma":
-			## `_Diploma`'s page, `_PrintDiploma`'s with the printer's own status
-			## box over it, and page 2 behind a printer that answered: the first
-			## number is 1 for the printing loop and the second the page.
-			_screen.preview_diploma(_cell.x >= 1, maxi(_cell.y, 1))
-		elif _kind == &"start_menu":
-			## `SetUpMenuItems`' own gates opened, because the list worth
-			## photographing is the eight rows a finished save carries: they fill
-			## the box exactly, so the host's MODS row and any a mod registered
-			## are what the window has to be scrolled to. The first number is how
-			## many rows down to walk before the picture, and a second number of
-			## 1 or more runs the Bug Catching Contest, which is the list
-			## `SetUpMenuItems` drops PACK from and puts QUIT in SAVE's slot.
-			if _cell.y >= 1:
-				var contest_world: Gen2WorldAPI = _screen.get("_world")
-				contest_world.state.set_engine_flag(Gen2WorldState.engine_flag(
-					Gen2WorldState.ENGINE_BUG_CONTEST_TIMER,
-					Gen2WorldState.is_crystal_profile(contest_world.data)
-				))
-				contest_world.state.set_park_balls(Gen2WorldBugContest.BALLS)
-				## A second number of 2 or more has something caught, which is
-				## the LEVEL row `StartMenu_PrintBugContestStatus` skips while
-				## `wContestMon` is still zero.
-				if _cell.y >= 2:
-					contest_world.state.set_contest_mon({
-						"species": 10, "level": 7, "max_hp": 22, "hp": 22,
-					})
-			_screen.get("_world").state.set_engine_flag(
-				Gen2WorldStartMenu.ENGINE_POKEDEX, true
-			)
-			_screen.get("_world").state.set_engine_flag(
-				Gen2WorldStartMenu.ENGINE_POKEGEAR, true
-			)
-			_screen.preview_start_menu()
-			for _down: int in maxi(_cell.x, 0):
-				_screen.press_button(Gen2Button.DOWN)
-				_screen.advance_frame()
-		elif _kind in [&"bills_pc", &"players_pc", &"pokemon_center_pc"]:
-			## `_BillsPC`, which no preview cell reaches: the first number is how
-			## many rows down the top menu to stand and the second how many A
-			## presses to spend from there, so `1 1` is the DEPOSIT list and
-			## `1 2` its submenu on the first party member.
-			_screen.call(SCREEN_DRIVER % _kind)
-			for _down: int in maxi(_cell.x, 0):
-				_screen.press_button(Gen2Button.DOWN)
-				_screen.advance_frame()
-			for _press: int in maxi(_cell.y, 0):
-				_screen.press_button(Gen2Button.A)
-				_screen.advance_frame()
-		elif _kind == &"mom_bank":
-			## `Mom_SetUpDepositMenu` and its withdraw twin, which no fixture
-			## cell reaches: her house is not a preview map and the dial stands
-			## three questions into `BankOfMom`.
-			_screen.preview_mom_bank(
-				Gen2WorldMoneyDial.MODE_WITHDRAW if _cell.y >= 1000 \
-					else Gen2WorldMoneyDial.MODE_DEPOSIT,
-				(maxi(_cell.y, 0) % 1000) * 100, maxi(_cell.x, 0) * 100
-			)
-		elif FIELD_ITEMS.has(_kind):
-			if _kind in FACE_UP_FIRST:
-				_screen.move_up()
-			_screen.preview_field_item(int(FIELD_ITEMS[_kind]))
-		elif _screen.has_method(SCREEN_DRIVER % _kind):
-			## The screen's own `preview_*` drivers, by their name without the
-			## prefix. A `*_use` driver is one step per call, so it is called
-			## twice: the first opens the menu and the second answers it.
-			_screen.call(SCREEN_DRIVER % _kind)
-			if String(_kind).ends_with("_use") or String(_kind).ends_with("_question"):
-				_screen.call(SCREEN_DRIVER % _kind)
-		elif not _bare:
-			_screen.preview_effect_sprites(_kind)
-		if not _bare and _kind not in [
-			&"warp", &"door", &"map_name_sign", &"ledge", &"heal_machine",
-			&"battle", &"battle_transition", &"level_evolution", &"egg_hatch",
-			&"name_rater", &"move_deleter", &"move_tutor", &"day_care",
-			&"ice_slide", &"whiteout", &"view_cover", &"gift_nickname",
-			&"catch_nickname", &"mom_bank", &"bills_pc", &"players_pc",
-			&"pokemon_center_pc", &"start_menu", &"mod_notice", &"mod_page",
-			&"reset_question", &"launcher_question",
-		]:
-			## Those kinds drove themselves to the frame they want; every other
-			## kind stages a sprite and then spends the frames it needs.
+		_stage_kind()
+		if not _bare and _kind not in SELF_DRIVEN_KINDS:
 			for _frame: int in (STAGED_FRAMES_CUT if _kind == &"cut" else STAGED_FRAMES):
 				_screen.advance_frame()
 	if _frames < 18:
@@ -756,6 +415,439 @@ func _process(_delta: float) -> bool:
 	return true
 
 
+## The chamber's own `bg_event ..., BGEVENT_UP`: face the wall from the cell below it
+## and read it, which is the only way in.
+func _stage_unown_wall() -> void:
+	_screen.move_up()
+	_screen.interact()
+	## `writetext` is one page: the first press finishes the reveal the
+	## text speed is still spending, and the second ends the page, which
+	## is what runs `special DisplayUnownWords` and puts the box up.
+	_screen.press_button(Gen2Button.A)
+	_screen.press_button(Gen2Button.A)
+
+
+## Past the transition and into the fight it opens, which is the one picture a battle
+## renderer staged on the map draws.
+func _stage_battle() -> void:
+	_screen.preview_battle_request()
+	_screen.settle_battle_transition()
+	_screen.advance_frames(STAGED_FRAMES)
+
+
+## `DoBattleTransition` over the map it runs on. The first of the two numbers is how
+## many frames into it to photograph rather than a cell, since a transition is two
+## hundred of them and every one is a different picture; the second is 1 for a
+## trainer's, which is the branch that draws the Poke Ball and floods the map.
+func _stage_battle_transition() -> void:
+	_screen.preview_battle_transition(_cell.x, _cell.y != 0)
+
+
+## One of the five fade specials over the map it runs on. The first number is the
+## special (46 `FadeOutToWhite`, 47 `BattleTowerFade`, 48 `FadeOutToBlack`, 49
+## `FadeInFromWhite`, 50 `FadeInFromBlack`) and the second how many of its frames to
+## spend before the picture, since each of the four rows is a different screen.
+func _stage_script_fade() -> void:
+	_screen.preview_script_fade(maxi(_cell.x, 0))
+	for _frame: int in maxi(_cell.y, 0):
+		_screen.advance_frame()
+
+
+## `EvolveAfterBattle`'s own screen, which is a few hundred frames of picture. The
+## first number is how far into it to photograph rather than a cell, the way
+## `battle_transition`'s is; the box is pressed past on the frames it is waiting on,
+## since neither `PrintText` nor `DelayFrames` shortens for a screenshot.
+func _stage_level_evolution() -> void:
+	_screen.preview_level_evolution()
+	for _frame: int in maxi(_cell.x, 0):
+		_screen.advance_frame()
+		var evolving: Gen2EvolutionScreen = _screen.get("_evolution_host")
+		if evolving == null:
+			break
+		if evolving.awaiting_press():
+			_screen.press_button(Gen2Button.A)
+
+
+## `OverworldHatchEgg`, driven the same way and for the same reason: the sequence is
+## five hundred frames of picture, so the first number is how far into it to
+## photograph and the second is the species inside the egg, 0 for the first the cache
+## holds.
+func _stage_egg_hatch() -> void:
+	_screen.preview_egg_hatch(maxi(_cell.y, 0))
+	for _frame: int in maxi(_cell.x, 0):
+		_screen.advance_frame()
+		var hatching: Gen2EggHatchScreen = _screen.get("_hatch_host")
+		if hatching == null:
+			break
+		if hatching.awaiting_press():
+			_screen.press_button(Gen2Button.A)
+
+
+## `GivePoke`'s own prompt. The presses are spent behind the frames the box owes,
+## since nothing shortens a printing text; the second number's thousands digit is the
+## box branch.
+func _stage_gift_nickname() -> void:
+	_screen.preview_gift_nickname(maxi(_cell.y, 0) % 1000, _cell.y >= 1000)
+	_settle_mon_special("_nickname_host")
+	for _press: int in maxi(_cell.x, 0):
+		var prompt: Gen2NicknamePromptScreen = _screen.get("_nickname_host")
+		if prompt == null:
+			break
+		## NO on the question, so the mode photographs the routine's own
+		## boxes; the keyboard behind YES has `preview_naming_screen.gd`.
+		_screen.press_button(
+			Gen2Button.B if prompt.question_ready() else Gen2Button.A
+		)
+		_settle_mon_special("_nickname_host")
+
+
+## `Script_Whiteout`, which no fixture cell reaches: the party is poisoned down to its
+## last point and the pass `CountStep` owes is spent. The first number is how many of
+## its presses to spend, so 0 is the faint line, 1 the first page of `_WhitedOutText`
+## and 3 the map the player wakes up on.
+func _stage_whiteout() -> void:
+	_screen.preview_whiteout()
+	## The box reveals a letter at a time at the OPTION menu's own speed,
+	## so each press is given behind the frames its page costs.
+	for _press: int in maxi(_cell.x, 0) + 1:
+		for _frame: int in 120:
+			_screen.advance_frame()
+		if _press < maxi(_cell.x, 0):
+			_screen.press_button(Gen2Button.A)
+
+
+## `special UnownPuzzle`, which no fixture cell reaches. The first number is how many
+## frames into the board to photograph and the second which picture: 0 Kabuto, 1
+## Omanyte, 2 Aerodactyl, 3 Ho-Oh. The empty cursor blinks off `hVBlankCounter`, so a
+## frame with bit 4 clear photographs a board with no cursor on it. 4 to 7 are the
+## same four pictures with the board walked into `.SolvedPuzzleConfiguration` through
+## the screen's own presses, which is the only way to photograph the assembled
+## picture.
+func _stage_unown_puzzle() -> void:
+	_screen.preview_unown_puzzle(
+		maxi(_cell.y, 0) % RomLayout.UNOWN_PUZZLE_PICTURES.size(),
+		maxi(_cell.y, 0) >= RomLayout.UNOWN_PUZZLE_PICTURES.size()
+	)
+	for _frame: int in maxi(_cell.x, 0):
+		if _screen.get("_unown_puzzle_host") == null:
+			break
+		_screen.advance_frame()
+
+
+## `special SlotMachine`, which no fixture cell reaches either. The first number is
+## how many frames into the game to photograph and the second is the bet, 1 to 3, plus
+## 4 for the lucky machine the Game Corner's own `random 6` picks one time in six.
+func _stage_slot_machine() -> void:
+	var slots_bet: int = maxi(_cell.y, 0) % 4
+	_screen.preview_slot_machine(
+		100, maxi(_cell.y, 0) >= 4, maxi(slots_bet, 1), maxi(_cell.x, 0)
+	)
+
+
+## `AnimateTileset` runs once a hardware frame, so any frame of a map's own water,
+## flowers, lava or cave scroll is reachable by spending them: the first number is how
+## many, and the cell goes in `tile_anim@x,y` as usual.
+func _stage_tile_anim() -> void:
+	for _spent: int in maxi(_cell.x, 0):
+		_screen.advance_frame()
+
+
+## `special CardFlip`, which no fixture cell reaches either. The first number is how
+## many frames into the game to photograph and the second the balance in hundreds of
+## coins, 0 meaning 100.
+func _stage_card_flip() -> void:
+	_screen.preview_card_flip(
+		maxi(_cell.y, 0) * 100 if _cell.y > 0 else 100, maxi(_cell.x, 0)
+	)
+
+
+## The Day-Care's five, driven the way the two above are. The first number is how many
+## presses into the routine to photograph and the second is which routine: 0 the man,
+## 1 the lady, 2 the man outside, 3 and 4 the two signs.
+func _stage_day_care() -> void:
+	_screen.preview_day_care(DAY_CARE_ROLES[clampi(
+		_cell.y, 0, DAY_CARE_ROLES.size() - 1
+	)])
+	_settle_mon_special("_day_care_host")
+	for _press: int in maxi(_cell.x, 0):
+		if _screen.get("_day_care_host") == null:
+			break
+		_screen.press_button(Gen2Button.A)
+		_settle_mon_special("_day_care_host")
+
+
+## `special NameRater` and `special MoveDeletion`, neither of which any fixture cell
+## reaches. The first number is how many presses into the routine to photograph: 2 is
+## the introduction's last page with its YES/NO up, 4 the party list, and so on.
+## Presses are spent only once the box owes no frames, since nothing shortens a
+## printing text.
+func _stage_party_routine() -> void:
+	_screen.call(SCREEN_DRIVER % _kind)
+	var host_property: String = "_%s_host" % _kind
+	_settle_mon_special(host_property)
+	for _press: int in maxi(_cell.x, 0):
+		if _screen.get(host_property) == null:
+			break
+		_screen.press_button(Gen2Button.A)
+		_settle_mon_special(host_property)
+
+
+## `BattleTower1FReceptionistScript` from the cell below her, which is where
+## `Script_WalkToBattleTowerElevator` puts the player back. The first number is how
+## many A presses to spend, walking the welcome box, the explanation question and the
+## three-row menu; the second is how many DOWN presses on whichever menu is up.
+## `_CheckForBattleTowerRules` refuses anything but three different species holding
+## three different items, and the development save's party is not one.
+func _stage_battle_tower() -> void:
+	_stage_battle_tower_party()
+	_screen.press_button(Gen2Button.UP)
+	_screen.interact()
+	for _frame: int in TEXT_SETTLE_FRAMES:
+		_screen.advance_frame()
+	for _press: int in maxi(_cell.x, 0):
+		_screen.press_button(Gen2Button.A)
+		for _frame: int in TEXT_SETTLE_FRAMES:
+			_screen.advance_frame()
+	for _press: int in maxi(_cell.y, 0):
+		_screen.press_button(Gen2Button.DOWN)
+		for _frame: int in TEXT_SETTLE_FRAMES:
+			_screen.advance_frame()
+
+
+## `Script_yesorno`'s own box: the NPC beside the player is talked to and each page
+## answered until the choice the script ends on is up, which is what photographs
+## `YesNoMenuHeader.MenuData`'s cursor. `crystal 26 3 ... yes_no 31 6` is
+## Cherrygrove's guide.
+func _stage_yes_no() -> void:
+	_screen.press_button(Gen2Button.RIGHT)
+	_screen.interact()
+	for _press: int in WARP_FRAME_CAP:
+		if StringName(_screen._world.pending_script_input().get(
+			"command", &"")) == &"yesorno":
+			break
+		_screen.press_button(Gen2Button.A)
+		for _frame: int in 20:
+			_screen.advance_frame()
+
+
+## The clerk behind the counter, talked to from the cell in front of him: his
+## `pokemart` is what opens `BuyMenu`, so the shop is reached the way a player reaches
+## it. The presses are the dialog's own, the welcome box first and then the list.
+func _stage_mart() -> void:
+	_screen.press_button(Gen2Button.LEFT)
+	_screen.interact()
+	for _press: int in MART_PRESSES:
+		_screen.press_button(Gen2Button.A)
+	## `StandardMart`'s BUY/SELL/QUIT loop is what the welcome box hands
+	## the shop to. `mart` takes its BUY row, `mart_sell` the one below.
+	if _kind == &"mart_sell":
+		_screen.press_button(Gen2Button.DOWN)
+	_screen.press_button(Gen2Button.A)
+
+
+## The floor panel, read from the cell below it: `bg_event 3, 0`'s own `elevator` is
+## what opens the floor list. The car has to know where it is standing first, which is
+## what `warpmod` gives it, so the map's own script is left to run before the panel is
+## read. The number is how many DOWN presses to spend on the list.
+func _stage_elevator() -> void:
+	var car: Gen2WorldAPI = _screen.get("_world")
+	var door: Dictionary = (car.current_map.events.get("warps", []) as Array)[0]
+	## `.FindCurrentFloor` matches the backup warp's map, which walking
+	## into the car through its own -1 door is what writes. A preview
+	## opens the map instead of walking to it, so the floor the door
+	## names stands in for the one the player came from.
+	car.backup_warp = {
+		"warp": 1,
+		"map_group": int(door["map_group"]),
+		"map_number": int(door["map_number"]),
+	}
+	_screen.press_button(Gen2Button.UP)
+	_screen.interact()
+	for _press: int in maxi(_cell.x, 0):
+		_screen.press_button(Gen2Button.DOWN)
+
+
+## `MapSetupScript_Door` at its whitest: the step onto the warp tile and then
+## `FadeOutToWhite`'s last order, which is the frame the map is loaded on.
+func _stage_warp() -> void:
+	for _frame: int in WARP_FRAME_CAP:
+		## The first press turns, the second steps: the player is facing
+		## the room rather than the stairs when the map opens.
+		_screen.move_up()
+		_screen.advance_frame()
+		var fade: Dictionary = _screen.map_fade()
+		if StringName(fade.get("stage", &"")) == &"out" \
+			and int(fade.get("step", 0)) == Gen2WorldPalette.FADE_OUT_ORDERS.size() - 1:
+			break
+
+
+## `CheckDirectionalWarp`'s carpet: the step onto an interior door's mat lands and
+## takes no warp, which is what this photographs. The press after it is `.CheckWarp`,
+## and that is the one that warps.
+func _stage_door() -> void:
+	for _frame: int in WARP_FRAME_CAP:
+		_screen.move_down()
+		_screen.advance_frame()
+		if Gen2WorldCollision.is_directional_warp(
+			int(_screen.world_snapshot().get("collision", -1))
+		):
+			## player_cell commits when the step starts, so the frames
+			## the player is still walking are spent before the picture.
+			_screen.advance_frames(
+				Gen2WorldAPI.passes_in_frames(Gen2WorldAPI.STEP_PASSES_WALK)
+			)
+			break
+
+
+## `StepFunction_PlayerJump` at the top of its arc: the player is walked south until a
+## cell allows the hop below it, and the picture is the frame `UpdateJumpPosition`
+## draws highest (`crystal 24 4 ... ledge 5 4`).
+func _stage_ledge() -> void:
+	for _frame: int in WARP_FRAME_CAP:
+		_screen.move_down()
+		_screen.advance_frame()
+		if _screen.player_height_offset_pixels() >= LEDGE_ARC_TOP:
+			break
+
+
+## `DoPlayerMovement.CheckForced`: one press starts the run and the frames after it
+## are the slide's own, since nothing is held. The first number is the direction in
+## `.forced_dpad` order, down, up, left, right, and the second how many frames to
+## spend after the press; the cell goes in `ice_slide@x,y` (`crystal 3 61 ...
+## ice_slide@11,29 3 40`).
+func _stage_ice_slide() -> void:
+	var slide_button: int = ICE_SLIDE_BUTTONS[posmod(maxi(_cell.x, 0), 4)]
+	for _press: int in WARP_FRAME_CAP:
+		if _screen.standing_on_ice():
+			break
+		_screen.press_button(slide_button)
+		_screen.advance_frame()
+	for _spent: int in maxi(_cell.y, 0):
+		_screen.advance_frame()
+
+
+## `MapSetupScript_Connection`'s `InitMapNameSign`: walked west off New Bark Town's
+## edge onto Route 29, photographed while the sign the crossing raised is still up
+## (`crystal 24 4 ... map_name_sign 0 6`). The camera and the tile animation both keep
+## running behind it, which is the whole point of the row.
+func _stage_map_name_sign() -> void:
+	for _frame: int in WARP_FRAME_CAP:
+		_screen.move_left()
+		_screen.advance_frame()
+		if _screen.map_name_sign_passes() > 0 \
+			and _screen.map_name_sign_passes() < Gen2WorldAPI.MAP_NAME_SIGN_PASSES:
+			break
+
+
+## `Gen2ModHost.request_notice`'s banner, raised over the map the way
+## `InitMapNameSign` raises the landmark one. The first number is which badge the icon
+## shows.
+func _stage_mod_notice() -> void:
+	Gen2ModHost.instance().request_notice(&"preview", {
+		"title": "BADGE WON",
+		"line": BADGE_NAMES[clampi(_cell.x, 0, BADGE_NAMES.size() - 1)],
+		"icon": {"badge": clampi(_cell.x, 0, 7)},
+		"sound": &"none",
+	})
+	for _frame: int in WARP_FRAME_CAP:
+		_screen.advance_frame()
+		if _screen.map_name_sign_passes() > 0 \
+			and _screen.map_name_sign_passes() < Gen2WorldAPI.MAP_NAME_SIGN_PASSES:
+			break
+
+
+## `START_ACTION_OPEN_MOD_PAGE`'s screen, with the eight Johto badges listed and the
+## first number saying how many are won.
+func _stage_mod_page() -> void:
+	var won: int = clampi(_cell.x, 0, BADGE_NAMES.size())
+	Gen2ModHost.instance().register_page(&"preview", {
+		"title": "BADGES",
+		"rows": func() -> Array:
+			var rows: Array = []
+			for badge: int in BADGE_NAMES.size():
+				rows.append({
+					"label": BADGE_NAMES[badge],
+					"detail": "WON" if badge < won else "",
+					"icon": {"badge": badge},
+					"locked": badge >= won,
+				})
+			return rows,
+	})
+	_screen._open_mod_page(&"preview")
+	_screen.advance_frame()
+
+
+func _stage_pokepic() -> void:
+	_screen.preview_pokepic(POKEPIC_SPECIES)
+
+
+## `_UnownPrinter`'s browser: the first number is the slot, where 26 is the vacant
+## one, and the second is 1 for the page A sends.
+func _stage_unown_printer() -> void:
+	_screen.preview_unown_printer(maxi(_cell.x, 0), _cell.y >= 1)
+
+
+## `_Diploma`'s page, `_PrintDiploma`'s with the printer's own status box over it, and
+## page 2 behind a printer that answered: the first number is 1 for the printing loop
+## and the second the page.
+func _stage_diploma() -> void:
+	_screen.preview_diploma(_cell.x >= 1, maxi(_cell.y, 1))
+
+
+## `SetUpMenuItems`' own gates opened, because the list worth photographing is the
+## eight rows a finished save carries: they fill the box exactly, so the host's MODS
+## row and any a mod registered are what the window has to be scrolled to. The first
+## number is how many rows down to walk before the picture, and a second number of 1
+## or more runs the Bug Catching Contest, which is the list `SetUpMenuItems` drops
+## PACK from and puts QUIT in SAVE's slot.
+func _stage_start_menu() -> void:
+	if _cell.y >= 1:
+		var contest_world: Gen2WorldAPI = _screen.get("_world")
+		contest_world.state.set_engine_flag(Gen2WorldState.engine_flag(
+			Gen2WorldState.ENGINE_BUG_CONTEST_TIMER,
+			Gen2WorldState.is_crystal_profile(contest_world.data)
+		))
+		contest_world.state.set_park_balls(Gen2WorldBugContest.BALLS)
+		## A second number of 2 or more has something caught, which is
+		## the LEVEL row `StartMenu_PrintBugContestStatus` skips while
+		## `wContestMon` is still zero.
+		if _cell.y >= 2:
+			contest_world.state.set_contest_mon({
+				"species": 10, "level": 7, "max_hp": 22, "hp": 22,
+			})
+	_screen.get("_world").state.set_engine_flag(
+		Gen2WorldStartMenu.ENGINE_POKEDEX, true
+	)
+	_screen.get("_world").state.set_engine_flag(
+		Gen2WorldStartMenu.ENGINE_POKEGEAR, true
+	)
+	_screen.preview_start_menu()
+	for _down: int in maxi(_cell.x, 0):
+		_screen.press_button(Gen2Button.DOWN)
+		_screen.advance_frame()
+
+
+## `_BillsPC`, which no preview cell reaches: the first number is how many rows down
+## the top menu to stand and the second how many A presses to spend from there, so `1
+## 1` is the DEPOSIT list and `1 2` its submenu on the first party member.
+func _stage_pc() -> void:
+	_screen.call(SCREEN_DRIVER % _kind)
+	for _down: int in maxi(_cell.x, 0):
+		_screen.press_button(Gen2Button.DOWN)
+		_screen.advance_frame()
+	for _press: int in maxi(_cell.y, 0):
+		_screen.press_button(Gen2Button.A)
+		_screen.advance_frame()
+
+
+## `Mom_SetUpDepositMenu` and its withdraw twin, which no fixture cell reaches: her
+## house is not a preview map and the dial stands three questions into `BankOfMom`.
+func _stage_mom_bank() -> void:
+	_screen.preview_mom_bank(
+		Gen2WorldMoneyDial.MODE_WITHDRAW if _cell.y >= 1000 \
+			else Gen2WorldMoneyDial.MODE_DEPOSIT,
+		(maxi(_cell.y, 0) % 1000) * 100, maxi(_cell.x, 0) * 100
+	)
 ## The mod's own renderer, once there is one to choose: `_initialize` runs before
 ## the autoloads are in the tree, so nothing is registered while the screen is
 ## being built and the choice has to wait for the first frame.

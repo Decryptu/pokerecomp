@@ -1255,6 +1255,70 @@ func _stage_yes_or_no(tag: StringName, values: Dictionary) -> Dictionary:
 	return _waiting_result()
 
 
+## What answers each runtime request the host has finished, as the handler that
+## reads it. The key is the pending request's own kind.
+const COMPLETION_HANDLERS: Dictionary = {
+	&"catch_tutorial_requested": &"_complete_catch_tutorial",
+	&"swarm_requested": &"_complete_swarm",
+	&"phone_call_requested": &"_complete_phone_call",
+	&"special_phone_call_requested": &"_complete_phone_call",
+	&"mom_bank_dial_requested": &"_complete_mom_bank_dial",
+	&"party_selection_requested": &"_complete_party_selection",
+	&"apricorn_selection_requested": &"_complete_apricorn_selection",
+	&"elevator_requested": &"_complete_elevator",
+	&"trainer_approach_requested": &"_complete_trainer_approach",
+	&"day_care_requested": &"_complete_day_care",
+	&"slot_machine_requested": &"_complete_coin_game",
+	&"card_flip_requested": &"_complete_coin_game",
+	&"mart_requested": &"_complete_plain_request",
+	&"audio_requested": &"_complete_plain_request",
+	&"pokemon_requested": &"_complete_plain_request",
+	&"trade_requested": &"_complete_plain_request",
+	&"pc_requested": &"_complete_plain_request",
+	&"party_heal_requested": &"_complete_plain_request",
+	&"town_map_requested": &"_complete_plain_request",
+	## `BugContestJudging` answers with the placing, which the results script
+	## reads out of wScriptVar exactly as the marts and the PC do.
+	&"bug_contest_judging_requested": &"_complete_plain_request",
+	## Neither routine writes anything a script reads: each returns and the
+	## map's own `waitbutton` presses the text it left standing.
+	&"name_rater_requested": &"_complete_plain_request",
+	&"move_deleter_requested": &"_complete_plain_request",
+	## `MoveTutor` answers FALSE when the move was learned and -1 when the
+	## list was backed out of, which is the one branch its script reads.
+	&"move_tutor_requested": &"_complete_plain_request",
+	## `UnownPuzzle` answers `wSolvedUnownPuzzle`, which is zero for a board
+	## left on START and one for a solved one.
+	&"unown_puzzle_requested": &"_complete_plain_request",
+	## `CheckPartyFullAfterContest`'s own three answers, which
+	## `BugContestResults_DidNotLeaveMons` branches on twice.
+	&"contest_mon_requested": &"_complete_plain_request",
+	## `PlayRadio` holds until A or B and writes nothing; the station it
+	## opened is the request's own.
+	&"map_radio_requested": &"_complete_plain_request",
+	## `NewPokedexEntry` behind `GameCornerPrizeMonCheckDex`'s dex writes,
+	## which are staged here rather than in the screen.
+	&"pokedex_entry_requested": &"_complete_plain_request",
+	## `GiveDratini` rewrites four move slots and answers nothing: every one
+	## of its scripts runs straight on.
+	&"dratini_moveset_requested": &"_complete_plain_request",
+	## `_Diploma`, `_PrintDiploma` and `_UnownPrinter` write nothing either:
+	## the page stands until a button and the script runs on behind it.
+	&"diploma_requested": &"_complete_plain_request",
+	&"unown_printer_requested": &"_complete_plain_request",
+	## `TryQuickSave` answers TRUE for a save that was written and FALSE for
+	## one that was not, which is the branch both of its sites read.
+	&"quick_save_requested": &"_complete_plain_request",
+	## `_DisplayLinkRecord` draws one page and holds for a button, and the
+	## three link rooms' own consoles run their exchange and come back to a
+	## `newloadmap`. Neither writes anything the script reads.
+	&"link_record_requested": &"_complete_plain_request",
+	&"link_room_requested": &"_complete_plain_request",
+	&"rival_name_requested": &"_complete_rival_name",
+	&"battle_requested": &"_complete_battle",
+}
+
+
 ## Completes a host-owned runtime request without treating a button press as its
 ## result. A confirmed loss ends this invocation through the explicit blackout
 ## recovery result without committing its staged world state.
@@ -1266,315 +1330,332 @@ func complete_runtime_request(result: Dictionary) -> Dictionary:
 		}
 	var request: Dictionary = _pending.get("request", {})
 	var kind: StringName = StringName(request.get("kind", &""))
-	if kind == &"catch_tutorial_requested":
-		if not bool(result.get("ok", false)):
-			return _fail(
-				StringName(result.get("reason", &"catch_tutorial_failed")), result
-			)
-		var catch_outcome: StringName = StringName(result.get("outcome", &""))
-		if catch_outcome != Gen2WorldBattleAdapter.OUTCOME_CAUGHT:
-			return _fail(&"invalid_catch_tutorial_outcome", result)
-		_script_value = 1
-		_events.append({
-			"type": &"catch_tutorial_completed",
-			"request": request.duplicate(true),
-			"result": result.duplicate(true),
-		})
-		_events.append({"type": &"battle_map_reload_requested", "tutorial": true})
-		_pending = {}
-		return advance()
-	if kind == &"swarm_requested":
-		if not bool(result.get("ok", false)):
-			return _fail(
-				StringName(result.get("reason", &"swarm_request_failed")), result
-			)
-		var values: Dictionary = request.get("values", {})
-		var active: bool = bool(result.get("active", true))
-		var map_group: int = int(result.get("map_group", values.get("map_group", -1)))
-		var map_number: int = int(result.get("map_number", values.get("map_number", -1)))
-		var fishing_species: int = int(result.get("fishing_species", 0))
-		var swarm_kind: int = int(
-			result.get("kind", values.get("kind", Gen2WorldState.SWARM_DUNSPARCE))
-		)
-		if active and (map_group < 0 or map_number < 0):
-			return _fail(&"invalid_swarm_map", result)
-		if fishing_species not in [0, 0xD3, 0xDF]:
-			return _fail(&"invalid_fishing_swarm_species", result)
-		if swarm_kind not in [Gen2WorldState.SWARM_DUNSPARCE, Gen2WorldState.SWARM_YANMA]:
-			return _fail(&"invalid_swarm_kind", result)
-		_staged_swarm = {
-			"active": active,
-			"kind": swarm_kind,
-			"map_group": map_group,
-			"map_number": map_number,
-			"fishing_species": fishing_species,
-		}
-		_has_staged_swarm = true
-		_events.append({
-			"type": &"swarm_changed",
-			"kind": swarm_kind,
-			"map_group": map_group,
-			"map_number": map_number,
-			"active": active,
-			"fishing_species": fishing_species,
-		})
-		_pending = {}
-		return advance()
-	if kind in [&"phone_call_requested", &"special_phone_call_requested"]:
-		if not bool(result.get("ok", false)):
-			return _fail(
-				StringName(result.get("reason", "runtime_request_failed")), result
-			)
-		var phone_data: Dictionary = result.get("data", {})
-		_events.append({
-			"type": &"runtime_request_completed",
-			"kind": kind,
-			"request": request.duplicate(true),
-			"result": result.duplicate(true),
-		})
-		_pending = {}
-		if bool(phone_data.get("clear", false)):
-			_phone_context = {}
-			_script_value = 1
-			return advance()
-		var phone_script: Dictionary = phone_data.get("script", {})
-		if phone_script.is_empty():
-			_script_value = int(result.get("script_value", 1))
-			return advance()
-		_phone_context = phone_data.get("phone", {}).duplicate(true)
-		_phone_started = false
-		if not _push_frame(
-			int(phone_script.get("bank", -1)), int(phone_script.get("address", -1))
-		):
-			return _fail(&"phone_script_missing", phone_script)
-		return advance()
-	if kind == &"mom_bank_dial_requested":
-		if not bool(result.get("ok", false)):
-			return _fail(
-				StringName(result.get("reason", &"mom_bank_dial_failed")), result
-			)
-		var dial_mode: StringName = StringName(
-			(request.get("values", {}) as Dictionary).get("mode", MOM_DIAL_DEPOSIT)
-		)
-		## A cancelled box answers -1, which is `.CancelDeposit`'s own zero
-		## amount one step earlier.
-		var dial_amount: int = int(result.get("amount", -1))
-		_events.append({
-			"type": &"runtime_request_completed",
-			"kind": kind,
-			"request": request.duplicate(true),
-			"result": result.duplicate(true),
-		})
-		_pending = {}
-		return _mom_result(_finish_mom_bank_dial(dial_mode, maxi(dial_amount, 0)))
-	if kind == &"party_selection_requested":
-		if not bool(result.get("ok", false)):
-			return _fail(
-				StringName(result.get("reason", &"party_selection_failed")), result
-			)
-		return _finish_party_selection(request, result)
-	if kind == &"apricorn_selection_requested":
-		if not bool(result.get("ok", false)):
-			return _fail(
-				StringName(result.get("reason", &"apricorn_selection_failed")), result
-			)
-		var apricorn: int = int(result.get("item", 0))
-		var apricorn_quantity: int = int(result.get("quantity", 0))
-		if apricorn != 0 and not Gen2WorldApricorn.is_apricorn(apricorn):
-			return _fail(&"invalid_apricorn", result)
-		## `SelectApricornForKurt` zeroes wKurtApricornQuantity on entry and
-		## writes it only past `Kurt_SelectQuantity`'s carry, so a cancelled
-		## selection leaves both bytes at zero.
-		if apricorn == 0:
-			apricorn_quantity = 0
-		elif apricorn_quantity < 1 or apricorn_quantity > Gen2WorldApricorn.MAX_QUANTITY:
-			return _fail(&"invalid_apricorn_quantity", result)
-		_script_value = apricorn
-		_staged_kurt_apricorn_quantity = apricorn_quantity
-		_has_staged_kurt_apricorn_quantity = true
-		_events.append({
-			"type": &"runtime_request_completed",
-			"kind": kind,
-			"request": request.duplicate(true),
-			"result": result.duplicate(true),
-		})
-		_pending = {}
-		return advance()
-	if kind == &"elevator_requested":
-		## `Script_elevator` zeroes `wScriptVar` before the call and writes TRUE
-		## only past `ret c`, so a cancelled ride and a car with no floor to
-		## match both leave the script's own FALSE branch standing.
-		if not bool(result.get("ok", false)):
-			return _fail(StringName(result.get("reason", &"elevator_failed")), result)
-		var rode: bool = result.has("floor") and result["floor"] is Dictionary
-		if rode:
-			## `Elevator_GoToFloor` copies the chosen row's last three bytes
-			## straight over `wBackupWarpNumber`, and the -1 warp out of the car
-			## is what spends them.
-			var floor_row: Dictionary = result["floor"]
-			_emit_runtime_event(&"backup_warp_changed", {
-				"warp": int(floor_row.get("warp", 0)),
-				"map_group": int(floor_row.get("map_group", 0)),
-				"map_number": int(floor_row.get("map_number", 0)),
-			})
-		_script_value = 1 if rode else 0
-		_events.append({
-			"type": &"runtime_request_completed",
-			"kind": kind,
-			"request": request.duplicate(true),
-			"result": result.duplicate(true),
-		})
-		_pending = {}
-		return advance()
-	if kind == &"trainer_approach_requested":
-		if not bool(result.get("ok", false)):
-			return _fail(
-				StringName(result.get("reason", &"trainer_approach_failed")), result
-			)
-		_events.append({
-			"type": &"trainer_approach_completed",
-			"request": request.duplicate(true),
-			"result": result.duplicate(true),
-		})
-		_pending = {}
-		return advance()
-	if kind == &"day_care_requested":
-		## Four of the five write nothing a script reads, so wScriptVar is left
-		## where it stood unless the result carries one: `DayCareManOutside` is
-		## the only routine of the five with an `ld [wScriptVar], a` in it.
-		if not bool(result.get("ok", false)):
-			return _fail(
-				StringName(result.get("reason", &"runtime_request_failed")), result
-			)
-		if result.has("script_value"):
-			_script_value = int(result["script_value"])
-		_events.append({
-			"type": &"runtime_request_completed",
-			"kind": kind,
-			"request": request.duplicate(true),
-			"result": result.duplicate(true),
-		})
-		_pending = {}
-		return advance()
-	if kind == &"slot_machine_requested" or kind == &"card_flip_requested":
-		## `_SlotMachine` and `_CardFlip` both write `wCoins` themselves, over
-		## and over, so what comes back is the balance rather than a delta.
-		## Nothing reads `wScriptVar` after either: every map `closetext` and
-		## `end`.
-		if not bool(result.get("ok", false)):
-			return _fail(
-				StringName(result.get("reason", &"slot_machine_failed")), result
-			)
-		var slot_coins: int = int(result.get("coins", _coins_value()))
-		if slot_coins < 0 or slot_coins > Gen2SlotMachine.MAX_COINS:
-			return _fail(&"invalid_coins", result)
-		_staged_coins = slot_coins
-		_events.append({
-			"type": &"runtime_request_completed",
-			"kind": kind,
-			"request": request.duplicate(true),
-			"result": result.duplicate(true),
-		})
-		_pending = {}
-		return advance()
-	if kind in [
-		&"mart_requested", &"audio_requested", &"pokemon_requested", &"trade_requested",
-		&"pc_requested", &"party_heal_requested", &"town_map_requested",
-		## `BugContestJudging` answers with the placing, which the results script
-		## reads out of wScriptVar exactly as the marts and the PC do.
-		&"bug_contest_judging_requested",
-		## Neither routine writes anything a script reads: each returns and the
-		## map's own `waitbutton` presses the text it left standing.
-		&"name_rater_requested", &"move_deleter_requested",
-		## `MoveTutor` answers FALSE when the move was learned and -1 when the
-		## list was backed out of, which is the one branch its script reads.
-		&"move_tutor_requested",
-		## `UnownPuzzle` answers `wSolvedUnownPuzzle`, which is zero for a board
-		## left on START and one for a solved one.
-		&"unown_puzzle_requested",
-		## `CheckPartyFullAfterContest`'s own three answers, which
-		## `BugContestResults_DidNotLeaveMons` branches on twice.
-		&"contest_mon_requested",
-		## `PlayRadio` holds until A or B and writes nothing; the station it
-		## opened is the request's own.
-		&"map_radio_requested",
-		## `NewPokedexEntry` behind `GameCornerPrizeMonCheckDex`'s dex writes,
-		## which are staged here rather than in the screen.
-		&"pokedex_entry_requested",
-		## `GiveDratini` rewrites four move slots and answers nothing: every one
-		## of its scripts runs straight on.
-		&"dratini_moveset_requested",
-		## `_Diploma`, `_PrintDiploma` and `_UnownPrinter` write nothing either:
-		## the page stands until a button and the script runs on behind it.
-		&"diploma_requested", &"unown_printer_requested",
-		## `TryQuickSave` answers TRUE for a save that was written and FALSE for
-		## one that was not, which is the branch both of its sites read.
-		&"quick_save_requested",
-		## `_DisplayLinkRecord` draws one page and holds for a button, and the
-		## three link rooms' own consoles run their exchange and come back to a
-		## `newloadmap`. Neither writes anything the script reads.
-		&"link_record_requested", &"link_room_requested",
-	]:
-		if not bool(result.get("ok", false)):
-			return _fail(
-				StringName(result.get("reason", "runtime_request_failed")), result
-			)
-		_script_value = int(result.get("script_value", 1))
-		_events.append({
-			"type": &"runtime_request_completed",
-			"kind": kind,
-			"request": request.duplicate(true),
-			"result": result.duplicate(true),
-		})
-		var approach_after_audio: bool = kind == &"audio_requested" \
-			and StringName((request.get("values", {}) as Dictionary).get("kind", &"")) \
-			== &"encounter_music" and _trainer_intro_approach_pending
-		var smash_after_sound: bool = kind == &"audio_requested" \
-			and StringName((request.get("values", {}) as Dictionary).get("kind", &"")) \
-			== &"sound" and _rock_smash_after_sound
-		var notify_after_sound: Dictionary = _item_notify_after_sound \
-			if kind == &"audio_requested" else {}
-		var mom_after_sound: int = _bank_of_mom_after_sound \
-			if kind == &"audio_requested" else -1
-		_pending = {}
-		if mom_after_sound >= 0:
-			_bank_of_mom_after_sound = -1
-			var receipt: String = _mom_receipt_box
-			_mom_receipt_box = ""
-			return _mom_result(_mom_box(receipt, mom_after_sound))
-		if approach_after_audio:
-			_trainer_intro_approach_pending = false
-			_stage_trainer_approach()
-		if smash_after_sound:
-			_rock_smash_after_sound = false
-			_stage_rock_smashed()
-		if not notify_after_sound.is_empty():
-			_item_notify_after_sound = {}
-			_stage_item_notify(
-				int(notify_after_sound.get("item", 0)),
-				bool(notify_after_sound.get("finish", false))
-			)
-		return advance()
-	if kind == &"rival_name_requested":
-		if not bool(result.get("ok", false)):
-			return _fail(
-				StringName(result.get("reason", &"runtime_request_failed")), result
-			)
-		var default_name: String = String(
-			(request.get("values", {}) as Dictionary).get("default_name", "SILVER")
-		)
-		_rival_name = String(result.get("name", default_name)).strip_edges()
-		if _rival_name.is_empty():
-			_rival_name = default_name
-		_script_value = 1
-		_events.append({"type": &"rival_name_changed", "name": _rival_name})
-		_pending = {}
-		return advance()
-	if kind != &"battle_requested":
+	if not COMPLETION_HANDLERS.has(kind):
 		return {
 			"ok": false, "status": &"failed", "reason": &"runtime_request_kind_mismatch",
 			"details": {"kind": kind},
 		}
+	return call(COMPLETION_HANDLERS[kind], kind, request, result)
+
+
+func _complete_catch_tutorial(
+	_kind: StringName, request: Dictionary, result: Dictionary
+) -> Dictionary:
+	if not bool(result.get("ok", false)):
+		return _fail(
+			StringName(result.get("reason", &"catch_tutorial_failed")), result
+		)
+	var catch_outcome: StringName = StringName(result.get("outcome", &""))
+	if catch_outcome != Gen2WorldBattleAdapter.OUTCOME_CAUGHT:
+		return _fail(&"invalid_catch_tutorial_outcome", result)
+	_script_value = 1
+	_events.append({
+		"type": &"catch_tutorial_completed",
+		"request": request.duplicate(true),
+		"result": result.duplicate(true),
+	})
+	_events.append({"type": &"battle_map_reload_requested", "tutorial": true})
+	_pending = {}
+	return advance()
+
+
+func _complete_swarm(
+	_kind: StringName, request: Dictionary, result: Dictionary
+) -> Dictionary:
+	if not bool(result.get("ok", false)):
+		return _fail(
+			StringName(result.get("reason", &"swarm_request_failed")), result
+		)
+	var values: Dictionary = request.get("values", {})
+	var active: bool = bool(result.get("active", true))
+	var map_group: int = int(result.get("map_group", values.get("map_group", -1)))
+	var map_number: int = int(result.get("map_number", values.get("map_number", -1)))
+	var fishing_species: int = int(result.get("fishing_species", 0))
+	var swarm_kind: int = int(
+		result.get("kind", values.get("kind", Gen2WorldState.SWARM_DUNSPARCE))
+	)
+	if active and (map_group < 0 or map_number < 0):
+		return _fail(&"invalid_swarm_map", result)
+	if fishing_species not in [0, 0xD3, 0xDF]:
+		return _fail(&"invalid_fishing_swarm_species", result)
+	if swarm_kind not in [Gen2WorldState.SWARM_DUNSPARCE, Gen2WorldState.SWARM_YANMA]:
+		return _fail(&"invalid_swarm_kind", result)
+	_staged_swarm = {
+		"active": active,
+		"kind": swarm_kind,
+		"map_group": map_group,
+		"map_number": map_number,
+		"fishing_species": fishing_species,
+	}
+	_has_staged_swarm = true
+	_events.append({
+		"type": &"swarm_changed",
+		"kind": swarm_kind,
+		"map_group": map_group,
+		"map_number": map_number,
+		"active": active,
+		"fishing_species": fishing_species,
+	})
+	_pending = {}
+	return advance()
+
+
+func _complete_phone_call(
+	kind: StringName, request: Dictionary, result: Dictionary
+) -> Dictionary:
+	if not bool(result.get("ok", false)):
+		return _fail(
+			StringName(result.get("reason", "runtime_request_failed")), result
+		)
+	var phone_data: Dictionary = result.get("data", {})
+	_events.append({
+		"type": &"runtime_request_completed",
+		"kind": kind,
+		"request": request.duplicate(true),
+		"result": result.duplicate(true),
+	})
+	_pending = {}
+	if bool(phone_data.get("clear", false)):
+		_phone_context = {}
+		_script_value = 1
+		return advance()
+	var phone_script: Dictionary = phone_data.get("script", {})
+	if phone_script.is_empty():
+		_script_value = int(result.get("script_value", 1))
+		return advance()
+	_phone_context = phone_data.get("phone", {}).duplicate(true)
+	_phone_started = false
+	if not _push_frame(
+		int(phone_script.get("bank", -1)), int(phone_script.get("address", -1))
+	):
+		return _fail(&"phone_script_missing", phone_script)
+	return advance()
+
+
+func _complete_mom_bank_dial(
+	kind: StringName, request: Dictionary, result: Dictionary
+) -> Dictionary:
+	if not bool(result.get("ok", false)):
+		return _fail(
+			StringName(result.get("reason", &"mom_bank_dial_failed")), result
+		)
+	var dial_mode: StringName = StringName(
+		(request.get("values", {}) as Dictionary).get("mode", MOM_DIAL_DEPOSIT)
+	)
+	## A cancelled box answers -1, which is `.CancelDeposit`'s own zero
+	## amount one step earlier.
+	var dial_amount: int = int(result.get("amount", -1))
+	_events.append({
+		"type": &"runtime_request_completed",
+		"kind": kind,
+		"request": request.duplicate(true),
+		"result": result.duplicate(true),
+	})
+	_pending = {}
+	return _mom_result(_finish_mom_bank_dial(dial_mode, maxi(dial_amount, 0)))
+
+
+func _complete_party_selection(
+	_kind: StringName, request: Dictionary, result: Dictionary
+) -> Dictionary:
+	if not bool(result.get("ok", false)):
+		return _fail(
+			StringName(result.get("reason", &"party_selection_failed")), result
+		)
+	return _finish_party_selection(request, result)
+
+
+func _complete_apricorn_selection(
+	kind: StringName, request: Dictionary, result: Dictionary
+) -> Dictionary:
+	if not bool(result.get("ok", false)):
+		return _fail(
+			StringName(result.get("reason", &"apricorn_selection_failed")), result
+		)
+	var apricorn: int = int(result.get("item", 0))
+	var apricorn_quantity: int = int(result.get("quantity", 0))
+	if apricorn != 0 and not Gen2WorldApricorn.is_apricorn(apricorn):
+		return _fail(&"invalid_apricorn", result)
+	## `SelectApricornForKurt` zeroes wKurtApricornQuantity on entry and
+	## writes it only past `Kurt_SelectQuantity`'s carry, so a cancelled
+	## selection leaves both bytes at zero.
+	if apricorn == 0:
+		apricorn_quantity = 0
+	elif apricorn_quantity < 1 or apricorn_quantity > Gen2WorldApricorn.MAX_QUANTITY:
+		return _fail(&"invalid_apricorn_quantity", result)
+	_script_value = apricorn
+	_staged_kurt_apricorn_quantity = apricorn_quantity
+	_has_staged_kurt_apricorn_quantity = true
+	_events.append({
+		"type": &"runtime_request_completed",
+		"kind": kind,
+		"request": request.duplicate(true),
+		"result": result.duplicate(true),
+	})
+	_pending = {}
+	return advance()
+
+
+func _complete_elevator(
+	kind: StringName, request: Dictionary, result: Dictionary
+) -> Dictionary:
+	## `Script_elevator` zeroes `wScriptVar` before the call and writes TRUE
+	## only past `ret c`, so a cancelled ride and a car with no floor to
+	## match both leave the script's own FALSE branch standing.
+	if not bool(result.get("ok", false)):
+		return _fail(StringName(result.get("reason", &"elevator_failed")), result)
+	var rode: bool = result.has("floor") and result["floor"] is Dictionary
+	if rode:
+		## `Elevator_GoToFloor` copies the chosen row's last three bytes
+		## straight over `wBackupWarpNumber`, and the -1 warp out of the car
+		## is what spends them.
+		var floor_row: Dictionary = result["floor"]
+		_emit_runtime_event(&"backup_warp_changed", {
+			"warp": int(floor_row.get("warp", 0)),
+			"map_group": int(floor_row.get("map_group", 0)),
+			"map_number": int(floor_row.get("map_number", 0)),
+		})
+	_script_value = 1 if rode else 0
+	_events.append({
+		"type": &"runtime_request_completed",
+		"kind": kind,
+		"request": request.duplicate(true),
+		"result": result.duplicate(true),
+	})
+	_pending = {}
+	return advance()
+
+
+func _complete_trainer_approach(
+	_kind: StringName, request: Dictionary, result: Dictionary
+) -> Dictionary:
+	if not bool(result.get("ok", false)):
+		return _fail(
+			StringName(result.get("reason", &"trainer_approach_failed")), result
+		)
+	_events.append({
+		"type": &"trainer_approach_completed",
+		"request": request.duplicate(true),
+		"result": result.duplicate(true),
+	})
+	_pending = {}
+	return advance()
+
+
+func _complete_day_care(
+	kind: StringName, request: Dictionary, result: Dictionary
+) -> Dictionary:
+	## Four of the five write nothing a script reads, so wScriptVar is left
+	## where it stood unless the result carries one: `DayCareManOutside` is
+	## the only routine of the five with an `ld [wScriptVar], a` in it.
+	if not bool(result.get("ok", false)):
+		return _fail(
+			StringName(result.get("reason", &"runtime_request_failed")), result
+		)
+	if result.has("script_value"):
+		_script_value = int(result["script_value"])
+	_events.append({
+		"type": &"runtime_request_completed",
+		"kind": kind,
+		"request": request.duplicate(true),
+		"result": result.duplicate(true),
+	})
+	_pending = {}
+	return advance()
+
+
+func _complete_coin_game(
+	kind: StringName, request: Dictionary, result: Dictionary
+) -> Dictionary:
+	## `_SlotMachine` and `_CardFlip` both write `wCoins` themselves, over
+	## and over, so what comes back is the balance rather than a delta.
+	## Nothing reads `wScriptVar` after either: every map `closetext` and
+	## `end`.
+	if not bool(result.get("ok", false)):
+		return _fail(
+			StringName(result.get("reason", &"slot_machine_failed")), result
+		)
+	var slot_coins: int = int(result.get("coins", _coins_value()))
+	if slot_coins < 0 or slot_coins > Gen2SlotMachine.MAX_COINS:
+		return _fail(&"invalid_coins", result)
+	_staged_coins = slot_coins
+	_events.append({
+		"type": &"runtime_request_completed",
+		"kind": kind,
+		"request": request.duplicate(true),
+		"result": result.duplicate(true),
+	})
+	_pending = {}
+	return advance()
+
+
+func _complete_plain_request(
+	kind: StringName, request: Dictionary, result: Dictionary
+) -> Dictionary:
+	if not bool(result.get("ok", false)):
+		return _fail(
+			StringName(result.get("reason", "runtime_request_failed")), result
+		)
+	_script_value = int(result.get("script_value", 1))
+	_events.append({
+		"type": &"runtime_request_completed",
+		"kind": kind,
+		"request": request.duplicate(true),
+		"result": result.duplicate(true),
+	})
+	var approach_after_audio: bool = kind == &"audio_requested" \
+		and StringName((request.get("values", {}) as Dictionary).get("kind", &"")) \
+		== &"encounter_music" and _trainer_intro_approach_pending
+	var smash_after_sound: bool = kind == &"audio_requested" \
+		and StringName((request.get("values", {}) as Dictionary).get("kind", &"")) \
+		== &"sound" and _rock_smash_after_sound
+	var notify_after_sound: Dictionary = _item_notify_after_sound \
+		if kind == &"audio_requested" else {}
+	var mom_after_sound: int = _bank_of_mom_after_sound \
+		if kind == &"audio_requested" else -1
+	_pending = {}
+	if mom_after_sound >= 0:
+		_bank_of_mom_after_sound = -1
+		var receipt: String = _mom_receipt_box
+		_mom_receipt_box = ""
+		return _mom_result(_mom_box(receipt, mom_after_sound))
+	if approach_after_audio:
+		_trainer_intro_approach_pending = false
+		_stage_trainer_approach()
+	if smash_after_sound:
+		_rock_smash_after_sound = false
+		_stage_rock_smashed()
+	if not notify_after_sound.is_empty():
+		_item_notify_after_sound = {}
+		_stage_item_notify(
+			int(notify_after_sound.get("item", 0)),
+			bool(notify_after_sound.get("finish", false))
+		)
+	return advance()
+
+
+func _complete_rival_name(
+	_kind: StringName, request: Dictionary, result: Dictionary
+) -> Dictionary:
+	if not bool(result.get("ok", false)):
+		return _fail(
+			StringName(result.get("reason", &"runtime_request_failed")), result
+		)
+	var default_name: String = String(
+		(request.get("values", {}) as Dictionary).get("default_name", "SILVER")
+	)
+	_rival_name = String(result.get("name", default_name)).strip_edges()
+	if _rival_name.is_empty():
+		_rival_name = default_name
+	_script_value = 1
+	_events.append({"type": &"rival_name_changed", "name": _rival_name})
+	_pending = {}
+	return advance()
+
+
+func _complete_battle(
+	_kind: StringName, request: Dictionary, result: Dictionary
+) -> Dictionary:
 	if not bool(result.get("ok", false)):
 		return _fail(
 			StringName(result.get("reason", &"runtime_request_failed")), result
@@ -1696,8 +1777,6 @@ func complete_runtime_request(result: Dictionary) -> Dictionary:
 	})
 	_pending = {}
 	return advance()
-
-
 func pending_runtime_request() -> Dictionary:
 	if _pending.get("type", &"") != &"runtime_request":
 		return {}
@@ -1789,10 +1868,131 @@ func is_finished() -> bool:
 	return _completed or not _failure.is_empty()
 
 
+## Every script command this runner runs, as the handler that runs it.
+const COMMAND_HANDLERS: Dictionary = {
+	Gen2WorldScript.SCALL: &"_command_scall",
+	Gen2WorldScript.FARSCALL: &"_command_farscall",
+	Gen2WorldScript.MEMCALL: &"_command_memcall",
+	Gen2WorldScript.MEMJUMP: &"_command_memcall",
+	Gen2WorldScript.WARPMOD: &"_command_warpmod",
+	Gen2WorldScript.BLACKOUTMOD: &"_command_blackoutmod",
+	Gen2WorldScript.SJUMP: &"_command_sjump",
+	Gen2WorldScript.FARSJUMP: &"_command_farsjump",
+	Gen2WorldScript.IFEQUAL: &"_command_ifequal",
+	Gen2WorldScript.IFNOTEQUAL: &"_command_ifnotequal",
+	Gen2WorldScript.IFFALSE: &"_command_iffalse",
+	Gen2WorldScript.IFTRUE: &"_command_iftrue",
+	Gen2WorldScript.IFGREATER: &"_command_ifgreater",
+	Gen2WorldScript.IFLESS: &"_command_ifless",
+	Gen2WorldScript.JUMPSTD: &"_command_jumpstd",
+	Gen2WorldScript.CALLSTD: &"_command_callstd",
+	Gen2WorldScript.CHECKMAPSCENE: &"_command_checkmapscene",
+	Gen2WorldScript.SETMAPSCENE: &"_command_setmapscene",
+	Gen2WorldScript.CHECKSCENE: &"_command_checkscene",
+	Gen2WorldScript.SETSCENE: &"_command_setscene",
+	Gen2WorldScript.CHECKVER: &"_command_checkver",
+	Gen2WorldScript.SETVAL: &"_command_setval",
+	Gen2WorldScript.ADDVAL: &"_command_addval",
+	Gen2WorldScript.READMEM: &"_command_readmem",
+	Gen2WorldScript.WRITEMEM: &"_command_writemem",
+	Gen2WorldScript.LOADMEM: &"_command_loadmem",
+	Gen2WorldScript.READVAR: &"_command_readvar",
+	Gen2WorldScript.WRITEVAR: &"_command_writevar",
+	Gen2WorldScript.LOADVAR: &"_command_loadvar",
+	Gen2WorldScript.CHECKTIME: &"_command_checktime",
+	Gen2WorldScript.ADDCELLNUM: &"_command_addcellnum",
+	Gen2WorldScript.DELCELLNUM: &"_command_delcellnum",
+	Gen2WorldScript.CHECKCELLNUM: &"_command_checkcellnum",
+	Gen2WorldScript.SPECIAL: &"_command_special",
+	Gen2WorldScript.RANDOM: &"_command_random",
+	Gen2WorldScript.GIVEITEM: &"_command_giveitem",
+	Gen2WorldScript.TAKEITEM: &"_command_takeitem",
+	Gen2WorldScript.CHECKITEM: &"_command_checkitem",
+	Gen2WorldScript.GIVEMONEY: &"_command_givemoney",
+	Gen2WorldScript.TAKEMONEY: &"_command_givemoney",
+	Gen2WorldScript.CHECKMONEY: &"_command_checkmoney",
+	Gen2WorldScript.GIVECOINS: &"_command_givecoins",
+	Gen2WorldScript.TAKECOINS: &"_command_givecoins",
+	Gen2WorldScript.CHECKCOINS: &"_command_checkcoins",
+	Gen2WorldScript.GETMONEY: &"_command_getmoney",
+	Gen2WorldScript.GETCOINS: &"_command_getcoins",
+	Gen2WorldScript.GETITEMNAME: &"_command_getitemname",
+	Gen2WorldScript.GETMONNAME: &"_command_getmonname",
+	Gen2WorldScript.GETTRAINERNAME: &"_command_gettrainername",
+	Gen2WorldScript.GETSTRING: &"_command_getstring",
+	Gen2WorldScript.CLEAREVENT: &"_command_clearevent",
+	Gen2WorldScript.SETEVENT: &"_command_setevent",
+	Gen2WorldScript.CHECKEVENT: &"_command_checkevent",
+	Gen2WorldScript.CLEARFLAG: &"_command_clearflag",
+	Gen2WorldScript.SETFLAG: &"_command_setflag",
+	Gen2WorldScript.CHECKFLAG: &"_command_checkflag",
+	Gen2WorldScript.WILDON: &"_command_wildon",
+	Gen2WorldScript.WILDOFF: &"_command_wildoff",
+	Gen2WorldScript.WARP: &"_command_warp",
+	Gen2WorldScript.OPENTEXT: &"_command_opentext",
+	Gen2WorldScript.REANCHORMAP: &"_command_opentext",
+	Gen2WorldScript.CLOSETEXT: &"_command_opentext",
+	Gen2WorldScript.WRITEUNUSEDBYTE: &"_command_opentext",
+	Gen2WorldScript.CLOSEWINDOW: &"_command_opentext",
+	Gen2WorldScript.ITEMNOTIFY: &"_command_itemnotify",
+	Gen2WorldScript.POCKETISFULL: &"_command_pocketisfull",
+	Gen2WorldScript.WRITETEXT: &"_command_writetext",
+	Gen2WorldScript.FARWRITETEXT: &"_command_farwritetext",
+	Gen2WorldScript.JUMPTEXTFACEPLAYER: &"_command_jumptextfaceplayer",
+	Gen2WorldScript.REPEATTEXT: &"_command_repeattext",
+	Gen2WorldScript.YESORNO: &"_command_yesorno",
+	Gen2WorldScript.LOADMENU: &"_command_loadmenu",
+	Gen2WorldScript.CHECKPOKE: &"_command_checkpoke",
+	Gen2WorldScript.GIVEPOKE: &"_command_givepoke",
+	Gen2WorldScript.GIVEEGG: &"_command_givepoke",
+	Gen2WorldScript.GIVEPOKEMAIL: &"_command_givepokemail",
+	Gen2WorldScript.CHECKPOKEMAIL: &"_command_checkpokemail",
+	Gen2WorldScript.GOLD_FACEPLAYER: &"_command_gold_faceplayer",
+	Gen2WorldScript.FACEPLAYER: &"_command_gold_faceplayer",
+}
+
+## The two commands with nothing behind them yet: `getnum` reads a number into
+## a text buffer and `getcurlandmarkname` the landmark the player stands on, and
+## no script in either pin prints what they leave.
+const HANDLED_BASE: Array[int] = [
+	Gen2WorldScript.GETNUM, Gen2WorldScript.GETCURLANDMARKNAME,
+]
+
+
 func _execute(command: Dictionary, frame: Dictionary) -> Dictionary:
 	var opcode: int = int(command["opcode"])
 	var bank: int = int(frame["bank"])
 	command = _catalogued(command, frame)
+	var early: Dictionary = _execute_early_command(opcode, command, bank)
+	if not early.is_empty():
+		return early
+	var source: int = Gen2WorldScript.source_opcode(opcode, _crystal_commands())
+	var object_result: Dictionary = _execute_object_command(source, command)
+	if not object_result.is_empty():
+		return object_result
+	var later_result: Dictionary = _execute_later_command(source, command, bank)
+	if not later_result.is_empty():
+		return later_result
+	if Gen2WorldScript.is_terminal(opcode, _crystal_commands()):
+		_frames.pop_back()
+		if _frames.is_empty():
+			return _complete()
+		return {"ok": true}
+	if COMMAND_HANDLERS.has(opcode):
+		return call(COMMAND_HANDLERS[opcode], opcode, command, bank)
+	if opcode in HANDLED_BASE:
+		return {"ok": true}
+	return {
+		"ok": false,
+		"reason": &"unsupported_runtime_command",
+		"command": command,
+	}
+
+
+## The commands that answer before the opcode is normalized: two text jumps whose
+## bank depends on the profile, the two button pauses, and the two raw bytes
+## Crystal added over pokegold commands. Empty when the command is not one of them.
+func _execute_early_command(opcode: int, command: Dictionary, bank: int) -> Dictionary:
 	if opcode == Gen2WorldScript.FARJUMPTEXT:
 		if _crystal_commands():
 			return _show_text(int(command["bank"]), int(command["address"]), true)
@@ -1831,387 +2031,504 @@ func _execute(command: Dictionary, frame: Dictionary) -> Dictionary:
 		if not bool(variable_given.get("ok", true)):
 			return variable_given
 		return _stage_give_item_script(variable_item, variable_name)
-	var source: int = Gen2WorldScript.source_opcode(opcode, _crystal_commands())
-	var object_result: Dictionary = _execute_object_command(source, command)
-	if not object_result.is_empty():
-		return object_result
-	var later_result: Dictionary = _execute_later_command(source, command, bank)
-	if not later_result.is_empty():
-		return later_result
-	if Gen2WorldScript.is_terminal(opcode, _crystal_commands()):
-		_frames.pop_back()
-		if _frames.is_empty():
-			return _complete()
-		return {"ok": true}
-	match opcode:
-		Gen2WorldScript.SCALL:
-			return {"ok": _push_frame(bank, int(command["address"]))}
-		Gen2WorldScript.FARSCALL:
-			return {"ok": _push_frame(int(command["bank"]), int(command["address"]))}
-		Gen2WorldScript.MEMCALL, Gen2WorldScript.MEMJUMP:
-			var runtime_pointer: Dictionary = _runtime_memory_pointer(
-				int(command.get("address", 0))
-			)
-			if runtime_pointer.is_empty():
-				return {
-					"ok": false, "reason": &"missing_runtime_pointer",
-					"address": int(command.get("address", 0)), "command": command,
-				}
-			var pointer_bank: int = int(runtime_pointer.get("bank", -1))
-			var pointer_address: int = int(runtime_pointer.get("address", -1))
-			if opcode == Gen2WorldScript.MEMCALL:
-				if not _push_frame(pointer_bank, pointer_address):
-					return {
-						"ok": false, "reason": &"missing_runtime_script",
-						"bank": pointer_bank, "address": pointer_address,
-					}
-				return {"ok": true}
-			var jump_result: Dictionary = _replace_frame(pointer_bank, pointer_address)
-			return jump_result
-		Gen2WorldScript.WARPMOD:
-			## `Script_warpmod` writes `wBackupWarpNumber`, `wBackupMapGroup` and
-			## `wBackupMapNumber` outright, which is how a map whose only exit is
-			## a -1 warp is given one before the player can reach it: both dept
-			## store elevators and the Fast Ship's cabin are entered by a script
-			## that runs this first.
-			_emit_runtime_event(&"backup_warp_changed", {
-				"warp": int(command.get("warp_id", 0)),
-				"map_group": int(command.get("map_group", 0)),
-				"map_number": int(command.get("map_number", 0)),
-			})
-		Gen2WorldScript.BLACKOUTMOD:
-			## `Script_blackoutmod` writes `wLastSpawnMapGroup` and
-			## `wLastSpawnMapNumber`, which is the pair `GetWhiteoutSpawn` reads
-			## back through `IsSpawnPoint`. Writing it here is what makes a
-			## scripted destination reach the blackout: nothing else consults the
-			## command.
-			_emit_runtime_event(&"blackout_destination_changed", {
-				"map_group": int(command.get("map_group", 0)),
-				"map_number": int(command.get("map_number", 0)),
-			})
-		Gen2WorldScript.SJUMP:
-			return _replace_frame(bank, int(command["address"]))
-		Gen2WorldScript.FARSJUMP:
-			return _replace_frame(int(command["bank"]), int(command["address"]))
-		Gen2WorldScript.IFEQUAL:
-			return _branch(int(_script_value) == int(command["value"]), bank, int(command["address"]))
-		Gen2WorldScript.IFNOTEQUAL:
-			return _branch(int(_script_value) != int(command["value"]), bank, int(command["address"]))
-		Gen2WorldScript.IFFALSE:
-			return _branch(_script_value == 0, bank, int(command["address"]))
-		Gen2WorldScript.IFTRUE:
-			return _branch(_script_value != 0, bank, int(command["address"]))
-		Gen2WorldScript.IFGREATER:
-			return _branch(_script_value > int(command["value"]), bank, int(command["address"]))
-		Gen2WorldScript.IFLESS:
-			return _branch(_script_value < int(command["value"]), bank, int(command["address"]))
-		Gen2WorldScript.JUMPSTD:
-			if int(command["address"]) == STD_STRENGTH_BOULDER:
-				return _stage_strength_boulder()
-			if int(command["address"]) == STD_SMASH_ROCK:
-				return _stage_smash_rock()
-			var jump_standard: Dictionary = _standard_script(int(command["address"]))
-			if jump_standard.is_empty():
-				return {
-					"ok": false,
-					"reason": &"missing_standard_script",
-					"standard_index": int(command["address"]),
-				}
-			return _replace_frame(
-				int(jump_standard["bank"]), int(jump_standard["address"]),
-				jump_standard["data"]
-			)
-		Gen2WorldScript.CALLSTD:
-			if int(command["address"]) == STD_STRENGTH_BOULDER:
-				return _stage_strength_boulder()
-			if int(command["address"]) == STD_SMASH_ROCK:
-				return _stage_smash_rock()
-			var call_standard: Dictionary = _standard_script(int(command["address"]))
-			if call_standard.is_empty():
-				return {
-					"ok": false,
-					"reason": &"missing_standard_script",
-					"standard_index": int(command["address"]),
-				}
+	return {}
+
+
+func _command_scall(_opcode: int, command: Dictionary, bank: int) -> Dictionary:
+	return {"ok": _push_frame(bank, int(command["address"]))}
+
+
+func _command_farscall(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return {"ok": _push_frame(int(command["bank"]), int(command["address"]))}
+
+
+func _command_memcall(opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	var runtime_pointer: Dictionary = _runtime_memory_pointer(
+		int(command.get("address", 0))
+	)
+	if runtime_pointer.is_empty():
+		return {
+			"ok": false, "reason": &"missing_runtime_pointer",
+			"address": int(command.get("address", 0)), "command": command,
+		}
+	var pointer_bank: int = int(runtime_pointer.get("bank", -1))
+	var pointer_address: int = int(runtime_pointer.get("address", -1))
+	if opcode == Gen2WorldScript.MEMCALL:
+		if not _push_frame(pointer_bank, pointer_address):
 			return {
-				"ok": _push_frame(
-					int(call_standard["bank"]), int(call_standard["address"]),
-					call_standard["data"]
-				)
+				"ok": false, "reason": &"missing_runtime_script",
+				"bank": pointer_bank, "address": pointer_address,
 			}
-		Gen2WorldScript.CHECKMAPSCENE:
-			_script_value = _map_scene_value(
-				int(command["map_group"]), int(command["map_number"])
-			)
-		Gen2WorldScript.SETMAPSCENE:
-			var target_key: String = Gen2WorldState.map_scene_key(
-				int(command["map_group"]), int(command["map_number"])
-			)
-			_staged_scenes[target_key] = int(command["scene"])
-		Gen2WorldScript.CHECKSCENE:
-			_script_value = _map_scene_value(
-				int(_request.get("map_group", 0)), int(_request.get("map_number", 0))
-			)
-		Gen2WorldScript.SETSCENE:
-			var map_key: String = Gen2WorldState.map_scene_key(
-				int(_request.get("map_group", 0)), int(_request.get("map_number", 0))
-			)
-			_staged_scenes[map_key] = int(command["scene"])
-		Gen2WorldScript.CHECKVER:
-			## Script_checkver answers GS_VERSION, which
-			## `constants/misc_constants.asm` defines as 0 for Gold and 1 for
-			## Silver; pokecrystal defines it 0 unconditionally.
-			_script_value = 1 if data != null and data.id == &"silver" else 0
-		Gen2WorldScript.SETVAL:
-			_script_value = int(command["value"])
-		Gen2WorldScript.ADDVAL:
-			## Script_addval adds into wScriptVar, one byte, so it wraps there
-			## and not only where the value is later written. Goldenrod's switch
-			## room turns a switch off with `addval -1` and branches on it.
-			_script_value = (_script_value + int(command["value"])) & 0xFF
-		Gen2WorldScript.READMEM:
-			_script_value = _script_memory_value(int(command["address"]))
-		Gen2WorldScript.WRITEMEM:
-			return _stage_script_memory(int(command["address"]), _script_value)
-		Gen2WorldScript.LOADMEM:
-			return _stage_script_memory(int(command["address"]), int(command["value"]))
-		Gen2WorldScript.READVAR:
-			return _read_runtime_variable(int(command["value"]))
-		Gen2WorldScript.WRITEVAR:
-			return _write_runtime_variable(int(command["value"]))
-		Gen2WorldScript.LOADVAR:
-			return _load_runtime_variable(
-				int(command["value"]), int(command["value_2"])
-			)
-		Gen2WorldScript.CHECKTIME:
-			_script_value = 1 if Gen2WorldPhoneHost.time_mask_matches(
-				int(command["value"]), _clock_hour()
-			) else 0
-		Gen2WorldScript.ADDCELLNUM:
-			return _stage_phone_contact(int(command["value"]))
-		Gen2WorldScript.DELCELLNUM:
-			return _stage_phone_contact(int(command["value"]), false)
-		Gen2WorldScript.CHECKCELLNUM:
-			_script_value = 1 if _phone_contact_registered(int(command["value"])) else 0
-		Gen2WorldScript.SPECIAL:
-			return _execute_special(
-				Gen2WorldScript.special_index(int(command["value"]), _crystal_commands())
-			)
-		Gen2WorldScript.RANDOM:
-			var maximum: int = int(command["value"])
-			_script_value = _random.randi_range(0, maximum - 1) if maximum > 0 else 0
-		Gen2WorldScript.GIVEITEM:
-			return _stage_item_delta(int(command["value"]), int(command["value_2"]))
-		Gen2WorldScript.TAKEITEM:
-			return _stage_item_delta(int(command["value"]), -int(command["value_2"]))
-		Gen2WorldScript.CHECKITEM:
-			_script_value = 1 if _item_quantity(int(command["value"])) > 0 else 0
-		Gen2WorldScript.GIVEMONEY, Gen2WorldScript.TAKEMONEY:
-			return _stage_money_delta(
-				int(command["account"]), _decode_bcd(command["amount_bytes"]),
-				opcode == Gen2WorldScript.GIVEMONEY
-			)
-		Gen2WorldScript.CHECKMONEY:
-			_script_value = _compare_amount(
-				_money_balance(int(command["account"])),
-				_decode_bcd(command["amount_bytes"])
-			)
-		Gen2WorldScript.GIVECOINS, Gen2WorldScript.TAKECOINS:
-			return _stage_coins_delta(
-				int(command["value"]), opcode == Gen2WorldScript.GIVECOINS
-			)
-		Gen2WorldScript.CHECKCOINS:
-			_script_value = _compare_amount(_coins_value(), int(command["value"]))
-		Gen2WorldScript.GETMONEY:
-			var money: int = _money_balance(int(command["account"]))
-			_set_text_buffer(int(command["string_buffer"]), str(money), &"money")
-			_emit_runtime_event(&"text_value_requested", {
-				"value_kind": &"money", "account": int(command["account"]),
-				"value": money,
-				"string_buffer": int(command["string_buffer"]),
-			})
-		Gen2WorldScript.GETCOINS:
-			var coins: int = _coins_value()
-			_set_text_buffer(int(command["string_buffer"]), str(coins), &"coins")
-			_emit_runtime_event(&"text_value_requested", {
-				"value_kind": &"coins", "value": coins,
-				"string_buffer": int(command["string_buffer"]),
-			})
-		Gen2WorldScript.GETITEMNAME:
-			_set_text_buffer(
-				int(command["string_buffer"]),
-				data.item_name(int(command["item"])) if data != null else "",
-				&"item_name",
-				{"item": int(command["item"])}
-			)
-			_emit_runtime_event(&"text_buffer_requested", command)
-		Gen2WorldScript.GETMONNAME:
-			_set_text_buffer(
-				int(command["string_buffer"]),
-				String(data.species(int(command["pokemon"])).get("name", "")) if data != null else "",
-				&"mon_name",
-				{"pokemon": int(command["pokemon"])}
-			)
-			_emit_runtime_event(&"text_buffer_requested", command)
-		Gen2WorldScript.GETTRAINERNAME:
-			var trainer_name: String = ""
-			if data != null:
-				trainer_name = String(data.trainer_party(
-					int(command["trainer_group"]), int(command["trainer_id"]) - 1
-				).get("name", ""))
-			_set_text_buffer(
-				int(command["string_buffer"]), trainer_name, &"trainer_name",
-				{"trainer_group": int(command["trainer_group"]), "trainer_id": int(command["trainer_id"])}
-			)
-			_emit_runtime_event(&"text_buffer_requested", command)
-		Gen2WorldScript.GETSTRING:
-			## `Script_getstring` is `CopyName1`, which copies a plain character
-			## run up to its `@`. It is not a text: the first byte of
-			## `PokegearName` is `#`, which the command layer reads as an unknown
-			## command and refuses, so decoding this the way `writetext` is
-			## decoded leaves every `getstring` buffer empty and prints
-			## "<PLAYER> received !" with a hole where the name belongs.
-			var string_text: String = ""
-			if data != null:
-				var string_data: PackedByteArray = data.world_text(
-					int(_request.get("bank", 0)), int(command["address"])
-				)
-				string_text = Gen2Text.decode(string_data, 0, string_data.size())
-			_set_text_buffer(int(command["string_buffer"]), string_text, &"string", {
-				"bank": int(_request.get("bank", 0)), "address": int(command["address"]),
-			})
-			_emit_runtime_event(&"text_buffer_requested", command)
-		Gen2WorldScript.CLEAREVENT:
-			_staged_flags[int(command["flag"])] = false
-		Gen2WorldScript.SETEVENT:
-			_staged_flags[int(command["flag"])] = true
-		Gen2WorldScript.CHECKEVENT:
-			_script_value = 1 if _event_flag_active(int(command["flag"])) else 0
-		Gen2WorldScript.CLEARFLAG:
-			_staged_engine_flags[int(command["flag"])] = false
-		Gen2WorldScript.SETFLAG:
-			_staged_engine_flags[int(command["flag"])] = true
-		Gen2WorldScript.CHECKFLAG:
-			_script_value = 1 if _engine_flag_active(int(command["flag"])) else 0
-		## `Script_wildon` and `Script_wildoff`, which write
-		## `STATUSFLAGS_NO_WILD_ENCOUNTERS_F` outright rather than through a
-		## staged flag: it is scratch the next map entry does not clear, and the
-		## scripts that turn it off all turn it back on themselves.
-		Gen2WorldScript.WILDON:
-			_emit_runtime_event(&"wild_encounters_changed", {"enabled": true})
-		Gen2WorldScript.WILDOFF:
-			_emit_runtime_event(&"wild_encounters_changed", {"enabled": false})
-		Gen2WorldScript.WARP:
-			return _stage_warp(command)
-		Gen2WorldScript.OPENTEXT, Gen2WorldScript.REANCHORMAP, Gen2WorldScript.CLOSETEXT, Gen2WorldScript.WRITEUNUSEDBYTE, Gen2WorldScript.CLOSEWINDOW:
-			## `Script_closetext` takes the box down, so nothing stands behind a
-			## later choice; leaving the last question there would print it under
-			## an unrelated menu.
-			if opcode == Gen2WorldScript.CLOSETEXT:
-				_standing_text = ""
-				## The balance windows are tilemap, so the redraw behind the box
-				## is what takes them away too.
-				if _money_window != &"":
-					_money_window = &""
-					_emit_runtime_event(&"money_window_closed", {})
-		Gen2WorldScript.ITEMNOTIFY:
-			## `CurItemName` reads wCurItem, which whichever `giveitem` came
-			## before this wrote.
-			return _stage_item_notify(_last_item, false)
-		Gen2WorldScript.POCKETISFULL:
-			return _stage_pocket_is_full(_last_item, false)
-		Gen2WorldScript.WRITETEXT:
-			return _show_text(bank, int(command["address"]), false)
-		Gen2WorldScript.FARWRITETEXT:
-			return _show_text(int(command["bank"]), int(command["address"]), false)
-		Gen2WorldScript.JUMPTEXTFACEPLAYER:
-			## `Script_jumptextfaceplayer` jumps to JumpTextFacePlayerScript,
-			## whose first command is `faceplayer`; `jumptext` and `farjumptext`
-			## enter the same script one command later, at JumpTextScript. The
-			## four commands after it are `opentext`, `repeattext -1, -1`,
-			## `waitbutton` and `closetext`, which is what _show_text spends.
-			_face_player()
-			return _show_text(bank, int(command["address"]), true)
-		Gen2WorldScript.REPEATTEXT:
-			if int(command["value"]) == 0xFF and int(command["value_2"]) == 0xFF:
-				if _last_text.is_empty():
-					return {"ok": false, "reason": &"repeat_without_text"}
-				return _show_text(int(_last_text["bank"]), int(_last_text["address"]), false)
-		Gen2WorldScript.YESORNO:
-			return _stage_choice(command, [&"yes", &"no"])
-		Gen2WorldScript.LOADMENU:
-			_loaded_menu = {
-				"bank": int(_request.get("bank", 0)),
-				"address": int(command["address"]),
-			}
-			if data != null:
-				var cached_menu: Dictionary = data.world_menu(
-					int(_request.get("bank", 0)), int(command["address"])
-				)
-				for key: String in cached_menu:
-					_loaded_menu[key] = cached_menu[key]
-			_emit_runtime_event(&"menu_loaded", _loaded_menu)
-		Gen2WorldScript.CHECKPOKE:
-			## Script_checkpoke sets wScriptVar from whether the species is in
-			## wPartySpecies (engine/overworld/scripting.asm). The read-only party
-			## summary is the only party this scene-free runner may read, and an
-			## absent one fails the way VAR_PARTYCOUNT does. A summary carrying an
-			## empty species list answers 0, not a failure.
-			var party: Dictionary = _request.get("party", {})
-			if party.is_empty():
-				return {"ok": false, "reason": &"missing_party_summary", "command": command}
-			var species: Array = party.get("species", [])
-			_script_value = 1 if int(command.get("value", 0)) in species else 0
-		Gen2WorldScript.GIVEPOKE, Gen2WorldScript.GIVEEGG:
-			## Both write their species operand to wCurPartySpecies before the
-			## routine runs, whether or not the party had room for it.
-			_cur_party_species = int(command.get("pokemon", 0))
-			return _stage_runtime_request(&"pokemon_requested", command)
-		Gen2WorldScript.GIVEPOKEMAIL:
-			return _give_poke_mail(command)
-		Gen2WorldScript.CHECKPOKEMAIL:
-			return _check_poke_mail(command)
-		Gen2WorldScript.GOLD_FACEPLAYER, Gen2WorldScript.FACEPLAYER:
-			if Gen2WorldScript.is_faceplayer(opcode, _crystal_commands()):
-				pass
-	var handled_base: Array = [
-		Gen2WorldScript.CHECKMAPSCENE, Gen2WorldScript.SETMAPSCENE,
-		Gen2WorldScript.CHECKSCENE, Gen2WorldScript.SETSCENE,
-		Gen2WorldScript.CHECKVER,
-		Gen2WorldScript.SETVAL, Gen2WorldScript.ADDVAL, Gen2WorldScript.RANDOM,
-		Gen2WorldScript.CHECKEVENT, Gen2WorldScript.CLEAREVENT, Gen2WorldScript.SETEVENT,
-		Gen2WorldScript.CHECKFLAG, Gen2WorldScript.CLEARFLAG, Gen2WorldScript.SETFLAG,
-		Gen2WorldScript.WILDON, Gen2WorldScript.WILDOFF,
-		Gen2WorldScript.READMEM,
-		Gen2WorldScript.READVAR, Gen2WorldScript.WRITEVAR, Gen2WorldScript.LOADVAR,
-		Gen2WorldScript.CHECKTIME, Gen2WorldScript.SPECIAL,
-		Gen2WorldScript.CHECKITEM, Gen2WorldScript.CHECKPOKE,
-		Gen2WorldScript.ADDCELLNUM, Gen2WorldScript.DELCELLNUM,
-		Gen2WorldScript.CHECKCELLNUM,
-		Gen2WorldScript.GOLD_FACEPLAYER, Gen2WorldScript.FACEPLAYER,
-		Gen2WorldScript.OPENTEXT, Gen2WorldScript.REANCHORMAP,
-		Gen2WorldScript.CLOSETEXT, Gen2WorldScript.WRITEUNUSEDBYTE,
-		Gen2WorldScript.CLOSEWINDOW,
-		Gen2WorldScript.LOADMENU,
-		## Both comparisons answer through `_script_value` and stage nothing, so
-		## they never returned from their own branch and fell through to the
-		## refusal below. Every `checkcoins` in either game is a Game Corner or a
-		## Buena prize counter, and every one of them stopped its script here.
-		Gen2WorldScript.CHECKMONEY, Gen2WorldScript.CHECKCOINS,
-		Gen2WorldScript.GETMONEY, Gen2WorldScript.GETCOINS, Gen2WorldScript.GETNUM,
-		Gen2WorldScript.GETMONNAME, Gen2WorldScript.GETITEMNAME,
-		Gen2WorldScript.GETCURLANDMARKNAME, Gen2WorldScript.GETTRAINERNAME,
-		Gen2WorldScript.GETSTRING, Gen2WorldScript.BLACKOUTMOD,
-	]
-	if opcode in handled_base:
 		return {"ok": true}
+	var jump_result: Dictionary = _replace_frame(pointer_bank, pointer_address)
+	return jump_result
+
+
+## `Script_warpmod` writes `wBackupWarpNumber`, `wBackupMapGroup` and
+## `wBackupMapNumber` outright, which is how a map whose only exit is a -1 warp is
+## given one before the player can reach it: both dept store elevators and the Fast
+## Ship's cabin are entered by a script that runs this first.
+func _command_warpmod(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_emit_runtime_event(&"backup_warp_changed", {
+		"warp": int(command.get("warp_id", 0)),
+		"map_group": int(command.get("map_group", 0)),
+		"map_number": int(command.get("map_number", 0)),
+	})
+	return {"ok": true}
+
+
+## `Script_blackoutmod` writes `wLastSpawnMapGroup` and `wLastSpawnMapNumber`, which
+## is the pair `GetWhiteoutSpawn` reads back through `IsSpawnPoint`. Writing it here
+## is what makes a scripted destination reach the blackout: nothing else consults the
+## command.
+func _command_blackoutmod(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_emit_runtime_event(&"blackout_destination_changed", {
+		"map_group": int(command.get("map_group", 0)),
+		"map_number": int(command.get("map_number", 0)),
+	})
+	return {"ok": true}
+
+
+func _command_sjump(_opcode: int, command: Dictionary, bank: int) -> Dictionary:
+	return _replace_frame(bank, int(command["address"]))
+
+
+func _command_farsjump(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _replace_frame(int(command["bank"]), int(command["address"]))
+
+
+func _command_ifequal(_opcode: int, command: Dictionary, bank: int) -> Dictionary:
+	return _branch(int(_script_value) == int(command["value"]), bank, int(command["address"]))
+
+
+func _command_ifnotequal(_opcode: int, command: Dictionary, bank: int) -> Dictionary:
+	return _branch(int(_script_value) != int(command["value"]), bank, int(command["address"]))
+
+
+func _command_iffalse(_opcode: int, command: Dictionary, bank: int) -> Dictionary:
+	return _branch(_script_value == 0, bank, int(command["address"]))
+
+
+func _command_iftrue(_opcode: int, command: Dictionary, bank: int) -> Dictionary:
+	return _branch(_script_value != 0, bank, int(command["address"]))
+
+
+func _command_ifgreater(_opcode: int, command: Dictionary, bank: int) -> Dictionary:
+	return _branch(_script_value > int(command["value"]), bank, int(command["address"]))
+
+
+func _command_ifless(_opcode: int, command: Dictionary, bank: int) -> Dictionary:
+	return _branch(_script_value < int(command["value"]), bank, int(command["address"]))
+
+
+func _command_jumpstd(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	if int(command["address"]) == STD_STRENGTH_BOULDER:
+		return _stage_strength_boulder()
+	if int(command["address"]) == STD_SMASH_ROCK:
+		return _stage_smash_rock()
+	var jump_standard: Dictionary = _standard_script(int(command["address"]))
+	if jump_standard.is_empty():
+		return {
+			"ok": false,
+			"reason": &"missing_standard_script",
+			"standard_index": int(command["address"]),
+		}
+	return _replace_frame(
+		int(jump_standard["bank"]), int(jump_standard["address"]),
+		jump_standard["data"]
+	)
+
+
+func _command_callstd(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	if int(command["address"]) == STD_STRENGTH_BOULDER:
+		return _stage_strength_boulder()
+	if int(command["address"]) == STD_SMASH_ROCK:
+		return _stage_smash_rock()
+	var call_standard: Dictionary = _standard_script(int(command["address"]))
+	if call_standard.is_empty():
+		return {
+			"ok": false,
+			"reason": &"missing_standard_script",
+			"standard_index": int(command["address"]),
+		}
 	return {
-		"ok": false,
-		"reason": &"unsupported_runtime_command",
-		"command": command,
+		"ok": _push_frame(
+			int(call_standard["bank"]), int(call_standard["address"]),
+			call_standard["data"]
+		)
 	}
 
 
+func _command_checkmapscene(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_script_value = _map_scene_value(
+		int(command["map_group"]), int(command["map_number"])
+	)
+	return {"ok": true}
+
+
+func _command_setmapscene(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	var target_key: String = Gen2WorldState.map_scene_key(
+		int(command["map_group"]), int(command["map_number"])
+	)
+	_staged_scenes[target_key] = int(command["scene"])
+	return {"ok": true}
+
+
+func _command_checkscene(_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	_script_value = _map_scene_value(
+		int(_request.get("map_group", 0)), int(_request.get("map_number", 0))
+	)
+	return {"ok": true}
+
+
+func _command_setscene(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	var map_key: String = Gen2WorldState.map_scene_key(
+		int(_request.get("map_group", 0)), int(_request.get("map_number", 0))
+	)
+	_staged_scenes[map_key] = int(command["scene"])
+	return {"ok": true}
+
+
+## Script_checkver answers GS_VERSION, which `constants/misc_constants.asm` defines as
+## 0 for Gold and 1 for Silver; pokecrystal defines it 0 unconditionally.
+func _command_checkver(_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	_script_value = 1 if data != null and data.id == &"silver" else 0
+	return {"ok": true}
+
+
+func _command_setval(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_script_value = int(command["value"])
+	return {"ok": true}
+
+
+## Script_addval adds into wScriptVar, one byte, so it wraps there and not only where
+## the value is later written. Goldenrod's switch room turns a switch off with `addval
+## -1` and branches on it.
+func _command_addval(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_script_value = (_script_value + int(command["value"])) & 0xFF
+	return {"ok": true}
+
+
+func _command_readmem(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_script_value = _script_memory_value(int(command["address"]))
+	return {"ok": true}
+
+
+func _command_writemem(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_script_memory(int(command["address"]), _script_value)
+
+
+func _command_loadmem(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_script_memory(int(command["address"]), int(command["value"]))
+
+
+func _command_readvar(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _read_runtime_variable(int(command["value"]))
+
+
+func _command_writevar(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _write_runtime_variable(int(command["value"]))
+
+
+func _command_loadvar(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _load_runtime_variable(
+		int(command["value"]), int(command["value_2"])
+	)
+
+
+func _command_checktime(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_script_value = 1 if Gen2WorldPhoneHost.time_mask_matches(
+		int(command["value"]), _clock_hour()
+	) else 0
+	return {"ok": true}
+
+
+func _command_addcellnum(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_phone_contact(int(command["value"]))
+
+
+func _command_delcellnum(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_phone_contact(int(command["value"]), false)
+
+
+func _command_checkcellnum(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_script_value = 1 if _phone_contact_registered(int(command["value"])) else 0
+	return {"ok": true}
+
+
+func _command_special(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _execute_special(
+		Gen2WorldScript.special_index(int(command["value"]), _crystal_commands())
+	)
+
+
+func _command_random(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	var maximum: int = int(command["value"])
+	_script_value = _random.randi_range(0, maximum - 1) if maximum > 0 else 0
+	return {"ok": true}
+
+
+func _command_giveitem(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_item_delta(int(command["value"]), int(command["value_2"]))
+
+
+func _command_takeitem(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_item_delta(int(command["value"]), -int(command["value_2"]))
+
+
+func _command_checkitem(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_script_value = 1 if _item_quantity(int(command["value"])) > 0 else 0
+	return {"ok": true}
+
+
+func _command_givemoney(opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_money_delta(
+		int(command["account"]), _decode_bcd(command["amount_bytes"]),
+		opcode == Gen2WorldScript.GIVEMONEY
+	)
+
+
+func _command_checkmoney(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_script_value = _compare_amount(
+		_money_balance(int(command["account"])),
+		_decode_bcd(command["amount_bytes"])
+	)
+	return {"ok": true}
+
+
+func _command_givecoins(opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_coins_delta(
+		int(command["value"]), opcode == Gen2WorldScript.GIVECOINS
+	)
+
+
+func _command_checkcoins(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_script_value = _compare_amount(_coins_value(), int(command["value"]))
+	return {"ok": true}
+
+
+func _command_getmoney(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	var money: int = _money_balance(int(command["account"]))
+	_set_text_buffer(int(command["string_buffer"]), str(money), &"money")
+	_emit_runtime_event(&"text_value_requested", {
+		"value_kind": &"money", "account": int(command["account"]),
+		"value": money,
+		"string_buffer": int(command["string_buffer"]),
+	})
+	return {"ok": true}
+
+
+func _command_getcoins(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	var coins: int = _coins_value()
+	_set_text_buffer(int(command["string_buffer"]), str(coins), &"coins")
+	_emit_runtime_event(&"text_value_requested", {
+		"value_kind": &"coins", "value": coins,
+		"string_buffer": int(command["string_buffer"]),
+	})
+	return {"ok": true}
+
+
+func _command_getitemname(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_set_text_buffer(
+		int(command["string_buffer"]),
+		data.item_name(int(command["item"])) if data != null else "",
+		&"item_name",
+		{"item": int(command["item"])}
+	)
+	_emit_runtime_event(&"text_buffer_requested", command)
+	return {"ok": true}
+
+
+func _command_getmonname(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_set_text_buffer(
+		int(command["string_buffer"]),
+		String(data.species(int(command["pokemon"])).get("name", "")) if data != null else "",
+		&"mon_name",
+		{"pokemon": int(command["pokemon"])}
+	)
+	_emit_runtime_event(&"text_buffer_requested", command)
+	return {"ok": true}
+
+
+func _command_gettrainername(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	var trainer_name: String = ""
+	if data != null:
+		trainer_name = String(data.trainer_party(
+			int(command["trainer_group"]), int(command["trainer_id"]) - 1
+		).get("name", ""))
+	_set_text_buffer(
+		int(command["string_buffer"]), trainer_name, &"trainer_name",
+		{"trainer_group": int(command["trainer_group"]), "trainer_id": int(command["trainer_id"])}
+	)
+	_emit_runtime_event(&"text_buffer_requested", command)
+	return {"ok": true}
+
+
+## `Script_getstring` is `CopyName1`, which copies a plain character run up to its
+## `@`. It is not a text: the first byte of `PokegearName` is `#`, which the command
+## layer reads as an unknown command and refuses, so decoding this the way `writetext`
+## is decoded leaves every `getstring` buffer empty and prints "<PLAYER> received !"
+## with a hole where the name belongs.
+func _command_getstring(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	var string_text: String = ""
+	if data != null:
+		var string_data: PackedByteArray = data.world_text(
+			int(_request.get("bank", 0)), int(command["address"])
+		)
+		string_text = Gen2Text.decode(string_data, 0, string_data.size())
+	_set_text_buffer(int(command["string_buffer"]), string_text, &"string", {
+		"bank": int(_request.get("bank", 0)), "address": int(command["address"]),
+	})
+	_emit_runtime_event(&"text_buffer_requested", command)
+	return {"ok": true}
+
+
+func _command_clearevent(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_staged_flags[int(command["flag"])] = false
+	return {"ok": true}
+
+
+func _command_setevent(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_staged_flags[int(command["flag"])] = true
+	return {"ok": true}
+
+
+func _command_checkevent(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_script_value = 1 if _event_flag_active(int(command["flag"])) else 0
+	return {"ok": true}
+
+
+func _command_clearflag(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_staged_engine_flags[int(command["flag"])] = false
+	return {"ok": true}
+
+
+func _command_setflag(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_staged_engine_flags[int(command["flag"])] = true
+	return {"ok": true}
+
+
+func _command_checkflag(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_script_value = 1 if _engine_flag_active(int(command["flag"])) else 0
+## `Script_wildon` and `Script_wildoff`, which write
+## `STATUSFLAGS_NO_WILD_ENCOUNTERS_F` outright rather than through a
+## staged flag: it is scratch the next map entry does not clear, and the
+## scripts that turn it off all turn it back on themselves.
+	return {"ok": true}
+
+
+func _command_wildon(_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	_emit_runtime_event(&"wild_encounters_changed", {"enabled": true})
+	return {"ok": true}
+
+
+func _command_wildoff(_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	_emit_runtime_event(&"wild_encounters_changed", {"enabled": false})
+	return {"ok": true}
+
+
+func _command_warp(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_warp(command)
+
+
+## `Script_closetext` takes the box down, so nothing stands behind a later choice;
+## leaving the last question there would print it under an unrelated menu.
+func _command_opentext(opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	if opcode == Gen2WorldScript.CLOSETEXT:
+		_standing_text = ""
+		## The balance windows are tilemap, so the redraw behind the box
+		## is what takes them away too.
+		if _money_window != &"":
+			_money_window = &""
+			_emit_runtime_event(&"money_window_closed", {})
+	return {"ok": true}
+
+
+## `CurItemName` reads wCurItem, which whichever `giveitem` came before this wrote.
+func _command_itemnotify(_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_item_notify(_last_item, false)
+
+
+func _command_pocketisfull(_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_pocket_is_full(_last_item, false)
+
+
+func _command_writetext(_opcode: int, command: Dictionary, bank: int) -> Dictionary:
+	return _show_text(bank, int(command["address"]), false)
+
+
+func _command_farwritetext(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _show_text(int(command["bank"]), int(command["address"]), false)
+
+
+## `Script_jumptextfaceplayer` jumps to JumpTextFacePlayerScript, whose first command
+## is `faceplayer`; `jumptext` and `farjumptext` enter the same script one command
+## later, at JumpTextScript. The four commands after it are `opentext`, `repeattext
+## -1, -1`, `waitbutton` and `closetext`, which is what _show_text spends.
+func _command_jumptextfaceplayer(_opcode: int, command: Dictionary, bank: int) -> Dictionary:
+	_face_player()
+	return _show_text(bank, int(command["address"]), true)
+
+
+func _command_repeattext(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	if int(command["value"]) == 0xFF and int(command["value_2"]) == 0xFF:
+		if _last_text.is_empty():
+			return {"ok": false, "reason": &"repeat_without_text"}
+		return _show_text(int(_last_text["bank"]), int(_last_text["address"]), false)
+	return {"ok": true}
+
+
+func _command_yesorno(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_choice(command, [&"yes", &"no"])
+
+
+func _command_loadmenu(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_loaded_menu = {
+		"bank": int(_request.get("bank", 0)),
+		"address": int(command["address"]),
+	}
+	if data != null:
+		var cached_menu: Dictionary = data.world_menu(
+			int(_request.get("bank", 0)), int(command["address"])
+		)
+		for key: String in cached_menu:
+			_loaded_menu[key] = cached_menu[key]
+	_emit_runtime_event(&"menu_loaded", _loaded_menu)
+	return {"ok": true}
+
+
+## Script_checkpoke sets wScriptVar from whether the species is in wPartySpecies
+## (engine/overworld/scripting.asm). The read-only party summary is the only party
+## this scene-free runner may read, and an absent one fails the way VAR_PARTYCOUNT
+## does. A summary carrying an empty species list answers 0, not a failure.
+func _command_checkpoke(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	var party: Dictionary = _request.get("party", {})
+	if party.is_empty():
+		return {"ok": false, "reason": &"missing_party_summary", "command": command}
+	var species: Array = party.get("species", [])
+	_script_value = 1 if int(command.get("value", 0)) in species else 0
+	return {"ok": true}
+
+
+## Both write their species operand to wCurPartySpecies before the routine runs,
+## whether or not the party had room for it.
+func _command_givepoke(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_cur_party_species = int(command.get("pokemon", 0))
+	return _stage_runtime_request(&"pokemon_requested", command)
+
+
+func _command_givepokemail(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _give_poke_mail(command)
+
+
+func _command_checkpokemail(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _check_poke_mail(command)
+
+
+func _command_gold_faceplayer(opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	if Gen2WorldScript.is_faceplayer(opcode, _crystal_commands()):
+		pass
+	return {"ok": true}
 ## A command whose numbers a mod may have moved, substituted before it runs.
 ##
 ## The site is addressed by the byte it sits at, `frame.address + offset`, which
@@ -2318,380 +2635,562 @@ const CATALOG_KINDS: Dictionary = {
 }
 
 
-func _execute_later_command(source_opcode: int, command: Dictionary, bank: int) -> Dictionary:
-	match source_opcode:
-		0x55:
-			## `Script_pokepic` takes wScriptVar when its operand is zero and
-			## writes whichever it settled on to wCurPartySpecies, which is
-			## what a later `special PlayCurMonCry` reads.
-			var pic_species: int = int(command.get("pokemon", 0))
-			if pic_species == 0:
-				pic_species = _script_value
-			_cur_party_species = pic_species
-			_emit_runtime_event(&"pokemon_picture_requested", {
-				"pokemon": pic_species,
-			})
-		0x56:
-			_emit_runtime_event(&"pokemon_picture_closed", {})
-		0x57, 0x58:
-			return _stage_menu(source_opcode == 0x57, command)
-		0x5B:
-			var trainer_value: Variant = _request.get("trainer", {})
-			if trainer_value is Dictionary and not (trainer_value as Dictionary).is_empty():
-				var trainer: Dictionary = trainer_value as Dictionary
-				_battle_setup = _new_battle_setup({
-					"kind": &"trainer",
-					"trainer_group": int(trainer.get("trainer_group", 0)),
-					"trainer_id": maxi(int(trainer.get("trainer_id", 0)) - 1, 0),
-					"trainer_flag": int(trainer.get("event_flag", -1)),
-					"win_text": _trainer_text_pointer(trainer, "win_text", bank),
-					"loss_text": _trainer_text_pointer(trainer, "loss_text", bank),
-				})
-				_emit_runtime_event(&"battle_setup_changed", _battle_setup)
-		0x5C:
-			_battle_setup = _new_battle_setup({
-				"kind": &"wild", "pokemon": int(command.get("pokemon", 0)),
-				"level": int(command.get("level", 0)),
-			})
-			_emit_runtime_event(&"battle_setup_changed", _battle_setup)
-		0x5D:
-			_loaded_battle_type = -1
-			_battle_setup = _new_battle_setup({
-				"kind": &"trainer", "trainer_group": int(command.get("trainer_group", 0)),
-				# The cartridge's loadtrainer operand is one-based; the imported
-				# party table API is zero-based.
-				"trainer_id": maxi(int(command.get("trainer_id", 0)) - 1, 0),
-			})
-			_emit_runtime_event(&"battle_setup_changed", _battle_setup)
-		0x5E:
-			if _battle_setup.is_empty():
-				return {
-					"ok": false, "reason": &"battle_setup_missing", "command": command,
-				}
-			return _stage_runtime_request(&"battle_requested", _battle_request_values())
-		0x5F:
-			_emit_runtime_event(&"battle_map_reload_requested", {"requested": true})
-		0x60:
-			var tutorial_setup: Dictionary = _battle_setup.duplicate(true)
-			if tutorial_setup.is_empty() or StringName(tutorial_setup.get("kind", &"")) != &"wild":
-				return {"ok": false, "reason": &"tutorial_battle_setup_missing"}
-			tutorial_setup["tutorial"] = true
-			tutorial_setup["battle_type"] = int(command.get("value", 0))
-			tutorial_setup["can_lose"] = false
-			return _stage_runtime_request(&"catch_tutorial_requested", tutorial_setup)
-		0x61:
-			return _stage_runtime_request(&"trainer_text_requested", {
-				"text_id": int(command.get("value", 0)),
-				"setup": _battle_setup.duplicate(true),
-			})
-		0x62:
-			var trainer_event: Dictionary = _request.get("event", {})
-			var trainer_data: Variant = _request.get("trainer", {})
-			var trainer_flag: int = int(trainer_event.get("event_flag", 0))
-			if trainer_data is Dictionary and not (trainer_data as Dictionary).is_empty():
-				trainer_flag = int((trainer_data as Dictionary).get("event_flag", -1))
-			var action: int = int(command.get("value", 0))
-			if action == 0:
-				_staged_flags[trainer_flag] = false
-			elif action == 1:
-				_staged_flags[trainer_flag] = true
-			elif action == 2:
-				_script_value = 1 if _event_flag_active(trainer_flag) else 0
-			else:
-				return {"ok": false, "reason": &"unsupported_trainer_flag_action", "action": action}
-			_emit_runtime_event(&"trainer_flag_action", {
-				"action": action, "event_flag": trainer_flag,
-				"script_value": _script_value,
-			})
-		0x63:
-			_battle_setup["win_text"] = {
-				"bank": bank, "address": int(command.get("win_address", 0)),
-			}
-			_battle_setup["loss_text"] = {
-				"bank": bank, "address": int(command.get("loss_address", 0)),
-			}
-		0x64:
-			## Script_scripttalkafter jumps to wScriptAfterPointer in
-			## wSeenTrainerBank, which is the map's own script bank here. A
-			## record without one leaves the script to end, since the source
-			## always writes the pointer the trainer macro carries.
-			var after_trainer: Variant = _request.get("trainer", {})
-			var after_address: int = int((after_trainer as Dictionary).get("after_script", 0)) \
-				if after_trainer is Dictionary else 0
-			_emit_runtime_event(&"trainer_talk_after_requested", {
+## The commands numbered past the two profiles' seam, as the handler that runs
+## each. The key is the pokegold opcode [method Gen2WorldScript.source_opcode]
+## normalizes to, so one row serves both profiles.
+const LATER_HANDLERS: Dictionary = {
+	0x55: &"_command_pokepic",
+	0x56: &"_command_closepokepic",
+	0x57: &"_command_two_d_menu",
+	0x58: &"_command_two_d_menu",
+	0x5B: &"_command_loadtemptrainer",
+	0x5C: &"_command_loadwildmon",
+	0x5D: &"_command_loadtrainer",
+	0x5E: &"_command_startbattle",
+	0x5F: &"_command_reloadmapafterbattle",
+	0x60: &"_command_catchtutorial",
+	0x61: &"_command_trainertext",
+	0x62: &"_command_trainerflagaction",
+	0x63: &"_command_winlosstext",
+	0x64: &"_command_scripttalkafter",
+	0x65: &"_command_endifjustbattled",
+	0x66: &"_command_checkjustbattled",
+	0x73: &"_command_loademote",
+	0x74: &"_command_showemote",
+	0x77: &"_command_earthquake",
+	0x78: &"_command_changemapblocks",
+	0x79: &"_command_changeblock",
+	0x7A: &"_command_reloadmap",
+	0x7B: &"_command_refreshmap",
+	0x7C: &"_command_writecmdqueue",
+	0x7D: &"_command_delcmdqueue",
+	0x7E: &"_command_playmusic",
+	0x7F: &"_command_encountermusic",
+	0x80: &"_command_musicfadeout",
+	0x81: &"_command_playmapmusic",
+	0x82: &"_command_dontrestartmapmusic",
+	0x83: &"_command_cry",
+	0x84: &"_command_playsound",
+	0x85: &"_command_waitsfx",
+	0x86: &"_command_warpsound",
+	0x87: &"_command_specialsound",
+	0x6C: &"_command_variablesprite",
+	0x8A: &"_command_pause",
+	0x8B: &"_command_pause",
+	0x8C: &"_command_sdefer",
+	0x89: &"_command_newloadmap",
+	0x8D: &"_command_warpcheck",
+	0x93: &"_command_pokemart",
+	0x94: &"_command_elevator",
+	0x95: &"_command_trade",
+	0x96: &"_command_askforphonenumber",
+	0x97: &"_command_phonecall",
+	0x98: &"_command_hangup",
+	0x99: &"_command_describedecoration",
+	0x9A: &"_command_fruittree",
+	0x9B: &"_command_specialphonecall",
+	0x9C: &"_command_checkphonecall",
+	0x9D: &"_command_verbosegiveitem",
+	0x9E: &"_command_swarm",
+	0x9F: &"_command_halloffame",
+	0xA0: &"_command_credits",
+	0xA1: &"_command_warpfacing",
+	0xA2: &"_command_battletowertext",
+}
+
+
+func _execute_later_command(
+	source_opcode: int, command: Dictionary, bank: int
+) -> Dictionary:
+	if not LATER_HANDLERS.has(source_opcode):
+		return {}
+	return call(LATER_HANDLERS[source_opcode], source_opcode, command, bank)
+
+
+## `Script_pokepic` takes wScriptVar when its operand is zero and writes whichever it
+## settled on to wCurPartySpecies, which is what a later `special PlayCurMonCry`
+## reads.
+func _command_pokepic(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	var pic_species: int = int(command.get("pokemon", 0))
+	if pic_species == 0:
+		pic_species = _script_value
+	_cur_party_species = pic_species
+	_emit_runtime_event(&"pokemon_picture_requested", {
+		"pokemon": pic_species,
+	})
+	return {"ok": true}
+
+
+func _command_closepokepic(_source_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	_emit_runtime_event(&"pokemon_picture_closed", {})
+	return {"ok": true}
+
+
+func _command_two_d_menu(source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_menu(source_opcode == 0x57, command)
+
+
+func _command_loadtemptrainer(_source_opcode: int, _command: Dictionary, bank: int) -> Dictionary:
+	var trainer_value: Variant = _request.get("trainer", {})
+	if trainer_value is Dictionary and not (trainer_value as Dictionary).is_empty():
+		var trainer: Dictionary = trainer_value as Dictionary
+		_battle_setup = _new_battle_setup({
+			"kind": &"trainer",
+			"trainer_group": int(trainer.get("trainer_group", 0)),
+			"trainer_id": maxi(int(trainer.get("trainer_id", 0)) - 1, 0),
+			"trainer_flag": int(trainer.get("event_flag", -1)),
+			"win_text": _trainer_text_pointer(trainer, "win_text", bank),
+			"loss_text": _trainer_text_pointer(trainer, "loss_text", bank),
+		})
+		_emit_runtime_event(&"battle_setup_changed", _battle_setup)
+	return {"ok": true}
+
+
+func _command_loadwildmon(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_battle_setup = _new_battle_setup({
+		"kind": &"wild", "pokemon": int(command.get("pokemon", 0)),
+		"level": int(command.get("level", 0)),
+	})
+	_emit_runtime_event(&"battle_setup_changed", _battle_setup)
+	return {"ok": true}
+
+
+func _command_loadtrainer(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_loaded_battle_type = -1
+	_battle_setup = _new_battle_setup({
+		"kind": &"trainer", "trainer_group": int(command.get("trainer_group", 0)),
+		# The cartridge's loadtrainer operand is one-based; the imported
+		# party table API is zero-based.
+		"trainer_id": maxi(int(command.get("trainer_id", 0)) - 1, 0),
+	})
+	_emit_runtime_event(&"battle_setup_changed", _battle_setup)
+	return {"ok": true}
+
+
+func _command_startbattle(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	if _battle_setup.is_empty():
+		return {
+			"ok": false, "reason": &"battle_setup_missing", "command": command,
+		}
+	return _stage_runtime_request(&"battle_requested", _battle_request_values())
+
+
+func _command_reloadmapafterbattle(_source_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	_emit_runtime_event(&"battle_map_reload_requested", {"requested": true})
+	return {"ok": true}
+
+
+func _command_catchtutorial(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	var tutorial_setup: Dictionary = _battle_setup.duplicate(true)
+	if tutorial_setup.is_empty() or StringName(tutorial_setup.get("kind", &"")) != &"wild":
+		return {"ok": false, "reason": &"tutorial_battle_setup_missing"}
+	tutorial_setup["tutorial"] = true
+	tutorial_setup["battle_type"] = int(command.get("value", 0))
+	tutorial_setup["can_lose"] = false
+	return _stage_runtime_request(&"catch_tutorial_requested", tutorial_setup)
+
+
+func _command_trainertext(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_runtime_request(&"trainer_text_requested", {
+		"text_id": int(command.get("value", 0)),
+		"setup": _battle_setup.duplicate(true),
+	})
+
+
+func _command_trainerflagaction(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	var trainer_event: Dictionary = _request.get("event", {})
+	var trainer_data: Variant = _request.get("trainer", {})
+	var trainer_flag: int = int(trainer_event.get("event_flag", 0))
+	if trainer_data is Dictionary and not (trainer_data as Dictionary).is_empty():
+		trainer_flag = int((trainer_data as Dictionary).get("event_flag", -1))
+	var action: int = int(command.get("value", 0))
+	if action == 0:
+		_staged_flags[trainer_flag] = false
+	elif action == 1:
+		_staged_flags[trainer_flag] = true
+	elif action == 2:
+		_script_value = 1 if _event_flag_active(trainer_flag) else 0
+	else:
+		return {"ok": false, "reason": &"unsupported_trainer_flag_action", "action": action}
+	_emit_runtime_event(&"trainer_flag_action", {
+		"action": action, "event_flag": trainer_flag,
+		"script_value": _script_value,
+	})
+	return {"ok": true}
+
+
+func _command_winlosstext(_source_opcode: int, command: Dictionary, bank: int) -> Dictionary:
+	_battle_setup["win_text"] = {
+		"bank": bank, "address": int(command.get("win_address", 0)),
+	}
+	_battle_setup["loss_text"] = {
+		"bank": bank, "address": int(command.get("loss_address", 0)),
+	}
+	return {"ok": true}
+
+
+## Script_scripttalkafter jumps to wScriptAfterPointer in wSeenTrainerBank, which is
+## the map's own script bank here. A record without one leaves the script to end,
+## since the source always writes the pointer the trainer macro carries.
+func _command_scripttalkafter(_source_opcode: int, _command: Dictionary, bank: int) -> Dictionary:
+	var after_trainer: Variant = _request.get("trainer", {})
+	var after_address: int = int((after_trainer as Dictionary).get("after_script", 0)) \
+		if after_trainer is Dictionary else 0
+	_emit_runtime_event(&"trainer_talk_after_requested", {
+		"bank": bank, "address": after_address,
+	})
+	if after_address > 0:
+		_frames.clear()
+		if not _push_frame(bank, after_address):
+			return {
+				"ok": false, "reason": &"missing_trainer_after_script",
 				"bank": bank, "address": after_address,
-			})
-			if after_address > 0:
-				_frames.clear()
-				if not _push_frame(bank, after_address):
-					return {
-						"ok": false, "reason": &"missing_trainer_after_script",
-						"bank": bank, "address": after_address,
-					}
-		0x65:
-			if _just_battled():
-				_frames.clear()
-		0x66:
-			_script_value = 1 if _just_battled() else 0
-		0x73:
-			_loaded_emote = int(command.get("value", -1))
-			if _loaded_emote == 0xFF:
-				_loaded_emote = _script_value
-			_emit_runtime_event(&"emote_loaded", {"emote_id": _loaded_emote})
-		0x74:
-			## Script_showemote is `ScriptCall ShowEmoteScript`: loademote, an
-			## applymovement that shows the emote, `pause 0` over the delay this
-			## command just wrote, and an applymovement that hides it again. The two
-			## one-command movements are folded into the emote event and its hide;
-			## the pause is the wait, and it is what the operand measures.
-			var emote_id: int = int(command.get("value", _loaded_emote))
-			if emote_id == 0xFF:
-				emote_id = _loaded_emote
-			_loaded_emote = emote_id
-			## `cp LAST_TALKED / jr z` keeps hLastTalked as it was only when the
-			## operand is LAST_TALKED itself; every other id becomes the new one,
-			## which is what the two `applymovementlasttalked`s inside
-			## ShowEmoteScript then move.
-			var emote_object_id: int = int(command.get("object_id", 0))
-			if emote_object_id != LAST_TALKED:
-				_last_talked_object_index = _object_index_from_id(emote_object_id)
-			var emote_object: int = _object_index_from_id(emote_object_id)
-			_script_delay = int(command.get("value_2", 0))
-			_emit_object_event(&"object_emote", {
-				"object_index": emote_object,
-				"emote_id": emote_id,
-				"visible": true,
-				## Zero is "until the hide", not "for no time": the source takes the
-				## emote down from ShowEmoteScript's last command, not on a counter.
-				"duration": 0,
-			})
-			return _stage_frame_wait(
-				_script_delay * PAUSE_FRAMES_PER_UNIT,
-				{"hide_emote_object": emote_object, "emote_id": emote_id}
-			)
-		0x77:
-			## Script_earthquake is `ScriptCall` on `applymovement PLAYER,
-			## wEarthquakeMovementDataBuffer`, whose stream is `step_shake n` then
-			## `step_sleep (n & %00111111)`. The shake starts and the movement wait
-			## is that sleep, since step_shake itself reaches
-			## ContinueReadingMovement without spending a frame.
-			_emit_runtime_event(&"earthquake_requested", {
-				"strength": int(command.get("value", 0)),
-			})
-			return _stage_frame_wait(int(command.get("value", 0)) & 0x3F)
-		0x78:
-			_emit_runtime_event(&"map_blocks_requested", {
-				"bank": bank, "address": int(command.get("address", 0)),
-			})
-		0x79:
-			_emit_runtime_event(&"map_block_changed", {
-				"x": int(command.get("x", 0)), "y": int(command.get("y", 0)),
-				"block": int(command.get("block", 0)),
-			})
-		0x7A:
-			_emit_runtime_event(&"map_reload_requested", {})
-		0x7B:
-			_emit_runtime_event(&"map_refresh_requested", {})
-		0x7C:
-			_emit_runtime_event(&"command_queue_written", {
-				"bank": bank, "address": int(command.get("address", 0)),
-			})
-		0x7D:
-			_script_value = 1
-			_emit_runtime_event(&"command_queue_deleted", {
-				"queue_id": int(command.get("value", -1)),
-			})
-		0x7E:
-			return _stage_audio_request(&"music", {
-				"address": int(command.get("address", 0)),
-			})
-		0x7F:
-			return _stage_audio_request(&"encounter_music", {})
-		0x80:
-			return _stage_audio_request(&"music_fadeout", {
-				"music": int(command.get("value", 0)),
-				"fade_time": int(command.get("value_2", 0)),
-			})
-		0x81:
-			return _stage_audio_request(&"map_music", {})
-		0x82:
-			_emit_runtime_event(&"map_music_restart_disabled", {})
-		0x83:
-			return _stage_audio_request(&"cry", {"species": int(command.get("value", 0))})
-		0x84:
-			return _stage_audio_request(&"sound", {"address": int(command.get("value", 0))})
-		0x85:
-			return _stage_audio_request(&"sound_wait", {})
-		0x86:
-			return _stage_audio_request(&"warp_sound", {
-				"collision": int(_request.get("collision", -1)),
-			})
-		0x87:
-			return _stage_audio_request(&"special_sound", {"item": _last_item})
-		0x6C:
-			## variablesprite stores a sprite id in the source's variable-sprite
-			## table. The first operand is an index relative to SPRITE_VARS.
-			_emit_runtime_event(&"variable_sprite_changed", {
-				"variable_sprite": VARIABLE_SPRITE_BASE + int(command.get("value", 0)),
-				"sprite": int(command.get("value_2", 0)),
-			})
-		0x8A, 0x8B:
-			## Both write wScriptDelay when their operand is nonzero and reuse
-			## whatever is in it when it is zero. `Script_pause` then spends
-			## `DelayFrames 2` per unit inside the command; `Script_deactivatefacing`
-			## hands the same count to SCRIPT_WAIT, which WaitScript decrements once
-			## per frame.
-			var delay_operand: int = int(command.get("value", 0))
-			if delay_operand != 0:
-				_script_delay = delay_operand
-			var delay_frames: int = _script_delay * PAUSE_FRAMES_PER_UNIT \
-				if source_opcode == 0x8A else _script_delay
-			_emit_runtime_event(&"script_timing_requested", {
-				"kind": &"pause" if source_opcode == 0x8A else &"deactivate_facing",
-				"value": delay_operand,
-				"frames": delay_frames,
-			})
-			return _stage_frame_wait(delay_frames)
-		0x8C:
-			_ran_deferred = true
-			if not _push_frame(bank, int(command.get("address", 0))):
-				return {
-					"ok": false, "reason": &"missing_deferred_script",
-					"bank": bank, "address": int(command.get("address", 0)),
-				}
-		0x89:
-			## Script_newloadmap sets hMapEntryMethod and re-enters the current
-			## map. It yields rather than ending: StopScript only clears
-			## SCRIPT_RUNNING in wScriptFlags, so the commands after it run, as
-			## FallIntoMapScript's pitfall animation shows
-			## (engine/overworld/events.asm). The re-entry itself is already
-			## queued here, because the `warpcheck` before it took a warp and
-			## every map change queues its own callbacks, so what is left to
-			## carry is the entry method the transition is drawn with.
-			_emit_runtime_event(&"map_entry_method_requested", {
-				"method": int(command.get("value", 0)),
-			})
-		0x8D:
-			## Script_warpcheck runs WarpCheck against the cell the player is
-			## standing on, so the destination is the world's to resolve, not
-			## the script's. Burned Tower's rival scene opens the hole under the
-			## player and then relies on this to drop them through it.
-			_emit_runtime_event(&"warp_check_requested", {})
-		0x93:
-			var mart: Dictionary = {
-				"dialog": int(command.get("value", 0)),
-				"address": int(command.get("address", 0)),
 			}
-			if command.has("mart_items"):
-				mart["items"] = command["mart_items"]
-			return _stage_runtime_request(&"mart_requested", mart)
-		0x94:
-			## `Script_elevator` hands `Elevator` the pointer in `de` and the
-			## running script's own bank in `b`, which is where the `elevfloor`
-			## list lives.
-			return _stage_runtime_request(&"elevator_requested", {
-				"bank": bank,
-				"address": int(command.get("address", 0)),
-			})
-		0x95:
-			var trade: Dictionary = {"trade_id": int(command.get("value", 0))}
-			## A patched site names both halves; an unpatched one names neither
-			## and the record answers for both, as it always has.
-			for key: String in ["offered_species", "requested_species"]:
-				if command.has(key):
-					trade[key] = int(command[key])
-			return _stage_runtime_request(&"trade_requested", trade)
-		0x96:
-			return _stage_phone_choice(int(command.get("value", 0)))
-		0x97:
-			return _stage_runtime_request(&"phone_call_requested", {
-				"address": int(command.get("address", 0)),
-			})
-		0x98:
-			## `Script_hangup` is `HangUp` inline: seven twenty-frame waits with
-			## its own two lines on the box, and no button anywhere in it.
-			_emit_runtime_event(&"phone_hangup", {
-				"frames": Gen2WorldPhoneRing.HANG_UP_FRAMES,
-			})
-			return _stage_frame_wait(
-				Gen2WorldPhoneRing.HANG_UP_FRAMES, {"hang_up": true}
-			)
-		0x99:
-			return _stage_decoration_description(int(command.get("value", 0)))
-		0x9A:
-			return _stage_fruit_tree(int(command.get("value", 0)))
-		0x9B:
-			## The cartridge uses specialphonecall to store the pending special
-			## call. Imported phone scripts also use SPECIALCALL_NONE to clear it.
-			## This command never starts the call directly. CheckSpecialPhoneCall
-			## consumes the staged value during a later step.
-			var special_call_id: int = int(command.get("address", 0))
-			if not _phone_context.is_empty():
-				_phone_context["special_call_id"] = special_call_id
-			_staged_special_phone_call = special_call_id
-			_has_staged_special_phone_call = true
-			_script_value = 1
-			_emit_runtime_event(&"special_phone_call_changed", {
-				"call_id": special_call_id,
-			})
-			return {"ok": true}
-		0x9C:
-			_script_value = 1 if _current_special_phone_call() != 0 else 0
-		0x9D:
-			## Script_verbosegiveitem is Script_giveitem plus `CurItemName` and a
-			## CopyConvertedText into STRING_BUFFER_4, which is what GiveItemScript's
-			## _ReceivedItemText then prints as `text_ram wStringBuffer4`. Staging
-			## the item without filling the buffer leaves that text unresolved.
-			var verbose_item: int = int(command.get("item", 0))
-			var verbose_name: String = data.item_name(verbose_item) if data != null else ""
-			_set_text_buffer(
-				RomLayout.STRING_BUFFER_4, verbose_name, &"item_name",
-				{"item": verbose_item}
-			)
-			var given: Dictionary = _stage_item_delta(
-				verbose_item, int(command.get("quantity", 1))
-			)
-			if not bool(given.get("ok", true)):
-				return given
-			return _stage_give_item_script(verbose_item, verbose_name)
-		0x9E:
-			## Crystal's `swarm` carries which of the two swarms it is setting
-			## and pokegold's does not, because `StoreSwarmMapIndices` there
-			## writes one pair whatever `c` holds.
-			return _stage_runtime_request(&"swarm_requested", {
-				"kind": int(command.get("flag", Gen2WorldState.SWARM_DUNSPARCE)),
-				"map_group": int(command.get("map_group", 0)),
-				"map_number": int(command.get("map_number", 0)),
-			})
-		0x9F:
-			_staged_engine_flags[Gen2WorldState.ENGINE_HALL_OF_FAME] = true
-			_events.append({"type": &"hall_of_fame_requested"})
-		0xA0:
-			## Script_credits farcalls RedCredits and then falls into
-			## Script_endall the way Script_halloffame does
-			## (engine/overworld/scripting.asm's ReturnFromCredits). No flag and
-			## no state: presentation only, and both call sites are followed by
-			## the source's own `end`, so this runs on rather than stopping.
-			_events.append({"type": &"credits_requested"})
-		0xA1:
-			return _stage_warp_facing_request(command)
-		0xA2:
-			## Crystal's own `battletowertext`, raw $a4. Gold and Silver's
-			## command table stops at $a1, so nothing of theirs reaches here.
-			return _stage_battle_tower_text(int(command.get("value", 1)))
-	## The commands whose case above falls out of the match rather than returning
-	## a result of its own. The four that now wait (`showemote`, `earthquake`,
-	## `pause` and `deactivatefacing`) return from inside it and are not here.
-	var handled_sources: Array = [
-		0x55, 0x56, 0x57, 0x58, 0x5B, 0x5C, 0x5D, 0x5F, 0x60, 0x61, 0x62, 0x63, 0x64,
-		0x65, 0x66, 0x7F, 0x81, 0x82, 0x85, 0x8D, 0x98,
-		0x8C,
-		0x6C, 0x73, 0x78, 0x79, 0x7A, 0x7B, 0x7C, 0x7D, 0x9C, 0x9F,
-		0xA0, 0x89,
-	]
-	if source_opcode in handled_sources:
-		return {"ok": true}
-	return {}
+	return {"ok": true}
+
+
+func _command_endifjustbattled(_source_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	if _just_battled():
+		_frames.clear()
+	return {"ok": true}
+
+
+func _command_checkjustbattled(_source_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	_script_value = 1 if _just_battled() else 0
+	return {"ok": true}
+
+
+func _command_loademote(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_loaded_emote = int(command.get("value", -1))
+	if _loaded_emote == 0xFF:
+		_loaded_emote = _script_value
+	_emit_runtime_event(&"emote_loaded", {"emote_id": _loaded_emote})
+	return {"ok": true}
+
+
+## Script_showemote is `ScriptCall ShowEmoteScript`: loademote, an applymovement that
+## shows the emote, `pause 0` over the delay this command just wrote, and an
+## applymovement that hides it again. The two one-command movements are folded into
+## the emote event and its hide; the pause is the wait, and it is what the operand
+## measures.
+func _command_showemote(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	var emote_id: int = int(command.get("value", _loaded_emote))
+	if emote_id == 0xFF:
+		emote_id = _loaded_emote
+	_loaded_emote = emote_id
+	## `cp LAST_TALKED / jr z` keeps hLastTalked as it was only when the
+	## operand is LAST_TALKED itself; every other id becomes the new one,
+	## which is what the two `applymovementlasttalked`s inside
+	## ShowEmoteScript then move.
+	var emote_object_id: int = int(command.get("object_id", 0))
+	if emote_object_id != LAST_TALKED:
+		_last_talked_object_index = _object_index_from_id(emote_object_id)
+	var emote_object: int = _object_index_from_id(emote_object_id)
+	_script_delay = int(command.get("value_2", 0))
+	_emit_object_event(&"object_emote", {
+		"object_index": emote_object,
+		"emote_id": emote_id,
+		"visible": true,
+		## Zero is "until the hide", not "for no time": the source takes the
+		## emote down from ShowEmoteScript's last command, not on a counter.
+		"duration": 0,
+	})
+	return _stage_frame_wait(
+		_script_delay * PAUSE_FRAMES_PER_UNIT,
+		{"hide_emote_object": emote_object, "emote_id": emote_id}
+	)
+
+
+## Script_earthquake is `ScriptCall` on `applymovement PLAYER,
+## wEarthquakeMovementDataBuffer`, whose stream is `step_shake n` then `step_sleep (n
+## & %00111111)`. The shake starts and the movement wait is that sleep, since
+## step_shake itself reaches ContinueReadingMovement without spending a frame.
+func _command_earthquake(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_emit_runtime_event(&"earthquake_requested", {
+		"strength": int(command.get("value", 0)),
+	})
+	return _stage_frame_wait(int(command.get("value", 0)) & 0x3F)
+
+
+func _command_changemapblocks(_source_opcode: int, command: Dictionary, bank: int) -> Dictionary:
+	_emit_runtime_event(&"map_blocks_requested", {
+		"bank": bank, "address": int(command.get("address", 0)),
+	})
+	return {"ok": true}
+
+
+func _command_changeblock(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_emit_runtime_event(&"map_block_changed", {
+		"x": int(command.get("x", 0)), "y": int(command.get("y", 0)),
+		"block": int(command.get("block", 0)),
+	})
+	return {"ok": true}
+
+
+func _command_reloadmap(_source_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	_emit_runtime_event(&"map_reload_requested", {})
+	return {"ok": true}
+
+
+func _command_refreshmap(_source_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	_emit_runtime_event(&"map_refresh_requested", {})
+	return {"ok": true}
+
+
+func _command_writecmdqueue(_source_opcode: int, command: Dictionary, bank: int) -> Dictionary:
+	_emit_runtime_event(&"command_queue_written", {
+		"bank": bank, "address": int(command.get("address", 0)),
+	})
+	return {"ok": true}
+
+
+func _command_delcmdqueue(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_script_value = 1
+	_emit_runtime_event(&"command_queue_deleted", {
+		"queue_id": int(command.get("value", -1)),
+	})
+	return {"ok": true}
+
+
+func _command_playmusic(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_audio_request(&"music", {
+		"address": int(command.get("address", 0)),
+	})
+
+
+func _command_encountermusic(_source_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_audio_request(&"encounter_music", {})
+
+
+func _command_musicfadeout(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_audio_request(&"music_fadeout", {
+		"music": int(command.get("value", 0)),
+		"fade_time": int(command.get("value_2", 0)),
+	})
+
+
+func _command_playmapmusic(_source_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_audio_request(&"map_music", {})
+
+
+func _command_dontrestartmapmusic(_source_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	_emit_runtime_event(&"map_music_restart_disabled", {})
+	return {"ok": true}
+
+
+func _command_cry(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_audio_request(&"cry", {"species": int(command.get("value", 0))})
+
+
+func _command_playsound(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_audio_request(&"sound", {"address": int(command.get("value", 0))})
+
+
+func _command_waitsfx(_source_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_audio_request(&"sound_wait", {})
+
+
+func _command_warpsound(_source_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_audio_request(&"warp_sound", {
+		"collision": int(_request.get("collision", -1)),
+	})
+
+
+func _command_specialsound(_source_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_audio_request(&"special_sound", {"item": _last_item})
+
+
+## variablesprite stores a sprite id in the source's variable-sprite table. The first
+## operand is an index relative to SPRITE_VARS.
+func _command_variablesprite(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_emit_runtime_event(&"variable_sprite_changed", {
+		"variable_sprite": VARIABLE_SPRITE_BASE + int(command.get("value", 0)),
+		"sprite": int(command.get("value_2", 0)),
+	})
+	return {"ok": true}
+
+
+## Both write wScriptDelay when their operand is nonzero and reuse whatever is in it
+## when it is zero. `Script_pause` then spends `DelayFrames 2` per unit inside the
+## command; `Script_deactivatefacing` hands the same count to SCRIPT_WAIT, which
+## WaitScript decrements once per frame.
+func _command_pause(source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	var delay_operand: int = int(command.get("value", 0))
+	if delay_operand != 0:
+		_script_delay = delay_operand
+	var delay_frames: int = _script_delay * PAUSE_FRAMES_PER_UNIT \
+		if source_opcode == 0x8A else _script_delay
+	_emit_runtime_event(&"script_timing_requested", {
+		"kind": &"pause" if source_opcode == 0x8A else &"deactivate_facing",
+		"value": delay_operand,
+		"frames": delay_frames,
+	})
+	return _stage_frame_wait(delay_frames)
+
+
+func _command_sdefer(_source_opcode: int, command: Dictionary, bank: int) -> Dictionary:
+	_ran_deferred = true
+	if not _push_frame(bank, int(command.get("address", 0))):
+		return {
+			"ok": false, "reason": &"missing_deferred_script",
+			"bank": bank, "address": int(command.get("address", 0)),
+		}
+	return {"ok": true}
+
+
+## Script_newloadmap sets hMapEntryMethod and re-enters the current map. It yields
+## rather than ending: StopScript only clears SCRIPT_RUNNING in wScriptFlags, so the
+## commands after it run, as FallIntoMapScript's pitfall animation shows
+## (engine/overworld/events.asm). The re-entry itself is already queued here, because
+## the `warpcheck` before it took a warp and every map change queues its own
+## callbacks, so what is left to carry is the entry method the transition is drawn
+## with.
+func _command_newloadmap(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_emit_runtime_event(&"map_entry_method_requested", {
+		"method": int(command.get("value", 0)),
+	})
+	return {"ok": true}
+
+
+## Script_warpcheck runs WarpCheck against the cell the player is standing on, so the
+## destination is the world's to resolve, not the script's. Burned Tower's rival scene
+## opens the hole under the player and then relies on this to drop them through it.
+func _command_warpcheck(_source_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	_emit_runtime_event(&"warp_check_requested", {})
+	return {"ok": true}
+
+
+func _command_pokemart(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	var mart: Dictionary = {
+		"dialog": int(command.get("value", 0)),
+		"address": int(command.get("address", 0)),
+	}
+	if command.has("mart_items"):
+		mart["items"] = command["mart_items"]
+	return _stage_runtime_request(&"mart_requested", mart)
+
+
+## `Script_elevator` hands `Elevator` the pointer in `de` and the running script's own
+## bank in `b`, which is where the `elevfloor` list lives.
+func _command_elevator(_source_opcode: int, command: Dictionary, bank: int) -> Dictionary:
+	return _stage_runtime_request(&"elevator_requested", {
+		"bank": bank,
+		"address": int(command.get("address", 0)),
+	})
+
+
+func _command_trade(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	var trade: Dictionary = {"trade_id": int(command.get("value", 0))}
+	## A patched site names both halves; an unpatched one names neither
+	## and the record answers for both, as it always has.
+	for key: String in ["offered_species", "requested_species"]:
+		if command.has(key):
+			trade[key] = int(command[key])
+	return _stage_runtime_request(&"trade_requested", trade)
+
+
+func _command_askforphonenumber(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_phone_choice(int(command.get("value", 0)))
+
+
+func _command_phonecall(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_runtime_request(&"phone_call_requested", {
+		"address": int(command.get("address", 0)),
+	})
+
+
+## `Script_hangup` is `HangUp` inline: seven twenty-frame waits with its own two lines
+## on the box, and no button anywhere in it.
+func _command_hangup(_source_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	_emit_runtime_event(&"phone_hangup", {
+		"frames": Gen2WorldPhoneRing.HANG_UP_FRAMES,
+	})
+	return _stage_frame_wait(
+		Gen2WorldPhoneRing.HANG_UP_FRAMES, {"hang_up": true}
+	)
+
+
+func _command_describedecoration(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_decoration_description(int(command.get("value", 0)))
+
+
+func _command_fruittree(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_fruit_tree(int(command.get("value", 0)))
+
+
+## The cartridge uses specialphonecall to store the pending special call. Imported
+## phone scripts also use SPECIALCALL_NONE to clear it. This command never starts the
+## call directly. CheckSpecialPhoneCall consumes the staged value during a later step.
+func _command_specialphonecall(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	var special_call_id: int = int(command.get("address", 0))
+	if not _phone_context.is_empty():
+		_phone_context["special_call_id"] = special_call_id
+	_staged_special_phone_call = special_call_id
+	_has_staged_special_phone_call = true
+	_script_value = 1
+	_emit_runtime_event(&"special_phone_call_changed", {
+		"call_id": special_call_id,
+	})
+	return {"ok": true}
+
+
+func _command_checkphonecall(_source_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	_script_value = 1 if _current_special_phone_call() != 0 else 0
+	return {"ok": true}
+
+
+## Script_verbosegiveitem is Script_giveitem plus `CurItemName` and a
+## CopyConvertedText into STRING_BUFFER_4, which is what GiveItemScript's
+## _ReceivedItemText then prints as `text_ram wStringBuffer4`. Staging the item
+## without filling the buffer leaves that text unresolved.
+func _command_verbosegiveitem(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	var verbose_item: int = int(command.get("item", 0))
+	var verbose_name: String = data.item_name(verbose_item) if data != null else ""
+	_set_text_buffer(
+		RomLayout.STRING_BUFFER_4, verbose_name, &"item_name",
+		{"item": verbose_item}
+	)
+	var given: Dictionary = _stage_item_delta(
+		verbose_item, int(command.get("quantity", 1))
+	)
+	if not bool(given.get("ok", true)):
+		return given
+	return _stage_give_item_script(verbose_item, verbose_name)
+
+
+## Crystal's `swarm` carries which of the two swarms it is setting and pokegold's does
+## not, because `StoreSwarmMapIndices` there writes one pair whatever `c` holds.
+func _command_swarm(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_runtime_request(&"swarm_requested", {
+		"kind": int(command.get("flag", Gen2WorldState.SWARM_DUNSPARCE)),
+		"map_group": int(command.get("map_group", 0)),
+		"map_number": int(command.get("map_number", 0)),
+	})
+
+
+func _command_halloffame(_source_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	_staged_engine_flags[Gen2WorldState.ENGINE_HALL_OF_FAME] = true
+	_events.append({"type": &"hall_of_fame_requested"})
+	return {"ok": true}
+
+
+## Script_credits farcalls RedCredits and then falls into Script_endall the way
+## Script_halloffame does (engine/overworld/scripting.asm's ReturnFromCredits). No
+## flag and no state: presentation only, and both call sites are followed by the
+## source's own `end`, so this runs on rather than stopping.
+func _command_credits(_source_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	_events.append({"type": &"credits_requested"})
+	return {"ok": true}
+
+
+func _command_warpfacing(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_warp_facing_request(command)
+
+
+## Crystal's own `battletowertext`, raw $a4. Gold and Silver's command table stops at
+## $a1, so nothing of theirs reaches here.
+func _command_battletowertext(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	return _stage_battle_tower_text(int(command.get("value", 1)))
 
 
 func _execute_object_command(source_opcode: int, command: Dictionary) -> Dictionary:
@@ -3333,848 +3832,1190 @@ static func itemfinder_sounds() -> Array:
 	return schedule
 
 
+## Every special this runner answers, as the handler that answers it. SPECIAL is a
+## shared cartridge dispatch table: phone routines are one part of it, and map
+## callbacks and the new-game clock setup use the same table.
+const SPECIAL_HANDLERS: Dictionary = {
+	SPECIAL_OVERWORLD_TOWN_MAP: &"_special_overworld_town_map",
+	SPECIAL_PLAYERS_HOUSE_PC: &"_special_players_house_pc",
+	SPECIAL_POKEMON_CENTER_PC: &"_special_pokemon_center_pc",
+	SPECIAL_BATTLE_TOWER_ACTION: &"_special_battle_tower_action",
+	SPECIAL_CHECK_BATTLE_TOWER_RULES: &"_special_check_battle_tower_rules",
+	SPECIAL_TRY_QUICK_SAVE: &"_special_try_quick_save",
+	SPECIAL_RESET: &"_special_reset",
+	SPECIAL_CHALLENGE_MENU: &"_special_challenge_menu",
+	SPECIAL_SET_BITS_FOR_LINK_TRADE_REQUEST: &"_special_request_link_room",
+	SPECIAL_SET_BITS_FOR_BATTLE_REQUEST: &"_special_request_link_room",
+	SPECIAL_SET_BITS_FOR_TIME_CAPSULE_REQUEST: &"_special_set_bits_for_time_capsule_request",
+	SPECIAL_WAIT_FOR_LINKED_FRIEND: &"_special_wait_for_linked_friend",
+	SPECIAL_CHECK_LINK_TIMEOUT_RECEPTIONIST: &"_special_check_link_timeout_receptionist",
+	SPECIAL_CHECK_BOTH_SELECTED_SAME_ROOM: &"_special_check_both_selected_same_room",
+	SPECIAL_FAILED_LINK_TO_PAST: &"_special_failed_link_to_past",
+	SPECIAL_CLOSE_LINK: &"_special_close_link",
+	SPECIAL_WAIT_FOR_OTHER_PLAYER_TO_EXIT: &"_special_wait_for_other_player_to_exit",
+	SPECIAL_CHECK_TIME_CAPSULE_COMPATIBILITY: &"_special_check_time_capsule_compatibility",
+	SPECIAL_ENTER_TIME_CAPSULE: &"_special_enter_time_capsule",
+	SPECIAL_TRADE_CENTER: &"_special_link_room",
+	SPECIAL_COLOSSEUM: &"_special_link_room",
+	SPECIAL_TIME_CAPSULE: &"_special_link_room",
+	SPECIAL_CHECK_MOBILE_ADAPTER_STATUS: &"_special_check_mobile_adapter_status",
+	SPECIAL_CABLE_CLUB_CHECK_WHICH_CHRIS: &"_special_cable_club_check_which_chris",
+	SPECIAL_DISPLAY_LINK_RECORD: &"_special_display_link_record",
+	SPECIAL_BATTLE_TOWER_ROOM_MENU: &"_special_battle_tower_room_menu",
+	SPECIAL_LOAD_BATTLE_TOWER_OPPONENT: &"_special_load_battle_tower_opponent",
+	SPECIAL_BATTLE_TOWER_BATTLE: &"_special_battle_tower_battle",
+	SPECIAL_SET_DAY_OF_WEEK: &"_special_set_day_of_week",
+	SPECIAL_INITIAL_SET_DST_FLAG: &"_special_initial_set_dst_flag",
+	SPECIAL_INITIAL_CLEAR_DST_FLAG: &"_special_initial_clear_dst_flag",
+	SPECIAL_PLAY_MAP_MUSIC: &"_special_map_music",
+	SPECIAL_RESTART_MAP_MUSIC: &"_special_map_music",
+	SPECIAL_FADE_OUT_MUSIC: &"_special_fade_out_music",
+	36: &"_special_rival_name",
+	27: &"_special_heal_party",
+	SPECIAL_HEAL_MACHINE_ANIM: &"_special_heal_machine_anim",
+	SPECIAL_MAGNET_TRAIN: &"_special_magnet_train",
+	SPECIAL_PROF_OAKS_PC_BOOT: &"_special_prof_oaks_pc_boot",
+	SPECIAL_CHECK_POKERUS: &"_special_check_pokerus",
+	SPECIAL_SNORLAX_AWAKE: &"_special_snorlax_awake",
+	SPECIAL_FADE_OUT_TO_WHITE: &"_special_palette_fade",
+	SPECIAL_BATTLE_TOWER_FADE: &"_special_palette_fade",
+	SPECIAL_FADE_OUT_TO_BLACK: &"_special_palette_fade",
+	SPECIAL_FADE_IN_FROM_WHITE: &"_special_palette_fade",
+	SPECIAL_FADE_IN_FROM_BLACK: &"_special_palette_fade",
+	51: &"_special_presentation_only",
+	52: &"_special_presentation_only",
+	53: &"_special_presentation_only",
+	55: &"_special_presentation_only",
+	56: &"_special_presentation_only",
+	94: &"_special_presentation_only",
+	152: &"_special_presentation_only",
+	157: &"_special_presentation_only",
+	158: &"_special_presentation_only",
+	164: &"_special_presentation_only",
+	95: &"_special_cry",
+	100: &"_special_cry",
+	59: &"_special_wait_sfx",
+	66: &"_special_find_party_mon",
+	67: &"_special_find_party_mon",
+	89: &"_special_first_mon_happiness",
+	90: &"_special_first_mon_is_egg",
+	102: &"_special_gameboy_check",
+	150: &"_special_mon_check",
+	151: &"_special_mon_check",
+	SPECIAL_INIT_ROAM_MONS: &"_special_init_roam_mons",
+	SPECIAL_BILLS_GRANDFATHER: &"_special_grooming",
+	SPECIAL_OLDER_HAIRCUT_BROTHER: &"_special_grooming",
+	SPECIAL_YOUNGER_HAIRCUT_BROTHER: &"_special_grooming",
+	SPECIAL_DAISYS_GROOMING: &"_special_grooming",
+	SPECIAL_DISPLAY_COIN_CASE_BALANCE: &"_special_money_window",
+	SPECIAL_DISPLAY_MONEY_AND_COIN_BALANCE: &"_special_money_window",
+	SPECIAL_PLACE_MONEY_TOP_RIGHT: &"_special_money_window",
+	SPECIAL_DAY_CARE_MAN: &"_special_day_care",
+	SPECIAL_DAY_CARE_LADY: &"_special_day_care",
+	SPECIAL_DAY_CARE_MAN_OUTSIDE: &"_special_day_care",
+	SPECIAL_DAY_CARE_MON_1: &"_special_day_care",
+	SPECIAL_DAY_CARE_MON_2: &"_special_day_care",
+	SPECIAL_NAME_RATER: &"_special_name_rater",
+	SPECIAL_MOVE_DELETION: &"_special_move_deletion",
+	SPECIAL_MOVE_TUTOR: &"_special_move_tutor",
+	SPECIAL_SELECT_APRICORN_FOR_KURT: &"_special_select_apricorn_for_kurt",
+	SPECIAL_GIVE_PARK_BALLS: &"_special_give_park_balls",
+	SPECIAL_SELECT_RANDOM_BUG_CONTESTANTS: &"_special_select_random_bug_contestants",
+	SPECIAL_CONTEST_DROP_OFF_MONS: &"_special_contest_drop_off_mons",
+	SPECIAL_CONTEST_RETURN_MONS: &"_special_contest_return_mons",
+	SPECIAL_WARP_TO_SPAWN_POINT: &"_special_warp_to_spawn_point",
+	SPECIAL_CHECK_PARTY_FULL_AFTER_CONTEST: &"_special_check_party_full_after_contest",
+	SPECIAL_BUG_CONTEST_JUDGING: &"_special_bug_contest_judging",
+	SPECIAL_ACTIVATE_FISHING_SWARM: &"_special_activate_fishing_swarm",
+	SPECIAL_TOGGLE_MAPTILE_DECORATIONS: &"_special_toggle_maptile_decorations",
+	SPECIAL_TOGGLE_DECORATIONS_VISIBILITY: &"_special_toggle_decorations_visibility",
+	SPECIAL_SLOT_MACHINE: &"_special_slot_machine",
+	SPECIAL_CARD_FLIP: &"_special_card_flip",
+	SPECIAL_UNOWN_PUZZLE: &"_special_unown_puzzle",
+	SPECIAL_DISPLAY_UNOWN_WORDS: &"_special_display_unown_words",
+	SPECIAL_SAMPLE_KENJI_BREAK_COUNTDOWN: &"_special_sample_kenji_break_countdown",
+	SPECIAL_TRAINER_HOUSE: &"_special_trainer_house",
+	SPECIAL_CHECK_MYSTERY_GIFT: &"_special_check_mystery_gift",
+	SPECIAL_UNLOCK_MYSTERY_GIFT: &"_special_unlock_mystery_gift",
+	SPECIAL_GET_MYSTERY_GIFT_ITEM: &"_special_get_mystery_gift_item",
+	SPECIAL_HO_OH_CHAMBER: &"_special_ho_oh_chamber",
+	SPECIAL_OMANYTE_CHAMBER: &"_special_omanyte_chamber",
+	SPECIAL_CHECK_CAUGHT_CELEBI: &"_special_check_caught_celebi",
+	SPECIAL_CELEBI_SHRINE_EVENT: &"_special_celebi_shrine_event",
+	SPECIAL_MAP_RADIO: &"_special_map_radio",
+	SPECIAL_CHECK_LUCKY_NUMBER_SHOW_FLAG: &"_special_check_lucky_number_show_flag",
+	SPECIAL_RESET_LUCKY_NUMBER_SHOW_FLAG: &"_special_reset_lucky_number_show_flag",
+	SPECIAL_PRINT_TODAYS_LUCKY_NUMBER: &"_special_print_todays_lucky_number",
+	SPECIAL_CHECK_FOR_LUCKY_NUMBER_WINNERS: &"_special_check_for_lucky_number_winners",
+	SPECIAL_MAGIKARP_HOUSE_SIGN: &"_special_magikarp_house_sign",
+	SPECIAL_BANK_OF_MOM: &"_special_bank_of_mom",
+	SPECIAL_UNOWN_PRINTER: &"_special_unown_printer",
+	SPECIAL_DIPLOMA: &"_special_diploma",
+	SPECIAL_PRINT_DIPLOMA: &"_special_diploma",
+	SPECIAL_BUENA_PRIZE: &"_special_buena_prize",
+	SPECIAL_POKE_SEER: &"_special_poke_seer",
+	SPECIAL_CHECK_MAGIKARP_LENGTH: &"_special_party_selection",
+	SPECIAL_PHOTO_STUDIO: &"_special_party_selection",
+	SPECIAL_RETURN_SHUCKIE: &"_special_party_selection",
+	SPECIAL_GIVE_SHUCKLE: &"_special_give_shuckle",
+	SPECIAL_ASK_REMEMBER_PASSWORD: &"_special_ask_remember_password",
+	SPECIAL_GIVE_ODD_EGG: &"_special_give_odd_egg",
+	SPECIAL_GIVE_DRATINI: &"_special_give_dratini",
+	SPECIAL_GAME_CORNER_PRIZE_MON_CHECK_DEX: &"_special_game_corner_prize_mon_check_dex",
+	SPECIAL_BUENAS_PASSWORD: &"_special_buenas_password",
+	SPECIAL_RANDOM_UNSEEN_WILD_MON: &"_special_random_unseen_wild_mon",
+	SPECIAL_RANDOM_PHONE_WILD_MON: &"_special_random_phone_wild_mon",
+	SPECIAL_RANDOM_PHONE_MON: &"_special_random_phone_mon",
+}
+
+
 ## [param special] is the Crystal-canonical index from
 ## Gen2WorldScript.special_index(), not the raw stream byte, so the payloads
 ## below report that index on both profiles.
 func _execute_special(special: int) -> Dictionary:
-	## SPECIAL is a shared cartridge dispatch table. Phone routines are only one
-	## part of it; map callbacks and the new-game clock setup use the same table.
-	match special:
-		SPECIAL_OVERWORLD_TOWN_MAP:
-			return _stage_runtime_request(&"town_map_requested", {
-				"special": special,
-				"landmark": int(_request.get("landmark", 0)),
-			})
-		SPECIAL_PLAYERS_HOUSE_PC:
-			return _stage_runtime_request(&"pc_requested", {
-				"special": special,
-				"mode": &"players_house",
-			})
-		SPECIAL_POKEMON_CENTER_PC:
-			return _stage_runtime_request(&"pc_requested", {
-				"special": special,
-				"mode": &"pokemon_center",
-			})
-		SPECIAL_BATTLE_TOWER_ACTION:
-			## `jumptable .dw, wScriptVar`: the `setval` in front of the special
-			## names the row, and the row's own answer replaces it.
-			var answered: int = _battle_tower().action(_script_value, {
-				"party": _battle_tower_party(),
-				"pack": _pack_items(),
-				"save_is_yours": true,
-				"random": _battle_tower_random(0),
-			})
-			if answered >= 0:
-				_script_value = answered
-			return {"ok": true}
-		SPECIAL_CHECK_BATTLE_TOWER_RULES:
-			return _check_battle_tower_rules()
-		SPECIAL_TRY_QUICK_SAVE:
-			return _stage_runtime_request(&"quick_save_requested", {"special": special})
-		SPECIAL_RESET:
-			## The console restarting, which is how a saved-and-left challenge
-			## leaves the battle room. Nothing follows it in any script.
-			_events.append({"type": &"soft_reset_requested"})
-			_pending = {}
-			_active = false
-			_completed = true
-			return {"ok": true}
-		SPECIAL_CHALLENGE_MENU:
-			return _stage_challenge_menu()
-		SPECIAL_SET_BITS_FOR_LINK_TRADE_REQUEST, SPECIAL_SET_BITS_FOR_BATTLE_REQUEST:
-			_link_session().request_room(
-				Gen2LinkSession.CABLECLUBROOM_TRADECENTER \
-					if special == SPECIAL_SET_BITS_FOR_LINK_TRADE_REQUEST \
-					else Gen2LinkSession.CABLECLUBROOM_COLOSSEUM
-			)
-		SPECIAL_SET_BITS_FOR_TIME_CAPSULE_REQUEST:
-			## The Time Capsule asks for `CABLECLUBROOM_NULL`, which is why its
-			## own script never reaches `CheckBothSelectedSameRoom` on a branch
-			## that could pass.
-			_link_session().request_time_capsule()
-		SPECIAL_WAIT_FOR_LINKED_FRIEND:
-			_script_value = _link_session().wait_for_linked_friend(_link_transport())
-			if _script_value == 0:
-				return {"ok": true}
-			return _stage_frame_wait(
-				Gen2LinkSession.WAIT_FOR_FRIEND_CONNECTED_FRAMES,
-				{"special": special, "kind": &"link_wait"}
-			)
-		SPECIAL_CHECK_LINK_TIMEOUT_RECEPTIONIST:
-			var session: Gen2LinkSession = _link_session()
-			_script_value = session.check_link_timeout(_link_transport())
-			## The `readmem wOtherPlayerLinkMode` every one of the three scripts
-			## runs on the next line reads this byte and not wScriptVar.
-			var stored: Dictionary = _stage_script_memory(
-				data.other_player_link_mode_address() if data != null else -1,
-				session.other_player_link_mode
-			)
-			if not bool(stored.get("ok", true)):
-				return stored
-			return _stage_frame_wait(
-				Gen2LinkSession.CHECK_LINK_TIMEOUT_FRAMES,
-				{"special": special, "kind": &"link_wait"}
-			)
-		SPECIAL_CHECK_BOTH_SELECTED_SAME_ROOM:
-			_script_value = _link_session().check_both_selected_same_room(_link_transport())
-		SPECIAL_FAILED_LINK_TO_PAST:
-			_link_session().failed_link_to_past(_link_transport())
-			return _stage_frame_wait(
-				Gen2LinkSession.FAILED_LINK_TO_PAST_FRAMES,
-				{"special": special, "kind": &"link_wait"}
-			)
-		SPECIAL_CLOSE_LINK:
-			_link_session().close_link(_link_transport())
-			return _stage_frame_wait(
-				Gen2LinkSession.CLOSE_LINK_FRAMES,
-				{"special": special, "kind": &"link_wait"}
-			)
-		SPECIAL_WAIT_FOR_OTHER_PLAYER_TO_EXIT:
-			_link_session().wait_for_other_player_to_exit(_link_transport())
-			return _stage_frame_wait(
-				Gen2LinkSession.WAIT_FOR_OTHER_PLAYER_FRAMES,
-				{"special": special, "kind": &"link_wait"}
-			)
-		SPECIAL_CHECK_TIME_CAPSULE_COMPATIBILITY:
-			return _check_time_capsule_compatibility()
-		SPECIAL_ENTER_TIME_CAPSULE:
-			_link_session().enter_time_capsule(_link_transport())
-			return _stage_frame_wait(
-				Gen2LinkSession.ENTER_TIME_CAPSULE_FRAMES,
-				{"special": special, "kind": &"link_wait"}
-			)
-		SPECIAL_TRADE_CENTER, SPECIAL_COLOSSEUM, SPECIAL_TIME_CAPSULE:
-			return _stage_link_room(special)
-		SPECIAL_CHECK_MOBILE_ADAPTER_STATUS:
-			## `CheckMobileAdapterStatusSpecial` answers whether a Mobile Adapter
-			## GB is plugged in, and none is: there is no such peripheral on any
-			## platform this runs on. FALSE is what both Crystal receptionists
-			## branch on to reach `.NoMobile`, which is the cable club proper,
-			## so this is the answer that opens the room rather than the one that
-			## closes it.
-			_script_value = 0
-		SPECIAL_CABLE_CLUB_CHECK_WHICH_CHRIS:
-			_script_value = _link_session().which_chris(_link_transport())
-		SPECIAL_DISPLAY_LINK_RECORD:
-			## `_DisplayLinkRecord` draws `sLinkBattleStats` and holds for A or
-			## B. It writes nothing, so the script runs straight on behind it.
-			return _stage_runtime_request(&"link_record_requested", {"special": special})
-		SPECIAL_BATTLE_TOWER_ROOM_MENU:
-			return _stage_room_menu()
-		SPECIAL_LOAD_BATTLE_TOWER_OPPONENT:
-			return _load_battle_tower_opponent()
-		SPECIAL_BATTLE_TOWER_BATTLE:
-			return _stage_battle_tower_battle()
-		SPECIAL_SET_DAY_OF_WEEK:
-			_stage_day_of_week_menu()
-			return {"ok": true}
-		SPECIAL_INITIAL_SET_DST_FLAG:
-			_staged_dst_enabled = true
-			_has_staged_dst = true
-			_stage_dst_confirmation_text(true)
-			return {"ok": true}
-		SPECIAL_INITIAL_CLEAR_DST_FLAG:
-			_staged_dst_enabled = false
-			_has_staged_dst = true
-			_stage_dst_confirmation_text(false)
-			return {"ok": true}
-		SPECIAL_PLAY_MAP_MUSIC, SPECIAL_RESTART_MAP_MUSIC:
-			# Entering a map with the music already playing does not restart it,
-			# which is why crossing a route boundary is one continuous track.
-			# RestartMapMusic exists to override exactly that, so it says so.
-			return _stage_audio_request(&"map_music", {
-				"special": special,
-				"restart": special == SPECIAL_RESTART_MAP_MUSIC,
-			})
-		SPECIAL_FADE_OUT_MUSIC:
-			_emit_runtime_event(&"music_fadeout_requested", {"special": special})
-		36:
-			return _stage_runtime_request(&"rival_name_requested", {
-				"special": special, "default_name": "SILVER",
-			})
-		27:
-			## HealParty is a save-owned transaction. It is deliberately a host
-			## request so HP, status and PP are changed together with the selected
-			## project save.
-			return _stage_runtime_request(&"party_heal_requested", {"special": special})
-		SPECIAL_HEAL_MACHINE_ANIM:
-			## wScriptVar selects the machine's screen position: 0 Pokemon Center,
-			## 1 Elm's Lab, 2 Hall of Fame. A preceding SETVAL loads it. Nothing
-			## here changes state, but the routine is not free: it spends thirty
-			## frames a ball and `.FlashPalettes8Times`' eighty, with a sound on
-			## each ball, so the script waits for it the way the cartridge does.
-			var machine_type: int = clampi(_script_value, 0, HEAL_MACHINE_HALL_OF_FAME)
-			var balls: int = int((_request.get("party", {}) as Dictionary).get("count", 0))
-			var sounds: Array = heal_machine_sounds(machine_type, balls)
-			_emit_runtime_event(&"presentation_special_applied", {
-				"special": special, "kind": &"heal_machine_anim",
-				"machine_type": machine_type,
-				"balls": balls,
-				"sounds": sounds.duplicate(true),
-			})
-			## `ld a, [wPartyCount] / and a / ret z`: an empty party leaves the
-			## machine alone and spends nothing.
-			if balls > 0:
-				return _stage_frame_wait(
-					balls * HEAL_MACHINE_BALL_FRAMES + HEAL_MACHINE_FLASH_FRAMES,
-					{"special": special, "kind": &"heal_machine_anim"}
-				)
-		SPECIAL_MAGNET_TRAIN:
-			## engine/events/magnet_train.asm's MagnetTrain is scroll positions,
-			## graphics, music and a VBlank cutscene handler. It reads
-			## wScriptVar for the direction and writes nothing the overworld can
-			## observe; the warp itself is the `warpcheck` that follows it.
-			_emit_runtime_event(&"presentation_special_applied", {
-				"special": special, "kind": &"magnet_train",
-				"to_goldenrod": _script_value != 0,
-			})
-		SPECIAL_PROF_OAKS_PC_BOOT:
-			## engine/events/prof_oaks_pc.asm's ProfOaksPCBoot prints, counts the
-			## set bits in wPokedexSeen and wPokedexCaught for `Rate`, plays that
-			## rating's sound and waits for A or B. Presentation only: it writes
-			## nothing, so the script runs straight on to its own `end` and
-			## [Gen2ProfOaksPC] is handed the counts by whoever draws this.
-			_emit_runtime_event(&"presentation_special_applied", {
-				"special": special, "kind": &"prof_oaks_pc_boot",
-			})
-		SPECIAL_CHECK_POKERUS:
-			var party: Dictionary = _request.get("party", {})
-			if party.is_empty():
-				return {"ok": false, "reason": &"missing_party_summary", "special": special}
-			_script_value = 1 if bool(party.get("pokerus", false)) else 0
-		SPECIAL_SNORLAX_AWAKE:
-			## Two reads and nothing else: the track in wMapMusic and the cell the
-			## player stands on. The Poke Flute channel reaches wMapMusic through
-			## StartRadioStation and stays there because closing the Pokegear
-			## restores the map's music only for its two sentinel ids.
-			var cell: Vector2i = _player_cell()
-			_script_value = 1 if state != null \
-				and state.map_music() == Gen2WorldRadio.MUSIC_POKE_FLUTE_CHANNEL \
-				and cell in SNORLAX_PROXIMITY_CELLS else 0
-		SPECIAL_FADE_OUT_TO_WHITE, SPECIAL_BATTLE_TOWER_FADE, SPECIAL_FADE_OUT_TO_BLACK, \
-		SPECIAL_FADE_IN_FROM_WHITE, SPECIAL_FADE_IN_FROM_BLACK:
-			## `FadeOutToWhite` is 46 in both pins, since Crystal's inserted
-			## `BattleTowerFade` sits at 47; `FadeInFromWhite` is 49 here and 48 in
-			## Gold/Silver, which `special_index()` already normalizes. Each of the
-			## five is `GetTimePalFade` and then four rows of the fade table, and
-			## none is free: `ConvertTimePals*HL` spends `ld c, 2` on every row, so
-			## the script holds for the whole walk the way it does on the cartridge.
-			## `FillWhiteBGColor` is the two white fades' alone.
-			var orders: Array[int] = FADE_ORDERS_OF[special]
-			var step_frames: int = Gen2WorldPalette.BATTLE_TOWER_FADE_STEP_FRAMES \
-				if special == SPECIAL_BATTLE_TOWER_FADE \
-				else Gen2WorldPalette.FADE_STEP_FRAMES
-			_emit_runtime_event(&"presentation_special_applied", {
-				"special": special, "kind": &"palette_fade",
-				"orders": orders.duplicate(),
-				"step_frames": step_frames,
-				"white_fill": special in FADE_WHITE_FILL_SPECIALS,
-			})
-			return _stage_frame_wait(orders.size() * step_frames, {
-				"special": special, "kind": &"palette_fade",
-			})
-		51, 52, 53, 55, 56, 94, 152, 157, 158, 164:
-			## Sprite reload, palette reload and the dummied trainer-ranking
-			## bookkeeping affect presentation or source-only counters rather than
-			## scene-free state. `LoadUsedSpritesGFX`, `UpdateSprites`,
-			## `UpdatePlayerSprite`, `ReloadSpritesNoPalettes` and `RefreshSprites`
-			## reload the sprite set a `variablesprite` just changed;
-			## `ClearBGPalettes`, `UpdateTimePals`, `SetPlayerPalette` and
-			## `LoadMapPalettes` are the palette pair the day/night scripts open
-			## with, and the renderer takes its palettes from the map and the clock.
-			_emit_runtime_event(&"presentation_special_applied", {"special": special})
-		95, 100:
-			## `PlaySlowCry` (95) is `LoadCry` with the record's own pitch lowered
-			## by `$140` and its length raised by `$60`, and `PlayCurMonCry` (100) is
-			## `PlayMonCry` straight. Neither writes anything back, so what they owe
-			## is the sound and the `WaitSFX` each ends on. They do not read the same
-			## byte: 95 is `ld a, [wScriptVar]`, which the `setval` in front of it
-			## has just set, and 100 is `ld a, [wCurPartySpecies]`, all four of whose
-			## scripts are a grooming routine's.
-			return _stage_audio_request(&"cry", {
-				"special": special,
-				"species": _script_value if special == 95 else _cur_party_species,
-				"slow": special == 95,
-			})
-		59:
-			## `SpecialWaitSFX` is `WaitSFX`: it holds until the four effect
-			## channels are free rather than spending a counted number of
-			## frames, which is `Script_waitsfx`'s own request.
-			return _stage_audio_request(&"sound_wait", {"special": special})
-		66, 67:
-			## `FindPartyMonThatSpecies` and its ID-checking twin. Both answer
-			## TRUE/FALSE in wScriptVar off the species wScriptVar was loaded
-			## with; the second adds `CheckOwnMon`'s ID and OT test on the slot
-			## the first one found.
-			var party: Dictionary = _request.get("party", {})
-			if party.is_empty():
-				return {"ok": false, "reason": &"missing_party_summary", "special": special}
-			_script_value = 1 if _party_slot_of_species(
-				party, _script_value, special == 67
-			) >= 0 else 0
-		89:
-			## `GetFirstPokemonHappiness` walks past every EGG in the list and
-			## answers the first hatched member's happiness byte, naming that
-			## member in the buffer its two boxes print.
-			var happy_party: Dictionary = _request.get("party", {})
-			if happy_party.is_empty():
-				return {"ok": false, "reason": &"missing_party_summary", "special": special}
-			var eggs: Array = happy_party.get("eggs", [])
-			var happiness: Array = happy_party.get("happiness", [])
-			var names: Array = happy_party.get("names", [])
-			var slot: int = 0
-			while slot < eggs.size() and bool(eggs[slot]):
-				slot += 1
-			_script_value = int(happiness[slot]) if slot < happiness.size() else 0
-			if slot < names.size():
-				_set_text_buffer(3, String(names[slot]), &"first_party_mon", {
-					"special": special, "slot": slot,
-				})
-		90:
-			## `CheckFirstMonIsEgg` reads slot zero alone, and names it whether
-			## or not it is an egg: `GetPokemonName` runs on both branches.
-			var first_party: Dictionary = _request.get("party", {})
-			if first_party.is_empty():
-				return {"ok": false, "reason": &"missing_party_summary", "special": special}
-			var first_eggs: Array = first_party.get("eggs", [])
-			var first_names: Array = first_party.get("names", [])
-			_script_value = 1 if not first_eggs.is_empty() and bool(first_eggs[0]) else 0
-			if not first_names.is_empty():
-				_set_text_buffer(3, String(first_names[0]), &"first_party_mon", {
-					"special": special, "slot": 0,
-				})
-		102:
-			## `GameboyCheck` reports which console the game booted on. This one
-			## is a Game Boy Color every time, since every screen here is drawn
-			## in the CGB palettes `hCGB` selects.
-			_script_value = GBCHECK_CGB
-		150, 151:
-			## `MonCheck` answers whether the player owns the species in
-			## wScriptVar and `BeastsCheck` runs the same test on all three
-			## beasts, leaving the last species it asked about behind in
-			## wScriptVar when one is missing.
-			var owner_party: Dictionary = _request.get("party", {})
-			if owner_party.is_empty():
-				return {"ok": false, "reason": &"missing_party_summary", "special": special}
-			var owned: Array = owner_party.get("owned_species", [])
-			if special == 151:
-				_script_value = 1 if owned.has(_script_value) else 0
-			else:
-				_script_value = 1
-				for beast: int in BEAST_SPECIES:
-					if not owned.has(beast):
-						_script_value = beast
-						break
-		SPECIAL_INIT_ROAM_MONS:
-			## InitRoamMons seeds the roam structs with Raikou and Entei at
-			## level 40 on their starting maps. Gen2WorldAPI.open() already
-			## seeds the same imported records, and ensure_roaming_mons() keeps
-			## positions a player has already moved, so this reports rather than
-			## resetting a beast that is already loose.
-			if state != null and data != null:
-				state.ensure_roaming_mons(data.world_roaming_mons())
-			_emit_runtime_event(&"roaming_mons_initialized", {
-				"special": special,
-				"count": state.roaming_mons().size() if state != null else 0,
-			})
-		SPECIAL_BILLS_GRANDFATHER, SPECIAL_OLDER_HAIRCUT_BROTHER, \
-		SPECIAL_YOUNGER_HAIRCUT_BROTHER, SPECIAL_DAISYS_GROOMING:
-			## `engine/events/haircut.asm`. All four open `SelectMonFromParty`
-			## and nothing else: every box either routine's script shows is the
-			## script's own, so the host owes a party list and an answer.
-			return _stage_runtime_request(&"party_selection_requested", {
-				"special": special,
-				"routine": GROOMING_TABLE_OF.get(special, &"bills_grandfather"),
-			})
-		SPECIAL_DISPLAY_COIN_CASE_BALANCE, SPECIAL_DISPLAY_MONEY_AND_COIN_BALANCE, \
-		SPECIAL_PLACE_MONEY_TOP_RIGHT:
-			## Three tilemap writes and a `ret`. The window stands over the map
-			## until `closetext` redraws it, so a script that spends money
-			## between two of them (the haircut brothers' `takemoney`) draws the
-			## second over the first.
-			_money_window = MONEY_WINDOW_KIND_OF[special]
-			_emit_runtime_event(&"money_window_opened", {
-				"special": special,
-				"kind": _money_window,
-				"money": _money_balance(ACCOUNT_YOUR_MONEY),
-				"coins": _coins_value(),
-			})
-		SPECIAL_DAY_CARE_MAN, SPECIAL_DAY_CARE_LADY, SPECIAL_DAY_CARE_MAN_OUTSIDE, \
-		SPECIAL_DAY_CARE_MON_1, SPECIAL_DAY_CARE_MON_2:
-			## Each of the five owns its own boxes, and the two counters own the
-			## party list and both `YesNoBox`es as well, so the whole routine is
-			## one host request the way `NameRater` is.
-			return _stage_runtime_request(&"day_care_requested", {
-				"special": special,
-				"role": DAY_CARE_ROLE_OF[special],
-			})
-		SPECIAL_NAME_RATER:
-			return _stage_runtime_request(&"name_rater_requested", {
-				"special": special,
-			})
-		SPECIAL_MOVE_DELETION:
-			return _stage_runtime_request(&"move_deleter_requested", {
-				"special": special,
-			})
-		SPECIAL_MOVE_TUTOR:
-			## `.GetMoveTutorMove` reads the value the map's own `setval` left,
-			## and a cartridge whose TMHMMoves stops at HM07 has no move to
-			## teach, which is the refusal rather than a guessed one.
-			var tutor_move: int = Gen2MoveTutor.move_for_value(data, _script_value)
-			if tutor_move <= 0:
-				return {
-					"ok": false,
-					"reason": &"unknown_move_tutor_move",
-					"special": special,
-					"value": _script_value,
-				}
-			return _stage_runtime_request(&"move_tutor_requested", {
-				"special": special,
-				"value": _script_value,
-				"move": tutor_move,
-			})
-		SPECIAL_SELECT_APRICORN_FOR_KURT:
-			## Both of the special's boxes are the host's; it answers with the
-			## chosen apricorn and how many of it, and a backed-out box is the
-			## source's own `wScriptVar = 0`.
-			return _stage_runtime_request(&"apricorn_selection_requested", {
-				"special": special,
-			})
-		SPECIAL_GIVE_PARK_BALLS:
-			## `GiveParkBalls` clears wContestMon, loads twenty balls and starts
-			## the timer. The flag itself is the script's own `setflag`, which
-			## has already run by here.
-			_emit_runtime_event(&"bug_contest_started", {"special": special})
-		SPECIAL_SELECT_RANDOM_BUG_CONTESTANTS:
-			## Five of the ten contestant flags set, which is both who competes
-			## in the judging and which sprites the park does not draw.
-			_emit_runtime_event(&"bug_contestants_selected", {"special": special})
-		SPECIAL_CONTEST_DROP_OFF_MONS:
-			## `ContestDropOffMons` answers 1 when the lead is fainted, which is
-			## the one branch its callers read, and otherwise masks the party to
-			## its first member.
-			var contest_party: Dictionary = _request.get("party", {})
-			if contest_party.is_empty():
-				return {"ok": false, "reason": &"missing_party_summary", "special": special}
-			var lead_fainted: bool = bool(contest_party.get("lead_fainted", false))
-			_script_value = 1 if lead_fainted else 0
-			if not lead_fainted:
-				_emit_runtime_event(&"contest_mons_dropped_off", {
-					"special": special,
-					"second_species": int(contest_party.get("second_species", 0)),
-				})
-		SPECIAL_CONTEST_RETURN_MONS:
-			_emit_runtime_event(&"contest_mons_returned", {"special": special})
-		SPECIAL_WARP_TO_SPAWN_POINT:
-			_emit_runtime_event(&"warp_to_spawn_point", {"special": special})
-		SPECIAL_CHECK_PARTY_FULL_AFTER_CONTEST:
-			## `CheckPartyFullAfterContest` does not only answer where the
-			## Pokemon caught in the contest would go: it takes it home, asks
-			## `GiveANickname_YesNo` about it and clears `wContestMon`. The
-			## answer is the party host's, since a nickname is a screen.
-			return _stage_runtime_request(&"contest_mon_requested", {
-				"special": special,
-			})
-		SPECIAL_BUG_CONTEST_JUDGING:
-			## The judging prints three placings and leaves the player's own in
-			## wScriptVar, which the results script branches on.
-			return _stage_runtime_request(&"bug_contest_judging_requested", {
-				"special": special,
-			})
-		SPECIAL_ACTIVATE_FISHING_SWARM:
-			_emit_runtime_event(&"phone_special_requested", {
-				"special": special, "kind": &"activate_fishing_swarm",
-				"species": _script_value,
-			})
-		SPECIAL_TOGGLE_MAPTILE_DECORATIONS:
-			_apply_maptile_decorations()
-			_emit_runtime_event(&"decoration_callback_applied", {
-				"special": special,
-				"kind": &"toggle_maptile_decorations",
-				"decorations": state.maptile_decorations() if state != null else {},
-			})
-		SPECIAL_TOGGLE_DECORATIONS_VISIBILITY:
-			## `ToggleDecorationVisibility` per slot: an empty slot sets the
-			## object's event flag and the renderer removes it, and a filled one
-			## clears the flag and writes the decoration's own variable sprite.
-			var shown: Dictionary = {}
-			for row: Dictionary in Gen2WorldDecoration.OBJECT_SLOTS:
-				var deco: int = state.maptile_decoration(
-					StringName(row["slot"])
-				) if state != null else 0
-				var sprite: int = int(data.decoration(deco).get("sprite", 0)) \
-					if data != null and deco > 0 else 0
-				_staged_flags[int(row["flag"])] = sprite <= 0
-				if sprite <= 0:
-					continue
-				shown[int(row["variable_sprite"])] = sprite
-				_emit_runtime_event(&"variable_sprite_changed", {
-					"variable_sprite": int(row["variable_sprite"]),
-					"sprite": sprite,
-				})
-			_emit_runtime_event(&"decoration_callback_applied", {
-				"special": special,
-				"kind": &"toggle_decorations_visibility",
-				"sprites": shown,
-			})
-		SPECIAL_SLOT_MACHINE:
-			return _stage_runtime_request(&"slot_machine_requested", {
-				"special": special,
-				## `Slots_InitBias`' own `ld a, [wScriptVar] / and a`, which is
-				## the only thing the operand decides.
-				"lucky": _script_value != 0,
-				"coins": _coins_value(),
-			})
-		SPECIAL_CARD_FLIP:
-			return _stage_runtime_request(&"card_flip_requested", {
-				"special": special,
-				"coins": _coins_value(),
-			})
-		SPECIAL_UNOWN_PUZZLE:
-			return _stage_runtime_request(&"unown_puzzle_requested", {
-				"special": special,
-				## `maskbits NUM_UNOWN_PUZZLES` is what bounds the operand, so a
-				## value outside the four wraps rather than failing.
-				"puzzle": _script_value & 0x3,
-			})
-		SPECIAL_DISPLAY_UNOWN_WORDS:
-			## The word the wall spells, staged as the text `JoyWaitAorB` holds
-			## until a button. A host that can reach the chamber's own tileset
-			## draws it as `_DisplayUnownWords_CopyWord`'s 2x2 letter blocks
-			## instead ([Gen2UnownWallPage]); the wait it answers is this one.
-			var wall_word: String = data.unown_wall_word(_script_value) if data != null \
-				else ""
-			if wall_word.is_empty():
-				return {
-					"ok": false,
-					"reason": &"unknown_unown_wall",
-					"special": special,
-					"wall": _script_value,
-				}
-			## `special` is a StringName tag on a pending text, not the index, so
-			## the wall is named under its own key.
-			return _stage_internal_text(wall_word, false, {"unown_wall": _script_value})
-		SPECIAL_SAMPLE_KENJI_BREAK_COUNTDOWN:
-			## `Random` masked to two bits plus three. The same byte is stepped
-			## by `CheckDailyResetTimer` on every day that passes, which is
-			## `Gen2WorldState.reset_daily_flags`; this is the resample its own
-			## script asks for.
-			_staged_kenji_break_timer = Gen2WorldState.kenji_break_countdown(_random)
-			_has_staged_kenji_break_timer = true
-		SPECIAL_TRAINER_HOUSE:
-			## `sMysteryGiftTrainerHouseFlag` straight into wScriptVar: a
-			## player who has never received a Mystery Gift is turned away, and
-			## one who has fights CAL under the partner's name.
-			_script_value = int(_mystery_gift_section().get("trainer_house_flag", 0))
-		SPECIAL_CHECK_MYSTERY_GIFT:
-			## Zero when nothing is waiting and the item plus one when something
-			## is. POKECENTER_2F's scene script branches on the zero, and the
-			## officer it puts on the floor is what hands the gift over.
-			_script_value = Gen2MysteryGift.check_value(_mystery_gift_section())
-		SPECIAL_UNLOCK_MYSTERY_GIFT:
-			## Carrie's own row on GOLDENROD DEPT. STORE 5F, behind a
-			## `GameboyCheck` this project always passes: there is no Game Boy
-			## here that is not a colour one.
-			Gen2MysteryGift.unlock(_mystery_gift_section())
-		SPECIAL_GET_MYSTERY_GIFT_ITEM:
-			return _stage_mystery_gift_item(special)
-		SPECIAL_HO_OH_CHAMBER:
-			## `wPartySpecies`' first byte and nothing else: the wall opens for a
-			## party led by Ho-Oh. `GetMapAttributesPointer` in front of it is
-			## marked pointless in the pin and answers nothing.
-			var chamber_party: Dictionary = _request.get("party", {})
-			if chamber_party.is_empty():
-				return {"ok": false, "reason": &"missing_party_summary", "special": special}
-			var chamber_species: Array = chamber_party.get("species", [])
-			if not chamber_species.is_empty() and int(chamber_species[0]) == SPECIES_HO_OH:
-				_staged_flags[EVENT_WALL_OPENED_IN_HO_OH_CHAMBER] = true
-		SPECIAL_OMANYTE_CHAMBER:
-			## A WATER STONE in the bag opens it, and so does one held by any
-			## party member: `.loop` walks the party backwards reading MON_ITEM.
-			## The flag is tested first, so a wall already open spends nothing.
-			if not _event_flag_active(EVENT_WALL_OPENED_IN_OMANYTE_CHAMBER):
-				var stone_party: Dictionary = _request.get("party", {})
-				if stone_party.is_empty():
-					return {
-						"ok": false, "reason": &"missing_party_summary", "special": special,
-					}
-				var opens: bool = _item_quantity(ITEM_WATER_STONE) > 0
-				if not opens:
-					for held: Variant in stone_party.get("held_items", []):
-						if int(held) == ITEM_WATER_STONE:
-							opens = true
-							break
-				if opens:
-					_staged_flags[EVENT_WALL_OPENED_IN_OMANYTE_CHAMBER] = true
-		SPECIAL_CHECK_CAUGHT_CELEBI:
-			## `wBattleResult`'s BATTLERESULT_CAUGHT_CELEBI, which
-			## `PokeBallEffect` sets on a catch made in a BATTLETYPE_CELEBI
-			## fight and nothing else clears until the next battle.
-			_script_value = 1 if state != null and state.battle_caught_celebi() else 0
-		SPECIAL_CELEBI_SHRINE_EVENT:
-			## The whole routine is a sprite-anim cutscene and a battle type.
-			## There is no sprite-anim layer outside the intro, so what it owes a
-			## script is the wait its own loop spends and the type the fight
-			## behind it starts with.
-			_loaded_battle_type = Gen2Battle.BATTLETYPE_CELEBI
-			if not _battle_setup.is_empty():
-				_battle_setup["battle_type"] = Gen2Battle.BATTLETYPE_CELEBI
-			_emit_runtime_event(&"presentation_special_applied", {
-				"special": special, "kind": &"celebi_shrine",
-			})
-			return _stage_frame_wait(
-				CELEBI_SHRINE_PASSES * CELEBI_SHRINE_FRAMES_PER_PASS,
-				{"special": special, "kind": &"celebi_shrine"}
-			)
-		SPECIAL_MAP_RADIO:
-			## `PlayRadio` opens the station wScriptVar names, prints its line in
-			## a four-row box and holds until A or B. It is the Pokegear's own
-			## radio without the Pokegear, so the station is the request and the
-			## host draws it.
-			return _stage_runtime_request(&"map_radio_requested", {
-				"special": special,
-				"station": _script_value,
-			})
-		SPECIAL_CHECK_LUCKY_NUMBER_SHOW_FLAG:
-			## `ScriptReturnCarry`: TRUE once `wLuckyNumberDayTimer` has run out,
-			## which is the Friday the show comes round on.
-			_script_value = 1 if state != null and state.lucky_number_show_ready() else 0
-		SPECIAL_RESET_LUCKY_NUMBER_SHOW_FLAG:
-			## `RestartLuckyNumberCountdown`, then the GAME_OVER bit off the show
-			## flag, then `LoadOrRegenerateLuckyIDNumber`. The bit is the radio
-			## segment's own and this project's radio reads the timer instead, so
-			## what is left is the countdown and the number.
-			_staged_lucky_number_days_left = _lucky_number_days_until_friday()
-			_has_staged_lucky_number_days_left = true
-			_refresh_lucky_id_number()
-		SPECIAL_PRINT_TODAYS_LUCKY_NUMBER:
-			## `PrintNum` with PRINTNUM_LEADINGZEROS over five digits into
-			## wStringBuffer3, which the radio tower's own text prints.
-			_refresh_lucky_id_number()
-			_set_text_buffer(
-				RomLayout.STRING_BUFFER_3, "%05d" % _lucky_id_number(), &"lucky_number",
-				{"special": special}
-			)
-		SPECIAL_CHECK_FOR_LUCKY_NUMBER_WINNERS:
-			## The whole walk is over ID numbers the party mirror carries, so the
-			## routine is the host's arithmetic rather than a screen.
-			var lucky_party: Dictionary = _request.get("party", {})
-			if lucky_party.is_empty():
-				return {"ok": false, "reason": &"missing_party_summary", "special": special}
-			_refresh_lucky_id_number()
-			var winner: Dictionary = Gen2WorldPartyHost.lucky_number_match(
-				_lucky_id_number(),
-				lucky_party.get("id_numbers", []),
-				lucky_party.get("species", []),
-				lucky_party.get("eggs", []),
-				lucky_party.get("stored_id_numbers", []),
-				lucky_party.get("stored_species", [])
-			)
-			_script_value = int(winner.get("script_value", 0))
-			if _script_value == 0:
-				return {"ok": true}
-			## `GetPokemonName` on the matching row's species, into the buffer
-			## both boxes print, and then the box the match's own location picks.
-			var winner_species: int = int(winner.get("species", 0))
-			_cur_party_species = winner_species
-			var winner_name: String = String(
-				data.species(winner_species).get("name", "")
-			) if data != null else ""
-			_set_text_buffer(RomLayout.STRING_BUFFER_1, winner_name, &"lucky_number_winner", {
-				"special": special, "species": winner_species,
-			})
-			var lucky_box: String = _special_box(
-				"lucky_number",
-				"match_pc" if bool(winner.get("in_storage", false)) else "match_party"
-			)
-			if lucky_box.is_empty():
-				return {"ok": false, "reason": &"missing_special_text", "special": special}
-			return _stage_internal_text(lucky_box, false, {"special": special})
-		SPECIAL_MAGIKARP_HOUSE_SIGN:
-			## The record straight out of the save into wMagikarpLength, printed
-			## the way `PrintMagikarpLength` prints it, and the sign's own box.
-			## An unbeaten record is two zero bytes, which is what the sign shows
-			## before anyone has measured one.
-			var record: Dictionary = state.best_magikarp() if state != null else {}
-			_set_text_buffer(RomLayout.STRING_BUFFER_1, Gen2WorldPartyHost.magikarp_length_string(
-				int(record.get("feet", 0)), int(record.get("inches", 0))
-			), &"magikarp_length", {"special": special})
-			_set_text_ram("magikarp_record_holder", String(record.get("ot", "")))
-			var sign_box: String = _special_box("magikarp", "record")
-			if sign_box.is_empty():
-				return {"ok": false, "reason": &"missing_special_text", "special": special}
-			return _stage_internal_text(sign_box, false, {"special": special})
-		SPECIAL_BANK_OF_MOM:
-			return _bank_of_mom(MOM_CHECK_INITIALIZED)
-		SPECIAL_UNOWN_PRINTER:
-			## `ld a, [wUnownDex] / and a / ret z`: with no Unown caught the
-			## routine draws nothing at all, which the host answers for since it
-			## is the one that holds the dex.
-			return _stage_runtime_request(&"unown_printer_requested", {
-				"special": special,
-				"caught": state.unown_caught_count() if state != null else 0,
-			})
-		SPECIAL_DIPLOMA, SPECIAL_PRINT_DIPLOMA:
-			## `_Diploma` draws `PlaceDiplomaOnScreen`'s page and waits for a
-			## button; `_PrintDiploma` draws the same page and then holds in
-			## `SendScreenToPrinter`. Neither writes anything a script reads, so
-			## the request carries only which of the two loops is standing.
-			return _stage_runtime_request(&"diploma_requested", {
-				"special": special,
-				"printing": special == SPECIAL_PRINT_DIPLOMA,
-			})
-		SPECIAL_BUENA_PRIZE:
-			## The counter is one loop: the prize list, a yes/no on the row, and
-			## whichever of the four boxes the answer reaches. B on the list is
-			## the only way out and prints her parting line.
-			return _stage_buena_prize_menu(special)
-		SPECIAL_POKE_SEER:
-			## `PrintSeerText SEER_INTRO`, `JoyWaitAorB`, and only then the list.
-			var seer_intro: String = _special_box("poke_seer", "see_all")
-			if seer_intro.is_empty():
-				return {"ok": false, "reason": &"missing_special_text", "special": special}
-			return _stage_internal_text(seer_intro, false, {
-				"special": special,
-				"party_selection_after_text": {
-					"special": special,
-					"routine": PARTY_SELECTION_ROUTINE_OF[special],
-				},
-			})
-		SPECIAL_CHECK_MAGIKARP_LENGTH, SPECIAL_PHOTO_STUDIO, SPECIAL_RETURN_SHUCKIE:
-			## All three open `SelectMonFromParty` and answer on what came back.
-			## `PhotoStudio` prints its own question in front of the list, which
-			## is the one box a script does not carry for it.
-			if special == SPECIAL_PHOTO_STUDIO:
-				var asked: String = _special_box("photo_studio", "which_mon")
-				if asked.is_empty():
-					return {"ok": false, "reason": &"missing_special_text", "special": special}
-				_standing_text = asked
-			return _stage_runtime_request(&"party_selection_requested", {
-				"special": special,
-				"routine": PARTY_SELECTION_ROUTINE_OF[special],
-			})
-		SPECIAL_GIVE_SHUCKLE:
-			## `TryAddMonToParty` with a level 15 SHUCKLE holding a BERRY, named
-			## SHUCKIE under MANIA's own OT and ID, and the daily flag behind it.
-			## A full party is `.NotGiven`, which answers zero and gives nothing:
-			## the box is never reached.
-			return _stage_runtime_request(&"pokemon_requested", {
-				"special": special,
-				"kind": &"give_shuckle",
-				"pokemon": Gen2WorldPartyHost.SHUCKLE,
-				"level": Gen2WorldPartyHost.SHUCKIE_LEVEL,
-				"item": Gen2WorldPartyHost.ITEM_BERRY,
-				"nickname": Gen2WorldPartyHost.SHUCKIE_NICKNAME,
-				"original_trainer": Gen2WorldPartyHost.MANIA_OT_NAME,
-				"ot_id": Gen2WorldPartyHost.MANIA_OT_ID,
-				"party_only": true,
-			})
-		SPECIAL_ASK_REMEMBER_PASSWORD:
-			## The box alone: the question is the `writetext` in front of it, and
-			## the answer is `yesorno`'s own, YES writing 1 and B writing 0.
-			_pending = {
-				"type": &"choice",
-				"command": &"yesorno",
-				"choices": [&"yes", &"no"],
-				"text": _standing_text,
-				"special": &"ask_remember_password",
-				"header": ASK_REMEMBER_PASSWORD_BOX.duplicate(),
-				"source": _request.duplicate(true),
-			}
-			return _waiting_result()
-		SPECIAL_GIVE_ODD_EGG:
-			## `AddMobileMonToParty` with one of `OddEggs`' fourteen rows, rolled
-			## against `OddEggProbabilities`. `TossKeyItem` runs first and
-			## removes nothing when the pack holds no ticket; it writes no
-			## wScriptVar either way, so the toss's own answer is put back.
-			if _item_quantity(ITEM_EGG_TICKET) > 0:
-				var kept: int = _script_value
-				var tossed: Dictionary = _stage_item_delta(ITEM_EGG_TICKET, -1)
-				_script_value = kept
-				if not bool(tossed.get("ok", true)):
-					return tossed
-			return _stage_runtime_request(&"pokemon_requested", {
-				"special": special,
-				"kind": &"give_odd_egg",
-				"party_only": true,
-			})
-		SPECIAL_GIVE_DRATINI:
-			## Not a gift at all: the Dragon Shrine's `givepoke` has already run,
-			## and this rewrites the last DRATINI in the party with one of two
-			## movesets. A wScriptVar above one returns before the search, which
-			## is what the elder's third answer leaves standing.
-			if _script_value > 1:
-				return {"ok": true}
-			return _stage_runtime_request(&"dratini_moveset_requested", {
-				"special": special,
-				"moveset": _script_value,
-			})
-		SPECIAL_GAME_CORNER_PRIZE_MON_CHECK_DEX:
-			## `CheckCaughtMon` on wScriptVar less one, and nothing at all when
-			## it is already caught: the prize counter has handed the Pokemon
-			## over by here, so this is the new-entry screen alone. The species
-			## byte is one high, which is the `dec a` in front of both calls.
-			var prize_species: int = _script_value
-			if prize_species <= 0:
-				return {"ok": false, "reason": &"invalid_prize_species", "special": special}
-			if state != null and state.has_caught_species(prize_species):
-				return {"ok": true}
-			_staged_caught_species[prize_species] = true
-			return _stage_runtime_request(&"pokedex_entry_requested", {
-				"special": special,
-				"species": prize_species,
-			})
-		SPECIAL_BUENAS_PASSWORD:
-			## `DoNthMenu` over the five words of today's category, and the
-			## answer is whether the row matches the low nibble of
-			## `wBuenasPassword`. The category is the high nibble, which is what
-			## the radio show drew this morning.
-			var password: int = _buenas_password()
-			if password < 0:
-				return {"ok": false, "reason": &"missing_buenas_password", "special": special}
-			_stage_buenas_password_menu(password)
-		SPECIAL_RANDOM_UNSEEN_WILD_MON:
-			var rare_species: int = _phone_unseen_rare_species()
-			if rare_species <= 0:
-				_emit_runtime_event(&"phone_special_requested", {
-					"special": special, "kind": &"random_unseen_wild_mon",
-					"internal_text": false, "script_value": 1,
-				})
-				_script_value = 1
-			else:
-				var rare_name: String = String(data.species(rare_species).get("name", ""))
-				_set_text_buffer(1, rare_name, &"phone_unseen_wild_mon", {
-					"special": special, "species": rare_species,
-				})
-				_emit_runtime_event(&"phone_special_requested", {
-					"special": special, "kind": &"random_unseen_wild_mon",
-					"internal_text": true, "buffer": 1, "value": rare_name,
-					"species": rare_species, "script_value": 0,
-				})
-				_script_value = 0
-		SPECIAL_RANDOM_PHONE_WILD_MON:
-			var wild_name: String = _phone_wild_mon_name()
-			_set_text_buffer(1, wild_name, &"phone_wild_mon", {"special": special})
-			_emit_runtime_event(&"phone_special_requested", {
-				"special": special, "kind": &"random_phone_wild_mon",
-				"buffer": 1, "value": wild_name,
-			})
-		SPECIAL_RANDOM_PHONE_MON:
-			var trainer_mon_name: String = _phone_trainer_mon_name()
-			_set_text_buffer(1, trainer_mon_name, &"phone_mon", {"special": special})
-			_emit_runtime_event(&"phone_special_requested", {
-				"special": special, "kind": &"random_phone_mon",
-				"buffer": 1, "value": trainer_mon_name,
-			})
-		_:
-			return {
-				"ok": false,
-				"reason": &"unsupported_phone_special",
-				"special": special,
-			}
+	if not SPECIAL_HANDLERS.has(special):
+		return {
+			"ok": false,
+			"reason": &"unsupported_phone_special",
+			"special": special,
+		}
+	return call(SPECIAL_HANDLERS[special], special)
+
+
+func _special_overworld_town_map(special: int) -> Dictionary:
+	return _stage_runtime_request(&"town_map_requested", {
+		"special": special,
+		"landmark": int(_request.get("landmark", 0)),
+	})
+
+
+func _special_players_house_pc(special: int) -> Dictionary:
+	return _stage_runtime_request(&"pc_requested", {
+		"special": special,
+		"mode": &"players_house",
+	})
+
+
+func _special_pokemon_center_pc(special: int) -> Dictionary:
+	return _stage_runtime_request(&"pc_requested", {
+		"special": special,
+		"mode": &"pokemon_center",
+	})
+
+
+## `jumptable .dw, wScriptVar`: the `setval` in front of the special names the row,
+## and the row's own answer replaces it.
+func _special_battle_tower_action(_special: int) -> Dictionary:
+	var answered: int = _battle_tower().action(_script_value, {
+		"party": _battle_tower_party(),
+		"pack": _pack_items(),
+		"save_is_yours": true,
+		"random": _battle_tower_random(0),
+	})
+	if answered >= 0:
+		_script_value = answered
 	return {"ok": true}
 
 
+func _special_check_battle_tower_rules(_special: int) -> Dictionary:
+	return _check_battle_tower_rules()
+
+
+func _special_try_quick_save(special: int) -> Dictionary:
+	return _stage_runtime_request(&"quick_save_requested", {"special": special})
+
+
+## The console restarting, which is how a saved-and-left challenge leaves the battle
+## room. Nothing follows it in any script.
+func _special_reset(_special: int) -> Dictionary:
+	_events.append({"type": &"soft_reset_requested"})
+	_pending = {}
+	_active = false
+	_completed = true
+	return {"ok": true}
+
+
+func _special_challenge_menu(_special: int) -> Dictionary:
+	return _stage_challenge_menu()
+
+
+func _special_request_link_room(special: int) -> Dictionary:
+	_link_session().request_room(
+		Gen2LinkSession.CABLECLUBROOM_TRADECENTER \
+			if special == SPECIAL_SET_BITS_FOR_LINK_TRADE_REQUEST \
+			else Gen2LinkSession.CABLECLUBROOM_COLOSSEUM
+	)
+	return {"ok": true}
+
+
+## The Time Capsule asks for `CABLECLUBROOM_NULL`, which is why its own script never
+## reaches `CheckBothSelectedSameRoom` on a branch that could pass.
+func _special_set_bits_for_time_capsule_request(_special: int) -> Dictionary:
+	_link_session().request_time_capsule()
+	return {"ok": true}
+
+
+func _special_wait_for_linked_friend(special: int) -> Dictionary:
+	_script_value = _link_session().wait_for_linked_friend(_link_transport())
+	if _script_value == 0:
+		return {"ok": true}
+	return _stage_frame_wait(
+		Gen2LinkSession.WAIT_FOR_FRIEND_CONNECTED_FRAMES,
+		{"special": special, "kind": &"link_wait"}
+	)
+
+
+func _special_check_link_timeout_receptionist(special: int) -> Dictionary:
+	var session: Gen2LinkSession = _link_session()
+	_script_value = session.check_link_timeout(_link_transport())
+	## The `readmem wOtherPlayerLinkMode` every one of the three scripts
+	## runs on the next line reads this byte and not wScriptVar.
+	var stored: Dictionary = _stage_script_memory(
+		data.other_player_link_mode_address() if data != null else -1,
+		session.other_player_link_mode
+	)
+	if not bool(stored.get("ok", true)):
+		return stored
+	return _stage_frame_wait(
+		Gen2LinkSession.CHECK_LINK_TIMEOUT_FRAMES,
+		{"special": special, "kind": &"link_wait"}
+	)
+
+
+func _special_check_both_selected_same_room(_special: int) -> Dictionary:
+	_script_value = _link_session().check_both_selected_same_room(_link_transport())
+	return {"ok": true}
+
+
+func _special_failed_link_to_past(special: int) -> Dictionary:
+	_link_session().failed_link_to_past(_link_transport())
+	return _stage_frame_wait(
+		Gen2LinkSession.FAILED_LINK_TO_PAST_FRAMES,
+		{"special": special, "kind": &"link_wait"}
+	)
+
+
+func _special_close_link(special: int) -> Dictionary:
+	_link_session().close_link(_link_transport())
+	return _stage_frame_wait(
+		Gen2LinkSession.CLOSE_LINK_FRAMES,
+		{"special": special, "kind": &"link_wait"}
+	)
+
+
+func _special_wait_for_other_player_to_exit(special: int) -> Dictionary:
+	_link_session().wait_for_other_player_to_exit(_link_transport())
+	return _stage_frame_wait(
+		Gen2LinkSession.WAIT_FOR_OTHER_PLAYER_FRAMES,
+		{"special": special, "kind": &"link_wait"}
+	)
+
+
+func _special_check_time_capsule_compatibility(_special: int) -> Dictionary:
+	return _check_time_capsule_compatibility()
+
+
+func _special_enter_time_capsule(special: int) -> Dictionary:
+	_link_session().enter_time_capsule(_link_transport())
+	return _stage_frame_wait(
+		Gen2LinkSession.ENTER_TIME_CAPSULE_FRAMES,
+		{"special": special, "kind": &"link_wait"}
+	)
+
+
+func _special_link_room(special: int) -> Dictionary:
+	return _stage_link_room(special)
+
+
+## `CheckMobileAdapterStatusSpecial` answers whether a Mobile Adapter GB is plugged
+## in, and none is: there is no such peripheral on any platform this runs on. FALSE is
+## what both Crystal receptionists branch on to reach `.NoMobile`, which is the cable
+## club proper, so this is the answer that opens the room rather than the one that
+## closes it.
+func _special_check_mobile_adapter_status(_special: int) -> Dictionary:
+	_script_value = 0
+	return {"ok": true}
+
+
+func _special_cable_club_check_which_chris(_special: int) -> Dictionary:
+	_script_value = _link_session().which_chris(_link_transport())
+	return {"ok": true}
+
+
+## `_DisplayLinkRecord` draws `sLinkBattleStats` and holds for A or B. It writes
+## nothing, so the script runs straight on behind it.
+func _special_display_link_record(special: int) -> Dictionary:
+	return _stage_runtime_request(&"link_record_requested", {"special": special})
+
+
+func _special_battle_tower_room_menu(_special: int) -> Dictionary:
+	return _stage_room_menu()
+
+
+func _special_load_battle_tower_opponent(_special: int) -> Dictionary:
+	return _load_battle_tower_opponent()
+
+
+func _special_battle_tower_battle(_special: int) -> Dictionary:
+	return _stage_battle_tower_battle()
+
+
+func _special_set_day_of_week(_special: int) -> Dictionary:
+	_stage_day_of_week_menu()
+	return {"ok": true}
+
+
+func _special_initial_set_dst_flag(_special: int) -> Dictionary:
+	_staged_dst_enabled = true
+	_has_staged_dst = true
+	_stage_dst_confirmation_text(true)
+	return {"ok": true}
+
+
+func _special_initial_clear_dst_flag(_special: int) -> Dictionary:
+	_staged_dst_enabled = false
+	_has_staged_dst = true
+	_stage_dst_confirmation_text(false)
+	return {"ok": true}
+
+
+func _special_map_music(special: int) -> Dictionary:
+	# Entering a map with the music already playing does not restart it,
+	# which is why crossing a route boundary is one continuous track.
+	# RestartMapMusic exists to override exactly that, so it says so.
+	return _stage_audio_request(&"map_music", {
+		"special": special,
+		"restart": special == SPECIAL_RESTART_MAP_MUSIC,
+	})
+
+
+func _special_fade_out_music(special: int) -> Dictionary:
+	_emit_runtime_event(&"music_fadeout_requested", {"special": special})
+	return {"ok": true}
+
+
+func _special_rival_name(special: int) -> Dictionary:
+	return _stage_runtime_request(&"rival_name_requested", {
+		"special": special, "default_name": "SILVER",
+	})
+
+
+## HealParty is a save-owned transaction. It is deliberately a host request so HP,
+## status and PP are changed together with the selected project save.
+func _special_heal_party(special: int) -> Dictionary:
+	return _stage_runtime_request(&"party_heal_requested", {"special": special})
+
+
+## wScriptVar selects the machine's screen position: 0 Pokemon Center, 1 Elm's Lab, 2
+## Hall of Fame. A preceding SETVAL loads it. Nothing here changes state, but the
+## routine is not free: it spends thirty frames a ball and `.FlashPalettes8Times`'
+## eighty, with a sound on each ball, so the script waits for it the way the cartridge
+## does.
+func _special_heal_machine_anim(special: int) -> Dictionary:
+	var machine_type: int = clampi(_script_value, 0, HEAL_MACHINE_HALL_OF_FAME)
+	var balls: int = int((_request.get("party", {}) as Dictionary).get("count", 0))
+	var sounds: Array = heal_machine_sounds(machine_type, balls)
+	_emit_runtime_event(&"presentation_special_applied", {
+		"special": special, "kind": &"heal_machine_anim",
+		"machine_type": machine_type,
+		"balls": balls,
+		"sounds": sounds.duplicate(true),
+	})
+	## `ld a, [wPartyCount] / and a / ret z`: an empty party leaves the
+	## machine alone and spends nothing.
+	if balls > 0:
+		return _stage_frame_wait(
+			balls * HEAL_MACHINE_BALL_FRAMES + HEAL_MACHINE_FLASH_FRAMES,
+			{"special": special, "kind": &"heal_machine_anim"}
+		)
+	return {"ok": true}
+
+
+## engine/events/magnet_train.asm's MagnetTrain is scroll positions, graphics, music
+## and a VBlank cutscene handler. It reads wScriptVar for the direction and writes
+## nothing the overworld can observe; the warp itself is the `warpcheck` that follows
+## it.
+func _special_magnet_train(special: int) -> Dictionary:
+	_emit_runtime_event(&"presentation_special_applied", {
+		"special": special, "kind": &"magnet_train",
+		"to_goldenrod": _script_value != 0,
+	})
+	return {"ok": true}
+
+
+## engine/events/prof_oaks_pc.asm's ProfOaksPCBoot prints, counts the set bits in
+## wPokedexSeen and wPokedexCaught for `Rate`, plays that rating's sound and waits for
+## A or B. Presentation only: it writes nothing, so the script runs straight on to its
+## own `end` and [Gen2ProfOaksPC] is handed the counts by whoever draws this.
+func _special_prof_oaks_pc_boot(special: int) -> Dictionary:
+	_emit_runtime_event(&"presentation_special_applied", {
+		"special": special, "kind": &"prof_oaks_pc_boot",
+	})
+	return {"ok": true}
+
+
+func _special_check_pokerus(special: int) -> Dictionary:
+	var party: Dictionary = _request.get("party", {})
+	if party.is_empty():
+		return {"ok": false, "reason": &"missing_party_summary", "special": special}
+	_script_value = 1 if bool(party.get("pokerus", false)) else 0
+	return {"ok": true}
+
+
+## Two reads and nothing else: the track in wMapMusic and the cell the player stands
+## on. The Poke Flute channel reaches wMapMusic through StartRadioStation and stays
+## there because closing the Pokegear restores the map's music only for its two
+## sentinel ids.
+func _special_snorlax_awake(_special: int) -> Dictionary:
+	var cell: Vector2i = _player_cell()
+	_script_value = 1 if state != null \
+		and state.map_music() == Gen2WorldRadio.MUSIC_POKE_FLUTE_CHANNEL \
+		and cell in SNORLAX_PROXIMITY_CELLS else 0
+	return {"ok": true}
+
+
+## `FadeOutToWhite` is 46 in both pins, since Crystal's inserted `BattleTowerFade`
+## sits at 47; `FadeInFromWhite` is 49 here and 48 in Gold/Silver, which
+## `special_index()` already normalizes. Each of the five is `GetTimePalFade` and then
+## four rows of the fade table, and none is free: `ConvertTimePals*HL` spends `ld c,
+## 2` on every row, so the script holds for the whole walk the way it does on the
+## cartridge. `FillWhiteBGColor` is the two white fades' alone.
+func _special_palette_fade(special: int) -> Dictionary:
+	var orders: Array[int] = FADE_ORDERS_OF[special]
+	var step_frames: int = Gen2WorldPalette.BATTLE_TOWER_FADE_STEP_FRAMES \
+		if special == SPECIAL_BATTLE_TOWER_FADE \
+		else Gen2WorldPalette.FADE_STEP_FRAMES
+	_emit_runtime_event(&"presentation_special_applied", {
+		"special": special, "kind": &"palette_fade",
+		"orders": orders.duplicate(),
+		"step_frames": step_frames,
+		"white_fill": special in FADE_WHITE_FILL_SPECIALS,
+	})
+	return _stage_frame_wait(orders.size() * step_frames, {
+		"special": special, "kind": &"palette_fade",
+	})
+
+
+## Sprite reload, palette reload and the dummied trainer-ranking bookkeeping affect
+## presentation or source-only counters rather than scene-free state.
+## `LoadUsedSpritesGFX`, `UpdateSprites`, `UpdatePlayerSprite`,
+## `ReloadSpritesNoPalettes` and `RefreshSprites` reload the sprite set a
+## `variablesprite` just changed; `ClearBGPalettes`, `UpdateTimePals`,
+## `SetPlayerPalette` and `LoadMapPalettes` are the palette pair the day/night scripts
+## open with, and the renderer takes its palettes from the map and the clock.
+func _special_presentation_only(special: int) -> Dictionary:
+	_emit_runtime_event(&"presentation_special_applied", {"special": special})
+	return {"ok": true}
+
+
+## `PlaySlowCry` (95) is `LoadCry` with the record's own pitch lowered by `$140` and
+## its length raised by `$60`, and `PlayCurMonCry` (100) is `PlayMonCry` straight.
+## Neither writes anything back, so what they owe is the sound and the `WaitSFX` each
+## ends on. They do not read the same byte: 95 is `ld a, [wScriptVar]`, which the
+## `setval` in front of it has just set, and 100 is `ld a, [wCurPartySpecies]`, all
+## four of whose scripts are a grooming routine's.
+func _special_cry(special: int) -> Dictionary:
+	return _stage_audio_request(&"cry", {
+		"special": special,
+		"species": _script_value if special == 95 else _cur_party_species,
+		"slow": special == 95,
+	})
+
+
+## `SpecialWaitSFX` is `WaitSFX`: it holds until the four effect channels are free
+## rather than spending a counted number of frames, which is `Script_waitsfx`'s own
+## request.
+func _special_wait_sfx(special: int) -> Dictionary:
+	return _stage_audio_request(&"sound_wait", {"special": special})
+
+
+## `FindPartyMonThatSpecies` and its ID-checking twin. Both answer TRUE/FALSE in
+## wScriptVar off the species wScriptVar was loaded with; the second adds
+## `CheckOwnMon`'s ID and OT test on the slot the first one found.
+func _special_find_party_mon(special: int) -> Dictionary:
+	var party: Dictionary = _request.get("party", {})
+	if party.is_empty():
+		return {"ok": false, "reason": &"missing_party_summary", "special": special}
+	_script_value = 1 if _party_slot_of_species(
+		party, _script_value, special == 67
+	) >= 0 else 0
+	return {"ok": true}
+
+
+## `GetFirstPokemonHappiness` walks past every EGG in the list and answers the first
+## hatched member's happiness byte, naming that member in the buffer its two boxes
+## print.
+func _special_first_mon_happiness(special: int) -> Dictionary:
+	var happy_party: Dictionary = _request.get("party", {})
+	if happy_party.is_empty():
+		return {"ok": false, "reason": &"missing_party_summary", "special": special}
+	var eggs: Array = happy_party.get("eggs", [])
+	var happiness: Array = happy_party.get("happiness", [])
+	var names: Array = happy_party.get("names", [])
+	var slot: int = 0
+	while slot < eggs.size() and bool(eggs[slot]):
+		slot += 1
+	_script_value = int(happiness[slot]) if slot < happiness.size() else 0
+	if slot < names.size():
+		_set_text_buffer(3, String(names[slot]), &"first_party_mon", {
+			"special": special, "slot": slot,
+		})
+	return {"ok": true}
+
+
+## `CheckFirstMonIsEgg` reads slot zero alone, and names it whether or not it is an
+## egg: `GetPokemonName` runs on both branches.
+func _special_first_mon_is_egg(special: int) -> Dictionary:
+	var first_party: Dictionary = _request.get("party", {})
+	if first_party.is_empty():
+		return {"ok": false, "reason": &"missing_party_summary", "special": special}
+	var first_eggs: Array = first_party.get("eggs", [])
+	var first_names: Array = first_party.get("names", [])
+	_script_value = 1 if not first_eggs.is_empty() and bool(first_eggs[0]) else 0
+	if not first_names.is_empty():
+		_set_text_buffer(3, String(first_names[0]), &"first_party_mon", {
+			"special": special, "slot": 0,
+		})
+	return {"ok": true}
+
+
+## `GameboyCheck` reports which console the game booted on. This one is a Game Boy
+## Color every time, since every screen here is drawn in the CGB palettes `hCGB`
+## selects.
+func _special_gameboy_check(_special: int) -> Dictionary:
+	_script_value = GBCHECK_CGB
+	return {"ok": true}
+
+
+## `MonCheck` answers whether the player owns the species in wScriptVar and
+## `BeastsCheck` runs the same test on all three beasts, leaving the last species it
+## asked about behind in wScriptVar when one is missing.
+func _special_mon_check(special: int) -> Dictionary:
+	var owner_party: Dictionary = _request.get("party", {})
+	if owner_party.is_empty():
+		return {"ok": false, "reason": &"missing_party_summary", "special": special}
+	var owned: Array = owner_party.get("owned_species", [])
+	if special == 151:
+		_script_value = 1 if owned.has(_script_value) else 0
+	else:
+		_script_value = 1
+		for beast: int in BEAST_SPECIES:
+			if not owned.has(beast):
+				_script_value = beast
+				break
+	return {"ok": true}
+
+
+## InitRoamMons seeds the roam structs with Raikou and Entei at level 40 on their
+## starting maps. Gen2WorldAPI.open() already seeds the same imported records, and
+## ensure_roaming_mons() keeps positions a player has already moved, so this reports
+## rather than resetting a beast that is already loose.
+func _special_init_roam_mons(special: int) -> Dictionary:
+	if state != null and data != null:
+		state.ensure_roaming_mons(data.world_roaming_mons())
+	_emit_runtime_event(&"roaming_mons_initialized", {
+		"special": special,
+		"count": state.roaming_mons().size() if state != null else 0,
+	})
+	return {"ok": true}
+
+
+## `engine/events/haircut.asm`. All four open `SelectMonFromParty` and nothing else:
+## every box either routine's script shows is the script's own, so the host owes a
+## party list and an answer.
+func _special_grooming(special: int) -> Dictionary:
+	return _stage_runtime_request(&"party_selection_requested", {
+		"special": special,
+		"routine": GROOMING_TABLE_OF.get(special, &"bills_grandfather"),
+	})
+
+
+## Three tilemap writes and a `ret`. The window stands over the map until `closetext`
+## redraws it, so a script that spends money between two of them (the haircut
+## brothers' `takemoney`) draws the second over the first.
+func _special_money_window(special: int) -> Dictionary:
+	_money_window = MONEY_WINDOW_KIND_OF[special]
+	_emit_runtime_event(&"money_window_opened", {
+		"special": special,
+		"kind": _money_window,
+		"money": _money_balance(ACCOUNT_YOUR_MONEY),
+		"coins": _coins_value(),
+	})
+	return {"ok": true}
+
+
+## Each of the five owns its own boxes, and the two counters own the party list and
+## both `YesNoBox`es as well, so the whole routine is one host request the way
+## `NameRater` is.
+func _special_day_care(special: int) -> Dictionary:
+	return _stage_runtime_request(&"day_care_requested", {
+		"special": special,
+		"role": DAY_CARE_ROLE_OF[special],
+	})
+
+
+func _special_name_rater(special: int) -> Dictionary:
+	return _stage_runtime_request(&"name_rater_requested", {
+		"special": special,
+	})
+
+
+func _special_move_deletion(special: int) -> Dictionary:
+	return _stage_runtime_request(&"move_deleter_requested", {
+		"special": special,
+	})
+
+
+## `.GetMoveTutorMove` reads the value the map's own `setval` left, and a cartridge
+## whose TMHMMoves stops at HM07 has no move to teach, which is the refusal rather
+## than a guessed one.
+func _special_move_tutor(special: int) -> Dictionary:
+	var tutor_move: int = Gen2MoveTutor.move_for_value(data, _script_value)
+	if tutor_move <= 0:
+		return {
+			"ok": false,
+			"reason": &"unknown_move_tutor_move",
+			"special": special,
+			"value": _script_value,
+		}
+	return _stage_runtime_request(&"move_tutor_requested", {
+		"special": special,
+		"value": _script_value,
+		"move": tutor_move,
+	})
+
+
+## Both of the special's boxes are the host's; it answers with the chosen apricorn and
+## how many of it, and a backed-out box is the source's own `wScriptVar = 0`.
+func _special_select_apricorn_for_kurt(special: int) -> Dictionary:
+	return _stage_runtime_request(&"apricorn_selection_requested", {
+		"special": special,
+	})
+
+
+## `GiveParkBalls` clears wContestMon, loads twenty balls and starts the timer. The
+## flag itself is the script's own `setflag`, which has already run by here.
+func _special_give_park_balls(special: int) -> Dictionary:
+	_emit_runtime_event(&"bug_contest_started", {"special": special})
+	return {"ok": true}
+
+
+## Five of the ten contestant flags set, which is both who competes in the judging and
+## which sprites the park does not draw.
+func _special_select_random_bug_contestants(special: int) -> Dictionary:
+	_emit_runtime_event(&"bug_contestants_selected", {"special": special})
+	return {"ok": true}
+
+
+## `ContestDropOffMons` answers 1 when the lead is fainted, which is the one branch
+## its callers read, and otherwise masks the party to its first member.
+func _special_contest_drop_off_mons(special: int) -> Dictionary:
+	var contest_party: Dictionary = _request.get("party", {})
+	if contest_party.is_empty():
+		return {"ok": false, "reason": &"missing_party_summary", "special": special}
+	var lead_fainted: bool = bool(contest_party.get("lead_fainted", false))
+	_script_value = 1 if lead_fainted else 0
+	if not lead_fainted:
+		_emit_runtime_event(&"contest_mons_dropped_off", {
+			"special": special,
+			"second_species": int(contest_party.get("second_species", 0)),
+		})
+	return {"ok": true}
+
+
+func _special_contest_return_mons(special: int) -> Dictionary:
+	_emit_runtime_event(&"contest_mons_returned", {"special": special})
+	return {"ok": true}
+
+
+func _special_warp_to_spawn_point(special: int) -> Dictionary:
+	_emit_runtime_event(&"warp_to_spawn_point", {"special": special})
+	return {"ok": true}
+
+
+## `CheckPartyFullAfterContest` does not only answer where the Pokemon caught in the
+## contest would go: it takes it home, asks `GiveANickname_YesNo` about it and clears
+## `wContestMon`. The answer is the party host's, since a nickname is a screen.
+func _special_check_party_full_after_contest(special: int) -> Dictionary:
+	return _stage_runtime_request(&"contest_mon_requested", {
+		"special": special,
+	})
+
+
+## The judging prints three placings and leaves the player's own in wScriptVar, which
+## the results script branches on.
+func _special_bug_contest_judging(special: int) -> Dictionary:
+	return _stage_runtime_request(&"bug_contest_judging_requested", {
+		"special": special,
+	})
+
+
+func _special_activate_fishing_swarm(special: int) -> Dictionary:
+	_emit_runtime_event(&"phone_special_requested", {
+		"special": special, "kind": &"activate_fishing_swarm",
+		"species": _script_value,
+	})
+	return {"ok": true}
+
+
+func _special_toggle_maptile_decorations(special: int) -> Dictionary:
+	_apply_maptile_decorations()
+	_emit_runtime_event(&"decoration_callback_applied", {
+		"special": special,
+		"kind": &"toggle_maptile_decorations",
+		"decorations": state.maptile_decorations() if state != null else {},
+	})
+	return {"ok": true}
+
+
+## `ToggleDecorationVisibility` per slot: an empty slot sets the object's event flag
+## and the renderer removes it, and a filled one clears the flag and writes the
+## decoration's own variable sprite.
+func _special_toggle_decorations_visibility(special: int) -> Dictionary:
+	var shown: Dictionary = {}
+	for row: Dictionary in Gen2WorldDecoration.OBJECT_SLOTS:
+		var deco: int = state.maptile_decoration(
+			StringName(row["slot"])
+		) if state != null else 0
+		var sprite: int = int(data.decoration(deco).get("sprite", 0)) \
+			if data != null and deco > 0 else 0
+		_staged_flags[int(row["flag"])] = sprite <= 0
+		if sprite <= 0:
+			continue
+		shown[int(row["variable_sprite"])] = sprite
+		_emit_runtime_event(&"variable_sprite_changed", {
+			"variable_sprite": int(row["variable_sprite"]),
+			"sprite": sprite,
+		})
+	_emit_runtime_event(&"decoration_callback_applied", {
+		"special": special,
+		"kind": &"toggle_decorations_visibility",
+		"sprites": shown,
+	})
+	return {"ok": true}
+
+
+func _special_slot_machine(special: int) -> Dictionary:
+	return _stage_runtime_request(&"slot_machine_requested", {
+		"special": special,
+		## `Slots_InitBias`' own `ld a, [wScriptVar] / and a`, which is
+		## the only thing the operand decides.
+		"lucky": _script_value != 0,
+		"coins": _coins_value(),
+	})
+
+
+func _special_card_flip(special: int) -> Dictionary:
+	return _stage_runtime_request(&"card_flip_requested", {
+		"special": special,
+		"coins": _coins_value(),
+	})
+
+
+func _special_unown_puzzle(special: int) -> Dictionary:
+	return _stage_runtime_request(&"unown_puzzle_requested", {
+		"special": special,
+		## `maskbits NUM_UNOWN_PUZZLES` is what bounds the operand, so a
+		## value outside the four wraps rather than failing.
+		"puzzle": _script_value & 0x3,
+	})
+
+
+## The word the wall spells, staged as the text `JoyWaitAorB` holds until a button. A
+## host that can reach the chamber's own tileset draws it as
+## `_DisplayUnownWords_CopyWord`'s 2x2 letter blocks instead ([Gen2UnownWallPage]);
+## the wait it answers is this one.
+func _special_display_unown_words(special: int) -> Dictionary:
+	var wall_word: String = data.unown_wall_word(_script_value) if data != null \
+		else ""
+	if wall_word.is_empty():
+		return {
+			"ok": false,
+			"reason": &"unknown_unown_wall",
+			"special": special,
+			"wall": _script_value,
+		}
+	## `special` is a StringName tag on a pending text, not the index, so
+	## the wall is named under its own key.
+	return _stage_internal_text(wall_word, false, {"unown_wall": _script_value})
+
+
+## `Random` masked to two bits plus three. The same byte is stepped by
+## `CheckDailyResetTimer` on every day that passes, which is
+## `Gen2WorldState.reset_daily_flags`; this is the resample its own script asks for.
+func _special_sample_kenji_break_countdown(_special: int) -> Dictionary:
+	_staged_kenji_break_timer = Gen2WorldState.kenji_break_countdown(_random)
+	_has_staged_kenji_break_timer = true
+	return {"ok": true}
+
+
+## `sMysteryGiftTrainerHouseFlag` straight into wScriptVar: a player who has never
+## received a Mystery Gift is turned away, and one who has fights CAL under the
+## partner's name.
+func _special_trainer_house(_special: int) -> Dictionary:
+	_script_value = int(_mystery_gift_section().get("trainer_house_flag", 0))
+	return {"ok": true}
+
+
+## Zero when nothing is waiting and the item plus one when something is.
+## POKECENTER_2F's scene script branches on the zero, and the officer it puts on the
+## floor is what hands the gift over.
+func _special_check_mystery_gift(_special: int) -> Dictionary:
+	_script_value = Gen2MysteryGift.check_value(_mystery_gift_section())
+	return {"ok": true}
+
+
+## Carrie's own row on GOLDENROD DEPT. STORE 5F, behind a `GameboyCheck` this project
+## always passes: there is no Game Boy here that is not a colour one.
+func _special_unlock_mystery_gift(_special: int) -> Dictionary:
+	Gen2MysteryGift.unlock(_mystery_gift_section())
+	return {"ok": true}
+
+
+func _special_get_mystery_gift_item(special: int) -> Dictionary:
+	return _stage_mystery_gift_item(special)
+
+
+## `wPartySpecies`' first byte and nothing else: the wall opens for a party led by
+## Ho-Oh. `GetMapAttributesPointer` in front of it is marked pointless in the pin and
+## answers nothing.
+func _special_ho_oh_chamber(special: int) -> Dictionary:
+	var chamber_party: Dictionary = _request.get("party", {})
+	if chamber_party.is_empty():
+		return {"ok": false, "reason": &"missing_party_summary", "special": special}
+	var chamber_species: Array = chamber_party.get("species", [])
+	if not chamber_species.is_empty() and int(chamber_species[0]) == SPECIES_HO_OH:
+		_staged_flags[EVENT_WALL_OPENED_IN_HO_OH_CHAMBER] = true
+	return {"ok": true}
+
+
+## A WATER STONE in the bag opens it, and so does one held by any party member:
+## `.loop` walks the party backwards reading MON_ITEM. The flag is tested first, so a
+## wall already open spends nothing.
+func _special_omanyte_chamber(special: int) -> Dictionary:
+	if not _event_flag_active(EVENT_WALL_OPENED_IN_OMANYTE_CHAMBER):
+		var stone_party: Dictionary = _request.get("party", {})
+		if stone_party.is_empty():
+			return {
+				"ok": false, "reason": &"missing_party_summary", "special": special,
+			}
+		var opens: bool = _item_quantity(ITEM_WATER_STONE) > 0
+		if not opens:
+			for held: Variant in stone_party.get("held_items", []):
+				if int(held) == ITEM_WATER_STONE:
+					opens = true
+					break
+		if opens:
+			_staged_flags[EVENT_WALL_OPENED_IN_OMANYTE_CHAMBER] = true
+	return {"ok": true}
+
+
+## `wBattleResult`'s BATTLERESULT_CAUGHT_CELEBI, which `PokeBallEffect` sets on a
+## catch made in a BATTLETYPE_CELEBI fight and nothing else clears until the next
+## battle.
+func _special_check_caught_celebi(_special: int) -> Dictionary:
+	_script_value = 1 if state != null and state.battle_caught_celebi() else 0
+	return {"ok": true}
+
+
+## The whole routine is a sprite-anim cutscene and a battle type. There is no
+## sprite-anim layer outside the intro, so what it owes a script is the wait its own
+## loop spends and the type the fight behind it starts with.
+func _special_celebi_shrine_event(special: int) -> Dictionary:
+	_loaded_battle_type = Gen2Battle.BATTLETYPE_CELEBI
+	if not _battle_setup.is_empty():
+		_battle_setup["battle_type"] = Gen2Battle.BATTLETYPE_CELEBI
+	_emit_runtime_event(&"presentation_special_applied", {
+		"special": special, "kind": &"celebi_shrine",
+	})
+	return _stage_frame_wait(
+		CELEBI_SHRINE_PASSES * CELEBI_SHRINE_FRAMES_PER_PASS,
+		{"special": special, "kind": &"celebi_shrine"}
+	)
+
+
+## `PlayRadio` opens the station wScriptVar names, prints its line in a four-row box
+## and holds until A or B. It is the Pokegear's own radio without the Pokegear, so the
+## station is the request and the host draws it.
+func _special_map_radio(special: int) -> Dictionary:
+	return _stage_runtime_request(&"map_radio_requested", {
+		"special": special,
+		"station": _script_value,
+	})
+
+
+## `ScriptReturnCarry`: TRUE once `wLuckyNumberDayTimer` has run out, which is the
+## Friday the show comes round on.
+func _special_check_lucky_number_show_flag(_special: int) -> Dictionary:
+	_script_value = 1 if state != null and state.lucky_number_show_ready() else 0
+	return {"ok": true}
+
+
+## `RestartLuckyNumberCountdown`, then the GAME_OVER bit off the show flag, then
+## `LoadOrRegenerateLuckyIDNumber`. The bit is the radio segment's own and this
+## project's radio reads the timer instead, so what is left is the countdown and the
+## number.
+func _special_reset_lucky_number_show_flag(_special: int) -> Dictionary:
+	_staged_lucky_number_days_left = _lucky_number_days_until_friday()
+	_has_staged_lucky_number_days_left = true
+	_refresh_lucky_id_number()
+	return {"ok": true}
+
+
+## `PrintNum` with PRINTNUM_LEADINGZEROS over five digits into wStringBuffer3, which
+## the radio tower's own text prints.
+func _special_print_todays_lucky_number(special: int) -> Dictionary:
+	_refresh_lucky_id_number()
+	_set_text_buffer(
+		RomLayout.STRING_BUFFER_3, "%05d" % _lucky_id_number(), &"lucky_number",
+		{"special": special}
+	)
+	return {"ok": true}
+
+
+## The whole walk is over ID numbers the party mirror carries, so the routine is the
+## host's arithmetic rather than a screen.
+func _special_check_for_lucky_number_winners(special: int) -> Dictionary:
+	var lucky_party: Dictionary = _request.get("party", {})
+	if lucky_party.is_empty():
+		return {"ok": false, "reason": &"missing_party_summary", "special": special}
+	_refresh_lucky_id_number()
+	var winner: Dictionary = Gen2WorldPartyHost.lucky_number_match(
+		_lucky_id_number(),
+		lucky_party.get("id_numbers", []),
+		lucky_party.get("species", []),
+		lucky_party.get("eggs", []),
+		lucky_party.get("stored_id_numbers", []),
+		lucky_party.get("stored_species", [])
+	)
+	_script_value = int(winner.get("script_value", 0))
+	if _script_value == 0:
+		return {"ok": true}
+	## `GetPokemonName` on the matching row's species, into the buffer
+	## both boxes print, and then the box the match's own location picks.
+	var winner_species: int = int(winner.get("species", 0))
+	_cur_party_species = winner_species
+	var winner_name: String = String(
+		data.species(winner_species).get("name", "")
+	) if data != null else ""
+	_set_text_buffer(RomLayout.STRING_BUFFER_1, winner_name, &"lucky_number_winner", {
+		"special": special, "species": winner_species,
+	})
+	var lucky_box: String = _special_box(
+		"lucky_number",
+		"match_pc" if bool(winner.get("in_storage", false)) else "match_party"
+	)
+	if lucky_box.is_empty():
+		return {"ok": false, "reason": &"missing_special_text", "special": special}
+	return _stage_internal_text(lucky_box, false, {"special": special})
+
+
+## The record straight out of the save into wMagikarpLength, printed the way
+## `PrintMagikarpLength` prints it, and the sign's own box. An unbeaten record is two
+## zero bytes, which is what the sign shows before anyone has measured one.
+func _special_magikarp_house_sign(special: int) -> Dictionary:
+	var record: Dictionary = state.best_magikarp() if state != null else {}
+	_set_text_buffer(RomLayout.STRING_BUFFER_1, Gen2WorldPartyHost.magikarp_length_string(
+		int(record.get("feet", 0)), int(record.get("inches", 0))
+	), &"magikarp_length", {"special": special})
+	_set_text_ram("magikarp_record_holder", String(record.get("ot", "")))
+	var sign_box: String = _special_box("magikarp", "record")
+	if sign_box.is_empty():
+		return {"ok": false, "reason": &"missing_special_text", "special": special}
+	return _stage_internal_text(sign_box, false, {"special": special})
+
+
+func _special_bank_of_mom(_special: int) -> Dictionary:
+	return _bank_of_mom(MOM_CHECK_INITIALIZED)
+
+
+## `ld a, [wUnownDex] / and a / ret z`: with no Unown caught the routine draws nothing
+## at all, which the host answers for since it is the one that holds the dex.
+func _special_unown_printer(special: int) -> Dictionary:
+	return _stage_runtime_request(&"unown_printer_requested", {
+		"special": special,
+		"caught": state.unown_caught_count() if state != null else 0,
+	})
+
+
+## `_Diploma` draws `PlaceDiplomaOnScreen`'s page and waits for a button;
+## `_PrintDiploma` draws the same page and then holds in `SendScreenToPrinter`.
+## Neither writes anything a script reads, so the request carries only which of the
+## two loops is standing.
+func _special_diploma(special: int) -> Dictionary:
+	return _stage_runtime_request(&"diploma_requested", {
+		"special": special,
+		"printing": special == SPECIAL_PRINT_DIPLOMA,
+	})
+
+
+## The counter is one loop: the prize list, a yes/no on the row, and whichever of the
+## four boxes the answer reaches. B on the list is the only way out and prints her
+## parting line.
+func _special_buena_prize(special: int) -> Dictionary:
+	return _stage_buena_prize_menu(special)
+
+
+## `PrintSeerText SEER_INTRO`, `JoyWaitAorB`, and only then the list.
+func _special_poke_seer(special: int) -> Dictionary:
+	var seer_intro: String = _special_box("poke_seer", "see_all")
+	if seer_intro.is_empty():
+		return {"ok": false, "reason": &"missing_special_text", "special": special}
+	return _stage_internal_text(seer_intro, false, {
+		"special": special,
+		"party_selection_after_text": {
+			"special": special,
+			"routine": PARTY_SELECTION_ROUTINE_OF[special],
+		},
+	})
+
+
+## All three open `SelectMonFromParty` and answer on what came back. `PhotoStudio`
+## prints its own question in front of the list, which is the one box a script does
+## not carry for it.
+func _special_party_selection(special: int) -> Dictionary:
+	if special == SPECIAL_PHOTO_STUDIO:
+		var asked: String = _special_box("photo_studio", "which_mon")
+		if asked.is_empty():
+			return {"ok": false, "reason": &"missing_special_text", "special": special}
+		_standing_text = asked
+	return _stage_runtime_request(&"party_selection_requested", {
+		"special": special,
+		"routine": PARTY_SELECTION_ROUTINE_OF[special],
+	})
+
+
+## `TryAddMonToParty` with a level 15 SHUCKLE holding a BERRY, named SHUCKIE under
+## MANIA's own OT and ID, and the daily flag behind it. A full party is `.NotGiven`,
+## which answers zero and gives nothing: the box is never reached.
+func _special_give_shuckle(special: int) -> Dictionary:
+	return _stage_runtime_request(&"pokemon_requested", {
+		"special": special,
+		"kind": &"give_shuckle",
+		"pokemon": Gen2WorldPartyHost.SHUCKLE,
+		"level": Gen2WorldPartyHost.SHUCKIE_LEVEL,
+		"item": Gen2WorldPartyHost.ITEM_BERRY,
+		"nickname": Gen2WorldPartyHost.SHUCKIE_NICKNAME,
+		"original_trainer": Gen2WorldPartyHost.MANIA_OT_NAME,
+		"ot_id": Gen2WorldPartyHost.MANIA_OT_ID,
+		"party_only": true,
+	})
+
+
+## The box alone: the question is the `writetext` in front of it, and the answer is
+## `yesorno`'s own, YES writing 1 and B writing 0.
+func _special_ask_remember_password(_special: int) -> Dictionary:
+	_pending = {
+		"type": &"choice",
+		"command": &"yesorno",
+		"choices": [&"yes", &"no"],
+		"text": _standing_text,
+		"special": &"ask_remember_password",
+		"header": ASK_REMEMBER_PASSWORD_BOX.duplicate(),
+		"source": _request.duplicate(true),
+	}
+	return _waiting_result()
+
+
+## `AddMobileMonToParty` with one of `OddEggs`' fourteen rows, rolled against
+## `OddEggProbabilities`. `TossKeyItem` runs first and removes nothing when the pack
+## holds no ticket; it writes no wScriptVar either way, so the toss's own answer is
+## put back.
+func _special_give_odd_egg(special: int) -> Dictionary:
+	if _item_quantity(ITEM_EGG_TICKET) > 0:
+		var kept: int = _script_value
+		var tossed: Dictionary = _stage_item_delta(ITEM_EGG_TICKET, -1)
+		_script_value = kept
+		if not bool(tossed.get("ok", true)):
+			return tossed
+	return _stage_runtime_request(&"pokemon_requested", {
+		"special": special,
+		"kind": &"give_odd_egg",
+		"party_only": true,
+	})
+
+
+## Not a gift at all: the Dragon Shrine's `givepoke` has already run, and this
+## rewrites the last DRATINI in the party with one of two movesets. A wScriptVar above
+## one returns before the search, which is what the elder's third answer leaves
+## standing.
+func _special_give_dratini(special: int) -> Dictionary:
+	if _script_value > 1:
+		return {"ok": true}
+	return _stage_runtime_request(&"dratini_moveset_requested", {
+		"special": special,
+		"moveset": _script_value,
+	})
+
+
+## `CheckCaughtMon` on wScriptVar less one, and nothing at all when it is already
+## caught: the prize counter has handed the Pokemon over by here, so this is the
+## new-entry screen alone. The species byte is one high, which is the `dec a` in front
+## of both calls.
+func _special_game_corner_prize_mon_check_dex(special: int) -> Dictionary:
+	var prize_species: int = _script_value
+	if prize_species <= 0:
+		return {"ok": false, "reason": &"invalid_prize_species", "special": special}
+	if state != null and state.has_caught_species(prize_species):
+		return {"ok": true}
+	_staged_caught_species[prize_species] = true
+	return _stage_runtime_request(&"pokedex_entry_requested", {
+		"special": special,
+		"species": prize_species,
+	})
+
+
+## `DoNthMenu` over the five words of today's category, and the answer is whether the
+## row matches the low nibble of `wBuenasPassword`. The category is the high nibble,
+## which is what the radio show drew this morning.
+func _special_buenas_password(special: int) -> Dictionary:
+	var password: int = _buenas_password()
+	if password < 0:
+		return {"ok": false, "reason": &"missing_buenas_password", "special": special}
+	_stage_buenas_password_menu(password)
+	return {"ok": true}
+
+
+func _special_random_unseen_wild_mon(special: int) -> Dictionary:
+	var rare_species: int = _phone_unseen_rare_species()
+	if rare_species <= 0:
+		_emit_runtime_event(&"phone_special_requested", {
+			"special": special, "kind": &"random_unseen_wild_mon",
+			"internal_text": false, "script_value": 1,
+		})
+		_script_value = 1
+	else:
+		var rare_name: String = String(data.species(rare_species).get("name", ""))
+		_set_text_buffer(1, rare_name, &"phone_unseen_wild_mon", {
+			"special": special, "species": rare_species,
+		})
+		_emit_runtime_event(&"phone_special_requested", {
+			"special": special, "kind": &"random_unseen_wild_mon",
+			"internal_text": true, "buffer": 1, "value": rare_name,
+			"species": rare_species, "script_value": 0,
+		})
+		_script_value = 0
+	return {"ok": true}
+
+
+func _special_random_phone_wild_mon(special: int) -> Dictionary:
+	var wild_name: String = _phone_wild_mon_name()
+	_set_text_buffer(1, wild_name, &"phone_wild_mon", {"special": special})
+	_emit_runtime_event(&"phone_special_requested", {
+		"special": special, "kind": &"random_phone_wild_mon",
+		"buffer": 1, "value": wild_name,
+	})
+	return {"ok": true}
+
+
+func _special_random_phone_mon(special: int) -> Dictionary:
+	var trainer_mon_name: String = _phone_trainer_mon_name()
+	_set_text_buffer(1, trainer_mon_name, &"phone_mon", {"special": special})
+	_emit_runtime_event(&"phone_special_requested", {
+		"special": special, "kind": &"random_phone_mon",
+		"buffer": 1, "value": trainer_mon_name,
+	})
+	return {"ok": true}
 ## ToggleMaptileDecorations and SetDecorationTile
 ## (engine/overworld/decorations.asm). Coordinates are changeblock coordinates;
 ## Gen2WorldAPI applies their padded-buffer conversion.

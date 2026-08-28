@@ -854,6 +854,24 @@ func test_the_spawn_point_special_clears_the_contest_and_safari_flags() -> void:
 	assert_false(world.state.is_engine_flag_active(safari))
 
 
+## `Script_warpmod` writes the three backup-warp bytes and returns, so the script
+## carries on to whatever puts the player on the -1 warp that spends them. Both
+## dept store elevators and the Fast Ship's cabin are entered that way.
+func test_warpmod_records_the_backup_warp_and_the_script_runs_on() -> void:
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
+	scripts["48:6280"] = [
+		Gen2WorldScript.WARPMOD, 3, 1, 2,
+		Gen2WorldScript.END,
+	]
+	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
+	var data: GameData = GameData.open_directory(_directory)
+	data.world_map(1, 1).events["coord_events"][0]["script"] = 0x6280
+	var world := Gen2WorldAPI.open(data, 1, 1, Vector2i(7, 6))
+	var result: Array = world.dispatch_script_events()
+	assert_eq(result[0]["status"], &"complete", JSON.stringify(result))
+	assert_eq(world.backup_warp, {"warp": 3, "map_group": 1, "map_number": 2})
+
+
 func test_map_decoration_specials_stamp_the_selected_room_blocks() -> void:
 	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
 	scripts["48:6250"] = [
