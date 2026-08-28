@@ -37,6 +37,11 @@ const SAVED_PLAYER: String = "TEST"
 
 
 func after_each() -> void:
+	## Opening a world installs the rules it was opened under, which is the whole
+	## point of them (`Gen2WorldAPI._init`), so a test that opened a Nuzlocke
+	## leaves every test after it playing one: its catches ask for no nickname
+	## and its faints are permanent. Put back before the next one builds a save.
+	Gen2Rules.install(null)
 	if is_instance_valid(_world_screen):
 		_world_screen.free()
 		_world_screen = null
@@ -46,7 +51,12 @@ func after_each() -> void:
 	Gen2ModHost.reset()
 
 
-func _open_world(with_save: bool = false, seed_value: int = 0) -> void:
+## [param challenge] is written onto the injected save rather than installed by
+## hand: which rules a run is played under belongs to the slot, and the world is
+## what reads them off it.
+func _open_world(
+	with_save: bool = false, seed_value: int = 0, challenge: StringName = &""
+) -> void:
 	var packed: PackedScene = load("res://game/world/world_screen.tscn")
 	_world_screen = packed.instantiate() as Gen2WorldScreen
 	_world_screen.map_group = Fixture.MAP_GROUP
@@ -66,6 +76,9 @@ func _open_world(with_save: bool = false, seed_value: int = 0) -> void:
 		snapshot.player_cell = Vector2i(4, 5)
 		snapshot.world_state = Gen2WorldState.new()
 		save.world = snapshot
+		if not challenge.is_empty():
+			save.run_rules = Gen2Rules.new()
+			save.run_rules.challenge = challenge
 		_world_screen.set_save(save)
 	add_child(_world_screen)
 	await get_tree().process_frame
@@ -620,7 +633,7 @@ func test_master_ball_capture_runs_through_the_real_battle_overlay() -> void:
 	_settle_frames(host)
 	assert_eq(
 		host.battle_snapshot()["message"],
-		"You threw a %s!" % _data.item_name(Gen2WorldPartyHost.ITEM_MASTER_BALL)
+		host._item_used_text(Gen2WorldPartyHost.ITEM_MASTER_BALL)
 	)
 
 	var caught: String = "Gotcha! %s was caught!" % _wild_name()
@@ -640,6 +653,54 @@ func test_master_ball_capture_runs_through_the_real_battle_overlay() -> void:
 	assert_eq(_world_screen.world_snapshot()["script_prompt"], "Caught %s" % _wild_name())
 
 
+## `PokeBallEffect` reaches `AskGiveNicknameText` only once
+## `Text_GotchaMonWasCaught` has finished printing. A Nuzlocke is where an early
+## prompt shows, because it skips the question and opens the keyboard outright:
+## the naming screen stood over a box halfway through "Gotcha! X was caught!".
+func test_the_catch_prompt_waits_for_the_gotcha_line() -> void:
+	await _open_world(true, 0, Gen2Rules.CHALLENGE_NUZLOCKE)
+	assert_true(bool(_world_screen._world.state.apply_changes(
+		{}, {}, {"items": {Gen2WorldPartyHost.ITEM_MASTER_BALL: 1}}
+	)["ok"]))
+	_world_screen.preview_wild_encounter()
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var host: Gen2BattleScreen = _battle_host()
+	assert_not_null(host)
+	assert_true(host.begin_capture()["ok"])
+	assert_true(host.select_capture_ball(
+		host.available_capture_balls().find(Gen2WorldPartyHost.ITEM_MASTER_BALL)
+	)["ok"])
+	assert_true(host.throw_capture_ball()["ok"])
+	_settle_frames(host)
+
+	var caught: String = "Gotcha! %s was caught!" % _wild_name()
+	for _message: int in 10:
+		if String(host.battle_snapshot()["message"]) == caught:
+			break
+		host.finish()
+		host.advance()
+	assert_eq(String(host.battle_snapshot()["message"]), caught)
+	var box: Gen2TextBox = host.get("_box")
+	assert_true(box.is_revealing(), "the caught line has only just been put up")
+	assert_true(
+		host._open_capture_nickname(),
+		"the prompt is owed, so the pump waits here rather than running on"
+	)
+	assert_null(
+		host.get("_capture_nickname_host"),
+		"and nothing is built over a line that is still printing"
+	)
+
+	box.finish()
+	assert_true(host._open_capture_nickname())
+	assert_not_null(
+		host.get("_capture_nickname_host"),
+		"once the line is done the keyboard opens, no question asked"
+	)
+
+
 func test_failed_capture_shows_break_free_and_returns_to_battle() -> void:
 	await _open_world()
 	_data.species(Fixture.TRAINER_SPECIES)["catch_rate"] = 1
@@ -655,14 +716,16 @@ func test_failed_capture_shows_break_free_and_returns_to_battle() -> void:
 	_settle_frames(host)
 	assert_eq(
 		host.battle_snapshot()["message"],
-		"You threw a %s!" % _data.item_name(Gen2WorldPartyHost.ITEM_POKE_BALL)
+		host._item_used_text(Gen2WorldPartyHost.ITEM_POKE_BALL)
 	)
 
+	## One of `.shake_and_break_free`'s four lines and nothing else: which one is
+	## the rock count's to decide, and no line is said for a rock of its own.
 	var saw_break_free: bool = false
 	for _message: int in 5:
 		host.finish()
 		host.advance()
-		if host.battle_snapshot()["message"] == "%s broke free!" % _wild_name():
+		if Gen2BattleScreen.BREAK_FREE_TEXT.has(host.battle_snapshot()["message"]):
 			saw_break_free = true
 
 	assert_true(saw_break_free)
@@ -1380,6 +1443,48 @@ func test_a_battle_runs_its_transition_before_the_overlay_exists() -> void:
 	assert_not_null(_battle_child(), "and the battle behind it once it lands")
 
 
+## `DoBattleTransition` owns every frame between the encounter and the overlay
+## with the joypad unread. A press landing in one of them used to reach
+## `script_input_waiting()` below it and cancel the request `startbattle` waits
+## on, so the script died with `invalid_battle_outcome`: the fight still ran, and
+## everything the trainer's script does after it -- its beaten flag, its text and
+## a gym leader's badge -- never arrived. A player holding A through the approach
+## is what does it.
+func test_a_press_during_the_battle_transition_leaves_the_script_running() -> void:
+	await _open_world()
+	await _walk_one(Vector2i.RIGHT)
+	for _frame: int in 400:
+		_world_screen.advance_frame()
+		if _world_screen.battle_transition_running():
+			break
+		var waiting: Dictionary = _world_screen._world.pending_script_input()
+		if StringName(waiting.get("type", &"")) in [&"text", &"button"]:
+			_world_screen._advance_script_input()
+	assert_true(_world_screen.battle_transition_running(), "the transition is on screen")
+	_world_screen.press_button(Gen2Button.A)
+	assert_eq(
+		_world_screen.world_snapshot()["script_prompt"], "Battle starting",
+		"the press was swallowed rather than answering the script"
+	)
+
+	var host: Gen2BattleScreen = _battle_child()
+	assert_not_null(host)
+	for _hit: int in 12:
+		host.hurt_enemy()
+	host = _battle_host()
+	host.finish()
+	host.advance()
+	host.finish()
+	host.advance()
+	await get_tree().process_frame
+	var world: Dictionary = _world_screen.world_snapshot()
+	assert_true(world["just_battled"])
+	assert_eq(
+		world["visible_objects"], 0,
+		"the script ran on past the fight and set the trainer's beaten flag"
+	)
+
+
 ## `ExitBattle`'s `predef EvolveAfterBattle`, which is the pass this screen runs
 ## on the overworld: the level evolution the fight paid for is presented, and
 ## the party row is only written when the animation has finished.
@@ -1786,10 +1891,23 @@ func test_the_last_member_fainting_to_poison_opens_the_whiteout() -> void:
 ## The Nuzlocke's own ending, on the same pass the whiteout above walks. A faint
 ## is a death, so the row leaves the party rather than being healed, and a party
 ## with nothing left is a wipe: the run is over rather than set back to a Center.
+## `Gen2GameRuntime._activate_rules` installs a slot's own rules when the
+## launcher chooses one, and nothing does when [method Gen2WorldScreen.set_save]
+## injects one, so the world reads them off the save it opened. Without it a
+## Nuzlocke slot played as the cartridge's own game: no death was permanent and
+## no area was ever spent.
+func test_the_world_plays_the_rules_the_save_it_opened_carries() -> void:
+	Gen2Rules.install(null)
+	await _open_world(true, 0, Gen2Rules.CHALLENGE_NUZLOCKE)
+	assert_true(_world_screen._world.rules.is_nuzlocke(), "the world's own set")
+	assert_true(
+		Gen2Rules.active().is_nuzlocke(),
+		"and the installed one every static reads"
+	)
+
+
 func test_a_nuzlocke_wipe_ends_the_run_instead_of_whiting_out() -> void:
-	await _open_world(true)
-	_world_screen._world.rules = Gen2Rules.new()
-	_world_screen._world.rules.challenge = Gen2Rules.CHALLENGE_NUZLOCKE
+	await _open_world(true, 0, Gen2Rules.CHALLENGE_NUZLOCKE)
 	var save: Gen2SaveData = _world_screen._injected_save
 	var mon: Gen2SaveMon = save.party[0]
 	mon.is_egg = false

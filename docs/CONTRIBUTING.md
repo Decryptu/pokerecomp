@@ -105,19 +105,39 @@ An optional `<method> <times> [int arg]` drives a scene before capture. Keep
 state changes as callable methods, not only input branches, so screens stay
 inspectable without a key press.
 
-`tools/record_clip.gd` records one overworld clip to video, mods and all, for a
-trailer rather than for a check. Godot's Movie Maker pins the frame delta, so the
-world spends exactly one hardware frame per recorded frame and the same arguments
-give the same clip:
+`tools/record_clip.gd` records one clip to video, mods and all, for a trailer
+rather than for a check. Godot's Movie Maker pins the frame delta, so the world
+spends exactly one hardware frame per recorded frame and the same arguments give
+the same clip:
 
 ```bash
 godot --path . --mods --write-movie /tmp/clip.avi --fixed-fps 60 \
   -s res://tools/record_clip.gd -- crystal 24 3 cell=20,10 hold=left seconds=5
 ```
 
-Buttons are scripted per hardware frame through `Gen2WorldScreen.replay_input`,
-and its `probe=` modes answer where a walk may go and what a seed puts on the
-map before a clip is shot. The header has the options and the ffmpeg line.
+`screen=saves` shoots the launcher's save page instead of the world, which is
+where a run's challenge is chosen. Movie Maker's frame is the project's own
+viewport, so `size=` defaults to it: a layout of any other size is scaled into
+the frame, which is what makes a page's text soft. What the clip plays with is
+arguments: `party=`, `items=`, `challenge=` and `progress=` build the recording
+save and the run behind it, and nothing is written to disk.
+
+Buttons are scripted per hardware frame through `Gen2WorldScreen.replay_input`.
+`text=auto` answers a box that is waiting for a press and `at=<state>:<action>`
+lands one on a menu the first time the screen reaches it, so a clip that has to
+fight, open the pack or throw a ball is aimed at what is on screen rather than at
+a frame number; `read=` and `beat=` set how long a finished page and a chosen
+menu row are left standing, which is what makes a clip readable rather than
+merely correct. `meet` fights the wild a mod has drawn on the map instead of
+inventing one, so the entry's id travels with the battle and its sprite goes
+when the fight is over. The `probe=` modes answer where a walk may go, what a
+seed puts on the map, what the start menu's rows are and, with `probe=trace`,
+the frame every visible thing changed on. The header has the options and the ffmpeg line.
+
+The recording window is put in front and kept there: the engine does not draw an
+occluded window and Movie Maker writes a frame per drawn frame, so a covered one
+records a clip with its middle missing. A run that loses frames anyway fails
+rather than writing a short clip.
 
 `tools/profile.gd` answers what a drawn frame costs, per screen, in
 milliseconds. It needs a window, and turns the frame cap and vsync off so the

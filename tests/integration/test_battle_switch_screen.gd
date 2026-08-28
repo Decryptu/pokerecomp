@@ -473,6 +473,65 @@ func test_the_end_of_a_turn_opens_the_battle_menu() -> void:
 	assert_false(_screen._renderer_input_free(), "the menu owns the joypad")
 
 
+## PACK opened a list whose whole presentation was a line of key bindings in the
+## text box. It is a drawn list like every other one the battle puts up, and the
+## box under it is `UpdateItemDescription`'s.
+func test_the_pack_is_a_drawn_list_with_the_row_description_under_it() -> void:
+	var battle: Gen2Battle = _menu_battle()
+	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
+	await _advance_to_menu()
+	var items: Array[int] = [BattleFixture.POTION, BattleFixture.FULL_HEAL]
+	_screen.set_battle_pack(
+		items, {BattleFixture.POTION: 3, BattleFixture.FULL_HEAL: 1}
+	)
+
+	await _step(Gen2Button.DOWN)
+	assert_eq(int(_screen.battle_snapshot()["menu_position"]), Gen2BattleMenu.PACK)
+	await _step(Gen2Button.A)
+	assert_true(bool(_screen.get("_pack_selecting")))
+	assert_true(_menu_layer().visible, "the rows are drawn, not spelled out")
+	var message: String = String(_screen.battle_snapshot()["message"])
+	assert_eq(message, Gen2WorldPack.row_description(_data, BattleFixture.POTION))
+	assert_false(message.contains("Left and right"), "a key binding is not a screen")
+
+	await _step(Gen2Button.DOWN)
+	assert_eq(
+		_screen.selected_pack_item(), BattleFixture.FULL_HEAL, "a list walks downwards"
+	)
+	assert_eq(
+		String(_screen.battle_snapshot()["message"]),
+		Gen2WorldPack.row_description(_data, BattleFixture.FULL_HEAL)
+	)
+
+
+## The throw is a message and no message redraws a menu, so the ball list stood
+## over the whole of the fight it had just started.
+func test_throwing_a_ball_takes_the_list_off_the_screen() -> void:
+	var battle: Gen2Battle = _menu_battle()
+	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])
+	await _advance_to_menu()
+	_screen.set_battle_pack(
+		[BattleFixture.POTION, BattleFixture.POKE_BALL],
+		{BattleFixture.POTION: 1, BattleFixture.POKE_BALL: 4}
+	)
+	_screen.set_capture_balls([BattleFixture.POKE_BALL], {BattleFixture.POKE_BALL: 4})
+	## A ball is only thrown in a wild battle, which is what the world tells the
+	## screen when it hands one over.
+	_screen.set("_world_battle_active", true)
+	_screen.set("_world_battle_request", {"values": {"kind": &"wild"}})
+
+	await _step(Gen2Button.DOWN)
+	await _step(Gen2Button.A)
+	await _step(Gen2Button.DOWN)
+	await _step(Gen2Button.A)
+	assert_true(bool(_screen.get("_capture_selecting")), "the ball pocket is up")
+	assert_true(_menu_layer().visible)
+
+	await _step(Gen2Button.A)
+	assert_true(bool(_screen.get("_capture_waiting")), "the ball is in the air")
+	assert_false(_menu_layer().visible, "and nothing is drawn over the fight")
+
+
 ## `_2DMenuInterpretJoypad` with neither wrap flag: a press off the grid is
 ## ignored, and the four positions are the source's own order.
 func test_the_battle_menu_walks_its_two_by_two_and_does_not_wrap() -> void:

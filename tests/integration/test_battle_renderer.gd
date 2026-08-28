@@ -248,10 +248,9 @@ func test_a_capture_publishes_and_a_mod_line_lands_behind_it() -> void:
 		"destination": {"ok": true, "destination": &"box"},
 	})
 
-	_battle_screen._show_next_capture_message()
-	assert_string_contains(String(_battle_screen.battle_snapshot()["message"]), "shook")
+	## `Text_GotchaMonWasCaught` is the whole of what a caught throw says: the
+	## rocking is the animation, and nothing is published before the line.
 	assert_eq(_caught.size(), 0, "published before the line that says why")
-
 	_battle_screen._show_next_capture_message()
 	assert_string_contains(String(_battle_screen.battle_snapshot()["message"]), "Gotcha!")
 	assert_eq(_caught.size(), 1)

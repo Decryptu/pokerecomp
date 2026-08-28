@@ -273,6 +273,9 @@ var _last_battle_outcome: StringName = &""
 ## The audio driver's rendered-frame count as of the last frame, for the one
 ## script wait that reads it. See [method Gen2AudioPlayer.timeline_updates].
 var _audio_rendered_seen: int = 0
+## How many frames it has stood still for, against
+## [constant Gen2AudioPlayer.SERVICE_GAP_FRAMES].
+var _audio_still_frames: int = 0
 ## Which of `HangUp`'s seven writes is on the box, so each is written once
 ## rather than every frame of its twenty.
 var _hang_up_phase: StringName = &""
@@ -431,8 +434,14 @@ func _build_world() -> void:
 	var initial_day: int = day
 	var initial_hour: int = hour
 	var initial_minute: int = minute
+	## A world opened for a save plays that save's rules, whoever opened it.
+	## `Gen2GameRuntime._activate_rules` installs the slot's own set when the
+	## launcher chooses one, and nothing does when a test or a tool injects one
+	## through [method set_save]: a Nuzlocke slot then played as the cartridge's
+	## own game, which is the one difference a rules block exists to make.
+	var save_rules: Gen2Rules = selected_save.run_rules if selected_save != null else null
 	if selected_save != null and selected_save.world != null:
-		_world = Gen2WorldAPI.open_snapshot(_data, selected_save.world)
+		_world = Gen2WorldAPI.open_snapshot(_data, selected_save.world, save_rules)
 		if _world == null:
 			_show_load_failure(
 				"Saved overworld unavailable",
@@ -461,7 +470,7 @@ func _build_world() -> void:
 		var saveless_state := Gen2WorldState.new()
 		Gen2WorldSpawn.apply_initial_decorations(saveless_state)
 		_world = Gen2WorldAPI.open(
-			_data, map_group, map_number, start_cell, saveless_state
+			_data, map_group, map_number, start_cell, saveless_state, save_rules
 		)
 	else:
 		var development_state := Gen2WorldState.new(
@@ -962,10 +971,12 @@ func advance_frame() -> void:
 	## servicing leaves `effect_playing()` true for the rest of the run, so the
 	## rendered-frame count is what decides whether this is a wait at all.
 	var audio_rendered: int = _audio_player.timeline_updates() if _audio_player != null else 0
-	var audio_moved: bool = audio_rendered != _audio_rendered_seen
+	_audio_still_frames = 0 if audio_rendered != _audio_rendered_seen \
+		else _audio_still_frames + 1
 	_audio_rendered_seen = audio_rendered
 	if _audio_waiting and _audio_player != null \
-		and (not _audio_player.effect_playing() or not audio_moved):
+		and (not _audio_player.effect_playing()
+			or _audio_still_frames > Gen2AudioPlayer.SERVICE_GAP_FRAMES):
 		_audio_waiting = false
 		var audio_result: Dictionary = Gen2WorldHost.complete_runtime_request(
 			_world, {"ok": true, "sound_finished": true}
@@ -1266,8 +1277,15 @@ func _handle_button(button: int) -> bool:
 	if _battle_host != null:
 		_battle_host.press_button(button)
 		return true
+	## `DoBattleTransition` owns every frame between the encounter and the battle
+	## screen with the joypad unread, the same way a map fade does. Without it a
+	## press landing in those frames reached `script_input_waiting()` below and
+	## cancelled the request `startbattle` was waiting on, so the script died
+	## with `invalid_battle_outcome`: the fight still ran, and the gym leader's
+	## badge, the flag behind it and everything after it never arrived. A player
+	## holding A through a trainer's approach is what does it.
 	if not _map_fade.is_empty() or not _trainer_approach.is_empty() \
-		or _world.phone_ring_active():
+		or _battle_transition != null or _world.phone_ring_active():
 		return true
 	## In front of every other overlay: `EvolveAfterBattle` runs with the map
 	## loop suspended, and the pack path reaches it with the pack still open
@@ -3320,7 +3338,13 @@ func _preview_field_move(move: int, badge: int) -> void:
 		_script_prompt = "Field move preview needs a party"
 		_refresh_labels()
 		return
-	(save.party[0] as Gen2SaveMon).moves[0] = move
+	var teacher: Gen2SaveMon = save.party[0]
+	teacher.moves[0] = move
+	## The slot's PP with it. `Gen2SaveValidator` refuses a row carrying more PP
+	## than its move has, so a Tackle at 35 replaced by a Surf at 15 left a save
+	## every world transaction after it would refuse: the field move worked and
+	## the next catch, purchase or party change reported nothing but failure.
+	teacher.pp[0] = int(_data.move(move).get("pp", 0))
 	_injected_save = save
 	_world.state.set_engine_flag(Gen2WorldState.badge_flag(
 		badge, Gen2WorldState.is_crystal_profile(_data)
@@ -4227,11 +4251,38 @@ func _teachable_tmhm_for(species: int) -> int:
 ## Public screenshot driver for the battle-request host path. It starts the
 ## same request shape emitted by [Gen2WorldScriptRunner], without pretending a
 ## map event was present in the selected development map.
-func preview_battle_request() -> void:
+##
+## [param battle_type] is `wBattleType`, so
+## [constant Gen2Battle.BATTLETYPE_FORCESHINY] opens the fight the Lake of Rage
+## Gyarados is met in.
+func preview_battle_request(
+	species: int = 16, at_level: int = 5,
+	battle_type: int = Gen2Battle.BATTLETYPE_NORMAL
+) -> void:
 	_start_battle_request({
 		"kind": &"battle_requested",
-		"values": {"kind": &"wild", "pokemon": 16, "level": 5},
+		"values": {
+			"kind": &"wild", "pokemon": species, "level": at_level,
+			"battle_type": battle_type,
+		},
 	})
+
+
+## Public screenshot driver for a wild that is already standing on the map: the
+## one a provider put on [param cell], met exactly as a step onto that cell meets
+## it. The entry's id travels with the request, so the provider is told how the
+## fight ended and can take its Pokemon off the map; a battle started any other
+## way leaves the sprite standing where it was.
+func preview_meet_visible_encounter(cell: Vector2i) -> bool:
+	if _encounters == null or not _encounters.active():
+		return false
+	var request: Dictionary = _encounters.battle_request_at(cell)
+	if request.is_empty():
+		return false
+	_battle_encounter_id = StringName(request["visible_encounter"])
+	_zero_map_name_sign_timer()
+	_start_battle_request(request)
+	return true
 
 
 ## Public screenshot driver for the real wild capture bridge. It adds one
@@ -7840,8 +7891,11 @@ func _advance_sound_schedule() -> void:
 		if bool(due.get("wait", false)):
 			if _audio_player != null and _audio_player.effect_playing():
 				var rendered: int = _audio_player.timeline_updates()
-				if int(due.get("rendered", -1)) != rendered:
+				var still: int = 0 if int(due.get("rendered", -1)) != rendered \
+					else int(due.get("still", 0)) + 1
+				if still <= Gen2AudioPlayer.SERVICE_GAP_FRAMES:
 					due["rendered"] = rendered
+					due["still"] = still
 					break
 		elif int(due.get("frame", 0)) > _sound_schedule_frame:
 			break

@@ -123,6 +123,61 @@ static func level_up_box() -> Gen2MenuBox:
 	)
 
 
+## `ForgetMove`'s own list, drawn over the field while `MoveAskForgetText` stands
+## in the text box below it: `hlcoord 5, 2` with `b, NUM_MOVES * 2` and
+## `c, MOVE_NAME_LENGTH`, its rows placed from `hlcoord 5 + 2, 2 + 2` a whole two
+## rows apart, and `w2DMenuFlags1` $20, which is STATICMENU_WRAP alone.
+const FORGET_LEFT: int = 5
+const FORGET_TOP: int = 2
+const FORGET_RIGHT: int = 19
+const FORGET_BOTTOM: int = 11
+const FORGET_FLAGS: int = Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_WRAP
+
+## The other three lists a battle puts in front of the player: the pack, the
+## balls it can throw, and the move an Ether goes on.
+##
+## `BattleMenu_Pack` opens `Pack` itself on the cartridge, four pockets with a
+## description under them, and `RestorePPEffect` borrows the same screen. The
+## battle here is handed the flat list of items it can use rather than the
+## pockets, so there is no pocket axis to draw and the box above is what is left:
+## the same rows, opened out to the full width so a count fits beside a name, and
+## `ScrollingMenu`'s arrows for the rows outside the window. The text box below
+## it stays for the description, which is where `UpdateItemDescription` writes.
+const LIST_LEFT: int = 0
+const LIST_TOP: int = 2
+const LIST_RIGHT: int = 19
+const LIST_BOTTOM: int = 11
+const LIST_ROWS: int = 4
+const LIST_FLAGS: int = FORGET_FLAGS
+## How many columns a row has, from [method Gen2MenuBox.text_start] to the frame
+## on the right.
+const LIST_TEXT_WIDTH: int = LIST_RIGHT - LIST_LEFT - 2
+
+
+static func forget_box() -> Gen2MenuBox:
+	return Gen2MenuBox.from_coords(
+		FORGET_LEFT, FORGET_TOP, FORGET_RIGHT, FORGET_BOTTOM, FORGET_FLAGS
+	)
+
+
+## [param scroll] is `wMenuScrollPosition`, which the up arrow is drawn from, and
+## [param more] whether anything is outside the window at all.
+static func list_box(scroll: int = 0, more: bool = false) -> Gen2MenuBox:
+	var box: Gen2MenuBox = Gen2MenuBox.from_coords(
+		LIST_LEFT, LIST_TOP, LIST_RIGHT, LIST_BOTTOM, LIST_FLAGS
+	)
+	box.scrolling_arrows = more
+	box.scroll = scroll
+	return box
+
+
+## `wMenuScrollPosition` after a cursor move: the window travels the least that
+## keeps the cursor inside it, which is what `ScrollingMenu`'s own clamp does.
+static func list_scrolled(scroll: int, cursor: int, count: int) -> int:
+	var last: int = maxi(count - LIST_ROWS, 0)
+	return clampi(clampi(scroll, cursor - LIST_ROWS + 1, cursor), 0, last)
+
+
 ## `_2DMenuInterpretJoypad` over the main menu's own two-by-two: a press that
 ## would leave the grid is ignored, since it sets no wrap flag and no exit one.
 ## [param position] and the answer are `wBattleMenuCursorPosition`.

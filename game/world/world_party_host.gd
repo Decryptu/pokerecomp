@@ -2055,6 +2055,12 @@ static func _source_hp_catch_rate(max_hp: int, current_hp: int, catch_rate: int)
 	return clampi(maxi(1, int(remaining * catch_rate / float(divisor))), 1, 255)
 
 
+## How many times the ball rocks before it opens, which is
+## `GetPokeBallWobble`'s own count minus the call that ends it: the routine
+## increments `wThrownBallWobbleCount` before it rolls, so a throw that escapes
+## on the first roll has rocked no times at all and `.shake_and_break_free`
+## answers it with `BallBrokeFreeText`. Three is the whole run, which is both a
+## catch and the `cp 3 + 1` escape.
 static func _failed_wobbles(catch_rate: int, random: RandomNumberGenerator) -> int:
 	var chance: int = 63
 	for row: Array in WOBBLE_PROBABILITIES:
@@ -2063,7 +2069,7 @@ static func _failed_wobbles(catch_rate: int, random: RandomNumberGenerator) -> i
 			break
 	for wobble: int in 3:
 		if random.randi_range(0, 255) >= chance:
-			return wobble + 1
+			return wobble
 	return 3
 
 

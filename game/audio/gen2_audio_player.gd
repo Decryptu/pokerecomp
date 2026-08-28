@@ -81,6 +81,18 @@ var _restarts: int = 0
 
 ## The driver exists before the node enters the tree: a host that plays its map
 ## music while it is still building itself has to reach a live engine.
+## How many of the CALLER's frames the driver may go without rendering before a
+## wait on a sound decides nobody is servicing it and gives up.
+##
+## Not one. The buffer is filled to a depth rather than by the frame, and a host
+## drawing faster than the driver renders leaves gaps of several frames in the
+## count: read as one frame, every `waitsfx` in the game ended on the frame after
+## it started, so a badge, a TM and every item jingle printed their line and
+## replaced it before it could be read. Long enough to cover a gap, short enough
+## that a run with no audio device at all pays a fifth of a second for it.
+const SERVICE_GAP_FRAMES: int = 12
+
+
 func _init() -> void:
 	_apu = Gen2Apu.new()
 	_engine = Gen2SoundEngine.new(_apu)
@@ -287,10 +299,10 @@ func effect_playing() -> bool:
 ## output stream with room in it: a headless run, a check or a replay leaves the
 ## channels exactly as the last request set them, so [method effect_playing] would
 ## answer true for the rest of the run. Anything WAITING on a sound compares this
-## count across two frames instead of trusting that answer, and stops waiting when
-## it has not moved. `AudioStreamPlayer.playing` is not that test: the dummy audio
-## driver reports true and consumes nothing. See `Gen2BattleScreen`'s
-## `ANIM_WAIT_SFX`.
+## count across frames instead of trusting that answer, and stops waiting once it
+## has stood still for [constant SERVICE_GAP_FRAMES]. `AudioStreamPlayer.playing`
+## is not that test: the dummy audio driver reports true and consumes nothing.
+## See `Gen2BattleScreen`'s `ANIM_WAIT_SFX`.
 func timeline_updates() -> int:
 	return _timeline_updates
 
