@@ -1131,6 +1131,18 @@ static func capture_wild(
 		return _failure(&"unsupported_ball_effect", {"ball": ball})
 	if world.state == null or world.state.item_quantity(ball) <= 0:
 		return _failure(&"insufficient_ball_quantity", {"ball": ball})
+	## `SetCaughtData`'s own landmark, which is the area a Nuzlocke counts by:
+	## [param caught_location] is the caller's override for a catch whose
+	## landmark is not the map the player stands on, and every caller that has
+	## none passes 0 and takes the map's.
+	var catch_landmark: int = caught_location if caught_location > 0 else world.landmark_backup()
+	## The Nuzlocke's first rule, at the one place a ball is ever thrown: only
+	## the encounter that claimed this area may be thrown at, and
+	## [member Gen2WorldAPI.nuzlocke_area_open] is what the battle claimed when
+	## it opened.
+	if world.rules != null and world.rules.is_nuzlocke() \
+		and world.nuzlocke_area_open != catch_landmark:
+		return _failure(&"nuzlocke_encounter_spent", {"landmark": catch_landmark})
 	var generator: RandomNumberGenerator = random if random != null else RandomNumberGenerator.new()
 	if random == null:
 		generator.randomize()
@@ -1142,13 +1154,10 @@ static func capture_wild(
 		var captured: Gen2SaveMon = _captured_mon(world.data, save, wild, generator)
 		if captured == null:
 			return _failure(&"could_not_create_captured_pokemon", outcome)
-		## `SetCaughtData` runs on the caught Pokemon itself. [param
-		## caught_location] is the caller's override, for a catch whose landmark
-		## is not the map the player is standing on; every one that has none
-		## passes 0 and takes the map's.
+		## `SetCaughtData` runs on the caught Pokemon itself.
 		set_caught_data(
 			captured, wild.level, world.object_time_of_day, world.player_female(),
-			caught_location if caught_location > 0 else world.landmark_backup()
+			catch_landmark
 		)
 		destination = candidate.add_party_or_box(captured)
 		if not bool(destination.get("ok", false)):
@@ -1156,6 +1165,11 @@ static func capture_wild(
 				"ball": ball, "outcome": outcome,
 			})
 		box_full = _fills_its_box(candidate, destination)
+		## The area is already spent by the claim that opened the battle; this
+		## only records that its encounter was taken rather than beaten. On the
+		## candidate, so a rolled-back catch takes the record back with it.
+		if world.rules != null and world.rules.is_nuzlocke():
+			Gen2Nuzlocke.note_caught(candidate.nuzlocke, catch_landmark)
 	var before: Gen2WorldSnapshot = world.snapshot()
 	## After the snapshot the rollback below restores, so a refused candidate
 	## save takes the dex flag back with the ball.

@@ -49,5 +49,5 @@ export_credentials.cfg
 
 # The same for the Android plugin: the Kotlin beside it is tracked, the library
 # is produced by tools/build_android_plugin.sh.
-/addons/second_screen/bin/
+/addons/android_native/bin/
 *.keystore

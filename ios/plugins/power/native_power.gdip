@@ -1,0 +1,15 @@
+[config]
+name="NativePower"
+binary="native_power.a"
+
+initialization="godot_native_power_init"
+deinitialization="godot_native_power_deinit"
+
+[dependencies]
+linked=[]
+embedded=[]
+system=["UIKit.framework"]
+
+capabilities=[]
+
+files=[]

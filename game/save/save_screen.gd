@@ -16,6 +16,9 @@ var _data_override: GameData = null
 var _selected_slot: int = 0
 var _new_game_visible: bool = false
 var _slots: Array = []
+## Which challenge the new-game form has selected. It is fixed for the life of
+## the save the form creates, which is why it is asked here and not in Settings.
+var _new_game_challenge: StringName = Gen2Rules.CHALLENGE_VANILLA
 var _pending_replace_action: StringName = &""
 var _pending_import_path: String = ""
 
@@ -102,7 +105,9 @@ func open_new_slot() -> bool:
 ##
 ## [param label] is the save file's own name, the decorative one Rename edits.
 ## It is optional; the trainer's name comes from the naming screen.
-func create_new_game(label: String = "", _starter_species: int = -1) -> bool:
+## [param challenge] overrides the form's own pick, which is what a test and a
+## driver use; a name this build does not carry falls back to the form's.
+func create_new_game(label: String = "", challenge: StringName = &"") -> bool:
 	if _data == null:
 		_set_status(&"error", "New game unavailable.", "No imported cartridge cache is selected.")
 		return false
@@ -120,7 +125,9 @@ func create_new_game(label: String = "", _starter_species: int = -1) -> bool:
 			"A save name is at most %d characters." % Gen2SaveData.MAX_LABEL,
 		)
 		return false
-	GameRuntime.begin_new_game(_data.id, _selected_slot, trimmed)
+	var chosen: StringName = challenge if Gen2Rules.CHALLENGES.has(challenge) \
+		else _new_game_challenge
+	GameRuntime.begin_new_game(_data.id, _selected_slot, trimmed, chosen)
 	_new_game_visible = false
 	get_tree().change_scene_to_file.call_deferred("res://game/world/intro_screen.tscn")
 	return true
@@ -361,9 +368,16 @@ func _refresh_details() -> void:
 	var save: Gen2SaveData = _load_selected_save()
 	if save != null:
 		body.add_child(Gen2LauncherUI.muted(_palette, "Player: %s" % save.player_name))
+		body.add_child(Gen2LauncherUI.muted(_palette, "Mode: %s" % _challenge_title(save)))
+		var over: bool = Gen2Nuzlocke.run_over(save.nuzlocke)
 		var save_actions: HFlowContainer = Gen2LauncherUI.actions()
 		body.add_child(save_actions)
-		save_actions.add_child(_action("Continue", Gen2LauncherButton.Variant.PRIMARY, &"play", _continue_selected))
+		## A Nuzlocke that lost its last Pokemon is finished. The slot is still a
+		## file to look at, export or delete; it is not a game to walk back into.
+		if not over:
+			save_actions.add_child(_action(
+				"Continue", Gen2LauncherButton.Variant.PRIMARY, &"play", _continue_selected
+			))
 		save_actions.add_child(_action("Party", Gen2LauncherButton.Variant.NEUTRAL, &"", _open_party))
 		## `MainMenu_GetWhichMenu`: the row is on the menu once
 		## `sNumDailyMysteryGiftPartnerIDs` is no longer -1, which is the byte a
@@ -377,6 +391,7 @@ func _refresh_details() -> void:
 		save_actions.add_child(_action("Import .sav", Gen2LauncherButton.Variant.NEUTRAL, &"", _request_import))
 		save_actions.add_child(_action("Replace", Gen2LauncherButton.Variant.NEUTRAL, &"", _request_new_game))
 		_add_party_summary(body, save)
+		_add_nuzlocke_summary(body, save)
 		_add_slot_management(body)
 		return
 
@@ -522,10 +537,79 @@ func _build_new_game_form(body: VBoxContainer) -> void:
 	_name_input.custom_minimum_size = Vector2(0, 42)
 	body.add_child(Gen2LauncherUI.caption(_palette, "Save name"))
 	body.add_child(_name_input)
+	_build_challenge_field(body)
 	var actions: HFlowContainer = Gen2LauncherUI.actions()
 	body.add_child(actions)
 	actions.add_child(_action("Start game", Gen2LauncherButton.Variant.PRIMARY, &"check", _create_from_form))
 	actions.add_child(_action("Cancel", Gen2LauncherButton.Variant.NEUTRAL, &"", cancel_new_game))
+
+
+## The one choice this screen makes that the game itself cannot take back. It is
+## here rather than in Settings because it belongs to the run: a Nuzlocke that
+## could be switched off after a death would not be one.
+func _build_challenge_field(body: VBoxContainer) -> void:
+	body.add_child(Gen2LauncherUI.caption(_palette, "Mode"))
+	var titles: Array = []
+	for challenge: StringName in Gen2Rules.CHALLENGES:
+		titles.append(Gen2Rules.challenge_title(challenge))
+	var detail: Label = Gen2LauncherUI.muted(_palette, "")
+	body.add_child(Gen2LauncherUI.segmented(
+		_palette, titles, maxi(Gen2Rules.CHALLENGES.find(_new_game_challenge), 0),
+		func(index: int) -> void:
+			_new_game_challenge = Gen2Rules.CHALLENGES[index]
+			detail.text = Gen2Rules.challenge_detail(_new_game_challenge)
+	))
+	detail.text = Gen2Rules.challenge_detail(_new_game_challenge)
+	body.add_child(detail)
+	body.add_child(Gen2LauncherUI.muted(
+		_palette, "This is fixed once the game starts and cannot be changed later."
+	))
+
+
+## What the run is played under, as the launcher spells it. A slot written
+## before the challenge existed has no rules block and reads as the cartridge's
+## own game, which is what it was.
+func _challenge_title(save: Gen2SaveData) -> String:
+	return Gen2Rules.challenge_title(
+		save.run_rules.challenge if save.run_rules != null else Gen2Rules.CHALLENGE_VANILLA
+	)
+
+
+## The Nuzlocke's own record: how many areas have given up their encounter, what
+## the run has lost, and its verdict. Drawn for a Nuzlocke and nothing else, so
+## an ordinary slot's pane is exactly what it was.
+func _add_nuzlocke_summary(body: VBoxContainer, save: Gen2SaveData) -> void:
+	if save.run_rules == null or not save.run_rules.is_nuzlocke():
+		return
+	var areas: Variant = save.nuzlocke.get("areas", {})
+	var graveyard: Variant = save.nuzlocke.get("graveyard", [])
+	var area_count: int = (areas as Dictionary).size() if areas is Dictionary else 0
+	var lost: Array = graveyard as Array if graveyard is Array else []
+	body.add_child(Gen2LauncherUI.caption(_palette, "Nuzlocke"))
+	if Gen2Nuzlocke.run_over(save.nuzlocke):
+		var verdict: Label = Gen2LauncherUI.body(
+			_palette, "This run is over. %d area%s met, %d lost." % [
+				area_count, "" if area_count == 1 else "s", lost.size(),
+			]
+		)
+		verdict.add_theme_color_override("font_color", _palette.error)
+		body.add_child(verdict)
+	else:
+		body.add_child(Gen2LauncherUI.muted(
+			_palette, "%d area%s met, %d lost." % [
+				area_count, "" if area_count == 1 else "s", lost.size(),
+			]
+		))
+	if lost.is_empty():
+		return
+	var names: PackedStringArray = PackedStringArray()
+	for entry: Variant in lost:
+		if entry is Dictionary:
+			names.append("%s Lv.%d" % [
+				Gen2Nuzlocke.grave_name(_data, entry as Dictionary),
+				int((entry as Dictionary).get("level", 1)),
+			])
+	body.add_child(Gen2LauncherUI.muted(_palette, ", ".join(names)))
 
 
 func _add_party_summary(body: VBoxContainer, save: Gen2SaveData) -> void:
@@ -600,7 +684,7 @@ func _create_from_form() -> void:
 	# The field belongs to a details pane that is rebuilt whole, so the reference
 	# outlives the node it points at.
 	if is_instance_valid(_name_input):
-		create_new_game(_name_input.text)
+		create_new_game(_name_input.text, _new_game_challenge)
 
 
 ## Closes the new-game form, leaving the slot it was opened on selected.
@@ -610,7 +694,13 @@ func cancel_new_game() -> void:
 
 
 func _continue_selected() -> void:
-	if _data == null or _load_selected_save() == null:
+	var save: Gen2SaveData = _load_selected_save()
+	if _data == null or save == null:
+		return
+	## The same refusal the missing button expresses, at the seam a test or a
+	## driver reaches: a finished Nuzlocke is never opened again.
+	if Gen2Nuzlocke.run_over(save.nuzlocke):
+		_set_status(&"error", "This run is over.", "A Nuzlocke that wiped cannot be continued.")
 		return
 	if not GameRuntime.select_save_slot(_data.id, _selected_slot):
 		_set_status(
@@ -758,19 +848,27 @@ func _slot_exists() -> bool:
 func _slot_state(row: Dictionary) -> String:
 	if not row["exists"]:
 		return "Empty"
-	return "Ready" if row["valid"] else "Unreadable"
+	if not row["valid"]:
+		return "Unreadable"
+	return "Run over" if bool(row.get("run_over", false)) else "Ready"
 
 
 func _slot_message(row: Dictionary) -> String:
 	if not row["exists"]:
 		return "No player data in this slot."
-	return "Ready to continue." if row["valid"] else String(row["message"])
+	if not row["valid"]:
+		return String(row["message"])
+	if bool(row.get("run_over", false)):
+		return "This Nuzlocke ended."
+	return "Ready to continue."
 
 
 func _slot_state_color(row: Dictionary) -> Color:
 	if not row["exists"]:
 		return _palette.muted
-	return _palette.success if row["valid"] else _palette.error
+	if not row["valid"] or bool(row.get("run_over", false)):
+		return _palette.error
+	return _palette.success
 
 
 func _display_name(mon: Gen2SaveMon) -> String:

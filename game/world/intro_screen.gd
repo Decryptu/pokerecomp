@@ -31,6 +31,9 @@ const CLOCK_HEAD_FRAMES: int = 8
 var _data: GameData = null
 var _slot: int = -1
 var _label: String = ""
+## Which challenge the save screen chose, carried from the launcher to the one
+## write that fixes it on the save. See [member Gen2Rules.challenge].
+var _challenge: StringName = Gen2Rules.CHALLENGE_VANILLA
 var _gender: int = Gen2SaveData.GENDER_MALE
 var _standalone: bool = true
 
@@ -145,6 +148,7 @@ func _take_pending() -> void:
 	var pending: Dictionary = GameRuntime.take_pending_new_game()
 	_slot = int(pending["slot"])
 	_label = String(pending["label"])
+	_challenge = StringName(pending.get("challenge", Gen2Rules.CHALLENGE_VANILLA))
 
 
 ## Which sub-screen is up, so a test or a driver can press into the right one.
@@ -297,7 +301,7 @@ func _on_speech_finished(player_name: String) -> void:
 		created.world.world_clock_stamp = Gen2WorldClock.host_seconds()
 	## Before the write: a mod holding a run snapshots what built it into the
 	## save's own namespace, and that has to be in the bytes on disk.
-	GameRuntime.announce_new_save(created)
+	GameRuntime.announce_new_save(created, _challenge)
 	var result: Dictionary = Gen2SaveStore.save(created, _data)
 	if not bool(result["ok"]):
 		_fail(String(result["message"]))

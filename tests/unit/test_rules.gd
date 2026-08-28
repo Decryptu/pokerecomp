@@ -69,7 +69,7 @@ func test_a_mode_change_keeps_a_hand_moved_flag() -> void:
 func test_only_what_differs_is_written_and_read_back() -> void:
 	var rules := Gen2Rules.new()
 	rules.set_mode(Gen2Rules.MODE_VANILLA)
-	rules.difficulty = Gen2Rules.DIFFICULTY_HARD
+	rules.challenge = Gen2Rules.CHALLENGE_HARD
 	rules.set_flag(REPRODUCED_TODAY, false)
 
 	var written: Dictionary = rules.to_dict()
@@ -78,43 +78,97 @@ func test_only_what_differs_is_written_and_read_back() -> void:
 
 	var restored: Gen2Rules = Gen2Rules.parse(written)
 	assert_true(restored.matches(rules))
-	assert_eq(restored.difficulty, Gen2Rules.DIFFICULTY_HARD)
+	assert_eq(restored.challenge, Gen2Rules.CHALLENGE_HARD)
 	assert_false(restored.reproduces(REPRODUCED_TODAY))
 	assert_true(restored.reproduces(FIRST_FLAG))
 
 
 func test_an_unreadable_block_falls_back_rather_than_refusing_the_rest() -> void:
 	var rules: Gen2Rules = Gen2Rules.parse({
-		"mode": "sideways", "difficulty": "impossible", "flags": {"no_such_bug": true},
+		"mode": "sideways", "challenge": "impossible", "flags": {"no_such_bug": true},
 	})
 	assert_eq(rules.mode, Gen2Rules.MODE_CURRENT)
-	assert_eq(rules.difficulty, Gen2Rules.DIFFICULTY_NORMAL)
+	assert_eq(rules.challenge, Gen2Rules.CHALLENGE_VANILLA)
 	assert_true(rules.overrides.is_empty())
 	assert_true(Gen2Rules.parse("not a block").matches(Gen2Rules.new()))
 
 
-## The difficulty rewrites which AI layers score rather than inventing a level or
-## a stat, so it can only ever ask for bits the scorer already reads.
-func test_the_difficulty_rewrites_a_trainer_classes_own_ai_layers() -> void:
+## Hard rewrites which AI layers score rather than inventing a score of its own,
+## so it can only ever ask for bits the scorer already reads.
+func test_hard_rewrites_a_trainer_classes_own_ai_layers() -> void:
 	var rules := Gen2Rules.new()
 	var imported: int = RomLayout.AI_BASIC | RomLayout.AI_SMART
-	assert_eq(rules.ai_move_weights(imported), imported, "normal is the cartridge's own")
+	assert_eq(rules.ai_move_weights(imported), imported, "vanilla is the cartridge's own")
 
-	rules.difficulty = Gen2Rules.DIFFICULTY_EASY
-	assert_eq(rules.ai_move_weights(imported), RomLayout.AI_BASIC)
-
-	rules.difficulty = Gen2Rules.DIFFICULTY_HARD
+	rules.challenge = Gen2Rules.CHALLENGE_HARD
 	assert_eq(rules.ai_move_weights(imported), RomLayout.AI_MOVE_WEIGHTS_MASK)
 	assert_eq(
 		rules.ai_move_weights(0) & ~RomLayout.AI_MOVE_WEIGHTS_MASK, 0,
 		"and never a bit the scorer does not read"
 	)
 
-	rules.difficulty = Gen2Rules.DIFFICULTY_NORMAL
+	rules.challenge = Gen2Rules.CHALLENGE_NUZLOCKE
 	assert_eq(
 		rules.ai_move_weights(RomLayout.AI_BASIC | (1 << 15)), RomLayout.AI_BASIC,
 		"a patched trainer cannot smuggle one in either"
 	)
+
+
+## The same rewrite on the word that decides when a class switches out and
+## reaches into its bag. Hard moves every class onto SWITCH_OFTEN and leaves the
+## item bits where the cartridge put them.
+func test_hard_moves_every_trainer_class_onto_switch_often() -> void:
+	var rules := Gen2Rules.new()
+	var imported: int = RomLayout.SWITCH_RARELY | RomLayout.CONTEXT_USE
+	assert_eq(rules.ai_item_switch(imported), imported, "vanilla is the cartridge's own")
+
+	rules.challenge = Gen2Rules.CHALLENGE_HARD
+	assert_eq(
+		rules.ai_item_switch(imported), RomLayout.SWITCH_OFTEN | RomLayout.CONTEXT_USE
+	)
+	assert_eq(
+		rules.ai_item_switch(RomLayout.SWITCH_SOMETIMES), RomLayout.SWITCH_OFTEN,
+		"and never two switch answers at once"
+	)
+	assert_eq(
+		rules.ai_item_switch(1 << 15) & ~RomLayout.AI_ITEM_SWITCH_MASK, 0,
+		"a patched class cannot smuggle a bit in"
+	)
+
+
+## The party rules are one global number each rather than 800 rewritten teams:
+## a percentage on the level, a perfect DV word, a full set of stat experience.
+func test_hard_raises_a_trainers_party_by_one_global_rule_each() -> void:
+	var rules := Gen2Rules.new()
+	assert_eq(rules.trainer_level(20), 20, "vanilla leaves the table alone")
+	assert_eq(rules.trainer_dvs(0x1234), 0x1234)
+	assert_true(rules.trainer_stat_exp().is_empty())
+
+	rules.challenge = Gen2Rules.CHALLENGE_HARD
+	assert_eq(rules.trainer_level(20), 23, "20 plus 15 percent, floored")
+	assert_eq(rules.trainer_level(2), 3, "and never less than one level")
+	assert_eq(
+		rules.trainer_level(Gen2Experience.MAX_LEVEL), Gen2Experience.MAX_LEVEL,
+		"the cap is the cartridge's own"
+	)
+	assert_eq(rules.trainer_level(0), 0, "an absent level is not raised")
+	assert_eq(rules.trainer_dvs(0x1234), Gen2BattleMon.PERFECT_DVS)
+	var trained: Dictionary = rules.trainer_stat_exp()
+	assert_eq(trained.size(), Gen2Experience.STAT_EXP_KEYS.size())
+	for key: String in Gen2Experience.STAT_EXP_KEYS:
+		assert_eq(int(trained[key]), Gen2Stats.MAX_STAT_EXP)
+
+
+## The challenge is part of what names a run, so two runs under different ones
+## are not the same rules even with identical flags.
+func test_the_challenge_is_part_of_what_makes_two_rule_sets_equal() -> void:
+	var vanilla := Gen2Rules.new()
+	var nuzlocke: Gen2Rules = vanilla.duplicate_rules()
+	nuzlocke.challenge = Gen2Rules.CHALLENGE_NUZLOCKE
+	assert_false(vanilla.matches(nuzlocke))
+	assert_true(nuzlocke.is_nuzlocke())
+	assert_false(vanilla.is_nuzlocke())
+	assert_true(nuzlocke.duplicate_rules().matches(nuzlocke))
 
 
 ## One installed set at a time, because the statics that read the rules

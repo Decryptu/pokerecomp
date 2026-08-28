@@ -37,7 +37,15 @@ static func of(world: Gen2WorldAPI, save: Gen2SaveData) -> Dictionary:
 static func of_save(save: Gen2SaveData, data: GameData = null) -> Dictionary:
 	var out: Dictionary = {}
 	if save != null and save.world != null and save.world.world_state != null:
-		_read_state(out, save.world.world_state, Gen2WorldState.is_crystal_profile(data))
+		## The save's own cartridge decides which badge table is read, and the
+		## save carries it. Without this a Gold or Silver slot read with no
+		## `data` in hand is read through Crystal's flags, which sit one apart,
+		## so every badge in the mask is the wrong badge. A mod calling this from
+		## `save_activated` has no [GameData] and should not have to open one to
+		## be answered correctly.
+		_read_state(out, save.world.world_state, Gen2WorldState.is_crystal_game_id(
+			data.id if data != null else save.game_id
+		))
 		out[&"beat_red"] = \
 			save.world.spawn_after_champion == Gen2WorldSnapshot.SPAWN_AFTER_RED
 	_read_save(out, save)

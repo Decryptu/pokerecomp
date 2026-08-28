@@ -79,6 +79,7 @@ var _shift: int = 0
 ## knowing whether it is drawing the egg or the hatchling.
 var _pic_origin: Vector2i = EGG_AT
 var _nickname_yes: bool = true
+var _nickname_forced: bool = false
 var _animation: Gen2PicAnimation = null
 var _animation_pixels: PackedByteArray = PackedByteArray()
 
@@ -92,10 +93,14 @@ var _naming: Gen2NamingScreenScreen = null
 
 ## [param hatches] is one [method Gen2WorldPartyHost.hatch_egg] summary per egg,
 ## in the order `HatchEggs` walks the party. An empty list closes at once.
-func set_context(data: GameData, hatches: Array) -> void:
+## [param forced] skips the YES/NO and opens the keyboard outright, which is the
+## Nuzlocke's "every Pokemon is nicknamed"; see
+## [member Gen2NicknamePromptScreen._forced], the same rule one screen over.
+func set_context(data: GameData, hatches: Array, forced: bool = false) -> void:
 	_data = data
 	_hatches = hatches.duplicate(true)
 	_index = 0
+	_nickname_forced = forced
 
 
 func _ready() -> void:
@@ -395,6 +400,9 @@ func _open_hatched_text() -> void:
 func _open_nickname_question() -> void:
 	_phase = Phase.ASK_NICKNAME
 	_nickname_yes = true
+	if _nickname_forced:
+		_answer_nickname(true)
+		return
 	_show_text(
 		Gen2WorldPartyHost.nickname_question(String(current_hatch().get("nickname", "")))
 	)

@@ -34,6 +34,10 @@ var _after_text_format: String = ""
 ## `_CaughtAskNicknameText` unless the caller names `PokeBallEffect`'s own
 ## `_AskGiveNicknameText` instead.
 var _question: String = ""
+## Whether the YES/NO is skipped and the keyboard opened outright, which is the
+## Nuzlocke's "every Pokemon is nicknamed": a question with one allowed answer
+## is worse than no question.
+var _forced: bool = false
 var _phase: int = Phase.DONE
 var _yes: bool = true
 var _answer: String = ""
@@ -48,11 +52,13 @@ func set_context(
 	data: GameData,
 	species_name: String,
 	after_text_format: String = "",
-	question: String = ""
+	question: String = "",
+	forced: bool = false
 ) -> void:
 	_data = data
 	_species_name = species_name
 	_after_text_format = after_text_format
+	_forced = forced
 	_question = question if not question.is_empty() \
 		else Gen2WorldPartyHost.caught_nickname_question(species_name)
 
@@ -67,6 +73,9 @@ func _ready() -> void:
 	_answer = _species_name
 	_phase = Phase.ASK
 	_yes = true
+	if _forced:
+		_answer_question(true)
+		return
 	_text_box.visible = true
 	## `_CaughtAskNicknameText` ends in `done`, so the last page draws no arrow:
 	## what waits is the `YesNoBox` behind it.
