@@ -36,13 +36,17 @@ signal sfx_requested(sfx: int, waited: bool)
 ## A field move chosen off the MOVES row, in the same shape a party member's own
 ## submenu emits: the world runs the one and the other through one path.
 signal field_move_chosen(action: Dictionary)
+## The reset chord's question was answered YES. Only the screen hosting this one
+## can restart the game, the same way it is the one that opens the launcher.
+signal soft_reset_confirmed
 
 enum Mode {
 	LIST, PACK, PACK_ITEM, PACK_TEACH, PACK_TARGET,
 	PACK_FORGET_ASK, PACK_FORGET, PACK_STOP_LEARNING, PACK_PP_MOVE,
 	PACK_TOSS_QUANTITY, PACK_TOSS_CONFIRM, PACK_GIVE_SWAP,
 	PACK_RESULT, SAVE_ASK, SAVE_OVERWRITE, SAVE_SAVING, SAVE_SAVED,
-	SAVE_FAILED, QUIT_ASK, OPTIONS, MODS, MOD_OPTIONS, FIELD_MOVES,
+	SAVE_FAILED, QUIT_ASK, LAUNCHER_ASK, RESET_ASK, OPTIONS, MODS, MOD_OPTIONS,
+	FIELD_MOVES,
 }
 
 ## `SaveMenu`'s four texts, out of `data/text/common_3.asm` on Crystal and
@@ -60,6 +64,18 @@ const SAVE_ASK_LINES: Array[String] = [
 ## texts for the same reason: no importer reads either.
 const QUIT_ASK_LINES: Array[String] = [
 	"Would you like to", "end the Contest?",
+]
+## This port's own words, over the same `YesNoBox` the two above use. The
+## launcher is where a cartridge goes back to here, and leaving takes whatever
+## has not been saved with it, which is the only reason the row asks at all.
+const LAUNCHER_ASK_LINES: Array[String] = [
+	"Would you like to", "quit this game?",
+]
+## The reset chord's own question, asked once ever: see
+## [signal Gen2InputRuntime.reset_chord_pressed]. Three lines, so the first two
+## are prompted past before the box appears, the way the overwrite question is.
+const RESET_ASK_LINES: Array[String] = [
+	"You pressed the", "RESET buttons.", "Reset the game?",
 ]
 const SAVE_OVERWRITE_LINES: Array[String] = [
 	"There is already a", "save file. Is it", "OK to overwrite?",
@@ -497,7 +513,8 @@ func _move(direction: Vector2i) -> void:
 				_render_targets()
 		## `VerticalMenu` over `YesNoMenuHeader`, which is only up while a
 		## question is; the two timed modes read no joypad at all.
-		Mode.SAVE_ASK, Mode.SAVE_OVERWRITE, Mode.QUIT_ASK:
+		Mode.SAVE_ASK, Mode.SAVE_OVERWRITE, Mode.QUIT_ASK, Mode.LAUNCHER_ASK, \
+		Mode.RESET_ASK:
 			if _save_cursor >= 0 and (direction.x != 0 or direction.y != 0):
 				_save_cursor = 1 - _save_cursor
 				_render_save()
@@ -595,7 +612,7 @@ func _confirm() -> void:
 			else:
 				_open_pack_mode(false)
 		Mode.SAVE_ASK, Mode.SAVE_OVERWRITE, Mode.SAVE_SAVING, Mode.SAVE_SAVED, \
-		Mode.SAVE_FAILED, Mode.QUIT_ASK:
+		Mode.SAVE_FAILED, Mode.QUIT_ASK, Mode.LAUNCHER_ASK, Mode.RESET_ASK:
 			_confirm_save()
 		## Options_Cancel is the only handler that reads A.
 		Mode.OPTIONS:
@@ -658,7 +675,7 @@ func _cancel() -> void:
 		Mode.PACK_TOSS_CONFIRM, Mode.PACK_GIVE_SWAP:
 			_open_pack_mode(false)
 		Mode.SAVE_ASK, Mode.SAVE_OVERWRITE, Mode.SAVE_SAVING, Mode.SAVE_SAVED, \
-		Mode.SAVE_FAILED, Mode.QUIT_ASK:
+		Mode.SAVE_FAILED, Mode.QUIT_ASK, Mode.LAUNCHER_ASK, Mode.RESET_ASK:
 			_cancel_save()
 		## `_Option.joypad_loop` exits on PAD_START | PAD_B from any row.
 		Mode.OPTIONS, Mode.MODS, Mode.FIELD_MOVES:
@@ -687,6 +704,8 @@ func _confirm_list() -> void:
 			_open_field_moves_mode()
 		Gen2WorldStartMenu.ITEM_EXIT:
 			closed.emit()
+		Gen2WorldStartMenu.ITEM_LAUNCHER:
+			_enter_save_mode(Mode.LAUNCHER_ASK, LAUNCHER_ASK_LINES, 0)
 		Gen2WorldStartMenu.ITEM_POKEDEX, Gen2WorldStartMenu.ITEM_POKEMON, \
 		Gen2WorldStartMenu.ITEM_POKEGEAR, Gen2WorldStartMenu.ITEM_PLAYER:
 			action_chosen.emit(_menu.selected_kind(), &"")
@@ -2046,6 +2065,30 @@ func _confirm_save() -> void:
 				_open_list_mode()
 			else:
 				action_chosen.emit(Gen2WorldStartMenu.ITEM_QUIT, &"")
+		## NO goes back to the list the row was chosen from, the same as every
+		## other question here. YES is the world's: only the screen hosting this
+		## one can put the launcher back.
+		Mode.LAUNCHER_ASK:
+			if _save_cursor == 1:
+				_open_list_mode()
+			else:
+				action_chosen.emit(Gen2WorldStartMenu.ITEM_LAUNCHER, &"")
+		## The chord opened this menu with nothing else to do, so both answers
+		## close it. Either one is also the acknowledgement: the player now knows
+		## the shortcut is there, and it is never asked again.
+		Mode.RESET_ASK:
+			## `_ContText`'s own `PromptButton` before the third line, the way
+			## the overwrite question reads its own.
+			if _save_cursor < 0:
+				_save_line = 1
+				_save_cursor = 0
+				_render_save()
+				return
+			_acknowledge_reset()
+			if _save_cursor == 1:
+				closed.emit()
+			else:
+				soft_reset_confirmed.emit()
 		Mode.SAVE_ASK:
 			if _save_cursor == 1:
 				_open_list_mode()
@@ -2074,10 +2117,32 @@ func _confirm_save() -> void:
 ## button while the text still has a line to come. The two timed modes read no
 ## joypad at all.
 func _cancel_save() -> void:
-	if _save_cursor < 0 and _mode == Mode.SAVE_OVERWRITE:
+	if _save_cursor < 0 and _mode in [Mode.SAVE_OVERWRITE, Mode.RESET_ASK]:
 		_confirm_save()
+	elif _mode == Mode.RESET_ASK:
+		## B is `YesNoBox`'s NO, and the menu was opened for the question alone.
+		_acknowledge_reset()
+		closed.emit()
 	elif _save_cursor >= 0:
 		_open_list_mode()
+
+
+## The reset chord has now been used once, so the question is never asked again.
+## Written whichever way it was answered: what the box is for is telling the
+## player the shortcut exists, and it has done that either way.
+func _acknowledge_reset() -> void:
+	var options: Gen2Options = Gen2OptionsStore.current()
+	if options.soft_reset_acknowledged:
+		return
+	options.soft_reset_acknowledged = true
+	Gen2OptionsStore.save(options)
+
+
+## Opens the reset chord's own question over whatever this menu was showing. The
+## world calls it instead of a row being chosen, so the list behind it is never
+## the thing the player is answering about.
+func ask_soft_reset() -> void:
+	_enter_save_mode(Mode.RESET_ASK, RESET_ASK_LINES, -1)
 
 
 ## One hardware frame of the two timed modes. Public so a test or a preview owns
@@ -2194,6 +2259,27 @@ func _exit_tree() -> void:
 		_naming = null
 
 
+## `StartMenu`'s own list, which is the picture behind every question asked off
+## a row of it.
+func _list_image() -> Image:
+	if _menu == null or _page == null:
+		return null
+	var contest: bool = _world != null and _world.bug_contest_active()
+	var shown: int = Gen2StartMenuPage.visible_rows(contest)
+	var labels: Array = []
+	for entry: Variant in _menu.items():
+		labels.append(String((entry as Dictionary).get("label", "")))
+	## `.PrintMenuAccount` reads the option on every cursor move, so turning MENU
+	## ACCOUNT off takes the block away at once.
+	var description: String = _menu.selected_description() \
+		if Gen2OptionsStore.current().menu_account else ""
+	return _page.render_list(
+		labels.slice(_list_scroll, _list_scroll + shown),
+		_menu.cursor - _list_scroll, description, contest, null,
+		_contest_status() if contest else {}
+	)
+
+
 ## Whichever of the cartridge's screens this mode is. `_hardware_image()` answers
 ## every one of them, so there is no window-resolution fallback behind it.
 func _render_hardware() -> void:
@@ -2249,25 +2335,16 @@ func _hardware_image() -> Image:
 		return null
 	match _mode:
 		Mode.LIST:
-			if _menu == null:
-				return null
-			var contest: bool = _world != null and _world.bug_contest_active()
-			var shown: int = Gen2StartMenuPage.visible_rows(contest)
-			var labels: Array = []
-			for entry: Variant in _menu.items():
-				labels.append(String((entry as Dictionary).get("label", "")))
-			## `.PrintMenuAccount` reads the option on every cursor move, so
-			## turning MENU ACCOUNT off takes the block away at once.
-			var description: String = _menu.selected_description() \
-				if Gen2OptionsStore.current().menu_account else ""
-			return _page.render_list(
-				labels.slice(_list_scroll, _list_scroll + shown),
-				_menu.cursor - _list_scroll, description, contest, null,
-				_contest_status() if contest else {}
-			)
+			return _list_image()
 		Mode.SAVE_ASK, Mode.SAVE_OVERWRITE, Mode.SAVE_SAVING, Mode.SAVE_SAVED, \
-		Mode.SAVE_FAILED, Mode.QUIT_ASK:
+		Mode.SAVE_FAILED:
 			return _page.render_save(_save_state())
+		## `StartMenu_Quit` and the two rows this port added below it ask over the
+		## list they were chosen from. Only `SaveMenu` puts up
+		## `Continue_LoadMenuHeader`'s panel of badges, Pokedex and play time,
+		## because only the save question is about the file.
+		Mode.QUIT_ASK, Mode.LAUNCHER_ASK, Mode.RESET_ASK:
+			return _page.render_save(_save_state(), _list_image())
 		Mode.OPTIONS:
 			if _options_menu == null:
 				return null

@@ -82,6 +82,40 @@ static func apply_display_density(window: Window, on: bool) -> void:
 	)
 
 
+## Keeps [param root]'s window drawn in launcher units for as long as [param root]
+## is in the tree, and puts it back when it leaves.
+##
+## Every screen written in launcher units needs this and only those do, so it is
+## a guard a screen attaches rather than something a shell happens to own: the
+## save editor is drawn in the same units and has no shell, and without the
+## factor it arrived on a phone at a third of its size. The factor is worked out
+## against the window, so turning the device redoes it.
+static func attach_density(root: Control) -> DensityGuard:
+	var guard := DensityGuard.new()
+	guard.name = "DensityGuard"
+	root.add_child(guard)
+	return guard
+
+
+## See [method attach_density]. A node rather than a call so entering and leaving
+## the tree, and the window changing size, are all one thing to get right.
+class DensityGuard extends Node:
+	func _enter_tree() -> void:
+		var window: Window = get_window()
+		Gen2LauncherUI.apply_display_density(window, true)
+		if window != null and not window.size_changed.is_connected(_update):
+			window.size_changed.connect(_update)
+
+	func _exit_tree() -> void:
+		var window: Window = get_window()
+		if window != null and window.size_changed.is_connected(_update):
+			window.size_changed.disconnect(_update)
+		Gen2LauncherUI.apply_display_density(window, false)
+
+	func _update() -> void:
+		Gen2LauncherUI.apply_display_density(get_window(), true)
+
+
 ## How many window pixels one unit of the base viewport is drawn at before the
 ## density factor above. The game leaves the factor off and is drawn at exactly
 ## this, which is what puts a 160x144 screen on whole pixels.

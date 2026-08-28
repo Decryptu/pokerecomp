@@ -234,3 +234,25 @@ func test_installing_twice_adds_one_ui_pad_binding() -> void:
 	var once: int = InputMap.action_get_events(&"ui_accept").size()
 	Gen2InputActions.install(Gen2InputActions.defaults())
 	assert_eq(InputMap.action_get_events(&"ui_accept").size(), once)
+
+
+## Godot moves a focus ring on `ui_up` and a menu moves on `gen2_up`, and one key
+## or pad button produces both. Anything reading a direction off an event has to
+## answer for either, or the launcher and the game disagree about the same press.
+func test_a_direction_is_read_off_either_vocabulary() -> void:
+	Gen2InputActions.install(Gen2InputActions.defaults())
+	var key := InputEventKey.new()
+	key.physical_keycode = KEY_DOWN
+	key.pressed = true
+	assert_eq(Gen2Button.direction_in(key), Gen2Button.DOWN)
+
+	## W is bound to the cartridge's UP and to nothing of Godot's.
+	var wasd := InputEventKey.new()
+	wasd.physical_keycode = KEY_W
+	wasd.pressed = true
+	assert_eq(Gen2Button.direction_in(wasd), Gen2Button.UP)
+
+	var accept := InputEventKey.new()
+	accept.physical_keycode = KEY_Z
+	accept.pressed = true
+	assert_eq(Gen2Button.direction_in(accept), Gen2Button.NONE, "A is not a direction")

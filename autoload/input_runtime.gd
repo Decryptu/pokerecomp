@@ -24,6 +24,10 @@ signal touch_controls_changed(shown: bool)
 ## A rebind landed. What is bound has already been installed in the [InputMap]
 ## by the time this arrives; a screen only needs it to redraw a legend.
 signal scheme_changed()
+## A + B + START + SELECT, the console's own reset, reported once per press of
+## the chord. The machine's rather than the game's, so it is detected here and
+## whichever screen is up decides what a reset costs.
+signal reset_chord_pressed()
 
 var _scheme: Dictionary = {}
 ## What the player bound each mod's own actions to, keyed by action name. See
@@ -37,6 +41,15 @@ var _touch_shown: bool = false
 ## directions at once is normal play, not an error: a player turning a corner
 ## presses the next one before releasing the last.
 var _direction_order: Array[int] = []
+## Seconds until the next repeat, per held direction. A direction with no entry
+## is not held, so the next press on it is a fresh one.
+var _repeat_clock: Dictionary = {}
+## The direction a repeat has just been sent for, cleared by the event arriving.
+## Without it the gate would swallow the very press it emitted.
+var _repeat_open: Dictionary = {}
+## Whether all four reset buttons were down last frame, so the chord fires once
+## per press rather than once per frame it is held.
+var _reset_chord_down: bool = false
 ## Every on-screen controller in the tree, innermost last. A battle opened over
 ## the map puts a second one on screen, and only the top of this stack may draw
 ## or read a finger.
@@ -44,6 +57,23 @@ var _direction_order: Array[int] = []
 ## that draws it: the pad has to name this class, and two class names that name
 ## each other do not compile.
 var _pads: Array[Control] = []
+
+## `JoyTextDelay`, which is the whole of the hardware's menu auto-repeat
+## (`home/joypad.asm`): a fresh press reloads `wTextDelayFrames` with 15, and
+## every later frame the counter reaches zero the held button is reported
+## pressed again and the counter is reloaded with 5.
+const REPEAT_DELAY_FRAMES: int = 15
+const REPEAT_INTERVAL_FRAMES: int = 5
+## Counted in seconds so the repeat keeps the source's rate on a host drawing at
+## something other than 60 Hz.
+const FRAME_SECONDS: float = 1.0 / 60.0
+
+## The four buttons a Game Boy resets on. `home/init.asm` wires them to the
+## hardware rather than to any routine, so the chord works from anywhere the
+## console is running and is not something the game can decline.
+const RESET_CHORD: Array[int] = [
+	Gen2Button.A, Gen2Button.B, Gen2Button.START, Gen2Button.SELECT,
+]
 
 ## The autoload, cached after the first lookup.
 static var _instance: Gen2InputRuntime = null
@@ -198,6 +228,31 @@ func send_action(action: StringName, pressed: bool) -> void:
 	Input.parse_input_event(event)
 
 
+## Whether this event is a directional press nothing should act on.
+##
+## An analog stick reports a fresh [InputEventJoypadMotion] every time its value
+## moves, and every one of those is an action press: one push of the stick walked
+## a menu cursor the length of the list. A held key repeats at the operating
+## system's rate for the same reason. The extra presses are swallowed here, in
+## front of the engine's own focus navigation as well as every screen, and
+## [method _advance_direction_repeat] puts back the repeat the hardware had.
+##
+## The cost is that a held stick past the deadzone reaches nothing else while it
+## is held, which a free camera reading raw motion would want. Nothing does
+## today; a renderer that did would read the axis rather than the event.
+func _gate_direction_repeat(event: InputEvent) -> bool:
+	var button: int = Gen2Button.direction_in(event)
+	if button == Gen2Button.NONE:
+		return false
+	if bool(_repeat_open.get(button, false)):
+		_repeat_open[button] = false
+		return false
+	if _repeat_clock.has(button):
+		return true
+	_repeat_clock[button] = FRAME_SECONDS * float(REPEAT_DELAY_FRAMES)
+	return false
+
+
 ## The direction currently held, most recently pressed first, or [constant
 ## Gen2Button.NONE]. Polled rather than read off events, because walking
 ## continues while a direction is held and the operating system's key repeat is
@@ -206,7 +261,7 @@ func held_direction() -> int:
 	return _direction_order.back() if not _direction_order.is_empty() else Gen2Button.NONE
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	for button: int in Gen2Button.DIRECTIONS:
 		var held: bool = Gen2Button.held(button)
 		var at: int = _direction_order.find(button)
@@ -214,12 +269,63 @@ func _process(_delta: float) -> void:
 			_direction_order.append(button)
 		elif not held and at >= 0:
 			_direction_order.remove_at(at)
+	_advance_direction_repeat(delta)
+	_poll_reset_chord()
 
 
-## Watches every event and consumes none. Device recon has to see input the
-## screens never get, including the mouse motion that says the player has put
-## the pad down.
+## The reset chord, polled rather than read off events: four buttons at once is
+## a state, and no single press says it.
+func _poll_reset_chord() -> void:
+	var down: bool = true
+	for button: int in RESET_CHORD:
+		if not Gen2Button.held(button):
+			down = false
+			break
+	if down and not _reset_chord_down:
+		reset_chord_pressed.emit()
+	_reset_chord_down = down
+
+
+## `JoyTextDelay`'s counter, one direction at a time. A direction the gate has
+## seen pressed carries a clock; when it runs out the direction is pressed again
+## on the player's behalf, which is what lets a held d-pad walk a list at all.
+func _advance_direction_repeat(delta: float) -> void:
+	for button: int in Gen2Button.DIRECTIONS:
+		if not _direction_pressed(button):
+			_repeat_clock.erase(button)
+			_repeat_open.erase(button)
+			continue
+		if not _repeat_clock.has(button):
+			continue
+		var left: float = float(_repeat_clock[button]) - delta
+		if left > 0.0:
+			_repeat_clock[button] = left
+			continue
+		_repeat_clock[button] = FRAME_SECONDS * float(REPEAT_INTERVAL_FRAMES)
+		_repeat_open[button] = true
+		## Only a press. A release would take the action away from
+		## [method Gen2Button.held] while the player is still holding the button,
+		## and the map walks on that answer.
+		send_action(Gen2Button.action(button), true)
+
+
+## Whether a direction is down on either vocabulary; see
+## [constant Gen2Button.UI_ACTIONS].
+static func _direction_pressed(button: int) -> bool:
+	return Gen2Button.held(button) \
+		or Input.is_action_pressed(Gen2Button.UI_ACTIONS[button])
+
+
+## Watches every event and consumes none, except a directional press the
+## hardware would not have reported: see [method _gate_direction_repeat]. Device
+## recon has to see input the screens never get, including the mouse motion that
+## says the player has put the pad down.
 func _input(event: InputEvent) -> void:
+	if _gate_direction_repeat(event):
+		var viewport: Viewport = get_viewport()
+		if viewport != null:
+			viewport.set_input_as_handled()
+		return
 	var kind: StringName = Gen2InputDevice.kind_of(event)
 	if kind.is_empty():
 		return

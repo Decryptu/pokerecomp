@@ -197,13 +197,19 @@ func render_list(
 ##   "cursor": int,       # -1 while no yes/no box is up
 ## }
 ## [/codeblock]
-func render_save(state: Dictionary) -> Image:
+## [param behind] is what the question stands over. `SaveMenu` puts
+## `Continue_LoadMenuHeader`'s own panel there, which is what an empty one draws;
+## `StartMenu_Quit` and the rows below it stand over the list instead.
+func render_save(state: Dictionary, behind: Image = null) -> Image:
 	if menu == null or font == null:
 		return null
 	var image: Image = Image.create_empty(
 		Gen2Screen.WIDTH, Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8
 	)
-	_blit(image, _render_save_info(state), Vector2i(SAVE_INFO_LEFT, SAVE_INFO_TOP))
+	if behind != null:
+		_blit(image, behind, Vector2i.ZERO)
+	else:
+		_blit(image, _render_save_info(state), Vector2i(SAVE_INFO_LEFT, SAVE_INFO_TOP))
 	_blit(image, _render_save_textbox(state), SAVE_TEXTBOX_AT)
 	var cursor: int = int(state.get("cursor", -1))
 	if cursor >= 0:

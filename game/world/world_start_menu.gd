@@ -48,6 +48,12 @@ const ITEM_FIELD_MOVES: StringName = &"field_moves"
 ## menu exactly. It sits after OPTION and before the entries mods registered
 ## themselves, which keeps both additions in one block ahead of EXIT.
 const ITEM_MODS: StringName = &"mods"
+## Not the cartridge's. The launcher is this port's boot menu, and a cartridge
+## comes out of a console rather than out of a menu, so the one thing the source
+## has no row for is the way back. Last, under EXIT, and behind the same contest
+## gate PACK is: a contest is a timed errand and leaving one is what the
+## cartridge's own QUIT is for.
+const ITEM_LAUNCHER: StringName = &"launcher"
 
 ## What `SetUpMenuItems` gates each source entry on. An empty gate is always
 ## appended, matching the entries the source adds unconditionally.
@@ -60,8 +66,9 @@ const GATE_NO_CONTEST: StringName = &"no_contest"
 
 ## `SetUpMenuItems` in source order, as data rather than a run of appends, so the
 ## host's registered entries can be spliced in without the order becoming a
-## question. EXIT stays last: it is what closes the menu, and the source never
-## puts anything after it.
+## question. EXIT stays last of the source's own: it is what closes the menu, and
+## the source never puts anything after it. Only [constant ITEM_LAUNCHER], which
+## the source has no row for at all, is below it.
 ## The labels are `.PokedexString` and its siblings verbatim, which is what the
 ## box over the map prints. `#` is the charmap's own $54 and expands to "POKe";
 ## `<PLAYER>`, which the source's own `.StatusString` is, is filled in by
@@ -75,6 +82,10 @@ const SOURCE_ENTRIES: Array[Dictionary] = [
 	{"kind": ITEM_SAVE, "label": "SAVE", "available": true, "gate": &""},
 	{"kind": ITEM_OPTION, "label": "OPTION", "available": true, "gate": &""},
 	{"kind": ITEM_EXIT, "label": "EXIT", "available": true, "gate": &""},
+	## Four tiles, because the box only has seven: `GetMenuTextStartCoord` puts
+	## the first letter at column 12 and the frame's right edge is at 19, which
+	## is what `#DEX` fills exactly.
+	{"kind": ITEM_LAUNCHER, "label": "HOME", "available": true, "gate": GATE_NO_CONTEST},
 ]
 
 ## `.Items`' third column, the one MENU ACCOUNT draws under the list

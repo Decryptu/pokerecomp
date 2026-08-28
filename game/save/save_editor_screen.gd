@@ -32,6 +32,7 @@ var _dex_list: ItemList = null
 var _selected_party: int = -1
 var _selected_box: int = 0
 var _palette: Gen2LauncherTheme = null
+var _margin: MarginContainer = null
 
 
 func _ready() -> void:
@@ -140,11 +141,17 @@ func _build_ui() -> void:
 	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(backdrop)
 
-	var margin := MarginContainer.new()
-	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	for side: String in ["left", "top", "right", "bottom"]:
-		margin.add_theme_constant_override("margin_%s" % side, Gen2LauncherUI.GAP_LG)
-	add_child(margin)
+	## Drawn in launcher units like the pages it borrows its controls from, so it
+	## needs the same factor: without it every word here arrived on a phone at a
+	## third of its size. See [method Gen2LauncherUI.attach_density].
+	Gen2LauncherUI.attach_density(self)
+
+	_margin = MarginContainer.new()
+	_margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(_margin)
+	_apply_margins()
+	resized.connect(_apply_margins)
+	var margin: MarginContainer = _margin
 
 	var root: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_MD)
 	margin.add_child(root)
@@ -174,6 +181,22 @@ func _build_ui() -> void:
 
 	_status = Gen2LauncherUI.muted(_palette, "")
 	root.add_child(_status)
+	Gen2FocusGuard.attach(self)
+
+
+## The page's own edges, standing off the notch, the rounded corners and the home
+## indicator the way [Gen2LauncherShell] does, and closer in on a phone than on a
+## desktop.
+func _apply_margins() -> void:
+	if _margin == null:
+		return
+	var insets: Dictionary = Gen2LauncherUI.safe_area_insets(get_window())
+	var narrow: bool = size.x < Gen2LauncherShell.COMPACT_WIDTH
+	var pad: int = Gen2LauncherUI.GAP_SM if narrow else Gen2LauncherUI.GAP_LG
+	_margin.add_theme_constant_override("margin_left", pad + int(insets["left"]))
+	_margin.add_theme_constant_override("margin_right", pad + int(insets["right"]))
+	_margin.add_theme_constant_override("margin_top", pad + int(insets["top"]))
+	_margin.add_theme_constant_override("margin_bottom", pad + int(insets["bottom"]))
 
 
 ## A tab's contents, scrolled. A tab is whatever size the window leaves it, so a

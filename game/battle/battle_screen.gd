@@ -159,7 +159,9 @@ var _rng := RandomNumberGenerator.new()
 ## this screen is an overlay inside the overworld, so a press is recorded once, by
 ## the world, and a replayed log reaches the fight: see
 ## [method Gen2WorldScreen.press_button] and `tools/replay_world.gd`.
-var _external_input: bool = false
+## Whether the screen that opened this one owns its input and its frames. See
+## [method set_driven].
+var _driven: bool = false
 var _save_slot: int = -1
 var _save_written: bool = false
 var _source_save: Gen2SaveData = null
@@ -445,6 +447,13 @@ var _bg_map: PackedByteArray = Gen2BattleScreenMap.seeded()
 ## the imported tables, opened once.
 var _anim_data: Gen2BattleAnimData = null
 var _anim: Gen2BattleAnimPlayer = null
+## `anim_keepsprites`: what the last script left on the screen. `BattleAnim_ClearOAM`
+## is skipped for it, so the objects stay drawn after the script has returned and
+## until something clears OAM. The catch is the one script that asks
+## (`BattleAnim_ThrowPokeBall.Click`), and the ball has to stay under
+## `Text_GotchaMonWasCaught`.
+var _kept_sprites: Array = []
+var _kept_tiles: Array = []
 var _anim_plan: Array = []
 var _anim_delay: int = 0
 var _anim_event: Dictionary = {}
@@ -469,6 +478,14 @@ var _battle_music: int = Gen2Battle.MUSIC_NONE
 func _process(delta: float) -> void:
 	if _box != null:
 		_box.accelerated = Gen2Button.text_accelerating()
+	## A screen someone else spends frames for must not also spend them off real
+	## time. The world drives a battle from its own pump
+	## ([method advance_hardware_frame]), so with this clock running as well every
+	## bar drained, every animation ran and the box's own arrow blinked at twice
+	## the source's rate. Same rule, and the same caller, as
+	## [member Gen2TextBox.driven].
+	if _driven:
+		return
 	## The yes/no box appears when the question above it has finished printing,
 	## and the box prints on its own clock rather than on a press.
 	if _switch_stage != &"":
@@ -784,11 +801,14 @@ func set_random_seed(value: int) -> void:
 	_rng.seed = value
 
 
-## Hands the input funnel to whoever opened this screen. The world does while a
-## battle is an overlay on it: one funnel is what makes a recorded log complete,
-## and two would record every press twice or none.
-func set_external_input(external: bool) -> void:
-	_external_input = external
+## Hands the input funnel and the frame pump to whoever opened this screen.
+##
+## The world does both while a battle is an overlay on it. One funnel is what
+## makes a recorded log complete, and two would record every press twice or none;
+## one pump is what makes a replay land on the same frame, and two spend every
+## frame twice.
+func set_driven(driven: bool) -> void:
+	_driven = driven
 
 
 ## The request this fight was started from, as the adapter prepared it: the
@@ -1811,6 +1831,7 @@ func advance_animation() -> bool:
 func _begin_animation(event: Dictionary) -> void:
 	_anim_event = event
 	_anim_plan = []
+	_clear_kept_sprites()
 
 	var index: int = int(event.get("index", 0))
 	var after: int = int(event.get("after_anim", 0))
@@ -2038,8 +2059,22 @@ func _restamp_battler(player_side: bool) -> void:
 func _end_script() -> void:
 	if _anim != null:
 		_bg_map = _anim.background().bg_map.duplicate()
+		## `BattleAnim_ClearOAM` has already run inside the player, so what is
+		## left here is what `anim_keepsprites` kept.
+		_kept_sprites = _anim.sprites()
+		_kept_tiles = _anim.tiles()
 	_anim = null
 	_run_next_anim_step()
+
+
+## `ClearSprites`. Nothing is drawn from the kept objects once they are gone, so
+## a caller that has nothing to clear pays only the push.
+func _clear_kept_sprites() -> void:
+	if _kept_sprites.is_empty() and _kept_tiles.is_empty():
+		return
+	_kept_sprites = []
+	_kept_tiles = []
+	_push_view()
 
 
 ## `PlayBattleMusic`, which `FindFirstAliveMonAndStartBattle` runs in front of
@@ -3445,6 +3480,10 @@ func _continue_after_messages() -> void:
 	if not _capture_messages.is_empty():
 		_show_next_capture_message()
 		return
+	## `PokeBallEffect`'s own `call ClearSprites`, which is the first thing after
+	## `Text_GotchaMonWasCaught` has been pressed past: the ball `anim_keepsprites`
+	## left at rest stays under that box and goes with it.
+	_clear_kept_sprites()
 	## After the line a mod asked from and before the nickname prompt, which is
 	## where a line about the catch reads.
 	if _show_next_mod_message():
@@ -4765,6 +4804,14 @@ func _show_next_event() -> void:
 			else:
 				show_message(text)
 			return
+		## `AnimateHPBar` and `MonFaintedAnimation` both block: the source does
+		## not reach the next command until the bar has emptied and the picture
+		## has sunk. Without this stop, a hit with no line of its own popped the
+		## faint in the same pass and the picture left the field while its own bar
+		## was still draining. [method _resume_after_frames] brings the queue back
+		## when the frames are spent.
+		if not _bars.is_empty() or fainting():
+			return
 	## The queue ran dry with nothing to print. `DoTurn` does not read a button
 	## between its last command and `BattleMenu`, so the screen runs on rather
 	## than leaving a stale box up until a press nobody owes.
@@ -5332,7 +5379,7 @@ func _read_hp() -> void:
 ## The cartridge's own controls first, then the development drivers that stand
 ## in for a battle menu this screen does not have yet.
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_ready() or _external_input:
+	if not is_ready() or _driven:
 		return
 	var button: int = Gen2Button.pressed_in(event)
 	if button != Gen2Button.NONE:
@@ -5702,8 +5749,8 @@ func _push_view() -> void:
 		"bg_vbank1": _bg_vbank1,
 		"bg_palette_maps": _background_maps(&"bg"),
 		"ob_palette_maps": _background_maps(&"ob"),
-		"anim_sprites": _anim.sprites() if _anim != null else [],
-		"anim_tiles": _anim.tiles() if _anim != null else [],
+		"anim_sprites": _anim.sprites() if _anim != null else _kept_sprites,
+		"anim_tiles": _anim.tiles() if _anim != null else _kept_tiles,
 		## Whether both panels are on the map, which is the summary of the two
 		## keys above rather than a third state.
 		"hud_visible": _hud_visible(),

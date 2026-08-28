@@ -115,6 +115,10 @@ var controls: Dictionary = Gen2InputActions.defaults()
 var mod_controls: Dictionary = {}
 var touch_mode: StringName = TOUCH_AUTO
 var touch_layout: Gen2TouchLayout = Gen2TouchLayout.new()
+## Whether the player has answered the question the reset chord asks the first
+## time it is used. An installation setting rather than a run's, because the
+## chord belongs to the machine: see [method Gen2InputRuntime.reset_chord_held].
+var soft_reset_acknowledged: bool = false
 
 
 ## The cartridge block as the bytes the hardware kept, `DefaultOptions` order.
@@ -224,6 +228,7 @@ func to_dict() -> Dictionary:
 		"mod_controls": mod_controls.duplicate(true),
 		"touch_mode": String(touch_mode),
 		"touch_layout": touch_layout.to_dict(),
+		"soft_reset_acknowledged": soft_reset_acknowledged,
 	}
 
 
@@ -261,6 +266,7 @@ static func parse(raw: Variant) -> Gen2Options:
 	options.mod_controls = Gen2InputActions.sanitize_mod_controls(row.get("mod_controls"))
 	options.touch_mode = _one_of(row.get("touch_mode", ""), TOUCH_MODES)
 	options.touch_layout = Gen2TouchLayout.parse(row.get("touch_layout"))
+	options.soft_reset_acknowledged = bool(row.get("soft_reset_acknowledged", false))
 	return options
 
 

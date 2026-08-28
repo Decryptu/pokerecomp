@@ -154,34 +154,14 @@ func _build() -> void:
 		_flash.color = Color(_flash_color(), 1.0)
 		ready.connect(fade_in, CONNECT_ONE_SHOT)
 
+	## Every launcher screen is drawn in points, and only a launcher screen is:
+	## the world upscales a 160x144 screen by a whole number of real pixels, and
+	## a window drawn in points would make that number wrong.
+	Gen2LauncherUI.attach_density(self)
 	resized.connect(_apply_layout)
 	_apply_layout()
 	_place_toast()
 	_focus = Gen2FocusGuard.attach(self)
-
-
-## Every launcher screen is drawn in points, and only a launcher screen is: the
-## world upscales a 160x144 screen by a whole number of real pixels, and a
-## window drawn in points would make that number wrong.
-##
-## The factor is worked out against the window's own size, so turning the device
-## has to redo it.
-func _enter_tree() -> void:
-	var window: Window = get_window()
-	Gen2LauncherUI.apply_display_density(window, true)
-	if window != null and not window.size_changed.is_connected(_update_density):
-		window.size_changed.connect(_update_density)
-
-
-func _update_density() -> void:
-	Gen2LauncherUI.apply_display_density(get_window(), true)
-
-
-func _exit_tree() -> void:
-	var window: Window = get_window()
-	if window != null and window.size_changed.is_connected(_update_density):
-		window.size_changed.disconnect(_update_density)
-	Gen2LauncherUI.apply_display_density(window, false)
 
 
 ## The wall clock, on the twenty-four hour dial the rest of the project uses.
@@ -406,17 +386,18 @@ func _on_dock_input(event: InputEvent, id: StringName) -> void:
 	if at < 0:
 		return
 	var target: Control = null
-	if event.is_action_pressed("ui_left", true):
-		target = _buttons.get(StringName(_entries[posmod(at - 1, _entries.size())]["id"]))
-	elif event.is_action_pressed("ui_right", true):
-		target = _buttons.get(StringName(_entries[posmod(at + 1, _entries.size())]["id"]))
-	elif event.is_action_pressed("ui_up", true):
-		var page: Control = _page_nodes.get(_current)
-		if page != null:
-			target = page.call("focus_target") if page.has_method("focus_target") \
-				else Gen2FocusGuard.first_focusable(page)
-	else:
-		return
+	match Gen2Button.direction_in(event):
+		Gen2Button.LEFT:
+			target = _buttons.get(StringName(_entries[posmod(at - 1, _entries.size())]["id"]))
+		Gen2Button.RIGHT:
+			target = _buttons.get(StringName(_entries[posmod(at + 1, _entries.size())]["id"]))
+		Gen2Button.UP:
+			var page: Control = _page_nodes.get(_current)
+			if page != null:
+				target = page.call("focus_target") if page.has_method("focus_target") \
+					else Gen2FocusGuard.first_focusable(page)
+		_:
+			return
 	if target == null or not target.is_visible_in_tree():
 		return
 	(_buttons[id] as Control).accept_event()
