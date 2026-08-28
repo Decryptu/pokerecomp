@@ -524,9 +524,11 @@ func test_throwing_a_ball_takes_the_list_off_the_screen() -> void:
 	await _step(Gen2Button.A)
 	await _step(Gen2Button.DOWN)
 	await _step(Gen2Button.A)
-	assert_true(bool(_screen.get("_capture_selecting")), "the ball pocket is up")
+	assert_eq(_screen.get("_pack_action_stage"), &"pack", "ItemSubmenu is up")
 	assert_true(_menu_layer().visible)
 
+	## `.BattleOnly` runs the effect on USE; the row was already chosen in the
+	## pack, so nothing asks which ball a second time.
 	await _step(Gen2Button.A)
 	assert_true(bool(_screen.get("_capture_waiting")), "the ball is in the air")
 	assert_false(_menu_layer().visible, "and nothing is drawn over the fight")
@@ -687,7 +689,9 @@ func test_the_pack_uses_an_item_on_the_chosen_member_and_spends_the_turn() -> vo
 	assert_true(bool(_screen.get("_pack_selecting")), "the pack list is up")
 	assert_eq(_screen.selected_pack_item(), BattleFixture.POTION)
 
-	# The party list `UseItem_SelectMon` opens, and the bench member on it.
+	# `ItemSubmenu`'s USE, and then the party list `UseItem_SelectMon` opens
+	# with the bench member on it.
+	await _step(Gen2Button.A)
 	await _step(Gen2Button.A)
 	assert_eq(_stage(), "pick")
 	await _step(Gen2Button.DOWN)
@@ -711,11 +715,13 @@ func test_the_item_target_list_takes_the_one_out_and_backs_out_to_the_pack() -> 
 	await _step(Gen2Button.DOWN)
 	await _step(Gen2Button.A)
 	await _step(Gen2Button.A)
+	await _step(Gen2Button.A)
 	assert_eq(_stage(), "pick")
 	await _step(Gen2Button.B)
 	assert_eq(_stage(), "", "the list is gone")
 	assert_true(bool(_screen.get("_pack_selecting")), "and the pack is back")
 
+	await _step(Gen2Button.A)
 	await _step(Gen2Button.A)
 	await _step(Gen2Button.A)
 	## Healed to 21 and then hit, because the item spends the turn and the enemy
@@ -739,6 +745,7 @@ func test_an_x_item_needs_no_target_and_b_closes_the_pack() -> void:
 
 	await _step(Gen2Button.A)
 	await _step(Gen2Button.A)
+	await _step(Gen2Button.A)
 	assert_eq(battle.mon(Gen2Battle.PLAYER).stage("attack"), 1)
 	assert_eq(_stage(), "", "no target list for an item used on the one that is out")
 
@@ -755,6 +762,7 @@ func test_an_ether_asks_which_move_and_fills_that_slot() -> void:
 	user.pp[1] = 0
 
 	await _step(Gen2Button.DOWN)
+	await _step(Gen2Button.A)
 	await _step(Gen2Button.A)
 	await _step(Gen2Button.A)
 	assert_eq(_stage(), "pick")

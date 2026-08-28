@@ -1096,6 +1096,126 @@ func test_master_ball_captures_a_wild_mon_and_records_catch_metadata() -> void:
 	assert_eq(_world.state.item_quantity(0x01), 0)
 
 
+## `PokeBallEffect` pushes `wEnemyMonStatus` and `wEnemyMonHP` in front of
+## `LoadEnemyMon` and writes them back after it, so a Pokemon caught at three HP
+## and asleep joins the party at three HP and asleep. Everything else about the
+## row is `GeneratePartyMonStats`': the trainer ID is the player's rather than a
+## rolled one, the PP is full because `FillPP` ran over whatever the fight had
+## drained, the stat experience is zero and the experience is the minimum for the
+## level.
+func test_a_caught_pokemon_keeps_its_health_and_its_status() -> void:
+	_save.player_id = 0x1234
+	var wild: Gen2BattleMon = Gen2BattleMon.create(
+		_data, 25, 5, _data.moves_at_level(25, 5), 0x1234
+	)
+	wild.hp = 3
+	wild.status = Gen2Status.SLEEP_MASK & 2
+	wild.stat_exp["attack"] = 5000
+	for slot: int in wild.pp.size():
+		wild.pp[slot] = 0
+	assert_true(bool(Gen2WorldPartyHost.capture_wild(
+		_world, _save, wild, 0x01, _random, 42, false
+	)["caught"]))
+	var caught: Gen2SaveMon = _save.party[2]
+	assert_eq(caught.hp, 3, "the health it was standing there with")
+	assert_eq(caught.status, wild.status, "and the status it was standing there in")
+	assert_eq(caught.ot_id, 0x1234, "the player's ID, so it is not a traded mon")
+	assert_eq(int(caught.stat_exp["attack"]), 0)
+	assert_eq(caught.happiness, Gen2WorldPartyHost.BASE_HAPPINESS)
+	assert_eq(caught.exp, Gen2Experience.total_exp_at(
+		int(_data.species(25).get("growth_rate", 0)), 5
+	))
+	for slot: int in Gen2SaveMon.MAX_MOVES:
+		var move: int = int(caught.moves[slot])
+		assert_eq(
+			int(caught.pp[slot]),
+			int(_data.move(move).get("pp", 0)) if move > 0 else 0,
+			"FillPP fills every slot"
+		)
+
+
+## `.SkipPartyMonFriendBall`: the one thing a FRIEND_BALL does, and the one ball
+## with no `BallMultiplierFunctionTable` row.
+func test_a_friend_ball_catch_starts_on_two_hundred_happiness() -> void:
+	_world.state.apply_changes({}, {}, {"items": {
+		Gen2WorldPartyHost.ITEM_FRIEND_BALL: 2, Gen2WorldPartyHost.ITEM_LOVE_BALL: 1,
+	}})
+	var wild: Gen2BattleMon = Gen2BattleMon.create(
+		_data, 25, 5, _data.moves_at_level(25, 5), 0x1234
+	)
+	wild.hp = 1
+	var caught: Dictionary = {}
+	for _throw: int in 200:
+		_world.state.apply_changes({}, {}, {"items": {
+			Gen2WorldPartyHost.ITEM_FRIEND_BALL: 2,
+		}})
+		caught = Gen2WorldPartyHost.capture_wild(
+			_world, _save, wild, Gen2WorldPartyHost.ITEM_FRIEND_BALL, _random, 42, false
+		)
+		if bool(caught.get("caught", false)):
+			break
+	assert_true(bool(caught.get("caught", false)), "no friend ball ever landed")
+	assert_eq(
+		(_save.party[_save.party.size() - 1] as Gen2SaveMon).happiness,
+		Gen2WorldPartyHost.FRIEND_BALL_HAPPINESS
+	)
+
+
+## Every row of `BallMultiplierFunctionTable` is reachable, which is the whole of
+## what Kurt makes: before this the seven apricorn balls were refused outright
+## and the player could carry a ball nothing would throw.
+func test_every_ball_kurt_makes_can_be_thrown() -> void:
+	var wild: Gen2BattleMon = Gen2BattleMon.create(
+		_data, 25, 5, _data.moves_at_level(25, 5), 0x1234
+	)
+	for ball: int in Gen2WorldApricorn.APRICORN_BALLS.map(
+		func(row: Array) -> int: return int(row[1])
+	):
+		_world.state.apply_changes({}, {}, {"items": {ball: 1}})
+		var thrown: Dictionary = Gen2WorldPartyHost.capture_wild(
+			_world, _save, wild, ball, _random, 42, false
+		)
+		assert_true(bool(thrown.get("ok", false)), "%d: %s" % [ball, JSON.stringify(thrown)])
+		assert_eq(_world.state.item_quantity(ball), 0, "and the ball was spent")
+
+
+## `SendMonIntoBox` writes `sBoxCount`, which is the open box and no other, and
+## `ShiftBoxMon` puts what it wrote at the head of it. A full open box refuses
+## the throw with the other thirteen still empty, which is
+## `Ball_BoxIsFullMessage`, and the ball is not spent.
+func test_a_full_party_catch_goes_to_the_front_of_the_open_box() -> void:
+	while _save.party.size() < Gen2SaveData.MAX_PARTY:
+		_save.party.append(Gen2SaveMon.from_dict(_save.party[0].to_dict()))
+	_save.current_box = 2
+	var resident: Gen2SaveMon = Gen2SaveMon.from_dict(_save.party[0].to_dict())
+	(_save.boxes[2] as Gen2SaveBox).put(resident)
+	var wild: Gen2BattleMon = Gen2BattleMon.create(
+		_data, 25, 5, _data.moves_at_level(25, 5), 0x1234
+	)
+	var caught: Dictionary = Gen2WorldPartyHost.capture_wild(
+		_world, _save, wild, 0x01, _random, 42, false
+	)
+	assert_true(bool(caught["caught"]))
+	assert_eq(int(caught["destination"]["box"]), 2, "the box the player has open")
+	assert_eq(int(caught["destination"]["slot"]), 0)
+	assert_eq((_save.boxes[2] as Gen2SaveBox).slots[0].species, 25)
+	assert_eq(
+		(_save.boxes[2] as Gen2SaveBox).slots[1].species, resident.species,
+		"and what was there moved down"
+	)
+	assert_true(_save.boxes[0].slots[0] == null, "box 1 is untouched")
+
+	for slot: int in Gen2SaveBox.CAPACITY:
+		(_save.boxes[2] as Gen2SaveBox).put(Gen2SaveMon.from_dict(resident.to_dict()), slot)
+	_world.state.apply_changes({}, {}, {"items": {0x01: 1}})
+	var refused: Dictionary = Gen2WorldPartyHost.capture_wild(
+		_world, _save, wild, 0x01, _random, 42, false
+	)
+	assert_false(bool(refused["ok"]))
+	assert_eq(StringName(refused["reason"]), &"storage_full")
+	assert_eq(_world.state.item_quantity(0x01), 1, "and the ball is still in the bag")
+
+
 ## `GetPokeBallWobble` increments its count before it rolls, so the roll that
 ## ends a throw names how many rocks came before it and not how many there were.
 ## A throw that escapes on the first roll has rocked no times at all, which is
@@ -1371,7 +1491,8 @@ func _add_capture_metadata() -> void:
 	RomCache.write_json(RomCache.species_path(Fixture.directory()), species)
 	var items: Array = RomCache.read_json(RomCache.items_path(Fixture.directory()))
 	for raw: Dictionary in items:
-		if int(raw["number"]) in [0x01, 0x02, 0x04, 0x05]:
+		if int(raw["number"]) in [0x01, 0x02, 0x04, 0x05] \
+			or int(raw["number"]) in Gen2WorldPartyHost.CAPTURE_BALLS:
 			raw["pocket"] = RomLayout.ITEM_POCKET_BALL
 	RomCache.write_json(RomCache.items_path(Fixture.directory()), items)
 

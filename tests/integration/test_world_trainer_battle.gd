@@ -2060,6 +2060,158 @@ func test_a_capture_pays_nothing_with_no_policy_registered() -> void:
 	assert_false(bool(host.get("_capture_experience_spent")))
 
 
+## `NewDexDataText` and `NewPokedexEntry` behind `Text_GotchaMonWasCaught`: a
+## species the dex has not caught yet says a line and opens its page, and the
+## catch waits there. `CheckCaughtMon` and `CheckReceivedDex` are both read
+## before the throw, because the throw is what registers the catch.
+func test_a_first_catch_says_its_dex_line_and_asks_for_the_page() -> void:
+	await _open_world()
+	_world_screen._world.state.set_engine_flag(Gen2WorldState.ENGINE_POKEDEX, true)
+	assert_true(bool(_world_screen._world.state.apply_changes(
+		{}, {}, {"items": {Gen2WorldPartyHost.ITEM_MASTER_BALL: 1}}
+	).get("ok", false)))
+	_world_screen.preview_wild_encounter()
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var host: Gen2BattleScreen = _battle_host()
+	assert_not_null(host)
+	var asked: Array[int] = []
+	host.dex_entry_requested.connect(func(species: int) -> void: asked.append(species))
+	assert_false(bool(host.get("_enemy_caught_before")), "the dex has never had one")
+	assert_true(host.begin_capture()["ok"])
+	assert_true(host.select_capture_ball(
+		host.available_capture_balls().find(Gen2WorldPartyHost.ITEM_MASTER_BALL)
+	)["ok"])
+	assert_true(host.throw_capture_ball()["ok"])
+	_settle_frames(host)
+
+	var said: Array[String] = []
+	for _message: int in 12:
+		var line: String = String(host.battle_snapshot()["message"])
+		if said.is_empty() or said.back() != line:
+			said.append(line)
+		if not asked.is_empty():
+			break
+		host.finish()
+		host.advance()
+	var expected: String = Gen2BattleScreen.NEW_DEX_DATA_TEXT % _wild_name()
+	assert_true(said.has(expected), JSON.stringify(said))
+	assert_gt(said.find(expected), said.find("Gotcha! %s was caught!" % _wild_name()))
+	assert_eq(asked.size(), 1, "and the page was asked for once")
+
+
+## A species already in the dex adds no data and opens no page.
+func test_a_catch_of_a_known_species_says_no_dex_line() -> void:
+	await _open_world()
+	_world_screen._world.state.set_engine_flag(Gen2WorldState.ENGINE_POKEDEX, true)
+	_world_screen._world.state.set_species_caught(Fixture.TRAINER_SPECIES)
+	assert_true(bool(_world_screen._world.state.apply_changes(
+		{}, {}, {"items": {Gen2WorldPartyHost.ITEM_MASTER_BALL: 1}}
+	).get("ok", false)))
+	_world_screen.preview_wild_encounter()
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var host: Gen2BattleScreen = _battle_host()
+	assert_not_null(host)
+	assert_true(bool(host.get("_enemy_caught_before")))
+	assert_true(host.begin_capture()["ok"])
+	assert_true(host.select_capture_ball(
+		host.available_capture_balls().find(Gen2WorldPartyHost.ITEM_MASTER_BALL)
+	)["ok"])
+	assert_true(host.throw_capture_ball()["ok"])
+	_settle_frames(host)
+	for _message: int in 10:
+		assert_false(
+			String(host.battle_snapshot()["message"]).contains("was newly added"),
+			"nothing is added to a dex that already has one",
+		)
+		if host.get("_capture_nickname_host") != null:
+			break
+		host.finish()
+		host.advance()
+
+
+## `UseBallInTrainerBattle` is jumped to before `PokeBallEffect` says anything:
+## there is no ITEM USED line, the throw is drawn on
+## `BattleAnim_ThrowPokeBall`'s own NO_ITEM branch, the refusal is two boxes
+## rather than one, and `UseDisposableItem` spends the ball anyway.
+func test_a_ball_thrown_at_a_trainer_is_blocked_drawn_and_spent() -> void:
+	await _open_world()
+	assert_true(bool(_world_screen._world.state.apply_changes(
+		{}, {}, {"items": {Gen2WorldPartyHost.ITEM_POKE_BALL: 2}}
+	).get("ok", false)))
+	await _trigger_trainer()
+
+	var host: Gen2BattleScreen = _battle_host()
+	assert_not_null(host)
+	host.set_battle_pack(
+		[Gen2WorldPartyHost.ITEM_POKE_BALL], {Gen2WorldPartyHost.ITEM_POKE_BALL: 2}
+	)
+	assert_true(bool(host.open_battle_pack().get("ok", false)))
+	var thrown: Dictionary = host.use_selected_pack_item()
+	assert_eq(StringName(thrown.get("status", &"")), &"blocked", JSON.stringify(thrown))
+	assert_true(host.animation_running(), "the throw is drawn before it is refused")
+	assert_eq(
+		int(host._anim_event["param"]), Gen2BattleScreen.ANIM_PARAM_NO_ITEM,
+		"`anim_if_param_equal NO_ITEM`, the branch the trainer blocks it on",
+	)
+	assert_eq(
+		_world_screen._world.state.item_quantity(Gen2WorldPartyHost.ITEM_POKE_BALL), 1,
+		"`jr UseDisposableItem`: the ball is gone whatever the trainer did",
+	)
+	_settle_frames(host)
+
+	var said: Array[String] = []
+	for _message: int in 6:
+		var line: String = String(host.battle_snapshot()["message"])
+		if said.is_empty() or said.back() != line:
+			said.append(line)
+		host.finish()
+		host.advance()
+	assert_true(
+		said.has(Gen2BattleScreen.BALL_BLOCKED_TEXT), JSON.stringify(said)
+	)
+	assert_true(said.has(Gen2BattleScreen.BALL_DONT_BE_A_THIEF_TEXT), JSON.stringify(said))
+
+
+## `.UseItem` returns with no carry on a ball that did not land, so the enemy
+## takes the turn the throw was paid with: `wItemEffectSucceeded` and
+## `wBattlePlayerAction` are the same byte, and `_DoItemEffect` wrote
+## BATTLEPLAYERACTION_USEITEM into it on the way in.
+func test_a_ball_that_missed_costs_the_turn() -> void:
+	await _open_world()
+	_data.species(Fixture.TRAINER_SPECIES)["catch_rate"] = 1
+	assert_true(bool(_world_screen._world.state.apply_changes(
+		{}, {}, {"items": {Gen2WorldPartyHost.ITEM_POKE_BALL: 4}}
+	).get("ok", false)))
+	_world_screen._encounter_random.seed = 1
+	_world_screen.preview_wild_encounter()
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var host: Gen2BattleScreen = _battle_host()
+	assert_not_null(host)
+	var battle: Gen2Battle = host.get("_battle")
+	var before: int = battle.mon(Gen2Battle.PLAYER).hp
+	assert_true(host.begin_capture()["ok"])
+	assert_true(host.throw_capture_ball()["ok"])
+	_settle_frames(host)
+	for _message: int in 12:
+		if battle.mon(Gen2Battle.PLAYER).hp < before:
+			break
+		if host.bars_animating() or host.frames_running():
+			host.advance_hardware_frame()
+			continue
+		host.finish()
+		host.advance()
+	assert_lt(
+		battle.mon(Gen2Battle.PLAYER).hp, before,
+		"the enemy moved in the turn the ball was thrown in",
+	)
+
+
 ## `PokeBallEffect` plays `ANIM_THROW_POKE_BALL` between the throw text and the
 ## result text, and that one script is the whole capture: the ball, the poof, the
 ## opponent going into it through `BATTLE_BG_EFFECT_RETURN_MON`, the wobbles that

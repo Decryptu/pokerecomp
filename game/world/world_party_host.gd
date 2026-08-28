@@ -13,6 +13,9 @@ extends RefCounted
 const CAUGHT_EGG_LEVEL: int = 1
 ## `HatchEggs`' own `ld [hl], $78`, the happiness a hatchling starts on.
 const HATCHED_HAPPINESS: int = 0x78
+## `BASE_HAPPINESS`, which `GeneratePartyMonStats` writes into every row it
+## builds (`constants/pokemon_data_constants.asm`).
+const BASE_HAPPINESS: int = 70
 ## `LANDMARK_GIFT`, the landmark `SetGiftMonCaughtData` writes instead of a map.
 const LANDMARK_GIFT: int = 0x7E
 ## `LANDMARK_NATIONAL_PARK`, which `CheckPartyFullAfterContest` writes over
@@ -45,6 +48,19 @@ const ITEM_MASTER_BALL: int = 0x01
 const ITEM_ULTRA_BALL: int = 0x02
 const ITEM_GREAT_BALL: int = 0x04
 const ITEM_POKE_BALL: int = 0x05
+## The seven balls Kurt makes out of apricorns (`data/items/apricorn_balls.asm`),
+## each with its own row in `BallMultiplierFunctionTable`. FRIEND_BALL has no
+## row: its effect is the happiness it writes after the catch has landed.
+const ITEM_HEAVY_BALL: int = 0x9D
+const ITEM_LEVEL_BALL: int = 0x9F
+const ITEM_LURE_BALL: int = 0xA0
+const ITEM_FAST_BALL: int = 0xA1
+const ITEM_FRIEND_BALL: int = 0xA4
+const ITEM_MOON_BALL: int = 0xA5
+const ITEM_LOVE_BALL: int = 0xA6
+## `FRIEND_BALL_HAPPINESS` (`constants/pokemon_data_constants.asm`), written over
+## `BASE_HAPPINESS` on both the party and the box branch of `PokeBallEffect`.
+const FRIEND_BALL_HAPPINESS: int = 200
 ## The Bug Contest's own ball. It is never in the bag: `wParkBallsRemaining` is
 ## what holds it and `BattleMenu_Pack`'s contest branch loads it by name.
 const ITEM_PARK_BALL: int = 0xB1
@@ -157,9 +173,48 @@ const MAGIKARP_LENGTHS: Array = [
 	[65210, 5], [65410, 2], [65510, 1],
 ]
 
+## Every ball `PokeBallEffect` can be reached with, in ball-pocket order.
+## SAFARI_BALL is left out on purpose: it is `$08`, the same number as
+## MOON_STONE, so its `BallMultiplierFunctionTable` row is unreachable with any
+## item whose effect is `PokeBallEffect`.
 const CAPTURE_BALLS: Array[int] = [
 	ITEM_POKE_BALL, ITEM_GREAT_BALL, ITEM_ULTRA_BALL, ITEM_MASTER_BALL,
+	ITEM_HEAVY_BALL, ITEM_LEVEL_BALL, ITEM_LURE_BALL, ITEM_FAST_BALL,
+	ITEM_FRIEND_BALL, ITEM_MOON_BALL, ITEM_LOVE_BALL,
 ]
+
+## `HeavyBallMultiplier.WeightsTable`: the high byte of the converted weight the
+## row applies below, and what it adds to the catch rate there. The `.lightmon`
+## branch in front of it takes 20 off below `HIGH(1024)`.
+const HEAVY_BALL_WEIGHTS: Array = [
+	[0x08, 0], [0x0C, 20], [0x10, 30], [0xFF, 40],
+]
+const HEAVY_BALL_LIGHT_HIGH: int = 0x04
+const HEAVY_BALL_LIGHT_PENALTY: int = 20
+
+## `docs/bugs_and_glitches.md`'s "Heavy Ball uses wrong weight value for three
+## Pokemon": `HeavyBall_GetDexEntryBank` masks the species without taking one off
+## first, so 64, 128 and 192 read their own entry's address out of the next
+## bank up. What is there is a different cartridge's business on each build, so
+## these are measured rather than derived: `.claude/oracle/battle/catch_rate.py`
+## on all three dumps says Gold and Silver land on the same row the right weight
+## would, and Crystal does not. KADABRA and TAUROS are what it answered there;
+## SUNFLORA is the third and has no answer, because the `.SkipText` walk never
+## finds its terminator and the cartridge locks up (see `HANDOFF.md`).
+const HEAVY_BALL_WRONG_BANK: Dictionary = {64: 20, 128: 40}
+
+## `FleeMons`' first three bytes, which is as far as `FastBallMultiplier`'s
+## `ld d, 3` reads: MAGNEMITE, GRIMER and TANGELA are the whole list the boost
+## can match (`docs/bugs_and_glitches.md`, "Fast Ball only boosts catch rate for
+## three Pokemon").
+const FAST_BALL_SPECIES: Array[int] = [0x51, 0x58, 0x72]
+
+## `MOON_STONE_RED`, which is BURN_HEAL's number rather than MOON_STONE's, read
+## three bytes past the evolution method instead of one. Both halves of
+## `docs/bugs_and_glitches.md`'s "Moon Ball does not boost catch rate": the byte
+## reached is the next evolution's method or the list terminator, and no
+## evolution method is 10, so no species is ever boosted.
+const MOON_BALL_STONE: int = 0x0A
 
 const WOBBLE_PROBABILITIES: Array = [
 	[1, 63], [2, 75], [3, 84], [4, 90], [5, 95], [7, 103], [10, 113],
@@ -912,7 +967,7 @@ static func gift_destination(save: Gen2SaveData) -> StringName:
 		return &"full"
 	if save.party.size() < Gen2SaveData.MAX_PARTY:
 		return &"party"
-	return &"box" if bool(save.first_empty_box_slot().get("ok", false)) else &"full"
+	return &"box" if bool(save.deposit_box_slot().get("ok", false)) else &"full"
 
 
 ## `DoEggStep`, spent [param times] over. Each pass walks the party from the
@@ -1102,7 +1157,11 @@ static func contest_return_mons(save: Gen2SaveData) -> int:
 ## Attempts to catch one wild battle mon and consumes the ball on either result.
 ## The battle screen owns the animation; this host owns the cartridge outcome and
 ## the save/world writeback. A caught mon enters the party when there is room and
-## otherwise uses the first free PC-box slot.
+## otherwise goes to the front of the box the player has open, which is the one
+## `SendMonIntoBox` deposits into.
+##
+## [param thrower] is the player's active battler, which LEVEL_BALL and LOVE_BALL
+## read; see [method _ball_multiplier].
 static func capture_wild(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -1111,15 +1170,18 @@ static func capture_wild(
 	random: RandomNumberGenerator = null,
 	caught_location: int = 0,
 	persist: bool = true,
-	battle_type: int = Gen2Battle.BATTLETYPE_NORMAL
+	battle_type: int = Gen2Battle.BATTLETYPE_NORMAL,
+	thrower: Gen2BattleMon = null
 ) -> Dictionary:
 	if world == null or save == null or world.data == null or wild == null:
 		return _failure(&"missing_capture_context", {})
 	var opened: Dictionary = Gen2WorldTransaction.begin(world, save)
 	if not bool(opened.get("ok", false)):
 		return _failure(StringName(opened["reason"]), opened.get("details", {}))
+	## `Ball_BoxIsFullMessage`, which stands in front of everything else the
+	## effect does: no line is said about the ball and the ball is not spent.
 	if save.party.size() >= Gen2SaveData.MAX_PARTY:
-		var storage: Dictionary = save.first_empty_box_slot()
+		var storage: Dictionary = save.deposit_box_slot()
 		if not bool(storage.get("ok", false)):
 			return _failure(&"storage_full", {"ball": ball})
 	var definition: Dictionary = world.data.item(ball)
@@ -1127,7 +1189,7 @@ static func capture_wild(
 		return _failure(&"unknown_ball", {"ball": ball})
 	if int(definition.get("pocket", 0)) != RomLayout.ITEM_POCKET_BALL:
 		return _failure(&"item_is_not_a_ball", {"ball": ball})
-	if ball not in [ITEM_MASTER_BALL, ITEM_ULTRA_BALL, ITEM_GREAT_BALL, ITEM_POKE_BALL]:
+	if ball not in CAPTURE_BALLS:
 		return _failure(&"unsupported_ball_effect", {"ball": ball})
 	if world.state == null or world.state.item_quantity(ball) <= 0:
 		return _failure(&"insufficient_ball_quantity", {"ball": ball})
@@ -1146,12 +1208,14 @@ static func capture_wild(
 	var generator: RandomNumberGenerator = random if random != null else RandomNumberGenerator.new()
 	if random == null:
 		generator.randomize()
-	var outcome: Dictionary = _capture_outcome(world.data, wild, ball, generator)
+	var outcome: Dictionary = _capture_outcome(
+		world.data, wild, ball, generator, battle_type, thrower
+	)
 	var candidate: Gen2SaveData = opened["candidate"]
 	var destination: Dictionary = {}
 	var box_full: bool = false
 	if bool(outcome.get("caught", false)):
-		var captured: Gen2SaveMon = _captured_mon(world.data, save, wild, generator)
+		var captured: Gen2SaveMon = _captured_mon(world.data, save, wild, ball)
 		if captured == null:
 			return _failure(&"could_not_create_captured_pokemon", outcome)
 		## `SetCaughtData` runs on the caught Pokemon itself.
@@ -1159,7 +1223,9 @@ static func capture_wild(
 			captured, wild.level, world.object_time_of_day, world.player_female(),
 			catch_landmark
 		)
-		destination = candidate.add_party_or_box(captured)
+		## `SendMonIntoBox`'s own `ShiftBoxMon`: a catch that lands in a box goes
+		## to the front of it, which every other deposit does not.
+		destination = candidate.add_party_or_box(captured, true)
 		if not bool(destination.get("ok", false)):
 			return _failure(StringName(destination.get("reason", &"storage_full")), {
 				"ball": ball, "outcome": outcome,
@@ -1249,7 +1315,7 @@ static func _apply_contest_mon(
 			"summary": {"kind": &"contest_mon", "accepted": false},
 		}
 	var boxed: bool = candidate.party.size() >= Gen2SaveData.MAX_PARTY
-	if boxed and not bool(candidate.first_empty_box_slot().get("ok", false)):
+	if boxed and not bool(candidate.deposit_box_slot().get("ok", false)):
 		## `.BoxFull`: nothing is written and the catch is gone, which is the
 		## cartridge's own answer rather than a refusal of this port's.
 		world.state.set_contest_mon({})
@@ -2009,29 +2075,36 @@ static func contest_mon_from(wild: Gen2BattleMon) -> Dictionary:
 	}
 
 
+## `PokeBallEffect`'s roll, from `wEnemyMonCatchRate` down to `wFinalCatchRate`.
+##
+## [param battle_type] is `wBattleType`: BATTLETYPE_TUTORIAL catches without a
+## roll, the way a MASTER_BALL does. [param thrower] is the player's active
+## battler, which LEVEL_BALL reads a level off and LOVE_BALL a species and a
+## gender; a caller with none passes null and both rows answer with no boost.
 static func _capture_outcome(
-	data: GameData, wild: Gen2BattleMon, ball: int, random: RandomNumberGenerator
+	data: GameData,
+	wild: Gen2BattleMon,
+	ball: int,
+	random: RandomNumberGenerator,
+	battle_type: int = Gen2Battle.BATTLETYPE_NORMAL,
+	thrower: Gen2BattleMon = null
 ) -> Dictionary:
-	if ball == ITEM_MASTER_BALL:
+	if ball == ITEM_MASTER_BALL or battle_type == Gen2Battle.BATTLETYPE_TUTORIAL:
 		return {"caught": true, "catch_rate": 255, "wobbles": 3}
-	var species: Dictionary = data.species(wild.species)
-	var catch_rate: int = clampi(int(species.get("catch_rate", 0)), 1, 255)
-	match ball:
-		ITEM_ULTRA_BALL:
-			catch_rate = mini(catch_rate * 2, 255)
-		## `GreatBallMultiplier` and `ParkBallMultiplier` are the same routine
-		## written twice: catch rate times one and a half.
-		ITEM_GREAT_BALL, ITEM_PARK_BALL:
-			catch_rate = mini(catch_rate + int(catch_rate / 2.0), 255)
-		ITEM_POKE_BALL:
-			pass
 	var max_hp: int = maxi(wild.max_hp(), 1)
-	var current_hp: int = clampi(wild.hp, 1, max_hp)
-	var final_rate: int = _source_hp_catch_rate(max_hp, current_hp, catch_rate)
-	# This is the actual Gen 2 behavior: sleep and freeze add 10, while the
-	# intended +5 for burn, poison and paralysis is skipped by the source bug.
-	if Gen2Status.has(wild.status, Gen2Status.FREEZE) or Gen2Status.is_asleep(wild.status):
-		final_rate = mini(final_rate + 10, 255)
+	var final_rate: int = final_catch_rate(data, ball, {
+		"base_rate": clampi(int(data.species(wild.species).get("catch_rate", 0)), 1, 255),
+		"max_hp": max_hp,
+		"current_hp": clampi(wild.hp, 1, max_hp),
+		"status": wild.status,
+		"species": wild.species,
+		"dvs": wild.persistent_dvs(),
+		"level": wild.level,
+		"thrower_species": thrower.species if thrower != null else 0,
+		"thrower_dvs": thrower.persistent_dvs() if thrower != null else 0,
+		"thrower_level": thrower.level if thrower != null else 0,
+		"battle_type": battle_type,
+	})
 	var caught: bool = random.randi_range(0, 255) <= final_rate
 	return {
 		"caught": caught,
@@ -2040,19 +2113,182 @@ static func _capture_outcome(
 	}
 
 
+## `wFinalCatchRate`: everything `PokeBallEffect` settles between
+## `ld a, [wEnemyMonCatchRate]` and the `call Random` that reads the answer.
+##
+## Split out from the throw because the cartridge can be asked the same question
+## directly: `.claude/oracle/battle/catch_rate.py` runs those instructions on a
+## real dump for a grid of cases, and [param case] is that grid's own row. The
+## keys are the bytes the routine reads, named for the WRAM labels it reads them
+## from.
+static func final_catch_rate(data: GameData, ball: int, case: Dictionary) -> int:
+	var catch_rate: int = _ball_multiplier(data, ball, int(case["base_rate"]), case)
+	## `.skip_or_return_from_ball_fn`'s own `cp LEVEL_BALL`: a Level Ball jumps
+	## straight to `.skip_hp_calc`, so its final rate is the multiplied catch
+	## rate with no health, status or held-item term at all.
+	if ball == ITEM_LEVEL_BALL:
+		return catch_rate
+	var final_rate: int = _source_hp_catch_rate(
+		int(case["max_hp"]), int(case["current_hp"]), catch_rate
+	)
+	# This is the actual Gen 2 behavior: sleep and freeze add 10, while the
+	# intended +5 for burn, poison and paralysis is skipped by the source bug.
+	var status: int = int(case.get("status", 0))
+	if Gen2Status.has(status, Gen2Status.FREEZE) or Gen2Status.is_asleep(status):
+		final_rate = mini(final_rate + 10, 255)
+	## HELD_CATCH_CHANCE would be added here. No item in either pin carries that
+	## held effect, so the branch has nothing to reach it with.
+	return final_rate
+
+
+## `BallMultiplierFunctionTable`, every row of it. Each bug the table carries is
+## reproduced rather than corrected, and each names the entry in
+## `docs/bugs_and_glitches.md` that describes it.
+static func _ball_multiplier(
+	data: GameData, ball: int, catch_rate: int, case: Dictionary
+) -> int:
+	match ball:
+		ITEM_ULTRA_BALL:
+			return _ball_shift(catch_rate, 1)
+		## `GreatBallMultiplier` and `ParkBallMultiplier` are the same routine
+		## written twice: catch rate times one and a half.
+		ITEM_GREAT_BALL, ITEM_PARK_BALL:
+			return mini(catch_rate + (catch_rate >> 1), 255)
+		ITEM_HEAVY_BALL:
+			return _heavy_ball(data, int(case["species"]), catch_rate)
+		ITEM_LEVEL_BALL:
+			return _level_ball(
+				int(case["level"]), int(case.get("thrower_level", 0)), catch_rate
+			)
+		## `LureBallMultiplier`: three times the rate, and only on a rod battle.
+		ITEM_LURE_BALL:
+			if int(case.get("battle_type", 0)) != Gen2Battle.BATTLETYPE_FISH:
+				return catch_rate
+			return mini(catch_rate * 3, 255)
+		ITEM_FAST_BALL:
+			return _ball_shift(catch_rate, 2) \
+				if int(case["species"]) in FAST_BALL_SPECIES else catch_rate
+		ITEM_MOON_BALL:
+			return _moon_ball(data, int(case["species"]), catch_rate)
+		ITEM_LOVE_BALL:
+			return _love_ball(data, catch_rate, case)
+	return catch_rate
+
+
+## The `sla b / jr c, .max` chain every boosting row is written as: one shift per
+## doubling, and a carry out of the byte pins the rate at 255 rather than
+## wrapping it.
+static func _ball_shift(catch_rate: int, doublings: int) -> int:
+	var out: int = catch_rate
+	for _step: int in doublings:
+		out <<= 1
+		if out > 0xFF:
+			return 0xFF
+	return out
+
+
+## `HeavyBallMultiplier`. The dex entry's weight is converted with the routine's
+## own three shifts and two subtractions, and only the high byte of the result
+## decides which row of `.WeightsTable` applies.
+static func _heavy_ball(data: GameData, species: int, catch_rate: int) -> int:
+	if HEAVY_BALL_WRONG_BANK.has(species) and Gen2WorldState.is_crystal_profile(data):
+		return mini(catch_rate + int(HEAVY_BALL_WRONG_BANK[species]), 255)
+	var weight: int = int(data.dex_entry(species).get("weight", 0)) & 0xFFFF
+	var halved: int = weight >> 1
+	var part: int = halved >> 4
+	var converted: int = (halved - part) & 0xFFFF
+	part >>= 1
+	converted = (converted - part) & 0xFFFF
+	var high: int = converted >> 8
+	if high < HEAVY_BALL_LIGHT_HIGH:
+		## `.lightmon`'s `sub 20 / ret nc / ld b, $1`: a borrow floors at one
+		## rather than at zero.
+		var lowered: int = catch_rate - HEAVY_BALL_LIGHT_PENALTY
+		return lowered if lowered >= 0 else 1
+	for row: Array in HEAVY_BALL_WEIGHTS:
+		if high < int(row[0]):
+			return mini(catch_rate + int(row[1]), 255)
+	return catch_rate
+
+
+## `LevelBallMultiplier`: double for each halving of the player's level the wild
+## still sits under, up to eight times.
+static func _level_ball(wild_level: int, thrower_level: int, catch_rate: int) -> int:
+	var threshold: int = thrower_level
+	var doublings: int = 0
+	while doublings < 3 and wild_level < threshold:
+		doublings += 1
+		threshold >>= 1
+	return _ball_shift(catch_rate, doublings)
+
+
+## `MoonBallMultiplier`, bug included: the item byte is read three bytes past the
+## evolution method instead of one, so what it compares against BURN_HEAL is the
+## next evolution's method or the terminator. Nothing is ever boosted.
+static func _moon_ball(data: GameData, species: int, catch_rate: int) -> int:
+	var rows: Array = data.evolutions(species)
+	if rows.is_empty() or int((rows[0] as Dictionary).get("method", 0)) != RomLayout.EVOLVE_ITEM:
+		return catch_rate
+	var next_method: int = int((rows[1] as Dictionary).get("method", 0)) if rows.size() > 1 else 0
+	if next_method != MOON_BALL_STONE:
+		return catch_rate
+	return _ball_shift(catch_rate, 2)
+
+
+## `LoveBallMultiplier`, bug included: the comparison that should refuse a
+## matching gender is the one that refuses a differing one, so the eightfold
+## boost lands on a wild of the SAME gender as the battler facing it. Either
+## side being genderless answers with no boost at all.
+static func _love_ball(data: GameData, catch_rate: int, case: Dictionary) -> int:
+	var species: int = int(case["species"])
+	if int(case.get("thrower_species", 0)) != species:
+		return catch_rate
+	var player_gender: StringName = Gen2BattleMon.gender_for(
+		data, species, int(case.get("thrower_dvs", 0))
+	)
+	if player_gender == Gen2BattleMon.GENDER_NONE:
+		return catch_rate
+	var wild_gender: StringName = Gen2BattleMon.gender_for(
+		data, species, int(case.get("dvs", 0))
+	)
+	if wild_gender == Gen2BattleMon.GENDER_NONE:
+		return catch_rate
+	return _ball_shift(catch_rate, 3) if wild_gender == player_gender else catch_rate
+
+
+## The health term, as the cartridge's own bytes rather than as arithmetic that
+## happens to agree with them.
+##
+## Both operands are shifted right twice only when `3 * max HP` does not fit in
+## one byte, and everything after that is a byte: `ld b, e` keeps the low byte of
+## the divisor, `sub c` wraps, and `hQuotient + 3` is the low byte of the
+## quotient. Above 341 max HP the shifted divisor no longer fits either, which is
+## `docs/bugs_and_glitches.md`'s "Catch rate formula breaks for Pokemon with max
+## HP > 341", and all three truncations are what make it break.
 static func _source_hp_catch_rate(max_hp: int, current_hp: int, catch_rate: int) -> int:
-	# The cartridge shifts both operands by two only when 3 * max HP does not
-	# fit in one byte. It then keeps the low byte, including the documented
-	# high-HP overflow behavior, instead of using a wider modern formula.
 	var three_max: int = 3 * max_hp
 	var two_current: int = 2 * current_hp
 	if (three_max >> 8) != 0:
 		three_max >>= 2
 		two_current >>= 2
-	var divisor: int = maxi(three_max & 0xFF, 1)
-	var current_part: int = maxi(two_current & 0xFF, 1)
-	var remaining: int = maxi((three_max & 0xFF) - current_part, 0)
-	return clampi(maxi(1, int(remaining * catch_rate / float(divisor))), 1, 255)
+		## `.okay_1`'s own `ld c, $1`, which the unshifted branch never reaches.
+		if (two_current & 0xFF) == 0:
+			two_current = 1
+	var divisor: int = three_max & 0xFF
+	var current_part: int = two_current & 0xFF
+	if divisor == 0:
+		## 342 and 683 max HP are the two values whose shifted divisor is a whole
+		## multiple of 256, and `_Divide`'s `.loop` never leaves on a zero
+		## divisor: the cartridge locks up here rather than answering. Measured,
+		## not read: `.claude/oracle/battle/catch_rate.py` never returns on
+		## either. Guarded with both operands untruncated, which is the ratio the
+		## routine was reaching for; there is no cartridge answer to match.
+		divisor = three_max
+		current_part = two_current
+	var remaining: int = (divisor - current_part) & 0xFF if divisor <= 0xFF \
+		else maxi(divisor - current_part, 0)
+	var quotient: int = int(remaining * catch_rate / divisor) & 0xFF
+	return quotient if quotient > 0 else 1
 
 
 ## How many times the ball rocks before it opens, which is
@@ -2073,21 +2309,40 @@ static func _failed_wobbles(catch_rate: int, random: RandomNumberGenerator) -> i
 	return 3
 
 
+## `GeneratePartyMonStats`' wild branch, which is what `TryAddMonToParty` and
+## `SendMonIntoBox` both build the caught row out of.
+##
+## Four of these read wrong from the outside and are the source's own. The
+## Pokemon keeps the health and the status condition it was standing there with,
+## because `PokeBallEffect` pushes `wEnemyMonStatus` and `wEnemyMonHP` in front
+## of `LoadEnemyMon` and writes them back after it. Its PP is full, because
+## `LoadEnemyMon`'s `FillPP` ran over whatever the fight had drained. Its stat
+## experience is zero and its experience is the minimum for its level, whatever
+## the battler had. The trainer ID is `wPlayerID`: a Pokemon caught by the player
+## is not a traded one.
 static func _captured_mon(
 	data: GameData,
 	save: Gen2SaveData,
 	wild: Gen2BattleMon,
-	random: RandomNumberGenerator
+	ball: int
 ) -> Gen2SaveMon:
 	var out: Gen2SaveMon = Gen2SaveBattleAdapter.from_battle_mon(wild)
 	if out == null:
 		return null
-	out.hp = wild.max_hp()
-	out.status = Gen2Status.NONE
 	out.nickname = String(data.species(wild.species).get("name", ""))
 	out.original_trainer = save.player_name
-	out.ot_id = random.randi_range(0, 0xFFFF)
-	out.happiness = 70
+	out.ot_id = save.player_id & 0xFFFF
+	out.exp = Gen2Experience.total_exp_at(
+		int(data.species(wild.species).get("growth_rate", 0)), wild.level
+	)
+	for key: Variant in Gen2SaveMon.STAT_EXP_KEYS:
+		out.stat_exp[key] = 0
+	for slot: int in Gen2SaveMon.MAX_MOVES:
+		var known: int = int(out.moves[slot])
+		out.pp[slot] = int(data.move(known).get("pp", 0)) if known > 0 else 0
+	## `.SkipPartyMonFriendBall` and `.SkipBoxMonFriendBall`, which write the same
+	## byte on either side of the deposit.
+	out.happiness = FRIEND_BALL_HAPPINESS if ball == ITEM_FRIEND_BALL else BASE_HAPPINESS
 	out.is_egg = false
 	return out
 

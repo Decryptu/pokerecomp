@@ -3,6 +3,9 @@ extends Control
 
 signal battle_finished(result: Dictionary)
 signal capture_requested(ball: int)
+## `NewPokedexEntry` behind `Text_GotchaMonWasCaught`: the page belongs to the
+## world, which owns the dex, so the battle asks for it and waits.
+signal dex_entry_requested(species: int)
 ## A bag item spent inside the battle, so the world takes one off the pocket.
 ## `target` is the party index an ITEMMENU_PARTY item was used on, or -1.
 signal item_used(item: int, target: int)
@@ -293,6 +296,17 @@ var _pack_move_selecting: bool = false:
 var _capture_balls: Array[int] = []
 var _capture_quantities: Dictionary = {}
 var _capture_ball_index: int = 0
+## `ItemSubmenu`, which stands between a pack row and its effect. Empty when no
+## submenu is up; `&"pack"` and `&"capture"` name the list it was opened over.
+var _pack_action_stage: StringName = &""
+var _pack_action_index: int = 0
+## The action `.UseItem` returning with `wBattlePlayerAction` still
+## BATTLEPLAYERACTION_USEITEM owes the enemy. Empty when the throw was refused
+## before `_DoItemEffect` ran, which is what `.didnt_use_item` takes it back to.
+var _capture_spent_turn: Dictionary = {}
+## Which list the ball was chosen from, so a refused throw reopens it the way
+## `.didnt_use_item` drops back into the pack it was still standing in.
+var _capture_origin: StringName = &"capture"
 ## What [method begin_capture] says instead of opening, when the run's rules
 ## forbid a catch in this fight. Empty means the selector opens.
 var _capture_refusal: String = ""
@@ -331,6 +345,14 @@ var _annotations_drawn: String = ""
 ## Whether the enemy species was in this save's Pokedex before the battle began,
 ## read once at the start because the first sight of it registers immediately.
 var _enemy_seen_before: bool = false
+## `CheckCaughtMon` and `CheckReceivedDex`, both read before the throw registers
+## anything: a species already in the dex adds no data, and a player who has not
+## been handed the dex is shown no page at all.
+var _enemy_caught_before: bool = false
+var _dex_received: bool = false
+## How far `NewDexDataText` and the page behind it have got. Empty until the
+## catch is terminal.
+var _capture_dex_stage: StringName = &""
 var _capture_result: Dictionary = {}
 ## `PokeBallEffect`'s own `AskGiveNicknameText`, which stands over the battle
 ## because the whole routine runs inside it. Null while nothing is being named.
@@ -1070,6 +1092,8 @@ func start_world_battle(
 	_enemy_seen_before = save != null and save.world != null \
 		and save.world.world_state != null \
 		and save.world.world_state.has_seen_species(_enemy)
+	_enemy_caught_before = false
+	_dex_received = false
 	_init_battle_display()
 	_play_battle_music()
 
@@ -1740,6 +1764,17 @@ const ANIM_THROW_POKE_BALL: int = 0x100
 ## [method Gen2WorldPartyHost._failed_wobbles] answers with. There is no line for
 ## a rock on its own: the rocking is the animation, and one of these is the whole
 ## of what a failed throw says.
+## `BallBlockedText` and `BallDontBeAThiefText`, which are two boxes rather than
+## one line, and `BallBoxFullText`, said before the ball is even thrown.
+## `_NewDexDataText`, which names the Pokemon and plays a sound of its own.
+const NEW_DEX_DATA_TEXT: String = "%s's data\nwas newly added to\nthe #DEX."
+const BALL_BLOCKED_TEXT: String = "The trainer\nblocked the BALL!"
+const BALL_DONT_BE_A_THIEF_TEXT: String = "Don't be a thief!"
+const BALL_BOX_FULL_TEXT: String = "The #MON BOX\nis full. That\ncan't be used now."
+## `anim_if_param_equal NO_ITEM`, `BattleAnim_ThrowPokeBall`'s own first branch
+## and the one `UseBallInTrainerBattle` sets `wBattleAnimParam` to.
+const ANIM_PARAM_NO_ITEM: int = 0
+
 const BREAK_FREE_TEXT: Array[String] = [
 	"Oh no! The #MON\nbroke free!",
 	"Aww! It appeared\nto be caught!",
@@ -2641,15 +2676,11 @@ func use_selected_pack_item() -> Dictionary:
 	if _data != null and int(_data.item(item).get("pocket", 0)) == Gen2WorldPack.TYPE_BALL:
 		_pack_selecting = false
 		if not _is_wild_battle():
-			## `PokeBallEffect`'s `UseBallInTrainerBattle`, which spends neither
-			## the ball nor the turn.
-			show_message("The trainer blocked the BALL!
-Don't be a thief!")
-			return {"ok": false, "reason": &"ball_in_trainer_battle"}
-		var opened: Dictionary = begin_capture()
-		if bool(opened.get("ok", false)):
-			select_capture_ball(_capture_balls.find(item))
-		return opened
+			return _block_ball_in_trainer_battle(item)
+		var refused: Dictionary = _capture_guard()
+		if not refused.is_empty():
+			return refused
+		return _throw_ball(item, &"pack")
 	if _data != null \
 		and int(_data.item(item).get("battle_menu", 0)) == Gen2WorldPack.ITEMMENU_PARTY:
 		_pack_selecting = false
@@ -2657,6 +2688,27 @@ Don't be a thief!")
 		_open_switch_pick(&"item")
 		return {"ok": true, "status": &"choosing_target", "item": item}
 	return _use_pack_item(item, -1)
+
+
+## `UseBallInTrainerBattle`, which is where `PokeBallEffect` jumps before it says
+## anything at all: no ITEM USED line, the throw animation on
+## `BattleAnim_ThrowPokeBall`'s own NO_ITEM branch, two boxes, and then
+## `UseDisposableItem` spends the ball anyway. The turn goes with it, because
+## `wItemEffectSucceeded` and `wBattlePlayerAction` are one byte and
+## `_DoItemEffect` set it to BATTLEPLAYERACTION_USEITEM on the way in.
+func _block_ball_in_trainer_battle(ball: int) -> Dictionary:
+	_capture_messages.clear()
+	_capture_messages.append(BALL_BLOCKED_TEXT)
+	_capture_messages.append(BALL_DONT_BE_A_THIEF_TEXT)
+	_begin_animation({
+		"param": ANIM_PARAM_NO_ITEM,
+		"index": ANIM_THROW_POKE_BALL,
+		"enemy_turn": false,
+	})
+	item_used.emit(ball, -1)
+	if not _battle.is_over():
+		_capture_spent_turn = Gen2Battle.use_item(ball)
+	return {"ok": true, "status": &"blocked", "ball": ball}
 
 
 ## `RestorePPEffect`'s question: which of the target's moves the Ether goes on.
@@ -2729,6 +2781,17 @@ func set_capture_refusal(message: String) -> void:
 	_capture_refusal = message
 
 
+## `SetSeenMon`, `CheckCaughtMon` and `CheckReceivedDex`, off the world's live
+## state rather than off the save's own snapshot: that snapshot is only as fresh
+## as the last write to disk, so a species seen or caught since then reads as
+## new. Called by the host that owns the world, before the entrance runs and
+## therefore before anything registers this sight.
+func set_dex_context(seen: bool, caught: bool, received: bool) -> void:
+	_enemy_seen_before = seen
+	_enemy_caught_before = caught
+	_dex_received = received
+
+
 ## Supplies the wild battle with the supported balls currently owned by the
 ## overworld. The battle scene never reads or mutates world inventory itself.
 func set_capture_balls(balls: Array, quantities: Dictionary = {}) -> void:
@@ -2756,6 +2819,12 @@ func capture_target() -> Gen2BattleMon:
 	return _battle.enemy if _is_wild_battle() and _battle != null else null
 
 
+## The battler the ball is thrown past, which LEVEL_BALL reads a level off and
+## LOVE_BALL a species and a gender (`wBattleMonLevel`, `wTempBattleMonSpecies`).
+func capture_thrower() -> Gen2BattleMon:
+	return _battle.player if _is_wild_battle() and _battle != null else null
+
+
 ## `wBattleType`, which `PokeBallEffect` reads once the catch has landed: a
 ## BATTLETYPE_CELEBI catch is the one that raises BATTLERESULT_CAUGHT_CELEBI.
 func capture_battle_type() -> int:
@@ -2765,19 +2834,11 @@ func capture_battle_type() -> int:
 ## Opens the small wild-battle ball selector. The full bag UI remains a later
 ## world-service host; this boundary exposes only the capture action.
 func begin_capture() -> Dictionary:
-	if not _is_wild_battle() or _battle == null or _battle.is_over():
-		return _capture_failure(&"capture_not_available")
-	## A Nuzlocke area that has already given up its encounter, said the way the
-	## empty-bag line below is said: the ball is in the bag, the rules are what
-	## refuse it.
-	if not _capture_refusal.is_empty():
-		show_message(_capture_refusal)
-		return _capture_failure(&"capture_refused_by_rules")
-	if _capture_selecting or _capture_waiting or not _capture_messages.is_empty() \
-		or not _capture_result.is_empty():
+	var refused: Dictionary = _capture_guard()
+	if not refused.is_empty():
+		return refused
+	if _capture_selecting:
 		return _capture_failure(&"capture_input_busy")
-	if not _pending.is_empty():
-		return _capture_failure(&"battle_events_pending")
 	if _capture_balls.is_empty():
 		show_message("You have no POKE BALLS!")
 		return _capture_failure(&"no_capture_balls")
@@ -2785,6 +2846,26 @@ func begin_capture() -> Dictionary:
 	_capture_ball_index = 0
 	_show_capture_selection()
 	return {"ok": true, "ball": _selected_capture_ball()}
+
+
+## Every refusal a throw is reached through, shared by the pack's own BALL row
+## and by the small selector a fight with no bag behind it is handed. Empty means
+## the ball may be thrown.
+func _capture_guard() -> Dictionary:
+	if not _is_wild_battle() or _battle == null or _battle.is_over():
+		return _capture_failure(&"capture_not_available")
+	## A Nuzlocke area that has already given up its encounter, said the way the
+	## empty-bag line above is said: the ball is in the bag, the rules are what
+	## refuse it.
+	if not _capture_refusal.is_empty():
+		show_message(_capture_refusal)
+		return _capture_failure(&"capture_refused_by_rules")
+	if _capture_waiting or not _capture_messages.is_empty() \
+		or not _capture_result.is_empty():
+		return _capture_failure(&"capture_input_busy")
+	if not _pending.is_empty():
+		return _capture_failure(&"battle_events_pending")
+	return {}
 
 
 func select_capture_ball(index: int) -> Dictionary:
@@ -2798,9 +2879,21 @@ func select_capture_ball(index: int) -> Dictionary:
 func throw_capture_ball() -> Dictionary:
 	if not _capture_selecting or _capture_balls.is_empty():
 		return _capture_failure(&"capture_selection_not_active")
-	var ball: int = _selected_capture_ball()
 	_capture_selecting = false
+	return _throw_ball(_selected_capture_ball(), &"capture")
+
+
+## `PokeBallEffect` from the item onwards, which the pack's own BALL row and the
+## selector both arrive at: `ItemUsedText`, and then the world resolves the
+## throw. The turn is banked here because `_DoItemEffect` has already written
+## BATTLEPLAYERACTION_USEITEM into the byte it shares with
+## `wItemEffectSucceeded`; a refusal takes it back.
+func _throw_ball(ball: int, origin: StringName = &"capture") -> Dictionary:
+	if ball <= 0:
+		return _capture_failure(&"capture_selection_not_active")
+	_capture_origin = origin
 	_capture_waiting = true
+	_capture_spent_turn = Gen2Battle.use_item(ball)
 	show_message(_item_used_text(ball))
 	capture_requested.emit(ball)
 	return {"ok": true, "status": &"waiting", "ball": ball}
@@ -2816,7 +2909,22 @@ func complete_capture(result: Dictionary) -> Dictionary:
 	_capture_result = result.duplicate(true)
 	_capture_terminal = false
 	if not bool(result.get("ok", false)):
-		_capture_messages.append("The capture could not be completed.")
+		## `Ball_BoxIsFullMessage` writes `$2` into the byte that is also
+		## `wBattlePlayerAction`, so `.didnt_use_item` zeroes it and the pack is
+		## reopened with the ball still in the bag and the turn still the
+		## player's. Every other refusal this host can answer with is the same
+		## shape, which is why the box takes them all back.
+		_capture_result.clear()
+		_capture_spent_turn = {}
+		show_message(
+			BALL_BOX_FULL_TEXT if StringName(result.get("reason", &"")) == &"storage_full"
+			else "The capture could not be completed."
+		)
+		if _capture_origin == &"pack" and not _pack_rows.is_empty():
+			_pack_selecting = true
+		elif not _capture_balls.is_empty():
+			_capture_selecting = true
+		_reopen_menu_layer()
 		return result
 	var result_ball: int = int(result.get("ball", 0))
 	if result_ball > 0 and result.has("quantity"):
@@ -2879,6 +2987,14 @@ func _begin_capture_animation(ball: int, wobbles: int, caught: bool) -> void:
 		"enemy_turn": false,
 		"wobbles": answers,
 	})
+
+
+## `ItemSubmenu` over the list [param over] names, opened on USE the way
+## `.UsableMenuHeader`'s `db 1 ; default option` does.
+func _open_pack_action(over: StringName) -> void:
+	_pack_action_stage = over
+	_pack_action_index = 0
+	_reopen_menu_layer()
 
 
 func _show_capture_selection() -> void:
@@ -3032,6 +3148,38 @@ func _open_capture_nickname() -> bool:
 	return true
 
 
+## `NewDexDataText`, then the page. True while either is still owed, so the pump
+## that called this waits. The world owns the dex and draws the page; this only
+## says when.
+func _open_new_dex_entry() -> bool:
+	if _capture_dex_stage == &"done" or _world_battle_tutorial \
+		or bool(_capture_result.get("contest", false)) \
+		or not bool(_capture_result.get("caught", false)) \
+		or _enemy_caught_before or not _dex_received:
+		return false
+	match _capture_dex_stage:
+		&"":
+			_capture_dex_stage = &"text"
+			show_message(NEW_DEX_DATA_TEXT % _name_of(_enemy))
+			return true
+		&"text":
+			## `call ClearSprites` between the line and the page, which is the
+			## same call the catch's own box is followed by.
+			_clear_kept_sprites()
+			_capture_dex_stage = &"page"
+			dex_entry_requested.emit(_enemy)
+			return true
+	return true
+
+
+## The page closing, which is `ExitAllMenus` behind `NewPokedexEntry`.
+func complete_dex_entry() -> void:
+	if _capture_dex_stage != &"page":
+		return
+	_capture_dex_stage = &"done"
+	_continue_after_messages()
+
+
 func _on_capture_named(nickname: String) -> void:
 	_capture_nickname = nickname
 
@@ -3069,6 +3217,9 @@ func _spend_capture_experience() -> bool:
 
 func _clear_capture_action() -> void:
 	_capture_experience_spent = false
+	_pack_action_stage = &""
+	_capture_dex_stage = &""
+	_capture_spent_turn = {}
 	_capture_selecting = false
 	_capture_waiting = false
 	_capture_messages.clear()
@@ -3082,6 +3233,7 @@ func _clear_capture_action() -> void:
 
 
 func _reset_capture_state() -> void:
+	_capture_spent_turn = {}
 	_capture_balls.clear()
 	_capture_quantities.clear()
 	_capture_ball_index = 0
@@ -3473,7 +3625,7 @@ func _continue_after_messages() -> void:
 	## sub-lists, and the forget offer are each answered by a press rather than
 	## run past by the pump.
 	if _menu_stage != &"" or _pack_selecting or _pack_move_selecting \
-		or _forget_stage != &"":
+		or _pack_action_stage != &"" or _forget_stage != &"":
 		return
 	if _world_battle_tutorial:
 		return
@@ -3500,6 +3652,13 @@ func _continue_after_messages() -> void:
 				show_message(CONTEST_ALREADY_CAUGHT_TEXT % _contest_stock_name())
 				return
 			_open_yes_no(&"contest_replace", CONTEST_REPLACE_TEXT)
+			return
+		## `NewDexDataText` and `NewPokedexEntry`, which stand between
+		## `Text_GotchaMonWasCaught` and everything else a catch does. Only for a
+		## species the dex had not caught yet, and only once the player has the
+		## dex at all: `CheckCaughtMon` and `CheckReceivedDex` are both read
+		## before the throw, because the throw is what registers the catch.
+		if _open_new_dex_entry():
 			return
 		## A registered policy's award and every level up, move offer and
 		## evolution flag behind it, spent between `Text_GotchaMonWasCaught` and
@@ -3528,8 +3687,27 @@ func _continue_after_messages() -> void:
 		_finish_world_capture(capture)
 		return
 	if not _capture_result.is_empty():
+		## `.UseItem` returns with no carry on a ball that did not land, so
+		## `BattleMenu` falls back into `DoBattle` and the enemy takes the turn
+		## the throw was paid with. Only a catch escapes it, through `.run`.
+		var spent: Dictionary = _capture_spent_turn
+		_capture_spent_turn = {}
 		_clear_capture_action()
+		if not spent.is_empty() and _battle != null and not _battle.is_over():
+			_pending = _battle.take_actions(spent, _enemy_action())
+			if not _pending.is_empty():
+				_show_next_event()
+				return
 		return
+	if not _capture_spent_turn.is_empty():
+		## The blocked throw in a trainer battle, whose two boxes are behind it.
+		var blocked: Dictionary = _capture_spent_turn
+		_capture_spent_turn = {}
+		if _battle != null and not _battle.is_over():
+			_pending = _battle.take_actions(blocked, _enemy_action())
+			if not _pending.is_empty():
+				_show_next_event()
+				return
 	if not _pending.is_empty():
 		_show_next_event()
 		return
@@ -3978,6 +4156,14 @@ func _answer_switch_offer() -> bool:
 ## cursor on YES are `YesNoMenuHeader`'s. `InterpretTwoOptionMenu`'s fifteen
 ## frames between the answer and the box coming down are not spent, the way no
 ## other menu delay here is.
+## `ItemSubmenu.UsableMenuHeader`'s own `menu_coords 13, 7, SCREEN_WIDTH - 1,
+## TEXTBOX_Y - 1` and its two rows. Every item a battle lists is usable, so
+## `.UnusableMenuData`'s single QUIT row is unreachable here.
+const PACK_ACTION_LEFT: int = 13
+const PACK_ACTION_TOP: int = 7
+const PACK_ACTION_SPAN: Vector2i = Vector2i(6, 4)
+const PACK_ACTIONS: Array[String] = ["USE", "QUIT"]
+
 const YES_NO_LEFT: int = 1
 const YES_NO_TOP: int = 7
 const YES_NO_SPAN: Vector2i = Vector2i(5, 4)
@@ -4324,7 +4510,7 @@ func _reopen_menu_layer() -> void:
 func _refresh_menu_layer() -> void:
 	if _menu_layer == null:
 		return
-	var signature: String = "%s|%s|%d|%d|%d|%s|%s" % [
+	var signature: String = "%s|%s|%d|%d|%d|%s|%s|%s" % [
 		_switch_stage, _menu_stage,
 		_switch_offer.selected_index() if _switch_offer != null else (
 			_switch_menu.cursor if _switch_menu != null else -1
@@ -4340,6 +4526,7 @@ func _refresh_menu_layer() -> void:
 			_capture_ball_index if _capture_selecting else -1,
 			_pack_rows.size(),
 		],
+		"%s%d" % [_pack_action_stage, _pack_action_index],
 		## The icons move on their own clock, so the cursor alone does not say
 		## whether the page still draws what the layer is holding.
 		_party_page.animation_signature() if _party_page != null else "",
@@ -4369,6 +4556,15 @@ func _refresh_menu_layer() -> void:
 	## while it stands, so at most one of them is up at a time.
 	if _forget_stage != &"":
 		_draw_forget_stage()
+		return
+	if _pack_action_stage != &"":
+		## `MENU_BACKUP_TILES`: the submenu's box is drawn over the list the row
+		## was chosen from, which stays where it was.
+		if _pack_action_stage == &"capture":
+			_draw_capture_menu()
+		else:
+			_draw_pack_menu()
+		_draw_pack_action_menu()
 		return
 	if _pack_move_selecting:
 		_draw_pack_move_menu()
@@ -4599,6 +4795,27 @@ func _draw_capture_menu() -> void:
 	for ball: int in _capture_balls:
 		labels.append(_list_row(_item_name(ball), "×%d" % _capture_quantity(ball)))
 	_draw_list_menu(&"capture", labels, _capture_ball_index)
+
+
+## `ItemSubmenu`'s USE/QUIT box, which stands over the list the row was chosen
+## from and is what the second A press answers.
+##
+## On [member _info_layer] rather than on the menu layer, which is under the
+## list: `LoadMenuHeader` draws this box into the tilemap after the pack's own,
+## so it covers the rows it was opened from.
+func _draw_pack_action_menu() -> void:
+	if _menu_page == null:
+		return
+	var box: Gen2MenuBox = Gen2MenuBox.from_coords(
+		PACK_ACTION_LEFT, PACK_ACTION_TOP,
+		PACK_ACTION_LEFT + PACK_ACTION_SPAN.x, PACK_ACTION_TOP + PACK_ACTION_SPAN.y,
+		YES_NO_FLAGS
+	)
+	_show_layer_image(
+		_info_layer,
+		_menu_page.render(box, PACK_ACTIONS, _pack_action_index),
+		box.border_position() * Gen2Font.TILE
+	)
 
 
 ## `RestorePPEffect`'s question, as the pack's own move list: which slot the
@@ -5457,6 +5674,33 @@ func _handle_button(button: int) -> bool:
 				return false
 		return true
 
+	if _pack_action_stage != &"":
+		match button:
+			Gen2Button.RIGHT, Gen2Button.DOWN:
+				_pack_action_index = posmod(_pack_action_index + 1, PACK_ACTIONS.size())
+				_reopen_menu_layer()
+			Gen2Button.LEFT, Gen2Button.UP:
+				_pack_action_index = posmod(_pack_action_index - 1, PACK_ACTIONS.size())
+				_reopen_menu_layer()
+			Gen2Button.A:
+				var over: StringName = _pack_action_stage
+				_pack_action_stage = &""
+				if _pack_action_index == 0:
+					if over == &"capture":
+						throw_capture_ball()
+					else:
+						use_selected_pack_item()
+				else:
+					_reopen_menu_layer()
+			Gen2Button.B:
+				## `.Quit` is a bare `ret`, so the list the row was chosen from
+				## is still standing under the box that just closed.
+				_pack_action_stage = &""
+				_reopen_menu_layer()
+			_:
+				return false
+		return true
+
 	if _pack_selecting:
 		match button:
 			Gen2Button.RIGHT, Gen2Button.DOWN:
@@ -5464,7 +5708,7 @@ func _handle_button(button: int) -> bool:
 			Gen2Button.LEFT, Gen2Button.UP:
 				select_pack_row(_pack_index - 1)
 			Gen2Button.A:
-				use_selected_pack_item()
+				_open_pack_action(&"pack")
 			Gen2Button.B:
 				close_battle_pack()
 			_:
@@ -5478,7 +5722,7 @@ func _handle_button(button: int) -> bool:
 			Gen2Button.LEFT, Gen2Button.UP:
 				select_capture_ball(_capture_ball_index - 1)
 			Gen2Button.A:
-				throw_capture_ball()
+				_open_pack_action(&"capture")
 			Gen2Button.B:
 				_clear_capture_action()
 				show_message("Choose an action.")
@@ -5901,5 +6145,15 @@ func _name_of(species: int) -> String:
 	return String(_data.species(species).get("name", ""))
 
 
+## `.PrintBattleStartText`'s four lines, chosen by `wBattleType` in its order.
+## BATTLETYPE_CELEBI takes `WildCelebiAppearedText`, which is
+## `WildPokemonAppearedText` written a second time.
 func _announce() -> void:
-	show_message("Wild %s\nappeared!" % _name_of(_enemy))
+	var wild: String = _name_of(_enemy)
+	match _battle.battle_type if _battle != null else Gen2Battle.BATTLETYPE_NORMAL:
+		Gen2Battle.BATTLETYPE_FISH:
+			show_message("The hooked\n%s\nattacked!" % wild)
+		Gen2Battle.BATTLETYPE_TREE:
+			show_message("%s fell\nout of the tree!" % wild)
+		_:
+			show_message("Wild %s\nappeared!" % wild)
