@@ -14,6 +14,9 @@ const STATICMENU_ENABLE_LEFT_RIGHT: int = 1 << 2
 const STATICMENU_ENABLE_START: int = 1 << 3
 const STATICMENU_PLACE_TITLE: int = 1 << 4
 const STATICMENU_WRAP: int = 1 << 5
+## `ScrollingMenu_UpdateDisplay` reaches its first row with `ld bc, SCREEN_WIDTH
+## + 1` where `_InitVerticalMenuCursor` spends a second row: every scrolling menu
+## carries this flag and no vertical one does.
 const STATICMENU_NO_TOP_SPACING: int = 1 << 6
 const STATICMENU_CURSOR: int = 1 << 7
 
@@ -42,6 +45,9 @@ var row_step: int = ROW_STEP
 ## `SCROLLINGMENU_*` by `ScrollingMenu`, and the two sets overlap.
 var scrolling_arrows: bool = false
 var scroll: int = 0
+## The frame a caller drew before the menu, `ScrollingMenu` drawing none. Empty
+## is every other menu, whose frame is its own corners.
+var frame: Rect2i = Rect2i()
 ## `BattleTowerRoomMenu_UpdatePickLevelMenu`, the one menu in the game that
 ## shows a single row between two arrows instead of a list under a cursor. Both
 ## are the `▼` of `String_119d07`, placed at `hlcoord 13, 8` and `hlcoord 13,
@@ -84,13 +90,13 @@ func interior() -> Vector2i:
 	return dims() - Vector2i.ONE
 
 
-## The drawn frame: the interior plus the two edge tiles on each axis.
+## The drawn frame, or [member frame] where the caller drew one of its own.
 func border_size() -> Vector2i:
-	return interior() + Vector2i(2, 2)
+	return frame.size if frame.size.x > 0 else interior() + Vector2i(2, 2)
 
 
 func border_position() -> Vector2i:
-	return Vector2i(left, top)
+	return frame.position if frame.size.x > 0 else Vector2i(left, top)
 
 
 ## `GetMenuTextStartCoord`: one in from the top-left corner, one row further

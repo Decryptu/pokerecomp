@@ -598,6 +598,8 @@ func _finish_import(success: bool, message: String) -> void:
 		"Import complete." if success else "Import stopped.",
 		message,
 	)
+	if _shell != null:
+		_shell.log_layers("import")
 
 
 func _set_status(kind: StringName, title: String, detail: String) -> void:

@@ -848,7 +848,7 @@ func test_a_mod_row_fits_a_phone_rather_than_running_off_its_card() -> void:
 	}) as Gen2LauncherCard
 	page.add_child(download_card)
 	var stack: VBoxContainer = download_card.get_child(0) as VBoxContainer
-	assert_eq(stack.get_child_count(), 1, "the download stays on the content row")
+	assert_eq(stack.get_child_count(), 2, "the download takes the second row too")
 
 
 ## Every card in [param root]'s subtree.
