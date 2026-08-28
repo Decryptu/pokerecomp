@@ -1912,8 +1912,11 @@ func _run_next_anim_step() -> void:
 				## and it costs one frame either way.
 				if _audio_player != null and _audio_player.effect_playing():
 					var rendered: int = _audio_player.timeline_updates()
-					if int(step.get("rendered", -1)) != rendered:
+					var still: int = 0 if int(step.get("rendered", -1)) != rendered \
+						else int(step.get("still", 0)) + 1
+					if still <= Gen2AudioPlayer.SERVICE_GAP_FRAMES:
 						step["rendered"] = rendered
+						step["still"] = still
 						_anim_plan.push_front(step)
 						_anim_delay = 1
 						return
@@ -2925,6 +2928,13 @@ func _open_capture_nickname() -> bool:
 	var species_name: String = _name_of(_enemy)
 	if species_name.is_empty():
 		return false
+	## `PokeBallEffect` reaches `AskGiveNicknameText` only once
+	## `Text_GotchaMonWasCaught` has finished printing, so the prompt waits for
+	## the box rather than opening over it. True, because the pump is meant to
+	## wait here: without it a Nuzlocke, whose question is skipped, put its
+	## keyboard on screen halfway through "Gotcha! X was caught!".
+	if _box != null and (_box.is_revealing() or _box.has_pages_left()):
+		return true
 	_capture_nickname_asked = true
 	_capture_nickname = species_name
 	var host := Gen2NicknamePromptScreen.new()

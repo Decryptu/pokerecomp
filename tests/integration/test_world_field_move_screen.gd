@@ -377,6 +377,33 @@ func test_cut_facing_nothing_reports_the_source_refusal() -> void:
 	assert_eq(_world_screen._world.block_at(TREE_BLOCK.x, TREE_BLOCK.y), BLOCK_TREE)
 
 
+## `preview_surf` rewrites the first move slot, and `Gen2SaveValidator` refuses a
+## row carrying more PP than its move has. Without the slot's PP moving with it,
+## a Tackle at 35 replaced by a Surf at 15 left a save every world transaction
+## after it refused: the field move worked, and the next catch, purchase or party
+## change reported nothing but failure.
+func test_the_surf_driver_leaves_a_save_a_transaction_will_accept() -> void:
+	await _open_surf_world()
+	var before: Gen2SaveData = _world_screen._injected_save
+	## More PP than any move has, so the slot is only valid afterwards if the
+	## driver wrote the new move's own maximum into it.
+	(before.party[0] as Gen2SaveMon).pp[0] = 99
+
+	_world_screen.preview_surf()
+	var save: Gen2SaveData = _world_screen._injected_save
+	assert_not_null(save)
+	assert_eq(int((save.party[0] as Gen2SaveMon).moves[0]), Gen2WorldFieldMove.MOVE_SURF)
+	assert_eq(
+		int((save.party[0] as Gen2SaveMon).pp[0]),
+		int(_data.move(Gen2WorldFieldMove.MOVE_SURF).get("pp", 0)),
+		"the slot carries the PP of the move now in it"
+	)
+	assert_true(
+		bool(Gen2SaveValidator.validate(save, _data).get("ok", false)),
+		"so a transaction opened on this save is not refused"
+	)
+
+
 func test_submenu_lists_surf_for_a_mon_that_knows_it() -> void:
 	await _open_surf_world()
 	var party: Gen2PartyScreen = await _open_party()

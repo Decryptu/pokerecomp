@@ -291,6 +291,37 @@ func test_a_party_heal_request_is_settled_where_it_is_staged() -> void:
 	assert_true((save.party[0] as Gen2SaveMon).hp > 1, "the party healed with no press")
 
 
+## `Script_waitsfx` holds the script until the effect channels are free, and a
+## driver nobody is servicing would hold it for ever, so the wait gives up once
+## the rendered-frame count has stood still. Counted over
+## [constant Gen2AudioPlayer.SERVICE_GAP_FRAMES] rather than over one frame: the
+## buffer is filled to a depth rather than by the frame, and read as one frame
+## every `waitsfx` in the game ended on the frame after it started, so a badge, a
+## TM and every item jingle printed their line and replaced it unread.
+func test_a_sound_wait_survives_a_frame_the_driver_rendered_nothing_in() -> void:
+	_world_screen = await _open_world()
+	var player: Gen2AudioPlayer = _world_screen._audio_player
+	assert_not_null(player)
+	## What `playsound` leaves behind: `_CheckSFX` reads the channels rather than
+	## the request, so one of them being on is the whole of "a sound is playing".
+	var engine: Gen2SoundEngine = player.get("_engine")
+	engine.channels[Gen2SoundEngine.NUM_MUSIC_CHANNELS].channel_on = true
+	assert_true(player.effect_playing())
+
+	_world_screen._audio_waiting = true
+	_world_screen.advance_frame()
+	assert_true(
+		_world_screen._audio_waiting,
+		"one frame the driver rendered nothing in is not a stall"
+	)
+	for _frame: int in Gen2AudioPlayer.SERVICE_GAP_FRAMES + 2:
+		_world_screen.advance_frame()
+	assert_false(
+		_world_screen._audio_waiting,
+		"and a driver nobody services still gives the script back"
+	)
+
+
 ## `Script_pokepic` puts its box up and `Script_cry` is the next command, so the
 ## picture and the runtime request the cry stages land on the same result. The
 ## request takes the pump out of the result loop, and the events beside it are
