@@ -325,8 +325,7 @@ func _verify_pewter(data: GameData, game_id: StringName, crystal: bool) -> void:
 	])
 
 
-## Every cell in [param region] a trainer sees the player on, as object index to
-## the set of cells.
+## Every cell in [param region] a trainer sees the player on, by object index.
 func _sight_lines(
 	data: GameData, group: int, number: int, region: Dictionary
 ) -> Dictionary:
@@ -345,8 +344,7 @@ func _sight_lines(
 	return out
 
 
-## The map [param region] crosses onto over [param axis], as the first edge cell
-## in it that really connects. Empty when the region reaches no such edge.
+## The map [param region] crosses onto over [param axis], as `mt_silver.gd` has it.
 func _crossing(world: Gen2WorldAPI, region: Dictionary, axis: String) -> Dictionary:
 	var size: Vector2i = world.map_size_cells()
 	var direction: Vector2i = {

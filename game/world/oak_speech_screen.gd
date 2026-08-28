@@ -118,9 +118,7 @@ func _process(delta: float) -> void:
 	advance_frames(_frame_clock.tick(delta))
 
 
-## Runs [param count] source frames of whatever the screen is standing in.
-## Public so a test or a preview tool can spend the cartridge's own
-## `DelayFrames` without a clock; [method _process] is the only other caller.
+## [method Gen2ClockSetScreen.advance_frames] over this screen's own state.
 func advance_frames(count: int) -> void:
 	for _frame: int in count:
 		if _text_box != null:
@@ -132,8 +130,7 @@ func advance_frames(count: int) -> void:
 			return
 		_presentation.advance_frame()
 		_apply_frame()
-		# The last VBlank of a `DelayFrames` run is the frame the routine
-		# returns on, so no frame is spent at a call boundary.
+		# `DelayFrames` returns on its last VBlank; no frame goes at a boundary.
 		if _presentation.finished():
 			_finish_queue()
 

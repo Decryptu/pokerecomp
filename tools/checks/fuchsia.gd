@@ -258,8 +258,7 @@ func _verify_gym(data: GameData, game_id: StringName) -> void:
 	])
 
 
-## Every cell in [param region] a trainer sees the player on, as object index to
-## the set of cells.
+## Every cell in [param region] a trainer sees the player on, by object index.
 func _sight_lines(
 	data: GameData, group: int, number: int, region: Dictionary
 ) -> Dictionary:

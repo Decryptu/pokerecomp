@@ -179,6 +179,18 @@ static func from_dict(raw: Variant) -> Gen2SaveData:
 		return null
 	var source: Dictionary = migration["data"]
 	var out := Gen2SaveData.new()
+	_read_header(out, source)
+	_read_lists(out, source)
+	_read_boxes(out, source)
+	var raw_world: Variant = source.get("world", {})
+	if raw_world is Dictionary and not (raw_world as Dictionary).is_empty():
+		out.world = Gen2WorldSnapshot.from_dict(raw_world)
+	_read_mods(out, source)
+	_read_run(out, source)
+	return out
+
+
+static func _read_header(out: Gen2SaveData, source: Dictionary) -> void:
 	out.format_version = FORMAT_VERSION
 	out.game_id = StringName(source.get("game_id", ""))
 	out.rom_sha1 = String(source.get("rom_sha1", ""))
@@ -193,6 +205,9 @@ static func from_dict(raw: Variant) -> Gen2SaveData:
 	out.link_record = Gen2LinkSession.normalize_record(source.get("link_record", {}))
 	out.mystery_gift = Gen2MysteryGift.normalize(source.get("mystery_gift", {}))
 	out.nuzlocke = Gen2Nuzlocke.normalize(source.get("nuzlocke", {}))
+
+
+static func _read_lists(out: Gen2SaveData, source: Dictionary) -> void:
 	var raw_box_names: Variant = source.get("box_names", [])
 	if raw_box_names is Array:
 		for index: int in mini((raw_box_names as Array).size(), BOX_COUNT):
@@ -213,6 +228,11 @@ static func from_dict(raw: Variant) -> Gen2SaveData:
 	if raw_stash is Array:
 		for raw_mon: Variant in raw_stash as Array:
 			out.contest_stashed_party.append(Gen2SaveMon.from_dict(raw_mon))
+
+
+## A file whose boxes are the wrong shape is marked rather than refused here, so
+## the validator is the one that turns it away.
+static func _read_boxes(out: Gen2SaveData, source: Dictionary) -> void:
 	var raw_boxes: Variant = source.get("boxes", null)
 	out.boxes_shape_valid = raw_boxes is Array and (raw_boxes as Array).size() == BOX_COUNT
 	if raw_boxes is Array:
@@ -228,9 +248,9 @@ static func from_dict(raw: Variant) -> Gen2SaveData:
 				out.boxes[box_index] = box
 	else:
 		out.boxes_shape_valid = false
-	var raw_world: Variant = source.get("world", {})
-	if raw_world is Dictionary and not (raw_world as Dictionary).is_empty():
-		out.world = Gen2WorldSnapshot.from_dict(raw_world)
+
+
+static func _read_mods(out: Gen2SaveData, source: Dictionary) -> void:
 	var raw_mods: Variant = source.get("mods", {})
 	if raw_mods is Dictionary:
 		for raw_id: Variant in raw_mods:
@@ -238,6 +258,9 @@ static func from_dict(raw: Variant) -> Gen2SaveData:
 			var value: Variant = raw_mods[raw_id]
 			if _valid_mod_id(id) and value is Dictionary:
 				out.mods[StringName(id)] = (value as Dictionary).duplicate(true)
+
+
+static func _read_run(out: Gen2SaveData, source: Dictionary) -> void:
 	var raw_run: Variant = source.get("run", {})
 	if raw_run is Dictionary:
 		out.run_seed = int((raw_run as Dictionary).get("seed", 0))
@@ -259,8 +282,6 @@ static func from_dict(raw: Variant) -> Gen2SaveData:
 				var options: Variant = (raw_run_options as Dictionary)[raw_id]
 				if _valid_mod_id(id) and options is Dictionary:
 					out.run_options[StringName(id)] = (options as Dictionary).duplicate(true)
-	return out
-
 
 ## Converts an older project save shape into the current schema, one version step
 ## at a time so a version 1 file reaches the current one through every step. Each

@@ -15,9 +15,7 @@ var _page: Gen2MenuPage = null
 var _options: Array[String] = []
 var _background: TextureRect = null
 
-## The four colours the screen is drawn through, index 0 the field and 3 the
-## ink. Empty is the ordinary black-on-white; the intro sets it because
-## `RotateThreePalettesRight` fades this screen out before `ClearTilemap`.
+## The four colours [Gen2NamingScreenScreen] is drawn through, on the same terms.
 var palette: PackedColorArray = PackedColorArray():
 	set(value):
 		palette = value

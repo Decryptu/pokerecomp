@@ -506,10 +506,7 @@ func _render_noise(mix: PackedInt32Array) -> void:
 				len_counter = 0
 		if not enabled:
 			continue
-		## `env_inc` is zeroed once the envelope has run out of steps, and a
-		## note holds far longer than it takes; the drain below cannot fire with
-		## nothing being added, since it always leaves the counter under the
-		## reference.
+		## The envelope guard [method _render_square] explains.
 		if env_inc != 0:
 			env_counter += env_inc
 			while env_counter > FREQ_INC_REF:

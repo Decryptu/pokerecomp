@@ -18,7 +18,7 @@ const MAX_COMPLEXITY: int = 20
 const MAX_COMMENT_BLOCK: int = 8
 ## Comment lines under [constant COUNTED_ROOTS]. A ceiling, not a target: lower
 ## it whenever a pass leaves room, and never raise it.
-const MAX_COMMENT_LINES: int = 37891
+const MAX_COMMENT_LINES: int = 37887
 
 ## The functions still over [constant MAX_COMPLEXITY], as `path:function`. Delete
 ## a line when you fix one. The test fails on a line that no longer names a
@@ -26,8 +26,6 @@ const MAX_COMMENT_LINES: int = 37891
 const OVER_COMPLEXITY: Array[String] = [
 	"game/audio/gen2_apu.gd:_render_square",
 	"game/audio/gen2_apu.gd:write",
-	"game/audio/gen2_sound_engine.gd:_parse_music_command",
-	"game/battle/ai.gd:_apply_basic",
 	"game/battle/battle_screen.gd:_handle_button",
 	"game/battle/battle_screen.gd:_refresh_menu_layer",
 	"game/battle/battle_screen.gd:start_world_battle",
@@ -38,7 +36,6 @@ const OVER_COMPLEXITY: Array[String] = [
 	"game/import/rom_importer.gd:_read_one_trainer",
 	"game/import/rom_importer.gd:_verify_gs_title",
 	"game/import/rom_importer.gd:_verify_presents_sprites",
-	"game/import/rom_importer.gd:import_rom",
 	"game/import/rom_importer.gd:verify_battle_graphics",
 	"game/import/rom_importer.gd:verify_battle_tower",
 	"game/import/rom_importer.gd:verify_mail",
@@ -55,14 +52,10 @@ const OVER_COMPLEXITY: Array[String] = [
 	"game/render/intro_movie_page.gd:_draw_background",
 	"game/save/party_screen.gd:_confirm",
 	"game/save/save_battle_adapter.gd:from_battle_party",
-	"game/save/save_data.gd:from_dict",
 	"game/save/save_validator.gd:validate",
 	"game/world/battle_tower.gd:action",
 	"game/world/intro_movie.gd:_run_scene",
 	"game/world/slot_machine.gd:_reel_action",
-	"game/world/start_menu_screen.gd:_confirm",
-	"game/world/start_menu_screen.gd:_hardware_image",
-	"game/world/start_menu_screen.gd:_move",
 	"game/world/world_animation.gd:tick",
 	"game/world/world_api.gd:_apply_object_movement",
 	"game/world/world_api.gd:_enqueue_script",
@@ -73,28 +66,21 @@ const OVER_COMPLEXITY: Array[String] = [
 	"game/world/world_decoration.gd:apply",
 	"game/world/world_encounter.gd:resolve",
 	"game/world/world_encounter.gd:resolve_fishing",
-	"game/world/world_host.gd:_resolve_data_request",
 	"game/world/world_mart_host.gd:purchase",
 	"game/world/world_party_host.gd:_apply_item_effect",
-	"game/world/world_party_host.gd:_apply_party_request",
 	"game/world/world_party_host.gd:capture_wild",
 	"game/world/world_party_host.gd:teach_tm_hm",
-	"game/world/world_renderer.gd:_draw",
 	"game/world/world_screen.gd:_apply_interface_mask",
-	"game/world/world_screen.gd:_handle_button",
 	"game/world/world_screen.gd:_overlay_open",
 	"game/world/world_screen.gd:_run_party_action",
 	"game/world/world_script.gd:scan_references",
 	"game/world/world_script_runner.gd:_complete",
 	"game/world/world_script_runner.gd:_read_runtime_variable",
 	"game/world/world_service_screen.gd:_confirm_pc_row",
-	"tools/checks/opening_lane.gd:_validate",
 	"tools/checks/pokedex.gd:_validate",
 	"tools/checks/radio.gd:_verify_shows",
-	"tools/preview_battle_switch.gd:_open",
 	"tools/preview_town_map.gd:_initialize",
 	"tools/preview_world.gd:_initialize",
-	"tools/record_clip.gd:_initialize",
 	"tools/record_clip.gd:_process",
 	"tools/trace_world_script.gd:_run",
 ]

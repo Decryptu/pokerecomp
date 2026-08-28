@@ -109,6 +109,37 @@ const STALL_MOVE_NUMBERS: Array = [
 
 ## The screen each of the three screen moves would raise, which is the whole of
 ## `AI_Redundant`'s `.LightScreen`, `.Reflect` and `.Safeguard`.
+## `AI_Redundant`'s rows that are one substatus bit on the target, by the move
+## effect that would set it.
+const REDUNDANT_TARGET_SUBSTATUS: Dictionary = {
+	## `.PerishSong` reads `wPlayerSubStatus1`, the target's: a second song over
+	## one already counting down would reset nothing.
+	Gen2MoveEffect.PERISH_SONG: Gen2Substatus.PERISH,
+	Gen2MoveEffect.LEECH_SEED: Gen2Substatus.LEECH_SEED,
+	Gen2MoveEffect.FORESIGHT: Gen2Substatus.IDENTIFIED,
+	Gen2MoveEffect.SWAGGER: Gen2Substatus.CONFUSED,
+}
+
+## The same read off the user's own side, which is where each of these lands.
+const REDUNDANT_USER_SUBSTATUS: Dictionary = {
+	Gen2MoveEffect.MIST: Gen2Substatus.MIST,
+	Gen2MoveEffect.FOCUS_ENERGY: Gen2Substatus.FOCUS_ENERGY,
+	Gen2MoveEffect.MEAN_LOOK: Gen2Substatus.CANT_RUN,
+	Gen2MoveEffect.SUBSTITUTE: Gen2Substatus.SUBSTITUTE,
+	Gen2MoveEffect.TRANSFORM: Gen2Substatus.TRANSFORMED,
+}
+
+## `.Heal`, `.MorningSun`, `.Synthesis` and `.Moonlight`, four labels on one row.
+const HEALING_EFFECTS: Array = [
+	Gen2MoveEffect.HEAL, Gen2MoveEffect.MORNING_SUN,
+	Gen2MoveEffect.SYNTHESIS, Gen2MoveEffect.MOONLIGHT,
+]
+
+## The two that need the user asleep to do anything at all.
+const SLEEP_REQUIRED_EFFECTS: Array = [
+	Gen2MoveEffect.SLEEP_TALK, Gen2MoveEffect.SNORE,
+]
+
 const SCREEN_FOR_EFFECT: Dictionary = {
 	Gen2MoveEffect.LIGHT_SCREEN: Gen2Screens.LIGHT_SCREEN,
 	Gen2MoveEffect.REFLECT: Gen2Screens.REFLECT,
@@ -400,96 +431,85 @@ static func _skip_80_20(rng: RandomNumberGenerator) -> bool:
 ## the attacker rather than the defender. A standing Substitute reads the attacker
 ## for the same reason; Leech Seed, Nightmare and Spikes read the target.
 static func _apply_basic(scores: Array, c: Context) -> void:
-	var attacker: Gen2BattleMon = c.attacker
-	var defender: Gen2BattleMon = c.defender
-	var data: GameData = c.data
-	var weather: int = c.weather
-	var attacker_screens: int = c.attacker_screens
-	var defender_screens: int = c.defender_screens
 	for slot: int in Gen2BattleMon.MAX_MOVES:
-		if not attacker.can_use(slot):
+		if not c.attacker.can_use(slot):
 			continue
-		var effect: int = _effect(_move_at(attacker, data, slot))
-		var redundant: bool = false
-		if effect == Gen2MoveEffect.CONFUSE:
-			# `.Confuse` is the one row with two clauses: already confused, or
-			# behind the player's own Safeguard.
-			redundant = Gen2Substatus.has(defender.substatus, Gen2Substatus.CONFUSED) \
-				or Gen2Screens.has(defender_screens, Gen2Screens.SAFEGUARD)
-		elif STATUS_ONLY_EFFECTS.has(effect):
-			redundant = Gen2Status.is_afflicted(defender.status)
-		elif effect == Gen2MoveEffect.DISABLE:
-			redundant = defender.disabled_slot >= 0
-		elif effect == Gen2MoveEffect.ENCORE:
-			redundant = defender.encored_slot >= 0
-		elif effect == Gen2MoveEffect.ATTRACT:
-			var same_gender: bool = attacker.gender() == defender.gender()
-			var unknown_gender: bool = attacker.gender() == Gen2BattleMon.GENDER_NONE \
-				or defender.gender() == Gen2BattleMon.GENDER_NONE
-			redundant = same_gender or unknown_gender \
-				or Gen2Substatus.has(defender.substatus, Gen2Substatus.ATTRACTED)
-		elif effect == Gen2MoveEffect.MIST:
-			redundant = Gen2Substatus.has(attacker.substatus, Gen2Substatus.MIST)
-		elif effect == Gen2MoveEffect.FOCUS_ENERGY:
-			redundant = Gen2Substatus.has(attacker.substatus, Gen2Substatus.FOCUS_ENERGY)
-		elif effect == Gen2MoveEffect.PERISH_SONG:
-			# `.PerishSong` reads `wPlayerSubStatus1`, the target's: a second song
-			# over one already counting down would reset nothing.
-			redundant = Gen2Substatus.has(defender.substatus, Gen2Substatus.PERISH)
-		elif effect == Gen2MoveEffect.MEAN_LOOK:
-			# `.MeanLook` reads the user's own flag, the side the trap sits on.
-			redundant = Gen2Substatus.has(attacker.substatus, Gen2Substatus.CANT_RUN)
-		elif SCREEN_FOR_EFFECT.has(effect):
-			# `.LightScreen`, `.Reflect` and `.Safeguard` all read
-			# `wEnemyScreens`, the AI's own side: a screen it already holds is
-			# the wasted turn, not one the player holds.
-			redundant = Gen2Screens.has(attacker_screens, int(SCREEN_FOR_EFFECT[effect]))
-		elif effect == Gen2MoveEffect.SUBSTITUTE:
-			# `.Substitute` reads `wEnemySubStatus4`, the AI's own.
-			redundant = Gen2Substatus.has(attacker.substatus, Gen2Substatus.SUBSTITUTE)
-		elif effect == Gen2MoveEffect.LEECH_SEED:
-			redundant = Gen2Substatus.has(defender.substatus, Gen2Substatus.LEECH_SEED)
-		elif effect == Gen2MoveEffect.NIGHTMARE:
-			# `.Nightmare` treats *no* status as the redundant case, so a target
-			# carrying any status stays encouraged even when it is awake and cannot
-			# have one. The source marks that as a bug; reproduced, not fixed.
-			redundant = not Gen2Status.is_afflicted(defender.status) \
-				or Gen2Substatus.has(defender.substatus, Gen2Substatus.NIGHTMARE)
-		elif effect == Gen2MoveEffect.SPIKES:
-			# `.Spikes` reads `wPlayerScreens`, the side they would land on.
-			redundant = Gen2Screens.has(defender_screens, Gen2Screens.SPIKES)
-		elif effect == Gen2MoveEffect.FORESIGHT:
-			redundant = Gen2Substatus.has(defender.substatus, Gen2Substatus.IDENTIFIED)
-		elif effect == Gen2MoveEffect.TELEPORT:
-			# `.Teleport` is a label on `.Redundant` itself, so it is redundant
-			# unconditionally: a trainer's Pokémon is refused by the move anyway.
-			redundant = true
-		elif effect == Gen2MoveEffect.SLEEP_TALK or effect == Gen2MoveEffect.SNORE:
-			# `.SleepTalk` shares Snore's row: awake means the move is wasted.
-			redundant = not Gen2Status.is_asleep(attacker.status)
-		elif effect == Gen2MoveEffect.DREAM_EATER:
-			# `.DreamEater` is the same shape read the other way round, off the
-			# target's status rather than the user's.
-			redundant = not Gen2Status.is_asleep(defender.status)
-		elif effect == Gen2MoveEffect.SWAGGER:
-			redundant = Gen2Substatus.has(defender.substatus, Gen2Substatus.CONFUSED)
-		elif effect == Gen2MoveEffect.TRANSFORM:
-			redundant = Gen2Substatus.has(attacker.substatus, Gen2Substatus.TRANSFORMED)
-		elif effect == Gen2MoveEffect.FUTURE_SIGHT:
-			# `.FutureSight` reads `SCREENS_UNUSED`, a bit nothing ever writes, so
-			# a second Future Sight is never discouraged. `docs/bugs_and_glitches.md`
-			# records it as a bug; reproduced, not fixed.
-			redundant = false
-		elif effect == Gen2MoveEffect.HEAL or effect == Gen2MoveEffect.MORNING_SUN \
-				or effect == Gen2MoveEffect.SYNTHESIS or effect == Gen2MoveEffect.MOONLIGHT:
-			# Four labels on one body: healing a full bar does nothing, whatever
-			# the weather would have made of it.
-			redundant = _at_max_hp(attacker)
-		elif WEATHER_FOR_EFFECT.has(effect):
-			redundant = weather == int(WEATHER_FOR_EFFECT[effect])
-		if redundant:
+		if _is_redundant(_effect(_move_at(c.attacker, c.data, slot)), c):
 			_discourage(scores, slot)
 
+
+## `AI_Redundant`'s table, which is one read per row.
+static func _is_redundant(effect: int, c: Context) -> bool:
+	if REDUNDANT_TARGET_SUBSTATUS.has(effect):
+		return Gen2Substatus.has(c.defender.substatus, int(REDUNDANT_TARGET_SUBSTATUS[effect]))
+	if REDUNDANT_USER_SUBSTATUS.has(effect):
+		return Gen2Substatus.has(c.attacker.substatus, int(REDUNDANT_USER_SUBSTATUS[effect]))
+	# `.LightScreen`, `.Reflect` and `.Safeguard` all read `wEnemyScreens`, the
+	# AI's own side: a screen it already holds is the wasted turn, not one the
+	# player holds.
+	if SCREEN_FOR_EFFECT.has(effect):
+		return Gen2Screens.has(c.attacker_screens, int(SCREEN_FOR_EFFECT[effect]))
+	if WEATHER_FOR_EFFECT.has(effect):
+		return c.weather == int(WEATHER_FOR_EFFECT[effect])
+	if STATUS_ONLY_EFFECTS.has(effect):
+		return Gen2Status.is_afflicted(c.defender.status)
+	# Four labels on one body: healing a full bar does nothing, whatever the
+	# weather would have made of it.
+	if HEALING_EFFECTS.has(effect):
+		return _at_max_hp(c.attacker)
+	# `.SleepTalk` shares Snore's row: awake means the move is wasted.
+	if SLEEP_REQUIRED_EFFECTS.has(effect):
+		return not Gen2Status.is_asleep(c.attacker.status)
+	return _is_redundant_once(effect, c)
+
+
+## The `.Redundant` rows that read something no other row does.
+static func _is_redundant_once(effect: int, c: Context) -> bool:
+	match effect:
+		Gen2MoveEffect.CONFUSE:
+			# `.Confuse` is the one row with two clauses: already confused, or
+			# behind the player's own Safeguard.
+			return Gen2Substatus.has(c.defender.substatus, Gen2Substatus.CONFUSED) \
+				or Gen2Screens.has(c.defender_screens, Gen2Screens.SAFEGUARD)
+		Gen2MoveEffect.DISABLE:
+			return c.defender.disabled_slot >= 0
+		Gen2MoveEffect.ENCORE:
+			return c.defender.encored_slot >= 0
+		Gen2MoveEffect.ATTRACT:
+			return _attract_redundant(c)
+		Gen2MoveEffect.NIGHTMARE:
+			# `.Nightmare` treats *no* status as the redundant case, so a target
+			# carrying any status stays encouraged even when it is awake and
+			# cannot have one. The source marks that as a bug; reproduced, not
+			# fixed.
+			return not Gen2Status.is_afflicted(c.defender.status) \
+				or Gen2Substatus.has(c.defender.substatus, Gen2Substatus.NIGHTMARE)
+		Gen2MoveEffect.SPIKES:
+			# `.Spikes` reads `wPlayerScreens`, the side they would land on.
+			return Gen2Screens.has(c.defender_screens, Gen2Screens.SPIKES)
+		Gen2MoveEffect.TELEPORT:
+			# `.Teleport` is a label on `.Redundant` itself, so it is redundant
+			# unconditionally: a trainer's Pokemon is refused by the move anyway.
+			return true
+		Gen2MoveEffect.DREAM_EATER:
+			# `.DreamEater` is Snore's shape read the other way round, off the
+			# target's status rather than the user's.
+			return not Gen2Status.is_asleep(c.defender.status)
+		Gen2MoveEffect.FUTURE_SIGHT:
+			# `.FutureSight` reads `SCREENS_UNUSED`, a bit nothing ever writes,
+			# so a second Future Sight is never discouraged.
+			# `docs/bugs_and_glitches.md` records it as a bug; reproduced.
+			return false
+	return false
+
+
+static func _attract_redundant(c: Context) -> bool:
+	if c.attacker.gender() == c.defender.gender():
+		return true
+	if c.attacker.gender() == Gen2BattleMon.GENDER_NONE \
+		or c.defender.gender() == Gen2BattleMon.GENDER_NONE:
+		return true
+	return Gen2Substatus.has(c.defender.substatus, Gen2Substatus.ATTRACTED)
 
 ## [constant RomLayout.AI_SETUP]: use a stat move on the first turn. Raising is
 ## encouraged only on the attacker's first turn and lowering only on the

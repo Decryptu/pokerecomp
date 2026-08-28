@@ -988,8 +988,7 @@ func close_embedded() -> void:
 	closed.emit({"ok": true, "script_value": 0, "changed": false})
 
 
-## The screen the opener wants this drawn in, handed over before it is added to
-## the tree. Without one the field goes in whichever screen this ends up inside.
+## The screen the opener wants this drawn in, as [Gen2PokegearScreen] takes it.
 func set_screen(screen: Gen2Screen) -> void:
 	_screen = screen
 

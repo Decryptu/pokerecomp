@@ -44,59 +44,14 @@ func _validate(game_id: StringName) -> bool:
 	if data.id != game_id:
 		failures.append("source_profile_mismatch:%s" % data.id)
 	var counts: Dictionary = {}
-	for section: String in REQUIRED_SECTIONS:
-		var path: String = "%s/%s" % [data.directory, REQUIRED_SECTIONS[section]]
-		var value: Variant = RomCache.read_json(path)
-		if (value is Dictionary and (value as Dictionary).is_empty()) \
-			or (value is Array and (value as Array).is_empty()) \
-			or value == null:
-			failures.append("missing_%s" % section)
-		else:
-			counts[section] = value.size()
-
-	var home: Gen2WorldMap = data.world_map(24, Gen2WorldSpawn.PLAYERS_HOUSE_2F)
-	var town: Gen2WorldMap = data.world_map(24, 4)
-	if home == null:
-		failures.append("missing_bedroom_map:24:7")
-	if town == null:
-		failures.append("missing_new_bark_map:24:4")
-	for map: Gen2WorldMap in [home, town]:
-		if map == null:
-			continue
-		var tileset: Gen2WorldTileset = data.world_tileset(map.tileset)
-		if tileset == null or tileset.meta.is_empty() or tileset.collision.is_empty():
-			failures.append("missing_graphics_or_collision:map_%d_%d" % [map.group, map.number])
-		if map.blocks.is_empty() or map.collision.is_empty():
-			failures.append("missing_map_payload:map_%d_%d" % [map.group, map.number])
-
-	for table: int in 4:
-		if data.name_input_chars(table).is_empty():
-			failures.append("missing_name_keyboard:%d" % table)
-	for key: String in ["oak_1", "oak_2", "oak_4", "oak_5", "oak_6", "oak_7"]:
-		if data.intro_text(key).is_empty():
-			failures.append("missing_intro_text:%s" % key)
-	if game_id == &"crystal" and data.intro_text("gender").is_empty():
-		failures.append("missing_crystal_gender_text")
-
 	var audio_counts: Dictionary = data.world_service_counts()
-	for kind: String in ["music", "sfx", "cries"]:
-		if int(audio_counts.get(kind, 0)) <= 0:
-			failures.append("missing_audio:%s" % kind)
-	for asset: StringName in [&"wave_samples", &"drumkits"]:
-		if data.world_audio_asset_bytes(asset).is_empty():
-			failures.append("missing_audio_payload:%s" % asset)
-
+	failures.append_array(_audit_sections(data, counts))
+	failures.append_array(_audit_starting_maps(data))
+	failures.append_array(_audit_opening_text(data, game_id))
+	failures.append_array(_audit_audio_assets(data, audio_counts))
 	if counts.get("movements", 0) == 0:
 		failures.append("missing_movement_data")
-	for kind: StringName in [&"music", &"sfx", &"cries"]:
-		var kind_count: int = int(audio_counts.get(String(kind), 0))
-		for index: int in kind_count:
-			var record: Dictionary = data.world_audio(kind, index)
-			if record.is_empty():
-				failures.append("missing_audio_record:%s:%d" % [kind, index])
-			elif record.get("bytes", PackedByteArray()).is_empty():
-				failures.append("missing_audio_record_payload:%s:%d" % [kind, index])
-
+	failures.append_array(_audit_audio_records(data, audio_counts))
 	failures.append_array(_audit_opening_music(data))
 	failures.append_array(_audit_title_backdrop(data))
 
@@ -122,6 +77,74 @@ func _validate(game_id: StringName) -> bool:
 	print("  opening_lane=invalid failures=%s" % JSON.stringify(failures))
 	return false
 
+
+func _audit_sections(data: GameData, counts: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for section: String in REQUIRED_SECTIONS:
+		var path: String = "%s/%s" % [data.directory, REQUIRED_SECTIONS[section]]
+		var value: Variant = RomCache.read_json(path)
+		if (value is Dictionary and (value as Dictionary).is_empty()) \
+			or (value is Array and (value as Array).is_empty()) \
+			or value == null:
+			out.append("missing_%s" % section)
+		else:
+			counts[section] = value.size()
+	return out
+
+
+func _audit_starting_maps(data: GameData) -> Array[String]:
+	var out: Array[String] = []
+	var home: Gen2WorldMap = data.world_map(24, Gen2WorldSpawn.PLAYERS_HOUSE_2F)
+	var town: Gen2WorldMap = data.world_map(24, 4)
+	if home == null:
+		out.append("missing_bedroom_map:24:7")
+	if town == null:
+		out.append("missing_new_bark_map:24:4")
+	for map: Gen2WorldMap in [home, town]:
+		if map == null:
+			continue
+		var tileset: Gen2WorldTileset = data.world_tileset(map.tileset)
+		if tileset == null or tileset.meta.is_empty() or tileset.collision.is_empty():
+			out.append("missing_graphics_or_collision:map_%d_%d" % [map.group, map.number])
+		if map.blocks.is_empty() or map.collision.is_empty():
+			out.append("missing_map_payload:map_%d_%d" % [map.group, map.number])
+	return out
+
+
+func _audit_opening_text(data: GameData, game_id: StringName) -> Array[String]:
+	var out: Array[String] = []
+	for table: int in 4:
+		if data.name_input_chars(table).is_empty():
+			out.append("missing_name_keyboard:%d" % table)
+	for key: String in ["oak_1", "oak_2", "oak_4", "oak_5", "oak_6", "oak_7"]:
+		if data.intro_text(key).is_empty():
+			out.append("missing_intro_text:%s" % key)
+	if game_id == &"crystal" and data.intro_text("gender").is_empty():
+		out.append("missing_crystal_gender_text")
+	return out
+
+
+func _audit_audio_assets(data: GameData, audio_counts: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for kind: String in ["music", "sfx", "cries"]:
+		if int(audio_counts.get(kind, 0)) <= 0:
+			out.append("missing_audio:%s" % kind)
+	for asset: StringName in [&"wave_samples", &"drumkits"]:
+		if data.world_audio_asset_bytes(asset).is_empty():
+			out.append("missing_audio_payload:%s" % asset)
+	return out
+
+
+func _audit_audio_records(data: GameData, audio_counts: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for kind: StringName in [&"music", &"sfx", &"cries"]:
+		for index: int in int(audio_counts.get(String(kind), 0)):
+			var record: Dictionary = data.world_audio(kind, index)
+			if record.is_empty():
+				out.append("missing_audio_record:%s:%d" % [kind, index])
+			elif record.get("bytes", PackedByteArray()).is_empty():
+				out.append("missing_audio_record_payload:%s:%d" % [kind, index])
+	return out
 
 ## What the title screen puts around itself in a window that is not 10:9.
 ##

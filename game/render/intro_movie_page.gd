@@ -230,8 +230,7 @@ func draw(movie: Gen2IntroMovie) -> Image:
 	var background: Array = _draw_background(pixels, movie)
 	var behind: PackedByteArray = background[0]
 	var forced: PackedByteArray = background[1]
-	# The lower OAM index wins a pixel, so a slot only paints where no earlier
-	# one did.
+	# The lower OAM index wins a pixel.
 	var taken := PackedByteArray()
 	taken.resize(WIDTH * HEIGHT)
 	for entry: Dictionary in shadow_oam(movie):
@@ -239,11 +238,7 @@ func draw(movie: Gen2IntroMovie) -> Image:
 	return Gen2PicImage.canvas_image(pixels, WIDTH, HEIGHT)
 
 
-## Every live struct expanded into the shadow OAM the hardware would hold, in
-## struct order, which is the z-order `PlaySpriteAnimations` walks. `y` and `x`
-## are the OAM bytes and `tile` the byte `dbsprite` writes. [method draw] blits
-## this same list rather than re-deriving it, so a trace of it compares to a
-## cartridge's own buffer line for line.
+## [method Gen2GoldSilverIntroPage.shadow_oam]'s buffer for this movie.
 func shadow_oam(movie: Gen2IntroMovie) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if movie == null:
@@ -270,8 +265,7 @@ func shadow_oam(movie: Gen2IntroMovie) -> Array[Dictionary]:
 			if flip_y:
 				dy = -TILE - dy
 			out.append({
-				# `UpdateAnimFrame` builds every position with `add`, so an
-				# offset past the screen wraps rather than clamping.
+				# The `add` wrap [Gen2TitlePage] records.
 				"y": (at.y + dy) & 0xFF,
 				"x": (at.x + dx) & 0xFF,
 				"tile": (int(sprite["vtile"]) + int(ordering["vtile"]) + int(part[2])) & 0xFF,
