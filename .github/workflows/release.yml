@@ -500,7 +500,11 @@ jobs:
           cat sha256sums.txt
           cd ..
 
-          notes="$(sed "s/{VERSION}/${v}/g" .github/release-notes.md)"
+          # The editing note at the top of the file belongs to the file. It is
+          # invisible on GitHub, so five published bodies carried it before
+          # anyone noticed; dropped here rather than trusted to be remembered.
+          notes="$(sed '/^<!--/,/-->$/d' .github/release-notes.md \
+            | sed "s/{VERSION}/${v}/g" | sed '/./,$!d')"
           gh release create "${{ needs.version.outputs.tag }}" \
             --title "$v" --notes "$notes" staged/*
 
