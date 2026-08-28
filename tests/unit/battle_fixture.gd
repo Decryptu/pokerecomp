@@ -331,12 +331,18 @@ const ETHER: int = 0x3F
 const ELIXER: int = 0x41
 const POKE_BALL: int = 0x05
 const BATTLE_ITEMS: Dictionary = {
-	POTION: {"name": "POTION", "battle_menu": 5, "pocket": 1, "heal_amount": 20},
+	POTION: {
+		"name": "POTION", "battle_menu": 5, "pocket": 1, "heal_amount": 20,
+		"description": "Restores HP by 20.",
+	},
 	FULL_RESTORE: {
 		"name": "FULL RESTORE", "battle_menu": 5, "pocket": 1,
 		"heal_amount": 999, "status_mask": 0xFF,
 	},
-	FULL_HEAL: {"name": "FULL HEAL", "battle_menu": 5, "pocket": 1, "status_mask": 0xFF},
+	FULL_HEAL: {
+		"name": "FULL HEAL", "battle_menu": 5, "pocket": 1, "status_mask": 0xFF,
+		"description": "Heals all status problems.",
+	},
 	REVIVE: {"name": "REVIVE", "battle_menu": 5, "pocket": 1},
 	POKE_DOLL: {"name": "POKE DOLL", "battle_menu": 6, "pocket": 1},
 	X_ATTACK: {"name": "X ATTACK", "battle_menu": 6, "pocket": 1},

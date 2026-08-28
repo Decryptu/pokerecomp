@@ -4268,6 +4268,23 @@ func preview_battle_request(
 	})
 
 
+## Public screenshot driver for a wild that is already standing on the map: the
+## one a provider put on [param cell], met exactly as a step onto that cell meets
+## it. The entry's id travels with the request, so the provider is told how the
+## fight ended and can take its Pokemon off the map; a battle started any other
+## way leaves the sprite standing where it was.
+func preview_meet_visible_encounter(cell: Vector2i) -> bool:
+	if _encounters == null or not _encounters.active():
+		return false
+	var request: Dictionary = _encounters.battle_request_at(cell)
+	if request.is_empty():
+		return false
+	_battle_encounter_id = StringName(request["visible_encounter"])
+	_zero_map_name_sign_timer()
+	_start_battle_request(request)
+	return true
+
+
 ## Public screenshot driver for the real wild capture bridge. It adds one
 ## development Master Ball, starts an imported wild encounter, and leaves the
 ## production battle overlay on its throw message.

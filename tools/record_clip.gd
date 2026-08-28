@@ -31,9 +31,14 @@ extends SceneTree
 ##                  right. Untouched by default, which is the map's own answer.
 ##   hour=<0-23>    the clock the map is drawn on, which is its palette
 ##   view=<mod id>  a mod's renderer instead of the built-in one (`voxel3d`)
-##   size=<W>x<H>   the size the game lays itself out for, 1280x720 by default.
-##                  NOT the video's: Movie Maker fixes that at the project's own
-##                  viewport before a line of this script runs.
+##   size=<W>x<H>   the size the game lays itself out for. The video's own size
+##                  by default, which is the one size that costs nothing: Movie
+##                  Maker fixes the frame at the project's own viewport before a
+##                  line of this script runs, and a layout of any other size is
+##                  scaled into it, which is what makes a launcher page's text
+##                  soft. Give this only to shoot a shape the frame is not, a
+##                  portrait phone being the one that earns it: `--resolution`
+##                  moves the window on the desktop and not the frame.
 ##   seconds=<n>    how long the clip runs after the warm-up
 ##   seed=<n>       the run seed, which is what a mod's spawn plan is built from
 ##   hold=<dir>     a direction held for the whole clip: up, down, left, right
@@ -63,6 +68,12 @@ extends SceneTree
 ##                  player reading. A battle's own text is as long as its text is
 ##                  and no frame number can be worked out in advance, so a clip
 ##                  that has to reach a menu says this rather than counting.
+##   read=<frames>  how long a finished page is left standing before `text=auto`
+##                  turns it. The default is [constant TEXT_GAP], which is a
+##                  viewer's reading speed rather than a player's.
+##   beat=<frames>  the same between one `at=` or `always=` action and the next,
+##                  which is how long a chosen menu row is seen before it is
+##                  pressed. The default is [constant STATE_GAP].
 ##   at=<state>:<action>  one action, performed the first time the screen reaches
 ##                  that state: `menu` is the battle's FIGHT/PKMN/PACK/RUN,
 ##                  `move` its move list, `pack` the pack it opens, `capture` the
@@ -85,8 +96,10 @@ extends SceneTree
 ## World actions are a button name (`a`, `b`, `start`, `select`, `up`, `down`,
 ## `left`, `right`), `hold-<dir>` or `hold-none` to change what is held from that
 ## frame, `surf` to mount the water the player is facing, `battle` to start a
-## wild fight, `wild-<species>-<level>[-shiny]` to start one against a named
-## Pokemon, `menu-off` to close whatever is open, `text-off` and `text-on` to
+## wild fight, `meet` to face the nearest wild a mod has drawn on the map and
+## fight THAT one, `meet-shiny` for the nearest one that is shiny,
+## `wild-<species>-<level>[-shiny]` to start one against a named Pokemon that is
+## on no map, `menu-off` to close whatever is open, `text-off` and `text-on` to
 ## stop and restart `text=auto` so the last line of a clip is left up rather
 ## than turned, or `view-<mod id>` to switch
 ## the renderer on camera, cover and all. Frames are the world's own, counted
@@ -121,6 +134,7 @@ extends SceneTree
 ## spawn plan is built from, so a seed found from one cell puts its shiny
 ## somewhere else from another. `probe=wilds` is the check on that.
 
+## Only for a run with no window to ask, which is every headless one.
 const DEFAULT_WINDOW := Vector2i(1280, 720)
 ## Frames spent before the clip proper: the map loads, a mod's renderer is
 ## chosen and its cover is settled. Trimmed off the video afterwards.
@@ -155,6 +169,9 @@ const DEFAULT_PARTY_LEVEL: int = 40
 var _screen: Gen2WorldScreen = null
 ## The launcher page a `screen=saves` clip is shot on, and null for a world one.
 var _page: Control = null
+## The frame Movie Maker writes, which is the window as the engine started it.
+## Read before anything here resizes anything.
+var _frame_size: Vector2i = DEFAULT_WINDOW
 var _window: Vector2i = DEFAULT_WINDOW
 var _view: StringName = &""
 var _restore_view: StringName = &""
@@ -212,6 +229,9 @@ var _holds_scripted: bool = false
 var _drawn_at_start: int = 0
 ## Whether `text=auto` is on: an A press whenever the box wants one.
 var _auto_text: bool = false
+## `read=` and `beat=`, the two gaps above.
+var _read_gap: int = TEXT_GAP
+var _beat_gap: int = STATE_GAP
 ## `at=` entries still waiting for their state, in the order they were written.
 var _waits: Array[Dictionary] = []
 ## `always=` entries, state to action, none of which is ever spent.
@@ -222,6 +242,17 @@ var _state_ready: int = 0
 
 
 func _initialize() -> void:
+	## Movie Maker's frame is the PROJECT's viewport rather than the window, so
+	## `--resolution` moves what is on the desktop and not what is written.
+	var frame := Vector2i(
+		int(ProjectSettings.get_setting("display/window/size/viewport_width", 0)),
+		int(ProjectSettings.get_setting("display/window/size/viewport_height", 0))
+	)
+	if frame.x <= 0 or frame.y <= 0:
+		frame = DisplayServer.window_get_size()
+	if frame.x > 0 and frame.y > 0:
+		_frame_size = frame
+		_window = frame
 	var args: PackedStringArray = OS.get_cmdline_user_args()
 	if args.size() < 3:
 		push_error("Usage: record_clip.gd -- <game> <group> <map> [key=value ...]")
@@ -267,6 +298,10 @@ func _initialize() -> void:
 					_flags.append(int(raw))
 			"progress":
 				_progress = _parse_progress(value)
+			"read":
+				_read_gap = maxi(int(value), 0)
+			"beat":
+				_beat_gap = maxi(int(value), 0)
 			"text":
 				_auto_text = value == "auto"
 			"always":
@@ -389,6 +424,11 @@ func _build() -> void:
 		_quit_failed()
 		return
 
+	## Read by `.claude/clip.sh`, which scales a hardware screen and a launcher
+	## page differently: one is square pixels and the other is not.
+	print("FRAME=%dx%d LAYOUT=%dx%d SCREEN=%s" % [
+		_frame_size.x, _frame_size.y, _window.x, _window.y, _kind,
+	])
 	DisplayServer.window_set_size(_window)
 	root.set_content_scale_size(_window)
 	root.size = _window
@@ -659,13 +699,14 @@ func _answer_static_probe() -> void:
 
 ## How long the clip waits between one action spent on a state and the next: a
 ## press a viewer is meant to follow lands a beat after the one before it rather
-## than on the same frame.
-const STATE_GAP: int = 26
-## The same for `text=auto`, which is not a decision to watch but a page being
-## turned. A press while the page is still printing is spent and does nothing
-## (`Gen2TextBox.advance`), so this only decides how soon after a page finishes
-## the next one starts.
-const TEXT_GAP: int = 8
+## than on the same frame. `beat=` moves it.
+const STATE_GAP: int = 40
+## The same for `text=auto`. A press while the page is still printing is spent and
+## does nothing (`Gen2TextBox.advance`), so this is how long a FINISHED page is
+## left standing, which is the one thing that decides whether a clip can be read.
+## Three quarters of a second: shorter and the last words of a line are gone
+## before a viewer reaches them. `read=` moves it.
+const TEXT_GAP: int = 45
 
 
 ## `text=auto` and the `at=` queue, both of which watch the screen rather than
@@ -681,7 +722,7 @@ func _spend_by_state() -> void:
 	var state: StringName = _screen_state()
 	if _auto_text and state == &"text":
 		_screen.press_button(Gen2Button.A)
-		_state_ready = now + TEXT_GAP
+		_state_ready = now + _read_gap
 		return
 	var action: String = ""
 	if not _waits.is_empty() and StringName(_waits[0]["state"]) == state:
@@ -696,7 +737,7 @@ func _spend_by_state() -> void:
 		_screen.press_button(button)
 	else:
 		_perform(action)
-	_state_ready = now + STATE_GAP
+	_state_ready = now + _beat_gap
 
 
 ## What is on screen, as the vocabulary `at=` and `text=auto` are written in.
@@ -890,6 +931,10 @@ func _perform(action: String) -> void:
 			_screen.preview_surf_use()
 		"battle":
 			_screen.preview_battle_request()
+		"meet":
+			_meet_visible_encounter(false)
+		"meet-shiny":
+			_meet_visible_encounter(true)
 		"menu-off":
 			_screen.press_button(Gen2Button.B)
 		"text-off":
@@ -904,6 +949,53 @@ func _perform(action: String) -> void:
 			## one thing here worth filming rather than settling.
 			if action.begins_with("view-"):
 				_screen.select_view(StringName(action.trim_prefix("view-")))
+
+
+## The wild a provider has put on the map nearest the player, met the way walking
+## onto it meets it. Faces the player at it first, since a clip of an encounter
+## is a clip of the thing on screen.
+##
+## Not the same as `wild-`: that one invents a battle and the entry standing on
+## the map is not part of it, so its Pokemon is still there afterwards however
+## the fight ended.
+func _meet_visible_encounter(shiny_only: bool) -> void:
+	var encounters: Object = _screen.get("_encounters")
+	var world: Gen2WorldAPI = _screen.get("_world")
+	if encounters == null or world == null:
+		push_error("meet needs a world with a visible-encounter provider on it.")
+		_quit_failed()
+		return
+	var from: Vector2i = world.player_cell
+	var nearest := Vector2i(-1, -1)
+	var closest: int = 1 << 30
+	for raw: Variant in encounters.call("entries"):
+		var entry: Dictionary = raw
+		if shiny_only and not _is_shiny(int(entry.get("dvs", 0))):
+			continue
+		var cell: Vector2i = entry["cell"]
+		var away: int = absi(cell.x - from.x) + absi(cell.y - from.y)
+		if away < closest:
+			closest = away
+			nearest = cell
+	if nearest.x < 0:
+		push_error("No %svisible encounter is on this map. Did you pass --mods?" % [
+			"shiny " if shiny_only else "",
+		])
+		_quit_failed()
+		return
+	world.player_facing = _facing_towards(from, nearest)
+	if not bool(_screen.preview_meet_visible_encounter(nearest)):
+		push_error("The wild at %s refused to be met." % nearest)
+		_quit_failed()
+
+
+## Which way [param from] looks to see [param at]. The longer axis wins, which is
+## what a player walking towards one would end up facing.
+static func _facing_towards(from: Vector2i, at: Vector2i) -> int:
+	var away: Vector2i = at - from
+	if absi(away.x) >= absi(away.y):
+		return Gen2WorldSprite.FACING_RIGHT if away.x >= 0 else Gen2WorldSprite.FACING_LEFT
+	return Gen2WorldSprite.FACING_DOWN if away.y >= 0 else Gen2WorldSprite.FACING_UP
 
 
 ## `wild-<species>-<level>[-shiny]`, the one wild a clip has to name rather than

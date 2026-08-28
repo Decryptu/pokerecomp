@@ -1096,6 +1096,22 @@ func test_master_ball_captures_a_wild_mon_and_records_catch_metadata() -> void:
 	assert_eq(_world.state.item_quantity(0x01), 0)
 
 
+## `GetPokeBallWobble` increments its count before it rolls, so the roll that
+## ends a throw names how many rocks came before it and not how many there were.
+## A throw that escapes on the first roll has rocked no times at all, which is
+## `BallBrokeFreeText`'s own case and was unreachable while the answer here was
+## the source's count rather than the rocks.
+func test_a_failed_throw_counts_the_rocks_and_not_the_rolls() -> void:
+	var seen: Dictionary = {}
+	for seed_value: int in 200:
+		var random := RandomNumberGenerator.new()
+		random.seed = seed_value
+		seen[Gen2WorldPartyHost._failed_wobbles(1, random)] = true
+	assert_true(seen.has(0), "a throw that escapes on the first roll has not rocked")
+	assert_eq(seen.keys().min(), 0)
+	assert_eq(seen.keys().max(), 3, "the ball rocks three times at most")
+
+
 ## The Nuzlocke's first rule at the one place a ball is ever thrown. The battle
 ## claims the area when it opens and leaves it on the world; anything else is an
 ## area that already gave up its encounter, and the ball is refused whole: no

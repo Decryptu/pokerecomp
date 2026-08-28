@@ -309,13 +309,36 @@ func test_a_segmented_control_moves_its_choice_and_reports_the_index() -> void:
 	await get_tree().process_frame
 
 	var buttons: Array[Gen2LauncherButton] = []
-	for child: Node in control.get_child(0).get_children():
+	for child: Node in (control.get_meta(&"wrapping_row") as Control).get_children():
 		buttons.append(child)
 	assert_true(buttons[0].is_active())
 	buttons[2].pressed.emit()
 	assert_eq(chosen, [2] as Array[int])
 	assert_true(buttons[2].is_active())
 	assert_false(buttons[0].is_active(), "only one segment can be chosen")
+
+
+## A page body gives its children the whole column, and a segmented track filled
+## it while its three choices sat bunched at the left. The track is the choices,
+## so it is as wide as they are while they fit on one line.
+func test_a_segmented_track_is_as_wide_as_its_choices_and_no_wider() -> void:
+	var control: Control = Gen2LauncherUI.segmented(
+		_light, ["Vanilla", "Hard", "Nuzlocke"], 0, func(_index: int) -> void: pass
+	)
+	var body := VBoxContainer.new()
+	add_child_autofree(body)
+	body.add_child(control)
+	body.size = Vector2(900.0, 200.0)
+	await wait_process_frames(2)
+
+	var wanted: float = Gen2LauncherUI.preferred_width(control)
+	assert_gt(control.size.x, wanted - 1.0, "the row itself is given the column")
+	assert_almost_eq(control.get_child(0).size.x, wanted, 1.0)
+
+	# Narrower than one line, the track takes what there is and the flow wraps.
+	body.size = Vector2(wanted / 2.0, 200.0)
+	await wait_process_frames(2)
+	assert_almost_eq(control.get_child(0).size.x, wanted / 2.0, 1.0)
 
 
 func test_the_stage_holds_one_cartridge_per_supported_game() -> void:

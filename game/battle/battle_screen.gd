@@ -270,10 +270,13 @@ var _world_context: Gen2BattleWorldContext = null
 var _pack_rows: Array[int] = []
 var _pack_quantities: Dictionary = {}
 var _pack_index: int = 0
+## `wMenuScrollPosition` for each list that can outgrow its window, kept apart so
+## a sub-list opened over the pack does not move the pack's own.
+var _list_scroll: Dictionary = {}
 var _pack_selecting: bool = false:
 	set(value):
 		_pack_selecting = value
-		_gate_annotations()
+		_list_state_changed()
 var _pack_item: int = 0
 ## `RestorePPEffect`'s own `.loop`, which asks which move before it restores
 ## anything. Only the three items that fill one slot ever open it.
@@ -283,7 +286,7 @@ var _pack_move_target: int = -1
 var _pack_move_selecting: bool = false:
 	set(value):
 		_pack_move_selecting = value
-		_gate_annotations()
+		_list_state_changed()
 
 var _capture_balls: Array[int] = []
 var _capture_quantities: Dictionary = {}
@@ -294,7 +297,7 @@ var _capture_refusal: String = ""
 var _capture_selecting: bool = false:
 	set(value):
 		_capture_selecting = value
-		_gate_annotations()
+		_list_state_changed()
 var _capture_waiting: bool = false
 var _capture_messages: Array[String] = []
 ## The [constant Gen2Battle.CAUGHT] event built by [method complete_capture] and
@@ -347,7 +350,7 @@ var _capture_nickname_asked: bool = false
 var _forget_stage: StringName = &"":
 	set(value):
 		_forget_stage = value
-		_gate_annotations()
+		_list_state_changed()
 var _forget_moves: Array = []
 var _forget_cursor: int = 0
 var _forget_confirm_cursor: int = 0
@@ -1711,6 +1714,19 @@ const ANIM_MOVE_LIMIT: int = 0x100
 ## (constants/move_constants.asm).
 const ANIM_THROW_POKE_BALL: int = 0x100
 
+## `.shake_and_break_free`'s four texts, indexed by how many times the ball
+## rocked. `PokeBallEffect` reads `wThrownBallWobbleCount`, which is one higher
+## than the count of rocks; the count itself is what
+## [method Gen2WorldPartyHost._failed_wobbles] answers with. There is no line for
+## a rock on its own: the rocking is the animation, and one of these is the whole
+## of what a failed throw says.
+const BREAK_FREE_TEXT: Array[String] = [
+	"Oh no! The #MON\nbroke free!",
+	"Aww! It appeared\nto be caught!",
+	"Aargh!\nAlmost had it!",
+	"Shoot! It was so\nclose too!",
+]
+
 ## `SendOutMonText`'s four texts, in [constant Gen2Battle.SEND_OUT_GO]'s order.
 const SEND_OUT_LINES: Array[String] = [
 	"Go! %s!", "Do it! %s!", "Go for it,\n%s!", "Your foe's weak!\nGet'm, %s!",
@@ -2401,6 +2417,16 @@ func _annotations_visible() -> bool:
 		and not _capture_selecting and _forget_stage == &""
 
 
+## One of the four lists in front of the fight opened or closed: the pack, its
+## two sub-lists and the forget offer. Both layers follow the state rather than
+## every call site that changes one remembering to take it down. A ball thrown
+## from the pack left its list standing over the whole fight, because the throw
+## is a message and no message redraws a menu.
+func _list_state_changed() -> void:
+	_gate_annotations()
+	_reopen_menu_layer()
+
+
 ## Rebuilds the layer the frame a modal takes the interface or gives it back.
 ##
 ## Every state [method _annotations_visible] reads writes through a setter that
@@ -2557,11 +2583,11 @@ func select_pack_row(index: int) -> Dictionary:
 	return {"ok": true, "item": selected_pack_item()}
 
 
+## The list itself is the menu layer's; the box below it is
+## `UpdateItemDescription`'s, which prints the row the cursor is on.
 func _show_pack_selection() -> void:
-	var item: int = selected_pack_item()
-	show_message("Use %s x%d. Left and right: choose, A: use, B: back" % [
-		_item_name(item), int(_pack_quantities.get(item, 1)),
-	])
+	show_message(Gen2WorldPack.row_description(_data, selected_pack_item()))
+	_reopen_menu_layer()
 
 
 func close_battle_pack() -> void:
@@ -2618,12 +2644,19 @@ func _open_pack_move(item: int, target: int) -> void:
 
 
 func _show_pack_move_selection() -> void:
+	show_message(String(_selected_pack_move().get("description", "")))
+	_reopen_menu_layer()
+
+
+## The move the Ether would go on, as [GameData] holds it.
+func _selected_pack_move() -> Dictionary:
+	if _data == null or _pack_move_slots.is_empty():
+		return {}
 	var mon: Gen2BattleMon = _battle.party(Gen2Battle.PLAYER).at(_pack_move_target)
-	var slot: int = int(_pack_move_slots[_pack_move_index])
-	var move: Dictionary = _data.move(int(mon.moves[slot])) if _data != null else {}
-	show_message("Restore %s %d PP. Left and right: choose, A: use, B: back" % [
-		String(move.get("name", "MOVE")), mon.pp_left(slot),
-	])
+	if mon == null:
+		return {}
+	var slot: int = int(_pack_move_slots[posmod(_pack_move_index, _pack_move_slots.size())])
+	return _data.move(int(mon.moves[slot]))
 
 
 func _close_pack_move() -> void:
@@ -2646,9 +2679,7 @@ func _use_pack_item(item: int, target: int, move_slot: int = -1) -> Dictionary:
 		_pack_selecting = true
 		return used
 	item_used.emit(item, target)
-	## `ItemUsedText`, less its `<PLAYER>` the way every other host-authored line
-	## here drops one.
-	show_message("Used the %s." % _item_name(item))
+	show_message(_item_used_text(item))
 	if _battle.is_over():
 		## `PokeDollEffect`'s `wForcedSwitch`: the battle is already over, so no
 		## turn is taken and the terminal text is what follows this line.
@@ -2735,7 +2766,7 @@ func throw_capture_ball() -> Dictionary:
 	var ball: int = _selected_capture_ball()
 	_capture_selecting = false
 	_capture_waiting = true
-	show_message("You threw a %s!" % _item_name(ball))
+	show_message(_item_used_text(ball))
 	capture_requested.emit(ball)
 	return {"ok": true, "status": &"waiting", "ball": ball}
 
@@ -2764,8 +2795,6 @@ func complete_capture(result: Dictionary) -> Dictionary:
 
 	var wobbles: int = clampi(int(result.get("wobbles", 0)), 0, 3)
 	var caught: bool = bool(result.get("caught", false))
-	for _wobble: int in wobbles:
-		_capture_messages.append("The ball shook!")
 	if caught:
 		_capture_messages.append("Gotcha! %s was caught!" % _name_of(_enemy))
 		## `.catch_bug_contest_mon` runs after `Text_GotchaMonWasCaught`, and
@@ -2778,7 +2807,7 @@ func complete_capture(result: Dictionary) -> Dictionary:
 		_capture_terminal = true
 		_capture_caught_event = _caught_event(result)
 	else:
-		_capture_messages.append("%s broke free!" % _name_of(_enemy))
+		_capture_messages.append(BREAK_FREE_TEXT[wobbles])
 	_begin_capture_animation(result_ball, wobbles, caught)
 	return result
 
@@ -2818,10 +2847,8 @@ func _begin_capture_animation(ball: int, wobbles: int, caught: bool) -> void:
 
 
 func _show_capture_selection() -> void:
-	show_message(
-		"Choose %s x%d. Left and right: select, A: throw"
-		% [_item_name(_selected_capture_ball()), _capture_quantity(_selected_capture_ball())]
-	)
+	show_message(Gen2WorldPack.row_description(_data, _selected_capture_ball()))
+	_reopen_menu_layer()
 
 
 func _show_next_capture_message() -> void:
@@ -2893,6 +2920,14 @@ func _item_name(item: int) -> String:
 		return "BALL"
 	var item_name: String = _data.item_name(item)
 	return item_name if not item_name.is_empty() else "BALL %d" % item
+
+
+## `ItemUsedText`, the one line `PokeBallEffect` and every other battle item
+## print before their effect runs. A ball says it too: the throw, the rocking and
+## the click are the animation behind this line, and the next thing said is
+## already the outcome.
+func _item_used_text(item: int) -> String:
+	return "%s used the\n%s." % [_player_label(), _item_name(item)]
 
 
 func _is_wild_battle() -> bool:
@@ -3227,23 +3262,19 @@ func _show_forget_stage(stage: StringName) -> void:
 		_show_forget_confirm()
 
 
-## The two yes/no boxes, which open on YES the way YesNoBox does.
+## The two yes/no boxes, which open on YES the way YesNoBox does. The question is
+## the box's own and the answer is `PlaceYesNoBox`', drawn over the field once the
+## question has been read.
 func _show_forget_confirm() -> void:
-	show_message("%s %s Left and right: move, A: choose" % [
-		_forget_prompt_text(),
-		">YES  NO" if _forget_confirm_cursor == 0 else " YES >NO",
-	])
+	show_message(_forget_prompt_text())
+	_reopen_menu_layer()
 
 
+## `ForgetMove.loop`: `MoveAskForgetText` in the box and the list in its own
+## frame over the field, both drawn again on every pass round the loop.
 func _show_forget_list() -> void:
-	var names: PackedStringArray = []
-	for index: int in _forget_moves.size():
-		var entry: Dictionary = _forget_moves[index]
-		var move_name: String = String(entry.get("name", ""))
-		names.append("[%s]" % move_name if index == _forget_cursor else move_name)
-	show_message("%s %s Up and down: move, A: forget, B: back" % [
-		Gen2MoveForget.which_text(), " ".join(names),
-	])
+	show_message(Gen2MoveForget.which_text())
+	_reopen_menu_layer()
 
 
 ## The offer's own name fields, which [method Gen2Battle.pending_learn] carries
@@ -4254,13 +4285,22 @@ func _reopen_menu_layer() -> void:
 func _refresh_menu_layer() -> void:
 	if _menu_layer == null:
 		return
-	var signature: String = "%s|%s|%d|%d|%d|%s" % [
+	var signature: String = "%s|%s|%d|%d|%d|%s|%s" % [
 		_switch_stage, _menu_stage,
 		_switch_offer.selected_index() if _switch_offer != null else (
 			_switch_menu.cursor if _switch_menu != null else -1
 		),
 		int(_offer_still_reading()),
 		_menu_position * 8 + _move_cursor,
+		## The four lists in front of the fight, each with the cursor it is
+		## drawn from: which one is up is part of what the layer is holding.
+		"%s%d,%d,%d,%d,%d,%d" % [
+			_forget_stage, _forget_cursor, _forget_confirm_cursor,
+			_pack_index if _pack_selecting else -1,
+			_pack_move_index if _pack_move_selecting else -1,
+			_capture_ball_index if _capture_selecting else -1,
+			_pack_rows.size(),
+		],
 		## The icons move on their own clock, so the cursor alone does not say
 		## whether the page still draws what the layer is holding.
 		_party_page.animation_signature() if _party_page != null else "",
@@ -4286,6 +4326,20 @@ func _refresh_menu_layer() -> void:
 		&"pick", &"refused":
 			_draw_party_page()
 			return
+	## Each of these is a list in front of the fight, and each owns the joypad
+	## while it stands, so at most one of them is up at a time.
+	if _forget_stage != &"":
+		_draw_forget_stage()
+		return
+	if _pack_move_selecting:
+		_draw_pack_move_menu()
+		return
+	if _pack_selecting:
+		_draw_pack_menu()
+		return
+	if _capture_selecting:
+		_draw_capture_menu()
+		return
 	match _menu_stage:
 		&"main":
 			_draw_battle_menu()
@@ -4399,7 +4453,9 @@ func _blank_tiles(
 				indices[offset] = 0
 
 
-func _draw_yes_no_box() -> void:
+## [param cursor] is which row is chosen, and -1 asks the switch offer that owns
+## every other one of these boxes.
+func _draw_yes_no_box(cursor: int = -1) -> void:
 	if _menu_page == null or _offer_still_reading():
 		_menu_layer.visible = false
 		return
@@ -4408,7 +4464,10 @@ func _draw_yes_no_box() -> void:
 		YES_NO_LEFT + YES_NO_SPAN.x, YES_NO_TOP + YES_NO_SPAN.y, YES_NO_FLAGS
 	)
 	_show_menu_image(
-		_menu_page.render(box, YES_NO_OPTIONS, _switch_offer.selected_index()),
+		_menu_page.render(
+			box, YES_NO_OPTIONS,
+			cursor if cursor >= 0 else _switch_offer.selected_index()
+		),
 		box.border_position() * Gen2Font.TILE
 	)
 
@@ -4451,6 +4510,93 @@ func _draw_move_menu() -> void:
 		box.border_position() * Gen2Font.TILE
 	)
 	_draw_move_info(_move_rows[_move_cursor])
+
+
+## One of the lists standing in front of the fight, windowed onto
+## [constant Gen2BattleMenu.LIST_ROWS] rows with the cursor kept inside it.
+func _draw_list_menu(key: StringName, labels: Array, cursor: int) -> void:
+	_menu_layer.visible = false
+	if _menu_page == null or labels.is_empty():
+		return
+	var scroll: int = Gen2BattleMenu.list_scrolled(
+		int(_list_scroll.get(key, 0)), cursor, labels.size()
+	)
+	_list_scroll[key] = scroll
+	var box: Gen2MenuBox = Gen2BattleMenu.list_box(
+		scroll, labels.size() > Gen2BattleMenu.LIST_ROWS
+	)
+	_show_layer_image(
+		_battle_menu_layer,
+		_menu_page.render(
+			box,
+			labels.slice(scroll, scroll + Gen2BattleMenu.LIST_ROWS),
+			cursor - scroll
+		),
+		box.border_position() * Gen2Font.TILE
+	)
+
+
+## A row with [param tail] against the box's right-hand edge, which is where the
+## pack writes a count and the move list a PP pair.
+static func _list_row(text: String, tail: String) -> String:
+	var room: int = maxi(Gen2BattleMenu.LIST_TEXT_WIDTH - tail.length(), 0)
+	return text.left(room).rpad(room) + tail
+
+
+## `Pack`'s own rows for the items a battle can use, with what is left of each.
+func _draw_pack_menu() -> void:
+	var labels: Array = []
+	for item: int in _pack_rows:
+		labels.append(
+			_list_row(_item_name(item), "×%d" % int(_pack_quantities.get(item, 1)))
+		)
+	_draw_list_menu(&"pack", labels, _pack_index)
+
+
+## The BALL pocket of the same list: what choosing a ball in the pack opens, and
+## the whole of what a fight with no bag behind it is handed.
+func _draw_capture_menu() -> void:
+	var labels: Array = []
+	for ball: int in _capture_balls:
+		labels.append(_list_row(_item_name(ball), "×%d" % _capture_quantity(ball)))
+	_draw_list_menu(&"capture", labels, _capture_ball_index)
+
+
+## `RestorePPEffect`'s question, as the pack's own move list: which slot the
+## Ether goes on, with the PP it stands on.
+func _draw_pack_move_menu() -> void:
+	var mon: Gen2BattleMon = _battle.party(Gen2Battle.PLAYER).at(_pack_move_target) \
+		if _battle != null else null
+	if mon == null or _data == null:
+		_menu_layer.visible = false
+		return
+	var labels: Array = []
+	for raw_slot: int in _pack_move_slots:
+		var record: Dictionary = _data.move(int(mon.moves[raw_slot]))
+		labels.append(_list_row(
+			String(record.get("name", "")),
+			"%2d/%2d" % [mon.pp_left(raw_slot), int(record.get("pp", 0))]
+		))
+	_draw_list_menu(&"pack_move", labels, _pack_move_index)
+
+
+## `ForgetMove`'s own frame over the field, or the `YesNoBox` of the two
+## questions either side of the list.
+func _draw_forget_stage() -> void:
+	if _forget_stage != &"list":
+		_draw_yes_no_box(_forget_confirm_cursor)
+		return
+	_menu_layer.visible = false
+	if _menu_page == null or _forget_moves.is_empty():
+		return
+	var labels: Array = []
+	for entry: Dictionary in _forget_moves:
+		labels.append(String(entry.get("name", "")))
+	var box: Gen2MenuBox = Gen2BattleMenu.forget_box()
+	_show_layer_image(
+		_battle_menu_layer, _menu_page.render(box, labels, _forget_cursor),
+		box.border_position() * Gen2Font.TILE
+	)
 
 
 ## `MoveInfoBox`: the type and the PP pair of the row the cursor is on, or its
@@ -5247,10 +5393,10 @@ func _handle_button(button: int) -> bool:
 
 	if _pack_move_selecting:
 		match button:
-			Gen2Button.RIGHT:
+			Gen2Button.RIGHT, Gen2Button.DOWN:
 				_pack_move_index = posmod(_pack_move_index + 1, _pack_move_slots.size())
 				_show_pack_move_selection()
-			Gen2Button.LEFT:
+			Gen2Button.LEFT, Gen2Button.UP:
 				_pack_move_index = posmod(_pack_move_index - 1, _pack_move_slots.size())
 				_show_pack_move_selection()
 			Gen2Button.A:
@@ -5266,9 +5412,9 @@ func _handle_button(button: int) -> bool:
 
 	if _pack_selecting:
 		match button:
-			Gen2Button.RIGHT:
+			Gen2Button.RIGHT, Gen2Button.DOWN:
 				select_pack_row(_pack_index + 1)
-			Gen2Button.LEFT:
+			Gen2Button.LEFT, Gen2Button.UP:
 				select_pack_row(_pack_index - 1)
 			Gen2Button.A:
 				use_selected_pack_item()
@@ -5280,9 +5426,9 @@ func _handle_button(button: int) -> bool:
 
 	if _capture_selecting:
 		match button:
-			Gen2Button.RIGHT:
+			Gen2Button.RIGHT, Gen2Button.DOWN:
 				select_capture_ball(_capture_ball_index + 1)
-			Gen2Button.LEFT:
+			Gen2Button.LEFT, Gen2Button.UP:
 				select_capture_ball(_capture_ball_index - 1)
 			Gen2Button.A:
 				throw_capture_ball()

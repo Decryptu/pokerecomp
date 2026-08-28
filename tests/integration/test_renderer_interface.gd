@@ -394,6 +394,46 @@ func battle_finished(id, result) -> void:
 """
 
 
+## A driver that aims a shot at a wild already on the map goes through the same
+## seam a step does, so the fight carries the entry's id and its Pokemon is taken
+## off the map when the fight is over. `preview_battle_request` invents a wild
+## instead, and the one standing there is left where it was however it ended.
+func test_meeting_a_drawn_wild_carries_its_id_the_way_a_step_does() -> void:
+	var provider: Object = _script(PROVIDER_SOURCE).new()
+	assert_true(
+		Gen2ModHost.instance().register_visible_encounters(&"wilds", provider)["ok"]
+	)
+	var packed: PackedScene = load("res://game/world/world_screen.tscn")
+	_world_screen = packed.instantiate() as Gen2WorldScreen
+	_world_screen.map_group = Fixture.MAP_GROUP
+	_world_screen.map_number = Fixture.MAP_NUMBER
+	_world_screen.start_cell = Vector2i(7, 6)
+	_world_screen.set_data(_data)
+	add_child(_world_screen)
+	await get_tree().process_frame
+	_world_screen.set_process(false)
+	_world_screen._world.current_map.environment = Gen2WorldAPI.ENVIRONMENT_CAVE
+	_world_screen._encounters.set_providers([provider])
+	var cell := Vector2i(7, 7)
+	provider.set("entry", {
+		"id": &"a", "cell": cell, "species": Fixture.TRAINER_SPECIES,
+		"level": 5, "method": Gen2WorldEncounter.METHOD_GRASS,
+	})
+	_world_screen.advance_frames(1)
+
+	assert_true(_world_screen.preview_meet_visible_encounter(cell))
+	assert_eq(_world_screen._battle_encounter_id, &"a")
+	_world_screen._on_battle_finished({"outcome": Gen2WorldBattleAdapter.OUTCOME_CAUGHT})
+	var reported: Array = provider.get("results")
+	assert_eq(reported.size(), 1, "the provider is told, so it can take it away")
+	assert_eq(StringName(reported[0][0]), &"a")
+
+	assert_false(
+		_world_screen.preview_meet_visible_encounter(Vector2i(0, 0)),
+		"nothing stands there"
+	)
+
+
 ## The whole seam in one walk: the provider is contexted from the map's own
 ## tables, its entry is validated against them, drawn with the SPECIES' colours,
 ## and met by stepping onto it instead of by a roll.

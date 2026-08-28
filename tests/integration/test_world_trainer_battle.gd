@@ -633,7 +633,7 @@ func test_master_ball_capture_runs_through_the_real_battle_overlay() -> void:
 	_settle_frames(host)
 	assert_eq(
 		host.battle_snapshot()["message"],
-		"You threw a %s!" % _data.item_name(Gen2WorldPartyHost.ITEM_MASTER_BALL)
+		host._item_used_text(Gen2WorldPartyHost.ITEM_MASTER_BALL)
 	)
 
 	var caught: String = "Gotcha! %s was caught!" % _wild_name()
@@ -716,14 +716,16 @@ func test_failed_capture_shows_break_free_and_returns_to_battle() -> void:
 	_settle_frames(host)
 	assert_eq(
 		host.battle_snapshot()["message"],
-		"You threw a %s!" % _data.item_name(Gen2WorldPartyHost.ITEM_POKE_BALL)
+		host._item_used_text(Gen2WorldPartyHost.ITEM_POKE_BALL)
 	)
 
+	## One of `.shake_and_break_free`'s four lines and nothing else: which one is
+	## the rock count's to decide, and no line is said for a rock of its own.
 	var saw_break_free: bool = false
 	for _message: int in 5:
 		host.finish()
 		host.advance()
-		if host.battle_snapshot()["message"] == "%s broke free!" % _wild_name():
+		if Gen2BattleScreen.BREAK_FREE_TEXT.has(host.battle_snapshot()["message"]):
 			saw_break_free = true
 
 	assert_true(saw_break_free)

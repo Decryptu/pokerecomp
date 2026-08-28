@@ -404,7 +404,65 @@ static func segmented(
 	if selected >= 0 and selected < buttons.size():
 		buttons[selected].set_active(true)
 	track.set_meta(&"wrapping_row", line)
-	return track
+	var hug := HugRow.new()
+	hug.add_child(track)
+	## A [FieldRow] asks a wrapping control how wide it would like to be; a page
+	## body does not, and gives it the whole column. Carried onto the wrapper so
+	## a segmented control in a field is measured exactly as it was.
+	hug.set_meta(&"wrapping_row", line)
+	return hug
+
+
+## One control kept at the width it would like rather than the width it is given.
+##
+## An [HFlowContainer] measures as one column, since that is the narrowest it can
+## be drawn, so a track asking for its minimum would always stack. This asks for
+## that minimum, which is what lets it wrap on a phone, and then draws the child
+## at [method Gen2LauncherUI.preferred_width] whenever the row is wide enough to
+## hold it on one line.
+##
+## A [Container] is not usable here for the reason [FieldRow] gives.
+class HugRow extends Control:
+	var _pending: bool = false
+
+	func _init() -> void:
+		resized.connect(_queue_layout)
+
+	func _ready() -> void:
+		var child: Control = _child()
+		if child != null:
+			child.minimum_size_changed.connect(_queue_layout)
+		_queue_layout()
+
+	func _queue_layout() -> void:
+		update_minimum_size()
+		if _pending:
+			return
+		_pending = true
+		_layout.call_deferred()
+
+	func _child() -> Control:
+		for node: Node in get_children():
+			var control := node as Control
+			if control != null and control.visible:
+				return control
+		return null
+
+	func _get_minimum_size() -> Vector2:
+		var child: Control = _child()
+		return child.get_combined_minimum_size() if child != null else Vector2.ZERO
+
+	func _layout() -> void:
+		_pending = false
+		var child: Control = _child()
+		if child == null:
+			return
+		var wide: float = Gen2LauncherUI.preferred_width(child)
+		child.position = Vector2.ZERO
+		child.size = Vector2(
+			minf(wide, size.x) if size.x > 0.0 else wide,
+			maxf(size.y, child.get_combined_minimum_size().y)
+		)
 
 
 ## One whole number, typed or stepped. A slider is the wrong shape for a value
