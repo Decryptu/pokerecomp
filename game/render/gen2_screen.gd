@@ -192,12 +192,24 @@ func _ready() -> void:
 	_cover.draw.connect(_draw_cover)
 	add_child(_cover)
 	set_process(false)
-	# Every screen, rather than the two that remembered to ask: a window is not
-	# 10:9, and a screen that does not fill it leaves bars a player reads as a
-	# fault. What a screen puts in the room is its own business; having the room
-	# is not.
-	expanded = Gen2OptionsStore.current().screen_fill
+	apply_screen_fill()
 	_fit()
+
+
+## Takes SCREEN FILL from the options file and applies it.
+##
+## Every screen, rather than the two that remembered to ask: a window is not
+## 10:9, and a screen that does not fill it leaves bars a player reads as a
+## fault. What a screen puts in the room is its own business; having the room is
+## not.
+##
+## Public and idempotent because the option is the file's rather than this
+## frame's: a caller that changed it after the screen entered the tree, which is
+## every tool that stages a framed shot and would be a live Settings toggle,
+## calls this and is obeyed. [member expanded]'s setter refits and answers
+## nothing when the value has not moved.
+func apply_screen_fill() -> void:
+	expanded = Gen2OptionsStore.current().screen_fill
 
 
 ## Inside the screen, in hardware pixels: position it in the 160x144 space.

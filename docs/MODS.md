@@ -1248,6 +1248,10 @@ when no world is open. `Gen2ModHost.progress_for(save)` answers the same off a
 save, which is what a `save_activated` callback has: the slot has been chosen and
 no world exists yet. Both are copies, and read only.
 
+`progress_for` takes the cartridge from the save's own `game_id`, so a mod needs
+no `GameData` to be answered correctly on a Gold or Silver slot. The optional
+second argument is for a caller that already has one.
+
 Every field is a state the run has **reached** rather than a moment it passed, so
 a mod installed onto a save already played reads what that save has. That is the
 difference between "eight badges" and "a badge was awarded": the first is still

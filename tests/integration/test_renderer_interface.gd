@@ -987,6 +987,58 @@ func test_a_framed_screen_hands_back_its_whole_surface() -> void:
 	)
 
 
+## SCREEN FILL is the options file's answer rather than the frame the screen was
+## born on, so a caller that sets it after the scene exists is obeyed. The
+## request that found this had set it the other way round and read a screen that
+## was still expanded.
+func test_the_screen_fill_option_is_taken_again_when_the_world_applies_it() -> void:
+	Gen2OptionsStore.current().screen_fill = true
+	await _open_world(NATIVE_SOURCE)
+	var screen: Gen2Screen = _world_screen._screen
+	assert_true(screen.expanded)
+
+	Gen2OptionsStore.current().screen_fill = false
+	_world_screen._apply_screen_fill()
+	assert_false(screen.expanded, "the option is authoritative, not the birth frame")
+	Gen2OptionsStore.current().screen_fill = true
+	_world_screen._apply_screen_fill()
+	assert_true(screen.expanded, "and it goes back")
+
+
+## Everything the world raises over the map is a child of the screen's own
+## 160x144 interface, which clips. Framed there is no room around it, so a
+## banner one pixel too tall or one row too low is invisible and nothing says
+## so: this is the shape of the report that nothing is drawn with SCREEN FILL
+## off.
+func test_a_framed_screen_holds_the_banners_raised_over_the_map() -> void:
+	Gen2OptionsStore.current().screen_fill = false
+	await _open_world(NATIVE_SOURCE)
+	var screen: Gen2Screen = _world_screen._screen
+	assert_false(screen.expanded)
+	var hardware := Rect2i(Vector2i.ZERO, Vector2i(Gen2Screen.WIDTH, Gen2Screen.HEIGHT))
+
+	assert_true(bool(Gen2ModHost.instance().request_notice(&"probe", {
+		"title": "BADGE WON", "line": "PLAINBADGE", "sound": &"none",
+	}).get("ok", false)), "the notice was accepted")
+	## `PlaceMapNameSign` returns on the frame the timer still reads its full
+	## sixty, so the window is only brought down on the frame after the raise.
+	for _frame: int in 8:
+		_world_screen.advance_frame()
+		if _world_screen.map_name_sign_passes() > 0 \
+			and _world_screen.map_name_sign_passes() < Gen2WorldAPI.MAP_NAME_SIGN_PASSES:
+			break
+	assert_gt(_world_screen.map_name_sign_passes(), 0, "the banner is up")
+	var banner: Control = _world_screen._map_name_sign
+	assert_not_null(banner)
+	assert_true(banner.visible)
+	assert_true(
+		hardware.encloses(Rect2i(Vector2i(banner.position), Vector2i(banner.size))),
+		"the banner sits inside the rectangle the interface clips to: %s in %s" % [
+			banner.get_rect(), hardware,
+		],
+	)
+
+
 ## The map and cell readout and the shortcut legend are the two things over the
 ## picture that no player should ever see. A release build hides them in
 ## `_ready`, so the scene has to arrive hidden too: a label that starts visible

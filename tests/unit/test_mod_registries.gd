@@ -779,6 +779,36 @@ func test_a_mod_page_is_registered_once_and_gates_its_own_start_row() -> void:
 	assert_eq(host.start_menu_entries(context).size(), 1, "the page exists now")
 
 
+## The badge tables are one engine flag apart between the two profiles, so a save
+## read through the wrong one answers every badge wrongly. A mod calling
+## `progress_for` from `save_activated` has no [GameData], and the save carries
+## the cartridge it belongs to.
+func test_a_progress_reading_uses_the_cartridge_the_save_names() -> void:
+	var save := Gen2SaveData.new()
+	save.game_id = &"gold"
+	save.world = Gen2WorldSnapshot.new()
+	## Gold and Silver's first badge, which on Crystal's table is not a badge the
+	## mask counts at all.
+	save.world.world_state.set_engine_flag(
+		Gen2WorldState.badge_flag(0, false), true
+	)
+
+	var told: Dictionary = Gen2ModProgress.of_save(save)
+	assert_eq(int(told[&"badges"]), 0b1, "the save's own game_id picked the table")
+	assert_eq(int(told[&"badge_count"]), 1)
+
+	save.game_id = &"crystal"
+	assert_eq(
+		int(Gen2ModProgress.of_save(save)[&"badges"]), 0,
+		"and Crystal's table reads the same flag as no badge",
+	)
+	assert_true(
+		Gen2WorldState.is_crystal_game_id(&"crystal"),
+		"an id nobody recognises is Crystal, as a null cache has always been",
+	)
+	assert_false(Gen2WorldState.is_crystal_game_id(&"silver"))
+
+
 ## `progress`, `progress_for` and `progress_changed`: the same fields off a live
 ## run and off a save nobody has opened yet, a field that moved emitted once, and
 ## nothing read at all while no mod is watching.

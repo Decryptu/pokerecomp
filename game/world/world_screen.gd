@@ -676,10 +676,13 @@ func _render_time_of_day() -> int:
 ## field. Every menu, box and cursor over it stays inside the 160x144 rectangle
 ## [Gen2Screen] centres in the buffer.
 ##
-## The screen has already read the setting ([Gen2Screen]); what is left here is
-## the zoom, which is the map's alone.
+## The setting itself is the screen's ([method Gen2Screen.apply_screen_fill]) and
+## is taken again here rather than trusted from the frame the screen was born on:
+## a tool that stages a framed shot sets the option around building this scene,
+## and either order has to mean the same thing. The zoom is the map's alone.
 func _apply_screen_fill() -> void:
 	var options: Gen2Options = Gen2OptionsStore.current()
+	_screen.apply_screen_fill()
 	if _screen.expanded:
 		_screen.zoom_step = options.zoom_step
 	_on_view_size_changed(_screen.view_size())

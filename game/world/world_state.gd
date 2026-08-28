@@ -1217,8 +1217,20 @@ func set_blue_card_balance(points: int) -> void:
 ## `_GetVarAction.CountBadges` agree on everything except this table's
 ## offset, so every profile-dependent flag lookup here keys off the same
 ## question the script command-width split already answers.
+##
+## A null cache answers Crystal, which is what every caller that has no cache in
+## hand has always meant. A caller holding only an id, such as a save's own
+## [member Gen2SaveData.game_id], asks [method is_crystal_game_id] instead: that
+## one knows the difference between "not told" and "told Gold".
 static func is_crystal_profile(data: GameData) -> bool:
-	return data == null or (data.id != &"gold" and data.id != &"silver")
+	return data == null or is_crystal_game_id(data.id)
+
+
+## The same question off a cartridge id rather than an open cache. A save carries
+## one and a mod may have no [GameData] at all, so this is what keeps a Gold save
+## from being read through Crystal's tables.
+static func is_crystal_game_id(id: StringName) -> bool:
+	return id != &"gold" and id != &"silver"
 
 
 ## The source resets its first eight event flags whenever a map reloads. These
