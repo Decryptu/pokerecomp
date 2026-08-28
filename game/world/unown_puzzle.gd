@@ -1,32 +1,14 @@
 class_name Gen2UnownPuzzle
 extends RefCounted
 
-## `_UnownPuzzle` (engine/games/unown_puzzle.asm), the sliding-piece puzzle the
-## four Ruins of Alph chambers open.
-##
-## The board is `wPuzzlePieces`, six by six cells holding a piece number 1 to 16
-## or zero. Only the inner four by four is the picture; the ring around it is
-## where the sixteen pieces are scattered, less the four cells the START>CANCEL
-## box stands on, which is why `.PuzzlePieceInitialPositions` is sixteen entries
-## for sixteen pieces and the scatter is a permutation rather than a placement.
-##
-## Node-free and scene-free: the screen owns the frames and the sound, this owns
-## the rules, and the generator is injected so a run replays.
-##
-## Three things a reading gets wrong:
-##
-## - **The cursor walks cells, not tiles, and its edges are hand-listed.** The
-##   bottom border row is reachable at its two ends alone: `.d_right`'s own
-##   `.right_overflow` jumps cell 30 straight to 35 over the four the box
-##   covers, and `.d_left` jumps back. Nothing steps down out of the bottom
-##   inner row either, which is the four `ret z` in front of `.d_down`'s bound.
-## - **A press is refused rather than ignored.** Lifting from an empty cell and
-##   placing onto a full one both reach `UnownPuzzle_InvalidAction`, which plays
-##   `SFX_WRONG` and waits it out, so the frame is spent either way.
-## - **Holding a piece stops the cursor blinking.** `_UnownPuzzle.loop` reads
-##   `hVBlankCounter and $10` only when `wHoldingUnownPuzzlePiece` is clear, so
-##   the empty cursor is up sixteen frames in thirty-two and a held piece is up
-##   on every one of them.
+## `_UnownPuzzle`, the sliding-piece puzzle the four Ruins of Alph chambers open.
+## The board is `wPuzzlePieces`, six by six cells holding a piece number or zero;
+## only the inner four by four is the picture and the ring around it is where the
+## pieces are scattered, less the four cells the START>CANCEL box stands on.
+## Node-free and scene-free, with the generator injected. Three things a reading
+## gets wrong: the cursor walks cells rather than tiles and its edges are
+## hand-listed; a press is refused rather than ignored, both bad presses reaching
+## `UnownPuzzle_InvalidAction`; and holding a piece stops the cursor blinking.
 
 ## `wPuzzlePieces` is six by six and `puzcoord` is `row * 6 + column`.
 const COLUMNS: int = 6

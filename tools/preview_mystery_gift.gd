@@ -4,17 +4,10 @@ extends SceneTree
 ##
 ##   Godot --headless --path . -s res://tools/preview_mystery_gift.gd -- <game> <out.png> [box]
 ##
-## [box] is `prompt` or one of `DoMysteryGift`'s eight outcome names
-## (`canceled`, `comm_error`, `retrieve`, `friend_not_ready`, `five_a_day`,
-## `one_a_day`, `sent`, `sent_home`), or `all` for a contact sheet of every one.
-## `all` is the default.
-##
-## The frame is the one picture that differs between the two cartridges for a
-## reason: Crystal builds it out of one run and two palettes, Gold and Silver
-## out of three runs and one, so the same call on the three caches is the whole
-## comparison.
-##
-## Composed into an [Image] rather than through a window, so this runs headless.
+## [box] is `prompt` or one of `DoMysteryGift`'s eight outcome names, or `all` for a
+## contact sheet, which is the default. The frame is the one picture that differs
+## between the two cartridges for a reason: Crystal builds it out of one run and two
+## palettes and Gold and Silver out of three runs and one.
 
 const COLUMNS: int = 3
 const PARTNER: String = "KRIS"

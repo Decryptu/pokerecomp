@@ -2,19 +2,12 @@ class_name Gen2HpBarAnimation
 extends RefCounted
 
 ## The HP bar draining or filling, one pixel at a time
-## (engine/battle/anim_hp_bar.asm).
-##
-## Scene-free like the rest of the battle layer: the screen ticks this once per
-## hardware frame and draws [method pixels], and the bar arrives before the
-## message that describes the hit is printed. That ordering is the source's, not
-## a choice: `NormalHit` runs `applydamage` before `criticaltext` and
-## `supereffectivetext`, and `DoEnemyDamage` ends with `predef AnimateHPBar`.
-##
-## `_AnimateHPBar` has two branches, keyed on whether the maximum is at least
-## `HP_BAR_LENGTH_PX`: over it the loop steps real HP and redraws only when the
-## pixel moves, under it the loop steps the pixel itself. Both redraw exactly one
-## pixel per iteration, so both are one pixel per step here; what differs is only
-## the HP *number* printed beside the bar, which [method hp] answers.
+## (engine/battle/anim_hp_bar.asm). The bar arrives before the message that
+## describes the hit, which is the source's order rather than a choice: `NormalHit`
+## runs `applydamage` before `criticaltext`. `_AnimateHPBar` has two branches, keyed
+## on whether the maximum is at least `HP_BAR_LENGTH_PX`; both redraw exactly one
+## pixel per iteration, so both are one pixel per step here, and what differs is
+## only the HP number printed beside the bar, which [method hp] answers.
 
 ## `HP_BAR_LENGTH * TILE_WIDTH`, the bar's full width in pixels.
 const LENGTH_PX: int = Gen2BattleHud.HP_BAR_TILES * Gen2BattleHud.TILE
@@ -90,18 +83,12 @@ func hp() -> int:
 
 
 ## `ShortHPBar_CalcPixelFrame`, which is how a maximum under the bar's own width
-## recovers an HP number from a pixel count: multiply, subtract the width until it
-## borrows, then round with its `add hl, $80` and one more subtraction.
-##
-## Its loop subtracts before it tests, so an exact multiple of the width is
-## counted and then rounded up again: one HP too many, which is
-## `docs/bugs_and_glitches.md`'s "HP bar animation off-by-one error for low HP".
-## pret's fix stops the loop on the zero, and the rounding then lands on the
-## quotient itself. Everything else about the routine is the same either way.
-##
-## The answer is clamped to the two ends of this animation, which is the routine's
-## own `wCurHPAnimLowHP`/`wCurHPAnimHighHP` comparison and is why the extra HP is
-## invisible until the drain passes through an exact multiple.
+## recovers an HP number from a pixel count. Its loop subtracts before it tests,
+## so an exact multiple of the width is counted and then rounded up again: one HP
+## too many, which is `docs/bugs_and_glitches.md`'s low-HP off-by-one. pret's fix
+## stops the loop on the zero. The answer is clamped to the two ends of this
+## animation, the routine's own `wCurHPAnimLowHP`/`wCurHPAnimHighHP` comparison,
+## which is why the extra HP is invisible until the drain passes through a multiple.
 func _short_bar_hp() -> int:
 	var total: int = _max_hp * _pixels
 	var counted: int = 0

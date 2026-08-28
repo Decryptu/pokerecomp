@@ -5,16 +5,9 @@ extends SceneTree
 ##   Godot --headless --path . -s res://tools/preview_pack.gd -- \
 ##       crystal /tmp/pack.png [items|balls|key|tmhm|use|give] [presses] [female]
 ##
-## The world behind it is a new game holding enough of each pocket to fill the
-## five visible rows and scroll past them, with a development party behind it so
-## `use` and `give` reach `.Party`'s own list. Those two are the party menu
-## `GiveItem` and every `.Party` item effect open, so what they photograph is
-## [Gen2PartyMenuPage] with the prompt that entrance writes. [presses] is a `u,d,l,r,a,b,s` list
-## driven into the real screen before the shot, so the picture is what the
-## cartridge's own listing would show after those buttons.
-##
-## Headless: the page composes into an [Image] rather than through a viewport,
-## so no window and no settle are needed.
+## The world behind it is a new game holding enough of each pocket to scroll, with a
+## development party so `use` and `give` reach `.Party`'s own list. [presses] is a
+## `u,d,l,r,a,b,s` list driven into the real screen before the shot.
 
 const NEW_BARK_GROUP: int = 24
 const NEW_BARK_MAP: int = 7

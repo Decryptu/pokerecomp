@@ -1,20 +1,14 @@
 class_name Gen2WorldPC
 extends RefCounted
 
-## `engine/events/pokecenter_pc.asm`: the Pokemon Center's top menu, the item
-## PC behind its `<PLAYER>'S PC` row, and the two transactions that move a stack
-## between the bag and `wPCItems`.
-##
-## Scene-free like the other world hosts. The rows and their per-state lists are
-## the source's own tables; a host draws whichever list [method top_menu] and
-## [method players_pc_menu] return and calls the transactions below. The commit
-## boundary is [Gen2WorldTransaction], the same one the mart, Kurt and the bag
-## go through.
-##
-## Every row of both lists is built. MAIL BOX is `_PlayerMailBoxMenu` over
-## [member Gen2SaveData.mailbox] and its own submenu below, DECORATION is
-## [Gen2WorldDecoration]'s and HALL OF FAME is [Gen2HallOfFame]'s viewer over
-## [member Gen2SaveData.hall_of_fame].
+## `engine/events/pokecenter_pc.asm`: the Pokemon Center's top menu, the item PC
+## behind its `<PLAYER>'S PC` row, and the two transactions that move a stack
+## between the bag and `wPCItems`. Scene-free like the other world hosts: the rows
+## and their per-state lists are the source's own tables, a host draws whichever
+## list is returned, and the commit boundary is [Gen2WorldTransaction]. Every row
+## of both lists is built, MAIL BOX being `_PlayerMailBoxMenu` over the save's own
+## mailbox, DECORATION [Gen2WorldDecoration]'s and HALL OF FAME [Gen2HallOfFame]'s
+## viewer.
 
 ## `PokemonCenterPC.Jumptable` indexes.
 const PCPCITEM_PLAYERS_PC: int = 0

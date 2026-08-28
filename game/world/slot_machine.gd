@@ -1,38 +1,14 @@
 class_name Gen2SlotMachine
 extends RefCounted
 
-## `_SlotMachine`'s own state (engine/games/slot_machine.asm), node-free.
-##
-## [Gen2SlotMachinePage] owns the picture and [Gen2SlotMachineScreen] the pump;
-## this is `SlotsLoop`: one pass a frame, `SlotsJumptable` then
-## `Slots_SpinReels` then the two sprite objects, with the reels' own
-## `ReelActionJumptable` under them.
-##
-## Five things the source states that a reading gets wrong:
-##
-## - **A reel is manipulated after the button, not before.** `Slots_StopReel1`
-##   through `..._StopReel3` pick an action rather than a stop, and the action
-##   walks the reel on up to `REEL_MANIP_COUNTER` further slots looking for the
-##   biased symbol. The bias is rolled once a bet in `Slots_InitBias` and is
-##   what decides the spin; the button decides when the search starts.
-## - **`Slots_InitBias` keeps a seven.** Its first two lines are
-##   `ld a, [wSlotBias] / and a / ret z`, and SLOTS_SEVEN is zero, so a spin
-##   that left the bias on seven rolls nothing and stays there.
-##   `Slots_PayoutText.LinedUpSevens` is what clears it, on a roll whose odds
-##   `wKeepSevenBiasChance` picked at the top of the game.
-## - **Golem, Chansey and the slow advance are searches, not decorations.**
-##   Each is entered only when the third reel is standing on a match it must not
-##   keep, and each advances the reel until `Slots_CheckMatchedAllThreeReels`
-##   answers what the bias wants. `Slots_GetNumberOfGolems` runs that search
-##   ahead of the animation and hands it the count.
-## - **A reel action runs once every sixteen units of spin distance**, not once
-##   a frame: `.SpinReel` tests `REEL_SPIN_DISTANCE and $f` before calling it,
-##   and a rate of 0 stops the reel where it stands without ending its action.
-## - **The three reel strips repeat their own first three symbols.** A window is
-##   three consecutive bytes from `(position - 1) and $f`, so nothing wraps.
-##
-## Randomness is injected: every `Random` here is a byte off the generator the
-## caller owns, so a seeded run repeats.
+## `_SlotMachine`'s own state (engine/games/slot_machine.asm), node-free, which is
+## `SlotsLoop`'s side of it. Five things a reading gets wrong: a reel is
+## manipulated after the button rather than before, the bias being rolled once a
+## bet and the button only deciding when the search starts; `Slots_InitBias` keeps
+## a seven, since SLOTS_SEVEN is zero and its `ret z` leaves it there; Golem,
+## Chansey and the slow advance are searches rather than decorations; a reel action
+## runs once every sixteen units of spin distance rather than once a frame; and the
+## three reel strips repeat their own first three symbols, so nothing wraps.
 
 ## `wSlotMatched` values, which are the reel strips' own bytes.
 const SLOTS_SEVEN: int = 0x00

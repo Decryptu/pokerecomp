@@ -1,31 +1,14 @@
 class_name Gen2IntroMoviePage
 extends RefCounted
 
-## The intro movie's screen, on the tile grid the hardware uses.
-##
-## [Gen2IntroMovie] owns the BG map, the attribute plane, the palettes, the
-## scroll and the sprite structs; this turns a tile number into pixels. The
-## split is the credits' and the title screen's.
-##
-## Two things here are not a plain tilemap draw:
-##
-## - The BG map is 32 tiles wide and wraps. `hSCX` and `hSCY` are bytes, the
-##   panorama scenes scroll past both edges, and `hLCDCPointer` = LOW(rSCX)
-##   gives every scanline its own `hSCX`, which is what
-##   `Intro_PerspectiveScrollBG` uses to run the grass and the trees at
-##   different speeds. So the screen is sampled scanline by scanline rather than
-##   blitted tile by tile.
-## - A BG tile number below $80 reads from `vTiles2` and $80 and up from
-##   `vTiles1`, which are two different sheets in the scenes that load both.
-##
-## An object is drawn through the palette its own `dbsprite` attribute names,
-## which is one of the eight a scene's palette run wrote past the background
-## buffer's end.
-##
-## Shadow OAM holds forty sprites and `UpdateAnimFrame` stops filling it at
-## `wShadowOAMEnd`, so a frame that asks for more loses the last of them rather
-## than growing. `IntroScene10` is the one frame that does: Wooper's sixteen and
-## Pichu's twenty-five come to forty-one, and Pichu's last tile is not drawn.
+## The intro movie's screen, on the tile grid the hardware uses. [Gen2IntroMovie]
+## owns the BG map, the attribute plane, the palettes, the scroll and the sprite
+## structs; this turns a tile number into pixels. Two things are not a plain
+## tilemap draw: the BG map wraps and `hLCDCPointer` = LOW(rSCX) gives every
+## scanline its own `hSCX`, which is what runs the grass and the trees at
+## different speeds, so the screen is sampled scanline by scanline; and a BG tile
+## below $80 reads from `vTiles2` and $80 up from `vTiles1`. Shadow OAM holds
+## forty sprites, so `IntroScene10`'s forty-first, Pichu's last tile, is not drawn.
 
 const TILE: int = Gen2Tiles.TILE_WIDTH
 const WIDTH: int = Gen2Screen.WIDTH

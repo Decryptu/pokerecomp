@@ -6,18 +6,14 @@ extends Control
 ## hosts and API.
 
 signal completed(results: Array)
-## The sound this screen asks for, played by whoever owns the driver.
-##
-## Nothing here reaches [Gen2AudioPlayer]: the world screen owns the one player
-## a map's music and its effects share, so a second surface asking for a sound
-## goes through it the way the start menu, the party screen and the move screen
-## already do. [Gen2WorldAudioHost] is an inspection probe that renders no
-## samples and must never stand in for it.
-##
-## [param waited] is `WaitPlaySFX`, or a `WaitSFX` spent in front of the sound
-## by hand: the cartridge holds there until the four effect channels are free,
-## so the request can never be the one `PlaySFX`'s own priority gate refuses.
-## The wait itself is not spent; what it carries is that the sound is heard.
+## The sound this screen asks for, played by whoever owns the driver. Nothing here
+## reaches [Gen2AudioPlayer]: the world screen owns the one player a map's music
+## and its effects share, so a second surface asking for a sound goes through it.
+## [Gen2WorldAudioHost] is an inspection probe that renders no samples and must
+## never stand in for it. [param waited] is `WaitPlaySFX`, or a `WaitSFX` spent in
+## front of the sound by hand: the cartridge holds there until the four effect
+## channels are free, so the request can never be the one `PlaySFX`'s priority gate
+## refuses. The wait itself is not spent.
 signal sfx_requested(index: int, waited: bool)
 ## `PlayMonCry2` from a screen this one opens, the box screen's stats page today.
 ## Passed on for the same reason [signal sfx_requested] is: the world screen owns

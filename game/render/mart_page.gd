@@ -1,25 +1,14 @@
 class_name Gen2MartPage
 extends RefCounted
 
-## `BuyMenu`'s screen (`engine/items/mart.asm`): `BlankScreen`, the money box
-## `PlaceMoneyTopRight` puts in the corner, `MenuHeader_Buy`'s scrolling list of
-## names and BCD prices, and the speech box `UpdateItemDescription` writes into.
-##
-## [Gen2WorldMartHost] owns the list, the money and the transaction; this is the
-## picture, and node-free so it can be read back headless. The quantity box is
-## `BuyItem_MenuHeader`, which stands over the speech box rather than replacing
-## it, and the yes/no over it is the host's own [Gen2MenuPage].
-##
-## Three things the source does that a redraw here has to keep:
-##
-## - `ScrollingMenu` draws no frame around the list. Only `ClearWholeMenuBox`
-##   runs, so the names sit on the blank screen and the arrows stand where a
-##   border would have been.
-## - The fourth row's price lands on the box's own bottom coordinate, row 11,
-##   because `.PrintBCDPrices` prints one row below a name that is already on
-##   the last row the height allows.
-## - `▼` is drawn whenever the list has arrows at all, while `▲` waits for
-##   `wMenuScrollPosition` to leave zero.
+## `BuyMenu`'s screen (`engine/items/mart.asm`): `BlankScreen`, the money box in
+## the corner, `MenuHeader_Buy`'s scrolling list of names and BCD prices, and the
+## speech box `UpdateItemDescription` writes into. [Gen2WorldMartHost] owns the
+## list and the transaction; this is the picture. Three things a redraw has to
+## keep: `ScrollingMenu` draws no frame, so the names sit on the blank screen; the
+## fourth row's price lands on row 11, because `.PrintBCDPrices` prints one row
+## below a name already on the last row the height allows; and the down arrow is
+## drawn whenever the list has arrows while the up one waits for a scroll.
 
 const TILE: int = Gen2Font.TILE
 
@@ -125,19 +114,10 @@ static func from_data(data: GameData) -> Gen2MartPage:
 	return out
 
 
-## The whole screen. [param state] is what the host holds:
-##
-## [codeblock]
-## {
-##   "money": int,
-##   "rows": Array,      # {"name": String, "price": int} or {"cancel": true}
-##   "cursor": int,      # which visible row the arrow stands on
-##   "scrolled": bool,   # wMenuScrollPosition is past zero
-##   "text": String,     # the speech box's lines
-##   "quantity": int,    # -1 while no quantity box is up
-##   "subtotal": int,
-## }
-## [/codeblock]
+## The whole screen. [param state] is what the host holds: `money`, `rows` of
+## `{name, price}` or `{cancel}`, `cursor` for the visible row the arrow stands
+## on, `scrolled` for `wMenuScrollPosition` past zero, `text` for the speech box's
+## lines, `quantity` at -1 while no quantity box is up, and `subtotal`.
 func render(state: Dictionary) -> Image:
 	if font == null:
 		return null
@@ -210,16 +190,13 @@ static func balance_window(
 	}
 
 
-## `Mom_ContinueMenuSetup`'s box (`engine/events/mom.asm`), drawn here for the
-## reason the three balance windows are: it is a money box, and `PrintNum` with
-## PRINTNUM_MONEY is what fills all four of them.
-##
-## `Textbox` at `hlcoord 0, 0` with `lb bc, 6, 18`, so eight rows and the whole
-## screen's width; SAVED against her balance, HELD against the player's and the
-## transaction's own word against the amount being typed.
+## `Mom_ContinueMenuSetup`'s box, drawn here for the reason the three balance
+## windows are: it is a money box, and `PrintNum` with PRINTNUM_MONEY fills all
+## four. `Textbox` at `hlcoord 0, 0` with `lb bc, 6, 18`, so eight rows and the
+## whole screen's width, SAVED against her balance and HELD against the player's.
 ## `Mom_WithdrawDepositMenuJoypad` blanks the digit the cursor stands on for
-## sixteen frames in every thirty-two, which is `hVBlankCounter`'s bit 4, so an
-## off half of the blink is a missing digit rather than a mark beside one.
+## sixteen frames in every thirty-two, `hVBlankCounter`'s bit 4, so an off half of
+## the blink is a missing digit rather than a mark beside one.
 static func bank_window(
 	data: GameData, word: String, saved: int, held: int, amount: String,
 	cursor: int, cursor_up: bool

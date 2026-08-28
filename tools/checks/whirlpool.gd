@@ -3,22 +3,13 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies Whirlpool and the forced-tile layer against freshly imported real
-## caches, for both command profiles.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## engine/events/overworld.asm's WhirlpoolFunction and TryWhirlpoolMenu,
-## home/map_objects.asm's CheckWhirlpoolTile, data/collision/field_move_blocks.asm's
-## WhirlpoolBlockPointers and engine/overworld/player_movement.asm's
-## DoPlayerMovement.CheckTile. All four are byte identical between the pins, and
-## WhirlpoolBlockPointers names only TILESET_JOHTO, which is $01 in both games, so
-## nothing here is profile split except the badge flag number and Dragon's Den's
-## map number.
-##
-## The real-cartridge counterpart to tests/unit/test_world_field_move.gd and the
-## forced-tile tests in tests/unit/test_world_api.gd. Dragon's Den B1F is the
-## acceptance case, because its whirlpool is the one a Crystal playthrough meets.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- whirlpool
+## caches, for both command profiles. Expected values come from the pinned sources:
+## WhirlpoolFunction and TryWhirlpoolMenu, CheckWhirlpoolTile,
+## WhirlpoolBlockPointers and `DoPlayerMovement.CheckTile`. All four are byte
+## identical between the pins, and WhirlpoolBlockPointers names only TILESET_JOHTO,
+## which is $01 in both games. The real-cartridge counterpart to
+## tests/unit/test_world_field_move.gd; Dragon's Den B1F is the acceptance case,
+## because its whirlpool is the one a Crystal playthrough meets.
 
 
 ## constants/map_constants.asm, DUNGEONS group. Crystal's extra maps push

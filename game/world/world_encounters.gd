@@ -1,22 +1,14 @@
 class_name Gen2WorldEncounters
 extends RefCounted
 
-## Wild Pokemon a mod puts on the map instead of a step roll, driven and
-## validated by the host. A mod registers a PROVIDER through
-## [method Gen2ModHost.register_visible_encounters]; the screen gives it a
-## snapshot of where a wild may stand and which table each method resolves to,
-## spends one frame of it per hardware frame, and takes back a bounded list of
-## entries.
-##
-## The division is the point. The PROVIDER owns the population: how many there
-## are, where each one goes, how it moves and what it does after a battle. The
-## HOST owns every rule a mod must not re-derive: which cells are eligible, which
-## table is active, whether an entry is inside both, what a shiny is, and what
-## meeting one starts. Nothing here reads a node.
-##
-## [Gen2WorldActors] is the layer next to this one and the two are different
-## contracts: an actor is presentation and takes part in nothing, a visible
-## encounter is met and fought.
+## Wild Pokemon a mod puts on the map instead of a step roll, driven and validated
+## by the host. The screen gives a registered PROVIDER a snapshot of where a wild
+## may stand and which table each method resolves to, spends one frame of it per
+## hardware frame, and takes back a bounded list of entries. The division is the
+## point: the provider owns the population, and the host owns every rule a mod
+## must not re-derive. Nothing here reads a node. [Gen2WorldActors] is the layer
+## next to this one and the two are different contracts: an actor is presentation,
+## a visible encounter is met and fought.
 
 ## Checked at registration, where the mod's name is still in hand.
 const PROVIDER_METHODS: Array[String] = [
@@ -40,24 +32,14 @@ const PULSE_FRAMES: int = 600
 ## The four `Gen2WorldSprite` facings.
 const MAX_FACING: int = Gen2WorldSprite.FACING_RIGHT
 
-## How many steps an entry's `glow` amount is rounded onto, and the palette
-## colour it leaves alone.
-##
-## The rung count is the host's rather than the mod's on purpose. Both world
-## renderers cache one sprite texture per distinct set of four colours and
-## neither evicts (`world_renderer.gd:_actor_texture` keys on `hash(colors)`), so
-## a glow interpolated freely would leave a texture behind on every frame the map
-## is up. Nine amounts is nine palettes per species, and the key carries a facing
-## and a frame beside them: eight of those, so seventy-two textures for a species
-## that glows and none for one that does not.
-##
-## Eight rather than four because a mark meant to be subtle has to keep a cycle
-## after the rounding. A glow whose peak is under half the walk, which is what
-## reads as a breath rather than a recolour, has four steps left on eighths and
-## one on quarters.
-##
-## Colour 0 is the icon's cut-out ([method Gen2PicImage.lookup] gives it alpha
-## zero), so walking it would change the cache key and no pixel.
+## How many steps an entry's `glow` amount is rounded onto, and the palette colour
+## it leaves alone. The rung count is the host's rather than the mod's: both world
+## renderers cache one sprite texture per distinct set of four colours and neither
+## evicts, so a glow interpolated freely would leave a texture behind on every
+## frame the map is up. Eight rather than four because a mark meant to be subtle
+## has to keep a cycle after the rounding: a glow whose peak is under half the
+## walk has four steps left on eighths and one on quarters. Colour 0 is the icon's
+## cut-out, so walking it would change the cache key and no pixel.
 const GLOW_RUNGS: int = 8
 const GLOW_CUTOUT_COLOR: int = 0
 
@@ -280,12 +262,10 @@ func _build_context() -> Dictionary:
 ## deliberately NOT folded into `eligible`: which cells a wild MAY stand on is
 ## `CanEncounterWildMon`'s rule and does not change while the map is up, and
 ## [method _validate] drops an entry standing outside `eligible`, so folding the
-## two together would delete a wild an NPC walks over.
-##
-## An object mid-step is DRAWN between two cells, so both are held: its committed
-## `cell` and the cell its drawing laps into, which is what `step_offset_cells()`
-## measures. A big object holds all four of the cells `occupies` answers for.
-## The player is not in it; `player` is where that cell is.
+## two together would delete a wild an NPC walks over. An object mid-step is DRAWN
+## between two cells, so both are held, and a big object holds all four of the
+## cells `occupies` answers for. The player is not in it; `player` is where that
+## cell is.
 func _occupied_cells() -> PackedVector2Array:
 	var out := PackedVector2Array()
 	if _world == null:
@@ -308,25 +288,13 @@ func _occupied_cells() -> PackedVector2Array:
 
 
 ## What moves while one map is up: the player's pose, the cells the map's own
-## objects hold, the tables, and `wildoff`. An object walks while the player
-## stands still, so the occupancy is on this pass rather than on the map change.
-##
-## The eligible sweep is the whole map and is taken only when `wildoff` is
-## toggled, which is the one thing that moves it: `CanEncounterWildMon`'s answer
-## for a cell is the terrain's and stands as long as the map does. A script may
-## run `wildoff` at any point in a walk, and an entry standing on a cell it just
-## emptied is dropped by [method _validate] rather than grandfathered: a wild is
-## admitted against a table, never against a map that has switched wilds off.
-##
-## The tables move without the map: six o'clock, a swarm arriving, and the Bug
-## Contest starting or ending each change what a roll would read. A provider that
-## mints an entry LATER than the map change plans it against whatever it was
-## handed, so a stale snapshot would spawn a day species at night and
-## [method _table_offers] would agree with it. `generation` is deliberately not
-## bumped: that means "the map changed, discard everything", and an hour boundary
-## is not a map change.
-##
-## Pushed once, so a frame that moves two of the three costs one call.
+## objects hold, the tables, and `wildoff`. The eligible sweep is the whole map and
+## is taken only when `wildoff` is toggled, which is the one thing that moves it,
+## and an entry standing on a cell it just emptied is dropped rather than
+## grandfathered. The tables move without the map: six o'clock, a swarm arriving
+## and the Bug Contest each change what a roll would read, so a provider minting an
+## entry later plans it against whatever it was handed. `generation` is deliberately
+## not bumped: an hour boundary is not a map change. Pushed once per frame.
 func _push_context_changes() -> void:
 	if _world == null or _context.is_empty():
 		return

@@ -3,15 +3,11 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies the credits against freshly imported real caches, for both command
-## profiles.
-##
-## The whole script is run to `CREDITS_END` rather than sampled: every command it
-## carries, every string it names and every scene it selects is exercised once,
-## which is the sweep tests/integration/test_credits.gd's four-string fixture
-## cannot be. The expected values come from pokecrystal and pokegold's
-## engine/movie/credits.asm, data/credits_script.asm and credits_strings.asm.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- credits
+## profiles. The whole script is run to `CREDITS_END` rather than sampled: every
+## command it carries, every string it names and every scene it selects is exercised
+## once, which is the sweep tests/integration/test_credits.gd's four-string fixture
+## cannot be. Expected values come from pokecrystal and pokegold's
+## engine/movie/credits.asm and the two data files behind it.
 
 
 ## Long enough for either script, whose own totals are pinned below.

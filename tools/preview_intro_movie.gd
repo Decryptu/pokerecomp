@@ -5,13 +5,9 @@ extends SceneTree
 ##
 ##   Godot --headless --path . -s res://tools/preview_intro_movie.gd -- crystal /tmp/i.png [frame;frame]
 ##
-## [frame] is how many source frames to spend before the shot; several separated
-## by `;` write one file each, numbered. With no frame list the tool runs the
-## whole movie and prints the frame each scene starts on, which is what pins the
-## budgets.
-##
-## Headless: the page draws into an [Image] rather than through a viewport, so
-## there is no window and no settle.
+## [frame] is how many source frames to spend before the shot; several separated by
+## `;` write one file each, numbered. With no frame list the tool runs the whole
+## movie and prints the frame each scene starts on, which is what pins the budgets.
 
 const MAX_FRAMES: int = 20000
 

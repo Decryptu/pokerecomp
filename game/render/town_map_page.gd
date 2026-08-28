@@ -2,25 +2,13 @@ class_name Gen2TownMapPage
 extends RefCounted
 
 ## The region map (`_TownMap` and `InitPokegearTilemap.Map`) and the Pokegear's
-## other three cards, on the tile grid the hardware uses.
-##
-## Like the trainer card this is a tilemap screen: `FillTownMap` writes one tile
-## number per cell of the whole screen out of `JohtoMap` or `KantoMap`, the frame
-## overwrites a few of them and only the landmark's name is printed text. So the
-## page builds a map of tile numbers, colours it through `TownMapPals` and then
-## resolves each number to pixels.
-##
-## `Pokegear_LoadGFX`'s VRAM window:
-##
-## | Tiles | Contents |
-## |---|---|
-## | $00-$2f | `TownMapGFX`, which is every tile a region map names |
-## | $30-$5d | `PokegearGFX`, the card frame and its icons |
-## | $60+ | the font, so printed text addresses glyphs as usual |
-##
-## The other three cards are the same window with one of the RLE tilemaps over
-## it instead of a region map, so they are built here rather than in a page of
-## their own; `Pokegear_FinishTilemap`'s icon row runs on all four.
+## other three cards, on the tile grid the hardware uses. Like the trainer card
+## this is a tilemap screen: `FillTownMap` writes one tile number per cell out of
+## `JohtoMap` or `KantoMap` and only the landmark's name is printed text, so the
+## page builds a map of tile numbers, colours it through `TownMapPals` and
+## resolves each number to pixels. The VRAM window is `TownMapGFX` at $00,
+## `PokegearGFX` at $30 and the font from $60. The other three cards are the same
+## window with one of the RLE tilemaps over it, so they are built here too.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20

@@ -1,138 +1,13 @@
 extends SceneTree
 
-## Records one clip to a video, for a trailer rather than for a check.
-##
-## Godot's Movie Maker is what makes this reproducible: `--write-movie` pins the
-## frame delta, so the world's own clock spends exactly one hardware frame per
-## recorded frame and a clip is the same clip twice. Nothing here steps the
-## screen by hand for that reason: the game runs its ordinary `_process`, mods
-## included, and only the buttons are scripted.
+## Records one clip to a video, for a trailer rather than for a check. Godot's
+## Movie Maker is what makes it reproducible: `--write-movie` pins the frame delta,
+## so the world spends exactly one hardware frame per recorded frame. Nothing here
+## steps the screen by hand for that reason: the game runs its ordinary `_process`,
+## mods included, and only the buttons are scripted. [constant USAGE] is every key.
 ##
 ##   Godot --path . --mods --write-movie /tmp/clip.avi --fixed-fps 60 \
 ##     -s res://tools/record_clip.gd -- <game> <group> <map> [key=value ...]
-##
-## The AVI is Motion JPEG with the game's own audio in it. What a trailer wants
-## is the clip proper at 1080p, and `TRIM=<frame>` on stdout is where that
-## starts: the mod load and the warm-up in front of it are as long as they are,
-## so the number is printed rather than assumed. The nearest-neighbour step is
-## what keeps the pixels square through a scale that is not a whole number:
-##
-##   ffmpeg -i clip.avi -vf "trim=start_frame=$TRIM,setpts=PTS-STARTPTS,\
-##     scale=2304:1296:flags=neighbor,scale=1920:1080:flags=lanczos" \
-##     -c:v libx264 -crf 18 -pix_fmt yuv420p -r 60 clip.mp4
-##
-## Keys, all optional:
-##   screen=<world|saves>  which screen the clip is shot on. `world` is the game
-##                  and is the default; `saves` is the launcher's save page,
-##                  where a run's challenge is chosen. The group and map are
-##                  ignored by `saves` and still have to be given.
-##   cell=<x>,<y>   where the player stands when the map opens
-##   facing=<dir>   which way the player faces when it opens: up, down, left,
-##                  right. Untouched by default, which is the map's own answer.
-##   hour=<0-23>    the clock the map is drawn on, which is its palette
-##   view=<mod id>  a mod's renderer instead of the built-in one (`voxel3d`)
-##   size=<W>x<H>   the size the game lays itself out for. The video's own size
-##                  by default, which is the one size that costs nothing: Movie
-##                  Maker fixes the frame at the project's own viewport before a
-##                  line of this script runs, and a layout of any other size is
-##                  scaled into it, which is what makes a launcher page's text
-##                  soft. Give this only to shoot a shape the frame is not, a
-##                  portrait phone being the one that earns it: `--resolution`
-##                  moves the window on the desktop and not the frame.
-##   seconds=<n>    how long the clip runs after the warm-up
-##   seed=<n>       the run seed, which is what a mod's spawn plan is built from
-##   hold=<dir>     a direction held for the whole clip: up, down, left, right
-##   challenge=<c>  the challenge the recording run is played under: vanilla,
-##                  hard or nuzlocke. What `Gen2Rules` gives a real run, so a
-##                  Nuzlocke clip meets the Nuzlocke's own rules.
-##   party=<spec>   the party the clip plays with, `species:level` per member
-##                  separated by commas, six at most. Each may carry `shiny`,
-##                  `hp<n>` for a member standing at that many hit points, and
-##                  `brink` for one a single point of experience short of its
-##                  next level. Six healthy level 40s by default.
-##   items=<spec>   items in the bag, `item:count` separated by commas. A capture
-##                  clip needs its own balls: 5 is a POKE BALL.
-##   progress=<spec>  how far along the run is, `badges:8,caught:120`. What a mod
-##                  reading [Gen2ModProgress] answers about, so a clip of a list
-##                  a run fills in is shot part way through one rather than at
-##                  nothing. `badges` is the first n in source order and `caught`
-##                  the first n species numbers; `pokedex:1` and `pokegear:1` are
-##                  the start menu's own two gates. `spent:1` is a Nuzlocke whose
-##                  area has already given up its one encounter, which is what a
-##                  clip of the refusal starts from.
-##   flags=<n>[,<n>]  event flags the run has already set, by their index in
-##                  `constants/event_flags.asm`. What puts a script on the branch
-##                  a clip wants: 8 is `EVENT_GOT_TM31_MUD_SLAP`, which takes the
-##                  TM speech off the end of the Violet Gym badge.
-##   text=auto      an A press whenever the box is waiting for one, which is a
-##                  player reading. A battle's own text is as long as its text is
-##                  and no frame number can be worked out in advance, so a clip
-##                  that has to reach a menu says this rather than counting.
-##   read=<frames>  how long a finished page is left standing before `text=auto`
-##                  turns it. The default is [constant TEXT_GAP], which is a
-##                  viewer's reading speed rather than a player's.
-##   beat=<frames>  the same between one `at=` or `always=` action and the next,
-##                  which is how long a chosen menu row is seen before it is
-##                  pressed. The default is [constant STATE_GAP].
-##   at=<state>:<action>  one action, performed the first time the screen reaches
-##                  that state: `menu` is the battle's FIGHT/PKMN/PACK/RUN,
-##                  `move` its move list, `pack` the pack it opens, `capture` the
-##                  ball selector, `switch` the party list, `ask` the nickname
-##                  question a catch reaches, `name` the keyboard behind it and
-##                  `map` the overworld with no battle over it. Repeatable, and they are
-##                  spent in the order they are written, a beat apart. What aims
-##                  a press at a menu rather than at a frame.
-##   always=<state>:<action>  the same, but never spent: it answers that state
-##                  every time the screen reaches it, once the `at=` queue has
-##                  nothing waiting for it. `always=menu:a always=move:a` is a
-##                  player fighting with the first move for as many turns as the
-##                  fight lasts, which is not a number a clip can know.
-##   mash=<first>:<every>[:<last>]  an A press every `every` frames from `first`,
-##                  which is a player holding a battle or a script along. Runs to
-##                  the end of the clip unless `last` says otherwise, and adds to
-##                  whatever `do=` already asked for.
-##   do=<frame>:<action>   one scripted action, repeatable
-##
-## World actions are a button name (`a`, `b`, `start`, `select`, `up`, `down`,
-## `left`, `right`), `hold-<dir>` or `hold-none` to change what is held from that
-## frame, `surf` to mount the water the player is facing, `battle` to start a
-## wild fight, `meet` to face the nearest wild a mod has drawn on the map and
-## fight THAT one, `meet-shiny` for the nearest one that is shiny,
-## `wild-<species>-<level>[-shiny]` to start one against a named Pokemon that is
-## on no map, `menu-off` to close whatever is open, `text-off` and `text-on` to
-## stop and restart `text=auto` so the last line of a clip is left up rather
-## than turned, or `view-<mod id>` to switch
-## the renderer on camera, cover and all. Frames are the world's own, counted
-## from the first recorded one.
-##
-## Save-screen actions are `new-slot` to open the new-game form on the first
-## free slot, `slot-<n>` to select one, `name-<text>` to type a save name, and
-## `focus-<label>` and `click-<label>` for one of the page's own buttons, found
-## by the words on it. The focus ring is what a viewer follows, so a click is
-## worth a `focus-` a moment before it.
-##
-## A `probe=` records nothing and answers a question instead, which is how a clip
-## is aimed before it is shot:
-##   probe=map    an ASCII plan of the map: `.` land, `~` water, `#` blocked,
-##                `o` an object standing on it, `@` the player's own cell
-##   probe=walk   runs the clip's own buttons and prints the path the player
-##                actually took, so a walk that hits a wall is seen before it is
-##                recorded rather than after
-##   probe=wilds  the wild population this `seed=` really puts on the map
-##   probe=shiny  asks the installed visible-encounter providers for the plan
-##                every seed would build on this map and prints the ones holding
-##                a shiny, which is how a sparkle clip gets its `seed=`
-##   probe=menu   the start menu's own rows in order, which is how many DOWN
-##                presses a mod's row costs: a mod adds one and the count moves
-##   probe=trace  runs the clip's own buttons and prints the frame every visible
-##                thing changed on: the text on screen, the battle's menu and
-##                whether it is waiting for a press. A clip that has to land a
-##                press on a menu is aimed with this and shot afterwards
-##
-## A `probe=` takes the same arguments as the clip it is aiming, and `cell=` is
-## not optional among them: where the player stands is part of the context a
-## spawn plan is built from, so a seed found from one cell puts its shiny
-## somewhere else from another. `probe=wilds` is the check on that.
 
 ## Only for a run with no window to ask, which is every headless one.
 const DEFAULT_WINDOW := Vector2i(1280, 720)
@@ -241,6 +116,122 @@ var _always: Dictionary = {}
 var _state_ready: int = 0
 
 
+const USAGE: String = """
+Keys, all optional:
+  screen=<world|saves>  which screen the clip is shot on. `world` is the game
+				 and is the default; `saves` is the launcher's save page,
+				 where a run's challenge is chosen. The group and map are
+                 ignored by `saves` and still have to be given.
+  cell=<x>,<y>   where the player stands when the map opens
+  facing=<dir>   which way the player faces when it opens: up, down, left,
+				 right. Untouched by default, which is the map's own answer.
+  hour=<0-23>    the clock the map is drawn on, which is its palette
+  view=<mod id>  a mod's renderer instead of the built-in one (`voxel3d`)
+  size=<W>x<H>   the size the game lays itself out for. The video's own size
+				 by default, which is the one size that costs nothing: Movie
+				 Maker fixes the frame at the project's own viewport before a
+                 line of this script runs, and a layout of any other size is
+				 scaled into it, which is what makes a launcher page's text
+				 soft. Give this only to shoot a shape the frame is not, a
+				 portrait phone being the one that earns it: `--resolution`
+				 moves the window on the desktop and not the frame.
+  seconds=<n>    how long the clip runs after the warm-up
+  seed=<n>       the run seed, which is what a mod's spawn plan is built from
+  hold=<dir>     a direction held for the whole clip: up, down, left, right
+  challenge=<c>  the challenge the recording run is played under: vanilla,
+                 hard or nuzlocke. What `Gen2Rules` gives a real run, so a
+				 Nuzlocke clip meets the Nuzlocke's own rules.
+  party=<spec>   the party the clip plays with, `species:level` per member
+				 separated by commas, six at most. Each may carry `shiny`,
+				 `hp<n>` for a member standing at that many hit points, and
+				 `brink` for one a single point of experience short of its
+				 next level. Six healthy level 40s by default.
+  items=<spec>   items in the bag, `item:count` separated by commas. A capture
+				 clip needs its own balls: 5 is a POKE BALL.
+  progress=<spec>  how far along the run is, `badges:8,caught:120`. What a mod
+				 reading [Gen2ModProgress] answers about, so a clip of a list
+				 a run fills in is shot part way through one rather than at
+				 nothing. `badges` is the first n in source order and `caught`
+				 the first n species numbers; `pokedex:1` and `pokegear:1` are
+				 the start menu's own two gates. `spent:1` is a Nuzlocke whose
+                 area has already given up its one encounter, which is what a
+                 clip of the refusal starts from.
+  flags=<n>[,<n>]  event flags the run has already set, by their index in
+                 `constants/event_flags.asm`. What puts a script on the branch
+                 a clip wants: 8 is `EVENT_GOT_TM31_MUD_SLAP`, which takes the
+                 TM speech off the end of the Violet Gym badge.
+  text=auto      an A press whenever the box is waiting for one, which is a
+				 player reading. A battle's own text is as long as its text is
+				 and no frame number can be worked out in advance, so a clip
+				 that has to reach a menu says this rather than counting.
+  read=<frames>  how long a finished page is left standing before `text=auto`
+				 turns it. The default is [constant TEXT_GAP], which is a
+				 viewer's reading speed rather than a player's.
+  beat=<frames>  the same between one `at=` or `always=` action and the next,
+				 which is how long a chosen menu row is seen before it is
+				 pressed. The default is [constant STATE_GAP].
+  at=<state>:<action>  one action, performed the first time the screen reaches
+				 that state: `menu` is the battle's FIGHT/PKMN/PACK/RUN,
+                 `move` its move list, `pack` the pack it opens, `capture` the
+                 ball selector, `switch` the party list, `ask` the nickname
+                 question a catch reaches, `name` the keyboard behind it and
+                 `map` the overworld with no battle over it. Repeatable, and they are
+                 spent in the order they are written, a beat apart. What aims
+                 a press at a menu rather than at a frame.
+  always=<state>:<action>  the same, but never spent: it answers that state
+                 every time the screen reaches it, once the `at=` queue has
+                 nothing waiting for it. `always=menu:a always=move:a` is a
+                 player fighting with the first move for as many turns as the
+                 fight lasts, which is not a number a clip can know.
+  mash=<first>:<every>[:<last>]  an A press every `every` frames from `first`,
+                 which is a player holding a battle or a script along. Runs to
+                 the end of the clip unless `last` says otherwise, and adds to
+                 whatever `do=` already asked for.
+  do=<frame>:<action>   one scripted action, repeatable
+
+World actions are a button name (`a`, `b`, `start`, `select`, `up`, `down`,
+`left`, `right`), `hold-<dir>` or `hold-none` to change what is held from that
+frame, `surf` to mount the water the player is facing, `battle` to start a
+wild fight, `meet` to face the nearest wild a mod has drawn on the map and
+fight THAT one, `meet-shiny` for the nearest one that is shiny,
+`wild-<species>-<level>[-shiny]` to start one against a named Pokemon that is
+on no map, `menu-off` to close whatever is open, `text-off` and `text-on` to
+stop and restart `text=auto` so the last line of a clip is left up rather
+than turned, or `view-<mod id>` to switch
+the renderer on camera, cover and all. Frames are the world's own, counted
+from the first recorded one.
+
+Save-screen actions are `new-slot` to open the new-game form on the first
+free slot, `slot-<n>` to select one, `name-<text>` to type a save name, and
+`focus-<label>` and `click-<label>` for one of the page's own buttons, found
+by the words on it. The focus ring is what a viewer follows, so a click is
+worth a `focus-` a moment before it.
+
+A `probe=` records nothing and answers a question instead, which is how a clip
+is aimed before it is shot:
+  probe=map    an ASCII plan of the map: `.` land, `~` water, `#` blocked,
+			   `o` an object standing on it, `@` the player's own cell
+  probe=walk   runs the clip's own buttons and prints the path the player
+               actually took, so a walk that hits a wall is seen before it is
+               recorded rather than after
+  probe=wilds  the wild population this `seed=` really puts on the map
+  probe=shiny  asks the installed visible-encounter providers for the plan
+               every seed would build on this map and prints the ones holding
+               a shiny, which is how a sparkle clip gets its `seed=`
+  probe=menu   the start menu's own rows in order, which is how many DOWN
+			   presses a mod's row costs: a mod adds one and the count moves
+  probe=trace  runs the clip's own buttons and prints the frame every visible
+			   thing changed on: the text on screen, the battle's menu and
+               whether it is waiting for a press. A clip that has to land a
+               press on a menu is aimed with this and shot afterwards
+
+A `probe=` takes the same arguments as the clip it is aiming, and `cell=` is
+not optional among them: where the player stands is part of the context a
+spawn plan is built from, so a seed found from one cell puts its shiny
+somewhere else from another. `probe=wilds` is the check on that.
+"""
+
+
 func _initialize() -> void:
 	## Movie Maker's frame is the PROJECT's viewport rather than the window, so
 	## `--resolution` moves what is on the desktop and not what is written.
@@ -256,6 +247,7 @@ func _initialize() -> void:
 	var args: PackedStringArray = OS.get_cmdline_user_args()
 	if args.size() < 3:
 		push_error("Usage: record_clip.gd -- <game> <group> <map> [key=value ...]")
+		print(USAGE)
 		_quit_failed()
 		return
 
@@ -402,14 +394,12 @@ func _parse_items(spec: String) -> Dictionary:
 
 
 ## Whether the mods are still loading, which the screen has to be built after.
-##
 ## `GameRuntime` loads them from its own `_ready`, and that has not run while
-## `_initialize` runs nor on the first frame after it. A screen built before it
-## has no follower walking behind the player and no wild Pokemon on the map, and
-## which of those a clip caught was a race. Waited out rather than loaded again
-## here: a second `load_mods` registers every mod twice, and `reload_mods` runs
-## the save lifecycle, which is what puts a development run's randomizer over a
-## clip that never asked for one.
+## `_initialize` runs nor on the first frame after it, so a screen built before it
+## has no follower and no wild Pokemon on the map. Waited out rather than loaded
+## again here: a second `load_mods` registers every mod twice, and `reload_mods`
+## runs the save lifecycle, which puts a development run's randomizer over a clip
+## that never asked for one.
 func _waiting_for_mods() -> bool:
 	if _frames > MOD_LOAD_FRAMES or not Gen2GameRuntime.mods_are_allowed():
 		return false

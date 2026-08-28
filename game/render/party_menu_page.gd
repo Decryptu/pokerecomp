@@ -2,23 +2,13 @@ class_name Gen2PartyMenuPage
 extends RefCounted
 
 ## The party menu as the hardware draws it: `WritePartyMenuTilemap`'s
-## `PARTYMENUACTION_SWITCH` quality set plus `PlacePartyMenuText`
-## (`engine/pokemon/party_menu.asm`).
-##
-## `SetUpBattlePartyMenu` clears the battle off the screen and puts this in its
-## place, so the page is the whole 160x144 rather than a box over the field.
-## Every column below is `hlcoord`'s own, and each quality steps two rows per
-## member because `PartyMenu2DMenuData`'s cursor offset is `dn 2, 0`.
-##
-## [Gen2BattleSwitchMenu] owns the rows and the cursor; this is presentation
-## only, and node-free, so the page can be read back headless. The one thing it
-## owns itself is `InitPartyMenuGFX`'s icons, because the sprite anim structs
-## behind them are per-frame state and nothing else here holds it: [method
-## advance] is one pass of `PlaySpriteAnimations` over them.
-##
-## A row carrying `egg` is `PartyMenuCheckEgg`'s: its nickname and its icon are
-## drawn and every other quality is stepped past. Only the overworld menu can
-## show one; a battle party cannot hold an egg.
+## `PARTYMENUACTION_SWITCH` quality set plus `PlacePartyMenuText`.
+## `SetUpBattlePartyMenu` clears the battle off the screen, so the page is the
+## whole 160x144 rather than a box over the field, and each quality steps two rows
+## per member because `PartyMenu2DMenuData`'s cursor offset is `dn 2, 0`.
+## [Gen2BattleSwitchMenu] owns the rows and the cursor. The one thing this owns is
+## `InitPartyMenuGFX`'s icons, whose sprite anim structs are per-frame state. A row
+## carrying `egg` is `PartyMenuCheckEgg`'s and only the overworld menu shows one.
 
 const TILE: int = Gen2Font.TILE
 

@@ -1,19 +1,13 @@
 extends GutTest
 
 ## `WritePartyMenuTilemap`'s `PARTYMENUACTION_SWITCH` columns and
-## `PlacePartyMenuText`'s box (`engine/pokemon/party_menu.asm`), checked by where
-## the ink lands rather than by eye.
-##
-## Every sheet in the cache is filled with one index, so a glyph is a solid tile
-## and a column that drew something can be told from one that did not. That is
-## the whole claim here: the page is geometry, and the drawing under it is
-## [Gen2Font]'s and [Gen2BattleHud]'s own.
-##
-## The battle-extra strip is filled with a different index from the rest, since
-## the bars come off it and are the one thing on the page drawn through a palette
-## that is not black on white. The icons are the other: one fixture shape whose
-## two frames carry different indices, so which pass is on screen and where it
-## landed can both be read off the picture.
+## `PlacePartyMenuText`'s box, checked by where the ink lands rather than by eye.
+## Every sheet in the cache is filled with one index, so a glyph is a solid tile and
+## a column that drew something can be told from one that did not: the page is
+## geometry, and the drawing under it is [Gen2Font]'s and [Gen2BattleHud]'s own. The
+## battle-extra strip is filled with a different index, since the bars come off it
+## and are the one thing drawn through a palette that is not black on white; the
+## icons are the other, one shape whose two frames carry different indices.
 
 ## The fixture's one icon shape and the species that names it, plus the two
 ## colours its frames are drawn in.

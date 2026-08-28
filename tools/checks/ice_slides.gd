@@ -5,17 +5,11 @@ var _r: RefCounted = null
 ## Sweeps every ice cell on every map of all three cartridges through the slide
 ## `DoPlayerMovement.CheckForced` and `CheckStandingOnIce` produce, rather than
 ## sampling the Ice Path. The expected shapes come from the pinned
-## engine/overworld/player_movement.asm, identical in pokecrystal and pokegold:
-## a step onto ice leaves `wPlayerTurningDirection` set, the next poll ORs that
-## direction back into `wCurInput`, and the run ends at the first refused step,
-## whose `._WalkInPlace` clears the byte.
-##
-## Two invariants are what a broken slide trips. It has to terminate, which it
-## only does because a refusal clears the byte; and with nothing held it has to
-## keep the one direction, since a slide that could turn on its own would carry
-## the player off a run the map laid out.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- ice_slides
+## player_movement.asm, identical in both: a step onto ice leaves
+## `wPlayerTurningDirection` set, the next poll ORs that direction back into
+## `wCurInput`, and the run ends at the first refused step. Two invariants are what
+## a broken slide trips: it has to terminate, which it only does because a refusal
+## clears the byte, and with nothing held it has to keep the one direction.
 
 ## A slide can be no longer than the map, so anything past this is a loop.
 const RUN_CEILING: int = 512

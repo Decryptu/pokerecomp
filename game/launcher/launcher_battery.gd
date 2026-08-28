@@ -1,23 +1,13 @@
 class_name Gen2LauncherBattery
 extends HBoxContainer
 
-## The charge indicator in the top right: a cell that fills and empties, with the
-## percentage written beside it.
-##
-## Godot reports no power state on any platform, so every reading here is this
-## project's own. There is one probe per platform and no fallback: a machine
-## whose charge cannot be read draws no indicator at all rather than a full cell
-## that is not true. That is what [method reading_available] answers, and it is
-## why a desktop with no battery in it shows nothing either.
-##
-## | Platform | Where the reading comes from |
-## |---|---|
-## | macOS | `pmset -g batt`, on a worker thread |
-## | Windows | `Get-CimInstance Win32_Battery`, on a worker thread |
-## | Linux, BSD | `/sys/class/power_supply/BAT*/capacity` and `status` |
-## | Android | `ACTION_BATTERY_CHANGED`, through the platform plugin |
-## | iOS | `UIDevice.batteryLevel`, through the platform plugin |
-##
+## The charge indicator in the top right. Godot reports no power state on any
+## platform, so every reading here is this project's own. There is one probe per
+## platform and no fallback: a machine whose charge cannot be read draws no
+## indicator rather than a full cell that is not true, which is what
+## [method reading_available] answers. macOS reads `pmset -g batt` and Windows
+## `Get-CimInstance Win32_Battery`, both on a worker thread; Linux and BSD read
+## `/sys/class/power_supply`; Android and iOS come through the platform plugin.
 ## Anything else, the Switch build included, has no probe and no indicator.
 
 const FULL: int = 100

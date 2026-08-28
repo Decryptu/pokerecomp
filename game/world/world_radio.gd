@@ -2,22 +2,13 @@ class_name Gen2WorldRadio
 extends RefCounted
 
 ## The Pokegear radio card's tuning knob, its station table, and the music each
-## station leaves in `wMapMusic`.
-##
-## Scene-free and stateless: a caller passes the knob position and the facts the
-## source reads off WRAM, and gets back the station that answers. The knob and
-## the tuned channel live on `Gen2WorldState`; the music a station commits lands
-## in `Gen2WorldState.map_music`, which is what `SnorlaxAwake` reads.
-##
-## Modelled here: `UpdateRadioStation`, `RadioChannels`, each handler's
-## availability check, `LoadStation_*`, `PlayRadioShow`'s Rocket override and
-## `StartRadioStation`'s music commit, which is the whole of what the overworld
-## can observe. The words a station then prints are [Gen2RadioShow].
-##
-## Channel ids are Crystal-canonical, the way `Gen2WorldScript.special_index()`
-## keeps specials Crystal-canonical: Gold and Silver ship no Buena's Password
-## channel, so their own ids from PLACES_AND_PEOPLE on sit one lower.
-## `raw_channel()` converts when a cartridge-shaped number is wanted.
+## station leaves in `wMapMusic`. Scene-free and stateless: a caller passes the
+## knob position and the facts the source reads off WRAM and gets back the station
+## that answers. Modelled here: `UpdateRadioStation`, `RadioChannels`, each
+## handler's availability check, `LoadStation_*`, `PlayRadioShow`'s Rocket override
+## and `StartRadioStation`'s music commit. The words a station prints are
+## [Gen2RadioShow]. Channel ids are Crystal-canonical, so Gold and Silver's own
+## ids from PLACES_AND_PEOPLE on sit one lower; `raw_channel()` converts.
 
 ## constants/radio_constants.asm.
 const OAKS_POKEMON_TALK: int = 0
@@ -206,14 +197,12 @@ static func station_for(knob: int, context: Dictionary = {}) -> Dictionary:
 
 
 ## The knob position a channel is carried on, or -1 where this profile has none.
-## `PlayRadioStationPointers`, the nine `MAPRADIO_*` rows a `special MapRadio`
-## indexes. Only two of them are reachable: `Radio1Script` names the Pokemon
-## Channel and `Radio2Script` the Lucky Channel, and those two std scripts are
-## every radio on every map.
-##
-## `LoadStation_PokemonChannel` is a branch rather than a station: Kanto reads
-## Places and People, a Johto morning the Pokedex Show, and any other Johto hour
-## Oak's Pokemon Talk.
+## Below, `PlayRadioStationPointers`, the nine `MAPRADIO_*` rows a
+## `special MapRadio` indexes. Only two are reachable: `Radio1Script` names the
+## Pokemon Channel and `Radio2Script` the Lucky Channel, and those two std scripts
+## are every radio on every map. `LoadStation_PokemonChannel` is a branch rather
+## than a station: Kanto reads Places and People, a Johto morning the Pokedex Show,
+## and any other Johto hour Oak's Pokemon Talk.
 const MAP_RADIO_STATIONS: Array[int] = [
 	-1, OAKS_POKEMON_TALK, POKEDEX_SHOW, POKEMON_MUSIC, LUCKY_CHANNEL,
 	UNOWN_RADIO, PLACES_AND_PEOPLE, LETS_ALL_SING, ROCKET_RADIO,

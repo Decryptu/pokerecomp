@@ -2,21 +2,13 @@ class_name Gen2IntroMovie
 extends RefCounted
 
 ## `CrystalIntro` (engine/movie/intro.asm): the movie between the GameFreak logo
-## and the title screen.
-##
-## Twenty-eight scenes behind one jumptable, stepped once per hardware frame.
-## Half of them are setup: they load a graphics sheet, a 32x32 BG map and its
-## attribute plane, copy a palette run into `wBGPals1` and `wBGPals2`, and call
-## `NextIntroScene`. The other half animate for a fixed number of frames by
-## writing the palettes, `hSCX`, `hSCY`, `wLYOverrides` and a handful of sprite
-## animation structs, then hand on.
-##
-## This owns all of that state; [Gen2IntroMoviePage] turns it into pixels. The
-## split is the credits': a per-frame jumptable, a tilemap the state machine
-## owns, and a page that only turns tile numbers into colours.
-##
-## Crystal only. Gold and Silver's `GoldSilverIntro` is a different movie and is
-## not built.
+## and the title screen. Twenty-eight scenes behind one jumptable, stepped once
+## per hardware frame. Half of them are setup, loading a sheet, a 32x32 BG map and
+## its attribute plane and a palette run; the other half animate for a fixed
+## number of frames by writing the palettes, `hSCX`, `hSCY`, `wLYOverrides` and a
+## handful of sprite animation structs. This owns all of that state and
+## [Gen2IntroMoviePage] turns it into pixels, the same split the credits use.
+## Crystal only: `GoldSilverIntro` is a different movie.
 
 ## `wBGPals2` and the `wOBPals2` behind it, which is what the screen shows.
 ##
@@ -148,13 +140,11 @@ const UNOWN_SOUNDS: Array[Array] = [
 
 ## What each setup scene loads, keyed by its scene index. `bg` is the sheet BG
 ## tile numbers below $80 read from, `bg_first` how far into it that half starts,
-## and `bg_high` the sheet $80 and up reads from; `obj` is the sheet a sprite
-## tile reads from and `obj_bank1` the one an `OAM_BANK1` sprite does. `map` and
-## `attr` name the 32x32 BG maps.
-##
-## The names are `RomLayout.INTRO_SECTION`'s. A missing key keeps what the scene
-## before it left in that part of VRAM, which is what the source's own
-## `Intro_DecompressRequest2bpp_*` calls do.
+## and `bg_high` the sheet $80 and up reads from; `obj` is the sheet a sprite tile
+## reads from and `obj_bank1` the one an `OAM_BANK1` sprite does. `map` and `attr`
+## name the 32x32 BG maps. The names are `RomLayout.INTRO_SECTION`'s, and a missing
+## key keeps what the scene before it left in that part of VRAM, which is what the
+## source's own `Intro_DecompressRequest2bpp_*` calls do.
 const SCENE_VRAM: Dictionary = {
 	0: {
 		"bg": "unowns", "map": "unown_a_map", "attr": "unown_a_attr", "obj": "pulse",
@@ -233,14 +223,12 @@ const CLEAR_BG_PALS_FRAMES: int = 2
 ## counter being frozen for the whole of its span.
 const SETUP_OVERRUN_KEY: int = -1
 ## Frames a pass costs over the one the loop would spend, keyed by scene and then
-## by `wIntroSceneFrameCounter` at the top of that pass.
-##
-## The cause is `Decompress`, the sprite pass and `Intro_ColoredSuicuneFrameSwap`
-## costing more CPU than a frame has left, so the `DelayFrame` the loop ends on
-## lands a frame late. Measured against a real dump under `.claude/oracle` rather
-## than derived, because nothing here counts cycles: with it the movie's own
-## `wJumptableIndex` and counter agree with the cartridge's on all 2,441 frames,
-## and without it the port ends 101 frames early.
+## by `wIntroSceneFrameCounter` at the top of that pass. The cause is `Decompress`,
+## the sprite pass and `Intro_ColoredSuicuneFrameSwap` costing more CPU than a
+## frame has left, so the `DelayFrame` the loop ends on lands a frame late.
+## Measured against a real dump under `.claude/oracle` rather than derived: with it
+## the movie's own `wJumptableIndex` and counter agree with the cartridge's on all
+## 2,441 frames, and without it the port ends 101 frames early.
 const SCENE_OVERRUN: Dictionary = {
 	# Each setup scene, over its `Intro_ClearBGPals`, `ClearTilemap` and
 	# `Request2bpp` waits.

@@ -105,13 +105,12 @@ const HAPPINESS_PROBABILITIES: Dictionary = {
 
 ## The bytes `HaircutOrGrooming`'s `.loop` reads when it walks off the end of
 ## `HappinessData_DaisysGrooming`, which is `docs/bugs_and_glitches.md`'s
-## "Daisy's grooming doesn't always increase happiness". `sub $ff` from `$ff`
-## sets no carry, so a roll of exactly 255 steps three bytes on into
-## `CopyPokemonName_Buffer1_Buffer3`'s own `ld hl, wStringBuffer1`: `$21`
-## borrows against the remaining zero, and the address's two bytes are then read
-## as the row. The address is the one part that is not shared, so the low byte
-## reaching wScriptVar and the high byte reaching `ChangeHappiness` are pinned
-## per profile out of rgblink's symbol table.
+## "Daisy's grooming doesn't always increase happiness". `sub $ff` from `$ff` sets
+## no carry, so a roll of exactly 255 steps three bytes on into
+## `CopyPokemonName_Buffer1_Buffer3`'s own `ld hl, wStringBuffer1`, and the
+## address's two bytes are then read as the row. The address is the one part that
+## is not shared, so the two bytes are pinned per profile out of rgblink's symbol
+## table.
 const STRING_BUFFER_1: Dictionary = {true: 0xD073, false: 0xCF6B}
 const HAPPINESS_TABLE_OVERRUN_OPCODE: int = 0x21
 
@@ -194,13 +193,12 @@ const HEAVY_BALL_LIGHT_PENALTY: int = 20
 
 ## `docs/bugs_and_glitches.md`'s "Heavy Ball uses wrong weight value for three
 ## Pokemon": `HeavyBall_GetDexEntryBank` masks the species without taking one off
-## first, so 64, 128 and 192 read their own entry's address out of the next
-## bank up. What is there is a different cartridge's business on each build, so
-## these are measured rather than derived: `.claude/oracle/battle/catch_rate.py`
-## on all three dumps says Gold and Silver land on the same row the right weight
-## would, and Crystal does not. KADABRA and TAUROS are what it answered there;
-## SUNFLORA is the third and has no answer, because the `.SkipText` walk never
-## finds its terminator and the cartridge locks up (see `HANDOFF.md`).
+## first, so 64, 128 and 192 read their own entry's address out of the next bank
+## up. What is there is a different cartridge's business on each build, so these
+## are measured rather than derived: `.claude/oracle/battle/catch_rate.py` says
+## Gold and Silver land on the same row the right weight would and Crystal does
+## not. SUNFLORA is the third and has no answer, because the `.SkipText` walk never
+## finds its terminator and the cartridge locks up.
 const HEAVY_BALL_WRONG_BANK: Dictionary = {64: 20, 128: 40}
 
 ## `FleeMons`' first three bytes, which is as far as `FastBallMultiplier`'s
@@ -362,17 +360,13 @@ static func heal_party(
 
 
 ## The link trade's own commit, which is `LinkTrade`'s `.do_trade` tail: the
-## offered slot leaves through `RemoveMonFromPartyOrBox` and the received
-## Pokemon is appended by `AddTempmonToParty`, so it lands at the END of the
-## party rather than in the slot that was emptied. That is the one place the
-## link trade differs from the in-game one, which writes into the vacated slot.
-##
-## `wForceEvolution` is set over the append, so a species that evolves by trade
-## evolves here and nowhere else. Mail travels with each Pokemon because it hangs
-## off the row: `sPartyMail` is shifted by the same removal.
-##
-## [param incoming] is the peer's [Gen2SaveMon] dictionary; [param peer] names
-## the trainer it came from, for the dex and for the box the caller prints.
+## offered slot leaves through `RemoveMonFromPartyOrBox` and the received Pokemon
+## is appended by `AddTempmonToParty`, so it lands at the END of the party rather
+## than in the slot that was emptied. That is the one place the link trade differs
+## from the in-game one. `wForceEvolution` is set over the append, so a species
+## that evolves by trade evolves here and nowhere else. Mail travels with each
+## Pokemon because it hangs off the row. [param incoming] is the peer's
+## [Gen2SaveMon] dictionary and [param peer] names the trainer it came from.
 static func commit_link_trade(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -502,16 +496,12 @@ static func heal_party_rows(data: GameData, save: Gen2SaveData) -> int:
 
 
 ## `Softboiled_MilkDrinkFunction`: a fifth of the user's own maximum health moved
-## from the user to another party member, as one candidate transaction.
-##
-## Both halves are the *user's* fifth. `GetOneFifthMaxHP` is called twice with
-## `wCurPartyMon` still holding the user, and only then is the recipient written
-## into it, so a big Pokemon heals a small one by a big number.
-##
-## The refusals are `.SelectMilkDrinkRecipient`'s own, in its order: the user
-## itself, a fainted recipient and one already at full health. The caller checks
-## the user's own health first, which is the `.CheckMonHasEnoughHP` this shares
-## with the party menu's line.
+## from the user to another party member, as one candidate transaction. Both halves
+## are the *user's* fifth, `GetOneFifthMaxHP` being called twice with
+## `wCurPartyMon` still holding the user, so a big Pokemon heals a small one by a
+## big number. The refusals are `.SelectMilkDrinkRecipient`'s own, in its order:
+## the user itself, a fainted recipient and one already at full health. The caller
+## checks the user's own health first.
 static func transfer_health(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -638,23 +628,13 @@ static func use_item(
 
 
 ## engine/items/tmhm.asm's TeachTMHM, as one candidate transaction beside
-## use_item(). The pack's own USE reaches this, not `UseItem`'s jumptable: the
-## TM/HM pocket runs AskTeachTMHM, ChooseMonToLearnTMHM and TeachTMHM instead
-## (engine/items/pack.asm's .UseItem).
-##
-## The refusal order is the source's. CanLearnTMHMMove comes first, then
-## KnowsMove, then LearnMove's own search for an empty slot; each answers before
-## anything is written.
-##
-## A full moveset is where LearnMove reaches ForgetMove, which is a menu, so this
-## is called twice: once with [param forget_slot] left at -1, which is what runs
-## the two compatibility checks and answers `moveset_full` having written
-## nothing, and again with the slot the player gave up. An empty slot always
-## wins over a passed [param forget_slot], because LearnMove.loop only reaches
-## ForgetMove when its own scan finds no zero.
-##
-## An HM is not consumed: TeachTMHM returns straight after IsHM, so it skips both
-## ConsumeTM and the happiness change.
+## `use_item()`. The pack's own USE reaches this rather than `UseItem`'s
+## jumptable. The refusal order is the source's: CanLearnTMHMMove, then KnowsMove,
+## then LearnMove's own search for an empty slot, each answering before anything is
+## written. A full moveset is where LearnMove reaches ForgetMove, which is a menu,
+## so this is called twice, once with [param forget_slot] at -1 to run the
+## compatibility checks and again with the slot the player gave up. An empty slot
+## always wins over a passed slot. An HM is not consumed: TeachTMHM skips both.
 static func teach_tm_hm(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -747,14 +727,11 @@ static func teach_tm_hm(
 ## `LearnMove` on its own, without the TM/HM that usually reaches it: what an
 ## evolution offers a Pokemon whose four slots are full. The refusal order is
 ## `LearnMove`'s own, an empty slot always winning over a passed
-## [param forget_slot] the way `.loop` does, and by default nothing is consumed
-## and no happiness moves because no item was used.
-##
-## [param compatibility_checked] is `CheckCanLearnMoveTutorMove`'s own
-## `predef CanLearnTMHMMove`, which stands in front of `KnowsMove` there and
-## nowhere else, and [param happiness_kind] its `ld c, HAPPINESS_LEARNMOVE`,
-## charged inside the same transaction the move is written in. A level-up offer
-## passes neither, which is what makes it the plain `LearnMove` it is.
+## [param forget_slot] the way `.loop` does, and by default nothing is consumed and
+## no happiness moves because no item was used. [param compatibility_checked] is
+## `CheckCanLearnMoveTutorMove`'s own `predef CanLearnTMHMMove` and
+## [param happiness_kind] its `ld c, HAPPINESS_LEARNMOVE`; a level-up offer passes
+## neither, which is what makes it the plain `LearnMove` it is.
 static func learn_move(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -842,14 +819,12 @@ static func teach_tutor_move(
 
 
 ## `ChangeHappiness` over the imported table, taking the byte rather than the
-## Pokemon: `wCurPartyMon`'s egg guard and the `wBattleMonHappiness` mirror
-## behind it are the caller's, because a caller here holds either a
-## [Gen2SaveMon] or a [Gen2BattleMon] and never both.
-##
-## The three rows are picked by HAPPINESS_THRESHOLD_1 and _2, and the sign of a
-## change is `cp $64`: a byte from 100 up is the subtracting branch, which is why
-## the table is read signed. Each branch answers the carry rather than clamping,
-## so a rise saturates at 255 and a fall at 0.
+## Pokemon: `wCurPartyMon`'s egg guard and the `wBattleMonHappiness` mirror behind
+## it are the caller's, because a caller here holds either a [Gen2SaveMon] or a
+## [Gen2BattleMon] and never both. The three rows are picked by
+## HAPPINESS_THRESHOLD_1 and _2, and the sign of a change is `cp $64`: a byte from
+## 100 up is the subtracting branch, which is why the table is read signed. Each
+## branch answers the carry rather than clamping, so a rise saturates at 255.
 static func change_happiness(data: GameData, happiness: int, kind: int) -> int:
 	var changes: Array[int] = []
 	if data != null:
@@ -1006,17 +981,13 @@ static func party_has_fit_mon(save: Gen2SaveData) -> bool:
 
 
 ## `DoPoisonStep`, the pass `CountStep` owes every fourth step. One HP off every
-## poisoned member that is still standing, and a member the point finishes has
-## its status cleared, which is what stops it being damaged again.
-##
-## The two flags `wPoisonStepFlagSum` collects decide what the pass costs:
-## `%10`, somebody fainted, is the only one that reaches a script, and `%01`
-## alone is the sound and nothing else. `.CheckWhitedOut` runs inside that
-## script, so the happiness penalty and the lines are charged on the faint
-## branch alone.
-##
-## Answers `{"damaged", "fainted", "sfx", "texts", "whiteout"}`; the caller owns
-## the sound, the box and the blackout behind it.
+## poisoned member that is still standing, and a member the point finishes has its
+## status cleared, which is what stops it being damaged again. The two flags
+## `wPoisonStepFlagSum` collects decide what the pass costs: `%10`, somebody
+## fainted, is the only one that reaches a script, and `%01` alone is the sound.
+## `.CheckWhitedOut` runs inside that script, so the happiness penalty and the
+## lines are charged on the faint branch alone. Answers `{damaged, fainted, sfx,
+## texts, whiteout}`; the caller owns the sound, the box and the blackout.
 static func apply_poison_step(data: GameData, save: Gen2SaveData) -> Dictionary:
 	var out: Dictionary = {
 		"damaged": PackedInt32Array(), "fainted": PackedInt32Array(),
@@ -1077,17 +1048,13 @@ static func whited_out_text(player_name: String) -> String:
 
 
 ## `Script_Whiteout` past its own text: `HealParty`, `HalveMoney`,
-## `GetWhiteoutSpawn` and the `WarpToSpawnPoint` behind them, in that order.
-## The last is [method Gen2WorldAPI.warp_to_spawn]'s own tail here, since every
-## escape shares it.
-##
-## One routine, because every way of blacking out reaches this one script: a
-## battle lost anywhere goes through `Script_reloadmapafterbattle`, and the last
-## party member fainting to poison goes through `.Script_MonFaintedToPoison`.
-##
-## The spawn is `wLastSpawnMapGroup`/`wLastSpawnMapNumber` read back through
-## `IsSpawnPoint`, so a map `blackoutmod` named is honoured here and SPAWN_HOME
-## is what a player who has entered no Pokemon Center gets.
+## `GetWhiteoutSpawn` and the `WarpToSpawnPoint` behind them, in that order. The
+## last is [method Gen2WorldAPI.warp_to_spawn]'s own tail here, since every escape
+## shares it. One routine, because every way of blacking out reaches this one
+## script: a battle lost anywhere goes through `Script_reloadmapafterbattle`, and
+## the last party member fainting to poison through `.Script_MonFaintedToPoison`.
+## The spawn is read back through `IsSpawnPoint`, so a map `blackoutmod` named is
+## honoured and SPAWN_HOME is what a player who has entered no Center gets.
 static func whiteout(
 	world: Gen2WorldAPI, save: Gen2SaveData, persist: bool = true
 ) -> Dictionary:
@@ -1120,16 +1087,13 @@ static func whiteout(
 	}
 
 
-## `ContestDropOffMons` past its fainted-lead branch: the party masked to its
-## lead for the length of the Bug Catching Contest. The cartridge drops
-## `wPartyCount` to 1 and writes a terminator over the second species byte,
-## leaving the members themselves in `wPartyMon`; nothing here counts a party by
-## a terminator, so the masked members move to
-## [member Gen2SaveData.contest_stashed_party] instead and the stashed species
-## byte stays as the world state's own.
-##
-## Answers the species `wBugContestSecondPartySpecies` takes, or 0 when the
-## party was one long already.
+## `ContestDropOffMons` past its fainted-lead branch: the party masked to its lead
+## for the length of the Bug Catching Contest. The cartridge drops `wPartyCount` to
+## 1 and writes a terminator over the second species byte, leaving the members in
+## `wPartyMon`; nothing here counts a party by a terminator, so the masked members
+## move to [member Gen2SaveData.contest_stashed_party] instead and the stashed
+## species byte stays as the world state's own. Answers the species
+## `wBugContestSecondPartySpecies` takes, or 0 when the party was one long already.
 static func contest_drop_off_mons(save: Gen2SaveData) -> int:
 	if save == null or save.party.size() <= 1:
 		return 0
@@ -1289,16 +1253,13 @@ static func _fills_its_box(save: Gen2SaveData, destination: Dictionary) -> bool:
 	return box != null and box.occupied_count() >= Gen2SaveBox.CAPACITY
 
 
-## `CheckPartyFullAfterContest`, which is what takes home whatever the Bug
-## Catching Contest caught. `wContestMon` is a party struct already, so the party
-## branch is a copy and the box branch an `InsertPokemonIntoBox`; each stands
-## behind its own `GiveANickname_YesNo`, and `SetCaughtData` is then overwritten
-## with LANDMARK_NATIONAL_PARK, the gender bit kept.
-##
-## Three things a reading gets wrong. `.BoxFull` writes nothing and still answers
-## BUGCONTEST_BOXED_MON, so a full party over a full box loses the catch; the box
-## branch prints no "sent to BILL's PC" line, because the script's own
-## `ContestResults_PartyFullText` is what BUGCONTEST_BOXED_MON reaches; and
+## `CheckPartyFullAfterContest`, which takes home whatever the Bug Catching
+## Contest caught. `wContestMon` is a party struct already, so the party branch is
+## a copy and the box branch an `InsertPokemonIntoBox`, each behind its own
+## `GiveANickname_YesNo`, and `SetCaughtData` is then overwritten with
+## LANDMARK_NATIONAL_PARK. Three things a reading gets wrong: `.BoxFull` writes
+## nothing and still answers BUGCONTEST_BOXED_MON, so a full party over a full box
+## loses the catch; the box branch prints no "sent to BILL's PC" line; and
 ## `wContestMon` is cleared on every branch but that last one.
 static func _apply_contest_mon(
 	world: Gen2WorldAPI,
@@ -2012,15 +1973,13 @@ static func apply_evolution(data: GameData, mon: Gen2SaveMon, row: Dictionary) -
 	}
 
 
-## A Park Ball thrown inside the Bug Catching Contest, which is a different
-## transaction from [method capture_wild]: the ball comes out of
-## `wParkBallsRemaining` rather than the bag, and what is caught goes to
-## `wContestMon` rather than to the party or a box, so no save is touched and
-## nothing can be refused for a full party.
-##
+## A Park Ball thrown inside the Bug Catching Contest, a different transaction
+## from [method capture_wild]: the ball comes out of `wParkBallsRemaining` rather
+## than the bag, and what is caught goes to `wContestMon` rather than to the party
+## or a box, so no save is touched and nothing can be refused for a full party.
 ## `BugContest_SetCaughtContestMon` asks before replacing a Pokemon already
-## caught, so a hit while one is held answers `replace_offer` and leaves the
-## state alone until the caller comes back with [method set_contest_mon].
+## caught, so a hit while one is held answers `replace_offer` and leaves the state
+## alone until the caller comes back with [method set_contest_mon].
 static func capture_contest(
 	world: Gen2WorldAPI, wild: Gen2BattleMon, random: RandomNumberGenerator = null
 ) -> Dictionary:
@@ -2257,14 +2216,12 @@ static func _love_ball(data: GameData, catch_rate: int, case: Dictionary) -> int
 
 
 ## The health term, as the cartridge's own bytes rather than as arithmetic that
-## happens to agree with them.
-##
-## Both operands are shifted right twice only when `3 * max HP` does not fit in
-## one byte, and everything after that is a byte: `ld b, e` keeps the low byte of
-## the divisor, `sub c` wraps, and `hQuotient + 3` is the low byte of the
-## quotient. Above 341 max HP the shifted divisor no longer fits either, which is
-## `docs/bugs_and_glitches.md`'s "Catch rate formula breaks for Pokemon with max
-## HP > 341", and all three truncations are what make it break.
+## happens to agree with them. Both operands are shifted right twice only when
+## `3 * max HP` does not fit in one byte, and everything after that is a byte:
+## `ld b, e` keeps the low byte of the divisor, `sub c` wraps, and `hQuotient + 3`
+## is the low byte of the quotient. Above 341 max HP the shifted divisor no longer
+## fits either, which is `docs/bugs_and_glitches.md`'s catch-rate break, and all
+## three truncations are what make it break.
 static func _source_hp_catch_rate(max_hp: int, current_hp: int, catch_rate: int) -> int:
 	var three_max: int = 3 * max_hp
 	var two_current: int = 2 * current_hp
@@ -2310,16 +2267,13 @@ static func _failed_wobbles(catch_rate: int, random: RandomNumberGenerator) -> i
 
 
 ## `GeneratePartyMonStats`' wild branch, which is what `TryAddMonToParty` and
-## `SendMonIntoBox` both build the caught row out of.
-##
-## Four of these read wrong from the outside and are the source's own. The
-## Pokemon keeps the health and the status condition it was standing there with,
-## because `PokeBallEffect` pushes `wEnemyMonStatus` and `wEnemyMonHP` in front
-## of `LoadEnemyMon` and writes them back after it. Its PP is full, because
-## `LoadEnemyMon`'s `FillPP` ran over whatever the fight had drained. Its stat
-## experience is zero and its experience is the minimum for its level, whatever
-## the battler had. The trainer ID is `wPlayerID`: a Pokemon caught by the player
-## is not a traded one.
+## `SendMonIntoBox` both build the caught row out of. Four of these read wrong from
+## the outside and are the source's own. The Pokemon keeps the health and status
+## it was standing there with, because `PokeBallEffect` pushes `wEnemyMonStatus`
+## and `wEnemyMonHP` in front of `LoadEnemyMon` and writes them back after it. Its
+## PP is full, because `FillPP` ran over whatever the fight had drained. Its stat
+## experience is zero and its experience the minimum for its level. The trainer ID
+## is `wPlayerID`: a Pokemon caught by the player is not a traded one.
 static func _captured_mon(
 	data: GameData,
 	save: Gen2SaveData,

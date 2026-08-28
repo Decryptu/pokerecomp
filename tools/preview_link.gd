@@ -4,17 +4,10 @@ extends SceneTree
 ##
 ##   Godot --headless --path . -s res://tools/preview_link.gd -- <game> <out.png> [screen]
 ##
-## [screen] is `trade`, `wait`, `confirm`, `record` or `all` for a contact sheet
-## of every one. `all` is the default.
-##
-## The trade screen is the one page whose picture differs between the two
-## cartridges for a reason rather than by accident: Crystal lays it out from
-## `MobileTradeBorderTilemap` and Gold and Silver draw two `LinkTextboxAtHL`
-## boxes on an empty screen, so the same call on the three caches is the whole
-## comparison.
-##
-## Composed into an [Image] rather than through a window, so this runs headless
-## and needs no settling frames.
+## [screen] is `trade`, `wait`, `confirm`, `record` or `all`, the default. The trade
+## screen is the one page whose picture differs between the two cartridges for a
+## reason rather than by accident, so the same call on the three caches is the whole
+## comparison. Composed into an [Image], so this runs headless.
 
 const COLUMNS: int = 2
 const SCREENS: Array[String] = ["wait", "trade", "confirm", "record"]

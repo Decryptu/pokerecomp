@@ -1,19 +1,14 @@
 class_name Gen2TextLayout
 extends RefCounted
 
-## Breaking a string into the lines and pages a text box can show.
-##
-## Pure rules, no font and no screen: it counts tiles and returns strings, so a
-## conversation's pagination can be checked without drawing anything.
-##
-## Widths count tiles, never characters: a ligature like "'s" is two characters
-## in one glyph, so [method String.length] overstates a line and wraps it a
-## column early. [method Gen2Text.encoded_length] is the measure that matches the
-## screen.
-##
-## The cartridges do not wrap at runtime; their text is pre-broken at authoring
-## time with control codes, which works when every string is known in advance and
-## does not when a mod adds one or a name runs long.
+## Breaking a string into the lines and pages a text box can show. Pure rules, no
+## font and no screen: it counts tiles and returns strings, so a conversation's
+## pagination can be checked without drawing anything. Widths count tiles, never
+## characters: a ligature like "'s" is two characters in one glyph, so
+## [method String.length] overstates a line and wraps it a column early. The
+## cartridges do not wrap at runtime, their text being pre-broken at authoring
+## time, which works when every string is known in advance and does not when a mod
+## adds one or a name runs long.
 
 
 ## Breaks [param text] into lines of at most [param columns] tiles.
@@ -85,17 +80,13 @@ static func lay_out(text: String, columns: int, rows: int) -> Array:
 
 
 ## The same pages with what each of them costs to reach, which is what a box
-## animating a scroll needs and a caller only counting lines does not.
-##
-## `enter` is `&"page"` for a `Paragraph`, whose box is cleared and which waits
-## for a press first; `&"scroll"` for `_ContText`, which waits and then runs
-## `TextScroll` twice; and `&"scroll_nowait"` for `_ContTextNoPause`, which is
-## the same two scrolls with nothing waited for. The first page is `&"start"`.
-##
-## `carried` is how many of the page's first lines the scroll moved up rather
-## than printed. `TextScroll` copies tiles and `_ContTextNoPause` then writes at
-## `TEXTBOX_INNERY + 2`, so a carried line is already on screen and is never
-## typed a second time.
+## animating a scroll needs. `enter` is `page` for a `Paragraph`, whose box is
+## cleared and which waits for a press first; `scroll` for `_ContText`, which
+## waits and then runs `TextScroll` twice; and `scroll_nowait` for
+## `_ContTextNoPause`, the same two scrolls with nothing waited for. The first
+## page is `start`. `carried` is how many of the page's first lines the scroll
+## moved up rather than printed, since `TextScroll` copies tiles and a carried
+## line is already on screen.
 static func lay_out_pages(text: String, columns: int, rows: int) -> Array:
 	var out: Array = []
 	if rows <= 0 or columns <= 0:

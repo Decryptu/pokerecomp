@@ -2,15 +2,12 @@ class_name Gen2TouchLayoutSheet
 extends Control
 
 ## Arranging the on-screen controller: drag each cluster where a thumb wants it,
-## and set how large and how solid it is.
-##
-## Full screen rather than a card, because the thing being arranged is measured
-## against the rectangle the game hands the controller and a preview in a box of
-## its own would place it against the wrong one.
-##
-## The layout is per orientation, and this edits the one the window is currently
-## in. On the device that matters, turning it sideways is how the other is
-## reached, which is also the only way to see what that one will look like.
+## and set how large and how solid it is. Full screen rather than a card, because
+## what is being arranged is measured against the rectangle the game hands the
+## controller and a preview in a box of its own would place it against the wrong
+## one. The layout is per orientation and this edits the one the window is in;
+## turning the device sideways is both how the other is reached and the only way
+## to see what it will look like.
 
 signal closed()
 

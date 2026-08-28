@@ -2,35 +2,21 @@ class_name Gen2SecondScreenHost
 extends Node
 
 ## Puts a [Gen2SecondScreen] on a real second display, and reports touches back.
-##
-## There are two ways a second panel is reached and this owns both, because the
-## screen above must not know which one it got:
-##
-## | Backend | Where it runs | How a frame arrives |
-## |---|---|---|
-## | `panel` | A handheld whose lower display is a secondary Android display | the platform plugin, one bitmap per drawn frame |
-## | `window` | Any desktop | a second [Window] holding the screen itself |
-##
-## The panel backend copies pixels rather than sharing a rendering context, and
-## that is the whole reason [Gen2SecondScreen] draws in hardware pixels instead
-## of the panel's own: a copy of a 206x180 picture is 148 KB and one of a
-## 1240x1080 panel is 5.4 MB, and the far side can scale a bitmap by a whole
-## number for nothing. Sharing a context instead would mean a Vulkan swapchain
-## per display, which this project cannot have while it renders through the
-## compatibility backend.
-##
-## The plugin is named by [constant PLUGIN], and is absent on every platform but
-## Android; [method available] is false there and nothing above this cares.
+## Two backends, because the screen above must not know which one it got: `panel`
+## is a handheld's secondary Android display reached through the platform plugin,
+## one bitmap per drawn frame, and `window` is a second [Window] on any desktop.
+## The panel backend copies pixels rather than sharing a context, which is why
+## [Gen2SecondScreen] draws in hardware pixels: 148 KB a frame against the panel's
+## own 5.4 MB. Sharing would mean a Vulkan swapchain per display, which this
+## project cannot have while it renders through the compatibility backend.
 
 ## The Android plugin singleton. Its contract is four calls and three signals:
-##
-## - `open() -> bool`, `close()`, `panel_size() -> PackedInt32Array` of two
-## - `present(pixels: PackedByteArray, width: int, height: int)`
-## - `panel_connected(width, height)`, `panel_disconnected()`,
-##   `panel_touched(x, y)` in the presented picture's own pixels
-## Not the screen's own class name: a plugin singleton is a global identifier in
-## GDScript, and one that collided would shadow [Gen2SecondScreen] on Android
-## and nowhere else.
+## `open() -> bool`, `close()`, `panel_size() -> PackedInt32Array` of two,
+## `present(pixels, width, height)`, and `panel_connected(width, height)`,
+## `panel_disconnected()` and `panel_touched(x, y)` in the presented picture's own
+## pixels. Not the screen's own class name: a plugin singleton is a global
+## identifier in GDScript, and one that collided would shadow [Gen2SecondScreen]
+## on Android and nowhere else.
 const PLUGIN: String = "Gen2SecondScreenPanel"
 
 ## The panel a `window` backend pretends to be, so what is looked at on a desktop
@@ -45,12 +31,10 @@ const WINDOW_SCALE: int = 4
 ## An animating page is copied at half the host's rate rather than every drawn
 ## frame. The trainer card's colon, the party's icons and the region map's player
 ## are the only things on the panel that move, and all three are slower than this.
-##
 ## A still page is not copied on a clock at all: it is sent for a few frames after
-## the screen says it has redrawn, and not again. That matters because the
-## launcher's own page is drawn at the panel's full resolution rather than in
-## hardware pixels, and one of those is 5.4 MB where a hardware-pixel canvas is
-## 148 KB.
+## the screen says it has redrawn, and not again, which matters because the
+## launcher's own page is drawn at the panel's full resolution and one of those is
+## 5.4 MB where a hardware-pixel canvas is 148 KB.
 const PANEL_HZ: float = 30.0
 ## How many frames a still page is sent for after it changes. More than one,
 ## because the viewport draws what it was given on the frame after it was given

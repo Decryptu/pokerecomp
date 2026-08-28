@@ -16,14 +16,10 @@ signal item_used(item: int, target: int)
 signal enemy_seen(species: int, unown_form: int)
 
 ## Owns the battle, the events and the text box; decides nothing about how they
-## are drawn. A [Gen2Battle] resolves the turn and answers with events; this
-## shows them one at a time, reading every number out of the event rather than
-## asking the engine again, which is why the setters still take plain values.
-##
-## Presentation is a registered renderer, the same boundary the overworld's map
-## goes through: [method _push_view] hands plain display values to whatever
-## [Gen2ModHost] constructs, and the text box stays hardware pixels over it, as
-## menus do over the world renderer.
+## are drawn. A [Gen2Battle] resolves the turn and answers with events; this shows
+## them one at a time, reading every number out of the event rather than asking
+## the engine again. Presentation is a registered renderer, the same boundary the
+## overworld's map goes through, with the text box staying hardware pixels over it.
 
 ## `anim_sound` and `anim_cry` have to reach a player, and a battle had none:
 ## this is the world screen's own route (`game/world/world_screen.gd`).
@@ -534,13 +530,9 @@ func _process(delta: float) -> void:
 
 ## Whether anything is counting hardware frames right now. Public with
 ## [method advance_frame] so a test or a screenshot driver can settle the screen
-## without waiting on real time.
-##
-## An exp bar stopped at a level boundary is waiting on the press that dismisses
-## `.LoopLevels`' textbox, not on frames: it cannot move until
-## [method Gen2ExpBarAnimation.resume]. It is excluded here so a caller draining
-## frames stops instead of spinning, which [method bars_animating] does not do
-## because that answers whether a bar is on screen.
+## without waiting on real time. An exp bar stopped at a level boundary is waiting
+## on the press that dismisses `.LoopLevels`' textbox rather than on frames, so it
+## is excluded and a caller draining frames stops instead of spinning.
 func frames_running() -> bool:
 	var bars: bool = not _bars.is_empty() or (_exp_bar != null and not _exp_bar.paused())
 	return bars or _intro != null or animation_running() or fainting() or sliding() \
@@ -1339,30 +1331,13 @@ func advance_intro() -> bool:
 
 
 ## `BattleStartMessage` and the opening of `DoBattle`, which the sliding pics run
-## straight into and which is the whole of a battle's entrance.
-##
-## One stage per step, spent in order by [method _advance_entrance]. Measured
-## against a real cartridge frame by frame, which is where the frame counts and
-## the two presses come from:
-##
-## | | Wild | Trainer |
-## |---|---|---|
-## | 1 | the shiny pass and the enemy's cry | `SFX_SHINE`, `WaitSFX`, twenty frames |
-## | 2 | the party balls, then the start line, which waits on a press | the same |
-## | 3 | the balls go and the enemy's panel arrives | the balls go and the trainer slides off |
-## | 4 | - | `ShowBattleTextEnemySentOut`, a press, the enemy's ball, cry and panel |
-## | 5 | `DoBattle`'s forty frames | the same |
-## | 6 | the player slides off, `SendOutMonText` prints without waiting | the same |
-## | 7 | the ball, the cry and the player's panel | the same |
-##
-## `AnimateFrontpic` is the enemy's alone and is where its cry comes from:
-## `BattleStartMessage`'s wild branch runs `ANIM_MON_NORMAL` and
-## `ShowSetEnemyMonAndSendOutAnimation` runs `ANIM_MON_SLOW`, both at
-## `hlcoord 12, 0`, and both `jr .skip_cry` past `PlayStereoCry` because the
-## animation plays it. Crystal's alone: pokegold has no `pic_animation.asm` and
-## both of its send-outs reach `PlayStereoCry` directly, which is the
-## `.cry_no_anim` branch and what this project falls back on. The player's own
-## send-out has no animation on either cartridge.
+## straight into: one stage per step, spent in order by
+## [method _advance_entrance]. Measured against a real cartridge frame by frame,
+## which is where the frame counts and the two presses come from.
+## `AnimateFrontpic` is the enemy's alone and is where its cry comes from, both
+## send-outs `jr .skip_cry` past `PlayStereoCry`. Crystal's alone: pokegold has no
+## `pic_animation.asm` and reaches `PlayStereoCry` directly, the `.cry_no_anim`
+## branch this project falls back on. The player's send-out has no animation.
 func _build_entrance() -> void:
 	_entrance_stages = []
 	var text: String = _intro_message
@@ -1724,15 +1699,12 @@ const ANIM_APPEAR_USER: StringName = &"appear_user"
 ## come out of its script.
 const ANIM_SFX: StringName = &"sfx"
 
-## Whose square is showing the substitute's doll rather than the mon itself,
-## keyed by [constant Gen2Battle.PLAYER] and [constant Gen2Battle.ENEMY].
-##
-## The cartridge keeps this in VRAM rather than in a variable: `GetSubstitutePic`
-## writes the doll over the battler's own tiles and `DropPlayerSub` writes the
-## picture back, so what is on the field is whatever was drawn there last. The
-## three writers are the animation's `anim_raisesub` and `anim_dropsub`, the two
-## `noanim` commands the battle-scene option reaches instead, and a send-out,
-## which draws a fresh picture either way.
+## Whose square is showing the substitute's doll rather than the mon itself. The
+## cartridge keeps this in VRAM rather than in a variable: `GetSubstitutePic`
+## writes the doll over the battler's tiles and `DropPlayerSub` writes the picture
+## back, so what is on the field is whatever was drawn last. The three writers are
+## `anim_raisesub`/`anim_dropsub`, the two `noanim` commands the battle-scene
+## option reaches instead, and a send-out.
 var _substitute_pic: Dictionary = {Gen2Battle.PLAYER: false, Gen2Battle.ENEMY: false}
 
 ## The second answer the same three writers give. `GetBattleMonBackpic` tests
@@ -1759,14 +1731,12 @@ const ANIM_MOVE_LIMIT: int = 0x100
 const ANIM_THROW_POKE_BALL: int = 0x100
 
 ## `.shake_and_break_free`'s four texts, indexed by how many times the ball
-## rocked. `PokeBallEffect` reads `wThrownBallWobbleCount`, which is one higher
-## than the count of rocks; the count itself is what
-## [method Gen2WorldPartyHost._failed_wobbles] answers with. There is no line for
-## a rock on its own: the rocking is the animation, and one of these is the whole
-## of what a failed throw says.
-## `BallBlockedText` and `BallDontBeAThiefText`, which are two boxes rather than
-## one line, and `BallBoxFullText`, said before the ball is even thrown.
-## `_NewDexDataText`, which names the Pokemon and plays a sound of its own.
+## rocked. `PokeBallEffect` reads `wThrownBallWobbleCount`, one higher than the
+## count of rocks, which is what [method Gen2WorldPartyHost._failed_wobbles]
+## answers. There is no line for a rock on its own. Beside them:
+## `BallBlockedText` and `BallDontBeAThiefText`, two boxes rather than one line,
+## `BallBoxFullText`, said before the ball is thrown, and `_NewDexDataText`, which
+## names the Pokemon and plays a sound of its own.
 const NEW_DEX_DATA_TEXT: String = "%s's data\nwas newly added to\nthe #DEX."
 const BALL_BLOCKED_TEXT: String = "The trainer\nblocked the BALL!"
 const BALL_DONT_BE_A_THIEF_TEXT: String = "Don't be a thief!"
@@ -2254,16 +2224,11 @@ func _drawn_exp() -> int:
 
 
 ## Begins the fill [param event]'s award earns, which is `AnimateExpBar`, from
-## the [param from_pixels] the bar stood at before the award was committed.
-##
-## The segments are read out of the events still queued behind this one: one
-## ending at the end of the bar per level this gain crosses, then the partial
-## fill `.FinishExpBar` computes from the exp and level the gain settled on.
-##
-## Two of the routine's own guards return before any of that, and both are kept:
-## a gainer who is not the Pokémon on the field animates nothing
-## (`wCurPartyMon` against `wCurBattleMon`), and neither does one already at
-## `MAX_LEVEL`.
+## the [param from_pixels] the bar stood at before the award was committed. The
+## segments are read out of the events still queued behind this one: one per level
+## crossed, then `.FinishExpBar`'s partial fill. Both of the routine's own guards
+## are kept: a gainer who is not the Pokemon on the field animates nothing
+## (`wCurPartyMon` against `wCurBattleMon`), and neither does one at `MAX_LEVEL`.
 func _start_exp_bar(event: Dictionary, from_pixels: int) -> void:
 	_exp_bar = null
 	if _battle == null or _battle.player == null:
@@ -2418,17 +2383,12 @@ func battle_snapshot() -> Dictionary:
 	}
 
 
-## The plain reading a registered battle-information provider annotates from.
-##
-## Everything such a provider could otherwise only guess at from past events:
+## The plain reading a registered battle-information provider annotates from:
 ## both sides' live stat stages, the weather and what is left of it, who is
-## standing, what is on screen, whether this opponent had been seen in this save
-## before the fight, and the move rows with the exact effectiveness of each
-## against the defender.
-##
-## The effectiveness is [method GameData.type_effectiveness] over the defender's
-## own [method Gen2BattleMon.types], carrying Foresight's identified state, so a
-## provider never copies the type chart, never resolves a dual type itself and
+## standing, what is on screen, whether this opponent had been seen in this save,
+## and each move's exact effectiveness against the defender. That effectiveness is
+## [method GameData.type_effectiveness] over [method Gen2BattleMon.types] carrying
+## Foresight's identified state, so a provider never copies the type chart and
 ## never rebuilds state from the event stream.
 func info_snapshot() -> Dictionary:
 	var player: Gen2BattleMon = _battle.mon(Gen2Battle.PLAYER) if _battle != null else null
@@ -2955,18 +2915,14 @@ func complete_capture(result: Dictionary) -> Dictionary:
 	return result
 
 
-## `PokeBallEffect`'s own `PlayBattleAnim` on `ANIM_THROW_POKE_BALL`, which is
-## the throw, the poof, the opponent going into the ball, the wobbles and the
-## click or the break free: one script, not five.
-##
-## The catch is already resolved when this runs, the way the source resolves it
-## in front of the animation and hands the drawing `wWildMon` and
-## `wThrownBallWobbleCount` rather than a roll. `anim_checkpokeball` is what
-## reads them, so the queue is `GetPokeBallWobble`'s answers in order.
-##
-## The opponent leaving the field and coming back are `BATTLE_BG_EFFECT_RETURN_MON`
-## and `..._ENTER_MON` inside the script, which is why nothing here touches the
-## picture: both report through [method battler_side] like every other resize.
+## `PokeBallEffect`'s own `PlayBattleAnim` on `ANIM_THROW_POKE_BALL`: the throw,
+## the poof, the opponent going in, the wobbles and the click or the break free,
+## one script rather than five. The catch is already resolved when this runs, the
+## way the source resolves it in front of the animation and hands the drawing
+## `wThrownBallWobbleCount` rather than a roll, so the queue is
+## `GetPokeBallWobble`'s answers in order. The opponent leaving and coming back
+## are `BATTLE_BG_EFFECT_RETURN_MON` and `..._ENTER_MON` inside the script, which
+## is why nothing here touches the picture.
 func _begin_capture_animation(ball: int, wobbles: int, caught: bool) -> void:
 	if ball <= 0:
 		return
@@ -3591,41 +3547,14 @@ func advance() -> void:
 ## reached both by the press that dismissed the last box and by
 ## [method _show_next_event] finding no line left to print.
 func _continue_after_messages() -> void:
-	if _box == null:
-		return
-	## `PokeBallEffect` does not return until the naming is over, so nothing
-	## behind it runs while the prompt is up.
-	if _capture_nickname_host != null:
-		return
-	## The same waits [method _resume_after_frames] respects: a box still up, a
-	## line held behind a bar, or frames nobody has spent yet.
-	if _intro != null or bars_animating() or fainting() or animation_running():
-		return
-	## `applydamage` animates the bar and sinks the picture before `criticaltext`
-	## prints, so a line produced while either was running was held rather than
-	## raced. Released here, where every wait it can be held behind ends: a faint
-	## with no bar beside it is one, and the bar pump never sees that frame.
-	if not _held_message.is_empty():
-		var held: String = _held_message
-		_held_message = ""
-		show_message(held)
-		return
-	if _message_awaits_press:
-		return
-	## `BattleStartMessage` and `DoBattle`'s opening: each step is either frames
-	## or a line, so the pump and the press both arrive back here for the next.
-	if _advance_entrance():
+	if _messages_held():
 		return
 	## Nothing is left to print, so the line the box stood beside is gone even
 	## though no event was popped to take it away.
 	_clear_level_up_box()
 	if _capture_selecting or _capture_waiting:
 		return
-	## A list already up owns the joypad: the battle menu, the pack and its two
-	## sub-lists, and the forget offer are each answered by a press rather than
-	## run past by the pump.
-	if _menu_stage != &"" or _pack_selecting or _pack_move_selecting \
-		or _pack_action_stage != &"" or _forget_stage != &"":
+	if _a_list_owns_the_joypad():
 		return
 	if _world_battle_tutorial:
 		return
@@ -3641,73 +3570,10 @@ func _continue_after_messages() -> void:
 	if _show_next_mod_message():
 		return
 	if _capture_terminal:
-		## `BugContest_SetCaughtContestMon` asks before replacing the Pokemon
-		## already caught, over the same `PlaceYesNoBox` a switch offer uses.
-		if bool(_capture_result.get("replace_offer", false)) and _switch_stage == &"":
-			## `DisplayAlreadyCaughtText` before `DisplayCaughtContestMonStats`
-			## and the box: the line about the one already held is prompted past
-			## first, and the question is asked over the comparison.
-			if not _contest_already_caught_said:
-				_contest_already_caught_said = true
-				show_message(CONTEST_ALREADY_CAUGHT_TEXT % _contest_stock_name())
-				return
-			_open_yes_no(&"contest_replace", CONTEST_REPLACE_TEXT)
-			return
-		## `NewDexDataText` and `NewPokedexEntry`, which stand between
-		## `Text_GotchaMonWasCaught` and everything else a catch does. Only for a
-		## species the dex had not caught yet, and only once the player has the
-		## dex at all: `CheckCaughtMon` and `CheckReceivedDex` are both read
-		## before the throw, because the throw is what registers the catch.
-		if _open_new_dex_entry():
-			return
-		## A registered policy's award and every level up, move offer and
-		## evolution flag behind it, spent between `Text_GotchaMonWasCaught` and
-		## `AskGiveNicknameText` so nothing is filed with a level up still owed.
-		if _spend_capture_experience():
-			return
-		if _capture_experience_spent:
-			if not _pending.is_empty():
-				_show_next_event()
-				return
-			if _open_move_learn():
-				return
-		## `.skip_pokedex` reaches `.catch_bug_contest_mon` before either
-		## `AskGiveNicknameText`, so a contest catch is never named.
-		if _open_capture_nickname():
-			return
-		var capture: Dictionary = _capture_result.duplicate(true)
-		if not _capture_nickname.is_empty():
-			capture["nickname"] = _capture_nickname
-		if _capture_experience_spent:
-			## The experience landed on the party the battle owns, so the save
-			## the world holds needs it before that world files the catch.
-			sync_live_party()
-			capture["experience_awarded"] = true
-		_clear_capture_action()
-		_finish_world_capture(capture)
+		_continue_capture()
 		return
-	if not _capture_result.is_empty():
-		## `.UseItem` returns with no carry on a ball that did not land, so
-		## `BattleMenu` falls back into `DoBattle` and the enemy takes the turn
-		## the throw was paid with. Only a catch escapes it, through `.run`.
-		var spent: Dictionary = _capture_spent_turn
-		_capture_spent_turn = {}
-		_clear_capture_action()
-		if not spent.is_empty() and _battle != null and not _battle.is_over():
-			_pending = _battle.take_actions(spent, _enemy_action())
-			if not _pending.is_empty():
-				_show_next_event()
-				return
+	if _continue_capture_turn():
 		return
-	if not _capture_spent_turn.is_empty():
-		## The blocked throw in a trainer battle, whose two boxes are behind it.
-		var blocked: Dictionary = _capture_spent_turn
-		_capture_spent_turn = {}
-		if _battle != null and not _battle.is_over():
-			_pending = _battle.take_actions(blocked, _enemy_action())
-			if not _pending.is_empty():
-				_show_next_event()
-				return
 	if not _pending.is_empty():
 		_show_next_event()
 		return
@@ -3722,32 +3588,142 @@ func _continue_after_messages() -> void:
 	if _replace_the_fallen():
 		return
 	if _battle != null and _battle.is_over():
-		if _world_battle_active and not _battle.has_fled():
-			# A run shows neither a win nor a loss text and blacks nobody out:
-			# `wBattleResult` is DRAW and the party is still standing.
-			if _show_world_battle_terminal_text():
-				return
-			## `.give_money` is the next thing `BattleWon` does once
-			## `PrintWinLossText` has been answered.
-			if _show_prize_money_text():
-				return
-			## `LostBattle`'s `.not_canlose` is the grayscale and a `ret`: the
-			## battle prints nothing about blacking out, because `_WhitedOutText`
-			## belongs to `Script_Whiteout` on the overworld. What is checked
-			## here is only that the party the whiteout will heal can be read.
-			if _battle.winner() != Gen2Battle.PLAYER and not _world_battle_recovery_shown:
-				if not _prepare_world_battle_recovery():
-					return
-				_world_battle_recovery_shown = true
-		## `CheckPayDay` is `.HandleEndOfBattle`'s, outside the battle loop and
-		## behind whichever of the two win or loss texts was printed. A wild
-		## battle reaches it with no `_world_battle_active` in front of it.
-		if _show_pay_day_text():
-			return
-		if _save_battle_result() and _world_battle_active:
-			_finish_world_battle()
+		_finish_battle()
 		return
 	_open_battle_menu()
+
+
+## A list already up owns the joypad: the battle menu, the pack and its two
+## sub-lists, and the forget offer are each answered by a press rather than run
+## past by the pump.
+func _a_list_owns_the_joypad() -> bool:
+	return _menu_stage != &"" or _pack_selecting or _pack_move_selecting \
+		or _pack_action_stage != &"" or _forget_stage != &""
+
+
+## Whether a box, a bar or a frame nobody has spent yet still owns the screen.
+## The same waits [method _resume_after_frames] respects.
+func _messages_held() -> bool:
+	if _box == null:
+		return true
+	## `PokeBallEffect` does not return until the naming is over, so nothing
+	## behind it runs while the prompt is up.
+	if _capture_nickname_host != null:
+		return true
+	if _intro != null or bars_animating() or fainting() or animation_running():
+		return true
+	## `applydamage` animates the bar and sinks the picture before `criticaltext`
+	## prints, so a line produced while either was running was held rather than
+	## raced. Released here, where every wait it can be held behind ends: a faint
+	## with no bar beside it is one, and the bar pump never sees that frame.
+	if not _held_message.is_empty():
+		var held: String = _held_message
+		_held_message = ""
+		show_message(held)
+		return true
+	if _message_awaits_press:
+		return true
+	## `BattleStartMessage` and `DoBattle`'s opening: each step is either frames
+	## or a line, so the pump and the press both arrive back here for the next.
+	return _advance_entrance()
+
+
+## Everything `PokeBallEffect` does between `Text_GotchaMonWasCaught` and handing
+## the catch back to the world.
+func _continue_capture() -> void:
+	## `BugContest_SetCaughtContestMon` asks before replacing the Pokemon
+	## already caught, over the same `PlaceYesNoBox` a switch offer uses.
+	if bool(_capture_result.get("replace_offer", false)) and _switch_stage == &"":
+		## `DisplayAlreadyCaughtText` before `DisplayCaughtContestMonStats`
+		## and the box: the line about the one already held is prompted past
+		## first, and the question is asked over the comparison.
+		if not _contest_already_caught_said:
+			_contest_already_caught_said = true
+			show_message(CONTEST_ALREADY_CAUGHT_TEXT % _contest_stock_name())
+			return
+		_open_yes_no(&"contest_replace", CONTEST_REPLACE_TEXT)
+		return
+	## `NewDexDataText` and `NewPokedexEntry`, which stand between
+	## `Text_GotchaMonWasCaught` and everything else a catch does. Only for a
+	## species the dex had not caught yet, and only once the player has the
+	## dex at all: `CheckCaughtMon` and `CheckReceivedDex` are both read
+	## before the throw, because the throw is what registers the catch.
+	if _open_new_dex_entry():
+		return
+	## A registered policy's award and every level up, move offer and
+	## evolution flag behind it, spent between `Text_GotchaMonWasCaught` and
+	## `AskGiveNicknameText` so nothing is filed with a level up still owed.
+	if _spend_capture_experience():
+		return
+	if _capture_experience_spent:
+		if not _pending.is_empty():
+			_show_next_event()
+			return
+		if _open_move_learn():
+			return
+	## `.skip_pokedex` reaches `.catch_bug_contest_mon` before either
+	## `AskGiveNicknameText`, so a contest catch is never named.
+	if _open_capture_nickname():
+		return
+	var capture: Dictionary = _capture_result.duplicate(true)
+	if not _capture_nickname.is_empty():
+		capture["nickname"] = _capture_nickname
+	if _capture_experience_spent:
+		## The experience landed on the party the battle owns, so the save
+		## the world holds needs it before that world files the catch.
+		sync_live_party()
+		capture["experience_awarded"] = true
+	_clear_capture_action()
+	_finish_world_capture(capture)
+
+
+## The turn a throw was paid with. `.UseItem` returns with no carry on a ball
+## that did not land, so `BattleMenu` falls back into `DoBattle` and the enemy
+## takes it; only a catch escapes, through `.run`. Answers whether the turn it
+## started owns the screen.
+func _continue_capture_turn() -> bool:
+	var thrown: bool = not _capture_result.is_empty()
+	if not thrown and _capture_spent_turn.is_empty():
+		return false
+	## The blocked throw in a trainer battle, whose two boxes are behind it.
+	var spent: Dictionary = _capture_spent_turn
+	_capture_spent_turn = {}
+	if thrown:
+		_clear_capture_action()
+	if not spent.is_empty() and _battle != null and not _battle.is_over():
+		_pending = _battle.take_actions(spent, _enemy_action())
+		if not _pending.is_empty():
+			_show_next_event()
+			return true
+	return thrown
+
+
+## `.HandleEndOfBattle`, outside the battle loop.
+func _finish_battle() -> void:
+	if _world_battle_active and not _battle.has_fled():
+		# A run shows neither a win nor a loss text and blacks nobody out:
+		# `wBattleResult` is DRAW and the party is still standing.
+		if _show_world_battle_terminal_text():
+			return
+		## `.give_money` is the next thing `BattleWon` does once
+		## `PrintWinLossText` has been answered.
+		if _show_prize_money_text():
+			return
+		## `LostBattle`'s `.not_canlose` is the grayscale and a `ret`: the
+		## battle prints nothing about blacking out, because `_WhitedOutText`
+		## belongs to `Script_Whiteout` on the overworld. What is checked
+		## here is only that the party the whiteout will heal can be read.
+		if _battle.winner() != Gen2Battle.PLAYER and not _world_battle_recovery_shown:
+			if not _prepare_world_battle_recovery():
+				return
+			_world_battle_recovery_shown = true
+	## `CheckPayDay` is `.HandleEndOfBattle`'s, outside the battle loop and
+	## behind whichever of the two win or loss texts was printed. A wild
+	## battle reaches it with no `_world_battle_active` in front of it.
+	if _show_pay_day_text():
+		return
+	if _save_battle_result() and _world_battle_active:
+		_finish_world_battle()
 
 
 ## The fought party over the live save, with nothing written to disk.
@@ -3972,15 +3948,12 @@ func _prepare_world_battle_recovery() -> bool:
 	return true
 
 
-## Answers a Baton Pass that stopped the turn, and whether there was one.
-##
-## The player's target is `ForcePickSwitchMonInBattle`, which is the party menu
-## with no way out of it, so the list is opened and the turn stays standing until
-## a row answers it. The enemy's is `FindMonInOTPartyToSwitchIntoBattle`, the
-## AI's own type-matchup pick, which [method Gen2Battle.baton_pass_target] makes.
-##
-## It is answered before a replacement, because a turn left standing here has not
-## finished and nothing behind it can be asked yet.
+## Answers a Baton Pass that stopped the turn, and whether there was one. The
+## player's target is `ForcePickSwitchMonInBattle`, the party menu with no way out
+## of it, so the list stays open until a row answers; the enemy's is
+## `FindMonInOTPartyToSwitchIntoBattle`, which
+## [method Gen2Battle.baton_pass_target] makes. Answered before a replacement,
+## because a turn left standing here has not finished.
 func _answer_baton_pass() -> bool:
 	if _battle == null:
 		return false
@@ -4151,14 +4124,11 @@ func _answer_switch_offer() -> bool:
 
 
 ## `OfferSwitch`'s own `lb bc, 1, 7` through `_YesNoBox`, which stores the left
-## and top coordinates it is handed and adds five and four for the other two
-## (`home/menu.asm`). The flags, the two options and the `db 1` that opens the
-## cursor on YES are `YesNoMenuHeader`'s. `InterpretTwoOptionMenu`'s fifteen
-## frames between the answer and the box coming down are not spent, the way no
-## other menu delay here is.
-## `ItemSubmenu.UsableMenuHeader`'s own `menu_coords 13, 7, SCREEN_WIDTH - 1,
-## TEXTBOX_Y - 1` and its two rows. Every item a battle lists is usable, so
-## `.UnusableMenuData`'s single QUIT row is unreachable here.
+## and top it is handed and adds five and four for the other two. The flags, the
+## options and the `db 1` that opens the cursor on YES are `YesNoMenuHeader`'s.
+## `InterpretTwoOptionMenu`'s fifteen frames are not spent, as no menu delay here
+## is. Below: `ItemSubmenu.UsableMenuHeader`'s two rows. Every item a battle lists
+## is usable, so `.UnusableMenuData`'s single QUIT row is unreachable here.
 const PACK_ACTION_LEFT: int = 13
 const PACK_ACTION_TOP: int = 7
 const PACK_ACTION_SPAN: Vector2i = Vector2i(6, 4)
@@ -5797,18 +5767,12 @@ func _build_renderer() -> void:
 	_apply_renderer_interface_style()
 
 
-## Who fills the buffer SCREEN FILL gave the fight.
-##
-## The built-in arena is `_BattleScene`'s own 160x144 and has nothing to put in a
-## wider buffer, exactly like the pack or the PC, so the screen fills the
-## surround with the arena's own field. A renderer on the native layer, staged on
-## the map the encounter fired on, has the same world the overworld was filling
-## the window with a frame earlier and fills the surface itself, so the mask
-## would only crop it.
-##
-## The interface does not move either way: the panels, the bars and the boxes are
-## hardware pixels laid out in 160x144 and stay in the rectangle
-## [Gen2Screen] centres in the buffer.
+## Who fills the buffer SCREEN FILL gave the fight. The built-in arena is
+## `_BattleScene`'s own 160x144 and has nothing to put in a wider buffer, so the
+## screen fills the surround with the arena's own field. A renderer on the native
+## layer, staged on the map the encounter fired on, fills the surface itself and
+## the mask would only crop it. The interface does not move either way: panels,
+## bars and boxes stay in the rectangle [Gen2Screen] centres in the buffer.
 func _apply_screen_fill() -> void:
 	_screen.interface_masked = Gen2ModHost.renderer_uses_hardware_viewport(_renderer)
 
@@ -6014,15 +5978,12 @@ func _push_view() -> void:
 	_refresh_annotations()
 
 
-## What is standing on one side's square, whether it is on it, how far it is
-## from resting there and how big it is drawn. `docs/MODS.md` documents the
-## block; this is where it is filled.
-##
+## What is standing on one side's square, whether it is on it, how far it is from
+## resting there and how big it is drawn; `docs/MODS.md` documents the block.
 ## Every other battler field says it in the terms the hardware draws it in, so a
 ## renderer with no background plane would have to rebuild host state to read a
-## faint, a recall or a deformation. These four say it plainly instead, read out
-## of the state the screen already runs (`faint_step`, `slide_step`, the resize
-## scripts and the scanline window) rather than simulated again.
+## faint, a recall or a deformation. These four are read out of the state the
+## screen already runs rather than simulated again.
 func battler_side(side: int) -> Dictionary:
 	var player_side: bool = side == Gen2Battle.PLAYER
 	var backpic: String = _player_backpic if player_side else ""

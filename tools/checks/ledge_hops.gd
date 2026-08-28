@@ -4,17 +4,12 @@ var _r: RefCounted = null
 
 ## Verifies the two `DoPlayerMovement` branches a step is refused into against
 ## freshly imported real caches, for both command profiles: `.TryJump` and the
-## `.CheckWarp` behind it. The expected codes come from the pinned pokecrystal
-## and pokegold sources: engine/overworld/player_movement.asm's .TryJump, its
-## .ledge_table, .EdgeWarps, and data/collision/collision_permissions.asm.
-##
-## The real-cartridge counterpart to tests/unit/test_world_collision.gd and the
-## ledge cases in tests/unit/test_world_api.gd, which use synthetic caches. It
-## also pins what gates Route 30's corridor north, which
+## `.CheckWarp` behind it. The expected codes come from the pinned sources'
+## `.TryJump`, its `.ledge_table`, `.EdgeWarps` and the collision permissions. The
+## real-cartridge counterpart to tests/unit/test_world_collision.gd, which uses
+## synthetic caches. It also pins what gates Route 30's corridor north, which
 ## tools/preview_world_story.gd walks: terrain and hops carry the route, and
 ## EVENT_ROUTE_30_BATTLE opens the last two cells.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- ledge_hops
 
 const ROUTE30_GROUP: int = 26
 const ROUTE30_NUMBER: int = 1

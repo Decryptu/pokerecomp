@@ -3,21 +3,13 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## The Nuzlocke's area rule against freshly imported real caches, for all three
-## cartridges.
-##
-## A Nuzlocke counts by AREA, and the area a catch belongs to is the landmark
-## `SetCaughtData` writes: `Gen2WorldAPI.landmark_backup`, the same number the
-## Pokemon's own met location carries. So the rule only works if every map a
-## wild can be met on has a landmark of its own. A map that answered
-## `LANDMARK_SPECIAL` would put its encounter on whatever the player last warped
-## from, which is a different area on every visit.
-##
-## The census is the point, the way `wild_encounters.gd`'s is: it is what a
-## Nuzlocke actually has to spend. A landmark shared by several maps is ONE
-## area, which is what makes a multi-floor cave one encounter rather than one
-## per floor, and the two counts differing is what proves that.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- nuzlocke
+## cartridges. A Nuzlocke counts by AREA, and the area a catch belongs to is the
+## landmark `SetCaughtData` writes, so the rule only works if every map a wild can
+## be met on has a landmark of its own: a map answering `LANDMARK_SPECIAL` would put
+## its encounter on whatever the player last warped from. The census is the point,
+## the way `wild_encounters.gd`'s is: a landmark shared by several maps is ONE area,
+## which is what makes a multi-floor cave one encounter rather than one per floor,
+## and the two counts differing is what proves that.
 
 ## Per game: maps carrying a wild table, and the distinct landmarks behind them,
 ## which is how many encounters a Nuzlocke of that cartridge gets.

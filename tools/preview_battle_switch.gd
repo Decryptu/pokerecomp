@@ -1,36 +1,12 @@
 extends SceneTree
 
-## Captures the menus a battle is answered through, against a real imported
-## cache: `BattleMenu`'s own FIGHT/PKMN/PACK/RUN and the `MoveSelectionScreen`
-## behind FIGHT, `OfferSwitch`'s yes/no box over the field,
-## `AskUseNextPokemon`'s box in the same place, and the party list they open.
+## Captures the menus a battle is answered through, against a real imported cache:
+## `BattleMenu`'s own four rows and the `MoveSelectionScreen` behind FIGHT,
+## `OfferSwitch`'s yes/no box over the field, `AskUseNextPokemon`'s box in the same
+## place, and the party list they open. The stages are [constant MENU_STAGES] and [constant WORLD_STAGES].
 ##
-##   Godot --path . -s res://tools/preview_battle_switch.gd -- crystal /tmp/s.png [stage] [presses] [passes]
-##
-## [stage] is one of `offer` (the default), `balls` (the pack showing every ball
-## a throw can be made with), `prize` (a trainer battle fought to
-## its win, photographed on `GotMoneyForWinningText`), `menu`, `move`, `info` (the move
-## list with a registered battle-information provider's annotations over it:
-## a mark per row for the effectiveness against the defender, the non-zero stat
-## stages, and a tile of the provider's own for the weather), `info_pack` and
-## `info_pkmn` (the same battle state, with the modal that covers the
-## annotations open and no provider of this tool's own registered, so a mod
-## under test is the only thing answering), `contest`, `pack`,
-## `pick`, `use_next`, `replace`, `level_up`, which is the stats box
-## `.skip_exp_bar_animation` draws beside its grew-to-level line, and `shiny`
-## and `normal`, the same wild entered through the world's own path with and
-## without the shiny DV word, which is the pair `CGB_BattleColors` is read from;
-## [presses] is a `u,d,l,r,a,b` list driven into the menu before the shot, so a
-## cursor row or a refusal can be photographed; [passes] is how many sprite
-## passes the party page's icons are given, which is what moves the chosen row's
-## icon off its resting offset. The screen's own processing is taken away before
-## those are spent, so the same arguments photograph the same frame. The battle is a real trainer's
-## party out of the cache with the player on a bench of three, since both a
-## switch and a replacement need somebody to send.
-##
-## The two faint stages take the player's Pokémon down rather than fighting it
-## down: what is being photographed is the question a faint leads to, and a real
-## turn would have to be repeated until a move happened to land.
+##   Godot --path . -s res://tools/preview_battle_switch.gd -- \
+##       crystal /tmp/s.png [stage] [presses] [passes]
 
 const WINDOW_SIZE := Vector2i(1152, 648)
 ## Enough frames for the scene to lay out and for the hardware viewport to hold

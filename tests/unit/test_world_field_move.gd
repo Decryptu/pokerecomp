@@ -1,14 +1,12 @@
 extends GutTest
 
 ## Field-move tables and the Cut, Surf and Whirlpool boundaries, against a
-## synthetic cache built for this file so the shared world fixture stays
-## untouched.
-##
-## The cache uses tileset number 1 (TILESET_JOHTO) so the real CutTreeBlockPointers
-## rows apply: block $5b is a tree replaced by $3c, block $03 is grass replaced
-## by $02. WhirlpoolBlockPointers names the same tileset, where block $07 is
-## replaced by $36. Tileset 5 is TILESET_PLAYERS_HOUSE, which neither source
-## table has an entry for.
+## synthetic cache built for this file so the shared world fixture stays untouched.
+## The cache uses tileset number 1 (TILESET_JOHTO) so the real
+## CutTreeBlockPointers rows apply: block $5b is a tree replaced by $3c, block $03
+## is grass replaced by $02. WhirlpoolBlockPointers names the same tileset, where
+## block $07 is replaced by $36. Tileset 5 is TILESET_PLAYERS_HOUSE, which neither
+## source table has an entry for.
 
 const TILESET_CUTTABLE: int = Gen2WorldFieldMove.TILESET_JOHTO
 const TILESET_NO_ENTRY: int = 5

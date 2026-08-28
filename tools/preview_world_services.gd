@@ -1,22 +1,12 @@
 extends SceneTree
 
-## Captures the production world-service overlay with a deterministic cache.
+## Captures the production world-service overlay with a deterministic cache. The
+## mode is the third argument and the fourth a press list, which is how the apricorn
+## mode's second box is photographed. The modes are `apricorn`, `town_map`,
+## `pokegear`, `trainer_card`, `oak_pc`, `pc`, `decoration`, `hall_of_fame`,
+## `battle_tower_room` and `unown_dex`; with none the mart is drawn.
 ##
-##   Godot --path . -s res://tools/preview_world_services.gd -- /tmp/mart.png
-##   Godot --path . -s res://tools/preview_world_services.gd -- /tmp/kurt.png apricorn
-##   Godot --path . -s res://tools/preview_world_services.gd -- /tmp/map.png town_map
-##   Godot --path . -s res://tools/preview_world_services.gd -- /tmp/clock.png pokegear a
-##   Godot --path . -s res://tools/preview_world_services.gd -- /tmp/card.png trainer_card
-##   Godot --path . -s res://tools/preview_world_services.gd -- /tmp/oak.png oak_pc
-##   Godot --path . -s res://tools/preview_world_services.gd -- /tmp/pc.png pc
 ##   Godot --path . -s res://tools/preview_world_services.gd -- /tmp/pc.png pc a,down,a
-##   Godot --path . -s res://tools/preview_world_services.gd -- /tmp/deco.png decoration
-##   Godot --path . -s res://tools/preview_world_services.gd -- /tmp/hof.png hall_of_fame
-##   Godot --path . -s res://tools/preview_world_services.gd -- /tmp/room.png battle_tower_room
-##   Godot --path . -s res://tools/preview_world_services.gd -- /tmp/unown.png unown_dex
-##
-## `presses` drives the overlay with its own buttons before the shot, which is
-## how the apricorn mode's second box is photographed.
 
 const WINDOW_SIZE := Vector2i(1152, 648)
 const Fixture := preload("res://tests/integration/world_trainer_fixture.gd")

@@ -2,14 +2,12 @@ class_name Gen2GenderScreen
 extends Control
 
 ## `engine/menus/init_gender.asm`'s boy-or-girl choice, Crystal only.
-##
 ## `InitGender` prints its question, runs a `VerticalMenu` and writes
 ## `wMenuCursorY - 1` into `wPlayerGender`, which is bit 0 of the byte
 ## [Gen2SaveData] already carries. The selection rules are [Gen2WorldMenu]'s and
-## the layout [Gen2GenderScreenPage]'s; this is the node between them.
-##
-## `.MenuData` sets STATICMENU_DISABLE_B, so there is no way out but a choice.
-## That is the source's own answer to a screen a new game cannot skip.
+## the layout [Gen2GenderScreenPage]'s. `.MenuData` sets STATICMENU_DISABLE_B, so
+## there is no way out but a choice, which is the source's own answer to a screen
+## a new game cannot skip.
 
 ## Carries [constant Gen2SaveData.GENDER_MALE] or `GENDER_FEMALE`.
 signal closed(gender: int)

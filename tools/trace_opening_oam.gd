@@ -1,38 +1,12 @@
 extends SceneTree
 
 ## Dumps the opening's shadow OAM, one line per sprite per frame, against a real
-## cache.
-##
-##   Godot --headless --path . -s res://tools/trace_opening_oam.gd -- <game> <phase> [out.txt]
-##
-## `phase` is `presents`, `intro` (Crystal's movie), `gs_intro` (Gold and
-## Silver's) or `title`. The artefact is the one `.claude/verification.md`
-## step 2 asks for: two faithful implementations of `PlaySpriteAnimations` put
-## the same sprites in the same slots on the same frames, so a `diff` against a
-## cartridge running under an emulator settles the port rather than a frame count
-## measured from the port itself. `tools/render_audio.gd` is the same shape for
-## the driver's register writes.
-##
-## A line is `frame slot y x tile`, with `y` and `x` the OAM bytes: a cartridge's
-## own buffer is read at the frame boundary, where hDMATransfer copies it.
-##
-## Either movie also writes `<out>.state`, one `frame scene counter` line per
-## frame. Gold and Silver append their second scene counter, since their scroll
-## scenes advance that one while the first stays fixed. These are the cartridge
-## state that aligns a pixel diff: a setup
-## scene's decompression overruns VBlank by three to twelve frames there and by
-## none here, so a per-scene offset is still several frames out inside the scene
-## and every frame of a fade compares against the wrong step of it. A frame
-## spending the setup's own delay is written under the setup scene's index,
-## which is where the source spends it.
-##
-## A fourth argument writes the page's own picture for those frames, named after
-## each, so the frame a diff points at can be looked at beside the emulator's.
-## It is a comma list, and an entry may be a `lo-hi` range, which is what a
-## per-frame pixel diff over a whole scene wants rather than a hand-listed set.
-## The page draws into an `Image`, so this stays headless;
-## `tools/preview_intro.gd` photographs the same screen through the boot
-## cinema, whose frames count from the copyright rather than from this phase.
+## cache. `phase` is `presents`, `intro`, `gs_intro` or `title`, and the artefact is
+## the one `.claude/verification.md` step 2 asks for: two faithful implementations
+## of `PlaySpriteAnimations` put the same sprites in the same slots on the same
+## frames. A line is `frame slot y x tile`, the OAM bytes as a cartridge's own
+## buffer holds them at the frame boundary. Arguments:
+## `<game> <phase> [out.txt] [frames]`.
 
 const PHASES: Array[String] = ["presents", "intro", "gs_intro", "title"]
 

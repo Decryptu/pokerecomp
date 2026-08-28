@@ -2,21 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the overworld field-move prompts against freshly imported real
-## caches, for both command profiles.
-##
-## The expected values come from the pinned pokecrystal and pokegold sources:
-## engine/overworld/events.asm's TryTileCollisionEvent from `.cut` on, and
-## engine/events/overworld.asm's TryCutOW, TryWhirlpoolOW, TryWaterfallOW,
-## TryHeadbuttOW, TrySurfOW and the five Ask*Scripts behind them, all of which
-## are byte identical between the pins.
-##
-## The real-cartridge counterpart to the prompt half of
+## Verifies the overworld field-move prompts against freshly imported real caches,
+## for both command profiles. Expected values come from the pinned sources:
+## TryTileCollisionEvent from `.cut` on, and the five `Try*OW` routines and the
+## Ask*Scripts behind them, all byte identical between the pins. The real-cartridge
+## counterpart to the prompt half of
 ## tests/integration/test_world_field_move_screen.gd. Each move is driven on the
 ## same map its own validator uses, so a failure here is about the prompt rather
 ## than about the move.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- field_move_prompts
 
 
 ## validate_cut.gd's Ilex Forest tree, and the cell it is faced from.

@@ -3,21 +3,13 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Every effect byte's command list against the pins' own `data/moves/effects.asm`.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- move_effects
-##
 ## A move is a short program and [Gen2MoveEffect] is the whole table of them
-## transcribed by hand, so the comparable artefact is the command list itself:
-## the pin's `MoveEffectsPointers` in order, each label's commands resolved
-## through its fallthrough, against [method Gen2MoveEffect.sequence_for]. That
-## catches a step in the wrong place, which no unit test of one move can, and it
-## is the static half of the battle-command trace
-## `.claude/oracle/battle/trace_move_commands.py` runs against a real cartridge.
-##
-## `pokecrystal` and `pokegold` ship the same two files byte for byte, so the
-## corpus is one table read against all three caches.
-##
-## The checkouts are local-only, so a missing one skips rather than fails.
+## transcribed by hand, so the comparable artefact is the command list itself: the
+## pin's `MoveEffectsPointers` in order, each label's commands resolved through its
+## fallthrough, against [method Gen2MoveEffect.sequence_for]. That catches a step in
+## the wrong place, which no unit test of one move can, and it is the static half of
+## the battle-command trace an oracle runs against a real cartridge. A missing
+## checkout skips rather than fails.
 
 const PINS: Dictionary = {
 	&"gold": "pokegold", &"silver": "pokegold", &"crystal": "pokecrystal",
@@ -69,13 +61,11 @@ const FOLDED: Dictionary = {
 
 ## `toxictarget` is the second half of `BattleCommand_Poison`, which reads the
 ## effect byte back to decide between a flat poison and a ramping one; the two
-## readings are two commands here and one there.
-##
-## `checkimmune` is this port's own, and the one command with no cartridge name:
-## `BattleCommand_Stab` writes `wAttackMissed` when the matchup is zero and the
-## later steps read it back, so the immunity is split out of `stab` here rather
-## than carried in a register. It is dropped from our side before the lists are
-## compared.
+## readings are two commands here and one there. `checkimmune` is this port's own
+## and the one command with no cartridge name: `BattleCommand_Stab` writes
+## `wAttackMissed` when the matchup is zero and the later steps read it back, so the
+## immunity is split out of `stab` here rather than carried in a register. It is
+## dropped from our side before the lists are compared.
 const OURS_ONLY: Array[String] = ["checkimmune"]
 
 ## Ours named for what it does where the pin names the register it writes.

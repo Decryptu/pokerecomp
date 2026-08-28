@@ -1,16 +1,12 @@
 class_name Gen2BattleTiles
 extends RefCounted
 
-## The battle screen's tile page, assembled the way the hardware assembles it.
-##
-## A battle loads four sheets into one run of tile numbers, overlapping on
-## purpose: the battle font goes in first and the two HUD borders over the middle
-## of it, so thirteen of its tiles are never seen. This copies them in the same
-## order into one strip and keeps the cartridge's tile numbers, so the constants
-## below are the disassembly's own.
-##
-## Node-free like the rest of the drawing layer: indices into a buffer, so a
-## whole HUD can be laid out and checked with no display.
+## The battle screen's tile page, assembled the way the hardware assembles it. A
+## battle loads four sheets into one run of tile numbers, overlapping on purpose:
+## the battle font goes in first and the two HUD borders over the middle of it, so
+## thirteen of its tiles are never seen. This copies them in the same order into
+## one strip and keeps the cartridge's tile numbers, so the constants below are
+## the disassembly's own. Node-free like the rest of the drawing layer.
 
 const TILE: int = Gen2Font.TILE
 

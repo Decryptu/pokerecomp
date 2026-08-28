@@ -3,19 +3,12 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies `GoldSilverIntro`'s art against freshly imported real caches, on all
-## three cartridges.
-##
-## The section walk is what says the one pinned address is right: eleven entries
-## in a row landing on their exact sizes, each rounded up to a sixteen-byte
-## boundary to reach the next. This sweeps the imported result rather than the
-## walk, so a cache built from the wrong offset shows up as a sheet of the wrong
-## length or a metatile map naming a metatile its own `.bin` does not hold.
-##
-## Gold and Silver ship the same art byte for byte, which is checked here rather
-## than assumed: the two caches are compared against each other entry by entry.
-## Crystal runs `CrystalIntro` instead and is checked for saying so.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- gs_intro
+## three cartridges. The section walk is what says the one pinned address is right:
+## eleven entries in a row landing on their exact sizes, each rounded up to a
+## sixteen-byte boundary to reach the next. This sweeps the imported result rather
+## than the walk, so a cache built from the wrong offset shows up as a sheet of the
+## wrong length. Gold and Silver ship the same art byte for byte, which is checked
+## rather than assumed; Crystal runs `CrystalIntro` and is checked for saying so.
 
 const MOVIE_GAMES: Array[StringName] = [&"gold", &"silver"]
 

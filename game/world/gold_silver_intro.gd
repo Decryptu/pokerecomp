@@ -1,27 +1,14 @@
 class_name Gen2GoldSilverIntro
 extends RefCounted
 
-## `GoldSilverIntro` (pokegold/engine/movie/intro.asm): the movie between the
-## GameFreak logo and the title screen on Gold and Silver.
-##
-## Seventeen scenes behind one jumptable, stepped once per hardware frame, over
-## three cutscenes: shellders and magikarp under water rising to a surfacing
-## Lapras, Jigglypuff and Pikachu in the grass, and Charizard breathing a
-## fireball over the three Johto starters. Crystal runs [Gen2IntroMovie]
-## instead, which is a different movie entirely.
-##
-## Two things here are not [Gen2IntroMovie]'s shape:
-##
-## - **The colour model is `DmgToCgbBGPals`, not palette runs.** Each cutscene
-##   loads one background palette and up to two object palettes through
-##   `SCGB_GS_INTRO`, and every fade after that is a table of DMG register bytes
-##   reordering those four colours. `WipeAttrmap` leaves every tile on palette 0,
-##   so the whole movie is one background palette at a time.
-## - **`hLCDCPointer` is `$42`, which is LOW(rSCY).** Crystal's movie gives each
-##   scanline its own `hSCX`; this one gives each its own `hSCY`, which is what
-##   makes the water wobble. [method scroll_y_at] is the seam.
-##
-## [Gen2GoldSilverIntroPage] turns all of it into pixels; nothing here draws.
+## `GoldSilverIntro`: the movie between the GameFreak logo and the title screen on
+## Gold and Silver. Seventeen scenes behind one jumptable, stepped once per
+## hardware frame, over three cutscenes. Crystal runs [Gen2IntroMovie] instead,
+## which is a different movie entirely. Two things are not that movie's shape: the
+## colour model is `DmgToCgbBGPals` rather than palette runs, so the whole movie is
+## one background palette at a time; and `hLCDCPointer` is LOW(rSCY) rather than
+## LOW(rSCX), which is what makes the water wobble, [method scroll_y_at] being the
+## seam. [Gen2GoldSilverIntroPage] turns all of it into pixels.
 
 ## `wBGPals1` and `wOBPals1`, of which this movie only ever fills the first
 ## background palette and the first two object ones.
@@ -114,15 +101,12 @@ const STARTERS: Dictionary = {
 }
 
 ## `Intro_InitBubble.pixel_table`, read `ld e, [hl] / inc hl / ld d, [hl]`, so
-## each row is (x, y) rather than the (y, x) every `depixel` in the file is.
-##
-## The index is `(wIntroFrameCounter1 & $70) swap 4`, which runs 0 to 7 over a
-## table of six: rows 6 and 7 are the first four bytes of `Intro_InitMagikarps`
-## read as coordinates. `depixel 8, 7, 0, 7` assembles to `ld de, $403f`, so
-## those bytes are $11 $3f $40 and then the `ldh a, [hSGB]` opcode $f0. The
-## counter opens at $80 and is decremented before the spawn, so 7 is the first
-## row the scene reaches and the two overread bubbles are the two the cartridge
-## shows first.
+## each row is (x, y) rather than the (y, x) every `depixel` in the file is. The
+## index runs 0 to 7 over a table of six: rows 6 and 7 are the first four bytes of
+## `Intro_InitMagikarps` read as coordinates, `depixel 8, 7, 0, 7` assembling to
+## `ld de, $403f`. The counter opens at $80 and is decremented before the spawn,
+## so 7 is the first row the scene reaches and the two overread bubbles are the
+## two the cartridge shows first.
 const BUBBLE_AT: Array[Vector2i] = [
 	Vector2i(6 * 8, 14 * 8 + 4), Vector2i(14 * 8, 18 * 8 + 4),
 	Vector2i(10 * 8, 16 * 8 + 4), Vector2i(12 * 8, 15 * 8),

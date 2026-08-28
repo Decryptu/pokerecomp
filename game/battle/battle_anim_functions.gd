@@ -2,18 +2,12 @@ class_name Gen2BattleAnimFunctions
 extends RefCounted
 
 ## The eighty motion callbacks `DoBattleAnimFrame` dispatches
-## (engine/battle_anims/functions.asm), plus the five helpers they are built
-## from.
-##
-## An object row names one of these and the `anim_obj` that spawned it supplies
-## the parameter it reads. Nearly every one is a `BattleAnim_AnonJumptable` over
-## two to four states, which is a match on the object's own `jumptable_index`,
-## and the arithmetic is on that object's coordinates, offsets and two spare
-## bytes. Every value here is a cartridge byte and wraps like one.
-##
-## Scene-free: a callback moves an object and nothing else. The three that reach
-## past the object, the ball palette, the Sky Attack `wOBP0` cycle and Surf's
-## scanline window, write player state a renderer reads rather than drawing.
+## (engine/battle_anims/functions.asm), plus the five helpers they are built from.
+## Nearly every one is a `BattleAnim_AnonJumptable` over two to four states, which
+## is a match on the object's own `jumptable_index`, and every value is a
+## cartridge byte and wraps like one. Scene-free: the three that reach past the
+## object, the ball palette, Sky Attack's `wOBP0` cycle and Surf's scanline
+## window, write player state a renderer reads rather than drawing.
 
 ## `BattleAnimSineWave` has 32 samples over half a turn, so the full turn is 64
 ## and `BattleAnim_Sine` masks its argument with $3f.

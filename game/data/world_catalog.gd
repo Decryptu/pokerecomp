@@ -2,31 +2,13 @@ class_name Gen2WorldCatalog
 extends RefCounted
 
 ## Every stable gameplay SITE the cartridge hands something out at, decoded once
-## and addressed by an id that does not move: a starter, a gift, a static battle,
-## a trade, a Game Corner prize, an item on the ground, a badge and a shop.
+## and addressed by an id that does not move: starters, gifts, static battles,
+## trades, prizes, ground items, badges and shops. The host owns the decoding and
+## the mod owns the placement, so a randomizer needs no private copy of cartridge
+## semantics. A patch changes a FIELD of a row and never the script behind it.
 ##
-## Why this exists rather than a mod holding a list of script addresses: a
-## randomizer that shuffled starters by patching `ElmsLab` at $58F3 would be a
-## private copy of cartridge semantics, wrong on Gold the moment an address
-## shifts, and silently broken by any change here. The host owns the decoding;
-## the mod owns the placement.
-##
-## Nothing is imported for this. Every row is derived from data the cache already
-## holds: the decoded scripts, the map events, the mart lists and the trade
-## records. That is why there is no cache-format bump behind it and why a fresh
-## cartridge needs no re-import.
-##
-## The scan is not cheap: it decodes every command of every imported script,
-## about thirteen seconds for Crystal, and it answered 547 rows for that. So it
-## is written beside the cache as a sidecar and read back ([method to_dict]).
-## The sidecar is derived, not imported: an absent, stale or unreadable one is
-## rebuilt and written, so no cache format covers it and a cache from an older
-## build needs no re-import.
-##
-## A patch changes a FIELD of a row. It never replaces a script, a completion
-## flag, a dialogue, an inventory transaction or a battle flow: the site still
-## runs the cartridge's own code, and only the number it hands over is the mod's.
-## See [method Gen2ModHost.patch_check].
+## Nothing is imported for this: every row is derived from the cache and written
+## beside it as a sidecar, so an absent or stale one is rebuilt rather than bumped.
 
 const KIND_STARTER: StringName = &"starter"
 const KIND_GIFT: StringName = &"gift"
@@ -43,17 +25,13 @@ const KINDS: Array[StringName] = [
 	KIND_BADGE, KIND_SHOP,
 ]
 
-## `id = kind << 40 | bank << 24 | absolute address`. The address is ABSOLUTE, the
-## script's own base plus the command's offset inside it, and that is what makes
-## the id stable: the cache stores one blob per entry point and two entry points
-## into one routine overlap, so a site addressed by (blob, offset) would be
-## counted once per blob that reaches it. Addressed by the byte it lives at, it
-## is one site however many ways in there are, and a runtime reader computes the
-## same number from its own frame.
-##
-## A site that is a map EVENT rather than a script has no address: it uses the
-## map's group as the bank and [constant ID_EVENT_BIT] over the map number and
-## the event index, so the two spaces cannot collide.
+## `id = kind << 40 | bank << 24 | absolute address`. The address is ABSOLUTE,
+## the script's own base plus the command's offset, and that is what makes the id
+## stable: two entry points into one routine overlap, so a site addressed by
+## (blob, offset) would be counted once per blob that reaches it. A site that is a
+## map EVENT has no address and uses the map's group as the bank with
+## [constant ID_EVENT_BIT] over the map number and event index, so the two spaces
+## cannot collide.
 const ID_KIND_SHIFT: int = 40
 const ID_BANK_SHIFT: int = 24
 const ID_ADDRESS_MASK: int = 0xFFFFFF
@@ -121,15 +99,11 @@ static func build(data: GameData) -> Gen2WorldCatalog:
 	return out
 
 
-## The same scan, in chunks, handing the main loop a frame between them and
-## saying how far along it is.
-##
-## This walk is seven eighths of a cartridge import's wall clock: it decodes
-## every command of every script the import just wrote. Run whole it is the one
-## stretch long enough for a player to decide the launcher has stopped, so the
-## import uses this and the lazy rebuild behind [method GameData.catalog] uses
-## [method build], which has no screen to keep alive and no loop to give a frame
-## back to.
+## The same scan, in chunks, handing the main loop a frame between them and saying
+## how far along it is. This walk is seven eighths of a cartridge import's wall
+## clock, and run whole it is the one stretch long enough for a player to decide
+## the launcher has stopped. The lazy rebuild behind [method GameData.catalog]
+## uses [method build] instead, having no screen to keep alive.
 static func build_reporting(
 	data: GameData, on_progress: Callable = Callable(), yield_ms: int = 0
 ) -> Gen2WorldCatalog:
@@ -431,18 +405,13 @@ func _scan_one_script(
 
 	var commands: Array = []
 	var offset: int = 0
-	## The walk does NOT stop at the first `end` or `sjump`. A bounded blob holds
-	## a routine and the branch bodies behind it, and the Game Corner's three
-	## prizes are exactly that: one `.loop` and three labels after its jump.
-	## The bound counts `end`s, not every command that never returns: a `sjump`
-	## into a label below it is one routine, not two.
-	##
-	## It DOES stop at the first byte no command owns. Everything decoded before
-	## that came from a real entry point at a real offset; everything after would
-	## be text or a data table read as code. Two more guards sit behind this one:
-	## a site's numbers have to be ones the cartridge can hold ([method
-	## _plausible]), and a static has to be followed by the `startbattle` that
-	## makes it one.
+	## The walk does NOT stop at the first `end` or `sjump`: a bounded blob holds a
+	## routine and the branch bodies behind it, and the Game Corner's three prizes
+	## are exactly that. The bound counts `end`s rather than every command that
+	## never returns. It DOES stop at the first byte no command owns, since
+	## everything after would be text or a data table read as code. Two guards sit
+	## behind it: a site's numbers have to be ones the cartridge can hold, and a
+	## static has to be followed by the `startbattle` that makes it one.
 	var terminators: int = 0
 	for _step: int in MAX_SCRIPT_COMMANDS:
 		if offset >= body.size():
@@ -631,13 +600,10 @@ func _mart_items(index: int) -> Array:
 
 ## Stamps every script site with the MAP whose events reach it, which is the one
 ## thing a script address does not carry and a placement cannot do without: a
-## badge is only completable if its gym can be walked to.
-##
-## Each map's own event scripts are followed through `scall`, `sjump`, `farscall`
-## and the branch commands, which is the same closure the importer walks. A
-## script two maps both reach is stamped with the first in map order, so the
-## answer is stable; a script no map reaches keeps no map at all rather than a
-## guessed one.
+## badge is only completable if its gym can be walked to. Each map's event scripts
+## are followed through `scall`, `sjump`, `farscall` and the branch commands, the
+## same closure the importer walks. A script two maps reach is stamped with the
+## first in map order, so the answer is stable; one no map reaches keeps none.
 func _attribute_maps() -> void:
 	var crystal: bool = Gen2WorldState.is_crystal_profile(_data)
 	var owner: Dictionary = {}

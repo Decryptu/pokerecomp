@@ -2,15 +2,11 @@ class_name Gen2Screens
 extends RefCounted
 
 ## `wPlayerScreens` and `wEnemyScreens`: the flags that belong to a side of the
-## field rather than to whoever is standing on it.
-##
-## Nothing clears these on a switch, which is the whole difference between them
-## and [Gen2Substatus]: a Reflect put up by one Pokémon still halves damage for
-## the one sent out behind it. Only the counters ending them do, in
-## [method Gen2Battle._tick_screens] and [method Gen2Battle._tick_safeguard].
-##
-## Pure arithmetic and no state, the same shape as [Gen2Weather]; the flags and
-## the three counters live on [Gen2Battle], one of each per side.
+## field rather than to whoever is standing on it. Nothing clears these on a
+## switch, which is the whole difference between them and [Gen2Substatus]: a
+## Reflect put up by one Pokemon still halves damage for the one sent out behind
+## it. Only the counters ending them do. Pure arithmetic and no state, the same
+## shape as [Gen2Weather].
 
 ## `constants/battle_constants.asm`'s bit numbers, kept rather than renumbered so
 ## a `bit SCREENS_REFLECT` in the source reads across. Bit 1 is skipped there and

@@ -1,18 +1,13 @@
 class_name Gen2UnownWall
 extends RefCounted
 
-## `DisplayUnownWords` (engine/events/unown_walls.asm): the word a Ruins of Alph
-## chamber wall spells, as the box it is drawn in and the tiles that draw it.
-##
-## The letters are not font glyphs and are not `UnownFont`, which is the
-## Pokedex's own sheet: `_DisplayUnownWords_CopyWord` computes a tile number
-## from the character itself and places a 2x2 block of the *tileset's* own tiles,
-## which is why the chambers ship a tileset holding an alphabet
-## (gfx/tilesets/ruins_of_alph.png). So this needs no import: the word comes from
-## `UnownWalls`, which [method GameData.unown_wall_word] already carries, and the
-## tiles come from the tileset the chamber is already drawn with.
-##
-## Scene-free arithmetic. [Gen2UnownWallPage] draws what this places.
+## `DisplayUnownWords`: the word a Ruins of Alph chamber wall spells, as the box
+## it is drawn in and the tiles that draw it. The letters are not font glyphs and
+## are not `UnownFont`, which is the Pokedex's own sheet:
+## `_DisplayUnownWords_CopyWord` computes a tile number from the character itself
+## and places a 2x2 block of the *tileset's* own tiles, which is why the chambers
+## ship a tileset holding an alphabet. So this needs no import: the word comes from
+## `UnownWalls` and the tiles from the tileset the chamber is already drawn with.
 
 ## `constants/charmap.asm`'s `unown` charmap, `$10 * (i / 8) + 2 * i` over
 ## "ABCDEFGHIJKLMNOPQRSTUVWXYZ-": eight letters to a row of the sheet, each two

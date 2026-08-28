@@ -1,21 +1,14 @@
 class_name Gen2Diagnostics
 extends Node
 
-## What a player hands over when something goes wrong: one file holding this
-## build, this machine, the settings and mods in force, and the engine's own log
-## of the session that broke.
+## What a player hands over when something goes wrong: this build, this machine,
+## the settings and mods in force, and the engine's own log of the session.
 ##
-## It is a sink rather than a set of call sites. [Logger] is installed with
-## [method OS.add_logger], so every `print`, `push_warning`, `push_error`,
-## engine error and GDScript runtime error anywhere in the game, in a tool or in
-## a mod passes through here without that code knowing. Adding a message to a
-## screen therefore adds it to a bug report; nothing has to be routed twice.
-##
-## The file on disk is the engine's own, at [constant DIRECTORY]: the crash
-## handler writes its backtrace to stderr, which a script-side sink never sees
-## and the file logger does. What this class adds around it is the header the
-## file opens with, the pruning the engine does not do, and the bundle a player
-## can actually attach to an issue.
+## A sink rather than a set of call sites: [Logger] goes in through
+## [method OS.add_logger], so every print, warning and runtime error in the game,
+## a tool or a mod reaches the report without being routed twice. The file at
+## [constant DIRECTORY] is the engine's own, so it catches the crash handler's
+## backtrace too; this class adds the header, the pruning and the bundle.
 
 ## Where the engine's file logger writes, mirrored from `project.godot` so the
 ## prune and the bundle read the directory the logs are actually in.
@@ -266,16 +259,12 @@ func _pack_bundle(directory: String) -> Dictionary:
 	return {"ok": true, "message": "", "path": path, "files": written}
 
 
-## The kept log files, newest first, named relative to [param directory]. An
-## absolute path carries the player's own account name and this list is read
-## out into a file they are about to publish.
-##
-## The engine's live file sorts first whatever its timestamp says, and the
-## rotated ones fall back to their names. [method FileAccess.get_modified_time]
-## has one-second resolution and a rotation writes several files inside one
-## second, so mtime alone leaves the order arbitrary: the prune below would then
-## sometimes take the session it is being run to preserve. A rotated name is the
-## live one with an ISO stamp inserted, so name-descending IS newest-first.
+## The kept log files, newest first, named relative to [param directory]: an
+## absolute path carries the player's account name into a file they are about to
+## publish. Sorted by name rather than mtime, which has one-second resolution
+## while a rotation writes several files inside one second; a rotated name is the
+## live one with an ISO stamp inserted, so name-descending is newest-first and the
+## prune below cannot take the session it was run to preserve.
 func log_files(directory: String = DIRECTORY) -> PackedStringArray:
 	var live: String = String(
 		ProjectSettings.get_setting("debug/file_logging/log_path", "")

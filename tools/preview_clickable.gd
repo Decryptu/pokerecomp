@@ -4,22 +4,10 @@ extends SceneTree
 ##
 ##   Godot --path . -s res://tools/preview_clickable.gd
 ##
-## Not headless, and not a `tools/checks/` topic: it reads `root` and
-## `gui_get_hovered_control()`, so it needs a real window the way
-## `tools/screenshot.gd` does. Run with `--headless` it reports every button as
-## unreachable, which is the absent window rather than the screen.
-##
-## A button that is wired correctly and drawn in the right place is still dead
-## if something transparent is sitting on top of it, and nothing in the scene
-## tree says so: the overlay is visible, the button is visible, and only the
-## viewport's own hit test knows which one a click reaches. So this asks the
-## viewport, one button at a time, through the same path a mouse takes.
-##
-## Not a GUT test. These screens lay themselves out against the window, and the
-## test harness gives them neither its size nor a real hit test, so under GUT
-## every rect falls outside the viewport and the walk finds nothing to check.
-## `test_launcher.gd` keeps the half that is checkable headlessly, which is that
-## a toast contains nothing a click can land on.
+## Not headless and not a `tools/checks/` topic: it reads `root` and
+## `gui_get_hovered_control()`, so it needs a real window. A button drawn in the
+## right place is still dead if something transparent is sitting on top of it, and
+## only the viewport's own hit test knows, so this asks it one button at a time.
 
 ## The size the launcher is designed against. A window this size puts every
 ## screen's own actions on screen without scrolling.

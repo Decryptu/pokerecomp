@@ -1,15 +1,11 @@
 class_name Gen2ModSourcesPage
 extends VBoxContainer
 
-## The sources the player follows, and what to add.
-##
-## A source is a published index: a JSON listing naming mods that live wherever
-## their authors put them. Following one is trusting whoever publishes it, so
-## none ships with the game and none is ever added on its own.
-##
-## The page decides nothing. Following, forgetting and what a URL resolves to
-## are [Gen2ModIndex]'s, and fetching is the mods page's, which owns the one
-## request this launcher makes.
+## The sources the player follows, and what to add. A source is a published index:
+## a JSON listing naming mods that live wherever their authors put them. Following
+## one is trusting whoever publishes it, so none ships with the game and none is
+## ever added on its own. The page decides nothing: following, forgetting and what
+## a URL resolves to are [Gen2ModIndex]'s, and fetching is the mods page's.
 
 signal closed
 signal followed(feed: String)

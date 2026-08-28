@@ -689,14 +689,12 @@ func _render_time_of_day() -> int:
 
 
 ## SCREEN FILL: the overworld has more to show than the hardware framed, so it
-## fills the window with map where every other screen fills it with its own
-## field. Every menu, box and cursor over it stays inside the 160x144 rectangle
-## [Gen2Screen] centres in the buffer.
-##
-## The setting itself is the screen's ([method Gen2Screen.apply_screen_fill]) and
-## is taken again here rather than trusted from the frame the screen was born on:
-## a tool that stages a framed shot sets the option around building this scene,
-## and either order has to mean the same thing. The zoom is the map's alone.
+## fills the window with map where every other screen fills it with its own field.
+## Every menu, box and cursor over it stays inside the 160x144 rectangle
+## [Gen2Screen] centres in the buffer. The setting itself is the screen's and is
+## taken again here rather than trusted from the frame the screen was born on: a
+## tool that stages a framed shot sets the option around building this scene, and
+## either order has to mean the same thing. The zoom is the map's alone.
 func _apply_screen_fill() -> void:
 	var options: Gen2Options = Gen2OptionsStore.current()
 	_screen.apply_screen_fill()
@@ -706,25 +704,14 @@ func _apply_screen_fill() -> void:
 	_apply_interface_mask()
 
 
-## A screen that hides the map takes the whole picture with it: it is laid out
-## in 160x144 and has nothing to put in a wider buffer, so the surround becomes
-## that screen's own field rather than the map behind it. The start menu is not
-## one of these -- it is a box the map is still visible around, as on the
-## cartridge -- and neither is a map fade, which fades the whole picture.
-##
-## `DoBattleTransition` is: it writes twenty by eighteen screen cells and
-## nothing wider, so a wedge pattern in a filled window would stop where the
-## cartridge's screen ended. It closes the surround for the battle that follows
-## it, which is masked for the same reason.
-##
-## The mask is drawn inside the hardware viewport and the viewport is composited
-## over the native layer, so raising it would crop a renderer that is not drawing
-## in the buffer it describes: one of those has already filled the whole surface,
-## and a letterbox around a rectangle it never used has nothing to say about it.
-## Such a renderer is told instead
-## ([constant Gen2ModHost.RENDERER_INTERFACE_MASK_METHOD]) and closes its own
-## surround in its own units, which is the only way a transition's wedge reaches
-## the edge of a filled window.
+## A screen that hides the map takes the whole picture with it: it is laid out in
+## 160x144 and has nothing to put in a wider buffer, so the surround becomes that
+## screen's own field. The start menu is not one of these, being a box the map is
+## still visible around, and neither is a map fade. `DoBattleTransition` is: it
+## writes twenty by eighteen cells and nothing wider. The mask is drawn inside the
+## hardware viewport, so raising it would crop a renderer that already filled the
+## whole surface; such a renderer is told instead and closes its own surround,
+## which is the only way a wedge reaches the edge of a filled window.
 func _apply_interface_mask() -> void:
 	var owned: bool = (
 		_battle_transition != null
@@ -832,17 +819,34 @@ func advance_frames(count: int) -> void:
 		advance_frame()
 
 
-## One hardware frame of the overworld, in the order the frame is drawn in.
-##
-## Every countdown below is spent exactly once here, so each is a function of
-## [member Gen2WorldAPI.frame_number] and not of banked real time.
-##
-## Half of what follows is `HandleMap`'s own pass and runs once per two frames:
-## see [member Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS] and `map_pass` below. The
-## other half is what the source spends its own `DelayFrames` on from inside a
-## command, which the pass does not gate: a text box, either fade, the battle
-## transition, `GameTimer` and `AnimateTileset` are all VBlank's or a routine's
-## own and are spent on every frame.
+## Every host that runs inside the map's own loop, member and the method that
+## spends its frame. Their `DelayFrames` counts come from this pump rather than
+## from real time, which is what makes a fight, a hatch or a trade inside a
+## replay reach the same place on the same frame.
+const FRAME_HOSTS: Array[Array] = [
+	## `PlayRadioShow` runs from the Pokegear's own loop, so an open radio card
+	## spends this frame too rather than counting one of its own.
+	["_service_host", "advance_frame"],
+	["_battle_host", "advance_hardware_frame"],
+	["_evolution_host", "advance_frame"],
+	["_link_host", "advance_frame"],
+	["_hatch_host", "advance_frame"],
+	["_nickname_host", "advance_frame"],
+	["_name_rater_host", "advance_frame"],
+	["_move_deleter_host", "advance_frame"],
+	["_move_tutor_host", "advance_frame"],
+	["_day_care_host", "advance_frame"],
+	["_unown_puzzle_host", "advance_frame"],
+	["_slot_machine_host", "advance_frame"],
+	["_card_flip_host", "advance_frame"],
+]
+
+
+## One hardware frame of the overworld, in the order it is drawn. Every countdown
+## is spent exactly once here, so each is a function of
+## [member Gen2WorldAPI.frame_number] rather than of banked real time. Half of
+## what follows is `HandleMap`'s own pass and runs once per two frames; the other
+## half is what a command spends its own `DelayFrames` on and is not gated.
 func advance_frame() -> void:
 	_spending_frame = true
 	## `ResetOverworldDelay` and `NextOverworldFrame`: the pass reloads the delay
@@ -852,6 +856,27 @@ func advance_frame() -> void:
 	var map_pass: bool = _overworld_delay <= 0
 	if map_pass:
 		_overworld_delay = Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS
+	_advance_presentation(map_pass)
+	_advance_movement(map_pass)
+	_advance_population(map_pass)
+	_advance_waits(map_pass)
+	for row: Array in FRAME_HOSTS:
+		var host: Object = get(row[0])
+		if host != null:
+			host.call(row[1])
+	_spending_frame = false
+
+
+## Redraws when [param moved] says something under the renderer changed.
+func _refresh_if(moved: bool) -> void:
+	if moved and _renderer != null:
+		_renderer.refresh()
+
+
+## The text box, the fades, the transition and the two animation timers, none of
+## which the pass gates: they are what the source spends its own `DelayFrames`
+## on from inside a command, plus VBlank's `GameTimer` and `AnimateTileset`.
+func _advance_presentation(map_pass: bool) -> void:
 	if _text_box != null:
 		_text_box.accelerated = Gen2Button.text_accelerating()
 		_text_box.advance_frame()
@@ -883,75 +908,72 @@ func advance_frame() -> void:
 		var effects_moved: bool = _effects.advance_frame()
 		if map_pass:
 			effects_moved = _effects.advance_pass() or effects_moved
-		if effects_moved and _renderer != null:
-			_renderer.refresh()
+		_refresh_if(effects_moved)
 	## `AnimateTileset` is VBlank's, not the pass's, so the water and the flowers
 	## animate on every frame while the objects standing on them move on passes.
 	if _animation != null and _animation.advance_frame() and _renderer != null:
 		_renderer.refresh_animation()
-	## `GetJoypad` and `PlayerEvents` are both inside the pass, so a held
-	## direction starts a step on a pass and never between two. Before the step
-	## below, which is `HandleMap`'s own order: `MapEvents` starts the step and
-	## `HandleMapObjects` moves it in the same pass, so a walk begun from
-	## standing covers its first two pixels on the pass the press landed on.
+
+
+## `GetJoypad` and `PlayerEvents` are both inside the pass, so a held direction
+## starts a step on a pass and never between two. `MapEvents` starts the step and
+## `HandleMapObjects` moves it in the same pass, so a walk begun from standing
+## covers its first two pixels on the pass the press landed on.
+func _advance_movement(map_pass: bool) -> void:
 	if map_pass:
 		_advance_forced_movement()
 		_advance_held_direction()
-	if map_pass and _world != null and _world.advance_player_step_pass() \
-		and _renderer != null:
-		_renderer.refresh()
-	## `CheckPlayerState` reads the step flags at the end of `HandleMap`, after
-	## `HandleMapObjects`, so the step that finishes on this frame is the one
-	## whose events this frame runs.
-	if map_pass and not _pending_step_events.is_empty() and _world != null \
-		and not _world.player_step_in_progress():
-		var landed: Dictionary = _pending_step_events
-		_pending_step_events = {}
-		_complete_player_step(landed)
+		_refresh_if(_world != null and _world.advance_player_step_pass())
+		## `CheckPlayerState` reads the step flags at the end of `HandleMap`,
+		## after `HandleMapObjects`, so the step that finishes on this frame is
+		## the one whose events this frame runs.
+		if not _pending_step_events.is_empty() and _world != null \
+			and not _world.player_step_in_progress():
+			var landed: Dictionary = _pending_step_events
+			_pending_step_events = {}
+			_complete_player_step(landed)
 	## Not the pass's: an emote's own countdown stands in for the `pause` between
 	## `ShowEmoteScript`'s two movements, and a script's `DelayFrames` is spent
 	## from inside the command rather than by `NextOverworldFrame`.
-	if _world != null and _world.advance_emotes_frame() and _renderer != null:
-		_renderer.refresh()
-	## After the player's own step, so an actor reading
-	## `player_step_offset_cells()` sees this frame rather than the last one's.
-	## Before the actors, which draw its population: a wild that moved this frame
-	## has to be in the sprite list the actor layer collects after it.
-	##
+	_refresh_if(_world != null and _world.advance_emotes_frame())
+
+
+## Everything drawn on the map that is not the player. Wilds move after the
+## player's own step, so an actor reading `player_step_offset_cells()` sees this
+## frame, and before the actors, which draw its population.
+func _advance_population(map_pass: bool) -> void:
 	## Gated on the same predicate the map's own objects step behind, so a
 	## provider's frame count is the time the player spent on the overworld: a
-	## population stands still behind a battle, a menu, a text box and a fade,
-	## which is what the map does with its objects. Not the pass's: a wild is
-	## drawn between cells like an object mid-step, and the source moves those on
-	## every frame.
+	## population stands still behind a battle, a menu, a text box and a fade.
+	## Not the pass's: a wild is drawn between cells like an object mid-step.
 	if _encounters != null and _objects_may_move() and _encounters.advance_frame():
 		_play_encounter_sounds()
-		if _renderer != null:
-			_renderer.refresh()
+		_refresh_if(true)
 	## Deliberately not gated with it: an actor owns no state the host validates
 	## and is drawn only on the frames the map is, so an animation running behind
 	## an overlay costs a mod nothing and freezing one would strand a walk cycle
 	## mid-step.
-	if _actors != null and _actors.advance_frame() and _renderer != null:
-		_renderer.refresh()
+	_refresh_if(_actors != null and _actors.advance_frame())
 	_spend_actor_requests()
 	_spend_hidden_item_requests()
 	_spend_item_gift_requests()
 	_spend_notice_requests()
-	if map_pass and _objects_may_move() \
-		and _world.advance_object_steps_pass(_object_random) \
-		and _renderer != null:
-		_renderer.refresh()
+	if not map_pass:
+		return
+	_refresh_if(_objects_may_move() and _world.advance_object_steps_pass(_object_random))
 	# Not gated on _objects_may_move(): an applymovement is drawn while the
 	# script that ran it is still going, which is when a script runs one.
-	if map_pass and _world != null and _world.advance_scripted_steps_pass() \
-		and _renderer != null:
-		_renderer.refresh()
+	_refresh_if(_world != null and _world.advance_scripted_steps_pass())
 	# After both trails: `ShakeGrass` is called where the step starts, so a
 	# rustle taken now belongs to a step begun on this frame.
-	if map_pass:
-		_spawn_grass_rustles()
-	if not _pending_headbutt_finish.is_empty() and (_effects == null or not _effects.sprites_active()):
+	_spawn_grass_rustles()
+
+
+## What a frame owes something already waiting on it, each behind the trail it
+## waits for.
+func _advance_waits(map_pass: bool) -> void:
+	if not _pending_headbutt_finish.is_empty() \
+		and (_effects == null or not _effects.sprites_active()):
 		var headbutt: Dictionary = _pending_headbutt_finish
 		_pending_headbutt_finish = {}
 		_finish_headbutt(headbutt)
@@ -973,61 +995,29 @@ func advance_frame() -> void:
 		if not ring_results.is_empty():
 			_show_script_results(ring_results)
 		_refresh_labels()
-	# The condition is the audio device's, not a counter's, but the request it
-	# completes is a script's, so it lands on a frame like every other resume.
-	## The same rule the battle's `ANIM_WAIT_SFX` follows: a driver nobody is
-	## servicing leaves `effect_playing()` true for the rest of the run, so the
-	## rendered-frame count is what decides whether this is a wait at all.
+	_advance_audio_wait()
+
+
+## The one wait whose condition is the audio device's rather than a counter's.
+## The same rule the battle's `ANIM_WAIT_SFX` follows: a driver nobody is
+## servicing leaves `effect_playing()` true for the rest of the run, so the
+## rendered-frame count is what decides whether this is a wait at all.
+func _advance_audio_wait() -> void:
 	var audio_rendered: int = _audio_player.timeline_updates() if _audio_player != null else 0
 	_audio_still_frames = 0 if audio_rendered != _audio_rendered_seen \
 		else _audio_still_frames + 1
 	_audio_rendered_seen = audio_rendered
-	if _audio_waiting and _audio_player != null \
-		and (not _audio_player.effect_playing()
-			or _audio_still_frames > Gen2AudioPlayer.SERVICE_GAP_FRAMES):
-		_audio_waiting = false
-		var audio_result: Dictionary = Gen2WorldHost.complete_runtime_request(
-			_world, {"ok": true, "sound_finished": true}
-		)
-		if bool(audio_result.get("ok", false)):
-			_show_script_results(audio_result.get("results", []))
-	# `PlayRadioShow` runs from the Pokegear's own loop, so an open radio card
-	# spends this frame too rather than counting one of its own.
-	if _service_host != null:
-		_service_host.advance_frame()
-	## A battle is `BattleIntro` onward running inside the map's own loop, so its
-	## bars, its animations and its faints are spent from this pump rather than
-	## from real time. That is what makes a fight inside a replay reach the same
-	## place on the same frame.
-	if _battle_host != null:
-		_battle_host.advance_hardware_frame()
-	## `EvolveAfterBattle` runs inside the map's own loop the same way, so its
-	## `DelayFrames` counts are spent from this pump.
-	if _evolution_host != null:
-		_evolution_host.advance_frame()
-	## `LinkCommunications` spends its own `DelayFrames` inside the map's loop
-	## too, which is what the trade screen's waits are counted from.
-	if _link_host != null:
-		_link_host.advance_frame()
-	if _hatch_host != null:
-		_hatch_host.advance_frame()
-	if _nickname_host != null:
-		_nickname_host.advance_frame()
-	if _name_rater_host != null:
-		_name_rater_host.advance_frame()
-	if _move_deleter_host != null:
-		_move_deleter_host.advance_frame()
-	if _move_tutor_host != null:
-		_move_tutor_host.advance_frame()
-	if _day_care_host != null:
-		_day_care_host.advance_frame()
-	if _unown_puzzle_host != null:
-		_unown_puzzle_host.advance_frame()
-	if _slot_machine_host != null:
-		_slot_machine_host.advance_frame()
-	if _card_flip_host != null:
-		_card_flip_host.advance_frame()
-	_spending_frame = false
+	if not _audio_waiting or _audio_player == null:
+		return
+	if _audio_player.effect_playing() \
+		and _audio_still_frames <= Gen2AudioPlayer.SERVICE_GAP_FRAMES:
+		return
+	_audio_waiting = false
+	var audio_result: Dictionary = Gen2WorldHost.complete_runtime_request(
+		_world, {"ok": true, "sound_finished": true}
+	)
+	if bool(audio_result.get("ok", false)):
+		_show_script_results(audio_result.get("results", []))
 
 
 ## Whether a battle owns the screen right now. Public beside
@@ -1113,15 +1103,14 @@ func _advance_day_cycle(delta: float) -> void:
 	_refresh_labels()
 
 
-## .CheckTile's forced walk, which the source polls every frame with no input:
-## a waterfall pushes the player back down and a door, staircase or cave tile
-## steps them off it. The step already in progress paces it.
-##
-## PLAYERMOVEMENT_FORCE_TURN is deliberately not drained here. Its
-## Script_ForcedMovement is a queued script whose two step_dig runs pace the spin,
-## and this project renders none of that, so draining it per frame would flip the
-## facing at the frame rate. Gen2WorldAPI.move_result() answers it on the movement
-## attempt instead, which is where a player meets it.
+## `.CheckTile`'s forced walk, which the source polls every frame with no input: a
+## waterfall pushes the player back down and a door, staircase or cave tile steps
+## them off it. The step already in progress paces it.
+## PLAYERMOVEMENT_FORCE_TURN is deliberately not drained here: its
+## `Script_ForcedMovement` is a queued script whose two step_dig runs pace the
+## spin, and this project renders none of that, so draining it per frame would flip
+## the facing at the frame rate. `move_result()` answers it on the movement attempt
+## instead, which is where a player meets it.
 func _advance_forced_movement() -> void:
 	if not _objects_may_move() or _world.script_input_waiting() \
 		or _world.player_step_in_progress():
@@ -1799,14 +1788,12 @@ func _whiteout_texts() -> PackedStringArray:
 
 
 ## Whether this blackout is the end of a Nuzlocke rather than a walk back to a
-## Pokemon Center. A run whose every Pokemon is dead has nothing to heal: the
-## rule is a full wipe ending the run, storage or no storage.
-##
-## Not inside the Bug Catching Contest. `ContestDropOffMons` masks the rest of
-## the party into [member Gen2SaveData.contest_stashed_party] and leaves one
-## Pokemon standing, so a faint there empties a party that is not the run's:
-## `Script_Whiteout`'s own contest branch judges the contest and gives the
-## others back, and the run carries on with them.
+## Pokemon Center. A run whose every Pokemon is dead has nothing to heal: the rule
+## is a full wipe ending the run, storage or no storage. Not inside the Bug
+## Catching Contest: `ContestDropOffMons` masks the rest of the party into
+## [member Gen2SaveData.contest_stashed_party] and leaves one Pokemon standing, so
+## a faint there empties a party that is not the run's, and `Script_Whiteout`'s own
+## contest branch gives the others back.
 func _nuzlocke_ends_here(save: Gen2SaveData) -> bool:
 	return _world != null and _world.rules != null and _world.rules.is_nuzlocke() \
 		and save != null and not _world.bug_contest_active() \
@@ -2027,7 +2014,7 @@ func _open_gift_nickname(request: Dictionary) -> bool:
 ##
 ## False when the routine reaches no prompt: nothing was caught, and `.BoxFull`,
 ## which writes nothing and answers BUGCONTEST_BOXED_MON where it stands.
-func _open_contest_nickname() -> bool:
+func _open_contest_nickname(_request: Dictionary = {}) -> bool:
 	if _nickname_host != null or _world == null or _data == null or _world.state == null:
 		return false
 	var caught: Dictionary = _world.state.contest_mon()
@@ -2103,7 +2090,7 @@ func _on_hatch_closed() -> void:
 ## `special NameRater`. `_NameRater` owns its own boxes and both of the screens
 ## it opens, so the whole routine is one host and the script stays suspended
 ## behind it, which is what `opentext` left it doing.
-func _open_name_rater() -> bool:
+func _open_name_rater(_request: Dictionary = {}) -> bool:
 	if _name_rater_host != null or _world == null or _data == null:
 		return false
 	var texts: Dictionary = Gen2WorldHost.name_rater_texts(_data)
@@ -2158,12 +2145,10 @@ func _on_name_rater_closed() -> void:
 ## The Day-Care's five specials, hosted exactly as `special NameRater` is. The
 ## routine writes the party, the two slots and the money itself, so nothing is
 ## staged: the cartridge's own routines write WRAM straight and the save is only
-## committed when the player saves.
-## `special UnownPuzzle`. `FadeToMenu` in front of it and `ExitAllMenus` behind
-## it are what the host's own overlay already is: the board covers the map and
-## the map is redrawn when it closes.
-## `_Diploma`'s page, or `_PrintDiploma`'s with the printer's own status box
-## over it. The screen owns both loops; this only hands it the two things the
+## committed when the player saves. Below, `special UnownPuzzle`, whose
+## `FadeToMenu` and `ExitAllMenus` are what the host's own overlay already is; and
+## `_Diploma`'s page, or `_PrintDiploma`'s with the printer's own status box over
+## it, where the screen owns both loops and this only hands it the two things the
 ## page prints that the cache does not carry.
 func _open_diploma(request: Dictionary) -> bool:
 	if _diploma_host != null or _world == null or _data == null:
@@ -2422,7 +2407,7 @@ func _on_day_care_closed() -> void:
 
 
 ## `special MoveDeletion`, hosted exactly as `special NameRater` is.
-func _open_move_deleter() -> bool:
+func _open_move_deleter(_request: Dictionary = {}) -> bool:
 	if _move_deleter_host != null or _world == null or _data == null:
 		return false
 	var texts: Dictionary = Gen2WorldHost.move_deleter_texts(_data)
@@ -2580,12 +2565,10 @@ func _after_map_settled() -> bool:
 	## `CheckTileEvent`'s own order: the warp and the coord events above, then
 	## `CountStep`, and only then `RandomEncounter`. A poison pass that reaches a
 	## script answers with carry, so the step it runs on rolls no wild, and
-	## `CheckTimeEvents` below is a caller further on.
-	##
-	## `CheckSpecialPhoneCall` is `CountStep`'s first test and stands in front of
-	## the counters, so the step a special call rings on is charged nothing:
-	## [method Gen2WorldAPI.count_step] already refused it, and the poison pass
-	## below reads the counter that refusal left standing.
+	## `CheckTimeEvents` below is a caller further on. `CheckSpecialPhoneCall` is
+	## `CountStep`'s first test and stands in front of the counters, so the step a
+	## special call rings on is charged nothing: `count_step()` already refused it,
+	## and the poison pass below reads the counter that refusal left standing.
 	var special_attempt: Dictionary = _world.try_special_phone_call()
 	var special_results: Array = special_attempt.get("results", [])
 	if bool(special_attempt.get("attempted", false)) and not special_results.is_empty():
@@ -3819,15 +3802,14 @@ func _tap_puzzle(button: int) -> void:
 	host.release_button(button)
 
 
-## Public screenshot driver and scene-test entry for `OverworldHatchEgg`: it
-## stands an egg with one cycle left in the first party slot of an injected
-## save, spends the egg step, and opens the sequence on whatever hatched.
-##
-## [param species] is what is inside the egg; 0 takes the first species the
-## cache holds, so the driver works on all three without a table.
-## One of the five fade specials on the map that is already open, for a
-## screenshot. The frames it spends are the script's on the real path, so this
-## opens the fade and the caller advances into it.
+## Public screenshot driver and scene-test entry for `OverworldHatchEgg`: it stands
+## an egg with one cycle left in the first party slot of an injected save, spends
+## the egg step, and opens the sequence on whatever hatched. [param species] is
+## what is inside the egg; 0 takes the first species the cache holds, so the driver
+## works on all three without a table. Below, one of the five fade specials on the
+## map that is already open, for a screenshot: the frames it spends are the
+## script's on the real path, so this opens the fade and the caller advances into
+## it.
 func preview_script_fade(special: int) -> void:
 	if not Gen2WorldScriptRunner.FADE_ORDERS_OF.has(special):
 		return
@@ -4801,18 +4783,14 @@ func _open_battle_host(request: Dictionary) -> void:
 	_refresh_labels()
 
 
-## The Nuzlocke's first rule, at the one place every battle is opened.
-##
-## An area gives up one encounter, and it gives it up the moment the Pokemon is
-## met rather than when a ball lands: beating it or running from it spends it
-## just the same, which is the rule's "no second chances". The claim is written
-## to disk here for the same reason a death is, so a reload cannot hand the area
-## back.
-##
-## Two wild battles claim nothing. The Bug Catching Contest has its own park
-## balls and its own judging, and a roamer belongs to no area at all: its
-## landmark is wherever it caught the player, so counting it would spend a route
-## the player never chose to spend.
+## The Nuzlocke's first rule, at the one place every battle is opened. An area
+## gives up one encounter, and it gives it up the moment the Pokemon is met rather
+## than when a ball lands: beating it or running from it spends it just the same,
+## which is the rule's "no second chances". The claim is written to disk here for
+## the same reason a death is, so a reload cannot hand the area back. Two wild
+## battles claim nothing: the Bug Catching Contest has its own park balls, and a
+## roamer belongs to no area at all, its landmark being wherever it caught the
+## player.
 func _claim_nuzlocke_encounter(
 	host: Gen2BattleScreen, values: Dictionary, save: Gen2SaveData
 ) -> void:
@@ -5104,14 +5082,11 @@ func _finish_battle_exit(result: Dictionary, fought_save: Gen2SaveData) -> void:
 	_refresh_labels()
 
 
-## The Nuzlocke's second rule: a faint is a death, so every party member at zero
-## HP is released and recorded. The battle said the line as each one fell; this
-## is where the row actually goes.
-##
-## Written to disk the moment it happens, whatever the outcome was, which is the
-## whole of the no-resets rule this project can enforce: quitting to the launcher
-## and reopening the slot cannot bring anything back.
-##
+## The Nuzlocke's second rule: a faint is a death, so every party member at zero HP
+## is released and recorded. The battle said the line as each one fell; this is
+## where the row actually goes. Written to disk the moment it happens, whatever the
+## outcome was, which is the whole of the no-resets rule this project can enforce:
+## quitting to the launcher and reopening the slot cannot bring anything back.
 ## Answers what it took, so a caller that is about to end the run can say so.
 func _reap_nuzlocke_faints(save: Gen2SaveData, cause: StringName) -> Array:
 	if _world == null or _world.rules == null or not _world.rules.is_nuzlocke():
@@ -5284,14 +5259,12 @@ func _advance_script_input() -> void:
 	_refresh_labels()
 
 
-## `Script_writetext` is `MapTextbox` and returns as soon as the string is
-## placed, so a text ending in `<DONE>` owes no press of its own and the script
-## runs on the moment its last page is up. The box reaches that page three ways:
-## shown whole, turned to by the press that clears a `<PARA>`, or scrolled into
-## by `_ContText`, and only the first two are a press. The scroll ends on a
-## frame, which is why [method advance_frame] asks this as well; without it the
-## last page sat there with the script still suspended and the press that closed
-## the box paid for the `waitbutton` behind it, so every `<CONT>`-terminated
+## `Script_writetext` is `MapTextbox` and returns as soon as the string is placed,
+## so a text ending in `<DONE>` owes no press of its own and the script runs on the
+## moment its last page is up. The box reaches that page three ways: shown whole,
+## turned to by the press that clears a `<PARA>`, or scrolled into by `_ContText`,
+## and only the first two are a press. The scroll ends on a frame, which is why
+## [method advance_frame] asks this as well; without it every `<CONT>`-terminated
 ## text cost one press more than the cartridge spends.
 func _continue_if_text_settled() -> bool:
 	if _text_box == null or not _text_box.visible or _world == null:
@@ -6822,343 +6795,404 @@ func _on_service_completed(results: Array) -> void:
 	_reopen_start_menu_if_due()
 
 
-func _show_script_results(results: Array) -> void:
-	## Whether this result staged a text at all; whether it owes a press is
-	## [method _continue_if_text_settled]'s question, asked once the loop is done.
-	var continue_after_text: bool = false
-	var waiting: bool = false
-	var failed: bool = false
-	var map_changed: bool = false
+## Script event to the method that spends it, each taking the event. Four types
+## are not here: `soft_reset_requested` ends the screen, `tree_shake_requested`
+## has nothing for a host to start because the object animates itself for the
+## frames the stream sleeps, and the rest are in [constant EVENT_FLAGS] and
+## [constant EVENT_PROMPTS].
+const EVENT_HANDLERS: Dictionary = {
+	&"presentation_special_applied": &"_apply_presentation",
+	&"contest_mons_dropped_off": &"_event_contest_drop_off",
+	&"contest_mons_returned": &"_event_contest_return",
+	&"hall_of_fame_requested": &"_event_hall_of_fame",
+	&"credits_requested": &"_event_credits",
+	&"battle_tower_opponent_loaded": &"_event_battle_tower_opponent",
+	&"field_move_confirmed": &"_event_field_move_confirmed",
+	&"pokemon_picture_requested": &"_event_show_picture",
+	&"pokemon_picture_closed": &"_event_hide_picture",
+	&"money_window_opened": &"_show_money_window",
+	&"money_window_closed": &"_event_hide_money_window",
+	&"party_happiness_changed": &"_apply_party_happiness",
+	&"party_member_removed": &"_remove_party_member",
+	&"party_mail_given": &"_give_party_mail",
+	&"screen_shake_requested": &"_event_screen_shake",
+}
+
+## `presentation_special_applied` kind to the method that starts it.
+const PRESENTATION_HANDLERS: Dictionary = {
+	&"prof_oaks_pc_boot": &"_event_prof_oaks_pc",
+	&"heal_machine_anim": &"_start_heal_machine_sounds",
+	&"palette_fade": &"_start_script_fade",
+}
+
+## Events the results loop only records, and what each raises.
+const EVENT_FLAGS: Dictionary = {
 	## `Script_reloadmap`'s own entry method, which a warp does not share: only
 	## this one re-enters the map the player is already standing on.
-	var map_reloaded: bool = false
-	var clock_changed: bool = false
-	var blacked_out: bool = false
+	&"battle_map_reload_requested": [&"map_changed", &"map_reloaded"],
+	&"warp": [&"map_changed"],
+	&"world_clock_changed": [&"clock_changed"],
+	## `Script_reloadmapafterbattle`'s LOSE branch, which is `ScriptJump
+	## Script_BattleWhiteout` and ends the script: the runner has already
+	## stopped, so the sequence is started once the loop is done.
+	&"blackout": [&"blacked_out"],
+}
+
+## Events with nothing for a host to do but say so.
+const EVENT_PROMPTS: Array[StringName] = [
+	&"rock_smash_effect_requested", &"movement_command_requested", &"item_changed",
+	&"money_changed", &"coins_changed", &"movement_blocked", &"movement_failed",
+]
+
+## Runtime requests the screen answers itself. Each method takes the request and
+## answers what the results loop does next: `break`, `return` when it has already
+## shown its own results, or `none`.
+const REQUEST_HANDLERS: Dictionary = {
+	&"trainer_approach_requested": &"_request_trainer_approach",
+	&"battle_requested": &"_request_battle",
+	&"catch_tutorial_requested": &"_request_battle",
+	&"bug_contest_judging_requested": &"_request_bug_contest_judging",
+	&"quick_save_requested": &"_request_quick_save",
+	&"swarm_requested": &"_request_swarm",
+	&"map_radio_requested": &"_request_map_radio",
+	&"audio_requested": &"_request_audio",
+}
+
+## Runtime requests the screen answers by opening a page: the method that opens
+## it, and what a refusal does. `continue` leaves the script where it is,
+## `prompt` falls through to the generic acknowledge, and the rest complete the
+## request themselves with the values beside them.
+const REQUEST_OPENERS: Dictionary = {
+	&"link_record_requested": [&"_open_link_record", &"continue", {}],
+	&"link_room_requested": [&"_open_link_room", &"continue", {}],
+	&"party_selection_requested": [&"_open_party_selection", &"continue", {}],
+	&"name_rater_requested": [&"_open_name_rater", &"continue", {}],
+	&"move_deleter_requested": [&"_open_move_deleter", &"continue", {}],
+	&"move_tutor_requested": [&"_open_move_tutor", &"continue", {}],
+	&"day_care_requested": [&"_open_day_care", &"continue", {}],
+	&"pokedex_entry_requested": [&"_open_pokedex_entry", &"continue", {}],
+	## A cartridge whose cache has no slots or card flip art gives the coins back
+	## untouched rather than stopping the script.
+	&"slot_machine_requested": [&"_open_slot_machine", &"coins", {}],
+	&"card_flip_requested": [&"_open_card_flip", &"coins", {}],
+	## `ret z` on an empty dex, and the same answer for a cache with no glyphs or
+	## no diploma art: the script runs straight on and writes nothing either.
+	&"unown_printer_requested": [&"_open_unown_printer", &"values", {"ok": true}],
+	&"diploma_requested": [&"_open_diploma", &"values", {"ok": true}],
+	## A cache with no puzzle art answers an unsolved board, which is the
+	## `iftrue` the map takes either way.
+	&"unown_puzzle_requested": [
+		&"_open_unown_puzzle", &"values", {"ok": true, "script_value": 0},
+	],
+	&"pokemon_requested": [&"_open_gift_nickname", &"prompt", {}],
+	&"contest_mon_requested": [&"_open_contest_nickname", &"prompt", {}],
+}
+
+## Requests the service host draws, all on one screen.
+const SERVICE_HOST_REQUESTS: Array[StringName] = [
+	&"mart_requested", &"phone_call_requested", &"special_phone_call_requested",
+	&"town_map_requested", &"apricorn_selection_requested", &"pc_requested",
+	&"mom_bank_dial_requested", &"elevator_requested",
+]
+
+
+func _show_script_results(results: Array) -> void:
+	var flags: Dictionary = {}
 	for source_result: Dictionary in results:
 		var result: Dictionary = Gen2ModHost.publish(Gen2ModHost.CHANNEL_WORLD, source_result)
-		## Applied before the status below, and before any branch of it that leaves
+		## Spent before the status below, and before any branch of it that leaves
 		## the loop: a command's presentation effect happened before the wait the
-		## same result ends on, and a `break` that skipped this dropped it. That is
-		## what left a `pokepic` undrawn, since `Script_pokepic` is followed by the
-		## `cry` whose runtime request breaks out of the loop.
+		## same result ends on. A `break` that skipped this left a `pokepic`
+		## undrawn, since `Script_pokepic` is followed by the `cry` whose runtime
+		## request breaks out of the loop.
 		for result_event: Dictionary in result.get("events", []):
-			if result_event.get("type", &"") == &"presentation_special_applied" \
-				and StringName(result_event.get("kind", &"")) == &"prof_oaks_pc_boot":
-				open_prof_oaks_pc()
-			elif result_event.get("type", &"") == &"presentation_special_applied" \
-				and StringName(result_event.get("kind", &"")) == &"heal_machine_anim":
-				_start_heal_machine_sounds(result_event)
-			elif result_event.get("type", &"") == &"presentation_special_applied" \
-				and StringName(result_event.get("kind", &"")) == &"palette_fade":
-				_start_script_fade(result_event)
-			elif result_event.get("type", &"") == &"contest_mons_dropped_off":
-				## `ContestDropOffMons` masks the party to its lead; the world
-				## state keeps the stashed species byte and the save keeps the
-				## members themselves.
-				Gen2WorldPartyHost.contest_drop_off_mons(_active_party_save())
-			elif result_event.get("type", &"") == &"contest_mons_returned":
-				Gen2WorldPartyHost.contest_return_mons(_active_party_save())
-			elif result_event.get("type", &"") == &"hall_of_fame_requested":
-				## An event, not a runtime request: `halloffame` commits its flag
-				## and runs on, and the source's own `end` is the next command,
-				## so nothing is waiting to be resumed when this opens.
-				open_hall_of_fame()
-			elif result_event.get("type", &"") == &"credits_requested":
-				## `Script_credits` farcalls `RedCredits`, whose own
-				## `ld a, SPAWN_RED` puts the next CONTINUE on Mount Silver.
-				if _world != null:
-					_world.spawn_after_champion = Gen2WorldSnapshot.SPAWN_AFTER_RED
-				open_credits()
-			elif result_event.get("type", &"") == &"soft_reset_requested":
-				## `special Reset` restarts the console, which is how a saved and
-				## left Battle Tower challenge leaves the battle room. The save
-				## has already been written by the action in front of it.
-				persist_world_snapshot()
-				_soft_reset()
+			if not _apply_result_event(result_event, flags):
 				return
-			elif result_event.get("type", &"") == &"battle_tower_opponent_loaded":
-				## `LoadOpponentTrainerAndPokemonWithOTSprite`'s tail, which
-				## writes the sampled class's sprite into `wMapObjects` and loads
-				## it: the opponent is chosen at random and has to appear as
-				## whoever was drawn.
-				_world.set_object_sprite(
-					int(result_event.get("object", 0)), int(result_event.get("sprite", 0))
-				)
-			elif result_event.get("type", &"") == &"field_move_confirmed":
-				## `iftrue Script_Cut` and its four counterparts. The move is the
-				## host's, and it is the same staged request and acknowledge the
-				## party submenu reaches, so the two ways in stay one path.
-				_use_prompted_field_move(int(result_event.get("move", 0)),
-					int(result_event.get("slot", -1)))
-			elif result_event.get("type", &"") == &"pokemon_picture_requested":
-				_show_story_picture(int(result_event.get("pokemon", 0)))
-			elif result_event.get("type", &"") == &"pokemon_picture_closed":
-				_hide_story_picture()
-			elif result_event.get("type", &"") == &"money_window_opened":
-				_show_money_window(result_event)
-			elif result_event.get("type", &"") == &"money_window_closed":
-				_hide_money_window()
-			elif result_event.get("type", &"") == &"party_happiness_changed":
-				_apply_party_happiness(result_event)
-			elif result_event.get("type", &"") == &"party_member_removed":
-				_remove_party_member(result_event)
-			elif result_event.get("type", &"") == &"party_mail_given":
-				_give_party_mail(result_event)
-			elif result_event.get("type", &"") == &"screen_shake_requested":
-				if _effects != null:
-					_effects.start_screen_shake(
-						int(result_event.get("strength", 0)),
-						&"screen_shake",
-						result_event,
-					)
-				if _renderer != null:
-					_renderer.refresh()
-			elif result_event.get("type", &"") == &"tree_shake_requested":
-				## The object animates itself for the frames the stream sleeps;
-				## there is nothing for a host to start.
-				pass
-			elif result_event.get("type", &"") in [
-				&"rock_smash_effect_requested",
-				&"movement_command_requested",
-			]:
-				_script_prompt = "Applied: %s" % String(result_event.get("type", &"effect"))
-			elif result_event.get("type", &"") == &"warp":
-				map_changed = true
-			elif result_event.get("type", &"") == &"world_clock_changed":
-				clock_changed = true
-			elif result_event.get("type", &"") == &"battle_map_reload_requested":
-				map_changed = true
-				map_reloaded = true
-			elif result_event.get("type", &"") == &"blackout":
-				## `Script_reloadmapafterbattle`'s LOSE branch, which is
-				## `ScriptJump Script_BattleWhiteout` and ends the script: the
-				## runner has already stopped, so the sequence is started here
-				## and owns the screen from its first line.
-				blacked_out = true
-			elif result_event.get("type", &"") in [
-				&"item_changed", &"money_changed", &"coins_changed", &"movement_blocked",
-				&"movement_failed",
-			]:
-				_script_prompt = "Applied: %s" % String(result_event.get("type", &"effect"))
 		if result.has("clock"):
-			clock_changed = true
-		var status: StringName = StringName(result.get("status", &""))
-		if status == &"phone_ring":
-			waiting = true
-			var ring: Dictionary = result.get("event", {})
-			var contact: Dictionary = ring.get("contact", {})
-			_script_prompt = "Phone ringing: %s" % _phone_contact_label(contact)
-		elif status == &"waiting":
-			waiting = true
-			var event: Dictionary = result.get("event", {})
-			var event_type: StringName = StringName(event.get("type", &""))
-			if event_type == &"text" and event.has("unown_wall") \
-				and _open_unown_wall(String(event.get("text", ""))):
-				break
-			if event_type == &"text" and _text_box != null and _text_box.font != null:
-				## Prof Oak's PC is the one special that draws on its own and
-				## whose script runs on past it, so its pages are shown first and
-				## this text waits behind them.
-				# `LoadBlinkingCursor` is `Paragraph`, `_ContText` and
-				# `PromptText`; a `writetext` whose text ends in `done` reaches
-				# none of them, so its last page carries no arrow and the script
-				# runs straight on.
-				_text_awaits_press = bool(event.get("prompt", true))
-				if _oak_pc_pages.is_empty():
-					_apply_text_box_options()
-					_text_box.show_text(
-						String(event.get("text", "")), _text_awaits_press
-					)
-					_text_box.visible = true
-				_script_prompt = "A: advance text"
-				continue_after_text = true
-			elif event_type == &"button":
-				if _text_box != null:
-					_text_box.visible = true
-				_script_prompt = "A: continue script"
-			elif event_type == &"wait":
-				_script_prompt = "Script waiting on %s" % String(event.get("wait", &"frames"))
-			elif event_type in [&"choice", &"menu"]:
-				_open_service_host()
-				break
-			elif event_type == &"runtime_request":
-				var request: Dictionary = event.get("request", {})
-				if StringName(request.get("kind", &"")) == &"trainer_approach_requested":
-					_start_trainer_approach(request)
-					break
-				if StringName(request.get("kind", &"")) == &"battle_requested":
-					_start_battle_request(request)
-					break
-				if StringName(request.get("kind", &"")) == &"catch_tutorial_requested":
-					_start_battle_request(request)
-					break
-				if StringName(request.get("kind", &"")) == &"bug_contest_judging_requested":
-					## `_BugContestJudging` scores the player, ranks them against
-					## the contestants who turned up and leaves the placing in
-					## wScriptVar, which the results script branches on.
-					var judged: Dictionary = _world.judge_bug_contest(_encounter_random)
-					var judged_results: Array = _world.complete_runtime_request({
-						"ok": true,
-						"script_value": int(judged.get("player_place", 0)),
-						"judging": judged.duplicate(true),
-					})
-					_script_prompt = _bug_contest_placings_text(judged)
-					_show_script_results(judged_results)
-					return
-				if StringName(request.get("kind", &"")) == &"link_record_requested":
-					if _open_link_screen(Gen2LinkScreen.MODE_RECORD):
-						break
-					continue
-				if StringName(request.get("kind", &"")) == &"link_room_requested":
-					if _open_link_room(request):
-						break
-					continue
-				if StringName(request.get("kind", &"")) == &"quick_save_requested":
-					## `TryQuickSave` writes the save where it stands and answers
-					## TRUE; a write that fails answers FALSE, which is the same
-					## "no" the source gives a player who declines.
-					var written: Dictionary = persist_world_snapshot()
-					_show_script_results(_world.complete_runtime_request({
-						"ok": true,
-						"script_value": 1 if bool(written.get("ok", false)) else 0,
-					}))
-					return
-				if StringName(request.get("kind", &"")) == &"party_selection_requested":
-					if _open_party_selection():
-						break
-					continue
-				if StringName(request.get("kind", &"")) == &"name_rater_requested":
-					if _open_name_rater():
-						break
-					continue
-				if StringName(request.get("kind", &"")) == &"move_deleter_requested":
-					if _open_move_deleter():
-						break
-					continue
-				if StringName(request.get("kind", &"")) == &"move_tutor_requested":
-					if _open_move_tutor(request):
-						break
-					continue
-				if StringName(request.get("kind", &"")) == &"day_care_requested":
-					if _open_day_care(request):
-						break
-					continue
-				if StringName(request.get("kind", &"")) == &"slot_machine_requested":
-					if _open_slot_machine(request):
-						break
-					## A cartridge whose cache has no slots art gives the coins
-					## back untouched rather than stopping the script.
-					_show_script_results(_world.complete_runtime_request({
-						"ok": true,
-						"coins": int((request.get("values", {}) as Dictionary).get(
-							"coins", 0
-						)),
-					}))
-					return
-				if StringName(request.get("kind", &"")) == &"card_flip_requested":
-					if _open_card_flip(request):
-						break
-					## A cartridge whose cache has no card flip art gives the
-					## coins back untouched rather than stopping the script.
-					_show_script_results(_world.complete_runtime_request({
-						"ok": true,
-						"coins": int((request.get("values", {}) as Dictionary).get(
-							"coins", 0
-						)),
-					}))
-					return
-				if StringName(request.get("kind", &"")) == &"unown_printer_requested":
-					if _open_unown_printer(request):
-						break
-					## `ret z` on an empty dex, and the same answer for a cache
-					## with no glyphs: the script runs straight on.
-					_show_script_results(_world.complete_runtime_request({"ok": true}))
-					return
-				if StringName(request.get("kind", &"")) == &"diploma_requested":
-					if _open_diploma(request):
-						break
-					## A cache with no diploma art answers the script the way a
-					## page that has been read does: it writes nothing either.
-					_show_script_results(_world.complete_runtime_request({"ok": true}))
-					return
-				if StringName(request.get("kind", &"")) == &"unown_puzzle_requested":
-					if _open_unown_puzzle(request):
-						break
-					## A cartridge whose cache has no puzzle art answers the
-					## script an unsolved board rather than stopping it, which is
-					## the `iftrue` the map takes either way.
-					_show_script_results(_world.complete_runtime_request({
-						"ok": true, "script_value": 0,
-					}))
-					return
-				if StringName(request.get("kind", &"")) == &"swarm_requested":
-					var values: Dictionary = request.get("values", {})
-					var swarm_results: Array = _world.complete_runtime_request({
-						"ok": true,
-						"active": true,
-						"map_group": int(values.get("map_group", -1)),
-						"map_number": int(values.get("map_number", -1)),
-					})
-					_show_script_results(swarm_results)
-					return
-				if StringName(request.get("kind", &"")) == &"pokemon_requested" \
-					and _open_gift_nickname(request):
-					break
-				if StringName(request.get("kind", &"")) == &"contest_mon_requested" \
-					and _open_contest_nickname():
-					break
-				if StringName(request.get("kind", &"")) in \
-					Gen2WorldHost.UNATTENDED_REQUESTS:
-					var settled: Array = _complete_unattended_request()
-					if not settled.is_empty():
-						_show_script_results(settled)
-						return
-					continue
-				if StringName(request.get("kind", &"")) in [
-					&"mart_requested", &"phone_call_requested",
-					&"special_phone_call_requested", &"town_map_requested",
-					&"apricorn_selection_requested", &"pc_requested",
-					&"mom_bank_dial_requested", &"elevator_requested",
-				]:
-					_open_service_host()
-					break
-				if StringName(request.get("kind", &"")) == &"map_radio_requested":
-					var radio_results: Array = _handle_map_radio_request(request)
-					if not radio_results.is_empty():
-						_show_script_results(radio_results)
-					break
-				if StringName(request.get("kind", &"")) == &"pokedex_entry_requested":
-					if _open_pokedex_entry(request):
-						break
-					continue
-				if StringName(request.get("kind", &"")) == &"audio_requested":
-					var audio_results: Array = _handle_audio_request(request)
-					if not audio_results.is_empty():
-						_show_script_results(audio_results)
-					break
-				_script_prompt = "Runtime request: %s, press A to acknowledge" % String(
-					request.get("kind", "effect")
-				)
-		elif status == &"recovered":
-			## `_recovered_result`'s own status, raised on the same result the
-			## `blackout` event above is on.
-			blacked_out = true
-		elif not bool(result.get("ok", false)):
-			failed = true
+			flags[&"clock_changed"] = true
+		var verdict: StringName = _apply_result_status(result, flags)
+		if verdict == &"return":
+			return
+		if verdict == &"break":
+			break
+	_settle_after_results(flags)
+
+
+## Spends one script event, raising its rows of [constant EVENT_FLAGS] in
+## [param flags]. False when the screen is gone and the rest is dropped.
+func _apply_result_event(event: Dictionary, flags: Dictionary) -> bool:
+	var type: StringName = StringName(event.get("type", &""))
+	if type == &"soft_reset_requested":
+		## `special Reset` restarts the console, which is how a saved and left
+		## Battle Tower challenge leaves the battle room. The save has already
+		## been written by the action in front of it.
+		persist_world_snapshot()
+		_soft_reset()
+		return false
+	for flag: StringName in EVENT_FLAGS.get(type, []):
+		flags[flag] = true
+	if EVENT_PROMPTS.has(type):
+		_script_prompt = "Applied: %s" % String(type)
+	elif EVENT_HANDLERS.has(type):
+		call(EVENT_HANDLERS[type], event)
+	return true
+
+
+func _apply_presentation(event: Dictionary) -> void:
+	var kind: StringName = StringName(event.get("kind", &""))
+	if PRESENTATION_HANDLERS.has(kind):
+		call(PRESENTATION_HANDLERS[kind], event)
+
+
+## `ContestDropOffMons` masks the party to its lead; the world state keeps the
+## stashed species byte and the save keeps the members themselves.
+## An event, not a runtime request: `halloffame` commits its flag and runs on,
+## and the source's own `end` is the next command, so nothing is waiting to be
+## resumed when this opens.
+func _event_hall_of_fame(_event: Dictionary) -> void:
+	open_hall_of_fame()
+
+
+func _event_prof_oaks_pc(_event: Dictionary) -> void:
+	open_prof_oaks_pc()
+
+
+func _event_hide_picture(_event: Dictionary) -> void:
+	_hide_story_picture()
+
+
+func _event_hide_money_window(_event: Dictionary) -> void:
+	_hide_money_window()
+
+
+func _event_contest_drop_off(_event: Dictionary) -> void:
+	Gen2WorldPartyHost.contest_drop_off_mons(_active_party_save())
+
+
+func _event_contest_return(_event: Dictionary) -> void:
+	Gen2WorldPartyHost.contest_return_mons(_active_party_save())
+
+
+## `Script_credits` farcalls `RedCredits`, whose own `ld a, SPAWN_RED` puts the
+## next CONTINUE on Mount Silver.
+func _event_credits(_event: Dictionary) -> void:
+	if _world != null:
+		_world.spawn_after_champion = Gen2WorldSnapshot.SPAWN_AFTER_RED
+	open_credits()
+
+
+## `LoadOpponentTrainerAndPokemonWithOTSprite`'s tail: the opponent is chosen at
+## random and has to appear as whoever was drawn.
+func _event_battle_tower_opponent(event: Dictionary) -> void:
+	_world.set_object_sprite(int(event.get("object", 0)), int(event.get("sprite", 0)))
+
+
+## `iftrue Script_Cut` and its four counterparts. The move is the host's, and it
+## is the same staged request and acknowledge the party submenu reaches, so the
+## two ways in stay one path.
+func _event_field_move_confirmed(event: Dictionary) -> void:
+	_use_prompted_field_move(int(event.get("move", 0)), int(event.get("slot", -1)))
+
+
+func _event_show_picture(event: Dictionary) -> void:
+	_show_story_picture(int(event.get("pokemon", 0)))
+
+
+func _event_screen_shake(event: Dictionary) -> void:
+	if _effects != null:
+		_effects.start_screen_shake(int(event.get("strength", 0)), &"screen_shake", event)
+	if _renderer != null:
+		_renderer.refresh()
+
+
+## What the result's own status leaves the loop doing: `break`, `return` when it
+## has already shown results of its own, or `none`.
+func _apply_result_status(result: Dictionary, flags: Dictionary) -> StringName:
+	var status: StringName = StringName(result.get("status", &""))
+	if status == &"phone_ring":
+		flags[&"waiting"] = true
+		var ring: Dictionary = result.get("event", {})
+		_script_prompt = "Phone ringing: %s" % _phone_contact_label(
+			ring.get("contact", {})
+		)
+		return &"none"
+	if status == &"recovered":
+		## `_recovered_result`'s own status, raised on the same result the
+		## `blackout` event is on.
+		flags[&"blacked_out"] = true
+		return &"none"
+	if status != &"waiting":
+		if not bool(result.get("ok", false)):
+			flags[&"failed"] = true
 			_script_prompt = "Script stopped: %s" % String(result.get("reason", "unknown"))
-	if not waiting and not failed:
+		return &"none"
+
+	flags[&"waiting"] = true
+	var event: Dictionary = result.get("event", {})
+	var event_type: StringName = StringName(event.get("type", &""))
+	if event_type == &"text":
+		return _apply_text_pause(event, flags)
+	if event_type == &"button":
+		if _text_box != null:
+			_text_box.visible = true
+		_script_prompt = "A: continue script"
+		return &"none"
+	if event_type == &"wait":
+		_script_prompt = "Script waiting on %s" % String(event.get("wait", &"frames"))
+		return &"none"
+	if event_type in [&"choice", &"menu"]:
+		_open_service_host()
+		return &"break"
+	if event_type == &"runtime_request":
+		return _handle_runtime_request(event.get("request", {}))
+	return &"none"
+
+
+## A `writetext` pause. Prof Oak's PC is the one special that draws on its own
+## and whose script runs on past it, so its pages are shown first and this text
+## waits behind them.
+func _apply_text_pause(event: Dictionary, flags: Dictionary) -> StringName:
+	if event.has("unown_wall") and _open_unown_wall(String(event.get("text", ""))):
+		return &"break"
+	if _text_box == null or _text_box.font == null:
+		return &"none"
+	# `LoadBlinkingCursor` is `Paragraph`, `_ContText` and `PromptText`; a
+	# `writetext` whose text ends in `done` reaches none of them, so its last page
+	# carries no arrow and the script runs straight on.
+	_text_awaits_press = bool(event.get("prompt", true))
+	if _oak_pc_pages.is_empty():
+		_apply_text_box_options()
+		_text_box.show_text(String(event.get("text", "")), _text_awaits_press)
+		_text_box.visible = true
+	_script_prompt = "A: advance text"
+	flags[&"continue_after_text"] = true
+	return &"none"
+
+
+## What the open runtime request leaves the results loop doing.
+func _handle_runtime_request(request: Dictionary) -> StringName:
+	var kind: StringName = StringName(request.get("kind", &""))
+	if REQUEST_HANDLERS.has(kind):
+		return call(REQUEST_HANDLERS[kind], request) as StringName
+	if REQUEST_OPENERS.has(kind):
+		var opened: StringName = _open_requested_page(kind, request)
+		if opened != &"prompt":
+			return opened
+	elif kind in Gen2WorldHost.UNATTENDED_REQUESTS:
+		var settled: Array = _complete_unattended_request()
+		if settled.is_empty():
+			return &"none"
+		_show_script_results(settled)
+		return &"return"
+	elif kind in SERVICE_HOST_REQUESTS:
+		_open_service_host()
+		return &"break"
+	_script_prompt = "Runtime request: %s, press A to acknowledge" % String(
+		request.get("kind", "effect")
+	)
+	return &"none"
+
+
+## Opens [param kind]'s page, or spends its [constant REQUEST_OPENERS] refusal.
+func _open_requested_page(kind: StringName, request: Dictionary) -> StringName:
+	var row: Array = REQUEST_OPENERS[kind]
+	if call(row[0], request):
+		return &"break"
+	if row[1] == &"continue":
+		return &"none"
+	if row[1] == &"prompt":
+		return &"prompt"
+	var values: Dictionary = (row[2] as Dictionary).duplicate()
+	if row[1] == &"coins":
+		values = {
+			"ok": true,
+			"coins": int((request.get("values", {}) as Dictionary).get("coins", 0)),
+		}
+	_show_script_results(_world.complete_runtime_request(values))
+	return &"return"
+
+
+func _open_link_record(_request: Dictionary) -> bool:
+	return _open_link_screen(Gen2LinkScreen.MODE_RECORD)
+
+
+func _request_trainer_approach(request: Dictionary) -> StringName:
+	_start_trainer_approach(request)
+	return &"break"
+
+
+func _request_battle(request: Dictionary) -> StringName:
+	_start_battle_request(request)
+	return &"break"
+
+
+## `_BugContestJudging` scores the player, ranks them against the contestants who
+## turned up and leaves the placing in wScriptVar, which the results script
+## branches on.
+func _request_bug_contest_judging(_request: Dictionary) -> StringName:
+	var judged: Dictionary = _world.judge_bug_contest(_encounter_random)
+	var judged_results: Array = _world.complete_runtime_request({
+		"ok": true,
+		"script_value": int(judged.get("player_place", 0)),
+		"judging": judged.duplicate(true),
+	})
+	_script_prompt = _bug_contest_placings_text(judged)
+	_show_script_results(judged_results)
+	return &"return"
+
+
+## `TryQuickSave` writes the save where it stands and answers TRUE; a write that
+## fails answers FALSE, which is the same "no" the source gives a player who
+## declines.
+func _request_quick_save(_request: Dictionary) -> StringName:
+	var written: Dictionary = persist_world_snapshot()
+	_show_script_results(_world.complete_runtime_request({
+		"ok": true,
+		"script_value": 1 if bool(written.get("ok", false)) else 0,
+	}))
+	return &"return"
+
+
+func _request_swarm(request: Dictionary) -> StringName:
+	var values: Dictionary = request.get("values", {})
+	_show_script_results(_world.complete_runtime_request({
+		"ok": true,
+		"active": true,
+		"map_group": int(values.get("map_group", -1)),
+		"map_number": int(values.get("map_number", -1)),
+	}))
+	return &"return"
+
+
+func _request_map_radio(request: Dictionary) -> StringName:
+	var radio_results: Array = _handle_map_radio_request(request)
+	if not radio_results.is_empty():
+		_show_script_results(radio_results)
+	return &"break"
+
+
+func _request_audio(request: Dictionary) -> StringName:
+	var audio_results: Array = _handle_audio_request(request)
+	if not audio_results.is_empty():
+		_show_script_results(audio_results)
+	return &"break"
+
+
+## The renderer, the clock and the music the drained results owe the screen.
+func _settle_after_results(flags: Dictionary) -> void:
+	if not flags.has(&"waiting") and not flags.has(&"failed"):
 		_script_prompt = ""
-	if clock_changed:
+	if flags.has(&"clock_changed"):
 		_sync_host_clock()
 	if _renderer != null:
-		if map_changed:
+		if flags.has(&"map_changed"):
 			## A warp redraws the whole tilemap, so a balance window a script
 			## left standing goes with it the way `closetext`'s redraw takes it.
 			_hide_money_window()
 			## A warp has already run `_apply_map`, which is `EnterMap` whole;
 			## re-entering it here would take MAPSETUP_RELOADMAP's own poison
 			## reset on a step that never asked for one.
-			if map_reloaded:
+			if flags.has(&"map_reloaded"):
 				_world.reload_current_map()
 			_animation.configure(_world, _render_time_of_day())
 			_set_renderer_world()
@@ -7166,11 +7200,11 @@ func _show_script_results(results: Array) -> void:
 			_play_current_map_music()
 		else:
 			_renderer.refresh()
-	## Decided in the loop and spent here, because a special drawing its own
-	## pages is an event on the same result as the text waiting behind them.
-	if continue_after_text and _continue_if_text_settled():
+	## Decided in the loop and spent here, because a special drawing its own pages
+	## is an event on the same result as the text waiting behind them.
+	if flags.has(&"continue_after_text") and _continue_if_text_settled():
 		return
-	if blacked_out:
+	if flags.has(&"blacked_out"):
 		_start_whiteout()
 		return
 	_refresh_labels()
@@ -7324,17 +7358,14 @@ func money_window_open() -> bool:
 	return _money_window != null
 
 
-## `HaircutOrGrooming`'s own `call ChangeHappiness`. The row is the runner's,
-## since the roll that picked it has to belong to the seeded generator; the byte
-## it changes belongs to the save this screen holds.
-## `RemoveMonFromPartyOrBox` with REMOVE_PARTY, which `ReturnShuckie` runs on
-## the row the player handed back. An event rather than a runtime request: the
-## routine writes wScriptVar and runs straight on, and the removal is the same
+## `HaircutOrGrooming`'s own `call ChangeHappiness`. The row is the runner's, since
+## the roll that picked it has to belong to the seeded generator; the byte it
+## changes belongs to the save this screen holds. Below, `RemoveMonFromPartyOrBox`
+## with REMOVE_PARTY, which `ReturnShuckie` runs on the row the player handed back,
+## and `GivePokeMail`, the item onto the member's own MON_ITEM and the script's
+## message into its `sPartyMail` row. Both are events rather than runtime requests:
+## each routine answers nothing and runs straight on, and the write is the same
 ## save write a happiness change is.
-## `GivePokeMail`: the item onto the member's own MON_ITEM and the script's
-## message into its `sPartyMail` row, whose author, ID and species are the
-## member's own. An event rather than a runtime request, for the same reason the
-## removal below is one: the routine answers nothing and runs straight on.
 func _give_party_mail(event: Dictionary) -> void:
 	var save: Gen2SaveData = _embedded_party_save()
 	var slot: int = int(event.get("slot", -1))
@@ -7440,7 +7471,7 @@ func _apply_party_happiness(event: Dictionary) -> void:
 ## routines. The same list the Name Rater and the move deleter open, and the
 ## same `_party_host` the start menu uses, so an overlay is named in one place
 ## and a press reaches it through one branch.
-func _open_party_selection() -> bool:
+func _open_party_selection(_request: Dictionary = {}) -> bool:
 	if _party_host != null or _world == null or _data == null:
 		return false
 	var save: Gen2SaveData = _embedded_party_save()

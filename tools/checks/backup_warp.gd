@@ -1,24 +1,13 @@
 extends RefCounted
 
 ## Verifies the backup warp against freshly imported real caches on all three
-## cartridges: `wBackupWarpNumber`, `wBackupMapGroup` and `wBackupMapNumber`,
-## which `SavePlayerData` copies into `sCurMapData` and which two unrelated
-## routines both read.
+## cartridges: `wBackupWarpNumber`, `wBackupMapGroup` and `wBackupMapNumber`, which
+## `SavePlayerData` copies into `sCurMapData` and which two unrelated routines both
+## read. Expected values come from the pinned pokecrystal and pokegold sources.
 ##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## home/map.asm's `CopyWarpData` and `GetWarpDestCoords`, home/region.asm's
-## `IsInJohto`, engine/overworld/landmarks.asm's `RegionCheck`,
-## engine/overworld/scripting.asm's `Script_warpmod`, ram/wram.asm and
-## engine/menus/save.asm.
-##
-## The finding the topic carries: a `warp_event` whose destination is -1 names
-## no warp and no map of its own, and this port read the placeholder beside it,
-## so the stairs out of every Pokemon Center's second floor led nowhere. The
-## same three bytes are the landmark a `LANDMARK_SPECIAL` map borrows, so the
-## radio, the battle track, the town map and the dex area screen all answered
-## with Johto's defaults up there whatever region the player was in.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- backup_warp
+## The finding the topic carries: a `warp_event` whose destination is -1 names no
+## warp and no map of its own, and this port read the placeholder beside it, so the
+## stairs out of every Pokemon Center's second floor led nowhere.
 
 ## The six `warp_event`s in either corpus whose destination is -1, as
 ## [group, number, warp index]. Crystal and Gold and Silver disagree only on the

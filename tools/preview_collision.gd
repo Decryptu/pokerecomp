@@ -1,16 +1,11 @@
 extends SceneTree
 
 ## Draws a whole map as the game draws it, with every walk cell's permission
-## checkerboarded over the top: red for WALL, blue for WATER, nothing for LAND.
-##
-## For a report that a player can stand somewhere they should not. The art and
-## the permission come from the same two sources the runtime reads, the map's
-## block grid and the tileset's four-bytes-per-block collision table, so a wall
-## drawn without a red square is a real disagreement between what is drawn and
-## what is walked, rather than a rendering offset.
-##
-## Objects are not drawn: this is the map's own answer. Use
-## `Gen2WorldAPI.active_objects()` for who is standing on it.
+## checkerboarded over the top: red for WALL, blue for WATER, nothing for LAND. For
+## a report that a player can stand somewhere they should not. The art and the
+## permission come from the same two sources the runtime reads, so a wall drawn
+## without a red square is a real disagreement rather than a rendering offset.
+## Objects are not drawn: this is the map's own answer.
 ##
 ##   Godot --headless --path . -s res://tools/preview_collision.gd -- crystal 26 2 /tmp/route31.png
 

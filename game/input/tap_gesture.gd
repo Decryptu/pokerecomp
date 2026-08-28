@@ -1,15 +1,11 @@
 class_name Gen2TapGesture
 extends RefCounted
 
-## Counts quick repeated taps in roughly one place.
-##
-## The one way back from hidden on-screen controls. A player who turns them off
-## for a plugged-in pad, then unplugs it on a device with no keyboard, has no
-## button left to press, so the gesture has to be something no ordinary play
-## produces and no button can swallow.
-##
-## Timing and counting only, with the clock passed in, so a test does not have
-## to wait half a second three times.
+## Counts quick repeated taps in roughly one place: the one way back from hidden
+## on-screen controls. A player who turns them off for a plugged-in pad, then
+## unplugs it on a device with no keyboard, has no button left to press, so the
+## gesture has to be something no ordinary play produces and no button can
+## swallow. Timing and counting only, with the clock passed in.
 
 const TAPS: int = 3
 ## Between consecutive taps. Long enough to be comfortable, short enough that

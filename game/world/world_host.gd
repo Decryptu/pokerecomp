@@ -11,14 +11,10 @@ extends RefCounted
 ## `giveegg` and a `givepoke` that names an OT each run to completion inside the
 ## command that asked for them and the script runs straight on, so a screen
 ## completes one where it is staged rather than waiting for a press.
-##
 ## `pokemon_requested` is here for those and no further: `GivePoke`'s `.wildmon`
-## branch reaches `GiveANickname_YesNo`, which is a box and a naming screen, so a
-## screen that can draw one intercepts the request in front of this list
-## (`Gen2WorldScreen._open_gift_nickname`) and a driver that cannot settles it
-## here with the species name, which is what NO answers.
-## `contest_mon_requested` is `CheckPartyFullAfterContest`, which reaches the
-## same routine one caller further on and is intercepted the same way.
+## branch reaches `GiveANickname_YesNo`, so a screen that can draw one intercepts
+## the request in front of this list and a driver that cannot settles it here with
+## the species name, which is what NO answers.
 const UNATTENDED_REQUESTS: Array[StringName] = [
 	&"party_heal_requested", &"pokemon_requested", &"trade_requested",
 	&"contest_mon_requested",

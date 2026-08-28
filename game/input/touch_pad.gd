@@ -1,20 +1,12 @@
 class_name Gen2TouchPad
 extends Control
 
-## The on-screen controller: a d-pad, A and B, START and SELECT.
-##
-## Godot ships no such thing for a [Control] interface, so this is ours. It
-## draws what [Gen2TouchLayout] places and turns a finger into the same button a
-## key or a pad produces, by way of [Gen2InputRuntime], so no screen has to know a
-## touchscreen exists.
-##
-## Touches are read in [method _input] rather than [method _gui_input] because
-## more than one finger is normal here: a thumb walking while the other presses
-## A is two live touches, and the GUI layer only ever tracks one pointer.
-##
-## In edit mode nothing is pressed and a drag moves a cluster instead. The
-## layout handed to [method set_layout] is edited in place, which is how the
-## settings page arranges the live one and has nothing to copy back.
+## The on-screen controller: a d-pad, A and B, START and SELECT. It draws what
+## [Gen2TouchLayout] places and turns a finger into the same button a key or a pad
+## produces, so no screen has to know a touchscreen exists. Touches are read in
+## [method _input] rather than [method _gui_input] because more than one finger is
+## normal here and the GUI layer only tracks one pointer. In edit mode nothing is
+## pressed and a drag moves a cluster instead, editing the layout in place.
 
 const FILL: Color = Color(0.04, 0.06, 0.09, 0.80)
 const FILL_PRESSED: Color = Color(0.30, 0.55, 0.80, 0.95)

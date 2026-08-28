@@ -1,17 +1,13 @@
 extends SceneTree
 
-## Captures the naming screen against a real imported cache, which is what makes
-## it worth looking at: the keyboard, the border, the two entry markers and the
-## cursor bracket are all cartridge graphics rather than stand-ins.
+## Captures the naming screen against a real imported cache, which is what makes it
+## worth looking at: the keyboard, the border, the two entry markers and the cursor
+## bracket are all cartridge graphics rather than stand-ins.
 ##
 ##   Godot --path . -s res://tools/preview_naming_screen.gd -- crystal /tmp/name.png [presses]
 ##
-## A `mail` argument after the presses opens `_ComposeMailMessage` instead: the
-## same screen class over its own six-row keyboard and two-line entry.
-##
-## [presses] is a button script driving the screen before the capture: `r`, `l`,
-## `u`, `d` for the d-pad, `a`, `b`, `s` for START and `c` for SELECT. So
-## `aaardc` types three letters, steps right and down and flips the case.
+## A `mail` argument after the presses opens `_ComposeMailMessage` instead.
+## [presses] is a button script: `r`, `l`, `u`, `d`, `a`, `b`, `s` and `c`.
 
 const WINDOW_SIZE := Vector2i(1152, 648)
 const SETTLE_FRAMES: int = 8

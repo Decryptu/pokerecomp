@@ -2,17 +2,12 @@ class_name Gen2PCBoxPage
 extends RefCounted
 
 ## Bill's PC on the tile grid the hardware uses (`engine/pokemon/bills_pc.asm`).
-##
 ## `Gen2BoxScreen` owns the party, the boxes and what a row may do; this is the
 ## picture, the way [Gen2PackPage] is the pack's. Every position is the source's
 ## own: `BillsPC_BoxName`'s header box, `BillsPC_RefreshTextboxes`' listing,
-## `PCMonInfo`'s left column and `BillsPC_PlaceString`'s bottom box.
-##
-## Node-free: it writes indices into a buffer, so a page can be drawn and read
-## back headless. The selected Pokemon's pic is not in that buffer and neither is
-## the cursor, since both are drawn through palettes of their own; the screen
-## composes them over the page from [method pic_position] and
-## [method cursor_sprites].
+## `PCMonInfo`'s left column and `BillsPC_PlaceString`'s bottom box. Node-free;
+## the selected Pokemon's pic and the cursor are drawn through palettes of their
+## own and are composed over the page by the screen.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20
@@ -59,16 +54,13 @@ const MAIL_CODE: int = 0x5C
 const ITEM_CODE: int = 0x5D
 
 ## `BillsPC_UpdateSelectionCursor`'s OAM, as (x, y, tile, x flip, y flip) in
-## screen pixels: `dbsprite` is x tile, y tile, x pixel, y pixel, and a shadow
-## OAM position carries the hardware's own 8 and 16 pixel bias, which is taken
-## off here. The whole set moves down sixteen pixels per cursor row
-## (`and $7 / swap a`), so only the row inside the listing is stored.
-##
-## The two profiles draw different rings out of different sheets, the way
-## `.Frameset_GSTitleTrail` does: Crystal's twenty-four objects are two tiles
-## flipped into four edges, and Gold and Silver's twenty are six tiles with no
-## flip in them at all. Reading either set out of the other's sheet draws the
-## side pieces along the top.
+## screen pixels: `dbsprite` is x tile, y tile, x pixel, y pixel, and the
+## hardware's own 8 and 16 pixel bias is taken off here. The whole set moves down
+## sixteen pixels per cursor row, so only the row inside the listing is stored.
+## The two profiles draw different rings out of different sheets: Crystal's
+## twenty-four objects are two tiles flipped into four edges, and Gold and
+## Silver's twenty are six tiles with no flip in them. Reading either set out of
+## the other's sheet draws the side pieces along the top.
 const CURSOR_STEP: int = 16
 const CURSOR_SPRITES: Array = [
 	[72, 22, 0, false, false], [80, 22, 0, false, false],

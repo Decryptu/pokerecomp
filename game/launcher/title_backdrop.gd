@@ -2,14 +2,11 @@ class_name Gen2LauncherTitleBackdrop
 extends Node
 
 ## A non-interactive title-screen loop, picture and music, for the launcher
-## backdrop.
-##
-## This deliberately hosts only [Gen2TitleScene] and [Gen2TitlePage]. The boot
-## cinema that advances into the intro and menu is never created. What it does
-## create is the cartridge sound driver, so the screen is heard as well as seen:
-## the same `MUSIC_TITLE` the title screen itself plays, at [constant
-## VOLUME_SCALE] of the player's settings, looping for as long as the backdrop
-## is up.
+## backdrop. It hosts only [Gen2TitleScene] and [Gen2TitlePage]; the boot cinema
+## that advances into the intro and menu is never created. What it does create is
+## the cartridge sound driver, so the screen is heard as well as seen: the same
+## `MUSIC_TITLE` the title screen plays, at [constant VOLUME_SCALE] of the
+## player's settings, looping for as long as the backdrop is up.
 
 const FRAME_TIME: float = 1.0 / 60.0
 const MAX_STEPS_PER_TICK: int = 4

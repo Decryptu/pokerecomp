@@ -1,20 +1,13 @@
 class_name Gen2BattleHud
 extends RefCounted
 
-## The two status panels a battle draws, on the tile grid the hardware uses.
-##
-## Everything is in tiles at the positions the games use. The enemy's panel hangs
-## from a side on its left at the top, the player's from a side on its right
-## below the middle. Neither is a box: an edge and two corners with the contents
-## printed inside, which is why both come from the HUD sheets rather than a text
-## box frame.
-##
-## The player's panel also carries HP as numbers and an exp bar along its bottom
-## edge, closed by the cap hanging off the other side. The enemy's has neither,
-## because the player is not supposed to know either number.
-##
-## Node-free: it writes indices into a buffer, so a HUD can be drawn and read
-## back headless.
+## The two status panels a battle draws, on the tile grid the hardware uses. The
+## enemy's hangs from a side on its left at the top, the player's from a side on
+## its right below the middle; neither is a box, but an edge and two corners with
+## the contents printed inside, which is why both come from the HUD sheets. The
+## player's also carries HP as numbers and an exp bar along its bottom edge, and
+## the enemy's has neither because the player is not supposed to know either
+## number. Node-free: it writes indices into a buffer.
 
 const TILE: int = Gen2Font.TILE
 
@@ -147,20 +140,14 @@ func draw_hp_bar(
 		)
 
 
-## The exp bar, whose ends are the HP bar's own tiles and whose partial fills
-## are the only thing its own sheet is for.
-##
-## [param pixels] is `PlaceExpBar`'s own `b`: the bar is a pixel count, never a
-## ratio, because `CalcExpBar` has already done the division and rounded it the
-## cartridge's way.
-##
-## `PlaceExpBar` starts at `hlcoord 17, 11` and writes with `ld [hld], a`, so
-## the full tiles land at the right-hand end and the run walks left; unlike
-## `DrawBattleHPBar` it lays no empty template first and instead writes $62 for
-## every tile the fill did not reach. Filling the other way put the bar's lit
-## end on the wrong side, and skipping the empties left the trough unpainted.
-## [param at] is the bar's left-hand tile, which is the HUD's own everywhere but
-## the stats screen, where `LoadPinkPage` fills the same bar in at (11,16).
+## The exp bar, whose ends are the HP bar's own tiles and whose partial fills are
+## the only thing its own sheet is for. [param pixels] is `PlaceExpBar`'s own `b`:
+## a pixel count and never a ratio, `CalcExpBar` having already divided and rounded
+## it. `PlaceExpBar` starts at `hlcoord 17, 11` and writes with `ld [hld], a`, so
+## the full tiles land at the right-hand end and the run walks left, and unlike
+## `DrawBattleHPBar` it lays no empty template and writes $62 for every tile the
+## fill did not reach. [param at] is the bar's left-hand tile, the HUD's own
+## everywhere but the stats screen, where `LoadPinkPage` fills it in at (11,16).
 func draw_exp_bar(
 	into: PackedByteArray, width: int, pixels: int, at: Vector2i = PLAYER_EXP
 ) -> void:

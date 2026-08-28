@@ -1,17 +1,13 @@
 class_name Gen2EffectCommands
 extends RefCounted
 
-## The steps a move is made of.
-##
-## A move is a short program rather than a switch case: the cartridge keeps a
-## command list per effect and runs it in order. An ordinary attack announces,
-## spends the PP, works out damage, rolls the hit, applies it and checks for a
-## faint, and every other move is that list with steps added, removed or replaced.
-## None of it reaches [Gen2Battle], which only runs a list.
-##
-## The names are the cartridge's, so a sequence reads against
-## [code]data/moves/effects.asm[/code] line for line; [Gen2MoveEffect] holds
-## them.
+## The steps a move is made of. A move is a short program rather than a switch
+## case: the cartridge keeps a command list per effect and runs it in order. An
+## ordinary attack announces, spends the PP, works out damage, rolls the hit,
+## applies it and checks for a faint, and every other move is that list with steps
+## added, removed or replaced. None of it reaches [Gen2Battle], which only runs a
+## list. The names are the cartridge's, so a sequence reads against
+## `data/moves/effects.asm` line for line.
 
 ## Announces the move. First, because a move that fails still says it was used.
 const USED_MOVE_TEXT: StringName = &"usedmovetext"
@@ -586,267 +582,159 @@ static func is_engine_command(command: StringName) -> bool:
 	return _engine_commands.has(command)
 
 
+## Every command whose whole body is one call, name to that call. A `bind` is the
+## second argument the source passes; the commands with more than one step are the
+## match in [method run].
+static var HANDLERS: Dictionary = {
+	USED_MOVE_TEXT: _used_move_text,
+	DO_TURN: _do_turn,
+	CRITICAL: _critical,
+	DAMAGE_STATS: _damage_stats,
+	DAMAGE_CALC: _damage_calc,
+	STAB: _stab,
+	DAMAGE_VARIATION: _damage_variation,
+	DOUBLE_DAMAGE: _double_damage,
+	HAPPINESS_POWER: _happiness_power.bind(false),
+	FRUSTRATION_POWER: _happiness_power.bind(true),
+	GET_MAGNITUDE: _get_magnitude,
+	HIDDEN_POWER: _hidden_power,
+	PRESENT: _present,
+	FURY_CUTTER: _fury_cutter,
+	TRIPLE_KICK: _triple_kick,
+	KICK_COUNTER: _kick_counter,
+	FALSE_SWIPE: _false_swipe,
+	RESET_TYPE_MATCHUP: _reset_type_matchup,
+	HEAL_BELL: _heal_bell,
+	SNORE: _snore,
+	TRI_STATUS_CHANCE: _tri_status_chance,
+	DEFROST: _defrost_user,
+	SPLASH: _splash,
+	MIRROR_MOVE: _mirror_move,
+	MIMIC: _mimic,
+	METRONOME: _metronome,
+	SKETCH: _sketch,
+	SLEEP_TALK: _sleep_talk,
+	CONVERSION: _conversion,
+	CONVERSION_2: _conversion_2,
+	STORE_ENERGY: _store_energy,
+	UNLEASH_ENERGY: _unleash_energy,
+	RAGE: _rage,
+	RAGE_DAMAGE: _rage_damage,
+	BUILD_OPPONENT_RAGE: _build_opponent_rage,
+	CHECK_FUTURE_SIGHT: _check_future_sight,
+	FUTURE_SIGHT: _future_sight,
+	PAY_DAY: _pay_day,
+	TRANSFORM: _transform,
+	SWITCH_TURN: _switch_turn,
+	CHECK_IMMUNE: _check_immune,
+	CHECK_HIT: _check_hit,
+	COUNTER: _counter.bind(false),
+	MIRROR_COAT: _counter.bind(true),
+	SELFDESTRUCT: _selfdestruct,
+	APPLY_DAMAGE: _apply_damage,
+	RECOIL: _recoil,
+	CHECK_FAINT: _check_faint,
+	CHECK_STATUS: _check_status,
+	EFFECT_CHANCE: _effect_chance,
+	SLEEP_TARGET: _status_target.bind(Gen2Status.SLEEP_MASK),
+	POISON_TARGET: _status_target.bind(Gen2Status.POISON),
+	BURN_TARGET: _status_target.bind(Gen2Status.BURN),
+	FREEZE_TARGET: _status_target.bind(Gen2Status.FREEZE),
+	PARALYZE_TARGET: _status_target.bind(Gen2Status.PARALYSIS),
+	TOXIC_TARGET: _toxic_target,
+	FLINCH_TARGET: _flinch_target,
+	CONFUSE_TARGET: _confuse_target,
+	DRAIN_TARGET: _drain_target,
+	FIXED_DAMAGE: _fixed_damage,
+	OHKO: _ohko,
+	RECHARGE: _recharge,
+	CHARGE_MOVE: _check_charge,
+	CHARGE: _charge,
+	END_LOOP: _end_loop,
+	ROLLOUT_CHECK: _rollout_check,
+	ROLLOUT_POWER: _rollout_power,
+	CHECK_RAMPAGE: _check_rampage,
+	RAMPAGE: _rampage,
+	CURL: _curl,
+	HAZE: _haze,
+	BELLY_DRUM: _belly_drum,
+	PSYCH_UP: _psych_up,
+	DISABLE: _disable,
+	ENCORE: _encore,
+	ATTRACT: _attract,
+	MIST: _mist,
+	FOCUS_ENERGY: _focus_energy,
+	TRAP_TARGET: _trap_target,
+	ARENA_TRAP: _arena_trap,
+	START_RAIN: _start_weather.bind(Gen2Weather.RAIN),
+	START_SUN: _start_weather.bind(Gen2Weather.SUN),
+	START_SANDSTORM: _start_weather.bind(Gen2Weather.SANDSTORM),
+	SCREEN: _screen,
+	SAFEGUARD: _safeguard,
+	PERISH_SONG: _perish_song,
+	SUBSTITUTE: _substitute,
+	LEECH_SEED: _leech_seed,
+	NIGHTMARE: _nightmare,
+	CURSE: _curse,
+	SPIKES: _spikes,
+	CLEAR_HAZARDS: _clear_hazards,
+	PROTECT: _protect,
+	ENDURE: _endure,
+	DESTINY_BOND: _destiny_bond,
+	FORCE_SWITCH: _force_switch,
+	BATON_PASS: _baton_pass,
+	TELEPORT: _teleport,
+	FORESIGHT: _foresight,
+	LOCK_ON: _lock_on,
+	SPITE: _spite,
+	PAIN_SPLIT: _pain_split,
+	THIEF: _thief,
+	PURSUIT: _pursuit,
+	BEAT_UP: _beat_up,
+	BEAT_UP_FAIL_TEXT: _beat_up_fail_text,
+	CHECK_SAFEGUARD: _check_safeguard,
+	HEAL: _heal,
+	TIMED_HEAL: _timed_heal,
+	THUNDER_ACCURACY: _thunder_accuracy,
+	SKIP_SUN_CHARGE: _skip_sun_charge,
+	MOVE_ANIM_NO_SUB: _move_anim,
+	LOWER_SUB: _lower_sub,
+	RAISE_SUB: _raise_sub,
+	LOWER_SUB_NO_ANIM: _sub_pic.bind(false),
+	STAT_UP_ANIM: _stat_change_anim.bind(Gen2BattleAnimPlayer.AFTER_ANIM_NONE),
+	KINGS_ROCK: _kings_rock,
+	ALL_STATS_UP: _all_stats_up,
+	STAT_UP_MESSAGE: _stat_message,
+	STAT_DOWN_MESSAGE: _stat_message,
+	STAT_UP_FAIL_TEXT: _stat_fail_text,
+	STAT_DOWN_FAIL_TEXT: _stat_fail_text,
+}
+
+
 ## Runs one command against [param turn]. An unknown command is an error rather
 ## than a no-op, a sequence naming a step nobody wrote being a move that quietly
 ## does less. A mod's own is reached through [Gen2MoveEffect] after this refuses.
 static func run(command: StringName, turn: Gen2Turn) -> void:
+	if HANDLERS.has(command):
+		(HANDLERS[command] as Callable).call(turn)
+		return
 	match command:
-		USED_MOVE_TEXT:
-			_used_move_text(turn)
-		DO_TURN:
-			_do_turn(turn)
-		CRITICAL:
-			_critical(turn)
-		DAMAGE_STATS:
-			_damage_stats(turn)
-		DAMAGE_CALC:
-			_damage_calc(turn)
-		STAB:
-			_stab(turn)
-		DAMAGE_VARIATION:
-			_damage_variation(turn)
-		DOUBLE_DAMAGE:
-			_double_damage(turn)
-		HAPPINESS_POWER:
-			_happiness_power(turn, false)
-		FRUSTRATION_POWER:
-			_happiness_power(turn, true)
-		GET_MAGNITUDE:
-			_get_magnitude(turn)
-		HIDDEN_POWER:
-			_hidden_power(turn)
-		PRESENT:
-			_present(turn)
-		FURY_CUTTER:
-			_fury_cutter(turn)
-		TRIPLE_KICK:
-			_triple_kick(turn)
-		KICK_COUNTER:
-			_kick_counter(turn)
-		FALSE_SWIPE:
-			_false_swipe(turn)
-		RESET_TYPE_MATCHUP:
-			_reset_type_matchup(turn)
-		HEAL_BELL:
-			_heal_bell(turn)
-		SNORE:
-			_snore(turn)
-		TRI_STATUS_CHANCE:
-			_tri_status_chance(turn)
-		DEFROST:
-			_defrost_user(turn)
-		SPLASH:
-			_splash(turn)
-		MIRROR_MOVE:
-			_mirror_move(turn)
-		MIMIC:
-			_mimic(turn)
-		METRONOME:
-			_metronome(turn)
-		SKETCH:
-			_sketch(turn)
-		SLEEP_TALK:
-			_sleep_talk(turn)
-		CONVERSION:
-			_conversion(turn)
-		CONVERSION_2:
-			_conversion_2(turn)
-		STORE_ENERGY:
-			_store_energy(turn)
-		UNLEASH_ENERGY:
-			_unleash_energy(turn)
-		RAGE:
-			_rage(turn)
-		RAGE_DAMAGE:
-			_rage_damage(turn)
-		BUILD_OPPONENT_RAGE:
-			_build_opponent_rage(turn)
-		CHECK_FUTURE_SIGHT:
-			_check_future_sight(turn)
-		FUTURE_SIGHT:
-			_future_sight(turn)
-		PAY_DAY:
-			_pay_day(turn)
-		TRANSFORM:
-			_transform(turn)
-		SWITCH_TURN:
-			_switch_turn(turn)
-		CHECK_IMMUNE:
-			_check_immune(turn)
-		CHECK_HIT:
-			_check_hit(turn)
-		COUNTER:
-			_counter(turn, false)
-		MIRROR_COAT:
-			_counter(turn, true)
-		SELFDESTRUCT:
-			_selfdestruct(turn)
-		APPLY_DAMAGE:
-			_apply_damage(turn)
-		RECOIL:
-			_recoil(turn)
-		CHECK_FAINT:
-			_check_faint(turn)
 		END_MOVE:
 			turn.end()
-		CHECK_STATUS:
-			_check_status(turn)
-		EFFECT_CHANCE:
-			_effect_chance(turn)
-		SLEEP_TARGET:
-			_status_target(turn, Gen2Status.SLEEP_MASK)
-		POISON_TARGET:
-			_status_target(turn, Gen2Status.POISON)
-		BURN_TARGET:
-			_status_target(turn, Gen2Status.BURN)
-		FREEZE_TARGET:
-			_status_target(turn, Gen2Status.FREEZE)
-		PARALYZE_TARGET:
-			_status_target(turn, Gen2Status.PARALYSIS)
-		TOXIC_TARGET:
-			_toxic_target(turn)
-		FLINCH_TARGET:
-			_flinch_target(turn)
-		CONFUSE_TARGET:
-			_confuse_target(turn)
-		DRAIN_TARGET:
-			_drain_target(turn)
-		FIXED_DAMAGE:
-			_fixed_damage(turn)
-		OHKO:
-			_ohko(turn)
-		RECHARGE:
-			_recharge(turn)
-		CHARGE_MOVE:
-			_check_charge(turn)
-		CHARGE:
-			_charge(turn)
 		END_TURN:
 			turn.end()
 		START_LOOP:
 			turn.attacker().rollout_count = 0
-		END_LOOP:
-			_end_loop(turn)
-		ROLLOUT_CHECK:
-			_rollout_check(turn)
-		ROLLOUT_POWER:
-			_rollout_power(turn)
-		CHECK_RAMPAGE:
-			_check_rampage(turn)
-		RAMPAGE:
-			_rampage(turn)
-		CURL:
-			_curl(turn)
-		HAZE:
-			_haze(turn)
-		BELLY_DRUM:
-			_belly_drum(turn)
-		PSYCH_UP:
-			_psych_up(turn)
-		DISABLE:
-			_disable(turn)
-		ENCORE:
-			_encore(turn)
-		ATTRACT:
-			_attract(turn)
-		MIST:
-			_mist(turn)
-		FOCUS_ENERGY:
-			_focus_energy(turn)
-		TRAP_TARGET:
-			_trap_target(turn)
-		ARENA_TRAP:
-			_arena_trap(turn)
-		START_RAIN:
-			_start_weather(turn, Gen2Weather.RAIN)
-		START_SUN:
-			_start_weather(turn, Gen2Weather.SUN)
-		START_SANDSTORM:
-			_start_weather(turn, Gen2Weather.SANDSTORM)
-		SCREEN:
-			_screen(turn)
-		SAFEGUARD:
-			_safeguard(turn)
-		PERISH_SONG:
-			_perish_song(turn)
-		SUBSTITUTE:
-			_substitute(turn)
-		LEECH_SEED:
-			_leech_seed(turn)
-		NIGHTMARE:
-			_nightmare(turn)
-		CURSE:
-			_curse(turn)
-		SPIKES:
-			_spikes(turn)
-		CLEAR_HAZARDS:
-			_clear_hazards(turn)
-		PROTECT:
-			_protect(turn)
-		ENDURE:
-			_endure(turn)
-		DESTINY_BOND:
-			_destiny_bond(turn)
-		FORCE_SWITCH:
-			_force_switch(turn)
-		BATON_PASS:
-			_baton_pass(turn)
-		TELEPORT:
-			_teleport(turn)
-		FORESIGHT:
-			_foresight(turn)
-		LOCK_ON:
-			_lock_on(turn)
-		SPITE:
-			_spite(turn)
-		PAIN_SPLIT:
-			_pain_split(turn)
-		THIEF:
-			_thief(turn)
-		PURSUIT:
-			_pursuit(turn)
-		BEAT_UP:
-			_beat_up(turn)
-		BEAT_UP_FAIL_TEXT:
-			_beat_up_fail_text(turn)
-		CHECK_SAFEGUARD:
-			_check_safeguard(turn)
-		HEAL:
-			_heal(turn)
-		TIMED_HEAL:
-			_timed_heal(turn)
-		THUNDER_ACCURACY:
-			_thunder_accuracy(turn)
-		SKIP_SUN_CHARGE:
-			_skip_sun_charge(turn)
 		MOVE_ANIM:
 			_lower_sub(turn)
 			_move_anim(turn)
 			_raise_sub(turn)
-		MOVE_ANIM_NO_SUB:
-			_move_anim(turn)
-		LOWER_SUB:
-			_lower_sub(turn)
-		RAISE_SUB:
-			_raise_sub(turn)
-		LOWER_SUB_NO_ANIM:
-			_sub_pic(turn, false)
-		STAT_UP_ANIM:
-			_stat_change_anim(turn, Gen2BattleAnimPlayer.AFTER_ANIM_NONE)
 		STAT_DOWN_ANIM:
 			_stat_change_anim(
 				turn,
 				Gen2BattleAnimPlayer.AFTER_ANIM_ENEMY_STAT_DOWN if turn.side == Gen2Battle.PLAYER
 					else Gen2BattleAnimPlayer.AFTER_ANIM_WOBBLE
 			)
-		KINGS_ROCK:
-			_kings_rock(turn)
-		ALL_STATS_UP:
-			_all_stats_up(turn)
-		STAT_UP_MESSAGE, STAT_DOWN_MESSAGE:
-			_stat_message(turn)
-		STAT_UP_FAIL_TEXT, STAT_DOWN_FAIL_TEXT:
-			_stat_fail_text(turn)
 		_:
 			if STAT_COMMANDS.has(command):
 				_stat_change(command, turn)
@@ -1574,15 +1462,12 @@ static func _check_hit(turn: Gen2Turn) -> void:
 
 
 ## `BattleCommand_FailureText`, the half of it that is state rather than words.
-## Which line a miss says is the standing divergence; what it leaves behind is
-## not, and two of its three branches were missing here.
-##
+## Which line a miss says is the standing divergence; what it leaves behind is not.
 ## `.fly_dig` reads `BATTLE_VARS_MOVE_ANIM` rather than the effect byte, so it is
-## the move that names it. `checkcharge` has already cleared both bits on the
-## release turn, which is what makes `AppearUserRaiseSub` the branch's substance:
-## a missed Fly or Dig owes the picture back, and nothing here paid it. Whether
-## it shows depends on what the charge animation left behind, which
-## [method Gen2BattleScreen.animation_snapshot]'s `battler_visible` reports.
+## the move that names it, and `checkcharge` has already cleared both bits on the
+## release turn: a missed Fly or Dig owes the picture back, which is what
+## `AppearUserRaiseSub` pays. Whether it shows depends on what the charge
+## animation left, which [method Gen2BattleScreen.animation_snapshot] reports.
 static func _failure_text(turn: Gen2Turn) -> void:
 	_jump_kick_crash(turn)
 	if turn.move_number in [Gen2MoveEffect.FLY_MOVE, Gen2MoveEffect.DIG_MOVE]:
@@ -1614,16 +1499,13 @@ static func _jump_kick_crash(turn: Gen2Turn) -> void:
 
 
 ## Takes the damage off and reports what was taken.
-##
 ## `BattleCommand_ApplyDamage` rolls the defender's Focus Band first, and a band
-## that fires calls `BattleCommand_FalseSwipe`, leaving one hit point. The roll
-## happens whether or not the hit was lethal, and only the survival shows.
-##
-## The band sits in front of the substitute routing, which is the source's order
-## rather than a tidying opportunity: `FalseSwipe` clamps against the *real*
-## health, so a band can fire, cut the figure, and have the doll spend the cut
-## figure with "hung on" printed anyway. `.update_damage_taken` then returns early
-## against a doll, which is what stops Counter answering a hit it took.
+## that fires calls `BattleCommand_FalseSwipe`, leaving one hit point; the roll
+## happens whether or not the hit was lethal. The band sits in front of the
+## substitute routing, which is the source's order: `FalseSwipe` clamps against
+## the *real* health, so a band can fire, cut the figure, and have the doll spend
+## the cut figure with "hung on" printed anyway. `.update_damage_taken` then
+## returns early against a doll, which stops Counter answering a hit it took.
 static func _apply_damage(turn: Gen2Turn) -> void:
 	if turn.missed or turn.damage <= 0:
 		return
@@ -2059,15 +1941,12 @@ static func _status_target(turn: Gen2Turn, flag: int) -> void:
 
 
 ## Whether the target's type refuses this status, which two of the five ask.
-##
 ## Poison asks `CheckIfTargetIsPoisonType`, comparing the target's types against
 ## POISON rather than the move's, so a Poison-type is refused whatever poisons it.
 ## Burn and freeze ask `CheckMoveTypeMatchesTarget`, comparing the *move's* type,
-## so a Fire-type shrugs off a Fire-type burn; its `.normal` branch returns
-## non-zero without comparing, so Tri Attack can burn and freeze anything.
-##
-## Sleep and paralysis ask neither, which is why Body Slam paralyses a
-## Ground-type: those immunities are a later generation's.
+## and its `.normal` branch returns non-zero without comparing, so Tri Attack can
+## burn and freeze anything. Sleep and paralysis ask neither, which is why Body
+## Slam paralyses a Ground-type.
 static func _status_type_refuses(turn: Gen2Turn, flag: int) -> bool:
 	var types: Array = turn.defender().types()
 	if flag == Gen2Status.POISON:
@@ -2203,13 +2082,10 @@ static func _drain_target(turn: Gen2Turn) -> void:
 
 
 ## `BattleCommand_ConstantDamage`: the whole hit without the ordinary formula.
-## [constant Gen2MoveEffect.LEVEL_DAMAGE] is the user's level,
-## [constant Gen2MoveEffect.PSYWAVE] a roll of it,
-## [constant Gen2MoveEffect.SUPER_FANG] half the target's HP and
-## [constant Gen2MoveEffect.STATIC_DAMAGE] the power field. None criticals or
-## announces an effectiveness, the number having been multiplied by neither, which
-## is what [constant RESET_TYPE_MATCHUP] behind them says.
-##
+## LEVEL_DAMAGE is the user's level, PSYWAVE a roll of it, SUPER_FANG half the
+## target's HP and STATIC_DAMAGE the power field. None criticals or announces an
+## effectiveness, the number having been multiplied by neither, which is what
+## [constant RESET_TYPE_MATCHUP] behind them says.
 ## [constant Gen2MoveEffect.REVERSAL] shares the command and not the shape: it
 ## sets a power and runs the formula, its list carrying `stab`, so Flail against a
 ## Ghost really is super effective.
@@ -2397,12 +2273,10 @@ static func _rollout_check(turn: Gen2Turn) -> void:
 ## `BattleCommand_RolloutPower`, both halves of Rollout: the count and the
 ## doubling. It runs after `stab` and the hit check and before `damagevariation`,
 ## so the doubling lands on the matched-up damage and the spread comes off the
-## doubled figure; a miss, immunity included, ends the chain, and a fifth hit
-## clears the flag while keeping its count until the next Rollout resets it.
-##
-## The count is raised before the doubling and one doubling does nothing
-## (`inc [hl]`, then `dec b / jr z`), so the first hit is worth its own power and
-## the fifth sixteen times it. Defense Curl adds one more.
+## doubled figure; a miss ends the chain, and a fifth hit clears the flag while
+## keeping its count. The count is raised before the doubling and one doubling
+## does nothing (`inc [hl]`, then `dec b / jr z`), so the first hit is worth its
+## own power and the fifth sixteen times it. Defense Curl adds one more.
 static func _rollout_power(turn: Gen2Turn) -> void:
 	var mon: Gen2BattleMon = turn.attacker()
 	# Sleep Talk can call Rollout while the user remains asleep. The cartridge's
@@ -3099,18 +2973,13 @@ static func _force_switch_wild(turn: Gen2Turn) -> void:
 	turn.emit(line, {"target": turn.target})
 
 
-## `BattleCommand_BatonPass`: switch, and hand the arrival everything the
-## position was carrying.
-##
-## The two halves differ in one thing, which is why this is the first effect that
-## cannot be resolved in one go: the enemy's target is picked by the routine that
-## picks an ordinary AI switch, and the player's is
-## `ForcePickSwitchMonInBattle`, a menu inside the move that cannot be backed out
-## of, so the turn stops here until [method Gen2Battle.pass_to]. Committing a
-## target before the turn would be wrong: a pass that moves second is picked once
-## the opponent's move has landed.
-##
-## `AnimateCurrentMove` is in front of both, so it runs before the question.
+## `BattleCommand_BatonPass`: switch, and hand the arrival everything the position
+## was carrying. The two halves differ in one thing, which is why this is the
+## first effect that cannot be resolved in one go: the enemy's target is picked by
+## the ordinary AI switch and the player's by `ForcePickSwitchMonInBattle`, a menu
+## inside the move that cannot be backed out of, so the turn stops here until
+## [method Gen2Battle.pass_to]. Committing a target before the turn would be
+## wrong: a pass that moves second is picked once the opponent's move has landed.
 static func _baton_pass(turn: Gen2Turn) -> void:
 	var battle: Gen2Battle = turn.battle
 	var side: int = turn.side
@@ -3136,18 +3005,13 @@ static func _baton_pass(turn: Gen2Turn) -> void:
 
 
 ## `BattleCommand_Teleport`: the user takes itself out of a wild battle, which
-## [method Gen2Battle.force_out] ends as a draw, the pair Whirlwind and Roar
-## reach except that the side leaving is the user's.
-##
-## Four refusals in the source's order: the four scripted `wBattleType` values,
-## Mean Look or Spider Web, a trainer battle, and `BattleCommand_ForceSwitch`'s
-## level comparison, where a user at or above the other's level always gets away
-## and below it the roll is drawn out of the two levels summed and one more.
-##
-## The enemy's half draws that roll and throws it away, `cp b / jr nc, .run_away`
-## falling straight into `.run_away`, so a wild Pokémon always teleports
-## (`docs/bugs_and_glitches.md`). Mirrored rather than fixed, and the roll is
-## still drawn so the generator moves the same way.
+## [method Gen2Battle.force_out] ends as a draw. Four refusals in the source's
+## order: the four scripted `wBattleType` values, Mean Look or Spider Web, a
+## trainer battle, and `BattleCommand_ForceSwitch`'s level comparison. The enemy's
+## half draws that roll and throws it away, `cp b / jr nc, .run_away` falling
+## straight into `.run_away`, so a wild Pokemon always teleports
+## (`docs/bugs_and_glitches.md`). Mirrored rather than fixed, and the roll is still
+## drawn so the generator moves the same way.
 static func _teleport(turn: Gen2Turn) -> void:
 	if FORCE_SWITCH_REFUSED_TYPES.has(turn.battle.battle_type) \
 		or Gen2Substatus.has(turn.defender().substatus, Gen2Substatus.CANT_RUN) \
@@ -3172,13 +3036,11 @@ static func _teleport(turn: Gen2Turn) -> void:
 
 ## `BattleCommand_Foresight`: the flag that drops the target's evasion out of the
 ## accuracy sum and opens the two Ghost immunities the matchup table keeps past
-## its own `-2` marker. It sits on the target and nothing but a switch clears it.
-##
-## Two refusals: a target that is flying or underground, and one already
-## identified. Only the second is reached through the cartridge's own list, on the
-## cartridge as well as here, since `checkhit` in front of the command has already
-## turned a hidden target away. The first is kept for a registered list that
-## carries no `checkhit`.
+## its `-2` marker. It sits on the target and nothing but a switch clears it. Two
+## refusals: a target that is flying or underground, and one already identified.
+## Only the second is reached through the cartridge's own list, since `checkhit`
+## in front of the command has already turned a hidden target away; the first is
+## kept for a registered list that carries no `checkhit`.
 static func _foresight(turn: Gen2Turn) -> void:
 	var defender: Gen2BattleMon = turn.defender()
 	if _is_hidden(defender.substatus) \
@@ -3500,14 +3362,11 @@ static func _play_fx_anim(
 
 ## `PlayOpponentBattleAnim`, the fifth route an animation reaches the screen by
 ## and the only one that is not the move's own: `wFXAnimID` from `de`,
-## `wBattleAfterAnim` cleared, `PlayBattleAnim` between two
-## `BattleCommand_SwitchTurn` calls. `wBattleAnimParam` is left alone, so whatever
-## the move's animation wrote stands.
-##
-## Its five callers are all secondary-effect commands with ids past `wFXAnimID`'s
-## low byte, so `BattleAnimRunScript` takes `.not_move`, skipping
-## `CheckBattleScene`, both hud calls and the after-anim: a status animation plays
-## with the battle-scene option off.
+## `wBattleAfterAnim` cleared, `PlayBattleAnim` between two `SwitchTurn` calls,
+## and `wBattleAnimParam` left alone. Its five callers are all secondary-effect
+## commands with ids past `wFXAnimID`'s low byte, so `BattleAnimRunScript` takes
+## `.not_move` and skips `CheckBattleScene`: a status animation plays with the
+## battle-scene option off.
 static func _play_opponent_battle_anim(turn: Gen2Turn, index: int) -> void:
 	_play_fx_anim(turn, index, Gen2BattleAnimPlayer.AFTER_ANIM_NONE, false, true)
 
@@ -3649,13 +3508,10 @@ static func _status_target_anim(turn: Gen2Turn, flag: int) -> int:
 
 ## `AnimateCurrentMove`, which is `LoadMoveAnim` between a `lowersub` and a
 ## `raisesub`: the move's own animation with `wBattleAfterAnim` cleared, so no
-## damage flash follows it.
-##
-## Not a list command. Fifteen commands call it from inside their own bodies,
-## and it is the whole animation of every move whose effect list carries no
-## animation command at all. `wBattleAnimParam` is pushed across the drop rather
-## than cleared, so whatever the last animation left stands; the raise behind it
-## is last and leaves its own 2 there.
+## damage flash follows it. Not a list command. Fifteen commands call it from
+## inside their own bodies, and it is the whole animation of every move whose
+## effect list carries no animation command. `wBattleAnimParam` is pushed across
+## the drop rather than cleared, so whatever the last animation left stands.
 static func _animate_current_move(turn: Gen2Turn) -> void:
 	var param: int = turn.battle.battle_anim_param
 	_lower_sub(turn)
@@ -3688,17 +3544,12 @@ static func _kings_rock(turn: Gen2Turn) -> void:
 
 
 ## Moves one stat by one command's worth and writes down who it happened to and
-## whether it moved, for the message step behind it. A secondary effect's failed
-## roll skips this as it skips a status, the damage having landed.
-##
-## A drop against Mist never reaches [method Gen2BattleMon.change_stage]: every
-## lowering entry targets the opponent (`entry[2]` false), which is what Mist
-## blocks, and a rise always targets the user, matching `CheckMist` gating the
-## "down" and "down2" ranges alone.
-##
-## The order is `BattleCommand_StatDown`'s: `CheckMist`, the stage that cannot
-## move, then `.DidntMiss`'s `CheckSubstituteOpp` and `wEffectFailed`, each with
-## its own `wFailedMessage`, so a failed secondary roll still says the line.
+## whether it moved, for the message step behind it. A drop against Mist never
+## reaches [method Gen2BattleMon.change_stage]: every lowering entry targets the
+## opponent, which is what Mist blocks, and a rise always targets the user. The
+## order is `BattleCommand_StatDown`'s: `CheckMist`, the stage that cannot move,
+## then `.DidntMiss`'s `CheckSubstituteOpp` and `wEffectFailed`, each with its own
+## `wFailedMessage`, so a failed secondary roll still says the line.
 static func _stat_change(command: StringName, turn: Gen2Turn) -> void:
 	var entry: Array = STAT_COMMANDS[command]
 	var stat_key: String = String(entry[0])

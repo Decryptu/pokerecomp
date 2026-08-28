@@ -2,17 +2,13 @@ class_name Gen2LinkScreen
 extends Control
 
 ## `LinkCommunications` from the console the player used to the moment the room
-## lets them go: the trade screen's own two-list menu (`InitTradeMenuDisplay`
-## and `LinkTradeMenu`) and `_DisplayLinkRecord`'s one page.
-##
-## Embedded in the overworld the way the Hall of Fame viewer and BILL'S PC are.
-## The cable is [Gen2LinkTransport] and the commit is
-## [method Gen2WorldPartyHost.commit_link_trade]; this screen owns the cursor,
-## the boxes and the order they are shown in, and nothing else.
-##
-## The Colosseum is not here: `Colosseum` runs the same `LinkCommunications`
-## opening and then a battle, which the world screen already opens through its
-## own battle host.
+## lets them go: the trade screen's own two-list menu and `_DisplayLinkRecord`'s
+## one page. Embedded in the overworld the way the Hall of Fame viewer and BILL'S
+## PC are. The cable is [Gen2LinkTransport] and the commit is
+## [method Gen2WorldPartyHost.commit_link_trade]; this screen owns the cursor, the
+## boxes and the order they are shown in, and nothing else. The Colosseum is not
+## here: `Colosseum` runs the same opening and then a battle, which the world
+## screen already opens through its own battle host.
 
 signal closed()
 ## `LinkMonStatsScreen`, which the overworld opens over this the way the party

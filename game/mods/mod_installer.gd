@@ -1,16 +1,13 @@
 class_name Gen2ModInstaller
 extends RefCounted
 
-## Installs a mod from a `.zip` into [constant Gen2ModHost.ROOT].
-##
-## This is the only way a mod gets onto disk, whichever way the player found it:
-## a file they picked, a file they dropped on the window, or one downloaded from
-## an index. A listing therefore buys a mod no trust that picking the same file
-## by hand would not, and there is one place to harden rather than three.
-##
-## Nothing is written until the archive has been opened, its layout resolved and
-## its manifest validated, so a refused archive leaves the mods directory
-## exactly as it was. A copy that fails part way removes what it wrote.
+## Installs a mod from a `.zip` into [constant Gen2ModHost.ROOT]. The only way a
+## mod gets onto disk, whichever way the player found it: a file they picked, a
+## file they dropped on the window, or one downloaded from an index. So a listing
+## buys a mod no trust that picking the same file by hand would not, and there is
+## one place to harden rather than three. Nothing is written until the archive has
+## been opened, its layout resolved and its manifest validated, and a copy that
+## fails part way removes what it wrote.
 
 ## A single mod's uncompressed size. Well above the voxel example and far below
 ## anything that fills a phone, so a hostile or broken archive stops here rather

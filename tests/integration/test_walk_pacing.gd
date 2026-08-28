@@ -1,24 +1,13 @@
 extends GutTest
 
-## `StepVectors`' normal row (`engine/overworld/map_objects.asm`): two pixels a
-## pass for eight passes, which is one cell.
-##
-## A pass is not a frame. `HandleMap` ends every iteration in
-## `NextOverworldFrame`, whose `MaxOverworldDelay` is 2, so the whole overworld
-## runs once per two hardware frames and an ordinary walk step takes sixteen.
-## Measured on a real cartridge, `.claude/oracle/overworld/trace_walk.py` on
-## Route 29: `wPlayerStepDuration` counts 7 down to 0 over frames 19 to 34 while
-## `wPlayerSpriteX` walks 208 to 224 two pixels at a time, and a hook on
-## `HandleMapObjects` fires on every other frame and no other.
-##
-## The constant on its own is not the question; the pacing around it is. A step
-## that costs nine passes because the pass the last one ended on is spent
-## starting the next reads as sluggish, and no constant would be wrong. In the
-## source it costs eight: `HandleObjectStep`'s `.one` calls
-## `StepFunction_FromMovement`, and when that starts a step the step type is no
-## longer STEP_TYPE_FROM_MOVEMENT, so the `ret z` is skipped and `.ok3` runs the
-## new step function on the same frame. `StepFunction_PlayerWalk`'s `.init`
-## falls into `.step`, which moves.
+## `StepVectors`' normal row: two pixels a pass for eight passes, which is one
+## cell. A pass is not a frame, `MaxOverworldDelay` being 2, so an ordinary walk
+## step takes sixteen. Measured on a real cartridge on Route 29:
+## `wPlayerStepDuration` counts 7 down to 0 over frames 19 to 34 while
+## `wPlayerSpriteX` walks 208 to 224 two pixels at a time. The constant on its own
+## is not the question; the pacing around it is. In the source a step costs eight
+## passes rather than nine because `.ok3` runs the new step function on the same
+## frame, and `StepFunction_PlayerWalk`'s `.init` falls into `.step`.
 
 const Fixture := preload("res://tests/integration/world_trainer_fixture.gd")
 

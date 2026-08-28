@@ -1,38 +1,14 @@
 class_name Gen2CardFlip
 extends RefCounted
 
-## `_CardFlip`'s own state (engine/games/card_flip.asm), node-free.
-##
-## [Gen2CardFlipPage] owns the picture and [Gen2CardFlipScreen] the pump; this
-## is `.MasterLoop`: one pass of `.Jumptable` a frame, with the background this
-## screen writes kept here because almost everything the game shows is a
-## tilemap write rather than a state a page could infer.
-##
-## Five things the source states that a reading gets wrong:
-##
-## - **The deck is dealt, not drawn.** `CardFlip_ShuffleDeck` fills `wDeck` with
-##   an ordering once, and `.CheckTheCard` reads
-##   `wDeck[wCardFlipNumCardsPlayed * 2 + wCardFlipWhichCard]`, so the two cards
-##   on the table are the pair for this round and picking one decides which of
-##   two known cards turns over. Twelve rounds exhaust the twenty-four.
-## - **`.ChooseACard`'s toggle is the choice.** There is no cursor over the two
-##   cards: `wCardFlipWhichCard` flips every four frames on its own and A takes
-##   whichever is lit, which is what the border sprite is drawn on.
-## - **A bet is one of forty-eight cells, and six of them are unreachable.**
-##   `CollapseCursorPosition` is `y * 6 + x` and `CardFlip_CheckWinCondition`'s
-##   jumptable has four `.Impossible` entries, which lose. The four exist
-##   because `ChooseCard_HandleJoypad` cannot walk into columns 0 and 1 of the
-##   two Pokemon rows and does not test for them.
-## - **The board's own marks are drawn one round late.** `.KeepTheCurrentDeck`
-##   calls `CardFlip_BlankDiscardedCardSlot` for the card just turned over, and
-##   the pair it belongs to is what decides the tile: a cell whose other half is
-##   already discarded gets `$3d` rather than its own triangle.
-## - **A shuffle is not a reset.** `.Continue` reshuffles only on the twelfth
-##   round, and `CardFlip_ShuffleDeck` clears `wDiscardPile` with it, so the
-##   board's marks and the twelve lights are cleared by the same call.
-##
-## Randomness is injected: every `Random` here is a byte off the generator the
-## caller owns, so a seeded run repeats.
+## `_CardFlip`'s own state (engine/games/card_flip.asm), node-free, and
+## `.MasterLoop`'s side of it. Five things a reading gets wrong: the deck is dealt
+## rather than drawn, `.CheckTheCard` reading a pair fixed at shuffle time;
+## `.ChooseACard`'s toggle is the choice, there being no cursor over the two
+## cards; a bet is one of forty-eight cells and six are unreachable, four of them
+## `.Impossible` entries that lose; the board's marks are drawn one round late;
+## and a shuffle is not a reset, `.Continue` reshuffling only on the twelfth
+## round. Randomness is injected, so a seeded run repeats.
 
 ## `CARDFLIP_DECK_SIZE`, which is four Pokemon by six levels.
 const DECK_SIZE: int = 24

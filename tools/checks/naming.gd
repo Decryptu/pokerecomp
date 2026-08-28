@@ -2,20 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the four name-input keyboards against freshly imported real caches,
-## in all three games.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## data/text/name_input_chars.asm's NameInputLower, BoxNameInputLower,
-## NameInputUpper and BoxNameInputUpper, read by engine/menus/naming_screen.asm's
-## NamingScreen_ApplyTextInputMode and NamingScreen_GetLastCharacter.
-##
-## The block is one contiguous 374-byte run with every row 17 bytes, so a wrong
-## offset slides every table after it. What pins it is the content: the letter
-## rows, the symbol rows and the command row are all checked by value, and the
-## whole block is compared between the three games, which ship it byte identical.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- naming
+## Verifies the four name-input keyboards against freshly imported real caches, in
+## all three games. Expected values come from the pinned sources'
+## `data/text/name_input_chars.asm`, read by `NamingScreen_ApplyTextInputMode` and
+## `NamingScreen_GetLastCharacter`. The block is one contiguous 374-byte run with
+## every row 17 bytes, so a wrong offset slides every table after it. What pins it
+## is the content: the letter rows, the symbol rows and the command row are all
+## checked by value, and the whole block is compared between the three games, which
+## ship it byte identical.
 
 
 ## Rows per table, in block order. A name keyboard is 5 rows and a box keyboard

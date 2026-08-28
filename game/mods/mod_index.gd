@@ -1,22 +1,13 @@
 class_name Gen2ModIndex
 extends RefCounted
 
-## A published list of mods a player chose to follow.
-##
-## An index is metadata only: a JSON feed naming mods that live wherever their
-## authors put them. Nothing here installs anything. A chosen entry hands its
-## download to [Gen2ModInstaller] like any other archive, with the listed id
-## required to match, so appearing in a feed buys a mod no trust that picking
-## the same file by hand would not.
-##
-## One index ships with the game: this project's own, in [constant
-## BUILT_IN_FEED]. It is a listing and nothing more, so a build carrying it has
-## installed nothing and downloaded nothing until the player picks a mod out of
-## it. Every other index is the player trusting a publisher we did not choose
-## for them, so adding one is always their act and only theirs.
-##
-## Everything above "fetching" is pure: no HTTP, no filesystem. The feed format
-## is a contract with people we will never meet, so its rules are worth testing
+## A published list of mods a player chose to follow: metadata only, a JSON feed
+## naming mods that live wherever their authors put them. Nothing here installs
+## anything, and a chosen entry hands its download to [Gen2ModInstaller] with the
+## listed id required to match, so appearing in a feed buys a mod no trust that
+## picking the same file by hand would not. One index ships with the game, this
+## project's own; every other is the player trusting a publisher we did not choose
+## for them. Everything above "fetching" is pure, so the feed format can be tested
 ## without a network.
 
 ## Feeds declare this. A later format may reuse a field name for something else,

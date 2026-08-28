@@ -3,20 +3,12 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies the Battle Tower against freshly imported real caches, on all three
-## games.
-##
-## Expected values come from the pinned pokecrystal source: the 70 rows of
-## data/battle_tower/classes.asm, the ten level groups of
-## data/battle_tower/parties.asm, data/trainers/genders.asm,
-## data/trainers/sprites.asm and mobile/mobile_46.asm's own menu strings. The
-## pins here are counted off the asm rather than read from [Gen2BattleTower]'s
-## own tables, so a mistranscribed row is a failure instead of an agreement.
-##
-## Gold and Silver ship no tower at all, which is checked as an absence rather
-## than as an empty table: the cartridge has no map, no routine and no data for
-## one, and a cache that claims otherwise is a wrong pin.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- battle_tower
+## games. Expected values come from the pinned pokecrystal source: the 70 class
+## rows, the ten level groups, the two per-class tables and the menu strings. The
+## pins are counted off the asm rather than read from [Gen2BattleTower]'s own
+## tables, so a mistranscribed row is a failure instead of an agreement. Gold and
+## Silver ship no tower at all, which is checked as an absence rather than as an
+## empty table: a cache that claims otherwise is a wrong pin.
 
 ## `BattleTowerTrainers`' four corners: the run's own ends and the two rows
 ## either side of `assert_table_length BATTLETOWER_NUM_UNIQUE_MON`, which is

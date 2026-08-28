@@ -1,21 +1,13 @@
 extends SceneTree
 
-## Captures the credits against a real imported cache, one source frame at a
-## time.
+## Captures the credits against a real imported cache, one source frame at a time.
 ##
 ##   Godot --headless --path . -s res://tools/preview_credits.gd -- crystal /tmp/c.png [frame] [live]
 ##
-## [frame] is how many source frames to spend before the shot. A `CREDITS_WAIT`
-## tick is thirteen frames, so the batches land a long way apart; several frames
-## separated by `;` write one file each, numbered. A frame suffixed `b` holds B
-## down for it, which is the skip a replay allows.
-##
-## `live` drives the production world screen's own overlay instead of the page
-## directly, which is what says `open_credits` reaches it. One frame only, since
-## the screen owns its own clock.
-##
-## Headless either way: the page draws into an [Image] rather than through a
-## viewport, so no window and no settle are needed.
+## [frame] is how many source frames to spend before the shot; a `CREDITS_WAIT` tick
+## is thirteen frames, several separated by `;` write one file each, and a frame
+## suffixed `b` holds B down for it. `live` drives the production world screen's own
+## overlay instead of the page directly. Headless either way.
 
 var _screen: Gen2WorldScreen = null
 var _output_path: String = ""

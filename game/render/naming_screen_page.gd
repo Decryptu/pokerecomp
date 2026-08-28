@@ -1,22 +1,14 @@
 class_name Gen2NamingScreenPage
 extends RefCounted
 
-## `engine/menus/naming_screen.asm`'s screen on the hardware tile grid.
-##
-## The naming screen is a tilemap screen rather than a text one, the way the
-## trainer card is, so the page keeps the cartridge's own VRAM window and writes
-## tile numbers into a map: $60 the border `LoadNamingScreenGFX` copies over the
-## font-extra slot, $eb and $f2 the two entry markers, and the font from $80 up.
-##
-## Positions are `NamingScreen_InitText` and `NamingScreen_ApplyTextInputMode`'s
-## own. The layout is the same shape on both keyboards and differs only in where
-## the two `ClearBox` calls land and how many rows are printed, which is the
-## whole of `NamingScreen_IsTargetBox` here. `_ComposeMailMessage.InitCharset`
-## is the third layout: the same tiles and the same cursor over a wider
-## keyboard, a two-line entry and an icon instead of a prompt.
-##
-## Node-free: it writes indices into a buffer, so a page can be drawn and read
-## back headless.
+## `engine/menus/naming_screen.asm`'s screen on the hardware tile grid. The naming
+## screen is a tilemap screen rather than a text one, the way the trainer card is,
+## so the page keeps the cartridge's own VRAM window: $60 the border, $eb and $f2
+## the two entry markers, and the font from $80 up. The layout is the same shape
+## on both keyboards and differs only in where the two `ClearBox` calls land and
+## how many rows are printed. `_ComposeMailMessage.InitCharset` is the third
+## layout: the same tiles and cursor over a wider keyboard, a two-line entry and
+## an icon instead of a prompt. Node-free.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20

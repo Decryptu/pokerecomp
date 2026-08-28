@@ -3,17 +3,12 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies `PadFrontpic`'s placement against freshly imported real caches: the
-## whole species corpus on all three cartridges, through both boxes a front pic
-## is drawn in, `Script_pokepic`'s [Gen2PokepicPage] and the battle screen's own
-## 7x7 block.
-##
-## What a sampled case cannot say: `PadFrontpic` gives a 5x5, a 6x6 and a 7x7
-## three different corners inside `PlaceGraphic`'s block, so a page that centres
-## a pic instead is right about roughly half the corpus. Every species is drawn
-## and its ink is required to sit inside the frame and above the interior's last
-## row, which is the row `lb bc, 7, 7` leaves empty in an eight-row interior.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- pokepic
+## whole species corpus on all three cartridges, through both boxes a front pic is
+## drawn in, `Script_pokepic`'s [Gen2PokepicPage] and the battle screen's own 7x7
+## block. What a sampled case cannot say: `PadFrontpic` gives a 5x5, a 6x6 and a
+## 7x7 three different corners inside `PlaceGraphic`'s block, so a page that centres
+## a pic instead is right about roughly half the corpus. Every species is drawn and
+## its ink is required to sit inside the frame and above the interior's last row.
 
 ## `data/pokemon/base_stats/`'s own range.
 const FIRST_SPECIES: int = 1

@@ -2,24 +2,13 @@ class_name Gen2BattleAnimBgEffects
 extends RefCounted
 
 ## The `BATTLE_BG_EFFECT_*` jumptable and the routines it dispatches
-## (engine/battle_anims/bg_effects.asm).
-##
-## A bg effect is the half of an animation that is not an object: the screen
-## shakes, the scanline deformations, the palette fades and the tilemap edits
-## that hide, shrink and slide a battler's picture. Five run at once, each a
-## four-byte `battle_bg_effect` the script queues with `anim_bgeffect`.
+## (engine/battle_anims/bg_effects.asm): the screen shakes, the scanline
+## deformations, the palette fades and the tilemap edits. Five run at once.
 ##
 ## **An effect id is profile-local and is never normalised.** pokegold ships no
-## `BATTLE_BG_EFFECT_BODY_SLAM`, so its list is 53 long against Crystal's 54 and
-## every id from $25 on names a different effect in the two games. The two
-## jumptables are kept whole here for that reason, and dispatch is by name.
-##
-## The Color hardware's branch is the one taken wherever the source asks `hCGB`
-## or `hSGB`, which is the same choice every `_CGB_*` layout in this project
-## makes. The DMG halves of `BGEffect_RapidCyclePals` and
-## `BattleBGEffect_FadeMonsToBlackRepeating` are therefore not built; the effects
-## that write `wBGP` unconditionally still reach the screen, because
-## `BattleAnimRequestPals` turns that byte into a CGB palette remap.
+## `BATTLE_BG_EFFECT_BODY_SLAM`, so every id from $25 on names a different effect
+## in the two games; both jumptables are kept whole and dispatch is by name. The
+## Color branch is taken wherever the source asks `hCGB`, as everywhere else here.
 
 ## `BattleBGEffects`, Crystal's own order. The index is the cartridge's effect
 ## id and entry 0 is `BattleBGEffect_End`, which is also the free-slot marker.
@@ -186,6 +175,60 @@ static func names_for(profile: StringName) -> Array[StringName]:
 	return EFFECTS_CRYSTAL if profile == &"crystal" else EFFECTS_GOLD
 
 
+## Every effect whose whole body is one call on the background or the player, as
+## name to [the call, whether it takes the player rather than the background]. A
+## `bind` is the argument the source passes after the two; the handful that write
+## a palette byte themselves are the match in [method run].
+static var HANDLERS: Dictionary = {
+	&"flash_inverted": [_flash.bind(PALS_FLASH_INVERTED), false],
+	&"flash_white": [_flash.bind(PALS_FLASH_WHITE), false],
+	&"white_hues": [_hues.bind(PALS_WHITE_HUES, false), false],
+	&"black_hues": [_hues.bind(PALS_BLACK_HUES, false), false],
+	&"alternate_hues": [_hues.bind(PALS_ALTERNATE_HUES, true), false],
+	&"hide_mon": [_hide_mon, true],
+	&"show_mon": [_show_mon, true],
+	&"enter_mon": [_enter_mon, true],
+	&"return_mon": [_return_mon, true],
+	&"surf": [_surf, false],
+	&"whirlpool": [_whirlpool, true],
+	&"teleport": [_teleport, true],
+	&"night_shade": [_night_shade, true],
+	&"battler_obj_1row": [_battler_obj.bind(false), true],
+	&"battler_obj_2row": [_battler_obj.bind(true), true],
+	&"double_team": [_double_team, true],
+	&"acid_armor": [_acid_armor, true],
+	&"rapid_flash": [_rapid_cycle_pals.bind(PALS_RAPID_FLASH), true],
+	&"fade_mon_to_light": [_rapid_cycle_pals.bind(PALS_TO_LIGHT), true],
+	&"fade_mon_to_black": [_rapid_cycle_pals.bind(PALS_TO_BLACK), true],
+	&"fade_mon_to_light_repeating": [_rapid_cycle_pals.bind(PALS_TO_LIGHT_REPEATING), true],
+	&"fade_mon_to_black_repeating": [_rapid_cycle_pals.bind(PALS_TO_BLACK_REPEATING), true],
+	&"cycle_mon_light_dark_repeating": [_rapid_cycle_pals.bind(PALS_LIGHT_DARK_REPEATING), true],
+	&"flash_mon_repeating": [_rapid_cycle_pals.bind(PALS_FLASH_MON_REPEATING), true],
+	&"fade_mons_to_black_repeating": [_fade_mons_to_black_repeating, true],
+	&"fade_mon_to_white_wait_fade_back": [_rapid_cycle_pals.bind(PALS_TO_WHITE_WAIT_BACK), true],
+	&"fade_mon_from_white": [_rapid_cycle_pals.bind(PALS_FROM_WHITE), true],
+	&"withdraw": [_withdraw, true],
+	&"bounce_down": [_bounce_down, true],
+	&"dig": [_dig, true],
+	&"tackle": [_tackle.bind(false), true],
+	&"body_slam": [_tackle.bind(true), true],
+	&"wobble_mon": [_wobble_mon, true],
+	&"remove_mon": [_remove_mon, true],
+	&"wave_deform_mon": [_wave_deform_mon, true],
+	&"psychic": [_psychic, true],
+	&"beta_send_out_mon1": [_beta_send_out_mon1, true],
+	&"beta_send_out_mon2": [_beta_send_out_mon2, true],
+	&"flail": [_flail, true],
+	&"beta_pursuit": [_beta_pursuit, true],
+	&"rollout": [_rollout, true],
+	&"vital_throw": [_vital_throw, true],
+	&"water": [_water, true],
+	&"vibrate_mon": [_vibrate_mon, true],
+	&"wobble_player": [_wobble_player, true],
+	&"wobble_screen": [_wobble_screen, true],
+}
+
+
 ## `DoBattleBGEffectFunction`. Answers false when the id is past this profile's
 ## own table, which cartridge data never asks for.
 static func run(
@@ -195,118 +238,34 @@ static func run(
 	if effect.id < 0 or effect.id >= names.size():
 		return false
 	var background: Gen2BattleAnimBackground = player.background()
-	match names[effect.id]:
+	var name: StringName = names[effect.id]
+	if HANDLERS.has(name):
+		var row: Array = HANDLERS[name]
+		var subject: Object = background
+		if bool(row[1]):
+			subject = player
+		(row[0] as Callable).call(subject, effect)
+		return true
+	match name:
 		&"end":
 			effect.end()
-		&"flash_inverted":
-			_flash(background, effect, PALS_FLASH_INVERTED)
-		&"flash_white":
-			_flash(background, effect, PALS_FLASH_WHITE)
-		&"white_hues":
-			_hues(background, effect, PALS_WHITE_HUES, false)
-		&"black_hues":
-			_hues(background, effect, PALS_BLACK_HUES, false)
-		&"alternate_hues":
-			_hues(background, effect, PALS_ALTERNATE_HUES, true)
 		&"cycle_ob_pals_gray_and_yellow":
 			background.obp0 = _nth_dmg_pal(effect, PALS_OB_GRAY_YELLOW)
 		&"cycle_mid_ob_pals_gray_and_yellow":
 			background.obp0 = _nth_dmg_pal(effect, PALS_MID_OB_GRAY_YELLOW)
 		&"cycle_bg_pals_inverted":
 			background.bgp = _nth_dmg_pal(effect, PALS_BG_INVERTED)
-		&"hide_mon":
-			_hide_mon(player, effect)
-		&"show_mon":
-			_show_mon(player, effect)
-		&"enter_mon":
-			_enter_mon(player, effect)
-		&"return_mon":
-			_return_mon(player, effect)
-		&"surf":
-			_surf(background, effect)
-		&"whirlpool":
-			_whirlpool(player, effect)
-		&"teleport":
-			_teleport(player, effect)
-		&"night_shade":
-			_night_shade(player, effect)
-		&"battler_obj_1row":
-			_battler_obj(player, effect, false)
-		&"battler_obj_2row":
-			_battler_obj(player, effect, true)
-		&"double_team":
-			_double_team(player, effect)
-		&"acid_armor":
-			_acid_armor(player, effect)
-		&"rapid_flash":
-			_rapid_cycle_pals(player, effect, PALS_RAPID_FLASH)
-		&"fade_mon_to_light":
-			_rapid_cycle_pals(player, effect, PALS_TO_LIGHT)
-		&"fade_mon_to_black":
-			_rapid_cycle_pals(player, effect, PALS_TO_BLACK)
-		&"fade_mon_to_light_repeating":
-			_rapid_cycle_pals(player, effect, PALS_TO_LIGHT_REPEATING)
-		&"fade_mon_to_black_repeating":
-			_rapid_cycle_pals(player, effect, PALS_TO_BLACK_REPEATING)
-		&"cycle_mon_light_dark_repeating":
-			_rapid_cycle_pals(player, effect, PALS_LIGHT_DARK_REPEATING)
-		&"flash_mon_repeating":
-			_rapid_cycle_pals(player, effect, PALS_FLASH_MON_REPEATING)
-		&"fade_mons_to_black_repeating":
-			_fade_mons_to_black_repeating(player, effect)
-		&"fade_mon_to_white_wait_fade_back":
-			_rapid_cycle_pals(player, effect, PALS_TO_WHITE_WAIT_BACK)
-		&"fade_mon_from_white":
-			_rapid_cycle_pals(player, effect, PALS_FROM_WHITE)
 		&"shake_screen_x":
 			background.scx = _shake_amount(background, effect)
 		&"shake_screen_y":
 			background.scy = _shake_amount(background, effect)
-		&"withdraw":
-			_withdraw(player, effect)
-		&"bounce_down":
-			_bounce_down(player, effect)
-		&"dig":
-			_dig(player, effect)
-		&"tackle":
-			_tackle(player, effect, false)
-		&"body_slam":
-			_tackle(player, effect, true)
-		&"wobble_mon":
-			_wobble_mon(player, effect)
-		&"remove_mon":
-			_remove_mon(player, effect)
-		&"wave_deform_mon":
-			_wave_deform_mon(player, effect)
-		&"psychic":
-			_psychic(player, effect)
-		&"beta_send_out_mon1":
-			_beta_send_out_mon1(player, effect)
-		&"beta_send_out_mon2":
-			_beta_send_out_mon2(player, effect)
-		&"flail":
-			_flail(player, effect)
-		&"beta_pursuit":
-			_beta_pursuit(player, effect)
-		&"rollout":
-			_rollout(player, effect)
-		&"vital_throw":
-			_vital_throw(player, effect)
 		&"start_water":
 			background.set_ly_overrides(0)
 			_set_lcd_stat_customs(player, effect, Gen2BattleAnimBackground.LCDC_SCY, false)
 			effect.end()
-		&"water":
-			_water(player, effect)
 		&"end_water":
 			background.reset_lcd_stat_custom()
 			effect.end()
-		&"vibrate_mon":
-			_vibrate_mon(player, effect)
-		&"wobble_player":
-			_wobble_player(player, effect)
-		&"wobble_screen":
-			_wobble_screen(player, effect)
 		_:
 			return false
 	return true

@@ -268,9 +268,31 @@ subject. Before creating any file, name the existing one it cannot go in.
 - **Docs.** State each fact once, where it is enforced, and link instead of
   repeating. Source findings and constants go next to the code; contracts go in
   `docs/`.
-- **Comments.** A source symbol plus a one-line reason. Comment non-obvious
-  constraints and quirks; never restate the line below. No section banners, no
-  doc comment on a self-evident function. `rom_layout.gd` is the one exemption:
-  a comment recording how an offset was located is the evidence for that number.
+- **Comments.** Write none you do not have to: a name, a guard clause or a small
+  named helper says it once and cannot go stale. The one worth writing is a
+  source fact, the pret symbol a behaviour comes from plus the line saying why it
+  is not obvious. Never restate the line below, no section banners, no doc
+  comment on a self-evident function, and no paragraph of prose about a decision
+  the code makes plainly. A comment explaining a workaround is a bug report: fix
+  the code instead. `rom_layout.gd` records how an offset was located, which is
+  evidence for a number rather than restatement, and is still held to the cap.
 
 When something changes, replace the old text. Never append a correction.
+
+## The budget
+
+`tests/unit/test_source_budget.gd` caps how much branching and how much prose the
+tree may carry, because both track defect count the way line count does. It fails
+the suite.
+
+| Rule | Ceiling |
+|---|---|
+| Cyclomatic complexity of one function | 20 |
+| Lines in one comment block | 8 |
+| Comment lines under `game/`, `tools/` and `autoload/` | the number recorded in the test, which only goes down |
+
+Complexity counts `if`, `elif`, `while`, `for`, `and`, `or`, an inline `if` and
+one per `match` arm. Over the ceiling, the remedy is a lookup table, a guard
+clause or a named helper, never a nested ternary. The functions still over it are
+listed in that test and the list may only shrink: the test also fails on a line
+that no longer names a function over the ceiling.

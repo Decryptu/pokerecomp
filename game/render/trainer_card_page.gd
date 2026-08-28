@@ -2,32 +2,13 @@ class_name Gen2TrainerCardPage
 extends RefCounted
 
 ## One page of the trainer card (`engine/menus/trainer_card.asm`), on the tile
-## grid the hardware uses.
-##
-## The card is a tilemap screen rather than a text screen: most of what it draws
-## are raw tile numbers into the window the card graphics are loaded at, and only
-## the player's name, the numbers and a handful of labels are printed text. So
-## this keeps the cartridge's own VRAM window and writes tile numbers into a map,
-## exactly like `TrainerCard_InitBorder` and `TrainerCardSetup_PlaceTilemapString`
-## do, then resolves each number to pixels at the end.
-##
-## VRAM, as `_Option`'s `.InitRAM` and each page's LoadGFX build it:
-##
-## | Tiles | Contents |
-## |---|---|
-## | $00-$22 | `GetCardPic`'s 35-tile player pic, gender selected |
-## | $1c | Crystal only, overwritten by `CardRightCornerGFX` |
-## | $23-$28 | `TrainerCardGFX`, the card's own frame pieces |
-## | $29-$7e | 86 tiles: `CardStatusGFX` on page 1, `LeaderGFX` on pages 2 and 3 |
-## | $80+ | the font, so printed text addresses glyphs as usual |
-##
-## Page 1's 86 tiles start at `CardStatusGFX`, which is only six tiles long, so
-## the copy runs straight on into `LeaderGFX`. That overrun is the cartridge's
-## own and is why the status strip and the leader strip overlap.
-##
-## Node-free: it writes tile numbers and then indices into a buffer, so a page
-## can be drawn and read back headless. The badge sprites are not in that buffer;
-## they are objects with their own palette, composed over the page by the screen.
+## grid the hardware uses. The card is a tilemap screen rather than a text screen,
+## so this keeps the cartridge's own VRAM window and writes tile numbers into a
+## map exactly as `TrainerCard_InitBorder` does, then resolves each number to
+## pixels. The window is `GetCardPic`'s 35-tile player pic at $00,
+## `TrainerCardGFX`'s frame pieces at $23, 86 tiles at $29 and the font from $80.
+## Page 1's 86 start at `CardStatusGFX`, which is only six tiles long, so the copy
+## runs straight on into `LeaderGFX`: that overrun is the cartridge's own.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20
@@ -133,15 +114,13 @@ const LEADER_FACE_ROWS: int = 3
 const LEADER_FACE_TILES: int = 10
 const LEADER_STRIDE: int = 4
 
-## `_CGB_TrainerCard`'s attribute map, as `FillBoxCGB` writes it: rows first,
-## then columns. Its palette slots are [constant RomLayout.CARD_PALETTE_CLASSES]'
-## own order, and the leader boxes are filled whatever page is on screen, since
-## the layout runs once in `.InitRAM`.
-##
-## Both gender branches are the source's: the whole card takes the opposite
-## gender's palette and the pic area the player's own, Clair's box is filled only
-## for Kris, and the top-right corner is written twice, the second write being
-## the one that lasts.
+## `_CGB_TrainerCard`'s attribute map, as `FillBoxCGB` writes it: rows first, then
+## columns. Its palette slots are [constant RomLayout.CARD_PALETTE_CLASSES]' own
+## order, and the leader boxes are filled whatever page is on screen, since the
+## layout runs once in `.InitRAM`. Both gender branches are the source's: the
+## whole card takes the opposite gender's palette and the pic area the player's
+## own, Clair's box is filled only for Kris, and the top-right corner is written
+## twice, the second write being the one that lasts.
 const ATTRIBUTE_LEADER_BOXES: Array[Dictionary] = [
 	{"at": Vector2i(2, 11), "palette": 1},
 	{"at": Vector2i(6, 11), "palette": 2},

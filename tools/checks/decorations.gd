@@ -2,23 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies `DecorationAttributes` and the `DecorationNames` run behind it
-## against freshly imported real caches, in all three games, and the name
-## [Gen2WorldDecoration] spells from each row.
-##
-## Expected values are the pinned pokecrystal and pokegold sources'
-## `data/decorations/attributes.asm`, `data/decorations/names.asm` and
-## `GetDecoName`. One pinned address per cartridge finds the lot, so what says
-## the address is right is the content: fifty-three rows whose types, actions,
-## event flags and block or sprite bytes are all the source's, and the names they
-## are spelled from.
-##
-## The two pins are byte identical bar one name: Gold and Silver spell the third
-## console "NINTENDO64" where Crystal spells it "NINTENDO 64". That is checked
-## here rather than assumed, and it is why the whole run is not compared between
-## cartridges the way the Pokemon Center PC's is.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- decorations
+## Verifies `DecorationAttributes` and the `DecorationNames` run behind it against
+## freshly imported real caches, in all three games, and the name
+## [Gen2WorldDecoration] spells from each row. One pinned address per cartridge
+## finds the lot, so what says the address is right is the content: fifty-three rows
+## whose types, actions, event flags and block or sprite bytes are all the source's.
+## The two pins are byte identical bar one name, Gold and Silver spelling the third
+## console "NINTENDO64" where Crystal spells it "NINTENDO 64", which is why the
+## whole run is not compared between cartridges.
 
 ## Every row, as [name, type, action, event flag, block or sprite]. The name is
 ## what `GetDecoName` assembles, not the `DecorationNames` entry the row points

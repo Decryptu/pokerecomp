@@ -1,19 +1,13 @@
 class_name Gen2SaveMail
 extends RefCounted
 
-## One `mailmsg` struct (`macros/ram.asm`) and the four routines in
-## `engine/pokemon/mail.asm` that move one between a party member and the PC.
-##
-## The cartridge keeps party mail in `sPartyMail`, a sixth of SRAM indexed by
-## party slot, and the mailbox in `sMailboxes` behind its own count. The mailbox
-## is kept the same way here, on [member Gen2SaveData.mailbox]; a party member's
-## mail is kept on the member instead of on its slot, because everything that
-## moves a slot moves its mail with it (`SwitchPartyMons` swaps both) and
-## nothing can put a mailed Pokemon anywhere else: `BillsPC_CheckMail_Prevent
-## Blackout` and `Gen2WorldDayCare`'s own refusal are the two gates, and the
-## day care's is already built.
-##
-## Scene-free and cache-free, like the rest of `game/save/`.
+## One `mailmsg` struct and the four routines in `engine/pokemon/mail.asm` that
+## move one between a party member and the PC. The cartridge keeps party mail in
+## `sPartyMail` indexed by party slot and the mailbox in `sMailboxes`; the mailbox
+## is kept the same way here, but a party member's mail is kept on the member
+## rather than on its slot, because everything that moves a slot moves its mail
+## with it and nothing can put a mailed Pokemon anywhere else. Scene-free and
+## cache-free, like the rest of `game/save/`.
 
 ## `MAIL_LINE_LENGTH`, `MAIL_MSG_LENGTH` and `MAILBOX_CAPACITY`.
 const LINE_LENGTH: int = RomLayout.MAIL_LINE_LENGTH

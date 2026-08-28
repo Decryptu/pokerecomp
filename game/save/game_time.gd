@@ -1,16 +1,13 @@
 class_name Gen2GameTime
 extends RefCounted
 
-## The play timer the trainer card prints (`home/game_time.asm`, `GameTimer`).
-##
-## Not the day cycle: [Gen2WorldClock] is real time and answers what hour the
-## world is in, while this counts hardware frames of actual play and is what
-## `wGameTimeHours`/`wGameTimeMinutes` hold. The cartridge keeps both, and they
-## disagree the moment the game is closed.
-##
-## `GameTimer` counts 60 frames to a second even though a frame is 1/59.7275 s,
-## so the play timer runs about half a percent slow against a wall clock. That
-## is the cartridge's own arithmetic and is mirrored rather than corrected.
+## The play timer the trainer card prints (`home/game_time.asm`, `GameTimer`). Not
+## the day cycle: [Gen2WorldClock] is real time and answers what hour the world is
+## in, while this counts hardware frames of actual play. The cartridge keeps both
+## and they disagree the moment the game is closed. `GameTimer` counts 60 frames
+## to a second even though a frame is 1/59.7275 s, so the play timer runs about
+## half a percent slow against a wall clock: the cartridge's own arithmetic,
+## mirrored rather than corrected.
 
 ## `GameTimer.Function`'s own comparisons.
 const FRAMES_PER_SECOND: int = 60

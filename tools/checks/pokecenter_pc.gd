@@ -2,23 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the Pokemon Center PC's imported menu tables against freshly
-## imported real caches, in all three games.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## `engine/events/pokecenter_pc.asm`'s `PokemonCenterPC.Jumptable`, its
-## `.WhichPC`, `PlayersPCMenuData.PlayersPCMenuPointers` and that menu's own
-## `.WhichPC`, plus the fourteen `text_far` stubs the two routines print
-## through.
-##
-## One pinned address per cartridge finds all of it, so what says the address is
-## right is the content: two runs of `@`-terminated strings, five lists whose
-## entries all name rows those runs have, and fourteen stubs that decode. The
-## three games ship the block identical bar the two boxes that carry a
-## `text_ram` and a `text_decimal` slot, whose addresses are each cartridge's own
-## WRAM; that is checked here rather than assumed.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- pokecenter_pc
+## Verifies the Pokemon Center PC's imported menu tables against freshly imported
+## real caches, in all three games. Expected values come from the pinned sources'
+## `PokemonCenterPC.Jumptable`, its `.WhichPC`, `PlayersPCMenuPointers` and that
+## menu's own `.WhichPC`, plus the fourteen `text_far` stubs. One pinned address per
+## cartridge finds all of it, so what says the address is right is the content: two
+## runs of `@`-terminated strings, five lists whose entries all name rows those runs
+## have, and fourteen stubs that decode. The three games ship the block identical
+## bar the two boxes carrying a WRAM address of their own.
 
 ## `.Jumptable`'s strings, in its own order. The first keeps the `<PLAYER>`
 ## marker the cartridge stores.

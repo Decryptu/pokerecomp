@@ -1,20 +1,14 @@
 class_name GameData
 extends RefCounted
 
-## A decoded cartridge, read back out of the cache.
-##
-## The importer's counterpart and the only way the engine sees cartridge content:
-## nothing downstream opens a ROM, and nothing here knows what a ROM is.
-## [RefCounted] and scene-free, so a battle or menu can run in a test.
+## A decoded cartridge, read back out of the cache: the importer's counterpart
+## and the only way the engine sees cartridge content. [RefCounted] and
+## scene-free, so a battle or menu can run in a test.
 ##
 ## JSON has one number type, so every cached number returns as a float and every
-## comparison against an int quietly fails. Coercion happens here, once.
-##
-## Index buffers load on first use and are kept: a pic atlas is about a megabyte
-## of indices. World sections load the same way for a blunter reason, that
-## scripts, text and audio are almost all of a cache and the launcher, pic viewer
-## and battle never read them; reading them at open() made listing three games
-## cost more than entering one and put the whole cache in phone memory.
+## comparison against an int quietly fails; coercion happens here, once. Index
+## buffers and world sections load on first use, because reading them at open()
+## made listing three games cost more than entering one.
 
 var id: StringName = &""
 var sha1: String = ""
@@ -148,18 +142,73 @@ static func open(game_id: StringName) -> GameData:
 
 ## Opens whichever of the two [param argument] names: a directory
 ## [method RomCache.is_usable] accepts is a cache path, and anything else is a
-## [RomRegistry] id. Null when neither resolves.
-##
-## For a tool whose command line carries one string and cannot say which form it
-## is. Which of the two an argument means is a fact about the cache layout and
-## the registry, so it is answered here rather than sniffed by every tool that
-## would otherwise copy it and go stale when the cache naming moves. [member id]
-## is filled off the manifest either way. Named for its argument rather than
-## `open_any`, which already means the first cartridge that has a cache at all.
+## [RomRegistry] id. Null when neither resolves. For a tool whose command line
+## carries one string and cannot say which form it is; answered here rather than
+## sniffed by every tool that would go stale when the cache naming moves. Named
+## for its argument rather than `open_any`, which already means the first
+## cartridge that has a cache at all.
 static func open_argument(argument: String) -> GameData:
 	if RomCache.is_usable(argument):
 		return open_directory(argument)
 	return open(StringName(argument))
+
+
+## Manifest sections copied into a member as they stand, key to member. A section
+## that is missing or the wrong type leaves the member's own default, which is
+## what lets a cache written by an older import still open.
+const MANIFEST_DICTIONARIES: Dictionary = {
+	"atlases": "_atlases",
+	"egg_pic": "_egg_pic",
+	"tiles": "_tiles",
+	"bar_palettes": "_bar_palettes",
+	"stats_screen_palettes": "_stats_screen_palettes",
+	"player_palettes": "_player_palettes",
+	"transition_palettes": "_transition_palettes",
+	"card_palettes": "_card_palettes",
+	"pokedex_palettes": "_pokedex_palettes",
+	"pack": "_pack",
+	"battle_object_palettes": "_battle_object_palettes",
+	"presents_palettes": "_presents_palettes",
+	"title": "_title",
+	"town_map": "_town_map",
+	"oak_ratings": "_oak_ratings",
+	"pokecenter_pc": "_pokecenter_pc",
+	"decorations": "_decorations",
+	"mom_phone": "_mom_phone",
+	"credits": "_credits",
+	"intro_movie": "_intro_movie",
+	"unown_puzzle": "_unown_puzzle",
+	"diploma": "_diploma",
+	"mystery_gift": "_mystery_gift",
+	"link_border": "_link_border",
+	"printer_strings": "_printer_strings",
+	"slots": "_slots",
+	"slots_text": "_slots_text",
+	"card_flip": "_card_flip",
+	"card_flip_text": "_card_flip_text",
+	"gs_intro": "_gs_intro",
+	"menu_text": "_menu_text",
+	"mart_text": "_mart_text",
+	"name_rater_text": "_name_rater_text",
+	"move_deleter_text": "_move_deleter_text",
+	"day_care_text": "_day_care_text",
+	"special_text": "_special_text",
+	"special_text_ram": "_special_text_ram",
+}
+
+## The same for the sections that are lists.
+const MANIFEST_ARRAYS: Dictionary = {
+	"battle_grayscale_palette": "_battle_grayscale_palette",
+	"move_screen_palette": "_move_screen_palette",
+	"mail_palettes": "_mail_palettes",
+	"mail_items": "_mail_items",
+	"pc_palette": "_pc_palette",
+	"gender_screen_palette": "_gender_screen_palette",
+	"copyright_string": "_copyright_string",
+	"copyright_palette": "_copyright_palette",
+	"text_bg_palette": "_text_bg_palette",
+	"odd_eggs": "_odd_eggs",
+}
 
 
 ## Opens a cache directory, or null if it is missing, incomplete, or was written
@@ -174,111 +223,46 @@ static func open_directory(path: String) -> GameData:
 	data.directory = path
 	data.id = StringName(manifest.get("game_id", ""))
 	data.sha1 = String(manifest.get("sha1", ""))
-	data._atlases = manifest.get("atlases", {})
-	data._egg_pic = manifest.get("egg_pic", {})
-	data._tiles = manifest.get("tiles", {})
-	data._bar_palettes = manifest.get("bar_palettes", {})
-	data._battle_grayscale_palette = manifest.get("battle_grayscale_palette", [])
-	data._move_screen_palette = manifest.get("move_screen_palette", [])
-	data._stats_screen_palettes = manifest.get("stats_screen_palettes", {})
-	data._player_palettes = manifest.get("player_palettes", {})
-	data._transition_palettes = manifest.get("transition_palettes", {})
-	data._card_palettes = manifest.get("card_palettes", {})
-	var mail_palettes: Variant = manifest.get("mail_palettes", [])
-	data._mail_palettes = mail_palettes if mail_palettes is Array else []
-	var raw_mail_items: Variant = manifest.get("mail_items", [])
-	data._mail_items = raw_mail_items if raw_mail_items is Array else []
-	data._pokedex_palettes = manifest.get("pokedex_palettes", {})
-	data._pack = manifest.get("pack", {})
-	var raw_pc_palette: Variant = manifest.get("pc_palette", [])
-	data._pc_palette = raw_pc_palette if raw_pc_palette is Array else []
-	var gender_palette: Variant = manifest.get("gender_screen_palette", [])
-	data._gender_screen_palette = gender_palette if gender_palette is Array else []
-	var raw_copyright_string: Variant = manifest.get("copyright_string", [])
-	data._copyright_string = raw_copyright_string if raw_copyright_string is Array else []
-	var raw_copyright_palette: Variant = manifest.get("copyright_palette", [])
-	data._copyright_palette = raw_copyright_palette if raw_copyright_palette is Array else []
-	var text_palette: Variant = manifest.get("text_bg_palette", [])
-	data._text_bg_palette = text_palette if text_palette is Array else []
-	data._battle_object_palettes = manifest.get("battle_object_palettes", {})
-	var presents_palettes: Variant = manifest.get("presents_palettes", {})
-	data._presents_palettes = presents_palettes if presents_palettes is Dictionary else {}
-	var raw_title: Variant = manifest.get("title", {})
-	data._title = raw_title if raw_title is Dictionary else {}
-	var town_map: Variant = manifest.get("town_map", {})
-	data._town_map = town_map if town_map is Dictionary else {}
-	var raw_oak_ratings: Variant = manifest.get("oak_ratings", {})
-	data._oak_ratings = raw_oak_ratings if raw_oak_ratings is Dictionary else {}
-	var pokecenter_pc: Variant = manifest.get("pokecenter_pc", {})
-	data._pokecenter_pc = pokecenter_pc if pokecenter_pc is Dictionary else {}
-	var decorations: Variant = manifest.get("decorations", {})
-	data._decorations = decorations if decorations is Dictionary else {}
-	var mom_phone: Variant = manifest.get("mom_phone", {})
-	data._mom_phone = mom_phone if mom_phone is Dictionary else {}
-	var unown_words: Variant = manifest.get("unown_words", [])
-	if unown_words is Array:
-		for word: Variant in unown_words as Array:
-			data._unown_words.append(String(word))
-	var unown_walls: Variant = manifest.get("unown_walls", [])
-	if unown_walls is Array:
-		for wall: Variant in unown_walls as Array:
-			data._unown_walls.append(String(wall))
-	var eggs: Variant = manifest.get("odd_eggs", [])
-	data._odd_eggs = eggs if eggs is Array else []
-	var credits: Variant = manifest.get("credits", {})
-	data._credits = credits if credits is Dictionary else {}
-	var intro_movie: Variant = manifest.get("intro_movie", {})
-	data._intro_movie = intro_movie if intro_movie is Dictionary else {}
-	var unown_puzzle: Variant = manifest.get("unown_puzzle", {})
-	data._unown_puzzle = unown_puzzle if unown_puzzle is Dictionary else {}
-	var diploma: Variant = manifest.get("diploma", {})
-	data._diploma = diploma if diploma is Dictionary else {}
-	var mystery_gift: Variant = manifest.get("mystery_gift", {})
-	data._mystery_gift = mystery_gift if mystery_gift is Dictionary else {}
-	var link_border: Variant = manifest.get("link_border", {})
-	data._link_border = link_border if link_border is Dictionary else {}
+	for key: String in MANIFEST_DICTIONARIES:
+		var section: Variant = manifest.get(key, {})
+		if section is Dictionary:
+			data.set(MANIFEST_DICTIONARIES[key], section)
+	for key: String in MANIFEST_ARRAYS:
+		var section: Variant = manifest.get(key, [])
+		if section is Array:
+			data.set(MANIFEST_ARRAYS[key], section)
+	data._unown_words = _string_list(manifest.get("unown_words", []))
+	data._unown_walls = _string_list(manifest.get("unown_walls", []))
 	data._other_player_link_mode = int(manifest.get("other_player_link_mode", -1))
-	var printer_strings: Variant = manifest.get("printer_strings", {})
-	data._printer_strings = printer_strings if printer_strings is Dictionary else {}
-	var slots: Variant = manifest.get("slots", {})
-	data._slots = slots if slots is Dictionary else {}
-	var raw_slots_text: Variant = manifest.get("slots_text", {})
-	data._slots_text = raw_slots_text if raw_slots_text is Dictionary else {}
-	var card_flip: Variant = manifest.get("card_flip", {})
-	data._card_flip = card_flip if card_flip is Dictionary else {}
-	var raw_card_flip_text: Variant = manifest.get("card_flip_text", {})
-	data._card_flip_text = raw_card_flip_text if raw_card_flip_text is Dictionary else {}
-	var gs_intro: Variant = manifest.get("gs_intro", {})
-	data._gs_intro = gs_intro if gs_intro is Dictionary else {}
-	var raw_menu_text: Variant = manifest.get("menu_text", {})
-	data._menu_text = raw_menu_text if raw_menu_text is Dictionary else {}
-	var raw_mart_text: Variant = manifest.get("mart_text", {})
-	data._mart_text = raw_mart_text if raw_mart_text is Dictionary else {}
-	var raw_name_rater_text: Variant = manifest.get("name_rater_text", {})
-	data._name_rater_text = raw_name_rater_text if raw_name_rater_text is Dictionary else {}
-	var raw_move_deleter_text: Variant = manifest.get("move_deleter_text", {})
-	data._move_deleter_text = raw_move_deleter_text if raw_move_deleter_text is Dictionary else {}
-	var raw_day_care_text: Variant = manifest.get("day_care_text", {})
-	data._day_care_text = raw_day_care_text if raw_day_care_text is Dictionary else {}
-	var raw_special_text: Variant = manifest.get("special_text", {})
-	data._special_text = raw_special_text if raw_special_text is Dictionary else {}
-	var raw_special_text_ram: Variant = manifest.get("special_text_ram", {})
-	data._special_text_ram = raw_special_text_ram if raw_special_text_ram is Dictionary else {}
-	data._species = data._read_array(RomCache.species_path(path))
-	data._moves = data._read_array(RomCache.moves_path(path))
-	data._tmhm_moves = data._read_int_array(RomCache.tmhm_moves_path(path))
-	data._happiness_changes = data._read_array(RomCache.happiness_changes_path(path))
-	data._name_input_chars = data._read_array(RomCache.name_input_chars_path(path))
-	data._string_buffer_pointers = data._read_int_array(RomCache.text_buffers_path(path))
-	var intro: Variant = RomCache.read_json(RomCache.intro_text_path(path))
-	data._intro_text = intro if intro is Dictionary else {}
-	data._load_dex_orders(RomCache.dex_orders_path(path))
-	data._items = data._read_array(RomCache.items_path(path))
-	data._world_trades = data._read_array(RomCache.world_trades_path(path))
-	data._types = data._read_array(RomCache.types_path(path))
-	data._trainers = data._read_array(RomCache.trainers_path(path))
-	data._build_matchups(data._read_array(RomCache.matchups_path(path)))
+	data._read_cache(path)
 	return data
+
+
+static func _string_list(raw: Variant) -> PackedStringArray:
+	var out := PackedStringArray()
+	if not raw is Array:
+		return out
+	for entry: Variant in raw as Array:
+		out.append(String(entry))
+	return out
+
+
+## The tables that live beside the manifest as their own files.
+func _read_cache(path: String) -> void:
+	_species = _read_array(RomCache.species_path(path))
+	_moves = _read_array(RomCache.moves_path(path))
+	_tmhm_moves = _read_int_array(RomCache.tmhm_moves_path(path))
+	_happiness_changes = _read_array(RomCache.happiness_changes_path(path))
+	_name_input_chars = _read_array(RomCache.name_input_chars_path(path))
+	_string_buffer_pointers = _read_int_array(RomCache.text_buffers_path(path))
+	var intro: Variant = RomCache.read_json(RomCache.intro_text_path(path))
+	_intro_text = intro if intro is Dictionary else {}
+	_load_dex_orders(RomCache.dex_orders_path(path))
+	_items = _read_array(RomCache.items_path(path))
+	_world_trades = _read_array(RomCache.world_trades_path(path))
+	_types = _read_array(RomCache.types_path(path))
+	_trainers = _read_array(RomCache.trainers_path(path))
+	_build_matchups(_read_array(RomCache.matchups_path(path)))
 
 
 ## The first registry game with a usable cache, or null if none has been
@@ -320,13 +304,10 @@ func world_maps() -> Array:
 
 ## Every imported script's `bank:address` key, sorted, for a caller that has to
 ## walk the whole corpus rather than follow one pointer. See [Gen2WorldCatalog].
-##
 ## The keys an item ball, a hidden item or a conditional background event points
-## at are NOT here. Their bytes live in the map-scripts bank and are cached with
-## the scripts because every runtime reader asks [method world_script] for them,
-## but they are `db item, quantity`, `dwb event, item` and a `conditional_event`
-## record rather than commands, and a corpus walk that decoded them read item
-## counts as opcodes.
+## at are NOT here: their bytes live in the map-scripts bank and are cached with
+## the scripts, but they are `db item, quantity` and the like rather than
+## commands, and a corpus walk that decoded them read item counts as opcodes.
 func world_script_keys() -> Array:
 	var data_only: Dictionary = _script_data_pointers()
 	var out: Array = []
@@ -1504,22 +1485,13 @@ func mod_type_numbers() -> Array[int]:
 
 
 ## How effective [param attacking] is against [param defending], in tenths: 0 for
-## an immunity, 5 for a resistance, 20 for a weakness and 10 for everything else.
-##
-## Tenths rather than a float, because that is what the cartridge stores and what
-## the damage formula divides by, and the games truncate after each of a
-## defender's two types. A float would disagree exactly where it matters.
-##
-## Only exceptions are listed, so an absent pair is neutral, as is a type number
-## missing from the chart entirely (the padding run, where Curse lives).
-##
-## [param foresight] is whether the defender has been identified, which cancels
-## the Ghost immunities and nothing else.
-##
-## The key keeps both ids whole ([method Gen2ContentOverlay.matchup_number]) so a
-## mod type cannot alias a cartridge pair. An unmodded game answers off the
-## folded lookup alone; the overlay is asked only when a mod loaded, this being
-## the damage formula's own path.
+## an immunity, 5 for a resistance, 20 for a weakness, 10 otherwise. Tenths
+## because that is what the cartridge stores and what the damage formula divides
+## by, truncating after each of a defender's two types. Only exceptions are
+## listed, so an absent pair is neutral, as is a type missing from the chart.
+## [param foresight] cancels the Ghost immunities and nothing else. The key keeps
+## both ids whole so a mod type cannot alias a cartridge pair, and the overlay is
+## asked only when a mod loaded, this being the damage formula's own path.
 func type_matchup(attacking: int, defending: int, foresight: bool = false) -> int:
 	var key: int = Gen2ContentOverlay.matchup_number(attacking, defending)
 	if _overlay != null and not _overlay.is_empty():
@@ -1545,18 +1517,14 @@ func _matchup_row(key: int) -> Dictionary:
 	}
 
 
-## How effective [param attacking] is against a defender of one or two types,
-## in tenths, accumulated the way the cartridge accumulates it: start at ten,
-## multiply by each matching type in turn, and truncate after each.
+## How effective [param attacking] is against a defender of one or two types, in
+## tenths, accumulated the way the cartridge accumulates it: start at ten,
+## multiply by each matching type in turn, truncate after each.
 ##
 ## The number a battle announces, not the one it deals damage with. The hardware
-## computes them separately and they disagree: this accumulator truncates in
-## tenths, so a move resisted by both halves of a dual type reports 2 rather than
-## 2.5, while damage multiplies the damage itself once per type. Use this for the
-## message and [method type_matchup] per type for damage.
-##
-## A single-type Pokémon carries its type in both slots, and the cartridge
-## applies a row at most once, so a repeat is skipped here too.
+## computes them separately and they disagree: a move resisted by both halves of
+## a dual type reports 2 rather than 2.5. Use [method type_matchup] per type for
+## damage. A single-type Pokemon carries its type in both slots and repeats skip.
 func type_effectiveness(attacking: int, defending: Array, foresight: bool = false) -> int:
 	var out: int = RomLayout.MATCHUP_EFFECTIVE
 	var applied: Array = []
@@ -2130,15 +2098,14 @@ func mystery_gift_table(decorations: bool) -> Array:
 	return (_mystery_gift.get("decos" if decorations else "items", []) as Array).duplicate()
 
 
-## `LinkCommsBorderGFX`'s own strip and, on Crystal alone, the three tilemaps
-## the trade screen is laid out from. A cache imported before the border existed
+## `LinkCommsBorderGFX`'s own strip and, on Crystal alone, the three tilemaps the
+## trade screen is laid out from. A cache imported before the border existed
 ## carries neither, which is what [method has_link_border] answers for; a cache
-## that carries the strip but no screen is Gold or Silver, whose trade screen is
-## two `LinkTextboxAtHL` boxes rather than a tilemap.
-## `wOtherPlayerLinkMode`, whose address the two cartridges do not share: the
-## three receptionist scripts `readmem` it by their own profile's address, so a
-## runner writing Crystal's would leave Gold's read as zero and send every
-## player down the "can't link to the past" branch.
+## with the strip but no screen is Gold or Silver, whose trade screen is two
+## `LinkTextboxAtHL` boxes rather than a tilemap.
+## Below it, `wOtherPlayerLinkMode`, whose address the two cartridges do not
+## share: a runner writing Crystal's would leave Gold's read as zero and send
+## every player down the "can't link to the past" branch.
 func other_player_link_mode_address() -> int:
 	return _other_player_link_mode
 
@@ -2537,14 +2504,11 @@ func trainer_party_count(number: int) -> int:
 
 
 ## One of a trainer class's individual trainers, as { name, type, party }, where
-## [code]party[/code] is that trainer's Pokémon in the cartridge's own order, each
+## `party` is that trainer's Pokemon in the cartridge's own order, each
 ## { level, species, item, moves }. Empty for a class or an index this class does
-## not have.
-##
-## [code]type[/code] is one of the [code]RomLayout.TRAINER_MON_*[/code]
-## constants and decides what a member's own Pokémon means: whether it knows
-## what its level teaches it or the moves stored with it, and whether it holds
-## an item. See [Gen2TrainerParty], which turns this into battle-ready Pokémon.
+## not have. `type` is one of the `RomLayout.TRAINER_MON_*` constants and decides
+## whether a member knows what its level teaches or the moves stored with it, and
+## whether it holds an item. See [Gen2TrainerParty].
 func trainer_party(number: int, index: int) -> Dictionary:
 	var trainers: Array = trainer(number).get("trainers", [])
 	if index < 0 or index >= trainers.size():
@@ -2601,13 +2565,11 @@ func trainer_dvs(number: int) -> int:
 
 ## Where a trainer class sits in the trainer atlas. Every trainer is drawn at the
 ## same size, so unlike a species pic this one always fills its cell.
-## `GetTrainerBackpic`: the player's own 6x6 picture, which is what stands on
-## the player's square until a Pokemon is sent out. [param kind] is one of
-## [constant RomLayout.PLAYER_BACKPICS]; Gold and Silver ship no Kris, and the
-## empty Dictionary is what says so.
-## `GetPlayerOrMonPalettePointer`: the player's own colours, which is what the
-## back pic on the field is drawn in until a Pokemon replaces it. The Dude wears
-## the player's, so [param kind] is a gender rather than a picture.
+## `GetTrainerBackpic` below it is the player's own 6x6 picture, which stands on
+## the player's square until a Pokemon is sent out; Gold and Silver ship no Kris
+## and the empty Dictionary says so. `GetPlayerOrMonPalettePointer` is its
+## colours, and the Dude wears the player's, so [param kind] is a gender rather
+## than a picture.
 func player_palette(kind: String) -> PackedColorArray:
 	var stored: Variant = _player_palettes.get(kind, null)
 	if not stored is Array or (stored as Array).size() < 2:
@@ -3168,15 +3130,12 @@ func _entry(rows: Array, index: int) -> Dictionary:
 	return rows[index]
 
 
-## One numbered content row, with the mod overlay consulted first.
-##
-## The chokepoint species, moves, items and trainers all read through, and so the
-## one place that has to know a mod may have added or changed one. Everything
-## carried on a species row rides along: a defined species has a learnset,
-## evolutions and TM flags because [method learnset], [method evolutions] and the
-## TM/HM gate all read them back off this row.
-##
-## Numbering is one-based, the cartridge's own; see [Gen2ContentOverlay].
+## One numbered content row, with the mod overlay consulted first: the chokepoint
+## species, moves, items and trainers all read through, and so the one place that
+## has to know a mod may have added or changed one. Everything carried on a
+## species row rides along, because [method learnset], [method evolutions] and the
+## TM/HM gate all read them back off this row. Numbering is one-based, the
+## cartridge's own.
 func _content(kind: StringName, rows: Array, number: int) -> Dictionary:
 	return _overlaid(kind, number, _entry(rows, number - 1))
 

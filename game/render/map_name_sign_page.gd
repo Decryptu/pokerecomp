@@ -1,24 +1,14 @@
 class_name Gen2MapNameSignPage
 extends RefCounted
 
-## `PlaceMapNameFrame` and `PlaceMapNameCenterAlign`
-## (engine/events/map_name_sign.asm): the sign a map entry raises, drawn out of
-## `MapEntryFrameGFX`'s own fourteen tiles with the landmark's name centred on
-## its lower interior row.
-##
-## Four rows of the window, which the hardware can only start at a scanline and
-## run to the bottom of the screen from: `rWY` $70 is what puts the sign in the
-## bottom four rows rather than the top.
-##
-## Crystal's own screen. Gold and Silver ship neither `InitMapNameSign` nor the
-## sheet, so a cache without it renders nothing at all.
-##
-## [method render_notice] is the same four rows carrying a mod's own two lines
-## and an icon, which is what [method Gen2ModHost.request_notice] draws with: the
-## banner is the only thing the cartridge ever puts over a live map, so a notice
-## drawn this way is vanilla by construction. A cache with no sheet falls back to
-## the ordinary text-box frame rather than to nothing, since a mod's notice has
-## to reach a Gold or Silver player too.
+## `PlaceMapNameFrame` and `PlaceMapNameCenterAlign`: the sign a map entry raises,
+## drawn out of `MapEntryFrameGFX`'s own fourteen tiles with the landmark's name
+## centred on its lower interior row. Four rows of the window, which the hardware
+## can only run to the bottom of the screen from, so `rWY` $70 is what puts the
+## sign at the bottom. Crystal's own screen: Gold and Silver ship neither routine
+## nor sheet. [method render_notice] is the same four rows carrying a mod's two
+## lines and an icon, so a notice is vanilla by construction; a cache with no
+## sheet falls back to the ordinary text-box frame.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20
@@ -160,14 +150,11 @@ static func render_notice(
 
 ## The 16x16 a notice wears, out of the vocabulary an actor and a battle
 ## annotation already share. Null where the cache carries no art for what was
-## asked, which draws a notice with no icon rather than a placeholder.
-##
-## | Key | Drawn from |
-## |---|---|
-## | `badge` | `TrainerCard_JohtoBadgesOAM`'s four tiles, which is the only place the game draws a badge. 0 to 7; the Kanto eight have no art on the cartridge |
-## | `species` | [method GameData.species_icon_indices], the party menu's own icon |
-## | `sprite` | An `OverworldSprites` row, facing down |
-## | `tile` | Raw indices, [Gen2BattleAnnotations]' own shape, drawn in the frame's palette |
+## asked, which draws a notice with no icon rather than a placeholder. `badge` is
+## `TrainerCard_JohtoBadgesOAM`'s four tiles, 0 to 7, the Kanto eight having no
+## art on the cartridge; `species` is [method GameData.species_icon_indices];
+## `sprite` is an `OverworldSprites` row facing down; and `tile` is raw indices in
+## [Gen2BattleAnnotations]' own shape, drawn in the frame's palette.
 static func render_notice_icon(
 	data: GameData, icon: Dictionary, time_of_day: int = Gen2WorldPalette.TIME_MORNING
 ) -> Image:

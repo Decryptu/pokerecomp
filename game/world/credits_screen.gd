@@ -2,15 +2,11 @@ class_name Gen2CreditsScreen
 extends Control
 
 ## The credits, embedded in the overworld the way the Hall of Fame is.
-##
 ## [Gen2Credits] owns `Credits`' whole loop and [Gen2CreditsPage] draws it; this
 ## spends the frames and reads the two buttons `.execution_loop` reads. Both are
-## held states rather than presses (`hJoypadDown`), so the host has to say when
-## each is let go: A only leaves once the script has run out, and B burns a tick
-## of the current wait per frame and only on a replay.
-##
-## The two `PlayMusic` calls are the overworld's rather than this screen's, the
-## same way the Hall of Fame's rating sound is.
+## held states rather than presses, so the host says when each is let go: A only
+## leaves once the script has run out, and B burns a tick of the current wait per
+## frame and only on a replay. The two `PlayMusic` calls are the overworld's.
 
 signal closed()
 signal music_requested(music: int)

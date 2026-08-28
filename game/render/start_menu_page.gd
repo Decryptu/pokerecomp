@@ -182,24 +182,11 @@ func render_list(
 ## `SaveMenu`'s screen: `DisplaySaveInfoOnSave`'s box in the top-right,
 ## `SpeechTextbox` at the foot, and `PlaceYesNoBox`'s own box on the left when a
 ## question is up. Transparent everywhere else, since the map stays behind it.
-##
-## [param state] is what [Gen2StartMenuScreen] holds:
-##
-## [codeblock]
-## {
-##   "player_name": String,
-##   "badges": int,
-##   "pokedex": bool,     # STATUSFLAGS_POKEDEX_F, which blanks the #DEX row
-##   "caught": int,
-##   "hours": int, "minutes": int,
-##   "lines": Array,      # the text's own lines, whole
-##   "line": int,         # which of them is on the box's top row
-##   "cursor": int,       # -1 while no yes/no box is up
-## }
-## [/codeblock]
-## [param behind] is what the question stands over. `SaveMenu` puts
-## `Continue_LoadMenuHeader`'s own panel there, which is what an empty one draws;
-## `StartMenu_Quit` and the rows below it stand over the list instead.
+## [param state] is what [Gen2StartMenuScreen] holds: `player_name`, `badges`,
+## `pokedex` (STATUSFLAGS_POKEDEX_F, which blanks the #DEX row), `caught`, `hours`
+## and `minutes`, the text's own whole `lines`, `line` for which is on the top row
+## and `cursor` at -1 while no yes/no box is up. [param behind] is what the
+## question stands over.
 func render_save(state: Dictionary, behind: Image = null) -> Image:
 	if menu == null or font == null:
 		return null

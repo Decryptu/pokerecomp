@@ -3,22 +3,11 @@ extends SceneTree
 ## What a drawn frame costs, per screen, in milliseconds.
 ##
 ##   Godot --path . -s res://tools/profile.gd -- [subject ...] [game] [frames]
-##   Godot --path . -s res://tools/profile.gd -- all crystal 900
 ##
-## Not a check and not a preview: `tools/checks/` runs headless under
-## `validate.gd` and answers right or wrong, and a `preview_*.gd` photographs one
-## frame. Neither can say what sixty of them cost, which is the only question
-## that decides whether a weaker machine holds its frame rate.
-##
-## A real window, vsync off and no frame cap, so the number is the whole frame:
-## the screen's own hardware pass, whatever it rebuilds, and the draw. Every
-## subject is driven by counted `advance_frame()` calls with the node's own
-## `_process` off, so one drawn frame is one hardware frame whatever the host
-## does, and two runs compare.
-##
-## The number is this machine's. What carries across machines is the ratio
-## between two runs of the same subject, which is what an optimisation is
-## measured by.
+## Neither a check nor a preview can say what sixty frames cost, which is the only
+## question that decides whether a weaker machine holds its frame rate. A real
+## window, vsync off and no frame cap, with every subject driven by counted
+## `advance_frame()` calls, so two runs compare; the ratio is what carries.
 
 const WINDOW_SIZE := Vector2i(1152, 648)
 ## Frames spent before the first one is timed: a screen builds its textures on

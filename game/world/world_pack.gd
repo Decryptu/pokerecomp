@@ -2,19 +2,13 @@ class_name Gen2WorldPack
 extends RefCounted
 
 ## Scene-free grouping of owned items into the cartridge's four pack pockets.
-##
-## `Gen2WorldState` stores items as a flat item-to-quantity map; this is
-## presentation only and does not change that. Classification uses the item type
-## byte GameData imports under the confusingly-named `pocket` field
-## (`data/items/attributes.asm`'s `item_attribute` macro calls it "pocket";
-## `constants/item_data_constants.asm` names the same values
-## `ITEM`/`KEY_ITEM`/`BALL`/`TM_HM`), which is what decides a real item's pocket.
-## Source capacities (the four `MAX_*` below) are enforced at data-aware receive
-## seams. The save remains a flat item-to-quantity map, so one item cannot be
-## split into two 99-count stacks like the source's packed pocket arrays can.
-##
-## Pockets registered on `Gen2ModHost` follow the four source ones, and the item
-## submenu below is `engine/items/pack.asm`'s own header selection.
+## [Gen2WorldState] stores items as a flat item-to-quantity map and this is
+## presentation only. Classification uses the item type byte GameData imports under
+## the confusingly-named `pocket` field, which is what decides a real item's
+## pocket. The save remains flat, so one item cannot be split into two 99-count
+## stacks like the source's packed pocket arrays can. Pockets registered on
+## [Gen2ModHost] follow the four source ones, and the item submenu below is
+## `engine/items/pack.asm`'s own header selection.
 
 const TYPE_ITEM: int = 1
 const TYPE_KEY_ITEM: int = 2
@@ -159,14 +153,10 @@ static func source_pocket_name(data: GameData, item: int) -> String:
 ## The five rows `ScrollingMenu_UpdateDisplay` writes, out of one pocket's own
 ## items and the CANCEL row after them. The TM/HM pocket is
 ## `TMHM_DisplayPocketItems`, which prints the TM number and the move it teaches
-## rather than the item's name.
-##
-## Here rather than in the screen that scrolls them, because the pack listing is
-## drawn on more than one screen and only one of them owns a cursor.
-##
-## [param cancel] is the row that closes the pack. A screen that cannot be closed
-## because nothing on it takes a button asks for the listing without it, the way
-## [method Gen2PartyMenuPage.render] is asked for one without its own CANCEL.
+## rather than the item's name. Here rather than in the screen that scrolls them,
+## because the pack listing is drawn on more than one screen and only one of them
+## owns a cursor. [param cancel] is the row that closes the pack: a screen that
+## cannot be closed asks for the listing without it.
 static func list_rows(
 	data: GameData, pocket_type: int, items: Array, scroll: int = 0,
 	cancel: bool = true
@@ -216,17 +206,13 @@ static func row_description(data: GameData, item: int) -> String:
 	return String(data.item(item).get("description", ""))
 
 
-## `SwitchItemsInBag` (`engine/items/switch_items.asm`), one press of SELECT or
-## of the A that places the held item.
-##
+## `SwitchItemsInBag`, one press of SELECT or of the A that places the held item.
 ## [param order] is one pocket's item numbers in list order, [param held] the row
 ## an earlier SELECT marked or -1 for none, and [param cursor] the row the press
 ## landed on, where a row past the last item is the CANCEL terminator the source
-## reads as -1. Answers the new order and the new held row.
-##
-## The source stores the held row as `wSwitchItem` = row + 1 so that zero means
-## none; -1 is that same "none" here. `.try_combining_stacks` cannot fire: the
-## flat item model has one stack per item, so no two rows ever carry the same
+## reads as -1. The source stores the held row as `wSwitchItem` = row + 1 so that
+## zero means none; -1 is that same "none" here. `.try_combining_stacks` cannot
+## fire: the flat item model has one stack per item, so no two rows carry the same
 ## item number.
 static func switch_items(order: Array, held: int, cursor: int) -> Dictionary:
 	var moved: Array[int] = []

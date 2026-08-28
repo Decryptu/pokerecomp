@@ -1,27 +1,14 @@
 class_name Gen2PokedexPage
 extends RefCounted
 
-## The Pokedex's own tile screens (engine/pokedex/pokedex.asm).
-##
-## [Gen2Pokedex] owns the listing, the cursor and the mode; this is the picture,
-## the way [Gen2TownMapPage] is the region map's. Every layout here is one of the
-## source's `Pokedex_Draw*BG` routines read as tile writes, so a screen is a
-## 20x18 grid of tile numbers in the dex's own VRAM numbering and nothing else.
-##
-## Three sheets share that numbering, which is what `Pokedex_LoadGFX` leaves in
-## `vTiles2`:
-##
-## - `$00` to `$30` is the font, **inverted**. `Pokedex_LoadInvertedFont` XORs
-##   every byte, so a lit pixel becomes an unlit one and the whole screen is
-##   light text on dark rather than the overworld's dark on light.
-## - `$31` to `$6a` is `PokedexLZ`'s 58 tiles, which the decompress lands on top
-##   of whatever was there.
-## - `$6b` up is `LoadFontsExtra`, inverted by the same `Pokedex_InvertTiles`
-##   pass over `$60` to `$7f`. Only the run past the dex sheet survives it.
-##
-## The main screen is the one that is not a plain grid: its listing is in the
-## *window* layer at `hWX`, over a background scrolled by `POKEDEX_SCX`, so it
-## is composed in pixels by [method image_main] rather than written into one map.
+## The Pokedex's own tile screens (engine/pokedex/pokedex.asm). [Gen2Pokedex] owns
+## the listing, the cursor and the mode; this is the picture. Every layout is one
+## of the source's `Pokedex_Draw*BG` routines read as tile writes. Three sheets
+## share the dex's VRAM numbering: `$00` to `$30` is the font **inverted**, since
+## `Pokedex_LoadInvertedFont` XORs every byte and the whole screen is light on
+## dark; `$31` to `$6a` is `PokedexLZ`; `$6b` up is `LoadFontsExtra`, inverted by
+## the same pass. The main screen is not a plain grid: its listing is in the
+## window layer at `hWX`, so it is composed in pixels by [method image_main].
 
 const COLUMNS: int = 20
 const ROWS: int = 18
@@ -349,14 +336,12 @@ func window_map(rows: Array, old_mode: bool) -> PackedInt32Array:
 
 
 ## `Pokedex_PrintListing`, which both listing screens share: one entry every two
-## rows from row 2, at column 0.
-##
-## `.PrintEntry` reaches the name by one `inc hl` from that column, and the
-## caught symbol is what it writes into the cell it steps over, so a name runs
-## from column 1 to column 10 and the scroll bar's column 11 is clear of it.
-## DEXMODE_OLD's number is three digits at column 0 of the row above. The cursor
-## is not in this map at all: it is the object frame `Pokedex_LoadCursorOAM`
-## draws over the whole screen.
+## rows from row 2, at column 0. `.PrintEntry` reaches the name by one `inc hl`
+## from that column and the caught symbol is what it writes into the cell it steps
+## over, so a name runs from column 1 to column 10 and the scroll bar's column 11
+## is clear of it. DEXMODE_OLD's number is three digits at column 0 of the row
+## above. The cursor is not in this map at all: it is the object frame
+## `Pokedex_LoadCursorOAM` draws over the whole screen.
 func _window_rows(map: PackedInt32Array, rows: Array, old_mode: bool) -> void:
 	for index: int in rows.size():
 		var entry: Dictionary = rows[index]
@@ -762,12 +747,10 @@ func _blit_object(
 ## `Pokedex_LoadSelectedMonTiles`'s `.QuestionMark`, which is what an unseen
 ## species' box is drawn with: `LoadQuestionMarkPic` decompresses
 ## `gfx/pokedex/question_mark.2bpp.lz` and copies its 7 * 7 tiles into the pic
-## slot. Column major, like every pic, and drawn through the dex's own
-## `question_mark` palette rather than a species one.
-##
-## Not `PokedexSlowpokeLZ`, which this used to draw: that is a different asset
-## entirely, five Slowpoke reading a book decompressed to `vTiles0` for the
-## search screen and the listing's objects.
+## slot, column major like every pic and drawn through the dex's own
+## `question_mark` palette. Not `PokedexSlowpokeLZ`, which this used to draw:
+## that is a different asset, five Slowpoke reading a book decompressed to
+## `vTiles0` for the search screen and the listing's objects.
 func unseen_pic() -> Image:
 	if _question_mark.is_empty() or _question_mark_palette.size() != Gen2Palette.COLORS_PER_PIC:
 		return null

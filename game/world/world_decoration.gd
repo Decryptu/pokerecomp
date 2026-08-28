@@ -1,16 +1,13 @@
 class_name Gen2WorldDecoration
 extends RefCounted
 
-## `engine/overworld/decorations.asm`: which decorations the player owns, the
-## seven category menus `_PlayerDecorationMenu` opens over them, and the
-## `DecoAction_*` that move one between a `wDeco*` slot and the room.
-##
-## Scene-free like the other world hosts. Ownership is an event flag, which the
-## state already carries, and a placed decoration is a `wDeco*` slot, which is
-## [method Gen2WorldState.maptile_decoration]; nothing here is new save state.
-## The imported `DecorationAttributes` row is the only source of a decoration's
-## type, name parts, action, flag and block or sprite, so a mod repointing one
-## takes all five with it.
+## `engine/overworld/decorations.asm`: which decorations the player owns, the seven
+## category menus `_PlayerDecorationMenu` opens over them, and the `DecoAction_*`
+## that move one between a `wDeco*` slot and the room. Scene-free like the other
+## world hosts. Ownership is an event flag and a placed decoration is a `wDeco*`
+## slot, so nothing here is new save state. The imported `DecorationAttributes` row
+## is the only source of a decoration's type, name parts, action, flag and block or
+## sprite, so a mod repointing one takes all five with it.
 
 ## `constants/deco_constants.asm`' decoration types, which decide how
 ## `GetDecoName` spells a row rather than which category it is in.

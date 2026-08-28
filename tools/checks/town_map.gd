@@ -3,24 +3,13 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies the region map against freshly imported real caches, on all three
-## cartridges.
-##
-## The expected values come from the pinned sources: data/maps/landmarks.asm,
-## gfx/pokegear/johto.bin and kanto.bin, gfx/pokegear/town_map_palette_map.asm,
-## and engine/pokegear/pokegear.asm's `_TownMap`, `PokegearMap` and
-## `TownMap_GetKantoLandmarkLimits`.
-##
-## The Pokegear's other three cards are swept here too: they are the same VRAM
-## window, the same palettes and the same page.
-##
-## The real-cartridge counterpart to tests/unit/test_town_map.gd and
-## test_town_map_page.gd, which use a synthetic cache. What only a real cache can
-## say is that the 96 landmarks and the two 360-cell maps decoded, that the
-## Gold/Silver split is exactly the one `BATTLE TOWER` causes, that every
-## landmark's icon lands on the screen it is drawn on, and that `FindNest` keeps
-## each region's own wild tables over all 251 species.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- town_map
+## cartridges, and the Pokegear's other three cards with it, since they are the same
+## VRAM window, palettes and page. Expected values come from the pinned sources'
+## landmarks, the two region `.bin`s, the palette map and `_TownMap`. The
+## real-cartridge counterpart to tests/unit/test_town_map.gd. What only a real cache
+## can say is that the 96 landmarks and the two 360-cell maps decoded, that the
+## Gold/Silver split is exactly the one `BATTLE TOWER` causes, and that `FindNest`
+## keeps each region's own wild tables over all 251 species.
 
 
 ## The one landmark Gold and Silver do not ship, and the two either side of it in
@@ -83,17 +72,14 @@ func run(r: RefCounted) -> void:
 		_verify_cards(game_id, _data)
 
 
-## `Flypoints` and `SpawnPoints` against the cache they were imported beside:
-## every flypoint names a landmark the region map draws and a spawn the table
-## holds, and every spawn names a map this cartridge ships.
-##
-## The landmark column is the profile-split half, so this is where it is swept:
-## Gold and Silver ship one landmark fewer, and a Crystal number read on either
-## of them lands on the wrong city.
-## `_FlyMap`'s own walk on a real cache: with every flypoint visited, one press
-## per row reaches each of the region's twelve and comes back to where it
-## started, and every cursor lands on a landmark the region map draws an icon
-## for.
+## `Flypoints` and `SpawnPoints` against the cache they were imported beside: every
+## flypoint names a landmark the region map draws and a spawn the table holds, and
+## every spawn names a map this cartridge ships. The landmark column is the
+## profile-split half, so this is where it is swept: Gold and Silver ship one
+## landmark fewer, and a Crystal number read on either lands on the wrong city.
+## Below, `_FlyMap`'s own walk on a real cache: with every flypoint visited, one
+## press per row reaches each of the region's twelve and comes back to where it
+## started.
 func _verify_fly_walk(game_id: StringName, _data: GameData) -> void:
 	var crystal: bool = Gen2WorldState.is_crystal_profile(_data)
 	var visited: Array[int] = []

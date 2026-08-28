@@ -1,17 +1,13 @@
 class_name Gen2MysteryGiftPage
 extends RefCounted
 
-## `InitMysteryGiftLayout` and the boxes `DoMysteryGift` prints over it.
-##
-## Two screens under one name: Crystal builds its frame out of one sixty-seven
-## tile run and colours it with two palettes, and Gold and Silver build theirs
-## out of three runs and one palette. Neither has a stored tilemap, so the
-## screen is the routine's own `hlcoord` writes transcribed rather than a map
-## read out of the dump; [constant CRYSTAL_LAYOUT] and [constant GS_LAYOUT] are
-## those writes in the order the routine makes them, and drawing is a walk over
-## them.
-##
-## Node-free, so a check can read the tilemap back headless.
+## `InitMysteryGiftLayout` and the boxes `DoMysteryGift` prints over it. Two
+## screens under one name: Crystal builds its frame out of one sixty-seven tile
+## run and colours it with two palettes, and Gold and Silver build theirs out of
+## three runs and one palette. Neither has a stored tilemap, so the screen is the
+## routine's own `hlcoord` writes transcribed rather than a map read out of the
+## dump, and drawing is a walk over [constant CRYSTAL_LAYOUT] and
+## [constant GS_LAYOUT]. Node-free.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20

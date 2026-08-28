@@ -1,21 +1,13 @@
 extends RefCounted
 
 ## Sweeps `_SlotMachine` on freshly imported real caches, all three cartridges.
-##
-## Every expectation below is transcribed from pokecrystal's own
-## engine/games/slot_machine.asm rather than read back out of the
-## implementation, which is the only way the topic can go red: the three reel
-## strips, the payout table, both bias tables, the six symbols' own line rules
-## and the section's own sizes are the source's tables, and the art is re-read
-## out of the dump beside the cache rather than compared with itself.
-##
-## The class of bug it exists to catch is a reel that lines up something the
-## bias did not ask for. `Slots_CheckMatchedAllThreeReels` is five row tests
-## behind a bet, and a window read one symbol out still matches *something*, so
-## the check drives whole spins on a pinned seed and asserts what stopped where:
-## every bet, every bias, every reel, on all three cartridges.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- slots
+## Every expectation is transcribed from pokecrystal's own
+## engine/games/slot_machine.asm rather than read back out of the implementation,
+## which is the only way the topic can go red, and the art is re-read out of the
+## dump beside the cache. The class of bug it catches is a reel that lines up
+## something the bias did not ask for: `Slots_CheckMatchedAllThreeReels` is five row
+## tests behind a bet and a window read one symbol out still matches something, so
+## the check drives whole spins on a pinned seed and asserts what stopped where.
 
 ## `Reel1Tilemap`, `Reel2Tilemap` and `Reel3Tilemap`, byte for byte, including
 ## the first three symbols each repeats behind itself.

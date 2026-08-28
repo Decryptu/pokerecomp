@@ -1,27 +1,14 @@
 class_name Gen2Lz
 extends RefCounted
 
-## The LZ variant Generation 1 and 2 use for every compressed graphic.
-##
-## A stream is a run of commands, terminated by $FF. Each command byte packs a
-## 3-bit opcode and a length; opcode 7 escapes to a long form that borrows two
-## more length bits and a following byte, so a single command can span up to
-## 1024 bytes.
-##
-##   000 literal    copy the next N bytes verbatim
-##   001 iterate    repeat the next byte N times
-##   010 alternate  repeat the next two bytes, alternating, N times
-##   011 zero       N zero bytes
-##   100 repeat     copy N bytes already written, forwards
-##   101 flipped    same, with each byte's bits reversed
-##   110 reversed   same, but reading backwards from the source
-##
-## The three back-references take an offset that is either a one-byte distance
-## back from the write head (high bit set) or a two-byte absolute position from
-## the output's start (high bit clear). Sources may overlap the bytes being
-## written, which is how the format expresses runs, so the copy is
-## byte-at-a-time, not a slice. The bit-reversing opcode exists because these
-## streams encode 2bpp tiles: a mirrored sprite half is the same bytes flipped.
+## The LZ variant Generation 1 and 2 use for every compressed graphic. A stream is
+## a run of commands terminated by $FF, each packing a 3-bit opcode and a length;
+## opcode 7 escapes to a long form so one command can span 1024 bytes. The seven
+## are literal, iterate, alternate, zero, and the three back-references repeat,
+## flipped and reversed. A back-reference offset is a one-byte distance back (high
+## bit set) or a two-byte absolute position (high bit clear), and sources may
+## overlap the bytes being written, so the copy is byte-at-a-time. The
+## bit-reversing opcode exists because a mirrored 2bpp sprite half is those bytes.
 
 enum Op {
 	LITERAL,

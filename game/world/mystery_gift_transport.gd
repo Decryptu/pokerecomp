@@ -2,22 +2,13 @@ class_name Gen2MysteryGiftTransport
 extends RefCounted
 
 ## The infrared window, as the only thing above it needs it to be.
-##
-## `ExchangeMysteryGiftData` reaches the other Game Boy through rRP rather than
-## through the cable, and what it does with it comes down to three things:
-## whether a partner is in the window at all, which of the two ends is the
-## sender, and one twenty-byte block swapped both ways. There is no infrared
-## port on a modern platform, so this project chooses the transport, and this
-## class is that choice.
-##
-## Scene free and injected, the way [Gen2LinkTransport] is. A window with
-## nobody in it is the honest default and a real game path rather than a stub:
-## the exchange times out, `hMGStatusFlags` comes back `MG_TIMED_OUT` and
-## `DoMysteryGift` prints its own communication-error box.
-##
-## The one partner that exists today is another of this player's own save
-## slots, which [method peer_from_save] builds. A network transport subclasses
-## this and overrides [method peer_block]; nothing above changes.
+## `ExchangeMysteryGiftData` reaches the other Game Boy through rRP, and what it
+## does with it comes down to three things: whether a partner is in the window,
+## which end is the sender, and one twenty-byte block swapped both ways. Scene
+## free and injected, the way [Gen2LinkTransport] is: a window with nobody in it
+## is the honest default and a real game path, since the exchange times out and
+## `DoMysteryGift` prints its own communication-error box. The one partner today
+## is another of this player's own slots.
 
 ## `hMGRole`. The side that holds the window open first is the receiver, which
 ## is what `InitializeIRCommunicationRoles` settles between two real Game Boys.

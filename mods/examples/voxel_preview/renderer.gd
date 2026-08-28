@@ -1,21 +1,13 @@
 extends SubViewportContainer
 
-## A world renderer that draws geometry instead of hardware tiles.
-##
-## The point is that nothing about the world requires the view to be 2D. It reads
-## exactly what the built-in renderer reads (each walk cell's collision
-## permission, the block grid, the tileset's palettes, the player's cell) and
-## extrudes a solid per cell with a camera on the player.
-##
-## It answers [code]uses_hardware_viewport[/code] false, so it gets the screen's
-## own rectangle at window resolution rather than a 160x144 buffer, which under
-## SCREEN FILL is the whole window. Text boxes and menus stay hardware pixels
-## over the top, inside the rectangle [method set_screen_rect] names, and the
-## letterbox around them is this view's own to draw ([method
-## set_interface_masked]) because the screen's cannot reach this layer.
-##
-## It reads the world and never writes it, so the two renderers can be swapped
-## mid-step and neither can tell the other what changed.
+## A world renderer that draws geometry instead of hardware tiles. The point is
+## that nothing about the world requires the view to be 2D: it reads exactly what
+## the built-in renderer reads and extrudes a solid per cell with a camera on the
+## player. It answers `uses_hardware_viewport` false, so it gets the screen's own
+## rectangle at window resolution, and the letterbox around the hardware-pixel
+## boxes over it is this view's own to draw because the screen's cannot reach this
+## layer. It reads the world and never writes it, so the two renderers can be
+## swapped mid-step and neither can tell the other what changed.
 
 ## What mod.json declares, which is how the renderer names itself to the host
 ## when it reads its own settings back.

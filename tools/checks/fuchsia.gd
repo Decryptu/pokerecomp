@@ -3,24 +3,13 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies the walk south from Lavender Town to Fuchsia City and the Soul Badge,
-## against freshly imported real caches for both command profiles.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## maps/Route12.asm, maps/Route13.asm, maps/Route14.asm, maps/Route15.asm,
-## maps/Route15FuchsiaGate.asm, maps/FuchsiaCity.asm, maps/FuchsiaGym.asm and
-## data/maps/attributes.asm.
-##
-## Two findings carry the leg. The way south is four plain connections with one
-## gate at the end, so what it costs is trainers rather than errands, and which
-## trainers is not the same question as how many: shutting each sight line's own
-## cells in turn shows that Crystal owes two of Route 13's five and nothing at
-## all on Routes 12, 14 and 15, while Gold and Silver owe a different set on
-## three profile-split routes. And Fuchsia Gym is a maze rather than a gate: its
-## fifty wall cells leave 130 walkable ones and its six objects stand on six of
-## them, so the door reaches 124; none of those six is an
+## for both command profiles. Two findings carry the leg. The way south is four
+## plain connections with one gate at the end, so what it costs is trainers rather
+## than errands, and which trainers is not the same question as how many: shutting
+## each sight line's cells in turn shows Crystal owes two of Route 13's five and
+## nothing on Routes 12, 14 and 15, while Gold and Silver owe a different set. And
+## Fuchsia Gym is a maze rather than a gate: none of its six objects is an
 ## OBJECTTYPE_TRAINER, and Janine sets her four disguised trainers' flags herself.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- fuchsia
 
 
 ## constants/map_constants.asm. Route 12 belongs to the LAVENDER group; Routes

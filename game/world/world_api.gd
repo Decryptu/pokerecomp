@@ -69,23 +69,13 @@ const STEP_PASSES_FAST: int = 4
 ## then the new facing is written and two more, so a turn on the spot costs
 ## four frames and no cell.
 const STEP_PASSES_TURN: int = 4
-## How long each scripted step command takes, from the `STEP_*` speed it passes
-## to `InitStep` (engine/overworld/movement.asm) and that row of `StepVectors`.
-##
-## Every command here reaches `InitStep`: `NormalStep`, `SlideStep`, `JumpStep`
-## and `TurningStep` all call it and differ in the step type they set over the
-## top, a spin for the three turning rows and a jump for the three jumping ones.
-## The turning rows keep the direction the command names; `turn_away` does not
-## reverse it.
-##
-## The frames here are one cell's. The three jumping rows cover two: `JumpStep`
-## sets `STEP_TYPE_NPC_JUMP` or `STEP_TYPE_PLAYER_JUMP`, whose jumptables are
-## `.Jump` then `.Land` with a `GetNextTile` between them, so each spends this
-## many frames and the command lands two cells on (JUMP_STEP_KINDS below).
-##
-## `turn_step` is the one command that is not here: `TurnStep` sets
-## STEP_TYPE_TURN, never calls `InitStep`, and `StepFunction_Turn` is two frames
-## of standing and two of the new facing. It is filed with `turn_head` below.
+## How long each scripted step command takes, from the `STEP_*` speed it passes to
+## `InitStep` and that row of `StepVectors`. Every command here reaches `InitStep`
+## and they differ only in the step type set over the top; the turning rows keep
+## the direction the command names, `turn_away` not reversing it. The frames are
+## one cell's, and the three jumping rows cover two, `JumpStep`'s jumptable being
+## `.Jump` then `.Land`. `turn_step` is the one command not here: `TurnStep` never
+## calls `InitStep`, so it is filed with `turn_head` below.
 const SCRIPTED_STEP_PASSES: Dictionary = {
 	&"slow_step": STEP_PASSES_NPC_WALK,
 	&"step": STEP_PASSES_WALK,
@@ -145,16 +135,13 @@ static func passes_in_frames(passes: int) -> int:
 	return passes * FRAMES_PER_OVERWORLD_PASS
 
 
-## `InitMapNameSign`. `wCurLandmark` is -1 on a map that has no name to show,
-## and the five landmarks `.CheckSpecialMap` names get no sign either, alongside
-## `LANDMARK_SPECIAL` itself. Crystal indices, since the sign is Crystal's own
-## screen. The two National Park gates are `GROUP_ROUTE_35_NATIONAL_PARK_GATE`'s
-## maps 15 and 17, which `.CheckNationalParkGate` names because their
-## environment is not `GATE`.
-## A `warp_event`'s destination byte for `-1`, which names [member backup_warp]
-## rather than a warp on the map beside it. Six warp events across five maps
-## carry it: POKECENTER_2F's stairs, both dept store elevators' two doors and
-## FAST_SHIP_1F's cabin.
+## `InitMapNameSign`. `wCurLandmark` is -1 on a map with no name to show, and the
+## five landmarks `.CheckSpecialMap` names get no sign either, alongside
+## `LANDMARK_SPECIAL`. Crystal indices, since the sign is Crystal's own screen. The
+## two National Park gates are that group's maps 15 and 17, which
+## `.CheckNationalParkGate` names because their environment is not `GATE`.
+## Below, a `warp_event`'s destination byte for `-1`, which names
+## [member backup_warp]: six warp events across five maps carry it.
 const BACKUP_WARP_DESTINATION: int = 0xFF
 const MAP_NAME_SIGN_NO_LANDMARK: int = -1
 ## `wLandmarkSignTimer`, decremented once per `PlaceMapNameSign` and so once
@@ -513,18 +500,13 @@ func landmark() -> int:
 	return current_map.location if current_map != null else Gen2WorldRadio.LANDMARK_SPECIAL
 
 
-## The same lookup with the `LANDMARK_SPECIAL` fallback `RegionCheck`,
-## `IsInJohto`, `FlyMap`, `Pokedex_GetLandmark` and both `TownMap_*` routines
-## spell out: a map with no landmark of its own borrows [member backup_warp]'s.
-##
-## Six maps carry `LANDMARK_SPECIAL` and only one of them is ordinary: POKECENTER_2F
-## is every Pokemon Center's own upstairs, so the region a radio, a battle track,
-## the town map and the dex area screen answer with is the backup's on every visit
-## to one. The other five are the cable club's rooms.
-##
-## `SetCaughtData` tests POKECENTER_2F by name rather than the landmark, and the
-## two agree everywhere a caught mon can be made: nothing is caught in the five
-## cable club rooms, and a traded mon carries its own data.
+## The same lookup with the `LANDMARK_SPECIAL` fallback `RegionCheck`, `FlyMap`,
+## `Pokedex_GetLandmark` and both `TownMap_*` routines spell out: a map with no
+## landmark of its own borrows [member backup_warp]'s. Six maps carry it and only
+## one is ordinary, POKECENTER_2F being every Pokemon Center's own upstairs, so
+## the region a radio, a battle track and the dex area answer with is the backup's
+## on every visit. `SetCaughtData` tests POKECENTER_2F by name rather than the
+## landmark, and the two agree everywhere a caught mon can be made.
 func landmark_backup() -> int:
 	var here: int = landmark()
 	if here != Gen2WorldRadio.LANDMARK_SPECIAL or backup_warp.is_empty() or data == null:
@@ -1020,22 +1002,13 @@ func set_movement_mode(mode: StringName) -> Dictionary:
 
 
 ## Sets the read-only party mirror a queued script's VAR_PARTYCOUNT read, its
-## CheckPokerus special and its checkpoke consult. count must be non-negative;
-## has_pokerus is the source's own low-nibble-nonzero check across the whole
-## party, computed by the caller because Gen2WorldAPI does not read Gen2SaveMon
-## fields directly. [param species] mirrors `wPartySpecies` for `checkpoke`.
-## [param moves] is one move list per slot, mirroring the party's move slots for
-## `CheckPartyMove`, and [param names] one display name per slot for
-## `GetPartyNickname`; TryStrengthOW asks the first and Script_UsedStrength the
-## second. Only an absent summary fails a script-visible read; a summary whose
-## list is empty answers "not in the party", which is what the story preview's
-## own callers rely on.
-## [param eggs] marks which slots are eggs, because `CheckPartyMove` skips them:
-## an egg carries the moves it will hatch with and would otherwise answer for a
-## move no usable party member knows.
-## [param extra] carries the few party facts a script asks about that are not
-## per-slot: `lead_fainted` for `ContestDropOffMons`, `second_species` for the
-## byte it stashes, and `storage_full` for `CheckPartyFullAfterContest`.
+## CheckPokerus special and its checkpoke consult. `has_pokerus` is the source's
+## own low-nibble check across the party, computed by the caller because this
+## class does not read [Gen2SaveMon] fields. [param moves] mirrors the move slots
+## for `CheckPartyMove` and [param names] the display names for
+## `GetPartyNickname`. [param eggs] marks the slots `CheckPartyMove` skips, since
+## an egg carries the moves it will hatch with. [param extra] carries the few party
+## facts that are not per-slot. Only an absent summary fails a script-visible read.
 func set_party_summary(
 	count: int, has_pokerus: bool, species: Array[int] = [] as Array[int],
 	moves: Array = [], names: Array = [], eggs: Array = [], extra: Dictionary = {},
@@ -1057,16 +1030,13 @@ func set_party_summary(
 	return {"ok": true}
 
 
-## CheckPartyMove (`engine/events/overworld.asm`): the first party slot whose own
-## move list carries [param move], or -1 when none does. Eggs are skipped, empty
-## and terminator slots end the walk, and the answer is the slot index the source
-## leaves in `wCurPartyMon`.
-##
-## Every field move is gated on this. The party submenu reaches `CutFunction` and
-## friends only for a mon that knows the move, and the overworld prompts
-## (`TryCutOW`, `TrySurfOW`, `TryWhirlpoolOW`, `TryWaterfallOW`, `TryStrengthOW`)
-## each call `CheckPartyMove` themselves, so there is no path in either game that
-## uses a field move the party does not know.
+## CheckPartyMove: the first party slot whose own move list carries [param move],
+## or -1 when none does. Eggs are skipped, empty and terminator slots end the walk,
+## and the answer is the slot index the source leaves in `wCurPartyMon`. Every
+## field move is gated on this: the party submenu reaches `CutFunction` and friends
+## only for a mon that knows the move, and the overworld prompts each call
+## `CheckPartyMove` themselves, so there is no path in either game that uses a
+## field move the party does not know.
 func party_slot_with_move(move_id: int) -> int:
 	var moves: Array = _party_summary.get("moves", [])
 	var eggs: Array = _party_summary.get("eggs", [])
@@ -1084,19 +1054,14 @@ const FIELD_MOVE_SOURCE_PARTY: StringName = &"party"
 const FIELD_MOVE_SOURCE_ITEM: StringName = &"item"
 
 
-## WHERE a field move would be used from, which is the one question every
-## entrance to one asks: `{kind, move, slot, item}`, and `{}` when nothing can
-## use it.
-##
-## The party is asked first and answers exactly what [method
-## party_slot_with_move] did, so with no registered source every field move
-## resolves the way it always has. Only when no slot knows the move is an
-## alternate source considered, and only for the seven HM moves.
-##
-## The badge is deliberately NOT part of this. Every `Try*OW` and every staged
-## request tests its own `CheckBadge` in the source's own order, so a player
-## carrying HM01 without the Hive Badge is told about the badge, exactly as one
-## whose Pokemon knows CUT is.
+## WHERE a field move would be used from, which is the one question every entrance
+## to one asks: `{kind, move, slot, item}`, and `{}` when nothing can use it. The
+## party is asked first and answers exactly what [method party_slot_with_move]
+## did, so with no registered source every field move resolves the way it always
+## has; only when no slot knows the move is an alternate source considered, and
+## only for the seven HM moves. The badge is deliberately NOT part of this: every
+## `Try*OW` tests its own `CheckBadge` in the source's order, so a player carrying
+## HM01 without the Hive Badge is told about the badge.
 func field_move_source(move_id: int) -> Dictionary:
 	var slot: int = party_slot_with_move(move_id)
 	if slot >= 0:
@@ -1310,17 +1275,14 @@ static func _cut_failure(reason: StringName) -> Dictionary:
 	return {"ok": false, "kind": &"cut_failed", "reason": reason}
 
 
-## engine/events/overworld.asm's SurfFunction .TrySurf, staged rather than
-## applied, for the same reason Cut is: UsedSurfScript changes nothing until its
-## text is acknowledged.
-##
-## The refusal order is the source's. The badge is tested before the player's own
-## state and before the tile, so a player without the Fog Badge is told about the
-## badge whether or not the water in front of them is surfable. CheckBadge itself
-## is what pushes that text, which is why this reports the same badge_required
-## Cut does. [param species] is the chosen party member's, for GetSurfType.
-##
-## The source's wBikeFlags branch has no counterpart here, since no bike exists.
+## engine/events/overworld.asm's SurfFunction .TrySurf, staged rather than applied,
+## for the same reason Cut is: UsedSurfScript changes nothing until its text is
+## acknowledged. The refusal order is the source's: the badge is tested before the
+## player's own state and before the tile, so a player without the Fog Badge is
+## told about the badge whether or not the water in front is surfable, CheckBadge
+## itself being what pushes that text. [param species] is the chosen party
+## member's, for GetSurfType. The source's wBikeFlags branch has no counterpart
+## here, since no bike exists.
 func surf_request(species: int = 0) -> Dictionary:
 	if current_map == null or current_tileset == null:
 		return _surf_failure(&"missing_map")
@@ -1468,13 +1430,11 @@ static func _whirlpool_failure(reason: StringName) -> Dictionary:
 
 ## engine/events/overworld.asm's WaterfallFunction .TryWaterfall, staged the way
 ## the other four are: Script_UsedWaterfall shows _UseWaterfallText and waits on
-## its button before the first climbing step, so nothing moves until the commit.
-##
-## .TryWaterfall is CheckBadge ENGINE_RISINGBADGE, then CheckMapCanWaterfall,
-## which is two tests and no more: `wPlayerDirection & $c` must be FACE_UP, and
-## wTileUp must satisfy CheckWaterfallTile. It reads no player state, so like
-## .TryWhirlpool it neither requires nor refuses surfing, and its refusal is
-## FieldMoveFailed's generic _CantUseItemText rather than a move-specific line.
+## its button before the first climbing step. `.TryWaterfall` is CheckBadge
+## ENGINE_RISINGBADGE, then CheckMapCanWaterfall, which is two tests and no more:
+## `wPlayerDirection & $c` must be FACE_UP, and wTileUp must satisfy
+## CheckWaterfallTile. It reads no player state, so it neither requires nor refuses
+## surfing, and its refusal is FieldMoveFailed's generic line.
 func waterfall_request() -> Dictionary:
 	if current_map == null or current_tileset == null:
 		return _waterfall_failure(&"missing_map")
@@ -1510,16 +1470,13 @@ func pending_waterfall() -> Dictionary:
 
 
 ## Script_UsedWaterfall's loop: `applymovement PLAYER, .WaterfallStep` is one
-## `turn_waterfall UP`, and `.CheckContinueWaterfall` repeats it while the cell
-## the player now stands on still answers CheckWaterfallTile. So the climb ends
-## on the first cell above the column that is not a waterfall, however tall it
-## is, and the whole run is one command rather than a step the caller paces.
-##
-## Each step is an applymovement, so it consults no collision, spends no repel
-## step and rolls no encounter, exactly as complete_surf()'s single slow_step
-## does. The landing does re-derive the player state, the way a warp does:
-## CheckUpdatePlayerSprite keeps surfing on water and restores walking anywhere
-## else, which is what puts a climber ashore on the ledge above.
+## `turn_waterfall UP`, and `.CheckContinueWaterfall` repeats it while the cell the
+## player now stands on still answers CheckWaterfallTile. So the climb ends on the
+## first cell above the column that is not a waterfall, and the whole run is one
+## command rather than a step the caller paces. Each step is an applymovement, so
+## it consults no collision, spends no repel step and rolls no encounter. The
+## landing does re-derive the player state the way a warp does, which is what puts
+## a climber ashore on the ledge above.
 func complete_waterfall() -> Dictionary:
 	if _pending_waterfall.is_empty():
 		return _waterfall_failure(&"no_pending_waterfall")
@@ -1557,14 +1514,11 @@ static func _waterfall_failure(reason: StringName) -> Dictionary:
 
 
 ## engine/events/overworld.asm's FlashFunction .CheckUseFlash, staged the way the
-## other five are.
-##
-## Flash is the one field move that checks no tile at all. Its whole test is the
-## badge and then whether this map is a dark one, which is the map header's own
-## palette byte rather than anything under the player. The Aerodactyl chamber's
-## `SpecialAerodactylChamber` branch, which lets Flash be used in a lit room
-## there, is a Ruins of Alph puzzle that is not implemented, so the palette is
-## the only way through here.
+## other five are. Flash is the one field move that checks no tile at all: its
+## whole test is the badge and then whether this map is a dark one, which is the
+## map header's own palette byte rather than anything under the player. The
+## Aerodactyl chamber's branch is a Ruins of Alph puzzle that is not implemented,
+## so the palette is the only way through here.
 func flash_request() -> Dictionary:
 	if current_map == null:
 		return _flash_failure(&"missing_map")
@@ -1718,16 +1672,13 @@ static func _headbutt_failure(reason: StringName) -> Dictionary:
 	return {"ok": false, "kind": &"headbutt_failed", "reason": reason}
 
 
-## engine/events/overworld.asm's TryRockSmashFromMenu, staged the way the other
-## six are: RockSmashScript reaches RockMonEncounter only after
-## UseRockSmashText, so the roll and the rock both belong to the commit.
-##
-## Rock Smash asks neither a badge nor a tile. `GetFacingObject` is
-## `CheckFacingObject` and then the faced object's own `MAPOBJECT_MOVEMENT`
-## byte, compared against `SPRITEMOVEDATA_SMASHABLE_ROCK`, so the question is
-## which object is in front rather than what the ground is. That is also why it
-## reads the doubled counter cell the way `interact()` does: it is the same
-## `CheckFacingObject`.
+## engine/events/overworld.asm's TryRockSmashFromMenu, staged the way the other six
+## are: RockSmashScript reaches RockMonEncounter only after UseRockSmashText, so
+## the roll and the rock both belong to the commit. Rock Smash asks neither a badge
+## nor a tile: `GetFacingObject` is `CheckFacingObject` and then the faced object's
+## own `MAPOBJECT_MOVEMENT` byte against `SPRITEMOVEDATA_SMASHABLE_ROCK`, so the
+## question is which object is in front rather than what the ground is. That is
+## also why it reads the doubled counter cell the way `interact()` does.
 func rock_smash_request() -> Dictionary:
 	if current_map == null or current_tileset == null:
 		return _rock_smash_failure(&"missing_map")
@@ -1899,15 +1850,13 @@ func map_time_of_day() -> int:
 	)
 
 
-## engine/events/overworld.asm's StrengthFunction .TryStrength, staged the way
-## the other three are because Script_UsedStrength sets nothing until after its
-## text either.
-##
-## Unlike them, .TryStrength is a badge check and nothing else: no faced tile, no
-## block table, no player state, and no check that a boulder is even in front.
-## Its .AlreadyUsingStrength branch is annotated unreferenced in both pins, so an
-## already-active flag is not a refusal here. [param species] is the chosen party
-## member's, for SetStrengthFlag's wStrengthSpecies.
+## engine/events/overworld.asm's StrengthFunction .TryStrength, staged the way the
+## other three are because Script_UsedStrength sets nothing until after its text
+## either. Unlike them, `.TryStrength` is a badge check and nothing else: no faced
+## tile, no block table, no player state, and no check that a boulder is even in
+## front. Its `.AlreadyUsingStrength` branch is annotated unreferenced in both
+## pins, so an already-active flag is not a refusal here. [param species] is the
+## chosen party member's, for SetStrengthFlag's wStrengthSpecies.
 func strength_request(species: int = 0) -> Dictionary:
 	if current_map == null or current_tileset == null:
 		return _strength_failure(&"missing_map")
@@ -2127,17 +2076,13 @@ func can_encounter_wild_mon_at(cell: Vector2i) -> bool:
 	return not Gen2WorldCollision.is_ice(code)
 
 
-## Every cell of the current map a wild could be met on, grouped by the method
-## the terrain resolves to, as [method encounter_request] resolves it: WATER_TILE
-## is `surf` and LAND_TILE is `grass`, and a cave or dungeon floor is grass
-## whether or not it is drawn as grass.
-##
-## One narrowing on [method can_encounter_wild_mon]: a cell nothing can stand on
-## is not offered. A cave's walls pass the gate, since the cave branch skips the
-## grass test, and a Pokemon cannot be put inside one.
-##
-## The map's own collision grid and nothing past it: a connection's cells belong
-## to the connected map's own tables.
+## Every cell of the current map a wild could be met on, grouped by the method the
+## terrain resolves to, as [method encounter_request] resolves it: WATER_TILE is
+## `surf` and LAND_TILE is `grass`, and a cave or dungeon floor is grass whether or
+## not it is drawn as grass. One narrowing on
+## [method can_encounter_wild_mon]: a cell nothing can stand on is not offered,
+## since a cave's walls pass the gate and a Pokemon cannot be put inside one. The
+## map's own collision grid and nothing past it.
 func visible_encounter_cells() -> Dictionary:
 	var out: Dictionary = {
 		Gen2WorldEncounter.METHOD_GRASS: PackedVector2Array(),
@@ -2810,17 +2755,13 @@ func advance_emotes_frame() -> bool:
 	return changed
 
 
-## The grass rustles `NormalStep` spawned this frame, taken once.
-##
-## `ShakeGrass` runs where a step starts, for whichever object is stepping and
-## for the player alike, when the tile that step commits to is grass by
-## `SetTallGrassFlags`' own test. The temporary object it spawns lives one frame
-## less than the step (`MovementFunction_ShakingGrass`), tracks the object that
-## spawned it, and is drawn over that object's own sprite.
-##
-## Returned rather than emitted because nothing in the world reads it: it is
-## presentation, and [Gen2WorldEffects] is what holds it while it runs. Object
-## index -1 is the player.
+## The grass rustles `NormalStep` spawned this frame, taken once. `ShakeGrass` runs
+## where a step starts, for whichever object is stepping and for the player alike,
+## when the tile that step commits to is grass by `SetTallGrassFlags`' own test.
+## The temporary object it spawns lives one frame less than the step, tracks the
+## object that spawned it and is drawn over that object's own sprite. Returned
+## rather than emitted because nothing in the world reads it: it is presentation,
+## and [Gen2WorldEffects] holds it while it runs. Object index -1 is the player.
 func take_grass_rustles() -> Array:
 	var out: Array = []
 	if _player_step_began:
@@ -2918,19 +2859,13 @@ func trainer_approach_plan(
 
 
 ## Applies one step from an already validated approach plan and starts that
-## object's presentation offset for the pacing caller to consume; the object's
-## cell is already the destination when this returns.
-##
-## Only the map bounds refuse, as in _apply_object_movement(): the approach is
-## `applymovementlasttalked wMovementBuffer` (engine/events/trainer_scripts.asm)
-## and its steps reach NormalStep (engine/overworld/movement.asm), which never
-## calls CanObjectMoveInDirection. That is what walks Cerulean Gym's swimmers
-## over their own pool.
-##
-## STEP_PASSES_WALK, not the slow row: TrainerWalkToPlayer passes 1 in d and
-## `.GetPathToPlayer`'s `push de`/`pop af` hands it to
-## ComputePathToWalkToPlayer, whose `ld b, a` selects `.MovementData`'s `step`
-## row (engine/overworld/player_object.asm, home/movement.asm).
+## object's presentation offset for the pacing caller to consume; the object's cell
+## is already the destination when this returns. Only the map bounds refuse: the
+## approach is `applymovementlasttalked wMovementBuffer` and its steps reach
+## NormalStep, which never calls CanObjectMoveInDirection, which is what walks
+## Cerulean Gym's swimmers over their own pool. STEP_PASSES_WALK, not the slow row:
+## TrainerWalkToPlayer passes 1 in d and `.GetPathToPlayer` hands it to
+## ComputePathToWalkToPlayer, whose `ld b, a` selects `.MovementData`'s `step` row.
 func advance_trainer_approach_step(object_index: int, direction: Vector2i) -> Dictionary:
 	if current_map == null or object_index < 0 or object_index >= objects.size():
 		return {"ok": false, "reason": &"invalid_trainer_object"}
@@ -3115,18 +3050,13 @@ func warp_index_at(cell: Vector2i) -> int:
 	return 0
 
 
-## engine/overworld/cmd_queue.asm's CmdQueue_StoneTable and home/stone_queue.asm's
-## HandleStoneQueue, as one question: which script does this boulder's cell fire?
-##
-## The source's own order, all five tests. The object must be a Strength boulder,
-## standing on a pit tile (`CheckPitTile`, COLL_PIT or COLL_PIT_68), not mid-step,
-## on a warp event, and named by a written CMDQUEUE_STONETABLE row for that
-## warp. Answers an empty Dictionary when any of them refuses.
-##
-## The row's object id is an `object_const_def` constant, which starts at 2, so
-## it is compared against the object's own index plus two. That is the same
-## mapping `applymovement` uses, and the source makes it by comparing against
-## OBJECT_MAP_OBJECT_INDEX + 1 over a table whose index zero is the player.
+## `CmdQueue_StoneTable` and `HandleStoneQueue`, as one question: which script does
+## this boulder's cell fire? The source's own order, all five tests. The object
+## must be a Strength boulder, standing on a pit tile, not mid-step, on a warp
+## event, and named by a written CMDQUEUE_STONETABLE row for that warp; any refusal
+## answers an empty Dictionary. The row's object id is an `object_const_def`
+## constant, which starts at 2, so it is compared against the object's own index
+## plus two, the same mapping `applymovement` uses.
 func stone_queue_script(boulder: Gen2WorldObject) -> Dictionary:
 	if boulder == null or not boulder.is_strength_boulder() or boulder.is_stepping():
 		return {}
@@ -3626,16 +3556,14 @@ func dispatch_callbacks(callback_type: int = -1) -> Array:
 	return run_event_queue(false)
 
 
-## Runs the callbacks that belong to entering the current map. The scene calls
-## this once after opening a new or validated snapshot; map transitions already
-## queue the same callback set from _apply_map().
-##
-## The scene script is armed only once per entry. `MAPSETUP_ENTER` runs it as
-## part of the map load, so a second call for the same entry is a caller
-## dispatching twice, not a second entry: replaying the scene would walk its
-## `applymovement`s again, which is what put the Dragon Shrine's player through
-## the north wall. The callbacks are re-queued, since each is written to run
-## whenever the map is refreshed.
+## Runs the callbacks that belong to entering the current map. The scene calls this
+## once after opening a new or validated snapshot; map transitions already queue
+## the same callback set from `_apply_map()`. The scene script is armed only once
+## per entry: `MAPSETUP_ENTER` runs it as part of the map load, so a second call is
+## a caller dispatching twice rather than a second entry, and replaying the scene
+## would walk its `applymovement`s again, which is what put the Dragon Shrine's
+## player through the north wall. The callbacks are re-queued, since each is
+## written to run whenever the map is refreshed.
 func dispatch_map_entry() -> Array:
 	if current_map == null:
 		return []
@@ -3648,19 +3576,14 @@ func dispatch_map_entry() -> Array:
 	return events
 
 
-## `LoadObjectMasks` (engine/overworld/map_objects_2.asm), which is what actually
-## masks an object rather than `ReadObjectEvents`: that one copies every event
-## into `wMapObjects` without looking at a flag.
-##
-## The distinction is the whole reason this is a step of its own.
-## `MapSetupScript_Warp` runs `LoadMapAttributes`, then `HandleNewMap`, whose
-## `MAPCALLBACK_NEWMAP` is where `ToggleDecorationsVisibility` sets the four
-## `EVENT_PLAYERS_HOUSE_2F_*` flags for a decoration the player does not own, and
-## only then `LoadMapObjects`, which runs `MAPCALLBACK_OBJECTS` and calls this.
-## So a flag a map-entry callback writes is read *after* it is written. Reading
-## it while the record is built puts the console, both dolls and the big doll in
-## the player's bedroom on a new game, each drawn as the `SPRITE_CHRIS` its
-## unassigned variable sprite falls back to.
+## `LoadObjectMasks`, which is what actually masks an object rather than
+## `ReadObjectEvents`: that one copies every event into `wMapObjects` without
+## looking at a flag. `MapSetupScript_Warp` runs `LoadMapAttributes`, then
+## `HandleNewMap`, whose `MAPCALLBACK_NEWMAP` is where `ToggleDecorationsVisibility`
+## sets the four `EVENT_PLAYERS_HOUSE_2F_*` flags, and only then `LoadMapObjects`,
+## which calls this. So a flag a map-entry callback writes is read *after* it is
+## written; reading it while the record is built puts the console, both dolls and
+## the big doll in the player's bedroom on a new game.
 func load_object_masks() -> void:
 	_object_masks_pending = false
 	for object: Gen2WorldObject in objects:
@@ -3708,17 +3631,12 @@ func interact() -> Array:
 
 
 ## TryTileCollisionEvent from `.cut` on. The faced tile picks the branch, in the
-## source's order: a cut tree, then a whirlpool, then a waterfall, then a
-## headbutt tree, and `.surf` as the fallback any other tile reaches.
-##
-## Only the tile-shaped half of each gate is answered here, because only this
-## layer can read the map: whether the branch applies at all, and for Whirlpool
-## and Waterfall whether TryWhirlpoolMenu and CheckMapCanWaterfall would pass.
-## The party and the badge belong to the runner, which replays the Ask*Script.
-##
-## `.surf` is the one branch that is silent rather than refused when its own
-## tile checks fail: TrySurfOW answers no carry and the player event ends, so an
-## ordinary wall produces no request at all.
+## source's order: a cut tree, then a whirlpool, then a waterfall, then a headbutt
+## tree, and `.surf` as the fallback any other tile reaches. Only the tile-shaped
+## half of each gate is answered here, because only this layer can read the map;
+## the party and the badge belong to the runner, which replays the Ask*Script.
+## `.surf` is the one branch that is silent rather than refused when its own tile
+## checks fail, so an ordinary wall produces no request at all.
 func _field_move_prompt_request(cell: Vector2i) -> Dictionary:
 	if current_map == null or current_tileset == null or data == null:
 		return {}
@@ -3883,15 +3801,13 @@ func _resume_after(advanced: Dictionary) -> Array:
 	return results
 
 
-## Starts each queued script in turn and stops at the first one that waits for
-## the host.
-##
-## A warp applied while resuming a host request leaves the destination's map
+## Starts each queued script in turn and stops at the first one that waits for the
+## host. A warp applied while resuming a host request leaves the destination's map
 ## scene pending exactly as one applied inside [method run_event_queue] does, so
 ## this has to pick it up too. Boarding the S.S. Aqua is where that shows:
 ## `OlivinePortSailorAtGangwayScript` warps mid-script and the ship's own
-## `FastShip1FEnterShipScript` is what walks the player away from the door, so
-## dropping it left the player boxed in against the sailor who blocks it.
+## `FastShip1FEnterShipScript` walks the player away from the door, so dropping it
+## left the player boxed in against the sailor who blocks it.
 func _drain_script_queue() -> Array:
 	var results: Array = []
 	while _active_script == null:
@@ -4295,6 +4211,43 @@ func _coord_event_condition_active(event: Dictionary) -> bool:
 	return int(event.get("scene", -1)) == state.map_scene(current_map.group, current_map.number)
 
 
+## Script event to the method that applies it, each taking the event and
+## answering the events it generated.
+const SCRIPT_EVENT_HANDLERS: Dictionary = {
+	&"warp_check_requested": &"_script_warp_check",
+	&"player_facing_requested": &"_script_player_facing",
+	&"player_movement_requested": &"_apply_player_movement",
+	&"object_movement_requested": &"_apply_object_movement",
+	&"object_write_position": &"_script_write_object_position",
+	&"map_block_changed": &"_script_change_block",
+	&"map_reload_requested": &"_script_reload_map",
+	&"map_refresh_requested": &"_script_refresh_map",
+	&"bug_contest_started": &"_script_start_bug_contest",
+	&"bug_contestants_selected": &"_script_select_contestants",
+	&"contest_mons_dropped_off": &"_script_contest_drop_off",
+	&"contest_mons_returned": &"_script_contest_return",
+	&"warp_to_spawn_point": &"_script_warp_to_spawn",
+	&"wild_encounters_changed": &"_script_wild_encounters",
+	&"command_queue_written": &"_script_queue_write",
+	&"command_queue_deleted": &"_script_queue_delete",
+	&"earthquake_requested": &"_script_earthquake",
+	&"object_follow": &"_script_object_follow",
+	&"object_stop_follow": &"_script_object_stop_follow",
+	&"player_face_object": &"_script_player_face_object",
+}
+
+## The three that edit the loaded object itself, all behind the same bounds test.
+const LOCAL_OBJECT_EVENTS: Array[StringName] = [
+	&"object_deleted", &"object_emote", &"object_event_flag",
+]
+
+## The five that record an override the next object load reads.
+const OBJECT_OVERRIDE_EVENTS: Array[StringName] = [
+	&"object_visibility", &"object_position", &"object_facing",
+	&"object_face_player", &"object_face_object",
+]
+
+
 func _apply_script_object_events(raw_events: Variant) -> Array:
 	var generated: Array = []
 	if not raw_events is Array:
@@ -4304,248 +4257,247 @@ func _apply_script_object_events(raw_events: Variant) -> Array:
 		if not raw_event is Dictionary:
 			continue
 		var event: Dictionary = raw_event as Dictionary
-		var event_type: StringName = StringName(event.get("type", &""))
-		if event_type == &"warp_check_requested":
-			## Script_warpcheck asks whether the player is standing on a warp
-			## and takes it if so, which is how the Burned Tower rival scene
-			## drops the player through the hole it just opened. A cell with no
-			## warp answers nothing, exactly as WarpCheck's carry does.
-			var checked: Dictionary = try_warp()
-			generated.append({
-				"type": &"warp_check",
-				"taken": bool(checked.get("ok", false)),
-				"transition": checked.duplicate(true),
-			})
-			continue
-		if event_type == &"player_facing_requested":
-			## Script_warpfacing writes the player's facing before the warp, and
-			## the map load never touches it, so the facing outlives the
-			## transition. Lance's room is where it shows: `warpfacing UP` is
-			## what the player enters the Hall of Fame already facing.
-			player_facing = int(event.get("facing", player_facing))
-			generated.append({"type": &"player_facing", "facing": player_facing})
-			continue
-		if event_type == &"player_movement_requested":
-			generated.append_array(_apply_player_movement(event))
-			continue
-		if event_type == &"object_movement_requested":
-			generated.append_array(_apply_object_movement(event))
-			continue
-		if event_type == &"object_write_position":
-			var write_map_group: int = int(event.get("map_group", -1))
-			var write_map_number: int = int(event.get("map_number", -1))
-			var write_index: int = int(event.get("object_index", -1))
-			if current_map == null or write_map_group != current_map.group \
-				or write_map_number != current_map.number \
-				or write_index < 0 or write_index >= objects.size():
-				generated.append({"type": &"object_change_failed", "reason": &"invalid_object"})
-				continue
-			var write_object: Gen2WorldObject = objects[write_index]
-			var write_key: String = _object_key(
-				write_map_group, write_map_number, write_index
-			)
-			_object_position_overrides[write_key] = write_object.cell
-			generated.append({
-				"type": &"object_position_written",
-				"object_index": write_index, "cell": write_object.cell,
-			})
-			continue
-		if event_type == &"map_block_changed":
-			if current_map == null or int(event.get("map_group", -1)) != current_map.group \
-				or int(event.get("map_number", -1)) != current_map.number:
-				generated.append({"type": &"map_change_failed", "reason": &"invalid_map"})
-				continue
-			var source_cell := Vector2i(
-				int(event.get("x", -1)), int(event.get("y", -1))
-			)
-			var block_cell: Vector2i = _script_block_cell(source_cell)
-			var changed_block: Dictionary = change_block(
-				block_cell.x, block_cell.y, int(event.get("block", -1))
-			)
-			if bool(changed_block.get("ok", false)):
-				changed_block["source_cell"] = source_cell
-				generated.append({"type": &"map_block_changed", "change": changed_block})
-			else:
-				generated.append({
-					"type": &"map_change_failed",
-					"reason": changed_block.get("reason", &"invalid_block"),
-					"source_cell": source_cell,
-					"block_cell": block_cell,
-				})
-			continue
-		if event_type == &"map_reload_requested":
-			generated.append(reload_current_map())
-			continue
-		if event_type == &"bug_contest_started":
-			generated.append(start_bug_contest())
-			continue
-		if event_type == &"bug_contestants_selected":
-			var withdrawn: Dictionary = Gen2WorldBugContest.select_withdrawn(
-				schedule_random if schedule_random != null else RandomNumberGenerator.new()
-			)
-			for index: int in Gen2WorldBugContest.NUM_CONTESTANTS:
-				state.set_event_flag(
-					Gen2WorldState.EVENT_BUG_CATCHING_CONTESTANT_FIRST + index,
-					bool(withdrawn.get(index, false))
-				)
-			generated.append({
-				"type": &"bug_contestants_selected",
-				"withdrawn": withdrawn.keys(),
-			})
-			continue
-		if event_type == &"contest_mons_dropped_off":
-			state.set_contest_second_party_species(int(event.get("second_species", 0)))
-			generated.append({
-				"type": &"contest_mons_dropped_off",
-				"second_species": state.contest_second_party_species(),
-			})
-			continue
-		if event_type == &"warp_to_spawn_point":
-			warp_to_spawn_point()
-			generated.append({"type": &"warp_to_spawn_point"})
-			continue
-		if event_type == &"contest_mons_returned":
-			state.set_contest_second_party_species(0)
-			generated.append({"type": &"contest_mons_returned"})
-			continue
-		if event_type == &"wild_encounters_changed":
-			var wild_enabled: bool = bool(event.get("enabled", true))
-			state.set_wild_encounters_off(not wild_enabled)
-			generated.append({
-				"type": &"wild_encounters_changed", "enabled": wild_enabled,
-			})
-			continue
-		if event_type == &"variable_sprite_changed":
-			var variable_sprite: int = int(event.get("variable_sprite", -1))
+		var type: StringName = StringName(event.get("type", &""))
+		if SCRIPT_EVENT_HANDLERS.has(type):
+			generated.append_array(call(SCRIPT_EVENT_HANDLERS[type], event) as Array)
+		elif type == &"variable_sprite_changed":
+			var slot: int = int(event.get("variable_sprite", -1))
 			var sprite: int = int(event.get("sprite", 0))
-			if variable_sprite < Gen2WorldScriptRunner.VARIABLE_SPRITE_BASE \
-				or sprite <= 0:
+			if slot < Gen2WorldScriptRunner.VARIABLE_SPRITE_BASE or sprite <= 0:
 				generated.append({"type": &"variable_sprite_change_failed"})
 				continue
-			state.set_variable_sprite(variable_sprite, sprite)
+			state.set_variable_sprite(slot, sprite)
 			## The table is `wPlayerData`, not the loaded map, so the people
 			## SCREEN FILL draws on the maps next door resolve through it too.
 			_connected_objects = []
 			reload_objects = true
 			generated.append({
 				"type": &"variable_sprite_changed",
-				"variable_sprite": variable_sprite,
-				"sprite": sprite,
+				"variable_sprite": slot, "sprite": sprite,
 			})
-			continue
-		if event_type == &"map_refresh_requested":
-			generated.append({"type": &"map_refreshed", "map": map_id()})
-			continue
-		if event_type == &"command_queue_written":
-			generated.append(apply_command_queue_write(
-				int(event.get("bank", 0)), int(event.get("address", 0))
-			))
-			continue
-		if event_type == &"command_queue_deleted":
-			generated.append(apply_command_queue_delete(int(event.get("queue_id", -1))))
-			continue
-		if event_type == &"earthquake_requested":
-			generated.append({
-				"type": &"screen_shake_requested",
-				"strength": int(event.get("strength", 0)),
-			})
-			continue
-		if event_type == &"object_follow":
-			## `wObjectFollow_Leader` and `wObjectFollow_Follower` are one byte
-			## each, so a second `follow` replaces the pair rather than adding to
-			## it.
-			_start_object_follow(event)
-			continue
-		if event_type == &"object_stop_follow":
-			_object_followers.clear()
-			continue
-		if event_type in [&"object_deleted", &"object_emote", &"object_event_flag"]:
-			var local_map_group: int = int(event.get("map_group", -1))
-			var local_map_number: int = int(event.get("map_number", -1))
-			var local_index: int = int(event.get("object_index", -1))
-			if current_map == null or local_map_group != current_map.group \
-				or local_map_number != current_map.number \
-				or local_index < 0 or local_index >= objects.size():
-				generated.append({"type": &"object_change_failed", "reason": &"invalid_object"})
-				continue
-			var local_object: Gen2WorldObject = objects[local_index]
-			var local_key: String = _object_key(local_map_group, local_map_number, local_index)
-			match event_type:
-				&"object_deleted":
-					local_object.deleted = true
-					local_object.active = false
-					_object_followers.erase(local_key)
-					generated.append({"type": &"object_deleted", "object_index": local_index})
-				&"object_emote":
-					local_object.set_emote(
-						int(event.get("emote_id", -1)), bool(event.get("visible", false)),
-						int(event.get("duration", 0))
-					)
-				&"object_event_flag":
-					var flag: int = local_object.event_flag
-					if flag > 0:
-						state.set_event_flag(flag, bool(event.get("active", false)))
-			continue
-		if event_type == &"player_face_object":
-			var player_target_index: int = int(event.get("target_index", -1))
-			if current_map != null and int(event.get("map_group", -1)) == current_map.group \
-				and int(event.get("map_number", -1)) == current_map.number \
-				and player_target_index >= 0 and player_target_index < objects.size():
-				player_facing = _facing_toward(
-					player_cell, (objects[player_target_index] as Gen2WorldObject).cell
-				)
-			continue
-		if event_type not in [
-			&"object_visibility", &"object_position", &"object_facing",
-			&"object_face_player", &"object_face_object",
-		]:
-			continue
-		var map_group: int = int(event.get("map_group", -1))
-		var map_number: int = int(event.get("map_number", -1))
-		var object_index: int = int(event.get("object_index", -1))
-		if object_index < 0:
-			continue
-		var key: String = _object_key(map_group, map_number, object_index)
-		match event_type:
-			&"object_visibility":
-				_object_visibility_overrides[key] = bool(event.get("active", false))
-				if object_index < objects.size() \
-					and (objects[object_index] as Gen2WorldObject).event_flag <= 0:
-					_transient_object_visibility_overrides[key] = true
-				else:
-					_transient_object_visibility_overrides.erase(key)
-				reload_objects = true
-			&"object_position":
-				var cell: Variant = event.get("cell", Vector2i.ZERO)
-				if cell is Vector2i:
-					_object_position_overrides[key] = cell
-					reload_objects = true
-			&"object_facing":
-				_object_facing_overrides[key] = clampi(
-					int(event.get("facing", Gen2WorldSprite.FACING_DOWN)),
-					Gen2WorldSprite.FACING_DOWN, Gen2WorldSprite.FACING_RIGHT
-				)
-				reload_objects = true
-			&"object_face_player":
-				if map_group == current_map.group and map_number == current_map.number \
-					and object_index < objects.size():
-					var object: Gen2WorldObject = objects[object_index]
-					var facing: int = _facing_toward(object.cell, player_cell)
-					_object_facing_overrides[key] = facing
-				reload_objects = true
-			&"object_face_object":
-				var target_index: int = int(event.get("target_index", -1))
-				if map_group == current_map.group and map_number == current_map.number \
-					and object_index < objects.size() and target_index >= 0 \
-					and target_index < objects.size():
-					_object_facing_overrides[key] = _facing_toward(
-						(objects[object_index] as Gen2WorldObject).cell,
-						(objects[target_index] as Gen2WorldObject).cell
-					)
-				reload_objects = true
+		elif type in LOCAL_OBJECT_EVENTS:
+			generated.append_array(_apply_local_object_event(type, event))
+		elif type in OBJECT_OVERRIDE_EVENTS:
+			reload_objects = _apply_object_override(type, event) or reload_objects
 	if reload_objects and current_map != null:
 		_load_objects(true)
 	return generated
+
+
+## Script_warpcheck asks whether the player is standing on a warp and takes it if
+## so, which is how the Burned Tower rival scene drops the player through the
+## hole it just opened. A cell with no warp answers nothing, exactly as
+## WarpCheck's carry does.
+func _script_warp_check(_event: Dictionary) -> Array:
+	var checked: Dictionary = try_warp()
+	return [{
+		"type": &"warp_check",
+		"taken": bool(checked.get("ok", false)),
+		"transition": checked.duplicate(true),
+	}]
+
+
+## Script_warpfacing writes the player's facing before the warp and the map load
+## never touches it, so the facing outlives the transition. Lance's room is where
+## it shows: `warpfacing UP` is what the player enters the Hall of Fame facing.
+func _script_player_facing(event: Dictionary) -> Array:
+	player_facing = int(event.get("facing", player_facing))
+	return [{"type": &"player_facing", "facing": player_facing}]
+
+
+func _script_write_object_position(event: Dictionary) -> Array:
+	var index: int = int(event.get("object_index", -1))
+	if not _event_names_loaded_object(event, index):
+		return [{"type": &"object_change_failed", "reason": &"invalid_object"}]
+	var key: String = _object_key(
+		int(event.get("map_group", -1)), int(event.get("map_number", -1)), index
+	)
+	_object_position_overrides[key] = (objects[index] as Gen2WorldObject).cell
+	return [{
+		"type": &"object_position_written",
+		"object_index": index, "cell": _object_position_overrides[key],
+	}]
+
+
+func _script_change_block(event: Dictionary) -> Array:
+	if current_map == null or int(event.get("map_group", -1)) != current_map.group \
+		or int(event.get("map_number", -1)) != current_map.number:
+		return [{"type": &"map_change_failed", "reason": &"invalid_map"}]
+	var source_cell := Vector2i(int(event.get("x", -1)), int(event.get("y", -1)))
+	var block_cell: Vector2i = _script_block_cell(source_cell)
+	var changed: Dictionary = change_block(
+		block_cell.x, block_cell.y, int(event.get("block", -1))
+	)
+	if not bool(changed.get("ok", false)):
+		return [{
+			"type": &"map_change_failed",
+			"reason": changed.get("reason", &"invalid_block"),
+			"source_cell": source_cell,
+			"block_cell": block_cell,
+		}]
+	changed["source_cell"] = source_cell
+	return [{"type": &"map_block_changed", "change": changed}]
+
+
+func _script_reload_map(_event: Dictionary) -> Array:
+	return [reload_current_map()]
+
+
+func _script_refresh_map(_event: Dictionary) -> Array:
+	return [{"type": &"map_refreshed", "map": map_id()}]
+
+
+func _script_start_bug_contest(_event: Dictionary) -> Array:
+	return [start_bug_contest()]
+
+
+func _script_select_contestants(_event: Dictionary) -> Array:
+	var withdrawn: Dictionary = Gen2WorldBugContest.select_withdrawn(
+		schedule_random if schedule_random != null else RandomNumberGenerator.new()
+	)
+	for index: int in Gen2WorldBugContest.NUM_CONTESTANTS:
+		state.set_event_flag(
+			Gen2WorldState.EVENT_BUG_CATCHING_CONTESTANT_FIRST + index,
+			bool(withdrawn.get(index, false))
+		)
+	return [{"type": &"bug_contestants_selected", "withdrawn": withdrawn.keys()}]
+
+
+func _script_contest_drop_off(event: Dictionary) -> Array:
+	state.set_contest_second_party_species(int(event.get("second_species", 0)))
+	return [{
+		"type": &"contest_mons_dropped_off",
+		"second_species": state.contest_second_party_species(),
+	}]
+
+
+func _script_contest_return(_event: Dictionary) -> Array:
+	state.set_contest_second_party_species(0)
+	return [{"type": &"contest_mons_returned"}]
+
+
+func _script_warp_to_spawn(_event: Dictionary) -> Array:
+	warp_to_spawn_point()
+	return [{"type": &"warp_to_spawn_point"}]
+
+
+func _script_wild_encounters(event: Dictionary) -> Array:
+	var enabled: bool = bool(event.get("enabled", true))
+	state.set_wild_encounters_off(not enabled)
+	return [{"type": &"wild_encounters_changed", "enabled": enabled}]
+
+
+func _script_queue_write(event: Dictionary) -> Array:
+	return [apply_command_queue_write(
+		int(event.get("bank", 0)), int(event.get("address", 0))
+	)]
+
+
+func _script_queue_delete(event: Dictionary) -> Array:
+	return [apply_command_queue_delete(int(event.get("queue_id", -1)))]
+
+
+func _script_earthquake(event: Dictionary) -> Array:
+	return [{
+		"type": &"screen_shake_requested", "strength": int(event.get("strength", 0)),
+	}]
+
+
+## `wObjectFollow_Leader` and `wObjectFollow_Follower` are one byte each, so a
+## second `follow` replaces the pair rather than adding to it.
+func _script_object_follow(event: Dictionary) -> Array:
+	_start_object_follow(event)
+	return []
+
+
+func _script_object_stop_follow(_event: Dictionary) -> Array:
+	_object_followers.clear()
+	return []
+
+
+func _script_player_face_object(event: Dictionary) -> Array:
+	var target: int = int(event.get("target_index", -1))
+	if _event_names_loaded_object(event, target):
+		player_facing = _facing_toward(
+			player_cell, (objects[target] as Gen2WorldObject).cell
+		)
+	return []
+
+
+## Whether [param event] names the loaded map and an object on it. Every event
+## that edits one is refused rather than applied to whatever is at that index on
+## another map.
+func _event_names_loaded_object(event: Dictionary, index: int) -> bool:
+	return current_map != null \
+		and int(event.get("map_group", -1)) == current_map.group \
+		and int(event.get("map_number", -1)) == current_map.number \
+		and index >= 0 and index < objects.size()
+
+
+func _apply_local_object_event(type: StringName, event: Dictionary) -> Array:
+	var index: int = int(event.get("object_index", -1))
+	if not _event_names_loaded_object(event, index):
+		return [{"type": &"object_change_failed", "reason": &"invalid_object"}]
+	var object: Gen2WorldObject = objects[index]
+	match type:
+		&"object_deleted":
+			object.deleted = true
+			object.active = false
+			_object_followers.erase(_object_key(
+				int(event.get("map_group", -1)), int(event.get("map_number", -1)), index
+			))
+			return [{"type": &"object_deleted", "object_index": index}]
+		&"object_emote":
+			object.set_emote(
+				int(event.get("emote_id", -1)), bool(event.get("visible", false)),
+				int(event.get("duration", 0))
+			)
+		&"object_event_flag":
+			if object.event_flag > 0:
+				state.set_event_flag(object.event_flag, bool(event.get("active", false)))
+	return []
+
+
+## Records what the next object load reads back, and answers whether one is due.
+func _apply_object_override(type: StringName, event: Dictionary) -> bool:
+	var map_group: int = int(event.get("map_group", -1))
+	var map_number: int = int(event.get("map_number", -1))
+	var index: int = int(event.get("object_index", -1))
+	if index < 0:
+		return false
+	var key: String = _object_key(map_group, map_number, index)
+	var names_loaded: bool = _event_names_loaded_object(event, index)
+	match type:
+		&"object_visibility":
+			_object_visibility_overrides[key] = bool(event.get("active", false))
+			if index < objects.size() \
+				and (objects[index] as Gen2WorldObject).event_flag <= 0:
+				_transient_object_visibility_overrides[key] = true
+			else:
+				_transient_object_visibility_overrides.erase(key)
+		&"object_position":
+			var cell: Variant = event.get("cell", Vector2i.ZERO)
+			if not cell is Vector2i:
+				return false
+			_object_position_overrides[key] = cell
+		&"object_facing":
+			_object_facing_overrides[key] = clampi(
+				int(event.get("facing", Gen2WorldSprite.FACING_DOWN)),
+				Gen2WorldSprite.FACING_DOWN, Gen2WorldSprite.FACING_RIGHT
+			)
+		&"object_face_player":
+			if names_loaded:
+				_object_facing_overrides[key] = _facing_toward(
+					(objects[index] as Gen2WorldObject).cell, player_cell
+				)
+		&"object_face_object":
+			var target: int = int(event.get("target_index", -1))
+			if names_loaded and target >= 0 and target < objects.size():
+				_object_facing_overrides[key] = _facing_toward(
+					(objects[index] as Gen2WorldObject).cell,
+					(objects[target] as Gen2WorldObject).cell
+				)
+	return true
 
 
 func _apply_object_movement(event: Dictionary) -> Array:
@@ -4894,14 +4846,10 @@ func _apply_script_warp(request: Dictionary) -> Dictionary:
 
 
 ## Resolves and applies an ordinary warp at the current cell. The destination
-## field selects a one-based warp in the destination map, as in the original
-## map macro. An invalid target leaves this API unchanged and returns an error
-## record instead of silently placing the player on another map.
-## `CheckWarpTile`'s own answer, without walking through the warp: whether
-## the step that just landed on [param cell] has a warp to take. A host that
-## spends `MapSetupScript_Door`'s fade before the map swaps asks this first, and
-## [method try_warp] is the swap itself.
-##
+## field selects a one-based warp in the destination map, as in the original map
+## macro; an invalid target leaves this API unchanged and returns an error record.
+## Below, `CheckWarpTile`'s own answer without walking through the warp, for a
+## host that spends `MapSetupScript_Door`'s fade before the map swaps.
 ## `CheckWarpTile` is `GetDestinationWarpNumber` and then `CheckDirectionalWarp`,
 ## which clears carry on the four warp carpets: landing on one of those warps
 ## nothing, and only [method edge_warp_ready] takes it.
@@ -5026,18 +4974,13 @@ func try_warp(cell: Vector2i = player_cell) -> Dictionary:
 	}
 
 
-## Resolves the source connection for a cardinal step beyond the current map.
-## The stored offsets are the signed cell offsets generated by the cartridge's
-## connection macro. No map mutation occurs when the target is invalid.
-## Where a step in [param direction] off [param cell] would land, resolved
-## without moving anyone: the connection for that edge, the aligned target cell
-## and every refusal try_connection() reports. Empty when this map has no
-## connection that way at all.
-##
-## A caller planning a walk asks this rather than testing the edge coordinate,
-## because a connection spans only part of its edge: Route 8 is forty cells wide
-## and its east connection covers nine of them, so three of its four walkable
-## east-edge cells resolve to nothing.
+## Resolves the source connection for a cardinal step beyond the current map. The
+## stored offsets are the signed cell offsets the cartridge's connection macro
+## generates, and no map mutation occurs when the target is invalid. Below, where
+## a step would land, resolved without moving anyone, and every refusal
+## `try_connection()` reports. A caller planning a walk asks that rather than
+## testing the edge coordinate, because a connection spans only part of its edge:
+## Route 8 is forty cells wide and its east connection covers nine of them.
 func connection_target(cell: Vector2i, direction: Vector2i) -> Dictionary:
 	var direction_name: String = _direction_name(direction)
 	if direction_name.is_empty() or current_map == null or data == null:
@@ -5209,13 +5152,11 @@ func _step_permission_allows(cell: Vector2i, direction: Vector2i) -> bool:
 ## [param direction] matches CanObjectMoveInDirection's CanObjectLeaveTile
 ## (moving's own cell) and WillObjectBumpIntoTile (the destination) side-wall
 ## checks; Vector2i.ZERO skips them for callers that only want the destination
-## permission and occupancy.
-##
-## A swimming object wants the opposite permission: CanObjectMoveInDirection
-## (engine/overworld/npc_movement.asm) branches on OBJECT_PALETTE's SWIMMING bit
-## into WillObjectBumpIntoLand, which refuses anything but WATER_TILE, where the
-## not-swimming branch's WillObjectBumpIntoWater refuses anything but LAND_TILE.
-## Everything after that branch is shared, so only the permission differs.
+## permission and occupancy. A swimming object wants the opposite permission:
+## CanObjectMoveInDirection branches on OBJECT_PALETTE's SWIMMING bit into
+## WillObjectBumpIntoLand, which refuses anything but WATER_TILE, where the
+## not-swimming branch refuses anything but LAND_TILE. Everything after that
+## branch is shared, so only the permission differs.
 func can_object_walk_to(
 	cell: Vector2i, moving: Gen2WorldObject, direction: Vector2i = Vector2i.ZERO
 ) -> bool:
@@ -5378,22 +5319,13 @@ func advance_object_steps_pass(random: RandomNumberGenerator) -> bool:
 
 
 ## Drains the presentation trail an `applymovement` left on the objects it moved,
-## and nothing else.
-##
-## Separate from [method advance_object_steps_pass] because that one decides
-## movement and a caller stops calling it while a script runs, which is exactly
-## when a scripted stream needs drawing. This decides nothing, rolls nothing and
+## and nothing else. Separate from [method advance_object_steps_pass] because that
+## one decides movement and a caller stops calling it while a script runs, which
+## is exactly when a scripted stream needs drawing. This decides nothing and
 ## writes no cell: every cell the stream names committed when it was applied.
-## Returns true when something a renderer draws moved.
-## `FreezeAllOtherObjects` (engine/overworld/map_objects.asm): `ApplyMovement`
-## freezes every object that has a sprite and then clears the bit on the one it
-## is about to move, so the map stands still around a scripted walk and nowhere
-## else. [param moving_index] is -1 for the player, who is object struct 0 on
-## the cartridge and not a member of `objects` here.
-##
-## `UnfreezeFollowerObject` behind it clears the follower's bit when the object
-## being moved is the leader it was told to follow, which is what keeps a
-## `follow` pair walking together through one `applymovement`.
+## Below, `FreezeAllOtherObjects`: `ApplyMovement` freezes every object with a
+## sprite and clears the bit on the one it is about to move, and
+## `UnfreezeFollowerObject` behind it keeps a `follow` pair walking together.
 func freeze_all_other_objects(moving_index: int) -> void:
 	for slot: int in objects.size():
 		var object: Gen2WorldObject = objects[slot]
@@ -5576,15 +5508,14 @@ func _follow_object_is_visible(object_index: int) -> bool:
 	return object.active and not object.deleted
 
 
-## Every follower of [param leader_index] steps into the cell that leader has
-## just left. `follow` names the leader first and the follower second, and the
-## follower may be the player, so this is driven by an object's scripted step as
-## well as by a player one; [param leader_index] is -1 for the player.
-##
-## Follower steps commit on the map bounds alone, for the same reason a scripted
-## step and a trainer approach do: MovementFunction_Follow is HandleMovementData
-## over the queued leader commands (engine/overworld/map_objects.asm), so every
-## one of them lands in NormalStep and never reaches CanObjectMoveInDirection.
+## Every follower of [param leader_index] steps into the cell that leader has just
+## left. `follow` names the leader first and the follower second, and the follower
+## may be the player, so this is driven by an object's scripted step as well as by
+## a player one; [param leader_index] is -1 for the player. Follower steps commit
+## on the map bounds alone, for the same reason a scripted step and a trainer
+## approach do: MovementFunction_Follow is HandleMovementData over the queued
+## leader commands, so every one of them lands in NormalStep and never reaches
+## CanObjectMoveInDirection.
 func _advance_followers(leader_index: int, leader_from_cell: Vector2i) -> void:
 	if current_map == null:
 		return
@@ -5661,22 +5592,14 @@ func _step_follower(follower_index: int, target_cell: Vector2i, exact: bool) -> 
 	_object_facing_overrides[override_key] = follower.facing
 
 
-## Moves one cell or enters a neighboring map when the step leaves a connected
-## map edge. The legacy boolean move() wrapper remains available to callers.
-## `DoPlayerMovement`, which is what a button press reaches: `.CheckTurning`
-## and then [method move_result]'s `.TryStep`.
-##
-## `.CheckTurning`'s own comment is "This also lets the player change facing
-## without moving by tapping a direction". It runs before any collision check,
-## so a direction that differs from the current facing turns on the spot even
-## into a wall, and the walk happens on the next poll, once the facing agrees.
-## It guards on `wPlayerTurningDirection`, which `.StandInPlace` clears, so a
-## turn is only ever taken from a standstill.
-##
-## Only the input path has it. `applymovement` drives an object through
-## `engine/overworld/movement.asm` and never reaches `DoPlayerMovement`, which
-## is why a scripted walk turns nothing and [method move_result] stays the
-## step on its own.
+## Moves one cell or enters a neighboring map when the step leaves a connected map
+## edge. Below, `DoPlayerMovement`, which is what a button press reaches:
+## `.CheckTurning` and then [method move_result]'s `.TryStep`. `.CheckTurning` runs
+## before any collision check, so a direction that differs from the current facing
+## turns on the spot even into a wall and the walk happens on the next poll; it
+## guards on `wPlayerTurningDirection`, so a turn is only taken from a standstill.
+## Only the input path has it: `applymovement` never reaches `DoPlayerMovement`,
+## which is why a scripted walk turns nothing.
 func player_input_move(direction: Vector2i) -> Dictionary:
 	if abs(direction.x) + abs(direction.y) != 1:
 		return {"ok": false, "kind": &"move", "reason": &"invalid_direction"}
@@ -5902,26 +5825,14 @@ func _forced_step(direction: Vector2i, destination: Vector2i) -> Dictionary:
 	}
 
 
-## .CheckStrengthBoulder, then the boulder's own MovementFunction_Strength.
-##
-## The source splits these across two frames: the player's step flags the boulder
-## and bumps, and the boulder starts moving on its next movement tick. Nothing
-## observable sits between the two, because the boulder is not asked to decide
-## anything in between and the flag it carries is cleared unread by nobody, so
-## both are resolved here in one call. The player is not moved either way; the
-## caller still reports a blocked step.
-##
-## Refusals, in the source's own order: BIKEFLAGS_STRENGTH_ACTIVE_F, then a
-## boulder that is standing (OBJECT_WALKING == STANDING, so a boulder already
-## mid-push is not pushed again), then the destination the boulder would take.
-## The boulder's own cell being a pit stops it permanently
-## (MovementFunction_Strength .on_pit), which is Blackthorn Gym 2F's puzzle and
-## the only thing that reads it.
-##
-## [param destination] is the boulder's cell, already known to have refused the
-## player. Its permission is checked here because .CheckLandPerms runs before
-## .CheckNPC, so a boulder standing somewhere the player could not walk anyway is
-## never even considered.
+## `.CheckStrengthBoulder`, then the boulder's own `MovementFunction_Strength`.
+## The source splits these across two frames, but nothing observable sits between
+## the two, so both are resolved here in one call; the player is not moved either
+## way and the caller still reports a blocked step. Refusals in the source's own
+## order: BIKEFLAGS_STRENGTH_ACTIVE_F, a boulder that is not standing, then the
+## destination the boulder would take. The boulder's own cell being a pit stops it
+## permanently, which is Blackthorn Gym 2F's puzzle. [param destination]'s
+## permission is checked here because `.CheckLandPerms` runs before `.CheckNPC`.
 func _try_push_boulder(direction: Vector2i, destination: Vector2i) -> Dictionary:
 	if not strength_active():
 		return {}
@@ -6548,21 +6459,14 @@ static func _escape_rope_failure(reason: StringName) -> Dictionary:
 	return {"ok": false, "kind": &"escape_rope_failed", "reason": reason}
 
 
-## `CheckForHiddenItems`, which is the whole of the Itemfinder: a BGEVENT_ITEM
-## whose flag is still clear, inside the screen the player stands in the middle
-## of. The window is the source's own arithmetic on the bottom right corner,
-## `wXCoord + SCREEN_WIDTH / 4` and `wYCoord + SCREEN_HEIGHT / 4`, accepted while
-## the difference stays below half a screen: four cells up and left of the
-## player, four down and five right.
-## Every BGEVENT_ITEM on the current map, as `{cell, item, flag, taken}`, whether
-## or not it has been picked up: `taken` is [method event_flag_active] on its own
-## flag, which is the Itemfinder's own test. A read and scene-free, like
-## [method visible_encounter_cells], so a probe can walk a map and print them
-## with no game running.
-##
-## The map's own events and nothing past them; a connection's belong to the
-## connected map. An event whose three bytes do not decode is dropped rather than
-## offered with a zero item, the way [method _hidden_item_record] refuses one.
+## `CheckForHiddenItems`, the whole of the Itemfinder: a BGEVENT_ITEM whose flag
+## is still clear, inside the screen the player stands in the middle of. The window
+## is the source's own arithmetic on the bottom right corner, four cells up and
+## left of the player and four down and five right. Below, every BGEVENT_ITEM on
+## the current map as `{cell, item, flag, taken}` whether or not it has been picked
+## up, read and scene-free so a probe can walk a map with no game running. The
+## map's own events and nothing past them; an event whose three bytes do not decode
+## is dropped rather than offered with a zero item.
 func hidden_items() -> Array:
 	var out: Array = []
 	if current_map == null:
@@ -6619,12 +6523,9 @@ func take_hidden_item(cell: Vector2i) -> Array:
 ## the ordinary script path, so the bag write, the save, the received line, the
 ## fanfare and the pack-full branch are all the host's exactly as they are for a
 ## give the map makes. Answers the script results [method take_hidden_item] does,
-## and an empty array when the item is not one the cartridge knows or when a
-## script is already running.
-##
-## There is no cell, no event flag and no map behind it: this is the give a mod
-## asked for through [method Gen2ModHost.request_item_gift], and the mod named
-## the item and nothing else.
+## and an empty array when the item is not one the cartridge knows or when a script
+## is already running. There is no cell, no event flag and no map behind it: the
+## mod named the item and nothing else.
 func give_item_gift(item: int, quantity: int = 1) -> Array:
 	if current_map == null or _active_script != null or not _script_queue.is_empty():
 		return []
@@ -6936,23 +6837,14 @@ func _day_care_species(sprite_number: int) -> int:
 	return 0 if mon == null else mon.species
 
 
-## One row of a map's object events as a live object.
-##
-## `GetMonSprite`'s `.Variable` branch reads wVariableSprites and falls through
-## to `.NoBreedmon` on a zero slot, whose `ld a, WALKING_SPRITE` is 1 and so
-## `SPRITE_CHRIS` by coincidence of two constant lists
-## (engine/overworld/overworld.asm). Reaching that fallback is the exception and
-## not the rule: `Gen2WorldState.INITIAL_VARIABLE_SPRITES` is what
-## `InitializeEventsScript` leaves in nine of the slots and
-## `ToggleDecorationsVisibility` fills the other four, so every slot any map
-## stands an object on has a row. An object drawn as the player means the table
-## lost one. An object that should not be there at all is masked by [method
-## load_object_masks], not by this fallback.
-## `LoadOpponentTrainerAndPokemonWithOTSprite`'s tail: it writes a sprite number
-## straight into `wMapObjects` and calls `GetUsedSprite`, because the Battle
-## Tower's opponent is drawn at random and its object event carries a placeholder
-## instead. The overworld sprite is replaced in place; nothing else about the
-## object moves.
+## One row of a map's object events as a live object. `GetMonSprite`'s `.Variable`
+## branch reads wVariableSprites and falls through to `.NoBreedmon` on a zero slot,
+## whose `ld a, WALKING_SPRITE` is 1 and so `SPRITE_CHRIS` by coincidence of two
+## constant lists. Reaching that fallback is the exception: every slot any map
+## stands an object on has a row, so an object drawn as the player means the table
+## lost one. Below, `LoadOpponentTrainerAndPokemonWithOTSprite`'s tail, which
+## writes a sprite number straight into `wMapObjects` because the Battle Tower's
+## opponent is drawn at random and its object event carries a placeholder.
 func set_object_sprite(index: int, sprite_number: int) -> Dictionary:
 	if index < 0 or index >= objects.size() or sprite_number <= 0:
 		return {"ok": false, "reason": &"invalid_object_sprite", "object": index}
@@ -6979,17 +6871,13 @@ func _object_from_event(index: int, value: Dictionary) -> Gen2WorldObject:
 
 
 ## The people standing on the maps [method map_placements] puts around this one,
-## for a view wide enough to see them.
-##
-## Deliberately not part of [member objects]: `ReadObjectEvents` fills
-## `wMapObjects` from the loaded map alone, so on the cartridge a connected
-## map's people do not exist until its own map load builds them. These take no
-## step, run no script, answer no collision and are not talked to. They stand
-## where their map's event data puts them, which is what a town seen from the
-## route next to it looks like.
-##
-## Each entry is `{"object": Gen2WorldObject, "offset": Vector2i}`, the offset
-## being the map's own origin in walk cells.
+## for a view wide enough to see them. Deliberately not part of [member objects]:
+## `ReadObjectEvents` fills `wMapObjects` from the loaded map alone, so on the
+## cartridge a connected map's people do not exist until its own map load builds
+## them. These take no step, run no script, answer no collision and are not talked
+## to; they stand where their map's event data puts them, which is what a town seen
+## from the route next to it looks like. Each entry is `{object, offset}`, the
+## offset being the map's own origin in walk cells.
 func connected_map_objects() -> Array:
 	if not _connected_objects.is_empty() or current_map == null or data == null:
 		return _connected_objects

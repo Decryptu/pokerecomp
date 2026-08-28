@@ -1,24 +1,14 @@
 class_name Gen2SplashScreen
 extends Control
 
-## `SplashScreen` (`engine/movie/splash.asm`), as far as this project has the art
-## for it.
-##
-## The source runs four things before a new game: the copyright screen, the
-## GameFreak logo animation, the intro movie, and the title screen. The movie is
-## the cartridge's own: `CrystalIntro` through [Gen2IntroMoviePage] on Crystal
-## and `GoldSilverIntro` through [Gen2GoldSilverIntroPage] on the other two.
-## [Gen2BootCinema] is started with the phases this cache has art for; a phase it
-## has none for is skipped rather than held on a blank screen for the frames it
-## would have taken.
-##
-## The pacing is the source's throughout. The copyright half is ten frames of
-## blank and the screen for a hundred, with no button read at all, since
-## `DelayFrames` does not look at the joypad; the GameFreak half is
-## `GameFreakPresentsScene` and its sprite, which do read one, and a press there
-## ends the animation early through [method Gen2BootCinema.skip_presents]. The
-## title screen reads a held button rather than a press, because every branch of
-## `TitleScreenMain` is `hJoyDown`.
+## `SplashScreen`, as far as this project has the art for it: the copyright
+## screen, the GameFreak logo animation, the intro movie and the title screen.
+## [Gen2BootCinema] is started with the phases this cache has art for, and one it
+## has none for is skipped rather than held on a blank screen. The pacing is the
+## source's: the copyright half is ten frames of blank and the screen for a hundred
+## with no button read at all, the GameFreak half reads one and a press there ends
+## the animation early, and the title screen reads a held button because every
+## `TitleScreenMain` branch is `hJoyDown`.
 
 ## Emitted once the last phase this host can draw has finished.
 signal closed()

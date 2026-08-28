@@ -2,22 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the imported `cmdqueue` payloads against freshly imported real
-## caches, for both command profiles.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## macros/scripts/maps.asm's `cmdqueue` and `stonetable`, engine/overworld/
-## cmd_queue.asm's CmdQueue_StoneTable, home/stone_queue.asm's HandleStoneQueue,
-## and the two maps that write one, maps/BlackthornGym2F.asm and
-## maps/IcePathB1F.asm. Both files are byte identical between the pins.
-##
-## The importer skips a queue pointer it cannot resolve, because scripts are
-## collected as fixed slices and a slice running past its own end can decode
-## stray bytes as a `writecmdqueue`. This is what makes that tolerance safe: it
-## asserts the two real tables are present, complete and correct rather than
-## trusting the scan not to have missed one.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- command_queues
+## Verifies the imported `cmdqueue` payloads against freshly imported real caches,
+## for both command profiles. Expected values come from the pinned sources' own
+## macros, `CmdQueue_StoneTable`, `HandleStoneQueue` and the two maps that write
+## one, BlackthornGym2F and IcePathB1F, both byte identical between the pins. The
+## importer skips a queue pointer it cannot resolve, because a script slice running
+## past its own end can decode stray bytes as a `writecmdqueue`; this is what makes
+## that tolerance safe, asserting the two real tables are present, complete and
+## correct rather than trusting the scan not to have missed one.
 
 
 ## Blackthorn Gym 2F and Ice Path B1F, the only two maps in either game with a

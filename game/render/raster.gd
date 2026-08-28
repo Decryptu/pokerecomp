@@ -1,17 +1,13 @@
 class_name Gen2Raster
 extends RefCounted
 
-## A background scrolled by a different amount on each scanline, which is what
-## the hardware's `SCX` is once a routine rewrites it part way down a frame.
-##
-## The background map is wider than the screen, [param map_width] against the
-## image's own width, and everything past what was drawn is blank. So an offset
-## does not slide an image sideways and leave a gap: it wraps, and blank is what
-## comes in. An offset is a distance to look *right* into the map, so a larger
-## one puts the drawn content further left.
-##
-## Node-free and pure: it takes an image and answers a new one, which is what
-## lets a scroll be asserted headless rather than photographed.
+## A background scrolled by a different amount on each scanline, which is what the
+## hardware's `SCX` is once a routine rewrites it part way down a frame. The
+## background map is wider than the screen, [param map_width] against the image's
+## own width, and everything past what was drawn is blank, so an offset wraps
+## rather than leaving a gap. An offset is a distance to look *right* into the
+## map, so a larger one puts the drawn content further left. Node-free and pure,
+## which is what lets a scroll be asserted headless rather than photographed.
 
 ## Rows sharing an offset are moved together, since a run of scanlines with one
 ## value is the shape every routine that does this produces: three bands for

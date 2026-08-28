@@ -1,15 +1,13 @@
 extends GutTest
 
-## Scene integration for Cut, Surf and Whirlpool: the party submenu, the
-## field-move message and the change each commits, driven through the production
-## world screen and party screen.
-##
-## The shared trainer fixture is patched here rather than extended, the same way
-## test_world_start_menu_screen.gd patches its Potion in: the map moves onto
-## TILESET_JOHTO so the real CutTreeBlockPointers and WhirlpoolBlockPointers rows
-## apply, block $5b's bottom-left quadrant becomes the cut tree and block $07's
-## the whirlpool. The fixture's own water cell at (8,7) is what Surf is driven
-## against.
+## Scene integration for Cut, Surf and Whirlpool: the party submenu, the field-move
+## message and the change each commits, driven through the production world screen
+## and party screen. The shared trainer fixture is patched here rather than
+## extended, the same way test_world_start_menu_screen.gd patches its Potion in:
+## the map moves onto TILESET_JOHTO so the real CutTreeBlockPointers and
+## WhirlpoolBlockPointers rows apply, block $5b's bottom-left quadrant becomes the
+## cut tree and block $07's the whirlpool. The fixture's own water cell at (8,7) is
+## what Surf is driven against.
 
 const Fixture := preload("res://tests/integration/world_trainer_fixture.gd")
 const BattleFixture := preload("res://tests/unit/battle_fixture.gd")

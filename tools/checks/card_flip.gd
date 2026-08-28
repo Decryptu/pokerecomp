@@ -1,23 +1,13 @@
 extends RefCounted
 
-## Sweeps `_CardFlip` on freshly imported real caches, all three cartridges.
-##
-## Every expectation below is transcribed from pokecrystal's own
-## engine/games/card_flip.asm rather than read back out of the implementation,
-## which is the only way the topic can go red: the win jumptable's own
-## forty-eight entries, the deck's twenty-four pictures, the section's sizes and
-## the board's own tilemap are the source's tables, and the art is re-read out
-## of the dump beside the cache rather than compared with itself.
-##
-## The class of bug it exists to catch is a bet that pays the wrong cell.
-## `CardFlip_CheckWinCondition` is a jumptable of forty-eight, most of whose
-## entries differ from their neighbour by one bit test, so a cursor read one
-## cell out still pays *something*. The check therefore drives the whole
-## forty-eight by twenty-four grid against the jumptable rather than sampling,
-## and drives whole games on a pinned seed for the rest: the shuffle, the deck's
-## twelve rounds and the board's own discard marks.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- card_flip
+## Sweeps `_CardFlip` on freshly imported real caches, all three cartridges. Every
+## expectation is transcribed from pokecrystal's own engine/games/card_flip.asm
+## rather than read back out of the implementation, which is the only way the topic
+## can go red. The class of bug it exists to catch is a bet that pays the wrong
+## cell: `CardFlip_CheckWinCondition` is a jumptable of forty-eight, most of whose
+## entries differ from their neighbour by one bit test, so a cursor read one cell
+## out still pays something. It therefore drives the whole forty-eight by
+## twenty-four grid rather than sampling, and whole games on a pinned seed.
 
 ## `_CardFlip`'s own loads: which run is decompressed to how many tiles.
 const SECTION: Dictionary = {

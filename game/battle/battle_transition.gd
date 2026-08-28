@@ -2,18 +2,12 @@ class_name Gen2BattleTransition
 extends RefCounted
 
 ## `DoBattleTransition` (engine/battle/battle_transition.asm): what the overworld
-## does between the encounter and the battle screen.
-##
-## Four animations, picked by the lead's level against the opponent's and by the
-## environment, each of them a Poke Ball drawn over the map for a trainer, three
-## passes of a palette flash, and then one of four ways of going black. The
-## jumptable is walked one entry per frame, which is what `DoBattleTransition`'s
-## own `.loop` does with its `DelayFrame`.
-##
-## Node-free: it answers with a screen of cells, a DMG palette order and a
-## per-scanline offset, and the world screen draws those over whatever it was
-## already drawing. Nothing here reaches a renderer, so a whole transition can be
-## stepped and read headless.
+## does between the encounter and the battle screen. Four animations, picked by
+## the lead's level against the opponent's and by the environment, three passes of
+## a palette flash, then one of four ways of going black. The jumptable is walked
+## one entry per frame, which is `.loop`'s own `DelayFrame`. Node-free: it answers
+## with a screen of cells, a DMG palette order and a per-scanline offset, so a
+## whole transition can be stepped headless.
 
 const COLUMNS: int = 20
 const ROWS: int = 18
@@ -143,17 +137,12 @@ const SINE_STEP_FRAMES: Array[int] = [2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 4, 
 ## the Route 30 trace it runs on frame 813 and `..._SetUpBGMap` on 817.
 const BALL_FRAMES: int = 3
 
-## `DoBattleTransition.InitGFX` before the jumptable, and `.done` after it.
-##
-## Both are runs of VRAM copies this port does at once: `ReanchorBGMap`,
-## `Request2bpp` twice for the two tiles and again for the forty the BG map is
-## filled with, `BattleStart_CopyTilemapAtOnce`, and then the palette wipe at the
-## end. The counts are measured against a real cartridge rather than derived,
-## because a `WaitBGMap` is worth whatever the copy in front of it left.
-## `.InitGFX` is 19 frames on that trace, 793 to 811, and
-## `..._DetermineWhichAnimation` is the twentieth. The tail is
-## `StartTrainerBattle_Finish` on 959, the loop's own `DelayFrame` behind it and
-## `.done`'s two, which is the screen fully black on 962.
+## `DoBattleTransition.InitGFX` before the jumptable, and `.done` after it. Both
+## are runs of VRAM copies this port does at once, and the counts are measured
+## against a real cartridge rather than derived, because a `WaitBGMap` is worth
+## whatever the copy in front of it left. `.InitGFX` is 19 frames on that trace,
+## 793 to 811, and `._DetermineWhichAnimation` is the twentieth; the tail is
+## `StartTrainerBattle_Finish` on 959 and the screen fully black on 962.
 const LEAD_FRAMES: int = 19
 const TAIL_FRAMES: int = 4
 

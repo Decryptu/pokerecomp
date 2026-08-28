@@ -1,21 +1,13 @@
 class_name Gen2MysteryGiftScreen
 extends Control
 
-## `DoMysteryGift` (`engine/link/mystery_gift.asm`), from the prompt the screen
-## opens on to the box it ends on.
-##
+## `DoMysteryGift`, from the prompt the screen opens on to the box it ends on.
 ## The routine is three steps and no menu: the layout with
 ## `.String_PressAToLink_BToCancel` under it, A to hold the infrared window open
 ## and B to leave it, and then one box. Everything the box could say is
-## [method Gen2MysteryGift.exchange]'s answer, so this screen owns the wait, the
-## two buttons and the picture; the decision is not here and neither is the
-## section.
-##
-## It is the main menu's row rather than an overworld one, so its host is the
-## save screen: the section lives outside the checksummed save on the cartridge
-## precisely so the exchange can happen with no file loaded, and the two slots
-## the save screen already has in front of it are the only two Mystery Gift
-## blocks that exist on one machine.
+## [method Gen2MysteryGift.exchange]'s answer. It is the main menu's row rather
+## than an overworld one, so its host is the save screen: the section lives outside
+## the checksummed save precisely so the exchange can happen with no file loaded.
 
 signal closed()
 

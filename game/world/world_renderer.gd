@@ -2,27 +2,24 @@ class_name Gen2WorldRenderer
 extends Node2D
 
 ## Draws the visible map page and the development player marker in hardware
-## pixels. It does not own map state; call [method set_world] when the API
-## changes or [method refresh] after a movement.
-##
-## The surface is the cartridge's 160x144 unless the world has been given a
-## larger [member Gen2WorldAPI.view_pixels], in which case the map fills all of
-## it: the connected maps the graph places around this one are drawn as well, on
-## [Gen2WorldMapLayer] quads under the sprites, and the border block fills
-## whatever no map covers.
+## pixels. It does not own map state; call [method set_world] when the API changes
+## or [method refresh] after a movement. The surface is the cartridge's 160x144
+## unless the world has been given a larger [member Gen2WorldAPI.view_pixels], in
+## which case the map fills all of it: the connected maps the graph places around
+## this one are drawn as well, on [Gen2WorldMapLayer] quads under the sprites, and
+## the border block fills whatever no map covers.
 
 const PLAYER_COLOR: Color = Color("#d34a5a")
 const FALLBACK_BACKGROUND: Color = Color("#f5f1d8")
 
-## `.InitSprite` (engine/overworld/map_objects.asm) writes an object's OAM y as
-## `add OAM_Y_OFS - 4` against a plain `add OAM_X_OFS` on the other axis, so a
-## 16x16 overworld sprite stands four pixels above its own cell and nothing
-## shifts it sideways. Every map object shares the one write: the emote, the
-## shadow, the boulder dust and the shaking grass are tracking objects that copy
-## the tracked object's `OBJECT_SPRITE_Y` and go through it too, and the jump
-## arc, the tracking bob and the fishing rod are offsets added in front of it.
-## The tuft of grass over a sprite's legs is background rather than OAM and takes
-## no lift; it moves with the sprite because OAM_PRIO is what draws it.
+## `.InitSprite` writes an object's OAM y as `add OAM_Y_OFS - 4` against a plain
+## `add OAM_X_OFS` on the other axis, so a 16x16 overworld sprite stands four
+## pixels above its own cell and nothing shifts it sideways. Every map object
+## shares the one write: the emote, the shadow, the boulder dust and the shaking
+## grass are tracking objects that copy the tracked object's `OBJECT_SPRITE_Y`,
+## and the jump arc, the tracking bob and the fishing rod are offsets added in
+## front of it. The tuft of grass over a sprite's legs is background rather than
+## OAM and takes no lift; OAM_PRIO is what draws it.
 const SPRITE_LIFT := Vector2(0, -4)
 
 var _world: Gen2WorldAPI = null
@@ -392,18 +389,13 @@ func _palette_tables(palettes: Array) -> Array:
 
 
 ## `DoBattleTransition`, drawn over whatever the map was already showing.
-##
 ## [param cells] is [method Gen2BattleTransition.cells], [param tiles] the two
-## tiles `LoadBattleTransitionGFX` loads as index buffers, and [param palette]
-## the four colours the whole map is flooded with while a trainer's ball is up.
-## An empty palette is the wild branch, which floods nothing: its black tile is
-## colour 3 of whatever palette the cell under it was already drawn in. Every
-## overworld palette's colour 3 is `gfx/overworld/trainer_battle.pal`'s own
-## (7,7,7), so both kinds of wedge come out the same dark grey.
-##
-## [param sprites] is [method Gen2BattleTransition.sprites] and [param opponent]
-## the map object `hLastTalked` names; [param order] is the flash's `wBGP`, which
-## `DmgToCgbBGPals` applies to the background alone.
+## tiles `LoadBattleTransitionGFX` loads as index buffers, and [param palette] the
+## four colours the whole map is flooded with while a trainer's ball is up. An
+## empty palette is the wild branch, which floods nothing: its black tile is colour
+## 3 of whatever palette the cell was already drawn in, and every overworld
+## palette's colour 3 is the same (7,7,7), so both kinds of wedge come out the same
+## dark grey. [param order] is the flash's `wBGP`, applied to the background alone.
 func set_transition(
 	cells: PackedByteArray, tiles: PackedByteArray, palette: PackedColorArray,
 	sprites: int = Gen2BattleTransition.SPRITES_ALL, opponent: int = -1,

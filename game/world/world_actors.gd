@@ -1,22 +1,14 @@
 class_name Gen2WorldActors
 extends RefCounted
 
-## The sprites a mod puts in the world, driven and resolved by the host. A mod
-## wanting one thing in the overworld, a follower or a marker, registers an actor
-## through [method Gen2ModHost.register_world_actor] rather than a whole
-## renderer. The screen drives it with one `advance_frame` per world frame and
-## one `sprites()` read after it, resolved into the same [Gen2WorldSprite] the
-## map's own objects are drawn from.
-##
-## PRESENTATION and nothing else: an actor's sprite occupies no cell, blocks
-## nothing, is talked to by nobody, is seen by no trainer and is in no snapshot.
-## That is why it is a layer of its own rather than a map object, which is world
-## state a mod must not be able to change.
-##
-## A mod names cartridge art and never composes pixels: an entry carries an
-## `IconPointers` row (`icon`) or an `OverworldSprites` row (`sprite`), and the
-## strip, palette, time of day and animation rate are resolved here the way they
-## are for a mon-icon object standing on a map.
+## The sprites a mod puts in the world, driven and resolved by the host: a mod
+## wanting a follower or a marker registers an actor rather than a whole renderer,
+## and the screen drives it with one `advance_frame` per world frame and one
+## `sprites()` read after it. PRESENTATION and nothing else: an actor's sprite
+## occupies no cell, blocks nothing, is talked to by nobody, is seen by no trainer
+## and is in no snapshot, which is why it is a layer of its own rather than a map
+## object. A mod names cartridge art and never composes pixels, the strip, palette
+## and animation rate being resolved here.
 
 ## Checked at registration, where the mod's name is still in hand.
 const ACTOR_METHODS: Array[String] = ["set_world", "advance_frame", "sprites"]
@@ -108,14 +100,12 @@ func advance_frame() -> bool:
 
 
 ## A press of A that no cartridge object, background event or tile branch
-## answered, offered to the actors in registration order; the first answering
-## true consumes it. [param cell] is the player's faced cell and [param facing]
-## the player's own, so an actor tests its own pose and the host never has to
-## invent an occupancy notion for a sprite that occupies nothing.
-##
-## Offered ONLY after [method Gen2WorldAPI.interact] answered nothing, so no
-## cartridge interaction can ever be shadowed by a mod. An actor without the
-## method is offered nothing.
+## answered, offered to the actors in registration order; the first answering true
+## consumes it. [param cell] is the player's faced cell and [param facing] the
+## player's own, so an actor tests its own pose and the host never has to invent
+## an occupancy notion for a sprite that occupies nothing. Offered ONLY after
+## [method Gen2WorldAPI.interact] answered nothing, so no cartridge interaction
+## can be shadowed by a mod.
 func interact(cell: Vector2i, facing: int) -> bool:
 	for actor: Object in _actors:
 		if not actor.has_method(ACTOR_INTERACT_METHOD):

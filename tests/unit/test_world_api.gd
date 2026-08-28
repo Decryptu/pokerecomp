@@ -4412,18 +4412,14 @@ func test_script_movement_steps_through_a_wall_the_way_normal_step_does() -> voi
 	assert_eq(world.player_cell, Vector2i(9, 6))
 
 
-## An applymovement applies its whole stream in one call, so every cell of the
-## path commits at once and the drawing is what trails. Presentation only: the
-## cells below are already the stream's last one while the offset is still two
-## behind it.
-## The four turning commands, which are not what their names suggest.
+## An applymovement applies its whole stream in one call, so every cell of the path
+## commits at once and the drawing is what trails.
+## Below, the four turning commands, which are not what their names suggest.
 ## `TurnStep` sets STEP_TYPE_TURN and never calls `InitStep`, so it only turns;
-## `turn_away`, `turn_in` and `turn_waterfall` all reach `TurningStep`, which
-## does call it, so each steps one cell in the direction it names and only the
-## spin over the top tells them from a plain step. `turn_away` does not reverse
-## anything. `engine/events/forced_movement.asm` is the case that shows it: a
-## whirlpool spins the player, `turn_in` steps them back off the tile, and they
-## would stand on it for good if it turned in place.
+## `turn_away`, `turn_in` and `turn_waterfall` all reach `TurningStep`, which does
+## call it, so each steps one cell in the direction it names. `turn_away` does not
+## reverse anything, and `engine/events/forced_movement.asm` is the case that shows
+## it: a whirlpool spins the player and `turn_in` steps them back off the tile.
 func test_the_turning_movement_commands_step_or_turn_as_their_source_does() -> void:
 	RomCache.write_json(RomCache.world_movements_path(_directory), {
 		# turn_step down, then turn_in up.

@@ -22,15 +22,12 @@ const TOUCH_TARGET: float = 48.0
 
 
 ## Whether this display server hands out the screen's own pixels rather than
-## points.
-##
-## A platform that cannot open a second window is one whose window is the whole
-## screen, and every one of them measures in physical pixels: a phone, a tablet,
-## a console. A desktop is already in points and wants no factor at all. Asked of
-## the display server rather than of a list of platform names, so a console this
+## points. A platform that cannot open a second window is one whose window is the
+## whole screen, and every one of them measures in physical pixels. Asked of the
+## display server rather than of a list of platform names, so a console this
 ## project has not met yet is covered on the day it arrives. A headless run
-## answers no to every feature there is, so it is asked first whether it draws
-## at all; without that a test tier would measure itself as a handheld.
+## answers no to every feature there is, so it is asked first whether it draws at
+## all; without that a test tier would measure itself as a handheld.
 static func draws_in_screen_pixels() -> bool:
 	return (
 		DisplayServer.window_can_draw()
@@ -38,16 +35,14 @@ static func draws_in_screen_pixels() -> bool:
 	)
 
 
-## How many window pixels one launcher unit is drawn at, so that a unit is a
-## device-independent point rather than a pixel.
-##
-## Every size the launcher is written in is a desktop pixel, which is a comfortable
-## reading size only because a desktop screen is about 100 pixels to the inch. A
-## phone is three to four times that, so the same numbers arrive at a third of the
-## size and the window measures wide enough to be taken for a desktop. The screen's
-## own backing scale is exactly that ratio, and iOS and Android both report it. A
-## Switch reports neither a scale nor a phone's density: 237 dots per inch held
-## in the hands, 96 in the dock, which the same formula turns into 1.5 and 1.
+## How many window pixels one launcher unit is drawn at, so a unit is a
+## device-independent point rather than a pixel. Every size the launcher is
+## written in is a desktop pixel, comfortable only because a desktop screen is
+## about 100 pixels to the inch; a phone is three to four times that, so the same
+## numbers arrive at a third of the size and the window measures wide enough to be
+## taken for a desktop. iOS and Android both report the backing scale. A Switch
+## reports neither: 237 dots per inch in the hands and 96 in the dock, which the
+## same formula turns into 1.5 and 1.
 static func display_density() -> float:
 	if preview_density > 0.0:
 		return preview_density
@@ -321,17 +316,12 @@ static func field(theme: Gen2LauncherTheme, text: String, control: Control) -> C
 
 
 ## The two halves of a [method field], side by side while they both fit and
-## stacked when they do not.
-##
-## Every launcher page scrolls vertically only, so a row wider than the window is
-## cut off rather than reachable, and a settings row is exactly the shape that
-## outgrows a portrait phone: the label wants its whole text and the control
-## carries its own minimum width. Stacking is what keeps the control on screen.
-##
-## A [Container] is not usable here: from 4.8.dev4 the engine answers a
-## container's minimum size itself and never calls a script's
-## [method Control._get_minimum_size], and asking for less than both halves is
-## the whole point of this row.
+## stacked when they do not. Every launcher page scrolls vertically only, so a row
+## wider than the window is cut off rather than reachable, and a settings row is
+## exactly the shape that outgrows a portrait phone. A [Container] is not usable
+## here: from 4.8.dev4 the engine answers a container's minimum size itself and
+## never calls a script's [method Control._get_minimum_size], and asking for less
+## than both halves is the whole point of this row.
 class FieldRow extends Control:
 	var _pending: bool = false
 
@@ -448,14 +438,11 @@ static func segmented(
 
 
 ## One control kept at the width it would like rather than the width it is given.
-##
 ## An [HFlowContainer] measures as one column, since that is the narrowest it can
 ## be drawn, so a track asking for its minimum would always stack. This asks for
 ## that minimum, which is what lets it wrap on a phone, and then draws the child
-## at [method Gen2LauncherUI.preferred_width] whenever the row is wide enough to
-## hold it on one line.
-##
-## A [Container] is not usable here for the reason [FieldRow] gives.
+## at [method Gen2LauncherUI.preferred_width] whenever the row is wide enough. A
+## [Container] is not usable here for the reason [FieldRow] gives.
 class HugRow extends Control:
 	var _pending: bool = false
 
@@ -561,15 +548,12 @@ static func file_picker(
 	return Gen2LauncherFilePicker.create(theme, title_text, mode, filters)
 
 
-## The square a mod's icon is drawn in, on a list row and on its own page.
-##
-## Always the same node whether or not there is a picture, because the alternative
-## is a list whose names start at two different places depending on whose mod it
-## is. A mod with no icon gets the generic glyph, greyed, in the same square.
-##
-## Nearest filtering, and never stretched: an icon is 32x32 pixel art drawn at
-## about 40, so smoothing it would blur exactly the edges it is made of, and
-## letting it fill a square it is not square for would distort it.
+## The square a mod's icon is drawn in, on a list row and on its own page. Always
+## the same node whether or not there is a picture, because the alternative is a
+## list whose names start at two different places depending on whose mod it is; a
+## mod with no icon gets the generic glyph, greyed, in the same square. Nearest
+## filtering and never stretched: an icon is 32x32 pixel art drawn at about 40, so
+## smoothing it would blur exactly the edges it is made of.
 static func mod_icon(
 	theme: Gen2LauncherTheme, texture: Texture2D, side: float = MOD_ICON_SIDE
 ) -> Control:

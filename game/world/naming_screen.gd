@@ -2,12 +2,9 @@ class_name Gen2NamingScreen
 extends RefCounted
 
 ## `engine/menus/naming_screen.asm`'s model: which keyboard is live, where the
-## cursor is, what a press does to the name being typed and what comes out at
-## the end.
-##
-## Scene-free, so the whole walk can be tested without drawing it.
-## `Gen2NamingScreenPage` draws what this holds. The name is kept as the
-## cartridge keeps it, a fixed buffer of raw codes seeded with
+## cursor is, what a press does to the name being typed and what comes out at the
+## end. Scene-free, so the whole walk can be tested without drawing it. The name is
+## kept as the cartridge keeps it, a fixed buffer of raw codes seeded with
 ## NAMINGSCREEN_UNDERLINE and NAMINGSCREEN_MIDDLELINE rather than a String,
 ## because every routine here reads and writes those two markers.
 

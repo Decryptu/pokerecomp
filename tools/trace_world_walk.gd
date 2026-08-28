@@ -1,25 +1,13 @@
 extends SceneTree
 
 ## Every hardware frame of a walk on the real world screen: where the map is
-## scrolled to, where the player is drawn, and which of `Facings` is up.
-##
-##   Godot --headless --path . -s res://tools/trace_world_walk.gd -- \
-##       <game> <group> <map> <x> <y> <direction> <frames> <out.txt>
-##
-## The port half of `.claude/oracle/overworld/trace_walk.py`, which prints the
-## same artefact off a real cartridge. The line is
-## `frame cam_x cam_y x y screen_x screen_y facing walk_frame`, where `cam_x`
-## and `cam_y` are hSCX/hSCY in map pixels rather than modulo the BG map and
-## `screen_x`/`screen_y` are the player's own drawn pixel.
-##
-## Diff `screen_x` against the cartridge's OAM slot 0 minus rSCX, not against its
-## `wPlayerSpriteX - hSCX`: `HandleMapObjects` writes the object field before
-## `NextOverworldFrame` spends its two frames and `_UpdateSprites` does not copy
-## it into shadow OAM until after them, so that pair reads two pixels of lead the
-## screen never shows.
-##
-## Ten standing frames come first, the way the cartridge trace opens, so a diff
-## aligns on the frame the direction starts being held rather than on the file.
+## scrolled to, where the player is drawn, and which of `Facings` is up. The port
+## half of `.claude/oracle/overworld/trace_walk.py`. Diff `screen_x` against the
+## cartridge's OAM slot 0 minus rSCX, not against its `wPlayerSpriteX - hSCX`:
+## `HandleMapObjects` writes the object field before `NextOverworldFrame` spends its
+## two frames, so that pair reads two pixels of lead the screen never shows. Ten
+## standing frames come first. Arguments:
+## `<game> <group> <map> <x> <y> <direction> <frames> <out.txt>`.
 
 const STANDING_FRAMES: int = 10
 

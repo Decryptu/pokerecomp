@@ -5,13 +5,9 @@ extends RefCounted
 ## it: `wLinkMode`, `wPlayerLinkAction`, `wChosenCableClubRoom` and
 ## `wOtherPlayerLinkMode`, plus the answers `WaitForLinkedFriend`,
 ## `CheckLinkTimeout_Receptionist`, `CheckBothSelectedSameRoom`,
-## `CheckTimeCapsuleCompatibility`, `ValidateOTTrademon` and
-## `CheckAnyOtherAliveMonsForTrade` give from them.
-##
-## Scene free, and WRAM rather than save data: the cartridge keeps none of this
-## across a reset, and neither does [Gen2WorldState], which holds one live and
-## leaves it out of its snapshot. The cable itself is [Gen2LinkTransport], which
-## is injected; nothing here knows what it is made of.
+## `CheckTimeCapsuleCompatibility` and `ValidateOTTrademon` give from them. Scene
+## free, and WRAM rather than save data: the cartridge keeps none of this across a
+## reset and neither does [Gen2WorldState]. The cable itself is injected.
 
 const CONNECTION_NOT_ESTABLISHED: int = Gen2LinkTransport.CONNECTION_NOT_ESTABLISHED
 const USING_EXTERNAL_CLOCK: int = Gen2LinkTransport.USING_EXTERNAL_CLOCK
@@ -229,15 +225,12 @@ static func _incompatible(value: int, slot: int, species: int, move: int) -> Dic
 
 ## `ValidateOTTrademon`: the offered Pokemon's own species must match the row the
 ## party list names it by, unless that row says EGG, and its level must be one a
-## level can be. The Time Capsule adds a third test, and it is the only one that
-## needs the peer to say anything about itself: a Gen 1 game reports the typing
-## it holds for the species, and one whose typing this generation changed is
-## refused. Magnemite and Magneton are excused by name because theirs is that
-## change.
-##
-## [param mon] carries `types` only when the peer is a Gen 1 game, which is the
-## only sender `Link_ConvertPartyStruct1to2` fills `wLinkOTPartyMonTypes` from,
-## so a Gen 2 peer skips the test rather than failing an empty one.
+## level can be. The Time Capsule adds a third test, the only one that needs the
+## peer to say anything about itself: a Gen 1 game reports the typing it holds,
+## and one whose typing this generation changed is refused, Magnemite and Magneton
+## being excused by name because theirs is that change. [param mon] carries `types`
+## only when the peer is a Gen 1 game, so a Gen 2 peer skips the test rather than
+## failing an empty one.
 static func validate_ot_trademon(
 	mon: Dictionary, listed_species: int, listed_is_egg: bool, mode: int,
 	base_types: Array = []

@@ -1,16 +1,11 @@
 class_name Gen2MoveEffect
 extends RefCounted
 
-## What each move's effect byte makes it do, as a list of commands.
-##
-## The table the cartridge keeps in [code]data/moves/effects.asm[/code], to be
-## read against it. A move number picks an effect byte and an effect byte picks a
-## list.
-##
-## Almost every list is [constant NORMAL_HIT] with something inserted, which is
-## the reason for keeping the shape: burn, paralysis, stat changes and the
-## multi-hit moves are commands added to a list rather than branches added to the
-## turn loop. The effect bytes are the cartridge's own.
+## What each move's effect byte makes it do, as a list of commands: the table the
+## cartridge keeps in `data/moves/effects.asm`, to be read against it. Almost every
+## list is [constant NORMAL_HIT] with something inserted, which is the reason for
+## keeping the shape: burn, paralysis, stat changes and the multi-hit moves are
+## commands added to a list rather than branches added to the turn loop.
 
 ## The effect bytes with a list of their own, numbered as the cartridge's move
 ## table numbers them.
@@ -1300,13 +1295,11 @@ const DREAM_EATER_SEQUENCE: Array = [
 
 ## [constant SUPER_FANG], [constant STATIC_DAMAGE], [constant LEVEL_DAMAGE] and
 ## [constant PSYWAVE]: one shared list, the way the cartridge shares one script
-## (`StaticDamage:`) across all four labels.
-##
-## The shortest damaging list in the game: no critical, no stats, no formula, no
-## matchup and no spread, because the number is
-## [constant Gen2EffectCommands.FIXED_DAMAGE]'s to decide outright.
-## [constant Gen2EffectCommands.RESET_TYPE_MATCHUP] behind the hit check is what
-## answers an immunity and flattens the effectiveness none of the four earned.
+## (`StaticDamage:`) across all four labels. The shortest damaging list in the
+## game, with no critical, stats, formula, matchup or spread, because the number
+## is [constant Gen2EffectCommands.FIXED_DAMAGE]'s to decide outright.
+## [constant Gen2EffectCommands.RESET_TYPE_MATCHUP] behind the hit check answers
+## an immunity and flattens the effectiveness none of the four earned.
 const FIXED_DAMAGE_SEQUENCE: Array = [
 	Gen2EffectCommands.USED_MOVE_TEXT,
 	Gen2EffectCommands.DO_TURN,

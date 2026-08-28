@@ -1,19 +1,13 @@
 class_name Gen2BoxScreen
 extends Control
 
-## Bill's PC's two lists, on the hardware's own grid.
-##
-## [Gen2PCBoxPage] is the picture and `engine/pokemon/bills_pc.asm` is the model.
-## `_DepositPKMN` and `_WithdrawPKMN` are this one screen with a different list
-## loaded: `wBillsPC_LoadedBox` is the party for one and the current box for the
-## other, `CopyBoxmonSpecies` builds the list with a CANCEL row on the end, and
-## `Withdraw_UpDown` walks it. `_BillsPC`'s own top menu is the panel's
-## ([Gen2WorldServiceScreen]), which is what opens this in either mode.
-##
-## A on a row opens the submenu both jumptables reach: the transfer, STATS,
+## Bill's PC's two lists, on the hardware's own grid. [Gen2PCBoxPage] is the
+## picture and `engine/pokemon/bills_pc.asm` is the model. `_DepositPKMN` and
+## `_WithdrawPKMN` are this one screen with a different list loaded, and
+## `_BillsPC`'s own top menu is the panel's, which is what opens this in either
+## mode. A on a row opens the submenu both jumptables reach: the transfer, STATS,
 ## RELEASE and CANCEL. Left and right do nothing, because the only routine that
-## reads them is `MoveMonWithoutMail_DPad`, and MOVE PKMN W/O MAIL is a screen of
-## its own that is not built.
+## reads them is `MoveMonWithoutMail_DPad` and that screen is not built.
 
 signal closed(result: Dictionary)
 ## `PlayMonCry2` from the stats screen this one can open, played by whoever owns

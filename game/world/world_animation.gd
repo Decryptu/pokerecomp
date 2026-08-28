@@ -223,15 +223,12 @@ func current_indices() -> PackedByteArray:
 	return _indices
 
 
-## Every frame one animated tile is ever drawn as, in the order the sequence
-## plays them, each entry the tile's sixty-four palette indices row by row. An
-## empty array for a tile no command touches.
-##
-## Read-only and one map resolve's question: a mesh cut from the live strip is
-## cut from whichever frame the atlas happened to hold, so geometry has to span
-## the union of every frame. The live sequence is not advanced, because the
-## running game shares this object and stepping it would move what the player
-## sees; the walk runs on a copy from the start of the command list.
+## Every frame one animated tile is ever drawn as, in the order the sequence plays
+## them, each entry the tile's sixty-four palette indices row by row; an empty
+## array for a tile no command touches. Read-only and one map resolve's question:
+## a mesh cut from the live strip is cut from whichever frame the atlas happened to
+## hold, so geometry has to span the union of every frame. The live sequence is not
+## advanced, because the running game shares this object; the walk runs on a copy.
 func tile_frames(tile: int) -> Array[PackedByteArray]:
 	var out: Array[PackedByteArray] = []
 	if _commands.is_empty() or tileset == null or tile < 0 or tile >= tileset.tile_count:

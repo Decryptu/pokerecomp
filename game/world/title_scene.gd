@@ -1,15 +1,12 @@
 class_name Gen2TitleScene
 extends RefCounted
 
-## `TitleScreenScene` (`engine/menus/intro_menu.asm`), one source frame at a
-## time. Two screens under one name: Crystal opens on `TitleScreenEntrance`,
-## walking `hSCX` in from 112 while the crystal falls and the interlaced
-## `wLYOverrides` pull the logo together, and Gold and Silver go straight to the
-## timer with a bird on its own sine.
-##
-## Scene-free: the frames, the scroll, the sprites and the answer. The pixels are
-## [Gen2TitlePage]'s and the caller reads [method selected_option] once
-## [method finished] holds.
+## `TitleScreenScene` (`engine/menus/intro_menu.asm`), one source frame at a time.
+## Two screens under one name: Crystal opens on `TitleScreenEntrance`, walking
+## `hSCX` in from 112 while the crystal falls and the interlaced `wLYOverrides`
+## pull the logo together, and Gold and Silver go straight to the timer with a bird
+## on its own sine. Scene-free: the frames, the scroll, the sprites and the answer.
+## The pixels are [Gen2TitlePage]'s.
 
 ## `.scenes`. Crystal's table opens on the entrance and Gold and Silver's does
 ## not, so the phase is named rather than numbered here.
@@ -170,14 +167,11 @@ var _suicune_counter: int = 0
 ## by the page: the counter is read before it is raised, so the write lands late.
 var _suicune_base: int = SUICUNE_FIRST_BASE
 var _bird_var: int = 0
-## `SPRITEANIMSTRUCT_FRAME` and `..._DURATION` for the bird's own struct, and
-## the frame counter opens at 0 rather than `_InitSpriteAnimStruct`'s -1.
-## `_TitleScreen` copies the spawned struct into `wSpriteAnim10` with
-## `ld bc, NUM_SPRITE_ANIM_STRUCTS`, which is ten bytes where the struct is
-## sixteen, so the six fields from `..._FRAME` up are never copied. They are the
-## zeroes `ClearSpriteAnims` left, that routine having wiped the whole of
-## `wSpriteAnimData` at the top of `_TitleScreen`, so the values are the
-## cartridge's on every entry rather than boot-time WRAM. The one visible
+## `SPRITEANIMSTRUCT_FRAME` and `..._DURATION` for the bird's own struct, and the
+## frame counter opens at 0 rather than `_InitSpriteAnimStruct`'s -1.
+## `_TitleScreen` copies the spawned struct with `ld bc, NUM_SPRITE_ANIM_STRUCTS`,
+## ten bytes where the struct is sixteen, so the six fields from `..._FRAME` up are
+## never copied and are the zeroes `ClearSpriteAnims` left. The one visible
 ## consequence is `GetSpriteAnimFrame`'s `inc [hl]`: entry 0 is skipped on the
 ## first pass, and `oamrestart` writes -1, so every later cycle plays it.
 var _bird_frame: int = 0

@@ -1,21 +1,13 @@
 class_name Gen2GameFreakPresents
 extends RefCounted
 
-## `GameFreakPresentsScene` and the sprite animation beside it
-## (`engine/movie/splash.asm`), which is the second half of `SplashScreen`.
-##
-## Two cartridges, two sequences. Crystal bounces a Ditto in on
-## `BattleAnim_Sine_e`, waits, and fades its pink to orange as it turns into the
-## logo; Gold and Silver throw a star that leaves the logo behind it, rotate
-## `rOBP1` until the logo is yellow, and spray sparkles out of it. The words
-## underneath are the same two `PlaceString`s on both, at different rows.
-##
-## Every frame here is a frame the cartridge spends. The scene jumptable and the
-## sprite's own jumptable run in one `advance_frame()`, in the order that
-## profile's loop calls them: Crystal's `.joy_loop` runs the scene and then
-## `PlaySpriteAnimations`, Gold's `GameFreakPresentsFrame` the other way round.
-##
-## Scene-free: a host reads [method sprites], [method words] and
+## `GameFreakPresentsScene` and the sprite animation beside it, which is the
+## second half of `SplashScreen`. Two cartridges, two sequences: Crystal bounces a
+## Ditto in on `BattleAnim_Sine_e` and fades its pink to orange as it turns into
+## the logo, while Gold and Silver throw a star that leaves the logo behind it and
+## spray sparkles out of it. Every frame here is a frame the cartridge spends, and
+## the two jumptables run in one `advance_frame()` in the order that profile's
+## loop calls them. Scene-free: a host reads [method sprites], [method words] and
 ## [method fade_step] and draws them.
 
 ## `GameFreakLogoSpriteAnim`'s own jumptable, which is the Ditto's, and Gold's

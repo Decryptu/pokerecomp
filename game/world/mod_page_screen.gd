@@ -1,20 +1,14 @@
 class_name Gen2ModPageScreen
 extends Control
 
-## The one screen a mod may put behind a start-menu row
-## ([constant Gen2ModHost.START_ACTION_OPEN_MOD_PAGE]), embedded in the overworld
-## the way the trainer card and the Hall of Fame are.
-##
-## A record of what a run has done is what the cartridge's own trainer card is,
-## and this is drawn the same way: the screen's own frame and font, paged with
-## the d-pad and left with B. The mod supplies rows and nothing else, so it needs
-## no node, no renderer and no art; the icons are
-## [method Gen2MapNameSignPage.render_notice_icon]'s vocabulary, which is the one
-## an actor and a battle annotation already share.
-##
-## A locked row is drawn the way the Pokedex draws an unseen entry: the label is
-## replaced by `?`, which is what `PrintDexEntry`'s unseen branch does, and its
-## icon is left off.
+## The one screen a mod may put behind a start-menu row, embedded in the overworld
+## the way the trainer card and the Hall of Fame are. A record of what a run has
+## done is what the cartridge's own trainer card is, and this is drawn the same
+## way: the screen's own frame and font, paged with the d-pad and left with B. The
+## mod supplies rows and nothing else, and the icons are
+## [method Gen2MapNameSignPage.render_notice_icon]'s vocabulary. A locked row is
+## drawn the way the Pokedex draws an unseen entry, its label replaced by `?` and
+## its icon left off.
 
 signal closed()
 

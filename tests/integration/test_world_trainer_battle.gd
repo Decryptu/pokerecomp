@@ -2214,14 +2214,12 @@ func test_a_ball_that_missed_costs_the_turn() -> void:
 
 ## `PokeBallEffect` plays `ANIM_THROW_POKE_BALL` between the throw text and the
 ## result text, and that one script is the whole capture: the ball, the poof, the
-## opponent going into it through `BATTLE_BG_EFFECT_RETURN_MON`, the wobbles that
-## `anim_checkpokeball` counts out, and the click or the break free. Nothing
-## played it here, so no renderer could draw a capture and the built-in one drew
-## nothing either.
-##
-## This fixture ships no animation layer, so what it can say is that the screen
-## asks for the animation and spends its frames. What the script then draws is
-## swept against real caches by `tools/checks/battle_anims.gd`.
+## opponent going into it, the wobbles `anim_checkpokeball` counts out, and the
+## click or the break free. Nothing played it here, so no renderer could draw a
+## capture and the built-in one drew nothing either. This fixture ships no
+## animation layer, so what it can say is that the screen asks for the animation
+## and spends its frames; what the script then draws is swept against real caches
+## by `tools/checks/battle_anims.gd`.
 func test_a_thrown_ball_asks_for_the_throw_animation() -> void:
 	await _open_world()
 	_data.species(Fixture.TRAINER_SPECIES)["catch_rate"] = 1

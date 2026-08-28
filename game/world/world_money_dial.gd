@@ -1,15 +1,13 @@
 class_name Gen2WorldMoneyDial
 extends RefCounted
 
-## `Mom_WithdrawDepositMenuJoypad` (`engine/events/mom.asm`), the six-digit money
-## dial her bank is the only caller of. It owns `wStringBuffer2`, the amount
-## being typed, and `wMomBankDigitCursorPosition`, which digit the cursor stands
-## on; the caller owns the box the three balances are drawn in.
-##
-## Not [Gen2WorldQuantityPrompt], which is `BuySellToss_InterpretJoypad`: that
-## dial steps one value against a ceiling and this one adds and subtracts a
-## power of ten per digit, so up on the hundreds column moves the amount by a
-## hundred rather than moving a digit.
+## `Mom_WithdrawDepositMenuJoypad`, the six-digit money dial her bank is the only
+## caller of. It owns `wStringBuffer2`, the amount being typed, and
+## `wMomBankDigitCursorPosition`, which digit the cursor stands on; the caller owns
+## the box the three balances are drawn in. Not [Gen2WorldQuantityPrompt], which is
+## `BuySellToss_InterpretJoypad`: that dial steps one value against a ceiling and
+## this one adds and subtracts a power of ten per digit, so up on the hundreds
+## column moves the amount by a hundred rather than moving a digit.
 
 ## `.DigitQuantities`, `10**x` for x from five down to nought. The table is
 ## written out three times in the source and only the first sixth is indexed:

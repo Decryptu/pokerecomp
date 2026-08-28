@@ -2,23 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies Strength and boulder pushing against freshly imported real caches,
-## for both command profiles.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## engine/events/overworld.asm's StrengthFunction, TryStrengthOW and
-## AskStrengthScript, engine/overworld/player_movement.asm's
-## DoPlayerMovement.CheckStrengthBoulder, engine/overworld/map_objects.asm's
-## MovementFunction_Strength and engine/overworld/npc_movement.asm's
-## CanObjectMoveInDirection. All five are byte identical between the pins, so
-## nothing here is profile split except the two engine flag numbers.
-##
-## The real-cartridge counterpart to the Strength cases in
-## tests/unit/test_world_field_move.gd and tests/unit/test_world_api.gd.
-## Cianwood Gym is the acceptance case, because its three-boulder wall is what a
-## playthrough meets first.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- strength
+## Verifies Strength and boulder pushing against freshly imported real caches, for
+## both command profiles. Expected values come from the pinned sources:
+## StrengthFunction, TryStrengthOW, AskStrengthScript, `.CheckStrengthBoulder`,
+## `MovementFunction_Strength` and `CanObjectMoveInDirection`, all byte identical
+## between the pins, so nothing here is profile split except the two engine flag
+## numbers. The real-cartridge counterpart to the Strength cases in the two world
+## unit tests; Cianwood Gym is the acceptance case, its three-boulder wall being
+## what a playthrough meets first.
 
 
 ## constants/map_constants.asm, CIANWOOD group. Unlike Dragon's Den, the group

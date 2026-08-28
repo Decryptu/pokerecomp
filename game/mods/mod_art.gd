@@ -2,16 +2,11 @@ class_name Gen2ModArt
 extends RefCounted
 
 ## A mod's own pictures: the icon the launcher draws beside its name, and the
-## thumbnail a listing site shows for it.
-##
-## Both are optional and neither is declared for the usual mod: dropping
-## `icon.png` beside `mod.json` is the whole of it, because a convention an
-## author has to read a document to obey is one most will not. A manifest may
-## still name another path, which is what a mod keeping its art in a
-## subdirectory or inside a pack needs.
-##
-## The game never draws a thumbnail. It is resolved here anyway so one rule
-## covers both files and a packaging script has one place to ask.
+## thumbnail a listing site shows for it. Both are optional and neither is
+## declared for the usual mod, since dropping `icon.png` beside `mod.json` is the
+## whole of it and a convention an author has to read a document to obey is one
+## most will not. A manifest may still name another path. The game never draws a
+## thumbnail; it is resolved here anyway so one rule covers both files.
 
 ## Tried in order, and the first that exists wins. PNG leads because an icon is
 ## 32x32 pixel art off the cartridge, where lossy compression only costs.

@@ -2,25 +2,12 @@ extends SceneTree
 
 ## Photographs the lower display against a real cache.
 ##
-##   Godot --path . -s res://tools/preview_second_screen.gd -- <game> <out.png> [tab] [progress] [panel] [theme]
+##   Godot --path . -s res://tools/preview_second_screen.gd -- \
+##       <game> <out.png> [tab] [progress] [panel] [theme]
 ##
-## `tab` is one of `pokedex`, `pokemon`, `pack`, `pokegear`, `player`, `idle` for
-## the picture the panel shows with no world on it, or `all` to write one file per
-## open tab with the tab's name before the extension.
-## `progress` is how far the run has got, which is the only thing that decides
-## which tabs exist: `start` is a player who has just left their bedroom,
-## `starter` has Elm's Pokemon, `gear` has the Pokegear and the MAP card, and
-## `full` has everything the START menu can offer. `panel` is a lower display's
-## own pixel size, `WIDTHxHEIGHT`, which chooses the canvas the way a real one
-## would; the default is the AYN Thor's 1240x1080. `theme` is `light` or `dark`,
-## which only the idle page reads: it is launcher UI and wears the launcher's own
-## appearance.
-##
-## The picture written is the canvas itself, one file pixel per hardware pixel,
-## so a diff against it is exact. Look at it with an image viewer that does not
-## smooth.
-##
-## Opens a window: a [SubViewport] needs a rendering device.
+## `progress` is the only thing that decides which tabs exist: `start`, `starter`,
+## `gear` or `full`. `panel` is a lower display's own `WIDTHxHEIGHT`, defaulting to
+## the AYN Thor's 1240x1080. The picture is the canvas itself, one pixel per pixel.
 
 const WINDOW_SIZE := Vector2i(640, 480)
 const FRAMES_BEFORE_CAPTURE: int = 8

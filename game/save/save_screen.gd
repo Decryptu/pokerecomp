@@ -97,16 +97,12 @@ func open_new_slot() -> bool:
 
 
 ## Starts a new game in the selected slot by running the cartridge's own intro.
-##
-## Nothing is written here. `NewGame` reaches `InitializeWorld` only after
+## Nothing is written here: `NewGame` reaches `InitializeWorld` only after
 ## `PlayerProfileSetup` and `OakSpeech` have returned, so the slot is staged on
-## [GameRuntime] and [Gen2IntroScreen] writes it once the trainer has a name and
-## a gender. Abandoning the intro leaves no file behind.
-##
-## [param label] is the save file's own name, the decorative one Rename edits.
-## It is optional; the trainer's name comes from the naming screen.
-## [param challenge] overrides the form's own pick, which is what a test and a
-## driver use; a name this build does not carry falls back to the form's.
+## [GameRuntime] and [Gen2IntroScreen] writes it once the trainer has a name and a
+## gender, and abandoning the intro leaves no file behind. [param label] is the
+## save file's decorative name, optional; [param challenge] overrides the form's
+## own pick, which is what a test and a driver use.
 func create_new_game(label: String = "", challenge: StringName = &"") -> bool:
 	if _data == null:
 		_set_status(&"error", "New game unavailable.", "No imported cartridge cache is selected.")

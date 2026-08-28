@@ -1,18 +1,13 @@
 extends SceneTree
 
-## Captures `ReadAnyMail` against a real imported cache. The ten mail types are
-## the one screen in this project drawn through four cartridge colours rather
-## than a white-to-black pair, and every one of them is a different VRAM window
-## over the same 1bpp run, so the picture is what says a transcription is right.
+## Captures `ReadAnyMail` against a real imported cache. The ten mail types are the
+## one screen in this project drawn through four cartridge colours rather than a
+## white-to-black pair, and every one is a different VRAM window over the same 1bpp
+## run, so the picture is what says a transcription is right.
 ##
 ##   Godot --headless --path . -s res://tools/preview_mail.gd -- crystal /tmp/mail.png [type]
 ##
-## [type] is a `MailGFXPointers` index, 0 to 9, or `all` for a contact sheet of
-## every one. PORTRAITMAIL draws a Pokemon, which is `wCurPartySpecies` at the
-## moment the message was written.
-##
-## The page is composed into an [Image] rather than through a window, so this
-## runs headless and needs no settling frames.
+## [type] is a `MailGFXPointers` index, 0 to 9, or `all` for a contact sheet.
 
 const COLUMNS: int = 5
 const SAMPLE_SPECIES: int = 1

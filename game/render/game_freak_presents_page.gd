@@ -1,17 +1,13 @@
 class_name Gen2GameFreakPresentsPage
 extends RefCounted
 
-## The GameFreak Presents screen, on the tile grid the hardware uses.
-##
-## A cleared background with two `PlaceString`s on it and one object layer over
-## the top, which is where the two profiles part: Crystal's Ditto comes out of
-## `GameFreakDittoGFX` and reads eleven OAM sets off one 16x16 sheet, while Gold
-## and Silver's logo, star and sparkles are the tail of `GameFreakLogoGFX`
-## followed by `GameFreakLogoStarsGFX`, one contiguous run from `vTiles1` tile
-## $0d, which is what `SPRITE_ANIM_DICT_GS_SPLASH` maps to.
-##
-## [Gen2GameFreakPresents] owns the frames and the positions; this owns the
-## pixels. Node-free like the other `render/*_page.gd`.
+## The GameFreak Presents screen, on the tile grid the hardware uses: a cleared
+## background with two `PlaceString`s and one object layer over the top, which is
+## where the two profiles part. Crystal's Ditto comes out of `GameFreakDittoGFX`
+## and reads eleven OAM sets off one 16x16 sheet, while Gold and Silver's logo,
+## star and sparkles are the tail of `GameFreakLogoGFX` followed by
+## `GameFreakLogoStarsGFX`, one contiguous run from `vTiles1` tile $0d.
+## [Gen2GameFreakPresents] owns the frames and the positions; this owns the pixels.
 
 const TILE: int = Gen2Tiles.TILE_WIDTH
 const COLUMNS: int = 20

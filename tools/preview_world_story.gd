@@ -4,14 +4,10 @@ extends SceneTree
 ## cartridge cache without opening the ROM at runtime.
 ##
 ##   Godot --headless --path . -s res://tools/preview_world_story.gd -- \
-##     crystal 3 19 3 5 1 37,1744
+##     crystal 3 19 3 5 1 37,1744 home story
 ##
-## The optional final argument is a comma-separated list of event flags. Facing
-## uses the runtime values: down=0, up=1, left=2, right=3. The optional eighth
-## argument `home` follows the imported bedroom stair warp into the first floor
-## and then the imported first-floor warp into New Bark Town. A ninth argument
-## `story` drives the imported first-floor Mom event and the New Bark entry
-## event through explicit source inputs.
+## The optional seventh argument is a comma-separated event flag list. `home`
+## follows the bedroom stair warp out; `story` drives the Mom and New Bark events.
 
 ## A ring is 30 lead frames plus two 60-frame rings; the budget only has to
 ## outlast that.
@@ -117,17 +113,12 @@ const EVENT_ANSWERED_DRAGON_MASTER_QUIZ_WRONG: int = 193
 const BADGE_RISING: int = 7
 
 ## Blackthorn Gym 2F's pushes in order, each an approach cell and the direction
-## stepped from it (`maps/BlackthornGym2F.asm`).
-##
-## Four of the six boulders move. BOULDER5 on (6,1) and BOULDER6 on (8,14) are
-## in neither the `stonetable` nor any event flag: they seal the two pockets the
-## puzzle needs, the top-right one holding BOULDER1 and its hole, and the
-## bottom one holding the row BOULDER3 has to be pushed from. Shoving each three
-## cells clears both. BOULDER1 is then one push into (8,3), and BOULDER3 goes
-## north until the wall at (6,6) stops it and then east into (8,7).
-##
-## BOULDER2 is left alone. Its hole is a `stonetable` row like the other two,
-## but the 1F cell its flag opens, (2,5), is a dead end beside the entrance.
+## stepped from it. Four of the six boulders move: BOULDER5 on (6,1) and BOULDER6 on
+## (8,14) are in neither the `stonetable` nor any event flag and seal the two pockets
+## the puzzle needs, so shoving each three cells clears both; BOULDER1 is then one
+## push into (8,3), and BOULDER3 goes north until the wall at (6,6) stops it and then
+## east into (8,7). BOULDER2 is left alone: its hole is a `stonetable` row like the
+## other two, but the 1F cell its flag opens is a dead end beside the entrance.
 const BLACKTHORN_GYM_PUSHES: Array = [
 	{
 		"step": "blackthorn_gym_clear_top_pocket",
@@ -174,17 +165,13 @@ const DRAGON_SHRINE_ANSWERS: Array[int] = [0, 0, 1, 0, 1]
 const OBJECT_STEP_FRAME_BUDGET: int = 64
 
 ## Route 44's Ice Path door and then every warp cell the cave is crossed by, in
-## order (`maps/Route44.asm`, `maps/IcePath*.asm`).
-##
-## The cave is six floor-crossings, not one. Stepping on a warp takes it, so a
-## floor is only crossed between warps its own walk connects, and on Ice Path
-## those regions are disjoint: 1F's Route 44 door reaches the first staircase
-## and nothing else, while the Blackthorn door is reached only from the second
-## staircase, at the far end of the loop through B1F, both B2Fs and B3F.
-##
-## The `stonetable` boulders on B1F are not on this path. Their holes (B1F warps
-## 3 to 6) are shortcuts into B2F Mahogany side, which the walk already reaches
-## through warp 2.
+## order. The cave is six floor-crossings, not one: stepping on a warp takes it, so a
+## floor is only crossed between warps its own walk connects, and on Ice Path those
+## regions are disjoint. 1F's Route 44 door reaches the first staircase and nothing
+## else, while the Blackthorn door is reached only from the second staircase, at the
+## far end of the loop through B1F, both B2Fs and B3F. The `stonetable` boulders on
+## B1F are not on this path: their holes are shortcuts into B2F Mahogany side, which
+## the walk already reaches through warp 2.
 const ICE_PATH_DOORS: Array = [
 	{"step": "route_44_to_ice_path_1f", "cell": Vector2i(56, 7), "hm07": true},
 	{"step": "ice_path_1f_to_b1f", "cell": Vector2i(37, 5)},
@@ -239,15 +226,14 @@ const VICTORY_ROAD_LADDERS: Array = [
 	{"step": "victory_road_second_ladder", "cell": Vector2i(13, 31)},
 ]
 
-## The Elite Four, in the order their doors join them. Every map is in the
-## INDIGO group (16); `maps/IndigoPlateauPokecenter1F.asm` warp 4 at (14,3) is
-## the only way in and each room's exit pair leads to the next.
-##
-## The four rooms share one shape. `<Room>DoorLocksBehindYouScript` walks the
-## player four cells north of the arrival warp and walls the entrance, the boss
-## stands on (5,7) and is faced from (5,8), and beating them opens the exit
-## block over (4,2)/(5,2). Lance's room is taller and is not talked to at all:
-## its coord events on (4,5) and (5,5) run the approach and the champion scene.
+## The Elite Four, in the order their doors join them. Every map is in the INDIGO
+## group (16); the Pokemon Center's warp 4 at (14,3) is the only way in and each
+## room's exit pair leads to the next. The four rooms share one shape:
+## `<Room>DoorLocksBehindYouScript` walks the player four cells north of the
+## arrival warp and walls the entrance, the boss stands on (5,7) and is faced from
+## (5,8), and beating them opens the exit block over (4,2)/(5,2). Lance's room is
+## taller and is not talked to at all: its coord events on (4,5) and (5,5) run the
+## approach and the champion scene.
 const ELITE_FOUR_ROOM_ARRIVAL: Vector2i = Vector2i(5, 17)
 const ELITE_FOUR_ROOM_BOSS_FACE: Vector2i = Vector2i(5, 8)
 const ELITE_FOUR_ROOM_EXIT: Vector2i = Vector2i(5, 2)
@@ -399,15 +385,14 @@ const SAFFRON_CITY_NUMBER: int = 2
 const SAFFRON_GYM_NUMBER: int = 4
 const SAFFRON_GYM_DOOR: Vector2i = Vector2i(34, 3)
 
-## The lost-doll errand and the Magnet Train it pays for. `maps/SaffronCity.asm`
-## warp 8 is the Copycat's house, warp 12 the Route 6 gate and warp 6 the train
-## station; `maps/VermilionCity.asm` warp 3 is the Pokemon Fan Club.
-##
-## The order is the cartridge's own. `PokemonFanClubClefairyGuyScript` reads
-## EVENT_MET_COPYCAT_FOUND_OUT_ABOUT_LOST_ITEM before he parts with the doll, and
-## only `Copycat`'s `.TalkAboutLostItem` sets it, which itself needs
-## EVENT_RETURNED_MACHINE_PART from the Power Plant. So the Copycat is visited
-## first, empty-handed, and the walk to Vermilion is what the visit buys.
+## The Elite Four, in the order their doors join them. Every map is in the INDIGO
+## group (16); the Pokemon Center's warp 4 at (14,3) is the only way in and each
+## room's exit pair leads to the next. The four rooms share one shape:
+## `<Room>DoorLocksBehindYouScript` walks the player four cells north of the
+## arrival warp and walls the entrance, the boss stands on (5,7) and is faced from
+## (5,8), and beating them opens the exit block over (4,2)/(5,2). Lance's room is
+## taller and is not talked to at all: its coord events on (4,5) and (5,5) run the
+## approach and the champion scene.
 const SAFFRON_COPYCAT_HOUSE_DOOR: Vector2i = Vector2i(9, 11)
 const COPYCAT_HOUSE_STAIRS_UP: Vector2i = Vector2i(2, 0)
 const COPYCAT_HOUSE_STAIRS_DOWN: Vector2i = Vector2i(3, 0)
@@ -619,20 +604,14 @@ const FUCHSIA_GYM_EXIT: Vector2i = Vector2i(4, 17)
 const FUCHSIA_ROUTE_15_GATE_DOOR: Vector2i = Vector2i(37, 22)
 const ROUTE_11_NUMBER: int = 2
 
-## Vermilion's Snorlax. The whole chain is pinned and checked against the cache
-## by `tools/checks/radio.gd`, which is where these values are explained; only
-## the cells the walk needs are repeated here.
-##
-## `maps/VermilionCity.asm` object 4 is a BIG_OBJECT filling (34,8) to (35,9),
-## and the cave mouth on (34,7) is sealed until it moves.
-##
-## The route arrives from Route 11, not from the port, and that lands it inside
-## the eight-cell pocket the Snorlax's own body seals off the city's east edge:
-## (36..39, 8) and (36..39, 9), measured against the cache. So the walk uses
-## (36,9) facing left, which is the last of `SnorlaxAwake.ProximityCoords` and
-## the only kind of cell an eastbound player ever has. Three of those five
-## coordinates sit in pockets like this one, which is why the source lists all
-## five rather than only the two the port side can stand on.
+## The lost-doll errand and the Magnet Train it pays for. Saffron's warp 8 is the
+## Copycat's house, warp 12 the Route 6 gate and warp 6 the train station;
+## Vermilion's warp 3 is the Pokemon Fan Club. The order is the cartridge's own:
+## `PokemonFanClubClefairyGuyScript` reads
+## EVENT_MET_COPYCAT_FOUND_OUT_ABOUT_LOST_ITEM before he parts with the doll, and
+## only `Copycat`'s `.TalkAboutLostItem` sets it, which itself needs
+## EVENT_RETURNED_MACHINE_PART from the Power Plant. So the Copycat is visited
+## first, empty-handed, and the walk to Vermilion is what the visit buys.
 const SNORLAX_TALK: Vector2i = Vector2i(36, 9)
 const DIGLETTS_CAVE_MOUTH: Vector2i = Vector2i(34, 7)
 ## `engine/pokegear/pokegear.asm` RadioChannels: 20.0, the Poke Flute channel.
@@ -838,15 +817,14 @@ const EVENT_TELEPORT_GUY: int = 1916
 const EVENT_RIVAL_SPROUT_TOWER: int = 1732
 const EVENT_RED_IN_MT_SILVER: int = 1890
 
-## Maps this walk names by id rather than by cell, where the two profiles
-## disagree (`constants/map_constants.asm`). A map number counts from its
-## group's first entry, so a map pokegold does not ship shifts every later
-## number in that group: group 3 runs eight lower from `UNION_CAVE_1F` on,
-## because pokecrystal inserts eight Ruins of Alph word and item rooms, and
-## group 11 shifts around `GOLDENROD_POKECENTER_1F` and the absent
-## `GOLDENROD_DEPT_STORE_ROOF`. Only the ids this walk resolves are listed;
-## everything else it reaches is found by the cell it stands on, which no
-## renumbering moves.
+## Vermilion's Snorlax. The whole chain is pinned and checked against the cache by
+## `tools/checks/radio.gd`, which is where these values are explained; only the
+## cells the walk needs are repeated here. Object 4 is a BIG_OBJECT filling (34,8)
+## to (35,9), and the cave mouth on (34,7) is sealed until it moves. The route
+## arrives from Route 11 rather than the port, which lands it inside the eight-cell
+## pocket the Snorlax's own body seals off the east edge, so the walk uses (36,9)
+## facing left: the last of `SnorlaxAwake.ProximityCoords` and the only kind of
+## cell an eastbound player ever has.
 const MAP_IDS: Dictionary = {
 	&"ILEX_FOREST": {&"crystal": Vector2i(3, 52), &"gold": Vector2i(3, 44)},
 	&"MAHOGANY_MART_1F": {&"crystal": Vector2i(3, 48), &"gold": Vector2i(3, 40)},
@@ -965,15 +943,13 @@ func _story_path(data: GameData) -> Dictionary:
 	save.world = world.snapshot()
 	var random := RandomNumberGenerator.new()
 	random.seed = 7
-	# Every map load advances the roaming beasts. Supply a dedicated schedule
-	# stream rather than relying on an implicit random source, as the live screen
-	# does at world_screen.gd:153. Without this the route's reported roaming
-	# positions cannot be diffed against itself.
-	#
-	# Its own generator, not the route's: the schedule rolls once per map load,
-	# and drawing them from the same stream would shift every encounter and catch
-	# behind them. That separation is the whole point of Gen2WorldAPI keeping
-	# three.
+	## Maps this walk names by id rather than by cell, where the two profiles disagree.
+	## A map number counts from its group's first entry, so a map pokegold does not
+	## ship shifts every later number in that group: group 3 runs eight lower from
+	## `UNION_CAVE_1F` on, because pokecrystal inserts eight Ruins of Alph rooms, and
+	## group 11 shifts around `GOLDENROD_POKECENTER_1F` and the absent
+	## `GOLDENROD_DEPT_STORE_ROOF`. Only the ids this walk resolves are listed;
+	## everything else it reaches is found by the cell it stands on.
 	var schedule_random := RandomNumberGenerator.new()
 	schedule_random.seed = 11
 	world.schedule_random = schedule_random
@@ -2424,19 +2400,12 @@ func _goldenrod_flower_shop(
 	return {"ok": true}
 
 
-## Goldenrod to the Fog Badge. Two errands gate it: the SquirtBottle, whose
-## shape is the leg's one profile split, and Morty, who is absent until the
-## Burned Tower's beasts are released.
-##
-## Crystal spends the bottle on a round trip. `Route36FloriaScript` has to be
-## met on Route 36 first (EVENT_MET_FLORIA), then talked to again in the shop
-## (EVENT_TALKED_TO_FLORIA_AT_FLOWER_SHOP), and only then does
-## `FlowerShopTeacherScript` reach its `verbosegiveitem SQUIRTBOTTLE`. Gold and
-## Silver ship no Floria on Route 36 at all (`maps/Route36.asm`) and their
-## teacher is `checkflag ENGINE_PLAINBADGE` and nothing else
-## (`maps/GoldenrodFlowerShop.asm`), so the badge the walk already holds is the
-## whole gate and the trip north before the shop buys nothing. The shop's own
-## Floria wanders there and gates nothing either.
+# Every map load advances the roaming beasts, so this supplies a dedicated
+# schedule stream rather than relying on an implicit random source, as the live
+# screen does. Its own generator, not the route's: the schedule rolls once per
+# map load, and drawing them from the same stream would shift every encounter
+# and catch behind them. That separation is the whole point of [Gen2WorldAPI]
+# keeping three.
 func _fog_badge_path(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -2758,18 +2727,14 @@ func _fog_badge_path(
 	return {"ok": true}
 
 
-## The Fog Badge to the Mineral Badge, taking the Storm Badge on the way, on the
-## same world, state and save. This is the first leg that needs Surf on the real
-## route: HM03 is the Dance Theater's reward for the five Kimono Girls, and
-## Routes 40 and 41 are the only way to Cianwood, whose pharmacy holds the
-## SecretPotion that maps/OlivineLighthouse6F.asm wants before it clears
-## EVENT_OLIVINE_GYM_JASMINE.
-##
-## Chuck is on this leg rather than one of its own because the crossing is: the
-## Mineral Badge sends the player to Cianwood for the SecretPotion anyway, and
-## maps/CianwoodGym.asm is two doors from the pharmacy. Doing it here costs no
-## extra Route 40/41 crossing, which is also the order a player walks. HM04 is
-## collected before the outbound crossing, from maps/OlivineCafe.asm.
+## Goldenrod to the Fog Badge. Two errands gate it: the SquirtBottle, whose shape
+## is the leg's one profile split, and Morty, who is absent until the Burned
+## Tower's beasts are released. Crystal spends the bottle on a round trip, Floria
+## having to be met on Route 36 first and talked to again in the shop before
+## `FlowerShopTeacherScript` reaches its `verbosegiveitem SQUIRTBOTTLE`. Gold and
+## Silver ship no Floria on Route 36 at all and their teacher is
+## `checkflag ENGINE_PLAINBADGE` and nothing else, so the badge the walk already
+## holds is the whole gate and the trip north before the shop buys nothing.
 func _mineral_badge_path(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -2998,16 +2963,14 @@ func _mineral_badge_path(
 	return {"ok": true}
 
 
-## The Mineral Badge to the Glacier Badge. Mahogany's gym is closed until the
-## Rocket hideout under its souvenir shop is cleared
-## (`EVENT_MAHOGANY_TOWN_POKEFAN_M_BLOCKS_GYM`, `maps/MahoganyTown.asm`), and the
-## hideout only opens after Lance is met at the Lake of Rage, which is behind the
-## Red Gyarados in the middle of the water.
-##
-## The hideout is three floors of one-way halves rather than one maze: each floor
-## is cut in two and the halves are joined through the other floor, so the route
-## climbs and drops the same ladders several times. Its own doors are the only
-## other links, and each opens on something learned a floor away.
+## The Fog Badge to the Mineral Badge, taking the Storm Badge on the way, on the
+## same world, state and save. The first leg that needs Surf on the real route:
+## HM03 is the Dance Theater's reward for the five Kimono Girls, and Routes 40 and
+## 41 are the only way to Cianwood, whose pharmacy holds the SecretPotion Olivine
+## Lighthouse wants before it clears EVENT_OLIVINE_GYM_JASMINE. Chuck is on this
+## leg rather than one of its own because the crossing is: the Mineral Badge sends
+## the player to Cianwood anyway and the gym is two doors from the pharmacy, which
+## is also the order a player walks. HM04 is collected before the outbound crossing.
 func _glacier_badge_path(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -3603,19 +3566,13 @@ func _glacier_badge_path(
 	return {"ok": true}
 
 
-## Mahogany Town west to Goldenrod City and back, clearing the Radio Tower.
-##
-## This leg is what opens Blackthorn Gym. `maps/BlackthornCity.asm` stands
-## BLACKTHORNCITY_SUPER_NERD1 on (18,12), the only cell that reaches the gym
-## door warp at (18,11), and its event flag is set only by
-## `maps/RadioTower5F.asm`'s boss script. Beating Pryce already ran
-## `RadioTowerRocketsScript` (`engine/events/std_scripts.asm`), so the takeover
-## is armed before the leg starts: the Rockets are visible and the Black Belt
-## who would block 2F's stairs is hidden.
-##
-## The walk back is six connections west, all of them crossed eastward earlier
-## in the route, and the two Route 42 lakes are surfed in reverse. Appends to
-## [param path] and answers only ok or the failure.
+## The Mineral Badge to the Glacier Badge. Mahogany's gym is closed until the
+## Rocket hideout under its souvenir shop is cleared, and the hideout only opens
+## after Lance is met at the Lake of Rage, which is behind the Red Gyarados in the
+## middle of the water. The hideout is three floors of one-way halves rather than
+## one maze: each floor is cut in two and the halves are joined through the other
+## floor, so the route climbs and drops the same ladders several times. Its own
+## doors are the only other links, and each opens on something learned a floor away.
 func _radio_tower_path(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -3765,25 +3722,13 @@ func _radio_tower_boss(
 	return {"ok": true}
 
 
-## Goldenrod City to the warehouse director's CARD_KEY, and back.
-##
-## Three maps, each cut into regions the others join. GoldenrodUnderground's
-## north half is reached from the switch room's south corridor and ends at the
-## basement door (18,6), which `BasementDoorScript` unlocks with the
-## BASEMENT_KEY and which then warps to the underground's south half. That half
-## reaches the switch room's top corridor, where the three switches are.
-##
-## The puzzle is `GoldenrodUndergroundSwitchRoomEntrances_UpdateDoors`: switch 1,
-## 2 and 3 add 1, 2 and 3 to `wUndergroundSwitchPositions` and each position
-## opens some doors and closes others, leaving the ones it does not name alone,
-## so states accumulate. Turning 3, then 2, then 1 walks positions 3, 5 and 6 and
-## ends with doors 3, 5, 6, 8, 9 and 11 open, which is the one chain from the top
-## corridor to the warehouse doors at (22,10) and (23,10).
-##
-## Coming back needs the emergency switch: the warehouse's own
-## MAPCALLBACK_NEWMAP clears every door event, so re-entering the switch room
-## seals the room the warehouse opens into, and `EmergencySwitchScript` at
-## (20,11) is the only switch reachable from inside it.
+## Mahogany Town west to Goldenrod City and back, clearing the Radio Tower. This
+## leg is what opens Blackthorn Gym: BLACKTHORNCITY_SUPER_NERD1 stands on (18,12),
+## the only cell that reaches the gym door warp at (18,11), and its event flag is
+## set only by `maps/RadioTower5F.asm`'s boss script. Beating Pryce already ran
+## `RadioTowerRocketsScript`, so the takeover is armed before the leg starts. The
+## walk back is six connections west, all crossed eastward earlier in the route,
+## and the two Route 42 lakes are surfed in reverse. Appends to [param path].
 func _goldenrod_underground_card_key(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -3985,16 +3930,14 @@ func _warp_chain(
 	return {"ok": true}
 
 
-## Mahogany Town and Goldenrod City in either direction, on the same world,
-## state and save. [param heading] is "west" for Mahogany to Goldenrod and
-## "east" for the return.
-##
-## The chain is Mahogany, Route 42, Ecruteak City, Route 37, Route 36, Route 35,
-## Goldenrod (`data/maps/attributes.asm`), with Route 35's south end a gate
-## building rather than a connection (`maps/Route35.asm` warp to
-## ROUTE_35_GOLDENROD_GATE). Route 42's two lakes have no land path around them,
-## so both are surfed, and Route 35's cut tree regrows on every map load, so it
-## is cut on every crossing.
+## Goldenrod City to the warehouse director's CARD_KEY, and back. Three maps, each
+## cut into regions the others join: the underground's north half ends at the
+## basement door the BASEMENT_KEY unlocks, which warps to the south half, and that
+## half reaches the switch room's top corridor. The puzzle is
+## `..._UpdateDoors`: each switch adds to `wUndergroundSwitchPositions` and opens
+## some doors and closes others, leaving the rest alone, so states accumulate and
+## 3, then 2, then 1 is the one chain to the warehouse. Coming back needs the
+## emergency switch, since the warehouse's own callback clears every door event.
 func _goldenrod_crossing(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -4182,16 +4125,13 @@ func _lake_crossing(
 	return _walk_cell_resolving(world, landfall, save, random, data, true)
 
 
-## Blackthorn City to the Rising Badge, on the same world, state and save.
-##
-## The badge is not won in the gym. `BlackthornGymClairScript` sets only
-## `EVENT_BEAT_CLAIR` and swaps the two Blackthorn gramps so the Dragon's Den
-## door at (20,1) opens. `maps/DragonShrine.asm` is what runs
-## `setflag ENGINE_RISINGBADGE` on Crystal, at the end of the elder's
-## five-question quiz; Gold and Silver have no shrine and put the same line in
-## `DragonsDenB1FDragonFangScript` (`maps/DragonsDenB1F.asm`).
-##
-## Appends to [param path] and answers only ok or the failure.
+## Mahogany Town and Goldenrod City in either direction, on the same world, state
+## and save. [param heading] is "west" for Mahogany to Goldenrod and "east" for the
+## return. The chain is Mahogany, Route 42, Ecruteak City, Route 37, Route 36,
+## Route 35, Goldenrod, with Route 35's south end a gate building rather than a
+## connection. Route 42's two lakes have no land path around them, so both are
+## surfed, and Route 35's cut tree regrows on every map load, so it is cut on every
+## crossing.
 func _rising_badge_path(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -4235,21 +4175,13 @@ func _rising_badge_path(
 	return {"ok": true}
 
 
-## Blackthorn Gym's boulder puzzle and Clair.
-##
-## 1F is four regions, and the entrance reaches only one of them. 2F's three
-## holes are `stonetable` rows, and a boulder that falls through one is
-## `disappear`ed and sets its own event flag, which
-## `BlackthornGym1FBouldersCallback` turns into a `changeblock` on 1F. Two of
-## those changes are the route: BOULDER1 through the (8,3) hole opens 1F (8,3),
-## joining the middle corridor to Clair's room, and BOULDER3 through the (8,7)
-## hole opens 1F (8,7), joining that corridor to the pocket 2F's (7,9) staircase
-## drops into. BOULDER2's hole adds one 1F cell beside the entrance and reaches
-## nothing, so the walk leaves it alone.
-##
-## BOULDER1 is one push; BOULDER3 starts nine cells south of the row it has to
-## cross on, so it goes north until the wall at (6,6) stops it and then east
-## into the hole.
+## Blackthorn City to the Rising Badge, on the same world, state and save. The
+## badge is not won in the gym: `BlackthornGymClairScript` sets only
+## `EVENT_BEAT_CLAIR` and swaps the two Blackthorn gramps so the Dragon's Den door
+## at (20,1) opens. `maps/DragonShrine.asm` is what runs
+## `setflag ENGINE_RISINGBADGE` on Crystal, at the end of the elder's five-question
+## quiz; Gold and Silver have no shrine and put the same line in
+## `DragonsDenB1FDragonFangScript`. Appends to [param path].
 func _blackthorn_gym_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -4329,18 +4261,14 @@ func _blackthorn_gym_leg(
 	return {"ok": true}
 
 
-## Blackthorn City to the Dragon Shrine, and the elder's quiz.
-##
-## Clair's script sets `EVENT_BLACKTHORN_CITY_GRAMPS_BLOCKS_DRAGONS_DEN` and
-## clears its partner, which swaps the gramps standing on (20,2) for one beside
-## it and opens the den door at (20,1). Neither den floor needs a field move:
-## B1F's shrine warp at (19,29) is on the same land region as the ladder from
-## 1F, and the whirlpool at (10,20) guards the water pocket rather than the way
-## through.
-##
-## The quiz is answered correctly. `.WrongAnswer` on the last question checks
-## `EVENT_TEMPORARY_UNTIL_MAP_RELOAD_6`, which question 5 has already set, so it
-## asks question 5 again: a wrong answer there is the one that does not move on.
+## Blackthorn Gym's boulder puzzle and Clair. 1F is four regions and the entrance
+## reaches only one. 2F's three holes are `stonetable` rows, and a boulder that
+## falls through one sets its own event flag, which
+## `BlackthornGym1FBouldersCallback` turns into a `changeblock` on 1F. Two of those
+## are the route: BOULDER1 through the (8,3) hole joins the middle corridor to
+## Clair's room, and BOULDER3 through the (8,7) hole joins it to the pocket 2F's
+## staircase drops into. BOULDER2's hole reaches nothing. BOULDER1 is one push;
+## BOULDER3 goes north until the wall at (6,6) stops it and then east.
 func _dragon_shrine_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -4468,23 +4396,14 @@ func _dragon_shrine_leg(
 	return {"ok": true}
 
 
-## Dragon's Den B1F's DRAGON_FANG ball, which is where Gold and Silver keep the
-## Rising Badge.
-##
-## pokegold ships no DRAGON_SHRINE map: `maps/DragonsDenB1F.asm` has one warp
-## rather than two and no coord event, and blocks (7..11, 13..15) of its `.blk`
-## wall the shrine mouth off, which is the whole difference between the two
-## grids. `DragonsDenB1FDragonFangScript` is the errand instead: the ball on
-## (35,16) gives the fang, then Clair walks in, runs `setflag ENGINE_RISINGBADGE`
-## and hands over TM24 in the same conversation Crystal splits between the elder
-## and a later coord event.
-##
-## The ball's land strip is (34..35, 16..21) and touches no other land, so the
-## lake is the only way onto it and (34,22) is its one shore: the water west of
-## the strip is a pocket of its own, sealed off by the COLL_BUOY column on
-## (30, 16..19), which `data/collision/collision_permissions.asm` gives
-## WALL_TILE. The whirlpool on (10,20) is on this route as much as on Crystal's,
-## since it is the only cell joining the ladder's own lake to the southern one.
+## Blackthorn City to the Dragon Shrine, and the elder's quiz. Clair's script swaps
+## the gramps standing on (20,2) for one beside it and opens the den door at
+## (20,1). Neither den floor needs a field move: B1F's shrine warp at (19,29) is on
+## the same land region as the ladder from 1F, and the whirlpool at (10,20) guards
+## the water pocket rather than the way through. The quiz is answered correctly:
+## `.WrongAnswer` on the last question checks a flag question 5 has already set, so
+## it asks question 5 again, and a wrong answer there is the one that does not move
+## on.
 func _dragons_den_dragon_fang(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -4554,20 +4473,14 @@ func _dragons_den_dragon_fang(
 	return {"ok": true}
 
 
-## The Dragon Shrine to Indigo Plateau, on the same world, state and save.
-##
-## `VictoryRoadGate`'s coord event at (10,11) is a `readvar VAR_BADGES` against
-## `NUM_JOHTO_BADGES - 1`, so it is the first script on the walked route that
-## reads the badge count back, and the eighth badge is what opens the leg.
-##
-## Route 27 is the reason this leg waited on Waterfall. Its Kanto landfall sits
-## in a region that reaches no map edge, and the only crossing of the channel
-## east of it starts in a pocket reached solely by leaving Tohjo Falls there.
-## The cave in turn is two lower channels that reach the pool feeding them only
-## by climbing `COLL_WATERFALL` cells. `tools/checks/route_27.gd` pins all of
-## it.
-##
-## Appends to [param path] and answers only ok or the failure.
+## Dragon's Den B1F's DRAGON_FANG ball, which is where Gold and Silver keep the
+## Rising Badge. pokegold ships no DRAGON_SHRINE map: B1F has one warp rather than
+## two and no coord event, and blocks (7..11, 13..15) wall the shrine mouth off.
+## `DragonsDenB1FDragonFangScript` is the errand instead: the ball on (35,16) gives
+## the fang, then Clair walks in, runs `setflag ENGINE_RISINGBADGE` and hands over
+## TM24. The ball's land strip touches no other land, so the lake is the only way
+## onto it and (34,22) is its one shore; the whirlpool on (10,20) is on this route
+## as much as on Crystal's.
 func _kanto_approach_path(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -4594,19 +4507,14 @@ func _kanto_approach_path(
 	return _elite_four_leg(world, save, random, data, path)
 
 
-## The Dragon's Den back to New Bark Town.
-##
-## The way out is the way in reversed. Crystal clears the whirlpool twice:
-## `complete_whirlpool()` is a transient block override, so the warp into the
-## shrine restored (10,20), and the water south of it reaches the shrine's
-## landfall and nothing else. Gold and Silver enter no map in between, so their
-## first clear still holds.
-##
-## Blackthorn's own exit is south, not west: Route 45 into Route 46 into the
-## Route 29 gate. Route 46 is walked downhill only. Its ledges leave the region
-## around the gate cells reaching no map edge at all, so a route that tried to
-## climb it from Route 29 would stop; entered from Route 45's west edge it
-## reaches the gate.
+## The Dragon Shrine to Indigo Plateau, on the same world, state and save.
+## `VictoryRoadGate`'s coord event at (10,11) is a `readvar VAR_BADGES` against
+## `NUM_JOHTO_BADGES - 1`, so it is the first script on the walked route that reads
+## the badge count back. Route 27 is the reason this leg waited on Waterfall: its
+## Kanto landfall sits in a region that reaches no map edge, the only crossing east
+## of it starts in a pocket reached solely by leaving Tohjo Falls there, and the
+## cave's two lower channels reach the pool feeding them only by climbing
+## `COLL_WATERFALL` cells. `tools/checks/route_27.gd` pins all of it.
 func _blackthorn_departure(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -4798,20 +4706,14 @@ func _blackthorn_departure(
 	return {"ok": true}
 
 
-## New Bark Town to Route 26, along Route 27 and through Tohjo Falls.
-##
-## New Bark's east column is wall except the four water rows 6 to 9, so leaving
-## town east is a crossing rather than a step. The far side is still water, so
-## one water-only walk comes ashore on ROUTE_27_LANDFALL, one of the two
-## `SCENE_ROUTE27_FIRST_STEP_INTO_KANTO` coord cells, and the scene runs on
-## arrival.
-##
-## From there the way east is the cave, twice over. Row 5 of Route 27 is solid
-## cliff apart from Tohjo Falls' two mouths, and both are `COLL_CAVE`, whose
-## `.CheckTile` `.warps` branch forces a step DOWN: a player leaving either
-## mouth always ends south of it. So the west mouth is entered from the
-## landfall's region, the cave is crossed, and the east mouth drops the player
-## into the pocket whose own shore is the channel across to Route 26's edge.
+## The Dragon's Den back to New Bark Town. The way out is the way in reversed.
+## Crystal clears the whirlpool twice: `complete_whirlpool()` is a transient block
+## override, so the warp into the shrine restored (10,20), and the water south of
+## it reaches the shrine's landfall and nothing else. Gold and Silver enter no map
+## in between, so their first clear still holds. Blackthorn's own exit is south
+## rather than west: Route 45 into Route 46 into the Route 29 gate. Route 46 is
+## walked downhill only, its ledges leaving the gate region reaching no map edge
+## at all.
 func _kanto_approach(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -4902,15 +4804,14 @@ func _kanto_approach(
 	return {"ok": true}
 
 
-## Tohjo Falls, west mouth to east mouth, which is one Waterfall climb and one
-## ride back down.
-##
-## The cave is three water bodies joined only by its waterfalls. From the west
-## door's landing the surf runs west and north to the foot of the x 8 to 11
-## column; the climb ends on the pool above it, still on water. The east
-## waterfall is then ridden down rather than climbed: stepping onto its top cell
-## leaves the player standing on a `COLL_WATERFALL`, and `.CheckTile` takes over
-## from there, which is `advance_forced_movement()` here.
+## New Bark Town to Route 26, along Route 27 and through Tohjo Falls. New Bark's
+## east column is wall except the four water rows 6 to 9, so leaving town east is a
+## crossing rather than a step, and the far side is still water: one water-only
+## walk comes ashore on ROUTE_27_LANDFALL, one of the two
+## `SCENE_ROUTE27_FIRST_STEP_INTO_KANTO` coord cells. From there the way east is
+## the cave, twice over. Row 5 is solid cliff apart from Tohjo Falls' two mouths,
+## both `COLL_CAVE`, whose `.warps` branch forces a step DOWN, so the east mouth
+## drops the player into the pocket whose shore crosses to Route 26.
 func _tohjo_falls_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -5221,16 +5122,13 @@ func _victory_road_leg(
 	return {"ok": true}
 
 
-## The Indigo Plateau Pokemon Center to the Hall of Fame.
-##
-## The five rooms are one corridor with a door between each pair, and no heal
-## anywhere in it. `_drain_story()` answers every battle with a win, so what
-## this walks is the doors, the scenes and the flags, not five fights a party
-## survived.
-##
-## `IndigoPlateauPokecenter1FPrepareElite4Callback` has already run on the
-## Pokemon Center's own map entry: it sets all six scenes and clears the twelve
-## room flags, so each room arrives on its `_LOCK_DOOR` scene.
+## The Indigo Plateau Pokemon Center to the Hall of Fame. The five rooms are one
+## corridor with a door between each pair, and no heal anywhere in it.
+## `_drain_story()` answers every battle with a win, so what this walks is the
+## doors, the scenes and the flags rather than five fights a party survived.
+## `IndigoPlateauPokecenter1FPrepareElite4Callback` has already run on the Pokemon
+## Center's own map entry: it sets all six scenes and clears the twelve room flags,
+## so each room arrives on its `_LOCK_DOOR` scene.
 func _elite_four_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -5427,16 +5325,13 @@ func _hall_of_fame_leg(
 	return {"ok": true}
 
 
-## The Hall of Fame to Kanto: the post-credits spawn, Elm's S.S. Ticket, the
-## walk back to Olivine, the S.S. Aqua and landfall in Vermilion City.
-##
-## This leg starts on a new world. `SpawnAfterE4` (`engine/menus/intro_menu.asm`)
-## answers the next Continue with SPAWN_NEW_BARK and MAPSETUP_WARP, so the
-## cartridge does not walk out of the Hall of Fame either; it reloads the map.
-## The state and the save carry over, which is what makes the flags the Hall of
-## Fame just set visible to Elm.
-##
-## Returns the world it built, since everything after it runs there.
+## The Hall of Fame to Kanto: the post-credits spawn, Elm's S.S. Ticket, the walk
+## back to Olivine, the S.S. Aqua and landfall in Vermilion City. This leg starts on
+## a new world: `SpawnAfterE4` answers the next Continue with SPAWN_NEW_BARK and
+## MAPSETUP_WARP, so the cartridge does not walk out of the Hall of Fame either, it
+## reloads the map. The state and the save carry over, which is what makes the flags
+## the Hall of Fame just set visible to Elm. Returns the world it built, since
+## everything after it runs there.
 func _kanto_crossing_path(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -5496,18 +5391,14 @@ func _kanto_crossing_path(
 	return {"ok": true, "world": spawned}
 
 
-## Olivine Port to Vermilion City on the S.S. Aqua.
-##
-## The Hall of Fame is what opens this: `HallOfFameEnterScript` sets
-## EVENT_OLIVINE_PORT_SPRITES_BEFORE_HALL_OF_FAME and clears the `AFTER` one, and
-## the sailor those flags swap is the one standing on the port's own coord event
-## at (7,15). Before the Hall of Fame he blocks it.
-##
-## The first crossing is the granddaughter's: `.CanArrive` in
-## `maps/FastShipCabins_SW_SSW_NW.asm` wants EVENT_FAST_SHIP_FOUND_GIRL or
-## EVENT_FAST_SHIP_FIRST_TIME, and neither is set on the way out, so the ship
-## only docks once `SSAquaMetalCoatAndDocking` has run. The bed is not needed;
-## that script sets both the arrival and the found-girl flags itself.
+## Olivine Port to Vermilion City on the S.S. Aqua. The Hall of Fame is what opens
+## this: `HallOfFameEnterScript` swaps the two port sprite flags, and the sailor
+## those flags swap is the one standing on the port's own coord event at (7,15).
+## Before the Hall of Fame he blocks it. The first crossing is the granddaughter's:
+## `.CanArrive` wants EVENT_FAST_SHIP_FOUND_GIRL or EVENT_FAST_SHIP_FIRST_TIME and
+## neither is set on the way out, so the ship only docks once
+## `SSAquaMetalCoatAndDocking` has run. The bed is not needed; that script sets both
+## flags itself.
 func _ss_aqua_crossing(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -6236,17 +6127,14 @@ func _celadon_gym_leg(
 	return {"ok": true}
 
 
-## Celadon Gym to Cerulean City, by way of Saffron and Route 5.
-##
-## Two gate buildings and one open connection. Cerulean is as far as this walk
-## goes: the Cascade Badge is an errand, not a cell. Misty and her three swimmers
-## all carry EVENT_TRAINERS_IN_CERULEAN_GYM as their hide flag and
-## `InitializeEventsScript` sets it, so the gym stays empty until
-## `Route25MistyDate1Script` clears it; that scene is armed by the gym's own
-## grunt, who is armed by the Power Plant manager. The plant is not walked to
-## either: it sits in a region with no map edge and no walkable neighbour, and
-## the way in is Route 9's river, which the same cut that opens the route also
-## opens the shore of. `tools/checks/cerulean.gd` pins all of it.
+## Celadon Gym to Cerulean City, by way of Saffron and Route 5: two gate buildings
+## and one open connection. Cerulean is as far as this walk goes, because the
+## Cascade Badge is an errand rather than a cell. Misty and her three swimmers all
+## hide behind EVENT_TRAINERS_IN_CERULEAN_GYM, cleared by a scene armed by the
+## gym's own grunt, who is armed by the Power Plant manager. The plant is not walked
+## to either: it sits in a region with no map edge and no walkable neighbour, and
+## the way in is Route 9's river, whose shore the same cut opens.
+## `tools/checks/cerulean.gd` pins all of it.
 func _cerulean_approach_path(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -6390,19 +6278,14 @@ func _machine_part_errand(
 	return _cerulean_gym_leg(world, save, random, data, path)
 
 
-## Misty, once the errand has put her in her gym.
-##
-## The gym is a pool with the leader on an island, and its trainers are what the
-## walk has to answer: Swimmer Diana watches the one row every route to Misty
-## crosses, and Swimmers Parker and Briana watch the pool's two alternative
-## columns, so one of the pair is met whichever way round it goes. All three stand
-## on water and walk over it to reach the player, which the cartridge allows
-## because `SeenByTrainerScript` is `applymovementlasttalked` and its steps reach
-## `NormalStep`, checking no permission. `tools/checks/cerulean.gd` pins the
-## geometry and each approach.
-##
-## Misty herself sets all three of their beaten flags along with her own, the way
-## Surge, Erika and Sabrina do, so they are reported rather than gated on.
+## Misty, once the errand has put her in her gym. The gym is a pool with the leader
+## on an island, and its trainers are what the walk has to answer: Swimmer Diana
+## watches the one row every route to Misty crosses, and Parker and Briana watch the
+## pool's two alternative columns, so one of the pair is met whichever way round it
+## goes. All three stand on water and walk over it to reach the player, which the
+## cartridge allows because `SeenByTrainerScript`'s steps reach `NormalStep` and
+## check no permission. Misty sets all three of their beaten flags along with her
+## own, so they are reported rather than gated on.
 func _cerulean_gym_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -6452,22 +6335,13 @@ func _cerulean_gym_leg(
 
 
 ## Cerulean Gym back through Saffron to Lavender Town and the Kanto Radio Tower.
-##
-## Two gate buildings and one open connection, the same shape as the walk that
-## reached Cerulean, run in reverse and then east: Route 5's own warp at (8,17)
-## into the Saffron gate, Saffron's warp 14 into the Route 8 gate, and Route 8's
-## single east crossing at (39,8) onto Lavender's (0,8). No cut tree and no
-## errand stand in the way of the town itself; Route 8's five trainers are the
-## only thing between the gate and the crossing, and just one of them, Super Nerd
-## Tom, cannot be routed around. The three bikers watch the corridor west of the
-## route's eight `$a3` hop-down ledges, and the eastbound walk hops off row 6
-## onto row 8 east of them, so it never enters a line they cover.
-##
-## What the leg is for is the EXPN CARD. `LavRadioTower1FGentlemanScript` gates it
-## on `EVENT_RETURNED_MACHINE_PART`, which the Cerulean errand already set, so
-## this is the second time a Kanto opener sat before its gate rather than behind
-## it: the tower is off the air until the Power Plant runs, and the card is what
-## eventually answers `special SnorlaxAwake` on Route 11.
+## Two gate buildings and one open connection, the same shape run in reverse and
+## then east. Route 8's five trainers are the only thing between the gate and the
+## crossing, and just one, Super Nerd Tom, cannot be routed around: the three bikers
+## watch the corridor west of the route's eight `$a3` hop-down ledges, and the
+## eastbound walk hops off row 6 onto row 8 east of them. What the leg is for is the
+## EXPN CARD, gated on `EVENT_RETURNED_MACHINE_PART`, which the Cerulean errand
+## already set: the third Kanto opener that sat before its gate.
 func _lavender_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -6564,21 +6438,14 @@ func _lavender_leg(
 	return _fuchsia_leg(world, save, random, data, path)
 
 
-## The lost-doll errand and the Magnet Train, run from Saffron City.
-##
-## An errand rather than a walk, and the one leg on the route whose order the
-## cartridge fixes rather than the geography: the Fan Club's Clefairy guy reads
+## The lost-doll errand and the Magnet Train, run from Saffron City. An errand
+## rather than a walk, and the one leg whose order the cartridge fixes rather than
+## the geography: the Fan Club's Clefairy guy reads
 ## EVENT_MET_COPYCAT_FOUND_OUT_ABOUT_LOST_ITEM before he parts with the doll, and
-## only the Copycat sets it, so she is visited first with nothing to give her.
-## Her own branch needs EVENT_RETURNED_MACHINE_PART, which the Cerulean leg set
-## at the Power Plant, so this is the third Kanto opener that sat before its gate.
-##
-## The ride itself never touches the platform on foot. Each station is two
-## regions with row 9 solid between them; the officer stands inside that row and
-## is talked to across it, and his script's `applymovement` walks the player over
-## the wall onto the train door, because a scripted step ignores collision. The
-## `warpcheck` after it takes the door, and the arrival coord event on the far
-## station is stepped onto rather than walked to, since it is live.
+## only the Copycat sets it. The ride itself never touches the platform on foot:
+## each station is two regions with row 9 solid between them, the officer is talked
+## to across that row, and his script's `applymovement` walks the player over the
+## wall onto the train door, because a scripted step ignores collision.
 func _magnet_train_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -6859,24 +6726,14 @@ func _magnet_train_ride(
 	return {"ok": true}
 
 
-## Lavender Town south to Fuchsia City and the Soul Badge.
-##
-## The longest open walk in Kanto and the first leg since Vermilion with no
-## errand in it at all: Routes 12, 13, 14 and 15 are four plain connections, and
-## the only door is `ROUTE_15_FUCHSIA_GATE` at the end. What it costs is
-## trainers, eighteen of them, and `tools/checks/fuchsia.gd` measures which
-## ones a walk owes rather than guessing: on this profile only Route 13's
-## Pokefan Joshua and Hiker Kenny stand where shutting their sight line seals the
-## way south. The other three routes can be crossed without meeting anyone, and
-## Route 12, Route 14 and Route 15 are all profile splits, so Gold and Silver
-## owe a different set.
-##
-## The gym is a maze rather than a puzzle with a gate: 128 walkable cells behind
-## the door, and Janine on (1,10) reachable from (1,9). Her four disguised
-## trainers are `OBJECTTYPE_SCRIPT`, so nothing sees the player and none of them
-## has to be fought; `FuchsiaGymJanineScript` sets all four beaten flags itself
-## along with `ENGINE_SOULBADGE`, and hands over TM06 through its own
-## `verbosegiveitem`.
+## Lavender Town south to Fuchsia City and the Soul Badge. The longest open walk in
+## Kanto and the first leg since Vermilion with no errand in it at all: four plain
+## connections and one door at the end. What it costs is trainers, eighteen of them,
+## and `tools/checks/fuchsia.gd` measures which ones a walk owes: on this profile
+## only Route 13's Pokefan Joshua and Hiker Kenny stand where shutting their sight
+## line seals the way south. The gym is a maze rather than a puzzle with a gate, and
+## its four disguised trainers are `OBJECTTYPE_SCRIPT`, so Janine sets all four
+## beaten flags herself along with the badge.
 func _fuchsia_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -6986,21 +6843,13 @@ func _fuchsia_leg(
 
 
 ## Fuchsia Gym back to Vermilion, through Diglett's Cave to Route 2, and up to
-## Pewter Gym for the Boulder Badge.
-##
-## The order is forced. Measured against a real Crystal cache, a walk out of
-## Cerulean reaches 91 maps and none of Route 3, Route 4's main region, Mount
-## Moon, Route 2, Viridian, Pallet, Cinnabar, Route 20 or Seafoam Gym, and
+## Pewter Gym for the Boulder Badge. The order is forced: measured against a real
+## Crystal cache, a walk out of Cerulean reaches 91 maps and none of west Kanto, and
 ## Fuchsia's own south edge is sealed the other way while
-## EVENT_CINNABAR_ROCKS_CLEARED is clear. Diglett's Cave is the one door into
-## west Kanto, and the Snorlax on top of it is the lock.
-##
-## What opens that lock is the radio, which is why the Goldenrod leg now takes
-## the Radio Card: `SnorlaxAwake` answers only while the Poke Flute channel is
-## the track in `wMapMusic`, and a station's music id is neither sentinel
-## `ExitPokegearRadio_HandleMusic` restores on, so it survives the Pokegear
-## closing. `tools/checks/radio.gd` owns that whole chain and the Route 2
-## counts behind it.
+## EVENT_CINNABAR_ROCKS_CLEARED is clear. Diglett's Cave is the one door into west
+## Kanto and the Snorlax on top of it is the lock. What opens that lock is the
+## radio, which is why the Goldenrod leg takes the Radio Card: `SnorlaxAwake`
+## answers only while the Poke Flute channel is the track in `wMapMusic`.
 func _pewter_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -7227,16 +7076,14 @@ func _pewter_gym_leg(
 	return _cinnabar_leg(world, save, random, data, path)
 
 
-## Pewter Gym south to Cinnabar Island and east to Seafoam Gym's Volcano Badge.
-##
-## Six plain connections carry the walk down the west coast, and then it is water
-## the rest of the way: Pallet's own pond is the last land, and Route 21,
-## Cinnabar's west side and Route 20 are all surfed. Two things make this leg the
-## one that has to come before Viridian's. Blue stands on Cinnabar until he is
-## talked to, and `CinnabarIslandBlue` is the only `clearevent` for
-## EVENT_VIRIDIAN_GYM_BLUE in either pin; and `Route20ClearRocksCallback` is a
-## MAPCALLBACK_NEWMAP, so simply arriving on Route 20 sets
-## EVENT_CINNABAR_ROCKS_CLEARED and takes the six `$7a` wall blocks off Route 19.
+## Pewter Gym south to Cinnabar Island and east to Seafoam Gym's Volcano Badge. Six
+## plain connections carry the walk down the west coast and then it is water the
+## rest of the way, Pallet's own pond being the last land. Two things make this leg
+## come before Viridian's: Blue stands on Cinnabar until he is talked to, and
+## `CinnabarIslandBlue` is the only `clearevent` for EVENT_VIRIDIAN_GYM_BLUE in
+## either pin; and `Route20ClearRocksCallback` is a MAPCALLBACK_NEWMAP, so simply
+## arriving on Route 20 sets EVENT_CINNABAR_ROCKS_CLEARED and takes the six `$7a`
+## wall blocks off Route 19.
 func _cinnabar_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -7577,21 +7424,14 @@ func _viridian_leg(
 	return _mt_silver_leg(world, save, random, data, path)
 
 
-## Viridian Gym to Red, which is Oak's errand and then a walk west.
-##
-## The sixteenth badge is what opens this leg and Oak is what spends it:
-## `maps/OaksLab.asm` takes `.OpenMtSilver` only on `ifequal NUM_BADGES`, so the
-## walk goes south to Pallet before it goes west. That is not a courtesy call.
-## The Victory Road Gate is three regions joined by two single cells and a black
-## belt stands in each, so EVENT_OPENED_MT_SILVER is the one thing that joins
-## the corridor to the Route 28 arm, exactly as EVENT_FOUGHT_SNORLAX joins it to
-## the Route 22 arm the leg arrives through. `tools/checks/mt_silver.gd` pins
-## all four combinations.
-##
-## Red himself is the route's second presentation boundary: his script ends on
-## `credits`, which commits nothing and emits one event, the way `halloffame`
-## does. `disappear` then sets EVENT_RED_IN_MT_SILVER again, so the room the
-## Hall of Fame opened closes behind the walk.
+## Viridian Gym to Red, which is Oak's errand and then a walk west. The sixteenth
+## badge opens the leg and Oak is what spends it: `maps/OaksLab.asm` takes
+## `.OpenMtSilver` only on `ifequal NUM_BADGES`, so the walk goes south to Pallet
+## before it goes west. That is not a courtesy call: the Victory Road Gate is three
+## regions joined by two single cells with a black belt in each, so
+## EVENT_OPENED_MT_SILVER is the one thing that joins the corridor to the Route 28
+## arm. Red's own script ends on `credits`, which commits nothing and emits one
+## event, and `disappear` then closes the room behind the walk.
 func _mt_silver_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -8275,23 +8115,14 @@ func _settle_object_steps(world: Gen2WorldAPI, random: RandomNumberGenerator) ->
 		world.advance_object_steps_pass(random)
 
 
-## Mahogany Town east to Blackthorn City, on the same world, state and save.
-## Starts in the town, since the Radio Tower leg before it left the gym.
-##
-## Route 44 carries seven trainers and no scripted gate, so the leg is a walk
-## the trainers interrupt rather than a sequence of errands. Its one warp is the
-## Ice Path door at (56,7) (`maps/Route44.asm`); the east connection to
-## Blackthorn exists in `data/maps/attributes.asm` but the cartridge's own way
-## through is the cave.
-##
-## Ice Path 1F is the only floor on the way: its second warp is Blackthorn's own
-## (`maps/IcePath1F.asm` warp 2 to BLACKTHORN_CITY 7), so the `stonetable`
-## boulder puzzle on B1F is beside the route rather than across it. The floor is
-## COLL_ICE, which is LAND_TILE, so the walk crosses it without the source's
-## sliding; sliding only ever removes choices, so nothing reachable with it is
-## unreachable here.
-##
-## Appends to [param path] and answers only ok or the failure.
+## Mahogany Town east to Blackthorn City, on the same world, state and save. Starts
+## in the town, since the Radio Tower leg before it left the gym. Route 44 carries
+## seven trainers and no scripted gate, so the leg is a walk the trainers interrupt.
+## Its one warp is the Ice Path door at (56,7); the east connection to Blackthorn
+## exists but the cartridge's own way through is the cave. Ice Path 1F is the only
+## floor on the way, its second warp being Blackthorn's own, so the `stonetable`
+## puzzle on B1F is beside the route rather than across it. The floor is COLL_ICE,
+## which is LAND_TILE, so the walk crosses it without the source's sliding.
 func _blackthorn_path(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -8542,19 +8373,13 @@ func _olivine_cafe_hm04(
 
 
 ## Cianwood City's gym, whose only corridor is walled by three
-## SPRITEMOVEDATA_STRENGTH_BOULDER objects at (3,7), (4,7) and (5,7).
-##
-## Row 7 is the sole link between the entrance half and Chuck, its ends are walls
-## at x=2 and x=6, and row 5 above it opens only at (4,5) and (5,5), the second of
-## which a Black Belt stands on for good. So no single push opens it: pushing any
-## boulder north just moves the wall up a row. The corridor opens by clearing
-## (3,7) and (5,7) north first, then pushing the middle boulder sideways into the
-## cell (3,7) left behind, which leaves (4,6) and (4,5) free above the freed
-## (4,7). A state-space search over player cell plus boulder cells finds no
-## shorter answer.
-##
-## Chuck himself needs no Strength: his script throws BOULDER1 aside with an
-## applymovement of its own before the battle.
+## SPRITEMOVEDATA_STRENGTH_BOULDER objects at (3,7), (4,7) and (5,7). Row 7 is the
+## sole link between the entrance half and Chuck, its ends are walls, and row 5
+## above it opens only at (4,5) and (5,5), the second of which a Black Belt stands
+## on for good. So no single push opens it: the corridor opens by clearing (3,7) and
+## (5,7) north first, then pushing the middle boulder sideways into the cell (3,7)
+## left behind. A state-space search over player cell plus boulder cells finds no
+## shorter answer. Chuck himself needs no Strength.
 func _storm_badge_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -8690,17 +8515,13 @@ func _push_boulder_at(
 	}
 
 
-## A mart clerk, talked to across their own counter.
-##
-## Elm's aide gives five Poké Balls, which is not what three catches cost: the
-## route fights each wild down and throws until one sticks, and every throw that
-## does not is a ball. So it buys before the two catches it can and before the
-## one it cannot, Blackthorn being the last town the route stands in before the
-## Dragon's Den.
-##
-## The clerk stands on (1,3) behind the `$90` counter on (2,3), so this is a
-## CheckFacingObject doubled reach like the Radio Card woman's, and the buying
-## itself happens inside the clerk's own `pokemart` pause rather than beside it.
+## A mart clerk, talked to across their own counter. Elm's aide gives five Poke
+## Balls, which is not what three catches cost: the route fights each wild down and
+## throws until one sticks, and every throw that does not is a ball. So it buys
+## before the two catches it can and before the one it cannot, Blackthorn being the
+## last town the route stands in before the Dragon's Den. The clerk stands on (1,3)
+## behind the `$90` counter on (2,3), so this is a CheckFacingObject doubled reach,
+## and the buying happens inside the clerk's own `pokemart` pause.
 func _buy_balls(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -8736,21 +8557,14 @@ func _buy_balls(
 	return {"ok": true}
 
 
-## Route 32's Pokemon Center for the OLD ROD, and then the shore below it for
-## what the rod is here to catch.
-##
-## This is the route's answer to Surf and Whirlpool, and it has to be a rod
-## rather than a walk. Every grass wild in reach before Route 40's south edge
-## that CanLearnTMHMMove accepts for SURF is night only except Slowpoke Well's
-## Slowpoke, and Slowpoke does not take WHIRLPOOL at all; the walked route runs
-## on the new game's own 06:00 clock, so a night slot is not something it can
-## honestly reach. Route 32's own Old Rod row is the one time-independent source
-## of a mon that takes both, at Tentacool on the last threshold
-## (`data/wild/fish.asm`).
-##
-## `Route32Pokecenter1FFishingGuruScript` gates the rod on its own yes/no and
-## then `verbosegiveitem OLD_ROD`, which is what `Gen2WorldInventory.owns_rod()`
-## reads back.
+## Route 32's Pokemon Center for the OLD ROD, and then the shore below it for what
+## the rod is here to catch. This is the route's answer to Surf and Whirlpool, and
+## it has to be a rod rather than a walk: every grass wild in reach before Route
+## 40's south edge that CanLearnTMHMMove accepts for SURF is night only except
+## Slowpoke Well's Slowpoke, and Slowpoke does not take WHIRLPOOL at all. The walked
+## route runs on the new game's own 06:00 clock, so Route 32's Old Rod row is the
+## one time-independent source of a mon that takes both, at Tentacool on the last
+## threshold.
 func _route_32_old_rod(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -8810,19 +8624,14 @@ func _route_32_old_rod(
 	)
 
 
-## Catches something on the current map that can learn [param move], which is
-## how this route gets both of the HMs its own party cannot take.
-##
-## Neither is optional. The starter is still unevolved by Olivine and Chikorita,
-## Cyndaquil and Totodile all learn STRENGTH only after evolving, so Union Cave
-## 1F's Geodude and Onix are the first catch; none of the party learns WATERFALL
-## at all, so Dragon's Den B1F's Dratini is the second
-## (`data/pokemon/base_stats/*.asm`, `data/wild/johto_water.asm`).
-##
-## The walk itself never rolls a wild encounter, so this forces one, checks the
-## species against CanLearnTMHMMove and throws a Poké Ball, retrying until the
-## bag runs out. Both rolls come from the route's seeded generator, so the answer
-## is the same on every run.
+## Catches something on the current map that can learn [param move], which is how
+## this route gets both of the HMs its own party cannot take. Neither is optional:
+## the starter is still unevolved by Olivine and all three starters learn STRENGTH
+## only after evolving, so Union Cave 1F's Geodude and Onix are the first catch, and
+## none of the party learns WATERFALL at all, so Dragon's Den B1F's Dratini is the
+## second. The walk itself never rolls a wild encounter, so this forces one, checks
+## the species against CanLearnTMHMMove and throws a Poke Ball; both rolls come from
+## the route's seeded generator.
 func _catch_field_move_mon(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -8897,14 +8706,13 @@ func _catch_field_move_mon(
 
 
 ## TeachTMHM against the first party member the machine will take, which is what
-## ChooseMonToLearnTMHM leaves the player to pick. Compatibility, a known move
-## and a full moveset are all real refusals, so the walk tries each slot in party
-## order and reports the last reason when none of them can learn it.
-##
-## A full moveset everywhere is the second pass rather than a failure: it is
-## `ForgetMove`'s own prompt, which the walk answers with the first slot that is
-## not an HM, since every HM it has taught is load bearing. A levelled party
-## reaches it, because four level-up moves leave the starter no room for CUT.
+## ChooseMonToLearnTMHM leaves the player to pick. Compatibility, a known move and a
+## full moveset are all real refusals, so the walk tries each slot in party order
+## and reports the last reason when none of them can learn it. A full moveset
+## everywhere is the second pass rather than a failure: it is `ForgetMove`'s own
+## prompt, which the walk answers with the first slot that is not an HM, since every
+## HM it has taught is load bearing. A levelled party reaches it, because four
+## level-up moves leave the starter no room for CUT.
 func _teach_tm_hm(world: Gen2WorldAPI, save: Gen2SaveData, item: int) -> Dictionary:
 	var reason: String = "no party member"
 	for index: int in save.party.size():
@@ -9237,15 +9045,13 @@ func _party_species(save: Gen2SaveData) -> Array:
 
 
 ## The experience a won trainer battle pays, since this walk answers every one of
-## them with a win rather than fighting it. [method Gen2Battle.award_win_experience]
-## is the engine's own split, level up, evolution and move learning; the fought
-## party is written back over the saved one through the adapter that owns that
-## seam, so a leg arrives carrying the levels its fights paid for rather than the
-## ones it started the game with.
-##
-## What is still not a played route: no party member takes damage, and a move
-## offered into a full moveset is left in the engine's queue, which is the same
-## answer as declining it.
+## them with a win rather than fighting it.
+## [method Gen2Battle.award_win_experience] is the engine's own split, level up,
+## evolution and move learning; the fought party is written back over the saved one
+## through the adapter that owns that seam, so a leg arrives carrying the levels its
+## fights paid for. What is still not a played route: no party member takes damage,
+## and a move offered into a full moveset is left in the engine's queue, which is
+## the same answer as declining it.
 func _award_battle_experience(
 	data: GameData, world: Gen2WorldAPI, save: Gen2SaveData, battle: Gen2Battle,
 	player_party: Gen2Party
@@ -9852,18 +9658,14 @@ func _walk_to_connection(
 	}
 
 
-## The cell [param step] from [param cell] reaches by an ordinary walk or, when
-## that is blocked, a ledge hop (Gen2WorldCollision.allows_hop, mirroring
-## Gen2WorldAPI._try_ledge_hop's order and its surf and map-bounds refusals).
-## Returns (-1, -1) when neither applies, so a BFS frontier can use it as one
-## reachability test. Replaying the recorded direction through
-## world.move_result() performs the same hop, so no separate replay step exists.
-##
-## [param water_only] is what a surfing plan needs. can_walk_to() lets a surfing
-## player step onto land, and that step is .ExitWater, so a plan drawn once and
-## replayed would stop surfing partway and see every later water step refused.
-## Restricting the frontier to WATER_TILE keeps the whole plan legal in the mode
-## it was drawn in; the caller enters and leaves the water explicitly.
+## The cell [param step] from [param cell] reaches by an ordinary walk or, when that
+## is blocked, a ledge hop, mirroring `_try_ledge_hop`'s order and its surf and
+## map-bounds refusals. Returns (-1, -1) when neither applies, so a BFS frontier can
+## use it as one reachability test. [param water_only] is what a surfing plan needs:
+## `can_walk_to()` lets a surfing player step onto land, and that step is
+## `.ExitWater`, so a plan drawn once and replayed would stop surfing partway and
+## see every later water step refused. Restricting the frontier to WATER_TILE keeps
+## the plan legal in the mode it was drawn in.
 func _reachable_step(
 	world: Gen2WorldAPI, cell: Vector2i, step: Vector2i,
 	warp_target: Vector2i = Vector2i(-1, -1),
@@ -10004,14 +9806,12 @@ func _walk_to_story_cell(
 
 
 ## What a failed walk hit, when what it hit was somebody standing there.
-## `Gen2WorldAPI.can_walk_to()` refuses a cell an object holds exactly as it
-## refuses a wall, so without this a route blocked by an NPC or an item ball
-## reads the same as one blocked by the map, and both of Route 40's beach rocks
-## and the Lake of Rage's gramps cost a hand-routed detour to find.
-##
-## [param target] is the cell the walk wanted, or `(-1, -1)` for a connection
-## edge that has none; [param visited] is the frontier's own `previous` map.
-## Answers "" when nothing is in the way, so it appends to a reason.
+## `Gen2WorldAPI.can_walk_to()` refuses a cell an object holds exactly as it refuses
+## a wall, so without this a route blocked by an NPC or an item ball reads the same
+## as one blocked by the map, and both of Route 40's beach rocks and the Lake of
+## Rage's gramps cost a hand-routed detour to find. [param target] is the cell the
+## walk wanted, or `(-1, -1)` for a connection edge that has none; [param visited]
+## is the frontier's own `previous` map. Answers "" when nothing is in the way.
 func _objects_in_the_way(
 	world: Gen2WorldAPI, target: Vector2i, visited: Dictionary
 ) -> String:

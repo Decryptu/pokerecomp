@@ -3,24 +3,13 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies the way west from Saffron City to Celadon City and its gym against
-## freshly imported real caches, for both command profiles.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## maps/SaffronCity.asm, maps/Route7SaffronGate.asm, maps/Route7.asm,
-## maps/CeladonCity.asm, maps/CeladonGym.asm and data/maps/attributes.asm.
-## Route7.asm, Route7SaffronGate.asm and all four .blk files are byte identical
-## between the pins; CeladonCity.asm and CeladonGym.asm differ only in NPC text
-## and an `_CRYSTAL_AU` block, so nothing here is profile split.
-##
-## Three things are worth pinning. Saffron has a real west connection to Route 7
-## and it is a dead end, landing in a sealed four-cell corner, so
-## `ROUTE_7_SAFFRON_GATE` carries that crossing the way it does the Route 6 one.
-## Route 7's own west edge is the open half: a real connection onto Celadon City
-## that needs no gate. And the gate that replaces it is inside the city, one
-## COLL_CUT_TREE on (28,35) sealing the whole gym yard, which makes Cut the price
-## of the Rainbow Badge the way it was of the Thunder Badge.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- celadon
+## freshly imported real caches, for both command profiles. Route7.asm, its gate
+## and all four .blk files are byte identical between the pins, so nothing here is
+## profile split. Three things are worth pinning: Saffron's west connection to
+## Route 7 is a dead end landing in a sealed four-cell corner; Route 7's own west
+## edge is the open half, a real connection onto Celadon that needs no gate; and
+## the gate that replaces it is inside the city, one COLL_CUT_TREE on (28,35)
+## sealing the whole gym yard, which makes Cut the price of the Rainbow Badge.
 
 
 ## constants/map_constants.asm: the CELADON group is 21 and the SAFFRON group 25.

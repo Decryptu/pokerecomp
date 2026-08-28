@@ -1,29 +1,14 @@
 class_name Gen2CardFlipPage
 extends RefCounted
 
-## `_CardFlip`'s screen: `CardFlipTilemap` and the two card slots beside it,
-## under the border and cursor objects `CardFlip_CopyOAM` writes.
-##
-## Node-free, so the whole table can be read back headless. [Gen2CardFlip] owns
-## the state and the background it writes; this is the two boxes over it, the
-## palettes and shadow OAM.
-##
-## Four things the source states that a reading gets wrong:
-##
-## - **Every object here is eight by eight.** `_CardFlip` never touches
-##   `B_LCDC_OBJ_SIZE`, and the slot machine's `set` is its own, reset on the way
-##   out; the intro menu leaves the hardware on 8x8. A cursor tile is one tile.
-## - **The objects are drawn in the map's own palettes.** `CardFlip_InitAttrPals`
-##   writes `wBGPals1` and nothing else, and `DmgToCgbObjPals` reorders
-##   `wOBPals1` into the live buffer with `%11100100`, which is the identity. So
-##   object palette 0 is still `PAL_OW_RED` from the Game Corner's own map.
-## - **The lamps are characters.** `_CardFlip` copies its two bulbs over the
-##   font's "♂" and "♀", so `CARD_FLIP_LIGHT_OFF_TILE` sits in the font's
-##   half of the window and every other cell of the board is under it.
-## - **Crystal's digits stand one pixel higher.** `CardFlip_ShiftDigitsUpOnePixel`
-##   copies each of "0" to "9" back two bytes over itself, which is one pixel
-##   row, and blanks the last row of "9". pokegold marks the routine
-##   `; unreferenced` and its digits sit where the font puts them.
+## `_CardFlip`'s screen: `CardFlipTilemap` and the two card slots beside it, under
+## the border and cursor objects `CardFlip_CopyOAM` writes. Node-free, so the
+## whole table can be read back headless. Four things a reading gets wrong: every
+## object here is eight by eight, since `_CardFlip` never touches
+## `B_LCDC_OBJ_SIZE`; the objects are drawn in the map's own palettes, since
+## `DmgToCgbObjPals` reorders with the identity; the lamps are characters, copied
+## over the font's gender signs; and Crystal's digits stand one pixel higher, from
+## `CardFlip_ShiftDigitsUpOnePixel`, which pokegold marks unreferenced.
 
 const TILE: int = Gen2Font.TILE
 const SCREEN_COLUMNS: int = Gen2CardFlip.SCREEN_COLUMNS
@@ -378,15 +363,9 @@ func set_object_palette(colors: PackedColorArray) -> void:
 
 
 ## The whole screen for [param game]. [param state] is what the host holds over
-## it:
-##
-## [codeblock]
-## {
-##   "text": String,   # the box under the table, empty for none
-##   "yes_no": int,    # 1 or 2 while a YES/NO box is up, 0 for none
-##   "blink": int,     # the frame a loaded blinking cursor is counted on, -1 none
-## }
-## [/codeblock]
+## it: `text`, the box under the table and empty for none; `yes_no`, 1 or 2 while
+## a YES/NO box is up and 0 for none; and `blink`, the frame a loaded blinking
+## cursor is counted on, -1 for none.
 func render(game: Gen2CardFlip, state: Dictionary = {}) -> Image:
 	if not ready():
 		return null

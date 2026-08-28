@@ -1,15 +1,13 @@
 extends GutTest
 
-## `_SlotMachine`'s rules (engine/games/slot_machine.asm), driven headless.
-##
-## The reel strips here are the cartridge's own, so a window is a real one; the
-## art is `tools/checks/slots.gd` and the screen around it
-## `tests/integration/test_world_slot_machine.gd`.
-##
-## What is asserted is what a reading gets wrong rather than what a spin looks
-## like: that a bet is taken once and paid once, that an unbiased spin can only
-## stop where nothing is lined up, that a seven keeps its own bias, and that the
-## payout animation walks the coins over rather than adding them at once.
+## `_SlotMachine`'s rules (engine/games/slot_machine.asm), driven headless. The
+## reel strips here are the cartridge's own, so a window is a real one; the art is
+## `tools/checks/slots.gd` and the screen around it
+## `tests/integration/test_world_slot_machine.gd`. What is asserted is what a
+## reading gets wrong rather than what a spin looks like: that a bet is taken once
+## and paid once, that an unbiased spin can only stop where nothing is lined up,
+## that a seven keeps its own bias, and that the payout animation walks the coins
+## over rather than adding them at once.
 
 const REELS: Array = [
 	[

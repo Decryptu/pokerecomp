@@ -82,19 +82,25 @@ static func _validate_world(world: Gen2WorldSnapshot, data: GameData) -> Diction
 		or world.world_minute < 0 \
 		or world.world_minute >= Gen2WorldClock.MINUTES_PER_HOUR:
 		return _failure("the saved world clock is invalid")
-	if world.world_state == null:
+	return _validate_world_state(world.world_state, data)
+
+
+## The flags, bag and balances the world screen would open with.
+static func _validate_world_state(state: Gen2WorldState, data: GameData) -> Dictionary:
+	if state == null:
 		return _failure("the saved world state is missing")
-	for raw_flag: Variant in world.world_state.engine_flags():
+	for raw_flag: Variant in state.engine_flags():
 		if int(raw_flag) < 0:
 			return _failure("the saved world engine flag is invalid")
-	for raw_item: Variant in world.world_state.items():
+	for raw_item: Variant in state.items():
 		if data.item(int(raw_item)).is_empty():
 			return _failure("the saved world contains unknown item %d" % int(raw_item))
-	for raw_account: Variant in world.world_state.money_balances():
-		var balance: int = int(world.world_state.money_balances()[raw_account])
+	var balances: Dictionary = state.money_balances()
+	for raw_account: Variant in balances:
+		var balance: int = int(balances[raw_account])
 		if balance < 0 or balance > Gen2WorldInventory.MAX_MONEY:
 			return _failure("the saved world money balance is invalid")
-	if world.world_state.coins() < 0 or world.world_state.coins() > Gen2WorldInventory.MAX_COINS:
+	if state.coins() < 0 or state.coins() > Gen2WorldInventory.MAX_COINS:
 		return _failure("the saved world coin balance is invalid")
 	return {"ok": true, "message": ""}
 
@@ -117,13 +123,29 @@ static func _validate_mon(
 	)
 	if expected_level != mon.level:
 		return _failure("%s level and experience disagree" % subject)
+	var stats: Dictionary = _validate_mon_stats(mon, data, subject)
+	if not stats["ok"]:
+		return stats
+	var moves: Dictionary = _validate_mon_moves(mon, data, subject)
+	if not moves["ok"]:
+		return moves
+	if mon.item < 0:
+		return _failure("%s has an invalid item" % subject)
+	if mon.item > 0 and data.item(mon.item).is_empty():
+		return _failure("%s has unknown item %d" % [subject, mon.item])
+	return {"ok": true, "message": ""}
+
+
+## DVs, stat experience, HP against the maximum the same formula gives, status.
+static func _validate_mon_stats(
+	mon: Gen2SaveMon, data: GameData, subject: String
+) -> Dictionary:
 	if mon.dvs < 0 or mon.dvs > 0xFFFF:
 		return _failure("%s has invalid DVs" % subject)
 	for key: String in Gen2SaveMon.STAT_EXP_KEYS:
 		var value: int = int(mon.stat_exp.get(key, -1))
 		if value < 0 or value > Gen2Stats.MAX_STAT_EXP:
 			return _failure("%s has invalid %s stat experience" % [subject, key])
-
 	var base: Dictionary = data.species(mon.species).get("stats", {})
 	var max_hp: int = Gen2Stats.calculate(
 		int(base.get("hp", 0)), Gen2Stats.hp_dv(mon.dvs), int(mon.stat_exp.get("hp", 0)),
@@ -133,7 +155,13 @@ static func _validate_mon(
 		return _failure("%s has invalid HP" % subject)
 	if not is_valid_status(mon.status):
 		return _failure("%s has invalid status" % subject)
+	return {"ok": true, "message": ""}
 
+
+## Four slots, filled from the front, each with PP its own move allows.
+static func _validate_mon_moves(
+	mon: Gen2SaveMon, data: GameData, subject: String
+) -> Dictionary:
 	if mon.moves.size() != Gen2SaveMon.MAX_MOVES or mon.pp.size() != Gen2SaveMon.MAX_MOVES:
 		return _failure("%s does not have four move slots" % subject)
 	var empty_seen: bool = false
@@ -150,14 +178,8 @@ static func _validate_mon(
 		var move: Dictionary = data.move(move_number)
 		if move.is_empty():
 			return _failure("%s has unknown move %d" % [subject, move_number])
-		var max_pp: int = int(move.get("pp", 0))
-		if pp < 0 or pp > max_pp:
+		if pp < 0 or pp > int(move.get("pp", 0)):
 			return _failure("%s has invalid PP for move %d" % [subject, move_number])
-
-	if mon.item < 0:
-		return _failure("%s has an invalid item" % subject)
-	if mon.item > 0 and data.item(mon.item).is_empty():
-		return _failure("%s has unknown item %d" % [subject, mon.item])
 	return {"ok": true, "message": ""}
 
 

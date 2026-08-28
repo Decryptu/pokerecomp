@@ -1,15 +1,12 @@
 class_name Gen2ClockSetScreen
 extends Control
 
-## `InitClock`, before Oak's first speech beat. Hour and minutes only: the
-## routine ends on `OakText_ResponseToSetTime` after `.MinutesAreSet` and never
-## calls `SetDayOfWeek`, which is Mom's own errand in `PlayersHouse1F.asm`. The
-## weekday the save starts on is whatever the RTC holds, SUNDAY on a fresh one.
-##
-## Every line here is a `PrintText`, so the box is a [Gen2TextBox] and reveals at
-## the cartridge's own rate, and every wait is a `DelayFrames` operand spent
-## through a [Gen2IntroPresentation]. `RotateFourPalettesLeft` is the caller's,
-## over the screen `InitGender` left standing; see [Gen2IntroScreen].
+## `InitClock`, before Oak's first speech beat. Hour and minutes only: the routine
+## ends on `OakText_ResponseToSetTime` after `.MinutesAreSet` and never calls
+## `SetDayOfWeek`, which is Mom's own errand, so the weekday a save starts on is
+## whatever the RTC holds. Every line is a `PrintText`, so the box is a
+## [Gen2TextBox] revealing at the cartridge's own rate and every wait is a
+## `DelayFrames` operand spent through a [Gen2IntroPresentation].
 
 signal finished(day: int, hour: int, minute: int)
 

@@ -4,14 +4,10 @@ extends SceneTree
 ##
 ##   Godot --path . -s res://tools/preview_saves.gd -- <out.png> [light|dark] [WxH] [page]
 ##
-## [page] is `saves`, `new`, `party`, `boxes` or `editor`, the pages the save
-## slots lead to. They are one command because they are one section and share
-## this harness; each is its own scene, and `new` is the slot list with the
-## new-game form open on a free slot.
-##
-## The size is what says whether a page is responsive, so it is an argument
-## rather than a constant: a phone portrait and a desktop window are the same
-## command twice.
+## [page] is `saves`, `new`, `party`, `boxes` or `editor`. They are one command
+## because they are one section and share this harness. The size is what says
+## whether a page is responsive, so it is an argument rather than a constant: a
+## phone portrait and a desktop window are the same command twice.
 
 var _output: String = ""
 var _frames: int = 0

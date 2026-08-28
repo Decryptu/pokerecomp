@@ -1,16 +1,12 @@
 extends SceneTree
 
-## Every hardware frame of a map's tileset animation: which of the tileset's
-## tiles `_AnimateTileset` rewrote, where the command list stands, and what the
-## two palette commands are holding.
-##
-##   Godot --headless --path . -s res://tools/trace_world_tiles.gd -- \
-##       <game> <group> <map> <frames> <out.txt> [time_of_day]
-##
-## The port half of `.claude/oracle/overworld/trace_tiles.py`, which prints the
-## same artefact off a real cartridge by reading vTiles2 once a frame. The line
-## is `frame anim_frame timer water cave tiles`, and `anim_frame` is read after
+## Every hardware frame of a map's tileset animation: which of the tileset's tiles
+## `_AnimateTileset` rewrote, where the command list stands, and what the two
+## palette commands are holding. The port half of
+## `.claude/oracle/overworld/trace_tiles.py`, which reads vTiles2 once a frame. The
+## line is `frame anim_frame timer water cave tiles`, and `anim_frame` is read after
 ## the frame is spent, which is where `hTileAnimFrame` stands on that side.
+## Arguments: `<game> <group> <map> <frames> <out.txt> [time_of_day]`.
 
 func _initialize() -> void:
 	_run.call_deferred()

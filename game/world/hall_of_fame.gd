@@ -2,18 +2,13 @@ class_name Gen2HallOfFame
 extends RefCounted
 
 ## The induction sequence `halloffame` asks for, as pages a screen can draw.
-##
-## `engine/events/halloffame.asm`'s AnimateHallOfFame walks the party built by
-## GetHallOfFameParty, showing one panel per Pokémon and then the player's own,
-## so the order and the contents here are that routine's, not a choice.
-## `HOF_AnimatePlayerPic` ends on `farcall ProfOaksPCRating`, whose two texts
-## print into the empty box that panel opens under itself, so the player's panel
-## is answered once per box rather than once.
-##
-## What this does not carry is what the project has no source for. The panel's
-## `<ID>№/` line needs the mon's OT ID, which the save does keep; the player's
-## panel additionally wants the trainer ID and PLAY TIME, which the save model
-## has neither of, so those lines are absent rather than drawn as zeros.
+## `AnimateHallOfFame` walks the party built by `GetHallOfFameParty`, showing one
+## panel per Pokemon and then the player's own, so the order and the contents are
+## that routine's. `HOF_AnimatePlayerPic` ends on `farcall ProfOaksPCRating`,
+## whose two texts print into the empty box that panel opens, so the player's
+## panel is answered once per box. The player's panel wants a trainer ID and PLAY
+## TIME the save model has neither of, so those lines are absent rather than drawn
+## as zeros.
 
 ## GetHallOfFameParty's own cap: it copies at most a full party and stops on the
 ## -1 terminator.

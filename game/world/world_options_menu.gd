@@ -1,16 +1,12 @@
 class_name Gen2WorldOptionsMenu
 extends RefCounted
 
-## Scene-free model of the in-game OPTION menu (engine/menus/options_menu.asm).
-##
-## Seven value rows plus CANCEL, each row a left/right cycle over one field of
-## [Gen2Options]. The model edits that object in place and never touches the
-## file: [Gen2OptionsStore] owns persistence, the way [Gen2InputActions] leaves
-## it alone.
-##
-## `data/default_options.asm` and the whole menu are byte identical between the
-## pins except pokegold's `.ExitOptions` lacking the `SFX_TRANSACTION` play, so
-## nothing here is profile split.
+## Scene-free model of the in-game OPTION menu (engine/menus/options_menu.asm):
+## seven value rows plus CANCEL, each a left/right cycle over one field of
+## [Gen2Options]. The model edits that object in place and never touches the file,
+## the way [Gen2InputActions] leaves it alone. `data/default_options.asm` and the
+## whole menu are byte identical between the pins except pokegold's `.ExitOptions`
+## lacking the `SFX_TRANSACTION` play, so nothing here is profile split.
 
 ## GetOptionPointer.Pointers indexes.
 const OPT_TEXT_SPEED: int = 0

@@ -253,22 +253,14 @@ static func read_world(
 	}
 
 
-## The `cmdqueue` payloads, as a second pass over the scripts already collected.
-##
-## A `writecmdqueue` operand points at data, not at script, so the recursive
-## walk in _collect_script() cannot follow it the way it follows a call: the
-## bytes there are a queue entry, and behind that a stone table. Both are read
-## here, and each table row's own script is collected like any other.
-##
-## Only Blackthorn Gym 2F and Ice Path B1F write a queue, and both write a
-## CMDQUEUE_STONETABLE, so an entry of any other type is kept for its pointer
-## and left undecoded rather than guessed at.
-##
-## A pointer that does not resolve is skipped, not fatal. Scripts are collected
-## as fixed slices, so a slice that runs past its own end can decode stray bytes
-## as a `writecmdqueue`; the corpus counts already treat that as expected. What
-## keeps this honest is `tools/checks/command_queues.gd`, which asserts the two
-## real tables against the pinned sources rather than trusting the scan.
+## The `cmdqueue` payloads, as a second pass over the scripts already collected. A
+## `writecmdqueue` operand points at data rather than script, so the recursive
+## walk cannot follow it the way it follows a call. Only Blackthorn Gym 2F and Ice
+## Path B1F write a queue and both write a CMDQUEUE_STONETABLE, so an entry of any
+## other type is kept for its pointer and left undecoded. A pointer that does not
+## resolve is skipped rather than fatal, since a slice running past its own end
+## can decode stray bytes as a `writecmdqueue`; what keeps this honest is
+## `tools/checks/command_queues.gd`, which asserts the two real tables.
 static func _read_command_queues(
 	rom: RomFile, script_data: Dictionary, text_data: Dictionary, movement_data: Dictionary
 ) -> Dictionary:
@@ -474,15 +466,13 @@ static func _read_overworld_sprites(rom: RomFile, layout: Dictionary) -> Diction
 	return {"ok": true, "sprites": sprites, "palettes": palettes, "graphics": graphics}
 
 
-## LoadOverworldMonIcon reads the contiguous eight-tile IconPointers region.
-## The pointer table is redundant for this use: every icon is 8 tiles and the
-## source stores them in the same order as constants/icon_constants.asm. It is
-## read anyway, as the check on the offset: `IconPointers` sits immediately in
-## front of the art and its entries walk it eight tiles at a time.
-##
-## `MonMenuIcons` is in front of that again (`ReadMonMenuIcon`), which is what
-## turns a species into one of the 38 shapes, and `HeldItemIcons` and
-## `PartyMenuOBPals` are the other two things a party menu icon needs.
+## LoadOverworldMonIcon reads the contiguous eight-tile IconPointers region. The
+## pointer table is redundant for this use, every icon being 8 tiles in the
+## source's own order, and is read anyway as the check on the offset: it sits
+## immediately in front of the art and its entries walk it eight tiles at a time.
+## `MonMenuIcons` is in front of that again, which turns a species into one of the
+## 38 shapes, and `HeldItemIcons` and `PartyMenuOBPals` are the other two things a
+## party menu icon needs.
 static func _read_overworld_icons(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var offset: int = int(layout.get("overworld_icons", -1))
 	var size: int = RomLayout.MON_ICON_COUNT * RomLayout.MON_ICON_BYTES
@@ -621,14 +611,12 @@ static func _read_party_menu_ob_palettes(rom: RomFile, layout: Dictionary) -> Di
 
 ## The sprites the engine draws over an object rather than as one: the eight
 ## showemote bubbles, the jump shadow, the fishing rod, Strength's boulder dust
-## and the tall-grass rustle, plus ShakeHeadbuttTree's own sheet.
-##
-## The emote table pins its own entries: LoadEmote copies each sheet to the VRAM
-## address the record carries, and the twelve tile numbers are the layout
-## FacingEmote ($f8, four tiles), FacingShadow and the fishing rod ($fc) and
-## FacingBoulderDust1/FacingGrass1 ($fe) index. A record naming any other tile
-## is a wrong table rather than a cartridge difference: all three ship this one
-## byte identical.
+## and the tall-grass rustle, plus ShakeHeadbuttTree's own sheet. The emote table
+## pins its own entries: LoadEmote copies each sheet to the VRAM address the
+## record carries, and the twelve tile numbers are the layout FacingEmote,
+## FacingShadow and FacingBoulderDust1 index. A record naming any other tile is a
+## wrong table rather than a cartridge difference: all three ship this byte
+## identical.
 const EMOTE_TILE_LAYOUT: Array = [
 	[4, 0xF8], [4, 0xF8], [4, 0xF8], [4, 0xF8], [4, 0xF8], [4, 0xF8], [4, 0xF8], [4, 0xF8],
 	[1, 0xFC], [2, 0xFC], [2, 0xFE], [1, 0xFE],
@@ -1332,16 +1320,13 @@ static func _read_map_scripts(
 	return {"ok": true, "scenes": scenes, "callbacks": callbacks}
 
 
-## Whether an event record's own pointer addresses commands.
-##
-## Only `ObjectEventTypeArray`'s `.script` and `BGEventJumptable`'s five reading
-## entries reach `CallScript` with it. An item ball's word is the `itemball`
-## macro's `db item, quantity`, a hidden item's is `hiddenitem`'s
-## `dwb event, item`, a conditional background event's is a `conditional_event`
-## record, and `OBJECTTYPE_3` through `OBJECTTYPE_6` are dummy events that run
-## nothing. Decoding those as commands and following what they named is where 50
-## Crystal and 20 Gold `loadmenu` records came from, and the `special` operands
-## that name no `SpecialsPointers` entry with them.
+## Whether an event record's own pointer addresses commands. Only
+## `ObjectEventTypeArray`'s `.script` and `BGEventJumptable`'s five reading
+## entries reach `CallScript` with it. An item ball's word is `db item, quantity`,
+## a hidden item's is `dwb event, item`, a conditional background event's is a
+## `conditional_event` record, and `OBJECTTYPE_3` through `_6` run nothing.
+## Decoding those as commands is where 50 Crystal and 20 Gold `loadmenu` records
+## came from, and the `special` operands naming no `SpecialsPointers` entry.
 static func event_pointer_is_script(source: String, event: Dictionary) -> bool:
 	match source:
 		"objects":

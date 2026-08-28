@@ -138,14 +138,12 @@ static func stopped_evolving_text(mon_name: String) -> String:
 
 ## `EvolveAfterBattle`'s master loop, as a list of plans rather than a walk that
 ## evolves as it goes: nothing here writes a party row, so a caller can show
-## `EvolutionAnimation` for each and apply only the ones that were not cancelled.
-##
-## [param evolvable] is `wEvolvableFlags` as [method Gen2Battle.evolvable_indices]
-## answers it: BATTLE-party indices, mapped here through the one rule that knows
-## an egg keeps its party slot without being a combatant. Only `.level`,
-## `.happiness` and `.stat` are reachable on this path: `wForceEvolution` is zero,
-## which is what `.item` demands, and `.trade` demands a `wLinkMode` this project
-## has none of.
+## `EvolutionAnimation` for each and apply only the ones not cancelled.
+## [param evolvable] is `wEvolvableFlags` as
+## [method Gen2Battle.evolvable_indices] answers it, mapped through the one rule
+## that knows an egg keeps its party slot without being a combatant. Only
+## `.level`, `.happiness` and `.stat` are reachable here: `wForceEvolution` is
+## zero and `.trade` demands a `wLinkMode` this project has none of.
 static func after_battle(
 	data: GameData, save: Gen2SaveData, evolvable: Array, time_of_day: int
 ) -> Array:

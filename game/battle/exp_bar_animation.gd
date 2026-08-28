@@ -1,19 +1,13 @@
 class_name Gen2ExpBarAnimation
 extends RefCounted
 
-## The exp bar filling, one pixel at a time (`AnimateExpBar`,
-## engine/battle/core.asm).
-##
-## Not the HP bar again: `.LoopLevels` fills to the end, raises the level and
-## refills from empty (`ld c, $40`, then `ld b, $0`), so this is a list of
-## segments, one per level crossed plus `.FinishExpBar`'s partial fill. Its text
-## ordering is the opposite of the HP bar's: `Text_MonGainedExpPoint` is printed
-## before `AnimateExpBar` and `BattleText_StringBuffer1GrewToLevel` inside the
-## loop, after that segment has reached the end.
-##
-## The three guards Gold and Silver lack (`.NoOverflow`'s `$ffffff` clamp, the
-## `cp e` after `CalcLevel`, `.LoopLevels`' `cp MAX_LEVEL`) are unreachable from
-## a gain, so nothing here is profile split.
+## The exp bar filling, one pixel at a time (`AnimateExpBar`). Not the HP bar
+## again: `.LoopLevels` fills to the end, raises the level and refills from empty,
+## so this is a list of segments, one per level crossed plus `.FinishExpBar`'s
+## partial fill. Its text ordering is the opposite of the HP bar's:
+## `Text_MonGainedExpPoint` is printed before `AnimateExpBar` and
+## `BattleText_StringBuffer1GrewToLevel` inside the loop. The three guards Gold
+## and Silver lack are unreachable from a gain, so nothing here is profile split.
 
 ## `EXP_BAR_LENGTH * TILE_WIDTH`: `CalcExpBar` returns `$40 - b` over eight
 ## tiles.

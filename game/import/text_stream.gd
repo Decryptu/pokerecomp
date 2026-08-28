@@ -1,24 +1,14 @@
 class_name Gen2TextStream
 extends RefCounted
 
-## `home/text.asm`'s printer: the layer above [Gen2Text].
-##
-## A cartridge text is two languages, not one. `DoTextUntilTerminator` reads
-## *text commands*, `$00` to `$16`, each with its own operand width; `TX_START`
-## hands the bytes after it to `PlaceString`, which reads *characters* and runs
-## `CheckDict` over the ones that are not glyphs. The same byte means different
-## things in the two: `$16` is `TX_FAR` to the command loop and `<CR>` to
-## `CheckDict`, `$50` ends a literal for one and the whole text for the other.
-##
-## Reading a text with the character table alone prints the command bytes. That
-## is where `?06?` (`TX_PROMPT_BUTTON`), `?00?` (`TX_START`) and a whole
-## `text_ram` pointer drawn as `?01?e?CF?` came from, and why `$50` looked like a
-## page break: it is `@`, and `_OakText2` ends on one, so a reader that treated
-## it as a break walked straight into `_OakText3` and `_OakText4`.
-##
-## Names are substituted here rather than left as markers, because this is the
-## layer that knows them: `PrintPlayerName` and its siblings are `CheckDict`
-## entries, not something a later pass can spot in a string.
+## `home/text.asm`'s printer: the layer above [Gen2Text]. A cartridge text is two
+## languages, not one. `DoTextUntilTerminator` reads *text commands*, `$00` to
+## `$16`, each with its own operand width; `TX_START` hands what follows to
+## `PlaceString`, which reads *characters*. The same byte means different things
+## in the two: `$16` is `TX_FAR` to one and `<CR>` to the other, and `$50` ends a
+## literal for one and the whole text for the other, which is why a reader that
+## treated it as a page break walked straight into the next text. Names are
+## substituted here, because `PrintPlayerName` is a `CheckDict` entry.
 
 ## `macros/scripts/text.asm`, the `TextCommands` indices.
 const TX_START: int = 0x00
@@ -69,16 +59,12 @@ const CHAR_DONE: int = 0x57
 const CHAR_PROMPT: int = 0x58
 const CHAR_DEXEND: int = 0x5F
 
-## What the two waits become in the laid-out string.
-##
-## `Paragraph` clears the box and starts again at the top line; `_ContText`
-## scrolls by one line and starts at the bottom, so the line above stays on
-## screen. They are different breaks, and a layout that cannot tell them apart
-## drops a line every time a paragraph runs past two lines.
-##
-## Private-use code points rather than control characters: a cache is JSON,
-## and Godot writes U+000B as `\v`, which JSON has no escape for. Nothing in
-## [method Gen2Text.character] can produce either of these.
+## What the two waits become in the laid-out string. `Paragraph` clears the box
+## and starts again at the top line; `_ContText` scrolls by one line and starts at
+## the bottom, so the line above stays on screen. A layout that cannot tell them
+## apart drops a line every time a paragraph runs past two lines. Private-use code
+## points rather than control characters: a cache is JSON and Godot writes U+000B
+## as `\v`, which JSON has no escape for.
 const PAGE_BREAK: String = "\ue000"
 const SCROLL_BREAK: String = "\ue001"
 ## `_ContTextNoPause`, which `<SCROLL>` and `TextCommand_SCROLL` reach directly:

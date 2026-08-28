@@ -2,24 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## The imported map corpus against the pins' own copies of the same bytes.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- map_data
-##
-## pret assembles to a bit-identical ROM, so `maps/*.blk`,
-## `data/tilesets/*_metatiles.bin`, `data/tilesets/*_collision.asm` and
-## `gfx/tilesets/*_palette_map.asm` are the cartridge's own bytes read a second
-## way. Agreement proves the importer's addressing, stride and fold, which is
-## where an offset or a stride read one row out hides; it proves nothing about
-## what the bytes mean. `drawn_blocks` and `side_walls` are the semantic half.
-##
-## Gold and Silver both run against `pokegold`, and every identity here comes
-## from the pin's own tables rather than from a number: a map is found by
-## walking `constants/map_constants.asm` in order, and a tileset's files by
-## following `TilesetXMeta` through `gfx/tilesets.asm`, because `Tileset0` and
-## `TilesetJohto` are the same record under two labels.
-##
-## The checkouts are local-only, so a missing one skips rather than fails.
+## The imported map corpus against the pins' own copies of the same bytes. pret
+## assembles to a bit-identical ROM, so the `.blk`, metatile, collision and palette
+## map files are the cartridge's own bytes read a second way. Agreement proves the
+## importer's addressing, stride and fold, which is where an offset read one row out
+## hides; it proves nothing about what the bytes mean, and `drawn_blocks` and
+## `side_walls` are the semantic half. Every identity comes from the pin's own
+## tables rather than from a number, because `Tileset0` and `TilesetJohto` are the
+## same record under two labels. A missing checkout skips rather than fails.
 
 const PINS: Dictionary = {
 	&"gold": "pokegold", &"silver": "pokegold", &"crystal": "pokecrystal",

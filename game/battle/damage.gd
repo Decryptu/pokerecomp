@@ -1,18 +1,14 @@
 class_name Gen2Damage
 extends RefCounted
 
-## The damage formula, in the order and the arithmetic the hardware uses.
-##
-## Every step truncates and none of them commute, so this is a sequence rather
-## than an expression: the matchup applies one type at a time with a truncation
-## between, the critical multiplier lands before the cap and minimum, and the
-## spread after everything.
-##
-## The cartridge's four commands are [method damage_stats], [method damage_calc],
-## [method stab_damage] and [method apply_variation], run one at a time by
-## [Gen2EffectCommands] because half a dozen effects write between two of them.
-## [method calculate_with] is the composition, for a caller with no list to put
-## the four in.
+## The damage formula, in the order and the arithmetic the hardware uses. Every
+## step truncates and none of them commute, so this is a sequence rather than an
+## expression: the matchup applies one type at a time with a truncation between,
+## the critical multiplier lands before the cap and minimum, and the spread after
+## everything. The cartridge's four commands are [method damage_stats],
+## [method damage_calc], [method stab_damage] and [method apply_variation], run
+## one at a time because half a dozen effects write between two of them;
+## [method calculate_with] is the composition.
 
 ## The cap lands before the minimum is added, so the biggest hit is 999 and the
 ## smallest that connects at all is 2.
@@ -54,19 +50,13 @@ const TRUNCATE_SHIFT: int = 4
 
 
 ## A hit with both rolls decided: deterministic, and the whole formula, for a
-## caller (the AI, a test) that has no list to put the four steps in. Present,
-## Triple Kick, Fury Cutter and Rollout each write between two of them, which is
-## why the effect commands call the four rather than this.
-##
-## Returns { damage, critical, effectiveness, stab, immune }.
-## [code]effectiveness[/code] is in tenths and is the announced number, not
-## always the one damage used (see [method GameData.type_effectiveness]);
-## [code]immune[/code] is a matchup of zero, which is a miss rather than a hit
-## for nothing.
-##
-## Selfdestruct's halved defense comes off the move's own effect byte here, the
-## way `BattleCommand_DamageCalc` reads it, so a caller predicting a hit gets the
-## same number the hit will deal.
+## caller with no list to put the four steps in. Present, Triple Kick, Fury Cutter
+## and Rollout each write between two of them, which is why the effect commands
+## call the four rather than this. Returns { damage, critical, effectiveness,
+## stab, immune }: the effectiveness is in tenths and is the announced number
+## rather than always the one damage used, and `immune` is a matchup of zero.
+## Selfdestruct's halved defense comes off the move's own effect byte, the way
+## `BattleCommand_DamageCalc` reads it.
 static func calculate_with(
 	attacker: Gen2BattleMon,
 	defender: Gen2BattleMon,
@@ -244,15 +234,13 @@ static func base_damage(level: int, power: int, attack: int, defense: int) -> in
 	return out
 
 
-## `TruncateHL_BC`: both stats shifted right two bits at a time until each fits
-## in a byte, flooring at one. Not cosmetic: `base_damage` multiplies by the
-## attack before it divides by the defense, so shifting both changes the answer.
-##
+## `TruncateHL_BC`: both stats shifted right two bits at a time until each fits in
+## a byte, flooring at one. Not cosmetic: `base_damage` multiplies by the attack
+## before it divides by the defense, so shifting both changes the answer.
 ## [param crystal] is the single-player fix, `.finish` looping back while
-## `wLinkMode` is not `LINK_COLOSSEUM`. pokegold has no such check, so one pass
-## is all a value gets and anything still over a byte wraps, which is
-## `docs/bugs_and_glitches.md`'s "Reflect and Light Screen can make (Special)
-## Defense wrap around above 1024".
+## `wLinkMode` is not `LINK_COLOSSEUM`. pokegold has no such check, so anything
+## still over a byte wraps, which is `docs/bugs_and_glitches.md`'s Reflect and
+## Light Screen wrap.
 static func truncate_stats(attack: int, defense: int, crystal: bool = true) -> Array:
 	var out_attack: int = attack
 	var out_defense: int = defense
@@ -514,14 +502,11 @@ static func _defense_stat(
 
 
 ## `DittoMetalPowder`, called at `.done` after `TruncateHL_BC`, so the half again
-## lands on the byte rather than on the stat it was truncated from.
-##
-## Its overflow is reproduced by default: `srl a / add c` carries for a byte over
-## 170 and the recovery halves the *attack* and shifts the carry back into the
-## defence, which is `docs/bugs_and_glitches.md`'s "Metal Powder can increase
-## damage taken with boosted (Special) Defense". Turning
-## `metal_powder_overflow` off keeps the boosted defence at the byte it would
-## have overflowed past, which is what the boost was for.
+## lands on the byte rather than on the stat it was truncated from. Its overflow
+## is reproduced by default: `srl a / add c` carries for a byte over 170 and the
+## recovery halves the *attack* and shifts the carry back into the defence, which
+## is `docs/bugs_and_glitches.md`'s Metal Powder entry. Turning
+## `metal_powder_overflow` off keeps the boosted defence at the byte instead.
 static func metal_powder_pair(defender: Gen2BattleMon, pair: Array) -> Array:
 	if defender == null or not Gen2HeldItem.boosts_defence(defender.species, defender.item):
 		return pair

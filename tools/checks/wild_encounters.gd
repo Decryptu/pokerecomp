@@ -2,25 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies where a wild encounter can be rolled at all, against freshly
-## imported real caches, for all three cartridges.
-##
-## The expected shape comes from engine/overworld/events.asm's RandomEncounter,
-## CanEncounterWildMon and CheckWildEncounterCooldown,
-## engine/overworld/tile_events.asm's CheckGrassCollision and
-## home/map_objects.asm's CheckIceTile. The real-cartridge counterpart to the
-## gate cases in tests/unit/test_world_api.gd, which use a hand-built map.
-##
-## The visible-encounter sweep is checked against the same rule on the same
-## corpus: `visible_encounter_cells` has to name exactly the cells the step roll
-## accepts, grouped by the method the terrain resolves to.
-##
-## The census is the point: an encounter cell is a small minority of a map's
-## walkable cells, and the defect this topic exists to catch was every land cell
-## rolling. A route whose grass moves, or a collision code that stops being read
-## as grass, moves these counts.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- wild_encounters
+## Verifies where a wild encounter can be rolled at all, against freshly imported
+## real caches, for all three cartridges. The expected shape comes from
+## RandomEncounter, CanEncounterWildMon, CheckWildEncounterCooldown,
+## CheckGrassCollision and CheckIceTile. The visible-encounter sweep is checked
+## against the same rule on the same corpus: `visible_encounter_cells` has to name
+## exactly the cells the step roll accepts. The census is the point: an encounter
+## cell is a small minority of a map's walkable cells, and the defect this exists to
+## catch was every land cell rolling.
 
 ## Census of the real caches, pinned so a cache or a rule change is loud.
 ## Per game: encounter cells, maps holding one, and cells refused for ice.
@@ -66,20 +55,14 @@ const DV_SWEEP_SPECIES: int = 19
 const DV_SWEEP_LEVEL: int = 5
 
 
-## `LoadEnemyMon`'s `.InitDVs` against the real caches: every wild the game
-## builds now rolls its own DVs, where before only a visible encounter carried
-## any and all eight other sources entered at 15/15/15/15. The sweep is the
-## point, the way the census above is: one wild proves nothing about a roll.
-##
-## Four claims, in the source's own order of precedence:
-##
-## - a request carrying `dvs` keeps them, which is the visible encounter and the
-##   roamer's stored word;
-## - `BATTLETYPE_FORCESHINY` writes `ATKDEFDV_SHINY`/`SPDSPCDV_SHINY`, which is
-##   the red Gyarados and is a shiny;
-## - an ordinary wild spreads over the whole 16-bit word rather than sitting on
-##   one number, and every nibble reaches both ends of 0 to 15;
-## - a wild UNOWN takes only a letter the puzzle has unlocked, per set.
+## `LoadEnemyMon`'s `.InitDVs` against the real caches: every wild the game builds
+## now rolls its own DVs, where before only a visible encounter carried any and all
+## eight other sources entered at 15/15/15/15. The sweep is the point: one wild
+## proves nothing about a roll. Four claims, in the source's own order of
+## precedence: a request carrying `dvs` keeps them; `BATTLETYPE_FORCESHINY` writes
+## the shiny word, which is the red Gyarados; an ordinary wild spreads over the
+## whole 16-bit word with every nibble reaching both ends of 0 to 15; and a wild
+## UNOWN takes only a letter the puzzle has unlocked, per set.
 func _verify_rolled_dvs() -> void:
 	var party: Gen2Party = Gen2WorldBattleAdapter.fallback_party(_r.data)
 	if not _r.check(party != null, "no party could be built for the DV sweep."):

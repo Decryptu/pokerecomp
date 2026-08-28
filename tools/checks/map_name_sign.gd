@@ -5,14 +5,10 @@ var _r: RefCounted = null
 ## Verifies `InitMapNameSign` and its sign against freshly imported real caches:
 ## every map on all three cartridges is asked what landmark it would raise, and
 ## every name that answers is drawn through the same [Gen2MapNameSignPage] the
-## overworld displays.
-##
-## What a sampled map cannot say: the rule is three tests over the whole corpus
-## (`GATE`, the two National Park gates, and `.CheckSpecialMap`'s six landmarks),
-## and the sign is Crystal's own screen, so Gold and Silver must raise none at
-## all rather than draw one out of a sheet they do not ship.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- map_name_sign
+## overworld displays. What a sampled map cannot say: the rule is three tests over
+## the whole corpus (`GATE`, the two National Park gates, and `.CheckSpecialMap`'s
+## six landmarks), and the sign is Crystal's own screen, so Gold and Silver must
+## raise none at all rather than draw one out of a sheet they do not ship.
 
 const TILE: int = Gen2Font.TILE
 const SIZE: Vector2i = Vector2i(

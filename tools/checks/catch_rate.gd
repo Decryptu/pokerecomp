@@ -3,22 +3,13 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## `wFinalCatchRate` on all three cartridges, against what the cartridges
-## themselves answered.
-##
-## `PokeBallEffect` settles the whole catch rate before it rolls, so the answer
-## is a pure function of eleven bytes and can be asked of a real dump directly:
-## `.claude/oracle/battle/catch_rate.py` sets those bytes, runs the instructions
-## between `.get_multiplier_loop` and the `call Random` in `.skip_hp_calc`, and
-## prints one line per case. This topic builds the same 4,779 cases here.
-##
-## The sweep is the whole corpus: every species against every ball, because
-## Heavy, Moon, Fast and Love are the only rows that differ per species; every
-## byte boundary of the health term against every status bit; and Level Ball's
-## whole level ladder. What is pinned is the digest of all of them plus the rows
-## below, which name the branch each one proves, so a break is both caught and
-## readable.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- catch_rate
+## themselves answered. `PokeBallEffect` settles the whole catch rate before it
+## rolls, so the answer is a pure function of eleven bytes and can be asked of a
+## real dump directly; `.claude/oracle/battle/catch_rate.py` prints one line per
+## case and this topic builds the same 4,779 here. The sweep is the whole corpus:
+## every species against every ball, every byte boundary of the health term against
+## every status bit, and Level Ball's whole ladder. What is pinned is the digest
+## plus the rows below, which name the branch each one proves.
 
 ## `data/items/apricorn_balls.asm` and the four ordinary ones. MASTER_BALL is not
 ## here: it never reaches the multiplier table.

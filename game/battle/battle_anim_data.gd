@@ -2,15 +2,10 @@ class_name Gen2BattleAnimData
 extends RefCounted
 
 ## The five imported battle animation tables, read the way the cartridge reads
-## them.
-##
-## [Gen2BattleAnimImporter] caches each table as a whole region, table and data
-## together, because every pointer inside one is bank-local. This resolves those
-## pointers: an address minus the region's base is an index into its bytes, which
-## is the same arithmetic `add hl, de` does with the bank paged in.
-##
-## Scene-free and [GameData]-free once built, so a test can hand-build one the
-## way a battle fixture hand-builds a party.
+## them. [Gen2BattleAnimImporter] caches each table as a whole region because
+## every pointer inside one is bank-local; this resolves them, an address minus
+## the region's base being an index into its bytes, which is what `add hl, de`
+## does with the bank paged in.
 
 ## `BattleAnimObjects` row fields, in the order `InitBattleAnimation` copies them.
 const OBJECT_FIELDS: Array[StringName] = [

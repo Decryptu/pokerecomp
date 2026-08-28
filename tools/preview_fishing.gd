@@ -1,15 +1,11 @@
 extends SceneTree
 
-## Captures the production fishing cast screen.
-##
-## With only an output path it uses the deterministic integration fixture:
+## Captures the production fishing cast screen. With only an output path it uses
+## the deterministic integration fixture; pass a real imported cache and map to
+## capture authentic map art instead.
 ##
 ##   Godot --path . -s res://tools/preview_fishing.gd -- /tmp/fishing.png
-##
-## Pass a real imported cache and map to capture authentic map art instead:
-##
 ##   Godot --path . -s res://tools/preview_fishing.gd -- /tmp/fishing.png silver 2 5
-##
 
 const WINDOW_SIZE := Vector2i(1152, 648)
 const Fixture := preload("res://tests/integration/world_trainer_fixture.gd")

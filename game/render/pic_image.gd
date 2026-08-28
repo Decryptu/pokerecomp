@@ -242,16 +242,12 @@ static func lookup(
 
 
 ## What `wBoxAlignment` produces, a plain horizontal mirror. The flag is read
-## twice and only both halves make sense of it: `LoadOrientedFrontpic`'s
-## `.x_flip` bit-reverses every byte as it loads, mirroring each tile's pixels,
-## and `PlaceGraphic`'s `.right` then walks the tile columns with `dec hl`, so
-## the first column lands in the box's last. Reversing the columns alone
-## scrambles the sprite, which is what a column-strip reversal did here.
-##
-## The two compose exactly into [method Image.flip_x]: a pixel at
-## `x = 8 * column + px` lands at `8 * (columns - 1 - column) + (7 - px)`, which
-## is `width - 1 - x`. `PrepMonFrontpic` is the one caller that sets the flag and
-## the Oak speech the one screen that reaches it.
+## twice and only both halves make sense of it: `LoadOrientedFrontpic`'s `.x_flip`
+## bit-reverses every byte as it loads, mirroring each tile's pixels, and
+## `PlaceGraphic`'s `.right` then walks the tile columns with `dec hl`. Reversing
+## the columns alone scrambles the sprite. The two compose exactly into
+## [method Image.flip_x]. `PrepMonFrontpic` is the one caller that sets the flag
+## and the Oak speech the one screen that reaches it.
 static func x_flipped(image: Image) -> Image:
 	if image == null:
 		return image
@@ -338,16 +334,13 @@ static func canvas_image(pixels: PackedInt32Array, width: int, height: int) -> I
 	)
 
 
-## One 8x8 tile of [param strip] into a [method canvas] buffer.
-##
-## [param strip] is a horizontal run of [param strip_tiles] tiles, one byte of
-## colour index per pixel, which is the shape every sheet in the cache is stored
-## in; [param table] is [method lookup]'s. [param skip_index] is the colour the
-## blit leaves standing, -1 for none: an object palette never draws index 0 and
-## a background tile draws all four.
-##
-## Clipped rather than refused, so a caller places a sprite partly off screen
-## the way OAM does.
+## One 8x8 tile of [param strip] into a [method canvas] buffer. [param strip] is
+## a horizontal run of [param strip_tiles] tiles, one byte of colour index per
+## pixel, which is the shape every sheet in the cache is stored in.
+## [param skip_index] is the colour the blit leaves standing, -1 for none: an
+## object palette never draws index 0 and a background tile draws all four.
+## Clipped rather than refused, so a caller places a sprite partly off screen the
+## way OAM does.
 static func blit_tile(
 	pixels: PackedInt32Array,
 	width: int,
@@ -401,22 +394,14 @@ static func show(target: TextureRect, image: Image) -> void:
 	Gen2Screen.note_picture(target, image)
 
 
-## What a picture is mostly made of, which is the colour a screen carries out
-## past the hardware rectangle it was laid out in.
-##
-## The picture's own field rather than its border: a cartridge screen puts a box
-## frame or a header strip along its edge often enough that the edge says black
-## where the screen reads white. Sampled on a stride, because tile art is flat in
-## blocks of eight and a quarter of the pixels answers the same question as all
-## of them for a sixteenth of the walk.
-##
-## A picture with any transparency in it has no field at all. The hardware has no
-## alpha, so a screen's own picture is opaque everywhere; one that is not is a
-## layer drawn over another screen -- a `MENU_BACKUP_TILES` box, a sprite pass
-## composed over a background -- and answering for the screen underneath is what
-## painted a black band over the map. Whether the clear pixels outnumber the
-## drawn ones is not the question: a `PokemonCenterPC` menu with a text box
-## under it covers half the screen and still owns none of it.
+## What a picture is mostly made of, which is the colour a screen carries out past
+## the hardware rectangle it was laid out in. The picture's own field rather than
+## its border, since a cartridge screen puts a box frame along its edge often
+## enough that the edge says black where the screen reads white. Sampled on a
+## stride, because tile art is flat in blocks of eight. A picture with any
+## transparency has no field at all: the hardware has no alpha, so one that is not
+## opaque is a layer over another screen, and answering for the screen underneath
+## is what painted a black band over the map.
 static func field_color(image: Image, stride: int = FIELD_STRIDE) -> Color:
 	if image == null or image.is_empty() or image.get_format() != Image.FORMAT_RGBA8:
 		return TRANSPARENT
@@ -452,18 +437,13 @@ static func field_color(image: Image, stride: int = FIELD_STRIDE) -> Color:
 	return Color.hex(best)
 
 
-## The texture [param texture] becomes once it holds [param image].
-##
-## A screen redrawn every frame used to answer `ImageTexture.create_from_image`
-## each time, which allocates a texture and frees the last one on every frame it
-## draws; `update` writes into the one already on the GPU. The size and format
-## have to match for that, so a first frame and a resize still create.
-##
-## Not headless. There is no GPU there to save the upload to, and the dummy
-## driver hands `ImageTexture.get_image` back the picture the texture was
-## created with rather than the one it was last updated with, so a check or a
-## test that reads a screen back would read the frame before the one it asked
-## for.
+## The texture [param texture] becomes once it holds [param image]. A screen
+## redrawn every frame used to answer `ImageTexture.create_from_image` each time,
+## which allocates a texture and frees the last one on every frame it draws;
+## `update` writes into the one already on the GPU. The size and format have to
+## match for that, so a first frame and a resize still create. Not headless: the
+## dummy driver hands `ImageTexture.get_image` back the picture the texture was
+## created with rather than the one it was last updated with.
 static func refreshed_texture(texture: ImageTexture, image: Image) -> ImageTexture:
 	if image == null:
 		return texture

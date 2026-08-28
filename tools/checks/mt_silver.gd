@@ -2,26 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the walk from Viridian Gym to Red on Silver Cave Room 3, against
-## freshly imported real caches for both command profiles.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## data/maps/attributes.asm, constants/map_constants.asm, maps/PalletTown.asm,
-## maps/OaksLab.asm, maps/Route22.asm, maps/VictoryRoadGate.asm,
-## maps/Route28.asm, maps/SilverCaveOutside.asm and maps/SilverCaveRoom1.asm
-## through maps/SilverCaveRoom3.asm.
-##
-## Three findings carry the leg. The Victory Road Gate is three regions joined
-## by two single cells, and a black belt stands in each, so each belt's hide
-## flag is the gate on its own arm: EVENT_FOUGHT_SNORLAX opens the Route 22 arm
-## and EVENT_OPENED_MT_SILVER the Route 28 one, which makes Oak a hard gate on
-## Mt. Silver rather than a courtesy. Each Silver Cave room is one region, so no
-## room needs a hand-named intermediate cell the way Cinnabar did. And Red
-## carries EVENT_RED_IN_MT_SILVER as his hide flag, which InitializeEventsScript
-## sets at a new game and only HallOfFameEnterScript clears, so the room is
-## empty until the Hall of Fame.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- mt_silver
+## Verifies the walk from Viridian Gym to Red on Silver Cave Room 3, for both
+## command profiles. Three findings carry the leg. The Victory Road Gate is three
+## regions joined by two single cells with a black belt standing in each, so each
+## belt's hide flag is the gate on its own arm, which makes Oak a hard gate on Mt.
+## Silver rather than a courtesy. Each Silver Cave room is one region, so no room
+## needs a hand-named intermediate cell the way Cinnabar did. And Red carries
+## EVENT_RED_IN_MT_SILVER as his hide flag, set at a new game and cleared only by
+## HallOfFameEnterScript, so the room is empty until the Hall of Fame.
 
 
 ## constants/map_constants.asm. The DUNGEONS group is the one split on this leg:

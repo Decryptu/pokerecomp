@@ -4,24 +4,11 @@ extends RefCounted
 ## Scores an enemy trainer's move choice the way the cartridge's own AI does.
 ##
 ## Every slot starts at 20, or 80 with no PP. Each bit set in the trainer class's
-## [constant RomLayout.ATTR_AI_MOVE_WEIGHTS] word runs one scoring layer over the
-## four slots in the cartridge's bit order ([constant RomLayout.AI_BASIC] through
-## [constant RomLayout.AI_RISKY]), nudging scores up (discourage) or down
-## (encourage). Lowest score wins, ties broken at random.
-##
-## [RefCounted], scene-free, randomness injected, so a whole decision can be
-## asserted on in a test.
-##
-## `engine/battle/ai/scoring.asm` finds that minimum by decrementing every slot's
-## counter per pass until one reaches zero, then walking backward to give tied
-## slots the same outcome. That is an argmin without a MIN instruction, not a
-## rule of its own, so [method choose_slot] takes the minimum directly.
-##
-## Percent chances use the cartridge's `X * 255 / 100` macro rather than the odd
-## byte a few call sites adjust by one; the difference is one part in 256.
-##
-## Every row of `AI_Redundant` and of `AI_Smart`'s own jumptable has a handler;
-## `tests/unit/test_ai.gd` pins the latter against the source table.
+## [constant RomLayout.ATTR_AI_MOVE_WEIGHTS] runs one scoring layer over the four
+## slots, nudging scores up (discourage) or down (encourage); lowest wins, ties
+## broken at random. `scoring.asm` finds that minimum by decrementing counters,
+## which is an argmin rather than a rule, so [method choose_slot] takes it
+## directly. Percent chances use the cartridge's `X * 255 / 100` macro.
 
 ## Everything one scoring layer is allowed to read, gathered once so a handler
 ## takes the fact it needs rather than a thirteenth positional argument.
@@ -161,17 +148,12 @@ const SANDSTORM_IMMUNE_TYPES: Array = Gen2Weather.SANDSTORM_EXEMPT_TYPES
 const RESIDUAL_MOVE_NUMBERS: Array = [54, 73, 77, 78, 86, 116, 117, 139, 144, 160, 164, 191]
 
 
-## What the enemy does with its turn: pull its Pokémon out, reach for an item, or
-## use a move.
-##
-## `AI_SwitchOrTryItem`, which runs before the turn and settles ahead of it.
-## Switching is considered first and an item only when it is refused, which is
-## the cartridge's `DontSwitch` fallthrough rather than a separate decision.
-##
-## Answers a [Gen2Battle] action dictionary. [param item_switch_flags] is the
-## class's own [constant RomLayout.ATTR_AI_ITEM_SWITCH] word, and
-## [param move_slot] is what [method choose_slot] already picked, used when
-## nothing else is worth doing.
+## What the enemy does with its turn: pull its Pokemon out, reach for an item, or
+## use a move. `AI_SwitchOrTryItem`, which runs before the turn and settles ahead
+## of it: switching is considered first and an item only when it is refused,
+## which is the cartridge's `DontSwitch` fallthrough rather than a separate
+## decision. [param item_switch_flags] is the class's own
+## [constant RomLayout.ATTR_AI_ITEM_SWITCH].
 static func choose_action(
 	battle: Gen2Battle, item_switch_flags: int, move_slot: int, rng: RandomNumberGenerator
 ) -> Dictionary:
@@ -222,32 +204,14 @@ static func _locked_in(mon: Gen2BattleMon) -> bool:
 	return false
 
 
-## Picks a move slot for [param attacker] to use against [param defender], the
-## way [param ai_move_weights] (a trainer class's own
-## [constant RomLayout.ATTR_AI_MOVE_WEIGHTS]) says to score it.
-##
-## [param attacker_turns_taken] and [param defender_turns_taken] are
-## `wEnemyTurnsTaken` and `wPlayerTurnsTaken`, each side's own
-## [member Gen2BattleMon.turns_taken] read before the turn is spent, which is
-## when the cartridge's AI reads them too. Every handler that wants them wants
-## the same thing: whether this is the Pokémon's first turn out.
-##
-## [param weather] is [member Gen2Battle.weather], and the two screen words are
-## [member Gen2Battle.screens] for each side. [param attacker_screens] is the
-## AI's own, which is the `wEnemyScreens` every `AI_Redundant` screen row reads;
-## [param defender_screens] is the player's, which is what its Confuse row and
-## its damage estimate read.
-##
-## [param has_bench] and [param matchup_score] are the two routines the smart
-## layer farcalls out of a handler rather than reads off a battler:
-## `FindAliveEnemyMons`, which is whether the AI has anybody left to send, and
-## `CheckPlayerMoveTypeMatchups`, which is `wEnemyAISwitchScore` and is
-## [method Gen2AISwitch.matchup_score] here. Both are supplied the way
-## [param weather] is, since this routine scores a pairing rather than a battle;
-## the defaults are the neutral states, a lone Pokémon and an unnudged score.
-##
-## Always returns a slot in range: [method Gen2Battle.move_for] turns an
-## unusable slot into Struggle, so no empty-moveset case is needed here.
+## Picks a move slot for [param attacker] against [param defender], scored the
+## way [param ai_move_weights] says to. The two turn counts are `wEnemyTurnsTaken`
+## and `wPlayerTurnsTaken` read before the turn is spent, which is when the
+## cartridge reads them; every handler wants the same thing out of them, whether
+## this is the Pokemon's first turn out. [param has_bench] and
+## [param matchup_score] are `FindAliveEnemyMons` and `CheckPlayerMoveTypeMatchups`
+## supplied rather than read, since this scores a pairing rather than a battle.
+## Always returns a slot in range: an unusable one becomes Struggle.
 static func choose_slot(
 	attacker: Gen2BattleMon,
 	defender: Gen2BattleMon,
@@ -431,14 +395,10 @@ static func _skip_80_20(rng: RandomNumberGenerator) -> bool:
 
 ## [constant RomLayout.AI_BASIC]: nothing redundant. A status move against an
 ## already-statused target, confusion against a confused one, Disable or Encore
-## against a locked one, Attract against a target already in love or of the same
-## or unknown gender, and a second Mist or Focus Energy, which is why those two
-## read the attacker rather than the defender, and a screen the attacker's own
-## side already holds. A standing Substitute reads the attacker for the same
-## reason; Leech Seed, Nightmare and Spikes read the target.
-##
-## `AI_Redundant`'s own thirty rows are the rest of it, each reading whichever
-## side the effect would land on.
+## against a locked one, Attract against a target in love or of the same or
+## unknown gender, and a second Mist or Focus Energy, which is why those two read
+## the attacker rather than the defender. A standing Substitute reads the attacker
+## for the same reason; Leech Seed, Nightmare and Spikes read the target.
 static func _apply_basic(scores: Array, c: Context) -> void:
 	var attacker: Gen2BattleMon = c.attacker
 	var defender: Gen2BattleMon = c.defender
@@ -943,15 +903,11 @@ static func _smart_sandstorm(
 		_encourage(scores, slot, 1)
 
 
-## `AI_Smart_RainDance` and `AI_Smart_SunnyDay`, which are one routine with two
-## type pairs: the weather is a bad idea if it would suit the target and a good
-## one if it would hurt it, and otherwise worth setting only with a move that
-## wants it.
-##
-## [param favours_target] is the type the weather helps and
-## [param disfavours_target] the one it hurts, in the order the cartridge tests
-## them: the target's first type answers before its second, so a Water/Fire
-## target under Rain Dance is a Water target.
+## `AI_Smart_RainDance` and `AI_Smart_SunnyDay`, one routine with two type pairs:
+## the weather is a bad idea if it would suit the target and a good one if it
+## would hurt it, and otherwise worth setting only with a move that wants it. The
+## two types are tested in the cartridge's order, so a Water/Fire target under
+## Rain Dance is a Water target.
 static func _smart_weather_move(
 	scores: Array, slot: int, attacker: Gen2BattleMon, defender: Gen2BattleMon,
 	rng: RandomNumberGenerator, atk_turns: int, def_turns: int,
@@ -1107,17 +1063,12 @@ static func _smart_heal(
 		_discourage(scores, slot, 1)
 
 
-## `AI_Smart_PerishSong`: worth singing when the player cannot leave, not worth
-## singing when the AI has nobody to leave for.
-##
-## Three branches in the source's own order. `.no`, with nobody on the bench, is
-## the only one that moves a score without a roll: five points against, since a
-## song the AI cannot walk away from kills it too. A player held by Mean Look or
-## Spider Web is `.yes`, 50% to encourage. Otherwise the AI only bothers when the
-## matchup is one it is not losing: `CheckPlayerMoveTypeMatchups` below
-## [constant Gen2AISwitch.BASE_SCORE] returns with nothing said, and at or above
-## it is 50% to discourage. Reading that as "sing when things are going badly"
-## has it backwards; the branch that says yes is the trapped one.
+## `AI_Smart_PerishSong`, three branches in the source's own order. `.no`, with
+## nobody on the bench, is the only one that moves a score without a roll: five
+## points against, since a song the AI cannot walk away from kills it too. A
+## player held by Mean Look or Spider Web is `.yes`, 50% to encourage. Otherwise
+## the AI only bothers when the matchup is one it is not losing. The branch that
+## says yes is the trapped one, not the winning one.
 static func _smart_perish_song(
 	scores: Array, slot: int, defender: Gen2BattleMon, rng: RandomNumberGenerator,
 	has_bench: bool, matchup_score: int
@@ -1147,17 +1098,11 @@ static func _smart_pain_split(
 		_discourage(scores, slot, 1)
 
 
-## `AI_Smart_LockOn`, whose two halves ask opposite questions.
-##
-## With the player already locked on, aiming again is wasted: every inaccurate
-## move the enemy knows is encouraged instead, and Lock On itself is dismissed.
-## The walk stops at the first empty slot, which is `.dismiss`.
-##
-## Without it, the ladder is health, then speed, then whether the accuracy is
-## actually a problem: a sharply raised evasion or a sharply lowered accuracy is
-## worth aiming for, a mild one is not worth a turn, and past both it comes down
-## to whether any move in the list is inaccurate enough to want the help and at
-## least neutral against the target.
+## `AI_Smart_LockOn`, whose two halves ask opposite questions. With the player
+## already locked on, aiming again is wasted: every inaccurate move the enemy
+## knows is encouraged instead and Lock On itself is dismissed, the walk stopping
+## at the first empty slot. Without it the ladder is health, then speed, then
+## whether the accuracy is actually a problem.
 static func _smart_lock_on(
 	scores: Array, slot: int, attacker: Gen2BattleMon, defender: Gen2BattleMon,
 	data: GameData, rng: RandomNumberGenerator
@@ -1406,14 +1351,10 @@ const PROTECT_DISCOURAGE_SKIP_PERCENT: int = 8
 
 
 ## `AI_Smart_Endure`: the same opening test as Protect, then health, then the one
-## reason to want to survive on a single point.
-##
-## Reversal is looked for by effect rather than by move number, which is
-## `AIHasMoveEffect`, and Flail carries the same byte, so either move answers.
-##
-## `.no_reversal` is the other reason: `wEnemySubStatus5`, the flag a Lock On the
-## *player* used left on the enemy. A guaranteed incoming hit is exactly what
-## surviving on one point is for.
+## reason to want to survive on a single point. Reversal is looked for by effect
+## rather than by move number, which is `AIHasMoveEffect`, and Flail carries the
+## same byte. `.no_reversal` is the other reason: `wEnemySubStatus5`, the flag a
+## Lock On the player used left on the enemy.
 static func _smart_endure(
 	scores: Array, slot: int, attacker: Gen2BattleMon, data: GameData,
 	rng: RandomNumberGenerator
@@ -1540,22 +1481,13 @@ static func _apply_aggressive(scores: Array, c: Context) -> void:
 
 
 ## `AIDamageCalc`: the AI's own damage prediction, which is `EnemyAttackDamage`
-## and `BattleCommand_DamageCalc` themselves rather than an approximation of
-## them, so it reads the player's screens exactly as a real hit would.
-##
-## [constant Gen2Damage.CONSTANT_DAMAGE_EFFECTS] leaves the formula alone and
-## answers with `BattleCommand_ConstantDamage`'s own number, the same one the hit
-## will deal. All six of those moves carry a power the AI's callers test, so the
-## branch is live: without it Seismic Toss and Night Shade are read at power 1
-## and Super Fang at 1, and an aggressive or risky trainer plays them blind.
-##
-## [param constant] is what `AI_Smart_PriorityHit` is missing: it inlines the
-## three formula calls and never consults the list.
-##
-## Psywave's prediction really does roll, `BattleCommand_ConstantDamage` calling
-## `BattleRandom` inside the estimate, so the roll is spent here too. The
-## cartridge spends it on the battle's stream rather than the AI's; this engine
-## injects one generator for both, which is the same object either way.
+## and `BattleCommand_DamageCalc` themselves rather than an approximation, so it
+## reads the player's screens exactly as a real hit would.
+## [constant Gen2Damage.CONSTANT_DAMAGE_EFFECTS] answers with
+## `BattleCommand_ConstantDamage`'s own number instead; without that branch
+## Seismic Toss, Night Shade and Super Fang are read at power 1. [param constant]
+## is what `AI_Smart_PriorityHit` is missing. Psywave's prediction really rolls,
+## and the roll is spent on the one generator both sides share.
 static func _estimate_damage(c: Context, move: Dictionary, constant: bool = true) -> int:
 	var effect: int = _effect(move)
 	if constant and Gen2Damage.CONSTANT_DAMAGE_EFFECTS.has(effect):

@@ -2,22 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the gates the Goldenrod Radio Tower leg turns, against freshly
-## imported real caches, for both command profiles.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## `maps/BlackthornCity.asm`, `maps/RadioTower2F.asm`, `maps/RadioTower3F.asm`
-## and `maps/GoldenrodUndergroundSwitchRoomEntrances.asm`. Blackthorn City's
-## event rows, RadioTower3F whole, and the switch room's `ugdoor_def` table and
-## `..._UpdateDoors` body are byte identical between the pins, and every event
-## flag below has the same number in both.
-##
-## The leg is route work, so what is worth pinning is not the scripts but the
-## three places a wrong flag or a missed `changeblock` would silently seal the
-## route: Blackthorn Gym's door, Radio Tower 2F's stairs and 3F's card-key
-## shutter, and the switch room's eleven doors.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- radio_tower
+## Verifies the gates the Goldenrod Radio Tower leg turns, for both command
+## profiles. Expected values come from the pinned sources' BlackthornCity,
+## RadioTower2F, RadioTower3F and the switch room; Blackthorn's event rows,
+## RadioTower3F whole, and the switch room's `ugdoor_def` table and update body are
+## byte identical between the pins, and every event flag below has the same number
+## in both. The leg is route work, so what is worth pinning is not the scripts but
+## the three places a wrong flag or a missed `changeblock` would silently seal it:
+## the gym door, the tower's stairs and card-key shutter, and the eleven doors.
 
 
 ## data/maps/maps.asm group/number pairs. Blackthorn City and the Radio Tower

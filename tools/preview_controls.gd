@@ -6,16 +6,8 @@ extends SceneTree
 ##   Godot --path . --resolution 480x960 -s res://tools/preview_controls.gd -- <out.png> [mod]
 ##
 ## A `mod` argument registers two controls of a mod's own and switches their
-## on-screen buttons on, which is what a phone player who wants a mod's camera
-## has to be able to reach.
-##
-## The orientation is the window's, so `--resolution` chooses which arrangement
-## is captured: portrait puts the screen at the top and the controller under it,
-## landscape centres the screen and leaves the margins for the controller.
-##
-## The controller is forced on for the capture, since a desktop is not a
-## touchscreen and `auto` would correctly hide the thing being photographed. The
-## options file is never written, so the developer's own settings are untouched.
+## on-screen buttons on. The controller is forced on for the capture, since `auto`
+## would correctly hide it on a desktop; the options file is never written.
 
 const Fixture := preload("res://tests/integration/world_trainer_fixture.gd")
 

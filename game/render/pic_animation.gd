@@ -1,25 +1,14 @@
 class_name Gen2PicAnimation
 extends RefCounted
 
-## `AnimateFrontpic` (engine/gfx/pic_animation.asm), the wobble a front pic does
-## when it is sent out, looked at in a menu, traded, evolved or hatched.
-##
-## The cartridge's shape is a per-frame interpreter over two nested state
-## machines, and so is this one: `SetUpPokeAnim` spends one scene command a
-## frame, and `PokeAnim_DoAnimScript` spends one script command over as many
-## frames as its own duration. Neither is flattened into a list of frames
-## computed once, because a `dorepeat` counter and a `SetWait` are read while
-## the animation runs.
-##
-## What it produces is a 7x7 box of tile numbers, which is exactly what
-## `PokeAnim_PlaceGraphic` writes into `wTilemap` and what
-## [method Gen2BattleScreenMap.stamp] already writes for the enemy's square. The
-## caller stamps that box into its own map; nothing here draws.
-##
-## Crystal only. pokegold ships no `pic_animation.asm`, no `anim.asm`, no
-## bitmasks and no frames, and both of its send-outs reach `PlayStereoCry`
-## directly, so a record this has none of animates nothing and the caller plays
-## the cry on its own.
+## `AnimateFrontpic`, the wobble a front pic does when it is sent out, looked at
+## in a menu, traded, evolved or hatched. The cartridge's shape is a per-frame
+## interpreter over two nested state machines and so is this one, because a
+## `dorepeat` counter and a `SetWait` are read while the animation runs. What it
+## produces is a 7x7 box of tile numbers, which is what `PokeAnim_PlaceGraphic`
+## writes into `wTilemap`; the caller stamps that box and nothing here draws.
+## Crystal only: pokegold ships no `pic_animation.asm`, so a record this has none
+## of animates nothing and the caller plays the cry on its own.
 
 ## The `ANIM_MON_*` constants, in `PokeAnims`' own order.
 enum {

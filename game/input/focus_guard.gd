@@ -1,25 +1,14 @@
 class_name Gen2FocusGuard
 extends Node
 
-## Gives a controller somewhere to start.
-##
-## Godot moves focus between [Control]s on `ui_up` and the rest of that family,
-## but only once something already has focus, and nothing does when a screen
-## opens. That is the whole reason a pad did nothing in the launcher: every
-## button was focusable and reachable, and none of them was the first.
-##
-## A mouse or a finger needs no focus ring, so one is only put up while the
-## player is on a keyboard or a pad. It is never taken away again, because a
-## click that dropped focus would empty the field the click had just filled.
-##
-## Add one to a screen with [method attach] and call [method refresh] whenever
-## what is on that screen changes.
-##
-## A modal over the screen takes the whole guard with it. Everything below is
-## still in the tree and still focusable, so without this the geometric search
-## joins a control in the modal to whatever happens to sit beside it on the page
-## behind, and one press walks out of the modal and scrolls the page. See
-## [constant MODAL_GROUP].
+## Gives a controller somewhere to start. Godot moves focus on `ui_up` and the
+## rest of that family, but only once something already has focus, and nothing
+## does when a screen opens. A ring is only put up while the player is on a
+## keyboard or a pad, and never taken away again, because a click that dropped
+## focus would empty the field the click had just filled. A modal takes the whole
+## guard with it: everything below is still focusable, so without that the
+## geometric search joins a control in the modal to one on the page behind. Add
+## one with [method attach] and call [method refresh] when the screen changes.
 
 ## Nodes in this group are modal: while one is in the tree, it is the only part
 ## of the screen the guard looks at. Named rather than typed so the guard owes

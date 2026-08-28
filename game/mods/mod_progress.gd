@@ -1,22 +1,13 @@
 class_name Gen2ModProgress
 extends RefCounted
 
-## What a run has achieved, as one flat read-only dictionary.
-##
-## A mod is deliberately given no world and no save: [method Gen2ModHost.progress]
-## and [method Gen2ModHost.progress_for] hand it this instead, the way
-## [method Gen2ModHost.inventory] hands it the bag. Every field is a state the
-## run has REACHED rather than a moment it passed, so a mod installed onto a save
-## already played reads what that save has and a mod watching
-## [signal Gen2ModHost.progress_changed] sees the same field move.
-##
-## Cartridge differences are resolved here. `badges` is a Crystal-ordered mask
-## whichever profile is open, so a mod never touches
-## [method Gen2WorldState.badge_flag] or the Gold and Silver flag table.
-##
-## A field this cannot answer is LEFT OUT rather than zeroed, so a mod written
-## against a later build reads a missing answer as nothing achieved rather than
-## as an achievement lost.
+## What a run has achieved, as one flat read-only dictionary. A mod is
+## deliberately given no world and no save: [method Gen2ModHost.progress] hands it
+## this instead, the way [method Gen2ModHost.inventory] hands it the bag. Every
+## field is a state the run has REACHED rather than a moment it passed, so a mod
+## installed onto a save already played reads what that save has. Cartridge
+## differences are resolved here, `badges` being a Crystal-ordered mask whichever
+## profile is open. A field this cannot answer is LEFT OUT rather than zeroed.
 
 ## The live run: [param world] for everything the world owns and [param save] for
 ## the party, the boxes and the play timer, which are the save's.

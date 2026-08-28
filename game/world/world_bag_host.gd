@@ -2,16 +2,12 @@ class_name Gen2WorldBagHost
 extends RefCounted
 
 ## Bag-only transactions: what the pack changes without a party, a mart or a
-## script behind it. `TossItem` (`home/item.asm`, `_TossItem`), the two halves of
-## `GiveTakePartyMonItem` and `RegisterItem`.
-##
-## The source routine walks `_TossItem`'s pocket jumptable to find which packed
-## array the item lives in and calls `RemoveItemFromPocket` on it. The flat item
-## model has one stack per item and no pocket arrays, so the whole walk is a
-## subtraction. Nothing observable differs until a save can hold two stacks.
-##
-## The commit boundary is [Gen2WorldTransaction], the same one the mart, Kurt
-## and the party hosts go through.
+## script behind it. `TossItem`, the two halves of `GiveTakePartyMonItem` and
+## `RegisterItem`. The source routine walks `_TossItem`'s pocket jumptable to find
+## which packed array the item lives in and calls `RemoveItemFromPocket` on it; the
+## flat item model has one stack per item and no pocket arrays, so the whole walk
+## is a subtraction and nothing observable differs until a save can hold two
+## stacks. The commit boundary is [Gen2WorldTransaction].
 
 ## `TossItem` with `wCurItemQuantity`, as one validated transaction.
 ##
@@ -55,17 +51,14 @@ static func toss(
 	}
 
 
-## `TryGiveItemToPartymon`, which the pack's GIVE and the party submenu's ITEM
-## both reach. [param swap] is the answer to `PokemonAskSwapItemText`: without it
-## a Pokemon already holding something is refused with nothing written, which is
-## where the source stops to ask.
-##
-## `ItemIsMail` is [method Gen2HeldItem.is_mail] and it is read twice here.
-## `.please_remove_mail` refuses in front of the swap, because a message cannot
-## be taken off with the item that carries it; and `GivePartyItem` runs
-## `ComposeMailMessage` when the item being given is mail, which is a screen
-## rather than a transaction, so the caller writes it and hands the finished
-## [param mail] in.
+## `TryGiveItemToPartymon`, which the pack's GIVE and the party submenu's ITEM both
+## reach. [param swap] is the answer to `PokemonAskSwapItemText`: without it a
+## Pokemon already holding something is refused with nothing written, which is
+## where the source stops to ask. `ItemIsMail` is read twice here:
+## `.please_remove_mail` refuses in front of the swap, because a message cannot be
+## taken off with the item that carries it, and `GivePartyItem` runs
+## `ComposeMailMessage` when the item given is mail, which is a screen rather than
+## a transaction, so the caller writes it and hands the finished [param mail] in.
 static func give_to_party(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,

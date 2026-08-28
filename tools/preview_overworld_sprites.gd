@@ -1,22 +1,13 @@
 extends SceneTree
 
-## Draws every overworld sprite a cache holds as one contact sheet, so a human
-## can see at a glance whether the strip was read at the right offset and the
-## frames were composed the right way round.
-##
-## Each sprite is a four-by-four block: the four facings across, in
-## `Gen2WorldSprite`'s down/up/left/right order, and the four `Facings` frames
-## down. Frames 0 and 2 are the standing drawing and 1 and 3 the walking one, so
-## a correct walking sprite reads as two poses alternating down the block, with
-## the right column mirroring the left.
-##
-## A still sprite draws the same picture sixteen times, which is right. A big
-## object (`SPRITE_BIG_SNORLAX`, `SPRITE_BIG_ONIX`, the dolls) draws as a
-## scramble, which is a known gap: those use `FacingBigDollSymmetric` and
-## `..._Asymmetric`, sixteen and fourteen tiles in a 32x32 square, and
-## `Gen2WorldSprite.image_for()` only knows the four-tile layout.
-##
-##   Godot --headless --path . -s res://tools/preview_overworld_sprites.gd -- crystal /tmp/sprites.png
+## Draws every overworld sprite a cache holds as one contact sheet, so a human can
+## see at a glance whether the strip was read at the right offset and the frames
+## composed the right way round. Each sprite is a four-by-four block: the four
+## facings across and the four `Facings` frames down, so a correct walking sprite
+## reads as two poses alternating with the right column mirroring the left. A big
+## object draws as a scramble, which is a known gap:
+## [method Gen2WorldSprite.image_for] only knows the four-tile layout, not the
+## sixteen-tile 32x32 one.
 
 const CELL: int = 16
 const COLUMNS: int = 8

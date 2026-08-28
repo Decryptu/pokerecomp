@@ -2,24 +2,13 @@ class_name Gen2SecondScreen
 extends Control
 
 ## The lower display: one of the game's own pages, with a row of tabs under it.
-##
-## Every page here is the screen the START menu opens, built and drawn exactly
-## as the overworld builds it, and then never handed a button. That is what
-## "read only" means in this file: the pages are not copies with a viewer's
-## shortcuts taken out, they are the same nodes with no input routed to them, so
-## a page cannot drift from the one the player sees on the top screen and cannot
-## change anything either.
-##
-## The tab row is the one thing that takes a touch. It moves the cursor in
-## [Gen2SecondScreenTabs] and nothing else; which tabs exist at all is the START
-## menu's own gate, so a page appears on the frame the cartridge would have
-## offered it and not before.
-##
-## Everything is drawn inside a [SubViewport] the size of [member canvas_size],
-## in hardware pixels, because that is what a host has to hand a display: a
-## second panel is reached by a bitmap and a scale factor, and a canvas of a few
-## hundred pixels a side is a copy small enough to make sixty times a second
-## where the panel's own 1240x1080 is not.
+## Every page is the screen the START menu opens, built and drawn exactly as the
+## overworld builds it and then never handed a button, so a page cannot drift from
+## the one the player sees and cannot change anything either. The tab row is the
+## one thing that takes a touch, and which tabs exist is the START menu's own
+## gate. Everything is drawn inside a [SubViewport] the size of
+## [member canvas_size] in hardware pixels, because a second panel is reached by a
+## bitmap and a copy that size can be made sixty times a second.
 
 ## The page, which is the cartridge's own screen and never another size.
 const PAGE_SIZE := Vector2i(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
@@ -575,16 +564,11 @@ func _build_page() -> void:
 
 
 ## What the panel shows with no world on it: the launcher is up, or a game has
-## just been closed, and the game's own pages are not a thing that exists yet.
-##
-## Drawn in the launcher's own language rather than the cartridge's, because at
-## this point there may be no cartridge: the shelf is a list of bays and one of
-## them is empty. It is the shelf's own silhouette for a slot with nothing in it,
-## with the project's name under it, on the same field every launcher page has.
-##
-## Laid out in the panel's own pixels at a whole multiple of the launcher's
-## units, so the type is rasterised at the size it is shown rather than blown up
-## from a 206-pixel canvas.
+## just been closed. Drawn in the launcher's own language rather than the
+## cartridge's, because at this point there may be no cartridge: the shelf is a
+## list of bays and one of them is empty. Laid out in the panel's own pixels at a
+## whole multiple of the launcher's units, so the type is rasterised at the size
+## it is shown rather than blown up from a 206-pixel canvas.
 func _build_idle() -> Node:
 	var skin: Gen2LauncherTheme = Gen2LauncherTheme.active()
 	var units: int = idle_scale(panel_size)

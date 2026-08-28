@@ -2,15 +2,11 @@ extends SceneTree
 
 ## The real-cache check suite. Every topic runs all three cartridges against a
 ## freshly imported cache; expected values come from the pinned pokecrystal and
-## pokegold sources and are named in each topic's own file.
+## pokegold sources and are named in each topic's own file. A topic is a script
+## under `tools/checks/` with `func run(r) -> void`, found by its file name; add one
+## there rather than writing another entry point.
 ##
-##   Godot --headless --path . -s res://tools/validate.gd -- all
-##   Godot --headless --path . -s res://tools/validate.gd -- cut surf
-##   Godot --headless --path . -s res://tools/validate.gd -- field_moves
-##
-## A topic is a script under `tools/checks/` with `func run(r) -> void`, found by
-## its file name. Add one there rather than writing another entry point; nothing
-## here needs editing for it to be picked up.
+##   Godot --headless --path . -s res://tools/validate.gd -- all cut surf
 
 const CheckRun := preload("res://tools/lib/check_run.gd")
 const CHECKS: String = "res://tools/checks"

@@ -1,22 +1,13 @@
 extends RefCounted
 
-## Sweeps every cached map script on all three cartridges for the `special`
-## command and asserts that each index it reaches is one this project answers,
-## or one of the named routines it deliberately does not.
-##
-## The class this exists to stop is a dispatch gap rather than a wrong reading:
-## `Gen2WorldScriptRunner._execute_special` fails an index it does not name, and
-## `_run_command`'s own `_fail` then stops the script where it stands, so one
-## missing entry is a wall in front of every NPC that reaches it. Nothing else
-## in the suite sees that, because a test reaches the specials it was written
-## for and a story walk reaches the maps it was written for.
-##
-## `data/events/special_pointers.asm` is the corpus and the runner's own match
-## is the claim, so the difference is derived rather than kept by hand:
-## `EXPECTED_DEFERRED` names what is left, and a routine leaving that list is a
-## line deleted here rather than a number edited.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- specials
+## Sweeps every cached map script on all three cartridges for the `special` command
+## and asserts that each index it reaches is one this project answers, or one of the
+## named routines it deliberately does not. The class this exists to stop is a
+## dispatch gap rather than a wrong reading: an index the runner does not name stops
+## the script where it stands, so one missing entry is a wall in front of every NPC
+## that reaches it. `data/events/special_pointers.asm` is the corpus and the
+## runner's own match is the claim, so the difference is derived:
+## `EXPECTED_DEFERRED` names what is left.
 
 ## Every index the corpus reaches that this project answers with nothing, and
 ## the feature each belongs to. `Gen2WorldScriptRunner` is checked against this
@@ -43,16 +34,14 @@ const EXPECTED_DEFERRED: Dictionary = {
 	64: "FindPartyMonAboveLevel",
 }
 
-## Decoded `special` operands that name no `SpecialsPointers` entry. Pinned
-## rather than filtered, so a walker that starts overrunning a script again is
-## caught here: every one of these comes from a cached script pointer, and a
-## pointer only exists because some walk collected it.
-##
-## Crystal's one is the cartridge's own. BattleTowerElevator.asm's receptionist
-## is an `OBJECTTYPE_SCRIPT` object whose script word is
-## `MovementData_BattleTowerElevatorReceptionistWalksIn`, so the bytes behind it
-## are movement rather than commands; the object stands in a room the scene
-## script drives and is never talked to.
+## Decoded `special` operands that name no `SpecialsPointers` entry. Pinned rather
+## than filtered, so a walker that starts overrunning a script again is caught here:
+## every one of these comes from a cached script pointer, and a pointer only exists
+## because some walk collected it. Crystal's one is the cartridge's own.
+## BattleTowerElevator.asm's receptionist is an `OBJECTTYPE_SCRIPT` object whose
+## script word is a movement data label, so the bytes behind it are movement rather
+## than commands; the object stands in a room the scene script drives and is never
+## talked to.
 const EXPECTED_OUT_OF_TABLE: Dictionary = {&"crystal": 1, &"gold": 0, &"silver": 0}
 
 ## The five fades and what each of them costs, from `ConvertTimePals*HL`'s own

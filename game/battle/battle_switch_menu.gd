@@ -2,19 +2,13 @@ class_name Gen2BattleSwitchMenu
 extends RefCounted
 
 ## `PickSwitchMonInBattle` and `ForcePickSwitchMonInBattle`
-## (`engine/battle/core.asm`).
-##
-## Three callers, one list. `OfferSwitch`'s YES can be backed out of; Baton Pass
-## reaches `ForcePickPartyMonInBattle`, which cannot and answers a refusal with
-## `SFX_WRONG` and the list again; `ForcePlayerMonChoice` is that forced list one
-## wrapper lower, so it makes no `SwitchMonAlreadyOut` check, which costs nothing
-## because `CheckIfCurPartyMonIsFitToFight` refuses the fainted slot first. Both
-## wrap `PickPartyMonInBattle` and its two refusals.
-##
-## Scene-free: [Gen2PartyMenuPage] draws the rows and the battle screen owns the
-## presses. `SetUpBattlePartyMenu` goes through `InitPartyMenuWithCancel`, so
-## CANCEL is a row in both variants and the forced one refuses rather than drops
-## it.
+## (`engine/battle/core.asm`): three callers, one list. `OfferSwitch`'s YES can be
+## backed out of; Baton Pass reaches `ForcePickPartyMonInBattle`, which cannot and
+## answers a refusal with `SFX_WRONG` and the list again; `ForcePlayerMonChoice`
+## is that forced list one wrapper lower, so it makes no `SwitchMonAlreadyOut`
+## check. Scene-free: [Gen2PartyMenuPage] draws the rows and the battle screen
+## owns the presses, and CANCEL is a row in both variants because
+## `SetUpBattlePartyMenu` goes through `InitPartyMenuWithCancel`.
 
 ## `PartyMenu2DMenuData`'s `_2DMENU_WRAP_UP_DOWN`, its only movement flag.
 const WRAPS: bool = true

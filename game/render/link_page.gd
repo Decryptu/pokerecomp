@@ -1,20 +1,13 @@
 class_name Gen2LinkPage
 extends RefCounted
 
-## The two screens the cable club draws: `InitTradeMenuDisplay`'s trade screen
-## (`engine/link/link.asm`) and `ReadAndPrintLinkBattleRecord`'s record page
-## (`engine/battle/core.asm`).
-##
-## Both are drawn with `LinkTextboxAtHL` rather than `Textbox`, which is a border
-## of its own out of `LinkCommsBorderGFX` and not the frame the OPTION menu
-## chooses. The two cartridges lay that border out differently and this is the
-## one place that difference shows: Crystal loads seventy tiles at `vTiles2` and
-## `LoadCableTradeBorderTilemap` puts a whole screen of them down, while Gold
-## and Silver load nine at `$76` and `PlaceTradeScreenTextbox` draws two ordinary
-## boxes with them.
-##
-## Node-free, the way [Gen2DiplomaPage] is: it writes palette indices into a
-## buffer so a check can read a screen back headless.
+## The two screens the cable club draws: `InitTradeMenuDisplay`'s trade screen and
+## `ReadAndPrintLinkBattleRecord`'s record page. Both are drawn with
+## `LinkTextboxAtHL` rather than `Textbox`, which is a border of its own out of
+## `LinkCommsBorderGFX` and not the frame the OPTION menu chooses. The two
+## cartridges lay that border out differently and this is the one place it shows:
+## Crystal puts a whole screen of seventy tiles down, while Gold and Silver load
+## nine and draw two ordinary boxes. Node-free.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20
@@ -156,14 +149,13 @@ func has_screen_tilemap() -> bool:
 
 
 ## `InitTradeMenuDisplay` and everything `LinkTradeMenu` draws over it.
-##
 ## [param state] carries what is on screen rather than what the player may do:
-## `player`/`partner` are `{name, species}` with the species names already
-## resolved, `list` is 0 for the player's half and 1 for the partner's, `index`
-## the cursor row, `partner_choice` the row `LinkTradePlaceArrow` marks or -1,
-## `footer` -1 for no footer and 0 or 1 for STATS or TRADE, `cancel` whether the
-## cursor is on CANCEL, `message` the lines the bottom box prints, `confirm` the
-## TRADE/CANCEL row or -1, and `waiting` whether `WAITING..!` stands.
+## `player`/`partner` are `{name, species}` with the species names resolved,
+## `list` is 0 for the player's half and 1 for the partner's, `index` the cursor
+## row, `partner_choice` the row `LinkTradePlaceArrow` marks or -1, `footer` -1 or
+## 0/1 for STATS or TRADE, `cancel` whether the cursor is on CANCEL, `message` the
+## bottom box's lines, `confirm` the TRADE/CANCEL row or -1, and `waiting` whether
+## `WAITING..!` stands.
 func draw_trade(state: Dictionary) -> PackedByteArray:
 	var indices := PackedByteArray()
 	indices.resize(WIDTH * HEIGHT)

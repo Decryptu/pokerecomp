@@ -1,18 +1,13 @@
 class_name RomCache
 extends RefCounted
 
-## Where decoded cartridge data lives between runs.
-##
-## Under [code]user://[/code], never inside the project: cartridge-derived data
-## must not be committed or exported. This is the runtime half of the rule
-## .gitignore and the pre-commit hook enforce at build time.
-##
-## One directory per dump, named by game and hash, so two revisions never share a
-## cache and a re-import cannot half-overwrite the last one.
-##
-## Pixel data is raw colour indices rather than images: it is what the renderer
-## wants, with palettes applied per species and shiny state at draw time, and it
-## avoids a decode round-trip whose exactness would have to be trusted.
+## Where decoded cartridge data lives between runs: under `user://`, never inside
+## the project, which is the runtime half of the rule .gitignore and the
+## pre-commit hook enforce at build time. One directory per dump, named by game
+## and hash, so two revisions never share a cache and a re-import cannot
+## half-overwrite the last one. Pixel data is raw colour indices rather than
+## images, which is what the renderer wants and avoids a decode round-trip whose
+## exactness would have to be trusted.
 
 const ROOT: String = "user://rom_cache"
 const MANIFEST: String = "manifest.json"

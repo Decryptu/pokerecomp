@@ -1,33 +1,14 @@
 class_name Gen2WorldProgression
 extends RefCounted
 
-## Whether a proposed placement can still be finished, answered by the host.
+## Whether a proposed placement can still be finished, answered by the host: a mod
+## shuffling badges and key items can write a seed nobody can beat, and the gates
+## are the cartridge's. Walks the [Gen2WorldCatalog] as a dependency graph and
+## answers with the FIRST requirement that was never satisfiable.
 ##
-## A mod shuffling badges and key items can write a seed nobody can beat, and it
-## cannot tell on its own: the gates are the cartridge's. This walks the
-## [Gen2WorldCatalog] as a dependency graph and answers deterministically, with
-## the FIRST requirement that was never satisfiable so generation can retry
-## against a reason rather than a guess.
-##
-## What it proves is one thing, exactly: that nothing critical is locked behind
-## itself. Start with nothing in hand, take every check whose requirements are
-## met, take what those checks hand over, and repeat until no new check opens.
-## A placement passes when every critical check is inside that closure.
-##
-## What it does NOT model, and why:
-##
-## - Story EVENTS. `checkevent` guards are set by story scripts a placement does
-##   not move, so an event requirement is treated as satisfiable. A shuffle that
-##   only moves rewards cannot make one unreachable.
-##
-## - A site the catalog could not attribute to a MAP. It is taken as standing
-##   wherever the player already is, which can pass a seed a walk would not; the
-##   opposite would reject good ones.
-##
-## The gates it DOES model are the ones a placement can break: an item or badge a
-## check asks for, the badge an HM needs before its move works at all, and
-## whether the map a check stands on can be WALKED to with the field moves in
-## hand, which [Gen2WorldReachability] answers off the cartridge's own collision.
+## It proves one thing: nothing critical is locked behind itself. Story events
+## and a site with no attributed map are both taken as satisfiable, since a
+## shuffle that only moves rewards cannot make either unreachable.
 
 ## What a validation answers with when it fails: which check could not be
 ## reached, and the one requirement of it that never became satisfiable.
@@ -54,13 +35,9 @@ static func reset() -> void:
 
 ## Validates [param patches], a map of catalog check id to the fields a mod
 ## proposes for it, WITHOUT installing any of them: the rows are resolved through
-## an overlay of this call's own, so the shared one and the live game are
-## untouched and two validations of two seeds cannot see each other.
-##
-## Answers
-## [code]{ok, reached, critical, missing: {check, requirement, kind}}[/code].
-## Deterministic: every walk is over ids in sorted order, so one placement always
-## answers the same way.
+## an overlay of this call's own, so two validations of two seeds cannot see each
+## other. Answers `{ok, reached, critical, missing: {check, requirement, kind}}`.
+## Deterministic: every walk is over ids in sorted order.
 static func validate(data: GameData, patches: Dictionary = {}) -> Dictionary:
 	if data == null:
 		return {"ok": false, "reason": REASON_NO_CATALOG, "reached": 0, "critical": 0}

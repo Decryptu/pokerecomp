@@ -1,24 +1,13 @@
 class_name Gen2ToolPath
 extends RefCounted
 
-## Refuses an output path that would be written inside this project.
-##
-## A tool runs with `--path <this project>`, so the project is what a path
-## resolves against rather than the directory the command was run from. A bare
-## `out.png` lands in the checkout and the editor then makes an `.import` file
-## beside it. That is a hazard this project owns, since it is what `--path`
-## points at, and it belongs to anything run against it: the mod repository's own
-## twenty-five tools hit it too, which is why this is a `class_name` rather than
-## a copy per tool.
-##
-## The test is where the path ends up, not how it is spelt. `res://out.png` is
+## Refuses an output path that would be written inside this project. A tool runs
+## with `--path <this project>`, so a bare `out.png` lands in the checkout and the
+## editor then makes an `.import` file beside it. That hazard belongs to anything run
+## against this project, which is why this is a `class_name` rather than a copy per
+## tool. The test is where the path ends up, not how it is spelt: `res://out.png` is
 ## absolute to `is_absolute_path()` and lands in the project just as a bare name
-## does, so a guard written on prefixes lets through the one thing it exists to
-## stop. Globalizing answers the question directly and also catches an absolute
-## path that happens to point into the checkout.
-##
-## `user://` is allowed: it is the userdata directory, which is where a tool's
-## own scratch belongs and is not the project.
+## does, so globalizing answers the question directly. `user://` is allowed.
 
 
 ## True when [param path] is refused, having printed why. A tool quits on true.

@@ -2,21 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the TM/HM table and compatibility flags against freshly imported
-## real caches, for both command profiles.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## data/moves/tmhm_moves.asm's TMHMMoves, engine/items/items.asm's
-## GetTMHMNumber and GetNumberedTMHM, engine/items/tmhm2.asm's CanLearnTMHMMove
-## and engine/items/tmhm.asm's AskTeachTMHM and TeachTMHM. All are byte identical
-## between the pins apart from one stubbed trainer-ranking call, so nothing here
-## is profile split except the table's own length.
-##
-## The real-cartridge counterpart to tests/unit/test_world_tmhm.gd. The census is
-## what actually pins it: every species' learnable set is compared against the
-## table rather than spot checked, so a wrong flag bit order shows up at once.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- tmhm
+## Verifies the TM/HM table and compatibility flags against freshly imported real
+## caches, for both command profiles. Expected values come from the pinned sources:
+## `TMHMMoves`, `GetTMHMNumber`, `GetNumberedTMHM`, `CanLearnTMHMMove`,
+## `AskTeachTMHM` and `TeachTMHM`, all byte identical between the pins apart from
+## one stubbed trainer-ranking call. The real-cartridge counterpart to
+## tests/unit/test_world_tmhm.gd. The census is what actually pins it: every
+## species' learnable set is compared against the table rather than spot checked, so
+## a wrong flag bit order shows up at once.
 
 
 ## constants/item_constants.asm: fifty TMs and seven HMs in both games, plus

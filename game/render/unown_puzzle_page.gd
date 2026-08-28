@@ -2,30 +2,13 @@ class_name Gen2UnownPuzzlePage
 extends RefCounted
 
 ## `_UnownPuzzle`'s screen: the board tilemap and the two object sets over it.
-##
-## Node-free, so the whole board can be read back headless. The tile bank is
-## built once per opened puzzle and the render is one index buffer.
-##
-## Four things the source states and a reading gets wrong:
-##
-## - **A puzzle picture is doubled, not drawn.** `ConvertLoadedPuzzlePieces`
-##   enlarges the 6x6 strip into a 12x12 one by taking each nibble through
-##   `.EnlargedTiles`, which is a two-times nearest scale of the whole picture:
-##   destination tile `(2r + h, 2c + w)` is source tile `(r, c)`'s own quarter.
-##   The sixteen three-by-three pieces are cut from that grid, so piece n's
-##   corner tile is `((n - 1) / 4) * 36 + ((n - 1) % 4) * 3`, which is
-##   `GetCurrentPuzzlePieceVTileCorner.Corners`.
-## - **The borders are ORed onto the pieces, in bitplanes.**
-##   `UnownPuzzle_AddPuzzlePieceBorders` runs `or [hl]` over the 2bpp bytes,
-##   which is a bitwise OR of the colour index per pixel, and it reaches the
-##   eight tiles around each piece's own centre rather than the picture's edge.
-## - **The board is drawn in vTiles0 and so from tile $00.** `ld a, %10010011`
-##   into `rLCDC` is the unsigned tile base, which is why a piece tile number is
-##   a small one and START>CANCEL sits at the top of the bank.
-## - **The cursor is red because of a palette write, not a tile.**
-##   `_CGB_UnownPuzzle` copies PREDEFPAL_UNOWN_PUZZLE everywhere and then
-##   overwrites object colour 0 with `palred 31`; `DmgToCgbObjPal0 $24` maps
-##   colour 3 onto colour 0, so the cursor's own ink draws in it.
+## Node-free, so the whole board can be read back headless. Four things a reading
+## gets wrong: a puzzle picture is doubled rather than drawn, destination tile
+## `(2r + h, 2c + w)` being source tile `(r, c)`'s own quarter; the borders are
+## ORed onto the pieces in bitplanes, reaching the eight tiles around each piece's
+## centre; the board is drawn in vTiles0 and so from tile $00, `rLCDC`'s
+## `%10010011` being the unsigned tile base; and the cursor is red because
+## `_CGB_UnownPuzzle` overwrites object colour 0, not because of a tile.
 
 const TILE: int = Gen2Tiles.TILE_WIDTH
 const TILE_PIXELS: int = Gen2Tiles.TILE_PIXELS

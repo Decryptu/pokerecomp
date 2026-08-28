@@ -3,28 +3,13 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies the walk back from Fuchsia City to Vermilion, through Diglett's Cave
-## onto Route 2, and north to Pewter Gym, against freshly imported real caches
-## for both command profiles.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## data/maps/attributes.asm, maps/Route11.asm, maps/VermilionCity.asm,
-## maps/DiglettsCave.asm, maps/Route2.asm, maps/PewterCity.asm and
-## maps/PewterGym.asm.
-##
-## Three findings carry the leg. The way back to Vermilion is five plain
-## connections with one gate at the start, not the walk through Lavender and
-## Saffron the route came by, because Route 12 connects west onto Route 11 and
-## Route 11 declares no warps at all. The Route 11 crossing lands inside the
-## eight-cell pocket the Snorlax's own two-by-two body seals off Vermilion's
-## east edge, which is why SnorlaxAwake lists five proximity coordinates rather
-## than the two the port side can stand on. And Diglett's Cave is three
-## disjoint regions joined by two ladders, so it is crossed by warps rather than
-## walked.
-##
-## The Snorlax chain itself, the Route 2 cut and their counts belong to
-## tools/checks/radio.gd and are not repeated here.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- pewter
+## onto Route 2, and north to Pewter Gym, for both command profiles. Three findings
+## carry the leg. The way back is five plain connections with one gate at the
+## start, not the walk through Lavender and Saffron the route came by, because
+## Route 12 connects west onto Route 11 and Route 11 declares no warps at all. The
+## Route 11 crossing lands inside the pocket the Snorlax's two-by-two body seals
+## off Vermilion's east edge. And Diglett's Cave is three disjoint regions joined by
+## two ladders, so it is crossed by warps rather than walked.
 
 
 ## constants/map_constants.asm. Only Diglett's Cave splits between the profiles.

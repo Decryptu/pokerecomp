@@ -3,13 +3,9 @@ extends Control
 
 ## `engine/menus/intro_menu.asm`'s `NewGame`, less the title screen that reaches
 ## it: `PlayerProfileSetup`'s gender question, then `OakSpeech`, then the world.
-##
-## It is its own screen rather than a state of the overworld because that is
-## where the cartridge puts it: `NewGame` reaches `InitializeWorld` only after
-## both have returned, so there is no world to be a state of yet.
-##
-## Nothing is written to disk until the run is over. The launcher stages a slot
-## and a label on [GameRuntime], this adds the trainer name and the gender, and
+## Its own screen rather than a state of the overworld because that is where the
+## cartridge puts it: `NewGame` reaches `InitializeWorld` only after both have
+## returned. Nothing is written to disk until the run is over, so
 ## `Gen2SaveStore.create_new_game` is called once, at the end. That is also why
 ## `Gen2SaveValidator`'s rule that a save has a trainer needs no exception: the
 ## save does not exist until there is one.

@@ -1,16 +1,13 @@
 class_name Gen2WorldTMHM
 extends RefCounted
 
-## Scene-free tables and gates for teaching a TM or HM
-## (engine/items/tmhm.asm, engine/items/tmhm2.asm).
-##
-## The TM/HM pocket does not reach `UseItem`'s jumptable at all: its own USE
-## entry runs AskTeachTMHM, then ChooseMonToLearnTMHM, then TeachTMHM
-## (engine/items/pack.asm's .UseItem). This class owns the first and the checks
-## the third makes; Gen2WorldPartyHost.teach_tm_hm() owns the transaction.
-##
-## Everything here is byte identical between the pins. pokegold's TeachTMHM
-## differs by one line, a stubbed trainer-ranking call that does nothing.
+## Scene-free tables and gates for teaching a TM or HM (engine/items/tmhm.asm).
+## The TM/HM pocket does not reach `UseItem`'s jumptable at all: its own USE entry
+## runs AskTeachTMHM, then ChooseMonToLearnTMHM, then TeachTMHM. This class owns
+## the first and the checks the third makes;
+## [method Gen2WorldPartyHost.teach_tm_hm] owns the transaction. Everything here is
+## byte identical between the pins, pokegold's TeachTMHM differing by one line, a
+## stubbed trainer-ranking call that does nothing.
 
 ## constants/item_constants.asm. The run from TM01 to HM07 is not contiguous:
 ## ITEM_C3 and ITEM_DC sit inside it as dummies, which is why the number a TM

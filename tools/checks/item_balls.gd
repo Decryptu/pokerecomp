@@ -3,22 +3,13 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies `OBJECTTYPE_ITEMBALL` and `BGEVENT_ITEM` dispatch against freshly
-## imported real caches, for both command profiles.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## `engine/overworld/events.asm`'s `ObjectEventTypeArray.itemball` and
-## `.itemifset`, `engine/events/misc_scripts.asm`'s `FindItemInBallScript`,
-## `engine/events/hidden_item.asm`'s `HiddenItemScript`, and the `itemball` and
-## `hiddenitem` macros in `macros/scripts/maps.asm`.
-##
-## The point of pinning both is that neither pointer is a script. A ball's
-## addresses `db item, quantity` and a hidden item's `dwb event, item`, and
-## before these dispatches existed `interact()` handed those bytes to the runner
-## as opcodes. Two of them matter most: Ice Path 1F's HM07, since nothing else in
-## either game gives Waterfall, and Cerulean Gym's MACHINE_PART, since nothing
-## else opens the Power Plant and with it the Cascade Badge.
-##
-##   Godot --headless -s res://tools/checks/item_balls.gd
+## imported real caches, for both command profiles. The point of pinning both is
+## that neither pointer is a script: a ball's addresses `db item, quantity` and a
+## hidden item's `dwb event, item`, and before these dispatches existed
+## `interact()` handed those bytes to the runner as opcodes. Two of them matter
+## most: Ice Path 1F's HM07, since nothing else in either game gives Waterfall, and
+## Cerulean Gym's MACHINE_PART, since nothing else opens the Power Plant and with
+## it the Cascade Badge.
 
 
 ## data/maps/maps.asm group/number pairs. Crystal's own extra maps push both
@@ -83,9 +74,8 @@ const HIDDEN_ITEMS: Array[Dictionary] = [
 ## `data/items/fruit_trees.asm`'s whole `FruitTreeItems`, in `FRUITTREE_*` order
 ## and byte identical between the two pins, named as `data/items/names.asm` names
 ## them. `GetFruitTreeItem` indexes this at the `fruittree` operand less one.
-##
-## Pinned by name rather than by number because the question a player asks about
-## a tree is what the bag then says: `BERRY` really is what four Johto trees and
+## Pinned by name rather than by number because the question a player asks about a
+## tree is what the bag then says: `BERRY` really is what four Johto trees and
 ## Route 11 bear, Oran and Sitrus being a Gen 3 renaming, and the table has no
 ## terminator and no pointer, so nothing but its contents says it decoded at the
 ## right offset.
@@ -291,22 +281,14 @@ func _verify_hidden_items(data: GameData, game_id: StringName) -> void:
 		)
 
 
-## `Gen2WorldAPI.hidden_items()` over EVERY map of the cartridge, which is the
-## only thing that can say the public read agrees with the dispatch the two
-## cases above drive one map at a time.
-##
-## What it proves, over every record rather than the two driven above: each one
-## decodes on a fresh state, none of them reads as already taken, and the read
-## and the ask agree on the item and the flag for every one of them.
-##
-## What it does NOT prove, and the reason is worth keeping so it is not chased
-## again: `_hidden_item_record` addresses the gameplay catalog's patch by
-## `event_index`, and on an unpatched cache `_catalogued_item` falls back to the
-## record's own byte, so a wrong index is inert over the whole corpus. It bites
-## only where a mod has moved what is in a hidden item, and the read is stamped
-## by `events_at()`'s own rule rather than by a second copy of it for that
-## reason. Maps carrying more than one record are counted below because that is
-## the population such a patch would be visible on.
+## `Gen2WorldAPI.hidden_items()` over EVERY map of the cartridge, which is the only
+## thing that can say the public read agrees with the dispatch the two cases above
+## drive one map at a time: each record decodes on a fresh state, none reads as
+## already taken, and the read and the ask agree on the item and the flag. What it
+## does NOT prove, kept so it is not chased again: `_hidden_item_record` addresses
+## the catalog's patch by `event_index` and falls back to the record's own byte, so
+## a wrong index is inert over the whole corpus and bites only where a mod has moved
+## what is in a hidden item.
 func _sweep_the_public_read(data: GameData, game_id: StringName) -> void:
 	var maps: int = 0
 	var records: int = 0

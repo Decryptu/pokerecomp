@@ -3,16 +3,13 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies Bill's PC's own graphics and its screen against freshly imported real
-## caches, over every species rather than a sampled one.
-##
-## Expected values come from `engine/pokemon/bills_pc.asm`: `BillsPC_InitGFX`'s
-## two runs, `_CGB_BillsPC`'s palettes, `BillsPC_RefreshTextboxes`' listing and
-## `PCMonInfo`'s left column. The sweep is over species because that column is
-## the one thing on the screen whose width is not fixed: a pic wider than its
-## seven-tile cell, or a name wider than the two boxes `ClearBox` leaves for it,
-## would overrun the listing, and no one-species screenshot says so.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- pc
+## caches, over every species rather than a sampled one. Expected values come from
+## `engine/pokemon/bills_pc.asm`: `BillsPC_InitGFX`'s two runs, `_CGB_BillsPC`'s
+## palettes, `BillsPC_RefreshTextboxes`' listing and `PCMonInfo`'s left column. The
+## sweep is over species because that column is the one thing on the screen whose
+## width is not fixed: a pic wider than its seven-tile cell, or a name wider than
+## the two boxes `ClearBox` leaves for it, would overrun the listing, and no
+## one-species screenshot says so.
 
 ## `BillsPCOrangePalette`, `gfx/pc/orange.pal`, which is the same four colours in
 ## all three dumps.

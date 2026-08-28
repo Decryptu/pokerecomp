@@ -2,27 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies why the walked route stops on Route 27, against freshly imported
-## real caches, for both command profiles.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## `maps/Route27.asm`, `maps/TohjoFalls.asm` and
-## `engine/overworld/player_movement.asm`. `TohjoFalls.blk` is byte identical
-## between the pins; `Route27.blk` is not, so its land census is profile split
-## while every water figure happens to match.
-##
-## Two halves. The first is geometry, and it is why this leg waited on
-## Waterfall: Route 27's landfall region reaches no map edge; the only crossing
-## of the channel east of it starts in a pocket that can only be left through
-## Tohjo Falls; and the cave's two lower channels reach each other only over
-## `COLL_WATERFALL` cells, which `.CheckTile` will only ever step a player down.
-##
-## The second is the way through, now that there is one. With the Rising Badge
-## the climb at the foot of the west column reaches the pool in a single
-## commit, and the east column is ridden back down by the same forced-tile rule
-## that made it a wall in the first place.
-##
-##   Godot --headless -s res://tools/checks/route_27.gd
+## Verifies why the walked route stops on Route 27, for both command profiles.
+## `TohjoFalls.blk` is byte identical between the pins; `Route27.blk` is not, so its
+## land census is profile split. Two halves. The first is geometry, and it is why
+## this leg waited on Waterfall: Route 27's landfall region reaches no map edge, the
+## only crossing east of it starts in a pocket that can only be left through Tohjo
+## Falls, and the cave's two lower channels reach each other only over
+## `COLL_WATERFALL` cells. The second is the way through: with the Rising Badge the
+## climb reaches the pool in a single commit.
 
 
 ## data/maps/maps.asm group/number pairs. Route 27 sits at the same pair in both

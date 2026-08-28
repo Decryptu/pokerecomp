@@ -1,24 +1,14 @@
 class_name Gen2InputActions
 extends RefCounted
 
-## What a device has to do to produce a [Gen2Button], as data.
-##
-## A binding is a plain dictionary so the whole control scheme survives a trip
-## through the options file, and so the remap UI can describe one without
-## holding an [InputEvent]. Three kinds cover every device the engine reports:
-##
-## [codeblock]
-## {"kind": "key",        "code": <physical keycode>}
-## {"kind": "pad_button", "code": <JoyButton>}
-## {"kind": "pad_axis",   "code": <JoyAxis>, "sign": -1 or 1}
-## [/codeblock]
-##
-## Keys bind by physical keycode, so the d-pad keeps the WASD positions on a
-## layout that does not spell WASD there. [method describe] asks the platform
-## what the key in that position is actually labelled.
-##
-## Nothing here reads or writes the options file: [Gen2OptionsStore] owns that,
-## and the runtime hands the result to [method install].
+## What a device has to do to produce a [Gen2Button], as data: a plain dictionary,
+## so the whole control scheme survives a trip through the options file and the
+## remap UI can describe one without holding an [InputEvent]. Three kinds cover
+## every device the engine reports, `key`, `pad_button` and `pad_axis`, each with
+## a `code` and the axis one a `sign`. Keys bind by physical keycode, so the d-pad
+## keeps the WASD positions on a layout that does not spell WASD there, and
+## [method describe] asks the platform what that key is labelled. Nothing here
+## reads or writes the options file.
 
 const KIND_KEY: StringName = &"key"
 const KIND_PAD_BUTTON: StringName = &"pad_button"
@@ -379,17 +369,13 @@ static func button_bound_to(scheme: Dictionary, binding: Dictionary) -> int:
 	return found[0] if not found.is_empty() else Gen2Button.NONE
 
 
-## A mod's own actions, installed beside the eight.
-##
-## Same three binding kinds, same deadzone, same physical keycodes: an action a
-## mod declares is bound, rebound and described by the code that does it for the
-## cartridge's own buttons, and reaches the mod as an id rather than as an
-## [InputEvent]. See [method Gen2ModHost.register_action].
-##
-## [param actions] is `[{name, default}]` and [param stored] is the player's
-## overrides keyed by the same names. Actions installed by an earlier call and
-## absent from this one are erased, so a mod switched off does not leave a live
-## action behind.
+## A mod's own actions, installed beside the eight. Same three binding kinds, same
+## deadzone, same physical keycodes: an action a mod declares is bound, rebound
+## and described by the code that does it for the cartridge's own buttons, and
+## reaches the mod as an id rather than as an [InputEvent]. [param actions] is
+## `[{name, default}]` and [param stored] the player's overrides; actions
+## installed by an earlier call and absent from this one are erased, so a mod
+## switched off does not leave a live action behind.
 static func install_mod_actions(actions: Array, stored: Dictionary) -> void:
 	var wanted: Dictionary = {}
 	for action: Dictionary in actions:

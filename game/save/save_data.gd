@@ -262,22 +262,14 @@ static func from_dict(raw: Variant) -> Gen2SaveData:
 	return out
 
 
-## Converts an older project save shape into the current schema, one version
-## step at a time so a version 1 file reaches the current one through every
-## step rather than skipping to it. Each step adds only what its version
-## lacked; a missing world snapshot stays missing throughout.
-##
-## Version 1 had no PC-box field. Version 2 had no slot label. Version 3 had no
-## player trainer ID; it migrates to zero rather than being invented, since a
-## rolled ID would silently change the headbutt encounters of an existing save.
-## Version 4 had neither gender nor a play timer; both migrate to the value a
-## new game starts with, male and 0:00, since neither can be recovered.
-## Version 5 had no per-mod namespace.
-##
-## The `run` block joined version 6 after it shipped and is not a version of its
-## own: it defaults to no seed, mod list, mod-option snapshot or rules, which is
-## the truth about a slot written before it existed rather than a value worth
-## inventing.
+## Converts an older project save shape into the current schema, one version step
+## at a time so a version 1 file reaches the current one through every step. Each
+## step adds only what its version lacked. Version 1 had no PC-box field, 2 no
+## slot label, 3 no player trainer ID (which migrates to zero rather than being
+## invented, since a rolled ID would change an existing save's headbutt
+## encounters), 4 neither gender nor a play timer, and 5 no per-mod namespace. The
+## `run` block joined version 6 after it shipped and is not a version of its own:
+## it defaults to nothing, which is the truth about a slot written before it.
 static func migrate_dict(raw: Variant) -> Dictionary:
 	if not raw is Dictionary:
 		return {"ok": false, "message": "save data is not an object"}

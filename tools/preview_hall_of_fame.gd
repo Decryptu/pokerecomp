@@ -1,17 +1,13 @@
 extends SceneTree
 
 ## Captures the production Hall of Fame overlay against a real imported cache,
-## which is what makes it worth looking at: the panel draws a real front pic,
-## the real font and the real text-box frame.
+## which is what makes it worth looking at: the panel draws a real front pic, the
+## real font and the real text-box frame.
 ##
 ##   Godot --path . -s res://tools/preview_hall_of_fame.gd -- crystal /tmp/hof.png [page]
 ##
-## A fourth argument of `shiny` makes the lead shiny, which is the one thing
-## about the panel a check cannot read off the buffer.
-##
-## [page] is how many times to advance before the capture, so 0 is the first
-## party member and the last pages are the player's own panel with each box
-## `ProfOaksPCRating` prints into it.
+## A fourth argument of `shiny` makes the lead shiny. [page] is how many times to
+## advance, so 0 is the first party member and the last pages are the player's own.
 
 const WINDOW_SIZE := Vector2i(1152, 648)
 ## Enough frames for the scene to lay out and the overlay to draw once.

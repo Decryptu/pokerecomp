@@ -2,15 +2,11 @@ class_name Gen2MoveDeleterScreen
 extends Control
 
 ## `MoveDeletion` (`engine/events/move_deleter.asm`) on the overworld's own pump.
-##
 ## The same shape as [Gen2NameRaterScreen] and for the same reason: the routine
-## owns its boxes, its two `YesNoBox`es and the two screens it opens, and the
-## map script's own `waitbutton` is what dismisses the text `PrintText` left
-## standing, so the ending is handed back rather than pressed here.
-##
-## `ChooseMoveToDelete` is `MoveScreenLoop`'s own screen with
-## `DeleteMoveScreen2DMenuData` in front of it, so the list is [Gen2MoveScreen]
-## in its deletion mode and the picture is [Gen2MoveScreenPage].
+## owns its boxes, its two `YesNoBox`es and the two screens it opens, and the map
+## script's own `waitbutton` is what dismisses the text `PrintText` left standing,
+## so the ending is handed back rather than pressed here. `ChooseMoveToDelete` is
+## `MoveScreenLoop`'s own screen with `DeleteMoveScreen2DMenuData` in front of it.
 
 signal finished(party_index: int, move_index: int, ending_text: String)
 signal closed()

@@ -1,21 +1,13 @@
 class_name Gen2UnownPuzzleScreen
 extends Control
 
-## `_UnownPuzzle`'s own loop, on the overworld's pump.
-##
-## [Gen2UnownPuzzle] owns the rules and [Gen2UnownPuzzlePage] the picture; this
-## is `.loop`: one pass a frame, `JoyTextDelay`'s repeat carried by the board,
-## and the exit `JUMPTABLE_EXIT_F` sets.
-##
-## Two things the loop states that a screen would otherwise get wrong:
-##
-## - **A press is answered where it lands as well as on the frame.** The host is
-##   press-only, so a tap between two frames would be lost; the pass runs on the
-##   press and the frame's own pass is skipped, which keeps one pass a frame.
-## - **`UnownPuzzle_A` ends on `WaitSFX` and nothing is read until it returns.**
-##   The wait is the driver's, not a frame count, so the screen holds while the
-##   player it was handed reports an effect. A screen with no player waits
-##   nothing, which is what a headless driver and every test see.
+## `_UnownPuzzle`'s own loop, on the overworld's pump. [Gen2UnownPuzzle] owns the
+## rules and [Gen2UnownPuzzlePage] the picture; this is `.loop`, one pass a frame,
+## with `JoyTextDelay`'s repeat carried by the board. Two things a screen would
+## otherwise get wrong: a press is answered where it lands as well as on the frame,
+## the pass running on the press and the frame's own pass being skipped; and
+## `UnownPuzzle_A` ends on `WaitSFX`, which is the driver's rather than a frame
+## count, so a screen with no player waits nothing.
 
 signal closed(solved: bool)
 signal sfx_requested(index: int, waited: bool)

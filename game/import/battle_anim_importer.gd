@@ -1,29 +1,14 @@
 class_name Gen2BattleAnimImporter
 extends RefCounted
 
-## Imports the battle animation data layer: `BattleAnimations`
-## (data/moves/animations.asm) and the four tables in data/battle_anims that the
-## objects it spawns are built from.
+## Imports the battle animation data layer: `BattleAnimations` and the four tables
+## in data/battle_anims the objects it spawns are built from. Each is a pointer
+## table immediately followed by its data with every pointer bank-local, so each
+## is cached as a whole region and a cached address resolves by subtraction.
 ##
-## Each of the five is a pointer table immediately followed by the data it points
-## at, and every pointer inside one is bank-local, so each is cached as a whole
-## region rather than entry by entry: the bytes stay the cartridge's own and a
-## cached address resolves by subtraction. Nothing is rewritten on the way in.
-##
-## The three regions in bank $33 are contiguous and do not overlap: the frameset
-## streams end where `BattleAnimOAMData` begins and its sprite data ends where
-## `AnimObjGFX` begins. Each region is still measured from its own table's
-## pointers rather than from its neighbour, so a profile that moved one would
-## still import.
-##
-## Validation walks what it stores. Every script is run to a top-level
-## `anim_ret`, every frameset stream to its terminator and every table index is
-## range-checked before anything is written, which is what makes a wrong offset
-## a refused import rather than a screen full of noise.
-##
-## The object graphics are the exception: they are LZ streams reached by far
-## pointer, so they are decoded into tile strips the way the pics and the trainer
-## card's sheets are.
+## Validation walks what it stores, which is what makes a wrong offset a refused
+## import rather than a screen full of noise. The object graphics are the
+## exception: LZ streams reached by far pointer, decoded into tile strips.
 
 ## `BattleAnim_Pound` whole, the anchor the script table was located from. Held
 ## here rather than in [RomLayout] because it is a check, not an offset: the
