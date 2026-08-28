@@ -18,6 +18,7 @@ extends SceneTree
 const KIND_HELP: Dictionary = {
 	&"effects": "cell: the emote, boulder dust, grass rustle and headbutt tree over the first visible object",
 	&"battle": "cell: the wild fight preview_battle_request starts, settled past its transition",
+	&"catch_tutorial": "frames: the Dude's own fight, which answers itself, that many frames in",
 	&"cut": "cell: OWCutAnimation's two halves and the jump shadow",
 	&"tile_anim": "frames: the map that many AnimateTileset frames in",
 	&"unown_wall": "cell: DisplayUnownWords' box. Group 3 maps 23 to 26 say HO-OH, ESCAPE, WATER, LIGHT",
@@ -303,6 +304,7 @@ func _settle_mon_special(host_property: String) -> void:
 const SELF_DRIVEN_KINDS: Array[StringName] = [
 	&"warp", &"door", &"map_name_sign", &"ledge", &"heal_machine",
 	&"battle", &"battle_transition", &"level_evolution", &"egg_hatch",
+	&"catch_tutorial",
 	&"name_rater", &"move_deleter", &"move_tutor", &"day_care",
 	&"ice_slide", &"whiteout", &"view_cover", &"gift_nickname",
 	&"catch_nickname", &"mom_bank", &"bills_pc", &"players_pc",
@@ -317,6 +319,7 @@ const SELF_DRIVEN_KINDS: Array[StringName] = [
 const STAGERS: Dictionary = {
 	&"unown_wall": &"_stage_unown_wall",
 	&"battle": &"_stage_battle",
+	&"catch_tutorial": &"_stage_catch_tutorial",
 	&"battle_transition": &"_stage_battle_transition",
 	&"script_fade": &"_stage_script_fade",
 	&"level_evolution": &"_stage_level_evolution",
@@ -433,6 +436,14 @@ func _stage_battle() -> void:
 	_screen.preview_battle_request()
 	_screen.settle_battle_transition()
 	_screen.advance_frames(STAGED_FRAMES)
+
+
+## `CatchTutorial`, played by `DudeAutoInputs` rather than by anybody. The first
+## number is how many frames in to photograph: nothing here presses anything.
+func _stage_catch_tutorial() -> void:
+	_screen.preview_catch_tutorial()
+	_screen.settle_battle_transition()
+	_screen.advance_frames(maxi(_cell.x, STAGED_FRAMES))
 
 
 ## `DoBattleTransition` over the map it runs on. The first of the two numbers is how

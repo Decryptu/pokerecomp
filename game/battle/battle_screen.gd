@@ -137,6 +137,36 @@ const SCREEN_FADED_TEXT: Dictionary = {
 	Gen2Screens.REFLECT: "%s's REFLECT faded!",
 }
 
+## `CatchTutorial.DudeTutorial`, which puts the player's name back afterwards.
+const DUDE_NAME: String = "DUDE"
+
+## `CatchTutorial.LoadDudeData`: one POTION, and five POKE BALLs because
+## `ld a, POKE_BALL` writes the quantity byte as well as the item byte.
+const DUDE_PACK: Array[int] = [
+	Gen2WorldPartyHost.ITEM_POTION, Gen2WorldPartyHost.ITEM_POKE_BALL,
+]
+const DUDE_PACK_QUANTITIES: Dictionary = {
+	Gen2WorldPartyHost.ITEM_POTION: 1,
+	Gen2WorldPartyHost.ITEM_POKE_BALL: Gen2WorldPartyHost.ITEM_POKE_BALL,
+}
+
+## `DudeAutoInputs`: a button and the byte after it, held for one poll more than
+## its own value, and a battle polls once a hardware frame. Measured through the
+## cartridge's own `GetJoypad`: RIGHT lands on frame 10, DOWN on 1021, A on 2042.
+const DUDE_AUTO_INPUT: Dictionary = {
+	&"text": [[Gen2Button.NONE, 0x50], [Gen2Button.A, 0x00]],
+	&"pack": [
+		[Gen2Button.NONE, 0x08], [Gen2Button.RIGHT, 0x00],
+		[Gen2Button.NONE, 0x08], [Gen2Button.A, 0x00],
+	],
+	&"menu": [
+		[Gen2Button.NONE, 0xFE], [Gen2Button.NONE, 0xFE], [Gen2Button.NONE, 0xFE],
+		[Gen2Button.NONE, 0xFE], [Gen2Button.DOWN, 0x00],
+		[Gen2Button.NONE, 0xFE], [Gen2Button.NONE, 0xFE], [Gen2Button.NONE, 0xFE],
+		[Gen2Button.NONE, 0xFE], [Gen2Button.A, 0x00],
+	],
+}
+
 var _data: GameData = null
 var _injected_data: GameData = null
 ## Whatever the mod host supplies. Typed as Node because a registered renderer
@@ -252,6 +282,11 @@ var _held_message: String = ""
 ## that the run of frames it just finished owes a press rather than the next
 ## command; see [method _resume_after_frames].
 var _message_awaits_press: bool = false
+## `wAutoInputAddress`, `wAutoInputLength` and `wInputType`, in that order.
+var _auto_input: Array = []
+var _auto_input_index: int = 0
+var _auto_input_delay: int = 0
+var _auto_input_stage: StringName = &""
 ## The bars' and the intro's clock: see [method _process].
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 ## The same, for the party page's icons. Kept apart because they animate while
@@ -520,6 +555,7 @@ func _process(delta: float) -> void:
 		_frame_clock.reset()
 		return
 	for _frame: int in _frame_clock.tick(delta):
+		_tick_auto_input()
 		if frames_running():
 			advance_frame()
 		elif _box != null:
@@ -569,7 +605,6 @@ func _resume_after_frames(was_running: bool) -> void:
 	_continue_after_messages()
 
 
-## Whether a picture is still sinking off its square.
 func fainting() -> bool:
 	return not _faints.is_empty()
 
@@ -592,7 +627,6 @@ func advance_faint() -> bool:
 	return true
 
 
-## Whether a picture is still sliding off its square.
 func sliding() -> bool:
 	return not _slides.is_empty()
 
@@ -832,6 +866,59 @@ func world_battle_request() -> Dictionary:
 	return _world_battle_request.duplicate(true)
 
 
+func _start_auto_input(stream: Array) -> void:
+	_auto_input = stream
+	_auto_input_index = 0
+	_auto_input_delay = 0
+
+
+func _stop_auto_input() -> void:
+	_auto_input = []
+	_auto_input_index = 0
+	_auto_input_delay = 0
+	_auto_input_stage = &""
+
+
+## Which of `_DudeAutoInput_A`, `_RightA` and `_DownA` this poll installs, from
+## `.wait_input`'s box, `BattleMenu`'s loop and `TutorialPack`. The menu answers
+## first: its stream is installed after the line above it has printed.
+func _dude_auto_input_stage() -> StringName:
+	if _pack_selecting:
+		return &"pack"
+	if _menu_stage == &"main":
+		return &"menu"
+	## `.wait_input` is reached once the line above it has printed and nothing
+	## else is spending frames, which is exactly a box owing a press here.
+	if _box != null and _box.visible and not _box.is_revealing() \
+		and not frames_running():
+		return &"text"
+	return &""
+
+
+## `GetJoypad`'s `.auto` branch, one poll. The tutorial is the only stream here.
+func _tick_auto_input() -> void:
+	if not _world_battle_active or not _world_battle_tutorial:
+		return
+	var stage: StringName = _dude_auto_input_stage()
+	if stage != _auto_input_stage:
+		_auto_input_stage = stage
+		if stage == &"":
+			_auto_input = []
+		else:
+			_start_auto_input(DUDE_AUTO_INPUT[stage])
+	if _auto_input_index >= _auto_input.size():
+		return
+	if _auto_input_delay > 0:
+		_auto_input_delay -= 1
+		return
+	var entry: Array = _auto_input[_auto_input_index]
+	_auto_input_index += 1
+	_auto_input_delay = int(entry[1])
+	var button: int = int(entry[0])
+	if button != Gen2Button.NONE:
+		_handle_button(button)
+
+
 ## One button, from the funnel rather than from an [InputEvent]. Public so the
 ## world can forward what it consumed and a tool can drive a fight by hand.
 func press_button(button: int) -> bool:
@@ -846,6 +933,7 @@ func press_button(button: int) -> bool:
 ## replayed run reaches the same place at the same frame.
 func advance_hardware_frame() -> bool:
 	var moved: bool = false
+	_tick_auto_input()
 	## `PrintLetterDelay` is a frame count, and with nothing servicing the box's
 	## own `_process` a message would never finish revealing, so a press would
 	## complete the page forever and never acknowledge it.
@@ -877,7 +965,6 @@ func _selected_runtime_save() -> Gen2SaveData:
 	return Gen2GameRuntime.selected_save_or_null()
 
 
-## True once the cache had everything the renderer draws with.
 func is_ready() -> bool:
 	return _renderer_ready and _box != null
 
@@ -1090,33 +1177,22 @@ func start_world_battle(
 	_dex_received = false
 	_init_battle_display()
 	_play_battle_music()
-
+	## The Dude's bag, not the player's, which is why the world hands none.
 	if _world_battle_tutorial:
-		show_message("Gotcha! %s was caught!" % _name_of(_enemy))
-		call_deferred("_finish_world_catch_tutorial")
-	elif bool(prepared.get("trainer_battle", false)):
+		## `.DudeTutorial` forces TEXT_DELAY_MED over the player's own TEXT SPEED.
+		if _box != null:
+			_box.reveal_speed = 1.0 / (Gen2Options.FRAME_SECONDS * Gen2Options.TEXT_DELAY_MED)
+		_stop_auto_input()
+		set_battle_pack(DUDE_PACK, DUDE_PACK_QUANTITIES)
+		set_capture_balls(
+			[Gen2WorldPartyHost.ITEM_POKE_BALL], DUDE_PACK_QUANTITIES
+		)
+
+	if bool(prepared.get("trainer_battle", false)):
 		show_message("%s\nwants to battle!" % _enemy_battler_label())
 	else:
 		_announce()
 	return true
-
-
-func _finish_world_catch_tutorial() -> void:
-	if not _world_battle_active or not _world_battle_tutorial \
-		or _world_battle_completion_sent:
-		return
-	_world_battle_completion_sent = true
-	battle_finished.emit({
-		"ok": true,
-		"outcome": Gen2WorldBattleAdapter.OUTCOME_CAUGHT,
-		"request": _world_battle_request.duplicate(true),
-		"capture": {
-			"species": _enemy,
-			"ball": Gen2WorldPartyHost.ITEM_POKE_BALL,
-			"tutorial": true,
-			"persistent": false,
-		},
-	})
 
 
 ## Public screenshot driver for the overworld battle loss boundary. It starts a
@@ -1233,7 +1309,6 @@ func bars_animating() -> bool:
 	return not _bars.is_empty() or _exp_bar != null
 
 
-## Whether the two pics are still sliding into place.
 func intro_running() -> bool:
 	return _intro != null
 
@@ -1344,7 +1419,7 @@ func _build_entrance() -> void:
 	_entrance_stages = []
 	var text: String = _intro_message
 	_intro_message = ""
-	if _battle == null or _world_battle_tutorial:
+	if _battle == null:
 		if not text.is_empty():
 			show_message(text)
 		return
@@ -1503,7 +1578,6 @@ func _advance_entrance() -> bool:
 	return false
 
 
-## The state each named routine of the entrance leaves behind.
 func _apply_entrance_step(what: StringName) -> void:
 	match what:
 		ENTRANCE_START_HUDS:
@@ -1896,7 +1970,6 @@ func _apply_sub_pic_no_anim(index: int, param: int) -> void:
 	)
 
 
-## Which picture one battler's square is holding, and the view behind it.
 func _set_substitute_pic(side: int, raised: bool) -> void:
 	if bool(_substitute_pic.get(side, false)) == raised:
 		return
@@ -2563,7 +2636,6 @@ func set_world_context(context: Gen2BattleWorldContext) -> void:
 	_push_world_context()
 
 
-## What a renderer was handed, or null for a battle started outside the world.
 func world_context() -> Gen2BattleWorldContext:
 	return _world_context
 
@@ -2697,7 +2769,6 @@ func _show_pack_move_selection() -> void:
 	_reopen_menu_layer()
 
 
-## The move the Ether would go on, as [GameData] holds it.
 func _selected_pack_move() -> Dictionary:
 	if _data == null or _pack_move_slots.is_empty():
 		return {}
@@ -3066,8 +3137,10 @@ func _open_capture_nickname() -> bool:
 		return true
 	if _capture_nickname_asked or _data == null or _screen == null:
 		return false
+	## `.FinishTutorial` and `.catch_bug_contest_mon` both return in front of
+	## `AskGiveNicknameText`: neither catch is kept.
 	if not bool(_capture_result.get("caught", false)) \
-		or bool(_capture_result.get("contest", false)):
+		or bool(_capture_result.get("contest", false)) or _world_battle_tutorial:
 		return false
 	var species_name: String = _name_of(_enemy)
 	if species_name.is_empty():
@@ -3558,8 +3631,6 @@ func _continue_after_messages() -> void:
 		return
 	if _a_list_owns_the_joypad():
 		return
-	if _world_battle_tutorial:
-		return
 	if not _capture_messages.is_empty():
 		_show_next_capture_message()
 		return
@@ -4013,7 +4084,6 @@ func _open_move_menu() -> void:
 	_reopen_menu_layer()
 
 
-## What a press does while one of the two menus is up.
 func _answer_menu(button: int) -> void:
 	match _menu_stage:
 		&"main":
@@ -4207,7 +4277,6 @@ func _close_switch() -> void:
 	_reopen_menu_layer()
 
 
-## What a press does while either menu is up.
 func _answer_switch(button: int) -> void:
 	match _switch_stage:
 		&"offer":
@@ -4407,7 +4476,6 @@ func _resolve_switch(answer: Dictionary) -> void:
 			_show_switch_refusal(String(answer.get("text", "")))
 
 
-## The chosen row, which finishes whichever question the list was opened for.
 func _commit_switch(index: int) -> void:
 	var reason: StringName = _switch_reason
 	_close_switch()
@@ -4464,6 +4532,8 @@ func _enemy_label() -> String:
 ## `NewGame`'s own default stands in rather than a blank in the middle of a
 ## sentence.
 func _player_label() -> String:
+	if _world_battle_tutorial:
+		return DUDE_NAME
 	if _source_save != null and not _source_save.player_name.is_empty():
 		return _source_save.player_name
 	return Gen2OakSpeech.DEFAULT_MALE
@@ -5685,7 +5755,13 @@ func _handle_button(button: int) -> bool:
 			Gen2Button.LEFT, Gen2Button.UP:
 				select_pack_row(_pack_index - 1)
 			Gen2Button.A:
-				_open_pack_action(&"pack")
+				## `BattleMenu_Pack.tutorial` discards what `TutorialPack` answered
+				## and throws a POKE BALL anyway, so there is no USE submenu.
+				if _world_battle_tutorial:
+					_pack_selecting = false
+					_throw_ball(Gen2WorldPartyHost.ITEM_POKE_BALL, &"pack")
+				else:
+					_open_pack_action(&"pack")
 			Gen2Button.B:
 				close_battle_pack()
 			_:
@@ -5863,7 +5939,6 @@ func _on_view_changed(_id: StringName) -> void:
 	_screen.play_view_cover(_build_renderer)
 
 
-## Selects the view after the current one, wrapping.
 func cycle_view() -> Dictionary:
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	var ids: Array[StringName] = host.view_ids()
@@ -5881,7 +5956,6 @@ func _battle_kind() -> StringName:
 	return &"trainer" if _enemy_trainer_class > 0 else &"wild"
 
 
-## The trainer's own name from the imported party record, not the class name.
 func _enemy_trainer_name() -> String:
 	if _enemy_trainer_class <= 0 or _data == null:
 		return ""

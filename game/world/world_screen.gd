@@ -359,7 +359,6 @@ func _show_load_failure(reason: String, detail: String) -> void:
 	_hint.visible = true
 
 
-## The debug caption, with whatever frame-rate reading is current appended.
 func _set_caption(text: String) -> void:
 	_caption_text = text
 	_caption.text = _caption_text + _rate_text
@@ -1427,7 +1426,6 @@ func _apply_text_box_options() -> void:
 	_text_box.reveal_speed = options.text_reveal_speed()
 
 
-## The A press that clears whatever a running script is waiting on.
 func _advance_script_pause() -> void:
 	## Except a frame wait, which nothing but frames ends: the source is inside
 	## WaitScriptMovement or a DelayFrames loop and reads no input there.
@@ -1570,7 +1568,6 @@ func _renderer_input_free() -> bool:
 		and not _world.script_input_waiting()
 
 
-## Public driver for screenshot tooling and scene tests.
 func move_player(direction: Vector2i) -> bool:
 	if _world == null or _overlay_open() or _world.fishing_busy() \
 		or _field_move_text or not _oak_pc_pages.is_empty() \
@@ -2673,7 +2670,6 @@ func map_fade() -> Dictionary:
 	return _map_fade.duplicate()
 
 
-## The same for one of the five fade specials, empty on every other frame.
 func script_fade() -> Dictionary:
 	return _script_fade.duplicate()
 
@@ -2765,7 +2761,6 @@ func _start_script_fade(event: Dictionary) -> void:
 	_apply_script_fade_step()
 
 
-## One frame of it, and the row the last step leaves behind.
 func _advance_script_fade() -> void:
 	if _script_fade.is_empty():
 		return
@@ -2860,7 +2855,6 @@ func _party_holds_cleanse_tag() -> bool:
 	return false
 
 
-## Public driver for the production NPC/object interaction path.
 func interact() -> bool:
 	if _world == null or _overlay_open() \
 		or _field_move_text or not _oak_pc_pages.is_empty() \
@@ -4330,6 +4324,19 @@ func preview_meet_visible_encounter(cell: Vector2i) -> bool:
 ## Public screenshot driver for the real wild capture bridge. It adds one
 ## development Master Ball, starts an imported wild encounter, and leaves the
 ## production battle overlay on its throw message.
+## `CatchTutorial`: the Dude's own fight, which answers itself. `Route29Tutorial1`
+## loads the same `loadwildmon RATTATA, 5` in front of it.
+func preview_catch_tutorial() -> void:
+	_start_battle_request({
+		"kind": &"catch_tutorial_requested",
+		"values": {
+			"kind": &"wild", "pokemon": 19, "level": 5,
+			"battle_type": Gen2Battle.BATTLETYPE_TUTORIAL,
+			"tutorial": true, "can_lose": false,
+		},
+	})
+
+
 func preview_capture() -> void:
 	if _world == null:
 		return
@@ -4472,7 +4479,6 @@ func preview_fishing() -> void:
 	start_fishing(true)
 
 
-## Public screenshot driver for the complete fishing-to-battle host path.
 func preview_fishing_battle() -> void:
 	if _world == null:
 		return
@@ -4642,7 +4648,6 @@ func battle_transition_running() -> bool:
 	return _battle_transition != null
 
 
-## One frame of it, and the battle behind it when the last one has been spent.
 func _advance_battle_transition() -> void:
 	if _battle_transition == null:
 		return
@@ -4735,10 +4740,9 @@ func _open_battle_host(request: Dictionary) -> void:
 	add_child(host)
 	host.battle_finished.connect(_on_battle_finished)
 	host.enemy_seen.connect(_on_enemy_seen)
-	if not tutorial:
-		host.capture_requested.connect(_on_capture_requested)
-		host.dex_entry_requested.connect(_on_battle_dex_entry_requested)
-		host.item_used.connect(_on_battle_item_used)
+	host.capture_requested.connect(_on_capture_requested)
+	host.dex_entry_requested.connect(_on_battle_dex_entry_requested)
+	host.item_used.connect(_on_battle_item_used)
 	_battle_host = host
 	## Started after the connections and here rather than left to the host's own
 	## deferred call: `startbattle` is a script command, so the fight belongs to
@@ -7069,7 +7073,6 @@ func _apply_text_pause(event: Dictionary, flags: Dictionary) -> StringName:
 	return &"none"
 
 
-## What the open runtime request leaves the results loop doing.
 func _handle_runtime_request(request: Dictionary) -> StringName:
 	var kind: StringName = StringName(request.get("kind", &""))
 	if REQUEST_HANDLERS.has(kind):
@@ -7178,7 +7181,6 @@ func _request_audio(request: Dictionary) -> StringName:
 	return &"break"
 
 
-## The renderer, the clock and the music the drained results owe the screen.
 func _settle_after_results(flags: Dictionary) -> void:
 	if not flags.has(&"waiting") and not flags.has(&"failed"):
 		_script_prompt = ""
@@ -7986,7 +7988,6 @@ func _play_encounter_sounds() -> void:
 			_play_sfx(int((command["operands"] as Array)[1]))
 
 
-## The machine's sounds, started where the special asked for them.
 func _start_heal_machine_sounds(event: Dictionary) -> void:
 	_start_sound_schedule((event.get("sounds", []) as Array).duplicate(true))
 	if _effects != null:
