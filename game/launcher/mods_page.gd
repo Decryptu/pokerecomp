@@ -226,8 +226,8 @@ func _empty_state() -> Control:
 ## on the mod's own page, which the row itself opens.
 func _card(row: Dictionary) -> Control:
 	var panel: Gen2LauncherCard = Gen2LauncherCard.create(_theme, Gen2LauncherTheme.RADIUS_MD, 18)
-	# Labels surrender their width before actions do, so the icon, text and the
-	# row's controls stay on one line even on a portrait phone.
+	# A portrait phone leaves a name eleven characters wide beside the controls,
+	# so the controls take a row of their own and the name takes the width.
 	var stack: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_SM)
 	panel.add_child(stack)
 	var line: HBoxContainer = Gen2LauncherUI.row(Gen2LauncherUI.GAP_MD)
@@ -244,6 +244,10 @@ func _card(row: Dictionary) -> Control:
 	text.add_child(_clipped(Gen2LauncherUI.muted(_theme, _version_line(row))))
 
 	var controls: HBoxContainer = line
+	if _compact:
+		controls = Gen2LauncherUI.row(Gen2LauncherUI.GAP_MD)
+		controls.alignment = BoxContainer.ALIGNMENT_END
+		stack.add_child(controls)
 
 	if bool(row["installed"]):
 		var switch: Gen2LauncherToggle = Gen2LauncherToggle.create(_theme, bool(row["enabled"]))
@@ -259,7 +263,7 @@ func _card(row: Dictionary) -> Control:
 	)
 	open.tooltip_text = "Open %s" % row["name"]
 	open.pressed.connect(func() -> void: open_mod(StringName(row["id"])))
-	line.add_child(open)
+	controls.add_child(open)
 	# Pressing the row is the same as pressing its chevron. The toggle and the
 	# action are buttons of their own and take their own press first.
 	panel.activated.connect(func() -> void: open_mod(StringName(row["id"])))

@@ -352,6 +352,7 @@ const STAGERS: Dictionary = {
 	&"start_menu": &"_stage_start_menu",
 	&"bills_pc": &"_stage_pc",
 	&"players_pc": &"_stage_pc",
+	&"mailbox": &"_stage_pc",
 	&"pokemon_center_pc": &"_stage_pc",
 	&"mom_bank": &"_stage_mom_bank",
 }

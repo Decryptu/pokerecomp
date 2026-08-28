@@ -201,6 +201,7 @@ var _hof: Gen2HallOfFameScreen = null
 ## `BillsPC_ChangeBoxSubmenu`'s `wMenuSelection`, which is the box the list's
 ## cursor was on rather than `wCurBox`, and the keyboard its NAME row opens.
 var _box_submenu_index: int = 0
+var _box_count: int = 0
 var _naming: Gen2NamingScreenScreen = null
 var _hof_index: int = 0
 ## `MailboxPC`: `wCurMessageIndex`, the message a submenu is acting on, the
@@ -211,6 +212,13 @@ var _mail_party: Gen2PartyScreen = null
 ## `_ChangeBox_MenuHeader`'s `db 4, 0`: four rows of a scrolling list, and where
 ## the window into the fourteen boxes stands.
 const BOX_LIST_ROWS: int = 4
+## Every mode whose rows are [member _pc_rows]. One missing falls through to the
+## "Continue" default, which hid the change-box list behind a single row.
+const PC_ROW_MODES: Array = [
+	MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES, MODE.PC_BOX_LIST, MODE.PC_BOX_SUBMENU,
+	MODE.PC_DECO, MODE.PC_DECO_LIST, MODE.PC_DECO_SIDE,
+	MODE.PC_MAILBOX, MODE.PC_MAIL_SUBMENU, MODE.PC_MAIL_CONFIRM,
+]
 ## The `db rows` byte of every scrolling menu this screen hosts, which is how
 ## many of its list a window shows at once. `wMenuScrollPosition` is one value
 ## here, the way it is one address on the cartridge: only one of these lists is
@@ -1803,19 +1811,18 @@ func _print_box() -> void:
 	_render_rows()
 
 
-## `GetBoxCount` for the row the cursor stands on, over MONS_PER_BOX.
+## `GetBoxCount` for the row the cursor stands on. It goes in the box beside the
+## list, so the words under it stay `.ChangeBoxString`'s.
 func _refresh_box_counts() -> void:
 	var index: int = clampi(_cursor, 0, Gen2SaveData.BOX_COUNT - 1)
 	var box: Gen2SaveBox = _save.boxes[index] if _save != null \
 		and index < _save.boxes.size() else null
-	var count: int = 0
-	if box != null:
-		for slot: int in Gen2SaveBox.CAPACITY:
-			if slot < box.slots.size() and box.slots[slot] != null:
-				count += 1
-	_status = "%d/%d PKMN, CURRENT BOX %d" % [
-		count, Gen2SaveBox.CAPACITY, _box_index + 1,
-	]
+	_box_count = 0
+	if box == null:
+		return
+	for slot: int in Gen2SaveBox.CAPACITY:
+		if slot < box.slots.size() and box.slots[slot] != null:
+			_box_count += 1
 
 
 ## BILL'S PC's own two lists. The panel steps aside for the box screen the way it
@@ -2465,12 +2472,7 @@ func _render_rows(override: Array = []) -> void:
 			else []
 	var values: Array = override if not override.is_empty() else (
 		_choices if _mode == MODE.MENU \
-		else _pc_rows if _mode in [
-			MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES,
-			MODE.PC_DECO, MODE.PC_DECO_LIST, MODE.PC_DECO_SIDE,
-			MODE.PC_BOX_SUBMENU,
-			MODE.PC_MAILBOX, MODE.PC_MAIL_SUBMENU, MODE.PC_MAIL_CONFIRM,
-		] \
+		else _pc_rows if PC_ROW_MODES.has(_mode) \
 		else _pc_entries if _mode == MODE.PC_ITEM_LIST \
 		else ["Continue"]
 	)
@@ -2518,7 +2520,7 @@ func _render_service_page(values: Array, cursor: int = -1) -> void:
 		else _dial_image() if _is_dial() else _service_page.render(
 		"" if quiet else _title, "" if quiet else _summary, labels,
 		_cursor if cursor < 0 else cursor, "" if quiet else _status,
-		_service_box(), _service_note()
+		_service_box(), _service_note(), _message_box()
 	)
 	if image != null:
 		Gen2PicImage.show(_service_view, image)
@@ -2526,17 +2528,38 @@ func _render_service_page(values: Array, cursor: int = -1) -> void:
 	_apply_layer_visibility()
 
 
-## `Elevator_GetCurrentFloorText`'s own box, which no other mode draws.
-func _service_note() -> PackedStringArray:
+## `BillsPC_PlaceChangeBoxString`'s `hlcoord 0, 14`, under the list's fourth row.
+func _message_box() -> Rect2i:
+	if _mode != MODE.PC_BOX_LIST:
+		return Gen2WorldServicePage.MESSAGE_BOX
+	return Rect2i(0, 14, 20, 4)
+
+
+## `Elevator_GetCurrentFloorText`'s `hlcoord 0, 0 / ld b, 4 / ld c, 8`.
+func _service_note() -> Dictionary:
+	if _mode == MODE.PC_BOX_LIST:
+		return _box_count_note()
 	if _mode != MODE.ELEVATOR:
-		return PackedStringArray()
+		return {}
 	var floors: Array = _elevator_floors()
 	var current: int = int(_elevator.get("current", -1))
 	if current < 0 or current >= floors.size():
-		return PackedStringArray()
-	return PackedStringArray([
-		"Now on:", _floor_name(int((floors[current] as Dictionary)["floor"])),
-	])
+		return {}
+	return {"rect": Rect2i(0, 0, 10, 6), "lines": [
+		{"text": "Now on:", "at": Vector2i(1, 2)},
+		{
+			"text": _floor_name(int((floors[current] as Dictionary)["floor"])),
+			"at": Vector2i(4, 4),
+		},
+	]}
+
+
+## `BillsPC_PrintBoxCountAndCapacity`'s `hlcoord 11, 7 / lb bc, 5, 7`.
+func _box_count_note() -> Dictionary:
+	return {"rect": Rect2i(11, 7, 9, 7), "lines": [
+		{"text": "#MON", "at": Vector2i(1, 2)},
+		{"text": "%d/%d" % [_box_count, Gen2SaveBox.CAPACITY], "at": Vector2i(2, 4)},
+	]}
 
 
 ## An overlay owns all 160x144 while it is up: the mart, box storage, a Pokegear
@@ -2594,14 +2617,8 @@ func _service_box() -> Gen2MenuBox:
 		MODE.PC_DECO_LIST:
 			return _deco_list_box()
 		MODE.ELEVATOR:
-			## `Elevator_MenuHeader`'s `menu_coords 12, 1, 18, 9`.
-			##
-			## `ScrollingMenu_UpdateDisplay` reaches its first row with
-			## `MenuBoxCoord2Tile / ld bc, SCREEN_WIDTH + 1`, which is one row
-			## down and one column right, where `_InitVerticalMenuCursor` spends
-			## a second row before the first item. A scrolling menu therefore has
-			## no top spacing, and this box's fourth floor sits on its own border
-			## without it.
+			## `Elevator_MenuHeader`'s `menu_coords 12, 1, 18, 9`, whose fourth
+			## floor only fits without the top row of spacing.
 			var elevator_box: Gen2MenuBox = Gen2MenuBox.from_coords(
 				12, 1, 18, 9,
 				Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_NO_TOP_SPACING
@@ -2611,9 +2628,10 @@ func _service_box() -> Gen2MenuBox:
 			return elevator_box
 		MODE.PC_MAILBOX:
 			## `.TopMenuHeader`'s `menu_coords 8, 1, SCREEN_WIDTH - 2, 10`.
-			return _scrolling_box(
-				Gen2MenuBox.from_coords(8, 1, 18, 10, Gen2MenuBox.STATICMENU_CURSOR)
-			)
+			return _scrolling_box(Gen2MenuBox.from_coords(
+				8, 1, 18, 10,
+				Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_NO_TOP_SPACING
+			))
 		MODE.PC_MAIL_SUBMENU:
 			## `.SubMenuHeader`'s `menu_coords 0, 0, 13, 9`.
 			return Gen2MenuBox.from_coords(0, 0, 13, 9, Gen2MenuBox.STATICMENU_CURSOR)
@@ -2648,15 +2666,14 @@ func _pc_top_box() -> Gen2MenuBox:
 	)
 
 
-## `_ChangeBox_MenuHeader`'s `menu_coords 1, 5, 9, 12`, which is four rows of a
-## scrolling list rather than all fourteen at once.
+## `_ChangeBox_MenuHeader`'s `menu_coords 1, 5, 9, 12`, four rows of fourteen.
+## `_ChangeBox` draws the frame itself, `Textbox` at `hlcoord 0, 4 / lb bc, 8, 9`.
 func _pc_box_list_box() -> Gen2MenuBox:
 	var box: Gen2MenuBox = Gen2MenuBox.from_coords(
-		1, 5, 9, 5 + BOX_LIST_ROWS + 2, Gen2MenuBox.STATICMENU_CURSOR
+		1, 5, 9, 12,
+		Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_NO_TOP_SPACING
 	)
-	## `ScrollingMenu` writes its rows one apart, where `VerticalMenu` writes
-	## them two.
-	box.row_step = 1
+	box.frame = Rect2i(0, 4, 11, 10)
 	return box
 
 

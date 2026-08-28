@@ -244,6 +244,25 @@ func toast() -> Gen2LauncherToast:
 	return _toast
 
 
+## What the Switch build's washed-out page and missing toast need answered, twice
+## over since the veil and the toast both arrive on a tween.
+func log_layers(where: String) -> void:
+	print(layer_report(where))
+	if is_inside_tree():
+		get_tree().create_timer(1.0).timeout.connect(
+			func() -> void: print(layer_report(where + " +1s"))
+		)
+
+
+func layer_report(where: String) -> String:
+	if _art_holder == null or _art_veil == null or _host == null or _toast == null:
+		return "launcher layers %s: not built" % where
+	return "launcher layers %s: art=%.2f at %d, veil %s, page at %d, toast %s %.2f %s" % [
+		where, _art_holder.modulate.a, _art_holder.get_index(), _art_veil.color,
+		_host.get_index(), _toast.visible, _toast.modulate.a, _toast.get_global_rect(),
+	]
+
+
 ## Puts [param texture] behind the launcher, crossfading from whatever was there.
 ## Pass null for the plain gradient, which is what a page with no cartridge
 ## behind it wants.

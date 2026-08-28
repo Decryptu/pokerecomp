@@ -157,11 +157,12 @@ func render(
 ## `Textbox`'s own `ClearBox`, so a menu over a filled page does not show it
 ## through. The source's blank is $7f, below the font, which draws as index 0.
 func _fill_interior(box: Gen2MenuBox, indices: PackedByteArray, width: int) -> void:
-	var interior: Vector2i = box.interior()
-	var left: int = (box.left + 1) * TILE
+	var corner: Vector2i = box.border_position()
+	var interior: Vector2i = box.border_size() - Vector2i(2, 2)
+	var left: int = (corner.x + 1) * TILE
 	var span: int = interior.x * TILE
 	for row: int in interior.y * TILE:
-		var start: int = ((box.top + 1) * TILE + row) * width + left
+		var start: int = ((corner.y + 1) * TILE + row) * width + left
 		if start < 0 or start + span > indices.size():
 			continue
 		for pixel: int in span:

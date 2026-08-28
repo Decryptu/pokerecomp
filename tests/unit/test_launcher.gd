@@ -542,6 +542,45 @@ func test_a_mod_registering_renderers_is_switched_on_from_its_own_page() -> void
 	Gen2ModState.reload()
 
 
+## A 390pt window leaves a mod's name about eleven characters wide beside its
+## toggle, bin and chevron, which trimmed every name on the page.
+func test_a_narrow_mods_page_gives_a_row_its_controls_a_line_of_their_own() -> void:
+	_write_probe_mod_zip()
+	assert_true(bool(Gen2ModInstaller.install_zip(_mod_archive).get("ok", false)))
+	Gen2ModHost.reset()
+	Gen2ModHost.instance().discover()
+	Gen2ModHost.instance().load_discovered()
+
+	var page: Gen2ModsPage = _mods_page()
+	assert_eq(_card_lines(page), 1, "a wide window keeps the row on one line")
+	page.set_compact(true)
+	assert_eq(_card_lines(page), 2, "a narrow one gives the controls their own")
+	page.set_compact(false)
+	assert_eq(_card_lines(page), 1, "and takes it back when there is room")
+	Gen2ModHost.reset()
+
+
+## How many lines the first mod card is stacked into.
+func _card_lines(page: Gen2ModsPage) -> int:
+	for card: Node in page.find_children("", "Gen2LauncherCard", true, false):
+		for child: Node in card.get_children():
+			if child is VBoxContainer:
+				return (child as VBoxContainer).get_child_count()
+	return 0
+
+
+## Only a run on the device can say why the Switch build dims its page and draws
+## no toast, so the launcher can say what it built (`HANDOFF.md`).
+func test_the_shell_can_report_what_it_layered() -> void:
+	await _open_launcher()
+	var shell: Gen2LauncherShell = _launcher.get("_shell")
+	assert_not_null(shell)
+	var line: String = shell.layer_report("test")
+	assert_string_contains(line, "veil", "the report names the sheet over the artwork")
+	assert_string_contains(line, "toast", "and whether the toast is on screen")
+	assert_false(line.contains("not built"), "a launcher that is up has both")
+
+
 ## A mod that replaces nothing about how the game is drawn gets no row at all,
 ## rather than a switch that would do nothing.
 func test_a_mod_with_no_renderer_has_no_view_switch() -> void:

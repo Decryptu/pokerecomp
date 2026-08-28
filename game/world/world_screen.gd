@@ -10,6 +10,8 @@ const BACKGROUND: Color = Color("#09111f")
 const TEXT: Color = Color("#f4f7fb")
 const MUTED: Color = Color("#9eacc0")
 const BATTLE_SCENE: PackedScene = preload("res://game/battle/battle_screen.tscn")
+const FLOWER_MAIL: int = 0xB6
+
 const SERVICE_SCENE: PackedScene = preload("res://game/world/world_service_screen.tscn")
 const START_MENU_SCENE: PackedScene = preload("res://game/world/start_menu_screen.tscn")
 const PARTY_SCENE: PackedScene = preload("res://game/save/party_screen.tscn")
@@ -3535,6 +3537,17 @@ func preview_pokemon_center_pc() -> void:
 
 
 func preview_players_pc() -> void:
+	_preview_pc(&"players_house")
+
+
+func preview_mailbox() -> void:
+	var save: Gen2SaveData = _embedded_party_save()
+	if save != null and save.mailbox.is_empty():
+		for author: String in ["MOM", "KURT", "BILL"]:
+			save.mailbox.append(Gen2SaveMail.compose(
+				Gen2SaveMail.blank_message(), author, save.player_id, 1, FLOWER_MAIL
+			))
+		_injected_save = save
 	_preview_pc(&"players_house")
 
 
