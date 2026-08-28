@@ -7,8 +7,8 @@ extends ScrollContainer
 ## controls inside a pane has to bring the pane with it, which is
 ## [member ScrollContainer.follow_focus]. And a pane whose content is mostly text
 ## has stretches with nothing focusable in them, so the pane itself takes focus
-## and reads `ui_up` and `ui_down` as scrolling, which is the only way past a
-## wall of prose on a keyboard.
+## and reads an up or a down ([method Gen2Button.direction_in]) as scrolling,
+## which is the only way past a wall of prose on a keyboard.
 ##
 ## The pane only takes focus when it actually has somewhere to go, so a short
 ## page does not put a stop on the way down to the dock.
@@ -72,15 +72,30 @@ func _gui_input(event: InputEvent) -> void:
 		and (event is InputEventMouseButton or event is InputEventMouseMotion):
 		accept_event()
 		return
+	if _scroll_by(event):
+		accept_event()
+
+
+## The repeat a held direction produces is an [InputEventAction]
+## ([method Gen2InputRuntime._advance_direction_repeat]), and the engine routes
+## no action to `_gui_input`, so a pane holding focus reads its repeats here.
+func _unhandled_input(event: InputEvent) -> void:
+	if has_focus() and _scroll_by(event):
+		get_viewport().set_input_as_handled()
+
+
+func _scroll_by(event: InputEvent) -> bool:
 	if not _scrollable():
-		return
+		return false
 	var step: float = maxf(size.y * PAGE, 40.0)
-	if event.is_action_pressed("ui_down", true):
-		accept_event()
-		scroll_vertical = int(float(scroll_vertical) + step)
-	elif event.is_action_pressed("ui_up", true):
-		accept_event()
-		scroll_vertical = int(float(scroll_vertical) - step)
+	match Gen2Button.direction_in(event):
+		Gen2Button.DOWN:
+			scroll_vertical = int(float(scroll_vertical) + step)
+			return true
+		Gen2Button.UP:
+			scroll_vertical = int(float(scroll_vertical) - step)
+			return true
+	return false
 
 
 func _on_screen_touch(touch: InputEventScreenTouch) -> void:

@@ -135,3 +135,50 @@ func test_reveal_does_nothing_unless_the_controller_is_switched_off() -> void:
 	options.touch_mode = Gen2Options.TOUCH_AUTO
 	_runtime.apply_options(options)
 	assert_false(_runtime.reveal_touch_controls(), "there is nothing to reveal")
+
+
+## `JoyTextDelay`: the second press of a direction the player never let go of is
+## the hardware's own repeat, and it does not arrive for fifteen frames. Without
+## the gate an analog stick reported one on every event it sent, which walked a
+## menu cursor the length of its list on one push.
+func test_a_held_direction_repeats_at_the_source_rate_and_not_faster() -> void:
+	var down := InputEventJoypadMotion.new()
+	down.axis = JOY_AXIS_LEFT_Y
+	down.axis_value = 1.0
+	assert_false(_runtime._gate_direction_repeat(down), "the first press is the player's")
+	down.axis_value = 0.98
+	assert_true(_runtime._gate_direction_repeat(down), "the stick has not been let go")
+	assert_true(_runtime._gate_direction_repeat(down))
+
+	## The repeat the gate owes, spent as frames rather than as presses.
+	_runtime.press(Gen2Button.DOWN)
+	await _settle()
+	var owed: int = 0
+	for _frame: int in Gen2InputRuntime.REPEAT_DELAY_FRAMES + 1:
+		_runtime._advance_direction_repeat(Gen2InputRuntime.FRAME_SECONDS)
+		if bool(_runtime._repeat_open.get(Gen2Button.DOWN, false)):
+			owed += 1
+			_runtime._repeat_open[Gen2Button.DOWN] = false
+	assert_eq(owed, 1, "one repeat in the first fifteen frames, not fifteen")
+	_runtime.release(Gen2Button.DOWN)
+	await _settle()
+
+
+## Four buttons at once is a state no single press says, so the chord is polled
+## and reported once per press of it.
+func test_the_reset_chord_is_reported_once_while_it_is_held() -> void:
+	var fired: Array = []
+	_runtime.reset_chord_pressed.connect(func() -> void: fired.append(true))
+	for button: int in Gen2InputRuntime.RESET_CHORD:
+		_runtime.press(button)
+	await _settle()
+	await _settle()
+	assert_eq(fired.size(), 1, "held for four frames, reported once")
+	_runtime.release(Gen2Button.SELECT)
+	await _settle()
+	_runtime.press(Gen2Button.SELECT)
+	await _settle()
+	assert_eq(fired.size(), 2, "let go and pressed again is a second reset")
+	for button: int in Gen2InputRuntime.RESET_CHORD:
+		_runtime.release(button)
+	await _settle()

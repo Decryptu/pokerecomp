@@ -404,6 +404,55 @@ func test_a_hit_drains_the_bar_before_it_says_what_the_hit_was() -> void:
 	assert_eq(_battle_screen.battle_snapshot()["message"], "It's super effective!")
 
 
+## `AnimateHPBar` blocks, so the picture does not start sinking until the bar it
+## belongs to has emptied. A hit with no line of its own used to pop the faint in
+## the same pass, and the opponent left the field over a bar still draining.
+func test_a_hit_that_says_nothing_still_empties_the_bar_before_the_faint() -> void:
+	await _open_battle()
+	_battle_screen.show_matchup(16, 155, 7, 9)
+	_settle_intro()
+	_battle_screen.set_hp(48, 48, 40, 40)
+
+	_battle_screen._pending = [
+		{
+			"type": Gen2Battle.HIT, "side": Gen2Battle.PLAYER,
+			"target": Gen2Battle.ENEMY, "hp": 0, "max_hp": 48, "critical": false,
+			"effectiveness": RomLayout.MATCHUP_EFFECTIVE,
+		},
+		{"type": Gen2Battle.FAINTED, "side": Gen2Battle.ENEMY},
+	]
+	## A turn is being resolved, so `BattleMenu` is not up: with it up the queue
+	## waits on the press that closes it and no frame would pop the faint at all.
+	_battle_screen._menu_stage = &""
+	_battle_screen._show_next_event()
+
+	assert_true(_battle_screen.bars_animating(), "the bar is on its way down")
+	assert_false(_battle_screen.fainting(), "and the picture has not moved yet")
+
+	var guard: int = 4000
+	while _battle_screen.bars_animating() and guard > 0:
+		_battle_screen.advance_frame()
+		guard -= 1
+	assert_eq(int(_battle_screen.get("_enemy_hp")), 0)
+	assert_true(_battle_screen.fainting(), "the faint follows the bar it waited for")
+
+
+## `anim_keepsprites` skips `BattleAnim_ClearOAM`, so what the last script left is
+## still drawn after it has returned: the ball at rest under "Gotcha!". The view
+## used to read the running player alone and the ball vanished with the script.
+func test_what_a_script_kept_is_still_drawn_once_the_script_has_ended() -> void:
+	await _open_battle()
+	_battle_screen._kept_sprites = [{"tile": 3, "attributes": 0, "x": 8, "y": 16}]
+	_battle_screen._push_view()
+	assert_eq(
+		(_battle_screen._renderer._view["anim_sprites"] as Array).size(), 1,
+		"the ball stays on the screen with no script running"
+	)
+	## `PokeBallEffect`'s own `ClearSprites`, which is what takes it away.
+	_battle_screen._clear_kept_sprites()
+	assert_true((_battle_screen._renderer._view["anim_sprites"] as Array).is_empty())
+
+
 ## A Pokemon coming out gets its bar drawn rather than drained: the maximum
 ## moved under it, so it is not the same bar.
 func test_a_new_pokemon_does_not_animate_its_bar_up() -> void:

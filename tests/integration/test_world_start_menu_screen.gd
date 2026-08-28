@@ -156,14 +156,63 @@ func test_exit_closes_the_menu_and_restores_movement() -> void:
 	_world_screen._open_start_menu()
 	await get_tree().process_frame
 	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
-	## EXIT is the source's guaranteed last entry.
-	while host.cursor() < host.get("_menu").size() - 1:
+	## EXIT is the source's guaranteed last entry; HOME, which this port added
+	## for the way back to the launcher, is the one row under it.
+	while host.cursor() < host.get("_menu").size() - 2:
 		host.handle_button(Gen2Button.DOWN)
 	assert_eq(host.get("_menu").selected_kind(), Gen2WorldStartMenu.ITEM_EXIT)
 	host.handle_button(Gen2Button.A)
 	await get_tree().process_frame
 	assert_null(_world_screen._start_menu_host)
 	assert_true(_world_screen._objects_may_move())
+
+
+## The way out of the cartridge, which the console owned and the source has no
+## row for. It asks first, because leaving takes whatever has not been saved.
+func test_home_asks_before_it_gives_the_cartridge_back() -> void:
+	await _open_world()
+	_world_screen._open_start_menu()
+	await get_tree().process_frame
+	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
+	while host.cursor() < host.get("_menu").size() - 1:
+		host.handle_button(Gen2Button.DOWN)
+	assert_eq(host.get("_menu").selected_kind(), Gen2WorldStartMenu.ITEM_LAUNCHER)
+	host.handle_button(Gen2Button.A)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.LAUNCHER_ASK)
+
+	## NO is the second row, and it goes back to the list rather than out.
+	host.handle_button(Gen2Button.DOWN)
+	host.handle_button(Gen2Button.A)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.LIST)
+	assert_not_null(_world_screen._start_menu_host, "the menu is still up")
+
+
+## The reset chord asks once ever, and the answer is written whichever way it
+## went: what the box is for is saying the shortcut exists.
+func test_the_reset_question_is_asked_once_and_answered_either_way() -> void:
+	Gen2OptionsStore.use_test_path()
+	var options: Gen2Options = Gen2OptionsStore.current()
+	options.soft_reset_acknowledged = false
+	Gen2OptionsStore.save(options)
+
+	await _open_world()
+	_world_screen._on_reset_chord()
+	await get_tree().process_frame
+	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
+	assert_not_null(host, "the chord opened the menu to ask")
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.RESET_ASK)
+
+	## Three lines, so the first press is `PromptButton` and the box only then
+	## appears; B on it is `YesNoBox`'s NO.
+	host.handle_button(Gen2Button.A)
+	var confirmed: Array = []
+	host.soft_reset_confirmed.connect(func() -> void: confirmed.append(true))
+	host.handle_button(Gen2Button.B)
+	assert_true(confirmed.is_empty(), "NO resets nothing")
+	assert_true(
+		Gen2OptionsStore.current().soft_reset_acknowledged,
+		"and is never asked again"
+	)
 
 
 func test_cancel_closes_the_menu_the_same_as_exit() -> void:
@@ -2111,13 +2160,13 @@ func test_a_list_longer_than_the_screen_is_scrolled_rather_than_drawn_past_it() 
 	assert_gt(rows, visible, "the fixture's own list already overflows the box")
 	assert_eq(host._list_scroll, 0, "and it opens at the top of itself")
 
-	## Down to the last row, which is EXIT: the window follows the cursor.
+	## Down to the last row, which is HOME: the window follows the cursor.
 	for _press: int in rows - 1:
 		host.handle_button(Gen2Button.DOWN)
-	assert_eq(host._menu.selected_kind(), Gen2WorldStartMenu.ITEM_EXIT)
+	assert_eq(host._menu.selected_kind(), Gen2WorldStartMenu.ITEM_LAUNCHER)
 	assert_eq(host._list_scroll, rows - visible)
 	assert_true(
-		host._menu.cursor - host._list_scroll < visible, "EXIT is inside the window"
+		host._menu.cursor - host._list_scroll < visible, "HOME is inside the window"
 	)
 
 	## `STATICMENU_WRAP` in both directions, with the window going round with it.

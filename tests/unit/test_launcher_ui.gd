@@ -886,6 +886,24 @@ func test_a_platform_that_cannot_open_a_second_window_draws_in_screen_pixels() -
 		assert_eq(Gen2LauncherUI.safe_area_insets(get_tree().root)["top"], 0.0)
 
 
+## Every screen written in launcher units needs the factor, and only a launcher
+## screen does. The save editor is drawn in those units and has no shell to own
+## it, which is what left it on a phone at a third of its size.
+func test_a_screen_in_launcher_units_carries_its_own_density_guard() -> void:
+	Gen2LauncherUI.preview_density = 3.0
+	var window: Window = get_tree().root
+	var before: float = window.content_scale_factor
+	var page := Control.new()
+	Gen2LauncherUI.attach_density(page)
+	add_child_autofree(page)
+	await get_tree().process_frame
+	assert_ne(window.content_scale_factor, before, "the page is drawn in points")
+	page.get_parent().remove_child(page)
+	assert_eq(window.content_scale_factor, 1.0, "and the game is not")
+	window.content_scale_factor = before
+	Gen2LauncherUI.preview_density = 0.0
+
+
 func test_the_preview_density_still_overrides_the_display_server() -> void:
 	Gen2LauncherUI.preview_density = 2.5
 	assert_eq(Gen2LauncherUI.display_density(), 2.5)

@@ -46,6 +46,16 @@ const LABELS: Dictionary = {
 	SELECT: "SELECT",
 }
 
+## Godot's own navigation actions, one per direction. The engine moves a focus
+## ring on these and nothing else, so a screen built out of [Control]s and a
+## screen built out of tiles are driven by two vocabularies that have to agree.
+const UI_ACTIONS: Dictionary = {
+	UP: &"ui_up",
+	DOWN: &"ui_down",
+	LEFT: &"ui_left",
+	RIGHT: &"ui_right",
+}
+
 const VECTORS: Dictionary = {
 	UP: Vector2i.UP,
 	DOWN: Vector2i.DOWN,
@@ -90,6 +100,19 @@ static func from_vector(direction: Vector2i) -> int:
 static func pressed_in(event: InputEvent) -> int:
 	for button: int in ALL:
 		if event.is_action_pressed(ACTIONS[button]):
+			return button
+	return NONE
+
+
+## The direction an event presses, counting Godot's own `ui_*` family beside the
+## cartridge's four. A focus ring moves on `ui_up`, a menu on `gen2_up`, and the
+## same key, pad button and stick produce both, so anything that reads a
+## direction off an event has to answer for either. [constant Gen2Button.NONE]
+## when the event presses none of the eight.
+static func direction_in(event: InputEvent) -> int:
+	for button: int in DIRECTIONS:
+		if event.is_action_pressed(ACTIONS[button], true) \
+			or event.is_action_pressed(UI_ACTIONS[button], true):
 			return button
 	return NONE
 

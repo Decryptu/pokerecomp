@@ -20,7 +20,7 @@ func test_default_list_omits_pokedex_pokemon_and_pokegear() -> void:
 	assert_eq(_kinds(menu), [
 		Gen2WorldStartMenu.ITEM_PACK, Gen2WorldStartMenu.ITEM_PLAYER,
 		Gen2WorldStartMenu.ITEM_SAVE, Gen2WorldStartMenu.ITEM_OPTION,
-		Gen2WorldStartMenu.ITEM_EXIT,
+		Gen2WorldStartMenu.ITEM_EXIT, Gen2WorldStartMenu.ITEM_LAUNCHER,
 	])
 
 
@@ -74,6 +74,7 @@ func test_full_list_matches_the_source_item_order_when_every_gate_is_open() -> v
 		Gen2WorldStartMenu.ITEM_PACK, Gen2WorldStartMenu.ITEM_POKEGEAR,
 		Gen2WorldStartMenu.ITEM_PLAYER, Gen2WorldStartMenu.ITEM_SAVE,
 		Gen2WorldStartMenu.ITEM_OPTION, Gen2WorldStartMenu.ITEM_EXIT,
+		Gen2WorldStartMenu.ITEM_LAUNCHER,
 	])
 
 
@@ -92,6 +93,19 @@ func test_every_entry_the_gates_admit_is_available() -> void:
 	assert_true(available_by_kind[Gen2WorldStartMenu.ITEM_POKEDEX])
 
 
+## The way back out of the cartridge, which the console rather than the game
+## owned. It is behind the contest gate PACK is: a contest is a timed errand and
+## the cartridge's own QUIT is what leaves one.
+func test_home_is_last_and_leaves_with_the_pack_during_a_contest() -> void:
+	var menu: Gen2WorldStartMenu = Gen2WorldStartMenu.build(1, true, true)
+	assert_eq(_kinds(menu).back(), Gen2WorldStartMenu.ITEM_LAUNCHER)
+	var contest: Gen2WorldStartMenu = Gen2WorldStartMenu.build(
+		1, true, true, 0, "", false, true
+	)
+	assert_false(_kinds(contest).has(Gen2WorldStartMenu.ITEM_LAUNCHER))
+	assert_false(_kinds(contest).has(Gen2WorldStartMenu.ITEM_PACK))
+
+
 func test_quit_never_appears_because_this_project_has_no_bug_contest() -> void:
 	var menu: Gen2WorldStartMenu = Gen2WorldStartMenu.build(1, true, true)
 	assert_false(_kinds(menu).has(&"quit"))
@@ -101,9 +115,9 @@ func test_quit_never_appears_because_this_project_has_no_bug_contest() -> void:
 ## both ends instead of stopping.
 func test_cursor_wraps_at_both_ends() -> void:
 	var menu: Gen2WorldStartMenu = Gen2WorldStartMenu.build(0, false, false)
-	assert_eq(menu.size(), 5)
+	assert_eq(menu.size(), 6)
 	assert_true(menu.move(-1))
-	assert_eq(menu.cursor, 4)
+	assert_eq(menu.cursor, 5)
 	assert_true(menu.move(1))
 	assert_eq(menu.cursor, 0)
 
@@ -157,8 +171,9 @@ func test_from_world_reads_party_count_and_engine_flags_off_the_live_world() -> 
 	RomCache.clear(Fixture.directory())
 
 
-## The registry seam: a mod entry is spliced in ahead of EXIT, which stays last
-## because it is what closes the menu, and no source entry moves.
+## The registry seam: a mod entry is spliced in ahead of EXIT, which stays last of
+## the source's own because it is what closes the menu, and no source entry
+## moves. Only HOME, which the cartridge has no row for, is below it.
 func test_a_registered_entry_lands_before_exit() -> void:
 	Gen2ModHost.reset()
 	var called: Array = []
@@ -171,6 +186,7 @@ func test_a_registered_entry_lands_before_exit() -> void:
 		Gen2WorldStartMenu.ITEM_PACK, Gen2WorldStartMenu.ITEM_PLAYER,
 		Gen2WorldStartMenu.ITEM_SAVE, Gen2WorldStartMenu.ITEM_OPTION,
 		&"atlas", Gen2WorldStartMenu.ITEM_EXIT,
+		Gen2WorldStartMenu.ITEM_LAUNCHER,
 	])
 	var entry: Dictionary = menu.items()[4]
 	assert_eq(String(entry.get("label", "")), "Atlas")
@@ -236,6 +252,7 @@ func test_mods_appears_only_for_a_mod_that_registered_a_setting() -> void:
 		Gen2WorldStartMenu.ITEM_PACK, Gen2WorldStartMenu.ITEM_PLAYER,
 		Gen2WorldStartMenu.ITEM_SAVE, Gen2WorldStartMenu.ITEM_OPTION,
 		Gen2WorldStartMenu.ITEM_MODS, &"atlas", Gen2WorldStartMenu.ITEM_EXIT,
+		Gen2WorldStartMenu.ITEM_LAUNCHER,
 	])
 	assert_true(bool(menu.items()[4].get("available", false)))
 	Gen2ModHost.reset()
@@ -250,6 +267,7 @@ func test_the_labels_are_the_source_strings_with_the_player_name_filled_in() -> 
 		labels.append(String((entry as Dictionary).get("label", "")))
 	assert_eq(labels, [
 		"#DEX", "#MON", "PACK", "<POKE>GEAR", "GOLD", "SAVE", "OPTION", "EXIT",
+		"HOME",
 	])
 	## A world with no save selected has no name to read.
 	assert_eq(String(Gen2WorldStartMenu.build(0, false, false).items()[1]["label"]), "PLAYER")
@@ -363,6 +381,7 @@ func test_moves_appears_only_when_a_field_move_source_has_something_to_offer() -
 		Gen2WorldStartMenu.ITEM_PACK, Gen2WorldStartMenu.ITEM_PLAYER,
 		Gen2WorldStartMenu.ITEM_SAVE, Gen2WorldStartMenu.ITEM_OPTION,
 		Gen2WorldStartMenu.ITEM_FIELD_MOVES, &"atlas", Gen2WorldStartMenu.ITEM_EXIT,
+		Gen2WorldStartMenu.ITEM_LAUNCHER,
 	])
 	assert_true(bool(menu.items()[4].get("available", false)))
 	Gen2ModHost.reset()

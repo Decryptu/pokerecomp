@@ -43,17 +43,10 @@ func _process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	var direction := Vector2.ZERO
-	if event.is_action_pressed("ui_up", true):
-		direction = Vector2.UP
-	elif event.is_action_pressed("ui_down", true):
-		direction = Vector2.DOWN
-	elif event.is_action_pressed("ui_left", true):
-		direction = Vector2.LEFT
-	elif event.is_action_pressed("ui_right", true):
-		direction = Vector2.RIGHT
-	else:
+	var button: int = Gen2Button.direction_in(event)
+	if button == Gen2Button.NONE:
 		return
+	var direction := Vector2(Gen2Button.vector(button))
 	if move_focus(direction):
 		_root.get_viewport().set_input_as_handled()
 

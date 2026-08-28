@@ -154,13 +154,8 @@ func _on_pressed(index: int) -> void:
 
 
 func _gui_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_left"):
+	if _step_by(event):
 		accept_event()
-		step(-1)
-		return
-	if event.is_action_pressed("ui_right"):
-		accept_event()
-		step(1)
 		return
 	if event.is_action_pressed("ui_accept"):
 		accept_event()
@@ -174,6 +169,24 @@ func _gui_input(event: InputEvent) -> void:
 			_on_drag(event)
 		else:
 			_hover(_at((event as InputEventMouseMotion).position))
+
+
+## The repeat a held direction produces is an [InputEventAction], which the
+## engine routes to no `_gui_input`, so the stage reads its repeats here.
+func _unhandled_input(event: InputEvent) -> void:
+	if has_focus() and _step_by(event):
+		get_viewport().set_input_as_handled()
+
+
+func _step_by(event: InputEvent) -> bool:
+	match Gen2Button.direction_in(event):
+		Gen2Button.LEFT:
+			step(-1)
+			return true
+		Gen2Button.RIGHT:
+			step(1)
+			return true
+	return false
 
 
 ## The row is dragged rather than paged: a press takes hold of it, the pointer

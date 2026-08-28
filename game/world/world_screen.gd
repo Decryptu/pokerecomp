@@ -13,6 +13,11 @@ const BATTLE_SCENE: PackedScene = preload("res://game/battle/battle_screen.tscn"
 const SERVICE_SCENE: PackedScene = preload("res://game/world/world_service_screen.tscn")
 const START_MENU_SCENE: PackedScene = preload("res://game/world/start_menu_screen.tscn")
 const PARTY_SCENE: PackedScene = preload("res://game/save/party_screen.tscn")
+## The launcher is this port's boot menu and the save screen is its title
+## screen, so a cartridge taken out goes to the first and a console reset to the
+## second, where CONTINUE is.
+const LAUNCHER_SCENE: String = "res://game/main/main.tscn"
+const SAVE_SCENE: String = "res://game/save/save_screen.tscn"
 const AUDIO_PLAYER_SCRIPT := preload("res://game/audio/gen2_audio_player.gd")
 ## How far into a view switch's close [method preview_view_cover] photographs:
 ## part way down the scatter, where the wipe is readable and the screen is not
@@ -338,6 +343,9 @@ func _ready() -> void:
 	_hint.visible = Gen2DebugKeys.enabled()
 	_data = _injected_data if _injected_data != null else _selected_runtime_data()
 	_build_world()
+	var input: Gen2InputRuntime = Gen2InputRuntime.instance()
+	if input != null and not input.reset_chord_pressed.is_connected(_on_reset_chord):
+		input.reset_chord_pressed.connect(_on_reset_chord)
 
 
 ## Why the overworld could not be built, on the two labels the debug readout
@@ -1876,7 +1884,32 @@ func _end_nuzlocke_run(save: Gen2SaveData) -> void:
 	## lists what the run caught and what it lost, and it will not open this one
 	## again.
 	if is_inside_tree():
-		get_tree().change_scene_to_file.call_deferred("res://game/save/save_screen.tscn")
+		get_tree().change_scene_to_file.call_deferred(SAVE_SCENE)
+
+
+## `Reset`, which on hardware is the four buttons wired straight to the console
+## and nothing the game may decline. Nothing is written: what is on disk is what
+## the last SAVE put there, which is the whole point of the shortcut.
+func _soft_reset() -> void:
+	if is_inside_tree():
+		get_tree().change_scene_to_file.call_deferred(SAVE_SCENE)
+
+
+## The reset chord, from anywhere the world is up. The first one ever asks first,
+## over the pause menu's own box, so a player who hit four buttons by accident
+## does not lose the walk between here and their last save; after that answer it
+## resets where it is pressed. A fight or an overlay owning the screen has no
+## room for the question, so the first chord there is refused and the second,
+## once the question has been answered on the map, is not.
+func _on_reset_chord() -> void:
+	if _world == null:
+		return
+	if Gen2OptionsStore.current().soft_reset_acknowledged:
+		_soft_reset()
+		return
+	_open_start_menu_host(func(host: Gen2StartMenuScreen) -> void:
+		host.ask_soft_reset()
+	)
 
 
 ## One player event's lines put up in order, the tail run once the last has been
@@ -3958,6 +3991,33 @@ func preview_start_menu() -> void:
 	_start_menu_host.handle_button(Gen2Button.DOWN)
 
 
+## Public screenshot driver for the reset chord's own question, which no cell
+## reaches: the chord is the console's rather than the map's. One press per call,
+## so a driver calling twice photographs the `YesNoBox` rather than the first
+## page of the text.
+func preview_reset_question() -> void:
+	if _start_menu_host == null:
+		_injected_save = _embedded_party_save()
+		_refresh_party_summary()
+		_open_start_menu_host(func(host: Gen2StartMenuScreen) -> void:
+			host.ask_soft_reset()
+		)
+		return
+	_start_menu_host.handle_button(Gen2Button.A)
+
+
+## The same for the HOME row's own question, walked to off the list the way a
+## player reaches it.
+func preview_launcher_question() -> void:
+	if _start_menu_host == null:
+		preview_start_menu()
+		return
+	var menu: Gen2WorldStartMenu = _start_menu_host.get("_menu")
+	while menu != null and menu.selected_kind() != Gen2WorldStartMenu.ITEM_LAUNCHER:
+		_start_menu_host.handle_button(Gen2Button.DOWN)
+	_start_menu_host.handle_button(Gen2Button.A)
+
+
 ## Public screenshot driver for the cover a view switch is hidden behind: the
 ## switch itself, photographed part way down its close. See
 ## [method Gen2Screen.play_view_cover].
@@ -4679,7 +4739,7 @@ func _open_battle_host(request: Dictionary) -> void:
 	## anything about the battle. Its frames and its buttons both come through this
 	## screen from here on.
 	host.set_random_seed(_encounter_random.randi())
-	host.set_external_input(true)
+	host.set_driven(true)
 	host.set_time_of_day(time_of_day)
 	# The clock's row is what the battle's own heals read; the drawn row is what
 	# a renderer staging the fight on this map has to match, so the context
@@ -5654,6 +5714,7 @@ func _open_start_menu_host(entry: Callable) -> void:
 	## map is already in rather than into one of the host's own.
 	host.set_screen(_screen)
 	host.action_chosen.connect(_on_start_menu_action)
+	host.soft_reset_confirmed.connect(_soft_reset)
 	host.closed.connect(_on_start_menu_closed)
 	host.field_item_used.connect(_on_field_item_used)
 	host.field_move_chosen.connect(_on_start_menu_field_move)
@@ -5704,6 +5765,13 @@ func _on_start_menu_action(kind: StringName, id: StringName = &"") -> void:
 			## BugCatchingContestReturnToGateScript` and the 4 it returns, which
 			## is `.ExitMenuRunScript`: the menu closes and the script runs.
 			_show_script_results(_world.queue_bug_contest_results(&"retired"))
+		Gen2WorldStartMenu.ITEM_LAUNCHER:
+			## Nothing is written: the row asked first, and a player who wanted
+			## this run kept chose SAVE before it. The cartridge comes out of the
+			## console exactly as it went in.
+			if is_inside_tree():
+				get_tree().change_scene_to_file.call_deferred(LAUNCHER_SCENE)
+			return
 	_refresh_labels()
 
 
@@ -6786,9 +6854,7 @@ func _show_script_results(results: Array) -> void:
 				## left Battle Tower challenge leaves the battle room. The save
 				## has already been written by the action in front of it.
 				persist_world_snapshot()
-				get_tree().change_scene_to_file.call_deferred(
-					"res://game/world/intro_screen.tscn"
-				)
+				_soft_reset()
 				return
 			elif result_event.get("type", &"") == &"battle_tower_opponent_loaded":
 				## `LoadOpponentTrainerAndPokemonWithOTSprite`'s tail, which

@@ -65,6 +65,8 @@ extends SceneTree
 ## | `repel_renewal` | cell | The question a Repel running out asks. Needs a registered renewal provider |
 ## | `mod_notice` | badge | `Gen2ModHost.request_notice`'s banner over the map, wearing that badge |
 ## | `mod_page` | badges won | `START_ACTION_OPEN_MOD_PAGE`'s screen, listing the eight Johto badges |
+## | `reset_question` | none | The reset chord's own question, asked once ever. Driven twice for the `YesNoBox` behind its second page |
+## | `launcher_question` | none | The HOME row's question, walked to off the list. Driven twice |
 ##
 ## A kind may also be the name of any `preview_*` driver on the world screen
 ## without that prefix: `field_move` (`PartyMenu` with a taught CUT),
@@ -736,7 +738,7 @@ func _process(_delta: float) -> bool:
 			## prefix. A `*_use` driver is one step per call, so it is called
 			## twice: the first opens the menu and the second answers it.
 			_screen.call(SCREEN_DRIVER % _kind)
-			if String(_kind).ends_with("_use"):
+			if String(_kind).ends_with("_use") or String(_kind).ends_with("_question"):
 				_screen.call(SCREEN_DRIVER % _kind)
 		elif not _bare:
 			_screen.preview_effect_sprites(_kind)
@@ -747,6 +749,7 @@ func _process(_delta: float) -> bool:
 			&"ice_slide", &"whiteout", &"view_cover", &"gift_nickname",
 			&"catch_nickname", &"mom_bank", &"bills_pc", &"players_pc",
 			&"pokemon_center_pc", &"start_menu", &"mod_notice", &"mod_page",
+			&"reset_question", &"launcher_question",
 		]:
 			## Those kinds drove themselves to the frame they want; every other
 			## kind stages a sprite and then spends the frames it needs.
