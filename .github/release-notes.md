@@ -5,29 +5,29 @@ break put in by hand only makes it ragged. -->
 
 ## New in this release
 
-**Controllers work in menus again.** A stick or a d-pad used to fly down a list: one push moved the cursor half a dozen rows, so picking an item or a move was guesswork. A held direction now moves one row, waits a quarter of a second, then repeats at the speed the Game Boy repeated at. Holding the d-pad to run down a long box list works too, which it never did before.
+This one is all about catching. Every number a thrown ball uses was checked against a real cartridge, case by case, and a lot of them were wrong.
 
-**Battles ran at double speed.** Every fight started from the overworld was spending each frame twice. Health bars drained twice as fast, move animations played twice as fast, and the little arrow that tells you a text box is waiting flickered instead of blinking. Fights now run at the speed the cartridge ran them at.
+**The seven balls Kurt makes now work.** Take him apricorns, get a Level Ball or a Lure Ball or a Heavy Ball back, and the game refused to let you throw it. All seven do what they are supposed to do now, including the ones that famously do nothing: the Moon Ball never helped on a real cartridge either, and it does not here.
 
-**A fainting Pokemon waited for its own health bar.** The sprite used to start sinking off the screen while the bar beside it was still emptying. The bar empties first, then the picture goes, in that order.
+**A Pokemon you catch arrives the way you left it.** It used to turn up at full health with its status cured. Catch one at 3 HP while it is asleep and that is what joins your party, which is what the cartridge does and what makes weakening one worth doing.
 
-**The ball stays on screen when you catch something.** After the wobbles it used to vanish the instant the animation ended, so "Gotcha!" was printed over an empty field. The ball now sits closed on the ground until you press past that message, which is what the cartridge does.
+**Every Pokemon you caught was being treated as a traded one.** They were given a random trainer ID instead of yours, so they collected the extra experience a traded Pokemon gets, for the rest of the game. They get your ID now.
 
-**What a thrown ball says is what the game says.** "The ball shook!" was never in either cartridge. A throw now says the item was used, the ball rocks, and then one line: either "Gotcha!" or one of the four real messages for a break-out, chosen by how many times it rocked.
+**Catch rates match the cartridge exactly.** Health, sleep, freeze, every ball's multiplier and the odd corners of the arithmetic the original got wrong. A Pokemon with more than 341 maximum health really is easier to catch at full health than at half on a real cartridge, and it is here too.
 
-**Five lists a battle asks with are real menus now.** The pack, the balls you can throw, the move an Ether goes on, and the forget offer and its yes/no used to be a line of key names in the text box. Each is a drawn list you move a cursor through, with up and down as well as left and right.
+**A caught Pokemon comes with full PP**, which it did not before.
 
-**HOME leaves the game.** A new row under EXIT in the START menu hands the cartridge back to the launcher. It asks first, because nothing is saved on the way out.
+**Catches go into the box you have open, at the top of it.** They were going to the first box with room anywhere in storage, and to the bottom. If the open box is full the throw is refused, the game says so, and you keep the ball.
 
-**A + B + START + SELECT resets, like it did on the console.** It works on the map and inside a fight, and puts you back at the save screen. Shiny hunters know why. The first time you ever press it the game asks whether you meant to, so a handful of buttons pressed by accident cannot cost you a walk; answer once and it never asks again.
+**Throwing a ball costs your turn.** A ball that broke free used to be free: the wild Pokemon just stood there. It attacks now.
 
-**A press during a trainer's approach no longer breaks the fight.** Holding A while a trainer walked up to you killed the script behind the battle. The fight still happened, but everything after it did not: a gym leader's badge, the flag behind it and its text all went missing.
+**A ball thrown at another trainer's Pokemon is thrown.** You see it knocked away, you get both lines about it, and you lose the ball, exactly as you should.
 
-**The lines a badge, a TM and a found item print stay up long enough to read.** They were being replaced a frame after they appeared on any machine drawing faster than the sound was being mixed.
+**The pack asks USE or QUIT.** Picking a ball used to ask you which ball a second time. It asks the question the cartridge asks instead.
 
-**The save editor fits a phone.** It was drawn at desktop size on a phone screen, which made it unreadable and unusable. It is now drawn at the size everything else in the launcher is, and it stands clear of the notch and the home bar.
+**Catching a new species adds it to the POKEDEX in front of you.** The line about new data and the entry page behind it were both missing.
 
-**For mod authors**, `tools/record_clip.gd` can aim a recording at what is on screen rather than at a frame number, which is what a clip that has to fight, open the pack or throw a ball needs.
+**A Pokemon on the end of a rod says it was hooked** when the fight starts, instead of saying it appeared. The game now knows a fishing battle from any other, which is also the one battle a Lure Ball helps in.
 
 ## Which file
 
