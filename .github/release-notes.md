@@ -5,20 +5,29 @@ break put in by hand only makes it ragged. -->
 
 ## New in this release
 
-**Three ways to play, and the game keeps the rules for you.** Starting a new game now asks whether it is a Vanilla, Hard or Nuzlocke run. Nothing to install and nothing to remember to do yourself. The mode belongs to that save and cannot be changed later, because a challenge you can switch off after a death is not a challenge. Every save you already have is a Vanilla run and is untouched by this.
+**Controllers work in menus again.** A stick or a d-pad used to fly down a list: one push moved the cursor half a dozen rows, so picking an item or a move was guesswork. A held direction now moves one row, waits a quarter of a second, then repeats at the speed the Game Boy repeated at. Holding the d-pad to run down a long box list works too, which it never did before.
 
-**Hard** makes every trainer in the game a real fight. Each one scores its moves with all ten of the game's own decision layers instead of the handful its class was given, switches out readily, and brings a party 15% higher in level with perfect stats and full training. The teams are still the ones the cartridge wrote: this raises them by one rule each rather than rewriting eight hundred of them.
+**Battles ran at double speed.** Every fight started from the overworld was spending each frame twice. Health bars drained twice as fast, move animations played twice as fast, and the little arrow that tells you a text box is waiting flickered instead of blinking. Fights now run at the speed the cartridge ran them at.
 
-**Nuzlocke** plays itself by the rules, so you do not have to:
+**A fainting Pokemon waited for its own health bar.** The sprite used to start sinking off the screen while the bar beside it was still emptying. The bar empties first, then the picture goes, in that order.
 
-- **One catch per area.** The first wild Pokemon you meet on a route, in a cave or in a town is the only one you may throw a ball at there, and it is spent whether you catch it, beat it or run from it. The ball menu tells you which area it was. The area is the met location a Pokemon's own summary shows, so a whole cave is one encounter rather than one per floor. Roamers and the Bug Catching Contest belong to no area and spend nothing.
-- **A faint is death.** A Pokemon that faints is gone for good on the way out of the battle, and it is written to disk the moment it happens: quitting and reopening the save cannot bring it back.
-- **Every Pokemon is nicknamed.** The question is skipped and the keyboard opens, for a catch, a gift and a hatched egg alike.
-- **Losing your last Pokemon ends the run.** Nothing is healed, no money is halved, and the save goes back to the shelf marked over, listing what it met and what it lost. It cannot be continued.
+**The ball stays on screen when you catch something.** After the wobbles it used to vanish the instant the animation ended, so "Gotcha!" was printed over an empty field. The ball now sits closed on the ground until you press past that message, which is what the cartridge does.
 
-**The battery indicator is real.** The cell in the top corner of the launcher was drawn full whatever your machine was doing. It now reads the machine on every platform that will answer: Windows, macOS, Linux, Android and iOS. It turns green while you are charging and amber when you are nearly out, and a machine that reports no charge at all, a desktop or a Switch, shows nothing rather than a full cell that is not true.
+**What a thrown ball says is what the game says.** "The ball shook!" was never in either cartridge. A throw now says the item was used, the ball rocks, and then one line: either "Gotcha!" or one of the four real messages for a break-out, chosen by how many times it rocked.
 
-**For mod authors**, a run's progress read off a save now uses that save's own cartridge, so a Gold or Silver slot no longer reports the wrong badges, and a mod needs no cartridge cache of its own to ask.
+**Five lists a battle asks with are real menus now.** The pack, the balls you can throw, the move an Ether goes on, and the forget offer and its yes/no used to be a line of key names in the text box. Each is a drawn list you move a cursor through, with up and down as well as left and right.
+
+**HOME leaves the game.** A new row under EXIT in the START menu hands the cartridge back to the launcher. It asks first, because nothing is saved on the way out.
+
+**A + B + START + SELECT resets, like it did on the console.** It works on the map and inside a fight, and puts you back at the save screen. Shiny hunters know why. The first time you ever press it the game asks whether you meant to, so a handful of buttons pressed by accident cannot cost you a walk; answer once and it never asks again.
+
+**A press during a trainer's approach no longer breaks the fight.** Holding A while a trainer walked up to you killed the script behind the battle. The fight still happened, but everything after it did not: a gym leader's badge, the flag behind it and its text all went missing.
+
+**The lines a badge, a TM and a found item print stay up long enough to read.** They were being replaced a frame after they appeared on any machine drawing faster than the sound was being mixed.
+
+**The save editor fits a phone.** It was drawn at desktop size on a phone screen, which made it unreadable and unusable. It is now drawn at the size everything else in the launcher is, and it stands clear of the notch and the home bar.
+
+**For mod authors**, `tools/record_clip.gd` can aim a recording at what is on screen rather than at a frame number, which is what a clip that has to fight, open the pack or throw a ball needs.
 
 ## Which file
 
