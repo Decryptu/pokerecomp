@@ -3,23 +3,11 @@ extends SceneTree
 ## Captures the region map against a real imported cache.
 ##
 ##   Godot --headless --path . -s res://tools/preview_town_map.gd -- \
-##       crystal /tmp/map.png [landmark] [town_map|card|clock|phone|radio|area:<species>|fly[:all]] [presses]
+##       crystal /tmp/map.png [landmark] [card|clock|phone|radio|area:<species>|fly[:all]] [presses]
 ##
 ## [landmark] is `TownMap_GetCurrentLandmark`'s answer, which picks the region and
-## where the player icon stands; `card` draws the Pokegear's own MAP frame instead
-## of `_TownMap`'s corner box, `area:19` draws `Pokedex_GetArea` for that
-## species, and `fly` draws `_FlyMap` with its own cursor, `fly:all` with every
-## flypoint visited rather than none. `clock`, `phone` and `radio` are the
-## Pokegear's other three cards, each read off a real world the way the service
-## host reads it. [presses] is a `u,d,l,r,a,b` list driven into the screen before the
-## shot, which is how a cursor walk is photographed. Three other tokens: `hof`
-## opens with `STATUSFLAGS_HALL_OF_FAME_F` set, which widens the Kanto window past
-## Victory Road and is what lets the dex area reach Kanto at all; `sel` and `rel`
-## press and release SELECT, the dex area's held button; and `f<n>` spends n
-## hardware frames, which is how the nest blink is caught either way up.
-##
-## Headless: the screen composes into an [Image] rather than through a viewport,
-## so no window and no settle are needed.
+## where the player icon stands. `hof` widens the Kanto window, `sel`/`rel` press and
+## release the dex area's held SELECT, and `f<n>` spends n frames for the nest blink.
 
 ## Where a card preview's world stands, which is what its clock, dial and contact
 ## list are read from.

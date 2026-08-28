@@ -1,18 +1,13 @@
 extends RefCounted
 
-## Sweeps link play against freshly imported real caches, all three cartridges.
-##
-## The class this exists to catch is a cable club that answers a question the
-## cartridge does not ask. Every one of the three receptionist scripts is the
-## same shape and none of them can be reached without a peer, so the two paths
-## that matter are the one a single console gets and the one a peer gets, and
-## both are driven here on the real map rather than asserted about the session.
-##
-## `LinkCommsBorderGFX` is checked as the two different things it is: seventy
-## tiles and a screen tilemap on Crystal, nine tiles and no tilemap on Gold and
+## Sweeps link play against freshly imported real caches, all three cartridges. The
+## class this exists to catch is a cable club that answers a question the cartridge
+## does not ask: every one of the three receptionist scripts is the same shape and
+## none can be reached without a peer, so the two paths that matter are the one a
+## single console gets and the one a peer gets, and both are driven on the real map.
+## `LinkCommsBorderGFX` is checked as the two different things it is, seventy tiles
+## and a screen tilemap on Crystal against nine tiles and no tilemap on Gold and
 ## Silver, which is the whole difference between the two trade screens.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- link
 
 ## `newgroup CABLE_CLUB`, the same group and numbers in both pins.
 const CABLE_CLUB_GROUP: int = 20

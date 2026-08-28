@@ -2,24 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the S.S. Aqua's interior against freshly imported real caches, for
-## both command profiles.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## maps/FastShip1F.asm, maps/FastShipB1F.asm, maps/FastShipCabins_NNW_NNE_NE.asm,
-## maps/FastShipCabins_SE_SSE_CaptainsCabin.asm and constants/event_flags.asm.
-## All five maps' event tables are byte identical between the pins and every
-## event flag below has the same number in both, so nothing here is profile
-## split; only the text and Crystal's own gender branch differ.
-##
-## The crossing is one puzzle. B1F's two sailors stand on (30,6) and (31,6) and
-## the coord events below them each move the visible one onto the player's own
-## column, so the corridor west is sealed for as long as the map scene is
-## SCENE_FASTSHIPB1F_SAILOR_BLOCKS. Nothing on B1F opens it: the on-duty sailor
-## reveals the lazy one in the NE cabin, and that sailor's own script sets
-## SCENE_FASTSHIPB1F_NOOP, which retires both coord events.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- ss_aqua
+## Verifies the S.S. Aqua's interior against freshly imported real caches, for both
+## command profiles. All five maps' event tables are byte identical between the pins
+## and every event flag below has the same number in both, so nothing here is
+## profile split; only the text and Crystal's own gender branch differ. The crossing
+## is one puzzle: B1F's two sailors stand on (30,6) and (31,6) and the coord events
+## below them each move the visible one onto the player's own column, so the corridor
+## west is sealed while the map scene is SCENE_FASTSHIPB1F_SAILOR_BLOCKS. Nothing on
+## B1F opens it: the lazy sailor's own script is what retires both coord events.
 
 
 ## `constants/map_constants.asm`'s 15th `newgroup`.

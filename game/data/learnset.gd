@@ -1,25 +1,14 @@
 class_name Gen2Learnset
 extends RefCounted
 
-## What a Pokémon knows, worked out from its level-up moves.
-##
-## The cartridge asks two different questions and gets two different answers, so
-## both are here and neither is the other's shortcut:
-##
-## [method moves_at_level] furnishes a newly created Pokémon, wild, trainer-owned
-## or a starter. It walks from the beginning and stops at the first move above
-## the level being filled for.
-##
-## [method moves_learned_at] offers a just-levelled Pokémon something new. It
-## reads the whole list and takes entries at exactly the level reached.
-##
-## One species' list is not ascending (see
-## [constant RomLayout.UNSORTED_LEARNSET_SPECIES]), so the first stops early and
-## misses moves the second finds: a wild Muk really is short three moves a raised
-## Muk has.
-##
-## [RefCounted] and static: a learnset is an Array of { level, move } from
-## [GameData], and nothing here needs a cache, scene or Pokémon.
+## What a Pokemon knows, worked out from its level-up moves. The cartridge asks
+## two different questions and neither answer is the other's shortcut:
+## [method moves_at_level] furnishes a newly created Pokemon and stops at the
+## first move above the level being filled for; [method moves_learned_at] offers a
+## just-levelled one something new and takes entries at exactly the level reached.
+## One species' list is not ascending
+## ([constant RomLayout.UNSORTED_LEARNSET_SPECIES]), so a wild Muk really is short
+## three moves a raised Muk has.
 
 ## How many moves a Pokémon can know at once.
 const MOVE_SLOTS: int = 4
@@ -38,14 +27,11 @@ static func moves_at_level(learnset: Array, level: int) -> Array:
 
 
 ## `FillMoves` itself, which is what [method moves_at_level] is one call of.
-##
 ## [param known] is filled in place and may already hold moves: a slot is taken
-## when one is empty, and the four are shifted down when none is. [param above]
-## is `wPrevPartyLevel`, and passing anything above zero is the
-## `wSkipMovesBeforeLevelUp` branch, which offers only the levels *between* the
-## two. `known` grows to at most [constant MOVE_SLOTS] entries and is padded with
-## zeroes only if it arrived that way, so a party row's four-slot array stays
-## four slots.
+## when one is empty, and the four are shifted down when none is. [param above] is
+## `wPrevPartyLevel`, and anything above zero is the `wSkipMovesBeforeLevelUp`
+## branch, which offers only the levels between the two. `known` is padded with
+## zeroes only if it arrived that way, so a party row's four slots stay four.
 static func fill_moves(
 	learnset: Array, known: Array, level: int, above: int = 0
 ) -> void:

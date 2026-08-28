@@ -1,17 +1,12 @@
 extends RefCounted
 
 ## Sweeps the Day-Care and the breeding rules behind it on freshly imported real
-## caches, all three cartridges, whole corpus.
-##
-## What this exists to catch is a rule that is right for the pair a test was
-## written for and wrong for the corpus: `GetPreEvolution` is a search over every
-## species, `CheckBreedmonCompatibility` reads two records at once, and
-## `FillMoves` is the same routine the retrieval and the egg both go through. A
-## sampled pair answers none of those.
-##
-## The real-cartridge counterpart to tests/unit/test_world_day_care.gd.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- day_care
+## caches, all three cartridges, whole corpus. What this exists to catch is a rule
+## that is right for the pair a test was written for and wrong for the corpus:
+## `GetPreEvolution` is a search over every species, `CheckBreedmonCompatibility`
+## reads two records at once, and `FillMoves` is the same routine the retrieval and
+## the egg both go through, and a sampled pair answers none of those. The
+## real-cartridge counterpart to tests/unit/test_world_day_care.gd.
 
 ## `PrintDayCareText.TextTable`'s twenty, `.NotYetText`, `DayCareManOutside`'s
 ## five and `engine/pokemon/breeding.asm`'s two plus five.

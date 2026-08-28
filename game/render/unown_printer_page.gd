@@ -1,15 +1,12 @@
 class_name Gen2UnownPrinterPage
 extends RefCounted
 
-## `_UnownPrinter` (`engine/events/print_unown.asm`), the ALPH RUINS STAMP
-## browser, and the page `PrintUnownStamp` builds out of it.
-##
-## Three `Textbox`es, three strings and one Unown frontpic; the menu's PRINT and
-## CANCEL rows are printed as `♂` and `♀` because `Request1bpp` has just
-## overwritten those two font tiles with a bold A and a bold B, so the two codes
-## are drawn from `UnownDexATile` rather than from the font.
-##
-## Node-free: the image is the whole product, so a check reads it back headless.
+## `_UnownPrinter`, the ALPH RUINS STAMP browser, and the page `PrintUnownStamp`
+## builds out of it: three `Textbox`es, three strings and one Unown frontpic. The
+## menu's PRINT and CANCEL rows are printed as the two gender signs because
+## `Request1bpp` has just overwritten those font tiles with a bold A and a bold B,
+## so the two codes are drawn from `UnownDexATile` rather than from the font.
+## Node-free: the image is the whole product.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20

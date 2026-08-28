@@ -1,0 +1,274 @@
+extends GutTest
+
+## The source budget: how much branching and how much prose the tree is allowed.
+## Both are capped because both track defect count the way line count does, and a
+## ceiling nothing measures is a wish. `CLAUDE.md`'s "The budget" is this table
+## in prose; this file is what fails.
+
+const ROOTS: Array[String] = ["autoload", "game", "mods", "tests", "tools"]
+## Where the comment total is counted. The tests and the shipped example mods are
+## left out: one is scaffolding and the other is written to be read.
+const COUNTED_ROOTS: Array[String] = ["autoload", "game", "tools"]
+## The project on disk. `res://` is the wrong door here: a test that has mounted
+## a resource pack leaves entries under it whose backing zip is closed, and
+## walking those raises `Parameter "zfile" is null` from inside the tier.
+static var PROJECT: String = ProjectSettings.globalize_path("res://")
+
+const MAX_COMPLEXITY: int = 20
+const MAX_COMMENT_BLOCK: int = 8
+## Comment lines under [constant COUNTED_ROOTS]. A ceiling, not a target: lower
+## it whenever a pass leaves room, and never raise it.
+const MAX_COMMENT_LINES: int = 37924
+
+## The functions still over [constant MAX_COMPLEXITY], as `path:function`. Delete
+## a line when you fix one. The test fails on a line that no longer names a
+## function over the ceiling, so this cannot rot and cannot grow.
+const OVER_COMPLEXITY: Array[String] = [
+	"game/audio/gen2_apu.gd:_render_square",
+	"game/audio/gen2_apu.gd:write",
+	"game/audio/gen2_sound_engine.gd:_parse_music_command",
+	"game/battle/ai.gd:_apply_basic",
+	"game/battle/ai.gd:_apply_smart",
+	"game/battle/battle_screen.gd:_describe",
+	"game/battle/battle_screen.gd:_handle_button",
+	"game/battle/battle_screen.gd:_refresh_menu_layer",
+	"game/battle/battle_screen.gd:start_world_battle",
+	"game/battle/effect_commands.gd:_check_hit",
+	"game/data/content_overlay.gd:_validate_fields",
+	"game/data/world_catalog.gd:_attribute_maps",
+	"game/import/lz_decompressor.gd:decompress",
+	"game/import/rom_importer.gd:_read_one_trainer",
+	"game/import/rom_importer.gd:_verify_gs_title",
+	"game/import/rom_importer.gd:_verify_presents_sprites",
+	"game/import/rom_importer.gd:import_rom",
+	"game/import/rom_importer.gd:verify_battle_graphics",
+	"game/import/rom_importer.gd:verify_battle_tower",
+	"game/import/rom_importer.gd:verify_mail",
+	"game/import/rom_importer.gd:verify_town_map",
+	"game/import/text_stream.gd:_run",
+	"game/import/world_encounter_importer.gd:_read_roaming_maps",
+	"game/import/world_encounter_importer.gd:read_bug_contest",
+	"game/import/world_importer.gd:_read_events",
+	"game/import/world_importer.gd:_read_map",
+	"game/import/world_importer.gd:import_to_cache",
+	"game/launcher/launcher_button.gd:repaint",
+	"game/mods/mod_host.gd:register_menu_entry",
+	"game/mods/mod_manifest.gd:from_dictionary",
+	"game/render/intro_movie_page.gd:_draw_background",
+	"game/save/party_screen.gd:_confirm",
+	"game/save/save_battle_adapter.gd:from_battle_party",
+	"game/save/save_data.gd:from_dict",
+	"game/save/save_validator.gd:validate",
+	"game/world/battle_tower.gd:action",
+	"game/world/intro_movie.gd:_run_scene",
+	"game/world/radio_show.gd:_run",
+	"game/world/slot_machine.gd:_reel_action",
+	"game/world/start_menu_screen.gd:_confirm",
+	"game/world/start_menu_screen.gd:_hardware_image",
+	"game/world/start_menu_screen.gd:_move",
+	"game/world/world_animation.gd:tick",
+	"game/world/world_api.gd:_apply_object_movement",
+	"game/world/world_api.gd:_enqueue_script",
+	"game/world/world_api.gd:can_object_walk_to",
+	"game/world/world_api.gd:encounter_request",
+	"game/world/world_bag_host.gd:give_to_party",
+	"game/world/world_battle.gd:prepare",
+	"game/world/world_decoration.gd:apply",
+	"game/world/world_encounter.gd:resolve",
+	"game/world/world_encounter.gd:resolve_fishing",
+	"game/world/world_host.gd:_resolve_data_request",
+	"game/world/world_mart_host.gd:purchase",
+	"game/world/world_party_host.gd:_apply_item_effect",
+	"game/world/world_party_host.gd:_apply_party_request",
+	"game/world/world_party_host.gd:capture_wild",
+	"game/world/world_party_host.gd:teach_tm_hm",
+	"game/world/world_renderer.gd:_draw",
+	"game/world/world_screen.gd:_apply_interface_mask",
+	"game/world/world_screen.gd:_handle_button",
+	"game/world/world_screen.gd:_overlay_open",
+	"game/world/world_screen.gd:_run_party_action",
+	"game/world/world_script.gd:command_at",
+	"game/world/world_script.gd:scan_references",
+	"game/world/world_script_runner.gd:_complete",
+	"game/world/world_script_runner.gd:_execute",
+	"game/world/world_script_runner.gd:_execute_later_command",
+	"game/world/world_script_runner.gd:_execute_special",
+	"game/world/world_script_runner.gd:_read_runtime_variable",
+	"game/world/world_script_runner.gd:complete_runtime_request",
+	"game/world/world_service_screen.gd:_confirm_pc_row",
+	"tools/checks/opening_lane.gd:_validate",
+	"tools/checks/pokedex.gd:_validate",
+	"tools/checks/radio.gd:_verify_shows",
+	"tools/preview_battle_switch.gd:_open",
+	"tools/preview_town_map.gd:_initialize",
+	"tools/preview_world.gd:_initialize",
+	"tools/preview_world.gd:_process",
+	"tools/preview_world_story.gd:_drain_story",
+	"tools/preview_world_story.gd:_fog_badge_path",
+	"tools/preview_world_story.gd:_glacier_badge_path",
+	"tools/preview_world_story.gd:_hive_badge_path",
+	"tools/preview_world_story.gd:_mineral_badge_path",
+	"tools/preview_world_story.gd:_plain_badge_path",
+	"tools/preview_world_story.gd:_story_path",
+	"tools/record_clip.gd:_initialize",
+	"tools/record_clip.gd:_process",
+	"tools/trace_world_script.gd:_run",
+]
+
+
+func test_no_function_is_over_the_complexity_ceiling() -> void:
+	var over: Array[String] = []
+	for path: String in _scripts():
+		var source: PackedStringArray = _lines(path)
+		for row: Dictionary in _functions(source):
+			if int(row["complexity"]) > MAX_COMPLEXITY:
+				over.append("%s:%s" % [path, row["name"]])
+	over.sort()
+	var listed: Array[String] = OVER_COMPLEXITY.duplicate()
+	listed.sort()
+	var added: Array[String] = _missing_from(over, listed)
+	var fixed: Array[String] = _missing_from(listed, over)
+	_report("over complexity %d and not listed" % MAX_COMPLEXITY, added)
+	_report("listed and no longer over the ceiling; delete the line", fixed)
+
+
+func test_no_comment_block_is_longer_than_the_ceiling() -> void:
+	var over: Array[String] = []
+	for path: String in _scripts():
+		var run: int = 0
+		var line_number: int = 0
+		for line: String in _lines(path):
+			line_number += 1
+			if line.strip_edges().begins_with("#"):
+				run += 1
+				continue
+			if run > MAX_COMMENT_BLOCK:
+				over.append("%s:%d is %d lines" % [path, line_number - run, run])
+			run = 0
+	_report("comment blocks over %d lines" % MAX_COMMENT_BLOCK, over)
+
+
+func test_the_comment_total_is_under_the_recorded_ceiling() -> void:
+	var total: int = 0
+	for path: String in _scripts():
+		if not _under(path, COUNTED_ROOTS):
+			continue
+		for line: String in _lines(path):
+			if line.strip_edges().begins_with("#"):
+				total += 1
+	assert_true(total <= MAX_COMMENT_LINES, "%d comment lines under %s, ceiling %d" % [
+		total, ", ".join(COUNTED_ROOTS), MAX_COMMENT_LINES,
+	])
+	if total < MAX_COMMENT_LINES:
+		gut.p("Comment lines: %d. Lower MAX_COMMENT_LINES to it." % total)
+
+
+## Fails with [param message] and prints every offender, since an assertion
+## message is truncated long before a list like this ends.
+func _report(message: String, offenders: Array[String]) -> void:
+	for entry: String in offenders:
+		gut.p("  %s" % entry)
+	assert_eq(offenders.size(), 0, message)
+
+
+## Every entry of [param wanted] that [param known] does not carry. Both are
+## sorted, so this is the difference either way round.
+func _missing_from(wanted: Array[String], known: Array[String]) -> Array[String]:
+	var out: Array[String] = []
+	for entry: String in wanted:
+		if not known.has(entry):
+			out.append(entry)
+	return out
+
+
+func _under(path: String, roots: Array[String]) -> bool:
+	for root: String in roots:
+		if path.begins_with(root + "/"):
+			return true
+	return false
+
+
+func _lines(path: String) -> PackedStringArray:
+	return FileAccess.get_file_as_string(PROJECT.path_join(path)).split("\n")
+
+
+## Every project script, by its path from the project root, in a stable order.
+## `addons/` is third-party.
+func _scripts() -> PackedStringArray:
+	var out := PackedStringArray()
+	for root: String in ROOTS:
+		_collect(root, out)
+	out.sort()
+	return out
+
+
+func _collect(directory: String, out: PackedStringArray) -> void:
+	var absolute: String = PROJECT.path_join(directory)
+	for file: String in DirAccess.get_files_at(absolute):
+		if file.ends_with(".gd"):
+			out.append(directory.path_join(file))
+	for child: String in DirAccess.get_directories_at(absolute):
+		_collect(directory.path_join(child), out)
+
+
+## Every top-level function in [param source] with its cyclomatic complexity,
+## counted the way a linter counts it: one for the function, one per `if`,
+## `elif`, `while`, `for`, `and`, `or` and inline `if`, and one per `match` arm.
+func _functions(source: PackedStringArray) -> Array[Dictionary]:
+	var branches := RegEx.create_from_string(
+		"(?<![A-Za-z0-9_.])(if|elif|while|for|and|or)(?![A-Za-z0-9_])"
+	)
+	var opener := RegEx.create_from_string("^(static\\s+)?func\\s+([A-Za-z0-9_]+)")
+	var out: Array[Dictionary] = []
+	var current: Dictionary = {}
+	## One entry per open `match`: the indent the statement sits at, so an arm is
+	## a line one deeper that ends in a colon.
+	var matches: Array[int] = []
+	for raw: String in source:
+		var code: String = _code(raw)
+		var text: String = code.strip_edges()
+		var opened: RegExMatch = opener.search(code)
+		if opened != null and not code.begins_with("\t"):
+			current = {"name": opened.get_string(2), "complexity": 1}
+			out.append(current)
+			matches.clear()
+			continue
+		if current.is_empty() or text.is_empty():
+			continue
+		var indent: int = code.length() - code.lstrip("\t").length()
+		while not matches.is_empty() and indent <= matches[matches.size() - 1]:
+			matches.resize(matches.size() - 1)
+		if not matches.is_empty() and indent == matches[matches.size() - 1] + 1 \
+			and text.ends_with(":"):
+			current["complexity"] = int(current["complexity"]) + 1
+		current["complexity"] = int(current["complexity"]) + branches.search_all(text).size()
+		if text.begins_with("match ") and text.ends_with(":"):
+			matches.append(indent)
+	return out
+
+
+## [param line] with its string literals and its comment blanked, so a keyword
+## inside a text never reads as a branch.
+func _code(line: String) -> String:
+	var out: String = ""
+	var quote: String = ""
+	var index: int = 0
+	while index < line.length():
+		var symbol: String = line[index]
+		if quote != "":
+			if symbol == "\\":
+				index += 2
+				out += "  "
+				continue
+			if symbol == quote:
+				quote = ""
+			out += " "
+		elif symbol == "\"" or symbol == "'":
+			quote = symbol
+			out += " "
+		elif symbol == "#":
+			break
+		else:
+			out += symbol
+		index += 1
+	return out

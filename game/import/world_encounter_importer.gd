@@ -184,15 +184,12 @@ static func read_world_encounters(rom: RomFile, layout: Dictionary) -> Dictionar
 
 
 ## `ContestMons` and `BugContestantPointers`, the Bug Catching Contest's own two
-## tables. Both ship byte identical on all three cartridges; they are read
-## rather than constants because they are cartridge data with a locator, unlike
-## `RadioChannelSongs`.
-##
-## A contestant record is `db class, id` then three `dbw mon, score` placings,
-## which `ComputeAIContestantScores` picks one of at random and then perturbs.
-## Entry zero of the pointer table is the player's own slot (`BUG_CONTEST_PLAYER`
-## is 1), and the source repeats the first real entry there, so the ten that
-## follow are what is read.
+## tables. Both ship byte identical on all three cartridges; they are read rather
+## than made constants because they are cartridge data with a locator. A
+## contestant record is `db class, id` then three `dbw mon, score` placings, which
+## `ComputeAIContestantScores` picks one of at random and then perturbs. Entry zero
+## of the pointer table is the player's own slot and the source repeats the first
+## real entry there, so the ten that follow are what is read.
 static func read_bug_contest(rom: RomFile, configured: Dictionary) -> Dictionary:
 	var mons_offset: int = int(configured.get("bug_contest_mons", -1))
 	var mon_count: int = int(configured.get("bug_contest_mon_count", -1))
@@ -550,17 +547,13 @@ static func _read_roaming_maps(
 	return {"ok": true, "count": rows.size(), "roaming": {"maps": rows, "mons": mons}}
 
 
-## TreeMonMaps, RockMonMaps and the TreeMons pointer table
-## (engine/events/treemons.asm, data/wild/treemon_maps.asm, treemons.asm),
-## plus Crystal's AsleepTreeMons* lists. All three tables live in one bank, so
-## a set pointer resolves against the pointer table's own bank.
-##
-## Several pointers alias one address in both profiles: Crystal's NONE and its
-## trailing unused entry both point at CANYON's bytes, and pokegold stacks
-## NONE, UNUSED and CITY on one label. That is the source's own shape, so
-## repeated addresses are kept rather than deduplicated.
-## Public because the whole-cartridge fixture the other readers would need to
-## be tested through is impractical: the anchors below are real cartridge rows.
+## TreeMonMaps, RockMonMaps and the TreeMons pointer table, plus Crystal's
+## AsleepTreeMons* lists. All three tables live in one bank, so a set pointer
+## resolves against the pointer table's own bank. Several pointers alias one
+## address in both profiles: Crystal's NONE and its trailing unused entry both
+## point at CANYON's bytes, and pokegold stacks NONE, UNUSED and CITY on one
+## label, so repeated addresses are kept rather than deduplicated. Public because
+## the whole-cartridge fixture the other readers would need is impractical.
 static func read_treemons(
 	rom: RomFile, layout: Dictionary, configured: Dictionary
 ) -> Dictionary:

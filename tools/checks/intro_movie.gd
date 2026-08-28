@@ -3,17 +3,12 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies the intro movie against freshly imported real caches, on all three
-## cartridges.
-##
-## The whole movie is run to `JUMPTABLE_EXIT_F` rather than sampled: every scene
-## of the jumptable, every sprite it spawns and every sound it asks for is
-## exercised once. The expected values come from pokecrystal's
-## engine/movie/intro.asm and data/sprite_anims/.
-##
-## Gold and Silver carry `GoldSilverIntro`, a different movie that is not
-## imported, so they are checked for saying so rather than for running.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- intro_movie
+## cartridges. The whole movie is run to `JUMPTABLE_EXIT_F` rather than sampled:
+## every scene of the jumptable, every sprite it spawns and every sound it asks for
+## is exercised once. Expected values come from pokecrystal's
+## engine/movie/intro.asm and data/sprite_anims/. Gold and Silver carry
+## `GoldSilverIntro`, a different movie that is not imported, so they are checked
+## for saying so rather than for running.
 
 const MOVIE_GAMES: Array[StringName] = [&"crystal"]
 
@@ -106,16 +101,14 @@ func _sheet_tiles(data: GameData, name: String) -> int:
 	return int(data.tile_sheet("intro_%s" % name).get("tiles", 0))
 
 
-## Every BG cell the movie actually samples has to name a tile the sheet that
-## part of VRAM currently holds, and every attribute byte a palette its own run
-## has. Sampled rather than whole, because only 360 of a map's 1,024 cells are
-## the picture: the rest of the Unown maps is $ff, which nothing scrolls onto and
-## no scene has loaded a sheet for.
-##
-## This is what says `SCENE_VRAM` pairs a map with a sheet the way the setup
-## scenes do, and that the halves a scene does not reload carry forward: the
-## close-up's own map names thirty-three tiles below $80, which read the leaping
-## Suicune `IntroScene15` left in `vTiles2`.
+## Every BG cell the movie actually samples has to name a tile the sheet that part
+## of VRAM currently holds, and every attribute byte a palette its own run has.
+## Sampled rather than whole, because only 360 of a map's 1,024 cells are the
+## picture: the rest of the Unown maps is $ff, which nothing scrolls onto. This is
+## what says `SCENE_VRAM` pairs a map with a sheet the way the setup scenes do, and
+## that the halves a scene does not reload carry forward: the close-up's own map
+## names thirty-three tiles below $80, which read the leaping Suicune
+## `IntroScene15` left in `vTiles2`.
 func _verify_sampled_tiles(game_id: StringName, movie: Gen2IntroMovie, data: GameData) -> bool:
 	var map: PackedByteArray = movie.bg_map()
 	var attr: PackedByteArray = movie.bg_attr()

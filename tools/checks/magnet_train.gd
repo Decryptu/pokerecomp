@@ -2,28 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the lost-doll errand between Saffron and Vermilion and the Magnet
-## Train ride it pays for, against freshly imported real caches for both command
-## profiles.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## constants/map_constants.asm, maps/SaffronCity.asm, maps/CopycatsHouse1F.asm,
-## maps/CopycatsHouse2F.asm, maps/VermilionCity.asm, maps/PokemonFanClub.asm,
-## maps/SaffronMagnetTrainStation.asm and
-## maps/GoldenrodMagnetTrainStation.asm.
-##
-## Three findings carry the leg. The Copycat is a variable sprite, SPRITE_COPYCAT
-## ($fb), whose row is InitializeEventsScript's SPRITE_LASS until her own script
-## overwrites it; GetMonSprite answers SPRITE_CHRIS for a slot with no row at
-## all, which is what a lost table looks like. Each
-## station is two regions with no walkable seam: row 9 is solid, so the lobby
-## never reaches the platform and the only way onto a train is the officer's own
-## `applymovement`, which is a forced step. And the errand is a three-legged
-## loop with an order the cartridge enforces, since the Fan Club's Clefairy guy
-## reads EVENT_MET_COPYCAT_FOUND_OUT_ABOUT_LOST_ITEM before he parts with the
-## doll.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- magnet_train
+## Verifies the lost-doll errand between Saffron and Vermilion and the Magnet Train
+## ride it pays for, for both command profiles. Three findings carry the leg. The
+## Copycat is a variable sprite whose row is InitializeEventsScript's SPRITE_LASS
+## until her own script overwrites it, and GetMonSprite answers SPRITE_CHRIS for a
+## slot with no row at all, which is what a lost table looks like. Each station is
+## two regions with no walkable seam, so the only way onto a train is the officer's
+## own forced `applymovement`. And the errand is a three-legged loop whose order the
+## cartridge enforces through the Fan Club's own event check.
 
 
 ## constants/map_constants.asm. Nothing on this leg splits between the profiles.

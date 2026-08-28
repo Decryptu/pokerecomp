@@ -1,30 +1,14 @@
 class_name Gen2Screen
 extends Control
 
-## A Game Boy Color screen: 160x144 pixels, scaled by a whole number to fit.
-##
-## What the game draws goes into a hardware-sized [SubViewport] blown up by an
-## integer factor, since any other scale resamples an 8x8 tile into something
-## that crawls when it moves. Surrounding chrome is ordinary Godot UI at window
-## resolution, which is why this is a [Control] and not a stretch setting.
-##
-## [method display_native] is a second layer behind it, covering the same
-## rectangle at window resolution, for a view that cannot be drawn into a 160x144
-## buffer and magnified but still has to line up with the boxes above it.
-##
-## [member expanded] widens the buffer instead of framing it. The window is not
-## 10:9 and never was; the black bars are the shape of a screen this project can
-## draw past, so the buffer is the size of the whole control and is filled.
-## Interface is unmoved: [method display] puts a screen inside a 160x144
-## rectangle centred in that surface, so every box, menu and cursor is laid out
-## exactly where the cartridge laid it out and only the surround grows.
-## [member zoom_step] is how many whole pixels a hardware pixel is drawn as,
-## counted from the largest that fits.
-##
-## SCREEN FILL is read here rather than by each screen, and the surround is
-## filled here rather than by each screen, because the two together are what
-## "no screen is letterboxed" means: a screen that says nothing about either is
-## responsive, and one that is written next year is too.
+## A Game Boy Color screen: 160x144 pixels, scaled by a whole number to fit. What
+## the game draws goes into a hardware-sized [SubViewport] blown up by an integer
+## factor, since any other scale resamples an 8x8 tile into something that crawls
+## when it moves. [method display_native] is a second layer behind it at window
+## resolution. [member expanded] widens the buffer instead of framing it, and
+## [method display] still centres a 160x144 rectangle in it, so only the surround
+## grows. SCREEN FILL is read here rather than by each screen, which is what makes
+## a screen written next year responsive without saying anything about it.
 
 const WIDTH: int = 160
 const HEIGHT: int = 144
@@ -93,14 +77,11 @@ var interface_masked: bool = true:
 			_mask.visible = value
 
 ## What the surround is painted with: the shown picture's own field, so a screen
-## carries its background out to the window edge wherever it is opened.
-##
-## Followed automatically from [method Gen2PicImage.show], which is the one place
-## a screen hands a redrawn picture to the node that shows it. A screen with more
-## art than the hardware framed hands [method set_backdrop] the real thing
-## instead, and this is what is left for one without.
-##
-## Meaningless until something has said what it is: see [method has_field].
+## carries its background out to the window edge wherever it is opened. Followed
+## automatically from [method Gen2PicImage.show], the one place a screen hands a
+## redrawn picture to the node that shows it; a screen with more art than the
+## hardware framed hands [method set_backdrop] the real thing instead. Meaningless
+## until something has said what it is: see [method has_field].
 var surround_color: Color = Color.BLACK:
 	set(value):
 		var told: bool = _field_told
@@ -196,18 +177,12 @@ func _ready() -> void:
 	_fit()
 
 
-## Takes SCREEN FILL from the options file and applies it.
-##
-## Every screen, rather than the two that remembered to ask: a window is not
-## 10:9, and a screen that does not fill it leaves bars a player reads as a
-## fault. What a screen puts in the room is its own business; having the room is
-## not.
-##
-## Public and idempotent because the option is the file's rather than this
-## frame's: a caller that changed it after the screen entered the tree, which is
-## every tool that stages a framed shot and would be a live Settings toggle,
-## calls this and is obeyed. [member expanded]'s setter refits and answers
-## nothing when the value has not moved.
+## Takes SCREEN FILL from the options file and applies it, for every screen rather
+## than the two that remembered to ask: a window is not 10:9, and a screen that
+## does not fill it leaves bars a player reads as a fault. What a screen puts in
+## the room is its own business; having the room is not. Public and idempotent
+## because the option is the file's rather than this frame's, so a caller that
+## changed it after the screen entered the tree is obeyed.
 func apply_screen_fill() -> void:
 	expanded = Gen2OptionsStore.current().screen_fill
 
@@ -222,14 +197,11 @@ func display(node: Node) -> void:
 
 ## Renderer content, in hardware pixels, kept below every node [method display]
 ## placed. A renderer rebuilt mid-screen would otherwise be appended after a live
-## text box and paint over it.
-##
-## [param fills_buffer] is a view that draws the whole expanded surface, and gets
-## the buffer's own origin. A view that does not is laid out in the hardware's
-## 160x144 like everything else here, so it goes where that rectangle is and is
-## clipped to it; in the buffer's corner it would sit off to one side with the
-## boxes above it somewhere else. That is the default, because it is the answer
-## for a view that was written without the question in mind.
+## text box and paint over it. [param fills_buffer] is a view that draws the whole
+## expanded surface and gets the buffer's own origin; a view that does not is laid
+## out in the hardware's 160x144 like everything else here and is clipped to it,
+## since in the buffer's corner it would sit off to one side with the boxes above
+## it somewhere else.
 func display_content(node: Node, fills_buffer: bool = false) -> void:
 	if not fills_buffer:
 		_content.add_child(node)
@@ -312,14 +284,11 @@ func clear() -> void:
 
 
 ## Takes a node off the screen now and frees it at the end of the frame.
-##
 ## `queue_free` on its own only does the second half: the node stays in the tree,
-## and drawn, until the frame it was dropped on is served. A replacement added on
-## the same frame is then composited over its predecessor rather than instead of
-## it, which is a stale panel showing under the live one for exactly the frame a
-## screenshot catches; inside a [Container] the two are laid out side by side.
-##
-## Static, and the one way a screen drops a child it is replacing.
+## and drawn, until the frame it was dropped on is served, so a replacement added
+## on the same frame is composited over its predecessor rather than instead of it.
+## Inside a [Container] the two are laid out side by side. Static, and the one way
+## a screen drops a child it is replacing.
 static func drop(node: Node) -> void:
 	if node == null or not is_instance_valid(node):
 		return
@@ -329,15 +298,12 @@ static func drop(node: Node) -> void:
 	node.queue_free()
 
 
-## The same from an [method Node._exit_tree], where the removal above is
-## refused.
-##
-## A parent is blocked from removing a child while it is already removing one,
-## and every screen that hosts a view it does not own drops that view as it
-## leaves: both hang off the same parent, so the parent is mid-removal when the
-## drop arrives and the engine raises an error instead. Hiding is the whole of
-## what the removal was for here, since nothing replaces a view whose screen is
-## going, and [method Node.queue_free] takes it off the tree either way.
+## The same from an [method Node._exit_tree], where the removal above is refused.
+## A parent is blocked from removing a child while it is already removing one, and
+## every screen that hosts a view it does not own drops that view as it leaves:
+## both hang off the same parent, so the parent is mid-removal when the drop
+## arrives. Hiding is the whole of what the removal was for here, since nothing
+## replaces a view whose screen is going.
 static func drop_on_exit(node: Node) -> void:
 	if node == null or not is_instance_valid(node):
 		return
@@ -393,18 +359,13 @@ static func owner_of(node: Node) -> Gen2Screen:
 	return found
 
 
-## The screen a host's own 160x144 view belongs in.
-##
-## [param handed] is the one the opener gave it, for a host mounted beside a
-## screen rather than inside it; failing that the one [param node] is already
-## standing in; failing both a new one over [param node], which is what a host
-## opened on its own -- the launcher's PC, a preview -- really does need.
-##
-## A second screen over a window that already has one is what made the surround
-## ambiguous. Two viewports each pick their own scale and their own place for the
-## hardware rectangle, so an overlay meant to sit on the map is drawn at a
-## different size beside it, and both of them paint a surround the other did not
-## ask for. One window, one screen.
+## The screen a host's own 160x144 view belongs in: [param handed] is the one the
+## opener gave it, failing that the one [param node] is already standing in,
+## failing both a new one over [param node], which is what a host opened on its
+## own really does need. A second screen over a window that already has one is
+## what made the surround ambiguous: two viewports each pick their own scale and
+## their own place for the hardware rectangle, so an overlay meant to sit on the
+## map is drawn at a different size beside it. One window, one screen.
 static func host_for(node: Control, handed: Gen2Screen = null) -> Gen2Screen:
 	if handed != null:
 		return handed
@@ -421,15 +382,12 @@ static func host_for(node: Control, handed: Gen2Screen = null) -> Gen2Screen:
 	return built
 
 
-## Real art for the surround, the size of [method view_size], from [param source].
-##
-## A flat [member surround_color] is what a screen laid out in 160x144 has to
-## offer; a screen whose background is more than one colour -- the title's sky
-## over its cloud bank -- draws the whole buffer instead and hands it here. Only
-## the surround is taken from it, so the hardware rectangle stays exactly the
-## picture the cartridge drew.
-##
-## Dropped with [param source], so the screen after it does not inherit its sky.
+## Real art for the surround, the size of [method view_size], from
+## [param source]. A flat [member surround_color] is what a screen laid out in
+## 160x144 has to offer; a screen whose background is more than one colour draws
+## the whole buffer instead and hands it here. Only the surround is taken from it,
+## so the hardware rectangle stays exactly the picture the cartridge drew. Dropped
+## with [param source], so the screen after it does not inherit its sky.
 func set_backdrop(source: Node, image: Image) -> void:
 	if image == null or Vector2i(image.get_width(), image.get_height()) != _view_size:
 		if _backdrop_source == source:
@@ -487,18 +445,14 @@ static func note_field(target: CanvasItem, field: Color) -> void:
 	screen._take_field(target, field)
 
 
-## Takes the surround's colour from a picture a screen has just drawn.
-##
-## Called from [method Gen2PicImage.show] rather than by each screen: that is the
-## one place a redrawn picture reaches the node showing it, so the surround
-## follows a palette fade and a screen swap without either knowing this exists.
-## Only a picture the size of the hardware screen counts, and only one that is
-## opaque everywhere it is sampled: see [method Gen2PicImage.field_color].
-##
-## Whether the surround is showing is deliberately not a condition. A screen
-## draws its field on the frame it opens and the host raises the mask on that
-## same frame, in the other order; a colour only recorded while the mask was
-## already up would be the colour of the screen before this one.
+## Takes the surround's colour from a picture a screen has just drawn. Called from
+## [method Gen2PicImage.show] rather than by each screen: that is the one place a
+## redrawn picture reaches the node showing it, so the surround follows a palette
+## fade and a screen swap without either knowing this exists. Only a picture the
+## size of the hardware screen counts, and only one opaque everywhere it is
+## sampled. Whether the surround is showing is deliberately not a condition: the
+## mask goes up on the same frame in the other order, so a colour recorded only
+## while it was up would be the colour of the screen before this one.
 static func note_picture(target: CanvasItem, image: Image) -> void:
 	if target == null or image == null:
 		return
@@ -551,25 +505,14 @@ func clear_field() -> void:
 		_mask.queue_redraw()
 
 
-## Hides a view switch behind the cartridge's own way of going black.
-##
-## Building a renderer is a stall: a 3D view meshes a whole map on the frame it
-## is turned on, and nothing on one thread can animate over its own freeze. Only
-## the middle is frozen, though, and the middle is a still picture, so the close
-## is spent on the renderer that is still running, [param rebuild] is called on
-## the frame the screen is fully black, and the open is spent on the one it
-## built. The player sees a wipe with a long middle instead of a jump.
-##
-## `StartTrainerBattle_SpeckleToBlack` is the pattern
-## ([method Gen2BattleTransition.create_outro]), so the switch reads as the
-## game's own and costs no art. The open is the close's frames backwards, which
-## is the same picture rather than a second animation.
-##
-## This is around the switch rather than at one caller: every way of choosing a
-## view reaches [signal Gen2ModHost.view_changed], and every screen listening to
-## it comes through here. A screen that cannot animate -- a headless check, a
-## screenshot driver, a screen not in the tree -- rebuilds at once, because a
-## cover measured by nobody is only a delay.
+## Hides a view switch behind the cartridge's own way of going black. Building a
+## renderer is a stall, and nothing on one thread can animate over its own freeze,
+## but the middle of a wipe is a still picture: the close is spent on the renderer
+## still running, [param rebuild] is called on the frame the screen is fully
+## black, and the open is spent on the one it built.
+## `StartTrainerBattle_SpeckleToBlack` is the pattern, so the switch reads as the
+## game's own and costs no art. Around the switch rather than at one caller,
+## because every way of choosing a view reaches [signal Gen2ModHost.view_changed].
 func play_view_cover(rebuild: Callable) -> void:
 	if not _can_animate_cover():
 		if rebuild.is_valid():

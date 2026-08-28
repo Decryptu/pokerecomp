@@ -2,14 +2,13 @@ class_name Gen2IntroPresentation
 extends RefCounted
 
 ## The intro's own per-frame animation: `home/fade.asm`'s palette fades,
-## `Intro_RotatePalettesLeftFrontpic`, `Intro_WipeInFrontpic` and
-## `MovePlayerPic`, queued as steps a screen advances one VBlank at a time.
-##
-## A palette step is a DMG palette byte, not a rotation: `CopyPals` reads it two
-## bits at a time and writes the loaded colour each pair names, so a fade is an
-## index remap of the palette already loaded ([method apply_bgp]). Every count is
-## a `DelayFrames` operand, so a screen stepping this on
-## [Gen2WorldAnimation.FrameClock] spends the frames the cartridge spends.
+## `Intro_RotatePalettesLeftFrontpic`, `Intro_WipeInFrontpic` and `MovePlayerPic`,
+## queued as steps a screen advances one VBlank at a time. A palette step is a DMG
+## palette byte rather than a rotation: `CopyPals` reads it two bits at a time and
+## writes the loaded colour each pair names, so a fade is an index remap of the
+## palette already loaded. Every count is a `DelayFrames` operand, so a screen
+## stepping this on [Gen2WorldAnimation.FrameClock] spends the frames the cartridge
+## spends.
 
 ## A step that writes no palette byte, or that does not move the pic.
 const KEEP: int = -1

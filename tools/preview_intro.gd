@@ -5,20 +5,9 @@ extends SceneTree
 ##   Godot --path . -s res://tools/preview_intro.gd -- <game> <out.png> [what] [steps] [WxH]
 ##
 ## `what` is `copyright`, `presents`, `title`, `gender`, `clock`, `speech` or
-## `shrink`; `steps` is how many source frames or
-## advances to run first, so any beat of `OakSpeech` can be photographed. Several
-## comma-separated steps write one file each, suffixed with the step, which is
-## how a whole fade is looked at without paying for a process per frame. The
-## screens are built directly rather than through `intro_screen.tscn`, which
-## reads `GameRuntime` and so cannot compile under `-s`.
-##
-## `WxH` photographs the opening in a real window through [Gen2Screen] instead,
-## which is the only way to see what SCREEN FILL puts around a screen laid out in
-## 160x144:
-##
-##   ... gold /tmp/title.png title 0 1920x1080
-##
-## Opens a window: rendering needs a display.
+## `shrink`; `steps` is how many source frames to run first, several separated by
+## commas writing one file each. `WxH` photographs the opening in a real window
+## through [Gen2Screen] instead, which is the only way to see SCREEN FILL.
 
 ## Captured at hardware resolution, so a frame here compares to an emulator
 ## frame pixel for pixel rather than by eye.

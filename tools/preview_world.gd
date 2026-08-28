@@ -1,86 +1,63 @@
 extends SceneTree
 
-## Renders one imported map's expanded 4x4-tile blocks to a PNG.
+## Renders one imported map's expanded 4x4-tile blocks to a PNG, or photographs
+## the real screen on that map. `live help` prints [constant KIND_HELP], which is
+## every kind and what its two numbers mean.
 ##
-##   Godot --headless --path . -s res://tools/preview_world.gd -- gold 1 1 /tmp/world.png
-##
-## A fifth `live` argument photographs the real screen on that map instead. It
-## drives the screen's own path and needs a display, so it runs without
-## `--headless`:
-##
-##   Godot --path . -s res://tools/preview_world.gd -- crystal 26 2 /tmp/out.png live [kind] [x y] [WxH] [touch]
-##
-## The two numbers after `kind` are that kind's own arguments; where a kind reads
-## them as something else, the player's cell is written on the kind itself as
-## `<kind>@x,y`, for example `battle_transition@5,7`.
-##
-## Extra flags, in any order after the kind:
-##
-## | Flag | Effect |
-## | `WxH` | The window to photograph in, for a phone's two shapes |
-## | `touch` | Draw the on-screen controller, the only way to see how [Gen2GameFrame] splits a portrait screen |
-## | `framed` | The 160x144 letterbox the hardware had, instead of SCREEN FILL |
-## | `zoom=<n>` | The zoom ladder; `zoom=-3` is the whole-region survey |
-## | `view=<mod id>` | A registered renderer instead of the built-in one. Needs `--mods` in front of the `--` |
-##
-##   ... live effects 4 4 430x932 touch
-##   Godot --path . -s res://tools/preview_world.gd --mods -- crystal 26 2 \
-##     /tmp/out.png live effects 4 4 1920x1080 zoom=-3 view=voxel3d
-##
-## Kinds, with what their two numbers mean. A kind saying "no fixture cell" is
-## driven directly because no map cell reaches it.
-##
-## | Kind | Numbers | Draws |
-## | `effects` | cell | The emote, boulder dust, grass rustle and headbutt tree over the first visible object |
-## | `battle` | cell | The wild fight `preview_battle_request` starts, settled past its transition |
-## | `cut` | cell | `OWCutAnimation`'s two halves and the jump shadow |
-## | `tile_anim` | frames | The map that many `AnimateTileset` frames in: water, flowers, lava, cave scroll |
-## | `unown_wall` | cell | `DisplayUnownWords`' box, read off the chamber wall above the cell. Group 3 maps 23 to 26 say HO-OH, ESCAPE, WATER, LIGHT |
-## | `mart`, `mart_sell` | cell in front of the counter | `BuyMenu`, and the SELL row (`DepositSellPack`) |
-## | `pokepic` | cell | `Script_pokepic`'s box over the map, holding Chikorita |
-## | `pet_actor` | cell | A mod's world actor one cell ahead, pressed with A so it wears a `showemote` heart |
-## | `warp` | warp tile | `MapSetupScript_Door` at its whitest, which is the frame the new map loads on |
-## | `script_fade` | special, frames | One of the five fade specials over the map |
-## | `door` | door mat | `.CheckWarp`'s carpet, standing on an interior door's mat |
-## | `ice_slide` | direction, frames | `DoPlayerMovement.CheckForced`'s run. Direction is down, up, left, right |
-## | `ledge` | start cell | The ledge hop at the top of its arc, walking south until one allows it |
-## | `map_name_sign` | cell | `InitMapNameSign`'s window, raised by walking west onto the neighbouring map |
-## | `yes_no` | script, presses | `Script_yesorno`'s box over the map's script |
-## | `battle_tower` | A presses, DOWN presses | `BattleTower1FReceptionistScript`, talked to from the cell below her |
-## | `name_rater`, `move_deleter` | presses | `special NameRater` / `special MoveDeletion`. 0 is the introduction, 2 the last page with YES/NO, 4 the party list |
-## | `gift_nickname` | presses, species | `GiveANickname_YesNo`. 1 is the question, 2 the `WasSentToBillsPCText` behind NO. Add 1000 to the species for the box branch |
-## | `unown_printer` | slot, page | `_UnownPrinter`'s ALPH RUINS STAMP browser. Slot 26 is the vacant one; page 1 is what A sends to a printer that is not there |
-## | `diploma` | loop, page | `_Diploma`'s page. 1 stands `_PrintDiploma`'s connection error over it; page 2 needs a printer that answered |
-## | `bills_pc` | rows down, A presses | `_BillsPC`'s top menu and the lists behind it |
-## | `players_pc`, `pokemon_center_pc` | rows down, A presses | The bedroom's item PC and the Pokemon Center's machine |
-## | `mom_bank` | wallet, balance, both in hundreds | `Mom_WithdrawDepositMenuJoypad`'s dial. Add 1000 for the WITHDRAW header |
-## | `move_tutor` | presses | `special MoveTutor`. 0 is `ChooseMonToLearnTMHM`'s list, not a box |
-## | `day_care` | presses, routine | 0 the man, 1 the lady, 2 the man outside, 3 and 4 the two signs |
-## | `slot_machine` | frames, bet | `special SlotMachine`. Bet is 1 to 3, plus 4 for the lucky machine |
-## | `card_flip` | frames, coins in hundreds | `special CardFlip` |
-## | `unown_puzzle` | frames, picture | `special UnownPuzzle`. 0 Kabuto, 1 Omanyte, 2 Aerodactyl, 3 Ho-Oh, or 4 to 7 solved. The cursor blinks off `hVBlankCounter`, so a frame with bit 4 clear has none |
-## | `visible_encounter` | cell | A shiny of the map's own table on the eligible cell nearest the player, with the sparkle over it |
-## | `visible_encounter_glow` | cell | The same population with ordinary DVs wearing an entry's `glow` |
-## | `field_moves_menu` | cell | The start menu's MOVES row and the HM list behind it. Needs a registered field-move source, and is driven twice |
-## | `repel_renewal` | cell | The question a Repel running out asks. Needs a registered renewal provider |
-## | `mod_notice` | badge | `Gen2ModHost.request_notice`'s banner over the map, wearing that badge |
-## | `mod_page` | badges won | `START_ACTION_OPEN_MOD_PAGE`'s screen, listing the eight Johto badges |
-## | `reset_question` | none | The reset chord's own question, asked once ever. Driven twice for the `YesNoBox` behind its second page |
-## | `launcher_question` | none | The HOME row's question, walked to off the list. Driven twice |
-##
-## A kind may also be the name of any `preview_*` driver on the world screen
-## without that prefix: `field_move` (`PartyMenu` with a taught CUT),
-## `start_menu`, `capture`, `catch_nickname` (`PokeBallEffect`'s question over
-## the battle the throw was made in), `move_forget` and the rest. A `*_use` name
-## is driven twice, since each call is one step of its own sequence.
-##
-## Or one of [constant FIELD_ITEMS]' names, which is the pack's USE on that item:
-## the Itemfinder closes the pack over the world's answer, the Coin Case prints
-## inside the pack, and the three in [constant FACE_UP_FIRST] each need their own
-## map and the cell below their target.
+##   Godot --headless --path . -s res://tools/preview_world.gd -- gold 1 1 /tmp/w.png
+##   Godot --path . -s res://tools/preview_world.gd -- crystal 26 2 /tmp/out.png \
+##       live [kind] [x y] [WxH] [touch] [framed] [zoom=<n>] [view=<mod id>]
 
 ## `TrainerCard_JohtoBadgesOAM`'s eight, for the two mod-surface kinds: the only
 ## badge art the cartridge has.
+## Every `live` kind, what its two numbers mean and what it draws. Data rather
+## than a comment, because `live help` prints it. A kind may also be any `preview_*` driver on the world screen without
+## that prefix (`field_move`, `start_menu`, `capture`, `catch_nickname`,
+## `move_forget`), which is driven twice when its name ends in `_use`, or one of
+## [constant FIELD_ITEMS]' names, which is the pack's USE on that item.
+const KIND_HELP: Dictionary = {
+	&"effects": "cell: the emote, boulder dust, grass rustle and headbutt tree over the first visible object",
+	&"battle": "cell: the wild fight preview_battle_request starts, settled past its transition",
+	&"cut": "cell: OWCutAnimation's two halves and the jump shadow",
+	&"tile_anim": "frames: the map that many AnimateTileset frames in",
+	&"unown_wall": "cell: DisplayUnownWords' box. Group 3 maps 23 to 26 say HO-OH, ESCAPE, WATER, LIGHT",
+	&"mart": "cell in front of the counter: BuyMenu",
+	&"mart_sell": "cell in front of the counter: the SELL row (DepositSellPack)",
+	&"pokepic": "cell: Script_pokepic's box over the map, holding Chikorita",
+	&"pet_actor": "cell: a mod's world actor one cell ahead, pressed with A so it wears a showemote heart",
+	&"warp": "warp tile: MapSetupScript_Door at its whitest, the frame the new map loads on",
+	&"script_fade": "special, frames: one of the five fade specials over the map",
+	&"door": "door mat: .CheckWarp's carpet, standing on an interior door's mat",
+	&"ice_slide": "direction, frames: DoPlayerMovement.CheckForced's run. Direction is down, up, left, right",
+	&"ledge": "start cell: the ledge hop at the top of its arc, walking south until one allows it",
+	&"map_name_sign": "cell: InitMapNameSign's window, raised by walking west onto the neighbouring map",
+	&"yes_no": "script, presses: Script_yesorno's box over the map's script",
+	&"battle_tower": "A presses, DOWN presses: BattleTower1FReceptionistScript, talked to from the cell below her",
+	&"name_rater": "presses: special NameRater. 0 is the introduction, 2 the last page with YES/NO, 4 the party list",
+	&"move_deleter": "presses: special MoveDeletion, the same three stages",
+	&"gift_nickname": "presses, species: GiveANickname_YesNo. 1 the question, 2 the WasSentToBillsPCText behind NO; add 1000 for the box branch",
+	&"unown_printer": "slot, page: _UnownPrinter's browser. Slot 26 is the vacant one; page 1 is what A sends to a printer that is not there",
+	&"diploma": "loop, page: _Diploma's page. 1 stands _PrintDiploma's connection error over it; page 2 needs a printer that answered",
+	&"bills_pc": "rows down, A presses: _BillsPC's top menu and the lists behind it",
+	&"players_pc": "rows down, A presses: the bedroom's item PC",
+	&"pokemon_center_pc": "rows down, A presses: the Pokemon Center's machine",
+	&"mom_bank": "wallet, balance, both in hundreds: Mom_WithdrawDepositMenuJoypad's dial. Add 1000 for the WITHDRAW header",
+	&"move_tutor": "presses: special MoveTutor. 0 is ChooseMonToLearnTMHM's list, not a box",
+	&"day_care": "presses, routine: 0 the man, 1 the lady, 2 the man outside, 3 and 4 the two signs",
+	&"slot_machine": "frames, bet: special SlotMachine. Bet is 1 to 3, plus 4 for the lucky machine",
+	&"card_flip": "frames, coins in hundreds: special CardFlip",
+	&"unown_puzzle": "frames, picture: special UnownPuzzle. 0 Kabuto, 1 Omanyte, 2 Aerodactyl, 3 Ho-Oh, 4 to 7 solved",
+	&"visible_encounter": "cell: a shiny of the map's own table on the eligible cell nearest the player",
+	&"visible_encounter_glow": "cell: the same population with ordinary DVs wearing an entry's glow",
+	&"field_moves_menu": "cell: the start menu's MOVES row and the HM list. Needs a registered field-move source",
+	&"repel_renewal": "cell: the question a Repel running out asks. Needs a registered renewal provider",
+	&"mod_notice": "badge: Gen2ModHost.request_notice's banner over the map, wearing that badge",
+	&"mod_page": "badges won: START_ACTION_OPEN_MOD_PAGE's screen, listing the eight Johto badges",
+	&"reset_question": "none: the reset chord's own question, asked once ever. Driven twice",
+	&"launcher_question": "none: the HOME row's question, walked to off the list. Driven twice",
+}
+
+
 const BADGE_NAMES: Array[String] = [
 	"ZEPHYRBADGE", "HIVEBADGE", "PLAINBADGE", "FOGBADGE",
 	"MINERALBADGE", "STORMBADGE", "GLACIERBADGE", "RISINGBADGE",
@@ -193,6 +170,11 @@ func _initialize() -> void:
 			return
 		_output_path = args[3]
 		var kind_arg: String = args[5] if args.size() >= 6 else "effects"
+		if kind_arg == "help":
+			for kind: StringName in KIND_HELP:
+				print("%-24s %s" % [kind, KIND_HELP[kind]])
+			quit(0)
+			return
 		if kind_arg.contains("@"):
 			var halves: PackedStringArray = kind_arg.split("@")
 			kind_arg = halves[0]
@@ -493,16 +475,13 @@ func _process(_delta: float) -> bool:
 				_screen.press_button(Gen2Button.A)
 				_settle_mon_special(host_property)
 		elif _kind == &"battle_tower":
-			## `BattleTower1FReceptionistScript` from the cell below her, which
-			## is where `Script_WalkToBattleTowerElevator` puts the player back.
-			## The first number is how many A presses to spend, which walks the
-			## welcome box, the explanation question and the Challenge /
-			## Explanation / Cancel menu; the second is how many DOWN presses to
-			## spend on whichever menu is up, so `battle_tower 6 2` stands on the
-			## third room of the level list.
-			## `_CheckForBattleTowerRules` refuses anything but three different
-			## species holding three different items, and the development save's
-			## party is not one, so the challenge would never open a room.
+			## `BattleTower1FReceptionistScript` from the cell below her, which is
+			## where `Script_WalkToBattleTowerElevator` puts the player back. The
+			## first number is how many A presses to spend, walking the welcome box,
+			## the explanation question and the three-row menu; the second is how many
+			## DOWN presses on whichever menu is up. `_CheckForBattleTowerRules`
+			## refuses anything but three different species holding three different
+			## items, and the development save's party is not one.
 			_stage_battle_tower_party()
 			_screen.press_button(Gen2Button.UP)
 			_screen.interact()

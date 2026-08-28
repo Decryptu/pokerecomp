@@ -1,23 +1,13 @@
 extends SceneTree
 
-## Every script command a walked conversation runs on the real world screen, in
-## the order it ran and with the `bank:address` the cartridge would hold in
-## wScriptBank:wScriptPos for it.
-##
-##   Godot --headless --path . -s res://tools/trace_world_script.gd -- \
-##       <game> <group> <map> <x> <y> <dir:count,...> <frames> <out.txt>
-##
-## The port half of `.claude/oracle/overworld/trace_script.py`, which prints the
-## same artefact off a real cartridge. The line is `frame bank:addr opcode name`,
-## so the two command orders diff directly and a branch taken on the wrong side
-## of a flag shows up as the first differing address rather than as a wrong box
-## on a screenshot.
-##
-## The walk list is the steps taken before A is pressed, so a run reaches the
-## object it is about to talk to. A count of zero is a turn on the spot, which
-## is what a press into the object being talked to does. A is then pressed every
-## fourteenth frame, the cadence the cartridge trace mashes at, until the one
-## conversation it started has ended.
+## Every script command a walked conversation runs on the real world screen, in the
+## order it ran and with the `bank:address` the cartridge would hold for it. The
+## port half of `.claude/oracle/overworld/trace_script.py`: the line is
+## `frame bank:addr opcode name`, so a branch taken on the wrong side of a flag
+## shows up as the first differing address. The walk list is the steps taken before
+## A is pressed, a count of zero being a turn on the spot; A is then pressed every
+## fourteenth frame, the cadence the cartridge trace mashes at. Arguments:
+## `<game> <group> <map> <x> <y> <dir:count,...> <frames> <out.txt>`.
 
 ## The cartridge trace's own pace: slow enough that a box waiting for a press is
 ## not pressed twice.

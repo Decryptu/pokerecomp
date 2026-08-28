@@ -111,17 +111,10 @@ func _ready() -> void:
 	load_mods()
 
 
-## Brings the lower display up for the whole process rather than for the world.
-##
-## Here rather than in [Gen2WorldScreen] because a handheld with two panels has
-## two panels in the launcher as well, and a black one reads as a fault. The
-## screen shows the project's own mark until a world is handed to it and again
-## when that world closes; [method set_second_screen_world] is the one way it
-## changes hands.
-##
-## Refused on anything but a player's own launch, for the reason
-## [method apply_display_options] gives: a check or a screenshot driver must not
-## open a window of its own.
+## Brings the lower display up for the whole process rather than for the world: a
+## handheld with two panels has two in the launcher as well, and a black one reads
+## as a fault. Refused on anything but a player's own launch, for the reason
+## [method apply_display_options] gives.
 func _attach_second_screen() -> void:
 	if not is_player_launch():
 		return
@@ -162,15 +155,12 @@ func _process(_delta: float) -> void:
 		_second_screen.refresh()
 
 
-## Puts the app block's window and frame-rate settings into the engine.
-##
-## The settings page calls this after every change, the way it calls
-## [method Gen2InputRuntime.apply_options] for the control scheme; nothing else
-## needs to. Refused on anything but a player's own launch: a headless check or a
-## `-s` tool would otherwise be capped at whatever frame rate the developer last
-## chose, and a screenshot driver would take the window with it. GAME SPEED is
-## not here: it reaches the game through [Gen2WorldAnimation.FrameClock], which
-## is what keeps it off the audio driver.
+## Puts the app block's window and frame-rate settings into the engine. The
+## settings page calls it after every change and nothing else needs to. Refused on
+## anything but a player's own launch: a headless check would be capped at
+## whatever frame rate the developer last chose, and a screenshot driver would
+## take the window with it. GAME SPEED reaches the game through
+## [Gen2WorldAnimation.FrameClock] instead, which keeps it off the audio driver.
 static func apply_display_options(options: Gen2Options) -> void:
 	if options == null or not is_player_launch():
 		return

@@ -1,16 +1,13 @@
 class_name Gen2NameRater
 extends RefCounted
 
-## `engine/events/name_rater.asm`, the rules half.
-##
-## `_NameRater` is a straight line of text, question, party selection, text and
-## naming screen; what needs a reading rather than a screen is which of its five
-## endings a chosen party member reaches, and the three routines beside it that
-## decide the last one. [Gen2NameRaterScreen] is the routine itself, on the
-## overworld's own pump; this holds nothing and answers questions.
-##
-## Every string is the cartridge's, read through [method GameData.name_rater_text]
-## off the ten `text_far` stubs `RomLayout.NAME_RATER_TEXT_ORDER` pins.
+## `engine/events/name_rater.asm`, the rules half. `_NameRater` is a straight line
+## of text, question, party selection, text and naming screen; what needs a reading
+## rather than a screen is which of its five endings a chosen party member reaches,
+## and the three routines beside it that decide the last one.
+## [Gen2NameRaterScreen] is the routine itself, on the overworld's own pump; this
+## holds nothing and answers questions. Every string is the cartridge's, off the
+## ten `text_far` stubs `RomLayout.NAME_RATER_TEXT_ORDER` pins.
 
 ## `MON_NAME_LENGTH - 1`: how many characters a nickname holds before its `@`.
 const NICKNAME_LENGTH: int = 10

@@ -1,18 +1,13 @@
 class_name Gen2NameRaterScreen
 extends Control
 
-## `_NameRater` (`engine/events/name_rater.asm`) on the overworld's own pump.
-##
-## The routine is a straight line: an introduction and a `YesNoBox`, the party
-## list `SelectMonFromParty` opens, three endings that need no new name, a second
+## `_NameRater` (`engine/events/name_rater.asm`) on the overworld's own pump. The
+## routine is a straight line: an introduction and a `YesNoBox`, the party list
+## `SelectMonFromParty` opens, three endings that need no new name, a second
 ## `YesNoBox`, `_NamingScreen`, and `.done`'s own text. [Gen2NameRater] answers
-## which ending a member reaches; this owns the boxes, the presses and the two
-## screens it opens over itself.
-##
-## The last text is deliberately not pressed here. `special NameRater` returns
-## the moment `PrintText` has drawn it and the map script's own `waitbutton` is
-## what dismisses it, so the ending text is handed to the caller through
-## [signal finished] and stands in the world's speech box for that one press.
+## which ending a member reaches; this owns the boxes and the presses. The last
+## text is deliberately not pressed here: `special NameRater` returns the moment
+## `PrintText` has drawn it and the map script's own `waitbutton` dismisses it.
 
 ## The chosen nickname, if the routine wrote one, and the text `.done` ends on.
 ## [param party_index] is -1 for every ending that renames nothing.

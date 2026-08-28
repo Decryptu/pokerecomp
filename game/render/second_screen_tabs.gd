@@ -1,18 +1,13 @@
 class_name Gen2SecondScreenTabs
 extends RefCounted
 
-## Which pages a second display may show, and the icon each is reached by.
-##
-## The gate is not this file's: it is [Gen2WorldStartMenu]'s, filtered to the
-## entries that are a picture rather than an action. A tab therefore appears on
-## exactly the frame its START menu row does, so the team page cannot be opened
-## before Elm has handed over a starter and the Pokegear page cannot be opened
-## before the phone call that gives one. SAVE, OPTION and EXIT do something
-## rather than show something, and a mod's own row is a screen this cannot draw,
-## so neither reaches a tab.
-##
-## Node-free: it answers a list and an icon image, and the view decides where to
-## put them.
+## Which pages a second display may show, and the icon each is reached by. The
+## gate is [Gen2WorldStartMenu]'s, filtered to the entries that are a picture
+## rather than an action, so a tab appears on exactly the frame its START menu row
+## does: the team page cannot be opened before Elm has handed over a starter.
+## SAVE, OPTION and EXIT do something rather than show something, and a mod's own
+## row is a screen this cannot draw, so neither reaches a tab. Node-free: it
+## answers a list and an icon image, and the view decides where to put them.
 
 ## The START menu rows that are a page. In `SetUpMenuItems` order, which is the
 ## order they are drawn in.
@@ -36,16 +31,11 @@ const ICON_MAX: int = 18
 ## Where each tab's icon is cut from: the cache's own sheet name, the top-left
 ## pixel in that sheet's own grid, how many tiles wide that grid is, and how many
 ## whole pixels one source pixel is drawn as. Every one is art the page it opens
-## already draws:
-##
-## | Tab | Icon |
-## |---|---|
-## | #DEX | the caught marker, as `HUDBallIcons` draws it: the same ball the dex listing puts beside a caught row, off the sheet that draws it on white rather than on the dex's black field |
-## | PACK | the middle of `PackGFX`'s five-by-three bag |
-## | GEAR | `.PlacePokegearCardIcon`'s MAP icon, tile $40 less [constant RomLayout.POKEGEAR_FIRST_TILE] |
-## | player | the head of `GetCardPic`'s own player picture |
-##
-## #MON has no entry: its icon is the party's lead, read live.
+## already draws: #DEX is the caught marker as `HUDBallIcons` draws it, on white
+## rather than on the dex's black field; PACK is the middle of `PackGFX`'s bag;
+## GEAR is `.PlacePokegearCardIcon`'s MAP icon; and the player tab is the head of
+## `GetCardPic`'s own picture. #MON has no entry: its icon is the party's lead,
+## read live.
 const ICONS: Dictionary = {
 	Gen2WorldStartMenu.ITEM_POKEDEX: {
 		"sheet": "ball_icons", "at": Vector2i(0, 0), "size": Vector2i(8, 8),
@@ -195,16 +185,12 @@ static func _species_icon(data: GameData, species: int, egg: bool) -> Image:
 
 
 ## The [param extent] rectangle of a sheet at [param at], as one picture, drawn
-## [param scale] whole pixels per source pixel.
-##
-## The cache stores every sheet as a single row of tiles, so a rectangle that
-## crosses a tile boundary is assembled here rather than blitted: [param stride]
-## is how many tiles wide the sheet was before it was flattened, which is the
-## only thing that says where its second row of tiles went.
-##
-## [param skip] is the colour left standing: zero for a species icon, which is an
-## object and never draws its own index 0, and -1 for a background sheet, whose
-## four colours are all drawn.
+## [param scale] whole pixels per source pixel. The cache stores every sheet as a
+## single row of tiles, so a rectangle that crosses a tile boundary is assembled
+## here rather than blitted: [param stride] is how many tiles wide the sheet was
+## before it was flattened, which is the only thing that says where its second row
+## went. [param skip] is the colour left standing: zero for a species icon, which
+## is an object and never draws its own index 0, and -1 for a background sheet.
 static func _crop(
 	strip: PackedByteArray, stride: int, at: Vector2i, extent: Vector2i, scale: int,
 	colors: PackedColorArray, skip: int

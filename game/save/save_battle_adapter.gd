@@ -55,14 +55,12 @@ static func to_battle_mon(data: GameData, saved: Gen2SaveMon) -> Gen2BattleMon:
 
 
 ## Writes a fought party back over [param source_save]. Eggs never entered the
-## battle party, so they keep their own slots and the battle Pokémon fill the
-## rest in order; the write fails rather than dropping an egg or shifting a
-## slot when the two no longer line up.
-##
-## The candidate starts as a complete clone of [param source_save], so fields
-## the battle model does not carry cannot disappear as the save schema grows.
-## Happiness is not restored from that clone: Return and Frustration read it,
-## so [Gen2BattleMon] holds it and it round-trips with the fought party.
+## battle party, so they keep their own slots and the battle Pokemon fill the rest
+## in order; the write fails rather than dropping an egg or shifting a slot when
+## the two no longer line up. The candidate starts as a complete clone of
+## [param source_save], so fields the battle model does not carry cannot disappear
+## as the save schema grows. Happiness is not restored from that clone: Return and
+## Frustration read it, so it round-trips with the fought party.
 static func from_battle_party(
 	game_id: StringName, rom_sha1: String, slot: int, party: Gen2Party, player_name: String = "",
 	source_save: Gen2SaveData = null

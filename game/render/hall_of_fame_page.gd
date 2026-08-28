@@ -1,20 +1,13 @@
 class_name Gen2HallOfFamePage
 extends RefCounted
 
-## One Hall of Fame induction panel, on the tile grid the hardware uses.
-##
-## Positions are `engine/events/halloffame.asm`'s own: DisplayHOFMon's two text
-## boxes, its frontpic at (6,5) and every field row it prints, and
-## HOF_AnimatePlayerPic's name box for the player's page.
-##
-## `halloffame.asm:298` calls `LoadFontsBattleExtra` before any of this, so the
-## panel prints with `gfx/font/font_battle_extra.png` over $60 to $78 and `№`,
-## `<ID>` and `<LV>` are real tiles. Every glyph and column here is the
-## cartridge's; see [constant Gen2Text.FONT_BATTLE_EXTRA].
-##
-## Node-free: it writes indices into a buffer, so a page can be drawn and read
-## back headless. The Pokémon's own pic is not in that buffer; it has its own
-## palette and is composed over the page by the screen.
+## One Hall of Fame induction panel, on the tile grid the hardware uses. Positions
+## are `engine/events/halloffame.asm`'s own: DisplayHOFMon's two text boxes, its
+## frontpic at (6,5) and every field row it prints, plus
+## HOF_AnimatePlayerPic's name box for the player's page. `halloffame.asm:298`
+## calls `LoadFontsBattleExtra` first, so the panel prints with the battle-extra
+## strip over $60 to $78. Node-free; the Pokemon's own pic is not in that buffer,
+## having its own palette, and is composed over the page by the screen.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20

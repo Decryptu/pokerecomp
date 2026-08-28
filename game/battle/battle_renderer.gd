@@ -2,26 +2,13 @@ class_name Gen2BattleRenderer
 extends Control
 
 ## Draws the battle field: two pics, two status panels, two HP bars, the exp bar
-## and whatever a battle animation is putting over them. It does not own the
-## battle; call [method set_battle_data] once, then [method set_view] whenever
-## the screen has new display values to show.
+## and whatever an animation is putting over them. Call [method set_battle_data]
+## once, then [method set_view] whenever the screen has new display values.
 ##
 ## The pics are drawn through `wTilemap` rather than placed at a corner, because
-## that map is what a battle animation edits: `BattleBGEffect_HideMon` blanks a
-## battler's box, `..._RemoveMon` shifts it a column at a time and the pic-resize
-## script stamps smaller arrangements of the same tiles over it. The screen owns
-## the map and hands it in; a tile id is the hardware's, `$00` up for the enemy's
-## front pic and `$31` up for the player's back pic.
-##
-## Panels compose into one screen-sized index buffer drawn over the pics with
-## index 0 transparent: a panel is a shape on a white field, drawn into the
-## background layer on hardware, so the pics show through everything that is not
-## ink.
-##
-## Every background layer is part of one plane, so a scroll applies to all of
-## them alike: the view hands over a per-scanline offset and each layer is
-## scrolled through [Gen2Raster] by the same one. The animation's own objects are
-## not part of that plane and do not scroll, the way OAM does not.
+## that map is what an animation edits. Panels compose into one screen-sized index
+## buffer with index 0 transparent. Every background layer is one plane, so the
+## per-scanline scroll applies to all of them and to none of the objects.
 
 const TILE: int = Gen2Font.TILE
 
@@ -246,20 +233,12 @@ func _bg_map() -> PackedByteArray:
 
 ## One screen-sized index buffer holding every cell of [param map] whose tile id
 ## falls inside this pic's own run, drawn from the pic's padded box. A tile is
-## `base + column * side + row`, which is the column-major order `PlaceGraphic`
-## walks and `.BGSquares` indexes.
-## [param vbank1] is `wAttrmap` bit 3, which is the VRAM bank each cell's tile
-## number is read from, and [param animated] is whether this layer owns bank 1.
-##
-## `PokeAnim_SetVBank1` is the whole reason both are needed. Bank 0 holds the
-## enemy's padded picture at tiles 0 to 48 and the player's back pic from `$31`,
-## which is 49; bank 1 holds the enemy's picture *and* `AnimateFrontpic`'s frames,
-## which run from that same 49. So the two sheets overlap in tile number and are
-## told apart by the bank alone: on a bank 0 cell this layer sees its own square
-## and nothing behind it, on a bank 1 cell only the layer that owns bank 1 draws
-## at all, and it may reach the frames. Reading one flat sheet instead puts the
-## animation's tiles over the player and the player's over the enemy, which is
-## the same defect from either side.
+## `base + column * side + row`, the column-major order `PlaceGraphic` walks.
+## [param vbank1] is `wAttrmap` bit 3 and [param animated] is whether this layer
+## owns bank 1. `PokeAnim_SetVBank1` is why both are needed: bank 1 holds the
+## enemy's picture *and* `AnimateFrontpic`'s frames from the same tile 49, so the
+## two sheets overlap in number and are told apart by the bank alone. One flat
+## sheet puts the animation's tiles over the player and the player's over the enemy.
 func _pic_layer(
 	map: PackedByteArray, base: int, side: int, pixels: PackedByteArray,
 	vbank1: PackedByteArray = PackedByteArray(), animated: bool = false
@@ -574,16 +553,12 @@ func _palette_map(key: String, slot: int) -> int:
 	return int((maps as PackedByteArray)[slot])
 
 
-## The panels, and then each bar over them in its own colour.
-##
-## The hardware gives every background tile its own palette, so a green HP bar
-## sits in a panel of black text without either being separate. Here that is one
-## buffer per palette, which is why the bars are drawn apart from the panels.
-##
-## `BattleAnimClearHud` takes one side off the map for the length of a move
-## animation and `BattleAnimRestoreHuds` puts it back; a battle opening has
-## neither of them up for several seconds. Both are the two per-side keys, and
-## the view's own `hud_visible` is the summary of them.
+## The panels, and then each bar over them in its own colour. The hardware gives
+## every background tile its own palette, so a green HP bar sits in a panel of
+## black text; here that is one buffer per palette, which is why the bars are
+## drawn apart from the panels. `BattleAnimClearHud` takes one side off the map
+## for the length of a move animation and `BattleAnimRestoreHuds` puts it back,
+## and the view's `hud_visible` is the summary of the two per-side keys.
 func _draw_panels() -> void:
 	var raster: Array = _raster_key()
 	var enemy_hp: int = int(_view.get("enemy_hp", 0))

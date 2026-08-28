@@ -1,18 +1,13 @@
 extends SceneTree
 
 ## Renders one imported audio record through the sound engine and the APU, and
-## writes a WAV plus the per-frame hardware-register trace beside it.
+## writes a WAV plus the per-frame hardware-register trace beside it. The trace is
+## the parity artefact: any faithful implementation of the same driver writes the
+## same registers in the same order on the same frames. Kinds are `music`, `sfx`,
+## `cry` and `mon_cry`; the id is the record index, the species for `mon_cry`, or
+## `all` to sweep the table into `<prefix>_<index>`.
 ##
-## The trace is the parity artefact: any faithful implementation of the same
-## driver has to write the same registers in the same order on the same frames.
-##
-## ```sh
-## G=/Applications/Godot.app/Contents/MacOS/Godot
-## $G --headless --path . -s res://tools/render_audio.gd -- crystal music 1 600 /tmp/out
-## ```
-## Kinds are `music`, `sfx`, `cry` and `mon_cry`; the id is the record index, or
-## the species number for `mon_cry`, or `all` to sweep the whole table into
-## `<prefix>_<index>`.
+##   ... -s res://tools/render_audio.gd -- crystal music 1 600 /tmp/out
 
 
 func _initialize() -> void:

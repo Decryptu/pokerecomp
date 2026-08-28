@@ -1,26 +1,14 @@
 class_name Gen2MailPage
 extends RefCounted
 
-## `ReadAnyMail` and the ten `Load*MailGFX` routines behind it
-## (`engine/pokemon/mail_2.asm`) on the hardware tile grid.
-##
-## Each mail type builds its own VRAM window out of one flat 1bpp run and then
-## writes a tilemap over it, so the page is two transcribed programs per type
-## rather than a picture: [constant LOADS] is the routine's `LoadMailGFX_Color*`
-## calls and [constant PLACES] its `hlcoord` writes. Keeping them as data is what
-## makes ten near-identical routines readable and what lets
-## `tools/checks/mail.gd` sweep every one on every cartridge.
-##
-## The 1bpp run has one ink level; `LoadMailGFX_Color1`, `_Color2` and `_Color3`
-## are the same bytes written into plane 0, plane 1 or both, so a lit pixel comes
-## out as palette index 1, 2 or 3 and an unlit one as 0. That is the whole reason
-## one sheet draws in three shades.
-##
-## Node-free like the other pages: it writes indices into a buffer.
-## PORTRAITMAIL's `PrepMonFrontpic` is in that buffer too rather than being a
-## layer over it: `PlaceGraphic` writes the picture into the tilemap, under the
-## frame the routine then draws, so a host laying it on top would cover the mail
-## with the Pokemon or the Pokemon with the mail.
+## `ReadAnyMail` and the ten `Load*MailGFX` routines behind it on the hardware
+## tile grid. Each mail type builds its own VRAM window out of one flat 1bpp run
+## and then writes a tilemap over it, so the page is two transcribed programs per
+## type rather than a picture, which is what makes ten near-identical routines
+## readable and lets `tools/checks/mail.gd` sweep every one. The 1bpp run has one
+## ink level and the three `LoadMailGFX_Color*` write it into plane 0, plane 1 or
+## both, which is why one sheet draws in three shades. PORTRAITMAIL's pic is in
+## the buffer rather than a layer, since `PlaceGraphic` writes it into the tilemap.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20

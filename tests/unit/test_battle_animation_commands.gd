@@ -1,14 +1,12 @@
 extends GutTest
 
-## The five routes an animation reaches the screen by.
-##
-## `moveanim` and `moveanimnosub` sit in the effect lists, `statupanim` and
-## `statdownanim` between a stat change and its message, and `AnimateCurrentMove`
-## inside individual command bodies rather than in any list at all. Those four
-## are the move's own animation. `PlayOpponentBattleAnim` is the fifth and is
-## not: five secondary-effect commands play a status animation on the target,
-## with `hBattleTurn` inverted for its length. All five write the same event,
-## since the engine is scene-free and the screen is what spends the frames.
+## The five routes an animation reaches the screen by. `moveanim` and
+## `moveanimnosub` sit in the effect lists, `statupanim` and `statdownanim` between
+## a stat change and its message, and `AnimateCurrentMove` inside individual command
+## bodies rather than in any list at all; those four are the move's own animation.
+## `PlayOpponentBattleAnim` is the fifth and is not: five secondary-effect commands
+## play a status animation on the target, with `hBattleTurn` inverted for its
+## length. All five write the same event, since the engine is scene-free.
 
 const Fixture := preload("res://tests/unit/battle_fixture.gd")
 

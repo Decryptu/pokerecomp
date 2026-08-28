@@ -1,46 +1,25 @@
 class_name Gen2BattleAnimScript
 extends RefCounted
 
-## The battle animation command interpreter
-## (engine/battle_anims/anim_commands.asm).
+## The battle animation command interpreter (engine/battle_anims/anim_commands.asm).
+## Nothing here draws, plays a sound or touches a palette: the commands are
+## reported and whoever is drawing decides what they look like.
 ##
-## Scene-free like the rest of the battle layer: the screen ticks this once per
-## hardware frame and reads back the commands that ran, the way it ticks the
-## bars and the intro. Nothing here draws, plays a sound or touches a palette;
-## the commands are reported and whoever is drawing decides what they look like.
-##
-## A script is a byte stream in one bank. Anything below
-## [constant FIRST_COMMAND] is not a command at all: `RunBattleAnimCommand`
-## stores it in `wBattleAnimDelay` and `.CheckTimer` then decrements it once a
-## frame and runs nothing while it is non-zero, so `anim_wait N` is exactly N
-## frames of pause. Everything from [constant FIRST_COMMAND] up dispatches
-## through `BattleAnimCommands`, which is what [constant COMMANDS] is.
-##
-## The control-flow state is the cartridge's, which means one level of nesting
-## and no more: `anim_call` saves the return address in the single
-## `wBattleAnimParent` word and `anim_loop` counts in the single
-## `wBattleAnimLoops` byte, so a call inside a call or a loop inside a loop
-## loses the outer one. Both are reproduced rather than generalised.
-##
-## `wBattleAnimParam` is an input the battle engine writes before playing
-## (engine/battle/effect_commands.asm), and `wBattleAnimVar` is animation-local:
-## `ClearBattleAnims` zeroes `wLYOverrides` through `wBattleAnimEnd`, which
-## covers the var and not the param.
+## Anything below [constant FIRST_COMMAND] is a delay rather than a command, so
+## `anim_wait N` is exactly N frames. The control flow is the cartridge's single
+## `wBattleAnimParent` word and single `wBattleAnimLoops` byte, so a call inside a
+## call loses the outer one; both are reproduced rather than generalised.
 
 ## `FIRST_BATTLE_ANIM_CMD` (macros/scripts/battle_anims.asm). Every byte under it
 ## is a delay.
 const FIRST_COMMAND: int = 0xD0
 
-## `BattleAnimCommands` in order, from [constant FIRST_COMMAND].
-##
-## The names are the jumptable's, not the macros': `$d9` assembles from
-## `anim_battlergfx_2row` but dispatches to `BattleAnimCmd_BattlerGFX_1Row`, and
-## `$da` the other way round. The routines are what run, so they are what the
-## commands are called here; the two are genuinely crosswise in both pins.
-##
-## `operands` is how many bytes follow the command byte. `target` is where the
-## low byte of a jump address sits inside them, or -1 for a command that never
-## branches.
+## `BattleAnimCommands` in order, from [constant FIRST_COMMAND]. The names are the
+## jumptable's, not the macros': `$d9` assembles from `anim_battlergfx_2row` but
+## dispatches to `BattleAnimCmd_BattlerGFX_1Row`, and `$da` the other way round.
+## The two are genuinely crosswise in both pins. `operands` is how many bytes
+## follow the command byte; `target` is where the low byte of a jump address sits
+## inside them, or -1 for a command that never branches.
 const COMMANDS: Array[Dictionary] = [
 	{"name": &"obj", "operands": 4, "target": -1},
 	{"name": &"gfx_1", "operands": 1, "target": -1},

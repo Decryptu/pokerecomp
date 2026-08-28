@@ -1,28 +1,14 @@
 class_name Gen2WorldClock
 extends RefCounted
 
-## Deterministic host clock for the real-time Generation 2 day cycle.
-## One elapsed host second is one cartridge clock second. A tick is published at
-## each completed game minute, while time-of-day changes use the cartridge's
-## 04:00, 10:00 and 18:00 boundaries.
-##
-## Seconds, not hardware frames, on purpose. Everything else in the overworld is
-## a countdown spent by [method Gen2WorldScreen.advance_frame]; the cartridge
-## reads a real-time clock for the day cycle, so this one takes wall time and
-## [method Gen2WorldScreen._advance_day_cycle] is the only caller that hands it
-## `delta`. A test or a replay reaches any boundary by asking for the seconds
-## rather than by waiting for them
-## ([method Gen2WorldScreen.advance_world_time]).
-##
-## The clock keeps its own time while the game is not running, which is what a
-## cartridge's RTC does: a snapshot records the host second its time was written
-## at, and [method catch_up] moves the saved time on by what has passed since.
-## Without that a save resumed at the hour it was written at, so a player who set
-## the clock in the morning never saw a night.
-##
-## The clock does not move roaming Pokémon: the cartridge advances those during
-## map setup, so [method Gen2WorldAPI.advance_schedule] is driven by a map change
-## rather than elapsed time.
+## Deterministic host clock for the real-time Generation 2 day cycle: one elapsed
+## host second is one cartridge clock second, a tick is published at each completed
+## game minute, and time-of-day changes use the cartridge's 04:00, 10:00 and 18:00
+## boundaries. Seconds rather than hardware frames on purpose, since the cartridge
+## reads a real-time clock for the day cycle; a test or a replay reaches any
+## boundary by asking for the seconds. The clock keeps its own time while the game
+## is not running, which is what an RTC does: without that a save resumed at the
+## hour it was written at. It does not move roaming Pokemon.
 
 const SECONDS_PER_MINUTE: float = 60.0
 const MINUTES_PER_HOUR: int = 60

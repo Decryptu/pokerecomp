@@ -2,20 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Runs every battle animation out of a freshly imported real cache, on all
-## three cartridges, and checks the four tables behind them.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## data/moves/animations.asm's BattleAnimations, data/battle_anims/objects.asm,
-## framesets.asm, oam.asm and object_gfx.asm, and
-## engine/battle_anims/anim_commands.asm's own interpreter.
-##
-## The real-cartridge counterpart to tests/unit/test_battle_anim_script.gd. What
-## pins it is running all 278 to completion rather than spot checking: an
-## operand width that is wrong by one byte still decodes, and only walking every
-## body past every branch makes it fall over.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- battle_anims
+## Runs every battle animation out of a freshly imported real cache, on all three
+## cartridges, and checks the four tables behind them. Expected values come from
+## the pinned pokecrystal and pokegold sources: BattleAnimations, the three
+## data/battle_anims tables and the interpreter itself. The real-cartridge
+## counterpart to tests/unit/test_battle_anim_script.gd. What pins it is running
+## all 278 to completion rather than spot checking: an operand width that is wrong
+## by one byte still decodes, and only walking every body past every branch makes
+## it fall over.
 
 
 ## `assert_table_length` in each pinned data file. All five are shared by the
@@ -45,16 +39,14 @@ const EXPECTED_POUND: Array = [
 const DUMMY_INDEX: int = 0
 const POUND_INDEX: int = 1
 
-## Both shapes the profile split in data/moves/animations.asm takes, as the
-## whole `anim_bgeffect` sequence of the animation that shows each. Neither is
-## reachable without following the animation properly: every one of these
-## sequences opens and closes inside a subroutine.
-##
-## TACKLE shows the split in which routine is called: Crystal calls
-## `BattleAnim_TargetObj_2Row` and Gold and Silver `..._1Row`, and the two
-## differ only in the effect they run, `BATTLE_BG_EFFECT_BATTLEROBJ_2ROW` ($12)
-## against `..._1ROW` ($11). Its own `BATTLE_BG_EFFECT_TACKLE` ($24) and the
-## closing `BattleAnim_ShowMon_0`'s `..._SHOW_MON` ($0a) are shared.
+## Both shapes the profile split in data/moves/animations.asm takes, as the whole
+## `anim_bgeffect` sequence of the animation that shows each. Neither is reachable
+## without following the animation properly: every one of these sequences opens and
+## closes inside a subroutine. TACKLE shows the split in which routine is called:
+## Crystal calls `BattleAnim_TargetObj_2Row` and Gold and Silver `..._1Row`, and
+## the two differ only in the effect they run, `..._BATTLEROBJ_2ROW` ($12) against
+## `..._1ROW` ($11). Its own `BATTLE_BG_EFFECT_TACKLE` ($24) and the closing
+## `..._SHOW_MON` ($0a) are shared.
 const TACKLE_INDEX: int = 0x21
 const TACKLE_BG_EFFECTS: Dictionary = {
 	&"gold": [0x11, 0x24, 0x0A],
@@ -139,27 +131,14 @@ const SEND_OUT_EFFECTS: Dictionary = {0: [0x0B], 1: [0x01, 0x06]}
 const SEND_OUT_FRAMES: Dictionary = {0: 39, 1: 69}
 
 
-## TACKLE, frame by frame, against a real cartridge: `.claude/oracle/battle`'s
-## `trace_move_anim.py` reads the shadow OAM and `wBattleAnimDelay` of a live
-## fight, and these are the three runs of sprite counts it recorded.
-##
-## Fourteen is the target's two rows, lifted off the tilemap by
-## `anim_battlergfx_1row`; thirty adds `BATTLE_ANIM_OBJ_HIT_BIG_YFIX`, whose
-## frameset is `oamframe 0, 6` and so lasts seven frames.
-##
-## The last run is the one number a reading gets wrong. `anim_incobj 1` frees the
-## target's rows through `BattleAnimFunc_Null`, and `BattleAnim_UpdateOAM_All`
-## has already passed the index test for that slot, so the freed object is drawn
-## one last time: eleven frames, not ten. The cartridge's own frames are 26 to
-## 56, one of them a repeat of the frame before it, which is a loop that overran
-## VBlank rather than a state of its own.
-## Crystal's row is the measured one. Gold and Silver run
-## `BattleAnim_TargetObj_1Row` where Crystal runs `..._2Row`, which is the
-## profile split [constant TACKLE_BG_EFFECTS] already pins, so their target is
-## seven sprites rather than fourteen and every run length is the same.
-## Both sides are measured. On the enemy's turn the target is the player, whose
-## picture is six columns rather than seven, so the two runs differ by the two
-## rows and nothing else.
+## TACKLE, frame by frame, against a real cartridge: `trace_move_anim.py` reads the
+## shadow OAM and `wBattleAnimDelay` of a live fight, and these are the three runs
+## of sprite counts it recorded. Fourteen is the target's two rows and thirty adds
+## `BATTLE_ANIM_OBJ_HIT_BIG_YFIX`. The last run is the one number a reading gets
+## wrong: `anim_incobj 1` frees the target's rows after the index test has passed,
+## so the freed object is drawn one last time, eleven frames rather than ten.
+## Crystal's row is the measured one and Gold and Silver's target is seven sprites
+## rather than fourteen. Both sides are measured.
 const TACKLE_SPRITE_RUNS: Dictionary = {
 	&"crystal": [
 		[[14, 12], [30, 7], [14, 11], [0, 2]],
@@ -210,16 +189,10 @@ func _verify_tackle_frames(game_id: StringName, data: GameData) -> void:
 ## `ANIM_THROW_POKE_BALL`, which is the whole of a capture: the ball, the poof,
 ## `BATTLE_BG_EFFECT_RETURN_MON` taking the opponent off the field, the wobble
 ## loop, and either `.Click` or `.BreakFree`'s `..._ENTER_MON` putting it back.
-##
-## Only `anim_checkpokeball` decides which way the loop leaves, so the two
-## endings are two runs of the same script with two answers, and the sweep above
-## reaches neither: with no answers queued the loop takes the escape on its
-## first turn and the click body is never decoded.
-##
-## What is checked is what a renderer with no background plane reads, which is
-## the resize scripts reporting through the battler block rather than the
-## tilemap: the opponent is on its square, goes off it, and comes back only when
-## it got out.
+## Only `anim_checkpokeball` decides which way the loop leaves, so the two endings
+## are two runs of the same script with two answers, and the sweep above reaches
+## neither. What is checked is what a renderer with no background plane reads: the
+## opponent is on its square, goes off it, and comes back only when it got out.
 func _verify_the_thrown_ball(game_id: StringName, data: GameData) -> void:
 	var anims: Gen2BattleAnimData = Gen2BattleAnimData.from_game_data(data)
 	if not _r.check(anims != null, "%s: no battle animation data in the cache." % game_id):

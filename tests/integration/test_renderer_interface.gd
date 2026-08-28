@@ -1,15 +1,12 @@
 extends GutTest
 
-## The interface seam a native-layer renderer gets: how opaque the screen draws
-## its own text box, where that box is, when a screen laid out in 160x144 takes
-## the picture over it, and whether the surface it is handed fills the window.
-## Plus the seam a mod's world actor gets, which is the same shape one layer
-## down. Both screens are the production paths; only the renderer and the actor
-## are synthetic.
-##
-## The contract is that the box stays the screen's. A renderer asks and is told;
-## it never draws or moves the box, and the frame and the glyphs are opaque
-## whatever it asks for, so nothing it can request makes text harder to read.
+## The interface seam a native-layer renderer gets: how opaque the screen draws its
+## own text box, where that box is, when a screen laid out in 160x144 takes the
+## picture over it, and whether the surface it is handed fills the window. Plus the
+## seam a mod's world actor gets, which is the same shape one layer down. Both
+## screens are the production paths; only the renderer and the actor are synthetic.
+## The contract is that the box stays the screen's: a renderer asks and is told, and
+## the frame and the glyphs are opaque whatever it asks for.
 
 const Fixture := preload("res://tests/integration/world_trainer_fixture.gd")
 

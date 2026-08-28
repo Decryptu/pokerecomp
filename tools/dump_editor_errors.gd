@@ -2,20 +2,12 @@
 extends EditorScript
 
 ## Editor > File > Run: writes the Debugger's error list to
-## user://editor_errors.txt and prints a tally per warning code.
-##
-## The GDScript analyzer runs only inside the editor and reports to that panel
-## alone: no CLI mode prints its warnings, `--check-only` suppresses them and
-## file logging records the running game rather than the editor. Scraping the
-## panel is the only way to read them outside it.
-##
-## The panel holds what this editor session has analysed, so a full sweep is
-## Project > Reload Current Project first, then this. It is also where a running
-## game's warnings arrive, which is how a mod's `user://` scripts are seen.
-##
-## For the analyser alone, with no editor to drive, see
-## `addons/warning_scan/plugin.gd`: it opens named scripts headlessly and prints
-## what the analyser says about each.
+## user://editor_errors.txt and prints a tally per warning code. The GDScript
+## analyzer runs only inside the editor and reports to that panel alone, so
+## scraping it is the only way to read the warnings outside it. The panel holds what
+## this editor session has analysed, so a full sweep is Project > Reload Current
+## Project first, then this. For the analyser alone, with no editor to drive, see
+## `addons/warning_scan/plugin.gd`.
 
 const OUTPUT_PATH: String = "user://editor_errors.txt"
 

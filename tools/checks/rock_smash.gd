@@ -3,21 +3,12 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies Rock Smash against freshly imported real caches, for both command
-## profiles.
-##
-## The expected values come from the pinned pokecrystal and pokegold sources:
-## engine/events/overworld.asm's TryRockSmashFromMenu, RockSmashScript and
-## AskRockSmashScript, engine/events/treemons.asm's RockMonEncounter,
-## engine/events/std_scripts.asm's SmashRockScript, and
-## data/sprites/map_objects.asm's SPRITEMOVEDATA_SMASHABLE_ROCK row.
-##
-## The real-cartridge counterpart to the rock half of
-## tests/unit/test_world_treemon.gd and
-## tests/integration/test_world_field_move_screen.gd. Cianwood City is the
-## acceptance case, because its six rocks are the largest population and its map
-## is one of the four RockMonMaps names.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- rock_smash
+## profiles. Expected values come from the pinned sources: TryRockSmashFromMenu,
+## RockSmashScript and AskRockSmashScript, RockMonEncounter, SmashRockScript and the
+## SPRITEMOVEDATA_SMASHABLE_ROCK row. The real-cartridge counterpart to the rock
+## half of tests/unit/test_world_treemon.gd and the field-move screen test. Cianwood
+## City is the acceptance case, because its six rocks are the largest population and
+## its map is one of the four RockMonMaps names.
 
 
 ## constants/map_constants.asm. Cianwood City and Route 40 keep their numbers

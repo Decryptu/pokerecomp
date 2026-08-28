@@ -2,16 +2,13 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the diploma's art, the printer's status run and the Unown printer's
-## own browser against freshly imported real caches on all three cartridges.
-##
+## Verifies the diploma's art, the printer's status run and the Unown printer's own
+## browser against freshly imported real caches on all three cartridges.
 ## `DiplomaGFX` and its two tilemaps are one pinned run: the LZ stream has to
-## decompress to exactly its own tile count and both tilemaps have to index
-## inside it, so an address one byte out fails rather than drawing rubbish. The
-## strings are the other half of the pin: `GBPrinterStrings` opens on the empty
-## string a status of zero prints, and a run pinned wrong would put a line there.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- printer
+## decompress to exactly its own tile count and both tilemaps have to index inside
+## it, so an address one byte out fails rather than drawing rubbish. The strings are
+## the other half of the pin: `GBPrinterStrings` opens on the empty string a status
+## of zero prints, and a run pinned wrong would put a line there.
 
 ## `PlaceDiplomaOnScreen`'s tilemaps are whole screens, and page 1's own corner
 ## is the certificate's top-left border tile.

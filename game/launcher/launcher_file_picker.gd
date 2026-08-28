@@ -1,24 +1,14 @@
 class_name Gen2LauncherFilePicker
 extends FileDialog
 
-## The one file picker every launcher dialog is built from. Any new file-picking
-## UI goes through [method Gen2LauncherUI.file_picker] rather than building its
-## own, and shows it with [method show_picker] rather than [method
-## Window.popup_centered].
-##
-## Three ways a platform offers a file, in the order they are preferred:
-##
-## 1. The engine's own native dialog, asked for with `use_native_dialog`. Windows,
-##    macOS, Linux and Android all answer, and Android's grants access to the one
-##    file chosen, which is why the app declares no storage permission.
-## 2. The `NativeFilePicker` singleton from `ios/plugins/file_picker`, for iOS,
-##    where `DisplayServerIOS` implements no `file_dialog_show` and so the engine
-##    has no system picker to offer. It hands back a file already copied into the
-##    app's own storage, so what a caller reads is an ordinary path.
-## 3. The engine's built-in browser, for anything left. Rooted at the app's own
-##    data where the filesystem is sandboxed, since every path outside it is one
-##    [FileAccess] would then be refused, and at the top of the volume where
-##    there is no pointer to steer it with. See [method _pointerless_start_dir].
+## The one file picker every launcher dialog is built from, reached through
+## [method Gen2LauncherUI.file_picker] and shown with [method show_picker]. Three
+## ways a platform offers a file, in the order they are preferred: the engine's
+## own native dialog, which Windows, macOS, Linux and Android all answer and whose
+## Android grant covers the one file chosen; the `NativeFilePicker` singleton for
+## iOS, where `DisplayServerIOS` implements no `file_dialog_show`, which hands back
+## a file already copied into app storage; and the built-in browser for anything
+## left, rooted per [method _pointerless_start_dir].
 
 ## The plugin's singleton, present only on a build that carries it.
 const NATIVE_SINGLETON: StringName = &"NativeFilePicker"

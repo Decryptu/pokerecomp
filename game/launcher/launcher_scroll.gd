@@ -1,27 +1,14 @@
 class_name Gen2LauncherScroll
 extends ScrollContainer
 
-## A vertical scroll pane that can be read without a pointer.
-##
-## Two things are needed and Godot gives neither by default. A pad walking the
-## controls inside a pane has to bring the pane with it, which is
-## [member ScrollContainer.follow_focus]. And a pane whose content is mostly text
-## has stretches with nothing focusable in them, so the pane itself takes focus
-## and reads an up or a down ([method Gen2Button.direction_in]) as scrolling,
-## which is the only way past a wall of prose on a keyboard.
-##
-## The pane only takes focus when it actually has somewhere to go, so a short
-## page does not put a stop on the way down to the dock.
-##
-## A finger is the third way, and the engine gives none of it. [ScrollContainer]
-## drags off mouse events emulated from the touch, and
-## [constant Control.MOUSE_FILTER_STOP] ends a pointer event at the control it
-## reaches: [method Viewport._gui_call_input] stops there for every mouse, touch
-## and drag event, and only a wheel is passed on by `force_pass_scroll_events`.
-## Every launcher page is a column of buttons, each of them STOP, so a wheel
-## scrolls the pane and a finger on the same page moves nothing. The pane
-## therefore reads the touch in [method Node._input], ahead of the GUI, and
-## leaves the engine's own drag switched off.
+## A vertical scroll pane that can be read without a pointer, since Godot gives
+## neither thing by default. A pad walking the controls inside a pane has to bring
+## the pane with it, and a pane whose content is mostly text has stretches with
+## nothing focusable, so the pane itself takes focus and reads an up or a down as
+## scrolling. It only takes focus when it has somewhere to go. A finger is the
+## third way: [constant Control.MOUSE_FILTER_STOP] ends a pointer event at the
+## control it reaches and every launcher button is STOP, so the pane reads the
+## touch in [method Node._input] and leaves the engine's own drag switched off.
 
 ## How far one press moves the pane, as a fraction of what it shows.
 const PAGE: float = 0.42

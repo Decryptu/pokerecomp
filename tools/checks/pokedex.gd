@@ -2,21 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the Pokedex's own graphics against freshly imported real caches, on
-## all three cartridges.
-##
-## The expected values come from the pinned sources: `Pokedex_LoadGFX`'s two LZ
-## runs, `gfx/footprints.asm`'s 16x64-tile grid, `Pokedex_LoadUnownFont` and
-## `_CGB_Pokedex`'s three palettes.
-##
-## The real-cartridge counterpart to tests/unit/test_pokedex.gd, which uses a
-## synthetic cache. What only a real cache can say is that the runs decompressed
-## to exactly the tiles the source asks for, that all three dumps carry the same
-## art, that every one of the 251 footprints is a real picture rather than the
-## blank the grid's tail is, and that every species draws an entry screen whose
-## own four footprint cells resolve.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- pokedex
+## Verifies the Pokedex's own graphics against freshly imported real caches, on all
+## three cartridges. Expected values come from the pinned sources:
+## `Pokedex_LoadGFX`'s two LZ runs, `gfx/footprints.asm`'s 16x64-tile grid,
+## `Pokedex_LoadUnownFont` and `_CGB_Pokedex`'s three palettes. The real-cartridge
+## counterpart to tests/unit/test_pokedex.gd, which uses a synthetic cache. What
+## only a real cache can say is that the runs decompressed to exactly the tiles the
+## source asks for, that all three dumps carry the same art, and that every one of
+## the 251 footprints is a real picture rather than the blank the grid's tail is.
 
 ## `Pokedex_LoadGFX` decompresses `PokedexLZ` to `vTiles2 tile $31`, so the sheet
 ## number a layout writes is offset by this and the last one it can name is

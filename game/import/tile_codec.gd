@@ -1,15 +1,11 @@
 class_name Gen2Tiles
 extends RefCounted
 
-## Game Boy 2bpp tile data to one-byte-per-pixel colour indices.
-##
-## A tile is 8x8 pixels in 16 bytes: two bytes per row, the first holding the
-## low bit of every pixel in that row and the second the high bit. Bit 7 is the
-## leftmost pixel.
-##
-## Decoding stops at indices 0-3; turning those into colours needs a palette (see
-## [Gen2Palette]). Keeping the two apart makes shiny variants free: same pixels,
-## different palette.
+## Game Boy 2bpp tile data to one-byte-per-pixel colour indices. A tile is 8x8 in
+## 16 bytes: two bytes per row, the first holding the low bit of every pixel in
+## that row and the second the high bit, bit 7 leftmost. Decoding stops at indices
+## 0-3, since turning those into colours needs a palette; keeping the two apart
+## makes shiny variants free.
 
 const TILE_WIDTH: int = 8
 const TILE_HEIGHT: int = 8
@@ -102,16 +98,12 @@ static func decode_2bpp_strip(data: PackedByteArray, offset: int, count: int) ->
 	return out
 
 
-## Decodes a Pokémon or trainer pic into a row-major index buffer
-## [param columns] * 8 wide and [param rows] * 8 tall.
-##
-## Pics store tiles column-major, the whole left column top to bottom then the
-## next, because the game streams them into VRAM a column at a time. Every other
-## tilemap here is row-major, so this is the one place the ordering flips.
-##
-## Trailing data is ignored: Crystal's front pics carry Pokédex animation frames
-## after the still image, so a stream is routinely longer than
-## [param columns] * [param rows] tiles.
+## Decodes a Pokemon or trainer pic into a row-major index buffer
+## [param columns] * 8 wide and [param rows] * 8 tall. Pics store tiles
+## column-major, the whole left column top to bottom then the next, because the
+## game streams them into VRAM a column at a time, so this is the one place the
+## ordering flips. Trailing data is ignored: Crystal's front pics carry Pokedex
+## animation frames after the still image.
 static func decode_pic(data: PackedByteArray, columns: int, rows: int) -> PackedByteArray:
 	var width: int = columns * TILE_WIDTH
 	var out: PackedByteArray = PackedByteArray()

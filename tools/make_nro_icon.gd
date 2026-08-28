@@ -5,13 +5,9 @@ extends SceneTree
 ##     Godot --headless --path . -s res://tools/make_nro_icon.gd -- <out.jpg>
 ##
 ## `elf2nro --icon=` takes a JPEG of exactly that size and nothing else, and the
-## repository's icon is a 1024 PNG, so one is made from the other at package
-## time rather than the same picture being committed twice.
-##
-## Godot does it rather than ImageMagick because Godot is already installed
-## wherever this runs and is the project's own tool: the release job used
-## whichever of `magick` and `convert` the runner image happened to carry, and
-## the 0.1.6 build failed when it carried neither.
+## repository's icon is a 1024 PNG, so one is made from the other at package time
+## rather than the same picture being committed twice. Godot does it rather than
+## ImageMagick because Godot is already installed wherever this runs.
 
 const SOURCE: String = "res://app_icon.png"
 const SIDE: int = 256

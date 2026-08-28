@@ -1,35 +1,13 @@
 extends SceneTree
 
-## Photographs the launcher in one appearance, at one window size, with a
-## chosen set of cartridges present.
+## Photographs the launcher in one appearance, at one window size, with a chosen
+## set of cartridges present.
 ##
-##   Godot --path . -s res://tools/preview_launcher.gd -- \
-##       <out.png> [light|dark] [width] [height] [page] [empty|mixed|full] [view] [mod id] \
-##       [scroll] [focus index] [fade step] [insets]
+##   Godot --path . -s res://tools/preview_launcher.gd -- <out.png> [light|dark] \
+##       [width] [height] [page] [empty|mixed|full] [view] [mod id] [scroll] \
+##       [focus index] [fade step] [insets]
 ##
-## `view` opens a sheet (`manage`, `touch`, `binding`, `bugs`, `report`,
-## `delete_mod`), raises the `toast` that stays until it is dismissed, runs an
-## `import` of the cartridge named in the `mod id` slot so the progress the
-## launcher draws from inside that job can be photographed from outside, or
-## picks the mods page's own: `list`, `sources`, or `mod` with an id.
-## `fade` is which step of the screen transition to photograph, 0 for none and 1
-## to 4 for one of `FadeOutToWhite`'s own rows: the launcher's leave-the-screen
-## sheet is stepped rather than tweened, so a still is the only way to see that
-## it is discrete. See [method Gen2LauncherShell.flash].
-##
-## `insets` is the screen furniture a phone would take, as `left,top,right,bottom`
-## in launcher units, so the notch and home indicator cases can be photographed on
-## a desktop. Give the window a phone's size in points and one of these to see
-## what the phone shows. See [method Gen2LauncherUI.safe_area_insets].
-##
-## `scroll` is how far down the page's own scroll to photograph, in pixels, for a
-## card that does not fit the window. `focus` puts the keyboard on the nth
-## focusable control in tree order, which is the only way to photograph a focus
-## ring: nothing takes focus until the player presses something.
-##
-## The state argument uses the preview seams on the launcher, so an empty shelf
-## can be photographed on a machine that has every cache imported. Like
-## `tools/screenshot.gd` this opens a real window and cannot run headless.
+## Every argument is documented at the parse below. Opens a real window.
 
 const STATES: Dictionary = {
 	"empty": {"gold": false, "silver": false, "crystal": false},

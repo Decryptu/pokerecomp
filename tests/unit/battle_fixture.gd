@@ -1,14 +1,11 @@
 extends RefCounted
 
-## A cache the battle tests are fought inside.
-##
-## Not a fake cartridge: a real cache directory with a handful of real species
-## and moves, written the way the importer writes one. The battle engine reads
-## cartridge content only through [GameData], so four Pokémon exercise the same
-## path 251 do and the suite runs on a machine with no ROM.
-##
-## The numbers are the published ones, so a stat or damage figure in a test can
-## be checked against a calculator rather than against this file.
+## A cache the battle tests are fought inside. Not a fake cartridge: a real cache
+## directory with a handful of real species and moves, written the way the importer
+## writes one. The battle engine reads cartridge content only through [GameData],
+## so four Pokemon exercise the same path 251 do and the suite runs on a machine
+## with no ROM. The numbers are the published ones, so a stat or damage figure in a
+## test can be checked against a calculator rather than against this file.
 
 const PIKACHU: int = 25
 const GEODUDE: int = 74

@@ -2,24 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the Pokegear radio card and the one thing in the overworld that
-## reads what it leaves behind: Vermilion City's Snorlax.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## engine/pokegear/pokegear.asm (RadioChannels, LoadStation_*,
-## ExitPokegearRadio_HandleMusic), engine/pokegear/radio.asm
-## (StartRadioStation), data/radio/channel_music.asm,
-## engine/events/specials.asm (SnorlaxAwake), data/sprites/map_objects.asm
-## (BIG_OBJECT) and maps/VermilionCity.asm.
-##
-## Two findings carry it. The Poke Flute channel is the only way a track other
-## than the map's own reaches `wMapMusic`, because a station's music id is
-## neither of the two sentinels ExitPokegearRadio_HandleMusic restores on; and
-## the Snorlax is a BIG_OBJECT, so it fills four cells rather than one, which is
-## exactly why SnorlaxAwake's five proximity coordinates are the cells they are
-## and why the Diglett's Cave mouth above it has no approach while it stands.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- radio
+## Verifies the Pokegear radio card and the one thing in the overworld that reads
+## what it leaves behind: Vermilion City's Snorlax. Expected values come from the
+## pinned sources' radio tables, `SnorlaxAwake`, the BIG_OBJECT row and
+## maps/VermilionCity.asm. Two findings carry it. The Poke Flute channel is the only
+## way a track other than the map's own reaches `wMapMusic`, because a station's
+## music id is neither of the two sentinels the exit restores on. And the Snorlax is
+## a BIG_OBJECT filling four cells rather than one, which is why SnorlaxAwake's five
+## proximity coordinates are the cells they are.
 
 
 ## constants/map_constants.asm.

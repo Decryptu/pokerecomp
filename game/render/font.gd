@@ -1,26 +1,14 @@
 class_name Gen2Font
 extends RefCounted
 
-## The cartridge's own font, drawn a tile at a time.
-##
-## Text here is tilemapped, not typeset: every character is one 8x8 tile of equal
-## width, and a character code is already the tile number that draws it. Nothing
-## is measured or kerned; indices are copied into a buffer at multiples of eight.
-##
-## Every sheet is one row of tiles ([method Gen2Tiles.decode_1bpp_strip]), so a
-## code is a horizontal offset and nothing else. A code with no tile draws
-## nothing rather than a placeholder, which is what the space at $7F is and what
-## the hardware does.
-##
-## Three sheets, because the hardware has three loaded at once and one of them
-## changes. The main font covers $80 upward and the frames $79 to $7E in both
-## strips; `_LoadFontsBattleExtra` replaces $60 to $78, which is where `№`,
-## `<ID>` and `<LV>` live. Which of the two is up is [Gen2Text]'s font argument,
-## carried through to the tile it addresses, so a caller says which screen it is
-## drawing rather than which sheet a byte came from.
-##
-## Node-free: it writes into an index buffer, not the screen, so a whole text box
-## can be laid out and checked headless.
+## The cartridge's own font, drawn a tile at a time. Text here is tilemapped, not
+## typeset: every character is one 8x8 tile of equal width and a character code is
+## already the tile number that draws it, so nothing is measured or kerned. A code
+## with no tile draws nothing rather than a placeholder, which is what the space
+## at $7F is. Three sheets, because the hardware has three loaded at once and one
+## changes: `_LoadFontsBattleExtra` replaces $60 to $78, and which is up is
+## [Gen2Text]'s font argument, so a caller says which screen it is drawing rather
+## than which sheet a byte came from. Node-free.
 
 const TILE: int = 8
 
@@ -133,19 +121,13 @@ func draw_code(
 
 
 ## Draws a string left to right from [param at_x], advancing eight pixels per
-## tile. Returns how many tiles were drawn, which is not the string's length
-## when it contains a ligature.
-##
-## [param max_tiles] stops the run short. `PlaceString` has no such bound and
-## needs none: every cartridge string is written to fit the box it is placed in.
-## A label a mod supplies is not, so a caller drawing into a fixed width passes
-## the room it has. Negative means no bound.
-##
-## A bounded run that does not fit ends in the charmap's own "…" rather than
-## stopping mid-word, so a cut value is never read as a whole one: two views
-## labelled "Game Boy Color 2D" and "Game Boy Advance" would otherwise draw the
-## same eight characters. The battle-extra strip has no ellipsis tile under $75,
-## so under that font the run is cut without one.
+## tile. Returns how many tiles were drawn, which is not the string's length when
+## it contains a ligature. [param max_tiles] stops the run short; `PlaceString`
+## has no such bound and needs none, every cartridge string being written to fit
+## its box, but a label a mod supplies is not. A bounded run that does not fit
+## ends in the charmap's own ellipsis rather than stopping mid-word, so a cut
+## value is never read as a whole one. The battle-extra strip has no ellipsis
+## tile under $75, so under that font the run is cut without one.
 func draw_text(
 	text: String, into: PackedByteArray, into_width: int, at_x: int, at_y: int,
 	font: StringName = Gen2Text.FONT_MAIN, max_tiles: int = -1

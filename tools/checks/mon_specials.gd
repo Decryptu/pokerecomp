@@ -4,22 +4,12 @@ var _r: RefCounted = null
 
 ## Verifies the two specials that open `SelectMonFromParty` against freshly
 ## imported real caches: the boxes each prints, the markers they carry, and every
-## map script in the corpus that reaches either, rather than a sampled one.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## `engine/events/name_rater.asm` and `engine/events/move_deleter.asm`,
-## `data/text/common_2.asm`'s ten `_NameRater*` texts and `common_3.asm`'s eight
-## `_Deleter*` ones, `data/events/special_pointers.asm`, and the two
-## `*NameRater.asm` maps beside `MoveDeletersHouse.asm`.
-##
-## One pinned address per cartridge finds every text, so what says the address is
-## right is the content, the way the mart's own topic reads its stubs. The corpus
-## half is the script sweep: the Name Rater's index differs by one between the two
-## command profiles where the deleter's does not, so a wrong normalization shows
-## up as a map reaching a different routine, and the surrounding `opentext`/`waitbutton`/`closetext` is
-## what says the ending text is pressed once rather than twice.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- mon_specials
+## map script in the corpus that reaches either. One pinned address per cartridge
+## finds every text, so what says the address is right is the content, the way the
+## mart's own topic reads its stubs. The corpus half is the script sweep: the Name
+## Rater's index differs by one between the two command profiles where the
+## deleter's does not, so a wrong normalization shows up as a map reaching a
+## different routine.
 
 ## Enough of each of the Name Rater's boxes to say which stub decoded. His two
 ## questions and the three endings that need no new name are the branches a

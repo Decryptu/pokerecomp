@@ -1,24 +1,14 @@
 class_name Gen2CardFlipScreen
 extends Control
 
-## `_CardFlip`'s own loop, on the overworld's pump.
-##
-## [Gen2CardFlip] owns the rules and [Gen2CardFlipPage] the picture; this is
-## `.MasterLoop`: one pass a frame, the boxes the game asks for answered where
-## the cartridge's own blocking calls would have stood, and the exit
-## `JUMPTABLE_EXIT_F` sets.
-##
-## Two things the loop states that a screen would otherwise get wrong:
-##
-## - **`YesNoBox` spends frames inside a state.** `VerticalMenu` does not return
-##   until the player answers, so nothing deals, nothing toggles and no coin is
-##   paid while either box is up. `.ChooseACard`'s toggle and `.PlaceYourBet`'s
-##   cursor are the opposite: both read the joypad on frames the loop is still
-##   spending, so a press there is answered where it lands as well as on the
-##   frame.
-## - **`WaitSFX` is the driver's, not a frame count.** The screen holds while the
-##   player it was handed reports an effect; a screen with no player waits
-##   nothing, which is what a headless driver and every test see.
+## `_CardFlip`'s own loop, on the overworld's pump. [Gen2CardFlip] owns the rules
+## and [Gen2CardFlipPage] the picture; this is `.MasterLoop`, one pass a frame,
+## with the boxes answered where the cartridge's blocking calls stood. Two things
+## a screen would otherwise get wrong: `YesNoBox` spends frames inside a state, so
+## nothing deals and no coin is paid while either box is up, while
+## `.ChooseACard`'s toggle reads the joypad on frames the loop is still spending;
+## and `WaitSFX` is the driver's rather than a frame count, so a screen with no
+## player waits nothing.
 
 signal closed(coins: int)
 signal sfx_requested(index: int, waited: bool)

@@ -3,16 +3,11 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies every evolution row on freshly imported real caches against
-## engine/pokemon/evolve.asm's `EvolveAfterBattle`, for all three cartridges.
-##
-## The predicates in [Gen2Evolution] are what the field host and any link host
-## share, so the census is what pins them: every row of every species is walked
-## and answered rather than spot checked, which is what catches a method the
-## importer misread or a predicate that answers the wrong branch.
-##
-## The real-cartridge counterpart to tests/unit/test_evolution.gd.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- evolutions
+## `EvolveAfterBattle`, for all three cartridges. The predicates in [Gen2Evolution]
+## are what the field host and any link host share, so the census is what pins them:
+## every row of every species is walked and answered rather than spot checked, which
+## is what catches a method the importer misread or a predicate that answers the
+## wrong branch. The real-cartridge counterpart to tests/unit/test_evolution.gd.
 
 ## data/pokemon/evos_attacks.asm, counted from the pins: every `db EVOLVE_*` in
 ## the file. Identical across the three, since no evolution changed between them.

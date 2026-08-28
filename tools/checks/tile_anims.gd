@@ -2,22 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Every tileset's `wTilesetAnim` command list, on all three cartridges, run for
-## a whole cycle.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- tile_anims
-##
-## The list is `data/tileset_anims.asm` and the commands are
-## `engine/tilesets/tileset_anims.asm`, both byte identical between the pins
-## apart from the addresses `RomLayout`'s `world_animation_functions` names. What
-## a reading of them costs is which command ticks `wTileAnimationTimer`:
+## Every tileset's `wTilesetAnim` command list, on all three cartridges, run for a
+## whole cycle. The list and its commands are byte identical between the pins apart
+## from the addresses `RomLayout`'s `world_animation_functions` names. What a
+## reading of them costs is which command ticks `wTileAnimationTimer`:
 ## `StandingTileFrame8` and `StandingTileFrame` do, and so does
 ## `ScrollTileRightLeft`, which is the **only** tick the cave, dark cave and ice
 ## path lists have. A timer that never moves leaves those three maps with a still
-## water palette, a still cave flicker and a tile scrolling one way for ever.
-##
-## `.claude/oracle/overworld/trace_tiles.py` and `tools/trace_world_tiles.gd` are
-## the frame-by-frame half of this, against a real cartridge.
+## water palette and a tile scrolling one way for ever.
 
 ## The whole set `Gen2WorldAnimation.tick` implements, which is every label
 ## `_AnimateTileset` can `jp hl` to. An operation outside it is an unread

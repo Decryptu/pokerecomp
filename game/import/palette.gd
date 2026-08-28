@@ -1,15 +1,11 @@
 class_name Gen2Palette
 extends RefCounted
 
-## Game Boy Color palette entries.
-##
-## A colour is 15 bits packed little-endian as $0BBBBBGG GGGRRRRR, five bits
-## per channel, red in the low bits. The hardware ignores bit 15.
-##
-## A stored Pokémon palette holds only two colours; every pic uses index 0 for
-## white and index 3 for black, so only the middle pair varies. Each species
-## stores two such pairs, normal and shiny, which is all being shiny means to the
-## renderer.
+## Game Boy Color palette entries. A colour is 15 bits packed little-endian as
+## $0BBBBBGG GGGRRRRR, five bits per channel, red low, bit 15 ignored. A stored
+## Pokemon palette holds only two colours, every pic using index 0 for white and 3
+## for black, and each species stores two such pairs, normal and shiny, which is
+## all being shiny means to the renderer.
 
 const COLOR_BYTES: int = 2
 ## The two middle colours a pic is drawn with. A trainer class stores one such

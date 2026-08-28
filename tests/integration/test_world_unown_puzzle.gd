@@ -1,13 +1,11 @@
 extends GutTest
 
 ## Scene integration for `special UnownPuzzle`, which is the whole line from the
-## chamber's script to the `iftrue` it branches on.
-##
-## `UnownPuzzle` is `FadeToMenu`, the board, and then
-## `ld a, [wSolvedUnownPuzzle] / ld [wScriptVar], a`, so the two things a unit
-## test cannot see are covered here: the board owns the screen while it is up,
-## and what it answers reaches the script. [Gen2UnownPuzzle]'s own rules are
-## `tests/unit/test_unown_puzzle.gd` and the art is
+## chamber's script to the `iftrue` it branches on. `UnownPuzzle` is `FadeToMenu`,
+## the board, and then `ld a, [wSolvedUnownPuzzle] / ld [wScriptVar], a`, so the
+## two things a unit test cannot see are covered here: the board owns the screen
+## while it is up, and what it answers reaches the script. [Gen2UnownPuzzle]'s own
+## rules are `tests/unit/test_unown_puzzle.gd` and the art is
 ## `tools/checks/unown_puzzle.gd`.
 
 const Fixture := preload("res://tests/integration/world_trainer_fixture.gd")

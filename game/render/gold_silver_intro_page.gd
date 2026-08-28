@@ -2,22 +2,13 @@ class_name Gen2GoldSilverIntroPage
 extends RefCounted
 
 ## `GoldSilverIntro`'s screen, on the tile grid the hardware uses.
-##
-## [Gen2GoldSilverIntro] owns the BG map, the palettes, the scroll and the
-## sprite structs; this turns a tile number into pixels. The split is
-## [Gen2IntroMoviePage]'s, with two differences that come from the movie itself:
-##
-## - The BG map is 32 tiles wide and wraps, and `hLCDCPointer` = LOW(rSCY) gives
-##   every scanline its own `hSCY` rather than its own `hSCX`, so the screen is
-##   sampled row by row through [method Gen2GoldSilverIntro.scroll_y_at].
-## - Every attribute byte is zero, so there is one background palette rather
-##   than eight: `IntroScene1` blanks the VRAM bank 1 map and each
-##   `_CGB_GSIntro` scene ends in `WipeAttrmap`.
-##
-## The starters are the one thing not read out of the intro's own sheets.
-## `Intro_GetMonFrontpic` decompresses three front pics into `vTiles0` over the
-## fire sheet already there, so their OAM sets index the pic atlas the cache
-## holds instead, column-major the way a `--columns` pic is stored.
+## [Gen2GoldSilverIntro] owns the BG map, palettes, scroll and sprite structs;
+## this turns a tile number into pixels. Two differences from
+## [Gen2IntroMoviePage]: the BG map wraps and `hLCDCPointer` = LOW(rSCY) gives
+## every scanline its own `hSCY`, so the screen is sampled row by row; and every
+## attribute byte is zero, so there is one background palette rather than eight.
+## The starters are the one thing not read out of the intro's own sheets, their
+## OAM sets indexing the pic atlas the cache holds.
 
 const TILE: int = Gen2Tiles.TILE_WIDTH
 const WIDTH: int = Gen2Screen.WIDTH

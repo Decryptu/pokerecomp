@@ -2,24 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the walk south from Pewter to Cinnabar Island, east to Seafoam Gym,
-## and back north to Viridian Gym, against freshly imported real caches for both
-## command profiles.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## data/maps/attributes.asm, maps/PalletTown.asm, maps/Route21.asm,
-## maps/CinnabarIsland.asm, maps/Route20.asm, maps/SeafoamGym.asm and
-## maps/ViridianGym.asm.
-##
-## Three findings carry the leg. Cinnabar Island is two land regions with no
-## seam between them, and the crossing off Route 21 can land on either, so which
-## cell it lands on decides whether Blue is reachable at all. Route 20's west
-## channel is walled off from the open sea on every side, so the island holding
-## the gym mouth is landed on from the east and not the west. And Viridian Gym
-## has no puzzle and no trainer: both its objects carry EVENT_VIRIDIAN_GYM_BLUE
-## as their hide flag, so the whole gate is Cinnabar's Blue clearing it.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- cinnabar
+## Verifies the walk south from Pewter to Cinnabar Island, east to Seafoam Gym and
+## back north to Viridian Gym, for both command profiles. Three findings carry the
+## leg: Cinnabar Island is two land regions with no seam between them and the
+## crossing off Route 21 can land on either, so which cell it lands on decides
+## whether Blue is reachable at all; Route 20's west channel is walled off from the
+## open sea on every side, so the gym mouth's island is landed on from the east; and
+## Viridian Gym has no puzzle and no trainer, both its objects hiding behind
+## EVENT_VIRIDIAN_GYM_BLUE, so the whole gate is Cinnabar's Blue clearing it.
 
 
 ## constants/map_constants.asm. Nothing on this leg splits between the profiles.

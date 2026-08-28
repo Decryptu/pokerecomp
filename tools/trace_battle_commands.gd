@@ -1,20 +1,11 @@
 extends SceneTree
 
 ## Every effect command one turn of a battle runs here, in the same shape
-## `.claude/oracle/battle/trace_move_commands.py` prints off a real cartridge.
-##
-##   Godot --headless --path . -s res://tools/trace_battle_commands.gd -- \
-##       <game> <out.txt> <player_move> <enemy_move>
-##
-## It fights until one side is down, so the artefact is a whole wild battle
-## rather than one turn.
-##
-## `DoMove`'s read cycle is [method Gen2Battle.run_move_effect] and its artefact
-## is [member Gen2Battle.command_trace], so the two files diff line for line and
-## a step in the wrong place is the first difference rather than a wrong number
-## on a screenshot. The opcode is the pin's own
-## `macros/scripts/battle_commands.asm` index, which this side does not carry, so
-## it is printed as `--` and the name is what a diff reads.
+## `.claude/oracle/battle/trace_move_commands.py` prints off a real cartridge. It
+## fights until one side is down, so the artefact is a whole wild battle rather than
+## one turn. The two files diff line for line, so a step in the wrong place is the
+## first difference; the opcode is printed as `--`, since this side carries no
+## index. Arguments: `<game> <out.txt> <player_move> <enemy_move>`.
 
 ## The matchup `.claude/oracle/battle/states/in_wild` stands in: a level five
 ## Cyndaquil against the level two Rattata that state walked into. The DVs and

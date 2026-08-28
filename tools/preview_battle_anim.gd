@@ -2,45 +2,12 @@ extends SceneTree
 
 ## Captures a battle animation mid-flight against a real imported cache, which
 ## `tools/screenshot.gd` cannot drive: an animation needs a turn taken, an event
-## queue walked to the animation it wants, and then a counted number of hardware
-## frames spent inside it.
+## queue walked to the animation it wants, and a counted number of frames spent
+## inside it. The flags and the `catch`, `0`, `miss` and frame-range forms are
+## documented below.
 ##
 ##   Godot --path . -s res://tools/preview_battle_anim.gd -- \
 ##       <game> <output.png> <move> <side> <frames> [scene_off]
-##
-## `<move>` is a move number, given to both Pokemon so either side's animation
-## can be photographed; `<side>` is 0 for the player's own and 1 for the
-## enemy's; `<frames>` is how many frames into the animation to stop.
-##
-## `<move> catch` throws a ball instead of taking a turn, which is
-## `ANIM_THROW_POKE_BALL` and the whole of a capture: the ball, the poof, the
-## opponent going into it, three wobbles and then the click or the break free.
-## `<side>` picks the ending, 0 caught and 1 broken free.
-##
-## `<move> 0` photographs the entrance instead, which is `BattleStartMessage` and
-## the opening of `DoBattle` rather than a turn: a wild one, or a trainer's with
-## `<side>` at 1, and `<frames>` counted from the frame the pics stop sliding.
-## `<frames>` may be a range, `lo-hi`, which writes one `<output>_f<N>.png` per
-## frame in it instead of a single file: that is what a frame by frame diff
-## against a real cartridge reads. A line the entrance waits on is pressed
-## [constant PRESS_AFTER] frames after it has finished printing, since the
-## cartridge waits on a person there and nothing here can.
-## `scene_off` clears the OPTION menu's battle-scene row first, which is what
-## `CheckBattleScene` reads, and the capture should then show the field
-## untouched. `with_intro` counts `<frames>` from the battle screen's own first
-## frame instead, so `BattleIntroSlidingPics` is inside the range rather than
-## spent before it; a cartridge trace is aligned to the slide's end, so use it
-## for a recording and not for a diff.
-##
-## `miss` forces the turn to miss instead, by putting the target's evasion at the
-## top and the user's accuracy at the bottom, and photographs the field once the
-## whole turn has been drawn rather than a counted frame inside an animation.
-## That is what `BattleCommand_FailureText`'s `.fly_dig` is read on: a two-turn
-## move is charged first, so the picture in the shot is the one the miss put back.
-## The printed `battler_visible` pair is the reading; the picture alone cannot
-## tell a square that was never emptied from one that was filled again.
-##
-## All three flags may be given, in any order.
 
 const WINDOW_SIZE := Vector2i(1152, 648)
 ## Enough frames for the scene to lay out before anything is driven, and enough

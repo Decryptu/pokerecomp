@@ -1,25 +1,14 @@
 class_name Gen2SlotMachineScreen
 extends Control
 
-## `_SlotMachine`'s own loop, on the overworld's pump.
-##
-## [Gen2SlotMachine] owns the rules and [Gen2SlotMachinePage] the picture; this
-## is `SlotsLoop`: one pass a frame, the boxes the machine asks for answered
-## where the cartridge's own blocking calls would have stood, and the exit
-## `SLOTS_END_LOOP_F` sets.
-##
-## Three things the loop states that a screen would otherwise get wrong:
-##
-## - **`Slots_AskBet` and `Slots_AskPlayAgain` spend frames inside an action.**
-##   `VerticalMenu` and `PlaceYesNoBox` do not return until the player answers,
-##   so nothing spins, no reel moves and no sprite is pumped while either is up.
-##   The machine answers `prompt()` for exactly that reason.
-## - **A press is answered where it lands as well as on the frame.** The host is
-##   press-only, and `hJoypadSum` is a sum rather than a sample: a tap between
-##   two frames stops a reel on the cartridge and has to here.
-## - **`WaitSFX` is the driver's, not a frame count.** The screen holds while
-##   the player it was handed reports an effect; a screen with no player waits
-##   nothing, which is what a headless driver and every test see.
+## `_SlotMachine`'s own loop, on the overworld's pump. [Gen2SlotMachine] owns the
+## rules and [Gen2SlotMachinePage] the picture; this is `SlotsLoop`, one pass a
+## frame. Three things a screen would otherwise get wrong: `Slots_AskBet` and
+## `Slots_AskPlayAgain` spend frames inside an action, so nothing spins while
+## either box is up, which is what `prompt()` is for; a press is answered where it
+## lands as well as on the frame, `hJoypadSum` being a sum rather than a sample;
+## and `WaitSFX` is the driver's rather than a frame count, so a screen with no
+## player waits nothing.
 
 signal closed(coins: int)
 signal sfx_requested(index: int, waited: bool)

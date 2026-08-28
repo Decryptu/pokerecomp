@@ -2,21 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the mart's own boxes and its buy screen against freshly imported
-## real caches, over every mart the cartridge ships rather than a sampled one.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## `engine/items/mart.asm`'s `GetMartDialogGroup.MartTextFunctionPointers`, the
-## twenty-nine `text_far` stubs behind it, and `MenuHeader_Buy`'s own geometry.
-##
-## One pinned address per cartridge finds every text, so what says the address
-## is right is the content: each stub has to decode, each group's opening has to
-## be that shop's own words, and every marker a box carries has to be one of the
-## three values `MartConfirmPurchase` fills. The screen itself is swept by
-## drawing all thirty-four marts: a name or a price that ran past the list's own
-## columns is what a wrong geometry looks like.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- mart
+## Verifies the mart's own boxes and its buy screen against freshly imported real
+## caches, over every mart the cartridge ships rather than a sampled one. Expected
+## values come from the pinned sources' `MartTextFunctionPointers`, the twenty-nine
+## `text_far` stubs behind it, and `MenuHeader_Buy`'s own geometry. One pinned
+## address per cartridge finds every text, so what says the address is right is the
+## content: each stub has to decode and each group's opening has to be that shop's
+## own words. The screen itself is swept by drawing all thirty-four marts, since a
+## name that ran past the list's columns is what a wrong geometry looks like.
 
 ## Enough of each group's boxes to say which stub decoded, without pinning a
 ## whole one. `bargain_sold_out` is the only refusal that is not shared.

@@ -1,21 +1,14 @@
 class_name Gen2TextBox
 extends TextureRect
 
-## A bordered text window, drawn the way the hardware draws one.
-##
-## Everything is on the tile grid, at the games' own measurements rather than by
-## choice: the border is six tiles of the chosen frame printed as box-drawing
-## characters, the interior is white, and text sits one tile in from the left on
-## every second row, since a line is eight pixels tall in a box whose rows are
-## sixteen apart.
-##
-## The box composes into one index buffer and goes through the same
-## index-plus-palette path a sprite does, so a glyph and a Pokémon are lit by the
-## same code. Only indices 0 and 3 appear: 1bpp graphics have no middle colours.
-##
-## Text reveals a tile at a time and waits at the end of each page.
-## [method advance] and [method finish] are plain methods as well as key
-## handlers, so a screen can be photographed mid-sentence.
+## A bordered text window, drawn the way the hardware draws one. Everything is on
+## the tile grid at the games' own measurements: the border is six tiles of the
+## chosen frame printed as box-drawing characters, and text sits one tile in from
+## the left on every second row, since a line is eight pixels tall in a box whose
+## rows are sixteen apart. The box composes into one index buffer, so a glyph and
+## a Pokemon are lit by the same code. Text reveals a tile at a time;
+## [method advance] and [method finish] are plain methods as well as key handlers,
+## so a screen can be photographed mid-sentence.
 
 ## Emitted when the last page has been shown and advanced past.
 signal finished
@@ -185,19 +178,14 @@ func place_at_bottom() -> void:
 	position = Vector2(0, STANDARD_TOP * TILE)
 
 
-## Lays [param text] out and starts revealing its first page.
-##
-## [param blink_cursor] is whether the *last* page loads the arrow, and that is
-## not the same question as whether it waits. `WaitPressAorB_BlinkCursor`'s own
-## comment says it: "The cursor has to be shown before calling this function or
-## no cursor will be shown at all." Three routines show it, `Paragraph`,
-## `_ContText` and `PromptText`, so a page with another behind it always blinks;
-## the last page blinks only if the text ends in `prompt`.
-##
-## Two things therefore draw no arrow. A text ending in `done` reaches none of
-## the three, which is why `SendOutMonText` prints "Go! <MON>!" and runs on. And
-## a caller that waits with `JoyWaitAorB` instead loads no cursor whatever its
-## text ends in, which is every page of `ProfOaksPCBoot`.
+## Lays [param text] out and starts revealing its first page. [param blink_cursor]
+## is whether the *last* page loads the arrow, which is not the same question as
+## whether it waits: `WaitPressAorB_BlinkCursor`'s own comment says the cursor has
+## to be shown before it is called or none is shown at all. Three routines show
+## it, so a page with another behind it always blinks and the last page blinks
+## only if the text ends in `prompt`. Two things therefore draw no arrow: a text
+## ending in `done`, which is why `SendOutMonText` runs on, and a caller that
+## waits with `JoyWaitAorB`, which is every page of `ProfOaksPCBoot`.
 func show_text(text: String, blink_cursor: bool = true) -> void:
 	_pages = Gen2TextLayout.lay_out_pages(text, text_columns(), text_rows())
 	_blink_cursor = blink_cursor
@@ -273,14 +261,11 @@ func finish() -> void:
 
 
 ## What a button press does: moves to the next page. Returns false once there is
-## nothing left, having emitted [signal finished].
-##
-## A press while the page is still printing is SPENT and does nothing else. The
-## cartridge has no path from a press to the end of a page: `PrintLetterDelay`
-## is the only thing a button reaches while text is running and the most it does
-## is [member accelerated]. Completing the page on the press instead let a
-## repeated one tear through a whole text a page per press, which is what
-## holding the advance key looked like.
+## nothing left, having emitted [signal finished]. A press while the page is still
+## printing is SPENT and does nothing else: the cartridge has no path from a press
+## to the end of a page, `PrintLetterDelay` being the only thing a button reaches
+## while text is running. Completing the page on the press instead let a repeated
+## one tear through a whole text a page per press.
 func advance() -> bool:
 	if _pages.is_empty():
 		return false
@@ -475,16 +460,12 @@ func _draw_border(indices: PackedByteArray, width: int) -> void:
 	font.draw_box(frame_style, indices, width, 0, 0, columns, rows)
 
 
-## The arrow, drawn only while the box is actually waiting: a page still
-## revealing has not reached its `PromptButton` yet.
 ## Whether `LoadBlinkingCursor` has the arrow up right now, which is the whole
-## rule for drawing it: a page still revealing has not reached its
-## `PromptButton`, a `scroll_nowait` page turns itself, a last page nothing
-## loaded the cursor for never shows one, and the blink is the other half of
-## `hVBlankCounter`.
-##
-## Public because it is a rule rather than a drawing step, and because a text
-## that owes no press is easy to draw an arrow over by accident.
+## rule for drawing it: a page still revealing has not reached its `PromptButton`,
+## a `scroll_nowait` page turns itself, a last page nothing loaded the cursor for
+## never shows one, and the blink is the other half of `hVBlankCounter`. Public
+## because it is a rule rather than a drawing step, and because a text that owes
+## no press is easy to draw an arrow over by accident.
 func cursor_visible() -> bool:
 	if _pages.is_empty() or is_revealing() or not _cursor_up():
 		return false

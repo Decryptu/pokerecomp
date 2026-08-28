@@ -2,18 +2,12 @@ class_name Gen2ContentOverlay
 extends RefCounted
 
 ## Content a mod adds or changes, consulted ahead of the cartridge's own tables.
-##
 ## [GameData] funnels every species, move, item and trainer read through one
-## place, so this is the one place that has to answer. Nothing downstream knows a
-## mod exists: a defined species has a learnset, evolutions and TM flags because
-## those live on the species row.
-##
-## [method define] adds content at a number the cartridge does not use;
-## [method patch] changes fields of a row it does. Definitions are normalized
+## place, so this is the one place that has to answer and nothing downstream knows
+## a mod exists. [method define] adds content at a number the cartridge does not
+## use; [method patch] changes fields of a row it does. Definitions are normalized
 ## against [constant DEFAULTS] on the way in, because readers index these rows
-## directly ([method GameData.palette] reads [code]palette.normal[/code],
-## [method GameData.species_pic] reads [code]front_tiles[/code]) and an omitted
-## field would crash the reader rather than draw wrong.
+## directly and an omitted field would crash the reader rather than draw wrong.
 
 ## The kinds a mod may reach. Types are zero-based while the other numbered
 ## content is one-based; [method define] and [method patch] keep that distinction

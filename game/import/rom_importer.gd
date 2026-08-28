@@ -1,15 +1,12 @@
 class_name RomImporter
 extends RefCounted
 
-## Decodes a verified cartridge into the cache under [code]user://[/code].
-##
-## The ROM is an asset database, read once and released. Nothing downstream holds
-## a reference, and nothing in the engine reads cartridge bytes at play time.
-##
-## The order matters: verify the hash, then the layout, then decode. A wrong
-## offset produces plausible garbage rather than an error, and garbage in the
-## cache is indistinguishable from real data later, so [method verify_layout]
-## checks values whose correct answers are known independently.
+## Decodes a verified cartridge into the cache under `user://`. The ROM is an
+## asset database, read once and released: nothing downstream holds a reference
+## and nothing in the engine reads cartridge bytes at play time. The order
+## matters, hash then layout then decode, because a wrong offset produces
+## plausible garbage rather than an error and garbage in the cache is
+## indistinguishable from real data later.
 
 ## Atlas cells are the largest pic of their kind so a renderer can index them
 ## arithmetically; smaller pics sit in the top-left of their cell and record
@@ -110,33 +107,111 @@ func _breathe(yield_ms: int) -> void:
 	await Engine.get_main_loop().process_frame
 
 
+## Every layout check, in the order they run: the first that answers not ok is
+## the whole answer. `docs/CONTRIBUTING.md` says an offset lands here with its
+## check in the same commit, and this list is that list. The four importers at
+## the end own their own tables and read the cartridge without a layout.
+static var LAYOUT_CHECKS: Array[Callable] = [
+	_verify_species_names,
+	_verify_base_stats,
+	_verify_palettes,
+	_verify_move_names,
+	_verify_move_data,
+	_verify_item_names,
+	verify_item_metadata,
+	verify_world_trades,
+	_verify_type_names,
+	verify_matchups,
+	verify_evos_attacks,
+	verify_egg_moves,
+	verify_pokedex,
+	verify_font,
+	verify_frames,
+	verify_battle_graphics,
+	verify_trainers,
+	verify_trainer_parties,
+	verify_trainer_attributes,
+	verify_trainer_dvs,
+	Gen2WorldImporter.verify_layout.unbind(1),
+	Gen2WorldEncounterImporter.verify_layout.unbind(1),
+	Gen2WorldServicesImporter.verify_layout.unbind(1),
+	Gen2BattleAnimImporter.verify_layout.unbind(1),
+	verify_name_input_chars,
+	verify_mail,
+	verify_mystery_gift,
+	verify_battle_tower,
+	verify_intro_text,
+	verify_string_buffer_pointers,
+	verify_gender_screen,
+	verify_text_bg_palette,
+	verify_shrink_pics,
+	verify_copyright,
+	verify_game_freak_presents,
+	verify_title,
+	verify_town_map,
+	verify_oak_ratings,
+	verify_pokecenter_pc,
+	verify_decorations,
+	verify_mom_phone,
+	verify_unown_words,
+	verify_unown_walls,
+	verify_odd_eggs,
+	verify_intro_movie,
+	verify_gs_intro,
+	verify_unown_puzzle,
+	verify_slots,
+	verify_printer,
+	verify_link_border,
+	verify_card_flip,
+	verify_credits,
+	verify_menu_text,
+	verify_mart_text,
+	verify_name_rater_text,
+	verify_move_deleter_text,
+	verify_day_care_text,
+	verify_special_text,
+	verify_map_entry_sign,
+	verify_pack,
+	verify_pc,
+	verify_descriptions,
+]
+
+
 ## Sanity-checks [RomLayout] against the cartridge before anything is decoded.
 ## Returns { ok, message }.
 static func verify_layout(rom: RomFile) -> Dictionary:
 	var layout: Dictionary = RomLayout.for_id(rom.id)
 	if layout.is_empty():
 		return {"ok": false, "message": "No layout for %s." % rom.id}
+	for check: Callable in LAYOUT_CHECKS:
+		var result: Dictionary = check.call(rom, layout)
+		if not bool(result.get("ok", false)):
+			return result
+	return {"ok": true, "message": "Layout verified."}
 
+
+## The first and last species, decoded through the text codec. Wrong offset,
+## wrong table or wrong character map all fail here.
+static func _verify_species_names(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var data: PackedByteArray = rom.bytes()
-
-	# The first and last species, decoded through the text codec. Wrong offset,
-	# wrong table or wrong character map all fail here.
 	var first: String = Gen2Text.decode(
 		data, RomLayout.species_name_offset(layout, 1), RomLayout.NAME_LENGTH
 	)
 	if first != "BULBASAUR":
 		return {"ok": false, "message": "Species name table: expected BULBASAUR, read %s." % first}
-
 	var last: String = Gen2Text.decode(
 		data, RomLayout.species_name_offset(layout, RomLayout.SPECIES_COUNT),
 		RomLayout.NAME_LENGTH
 	)
 	if last != "CELEBI":
 		return {"ok": false, "message": "Species name table: expected CELEBI, read %s." % last}
+	return {"ok": true}
 
-	# Every base stats entry opens with its own Pokédex number, so the whole
-	# table self-checks in one pass, and a stride that is off by any amount
-	# stops matching immediately.
+
+## Every base stats entry opens with its own Pokedex number, so the whole table
+## self-checks in one pass, and a stride that is off by any amount stops matching
+## immediately.
+static func _verify_base_stats(rom: RomFile, layout: Dictionary) -> Dictionary:
 	for species: int in range(1, RomLayout.SPECIES_COUNT + 1):
 		var stored: int = rom.u8(RomLayout.base_stats_offset(layout, species))
 		if stored != species:
@@ -144,17 +219,19 @@ static func verify_layout(rom: RomFile) -> Dictionary:
 				"ok": false,
 				"message": "Base stats entry %d claims to be %d." % [species, stored],
 			}
+	return {"ok": true}
 
-	# Palettes have no self-identifying field, so they are checked structurally:
-	# a colour is 15 bits, and no species is drawn in two blacks. An offset that
-	# lands on the wrong table, or a stride that runs past the end of the right
-	# one, breaks one of those. This check exists because a palette table that
-	# was one whole table too far along still decoded into sprites that were the
-	# correct shapes in the wrong colours, which nothing else would catch.
+
+## Palettes have no self-identifying field, so they are checked structurally: a
+## colour is 15 bits, and no species is drawn in two blacks. A palette table one
+## whole table too far along still decoded into sprites that were the correct
+## shapes in the wrong colours, which nothing else would catch.
+static func _verify_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var colors: int = int(float(Gen2Palette.ENTRY_BYTES) / float(Gen2Palette.COLOR_BYTES))
 	for species: int in range(1, RomLayout.SPECIES_COUNT + 1):
 		var entry: int = RomLayout.palette_offset(layout, species)
 		var packed: Array = []
-		for i: int in int(float(Gen2Palette.ENTRY_BYTES) / float(Gen2Palette.COLOR_BYTES)):
+		for i: int in colors:
 			packed.append(rom.u16le(entry + i * Gen2Palette.COLOR_BYTES))
 		for color: int in packed:
 			if color & 0x8000:
@@ -166,12 +243,16 @@ static func verify_layout(rom: RomFile) -> Dictionary:
 				}
 		if packed.count(0) == packed.size():
 			return {"ok": false, "message": "Palette %d is blank." % species}
+	return {"ok": true}
 
-	# Move and item names are variable-length, so one wrong byte at the start
-	# slides every entry after it and still reads as words. Checking the last
-	# entry of each table catches that; checking only the first would not.
+
+## Move and item names are variable-length, so one wrong byte at the start slides
+## every entry after it and still reads as words. Checking the last entry of each
+## table catches that; checking only the first would not.
+static func _verify_move_names(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var moves: PackedStringArray = Gen2Text.decode_sequence(
-		data, int(layout["move_names"]), RomLayout.MOVE_COUNT, RomLayout.MAX_NAME_LENGTH
+		rom.bytes(), int(layout["move_names"]), RomLayout.MOVE_COUNT,
+		RomLayout.MAX_NAME_LENGTH
 	)
 	if moves.size() != RomLayout.MOVE_COUNT:
 		return {"ok": false, "message": "Move name table ran out after %d." % moves.size()}
@@ -184,10 +265,13 @@ static func verify_layout(rom: RomFile) -> Dictionary:
 				RomLayout.MOVE_COUNT - 1
 			],
 		}
+	return {"ok": true}
 
-	# Every move entry opens with its animation, which is the move's own number,
-	# so the whole table self-checks the way the base stats do. The type byte is
-	# range-checked in the same pass because it indexes the type name table.
+
+## Every move entry opens with its animation, which is the move's own number, so
+## the whole table self-checks the way the base stats do. The type byte is
+## range-checked in the same pass because it indexes the type name table.
+static func _verify_move_data(rom: RomFile, layout: Dictionary) -> Dictionary:
 	for move: int in range(1, RomLayout.MOVE_COUNT + 1):
 		var entry: int = RomLayout.move_data_offset(layout, move)
 		var animation: int = rom.u8(entry + RomLayout.MOVE_ANIMATION)
@@ -201,247 +285,34 @@ static func verify_layout(rom: RomFile) -> Dictionary:
 					move, type_number,
 				],
 			}
+	return {"ok": true}
 
+
+static func _verify_item_names(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var items: PackedStringArray = Gen2Text.decode_sequence(
-		data, int(layout["item_names"]), RomLayout.ITEM_COUNT, RomLayout.MAX_NAME_LENGTH
+		rom.bytes(), int(layout["item_names"]), RomLayout.ITEM_COUNT,
+		RomLayout.MAX_NAME_LENGTH
 	)
 	if items.size() != RomLayout.ITEM_COUNT:
 		return {"ok": false, "message": "Item name table ran out after %d." % items.size()}
 	if items[0] != "MASTER BALL":
 		return {"ok": false, "message": "Item name table: expected MASTER BALL, read %s." % items[0]}
-	# Four entries in, so a start that is right but a walk that is not still
-	# fails here.
+	## Four entries in, so a start that is right but a walk that is not still
+	## fails here.
 	if items[3] != "GREAT BALL":
 		return {"ok": false, "message": "Item 4: expected GREAT BALL, read %s." % items[3]}
+	return {"ok": true}
 
-	var item_metadata: Dictionary = verify_item_metadata(rom, layout)
-	if not bool(item_metadata.get("ok", false)):
-		return item_metadata
 
-	var trades: Dictionary = verify_world_trades(rom, layout)
-	if not bool(trades.get("ok", false)):
-		return trades
-
-	# The first and last type, either side of the padding run in the middle.
-	var first_type: String = type_name(rom, layout, 0)
-	if first_type != "NORMAL":
-		return {"ok": false, "message": "Type table: expected NORMAL, read %s." % first_type}
-	var last_type: String = type_name(rom, layout, RomLayout.TYPE_COUNT - 1)
-	if last_type != "DARK":
-		return {"ok": false, "message": "Type table: expected DARK, read %s." % last_type}
-
-	var matchups: Dictionary = verify_matchups(rom, layout)
-	if not matchups["ok"]:
-		return matchups
-
-	var evos_attacks: Dictionary = verify_evos_attacks(rom, layout)
-	if not evos_attacks["ok"]:
-		return evos_attacks
-
-	var egg_moves: Dictionary = verify_egg_moves(rom, layout)
-	if not egg_moves["ok"]:
-		return egg_moves
-
-	var pokedex: Dictionary = verify_pokedex(rom, layout)
-	if not pokedex["ok"]:
-		return pokedex
-
-	var font: Dictionary = verify_font(rom, layout)
-	if not font["ok"]:
-		return font
-
-	var frames: Dictionary = verify_frames(rom, layout)
-	if not frames["ok"]:
-		return frames
-
-	var battle: Dictionary = verify_battle_graphics(rom, layout)
-	if not battle["ok"]:
-		return battle
-
-	var trainers: Dictionary = verify_trainers(rom, layout)
-	if not trainers["ok"]:
-		return trainers
-
-	var trainer_parties: Dictionary = verify_trainer_parties(rom, layout)
-	if not trainer_parties["ok"]:
-		return trainer_parties
-
-	var trainer_attributes: Dictionary = verify_trainer_attributes(rom, layout)
-	if not trainer_attributes["ok"]:
-		return trainer_attributes
-
-	var trainer_dvs: Dictionary = verify_trainer_dvs(rom, layout)
-	if not trainer_dvs["ok"]:
-		return trainer_dvs
-
-	var world: Dictionary = Gen2WorldImporter.verify_layout(rom)
-	if not world["ok"]:
-		return world
-
-	var encounters: Dictionary = Gen2WorldEncounterImporter.verify_layout(rom)
-	if not encounters["ok"]:
-		return encounters
-
-	var services: Dictionary = Gen2WorldServicesImporter.verify_layout(rom)
-	if not services["ok"]:
-		return services
-
-	var battle_anims: Dictionary = Gen2BattleAnimImporter.verify_layout(rom)
-	if not battle_anims["ok"]:
-		return battle_anims
-
-	var name_input: Dictionary = verify_name_input_chars(rom, layout)
-	if not name_input["ok"]:
-		return name_input
-
-	var mail: Dictionary = verify_mail(rom, layout)
-	if not mail["ok"]:
-		return mail
-
-	var mystery_gift: Dictionary = verify_mystery_gift(rom, layout)
-	if not mystery_gift["ok"]:
-		return mystery_gift
-
-	var battle_tower: Dictionary = verify_battle_tower(rom, layout)
-	if not battle_tower["ok"]:
-		return battle_tower
-
-	var intro_text: Dictionary = verify_intro_text(rom, layout)
-	if not intro_text["ok"]:
-		return intro_text
-
-	var string_buffers: Dictionary = verify_string_buffer_pointers(rom, layout)
-	if not string_buffers["ok"]:
-		return string_buffers
-
-	var gender_screen: Dictionary = verify_gender_screen(rom, layout)
-	if not gender_screen["ok"]:
-		return gender_screen
-
-	var text_palette: Dictionary = verify_text_bg_palette(rom, layout)
-	if not text_palette["ok"]:
-		return text_palette
-
-	var shrink: Dictionary = verify_shrink_pics(rom, layout)
-	if not shrink["ok"]:
-		return shrink
-
-	var copyright: Dictionary = verify_copyright(rom, layout)
-	if not copyright["ok"]:
-		return copyright
-
-	var presents: Dictionary = verify_game_freak_presents(rom, layout)
-	if not presents["ok"]:
-		return presents
-
-	var title: Dictionary = verify_title(rom, layout)
-	if not title["ok"]:
-		return title
-
-	var town_map: Dictionary = verify_town_map(rom, layout)
-	if not town_map["ok"]:
-		return town_map
-
-	var oak_ratings: Dictionary = verify_oak_ratings(rom, layout)
-	if not oak_ratings["ok"]:
-		return oak_ratings
-
-	var pokecenter_pc: Dictionary = verify_pokecenter_pc(rom, layout)
-	if not pokecenter_pc["ok"]:
-		return pokecenter_pc
-
-	var decorations: Dictionary = verify_decorations(rom, layout)
-	if not decorations["ok"]:
-		return decorations
-	var mom_phone: Dictionary = verify_mom_phone(rom, layout)
-	if not mom_phone["ok"]:
-		return mom_phone
-
-	var unown_words: Dictionary = verify_unown_words(rom, layout)
-	if not unown_words["ok"]:
-		return unown_words
-
-	var unown_walls: Dictionary = verify_unown_walls(rom, layout)
-	if not unown_walls["ok"]:
-		return unown_walls
-
-	var odd_eggs: Dictionary = verify_odd_eggs(rom, layout)
-	if not odd_eggs["ok"]:
-		return odd_eggs
-
-	var intro_movie: Dictionary = verify_intro_movie(rom, layout)
-	if not intro_movie["ok"]:
-		return intro_movie
-
-	var gs_intro: Dictionary = verify_gs_intro(rom, layout)
-	if not gs_intro["ok"]:
-		return gs_intro
-
-	var unown_puzzle: Dictionary = verify_unown_puzzle(rom, layout)
-	if not unown_puzzle["ok"]:
-		return unown_puzzle
-
-	var slots: Dictionary = verify_slots(rom, layout)
-	if not slots["ok"]:
-		return slots
-
-	var printer: Dictionary = verify_printer(rom, layout)
-	if not printer["ok"]:
-		return printer
-
-	var link_border: Dictionary = verify_link_border(rom, layout)
-	if not link_border["ok"]:
-		return link_border
-
-	var card_flip: Dictionary = verify_card_flip(rom, layout)
-	if not card_flip["ok"]:
-		return card_flip
-
-	var credits: Dictionary = verify_credits(rom, layout)
-	if not credits["ok"]:
-		return credits
-
-	var menu_text: Dictionary = verify_menu_text(rom, layout)
-	if not menu_text["ok"]:
-		return menu_text
-
-	var mart_text: Dictionary = verify_mart_text(rom, layout)
-	if not mart_text["ok"]:
-		return mart_text
-
-	var name_rater_text: Dictionary = verify_name_rater_text(rom, layout)
-	if not name_rater_text["ok"]:
-		return name_rater_text
-
-	var move_deleter_text: Dictionary = verify_move_deleter_text(rom, layout)
-	if not move_deleter_text["ok"]:
-		return move_deleter_text
-
-	var day_care_text: Dictionary = verify_day_care_text(rom, layout)
-	if not day_care_text["ok"]:
-		return day_care_text
-
-	var special_text: Dictionary = verify_special_text(rom, layout)
-	if not special_text["ok"]:
-		return special_text
-
-	var map_entry_sign: Dictionary = verify_map_entry_sign(rom, layout)
-	if not map_entry_sign["ok"]:
-		return map_entry_sign
-
-	var pack: Dictionary = verify_pack(rom, layout)
-	if not pack["ok"]:
-		return pack
-
-	var pc: Dictionary = verify_pc(rom, layout)
-	if not pc["ok"]:
-		return pc
-
-	var descriptions: Dictionary = verify_descriptions(rom, layout)
-	if not descriptions["ok"]:
-		return descriptions
-
-	return {"ok": true, "message": "Layout verified."}
+## The first and last type, either side of the padding run in the middle.
+static func _verify_type_names(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var first: String = type_name(rom, layout, 0)
+	if first != "NORMAL":
+		return {"ok": false, "message": "Type table: expected NORMAL, read %s." % first}
+	var last: String = type_name(rom, layout, RomLayout.TYPE_COUNT - 1)
+	if last != "DARK":
+		return {"ok": false, "message": "Type table: expected DARK, read %s." % last}
+	return {"ok": true}
 
 
 ## `gfx/sgb/predef.pal`'s PREDEFPAL_GAMEFREAK_LOGO_BG, the palette
@@ -524,15 +395,13 @@ const PRESENTS_DITTO_OAM_BASES: Array[int] = [
 ]
 
 
-## `GameFreakPresents`' art, identified by content rather than by bounds.
-##
-## The 1bpp run is two graphics, so it is checked as two: every tile of the
-## thirteen-tile word strip carries ink, the six that spell "PRESENTS" are clear
-## across their top rows because that word sits a row lower than the one above
-## it, and the fourteenth tile - the logo's own top-left corner - is blank,
+## `GameFreakPresents`' art, identified by content rather than by bounds. The 1bpp
+## run is two graphics, so it is checked as two: every tile of the thirteen-tile
+## word strip carries ink, the six that spell "PRESENTS" are clear across their
+## top rows because that word sits a row lower, and the fourteenth tile is blank,
 ## which is why `GameFreakPresents_PlaceGameFreak` can use it as the space in
-## "GAME FREAK". A neighbouring 1bpp run would have to be blank in exactly that
-## tile and inked in exactly the other twelve.
+## "GAME FREAK". A neighbouring run would have to be blank in exactly that tile
+## and inked in exactly the other twelve.
 static func verify_game_freak_presents(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var entry: Dictionary = layout.get("game_freak_presents", {})
 	if entry.is_empty():
@@ -913,16 +782,14 @@ static func _verify_title_run(
 	return {"ok": true, "sheet": sheet, "end": at + lz.consumed}
 
 
-## The region map, identified by content rather than by bounds.
-##
-## The two region tilemaps pin the graphic they are drawn out of: every one of
-## their 720 cells names a tile inside `TownMapGFX`'s 48, which no unrelated
-## 360-byte run does, and each ends on its own `-1`. The palette map is checked
-## the same way, against the six palettes it selects between, and the palette run
-## by the off-white all six open on. The landmark table checks its two ends and
-## every name pointer in between: `SPECIAL` sits at (0,0) with the only zeroed
-## record, the last row is the Fast Ship, and a pointer that leaves the table's
-## own bank is not a name.
+## The region map, identified by content rather than by bounds. The two region
+## tilemaps pin the graphic they are drawn out of: every one of their 720 cells
+## names a tile inside `TownMapGFX`'s 48, which no unrelated 360-byte run does,
+## and each ends on its own `-1`. The palette map is checked the same way and the
+## palette run by the off-white all six open on. The landmark table checks both
+## ends and every name pointer between: `SPECIAL` sits at (0,0) with the only
+## zeroed record, the last row is the Fast Ship, and a pointer that leaves the
+## table's bank is not a name.
 static func verify_town_map(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var entry: Dictionary = layout.get("town_map", {})
 	if entry.is_empty():
@@ -1660,16 +1527,12 @@ static func read_oak_text(rom: RomFile, _layout: Dictionary, stub: int) -> Strin
 	return String(decoded["text"])
 
 
-## `CrystalIntro`'s art section, walked whole from its one pinned address.
-##
-## Every entry is decompressed and its length checked against what the routine
-## that loads it asks VRAM for, then the next entry's address is that length
-## rounded up to [constant RomLayout.INTRO_ENTRY_ALIGN]. Thirty-five entries in a
-## row landing on their exact sizes is what says the address is right; a walk
-## that starts anywhere else fails inside the first two.
-##
-## Returns {name: PackedByteArray} in `INTRO_SECTION` order, or an empty
-## Dictionary if any entry does not decompress to its own size.
+## `CrystalIntro`'s art section, walked whole from its one pinned address. Every
+## entry is decompressed and its length checked against what the routine that
+## loads it asks VRAM for, and the next address is that length rounded up to
+## [constant RomLayout.INTRO_ENTRY_ALIGN]. Thirty-five entries landing on their
+## exact sizes is what says the address is right; a walk that starts anywhere else
+## fails inside the first two. Returns {name: PackedByteArray}, or empty.
 static func read_intro_section(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var entry: Dictionary = layout.get("intro_movie", {})
 	var at: int = int(entry.get("section", -1))
@@ -1698,16 +1561,12 @@ static func read_intro_section(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return out
 
 
-## `GoldSilverIntro`'s art section, walked the same way `CrystalIntro`'s is: one
-## pinned address, each entry checked against the size the routine that loads it
-## asks VRAM for, and the next address that size rounded up to
-## [constant RomLayout.INTRO_ENTRY_ALIGN].
-##
-## The two `.tilemap`s and two `.bin`s are uncompressed and pret checks them in
-## as binary, so their lengths are the file's rather than a tile count.
-##
-## Returns {name: PackedByteArray} in `GS_INTRO_SECTION` order, or an empty
-## Dictionary if any entry does not decompress to its own size.
+## `GoldSilverIntro`'s art section, walked the way `CrystalIntro`'s is: one pinned
+## address, each entry checked against the size the routine that loads it asks
+## VRAM for, the next address that size rounded up. The two `.tilemap`s and two
+## `.bin`s are uncompressed and pret checks them in as binary, so their lengths
+## are the file's rather than a tile count. Returns {name: PackedByteArray} in
+## `GS_INTRO_SECTION` order, or empty.
 static func read_gs_intro_section(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var entry: Dictionary = layout.get("gs_intro", {})
 	var at: int = int(entry.get("section", -1))
@@ -2035,14 +1894,12 @@ static func _verify_intro_palette_run(
 
 
 ## The credits (`engine/movie/credits.asm`), whose five runs each pin the next.
-##
 ## `CreditsBorderGFX` is the only pinned graphics offset: the four mon sheets
 ## follow it and `CreditsScript` follows them, so the run's own length is what
 ## says the offset is right. The script's terminator then puts
-## `CreditsStringsPointers` where the layout claims it is, and the string the
-## `copyright` index names has to be the copyright screen's own, which the layout
-## pins separately in another bank. Content, not neighbours, identifies the two
-## uncompressed graphics and the palettes.
+## `CreditsStringsPointers` where the layout claims, and the string the
+## `copyright` index names has to be the copyright screen's own. Content, not
+## neighbours, identifies the two uncompressed graphics and the palettes.
 static func verify_credits(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var entry: Dictionary = layout.get("credits", {})
 	if entry.is_empty():
@@ -2536,18 +2393,14 @@ static func read_menu_descriptions(rom: RomFile, layout: Dictionary) -> Array[St
 	return out
 
 
-## data/text/name_input_chars.asm. Nothing in the block identifies itself, so it
-## is pinned by content at both ends of every table: row 0 has to be the nine
-## letters the table opens with, and the last row has to be the command row,
-## which is what NamingScreen_GetCursorPosition reads by column. A run of text
-## bytes elsewhere in the bank passes neither.
-## StringBufferPointers checked against what `ram/wram.asm` says about its
-## targets, not against an address this project chose.
-##
-## wStringBuffer1..5 are five consecutive `ds STRING_BUFFER_LENGTH` runs, so the
-## five general entries must sit one stride apart in the order
-## `data/text_buffers.asm` lists them. A wrong offset lands on unrelated words
-## and fails the stride; a right offset in the wrong dump fails the WRAM range.
+## data/text/name_input_chars.asm, pinned by content at both ends of every table:
+## row 0 has to be the nine letters the table opens with and the last row the
+## command row, which `NamingScreen_GetCursorPosition` reads by column. A run of
+## text bytes elsewhere passes neither.
+## Below it, `StringBufferPointers` checked against `ram/wram.asm` rather than an
+## address this project chose: `wStringBuffer1..5` are five consecutive
+## `ds STRING_BUFFER_LENGTH` runs, so the five general entries must sit one stride
+## apart in the order `data/text_buffers.asm` lists them.
 static func verify_string_buffer_pointers(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var at: int = int(layout.get("string_buffer_pointers", -1))
 	var bytes: int = RomLayout.STRING_BUFFER_POINTER_COUNT * RomLayout.STRING_BUFFER_POINTER_SIZE
@@ -2602,18 +2455,13 @@ const MAIL_PALETTE_FIRST: Array[int] = [
 
 
 ## The five mail pins, each against something only the right offset carries:
-## `MailItems`' own eleven bytes, the two mail keyboards at both ends the way
-## the name keyboards are checked, the flat tiles `gfx/mail.asm` begins and ends
-## on, and `mail.pal`'s first colour per row with black behind every one.
-##
-## The icon is checked for bounds alone: eight 2bpp tiles of a picture with no
-## structure a wrong offset would fail, and `tools/checks/mail.gd` is what looks
-## at it.
-## `data/items/mystery_gift_items.asm` and
-## `data/decorations/mystery_gift_decos.asm`, resolved through their own
-## constant blocks rather than read back out of a dump: these are what say the
-## two pins are the tables and not some other pair of adjacent runs. Identical
-## in both disassemblies.
+## `MailItems`' own eleven bytes, the two mail keyboards at both ends, the flat
+## tiles `gfx/mail.asm` begins and ends on, and `mail.pal`'s first colour per row
+## with black behind every one. The icon is checked for bounds alone, eight 2bpp
+## tiles with no structure a wrong offset would fail, and `tools/checks/mail.gd`
+## looks at it. Below, the two mystery gift tables resolved through their own
+## constant blocks rather than read back out of a dump, which is what says the
+## pins are the tables and not some other pair of adjacent runs.
 const MYSTERY_GIFT_ITEM_NUMBERS: Array[int] = [
 	0xAD, 0x4E, 0x54, 0x50, 0x4F, 0x4A, 0x29, 0x33, 0x31, 0x53, 0x2C, 0x35,
 	0x21, 0xB9, 0xBA, 0xBC, 0x6D, 0xAE, 0x27, 0x04, 0x2A, 0x2B, 0x41, 0x3F,
@@ -2807,14 +2655,12 @@ func _import_battle_tower(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 
 ## The Battle Tower's seven pins, each against something only the right offset
-## carries: the first and last of `BattleTowerTrainers`' 70 names with every
-## class byte in range, `BattleTowerMons`' first row and every row's level
-## agreeing with the level group it sits in, the two per-class tables' own
-## widths and values, all 120 `text_far` stubs, `Strings_L10ToL100`'s CANCEL row
-## and `MenuData_ChallengeExplanationCancel`'s three rows.
-##
-## A cartridge with no tower answers ok: Gold and Silver ship no map, routine or
-## table for it, so an absent block is the truth about them.
+## carries: the first and last of `BattleTowerTrainers`' 70 names with every class
+## byte in range, `BattleTowerMons`' first row and every row's level agreeing with
+## its level group, the two per-class tables' widths and values, all 120
+## `text_far` stubs, `Strings_L10ToL100`'s CANCEL row and
+## `MenuData_ChallengeExplanationCancel`'s three rows. A cartridge with no tower
+## answers ok: Gold and Silver ship no map, routine or table for it.
 static func verify_battle_tower(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if not RomLayout.has_battle_tower(layout):
 		return {"ok": true, "message": "The cartridge has no Battle Tower."}
@@ -3366,17 +3212,12 @@ static func verify_matchups(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 
 ## Walks one species' entry in the combined evolution and level-up move table.
-##
 ## Returns { evolutions, learnset }, empty if both terminators were not where a
-## well-formed entry has them. An evolution is
-## { method, parameter, condition, target }, a level-up move { level, move };
-## [code]condition[/code] is zero except for [constant RomLayout.EVOLVE_STAT],
-## the only method asking two questions.
-##
+## well-formed entry has them. `condition` is zero except for
+## [constant RomLayout.EVOLVE_STAT], the only method asking two questions.
 ## Level-up moves keep the cartridge's order rather than being sorted: the order
-## decides which move a fresh Pokémon ends up with when more than four are on
-## offer, and one species really is out of order (see
-## [constant RomLayout.UNSORTED_LEARNSET_SPECIES]).
+## decides which move a fresh Pokemon ends up with when more than four are on
+## offer, and one species really is out of order.
 static func read_evos_attacks(rom: RomFile, layout: Dictionary, species: int) -> Dictionary:
 	var table: int = RomLayout.evos_attacks_pointer_offset(layout, species)
 	if not rom.in_bounds(table, RomLayout.EVOS_ATTACKS_POINTER_SIZE):
@@ -3523,18 +3364,13 @@ static func verify_egg_moves(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return {"ok": true, "message": ""}
 
 
-## Walks one species' Pokedex entry (data/pokemon/dex_entries.asm).
-##
-## Returns { category, height, weight, pages }, empty if the pointer or the walk
-## left the cartridge. [code]pages[/code] is always
-## [constant RomLayout.DEX_ENTRY_PAGES] strings.
-##
-## Height and weight are the cartridge's own numbers rather than converted
-## measurements: height is decimal digits of feet and inches and weight is tenths
-## of a pound, and `DisplayDexEntry` prints both by punctuating the digits. A
-## zero in either is the source's own "no measurement" and is kept, since
-## `.skip_height` and `.skip_weight` leave the row blank rather than printing a
-## zero.
+## Walks one species' Pokedex entry (data/pokemon/dex_entries.asm). Returns
+## { category, height, weight, pages }, empty if the pointer or the walk left the
+## cartridge. Height and weight are the cartridge's own numbers rather than
+## converted measurements, height being decimal digits of feet and inches and
+## weight tenths of a pound, both punctuated by `DisplayDexEntry`. A zero in
+## either is the source's own "no measurement" and is kept, since `.skip_height`
+## leaves the row blank rather than printing a zero.
 static func read_dex_entry(rom: RomFile, layout: Dictionary, species: int) -> Dictionary:
 	var table: int = RomLayout.dex_entry_pointer_offset(layout, species)
 	if not rom.in_bounds(table, RomLayout.DEX_ENTRY_POINTER_SIZE):
@@ -3577,15 +3413,13 @@ static func read_dex_entry(rom: RomFile, layout: Dictionary, species: int) -> Di
 	return {"category": category, "height": height, "weight": weight, "pages": pages}
 
 
-## The evolution and learnset table, checked species by species.
-##
-## Nothing says which species an entry belongs to, so the shape is checked: 251
-## pointers into the banked window, each naming evolutions whose methods come
-## from a set of five and whose targets are real species, then level-up moves at
-## real levels teaching real moves. A wrong pointer fails on its first byte,
-## since most byte values are neither an evolution method nor a terminator. On
-## top of that, levels ascend in all but one species, the totals are known, and
-## both ends are independently known content.
+## The evolution and learnset table, checked species by species. Nothing says
+## which species an entry belongs to, so the shape is checked: 251 pointers into
+## the banked window, each naming evolutions whose methods come from a set of five
+## and whose targets are real species, then level-up moves at real levels teaching
+## real moves. A wrong pointer fails on its first byte, since most byte values are
+## neither a method nor a terminator. On top of that, levels ascend in all but one
+## species, the totals are known, and both ends are independently known content.
 static func verify_evos_attacks(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var entries: Array = []
 	var evolutions: int = 0
@@ -3755,19 +3589,13 @@ static func read_dex_order(rom: RomFile, layout: Dictionary, key: String) -> Pac
 	return out
 
 
-## The Pokedex entries and the two order tables.
-##
-## The entries have no self-identifying field, so they are checked the way the
-## palettes are: every one of the 251 has to walk to a category and two pages
-## without leaving the cartridge, and the two ends have to say what they are
-## independently known to say. A pointer table that is one entry out still walks
-## into readable text, which is why the measurements are checked and not just
-## the strings.
-##
-## Each order table has to be a permutation of the whole species range. That is
-## a stronger check than a range check: a run of legal species numbers elsewhere
-## in the bank would pass the latter, and only the real table has every species
-## exactly once.
+## The Pokedex entries and the two order tables. The entries have no
+## self-identifying field, so they are checked the way the palettes are: every one
+## of the 251 has to walk to a category and two pages without leaving the
+## cartridge, and both ends have to say what they are independently known to say.
+## A pointer table one entry out still walks into readable text, which is why the
+## measurements are checked too. Each order table has to be a permutation of the
+## whole species range, which a run of legal species numbers elsewhere would fail.
 static func verify_pokedex(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if not layout.has("pokedex"):
 		return {"ok": false, "message": "No Pokedex offsets for this game."}
@@ -3989,14 +3817,12 @@ static func verify_frames(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 
 ## The battle HUD's graphics, checked by the one thing they do that nothing else
-## in the section does: they count. The pinned palette values every bar and page
-## is drawn with are checked here too, the stats screen's included: they are the
-## same bars and the same kind of check.
-##
-## A bar's fill levels are consecutive tiles each lighting one more column, so
-## the ink climbs by exactly two pixels a step, which a wrong offset does not
-## land on. The two HUD borders have neither content nor a progression, so they
-## are checked like the text box frames: every tile has ink, no two alike.
+## in the section does: they count. A bar's fill levels are consecutive tiles each
+## lighting one more column, so the ink climbs by exactly two pixels a step, which
+## a wrong offset does not land on. The two HUD borders have neither content nor a
+## progression, so they are checked like the text box frames, every tile inked and
+## no two alike. The pinned palette values every bar and page is drawn with are
+## checked here too, the stats screen's included.
 static func verify_battle_graphics(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var data: PackedByteArray = rom.bytes()
 
@@ -4293,20 +4119,13 @@ static func _trainer_palette_check(
 
 
 ## Reads the whole trainer party table in one pass: every class's individual
-## trainers, each a name, a type and a party.
-##
-## Not [method verify_trainers]'s table: that is the class every gym leader
-## shares ("LEADER"), this is the trainer inside it ("FALKNER"), read through
-## different pointers, one per class in both.
-##
-## Nothing in a class's bytes says where its group ends, so its span is bounded
-## by the *next* class's pointer, and the last class is walked until a byte that
-## cannot open a name. One class per game shares its pointer with the next, the
-## one class never sent into battle: its honest span is empty, not a copy of the
-## next. See [constant RomLayout.EMPTY_TRAINER_CLASS].
-##
-## Returns { ok, message, classes, total }, [code]classes[/code] being one Array
-## of trainers per class, in order.
+## trainers, each a name, a type and a party. Not [method verify_trainers]'s
+## table, which is the class every gym leader shares ("LEADER") rather than the
+## trainer inside it ("FALKNER"). Nothing in a class's bytes says where its group
+## ends, so its span is bounded by the next class's pointer and the last is walked
+## until a byte that cannot open a name. One class per game shares its pointer
+## with the next, the one class never sent into battle, and its honest span is
+## empty: see [constant RomLayout.EMPTY_TRAINER_CLASS].
 static func read_trainer_parties(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var count: int = RomLayout.trainer_class_count(layout)
 	var table: int = int(layout["trainer_parties"])
@@ -5458,14 +5277,11 @@ func _import_types(rom: RomFile, layout: Dictionary, on_progress: Callable) -> A
 
 
 ## Decodes the trainer classes: a name and the two colours the class is drawn in.
-##
 ## A class has one palette and no shiny counterpart, so the pair is stored flat,
-## and the pic is found by class number in the trainer atlas.
-##
-## Behind the classes sit the party table (who carries what), the attributes
-## table (how the class's AI plays it) and the DVs table. All four stay on one
-## entry rather than in separate cache files, because they are four tables one
-## class number addresses, not four separate questions.
+## and the pic is found by class number in the trainer atlas. Behind the classes
+## sit the party table, the attributes table and the DVs table, all on one entry
+## rather than in separate cache files, because they are four tables one class
+## number addresses rather than four separate questions.
 func _import_trainers(rom: RomFile, layout: Dictionary, on_progress: Callable) -> Array:
 	var count: int = RomLayout.trainer_class_count(layout)
 	var names: PackedStringArray = Gen2Text.decode_sequence(
@@ -5494,13 +5310,11 @@ func _import_trainers(rom: RomFile, layout: Dictionary, on_progress: Callable) -
 
 ## The four colours a battle draws its bars in. Small enough to live in the
 ## manifest beside the atlas metadata rather than in a file of its own.
-## `GetPlayerOrMonPalettePointer`'s two: the colours the player's own back pic is
-## drawn in while it is standing on the field, before a Pokemon is sent out.
-##
-## They are the first two rows of `TrainerPalettes`, which the cartridge shares
-## with two trainer classes on purpose ("Chris uses the same colors as Cal",
-## "Kris shares Falkner's palette"), so they are read at the table rather than
-## through a class number.
+## Below, `GetPlayerOrMonPalettePointer`'s two: the colours the player's back pic
+## is drawn in before a Pokemon is sent out. They are the first two rows of
+## `TrainerPalettes`, which the cartridge shares with two trainer classes on
+## purpose ("Chris uses the same colors as Cal"), so they are read at the table
+## rather than through a class number.
 func _import_player_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
 	for index: int in RomLayout.PLAYER_PALETTE_NAMES.size():
@@ -6087,13 +5901,10 @@ func _import_title(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 ## The region map's data half: both region tilemaps, `TownMapPals`' palette map,
 ## the landmark table, the palettes the six tile classes are drawn through, and
-## the other three Pokegear cards, which share the whole of that VRAM window.
-##
-## A landmark's name is kept as the codes it is rather than as text, because
+## the other three Pokegear cards, which share the whole of that VRAM window. A
+## landmark's name is kept as the codes it is rather than as text, because
 ## `TownMap_ConvertLineBreakCharacters` rewrites one of those codes before the
-## name is placed and a decoded string cannot say which byte it was: `<BSP>` is a
-## space everywhere else and a ligature ahead of it moves the character index off
-## the tile index.
+## name is placed and a decoded string cannot say which byte it was.
 func _import_town_map(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var entry: Dictionary = layout.get("town_map", {})
 	if entry.is_empty():
@@ -7059,16 +6870,12 @@ func _import_ditto_sheet(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 
 ## Decodes the fixed tile sheets: the font, the eight text box borders and the
-## battle HUD's graphics, each as one strip of tiles.
-##
-## None is compressed or per-species, so there is nothing to look up: each is a
-## fixed run of tiles at a known place. Strips, because each is addressed by a
-## number (a character code, a tile in a bar) and a strip turns that number into
-## a horizontal offset and nothing else.
-##
-## [code]first_code[/code] is the character code the first tile draws, zero for
-## graphics sheets. [code]bits[/code] is the cartridge's storage: font and
-## borders 1bpp, battle graphics 2bpp.
+## battle HUD's graphics, each as one strip of tiles. None is compressed or
+## per-species, so there is nothing to look up. Strips, because each is addressed
+## by a number (a character code, a tile in a bar) and a strip turns that number
+## into a horizontal offset and nothing else. `first_code` is the character code
+## the first tile draws, zero for graphics sheets; `bits` is the cartridge's
+## storage, font and borders 1bpp and battle graphics 2bpp.
 func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> Dictionary:
 	var data: PackedByteArray = rom.bytes()
 	var card: Dictionary = layout["trainer_card"]
@@ -7737,13 +7544,10 @@ func _blit_pic(
 
 ## `AnimateFrontpic`'s tables: one record per species and one per Unown letter,
 ## each carrying the two scripts and the frames they name. Empty for a cartridge
-## with no `pic_anim` pins, which is Gold and Silver: neither ships
-## `pic_animation.asm` and both send-outs reach `PlayStereoCry` directly.
-##
-## A frame is stored as its bitmask followed by its tile numbers, which is what
-## `PokeAnim_GetFrame` reads in that order, so one byte run holds a frame and
-## the bitmask table's own deduplication is resolved here rather than at every
-## draw.
+## with no `pic_anim` pins, which is Gold and Silver. A frame is stored as its
+## bitmask followed by its tile numbers, which is what `PokeAnim_GetFrame` reads
+## in that order, so one byte run holds a frame and the bitmask table's own
+## deduplication is resolved here rather than at every draw.
 func _import_pic_anims(rom: RomFile, layout: Dictionary, species: Array) -> Dictionary:
 	var pins: Dictionary = RomLayout.pic_anim(layout)
 	if pins.is_empty():

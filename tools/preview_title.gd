@@ -1,17 +1,13 @@
 extends SceneTree
 
-## Captures the title screen against a real imported cache, one source frame at
-## a time.
+## Captures the title screen against a real imported cache, one source frame at a
+## time.
 ##
 ##   Godot --headless --path . -s res://tools/preview_title.gd -- crystal /tmp/t.png [frame]
 ##
 ## [frame] is how many source frames to spend before the shot, so Crystal's
-## twenty-eight-frame entrance, its Suicune cycle and Gold's bird can each be
-## looked at where they actually are. Several frames separated by `;` write one
-## file each, numbered.
-##
-## Headless: the page is drawn into an [Image] rather than through a viewport, so
-## no window and no settle are needed.
+## twenty-eight-frame entrance, its Suicune cycle and Gold's bird can each be looked
+## at where they are. Several separated by `;` write one file each, numbered.
 
 
 func _initialize() -> void:

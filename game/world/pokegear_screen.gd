@@ -2,16 +2,12 @@ class_name Gen2PokegearScreen
 extends Control
 
 ## The Pokegear's clock, phone and radio cards, embedded the way the MAP card is.
-##
 ## [Gen2TownMapPage] draws all four; this composes one of the three over a
 ## [Gen2Screen] and puts the two objects `InitPokegearTilemap` spawns on top: the
-## mode indicator arrow under the card icons, and the radio card's tuning knob.
-## The MAP card is [Gen2TownMapScreen], which owns the region map's own cursor,
-## player icon and landmark walk and is also the dex area and the fly map.
-##
-## Nothing here decides anything: the world owns the clock, the dial and the
-## contact list, so a press is reported and the host reopens the card with what
-## the world then says.
+## mode indicator arrow and the radio card's tuning knob. The MAP card is
+## [Gen2TownMapScreen], which owns the region map's own cursor, player icon and
+## landmark walk. Nothing here decides anything: the world owns the clock, the
+## dial and the contact list, so a press is reported and the host reopens the card.
 
 signal closed()
 ## Left or right, which is `Pokegear_SwitchPage` and is the host's to resolve:

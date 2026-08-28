@@ -1,17 +1,13 @@
 class_name Gen2MailScreen
 extends Control
 
-## `ReadAnyMail` (`engine/pokemon/mail_2.asm`), embedded the way the Hall of
-## Fame viewer is.
-##
-## The routine loads the type's own graphics, prints the message and the author
-## over them, and then does nothing but wait: `.loop` reads A, B and START and
-## returns on any of the first two. [Gen2MailPage] owns the picture; this is the
-## node between it and the buttons.
-##
+## `ReadAnyMail` (`engine/pokemon/mail_2.asm`), embedded the way the Hall of Fame
+## viewer is. The routine loads the type's own graphics, prints the message and
+## the author over them, and then does nothing but wait: `.loop` reads A, B and
+## START and returns on any of the first two. [Gen2MailPage] owns the picture.
 ## START is `PrintMailAndExit`, the Game Boy Printer, which this project has no
-## transport for. It is answered as a press that does nothing rather than left
-## to fall through to whatever is behind the screen.
+## transport for: it is answered as a press that does nothing rather than left to
+## fall through to whatever is behind the screen.
 
 signal closed()
 

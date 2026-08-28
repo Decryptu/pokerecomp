@@ -1,23 +1,13 @@
 class_name Gen2ModOptions
 extends RefCounted
 
-## What the player chose for each mod's registered settings.
-##
-## The file under user:// is the installation's own values, beside
-## [Gen2ModState]'s disabled list: it is what a NEW run is created from and what
-## the launcher edits with no slot open. Per-mod *save* data is a separate thing
-## and is not this.
-##
-## A run bound with [method bind_run] takes over while it is played, because a
-## draw distance that changed under a loaded slot would make that slot's own
-## recorded walk unreproducible ([member Gen2SaveData.run_options]). The bound
-## Dictionary is the save's, so a setting changed mid-run is kept by the save that
-## was played rather than by the installation alone.
-##
-## Only values are kept. What a setting is, what it may be and what it falls back
-## to is the mod's own registration on [Gen2ModHost], so an uninstalled mod's
-## leftover row costs nothing and a mod that changed its ladder between versions
-## sees its stored value refused and its default used instead.
+## What the player chose for each mod's registered settings. The file under
+## user:// is the installation's own values and is what a NEW run is created from;
+## per-mod save data is a separate thing. A run bound with [method bind_run] takes
+## over while it is played, because a draw distance that changed under a loaded
+## slot would make that slot's recorded walk unreproducible. Only values are kept:
+## what a setting is and what it falls back to is the mod's own registration, so a
+## leftover row costs nothing and a changed ladder sees its stored value refused.
 
 const PATH: String = "user://mod_options.json"
 

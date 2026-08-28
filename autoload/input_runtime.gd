@@ -3,18 +3,11 @@ extends Node
 
 ## The live control scheme, and which device the player is actually using.
 ##
-## Two things need one owner. Bindings, because the [InputMap] is engine state
-## with no memory of where it came from, so something has to hold the scheme the
-## options file describes and put it back after every rebind. And the active
-## device, because "is a controller plugged in" is not the question any screen
-## asks: what decides whether an on-screen d-pad is drawn is whether the player
-## is touching the screen right now.
-##
-## Screens read this; only the settings page writes to it. They reach it through
-## [method instance] rather than through the `InputRuntime` global, for the same
-## reason [Gen2WorldScreen] reaches GameRuntime by path: a script handed to
-## Godot's `-s` is compiled before the tree that owns the autoloads exists, so a
-## preview tool that names a screen by type would fail to load it.
+## Bindings need an owner because the [InputMap] has no memory of where it came
+## from; the active device needs one because what decides whether an on-screen
+## d-pad is drawn is whether the player is touching the screen right now. Screens
+## read this through [method instance] rather than the `InputRuntime` global: a
+## `-s` script compiles before the tree that owns the autoloads exists.
 
 signal device_changed(kind: StringName)
 ## The effective answer, after both the setting and the active device. Also
@@ -228,18 +221,12 @@ func send_action(action: StringName, pressed: bool) -> void:
 	Input.parse_input_event(event)
 
 
-## Whether this event is a directional press nothing should act on.
-##
-## An analog stick reports a fresh [InputEventJoypadMotion] every time its value
-## moves, and every one of those is an action press: one push of the stick walked
-## a menu cursor the length of the list. A held key repeats at the operating
-## system's rate for the same reason. The extra presses are swallowed here, in
-## front of the engine's own focus navigation as well as every screen, and
+## Whether this event is a directional press nothing should act on. An analog
+## stick reports a fresh [InputEventJoypadMotion] on every value change and each
+## is an action press, so one push walked a menu the length of the list; a held
+## key repeats at the OS rate for the same reason. The extras are swallowed in
+## front of the engine's own focus navigation, and
 ## [method _advance_direction_repeat] puts back the repeat the hardware had.
-##
-## The cost is that a held stick past the deadzone reaches nothing else while it
-## is held, which a free camera reading raw motion would want. Nothing does
-## today; a renderer that did would read the axis rather than the event.
 func _gate_direction_repeat(event: InputEvent) -> bool:
 	var button: int = Gen2Button.direction_in(event)
 	if button == Gen2Button.NONE:

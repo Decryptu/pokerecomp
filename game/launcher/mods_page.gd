@@ -2,22 +2,13 @@ class_name Gen2ModsPage
 extends VBoxContainer
 
 ## The mod manager: a list grouped by where each mod came from, a page per mod,
-## and a page for the sources the player follows.
-##
-## The model is a package manager's. A source is a followed index; a mod no
-## source lists came from a file. Removing a mod that a source lists uninstalls
-## it and leaves it listed, so it can be downloaded again; removing one that
-## came from a file deletes the only copy there was. [Gen2ModCatalogue] decides
-## both, and this page draws what it decided.
-##
-## The list itself carries only what a list is for: what a mod is, whether it is
-## on, and one action. Settings, description and the install history live on the
-## mod's own page, reached by pressing its row.
-##
-## A change to the list is applied where it is made: the host is reset and every
-## entry script runs again, which is the same reload a cartridge change already
-## did. Nothing here can withdraw one registration on its own, so the whole list
-## is reloaded rather than half of it.
+## and a page for the sources the player follows. The model is a package
+## manager's, so removing a mod a source lists uninstalls it and leaves it listed
+## while removing one that came from a file deletes the only copy there was;
+## [Gen2ModCatalogue] decides both. The list carries only what a list is for, with
+## settings and history on the mod's own page. A change is applied where it is
+## made: the host is reset and every entry script runs again, because nothing here
+## can withdraw one registration on its own.
 
 ## Asks the launcher for its file picker: the page owns no OS dialog.
 signal install_requested
@@ -160,14 +151,12 @@ func refresh() -> void:
 
 
 ## Whether the page may reach the network without a player having asked it to.
-##
 ## [method HTTPRequest.request] refuses, loudly, from a node that is not in the
 ## tree, and [method create] builds the whole page before the launcher adds it.
-## The rest is [method Gen2GameRuntime.is_player_launch]: a check, a test tier,
-## a screenshot driver or a replay has nobody to show a listing to, and its
-## user:// is usually empty, so every page it builds would fetch the feed and
-## then an icon per row. The test tier builds seven. What a player pressed --
-## Check for updates, a download -- is not gated here and works in any run.
+## The rest is [method Gen2GameRuntime.is_player_launch]: a check, a test tier, a
+## screenshot driver or a replay has nobody to show a listing to and its user:// is
+## usually empty, so every page it builds would fetch the feed and then an icon
+## per row. What a player pressed is not gated here and works in any run.
 func _may_fetch_unprompted() -> bool:
 	return is_inside_tree() and Gen2GameRuntime.is_player_launch()
 

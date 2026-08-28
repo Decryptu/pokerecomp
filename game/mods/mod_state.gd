@@ -2,15 +2,11 @@ class_name Gen2ModState
 extends RefCounted
 
 ## The installation's own choices about installed mods: which are switched off,
-## and which one's view the game is drawn with.
-##
-## Disabled ids are stored rather than enabled ones, so a mod that was just
-## installed runs without needing an entry written for it, and a file lost or
-## damaged means every mod runs rather than none.
-##
-## A disabled mod is still discovered and still listed. Only [method
-## Gen2ModHost.load_discovered] skips it, so the launcher can show it, say it
-## is off, and switch it back on without reinstalling.
+## and which one's view the game is drawn with. Disabled ids are stored rather
+## than enabled ones, so a mod just installed runs without needing an entry, and a
+## file lost or damaged means every mod runs rather than none. A disabled mod is
+## still discovered and still listed; only [method Gen2ModHost.load_discovered]
+## skips it, so the launcher can switch it back on without reinstalling.
 
 ## Named for the list it was written for; it now also carries the selected view.
 const PATH: String = "user://mods_disabled.json"

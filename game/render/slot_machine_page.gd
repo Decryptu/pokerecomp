@@ -2,30 +2,13 @@ class_name Gen2SlotMachinePage
 extends RefCounted
 
 ## `_SlotMachine`'s screen: `SlotsTilemap` under the three reels' own objects.
-##
-## Node-free, so the whole machine can be read back headless. [Gen2SlotMachine]
-## owns the state and this is `.InitGFX`'s picture plus what `SlotsLoop` writes
-## into it every frame.
-##
-## Four things the source states and a reading gets wrong:
-##
-## - **The reels are objects, not background.** `Slots_UpdateReelPositionAndOAM`
-##   writes twenty-four shadow-OAM entries and `SlotsTilemap` leaves the three
-##   columns they stand in empty, which is why a reel can sit between two
-##   symbols at all: an object y is a pixel and a tilemap row is not.
-## - **`.InitGFX` sets `rLCDC`'s `B_LCDC_OBJ_SIZE` itself**, so every object here
-##   is eight by sixteen and draws its own tile and the one behind it, which is
-##   why a symbol is two OAM entries and not four. The exit path resets it, and
-##   no other screen in the game turns it on.
-## - **An object's palette is its own tile number shifted twice.**
-##   `.LoadOAM` writes `srl a / srl a / set B_OAM_PRIO, a` as the attribute
-##   byte, so symbol `SLOTS_STARYU` ($14) draws in object palette 5. The unused
-##   `GetUnknownSlotReelData` beside it is the table that would have said the
-##   same thing.
-## - **The bet lights are four cells each and thirteen apart.**
-##   `Slots_TurnLightsOnOrOff` writes the tile at the coordinate, again at
-##   `SCREEN_WIDTH / 2 + 3` past it, and then the tile behind it on the row
-##   below both, which is the pair of lamps down each side of the window.
+## Node-free, so the whole machine can be read back headless. Four things a
+## reading gets wrong: the reels are objects rather than background, which is why
+## a reel can sit between two symbols at all; `.InitGFX` sets `rLCDC`'s
+## `B_LCDC_OBJ_SIZE` itself, so a symbol is two OAM entries and not four; an
+## object's palette is its own tile number shifted twice, so `SLOTS_STARYU` ($14)
+## draws in object palette 5; and the bet lights are four cells each and thirteen
+## apart, a pair of lamps down each side of the window.
 
 const TILE: int = Gen2Font.TILE
 const SCREEN_COLUMNS: int = RomLayout.SLOTS_TILEMAP_COLUMNS
@@ -237,16 +220,10 @@ func attributes() -> PackedInt32Array:
 	return slots
 
 
-## The whole screen for [param machine]. [param state] is what the host holds
-## over it:
-##
-## [codeblock]
-## {
-##   "text": String,   # the box under the machine, empty for none
-##   "menu": int,      # which bet row the cursor is on, 0 for no menu
-##   "yes_no": int,    # 1 or 2 while the play-again box is up, 0 for none
-## }
-## [/codeblock]
+## The whole screen for [param machine]. [param state] is what the host holds over
+## it: `text`, the box under the machine and empty for none; `menu`, which bet row
+## the cursor is on and 0 for no menu; and `yes_no`, 1 or 2 while the play-again
+## box is up and 0 for none.
 func render(machine: Gen2SlotMachine, state: Dictionary = {}) -> Image:
 	if not ready():
 		return null

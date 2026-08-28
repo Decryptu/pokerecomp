@@ -2,24 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the way into Saffron City and its gym's warp maze against freshly
-## imported real caches, for both command profiles.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## maps/SaffronCity.asm, maps/SaffronGym.asm, maps/Route6.asm,
-## maps/Route6SaffronGate.asm and data/maps/attributes.asm. The city, the gym and
-## the gate are byte identical between the pins; Route 6 differs only in the two
-## extra Pokefans Crystal puts on (9,12) and (10,12), both sight range 0, so
-## nothing here is profile split.
-##
-## Two things are worth pinning. Saffron has a real south connection to Route 6,
-## but the city's own south row is wall everywhere Route 6's north edge aligns
-## to, so `ROUTE_6_SAFFRON_GATE` is the only way in, the way Route 31's gate is
-## into Violet. And Saffron Gym is nine rooms with no walkable path between them,
-## joined only by fifteen pairs of self-warps: Sabrina's room holds exactly one
-## pad and exactly one pad reaches it, so the way in is a fixed chain.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- saffron
+## Verifies the way into Saffron City and its gym's warp maze, for both command
+## profiles. The city, the gym and the gate are byte identical between the pins;
+## Route 6 differs only in the two extra Pokefans Crystal puts on (9,12) and
+## (10,12), both sight range 0, so nothing here is profile split. Two things are
+## worth pinning. Saffron has a real south connection to Route 6, but the city's own
+## south row is wall everywhere that edge aligns to, so the gate is the only way in.
+## And Saffron Gym is nine rooms with no walkable path between them, joined by
+## fifteen pairs of self-warps, so the way to Sabrina is a fixed chain.
 
 
 ## constants/map_constants.asm.

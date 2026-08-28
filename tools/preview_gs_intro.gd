@@ -1,17 +1,13 @@
 extends SceneTree
 
-## Captures Gold and Silver's intro movie against a real imported cache, one
-## source frame at a time.
+## Captures Gold and Silver's intro movie against a real imported cache, one source
+## frame at a time.
 ##
 ##   Godot --headless --path . -s res://tools/preview_gs_intro.gd -- gold /tmp/i.png [frame;frame]
 ##
-## [frame] is how many source frames to spend before the shot; several separated
-## by `;` write one file each, numbered. With no frame list the tool runs the
-## whole movie and prints the frame each scene starts on, which is what pins the
-## budgets.
-##
-## Headless: the page draws into an [Image] rather than through a viewport, so
-## there is no window and no settle.
+## [frame] is how many source frames to spend before the shot; several separated by
+## `;` write one file each, numbered. With no frame list the tool runs the whole
+## movie and prints the frame each scene starts on, which is what pins the budgets.
 
 const MAX_FRAMES: int = 20000
 

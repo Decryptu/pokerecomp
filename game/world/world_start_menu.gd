@@ -2,22 +2,13 @@ class_name Gen2WorldStartMenu
 extends RefCounted
 
 ## Scene-free model of the cartridge start menu (engine/menus/start_menu.asm).
-##
 ## `StartMenu.SetUpMenuItems` appends items in a fixed source order, skipping only
-## what its own gate refuses: Pokedex behind wStatusFlags/STATUSFLAGS_POKEDEX_F,
-## Pokemon behind a non-zero wPartyCount, Pokegear behind
-## wPokegearFlags/POKEGEAR_OBTAINED_F.
-##
-## QUIT stands where SAVE does while the Bug Catching Contest runs, and PACK
-## leaves the list with it: `SetUpMenuItems` reads
-## `STATUSFLAGS2_BUG_CONTEST_TIMER_F` twice, once for each. Link mode is the
-## other half of both gates and has no menu here.
-##
-## Entries registered on `Gen2ModHost` are spliced in ahead of EXIT, so a mod can
-## add a screen without reordering or removing anything the cartridge shipped.
-##
-## `STATICMENU_WRAP` is source flag data on `.MenuData`, so the cursor wraps at
-## both ends like a cached cartridge menu.
+## what its own gate refuses: Pokedex behind STATUSFLAGS_POKEDEX_F, Pokemon behind
+## a non-zero wPartyCount, Pokegear behind POKEGEAR_OBTAINED_F. QUIT stands where
+## SAVE does while the Bug Catching Contest runs and PACK leaves the list with it.
+## Entries registered on [Gen2ModHost] are spliced in ahead of EXIT, so a mod can
+## add a screen without reordering anything the cartridge shipped.
+## `STATICMENU_WRAP` is source flag data, so the cursor wraps at both ends.
 
 ## constants/engine_flags.asm: ENGINE_POKEGEAR = 4, ENGINE_POKEDEX = 11. Both
 ## indices are identical in pokecrystal and pokegold (unlike the badge and
@@ -68,11 +59,10 @@ const GATE_NO_CONTEST: StringName = &"no_contest"
 ## host's registered entries can be spliced in without the order becoming a
 ## question. EXIT stays last of the source's own: it is what closes the menu, and
 ## the source never puts anything after it. Only [constant ITEM_LAUNCHER], which
-## the source has no row for at all, is below it.
-## The labels are `.PokedexString` and its siblings verbatim, which is what the
-## box over the map prints. `#` is the charmap's own $54 and expands to "POKe";
-## `<PLAYER>`, which the source's own `.StatusString` is, is filled in by
-## [method build] because `PlaceString` reads `wPlayerName` for it.
+## the source has no row for at all, is below it. The labels are `.PokedexString`
+## and its siblings verbatim; `#` is the charmap's own $54 and expands to "POKe",
+## and `<PLAYER>` is filled in by [method build] because `PlaceString` reads
+## `wPlayerName` for it.
 const SOURCE_ENTRIES: Array[Dictionary] = [
 	{"kind": ITEM_POKEDEX, "label": "#DEX", "available": true, "gate": GATE_POKEDEX},
 	{"kind": ITEM_POKEMON, "label": "#MON", "available": true, "gate": GATE_PARTY},

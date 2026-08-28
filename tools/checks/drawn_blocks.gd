@@ -3,27 +3,13 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## The drawn-block fold, from a map record rather than from a loaded world.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- drawn_blocks
-##
-## `Gen2WorldAPI.drawn_block_for` is what a caller with no world has: a battle
-## staged on a map knows the map by number and never opens one. It has to be the
-## same fold `drawn_block_at` performs, so this sweeps every map of every cache
-## over its whole padded rectangle and refuses a single disagreement.
-##
-## The count of padded blocks that came from a neighbour rather than from the
-## border block is reported per game, because two implementations that both
-## answer the border block everywhere would agree and prove nothing.
-##
-## SCREEN FILL adds a second question to the same sweep, since it is the same
-## fold one step further out. `expanded_block_at` places whole connected maps
-## past the padding, and the two things that has to be true of it are checked
-## here rather than photographed:
-##
-## - inside `wOverworldMapBlocks` it is `drawn_block_at`, byte for byte, so
-##   nothing a 20x18 screen can reach moved;
-## - where the padding took a block off a neighbour, the placed map answers the
-##   same block, which is the seam being continuous rather than merely adjacent.
+## `Gen2WorldAPI.drawn_block_for` is what a caller with no world has, and it has to
+## be the same fold `drawn_block_at` performs, so this sweeps every map of every
+## cache over its whole padded rectangle. The count of padded blocks that came from
+## a neighbour is reported per game, because two implementations that both answer
+## the border block everywhere would agree and prove nothing. SCREEN FILL is the
+## same fold one step further out: inside `wOverworldMapBlocks` it is
+## `drawn_block_at` byte for byte, and the placed map answers the padding's block.
 
 ## `FillMapConnections` writes three blocks of padding on each side.
 const PADDING: int = 3

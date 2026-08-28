@@ -3,22 +3,13 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies the profile map ids `tools/preview_world_story.gd` resolves by name
-## against freshly imported real caches, for both command profiles.
-##
-## A map number counts from its group's first entry, so a map pokegold does not
-## ship shifts every later number in that group: group 3 runs eight lower from
-## UNION_CAVE_1F on, because pokecrystal inserts eight Ruins of Alph word and
-## item rooms (constants/map_constants.asm). The route walker names only the
-## maps it reaches by id rather than by cell, and only Ilex Forest is on a
-## walked leg today; the other three are read by the Mahogany and Rocket Base
-## legs, which no Gold walk reaches yet, so a wrong number there would be
-## silent. That is what this file is for.
-##
-## Each row carries the map's own block dimensions from its `map_const`, which
-## is what makes a wrong number loud: every number in this table resolves to a
-## differently sized map on the other profile.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- story_map_ids
+## against freshly imported real caches, for both command profiles. A map number
+## counts from its group's first entry, so a map pokegold does not ship shifts every
+## later number in that group: group 3 runs eight lower from UNION_CAVE_1F on. The
+## route walker names only the maps it reaches by id, and only Ilex Forest is on a
+## walked leg today, so a wrong number in the other three would be silent. Each row
+## carries the map's own block dimensions from its `map_const`, which is what makes
+## a wrong number loud.
 
 
 ## name: [crystal id, gold id, block width, block height]. The dimensions are

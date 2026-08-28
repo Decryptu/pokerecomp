@@ -1,16 +1,13 @@
 class_name Gen2UnownPrinterScreen
 extends Control
 
-## `_UnownPrinter`'s `.joy_loop` (`engine/events/print_unown.asm`): left and
-## right walk the twenty-six letters and the vacant slot behind them, wrapping
-## either way, B leaves and A sends the stamp to the printer.
-##
-## A therefore reaches `SendScreenToPrinter`, which prints whatever
-## `CheckPrinterStatus` last found. With nothing on the link `wPrinterHandshake`
-## and `wPrinterStatusFlags` stay -1, which is PRINTER_ERROR_2, and B is the way
-## back; the page under that box is `PlaceUnownPrinterFrontpic`'s, the stamp the
-## printer would have taken. There is no printer to plug in, so that is the
-## whole of what A can do here rather than a refusal invented for it.
+## `_UnownPrinter`'s `.joy_loop`: left and right walk the twenty-six letters and
+## the vacant slot behind them, wrapping either way, B leaves and A sends the stamp
+## to the printer. A therefore reaches `SendScreenToPrinter`, which prints whatever
+## `CheckPrinterStatus` last found; with nothing on the link both printer variables
+## stay -1, which is PRINTER_ERROR_2, and B is the way back. There is no printer to
+## plug in, so that is the whole of what A can do here rather than a refusal
+## invented for it.
 
 signal closed()
 signal music_requested(index: int)

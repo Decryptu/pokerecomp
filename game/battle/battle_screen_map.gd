@@ -1,19 +1,12 @@
 class_name Gen2BattleScreenMap
 extends RefCounted
 
-## `wTilemap` as a battle leaves it: which tile of which battler's picture sits
-## in each of the 20x18 cells.
-##
-## A battle animation does not draw a picture, it edits this map:
-## `BattleBGEffect_HideMon` blanks a battler's box, `..._RemoveMon` shifts it a
-## column at a time, `..._EnterMon` and `..._ReturnMon` stamp smaller
-## arrangements of the same tiles, and `AppearUser` puts a whole one back. The
-## screen owns the map, hands it to [Gen2BattleAnimBackground] before an
-## animation and takes back whatever the animation left, which is why a Fly is
-## still gone after its own animation ends.
-##
-## Node-free: a map is data, so what an effect did to one can be asserted
-## headless.
+## `wTilemap` as a battle leaves it: which tile of which battler's picture sits in
+## each of the 20x18 cells. An animation does not draw a picture, it edits this
+## map, and the screen hands it to [Gen2BattleAnimBackground] and takes back
+## whatever the animation left, which is why a Fly is still gone after its own
+## animation ends. Node-free: a map is data, so what an effect did to one can be
+## asserted headless.
 
 const COLUMNS: int = Gen2BattleAnimBackground.SCREEN_WIDTH
 const ROWS: int = Gen2BattleAnimBackground.SCREEN_HEIGHT

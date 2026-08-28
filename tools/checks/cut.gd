@@ -3,19 +3,13 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies Cut against freshly imported real caches, for both command profiles.
-##
-## The expected values come from the pinned pokecrystal and pokegold sources:
-## engine/events/overworld.asm's CutFunction and CheckMapForSomethingToCut,
-## engine/overworld/tile_events.asm's CheckCutCollision,
-## data/collision/field_move_blocks.asm's CutTreeBlockPointers, and
-## constants/tileset_constants.asm, whose PARK and FOREST numbers are the only
-## part of that table that differs between the two games.
-##
-## The real-cartridge counterpart to tests/unit/test_world_field_move.gd, which
-## uses a synthetic cache. Ilex Forest is the acceptance case, because its single
-## cut tree is what gates the route west out of the forest.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- cut
+## Expected values come from the pinned sources: CutFunction,
+## CheckMapForSomethingToCut, CheckCutCollision, CutTreeBlockPointers, and
+## constants/tileset_constants.asm, whose PARK and FOREST numbers are the only part
+## of that table that differs between the two games. The real-cartridge counterpart
+## to tests/unit/test_world_field_move.gd, which uses a synthetic cache. Ilex
+## Forest is the acceptance case, because its single cut tree gates the route west
+## out of the forest.
 
 
 ## constants/map_constants.asm, DUNGEONS group. Crystal's extra maps push

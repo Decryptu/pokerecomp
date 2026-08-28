@@ -2,23 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the gates between Blackthorn Gym's door and the Rising Badge,
-## against freshly imported real caches, for both command profiles.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## `maps/BlackthornGym2F.asm`, `maps/BlackthornGym1F.asm`,
-## `maps/BlackthornCity.asm` and `maps/DragonsDenB1F.asm`. Gym 2F's map events
-## and `BlackthornGym1FBouldersCallback` are byte identical between the pins;
-## Gold and Silver have no Dragon Shrine, so their B1F carries no warp to it and
-## the shrine checks are Crystal only.
-##
-## What is worth pinning here is not the scripts but the four places the leg
-## would silently stop: the two boulders that seal 2F's pockets, the two 1F
-## `changeblock`s that actually open Clair's room, the lake that is the only way
-## to the Dragon's Den door, and the whirlpool between the den ladder and the
-## shrine's one landfall.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- rising_badge
+## Verifies the gates between Blackthorn Gym's door and the Rising Badge, for both
+## command profiles. Gym 2F's map events and `BlackthornGym1FBouldersCallback` are
+## byte identical between the pins; Gold and Silver have no Dragon Shrine, so their
+## B1F carries no warp to it and the shrine checks are Crystal only. What is worth
+## pinning is not the scripts but the four places the leg would silently stop: the
+## two boulders that seal 2F's pockets, the two 1F `changeblock`s that open Clair's
+## room, the lake that is the only way to the Dragon's Den door, and the whirlpool
+## between the den ladder and the shrine's one landfall.
 
 
 ## data/maps/maps.asm group/number pairs. The gym floors and the city sit at the

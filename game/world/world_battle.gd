@@ -126,41 +126,14 @@ static func prepare(
 	}
 
 
-## `LoadEnemyMon`'s `.InitDVs` for a wild, which is the whole of what decides
-## whether the Pokemon in the grass is shiny, has a bad stat or answers a
-## different Hidden Power. Every wild reached this with 15/15/15/15 before,
-## because only the visible-encounter provider ever put `dvs` in the request and
-## the other eight sources (grass, surf, fishing, Headbutt, Rock Smash, the Bug
-## Contest, a static `loadwildmon`, a roamer) carried none.
-##
-## Rolled here rather than in each of those callers: this is the one place a
-## wild is built, and [param generator] is the battle's own, so an encounter
-## stays inside the run's reproducible sequence.
-##
-## Three cases keep an answer of their own, in the source's order:
-##
-## - a request already carrying `dvs` keeps it, which is what leaves the
-##   Pokemon a player walked up to the one they saw, and is also `.Roaming`'s
-##   stored word once the roamer's struct has been initialised;
-## - [constant Gen2Battle.BATTLETYPE_FORCESHINY] writes
-##   [constant Gen2Stats.SHINY_DVS] rather than rolling. This is the red
-##   Gyarados, which nothing read the type for until now;
-## - a wild UNOWN rerolls until its letter is one the Ruins of Alph puzzle has
-##   unlocked, which is `CheckUnownLetter`'s `jr c, .GenerateDVs`. The source
-##   notes the loop never ends if a forced shiny is also an Unown, so the shiny
-##   branch stays in front of it here the way it is there.
-## `BattleWon.give_money` and `CheckPayDay`, the two credits the way out of a
-## won battle pays, worked out once for whichever host fought it.
-##
-## Both are a win's own: `.give_money` is reached from the trainer branch of
-## `BattleWon`, and `CheckPayDay` sits behind `.HandleEndOfBattle`'s
-## `and $f / ret nz`, so a loss, a draw and a run all pay nothing. [param won] is
-## that `wBattleResult` test, passed in rather than read off the battle: a host
-## that settles a fight by fiat rather than playing it knows its own outcome.
-## [param state] is read for Mom's savings tier and her balance, never written.
-##
-## Returns `money` keyed by account, the figure `GotMoneyForWinningText` prints,
-## which of its four lines that is, and the Pay Day coins.
+## `LoadEnemyMon`'s `.InitDVs` for a wild, which decides whether the Pokemon in
+## the grass is shiny, has a bad stat or answers a different Hidden Power. Rolled
+## here rather than in each of the nine callers: this is the one place a wild is
+## built, and [param generator] is the battle's own. Three cases keep an answer of
+## their own, in the source's order: a request already carrying `dvs` keeps it,
+## which is what leaves a player the Pokemon they walked up to;
+## BATTLETYPE_FORCESHINY writes [constant Gen2Stats.SHINY_DVS]; and a wild UNOWN
+## rerolls until its letter is one the Ruins of Alph puzzle has unlocked.
 static func earnings(battle: Gen2Battle, state: Gen2WorldState, won: bool) -> Dictionary:
 	var result: Dictionary = {
 		"money": {}, "prize_shown": 0, "prize_line": &"", "pay_day": 0,
@@ -237,15 +210,13 @@ static func wild_dvs(
 	return word
 
 
-## Two `BattleRandom` bytes, high byte first, rerolled while the letter they give
-## a wild Unown is locked, which is `CheckUnownLetter`'s `jr c, .GenerateDVs`.
-##
+## Two `BattleRandom` bytes, high byte first, rerolled while the letter they give a
+## wild Unown is locked, which is `CheckUnownLetter`'s `jr c, .GenerateDVs`.
 ## Unbounded the way the source's is, and safe for the same reason: the mask is
-## narrowed to the four real sets first, and every one of them holds letters, so
-## any mask left standing is one a roll reaches. A mask of nothing is the save
-## that has solved no puzzle, and there the gate is dropped rather than looped
-## on: `ChooseWildEncounter` refuses a wild Unown outright on that save, so a
-## caller reaching here with one has already left the cartridge's own path.
+## narrowed to the four real sets first and every one of them holds letters, so any
+## mask left standing is one a roll reaches. A mask of nothing is the save that has
+## solved no puzzle, and there `ChooseWildEncounter` refuses a wild Unown outright,
+## so a caller reaching here with one has already left the cartridge's own path.
 static func _roll_dvs(
 	generator: RandomNumberGenerator, species: int, unlocked_unowns: int
 ) -> int:

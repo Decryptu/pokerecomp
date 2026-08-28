@@ -5,25 +5,12 @@ var _collisions: int = 0
 
 ## Sweeps `AnimateFrontpic` over the whole corpus on all three cartridges: every
 ## species and every Unown letter, both scripts, every frame each names, run to
-## completion through [Gen2PicAnimation].
-##
-## What a sampled case cannot say: a frame's tile numbers are remapped by the
-## pic's own height (`.GetTilemap` adds 24 to a 5x5's, 13 to a 6x6's and nothing
-## to a 7x7's), a bitmask is 4, 5 or 7 bytes for the same reason, and the three
-## sizes are 84, 84 and 83 of Crystal's 251. One size proves a third of it.
-##
-## The invariants, all of them the cartridge's own arithmetic rather than a
-## transcribed expectation:
-##
-## - every frame names exactly as many tiles as its bitmask has set bits;
-## - every tile a frame names is inside the run `GetAnimatedEnemyFrontpic`
-##   loads, which is the padded 7x7 box plus the pic's own `w * h` behind it;
-## - every script terminates, and running it leaves no cell of the box outside
-##   that run either;
-## - Gold and Silver have no records at all, which is `pic_animation.asm` being
-##   Crystal's alone rather than an import that failed.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- pic_anim
+## completion. What a sampled case cannot say: a frame's tile numbers are remapped
+## by the pic's own height, a bitmask is 4, 5 or 7 bytes for the same reason, and
+## the three sizes are 84, 84 and 83 of Crystal's 251. The invariants are the
+## cartridge's own arithmetic: a frame names as many tiles as its bitmask has set
+## bits, every tile is inside the run `GetAnimatedEnemyFrontpic` loads, every script
+## terminates, and Gold and Silver have no records at all.
 
 const FIRST_SPECIES: int = 1
 const LAST_SPECIES: int = RomLayout.SPECIES_COUNT

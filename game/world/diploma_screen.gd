@@ -1,19 +1,14 @@
 class_name Gen2DiplomaScreen
 extends Control
 
-## `_Diploma` and `_PrintDiploma` (`engine/events/diploma.asm`,
-## `engine/printer/printer.asm`), which are the same page under two loops.
-##
-## `_Diploma` is `PlaceDiplomaOnScreen` and `WaitPressAorB_BlinkCursor`, so
-## either button closes it. `_PrintDiploma` draws the same page and then holds
-## in `SendScreenToPrinter`, which prints whatever `CheckPrinterStatus` last
-## found; with nothing on the link `wPrinterHandshake` and `wPrinterStatusFlags`
-## both stay -1, which is PRINTER_ERROR_2, and B is the way out. That is not a
-## refusal invented here: it is the branch a Game Boy with no printer plugged in
-## takes, and there is no printer to plug in.
-##
-## Page 2 is therefore never drawn by the printing loop, because `.cancel` skips
-## it. [method preview_page] is what photographs it.
+## `_Diploma` and `_PrintDiploma`, which are the same page under two loops.
+## `_Diploma` is `PlaceDiplomaOnScreen` and `WaitPressAorB_BlinkCursor`, so either
+## button closes it. `_PrintDiploma` draws the same page and holds in
+## `SendScreenToPrinter`; with nothing on the link both printer variables stay -1,
+## which is PRINTER_ERROR_2, and B is the way out. That is the branch a Game Boy
+## with no printer takes rather than a refusal invented here. Page 2 is therefore
+## never drawn by the printing loop, because `.cancel` skips it, and
+## [method preview_page] is what photographs it.
 
 signal closed()
 signal music_requested(index: int)

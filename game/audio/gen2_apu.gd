@@ -3,24 +3,12 @@ extends RefCounted
 
 ## DMG audio processing unit: the four hardware channels behind $ff10-$ff3f.
 ##
-## The sound engine only ever writes registers; everything audible is decided
-## here. Ported from MiniGBS by way of minigb_apu, which is what suiCune renders
-## pokecrystal's engine through, so a register trace taken from either lands on
-## the same samples.
-##
-## One [method render_frame] call is one LCD frame: registers are sampled once
-## and held for the whole block, exactly as a per-VBlank driver observes them.
-##
-## Two things are counted rather than walked, and both answer the same samples.
-## `update_freq`'s loop adds `freq_inc` to a counter that resets to zero on every
-## crossing of `FREQ_INC_REF`, so the crossings a sample makes are
-## `(counter + freq_inc - 1) / FREQ_INC_REF` and what is left is the remainder;
-## the duty counter and the wave position are advanced by that count in one step,
-## since only where they end up is read. And minigb_apu's sub-sample average,
-## `((pos - prev) / freq_inc) * val`, is integer division on `uint32_t` with
-## `pos - prev` always below `freq_inc`, so every term of it is zero and the
-## sample is the last value the walk left. The noise channel runs sixteen
-## crossings a sample at its fastest rate, which is what both of these cost.
+## Everything audible is decided here; the sound engine only writes registers.
+## Ported from MiniGBS by way of minigb_apu, the path suiCune renders pokecrystal
+## through, so a register trace from either lands on the same samples. One
+## [method render_frame] is one LCD frame. `update_freq`'s walk and minigb_apu's
+## sub-sample average are both counted instead: only where the duty counter ends
+## is read, and every term of that average is integer zero.
 
 const SAMPLE_RATE: int = 32768
 ## AUDIO_SAMPLE_RATE / (DMG clock / 70,224 clocks per frame), truncated.

@@ -152,256 +152,180 @@ static func pointer_key(bank: int, address: int) -> String:
 	return "%d:%04X" % [bank, address]
 
 
+## Every opcode's command name, on pokegold's numbering. The eight commands the
+## two profiles spell differently are [constant PROFILE_COMMAND_NAMES]; an opcode
+## in neither is not a command on this profile.
+const COMMAND_NAMES: Dictionary = {
+	SCALL: &"scall",
+	FARSCALL: &"farscall",
+	MEMCALL: &"memcall",
+	SJUMP: &"sjump",
+	FARSJUMP: &"farsjump",
+	MEMJUMP: &"memjump",
+	IFEQUAL: &"ifequal",
+	IFNOTEQUAL: &"ifnotequal",
+	IFFALSE: &"iffalse",
+	IFTRUE: &"iftrue",
+	IFGREATER: &"ifgreater",
+	IFLESS: &"ifless",
+	JUMPSTD: &"jumpstd",
+	CALLSTD: &"callstd",
+	CALLASM: &"callasm",
+	SPECIAL: &"special",
+	MEMCALLASM: &"memcallasm",
+	CHECKMAPSCENE: &"checkmapscene",
+	SETMAPSCENE: &"setmapscene",
+	CHECKSCENE: &"checkscene",
+	SETSCENE: &"setscene",
+	SETVAL: &"setval",
+	ADDVAL: &"addval",
+	RANDOM: &"random",
+	CHECKVER: &"checkver",
+	READMEM: &"readmem",
+	WRITEMEM: &"writemem",
+	LOADMEM: &"loadmem",
+	READVAR: &"readvar",
+	WRITEVAR: &"writevar",
+	LOADVAR: &"loadvar",
+	GIVEITEM: &"giveitem",
+	TAKEITEM: &"takeitem",
+	CHECKITEM: &"checkitem",
+	GIVEMONEY: &"givemoney",
+	TAKEMONEY: &"takemoney",
+	CHECKMONEY: &"checkmoney",
+	GIVECOINS: &"givecoins",
+	TAKECOINS: &"takecoins",
+	CHECKCOINS: &"checkcoins",
+	ADDCELLNUM: &"addcellnum",
+	DELCELLNUM: &"delcellnum",
+	CHECKCELLNUM: &"checkcellnum",
+	CHECKTIME: &"checktime",
+	CHECKPOKE: &"checkpoke",
+	GIVEPOKE: &"givepoke",
+	GIVEEGG: &"giveegg",
+	GIVEPOKEMAIL: &"givepokemail",
+	CHECKPOKEMAIL: &"checkpokemail",
+	CHECKEVENT: &"checkevent",
+	CLEAREVENT: &"clearevent",
+	SETEVENT: &"setevent",
+	CHECKFLAG: &"checkflag",
+	CLEARFLAG: &"clearflag",
+	SETFLAG: &"setflag",
+	WILDON: &"wildon",
+	WILDOFF: &"wildoff",
+	XYCOMPARE: &"xycompare",
+	WARPMOD: &"warpmod",
+	BLACKOUTMOD: &"blackoutmod",
+	WARP: &"warp",
+	GETMONEY: &"getmoney",
+	GETCOINS: &"getcoins",
+	GETNUM: &"getnum",
+	GETMONNAME: &"getmonname",
+	GETITEMNAME: &"getitemname",
+	GETCURLANDMARKNAME: &"getcurlandmarkname",
+	GETTRAINERNAME: &"gettrainername",
+	GETSTRING: &"getstring",
+	ITEMNOTIFY: &"itemnotify",
+	POCKETISFULL: &"pocketisfull",
+	OPENTEXT: &"opentext",
+	REANCHORMAP: &"reanchormap",
+	CLOSETEXT: &"closetext",
+	WRITEUNUSEDBYTE: &"writeunusedbyte",
+	FARWRITETEXT: &"farwritetext",
+	WRITETEXT: &"writetext",
+	REPEATTEXT: &"repeattext",
+	YESORNO: &"yesorno",
+	LOADMENU: &"loadmenu",
+	CLOSEWINDOW: &"closewindow",
+	JUMPTEXTFACEPLAYER: &"jumptextfaceplayer",
+	FACEPLAYER: &"faceplayer",
+}
+
+## The opcodes Crystal and pokegold give different names, as [crystal, gold]. An
+## empty name is an opcode that profile does not have.
+const PROFILE_COMMAND_NAMES: Dictionary = {
+	FARJUMPTEXT: [&"farjumptext", &"jumptext"],
+	JUMPTEXT: [&"jumptext", &"waitbutton"],
+	WAITBUTTON: [&"waitbutton", &"promptbutton"],
+	PROMPTBUTTON: [&"promptbutton", &"pokepic"],
+	GOLD_FACEPLAYER: [&"", &"faceplayer"],
+	GOLD_ENDCALLBACK: [&"", &"endcallback"],
+	ENDCALLBACK: [&"endcallback", &"end"],
+	END: [&"end", &""],
+}
+
+
 static func command_name(opcode: int, crystal_commands: bool = true) -> StringName:
 	var later_name: StringName = _later_command_name(opcode, crystal_commands)
 	if not later_name.is_empty():
 		return later_name
-	match opcode:
-		SCALL:
-			return &"scall"
-		FARSCALL:
-			return &"farscall"
-		MEMCALL:
-			return &"memcall"
-		SJUMP:
-			return &"sjump"
-		FARSJUMP:
-			return &"farsjump"
-		MEMJUMP:
-			return &"memjump"
-		IFEQUAL:
-			return &"ifequal"
-		IFNOTEQUAL:
-			return &"ifnotequal"
-		IFFALSE:
-			return &"iffalse"
-		IFTRUE:
-			return &"iftrue"
-		IFGREATER:
-			return &"ifgreater"
-		IFLESS:
-			return &"ifless"
-		JUMPSTD:
-			return &"jumpstd"
-		CALLSTD:
-			return &"callstd"
-		CALLASM:
-			return &"callasm"
-		SPECIAL:
-			return &"special"
-		MEMCALLASM:
-			return &"memcallasm"
-		CHECKMAPSCENE:
-			return &"checkmapscene"
-		SETMAPSCENE:
-			return &"setmapscene"
-		CHECKSCENE:
-			return &"checkscene"
-		SETSCENE:
-			return &"setscene"
-		SETVAL:
-			return &"setval"
-		ADDVAL:
-			return &"addval"
-		RANDOM:
-			return &"random"
-		CHECKVER:
-			return &"checkver"
-		READMEM:
-			return &"readmem"
-		WRITEMEM:
-			return &"writemem"
-		LOADMEM:
-			return &"loadmem"
-		READVAR:
-			return &"readvar"
-		WRITEVAR:
-			return &"writevar"
-		LOADVAR:
-			return &"loadvar"
-		GIVEITEM:
-			return &"giveitem"
-		TAKEITEM:
-			return &"takeitem"
-		CHECKITEM:
-			return &"checkitem"
-		GIVEMONEY:
-			return &"givemoney"
-		TAKEMONEY:
-			return &"takemoney"
-		CHECKMONEY:
-			return &"checkmoney"
-		GIVECOINS:
-			return &"givecoins"
-		TAKECOINS:
-			return &"takecoins"
-		CHECKCOINS:
-			return &"checkcoins"
-		ADDCELLNUM:
-			return &"addcellnum"
-		DELCELLNUM:
-			return &"delcellnum"
-		CHECKCELLNUM:
-			return &"checkcellnum"
-		CHECKTIME:
-			return &"checktime"
-		CHECKPOKE:
-			return &"checkpoke"
-		GIVEPOKE:
-			return &"givepoke"
-		GIVEEGG:
-			return &"giveegg"
-		GIVEPOKEMAIL:
-			return &"givepokemail"
-		CHECKPOKEMAIL:
-			return &"checkpokemail"
-		CHECKEVENT:
-			return &"checkevent"
-		CLEAREVENT:
-			return &"clearevent"
-		SETEVENT:
-			return &"setevent"
-		CHECKFLAG:
-			return &"checkflag"
-		CLEARFLAG:
-			return &"clearflag"
-		SETFLAG:
-			return &"setflag"
-		WILDON:
-			return &"wildon"
-		WILDOFF:
-			return &"wildoff"
-		XYCOMPARE:
-			return &"xycompare"
-		WARPMOD:
-			return &"warpmod"
-		BLACKOUTMOD:
-			return &"blackoutmod"
-		WARP:
-			return &"warp"
-		GETMONEY:
-			return &"getmoney"
-		GETCOINS:
-			return &"getcoins"
-		GETNUM:
-			return &"getnum"
-		GETMONNAME:
-			return &"getmonname"
-		GETITEMNAME:
-			return &"getitemname"
-		GETCURLANDMARKNAME:
-			return &"getcurlandmarkname"
-		GETTRAINERNAME:
-			return &"gettrainername"
-		GETSTRING:
-			return &"getstring"
-		ITEMNOTIFY:
-			return &"itemnotify"
-		POCKETISFULL:
-			return &"pocketisfull"
-		OPENTEXT:
-			return &"opentext"
-		REANCHORMAP:
-			return &"reanchormap"
-		CLOSETEXT:
-			return &"closetext"
-		WRITEUNUSEDBYTE:
-			return &"writeunusedbyte"
-		FARWRITETEXT:
-			return &"farwritetext"
-		WRITETEXT:
-			return &"writetext"
-		REPEATTEXT:
-			return &"repeattext"
-		YESORNO:
-			return &"yesorno"
-		LOADMENU:
-			return &"loadmenu"
-		CLOSEWINDOW:
-			return &"closewindow"
-		JUMPTEXTFACEPLAYER:
-			return &"jumptextfaceplayer"
-		FARJUMPTEXT:
-			return &"farjumptext" if crystal_commands else &"jumptext"
-		JUMPTEXT:
-			return &"jumptext" if crystal_commands else &"waitbutton"
-		WAITBUTTON:
-			return &"waitbutton" if crystal_commands else &"promptbutton"
-		PROMPTBUTTON:
-			return &"promptbutton" if crystal_commands else &"pokepic"
-		GOLD_FACEPLAYER:
-			return &"faceplayer" if not crystal_commands else &""
-		FACEPLAYER:
-			return &"faceplayer"
-		GOLD_ENDCALLBACK:
-			return &"endcallback" if not crystal_commands else &""
-		ENDCALLBACK:
-			return &"endcallback" if crystal_commands else &"end"
-		END:
-			return &"end" if crystal_commands else &""
-	return &""
+	if PROFILE_COMMAND_NAMES.has(opcode):
+		return PROFILE_COMMAND_NAMES[opcode][0 if crystal_commands else 1]
+	return COMMAND_NAMES.get(opcode, &"")
+
+
+## Command widths in bytes, opcode run by width, on pokegold's numbering. The
+## eight the two profiles disagree about are [constant PROFILE_COMMAND_WIDTHS];
+## an opcode in neither falls through to the two tables further down.
+const COMMAND_WIDTHS: Dictionary = {
+	0: [
+		GIVEPOKE
+	],
+	1: [
+		CHECKSCENE, CHECKVER, WILDON, WILDOFF, ITEMNOTIFY, POCKETISFULL, OPENTEXT,
+		CLOSETEXT, YESORNO, CLOSEWINDOW, WAITBUTTON, ENDCALLBACK
+	],
+	2: [
+		SETSCENE, SETVAL, ADDVAL, RANDOM, READVAR, WRITEVAR, CHECKITEM, ADDCELLNUM,
+		DELCELLNUM, CHECKCELLNUM, CHECKTIME, CHECKPOKE, GETNUM, GETCURLANDMARKNAME,
+		REANCHORMAP, WRITEUNUSEDBYTE
+	],
+	3: [
+		SCALL, MEMCALL, SJUMP, MEMJUMP, WRITETEXT, JUMPTEXTFACEPLAYER, IFFALSE, IFTRUE,
+		JUMPSTD, CALLSTD, READMEM, WRITEMEM, XYCOMPARE, GIVEPOKEMAIL, CHECKPOKEMAIL,
+		LOADMENU, SPECIAL, MEMCALLASM, CHECKMAPSCENE, LOADVAR, GIVEITEM, TAKEITEM,
+		GIVECOINS, TAKECOINS, CHECKCOINS, CHECKFLAG, CLEARFLAG, SETFLAG, CLEAREVENT,
+		SETEVENT, BLACKOUTMOD, GETMONEY, GETMONNAME, GETITEMNAME, GIVEEGG, CHECKEVENT,
+		REPEATTEXT
+	],
+	4: [
+		FARSCALL, FARSJUMP, CALLASM, FARWRITETEXT, IFEQUAL, IFNOTEQUAL, IFGREATER, IFLESS,
+		LOADMEM, SETMAPSCENE, WARPMOD, GETTRAINERNAME, GETSTRING
+	],
+	5: [
+		GIVEMONEY, TAKEMONEY, CHECKMONEY, WARP
+	],
+}
+
+## [constant COMMAND_WIDTHS] flattened to opcode: width, built once.
+static var WIDTH_OF: Dictionary = _width_of(COMMAND_WIDTHS)
+
+
+static func _width_of(runs: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for width: int in runs:
+		for opcode: int in runs[width]:
+			out[opcode] = width
+	return out
+
+## The opcodes Crystal and pokegold give different widths, as [crystal, gold].
+const PROFILE_COMMAND_WIDTHS: Dictionary = {
+	GETCOINS: [3, 2],
+	FARJUMPTEXT: [4, 3],
+	JUMPTEXT: [3, 1],
+	PROMPTBUTTON: [1, 2],
+	GOLD_FACEPLAYER: [0, 1],
+	FACEPLAYER: [1, 0],
+	GOLD_ENDCALLBACK: [0, 1],
+	END: [1, 0],
+}
 
 
 static func command_width(opcode: int, crystal_commands: bool = true) -> int:
-	match opcode:
-		SCALL, MEMCALL, SJUMP, MEMJUMP, WRITETEXT, JUMPTEXTFACEPLAYER, IFFALSE, IFTRUE, JUMPSTD, CALLSTD, READMEM, WRITEMEM, XYCOMPARE, GIVEPOKEMAIL, CHECKPOKEMAIL, LOADMENU:
-			return 3
-		FARSCALL, FARSJUMP, CALLASM, FARWRITETEXT:
-			return 4
-		IFEQUAL, IFNOTEQUAL, IFGREATER, IFLESS, LOADMEM:
-			return 4
-		SPECIAL, MEMCALLASM, SETMAPSCENE, WARPMOD:
-			return 3 if opcode == SPECIAL or opcode == MEMCALLASM else 4
-		CHECKMAPSCENE:
-			return 3
-		CHECKSCENE, CHECKVER, WILDON, WILDOFF, ITEMNOTIFY, POCKETISFULL, OPENTEXT, CLOSETEXT, YESORNO, CLOSEWINDOW:
-			return 1
-		SETSCENE:
-			return 2
-		SETVAL, ADDVAL, RANDOM, READVAR, WRITEVAR, CHECKITEM, ADDCELLNUM, DELCELLNUM, CHECKCELLNUM, CHECKTIME, CHECKPOKE, GETNUM, GETCURLANDMARKNAME, REANCHORMAP, WRITEUNUSEDBYTE:
-			return 2
-		LOADVAR, GIVEITEM, TAKEITEM:
-			return 3
-		GIVECOINS, TAKECOINS, CHECKCOINS, CHECKFLAG, CLEARFLAG, SETFLAG, CLEAREVENT, SETEVENT, BLACKOUTMOD:
-			return 3
-		GIVEMONEY, TAKEMONEY, CHECKMONEY:
-			return 5
-		GETMONEY:
-			return 3
-		GETCOINS:
-			return 3 if crystal_commands else 2
-		GETMONNAME, GETITEMNAME:
-			return 3
-		GETTRAINERNAME, GETSTRING:
-			return 4
-		GIVEEGG:
-			return 3
-		GIVEPOKE:
-			return 0
-		CHECKEVENT:
-			return 3
-		WARP:
-			return 5
-		REPEATTEXT:
-			return 3
-		FARJUMPTEXT:
-			return 4 if crystal_commands else 3
-		JUMPTEXT:
-			return 3 if crystal_commands else 1
-		WAITBUTTON:
-			return 1
-		PROMPTBUTTON:
-			return 1 if crystal_commands else 2
-		GOLD_FACEPLAYER:
-			return 1 if not crystal_commands else 0
-		FACEPLAYER:
-			return 1 if crystal_commands else 0
-		GOLD_ENDCALLBACK:
-			return 1 if not crystal_commands else 0
-		ENDCALLBACK:
-			return 1
-		END:
-			return 1 if crystal_commands else 0
+	if PROFILE_COMMAND_WIDTHS.has(opcode):
+		return PROFILE_COMMAND_WIDTHS[opcode][0 if crystal_commands else 1]
+	if WIDTH_OF.has(opcode):
+		return WIDTH_OF[opcode]
 	if crystal_commands:
 		var crystal_width: int = _crystal_only_command_width(opcode)
 		if crystal_width > 0:
@@ -547,15 +471,13 @@ static func _later_command_name(opcode: int, crystal_commands: bool) -> StringNa
 
 
 ## Normalizes a raw command byte onto pokegold's numbering, which every width,
-## name and handler table here is keyed with. Crystal's stream inserts two
-## commands pokegold does not have: `farjumptext` at $52 and
-## `verbosegiveitemvar` at $9f (macros/scripts/events.asm in both pins). So
-## Crystal is one ahead from $53 and two ahead from $a0, and the commands
-## Crystal added themselves have no source opcode: callers handle those from the
-## raw byte before asking.
-##
-## The low boundary is $56 rather than $53 because every caller resolves
-## farjumptext, jumptext, waitbutton and promptbutton from the raw opcode first.
+## name and handler table here is keyed with. Crystal's stream inserts two commands
+## pokegold does not have, `farjumptext` at $52 and `verbosegiveitemvar` at $9f, so
+## Crystal is one ahead from $53 and two ahead from $a0, and the commands Crystal
+## added themselves have no source opcode: callers handle those from the raw byte
+## before asking. The low boundary is $56 rather than $53 because every caller
+## resolves farjumptext, jumptext, waitbutton and promptbutton from the raw opcode
+## first.
 static func source_opcode(opcode: int, crystal_commands: bool = true) -> int:
 	if not crystal_commands or opcode < 0x56:
 		return opcode

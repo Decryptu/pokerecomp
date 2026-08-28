@@ -2,21 +2,13 @@ class_name Gen2StatsScreenPage
 extends RefCounted
 
 ## The stats screen (`engine/pokemon/stats_screen.asm`), on the tile grid the
-## hardware uses.
-##
-## `StatsScreen_InitUpperHalf` draws the top seven rows once and each of
-## `LoadPinkPage`, `LoadGreenPage` and `LoadBluePage` fills the ten rows under
-## the divider, so the page number picks the lower half and nothing else. An egg
-## replaces the whole screen with `EggStatsScreen` instead.
-##
-## `StatsScreen_LoadFont` is `_LoadFontsBattleExtra` plus the bar borders and
-## `LoadStatsScreenPageTilesGFX`, so every glyph here is the battle-extra strip's
-## (`<LV>`, `<ID>`, `№`, `◀`) and the dividers, the page indicators, the exp
-## bar's end caps and `⁂` are tiles off [method Gen2BattleTiles.stats_page].
-##
-## Node-free: it writes indices into a buffer, so a page can be drawn and read
-## back headless. The Pokémon's own pic is not in that buffer; it has its own
-## palette and is composed over the page by the screen.
+## hardware uses. `StatsScreen_InitUpperHalf` draws the top seven rows once and
+## each of the three page routines fills the ten under the divider, so the page
+## number picks the lower half and nothing else; an egg replaces the whole screen
+## with `EggStatsScreen`. `StatsScreen_LoadFont` is `_LoadFontsBattleExtra` plus
+## the bar borders, so every glyph here is that strip's and the dividers, page
+## indicators and end caps come off [method Gen2BattleTiles.stats_page].
+## Node-free; the Pokemon's pic has its own palette and is composed by the screen.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20
@@ -308,13 +300,11 @@ static func attributes(count: int = NUM_PAGES) -> PackedInt32Array:
 
 ## The page as pixels. The hardware gives every tile a palette and one index
 ## buffer carries one, so the HP bar, the exp bar, the front pic's own square and
-## the three page indicators are the attrmap rather than four blended layers.
-## Slot 0 is the HP palette, which is what `WipeAttrmap` leaves every other cell on.
-##
-## `LoadStatsScreenPals` writes the open page's colour over colour 0 of the HP
-## and exp palettes, which is what tints the lower screen pink, green or blue.
-## An egg never reaches it: `EggStatsInit` jumps past `StatsScreen_LoadPage`, so
-## its screen keeps the white both palettes came in with.
+## the three page indicators are the attrmap rather than four blended layers. Slot
+## 0 is the HP palette, which is what `WipeAttrmap` leaves every other cell on.
+## `LoadStatsScreenPals` writes the open page's colour over colour 0 of the HP and
+## exp palettes, which is what tints the lower screen. An egg never reaches it:
+## `EggStatsInit` jumps past `StatsScreen_LoadPage`.
 func render(page: Dictionary, data: GameData) -> Image:
 	var indices: PackedByteArray = draw(page)
 	var width: int = COLUMNS * TILE

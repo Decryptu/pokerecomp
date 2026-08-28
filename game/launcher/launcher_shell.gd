@@ -295,16 +295,11 @@ func _art_layer() -> TextureRect:
 
 ## The screen-to-screen transition, in the family of the cartridge's own:
 ## `FadeOutToWhite` walks `Gen2WorldPalette.FADE_OUT_ORDERS` one row at a time,
-## holding each for `FADE_STEP_FRAMES`, so the screen leaves in four discrete
-## steps rather than on a continuous ramp. The launcher is not a cartridge
-## screen, so the colour it flattens onto is the palette's own rather than a
-## map's white, and the steps are alpha rather than palette rows.
-##
-## The next shell built after one of these fades in from the same colour, so a
-## launch is one transition across the scene change instead of a wipe and a cut.
-## [param hand_over] is false when the screen after this one is not a shell
-## screen: the world arrives on its own map fade, which is the cartridge's, so
-## it must not be walked back out of the launcher's sheet as well.
+## holding each for `FADE_STEP_FRAMES`, so the screen leaves in four discrete steps
+## rather than on a ramp. The colour it flattens onto is the palette's own and the
+## steps are alpha rather than palette rows. [param hand_over] is false when the
+## screen after this one is not a shell screen: the world arrives on its own map
+## fade, so it must not be walked back out of the launcher's sheet as well.
 func flash(hand_over: bool = true) -> void:
 	if not is_inside_tree():
 		return

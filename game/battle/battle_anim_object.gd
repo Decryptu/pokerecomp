@@ -2,19 +2,13 @@ class_name Gen2BattleAnimObject
 extends RefCounted
 
 ## One animation object: a `battle_anim_struct` and the two routines that read it
-## (engine/battle_anims/core.asm, engine/battle_anims/helpers.asm).
+## (engine/battle_anims/core.asm, helpers.asm). `anim_obj` names a row of
+## `BattleAnimObjects`, which supplies the frameset, the motion callback, the
+## palette and the graphics sheet, and a place to put it.
 ##
-## An object is spawned by `anim_obj`, which names a row of `BattleAnimObjects`
-## and a place to put it. The row supplies the frameset, the motion callback, the
-## palette and which graphics sheet its tiles come from; the command supplies the
-## coordinates and a parameter the callback reads.
-##
-## Every field is a cartridge byte and is kept as one. The coordinates wrap at
-## 256 because they are single bytes on hardware, and several animations rely on
-## that: an object walking off one side is the wrap, not a clamp.
-##
-## `frame` starts at -1 rather than 0. `GetBattleAnimFrame` increments before it
-## reads, so the first frame drawn is the frameset's first entry.
+## Every field is a cartridge byte: coordinates wrap at 256, and an object walking
+## off one side is that wrap rather than a clamp. `frame` starts at -1 because
+## `GetBattleAnimFrame` increments before it reads.
 
 ## Byte positions inside the struct, as `battleanimobj` orders them. Only the
 ## six a `BattleAnimObjects` row carries; the rest are runtime state.

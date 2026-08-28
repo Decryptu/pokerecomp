@@ -1,17 +1,13 @@
 class_name Gen2AIItems
 extends RefCounted
 
-## What a trainer reaches into its bag for, and what happens when it does.
-##
-## `AI_TryItem` and the `EnemyUsed*` routines in
-## [code]engine/battle/ai/items.asm[/code]. A trainer class carries at most two
-## item numbers ([code]TRNATTR_ITEM1[/code] and [code]TRNATTR_ITEM2[/code],
-## already in the cache as [method GameData.trainer_attributes]), and the same
-## class's [code]TRNATTR_AI_ITEM_SWITCH[/code] word decides how freely they are
-## spent.
-##
-## Only the enemy has any of this: the player's own pack has no X items and no
-## in-battle healing beyond what [Gen2HeldItem] does on its own.
+## What a trainer reaches into its bag for, and what happens when it does:
+## `AI_TryItem` and the `EnemyUsed*` routines in `engine/battle/ai/items.asm`. A
+## class carries at most two item numbers (`TRNATTR_ITEM1` and `_ITEM2`, already
+## in the cache as [method GameData.trainer_attributes]) and its
+## `TRNATTR_AI_ITEM_SWITCH` word decides how freely they are spent. Only the enemy
+## has any of this: the player's pack has no X items and no in-battle healing
+## beyond what [Gen2HeldItem] does on its own.
 
 ## The thirteen items the AI knows, at their cartridge numbers.
 const FULL_RESTORE: int = 0x0E

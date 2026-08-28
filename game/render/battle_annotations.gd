@@ -1,17 +1,12 @@
 class_name Gen2BattleAnnotations
 extends RefCounted
 
-## What a registered battle-information provider draws on the hardware
-## interface, validated once and drawn once.
-##
-## The grid is the cartridge's own screen in tiles, so a placement is said in the
-## same coordinates `hlcoord` is and lands in the same cells whichever renderer
-## is underneath: the annotations are interface, and the interface is 20x18
-## whether the battle behind it is the built-in arena or a native-layer view.
-##
-## A mod supplies a string or a tile and nothing else. Where a cell may be drawn,
-## what a tile's bytes mean, which provider owns a cell and when the layer is
-## hidden are all the host's.
+## What a registered battle-information provider draws on the hardware interface,
+## validated once and drawn once. The grid is the cartridge's own screen in tiles,
+## so a placement is said in the same coordinates `hlcoord` is and lands in the
+## same cells whichever renderer is underneath. A mod supplies a string or a tile
+## and nothing else: where a cell may be drawn, what a tile's bytes mean, which
+## provider owns a cell and when the layer is hidden are all the host's.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = Gen2Screen.WIDTH / TILE
@@ -48,15 +43,12 @@ static func from_data(data: GameData) -> Gen2BattleAnnotations:
 
 
 ## [param placement] as the host will keep it, or `{}` when it cannot be drawn.
-##
-## `field` is the one optional key: with it set the host draws the cartridge's
-## own interface field behind exactly the cells [method cells] answers, so ink a
-## provider puts on bare battle scenery is readable over a native renderer. It
-## is kept only when it was asked for, so a placement without it is exactly the
-## dictionary an API 13 provider already got back.
-##
-## Refused rather than clipped: a symbol half off the screen, or a stage summary
-## running through the border, is worse than one the player never sees.
+## `field` is the one optional key: with it set the host draws the cartridge's own
+## interface field behind exactly the cells [method cells] answers, so ink on bare
+## battle scenery is readable over a native renderer. It is kept only when it was
+## asked for, so a placement without it is exactly what an API 13 provider already
+## got back. Refused rather than clipped: a symbol half off the screen is worse
+## than one the player never sees.
 static func validate(placement: Dictionary) -> Dictionary:
 	var checked: Dictionary = validated(placement)
 	return checked["placement"] if bool(checked["ok"]) else {}

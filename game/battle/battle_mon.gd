@@ -385,15 +385,12 @@ func reset_stages() -> void:
 
 
 ## What Baton Pass hands to whoever comes in behind it. On the cartridge none of
-## this is the Pokémon's: `wPlayerSubStatus1` through `5` and their counters are
-## battle-position state, cleared on an ordinary entrance only because
-## `NewBattleMonStatus` says so, where `PassedBattleMonEntrance` and
-## `EnemySwitch_SetMode` do not. Here the same state is per-Pokémon and copied
-## across instead, with `ResetBatonPassStatus` naming what does not survive the
-## trip ([method Gen2Battle._reset_baton_pass_status]).
-##
-## The list is [method reset_volatile]'s plus the stages, which is why the two
-## sit together: a field added to one belongs in the other.
+## this is the Pokemon's: `wPlayerSubStatus1` through `5` are battle-position
+## state, cleared on an ordinary entrance only because `NewBattleMonStatus` says
+## so, where `PassedBattleMonEntrance` does not. Here the same state is
+## per-Pokemon and copied across, with `ResetBatonPassStatus` naming what does not
+## survive the trip. The list is [method reset_volatile]'s plus the stages, which
+## is why the two sit together: a field added to one belongs in the other.
 const PASSED_FIELDS: Array[String] = [
 	"substatus", "confusion_turns", "charged_move", "rollout_count",
 	"rampage_turns", "rampage_move", "toxic_counter", "disabled_slot",

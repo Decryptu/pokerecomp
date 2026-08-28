@@ -4,23 +4,10 @@ extends SceneTree
 ##
 ##   Godot --headless --path . -s res://tools/preview_mom_scene.gd -- <game> [png] [frame]
 ##
-## The story walker already proves the script's own results on [Gen2WorldAPI];
-## what it cannot say is whether the presentation runs. This drives the real
-## screen at the source frame rate from the cell the coord event sits on and
-## reports, per frame: the script's state, the object `applymovement` is walking,
-## and whether the text box is up. A `png` argument writes a frame, the last one
-## traced unless a `frame` number names an earlier one, so the emote, the walk
-## and the box can each be looked at.
-##
-## `maps/PlayersHouse1F.asm`: the two coord events at (8,4) and (9,4) are
-## Crystal's trigger. Gold and Silver ship none; their scene 0 is an `sdefer` of
-## the same script, so the trace there starts from the map entry instead, which
-## is why its three checkpoints sit later than Crystal's.
-##
-## It is a regression test, not only a report: the three frames the emote, the
-## walk and the box first appear on are pinned in [constant CHECKPOINTS] and a
-## run that moves one of them exits non-zero. Change those numbers only with a
-## reading of the asm that says why.
+## The story walker proves the script's results; what it cannot say is whether the
+## presentation runs. Crystal's trigger is the two coord events at (8,4) and (9,4);
+## Gold and Silver ship none and `sdefer` the same script from the map entry, which
+## is why their checkpoints sit later. A run that moves one exits non-zero.
 
 const WINDOW_SIZE := Vector2i(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 const FRAME: float = 1.0 / 59.7275

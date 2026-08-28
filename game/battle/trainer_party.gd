@@ -2,25 +2,13 @@ class_name Gen2TrainerParty
 extends RefCounted
 
 ## Turns one of a trainer class's individual trainers into a battle-ready party.
+## Lives here rather than beside [Gen2Learnset] because it produces
+## [Gen2BattleMon]s and the data layer holds no battle types.
 ##
-## Lives in [code]game/battle/[/code] rather than beside [Gen2Learnset] because
-## it produces [Gen2BattleMon]s and [Gen2Party]s, and the data layer holds no
-## battle types. [RefCounted] and static: it needs only [GameData] and a trainer
-## number.
-##
-## A NORMAL or ITEM trainer's Pokémon knows what its level teaches, from the
-## learnset, like a wild one; a MOVES or ITEM_MOVES trainer's knows exactly the
-## moves stored with it. Hence [method GameData.moves_at_level] for one and the
-## stored list for the other.
-##
-## Trainer Pokémon carry the per-class DVs ([method GameData.trainer_dvs]), not
-## [constant Gen2BattleMon.PERFECT_DVS]: a trainer's whole team shares one fixed
-## word, asked for once per class.
-##
-## This is the one place a trainer's party is made out of the cartridge's own
-## tables, so it is also where [constant Gen2Rules.CHALLENGE_HARD]'s level, DV
-## and stat-experience rules land. They are one global rule each rather than 800
-## rewritten teams.
+## A NORMAL or ITEM trainer's Pokemon knows what its level teaches; a MOVES or
+## ITEM_MOVES trainer's knows exactly the moves stored with it. DVs are the
+## per-class word rather than [constant Gen2BattleMon.PERFECT_DVS]. This is also
+## where [constant Gen2Rules.CHALLENGE_HARD]'s rules land, one rule not 800 teams.
 
 
 ## The party a trainer class's [param index]th trainer brings, or null if

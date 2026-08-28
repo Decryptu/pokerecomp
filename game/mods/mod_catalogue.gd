@@ -1,15 +1,12 @@
 class_name Gen2ModCatalogue
 extends RefCounted
 
-## One list of every mod the player can see, grouped by where it came from.
-##
-## A source is a followed index; a mod that no index lists came from a file the
-## player chose. That is the whole ownership rule, and it needs nothing written
-## down: a mod belongs to the source that lists its id, so uninstalling one from
-## a source leaves it listed and re-downloadable, while uninstalling one that
-## came from a file removes the only copy there was.
-##
-## Pure. It takes what [Gen2ModHost], [Gen2ModIndex] and [Gen2ModState] already
+## One list of every mod the player can see, grouped by where it came from. A
+## source is a followed index; a mod that no index lists came from a file the
+## player chose. That is the whole ownership rule and it needs nothing written
+## down: uninstalling one from a source leaves it listed and re-downloadable,
+## while uninstalling one that came from a file removes the only copy there was.
+## Pure: it takes what [Gen2ModHost], [Gen2ModIndex] and [Gen2ModState] already
 ## answer and decides nothing about the network or the screen.
 
 ## The group a mod nothing lists belongs to.

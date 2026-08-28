@@ -1,35 +1,13 @@
 extends SceneTree
 
 ## Records `(frame, button)` from a run of the real world screen and replays it
-## into a fresh world, then diffs the two worlds.
-##
-##   Godot --headless --path . -s res://tools/replay_world.gd -- [game ...] [frames]
-##
-## A seed, an input log and a frame number should reproduce a world exactly.
-## That is what `Gen2WorldScreen.advance_frame()` is for, and this is the
-## artefact it is proved by: the compared value is `Gen2WorldSnapshot` JSON plus
-## the play timer, which either matches byte for byte or does not.
-##
-## Four runs per route, all from the same seed and the same log:
-##
-## | Run | Driven by | Proves |
-## |---|---|---|
-## | record | `advance_frames`, a generated input program | the log the world consumed |
-## | replay | `advance_frames`, the recorded log | a log alone reproduces the run |
-## | 30 fps | `_process(1/30)`, the recorded log | the pump, not the host, spends frames |
-## | 144 fps | `_process(1/144)` , the recorded log | the same, from the other side |
-##
-## The corpus is twenty-seven generated walks over the spawn group, one scripted
-## errand and one wild battle. The battle route is the seam this tool exists to
-## close: a fight is spent from the world's own pump and its buttons arrive
-## through the world's own funnel, so the encounter, the enemy's own choices and
-## the party that comes out are all functions of the run's seed and its log.
-##
-## The two `_process` runs top up the last frame or two with `advance_frame()`,
-## because a host slower than the hardware cannot land on every frame; the run is
-## otherwise entirely theirs. They also feed `Gen2WorldClock` real seconds, which
-## is deliberate (`Gen2WorldScreen._advance_day_cycle`), so a route stays under a
-## cartridge minute and the day cycle cannot move under one run and not another.
+## into a fresh world, then diffs the two. A seed, an input log and a frame number
+## should reproduce a world exactly, and the compared value is
+## [Gen2WorldSnapshot] JSON plus the play timer, which either matches byte for byte
+## or does not. Four runs per route from the same seed and log: record, replay, and
+## the same log driven by `_process` at 30 and 144 fps, which is what says the pump
+## rather than the host spends frames. The corpus is twenty-seven generated walks,
+## one scripted errand and one wild battle, the battle being the seam this closes.
 
 const GAMES: Array[StringName] = [&"gold", &"silver", &"crystal"]
 ## Twenty seconds of hardware frames: long enough for several walks, a script
@@ -469,12 +447,10 @@ func _walk_frames() -> int:
 ## The scripted errand: walk the door column up to the counter, turn into the
 ## clerk, and then press A on a cadence for the rest of the run. That one button
 ## carries the whole leg, because every step of it answers a press: the clerk's
-## `pokemart` dialog, the mart overlay's own A, and the boxes on either side.
-##
-## Held rather than counted out step by step: `move_player` refuses while a step
-## is in flight, so a direction held to the counter arrives on the cell whatever
-## the walk rate is, and the turn into the counter is a press the wall refuses to
-## move on.
+## `pokemart` dialog, the mart overlay's own A, and the boxes on either side. Held
+## rather than counted out step by step: `move_player` refuses while a step is in
+## flight, so a direction held to the counter arrives on the cell whatever the walk
+## rate is.
 func _errand_program(frames: int) -> Array:
 	var log_lines: Array = []
 	var walk: int = mini(frames, (MART_DOOR.y - MART_COUNTER.y) * _walk_frames())

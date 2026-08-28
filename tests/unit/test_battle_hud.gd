@@ -181,15 +181,12 @@ func test_the_hp_bar_fill_is_drawn_apart_from_the_panel() -> void:
 	assert_eq(_ink_in_row(empty, Gen2BattleHud.ENEMY_BAR.y), 0, "a fainted bar draws nothing")
 
 
-## `PlaceExpBar` takes a pixel count in `b`, and it is never a ratio:
-## `CalcExpBar` has already divided. It starts at `hlcoord 17, 11` and writes
-## with `ld [hld], a`, so the full tiles land at the right-hand end and the run
-## walks left, and unlike `DrawBattleHPBar` it lays no empty template first:
-## every tile the fill did not reach is written $62 by `.loop2`.
-##
-## The fixture fills each sheet with one index, so a column says which sheet
-## drew it: the seven partial fills are the exp bar's own (2) and the empty and
-## full tiles are the battle font's (1). A column of 0 is a hole.
+## `PlaceExpBar` takes a pixel count in `b`, and it is never a ratio: `CalcExpBar`
+## has already divided. It starts at `hlcoord 17, 11` and writes with `ld [hld], a`,
+## so the full tiles land at the right-hand end and the run walks left, and unlike
+## `DrawBattleHPBar` it lays no empty template first: every tile the fill did not
+## reach is written $62 by `.loop2`. The fixture fills each sheet with one index, so
+## a column says which sheet drew it, and a column of 0 is a hole.
 func test_the_exp_bar_is_drawn_from_a_pixel_count() -> void:
 	_write_cache()
 	var hud: Gen2BattleHud = Gen2BattleHud.from_data(_data())

@@ -1,16 +1,12 @@
 class_name Gen2ModRefusal
 extends RefCounted
 
-## Why a mod was refused, said to a player rather than to a log.
-##
-## One table for every reason the mod layer produces: the installer's, the index
-## feed's, the manifest reader's and the host's registrations alike. The launcher
-## and the index dialog each used to keep their own, covering different halves of
-## the same set, so a mod refused through the wrong screen showed a raw
-## StringName. A new reason is worded here, once, and both screens have it.
-##
-## Anything unworded falls back to the reason itself, which is a poor line but an
-## honest one: it names something a search finds.
+## Why a mod was refused, said to a player rather than to a log: one table for
+## the installer's reasons, the index feed's, the manifest reader's and the
+## host's registrations alike. The launcher and the index dialog each used to keep
+## their own, covering different halves of the same set, so a mod refused through
+## the wrong screen showed a raw StringName. Anything unworded falls back to the
+## reason itself, which is a poor line but an honest one.
 
 ## Reasons that read the same wherever they come from. A [code]%s[/code] is
 ## filled with the result's own [code]detail[/code]; a reason wanting anything

@@ -1,21 +1,14 @@
 class_name Gen2GameFrame
 extends Control
 
-## Places the hardware screen and the on-screen controller, in either
-## orientation and at any window size.
-##
-## Portrait sends the screen to the top and gives the controller the room under
-## it, which is the shape a phone held upright has and the only arrangement
-## where a thumb is not over the map. Landscape centres the screen and leaves
-## the margins either side, which is where the thumbs already are on a phone
-## held sideways.
-##
-## With no controller on screen both cases are the same: the screen centres in
-## the whole frame, so a desktop window looks exactly as it did.
-##
-## The frame also owns the way back from hidden controls. The gesture is watched
+## Places the hardware screen and the on-screen controller, in either orientation
+## and at any window size. Portrait sends the screen to the top and gives the
+## controller the room under it, the only arrangement where a thumb is not over
+## the map; landscape centres the screen and leaves the margins either side, where
+## the thumbs already are. With no controller on screen both cases centre in the
+## whole frame. The frame also owns the way back from hidden controls, watched
 ## here rather than in [Gen2TouchPad] because a hidden pad is exactly when it is
-## needed, and it has to be reachable from anywhere on the game screen.
+## needed and it has to be reachable from anywhere on the game screen.
 
 ## How much of a portrait screen the controller may take. The hardware screen is
 ## 10:9, so even a tall phone has this much left over once the map has its share.

@@ -2,25 +2,13 @@ class_name Gen2Credits
 extends RefCounted
 
 ## The credits (`engine/movie/credits.asm`), as the frame-driven state machine
-## they are.
-##
-## `Credits_Jumptable` runs one entry per frame and loops back after thirteen, so
-## a `CREDITS_WAIT` tick is thirteen frames and not one: `ParseCredits` is the
-## first entry and spends a tick each time it comes round. The rest of the cycle
-## is what moves. `Credits_UpdateGFXRequestPath` steps the banner's frame, twice
-## a cycle on Crystal and once on Gold and Silver;`Credits_LYOverride` walks the
-## two border bands sideways two pixels, down on Crystal and up on the other two;
-## and the three `Credits_Next` entries behind a wait are the frames
-## `UpdateBGMap` spends copying the tilemap to the BG map a third at a time.
-##
-## That copy is why this owns two maps rather than one. `.parse` clears the text
-## region and places the next batch into `wTilemap` with `hBGMapMode` off, and
-## only `CREDITS_WAIT` turns the copy back on: a batch ending on `CREDITS_WAIT2`
-## or on `CREDITS_END` is written and never shown. The End stays on screen for
-## exactly that reason, since the clear in front of `CREDITS_END` is never
-## pushed.
-##
-## [Gen2CreditsPage] turns [method bg_map] into pixels; nothing here draws.
+## they are. `Credits_Jumptable` runs one entry per frame and loops back after
+## thirteen, so a `CREDITS_WAIT` tick is thirteen frames and not one. The rest of
+## the cycle is what moves: the banner's frame, the two border bands walking
+## sideways two pixels, and the three `Credits_Next` entries `UpdateBGMap` spends
+## copying the tilemap a third at a time. That copy is why this owns two maps: a
+## batch ending on `CREDITS_WAIT2` or `CREDITS_END` is written and never shown,
+## which is why The End stays on screen. Nothing here draws.
 
 ## `MUSIC_CREDITS` and the `MUSIC_POST_CREDITS` `.end` fades into, both the same
 ## number on all three cartridges.

@@ -3,13 +3,11 @@ extends Control
 
 ## `GiveANickname_YesNo`, `InitNickname` and the `WasSentToBillsPCText` behind
 ## them, for a Pokemon that was received rather than hatched: `GivePoke`'s
-## `.wildmon` branch and, through it, every `givepoke` that names no OT.
-##
-## Text only, because the routine draws nothing else: it stands over whatever
-## screen the caller left up, which on the overworld is the map with a textbox
-## on it. [Gen2EggHatchScreen] keeps its own copy of the same pair rather than
-## opening this one, since its question is `_BreedAskNicknameText` and its box
-## stands over its own animation backdrop.
+## `.wildmon` branch and every `givepoke` that names no OT. Text only, because the
+## routine draws nothing else: it stands over whatever screen the caller left up.
+## [Gen2EggHatchScreen] keeps its own copy of the same pair rather than opening
+## this one, since its question is `_BreedAskNicknameText` and its box stands over
+## its own animation backdrop.
 
 ## The nickname the player settled on, emitted once, before [signal closed].
 signal named(nickname: String)

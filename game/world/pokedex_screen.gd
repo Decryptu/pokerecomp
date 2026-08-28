@@ -1,21 +1,14 @@
 class_name Gen2PokedexScreen
 extends Control
 
-## The Pokedex (engine/pokedex/pokedex.asm), embedded in the overworld the way
-## the start menu and its own submenus are.
-##
-## Drawn on the hardware's own tile grid: [Gen2Pokedex] owns the listing, the
-## cursor and the mode, and [Gen2PokedexPage] the picture, the way the region map
-## and the trainer card are split. Every rule the screen obeys is the source's.
-##
-## All six of the source's states are here: the listing, the entry screen, the
-## OPTION screen, SEARCH, its results and the Unown dex. The OPTION screen draws
-## `.NoUnownModeArrowCursorData`'s three rows until the Ruins of Alph research
-## centre has set the flag, which is what the cartridge draws too.
-##
-## The entry screen's AREA is the exception to the panel above: `Pokedex_GetArea`
-## is the cartridge's own region map, so it opens [Gen2TownMapScreen], which
-## carries a hardware screen of its own.
+## The Pokedex (engine/pokedex/pokedex.asm), embedded in the overworld the way the
+## start menu and its own submenus are. Drawn on the hardware's own tile grid:
+## [Gen2Pokedex] owns the listing, the cursor and the mode and [Gen2PokedexPage]
+## the picture. All six of the source's states are here, and the OPTION screen
+## draws three rows until the Ruins of Alph research centre has set the flag. The
+## entry screen's AREA is the exception to that split: `Pokedex_GetArea` is the
+## cartridge's own region map, so it opens [Gen2TownMapScreen], which carries a
+## hardware screen of its own.
 
 ## Set by [method open_entry]: `NewPokedexEntry` has no listing behind it, so B
 ## on the entry closes the dex rather than going back to one.

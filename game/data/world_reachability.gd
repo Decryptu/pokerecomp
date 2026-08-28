@@ -2,26 +2,13 @@ class_name Gen2WorldReachability
 extends RefCounted
 
 ## Which maps a player can stand on with a given set of field moves, derived from
-## the cartridge's own collision, warps and connections.
+## the cartridge's own collision, warps and connections: the half of a progression
+## proof that is not about rewards. Nothing here is written down, the flood asking
+## [Gen2WorldCollision] and [Gen2WorldFieldMove] what `DoPlayerMovement` asks.
 ##
-## The half of a progression proof that is not about rewards. A shuffled badge is
-## only completable if the gym holding it can be WALKED to, and walking is gated
-## by Surf, Cut, Strength, Whirlpool and Waterfall, each of which is gated by a
-## badge. Nothing here is written down: the flood asks
-## [Gen2WorldCollision] and [Gen2WorldFieldMove] the same questions
-## `DoPlayerMovement` asks.
-##
-## The unit is the MAP, not the cell. A cell-exact frontier would be the truer
-## model and is not the one to build: it would need the block-level surf rules,
-## the ledge one-way tests and the forced-tile paths as a second copy of
-## `Gen2WorldAPI`'s, and the two would drift. A map is reachable here when some
-## walkable cell of it is, which is the granularity a placement is decided at
-## anyway, since a check sits on a map.
-##
-## Deliberately CONSERVATIVE in one direction only: an edge is offered when the
-## cartridge's own collision says a step across it is possible, so this can call
-## a map reachable that a cell-exact walk would not. It never calls a reachable
-## map unreachable, which is the direction that would reject a good seed.
+## The unit is the MAP rather than the cell, which is the granularity a placement
+## is decided at, and the flood is conservative in one direction only: it can call
+## a map reachable that a cell-exact walk would not, never the reverse.
 
 ## The moves an edge can ask for, in the order a report lists them.
 const GATE_MOVES: Array[int] = [

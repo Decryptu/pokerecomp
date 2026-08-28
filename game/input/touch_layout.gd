@@ -2,17 +2,12 @@ class_name Gen2TouchLayout
 extends RefCounted
 
 ## Where the on-screen controller's five clusters sit, how big they are and how
-## much of the screen they hide.
-##
-## Geometry only: [Gen2TouchPad] draws and reads touches, and this answers where
-## everything is. Keeping them apart is what lets the settings page show a live
-## preview and lets a test check placement without a viewport.
-##
-## Positions are stored as a fraction of the area the controller was given, not
-## as pixels, so a layout arranged on a phone still means the same thing on a
-## tablet, in the other orientation, or after the window is resized. Portrait and
-## landscape keep separate positions, because a cluster reachable by the thumb in
-## one is in the middle of the screen in the other.
+## much of the screen they hide. Geometry only: [Gen2TouchPad] draws and reads
+## touches, which is what lets the settings page show a live preview and a test
+## check placement without a viewport. Positions are a fraction of the area the
+## controller was given rather than pixels, so a layout arranged on a phone means
+## the same on a tablet; portrait and landscape keep separate positions, because a
+## cluster reachable by the thumb in one is mid-screen in the other.
 
 const GROUP_PAD: StringName = &"pad"
 const GROUP_A: StringName = &"a"
@@ -320,17 +315,13 @@ static func parse(raw: Variant) -> Gen2TouchLayout:
 	return layout
 
 
-## A layout written while A and B were one cluster carries a `face` centre and
-## no `a` or `b`. The pair sat on a fixed diagonal inside that cluster, B up and
+## A layout written while A and B were one cluster carries a `face` centre and no
+## `a` or `b`. The pair sat on a fixed diagonal inside that cluster, B up and
 ## right, A down and left, half [constant FACE_SPACING] from the centre each way,
-## so the two anchors it becomes are the ones the player already had.
-##
-## The offset is in points and an anchor is a fraction of an area this has never
-## been shown, so it is taken against the portrait phone the layout was arranged
-## on. [method group_rect] clamps whatever comes out.
-## [param stored] is what the file itself carried, not the merged anchors: every
-## group has a default, so asking the layout whether it has an `a` would answer
-## yes before the file has said anything.
+## so the two anchors it becomes are the ones the player already had. The offset
+## is in points against the portrait phone the layout was arranged on, and
+## [method group_rect] clamps whatever comes out. [param stored] is what the file
+## carried rather than the merged anchors, since every group has a default.
 func _split_face(orientation: StringName, stored: Dictionary) -> void:
 	var groups: Dictionary = anchors.get(orientation, {})
 	if not stored.has(String(GROUP_FACE)) \

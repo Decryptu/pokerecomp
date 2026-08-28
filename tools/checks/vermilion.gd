@@ -3,21 +3,13 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies Vermilion City, its gym and the passage up from the dock against
-## freshly imported real caches, for both command profiles.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## maps/VermilionCity.asm, maps/VermilionGym.asm, maps/VermilionPortPassage.asm
-## and constants/map_constants.asm. `VermilionCity.asm` and `VermilionCity.blk`
-## are byte identical between the pins and the gym differs only in Surge's text,
-## so nothing here is profile split.
-##
-## The one thing worth pinning is that this gym is not its Gen 1 self. There is
-## no trash-can puzzle: `VermilionGym_MapScripts` declares neither a scene nor a
-## callback, so the gym is open from the door. The gate is outside it, in the
-## city: the whole 42-cell gym yard is walled off by a single COLL_CUT_TREE on
-## (13,18), which makes Cut the price of the Thunder Badge.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- vermilion
+## freshly imported real caches, for both command profiles. `VermilionCity.asm` and
+## its `.blk` are byte identical between the pins and the gym differs only in
+## Surge's text, so nothing here is profile split. The one thing worth pinning is
+## that this gym is not its Gen 1 self: there is no trash-can puzzle,
+## `VermilionGym_MapScripts` declaring neither a scene nor a callback, so the gym is
+## open from the door. The gate is outside it, the whole 42-cell yard walled off by
+## a single COLL_CUT_TREE on (13,18), which makes Cut the price of the badge.
 
 
 ## constants/map_constants.asm: the VERMILION group is 12 and the FAST_SHIP

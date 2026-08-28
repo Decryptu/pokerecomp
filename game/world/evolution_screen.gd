@@ -1,18 +1,14 @@
 class_name Gen2EvolutionScreen
 extends Control
 
-## `EvolveAfterBattle`'s `.proceed` and the `EvolutionAnimation` it farcalls,
-## for one plan at a time out of [method Gen2Evolution.after_battle].
-##
-## Presentation only: nothing here writes a party row. Each plan is announced
-## with [signal resolved] at the point `.proceed` writes the new species, so the
-## caller applies it in the source's own order and the next plan starts after it.
-##
-## Two pieces of `.PlayEvolvedSFX` are not drawn: the thirty-two balls of light
-## are sprite-anim objects and this project has no sprite-anim layer outside the
-## intro, so their frames are spent and the screen holds the new picture through
-## them. Everything else, including both cries, the flash loop's own rising and
-## falling counters and `AnimateFrontpic ANIM_MON_EVOLVE`, is the routine's.
+## `EvolveAfterBattle`'s `.proceed` and the `EvolutionAnimation` it farcalls, for
+## one plan at a time out of [method Gen2Evolution.after_battle]. Presentation
+## only: nothing here writes a party row, and each plan is announced with
+## [signal resolved] at the point `.proceed` writes the new species, so the caller
+## applies it in the source's own order. Two pieces of `.PlayEvolvedSFX` are not
+## drawn: the thirty-two balls of light are sprite-anim objects and this project
+## has no such layer outside the intro, so their frames are spent and the screen
+## holds the new picture through them.
 
 signal resolved(plan: Dictionary, canceled: bool)
 signal closed()

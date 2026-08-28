@@ -1,18 +1,14 @@
 class_name Gen2WorldTransaction
 extends RefCounted
 
-## The commit boundary every world-owned transaction here shares.
-##
-## A mart purchase, Kurt's apricorns, a party request, a heal, a field item and
-## the pack's TOSS all do the same four things around whatever they actually
-## change: validate the save they were handed, build a candidate from it,
-## validate that candidate against the world it now describes and write it, and
-## put the live world back when any of the three refuses. That shape was
-## repeated in three hosts; it lives here instead.
-##
-## Scene-free and save-model-free: it validates through [Gen2SaveValidator] and
-## writes through [Gen2SaveStore], and knows nothing about what the caller
-## changed.
+## The commit boundary every world-owned transaction here shares. A mart purchase,
+## Kurt's apricorns, a party request, a heal, a field item and the pack's TOSS all
+## do the same four things around whatever they change: validate the save they were
+## handed, build a candidate from it, validate that candidate against the world it
+## now describes and write it, and put the live world back when any of the three
+## refuses. That shape was repeated in three hosts. Scene-free and
+## save-model-free: it validates through [Gen2SaveValidator] and writes through
+## [Gen2SaveStore], and knows nothing about what the caller changed.
 
 ## Validates [param save] and returns a candidate to work on, which is a full
 ## copy rather than a reference: nothing a caller writes to it reaches the live
@@ -110,15 +106,13 @@ static func copy_into(target: Gen2SaveData, source: Gen2SaveData) -> void:
 	target.run_rules = source.run_rules.duplicate_rules() if source.run_rules != null else null
 	target.boxes_shape_valid = source.boxes_shape_valid
 	## `game_time` is the one field the live save owns rather than the candidate:
-	## `Gen2WorldScreen._advance_game_time_frame` has been counting frames into it
-	## since the candidate was cloned, and copying the clone back loses them.
-	##
-	## This list is deliberately named field by field rather than delegated to
-	## [method Gen2SaveData.copy_from], which round-trips through `to_dict` and
-	## would rebuild every party member and renormalize the mod keys on every
+	## the screen has been counting frames into it since the candidate was cloned,
+	## and copying the clone back loses them. This list is deliberately named field
+	## by field rather than delegated to [method Gen2SaveData.copy_from], which
+	## round-trips through `to_dict` and would rebuild every party member on every
 	## commit. `test_the_transaction_write_back_carries_every_field_but_the_live_clock`
-	## is what keeps the two lists in step: a field added to the save and
-	## forgotten here fails there.
+	## keeps the two lists in step: a field added to the save and forgotten here
+	## fails there.
 
 
 static func failure(reason: StringName, details: Dictionary) -> Dictionary:

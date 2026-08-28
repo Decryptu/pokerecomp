@@ -1,22 +1,13 @@
 extends RefCounted
 
-## Sweeps `_UnownPuzzle` on freshly imported real caches, all three cartridges,
-## all four pictures, all thirty-six cells and all sixteen pieces.
-##
-## Every expectation below is transcribed from pokecrystal's own
-## engine/games/unown_puzzle.asm rather than read back out of the
-## implementation, which is the only way the topic can go red: the corners, the
-## solved configuration, the two OAM sets and the cursor's own hand-listed edges
-## are the source's tables, and the art is re-read out of the dump beside the
-## cache rather than compared with itself.
-##
-## The class of bug it exists to catch is the doubling. `ConvertLoadedPuzzlePieces`
-## and `UnownPuzzle_AddPuzzlePieceBorders` are two passes over one strip, and a
-## picture that is off by a nibble, a half-tile or a bitplane still draws
-## something. So the check asserts the pixel identity per piece rather than a
-## checksum: 144 tiles a picture, four pictures, three cartridges.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- unown_puzzle
+## Sweeps `_UnownPuzzle` on freshly imported real caches, all three cartridges, all
+## four pictures, all thirty-six cells and all sixteen pieces. Every expectation is
+## transcribed from pokecrystal's own engine/games/unown_puzzle.asm rather than read
+## back out of the implementation, and the art is re-read out of the dump beside the
+## cache. The class of bug it catches is the doubling:
+## `ConvertLoadedPuzzlePieces` and the border pass are two passes over one strip, and
+## a picture off by a nibble, a half-tile or a bitplane still draws something, so
+## the check asserts the pixel identity per piece rather than a checksum.
 
 const TILE: int = Gen2Tiles.TILE_WIDTH
 

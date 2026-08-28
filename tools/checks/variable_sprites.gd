@@ -2,25 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies `wVariableSprites` against freshly imported real caches for both
-## command profiles: every object either wears a row the source wrote or is
-## drawn as the player, and the table survives a save the way `wPlayerData` does.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## engine/overworld/overworld.asm's `GetMonSprite`, engine/events/std_scripts.asm's
-## `InitializeEventsScript`, engine/overworld/decorations.asm's
-## `ToggleDecorationsVisibility`, ram/wram.asm and engine/menus/save.asm.
-##
-## Two findings carry the topic. `wVariableSprites` sits inside `wPlayerData`,
-## which `SaveData` copies whole into `sPlayerData`, so a row assigned in one
-## session is still there in the next; keeping the table on the loaded world
-## instead drew nine slots' worth of people as the player on every reload, which
-## is what Route 40's swimmers reported. And a slot with no row at all is
-## `.NoBreedmon`'s `WALKING_SPRITE`, which is `SPRITE_CHRIS` by coincidence of
-## two constant lists, so the fallback is a symptom rather than a feature: the
-## nineteen slot-carrying objects in either corpus all have a row.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- variable_sprites
+## Verifies `wVariableSprites` against freshly imported real caches for both command
+## profiles: every object either wears a row the source wrote or is drawn as the
+## player, and the table survives a save the way `wPlayerData` does. Two findings
+## carry the topic. `wVariableSprites` sits inside `wPlayerData`, which `SaveData`
+## copies whole, so a row assigned in one session is still there in the next; keeping
+## the table on the loaded world instead drew nine slots' worth of people as the
+## player on every reload. And a slot with no row at all is `.NoBreedmon`'s
+## `WALKING_SPRITE`, so the fallback is a symptom rather than a feature.
 
 ## constants/sprite_constants.asm, the same numbers on all three cartridges.
 const SPRITE_CHRIS: int = 0x01

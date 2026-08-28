@@ -1,19 +1,13 @@
 class_name Gen2MysteryGift
 extends RefCounted
 
-## `engine/link/mystery_gift.asm` and `mystery_gift_2.asm`: the SRAM block, the
-## staged block the two Game Boys swap over IR, and `DoMysteryGift`'s own chain
-## of refusals between the exchange and the gift.
-##
-## Mystery Gift is not the cable link play [Gen2LinkSession] runs. It never
+## `engine/link/mystery_gift.asm`: the SRAM block, the staged block the two Game
+## Boys swap over IR, and `DoMysteryGift`'s own chain of refusals between the
+## exchange and the gift. Not the cable link play [Gen2LinkSession] runs: it never
 ## touches `wLinkMode`, it has its own `sMysteryGiftData` section outside the
-## checksummed save, and its peer is an infrared window rather than a wire, so
-## the transport is its own too ([Gen2MysteryGiftTransport]).
-##
-## Everything here is the section and the decision. The pixels are
-## [Gen2MysteryGiftPage] and the host is [Gen2MysteryGiftScreen]; the three
-## specials that reach the section from a script are
-## [Gen2WorldScriptRunner]'s.
+## checksummed save, and its peer is an infrared window rather than a wire, so the
+## transport is its own too. Everything here is the section and the decision; the
+## pixels are [Gen2MysteryGiftPage] and the host is [Gen2MysteryGiftScreen].
 
 ## `constants/serial_constants.asm`. Five gifts in a day, and one per person.
 const MAX_PARTNERS: int = 5
@@ -282,17 +276,13 @@ static func _rotated_bit(count: int) -> int:
 
 
 ## `DoMysteryGift` from the exchange down: every refusal in the routine's own
-## order, and the gift behind the last of them.
-##
-## The section is written in place, which is what the cartridge does to SRAM
-## between one box and the next: the partner ID is added and the trainer name
-## saved before the gift is chosen, so a partner who offers a decoration this
-## side already owns still counts against both daily limits.
-##
-## Answers `{ outcome, name, item, deco, retry }`. `outcome` names one of the
-## eight `text_far` stubs, `name` is what the box's `<PLAYER>`-style buffer
-## holds, and `retry` is `.CommunicationError`'s own `jp DoMysteryGift`: the
-## routine goes back to the prompt rather than leaving the screen.
+## order, and the gift behind the last of them. The section is written in place,
+## which is what the cartridge does to SRAM between one box and the next: the
+## partner ID is added and the trainer name saved before the gift is chosen, so a
+## partner who offers a decoration this side already owns still counts against
+## both daily limits. Answers `{ outcome, name, item, deco, retry }`, where
+## `outcome` names one of the eight `text_far` stubs and `retry` is
+## `.CommunicationError`'s own `jp DoMysteryGift`.
 static func exchange(
 	section: Dictionary, transport: Gen2MysteryGiftTransport,
 	player: Dictionary, tables: Dictionary, data: GameData = null

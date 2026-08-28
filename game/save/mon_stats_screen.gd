@@ -1,21 +1,14 @@
 class_name Gen2MonStatsScreen
 extends RefCounted
 
-## The stats screen's model (`engine/pokemon/stats_screen.asm`): which member of
-## a list is shown, which page is open, and what each page has to say about it.
-## The pages are the cartridge's three plus whatever mods have registered
-## ([method Gen2ModHost.register_stats_page]), which is
-## [method Gen2StatsScreenPage.page_count]. [Gen2StatsScreenPage] draws the answer.
-##
-## `StatsScreenInit` is opened over whatever screen asked for it and hands
-## control back on the way out, so this owns no nodes: whoever embedded it draws
-## [method snapshot] and feeds it [method handle_button].
-##
-## The list is the party in the two places STATS is reached from today, the
-## overworld's `MonMenu_Stats` and a battle's own party menu. `wMonType` picks a
-## different list on the cartridge (`sBoxMons`, the enemy's party, `wBufferMon`);
-## the shape here is the same for any of them, which is why the mons are passed
-## in rather than read out of a save.
+## The stats screen's model: which member of a list is shown, which page is open,
+## and what each page has to say about it. The pages are the cartridge's three plus
+## whatever mods have registered, and [Gen2StatsScreenPage] draws the answer.
+## `StatsScreenInit` is opened over whatever screen asked for it and hands control
+## back on the way out, so this owns no nodes. The list is the party in the two
+## places STATS is reached from today; `wMonType` picks a different list on the
+## cartridge, but the shape is the same for any of them, which is why the mons are
+## passed in rather than read out of a save.
 
 ## `StatsScreen_Exit`: B, or A on the last page.
 signal closed

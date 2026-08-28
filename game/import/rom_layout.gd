@@ -3,20 +3,12 @@ extends RefCounted
 
 ## Where the data lives inside each supported cartridge. Offsets are absolute
 ## positions in the 2 MiB dump rather than bank:address pairs, so a decoder never
-## thinks about banking; Gold and Silver share the bank map with a few per-game
-## sections, and Crystal moved almost everything and is its own table.
-##
-## Every offset was located in the cartridges themselves, by searching for
-## independently known bytes (the encoded "BULBASAUR", Bulbasaur's published base
-## stats), then cross-checked against pret for structure. A table is a claim
-## about a specific dump, which is why an uncharacterised ROM is refused rather
-## than guessed at, and an offset is only trustworthy alongside its check in
-## [method RomImporter.verify_layout].
-##
-## So the comments here are dense on purpose and this file is the one exemption
-## from the density rule in `docs/CONTRIBUTING.md`: most of them record how an
-## offset was found, which is the evidence for a number rather than a restatement
-## of the code beside it. Tighten the wording, never delete the derivation.
+## thinks about banking; Gold and Silver share the bank map and Crystal is its own
+## table. Every offset was located in the cartridges themselves, by searching for
+## independently known bytes, then cross-checked against pret for structure. A
+## table is a claim about a specific dump, so an uncharacterised ROM is refused
+## rather than guessed at, and a comment here records how an offset was FOUND:
+## that is evidence rather than restatement, so tighten it and never delete it.
 
 const SPECIES_COUNT: int = 251
 ## `GetMonFramesPointer`'s `cp JOHTO_POKEMON`: the frame data below this species
@@ -100,18 +92,14 @@ const ASLEEP_TREEMON_MAX_ROWS: int = 16
 ## values are the source's integer `$FF / 100 * percent` expressions.
 const WILD_SURF_LEVEL_THRESHOLDS: Array[int] = [89, 165, 216, 242]
 
-## Two blocks of 96 tiles: `LoadTilesetGFX` (home/map.asm) copies the first to
-## vTiles2 in VRAM bank 0 and the second to vTiles5 in bank 1 at the same tile
-## numbers, and a metatile byte with bit 7 set names the second, since
-## `_LoadOverworldAttrmapPals` reads the palette map at the full byte, takes bit
-## 3 of the nibble as the bank, then clears bit 7. So the span is 224: block 0 at
-## 0..95, `_LoadFontsExtra1`'s 32 font tiles at 96..127, block 1 at 128..223. The
-## strip carries all 224 with the font gap blank, indexed directly.
-##
-## Eight tilesets compress one block only; the cartridge copies whatever follows
-## into bank 1 and no block of theirs names it, so the import blanks it. Metatile
-## and collision tables are shorter for tilesets under 128 blocks and unused
-## entries may hold $FF, which is why a tile past the span resolves to 0.
+## Two blocks of 96 tiles: `LoadTilesetGFX` copies the first to vTiles2 in VRAM
+## bank 0 and the second to vTiles5 in bank 1 at the same tile numbers, and a
+## metatile byte with bit 7 set names the second. So the span is 224: block 0 at
+## 0..95, `_LoadFontsExtra1`'s 32 font tiles at 96..127, block 1 at 128..223, and
+## the strip carries all 224 with the font gap blank. Eight tilesets compress one
+## block only and no block of theirs names the second, so the import blanks it;
+## tables are shorter under 128 blocks and unused entries may hold $FF, which is
+## why a tile past the span resolves to 0.
 const TILESET_RECORD_SIZE: int = 15
 const TILESET_TILE_COUNT: int = 224
 const TILESET_BLOCK_TILES: int = 96
@@ -498,14 +486,12 @@ const MAX_LEVEL_UP_MOVES: int = 32
 const EVOLUTION_COUNT: int = 122
 
 ## Muk, whose level-up moves are not in ascending order. The cartridges ship it
-## that way in all three games, and it is not a decoding artefact: pret's own
-## listing carries a comment saying so.
-##
+## that way in all three games and pret's own listing carries a comment saying so.
 ## Named rather than worked around, because the order is load bearing: filling a
-## fresh Pokémon stops at the first entry above its level, so a Muk below 45
-## never reaches the three moves after the level 45 one. Checking the order
-## everywhere else is worth the exception, since scrambled levels are exactly
-## what a wrong offset produces.
+## fresh Pokemon stops at the first entry above its level, so a Muk below 45 never
+## reaches the three moves after the level 45 one. Checking the order everywhere
+## else is worth the exception, since scrambled levels are what a wrong offset
+## produces.
 const UNSORTED_LEARNSET_SPECIES: int = 89
 
 ## Unown's entry in the main pic table is a deliberate $FF placeholder: its 26
@@ -513,16 +499,13 @@ const UNSORTED_LEARNSET_SPECIES: int = 89
 const UNOWN_SPECIES: int = 201
 const UNOWN_FORMS: int = 26
 
-## `UnownWords` (data/pokemon/unown_words.asm): a pointer per form and then the
-## words themselves, laid down in the same order, so the table's own first entry
-## is where the run behind it starts. The table has one entry more than there are
-## forms because its zeroth is an unused duplicate of A's, and `PrintUnownWord`
-## indexes it by form number rather than by position.
-##
-## A word is not text: `unownword` stores each letter as `FIRST_UNOWN_CHAR + the
-## letter's rank`, which is the tile number of the Unown font
-## `Pokedex_LoadUnownFont` builds, and terminates with $FF. So it decodes with
-## the alphabet alone and never through [Gen2Text].
+## `UnownWords`: a pointer per form and then the words themselves in the same
+## order, so the table's first entry is where the run behind it starts. The table
+## has one entry more than there are forms because its zeroth is an unused
+## duplicate of A's, and `PrintUnownWord` indexes it by form number. A word is not
+## text: `unownword` stores each letter as `FIRST_UNOWN_CHAR + the letter's rank`,
+## the tile number of the font `Pokedex_LoadUnownFont` builds, terminated with
+## $FF, so it decodes with the alphabet alone and never through [Gen2Text].
 const UNOWN_WORD_ENTRIES: int = UNOWN_FORMS + 1
 const UNOWN_WORD_POINTER_SIZE: int = 2
 const FIRST_UNOWN_CHAR: int = 0x40
@@ -530,15 +513,13 @@ const UNOWN_WORD_TERMINATOR: int = 0xFF
 ## Well past REASSURE, the longest at eight.
 const UNOWN_WORD_MAX_LENGTH: int = 16
 
-## `UnownWalls` (data/events/unown_walls.asm): the four words the Ruins of Alph
-## chamber walls spell, in `UNOWNWORDS_*` order, ending at $FF. Crystal only,
-## since Gold and Silver's chambers carry the puzzle sign where Crystal carries
-## the pattern.
-##
-## A letter is stored under the `unown` charmap rather than the ordinary one:
-## `$10 * (i / 8) + 2 * i` over "ABCDEFGHIJKLMNOPQRSTUVWXYZ-", which is the
-## top-left tile of that letter's 2x2 block in a sixteen-tile-wide font. So the
-## codes run 0-14, 32-46, 64-78 and 96-100, always even, and nothing else decodes.
+## `UnownWalls`: the four words the Ruins of Alph chamber walls spell, in
+## `UNOWNWORDS_*` order, ending at $FF. Crystal only, since Gold and Silver's
+## chambers carry the puzzle sign where Crystal carries the pattern. A letter is
+## stored under the `unown` charmap: `$10 * (i / 8) + 2 * i` over the alphabet and
+## a dash, which is the top-left tile of that letter's 2x2 block in a
+## sixteen-tile-wide font, so the codes run 0-14, 32-46, 64-78 and 96-100, always
+## even, and nothing else decodes.
 const UNOWN_WALL_COUNT: int = 4
 const UNOWN_WALL_MAX_LENGTH: int = 12
 const UNOWN_WALL_TERMINATOR: int = 0xFF
@@ -575,13 +556,12 @@ const FONT_BLANK_RUNS: Array = [[0xBA, 0xBF], [0xC6, 0xCF], [0xD7, 0xDE]]
 
 ## `FontExtra`, the 2bpp sheet `_LoadFontsExtra1` parks under the main font.
 ## Thirty-two tiles stored, of which it copies `FontExtra + 3 tiles` to
-## `vTiles2 tile '<BOLD_D>'` for 22, so a tile is addressed by its code minus
-## $60 and the run that reaches the screen is $63 to $78. That run carries the
+## `vTiles2 tile '<BOLD_D>'` for 22, so a tile is addressed by its code minus $60
+## and the run that reaches the screen is $63 to $78. That run carries the
 ## ellipsis, the two quotes, the middle dot and `<COLON>`, which is every
-## character [Gen2Text] decodes below the main font's own $80 and the reason a
-## text saying "…" drew nothing without it. Codes $60 to $62 are overwritten by
-## `FontsExtra_SolidBlackGFX`, `FontsExtra2_UpArrowGFX` and
-## `PokegearPhoneIconGFX` and are stored but never drawn from here.
+## character [Gen2Text] decodes below the main font's $80 and the reason a text
+## saying an ellipsis drew nothing without it. Codes $60 to $62 are overwritten
+## elsewhere and are stored but never drawn from here.
 const FONT_EXTRA_TILES: int = 32
 const FONT_EXTRA_FIRST_CODE: int = 0x60
 const FONT_EXTRA_LOADED_FIRST: int = 0x63
@@ -661,11 +641,8 @@ const STATS_SHINY_TILE: int = 14
 ## is six tiles but `_Option`'s page 1 asks for 86, running on into `LeaderGFX`,
 ## so page 1's strip is those 86 from the card_status offset; pages 2 and 3 load
 ## 86 from the leaders offset, which overlaps it, and both are imported because
-## that is what each page draws.
-##
-## The pic is 5x7. Crystal stores it column-major (`--columns` plus
-## `PlaceGraphic`) and Gold and Silver row-major (their inline `.row`/`.col`
-## loop), so the importer reorders Crystal's and both reach the screen alike.
+## that is what each page draws. The pic is 5x7, stored column-major on Crystal
+## and row-major on Gold and Silver, so the importer reorders Crystal's.
 const CARD_STATUS_TILES: int = 86
 const CARD_LEADER_TILES: int = 86
 const CARD_BADGE_TILES: int = 44
@@ -675,24 +652,14 @@ const CARD_PIC_COLUMNS: int = 5
 const CARD_PIC_ROWS: int = 7
 const CARD_PIC_TILES: int = CARD_PIC_COLUMNS * CARD_PIC_ROWS
 
-## The Pokedex's graphics (engine/pokedex/pokedex.asm). `PokedexLZ` is the 58
-## tiles `Pokedex_LoadGFX` decompresses to `vTiles2 tile $31` and
-## `PokedexSlowpokeLZ` the 55 it decompresses to `vTiles0` straight after.
-##
-## Neither is what an unseen species is drawn as: `Pokedex_LoadSelectedMonTiles`
-## sends that case to `LoadQuestionMarkPic` and `gfx/pokedex/question_mark.2bpp.lz`,
-## which is `question_mark` below.
-## The first two were located by compressing the pinned `gfx/pokedex` PNGs with
-## pret's `tools/lzcompress` flags: each hits once per dump and the second follows
-## the first, which is the source's own order. The question mark's own PNG would
-## not match a compressed stream in any tile order or polarity, so it was found
-## by its shape instead: exactly one LZ run in each dump decompresses to 49
-## tiles and nothing else does, and all three carry the same picture.
-##
-## `Footprints` is 1bpp and uncompressed, 251 species of four tiles stored as
-## eight top halves then the eight matching bottoms, which is why a bottom half
-## sits [constant FOOTPRINT_HALF_STRIDE] tiles past its top. The 8 KiB run
-## matches once per dump and is byte identical on all three.
+## The Pokedex's graphics (engine/pokedex/pokedex.asm): `PokedexLZ`'s 58 tiles to
+## `vTiles2 tile $31` and `PokedexSlowpokeLZ`'s 55 to `vTiles0` straight after.
+## Neither is what an unseen species is drawn as; that is `question_mark` below.
+## The first two were located by compressing the pinned PNGs with pret's
+## `lzcompress` flags, each hitting once per dump in the source's own order. The
+## question mark's PNG matched nothing, so it was found by shape: exactly one LZ
+## run per dump decompresses to 49 tiles. `Footprints` is 1bpp and uncompressed,
+## eight top halves then their bottoms, hence [constant FOOTPRINT_HALF_STRIDE].
 const POKEDEX_TILES: int = 58
 const POKEDEX_SLOWPOKE_TILES: int = 55
 ## `LoadQuestionMarkPic`, whose `ld c, 7 * 7` is what the copy out of `sScratch`
@@ -1168,29 +1135,13 @@ const GS_INTRO_MAGIKARP_PALETTES: int = 2
 const GS_INTRO_SHELLDER_LAPRAS_PALETTES: int = 3
 
 ## `PREDEFPAL_BLACKOUT`, which is what `_CGB_BattleGrayscale` fills every
-## background and object palette with: `PalPacket_BattleGrayscale` is
-## `sgb_pal_set BLACKOUT, BLACKOUT, BLACKOUT, BLACKOUT` and `CopyPalettes` reads
-## each of those bytes as an index into `PredefPals` rather than as a colour.
-##
-## Despite the name it is not black: $7FFF, $1CE7, $0C62, $0000, the grayscale
-## ramp the whole battle is drawn in until `GetSGBLayout SCGB_BATTLE_COLORS`
-## runs, which is after `BattleIntroSlidingPics`. Identical in all three dumps.
-## `_CGB_MoveList`'s own background palette, which is why the move screen is
-## the same warm gold as Goldenrod City rather than white.
-## `_UnownPuzzle`'s art (engine/games/unown_puzzle.asm), as (cache name, kind,
-## tiles). `raw` is an uncompressed strip, everything else an LZ one of that many
-## tiles. The order is the routine's own INCBIN order and is what the walk
-## depends on: `UnownPuzzleCursorGFX` pins the six behind it, each address the
-## previous entry's own consumed length, and all six reproduce pret's build byte
-## for byte on all three cartridges.
-##
-## `tile_borders` is pinned separately because it is not in that run:
-## `LoadUnownPuzzlePiecesGFX` and its pointer table sit between the borders and
-## the cursor, which is thirty-four bytes of code inside the data.
-##
-## A puzzle picture is six by six tiles and `ConvertLoadedPuzzlePieces` doubles
-## it to twelve by twelve, so the sixteen three-by-three pieces come out of one
-## 36-tile strip.
+## background and object palette with. Despite the name it is not black: $7FFF,
+## $1CE7, $0C62, $0000, the grayscale ramp the whole battle is drawn in until
+## `GetSGBLayout SCGB_BATTLE_COLORS` runs after `BattleIntroSlidingPics`.
+## Below it, `_CGB_MoveList`'s own background palette, and `_UnownPuzzle`'s art as
+## (cache name, kind, tiles) in the routine's own INCBIN order, which is what the
+## walk depends on. `tile_borders` is pinned separately because thirty-four bytes
+## of code sit inside that data.
 const UNOWN_PUZZLE_SECTION: Array[Array] = [
 	["cursor", "raw", 4],
 	["start_cancel", "lz", 19],
@@ -1239,13 +1190,11 @@ const DIPLOMA_TILEMAP_BYTES: int = 360
 
 ## `LinkCommsBorderGFX`, the trade screen's own border, and the tilemaps behind
 ## it. The two cartridges draw the same screen out of very different amounts of
-## data: Gold and Silver load nine tiles to `vTiles2 tile $76` and let
-## `PlaceTradeScreenTextbox` draw two ordinary boxes with them, while Crystal
-## loads seventy tiles to `vTiles2` and lays a whole screen of them down from
-## `MobileTradeBorderTilemap` with the two cable rows written over its top and
-## bottom. `_LinkTextbox`'s own eight corner and edge tiles are `$30` to `$37`
-## of Crystal's block, which is what `LinkComms_LoadPleaseWaitTextboxBorderGFX`
-## copies to `$76` when only the box is wanted.
+## data: Gold and Silver load nine tiles and let `PlaceTradeScreenTextbox` draw
+## two ordinary boxes, while Crystal loads seventy and lays a whole screen down
+## from `MobileTradeBorderTilemap` with the two cable rows over its top and
+## bottom. `_LinkTextbox`'s eight corner and edge tiles are `$30` to `$37` of
+## Crystal's block, which is what is copied to `$76` when only the box is wanted.
 const LINK_BORDER_TILES_CRYSTAL: int = 70
 const LINK_BORDER_TILES_GOLD_SILVER: int = 9
 ## `_LinkTextbox`'s `$30`, the first of the eight tiles it draws a box from.
@@ -1316,14 +1265,12 @@ const SLOTS_TEXT_RUNS: Array = [
 
 
 ## `_CardFlip`'s own art run (engine/games/card_flip.asm), as (cache name, kind,
-## tiles). `raw` is an uncompressed strip of that many tiles, `lz` a compressed
-## one. The order is the routine's own INCBIN order and the walk is what pins
+## tiles). The order is the routine's own INCBIN order and the walk is what pins
 ## it: `.palettes` sits nine palettes in front of `CardFlipLZ03` and
 ## `CardFlipTilemap` behind `CardFlipLZ02`, so five entries landing on their own
-## sizes puts the walk on the tilemap's own independently found address.
-##
-## `off` and `on` are the two light bulbs `_CardFlip` copies over the font's own
-## "♂" and "♀", which is why `CARD_FLIP_LIGHT_OFF_TILE` is a character code.
+## sizes puts the walk on the tilemap's independently found address. `off` and
+## `on` are the two light bulbs `_CardFlip` copies over the font's own gender
+## signs, which is why `CARD_FLIP_LIGHT_OFF_TILE` is a character code.
 const CARD_FLIP_SECTION: Array[Array] = [
 	["card_flip_3", "lz", 7],
 	["card_flip_off", "raw", 1],
@@ -1712,14 +1659,12 @@ const LANDMARK_NAME_BYTES: int = 18
 
 ## The battle animation data layer: the per-move scripts and the four tables the
 ## objects they spawn are built from. All five are stored as contiguous regions
-## rather than entry by entry, each being a pointer table followed by the
-## bank-local data it points at, so a cached address resolves by subtraction and
-## the bytes stay the cartridge's ([Gen2BattleAnimImporter]).
-##
-## `BattleAnimations` (data/moves/animations.asm) is indexed by move number, so
-## entry 0 is `BattleAnim_Dummy` and 1 `BattleAnim_Pound`. Entries past
-## [constant MOVE_COUNT] are the four the table pads to $100 with and then the
-## non-move animations `wFXAnimID`'s high byte reaches.
+## rather than entry by entry, each a pointer table followed by the bank-local
+## data it points at, so a cached address resolves by subtraction.
+## `BattleAnimations` is indexed by move number, so entry 0 is `BattleAnim_Dummy`
+## and 1 `BattleAnim_Pound`; entries past [constant MOVE_COUNT] are the four the
+## table pads to $100 with and the non-move animations `wFXAnimID`'s high byte
+## reaches.
 const BATTLE_ANIM_SCRIPT_COUNT: int = 278
 const BATTLE_ANIM_OBJECT_COUNT: int = 188
 const BATTLE_ANIM_OBJECT_SIZE: int = 6
@@ -2338,14 +2283,13 @@ const GOLD_SILVER: Dictionary = {
 		"badge_palette": 0xA385,
 	},
 	# The region map. `johto`, `kanto`, `palette_map` and `palette` were matched
-	# from the assembled gfx/pokegear files, the three graphics by decompressing
-	# at every offset and keeping the run reproducing the PNG, and the landmark
-	# table by its x,y pairs at a stride of four, which nothing else matches.
-	# Every hit is unique per dump. `cards` is the three card tilemaps as one run
-	# from the pinned .rle files and `card_texts` the run of five that opens on
-	# `_GearEllipseText`. Nested
-	# like trainer_card, so Gold and Silver's absent female palette stays out of
-	# the flat offset checks.
+	# from the assembled gfx/pokegear files, the graphics by decompressing at every
+	# offset and keeping the run reproducing the PNG, and the landmark table by its
+	# x,y pairs at a stride of four, which nothing else matches. Every hit is
+	# unique per dump. `cards` is the three card tilemaps as one run and
+	# `card_texts` the run of five opening on `_GearEllipseText`. Nested like
+	# trainer_card, so Gold and Silver's absent female palette stays out of the
+	# flat offset checks.
 	"town_map": {
 		"gfx": 0xF8C92,
 		"pokegear_gfx": 0x1C0E43,
@@ -2812,14 +2756,12 @@ const CRYSTAL: Dictionary = {
 	# The same table; Crystal has no Gold and Silver intro to pin it under.
 	"predef_pals": 0x9DF6,
 	# `AnimateFrontpic`'s five tables, Crystal's alone: pokegold ships no
-	# `pic_animation.asm`, no `anim.asm`, no bitmasks and no frames, and both of
-	# its send-outs reach `PlayStereoCry` directly. Every address here is
-	# rgblink's own, from a `pokecrystal11.gbc` byte identical to the dump.
-	#
-	# A script pointer and a bitmask pointer are read in the table's own bank; a
-	# frames pointer is read in the bank its *data* lives in, which is
-	# `KantoFrames` below species [constant JOHTO_SPECIES] and `JohtoFrames`
-	# from it (`GetMonFramesPointer`).
+	# `pic_animation.asm`, no bitmasks and no frames, and both of its send-outs
+	# reach `PlayStereoCry` directly. Every address here is rgblink's own, from a
+	# `pokecrystal11.gbc` byte identical to the dump. A script pointer and a
+	# bitmask pointer are read in the table's own bank; a frames pointer is read in
+	# the bank its *data* lives in, `KantoFrames` below
+	# [constant JOHTO_SPECIES] and `JohtoFrames` from it.
 	"pic_anim": {
 		"scripts": 0xD0695,
 		"idle_scripts": 0xD16A3,
@@ -3041,17 +2983,13 @@ const CRYSTAL: Dictionary = {
 	# strings: `db "GAME FREAK@"` is eleven bytes and the INCBIN follows it.
 	"diploma": 0x1DD805,
 	# `LinkCommsBorderGFX` and, sixty-eight bytes of code behind it,
-	# `MobileTradeBorderTilemap` with the two cable strips laid out after it.
-	# Located off the border tiles themselves, which are a byte-exact match for
-	# `gfx/trade/border_tiles.png`; the tilemaps are pinned separately because
-	# `__LoadTradeScreenBorderGFX`, `LoadMobileTradeBorderTilemap` and
-	# `TestMobileTradeBorderTilemap` sit between the two.
-	# `InitMysteryGiftLayout`'s own `ld bc, $43 tiles`, uncompressed and
-	# straight into vTiles2, so the pin is a bounds check against the run the
-	# routine indexes rather than a decompression. `_CGB_MysteryGift` copies two
-	# palettes where Gold and Silver copy one. Located off
-	# `.String_PressAToLink_BToCancel`, the inline `db` string a page in front of
-	# the eight `text_far` stubs, which is the only plain text in the routine.
+	# `MobileTradeBorderTilemap` with the two cable strips after it. Located off the
+	# border tiles themselves, a byte-exact match for `gfx/trade/border_tiles.png`;
+	# the tilemaps are pinned separately because three routines sit between them.
+	# Below, `InitMysteryGiftLayout`'s own `ld bc, $43 tiles`, uncompressed and
+	# straight into vTiles2, so the pin is a bounds check rather than a
+	# decompression. Located off `.String_PressAToLink_BToCancel`, the only plain
+	# text in the routine.
 	"mystery_gift": {
 		"gfx": 0x105258, "tiles": 0x43,
 		"background": -1, "gfx2": -1,
@@ -3153,17 +3091,13 @@ const CRYSTAL: Dictionary = {
 		"icon": 0x11EF4,
 	},
 	# The Battle Tower, which Gold and Silver have no map, routine or table for.
-	# `trainers` is `BattleTowerTrainers`' 70 rows, `mons` the ten level groups
-	# of 21 nicknamed party-mon structs, `class_genders` and `class_sprites` the
-	# two per-class tables `BattleTowerText` and
-	# `LoadOpponentTrainerAndPokemonWithOTSprite` index, `trainer_text` the 120
-	# `text_far` stubs behind `BTMaleTrainerTexts`, `level_strings`
+	# `trainers` is `BattleTowerTrainers`' 70 rows, `mons` the ten level groups of
+	# 21 nicknamed party-mon structs, `class_genders` and `class_sprites` the two
+	# per-class tables, `trainer_text` the 120 `text_far` stubs, `level_strings`
 	# `Strings_L10ToL100` and `challenge_menu`
 	# `MenuData_ChallengeExplanationCancel`. Each hits once.
-	#
-	# `BattleTowerTrainerData` is deliberately not here: its 36 bytes per trainer
-	# are the mobile greeting's easy-chat word pairs, which `Function17042c`
-	# alone walks, and nothing on the local challenge reads them.
+	# `BattleTowerTrainerData` is deliberately absent: its 36 bytes per trainer are
+	# the mobile greeting's word pairs and nothing on a local challenge reads them.
 	"battle_tower": {
 		"trainers": 0x1F814E,
 		"mons": 0x1F8450,

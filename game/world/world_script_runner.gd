@@ -210,16 +210,13 @@ const SNORLAX_PROXIMITY_CELLS: Array[Vector2i] = [
 ## special_index() already normalizes. maps/KurtsHouse.asm's `.AskApricorn`
 ## branches on wScriptVar afterwards, one label per apricorn.
 const SPECIAL_SELECT_APRICORN_FOR_KURT: int = 86
-## MoveDeletion, 33 in both profiles: it sits below the first index the two
-## tables disagree on, so `special_index()` leaves it alone. `MoveDeletion` owns
-## the same shape `NameRater` does, one house further on, so it is one host
-## request as well.
-## The Battle Tower's own six specials, Crystal's alone. `BattleTowerAction` is
-## one routine reached with a `setval` in front of it, `BattleTowerRoomMenu` and
-## `Menu_ChallengeExplanationCancel` are the two menus the receptionist opens,
-## `LoadOpponentTrainerAndPokemon...` samples the next opponent and
-## `BattleTowerBattle` fights it. `CheckForBattleTowerRules` is the party check
-## in front of the whole challenge.
+## MoveDeletion, 33 in both profiles: it sits below the first index the two tables
+## disagree on, so `special_index()` leaves it alone, and it owns the same shape
+## `NameRater` does one house further on. Below, the Battle Tower's own six
+## specials, Crystal's alone: `BattleTowerAction` is one routine reached with a
+## `setval` in front of it, two of them are the menus the receptionist opens, one
+## samples the next opponent and one fights it, and `CheckForBattleTowerRules` is
+## the party check in front of the whole challenge.
 const SPECIAL_BATTLE_TOWER_ROOM_MENU: int = 116
 const SPECIAL_BATTLE_TOWER_BATTLE: int = 119
 const SPECIAL_LOAD_BATTLE_TOWER_OPPONENT: int = 122
@@ -352,22 +349,13 @@ const MONEY_WINDOW_KIND_OF: Dictionary = {
 	SPECIAL_PLACE_MONEY_TOP_RIGHT: &"money_top_right",
 }
 
-## DisplayUnownWords, which is Crystal's alone: pokegold's table stops well
-## before it, so no Gold or Silver script can reach this index and neither dump
-## ships the words. The four wall patterns are Crystal bg events, two per
-## chamber, where Gold and Silver's cells carry only the puzzle sign. A preceding
-## `setval` puts the `UNOWNWORDS_*` index in wScriptVar. Not to be read as 41,
-## which is `UnownPuzzle` on both and is the sliding puzzle itself.
-## `UnownPuzzle`, the sliding puzzle each of the four Ruins of Alph chambers
-## opens. The map's own `setval` in front of it names which picture; the special
-## answers `wSolvedUnownPuzzle` in wScriptVar, which the `iftrue` after the
-## `closetext` reads. 41 on both profiles, being under `special_index`'s split.
-## `SlotMachine`, the Game Corner's own machine. The map's `setval` in front of
-## it is `wScriptVar`, which `Slots_InitBias` reads: TRUE picks `.Lucky`'s own
-## bias table, and a `random 6 / ifequal 0` in front of the two scripts is which
-## machine a player sat down at. 42 on both profiles, being under
-## `special_index`'s split, and the machine's own `wCoins` writes are the coins
-## the request answers with.
+## DisplayUnownWords, Crystal's alone: pokegold's table stops well before it and
+## neither dump ships the words. The four wall patterns are Crystal bg events, two
+## per chamber, where Gold and Silver's cells carry only the puzzle sign. Not to be
+## read as 41, which is `UnownPuzzle` on both. That one is the sliding puzzle each
+## chamber opens, its `setval` naming the picture and its answer read by the
+## `iftrue`; 42 is `SlotMachine`, whose `setval` is what `Slots_InitBias` reads,
+## TRUE picking `.Lucky`'s own bias table. Both are under `special_index`'s split.
 const SPECIAL_SLOT_MACHINE: int = 42
 ## `CardFlip`, the Game Corner's other machine. Both Game Corners reach it and
 ## neither puts a `setval` in front of it: the routine reads no `wScriptVar` and
@@ -761,368 +749,56 @@ static func begin(
 	return runner
 
 
+## `_pending`'s type and `special` tag to the method that resumes it, taking the
+## caller's choice and answering a result. A pause with no row here gets the
+## generic answer in [method _resume_pending].
+const PENDING_RESUMES: Dictionary = {
+	&"menu/set_day_of_week": &"_resume_day_of_week_menu",
+	&"menu/battle_tower_challenge_menu": &"_resume_challenge_menu",
+	&"menu/battle_tower_room_menu": &"_resolve_room_menu",
+	&"text/battle_tower_room_refusal": &"_resume_room_refusal",
+	&"menu/buenas_password": &"_resume_buenas_password",
+	&"text/set_day_of_week_confirmation": &"_resume_day_of_week_text",
+	&"choice/set_day_of_week_confirmation": &"_resume_day_of_week_choice",
+	&"text/strength_ask": &"_resume_strength_ask_text",
+	&"choice/strength_ask": &"_resume_strength_ask_choice",
+	&"text/fruit_tree": &"_resume_fruit_tree",
+	&"text/item_received": &"_resume_item_received",
+	&"text/pocket_is_full": &"_resume_pocket_is_full",
+	&"text/strength_used": &"_resume_strength_used",
+	&"menu/buena_prize": &"_resume_buena_prize_menu",
+	&"choice/buena_prize_confirm": &"_resume_buena_prize_confirm",
+	&"menu/bank_of_mom_menu": &"_resume_mom_menu",
+	&"choice/bank_of_mom_choice": &"_resume_mom_choice",
+	&"text/field_move_ask": &"_resume_field_move_text",
+	&"choice/field_move_ask": &"_resume_field_move_choice",
+	&"choice/ask_remember_password": &"_resume_remember_password",
+	&"text/rock_smash_ask": &"_resume_rock_smash_text",
+	&"choice/rock_smash_ask": &"_resume_rock_smash_choice",
+	&"text/rock_smash_used": &"_resume_rock_smash_used",
+}
+
+## The continuations that carry their payload in a `_pending` key rather than a
+## tag, in the order a pause carrying two of them is resumed.
+const PENDING_CONTINUATIONS: Dictionary = {
+	"next_internal_texts": &"_resume_internal_texts",
+	"bank_of_mom_after_text": &"_resume_mom_after_text",
+	"bank_of_mom_dial": &"_resume_mom_dial",
+	"buena_prize_after_text": &"_resume_buena_after_text",
+	"party_selection_after_text": &"_resume_party_selection",
+	"special_after_text": &"_resume_special_after_text",
+}
+
+
 ## Advances until a text/button pause, completion or a bounded failure.
 func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 	if not _phone_context.is_empty() and not _phone_started:
 		_phone_started = true
 		_emit_runtime_event(&"phone_call_started", _phone_context)
 	if _pending:
-		if _pending.has("text"):
-			_standing_text = String(_pending["text"])
-		var pending_request: Dictionary = _pending.get("request", {})
-		if _pending.get("type", &"") == &"runtime_request" \
-			and StringName(pending_request.get("kind", &"")) == &"battle_requested":
-			return _waiting_result()
-		## Only frames end a wait, so a button press cannot: the source is inside
-		## WaitScriptMovement or a DelayFrames loop, which read no input at all.
-		if _pending.get("type", &"") == &"wait":
-			return _waiting_result()
-		if not acknowledge:
-			return _waiting_result()
-		var pending_type: StringName = StringName(_pending.get("type", &""))
-		if pending_type == &"menu" and _pending_tag() == &"set_day_of_week":
-			if choice < 0:
-				return _waiting_result()
-			var selected_day: int = posmod(choice, WEEKDAY_NAMES.size())
-			_pending = {
-				"type": &"text",
-				## `.ConfirmWeekdayText` places the weekday at `hlcoord 1, 14` and
-				## `_OakTimeIsItText` carries on from where `PlaceString` left
-				## off, so the two are one line.
-				"text": "%s, is it?" % WEEKDAY_NAMES[selected_day],
-				"special": &"set_day_of_week_confirmation",
-				"day": selected_day,
-				"source": _request.duplicate(true),
-			}
-			return _waiting_result()
-		if pending_type == &"menu" and _pending_tag() == &"battle_tower_challenge_menu":
-			## `Function17d246`: a row answers its own one-based number and B
-			## answers the same 4 the routine writes before it opens the menu.
-			_pending = {}
-			_script_value = CHALLENGE_MENU_CANCEL if choice < 0 else choice + 1
-			return advance()
-		if pending_type == &"menu" and _pending_tag() == &"battle_tower_room_menu":
-			return _resolve_room_menu(choice)
-		## The two refusals the room menu prints put its jumptable back at zero
-		## rather than leaving the routine, so the menu opens again behind them.
-		if pending_type == &"text" and _pending_tag() == &"battle_tower_room_refusal":
-			_pending = {}
-			return _stage_room_menu()
-		if pending_type == &"menu" and _pending_tag() == &"buenas_password":
-			## `STATICMENU_DISABLE_B`: B does not close the list, so the only way
-			## out is a row. The answer is whether it is the row the byte's own
-			## low nibble names, which `maskbits NUM_PASSWORDS_PER_CATEGORY`
-			## takes off it.
-			if choice < 0:
-				return _waiting_result()
-			var password: int = int(_pending.get("password", 0))
-			_pending = {}
-			_script_value = 1 if choice == (password & 0x3) else 0
-			return advance()
-		if pending_type == &"text" and _pending_tag() == &"set_day_of_week_confirmation":
-			var confirmation_day: int = int(_pending.get("day", 0))
-			_stage_day_of_week_confirmation(confirmation_day)
-			return _waiting_result()
-		if pending_type == &"choice" and _pending_tag() == &"set_day_of_week_confirmation":
-			var confirmed_day: int = int(_pending.get("day", 0))
-			_pending = {}
-			if choice == 0:
-				_staged_day_of_week = confirmed_day
-				_script_value = 1
-				return advance()
-			_stage_day_of_week_menu()
-			return _waiting_result()
-		## AskStrengthScript's `.AskStrength`: opentext, writetext, yesorno. The
-		## text pause is acknowledged first, then the choice is offered.
-		if pending_type == &"text" and _pending_tag() == &"strength_ask":
-			_pending = {
-				"type": &"choice",
-				"command": &"yesorno",
-				"choices": [&"yes", &"no"],
-				"text": _standing_text,
-				"special": &"strength_ask",
-				"slot": int(_pending.get("slot", -1)),
-				"source": _request.duplicate(true),
-			}
-			return _waiting_result()
-		if pending_type == &"choice" and _pending_tag() == &"strength_ask":
-			var chosen_slot: int = int(_pending.get("slot", -1))
-			_pending = {}
-			## `iftrue Script_UsedStrength`, and a no falls to closetext/end.
-			_script_value = 1 if choice == 0 else 0
-			if choice != 0:
-				return _complete()
-			_stage_strength_used(chosen_slot)
-			return _waiting_result()
-		## FruitTreeScript's promptbutton, behind which its two callasms sit.
-		if pending_type == &"text" and _pending_tag() == &"fruit_tree":
-			var fruit_tree: int = int(_pending.get("tree_id", 0))
-			var fruit_item: int = int(_pending.get("item", 0))
-			_pending = {}
-			_finish_after_pending = false
-			var picked: Dictionary = _resolve_fruit_tree(fruit_tree, fruit_item)
-			if not bool(picked.get("ok", false)):
-				return _fail(StringName(picked.get("reason", &"fruit_tree_failed")), picked)
-			return _waiting_result()
-		## The tail every item receipt shares behind its own line: the sound, and
-		## then `itemnotify`'s box once the host has played it.
-		if pending_type == &"text" and _pending_tag() == &"item_received":
-			var receipt_item: int = int(_pending.get("item", 0))
-			var receipt_sfx: int = int(_pending.get("sfx", 0))
-			var receipt_finish: bool = bool(_pending.get("finish", false))
-			_pending = {}
-			_finish_after_pending = false
-			_stage_receipt_tail(receipt_item, receipt_sfx, receipt_finish)
-			return _waiting_result()
-		## `GiveItemScript.Full`, whose `promptbutton` is the acknowledge above.
-		if pending_type == &"text" and _pending_tag() == &"pocket_is_full":
-			var full_item: int = int(_pending.get("item", 0))
-			var full_finish: bool = bool(_pending.get("finish", false))
-			_pending = {}
-			_finish_after_pending = false
-			_stage_pocket_is_full(full_item, full_finish)
-			return _waiting_result()
-		## Script_UsedStrength's second writetext, _MoveBoulderText.
-		if pending_type == &"text" and _pending_tag() == &"strength_used":
-			var used_name: String = String(_pending.get("name", "#MON"))
-			_stage_internal_text("%s can\nmove boulders." % used_name, true)
-			return _waiting_result()
-		## A run of boxes with nothing between them, which is what `PokeSeer`'s
-		## own actions print and what `PhotoStudio` prints once the printer it
-		## cannot reach has answered.
-		if pending_type == &"text" and _pending.has("next_internal_texts"):
-			var chained: Array = (_pending["next_internal_texts"] as Array).duplicate()
-			_pending = {}
-			_finish_after_pending = false
-			if chained.is_empty():
-				return advance()
-			var head: String = String(chained.pop_front())
-			_stage_internal_text(head, false, {} if chained.is_empty() else {
-				"next_internal_texts": chained,
-			})
-			return _waiting_result()
-		if pending_type == &"menu" and _pending_tag() == &"buena_prize":
-			var prize_special: int = int(_pending.get("prize_special", 0))
-			if choice < 0:
-				## `Buena_PrizeMenu`'s `.cancel`: B leaves the counter, and both
-				## `CloseWindow`s are behind her own parting box.
-				_pending = {}
-				return _buena_prize_box(prize_special, "come_again", true)
-			var prize_row: int = clampi(choice, 0, BUENA_PRIZES.size() - 1)
-			_pending = {}
-			_set_text_buffer(
-				RomLayout.STRING_BUFFER_1,
-				data.item_name(int(BUENA_PRIZES[prize_row][0])) if data != null else "",
-				&"buena_prize", {"special": prize_special, "prize": prize_row}
-			)
-			var confirm_box: String = _special_box("buena_prize", "is_that_right")
-			if confirm_box.is_empty():
-				return _fail(&"missing_special_text", {"special": prize_special})
-			_pending = {
-				"type": &"choice",
-				"command": &"buena_prize_confirm",
-				"choices": [&"yes", &"no"],
-				"text": confirm_box,
-				"special": &"buena_prize_confirm",
-				"prize": prize_row,
-				"prize_special": prize_special,
-				"source": _request.duplicate(true),
-			}
-			return _waiting_result()
-		if pending_type == &"choice" and _pending_tag() == &"buena_prize_confirm":
-			var confirm_row: int = int(_pending.get("prize", 0))
-			var confirm_special: int = int(_pending.get("prize_special", 0))
-			_pending = {}
-			if choice != 0:
-				return _stage_buena_prize_menu(confirm_special)
-			return _buy_buena_prize(confirm_special, confirm_row)
-		if pending_type == &"menu" and _pending_tag() == &"bank_of_mom_menu":
-			_pending = {}
-			if choice < 0:
-				return _mom_result(_bank_of_mom(MOM_JUST_DO_WHAT_YOU_CAN))
-			return _mom_result(_bank_of_mom(
-				MOM_MENU_TARGETS[clampi(choice, 0, MOM_MENU_TARGETS.size() - 1)]
-			))
-		if pending_type == &"choice" and _pending_tag() == &"bank_of_mom_choice":
-			var mom_state: int = int(_pending.get("mom_state", MOM_EXIT))
-			var mom_yes: bool = choice == 0
-			_pending = {}
-			match mom_state:
-				MOM_INITIALIZE:
-					## `MomLeavingText3` is printed either way; YES adds the tier
-					## she keeps and NO leaves the account open and saving
-					## nothing.
-					_staged_mom_savings_flags = MOM_ACTIVE \
-						| (MOM_SAVING_SOME_MONEY if mom_yes else 0)
-					if not mom_yes:
-						return _mom_result(_mom_box("leaving_3", MOM_EXIT))
-					var second: String = _special_box("bank_of_mom", "leaving_2")
-					var third: String = _special_box("bank_of_mom", "leaving_3")
-					if second.is_empty() or third.is_empty():
-						return _fail(
-							&"missing_special_text", {"special": SPECIAL_BANK_OF_MOM}
-						)
-					return _mom_result(_stage_internal_text(second, false, {
-						"special": SPECIAL_BANK_OF_MOM, "next_internal_texts": [third],
-					}))
-				MOM_IS_THIS_ABOUT_YOUR_MONEY:
-					return _mom_result(_bank_of_mom(
-						MOM_ACCESS_BANK if mom_yes else MOM_JUST_DO_WHAT_YOU_CAN
-					))
-				MOM_STOP_OR_START_SAVING:
-					_staged_mom_savings_flags = MOM_ACTIVE \
-						| (MOM_SAVING_SOME_MONEY if mom_yes else 0)
-					if not mom_yes:
-						return _mom_result(_bank_of_mom(MOM_JUST_DO_WHAT_YOU_CAN))
-					return _mom_result(_mom_box("start_saving_money", MOM_EXIT))
-			return _fail(&"invalid_bank_of_mom_state", {"state": mom_state})
-		## Her own boxes, each with the jumptable index that follows it.
-		if pending_type == &"text" and _pending.has("bank_of_mom_after_text"):
-			var mom_next: int = int(_pending["bank_of_mom_after_text"])
-			_pending = {}
-			_finish_after_pending = false
-			return _mom_result(_bank_of_mom(mom_next))
-		## `Mom_SetUpDepositMenu` stands behind the question rather than over it.
-		if pending_type == &"text" and _pending.has("bank_of_mom_dial"):
-			var mom_mode: StringName = StringName(_pending["bank_of_mom_dial"])
-			_pending = {}
-			_finish_after_pending = false
-			_stage_runtime_request(&"mom_bank_dial_requested", {
-				"special": SPECIAL_BANK_OF_MOM,
-				"mode": mom_mode,
-				"saved": _money_balance(ACCOUNT_MOMS_MONEY),
-				"held": _money_balance(ACCOUNT_YOUR_MONEY),
-			})
-			return _waiting_result()
-		## A box the prize counter printed, which goes back to her list rather
-		## than ending: `.print` falls into `.loop`.
-		if pending_type == &"text" and _pending.has("buena_prize_after_text"):
-			var after_special: int = int(_pending["buena_prize_after_text"])
-			_pending = {}
-			_finish_after_pending = false
-			return _stage_buena_prize_menu(after_special)
-		## `PokeSeer` prints its opening box, waits for a button and only then
-		## opens the list; the box is not the list's own backdrop.
-		if pending_type == &"text" and _pending.has("party_selection_after_text"):
-			var selection: Dictionary = _pending["party_selection_after_text"]
-			_pending = {}
-			_finish_after_pending = false
-			_stage_runtime_request(&"party_selection_requested", selection)
-			return _waiting_result()
-		## describedecoration is a local script in the cartridge. Its text must be
-		## acknowledged before the one decoration that needs a host, the town map,
-		## calls OverworldTownMap. Keeping this continuation on the text pause
-		## preserves the source's opentext/waitbutton/special/closetext/end order.
-		if pending_type == &"text" and _pending.has("special_after_text"):
-			var decoration_special: int = int(_pending.get("special_after_text", -1))
-			_pending = {}
-			_finish_after_pending = false
-			var special_result: Dictionary = _execute_special(decoration_special)
-			if not bool(special_result.get("ok", false)):
-				return _fail(
-					StringName(special_result.get("reason", &"special_failed")),
-					special_result
-				)
-			return _waiting_result() if _pending else advance()
-		## The five Ask*Scripts TryTileCollisionEvent reaches, all one shape:
-		## opentext, writetext, yesorno, iftrue <the move>, closetext, end.
-		if pending_type == &"text" and _pending_tag() == &"field_move_ask":
-			_pending = {
-				"type": &"choice",
-				"command": &"yesorno",
-				"choices": [&"yes", &"no"],
-				"text": _standing_text,
-				"special": &"field_move_ask",
-				"move": int(_pending.get("move", 0)),
-				"slot": int(_pending.get("slot", -1)),
-				"source": _request.duplicate(true),
-			}
-			return _waiting_result()
-		if pending_type == &"choice" and _pending_tag() == &"field_move_ask":
-			var asked_move: int = int(_pending.get("move", 0))
-			var asked_slot: int = int(_pending.get("slot", -1))
-			_pending = {}
-			_script_value = 1 if choice == 0 else 0
-			if choice == 0:
-				## `iftrue Script_Cut` and its four counterparts. The move
-				## itself belongs to the host, which owns the staged request
-				## and the commit the party submenu already reaches.
-				_emit_runtime_event(&"field_move_confirmed", {
-					"move": asked_move, "slot": asked_slot,
-				})
-			return _complete()
-		if pending_type == &"choice" and _pending_tag() == &"ask_remember_password":
-			_pending = {}
-			_script_value = 1 if choice == 0 else 0
-			_stage_frame_wait(ASK_REMEMBER_PASSWORD_CLOSE_FRAMES)
-			return _waiting_result()
-		## AskRockSmashScript, the same opentext/writetext/yesorno shape.
-		if pending_type == &"text" and _pending_tag() == &"rock_smash_ask":
-			_pending = {
-				"type": &"choice",
-				"command": &"yesorno",
-				"choices": [&"yes", &"no"],
-				"text": _standing_text,
-				"special": &"rock_smash_ask",
-				"slot": int(_pending.get("slot", -1)),
-				"source": _request.duplicate(true),
-			}
-			return _waiting_result()
-		if pending_type == &"choice" and _pending_tag() == &"rock_smash_ask":
-			var smash_slot: int = int(_pending.get("slot", -1))
-			_pending = {}
-			## `iftrue RockSmashScript`, and a no falls to closetext/end.
-			_script_value = 1 if choice == 0 else 0
-			if choice != 0:
-				return _complete()
-			_stage_rock_smash_used(smash_slot)
-			return _waiting_result()
-		## RockSmashScript's `closetext`, `special WaitSFX` and
-		## `playsound SFX_STRENGTH`. The rest of the script waits on the sound
-		## the way a trainer's approach waits on its encounter music.
-		if pending_type == &"text" and _pending_tag() == &"rock_smash_used":
-			_pending = {}
-			_rock_smash_after_sound = true
-			_stage_audio_request(&"sound", {"address": SFX_STRENGTH})
-			return _waiting_result()
-		if pending_type in [&"choice", &"menu"]:
-			if choice < 0:
-				return _waiting_result()
-			if pending_type == &"menu":
-				## Script_verticalmenu and Script__2dmenu store wMenuCursorY and
-				## wMenuCursorPosition, which count from one; cancel_input()
-				## already writes the zero their carry branch does. So a caller's
-				## zero-based option is the source's option minus one.
-				_script_value = choice + 1
-			elif pending_type == &"choice" \
-				and _pending.get("choices", []) == [&"yes", &"no"]:
-				_script_value = 1 if choice == 0 else 0
-			else:
-				_script_value = choice
-		if pending_type == &"choice" and _pending.has("contact"):
-			var contact: int = int(_pending.get("contact", -1))
-			if choice == 0:
-				var phone_result: Dictionary = _stage_phone_contact(contact)
-				if not bool(phone_result.get("ok", false)):
-					return _fail(
-						StringName(phone_result.get("reason", &"phone_contact_failed")),
-						phone_result
-					)
-			else:
-				_script_value = PHONE_CONTACT_REFUSED
-			_emit_runtime_event(&"phone_number_result", {
-				"contact": contact,
-				"accepted": choice == 0 and _script_value == PHONE_CONTACT_GOT,
-				"result": _script_value,
-			})
-		if pending_type == &"battle":
-			_stage_just_battled(true)
-		var finish_after_pending: bool = _finish_after_pending
-		_pending = {}
-		_finish_after_pending = false
-		if finish_after_pending:
-			return _complete()
-
+		var resumed: Dictionary = _resume_pending(acknowledge, choice)
+		if not resumed.is_empty():
+			return resumed
 	if not _active:
 		return _failure_result() if not _failure.is_empty() else _complete_result()
 
@@ -1161,6 +837,422 @@ func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 			return outcome if outcome.has("status") else _complete_result()
 
 	return _complete()
+
+
+## The open pause's own answer to [param acknowledge] and [param choice], or an
+## empty result when it is spent and the command loop takes over.
+func _resume_pending(acknowledge: bool, choice: int) -> Dictionary:
+	if _pending.has("text"):
+		_standing_text = String(_pending["text"])
+	var pending_type: StringName = StringName(_pending.get("type", &""))
+	var request: Dictionary = _pending.get("request", {})
+	if pending_type == &"runtime_request" \
+		and StringName(request.get("kind", &"")) == &"battle_requested":
+		return _waiting_result()
+	## Only frames end a wait, so a button press cannot: the source is inside
+	## WaitScriptMovement or a DelayFrames loop, which read no input at all.
+	if pending_type == &"wait" or not acknowledge:
+		return _waiting_result()
+
+	var resume: StringName = PENDING_RESUMES.get(
+		StringName("%s/%s" % [pending_type, _pending_tag()]), &""
+	)
+	if resume != &"":
+		return call(resume, choice) as Dictionary
+	for key: String in PENDING_CONTINUATIONS:
+		if pending_type == &"text" and _pending.has(key):
+			return call(PENDING_CONTINUATIONS[key], choice) as Dictionary
+
+	if pending_type in [&"choice", &"menu"]:
+		if choice < 0:
+			return _waiting_result()
+		_script_value = _answered_value(pending_type, choice)
+	if pending_type == &"choice" and _pending.has("contact"):
+		var refused: Dictionary = _resume_phone_contact(choice)
+		if not refused.is_empty():
+			return refused
+	if pending_type == &"battle":
+		_stage_just_battled(true)
+	var finish_after_pending: bool = _finish_after_pending
+	_pending = {}
+	_finish_after_pending = false
+	return _complete() if finish_after_pending else {}
+
+
+## What a row or a yes/no answers with. Script_verticalmenu and Script__2dmenu
+## store wMenuCursorY and wMenuCursorPosition, which count from one, and
+## cancel_input() already writes the zero their carry branch does.
+func _answered_value(pending_type: StringName, choice: int) -> int:
+	if pending_type == &"menu":
+		return choice + 1
+	if _pending.get("choices", []) == [&"yes", &"no"]:
+		return 1 if choice == 0 else 0
+	return choice
+
+
+## `AskNumber1M`'s yes: the number is taken or refused, and either way the caller
+## is told which. Answers empty unless the contact itself failed.
+func _resume_phone_contact(choice: int) -> Dictionary:
+	var contact: int = int(_pending.get("contact", -1))
+	if choice == 0:
+		var phone_result: Dictionary = _stage_phone_contact(contact)
+		if not bool(phone_result.get("ok", false)):
+			return _fail(
+				StringName(phone_result.get("reason", &"phone_contact_failed")),
+				phone_result
+			)
+	else:
+		_script_value = PHONE_CONTACT_REFUSED
+	_emit_runtime_event(&"phone_number_result", {
+		"contact": contact,
+		"accepted": choice == 0 and _script_value == PHONE_CONTACT_GOT,
+		"result": _script_value,
+	})
+	return {}
+
+
+func _resume_day_of_week_menu(choice: int) -> Dictionary:
+	if choice < 0:
+		return _waiting_result()
+	var selected_day: int = posmod(choice, WEEKDAY_NAMES.size())
+	_pending = {
+		"type": &"text",
+		## `.ConfirmWeekdayText` places the weekday at `hlcoord 1, 14` and
+		## `_OakTimeIsItText` carries on from where `PlaceString` left off, so the
+		## two are one line.
+		"text": "%s, is it?" % WEEKDAY_NAMES[selected_day],
+		"special": &"set_day_of_week_confirmation",
+		"day": selected_day,
+		"source": _request.duplicate(true),
+	}
+	return _waiting_result()
+
+
+## `Function17d246`: a row answers its own one-based number and B answers the
+## same 4 the routine writes before it opens the menu.
+func _resume_challenge_menu(choice: int) -> Dictionary:
+	_pending = {}
+	_script_value = CHALLENGE_MENU_CANCEL if choice < 0 else choice + 1
+	return advance()
+
+
+## The two refusals the room menu prints put its jumptable back at zero rather
+## than leaving the routine, so the menu opens again behind them.
+func _resume_room_refusal(_choice: int) -> Dictionary:
+	_pending = {}
+	return _stage_room_menu()
+
+
+## `STATICMENU_DISABLE_B`: B does not close the list, so the only way out is a
+## row. The answer is whether it is the row the byte's own low nibble names,
+## which `maskbits NUM_PASSWORDS_PER_CATEGORY` takes off it.
+func _resume_buenas_password(choice: int) -> Dictionary:
+	if choice < 0:
+		return _waiting_result()
+	var password: int = int(_pending.get("password", 0))
+	_pending = {}
+	_script_value = 1 if choice == (password & 0x3) else 0
+	return advance()
+
+
+func _resume_day_of_week_text(_choice: int) -> Dictionary:
+	_stage_day_of_week_confirmation(int(_pending.get("day", 0)))
+	return _waiting_result()
+
+
+func _resume_day_of_week_choice(choice: int) -> Dictionary:
+	var confirmed_day: int = int(_pending.get("day", 0))
+	_pending = {}
+	if choice != 0:
+		_stage_day_of_week_menu()
+		return _waiting_result()
+	_staged_day_of_week = confirmed_day
+	_script_value = 1
+	return advance()
+
+
+## AskStrengthScript's `.AskStrength`: opentext, writetext, yesorno. The text
+## pause is acknowledged first, then the choice is offered.
+func _resume_strength_ask_text(_choice: int) -> Dictionary:
+	return _stage_yes_or_no(&"strength_ask", {"slot": int(_pending.get("slot", -1))})
+
+
+func _resume_strength_ask_choice(choice: int) -> Dictionary:
+	var chosen_slot: int = int(_pending.get("slot", -1))
+	_pending = {}
+	## `iftrue Script_UsedStrength`, and a no falls to closetext/end.
+	_script_value = 1 if choice == 0 else 0
+	if choice != 0:
+		return _complete()
+	_stage_strength_used(chosen_slot)
+	return _waiting_result()
+
+
+## FruitTreeScript's promptbutton, behind which its two callasms sit.
+func _resume_fruit_tree(_choice: int) -> Dictionary:
+	var fruit_tree: int = int(_pending.get("tree_id", 0))
+	var fruit_item: int = int(_pending.get("item", 0))
+	_pending = {}
+	_finish_after_pending = false
+	var picked: Dictionary = _resolve_fruit_tree(fruit_tree, fruit_item)
+	if not bool(picked.get("ok", false)):
+		return _fail(StringName(picked.get("reason", &"fruit_tree_failed")), picked)
+	return _waiting_result()
+
+
+## The tail every item receipt shares behind its own line: the sound, and then
+## `itemnotify`'s box once the host has played it.
+func _resume_item_received(_choice: int) -> Dictionary:
+	var receipt_item: int = int(_pending.get("item", 0))
+	var receipt_sfx: int = int(_pending.get("sfx", 0))
+	var receipt_finish: bool = bool(_pending.get("finish", false))
+	_pending = {}
+	_finish_after_pending = false
+	_stage_receipt_tail(receipt_item, receipt_sfx, receipt_finish)
+	return _waiting_result()
+
+
+## `GiveItemScript.Full`, whose `promptbutton` is the acknowledge above.
+func _resume_pocket_is_full(_choice: int) -> Dictionary:
+	var full_item: int = int(_pending.get("item", 0))
+	var full_finish: bool = bool(_pending.get("finish", false))
+	_pending = {}
+	_finish_after_pending = false
+	_stage_pocket_is_full(full_item, full_finish)
+	return _waiting_result()
+
+
+## Script_UsedStrength's second writetext, _MoveBoulderText.
+func _resume_strength_used(_choice: int) -> Dictionary:
+	_stage_internal_text(
+		"%s can\nmove boulders." % String(_pending.get("name", "#MON")), true
+	)
+	return _waiting_result()
+
+
+## A run of boxes with nothing between them, which is what `PokeSeer`'s own
+## actions print and what `PhotoStudio` prints once the printer it cannot reach
+## has answered.
+func _resume_internal_texts(_choice: int) -> Dictionary:
+	var chained: Array = (_pending["next_internal_texts"] as Array).duplicate()
+	_pending = {}
+	_finish_after_pending = false
+	if chained.is_empty():
+		return advance()
+	var head: String = String(chained.pop_front())
+	_stage_internal_text(head, false, {} if chained.is_empty() else {
+		"next_internal_texts": chained,
+	})
+	return _waiting_result()
+
+
+func _resume_buena_prize_menu(choice: int) -> Dictionary:
+	var prize_special: int = int(_pending.get("prize_special", 0))
+	if choice < 0:
+		## `Buena_PrizeMenu`'s `.cancel`: B leaves the counter, and both
+		## `CloseWindow`s are behind her own parting box.
+		_pending = {}
+		return _buena_prize_box(prize_special, "come_again", true)
+	var prize_row: int = clampi(choice, 0, BUENA_PRIZES.size() - 1)
+	_pending = {}
+	_set_text_buffer(
+		RomLayout.STRING_BUFFER_1,
+		data.item_name(int(BUENA_PRIZES[prize_row][0])) if data != null else "",
+		&"buena_prize", {"special": prize_special, "prize": prize_row}
+	)
+	var confirm_box: String = _special_box("buena_prize", "is_that_right")
+	if confirm_box.is_empty():
+		return _fail(&"missing_special_text", {"special": prize_special})
+	_pending = {
+		"type": &"choice",
+		"command": &"buena_prize_confirm",
+		"choices": [&"yes", &"no"],
+		"text": confirm_box,
+		"special": &"buena_prize_confirm",
+		"prize": prize_row,
+		"prize_special": prize_special,
+		"source": _request.duplicate(true),
+	}
+	return _waiting_result()
+
+
+func _resume_buena_prize_confirm(choice: int) -> Dictionary:
+	var confirm_row: int = int(_pending.get("prize", 0))
+	var confirm_special: int = int(_pending.get("prize_special", 0))
+	_pending = {}
+	if choice != 0:
+		return _stage_buena_prize_menu(confirm_special)
+	return _buy_buena_prize(confirm_special, confirm_row)
+
+
+func _resume_mom_menu(choice: int) -> Dictionary:
+	_pending = {}
+	if choice < 0:
+		return _mom_result(_bank_of_mom(MOM_JUST_DO_WHAT_YOU_CAN))
+	return _mom_result(_bank_of_mom(
+		MOM_MENU_TARGETS[clampi(choice, 0, MOM_MENU_TARGETS.size() - 1)]
+	))
+
+
+func _resume_mom_choice(choice: int) -> Dictionary:
+	var mom_state: int = int(_pending.get("mom_state", MOM_EXIT))
+	var mom_yes: bool = choice == 0
+	_pending = {}
+	match mom_state:
+		MOM_INITIALIZE:
+			## `MomLeavingText3` is printed either way; YES adds the tier she
+			## keeps and NO leaves the account open and saving nothing.
+			_staged_mom_savings_flags = MOM_ACTIVE \
+				| (MOM_SAVING_SOME_MONEY if mom_yes else 0)
+			if not mom_yes:
+				return _mom_result(_mom_box("leaving_3", MOM_EXIT))
+			var second: String = _special_box("bank_of_mom", "leaving_2")
+			var third: String = _special_box("bank_of_mom", "leaving_3")
+			if second.is_empty() or third.is_empty():
+				return _fail(&"missing_special_text", {"special": SPECIAL_BANK_OF_MOM})
+			return _mom_result(_stage_internal_text(second, false, {
+				"special": SPECIAL_BANK_OF_MOM, "next_internal_texts": [third],
+			}))
+		MOM_IS_THIS_ABOUT_YOUR_MONEY:
+			return _mom_result(_bank_of_mom(
+				MOM_ACCESS_BANK if mom_yes else MOM_JUST_DO_WHAT_YOU_CAN
+			))
+		MOM_STOP_OR_START_SAVING:
+			_staged_mom_savings_flags = MOM_ACTIVE \
+				| (MOM_SAVING_SOME_MONEY if mom_yes else 0)
+			if not mom_yes:
+				return _mom_result(_bank_of_mom(MOM_JUST_DO_WHAT_YOU_CAN))
+			return _mom_result(_mom_box("start_saving_money", MOM_EXIT))
+	return _fail(&"invalid_bank_of_mom_state", {"state": mom_state})
+
+
+## Her own boxes, each with the jumptable index that follows it.
+func _resume_mom_after_text(_choice: int) -> Dictionary:
+	var mom_next: int = int(_pending["bank_of_mom_after_text"])
+	_pending = {}
+	_finish_after_pending = false
+	return _mom_result(_bank_of_mom(mom_next))
+
+
+## `Mom_SetUpDepositMenu` stands behind the question rather than over it.
+func _resume_mom_dial(_choice: int) -> Dictionary:
+	var mom_mode: StringName = StringName(_pending["bank_of_mom_dial"])
+	_pending = {}
+	_finish_after_pending = false
+	_stage_runtime_request(&"mom_bank_dial_requested", {
+		"special": SPECIAL_BANK_OF_MOM,
+		"mode": mom_mode,
+		"saved": _money_balance(ACCOUNT_MOMS_MONEY),
+		"held": _money_balance(ACCOUNT_YOUR_MONEY),
+	})
+	return _waiting_result()
+
+
+## A box the prize counter printed, which goes back to her list rather than
+## ending: `.print` falls into `.loop`.
+func _resume_buena_after_text(_choice: int) -> Dictionary:
+	var after_special: int = int(_pending["buena_prize_after_text"])
+	_pending = {}
+	_finish_after_pending = false
+	return _stage_buena_prize_menu(after_special)
+
+
+## `PokeSeer` prints its opening box, waits for a button and only then opens the
+## list; the box is not the list's own backdrop.
+func _resume_party_selection(_choice: int) -> Dictionary:
+	var selection: Dictionary = _pending["party_selection_after_text"]
+	_pending = {}
+	_finish_after_pending = false
+	_stage_runtime_request(&"party_selection_requested", selection)
+	return _waiting_result()
+
+
+## describedecoration is a local script in the cartridge. Its text must be
+## acknowledged before the one decoration that needs a host, the town map, calls
+## OverworldTownMap, which preserves the source's
+## opentext/waitbutton/special/closetext/end order.
+func _resume_special_after_text(_choice: int) -> Dictionary:
+	var decoration_special: int = int(_pending.get("special_after_text", -1))
+	_pending = {}
+	_finish_after_pending = false
+	var special_result: Dictionary = _execute_special(decoration_special)
+	if not bool(special_result.get("ok", false)):
+		return _fail(
+			StringName(special_result.get("reason", &"special_failed")), special_result
+		)
+	return _waiting_result() if _pending else advance()
+
+
+## The five Ask*Scripts TryTileCollisionEvent reaches, all one shape: opentext,
+## writetext, yesorno, iftrue <the move>, closetext, end.
+func _resume_field_move_text(_choice: int) -> Dictionary:
+	return _stage_yes_or_no(&"field_move_ask", {
+		"move": int(_pending.get("move", 0)), "slot": int(_pending.get("slot", -1)),
+	})
+
+
+func _resume_field_move_choice(choice: int) -> Dictionary:
+	var asked_move: int = int(_pending.get("move", 0))
+	var asked_slot: int = int(_pending.get("slot", -1))
+	_pending = {}
+	_script_value = 1 if choice == 0 else 0
+	if choice == 0:
+		## `iftrue Script_Cut` and its four counterparts. The move itself belongs
+		## to the host, which owns the staged request and the commit the party
+		## submenu already reaches.
+		_emit_runtime_event(&"field_move_confirmed", {
+			"move": asked_move, "slot": asked_slot,
+		})
+	return _complete()
+
+
+func _resume_remember_password(choice: int) -> Dictionary:
+	_pending = {}
+	_script_value = 1 if choice == 0 else 0
+	_stage_frame_wait(ASK_REMEMBER_PASSWORD_CLOSE_FRAMES)
+	return _waiting_result()
+
+
+## AskRockSmashScript, the same opentext/writetext/yesorno shape.
+func _resume_rock_smash_text(_choice: int) -> Dictionary:
+	return _stage_yes_or_no(&"rock_smash_ask", {"slot": int(_pending.get("slot", -1))})
+
+
+func _resume_rock_smash_choice(choice: int) -> Dictionary:
+	var smash_slot: int = int(_pending.get("slot", -1))
+	_pending = {}
+	## `iftrue RockSmashScript`, and a no falls to closetext/end.
+	_script_value = 1 if choice == 0 else 0
+	if choice != 0:
+		return _complete()
+	_stage_rock_smash_used(smash_slot)
+	return _waiting_result()
+
+
+## RockSmashScript's `closetext`, `special WaitSFX` and `playsound SFX_STRENGTH`.
+## The rest of the script waits on the sound the way a trainer's approach waits
+## on its encounter music.
+func _resume_rock_smash_used(_choice: int) -> Dictionary:
+	_pending = {}
+	_rock_smash_after_sound = true
+	_stage_audio_request(&"sound", {"address": SFX_STRENGTH})
+	return _waiting_result()
+
+
+## The yesorno an Ask*Script offers behind the box it has just printed, carrying
+## [param values] through to the answer.
+func _stage_yes_or_no(tag: StringName, values: Dictionary) -> Dictionary:
+	_pending = {
+		"type": &"choice",
+		"command": &"yesorno",
+		"choices": [&"yes", &"no"],
+		"text": _standing_text,
+		"special": tag,
+		"source": _request.duplicate(true),
+	}
+	for key: Variant in values:
+		_pending[key] = values[key]
+	return _waiting_result()
 
 
 ## Completes a host-owned runtime request without treating a button press as its
@@ -3462,16 +3554,12 @@ func _execute_special(special: int) -> Dictionary:
 		SPECIAL_FADE_OUT_TO_WHITE, SPECIAL_BATTLE_TOWER_FADE, SPECIAL_FADE_OUT_TO_BLACK, \
 		SPECIAL_FADE_IN_FROM_WHITE, SPECIAL_FADE_IN_FROM_BLACK:
 			## `FadeOutToWhite` is 46 in both pins, since Crystal's inserted
-			## `BattleTowerFade` sits at 47, so it needs no profile split;
-			## `FadeInFromWhite` is 49 here and 48 in Gold/Silver, which
-			## special_index() already normalizes (maps/OlivineLighthouse6F.asm's
-			## Amphy cure runs 46 then 49).
-			##
-			## Each of the five is `GetTimePalFade` and then four rows of the
-			## fade table, and none of them is free: `ConvertTimePals*HL` spends
-			## `ld c, 2` on every row and `BattleTowerFade`'s own loop `ld c, 7`,
-			## so the script holds for the whole walk the way it does on the
-			## cartridge. `FillWhiteBGColor` is the two white fades' alone.
+			## `BattleTowerFade` sits at 47; `FadeInFromWhite` is 49 here and 48 in
+			## Gold/Silver, which `special_index()` already normalizes. Each of the
+			## five is `GetTimePalFade` and then four rows of the fade table, and
+			## none is free: `ConvertTimePals*HL` spends `ld c, 2` on every row, so
+			## the script holds for the whole walk the way it does on the cartridge.
+			## `FillWhiteBGColor` is the two white fades' alone.
 			var orders: Array[int] = FADE_ORDERS_OF[special]
 			var step_frames: int = Gen2WorldPalette.BATTLE_TOWER_FADE_STEP_FRAMES \
 				if special == SPECIAL_BATTLE_TOWER_FADE \
@@ -3487,28 +3575,22 @@ func _execute_special(special: int) -> Dictionary:
 			})
 		51, 52, 53, 55, 56, 94, 152, 157, 158, 164:
 			## Sprite reload, palette reload and the dummied trainer-ranking
-			## bookkeeping affect presentation or source-only counters, not
-			## scene-free state. `LoadUsedSpritesGFX` (94), `UpdateSprites` (55),
-			## `UpdatePlayerSprite` (56), `ReloadSpritesNoPalettes` (51) and
-			## `RefreshSprites` (158) reload the sprite set a `variablesprite`
-			## just changed. `ClearBGPalettes` (52), `UpdateTimePals` (53),
-			## `SetPlayerPalette` (152) and `LoadMapPalettes` (164) are the
-			## palette pair `BugContestResultsWarpScript` and the day/night
-			## scripts open with; the renderer takes its palettes from the map
-			## and the clock, so all four are presentation here too.
+			## bookkeeping affect presentation or source-only counters rather than
+			## scene-free state. `LoadUsedSpritesGFX`, `UpdateSprites`,
+			## `UpdatePlayerSprite`, `ReloadSpritesNoPalettes` and `RefreshSprites`
+			## reload the sprite set a `variablesprite` just changed;
+			## `ClearBGPalettes`, `UpdateTimePals`, `SetPlayerPalette` and
+			## `LoadMapPalettes` are the palette pair the day/night scripts open
+			## with, and the renderer takes its palettes from the map and the clock.
 			_emit_runtime_event(&"presentation_special_applied", {"special": special})
 		95, 100:
-			## `PlaySlowCry` (95) is `LoadCry` with the record's own pitch
-			## lowered by `$140` and its length raised by `$60`, and
-			## `PlayCurMonCry` (100) is `PlayMonCry` straight. Neither writes
-			## anything back, so what they owe is the sound and the `WaitSFX`
-			## each ends on, which is `Script_cry`'s own request.
-			##
-			## They do not read the same byte. 95 is `ld a, [wScriptVar]`, which
-			## the `setval` in front of it has just set; 100 is
-			## `ld a, [wCurPartySpecies]`, and all four of its scripts are a
-			## grooming routine's, which leaves a `HappinessData_*` row rather
-			## than a species in wScriptVar.
+			## `PlaySlowCry` (95) is `LoadCry` with the record's own pitch lowered
+			## by `$140` and its length raised by `$60`, and `PlayCurMonCry` (100) is
+			## `PlayMonCry` straight. Neither writes anything back, so what they owe
+			## is the sound and the `WaitSFX` each ends on. They do not read the same
+			## byte: 95 is `ld a, [wScriptVar]`, which the `setval` in front of it
+			## has just set, and 100 is `ld a, [wCurPartySpecies]`, all four of whose
+			## scripts are a grooming routine's.
 			return _stage_audio_request(&"cry", {
 				"special": special,
 				"species": _script_value if special == 95 else _cur_party_species,
@@ -4219,13 +4301,11 @@ func _buena_prize_box(special: int, name: String, closing: bool) -> Dictionary:
 
 ## `BankOfMom`'s jumptable, one index at a time (`engine/events/mom.asm`). Every
 ## state either prints a box, opens her menu or opens the dial, so the source's
-## `.loop` is the chain of pendings each of them leaves behind.
-##
-## `DSTChecks` is the one branch not built, and it is a save-format bump: `.nope`
-## asks whether to move the clock an hour, which needs a saved `wDST` bit and the
-## `wStartHour`/`wStartDay` shift behind it, and nothing here carries either. The
-## branch taken instead is `.JustDoWhatYouCan`, which is what a clock nowhere
-## near a boundary reaches.
+## `.loop` is the chain of pendings each of them leaves behind. `DSTChecks` is the
+## one branch not built, and it is a save-format bump: `.nope` asks whether to move
+## the clock an hour, which needs a saved `wDST` bit and the `wStartHour` shift
+## behind it. The branch taken instead is `.JustDoWhatYouCan`, which is what a
+## clock nowhere near a boundary reaches.
 func _bank_of_mom(index: int) -> Dictionary:
 	match index:
 		MOM_CHECK_INITIALIZED:
@@ -4310,14 +4390,12 @@ func _mom_yes_no(name: String, state_index: int) -> Dictionary:
 
 
 ## `.StoreMoney`'s tail and `.TakeMoney`'s, which differ only in which account is
-## which. Three things the source does that a rewrite loses:
-##
-## - `GiveMoney` here adds into `wStringBuffer2` rather than into an account, so
-##   the ceiling is tested against the balance the transaction would leave and
-##   nothing is written when it fails.
-## - Both refusals `ret` with `wJumptableIndex` unchanged, so her question is
-##   asked again and the dial reopens rather than the routine ending.
-## - A dial left at zero is `.CancelDeposit`, the same branch B takes.
+## which. Three things the source does that a rewrite loses: `GiveMoney` adds into
+## `wStringBuffer2` rather than into an account, so the ceiling is tested against
+## the balance the transaction would leave and nothing is written when it fails;
+## both refusals `ret` with `wJumptableIndex` unchanged, so her question is asked
+## again and the dial reopens; and a dial left at zero is `.CancelDeposit`, the
+## same branch B takes.
 func _finish_mom_bank_dial(mode: StringName, amount: int) -> Dictionary:
 	var deposit: bool = mode == MOM_DIAL_DEPOSIT
 	var state_index: int = MOM_STORE_MONEY if deposit else MOM_TAKE_MONEY
@@ -5130,14 +5208,11 @@ func _finish_deferred_party_selection(
 
 ## `Script_givepokemail`, which copies the pointer's `db item` and the
 ## `MAIL_MSG_LENGTH` bytes behind it into `wMonMailMessageBuffer`, and
-## `GivePokeMail`, which hangs both on the last party member. Nothing is asked
-## and nothing is answered: the routine writes no wScriptVar and cannot fail, so
-## the write is an event the way a happiness change is.
-##
-## The mail's author, ID and species are the member's own `wPartyMonOTs`,
-## `wPartyMon1ID` and `wCurPartySpecies`, so the screen reads the first two off
-## the row it is writing and the runner carries the third, which the `givepoke`
-## in front of this one left standing.
+## `GivePokeMail`, which hangs both on the last party member. Nothing is asked and
+## nothing is answered: the routine writes no wScriptVar and cannot fail, so the
+## write is an event the way a happiness change is. The mail's author, ID and
+## species are the member's own, so the screen reads the first two off the row it
+## is writing and the runner carries the third.
 func _give_poke_mail(command: Dictionary) -> Dictionary:
 	var bytes: PackedByteArray = _mail_bytes(int(command.get("address", 0)))
 	if bytes.size() < Gen2SaveMail.MESSAGE_LENGTH + 1:
@@ -5359,17 +5434,13 @@ func _emit_object_event(event_type: StringName, values: Dictionary) -> void:
 	_events.append(event)
 
 
-## engine/events/overworld.asm's AskStrengthScript, synthesized.
-##
-## StrengthBoulderScript is `farsjump AskStrengthScript`, whose first command is
-## `callasm TryStrengthOW`. `callasm` has no runner here and its operand is a
-## link-time address absent from the pinned disassemblies, so the seam sits on
-## the standard-script index instead, which is 14 in both pins and verified by
-## the imported table. The synthesized body is the same shape trainer object
-## dispatch takes: source sequence, project metadata.
-##
-## Every branch of AskStrengthScript terminates, so this never returns to a
-## caller and jumpstd and callstd resolve alike.
+## engine/events/overworld.asm's AskStrengthScript, synthesized. StrengthBoulderScript
+## is `farsjump AskStrengthScript`, whose first command is `callasm TryStrengthOW`;
+## `callasm` has no runner here and its operand is a link-time address absent from
+## the pinned disassemblies, so the seam sits on the standard-script index instead,
+## which is 14 in both pins and verified by the imported table. The synthesized
+## body is the same shape trainer object dispatch takes. Every branch of
+## AskStrengthScript terminates, so this never returns to a caller.
 func _stage_strength_boulder() -> Dictionary:
 	var party: Dictionary = _request.get("party", {})
 	if party.is_empty():
@@ -5398,24 +5469,14 @@ func _stage_strength_boulder() -> Dictionary:
 	return {"ok": true}
 
 
-## engine/events/misc_scripts.asm's FindItemInBallScript, synthesized.
-##
-## An item ball's script pointer is not code: it is the `itemball` macro's
-## `db item, quantity`, which `ObjectEventTypeArray.itemball` copies into
-## wItemBallData before raising PLAYEREVENT_ITEMBALL. So the seam is the object
-## type, not a script address, and Gen2WorldAPI hands the two decoded bytes over
-## as an item_ball request. The script's own first command is `callasm
-## .TryReceiveItem` and both its texts are engine text rather than map text, so
-## the body is replayed here the way AskStrengthScript's is.
-##
-## Source order is receive, `disappear LAST_TALKED`, then the text, so the ball
-## is already gone when the box is drawn. Behind that text the script plays
-## SFX_ITEM by name rather than through `specialsound` and then runs
-## `itemnotify`; its own `pause 60` is the acknowledge here, since nothing draws
-## a text box that closes itself.
-##
-## The receive seam preserves the source's no-room branch without committing
-## the item, hiding the ball, or setting its event flag.
+## engine/events/misc_scripts.asm's FindItemInBallScript, synthesized. An item
+## ball's script pointer is not code: it is the `itemball` macro's
+## `db item, quantity`, which is copied into wItemBallData before
+## PLAYEREVENT_ITEMBALL is raised, so the seam is the object type rather than a
+## script address. Source order is receive, `disappear LAST_TALKED`, then the
+## text, so the ball is already gone when the box is drawn; its own `pause 60` is
+## the acknowledge here, since nothing draws a text box that closes itself. The
+## receive seam preserves the no-room branch without committing anything.
 func _stage_item_ball() -> Dictionary:
 	var item: int = int(_request.get("item", 0))
 	var quantity: int = maxi(1, int(_request.get("quantity", 1)))
@@ -5505,20 +5566,14 @@ func _fruit_tree_picked(tree_id: int) -> bool:
 	return state.fruit_tree_picked(tree_id)
 
 
-## HiddenItemScript, the BGEVENT_ITEM half of the same source area. The pointer
-## is the `hiddenitem` macro's `dwb event, item`, which `.itemifset` copies into
-## wHiddenItemData, so Gen2WorldAPI hands the decoded flag and item over the way
-## it hands over an item ball's two bytes.
-##
-## The differences from _stage_item_ball() are the flag and the object. There is
-## no object to hide, since the item is a background event rather than a ball,
-## and the flag `callasm SetMemEvent` writes is the record's own rather than the
-## object's. `_PlayerFoundItemText` is `_FoundItemText`'s wording, so the two
-## share FOUND_ITEM_TEXT and its <PLAYER> boundary.
-##
-## The source writes the text before `giveitem` and sets the flag after it. A
-## full pocket leaves both the item and the event flag untouched, then shows the
-## source's no-space branch in one scene-free text pause.
+## HiddenItemScript, the BGEVENT_ITEM half of the same source area. The pointer is
+## the `hiddenitem` macro's `dwb event, item`, handed over the way an item ball's
+## two bytes are. The differences from [method _stage_item_ball] are the flag and
+## the object: there is no object to hide, and the flag `callasm SetMemEvent`
+## writes is the record's own rather than the object's. `_PlayerFoundItemText` is
+## `_FoundItemText`'s wording, so the two share one constant. The source writes the
+## text before `giveitem` and sets the flag after it, so a full pocket leaves both
+## the item and the flag untouched.
 func _stage_hidden_item() -> Dictionary:
 	var item: int = int(_request.get("item", 0))
 	var flag: int = int(_request.get("flag", -1))
@@ -5593,16 +5648,11 @@ func _stage_strength_used(slot: int) -> Dictionary:
 
 
 ## engine/overworld/events.asm's TryTileCollisionEvent, from `.cut` on: the five
-## field-move branches a faced tile can reach, each of which is a `Try*OW` gate
-## and then an `Ask*Script`. Synthesized for the reason AskStrengthScript is,
-## and dispatched on the request kind rather than a standard-script index
-## because these are reached through `CallScript` rather than `jumpstd`.
-##
-## Which move the tile offers is [Gen2WorldAPI]'s answer, since only it can read
-## the map; so is `tile_ok`, the tile-shaped half of the gate that
-## TryWhirlpoolMenu and CheckMapCanWaterfall own. What is left here is the party
-## and the badge, which is what this runner already reads for the boulder.
-##
+## field-move branches a faced tile can reach, each a `Try*OW` gate and then an
+## `Ask*Script`. Synthesized for the reason AskStrengthScript is, and dispatched on
+## the request kind rather than a standard-script index because these are reached
+## through `CallScript`. Which move the tile offers is [Gen2WorldAPI]'s answer,
+## since only it can read the map; what is left here is the party and the badge.
 ## Three of the five have a refusal text and two do not: TryHeadbuttOW and
 ## TrySurfOW return no carry and the player event ends with nothing shown.
 func _stage_field_move_prompt() -> Dictionary:
@@ -5685,12 +5735,10 @@ func _field_move_prompt_refusal(move: int) -> String:
 ## engine/events/overworld.asm's AskRockSmashScript, synthesized for the same
 ## reason AskStrengthScript is: SmashRockScript is `farsjump AskRockSmashScript`
 ## and its first command is `callasm HasRockSmash`, whose operand is a link-time
-## address absent from the pins. The seam is the standard-script index, 15 in
-## both.
-##
-## `HasRockSmash` is CheckPartyMove and nothing else, so unlike the boulder
-## there is no badge and no already-active flag to check: the whole gate is
-## whether a party member knows ROCK SMASH.
+## address absent from the pins, so the seam is the standard-script index, 15 in
+## both. `HasRockSmash` is CheckPartyMove and nothing else, so unlike the boulder
+## there is no badge and no already-active flag to check: the whole gate is whether
+## a party member knows ROCK SMASH.
 func _stage_smash_rock() -> Dictionary:
 	var party: Dictionary = _request.get("party", {})
 	if party.is_empty():

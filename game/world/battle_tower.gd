@@ -259,14 +259,12 @@ static func _values_are_unique(values: Array, eggs: Array) -> bool:
 
 
 ## `LoadOpponentTrainerAndPokemon`: a trainer this streak has not sampled, and
-## three Pokemon of the chosen level group that share no species or held item
-## with each other or with either of the last two teams.
-##
-## The sampled trainer is written into `sBTTrainers[beaten]` and the two
-## previous-team lists shift, so calling this twice in a row gives two different
-## opponents the way the cartridge's own streak does. Answers
-## { trainer, name, class, mons }, `mons` being three [Gen2SaveMon], or an empty
-## Dictionary when the cartridge has no tower.
+## three Pokemon of the chosen level group that share no species or held item with
+## each other or with either of the last two teams. The sampled trainer is written
+## into `sBTTrainers[beaten]` and the two previous-team lists shift, so calling
+## this twice in a row gives two different opponents the way the cartridge's own
+## streak does. Answers { trainer, name, class, mons }, or an empty Dictionary
+## when the cartridge has no tower.
 func load_opponent(data: GameData, random: RandomNumberGenerator) -> Dictionary:
 	if data == null or not data.has_battle_tower():
 		return {}

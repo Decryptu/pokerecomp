@@ -6,13 +6,8 @@ extends SceneTree
 ##       crystal /tmp/dex.png [list|entry|option|search|results|unown] [presses]
 ##
 ## The world behind it is a new game with every species seen and every second one
-## caught, which is what puts a full listing, both row states and a real entry on
-## screen at once. [presses] is a
-## `u,d,l,r,a,b,sel,start` list driven in before the shot, and `f<n>` spends n
-## hardware frames, which is how the arrow is caught blinking either way.
-##
-## Headless: the screen composes into an [Image] rather than through a viewport,
-## so no window and no settle are needed.
+## caught, which puts a full listing, both row states and a real entry on screen at
+## once. `f<n>` in [presses] spends n hardware frames, which catches the arrow blink.
 
 const NEW_BARK_GROUP: int = 24
 const NEW_BARK_MAP: int = 7

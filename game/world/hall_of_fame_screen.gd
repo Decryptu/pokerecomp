@@ -2,20 +2,13 @@ class_name Gen2HallOfFameScreen
 extends Control
 
 ## The screen behind `halloffame`, embedded in the overworld the way the PC and
-## the mart overlays are.
-##
-## `engine/events/halloffame.asm`'s HallOfFame saves, walks the party one panel
-## at a time and then shows the player's own with `ProfOaksPCRating` printed into
-## it, and finally runs the credits. What is here is that walk, advanced by A.
-## The credits, the backpic and frontpic slides and the palette rotations are
-## not.
-##
-## `_HallOfFamePC` reuses the same walk over a stored record ([member viewer]);
-## the record itself is [member Gen2SaveData.hall_of_fame].
-##
-## The source pauses 60 frames per panel and moves on by itself. This waits for
-## a key instead: there is no animation to watch yet, so a timer would only be a
-## delay.
+## the mart overlays are. `HallOfFame` saves, walks the party one panel at a time
+## and then shows the player's own with `ProfOaksPCRating` printed into it. What
+## is here is that walk, advanced by A; the credits, the two pic slides and the
+## palette rotations are not. `_HallOfFamePC` reuses the same walk over a stored
+## record. The source pauses 60 frames per panel and moves on by itself; this
+## waits for a key instead, since there is no animation to watch yet and a timer
+## would only be a delay.
 
 signal closed()
 

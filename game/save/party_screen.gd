@@ -1,18 +1,14 @@
 class_name Gen2PartyScreen
 extends Control
 
-## The party menu, in the two places it is opened from.
-##
-## Embedded in the overworld it is `PartyMenu` itself: `StartMenu_Pokemon` runs
-## `InitPartyMenuWithCancel`, `WritePartyMenuTilemap` and `PlacePartyMenuText`,
-## and `PokemonActionSubmenu` opens `MonSubmenu`'s box over the bottom of it. So
+## The party menu, in the two places it is opened from. Embedded in the overworld
+## it is `PartyMenu` itself: `StartMenu_Pokemon` runs `InitPartyMenuWithCancel`
+## and `PokemonActionSubmenu` opens `MonSubmenu`'s box over the bottom of it, so
 ## the embedded view is [Gen2PartyMenuPage] and [Gen2MenuPage] at hardware
-## resolution, in a [Gen2Screen] of its own, and the model below is what
-## `PartyMenuSelect` and `MonMenuLoop` answer.
-##
-## The launcher's own party view, which is not a cartridge screen, keeps the
-## window-resolution panel: it is opened from the save slots with a mouse and
-## carries the PC storage and development battle buttons that no cartridge has.
+## resolution and the model below is what `PartyMenuSelect` answers. The
+## launcher's own party view, which is not a cartridge screen, keeps the
+## window-resolution panel and carries the PC storage and development battle
+## buttons that no cartridge has.
 
 ## Emitted only when embedded, mirroring Gen2BoxScreen.closed: the overworld
 ## start menu resumes on this rather than the screen navigating away with
@@ -242,17 +238,13 @@ func party_snapshot() -> Dictionary:
 	}
 
 
-## engine/pokemon/mon_submenu.asm's GetMonSubmenuItems for one party member.
-##
-## An egg gets three entries and no moves. Otherwise the four move slots are
-## walked in the mon's own slot order, appending every move that appears in
-## MonMenuOptions' field-move rows, then the fixed options follow. Every row is
-## acted on: the screens STATS and MOVE open are built, so a row that cannot be
-## chosen no longer exists here.
-##
-## [param slot] is one-based and [param in_battle] is whether the list belongs to
-## a turn: both only decide which mod rows are offered, and neither changes a
-## cartridge row.
+## engine/pokemon/mon_submenu.asm's GetMonSubmenuItems for one party member. An
+## egg gets three entries and no moves; otherwise the four move slots are walked
+## in the mon's own slot order, appending every move that appears in
+## MonMenuOptions' field-move rows, and the fixed options follow. Every row is
+## acted on, since the screens STATS and MOVE open are built. [param slot] is
+## one-based and [param in_battle] is whether the list belongs to a turn: both
+## only decide which mod rows are offered.
 static func submenu_items_for(
 	data: GameData, mon: Gen2SaveMon, slot: int = 0, in_battle: bool = false
 ) -> Array:

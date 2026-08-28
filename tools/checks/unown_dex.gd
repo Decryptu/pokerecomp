@@ -5,16 +5,11 @@ var _r: RefCounted = null
 ## Verifies the Unown dex against freshly imported real caches: `UnownWords`, the
 ## twenty-six pics `Pokedex_LoadUnownFrontpicTiles` draws from, `GetUnownLetter`
 ## over every DV word a Pokemon can carry, and `UnownWalls` on the eight Ruins of
-## Alph patterns that ask for one.
-##
-## The whole corpus rather than a sample: all 65,536 DV words on each cartridge,
-## every letter, every form's picture and every chamber wall. The words are a
-## plain byte run behind their own pointer table, so a wrong offset lands on
-## neighbouring data that still reads as letters; what says it is the right run
-## is that each word opens on its own letter, that the run starts where the table
-## ends, and that the three cartridges agree word for word.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- unown_dex
+## Alph patterns that ask for one. The whole corpus rather than a sample: all 65,536
+## DV words on each cartridge. The words are a plain byte run behind their own
+## pointer table, so a wrong offset lands on neighbouring data that still reads as
+## letters; what says it is the right run is that each word opens on its own letter
+## and that the three cartridges agree word for word.
 
 ## `data/pokemon/unown_words.asm`'s first and last, either side of the run.
 const FIRST_WORD: String = "ANGRY"

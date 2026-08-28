@@ -2,23 +2,13 @@ class_name Gen2PackPage
 extends RefCounted
 
 ## The pack's own tile screen (`Pack_InitGFX`, engine/items/pack.asm).
-##
-## [Gen2WorldPack] owns the pockets and what a row may do; this is the picture,
-## the way [Gen2PokedexPage] is the dex's. The screen is a 20x18 grid of tile
-## numbers plus one palette per cell, since `_CGB_PackPals` fills the attrmap
-## with six palettes at once and a single-palette blit cannot say what it draws.
-##
-## `Pack_InitGFX`'s VRAM window:
-##
-## | Tiles | Contents |
-## |---|---|
-## | $00-$4f | `PackMenuGFX`, the background, the header row and the pocket names |
-## | $50-$5e | the current pocket's picture, which `DrawPackGFX` swaps per pocket |
-## | $80+ | the font, so printed text addresses glyphs as usual |
-##
-## The copy is `$60 tiles` of an 80-tile sheet, so the sixteen it lands on $50
-## are `PackGFX`'s own first sixteen; `DrawPackGFX` overwrites fifteen of them
-## before the screen is shown and no tilemap names the sixteenth.
+## [Gen2WorldPack] owns the pockets and what a row may do; this is the picture.
+## The screen is a 20x18 grid of tile numbers plus one palette per cell, since
+## `_CGB_PackPals` fills the attrmap with six palettes at once. The VRAM window is
+## `PackMenuGFX` at $00, the current pocket's picture at $50 and the font from
+## $80. The copy is `$60 tiles` of an 80-tile sheet, so the sixteen landing on $50
+## are `PackGFX`'s own first sixteen; `DrawPackGFX` overwrites fifteen of them and
+## no tilemap names the sixteenth.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20

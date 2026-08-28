@@ -1,16 +1,13 @@
 class_name Gen2TitlePage
 extends RefCounted
 
-## The title screen, on the tile grid the hardware uses.
-##
-## Two screens under one name, the way [Gen2TitleScene] is. Crystal draws its
-## logo with `DrawTitleGraphic`, keeps a strip of Suicune under it that
-## `LoadSuicuneFrame` re-points every eighth frame, and stands the crystal in
-## front as thirty 8x16 objects. Gold and Silver write `TitleScreenTilemap`
-## straight into the BG map and fly one bird over it.
-##
-## [Gen2TitleScene] owns the frames and the positions; this owns the pixels.
-## Node-free like the other `render/*_page.gd`.
+## The title screen, on the tile grid the hardware uses. Two screens under one
+## name, the way [Gen2TitleScene] is: Crystal draws its logo with
+## `DrawTitleGraphic`, keeps a strip of Suicune under it that `LoadSuicuneFrame`
+## re-points every eighth frame, and stands the crystal in front as thirty 8x16
+## objects, while Gold and Silver write `TitleScreenTilemap` straight into the BG
+## map and fly one bird over it. [Gen2TitleScene] owns the frames and the
+## positions; this owns the pixels.
 
 const TILE: int = Gen2Tiles.TILE_WIDTH
 const COLUMNS: int = 20
@@ -243,19 +240,12 @@ static func from_data(data: GameData) -> Gen2TitlePage:
 
 ## What a screen wider than the hardware's own draws behind it: [param view]
 ## pixels of background, with the 160x144 rectangle at [param origin] left to
-## [method draw].
-##
-## Nothing is invented and nothing is stretched. `LoadTitleScreenTilemap` writes
-## all thirty-two columns of the BG map and the hardware only ever shows twenty,
-## so the twelve the screen never reached are the cartridge's own answer to a
-## wider window: sky over the logo's rows, and the cloud bank's four-tile pattern
-## carried on. Past those twelve the band repeats, which is seamless because
-## twelve is three of that pattern; above and below, the first and last rows do,
-## which is the same field either way. Crystal writes no tilemap at all and its
-## map is cleared, so its surround is the colour the cartridge leaves there.
-##
-## Not the whole map through a wider window: it is 256 pixels across and wraps,
-## so a buffer past that would bring the logo back round a second time.
+## [method draw]. Nothing is invented and nothing is stretched:
+## `LoadTitleScreenTilemap` writes all thirty-two columns and the hardware only
+## shows twenty, so the twelve the screen never reached are the cartridge's own
+## answer to a wider window. Past those twelve the band repeats, seamless because
+## twelve is three of its pattern. Not the whole map through a wider window: it is
+## 256 pixels across and wraps, so the logo would come back round a second time.
 func draw_backdrop(view: Vector2i, origin: Vector2i) -> Image:
 	var width: int = maxi(view.x, 1)
 	var height: int = maxi(view.y, 1)

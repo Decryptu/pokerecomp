@@ -2,14 +2,10 @@ class_name Gen2UnownWallPage
 extends RefCounted
 
 ## `DisplayUnownWords`' box on the hardware tile grid: `MenuBox`'s frame with
-## [Gen2UnownWall]'s 2x2 letter blocks placed in it.
-##
-## The letters come out of the chamber's own tileset strip rather than a font,
-## and wear `PAL_BG_BROWN` whatever the tileset's palette map says about those
-## tile numbers, which is what `_DisplayUnownWords_FillAttr` writes.
-##
-## Node-free: the image is the whole product, so the box can be read back
-## headless.
+## [Gen2UnownWall]'s 2x2 letter blocks placed in it. The letters come out of the
+## chamber's own tileset strip rather than a font, and wear `PAL_BG_BROWN`
+## whatever the tileset's palette map says about those tile numbers, which is what
+## `_DisplayUnownWords_FillAttr` writes. Node-free.
 
 const TILE: int = Gen2Font.TILE
 

@@ -6,10 +6,8 @@ extends SceneTree
 ##   Godot --path . -s res://tools/screenshot.gd -- <scene> <output.png> [frames] [method] [times]
 ##
 ## The optional method/times pair calls a no-argument method on the scene root
-## before capturing, which is how a screen is photographed mid-interaction.
-##
-## This opens a real window for a moment: rendering needs a display, so it cannot
-## run under --headless.
+## before capturing, which is how a screen is photographed mid-interaction. Opens a
+## real window for a moment: rendering needs a display.
 
 const DEFAULT_FRAMES: int = 12
 const WINDOW_SIZE := Vector2i(1152, 648)

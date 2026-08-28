@@ -1,19 +1,14 @@
 class_name Gen2AISwitch
 extends RefCounted
 
-## Whether a trainer pulls its Pokémon out, and which one it sends instead.
+## Whether a trainer pulls its Pokemon out, and which one it sends instead:
+## `CheckAbleToSwitch` and its five party scans in `engine/battle/ai/switch.asm`,
+## plus the three frequency gates in `items.asm`.
 ##
-## `CheckAbleToSwitch` and its five party scans in
-## [code]engine/battle/ai/switch.asm[/code], plus the three frequency gates in
-## [code]engine/battle/ai/items.asm[/code] that decide how often the answer is
-## acted on.
-##
-## The cartridge works in six-bit masks over the enemy party and reuses one
-## variable as both a score and a party index. Here the masks are arrays of party
-## indices and the two uses are separate return values, which changes nothing:
-## every scan keeps party order, and every place the cartridge converts a mask to
-## an index it takes the lowest index set, which is what every scan here answers
-## with too.
+## The cartridge works in six-bit masks and reuses one variable as both a score
+## and a party index; here the masks are arrays of indices and the two uses are
+## separate return values. Nothing changes: every scan keeps party order, and
+## every mask-to-index conversion takes the lowest index set.
 
 ## `BASE_AI_SWITCH_SCORE`, where [method matchup_score] starts before anything
 ## nudges it.
@@ -118,18 +113,13 @@ static func evaluate(battle: Gen2Battle) -> Dictionary:
 	return _no_counter_choice(battle, alive)
 
 
-## `CheckAbleToSwitch`'s opening branch: the turn before Perish Song finishes
-## the Pokémon that is out, get somebody else in. Empty means the branch did not
-## apply and the matchup half decides instead.
-##
-## Only a count of exactly one qualifies. Two is too early and zero has already
-## killed, so a Pokémon that will survive the song is left to fight.
-##
-## The tier is [constant TIER_HIGH] either way, which is the whole point of the
-## branch: what the shortlist changes is who comes in, not how much the AI wants
-## the switch. With a super-effective answer standing it is that Pokémon; without
-## one, `.not_2` walks the alive mask from the top and takes the first bit, which
-## is the lowest party index still standing, shortlist or no shortlist.
+## `CheckAbleToSwitch`'s opening branch: the turn before Perish Song finishes the
+## Pokemon that is out, get somebody else in. Empty means the matchup half decides
+## instead. Only a count of exactly one qualifies; two is too early and zero has
+## already killed. The tier is [constant TIER_HIGH] either way, so what the
+## shortlist changes is who comes in rather than how much the AI wants the switch:
+## without a super-effective answer, `.not_2` takes the lowest party index still
+## standing.
 static func _perish_choice(battle: Gen2Battle, alive: Array) -> Dictionary:
 	var enemy: Gen2BattleMon = battle.mon(Gen2Battle.ENEMY)
 	if not Gen2Substatus.has(enemy.substatus, Gen2Substatus.PERISH):

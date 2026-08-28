@@ -27,16 +27,13 @@ const PP_UP_MASK: int = 0xC0
 const PLAYER_GENDER_MASK: int = 0x01
 
 ## `player_id` is wPlayerID, the two big-endian bytes wPlayerData opens with in
-## both pins (ram/wram.asm), which is why it shares an address with
-## `primary_data_start`.
-##
+## both pins, which is why it shares an address with `primary_data_start`.
 ## `player_gender` is Crystal's alone and sits nowhere near the rest: it is
 ## `sCrystalData`, its own SRAM section past the Active Box, Link Battle and Hall
-## of Fame ones, so no checksum covers it and `_SaveData` is the only routine
-## that ever writes it. `01:be3d` in `pokecrystal11.sym`, which is bank 1 offset
-## `0x3E3D` in a 32 KiB image; that build is byte identical to the cartridge this
-## project verifies, so the address is the linker's rather than a guess. Gold and
-## Silver have no such section and no such byte: their player is always male.
+## of Fame ones, so no checksum covers it and `_SaveData` is the only routine that
+## writes it. `01:be3d` in `pokecrystal11.sym`, bank 1 offset `0x3E3D` in a 32 KiB
+## image, from a build byte identical to the cartridge this project verifies. Gold
+## and Silver have no such section: their player is always male.
 const LAYOUTS: Dictionary = {
 	"gold": {
 		"primary_check_1": 0x2008,

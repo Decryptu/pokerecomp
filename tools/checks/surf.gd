@@ -3,19 +3,13 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies Surf against freshly imported real caches, for both command profiles.
-##
-## The expected values come from the pinned pokecrystal and pokegold sources:
-## engine/events/overworld.asm's SurfFunction (.TrySurf, GetSurfType,
-## CheckDirection) and UsedSurfScript, engine/overworld/player_object.asm's
-## SurfStartStep, and engine/overworld/player_movement.asm's .TrySurf/.ExitWater.
-##
-## The real-cartridge counterpart to tests/unit/test_world_field_move.gd, which
-## uses a synthetic cache. New Bark Town is the acceptance case: its east shore
-## is the first real water a player walks up to, and maps/NewBarkTown.blk and
-## data/tilesets/johto_collision.asm are byte identical between the pins, so the
-## same cells answer on all three games.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- surf
+## Expected values come from the pinned sources: SurfFunction (.TrySurf,
+## GetSurfType, CheckDirection) and UsedSurfScript, SurfStartStep, and
+## `.TrySurf`/`.ExitWater`. The real-cartridge counterpart to
+## tests/unit/test_world_field_move.gd, which uses a synthetic cache. New Bark Town
+## is the acceptance case: its east shore is the first real water a player walks up
+## to, and both its `.blk` and the johto collision table are byte identical between
+## the pins, so the same cells answer on all three games.
 
 
 ## constants/map_constants.asm, NEW_BARK group. Unlike Ilex Forest, Crystal's

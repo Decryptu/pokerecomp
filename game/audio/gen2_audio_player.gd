@@ -17,14 +17,10 @@ const BUFFER_SECONDS: float = 0.1
 
 ## Driver frames kept queued ahead of the output, and so the press-to-sound delay
 ## this player adds before the platform's own: three frames is 50 ms at
-## [constant Gen2Apu.SAMPLE_RATE].
-##
-## The buffer used to be kept as full as it would go, which spent its whole
-## 125 ms depth as latency. Measured worst emptiness on a desktop run was a
-## quarter of the depth, so about two driver frames are consumed between two
-## services there; three is that with a frame to spare, and a device that cannot
-## hold it says so by running the queue dry, which raises the target rather than
-## needing a build per target and an ear.
+## [constant Gen2Apu.SAMPLE_RATE]. Measured worst emptiness on a desktop run was a
+## quarter of the buffer's 125 ms depth, about two driver frames between two
+## services; three is that with one to spare, and a device that cannot hold it
+## says so by running the queue dry, which raises the target.
 const TARGET_FRAMES_MIN: int = 3
 ## The ceiling the target grows to, which is the whole buffer: past it there is
 ## nothing left to raise.
@@ -79,20 +75,16 @@ var _underruns: int = 0
 var _restarts: int = 0
 
 
-## The driver exists before the node enters the tree: a host that plays its map
-## music while it is still building itself has to reach a live engine.
 ## How many of the CALLER's frames the driver may go without rendering before a
-## wait on a sound decides nobody is servicing it and gives up.
-##
-## Not one. The buffer is filled to a depth rather than by the frame, and a host
-## drawing faster than the driver renders leaves gaps of several frames in the
-## count: read as one frame, every `waitsfx` in the game ended on the frame after
-## it started, so a badge, a TM and every item jingle printed their line and
-## replaced it before it could be read. Long enough to cover a gap, short enough
-## that a run with no audio device at all pays a fifth of a second for it.
+## wait on a sound decides nobody is servicing it and gives up. Not one: the
+## buffer is filled to a depth rather than by the frame, and read as one frame
+## every `waitsfx` in the game ended on the frame after it started, so every item
+## jingle printed its line and replaced it before it could be read.
 const SERVICE_GAP_FRAMES: int = 12
 
 
+## The driver exists before the node enters the tree: a host that plays its map
+## music while it is still building itself has to reach a live engine.
 func _init() -> void:
 	_apu = Gen2Apu.new()
 	_engine = Gen2SoundEngine.new(_apu)
@@ -112,19 +104,13 @@ func _process(delta: float) -> void:
 	_service_timeline(delta)
 
 
-## The audio session, on every platform that says anything about it.
-##
-## Android and iOS send the two APPLICATION notifications when a call, Siri, the
-## audio focus or a home press takes the session away, and desktop sends the two
-## FOCUS ones. Coming back is what needs handling: the driver kept running, the
-## stream player still reports `playing`, and pushing into a playback nothing
-## consumes is silence over live music until a screen change builds another one.
-## A resume does not rebuild outright, because an alt-tab is a FOCUS_IN too and
-## a live output would be cut for nothing; it shortens the watchdog's window
-## instead, so an output that is still there proves it on the next tick and one
-## that is not is replaced a tenth of a second later. Going away needs nothing:
-## `_process` stops with the main loop, and where it does not the generator fills
-## and the fill stops.
+## The audio session, on every platform that says anything about it. Android and
+## iOS send the two APPLICATION notifications and desktop the two FOCUS ones.
+## Coming back is what needs handling: the driver kept running and the player
+## still reports `playing`, so pushing into a playback nothing consumes is silence
+## over live music. A resume shortens the watchdog's window rather than rebuilding
+## outright, because an alt-tab is a FOCUS_IN too. Going away needs nothing:
+## `_process` stops with the main loop.
 func _notification(what: int) -> void:
 	match what:
 		NOTIFICATION_APPLICATION_RESUMED, NOTIFICATION_APPLICATION_FOCUS_IN:
@@ -293,16 +279,13 @@ func effect_playing() -> bool:
 	return _engine.sfx_active()
 
 
-## How many driver frames this player has actually rendered.
-##
-## The engine only advances inside [method _service_timeline], which needs an
-## output stream with room in it: a headless run, a check or a replay leaves the
-## channels exactly as the last request set them, so [method effect_playing] would
-## answer true for the rest of the run. Anything WAITING on a sound compares this
-## count across frames instead of trusting that answer, and stops waiting once it
-## has stood still for [constant SERVICE_GAP_FRAMES]. `AudioStreamPlayer.playing`
-## is not that test: the dummy audio driver reports true and consumes nothing.
-## See `Gen2BattleScreen`'s `ANIM_WAIT_SFX`.
+## How many driver frames this player has actually rendered. The engine only
+## advances inside [method _service_timeline], which needs room in an output
+## stream, so a headless run, a check or a replay would leave [method
+## effect_playing] true for the rest of the run. Anything waiting on a sound
+## compares this count across frames and stops once it has stood still for
+## [constant SERVICE_GAP_FRAMES]. `AudioStreamPlayer.playing` is not that test:
+## the dummy audio driver reports true and consumes nothing.
 func timeline_updates() -> int:
 	return _timeline_updates
 
@@ -424,15 +407,11 @@ func _service_timeline(delta: float = 0.0) -> void:
 
 
 ## Rebuilds an output that has taken nothing from the driver for
-## [constant STALL_SECONDS] while the driver had sound for it.
-##
-## The platforms that announce an interruption are handled in
-## [method _notification]; this is the ones that do not, and it is also what
-## makes that handler cheap, since a resume only has to shorten this window
-## rather than rebuild a live output. `AudioStreamPlayer` reports `playing` over
-## a dead device, so what the queue does is the only honest evidence: a live one
-## consumes 59.7 driver frames a second and so takes a fill within a few ticks,
-## whatever the host's frame rate.
+## [constant STALL_SECONDS] while the driver had sound for it. The platforms that
+## announce an interruption are handled in [method _notification]; this is the
+## ones that do not. `AudioStreamPlayer` reports `playing` over a dead device, so
+## what the queue does is the only honest evidence: a live one consumes 59.7
+## driver frames a second whatever the host's frame rate.
 func _watch_for_a_dead_output(delta: float, pushed: int) -> void:
 	if pushed > 0 or not _engine.any_channel_active():
 		_starved_seconds = 0.0

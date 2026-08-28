@@ -1,16 +1,14 @@
 class_name Gen2WorldCollision
 extends RefCounted
 
-## Collision-code permissions. A map's grid stores the raw code from the
-## tileset's four-cell table and the game looks it up in a second table before
-## letting ordinary walking in; keeping that lookup here leaves the code itself
-## available for water, ledges and warps.
-##
-## [constant PERMISSIONS] is [code]CollisionPermissionTable[/code] entry for
-## entry, the same 256 bytes in all three games. Carried whole rather than as a
-## list of interesting codes: a code left off such a list silently becomes
-## ordinary ground, which is how the waterfall, current and buoy families and one
-## of the two headbutt trees were once walkable here.
+## Collision-code permissions. A map's grid stores the raw code from the tileset's
+## four-cell table and the game looks it up in a second table before letting
+## ordinary walking in; keeping that lookup here leaves the code itself available
+## for water, ledges and warps. [constant PERMISSIONS] is
+## `CollisionPermissionTable` entry for entry, the same 256 bytes in all three
+## games, carried whole rather than as a list of interesting codes: a code left off
+## such a list silently becomes ordinary ground, which is how the waterfall,
+## current and buoy families were once walkable here.
 
 const LAND_TILE: int = 0x00
 const WATER_TILE: int = 0x01
@@ -264,14 +262,12 @@ static func side_wall_step_blocked(from_code: int, to_code: int, direction: Vect
 
 ## home/map.asm's GetMovementPermissions: the wTilePermissions byte for a player
 ## standing on [param standing_code] with its four neighbours already read. The
-## leave rule is byte identical between the games; the enter rule is not. The
-## pins diverge only in .ok_down/.ok_up/.ok_right/.ok_left, where Crystal ORs the
-## matching FACE_* and Gold always sets bit RIGHT, numerically FACE_DOWN, because
-## those four were written with wWalkingDirection's transposed bit layout. So
-## every enter-rule match blocks DOWN alone on Gold and Silver. No shipped map of
-## theirs carries a side-wall code whose low three bits differ from 2
-## (COLL_UP_WALL, which no opposite-face test below can match), so the split
-## changes no pinned map; it stays because a mod-authored map could reach it.
+## leave rule is byte identical between the games; the enter rule is not. The pins
+## diverge only in `.ok_down`/`.ok_up`/`.ok_right`/`.ok_left`, where Crystal ORs the
+## matching FACE_* and Gold always sets bit RIGHT, because those four were written
+## with wWalkingDirection's transposed bit layout, so every enter-rule match blocks
+## DOWN alone on Gold and Silver. No shipped map of theirs reaches it; the split
+## stays because a mod-authored map could.
 static func tile_permissions(
 	standing_code: int, up_code: int, down_code: int, left_code: int, right_code: int,
 	is_crystal: bool = true,

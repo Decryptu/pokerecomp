@@ -822,22 +822,14 @@ func test_a_transformed_side_draws_the_species_it_copied() -> void:
 	assert_false(bool(renderer._view["player_shiny"]))
 
 
-## The whole entrance as `view["battlers"]` reports it, one side at a time: who
-## is standing on each square, and how far off it they are.
-##
-## This is the field a renderer with no background plane has instead of the
-## scanline scroll and the blanking `bg_map` columns, so it is asserted as the
-## sequence a fight actually opens with rather than at one sampled frame: two
-## trainers slide in, each walks off its own square, and a Pokemon takes it.
-##
-## The two sides do not pass through the same states, and the reason is one line
-## of the source. `ShowBattleTextEnemySentOut` waits on a press, so the
-## opponent's square stands empty for as long as the player takes to read it;
-## `SendOutMonText` "ends in `done`" and prints with the ball already in the air,
-## so the player's square is never empty at the end of a frame. That also costs
-## the player's walk its last step at a frame boundary: the ninth column shifts
-## and the Pokemon is stamped in the same frame, so what a renderer is handed is
-## the eighth, which is what every other field says at that frame too.
+## The whole entrance as `view["battlers"]` reports it, one side at a time: who is
+## standing on each square, and how far off it they are. This is the field a
+## renderer with no background plane has instead of the scanline scroll, so it is
+## asserted as the sequence a fight actually opens with rather than at one sampled
+## frame. The two sides do not pass through the same states, and the reason is one
+## line of the source: `ShowBattleTextEnemySentOut` waits on a press, so the
+## opponent's square stands empty, while `SendOutMonText` ends in `done` and prints
+## with the ball already in the air.
 func test_the_entrance_says_who_is_on_each_square_and_how_far_off_it() -> void:
 	await _open_battle()
 	_battle_screen.show_trainer(Fixture.TRAINER_CLASS, 0)

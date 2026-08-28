@@ -1,15 +1,13 @@
 class_name Gen2WorldEffects
 extends RefCounted
 
-## Scene-free presentation state for effects that the overworld engine paces in
-## hardware frames. The renderer owns the pixels; this class owns the source
-## duration, amplitude and deterministic offsets.
-##
-## Two shapes live here. `ShakeScreen` is one packed byte of duration and
-## amplitude. The rest are the sprites the engine draws over the map rather than
-## as map objects: `SpawnStrengthBoulderDust`, `ShakeGrass`, `ShakeHeadbuttTree`,
-## `OWCutAnimation` and `SpawnShadow`, each its own frameset over one of the
-## sheets GameData.overworld_effect() holds.
+## Scene-free presentation state for effects the overworld engine paces in hardware
+## frames: the renderer owns the pixels and this owns the source duration,
+## amplitude and deterministic offsets. Two shapes live here. `ShakeScreen` is one
+## packed byte of duration and amplitude. The rest are the sprites the engine draws
+## over the map rather than as map objects, `SpawnStrengthBoulderDust`,
+## `ShakeGrass`, `ShakeHeadbuttTree`, `OWCutAnimation` and `SpawnShadow`, each its
+## own frameset over one of the sheets `GameData.overworld_effect()` holds.
 
 var _frame: int = 0
 var _duration: int = 0

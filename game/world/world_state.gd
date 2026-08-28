@@ -252,14 +252,12 @@ var _phone_receive_minutes: int = PHONE_RECEIVE_DELAYS[0]
 var _pending_special_phone_call: int = 0
 var _script_memory: Dictionary = {}
 ## `wMapMusic`, `wRadioTuningKnob` and `wCurRadioLine`. The music is state rather
-## than something derived from the current map because `PlayMapMusic` writes it
-## and compares against it, and because a tuned radio station overwrites it and
-## survives the Pokegear closing. `SnorlaxAwake` reads exactly that byte.
-## `wStatusFlags`' `STATUSFLAGS_FLASH_F`. Its own byte on the cartridge rather
-## than an engine flag, saved with the rest of `wPlayerData` the way its
-## byte-neighbours here are, and it does not survive walking out into the open:
-## `ResetFlashIfOutOfCave` clears it on entering a ROUTE or a TOWN, so a lit cave
-## goes dark again the moment the player leaves and comes back.
+## than something derived from the current map because `PlayMapMusic` writes it and
+## compares against it, and because a tuned radio station overwrites it and survives
+## the Pokegear closing; `SnorlaxAwake` reads exactly that byte. Below,
+## `wStatusFlags`' `STATUSFLAGS_FLASH_F`, its own byte on the cartridge rather than
+## an engine flag: `ResetFlashIfOutOfCave` clears it on entering a ROUTE or a TOWN,
+## so a lit cave goes dark again the moment the player leaves and comes back.
 var _used_flash: bool = false
 
 ## `wBikeStep`, the two bytes `DoBikeStep` counts a bike ride in. Saved player
@@ -350,16 +348,13 @@ var _mom_item_trigger_balance: int = RomLayout.MOM_MONEY
 ## INITIAL_VARIABLE_SPRITES]).
 var _variable_sprites: Dictionary = {}
 
-## `InitializeEventsScript` (engine/events/std_scripts.asm), which the player's
-## bedroom runs once at new game behind `EVENT_INITIALIZED_EVENTS`. A fresh state
-## starts with these for the same reason [method Gen2WorldSpawn.apply_initial_decorations]
-## exists: every state the game can be in has run it, and a slot with no row is
-## `.NoBreedmon`'s `WALKING_SPRITE`, which is the player.
-##
-## The four `SPRITE_CONSOLE`..`SPRITE_BIG_DOLL` slots are deliberately absent:
-## `ToggleDecorationsVisibility` fills those on every entry to the bedroom, so
-## they are the one group that needs no default. The numbers are the same on all
-## three cartridges (constants/sprite_constants.asm).
+## `InitializeEventsScript`, which the player's bedroom runs once at new game
+## behind `EVENT_INITIALIZED_EVENTS`. A fresh state starts with these for the same
+## reason [method Gen2WorldSpawn.apply_initial_decorations] exists: every state the
+## game can be in has run it, and a slot with no row is `.NoBreedmon`'s
+## `WALKING_SPRITE`, which is the player. The four `SPRITE_CONSOLE`..`SPRITE_BIG_DOLL`
+## slots are deliberately absent, `ToggleDecorationsVisibility` filling those on
+## every entry to the bedroom. The numbers are the same on all three cartridges.
 const INITIAL_VARIABLE_SPRITES: Dictionary = {
 	0xF4: 0x52,  # SPRITE_WEIRD_TREE      -> SPRITE_SUDOWOODO
 	0xF5: 0x04,  # SPRITE_OLIVINE_RIVAL   -> SPRITE_RIVAL
@@ -410,57 +405,63 @@ func _init(
 	initial_caught_species: Dictionary = {},
 	initial_maptile_decorations: Dictionary = {},
 ) -> void:
-	for flag: Variant in initial_event_flags:
-		if int(flag) >= 0 and bool(initial_event_flags[flag]):
-			_event_flags[int(flag)] = true
-	for flag: Variant in initial_engine_flags:
-		if int(flag) >= 0 and bool(initial_engine_flags[flag]):
-			_engine_flags[int(flag)] = true
+	_seed_flags(_event_flags, initial_event_flags, 0)
+	_seed_flags(_engine_flags, initial_engine_flags, 0)
+	_seed_flags(_seen_species, initial_seen_species, 1)
+	## Caught implies seen, the way `SetSeenAndCaughtMon` falls through, so a
+	## restored state cannot hold a caught species it has not seen.
+	_seed_flags(_caught_species, initial_caught_species, 1)
+	for species: int in _caught_species:
+		_seen_species[species] = true
+	_seed_flags(_phone_contacts, initial_phone_contacts, 0, PHONE_CONTACT_CAPACITY)
 	for map_key: Variant in initial_map_scenes:
 		var scene: int = int(initial_map_scenes[map_key])
 		if scene >= 0:
 			_map_scenes[String(map_key)] = scene
-	for raw_item: Variant in initial_items:
-		var item: int = int(raw_item)
-		var quantity: int = int(initial_items[raw_item])
-		if item > 0 and quantity > 0:
-			_items[item] = quantity
-	for raw_account: Variant in initial_money:
-		var account: int = int(raw_account)
-		var balance: int = int(initial_money[raw_account])
-		if account >= 0 and balance > 0:
-			_money[account] = balance
+	_seed_counts(_items, initial_items, 1)
+	_seed_counts(_money, initial_money, 0)
+	_seed_counts(_script_memory, initial_script_memory, 1, 0xFF, SCRIPT_MEMORY_CAPACITY)
+	for category: StringName in MAPTILE_DECORATION_SLOTS:
+		var decoration: int = int(initial_maptile_decorations.get(category, 0)) & 0xFF
+		if decoration > 0:
+			_maptile_decorations[category] = decoration
 	_coins = maxi(0, initial_coins)
-	for raw_contact: Variant in initial_phone_contacts:
-		if bool(initial_phone_contacts[raw_contact]) and _phone_contacts.size() < PHONE_CONTACT_CAPACITY:
-			_phone_contacts[int(raw_contact)] = true
 	_repel_steps = maxi(0, initial_repel_steps)
 	_swarm_maps[SWARM_DUNSPARCE] = initial_swarm_map
-	_fishing_swarm_species = initial_fishing_swarm_species if initial_fishing_swarm_species in [0, 0xD3, 0xDF] else 0
+	_fishing_swarm_species = initial_fishing_swarm_species \
+		if initial_fishing_swarm_species in [0, 0xD3, 0xDF] else 0
 	_roaming_mons = _copy_roaming_mons(initial_roaming_mons)
-	for raw_species: Variant in initial_seen_species:
-		if int(raw_species) > 0 and bool(initial_seen_species[raw_species]):
-			_seen_species[int(raw_species)] = true
-	## Caught implies seen, the way `SetSeenAndCaughtMon` falls through, so a
-	## restored state cannot hold a caught species it has not seen.
-	for raw_species: Variant in initial_caught_species:
-		if int(raw_species) > 0 and bool(initial_caught_species[raw_species]):
-			_caught_species[int(raw_species)] = true
-			_seen_species[int(raw_species)] = true
 	_just_battled = initial_just_battled
-	_phone_receive_cycle = clampi(initial_phone_receive_cycle, 0, PHONE_RECEIVE_DELAYS.size() - 1)
+	_phone_receive_cycle = clampi(
+		initial_phone_receive_cycle, 0, PHONE_RECEIVE_DELAYS.size() - 1
+	)
 	_phone_receive_minutes = maxi(0, initial_phone_receive_minutes)
 	_pending_special_phone_call = maxi(0, initial_pending_special_phone_call)
-	for raw_address: Variant in initial_script_memory:
-		var address: int = int(raw_address)
-		var value: int = int(initial_script_memory[raw_address]) & 0xFF
-		if address > 0 and value != 0 and _script_memory.size() < SCRIPT_MEMORY_CAPACITY:
-			_script_memory[address] = value
-	for category: StringName in MAPTILE_DECORATION_SLOTS:
-		var decoration: int = int(initial_maptile_decorations.get(category, 0))
-		if decoration > 0 and decoration <= 0xFF:
-			_maptile_decorations[category] = decoration
 	_variable_sprites = INITIAL_VARIABLE_SPRITES.duplicate()
+
+
+## Keeps the true keys of [param source] that are at least [param low], up to
+## [param capacity] of them.
+static func _seed_flags(
+	target: Dictionary, source: Dictionary, low: int, capacity: int = UNBOUNDED
+) -> void:
+	for raw_key: Variant in source:
+		var key: int = int(raw_key)
+		if key >= low and bool(source[raw_key]) and target.size() < capacity:
+			target[key] = true
+
+
+## Keeps the non-zero counts of [param source] whose key is at least [param low],
+## each masked to [param mask], up to [param capacity] of them.
+static func _seed_counts(
+	target: Dictionary, source: Dictionary, low: int, mask: int = -1,
+	capacity: int = UNBOUNDED
+) -> void:
+	for raw_key: Variant in source:
+		var key: int = int(raw_key)
+		var value: int = int(source[raw_key]) & mask
+		if key >= low and value > 0 and target.size() < capacity:
+			target[key] = value
 
 
 ## JSON-safe representation of the mutable overworld state. Cartridge records
@@ -540,62 +541,32 @@ static func from_dict(raw: Variant) -> Gen2WorldState:
 	if not raw is Dictionary:
 		return Gen2WorldState.new()
 	var source: Dictionary = raw
-	var swarm: Vector2i = _vector_from_value(source.get("swarm_map", [-1, -1]))
 	var restored: Gen2WorldState = Gen2WorldState.new(
-		source.get("event_flags", {}) if source.get("event_flags", {}) is Dictionary else {},
-		source.get("map_scenes", {}) if source.get("map_scenes", {}) is Dictionary else {},
-		source.get("items", {}) if source.get("items", {}) is Dictionary else {},
-		source.get("money", {}) if source.get("money", {}) is Dictionary else {},
-		int(source.get("coins", 0)),
-		source.get("phone_contacts", {}) if source.get("phone_contacts", {}) is Dictionary else {},
-		int(source.get("repel_steps", 0)), swarm,
+		_map(source, "event_flags"), _map(source, "map_scenes"), _map(source, "items"),
+		_map(source, "money"), int(source.get("coins", 0)),
+		_map(source, "phone_contacts"), int(source.get("repel_steps", 0)),
+		_vector_from_value(source.get("swarm_map", [-1, -1])),
 		int(source.get("fishing_swarm_species", 0)),
-		source.get("roaming_mons", []) if source.get("roaming_mons", []) is Array else [],
-		bool(source.get("just_battled", false)),
+		_list(source, "roaming_mons"), bool(source.get("just_battled", false)),
 		int(source.get("phone_receive_cycle", 0)),
 		int(source.get("phone_receive_minutes", PHONE_RECEIVE_DELAYS[0])),
 		int(source.get("pending_special_phone_call", 0)),
-		source.get("seen_species", {}) if source.get("seen_species", {}) is Dictionary else {},
-		source.get("engine_flags", {}) if source.get("engine_flags", {}) is Dictionary else {},
-		source.get("script_memory", {}) if source.get("script_memory", {}) is Dictionary else {},
-		source.get("caught_species", {}) if source.get("caught_species", {}) is Dictionary else {},
-		source.get("maptile_decorations", {}) if source.get("maptile_decorations", {}) is Dictionary else {},
+		_map(source, "seen_species"), _map(source, "engine_flags"),
+		_map(source, "script_memory"), _map(source, "caught_species"),
+		_map(source, "maptile_decorations"),
 	)
-	## Absent in a state written before the radio existed. Zero is the same
-	## MUSIC_NONE a fresh state starts on, and the next map load writes the real
-	## track, so an old save needs no migration.
-	var stored_pc_items: Variant = source.get("pc_items", {})
-	if stored_pc_items is Dictionary:
-		for raw_item: Variant in stored_pc_items as Dictionary:
-			var pc_item: int = int(raw_item)
-			var pc_quantity: int = int((stored_pc_items as Dictionary)[raw_item])
-			if pc_item > 0 and pc_quantity > 0 \
-				and restored._pc_items.size() < Gen2WorldPack.MAX_PC_ITEMS:
-				restored._pc_items[pc_item] = pc_quantity
-	## Absent in a state written while there was one swarm slot. Crystal's Yanma
-	## swarm reads as inactive then, which is what a save taken before the news
-	## announced one would hold anyway.
+	_seed_counts(restored._pc_items, _map(source, "pc_items"), 1, -1, Gen2WorldPack.MAX_PC_ITEMS)
+	_seed_flags(restored._picked_fruit_trees, _map(source, "picked_fruit_trees"), 1)
 	restored._swarm_maps[SWARM_YANMA] = _vector_from_value(
 		source.get("yanma_swarm_map", [-1, -1])
 	)
-	## Absent in a state written before the byte was saved, which reads as a cave
-	## that has not been lit. `ResetFlashIfOutOfCave` clears it on the next ROUTE
-	## or TOWN either way, so an old save loses at most one cave's light.
 	restored._used_flash = bool(source.get("used_flash", false))
-	## Absent in a state written before the counter was kept, which reads as a
-	## ride that has not started: zero is what a new game holds and the only
-	## reader is the 1024-step threshold below it.
 	restored._bike_step = clampi(int(source.get("bike_step", 0)), 0, MAX_BIKE_STEP)
 	restored._map_music = maxi(0, int(source.get("map_music", MUSIC_NONE)))
 	restored.set_radio_knob(int(source.get("radio_knob", Gen2WorldRadio.KNOB_MIN)))
 	restored._radio_channel = int(source.get("radio_channel", -1))
 	restored.set_last_dex_mode(int(source.get("last_dex_mode", RomLayout.DEXMODE_NEW)))
 	restored.set_kurt_apricorn_quantity(int(source.get("kurt_apricorn_quantity", 0)))
-	var picked: Variant = source.get("picked_fruit_trees", {})
-	if picked is Dictionary:
-		for raw_tree: Variant in picked as Dictionary:
-			if int(raw_tree) > 0 and bool((picked as Dictionary)[raw_tree]):
-				restored._picked_fruit_trees[int(raw_tree)] = true
 	## Absent in a state written before the Unown dex, which reads as an empty
 	## one: the flag that unlocks the mode is an engine flag and survives on its
 	## own, so an old save shows the mode with nothing listed under it, which is
@@ -605,80 +576,78 @@ static func from_dict(raw: Variant) -> Gen2WorldState:
 	## byte was kept falls back to the first form caught, which is the same
 	## answer for every save whose first Unown was caught rather than only met.
 	restored.note_first_unown_seen(int(source.get("first_unown_seen", 0)))
-	var stored_unown: Variant = source.get("unown_dex", [])
-	if stored_unown is Array:
-		for raw_form: Variant in stored_unown as Array:
-			restored.update_unown_dex(int(raw_form))
+	for raw_form: Variant in _list(source, "unown_dex"):
+		restored.update_unown_dex(int(raw_form))
 	restored.set_registered_item(int(source.get("registered_item", 0)))
 	restored.set_wild_encounter_cooldown(int(source.get("wild_encounter_cooldown", 0)))
-	## Absent in a state written before the step counters existed, which restores
-	## as a fresh walk: zero is what a new game starts on and no reader of these
-	## can tell a migrated save from one that has taken no step.
 	restored._step_count = int(source.get("step_count", 0)) & 0xFF
 	restored._poison_step_count = int(source.get("poison_step_count", 0)) & 0xFF
 	restored._happiness_step_count = int(source.get("happiness_step_count", 0)) & 1
 	restored.set_wild_encounters_off(bool(source.get("wild_encounters_off", false)))
 	restored.set_park_balls(int(source.get("park_balls", 0)))
-	var started: Variant = source.get("bug_contest_started", {})
-	if started is Dictionary:
-		restored._bug_contest_started = _clock_dict(started as Dictionary)
-	var caught: Variant = source.get("contest_mon", {})
-	if caught is Dictionary and int((caught as Dictionary).get("species", 0)) > 0:
-		restored._contest_mon = (caught as Dictionary).duplicate()
+	restored._bug_contest_started = _clock_dict(_map(source, "bug_contest_started"))
+	var caught: Dictionary = _map(source, "contest_mon")
+	if int(caught.get("species", 0)) > 0:
+		restored._contest_mon = caught.duplicate()
 	restored.set_contest_second_party_species(
 		int(source.get("contest_second_party_species", 0))
 	)
-	## Absent in a state written before the Day-Care existed, which restores as
-	## two empty slots: nothing is deposited, so no flag, counter or egg has
-	## anything to be wrong about.
+	_restore_day_care(restored, source)
+	_restore_deferred(restored, source)
+	restored._battle_tower = Gen2BattleTower.from_dict(source.get("battle_tower", {}))
+	var sprites: Dictionary = _map(source, "variable_sprites")
+	for raw_slot: Variant in sprites:
+		restored.set_variable_sprite(int(raw_slot), int(sprites[raw_slot]))
+	return restored
+
+
+## [param source]'s [param key] when it is a Dictionary, and an empty one when it
+## is missing or something else. A field absent from a state written by an older
+## build reads as the value a new game holds, which is why nothing here versions.
+static func _map(source: Dictionary, key: String) -> Dictionary:
+	var value: Variant = source.get(key, {})
+	return value if value is Dictionary else {}
+
+
+## The same for a list.
+static func _list(source: Dictionary, key: String) -> Array:
+	var value: Variant = source.get(key, [])
+	return value if value is Array else []
+
+
+static func _restore_day_care(restored: Gen2WorldState, source: Dictionary) -> void:
 	restored._day_care_man = int(source.get("day_care_man", 0)) & 0xFF
 	restored._day_care_lady = int(source.get("day_care_lady", 0)) & 0xFF
 	restored._steps_to_egg = int(source.get("steps_to_egg", 0)) & 0xFF
-	var stored_mons: Variant = source.get("day_care_mons", [])
-	if stored_mons is Array:
-		for slot: int in mini((stored_mons as Array).size(), 2):
-			restored._day_care_mons[slot] = _mon_from_value((stored_mons as Array)[slot])
+	var stored: Array = _list(source, "day_care_mons")
+	for slot: int in mini(stored.size(), 2):
+		restored._day_care_mons[slot] = _mon_from_value(stored[slot])
 	restored._day_care_egg = _mon_from_value(source.get("day_care_egg", {}))
-	## Absent in a state written before the deferred routines were built. Zero
-	## reads as "never drawn" for the lucky number, "no record" for the Magikarp
-	## house and "Mom has not been asked" for her bank, which is what a save
-	## taken before any of them was reachable says anyway.
+
+
+## The lucky number, the Magikarp record, Mom's bank and Buena's password. Zero
+## reads as "never drawn", "no record" and "Mom has not been asked"; the one
+## field that does not default to zero is hers, because `NewGame` writes
+## `MOM_MONEY` there rather than a balance she has already passed.
+static func _restore_deferred(restored: Gen2WorldState, source: Dictionary) -> void:
 	restored._battle_caught_celebi = bool(source.get("battle_caught_celebi", false))
 	restored._lucky_id_number = int(source.get("lucky_id_number", 0)) & 0xFFFF
 	restored._lucky_number_day = int(source.get("lucky_number_day", 0)) & 0xFF
 	restored._lucky_number_days_left = int(source.get("lucky_number_days_left", 0)) & 0xFF
 	restored._kenji_break_timer = int(source.get("kenji_break_timer", 0)) & 0xFF
-	var record: Variant = source.get("best_magikarp", {})
-	if record is Dictionary:
-		restored._best_magikarp_feet = int((record as Dictionary).get("feet", 0)) & 0xFF
-		restored._best_magikarp_inches = int((record as Dictionary).get("inches", 0)) & 0xFF
-		restored._best_magikarp_ot = String((record as Dictionary).get("ot", ""))
+	var record: Dictionary = _map(source, "best_magikarp")
+	restored._best_magikarp_feet = int(record.get("feet", 0)) & 0xFF
+	restored._best_magikarp_inches = int(record.get("inches", 0)) & 0xFF
+	restored._best_magikarp_ot = String(record.get("ot", ""))
 	restored._mom_savings_flags = int(source.get("mom_savings_flags", 0)) & 0xFF
 	restored._mom_item_index = maxi(int(source.get("mom_item_index", 0)), 0)
 	restored._mom_item_set = maxi(int(source.get("mom_item_set", 0)), 0)
-	## `NewGame` writes `MOM_MONEY` here rather than zero, so a save from before
-	## the field existed reads as a new game rather than as a balance she has
-	## already passed.
 	restored._mom_item_trigger_balance = clampi(
 		int(source.get("mom_item_trigger_balance", RomLayout.MOM_MONEY)),
 		0, Gen2WorldInventory.MAX_MONEY
 	)
 	restored._blue_card_balance = int(source.get("blue_card_balance", 0)) & 0xFF
 	restored._buenas_password = int(source.get("buenas_password", 0)) & 0xFF
-	## Defaults rather than versioning: a slot written before the tower existed
-	## reads as one with no challenge in it, which is the truth about it.
-	restored._battle_tower = Gen2BattleTower.from_dict(source.get("battle_tower", {}))
-	## Absent in a state written before the table was saved. Those slots are
-	## whatever `InitializeEventsScript` left, which is what the constructor
-	## already seeded, so an old save needs no migration.
-	var stored_sprites: Variant = source.get("variable_sprites", {})
-	if stored_sprites is Dictionary:
-		for raw_slot: Variant in stored_sprites as Dictionary:
-			restored.set_variable_sprite(
-				int(raw_slot), int((stored_sprites as Dictionary)[raw_slot])
-			)
-
-	return restored
 
 
 ## Restores the mutable state after a host transaction could not be persisted.
@@ -957,15 +926,12 @@ static func engine_flag(crystal_index: int, crystal: bool = true) -> int:
 	return crystal_index - 1 if crystal_index > ENGINE_MOBILE_SYSTEM else -1
 
 
-## The `ENGINE_FLYPOINT_*` run, which is `wVisitedSpawns` a bit at a time: the
-## flag `CheckIfVisitedFlypoint` tests for spawn [param spawn], as a Crystal
-## index resolved onto [param crystal]'s own table.
-##
-## The rows are the spawns in order with one hole in them: `SPAWN_UNION_CAVE`
-## has no flag of its own (`data/events/engine_flags.asm`), so every spawn past
+## The `ENGINE_FLYPOINT_*` run, which is `wVisitedSpawns` a bit at a time: the flag
+## `CheckIfVisitedFlypoint` tests for spawn [param spawn], as a Crystal index
+## resolved onto [param crystal]'s own table. The rows are the spawns in order with
+## one hole in them: `SPAWN_UNION_CAVE` has no flag of its own, so every spawn past
 ## it sits one row lower than its own number. -1 for the Union Cave spawn and for
-## anything outside the run, which [method is_engine_flag_active] reads as
-## inactive.
+## anything outside the run, which [method is_engine_flag_active] reads as inactive.
 static func flypoint_flag(spawn: int, crystal: bool = true) -> int:
 	if spawn < 0 or spawn >= NUM_SPAWNS or spawn == SPAWN_UNION_CAVE:
 		return -1
@@ -1213,15 +1179,13 @@ func set_blue_card_balance(points: int) -> void:
 
 
 ## True unless [param data] is a verified Gold or Silver cache, matching
-## Gen2WorldScriptRunner._crystal_commands(). Both engine flag tables and
-## `_GetVarAction.CountBadges` agree on everything except this table's
-## offset, so every profile-dependent flag lookup here keys off the same
-## question the script command-width split already answers.
-##
-## A null cache answers Crystal, which is what every caller that has no cache in
-## hand has always meant. A caller holding only an id, such as a save's own
-## [member Gen2SaveData.game_id], asks [method is_crystal_game_id] instead: that
-## one knows the difference between "not told" and "told Gold".
+## `Gen2WorldScriptRunner._crystal_commands()`. Both engine flag tables and
+## `_GetVarAction.CountBadges` agree on everything except this table's offset, so
+## every profile-dependent flag lookup here keys off the same question the script
+## command-width split already answers. A null cache answers Crystal, which is what
+## every caller with no cache in hand has always meant; a caller holding only an id
+## asks [method is_crystal_game_id] instead, which knows the difference between
+## "not told" and "told Gold".
 static func is_crystal_profile(data: GameData) -> bool:
 	return data == null or is_crystal_game_id(data.id)
 
@@ -1700,14 +1664,12 @@ func count_step() -> bool:
 
 
 ## `DoBikeStep`, which `CountStep` reaches behind the poison branch. The caller
-## answers the three gates in front of the counter, since only it knows the map
-## and the player's state: [param armed] is `STATUSFLAGS2_BIKE_SHOP_CALL_F` and
-## the bike, and [param in_service] is `GetMapPhoneService`.
-##
-## The counter saturates at `$ffff` rather than wrapping, which is what the two
-## `cp 255` tests do, and the call is queued the first counted step past 1024
-## that finds no other special call already waiting. Answers whether the call was
-## queued.
+## answers the three gates in front of the counter, since only it knows the map and
+## the player's state: [param armed] is `STATUSFLAGS2_BIKE_SHOP_CALL_F` and the
+## bike, and [param in_service] is `GetMapPhoneService`. The counter saturates at
+## `$ffff` rather than wrapping, which is what the two `cp 255` tests do, and the
+## call is queued the first counted step past 1024 that finds no other special call
+## already waiting.
 func do_bike_step(armed: bool, in_service: bool) -> bool:
 	if not armed or not in_service:
 		return false
@@ -2089,15 +2051,12 @@ func _copy_roaming_mons(source: Array) -> Array:
 
 
 ## `BattleEnd_HandleRoamMons`, which every roaming battle ends through. A win,
-## which is the source's word for caught or defeated alike, empties the struct:
-## `GetRoamMonHP` writes 0, the two map bytes become `GROUP_N_A`/`MAP_N_A` and
-## the species byte becomes 0, so `CheckEncounterRoamMon` can never select that
-## slot again. Any other ending stores the HP the fight left the roamer on.
-##
-## [param dvs] is the word `LoadEnemyMon`'s `.Roaming` rolled on the first
-## encounter and read back on every later one; it is stored beside the HP so a
-## roamer keeps the Pokemon it was, shininess included. Answers whether the
-## record moved.
+## which is the source's word for caught or defeated alike, empties the struct: the
+## HP becomes 0, the two map bytes `GROUP_N_A`/`MAP_N_A` and the species byte 0, so
+## `CheckEncounterRoamMon` can never select that slot again. Any other ending stores
+## the HP the fight left the roamer on. [param dvs] is the word `.Roaming` rolled
+## on the first encounter and read back on every later one, stored beside the HP so
+## a roamer keeps the Pokemon it was, shininess included.
 func note_roam_battle_end(species: int, won: bool, hp: int, dvs: int) -> bool:
 	for index: int in _roaming_mons.size():
 		var mon: Dictionary = _roaming_mons[index]
@@ -2179,317 +2138,242 @@ static func _reordered(source: Dictionary, order: Array) -> Dictionary:
 	return result
 
 
-## Applies a script's staged state as one transaction. Validation happens before
-## either dictionary is replaced, so a failed script cannot leave half a flag
-## transition behind.
+## An unbounded key, value or capacity in [constant CHANGE_MAPS] and
+## [constant CHANGE_SCALARS].
+const UNBOUNDED: int = 0x7FFFFFFF
+## A change map whose values are bools: a true sets the key, a false erases it.
+const MERGE_FLAGS: int = 0
+## A change map whose values are counts: a non-zero stores it, a zero erases it.
+const MERGE_COUNTS: int = 1
+
+## Every map [method apply_changes] accepts, in the order a bad one is reported:
+## the `runtime_changes` key, the member, the merge mode, the smallest and
+## largest key, the largest value ([constant UNBOUNDED] for a flag map), the
+## reason a non-Dictionary answers with, the reason a bad entry answers with, and
+## the capacity the merged map may not pass with the reason it answers with.
+const CHANGE_MAPS: Array[Array] = [
+	["items", "_items", MERGE_COUNTS, 1, UNBOUNDED, UNBOUNDED,
+		&"invalid_items", &"invalid_item_quantity", UNBOUNDED, &""],
+	["pc_items", "_pc_items", MERGE_COUNTS, 1, UNBOUNDED, UNBOUNDED,
+		&"invalid_pc_items", &"invalid_pc_item_quantity",
+		Gen2WorldPack.MAX_PC_ITEMS, &"pc_item_capacity"],
+	["engine_flags", "_engine_flags", MERGE_FLAGS, 0, UNBOUNDED, UNBOUNDED,
+		&"invalid_engine_flags", &"invalid_engine_flag", UNBOUNDED, &""],
+	["money", "_money", MERGE_COUNTS, 0, UNBOUNDED, UNBOUNDED,
+		&"invalid_money", &"invalid_money_balance", UNBOUNDED, &""],
+	["phone_contacts", "_phone_contacts", MERGE_FLAGS, 0, UNBOUNDED, UNBOUNDED,
+		&"invalid_phone_contacts", &"invalid_phone_contact",
+		PHONE_CONTACT_CAPACITY, &"phone_contact_capacity"],
+	["fruit_trees", "_picked_fruit_trees", MERGE_FLAGS, 1, RomLayout.FRUIT_TREE_COUNT,
+		UNBOUNDED, &"invalid_fruit_trees", &"invalid_fruit_trees", UNBOUNDED, &""],
+	["seen_species", "_seen_species", MERGE_FLAGS, 1, UNBOUNDED, UNBOUNDED,
+		&"invalid_seen_species", &"invalid_seen_species", UNBOUNDED, &""],
+	["caught_species", "_caught_species", MERGE_FLAGS, 1, UNBOUNDED, UNBOUNDED,
+		&"invalid_caught_species", &"invalid_caught_species", UNBOUNDED, &""],
+	["script_memory", "_script_memory", MERGE_COUNTS, 1, UNBOUNDED, 0xFF,
+		&"invalid_script_memory", &"invalid_script_memory",
+		SCRIPT_MEMORY_CAPACITY, &"script_memory_capacity"],
+]
+
+## Every bounded integer `runtime_changes` may carry: the key, the member, the
+## largest value and the reason a value outside 0..that answers with.
+static var CHANGE_SCALARS: Array[Array] = [
+	["coins", "_coins", UNBOUNDED, &"invalid_coins"],
+	["phone_receive_cycle", "_phone_receive_cycle", PHONE_RECEIVE_DELAYS.size() - 1,
+		&"invalid_phone_receive_cycle"],
+	["phone_receive_minutes", "_phone_receive_minutes", UNBOUNDED,
+		&"invalid_phone_receive_minutes"],
+	["pending_special_phone_call", "_pending_special_phone_call", UNBOUNDED,
+		&"invalid_special_phone_call"],
+	["repel_steps", "_repel_steps", UNBOUNDED, &"invalid_repel_steps"],
+	["kurt_apricorn_quantity", "_kurt_apricorn_quantity", 0xFF,
+		&"invalid_kurt_apricorn_quantity"],
+	["blue_card_balance", "_blue_card_balance", 0xFF, &"invalid_blue_card_balance"],
+	["mom_savings_flags", "_mom_savings_flags", 0xFF, &"invalid_mom_savings_flags"],
+	["kenji_break_timer", "_kenji_break_timer", 0xFF, &"invalid_kenji_break_timer"],
+	["lucky_number_days_left", "_lucky_number_days_left", 0xFF,
+		&"invalid_lucky_number_timer"],
+	["lucky_id_number", "_lucky_id_number", 0xFFFF, &"invalid_lucky_id_number"],
+	["lucky_number_day", "_lucky_number_day", 0xFF, &"invalid_lucky_number_day"],
+]
+
+## The members a pack listing reads in insertion order, so the same quantities in
+## another order still count as a change.
+const ORDERED_MEMBERS: Array[String] = ["_items", "_pc_items"]
+
+
+## [param source] merged with [param changes] under [constant MERGE_FLAGS] or
+## [constant MERGE_COUNTS].
+static func _merged(source: Dictionary, changes: Dictionary, mode: int) -> Dictionary:
+	var out: Dictionary = source.duplicate()
+	for raw_key: Variant in changes:
+		var key: int = int(raw_key)
+		var value: int = int(changes[raw_key]) if mode == MERGE_COUNTS else int(bool(changes[raw_key]))
+		if value == 0:
+			out.erase(key)
+		elif mode == MERGE_FLAGS:
+			out[key] = true
+		else:
+			out[key] = value
+	return out
+
+
+## Why [param changes] is not a map of keys in [param low]..[param high] with
+## values in 0..[param ceiling], or an empty name when it is.
+static func _map_reason(
+	changes: Dictionary, low: int, high: int, ceiling: int, reason: StringName
+) -> StringName:
+	for raw_key: Variant in changes:
+		var key: int = int(raw_key)
+		if key < low or key > high:
+			return reason
+		var value: int = int(changes[raw_key])
+		if value < 0 or value > ceiling:
+			return reason
+	return &""
+
+
+## Applies a script's staged state as one transaction. Nothing is replaced until
+## every field validates, so a failed script cannot leave half a flag transition
+## behind.
 func apply_changes(
 	flag_changes: Dictionary, scene_changes: Dictionary, runtime_changes: Dictionary = {}
 ) -> Dictionary:
-	for raw_flag: Variant in flag_changes:
-		if int(raw_flag) < 0:
-			return {"ok": false, "reason": &"invalid_event_flag"}
-	for raw_map: Variant in scene_changes:
-		if String(raw_map).is_empty() or int(scene_changes[raw_map]) < 0:
-			return {"ok": false, "reason": &"invalid_scene"}
-	var item_changes: Dictionary = runtime_changes.get("items", {})
-	if not item_changes is Dictionary:
-		return {"ok": false, "reason": &"invalid_items"}
-	for raw_item: Variant in item_changes:
-		if int(raw_item) <= 0 or int(item_changes[raw_item]) < 0:
-			return {"ok": false, "reason": &"invalid_item_quantity"}
-	## `SwitchItemsInBag`' whole effect: the same items in another order. A
-	## quantity map compares equal whatever order it holds, so a reorder has to
-	## be asked for by name or the transaction below would call it no change.
-	var item_order: Variant = runtime_changes.get("item_order", null)
-	if item_order != null and not item_order is Array:
-		return {"ok": false, "reason": &"invalid_item_order"}
-	var pc_item_changes: Dictionary = runtime_changes.get("pc_items", {})
-	if not pc_item_changes is Dictionary:
-		return {"ok": false, "reason": &"invalid_pc_items"}
-	var pc_item_order: Variant = runtime_changes.get("pc_item_order", null)
-	if pc_item_order != null and not pc_item_order is Array:
-		return {"ok": false, "reason": &"invalid_pc_item_order"}
-	for raw_item: Variant in pc_item_changes:
-		if int(raw_item) <= 0 or int(pc_item_changes[raw_item]) < 0:
-			return {"ok": false, "reason": &"invalid_pc_item_quantity"}
-	var engine_flag_changes: Dictionary = runtime_changes.get("engine_flags", {})
-	if not engine_flag_changes is Dictionary:
-		return {"ok": false, "reason": &"invalid_engine_flags"}
-	for raw_flag: Variant in engine_flag_changes:
-		if int(raw_flag) < 0:
-			return {"ok": false, "reason": &"invalid_engine_flag"}
-	var money_changes: Dictionary = runtime_changes.get("money", {})
-	if not money_changes is Dictionary:
-		return {"ok": false, "reason": &"invalid_money"}
-	for raw_account: Variant in money_changes:
-		if int(raw_account) < 0 or int(money_changes[raw_account]) < 0:
-			return {"ok": false, "reason": &"invalid_money_balance"}
-	var next_coins: int = int(runtime_changes.get("coins", _coins))
-	if next_coins < 0:
-		return {"ok": false, "reason": &"invalid_coins"}
-	var phone_changes: Dictionary = runtime_changes.get("phone_contacts", {})
-	if not phone_changes is Dictionary:
-		return {"ok": false, "reason": &"invalid_phone_contacts"}
-	for raw_contact: Variant in phone_changes:
-		if int(raw_contact) < 0:
-			return {"ok": false, "reason": &"invalid_phone_contact"}
-	var next_receive_cycle: int = int(
-		runtime_changes.get("phone_receive_cycle", _phone_receive_cycle)
+	var next: Dictionary = {}
+	var reason: StringName = _stage_changes(
+		flag_changes, scene_changes, runtime_changes, next
 	)
-	if next_receive_cycle < 0 or next_receive_cycle >= PHONE_RECEIVE_DELAYS.size():
-		return {"ok": false, "reason": &"invalid_phone_receive_cycle"}
-	var next_receive_minutes: int = int(
-		runtime_changes.get("phone_receive_minutes", _phone_receive_minutes)
-	)
-	if next_receive_minutes < 0:
-		return {"ok": false, "reason": &"invalid_phone_receive_minutes"}
-	var next_special_phone_call: int = int(
-		runtime_changes.get("pending_special_phone_call", _pending_special_phone_call)
-	)
-	if next_special_phone_call < 0:
-		return {"ok": false, "reason": &"invalid_special_phone_call"}
-	var swarm_change: Variant = runtime_changes.get("swarm", null)
-	if swarm_change != null and not swarm_change is Dictionary:
-		return {"ok": false, "reason": &"invalid_swarm"}
-	var next_swarm_maps: Array[Vector2i] = _swarm_maps.duplicate()
-	var next_fishing_swarm_species: int = _fishing_swarm_species
-	if swarm_change is Dictionary:
-		var swarm: Dictionary = swarm_change
-		var swarm_active: bool = bool(swarm.get("active", true))
-		var swarm_group: int = int(swarm.get("map_group", -1))
-		var swarm_number: int = int(swarm.get("map_number", -1))
-		if swarm_active and (swarm_group < 0 or swarm_number < 0):
-			return {"ok": false, "reason": &"invalid_swarm_map"}
-		var swarm_species: int = int(swarm.get("fishing_species", 0))
-		if swarm_species not in [0, 0xD3, 0xDF]:
-			return {"ok": false, "reason": &"invalid_fishing_swarm_species"}
-		var swarm_kind: int = int(swarm.get("kind", SWARM_DUNSPARCE))
-		if swarm_kind != SWARM_DUNSPARCE and swarm_kind != SWARM_YANMA:
-			return {"ok": false, "reason": &"invalid_swarm_kind"}
-		next_swarm_maps[swarm_kind] = (
-			Vector2i(swarm_group, swarm_number) if swarm_active else Vector2i(-1, -1)
-		)
-		next_fishing_swarm_species = swarm_species
-	var next_repel_steps: int = int(runtime_changes.get("repel_steps", _repel_steps))
-	if next_repel_steps < 0:
-		return {"ok": false, "reason": &"invalid_repel_steps"}
-	var next_kurt_apricorns: int = int(
-		runtime_changes.get("kurt_apricorn_quantity", _kurt_apricorn_quantity)
-	)
-	if next_kurt_apricorns < 0 or next_kurt_apricorns > 0xFF:
-		return {"ok": false, "reason": &"invalid_kurt_apricorn_quantity"}
-	var next_blue_card: int = int(
-		runtime_changes.get("blue_card_balance", _blue_card_balance)
-	)
-	if next_blue_card < 0 or next_blue_card > 0xFF:
-		return {"ok": false, "reason": &"invalid_blue_card_balance"}
-	var next_mom_savings: int = int(
-		runtime_changes.get("mom_savings_flags", _mom_savings_flags)
-	)
-	if next_mom_savings < 0 or next_mom_savings > 0xFF:
-		return {"ok": false, "reason": &"invalid_mom_savings_flags"}
-	var next_kenji: int = int(runtime_changes.get("kenji_break_timer", _kenji_break_timer))
-	if next_kenji < 0 or next_kenji > 0xFF:
-		return {"ok": false, "reason": &"invalid_kenji_break_timer"}
-	var next_lucky_days: int = int(
-		runtime_changes.get("lucky_number_days_left", _lucky_number_days_left)
-	)
-	if next_lucky_days < 0 or next_lucky_days > 0xFF:
-		return {"ok": false, "reason": &"invalid_lucky_number_timer"}
-	var next_lucky_id: int = int(runtime_changes.get("lucky_id_number", _lucky_id_number))
-	if next_lucky_id < 0 or next_lucky_id > 0xFFFF:
-		return {"ok": false, "reason": &"invalid_lucky_id_number"}
-	var next_lucky_day: int = int(runtime_changes.get("lucky_number_day", _lucky_number_day))
-	if next_lucky_day < 0 or next_lucky_day > 0xFF:
-		return {"ok": false, "reason": &"invalid_lucky_number_day"}
-	var magikarp_change: Variant = runtime_changes.get("best_magikarp", null)
-	if magikarp_change != null and not magikarp_change is Dictionary:
-		return {"ok": false, "reason": &"invalid_best_magikarp"}
-	var next_karp_feet: int = _best_magikarp_feet
-	var next_karp_inches: int = _best_magikarp_inches
-	var next_karp_ot: String = _best_magikarp_ot
-	if magikarp_change is Dictionary:
-		next_karp_feet = int((magikarp_change as Dictionary).get("feet", 0))
-		next_karp_inches = int((magikarp_change as Dictionary).get("inches", 0))
-		next_karp_ot = String((magikarp_change as Dictionary).get("ot", ""))
-		if next_karp_feet < 0 or next_karp_feet > 0xFF \
-			or next_karp_inches < 0 or next_karp_inches > 0xFF:
-			return {"ok": false, "reason": &"invalid_best_magikarp"}
-	var fruit_tree_changes: Dictionary = runtime_changes.get("fruit_trees", {})
-	if not fruit_tree_changes is Dictionary:
-		return {"ok": false, "reason": &"invalid_fruit_trees"}
-	for raw_tree: Variant in fruit_tree_changes:
-		if int(raw_tree) < 1 or int(raw_tree) > RomLayout.FRUIT_TREE_COUNT:
-			return {"ok": false, "reason": &"invalid_fruit_trees"}
-	var seen_changes: Dictionary = runtime_changes.get("seen_species", {})
-	if not seen_changes is Dictionary:
-		return {"ok": false, "reason": &"invalid_seen_species"}
-	for raw_species: Variant in seen_changes:
-		if int(raw_species) <= 0:
-			return {"ok": false, "reason": &"invalid_seen_species"}
-	var caught_changes: Dictionary = runtime_changes.get("caught_species", {})
-	if not caught_changes is Dictionary:
-		return {"ok": false, "reason": &"invalid_caught_species"}
-	for raw_species: Variant in caught_changes:
-		if int(raw_species) <= 0:
-			return {"ok": false, "reason": &"invalid_caught_species"}
-	var memory_changes: Dictionary = runtime_changes.get("script_memory", {})
-	if not memory_changes is Dictionary:
-		return {"ok": false, "reason": &"invalid_script_memory"}
-	for raw_address: Variant in memory_changes:
-		var change_value: int = int(memory_changes[raw_address])
-		if int(raw_address) <= 0 or change_value < 0 or change_value > 0xFF:
-			return {"ok": false, "reason": &"invalid_script_memory"}
+	if reason != &"":
+		return {"ok": false, "reason": reason}
 
-	var next_flags: Dictionary = _event_flags.duplicate()
-	for raw_flag: Variant in flag_changes:
-		var flag: int = int(raw_flag)
-		if bool(flag_changes[raw_flag]):
-			next_flags[flag] = true
-		else:
-			next_flags.erase(flag)
-	var next_engine_flags: Dictionary = _engine_flags.duplicate()
-	for raw_flag: Variant in engine_flag_changes:
-		var flag_id: int = int(raw_flag)
-		if bool(engine_flag_changes[raw_flag]):
-			next_engine_flags[flag_id] = true
-		else:
-			next_engine_flags.erase(flag_id)
-	var next_scenes: Dictionary = _map_scenes.duplicate()
-	for raw_map: Variant in scene_changes:
-		next_scenes[String(raw_map)] = int(scene_changes[raw_map])
-	var next_items: Dictionary = _items.duplicate()
-	for raw_item: Variant in item_changes:
-		var item: int = int(raw_item)
-		var quantity: int = int(item_changes[raw_item])
-		if quantity == 0:
-			next_items.erase(item)
-		else:
-			next_items[item] = quantity
-	var next_pc_items: Dictionary = _pc_items.duplicate()
-	for raw_item: Variant in pc_item_changes:
-		var pc_item: int = int(raw_item)
-		var pc_quantity: int = int(pc_item_changes[raw_item])
-		if pc_quantity == 0:
-			next_pc_items.erase(pc_item)
-		else:
-			next_pc_items[pc_item] = pc_quantity
-	if next_pc_items.size() > Gen2WorldPack.MAX_PC_ITEMS:
-		return {"ok": false, "reason": &"pc_item_capacity"}
-	if item_order != null:
-		if not _is_permutation(next_items, item_order as Array):
-			return {"ok": false, "reason": &"invalid_item_order"}
-		next_items = _reordered(next_items, item_order as Array)
-	if pc_item_order != null:
-		if not _is_permutation(next_pc_items, pc_item_order as Array):
-			return {"ok": false, "reason": &"invalid_pc_item_order"}
-		next_pc_items = _reordered(next_pc_items, pc_item_order as Array)
-	var next_money: Dictionary = _money.duplicate()
-	for raw_account: Variant in money_changes:
-		var account: int = int(raw_account)
-		var balance: int = int(money_changes[raw_account])
-		if balance == 0:
-			next_money.erase(account)
-		else:
-			next_money[account] = balance
-	var next_seen_species: Dictionary = _seen_species.duplicate()
-	for raw_species: Variant in seen_changes:
-		var species: int = int(raw_species)
-		if bool(seen_changes[raw_species]):
-			next_seen_species[species] = true
-		else:
-			next_seen_species.erase(species)
-	var next_caught_species: Dictionary = _caught_species.duplicate()
-	for raw_species: Variant in caught_changes:
-		var caught_species_number: int = int(raw_species)
-		if bool(caught_changes[raw_species]):
-			next_caught_species[caught_species_number] = true
-			next_seen_species[caught_species_number] = true
-		else:
-			next_caught_species.erase(caught_species_number)
-	var next_contacts: Dictionary = _phone_contacts.duplicate()
-	for raw_contact: Variant in phone_changes:
-		var contact: int = int(raw_contact)
-		if bool(phone_changes[raw_contact]):
-			next_contacts[contact] = true
-		else:
-			next_contacts.erase(contact)
-	if next_contacts.size() > PHONE_CONTACT_CAPACITY:
-		return {"ok": false, "reason": &"phone_contact_capacity"}
-	var next_script_memory: Dictionary = _script_memory.duplicate()
-	for raw_address: Variant in memory_changes:
-		var address: int = int(raw_address)
-		var value: int = int(memory_changes[raw_address])
-		if value == 0:
-			next_script_memory.erase(address)
-		else:
-			next_script_memory[address] = value
-	if next_script_memory.size() > SCRIPT_MEMORY_CAPACITY:
-		return {"ok": false, "reason": &"script_memory_capacity"}
-	var next_fruit_trees: Dictionary = _picked_fruit_trees.duplicate()
-	for raw_tree: Variant in fruit_tree_changes:
-		var tree: int = int(raw_tree)
-		if bool(fruit_tree_changes[raw_tree]):
-			next_fruit_trees[tree] = true
-		else:
-			next_fruit_trees.erase(tree)
-	var next_just_battled: bool = bool(
-		runtime_changes.get("just_battled", _just_battled)
-	)
-	var karp_changed: bool = next_karp_feet != _best_magikarp_feet \
-		or next_karp_inches != _best_magikarp_inches or next_karp_ot != _best_magikarp_ot
-
-	var did_change: bool = next_flags != _event_flags or next_engine_flags != _engine_flags \
-		or next_scenes != _map_scenes \
-		or next_items != _items or next_pc_items != _pc_items \
-		or next_items.keys() != _items.keys() \
-		or next_pc_items.keys() != _pc_items.keys() \
-		or next_money != _money or next_coins != _coins \
-		or next_contacts != _phone_contacts or next_just_battled != _just_battled \
-		or next_seen_species != _seen_species \
-		or next_caught_species != _caught_species \
-		or next_repel_steps != _repel_steps or next_swarm_maps != _swarm_maps \
-		or next_fishing_swarm_species != _fishing_swarm_species \
-		or next_receive_cycle != _phone_receive_cycle \
-		or next_receive_minutes != _phone_receive_minutes \
-		or next_special_phone_call != _pending_special_phone_call \
-		or next_script_memory != _script_memory \
-		or next_kurt_apricorns != _kurt_apricorn_quantity \
-		or next_fruit_trees != _picked_fruit_trees \
-		or next_blue_card != _blue_card_balance \
-		or next_mom_savings != _mom_savings_flags \
-		or next_kenji != _kenji_break_timer \
-		or next_lucky_days != _lucky_number_days_left or karp_changed \
-		or next_lucky_id != _lucky_id_number or next_lucky_day != _lucky_number_day
-	_event_flags = next_flags
-	_engine_flags = next_engine_flags
-	_map_scenes = next_scenes
-	_items = next_items
-	_pc_items = next_pc_items
-	_money = next_money
-	_seen_species = next_seen_species
-	_caught_species = next_caught_species
-	_coins = next_coins
-	_phone_contacts = next_contacts
-	_just_battled = next_just_battled
-	_repel_steps = next_repel_steps
-	_swarm_maps = next_swarm_maps
-	_fishing_swarm_species = next_fishing_swarm_species
-	_phone_receive_cycle = next_receive_cycle
-	_phone_receive_minutes = next_receive_minutes
-	_pending_special_phone_call = next_special_phone_call
-	_script_memory = next_script_memory
-	_kurt_apricorn_quantity = next_kurt_apricorns
-	_picked_fruit_trees = next_fruit_trees
-	_blue_card_balance = next_blue_card
-	_mom_savings_flags = next_mom_savings
-	_kenji_break_timer = next_kenji
-	_lucky_number_days_left = next_lucky_days
-	_lucky_id_number = next_lucky_id
-	_lucky_number_day = next_lucky_day
-	_best_magikarp_feet = next_karp_feet
-	_best_magikarp_inches = next_karp_inches
-	_best_magikarp_ot = next_karp_ot
+	var did_change: bool = false
+	for member: String in next:
+		var current: Variant = get(member)
+		if current != next[member]:
+			did_change = true
+		elif member in ORDERED_MEMBERS and current.keys() != (next[member] as Dictionary).keys():
+			did_change = true
+		set(member, next[member])
 	if did_change:
 		changed.emit()
 	return {"ok": true, "changed": did_change}
+
+
+## Fills [param next] with the member values [method apply_changes] would commit,
+## or answers why it may not.
+func _stage_changes(
+	flag_changes: Dictionary, scene_changes: Dictionary, runtime_changes: Dictionary,
+	next: Dictionary
+) -> StringName:
+	for raw_flag: Variant in flag_changes:
+		if int(raw_flag) < 0:
+			return &"invalid_event_flag"
+	next["_event_flags"] = _merged(_event_flags, flag_changes, MERGE_FLAGS)
+
+	var next_scenes: Dictionary = _map_scenes.duplicate()
+	for raw_map: Variant in scene_changes:
+		if String(raw_map).is_empty() or int(scene_changes[raw_map]) < 0:
+			return &"invalid_scene"
+		next_scenes[String(raw_map)] = int(scene_changes[raw_map])
+	next["_map_scenes"] = next_scenes
+
+	for row: Array in CHANGE_MAPS:
+		var changes: Variant = runtime_changes.get(row[0], {})
+		if not changes is Dictionary:
+			return row[6]
+		var row_reason: StringName = _map_reason(changes, row[3], row[4], row[5], row[7])
+		if row_reason != &"":
+			return row_reason
+		var merged: Dictionary = _merged(get(row[1]), changes, row[2])
+		if merged.size() > int(row[8]):
+			return row[9]
+		next[row[1]] = merged
+	## `SetSeenAndCaughtMon` sets both bits, so a species newly caught is seen
+	## whatever the caller passed.
+	var caught: Dictionary = runtime_changes.get("caught_species", {})
+	for raw_species: Variant in caught:
+		if bool(caught[raw_species]):
+			(next["_seen_species"] as Dictionary)[int(raw_species)] = true
+
+	var order_reason: StringName = _stage_orders(runtime_changes, next)
+	if order_reason != &"":
+		return order_reason
+
+	for row: Array in CHANGE_SCALARS:
+		var value: int = int(runtime_changes.get(row[0], get(row[1])))
+		if value < 0 or value > int(row[2]):
+			return row[3]
+		next[row[1]] = value
+	next["_just_battled"] = bool(runtime_changes.get("just_battled", _just_battled))
+
+	var swarm_reason: StringName = _stage_swarm(runtime_changes, next)
+	if swarm_reason != &"":
+		return swarm_reason
+	return _stage_magikarp(runtime_changes, next)
+
+
+## `SwitchItemsInBag`'s whole effect: the same items in another order. A quantity
+## map compares equal whatever order it holds, so a reorder has to be asked for
+## by name.
+func _stage_orders(runtime_changes: Dictionary, next: Dictionary) -> StringName:
+	for row: Array in [
+		["item_order", "_items", &"invalid_item_order"],
+		["pc_item_order", "_pc_items", &"invalid_pc_item_order"],
+	]:
+		var order: Variant = runtime_changes.get(row[0], null)
+		if order == null:
+			continue
+		if not order is Array or not _is_permutation(next[row[1]], order):
+			return row[2]
+		next[row[1]] = _reordered(next[row[1]], order)
+	return &""
+
+
+## The Dunsparce and Yanma swarm maps and the fishing swarm that shares their
+## script. An inactive swarm clears its map rather than carrying one nothing
+## reads.
+func _stage_swarm(runtime_changes: Dictionary, next: Dictionary) -> StringName:
+	var maps: Array[Vector2i] = _swarm_maps.duplicate()
+	next["_swarm_maps"] = maps
+	next["_fishing_swarm_species"] = _fishing_swarm_species
+	var change: Variant = runtime_changes.get("swarm", null)
+	if change == null:
+		return &""
+	if not change is Dictionary:
+		return &"invalid_swarm"
+	var swarm: Dictionary = change
+	var active: bool = bool(swarm.get("active", true))
+	var group: int = int(swarm.get("map_group", -1))
+	var number: int = int(swarm.get("map_number", -1))
+	if active and (group < 0 or number < 0):
+		return &"invalid_swarm_map"
+	var species: int = int(swarm.get("fishing_species", 0))
+	if species not in [0, 0xD3, 0xDF]:
+		return &"invalid_fishing_swarm_species"
+	var kind: int = int(swarm.get("kind", SWARM_DUNSPARCE))
+	if kind != SWARM_DUNSPARCE and kind != SWARM_YANMA:
+		return &"invalid_swarm_kind"
+	maps[kind] = Vector2i(group, number) if active else Vector2i(-1, -1)
+	next["_fishing_swarm_species"] = species
+	return &""
+
+
+## `sBestMagikarpLength`: feet, inches and the trainer who caught it, written
+## together or not at all.
+func _stage_magikarp(runtime_changes: Dictionary, next: Dictionary) -> StringName:
+	next["_best_magikarp_feet"] = _best_magikarp_feet
+	next["_best_magikarp_inches"] = _best_magikarp_inches
+	next["_best_magikarp_ot"] = _best_magikarp_ot
+	var change: Variant = runtime_changes.get("best_magikarp", null)
+	if change == null:
+		return &""
+	if not change is Dictionary:
+		return &"invalid_best_magikarp"
+	var feet: int = int((change as Dictionary).get("feet", 0))
+	var inches: int = int((change as Dictionary).get("inches", 0))
+	if feet < 0 or feet > 0xFF or inches < 0 or inches > 0xFF:
+		return &"invalid_best_magikarp"
+	next["_best_magikarp_feet"] = feet
+	next["_best_magikarp_inches"] = inches
+	next["_best_magikarp_ot"] = String((change as Dictionary).get("ot", ""))
+	return &""

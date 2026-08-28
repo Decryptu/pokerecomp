@@ -364,15 +364,12 @@ const EVADED: StringName = &"evaded"
 ## floor gets.
 const MIST_PROTECTED: StringName = &"mist_protected"
 
-## `ANIM_SEND_OUT_MON` (constants/move_constants.asm) and the two
-## `wBattleAnimParam` values every entrance plays it with: `BattleAnim_SendOutMon`
-## branches on the parameter, `$0` being the ball and `$1` the shiny sparkle.
-##
-## The constant is `$101`, not 101: the comments in that file are hexadecimal,
-## and the animations past the moves start at `const_next $ff`. Read as a
-## decimal it is NIGHT SHADE, which decodes, runs and draws, so nothing falls
-## over: the ball is a night shade with the wrong palette and four times the
-## frames. `tools/checks/battle_anims.gd` pins the body each parameter reaches.
+## `ANIM_SEND_OUT_MON` and the two `wBattleAnimParam` values every entrance plays
+## it with: `$0` the ball, `$1` the shiny sparkle. The constant is `$101`, not
+## 101, because the comments in `constants/move_constants.asm` are hexadecimal.
+## Read as a decimal it is NIGHT SHADE, which decodes, runs and draws, so nothing
+## falls over: the ball was a night shade with the wrong palette and four times
+## the frames. `tools/checks/battle_anims.gd` pins the body each parameter reaches.
 const ANIM_SEND_OUT_MON: int = 0x101
 const SEND_OUT_ANIM_NORMAL: int = 0
 const SEND_OUT_ANIM_SHINY: int = 1
@@ -937,17 +934,14 @@ func has_fled() -> bool:
 	return _fled
 
 
-## `TryToRunAwayFromBattle`, resolved without spending anything. Answers
-## `outcome`: [code]&"fled"[/code], [code]&"failed"[/code] for the short roll,
-## which costs the turn, or [code]&"blocked"[/code] for a refusal that costs
-## nothing, with `how` or `reason` naming the branch. Both trapping checks are
-## refusals rather than failed rolls: `.cant_escape` returns without writing
+## `TryToRunAwayFromBattle`, resolved without spending anything. Answers `outcome`
+## `fled`, `failed` for the short roll, which costs the turn, or `blocked` for a
+## refusal that costs nothing. Both trapping checks are refusals rather than
+## failed rolls: `.cant_escape` returns without writing
 ## `BATTLEPLAYERACTION_USEITEM`, so only `.cant_escape_2` spends the turn.
-##
 ## [param runner_speed] is the Speed the caller hands the routine, which is not
-## always the Pokémon out: `BattleMenu_Run` passes `wBattleMonSpeed` and
-## `AskUseNextPokemon` `wPartyMon1Speed`, and below zero takes the former. The
-## source's `hl` covers the Speed word alone, so the rest is the battle copy's.
+## always the Pokemon out: `BattleMenu_Run` passes `wBattleMonSpeed` and
+## `AskUseNextPokemon` `wPartyMon1Speed`.
 func run_odds(runner_speed: int = -1) -> Dictionary:
 	if battle_type in ALWAYS_ESCAPES:
 		return {"outcome": &"fled", "how": &"battle_type", "battle_type": battle_type}
@@ -1398,16 +1392,12 @@ func send_out(
 	return events
 
 
-## `SendOutPlayerMon` and `ShowSetEnemyMonAndSendOutAnimation`, which every
-## entrance in the source runs and which are the same three steps on both sides:
-## `ANIM_SEND_OUT_MON`, a second pass of it for a shiny, and the cry Crystal's
-## own `CheckFaintedFrzSlp` allows. Public because a battle's opening entrance is not
-## a [method send_out]: both sides are already standing there when the pics
-## finish sliding, and the screen plays the same list for them.
-##
-## [param ball] is false for `BattleStartMessage`'s wild branch, which is the one
-## entrance with no ball in it: the Pokemon is already standing there when the
-## pics stop sliding, so only the shiny pass and the cry are left of the list.
+## `SendOutPlayerMon` and `ShowSetEnemyMonAndSendOutAnimation`: the same three
+## steps on both sides, `ANIM_SEND_OUT_MON`, a second pass of it for a shiny, and
+## the cry Crystal's `CheckFaintedFrzSlp` allows. Public because a battle's
+## opening entrance is not a [method send_out]. [param ball] is false for
+## `BattleStartMessage`'s wild branch, the one entrance with no ball in it: the
+## Pokemon is already standing there when the pics stop sliding.
 func entrance_events(side: int, ball: bool = true) -> Array:
 	var entering: Gen2BattleMon = mon(side)
 	if entering == null:
@@ -2298,15 +2288,12 @@ func award_win_experience() -> Array:
 
 
 ## What a successful capture owes when a registered policy says a caught wild is
-## worth its experience. `PokeBallEffect` awards none: the wild is filed and the
-## battle ends, so this is an addition rather than a correction, and it is off
-## until [method Gen2ModHost.awards_catch_experience] answers yes.
-##
-## The same pass a faint takes, so the participant set, the Exp. Share split,
-## stat experience, the level ups, the move offers, the happiness gain, the
-## evolution eligibility and the EXP-bar events are one implementation. The
-## opponent is NOT fainted: it is caught and about to be filed, so its HP is left
-## where the throw left it and only the award runs.
+## worth its experience. `PokeBallEffect` awards none, so this is an addition
+## rather than a correction and it is off until
+## [method Gen2ModHost.awards_catch_experience] answers yes. The same pass a faint
+## takes, so participants, the Exp. Share split, level ups, move offers and
+## evolution eligibility are one implementation. The opponent is NOT fainted: its
+## HP is left where the throw left it and only the award runs.
 func award_capture_experience() -> Array:
 	var events: Array = []
 	if data == null or parties.is_empty():

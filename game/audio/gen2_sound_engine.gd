@@ -3,14 +3,11 @@ extends RefCounted
 
 ## The cartridge sound driver, ported from `audio/engine.asm`.
 ##
-## [method update_sound] is one `_UpdateSound`, which the cartridge runs once
-## per LCD frame. It parses each of the eight channel streams and writes the
-## hardware registers; [Gen2Apu] turns those writes into samples. Nothing here
-## decides what a note sounds like, exactly as on the cartridge.
-##
-## Every audible behaviour that used to be approximated - vibrato, pitch slides,
-## the rotating duty pattern, envelopes, the noise channel, sfx stealing music
-## channels - is now the driver's own state machine running at its own rate.
+## [method update_sound] is one `_UpdateSound`, which the cartridge runs once per
+## LCD frame: it parses each of the eight channel streams and writes the hardware
+## registers, and [Gen2Apu] turns those writes into samples. Vibrato, pitch
+## slides, the rotating duty pattern, envelopes, noise and sfx stealing music
+## channels are all the driver's own state machine at its own rate.
 
 const NUM_MUSIC_CHANNELS: int = 4
 const NUM_CHANNELS: int = 8
@@ -329,17 +326,11 @@ func sfx_channels_off() -> void:
 
 ## `PlaySFX`: the wrapper every `playsound`, `specialsound` and menu beep goes
 ## through, and the reason two of them do not pile onto each other. The table is
-## ordered highest priority first, so a request is refused while a *lower*-
-## numbered effect is still on the four channels; the same id restarts, since
-## the comparison is `cp e / jr c`.
-##
-## Only `PlayStereoSFX` and the battle animations behind it reach [method
-## play_sfx] without this gate. Without it every request restarted the channels
-## mid-effect, which is a fanfare cut in half by whatever the next box beeped.
-##
-## [param after_wait] is `WaitPlaySFX`, and the handful of sites that spend a
-## `WaitSFX` of their own first: the cartridge holds there until the channels
-## are free, so the gate can never be the thing that refuses those.
+## ordered highest priority first, so a request is refused while a lower-numbered
+## effect is still on the four channels; the same id restarts, since the
+## comparison is `cp e / jr c`. Only `PlayStereoSFX` and the battle animations
+## skip it. [param after_wait] is `WaitPlaySFX` and the sites that spend a
+## `WaitSFX` first, where the gate must never be what refuses them.
 func play_sfx_gated(record: Dictionary, after_wait: bool = false) -> bool:
 	var index: int = int(record.get("index", 0))
 	if not after_wait and sfx_active() and cur_sfx < index:

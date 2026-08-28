@@ -1,16 +1,12 @@
 class_name Gen2LauncherTheme
 extends RefCounted
 
-## Colours, metrics and a stock-control [Theme] for every launcher screen.
-##
-## One instance describes one appearance. Screens read [method active], which
-## follows `ui_theme` in the options file, and rebuild themselves when it
-## changes: everything the launcher draws is built in code, so a rebuild is
-## cheaper and more reliable than repainting live nodes.
-##
-## Depth is carried by fills and hairlines, not by shadows. Only what genuinely
-## floats over the page casts one, which is why a shadow is never cut off by the
-## scroll or margin container it happens to sit in.
+## Colours, metrics and a stock-control [Theme] for every launcher screen. One
+## instance describes one appearance; screens read [method active], which follows
+## `ui_theme` in the options file, and rebuild themselves when it changes, since
+## everything the launcher draws is built in code. Depth is carried by fills and
+## hairlines rather than shadows, so a shadow is never cut off by the scroll or
+## margin container it happens to sit in.
 
 const LIGHT: StringName = &"light"
 const DARK: StringName = &"dark"

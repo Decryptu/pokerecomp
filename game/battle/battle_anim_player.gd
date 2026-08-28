@@ -3,15 +3,12 @@ extends RefCounted
 
 ## One battle animation playing: `RunBattleAnimScript`'s frame loop
 ## (engine/battle_anims/anim_commands.asm). [Gen2BattleAnimScript] is the
-## interpreter and knows only bytes, [Gen2BattleAnimObject] is one object and
-## knows only itself; this is what the cartridge does with both once a frame,
-## running the script until it yields, stepping every live object and collecting
-## what they would put in `wShadowOAM`.
-##
-## Scene-free: a frame answers with sprites, a tile window and the palette each
-## sprite wants. All five of `.playframe`'s steps are here, and
-## [method unimplemented] reports what an animation asked for and did not get,
-## which cartridge data no longer produces and a hand-built region still can.
+## interpreter and [Gen2BattleAnimObject] is one object; this is what the
+## cartridge does with both once a frame, running the script until it yields,
+## stepping every live object and collecting what they would put in `wShadowOAM`.
+## Scene-free: a frame answers with sprites, a tile window and a palette per
+## sprite. [method unimplemented] reports what an animation asked for and did not
+## get, which cartridge data no longer produces.
 
 ## `NUM_BATTLE_ANIM_STRUCTS`: an eleventh object is simply not spawned.
 const MAX_OBJECTS: int = 10
@@ -369,18 +366,12 @@ func _load_graphics(operands: Array) -> void:
 
 
 ## `BattleAnimCmd_BattlerGFX_1Row` and `..._2Row`: one or two rows of each
-## battler's picture copied into the top of the animation window, so an effect
-## can lift a battler's feet or head off the tilemap and move them as objects,
-## which three bg effects including `BattleBGEffect_Tackle` do.
-##
-## The two dict entries are crosswise with what is copied, `PLAYERHEAD` holding
-## the enemy's rows and `ENEMYFEET` the player's, and the object rows are crossed
-## the same way, `BATTLE_ANIM_OBJ_ENEMYFEET_*` naming
-## `BATTLE_ANIM_GFX_PLAYERHEAD`, so the two cancel. Both crossings are the
-## cartridge's and neither is tidied.
-##
-## The window tiles these fill name a tile of `vTiles2`, where the battle's own
-## pictures live, in the numbering [Gen2BattleScreenMap] writes.
+## battler's picture copied into the top of the animation window, so an effect can
+## lift a battler's feet or head off the tilemap and move them as objects.
+## The dict entries are crosswise with what is copied, `PLAYERHEAD` holding the
+## enemy's rows, and the object rows are crossed the same way, so the two cancel.
+## Both crossings are the cartridge's and neither is tidied. The window tiles name
+## a tile of `vTiles2` in the numbering [Gen2BattleScreenMap] writes.
 func _load_battler_graphics(rows: int) -> void:
 	var slot: int = _free_tile_dict_slot()
 	if slot < 0 or slot + 1 >= TILE_DICT_ENTRIES:
@@ -486,16 +477,13 @@ func _execute_bg_effects() -> void:
 			_note(&"bg_effects", effect.id)
 
 
-## `BattleAnim_UpdateOAM_All`: every live object stepped and drawn, in slot
-## order, stopping at the first one whose sprites would not fit.
-##
-## The slot's index byte is tested once, at the top of the loop, so an object
-## whose own callback calls `DeinitBattleAnimation` still reaches
-## `BattleAnimOAMUpdate` and is **drawn one last time where it stands**;
-## `DeinitBattleAnimation` clears the index and nothing else, so the frameset
-## steps normally on that pass. Measured against a real cartridge: TACKLE's
-## `anim_incobj 1` frees the target's two rows on the frame it runs and OAM
-## still holds their fourteen sprites for that frame.
+## `BattleAnim_UpdateOAM_All`: every live object stepped and drawn in slot order,
+## stopping at the first whose sprites would not fit. The slot's index byte is
+## tested once, at the top of the loop, so an object whose own callback calls
+## `DeinitBattleAnimation` still reaches `BattleAnimOAMUpdate` and is **drawn one
+## last time where it stands**. Measured against a real cartridge: TACKLE's
+## `anim_incobj 1` frees the target's two rows on the frame it runs and OAM still
+## holds their fourteen sprites for that frame.
 func _update_oam() -> void:
 	_sprites = []
 	for object: Gen2BattleAnimObject in _objects:

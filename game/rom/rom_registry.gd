@@ -1,16 +1,12 @@
 class_name RomRegistry
 extends RefCounted
 
-## The allowlist of ROMs this project can import from.
-##
-## The project ships no game data. A user-supplied dump is matched here by SHA-1
-## before a byte is read for content. An unknown hash is a hard refusal: an
-## uncharacterised ROM has unknown bank layout, and guessing produces corrupt
-## assets rather than an honest error.
-##
-## Crystal's two common filenames (the "(UE) (V1.1)" and "(USA, Europe) (Rev 1)"
-## dumps) are byte-identical and collapse to one entry: matching is by hash,
-## never by filename.
+## The allowlist of ROMs this project can import from. The project ships no game
+## data: a user-supplied dump is matched here by SHA-1 before a byte is read for
+## content, and an unknown hash is a hard refusal, since an uncharacterised ROM
+## has unknown bank layout and guessing produces corrupt assets rather than an
+## honest error. Crystal's two common filenames are byte-identical and collapse to
+## one entry: matching is by hash, never by filename.
 
 ## Every Game Boy Color cartridge in this generation is 2 MiB. Used only as a
 ## cheap pre-filter so a wrong file is rejected before we hash it.

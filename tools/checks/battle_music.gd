@@ -2,25 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies `PlayBattleMusic` (engine/battle/start_battle.asm) against freshly
-## imported real caches, on all three cartridges.
-##
-## The routine is a walk down a list of compares, so the failure it can have is
-## not an arithmetic one: it is a row that stops being reachable, or a track it
-## names that the audio importer does not hold. Both are swept here over the
-## whole corpus rather than sampled, which is two sweeps:
-##
-## - every map in the cache, through `RegionCheck`, so the wild rows are asked
-##   at every landmark the cartridge has rather than at one;
-## - every trainer class the cartridge ships and every individual trainer inside
-##   it, so the RIVAL2 id split and both leader lists are reached by real data.
-##
-## Every track either sweep names is then looked up in the imported audio index,
-## which is what says the piece can actually be played. Gold and Silver have no
-## `MUSIC_SUICUNE_BATTLE` and never write the two battle types that reach it, so
-## that row is asked of Crystal alone.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- battle_music
+## Verifies `PlayBattleMusic` against freshly imported real caches, on all three
+## cartridges. The routine is a walk down a list of compares, so its failure is a
+## row that stops being reachable or a track the audio importer does not hold. Both
+## are swept over the whole corpus: every map through `RegionCheck`, so the wild
+## rows are asked at every landmark, and every trainer class and individual trainer,
+## so the RIVAL2 id split and both leader lists are reached by real data. Every
+## track named is then looked up in the imported audio index. Gold and Silver never
+## reach `MUSIC_SUICUNE_BATTLE`, so that row is asked of Crystal alone.
 
 ## The two hours the wild rows split on. Only Johto has a night track.
 const HOURS: Array[int] = [Gen2WorldPalette.TIME_DAY, Gen2WorldPalette.TIME_NIGHT]

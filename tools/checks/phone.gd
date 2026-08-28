@@ -1,16 +1,13 @@
 extends RefCounted
 
 ## Sweeps every imported phone contact and special call on all three cartridges.
-##
 ## `PhoneContacts` is a fixed-width table of two scripts per row and
-## `SpecialPhoneCallList` a table of a condition and a third, and every one of
-## them is reached by a routine rather than by a script the catalog walks: an
-## incoming call takes `PHONE_CONTACT_SCRIPT1`, `Script_SpecialBillCall` takes
-## `PHONE_CONTACT_SCRIPT2` for `PHONE_BILL` alone, and `CheckSpecialPhoneCall`
-## takes the list's own. So a row the importer read short reaches no test and no
-## story walk; it reaches a silent phone.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- phone
+## `SpecialPhoneCallList` a table of a condition and a third, and every one of them
+## is reached by a routine rather than by a script the catalog walks: an incoming
+## call takes `PHONE_CONTACT_SCRIPT1`, `Script_SpecialBillCall` takes `SCRIPT2` for
+## `PHONE_BILL` alone, and `CheckSpecialPhoneCall` takes the list's own. So a row
+## the importer read short reaches no test and no story walk; it reaches a silent
+## phone.
 
 var _r: RefCounted = null
 

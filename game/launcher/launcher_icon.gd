@@ -2,18 +2,13 @@ class_name Gen2LauncherIcon
 extends TextureRect
 
 ## The launcher's custom filled icon set, rasterised from SVG at the size it is
-## drawn. Source SVGs remain editable in `assets/launcher/icons`; their
-## `currentColor` fill is replaced with the active palette colour at runtime.
-##
-## `github`, `discord` and `bug` are the project's own drawings rather than
-## Material Symbols, so `LICENSE-MATERIAL-SYMBOLS.txt` beside them does not cover
-## those three; the two logos are the services' trade marks and are drawn only to
-## point at those services.
-##
-## Each source carries `importer="keep"`, because this reads the SVG text rather
-## than the texture Godot's own SVG importer makes: an imported `.svg` ships as
-## its `.ctex` alone, so `_svg()` came back empty on every exported build and
-## every glyph drew nothing. `test_launcher_ui.gd` asserts the importer.
+## drawn; the sources stay editable in `assets/launcher/icons` and their
+## `currentColor` fill is replaced with the palette colour at runtime. `github`,
+## `discord` and `bug` are the project's own drawings, so the Material Symbols
+## licence beside them does not cover those three. Each source carries
+## `importer="keep"` because this reads the SVG text rather than Godot's imported
+## texture: an imported `.svg` ships as its `.ctex` alone, so every glyph drew
+## nothing on an exported build. `test_launcher_ui.gd` asserts the importer.
 const GRID: int = 24
 
 const ICON_DIRECTORY: String = "res://assets/launcher/icons"

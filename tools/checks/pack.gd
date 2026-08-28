@@ -2,23 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the pack submenu's three permission tests against freshly imported
-## real caches, over every item row rather than a sampled one.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## `engine/items/pack.asm`'s `.ItemBallsKey_LoadSubmenu`, which asks
-## `_CheckTossableItem`, `CheckSelectableItem` and `CheckItemMenu` in that order,
-## `RegisterItem`, and `engine/pokemon/mon_menu.asm`'s `.GiveItem`, whose loop
-## refuses the key item pocket and then whatever `CheckTossableItem` refuses.
-## `data/items/attributes.asm` is byte identical between the pins, so nothing
-## here is profile split.
-##
-## The point of sweeping all 256 rows is that a permission bit read the wrong way
-## round is invisible on the one item a screen test picks: the bit is set on the
-## item that *cannot* do the thing, so an inverted read offers TOSS on every key
-## item and SEL on none.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- pack
+## Verifies the pack submenu's three permission tests against freshly imported real
+## caches, over every item row rather than a sampled one. Expected values come from
+## the pinned sources' `.ItemBallsKey_LoadSubmenu`, which asks `_CheckTossableItem`,
+## `CheckSelectableItem` and `CheckItemMenu` in that order, `RegisterItem`, and
+## `.GiveItem`. `data/items/attributes.asm` is byte identical between the pins. The
+## point of sweeping all 256 rows is that a permission bit read the wrong way round
+## is invisible on the one item a screen test picks: the bit is set on the item that
+## *cannot* do the thing, so an inverted read offers TOSS on every key item.
 
 ## The ten rows whose field-menu nibble is ITEMMENU_CLOSE, byte identical
 ## between the pins. The unit tier writes the nibble onto its own fixture, so

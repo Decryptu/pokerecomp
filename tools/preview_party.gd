@@ -3,25 +3,11 @@ extends SceneTree
 ## Captures the window-resolution save overlays against a real cache: the party,
 ## the PC boxes and the start menu's pack.
 ##
-##   Godot --path . -s res://tools/preview_party.gd -- <game> <out.png> [party|box|pack|select|stats] [presses] [shiny]
+##   Godot --path . -s res://tools/preview_party.gd -- <game> <out.png> \
+##       [party|box|pack|select|stats] [presses] [shiny]
 ##
-## A final `shiny` makes the lead shiny. The PC's pic and the stats page draw it;
-## the party menu's icons deliberately do not, which is the cartridge's own
-## answer and is what the three captures together say.
-##
-## `presses` is a comma-separated button list driven into the overlay before the
-## shot, the way `preview_world_services.gd` photographs a second page: `d` is
-## down, `u` up, `l` left, `r` right, `a` and `b` the two buttons. Several
-## comma-separated lists write one file each.
-##
-## Each is built directly rather than through the overworld, which is what makes
-## this a screen test rather than a world one; the pack is given a world of its
-## own because its transactions read one. They reach the runtime
-## through `Gen2GameRuntime`, so they compile under `-s` where naming the
-## autoload by identifier would not.
-##
-## Opens a window: rendering needs a display. Pass `--resolution` for a size
-## other than the project's own.
+## The PC's pic and the stats page draw a shiny lead; the party menu's icons
+## deliberately do not, which is the cartridge's own answer. Opens a window.
 
 const FRAMES_BEFORE_CAPTURE: int = 6
 

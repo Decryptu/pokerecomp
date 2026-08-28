@@ -3,21 +3,13 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies [Gen2WorldCatalog] against freshly imported real caches, on all three
-## cartridges.
-##
-## The catalog is derived, not imported: it walks the decoded scripts and the map
-## events and calls certain shapes starters, gifts, statics, trades, prizes,
-## items, badges and shops. A derivation like that is exactly the thing that
-## quietly stops being true, so what is pinned here is not a count alone but the
-## SEMANTICS: the three starters are Chikorita, Cyndaquil and Totodile, the
-## badges are sixteen distinct ones, the legendaries are among the statics at
-## their own levels, and the Game Corner's prices are the cartridge's.
-##
-## A census pin catches a decode that drifts. A semantic pin catches a decode
-## that drifts into something still plausible, which is the failure a census
-## cannot see.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- catalog
+## cartridges. The catalog is derived rather than imported: it walks the decoded
+## scripts and map events and calls certain shapes starters, gifts, statics,
+## trades, prizes, items, badges and shops. A derivation like that quietly stops
+## being true, so what is pinned is not a count alone but the SEMANTICS: the three
+## starters by name, sixteen distinct badges, the legendaries among the statics at
+## their own levels, and the Game Corner's own prices. A census pin catches a decode
+## that drifts; a semantic pin catches one that drifts into something plausible.
 
 ## constants/pokemon_constants.asm.
 const CHIKORITA: int = 152

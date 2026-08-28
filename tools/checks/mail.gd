@@ -3,19 +3,12 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies mail against freshly imported real caches, in all three games.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## data/items/mail_items.asm's MailItems, data/text/mail_input_chars.asm's two
-## keyboards, gfx/mail/mail.pal, and the ten Load*MailGFX routines in
-## engine/pokemon/mail_2.asm.
-##
-## The pins here are counted off the asm rather than read from
-## [Gen2MailPage]'s own tables, so a mistranscribed byte count or tile number is
-## a failure instead of an agreement: LOADED_RANGES is what each routine's
-## `ld c, n * TILE_1BPP_SIZE` calls add up to, and every tile a routine places
-## has to fall inside its own range.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- mail
+## Expected values come from the pinned sources: `MailItems`, the two keyboards,
+## `gfx/mail/mail.pal` and the ten `Load*MailGFX` routines. The pins are counted off
+## the asm rather than read from [Gen2MailPage]'s own tables, so a mistranscribed
+## byte count or tile number is a failure instead of an agreement: LOADED_RANGES is
+## what each routine's `ld c, n * TILE_1BPP_SIZE` calls add up to, and every tile a
+## routine places has to fall inside its own range.
 
 ## `MailItems`, which is also [constant Gen2HeldItem.MAIL_ITEMS]' pin.
 const EXPECTED_ITEMS: Array[int] = [158, 181, 182, 183, 184, 185, 186, 187, 188, 189]

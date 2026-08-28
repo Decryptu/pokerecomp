@@ -1,23 +1,14 @@
 class_name Gen2WorldMapLayer
 extends Node2D
 
-## One map's blocks, drawn as a single quad.
-##
-## `LoadMetatiles` resolves a block byte to sixteen graphics tiles every time it
-## refreshes the screen, and the renderer used to do the same on the CPU: one
-## draw per 8x8 tile, 380 of them for a hardware screen. A view that fills the
-## window at one pixel per world pixel wants tens of thousands, and a view that
-## takes in a whole region wants hundreds of thousands, which no per-tile loop
-## reaches at sixty frames a second.
-##
-## So the fold moves to the GPU. The block buffer, the tileset's metatile table
-## and the coloured tile strip go across as three byte textures and the fragment
-## shader does exactly what [method Gen2WorldAPI.drawn_block_at] does: block
-## byte, `$00` to the map's border block, metatile slot, tile, pixel. Nothing is
-## baked, so the strip the animation and the map fades already repaint is the
-## one this samples and neither needs a second path.
-##
-## Drawn behind its parent, so the renderer's own sprites stay above the map.
+## One map's blocks, drawn as a single quad. `LoadMetatiles` resolves a block byte
+## to sixteen graphics tiles every time it refreshes the screen, and the renderer
+## used to do the same on the CPU: 380 draws for a hardware screen, tens of
+## thousands for a window-filling view and hundreds of thousands for a region.
+## So the fold moves to the GPU: the block buffer, the metatile table and the
+## coloured tile strip go across as three byte textures and the fragment shader
+## does what [method Gen2WorldAPI.drawn_block_at] does. Nothing is baked, so the
+## strip the animation repaints is the one this samples.
 
 ## The three lookups a tile costs, in one pass. `map_blocks` of zero is the void
 ## fill: every block is the border block, which is what surrounds a map on the

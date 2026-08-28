@@ -2,17 +2,12 @@ class_name Gen2OakSpeechScreen
 extends Control
 
 ## `OakSpeech` drawn: a pic above the standard text box, advanced with A, with
-## `NamePlayer`'s menu and keyboard where the source puts them.
-##
-## The routine is a run of `PrintText` calls separated by palette fades and
-## `ClearTilemap`, so this screen is a run of beats separated by
-## [Gen2IntroPresentation] queues. Nothing here waits a number of frames it
-## chose: every count is a `DelayFrames` operand, and a fade is the source's own
-## palette-byte remap applied to each palette on screen.
-##
-## Oak and the speech species use the ordinary imported pic tables. Gold and
-## Silver use CAL's trainer pic for the player; Crystal uses the imported raw
-## ChrisPic or KrisPic.
+## `NamePlayer`'s menu and keyboard where the source puts them. The routine is a
+## run of `PrintText` calls separated by palette fades and `ClearTilemap`, so this
+## screen is a run of beats separated by [Gen2IntroPresentation] queues. Nothing
+## here waits a number of frames it chose: every count is a `DelayFrames` operand.
+## Oak and the speech species use the ordinary imported pic tables; Gold and Silver
+## use CAL's trainer pic for the player and Crystal the imported raw ChrisPic.
 
 ## Carries the name the intro settled on, already through `InitName`'s default.
 signal finished(player_name: String)

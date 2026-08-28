@@ -1,26 +1,14 @@
 class_name Gen2CreditsPage
 extends RefCounted
 
-## The credits screen, on the tile grid the hardware uses.
-##
-## [Gen2Credits] owns the BG map and the attribute map, because
-## `ConstructCreditsTilemap` and `ParseCredits` are what write them; this
-## resolves a tile number to pixels and colours it through `CreditsPalettes`.
-##
-## `Credits`' own VRAM window:
-##
-## | Tiles | Contents |
-## |---|---|
-## | $00-$0f | the banner's current 4x4 mon cell, out of `CreditsMonsGFX` |
-## | $20-$28 | `CreditsBorderGFX` |
-## | $40-$4f | `TheEndGFX` |
-## | $60-$7c | `CopyrightGFX`, where `LoadFontsBattleExtra` would put its strip |
-## | $80+ | the font, untouched |
-##
-## The two border bands are the only thing that scrolls: `hLCDCPointer` is
-## LOW(rSCX) and `Credits_LYOverride` fills eight scanlines of `wLYOverrides` per
-## band, so those rows are sampled through an offset that walks two pixels a
-## cycle.
+## The credits screen, on the tile grid the hardware uses. [Gen2Credits] owns the
+## BG map and the attribute map, because `ConstructCreditsTilemap` and
+## `ParseCredits` are what write them; this resolves a tile number to pixels and
+## colours it through `CreditsPalettes`. The VRAM window is the banner's 4x4 mon
+## cell at $00, `CreditsBorderGFX` at $20, `TheEndGFX` at $40, `CopyrightGFX` at
+## $60 and the font untouched from $80. The two border bands are the only thing
+## that scrolls: `Credits_LYOverride` fills eight scanlines of `wLYOverrides` per
+## band, so those rows are sampled through an offset walking two pixels a cycle.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = Gen2Credits.COLUMNS

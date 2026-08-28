@@ -2,38 +2,14 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the walk north from Saffron to Cerulean City and the way from there
-## to the Power Plant, against freshly imported real caches for both command
-## profiles.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## maps/SaffronCity.asm, maps/Route5SaffronGate.asm, maps/Route5.asm,
-## maps/CeruleanCity.asm, maps/CeruleanGym.asm, maps/Route9.asm,
-## maps/Route10North.asm, maps/PowerPlant.asm and data/maps/attributes.asm.
-##
-## The load-bearing finding is the last one. Misty and her three swimmers all
-## carry EVENT_TRAINERS_IN_CERULEAN_GYM as their hide flag and
-## `InitializeEventsScript` sets it, so the gym is empty until
-## `Route25MistyDate1Script` clears it; that scene is armed by the gym's own
-## grunt, and the grunt by `PowerPlantManager`. So the badge waits on the Power
-## Plant, and the plant is not walked to: Cerulean's east edge crosses on one
-## cell into a fourteen-cell pocket of Route 9 whose one cut tree opens 368 cells
-## reaching a single south crossing, and what that lands in is a yard holding
-## nothing but the Route 10 Pokecenter. The plant's own door sits in a region
-## with no map edge and no walkable neighbour, and Route 10 North's southern half
-## cannot even enter the water beside it, because row 14 is a buoy line whose own
-## permission walls its north face. The way in is Route 9's river, whose shore
-## the same cut opens: sixty cells of water that meet the south edge on columns
-## 56 and 57 and come out in Route 10 North's own lake, one step from the
-## plant's shore.
-##
-## The gym behind that errand is a pool. Its three swimmers stand on the water,
-## and the walk to Misty cannot avoid Diana's sight line or both of the other
-## two, so the badge needs approaches that cross water. They do, because
-## SeenByTrainerScript is `applymovementlasttalked` and NormalStep consults no
-## permission.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- cerulean
+## Verifies the walk north from Saffron to Cerulean City and the way from there to
+## the Power Plant, for both command profiles. The load-bearing finding: Misty and
+## her three swimmers all hide behind EVENT_TRAINERS_IN_CERULEAN_GYM, cleared by a
+## scene armed by the gym's grunt and he by `PowerPlantManager`, so the badge waits
+## on the Power Plant. The plant is not walked to: its door sits in a region with no
+## map edge and no walkable neighbour, and the way in is Route 9's river, sixty
+## cells of water opened by the same cut, meeting the south edge on columns 56 and
+## 57 and coming out one step from the plant's shore.
 
 
 ## constants/map_constants.asm: the CERULEAN group is 7, SAFFRON 25, LAVENDER 18.
@@ -224,15 +200,14 @@ func _verify_cerulean(data: GameData, game_id: StringName) -> void:
 	print("%s cerulean: one east crossing onto Route 9." % game_id)
 
 
-## The gym, which is a pool with three swimmers standing on it.
-##
-## Five of its six objects hide behind EVENT_TRAINERS_IN_CERULEAN_GYM, which is
-## what makes the badge an errand; the sixth is the grunt, whose own scene takes
-## him off the ladder column. The load-bearing part is the last: no walk to Misty
-## avoids Diana's sight line or both of the other two, and every approach stops
-## on water that `can_object_walk_to()` refuses. They resolve anyway, because
-## SeenByTrainerScript is `applymovementlasttalked` and every step in that buffer
-## reaches NormalStep, which consults no permission at all.
+## The gym, which is a pool with three swimmers standing on it. Five of its six
+## objects hide behind EVENT_TRAINERS_IN_CERULEAN_GYM, which is what makes the
+## badge an errand; the sixth is the grunt, whose own scene takes him off the ladder
+## column. The load-bearing part is the last: no walk to Misty avoids Diana's sight
+## line or both of the other two, and every approach stops on water that
+## `can_object_walk_to()` refuses. They resolve anyway, because SeenByTrainerScript
+## is `applymovementlasttalked` and every step in that buffer reaches NormalStep,
+## which consults no permission at all.
 func _verify_cerulean_gym(data: GameData, game_id: StringName) -> void:
 	var gym: Gen2WorldAPI = _open(data, CERULEAN_GROUP, CERULEAN_GYM, CERULEAN_GYM_LANDING)
 	if gym == null:

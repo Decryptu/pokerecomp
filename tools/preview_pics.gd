@@ -4,16 +4,10 @@ extends SceneTree
 ##
 ##   Godot --headless --path . -s res://tools/preview_pics.gd -- <game> <out.png> [what] [--shiny]
 ##
-## e.g. gold /tmp/gold_front.png front
-##
-## The cache stores colour indices, not pixels, with a palette applied at draw
-## time so shiny is free. This applies one and writes the result out, the only
-## way to tell a correct decode from a plausible wrong one. Headless: it writes
-## an image and opens no window.
-##
-## The font and borders come out too. Both are one row of tiles, so the font is
-## folded to sixteen a row, the shape the charmap describes, putting the
-## alphabets, the gaps and the digits where they can be read at a glance.
+## The cache stores colour indices rather than pixels, with a palette applied at
+## draw time so shiny is free; this applies one, which is the only way to tell a
+## correct decode from a plausible wrong one. The font comes out folded to sixteen
+## tiles a row, the shape the charmap describes.
 
 const ATLASES: PackedStringArray = ["front", "back", "unown_front", "unown_back", "trainers"]
 const SHEETS: PackedStringArray = [

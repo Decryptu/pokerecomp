@@ -2,18 +2,13 @@ class_name Gen2DayCareScreen
 extends Control
 
 ## `DayCareMan`, `DayCareLady`, `DayCareManOutside`, `DayCareMon1` and
-## `DayCareMon2` on the overworld's own pump.
-##
-## All five are straight lines of boxes, questions, a party list and two sounds,
-## so they are one screen with a queue rather than five: [Gen2WorldDayCare]
-## answers every question that needs a source reading and this owns the presses.
-##
-## Which of the five is running decides how it ends. The two counters and the man
-## outside are called from a script that follows them with `waitbutton`, so their
-## last box is handed to the caller through [signal finished] and stands in the
-## world's speech box for that one press; the two signs are called with no
-## `waitbutton` at all, because `DayCareMonCursor` and the compatibility text's
-## own `prompt` are the press.
+## `DayCareMon2` on the overworld's own pump. All five are straight lines of
+## boxes, questions, a party list and two sounds, so they are one screen with a
+## queue rather than five. Which of the five is running decides how it ends: the
+## two counters and the man outside are called from a script that follows them
+## with `waitbutton`, so their last box stands in the world's speech box for that
+## one press, while the two signs are called with no `waitbutton` because
+## `DayCareMonCursor` and the compatibility text's own `prompt` are the press.
 
 ## [param script_value] is -1 for the four routines that write no wScriptVar.
 signal finished(script_value: int, ending_text: String)

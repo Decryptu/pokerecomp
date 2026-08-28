@@ -1,24 +1,14 @@
 class_name Gen2LinkTransport
 extends RefCounted
 
-## The cable, as the only thing above it needs it to be.
-##
-## `home/serial.asm` and `engine/link/link.asm` reach the other Game Boy through
-## exactly three operations, and every routine the cable club runs is built from
-## them: read `hSerialConnectionStatus`, exchange one byte with `Link_EnsureSync`
-## or `Serial_PlaceWaitingTextAndSyncAndExchangeNybble`, and exchange a block
-## with `Serial_ExchangeBytes`. There is no cable on a modern platform, so this
-## project chooses the transport, and this class is that choice: the three
-## operations, and nothing about wires, timing or bit order.
-##
-## Scene free, and injected the way randomness is. A transport with no peer is
-## the honest default and a real game path rather than a stub: `WaitForLinkedFriend`
-## times out and the receptionist says the friend is not ready, which is what
-## the cartridge does with one Game Boy.
-##
-## The one peer that exists today is another of this player's own save slots,
-## which [method peer_from_save] builds. A network transport subclasses this and
-## overrides the three operations; nothing above changes.
+## The cable, as the only thing above it needs it to be. `home/serial.asm` reaches
+## the other Game Boy through exactly three operations and every routine the cable
+## club runs is built from them: read `hSerialConnectionStatus`, exchange one byte,
+## and exchange a block. There is no cable on a modern platform, so this class is
+## the three operations and nothing about wires, timing or bit order. Scene free
+## and injected: a transport with no peer is the honest default and a real game
+## path, since `WaitForLinkedFriend` times out. The one peer today is another of
+## this player's slots; a network transport overrides the three operations.
 
 ## constants/serial_constants.asm. `CONNECTION_NOT_ESTABLISHED` is what
 ## `Link_ResetSerialRegistersAfterLinkClosure` writes back.

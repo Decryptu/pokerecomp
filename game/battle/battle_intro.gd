@@ -3,27 +3,12 @@ extends RefCounted
 
 ## `BattleIntroSlidingPics` (engine/battle/sliding_intro.asm) is a background
 ## scroll, not a moving object: `SCX` is rewritten part way down the frame so the
-## top band comes in from one side and the middle from the other while the bottom
-## holds. A band edge falls inside the player's status panel, hence per scanline.
-## `InitBattleDisplay.BlankBGMap` leaves everything past the scene blank, so an
-## offset wraps at [constant MAP_WIDTH] and blank scrolls in.
-##
-## The one part of the battle presentation the two games do not share: Crystal
-## drives `wLYOverrides` while pokegold busy-waits on `rLY` and writes `rSCX`
-## twice a frame, so band edges, starting offsets and the walk all differ.
-## Neither band lands on zero (Crystal's middle ends at 2, Gold's top at 4);
-## `InitBattleDisplay`'s `xor a` / `ldh [hSCX], a` settles it and [method
-## finished] is that write.
-##
-## The player is in two pieces while it runs, and reading `.subfunction3` as the
-## overworld's leftovers cost a session: the eighteen sprites it walks are
-## `CopyBackpic.LoadTrainerBackpicAsOAM`'s own, which is the top three tile rows
-## of the player's back pic drawn as OAM. The bottom of that pic is on the
-## background and comes in with the middle band, and the two track each other to
-## within the two pixels `InitBattleDisplay`'s `xor a` / `ldh [hSCX], a` settles.
-## Without the sprites the player has no head and no shoulders for the whole
-## slide. `HideSprites` is what takes them off, after which `PlaceGraphic` puts
-## the whole pic on the background at its own square.
+## top band comes in from one side and the middle from the other, and a band edge
+## falls inside the status panel, hence per scanline. The one part of the battle
+## presentation the two games do not share: Crystal drives `wLYOverrides` while
+## pokegold busy-waits on `rLY`. Neither band lands on zero, and
+## `InitBattleDisplay`'s `xor a` / `ldh [hSCX], a` settles it.
+## [method sprites] says why the player is in two pieces while it runs.
 
 ## 32 tiles of 8, what an offset wraps at; past the screen's 160 is blank.
 const MAP_WIDTH: int = 256
@@ -97,15 +82,13 @@ func advance_frame() -> bool:
 	return true
 
 
-## `.LoadTrainerBackpicAsOAM` and `.subfunction3` together: the player's own
-## eighteen sprites where this frame leaves them, each { tile, x, y } with OAM's
-## own biased coordinates, which is what a renderer of one already takes.
-##
-## Gold and Silver walk the same eighteen: `.LoadTrainerBackpicAsOAM` is
-## byte-identical in both disassemblies and their own `.subfunction1` steps them
-## by two beside its `rSCX` writes. Crystal's walk is measured against a real
-## cartridge, sprite by sprite, from x 158 to 16, and Gold's ends on the same 16:
-## its lead frame spends no step, but its loop skips none either.
+## `.LoadTrainerBackpicAsOAM` and `.subfunction3` together: the top three tile
+## rows of the player's back pic drawn as OAM, where this frame leaves them, each
+## { tile, x, y } with OAM's own biased coordinates. The bottom of that pic is on
+## the background and comes in with the middle band; without the sprites the
+## player has no head or shoulders for the whole slide. Gold and Silver walk the
+## same eighteen, and Crystal's walk is measured against a real cartridge sprite
+## by sprite, x 158 to 16, with Gold ending on the same 16.
 func sprites() -> Array:
 	var out: Array = []
 	if finished():
@@ -151,21 +134,14 @@ func offsets() -> PackedInt32Array:
 	return out
 
 
-## How far the picture standing in each band is from its resting square, along
-## x and in pixels, for a renderer with no background plane to read a scroll off.
-## Zero once the slide has returned.
-##
-## Taken from the band's own arithmetic rather than from the byte [method
-## offsets] reports, because a scroll register cannot say which way a picture is
-## travelling: the two bands come in from opposite sides, and Crystal's middle
-## runs two pixels past its square and back, so the same `$02` reads as +254 or
-## -2 depending only on when in the slide it was sampled. The unwrapped step
-## count has no such ambiguity.
-##
-## The top band carries the opponent, which is in from the left, so its
-## displacement is negative and climbs to zero. The middle carries the player,
-## in from the right, so its own falls to zero and then to the -2 Crystal
-## overshoots by before `InitBattleDisplay`'s `xor a` settles it.
+## How far the picture standing in each band is from its resting square, along x
+## and in pixels, for a renderer with no background plane. Taken from the band's
+## own arithmetic rather than from [method offsets], because a scroll register
+## cannot say which way a picture is travelling: the same `$02` reads as +254 or
+## -2 depending only on when it was sampled. The top band carries the opponent, in
+## from the left, so its displacement climbs to zero; the middle carries the
+## player, in from the right, so its own falls to zero and then to the -2 Crystal
+## overshoots by.
 func enemy_offset() -> float:
 	return 0.0 if finished() else float(-_top_scx())
 

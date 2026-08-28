@@ -3,23 +3,13 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies the corridor from the Indigo Plateau Pokemon Center to the Hall of
-## Fame, against freshly imported real caches, for both command profiles.
-##
-## Expected values come from the pinned pokecrystal and pokegold sources:
-## `maps/IndigoPlateauPokecenter1F.asm`, `maps/WillsRoom.asm`,
-## `maps/KogasRoom.asm`, `maps/BrunosRoom.asm`, `maps/KarensRoom.asm`,
-## `maps/LancesRoom.asm` and `maps/HallOfFame.asm`. The Pokemon Center and the
-## Hall of Fame are byte identical between the pins and the four rooms differ
-## only in their `reanchormap` operand ($86 Crystal, $85 Gold/Silver). Lance's
-## room is the profile split: Gold and Silver put Lance one row further up, its
-## exit warps on y=0 rather than y=1, and end the champion scene with `warp`
-## rather than `warpfacing`.
-##
-## What is worth pinning is the two block changes each room turns on. Nothing
-## else stops the leg: the door behind the player is walled by the entrance
-## scene, and the door ahead is opened only by the boss.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- elite_four
+## Fame, for both command profiles. The Pokemon Center and the Hall of Fame are byte
+## identical between the pins and the four rooms differ only in their `reanchormap`
+## operand; Lance's room is the profile split, Gold and Silver putting Lance one row
+## further up, warping out on y=0 and ending the champion scene with `warp` rather
+## than `warpfacing`. What is worth pinning is the two block changes each room turns
+## on: nothing else stops the leg, the door behind the player being walled by the
+## entrance scene and the door ahead opened only by the boss.
 
 
 ## constants/map_constants.asm's INDIGO group, the 16th `newgroup`.

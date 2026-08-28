@@ -3,18 +3,12 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies the sprites the overworld draws over an object rather than as one,
-## against freshly imported real caches: `data/sprites/emotes.asm`'s twelve
-## sheets and ShakeHeadbuttTree's own.
-##
-## Every expectation comes from the pinned sources: the emote table's tile
-## numbers are `Facings`' own ($f8 for the four-tile bubbles, $fc for the jump
-## shadow and the fishing rod, $fe for the boulder dust and the grass rustle),
-## and all three cartridges ship the art itself byte identical, which is what
-## the cross-cartridge comparison checks. A sheet read at the wrong offset
-## decodes neighbouring code into legal-looking pixels, so shape alone would not
-## catch it.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- overworld_effects
+## against freshly imported real caches: `data/sprites/emotes.asm`'s twelve sheets
+## and ShakeHeadbuttTree's own. Every expectation comes from the pinned sources: the
+## emote table's tile numbers are `Facings`' own, and all three cartridges ship the
+## art itself byte identical, which is what the cross-cartridge comparison checks. A
+## sheet read at the wrong offset decodes neighbouring code into legal-looking
+## pixels, so shape alone would not catch it.
 
 ## The names Gen2WorldImporter writes, with the tile count and VRAM tile each
 ## record must name.

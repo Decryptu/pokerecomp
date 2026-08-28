@@ -2,16 +2,12 @@ class_name Gen2StartMenuScreen
 extends Control
 
 ## The overworld pause menu (engine/menus/start_menu.asm). The list, `_Option`,
-## `SaveMenu` and every box the pack opens are the cartridge's own screens
-## through [Gen2StartMenuPage] and [Gen2PackPage], drawn into whichever
-## [Gen2Screen] the host hands over. A caller that hands over none keeps the
-## window-resolution panel below, which is what a launcher preview gets.
-##
-## Pokedex, Pokemon and Pokegear are screens the world already owns
-## (Gen2PokedexScreen, Gen2PartyScreen, the phone list on
-## Gen2WorldServiceScreen), so this only reports the choice through
-## [signal action_chosen]. Pack and Save live here as internal modes, the way
-## Gen2WorldServiceScreen owns a mart mode beside its menu mode.
+## `SaveMenu` and every box the pack opens are the cartridge's own screens through
+## [Gen2StartMenuPage] and [Gen2PackPage], drawn into whichever [Gen2Screen] the
+## host hands over; a caller that hands over none keeps the window-resolution
+## panel below. Pokedex, Pokemon and Pokegear are screens the world already owns,
+## so this only reports the choice through [signal action_chosen]. Pack and Save
+## live here as internal modes.
 
 ## Emitted for an available entry this screen does not own itself
 ## (Pokedex, Pokemon, Pokegear, Player); the caller opens the matching screen.
@@ -808,12 +804,10 @@ func _open_mods_mode() -> void:
 
 ## The rows the MODS entry shows: the host's own VIEW row where the player has
 ## more than one view to choose from, then one row per mod that registered a
-## setting.
-##
-## The view is the host's and not any mod's: `Gen2ModHost` holds one selection
-## for both surfaces, persists it and draws it on the launcher's mod page, and a
-## mod registering a VIEW button of its own would be a private copy of that
-## state, six of them for six mods. This is the same list on the surface a
+## setting. The view is the host's and not any mod's: `Gen2ModHost` holds one
+## selection for both surfaces, persists it and draws it on the launcher's mod
+## page, and a mod registering a VIEW button of its own would be a private copy of
+## that state, six of them for six mods. This is the same list on the surface a
 ## player is already changing what a mod does from, which is the only place a
 ## shipped build has: `V` is behind [method Gen2DebugKeys.enabled].
 func _mod_rows() -> Array:

@@ -1,18 +1,14 @@
 class_name Gen2EggHatchScreen
 extends Control
 
-## `HatchEggs` and the `EggHatch_AnimationSequence` its `.Text_HatchEgg` runs,
-## for one party egg at a time.
-##
-## Presentation only: [method Gen2WorldPartyHost.hatch_egg] has already written
-## the party row, which is the source's own order, so the picture the sequence
-## ends on is the Pokemon the row now holds. What this screen owns after that is
-## the nickname: [signal named] carries the answer and the caller writes it.
-##
+## `HatchEggs` and the `EggHatch_AnimationSequence` its `.Text_HatchEgg` runs, for
+## one party egg at a time. Presentation only:
+## [method Gen2WorldPartyHost.hatch_egg] has already written the party row, which
+## is the source's own order, so the picture the sequence ends on is the Pokemon
+## the row now holds. What this owns after that is the nickname.
 ## `Hatch_InitShellFragments`' ten shell pieces are sprite-anim objects and this
-## project has no sprite-anim layer outside the intro, the same reason
-## `.PlayEvolvedSFX`'s balls of light are absent from [Gen2EvolutionScreen].
-## Their 130 frames are spent with the hatchling standing.
+## project has no sprite-anim layer outside the intro, so their 130 frames are
+## spent with the hatchling standing.
 
 ## The nickname the player settled on for the hatched party slot.
 signal named(party_index: int, nickname: String)

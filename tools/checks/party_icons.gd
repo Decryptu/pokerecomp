@@ -3,17 +3,13 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies the menu mon icons a party page draws, against freshly imported real
-## caches: `MonMenuIcons` (one of the 38 `ICON_*` shapes per species),
-## `IconPointers`' art behind it, `HeldItemIcons` and `PartyMenuOBPals`.
-##
-## The whole corpus rather than a sample: every species on all three cartridges
-## resolves to an icon whose eight tiles decode and carry ink. The table is a
-## plain byte run, so a wrong offset lands on neighbouring data that still reads
-## as numbers; what says it is the right run is that every entry is in range,
-## that the first and last species are the shapes the source names, and that the
-## three cartridges agree entry for entry.
-##
-##   Godot --headless --path . -s res://tools/validate.gd -- party_icons
+## caches: `MonMenuIcons`, `IconPointers`' art behind it, `HeldItemIcons` and
+## `PartyMenuOBPals`. The whole corpus rather than a sample: every species on all
+## three cartridges resolves to an icon whose eight tiles decode and carry ink. The
+## table is a plain byte run, so a wrong offset lands on neighbouring data that
+## still reads as numbers; what says it is the right run is that every entry is in
+## range, that the first and last species are the shapes the source names, and that
+## the three cartridges agree entry for entry.
 
 ## `constants/icon_constants.asm`, the entries the census names.
 const ICON_BULBASAUR: int = 22
