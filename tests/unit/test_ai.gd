@@ -1396,14 +1396,13 @@ func test_every_redundancy_row_has_a_handler() -> void:
 
 
 ## The one assertion that cannot be made by running a single pairing: which
-## effects `_apply_smart` dispatches at all. The arms are read out of the file
-## and resolved through [Gen2MoveEffect]'s own constants, so a renamed constant
-## fails here rather than silently dropping a row.
+## effects `_apply_smart` dispatches at all. Its table is keyed by
+## [Gen2MoveEffect]'s own constants, so a renamed constant fails to parse rather
+## than silently dropping a row.
 func test_every_smart_jumptable_entry_has_a_handler() -> void:
-	var handled: Array[int] = _dispatched_effects("_apply_smart")
 	var missing: Array[int] = []
 	for number: int in SMART_EFFECT_NUMBERS:
-		if not handled.has(number):
+		if not Gen2BattleAI.SMART_HANDLERS.has(number):
 			missing.append(number)
 	assert_eq(missing, [] as Array[int], "every AI_Smart row needs an arm")
 

@@ -426,272 +426,351 @@ func _roll_percent(threshold: int) -> bool:
 	return _random.randi_range(0, 255) < threshold
 
 
+## The segments whose whole body is one line and the segment it hands over to,
+## which is what `RadioJumptable`'s rows mostly are.
+const SEGMENT_LINES: Dictionary = {
+	&"OaksPKMNTalk2": [&"OPT_IntroText2", &"OaksPKMNTalk3"],
+	&"OaksPKMNTalk3": [&"OPT_IntroText3", &"OaksPKMNTalk4"],
+	&"OaksPKMNTalk5": [&"OPT_OakText2", &"OaksPKMNTalk6"],
+	&"OaksPKMNTalk6": [&"OPT_OakText3", &"OaksPKMNTalk7"],
+	&"OaksPKMNTalk7": [&"OPT_MaryText1", &"OaksPKMNTalk8"],
+	&"BenMonMusic2": [&"BenIntroText2", &"BenMonMusic3"],
+	&"BenMonMusic3": [&"BenIntroText3", &"BenFernMusic4"],
+	&"FernMonMusic2": [&"FernIntroText2", &"BenFernMusic4"],
+	&"BenFernMusic4": [&"BenFernText1", &"BenFernMusic5"],
+	&"LuckyNumberShow2": [&"LC_Text2", &"LuckyNumberShow3"],
+	&"LuckyNumberShow3": [&"LC_Text3", &"LuckyNumberShow4"],
+	&"LuckyNumberShow4": [&"LC_Text4", &"LuckyNumberShow5"],
+	&"LuckyNumberShow5": [&"LC_Text5", &"LuckyNumberShow6"],
+	&"LuckyNumberShow6": [&"LC_Text6", &"LuckyNumberShow7"],
+	&"LuckyNumberShow7": [&"LC_Text7", &"LuckyNumberShow8"],
+	&"LuckyNumberShow8": [&"LC_Text8", &"LuckyNumberShow9"],
+	&"LuckyNumberShow9": [&"LC_Text9", &"LuckyNumberShow10"],
+	&"LuckyNumberShow10": [&"LC_Text7", &"LuckyNumberShow11"],
+	&"LuckyNumberShow11": [&"LC_Text8", &"LuckyNumberShow12"],
+	&"LuckyNumberShow12": [&"LC_Text10", &"LuckyNumberShow13"],
+	&"LuckyNumberShow14": [&"LC_DragText1", &"LuckyNumberShow15"],
+	&"LuckyNumberShow15": [&"LC_DragText2", &"LuckyNumberShow1"],
+	&"PeoplePlaces2": [&"PnP_Text2", &"PeoplePlaces3"],
+	&"RocketRadio2": [&"RocketRadioText2", &"RocketRadio3"],
+	&"RocketRadio3": [&"RocketRadioText3", &"RocketRadio4"],
+	&"RocketRadio4": [&"RocketRadioText4", &"RocketRadio5"],
+	&"RocketRadio5": [&"RocketRadioText5", &"RocketRadio6"],
+	&"RocketRadio6": [&"RocketRadioText6", &"RocketRadio7"],
+	&"RocketRadio7": [&"RocketRadioText7", &"RocketRadio8"],
+	&"RocketRadio8": [&"RocketRadioText8", &"RocketRadio9"],
+	&"RocketRadio9": [&"RocketRadioText9", &"RocketRadio10"],
+	&"RocketRadio10": [&"RocketRadioText10", &"RocketRadio1"],
+	&"BuenasPassword2": [&"BuenaRadioText2", &"BuenasPassword3"],
+	&"BuenasPassword5": [&"BuenaRadioText5", &"BuenasPassword6"],
+	&"BuenasPassword6": [&"BuenaRadioText6", &"BuenasPassword7"],
+	&"BuenasPassword9": [&"BuenaRadioMidnightText1", &"BuenasPassword10"],
+	&"BuenasPassword10": [&"BuenaRadioMidnightText2", &"BuenasPassword11"],
+	&"BuenasPassword11": [&"BuenaRadioMidnightText3", &"BuenasPassword12"],
+	&"BuenasPassword12": [&"BuenaRadioMidnightText4", &"BuenasPassword13"],
+	&"BuenasPassword13": [&"BuenaRadioMidnightText5", &"BuenasPassword14"],
+	&"BuenasPassword14": [&"BuenaRadioMidnightText6", &"BuenasPassword15"],
+	&"BuenasPassword15": [&"BuenaRadioMidnightText7", &"BuenasPassword16"],
+	&"BuenasPassword16": [&"BuenaRadioMidnightText8", &"BuenasPassword17"],
+	&"BuenasPassword17": [&"BuenaRadioMidnightText9", &"BuenasPassword18"],
+	&"BuenasPassword18": [&"BuenaRadioMidnightText10", &"BuenasPassword19"],
+	&"BuenasPassword19": [&"BuenaRadioMidnightText10", &"BuenasPassword20"],
+}
+
+## The segments that do more than say a line, as the handler that runs each.
+const SEGMENT_HANDLERS: Dictionary = {
+	&"OaksPKMNTalk1": &"_segment_oaks_pkmn_talk1",
+	&"OaksPKMNTalk4": &"_segment_oaks_pkmn_talk4",
+	&"OaksPKMNTalk8": &"_segment_oaks_pkmn_talk8",
+	&"OaksPKMNTalk9": &"_segment_oaks_pkmn_talk9",
+	&"OaksPKMNTalk10": &"_segment_oaks_pkmn_talk10",
+	&"OaksPKMNTalk11": &"_segment_oaks_pkmn_talk11",
+	&"OaksPKMNTalk12": &"_segment_oaks_pkmn_talk12",
+	&"OaksPKMNTalk13": &"_segment_oaks_pkmn_talk13",
+	&"OaksPKMNTalk14": &"_segment_oaks_pkmn_talk14",
+	&"PokedexShow1": &"_segment_pokedex_show1",
+	&"PokedexShow2": &"_segment_pokedex_show2",
+	&"PokedexShow3": &"_segment_pokedex_show3",
+	&"PokedexShow4": &"_segment_pokedex_show4",
+	&"PokedexShow5": &"_segment_pokedex_show5",
+	&"PokedexShow6": &"_segment_pokedex_show6",
+	&"PokedexShow7": &"_segment_pokedex_show7",
+	&"PokedexShow8": &"_segment_pokedex_show8",
+	&"BenMonMusic1": &"_segment_ben_mon_music1",
+	&"FernMonMusic1": &"_segment_fern_mon_music1",
+	&"BenFernMusic5": &"_segment_ben_fern_music5",
+	&"BenFernMusic6": &"_segment_ben_fern_music6",
+	&"BenFernMusic7": &"_segment_ben_fern_music7",
+	&"LuckyNumberShow1": &"_segment_lucky_number_show1",
+	&"LuckyNumberShow13": &"_segment_lucky_number_show13",
+	&"PeoplePlaces1": &"_segment_people_places1",
+	&"PeoplePlaces3": &"_segment_people_places3",
+	&"PeoplePlaces4": &"_segment_people_places4",
+	&"PeoplePlaces5": &"_segment_people_places5",
+	&"PeoplePlaces6": &"_segment_people_places6",
+	&"PeoplePlaces7": &"_segment_people_places7",
+	&"RocketRadio1": &"_segment_rocket_radio1",
+	&"PokeFluteRadio": &"_segment_music_only",
+	&"UnownRadio": &"_segment_music_only",
+	&"EvolutionRadio": &"_segment_music_only",
+	&"BuenasPassword1": &"_segment_buenas_password1",
+	&"BuenasPassword3": &"_segment_buenas_password3",
+	&"BuenasPassword4": &"_segment_buenas_password4",
+	&"BuenasPassword7": &"_segment_buenas_password7",
+	&"BuenasPassword8": &"_segment_buenas_password8",
+	&"BuenasPassword20": &"_segment_buenas_password20",
+	&"BuenasPassword21": &"_segment_buenas_password21",
+}
+
+
 func _run(segment_id: StringName) -> void:
 	ran_segment = segment_id
-	match segment_id:
-		&"OaksPKMNTalk1":
-			_oaks_counter = 5
-			_start_station(Gen2WorldRadio.OAKS_POKEMON_TALK)
-			_say(&"OPT_IntroText1", &"OaksPKMNTalk2")
-		&"OaksPKMNTalk2":
-			_say(&"OPT_IntroText2", &"OaksPKMNTalk3")
-		&"OaksPKMNTalk3":
-			_say(&"OPT_IntroText3", &"OaksPKMNTalk4")
-		&"OaksPKMNTalk4":
-			_oaks_pick_wild()
-			_say(&"OPT_OakText1", &"OaksPKMNTalk5")
-		&"OaksPKMNTalk5":
-			_say(&"OPT_OakText2", &"OaksPKMNTalk6")
-		&"OaksPKMNTalk6":
-			_say(&"OPT_OakText3", &"OaksPKMNTalk7")
-		&"OaksPKMNTalk7":
-			_say(&"OPT_MaryText1", &"OaksPKMNTalk8")
-		&"OaksPKMNTalk8":
-			_print(OPT_ADVERBS[_roll(OPT_ADVERBS.size())], &"OaksPKMNTalk9")
-		&"OaksPKMNTalk9":
-			var adjective: String = _oaks_adjective(_roll(OPT_ADJECTIVES.size()))
-			_oaks_counter -= 1
-			var next: StringName = &"OaksPKMNTalk4"
-			if _oaks_counter == 0:
-				_oaks_counter = 5
-				next = &"OaksPKMNTalk10"
-			_print(adjective, next)
-		&"OaksPKMNTalk10":
-			# `RadioMusicRestartPokemonChannel` and two `PrintText`s rather than
-			# radio lines: the box is cleared and "#MON" placed straight into it.
-			pending_music = MUSIC_POKEMON_TALK
-			_top = ""
-			_bottom = String(TEXTS[&"OPT_PokemonChannelText"])
-			_line = &"OaksPKMNTalk11"
-			_delay = LINE_FRAMES
-		&"OaksPKMNTalk11":
-			_place(_pad(RESTART_TOP_COLUMN, "#MON"), true, &"OaksPKMNTalk12")
-		&"OaksPKMNTalk12":
-			_place("#MON Channel", false, &"OaksPKMNTalk13")
-		&"OaksPKMNTalk13":
-			_place(_bottom, false, &"OaksPKMNTalk14")
-		&"OaksPKMNTalk14":
-			if _delay > 0:
-				_delay -= 1
-				return
-			pending_music = MUSIC_POKEMON_TALK
-			_top = ""
-			_bottom = ""
-			_next_line = &"OaksPKMNTalk4"
-			_lines_printed = 0
-			_line = SCROLL
-			_delay = RESTART_FRAMES
-
-		&"PokedexShow1":
-			_start_station(Gen2WorldRadio.POKEDEX_SHOW)
-			if not _pokedex_pick_mon():
-				# `.loop` retries until it finds a caught species, so an empty
-				# dex would spin forever on the cartridge; here the station
-				# simply has nothing to read.
-				_line = &""
-				return
-			_say(&"PokedexShowText", &"PokedexShow2")
-		&"PokedexShow2":
-			_print(_dex_line(), &"PokedexShow3")
-		&"PokedexShow3":
-			_print(_dex_line(), &"PokedexShow4")
-		&"PokedexShow4":
-			_print(_dex_line(), &"PokedexShow5")
-		&"PokedexShow5":
-			_print(_dex_line(), &"PokedexShow6")
-		&"PokedexShow6":
-			_print(_dex_line(), &"PokedexShow7")
-		&"PokedexShow7":
-			_print(_dex_line(), &"PokedexShow8")
-		&"PokedexShow8":
-			_print(_dex_line(), &"PokedexShow1")
-
-		&"BenMonMusic1":
-			_start_pokemon_music()
-			_say(&"BenIntroText1", &"BenMonMusic2")
-		&"BenMonMusic2":
-			_say(&"BenIntroText2", &"BenMonMusic3")
-		&"BenMonMusic3":
-			_say(&"BenIntroText3", &"BenFernMusic4")
-		&"FernMonMusic1":
-			_start_pokemon_music()
-			_say(&"FernIntroText1", &"FernMonMusic2")
-		&"FernMonMusic2":
-			_say(&"FernIntroText2", &"BenFernMusic4")
-		&"BenFernMusic4":
-			_say(&"BenFernText1", &"BenFernMusic5")
-		&"BenFernMusic5":
-			_say(
-				&"BenFernText2A" if _march_day() else &"BenFernText2B",
-				&"BenFernMusic6"
-			)
-		&"BenFernMusic6":
-			_say(
-				&"BenFernText3A" if _march_day() else &"BenFernText3B",
-				&"BenFernMusic7"
-			)
-		&"BenFernMusic7":
-			# A bare `ret`: the music channel says its three lines once and then
-			# leaves the box alone until the dial moves.
-			_line = &""
-
-		&"LuckyNumberShow1":
-			_start_station(Gen2WorldRadio.LUCKY_CHANNEL)
-			_say(&"LC_Text1", &"LuckyNumberShow2")
-		&"LuckyNumberShow2":
-			_say(&"LC_Text2", &"LuckyNumberShow3")
-		&"LuckyNumberShow3":
-			_say(&"LC_Text3", &"LuckyNumberShow4")
-		&"LuckyNumberShow4":
-			_say(&"LC_Text4", &"LuckyNumberShow5")
-		&"LuckyNumberShow5":
-			_say(&"LC_Text5", &"LuckyNumberShow6")
-		&"LuckyNumberShow6":
-			_say(&"LC_Text6", &"LuckyNumberShow7")
-		&"LuckyNumberShow7":
-			_say(&"LC_Text7", &"LuckyNumberShow8")
-		&"LuckyNumberShow8":
-			_say(&"LC_Text8", &"LuckyNumberShow9")
-		&"LuckyNumberShow9":
-			_say(&"LC_Text9", &"LuckyNumberShow10")
-		&"LuckyNumberShow10":
-			_say(&"LC_Text7", &"LuckyNumberShow11")
-		&"LuckyNumberShow11":
-			_say(&"LC_Text8", &"LuckyNumberShow12")
-		&"LuckyNumberShow12":
-			_say(&"LC_Text10", &"LuckyNumberShow13")
-		&"LuckyNumberShow13":
-			# `call Random / and a`: 255 of 256 rolls restart the show, and the
-			# one zero gets REED's two extra lines.
-			_say(
-				&"LC_Text11",
-				&"LuckyNumberShow14" if _roll(256) == 0 else &"LuckyNumberShow1"
-			)
-		&"LuckyNumberShow14":
-			_say(&"LC_DragText1", &"LuckyNumberShow15")
-		&"LuckyNumberShow15":
-			_say(&"LC_DragText2", &"LuckyNumberShow1")
-
-		&"PeoplePlaces1":
-			_start_station(Gen2WorldRadio.PLACES_AND_PEOPLE)
-			_say(&"PnP_Text1", &"PeoplePlaces2")
-		&"PeoplePlaces2":
-			_say(&"PnP_Text2", &"PeoplePlaces3")
-		&"PeoplePlaces3":
-			_say(&"PnP_Text3", _pnp_topic())
-		&"PeoplePlaces4":
-			_pnp_pick_person()
-			_say(&"PnP_Text4", &"PeoplePlaces5")
-		&"PeoplePlaces5":
-			_print(PNP_ADJECTIVES[_roll(PNP_ADJECTIVES.size())], _pnp_next())
-		&"PeoplePlaces6":
-			_pnp_pick_place()
-			_say(&"PnP_Text5", &"PeoplePlaces7")
-		&"PeoplePlaces7":
-			_print(PNP_ADJECTIVES[_roll(PNP_ADJECTIVES.size())], _pnp_next())
-
-		&"RocketRadio1":
-			_start_station(Gen2WorldRadio.ROCKET_RADIO)
-			_say(&"RocketRadioText1", &"RocketRadio2")
-		&"RocketRadio2":
-			_say(&"RocketRadioText2", &"RocketRadio3")
-		&"RocketRadio3":
-			_say(&"RocketRadioText3", &"RocketRadio4")
-		&"RocketRadio4":
-			_say(&"RocketRadioText4", &"RocketRadio5")
-		&"RocketRadio5":
-			_say(&"RocketRadioText5", &"RocketRadio6")
-		&"RocketRadio6":
-			_say(&"RocketRadioText6", &"RocketRadio7")
-		&"RocketRadio7":
-			_say(&"RocketRadioText7", &"RocketRadio8")
-		&"RocketRadio8":
-			_say(&"RocketRadioText8", &"RocketRadio9")
-		&"RocketRadio9":
-			_say(&"RocketRadioText9", &"RocketRadio10")
-		&"RocketRadio10":
-			_say(&"RocketRadioText10", &"RocketRadio1")
-
-		&"PokeFluteRadio", &"UnownRadio", &"EvolutionRadio":
-			# All three are `StartRadioStation` and a line count of 1, which is
-			# what stops `RadioScroll` clearing a box they never write to.
-			_start_station(_music_only_channel(segment_id))
-			_lines_printed = 1
-			_line = &""
-
-		&"BuenasPassword1":
-			if _off_air():
-				_run(&"BuenasPassword20" if _lines_printed == 0 else &"BuenasPassword8")
-				return
-			_start_station(Gen2WorldRadio.BUENAS_PASSWORD)
-			_say(&"BuenaRadioText1", &"BuenasPassword2")
-		&"BuenasPassword2":
-			_say(&"BuenaRadioText2", &"BuenasPassword3")
-		&"BuenasPassword3":
-			_say(
-				&"BuenaRadioText3",
-				&"BuenasPassword8" if _off_air() else &"BuenasPassword4"
-			)
-			if _off_air():
-				buenas_password_today = false
-		&"BuenasPassword4":
-			if _off_air():
-				_run(&"BuenasPassword8")
-				return
-			_roll_password()
-			_say(&"BuenaRadioText4", &"BuenasPassword5")
-		&"BuenasPassword5":
-			_say(&"BuenaRadioText5", &"BuenasPassword6")
-		&"BuenasPassword6":
-			_say(&"BuenaRadioText6", &"BuenasPassword7")
-		&"BuenasPassword7":
-			var midnight: bool = _off_air()
-			if midnight:
-				buenas_password_today = false
-			_say(
-				&"BuenaRadioText7",
-				&"BuenasPassword8" if midnight else &"BuenasPassword1"
-			)
-		&"BuenasPassword8":
-			buenas_password_today = false
-			_say(&"BuenaRadioMidnightText10", &"BuenasPassword9")
-		&"BuenasPassword9":
-			_say(&"BuenaRadioMidnightText1", &"BuenasPassword10")
-		&"BuenasPassword10":
-			_say(&"BuenaRadioMidnightText2", &"BuenasPassword11")
-		&"BuenasPassword11":
-			_say(&"BuenaRadioMidnightText3", &"BuenasPassword12")
-		&"BuenasPassword12":
-			_say(&"BuenaRadioMidnightText4", &"BuenasPassword13")
-		&"BuenasPassword13":
-			_say(&"BuenaRadioMidnightText5", &"BuenasPassword14")
-		&"BuenasPassword14":
-			_say(&"BuenaRadioMidnightText6", &"BuenasPassword15")
-		&"BuenasPassword15":
-			_say(&"BuenaRadioMidnightText7", &"BuenasPassword16")
-		&"BuenasPassword16":
-			_say(&"BuenaRadioMidnightText8", &"BuenasPassword17")
-		&"BuenasPassword17":
-			_say(&"BuenaRadioMidnightText9", &"BuenasPassword18")
-		&"BuenasPassword18":
-			_say(&"BuenaRadioMidnightText10", &"BuenasPassword19")
-		&"BuenasPassword19":
-			_say(&"BuenaRadioMidnightText10", &"BuenasPassword20")
-		&"BuenasPassword20":
-			# `NoRadioMusic` and `NoRadioName`: the station goes quiet and its
-			# name comes off the dial before the off-air line.
-			pending_music = Gen2WorldState.MUSIC_NONE
-			buenas_password_today = false
-			_lines_printed = 0
-			_say(&"BuenaOffTheAirText", &"BuenasPassword21")
-		&"BuenasPassword21":
-			_lines_printed = 0
-			if not _off_air():
-				_run(&"BuenasPassword1")
-				return
-			_say(&"BuenaOffTheAirText", &"BuenasPassword21")
+	if SEGMENT_LINES.has(segment_id):
+		var row: Array = SEGMENT_LINES[segment_id]
+		_say(row[0], row[1])
+		return
+	if SEGMENT_HANDLERS.has(segment_id):
+		call(SEGMENT_HANDLERS[segment_id], segment_id)
 
 
+func _segment_oaks_pkmn_talk1(_segment_id: StringName) -> void:
+	_oaks_counter = 5
+	_start_station(Gen2WorldRadio.OAKS_POKEMON_TALK)
+	_say(&"OPT_IntroText1", &"OaksPKMNTalk2")
+
+
+func _segment_oaks_pkmn_talk4(_segment_id: StringName) -> void:
+	_oaks_pick_wild()
+	_say(&"OPT_OakText1", &"OaksPKMNTalk5")
+
+
+func _segment_oaks_pkmn_talk8(_segment_id: StringName) -> void:
+	_print(OPT_ADVERBS[_roll(OPT_ADVERBS.size())], &"OaksPKMNTalk9")
+
+
+func _segment_oaks_pkmn_talk9(_segment_id: StringName) -> void:
+	var adjective: String = _oaks_adjective(_roll(OPT_ADJECTIVES.size()))
+	_oaks_counter -= 1
+	var next: StringName = &"OaksPKMNTalk4"
+	if _oaks_counter == 0:
+		_oaks_counter = 5
+		next = &"OaksPKMNTalk10"
+	_print(adjective, next)
+
+
+## `RadioMusicRestartPokemonChannel` and two `PrintText`s rather than radio lines: the
+## box is cleared and "#MON" placed straight into it.
+func _segment_oaks_pkmn_talk10(_segment_id: StringName) -> void:
+	pending_music = MUSIC_POKEMON_TALK
+	_top = ""
+	_bottom = String(TEXTS[&"OPT_PokemonChannelText"])
+	_line = &"OaksPKMNTalk11"
+	_delay = LINE_FRAMES
+
+
+func _segment_oaks_pkmn_talk11(_segment_id: StringName) -> void:
+	_place(_pad(RESTART_TOP_COLUMN, "#MON"), true, &"OaksPKMNTalk12")
+
+
+func _segment_oaks_pkmn_talk12(_segment_id: StringName) -> void:
+	_place("#MON Channel", false, &"OaksPKMNTalk13")
+
+
+func _segment_oaks_pkmn_talk13(_segment_id: StringName) -> void:
+	_place(_bottom, false, &"OaksPKMNTalk14")
+
+
+func _segment_oaks_pkmn_talk14(_segment_id: StringName) -> void:
+	if _delay > 0:
+		_delay -= 1
+		return
+	pending_music = MUSIC_POKEMON_TALK
+	_top = ""
+	_bottom = ""
+	_next_line = &"OaksPKMNTalk4"
+	_lines_printed = 0
+	_line = SCROLL
+	_delay = RESTART_FRAMES
+
+
+func _segment_pokedex_show1(_segment_id: StringName) -> void:
+	_start_station(Gen2WorldRadio.POKEDEX_SHOW)
+	if not _pokedex_pick_mon():
+		# `.loop` retries until it finds a caught species, so an empty
+		# dex would spin forever on the cartridge; here the station
+		# simply has nothing to read.
+		_line = &""
+		return
+	_say(&"PokedexShowText", &"PokedexShow2")
+
+
+func _segment_pokedex_show2(_segment_id: StringName) -> void:
+	_print(_dex_line(), &"PokedexShow3")
+
+
+func _segment_pokedex_show3(_segment_id: StringName) -> void:
+	_print(_dex_line(), &"PokedexShow4")
+
+
+func _segment_pokedex_show4(_segment_id: StringName) -> void:
+	_print(_dex_line(), &"PokedexShow5")
+
+
+func _segment_pokedex_show5(_segment_id: StringName) -> void:
+	_print(_dex_line(), &"PokedexShow6")
+
+
+func _segment_pokedex_show6(_segment_id: StringName) -> void:
+	_print(_dex_line(), &"PokedexShow7")
+
+
+func _segment_pokedex_show7(_segment_id: StringName) -> void:
+	_print(_dex_line(), &"PokedexShow8")
+
+
+func _segment_pokedex_show8(_segment_id: StringName) -> void:
+	_print(_dex_line(), &"PokedexShow1")
+
+
+func _segment_ben_mon_music1(_segment_id: StringName) -> void:
+	_start_pokemon_music()
+	_say(&"BenIntroText1", &"BenMonMusic2")
+
+
+func _segment_fern_mon_music1(_segment_id: StringName) -> void:
+	_start_pokemon_music()
+	_say(&"FernIntroText1", &"FernMonMusic2")
+
+
+func _segment_ben_fern_music5(_segment_id: StringName) -> void:
+	_say(
+		&"BenFernText2A" if _march_day() else &"BenFernText2B",
+		&"BenFernMusic6"
+	)
+
+
+func _segment_ben_fern_music6(_segment_id: StringName) -> void:
+	_say(
+		&"BenFernText3A" if _march_day() else &"BenFernText3B",
+		&"BenFernMusic7"
+	)
+
+
+## A bare `ret`: the music channel says its three lines once and then leaves the box
+## alone until the dial moves.
+func _segment_ben_fern_music7(_segment_id: StringName) -> void:
+	_line = &""
+
+
+func _segment_lucky_number_show1(_segment_id: StringName) -> void:
+	_start_station(Gen2WorldRadio.LUCKY_CHANNEL)
+	_say(&"LC_Text1", &"LuckyNumberShow2")
+
+
+## `call Random / and a`: 255 of 256 rolls restart the show, and the one zero gets
+## REED's two extra lines.
+func _segment_lucky_number_show13(_segment_id: StringName) -> void:
+	_say(
+		&"LC_Text11",
+		&"LuckyNumberShow14" if _roll(256) == 0 else &"LuckyNumberShow1"
+	)
+
+
+func _segment_people_places1(_segment_id: StringName) -> void:
+	_start_station(Gen2WorldRadio.PLACES_AND_PEOPLE)
+	_say(&"PnP_Text1", &"PeoplePlaces2")
+
+
+func _segment_people_places3(_segment_id: StringName) -> void:
+	_say(&"PnP_Text3", _pnp_topic())
+
+
+func _segment_people_places4(_segment_id: StringName) -> void:
+	_pnp_pick_person()
+	_say(&"PnP_Text4", &"PeoplePlaces5")
+
+
+func _segment_people_places5(_segment_id: StringName) -> void:
+	_print(PNP_ADJECTIVES[_roll(PNP_ADJECTIVES.size())], _pnp_next())
+
+
+func _segment_people_places6(_segment_id: StringName) -> void:
+	_pnp_pick_place()
+	_say(&"PnP_Text5", &"PeoplePlaces7")
+
+
+func _segment_people_places7(_segment_id: StringName) -> void:
+	_print(PNP_ADJECTIVES[_roll(PNP_ADJECTIVES.size())], _pnp_next())
+
+
+func _segment_rocket_radio1(_segment_id: StringName) -> void:
+	_start_station(Gen2WorldRadio.ROCKET_RADIO)
+	_say(&"RocketRadioText1", &"RocketRadio2")
+
+
+## All three are `StartRadioStation` and a line count of 1, which is what stops
+## `RadioScroll` clearing a box they never write to.
+func _segment_music_only(segment_id: StringName) -> void:
+	_start_station(_music_only_channel(segment_id))
+	_lines_printed = 1
+	_line = &""
+
+
+func _segment_buenas_password1(_segment_id: StringName) -> void:
+	if _off_air():
+		_run(&"BuenasPassword20" if _lines_printed == 0 else &"BuenasPassword8")
+		return
+	_start_station(Gen2WorldRadio.BUENAS_PASSWORD)
+	_say(&"BuenaRadioText1", &"BuenasPassword2")
+
+
+func _segment_buenas_password3(_segment_id: StringName) -> void:
+	_say(
+		&"BuenaRadioText3",
+		&"BuenasPassword8" if _off_air() else &"BuenasPassword4"
+	)
+	if _off_air():
+		buenas_password_today = false
+
+
+func _segment_buenas_password4(_segment_id: StringName) -> void:
+	if _off_air():
+		_run(&"BuenasPassword8")
+		return
+	_roll_password()
+	_say(&"BuenaRadioText4", &"BuenasPassword5")
+
+
+func _segment_buenas_password7(_segment_id: StringName) -> void:
+	var midnight: bool = _off_air()
+	if midnight:
+		buenas_password_today = false
+	_say(
+		&"BuenaRadioText7",
+		&"BuenasPassword8" if midnight else &"BuenasPassword1"
+	)
+
+
+func _segment_buenas_password8(_segment_id: StringName) -> void:
+	buenas_password_today = false
+	_say(&"BuenaRadioMidnightText10", &"BuenasPassword9")
+
+
+## `NoRadioMusic` and `NoRadioName`: the station goes quiet and its name comes off the
+## dial before the off-air line.
+func _segment_buenas_password20(_segment_id: StringName) -> void:
+	pending_music = Gen2WorldState.MUSIC_NONE
+	buenas_password_today = false
+	_lines_printed = 0
+	_say(&"BuenaOffTheAirText", &"BuenasPassword21")
+
+
+func _segment_buenas_password21(_segment_id: StringName) -> void:
+	_lines_printed = 0
+	if not _off_air():
+		_run(&"BuenasPassword1")
+		return
+	_say(&"BuenaOffTheAirText", &"BuenasPassword21")
 ## `PlaceRadioString`: a string written straight into the box at a column, with
 ## its own 100-frame wait counted by the segment that follows.
 func _place(text: String, top: bool, next: StringName) -> void:

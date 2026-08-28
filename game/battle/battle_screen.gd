@@ -884,7 +884,9 @@ func is_ready() -> bool:
 
 ## Puts two Pokémon on the screen at a level each, both at full health, and
 ## starts a battle between them.
-func show_matchup(enemy: int, player: int, enemy_level: int = 5, player_level: int = 5) -> void:
+func show_matchup(
+	enemy: int, player: int, enemy_level: int = 5, player_level: int = 5
+) -> void:
 	_reset_capture_state()
 	_world_battle_active = false
 	_world_battle_tutorial = false
@@ -5131,376 +5133,378 @@ func _apply_event_state(event: Dictionary) -> void:
 			_refresh_level_up_box()
 
 
+## Every event that reads as one sentence, as the sentence and the arguments it
+## takes. An argument is `kind:field`, which [method _line_argument] resolves off
+## the event: a battler's name, a move, an item, a species, a type or a number.
+const LINES: Dictionary = {
+	Gen2Battle.USED_MOVE: ["%s used %s!", &"name:side", &"move:move"],
+	Gen2Battle.MISSED: ["%s's attack missed!", &"name:side"],
+	Gen2Battle.NO_EFFECT: ["It doesn't affect %s!", &"name:target"],
+	Gen2Battle.RECOIL: ["%s is hit with recoil!", &"name:side"],
+	Gen2Battle.DRAINED: ["%s sucked health from %s!", &"name:side", &"name:from"],
+	Gen2Battle.OHKO: ["It's a one-hit KO!"],
+	Gen2Battle.WOKE_UP: ["%s woke up!", &"name:side"],
+	# `WasDefrostedText` and `DefrostedOpponentText` are the same line under two
+	# names, differing only in whether it is the user or the target that is named.
+	Gen2Battle.THAWED: ["%s was defrosted!", &"name:side"],
+	Gen2Battle.CONFUSE_INFLICTED: ["%s became confused!", &"name:target"],
+	Gen2Battle.CONFUSED: ["%s is confused!", &"name:side"],
+	Gen2Battle.SNAPPED_OUT: ["%s snapped out of confusion!", &"name:side"],
+	Gen2Battle.HURT_ITSELF: ["It hurt itself in its confusion!"],
+	Gen2Battle.STAGES_CLEARED: ["All stat changes were eliminated!"],
+	Gen2Battle.STAGES_COPIED: ["%s copied the target's stat changes!", &"name:side"],
+	# `PlayStereoCry` prints nothing.
+	Gen2Battle.CRY: [""],
+	Gen2Battle.EXP_GAINED: [
+		"%s gained %d EXP. Points!",
+		&"species:species",
+		&"int:amount",
+	],
+	# The cartridge never prints a line of its own for this: it happens silently
+	# behind the EXP. Points message above it.
+	Gen2Battle.STAT_EXP_GAINED: [""],
+	Gen2Battle.GREW_LEVEL: [
+		"%s grew to level %d!",
+		&"species:species",
+		&"int:new_level",
+	],
+	Gen2Battle.MOVE_LEARNED: ["%s learned %s!", &"species:species", &"move:move"],
+	Gen2Battle.MOVE_OFFERED: [
+		"%s wants to learn %s!",
+		&"species:species",
+		&"move:move",
+	],
+	Gen2Battle.MOVE_FORGOTTEN: [
+		"%s forgot %s and learned %s!",
+		&"species:species",
+		&"move:forgot",
+		&"move:learned",
+	],
+	Gen2Battle.MOVE_DECLINED: [
+		"%s did not learn %s.",
+		&"species:species",
+		&"move:move",
+	],
+	Gen2Battle.MOVE_FAILED: ["But it failed!"],
+	Gen2Battle.BIDE_STORING: ["%s is storing energy!", &"name:side"],
+	Gen2Battle.BIDE_UNLEASHED: ["%s unleashed energy!", &"name:side"],
+	Gen2Battle.RAGE_BUILDING: ["%s's RAGE is building!", &"name:target"],
+	Gen2Battle.FUTURE_SIGHT_SET: ["%s foresaw an attack!", &"name:side"],
+	Gen2Battle.FUTURE_SIGHT_HIT: ["%s was hit by FUTURE SIGHT!", &"name:target"],
+	Gen2Battle.MIMIC_LEARNED: ["%s learned %s!", &"name:side", &"move:move"],
+	Gen2Battle.SKETCHED_MOVE: ["%s SKETCHED %s!", &"name:side", &"move:move"],
+	Gen2Battle.TYPE_CHANGED: [
+		"%s transformed into the %s-type!",
+		&"name:side",
+		&"type:type_number",
+	],
+	Gen2Battle.DISABLE_INFLICTED: [
+		"%s's %s was disabled!",
+		&"name:target",
+		&"move:move",
+	],
+	Gen2Battle.DISABLE_ENDED: ["%s is disabled no more!", &"name:side"],
+	Gen2Battle.ATTRACT_INFLICTED: ["%s fell in love!", &"name:target"],
+	Gen2Battle.ENCORE_INFLICTED: ["%s got an encore!", &"name:target"],
+	Gen2Battle.ENCORE_ENDED: ["%s's encore ended!", &"name:side"],
+	# `EnemyUsedOnText`, one line for all thirteen: the trainer's own name is not in
+	# the event, so the class is all this can say.
+	Gen2Battle.TRAINER_USED_ITEM: ["Enemy used %s on %s!", &"item:item", &"name:side"],
+	Gen2Battle.HP_RESTORED: ["%s regained health!", &"name:side"],
+	Gen2Battle.HP_ALREADY_FULL: ["%s's HP is full!", &"name:side"],
+	Gen2Battle.WENT_TO_SLEEP: ["%s went to sleep!", &"name:side"],
+	Gen2Battle.RESTED: ["%s fell asleep and became healthy!", &"name:side"],
+	# `BellChimedText` names nobody, since the bell was heard by a party rather than
+	# by a Pokémon.
+	Gen2Battle.BELL_CHIMED: ["A bell chimed!"],
+	Gen2Battle.NOTHING_HAPPENED: ["But nothing happened."],
+	Gen2Battle.MAGNITUDE: ["Magnitude %d!", &"int:magnitude"],
+	Gen2Battle.PRESENT_REFUSED: ["%s refused the gift!", &"name:target"],
+	Gen2Battle.CRASHED: ["%s kept going and crashed!", &"name:side"],
+	Gen2Battle.HURT_BY_SANDSTORM: ["The SANDSTORM hits %s!", &"name:side"],
+	Gen2Battle.RECOVERED_WITH_ITEM: [
+		"%s recovered with %s.",
+		&"name:side",
+		&"item:item",
+	],
+	Gen2Battle.RECOVERED_USING_ITEM: [
+		"%s recovered using a %s!",
+		&"name:side",
+		&"item:item",
+	],
+	Gen2Battle.RESTORED_PP: ["%s recovered PP using %s.", &"name:side", &"item:item"],
+	Gen2Battle.ITEM_HEALED_CONFUSION: [
+		"A %s rid %s of its confusion.",
+		&"item:item",
+		&"name:side",
+	],
+	Gen2Battle.ENDURED: ["%s hung on with %s!", &"name:target", &"item:item"],
+	Gen2Battle.PROTECTED_ITSELF: ["%s PROTECTED itself!", &"name:side"],
+	Gen2Battle.PROTECTING_ITSELF: ["%s's PROTECTING itself!", &"name:target"],
+	Gen2Battle.BRACED_ITSELF: ["%s braced itself!", &"name:side"],
+	Gen2Battle.ENDURED_HIT: ["%s ENDURED the hit!", &"name:target"],
+	Gen2Battle.DESTINY_BOND_SET: [
+		"%s's trying to take its opponent with it!",
+		&"name:side",
+	],
+	Gen2Battle.TOOK_DOWN_WITH_IT: [
+		"%s took down with it, %s!",
+		&"name:target",
+		&"name:side",
+	],
+	# `DraggedOutText` is `<USER>`, so it names the Pokemon that used the move rather
+	# than the one dragged out. Mirrored, not corrected.
+	Gen2Battle.DRAGGED_OUT: ["%s was dragged out!", &"name:side"],
+	Gen2Battle.FLED_IN_FEAR: ["%s fled in fear!", &"name:target"],
+	Gen2Battle.BLOWN_AWAY: ["%s was blown away!", &"name:target"],
+	Gen2Battle.FLED_FROM_BATTLE: ["%s fled from battle!", &"name:side"],
+	Gen2Battle.IDENTIFIED_SET: ["%s identified %s!", &"name:side", &"name:target"],
+	Gen2Battle.TOOK_AIM: ["%s took aim!", &"name:side"],
+	Gen2Battle.PP_REDUCED: [
+		"%s's %s was reduced by %d!",
+		&"name:target",
+		&"move:move",
+		&"int:amount",
+	],
+	# SharedPainText names neither Pokemon, since both were levelled.
+	Gen2Battle.SHARED_PAIN: ["The battlers shared pain!"],
+	Gen2Battle.STOLE_ITEM: ["%s stole %s from its foe!", &"name:side", &"item:item"],
+	# BeatUpAttackText names the party member that is swinging, which is only
+	# sometimes the Pokemon on the field.
+	Gen2Battle.BEAT_UP_ATTACK: ["%s's attack!", &"species:species"],
+	Gen2Battle.HURT_BY_TRAP: ["%s's hurt by %s!", &"name:side", &"move:move"],
+	Gen2Battle.RELEASED_FROM_TRAP: [
+		"%s was released from %s!",
+		&"name:side",
+		&"move:move",
+	],
+	Gen2Battle.CANT_ESCAPE_SET: ["%s can't escape now!", &"name:target"],
+	Gen2Battle.SWITCH_BLOCKED: ["%s can't be recalled!", &"name:side"],
+	Gen2Battle.SAFEGUARD_PROTECTED: ["%s is protected by SAFEGUARD!", &"name:target"],
+	# StartPerishText names neither Pokémon, since the song caught both.
+	Gen2Battle.PERISH_SONG_STARTED: ["Both #MON will faint in 3 turns!"],
+	Gen2Battle.PERISH_COUNT: ["%s's PERISH count is %d!", &"name:side", &"int:count"],
+	Gen2Battle.SUBSTITUTE_MADE: ["%s made a SUBSTITUTE!", &"name:side"],
+	Gen2Battle.SUBSTITUTE_ALREADY: ["%s has a SUBSTITUTE!", &"name:side"],
+	# TooWeakSubText names nobody at all.
+	Gen2Battle.SUBSTITUTE_TOO_WEAK: ["Too weak to make a SUBSTITUTE!"],
+	Gen2Battle.SUBSTITUTE_TOOK_DAMAGE: [
+		"The SUBSTITUTE took damage for %s!",
+		&"name:target",
+	],
+	Gen2Battle.SUBSTITUTE_FADED: ["%s's SUBSTITUTE faded!", &"name:target"],
+	Gen2Battle.WAS_SEEDED: ["%s was seeded!", &"name:target"],
+	Gen2Battle.LEECH_SEED_SAPPED: ["LEECH SEED saps %s!", &"name:side"],
+	Gen2Battle.EVADED: ["%s evaded the attack!", &"name:target"],
+	Gen2Battle.NIGHTMARE_STARTED: ["%s started to have a NIGHTMARE!", &"name:target"],
+	Gen2Battle.HURT_BY_NIGHTMARE: ["%s has a NIGHTMARE!", &"name:side"],
+	# PutACurseText is one text with a paragraph break in it, so the two halves are
+	# one line here rather than two events.
+	Gen2Battle.CURSE_SET: [
+		"%s cut its own HP and put a CURSE on %s!",
+		&"name:side",
+		&"name:target",
+	],
+	Gen2Battle.HURT_BY_CURSE: ["%s's hurt by the CURSE!", &"name:side"],
+	Gen2Battle.SPIKES_SET: ["SPIKES scattered all around %s!", &"name:target"],
+	Gen2Battle.HURT_BY_SPIKES: ["%s's hurt by SPIKES!", &"name:side"],
+	Gen2Battle.SHED_LEECH_SEED: ["%s shed LEECH SEED!", &"name:side"],
+	Gen2Battle.BLEW_SPIKES: ["%s blew away SPIKES!", &"name:side"],
+	Gen2Battle.RELEASED_BY: ["%s was released by %s!", &"name:side", &"name:target"],
+	Gen2Battle.MIST_SET: ["%s is shrouded in mist!", &"name:side"],
+	Gen2Battle.FOCUS_ENERGY_SET: ["%s is getting pumped!", &"name:side"],
+	Gen2Battle.MIST_PROTECTED: ["%s's stat drop was blocked by mist!", &"name:target"],
+	Gen2Battle.RUN_FAILED: ["Can't escape!"],
+	Gen2Battle.COINS_SCATTERED: ["Coins scattered everywhere!"],
+	Gen2Battle.TRANSFORMED: ["%s transformed into %s!", &"name:side", &"name:target"],
+}
+
+## The events whose sentence is a branch rather than a template.
+const LINE_HANDLERS: Dictionary = {
+	Gen2Battle.HIT: &"_hit_text",
+	Gen2Battle.HIT_TIMES: &"_hit_times_text",
+	Gen2Battle.FAINTED: &"_fainted_text",
+	Gen2Battle.CANNOT_MOVE: &"_cannot_move_text",
+	Gen2Battle.STATUS_INFLICTED: &"_status_inflicted_text",
+	Gen2Battle.HURT_BY_STATUS: &"_hurt_by_status_text",
+	Gen2Battle.CHARGING_UP: &"_charging_up_text",
+	Gen2Battle.STAT_CHANGED: &"_stat_changed_text",
+	Gen2Battle.STAT_CHANGE_FAILED: &"_stat_failed_text",
+	Gen2Battle.WITHDREW: &"_withdrew_text",
+	Gen2Battle.SENT_OUT: &"_sent_out_text",
+	Gen2Battle.WEATHER_STARTED: &"_weather_text",
+	Gen2Battle.WEATHER_CONTINUES: &"_weather_text",
+	Gen2Battle.WEATHER_ENDED: &"_weather_text",
+	Gen2Battle.TRAPPED: &"_trapped_text",
+	Gen2Battle.SCREEN_SET: &"_screen_set_text",
+	Gen2Battle.SCREEN_FADED: &"_screen_faded_text",
+	Gen2Battle.FLED: &"_fled_text",
+	Gen2Battle.RUN_BLOCKED: &"_run_blocked_text",
+	Gen2Battle.OVER: &"_over_text",
+}
+
+## Which of the three weather tables an event reads.
+const WEATHER_TEXT_OF: Dictionary = {
+	Gen2Battle.WEATHER_STARTED: WEATHER_STARTED_TEXT,
+	Gen2Battle.WEATHER_CONTINUES: WEATHER_CONTINUES_TEXT,
+	Gen2Battle.WEATHER_ENDED: WEATHER_ENDED_TEXT,
+}
+
+
 ## An event as a sentence, or an empty string for one there is nothing to say
 ## about. A neutral hit has no line of its own in these games: the bar moving is
 ## the whole of the message.
 func _describe(event: Dictionary) -> String:
-	# Every event carries a side except the one that ends the battle, which is
-	# about both of them.
-	var side: int = int(event.get("side", Gen2Battle.PLAYER))
-	match event["type"]:
-		Gen2Battle.USED_MOVE:
-			return "%s used %s!" % [
-				_battler_name(side), String(_data.move(int(event["move"])).get("name", "")),
-			]
-		Gen2Battle.MISSED:
-			return "%s's attack missed!" % _battler_name(side)
-		Gen2Battle.NO_EFFECT:
-			return "It doesn't affect %s!" % _battler_name(int(event["target"]))
-		Gen2Battle.HIT:
-			if bool(event["critical"]):
-				return "A critical hit!"
-			if int(event["effectiveness"]) > RomLayout.MATCHUP_EFFECTIVE:
-				return "It's super effective!"
-			if int(event["effectiveness"]) < RomLayout.MATCHUP_EFFECTIVE:
-				return "It's not very effective..."
-		Gen2Battle.RECOIL:
-			return "%s is hit with recoil!" % _battler_name(side)
-		Gen2Battle.HIT_TIMES:
-			return "Hit %d time%s!" % [int(event["times"]), "" if int(event["times"]) == 1 else "s"]
-		Gen2Battle.DRAINED:
-			return "%s sucked health from %s!" % [_battler_name(side), _battler_name(int(event["from"]))]
-		Gen2Battle.OHKO:
-			return "It's a one-hit KO!"
-		Gen2Battle.FAINTED:
-			var faint_line: String = "%s fainted!" % _battler_name(side)
-			## A Nuzlocke faint is a death, and it is said here rather than on
-			## the map: this is where the player is looking, and the row itself
-			## is taken off the party on the way out of the fight.
-			if side == Gen2Battle.PLAYER and _rules().is_nuzlocke():
-				faint_line += Gen2TextStream.PAGE_BREAK \
-					+ Gen2Nuzlocke.death_text(_battler_name(side))
-			return faint_line
-		Gen2Battle.CANNOT_MOVE:
-			return "%s %s" % [_battler_name(side), STOPPED_BY.get(event["reason"], "cannot move!")]
-		Gen2Battle.WOKE_UP:
-			return "%s woke up!" % _battler_name(side)
-		Gen2Battle.THAWED:
-			# `WasDefrostedText` and `DefrostedOpponentText` are the same line
-			# under two names, differing only in whether it is the user or the
-			# target that is named.
-			return "%s was defrosted!" % _battler_name(side)
-		Gen2Battle.STATUS_INFLICTED:
-			return "%s %s" % [
-				_battler_name(int(event["target"])),
-				INFLICTED.get(event["name"], "was hurt!"),
-			]
-		Gen2Battle.HURT_BY_STATUS:
-			return "%s is hurt by its %s!" % [_battler_name(side), event["name"]]
-		Gen2Battle.CONFUSE_INFLICTED:
-			return "%s became confused!" % _battler_name(int(event["target"]))
-		Gen2Battle.CONFUSED:
-			return "%s is confused!" % _battler_name(side)
-		Gen2Battle.SNAPPED_OUT:
-			return "%s snapped out of confusion!" % _battler_name(side)
-		Gen2Battle.HURT_ITSELF:
-			return "It hurt itself in its confusion!"
-		Gen2Battle.CHARGING_UP:
-			return "%s %s" % [
-				_battler_name(side), CHARGE_TEXT.get(int(event.get("move", 0)), CHARGE_DUG),
-			]
-		Gen2Battle.STAGES_CLEARED:
-			return "All stat changes were eliminated!"
-		Gen2Battle.STAGES_COPIED:
-			return "%s copied the target's stat changes!" % _battler_name(side)
-		Gen2Battle.STAT_CHANGED:
-			return _stat_changed_text(event)
-		Gen2Battle.STAT_CHANGE_FAILED:
-			return _stat_failed_text(event)
-		Gen2Battle.WITHDREW:
-			# Named out of the event, because by the time this is read the one on
-			# the field is already the one that came in.
-			if side == Gen2Battle.ENEMY:
-				return "Enemy withdrew %s!" % _name_of(int(event["species"]))
-			return "%s, come back!" % _name_of(int(event["species"]))
-		Gen2Battle.SENT_OUT:
-			if side == Gen2Battle.ENEMY:
-				return "Enemy sent out %s!" % _name_of(int(event["species"]))
-			return SEND_OUT_LINES[
-				clampi(int(event.get("line", Gen2Battle.SEND_OUT_GO)), 0, SEND_OUT_LINES.size() - 1)
-			] % _name_of(int(event["species"]))
-		Gen2Battle.CRY:
-			# `PlayStereoCry` prints nothing.
-			return ""
-		Gen2Battle.EXP_GAINED:
-			return "%s gained %d EXP. Points!" % [_name_of(int(event["species"])), int(event["amount"])]
-		Gen2Battle.STAT_EXP_GAINED:
-			# The cartridge never prints a line of its own for this: it happens
-			# silently behind the EXP. Points message above it.
-			return ""
-		Gen2Battle.GREW_LEVEL:
-			return "%s grew to level %d!" % [_name_of(int(event["species"])), int(event["new_level"])]
-		Gen2Battle.MOVE_LEARNED:
-			return "%s learned %s!" % [
-				_name_of(int(event["species"])), String(_data.move(int(event["move"])).get("name", "")),
-			]
-		Gen2Battle.MOVE_OFFERED:
-			return "%s wants to learn %s!" % [
-				_name_of(int(event["species"])), String(_data.move(int(event["move"])).get("name", "")),
-			]
-		Gen2Battle.MOVE_FORGOTTEN:
-			return "%s forgot %s and learned %s!" % [
-				_name_of(int(event["species"])),
-				String(_data.move(int(event["forgot"])).get("name", "")),
-				String(_data.move(int(event["learned"])).get("name", "")),
-			]
-		Gen2Battle.MOVE_DECLINED:
-			return "%s did not learn %s." % [
-				_name_of(int(event["species"])), String(_data.move(int(event["move"])).get("name", "")),
-			]
-		Gen2Battle.MOVE_FAILED:
-			return "But it failed!"
-		Gen2Battle.BIDE_STORING:
-			return "%s is storing energy!" % _battler_name(side)
-		Gen2Battle.BIDE_UNLEASHED:
-			return "%s unleashed energy!" % _battler_name(side)
-		Gen2Battle.RAGE_BUILDING:
-			return "%s's RAGE is building!" % _battler_name(int(event["target"]))
-		Gen2Battle.FUTURE_SIGHT_SET:
-			return "%s foresaw an attack!" % _battler_name(side)
-		Gen2Battle.FUTURE_SIGHT_HIT:
-			return "%s was hit by FUTURE SIGHT!" % _battler_name(int(event["target"]))
-		Gen2Battle.MIMIC_LEARNED:
-			return "%s learned %s!" % [
-				_battler_name(side), String(_data.move(int(event["move"])).get("name", "")),
-			]
-		Gen2Battle.SKETCHED_MOVE:
-			return "%s SKETCHED %s!" % [
-				_battler_name(side), String(_data.move(int(event["move"])).get("name", "")),
-			]
-		Gen2Battle.TYPE_CHANGED:
-			return "%s transformed into the %s-type!" % [
-				_battler_name(side), _data.type_name(int(event["type_number"])),
-			]
-		Gen2Battle.DISABLE_INFLICTED:
-			return "%s's %s was disabled!" % [
-				_battler_name(int(event["target"])), String(_data.move(int(event["move"])).get("name", "")),
-			]
-		Gen2Battle.DISABLE_ENDED:
-			return "%s is disabled no more!" % _battler_name(side)
-		Gen2Battle.ATTRACT_INFLICTED:
-			return "%s fell in love!" % _battler_name(int(event["target"]))
-		Gen2Battle.ENCORE_INFLICTED:
-			return "%s got an encore!" % _battler_name(int(event["target"]))
-		Gen2Battle.ENCORE_ENDED:
-			return "%s's encore ended!" % _battler_name(side)
-		Gen2Battle.TRAINER_USED_ITEM:
-			# `EnemyUsedOnText`, one line for all thirteen: the trainer's own
-			# name is not in the event, so the class is all this can say.
-			return "Enemy used %s on %s!" % [
-				_data.item_name(int(event["item"])), _battler_name(side),
-			]
-		Gen2Battle.HP_RESTORED:
-			return "%s regained health!" % _battler_name(side)
-		Gen2Battle.HP_ALREADY_FULL:
-			return "%s's HP is full!" % _battler_name(side)
-		Gen2Battle.WENT_TO_SLEEP:
-			return "%s went to sleep!" % _battler_name(side)
-		Gen2Battle.RESTED:
-			return "%s fell asleep and became healthy!" % _battler_name(side)
-		Gen2Battle.BELL_CHIMED:
-			# `BellChimedText` names nobody, since the bell was heard by a party
-			# rather than by a Pokémon.
-			return "A bell chimed!"
-		Gen2Battle.NOTHING_HAPPENED:
-			return "But nothing happened."
-		Gen2Battle.MAGNITUDE:
-			return "Magnitude %d!" % int(event["magnitude"])
-		Gen2Battle.PRESENT_REFUSED:
-			return "%s refused the gift!" % _battler_name(int(event["target"]))
-		Gen2Battle.CRASHED:
-			return "%s kept going and crashed!" % _battler_name(side)
-		Gen2Battle.WEATHER_STARTED:
-			return WEATHER_STARTED_TEXT.get(int(event["weather"]), "")
-		Gen2Battle.WEATHER_CONTINUES:
-			return WEATHER_CONTINUES_TEXT.get(int(event["weather"]), "")
-		Gen2Battle.WEATHER_ENDED:
-			return WEATHER_ENDED_TEXT.get(int(event["weather"]), "")
-		Gen2Battle.HURT_BY_SANDSTORM:
-			return "The SANDSTORM hits %s!" % _battler_name(side)
-		Gen2Battle.RECOVERED_WITH_ITEM:
-			return "%s recovered with %s." % [
-				_battler_name(side), _data.item_name(int(event["item"])),
-			]
-		Gen2Battle.RECOVERED_USING_ITEM:
-			return "%s recovered using a %s!" % [
-				_battler_name(side), _data.item_name(int(event["item"])),
-			]
-		Gen2Battle.RESTORED_PP:
-			return "%s recovered PP using %s." % [
-				_battler_name(side), _data.item_name(int(event["item"])),
-			]
-		Gen2Battle.ITEM_HEALED_CONFUSION:
-			return "A %s rid %s of its confusion." % [
-				_data.item_name(int(event["item"])), _battler_name(side),
-			]
-		Gen2Battle.ENDURED:
-			return "%s hung on with %s!" % [
-				_battler_name(int(event["target"])), _data.item_name(int(event["item"])),
-			]
-		Gen2Battle.PROTECTED_ITSELF:
-			return "%s PROTECTED itself!" % _battler_name(side)
-		Gen2Battle.PROTECTING_ITSELF:
-			return "%s's PROTECTING itself!" % _battler_name(int(event["target"]))
-		Gen2Battle.BRACED_ITSELF:
-			return "%s braced itself!" % _battler_name(side)
-		Gen2Battle.ENDURED_HIT:
-			return "%s ENDURED the hit!" % _battler_name(int(event["target"]))
-		Gen2Battle.DESTINY_BOND_SET:
-			return "%s's trying to take its opponent with it!" % _battler_name(side)
-		Gen2Battle.TOOK_DOWN_WITH_IT:
-			return "%s took down with it, %s!" % [
-				_battler_name(int(event["target"])), _battler_name(side),
-			]
-		Gen2Battle.DRAGGED_OUT:
-			# `DraggedOutText` is `<USER>`, so it names the Pokemon that used the
-			# move rather than the one dragged out. Mirrored, not corrected.
-			return "%s was dragged out!" % _battler_name(side)
-		Gen2Battle.FLED_IN_FEAR:
-			return "%s fled in fear!" % _battler_name(int(event["target"]))
-		Gen2Battle.BLOWN_AWAY:
-			return "%s was blown away!" % _battler_name(int(event["target"]))
-		Gen2Battle.FLED_FROM_BATTLE:
-			return "%s fled from battle!" % _battler_name(side)
-		Gen2Battle.IDENTIFIED_SET:
-			return "%s identified %s!" % [
-				_battler_name(side), _battler_name(int(event["target"])),
-			]
-		Gen2Battle.TOOK_AIM:
-			return "%s took aim!" % _battler_name(side)
-		Gen2Battle.PP_REDUCED:
-			return "%s's %s was reduced by %d!" % [
-				_battler_name(int(event["target"])),
-				String(_data.move(int(event["move"])).get("name", "")),
-				int(event["amount"]),
-			]
-		Gen2Battle.SHARED_PAIN:
-			# SharedPainText names neither Pokemon, since both were levelled.
-			return "The battlers shared pain!"
-		Gen2Battle.STOLE_ITEM:
-			return "%s stole %s from its foe!" % [
-				_battler_name(side), _data.item_name(int(event["item"])),
-			]
-		Gen2Battle.BEAT_UP_ATTACK:
-			# BeatUpAttackText names the party member that is swinging, which is
-			# only sometimes the Pokemon on the field.
-			return "%s's attack!" % _name_of(int(event["species"]))
-		Gen2Battle.TRAPPED:
-			return _trapped_text(event)
-		Gen2Battle.HURT_BY_TRAP:
-			return "%s's hurt by %s!" % [
-				_battler_name(side), String(_data.move(int(event["move"])).get("name", "")),
-			]
-		Gen2Battle.RELEASED_FROM_TRAP:
-			return "%s was released from %s!" % [
-				_battler_name(side), String(_data.move(int(event["move"])).get("name", "")),
-			]
-		Gen2Battle.CANT_ESCAPE_SET:
-			return "%s can't escape now!" % _battler_name(int(event["target"]))
-		Gen2Battle.SWITCH_BLOCKED:
-			return "%s can't be recalled!" % _battler_name(side)
-		Gen2Battle.SCREEN_SET:
-			return SCREEN_SET_TEXT.get(int(event["screen"]), "") % _battler_name(side)
-		Gen2Battle.SCREEN_FADED:
-			var faded: int = int(event["screen"])
-			if faded == Gen2Screens.SAFEGUARD:
-				return "%s's SAFEGUARD faded!" % _battler_name(side)
-			return SCREEN_FADED_TEXT.get(faded, "") % (
-				"Enemy #MON" if side == Gen2Battle.ENEMY else "Your #MON"
-			)
-		Gen2Battle.SAFEGUARD_PROTECTED:
-			return "%s is protected by SAFEGUARD!" % _battler_name(int(event["target"]))
-		Gen2Battle.PERISH_SONG_STARTED:
-			# StartPerishText names neither Pokémon, since the song caught both.
-			return "Both #MON will faint in 3 turns!"
-		Gen2Battle.PERISH_COUNT:
-			return "%s's PERISH count is %d!" % [
-				_battler_name(side), int(event["count"]),
-			]
-		Gen2Battle.SUBSTITUTE_MADE:
-			return "%s made a SUBSTITUTE!" % _battler_name(side)
-		Gen2Battle.SUBSTITUTE_ALREADY:
-			return "%s has a SUBSTITUTE!" % _battler_name(side)
-		Gen2Battle.SUBSTITUTE_TOO_WEAK:
-			# TooWeakSubText names nobody at all.
-			return "Too weak to make a SUBSTITUTE!"
-		Gen2Battle.SUBSTITUTE_TOOK_DAMAGE:
-			return "The SUBSTITUTE took damage for %s!" % _battler_name(int(event["target"]))
-		Gen2Battle.SUBSTITUTE_FADED:
-			return "%s's SUBSTITUTE faded!" % _battler_name(int(event["target"]))
-		Gen2Battle.WAS_SEEDED:
-			return "%s was seeded!" % _battler_name(int(event["target"]))
-		Gen2Battle.LEECH_SEED_SAPPED:
-			return "LEECH SEED saps %s!" % _battler_name(side)
-		Gen2Battle.EVADED:
-			return "%s evaded the attack!" % _battler_name(int(event["target"]))
-		Gen2Battle.NIGHTMARE_STARTED:
-			return "%s started to have a NIGHTMARE!" % _battler_name(int(event["target"]))
-		Gen2Battle.HURT_BY_NIGHTMARE:
-			return "%s has a NIGHTMARE!" % _battler_name(side)
-		Gen2Battle.CURSE_SET:
-			# PutACurseText is one text with a paragraph break in it, so the two
-			# halves are one line here rather than two events.
-			return "%s cut its own HP and put a CURSE on %s!" % [
-				_battler_name(side), _battler_name(int(event["target"])),
-			]
-		Gen2Battle.HURT_BY_CURSE:
-			return "%s's hurt by the CURSE!" % _battler_name(side)
-		Gen2Battle.SPIKES_SET:
-			return "SPIKES scattered all around %s!" % _battler_name(int(event["target"]))
-		Gen2Battle.HURT_BY_SPIKES:
-			return "%s's hurt by SPIKES!" % _battler_name(side)
-		Gen2Battle.SHED_LEECH_SEED:
-			return "%s shed LEECH SEED!" % _battler_name(side)
-		Gen2Battle.BLEW_SPIKES:
-			return "%s blew away SPIKES!" % _battler_name(side)
-		Gen2Battle.RELEASED_BY:
-			return "%s was released by %s!" % [
-				_battler_name(side), _battler_name(int(event["target"])),
-			]
-		Gen2Battle.MIST_SET:
-			return "%s is shrouded in mist!" % _battler_name(side)
-		Gen2Battle.FOCUS_ENERGY_SET:
-			return "%s is getting pumped!" % _battler_name(side)
-		Gen2Battle.MIST_PROTECTED:
-			return "%s's stat drop was blocked by mist!" % _battler_name(int(event["target"]))
-		Gen2Battle.FLED:
-			# BattleText_UserFledUsingAStringBuffer1 is the Smoke Ball's own
-			# line; every other branch reaches BattleText_GotAwaySafely.
-			if StringName(event.get("how", &"")) == &"item":
-				return "%s fled using a %s!" % [
-					_battler_name(Gen2Battle.PLAYER),
-					_data.item_name(int(event.get("item", 0))),
-				]
-			return "Got away safely!"
-		Gen2Battle.RUN_FAILED:
-			return "Can't escape!"
-		Gen2Battle.RUN_BLOCKED:
-			if StringName(event.get("reason", &"")) == &"trainer":
-				return "No! There's no running from a trainer battle!"
-			return "Can't escape!"
-		Gen2Battle.OVER:
-			# A run is a draw with both parties standing, and the line before
-			# this one already said so.
-			if bool(event.get("fled", false)):
-				return ""
-			# Both sides can go down in the same turn, through recoil or a burn,
-			# and then there is nobody to declare.
-			if event["winner"] == null:
-				return "Both sides are out of Pokémon!"
-			return "%s won!" % ("The enemy" if event["winner"] == Gen2Battle.ENEMY else "Player")
-		Gen2Battle.COINS_SCATTERED:
-			return "Coins scattered everywhere!"
-		Gen2Battle.TRANSFORMED:
-			return "%s transformed into %s!" % [
-				_battler_name(side), _battler_name(int(event["target"])),
-			]
+	var kind: Variant = event["type"]
+	if LINE_HANDLERS.has(kind):
+		return String(call(LINE_HANDLERS[kind], event))
+	if not LINES.has(kind):
+		return ""
+	var row: Array = LINES[kind]
+	var values: Array = []
+	for code: StringName in row.slice(1):
+		values.append(_line_argument(code, event))
+	if values.is_empty():
+		return String(row[0])
+	return String(row[0]) % values
+
+
+## One [constant LINES] argument. Every event carries a side except the one that
+## ends the battle, which is about both of them, so a missing side is the player.
+func _line_argument(code: StringName, event: Dictionary) -> Variant:
+	var parts: PackedStringArray = String(code).split(":")
+	var field: String = parts[1]
+	match parts[0]:
+		"name":
+			return _battler_name(int(event.get(field, Gen2Battle.PLAYER)))
+		"species":
+			return _name_of(int(event[field]))
+		"move":
+			return String(_data.move(int(event[field])).get("name", ""))
+		"item":
+			return _data.item_name(int(event[field]))
+		"type":
+			return _data.type_name(int(event[field]))
+	return int(event[field])
+
+
+func _hit_text(event: Dictionary) -> String:
+	if bool(event["critical"]):
+		return "A critical hit!"
+	if int(event["effectiveness"]) > RomLayout.MATCHUP_EFFECTIVE:
+		return "It's super effective!"
+	if int(event["effectiveness"]) < RomLayout.MATCHUP_EFFECTIVE:
+		return "It's not very effective..."
 	return ""
 
 
-## The sentence for a stat that actually moved. Ancientpower's [code]"all"[/code]
-## reads as one sentence about the Pokémon rather than five about its stats,
-## because that is the one thing the event says that a single stat's does not.
+func _hit_times_text(event: Dictionary) -> String:
+	var times: int = int(event["times"])
+	return "Hit %d time%s!" % [times, "" if times == 1 else "s"]
+
+
+## A Nuzlocke faint is a death, and it is said here rather than on the map: this
+## is where the player is looking, and the row itself is taken off the party on
+## the way out of the fight.
+func _fainted_text(event: Dictionary) -> String:
+	var side: int = int(event.get("side", Gen2Battle.PLAYER))
+	var line: String = "%s fainted!" % _battler_name(side)
+	if side == Gen2Battle.PLAYER and _rules().is_nuzlocke():
+		line += Gen2TextStream.PAGE_BREAK + Gen2Nuzlocke.death_text(_battler_name(side))
+	return line
+
+
+func _cannot_move_text(event: Dictionary) -> String:
+	return "%s %s" % [
+		_battler_name(int(event.get("side", Gen2Battle.PLAYER))),
+		STOPPED_BY.get(event["reason"], "cannot move!"),
+	]
+
+
+func _status_inflicted_text(event: Dictionary) -> String:
+	return "%s %s" % [
+		_battler_name(int(event["target"])), INFLICTED.get(event["name"], "was hurt!"),
+	]
+
+
+func _hurt_by_status_text(event: Dictionary) -> String:
+	return "%s is hurt by its %s!" % [
+		_battler_name(int(event.get("side", Gen2Battle.PLAYER))), event["name"],
+	]
+
+
+func _charging_up_text(event: Dictionary) -> String:
+	return "%s %s" % [
+		_battler_name(int(event.get("side", Gen2Battle.PLAYER))),
+		CHARGE_TEXT.get(int(event.get("move", 0)), CHARGE_DUG),
+	]
+
+
+## Named out of the event, because by the time this is read the one on the field
+## is already the one that came in.
+func _withdrew_text(event: Dictionary) -> String:
+	if int(event.get("side", Gen2Battle.PLAYER)) == Gen2Battle.ENEMY:
+		return "Enemy withdrew %s!" % _name_of(int(event["species"]))
+	return "%s, come back!" % _name_of(int(event["species"]))
+
+
+func _sent_out_text(event: Dictionary) -> String:
+	if int(event.get("side", Gen2Battle.PLAYER)) == Gen2Battle.ENEMY:
+		return "Enemy sent out %s!" % _name_of(int(event["species"]))
+	return SEND_OUT_LINES[
+		clampi(int(event.get("line", Gen2Battle.SEND_OUT_GO)), 0, SEND_OUT_LINES.size() - 1)
+	] % _name_of(int(event["species"]))
+
+
+func _weather_text(event: Dictionary) -> String:
+	return String((WEATHER_TEXT_OF[event["type"]] as Dictionary).get(
+		int(event["weather"]), ""
+	))
+
+
+func _screen_set_text(event: Dictionary) -> String:
+	return SCREEN_SET_TEXT.get(int(event["screen"]), "") % _battler_name(
+		int(event.get("side", Gen2Battle.PLAYER))
+	)
+
+
+func _screen_faded_text(event: Dictionary) -> String:
+	var side: int = int(event.get("side", Gen2Battle.PLAYER))
+	var faded: int = int(event["screen"])
+	if faded == Gen2Screens.SAFEGUARD:
+		return "%s's SAFEGUARD faded!" % _battler_name(side)
+	return SCREEN_FADED_TEXT.get(faded, "") % (
+		"Enemy #MON" if side == Gen2Battle.ENEMY else "Your #MON"
+	)
+
+
+## BattleText_UserFledUsingAStringBuffer1 is the Smoke Ball's own line; every
+## other branch reaches BattleText_GotAwaySafely.
+func _fled_text(event: Dictionary) -> String:
+	if StringName(event.get("how", &"")) == &"item":
+		return "%s fled using a %s!" % [
+			_battler_name(Gen2Battle.PLAYER), _data.item_name(int(event.get("item", 0))),
+		]
+	return "Got away safely!"
+
+
+func _run_blocked_text(event: Dictionary) -> String:
+	if StringName(event.get("reason", &"")) == &"trainer":
+		return "No! There's no running from a trainer battle!"
+	return "Can't escape!"
+
+
+## A run is a draw with both parties standing, and the line before this one
+## already said so. Both sides can go down in the same turn, through recoil or a
+## burn, and then there is nobody to declare.
+func _over_text(event: Dictionary) -> String:
+	if bool(event.get("fled", false)):
+		return ""
+	if event["winner"] == null:
+		return "Both sides are out of Pokémon!"
+	return "%s won!" % ("The enemy" if event["winner"] == Gen2Battle.ENEMY else "Player")
+
+
 ## The sentence a trapping move lands with, which is a per-move line rather than
 ## one sentence with the move's name in it: `BattleCommand_TrapTarget`'s `.Traps`
 ## table names five texts, three of which spell the move out and two of which do
@@ -5519,6 +5523,9 @@ func _trapped_text(event: Dictionary) -> String:
 	return "%s was trapped!" % who
 
 
+## The sentence for a stat that actually moved. Ancientpower's [code]"all"[/code]
+## reads as one sentence about the Pokémon rather than five about its stats,
+## because that is the one thing the event says that a single stat's does not.
 func _stat_changed_text(event: Dictionary) -> String:
 	var who: String = _battler_name(int(event["target"]))
 	if String(event["stat"]) == "all":

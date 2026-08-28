@@ -18,7 +18,7 @@ const MAX_COMPLEXITY: int = 20
 const MAX_COMMENT_BLOCK: int = 8
 ## Comment lines under [constant COUNTED_ROOTS]. A ceiling, not a target: lower
 ## it whenever a pass leaves room, and never raise it.
-const MAX_COMMENT_LINES: int = 37924
+const MAX_COMMENT_LINES: int = 37893
 
 ## The functions still over [constant MAX_COMPLEXITY], as `path:function`. Delete
 ## a line when you fix one. The test fails on a line that no longer names a
@@ -28,8 +28,6 @@ const OVER_COMPLEXITY: Array[String] = [
 	"game/audio/gen2_apu.gd:write",
 	"game/audio/gen2_sound_engine.gd:_parse_music_command",
 	"game/battle/ai.gd:_apply_basic",
-	"game/battle/ai.gd:_apply_smart",
-	"game/battle/battle_screen.gd:_describe",
 	"game/battle/battle_screen.gd:_handle_button",
 	"game/battle/battle_screen.gd:_refresh_menu_layer",
 	"game/battle/battle_screen.gd:start_world_battle",
@@ -61,7 +59,6 @@ const OVER_COMPLEXITY: Array[String] = [
 	"game/save/save_validator.gd:validate",
 	"game/world/battle_tower.gd:action",
 	"game/world/intro_movie.gd:_run_scene",
-	"game/world/radio_show.gd:_run",
 	"game/world/slot_machine.gd:_reel_action",
 	"game/world/start_menu_screen.gd:_confirm",
 	"game/world/start_menu_screen.gd:_hardware_image",
@@ -87,14 +84,9 @@ const OVER_COMPLEXITY: Array[String] = [
 	"game/world/world_screen.gd:_handle_button",
 	"game/world/world_screen.gd:_overlay_open",
 	"game/world/world_screen.gd:_run_party_action",
-	"game/world/world_script.gd:command_at",
 	"game/world/world_script.gd:scan_references",
 	"game/world/world_script_runner.gd:_complete",
-	"game/world/world_script_runner.gd:_execute",
-	"game/world/world_script_runner.gd:_execute_later_command",
-	"game/world/world_script_runner.gd:_execute_special",
 	"game/world/world_script_runner.gd:_read_runtime_variable",
-	"game/world/world_script_runner.gd:complete_runtime_request",
 	"game/world/world_service_screen.gd:_confirm_pc_row",
 	"tools/checks/opening_lane.gd:_validate",
 	"tools/checks/pokedex.gd:_validate",
@@ -102,7 +94,6 @@ const OVER_COMPLEXITY: Array[String] = [
 	"tools/preview_battle_switch.gd:_open",
 	"tools/preview_town_map.gd:_initialize",
 	"tools/preview_world.gd:_initialize",
-	"tools/preview_world.gd:_process",
 	"tools/preview_world_story.gd:_drain_story",
 	"tools/preview_world_story.gd:_fog_badge_path",
 	"tools/preview_world_story.gd:_glacier_badge_path",
@@ -213,7 +204,8 @@ func _collect(directory: String, out: PackedStringArray) -> void:
 
 ## Every top-level function in [param source] with its cyclomatic complexity,
 ## counted the way a linter counts it: one for the function, one per `if`,
-## `elif`, `while`, `for`, `and`, `or` and inline `if`, and one per `match` arm.
+## `elif`, `while`, `for`, `and`, `or` and inline `if`, and one per `match` arm,
+## whether the arm opens a block or carries its body on the same line.
 func _functions(source: PackedStringArray) -> Array[Dictionary]:
 	var branches := RegEx.create_from_string(
 		"(?<![A-Za-z0-9_.])(if|elif|while|for|and|or)(?![A-Za-z0-9_])"
@@ -222,8 +214,10 @@ func _functions(source: PackedStringArray) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var current: Dictionary = {}
 	## One entry per open `match`: the indent the statement sits at, so an arm is
-	## a line one deeper that ends in a colon.
+	## a line one deeper. An arm ends in a colon or carries its whole body after
+	## one, and both are a branch: a one-line arm hid 89 of them here once.
 	var matches: Array[int] = []
+	var arm := RegEx.create_from_string("^[^:]*:")
 	for raw: String in source:
 		var code: String = _code(raw)
 		var text: String = code.strip_edges()
@@ -239,7 +233,7 @@ func _functions(source: PackedStringArray) -> Array[Dictionary]:
 		while not matches.is_empty() and indent <= matches[matches.size() - 1]:
 			matches.resize(matches.size() - 1)
 		if not matches.is_empty() and indent == matches[matches.size() - 1] + 1 \
-			and text.ends_with(":"):
+			and arm.search(text) != null:
 			current["complexity"] = int(current["complexity"]) + 1
 		current["complexity"] = int(current["complexity"]) + branches.search_all(text).size()
 		if text.begins_with("match ") and text.ends_with(":"):
