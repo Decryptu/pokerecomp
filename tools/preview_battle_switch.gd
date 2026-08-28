@@ -211,123 +211,135 @@ func _informing() -> bool:
 
 
 func _open() -> void:
+	if _stage == "prize":
+		_open_prize()
+		return
+	if _stage == "contest_replace":
+		_open_contest_replace()
+		return
+	if _stage in WORLD_STAGES:
+		_open_world_stage()
+		return
+	_open_battle_stage()
+
+
+## `GotMoneyForWinningText`, reached by winning the fight rather than staging it.
+func _open_prize() -> void:
+	## `.give_money` prints it behind `PrintWinLossText`, and the reward is
+	## `ComputeTrainerReward`'s off the party the request built.
+	_screen.start_world_battle({"values": {
+		"kind": &"trainer", "trainer_group": TRAINER_CLASS, "trainer_id": 0,
+	}})
+	var fight: Gen2Battle = _screen.get("_battle")
+	fight.player.item = AMULET_COIN
+	_screen.set("_pending", fight.entrance_events(Gen2Battle.PLAYER))
+	_drain_to_menu()
+	## Each of Falkner's two is put on one hit point and knocked out by the
+	## lead's first move. The switch offer his bench opens is declined, since
+	## what is being photographed is the line behind the last faint.
+	for _step: int in 400:
+		_settle()
+		var snapshot: Dictionary = _screen.battle_snapshot()
+		if "for winning" in String(snapshot["message"]):
+			## The box is still revealing on the frame it is spotted, and
+			## the figure is the whole point of the picture.
+			_read_question()
+			_settle()
+			return
+		if String(snapshot["switch_stage"]) != "":
+			_read_question()
+			_screen._handle_button(Gen2Button.B)
+			continue
+		if String(snapshot["menu_stage"]) == "main" and not fight.is_over():
+			fight.enemy.hp = 1
+			_screen.set("_pending", fight.take_actions(
+				Gen2Battle.use_move(0), Gen2Battle.use_move(0)
+			))
+		_screen.finish()
+		_screen.advance()
+	push_error("the prize line was never reached")
+
+
+## A Park Ball thrown and caught while `wContestMon` already holds one, which is
+## the only way to `DisplayAlreadyCaughtText` and the comparison behind it. A wild
+## through the world's own path, since a capture needs one; the result is written
+## rather than rolled, because what is photographed is the page and a real throw
+## would have to be repeated until it stuck.
+func _open_contest_replace() -> void:
+	_screen.start_world_battle({"values": {
+		"kind": &"wild", "pokemon": CONTEST_WILD_SPECIES,
+		"level": CONTEST_WILD_LEVEL,
+		"battle_type": Gen2Battle.BATTLETYPE_CONTEST,
+	}})
+	_screen.set_capture_balls(
+		[Gen2WorldPartyHost.ITEM_PARK_BALL],
+		{Gen2WorldPartyHost.ITEM_PARK_BALL: Gen2WorldBugContest.BALLS}
+	)
+	_drain_to_menu()
+	_screen.begin_capture()
+	_screen.select_capture_ball(0)
+	_screen.throw_capture_ball()
+	_screen.complete_capture({
+		"ok": true, "contest": true, "caught": true, "wobbles": 3,
+		"ball": Gen2WorldPartyHost.ITEM_PARK_BALL,
+		"quantity": Gen2WorldBugContest.BALLS - 1,
+		"replace_offer": true,
+		"mon": Gen2WorldPartyHost.contest_mon_from(_screen.capture_target()),
+		"stock_species": CONTEST_STOCK_SPECIES,
+		"stock_level": CONTEST_STOCK_LEVEL,
+		"stock_max_hp": CONTEST_STOCK_MAX_HP,
+	})
+	## The throw's animation, then the shake lines and
+	## `DisplayAlreadyCaughtText`, each prompted past the way a player would.
+	for _press: int in 20:
+		_settle()
+		if String(_screen.battle_snapshot()["switch_stage"]) == "contest_replace":
+			break
+		_screen.finish()
+		_screen.advance()
+	_read_question()
+	_settle_icons()
+
+
+## The wild the world starts, entered the way a step into the grass does:
+## `BATTLETYPE_FORCESHINY` is what writes the shiny word, so the picture is the
+## cartridge's own forced shiny rather than a number typed in here.
+func _open_world_stage() -> void:
+	var values: Dictionary = {
+		"kind": &"wild", "pokemon": SHINY_SPECIES, "level": SHINY_LEVEL,
+	}
+	if _stage == "shiny":
+		values["battle_type"] = Gen2Battle.BATTLETYPE_FORCESHINY
+	else:
+		## Named rather than rolled, so the two pictures differ in the four
+		## numbers alone: an unnamed wild would roll and could be anything.
+		values["dvs"] = Gen2BattleMon.PERFECT_DVS
+	_screen.start_world_battle({"values": values})
+	## Both sides in one picture: `CGB_BattleColors` reads `CheckShininess`
+	## for the back pic as well, and the player's own party is the only place
+	## a shiny back pic can come from. Written after the battle is built and
+	## the display re-read, since the palette is chosen there.
+	var started: Gen2Battle = _screen.get("_battle")
+	if started != null:
+		started.player.dvs = Gen2Stats.SHINY_DVS if _stage == "shiny" \
+			else Gen2BattleMon.PERFECT_DVS
+		_screen._init_battle_display()
+	_drain_to_menu()
+	## The second `_init_battle_display` leaves a shorter event queue behind
+	## it, so the drain can land a press further in than it does without one.
+	## Backed out rather than counted, so both stages photograph the same
+	## screen and the two pictures differ in the palettes alone.
+	for _press: int in 4:
+		if String(_screen.battle_snapshot()["menu_stage"]) == "main":
+			break
+		_screen._handle_button(Gen2Button.B)
+		_settle()
+
+
+func _open_battle_stage() -> void:
 	var data: GameData = _screen.get("_data")
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 3
-
-	## The wild the world starts, entered the way a step into the grass does:
-	## `BATTLETYPE_FORCESHINY` is what writes the shiny word, so the picture is
-	## the cartridge's own forced shiny rather than a number typed in here.
-	if _stage == "prize":
-		## `GotMoneyForWinningText`, which `.give_money` prints behind
-		## `PrintWinLossText`. The fight is won rather than staged: the reward
-		## is `ComputeTrainerReward`'s, off the party the request built.
-		_screen.start_world_battle({"values": {
-			"kind": &"trainer", "trainer_group": TRAINER_CLASS, "trainer_id": 0,
-		}})
-		var fight: Gen2Battle = _screen.get("_battle")
-		fight.player.item = AMULET_COIN
-		_screen.set("_pending", fight.entrance_events(Gen2Battle.PLAYER))
-		_drain_to_menu()
-		## Each of Falkner's two is put on one hit point and knocked out by the
-		## lead's first move. The switch offer his bench opens is declined, since
-		## what is being photographed is the line behind the last faint.
-		for _step: int in 400:
-			_settle()
-			var snapshot: Dictionary = _screen.battle_snapshot()
-			if "for winning" in String(snapshot["message"]):
-				## The box is still revealing on the frame it is spotted, and
-				## the figure is the whole point of the picture.
-				_read_question()
-				_settle()
-				return
-			if String(snapshot["switch_stage"]) != "":
-				_read_question()
-				_screen._handle_button(Gen2Button.B)
-				continue
-			if String(snapshot["menu_stage"]) == "main" and not fight.is_over():
-				fight.enemy.hp = 1
-				_screen.set("_pending", fight.take_actions(
-					Gen2Battle.use_move(0), Gen2Battle.use_move(0)
-				))
-			_screen.finish()
-			_screen.advance()
-		push_error("the prize line was never reached")
-		return
-
-	## A Park Ball thrown and caught while `wContestMon` already holds one, which
-	## is the only way to `DisplayAlreadyCaughtText` and the comparison behind
-	## it. A wild through the world's own path, since a capture needs one; the
-	## result is written rather than rolled, because what is photographed is the
-	## page and a real throw would have to be repeated until it stuck.
-	if _stage == "contest_replace":
-		_screen.start_world_battle({"values": {
-			"kind": &"wild", "pokemon": CONTEST_WILD_SPECIES,
-			"level": CONTEST_WILD_LEVEL,
-			"battle_type": Gen2Battle.BATTLETYPE_CONTEST,
-		}})
-		_screen.set_capture_balls(
-			[Gen2WorldPartyHost.ITEM_PARK_BALL],
-			{Gen2WorldPartyHost.ITEM_PARK_BALL: Gen2WorldBugContest.BALLS}
-		)
-		_drain_to_menu()
-		_screen.begin_capture()
-		_screen.select_capture_ball(0)
-		_screen.throw_capture_ball()
-		_screen.complete_capture({
-			"ok": true, "contest": true, "caught": true, "wobbles": 3,
-			"ball": Gen2WorldPartyHost.ITEM_PARK_BALL,
-			"quantity": Gen2WorldBugContest.BALLS - 1,
-			"replace_offer": true,
-			"mon": Gen2WorldPartyHost.contest_mon_from(_screen.capture_target()),
-			"stock_species": CONTEST_STOCK_SPECIES,
-			"stock_level": CONTEST_STOCK_LEVEL,
-			"stock_max_hp": CONTEST_STOCK_MAX_HP,
-		})
-		## The throw's animation, then the shake lines and
-		## `DisplayAlreadyCaughtText`, each prompted past the way a player would.
-		for _press: int in 20:
-			_settle()
-			if String(_screen.battle_snapshot()["switch_stage"]) == "contest_replace":
-				break
-			_screen.finish()
-			_screen.advance()
-		_read_question()
-		_settle_icons()
-		return
-
-	if _stage in WORLD_STAGES:
-		var values: Dictionary = {
-			"kind": &"wild", "pokemon": SHINY_SPECIES, "level": SHINY_LEVEL,
-		}
-		if _stage == "shiny":
-			values["battle_type"] = Gen2Battle.BATTLETYPE_FORCESHINY
-		else:
-			## Named rather than rolled, so the two pictures differ in the four
-			## numbers alone: an unnamed wild would roll and could be anything.
-			values["dvs"] = Gen2BattleMon.PERFECT_DVS
-		_screen.start_world_battle({"values": values})
-		## Both sides in one picture: `CGB_BattleColors` reads `CheckShininess`
-		## for the back pic as well, and the player's own party is the only place
-		## a shiny back pic can come from. Written after the battle is built and
-		## the display re-read, since the palette is chosen there.
-		var started: Gen2Battle = _screen.get("_battle")
-		if started != null:
-			started.player.dvs = Gen2Stats.SHINY_DVS if _stage == "shiny" \
-				else Gen2BattleMon.PERFECT_DVS
-			_screen._init_battle_display()
-		_drain_to_menu()
-		## The second `_init_battle_display` leaves a shorter event queue behind
-		## it, so the drain can land a press further in than it does without one.
-		## Backed out rather than counted, so both stages photograph the same
-		## screen and the two pictures differ in the palettes alone.
-		for _press: int in 4:
-			if String(_screen.battle_snapshot()["menu_stage"]) == "main":
-				break
-			_screen._handle_button(Gen2Button.B)
-			_settle()
-		return
-
 	var members: Array = []
 	for species: int in PLAYER_SPECIES:
 		var lead: Array[int] = INFO_MOVES if _informing() else LEAD_MOVES
@@ -396,51 +408,7 @@ func _open() -> void:
 	## Both menu stages are what the intro leads into with nothing else staged,
 	## which is `BattleMenu`'s own first opening.
 	if _stage in MENU_STAGES:
-		## The state an information provider reads, which is the stage rather
-		## than the provider: a seen opponent, weather on, and two stages moved.
-		## Only `info` registers this tool's own, so a capture of a mod's
-		## annotations has exactly one provider answering and cannot attribute
-		## one mod's placements to the other.
-		if _informing():
-			## What `SetSeenMon` would have left behind, since a first sighting is
-			## not something the Pokedex could have told the player about.
-			_screen.set("_enemy_seen_before", true)
-			battle.weather = Gen2Weather.SUN
-			battle.weather_turns = 3
-			battle.player.stages["attack"] = 2
-			battle.player.stages["speed"] = -1
-		## The annotations are a mod's, over the move list they describe: the
-		## provider is synthetic and everything it is handed, and everything drawn
-		## from what it answers, is the host's.
-		if _stage == "info":
-			Gen2ModHost.instance().register_battle_info(&"preview", Annotations.new())
-		_drain_to_menu()
-		if _stage in ["move", "info"]:
-			_screen._handle_button(Gen2Button.A)
-		## `BattlePack`'s own list, over the bag the world hands the battle. The
-		## rows are a real cache's items, so the picture reads as the pack.
-		if _stage in ["pack", "info_pack"]:
-			_screen.set_battle_pack(PACK_ITEMS, PACK_QUANTITIES)
-			_screen._handle_button(Gen2Button.DOWN)
-			_screen._handle_button(Gen2Button.A)
-		## The BALL pocket of the same list. Every row of
-		## `BallMultiplierFunctionTable` is reachable, so the picture is the
-		## whole of what a player can throw.
-		if _stage == "balls":
-			_screen.set_battle_pack(
-				Gen2WorldPartyHost.capture_ball_items(), BALL_QUANTITIES
-			)
-			_screen._handle_button(Gen2Button.DOWN)
-			_screen._handle_button(Gen2Button.A)
-		## `BattleMenu_PKMN`'s party page, the other modal that covers the same
-		## cells: RIGHT from FIGHT is PKMN.
-		if _stage == "info_pkmn":
-			_screen._handle_button(Gen2Button.RIGHT)
-			_screen._handle_button(Gen2Button.A)
-		for press: String in _presses:
-			_screen._handle_button(_button(press))
-		_screen.finish()
-		_settle_icons()
+		_open_menu_stage(battle)
 		return
 
 	_drain()
@@ -456,6 +424,54 @@ func _open() -> void:
 	_screen.finish()
 	_settle_icons()
 
+
+## `BattleMenu`'s own first opening, with nothing else staged.
+func _open_menu_stage(battle: Gen2Battle) -> void:
+	## The state an information provider reads, which is the stage rather
+	## than the provider: a seen opponent, weather on, and two stages moved.
+	## Only `info` registers this tool's own, so a capture of a mod's
+	## annotations has exactly one provider answering and cannot attribute
+	## one mod's placements to the other.
+	if _informing():
+		## What `SetSeenMon` would have left behind, since a first sighting is
+		## not something the Pokedex could have told the player about.
+		_screen.set("_enemy_seen_before", true)
+		battle.weather = Gen2Weather.SUN
+		battle.weather_turns = 3
+		battle.player.stages["attack"] = 2
+		battle.player.stages["speed"] = -1
+	## The annotations are a mod's, over the move list they describe: the
+	## provider is synthetic and everything it is handed, and everything drawn
+	## from what it answers, is the host's.
+	if _stage == "info":
+		Gen2ModHost.instance().register_battle_info(&"preview", Annotations.new())
+	_drain_to_menu()
+	if _stage in ["move", "info"]:
+		_screen._handle_button(Gen2Button.A)
+	## `BattlePack`'s own list, over the bag the world hands the battle. The
+	## rows are a real cache's items, so the picture reads as the pack.
+	if _stage in ["pack", "info_pack"]:
+		_screen.set_battle_pack(PACK_ITEMS, PACK_QUANTITIES)
+		_screen._handle_button(Gen2Button.DOWN)
+		_screen._handle_button(Gen2Button.A)
+	## The BALL pocket of the same list. Every row of
+	## `BallMultiplierFunctionTable` is reachable, so the picture is the
+	## whole of what a player can throw.
+	if _stage == "balls":
+		_screen.set_battle_pack(
+			Gen2WorldPartyHost.capture_ball_items(), BALL_QUANTITIES
+		)
+		_screen._handle_button(Gen2Button.DOWN)
+		_screen._handle_button(Gen2Button.A)
+	## `BattleMenu_PKMN`'s party page, the other modal that covers the same
+	## cells: RIGHT from FIGHT is PKMN.
+	if _stage == "info_pkmn":
+		_screen._handle_button(Gen2Button.RIGHT)
+		_screen._handle_button(Gen2Button.A)
+	for press: String in _presses:
+		_screen._handle_button(_button(press))
+	_screen.finish()
+	_settle_icons()
 
 ## The icons animate on their own clock, so the screen keeps stepping them
 ## across the frames this tool spends laying the scene out. Taking its

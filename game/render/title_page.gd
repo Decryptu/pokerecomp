@@ -14,8 +14,7 @@ const COLUMNS: int = 20
 const ROWS: int = 18
 ## A sprite never draws its first colour.
 const TRANSPARENT_INDEX: int = 0
-## Shadow OAM counts from (8, 16), so a coordinate reaches the screen eight less
-## across and sixteen less down.
+## The shadow-OAM origin [Gen2GameFreakPresentsPage] records.
 const OAM_ORIGIN := Vector2i(8, 16)
 ## `wShadowOAM` holds forty sprites.
 const SHADOW_OAM_SPRITES: int = 40

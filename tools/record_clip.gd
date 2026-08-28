@@ -72,6 +72,7 @@ var _cell := Vector2i(-1, -1)
 var _facing: int = -1
 var _hour: int = -1
 var _seed: int = 1
+var _mash: String = ""
 var _kind: StringName = SCREEN_WORLD
 var _challenge: StringName = Gen2Rules.CHALLENGE_VANILLA
 ## Each member as `{species, level, shiny, hp, brink}`, or empty for the default
@@ -251,71 +252,14 @@ func _initialize() -> void:
 		_quit_failed()
 		return
 
-	var cell := Vector2i(-1, -1)
-	var hour: int = -1
-	var seed_value: int = 1
-	## Expanded after the whole line is read, since its default last frame is
-	## `seconds=`, which may be named after it.
-	var mash: String = ""
 	for extra: String in args.slice(3):
 		var key: String = extra.get_slice("=", 0)
 		var value: String = extra.substr(key.length() + 1)
-		match key:
-			"cell":
-				cell = Vector2i(int(value.get_slice(",", 0)), int(value.get_slice(",", 1)))
-			"facing":
-				_facing = _facing_for(value)
-			"hour":
-				hour = int(value)
-			"view":
-				_view = StringName(value)
-			"size":
-				_window = Vector2i(int(value.get_slice("x", 0)), int(value.get_slice("x", 1)))
-			"seconds":
-				_length = int(maxf(0.1, float(value)) * FRAMES_PER_SECOND)
-			"seed":
-				seed_value = int(value)
-			"hold":
-				_hold = _direction(value)
-			"screen":
-				_kind = StringName(value)
-			"challenge":
-				_challenge = StringName(value)
-			"party":
-				_party = _parse_party(value)
-			"items":
-				_items = _parse_items(value)
-			"flags":
-				for raw: String in value.split(",", false):
-					_flags.append(int(raw))
-			"progress":
-				_progress = _parse_progress(value)
-			"read":
-				_read_gap = maxi(int(value), 0)
-			"beat":
-				_beat_gap = maxi(int(value), 0)
-			"text":
-				_auto_text = value == "auto"
-			"always":
-				_always[StringName(value.get_slice(":", 0))] = \
-					value.substr(value.find(":") + 1)
-			"at":
-				_waits.append({
-					"state": StringName(value.get_slice(":", 0)),
-					"action": value.substr(value.find(":") + 1),
-				})
-			"mash":
-				mash = value
-			"do":
-				_add_action(int(value.get_slice(":", 0)), value.substr(value.find(":") + 1))
-			"warmup":
-				_warmup = maxi(2, int(value))
-			"probe":
-				_probe = StringName(value)
-			_:
-				push_error("Unknown option: %s" % extra)
-				_quit_failed()
-				return
+		if _read_scalar_option(key, value) or _read_staging_option(key, value):
+			continue
+		push_error("Unknown option: %s" % extra)
+		_quit_failed()
+		return
 
 	if _kind not in [SCREEN_WORLD, SCREEN_SAVES]:
 		push_error("Unknown screen: %s" % _kind)
@@ -326,14 +270,77 @@ func _initialize() -> void:
 		_quit_failed()
 		return
 
-	if not mash.is_empty():
-		_add_mash(mash)
+	## Expanded once the whole line is read, since its default last frame is
+	## `seconds=`, which may be named after it.
+	if not _mash.is_empty():
+		_add_mash(_mash)
 	_game = StringName(args[0])
 	_map = Vector2i(int(args[1]), int(args[2]))
-	_cell = cell
-	_hour = hour
-	_seed = seed_value
 
+
+func _read_scalar_option(key: String, value: String) -> bool:
+	match key:
+		"cell":
+			_cell = Vector2i(int(value.get_slice(",", 0)), int(value.get_slice(",", 1)))
+		"facing":
+			_facing = _facing_for(value)
+		"hour":
+			_hour = int(value)
+		"view":
+			_view = StringName(value)
+		"size":
+			_window = Vector2i(int(value.get_slice("x", 0)), int(value.get_slice("x", 1)))
+		"seconds":
+			_length = int(maxf(0.1, float(value)) * FRAMES_PER_SECOND)
+		"seed":
+			_seed = int(value)
+		"hold":
+			_hold = _direction(value)
+		"screen":
+			_kind = StringName(value)
+		"challenge":
+			_challenge = StringName(value)
+		"read":
+			_read_gap = maxi(int(value), 0)
+		"beat":
+			_beat_gap = maxi(int(value), 0)
+		"text":
+			_auto_text = value == "auto"
+		"warmup":
+			_warmup = maxi(2, int(value))
+		"probe":
+			_probe = StringName(value)
+		_:
+			return false
+	return true
+
+
+func _read_staging_option(key: String, value: String) -> bool:
+	match key:
+		"party":
+			_party = _parse_party(value)
+		"items":
+			_items = _parse_items(value)
+		"flags":
+			for raw: String in value.split(",", false):
+				_flags.append(int(raw))
+		"progress":
+			_progress = _parse_progress(value)
+		"always":
+			_always[StringName(value.get_slice(":", 0))] = \
+				value.substr(value.find(":") + 1)
+		"at":
+			_waits.append({
+				"state": StringName(value.get_slice(":", 0)),
+				"action": value.substr(value.find(":") + 1),
+			})
+		"mash":
+			_mash = value
+		"do":
+			_add_action(int(value.get_slice(":", 0)), value.substr(value.find(":") + 1))
+		_:
+			return false
+	return true
 
 ## `party=` as one member per comma. `species:level` and then any of `shiny`,
 ## `brink` and `hp<n>`, which are the three a clip has needed: a shiny to catch,

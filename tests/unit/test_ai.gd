@@ -1381,13 +1381,21 @@ func _dispatched_effects(function: String) -> Array[int]:
 
 ## Every row of `AI_Basic`'s redundancy table has an arm.
 func test_every_redundancy_row_has_a_handler() -> void:
-	var handled: Array[int] = _dispatched_effects("_apply_basic")
-	# Six rows are dispatched through a table rather than an arm, so the two
-	# tables count as dispatch too.
-	for effect: int in Gen2BattleAI.SCREEN_FOR_EFFECT.keys():
-		handled.append(int(effect))
-	for effect: int in Gen2BattleAI.WEATHER_FOR_EFFECT.keys():
-		handled.append(int(effect))
+	var handled: Array[int] = _dispatched_effects("_is_redundant_once")
+	# Most rows are dispatched through a table rather than an arm, so every
+	# table counts as dispatch too.
+	for table: Dictionary in [
+		Gen2BattleAI.SCREEN_FOR_EFFECT, Gen2BattleAI.WEATHER_FOR_EFFECT,
+		Gen2BattleAI.REDUNDANT_TARGET_SUBSTATUS, Gen2BattleAI.REDUNDANT_USER_SUBSTATUS,
+	]:
+		for effect: int in table.keys():
+			handled.append(int(effect))
+	for list: Array in [
+		Gen2BattleAI.STATUS_ONLY_EFFECTS, Gen2BattleAI.HEALING_EFFECTS,
+		Gen2BattleAI.SLEEP_REQUIRED_EFFECTS,
+	]:
+		for effect: int in list:
+			handled.append(int(effect))
 	var missing: Array[int] = []
 	for number: int in REDUNDANT_EFFECT_NUMBERS:
 		if not handled.has(number):

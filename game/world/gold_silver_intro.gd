@@ -126,9 +126,7 @@ const SHELLDER_AT: Array[Vector2i] = [
 	Vector2i(7 * 8, 18 * 8), Vector2i(10 * 8, 14 * 8), Vector2i(15 * 8, 16 * 8),
 ]
 
-## The framesets, as (OAM set, duration, attributes) plus how the run ends.
-## `oamframe X, n` lasts n + 1 frames; `oamend` repeats its last entry forever,
-## `oamdelete` takes the struct away and `oamrestart` goes round again.
+## The framesets [Gen2IntroMovie] describes, in the same shape.
 const FRAMESET_END: StringName = &"end"
 const FRAMESET_DELETE: StringName = &"delete"
 const FRAMESET_RESTART: StringName = &"restart"

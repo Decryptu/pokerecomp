@@ -1404,153 +1404,173 @@ static func _apply_party_request(
 	if kind == &"dratini_moveset_requested":
 		return _apply_dratini_moveset(world, candidate, request)
 	if kind == &"pokemon_requested":
-		var values: Dictionary = request.get("values", {})
-		var is_egg: bool = not values.has("pokemon")
-		var species: int = int(values.get("pokemon", values.get("value", 0)))
-		var level: int = int(values.get("level", values.get("value_2", 0)))
-		var held_item: int = int(values.get("item", 0))
-		if species <= 0 or world.data.species(species).is_empty():
-			return {"ok": false, "reason": &"unknown_species", "species": species}
-		if level < 1 or level > Gen2Experience.MAX_LEVEL:
-			return {"ok": false, "reason": &"invalid_level", "level": level}
-		if held_item < 0 or (held_item > 0 and world.data.item(held_item).is_empty()):
-			return {"ok": false, "reason": &"unknown_item", "item": held_item}
-		var mon: Gen2SaveMon = _new_mon(
-			world.data, candidate, species, level, held_item, random, is_egg
-		)
-		if mon == null:
-			return {"ok": false, "reason": &"could_not_create_pokemon"}
-		## `AddPartyMon`'s three caught-data branches. An egg's is overwritten by
-		## `SetEggMonCaughtData` when it hatches; a plain `givepoke` takes
-		## `SetCaughtData`, the map the player is standing on.
-		set_caught_data(
-			mon, level, world.object_time_of_day, world.player_female(), world.landmark_backup()
-		)
-		if is_egg:
-			## `GiveEgg` is `TryAddMonToParty` and nothing else, so a full party
-			## boxes no egg and leaves `Script_giveegg`'s own `xor a` in
-			## wScriptVar; only the `ret nc` past it writes 2.
-			if candidate.party.size() >= Gen2SaveData.MAX_PARTY:
-				return {
-					"ok": true, "accepted": false, "script_value": 0,
-					"reason": &"party_full",
-					"summary": {
-						"kind": &"egg", "accepted": false,
-						"species": species, "level": level,
-					},
-				}
-			return _append_mon(candidate, mon, 2, {
-				"kind": &"egg", "species": species, "level": level, "item": held_item,
-			})
-		var source: Dictionary = request.get("source", {})
-		var bank: int = int(source.get("bank", -1))
-		var nickname: String = _world_name(
-			world.data, bank, int(values.get("nickname_address", -1))
-		)
-		var ot_name: String = _world_name(
-			world.data, bank, int(values.get("ot_name_address", -1))
-		)
-		if not nickname.is_empty():
-			mon.nickname = nickname
-		if not ot_name.is_empty():
-			mon.original_trainer = ot_name
-			## `SetGiftPartyMonCaughtData`: a `givepoke` that names an OT is
-			## somebody's present, so its level byte is zero and its
-			## landmark is LANDMARK_GIFT rather than this map.
-			set_caught_data(mon, 0, -1, world.player_female(), LANDMARK_GIFT)
-		elif result.has("nickname"):
-			## `GiveANickname_YesNo` and `InitNickname`: the `.wildmon` branch,
-			## which is the thirteen `givepoke` sites that name no OT. The screen
-			## drew the question and the naming keyboard, and NO answers with the
-			## species name `.done` already left in the row.
-			var chosen: String = String(result["nickname"]).strip_edges()
-			if not chosen.is_empty():
-				mon.nickname = chosen
-		var appended: Dictionary = _append_mon(candidate, mon, 0, {
-			"kind": &"gift", "species": species, "level": level, "item": held_item,
-		})
-		if not bool(appended.get("ok", false)):
-			## `.FailedToGiveMon`'s `ld b, $2`: neither the party nor the box had
-			## room, so nothing is written and the script reads 2 and runs on.
-			if StringName(appended.get("reason", &"")) == &"storage_full":
-				return {
-					"ok": true, "accepted": false, "script_value": 2,
-					"reason": &"storage_full",
-					"summary": {
-						"kind": &"gift", "accepted": false,
-						"species": species, "level": level,
-					},
-				}
-			return appended
-		var destination: StringName = StringName(
-			(appended["summary"]["destination"] as Dictionary).get("destination", &"party")
-		)
-		if destination == &"box":
-			## `.skip_nickname`'s tail copies `wMonOrItemNameBuffer` over
-			## `sBoxMonNicknames` after `InitNickname` has written the player's
-			## entry, so a boxed gift always ends up with the species name.
-			mon.nickname = String(world.data.species(species).get("name", ""))
-			appended["script_value"] = 1
-		return appended
-
+		return _apply_pokemon_request(world, candidate, request, result, random)
 	if kind == &"trade_requested":
-		var values: Dictionary = request.get("values", {})
-		var trade_id: int = int(values.get("trade_id", -1))
-		var trade: Dictionary = world.data.world_trade(trade_id)
-		if trade.is_empty():
-			return {"ok": false, "reason": &"unknown_trade", "trade_id": trade_id}
-		## A visible-catalog site may name its own two halves. Applied to this
-		## call's COPY of the record: one cartridge trade row is named by more
-		## than one site, and writing the row would move the other one too. The
-		## nickname, OT, item and DVs stay the record's, since they belong to the
-		## Pokemon the cartridge wrote rather than to the species.
-		for half: Array in [
-			["offered_species", "offered_species"], ["requested_species", "requested_species"],
-		]:
-			if values.has(half[0]) and int(values[half[0]]) > 0:
-				trade[half[1]] = int(values[half[0]])
-		var requested_index: int = int(result.get("party_index", -1))
-		if requested_index < 0 or requested_index >= candidate.party.size():
-			requested_index = _find_trade_candidate(world.data, candidate, trade)
-		if requested_index < 0:
-			return {
-				"ok": true, "accepted": false, "script_value": 0,
-				"reason": &"requested_pokemon_missing",
-				"summary": {"kind": &"trade", "accepted": false, "trade_id": trade_id},
-			}
-		var requested: Gen2SaveMon = candidate.party[requested_index]
-		if requested.species != int(trade["requested_species"]):
-			return {"ok": false, "reason": &"trade_candidate_mismatch"}
-		if not _trade_gender_matches(
-			world.data, requested, int(trade.get("gender", RomLayout.TRADE_GENDER_EITHER))
-		):
-			return {"ok": false, "reason": &"trade_candidate_gender_mismatch"}
-		var received: Gen2SaveMon = _new_mon(
-			world.data, candidate, int(trade["offered_species"]), requested.level,
-			int(trade["item"]), random, false, int(trade["dvs"])
-		)
-		if received == null:
-			return {"ok": false, "reason": &"could_not_create_trade_pokemon"}
-		received.nickname = String(trade.get("nickname", ""))
-		received.original_trainer = String(trade.get("ot_name", ""))
-		received.ot_id = int(trade.get("ot_id", 0))
-		candidate.party[requested_index] = received
-		return {
-			"ok": true, "accepted": true, "script_value": 1,
-			"register_caught": received.species,
-			## A trade lands in the party slot the given Pokemon left, which is
-			## the PARTYMON `GeneratePartyMonStats` registers.
-			"register_unown": _unown_form(
-				received.species, received.dvs, {"destination": &"party"}
-			),
-			"summary": {
-				"kind": &"trade", "accepted": true, "trade_id": trade_id,
-				"given_species": requested.species,
-				"received_species": received.species,
-			},
-		}
+		return _apply_trade_request(world, candidate, request, result, random)
 	return {"ok": false, "reason": &"unsupported_party_request"}
 
+
+## `Script_givepoke` and `Script_giveegg`.
+static func _apply_pokemon_request(
+	world: Gen2WorldAPI,
+	candidate: Gen2SaveData,
+	request: Dictionary,
+	result: Dictionary,
+	random: RandomNumberGenerator
+) -> Dictionary:
+	var values: Dictionary = request.get("values", {})
+	var is_egg: bool = not values.has("pokemon")
+	var species: int = int(values.get("pokemon", values.get("value", 0)))
+	var level: int = int(values.get("level", values.get("value_2", 0)))
+	var held_item: int = int(values.get("item", 0))
+	if species <= 0 or world.data.species(species).is_empty():
+		return {"ok": false, "reason": &"unknown_species", "species": species}
+	if level < 1 or level > Gen2Experience.MAX_LEVEL:
+		return {"ok": false, "reason": &"invalid_level", "level": level}
+	if held_item < 0 or (held_item > 0 and world.data.item(held_item).is_empty()):
+		return {"ok": false, "reason": &"unknown_item", "item": held_item}
+	var mon: Gen2SaveMon = _new_mon(
+		world.data, candidate, species, level, held_item, random, is_egg
+	)
+	if mon == null:
+		return {"ok": false, "reason": &"could_not_create_pokemon"}
+	## `AddPartyMon`'s three caught-data branches. An egg's is overwritten by
+	## `SetEggMonCaughtData` when it hatches; a plain `givepoke` takes
+	## `SetCaughtData`, the map the player is standing on.
+	set_caught_data(
+		mon, level, world.object_time_of_day, world.player_female(), world.landmark_backup()
+	)
+	if is_egg:
+		## `GiveEgg` is `TryAddMonToParty` and nothing else, so a full party
+		## boxes no egg and leaves `Script_giveegg`'s own `xor a` in
+		## wScriptVar; only the `ret nc` past it writes 2.
+		if candidate.party.size() >= Gen2SaveData.MAX_PARTY:
+			return {
+				"ok": true, "accepted": false, "script_value": 0,
+				"reason": &"party_full",
+				"summary": {
+					"kind": &"egg", "accepted": false,
+					"species": species, "level": level,
+				},
+			}
+		return _append_mon(candidate, mon, 2, {
+			"kind": &"egg", "species": species, "level": level, "item": held_item,
+		})
+	var source: Dictionary = request.get("source", {})
+	var bank: int = int(source.get("bank", -1))
+	var nickname: String = _world_name(
+		world.data, bank, int(values.get("nickname_address", -1))
+	)
+	var ot_name: String = _world_name(
+		world.data, bank, int(values.get("ot_name_address", -1))
+	)
+	if not nickname.is_empty():
+		mon.nickname = nickname
+	if not ot_name.is_empty():
+		mon.original_trainer = ot_name
+		## `SetGiftPartyMonCaughtData`: a `givepoke` that names an OT is
+		## somebody's present, so its level byte is zero and its
+		## landmark is LANDMARK_GIFT rather than this map.
+		set_caught_data(mon, 0, -1, world.player_female(), LANDMARK_GIFT)
+	elif result.has("nickname"):
+		## `GiveANickname_YesNo` and `InitNickname`: the `.wildmon` branch,
+		## which is the thirteen `givepoke` sites that name no OT. The screen
+		## drew the question and the naming keyboard, and NO answers with the
+		## species name `.done` already left in the row.
+		var chosen: String = String(result["nickname"]).strip_edges()
+		if not chosen.is_empty():
+			mon.nickname = chosen
+	var appended: Dictionary = _append_mon(candidate, mon, 0, {
+		"kind": &"gift", "species": species, "level": level, "item": held_item,
+	})
+	if not bool(appended.get("ok", false)):
+		## `.FailedToGiveMon`'s `ld b, $2`: neither the party nor the box had
+		## room, so nothing is written and the script reads 2 and runs on.
+		if StringName(appended.get("reason", &"")) == &"storage_full":
+			return {
+				"ok": true, "accepted": false, "script_value": 2,
+				"reason": &"storage_full",
+				"summary": {
+					"kind": &"gift", "accepted": false,
+					"species": species, "level": level,
+				},
+			}
+		return appended
+	var destination: StringName = StringName(
+		(appended["summary"]["destination"] as Dictionary).get("destination", &"party")
+	)
+	if destination == &"box":
+		## `.skip_nickname`'s tail copies `wMonOrItemNameBuffer` over
+		## `sBoxMonNicknames` after `InitNickname` has written the player's
+		## entry, so a boxed gift always ends up with the species name.
+		mon.nickname = String(world.data.species(species).get("name", ""))
+		appended["script_value"] = 1
+	return appended
+
+
+## `Script_trade`, whose row is `world_trade`'s.
+static func _apply_trade_request(
+	world: Gen2WorldAPI,
+	candidate: Gen2SaveData,
+	request: Dictionary,
+	result: Dictionary,
+	random: RandomNumberGenerator
+) -> Dictionary:
+	var values: Dictionary = request.get("values", {})
+	var trade_id: int = int(values.get("trade_id", -1))
+	var trade: Dictionary = world.data.world_trade(trade_id)
+	if trade.is_empty():
+		return {"ok": false, "reason": &"unknown_trade", "trade_id": trade_id}
+	## A visible-catalog site may name its own two halves. Applied to this
+	## call's COPY of the record: one cartridge trade row is named by more
+	## than one site, and writing the row would move the other one too. The
+	## nickname, OT, item and DVs stay the record's, since they belong to the
+	## Pokemon the cartridge wrote rather than to the species.
+	for half: Array in [
+		["offered_species", "offered_species"], ["requested_species", "requested_species"],
+	]:
+		if values.has(half[0]) and int(values[half[0]]) > 0:
+			trade[half[1]] = int(values[half[0]])
+	var requested_index: int = int(result.get("party_index", -1))
+	if requested_index < 0 or requested_index >= candidate.party.size():
+		requested_index = _find_trade_candidate(world.data, candidate, trade)
+	if requested_index < 0:
+		return {
+			"ok": true, "accepted": false, "script_value": 0,
+			"reason": &"requested_pokemon_missing",
+			"summary": {"kind": &"trade", "accepted": false, "trade_id": trade_id},
+		}
+	var requested: Gen2SaveMon = candidate.party[requested_index]
+	if requested.species != int(trade["requested_species"]):
+		return {"ok": false, "reason": &"trade_candidate_mismatch"}
+	if not _trade_gender_matches(
+		world.data, requested, int(trade.get("gender", RomLayout.TRADE_GENDER_EITHER))
+	):
+		return {"ok": false, "reason": &"trade_candidate_gender_mismatch"}
+	var received: Gen2SaveMon = _new_mon(
+		world.data, candidate, int(trade["offered_species"]), requested.level,
+		int(trade["item"]), random, false, int(trade["dvs"])
+	)
+	if received == null:
+		return {"ok": false, "reason": &"could_not_create_trade_pokemon"}
+	received.nickname = String(trade.get("nickname", ""))
+	received.original_trainer = String(trade.get("ot_name", ""))
+	received.ot_id = int(trade.get("ot_id", 0))
+	candidate.party[requested_index] = received
+	return {
+		"ok": true, "accepted": true, "script_value": 1,
+		"register_caught": received.species,
+		## A trade lands in the party slot the given Pokemon left, which is
+		## the PARTYMON `GeneratePartyMonStats` registers.
+		"register_unown": _unown_form(
+			received.species, received.dvs, {"destination": &"party"}
+		),
+		"summary": {
+			"kind": &"trade", "accepted": true, "trade_id": trade_id,
+			"given_species": requested.species,
+			"received_species": received.species,
+		},
+	}
 
 ## `AddPartyMon`'s `.registerpokedex`, which an egg never reaches: the source
 ## checks `cp EGG` first and jumps past `SetSeenAndCaughtMon`, so a Pokemon is

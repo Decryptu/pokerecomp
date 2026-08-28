@@ -19,6 +19,43 @@ const NOISE_CHAN_BIT: int = 2
 
 const FIRST_MUSIC_COMMAND: int = 0xD0
 const SOUND_RETURN: int = 0xFF
+
+## `MusicCommands`, the jump table `ParseMusicCommand` indexes. Its first eight
+## rows are the octaves, read straight off the byte, and `Music_Nothing` owns
+## 0xF1 to 0xF9: a byte missing from this table does nothing.
+const MUSIC_COMMANDS: Dictionary = {
+	0xD8: &"_music_note_type",
+	0xD9: &"_music_transpose",
+	0xDA: &"_music_tempo",
+	0xDB: &"_music_duty_cycle",
+	0xDC: &"_music_volume_envelope",
+	0xDD: &"_music_pitch_sweep",
+	0xDE: &"_music_duty_cycle_pattern",
+	0xDF: &"_music_toggle_sfx",
+	0xE0: &"_music_pitch_slide",
+	0xE1: &"_music_vibrato",
+	0xE2: &"_music_skip_byte",
+	0xE3: &"_music_toggle_noise",
+	0xE4: &"_music_force_stereo_panning",
+	0xE5: &"_music_volume",
+	0xE6: &"_music_pitch_offset",
+	0xE7: &"_music_skip_byte",
+	0xE8: &"_music_skip_byte",
+	0xE9: &"_music_tempo_relative",
+	0xEA: &"_music_restart_channel",
+	0xEB: &"_music_new_song",
+	0xEC: &"_music_sfx_priority_on",
+	0xED: &"_music_sfx_priority_off",
+	0xEE: &"_music_unknown_ee",
+	0xEF: &"_music_stereo_panning",
+	0xF0: &"_music_sfx_toggle_noise",
+	0xFA: &"_music_set_condition",
+	0xFB: &"_music_jump_if",
+	0xFC: &"_music_jump_channel",
+	0xFD: &"_music_loop_channel",
+	0xFE: &"_music_call_channel",
+	SOUND_RETURN: &"_music_ret_channel",
+}
 const MAX_VOLUME: int = 0x77
 const VOLUME_LEVEL_MASK: int = 0x07
 const MUSIC_FADE_IN_BIT: int = 7
@@ -862,156 +899,212 @@ func _get_noise_sample() -> void:
 
 func _parse_music_command(command: int) -> void:
 	var channel: Channel = channels[_cur_channel]
-	match command:
-		0xD0, 0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7:
-			channel.octave = _cur_music_byte & 0x07
-		0xD8:
-			channel.note_length = _get_music_byte()
-			if (_cur_channel & 0x03) != CHAN4:
-				channel.volume_envelope = _get_music_byte()
-		0xD9:
-			channel.transposition = _get_music_byte()
-		0xDA:
-			# `bigdw`: the high byte is written first.
-			var tempo: int = _get_music_byte() << 8
-			tempo |= _get_music_byte()
-			_set_global_tempo(tempo)
-		0xDB:
-			channel.duty_cycle = (_get_music_byte() << 6) & 0xFF
-		0xDC:
-			channel.volume_envelope = _get_music_byte()
-		0xDD:
-			pitch_sweep_value = _get_music_byte()
-			channel.pitch_sweep = true
-		0xDE:
-			channel.duty_loop = true
-			var pattern: int = _get_music_byte()
-			channel.duty_cycle_pattern = ((pattern >> 2) | (pattern << 6)) & 0xFF
-			channel.duty_cycle = channel.duty_cycle_pattern & 0xC0
-		0xDF:
-			channel.sfx = not channel.sfx
-		0xE0:
-			_cur_note_duration = _get_music_byte()
-			var note: int = _get_music_byte()
-			channel.pitch_slide_target = _get_frequency(note & 0x0F, note >> 4)
-			channel.pitch_slide = true
-		0xE1:
-			channel.vibrato = true
-			channel.vibrato_dir = false
-			channel.vibrato_delay = _get_music_byte()
-			channel.vibrato_delay_count = channel.vibrato_delay
-			var shape: int = _get_music_byte()
-			var extent: int = (shape & 0xF0) >> 4
-			# The two halves are stored apart so the up swing rounds away from
-			# zero and the down swing rounds toward it.
-			channel.vibrato_extent = (((extent >> 1) + (extent & 1)) << 4) | (extent >> 1)
-			var rate: int = shape & 0x0F
-			channel.vibrato_rate = (rate << 4) | rate
-		0xE2:
-			var _unused_e2: int = _get_music_byte()
-		0xE3:
-			channel.noise = not channel.noise
-			if channel.noise:
-				_music_noise_sample_set = _get_music_byte()
-		0xE4:
-			_set_lr_tracks()
-			channel.tracks &= _get_music_byte()
-		0xE5:
-			var level: int = _get_music_byte()
-			if music_fade == 0:
-				volume = level
-		0xE6:
-			# `bigdw`, like tempo.
-			var offset: int = _get_music_byte() << 8
-			offset |= _get_music_byte()
-			channel.pitch_offset_enabled = true
-			channel.pitch_offset = offset
-		0xE7:
-			var _unused_e7: int = _get_music_byte()
-		0xE8:
-			var _unused_e8: int = _get_music_byte()
-		0xE9:
-			var relative: int = _get_music_byte()
-			if relative >= 0x80:
-				relative -= 0x100
-			_set_global_tempo((channel.tempo + relative) & 0xFFFF)
-		0xEA:
-			var header: int = _get_music_byte()
-			header |= _get_music_byte() << 8
-			_music_id = channel.music_id
-			_music_bank = channel.music_bank
-			var entry: int = _music_byte(_music_bank, header)
-			entry |= _music_byte(_music_bank, header + 1) << 8
-			var saved: int = _cur_channel
-			_load_channel(entry)
-			_start_channel()
-			_cur_channel = saved
-		0xEB:
-			# `Music_NewSong` names a song id, and no cartridge stream uses it.
-			# Reaching it would need a song table this driver does not own.
-			var _song_low: int = _get_music_byte()
-			var _song_high: int = _get_music_byte()
-		0xEC:
-			sfx_priority = 1
-		0xED:
-			sfx_priority = 0
-		0xEE:
-			var slot: int = _cur_channel & 0x03
-			if _channel_jump_condition[slot] != 0:
-				_channel_jump_condition[slot] = 0
-				var target: int = _get_music_byte()
-				channel.music_address = (target | (_get_music_byte() << 8)) & 0xFFFF
-			else:
-				channel.music_address = (channel.music_address + 2) & 0xFFFF
-		0xEF:
-			if stereo:
-				_set_lr_tracks()
-				channel.tracks &= _get_music_byte()
-			else:
-				var _skipped: int = _get_music_byte()
-		0xF0:
-			channel.noise = not channel.noise
-			if channel.noise:
-				_sfx_noise_sample_set = _get_music_byte()
-		0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8, 0xF9:
-			pass
-		0xFA:
-			channel.condition = _get_music_byte()
-		0xFB:
-			if _get_music_byte() == channel.condition:
-				var target: int = _get_music_byte()
-				channel.music_address = (target | (_get_music_byte() << 8)) & 0xFFFF
-			else:
-				channel.music_address = (channel.music_address + 2) & 0xFFFF
-		0xFC:
-			var target: int = _get_music_byte()
-			channel.music_address = (target | (_get_music_byte() << 8)) & 0xFFFF
-		0xFD:
-			var count: int = _get_music_byte()
-			if not channel.looping:
-				if count == 0:
-					var target: int = _get_music_byte()
-					channel.music_address = (target | (_get_music_byte() << 8)) & 0xFFFF
-					return
-				channel.looping = true
-				channel.loop_count = (count - 1) & 0xFF
-			if channel.loop_count == 0:
-				channel.looping = false
-				channel.music_address = (channel.music_address + 2) & 0xFFFF
-			else:
-				channel.loop_count -= 1
-				var target: int = _get_music_byte()
-				channel.music_address = (target | (_get_music_byte() << 8)) & 0xFFFF
-		0xFE:
-			var target: int = _get_music_byte()
-			target |= _get_music_byte() << 8
-			channel.last_music_address = channel.music_address
-			channel.music_address = target & 0xFFFF
-			channel.subroutine = true
-		SOUND_RETURN:
-			channel.subroutine = false
-			channel.music_address = channel.last_music_address
+	if command < 0xD8:
+		## `Music_Octave8` to `Music_Octave1`, the jump table's first eight rows.
+		channel.octave = _cur_music_byte & 0x07
+		return
+	var handler: StringName = MUSIC_COMMANDS.get(command, &"")
+	if handler != &"":
+		call(handler, channel)
 
+
+func _music_note_type(channel: Channel) -> void:
+	channel.note_length = _get_music_byte()
+	if (_cur_channel & 0x03) != CHAN4:
+		channel.volume_envelope = _get_music_byte()
+
+
+func _music_transpose(channel: Channel) -> void:
+	channel.transposition = _get_music_byte()
+
+
+func _music_tempo(_channel: Channel) -> void:
+	# `bigdw`: the high byte is written first.
+	var tempo: int = _get_music_byte() << 8
+	tempo |= _get_music_byte()
+	_set_global_tempo(tempo)
+
+
+func _music_duty_cycle(channel: Channel) -> void:
+	channel.duty_cycle = (_get_music_byte() << 6) & 0xFF
+
+
+func _music_volume_envelope(channel: Channel) -> void:
+	channel.volume_envelope = _get_music_byte()
+
+
+func _music_pitch_sweep(channel: Channel) -> void:
+	pitch_sweep_value = _get_music_byte()
+	channel.pitch_sweep = true
+
+
+func _music_duty_cycle_pattern(channel: Channel) -> void:
+	channel.duty_loop = true
+	var pattern: int = _get_music_byte()
+	channel.duty_cycle_pattern = ((pattern >> 2) | (pattern << 6)) & 0xFF
+	channel.duty_cycle = channel.duty_cycle_pattern & 0xC0
+
+
+func _music_toggle_sfx(channel: Channel) -> void:
+	channel.sfx = not channel.sfx
+
+
+func _music_pitch_slide(channel: Channel) -> void:
+	_cur_note_duration = _get_music_byte()
+	var note: int = _get_music_byte()
+	channel.pitch_slide_target = _get_frequency(note & 0x0F, note >> 4)
+	channel.pitch_slide = true
+
+
+func _music_vibrato(channel: Channel) -> void:
+	channel.vibrato = true
+	channel.vibrato_dir = false
+	channel.vibrato_delay = _get_music_byte()
+	channel.vibrato_delay_count = channel.vibrato_delay
+	var shape: int = _get_music_byte()
+	var extent: int = (shape & 0xF0) >> 4
+	# The two halves are stored apart so the up swing rounds away from zero and
+	# the down swing rounds toward it.
+	channel.vibrato_extent = (((extent >> 1) + (extent & 1)) << 4) | (extent >> 1)
+	var rate: int = shape & 0x0F
+	channel.vibrato_rate = (rate << 4) | rate
+
+
+## `Music_Unknown_E2`, `_E7` and `_E8` all read one byte and drop it.
+func _music_skip_byte(_channel: Channel) -> void:
+	var _skipped: int = _get_music_byte()
+
+
+func _music_toggle_noise(channel: Channel) -> void:
+	channel.noise = not channel.noise
+	if channel.noise:
+		_music_noise_sample_set = _get_music_byte()
+
+
+func _music_force_stereo_panning(channel: Channel) -> void:
+	_set_lr_tracks()
+	channel.tracks &= _get_music_byte()
+
+
+func _music_volume(_channel: Channel) -> void:
+	var level: int = _get_music_byte()
+	if music_fade == 0:
+		volume = level
+
+
+func _music_pitch_offset(channel: Channel) -> void:
+	# `bigdw`, like tempo.
+	var offset: int = _get_music_byte() << 8
+	offset |= _get_music_byte()
+	channel.pitch_offset_enabled = true
+	channel.pitch_offset = offset
+
+
+func _music_tempo_relative(channel: Channel) -> void:
+	var relative: int = _get_music_byte()
+	if relative >= 0x80:
+		relative -= 0x100
+	_set_global_tempo((channel.tempo + relative) & 0xFFFF)
+
+
+func _music_restart_channel(channel: Channel) -> void:
+	var header: int = _get_music_byte()
+	header |= _get_music_byte() << 8
+	_music_id = channel.music_id
+	_music_bank = channel.music_bank
+	var entry: int = _music_byte(_music_bank, header)
+	entry |= _music_byte(_music_bank, header + 1) << 8
+	var saved: int = _cur_channel
+	_load_channel(entry)
+	_start_channel()
+	_cur_channel = saved
+
+
+## `Music_NewSong` names a song id, and no cartridge stream uses it. Reaching it
+## would need a song table this driver does not own.
+func _music_new_song(_channel: Channel) -> void:
+	var _song_low: int = _get_music_byte()
+	var _song_high: int = _get_music_byte()
+
+
+func _music_sfx_priority_on(_channel: Channel) -> void:
+	sfx_priority = 1
+
+
+func _music_sfx_priority_off(_channel: Channel) -> void:
+	sfx_priority = 0
+
+
+func _music_unknown_ee(channel: Channel) -> void:
+	var slot: int = _cur_channel & 0x03
+	if _channel_jump_condition[slot] != 0:
+		_channel_jump_condition[slot] = 0
+		_music_take_jump(channel)
+	else:
+		channel.music_address = (channel.music_address + 2) & 0xFFFF
+
+
+func _music_stereo_panning(channel: Channel) -> void:
+	if stereo:
+		_set_lr_tracks()
+		channel.tracks &= _get_music_byte()
+	else:
+		var _skipped: int = _get_music_byte()
+
+
+func _music_sfx_toggle_noise(channel: Channel) -> void:
+	channel.noise = not channel.noise
+	if channel.noise:
+		_sfx_noise_sample_set = _get_music_byte()
+
+
+func _music_set_condition(channel: Channel) -> void:
+	channel.condition = _get_music_byte()
+
+
+func _music_jump_if(channel: Channel) -> void:
+	if _get_music_byte() == channel.condition:
+		_music_take_jump(channel)
+	else:
+		channel.music_address = (channel.music_address + 2) & 0xFFFF
+
+
+func _music_jump_channel(channel: Channel) -> void:
+	_music_take_jump(channel)
+
+
+func _music_loop_channel(channel: Channel) -> void:
+	var count: int = _get_music_byte()
+	if not channel.looping:
+		if count == 0:
+			_music_take_jump(channel)
+			return
+		channel.looping = true
+		channel.loop_count = (count - 1) & 0xFF
+	if channel.loop_count == 0:
+		channel.looping = false
+		channel.music_address = (channel.music_address + 2) & 0xFFFF
+	else:
+		channel.loop_count -= 1
+		_music_take_jump(channel)
+
+
+func _music_call_channel(channel: Channel) -> void:
+	var target: int = _get_music_byte()
+	target |= _get_music_byte() << 8
+	channel.last_music_address = channel.music_address
+	channel.music_address = target & 0xFFFF
+	channel.subroutine = true
+
+
+func _music_ret_channel(channel: Channel) -> void:
+	channel.subroutine = false
+	channel.music_address = channel.last_music_address
+
+
+func _music_take_jump(channel: Channel) -> void:
+	var target: int = _get_music_byte()
+	channel.music_address = (target | (_get_music_byte() << 8)) & 0xFFFF
 
 func _set_note_duration(duration: int) -> void:
 	var channel: Channel = channels[_cur_channel]

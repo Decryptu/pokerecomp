@@ -1265,6 +1265,62 @@ func press_button(button: int) -> bool:
 ## took it. A pause that owns the world swallows every button rather than
 ## refusing the ones it has no use for, which is what keeps a stray press from
 ## reaching the map behind it.
+## The overlays that own the whole screen, in the order a press is offered them.
+const OVERLAY_HOSTS: Array[StringName] = [
+	## In front of every other overlay: `EvolveAfterBattle` runs with the map
+	## loop suspended, and the pack path reaches it with the pack still open
+	## behind it, so its B is the animation's cancel rather than the pack's back.
+	&"_evolution_host",
+	## The same rule for `OverworldHatchEgg`, which `PlayerEvents` runs with the
+	## map loop suspended in exactly the same place.
+	&"_hatch_host",
+	## `GivePoke` runs inside `givepoke`, with the map loop suspended behind the
+	## script the same way, and its own naming screen is reached through it.
+	&"_nickname_host",
+	## `special NameRater` runs inside `opentext`, so the map loop is suspended
+	## behind it the same way and its own two screens are reached through it.
+	&"_name_rater_host",
+	## `special MoveTutor` and `special MoveDeletion`, the same shape again.
+	&"_move_tutor_host",
+	&"_move_deleter_host",
+	## The Day-Care's five, one screen with the same shape again.
+	&"_day_care_host",
+	## `special UnownPrinter`, which owns the whole screen until B off its list.
+	&"_unown_printer_host",
+	## `special Diploma`, which owns the whole screen until a button, and
+	## `special PrintDiploma`, which owns it until B.
+	&"_diploma_host",
+	## `special UnownPuzzle`, which owns the whole screen until START or the
+	## last piece.
+	&"_unown_puzzle_host",
+	## `special SlotMachine`, which owns the whole screen until the player says
+	## no to another game or runs out of coins.
+	&"_slot_machine_host",
+	## `special CardFlip`, the Game Corner's other machine, which owns the screen
+	## on the same terms.
+	&"_card_flip_host",
+	## Before the PC and the party overlay because the Hall of Fame is the one
+	## overlay a script opens with nothing behind it: there is no map to go back
+	## to until it has finished, and it takes no cancel.
+	&"_link_host",
+	&"_hall_of_fame_host",
+	&"_credits_host",
+	## `ReadPartyMonMail`, which `MonMailAction` opens over the party list and
+	## comes back to: it owns the screen while it is up.
+	&"_mail_host",
+	&"_party_host",
+]
+
+## The overlays that answer for themselves; a press one refuses reaches the map.
+const ANSWERING_HOSTS: Array[StringName] = [
+	&"_pokedex_host",
+	&"_trainer_card_host",
+	&"_mod_page_host",
+	&"_start_menu_host",
+	&"_service_host",
+]
+
+
 func _handle_button(button: int) -> bool:
 	## First, because a battle hides the map entirely and owns every button while
 	## it does. The fight takes it through this funnel rather than reading events
@@ -1273,116 +1329,19 @@ func _handle_button(button: int) -> bool:
 	if _battle_host != null:
 		_battle_host.press_button(button)
 		return true
-	## `DoBattleTransition` owns every frame between the encounter and the battle
-	## screen with the joypad unread, the same way a map fade does. Without it a
-	## press landing in those frames reached `script_input_waiting()` below and
-	## cancelled the request `startbattle` was waiting on, so the script died
-	## with `invalid_battle_outcome`: the fight still ran, and the gym leader's
-	## badge, the flag behind it and everything after it never arrived. A player
-	## holding A through a trainer's approach is what does it.
-	if not _map_fade.is_empty() or not _trainer_approach.is_empty() \
-		or _battle_transition != null or _world.phone_ring_active():
+	if _input_locked():
 		return true
-	## In front of every other overlay: `EvolveAfterBattle` runs with the map
-	## loop suspended, and the pack path reaches it with the pack still open
-	## behind it, so its B is the animation's cancel rather than the pack's back.
-	if _evolution_host != null:
-		_evolution_host.handle_button(button)
+	for host_name: StringName in OVERLAY_HOSTS:
+		var host: Object = get(host_name)
+		if host != null:
+			host.call(&"handle_button", button)
+			return true
+	if _handle_prompt_button(button):
 		return true
-	## The same rule for `OverworldHatchEgg`, which `PlayerEvents` runs with the
-	## map loop suspended in exactly the same place.
-	if _hatch_host != null:
-		_hatch_host.handle_button(button)
-		return true
-	## `GivePoke` runs inside `givepoke`, with the map loop suspended behind the
-	## script the same way, and its own naming screen is reached through it.
-	if _nickname_host != null:
-		_nickname_host.handle_button(button)
-		return true
-	## `special NameRater` runs inside `opentext`, so the map loop is suspended
-	## behind it the same way and its own two screens are reached through it.
-	if _name_rater_host != null:
-		_name_rater_host.handle_button(button)
-		return true
-	## `special MoveTutor` and `special MoveDeletion`, the same shape again.
-	if _move_tutor_host != null:
-		_move_tutor_host.handle_button(button)
-		return true
-	if _move_deleter_host != null:
-		_move_deleter_host.handle_button(button)
-		return true
-	## The Day-Care's five, one screen with the same shape again.
-	if _day_care_host != null:
-		_day_care_host.handle_button(button)
-		return true
-	## `special UnownPrinter`, which owns the whole screen until B off its list.
-	if _unown_printer_host != null:
-		_unown_printer_host.handle_button(button)
-		return true
-	## `special Diploma`, which owns the whole screen until a button, and
-	## `special PrintDiploma`, which owns it until B.
-	if _diploma_host != null:
-		_diploma_host.handle_button(button)
-		return true
-	## `special UnownPuzzle`, which owns the whole screen until START or the
-	## last piece.
-	if _unown_puzzle_host != null:
-		_unown_puzzle_host.handle_button(button)
-		return true
-	## `special SlotMachine`, which owns the whole screen until the player says
-	## no to another game or runs out of coins.
-	if _slot_machine_host != null:
-		_slot_machine_host.handle_button(button)
-		return true
-	## `special CardFlip`, the Game Corner's other machine, which owns the screen
-	## on the same terms.
-	if _card_flip_host != null:
-		_card_flip_host.handle_button(button)
-		return true
-	## Before the PC and the party overlay because the Hall of Fame is the one
-	## overlay a script opens with nothing behind it: there is no map to go back
-	## to until it has finished, and it takes no cancel.
-	if _link_host != null:
-		_link_host.handle_button(button)
-		return true
-	if _hall_of_fame_host != null:
-		_hall_of_fame_host.handle_button(button)
-		return true
-	if _credits_host != null:
-		_credits_host.handle_button(button)
-		return true
-	## `ReadPartyMonMail`, which `MonMailAction` opens over the party list and
-	## comes back to: it owns the screen while it is up.
-	if _mail_host != null:
-		_mail_host.handle_button(button)
-		return true
-	if _party_host != null:
-		_party_host.handle_button(button)
-		return true
-	if _field_move_text:
-		if button == Gen2Button.A:
-			_acknowledge_field_move_text()
-		return true
-	if not _oak_pc_pages.is_empty():
-		## `JoyWaitAorB`, which is what waits between each of the three texts.
-		if button in [Gen2Button.A, Gen2Button.B]:
-			_advance_prof_oaks_pc()
-		return true
-	if _unown_wall_box != null:
-		## `DisplayUnownWords`' own `JoyWaitAorB`, and the click it plays after.
-		if button in [Gen2Button.A, Gen2Button.B]:
-			_close_unown_wall()
-		return true
-	if _pokedex_host != null:
-		return _pokedex_host.handle_button(button)
-	if _trainer_card_host != null:
-		return _trainer_card_host.handle_button(button)
-	if _mod_page_host != null:
-		return _mod_page_host.handle_button(button)
-	if _start_menu_host != null:
-		return _start_menu_host.handle_button(button)
-	if _service_host != null:
-		return _service_host.handle_button(button)
+	for host_name: StringName in ANSWERING_HOSTS:
+		var host: Object = get(host_name)
+		if host != null:
+			return bool(host.call(&"handle_button", button))
 	if _world.fishing_busy():
 		if button == Gen2Button.A:
 			_handle_fishing_result(_world.advance_fishing())
@@ -1413,6 +1372,35 @@ func _handle_button(button: int) -> bool:
 			return true
 	return false
 
+
+## `DoBattleTransition` owns every frame between the encounter and the battle
+## screen with the joypad unread, the same way a map fade does. Without it a
+## press landing in those frames reached `script_input_waiting()` and cancelled
+## the request `startbattle` was waiting on, so the script died with
+## `invalid_battle_outcome`: the fight still ran, and the gym leader's badge, the
+## flag behind it and everything after it never arrived. A player holding A
+## through a trainer's approach is what does it.
+func _input_locked() -> bool:
+	return not _map_fade.is_empty() or not _trainer_approach.is_empty() \
+		or _battle_transition != null or _world.phone_ring_active()
+
+
+func _handle_prompt_button(button: int) -> bool:
+	if _field_move_text:
+		if button == Gen2Button.A:
+			_acknowledge_field_move_text()
+		return true
+	if not _oak_pc_pages.is_empty():
+		## `JoyWaitAorB`, which is what waits between each of the three texts.
+		if button in [Gen2Button.A, Gen2Button.B]:
+			_advance_prof_oaks_pc()
+		return true
+	if _unown_wall_box != null:
+		## `DisplayUnownWords`' own `JoyWaitAorB`, and the click it plays after.
+		if button in [Gen2Button.A, Gen2Button.B]:
+			_close_unown_wall()
+		return true
+	return false
 
 ## The two OPTION rows a box reads, applied on every box rather than once:
 ## `Textbox` reads wTextboxFrame and `PrintLetterDelay` reads the text speed as

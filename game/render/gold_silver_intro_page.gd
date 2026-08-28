@@ -324,8 +324,7 @@ func shadow_oam(movie: Gen2GoldSilverIntro) -> Array[Dictionary]:
 			if flip_x:
 				dx = -TILE - dx
 			out.append({
-				# `UpdateAnimFrame` builds every position with `add`, so an
-				# offset past the screen wraps rather than clamping.
+				# The `add` wrap [Gen2TitlePage] records.
 				"y": (at.y + int(part[0])) & 0xFF,
 				"x": (at.x + dx) & 0xFF,
 				"tile": (int(sprite["vtile"]) + int(ordering["vtile"]) + int(part[2])) & 0xFF,

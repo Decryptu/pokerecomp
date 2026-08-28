@@ -428,8 +428,7 @@ func _verify_viridian_gym(data: GameData, game_id: StringName) -> void:
 	])
 
 
-## The map [param region] crosses onto over [param axis], as the first edge cell
-## in it that really connects. Empty when the region reaches no such edge.
+## The map [param region] crosses onto over [param axis], as `mt_silver.gd` has it.
 func _crossing(world: Gen2WorldAPI, region: Dictionary, axis: String) -> Dictionary:
 	var size: Vector2i = world.map_size_cells()
 	var direction: Vector2i = {

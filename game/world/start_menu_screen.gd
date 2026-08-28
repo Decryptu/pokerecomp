@@ -45,6 +45,45 @@ enum Mode {
 	FIELD_MOVES,
 }
 
+## The two-row boxes, by the cursor each toggles and the method that repaints it.
+const TOGGLE_MODES: Dictionary = {
+	Mode.PACK_TEACH: [&"_teach_cursor", &"_render_teach"],
+	Mode.PACK_FORGET_ASK: [&"_forget_confirm_cursor", &"_render_forget_ask"],
+	Mode.PACK_STOP_LEARNING: [&"_forget_confirm_cursor", &"_render_stop_learning"],
+	Mode.PACK_TOSS_CONFIRM: [&"_toss_confirm_cursor", &"_render_toss_confirm"],
+	Mode.PACK_GIVE_SWAP: [&"_swap_cursor", &"_render_give_swap"],
+	Mode.SAVE_ASK: [&"_save_cursor", &"_render_save"],
+	Mode.SAVE_OVERWRITE: [&"_save_cursor", &"_render_save"],
+	Mode.QUIT_ASK: [&"_save_cursor", &"_render_save"],
+	Mode.LAUNCHER_ASK: [&"_save_cursor", &"_render_save"],
+	Mode.RESET_ASK: [&"_save_cursor", &"_render_save"],
+}
+
+## Every mode whose A press is one call. A ladder row is read with left and right,
+## so A does nothing on one, the way it does on the cartridge's own value rows; a
+## mod's button row is the exception, where pressing it is the whole setting.
+const CONFIRM_HANDLERS: Dictionary = {
+	Mode.LIST: &"_confirm_list",
+	Mode.PACK_ITEM: &"_confirm_item_action",
+	Mode.PACK_TEACH: &"_confirm_teach",
+	Mode.PACK_FORGET_ASK: &"_confirm_forget_ask",
+	Mode.PACK_FORGET: &"_confirm_forget",
+	Mode.PACK_PP_MOVE: &"_confirm_pp_move",
+	Mode.PACK_STOP_LEARNING: &"_confirm_stop_learning",
+	Mode.PACK_TOSS_CONFIRM: &"_confirm_toss",
+	Mode.PACK_GIVE_SWAP: &"_confirm_give_swap",
+	Mode.SAVE_ASK: &"_confirm_save",
+	Mode.SAVE_OVERWRITE: &"_confirm_save",
+	Mode.SAVE_SAVING: &"_confirm_save",
+	Mode.SAVE_SAVED: &"_confirm_save",
+	Mode.SAVE_FAILED: &"_confirm_save",
+	Mode.QUIT_ASK: &"_confirm_save",
+	Mode.LAUNCHER_ASK: &"_confirm_save",
+	Mode.RESET_ASK: &"_confirm_save",
+	Mode.MOD_OPTIONS: &"_press_mod_option",
+	Mode.FIELD_MOVES: &"_confirm_field_move",
+}
+
 ## `SaveMenu`'s four texts, out of `data/text/common_3.asm` on Crystal and
 ## `common_2.asm` on Gold and Silver, which no importer reads and which this
 ## project authors beside its other engine text. Verbatim, one entry a line, so
@@ -467,91 +506,104 @@ func _move(direction: Vector2i) -> void:
 			elif direction.y != 0:
 				_move_pack_cursor(direction.y)
 		Mode.PACK_ITEM:
-			if direction.y != 0 and not _item_actions.is_empty():
-				_item_cursor = wrapi(_item_cursor + signi(direction.y), 0, _item_actions.size())
-				_render_item_menu()
-		Mode.PACK_TEACH:
-			if direction.y != 0 or direction.x != 0:
-				_teach_cursor = 1 - _teach_cursor
-				_render_teach()
-		Mode.PACK_FORGET_ASK:
-			if direction.y != 0 or direction.x != 0:
-				_forget_confirm_cursor = 1 - _forget_confirm_cursor
-				_render_forget_ask()
+			_move_wrapped(
+				direction.y, &"_item_cursor", _item_actions.size(), &"_render_item_menu"
+			)
 		Mode.PACK_FORGET, Mode.PACK_PP_MOVE:
-			## w2DMenuNumCols is 1, so only vertical input moves the move list.
-			if direction.y != 0 and not _forget_moves.is_empty():
-				_forget_cursor = wrapi(
-					_forget_cursor + signi(direction.y), 0, _forget_moves.size()
-				)
-				_forget_refusal = ""
-				_render_forget_list()
-		Mode.PACK_STOP_LEARNING:
-			if direction.y != 0 or direction.x != 0:
-				_forget_confirm_cursor = 1 - _forget_confirm_cursor
-				_render_stop_learning()
-		Mode.PACK_TOSS_CONFIRM:
-			if direction.y != 0 or direction.x != 0:
-				_toss_confirm_cursor = 1 - _toss_confirm_cursor
-				_render_toss_confirm()
-		Mode.PACK_GIVE_SWAP:
-			if direction.y != 0 or direction.x != 0:
-				_swap_cursor = 1 - _swap_cursor
-				_render_give_swap()
+			_move_forget_list(direction.y)
 		Mode.PACK_TARGET:
-			## `InitPartyMenuWithCancel`: CANCEL is the row after the last member
-			## and the cursor wraps around it, which is `w2DMenuNumRows` being the
-			## party count plus one.
-			if direction.y != 0 and not _party_targets().is_empty():
-				_target_cursor = wrapi(
-					_target_cursor + signi(direction.y), 0, _party_targets().size() + 1
-				)
-				_render_targets()
-		## `VerticalMenu` over `YesNoMenuHeader`, which is only up while a
-		## question is; the two timed modes read no joypad at all.
-		Mode.SAVE_ASK, Mode.SAVE_OVERWRITE, Mode.QUIT_ASK, Mode.LAUNCHER_ASK, \
-		Mode.RESET_ASK:
-			if _save_cursor >= 0 and (direction.x != 0 or direction.y != 0):
-				_save_cursor = 1 - _save_cursor
-				_render_save()
-		Mode.OPTIONS:
-			if direction.y != 0:
-				_options_menu.move(direction.y)
-				_render_options_menu()
-			elif direction.x != 0 and _options_menu.adjust(direction.x):
-				_persist_options()
-				_render_options_menu()
-		Mode.MODS:
-			var mod_rows: Array = _mod_rows()
-			if mod_rows.is_empty():
-				return
-			if direction.y != 0:
-				_mod_cursor = wrapi(_mod_cursor + signi(direction.y), 0, mod_rows.size())
-				_render_mods()
-			elif direction.x != 0 and _mod_view_row(mod_rows):
-				_cycle_view(signi(direction.x))
-		Mode.MOD_OPTIONS:
-			var rows: Array = _mod_options()
-			if rows.is_empty():
-				return
-			if direction.y != 0:
-				_mod_option_cursor = wrapi(
-					_mod_option_cursor + signi(direction.y), 0, rows.size()
-				)
-				_render_mod_options()
-			elif direction.x != 0:
-				_adjust_mod_option(rows, direction.x)
+			_move_wrapped(
+				direction.y, &"_target_cursor", _target_rows(), &"_render_targets"
+			)
 		Mode.FIELD_MOVES:
-			if direction.y != 0 and not _field_move_rows.is_empty():
-				_field_move_cursor = wrapi(
-					_field_move_cursor + signi(direction.y), 0, _field_move_rows.size()
-				)
+			_move_wrapped(
+				direction.y, &"_field_move_cursor", _field_move_rows.size(), &""
+			)
+		Mode.PACK_TEACH, Mode.PACK_FORGET_ASK, Mode.PACK_STOP_LEARNING, \
+		Mode.PACK_TOSS_CONFIRM, Mode.PACK_GIVE_SWAP, Mode.SAVE_ASK, \
+		Mode.SAVE_OVERWRITE, Mode.QUIT_ASK, Mode.LAUNCHER_ASK, Mode.RESET_ASK:
+			_toggle_two_row(direction)
+		Mode.OPTIONS:
+			_move_options(direction)
+		Mode.MODS:
+			_move_mods(direction)
+		Mode.MOD_OPTIONS:
+			_move_mod_options(direction)
 
+
+func _move_wrapped(step: int, at: StringName, rows: int, render: StringName) -> void:
+	if step == 0 or rows <= 0:
+		return
+	set(at, wrapi(int(get(at)) + signi(step), 0, rows))
+	if render != &"":
+		call(render)
+
+
+## `InitPartyMenuWithCancel`: CANCEL is the row after the last member and the
+## cursor wraps around it, which is `w2DMenuNumRows` being the party count plus
+## one.
+func _target_rows() -> int:
+	var targets: Array = _party_targets()
+	return 0 if targets.is_empty() else targets.size() + 1
+
+
+## w2DMenuNumCols is 1, so only vertical input moves the move list.
+func _move_forget_list(step: int) -> void:
+	if step == 0 or _forget_moves.is_empty():
+		return
+	_forget_cursor = wrapi(_forget_cursor + signi(step), 0, _forget_moves.size())
+	_forget_refusal = ""
+	_render_forget_list()
+
+
+## `VerticalMenu` over a two-row box, where every direction toggles the cursor.
+## The save family parks its own at -1 while a box is timed rather than asked,
+## and reads no joypad then.
+func _toggle_two_row(direction: Vector2i) -> void:
+	var row: Array = TOGGLE_MODES[_mode]
+	var at: int = int(get(row[0]))
+	if at < 0 or direction == Vector2i.ZERO:
+		return
+	set(row[0], 1 - at)
+	call(row[1])
+
+
+func _move_options(direction: Vector2i) -> void:
+	if direction.y != 0:
+		_options_menu.move(direction.y)
+		_render_options_menu()
+	elif direction.x != 0 and _options_menu.adjust(direction.x):
+		_persist_options()
+		_render_options_menu()
+
+
+func _move_mods(direction: Vector2i) -> void:
+	var mod_rows: Array = _mod_rows()
+	if mod_rows.is_empty():
+		return
+	if direction.y != 0:
+		_mod_cursor = wrapi(_mod_cursor + signi(direction.y), 0, mod_rows.size())
+		_render_mods()
+	elif direction.x != 0 and _mod_view_row(mod_rows):
+		_cycle_view(signi(direction.x))
+
+
+func _move_mod_options(direction: Vector2i) -> void:
+	var rows: Array = _mod_options()
+	if rows.is_empty():
+		return
+	if direction.y != 0:
+		_mod_option_cursor = wrapi(_mod_option_cursor + signi(direction.y), 0, rows.size())
+		_render_mod_options()
+	elif direction.x != 0:
+		_adjust_mod_option(rows, direction.x)
 
 func _confirm() -> void:
+	var handler: StringName = CONFIRM_HANDLERS.get(_mode, &"")
+	if handler != &"":
+		call(handler)
+		return
 	match _mode:
-		Mode.LIST:
-			_confirm_list()
 		Mode.PACK:
 			## `.switching_item` reads A before anything else, so the A that
 			## would open an item's submenu places the held item instead.
@@ -569,22 +621,6 @@ func _confirm() -> void:
 				_give_selected_item(_give_target)
 			else:
 				_open_item_mode()
-		Mode.PACK_ITEM:
-			_confirm_item_action()
-		Mode.PACK_TEACH:
-			_confirm_teach()
-		Mode.PACK_FORGET_ASK:
-			_confirm_forget_ask()
-		Mode.PACK_FORGET:
-			_confirm_forget()
-		Mode.PACK_PP_MOVE:
-			_confirm_pp_move()
-		Mode.PACK_STOP_LEARNING:
-			_confirm_stop_learning()
-		Mode.PACK_TOSS_CONFIRM:
-			_confirm_toss()
-		Mode.PACK_GIVE_SWAP:
-			_confirm_give_swap()
 		Mode.PACK_TARGET:
 			## `PartyMenuSelect` returns carry on CANCEL, which the caller answers
 			## the same way it answers B.
@@ -596,20 +632,8 @@ func _confirm() -> void:
 				_give_selected_item(_target_cursor)
 			else:
 				_use_selected_item(_target_cursor)
-		## A pack opened over one Pokemon has no menu behind it to go back to:
-		## the party screen closed when it asked for this one.
 		Mode.PACK_RESULT:
-			if _pack_result_advanced():
-				return
-			if _pack_result_continued():
-				return
-			if _give_target >= 0:
-				closed.emit()
-			else:
-				_open_pack_mode(false)
-		Mode.SAVE_ASK, Mode.SAVE_OVERWRITE, Mode.SAVE_SAVING, Mode.SAVE_SAVED, \
-		Mode.SAVE_FAILED, Mode.QUIT_ASK, Mode.LAUNCHER_ASK, Mode.RESET_ASK:
-			_confirm_save()
+			_leave_pack_result()
 		## Options_Cancel is the only handler that reads A.
 		Mode.OPTIONS:
 			if _options_menu.is_cancel():
@@ -620,14 +644,18 @@ func _confirm() -> void:
 			var chosen: Dictionary = _mod_row()
 			if StringName(chosen.get("kind", &"")) == MOD_ROW_MOD:
 				_open_mod_options_mode(StringName(chosen["id"]))
-		## A ladder row is read with left and right, so A does nothing on one, the
-		## way it does on the cartridge's own value rows. A button row is the
-		## exception: pressing it is the whole setting.
-		Mode.MOD_OPTIONS:
-			_press_mod_option()
-		Mode.FIELD_MOVES:
-			_confirm_field_move()
 
+
+## A pack opened over one Pokemon has no menu to go back to; A and B agree.
+func _leave_pack_result() -> void:
+	if _pack_result_advanced():
+		return
+	if _pack_result_continued():
+		return
+	if _give_target >= 0:
+		closed.emit()
+	else:
+		_open_pack_mode(false)
 
 func _cancel() -> void:
 	match _mode:
@@ -645,14 +673,7 @@ func _cancel() -> void:
 		Mode.PACK_ITEM, Mode.PACK_TEACH:
 			_open_pack_mode(false)
 		Mode.PACK_RESULT:
-			if _pack_result_advanced():
-				return
-			if _pack_result_continued():
-				return
-			if _give_target >= 0:
-				closed.emit()
-			else:
-				_open_pack_mode(false)
+			_leave_pack_result()
 		## B at ForgetMove's ask is YesNoBox's no, and B in the move list is its
 		## own .cancel's scf. Both are the carry LearnMove.cancel tests.
 		Mode.PACK_FORGET_ASK, Mode.PACK_FORGET:
@@ -2340,55 +2361,22 @@ func _hardware_image() -> Image:
 		Mode.QUIT_ASK, Mode.LAUNCHER_ASK, Mode.RESET_ASK:
 			return _page.render_save(_save_state(), _list_image())
 		Mode.OPTIONS:
-			if _options_menu == null:
-				return null
-			return _page.render_options(_options_menu.rows(), _options_menu.cursor)
+			return _options_image()
 		Mode.PACK:
 			return _pack_image()
 		Mode.PACK_ITEM:
-			var labels: Array = []
-			for entry: Dictionary in _item_actions:
-				labels.append(String(entry.get("label", "")))
-			return _pack_overlay(box_text(), func(map: PackedInt32Array) -> void:
-				_pack_page.draw_menu(map, _item_menu_box(labels.size()), labels, _item_cursor)
-			)
-		Mode.PACK_TEACH:
-			return _pack_yes_no(box_text(), _teach_cursor)
-		Mode.PACK_FORGET_ASK:
-			return _pack_yes_no(box_text(), _forget_confirm_cursor)
-		Mode.PACK_STOP_LEARNING:
-			return _pack_yes_no(box_text(), _forget_confirm_cursor)
-		Mode.PACK_TOSS_CONFIRM:
-			return _pack_yes_no(box_text(), _toss_confirm_cursor)
-		Mode.PACK_GIVE_SWAP:
-			return _pack_yes_no(box_text(), _swap_cursor)
+			return _item_menu_image()
+		Mode.PACK_TEACH, Mode.PACK_FORGET_ASK, Mode.PACK_STOP_LEARNING, \
+		Mode.PACK_TOSS_CONFIRM, Mode.PACK_GIVE_SWAP:
+			return _pack_yes_no(box_text(), int(get(TOGGLE_MODES[_mode][0])))
 		Mode.PACK_TOSS_QUANTITY:
-			return _pack_overlay(box_text(), func(map: PackedInt32Array) -> void:
-				_pack_page.draw_quantity(
-					map,
-					Gen2MenuBox.from_coords(
-						TOSS_QUANTITY_AT.x, TOSS_QUANTITY_AT.y,
-						TOSS_QUANTITY_TO.x, TOSS_QUANTITY_TO.y, 0
-					),
-					_toss_prompt.value if _toss_prompt != null else 1
-				)
-			)
+			return _toss_quantity_image()
 		Mode.PACK_FORGET, Mode.PACK_PP_MOVE:
-			var moves: Array = []
-			for entry: Dictionary in _forget_moves:
-				moves.append(String(entry.get("name", "")))
-			return _pack_overlay(
-				box_text(), func(map: PackedInt32Array) -> void:
-					_pack_page.draw_move_list(map, moves, _forget_cursor)
-			)
+			return _move_list_image()
 		Mode.PACK_RESULT:
 			return _pack_overlay(box_text(), Callable())
 		Mode.PACK_TARGET:
-			if _party_menu_page() == null:
-				return null
-			return _target_page.render(
-				_party_targets(), _target_cursor, _target_prompt()
-			)
+			return _target_image()
 		Mode.FIELD_MOVES:
 			var moves: Array = _field_move_labels()
 			return _page.render_list(
@@ -2396,38 +2384,89 @@ func _hardware_image() -> Image:
 				Gen2PartyScreen.mon_menu_box(moves.size())
 			)
 		Mode.MODS:
-			var rows: Array = []
-			for row: Dictionary in _mod_rows():
-				if StringName(row["kind"]) == MOD_ROW_VIEW:
-					var host: Gen2ModHost = Gen2ModHost.instance()
-					rows.append({
-						"label": "VIEW", "value": host.view_label(host.selected_view()),
-					})
-					continue
-				rows.append({"label": _mod_name(StringName(row["id"])), "value": ""})
-			var window: Dictionary = _option_window(rows, _mod_cursor)
-			return _page.render_options(window["rows"], window["cursor"])
+			return _mod_rows_image()
 		Mode.MOD_OPTIONS:
-			var rows: Array = []
-			for raw: Dictionary in _mod_options():
-				var value: String = ""
-				match StringName(raw.get("kind", Gen2ModHost.OPTION_LADDER)):
-					Gen2ModHost.OPTION_BUTTON:
-						value = String(raw.get("press_label", "Go"))
-					Gen2ModHost.OPTION_NUMBER:
-						value = str(int(raw.get("value", 0)))
-					_:
-						var labels: Array = raw.get("labels", []) as Array
-						var index: int = int(raw.get("index", 0))
-						if index >= 0 and index < labels.size():
-							value = String(labels[index])
-				rows.append({"label": String(raw.get("label", "")), "value": value})
-			var window: Dictionary = _option_window(
-				rows, _mod_option_cursor, Gen2StartMenuPage.OPTIONS_VISIBLE_VALUE_ROWS
-			)
-			return _page.render_options(window["rows"], window["cursor"])
+			return _mod_options_image()
 	return null
 
+
+func _options_image() -> Image:
+	if _options_menu == null:
+		return null
+	return _page.render_options(_options_menu.rows(), _options_menu.cursor)
+
+
+func _item_menu_image() -> Image:
+	var labels: Array = []
+	for entry: Dictionary in _item_actions:
+		labels.append(String(entry.get("label", "")))
+	return _pack_overlay(box_text(), func(map: PackedInt32Array) -> void:
+		_pack_page.draw_menu(map, _item_menu_box(labels.size()), labels, _item_cursor)
+	)
+
+
+func _toss_quantity_image() -> Image:
+	return _pack_overlay(box_text(), func(map: PackedInt32Array) -> void:
+		_pack_page.draw_quantity(
+			map,
+			Gen2MenuBox.from_coords(
+				TOSS_QUANTITY_AT.x, TOSS_QUANTITY_AT.y,
+				TOSS_QUANTITY_TO.x, TOSS_QUANTITY_TO.y, 0
+			),
+			_toss_prompt.value if _toss_prompt != null else 1
+		)
+	)
+
+
+func _move_list_image() -> Image:
+	var moves: Array = []
+	for entry: Dictionary in _forget_moves:
+		moves.append(String(entry.get("name", "")))
+	return _pack_overlay(
+		box_text(), func(map: PackedInt32Array) -> void:
+			_pack_page.draw_move_list(map, moves, _forget_cursor)
+	)
+
+
+func _target_image() -> Image:
+	if _party_menu_page() == null:
+		return null
+	return _target_page.render(_party_targets(), _target_cursor, _target_prompt())
+
+
+func _mod_rows_image() -> Image:
+	var rows: Array = []
+	for row: Dictionary in _mod_rows():
+		if StringName(row["kind"]) == MOD_ROW_VIEW:
+			var host: Gen2ModHost = Gen2ModHost.instance()
+			rows.append({"label": "VIEW", "value": host.view_label(host.selected_view())})
+			continue
+		rows.append({"label": _mod_name(StringName(row["id"])), "value": ""})
+	var window: Dictionary = _option_window(rows, _mod_cursor)
+	return _page.render_options(window["rows"], window["cursor"])
+
+
+func _mod_options_image() -> Image:
+	var rows: Array = []
+	for raw: Dictionary in _mod_options():
+		rows.append({
+			"label": String(raw.get("label", "")), "value": _mod_option_value(raw),
+		})
+	var window: Dictionary = _option_window(
+		rows, _mod_option_cursor, Gen2StartMenuPage.OPTIONS_VISIBLE_VALUE_ROWS
+	)
+	return _page.render_options(window["rows"], window["cursor"])
+
+
+func _mod_option_value(raw: Dictionary) -> String:
+	match StringName(raw.get("kind", Gen2ModHost.OPTION_LADDER)):
+		Gen2ModHost.OPTION_BUTTON:
+			return String(raw.get("press_label", "Go"))
+		Gen2ModHost.OPTION_NUMBER:
+			return str(int(raw.get("value", 0)))
+	var labels: Array = raw.get("labels", []) as Array
+	var index: int = int(raw.get("index", 0))
+	return String(labels[index]) if index >= 0 and index < labels.size() else ''
 
 ## Keeps the active global row on the hardware page. Input and mutations retain
 ## the global cursor; only the rows handed to the page move.

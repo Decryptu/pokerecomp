@@ -230,66 +230,13 @@ static func _resolve_data_request(world: Gen2WorldAPI, request: Dictionary) -> D
 	var values: Dictionary = request.get("values", {})
 	match kind:
 		&"mart_requested":
-			var dialog_id: int = int(values.get("dialog", 0))
-			var mart_id: int = int(values.get("address", 0)) & 0xFF
-			var mart_result: Dictionary = Gen2WorldMartHost.resolve_mart(
-				world.data, dialog_id, mart_id, world.state.hall_of_fame(), world.state
-			)
-			if not bool(mart_result.get("ok", false)):
-				return {
-					"ok": false,
-					"reason": StringName(mart_result.get("reason", &"mart_data_unavailable")),
-				}
-			var mart: Dictionary = mart_result["mart"]
-			## A catalog site may sell its own shelf. `{item, price}` is the shape
-			## `Gen2WorldMartHost.entries` already reads, so a patched price is
-			## the price the counter charges and nothing else changes.
-			if values.has("items") and values["items"] is Array \
-				and not (values["items"] as Array).is_empty():
-				mart = mart.duplicate(true)
-				mart["items"] = (values["items"] as Array).duplicate(true)
-			return {
-				"ok": true,
-				"data": {"mart": mart, "mart_id": mart_id, "dialog": dialog_id},
-			}
+			return _resolve_mart(world, values)
 		&"elevator_requested":
-			var floors: Dictionary = Gen2WorldScript.decode_elevator_floors(
-				world.data.world_script_at(
-					int(values.get("bank", 0)), int(values.get("address", 0))
-				)
-			)
-			if not bool(floors.get("ok", false)):
-				return {
-					"ok": false,
-					"reason": StringName(floors.get("reason", &"elevator_data_unavailable")),
-				}
-			## `.FindCurrentFloor` walks the list for the row whose map is the
-			## backup warp's, and quits the whole routine when none is: the car
-			## does not know where it is standing, so it does not move.
-			var rows: Array = floors["floors"]
-			var current: int = -1
-			for index: int in rows.size():
-				var row: Dictionary = rows[index]
-				if int(row["map_group"]) == int(world.backup_warp.get("map_group", -1)) \
-					and int(row["map_number"]) == int(world.backup_warp.get("map_number", -1)):
-					current = index
-					break
-			if current < 0:
-				return {"ok": false, "reason": &"elevator_floor_unknown"}
-			return {
-				"ok": true,
-				"data": {"elevator": {"floors": rows, "current": current}},
-			}
+			return _resolve_elevator(world, values)
 		&"name_rater_requested":
-			var lines: Dictionary = name_rater_texts(world.data)
-			if lines.is_empty():
-				return {"ok": false, "reason": &"name_rater_text_unavailable"}
-			return {"ok": true, "data": {"name_rater_text": lines}}
+			return _resolve_text_block(&"name_rater_text", name_rater_texts(world.data))
 		&"move_deleter_requested":
-			var boxes: Dictionary = move_deleter_texts(world.data)
-			if boxes.is_empty():
-				return {"ok": false, "reason": &"move_deleter_text_unavailable"}
-			return {"ok": true, "data": {"move_deleter_text": boxes}}
+			return _resolve_text_block(&"move_deleter_text", move_deleter_texts(world.data))
 		&"move_tutor_requested":
 			## Every box `MoveTutor` prints is `LearnMove`'s or `TeachTMHM`'s,
 			## which [Gen2MoveForget] and [Gen2WorldTMHM] already own, so the
@@ -301,10 +248,7 @@ static func _resolve_data_request(world: Gen2WorldAPI, request: Dictionary) -> D
 				))},
 			}
 		&"day_care_requested":
-			var day_care: Dictionary = day_care_texts(world.data)
-			if day_care.is_empty():
-				return {"ok": false, "reason": &"day_care_text_unavailable"}
-			return {"ok": true, "data": {"day_care_text": day_care}}
+			return _resolve_text_block(&"day_care_text", day_care_texts(world.data))
 		&"map_radio_requested":
 			## `PlayRadio` opens one station and prints its own line; the station
 			## the script named is all the routine needs.
@@ -329,48 +273,9 @@ static func _resolve_data_request(world: Gen2WorldAPI, request: Dictionary) -> D
 				},
 			}
 		&"special_phone_call_requested":
-			var call_id: int = int(values.get("address", 0))
-			var special: Dictionary = Gen2WorldPhoneHost.resolve_special(
-				world.data, world.current_map, call_id, world.world_hour
-			)
-			if not bool(special.get("ok", false)):
-				return {
-					"ok": false,
-					"reason": StringName(special.get("reason", &"phone_data_unavailable")),
-				}
-			return {"ok": true, "data": special}
+			return _resolve_special_phone_call(world, values)
 		&"phone_call_requested":
-			var source: Dictionary = request.get("source", {})
-			var address: int = int(values.get("address", 0))
-			if values.has("contact"):
-				var outgoing: Dictionary = Gen2WorldPhoneHost.resolve_outgoing(
-					world.data, world.state, world.current_map,
-					int(values.get("contact", -1)), world.world_hour
-				)
-				if not bool(outgoing.get("ok", false)):
-					return {
-						"ok": false,
-						"reason": StringName(outgoing.get("reason", &"phone_data_unavailable")),
-					}
-				return {"ok": true, "data": outgoing}
-			var bank: int = int(source.get("bank", -1))
-			var caller_name_raw: PackedByteArray = world.data.world_text(bank, address)
-			var caller_name: Dictionary = Gen2WorldScript.decode_text(caller_name_raw)
-			if not bool(caller_name.get("ok", false)):
-				return {"ok": false, "reason": &"phone_caller_name_unavailable"}
-			## The source phonecall command passes a text pointer directly to
-			## PhoneCall. It does not identify a phone contact or dispatch a
-			## contact script.
-			return {
-				"ok": true,
-				"data": {
-					"phone_call": {
-						"caller_name_pointer": {"bank": bank, "address": address},
-						"caller_name": String(caller_name.get("text", "")),
-					},
-					"phone": source.get("phone", {}).duplicate(true),
-				},
-			}
+			return _resolve_phone_call(world, request, values)
 		&"pc_requested":
 			## `PokemonCenterPC` and `_PlayersHousePC`. Both are menus over state
 			## the world already holds, so the only thing to resolve is which of
@@ -380,13 +285,126 @@ static func _resolve_data_request(world: Gen2WorldAPI, request: Dictionary) -> D
 				return {"ok": false, "reason": &"unsupported_pc_mode"}
 			return {"ok": true, "data": {"pc": {"mode": pc_mode}}}
 		&"audio_requested":
-			var audio: Dictionary = audio_for_request(world, request)
-			var audio_kind: StringName = StringName(request.get("values", {}).get("kind", &""))
-			if audio.is_empty() and audio_kind != &"sound_wait":
-				return {"ok": false, "reason": &"audio_data_unavailable"}
-			return {"ok": true, "data": {"audio": audio}}
+			return _resolve_audio(world, request)
 	return {}
 
+
+static func _resolve_mart(world: Gen2WorldAPI, values: Dictionary) -> Dictionary:
+	var dialog_id: int = int(values.get("dialog", 0))
+	var mart_id: int = int(values.get("address", 0)) & 0xFF
+	var mart_result: Dictionary = Gen2WorldMartHost.resolve_mart(
+		world.data, dialog_id, mart_id, world.state.hall_of_fame(), world.state
+	)
+	if not bool(mart_result.get("ok", false)):
+		return {
+			"ok": false,
+			"reason": StringName(mart_result.get("reason", &"mart_data_unavailable")),
+		}
+	var mart: Dictionary = mart_result["mart"]
+	## A catalog site may sell its own shelf. `{item, price}` is the shape
+	## `Gen2WorldMartHost.entries` already reads, so a patched price is
+	## the price the counter charges and nothing else changes.
+	if values.has("items") and values["items"] is Array \
+		and not (values["items"] as Array).is_empty():
+		mart = mart.duplicate(true)
+		mart["items"] = (values["items"] as Array).duplicate(true)
+	return {
+		"ok": true,
+		"data": {"mart": mart, "mart_id": mart_id, "dialog": dialog_id},
+	}
+
+
+static func _resolve_elevator(world: Gen2WorldAPI, values: Dictionary) -> Dictionary:
+	var floors: Dictionary = Gen2WorldScript.decode_elevator_floors(
+		world.data.world_script_at(
+			int(values.get("bank", 0)), int(values.get("address", 0))
+		)
+	)
+	if not bool(floors.get("ok", false)):
+		return {
+			"ok": false,
+			"reason": StringName(floors.get("reason", &"elevator_data_unavailable")),
+		}
+	## `.FindCurrentFloor` walks the list for the row whose map is the
+	## backup warp's, and quits the whole routine when none is: the car
+	## does not know where it is standing, so it does not move.
+	var rows: Array = floors["floors"]
+	var current: int = -1
+	for index: int in rows.size():
+		var row: Dictionary = rows[index]
+		if int(row["map_group"]) == int(world.backup_warp.get("map_group", -1)) \
+			and int(row["map_number"]) == int(world.backup_warp.get("map_number", -1)):
+			current = index
+			break
+	if current < 0:
+		return {"ok": false, "reason": &"elevator_floor_unknown"}
+	return {
+		"ok": true,
+		"data": {"elevator": {"floors": rows, "current": current}},
+	}
+
+
+static func _resolve_special_phone_call(world: Gen2WorldAPI, values: Dictionary) -> Dictionary:
+	var call_id: int = int(values.get("address", 0))
+	var special: Dictionary = Gen2WorldPhoneHost.resolve_special(
+		world.data, world.current_map, call_id, world.world_hour
+	)
+	if not bool(special.get("ok", false)):
+		return {
+			"ok": false,
+			"reason": StringName(special.get("reason", &"phone_data_unavailable")),
+		}
+	return {"ok": true, "data": special}
+
+
+static func _resolve_phone_call(
+	world: Gen2WorldAPI, request: Dictionary, values: Dictionary
+) -> Dictionary:
+	var source: Dictionary = request.get("source", {})
+	var address: int = int(values.get("address", 0))
+	if values.has("contact"):
+		var outgoing: Dictionary = Gen2WorldPhoneHost.resolve_outgoing(
+			world.data, world.state, world.current_map,
+			int(values.get("contact", -1)), world.world_hour
+		)
+		if not bool(outgoing.get("ok", false)):
+			return {
+				"ok": false,
+				"reason": StringName(outgoing.get("reason", &"phone_data_unavailable")),
+			}
+		return {"ok": true, "data": outgoing}
+	var bank: int = int(source.get("bank", -1))
+	var caller_name_raw: PackedByteArray = world.data.world_text(bank, address)
+	var caller_name: Dictionary = Gen2WorldScript.decode_text(caller_name_raw)
+	if not bool(caller_name.get("ok", false)):
+		return {"ok": false, "reason": &"phone_caller_name_unavailable"}
+	## The source phonecall command passes a text pointer directly to
+	## PhoneCall. It does not identify a phone contact or dispatch a
+	## contact script.
+	return {
+		"ok": true,
+		"data": {
+			"phone_call": {
+				"caller_name_pointer": {"bank": bank, "address": address},
+				"caller_name": String(caller_name.get("text", "")),
+			},
+			"phone": source.get("phone", {}).duplicate(true),
+		},
+	}
+
+
+static func _resolve_audio(world: Gen2WorldAPI, request: Dictionary) -> Dictionary:
+	var audio: Dictionary = audio_for_request(world, request)
+	var audio_kind: StringName = StringName(request.get("values", {}).get("kind", &""))
+	if audio.is_empty() and audio_kind != &"sound_wait":
+		return {"ok": false, "reason": &"audio_data_unavailable"}
+	return {"ok": true, "data": {"audio": audio}}
+
+
+static func _resolve_text_block(key: StringName, lines: Dictionary) -> Dictionary:
+	if lines.is_empty():
+		return {"ok": false, "reason": StringName("%s_unavailable" % key)}
+	return {"ok": true, "data": {key: lines}}
 
 ## The record one `audio_requested` resolves to, which is also what says a
 ## `PlaySlowCry` and a `cry` are one request with one field between them.

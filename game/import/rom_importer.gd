@@ -4442,6 +4442,73 @@ static func type_name(rom: RomFile, layout: Dictionary, type_number: int) -> Str
 	return Gen2Text.decode(rom.bytes(), offset, RomLayout.MAX_NAME_LENGTH)
 
 
+func _import_core_sections(
+	rom: RomFile, layout: Dictionary, on_progress: Callable, yield_ms: int
+) -> Dictionary:
+	var species: Array = _import_species(rom, layout, on_progress)
+	await _breathe(yield_ms)
+	if species.is_empty():
+		return {"ok": false, "message": "Decoded no species."}
+
+	var pics: Dictionary = _import_pics(rom, layout, species, on_progress)
+	await _breathe(yield_ms)
+	if pics.is_empty():
+		return {"ok": false, "message": "Could not decode pics."}
+
+	# Crystal's alone; Gold and Silver have no pic animation, so an empty answer
+	# is the honest one rather than a failure.
+	var pic_anims: Dictionary = _import_pic_anims(rom, layout, species)
+	await _breathe(yield_ms)
+	if pic_anims.is_empty() and not RomLayout.pic_anim(layout).is_empty():
+		return {"ok": false, "message": "Could not decode pic animations."}
+
+	var tiles: Dictionary = _import_tiles(rom, layout, on_progress)
+	await _breathe(yield_ms)
+	if tiles.is_empty():
+		return {"ok": false, "message": "Could not write the font."}
+
+	var dex_orders: Dictionary = _import_dex_orders(rom, layout)
+	await _breathe(yield_ms)
+	if dex_orders.is_empty():
+		return {"ok": false, "message": "Dex order tables are outside the cartridge."}
+	return {
+		"ok": true, "species": species, "pics": pics,
+		"pic_anims": pic_anims, "tiles": tiles, "dex_orders": dex_orders,
+	}
+
+
+func _import_world_sections(
+	rom: RomFile, layout: Dictionary, directory: String,
+	on_progress: Callable, yield_ms: int
+) -> Dictionary:
+	var world: Dictionary = Gen2WorldImporter.import_to_cache(rom, layout, directory, on_progress)
+	await _breathe(yield_ms)
+	if not bool(world.get("ok", false)):
+		return {"ok": false, "message": String(world.get("message", "Could not import overworld data."))}
+	var encounters: Dictionary = Gen2WorldEncounterImporter.import_to_cache(rom, layout, directory)
+	await _breathe(yield_ms)
+	if not bool(encounters.get("ok", false)):
+		return {"ok": false, "message": String(encounters.get("message", "Could not import wild encounter data."))}
+	var services: Dictionary = Gen2WorldServicesImporter.import_to_cache(
+		rom, layout, directory,
+		world.get("scripts", {}), world.get("standard_scripts", {}),
+		world.get("text", {}), world.get("movements", {})
+	)
+	await _breathe(yield_ms)
+	if not bool(services.get("ok", false)):
+		return {"ok": false, "message": String(services.get("message", "Could not import world service data."))}
+	var battle_anims: Dictionary = Gen2BattleAnimImporter.import_to_cache(rom, layout, directory)
+	await _breathe(yield_ms)
+	if not bool(battle_anims.get("ok", false)):
+		return {"ok": false, "message": String(
+			battle_anims.get("message", "Could not import battle animation data.")
+		)}
+	return {
+		"ok": true, "world": world, "encounters": encounters,
+		"services": services, "battle_anims": battle_anims,
+	}
+
+
 ## Imports [param rom] into its cache directory, replacing whatever was there.
 ##
 ## [param on_progress] is called as [code](stage, done, total)[/code] if given.
@@ -4499,37 +4566,15 @@ func import_rom(
 		result["message"] = "Could not create %s." % directory
 		return result
 
-	var species: Array = _import_species(rom, layout, on_progress)
-	await _breathe(yield_ms)
-	if species.is_empty():
-		result["message"] = "Decoded no species."
+	var core: Dictionary = await _import_core_sections(rom, layout, on_progress, yield_ms)
+	if not bool(core.get("ok", false)):
+		result["message"] = String(core["message"])
 		return result
-
-	var pics: Dictionary = _import_pics(rom, layout, species, on_progress)
-	await _breathe(yield_ms)
-	if pics.is_empty():
-		result["message"] = "Could not decode pics."
-		return result
-
-	# Crystal's alone; Gold and Silver have no pic animation, so an empty answer
-	# is the honest one rather than a failure.
-	var pic_anims: Dictionary = _import_pic_anims(rom, layout, species)
-	await _breathe(yield_ms)
-	if pic_anims.is_empty() and not RomLayout.pic_anim(layout).is_empty():
-		result["message"] = "Could not decode pic animations."
-		return result
-
-	var tiles: Dictionary = _import_tiles(rom, layout, on_progress)
-	await _breathe(yield_ms)
-	if tiles.is_empty():
-		result["message"] = "Could not write the font."
-		return result
-
-	var dex_orders: Dictionary = _import_dex_orders(rom, layout)
-	await _breathe(yield_ms)
-	if dex_orders.is_empty():
-		result["message"] = "Dex order tables are outside the cartridge."
-		return result
+	var species: Array = core["species"]
+	var pics: Dictionary = core["pics"]
+	var tiles: Dictionary = core["tiles"]
+	var pic_anims: Dictionary = core["pic_anims"]
+	var dex_orders: Dictionary = core["dex_orders"]
 
 	var moves: Array = _import_moves(rom, layout, on_progress)
 	await _breathe(yield_ms)
@@ -4561,36 +4606,17 @@ func import_rom(
 	var matchups: Array = read_matchups(rom, layout)
 	var trainers: Array = _import_trainers(rom, layout, on_progress)
 	await _breathe(yield_ms)
-	var world: Dictionary = Gen2WorldImporter.import_to_cache(rom, layout, directory, on_progress)
-	await _breathe(yield_ms)
-	if not bool(world.get("ok", false)):
-		result["message"] = String(world.get("message", "Could not import overworld data."))
-		return result
-	var encounters: Dictionary = Gen2WorldEncounterImporter.import_to_cache(rom, layout, directory)
-	await _breathe(yield_ms)
-	if not bool(encounters.get("ok", false)):
-		result["message"] = String(encounters.get("message", "Could not import wild encounter data."))
-		return result
-	var services: Dictionary = Gen2WorldServicesImporter.import_to_cache(
-		rom, layout, directory,
-		world.get("scripts", {}), world.get("standard_scripts", {}),
-		world.get("text", {}), world.get("movements", {})
+	var sections: Dictionary = await _import_world_sections(
+		rom, layout, directory, on_progress, yield_ms
 	)
-	await _breathe(yield_ms)
-	if not bool(services.get("ok", false)):
-		result["message"] = String(services.get("message", "Could not import world service data."))
+	if not bool(sections.get("ok", false)):
+		result["message"] = String(sections["message"])
 		return result
-	var battle_anims: Dictionary = Gen2BattleAnimImporter.import_to_cache(rom, layout, directory)
-	await _breathe(yield_ms)
-	if not bool(battle_anims.get("ok", false)):
-		result["message"] = String(
-			battle_anims.get("message", "Could not import battle animation data.")
-		)
-		return result
+	var world: Dictionary = sections["world"]
+	var encounters: Dictionary = sections["encounters"]
+	var services: Dictionary = sections["services"]
+	var battle_anims: Dictionary = sections["battle_anims"]
 
-	if not RomCache.write_json(RomCache.species_path(directory), species):
-		result["message"] = "Could not write species data."
-		return result
 	if not pic_anims.is_empty() and not RomCache.write_section(
 		RomCache.pic_anims_path(directory),
 		RomCache.blob_path(RomCache.pic_anims_path(directory)), pic_anims
@@ -4604,44 +4630,24 @@ func import_rom(
 	):
 		result["message"] = "Could not write Battle Tower data."
 		return result
-	if not RomCache.write_json(RomCache.moves_path(directory), moves):
-		result["message"] = "Could not write move data."
-		return result
-	if not RomCache.write_json(RomCache.tmhm_moves_path(directory), tmhm_moves):
-		result["message"] = "Could not write TM/HM move data."
-		return result
-	if not RomCache.write_json(
-		RomCache.happiness_changes_path(directory), happiness_changes
-	):
-		result["message"] = "Could not write happiness change data."
-		return result
-	if not RomCache.write_json(RomCache.name_input_chars_path(directory), name_input_chars):
-		result["message"] = "Could not write name input data."
-		return result
-	if not RomCache.write_json(RomCache.text_buffers_path(directory), string_buffers):
-		result["message"] = "Could not write string buffer pointers."
-		return result
-	if not RomCache.write_json(RomCache.intro_text_path(directory), intro_text):
-		result["message"] = "Could not write intro text."
-		return result
-	if not RomCache.write_json(RomCache.dex_orders_path(directory), dex_orders):
-		result["message"] = "Could not write dex order data."
-		return result
-	if not RomCache.write_json(RomCache.items_path(directory), items):
-		result["message"] = "Could not write item data."
-		return result
-	if not RomCache.write_json(RomCache.world_trades_path(directory), trades):
-		result["message"] = "Could not write world trade data."
-		return result
-	if not RomCache.write_json(RomCache.types_path(directory), types):
-		result["message"] = "Could not write type data."
-		return result
-	if not RomCache.write_json(RomCache.matchups_path(directory), matchups):
-		result["message"] = "Could not write the type matchup chart."
-		return result
-	if not RomCache.write_json(RomCache.trainers_path(directory), trainers):
-		result["message"] = "Could not write trainer data."
-		return result
+	for section: Array in [
+		[RomCache.species_path(directory), species, "species data"],
+		[RomCache.moves_path(directory), moves, "move data"],
+		[RomCache.tmhm_moves_path(directory), tmhm_moves, "TM/HM move data"],
+		[RomCache.happiness_changes_path(directory), happiness_changes, "happiness change data"],
+		[RomCache.name_input_chars_path(directory), name_input_chars, "name input data"],
+		[RomCache.text_buffers_path(directory), string_buffers, "string buffer pointers"],
+		[RomCache.intro_text_path(directory), intro_text, "intro text"],
+		[RomCache.dex_orders_path(directory), dex_orders, "dex order data"],
+		[RomCache.items_path(directory), items, "item data"],
+		[RomCache.world_trades_path(directory), trades, "world trade data"],
+		[RomCache.types_path(directory), types, "type data"],
+		[RomCache.matchups_path(directory), matchups, "the type matchup chart"],
+		[RomCache.trainers_path(directory), trainers, "trainer data"],
+	]:
+		if not RomCache.write_json(section[0], section[1]):
+			result["message"] = "Could not write %s." % section[2]
+			return result
 
 	var evolutions: int = _count_in(species, "evolutions")
 	var learnset_moves: int = _count_in(species, "learnset")

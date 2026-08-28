@@ -720,6 +720,25 @@ func _draw() -> void:
 
 	var camera_pixels: Vector2 = _world.view_origin_pixels()
 	var background: Vector2 = _background_camera()
+	_draw_hidden_trees(background)
+	if not _transition_cells.is_empty():
+		_draw_transition(background)
+	if _transition_sprites == Gen2BattleTransition.SPRITES_NONE:
+		return
+
+	## `RespawnPlayerAndOpponent` at each outro's setup: from there the only map
+	## objects left in OAM are the player and, in a scripted battle, whoever
+	## `hLastTalked` names.
+	var battlers_only: bool = _transition_sprites == Gen2BattleTransition.SPRITES_BATTLERS
+	var drawn: Array = _row_entries(battlers_only)
+	_draw_row_entries(drawn, camera_pixels, background, battlers_only)
+	var player: Vector2 = _draw_player(background)
+	if battlers_only:
+		return
+	_draw_free_sprites(camera_pixels, player)
+
+
+func _draw_hidden_trees(background: Vector2) -> void:
 	## `Cut_Headbutt_GetPixelFacing`'s tree goes away while its own sprite
 	## animation plays, which the map quad knows nothing about: the four tiles of
 	## the cell are painted over with the tileset's own blank one.
@@ -740,17 +759,11 @@ func _draw() -> void:
 						Vector2(Gen2Tiles.TILE_WIDTH, Gen2Tiles.TILE_HEIGHT),
 					),
 				)
-	if not _transition_cells.is_empty():
-		_draw_transition(background)
-	if _transition_sprites == Gen2BattleTransition.SPRITES_NONE:
-		return
 
+
+func _row_entries(battlers_only: bool) -> Array:
 	var objects: Array = _world.visible_objects()
 	objects.sort_custom(_sort_objects)
-	## `RespawnPlayerAndOpponent` at each outro's setup: from there the only map
-	## objects left in OAM are the player and, in a scripted battle, whoever
-	## `hLastTalked` names.
-	var battlers_only: bool = _transition_sprites == Gen2BattleTransition.SPRITES_BATTLERS
 	## A mod's actors are drawn in the same pass and sorted into the same rows:
 	## a follower one cell below an NPC has to be drawn over it, and one cell
 	## above it under it. They carry no effect sprite and no grass of their own
@@ -781,6 +794,12 @@ func _draw() -> void:
 				"row": float(offset.y + neighbour.cell.y),
 			})
 	drawn.sort_custom(_sort_drawn)
+	return drawn
+
+
+func _draw_row_entries(
+	drawn: Array, camera_pixels: Vector2, background: Vector2, battlers_only: bool
+) -> void:
 	for entry: Dictionary in drawn:
 		if entry.has("actor"):
 			_draw_actor(entry["actor"], camera_pixels)
@@ -807,6 +826,9 @@ func _draw() -> void:
 		if not battlers_only:
 			_draw_effect_sprites(object.index, pixel)
 
+
+
+func _draw_player(background: Vector2) -> Vector2:
 	var player: Vector2 = Vector2(_world.player_view_pixel()) + SPRITE_LIFT
 	## The jump arc is a sprite offset, not a position: the shadow and the grass
 	## the hop leaves behind stay on the ground.
@@ -826,8 +848,11 @@ func _draw() -> void:
 		draw_rect(marker, PLAYER_COLOR, false, 1.0)
 		draw_line(marker.position, marker.end, PLAYER_COLOR, 1.0)
 		draw_line(Vector2(marker.end.x, marker.position.y), Vector2(marker.position.x, marker.end.y), PLAYER_COLOR, 1.0)
-	if battlers_only:
-		return
+	return player
+
+
+## The sprites the source draws from `wShadowOAMSprite36` up.
+func _draw_free_sprites(camera_pixels: Vector2, player: Vector2) -> void:
 	_draw_effect_sprites(-1, player)
 	## The tree sprite stands over its own cell rather than over an object, and
 	## the source draws every one of these from `wShadowOAMSprite36` up, which is
@@ -850,7 +875,6 @@ func _draw() -> void:
 		if bool(sprite.get("screen", false)):
 			_draw_effect_sprite(sprite, screen)
 	_draw_encounter_pulse(camera_pixels)
-
 
 ## `StartTrainerBattle_LoadPokeBallGraphics.copypals` writes the trainer palette
 ## over `wOBPals1/2 palette PAL_OW_TREE` and `PAL_OW_ROCK` as well as

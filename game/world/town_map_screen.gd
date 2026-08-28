@@ -610,8 +610,7 @@ func _icon_position(landmark: int) -> Vector2i:
 		- Vector2i(ICON_ORIGIN, ICON_ORIGIN)
 
 
-## The screen the opener wants this drawn in, handed over before it is added to
-## the tree. Without one the field goes in whichever screen this ends up inside.
+## The screen the opener wants this drawn in, as [Gen2PokegearScreen] takes it.
 func set_screen(screen: Gen2Screen) -> void:
 	_screen = screen
 
