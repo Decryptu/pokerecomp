@@ -13,6 +13,24 @@ extends SceneTree
 ## outlast that.
 const PHONE_RING_FRAME_BUDGET: int = 256
 
+## How much of the input sequence a failed drain reports.
+const PENDING_TRACE: int = 24
+
+## The runtime pause kinds this walk answers, by the method that answers each.
+## Every one is a pause the screen would open something for.
+const REQUEST_HANDLERS: Dictionary = {
+	&"rival_name_requested": &"_request_rival_name",
+	&"pokemon_requested": &"_request_party_host",
+	&"trade_requested": &"_request_party_host",
+	&"party_heal_requested": &"_request_party_host",
+	&"battle_requested": &"_request_battle",
+	&"trainer_approach_requested": &"_request_trainer_approach",
+	&"catch_tutorial_requested": &"_request_catch_tutorial",
+	&"mart_requested": &"_request_mart",
+	&"apricorn_selection_requested": &"_request_apricorns",
+	&"audio_requested": &"_request_audio",
+}
+
 ## SPECIALCALL_ASSISTANT (constants/phone_constants.asm), armed by beating
 ## Falkner and answered by ElmPhoneCallerScript's .assistant branch.
 const SPECIALCALL_ASSISTANT: int = 3
@@ -26,7 +44,6 @@ const WALK_RESOLVE_ATTEMPTS: int = 16
 ## names. A crowded map has more than a reader needs.
 const BLOCKING_OBJECTS_REPORTED: int = 4
 
-## constants/item_constants.asm's add_hm list, whose comment column is hex.
 ## `maps/Route32.asm` warp 1 and `maps/Route32Pokecenter1F.asm` warp 1, the
 ## fishing guru on (1,4) faced from below, and the nearest shore cell the rod is
 ## cast from: (10,42) faces water on (9,42) and sits in the same region as the
@@ -36,6 +53,7 @@ const ROUTE_32_POKECENTER_EXIT: Vector2i = Vector2i(3, 7)
 const FISHING_GURU_FACE: Vector2i = Vector2i(1, 5)
 const ROUTE_32_SHORE: Vector2i = Vector2i(10, 42)
 
+## constants/item_constants.asm's add_hm list, whose comment column is hex.
 const ITEM_HM_CUT: int = 0xF3
 const ITEM_HM_SURF: int = 0xF5
 const ITEM_HM_STRENGTH: int = 0xF6
@@ -385,14 +403,6 @@ const SAFFRON_CITY_NUMBER: int = 2
 const SAFFRON_GYM_NUMBER: int = 4
 const SAFFRON_GYM_DOOR: Vector2i = Vector2i(34, 3)
 
-## The Elite Four, in the order their doors join them. Every map is in the INDIGO
-## group (16); the Pokemon Center's warp 4 at (14,3) is the only way in and each
-## room's exit pair leads to the next. The four rooms share one shape:
-## `<Room>DoorLocksBehindYouScript` walks the player four cells north of the
-## arrival warp and walls the entrance, the boss stands on (5,7) and is faced from
-## (5,8), and beating them opens the exit block over (4,2)/(5,2). Lance's room is
-## taller and is not talked to at all: its coord events on (4,5) and (5,5) run the
-## approach and the champion scene.
 const SAFFRON_COPYCAT_HOUSE_DOOR: Vector2i = Vector2i(9, 11)
 const COPYCAT_HOUSE_STAIRS_UP: Vector2i = Vector2i(2, 0)
 const COPYCAT_HOUSE_STAIRS_DOWN: Vector2i = Vector2i(3, 0)
@@ -604,14 +614,6 @@ const FUCHSIA_GYM_EXIT: Vector2i = Vector2i(4, 17)
 const FUCHSIA_ROUTE_15_GATE_DOOR: Vector2i = Vector2i(37, 22)
 const ROUTE_11_NUMBER: int = 2
 
-## The lost-doll errand and the Magnet Train it pays for. Saffron's warp 8 is the
-## Copycat's house, warp 12 the Route 6 gate and warp 6 the train station;
-## Vermilion's warp 3 is the Pokemon Fan Club. The order is the cartridge's own:
-## `PokemonFanClubClefairyGuyScript` reads
-## EVENT_MET_COPYCAT_FOUND_OUT_ABOUT_LOST_ITEM before he parts with the doll, and
-## only `Copycat`'s `.TalkAboutLostItem` sets it, which itself needs
-## EVENT_RETURNED_MACHINE_PART from the Power Plant. So the Copycat is visited
-## first, empty-handed, and the walk to Vermilion is what the visit buys.
 const SNORLAX_TALK: Vector2i = Vector2i(36, 9)
 const DIGLETTS_CAVE_MOUTH: Vector2i = Vector2i(34, 7)
 ## `engine/pokegear/pokegear.asm` RadioChannels: 20.0, the Poke Flute channel.
@@ -817,14 +819,13 @@ const EVENT_TELEPORT_GUY: int = 1916
 const EVENT_RIVAL_SPROUT_TOWER: int = 1732
 const EVENT_RED_IN_MT_SILVER: int = 1890
 
-## Vermilion's Snorlax. The whole chain is pinned and checked against the cache by
-## `tools/checks/radio.gd`, which is where these values are explained; only the
-## cells the walk needs are repeated here. Object 4 is a BIG_OBJECT filling (34,8)
-## to (35,9), and the cave mouth on (34,7) is sealed until it moves. The route
-## arrives from Route 11 rather than the port, which lands it inside the eight-cell
-## pocket the Snorlax's own body seals off the east edge, so the walk uses (36,9)
-## facing left: the last of `SnorlaxAwake.ProximityCoords` and the only kind of
-## cell an eastbound player ever has.
+## Maps this walk names by id rather than by cell, where the two profiles disagree.
+## A map number counts from its group's first entry, so a map pokegold does not
+## ship shifts every later number in that group: group 3 runs eight lower from
+## `UNION_CAVE_1F` on, because pokecrystal inserts eight Ruins of Alph rooms, and
+## group 11 shifts around `GOLDENROD_POKECENTER_1F` and the absent
+## `GOLDENROD_DEPT_STORE_ROOF`. Only the ids this walk resolves are listed;
+## everything else it reaches is found by the cell it stands on.
 const MAP_IDS: Dictionary = {
 	&"ILEX_FOREST": {&"crystal": Vector2i(3, 52), &"gold": Vector2i(3, 44)},
 	&"MAHOGANY_MART_1F": {&"crystal": Vector2i(3, 48), &"gold": Vector2i(3, 40)},
@@ -943,25 +944,62 @@ func _story_path(data: GameData) -> Dictionary:
 	save.world = world.snapshot()
 	var random := RandomNumberGenerator.new()
 	random.seed = 7
-	## Maps this walk names by id rather than by cell, where the two profiles disagree.
-	## A map number counts from its group's first entry, so a map pokegold does not
-	## ship shifts every later number in that group: group 3 runs eight lower from
-	## `UNION_CAVE_1F` on, because pokecrystal inserts eight Ruins of Alph rooms, and
-	## group 11 shifts around `GOLDENROD_POKECENTER_1F` and the absent
-	## `GOLDENROD_DEPT_STORE_ROOF`. Only the ids this walk resolves are listed;
-	## everything else it reaches is found by the cell it stands on.
+	# The roaming beasts roll once per map load, so they get a stream of their
+	# own: drawn from the route's, they would shift every encounter behind them.
 	var schedule_random := RandomNumberGenerator.new()
 	schedule_random.seed = 11
 	world.schedule_random = schedule_random
 	var path: Array = []
 
+	var legs: Array[Callable] = [
+		_players_house_leg, _new_bark_starter_leg, _mystery_egg_leg, _elm_return_leg,
+		_zephyr_badge_path, _hive_badge_path, _plain_badge_path, _fog_badge_path,
+		_mineral_badge_path, _glacier_badge_path, _radio_tower_path, _blackthorn_path,
+		_rising_badge_path, _kanto_approach_path, _kanto_crossing_path,
+	]
+	for leg: Callable in legs:
+		var walked: Dictionary = leg.call(world, save, random, data, path)
+		if not bool(walked.get("ok", false)):
+			return walked
+		# PostCreditsSpawn is a map load, not a step, so the leg after the Hall
+		# of Fame answers with a world of its own; every leg after it reads that.
+		var crossed: Variant = walked.get("world", null)
+		if crossed is Gen2WorldAPI:
+			world = crossed
+
+	var party_summary: Array = []
+	for mon: Gen2SaveMon in save.party:
+		party_summary.append({
+			"species": mon.species,
+			"level": mon.level,
+			"item": mon.item,
+		})
+	return {
+		"ok": true,
+		"path": path,
+		"party": party_summary,
+		"event_flags": world.state.event_flags(),
+		"map_scenes": world.state.to_dict().get("map_scenes", {}),
+		"badge_count": world.state.badge_count(Gen2WorldState.is_crystal_profile(data)),
+	}
+
+
+## The bedroom's callbacks, the stairs and Mom.
+func _players_house_leg(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
 	# The bedroom's MAPCALLBACK_NEWMAP is what runs InitializeEventsScript
 	# (maps/PlayersHouse2F.asm's PlayersHouse2FInitializeRoomCallback), which
 	# sets the story's initial event flags. Skipping it left the walked route on
 	# a different flag baseline from a real new game, where world_screen.gd
 	# dispatches the same callbacks on the spawn map.
-	var bedroom_entry: Array = world.dispatch_map_entry()
-	var bedroom_run: Dictionary = _drain_story(world, bedroom_entry, save, random, data, true)
+	var bedroom_run: Dictionary = _drain_story(
+		world, world.dispatch_map_entry(), save, random, data, true
+	)
 	path.append({
 		"step": "players_house_2f_initial_events",
 		"map": _map_value(world),
@@ -972,13 +1010,9 @@ func _story_path(data: GameData) -> Dictionary:
 	if not bool(bedroom_run.get("terminal", false)):
 		return {"ok": false, "path": path, "reason": "initial event callbacks did not finish"}
 
-	var stair_warp: Dictionary = _warp_to(world.current_map, 24, 6)
-	if stair_warp.is_empty():
-		return {"ok": false, "reason": "missing home stair warp"}
-	world.player_cell = Vector2i(stair_warp["x"], stair_warp["y"])
-	var transition: Dictionary = world.try_warp()
-	if not bool(transition.get("ok", false)):
-		return {"ok": false, "reason": "stair warp failed", "transition": _transition_value(transition)}
+	var stairs: Dictionary = _warp_step(world, 24, 6)
+	if not bool(stairs.get("ok", false)):
+		return _leg_failed(path, "stair warp failed", stairs)
 	path.append({"map": _map_value(world), "cell": _cell_value(world)})
 
 	# The stair warp lands on (9,0) and the two profiles run Mom from opposite
@@ -995,10 +1029,7 @@ func _story_path(data: GameData) -> Dictionary:
 			world, Vector2i(9, 3), Vector2i(9, 4), save, random, data
 		)
 		if not bool(stepped.get("ok", false)):
-			return {
-				"ok": false, "path": path,
-				"reason": "the Mom coord event failed: %s" % stepped.get("reason", ""),
-			}
+			return _leg_failed(path, "the Mom coord event failed", stepped)
 		mom_run = stepped.get("run", mom_run)
 	path.append({
 		"step": "players_house_1f_mom",
@@ -1011,57 +1042,42 @@ func _story_path(data: GameData) -> Dictionary:
 	})
 	if not world.state.is_engine_flag_active(ENGINE_POKEGEAR):
 		return {"ok": false, "path": path, "reason": "Mom never handed over the Pokegear"}
+	return {"ok": true}
 
-	var town_warp: Dictionary = _warp_to(world.current_map, 24, 4)
-	if town_warp.is_empty():
-		return {"ok": false, "path": path, "reason": "missing first-floor town warp"}
-	world.player_cell = Vector2i(town_warp["x"], town_warp["y"])
-	transition = world.try_warp()
-	if not bool(transition.get("ok", false)):
-		return {"ok": false, "path": path, "reason": "town warp failed"}
+
+func _new_bark_starter_leg(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
+	var town: Dictionary = _warp_step(world, 24, 4)
+	if not bool(town.get("ok", false)):
+		return _leg_failed(path, "town warp failed", town)
 	var entry: Array = world.dispatch_map_entry()
-	var teacher: Array = []
-	var teacher_cell := Vector2i(-1, -1)
-	for target: Vector2i in [Vector2i(1, 9), Vector2i(1, 8)]:
-		var walked_to_teacher: Dictionary = _walk_to_story_cell(world, target)
-		teacher = walked_to_teacher.get("events", [])
-		if not teacher.is_empty():
-			teacher_cell = target
-			break
-	var teacher_run: Dictionary = _drain_story(world, teacher, save, random)
+	var teacher: Dictionary = _events_at_cells(world, [Vector2i(1, 9), Vector2i(1, 8)])
+	var teacher_run: Dictionary = _drain_story(world, teacher["events"], save, random)
 	path.append({
 		"step": "new_bark_teacher",
 		"map": _map_value(world),
 		"cell": _cell_value(world),
-		"trigger_cell": _cell_value_from_vector(teacher_cell),
+		"trigger_cell": _cell_value_from_vector(teacher["cell"]),
 		"entry_statuses": _statuses(entry),
 		"run": teacher_run,
 	})
 
-	var lab_warp: Dictionary = _warp_to(world.current_map, 24, 5)
-	if lab_warp.is_empty():
-		return {"ok": false, "path": path, "reason": "missing New Bark to Elm lab warp"}
-	world.player_cell = Vector2i(lab_warp["x"], lab_warp["y"])
-	transition = world.try_warp()
-	if not bool(transition.get("ok", false)):
-		return {"ok": false, "path": path, "reason": "Elm lab warp failed"}
-	var lab_entry: Array = world.dispatch_map_entry()
-	var lab_entry_run: Dictionary = _drain_story(world, lab_entry, save, random)
-	path.append({
-		"step": "elm_lab_entry_scene",
-		"map": _map_value(world),
-		"cell": _cell_value(world),
-		"run": lab_entry_run,
-	})
-	if not bool(lab_entry_run.get("terminal", false)):
-		return {"ok": false, "path": path, "reason": "Elm lab entry scene did not finish"}
+	var lab: Dictionary = _warp_entry_leg(
+		world, save, random, data, path, 24, 5, "elm_lab_entry_scene"
+	)
+	if not bool(lab.get("ok", false)):
+		return lab
 
 	# The source Cyndaquil ball is object 2 at (6,3). Interact from its
 	# validated south-facing cell so the imported object script owns the choice.
 	world.player_cell = Vector2i(6, 4)
 	world.player_facing = Gen2WorldSprite.FACING_UP
-	var starter: Array = world.interact()
-	var starter_run: Dictionary = _drain_story(world, starter, save, random)
+	var starter_run: Dictionary = _drain_story(world, world.interact(), save, random)
 	path.append({
 		"step": "elm_lab_cyndaquil_handoff",
 		"map": _map_value(world),
@@ -1074,13 +1090,8 @@ func _story_path(data: GameData) -> Dictionary:
 	# Elm's directions scene arms the imported aide Potion event. The second
 	# scene, which gives Poké Balls, belongs to the later Mystery Egg return and
 	# is deliberately not skipped here.
-	var potion_events: Array = []
-	for target: Vector2i in [Vector2i(4, 8), Vector2i(5, 8)]:
-		var walked_to_potion: Dictionary = _walk_to_story_cell(world, target)
-		potion_events = walked_to_potion.get("events", [])
-		if not potion_events.is_empty():
-			break
-	var potion_run: Dictionary = _drain_story(world, potion_events, save, random, data)
+	var potion: Dictionary = _events_at_cells(world, [Vector2i(4, 8), Vector2i(5, 8)])
+	var potion_run: Dictionary = _drain_story(world, potion["events"], save, random, data)
 	path.append({
 		"step": "elm_lab_aide_potion",
 		"map": _map_value(world),
@@ -1091,157 +1102,55 @@ func _story_path(data: GameData) -> Dictionary:
 	if not bool(potion_run.get("terminal", false)):
 		return {"ok": false, "path": path, "reason": "aide Potion event did not finish"}
 
-	var lab_exit: Dictionary = _warp_to(world.current_map, 24, 4)
-	if lab_exit.is_empty():
-		return {"ok": false, "path": path, "reason": "missing Elm lab exit warp"}
-	world.player_cell = Vector2i(lab_exit["x"], lab_exit["y"])
-	transition = world.try_warp()
-	if not bool(transition.get("ok", false)):
-		return {"ok": false, "path": path, "reason": "lab exit warp failed"}
-	var town_entry: Array = world.dispatch_map_entry()
-	var town_entry_run: Dictionary = _drain_story(world, town_entry, save, random, data)
-	path.append({
-		"step": "new_bark_after_starter",
-		"map": _map_value(world),
-		"cell": _cell_value(world),
-		"run": town_entry_run,
-	})
-	if not bool(town_entry_run.get("terminal", false)):
-		return {"ok": false, "path": path, "reason": "New Bark entry did not finish"}
+	return _warp_entry_leg(
+		world, save, random, data, path, 24, 4, "new_bark_after_starter"
+	)
 
-	var route_transition: Dictionary = _walk_to_connection(world, "west", 24, 3)
-	path.append({
-		"step": "new_bark_to_route_29",
-		"map": _map_value(world),
-		"cell": _cell_value(world),
-		"transition": _transition_value(route_transition.get("transition", {})),
-	})
-	if not bool(route_transition.get("ok", false)):
-		return {"ok": false, "path": path, "reason": "New Bark to Route 29 connection failed"}
-	var route_entry: Array = world.dispatch_map_entry()
-	var route_entry_run: Dictionary = _drain_story(world, route_entry, save, random, data)
-	path.append({
-		"step": "route_29_entry",
-		"map": _map_value(world),
-		"cell": _cell_value(world),
-		"run": route_entry_run,
-	})
-	if not bool(route_entry_run.get("terminal", false)):
-		return {"ok": false, "path": path, "reason": "Route 29 entry did not finish"}
 
-	var city_transition: Dictionary = _walk_to_connection(world, "west", 26, 3)
-	path.append({
-		"step": "route_29_to_cherrygrove",
-		"map": _map_value(world),
-		"cell": _cell_value(world),
-		"transition": _transition_value(city_transition.get("transition", {})),
-	})
-	if not bool(city_transition.get("ok", false)):
-		return {"ok": false, "path": path, "reason": "Route 29 to Cherrygrove connection failed"}
-	var city_entry: Array = world.dispatch_map_entry()
-	var city_entry_run: Dictionary = _drain_story(world, city_entry, save, random, data)
-	path.append({
-		"step": "cherrygrove_entry",
-		"map": _map_value(world),
-		"cell": _cell_value(world),
-		"run": city_entry_run,
-		"scene": world.state.map_scene(26, 3),
-	})
-	if not bool(city_entry_run.get("terminal", false)):
-		return {"ok": false, "path": path, "reason": "Cherrygrove entry did not finish"}
+## Route 29 to Mr Pokemon's house and back, which the first rival interrupts.
+func _mystery_egg_leg(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
+	var outward: Array = [
+		["west", 24, 3, "new_bark_to_route_29", "route_29_entry", []],
+		["west", 26, 3, "route_29_to_cherrygrove", "cherrygrove_entry", ["scene"]],
+		["north", 26, 1, "cherrygrove_to_route_30", "route_30_entry", []],
+	]
+	var crossed: Dictionary = _connection_legs(world, save, random, data, path, outward)
+	if not bool(crossed.get("ok", false)):
+		return crossed
 
-	var route30_transition: Dictionary = _walk_to_connection(world, "north", 26, 1)
-	path.append({
-		"step": "cherrygrove_to_route_30",
-		"map": _map_value(world),
-		"cell": _cell_value(world),
-		"transition": _transition_value(route30_transition.get("transition", {})),
-	})
-	if not bool(route30_transition.get("ok", false)):
-		return {"ok": false, "path": path, "reason": "Cherrygrove to Route 30 connection failed"}
-	var route30_entry: Array = world.dispatch_map_entry()
-	var route30_entry_run: Dictionary = _drain_story(world, route30_entry, save, random, data)
-	path.append({
-		"step": "route_30_entry",
-		"map": _map_value(world),
-		"cell": _cell_value(world),
-		"run": route30_entry_run,
-	})
-	if not bool(route30_entry_run.get("terminal", false)):
-		return {"ok": false, "path": path, "reason": "Route 30 entry did not finish"}
+	var mr_pokemon: Dictionary = _warp_entry_leg(
+		world, save, random, data, path, 26, 10, "mr_pokemon_mystery_egg",
+		["items", "engine_flags", "map_scenes"]
+	)
+	if not bool(mr_pokemon.get("ok", false)):
+		return mr_pokemon
 
-	var mr_pokemon_warp: Dictionary = _warp_to(world.current_map, 26, 10)
-	if mr_pokemon_warp.is_empty():
-		return {"ok": false, "path": path, "reason": "missing Route 30 to Mr Pokemon warp"}
-	world.player_cell = Vector2i(mr_pokemon_warp["x"], mr_pokemon_warp["y"])
-	transition = world.try_warp()
-	if not bool(transition.get("ok", false)):
-		return {"ok": false, "path": path, "reason": "Mr Pokemon warp failed"}
-	var mr_pokemon_entry: Array = world.dispatch_map_entry()
-	var mr_pokemon_run: Dictionary = _drain_story(world, mr_pokemon_entry, save, random, data)
-	path.append({
-		"step": "mr_pokemon_mystery_egg",
-		"map": _map_value(world),
-		"cell": _cell_value(world),
-		"run": mr_pokemon_run,
-		"items": _named_items(data, world.state.items()),
-		"engine_flags": world.state.engine_flags(),
-		"map_scenes": world.state.map_scenes(),
-	})
-	if not bool(mr_pokemon_run.get("terminal", false)):
-		return {"ok": false, "path": path, "reason": "Mr Pokemon event did not finish"}
+	var returned: Dictionary = _warp_entry_leg(
+		world, save, random, data, path, 26, 1, "route_30_return"
+	)
+	if not bool(returned.get("ok", false)):
+		return returned
 
-	var return_warp: Dictionary = _warp_to(world.current_map, 26, 1)
-	if return_warp.is_empty():
-		return {"ok": false, "path": path, "reason": "missing Mr Pokemon return warp"}
-	world.player_cell = Vector2i(return_warp["x"], return_warp["y"])
-	transition = world.try_warp()
-	if not bool(transition.get("ok", false)):
-		return {"ok": false, "path": path, "reason": "Route 30 return warp failed"}
-	var route30_return: Array = world.dispatch_map_entry()
-	var route30_return_run: Dictionary = _drain_story(world, route30_return, save, random, data)
-	path.append({
-		"step": "route_30_return",
-		"map": _map_value(world),
-		"cell": _cell_value(world),
-		"run": route30_return_run,
-	})
-	if not bool(route30_return_run.get("terminal", false)):
-		return {"ok": false, "path": path, "reason": "Route 30 return did not finish"}
+	var back: Dictionary = _connection_legs(world, save, random, data, path, [
+		["south", 26, 3, "route_30_to_cherrygrove_return", "cherrygrove_rival_scene_entry",
+			["scene"]],
+	])
+	if not bool(back.get("ok", false)):
+		return back
 
-	var city_return: Dictionary = _walk_to_connection(world, "south", 26, 3)
-	path.append({
-		"step": "route_30_to_cherrygrove_return",
-		"map": _map_value(world),
-		"cell": _cell_value(world),
-		"transition": _transition_value(city_return.get("transition", {})),
-	})
-	if not bool(city_return.get("ok", false)):
-		return {"ok": false, "path": path, "reason": "Route 30 to Cherrygrove return failed"}
-	var city_return_entry: Array = world.dispatch_map_entry()
-	var city_return_run: Dictionary = _drain_story(world, city_return_entry, save, random, data)
-	path.append({
-		"step": "cherrygrove_rival_scene_entry",
-		"map": _map_value(world),
-		"cell": _cell_value(world),
-		"run": city_return_run,
-		"scene": world.state.map_scene(26, 3),
-	})
-	if not bool(city_return_run.get("terminal", false)):
-		return {"ok": false, "path": path, "reason": "Cherrygrove return entry did not finish"}
-
-	var rival_events: Array = []
-	for target: Vector2i in [Vector2i(33, 6), Vector2i(33, 7)]:
-		var walked_to_rival: Dictionary = _walk_to_story_cell(world, target)
-		rival_events = walked_to_rival.get("events", [])
-		if not rival_events.is_empty():
-			break
-	if rival_events.is_empty():
+	var rival: Dictionary = _events_at_cells(world, [Vector2i(33, 6), Vector2i(33, 7)])
+	if rival["events"].is_empty():
 		return {
 			"ok": false, "path": path,
 			"reason": "Cherrygrove rival event was not dispatched",
 		}
-	var rival_run: Dictionary = _drain_story(world, rival_events, save, random, data)
+	var rival_run: Dictionary = _drain_story(world, rival["events"], save, random, data)
 	path.append({
 		"step": "cherrygrove_first_rival",
 		"map": _map_value(world),
@@ -1252,76 +1161,28 @@ func _story_path(data: GameData) -> Dictionary:
 	if not bool(rival_run.get("terminal", false)):
 		return {"ok": false, "path": path, "reason": "Cherrygrove rival event did not finish"}
 
-	var route29_return: Dictionary = _walk_to_connection(world, "east", 24, 3)
-	path.append({
-		"step": "cherrygrove_to_route_29_after_rival",
-		"map": _map_value(world),
-		"cell": _cell_value(world),
-		"transition": _transition_value(route29_return.get("transition", {})),
-	})
-	if not bool(route29_return.get("ok", false)):
-		return {"ok": false, "path": path, "reason": "Cherrygrove to Route 29 return failed"}
-	var route29_return_entry: Array = world.dispatch_map_entry()
-	var route29_return_run: Dictionary = _drain_story(
-		world, route29_return_entry, save, random, data
+	return _connection_legs(world, save, random, data, path, [
+		["east", 24, 3, "cherrygrove_to_route_29_after_rival", "route_29_after_rival", []],
+		["east", 24, 4, "route_29_to_new_bark_after_rival", "new_bark_after_rival", []],
+	])
+
+
+## Elm's lab with the egg: the officer, Elm himself, and the aide's Poké Balls.
+func _elm_return_leg(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
+	var officer_entry: Dictionary = _warp_entry_leg(
+		world, save, random, data, path, 24, 5, "elm_lab_officer_entry", ["scene"]
 	)
-	path.append({
-		"step": "route_29_after_rival",
-		"map": _map_value(world),
-		"cell": _cell_value(world),
-		"run": route29_return_run,
-	})
-	if not bool(route29_return_run.get("terminal", false)):
-		return {"ok": false, "path": path, "reason": "Route 29 return entry did not finish"}
+	if not bool(officer_entry.get("ok", false)):
+		return officer_entry
 
-	var new_bark_return: Dictionary = _walk_to_connection(world, "east", 24, 4)
-	path.append({
-		"step": "route_29_to_new_bark_after_rival",
-		"map": _map_value(world),
-		"cell": _cell_value(world),
-		"transition": _transition_value(new_bark_return.get("transition", {})),
-	})
-	if not bool(new_bark_return.get("ok", false)):
-		return {"ok": false, "path": path, "reason": "Route 29 to New Bark return failed"}
-	var new_bark_return_entry: Array = world.dispatch_map_entry()
-	var new_bark_return_run: Dictionary = _drain_story(
-		world, new_bark_return_entry, save, random, data
-	)
-	path.append({
-		"step": "new_bark_after_rival",
-		"map": _map_value(world),
-		"cell": _cell_value(world),
-		"run": new_bark_return_run,
-	})
-	if not bool(new_bark_return_run.get("terminal", false)):
-		return {"ok": false, "path": path, "reason": "New Bark return entry did not finish"}
-
-	var lab_return_warp: Dictionary = _warp_to(world.current_map, 24, 5)
-	if lab_return_warp.is_empty():
-		return {"ok": false, "path": path, "reason": "missing New Bark return lab warp"}
-	world.player_cell = Vector2i(lab_return_warp["x"], lab_return_warp["y"])
-	transition = world.try_warp()
-	if not bool(transition.get("ok", false)):
-		return {"ok": false, "path": path, "reason": "return lab warp failed"}
-	var officer_entry: Array = world.dispatch_map_entry()
-	var officer_entry_run: Dictionary = _drain_story(world, officer_entry, save, random, data)
-	path.append({
-		"step": "elm_lab_officer_entry",
-		"map": _map_value(world),
-		"cell": _cell_value(world),
-		"run": officer_entry_run,
-		"scene": world.state.map_scene(24, 5),
-	})
-	if not bool(officer_entry_run.get("terminal", false)):
-		return {"ok": false, "path": path, "reason": "Elm lab officer entry did not finish"}
-
-	var officer_events: Array = []
-	for target: Vector2i in [Vector2i(4, 5), Vector2i(5, 5)]:
-		var walked_to_officer: Dictionary = _walk_to_story_cell(world, target)
-		officer_events = walked_to_officer.get("events", [])
-		if not officer_events.is_empty():
-			break
-	var officer_run: Dictionary = _drain_story(world, officer_events, save, random, data)
+	var officer: Dictionary = _events_at_cells(world, [Vector2i(4, 5), Vector2i(5, 5)])
+	var officer_run: Dictionary = _drain_story(world, officer["events"], save, random, data)
 	path.append({
 		"step": "elm_lab_officer_dialogue",
 		"map": _map_value(world),
@@ -1349,13 +1210,8 @@ func _story_path(data: GameData) -> Dictionary:
 	if not bool(elm_run.get("terminal", false)):
 		return {"ok": false, "path": path, "reason": "Elm mystery egg return did not finish"}
 
-	var balls_events: Array = []
-	for target: Vector2i in [Vector2i(4, 8), Vector2i(5, 8)]:
-		var walked_to_balls: Dictionary = _walk_to_story_cell(world, target)
-		balls_events = walked_to_balls.get("events", [])
-		if not balls_events.is_empty():
-			break
-	var balls_run: Dictionary = _drain_story(world, balls_events, save, random, data, true)
+	var balls: Dictionary = _events_at_cells(world, [Vector2i(4, 8), Vector2i(5, 8)])
+	var balls_run: Dictionary = _drain_story(world, balls["events"], save, random, data, true)
 	path.append({
 		"step": "elm_lab_aide_pokeballs",
 		"map": _map_value(world),
@@ -1373,31 +1229,24 @@ func _story_path(data: GameData) -> Dictionary:
 	# engine/overworld/map_objects_2.asm masks an object whose flag is set).
 	# The Mystery Egg return above is what sets it, so the route walks from
 	# here on the same world and state.
-	var lab_exit_warp: Dictionary = _warp_to(world.current_map, 24, 4)
-	if lab_exit_warp.is_empty():
-		return {"ok": false, "path": path, "reason": "missing Elm lab exit warp"}
-	world.player_cell = Vector2i(lab_exit_warp["x"], lab_exit_warp["y"])
-	transition = world.try_warp()
-	if not bool(transition.get("ok", false)):
-		return {"ok": false, "path": path, "reason": "Elm lab exit warp failed"}
-	var departure_entry: Array = world.dispatch_map_entry()
-	var departure_run: Dictionary = _drain_story(world, departure_entry, save, random, data)
-	path.append({
-		"step": "new_bark_departure",
-		"map": _map_value(world),
-		"cell": _cell_value(world),
-		"run": departure_run,
-	})
-	if not bool(departure_run.get("terminal", false)):
-		return {"ok": false, "path": path, "reason": "New Bark departure entry did not finish"}
+	return _warp_entry_leg(world, save, random, data, path, 24, 4, "new_bark_departure")
 
-	var legs: Array = [
+
+## New Bark Town to the Zephyr Badge, through the gate Route 31 has no edge for.
+func _zephyr_badge_path(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
+	var north_legs: Array = [
 		{"step": "new_bark_to_route_29_north", "direction": "west", "group": 24, "number": 3},
 		{"step": "route_29_to_cherrygrove_north", "direction": "west", "group": 26, "number": 3},
 		{"step": "cherrygrove_to_route_30_north", "direction": "north", "group": 26, "number": 1},
 		{"step": "route_30_to_route_31", "direction": "north", "group": 26, "number": 2},
 	]
-	for leg: Dictionary in legs:
+	for leg: Dictionary in north_legs:
 		var walked: Dictionary = _walk_connection_resolving(
 			world, String(leg["direction"]), int(leg["group"]), int(leg["number"]),
 			save, random, data
@@ -1424,71 +1273,27 @@ func _story_path(data: GameData) -> Dictionary:
 	# west map connection: the map's four westmost cell columns are wall on
 	# every row, so no walkable west edge exists (maps/Route31.asm's
 	# warp_event 4, 6 and maps/Route31VioletGate.asm's warp_event 0, 4).
-	var gate_walk: Dictionary = _walk_cell_resolving(world, Vector2i(4, 6), save, random, data)
-	path.append({
-		"step": "route_31_to_violet_gate",
-		"map": _map_value(world),
-		"cell": _cell_value(world),
-		"encounters": gate_walk.get("encounters", []),
-	})
-	if not bool(gate_walk.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 31 gate approach failed: %s" % gate_walk.get("reason", ""),
-		}
-	transition = world.try_warp()
-	if not bool(transition.get("ok", false)):
-		return {"ok": false, "path": path, "reason": "Route 31 Violet gate warp failed"}
-	var gate_entry: Array = world.dispatch_map_entry()
-	var gate_run: Dictionary = _drain_story(world, gate_entry, save, random, data)
-	path.append({
-		"step": "violet_gate_entry",
-		"map": _map_value(world),
-		"cell": _cell_value(world),
-		"run": gate_run,
-	})
-	if not bool(gate_run.get("terminal", false)):
-		return {"ok": false, "path": path, "reason": "Violet gate entry did not finish"}
+	var gate: Dictionary = _walk_warp_entry_leg(
+		world, save, random, data, path, Vector2i(4, 6),
+		"route_31_to_violet_gate", "violet_gate_entry"
+	)
+	if not bool(gate.get("ok", false)):
+		return gate
 
-	var city_side: Dictionary = _walk_cell_resolving(world, Vector2i(0, 4), save, random, data)
-	if not bool(city_side.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Violet gate west exit unreachable: %s" % city_side.get("reason", ""),
-		}
-	transition = world.try_warp()
-	if not bool(transition.get("ok", false)):
-		return {"ok": false, "path": path, "reason": "Violet gate to Violet City warp failed"}
-	var violet_entry: Array = world.dispatch_map_entry()
-	var violet_entry_run: Dictionary = _drain_story(world, violet_entry, save, random, data)
-	path.append({
-		"step": "violet_city_entry",
-		"map": _map_value(world),
-		"cell": _cell_value(world),
-		"run": violet_entry_run,
-	})
-	if not bool(violet_entry_run.get("terminal", false)):
-		return {"ok": false, "path": path, "reason": "Violet City entry did not finish"}
+	var city: Dictionary = _walk_warp_entry_leg(
+		world, save, random, data, path, Vector2i(0, 4), "", "violet_city_entry"
+	)
+	if not bool(city.get("ok", false)):
+		return city
 
 	# The Pokemon Center nurse reads CheckPokerus and VAR_PARTYCOUNT, so the
 	# world needs the read-only party mirror before either can resolve.
 	_mirror_party(world, save)
-
-	var pokecenter_warp: Dictionary = _warp_to(world.current_map, 10, 10)
-	if pokecenter_warp.is_empty():
-		return {"ok": false, "path": path, "reason": "missing Violet Pokemon Center warp"}
-	world.player_cell = Vector2i(pokecenter_warp["x"], pokecenter_warp["y"])
-	transition = world.try_warp()
-	if not bool(transition.get("ok", false)):
-		return {"ok": false, "path": path, "reason": "Violet Pokemon Center warp failed"}
-	var pokecenter_entry: Array = world.dispatch_map_entry()
-	var pokecenter_entry_run: Dictionary = _drain_story(world, pokecenter_entry, save, random, data)
-	path.append({
-		"step": "violet_pokecenter_entry",
-		"map": _map_value(world),
-		"cell": _cell_value(world),
-		"run": pokecenter_entry_run,
-	})
+	var pokecenter: Dictionary = _warp_entry_leg(
+		world, save, random, data, path, 10, 10, "violet_pokecenter_entry"
+	)
+	if not bool(pokecenter.get("ok", false)):
+		return pokecenter
 
 	# VioletPokecenter1F places the nurse object at block (3,1); the counter
 	# tile directly below her at (3,2) is not walkable, so ordinary pathfinding
@@ -1511,61 +1316,33 @@ func _story_path(data: GameData) -> Dictionary:
 	if not bool(nurse_run.get("terminal", false)):
 		return {"ok": false, "path": path, "reason": "Pokemon Center nurse event did not finish"}
 
-	var pokecenter_exit: Dictionary = _warp_to(world.current_map, 10, 5)
-	if pokecenter_exit.is_empty():
-		return {"ok": false, "path": path, "reason": "missing Violet Pokemon Center exit warp"}
-	world.player_cell = Vector2i(pokecenter_exit["x"], pokecenter_exit["y"])
-	transition = world.try_warp()
-	if not bool(transition.get("ok", false)):
-		return {"ok": false, "path": path, "reason": "Violet Pokemon Center exit warp failed"}
-	path.append({"step": "violet_city_after_heal", "map": _map_value(world), "cell": _cell_value(world)})
-
-	# The mart on the way to the gym: Route 32's Tentacool and Union Cave's
-	# Geodude are both fought and thrown at from here on, and five Poké Balls do
-	# not cover two catches.
-	var violet_mart: Dictionary = _warp_chain(world, save, random, data, [Vector2i(9, 17)])
-	if not bool(violet_mart.get("ok", false)):
+	var pokecenter_exit: Dictionary = _warp_step(world, 10, 5)
+	if not bool(pokecenter_exit.get("ok", false)):
 		return {
 			"ok": false, "path": path,
-			"reason": "Violet Mart unreachable: %s" % violet_mart.get("reason", ""),
+			"reason": "Violet Pokemon Center exit warp failed: %s"
+				% pokecenter_exit.get("reason", ""),
 		}
-	var poke_balls: Dictionary = _buy_balls(
-		world, save, random, data, path, Gen2WorldPartyHost.ITEM_POKE_BALL,
-		POKE_BALLS_BOUGHT, "violet_mart_poke_balls"
-	)
-	if not bool(poke_balls.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Violet Mart failed: %s" % poke_balls.get("reason", ""),
-		}
-	var out_of_violet_mart: Dictionary = _warp_chain(world, save, random, data, [Vector2i(2, 7)])
-	if not bool(out_of_violet_mart.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Violet Mart exit failed: %s" % out_of_violet_mart.get("reason", ""),
-		}
-
-	var gym_warp: Dictionary = _warp_to(world.current_map, 10, 7)
-	if gym_warp.is_empty():
-		return {"ok": false, "path": path, "reason": "missing Violet Gym warp"}
-	world.player_cell = Vector2i(gym_warp["x"], gym_warp["y"])
-	transition = world.try_warp()
-	if not bool(transition.get("ok", false)):
-		return {"ok": false, "path": path, "reason": "Violet Gym warp failed"}
-	var gym_entry: Array = world.dispatch_map_entry()
-	var gym_entry_run: Dictionary = _drain_story(world, gym_entry, save, random, data)
 	path.append({
-		"step": "violet_gym_entry",
+		"step": "violet_city_after_heal",
 		"map": _map_value(world),
 		"cell": _cell_value(world),
-		"run": gym_entry_run,
 	})
+
+	var stocked: Dictionary = _violet_mart(world, save, random, data, path)
+	if not bool(stocked.get("ok", false)):
+		return stocked
+
+	var gym: Dictionary = _warp_entry_leg(
+		world, save, random, data, path, 10, 7, "violet_gym_entry"
+	)
+	if not bool(gym.get("ok", false)):
+		return gym
 
 	# Falkner is object 0 at block (5,1); facing up from (5,2) matches the
 	# source's faceplayer interaction cell. The gym's two Bird Keepers stand
 	# on sight lines across the way to him, so they are fought on the approach
 	# exactly as they are on the cartridge.
-	var falkner_events: Array = []
 	var walked_to_falkner: Dictionary = _walk_cell_resolving(
 		world, Vector2i(5, 2), save, random, data
 	)
@@ -1576,13 +1353,9 @@ func _story_path(data: GameData) -> Dictionary:
 		"encounters": walked_to_falkner.get("encounters", []),
 	})
 	if not bool(walked_to_falkner.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Falkner approach failed: %s" % walked_to_falkner.get("reason", ""),
-		}
+		return _leg_failed(path, "Falkner approach failed", walked_to_falkner)
 	world.player_facing = Gen2WorldSprite.FACING_UP
-	falkner_events = world.interact()
-	var falkner_run: Dictionary = _drain_story(world, falkner_events, save, random, data, true)
+	var falkner_run: Dictionary = _drain_story(world, world.interact(), save, random, data, true)
 	path.append({
 		"step": "violet_gym_falkner",
 		"map": _map_value(world),
@@ -1593,75 +1366,56 @@ func _story_path(data: GameData) -> Dictionary:
 	})
 	if not bool(falkner_run.get("terminal", false)):
 		return {"ok": false, "path": path, "reason": "Falkner event did not finish"}
-
-	var hive: Dictionary = _hive_badge_path(world, save, random, data, path)
-	if not bool(hive.get("ok", false)):
-		return hive
-
-	var plain: Dictionary = _plain_badge_path(world, save, random, data, path)
-	if not bool(plain.get("ok", false)):
-		return plain
-
-	var fog: Dictionary = _fog_badge_path(world, save, random, data, path)
-	if not bool(fog.get("ok", false)):
-		return fog
-
-	var mineral: Dictionary = _mineral_badge_path(world, save, random, data, path)
-	if not bool(mineral.get("ok", false)):
-		return mineral
-
-	var glacier: Dictionary = _glacier_badge_path(world, save, random, data, path)
-	if not bool(glacier.get("ok", false)):
-		return glacier
-
-	var radio_tower: Dictionary = _radio_tower_path(world, save, random, data, path)
-	if not bool(radio_tower.get("ok", false)):
-		return radio_tower
-
-	var blackthorn: Dictionary = _blackthorn_path(world, save, random, data, path)
-	if not bool(blackthorn.get("ok", false)):
-		return blackthorn
-
-	var rising: Dictionary = _rising_badge_path(world, save, random, data, path)
-	if not bool(rising.get("ok", false)):
-		return rising
-
-	var kanto: Dictionary = _kanto_approach_path(world, save, random, data, path)
-	if not bool(kanto.get("ok", false)):
-		return kanto
-
-	# PostCreditsSpawn is a map load, not a step, so the leg after the Hall of
-	# Fame runs on its own world; everything below reads the returned one.
-	var crossing: Dictionary = _kanto_crossing_path(world, save, random, data, path)
-	if not bool(crossing.get("ok", false)):
-		return crossing
-	var crossed: Variant = crossing.get("world", null)
-	if crossed is Gen2WorldAPI:
-		world = crossed
-
-	var party_summary: Array = []
-	for mon: Gen2SaveMon in save.party:
-		party_summary.append({
-			"species": mon.species,
-			"level": mon.level,
-			"item": mon.item,
-		})
-	return {
-		"ok": true,
-		"path": path,
-		"party": party_summary,
-		"event_flags": world.state.event_flags(),
-		"map_scenes": world.state.to_dict().get("map_scenes", {}),
-		"badge_count": world.state.badge_count(Gen2WorldState.is_crystal_profile(data)),
-	}
+	return {"ok": true}
 
 
-## Violet City to the Hive Badge, on the same world, state and save. Three
-## gates own this leg and each opens the next: the Togepi egg retires Route 32's
-## blocking coord event, Kurt hides the Rocket standing on the Slowpoke Well
-## corridor, and clearing the well hides the Rocket standing on the Azalea gym
-## door. Appends to [param path] and answers only ok or the failure.
+## The mart on the way to the gym: five Poké Balls do not cover the Route 32
+## and Union Cave catches that follow.
+func _violet_mart(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
+	var entered: Dictionary = _warp_chain(world, save, random, data, [Vector2i(9, 17)])
+	if not bool(entered.get("ok", false)):
+		return _leg_failed(path, "Violet Mart unreachable", entered)
+	var poke_balls: Dictionary = _buy_balls(
+		world, save, random, data, path, Gen2WorldPartyHost.ITEM_POKE_BALL,
+		POKE_BALLS_BOUGHT, "violet_mart_poke_balls"
+	)
+	if not bool(poke_balls.get("ok", false)):
+		return _leg_failed(path, "Violet Mart failed", poke_balls)
+	var left: Dictionary = _warp_chain(world, save, random, data, [Vector2i(2, 7)])
+	if not bool(left.get("ok", false)):
+		return _leg_failed(path, "Violet Mart exit failed", left)
+	return {"ok": true}
+
+
+## Violet City to the Hive Badge. Three gates own this leg and each opens the
+## next: the Togepi egg retires Route 32's blocking coord event, Kurt hides the
+## Rocket on the Slowpoke Well corridor, and clearing the well hides the one on
+## the Azalea gym door.
 func _hive_badge_path(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
+	var legs: Array[Callable] = [
+		_violet_togepi_egg_leg, _azalea_approach_leg, _kurt_and_the_well_leg, _azalea_gym_leg,
+	]
+	for leg: Callable in legs:
+		var walked: Dictionary = leg.call(world, save, random, data, path)
+		if not bool(walked.get("ok", false)):
+			return walked
+	return {"ok": true}
+
+
+## Falkner's assistant call, and the Togepi egg it sends the aide out with.
+func _violet_togepi_egg_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
 	random: RandomNumberGenerator,
@@ -1718,10 +1472,7 @@ func _hive_badge_path(
 	)
 	var walked_to_aide: Dictionary = _walk_cell_resolving(world, Vector2i(4, 4), save, random, data)
 	if not bool(walked_to_aide.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Elm's aide unreachable: %s" % walked_to_aide.get("reason", ""),
-		}
+		return _leg_failed(path, "Elm's aide unreachable", walked_to_aide)
 	world.player_facing = Gen2WorldSprite.FACING_UP
 	var egg_run: Dictionary = _drain_story(world, world.interact(), save, random, data, true)
 	path.append({
@@ -1738,7 +1489,18 @@ func _hive_badge_path(
 	if not _party_has_egg(save):
 		return {"ok": false, "path": path, "reason": "the Togepi egg did not reach the party"}
 	_mirror_party(world, save)
+	return {"ok": true}
 
+
+## Violet City to Azalea Town: Route 32's Old Rod, then Union Cave, which is
+## the only way to Route 33.
+func _azalea_approach_leg(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
 	var leaving_pokecenter: Dictionary = _warp_step(world, 10, 5)
 	if not bool(leaving_pokecenter.get("ok", false)):
 		return {"ok": false, "path": path, "reason": "Violet Pokemon Center exit warp failed"}
@@ -1756,10 +1518,7 @@ func _hive_badge_path(
 		"run": route32_entry,
 	})
 	if not bool(route32_leg.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Violet City to Route 32 failed: %s" % route32_leg.get("reason", ""),
-		}
+		return _leg_failed(path, "Violet City to Route 32 failed", route32_leg)
 
 	var rod: Dictionary = _route_32_old_rod(world, save, random, data, path)
 	if not bool(rod.get("ok", false)):
@@ -1771,10 +1530,7 @@ func _hive_badge_path(
 	# out again at (17,31), so the leg walks the warps, not the connection.
 	var union_cave: Dictionary = _warp_walk(world, Vector2i(6, 79), save, random, data)
 	if not bool(union_cave.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 32 to Union Cave failed: %s" % union_cave.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 32 to Union Cave failed", union_cave)
 	var union_entry: Dictionary = _drain_story(
 		world, world.dispatch_map_entry(), save, random, data
 	)
@@ -1795,10 +1551,7 @@ func _hive_badge_path(
 
 	var route33: Dictionary = _warp_walk(world, Vector2i(17, 31), save, random, data)
 	if not bool(route33.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Union Cave to Route 33 failed: %s" % route33.get("reason", ""),
-		}
+		return _leg_failed(path, "Union Cave to Route 33 failed", route33)
 	var route33_entry: Dictionary = _drain_story(
 		world, world.dispatch_map_entry(), save, random, data
 	)
@@ -1824,11 +1577,18 @@ func _hive_badge_path(
 		"run": azalea_entry,
 	})
 	if not bool(azalea_leg.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 33 to Azalea failed: %s" % azalea_leg.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 33 to Azalea failed", azalea_leg)
+	return {"ok": true}
 
+
+## Kurt, the Rockets in Slowpoke Well, and the apricorn errand they leave.
+func _kurt_and_the_well_leg(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
 	# Kurt1 stands at (3,2); facing him from (3,3) takes his .RunAround branch,
 	# and the script sets EVENT_AZALEA_TOWN_SLOWPOKETAIL_ROCKET, which hides the
 	# Rocket standing on the well corridor at Azalea (31,9).
@@ -1838,10 +1598,7 @@ func _hive_badge_path(
 	var kurt_entry: Dictionary = _drain_story(world, world.dispatch_map_entry(), save, random, data)
 	var walked_to_kurt: Dictionary = _walk_cell_resolving(world, Vector2i(3, 3), save, random, data)
 	if not bool(walked_to_kurt.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Kurt unreachable: %s" % walked_to_kurt.get("reason", ""),
-		}
+		return _leg_failed(path, "Kurt unreachable", walked_to_kurt)
 	world.player_facing = Gen2WorldSprite.FACING_UP
 	var kurt_run: Dictionary = _drain_story(world, world.interact(), save, random, data, true)
 	path.append({
@@ -1862,10 +1619,7 @@ func _hive_badge_path(
 	)
 	var well: Dictionary = _warp_walk(world, Vector2i(31, 7), save, random, data)
 	if not bool(well.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Slowpoke Well entrance blocked: %s" % well.get("reason", ""),
-		}
+		return _leg_failed(path, "Slowpoke Well entrance blocked", well)
 	var well_entry: Dictionary = _drain_story(world, world.dispatch_map_entry(), save, random, data)
 
 	# TrainerGruntM1 stands at (5,2) facing down. His post-battle script is the
@@ -1950,13 +1704,19 @@ func _hive_badge_path(
 		"run": errand,
 	})
 	if not bool(errand.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Kurt's apricorn errand failed: %s" % errand.get("reason", ""),
-		}
+		return _leg_failed(path, "Kurt's apricorn errand failed", errand)
 	if world.state.kurt_apricorn_quantity() != 1 or world.state.item_quantity(APRICORN_WHT) != 0:
 		return {"ok": false, "path": path, "reason": "Kurt took the wrong apricorns"}
+	return {"ok": true}
 
+
+func _azalea_gym_leg(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
 	var leaving_kurt_again: Dictionary = _warp_step(world, 8, 7)
 	if not bool(leaving_kurt_again.get("ok", false)):
 		return {"ok": false, "path": path, "reason": "Kurt's house exit after the errand failed"}
@@ -1965,10 +1725,7 @@ func _hive_badge_path(
 	)
 	var gym_door: Dictionary = _warp_walk(world, Vector2i(10, 15), save, random, data)
 	if not bool(gym_door.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Azalea gym door blocked: %s" % gym_door.get("reason", ""),
-		}
+		return _leg_failed(path, "Azalea gym door blocked", gym_door)
 	var gym_entry: Dictionary = _drain_story(world, world.dispatch_map_entry(), save, random, data)
 
 	# Bugsy is object 0 at (5,7); the gym's Bug Catchers and Twins hold sight
@@ -1985,10 +1742,7 @@ func _hive_badge_path(
 		"encounters": walked_to_bugsy.get("encounters", []),
 	})
 	if not bool(walked_to_bugsy.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Bugsy approach failed: %s" % walked_to_bugsy.get("reason", ""),
-		}
+		return _leg_failed(path, "Bugsy approach failed", walked_to_bugsy)
 	world.player_facing = Gen2WorldSprite.FACING_UP
 	var bugsy_run: Dictionary = _drain_story(world, world.interact(), save, random, data, true)
 	path.append({
@@ -2038,6 +1792,24 @@ func _plain_badge_path(
 	data: GameData,
 	path: Array,
 ) -> Dictionary:
+	var legs: Array[Callable] = [
+		_ilex_forest_leg, _route_34_to_goldenrod_leg, _goldenrod_gym_leg,
+	]
+	for leg: Callable in legs:
+		var walked: Dictionary = leg.call(world, save, random, data, path)
+		if not bool(walked.get("ok", false)):
+			return walked
+	return {"ok": true}
+
+
+## Ilex Forest: the Farfetch'd chain, HM01, and the tree it is spent on.
+func _ilex_forest_leg(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
 	var leaving_gym: Dictionary = _warp_step(world, 8, 7)
 	if not bool(leaving_gym.get("ok", false)):
 		return {"ok": false, "path": path, "reason": "Azalea Gym exit warp failed"}
@@ -2046,10 +1818,7 @@ func _plain_badge_path(
 	)
 	var azalea_gate: Dictionary = _warp_walk(world, Vector2i(2, 10), save, random, data)
 	if not bool(azalea_gate.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Ilex Forest gate unreachable: %s" % azalea_gate.get("reason", ""),
-		}
+		return _leg_failed(path, "Ilex Forest gate unreachable", azalea_gate)
 	var _gate_entry: Dictionary = _drain_story(
 		world, world.dispatch_map_entry(), save, random, data
 	)
@@ -2111,10 +1880,7 @@ func _plain_badge_path(
 		world, Vector2i(5, 29), save, random, data
 	)
 	if not bool(walked_to_master.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "charcoal master unreachable: %s" % walked_to_master.get("reason", ""),
-		}
+		return _leg_failed(path, "charcoal master unreachable", walked_to_master)
 	world.player_facing = Gen2WorldSprite.FACING_UP
 	var cut_gift: Dictionary = _drain_story(world, world.interact(), save, random, data, true)
 	path.append({
@@ -2142,19 +1908,13 @@ func _plain_badge_path(
 		"moves": _party_moves(save),
 	})
 	if not bool(taught.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "no party member learned CUT: %s" % taught.get("reason", ""),
-		}
+		return _leg_failed(path, "no party member learned CUT", taught)
 
 	var walked_to_tree: Dictionary = _walk_cell_resolving(
 		world, ILEX_CUT_APPROACH, save, random, data
 	)
 	if not bool(walked_to_tree.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Ilex cut tree unreachable: %s" % walked_to_tree.get("reason", ""),
-		}
+		return _leg_failed(path, "Ilex cut tree unreachable", walked_to_tree)
 	world.player_facing = Gen2WorldSprite.FACING_UP
 	var cut_request: Dictionary = world.cut_request()
 	var cut_applied: Dictionary = world.complete_cut() if bool(cut_request.get("ok", false)) else {}
@@ -2173,13 +1933,19 @@ func _plain_badge_path(
 				"reason", cut_applied.get("reason", "")
 			),
 		}
+	return {"ok": true}
 
+
+func _route_34_to_goldenrod_leg(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
 	var forest_exit: Dictionary = _warp_walk(world, Vector2i(1, 5), save, random, data)
 	if not bool(forest_exit.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Ilex Forest north exit unreachable: %s" % forest_exit.get("reason", ""),
-		}
+		return _leg_failed(path, "Ilex Forest north exit unreachable", forest_exit)
 	var north_gate_entry: Dictionary = _drain_story(
 		world, world.dispatch_map_entry(), save, random, data
 	)
@@ -2218,18 +1984,22 @@ func _plain_badge_path(
 		"run": goldenrod_entry,
 	})
 	if not bool(goldenrod.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 34 to Goldenrod failed: %s" % goldenrod.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 34 to Goldenrod failed", goldenrod)
+	return {"ok": true}
 
+
+## Whitney, the crying she is waited out of, and the badge that follows.
+func _goldenrod_gym_leg(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
 	_mirror_party(world, save)
 	var gym: Dictionary = _warp_walk(world, Vector2i(24, 7), save, random, data)
 	if not bool(gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Goldenrod Gym door unreachable: %s" % gym.get("reason", ""),
-		}
+		return _leg_failed(path, "Goldenrod Gym door unreachable", gym)
 	var gym_entry: Dictionary = _drain_story(world, world.dispatch_map_entry(), save, random, data)
 
 	# Whitney is object 0 at (8,3). Beating her sets EVENT_MADE_WHITNEY_CRY and
@@ -2240,10 +2010,7 @@ func _plain_badge_path(
 		world, Vector2i(8, 4), save, random, data
 	)
 	if not bool(walked_to_whitney.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Whitney approach failed: %s" % walked_to_whitney.get("reason", ""),
-		}
+		return _leg_failed(path, "Whitney approach failed", walked_to_whitney)
 	world.player_facing = Gen2WorldSprite.FACING_UP
 	var whitney_fight: Dictionary = _drain_story(world, world.interact(), save, random, data, true)
 	path.append({
@@ -2267,19 +2034,13 @@ func _plain_badge_path(
 		"scene": world.state.map_scene(11, 3),
 	})
 	if not bool(crying.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Whitney crying scene failed: %s" % crying.get("reason", ""),
-		}
+		return _leg_failed(path, "Whitney crying scene failed", crying)
 
 	var walked_back: Dictionary = _walk_cell_resolving(
 		world, Vector2i(8, 4), save, random, data
 	)
 	if not bool(walked_back.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Whitney second approach failed: %s" % walked_back.get("reason", ""),
-		}
+		return _leg_failed(path, "Whitney second approach failed", walked_back)
 	world.player_facing = Gen2WorldSprite.FACING_UP
 	var badge_run: Dictionary = _drain_story(world, world.interact(), save, random, data, true)
 	path.append({
@@ -2309,18 +2070,12 @@ func _goldenrod_to_route_36(
 		world, save, random, data, Vector2i(19, 1), 10, 2
 	)
 	if not bool(to_route_35.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Goldenrod to Route 35 failed: %s" % to_route_35.get("reason", ""),
-		}
+		return _leg_failed(path, "Goldenrod to Route 35 failed", to_route_35)
 	var tree: Dictionary = _cut_at(
 		world, Vector2i(17, 7), Gen2WorldSprite.FACING_UP, save, random, data
 	)
 	if not bool(tree.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 35 cut tree failed: %s" % tree.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 35 cut tree failed", tree)
 	var leg: Dictionary = _walk_connection_resolving(
 		world, "north", 10, 3, save, random, data
 	)
@@ -2335,10 +2090,7 @@ func _goldenrod_to_route_36(
 		"run": entry,
 	})
 	if not bool(leg.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 35 to Route 36 failed: %s" % leg.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 35 to Route 36 failed", leg)
 	return {"ok": true}
 
 
@@ -2358,10 +2110,7 @@ func _goldenrod_flower_shop(
 	var door: Vector2i = Vector2i(29, 5) if crystal else Vector2i(33, 5)
 	var shop: Dictionary = _warp_walk(world, door, save, random, data)
 	if not bool(shop.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "flower shop unreachable: %s" % shop.get("reason", ""),
-		}
+		return _leg_failed(path, "flower shop unreachable", shop)
 	var _shop_entry: Dictionary = _drain_story(
 		world, world.dispatch_map_entry(), save, random, data
 	)
@@ -2371,10 +2120,7 @@ func _goldenrod_flower_shop(
 			world, Vector2i(5, 5), Gen2WorldSprite.FACING_DOWN, save, random, data
 		)
 		if not bool(shop_floria.get("ok", false)):
-			return {
-				"ok": false, "path": path,
-				"reason": "flower shop Floria failed: %s" % shop_floria.get("reason", ""),
-			}
+			return _leg_failed(path, "flower shop Floria failed", shop_floria)
 	var bottle: Dictionary = _talk_to(
 		world, Vector2i(2, 5), Gen2WorldSprite.FACING_UP, save, random, data
 	)
@@ -2387,10 +2133,7 @@ func _goldenrod_flower_shop(
 		"items": _named_items(data, world.state.items()),
 	})
 	if not bool(bottle.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "SquirtBottle handoff failed: %s" % bottle.get("reason", ""),
-		}
+		return _leg_failed(path, "SquirtBottle handoff failed", bottle)
 	var leaving_shop: Dictionary = _warp_step(world, 11, 2)
 	if not bool(leaving_shop.get("ok", false)):
 		return {"ok": false, "path": path, "reason": "flower shop exit warp failed"}
@@ -2400,13 +2143,34 @@ func _goldenrod_flower_shop(
 	return {"ok": true}
 
 
-# Every map load advances the roaming beasts, so this supplies a dedicated
-# schedule stream rather than relying on an implicit random source, as the live
-# screen does. Its own generator, not the route's: the schedule rolls once per
-# map load, and drawing them from the same stream would shift every encounter
-# and catch behind them. That separation is the whole point of [Gen2WorldAPI]
-# keeping three.
+## Goldenrod to the Fog Badge. Two errands gate it: the SquirtBottle, whose shape
+## is the leg's one profile split, and Morty, who is absent until the Burned
+## Tower's beasts are released. Crystal spends the bottle on a round trip, Floria
+## having to be met on Route 36 first and talked to again in the shop before
+## `FlowerShopTeacherScript` reaches its `verbosegiveitem SQUIRTBOTTLE`. Gold and
+## Silver ship no Floria on Route 36 at all and their teacher is
+## `checkflag ENGINE_PLAINBADGE` and nothing else, so the badge the walk already
+## holds is the whole gate and the trip north before the shop buys nothing.
 func _fog_badge_path(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
+	var legs: Array[Callable] = [
+		_squirtbottle_leg, _burned_tower_leg, _ecruteak_gym_leg,
+	]
+	for leg: Callable in legs:
+		var walked: Dictionary = leg.call(world, save, random, data, path)
+		if not bool(walked.get("ok", false)):
+			return walked
+	return {"ok": true}
+
+
+## The SquirtBottle and the Sudowoodo it is spent on. Only Gold and Silver
+## come back for the Rock Smash their Burned Tower needs.
+func _squirtbottle_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
 	random: RandomNumberGenerator,
@@ -2439,10 +2203,7 @@ func _fog_badge_path(
 			"run": floria.get("run", {}),
 		})
 		if not bool(floria.get("ok", false)):
-			return {
-				"ok": false, "path": path,
-				"reason": "Route 36 Floria failed: %s" % floria.get("reason", ""),
-			}
+			return _leg_failed(path, "Route 36 Floria failed", floria)
 
 		var back_to_35: Dictionary = _walk_connection_resolving(
 			world, "south", 10, 2, save, random, data
@@ -2451,26 +2212,17 @@ func _fog_badge_path(
 			world, world.dispatch_map_entry(), save, random, data
 		)
 		if not bool(back_to_35.get("ok", false)):
-			return {
-				"ok": false, "path": path,
-				"reason": "Route 36 back to Route 35 failed: %s" % back_to_35.get("reason", ""),
-			}
+			return _leg_failed(path, "Route 36 back to Route 35 failed", back_to_35)
 		var south_cut: Dictionary = _cut_at(
 			world, Vector2i(17, 5), Gen2WorldSprite.FACING_DOWN, save, random, data
 		)
 		if not bool(south_cut.get("ok", false)):
-			return {
-				"ok": false, "path": path,
-				"reason": "Route 35 southbound cut failed: %s" % south_cut.get("reason", ""),
-			}
+			return _leg_failed(path, "Route 35 southbound cut failed", south_cut)
 		var back_to_city: Dictionary = _gate_leg(
 			world, save, random, data, Vector2i(9, 33), 11, 2
 		)
 		if not bool(back_to_city.get("ok", false)):
-			return {
-				"ok": false, "path": path,
-				"reason": "Route 35 back to Goldenrod failed: %s" % back_to_city.get("reason", ""),
-			}
+			return _leg_failed(path, "Route 35 back to Goldenrod failed", back_to_city)
 
 	var errand: Dictionary = _goldenrod_flower_shop(world, save, random, data, path)
 	if not bool(errand.get("ok", false)):
@@ -2492,10 +2244,7 @@ func _fog_badge_path(
 		"run": sudowoodo.get("run", {}),
 	})
 	if not bool(sudowoodo.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Sudowoodo failed: %s" % sudowoodo.get("reason", ""),
-		}
+		return _leg_failed(path, "Sudowoodo failed", sudowoodo)
 
 	if not crystal:
 		# `Route36RockSmashGuyScript` stands on (44,9) in both pins and hands
@@ -2507,10 +2256,7 @@ func _fog_badge_path(
 			world, Vector2i(44, 10), Gen2WorldSprite.FACING_UP, save, random, data
 		)
 		if not bool(rock_smash_guy.get("ok", false)):
-			return {
-				"ok": false, "path": path,
-				"reason": "Route 36 Rock Smash guy failed: %s" % rock_smash_guy.get("reason", ""),
-			}
+			return _leg_failed(path, "Route 36 Rock Smash guy failed", rock_smash_guy)
 		var rock_smash_taught: Dictionary = _teach_tm_hm(world, save, ITEM_TM_ROCK_SMASH)
 		_mirror_party(world, save)
 		path.append({
@@ -2522,11 +2268,19 @@ func _fog_badge_path(
 			"party": _party_moves(save),
 		})
 		if not bool(rock_smash_taught.get("ok", false)):
-			return {
-				"ok": false, "path": path,
-				"reason": "TM08 could not be taught: %s" % rock_smash_taught.get("reason", ""),
-			}
+			return _leg_failed(path, "TM08 could not be taught", rock_smash_taught)
+	return {"ok": true}
 
+
+## Route 36 north to Ecruteak and the Burned Tower the gym waits on.
+func _burned_tower_leg(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
+	var crystal: bool = Gen2WorldState.is_crystal_profile(data)
 	for leg: Dictionary in [
 		{"step": "route_36_to_route_37", "group": 10, "number": 4},
 		{"step": "route_37_to_ecruteak", "group": 4, "number": 9},
@@ -2554,10 +2308,7 @@ func _fog_badge_path(
 	# is SCENE_ECRUTEAKGYM_FORCED_TO_LEAVE and a gramps stands on the entrance.
 	var tower: Dictionary = _warp_walk(world, Vector2i(5, 5), save, random, data)
 	if not bool(tower.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Burned Tower door unreachable: %s" % tower.get("reason", ""),
-		}
+		return _leg_failed(path, "Burned Tower door unreachable", tower)
 	# Crystal's entry is Eusine's; Gold and Silver put the rival battle itself on
 	# entry, as `BurnedTower1FRivalBattleScene`'s `sdefer`.
 	var entry_run: Dictionary = _drain_story(
@@ -2609,10 +2360,7 @@ func _fog_badge_path(
 			"encounter": rock.get("encounter", {}),
 		})
 		if not bool(rock.get("ok", false)):
-			return {
-				"ok": false, "path": path,
-				"reason": "Burned Tower rock failed: %s" % rock.get("reason", ""),
-			}
+			return _leg_failed(path, "Burned Tower rock failed", rock)
 		# Pit 3 on (10,7) is the only one that lands in the basement region the
 		# beasts are in.
 		var hole: Dictionary = _warp_walk(world, Vector2i(10, 7), save, random, data)
@@ -2623,10 +2371,7 @@ func _fog_badge_path(
 			"encounters": hole.get("encounters", []),
 		})
 		if not bool(hole.get("ok", false)):
-			return {
-				"ok": false, "path": path,
-				"reason": "Burned Tower hole unreachable: %s" % hole.get("reason", ""),
-			}
+			return _leg_failed(path, "Burned Tower hole unreachable", hole)
 	var basement_entry: Dictionary = _drain_story(
 		world, world.dispatch_map_entry(), save, random, data
 	)
@@ -2643,10 +2388,7 @@ func _fog_badge_path(
 		"gym_scene": world.state.map_scene(4, 7),
 	})
 	if not bool(beasts.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "beast release failed: %s" % beasts.get("reason", ""),
-		}
+		return _leg_failed(path, "beast release failed", beasts)
 
 	if crystal:
 		# ReleaseTheBeasts appears Eusine at (10,12), which is the single cell of
@@ -2663,10 +2405,7 @@ func _fog_badge_path(
 			"run": eusine_basement.get("run", {}),
 		})
 		if not bool(eusine_basement.get("ok", false)):
-			return {
-				"ok": false, "path": path,
-				"reason": "basement Eusine failed: %s" % eusine_basement.get("reason", ""),
-			}
+			return _leg_failed(path, "basement Eusine failed", eusine_basement)
 
 	# (7,15) is the only cell on either profile's basement that `try_warp()` will
 	# fire on, since `CheckWarpCollision` gates a warp on its own tile code and
@@ -2678,30 +2417,30 @@ func _fog_badge_path(
 	# own hop handling takes on its way to the same ladder.
 	var out_of_basement: Dictionary = _warp_walk(world, Vector2i(7, 15), save, random, data)
 	if not bool(out_of_basement.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Burned Tower ladder unreachable: %s" % out_of_basement.get("reason", ""),
-		}
+		return _leg_failed(path, "Burned Tower ladder unreachable", out_of_basement)
 	var _tower_entry: Dictionary = _drain_story(
 		world, world.dispatch_map_entry(), save, random, data
 	)
 	var out_of_tower: Dictionary = _warp_walk(world, Vector2i(9, 15), save, random, data)
 	if not bool(out_of_tower.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Burned Tower exit unreachable: %s" % out_of_tower.get("reason", ""),
-		}
+		return _leg_failed(path, "Burned Tower exit unreachable", out_of_tower)
 	var _ecruteak_entry: Dictionary = _drain_story(
 		world, world.dispatch_map_entry(), save, random, data
 	)
+	return {"ok": true}
 
+
+func _ecruteak_gym_leg(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
 	_mirror_party(world, save)
 	var gym: Dictionary = _warp_walk(world, Vector2i(6, 27), save, random, data)
 	if not bool(gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Ecruteak Gym door unreachable: %s" % gym.get("reason", ""),
-		}
+		return _leg_failed(path, "Ecruteak Gym door unreachable", gym)
 	var gym_entry: Dictionary = _drain_story(world, world.dispatch_map_entry(), save, random, data)
 
 	# The gym floor is thirty holes that warp back to the entrance, so the walk
@@ -2720,22 +2459,34 @@ func _fog_badge_path(
 		"engine_flags": world.state.engine_flags(),
 	})
 	if not bool(morty.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Morty failed: %s" % morty.get("reason", ""),
-		}
+		return _leg_failed(path, "Morty failed", morty)
 	return {"ok": true}
 
 
-## Goldenrod to the Fog Badge. Two errands gate it: the SquirtBottle, whose shape
-## is the leg's one profile split, and Morty, who is absent until the Burned
-## Tower's beasts are released. Crystal spends the bottle on a round trip, Floria
-## having to be met on Route 36 first and talked to again in the shop before
-## `FlowerShopTeacherScript` reaches its `verbosegiveitem SQUIRTBOTTLE`. Gold and
-## Silver ship no Floria on Route 36 at all and their teacher is
-## `checkflag ENGINE_PLAINBADGE` and nothing else, so the badge the walk already
-## holds is the whole gate and the trip north before the shop buys nothing.
+## The Fog Badge to the Mineral Badge, taking the Storm Badge on the way. The
+## first leg that needs Surf: HM03 is the Dance Theater's reward for the five
+## Kimono Girls, and Routes 40 and 41 are the only way to Cianwood, whose
+## pharmacy holds the SecretPotion Olivine Lighthouse wants before it clears
+## EVENT_OLIVINE_GYM_JASMINE.
 func _mineral_badge_path(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
+	var legs: Array[Callable] = [
+		_dance_theater_leg, _olivine_approach_leg, _cianwood_secretpotion_leg, _olivine_gym_leg,
+	]
+	for leg: Callable in legs:
+		var walked: Dictionary = leg.call(world, save, random, data, path)
+		if not bool(walked.get("ok", false)):
+			return walked
+	return {"ok": true}
+
+
+## The five Kimono Girls and the HM03 they are fought for.
+func _dance_theater_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
 	random: RandomNumberGenerator,
@@ -2751,10 +2502,7 @@ func _mineral_badge_path(
 
 	var theater: Dictionary = _warp_walk(world, Vector2i(23, 21), save, random, data)
 	if not bool(theater.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Dance Theater door unreachable: %s" % theater.get("reason", ""),
-		}
+		return _leg_failed(path, "Dance Theater door unreachable", theater)
 	var _theater_entry: Dictionary = _drain_story(
 		world, world.dispatch_map_entry(), save, random, data
 	)
@@ -2798,10 +2546,7 @@ func _mineral_badge_path(
 		"items": _named_items(data, world.state.items()),
 	})
 	if not bool(surf_guy.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "HM03 handoff failed: %s" % surf_guy.get("reason", ""),
-		}
+		return _leg_failed(path, "HM03 handoff failed", surf_guy)
 
 	# Taught here, two legs before Route 40's south edge asks for it. The Ilex
 	# Forest Psyduck is the only party member CanLearnTMHMMove accepts.
@@ -2815,11 +2560,18 @@ func _mineral_badge_path(
 		"moves": _party_moves(save),
 	})
 	if not bool(surf_taught.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "no party member learned SURF: %s" % surf_taught.get("reason", ""),
-		}
+		return _leg_failed(path, "no party member learned SURF", surf_taught)
+	return {"ok": true}
 
+
+## Ecruteak City west to Olivine City, and the rival scene its entry defers.
+func _olivine_approach_leg(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
 	var leaving_theater: Dictionary = _warp_step(world, 4, 9)
 	if not bool(leaving_theater.get("ok", false)):
 		return {"ok": false, "path": path, "reason": "Dance Theater exit warp failed"}
@@ -2831,10 +2583,7 @@ func _mineral_badge_path(
 		world, save, random, data, Vector2i(0, 18), 1, 12
 	)
 	if not bool(to_route_38.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Ecruteak to Route 38 failed: %s" % to_route_38.get("reason", ""),
-		}
+		return _leg_failed(path, "Ecruteak to Route 38 failed", to_route_38)
 	for leg: Dictionary in [
 		{"step": "route_38_to_route_39", "direction": "west", "group": 1, "number": 13},
 		{"step": "route_39_to_olivine", "direction": "south", "group": 1, "number": 14},
@@ -2871,11 +2620,19 @@ func _mineral_badge_path(
 		"map_scene": world.state.map_scene(1, 14),
 	})
 	if not bool(rival.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Olivine rival scene failed: %s" % rival.get("reason", ""),
-		}
+		return _leg_failed(path, "Olivine rival scene failed", rival)
+	return {"ok": true}
 
+
+## HM04, the lighthouse that asks for the SecretPotion, and the crossing to
+## the pharmacy that holds it. Chuck's gym is two doors along, as it is walked.
+func _cianwood_secretpotion_leg(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
 	var cafe: Dictionary = _olivine_cafe_hm04(world, save, random, data, path)
 	if not bool(cafe.get("ok", false)):
 		return cafe
@@ -2890,10 +2647,7 @@ func _mineral_badge_path(
 
 	var pharmacy: Dictionary = _warp_walk(world, Vector2i(15, 47), save, random, data)
 	if not bool(pharmacy.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Cianwood Pharmacy door unreachable: %s" % pharmacy.get("reason", ""),
-		}
+		return _leg_failed(path, "Cianwood Pharmacy door unreachable", pharmacy)
 	var _pharmacy_entry: Dictionary = _drain_story(
 		world, world.dispatch_map_entry(), save, random, data
 	)
@@ -2911,10 +2665,7 @@ func _mineral_badge_path(
 		"items": _named_items(data, world.state.items()),
 	})
 	if not bool(potion.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "SecretPotion handoff failed: %s" % potion.get("reason", ""),
-		}
+		return _leg_failed(path, "SecretPotion handoff failed", potion)
 	var leaving_pharmacy: Dictionary = _warp_step(world, 22, 3)
 	if not bool(leaving_pharmacy.get("ok", false)):
 		return {"ok": false, "path": path, "reason": "Cianwood Pharmacy exit warp failed"}
@@ -2933,14 +2684,21 @@ func _mineral_badge_path(
 	var second_visit: Dictionary = _lighthouse_visit(world, save, random, data, path, "cure")
 	if not bool(second_visit.get("ok", false)):
 		return second_visit
+	return {"ok": true}
 
+
+## Olivine Gym and Jasmine, who is only in it once Amphy is cured.
+func _olivine_gym_leg(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
 	_mirror_party(world, save)
 	var gym: Dictionary = _warp_walk(world, Vector2i(10, 11), save, random, data)
 	if not bool(gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Olivine Gym door unreachable: %s" % gym.get("reason", ""),
-		}
+		return _leg_failed(path, "Olivine Gym door unreachable", gym)
 	var gym_entry: Dictionary = _drain_story(world, world.dispatch_map_entry(), save, random, data)
 	var jasmine: Dictionary = _talk_to(
 		world, Vector2i(5, 4), Gen2WorldSprite.FACING_UP, save, random, data
@@ -2956,21 +2714,17 @@ func _mineral_badge_path(
 		"items": _named_items(data, world.state.items()),
 	})
 	if not bool(jasmine.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Jasmine failed: %s" % jasmine.get("reason", ""),
-		}
+		return _leg_failed(path, "Jasmine failed", jasmine)
 	return {"ok": true}
 
 
-## The Fog Badge to the Mineral Badge, taking the Storm Badge on the way, on the
-## same world, state and save. The first leg that needs Surf on the real route:
-## HM03 is the Dance Theater's reward for the five Kimono Girls, and Routes 40 and
-## 41 are the only way to Cianwood, whose pharmacy holds the SecretPotion Olivine
-## Lighthouse wants before it clears EVENT_OLIVINE_GYM_JASMINE. Chuck is on this
-## leg rather than one of its own because the crossing is: the Mineral Badge sends
-## the player to Cianwood anyway and the gym is two doors from the pharmacy, which
-## is also the order a player walks. HM04 is collected before the outbound crossing.
+## The Mineral Badge to the Glacier Badge. Mahogany's gym is closed until the
+## Rocket hideout under its souvenir shop is cleared, and the hideout only opens
+## after Lance is met at the Lake of Rage, which is behind the Red Gyarados in the
+## middle of the water. The hideout is three floors of one-way halves rather than
+## one maze: each floor is cut in two and the halves are joined through the other
+## floor, so the route climbs and drops the same ladders several times. Its own
+## doors are the only other links, and each opens on something learned a floor away.
 func _glacier_badge_path(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -2978,10 +2732,25 @@ func _glacier_badge_path(
 	data: GameData,
 	path: Array,
 ) -> Dictionary:
-	var crystal: bool = Gen2WorldState.is_crystal_profile(data)
-	var mahogany_mart: Vector2i = _map_id(data, &"MAHOGANY_MART_1F")
-	var rocket_b2f: Vector2i = _map_id(data, &"TEAM_ROCKET_BASE_B2F")
-	var rocket_b3f: Vector2i = _map_id(data, &"TEAM_ROCKET_BASE_B3F")
+	var legs: Array[Callable] = [
+		_route_42_crossing, _lake_of_rage_leg, _rocket_hideout_password_leg,
+		_rocket_hideout_transmitter_leg, _mahogany_gym_leg,
+	]
+	for leg: Callable in legs:
+		var walked: Dictionary = leg.call(world, save, random, data, path)
+		if not bool(walked.get("ok", false)):
+			return walked
+	return {"ok": true}
+
+
+## Olivine Gym east to Mahogany Town, over Route 42's two lakes.
+func _route_42_crossing(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
 	var leaving_gym: Dictionary = _warp_step(world, 1, 14)
 	if not bool(leaving_gym.get("ok", false)):
 		return {"ok": false, "path": path, "reason": "Olivine Gym exit warp failed"}
@@ -3015,19 +2784,13 @@ func _glacier_badge_path(
 		world, save, random, data, Vector2i(35, 8), 4, 9
 	)
 	if not bool(to_ecruteak.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 38 back to Ecruteak failed: %s" % to_ecruteak.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 38 back to Ecruteak failed", to_ecruteak)
 
 	var route_42_path: Dictionary = _gate_leg(
 		world, save, random, data, Vector2i(35, 26), 2, 5
 	)
 	if not bool(route_42_path.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Ecruteak to Route 42 failed: %s" % route_42_path.get("reason", ""),
-		}
+		return _leg_failed(path, "Ecruteak to Route 42 failed", route_42_path)
 	# Route 42's halves do not join on foot. Its west side ends at x=13 and its
 	# only other land exit is Mt Mortar's door at (10,5), which opens into a cave
 	# pocket of its own, so the lake is the crossing. (13,9) is the west shore and
@@ -3036,28 +2799,19 @@ func _glacier_badge_path(
 		world, Vector2i(13, 9), Gen2WorldSprite.FACING_RIGHT, save, random, data
 	)
 	if not bool(across_route_42.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 42 surf entry failed: %s" % across_route_42.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 42 surf entry failed", across_route_42)
 	var route_42_shore: Dictionary = _walk_cell_resolving(
 		world, Vector2i(22, 12), save, random, data, true
 	)
 	if not bool(route_42_shore.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 42 landfall failed: %s" % route_42_shore.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 42 landfall failed", route_42_shore)
 	# The middle strip is its own pocket: a second lake separates it from the
 	# half that reaches Mahogany, so the route takes the water twice.
 	var second_crossing: Dictionary = _surf_at(
 		world, Vector2i(33, 10), Gen2WorldSprite.FACING_RIGHT, save, random, data
 	)
 	if not bool(second_crossing.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 42 second surf failed: %s" % second_crossing.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 42 second surf failed", second_crossing)
 	var route_42_far_shore: Dictionary = _walk_cell_resolving(
 		world, Vector2i(42, 9), save, random, data, true
 	)
@@ -3068,10 +2822,7 @@ func _glacier_badge_path(
 		"movement_mode": String(world.movement_mode),
 	})
 	if not bool(route_42_far_shore.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 42 far landfall failed: %s" % route_42_far_shore.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 42 far landfall failed", route_42_far_shore)
 	var to_mahogany: Dictionary = _walk_connection_resolving(
 		world, "east", 2, 7, save, random, data
 	)
@@ -3086,19 +2837,25 @@ func _glacier_badge_path(
 		"run": mahogany_entry,
 	})
 	if not bool(to_mahogany.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 42 to Mahogany failed: %s" % to_mahogany.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 42 to Mahogany failed", to_mahogany)
 
 	var to_route_43: Dictionary = _gate_leg(
 		world, save, random, data, Vector2i(9, 1), 9, 5
 	)
 	if not bool(to_route_43.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Mahogany to Route 43 failed: %s" % to_route_43.get("reason", ""),
-		}
+		return _leg_failed(path, "Mahogany to Route 43 failed", to_route_43)
+	return {"ok": true}
+
+
+## The Red Gyarados, and the Lance who opens the hideout under the shop.
+func _lake_of_rage_leg(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
+	var mahogany_mart: Vector2i = _map_id(data, &"MAHOGANY_MART_1F")
 	var to_lake: Dictionary = _walk_connection_resolving(
 		world, "north", 9, 6, save, random, data
 	)
@@ -3113,10 +2870,7 @@ func _glacier_badge_path(
 		"run": lake_entry,
 	})
 	if not bool(to_lake.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 43 to the Lake of Rage failed: %s" % to_lake.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 43 to the Lake of Rage failed", to_lake)
 
 	# The shore cell north of the gramps: (20,26) is his own cell and (24,26) is
 	# Fisher Raymond's, so the walked route takes the water at (22,26).
@@ -3124,10 +2878,7 @@ func _glacier_badge_path(
 		world, Vector2i(22, 26), Gen2WorldSprite.FACING_UP, save, random, data
 	)
 	if not bool(into_the_lake.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Lake of Rage surf entry failed: %s" % into_the_lake.get("reason", ""),
-		}
+		return _leg_failed(path, "Lake of Rage surf entry failed", into_the_lake)
 	# RedGyarados is loadwildmon plus BATTLETYPE_FORCESHINY, not a trainer, and
 	# the Red Scale it leaves behind is what Lance appears for.
 	var gyarados: Dictionary = _talk_to_on_water(
@@ -3141,18 +2892,12 @@ func _glacier_badge_path(
 		"items": _named_items(data, world.state.items()),
 	})
 	if not bool(gyarados.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Red Gyarados failed: %s" % gyarados.get("reason", ""),
-		}
+		return _leg_failed(path, "Red Gyarados failed", gyarados)
 	var ashore: Dictionary = _walk_cell_resolving(
 		world, Vector2i(22, 26), save, random, data, true
 	)
 	if not bool(ashore.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Lake of Rage landfall failed: %s" % ashore.get("reason", ""),
-		}
+		return _leg_failed(path, "Lake of Rage landfall failed", ashore)
 	var lance: Dictionary = _talk_to(
 		world, Vector2i(21, 29), Gen2WorldSprite.FACING_UP, save, random, data
 	)
@@ -3164,10 +2909,7 @@ func _glacier_badge_path(
 		"mart_scene": world.state.map_scene(mahogany_mart.x, mahogany_mart.y),
 	})
 	if not bool(lance.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Lake of Rage Lance failed: %s" % lance.get("reason", ""),
-		}
+		return _leg_failed(path, "Lake of Rage Lance failed", lance)
 
 	var back_to_route_43: Dictionary = _walk_connection_resolving(
 		world, "south", 9, 5, save, random, data
@@ -3176,29 +2918,32 @@ func _glacier_badge_path(
 		world, world.dispatch_map_entry(), save, random, data
 	)
 	if not bool(back_to_route_43.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Lake of Rage back to Route 43 failed: %s" % back_to_route_43.get(
-				"reason", ""
-			),
-		}
+		return _leg_failed(path, "Lake of Rage back to Route 43 failed", back_to_route_43)
 	var back_to_mahogany: Dictionary = _gate_leg(
 		world, save, random, data, Vector2i(9, 51), 2, 7
 	)
 	if not bool(back_to_mahogany.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 43 back to Mahogany failed: %s" % back_to_mahogany.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 43 back to Mahogany failed", back_to_mahogany)
 
+	return {"ok": true}
+
+
+## Down to B3F's two password grunts, who open Giovanni's office door.
+func _rocket_hideout_password_leg(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
+	var crystal: bool = Gen2WorldState.is_crystal_profile(data)
+	var rocket_b2f: Vector2i = _map_id(data, &"TEAM_ROCKET_BASE_B2F")
+	var rocket_b3f: Vector2i = _map_id(data, &"TEAM_ROCKET_BASE_B3F")
 	# MahoganyMart1F's scene 1 is Lance's Dragonite clearing the shop and the
 	# changeblock that uncovers the staircase, deferred by the scene script.
 	var mart: Dictionary = _warp_walk(world, Vector2i(11, 7), save, random, data)
 	if not bool(mart.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Mahogany Mart door unreachable: %s" % mart.get("reason", ""),
-		}
+		return _leg_failed(path, "Mahogany Mart door unreachable", mart)
 	var stairs: Dictionary = _drain_story(
 		world, world.dispatch_map_entry(), save, random, data, true
 	)
@@ -3218,10 +2963,7 @@ func _glacier_badge_path(
 
 	var into_the_base: Dictionary = _warp_walk(world, Vector2i(7, 3), save, random, data)
 	if not bool(into_the_base.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Rocket base staircase unreachable: %s" % into_the_base.get("reason", ""),
-		}
+		return _leg_failed(path, "Rocket base staircase unreachable", into_the_base)
 	var _b1f_entry: Dictionary = _drain_story(
 		world, world.dispatch_map_entry(), save, random, data
 	)
@@ -3238,16 +2980,10 @@ func _glacier_badge_path(
 		"run": switch.get("run", {}),
 	})
 	if not bool(switch.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "B1F secret switch failed: %s" % switch.get("reason", ""),
-		}
+		return _leg_failed(path, "B1F secret switch failed", switch)
 	var to_b2f: Dictionary = _warp_walk(world, Vector2i(3, 14), save, random, data)
 	if not bool(to_b2f.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "B2F ladder unreachable: %s" % to_b2f.get("reason", ""),
-		}
+		return _leg_failed(path, "B2F ladder unreachable", to_b2f)
 	var _b2f_entry: Dictionary = _drain_story(
 		world, world.dispatch_map_entry(), save, random, data
 	)
@@ -3260,19 +2996,13 @@ func _glacier_badge_path(
 		"scene": world.state.map_scene(rocket_b2f.x, rocket_b2f.y),
 	})
 	if not bool(heal.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "B2F Lance heal failed: %s" % heal.get("reason", ""),
-		}
+		return _leg_failed(path, "B2F Lance heal failed", heal)
 
 	# The B2F ladder the heal room reaches is the far one: row 12 is a solid wall
 	# and the only way north out of the bottom section is the right-hand column.
 	var to_b3f: Dictionary = _warp_walk(world, Vector2i(27, 14), save, random, data)
 	if not bool(to_b3f.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "B3F ladder unreachable: %s" % to_b3f.get("reason", ""),
-		}
+		return _leg_failed(path, "B3F ladder unreachable", to_b3f)
 	# B3F's first scene defers LanceGetPasswordScript, which ends by arming the
 	# rival scene; the rival scene arms the executive.
 	var password_scene: Dictionary = _drain_story(
@@ -3330,23 +3060,30 @@ func _glacier_badge_path(
 				],
 			}
 
+	return {"ok": true}
+
+
+## The office, the Electrodes that end the hideout, and the way back out.
+func _rocket_hideout_transmitter_leg(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
+	var rocket_b2f: Vector2i = _map_id(data, &"TEAM_ROCKET_BASE_B2F")
+	var rocket_b3f: Vector2i = _map_id(data, &"TEAM_ROCKET_BASE_B3F")
 	# B3F's northern half is walled off from this one, and it is entered from
 	# B2F's own northern half, so the route goes up one ladder and down another.
 	var b3f_up: Dictionary = _warp_walk(world, Vector2i(27, 2), save, random, data)
 	if not bool(b3f_up.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "B3F north-east ladder unreachable: %s" % b3f_up.get("reason", ""),
-		}
+		return _leg_failed(path, "B3F north-east ladder unreachable", b3f_up)
 	var _b2f_north: Dictionary = _drain_story(
 		world, world.dispatch_map_entry(), save, random, data
 	)
 	var b3f_down: Dictionary = _warp_walk(world, Vector2i(3, 2), save, random, data)
 	if not bool(b3f_down.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "B2F north-west ladder unreachable: %s" % b3f_down.get("reason", ""),
-		}
+		return _leg_failed(path, "B2F north-west ladder unreachable", b3f_down)
 	var _b3f_north: Dictionary = _drain_story(
 		world, world.dispatch_map_entry(), save, random, data
 	)
@@ -3359,10 +3096,7 @@ func _glacier_badge_path(
 		"scene": world.state.map_scene(rocket_b3f.x, rocket_b3f.y),
 	})
 	if not bool(rival.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "B3F rival scene failed: %s" % rival.get("reason", ""),
-		}
+		return _leg_failed(path, "B3F rival scene failed", rival)
 	# Giovanni's door is the only way into the office: row 9 is solid either side
 	# of it. It opens on the two passwords and changeblocks itself to floor.
 	var office_door: Dictionary = _talk_to(
@@ -3375,10 +3109,7 @@ func _glacier_badge_path(
 		"run": office_door.get("run", {}),
 	})
 	if not bool(office_door.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "B3F office door failed: %s" % office_door.get("reason", ""),
-		}
+		return _leg_failed(path, "B3F office door failed", office_door)
 	var executive: Dictionary = _walk_cell_resolving(world, Vector2i(10, 8), save, random, data)
 	path.append({
 		"step": "rocket_base_b3f_executive",
@@ -3388,10 +3119,7 @@ func _glacier_badge_path(
 		"scene": world.state.map_scene(rocket_b3f.x, rocket_b3f.y),
 	})
 	if not bool(executive.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "B3F executive failed: %s" % executive.get("reason", ""),
-		}
+		return _leg_failed(path, "B3F executive failed", executive)
 	# The Murkrow behind the desk is what says the transmitter password.
 	var murkrow: Dictionary = _talk_to(
 		world, Vector2i(7, 3), Gen2WorldSprite.FACING_UP, save, random, data
@@ -3403,10 +3131,7 @@ func _glacier_badge_path(
 		"run": murkrow.get("run", {}),
 	})
 	if not bool(murkrow.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "B3F Murkrow failed: %s" % murkrow.get("reason", ""),
-		}
+		return _leg_failed(path, "B3F Murkrow failed", murkrow)
 
 	# Back down to the machine room's own floor, which means unwinding the same
 	# three ladders: B2F's north-west pocket does not reach its south half either.
@@ -3440,10 +3165,7 @@ func _glacier_badge_path(
 		"run": transmitter_door.get("run", {}),
 	})
 	if not bool(transmitter_door.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "B2F transmitter door failed: %s" % transmitter_door.get("reason", ""),
-		}
+		return _leg_failed(path, "B2F transmitter door failed", transmitter_door)
 	# Stepping onto the cell north of that door is the executive's coord event,
 	# and it ends by arming the electrodes.
 	# The scene walks the player itself and then confines them with the
@@ -3502,10 +3224,7 @@ func _glacier_badge_path(
 		"moves": _party_moves(save),
 	})
 	if not bool(whirlpool_taught.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "no party member learned WHIRLPOOL: %s" % whirlpool_taught.get("reason", ""),
-		}
+		return _leg_failed(path, "no party member learned WHIRLPOOL", whirlpool_taught)
 
 	# Out the way the route came in. Clearing the base hides the grunts, so the
 	# walk back is not the one that came down.
@@ -3524,13 +3243,20 @@ func _glacier_badge_path(
 			world, world.dispatch_map_entry(), save, random, data
 		)
 
+	return {"ok": true}
+
+
+func _mahogany_gym_leg(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+) -> Dictionary:
 	_mirror_party(world, save)
 	var gym: Dictionary = _warp_walk(world, Vector2i(6, 13), save, random, data)
 	if not bool(gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Mahogany Gym door unreachable: %s" % gym.get("reason", ""),
-		}
+		return _leg_failed(path, "Mahogany Gym door unreachable", gym)
 	var gym_entry: Dictionary = _drain_story(world, world.dispatch_map_entry(), save, random, data)
 	# Pryce's floor is COLL_ICE, which is LAND_TILE, so the walk crosses it
 	# without the source's sliding.
@@ -3559,20 +3285,18 @@ func _glacier_badge_path(
 		),
 	})
 	if not bool(pryce.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Pryce failed: %s" % pryce.get("reason", ""),
-		}
+		return _leg_failed(path, "Pryce failed", pryce)
 	return {"ok": true}
 
 
-## The Mineral Badge to the Glacier Badge. Mahogany's gym is closed until the
-## Rocket hideout under its souvenir shop is cleared, and the hideout only opens
-## after Lance is met at the Lake of Rage, which is behind the Red Gyarados in the
-## middle of the water. The hideout is three floors of one-way halves rather than
-## one maze: each floor is cut in two and the halves are joined through the other
-## floor, so the route climbs and drops the same ladders several times. Its own
-## doors are the only other links, and each opens on something learned a floor away.
+
+## Mahogany Town west to Goldenrod City and back, clearing the Radio Tower. This
+## leg is what opens Blackthorn Gym: BLACKTHORNCITY_SUPER_NERD1 stands on (18,12),
+## the only cell that reaches the gym door warp at (18,11), and its event flag is
+## set only by `maps/RadioTower5F.asm`'s boss script. Beating Pryce already ran
+## `RadioTowerRocketsScript`, so the takeover is armed before the leg starts. The
+## walk back is six connections west, all crossed eastward earlier in the route,
+## and the two Route 42 lakes are surfed in reverse.
 func _radio_tower_path(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -3630,10 +3354,7 @@ func _radio_tower_boss(
 		[Vector2i(5, 15), Vector2i(15, 0), Vector2i(0, 0)]
 	)
 	if not bool(climbed.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Radio Tower return climb failed: %s" % climbed.get("reason", ""),
-		}
+		return _leg_failed(path, "Radio Tower return climb failed", climbed)
 
 	var slot: Dictionary = _talk_to(
 		world, Vector2i(14, 3), Gen2WorldSprite.FACING_UP, save, random, data
@@ -3645,19 +3366,13 @@ func _radio_tower_boss(
 		"run": slot.get("run", {}),
 	})
 	if not bool(slot.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "card key slot failed: %s" % slot.get("reason", ""),
-		}
+		return _leg_failed(path, "card key slot failed", slot)
 
 	var to_boss: Dictionary = _warp_chain(
 		world, save, random, data, [Vector2i(17, 0), Vector2i(12, 0)]
 	)
 	if not bool(to_boss.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Radio Tower shutter shaft failed: %s" % to_boss.get("reason", ""),
-		}
+		return _leg_failed(path, "Radio Tower shutter shaft failed", to_boss)
 
 	var boss: Dictionary = _walk_cell_resolving(world, Vector2i(16, 5), save, random, data)
 	path.append({
@@ -3671,10 +3386,7 @@ func _radio_tower_boss(
 		),
 	})
 	if not bool(boss.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Rocket boss failed: %s" % boss.get("reason", ""),
-		}
+		return _leg_failed(path, "Rocket boss failed", boss)
 	if not world.event_flag_active(EVENT_CLEARED_RADIO_TOWER):
 		return {"ok": false, "path": path, "reason": "the Radio Tower did not clear"}
 	if not world.event_flag_active(EVENT_BLACKTHORN_SUPER_NERD_BLOCKS_GYM):
@@ -3689,10 +3401,7 @@ func _radio_tower_boss(
 		[Vector2i(12, 0), Vector2i(17, 0), Vector2i(0, 0), Vector2i(15, 0)]
 	)
 	if not bool(descended.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Radio Tower return descent failed: %s" % descended.get("reason", ""),
-		}
+		return _leg_failed(path, "Radio Tower return descent failed", descended)
 
 	var card: Dictionary = _talk_to(
 		world, RADIO_CARD_WOMAN_FACE, Gen2WorldSprite.FACING_DOWN,
@@ -3706,29 +3415,24 @@ func _radio_tower_boss(
 		"run": card.get("run", {}),
 	})
 	if not bool(card.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Radio Card quiz did not finish: %s" % card.get("reason", ""),
-		}
+		return _leg_failed(path, "the Radio Card quiz did not finish", card)
 	if not world.state.is_engine_flag_active(Gen2WorldState.ENGINE_RADIO_CARD):
 		return {"ok": false, "path": path, "reason": "ENGINE_RADIO_CARD was not set"}
 
 	var out_of_tower: Dictionary = _warp_chain(world, save, random, data, [Vector2i(2, 7)])
 	if not bool(out_of_tower.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "leaving the Radio Tower failed: %s" % out_of_tower.get("reason", ""),
-		}
+		return _leg_failed(path, "leaving the Radio Tower failed", out_of_tower)
 	return {"ok": true}
 
 
-## Mahogany Town west to Goldenrod City and back, clearing the Radio Tower. This
-## leg is what opens Blackthorn Gym: BLACKTHORNCITY_SUPER_NERD1 stands on (18,12),
-## the only cell that reaches the gym door warp at (18,11), and its event flag is
-## set only by `maps/RadioTower5F.asm`'s boss script. Beating Pryce already ran
-## `RadioTowerRocketsScript`, so the takeover is armed before the leg starts. The
-## walk back is six connections west, all crossed eastward earlier in the route,
-## and the two Route 42 lakes are surfed in reverse. Appends to [param path].
+## Goldenrod City to the warehouse director's CARD_KEY, and back. Three maps, each
+## cut into regions the others join: the underground's north half ends at the
+## basement door the BASEMENT_KEY unlocks, which warps to the south half, and that
+## half reaches the switch room's top corridor. The puzzle is
+## `..._UpdateDoors`: each switch adds to `wUndergroundSwitchPositions` and opens
+## some doors and closes others, leaving the rest alone, so states accumulate and
+## 3, then 2, then 1 is the one chain to the warehouse. Coming back needs the
+## emergency switch, since the warehouse's own callback clears every door event.
 func _goldenrod_underground_card_key(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -3740,10 +3444,7 @@ func _goldenrod_underground_card_key(
 		world, save, random, data, [Vector2i(9, 5), Vector2i(21, 25)]
 	)
 	if not bool(inbound.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Goldenrod Underground entry failed: %s" % inbound.get("reason", ""),
-		}
+		return _leg_failed(path, "Goldenrod Underground entry failed", inbound)
 
 	var basement_door: Dictionary = _talk_to(
 		world, Vector2i(18, 7), Gen2WorldSprite.FACING_UP, save, random, data
@@ -3755,19 +3456,13 @@ func _goldenrod_underground_card_key(
 		"run": basement_door.get("run", {}),
 	})
 	if not bool(basement_door.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "basement door failed: %s" % basement_door.get("reason", ""),
-		}
+		return _leg_failed(path, "basement door failed", basement_door)
 
 	var to_switch_room: Dictionary = _warp_chain(
 		world, save, random, data, [Vector2i(18, 6), Vector2i(22, 27)]
 	)
 	if not bool(to_switch_room.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "basement door crossing failed: %s" % to_switch_room.get("reason", ""),
-		}
+		return _leg_failed(path, "basement door crossing failed", to_switch_room)
 
 	# Switch 3, then 2, then 1. The rival's coord event at (19,4) and (19,5) sits
 	# on the way to the first of them.
@@ -3789,10 +3484,7 @@ func _goldenrod_underground_card_key(
 
 	var to_warehouse: Dictionary = _warp_chain(world, save, random, data, [Vector2i(22, 10)])
 	if not bool(to_warehouse.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "warehouse door failed: %s" % to_warehouse.get("reason", ""),
-		}
+		return _leg_failed(path, "warehouse door failed", to_warehouse)
 
 	var director: Dictionary = _talk_to(
 		world, Vector2i(12, 9), Gen2WorldSprite.FACING_UP, save, random, data
@@ -3805,10 +3497,7 @@ func _goldenrod_underground_card_key(
 		"items": _named_items(data, world.state.items()),
 	})
 	if not bool(director.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "warehouse director failed: %s" % director.get("reason", ""),
-		}
+		return _leg_failed(path, "warehouse director failed", director)
 	if not world.state.items().has(ITEM_CARD_KEY):
 		return {"ok": false, "path": path, "reason": "the warehouse director left no CARD_KEY"}
 
@@ -3816,10 +3505,7 @@ func _goldenrod_underground_card_key(
 		world, save, random, data, [Vector2i(2, 12)]
 	)
 	if not bool(back_to_switch_room.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "warehouse exit failed: %s" % back_to_switch_room.get("reason", ""),
-		}
+		return _leg_failed(path, "warehouse exit failed", back_to_switch_room)
 
 	var emergency: Dictionary = _talk_to(
 		world, Vector2i(20, 12), Gen2WorldSprite.FACING_UP, save, random, data
@@ -3831,20 +3517,14 @@ func _goldenrod_underground_card_key(
 		"run": emergency.get("run", {}),
 	})
 	if not bool(emergency.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "emergency switch failed: %s" % emergency.get("reason", ""),
-		}
+		return _leg_failed(path, "emergency switch failed", emergency)
 
 	var outbound: Dictionary = _warp_chain(
 		world, save, random, data,
 		[Vector2i(23, 3), Vector2i(21, 31), Vector2i(3, 2), Vector2i(20, 29)]
 	)
 	if not bool(outbound.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Goldenrod Underground exit failed: %s" % outbound.get("reason", ""),
-		}
+		return _leg_failed(path, "Goldenrod Underground exit failed", outbound)
 	return {"ok": true}
 
 
@@ -3867,10 +3547,7 @@ func _radio_tower_basement_key(
 		[Vector2i(5, 15), Vector2i(15, 0), Vector2i(0, 0), Vector2i(7, 0), Vector2i(0, 0)]
 	)
 	if not bool(climbed.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Radio Tower climb failed: %s" % climbed.get("reason", ""),
-		}
+		return _leg_failed(path, "Radio Tower climb failed", climbed)
 
 	# FakeDirectorScript is a coord event, not an interaction: stepping onto
 	# (0,3) runs it (`maps/RadioTower5F.asm`). It battles EXECUTIVEM_3, hands
@@ -3887,10 +3564,7 @@ func _radio_tower_basement_key(
 		"items": _named_items(data, world.state.items()),
 	})
 	if not bool(fake_director.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "fake director failed: %s" % fake_director.get("reason", ""),
-		}
+		return _leg_failed(path, "fake director failed", fake_director)
 	if not world.state.items().has(ITEM_BASEMENT_KEY):
 		return {"ok": false, "path": path, "reason": "the fake director left no BASEMENT_KEY"}
 
@@ -3899,10 +3573,7 @@ func _radio_tower_basement_key(
 		[Vector2i(0, 0), Vector2i(9, 0), Vector2i(0, 0), Vector2i(15, 0), Vector2i(2, 7)]
 	)
 	if not bool(descended.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Radio Tower descent failed: %s" % descended.get("reason", ""),
-		}
+		return _leg_failed(path, "Radio Tower descent failed", descended)
 	return {"ok": true}
 
 
@@ -3930,14 +3601,13 @@ func _warp_chain(
 	return {"ok": true}
 
 
-## Goldenrod City to the warehouse director's CARD_KEY, and back. Three maps, each
-## cut into regions the others join: the underground's north half ends at the
-## basement door the BASEMENT_KEY unlocks, which warps to the south half, and that
-## half reaches the switch room's top corridor. The puzzle is
-## `..._UpdateDoors`: each switch adds to `wUndergroundSwitchPositions` and opens
-## some doors and closes others, leaving the rest alone, so states accumulate and
-## 3, then 2, then 1 is the one chain to the warehouse. Coming back needs the
-## emergency switch, since the warehouse's own callback clears every door event.
+## Mahogany Town and Goldenrod City in either direction, on the same world, state
+## and save. [param heading] is "west" for Mahogany to Goldenrod and "east" for the
+## return. The chain is Mahogany, Route 42, Ecruteak City, Route 37, Route 36,
+## Route 35, Goldenrod, with Route 35's south end a gate building rather than a
+## connection. Route 42's two lakes have no land path around them, so both are
+## surfed, and Route 35's cut tree regrows on every map load, so it is cut on every
+## crossing.
 func _goldenrod_crossing(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -3955,10 +3625,7 @@ func _goldenrod_crossing(
 			world, world.dispatch_map_entry(), save, random, data
 		)
 		if not bool(mahogany_leg.get("ok", false)):
-			return {
-				"ok": false, "path": path,
-				"reason": "Mahogany to Route 42 failed: %s" % mahogany_leg.get("reason", ""),
-			}
+			return _leg_failed(path, "Mahogany to Route 42 failed", mahogany_leg)
 		# The same two lakes _glacier_badge_path() crossed eastward, taken from
 		# the far shore each time.
 		var second_lake: Dictionary = _lake_crossing(
@@ -3966,19 +3633,13 @@ func _goldenrod_crossing(
 			Vector2i(42, 9), Gen2WorldSprite.FACING_LEFT, Vector2i(33, 10)
 		)
 		if not bool(second_lake.get("ok", false)):
-			return {
-				"ok": false, "path": path,
-				"reason": "Route 42 east lake westbound failed: %s" % second_lake.get("reason", ""),
-			}
+			return _leg_failed(path, "Route 42 east lake westbound failed", second_lake)
 		var first_lake: Dictionary = _lake_crossing(
 			world, save, random, data,
 			Vector2i(22, 12), Gen2WorldSprite.FACING_LEFT, Vector2i(13, 9)
 		)
 		if not bool(first_lake.get("ok", false)):
-			return {
-				"ok": false, "path": path,
-				"reason": "Route 42 west lake westbound failed: %s" % first_lake.get("reason", ""),
-			}
+			return _leg_failed(path, "Route 42 west lake westbound failed", first_lake)
 		path.append({
 			"step": "route_42_lakes_westbound",
 			"map": _map_value(world),
@@ -3992,10 +3653,7 @@ func _goldenrod_crossing(
 			world, save, random, data, Vector2i(0, 8), 4, 9
 		)
 		if not bool(to_ecruteak.get("ok", false)):
-			return {
-				"ok": false, "path": path,
-				"reason": "Route 42 to Ecruteak failed: %s" % to_ecruteak.get("reason", ""),
-			}
+			return _leg_failed(path, "Route 42 to Ecruteak failed", to_ecruteak)
 		for leg: Array in [["south", 10, 4], ["south", 10, 3], ["south", 10, 2]]:
 			var walked: Dictionary = _walk_connection_resolving(
 				world, String(leg[0]), int(leg[1]), int(leg[2]), save, random, data
@@ -4014,18 +3672,12 @@ func _goldenrod_crossing(
 			world, Vector2i(17, 5), Gen2WorldSprite.FACING_DOWN, save, random, data
 		)
 		if not bool(south_cut.get("ok", false)):
-			return {
-				"ok": false, "path": path,
-				"reason": "Route 35 southbound cut failed: %s" % south_cut.get("reason", ""),
-			}
+			return _leg_failed(path, "Route 35 southbound cut failed", south_cut)
 		var to_goldenrod: Dictionary = _gate_leg(
 			world, save, random, data, Vector2i(9, 33), 11, 2
 		)
 		if not bool(to_goldenrod.get("ok", false)):
-			return {
-				"ok": false, "path": path,
-				"reason": "Route 35 to Goldenrod failed: %s" % to_goldenrod.get("reason", ""),
-			}
+			return _leg_failed(path, "Route 35 to Goldenrod failed", to_goldenrod)
 		path.append({
 			"step": "mahogany_to_goldenrod",
 			"map": _map_value(world),
@@ -4037,18 +3689,12 @@ func _goldenrod_crossing(
 		world, save, random, data, Vector2i(19, 1), 10, 2
 	)
 	if not bool(to_route_35.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Goldenrod to Route 35 failed: %s" % to_route_35.get("reason", ""),
-		}
+		return _leg_failed(path, "Goldenrod to Route 35 failed", to_route_35)
 	var north_cut: Dictionary = _cut_at(
 		world, Vector2i(17, 7), Gen2WorldSprite.FACING_UP, save, random, data
 	)
 	if not bool(north_cut.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 35 northbound cut failed: %s" % north_cut.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 35 northbound cut failed", north_cut)
 	for leg: Array in [["north", 10, 3], ["north", 10, 4], ["north", 4, 9]]:
 		var walked: Dictionary = _walk_connection_resolving(
 			world, String(leg[0]), int(leg[1]), int(leg[2]), save, random, data
@@ -4067,28 +3713,19 @@ func _goldenrod_crossing(
 		world, save, random, data, Vector2i(35, 26), 2, 5
 	)
 	if not bool(route_42_path.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Ecruteak to Route 42 failed: %s" % route_42_path.get("reason", ""),
-		}
+		return _leg_failed(path, "Ecruteak to Route 42 failed", route_42_path)
 	var west_lake: Dictionary = _lake_crossing(
 		world, save, random, data,
 		Vector2i(13, 9), Gen2WorldSprite.FACING_RIGHT, Vector2i(22, 12)
 	)
 	if not bool(west_lake.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 42 west lake eastbound failed: %s" % west_lake.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 42 west lake eastbound failed", west_lake)
 	var east_lake: Dictionary = _lake_crossing(
 		world, save, random, data,
 		Vector2i(33, 10), Gen2WorldSprite.FACING_RIGHT, Vector2i(42, 9)
 	)
 	if not bool(east_lake.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 42 east lake eastbound failed: %s" % east_lake.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 42 east lake eastbound failed", east_lake)
 	var to_mahogany: Dictionary = _walk_connection_resolving(
 		world, "east", 2, 7, save, random, data
 	)
@@ -4096,10 +3733,7 @@ func _goldenrod_crossing(
 		world, world.dispatch_map_entry(), save, random, data
 	)
 	if not bool(to_mahogany.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 42 to Mahogany failed: %s" % to_mahogany.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 42 to Mahogany failed", to_mahogany)
 	path.append({
 		"step": "goldenrod_to_mahogany",
 		"map": _map_value(world),
@@ -4125,13 +3759,13 @@ func _lake_crossing(
 	return _walk_cell_resolving(world, landfall, save, random, data, true)
 
 
-## Mahogany Town and Goldenrod City in either direction, on the same world, state
-## and save. [param heading] is "west" for Mahogany to Goldenrod and "east" for the
-## return. The chain is Mahogany, Route 42, Ecruteak City, Route 37, Route 36,
-## Route 35, Goldenrod, with Route 35's south end a gate building rather than a
-## connection. Route 42's two lakes have no land path around them, so both are
-## surfed, and Route 35's cut tree regrows on every map load, so it is cut on every
-## crossing.
+## Blackthorn City to the Rising Badge. The
+## badge is not won in the gym: `BlackthornGymClairScript` sets only
+## `EVENT_BEAT_CLAIR` and swaps the two Blackthorn gramps so the Dragon's Den door
+## at (20,1) opens. `maps/DragonShrine.asm` is what runs
+## `setflag ENGINE_RISINGBADGE` on Crystal, at the end of the elder's five-question
+## quiz; Gold and Silver have no shrine and put the same line in
+## `DragonsDenB1FDragonFangScript`.
 func _rising_badge_path(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -4144,25 +3778,16 @@ func _rising_badge_path(
 	# route stands in before it.
 	var mart_trip: Dictionary = _warp_chain(world, save, random, data, [Vector2i(15, 29)])
 	if not bool(mart_trip.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Blackthorn Mart unreachable: %s" % mart_trip.get("reason", ""),
-		}
+		return _leg_failed(path, "Blackthorn Mart unreachable", mart_trip)
 	var bought: Dictionary = _buy_balls(
 		world, save, random, data, path, Gen2WorldPartyHost.ITEM_GREAT_BALL,
 		GREAT_BALLS_BOUGHT, "blackthorn_mart_great_balls"
 	)
 	if not bool(bought.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Blackthorn Mart failed: %s" % bought.get("reason", ""),
-		}
+		return _leg_failed(path, "Blackthorn Mart failed", bought)
 	var out_of_mart: Dictionary = _warp_chain(world, save, random, data, [Vector2i(2, 7)])
 	if not bool(out_of_mart.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Blackthorn Mart exit failed: %s" % out_of_mart.get("reason", ""),
-		}
+		return _leg_failed(path, "Blackthorn Mart exit failed", out_of_mart)
 
 	var gym: Dictionary = _blackthorn_gym_leg(world, save, random, data, path)
 	if not bool(gym.get("ok", false)):
@@ -4175,13 +3800,14 @@ func _rising_badge_path(
 	return {"ok": true}
 
 
-## Blackthorn City to the Rising Badge, on the same world, state and save. The
-## badge is not won in the gym: `BlackthornGymClairScript` sets only
-## `EVENT_BEAT_CLAIR` and swaps the two Blackthorn gramps so the Dragon's Den door
-## at (20,1) opens. `maps/DragonShrine.asm` is what runs
-## `setflag ENGINE_RISINGBADGE` on Crystal, at the end of the elder's five-question
-## quiz; Gold and Silver have no shrine and put the same line in
-## `DragonsDenB1FDragonFangScript`. Appends to [param path].
+## Blackthorn Gym's boulder puzzle and Clair. 1F is four regions and the entrance
+## reaches only one. 2F's three holes are `stonetable` rows, and a boulder that
+## falls through one sets its own event flag, which
+## `BlackthornGym1FBouldersCallback` turns into a `changeblock` on 1F. Two of those
+## are the route: BOULDER1 through the (8,3) hole joins the middle corridor to
+## Clair's room, and BOULDER3 through the (8,7) hole joins it to the pocket 2F's
+## staircase drops into. BOULDER2's hole reaches nothing. BOULDER1 is one push;
+## BOULDER3 goes north until the wall at (6,6) stops it and then east.
 func _blackthorn_gym_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -4195,10 +3821,7 @@ func _blackthorn_gym_leg(
 		world, save, random, data, [Vector2i(18, 11), Vector2i(1, 7)]
 	)
 	if not bool(to_gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Blackthorn Gym 2F unreachable: %s" % to_gym.get("reason", ""),
-		}
+		return _leg_failed(path, "Blackthorn Gym 2F unreachable", to_gym)
 
 	for leg: Dictionary in BLACKTHORN_GYM_PUSHES:
 		var pushes: Array = []
@@ -4236,10 +3859,7 @@ func _blackthorn_gym_leg(
 	# just joined to Clair's room.
 	var down: Dictionary = _warp_chain(world, save, random, data, [Vector2i(7, 9)])
 	if not bool(down.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Blackthorn Gym 1F return failed: %s" % down.get("reason", ""),
-		}
+		return _leg_failed(path, "Blackthorn Gym 1F return failed", down)
 
 	var clair: Dictionary = _talk_to(
 		world, Vector2i(5, 4), Gen2WorldSprite.FACING_UP, save, random, data
@@ -4252,23 +3872,20 @@ func _blackthorn_gym_leg(
 		"beat_clair": world.event_flag_active(EVENT_BEAT_CLAIR),
 	})
 	if not bool(clair.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Clair failed: %s" % clair.get("reason", ""),
-		}
+		return _leg_failed(path, "Clair failed", clair)
 	if not world.event_flag_active(EVENT_BEAT_CLAIR):
 		return {"ok": false, "path": path, "reason": "Clair was not beaten"}
 	return {"ok": true}
 
 
-## Blackthorn Gym's boulder puzzle and Clair. 1F is four regions and the entrance
-## reaches only one. 2F's three holes are `stonetable` rows, and a boulder that
-## falls through one sets its own event flag, which
-## `BlackthornGym1FBouldersCallback` turns into a `changeblock` on 1F. Two of those
-## are the route: BOULDER1 through the (8,3) hole joins the middle corridor to
-## Clair's room, and BOULDER3 through the (8,7) hole joins it to the pocket 2F's
-## staircase drops into. BOULDER2's hole reaches nothing. BOULDER1 is one push;
-## BOULDER3 goes north until the wall at (6,6) stops it and then east.
+## Blackthorn City to the Dragon Shrine, and the elder's quiz. Clair's script swaps
+## the gramps standing on (20,2) for one beside it and opens the den door at
+## (20,1). Neither den floor needs a field move: B1F's shrine warp at (19,29) is on
+## the same land region as the ladder from 1F, and the whirlpool at (10,20) guards
+## the water pocket rather than the way through. The quiz is answered correctly:
+## `.WrongAnswer` on the last question checks a flag question 5 has already set, so
+## it asks question 5 again, and a wrong answer there is the one that does not move
+## on.
 func _dragon_shrine_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -4280,10 +3897,7 @@ func _dragon_shrine_leg(
 		world, save, random, data, [Vector2i(7, 9), Vector2i(1, 7), Vector2i(4, 17)]
 	)
 	if not bool(out_of_gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Blackthorn Gym exit failed: %s" % out_of_gym.get("reason", ""),
-		}
+		return _leg_failed(path, "Blackthorn Gym exit failed", out_of_gym)
 
 	# The den door is across the lake, not around it. Every land route from the
 	# town centre is walled off by the $b2 fence line and the one-way $a3 ledges,
@@ -4300,10 +3914,7 @@ func _dragon_shrine_leg(
 		"movement_mode": String(world.movement_mode),
 	})
 	if not bool(crossing.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Blackthorn lake crossing failed: %s" % crossing.get("reason", ""),
-		}
+		return _leg_failed(path, "Blackthorn lake crossing failed", crossing)
 
 	# Dragon's Den 1F is two halves joined by its own warp pair, (3,3) into
 	# (5,13), so the ladder down at (5,15) is only reached through it.
@@ -4312,10 +3923,7 @@ func _dragon_shrine_leg(
 		[Vector2i(20, 1), Vector2i(3, 3), Vector2i(5, 15)]
 	)
 	if not bool(to_den.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Dragon's Den B1F unreachable: %s" % to_den.get("reason", ""),
-		}
+		return _leg_failed(path, "Dragon's Den B1F unreachable", to_den)
 
 	if not Gen2WorldState.is_crystal_profile(data):
 		return _dragons_den_dragon_fang(world, save, random, data, path)
@@ -4327,10 +3935,7 @@ func _dragon_shrine_leg(
 		world, Vector2i(10, 7), Gen2WorldSprite.FACING_DOWN, save, random, data
 	)
 	if not bool(entered.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Dragon's Den surf entry failed: %s" % entered.get("reason", ""),
-		}
+		return _leg_failed(path, "Dragon's Den surf entry failed", entered)
 	var cleared: Dictionary = _whirlpool_at(
 		world, Vector2i(10, 19), Gen2WorldSprite.FACING_DOWN, save, random, data
 	)
@@ -4341,10 +3946,7 @@ func _dragon_shrine_leg(
 		"run": cleared,
 	})
 	if not bool(cleared.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Dragon's Den whirlpool failed: %s" % cleared.get("reason", ""),
-		}
+		return _leg_failed(path, "Dragon's Den whirlpool failed", cleared)
 	var den_crossing: Dictionary = _walk_cell_resolving(
 		world, Vector2i(14, 31), save, random, data, true
 	)
@@ -4355,20 +3957,14 @@ func _dragon_shrine_leg(
 		"movement_mode": String(world.movement_mode),
 	})
 	if not bool(den_crossing.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Dragon's Den crossing failed: %s" % den_crossing.get("reason", ""),
-		}
+		return _leg_failed(path, "Dragon's Den crossing failed", den_crossing)
 
 	# _warp_chain, not used here: it drains the destination's own map entry with
 	# default answers, and the shrine's map entry is the quiz. One entry, one
 	# quiz, driven below by this leg's own answers.
 	var to_shrine: Dictionary = _warp_walk(world, Vector2i(19, 29), save, random, data)
 	if not bool(to_shrine.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Dragon Shrine unreachable: %s" % to_shrine.get("reason", ""),
-		}
+		return _leg_failed(path, "Dragon Shrine unreachable", to_shrine)
 
 	# The shrine's scene 0 is SCENE_DRAGONSHRINE_TAKE_TEST, an sdefer, so the
 	# quiz runs off the map entry rather than an interaction.
@@ -4396,14 +3992,14 @@ func _dragon_shrine_leg(
 	return {"ok": true}
 
 
-## Blackthorn City to the Dragon Shrine, and the elder's quiz. Clair's script swaps
-## the gramps standing on (20,2) for one beside it and opens the den door at
-## (20,1). Neither den floor needs a field move: B1F's shrine warp at (19,29) is on
-## the same land region as the ladder from 1F, and the whirlpool at (10,20) guards
-## the water pocket rather than the way through. The quiz is answered correctly:
-## `.WrongAnswer` on the last question checks a flag question 5 has already set, so
-## it asks question 5 again, and a wrong answer there is the one that does not move
-## on.
+## Dragon's Den B1F's DRAGON_FANG ball, which is where Gold and Silver keep the
+## Rising Badge. pokegold ships no DRAGON_SHRINE map: B1F has one warp rather than
+## two and no coord event, and blocks (7..11, 13..15) wall the shrine mouth off.
+## `DragonsDenB1FDragonFangScript` is the errand instead: the ball on (35,16) gives
+## the fang, then Clair walks in, runs `setflag ENGINE_RISINGBADGE` and hands over
+## TM24. The ball's land strip touches no other land, so the lake is the only way
+## onto it and (34,22) is its one shore; the whirlpool on (10,20) is on this route
+## as much as on Crystal's.
 func _dragons_den_dragon_fang(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -4415,10 +4011,7 @@ func _dragons_den_dragon_fang(
 		world, Vector2i(10, 7), Gen2WorldSprite.FACING_DOWN, save, random, data
 	)
 	if not bool(entered.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Dragon's Den surf entry failed: %s" % entered.get("reason", ""),
-		}
+		return _leg_failed(path, "Dragon's Den surf entry failed", entered)
 	var cleared: Dictionary = _whirlpool_at(
 		world, Vector2i(10, 19), Gen2WorldSprite.FACING_DOWN, save, random, data
 	)
@@ -4429,10 +4022,7 @@ func _dragons_den_dragon_fang(
 		"run": cleared,
 	})
 	if not bool(cleared.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Dragon's Den whirlpool failed: %s" % cleared.get("reason", ""),
-		}
+		return _leg_failed(path, "Dragon's Den whirlpool failed", cleared)
 	var crossing: Dictionary = _walk_cell_resolving(
 		world, Vector2i(34, 21), save, random, data, true
 	)
@@ -4443,10 +4033,7 @@ func _dragons_den_dragon_fang(
 		"movement_mode": String(world.movement_mode),
 	})
 	if not bool(crossing.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Dragon's Den crossing failed: %s" % crossing.get("reason", ""),
-		}
+		return _leg_failed(path, "Dragon's Den crossing failed", crossing)
 
 	# Faced from the west, so `readvar VAR_FACING` takes the script's RIGHT
 	# branch and Clair walks up the strip from (34,21) rather than (35,22).
@@ -4462,10 +4049,7 @@ func _dragons_den_dragon_fang(
 		"items": _named_items(data, world.state.items()),
 	})
 	if not bool(fang.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Dragon Fang handoff failed: %s" % fang.get("reason", ""),
-		}
+		return _leg_failed(path, "the Dragon Fang handoff failed", fang)
 	if not world.state.is_engine_flag_active(
 		Gen2WorldState.badge_flag(BADGE_RISING, false)
 	):
@@ -4473,14 +4057,14 @@ func _dragons_den_dragon_fang(
 	return {"ok": true}
 
 
-## Dragon's Den B1F's DRAGON_FANG ball, which is where Gold and Silver keep the
-## Rising Badge. pokegold ships no DRAGON_SHRINE map: B1F has one warp rather than
-## two and no coord event, and blocks (7..11, 13..15) wall the shrine mouth off.
-## `DragonsDenB1FDragonFangScript` is the errand instead: the ball on (35,16) gives
-## the fang, then Clair walks in, runs `setflag ENGINE_RISINGBADGE` and hands over
-## TM24. The ball's land strip touches no other land, so the lake is the only way
-## onto it and (34,22) is its one shore; the whirlpool on (10,20) is on this route
-## as much as on Crystal's.
+## The Dragon Shrine to Indigo Plateau.
+## `VictoryRoadGate`'s coord event at (10,11) is a `readvar VAR_BADGES` against
+## `NUM_JOHTO_BADGES - 1`, so it is the first script on the walked route that reads
+## the badge count back. Route 27 is the reason this leg waited on Waterfall: its
+## Kanto landfall sits in a region that reaches no map edge, the only crossing east
+## of it starts in a pocket reached solely by leaving Tohjo Falls there, and the
+## cave's two lower channels reach the pool feeding them only by climbing
+## `COLL_WATERFALL` cells. `tools/checks/route_27.gd` pins all of it.
 func _kanto_approach_path(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -4507,14 +4091,14 @@ func _kanto_approach_path(
 	return _elite_four_leg(world, save, random, data, path)
 
 
-## The Dragon Shrine to Indigo Plateau, on the same world, state and save.
-## `VictoryRoadGate`'s coord event at (10,11) is a `readvar VAR_BADGES` against
-## `NUM_JOHTO_BADGES - 1`, so it is the first script on the walked route that reads
-## the badge count back. Route 27 is the reason this leg waited on Waterfall: its
-## Kanto landfall sits in a region that reaches no map edge, the only crossing east
-## of it starts in a pocket reached solely by leaving Tohjo Falls there, and the
-## cave's two lower channels reach the pool feeding them only by climbing
-## `COLL_WATERFALL` cells. `tools/checks/route_27.gd` pins all of it.
+## The Dragon's Den back to New Bark Town. The way out is the way in reversed.
+## Crystal clears the whirlpool twice: `complete_whirlpool()` is a transient block
+## override, so the warp into the shrine restored (10,20), and the water south of
+## it reaches the shrine's landfall and nothing else. Gold and Silver enter no map
+## in between, so their first clear still holds. Blackthorn's own exit is south
+## rather than west: Route 45 into Route 46 into the Route 29 gate. Route 46 is
+## walked downhill only, its ledges leaving the gate region reaching no map edge
+## at all.
 func _blackthorn_departure(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -4526,10 +4110,7 @@ func _blackthorn_departure(
 	if crystal:
 		var to_den: Dictionary = _warp_chain(world, save, random, data, [Vector2i(4, 9)])
 		if not bool(to_den.get("ok", false)):
-			return {
-				"ok": false, "path": path,
-				"reason": "Dragon Shrine exit failed: %s" % to_den.get("reason", ""),
-			}
+			return _leg_failed(path, "Dragon Shrine exit failed", to_den)
 
 		# The shrine armed SCENE_DRAGONSDENB1F_CLAIR_GIVES_TM
 		# (maps/DragonShrine.asm), so B1F's coord event at (19,30), one cell below
@@ -4546,10 +4127,7 @@ func _blackthorn_departure(
 			"items": _named_items(data, world.state.items()),
 		})
 		if not bool(clair_tm.get("ok", false)):
-			return {
-				"ok": false, "path": path,
-				"reason": "Clair's TM scene failed: %s" % clair_tm.get("reason", ""),
-			}
+			return _leg_failed(path, "Clair's TM scene failed", clair_tm)
 
 	var entered: Dictionary = _surf_at(
 		world, Vector2i(14, 31) if crystal else Vector2i(34, 21),
@@ -4557,10 +4135,7 @@ func _blackthorn_departure(
 		save, random, data
 	)
 	if not bool(entered.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Dragon's Den return surf failed: %s" % entered.get("reason", ""),
-		}
+		return _leg_failed(path, "Dragon's Den return surf failed", entered)
 
 	# The Rising Badge is in, so WATERFALL is usable from here on, and this is
 	# the water it can be learned on: Dragon's Den B1F's own table is the only
@@ -4583,10 +4158,7 @@ func _blackthorn_departure(
 		"moves": _party_moves(save),
 	})
 	if not bool(taught.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "WATERFALL could not be taught: %s" % taught.get("reason", ""),
-		}
+		return _leg_failed(path, "WATERFALL could not be taught", taught)
 
 	if crystal:
 		var cleared: Dictionary = _whirlpool_at(
@@ -4599,10 +4171,7 @@ func _blackthorn_departure(
 			"run": cleared,
 		})
 		if not bool(cleared.get("ok", false)):
-			return {
-				"ok": false, "path": path,
-				"reason": "Dragon's Den return whirlpool failed: %s" % cleared.get("reason", ""),
-			}
+			return _leg_failed(path, "Dragon's Den return whirlpool failed", cleared)
 	var back_ashore: Dictionary = _walk_cell_resolving(
 		world, Vector2i(10, 7), save, random, data, true
 	)
@@ -4613,19 +4182,13 @@ func _blackthorn_departure(
 		"movement_mode": String(world.movement_mode),
 	})
 	if not bool(back_ashore.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Dragon's Den return crossing failed: %s" % back_ashore.get("reason", ""),
-		}
+		return _leg_failed(path, "Dragon's Den return crossing failed", back_ashore)
 
 	var to_town: Dictionary = _warp_chain(
 		world, save, random, data, [Vector2i(20, 3), Vector2i(5, 13), Vector2i(3, 5)]
 	)
 	if not bool(to_town.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Dragon's Den exit failed: %s" % to_town.get("reason", ""),
-		}
+		return _leg_failed(path, "Dragon's Den exit failed", to_town)
 
 	# The den door's shore is still an island: the town's $b2 fence line and its
 	# one-way $a3 ledges wall off every land route, so the lake is crossed back
@@ -4641,10 +4204,7 @@ func _blackthorn_departure(
 		"movement_mode": String(world.movement_mode),
 	})
 	if not bool(crossing.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Blackthorn return crossing failed: %s" % crossing.get("reason", ""),
-		}
+		return _leg_failed(path, "Blackthorn return crossing failed", crossing)
 
 	for leg: Dictionary in [
 		{"step": "blackthorn_to_route_45", "direction": "south", "group": 5, "number": 8},
@@ -4680,10 +4240,7 @@ func _blackthorn_departure(
 		"cell": _cell_value(world),
 	})
 	if not bool(gate.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 29 gate failed: %s" % gate.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 29 gate failed", gate)
 
 	var to_new_bark: Dictionary = _walk_connection_resolving(
 		world, "east", 24, 4, save, random, data
@@ -4699,21 +4256,18 @@ func _blackthorn_departure(
 		"run": new_bark_entry,
 	})
 	if not bool(to_new_bark.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 29 to New Bark failed: %s" % to_new_bark.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 29 to New Bark failed", to_new_bark)
 	return {"ok": true}
 
 
-## The Dragon's Den back to New Bark Town. The way out is the way in reversed.
-## Crystal clears the whirlpool twice: `complete_whirlpool()` is a transient block
-## override, so the warp into the shrine restored (10,20), and the water south of
-## it reaches the shrine's landfall and nothing else. Gold and Silver enter no map
-## in between, so their first clear still holds. Blackthorn's own exit is south
-## rather than west: Route 45 into Route 46 into the Route 29 gate. Route 46 is
-## walked downhill only, its ledges leaving the gate region reaching no map edge
-## at all.
+## New Bark Town to Route 26, along Route 27 and through Tohjo Falls. New Bark's
+## east column is wall except the four water rows 6 to 9, so leaving town east is a
+## crossing rather than a step, and the far side is still water: one water-only
+## walk comes ashore on ROUTE_27_LANDFALL, one of the two
+## `SCENE_ROUTE27_FIRST_STEP_INTO_KANTO` coord cells. From there the way east is
+## the cave, twice over. Row 5 is solid cliff apart from Tohjo Falls' two mouths,
+## both `COLL_CAVE`, whose `.warps` branch forces a step DOWN, so the east mouth
+## drops the player into the pocket whose shore crosses to Route 26.
 func _kanto_approach(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -4725,10 +4279,7 @@ func _kanto_approach(
 		world, Vector2i(17, 8), Gen2WorldSprite.FACING_RIGHT, save, random, data
 	)
 	if not bool(entered.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "New Bark surf entry failed: %s" % entered.get("reason", ""),
-		}
+		return _leg_failed(path, "New Bark surf entry failed", entered)
 	var crossed: Dictionary = _walk_connection_resolving(
 		world, "east", 24, 2, save, random, data, true
 	)
@@ -4748,15 +4299,9 @@ func _kanto_approach(
 		"run": entry,
 	})
 	if not bool(crossed.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "New Bark to Route 27 failed: %s" % crossed.get("reason", ""),
-		}
+		return _leg_failed(path, "New Bark to Route 27 failed", crossed)
 	if not bool(ashore.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 27 landfall failed: %s" % ashore.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 27 landfall failed", ashore)
 
 	var cave: Dictionary = _tohjo_falls_leg(world, save, random, data, path)
 	if not bool(cave.get("ok", false)):
@@ -4770,18 +4315,12 @@ func _kanto_approach(
 		world, Vector2i(39, 6), Gen2WorldSprite.FACING_RIGHT, save, random, data
 	)
 	if not bool(channel.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 27 channel surf failed: %s" % channel.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 27 channel surf failed", channel)
 	var landed: Dictionary = _walk_cell_resolving(
 		world, Vector2i(46, 4), save, random, data, true
 	)
 	if not bool(landed.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 27 channel landfall failed: %s" % landed.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 27 channel landfall failed", landed)
 	var to_route_26: Dictionary = _walk_connection_resolving(
 		world, "east", 24, 1, save, random, data
 	)
@@ -4797,21 +4336,10 @@ func _kanto_approach(
 		"run": route_26_entry,
 	})
 	if not bool(to_route_26.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 27 to Route 26 failed: %s" % to_route_26.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 27 to Route 26 failed", to_route_26)
 	return {"ok": true}
 
 
-## New Bark Town to Route 26, along Route 27 and through Tohjo Falls. New Bark's
-## east column is wall except the four water rows 6 to 9, so leaving town east is a
-## crossing rather than a step, and the far side is still water: one water-only
-## walk comes ashore on ROUTE_27_LANDFALL, one of the two
-## `SCENE_ROUTE27_FIRST_STEP_INTO_KANTO` coord cells. From there the way east is
-## the cave, twice over. Row 5 is solid cliff apart from Tohjo Falls' two mouths,
-## both `COLL_CAVE`, whose `.warps` branch forces a step DOWN, so the east mouth
-## drops the player into the pocket whose shore crosses to Route 26.
 func _tohjo_falls_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -4821,19 +4349,13 @@ func _tohjo_falls_leg(
 ) -> Dictionary:
 	var into_cave: Dictionary = _warp_chain(world, save, random, data, [TOHJO_WEST_MOUTH])
 	if not bool(into_cave.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Tohjo Falls entrance failed: %s" % into_cave.get("reason", ""),
-		}
+		return _leg_failed(path, "Tohjo Falls entrance failed", into_cave)
 
 	var entered: Dictionary = _surf_at(
 		world, TOHJO_WEST_SHORE, Gen2WorldSprite.FACING_LEFT, save, random, data
 	)
 	if not bool(entered.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Tohjo Falls surf entry failed: %s" % entered.get("reason", ""),
-		}
+		return _leg_failed(path, "Tohjo Falls surf entry failed", entered)
 	var climbed: Dictionary = _waterfall_at(
 		world, TOHJO_CLIMB_FOOT, save, random, data
 	)
@@ -4845,10 +4367,7 @@ func _tohjo_falls_leg(
 		"movement_mode": String(world.movement_mode),
 	})
 	if not bool(climbed.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Tohjo Falls climb failed: %s" % climbed.get("reason", ""),
-		}
+		return _leg_failed(path, "Tohjo Falls climb failed", climbed)
 
 	var descent: Dictionary = _ride_waterfall_down(
 		world, save, random, data, TOHJO_DESCENT_TOP
@@ -4860,19 +4379,13 @@ func _tohjo_falls_leg(
 		"steps": descent.get("steps", 0),
 	})
 	if not bool(descent.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Tohjo Falls descent failed: %s" % descent.get("reason", ""),
-		}
+		return _leg_failed(path, "Tohjo Falls descent failed", descent)
 
 	var ashore: Dictionary = _walk_cell_resolving(
 		world, TOHJO_EAST_LANDFALL, save, random, data, true
 	)
 	if not bool(ashore.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Tohjo Falls landfall failed: %s" % ashore.get("reason", ""),
-		}
+		return _leg_failed(path, "Tohjo Falls landfall failed", ashore)
 	var out_of_cave: Dictionary = _warp_chain(world, save, random, data, [TOHJO_EAST_DOOR])
 	path.append({
 		"step": "tohjo_falls_east_mouth",
@@ -4880,10 +4393,7 @@ func _tohjo_falls_leg(
 		"cell": _cell_value(world),
 	})
 	if not bool(out_of_cave.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Tohjo Falls exit failed: %s" % out_of_cave.get("reason", ""),
-		}
+		return _leg_failed(path, "Tohjo Falls exit failed", out_of_cave)
 	return {"ok": true}
 
 
@@ -4958,10 +4468,7 @@ func _victory_road_gate_leg(
 		mon.hp = 1
 	var into_house: Dictionary = _warp_chain(world, save, random, data, [Vector2i(15, 57)])
 	if not bool(into_house.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 26 heal house entrance failed: %s" % into_house.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 26 heal house entrance failed", into_house)
 	var healed: Dictionary = _talk_to(
 		world, Vector2i(2, 4), Gen2WorldSprite.FACING_UP, save, random, data
 	)
@@ -4973,23 +4480,14 @@ func _victory_road_gate_leg(
 		"party_hp_after": _party_hp(save),
 	})
 	if not bool(healed.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 26 heal house failed: %s" % healed.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 26 heal house failed", healed)
 	var out_of_house: Dictionary = _warp_chain(world, save, random, data, [Vector2i(2, 7)])
 	if not bool(out_of_house.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 26 heal house exit failed: %s" % out_of_house.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 26 heal house exit failed", out_of_house)
 
 	var into_gate: Dictionary = _warp_chain(world, save, random, data, [Vector2i(7, 5)])
 	if not bool(into_gate.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Victory Road Gate entrance failed: %s" % into_gate.get("reason", ""),
-		}
+		return _leg_failed(path, "Victory Road Gate entrance failed", into_gate)
 	var checked: Dictionary = _walk_cell_resolving(
 		world, Vector2i(10, 11), save, random, data
 	)
@@ -5001,10 +4499,7 @@ func _victory_road_gate_leg(
 		"encounters": checked.get("encounters", []),
 	})
 	if not bool(checked.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Victory Road Gate badge check failed: %s" % checked.get("reason", ""),
-		}
+		return _leg_failed(path, "Victory Road Gate badge check failed", checked)
 	# The officer's refusal branch is an applymovement that steps the player back
 	# down, so staying on (10,11) is what says the eighth badge was accepted.
 	if world.player_cell != Vector2i(10, 11):
@@ -5030,10 +4525,7 @@ func _victory_road_leg(
 ) -> Dictionary:
 	var into_road: Dictionary = _warp_chain(world, save, random, data, [Vector2i(9, 0)])
 	if not bool(into_road.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Victory Road entrance failed: %s" % into_road.get("reason", ""),
-		}
+		return _leg_failed(path, "Victory Road entrance failed", into_road)
 
 	for ladder: Dictionary in VICTORY_ROAD_LADDERS:
 		var climbed: Dictionary = _warp_chain(world, save, random, data, [ladder["cell"]])
@@ -5060,10 +4552,7 @@ func _victory_road_leg(
 		"beat_rival": world.event_flag_active(EVENT_RIVAL_VICTORY_ROAD),
 	})
 	if not bool(rival.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Victory Road rival failed: %s" % rival.get("reason", ""),
-		}
+		return _leg_failed(path, "Victory Road rival failed", rival)
 	if not world.event_flag_active(EVENT_RIVAL_VICTORY_ROAD):
 		return {"ok": false, "path": path, "reason": "the Victory Road rival did not appear"}
 
@@ -5071,10 +4560,7 @@ func _victory_road_leg(
 		world, save, random, data, [Vector2i(13, 5), Vector2i(9, 5)]
 	)
 	if not bool(to_plateau.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Indigo Plateau unreachable: %s" % to_plateau.get("reason", ""),
-		}
+		return _leg_failed(path, "Indigo Plateau unreachable", to_plateau)
 
 	# PlateauRivalBattle1 and 2 open on EVENT_BEAT_RIVAL_IN_MT_MOON, which this
 	# route never reaches, so the coord event runs to PlateauRivalScriptDone and
@@ -5088,10 +4574,7 @@ func _victory_road_leg(
 		world, PLATEAU_RIVAL_APPROACH, save, random, data
 	)
 	if not bool(approach.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Indigo Plateau approach failed: %s" % approach.get("reason", ""),
-		}
+		return _leg_failed(path, "Indigo Plateau approach failed", approach)
 	var stepped: Dictionary = world.move_result(Vector2i.UP)
 	var plateau: Dictionary = {"ok": bool(stepped.get("ok", false))}
 	if bool(plateau.get("ok", false)):
@@ -5113,10 +4596,7 @@ func _victory_road_leg(
 		"badge_count": world.state.badge_count(Gen2WorldState.is_crystal_profile(data)),
 	})
 	if not bool(plateau.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Indigo Plateau Pokemon Center failed: %s" % plateau.get("reason", ""),
-		}
+		return _leg_failed(path, "Indigo Plateau Pokemon Center failed", plateau)
 	if not _engine_flag_set(world, data, ENGINE_FLYPOINT_INDIGO_PLATEAU):
 		return {"ok": false, "path": path, "reason": "the Indigo Plateau flypoint was not set"}
 	return {"ok": true}
@@ -5140,10 +4620,7 @@ func _elite_four_leg(
 		world, save, random, data, [INDIGO_PLATEAU_ELITE_FOUR_DOOR]
 	)
 	if not bool(entered.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Elite Four door failed: %s" % entered.get("reason", ""),
-		}
+		return _leg_failed(path, "the Elite Four door failed", entered)
 
 	for room: Dictionary in ELITE_FOUR_ROOMS:
 		var settled: Vector2i = ELITE_FOUR_ROOM_ARRIVAL \
@@ -5233,10 +4710,7 @@ func _lances_room_leg(
 		world, LANCE_APPROACH, save, random, data
 	)
 	if not bool(approach.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the walk to Lance failed: %s" % approach.get("reason", ""),
-		}
+		return _leg_failed(path, "the walk to Lance failed", approach)
 	var stepped: Dictionary = world.move_result(Vector2i.UP)
 	var champion: Dictionary = {"ok": false, "reason": "the step onto the coord event refused"}
 	if bool(stepped.get("ok", false)):
@@ -5252,10 +4726,7 @@ func _lances_room_leg(
 		"battles": champion.get("battles", []),
 	})
 	if not bool(champion.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the champion scene failed: %s" % champion.get("reason", ""),
-		}
+		return _leg_failed(path, "the champion scene failed", champion)
 	if not world.event_flag_active(EVENT_BEAT_CHAMPION_LANCE):
 		return {"ok": false, "path": path, "reason": "Lance was not beaten"}
 	if world.map_id() != Vector2i(16, HALL_OF_FAME_NUMBER):
@@ -5411,10 +4882,7 @@ func _ss_aqua_crossing(
 		[OLIVINE_PORT_DOOR, OLIVINE_PASSAGE_STAIRS, OLIVINE_PASSAGE_EXIT]
 	)
 	if not bool(to_port.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Olivine Port unreachable: %s" % to_port.get("reason", ""),
-		}
+		return _leg_failed(path, "Olivine Port unreachable", to_port)
 
 	# The coord event is stepped onto rather than walked to: a resolving walk
 	# would re-dispatch it, and the boarding it starts answers a yes/no.
@@ -5422,10 +4890,7 @@ func _ss_aqua_crossing(
 		world, PORT_BOARDING_APPROACH, save, random, data
 	)
 	if not bool(approach.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the gangway approach failed: %s" % approach.get("reason", ""),
-		}
+		return _leg_failed(path, "the gangway approach failed", approach)
 	var stepped: Dictionary = world.move_result(Vector2i.DOWN)
 	var boarded: Dictionary = {"ok": false, "reason": "the step onto the gangway refused"}
 	if bool(stepped.get("ok", false)):
@@ -5442,10 +4907,7 @@ func _ss_aqua_crossing(
 		"run": boarded,
 	})
 	if not bool(boarded.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "boarding the S.S. Aqua failed: %s" % boarded.get("reason", ""),
-		}
+		return _leg_failed(path, "boarding the S.S. Aqua failed", boarded)
 	if world.map_id() != Vector2i(FAST_SHIP_GROUP, FAST_SHIP_1F_NUMBER):
 		return {
 			"ok": false, "path": path,
@@ -5470,10 +4932,7 @@ func _walk_west_to_olivine(
 ) -> Dictionary:
 	var out_of_lab: Dictionary = _warp_chain(world, save, random, data, [ELMS_LAB_DOOR])
 	if not bool(out_of_lab.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "leaving Elm's lab failed: %s" % out_of_lab.get("reason", ""),
-		}
+		return _leg_failed(path, "leaving Elm's lab failed", out_of_lab)
 
 	for stage: Dictionary in KANTO_RETURN_LEGS:
 		var walked: Dictionary
@@ -5523,10 +4982,7 @@ func _elm_ss_ticket(
 		world, save, random, data, [NEW_BARK_ELMS_LAB_DOOR]
 	)
 	if not bool(into_lab.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Elm's lab door failed: %s" % into_lab.get("reason", ""),
-		}
+		return _leg_failed(path, "Elm's lab door failed", into_lab)
 	var talked: Dictionary = _talk_to(
 		world, ELM_FACE_CELL, Gen2WorldSprite.FACING_UP, save, random, data
 	)
@@ -5538,10 +4994,7 @@ func _elm_ss_ticket(
 		"items": _named_items(data, world.state.items()),
 	})
 	if not bool(talked.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Elm did not finish: %s" % talked.get("reason", ""),
-		}
+		return _leg_failed(path, "Elm did not finish", talked)
 	if not world.event_flag_active(EVENT_GOT_SS_TICKET_FROM_ELM):
 		return {"ok": false, "path": path, "reason": "Elm did not hand over the S.S. Ticket"}
 	return {"ok": true}
@@ -5563,10 +5016,7 @@ func _ss_aqua_worried_grandpa(
 		world, SHIP_GRANDPA_APPROACH, save, random, data
 	)
 	if not bool(approach.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the walk to the grandpa scene failed: %s" % approach.get("reason", ""),
-		}
+		return _leg_failed(path, "the walk to the grandpa scene failed", approach)
 	var stepped: Dictionary = world.move_result(Vector2i.DOWN)
 	var scene: Dictionary = {"ok": false, "reason": "the step onto the grandpa cell refused"}
 	if bool(stepped.get("ok", false)):
@@ -5579,10 +5029,7 @@ func _ss_aqua_worried_grandpa(
 		"first_time": world.event_flag_active(EVENT_FAST_SHIP_FIRST_TIME),
 	})
 	if not bool(scene.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the grandpa scene failed: %s" % scene.get("reason", ""),
-		}
+		return _leg_failed(path, "the grandpa scene failed", scene)
 	return _ss_aqua_interior(world, save, random, data, path)
 
 
@@ -5624,10 +5071,7 @@ func _ss_aqua_b1f_sailor(
 ) -> Dictionary:
 	var below: Dictionary = _warp_chain(world, save, random, data, [SHIP_1F_TO_B1F_EAST])
 	if not bool(below.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the stairs down to B1F failed: %s" % below.get("reason", ""),
-		}
+		return _leg_failed(path, "the stairs down to B1F failed", below)
 	if world.map_id() != Vector2i(FAST_SHIP_GROUP, FAST_SHIP_B1F_NUMBER):
 		return {"ok": false, "path": path, "reason": "the stairs ended on %s" % [_map_value(world)]}
 
@@ -5635,10 +5079,7 @@ func _ss_aqua_b1f_sailor(
 		world, SHIP_B1F_SAILOR_APPROACH, save, random, data
 	)
 	if not bool(approach.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the walk up B1F's east corridor failed: %s" % approach.get("reason", ""),
-		}
+		return _leg_failed(path, "the walk up B1F's east corridor failed", approach)
 	var stepped: Dictionary = world.move_result(Vector2i.UP)
 	var blocked: Dictionary = {"ok": false, "reason": "the step onto the coord event refused"}
 	if bool(stepped.get("ok", false)):
@@ -5667,10 +5108,7 @@ func _ss_aqua_b1f_sailor(
 		"lazy_sailor_visible": not world.event_flag_active(EVENT_FAST_SHIP_NE_CABIN_SAILOR),
 	})
 	if not bool(talked.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the on-duty sailor did not finish: %s" % talked.get("reason", ""),
-		}
+		return _leg_failed(path, "the on-duty sailor did not finish", talked)
 	if world.event_flag_active(EVENT_FAST_SHIP_NE_CABIN_SAILOR):
 		return {"ok": false, "path": path, "reason": "the lazy sailor is still hidden"}
 	return {"ok": true}
@@ -5693,10 +5131,7 @@ func _ss_aqua_lazy_sailor(
 		world, save, random, data, [SHIP_B1F_TO_1F_EAST, SHIP_1F_TO_NE_CABIN]
 	)
 	if not bool(to_cabin.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the NE cabin door failed: %s" % to_cabin.get("reason", ""),
-		}
+		return _leg_failed(path, "the NE cabin door failed", to_cabin)
 	var talked: Dictionary = _talk_to(
 		world, SHIP_LAZY_SAILOR_FACE, Gen2WorldSprite.FACING_UP, save, random, data
 	)
@@ -5709,10 +5144,7 @@ func _ss_aqua_lazy_sailor(
 		"run": talked,
 	})
 	if not bool(talked.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the lazy sailor did not finish: %s" % talked.get("reason", ""),
-		}
+		return _leg_failed(path, "the lazy sailor did not finish", talked)
 	if world.state.map_scene(FAST_SHIP_GROUP, FAST_SHIP_B1F_NUMBER) != SCENE_FASTSHIPB1F_NOOP:
 		return {"ok": false, "path": path, "reason": "B1F's sailor-block scene did not retire"}
 	return {"ok": true}
@@ -5737,10 +5169,7 @@ func _ss_aqua_granddaughter(
 		SHIP_1F_TO_CAPTAIN_CABIN,
 	])
 	if not bool(westward.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the crossing to the captain's cabin failed: %s" % westward.get("reason", ""),
-		}
+		return _leg_failed(path, "the crossing to the captain's cabin failed", westward)
 	var talked: Dictionary = _talk_to(
 		world, SHIP_GRANDDAUGHTER_FACE, Gen2WorldSprite.FACING_RIGHT, save, random, data
 	)
@@ -5754,10 +5183,7 @@ func _ss_aqua_granddaughter(
 		"items": _named_items(data, world.state.items()),
 	})
 	if not bool(talked.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the granddaughter scene did not finish: %s" % talked.get("reason", ""),
-		}
+		return _leg_failed(path, "the granddaughter scene did not finish", talked)
 	if not world.event_flag_active(EVENT_FAST_SHIP_HAS_ARRIVED):
 		return {"ok": false, "path": path, "reason": "the ship never docked"}
 	if world.player_cell != SHIP_GRANDPA_CABIN_DOOR:
@@ -5789,10 +5215,7 @@ func _thunder_badge_path(
 		[VERMILION_PORT_EXIT, VERMILION_PASSAGE_STAIRS, VERMILION_PASSAGE_EXIT]
 	)
 	if not bool(to_city.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the walk up from the dock failed: %s" % to_city.get("reason", ""),
-		}
+		return _leg_failed(path, "the walk up from the dock failed", to_city)
 	if world.map_id() != Vector2i(VERMILION_GROUP, VERMILION_CITY_NUMBER):
 		return {
 			"ok": false, "path": path,
@@ -5818,17 +5241,11 @@ func _thunder_badge_path(
 		"cut": tree.get("cell", []),
 	})
 	if not bool(tree.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the gym yard's tree failed: %s" % tree.get("reason", ""),
-		}
+		return _leg_failed(path, "the gym yard's tree failed", tree)
 
 	var to_gym: Dictionary = _warp_chain(world, save, random, data, [VERMILION_GYM_DOOR])
 	if not bool(to_gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the gym door failed: %s" % to_gym.get("reason", ""),
-		}
+		return _leg_failed(path, "the gym door failed", to_gym)
 	var surge: Dictionary = _talk_to(
 		world, SURGE_FACE, Gen2WorldSprite.FACING_UP, save, random, data
 	)
@@ -5842,10 +5259,7 @@ func _thunder_badge_path(
 		"run": surge,
 	})
 	if not bool(surge.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Lt. Surge did not finish: %s" % surge.get("reason", ""),
-		}
+		return _leg_failed(path, "Lt. Surge did not finish", surge)
 	if not world.state.is_engine_flag_active(Gen2WorldState.badge_flag(
 		BADGE_THUNDER, Gen2WorldState.is_crystal_profile(data)
 	)):
@@ -5871,18 +5285,12 @@ func _marsh_badge_path(
 		world, save, random, data, [VERMILION_GYM_EXIT]
 	)
 	if not bool(out_of_gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "leaving Vermilion Gym failed: %s" % out_of_gym.get("reason", ""),
-		}
+		return _leg_failed(path, "leaving Vermilion Gym failed", out_of_gym)
 	var regrown: Dictionary = _cut_at(
 		world, VERMILION_GYM_TREE_RETURN, Gen2WorldSprite.FACING_UP, save, random, data
 	)
 	if not bool(regrown.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the regrown gym tree failed: %s" % regrown.get("reason", ""),
-		}
+		return _leg_failed(path, "the regrown gym tree failed", regrown)
 
 	var northward: Dictionary = _walk_connection_resolving(
 		world, "north", ROUTE_6_GROUP, ROUTE_6_NUMBER, save, random, data
@@ -5898,10 +5306,7 @@ func _marsh_badge_path(
 		"run": route_6_entry,
 	})
 	if not bool(northward.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the walk north to Route 6 failed: %s" % northward.get("reason", ""),
-		}
+		return _leg_failed(path, "the walk north to Route 6 failed", northward)
 
 	var gate: Dictionary = _gate_leg(
 		world, save, random, data, ROUTE_6_SAFFRON_GATE_DOOR,
@@ -5914,10 +5319,7 @@ func _marsh_badge_path(
 		"flypoint": _engine_flag_set(world, data, ENGINE_FLYPOINT_SAFFRON),
 	})
 	if not bool(gate.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Saffron gate failed: %s" % gate.get("reason", ""),
-		}
+		return _leg_failed(path, "the Saffron gate failed", gate)
 	if not _engine_flag_set(world, data, ENGINE_FLYPOINT_SAFFRON):
 		return {"ok": false, "path": path, "reason": "Saffron's flypoint callback did not run"}
 
@@ -5939,10 +5341,7 @@ func _saffron_gym_leg(
 ) -> Dictionary:
 	var into_gym: Dictionary = _warp_chain(world, save, random, data, [SAFFRON_GYM_DOOR])
 	if not bool(into_gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Saffron Gym door failed: %s" % into_gym.get("reason", ""),
-		}
+		return _leg_failed(path, "the Saffron Gym door failed", into_gym)
 	var pads: Array = []
 	for pad: Vector2i in SAFFRON_GYM_MAZE:
 		var stepped: Dictionary = _warp_walk(world, pad, save, random, data)
@@ -5977,10 +5376,7 @@ func _saffron_gym_leg(
 		"run": sabrina,
 	})
 	if not bool(sabrina.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Sabrina did not finish: %s" % sabrina.get("reason", ""),
-		}
+		return _leg_failed(path, "Sabrina did not finish", sabrina)
 	if not world.state.is_engine_flag_active(Gen2WorldState.badge_flag(
 		BADGE_MARSH, Gen2WorldState.is_crystal_profile(data)
 	)):
@@ -6025,10 +5421,7 @@ func _rainbow_badge_path(
 		"pads": pads,
 	})
 	if not bool(out_of_gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "leaving Saffron Gym failed: %s" % out_of_gym.get("reason", ""),
-		}
+		return _leg_failed(path, "leaving Saffron Gym failed", out_of_gym)
 
 	var gate: Dictionary = _gate_leg(
 		world, save, random, data, SAFFRON_ROUTE_7_GATE_DOOR,
@@ -6036,10 +5429,7 @@ func _rainbow_badge_path(
 	)
 	path.append({"step": "route_7", "map": _map_value(world), "cell": _cell_value(world)})
 	if not bool(gate.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Route 7 gate failed: %s" % gate.get("reason", ""),
-		}
+		return _leg_failed(path, "the Route 7 gate failed", gate)
 
 	var westward: Dictionary = _walk_connection_resolving(
 		world, "west", CELADON_GROUP, CELADON_CITY_NUMBER, save, random, data
@@ -6056,10 +5446,7 @@ func _rainbow_badge_path(
 		"run": city_entry,
 	})
 	if not bool(westward.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the walk west to Celadon failed: %s" % westward.get("reason", ""),
-		}
+		return _leg_failed(path, "the walk west to Celadon failed", westward)
 	if not _engine_flag_set(world, data, ENGINE_FLYPOINT_CELADON):
 		return {"ok": false, "path": path, "reason": "Celadon's flypoint callback did not run"}
 
@@ -6089,17 +5476,11 @@ func _celadon_gym_leg(
 		"cut": tree.get("cell", []),
 	})
 	if not bool(tree.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the gym yard's tree failed: %s" % tree.get("reason", ""),
-		}
+		return _leg_failed(path, "the gym yard's tree failed", tree)
 
 	var to_gym: Dictionary = _warp_chain(world, save, random, data, [CELADON_GYM_DOOR])
 	if not bool(to_gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the gym door failed: %s" % to_gym.get("reason", ""),
-		}
+		return _leg_failed(path, "the gym door failed", to_gym)
 	var erika: Dictionary = _talk_to(
 		world, ERIKA_FACE, Gen2WorldSprite.FACING_UP, save, random, data
 	)
@@ -6116,10 +5497,7 @@ func _celadon_gym_leg(
 		"run": erika,
 	})
 	if not bool(erika.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Erika did not finish: %s" % erika.get("reason", ""),
-		}
+		return _leg_failed(path, "Erika did not finish", erika)
 	if not world.state.is_engine_flag_active(Gen2WorldState.badge_flag(
 		BADGE_RAINBOW, Gen2WorldState.is_crystal_profile(data)
 	)):
@@ -6144,18 +5522,12 @@ func _cerulean_approach_path(
 ) -> Dictionary:
 	var out_of_gym: Dictionary = _warp_chain(world, save, random, data, [CELADON_GYM_EXIT])
 	if not bool(out_of_gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "leaving Celadon Gym failed: %s" % out_of_gym.get("reason", ""),
-		}
+		return _leg_failed(path, "leaving Celadon Gym failed", out_of_gym)
 	var regrown: Dictionary = _cut_at(
 		world, CELADON_GYM_TREE_RETURN, Gen2WorldSprite.FACING_RIGHT, save, random, data
 	)
 	if not bool(regrown.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the regrown gym tree failed: %s" % regrown.get("reason", ""),
-		}
+		return _leg_failed(path, "the regrown gym tree failed", regrown)
 
 	var eastward: Dictionary = _walk_connection_resolving(
 		world, "east", CELADON_GROUP, ROUTE_7_NUMBER, save, random, data
@@ -6170,28 +5542,19 @@ func _cerulean_approach_path(
 		"encounters": eastward.get("encounters", []),
 	})
 	if not bool(eastward.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the walk east to Route 7 failed: %s" % eastward.get("reason", ""),
-		}
+		return _leg_failed(path, "the walk east to Route 7 failed", eastward)
 
 	var to_saffron: Dictionary = _gate_leg(
 		world, save, random, data, ROUTE_7_GATE_DOOR, SAFFRON_GROUP, SAFFRON_CITY_NUMBER
 	)
 	if not bool(to_saffron.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Route 7 gate east failed: %s" % to_saffron.get("reason", ""),
-		}
+		return _leg_failed(path, "the Route 7 gate east failed", to_saffron)
 	var to_route_5: Dictionary = _gate_leg(
 		world, save, random, data, SAFFRON_ROUTE_5_GATE_DOOR, SAFFRON_GROUP, ROUTE_5_NUMBER
 	)
 	path.append({"step": "route_5", "map": _map_value(world), "cell": _cell_value(world)})
 	if not bool(to_route_5.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Route 5 gate failed: %s" % to_route_5.get("reason", ""),
-		}
+		return _leg_failed(path, "the Route 5 gate failed", to_route_5)
 
 	var northward: Dictionary = _walk_connection_resolving(
 		world, "north", CERULEAN_GROUP, CERULEAN_CITY_NUMBER, save, random, data
@@ -6208,10 +5571,7 @@ func _cerulean_approach_path(
 		"run": city_entry,
 	})
 	if not bool(northward.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the walk north to Cerulean failed: %s" % northward.get("reason", ""),
-		}
+		return _leg_failed(path, "the walk north to Cerulean failed", northward)
 	if not _engine_flag_set(world, data, ENGINE_FLYPOINT_CERULEAN):
 		return {"ok": false, "path": path, "reason": "Cerulean's flypoint callback did not run"}
 	return _machine_part_errand(world, save, random, data, path)
@@ -6247,16 +5607,10 @@ func _machine_part_errand(
 		"run": into_gym,
 	})
 	if not bool(into_gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Cerulean Gym door failed: %s" % into_gym.get("reason", ""),
-		}
+		return _leg_failed(path, "the Cerulean Gym door failed", into_gym)
 	var out_of_gym: Dictionary = _warp_chain(world, save, random, data, [CERULEAN_GYM_EXIT])
 	if not bool(out_of_gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "leaving Cerulean Gym failed: %s" % out_of_gym.get("reason", ""),
-		}
+		return _leg_failed(path, "leaving Cerulean Gym failed", out_of_gym)
 
 	var north: Dictionary = _route_24_and_25(world, save, random, data, path)
 	if not bool(north.get("ok", false)):
@@ -6295,10 +5649,7 @@ func _cerulean_gym_leg(
 ) -> Dictionary:
 	var into_gym: Dictionary = _warp_chain(world, save, random, data, [CERULEAN_GYM_DOOR])
 	if not bool(into_gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Cerulean Gym door failed: %s" % into_gym.get("reason", ""),
-		}
+		return _leg_failed(path, "the Cerulean Gym door failed", into_gym)
 	var misty: Dictionary = _talk_to(
 		world, MISTY_FACE, Gen2WorldSprite.FACING_UP, save, random, data
 	)
@@ -6320,10 +5671,7 @@ func _cerulean_gym_leg(
 		"run": misty,
 	})
 	if not bool(misty.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Misty did not finish: %s" % misty.get("reason", ""),
-		}
+		return _leg_failed(path, "Misty did not finish", misty)
 	if not world.state.is_engine_flag_active(badge):
 		return {"ok": false, "path": path, "reason": "ENGINE_CASCADEBADGE was not set"}
 	if trainers_beaten != CERULEAN_GYM_TRAINER_FLAGS.size():
@@ -6351,10 +5699,7 @@ func _lavender_leg(
 ) -> Dictionary:
 	var out_of_gym: Dictionary = _warp_chain(world, save, random, data, [CERULEAN_GYM_EXIT])
 	if not bool(out_of_gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "leaving Cerulean Gym failed: %s" % out_of_gym.get("reason", ""),
-		}
+		return _leg_failed(path, "leaving Cerulean Gym failed", out_of_gym)
 	var southward: Dictionary = _walk_connection_resolving(
 		world, "south", SAFFRON_GROUP, ROUTE_5_NUMBER, save, random, data
 	)
@@ -6362,18 +5707,12 @@ func _lavender_leg(
 		world, world.dispatch_map_entry(), save, random, data
 	)
 	if not bool(southward.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the walk south to Route 5 failed: %s" % southward.get("reason", ""),
-		}
+		return _leg_failed(path, "the walk south to Route 5 failed", southward)
 	var to_saffron: Dictionary = _gate_leg(
 		world, save, random, data, ROUTE_5_GATE_DOOR, SAFFRON_GROUP, SAFFRON_CITY_NUMBER
 	)
 	if not bool(to_saffron.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Route 5 gate south failed: %s" % to_saffron.get("reason", ""),
-		}
+		return _leg_failed(path, "the Route 5 gate south failed", to_saffron)
 	var errand: Dictionary = _magnet_train_leg(world, save, random, data, path)
 	if not bool(errand.get("ok", false)):
 		return errand
@@ -6383,10 +5722,7 @@ func _lavender_leg(
 	)
 	path.append({"step": "route_8", "map": _map_value(world), "cell": _cell_value(world)})
 	if not bool(to_route_8.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Route 8 gate failed: %s" % to_route_8.get("reason", ""),
-		}
+		return _leg_failed(path, "the Route 8 gate failed", to_route_8)
 
 	var eastward: Dictionary = _walk_connection_resolving(
 		world, "east", LAVENDER_GROUP, LAVENDER_TOWN_NUMBER, save, random, data
@@ -6403,10 +5739,7 @@ func _lavender_leg(
 		"run": town_entry,
 	})
 	if not bool(eastward.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the walk east to Lavender failed: %s" % eastward.get("reason", ""),
-		}
+		return _leg_failed(path, "the walk east to Lavender failed", eastward)
 	if not _engine_flag_set(world, data, ENGINE_FLYPOINT_LAVENDER):
 		return {"ok": false, "path": path, "reason": "Lavender's flypoint callback did not run"}
 
@@ -6414,10 +5747,7 @@ func _lavender_leg(
 		world, save, random, data, [LAVENDER_RADIO_TOWER_DOOR]
 	)
 	if not bool(into_tower.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Radio Tower door failed: %s" % into_tower.get("reason", ""),
-		}
+		return _leg_failed(path, "the Radio Tower door failed", into_tower)
 	var gentleman: Dictionary = _talk_to(
 		world, RADIO_TOWER_GENTLEMAN_FACE, Gen2WorldSprite.FACING_UP, save, random, data
 	)
@@ -6429,10 +5759,7 @@ func _lavender_leg(
 		"run": gentleman,
 	})
 	if not bool(gentleman.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Radio Tower gentleman did not finish: %s" % gentleman.get("reason", ""),
-		}
+		return _leg_failed(path, "the Radio Tower gentleman did not finish", gentleman)
 	if not world.state.is_engine_flag_active(ENGINE_EXPN_CARD):
 		return {"ok": false, "path": path, "reason": "ENGINE_EXPN_CARD was not set"}
 	return _fuchsia_leg(world, save, random, data, path)
@@ -6500,10 +5827,7 @@ func _copycat_visit(
 		world, save, random, data, [SAFFRON_COPYCAT_HOUSE_DOOR, COPYCAT_HOUSE_STAIRS_UP]
 	)
 	if not bool(upstairs.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Copycat's house stairs failed: %s" % upstairs.get("reason", ""),
-		}
+		return _leg_failed(path, "the Copycat's house stairs failed", upstairs)
 	var copycat: Dictionary = _talk_to(
 		world, COPYCAT_FACE, Gen2WorldSprite.FACING_LEFT, save, random, data
 	)
@@ -6519,18 +5843,12 @@ func _copycat_visit(
 		"run": copycat.get("run", {}),
 	})
 	if not bool(copycat.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Copycat did not finish: %s" % copycat.get("reason", ""),
-		}
+		return _leg_failed(path, "the Copycat did not finish", copycat)
 	var downstairs: Dictionary = _warp_chain(
 		world, save, random, data, [COPYCAT_HOUSE_STAIRS_DOWN, COPYCAT_HOUSE_EXIT]
 	)
 	if not bool(downstairs.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "leaving the Copycat's house failed: %s" % downstairs.get("reason", ""),
-		}
+		return _leg_failed(path, "leaving the Copycat's house failed", downstairs)
 	return {"ok": true}
 
 
@@ -6552,10 +5870,7 @@ func _saffron_vermilion_walk(
 			ROUTE_6_GROUP, ROUTE_6_NUMBER
 		)
 		if not bool(out_of_saffron.get("ok", false)):
-			return {
-				"ok": false, "path": path,
-				"reason": "the Route 6 gate south failed: %s" % out_of_saffron.get("reason", ""),
-			}
+			return _leg_failed(path, "the Route 6 gate south failed", out_of_saffron)
 
 	var walked: Dictionary = _walk_connection_resolving(
 		world, "south" if southbound else "north",
@@ -6594,10 +5909,7 @@ func _saffron_vermilion_walk(
 		"encounters": into_saffron.get("encounters", []),
 	})
 	if not bool(into_saffron.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Route 6 gate north failed: %s" % into_saffron.get("reason", ""),
-		}
+		return _leg_failed(path, "the Route 6 gate north failed", into_saffron)
 	return {"ok": true}
 
 
@@ -6613,10 +5925,7 @@ func _fan_club_doll(
 		world, save, random, data, [VERMILION_FAN_CLUB_DOOR]
 	)
 	if not bool(inside.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Fan Club door failed: %s" % inside.get("reason", ""),
-		}
+		return _leg_failed(path, "the Fan Club door failed", inside)
 	var guy: Dictionary = _talk_to(
 		world, CLEFAIRY_GUY_FACE, Gen2WorldSprite.FACING_RIGHT, save, random, data
 	)
@@ -6629,18 +5938,12 @@ func _fan_club_doll(
 		"run": guy.get("run", {}),
 	})
 	if not bool(guy.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Clefairy guy did not finish: %s" % guy.get("reason", ""),
-		}
+		return _leg_failed(path, "the Clefairy guy did not finish", guy)
 	if world.state.item_quantity(ITEM_LOST_ITEM) <= 0:
 		return {"ok": false, "path": path, "reason": "the LOST ITEM did not reach the bag"}
 	var out: Dictionary = _warp_chain(world, save, random, data, [FAN_CLUB_EXIT])
 	if not bool(out.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Fan Club exit failed: %s" % out.get("reason", ""),
-		}
+		return _leg_failed(path, "the Fan Club exit failed", out)
 	return {"ok": true}
 
 
@@ -6656,10 +5959,7 @@ func _magnet_train_ride(
 		world, save, random, data, [SAFFRON_TRAIN_STATION_DOOR]
 	)
 	if not bool(into_station.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Saffron station door failed: %s" % into_station.get("reason", ""),
-		}
+		return _leg_failed(path, "the Saffron station door failed", into_station)
 
 	for ride: Dictionary in [
 		{"step": "magnet_train_to_goldenrod", "group": GOLDENROD_GROUP,
@@ -6719,10 +6019,7 @@ func _magnet_train_ride(
 		world, save, random, data, [SAFFRON_TRAIN_STATION_EXIT]
 	)
 	if not bool(out_of_station.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Saffron station exit failed: %s" % out_of_station.get("reason", ""),
-		}
+		return _leg_failed(path, "the Saffron station exit failed", out_of_station)
 	return {"ok": true}
 
 
@@ -6745,10 +6042,7 @@ func _fuchsia_leg(
 		world, save, random, data, [LAVENDER_RADIO_TOWER_EXIT]
 	)
 	if not bool(out_of_tower.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "leaving the Radio Tower failed: %s" % out_of_tower.get("reason", ""),
-		}
+		return _leg_failed(path, "leaving the Radio Tower failed", out_of_tower)
 
 	var southbound: Array = [
 		{"step": "route_12", "direction": "south", "group": LAVENDER_GROUP,
@@ -6792,19 +6086,13 @@ func _fuchsia_leg(
 		"encounters": to_city.get("encounters", []),
 	})
 	if not bool(to_city.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Route 15 gate failed: %s" % to_city.get("reason", ""),
-		}
+		return _leg_failed(path, "the Route 15 gate failed", to_city)
 	if not _engine_flag_set(world, data, ENGINE_FLYPOINT_FUCHSIA):
 		return {"ok": false, "path": path, "reason": "Fuchsia's flypoint callback did not run"}
 
 	var into_gym: Dictionary = _warp_chain(world, save, random, data, [FUCHSIA_GYM_DOOR])
 	if not bool(into_gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Fuchsia Gym door failed: %s" % into_gym.get("reason", ""),
-		}
+		return _leg_failed(path, "the Fuchsia Gym door failed", into_gym)
 	var janine: Dictionary = _talk_to(
 		world, JANINE_FACE, Gen2WorldSprite.FACING_DOWN, save, random, data
 	)
@@ -6828,10 +6116,7 @@ func _fuchsia_leg(
 		"run": janine,
 	})
 	if not bool(janine.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Janine did not finish: %s" % janine.get("reason", ""),
-		}
+		return _leg_failed(path, "Janine did not finish", janine)
 	if not world.state.is_engine_flag_active(badge):
 		return {"ok": false, "path": path, "reason": "ENGINE_SOULBADGE was not set"}
 	if disguised != FUCHSIA_GYM_TRAINER_FLAGS.size():
@@ -6859,10 +6144,7 @@ func _pewter_leg(
 ) -> Dictionary:
 	var out_of_gym: Dictionary = _warp_chain(world, save, random, data, [FUCHSIA_GYM_EXIT])
 	if not bool(out_of_gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "leaving Fuchsia Gym failed: %s" % out_of_gym.get("reason", ""),
-		}
+		return _leg_failed(path, "leaving Fuchsia Gym failed", out_of_gym)
 
 	var to_route_15: Dictionary = _gate_leg(
 		world, save, random, data, FUCHSIA_ROUTE_15_GATE_DOOR, FUCHSIA_GROUP, ROUTE_15_NUMBER
@@ -6874,10 +6156,7 @@ func _pewter_leg(
 		"encounters": to_route_15.get("encounters", []),
 	})
 	if not bool(to_route_15.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Route 15 gate east failed: %s" % to_route_15.get("reason", ""),
-		}
+		return _leg_failed(path, "the Route 15 gate east failed", to_route_15)
 
 	var northbound: Array = [
 		{"step": "route_14_northbound", "direction": "east", "group": FUCHSIA_GROUP,
@@ -6925,10 +6204,7 @@ func _pewter_leg(
 		"cell": _cell_value(world),
 	})
 	if not bool(through_cave.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Diglett's Cave failed: %s" % through_cave.get("reason", ""),
-		}
+		return _leg_failed(path, "Diglett's Cave failed", through_cave)
 	if world.map_id() != Vector2i(ROUTE_2_GROUP, ROUTE_2_NUMBER):
 		return {"ok": false, "path": path, "reason": "the cave did not come out on Route 2"}
 
@@ -6944,10 +6220,7 @@ func _pewter_leg(
 		"encounters": cut.get("encounters", []),
 	})
 	if not bool(cut.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 2's cut tree failed: %s" % cut.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 2's cut tree failed", cut)
 
 	var to_pewter: Dictionary = _walk_connection_resolving(
 		world, "north", PEWTER_GROUP, PEWTER_CITY_NUMBER, save, random, data
@@ -6964,10 +6237,7 @@ func _pewter_leg(
 		"run": pewter_entry,
 	})
 	if not bool(to_pewter.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the walk to Pewter failed: %s" % to_pewter.get("reason", ""),
-		}
+		return _leg_failed(path, "the walk to Pewter failed", to_pewter)
 	if not _engine_flag_set(world, data, ENGINE_FLYPOINT_PEWTER):
 		return {"ok": false, "path": path, "reason": "Pewter's flypoint callback did not run"}
 
@@ -6994,17 +6264,11 @@ func _wake_snorlax(
 
 	var walked: Dictionary = _walk_cell_resolving(world, SNORLAX_TALK, save, random, data)
 	if not bool(walked.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the walk to the Snorlax failed: %s" % walked.get("reason", ""),
-		}
+		return _leg_failed(path, "the walk to the Snorlax failed", walked)
 	var tuned: Dictionary = world.tune_radio(KNOB_POKE_FLUTE)
 	world.close_radio()
 	if not bool(tuned.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "20.0 answered no station: %s" % tuned.get("reason", ""),
-		}
+		return _leg_failed(path, "20.0 answered no station", tuned)
 
 	world.player_facing = Gen2WorldSprite.FACING_LEFT
 	var run: Dictionary = _drain_story(world, world.interact(), save, random, data, true)
@@ -7043,10 +6307,7 @@ func _pewter_gym_leg(
 ) -> Dictionary:
 	var into_gym: Dictionary = _warp_chain(world, save, random, data, [PEWTER_GYM_DOOR])
 	if not bool(into_gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Pewter Gym door failed: %s" % into_gym.get("reason", ""),
-		}
+		return _leg_failed(path, "the Pewter Gym door failed", into_gym)
 
 	var brock: Dictionary = _talk_to(
 		world, BROCK_FACE, Gen2WorldSprite.FACING_UP, save, random, data
@@ -7065,10 +6326,7 @@ func _pewter_gym_leg(
 		"run": brock,
 	})
 	if not bool(brock.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Brock did not finish: %s" % brock.get("reason", ""),
-		}
+		return _leg_failed(path, "Brock did not finish", brock)
 	if not world.state.is_engine_flag_active(badge):
 		return {"ok": false, "path": path, "reason": "ENGINE_BOULDERBADGE was not set"}
 	if not world.event_flag_active(EVENT_BEAT_CAMPER_JERRY):
@@ -7093,10 +6351,7 @@ func _cinnabar_leg(
 ) -> Dictionary:
 	var out_of_gym: Dictionary = _warp_chain(world, save, random, data, [PEWTER_GYM_EXIT])
 	if not bool(out_of_gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "leaving Pewter Gym failed: %s" % out_of_gym.get("reason", ""),
-		}
+		return _leg_failed(path, "leaving Pewter Gym failed", out_of_gym)
 
 	var southbound: Array = [
 		{"step": "route_2_southbound", "group": ROUTE_2_GROUP, "number": ROUTE_2_NUMBER},
@@ -7145,10 +6400,7 @@ func _cinnabar_leg(
 		"encounters": boarded.get("encounters", []),
 	})
 	if not bool(boarded.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Pallet's surf entry failed: %s" % boarded.get("reason", ""),
-		}
+		return _leg_failed(path, "Pallet's surf entry failed", boarded)
 
 	for leg: Dictionary in [
 		{"step": "route_21", "number": ROUTE_21_NUMBER},
@@ -7177,10 +6429,7 @@ func _cinnabar_leg(
 		world, CINNABAR_LANDING, save, random, data, true
 	)
 	if not bool(ashore.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "landing on Cinnabar failed: %s" % ashore.get("reason", ""),
-		}
+		return _leg_failed(path, "landing on Cinnabar failed", ashore)
 	if not _engine_flag_set(world, data, ENGINE_FLYPOINT_CINNABAR):
 		return {"ok": false, "path": path, "reason": "Cinnabar's flypoint callback did not run"}
 
@@ -7197,10 +6446,7 @@ func _cinnabar_leg(
 		"run": blue.get("run", {}),
 	})
 	if not bool(blue.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Blue did not finish: %s" % blue.get("reason", ""),
-		}
+		return _leg_failed(path, "Blue did not finish", blue)
 	if world.event_flag_active(EVENT_VIRIDIAN_GYM_BLUE):
 		return {
 			"ok": false, "path": path,
@@ -7222,10 +6468,7 @@ func _seafoam_gym_leg(
 		world, CINNABAR_SURF_APPROACH, Gen2WorldSprite.FACING_LEFT, save, random, data
 	)
 	if not bool(boarded.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Cinnabar's surf entry failed: %s" % boarded.get("reason", ""),
-		}
+		return _leg_failed(path, "Cinnabar's surf entry failed", boarded)
 	var eastbound: Dictionary = _walk_connection_resolving(
 		world, "east", SEAFOAM_GROUP, ROUTE_20_NUMBER, save, random, data, true
 	)
@@ -7241,10 +6484,7 @@ func _seafoam_gym_leg(
 		"run": entry,
 	})
 	if not bool(eastbound.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the surf to Route 20 failed: %s" % eastbound.get("reason", ""),
-		}
+		return _leg_failed(path, "the surf to Route 20 failed", eastbound)
 	if not world.event_flag_active(EVENT_CINNABAR_ROCKS_CLEARED):
 		return {
 			"ok": false, "path": path,
@@ -7261,17 +6501,11 @@ func _seafoam_gym_leg(
 		"encounters": ashore.get("encounters", []),
 	})
 	if not bool(ashore.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "landing on Route 20 failed: %s" % ashore.get("reason", ""),
-		}
+		return _leg_failed(path, "landing on Route 20 failed", ashore)
 
 	var into_gym: Dictionary = _warp_chain(world, save, random, data, [SEAFOAM_GYM_DOOR])
 	if not bool(into_gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Seafoam Gym mouth failed: %s" % into_gym.get("reason", ""),
-		}
+		return _leg_failed(path, "the Seafoam Gym mouth failed", into_gym)
 
 	var blaine: Dictionary = _talk_to(
 		world, BLAINE_FACE, Gen2WorldSprite.FACING_UP, save, random, data
@@ -7292,10 +6526,7 @@ func _seafoam_gym_leg(
 		"run": blaine.get("run", {}),
 	})
 	if not bool(blaine.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Blaine did not finish: %s" % blaine.get("reason", ""),
-		}
+		return _leg_failed(path, "Blaine did not finish", blaine)
 	if not world.state.is_engine_flag_active(badge):
 		return {"ok": false, "path": path, "reason": "ENGINE_VOLCANOBADGE was not set"}
 	return _viridian_leg(world, save, random, data, path)
@@ -7317,18 +6548,12 @@ func _viridian_leg(
 ) -> Dictionary:
 	var out_of_gym: Dictionary = _warp_chain(world, save, random, data, [SEAFOAM_GYM_EXIT])
 	if not bool(out_of_gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "leaving Seafoam Gym failed: %s" % out_of_gym.get("reason", ""),
-		}
+		return _leg_failed(path, "leaving Seafoam Gym failed", out_of_gym)
 	var boarded: Dictionary = _surf_at(
 		world, ROUTE_20_SURF_APPROACH, Gen2WorldSprite.FACING_RIGHT, save, random, data
 	)
 	if not bool(boarded.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 20's surf entry failed: %s" % boarded.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 20's surf entry failed", boarded)
 
 	var northbound: Array = [
 		{"step": "cinnabar_return", "direction": "west", "number": CINNABAR_ISLAND_NUMBER},
@@ -7393,10 +6618,7 @@ func _viridian_leg(
 
 	var into_gym: Dictionary = _warp_chain(world, save, random, data, [VIRIDIAN_GYM_DOOR])
 	if not bool(into_gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Viridian Gym door failed: %s" % into_gym.get("reason", ""),
-		}
+		return _leg_failed(path, "the Viridian Gym door failed", into_gym)
 
 	var blue: Dictionary = _talk_to(
 		world, BLUE_GYM_FACE, Gen2WorldSprite.FACING_UP, save, random, data
@@ -7415,10 +6637,7 @@ func _viridian_leg(
 		"run": blue.get("run", {}),
 	})
 	if not bool(blue.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Blue did not finish: %s" % blue.get("reason", ""),
-		}
+		return _leg_failed(path, "Blue did not finish", blue)
 	if not world.state.is_engine_flag_active(badge):
 		return {"ok": false, "path": path, "reason": "ENGINE_EARTHBADGE was not set"}
 	return _mt_silver_leg(world, save, random, data, path)
@@ -7441,10 +6660,7 @@ func _mt_silver_leg(
 ) -> Dictionary:
 	var out_of_gym: Dictionary = _warp_chain(world, save, random, data, [VIRIDIAN_GYM_EXIT])
 	if not bool(out_of_gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "leaving Viridian Gym failed: %s" % out_of_gym.get("reason", ""),
-		}
+		return _leg_failed(path, "leaving Viridian Gym failed", out_of_gym)
 
 	for leg: Dictionary in [
 		{"step": "route_1_southbound", "group": PALLET_GROUP, "number": ROUTE_1_NUMBER},
@@ -7512,10 +6728,7 @@ func _mt_silver_leg(
 		"fought_snorlax": world.event_flag_active(EVENT_FOUGHT_SNORLAX),
 	})
 	if not bool(through_gate.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the gate's west arm failed: %s" % through_gate.get("reason", ""),
-		}
+		return _leg_failed(path, "the gate's west arm failed", through_gate)
 
 	var westbound: Dictionary = _walk_connection_resolving(
 		world, "west", SILVER_GROUP, SILVER_CAVE_OUTSIDE_NUMBER, save, random, data
@@ -7532,10 +6745,7 @@ func _mt_silver_leg(
 		"run": outside_entry,
 	})
 	if not bool(westbound.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the walk onto Silver Cave Outside failed: %s" % westbound.get("reason", ""),
-		}
+		return _leg_failed(path, "the walk onto Silver Cave Outside failed", westbound)
 	if not _engine_flag_set(world, data, ENGINE_FLYPOINT_SILVER_CAVE):
 		return {
 			"ok": false, "path": path,
@@ -7561,10 +6771,7 @@ func _oaks_lab_errand(
 ) -> Dictionary:
 	var into_lab: Dictionary = _warp_chain(world, save, random, data, [OAKS_LAB_DOOR])
 	if not bool(into_lab.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Oak's lab door failed: %s" % into_lab.get("reason", ""),
-		}
+		return _leg_failed(path, "Oak's lab door failed", into_lab)
 	var badges: int = world.state.badge_count(Gen2WorldState.is_crystal_profile(data))
 	var oak: Dictionary = _talk_to(
 		world, OAK_FACE, Gen2WorldSprite.FACING_UP, save, random, data
@@ -7579,10 +6786,7 @@ func _oaks_lab_errand(
 		"run": oak.get("run", {}),
 	})
 	if not bool(oak.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Oak did not finish: %s" % oak.get("reason", ""),
-		}
+		return _leg_failed(path, "Oak did not finish", oak)
 	if badges != 16:
 		return {
 			"ok": false, "path": path,
@@ -7592,10 +6796,7 @@ func _oaks_lab_errand(
 		return {"ok": false, "path": path, "reason": "EVENT_OPENED_MT_SILVER was not set"}
 	var out_of_lab: Dictionary = _warp_chain(world, save, random, data, [OAKS_LAB_EXIT])
 	if not bool(out_of_lab.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Oak's lab exit failed: %s" % out_of_lab.get("reason", ""),
-		}
+		return _leg_failed(path, "Oak's lab exit failed", out_of_lab)
 	return {"ok": true}
 
 
@@ -7612,10 +6813,7 @@ func _silver_cave_heal(
 		world, save, random, data, [SILVER_CAVE_POKECENTER_DOOR]
 	)
 	if not bool(into_center.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Mt. Silver Pokecenter door failed: %s" % into_center.get("reason", ""),
-		}
+		return _leg_failed(path, "the Mt. Silver Pokecenter door failed", into_center)
 	_mirror_party(world, save)
 	for mon: Gen2SaveMon in save.party:
 		mon.hp = 1
@@ -7640,10 +6838,7 @@ func _silver_cave_heal(
 		world, save, random, data, [SILVER_CAVE_POKECENTER_EXIT]
 	)
 	if not bool(out_of_center.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Mt. Silver Pokecenter exit failed: %s" % out_of_center.get("reason", ""),
-		}
+		return _leg_failed(path, "the Mt. Silver Pokecenter exit failed", out_of_center)
 	return {"ok": true}
 
 
@@ -7692,10 +6887,7 @@ func _silver_cave_rooms(
 		"run": run,
 	})
 	if not bool(red.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Red did not finish: %s" % red.get("reason", ""),
-		}
+		return _leg_failed(path, "Red did not finish", red)
 	var battles: Array = run.get("battles", [])
 	if battles.size() != 1 \
 		or int((battles[0] as Dictionary).get("trainer_class", 0)) != TRAINER_CLASS_RED:
@@ -7749,10 +6941,7 @@ func _power_plant_visit(
 		"run": manager,
 	})
 	if not bool(manager.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Power Plant manager did not finish: %s" % manager.get("reason", ""),
-		}
+		return _leg_failed(path, "the Power Plant manager did not finish", manager)
 	var home: Dictionary = _power_plant_crossing(world, save, random, data, path, true)
 	if not bool(home.get("ok", false)):
 		return home
@@ -7780,10 +6969,7 @@ func _power_plant_crossing(
 	if returning:
 		var outside: Dictionary = _warp_chain(world, save, random, data, [POWER_PLANT_EXIT])
 		if not bool(outside.get("ok", false)):
-			return {
-				"ok": false, "path": path,
-				"reason": "leaving the Power Plant failed: %s" % outside.get("reason", ""),
-			}
+			return _leg_failed(path, "leaving the Power Plant failed", outside)
 
 	# Each leg is an optional surf entry, the connection walk, an optional landing
 	# on the far side, then an optional cut and an optional surf entry for the
@@ -7872,10 +7058,7 @@ func _power_plant_crossing(
 		return {"ok": true}
 	var door: Dictionary = _warp_chain(world, save, random, data, [POWER_PLANT_DOOR])
 	if not bool(door.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Power Plant door failed: %s" % door.get("reason", ""),
-		}
+		return _leg_failed(path, "the Power Plant door failed", door)
 	return {"ok": true}
 
 
@@ -7895,10 +7078,7 @@ func _route_24_and_25(
 		world, world.dispatch_map_entry(), save, random, data
 	)
 	if not bool(to_24.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the walk north to Route 24 failed: %s" % to_24.get("reason", ""),
-		}
+		return _leg_failed(path, "the walk north to Route 24 failed", to_24)
 	var grunt: Dictionary = _talk_to(
 		world, ROUTE_24_ROCKET_FACE, Gen2WorldSprite.FACING_UP, save, random, data
 	)
@@ -7909,10 +7089,7 @@ func _route_24_and_25(
 		"run": grunt,
 	})
 	if not bool(grunt.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Route 24 grunt did not finish: %s" % grunt.get("reason", ""),
-		}
+		return _leg_failed(path, "the Route 24 grunt did not finish", grunt)
 
 	var to_25: Dictionary = _walk_connection_resolving(
 		world, "north", CERULEAN_GROUP, ROUTE_25_NUMBER, save, random, data
@@ -7921,10 +7098,7 @@ func _route_24_and_25(
 		world, world.dispatch_map_entry(), save, random, data
 	)
 	if not bool(to_25.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the walk north to Route 25 failed: %s" % to_25.get("reason", ""),
-		}
+		return _leg_failed(path, "the walk north to Route 25 failed", to_25)
 	var date: Dictionary = _coord_event_step(
 		world, ROUTE_25_DATE_APPROACH, ROUTE_25_DATE_COORD, save, random, data
 	)
@@ -7936,10 +7110,7 @@ func _route_24_and_25(
 		"run": date,
 	})
 	if not bool(date.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Misty date did not finish: %s" % date.get("reason", ""),
-		}
+		return _leg_failed(path, "the Misty date did not finish", date)
 	if world.event_flag_active(EVENT_TRAINERS_IN_CERULEAN_GYM):
 		return {"ok": false, "path": path, "reason": "the date did not empty the gym's hide flag"}
 
@@ -7951,10 +7122,7 @@ func _route_24_and_25(
 			world, world.dispatch_map_entry(), save, random, data
 		)
 		if not bool(walked.get("ok", false)):
-			return {
-				"ok": false, "path": path,
-				"reason": "the walk back south failed: %s" % walked.get("reason", ""),
-			}
+			return _leg_failed(path, "the walk back south failed", walked)
 	return {"ok": true}
 
 
@@ -7969,10 +7137,7 @@ func _cerulean_machine_part(
 ) -> Dictionary:
 	var into_gym: Dictionary = _warp_chain(world, save, random, data, [CERULEAN_GYM_DOOR])
 	if not bool(into_gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the gym door failed: %s" % into_gym.get("reason", ""),
-		}
+		return _leg_failed(path, "the gym door failed", into_gym)
 	var found: Dictionary = _talk_to(
 		world, MACHINE_PART_APPROACH, Gen2WorldSprite.FACING_DOWN, save, random, data
 	)
@@ -7984,18 +7149,12 @@ func _cerulean_machine_part(
 		"run": found,
 	})
 	if not bool(found.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the hidden machine part did not finish: %s" % found.get("reason", ""),
-		}
+		return _leg_failed(path, "the hidden machine part did not finish", found)
 	if int(world.state.items().get(ITEM_MACHINE_PART, 0)) < 1:
 		return {"ok": false, "path": path, "reason": "the machine part did not reach the bag"}
 	var out_of_gym: Dictionary = _warp_chain(world, save, random, data, [CERULEAN_GYM_EXIT])
 	if not bool(out_of_gym.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "leaving the gym with the part failed: %s" % out_of_gym.get("reason", ""),
-		}
+		return _leg_failed(path, "leaving the gym with the part failed", out_of_gym)
 	return {"ok": true}
 
 
@@ -8048,10 +7207,7 @@ func _ss_aqua_disembark(
 		world, save, random, data, [SHIP_GRANDPA_CABIN_DOOR]
 	)
 	if not bool(to_deck.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the grandpa cabin door failed: %s" % to_deck.get("reason", ""),
-		}
+		return _leg_failed(path, "the grandpa cabin door failed", to_deck)
 	var talked: Dictionary = _talk_to(
 		world, SHIP_1F_SAILOR_FACE, Gen2WorldSprite.FACING_UP, save, random, data
 	)
@@ -8063,10 +7219,7 @@ func _ss_aqua_disembark(
 		"run": talked,
 	})
 	if not bool(talked.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the gangway sailor did not finish: %s" % talked.get("reason", ""),
-		}
+		return _leg_failed(path, "the gangway sailor did not finish", talked)
 	if world.map_id() != Vector2i(FAST_SHIP_GROUP, VERMILION_PORT_NUMBER):
 		return {
 			"ok": false, "path": path,
@@ -8115,7 +7268,7 @@ func _settle_object_steps(world: Gen2WorldAPI, random: RandomNumberGenerator) ->
 		world.advance_object_steps_pass(random)
 
 
-## Mahogany Town east to Blackthorn City, on the same world, state and save. Starts
+## Mahogany Town east to Blackthorn City. Starts
 ## in the town, since the Radio Tower leg before it left the gym. Route 44 carries
 ## seven trainers and no scripted gate, so the leg is a walk the trainers interrupt.
 ## Its one warp is the Ice Path door at (56,7); the east connection to Blackthorn
@@ -8144,10 +7297,7 @@ func _blackthorn_path(
 		"run": route_44_entry,
 	})
 	if not bool(to_route_44.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Mahogany to Route 44 failed: %s" % to_route_44.get("reason", ""),
-		}
+		return _leg_failed(path, "Mahogany to Route 44 failed", to_route_44)
 
 	# The Ice Path door, then the cave itself. Every trainer with a sight line
 	# onto the way there answers first, which is what the resolving walk is for.
@@ -8186,10 +7336,7 @@ func _blackthorn_path(
 			"items": _named_items(data, world.state.items()),
 		})
 		if not bool(picked_up.get("ok", false)):
-			return {
-				"ok": false, "path": path,
-				"reason": "HM07 pickup failed: %s" % picked_up.get("reason", ""),
-			}
+			return _leg_failed(path, "HM07 pickup failed", picked_up)
 		if world.state.item_quantity(ITEM_HM_WATERFALL) <= 0:
 			return {"ok": false, "path": path, "reason": "HM07 did not reach the bag"}
 
@@ -8242,10 +7389,7 @@ func _lighthouse_visit(
 ) -> Dictionary:
 	var door: Dictionary = _warp_walk(world, Vector2i(29, 27), save, random, data)
 	if not bool(door.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Olivine Lighthouse door unreachable: %s" % door.get("reason", ""),
-		}
+		return _leg_failed(path, "Olivine Lighthouse door unreachable", door)
 	var _entry: Dictionary = _drain_story(world, world.dispatch_map_entry(), save, random, data)
 
 	var climb: Dictionary = _lighthouse_shaft(world, save, random, data, [
@@ -8330,10 +7474,7 @@ func _olivine_cafe_hm04(
 ) -> Dictionary:
 	var door: Dictionary = _warp_walk(world, Vector2i(7, 21), save, random, data)
 	if not bool(door.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Olivine Cafe door unreachable: %s" % door.get("reason", ""),
-		}
+		return _leg_failed(path, "Olivine Cafe door unreachable", door)
 	var _cafe_entry: Dictionary = _drain_story(
 		world, world.dispatch_map_entry(), save, random, data
 	)
@@ -8352,17 +7493,11 @@ func _olivine_cafe_hm04(
 		"party_moves": _party_moves(save),
 	})
 	if not bool(sailor.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "HM04 handoff failed: %s" % sailor.get("reason", ""),
-		}
+		return _leg_failed(path, "HM04 handoff failed", sailor)
 	if not world.state.items().has(ITEM_HM_STRENGTH):
 		return {"ok": false, "path": path, "reason": "HM04 did not reach the bag"}
 	if not bool(taught.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "teaching STRENGTH failed: %s" % taught.get("reason", ""),
-		}
+		return _leg_failed(path, "teaching STRENGTH failed", taught)
 	var leaving: Dictionary = _warp_step(world, 1, 14)
 	if not bool(leaving.get("ok", false)):
 		return {"ok": false, "path": path, "reason": "Olivine Cafe exit warp failed"}
@@ -8389,10 +7524,7 @@ func _storm_badge_leg(
 ) -> Dictionary:
 	var door: Dictionary = _warp_walk(world, Vector2i(8, 43), save, random, data)
 	if not bool(door.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Cianwood Gym door unreachable: %s" % door.get("reason", ""),
-		}
+		return _leg_failed(path, "Cianwood Gym door unreachable", door)
 	var gym_entry: Dictionary = _drain_story(
 		world, world.dispatch_map_entry(), save, random, data
 	)
@@ -8413,10 +7545,7 @@ func _storm_badge_leg(
 		"strength_active": world.strength_active(),
 	})
 	if not bool(asked.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "AskStrengthScript failed: %s" % asked.get("reason", ""),
-		}
+		return _leg_failed(path, "AskStrengthScript failed", asked)
 	if not world.strength_active():
 		return {"ok": false, "path": path, "reason": "Strength did not become active"}
 
@@ -8465,10 +7594,7 @@ func _storm_badge_leg(
 		"items": _named_items(data, world.state.items()),
 	})
 	if not bool(chuck.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Chuck failed: %s" % chuck.get("reason", ""),
-		}
+		return _leg_failed(path, "Chuck failed", chuck)
 	if not world.state.is_engine_flag_active(Gen2WorldState.badge_flag(
 		BADGE_STORM, Gen2WorldState.is_crystal_profile(data)
 	)):
@@ -8576,10 +7702,7 @@ func _route_32_old_rod(
 		world, save, random, data, [ROUTE_32_POKECENTER_DOOR]
 	)
 	if not bool(into_center.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the Route 32 Pokemon Center door failed: %s" % into_center.get("reason", ""),
-		}
+		return _leg_failed(path, "the Route 32 Pokemon Center door failed", into_center)
 	var guru: Dictionary = _talk_to(
 		world, FISHING_GURU_FACE, Gen2WorldSprite.FACING_UP,
 		save, random, data, [0] as Array[int]
@@ -8592,10 +7715,7 @@ func _route_32_old_rod(
 		"run": guru.get("run", {}),
 	})
 	if not bool(guru.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "the fishing guru did not finish: %s" % guru.get("reason", ""),
-		}
+		return _leg_failed(path, "the fishing guru did not finish", guru)
 	if world.state.item_quantity(Gen2WorldInventory.ITEM_OLD_ROD) <= 0:
 		return {"ok": false, "path": path, "reason": "the OLD ROD did not reach the bag"}
 
@@ -8603,19 +7723,13 @@ func _route_32_old_rod(
 		world, save, random, data, [ROUTE_32_POKECENTER_EXIT]
 	)
 	if not bool(outside.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "leaving the Route 32 Pokemon Center failed: %s" % outside.get("reason", ""),
-		}
+		return _leg_failed(path, "leaving the Route 32 Pokemon Center failed", outside)
 
 	var walked: Dictionary = _walk_cell_resolving(
 		world, ROUTE_32_SHORE, save, random, data
 	)
 	if not bool(walked.get("ok", false)):
-		return {
-			"ok": false, "path": path,
-			"reason": "Route 32's shore is unreachable: %s" % walked.get("reason", ""),
-		}
+		return _leg_failed(path, "Route 32's shore is unreachable", walked)
 	world.player_facing = Gen2WorldSprite.FACING_LEFT
 	return _catch_field_move_mon(
 		world, save, random, data, path,
@@ -9005,6 +8119,152 @@ func _talk_to(
 	}
 
 
+## Drains this map's entry callbacks and records them as [param step].
+## [param extras] names what else the record carries, read after the drain.
+func _entry_leg(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+	step: String,
+	extras: Array = [],
+) -> Dictionary:
+	var run: Dictionary = _drain_story(world, world.dispatch_map_entry(), save, random, data)
+	var record: Dictionary = {
+		"step": step,
+		"map": _map_value(world),
+		"cell": _cell_value(world),
+		"run": run,
+	}
+	for key: String in extras:
+		record[key] = _step_extra(key, world, save, data)
+	path.append(record)
+	if not bool(run.get("terminal", false)):
+		return {"ok": false, "path": path, "reason": "%s did not finish" % step}
+	return {"ok": true, "run": run}
+
+
+func _step_extra(key: String, world: Gen2WorldAPI, save: Gen2SaveData, data: GameData) -> Variant:
+	var map: Array[int] = _map_value(world)
+	match key:
+		"items":
+			return _named_items(data, world.state.items())
+		"engine_flags":
+			return world.state.engine_flags()
+		"map_scenes":
+			return world.state.map_scenes()
+		"scene":
+			return world.state.map_scene(map[0], map[1])
+		"badge_count":
+			return world.state.badge_count(Gen2WorldState.is_crystal_profile(data))
+		"party_hp_after":
+			return _party_hp(save)
+	return null
+
+
+## Warps to [param group]/[param number] and drains its entry, which is the
+## shape most legs of this walk share.
+func _warp_entry_leg(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+	group: int,
+	number: int,
+	step: String,
+	extras: Array = [],
+) -> Dictionary:
+	var transition: Dictionary = _warp_step(world, group, number)
+	if not bool(transition.get("ok", false)):
+		return {
+			"ok": false, "path": path,
+			"reason": "%s warp failed: %s" % [step, transition.get("reason", "")],
+		}
+	return _entry_leg(world, save, random, data, path, step, extras)
+
+
+## [method _warp_entry_leg] where the warp is a cell to walk to rather than a
+## warp id. [param walk_step] is empty where only the arrival is recorded.
+func _walk_warp_entry_leg(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+	cell: Vector2i,
+	walk_step: String,
+	step: String,
+) -> Dictionary:
+	var walked: Dictionary = _walk_cell_resolving(world, cell, save, random, data)
+	if not walk_step.is_empty():
+		path.append({
+			"step": walk_step,
+			"map": _map_value(world),
+			"cell": _cell_value(world),
+			"encounters": walked.get("encounters", []),
+		})
+	if not bool(walked.get("ok", false)):
+		return {
+			"ok": false, "path": path,
+			"reason": "%s approach failed: %s" % [step, walked.get("reason", "")],
+		}
+	var transition: Dictionary = world.try_warp()
+	if not bool(transition.get("ok", false)):
+		return {"ok": false, "path": path, "reason": "%s warp did not fire" % step}
+	return _entry_leg(world, save, random, data, path, step)
+
+
+## Crosses map connections in order, draining each entry it lands on. A row is
+## the direction, the group and number, the two step names and the extra keys.
+func _connection_legs(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	random: RandomNumberGenerator,
+	data: GameData,
+	path: Array,
+	legs: Array,
+) -> Dictionary:
+	for leg: Array in legs:
+		var transition: Dictionary = _walk_to_connection(
+			world, String(leg[0]), int(leg[1]), int(leg[2])
+		)
+		path.append({
+			"step": String(leg[3]),
+			"map": _map_value(world),
+			"cell": _cell_value(world),
+			"transition": _transition_value(transition.get("transition", {})),
+		})
+		if not bool(transition.get("ok", false)):
+			return {
+				"ok": false, "path": path,
+				"reason": "%s connection failed" % leg[3],
+			}
+		var arrived: Dictionary = _entry_leg(
+			world, save, random, data, path, String(leg[4]), leg[5]
+		)
+		if not bool(arrived.get("ok", false)):
+			return arrived
+	return {"ok": true}
+
+
+## The events the first reachable of [param targets] dispatches, with the cell
+## that answered: a story cell is approached from whichever side is free.
+func _events_at_cells(world: Gen2WorldAPI, targets: Array) -> Dictionary:
+	for target: Vector2i in targets:
+		var walked: Dictionary = _walk_to_story_cell(world, target)
+		var events: Array = walked.get("events", [])
+		if not events.is_empty():
+			return {"events": events, "cell": target}
+	return {"events": [], "cell": Vector2i(-1, -1)}
+
+
+## The failure a leg answers with when a step refuses.
+func _leg_failed(path: Array, label: String, result: Dictionary) -> Dictionary:
+	return {"ok": false, "path": path, "reason": "%s: %s" % [label, result.get("reason", "")]}
+
+
 ## Places the player on this map's warp to [param group]/[param number] and
 ## takes it. Used where the destination warp is the step, not the walk.
 func _warp_step(world: Gen2WorldAPI, group: int, number: int) -> Dictionary:
@@ -9310,15 +8570,6 @@ func _drain_story(
 	purchase: Dictionary = {},
 	apricorn: Dictionary = {},
 ) -> Dictionary:
-	var pending_answers: Array[int] = answers.duplicate()
-	## What to buy if a `pokemart` opens while this drain runs. Cleared once it
-	## is spent, so one standing order buys once.
-	var pending_purchase: Dictionary = purchase.duplicate()
-	var purchases: Array = []
-	## The same standing order for `special SelectApricornForKurt`. An empty one
-	## backs out of the box, which is the source's own cancel.
-	var pending_apricorn: Dictionary = apricorn.duplicate()
-	var apricorns_given: Array = []
 	if require_events and initial.is_empty():
 		return {
 			"statuses": [],
@@ -9330,271 +8581,317 @@ func _drain_story(
 			"details": "",
 		}
 	var results: Array = initial.duplicate(true)
-	var statuses: Array = _statuses(results)
-	var waits: int = 0
-	var last_reason: String = ""
-	var last_details: String = ""
-	var pending_trace: Array[String] = []
-	var waits_spent: int = 0
-	var battles: Array = []
-	var catch_tutorials: int = 0
-	var hall_of_fame: int = _hall_of_fame_events(results)
-	var credits: int = _credits_events(results)
-	var approaches: Array = []
-	for result: Dictionary in results:
-		if not bool(result.get("ok", false)):
-			last_reason = String(result.get("reason", "script_failed"))
-			last_details = JSON.stringify(result.get("details", result))
-			break
+	## Everything one drain accumulates, so the handlers below can write to it.
+	## The two standing orders are cleared once spent, so one order buys once.
+	var state: Dictionary = {
+		"save": save,
+		"random": random,
+		"data": data,
+		"answers": answers.duplicate(),
+		"purchase": purchase.duplicate(),
+		"apricorn": apricorn.duplicate(),
+		"statuses": _statuses(results),
+		"trace": [],
+		"battles": [],
+		"purchases": [],
+		"apricorns_given": [],
+		"approaches": [],
+		"catch_tutorials": 0,
+		"waits": 0,
+		"waits_spent": 0,
+		"hall_of_fame": _hall_of_fame_events(results),
+		"credits": _credits_events(results),
+		"reason": "",
+		"details": "",
+	}
+	_record_failure(results, state, true)
 	for _step: int in 256:
 		var input: Dictionary = world.pending_script_input()
 		var input_type: StringName = StringName(input.get("type", &""))
 		if world.phone_ring_active():
 			input_type = &"phone_ring"
-		if pending_trace.size() < 24:
-			pending_trace.append(String(input_type))
-		if input_type == &"phone_ring":
-			results = _drain_phone_ring(world)
-			if results.is_empty():
-				last_reason = "phone ring did not finish"
-				break
-		elif input_type == &"wait":
-			## A movement or a counted delay. Nothing answers it, so the walk
-			## spends the frames the way the screen does.
-			var standing_in: Dictionary = world.pending_script_wait()
-			results = world.finish_script_waits()
-			waits_spent += 1
-			if not world.pending_script_wait().is_empty():
-				last_reason = "a script wait never ended"
-				last_details = JSON.stringify(standing_in)
-				break
-		elif input_type in [&"text", &"button"]:
-			results = world.run_event_queue(true)
-		elif input_type in [&"choice", &"menu"]:
-			## Choices default to the source's first option, which is yes on a
-			## yesorno. A caller that needs particular answers, like the Dragon
-			## Shrine quiz, supplies them in the order the script asks.
-			var choice: int = 0
-			if not pending_answers.is_empty():
-				choice = pending_answers.pop_front()
-			results = world.choose_script_input(choice)
-		else:
-			var request: Dictionary = world.pending_runtime_request()
-			if request.is_empty():
-				break
-			if pending_trace.size() < 24:
-				pending_trace.append("runtime:%s" % String(request.get("kind", "")))
-			var request_kind: StringName = StringName(request.get("kind", &""))
-			if request_kind == &"rival_name_requested":
-				var name_host_result: Dictionary = Gen2WorldHost.complete_runtime_request(
-					world, {"ok": true, "name": "SILVER"}, save, false, random
-				)
-				if not bool(name_host_result.get("ok", false)):
-					last_reason = String(name_host_result.get("reason", "rival name host failed"))
-					last_details = JSON.stringify(name_host_result.get("details", {}))
-					break
-				results = name_host_result.get("results", [])
-			elif request_kind in [&"pokemon_requested", &"trade_requested", &"party_heal_requested"]:
-				var host_result: Dictionary = Gen2WorldHost.complete_runtime_request(
-					world, {"ok": true}, save, false, random
-				)
-				if not bool(host_result.get("ok", false)):
-					last_reason = String(host_result.get("reason", "party host failed"))
-					last_details = JSON.stringify(host_result.get("details", {}))
-					break
-				results = host_result.get("results", [])
-			elif request_kind == &"battle_requested":
-				var player_party: Gen2Party = (
-					Gen2SaveBattleAdapter.to_battle_party(data, save)
-					if data != null and save != null else Gen2WorldBattleAdapter.fallback_party(data)
-				)
-				var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(
-					data, request, player_party, random
-				)
-				if not bool(prepared.get("ok", false)):
-					last_reason = String(prepared.get("reason", "battle setup failed"))
-					last_details = JSON.stringify(prepared.get("details", {}))
-					break
-				var enemy_party: Gen2Party = prepared.get("enemy_party", null)
-				var levelled: Dictionary = _award_battle_experience(
-					data, world, save, prepared.get("battle", null), player_party
-				)
-				if not bool(levelled.get("ok", true)):
-					last_reason = String(levelled.get("reason", "experience write-back failed"))
-					last_details = JSON.stringify(levelled)
-					break
-				## `.give_money` and `CheckPayDay`, the other thing a win pays.
-				## This walk answers the request itself instead of opening a
-				## battle screen, so it credits the same accounts that screen
-				## would have.
-				var earned: Dictionary = Gen2WorldBattleAdapter.earnings(
-					prepared.get("battle", null), world.state, true
-				)
-				Gen2WorldBattleAdapter.credit_earnings(world.state, earned["money"])
-				battles.append({
-					"money": (earned["money"] as Dictionary).duplicate(),
-					"trainer_class": int(prepared.get("trainer_class", 0)),
-					"trainer_index": int(prepared.get("trainer_index", 0)),
-					"enemy_species": int(enemy_party.active_mon().species)
-						if enemy_party != null and enemy_party.active_mon() != null else 0,
-					"battle_type": int(request.get("values", {}).get("battle_type", 0)),
-					"can_lose": bool(request.get("values", {}).get("can_lose", false)),
-					"exp": levelled.get("awarded", 0),
-					"grew": levelled.get("grew", []),
-				})
-				results = world.complete_runtime_request({
-					"ok": true,
-					"outcome": Gen2WorldBattleAdapter.OUTCOME_WON,
-				})
-			elif request_kind == &"trainer_approach_requested":
-				# Route 30's trainers see the player on the corridor north, so
-				# the walked route runs the source presentation: shock emote for
-				# TRAINER_SHOCK_FRAMES, then one slow step per planned cell,
-				# then the facing update, before the seen text resumes. The
-				# same order tools/checks/crystal_route30_trainer.gd checks.
-				var approach_values: Dictionary = request.get("values", {})
-				var approach_index: int = int(approach_values.get("object_index", -1))
-				var raw_direction: Variant = approach_values.get("direction", Vector2i.ZERO)
-				var approach_direction: Vector2i = (
-					raw_direction if raw_direction is Vector2i else Vector2i.ZERO
-				)
-				var plan: Dictionary = world.start_trainer_approach(
-					approach_index, approach_direction,
-					int(approach_values.get("distance", 0))
-				)
-				if not bool(plan.get("ok", false)):
-					last_reason = String(plan.get("reason", "trainer approach plan failed"))
-					last_details = JSON.stringify(plan)
-					break
-				for _frame: int in int(plan.get("emote_frames", 0)):
-					world.advance_emotes_frame()
-				var approach_failed: bool = false
-				for path_step: Vector2i in plan.get("path", []):
-					var stepped: Dictionary = world.advance_trainer_approach_step(
-						approach_index, path_step
-					)
-					if not bool(stepped.get("ok", false)):
-						last_reason = String(stepped.get("reason", "trainer approach step failed"))
-						last_details = JSON.stringify(stepped)
-						approach_failed = true
-						break
-				if approach_failed:
-					break
-				var faced: Dictionary = world.finish_trainer_approach(approach_index)
-				if not bool(faced.get("ok", false)):
-					last_reason = String(faced.get("reason", "trainer approach finish failed"))
-					last_details = JSON.stringify(faced)
-					break
-				approaches.append({
-					"object_index": approach_index,
-					"path": plan.get("path", []).size(),
-				})
-				results = world.complete_runtime_request({
-					"ok": true,
-					"object_index": approach_index,
-					"path": plan.get("path", []),
-				})
-			elif request_kind == &"catch_tutorial_requested":
-				# ElmAfterTheftScript sets SCENE_ROUTE29_CATCH_TUTORIAL, so this
-				# is on the route from here on. The source guarantees the ball,
-				# and Gen2WorldScriptRunner refuses any other outcome, so the
-				# only valid completion is OUTCOME_CAUGHT. It changes no
-				# persistent party, PC or ball state.
-				catch_tutorials += 1
-				results = world.complete_runtime_request({
-					"ok": true,
-					"outcome": Gen2WorldBattleAdapter.OUTCOME_CAUGHT,
-				})
-			elif request_kind == &"mart_requested":
-				# `pokemart` is a runtime pause the same way a battle is, so the
-				# clerk's own script is what opens the mart and the caller's
-				# standing order is what buys from it. Gen2WorldHost resolves the
-				# dialog and mart id off the request exactly as the service
-				# screen does.
-				var mart_host: Dictionary = Gen2WorldHost.resolve_runtime_request(world, request)
-				if not bool(mart_host.get("ok", false)):
-					last_reason = String(mart_host.get("reason", "mart host failed"))
-					last_details = JSON.stringify(mart_host)
-					break
-				var mart: Dictionary = mart_host.get("data", {}).get("mart", {})
-				if not pending_purchase.is_empty():
-					var bought: Dictionary = Gen2WorldMartHost.purchase(
-						world, save, mart, int(pending_purchase.get("item", 0)),
-						int(pending_purchase.get("quantity", 0)), false
-					)
-					purchases.append({
-						"item": int(pending_purchase.get("item", 0)),
-						"quantity": int(pending_purchase.get("quantity", 0)),
-						"ok": bool(bought.get("ok", false)),
-						"reason": bought.get("reason", ""),
-					})
-					if not bool(bought.get("ok", false)):
-						last_reason = String(bought.get("reason", "purchase refused"))
-						last_details = JSON.stringify(bought)
-						break
-					pending_purchase = {}
-				results = world.complete_runtime_request({"ok": true})
-			elif request_kind == &"apricorn_selection_requested":
-				# Kurt's two boxes are a runtime pause the same way a mart is.
-				# Gen2WorldApricornHost takes the apricorns and resumes, so the
-				# walk proves the transaction rather than only the request.
-				var given: Dictionary = Gen2WorldHost.complete_runtime_request(
-					world, {
-						"ok": true,
-						"item": int(pending_apricorn.get("item", 0)),
-						"quantity": int(pending_apricorn.get("quantity", 0)),
-					}, save, false
-				)
-				if not bool(given.get("ok", false)):
-					last_reason = String(given.get("reason", "apricorn host failed"))
-					last_details = JSON.stringify(given)
-					break
-				apricorns_given.append({
-					"item": int(given.get("item", 0)),
-					"quantity": int(given.get("quantity", 0)),
-				})
-				pending_apricorn = {}
-				results = given.get("results", [])
-			elif request_kind == &"audio_requested":
-				results = world.complete_runtime_request({"ok": true})
-			else:
-				last_reason = "unsupported preview request: %s" % String(request.get("kind", ""))
-				break
-		if results.is_empty():
+		_trace(state, String(input_type))
+		if _absorb_results(world, _answer_input(world, input_type, state), state):
 			break
-		statuses.append_array(_statuses(results))
-		hall_of_fame += _hall_of_fame_events(results)
-		credits += _credits_events(results)
-		waits += 1
-		for result: Dictionary in results:
-			if not bool(result.get("ok", false)):
-				last_reason = String(result.get("reason", "script_failed"))
-				last_details = JSON.stringify(result.get("details", {}))
-				break
-		if not world.script_input_waiting() and world.pending_runtime_request().is_empty():
-			var terminal: bool = false
-			for result: Dictionary in results:
-				if StringName(result.get("status", &"")) in [&"complete", &"failed"]:
-					terminal = true
-			if terminal:
-				break
 	return {
-		"statuses": statuses,
-		"waits": waits,
-		"waits_spent": waits_spent,
-		"pending_trace": pending_trace,
-		"battles": battles,
-		"purchases": purchases,
-		"apricorns_given": apricorns_given,
-		"catch_tutorials": catch_tutorials,
-		"hall_of_fame": hall_of_fame,
-		"credits": credits,
-		"approaches": approaches,
-		"terminal": last_reason.is_empty() \
+		"statuses": state["statuses"],
+		"waits": state["waits"],
+		"waits_spent": state["waits_spent"],
+		"pending_trace": state["trace"],
+		"battles": state["battles"],
+		"purchases": state["purchases"],
+		"apricorns_given": state["apricorns_given"],
+		"catch_tutorials": state["catch_tutorials"],
+		"hall_of_fame": state["hall_of_fame"],
+		"credits": state["credits"],
+		"approaches": state["approaches"],
+		"terminal": String(state["reason"]).is_empty() \
 			and not world.script_input_waiting() and world.pending_runtime_request().is_empty(),
-		"reason": last_reason,
-		"details": last_details,
-}
+		"reason": state["reason"],
+		"details": state["details"],
+	}
+
+
+## What the walk answers the input the script waits on with. An empty answer
+## stops the drain, with a reason when the stop is a failure.
+func _answer_input(world: Gen2WorldAPI, input_type: StringName, state: Dictionary) -> Array:
+	if input_type == &"phone_ring":
+		var rung: Array = _drain_phone_ring(world)
+		if rung.is_empty():
+			state["reason"] = "phone ring did not finish"
+		return rung
+	if input_type == &"wait":
+		## A movement or a counted delay. Nothing answers it, so the walk
+		## spends the frames the way the screen does.
+		var standing_in: Dictionary = world.pending_script_wait()
+		var finished: Array = world.finish_script_waits()
+		state["waits_spent"] += 1
+		if world.pending_script_wait().is_empty():
+			return finished
+		return _request_failed(state, "a script wait never ended", standing_in)
+	if input_type in [&"text", &"button"]:
+		return world.run_event_queue(true)
+	if input_type in [&"choice", &"menu"]:
+		## Choices default to the source's first option, which is yes on a
+		## yesorno. A caller that needs particular answers, like the Dragon
+		## Shrine quiz, supplies them in the order the script asks.
+		var pending: Array = state["answers"]
+		var choice: int = int(pending.pop_front()) if not pending.is_empty() else 0
+		return world.choose_script_input(choice)
+	return _runtime_request(world, state)
+
+
+## The runtime pause the script stands in, answered by its kind's handler.
+func _runtime_request(world: Gen2WorldAPI, state: Dictionary) -> Array:
+	var request: Dictionary = world.pending_runtime_request()
+	if request.is_empty():
+		return []
+	var kind: StringName = StringName(request.get("kind", &""))
+	_trace(state, "runtime:%s" % String(kind))
+	if not REQUEST_HANDLERS.has(kind):
+		state["reason"] = "unsupported preview request: %s" % String(kind)
+		return []
+	return (Callable(self, String(REQUEST_HANDLERS[kind]))).call(world, request, state)
+
+
+func _request_rival_name(world: Gen2WorldAPI, _request: Dictionary, state: Dictionary) -> Array:
+	var named: Dictionary = Gen2WorldHost.complete_runtime_request(
+		world, {"ok": true, "name": "SILVER"}, state["save"], false, state["random"]
+	)
+	if not bool(named.get("ok", false)):
+		return _request_failed(
+			state, String(named.get("reason", "rival name host failed")),
+			named.get("details", {})
+		)
+	return named.get("results", [])
+
+
+func _request_party_host(world: Gen2WorldAPI, _request: Dictionary, state: Dictionary) -> Array:
+	var hosted: Dictionary = Gen2WorldHost.complete_runtime_request(
+		world, {"ok": true}, state["save"], false, state["random"]
+	)
+	if not bool(hosted.get("ok", false)):
+		return _request_failed(
+			state, String(hosted.get("reason", "party host failed")),
+			hosted.get("details", {})
+		)
+	return hosted.get("results", [])
+
+
+## `.give_money` and `CheckPayDay`, the other thing a win pays. This walk
+## answers the request itself instead of opening a battle screen, so it credits
+## the same accounts that screen would have.
+func _request_battle(world: Gen2WorldAPI, request: Dictionary, state: Dictionary) -> Array:
+	var data: GameData = state["data"]
+	var save: Gen2SaveData = state["save"]
+	var player_party: Gen2Party = (
+		Gen2SaveBattleAdapter.to_battle_party(data, save)
+		if data != null and save != null else Gen2WorldBattleAdapter.fallback_party(data)
+	)
+	var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(
+		data, request, player_party, state["random"]
+	)
+	if not bool(prepared.get("ok", false)):
+		return _request_failed(
+			state, String(prepared.get("reason", "battle setup failed")),
+			prepared.get("details", {})
+		)
+	var enemy_party: Gen2Party = prepared.get("enemy_party", null)
+	var levelled: Dictionary = _award_battle_experience(
+		data, world, save, prepared.get("battle", null), player_party
+	)
+	if not bool(levelled.get("ok", true)):
+		return _request_failed(
+			state, String(levelled.get("reason", "experience write-back failed")), levelled
+		)
+	var earned: Dictionary = Gen2WorldBattleAdapter.earnings(
+		prepared.get("battle", null), world.state, true
+	)
+	Gen2WorldBattleAdapter.credit_earnings(world.state, earned["money"])
+	state["battles"].append({
+		"money": (earned["money"] as Dictionary).duplicate(),
+		"trainer_class": int(prepared.get("trainer_class", 0)),
+		"trainer_index": int(prepared.get("trainer_index", 0)),
+		"enemy_species": int(enemy_party.active_mon().species)
+			if enemy_party != null and enemy_party.active_mon() != null else 0,
+		"battle_type": int(request.get("values", {}).get("battle_type", 0)),
+		"can_lose": bool(request.get("values", {}).get("can_lose", false)),
+		"exp": levelled.get("awarded", 0),
+		"grew": levelled.get("grew", []),
+	})
+	return world.complete_runtime_request({
+		"ok": true,
+		"outcome": Gen2WorldBattleAdapter.OUTCOME_WON,
+	})
+
+
+# The source presentation, in the order
+# tools/checks/crystal_route30_trainer.gd checks: shock emote for
+# TRAINER_SHOCK_FRAMES, one slow step per planned cell, then the facing.
+func _request_trainer_approach(
+	world: Gen2WorldAPI, request: Dictionary, state: Dictionary
+) -> Array:
+	var values: Dictionary = request.get("values", {})
+	var index: int = int(values.get("object_index", -1))
+	var raw_direction: Variant = values.get("direction", Vector2i.ZERO)
+	var plan: Dictionary = world.start_trainer_approach(
+		index, raw_direction if raw_direction is Vector2i else Vector2i.ZERO,
+		int(values.get("distance", 0))
+	)
+	if not bool(plan.get("ok", false)):
+		return _request_failed(
+			state, String(plan.get("reason", "trainer approach plan failed")), plan
+		)
+	for _frame: int in int(plan.get("emote_frames", 0)):
+		world.advance_emotes_frame()
+	for path_step: Vector2i in plan.get("path", []):
+		var stepped: Dictionary = world.advance_trainer_approach_step(index, path_step)
+		if not bool(stepped.get("ok", false)):
+			return _request_failed(
+				state, String(stepped.get("reason", "trainer approach step failed")), stepped
+			)
+	var faced: Dictionary = world.finish_trainer_approach(index)
+	if not bool(faced.get("ok", false)):
+		return _request_failed(
+			state, String(faced.get("reason", "trainer approach finish failed")), faced
+		)
+	state["approaches"].append({
+		"object_index": index,
+		"path": plan.get("path", []).size(),
+	})
+	return world.complete_runtime_request({
+		"ok": true,
+		"object_index": index,
+		"path": plan.get("path", []),
+	})
+
+
+# The source guarantees the ball and Gen2WorldScriptRunner refuses any other
+# outcome, so OUTCOME_CAUGHT is the only valid completion. It changes no
+# persistent party, PC or ball state.
+func _request_catch_tutorial(
+	world: Gen2WorldAPI, _request: Dictionary, state: Dictionary
+) -> Array:
+	state["catch_tutorials"] += 1
+	return world.complete_runtime_request({
+		"ok": true,
+		"outcome": Gen2WorldBattleAdapter.OUTCOME_CAUGHT,
+	})
+
+
+# The clerk's own script opens the mart and the caller's standing order buys
+# from it. Gen2WorldHost resolves the dialog and mart id off the request
+# exactly as the service screen does.
+func _request_mart(world: Gen2WorldAPI, request: Dictionary, state: Dictionary) -> Array:
+	var host: Dictionary = Gen2WorldHost.resolve_runtime_request(world, request)
+	if not bool(host.get("ok", false)):
+		return _request_failed(state, String(host.get("reason", "mart host failed")), host)
+	var order: Dictionary = state["purchase"]
+	if order.is_empty():
+		return world.complete_runtime_request({"ok": true})
+	var bought: Dictionary = Gen2WorldMartHost.purchase(
+		world, state["save"], host.get("data", {}).get("mart", {}),
+		int(order.get("item", 0)), int(order.get("quantity", 0)), false
+	)
+	state["purchases"].append({
+		"item": int(order.get("item", 0)),
+		"quantity": int(order.get("quantity", 0)),
+		"ok": bool(bought.get("ok", false)),
+		"reason": bought.get("reason", ""),
+	})
+	if not bool(bought.get("ok", false)):
+		return _request_failed(state, String(bought.get("reason", "purchase refused")), bought)
+	state["purchase"] = {}
+	return world.complete_runtime_request({"ok": true})
+
+
+# Gen2WorldApricornHost takes the apricorns and resumes, so the walk proves
+# the transaction rather than only the request. An empty standing order backs
+# out of the box, which is the source's own cancel.
+func _request_apricorns(world: Gen2WorldAPI, _request: Dictionary, state: Dictionary) -> Array:
+	var order: Dictionary = state["apricorn"]
+	var given: Dictionary = Gen2WorldHost.complete_runtime_request(
+		world, {
+			"ok": true,
+			"item": int(order.get("item", 0)),
+			"quantity": int(order.get("quantity", 0)),
+		}, state["save"], false
+	)
+	if not bool(given.get("ok", false)):
+		return _request_failed(state, String(given.get("reason", "apricorn host failed")), given)
+	state["apricorns_given"].append({
+		"item": int(given.get("item", 0)),
+		"quantity": int(given.get("quantity", 0)),
+	})
+	state["apricorn"] = {}
+	return given.get("results", [])
+
+
+func _request_audio(world: Gen2WorldAPI, _request: Dictionary, _state: Dictionary) -> Array:
+	return world.complete_runtime_request({"ok": true})
+
+
+## Takes in what one answer dispatched, and whether that ends the drain.
+func _absorb_results(world: Gen2WorldAPI, results: Array, state: Dictionary) -> bool:
+	if results.is_empty():
+		return true
+	state["statuses"].append_array(_statuses(results))
+	state["hall_of_fame"] += _hall_of_fame_events(results)
+	state["credits"] += _credits_events(results)
+	state["waits"] += 1
+	_record_failure(results, state)
+	if world.script_input_waiting() or not world.pending_runtime_request().is_empty():
+		return false
+	for result: Dictionary in results:
+		if StringName(result.get("status", &"")) in [&"complete", &"failed"]:
+			return true
+	return false
+
+
+## The first failed result, which is what a stopped drain reports.
+## [param whole_result] reports one with no details of its own in full.
+func _record_failure(results: Array, state: Dictionary, whole_result: bool = false) -> void:
+	for result: Dictionary in results:
+		if bool(result.get("ok", false)):
+			continue
+		state["reason"] = String(result.get("reason", "script_failed"))
+		state["details"] = JSON.stringify(
+			result.get("details", result if whole_result else {})
+		)
+		return
+
+
+## The stop a failed answer reports, which is no results and a reason.
+func _request_failed(state: Dictionary, reason: String, details: Variant) -> Array:
+	state["reason"] = reason
+	state["details"] = JSON.stringify(details)
+	return []
+
+
+func _trace(state: Dictionary, entry: String) -> void:
+	var trace: Array = state["trace"]
+	if trace.size() < PENDING_TRACE:
+		trace.append(entry)
 
 
 func _walk_to_connection(
