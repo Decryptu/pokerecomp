@@ -8,13 +8,11 @@ extends SceneTree
 ##   Godot --path . -s res://tools/preview_world.gd -- crystal 26 2 /tmp/out.png \
 ##       live [kind] [x y] [WxH] [touch] [framed] [zoom=<n>] [view=<mod id>]
 
-## `TrainerCard_JohtoBadgesOAM`'s eight, for the two mod-surface kinds: the only
-## badge art the cartridge has.
 ## Every `live` kind, what its two numbers mean and what it draws. Data rather
-## than a comment, because `live help` prints it. A kind may also be any `preview_*` driver on the world screen without
-## that prefix (`field_move`, `start_menu`, `capture`, `catch_nickname`,
-## `move_forget`), which is driven twice when its name ends in `_use`, or one of
-## [constant FIELD_ITEMS]' names, which is the pack's USE on that item.
+## than a comment, because `live help` prints it. A kind may also be any
+## `preview_*` driver on the world screen without that prefix, which is driven
+## twice when its name ends in `_use`, or one of [constant FIELD_ITEMS]' names,
+## which is the pack's USE on that item.
 const KIND_HELP: Dictionary = {
 	&"effects": "cell: the emote, boulder dust, grass rustle and headbutt tree over the first visible object",
 	&"battle": "cell: the wild fight preview_battle_request starts, settled past its transition",
@@ -59,6 +57,8 @@ const KIND_HELP: Dictionary = {
 }
 
 
+## `TrainerCard_JohtoBadgesOAM`'s eight, for the two mod-surface kinds: the only
+## badge art the cartridge has.
 const BADGE_NAMES: Array[String] = [
 	"ZEPHYRBADGE", "HIVEBADGE", "PLAINBADGE", "FOGBADGE",
 	"MINERALBADGE", "STORMBADGE", "GLACIERBADGE", "RISINGBADGE",
@@ -97,10 +97,6 @@ const DAY_CARE_ROLES: Array[StringName] = [
 ## `UpdateJumpPosition`'s highest `.y_offsets` entry, which is where the `ledge`
 ## kind photographs the hop.
 const LEDGE_ARC_TOP: float = 12.0
-## Hardware frames spent after the sprites are staged. Two puts the grass rustle
-## on its first facing and the boulder dust on its second, so every one of them
-## is up and none is on the frame it was spawned. Cut needs more: its tree stands
-## for three frames before it splits, and its leaves open on top of each other.
 ## The `kind`s that are a pack USE rather than a staged sprite, and the item
 ## each one uses. Every one of them is driven through the pack's own key item
 ## pocket, so the picture is the screen's answer and not a staged state.
@@ -135,8 +131,13 @@ const MART_PRESSES: int = 1
 ## owes nothing before the next one lands: nothing shortens a printing text.
 const TEXT_SETTLE_FRAMES: int = 20
 
+## Hardware frames spent after the sprites are staged. Two puts the grass rustle on
+## its first facing and the boulder dust on its second, so every one is up and none
+## is on the frame it was spawned. Two kinds are a moment inside an animation
+## instead: Cut's tree stands three frames before it splits, and the waterfall
+## climb runs four passes a cell, so 26 lands a few cells up.
 const STAGED_FRAMES: int = 2
-const STAGED_FRAMES_CUT: int = 12
+const STAGED_FRAMES_BY_KIND: Dictionary = {&"cut": 12, &"waterfall_use": 26}
 
 var _screen: Gen2WorldScreen = null
 var _output_path: String = ""
@@ -401,7 +402,7 @@ func _process(_delta: float) -> bool:
 	if _frames == 2:
 		_stage_kind()
 		if not _bare and _kind not in SELF_DRIVEN_KINDS:
-			for _frame: int in (STAGED_FRAMES_CUT if _kind == &"cut" else STAGED_FRAMES):
+			for _frame: int in int(STAGED_FRAMES_BY_KIND.get(_kind, STAGED_FRAMES)):
 				_screen.advance_frame()
 	if _frames < 18:
 		return false

@@ -90,6 +90,10 @@ const SCRIPTED_STEP_PASSES: Dictionary = {
 	&"turn_in": STEP_PASSES_WALK,
 	&"turn_waterfall": STEP_PASSES_FAST,
 }
+const STEP_KIND_WALK: StringName = &"step"
+const STEP_KIND_HOP: StringName = &"jump_step"
+const STEP_KIND_TURN: StringName = &"turn"
+
 ## The three rows of SCRIPTED_STEP_PASSES that are a hop: two cells, twice the
 ## frames, and the arc `UpdateJumpPosition` draws over them.
 const JUMP_STEP_KINDS: Array[StringName] = [
@@ -370,6 +374,9 @@ var _player_queued_steps: Array = []
 var _player_scripted_steps: bool = false
 ## The player's own OBJECT_STEP_FRAME. See Gen2WorldObject.step_frame.
 var _player_step_frame: int = 0
+var _player_step_kind: StringName = &""
+## What runs when the player's queued run drains.
+var _player_step_tail: Callable = Callable()
 ## Frames left of the counted wait a script is standing in, -1 while it is not
 ## standing in one or has not started counting.
 var _script_wait_frames: int = -1
@@ -886,6 +893,13 @@ func player_step_offset_cells() -> Vector2:
 	return behind
 
 
+## Which movement the step in flight is, so a renderer draws a waterfall climb as
+## a climb rather than a walk north: a scripted stream answers the command's own
+## name, one of [constant SCRIPTED_STEP_PASSES]' keys. Empty while nothing steps.
+func player_step_kind() -> StringName:
+	return _player_step_kind if _player_step_passes_remaining > 0 else &""
+
+
 ## The player's `Facings` frame, 0 to 3. `Gen2WorldObject.walk_frame()` for an
 ## object; the player's own step is paced here rather than on a record.
 func player_walk_frame() -> int:
@@ -898,11 +912,12 @@ func player_walk_frame() -> int:
 
 
 func _start_player_step(
-	direction: Vector2i, frames: int, jumping: bool = false
+	direction: Vector2i, frames: int, jumping: bool = false,
+	kind: StringName = STEP_KIND_WALK
 ) -> void:
 	_player_queued_steps.clear()
 	_player_scripted_steps = false
-	_begin_player_step(direction, frames, jumping)
+	_begin_player_step(direction, frames, jumping, kind)
 
 
 ## One step of a scripted stream, behind whatever the player is already walking.
@@ -913,13 +928,13 @@ func _start_player_step(
 ## turns a step at a time.
 func _queue_player_step(
 	direction: Vector2i, frames: int, jumping: bool = false,
-	facing: Vector2i = Vector2i.ZERO
+	facing: Vector2i = Vector2i.ZERO, kind: StringName = STEP_KIND_WALK
 ) -> void:
 	if _player_step_passes_remaining > 0 or not _player_queued_steps.is_empty():
 		_player_scripted_steps = true
 		_player_queued_steps.append({
 			"direction": direction, "frames": maxi(0, frames), "jumping": jumping,
-			"facing": facing,
+			"facing": facing, "kind": kind,
 		})
 		return
 	_face_player_toward(facing)
@@ -928,7 +943,7 @@ func _queue_player_step(
 	if frames <= 0 and direction == Vector2i.ZERO:
 		return
 	_player_scripted_steps = true
-	_begin_player_step(direction, frames, jumping)
+	_begin_player_step(direction, frames, jumping, kind)
 
 
 func _face_player_toward(direction: Vector2i) -> void:
@@ -943,15 +958,28 @@ func _start_next_player_step() -> void:
 		_face_player_toward(next.get("facing", Vector2i.ZERO))
 		if int(next["frames"]) > 0 or next["direction"] != Vector2i.ZERO:
 			_begin_player_step(
-				next["direction"], int(next["frames"]), bool(next.get("jumping", false))
+				next["direction"], int(next["frames"]), bool(next.get("jumping", false)),
+				StringName(next.get("kind", STEP_KIND_WALK))
 			)
 			return
 	_player_scripted_steps = false
+	_player_step_kind = &""
+	_run_player_step_tail()
+
+
+func _run_player_step_tail() -> void:
+	if not _player_step_tail.is_valid():
+		return
+	var tail: Callable = _player_step_tail
+	_player_step_tail = Callable()
+	tail.call()
 
 
 func _begin_player_step(
-	direction: Vector2i, frames: int, jumping: bool = false
+	direction: Vector2i, frames: int, jumping: bool = false,
+	kind: StringName = STEP_KIND_WALK
 ) -> void:
+	_player_step_kind = kind
 	## `StepFunction_PlayerJump` and `StepFunction_NPCJump` are the only step
 	## types that run `UpdateJumpPosition`, and every other step type replaces
 	## them, so the arc belongs to the hop that set it and to nothing begun after
@@ -964,6 +992,10 @@ func _begin_player_step(
 
 
 func _clear_player_step() -> void:
+	## A map load re-derives the player state itself, so dropping a tail loses
+	## nothing; running it against the cell being left would.
+	_player_step_tail = Callable()
+	_player_step_kind = &""
 	_player_step_began = false
 	_player_jumping = false
 	_player_step_direction = Vector2i.ZERO
@@ -1198,14 +1230,13 @@ func cancel_fishing() -> Dictionary:
 	return _fishing.cancel()
 
 
-## engine/events/overworld.asm's CutFunction, staged rather than applied.
-##
-## The source order is load bearing: .CheckAble tests ENGINE_HIVEBADGE before it
-## ever looks at the tile, so a player without the badge is told about the badge
-## even while facing a cuttable tree. A match records the block, replacement and
-## animation the way CheckMapForSomethingToCut fills wCutWhirlpool*; nothing is
-## written until complete_cut(), because Script_Cut shows its text first and only
-## then calls CutDownTreeOrGrass.
+## engine/events/overworld.asm's CutFunction. Every field move below is staged
+## rather than applied, because each source script shows its text and waits on the
+## button before it changes anything: `*_request` records and `complete_*` writes.
+## The refusal order is load bearing too: `.CheckAble` tests ENGINE_HIVEBADGE
+## before it ever looks at the tile, so a player without the badge is told about
+## the badge even while facing a cuttable tree. A match records the block,
+## replacement and animation the way CheckMapForSomethingToCut fills wCutWhirlpool*.
 func cut_request() -> Dictionary:
 	if current_map == null or current_tileset == null:
 		return _cut_failure(&"missing_map")
@@ -1275,14 +1306,11 @@ static func _cut_failure(reason: StringName) -> Dictionary:
 	return {"ok": false, "kind": &"cut_failed", "reason": reason}
 
 
-## engine/events/overworld.asm's SurfFunction .TrySurf, staged rather than applied,
-## for the same reason Cut is: UsedSurfScript changes nothing until its text is
-## acknowledged. The refusal order is the source's: the badge is tested before the
-## player's own state and before the tile, so a player without the Fog Badge is
-## told about the badge whether or not the water in front is surfable, CheckBadge
-## itself being what pushes that text. [param species] is the chosen party
-## member's, for GetSurfType. The source's wBikeFlags branch has no counterpart
-## here, since no bike exists.
+## SurfFunction .TrySurf. The badge is tested before the player's own state and
+## before the tile, so a player without the Fog Badge is told about the badge
+## whether or not the water in front is surfable, CheckBadge itself being what
+## pushes that text. [param species] is the chosen party member's, for GetSurfType.
+## The source's wBikeFlags branch has no counterpart here, since no bike exists.
 func surf_request(species: int = 0) -> Dictionary:
 	if current_map == null or current_tileset == null:
 		return _surf_failure(&"missing_map")
@@ -1342,7 +1370,7 @@ func complete_surf() -> Dictionary:
 	movement_mode = MOVEMENT_SURF
 	player_sprite_number = int(request["sprite"])
 	player_cell = request["cell"]
-	_start_player_step(request["direction"], STEP_PASSES_NPC_WALK)
+	_start_player_step(request["direction"], STEP_PASSES_NPC_WALK, false, &"slow_step")
 	return {
 		"ok": true,
 		"kind": &"surf_applied",
@@ -1356,13 +1384,10 @@ static func _surf_failure(reason: StringName) -> Dictionary:
 	return {"ok": false, "kind": &"surf_failed", "reason": reason}
 
 
-## engine/events/overworld.asm's WhirlpoolFunction .TryWhirlpool, staged the way
-## Cut is: TryWhirlpoolMenu fills the same wCutWhirlpool* slots, and
-## Script_UsedWhirlpool reaches DisappearWhirlpool only after UseWhirlpoolText.
-##
-## .TryWhirlpool checks ENGINE_GLACIERBADGE before the tile, the same order
-## .CheckAble has. It checks no player state at all: the source neither requires
-## nor refuses surfing, so a player facing a whirlpool from land resolves too.
+## WhirlpoolFunction .TryWhirlpool, filling the same wCutWhirlpool* slots Cut
+## does. ENGINE_GLACIERBADGE is checked before the tile, the order .CheckAble has,
+## and no player state at all: the source neither requires nor refuses surfing, so
+## a player facing a whirlpool from land resolves too.
 func whirlpool_request() -> Dictionary:
 	if current_map == null or current_tileset == null:
 		return _whirlpool_failure(&"missing_map")
@@ -1428,13 +1453,11 @@ static func _whirlpool_failure(reason: StringName) -> Dictionary:
 	return {"ok": false, "kind": &"whirlpool_failed", "reason": reason}
 
 
-## engine/events/overworld.asm's WaterfallFunction .TryWaterfall, staged the way
-## the other four are: Script_UsedWaterfall shows _UseWaterfallText and waits on
-## its button before the first climbing step. `.TryWaterfall` is CheckBadge
-## ENGINE_RISINGBADGE, then CheckMapCanWaterfall, which is two tests and no more:
-## `wPlayerDirection & $c` must be FACE_UP, and wTileUp must satisfy
-## CheckWaterfallTile. It reads no player state, so it neither requires nor refuses
-## surfing, and its refusal is FieldMoveFailed's generic line.
+## WaterfallFunction .TryWaterfall: CheckBadge ENGINE_RISINGBADGE, then
+## CheckMapCanWaterfall, which is two tests and no more: `wPlayerDirection & $c`
+## must be FACE_UP, and wTileUp must satisfy CheckWaterfallTile. It reads no player
+## state, so it neither requires nor refuses surfing, and its refusal is
+## FieldMoveFailed's generic line.
 func waterfall_request() -> Dictionary:
 	if current_map == null or current_tileset == null:
 		return _waterfall_failure(&"missing_map")
@@ -1470,13 +1493,13 @@ func pending_waterfall() -> Dictionary:
 
 
 ## Script_UsedWaterfall's loop: `applymovement PLAYER, .WaterfallStep` is one
-## `turn_waterfall UP`, and `.CheckContinueWaterfall` repeats it while the cell the
-## player now stands on still answers CheckWaterfallTile. So the climb ends on the
-## first cell above the column that is not a waterfall, and the whole run is one
-## command rather than a step the caller paces. Each step is an applymovement, so
-## it consults no collision, spends no repel step and rolls no encounter. The
-## landing does re-derive the player state the way a warp does, which is what puts
-## a climber ashore on the ledge above.
+## `turn_waterfall UP`, repeated by `.CheckContinueWaterfall` while the cell the
+## player now stands on answers CheckWaterfallTile, so the climb ends on the first
+## cell that is not a waterfall. Each step is an applymovement: no collision, no
+## repel step, no encounter. Paced like a scripted stream, the cell committing at
+## once and the column drawn a cell at a time, so a renderer can carry the player
+## up the fall's face; the landing state is re-derived when the run drains rather
+## than here, and the answer reports the mode it will leave.
 func complete_waterfall() -> Dictionary:
 	if _pending_waterfall.is_empty():
 		return _waterfall_failure(&"no_pending_waterfall")
@@ -1498,14 +1521,19 @@ func complete_waterfall() -> Dictionary:
 	if climbed <= 0 or Gen2WorldFieldMove.waterfall_tile(collision_code_at(cell)):
 		return _waterfall_failure(&"climb_did_not_finish")
 	player_cell = cell
-	_apply_map_setup_player_state()
+	player_facing = Gen2WorldSprite.FACING_UP
+	var passes: int = int(SCRIPTED_STEP_PASSES[&"turn_waterfall"])
+	for _step: int in climbed:
+		_queue_player_step(Vector2i.UP, passes, false, Vector2i.UP, &"turn_waterfall")
+	_player_step_tail = _apply_map_setup_player_state
 	return {
 		"ok": true,
 		"kind": &"waterfall_applied",
 		"move": int(request["move"]),
 		"cell": cell,
 		"steps": climbed,
-		"movement_mode": movement_mode,
+		"passes": climbed * passes,
+		"movement_mode": _setup_movement_mode(cell),
 	}
 
 
@@ -1513,12 +1541,11 @@ static func _waterfall_failure(reason: StringName) -> Dictionary:
 	return {"ok": false, "kind": &"waterfall_failed", "reason": reason}
 
 
-## engine/events/overworld.asm's FlashFunction .CheckUseFlash, staged the way the
-## other five are. Flash is the one field move that checks no tile at all: its
-## whole test is the badge and then whether this map is a dark one, which is the
-## map header's own palette byte rather than anything under the player. The
-## Aerodactyl chamber's branch is a Ruins of Alph puzzle that is not implemented,
-## so the palette is the only way through here.
+## FlashFunction .CheckUseFlash. Flash is the one field move that checks no tile
+## at all: its whole test is the badge and then whether this map is a dark one,
+## which is the map header's own palette byte rather than anything under the
+## player. The Aerodactyl chamber's branch is a Ruins of Alph puzzle that is not
+## implemented, so the palette is the only way through.
 func flash_request() -> Dictionary:
 	if current_map == null:
 		return _flash_failure(&"missing_map")
@@ -1563,13 +1590,11 @@ static func _flash_failure(reason: StringName) -> Dictionary:
 	return {"ok": false, "kind": &"flash_failed", "reason": reason}
 
 
-## engine/events/overworld.asm's TryHeadbuttOW and TryHeadbuttFromMenu, staged
-## the way the other five are: HeadbuttScript reaches TreeMonEncounter only
-## after UseHeadbuttText, so the roll belongs to the commit and not to this.
-##
-## Headbutt is the one field move with no badge at all: TryHeadbuttOW is
-## CheckPartyMove and nothing else, and TryHeadbuttFromMenu is the faced tile
-## and nothing else. Its refusal is FieldMoveFailed's generic _CantUseItemText.
+## TryHeadbuttOW and TryHeadbuttFromMenu; the roll belongs to the commit, since
+## HeadbuttScript reaches TreeMonEncounter only after UseHeadbuttText. Headbutt is
+## the one field move with no badge at all: TryHeadbuttOW is CheckPartyMove and
+## nothing else, TryHeadbuttFromMenu the faced tile and nothing else. Its refusal
+## is FieldMoveFailed's generic _CantUseItemText.
 func headbutt_request() -> Dictionary:
 	if current_map == null or current_tileset == null:
 		return _headbutt_failure(&"missing_map")
@@ -1672,13 +1697,11 @@ static func _headbutt_failure(reason: StringName) -> Dictionary:
 	return {"ok": false, "kind": &"headbutt_failed", "reason": reason}
 
 
-## engine/events/overworld.asm's TryRockSmashFromMenu, staged the way the other six
-## are: RockSmashScript reaches RockMonEncounter only after UseRockSmashText, so
-## the roll and the rock both belong to the commit. Rock Smash asks neither a badge
-## nor a tile: `GetFacingObject` is `CheckFacingObject` and then the faced object's
-## own `MAPOBJECT_MOVEMENT` byte against `SPRITEMOVEDATA_SMASHABLE_ROCK`, so the
-## question is which object is in front rather than what the ground is. That is
-## also why it reads the doubled counter cell the way `interact()` does.
+## TryRockSmashFromMenu; the roll and the rock both belong to the commit. Rock
+## Smash asks neither a badge nor a tile: `GetFacingObject` is `CheckFacingObject`
+## and then the faced object's own `MAPOBJECT_MOVEMENT` byte against
+## `SPRITEMOVEDATA_SMASHABLE_ROCK`, so the question is which object is in front
+## rather than what the ground is, and it reads the doubled cell `interact()` does.
 func rock_smash_request() -> Dictionary:
 	if current_map == null or current_tileset == null:
 		return _rock_smash_failure(&"missing_map")
@@ -1850,13 +1873,11 @@ func map_time_of_day() -> int:
 	)
 
 
-## engine/events/overworld.asm's StrengthFunction .TryStrength, staged the way the
-## other three are because Script_UsedStrength sets nothing until after its text
-## either. Unlike them, `.TryStrength` is a badge check and nothing else: no faced
-## tile, no block table, no player state, and no check that a boulder is even in
-## front. Its `.AlreadyUsingStrength` branch is annotated unreferenced in both
-## pins, so an already-active flag is not a refusal here. [param species] is the
-## chosen party member's, for SetStrengthFlag's wStrengthSpecies.
+## StrengthFunction .TryStrength, which unlike the others is a badge check and
+## nothing else: no faced tile, no block table, no player state, and no check that
+## a boulder is even in front. Its `.AlreadyUsingStrength` branch is annotated
+## unreferenced in both pins, so an already-active flag is not a refusal here.
+## [param species] is the chosen member's, for SetStrengthFlag's wStrengthSpecies.
 func strength_request(species: int = 0) -> Dictionary:
 	if current_map == null or current_tileset == null:
 		return _strength_failure(&"missing_map")
@@ -4694,7 +4715,7 @@ func _apply_player_movement(event: Dictionary) -> Array:
 			## the walk ends rather than on the frame the stream was applied.
 			_queue_player_step(
 				Vector2i.ZERO, 0, false,
-				_movement_direction(int(command.get("direction", 0))),
+				_movement_direction(int(command.get("direction", 0))), kind,
 			)
 			continue
 		if SCRIPTED_STEP_PASSES.has(kind):
@@ -4707,13 +4728,13 @@ func _apply_player_movement(event: Dictionary) -> Array:
 				player_cell = destination
 				_queue_player_step(
 					direction * cells, int(SCRIPTED_STEP_PASSES[kind]) * cells, jumping,
-					direction,
+					direction, kind,
 				)
 				_advance_followers(-1, vacated)
 			else:
 				## `NormalStep` writes the facing before the refusal, so a step
 				## off the map turns the player where they stand.
-				_queue_player_step(Vector2i.ZERO, 0, false, direction)
+				_queue_player_step(Vector2i.ZERO, 0, false, direction, kind)
 				generated.append({
 					"type": &"movement_blocked", "player": true, "cell": destination,
 				})
@@ -4731,7 +4752,8 @@ func _apply_player_movement(event: Dictionary) -> Array:
 			# The player's half of the same wait: Script_earthquake's own stream is
 			# `step_shake` and then a sleep, and the sleep is all of its duration.
 			_queue_player_step(
-				Vector2i.ZERO, Gen2WorldObject.sleep_frames(int(command.get("length", 0)))
+				Vector2i.ZERO, Gen2WorldObject.sleep_frames(int(command.get("length", 0))),
+				false, Vector2i.ZERO, kind
 			)
 			continue
 		if kind in [
@@ -5654,7 +5676,7 @@ func player_input_move(direction: Vector2i) -> Dictionary:
 		if pressed_facing != player_facing:
 			player_facing = pressed_facing
 			_do_step(direction)
-			_start_player_step(Vector2i.ZERO, STEP_PASSES_TURN)
+			_start_player_step(Vector2i.ZERO, STEP_PASSES_TURN, false, STEP_KIND_TURN)
 			return {
 				"ok": true, "kind": &"turn", "facing": player_facing, "cell": player_cell,
 			}
@@ -5948,7 +5970,7 @@ func _try_ledge_hop(direction: Vector2i) -> Dictionary:
 	count_step()
 	_advance_followers(-1, from_cell)
 	_do_step(direction)
-	_start_player_step(direction * 2, STEP_PASSES_HOP, true)
+	_start_player_step(direction * 2, STEP_PASSES_HOP, true, STEP_KIND_HOP)
 	return {
 		"ok": true,
 		"kind": &"ledge_hop",
@@ -6047,14 +6069,18 @@ func _cell_at_connection_edge(cell: Vector2i, direction_name: String) -> bool:
 ## warp taken from a water tile lands on dry land still surfing, where nothing
 ## but water is a legal step. .CheckForcedBiking has no counterpart here.
 func _apply_map_setup_player_state() -> void:
-	if collision_permission_at(player_cell) == Gen2WorldCollision.WATER_TILE:
-		if movement_mode != MOVEMENT_SURF:
-			movement_mode = MOVEMENT_SURF
-			player_sprite_number = Gen2WorldSprite.SPRITE_SURF
+	var mode: StringName = _setup_movement_mode(player_cell)
+	if mode == movement_mode:
 		return
-	if movement_mode == MOVEMENT_SURF:
-		movement_mode = MOVEMENT_WALK
-		player_sprite_number = _walking_sprite()
+	movement_mode = mode
+	player_sprite_number = Gen2WorldSprite.SPRITE_SURF if mode == MOVEMENT_SURF \
+		else _walking_sprite()
+
+
+func _setup_movement_mode(cell: Vector2i) -> StringName:
+	if collision_permission_at(cell) == Gen2WorldCollision.WATER_TILE:
+		return MOVEMENT_SURF
+	return MOVEMENT_WALK if movement_mode == MOVEMENT_SURF else movement_mode
 
 
 func _apply_map(

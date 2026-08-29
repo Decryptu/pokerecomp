@@ -2919,6 +2919,12 @@ func player_height_offset_pixels() -> float:
 	return _world.player_height_offset_pixels() if _world != null else 0.0
 
 
+## The world this screen is driving, null before one is open: a seam rather than
+## the field behind it.
+func world() -> Gen2WorldAPI:
+	return _world
+
+
 func world_snapshot() -> Dictionary:
 	return {
 		"map": _world.map_id() if _world != null else Vector2i(-1, -1),
@@ -3290,63 +3296,82 @@ func preview_field_move() -> void:
 ## field-move entry and shows its message, the second acknowledges it and
 ## commits.
 func preview_field_move_use() -> void:
-	if _field_move_text:
-		_acknowledge_field_move_text()
-		return
-	preview_field_move()
-	if _party_host != null:
-		_party_host.handle_button(Gen2Button.A)
+	_preview_field_move_use(Gen2WorldFieldMove.MOVE_CUT, Gen2WorldFieldMove.BADGE_HIVE)
 
 
-## The same pair for Surf. The scene must be opened on a map where the player
-## starts beside water and facing it; the Cut preview has the matching
-## requirement of a cuttable tile.
+## The same pair for Surf, which needs the scene opened beside water and facing
+## it; Cut's matching requirement is a cuttable tile.
 func preview_surf() -> void:
 	_preview_field_move(Gen2WorldFieldMove.MOVE_SURF, Gen2WorldFieldMove.BADGE_FOG)
 
 
 func preview_surf_use() -> void:
-	if _field_move_text:
-		_acknowledge_field_move_text()
-		return
-	preview_surf()
-	if _party_host != null:
-		_party_host.handle_button(Gen2Button.A)
+	_preview_field_move_use(Gen2WorldFieldMove.MOVE_SURF, Gen2WorldFieldMove.BADGE_FOG)
 
 
-## And for Whirlpool, which needs the scene opened facing a COLL_WHIRLPOOL cell:
-## Dragon's Den B1F, Route 41 or Route 27 are the only maps that carry one.
+## And for Whirlpool, facing a COLL_WHIRLPOOL cell: Dragon's Den B1F, Route 41
+## and Route 27 are the only maps that carry one.
 func preview_whirlpool() -> void:
 	_preview_field_move(Gen2WorldFieldMove.MOVE_WHIRLPOOL, Gen2WorldFieldMove.BADGE_GLACIER)
 
 
 func preview_whirlpool_use() -> void:
-	if _field_move_text:
-		_acknowledge_field_move_text()
-		return
-	preview_whirlpool()
-	if _party_host != null:
-		_party_host.handle_button(Gen2Button.A)
+	_preview_field_move_use(
+		Gen2WorldFieldMove.MOVE_WHIRLPOOL, Gen2WorldFieldMove.BADGE_GLACIER
+	)
 
 
-## And for Strength, which unlike the other three needs nothing in front of the
-## player: .TryStrength checks the badge and stops. To watch a boulder actually
-## move, open the scene on a map that has one and press a direction into it after
-## the second call; Cianwood Gym (22/5) and Ice Path B1F are the reachable ones.
+## And for Strength, which needs nothing in front of the player: .TryStrength
+## checks the badge and stops. To watch a boulder move, press a direction into one
+## after the second call; Cianwood Gym (22/5) and Ice Path B1F carry them.
 func preview_strength() -> void:
 	_preview_field_move(Gen2WorldFieldMove.MOVE_STRENGTH, Gen2WorldFieldMove.BADGE_PLAIN)
 
 
 func preview_strength_use() -> void:
+	_preview_field_move_use(
+		Gen2WorldFieldMove.MOVE_STRENGTH, Gen2WorldFieldMove.BADGE_PLAIN
+	)
+
+
+## And for Waterfall, in the water at a fall's foot; the facing is the driver's,
+## below. The climb is paced, so the frames after the second call are the climb.
+func preview_waterfall() -> void:
+	_preview_field_move(
+		Gen2WorldFieldMove.MOVE_WATERFALL, Gen2WorldFieldMove.BADGE_RISING,
+		Gen2WorldSprite.FACING_UP
+	)
+
+
+func preview_waterfall_use() -> void:
+	_preview_field_move_use(
+		Gen2WorldFieldMove.MOVE_WATERFALL, Gen2WorldFieldMove.BADGE_RISING,
+		Gen2WorldSprite.FACING_UP
+	)
+
+
+## And for Flash, which checks no tile and is what makes a dark cave
+## photographable at all.
+func preview_flash() -> void:
+	_preview_field_move(Gen2WorldFieldMove.MOVE_FLASH, Gen2WorldFieldMove.BADGE_ZEPHYR)
+
+
+func preview_flash_use() -> void:
+	_preview_field_move_use(Gen2WorldFieldMove.MOVE_FLASH, Gen2WorldFieldMove.BADGE_ZEPHYR)
+
+
+func _preview_field_move_use(move: int, badge: int, facing: int = -1) -> void:
 	if _field_move_text:
 		_acknowledge_field_move_text()
 		return
-	preview_strength()
+	_preview_field_move(move, badge, facing)
 	if _party_host != null:
 		_party_host.handle_button(Gen2Button.A)
 
 
-func _preview_field_move(move: int, badge: int) -> void:
+## [param facing] is for the one move that refuses on it: only FACE_UP passes
+## `CheckMapCanWaterfall`. The other five read no player state.
+func _preview_field_move(move: int, badge: int, facing: int = -1) -> void:
 	if _world == null or _data == null:
 		return
 	var save: Gen2SaveData = _embedded_party_save()
@@ -3362,6 +3387,8 @@ func _preview_field_move(move: int, badge: int) -> void:
 	## the next catch, purchase or party change reported nothing but failure.
 	teacher.pp[0] = int(_data.move(move).get("pp", 0))
 	_injected_save = save
+	if facing >= 0:
+		_world.player_facing = facing
 	_world.state.set_engine_flag(Gen2WorldState.badge_flag(
 		badge, Gen2WorldState.is_crystal_profile(_data)
 	))
@@ -6284,26 +6311,22 @@ func _surf_refusal(reason: StringName) -> String:
 	return "Can't use that here."
 
 
-## .FailWhirlpool has no text of its own: it calls FieldMoveFailed, so every
-## refusal but the badge falls back to _CantUseItemText. Cut is the exception,
-## not the rule.
+## .FailWhirlpool has no text of its own; see [method _field_move_refused]. Cut
+## is the exception, not the rule.
 func _whirlpool_refusal(reason: StringName) -> String:
 	if reason == &"badge_required":
 		return "Sorry! A new BADGE is required."
 	return "Can't use that here."
 
 
-## .TryWaterfall refuses through FieldMoveFailed, whose text is the generic
-## _CantUseItemText, so only the badge has a line of its own; CheckMapCanWaterfall
-## has no message at all.
+## CheckMapCanWaterfall has no message at all, so only the badge has a line.
 func _waterfall_refusal(reason: StringName) -> String:
 	if reason == &"badge_required":
 		return "Sorry! A new BADGE is required."
 	return "Can't use that here."
 
 
-## .CheckUseFlash has no refusal text of its own for a lit map: it reaches
-## FieldMoveFailed, which is _CantUseItemText. Only the badge has a line.
+## A lit map has no refusal text of its own; only the badge has a line.
 func _flash_refusal(reason: StringName) -> String:
 	if reason == &"badge_required":
 		return "Sorry! A new BADGE is required."
@@ -6535,12 +6558,10 @@ func _acknowledge_field_move_text() -> void:
 	_refresh_labels()
 
 
-## Cut plays SFX_PLACE_PUZZLE_PIECE_DOWN, Whirlpool plays SFX_SURF, Waterfall
-## plays SFX_BUBBLEBEAM and Surf changes the music, so each commit reports its
-## own audio. Strength is the one that plays nothing: Script_UsedStrength has no
-## PlaySFX, because SFX_STRENGTH belongs to the boulder that moves later, not to
-## the flag being set, and neither does Flash. All six redraw anyway, since the
-## party overlay closed over the map.
+## Each commit reports its own audio, below. Strength is the one that plays
+## nothing: Script_UsedStrength has no PlaySFX, because SFX_STRENGTH belongs to
+## the boulder that moves later rather than to the flag being set, and neither
+## does Flash. All redraw anyway, since the party overlay closed over the map.
 func _commit_field_move(applied: Dictionary, label: String) -> void:
 	if bool(applied.get("ok", false)):
 		match StringName(applied.get("kind", &"")):
@@ -7798,14 +7819,8 @@ func _fade_to_map_music() -> void:
 	)
 
 
-## Plays whatever `wMapMusic` currently holds. `Gen2WorldAPI` owns the write,
-## following PlayMapMusic and its SpecialMapMusic surf override on map entry, so
-## the track a tuned radio station left there survives until the player leaves
-## the map. Restarting a piece that is already playing is a presentation
-## difference from the source, which compares before it restarts.
 ## One music track by its own index, for a screen that starts its own: the
-## printer's is the first, and `_play_current_map_music` is what puts the map's
-## back.
+## printer's is the first, and [method _play_current_map_music] puts the map's back.
 func _play_music_track(index: int) -> void:
 	if _audio_player == null or _data == null:
 		return
@@ -7815,6 +7830,11 @@ func _play_music_track(index: int) -> void:
 	_audio_player.play_record(record, &"map_music", _audio_assets())
 
 
+## Plays whatever `wMapMusic` currently holds. `Gen2WorldAPI` owns the write,
+## following PlayMapMusic and its SpecialMapMusic surf override on map entry, so
+## the track a tuned radio station left there survives until the player leaves the
+## map. Restarting a piece already playing is a presentation difference from the
+## source, which compares before it restarts.
 func _play_current_map_music() -> void:
 	if _audio_player == null or _data == null or _world == null or _world.current_map == null:
 		return
@@ -7876,13 +7896,8 @@ func _spend_item_gift_requests() -> void:
 		return
 
 
-## A mod's hidden-item asks, spent on the first world frame nothing else owns.
-## The map's own script runs through the ordinary path, so the box, the fanfare
-## and the pacing are the world screen's exactly as they are for a player walking
-## onto the cell; the mod named a cell and nothing else.
-##
-## Only one is spent per frame, since the first one's script owns the world until
-## its box is pressed past, and the rest wait in the host's queue.
+## A mod's hidden-item asks, spent the same way and on the same gate: the mod
+## named a cell and nothing else, and the map's own script runs it.
 func _spend_hidden_item_requests() -> void:
 	if _world == null or not _world_idle_for_mod_request():
 		return

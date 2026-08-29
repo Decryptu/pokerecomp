@@ -1188,14 +1188,39 @@ func test_complete_waterfall_climbs_the_whole_column_in_one_command() -> void:
 	assert_true(world.pending_waterfall().is_empty())
 
 
+## The cell commits at once and the climb is drawn a cell at a time, so a renderer
+## carries the player up the fall's face instead of teleporting them.
+func test_complete_waterfall_paces_the_climb_one_cell_at_a_time() -> void:
+	var world: Gen2WorldAPI = _waterfall_world()
+	assert_true(bool(world.waterfall_request().get("ok", false)))
+	var applied: Dictionary = world.complete_waterfall()
+	var steps: int = int(applied["steps"])
+	assert_eq(int(applied["passes"]), steps * Gen2WorldAPI.STEP_PASSES_FAST)
+	assert_true(world.player_step_in_progress())
+	assert_eq(world.player_step_kind(), &"turn_waterfall")
+	## One cell behind per step still to be drawn, counting down to zero.
+	assert_eq(world.player_step_offset_cells(), Vector2(0, steps))
+	for _frame: int in int(applied["passes"]):
+		assert_true(world.player_step_in_progress(), "the climb ended early")
+		world.advance_player_step_pass()
+	assert_false(world.player_step_in_progress())
+	assert_eq(world.player_step_offset_cells(), Vector2.ZERO)
+	assert_eq(world.player_step_kind(), &"")
+	assert_eq(world.player_cell, WATERFALL_LANDING_CELL)
+
+
 ## The landing re-derives the player state the way a warp does, so a climb that
-## ends on land puts the surfer back on foot.
+## ends on land puts the surfer back on foot. Paced, that happens when the run
+## drains: the climber is still surfing while the fall is being climbed.
 func test_complete_waterfall_restores_walking_when_it_lands_ashore() -> void:
 	var world: Gen2WorldAPI = _waterfall_world()
 	assert_eq(world.movement_mode, Gen2WorldAPI.MOVEMENT_SURF)
 	assert_true(bool(world.waterfall_request().get("ok", false)))
 	var applied: Dictionary = world.complete_waterfall()
 	assert_eq(applied["movement_mode"], Gen2WorldAPI.MOVEMENT_WALK)
+	assert_eq(world.movement_mode, Gen2WorldAPI.MOVEMENT_SURF, "the climb is still on water")
+	for _frame: int in int(applied["passes"]):
+		world.advance_player_step_pass()
 	assert_eq(world.movement_mode, Gen2WorldAPI.MOVEMENT_WALK)
 	assert_eq(world.player_sprite_number, Gen2WorldSprite.SPRITE_PLAYER)
 
