@@ -120,17 +120,6 @@ static func _run(
 			# The effect plays and `WaitSFX` holds the printer; nothing is drawn.
 			continue
 		match command:
-			TX_RAM:
-				if not _has(data, at, 2):
-					return _truncated(out, &"truncated_text_ram")
-				var address: int = data[at] | (data[at + 1] << 8)
-				at += 2
-				out += _ram_string(context, address)
-			TX_STRINGBUFFER:
-				if not _has(data, at, 1):
-					return _truncated(out, &"truncated_text_buffer")
-				out += _buffer_string(context, int(data[at]))
-				at += 1
 			TX_FAR:
 				if not _has(data, at, 3):
 					return _truncated(out, &"truncated_text_far")
@@ -145,52 +134,75 @@ static func _run(
 					"ok": true, "text": out, "bytes": at,
 					"prompt": bool(far.get("prompt", false)),
 				}
-			TX_DOTS:
-				if not _has(data, at, 1):
-					return _truncated(out, &"truncated_text_dots")
-				out += "…".repeat(maxi(int(data[at]), 0))
-				at += 1
-			TX_DAY:
-				out += _weekday(context) + "DAY"
-			TX_LOW:
-				out += "\n"
-			TX_SCROLL:
-				out += SCROLL_NOWAIT_BREAK
-			TX_PROMPT_BUTTON, TX_WAIT_BUTTON:
-				# Both wait for a press; only the first shows the arrow, which is
-				# the box's business rather than the string's.
-				out += PAGE_BREAK
-				prompt = true
-			TX_PAUSE:
-				pass
-			TX_DECIMAL:
-				# `text_decimal address, bytes, digits`: a number printed out of
-				# live RAM. Marked rather than skipped, the way TX_RAM is, so a
-				# caller that does know the value can put it in and one that does
-				# not can see that a number belongs there.
-				if not _has(data, at, 3):
-					return _truncated(out, &"truncated_text_command")
-				out += _decimal_string(context, data[at] | (data[at + 1] << 8))
-				at += 3
-			TX_BCD, TX_MOVE:
-				# Three bytes of operand each, and each prints from live RAM this
-				# project does not model. Skipped rather than drawn wrong.
-				if not _has(data, at, 3):
-					return _truncated(out, &"truncated_text_command")
-				at += 3
-			TX_BOX:
-				if not _has(data, at, 4):
-					return _truncated(out, &"truncated_text_command")
-				at += 4
 			TX_START_ASM:
 				# `jp hl` into code. Nothing after it can be read as text.
 				return {"ok": true, "text": out, "bytes": at, "prompt": prompt}
 			_:
-				return {
-					"ok": false, "reason": &"unknown_text_command",
-					"text": out, "command": command,
-				}
+				var step: Dictionary = _step_command(data, at, context, command)
+				if step.has("reason"):
+					return _truncated(out, StringName(step["reason"]))
+				if step.is_empty():
+					return {
+						"ok": false, "reason": &"unknown_text_command",
+						"text": out, "command": command,
+					}
+				out += String(step.get("text", ""))
+				at = int(step["at"])
+				prompt = prompt or bool(step.get("prompt", false))
 	return {"ok": false, "reason": &"missing_text_terminator", "text": out}
+
+
+## A `reason` means the operands ran off the end; empty means another opcode.
+static func _step_command(
+	data: PackedByteArray, at: int, context: Dictionary, command: int
+) -> Dictionary:
+	match command:
+		TX_RAM:
+			if not _has(data, at, 2):
+				return {"reason": &"truncated_text_ram"}
+			return {"text": _ram_string(context, data[at] | (data[at + 1] << 8)), "at": at + 2}
+		TX_STRINGBUFFER:
+			if not _has(data, at, 1):
+				return {"reason": &"truncated_text_buffer"}
+			return {"text": _buffer_string(context, int(data[at])), "at": at + 1}
+		TX_DOTS:
+			if not _has(data, at, 1):
+				return {"reason": &"truncated_text_dots"}
+			return {"text": "…".repeat(maxi(int(data[at]), 0)), "at": at + 1}
+		TX_DAY:
+			return {"text": _weekday(context) + "DAY", "at": at}
+		TX_LOW:
+			return {"text": "\n", "at": at}
+		TX_SCROLL:
+			return {"text": SCROLL_NOWAIT_BREAK, "at": at}
+		TX_PROMPT_BUTTON, TX_WAIT_BUTTON:
+			# Both wait for a press; only the first shows the arrow, which is
+			# the box's business rather than the string's.
+			return {"text": PAGE_BREAK, "at": at, "prompt": true}
+		TX_PAUSE:
+			return {"at": at}
+		TX_DECIMAL:
+			# `text_decimal address, bytes, digits`: a number printed out of
+			# live RAM. Marked rather than skipped, the way TX_RAM is, so a
+			# caller that does know the value can put it in and one that does
+			# not can see that a number belongs there.
+			if not _has(data, at, 3):
+				return {"reason": &"truncated_text_command"}
+			return {
+				"text": _decimal_string(context, data[at] | (data[at + 1] << 8)),
+				"at": at + 3,
+			}
+		TX_BCD, TX_MOVE:
+			# Three bytes of operand each, and each prints from live RAM this
+			# project does not model. Skipped rather than drawn wrong.
+			if not _has(data, at, 3):
+				return {"reason": &"truncated_text_command"}
+			return {"at": at + 3}
+		TX_BOX:
+			if not _has(data, at, 4):
+				return {"reason": &"truncated_text_command"}
+			return {"at": at + 4}
+	return {}
 
 
 ## `PlaceString`/`CheckDict`: characters until the `@` that ends the literal.

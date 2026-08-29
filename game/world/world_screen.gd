@@ -6141,126 +6141,107 @@ func _run_party_action(action: Dictionary) -> void:
 	if _world == null:
 		_refresh_labels()
 		return
-	if StringName(action.get("kind", &"")) == &"mon_item":
-		_run_mon_item_action(action)
-		return
-	if StringName(action.get("kind", &"")) == &"mon_mail":
-		_run_mon_mail_action(action)
-		return
-	if StringName(action.get("kind", &"")) == &"heal_transfer":
-		_run_heal_transfer(action)
-		return
-	if StringName(action.get("kind", &"")) != &"field_move":
+	var kinds: Dictionary = {
+		&"mon_item": _run_mon_item_action,
+		&"mon_mail": _run_mon_mail_action,
+		&"heal_transfer": _run_heal_transfer,
+		&"field_move": _run_field_move,
+	}
+	var kind: StringName = StringName(action.get("kind", &""))
+	if not kinds.has(kind):
 		_refresh_labels()
 		return
+	(kinds[kind] as Callable).call(action)
+
+
+## Each field move: what it asks the world, the refusal, the line and what
+## follows it. [param user] is in the text already: Teleport's
+## `_TeleportReturnText` names nobody.
+func _field_move_rows(slot: int, user: String) -> Dictionary:
+	return {
+		Gen2WorldFieldMove.MOVE_CUT: [
+			_world.cut_request, _cut_refusal, "%s used CUT!" % user, Callable(),
+		],
+		Gen2WorldFieldMove.MOVE_SURF: [
+			_world.surf_request.bind(_party_species(slot)), _surf_refusal,
+			"%s used SURF!" % user, Callable(),
+		],
+		Gen2WorldFieldMove.MOVE_STRENGTH: [
+			_world.strength_request.bind(_party_species(slot)), _strength_refusal,
+			"%s used STRENGTH!" % user, Callable(),
+		],
+		Gen2WorldFieldMove.MOVE_WHIRLPOOL: [
+			_world.whirlpool_request, _whirlpool_refusal,
+			"%s used WHIRLPOOL!" % user, Callable(),
+		],
+		Gen2WorldFieldMove.MOVE_WATERFALL: [
+			_world.waterfall_request, _waterfall_refusal,
+			"%s used WATERFALL!" % user, Callable(),
+		],
+		Gen2WorldFieldMove.MOVE_FLASH: [
+			_world.flash_request, _flash_refusal, "%s used FLASH!" % user, Callable(),
+		],
+		## _UseHeadbuttText is "did a HEADBUTT!", not the "used" the others share.
+		Gen2WorldFieldMove.MOVE_HEADBUTT: [
+			_world.headbutt_request, _field_move_refused,
+			"%s did a HEADBUTT!" % user, Callable(),
+		],
+		Gen2WorldFieldMove.MOVE_ROCK_SMASH: [
+			_world.rock_smash_request, _field_move_refused,
+			"%s used ROCK SMASH!" % user, Callable(),
+		],
+		Gen2WorldFieldMove.MOVE_FLY: [
+			_world.fly_request, _field_move_refused, "", _open_fly_map,
+		],
+		Gen2WorldFieldMove.MOVE_SWEET_SCENT: [
+			_world.sweet_scent_request.bind(_encounter_random), _sweet_scent_refusal,
+			"%s used SWEET SCENT!" % user, _after_sweet_scent,
+		],
+		Gen2WorldFieldMove.MOVE_DIG: [
+			_world.dig_request, _field_move_refused, "%s used DIG!" % user,
+			_after_escape,
+		],
+		Gen2WorldFieldMove.MOVE_TELEPORT: [
+			_world.teleport_request, _field_move_refused,
+			"Return to the last\n#MON CENTER.", _after_escape,
+		],
+	}
+
+
+func _run_field_move(action: Dictionary) -> void:
 	var slot: int = int(action.get("slot", -1))
 	var user: String = String(action.get("name", "")) if action.has("name") \
 		else _prompted_field_move_name(slot)
-	match int(action.get("move", 0)):
-		Gen2WorldFieldMove.MOVE_CUT:
-			var cut: Dictionary = _world.cut_request()
-			if not bool(cut.get("ok", false)):
-				_show_field_move_text(_cut_refusal(StringName(cut.get("reason", &""))))
-				return
-			_show_field_move_text("%s used CUT!" % user)
-		Gen2WorldFieldMove.MOVE_SURF:
-			var surf: Dictionary = _world.surf_request(_party_species(slot))
-			if not bool(surf.get("ok", false)):
-				_show_field_move_text(_surf_refusal(StringName(surf.get("reason", &""))))
-				return
-			_show_field_move_text("%s used SURF!" % user)
-		Gen2WorldFieldMove.MOVE_STRENGTH:
-			var strength: Dictionary = _world.strength_request(
-				_party_species(slot)
-			)
-			if not bool(strength.get("ok", false)):
-				_show_field_move_text(
-					_strength_refusal(StringName(strength.get("reason", &"")))
-				)
-				return
-			_show_field_move_text("%s used STRENGTH!" % user)
-		Gen2WorldFieldMove.MOVE_WHIRLPOOL:
-			var whirlpool: Dictionary = _world.whirlpool_request()
-			if not bool(whirlpool.get("ok", false)):
-				_show_field_move_text(
-					_whirlpool_refusal(StringName(whirlpool.get("reason", &"")))
-				)
-				return
-			_show_field_move_text("%s used WHIRLPOOL!" % user)
-		Gen2WorldFieldMove.MOVE_WATERFALL:
-			var waterfall: Dictionary = _world.waterfall_request()
-			if not bool(waterfall.get("ok", false)):
-				_show_field_move_text(
-					_waterfall_refusal(StringName(waterfall.get("reason", &"")))
-				)
-				return
-			_show_field_move_text("%s used WATERFALL!" % user)
-		Gen2WorldFieldMove.MOVE_FLASH:
-			var flash: Dictionary = _world.flash_request()
-			if not bool(flash.get("ok", false)):
-				_show_field_move_text(_flash_refusal(StringName(flash.get("reason", &""))))
-				return
-			_show_field_move_text("%s used FLASH!" % user)
-		Gen2WorldFieldMove.MOVE_HEADBUTT:
-			var headbutt: Dictionary = _world.headbutt_request()
-			if not bool(headbutt.get("ok", false)):
-				_show_field_move_text(
-					_headbutt_refusal(StringName(headbutt.get("reason", &"")))
-				)
-				return
-			## _UseHeadbuttText is "did a HEADBUTT!", not the "used" the other five share.
-			_show_field_move_text("%s did a HEADBUTT!" % user)
-		Gen2WorldFieldMove.MOVE_ROCK_SMASH:
-			var rock_smash: Dictionary = _world.rock_smash_request()
-			if not bool(rock_smash.get("ok", false)):
-				_show_field_move_text(
-					_rock_smash_refusal(StringName(rock_smash.get("reason", &"")))
-				)
-				return
-			_show_field_move_text("%s used ROCK SMASH!" % user)
-		Gen2WorldFieldMove.MOVE_FLY:
-			var fly: Dictionary = _world.fly_request()
-			if not bool(fly.get("ok", false)):
-				## `.nostormbadge` says the badge line and `.indoors`
-				## `FieldMoveFailed`; neither is a text this project imports, so
-				## both get the refusal every field move shares.
-				_show_field_move_text("Can't use that here.")
-				return
-			_open_fly_map(fly)
-		Gen2WorldFieldMove.MOVE_SWEET_SCENT:
-			var scent: Dictionary = _world.sweet_scent_request(_encounter_random)
-			if not bool(scent.get("ok", false)):
-				## `SweetScentNothing`, which is the one refusal the script has:
-				## a tile no wild could be stepped into on says the same thing a
-				## map with no table does.
-				_show_field_move_text("Looks like there's\nnothing here…")
-				return
-			_show_field_move_text("%s used SWEET SCENT!" % user)
-			var found: Dictionary = scent["encounter"]
-			_start_battle_request({
-				"kind": &"battle_requested",
-				"values": found["values"],
-				"encounter": found.duplicate(true),
-			})
-		Gen2WorldFieldMove.MOVE_DIG:
-			var dig: Dictionary = _world.dig_request()
-			if not bool(dig.get("ok", false)):
-				## `.CantUseDigText`, which every refusal of an escape shares.
-				_show_field_move_text("Can't use that here.")
-				return
-			_show_field_move_text("%s used DIG!" % user)
-			_refresh_after_escape()
-		Gen2WorldFieldMove.MOVE_TELEPORT:
-			var teleport: Dictionary = _world.teleport_request()
-			if not bool(teleport.get("ok", false)):
-				_show_field_move_text("Can't use that here.")
-				return
-			## `_TeleportReturnText`, which names no Pokemon: the move says where
-			## it is going rather than who used it.
-			_show_field_move_text("Return to the last\n#MON CENTER.")
-			_refresh_after_escape()
-		_:
-			_show_field_move_text("Can't use that here.")
+	var rows: Dictionary = _field_move_rows(slot, user)
+	var move: int = int(action.get("move", 0))
+	if not rows.has(move):
+		_show_field_move_text(_field_move_refused(&""))
+		return
+	var row: Array = rows[move]
+	var answer: Dictionary = (row[0] as Callable).call()
+	if not bool(answer.get("ok", false)):
+		_show_field_move_text(
+			(row[1] as Callable).call(StringName(answer.get("reason", &"")))
+		)
+		return
+	if not String(row[2]).is_empty():
+		_show_field_move_text(row[2])
+	var after: Callable = row[3]
+	if after.is_valid():
+		after.call(answer)
+
+
+func _after_sweet_scent(answer: Dictionary) -> void:
+	var found: Dictionary = answer["encounter"]
+	_start_battle_request({
+		"kind": &"battle_requested",
+		"values": found["values"],
+		"encounter": found.duplicate(true),
+	})
+
+
+func _after_escape(_answer: Dictionary) -> void:
+	_refresh_after_escape()
 
 
 ## GetSurfType reads wPartySpecies at wCurPartyMon; the submenu action carries
@@ -6275,8 +6256,7 @@ func _party_species(slot: int) -> int:
 
 
 ## engine/events/overworld.asm's refusal texts, verbatim from
-## data/text/common_2.asm. A reason without a source text falls back to
-## _CantUseItemText, which is the source's own generic field-move refusal.
+## data/text/common_2.asm.
 func _cut_refusal(reason: StringName) -> String:
 	match reason:
 		&"badge_required":
@@ -6323,17 +6303,17 @@ func _flash_refusal(reason: StringName) -> String:
 	return "Can't use that here."
 
 
-## TryRockSmashFromMenu refuses through FieldMoveFailed too, so its only text is
-## the generic one. AskRockSmashScript's _MaySmashText belongs to the other
-## path, where the runner owns it.
-func _rock_smash_refusal(_reason: StringName) -> String:
-	return "Can't use that here."
+## `SweetScentNothing`: a tile with no wild says what a map with no table does.
+func _sweet_scent_refusal(_reason: StringName) -> String:
+	return "Looks like there's\nnothing here…"
 
 
-## TryHeadbuttFromMenu refuses through FieldMoveFailed, so every refusal is
-## _CantUseItemText. There is no badge branch to add one: Headbutt is gated on
-## CheckPartyMove and the faced tile alone.
-func _headbutt_refusal(_reason: StringName) -> String:
+## `FieldMoveFailed`, shared by every field move with no text of its own: Fly's
+## `.nostormbadge` and `.indoors`, Dig's `.CantUseDigText`, Teleport, and the two
+## the menu refuses through it, `TryRockSmashFromMenu` and `TryHeadbuttFromMenu`.
+## `AskRockSmashScript`'s `_MaySmashText` belongs to the other path, where the
+## runner owns it, and Headbutt is gated on `CheckPartyMove` and the tile alone.
+func _field_move_refused(_reason: StringName) -> String:
 	return "Can't use that here."
 
 

@@ -1415,68 +1415,80 @@ func _refresh_pc_counts() -> void:
 func _confirm_pc_row() -> void:
 	if _cursor < 0 or _cursor >= _pc_rows.size():
 		return
-	var row: int = int(_pc_rows[_cursor].get("row", -1))
-	if _mode == MODE.PC_BOX_LIST:
-		_open_box_submenu(clampi(row, 0, Gen2SaveData.BOX_COUNT - 1))
+	var handlers: Dictionary = {
+		MODE.PC_BOX_LIST: _confirm_box_list_row,
+		MODE.PC_BOX_SUBMENU: _confirm_box_submenu,
+		MODE.PC_BOXES: _confirm_bills_pc_row,
+		MODE.PC_DECO: _confirm_decoration_row,
+		MODE.PC_DECO_LIST: _confirm_decoration_list_row,
+		MODE.PC_DECO_SIDE: _confirm_decoration_side_row,
+		MODE.PC_MAILBOX: _open_mail_submenu,
+		MODE.PC_MAIL_SUBMENU: _confirm_mail_submenu,
+		MODE.PC_MAIL_CONFIRM: _confirm_mail_row,
+		MODE.PC: _confirm_pc_menu_row,
+	}
+	var handler: Callable = handlers.get(_mode, _confirm_player_pc_row)
+	handler.call(int(_pc_rows[_cursor].get("row", -1)))
+
+
+func _confirm_box_list_row(row: int) -> void:
+	_open_box_submenu(clampi(row, 0, Gen2SaveData.BOX_COUNT - 1))
+
+
+func _confirm_bills_pc_row(row: int) -> void:
+	match row:
+		Gen2WorldPC.BILLSPCITEM_WITHDRAW:
+			_open_boxes(Gen2BoxScreen.MODE_WITHDRAW)
+		Gen2WorldPC.BILLSPCITEM_DEPOSIT:
+			_open_boxes(Gen2BoxScreen.MODE_DEPOSIT)
+		Gen2WorldPC.BILLSPCITEM_CHANGE_BOX:
+			_open_box_list()
+		Gen2WorldPC.BILLSPCITEM_MOVE_WITHOUT_MAIL:
+			_open_boxes(Gen2BoxScreen.MODE_MOVE)
+		Gen2WorldPC.BILLSPCITEM_SEE_YA:
+			_leave_bills_pc()
+
+
+func _confirm_decoration_row(_row: int) -> void:
+	var slot: StringName = StringName(_pc_rows[_cursor].get("slot", &""))
+	if slot.is_empty():
+		_leave_decorations()
 		return
-	if _mode == MODE.PC_BOX_SUBMENU:
-		_confirm_box_submenu(row)
+	_open_decoration_category(slot)
+
+
+func _confirm_decoration_list_row(_row: int) -> void:
+	_choose_decoration(int(_pc_rows[_cursor].get("deco", 0)))
+
+
+func _confirm_decoration_side_row(_row: int) -> void:
+	var side: StringName = StringName(_pc_rows[_cursor].get("side", &""))
+	if side.is_empty():
+		_open_decoration_category(_deco_slot)
 		return
-	if _mode == MODE.PC_BOXES:
-		match row:
-			Gen2WorldPC.BILLSPCITEM_WITHDRAW:
-				_open_boxes(Gen2BoxScreen.MODE_WITHDRAW)
-			Gen2WorldPC.BILLSPCITEM_DEPOSIT:
-				_open_boxes(Gen2BoxScreen.MODE_DEPOSIT)
-			Gen2WorldPC.BILLSPCITEM_CHANGE_BOX:
-				_open_box_list()
-			Gen2WorldPC.BILLSPCITEM_MOVE_WITHOUT_MAIL:
-				_open_boxes(Gen2BoxScreen.MODE_MOVE)
-			Gen2WorldPC.BILLSPCITEM_SEE_YA:
-				_leave_bills_pc()
-		return
-	if _mode == MODE.PC_DECO:
-		var slot: StringName = StringName(_pc_rows[_cursor].get("slot", &""))
-		if slot.is_empty():
-			_leave_decorations()
-		else:
-			_open_decoration_category(slot)
-		return
-	if _mode == MODE.PC_DECO_LIST:
-		_choose_decoration(int(_pc_rows[_cursor].get("deco", 0)))
-		return
-	if _mode == MODE.PC_DECO_SIDE:
-		var side: StringName = StringName(_pc_rows[_cursor].get("side", &""))
-		if side.is_empty():
-			_open_decoration_category(_deco_slot)
-		else:
-			_apply_decoration(_deco_pending, side)
-		return
-	if _mode == MODE.PC_MAILBOX:
-		_open_mail_submenu(row)
-		return
-	if _mode == MODE.PC_MAIL_SUBMENU:
-		_confirm_mail_submenu(row)
-		return
-	if _mode == MODE.PC_MAIL_CONFIRM:
-		_confirm_mail_to_pack(row == 0)
-		return
-	if _mode == MODE.PC:
-		match row:
-			Gen2WorldPC.PCPCITEM_BILLS_PC:
-				_open_bills_pc_menu()
-			Gen2WorldPC.PCPCITEM_PLAYERS_PC:
-				_open_pc_items()
-			Gen2WorldPC.PCPCITEM_OAKS_PC:
-				_open_pc_oak()
-			Gen2WorldPC.PCPCITEM_HALL_OF_FAME:
-				_open_hall_of_fame(0)
-			Gen2WorldPC.PCPCITEM_TURN_OFF:
-				## `TurnOffPC` prints before `.shutdown` runs.
-				_open_pc_text(
-					[_data.pokecenter_pc_text("closed")], &"close", "TURN OFF"
-				)
-		return
+	_apply_decoration(_deco_pending, side)
+
+
+func _confirm_mail_row(row: int) -> void:
+	_confirm_mail_to_pack(row == 0)
+
+
+func _confirm_pc_menu_row(row: int) -> void:
+	match row:
+		Gen2WorldPC.PCPCITEM_BILLS_PC:
+			_open_bills_pc_menu()
+		Gen2WorldPC.PCPCITEM_PLAYERS_PC:
+			_open_pc_items()
+		Gen2WorldPC.PCPCITEM_OAKS_PC:
+			_open_pc_oak()
+		Gen2WorldPC.PCPCITEM_HALL_OF_FAME:
+			_open_hall_of_fame(0)
+		Gen2WorldPC.PCPCITEM_TURN_OFF:
+			## `TurnOffPC` prints before `.shutdown` runs.
+			_open_pc_text([_data.pokecenter_pc_text("closed")], &"close", "TURN OFF")
+
+
+func _confirm_player_pc_row(row: int) -> void:
 	match row:
 		Gen2WorldPC.PLAYERSPCITEM_WITHDRAW_ITEM, \
 		Gen2WorldPC.PLAYERSPCITEM_DEPOSIT_ITEM, \

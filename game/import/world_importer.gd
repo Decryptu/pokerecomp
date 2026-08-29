@@ -965,17 +965,13 @@ static func _read_map(
 		or height > RomLayout.MAP_MAX_HEIGHT_BLOCKS:
 		return _error("Map %d/%d has dimensions %dx%d blocks." % [group, number, width, height])
 
-	var block_bank: int = rom.u8(attributes + 3)
-	var block_address: int = rom.u16le(attributes + 4)
-	var block_offset: int = _far_offset(rom, {"bank": block_bank, "address": block_address})
-	var block_size: int = width * height
-	if block_offset < 0 or not rom.in_bounds(block_offset, block_size):
-		return _error("Map %d/%d block data is outside the ROM." % [group, number])
-	var block_bytes: PackedByteArray = rom.slice(block_offset, block_size)
-	var block_count: int = int(tilesets[tileset_number]["block_count"])
-	for block: int in block_bytes:
-		if block >= block_count:
-			return _error("Map %d/%d uses block %d in a %d-block tileset." % [group, number, block, block_count])
+	var blocks_result: Dictionary = _read_map_blocks(
+		rom, attributes, width, height, int(tilesets[tileset_number]["block_count"]),
+		group, number
+	)
+	if not bool(blocks_result.get("ok", false)):
+		return blocks_result
+	var block_bytes: PackedByteArray = blocks_result["blocks"]
 
 	var scripts_bank: int = rom.u8(attributes + 6)
 	var scripts_address: int = rom.u16le(attributes + 7)
@@ -1005,42 +1001,12 @@ static func _read_map(
 	)
 	if not bool(scripts_result.get("ok", false)):
 		return scripts_result
-	for source: String in ["coord_events", "bg_events", "objects"]:
-		for event: Dictionary in event_result[source]:
-			if source == "objects" and event.has("trainer"):
-				var trainer: Dictionary = event.get("trainer", {})
-				_collect_script(
-					rom, scripts_bank, int(trainer.get("after_script", 0)),
-					script_data, text_data, movement_data
-				)
-				for text_key: String in ["seen_text", "win_text", "loss_text"]:
-					var text_pointer: Dictionary = trainer.get(text_key, {})
-					_collect_text(
-						rom, int(text_pointer.get("bank", scripts_bank)),
-						int(text_pointer.get("address", 0)), text_data
-					)
-				continue
-			_collect_script(
-				rom, scripts_bank, int(event.get("script", 0)),
-				script_data, text_data, movement_data,
-				event_pointer_is_script(source, event)
-			)
-			if source == "bg_events":
-				_collect_conditional_bg_script(
-					rom, scripts_bank, event, script_data, text_data, movement_data
-				)
+	_collect_event_scripts(
+		rom, scripts_bank, event_result, script_data, text_data, movement_data
+	)
 
 	var tileset: Dictionary = tilesets[tileset_number]
-	var collision_grid: Array = []
-	for cell_y: int in height * RomLayout.MAP_BLOCK_CELL_WIDTH:
-		for cell_x: int in width * RomLayout.MAP_BLOCK_CELL_WIDTH:
-			var block: int = int(block_bytes[(cell_y >> 1) * width + (cell_x >> 1)])
-			var value: int = -1
-			if block > 0:
-				var collision_at: int = block * RomLayout.TILESET_COLLISION_BYTES_PER_BLOCK \
-					+ (cell_x & 1) + ((cell_y & 1) * 2)
-				value = int(tileset["collision"][collision_at])
-			collision_grid.append(value)
+	var collision_grid: Array = _collision_grid(tileset, block_bytes, width, height)
 
 	var phone_palette: int = rom.u8(record + 7)
 	return {
@@ -1078,6 +1044,74 @@ static func _read_map(
 			"objects": event_result["objects"],
 		},
 	}
+
+
+static func _read_map_blocks(
+	rom: RomFile, attributes: int, width: int, height: int, block_count: int,
+	group: int, number: int
+) -> Dictionary:
+	var block_bank: int = rom.u8(attributes + 3)
+	var block_address: int = rom.u16le(attributes + 4)
+	var block_offset: int = _far_offset(rom, {"bank": block_bank, "address": block_address})
+	var block_size: int = width * height
+	if block_offset < 0 or not rom.in_bounds(block_offset, block_size):
+		return _error("Map %d/%d block data is outside the ROM." % [group, number])
+	var block_bytes: PackedByteArray = rom.slice(block_offset, block_size)
+	for block: int in block_bytes:
+		if block >= block_count:
+			return _error("Map %d/%d uses block %d in a %d-block tileset." % [group, number, block, block_count])
+	return {"ok": true, "blocks": block_bytes}
+
+
+## A trainer object points at four scripts and texts; every other event at one.
+static func _collect_event_scripts(
+	rom: RomFile,
+	scripts_bank: int,
+	event_result: Dictionary,
+	script_data: Dictionary,
+	text_data: Dictionary,
+	movement_data: Dictionary,
+) -> void:
+	for source: String in ["coord_events", "bg_events", "objects"]:
+		for event: Dictionary in event_result[source]:
+			if source == "objects" and event.has("trainer"):
+				var trainer: Dictionary = event.get("trainer", {})
+				_collect_script(
+					rom, scripts_bank, int(trainer.get("after_script", 0)),
+					script_data, text_data, movement_data
+				)
+				for text_key: String in ["seen_text", "win_text", "loss_text"]:
+					var text_pointer: Dictionary = trainer.get(text_key, {})
+					_collect_text(
+						rom, int(text_pointer.get("bank", scripts_bank)),
+						int(text_pointer.get("address", 0)), text_data
+					)
+				continue
+			_collect_script(
+				rom, scripts_bank, int(event.get("script", 0)),
+				script_data, text_data, movement_data,
+				event_pointer_is_script(source, event)
+			)
+			if source == "bg_events":
+				_collect_conditional_bg_script(
+					rom, scripts_bank, event, script_data, text_data, movement_data
+				)
+
+
+static func _collision_grid(
+	tileset: Dictionary, block_bytes: PackedByteArray, width: int, height: int
+) -> Array:
+	var collision_grid: Array = []
+	for cell_y: int in height * RomLayout.MAP_BLOCK_CELL_WIDTH:
+		for cell_x: int in width * RomLayout.MAP_BLOCK_CELL_WIDTH:
+			var block: int = int(block_bytes[(cell_y >> 1) * width + (cell_x >> 1)])
+			var value: int = -1
+			if block > 0:
+				var collision_at: int = block * RomLayout.TILESET_COLLISION_BYTES_PER_BLOCK \
+					+ (cell_x & 1) + ((cell_y & 1) * 2)
+				value = int(tileset["collision"][collision_at])
+			collision_grid.append(value)
+	return collision_grid
 
 
 static func _read_connections(

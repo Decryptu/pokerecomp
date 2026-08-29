@@ -300,15 +300,13 @@ func tick() -> bool:
 	var command: Dictionary = _commands[_command_index]
 	_command_index += 1
 	var operation: String = String(command.get("operation", ""))
+	if not _copy_operation(operation, command):
+		_run_operation(operation, command)
+	return true
+
+
+func _copy_operation(operation: String, command: Dictionary) -> bool:
 	match operation:
-		"done":
-			_command_index = 0
-		"wait":
-			pass
-		"timer_8":
-			_timer = (_timer + 1) & 7
-		"timer":
-			_timer = (_timer + 1) & 0xFF
 		"water":
 			_copy_asset_tile("water", 0, (_timer & 6) >> 1, int(command.get("tile", -1)))
 		"flower":
@@ -342,6 +340,21 @@ func tick() -> bool:
 			_copy_asset_tile(
 				"whirlpool", int(command.get("asset_index", -1)), _timer & 3, int(command.get("tile", -1))
 			)
+		_:
+			return false
+	return true
+
+
+func _run_operation(operation: String, command: Dictionary) -> void:
+	match operation:
+		"done":
+			_command_index = 0
+		"wait":
+			pass
+		"timer_8":
+			_timer = (_timer + 1) & 7
+		"timer":
+			_timer = (_timer + 1) & 0xFF
 		"read_buffer":
 			_buffer = _tile_bytes(int(command.get("tile", -1)))
 		"write_buffer":
@@ -369,7 +382,6 @@ func tick() -> bool:
 					_changed = true
 					_palette_changed = true
 				_cave_color = cave_color
-	return true
 
 
 ## `GetForestTreeFrame`: the parity of `wTileAnimationTimer`, which the two

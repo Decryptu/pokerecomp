@@ -540,88 +540,94 @@ func cancel() -> bool:
 
 
 func _run_scene() -> void:
-	match _scene:
-		0:
-			_setup_scene()
-		1:
-			_scene_unown_a()
-		2:
-			_setup_scene()
-			_reset_ly_overrides()
-		3:
-			_scene_perspective_scroll()
-		4:
-			_setup_scene()
-			_ly_active = false
-		5:
-			_scene_unown_hi()
-		6:
-			_setup_scene()
-			_reset_ly_overrides()
-			_spawn(OBJ_INTRO_SUICUNE, Vector2i(27 * 8 + 0, 13 * 8 + 4))
-			_global_x_offset = 0xF0
-		7:
-			_scene_suicune_runs_in()
-		8:
-			_scene_attribute_bands()
-		9:
-			_scene_pichu_and_wooper()
-		10:
-			_setup_scene()
-			_ly_active = false
-		11:
-			_scene_many_unown()
-		12:
-			_setup_scene()
-			_spawn(OBJ_INTRO_SUICUNE, Vector2i(11 * 8 + 0, 13 * 8 + 4))
-			_emit(&"play_music", {"music": MUSIC_CRYSTAL_OPENING})
-			_global_x_offset = 0
-		13:
-			_scene_suicune_jumps()
-		14:
-			_setup_scene()
-			_load_tilemap()
-			_scy = SCREEN_HEIGHT_PX
-			_spawn(OBJ_INTRO_UNOWN_F, Vector2i(5 * 8, 8 * 8))
-			_spawn(OBJ_INTRO_SUICUNE_AWAY, Vector2i(0, 12 * 8))
-		15:
-			_scene_suicune_face()
-		16:
-			_setup_scene()
-		17:
-			_scene_suicune_close()
-		18:
-			_setup_scene()
-			_load_tilemap()
-			# `ld a, -5 * TILE_WIDTH`, which is a byte and stays one.
-			_scy = (-5 * 8) & 0xFF
-			# The grass tile parked at `vTiles1 tile $7f`, which is what the
-			# struct's own OAM set counts from.
-			_sprite_vtile = 0x7F
-			_spawn(OBJ_INTRO_SUICUNE_AWAY, Vector2i(0, 12 * 8))
-		19:
-			_scene_suicune_away()
-		20:
-			_colored_suicune_frame_swap()
-			_delay = 3
-			_counter = 0
-			_timer = 0
-			_next_scene()
-		21:
-			_scene_deinit_sprites()
-		22:
-			_counter = 0
-			_next_scene()
-		23:
-			_scene_fade_to_white()
-		24:
-			_scene_wait()
-		25:
-			_setup_scene()
-		26:
-			_scene_spell_crystal()
-		27:
-			_scene_end()
+	(_scene_routines().get(_scene, _setup_scene) as Callable).call()
+
+
+## What each scene runs on its frames. No entry is a plain [method _setup_scene].
+func _scene_routines() -> Dictionary:
+	return {
+		1: _scene_unown_a,
+		2: _scene_setup_reset_ly,
+		3: _scene_perspective_scroll,
+		4: _scene_setup_without_ly,
+		5: _scene_unown_hi,
+		6: _scene_setup_suicune_offscreen,
+		7: _scene_suicune_runs_in,
+		8: _scene_attribute_bands,
+		9: _scene_pichu_and_wooper,
+		10: _scene_setup_without_ly,
+		11: _scene_many_unown,
+		12: _scene_setup_suicune_music,
+		13: _scene_suicune_jumps,
+		14: _scene_setup_unown_and_suicune,
+		15: _scene_suicune_face,
+		17: _scene_suicune_close,
+		18: _scene_setup_grass,
+		19: _scene_suicune_away,
+		20: _scene_colored_suicune,
+		21: _scene_deinit_sprites,
+		22: _scene_reset_counter,
+		23: _scene_fade_to_white,
+		24: _scene_wait,
+		26: _scene_spell_crystal,
+		27: _scene_end,
+	}
+
+
+func _scene_setup_reset_ly() -> void:
+	_setup_scene()
+	_reset_ly_overrides()
+
+
+func _scene_setup_without_ly() -> void:
+	_setup_scene()
+	_ly_active = false
+
+
+func _scene_setup_suicune_offscreen() -> void:
+	_setup_scene()
+	_reset_ly_overrides()
+	_spawn(OBJ_INTRO_SUICUNE, Vector2i(27 * 8 + 0, 13 * 8 + 4))
+	_global_x_offset = 0xF0
+
+
+func _scene_setup_suicune_music() -> void:
+	_setup_scene()
+	_spawn(OBJ_INTRO_SUICUNE, Vector2i(11 * 8 + 0, 13 * 8 + 4))
+	_emit(&"play_music", {"music": MUSIC_CRYSTAL_OPENING})
+	_global_x_offset = 0
+
+
+func _scene_setup_unown_and_suicune() -> void:
+	_setup_scene()
+	_load_tilemap()
+	_scy = SCREEN_HEIGHT_PX
+	_spawn(OBJ_INTRO_UNOWN_F, Vector2i(5 * 8, 8 * 8))
+	_spawn(OBJ_INTRO_SUICUNE_AWAY, Vector2i(0, 12 * 8))
+
+
+func _scene_setup_grass() -> void:
+	_setup_scene()
+	_load_tilemap()
+	# `ld a, -5 * TILE_WIDTH`, which is a byte and stays one.
+	_scy = (-5 * 8) & 0xFF
+	# The grass tile parked at `vTiles1 tile $7f`, which is what the
+	# struct's own OAM set counts from.
+	_sprite_vtile = 0x7F
+	_spawn(OBJ_INTRO_SUICUNE_AWAY, Vector2i(0, 12 * 8))
+
+
+func _scene_colored_suicune() -> void:
+	_colored_suicune_frame_swap()
+	_delay = 3
+	_counter = 0
+	_timer = 0
+	_next_scene()
+
+
+func _scene_reset_counter() -> void:
+	_counter = 0
+	_next_scene()
 
 
 ## The half of a setup scene every one of them shares: clear the palettes, the

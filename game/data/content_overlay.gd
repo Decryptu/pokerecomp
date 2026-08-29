@@ -345,51 +345,78 @@ func _normalized(kind: StringName, number: int, row: Dictionary) -> Dictionary:
 ## Rows otherwise stay open-ended so future readers can add optional fields
 ## without making an older host erase them.
 func _validate_fields(kind: StringName, fields: Dictionary) -> Dictionary:
-	if kind == KIND_SPECIES:
-		if fields.has("pics"):
-			var pics: Variant = fields["pics"]
-			if not pics is Dictionary:
-				return _invalid(&"invalid_content_pic", "species pics")
-			for facing: String in ["front", "back"]:
-				if (pics as Dictionary).has(facing):
-					var valid_pic: Dictionary = _validate_pic((pics as Dictionary)[facing], 7)
-					if not bool(valid_pic.get("ok", false)):
-						return valid_pic
-		if fields.has("icon"):
-			var icon: Variant = fields["icon"]
-			if icon is int or icon is float:
-				if int(icon) < 0 or int(icon) > RomLayout.MON_ICON_COUNT:
-					return _invalid(&"invalid_content_icon", "icon %d" % int(icon))
-			elif icon is Dictionary:
-				if not _valid_indices((icon as Dictionary).get("indices", null), 8 * Gen2Tiles.TILE_PIXELS):
-					return _invalid(&"invalid_content_icon", "custom icon")
-			else:
-				return _invalid(&"invalid_content_icon", "species icon")
-	elif kind == KIND_ITEM and fields.has("evolution"):
-		var evolution: Variant = fields["evolution"]
-		if not evolution is Dictionary:
-			return _invalid(&"invalid_content_evolution", "evolution is not a dictionary")
-		if not (evolution as Dictionary).is_empty():
-			var method: int = int((evolution as Dictionary).get("method", 0))
-			if method not in [RomLayout.EVOLVE_ITEM, RomLayout.EVOLVE_TRADE]:
-				return _invalid(&"invalid_content_evolution", "method %d" % method)
-	elif kind == KIND_TRAINER and fields.has("pic"):
-		var valid_trainer_pic: Dictionary = _validate_pic(fields["pic"], 7)
-		if not bool(valid_trainer_pic.get("ok", false)):
-			return valid_trainer_pic
-	elif kind == KIND_TYPE:
-		if fields.has("name") and String(fields["name"]).is_empty():
-			return _invalid(&"invalid_content_type", "type name")
-		if fields.has("physical") and not fields["physical"] is bool:
-			return _invalid(&"invalid_content_type", "physical must be true or false")
-	elif kind == KIND_MATCHUP:
-		if not fields.has("multiplier"):
-			return _invalid(&"invalid_type_matchup", "multiplier is missing")
-		var multiplier: int = int(fields["multiplier"])
-		if multiplier < 0 or multiplier > 0xFF:
-			return _invalid(&"invalid_type_matchup", "multiplier %d" % multiplier)
-		if fields.has("negated_by_foresight") and not fields["negated_by_foresight"] is bool:
-			return _invalid(&"invalid_type_matchup", "negated_by_foresight")
+	var validators: Dictionary = {
+		KIND_SPECIES: _validate_species,
+		KIND_ITEM: _validate_item,
+		KIND_TRAINER: _validate_trainer,
+		KIND_TYPE: _validate_type,
+		KIND_MATCHUP: _validate_matchup,
+	}
+	if not validators.has(kind):
+		return {"ok": true}
+	return (validators[kind] as Callable).call(fields)
+
+
+func _validate_species(fields: Dictionary) -> Dictionary:
+	if fields.has("pics"):
+		var pics: Variant = fields["pics"]
+		if not pics is Dictionary:
+			return _invalid(&"invalid_content_pic", "species pics")
+		for facing: String in ["front", "back"]:
+			if (pics as Dictionary).has(facing):
+				var valid_pic: Dictionary = _validate_pic((pics as Dictionary)[facing], 7)
+				if not bool(valid_pic.get("ok", false)):
+					return valid_pic
+	if not fields.has("icon"):
+		return {"ok": true}
+	var icon: Variant = fields["icon"]
+	if icon is int or icon is float:
+		if int(icon) < 0 or int(icon) > RomLayout.MON_ICON_COUNT:
+			return _invalid(&"invalid_content_icon", "icon %d" % int(icon))
+		return {"ok": true}
+	if not icon is Dictionary:
+		return _invalid(&"invalid_content_icon", "species icon")
+	if not _valid_indices((icon as Dictionary).get("indices", null), 8 * Gen2Tiles.TILE_PIXELS):
+		return _invalid(&"invalid_content_icon", "custom icon")
+	return {"ok": true}
+
+
+func _validate_item(fields: Dictionary) -> Dictionary:
+	if not fields.has("evolution"):
+		return {"ok": true}
+	var evolution: Variant = fields["evolution"]
+	if not evolution is Dictionary:
+		return _invalid(&"invalid_content_evolution", "evolution is not a dictionary")
+	if (evolution as Dictionary).is_empty():
+		return {"ok": true}
+	var method: int = int((evolution as Dictionary).get("method", 0))
+	if method not in [RomLayout.EVOLVE_ITEM, RomLayout.EVOLVE_TRADE]:
+		return _invalid(&"invalid_content_evolution", "method %d" % method)
+	return {"ok": true}
+
+
+func _validate_trainer(fields: Dictionary) -> Dictionary:
+	if not fields.has("pic"):
+		return {"ok": true}
+	return _validate_pic(fields["pic"], 7)
+
+
+func _validate_type(fields: Dictionary) -> Dictionary:
+	if fields.has("name") and String(fields["name"]).is_empty():
+		return _invalid(&"invalid_content_type", "type name")
+	if fields.has("physical") and not fields["physical"] is bool:
+		return _invalid(&"invalid_content_type", "physical must be true or false")
+	return {"ok": true}
+
+
+func _validate_matchup(fields: Dictionary) -> Dictionary:
+	if not fields.has("multiplier"):
+		return _invalid(&"invalid_type_matchup", "multiplier is missing")
+	var multiplier: int = int(fields["multiplier"])
+	if multiplier < 0 or multiplier > 0xFF:
+		return _invalid(&"invalid_type_matchup", "multiplier %d" % multiplier)
+	if fields.has("negated_by_foresight") and not fields["negated_by_foresight"] is bool:
+		return _invalid(&"invalid_type_matchup", "negated_by_foresight")
 	return {"ok": true}
 
 

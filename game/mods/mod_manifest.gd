@@ -101,6 +101,18 @@ static func from_dictionary(source: Dictionary, folder: String) -> Dictionary:
 			return _refuse(&"invalid_game", game)
 		if not manifest.games.has(StringName(game)):
 			manifest.games.append(StringName(game))
+	for refusal: Dictionary in [
+		_check_names(manifest, regex),
+		_check_entry(manifest),
+		_check_pack(manifest),
+		_check_art(manifest),
+	]:
+		if not refusal.is_empty():
+			return refusal
+	return {"ok": true, "manifest": manifest}
+
+
+static func _check_names(manifest: Gen2ModManifest, regex: RegEx) -> Dictionary:
 	if regex.search(String(manifest.id)) == null:
 		return _refuse(&"invalid_id", String(manifest.id))
 	if manifest.api_version < MIN_API_VERSION or manifest.api_version > API_VERSION:
@@ -117,34 +129,46 @@ static func from_dictionary(source: Dictionary, folder: String) -> Dictionary:
 			return _refuse(&"invalid_dependency", dependency_id)
 		if not Gen2ModVersion.valid_range(wanted):
 			return _refuse(&"invalid_dependency_range", "%s %s" % [dependency_id, wanted])
+	return {}
+
+
+## An entry is a path inside the mod's own folder. Anything that climbs out of
+## it, or reaches for an absolute location, is refused.
+static func _check_entry(manifest: Gen2ModManifest) -> Dictionary:
 	if manifest.entry.is_empty():
 		return _refuse(&"missing_entry", String(manifest.id))
-	# An entry is a path inside the mod's own folder. Anything that climbs
-	# out of it, or reaches for an absolute location, is refused.
 	if manifest.entry.begins_with("/") or manifest.entry.contains("..") \
 		or manifest.entry.contains(":"):
 		return _refuse(&"entry_escapes_mod", manifest.entry)
+	# iOS forbids JIT and loading native code at runtime, so a mod is
+	# interpreted GDScript or it is nothing.
 	if not manifest.entry.ends_with(".gd"):
-		# iOS forbids JIT and loading native code at runtime, so a mod is
-		# interpreted GDScript or it is nothing.
 		return _refuse(&"entry_not_gdscript", manifest.entry)
-	if not manifest.pack.is_empty():
-		if manifest.pack.begins_with("/") or manifest.pack.contains("..") \
-			or manifest.pack.contains(":") or manifest.pack.contains("/"):
-			# A pack is a file beside the manifest, not a path: it is mounted
-			# rather than read, so there is nothing to gain by letting it point
-			# anywhere else.
-			return _refuse(&"pack_escapes_mod", manifest.pack)
-		if not (manifest.pack.ends_with(".pck") or manifest.pack.ends_with(".zip")):
-			return _refuse(&"pack_not_a_resource_pack", manifest.pack)
-	# Art is read from the mod directory rather than mounted or run, so the
-	# only rule is the entry's: a path that stays inside the mod's own folder.
+	return {}
+
+
+## A pack is a file beside the manifest, not a path: it is mounted rather than
+## read, so there is nothing to gain by letting it point anywhere else.
+static func _check_pack(manifest: Gen2ModManifest) -> Dictionary:
+	if manifest.pack.is_empty():
+		return {}
+	if manifest.pack.begins_with("/") or manifest.pack.contains("..") \
+		or manifest.pack.contains(":") or manifest.pack.contains("/"):
+		return _refuse(&"pack_escapes_mod", manifest.pack)
+	if not (manifest.pack.ends_with(".pck") or manifest.pack.ends_with(".zip")):
+		return _refuse(&"pack_not_a_resource_pack", manifest.pack)
+	return {}
+
+
+## Art is read from the mod directory rather than mounted or run, so the only
+## rule is the entry's: a path that stays inside the mod's own folder.
+static func _check_art(manifest: Gen2ModManifest) -> Dictionary:
 	for art: String in [manifest.icon, manifest.thumbnail]:
 		if art.is_empty():
 			continue
 		if art.begins_with("/") or art.contains("..") or art.contains(":"):
 			return _refuse(&"art_escapes_mod", art)
-	return {"ok": true, "manifest": manifest}
+	return {}
 
 
 ## Whether this mod ships its files as a resource pack rather than loose.

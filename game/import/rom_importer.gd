@@ -791,10 +791,24 @@ static func _verify_title_run(
 ## zeroed record, the last row is the Fast Ship, and a pointer that leaves the
 ## table's bank is not a name.
 static func verify_town_map(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var entry: Dictionary = layout.get("town_map", {})
-	if entry.is_empty():
+	if (layout.get("town_map", {}) as Dictionary).is_empty():
 		return {"ok": true, "message": "No region map on this cartridge."}
+	for check: Callable in [
+		RomImporter._verify_town_map_sheets,
+		RomImporter._verify_town_map_regions,
+		RomImporter.verify_dex_nest_icon,
+		RomImporter.verify_fly_map_label,
+		RomImporter._verify_pokegear_pages,
+		RomImporter._verify_town_map_palettes,
+	]:
+		var result: Dictionary = check.call(rom, layout)
+		if not bool(result.get("ok", false)):
+			return result
+	return verify_landmarks(rom, layout)
 
+
+static func _verify_town_map_sheets(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var entry: Dictionary = layout["town_map"]
 	for run: Array in [
 		["town map graphic", int(entry["gfx"]), RomLayout.TOWN_MAP_TILES],
 		["Pokegear graphic", int(entry["pokegear_gfx"]), RomLayout.POKEGEAR_TILES],
@@ -810,11 +824,13 @@ static func verify_town_map(rom: RomFile, layout: Dictionary) -> Dictionary:
 					run[0], sheet.size(), wanted,
 				],
 			}
-
 	var fast_ship: int = int(entry.get("fast_ship", -1))
 	if not rom.in_bounds(fast_ship, RomLayout.FAST_SHIP_TILES * Gen2Tiles.TILE_BYTES):
 		return {"ok": false, "message": "The Fast Ship icon is outside the cartridge."}
+	return {"ok": true, "message": ""}
 
+
+static func _verify_town_map_regions(rom: RomFile, layout: Dictionary) -> Dictionary:
 	for region: String in ["johto", "kanto"]:
 		var cells: PackedByteArray = read_town_map_region(rom, layout, region)
 		if cells.size() != RomLayout.TOWN_MAP_REGION_CELLS:
@@ -832,15 +848,10 @@ static func verify_town_map(rom: RomFile, layout: Dictionary) -> Dictionary:
 						region, cell, RomLayout.TOWN_MAP_TILES,
 					],
 				}
+	return {"ok": true, "message": ""}
 
-	var nest_check: Dictionary = verify_dex_nest_icon(rom, layout)
-	if not bool(nest_check["ok"]):
-		return nest_check
 
-	var label_check: Dictionary = verify_fly_map_label(rom, layout)
-	if not bool(label_check["ok"]):
-		return label_check
-
+static func _verify_pokegear_pages(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var cards: Dictionary = read_pokegear_cards(rom, layout)
 	if cards.size() != RomLayout.POKEGEAR_CARD_ORDER.size():
 		return {
@@ -861,14 +872,17 @@ static func verify_town_map(rom: RomFile, layout: Dictionary) -> Dictionary:
 						name, cell,
 					],
 				}
-
 	var texts: Dictionary = read_pokegear_texts(rom, layout)
 	if texts.size() != RomLayout.POKEGEAR_TEXT_NAMES.size():
 		return {"ok": false, "message": "The Pokegear texts did not decode."}
 	for name: String in texts:
 		if String(texts[name]).is_empty():
 			return {"ok": false, "message": "Pokegear text %s is empty." % name}
+	return {"ok": true, "message": ""}
 
+
+static func _verify_town_map_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var entry: Dictionary = layout["town_map"]
 	var palette_map: int = int(entry["palette_map"])
 	if not rom.in_bounds(palette_map, RomLayout.TOWN_MAP_PALETTE_MAP_BYTES):
 		return {"ok": false, "message": "The region palette map is outside the cartridge."}
@@ -882,7 +896,6 @@ static func verify_town_map(rom: RomFile, layout: Dictionary) -> Dictionary:
 					index, packed, RomLayout.TOWN_MAP_PALETTES,
 				],
 			}
-
 	for name: String in ["palette", "palette_female"]:
 		var at: int = int(entry.get(name, -1))
 		if at < 0:
@@ -901,8 +914,7 @@ static func verify_town_map(rom: RomFile, layout: Dictionary) -> Dictionary:
 						name, palette, first, RomLayout.TOWN_MAP_PALETTE_FIRST_COLOR,
 					],
 				}
-
-	return verify_landmarks(rom, layout)
+	return {"ok": true, "message": ""}
 
 
 ## `PokedexNestIconGFX` is one tile with no header and no neighbour to pin it
@@ -2664,9 +2676,22 @@ func _import_battle_tower(rom: RomFile, layout: Dictionary) -> Dictionary:
 static func verify_battle_tower(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if not RomLayout.has_battle_tower(layout):
 		return {"ok": true, "message": "The cartridge has no Battle Tower."}
+	for check: Callable in [
+		RomImporter._verify_battle_tower_trainers,
+		RomImporter._verify_battle_tower_mons,
+		RomImporter._verify_battle_tower_classes,
+		RomImporter._verify_battle_tower_texts,
+		RomImporter._verify_battle_tower_menus,
+	]:
+		var result: Dictionary = check.call(rom, layout)
+		if not bool(result.get("ok", false)):
+			return result
+	return {"ok": true, "message": "Battle Tower tables, texts and menus verified."}
+
+
+static func _verify_battle_tower_trainers(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var entry: Dictionary = RomLayout.battle_tower(layout)
 	var classes: int = RomLayout.trainer_class_count(layout)
-
 	var trainers: int = int(entry["trainers"])
 	var trainer_bytes: int = RomLayout.BATTLETOWER_NUM_UNIQUE_TRAINERS \
 		* RomLayout.BATTLETOWER_TRAINER_ROW_BYTES
@@ -2696,7 +2721,11 @@ static func verify_battle_tower(rom: RomFile, layout: Dictionary) -> Dictionary:
 					index, name, BATTLETOWER_PINNED_NAMES[index],
 				],
 			}
+	return {"ok": true, "message": ""}
 
+
+static func _verify_battle_tower_mons(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var entry: Dictionary = RomLayout.battle_tower(layout)
 	var mon_bytes: int = RomLayout.BATTLETOWER_LEVEL_GROUPS \
 		* RomLayout.BATTLETOWER_NUM_UNIQUE_MON * RomLayout.BATTLETOWER_MON_BYTES
 	if not rom.in_bounds(int(entry["mons"]), mon_bytes):
@@ -2721,7 +2750,12 @@ static func verify_battle_tower(rom: RomFile, layout: Dictionary) -> Dictionary:
 						group, index, rom.u8(at + BATTLETOWER_MON_LEVEL), level,
 					],
 				}
+	return {"ok": true, "message": ""}
 
+
+static func _verify_battle_tower_classes(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var entry: Dictionary = RomLayout.battle_tower(layout)
+	var classes: int = RomLayout.trainer_class_count(layout)
 	for key: String in ["class_genders", "class_sprites"]:
 		if not rom.in_bounds(int(entry[key]), classes - 1):
 			return {"ok": false, "message": "The Battle Tower %s table is outside the cartridge." % key}
@@ -2733,7 +2767,11 @@ static func verify_battle_tower(rom: RomFile, layout: Dictionary) -> Dictionary:
 			}
 		if rom.u8(int(entry["class_sprites"]) + index) == 0:
 			return {"ok": false, "message": "BTTrainerClassSprites entry %d is zero." % index}
+	return {"ok": true, "message": ""}
 
+
+static func _verify_battle_tower_texts(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var entry: Dictionary = RomLayout.battle_tower(layout)
 	var stubs: int = (RomLayout.BATTLETOWER_MALE_TEXTS + RomLayout.BATTLETOWER_FEMALE_TEXTS) \
 		* RomLayout.BATTLETOWER_TEXT_KINDS.size()
 	if not rom.in_bounds(int(entry["trainer_text"]), stubs * RomLayout.TEXT_FAR_STUB_BYTES):
@@ -2761,7 +2799,11 @@ static func verify_battle_tower(rom: RomFile, layout: Dictionary) -> Dictionary:
 				cancel, BATTLETOWER_LEVEL_CANCEL,
 			],
 		}
+	return {"ok": true, "message": ""}
 
+
+static func _verify_battle_tower_menus(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var entry: Dictionary = RomLayout.battle_tower(layout)
 	var menu: int = int(entry["challenge_menu"])
 	if not rom.in_bounds(menu, 2) \
 		or rom.u8(menu + 1) != RomLayout.BATTLETOWER_CHALLENGE_MENU_ROWS:
@@ -2774,7 +2816,7 @@ static func verify_battle_tower(rom: RomFile, layout: Dictionary) -> Dictionary:
 				rows, BATTLETOWER_CHALLENGE_MENU_ROWS,
 			],
 		}
-	return {"ok": true, "message": "Battle Tower tables, texts and menus verified."}
+	return {"ok": true, "message": ""}
 
 
 static func verify_name_input_chars(rom: RomFile, layout: Dictionary) -> Dictionary:
