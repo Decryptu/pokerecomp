@@ -18,7 +18,6 @@ var _view: TextureRect = null
 var _audio: Gen2AudioPlayer = null
 ## `hVBlankCounter`, which the empty cursor blinks off.
 var _frame: int = 0
-## Whether this frame's pass has already run, which a press does.
 var _acted: bool = false
 ## Whether `WaitSFX` is still holding.
 var _waiting: bool = false

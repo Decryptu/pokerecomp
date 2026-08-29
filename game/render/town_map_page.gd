@@ -149,7 +149,6 @@ var font: Gen2Font = null
 ## Which text-box border the player chose, for the box a card draws under itself.
 ## The region map screens have no box and never read it.
 var frame_style: int = 0
-## The VRAM window, as one indices strip per tile number.
 var _tiles: Dictionary = {}
 ## The three card tilemaps, by the names the cache keys them with.
 var _cards: Dictionary = {}

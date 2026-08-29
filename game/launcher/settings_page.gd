@@ -140,13 +140,21 @@ func _build() -> void:
 	)))
 	var fps_labels: Array[String] = []
 	for fps: int in Gen2Options.FPS_CHOICES:
-		fps_labels.append("Max" if fps == 0 else str(fps))
+		fps_labels.append("Display" if fps == 0 else str(fps))
 	app.add_child(Gen2LauncherUI.field(_theme, "Frame rate", Gen2LauncherUI.segmented(
 		_theme, fps_labels, maxi(Gen2Options.FPS_CHOICES.find(_options.max_fps), 0),
 		func(index: int) -> void:
 			_options.max_fps = Gen2Options.FPS_CHOICES[index]
 			_persist()
 	)))
+	app.add_child(Gen2LauncherUI.muted(
+		_theme,
+		"Display draws one frame per refresh, which is the only setting whose "
+		+ "frames each reach the panel once. A number below the panel's own rate "
+		+ "is a sleep and not a refresh, so the same picture is shown for one "
+		+ "refresh, then three, then two, and walking stutters however even the "
+		+ "game is underneath. Pick one only to save battery."
+	))
 
 	var controls: VBoxContainer = _card(column, "Controls")
 	var section: Gen2ControlsSection = Gen2ControlsSection.create(

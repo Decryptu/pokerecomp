@@ -67,7 +67,6 @@ var _female: bool = false
 var _time_of_day: int = Gen2WorldPalette.TIME_MORNING
 var _frames: int = 0
 var _open: bool = false
-## The screen this is drawn in, and the 160x144 layer inside it.
 var _screen: Gen2Screen = null
 var _field: Control = null
 var _background: TextureRect = null
@@ -613,7 +612,6 @@ func set_screen(screen: Gen2Screen) -> void:
 	_screen = screen
 
 
-## The field lives in a screen this node may not own, so it goes by hand.
 func _exit_tree() -> void:
 	if _field != null:
 		Gen2Screen.drop_on_exit(_field)

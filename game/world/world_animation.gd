@@ -33,7 +33,22 @@ class FrameClock extends RefCounted:
 	## How long [method rate] averages over before it publishes a new reading.
 	const RATE_WINDOW_SECONDS: float = 1.0
 
+	## When the clock stops measuring time and counts the host's own frames. A
+	## hardware frame is 16.742 ms and a host one the panel's, so a count off
+	## measured time slips against the frames the player is shown. 120 Hz is two
+	## hardware frames to 0.5 percent; 144 divides neither and is measured.
+	const LOCK_TOLERANCE: float = 0.01
+	const LOCK_STEADY_TICKS: int = 12
+	const LOCK_SPREAD: float = 0.08
+	const LOCK_MAX_DIVIDER: int = 8
+
 	var _elapsed: float = 0.0
+	## The host's frame smoothed, how many ran at that length, how many of them a
+	## hardware frame lasts while locked, and the phase between two.
+	var _interval: float = 0.0
+	var _steady: int = 0
+	var _divider: int = 0
+	var _phase: int = 0
 	var _window_seconds: float = 0.0
 	var _window_ticks: int = 0
 	var _window_frames: int = 0
@@ -43,14 +58,50 @@ class FrameClock extends RefCounted:
 	## Hardware frames owed since the last call. The scale is read every call
 	## because the settings object is shared and edited in place.
 	func tick(delta: float) -> int:
+		var scale: float = Gen2OptionsStore.current().speed_scale()
+		_watch(delta, FRAME_SECONDS / maxf(scale, 0.01))
+		if _divider > 0:
+			return _locked(delta)
 		_elapsed = minf(
-			_elapsed + delta * Gen2OptionsStore.current().speed_scale(),
+			_elapsed + delta * scale,
 			FRAME_SECONDS * float(MAX_CATCHUP_FRAMES),
 		)
 		var frames: int = int(_elapsed / FRAME_SECONDS)
 		_elapsed -= float(frames) * FRAME_SECONDS
 		_measure(delta, frames)
 		return frames
+
+	## One hardware frame every [member _divider] host frames.
+	func _locked(delta: float) -> int:
+		_phase += 1
+		var frames: int = 0
+		if _phase >= _divider:
+			_phase = 0
+			frames = 1
+		_elapsed = FRAME_SECONDS * float(_phase) / float(_divider)
+		_measure(delta, frames)
+		return frames
+
+	## [param target] is one hardware frame in real seconds at this GAME SPEED.
+	func _watch(delta: float, target: float) -> void:
+		if _interval <= 0.0 or absf(delta - _interval) > _interval * LOCK_SPREAD:
+			_interval = maxf(delta, 0.0001)
+			_steady = 0
+			_divider = 0
+			return
+		_interval += (delta - _interval) * 0.25
+		_steady += 1
+		if _steady < LOCK_STEADY_TICKS:
+			return
+		var per_frame: float = target / _interval
+		var divider: int = roundi(per_frame)
+		if divider < 1 or divider > LOCK_MAX_DIVIDER \
+			or absf(per_frame - float(divider)) > LOCK_TOLERANCE * float(divider):
+			_divider = 0
+			return
+		if _divider != divider:
+			_phase = 0
+		_divider = divider
 
 	## The banked remainder, as a share of one hardware frame.
 	func remainder() -> float:
@@ -61,6 +112,10 @@ class FrameClock extends RefCounted:
 	## measurement window goes with it, since a reading across a gap is a lie.
 	func reset() -> void:
 		_elapsed = 0.0
+		_interval = 0.0
+		_steady = 0
+		_divider = 0
+		_phase = 0
 		_window_seconds = 0.0
 		_window_ticks = 0
 		_window_frames = 0

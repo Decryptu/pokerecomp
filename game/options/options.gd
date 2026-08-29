@@ -10,7 +10,7 @@ extends RefCounted
 ## `data/default_options.asm` is byte identical between the two pins, so nothing
 ## here is profile split.
 
-const FORMAT_VERSION: int = 1
+const FORMAT_VERSION: int = 2
 
 ## `constants/ram_constants.asm`: bits 0-2 of `wOptions`.
 const TEXT_DELAY_FAST: int = 1
@@ -55,7 +55,10 @@ const GAME_SPEEDS: Array[StringName] = [&"normal", &"double", &"half"]
 ## How much hardware time one real second buys, per row of [constant
 ## GAME_SPEEDS]. See [method speed_scale].
 const GAME_SPEED_SCALES: Array[float] = [1.0, 2.0, 0.5]
-const FPS_CHOICES: Array[int] = [30, 60, 120, 144, 0]
+## FRAME RATE. 0 is the display's own, and the only one whose frames each reach
+## the panel once: a cap is a sleep and not a vblank, so it shows a frame for one
+## refresh, then three, then two.
+const FPS_CHOICES: Array[int] = [0, 30, 60, 120, 144]
 ## What a second display is offered. `auto` uses a real lower panel where the
 ## platform reports one and does nothing anywhere else; `window` opens a desktop
 ## window as well, which is how the panel is looked at on a machine that has no
@@ -96,7 +99,7 @@ var smooth_scroll: bool = true
 ## Whole steps of zoom away from the fitting scale, kept between sessions
 ## because it is a view preference rather than part of a run.
 var zoom_step: int = 0
-var max_fps: int = 60
+var max_fps: int = 0
 ## See [constant SECOND_SCREENS] and [Gen2SecondScreenHost].
 var second_screen: StringName = &"auto"
 var game_speed: StringName = &"normal"
@@ -262,8 +265,11 @@ static func parse(raw: Variant) -> Gen2Options:
 	options.zoom_step = clampi(int(row.get("zoom_step", 0)), -32, 32)
 	options.game_speed = _one_of(row.get("game_speed", ""), GAME_SPEEDS)
 	options.ui_theme = _one_of(row.get("ui_theme", ""), UI_THEMES)
-	var fps: int = int(row.get("max_fps", 60))
-	options.max_fps = fps if FPS_CHOICES.has(fps) else 60
+	var fps: int = int(row.get("max_fps", 0))
+	## The old default moves with the default; a rate the player picked stays.
+	if int(row.get("format_version", 1)) < 2 and fps == 60:
+		fps = 0
+	options.max_fps = fps if FPS_CHOICES.has(fps) else 0
 	options.second_screen = _one_of(row.get("second_screen", ""), SECOND_SCREENS)
 	options.rules = Gen2Rules.parse(row.get("rules"))
 	options.controls = Gen2InputActions.sanitize(row.get("controls"))

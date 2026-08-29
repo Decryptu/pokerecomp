@@ -698,14 +698,17 @@ own view gets the smoothing for free and a renderer reading
 decides: the step takes the same sixteen frames, lands on the same cell, and
 stands on the cartridge's own pixel at every pass boundary.
 
-It is set from banked real time rather than from a count of spent frames, which
-matters more than the interpolation does. A host frame is 16.667 ms and a
-hardware one 16.742, so a `_process` tick spends sometimes no frame and sometimes
-two; a position placed from that count alone moves 0, 1 or 2 pixels with nothing
-in the game behind the difference. `Gen2WorldScreen` sets `pass_fraction` once
-per drawn frame from the whole frames spent plus the part of the next one the
-clock is holding, so the picture stands within half a pixel of the clock however
-the host's frames land.
+It is set from the clock rather than from a count of spent frames, once per drawn
+frame rather than once per spent one, so the picture stands within half a pixel
+of the clock however the host's frames land.
+
+The clock itself is `Gen2WorldAnimation.FrameClock`, and it counts the host's own
+frames rather than measuring time whenever the host is steady and its frame
+divides a hardware one: one hardware frame per host frame at 60 Hz, one every
+second host frame at 120. Measuring time instead slips a whole frame every 3.7
+seconds against the frames the player is shown, which is half a pass and a pixel
+of the overworld. A rate that divides no hardware frame, or a host that hitches,
+falls back to measuring.
 
 The host constructs a renderer per world, so the view can change while the game
 runs. `Gen2WorldScreen.select_view()` is that switch and `cycle_view()` is what
