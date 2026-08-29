@@ -33,7 +33,7 @@ user://mods/<id>/
 | `id` | Lowercase `[a-z0-9][a-z0-9_-]*`. Addresses the directory and the registry keys |
 | `name` | Shown to the player |
 | `version` | The mod's own version. Strict `major.minor.patch` |
-| `api_version` | The oldest host this mod runs on, not a number to keep current: raise it when the mod starts using a newer seam. `Gen2ModManifest.API_VERSION` is 23 and a host accepts 1 to 23. [Contract versions](#contract-versions) says what each added |
+| `api_version` | The oldest host this mod runs on, not a number to keep current: raise it when the mod starts using a newer seam. `Gen2ModManifest.API_VERSION` is 24 and a host accepts 1 to 24. [Contract versions](#contract-versions) says what each added |
 | `entry` | A `.gd` path inside the mod directory, or inside the pack when there is one |
 | `pack` | Optional `.pck` or `.zip` beside `mod.json`, holding the mod's files |
 | `description` | Optional |
@@ -125,6 +125,7 @@ runs, since every version so far has only added.
 | 21 | Reading the run, a notice over the map, and keeping a page |
 | 22 | `Gen2WorldScreen.world()`, `Gen2WorldAPI.player_drawn_facing()`, `Gen2WorldObject.drawn_facing()`, and the `preview_waterfall` and `preview_flash` pairs |
 | 23 | `Gen2WorldAPI.unown_wall_event()` and `always_on_bike()`, and `Gen2WorldFieldMove`'s field-move texts |
+| 24 | `Gen2WorldAPI.player_step_span()` and `Gen2WorldObject.step_span()` |
 
 ## Installing
 
@@ -1540,6 +1541,17 @@ many cells below the landing as the climb is tall and counts down to zero. Its
 answer carries `steps` and `passes`, and the surfer stays a surfer until the last
 step lands them ashore. A renderer that draws a fall as a vertical wall reads the
 offset as height.
+
+`Gen2WorldAPI.player_step_span()` and `Gen2WorldObject.step_span()` say which two
+cells the step in flight runs between: `{from, to, progress, kind}`, and `{}` while
+nothing steps. Moving `from` to `to` by `progress` is exactly what the offset
+above answers, so the two never disagree; the span is the one to read when the
+plan a renderer draws is not a plain grid. A view that folds a run of plan into
+height, or lifts or ramps it, puts `from` and `to` through its own geometry and
+moves between the two answers, which stays continuous where a fractional cell
+cannot: the fractional cell is one number and the fold is a step in it. The offset
+sums the whole remaining run into one vector, which cannot be taken apart again
+once a scripted stream turns.
 
 A hop is the one step with a second axis.
 `Gen2WorldAPI.player_height_offset_pixels()` and

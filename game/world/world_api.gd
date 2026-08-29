@@ -870,9 +870,9 @@ static func jump_offset_at(spent: int, total: int) -> int:
 
 
 ## How far above the ground the player is drawn this frame, in world pixels and
-## positive upward. Zero at rest, on an ordinary step, and on the frame a hop
-## completes. Presentation only: the cell, the collision, the triggers and the
-## snapshot are already at the landing cell while this is above zero.
+## positive upward. Zero at rest, on an ordinary step and on the frame a hop
+## completes. Presentation only: the cell, the collision and the triggers are at
+## the landing cell while this is above zero.
 func player_height_offset_pixels() -> float:
 	return float(-player_jump_offset())
 
@@ -880,8 +880,8 @@ func player_height_offset_pixels() -> float:
 ## The in-flight step's presentation offset in fractional walk cells, from 1.0
 ## cell behind player_cell down to zero, so a renderer that does not think in
 ## hardware pixels can smooth against it without reverse-engineering CELL_PIXELS.
-## A scripted movement commits its whole path at once, so while its trail drains
-## this is as many cells behind as the player has left to be drawn walking.
+## A scripted movement commits its path at once, so while its trail drains this is
+## as many cells behind as the player has left to be drawn walking.
 func player_step_offset_cells() -> Vector2:
 	var behind := Vector2.ZERO
 	for entry: Dictionary in _player_queued_steps:
@@ -890,6 +890,27 @@ func player_step_offset_cells() -> Vector2:
 		behind -= Vector2(_player_step_direction) \
 			* (float(_player_step_passes_remaining) / float(_player_step_passes_total))
 	return behind
+
+
+## The two cells the step in flight runs between: `{from, to, progress, kind}`,
+## and `{}` while nothing steps. [method player_step_offset_cells] is this summed
+## over the run, which cannot be taken apart again once a stream turns. A renderer
+## whose plan is not a plain grid puts both ends through its own geometry and
+## moves between the answers, which a fractional cell cannot do across a fold.
+func player_step_span() -> Dictionary:
+	if _player_step_passes_remaining <= 0 or _player_step_passes_total <= 0:
+		return {}
+	var ahead := Vector2i.ZERO
+	for entry: Dictionary in _player_queued_steps:
+		ahead += entry["direction"] as Vector2i
+	var landing: Vector2i = player_cell - ahead
+	return {
+		"from": landing - _player_step_direction,
+		"to": landing,
+		"progress": 1.0 - float(_player_step_passes_remaining) \
+			/ float(_player_step_passes_total),
+		"kind": _player_step_kind,
+	}
 
 
 ## Which movement the step in flight is, so a renderer draws a waterfall climb as
@@ -1843,9 +1864,8 @@ static func _rock_smash_failure(reason: StringName) -> Dictionary:
 	return {"ok": false, "kind": &"rock_smash_failed", "reason": reason}
 
 
-## Mirrors the selected save's wPlayerID, the way set_party_summary() mirrors
-## its party. Gen2WorldAPI owns no save, so this stays optional and unset
-## refuses rather than scoring against zero.
+## Mirrors the selected save's wPlayerID, as set_party_summary() mirrors its
+## party. Unset refuses rather than scoring against zero.
 func set_player_id(new_player_id: int) -> Dictionary:
 	if new_player_id < 0 or new_player_id > 0xFFFF:
 		return {"ok": false, "reason": &"invalid_player_id", "player_id": new_player_id}
@@ -1868,8 +1888,7 @@ func player_name() -> String:
 
 
 ## `GetPlayerSprite`'s table choice, mirrored from the save. Setting it re-runs
-## the PLAYER_NORMAL lookup, which is what a map load does, so a world already
-## open picks the new sprite up without waiting for a warp.
+## the PLAYER_NORMAL lookup a map load does, so an open world picks it up at once.
 func set_player_gender(female: bool) -> Dictionary:
 	_player_female = female and Gen2WorldState.is_crystal_profile(data)
 	if movement_mode == MOVEMENT_WALK:
@@ -1882,7 +1901,7 @@ func player_female() -> bool:
 
 
 ## `InitPlayerObject` writes the palette onto the player object rather than
-## reading the sprite's own default row, so the renderer is told which one.
+## reading the sprite's default row, so the renderer is told which one.
 func player_palette() -> int:
 	return Gen2WorldSprite.player_palette(_player_female)
 
@@ -5932,13 +5951,12 @@ func _forced_step(direction: Vector2i, destination: Vector2i) -> Dictionary:
 
 
 ## `.CheckStrengthBoulder`, then the boulder's own `MovementFunction_Strength`.
-## The source splits these across two frames, but nothing observable sits between
-## the two, so both are resolved here in one call; the player is not moved either
-## way and the caller still reports a blocked step. Refusals in the source's own
-## order: BIKEFLAGS_STRENGTH_ACTIVE_F, a boulder that is not standing, then the
-## destination the boulder would take. The boulder's own cell being a pit stops it
-## permanently, which is Blackthorn Gym 2F's puzzle. [param destination]'s
-## permission is checked here because `.CheckLandPerms` runs before `.CheckNPC`.
+## The source splits these across two frames with nothing observable between, so
+## both resolve in one call; the player is not moved and the caller still reports
+## a blocked step. Refusals in order: BIKEFLAGS_STRENGTH_ACTIVE_F, a boulder that
+## is not standing, then the destination it would take. A boulder standing on a
+## pit stops for good, which is Blackthorn Gym 2F's puzzle. [param destination]'s
+## permission is read here because `.CheckLandPerms` runs before `.CheckNPC`.
 func _try_push_boulder(direction: Vector2i, destination: Vector2i) -> Dictionary:
 	if not strength_active():
 		return {}
@@ -6412,10 +6430,9 @@ func visited_flypoints() -> Array[int]:
 	return out
 
 
-## `SweetScentEncounter`: a wild appears where one could have been stepped into.
-## Its gates in the source's order are `CanEncounterWildMon`, the Bug Contest's
-## own tables, then the map's rate and `ChooseWildEncounter`. The rate is read
-## and never rolled against, and no step means no cooldown either.
+## `SweetScentEncounter`: a wild where one could have been stepped into. Its
+## gates in order are `CanEncounterWildMon`, the Bug Contest's tables, then the
+## rate and `ChooseWildEncounter`. The rate is read and never rolled against.
 func sweet_scent_request(random: RandomNumberGenerator = null) -> Dictionary:
 	if current_map == null or data == null:
 		return _sweet_scent_failure(&"missing_map")
@@ -6593,9 +6610,8 @@ static func _escape_rope_failure(reason: StringName) -> Dictionary:
 
 
 ## `CheckForHiddenItems`, the whole of the Itemfinder: a BGEVENT_ITEM whose flag
-## is still clear, inside the screen the player stands in the middle of, which is
-## four cells up and left and four down and five right. Below, every BGEVENT_ITEM
-## on the map as `{cell, item, flag, taken}` whether or not it has been taken, and
+## is still clear, four cells up and left of the player and four down and five
+## right. Below, every BGEVENT_ITEM on the map as `{cell, item, flag, taken}`,
 ## scene-free so a probe can walk a map with no game running. An event whose three
 ## bytes do not decode is dropped rather than offered with a zero item.
 func hidden_items() -> Array:

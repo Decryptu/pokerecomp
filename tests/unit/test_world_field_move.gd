@@ -2178,3 +2178,52 @@ func test_every_used_line_carries_the_source_break() -> void:
 		Gen2WorldFieldMove.used_text(Gen2WorldFieldMove.MOVE_CUT, "AB"), "AB used\nCUT!"
 	)
 	assert_eq(Gen2WorldFieldMove.used_text(Gen2WorldFieldMove.MOVE_FLY, "AB"), "")
+
+
+## `player_step_span()` against `player_step_offset_cells()` over the whole
+## climb: the two say the same thing, so a renderer can move to the newer one
+## without its drawing shifting. Moving `from` to `to` by `progress` is the
+## offset's own answer, cell for cell.
+func test_the_step_span_is_the_offset_taken_apart_step_by_step() -> void:
+	var world: Gen2WorldAPI = _waterfall_world()
+	assert_true(bool(world.waterfall_request().get("ok", false)))
+	var applied: Dictionary = world.complete_waterfall()
+	var seen: Array[Vector2i] = []
+	for _spent: int in int(applied["passes"]):
+		var span: Dictionary = world.player_step_span()
+		assert_false(span.is_empty())
+		assert_eq(span["kind"], &"turn_waterfall")
+		assert_eq((span["to"] as Vector2i) - (span["from"] as Vector2i), Vector2i.UP)
+		var walked: Vector2 = Vector2(span["from"] as Vector2i).lerp(
+			Vector2(span["to"] as Vector2i), float(span["progress"])
+		)
+		assert_almost_eq(
+			walked, Vector2(world.player_cell) + world.player_step_offset_cells(),
+			Vector2(0.001, 0.001)
+		)
+		if not seen.has(span["from"] as Vector2i):
+			seen.append(span["from"] as Vector2i)
+		world.advance_player_step_pass()
+	## One entry per step of the climb, in order, from the fall's foot up.
+	assert_eq(seen.size(), int(applied["steps"]))
+	assert_eq(seen[0], WATERFALL_STAND_CELL)
+	assert_eq(seen[seen.size() - 1] + Vector2i.UP, WATERFALL_LANDING_CELL)
+	assert_true(world.player_step_span().is_empty(), "empty once the run drains")
+
+
+## The same seam on an object, and the case the offset cannot answer: a stream
+## that turns sums to one vector, so which two cells the step in flight runs
+## between is unrecoverable from it.
+func test_an_object_step_span_survives_a_stream_that_turns() -> void:
+	var object := Gen2WorldObject.new()
+	object.cell = Vector2i(4, 4)
+	object.queue_step(Vector2i.RIGHT, 8, false, Vector2i.RIGHT)
+	object.queue_step(Vector2i.UP, 8, false, Vector2i.UP)
+	var first: Dictionary = object.step_span()
+	assert_eq(first["from"], Vector2i(3, 5))
+	assert_eq(first["to"], Vector2i(4, 5))
+	for _spent: int in 8:
+		object.tick_step()
+	var second: Dictionary = object.step_span()
+	assert_eq(second["from"], Vector2i(4, 5))
+	assert_eq(second["to"], Vector2i(4, 4))
