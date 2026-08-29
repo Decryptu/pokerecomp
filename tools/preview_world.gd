@@ -20,6 +20,7 @@ const KIND_HELP: Dictionary = {
 	&"cut": "cell: OWCutAnimation's two halves and the jump shadow",
 	&"tile_anim": "frames: the map that many AnimateTileset frames in",
 	&"unown_wall": "cell: DisplayUnownWords' box. Group 3 maps 23 to 26 say HO-OH, ESCAPE, WATER, LIGHT",
+	&"mart_top": "cell in front of the counter: MartWelcomeText and MenuHeader_BuySell over the map",
 	&"mart": "cell in front of the counter: BuyMenu",
 	&"mart_sell": "cell in front of the counter: the SELL row (DepositSellPack)",
 	&"pokepic": "cell: Script_pokepic's box over the map, holding Chikorita",
@@ -123,10 +124,9 @@ const POKEPIC_SPECIES: int = 152
 ## every `preview_*` on it is reachable from here rather than from nothing.
 const SCREEN_DRIVER: String = "preview_%s"
 
-## The clerk's own text box, which is the one press between `pokemart` and the
-## welcome the buy screen opens on. One more reaches the list, two the quantity
-## dial and three the yes/no.
-const MART_PRESSES: int = 1
+## `.HowMayIHelpYou` prints without waiting, so `pokemart` opens straight on the
+## BUY/SELL/QUIT menu and one press reaches the list.
+const MART_PRESSES: int = 0
 ## Frames spent between two presses of a driven menu, so the box a press opened
 ## owes nothing before the next one lands: nothing shortens a printing text.
 const TEXT_SETTLE_FRAMES: int = 20
@@ -343,6 +343,7 @@ const STAGERS: Dictionary = {
 	&"move_tutor": &"_stage_party_routine",
 	&"battle_tower": &"_stage_battle_tower",
 	&"yes_no": &"_stage_yes_no",
+	&"mart_top": &"_stage_mart",
 	&"mart": &"_stage_mart",
 	&"mart_sell": &"_stage_mart",
 	&"elevator": &"_stage_elevator",
@@ -649,9 +650,8 @@ func _stage_yes_no() -> void:
 			_screen.advance_frame()
 
 
-## The clerk behind the counter, talked to from the cell in front of him: his
-## `pokemart` is what opens `BuyMenu`, so the shop is reached the way a player reaches
-## it. The presses are the dialog's own, the welcome box first and then the list.
+## The clerk behind the counter, talked to from the cell in front of him, so the
+## shop is reached the way a player reaches it.
 func _stage_mart() -> void:
 	_screen.press_button(Gen2Button.LEFT)
 	_screen.interact()
@@ -659,6 +659,8 @@ func _stage_mart() -> void:
 		_screen.press_button(Gen2Button.A)
 	## `StandardMart`'s BUY/SELL/QUIT loop is what the welcome box hands
 	## the shop to. `mart` takes its BUY row, `mart_sell` the one below.
+	if _kind == &"mart_top":
+		return
 	if _kind == &"mart_sell":
 		_screen.press_button(Gen2Button.DOWN)
 	_screen.press_button(Gen2Button.A)

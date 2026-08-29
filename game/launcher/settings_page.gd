@@ -95,6 +95,20 @@ func _build() -> void:
 			_options.screen_fill = index == 1
 			_persist()
 	)))
+	app.add_child(Gen2LauncherUI.field(_theme, "Scrolling", Gen2LauncherUI.segmented(
+		_theme, ["Hardware", "Smooth"], 1 if _options.smooth_scroll else 0,
+		func(index: int) -> void:
+			_options.smooth_scroll = index == 1
+			_persist()
+	)))
+	app.add_child(Gen2LauncherUI.muted(
+		_theme,
+		"The overworld moves two pixels at a time, once every two frames, which "
+		+ "is what a Game Boy did and what its screen smeared over. Smooth draws "
+		+ "the frame in between, so the map moves a pixel a frame and lands on "
+		+ "the same pixel the hardware did. Nothing in the game is timed "
+		+ "differently either way."
+	))
 	app.add_child(Gen2LauncherUI.field(_theme, "Second screen", Gen2LauncherUI.segmented(
 		_theme, _titles(Gen2Options.SECOND_SCREENS),
 		maxi(Gen2Options.SECOND_SCREENS.find(_options.second_screen), 0),

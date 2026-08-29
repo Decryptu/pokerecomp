@@ -299,6 +299,7 @@ var _breed_random := RandomNumberGenerator.new()
 var _selected_rod: StringName = Gen2WorldEncounter.METHOD_OLD_ROD
 ## The overworld's hardware-frame clock: see [method _process].
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
+var _pass_moved: bool = false
 ## `(frame, button)` input, recorded from a run and played back into another.
 ## Both are opt-in and off in play. A replay applies a log's entries on the frame
 ## that recorded them, from inside the pump, so a host that owes two frames
@@ -803,6 +804,22 @@ func _process(delta: float) -> void:
 	_apply_interface_mask()
 
 
+## SMOOTH SCROLL, off `NextOverworldFrame`'s own countdown: a run driven by hand
+## stands on a pass and draws what the cartridge drew whatever the option says.
+func _apply_pass_fraction() -> void:
+	if _world == null:
+		return
+	var whole: bool = _overworld_delay >= Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS
+	_world.pass_fraction = 0.0 if not Gen2OptionsStore.current().smooth_scroll \
+		else float(Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS - _overworld_delay) \
+			/ float(Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS)
+	## Only when the pass moved something, so a still map costs what it did.
+	if whole:
+		_pass_moved = false
+		return
+	_refresh_if(_pass_moved and _world.pass_fraction > 0.0)
+
+
 ## Spends [param count] hardware frames. Public beside [method advance_frame] so
 ## a test, a preview tool or a replay settles the world on the frames it owes
 ## rather than on a clock.
@@ -849,6 +866,7 @@ func advance_frame() -> void:
 	if map_pass:
 		_overworld_delay = Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS
 	_advance_presentation(map_pass)
+	_apply_pass_fraction()
 	_advance_movement(map_pass)
 	_advance_population(map_pass)
 	_advance_waits(map_pass)
@@ -862,6 +880,7 @@ func advance_frame() -> void:
 ## Redraws when [param moved] says something under the renderer changed.
 func _refresh_if(moved: bool) -> void:
 	if moved and _renderer != null:
+		_pass_moved = true
 		_renderer.refresh()
 
 
@@ -3771,9 +3790,7 @@ func preview_card_flip(coins: int = 100, frames: int = 0) -> void:
 	for _frame: int in maxi(frames, 0):
 		if _card_flip_host == null:
 			break
-		## The `WaitSFX` steps are the driver's, and a screenshot spends no wall
-		## clock for an effect to finish in, so each is cut rather than waited
-		## out, the way `preview_slot_machine` does it.
+		## Cut rather than waited out, the way `preview_slot_machine` does it.
 		if _audio_player != null and host.game() != null \
 			and host.game().waiting_for_sfx():
 			_audio_player.stop_effects()

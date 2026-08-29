@@ -497,10 +497,9 @@ func is_idle() -> bool:
 	return idle_passes_remaining > 0
 
 
-## Pixel offset from the committed cell back toward where the step began,
-## shrinking to zero as step_passes_remaining reaches zero.
-func step_offset(cell_pixels: int) -> Vector2i:
-	var offset: Vector2 = step_offset_cells() * float(cell_pixels)
+## [method step_offset_cells] in pixels.
+func step_offset(cell_pixels: int, fraction: float = 0.0) -> Vector2i:
+	var offset: Vector2 = step_offset_cells(fraction) * float(cell_pixels)
 	return Vector2i(int(round(offset.x)), int(round(offset.y)))
 
 
@@ -514,15 +513,11 @@ func height_offset_pixels() -> float:
 	))
 
 
-## [method Gen2WorldAPI.player_step_offset_cells] for an object.
-func step_offset_cells() -> Vector2:
-	var behind := Vector2.ZERO
-	for entry: Dictionary in queued_steps:
-		behind -= Vector2(entry["direction"] as Vector2i)
-	if step_passes_remaining > 0 and step_passes_total > 0:
-		behind -= Vector2(step_direction) \
-			* (float(step_passes_remaining) / float(step_passes_total))
-	return behind
+func step_offset_cells(fraction: float = 0.0) -> Vector2:
+	return Gen2WorldAPI.step_behind_cells(
+		queued_steps, step_direction, step_passes_remaining, step_passes_total,
+		fraction
+	)
 
 
 ## [method Gen2WorldAPI.player_step_span] for an object.

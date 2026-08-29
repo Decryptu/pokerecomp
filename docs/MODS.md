@@ -689,6 +689,14 @@ whole cell the instant one begins. A camera following it pans a step early;
 `visible_origin_cells()` frames the interpolated position instead. The two agree
 whenever no step is in flight.
 
+**SMOOTH SCROLL** (`Gen2Options.smooth_scroll`, on by default, Settings >
+Application > Scrolling) is `Gen2WorldAPI.pass_fraction`: 0.0 on the overworld
+pass itself and 0.5 on the hardware frame after it. Every interpolated position
+above reads it, so a renderer framing its own view gets the smoothing for free
+and a renderer reading `Gen2WorldObject.step_offset()` passes it in. It moves
+nothing the engine decides: the step takes the same sixteen frames, lands on the
+same cell, and stands on the cartridge's own pixel at every pass boundary.
+
 The host constructs a renderer per world, so the view can change while the game
 runs. `Gen2WorldScreen.select_view()` is that switch and `cycle_view()` is what
 `V` is bound to. The map, the player and any running script are untouched.

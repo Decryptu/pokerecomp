@@ -133,6 +133,12 @@ const BGEVENT_COPY: int = 8
 ## that unit, and [Gen2WorldScreen] is what spends the two frames.
 const FRAMES_PER_OVERWORLD_PASS: int = 2
 
+## How far into the pass above the drawn frame stands: 0.0 on the pass, 0.5 on
+## the frame after it. A Game Boy's panel smeared its two-pixel jolt and a modern
+## one does not, so SMOOTH SCROLL halves the step rather than changing it.
+## Presentation only, and zero is what the cartridge drew.
+var pass_fraction: float = 0.0
+
 
 ## Hardware frames for a count of overworld passes. Anything spending frames
 ## against a duration read off the source, a driver or a preview, goes through
@@ -610,7 +616,6 @@ func radio_context() -> Dictionary:
 	}
 
 
-## The station the dial currently sits on, without changing anything.
 func radio_station() -> Dictionary:
 	return Gen2WorldRadio.station_for(state.radio_knob(), radio_context())
 
@@ -813,8 +818,8 @@ func view_surround_offset() -> Vector2i:
 ## [method visible_origin_cells] for a hardware-sized view. Whole pixels: the map
 ## quads and every sprite standing on them are placed from this one number.
 func view_origin_pixels() -> Vector2:
-	return visible_origin_cells() * float(CELL_PIXELS) \
-		- Vector2(view_surround_offset())
+	return (visible_origin_cells() * float(CELL_PIXELS) \
+		- Vector2(view_surround_offset())).round()
 
 
 ## The player's screen pixel, which is PLAYER_VIEW_CELL for as long as the
@@ -883,12 +888,24 @@ func player_height_offset_pixels() -> float:
 ## A scripted movement commits its path at once, so while its trail drains this is
 ## as many cells behind as the player has left to be drawn walking.
 func player_step_offset_cells() -> Vector2:
+	return step_behind_cells(
+		_player_queued_steps, _player_step_direction,
+		_player_step_passes_remaining, _player_step_passes_total, pass_fraction
+	)
+
+
+## The cells a step in flight is still behind its landing cell, for the player
+## and for every object: two answers computed apart slide the map under them.
+static func step_behind_cells(
+	queued: Array, direction: Vector2i, remaining: int, total: int,
+	fraction: float = 0.0
+) -> Vector2:
 	var behind := Vector2.ZERO
-	for entry: Dictionary in _player_queued_steps:
+	for entry: Dictionary in queued:
 		behind -= Vector2(entry["direction"] as Vector2i)
-	if _player_step_passes_remaining > 0 and _player_step_passes_total > 0:
-		behind -= Vector2(_player_step_direction) \
-			* (float(_player_step_passes_remaining) / float(_player_step_passes_total))
+	if remaining > 0 and total > 0:
+		behind -= Vector2(direction) \
+			* (maxf(float(remaining) - fraction, 0.0) / float(total))
 	return behind
 
 
@@ -1316,7 +1333,6 @@ func cut_request() -> Dictionary:
 	return _pending_cut.duplicate(true)
 
 
-## Empty until cut_request() succeeds.
 func pending_cut() -> Dictionary:
 	return _pending_cut.duplicate(true)
 
@@ -1394,7 +1410,6 @@ func surf_request(species: int = 0) -> Dictionary:
 	return _pending_surf.duplicate(true)
 
 
-## Empty until surf_request() succeeds.
 func pending_surf() -> Dictionary:
 	return _pending_surf.duplicate(true)
 
@@ -1461,7 +1476,6 @@ func whirlpool_request() -> Dictionary:
 	return _pending_whirlpool.duplicate(true)
 
 
-## Empty until whirlpool_request() succeeds.
 func pending_whirlpool() -> Dictionary:
 	return _pending_whirlpool.duplicate(true)
 
@@ -1525,7 +1539,6 @@ func waterfall_request() -> Dictionary:
 	return _pending_waterfall.duplicate(true)
 
 
-## Empty until waterfall_request() succeeds.
 func pending_waterfall() -> Dictionary:
 	return _pending_waterfall.duplicate(true)
 
@@ -1624,7 +1637,6 @@ func flash_request() -> Dictionary:
 	return _pending_flash.duplicate(true)
 
 
-## Empty until flash_request() succeeds.
 func pending_flash() -> Dictionary:
 	return _pending_flash.duplicate(true)
 
@@ -1675,7 +1687,6 @@ func headbutt_request() -> Dictionary:
 	return _pending_headbutt.duplicate(true)
 
 
-## Empty until headbutt_request() succeeds.
 func pending_headbutt() -> Dictionary:
 	return _pending_headbutt.duplicate(true)
 
@@ -1780,7 +1791,6 @@ func rock_smash_request() -> Dictionary:
 	return _pending_rock_smash.duplicate(true)
 
 
-## Empty until rock_smash_request() succeeds.
 func pending_rock_smash() -> Dictionary:
 	return _pending_rock_smash.duplicate(true)
 
@@ -1911,7 +1921,6 @@ func _walking_sprite() -> int:
 	return Gen2WorldSprite.player_normal_sprite(_player_female)
 
 
-## Clears the mirror, the counterpart of clear_party_summary().
 func clear_player_id() -> void:
 	_player_id = -1
 
@@ -1949,7 +1958,6 @@ func strength_request(species: int = 0) -> Dictionary:
 	return _pending_strength.duplicate(true)
 
 
-## Empty until strength_request() succeeds.
 func pending_strength() -> Dictionary:
 	return _pending_strength.duplicate(true)
 

@@ -342,3 +342,54 @@ func test_a_picture_beside_a_runtime_request_is_still_drawn() -> void:
 		_world_screen._world.dispatch_script_events(SCRIPT_CELL)
 	)
 	assert_not_null(_world_screen._story_picture, "the pokepic box is on screen")
+
+
+## SMOOTH SCROLL. `HandleMapObjects` moves the map two pixels once per two
+## frames; on, the frame between two passes is drawn a pixel on, so the step
+## takes the same sixteen frames and lands in the same place.
+func test_a_walk_step_is_drawn_a_pixel_a_frame_and_two_a_pass() -> void:
+	var options: Gen2Options = Gen2OptionsStore.current()
+	var chosen: bool = options.smooth_scroll
+	_world_screen = await _open_world()
+	options.smooth_scroll = true
+	var smooth: Array[float] = _walk_camera_pixels()
+	_world_screen.free()
+	_world_screen = await _open_world()
+	options.smooth_scroll = false
+	var hardware: Array[float] = _walk_camera_pixels()
+	options.smooth_scroll = chosen
+
+	assert_eq(smooth.size(), 16, "a walk step is sixteen frames")
+	assert_eq(smooth[15], 16.0, "and sixteen pixels, wherever it is drawn")
+	assert_eq(hardware[15], 16.0)
+	assert_eq(_biggest_jump(smooth), 1.0, "smooth never moves more than a pixel")
+	assert_eq(_biggest_jump(hardware), 2.0, "the pass moves two at a time")
+	assert_gt(_drawn_positions(smooth), 14, "a picture a frame rather than eight")
+	assert_eq(_drawn_positions(hardware), 8)
+
+
+## The camera's own x, one entry per hardware frame of one step east, measured
+## from where it stood before the step began.
+func _walk_camera_pixels() -> Array[float]:
+	var world: Gen2WorldAPI = _world_screen._world
+	var origin: float = world.view_origin_pixels().x
+	var out: Array[float] = []
+	world.move_result(Vector2i.RIGHT)
+	for _frame: int in 16:
+		_world_screen.advance_frame()
+		out.append(world.view_origin_pixels().x - origin)
+	return out
+
+
+func _biggest_jump(pixels: Array[float]) -> float:
+	var most: float = 0.0
+	for index: int in range(1, pixels.size()):
+		most = maxf(most, pixels[index] - pixels[index - 1])
+	return most
+
+
+func _drawn_positions(pixels: Array[float]) -> int:
+	var seen: Dictionary = {}
+	for value: float in pixels:
+		seen[value] = true
+	return seen.size()

@@ -368,6 +368,49 @@ func _finish_pokemon_center_pc(host: Gen2WorldServiceScreen) -> void:
 	assert_false(_world_screen._world.script_input_waiting())
 
 
+## `MartDialog` opens on the map: `.HowMayIHelpYou` prints without waiting and
+## `MenuHeader_BuySell` is drawn over that box, so nothing of `BuyMenu` is on
+## screen until BUY is taken.
+func test_the_shop_opens_over_the_map_and_the_buy_screen_only_after_buy() -> void:
+	await _open_world()
+	await _queue_service()
+
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	assert_eq(host._mart_stage, Gen2WorldServiceScreen.MART_TOP)
+	assert_true(host._mart_over_map, "the top menu stands on the map")
+	var over_map: Image = (host._mart_view.texture as ImageTexture).get_image()
+	assert_true(
+		over_map.detect_alpha() != Image.ALPHA_NONE,
+		"the box over the map is a layer rather than a screen"
+	)
+
+	assert_true(host.handle_button(Gen2Button.A))
+	assert_eq(host._mart_stage, Gen2WorldServiceScreen.MART_LIST)
+	assert_false(host._mart_over_map)
+	var listing: Image = (host._mart_view.texture as ImageTexture).get_image()
+	assert_eq(
+		listing.detect_alpha(), Image.ALPHA_NONE,
+		"`BuyMenu` blanks the screen and owns all of it"
+	)
+
+
+## `CopyMenuHeader` reloads `MenuHeader_BuySell`'s `db 1`, so the cursor is on
+## BUY every time `.TopMenu` runs rather than on the row it was left on.
+func test_the_top_menu_reopens_on_buy() -> void:
+	await _open_world()
+	await _queue_service()
+
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	assert_true(host.handle_button(Gen2Button.DOWN))
+	assert_eq(host._cursor, Gen2WorldServiceScreen.MART_TOP_SELL)
+	assert_true(host.handle_button(Gen2Button.A))
+	assert_eq(host._mart_stage, Gen2WorldServiceScreen.MART_SELL)
+	## B off the list is `SellMenu`'s quit, and `.AnythingElse` asks again.
+	assert_true(host.handle_button(Gen2Button.B))
+	assert_eq(host._mart_stage, Gen2WorldServiceScreen.MART_TOP)
+	assert_eq(host._cursor, Gen2WorldServiceScreen.MART_TOP_BUY)
+
+
 func test_mart_overlay_uses_production_input_and_returns_to_script() -> void:
 	await _open_world()
 	await _queue_service()

@@ -807,7 +807,8 @@ func _draw_row_entries(
 		var object: Gen2WorldObject = entry["object"]
 		var offset: Vector2i = entry.get("offset", Vector2i.ZERO)
 		var pixel: Vector2 = Vector2((object.cell + offset) * Gen2WorldAPI.CELL_PIXELS) \
-			+ Vector2(object.step_offset(Gen2WorldAPI.CELL_PIXELS)) - camera_pixels \
+			+ Vector2(object.step_offset(Gen2WorldAPI.CELL_PIXELS, _world.pass_fraction)) \
+			- camera_pixels \
 			+ SPRITE_LIFT
 		var texture: Texture2D = _actor_texture(
 			object.sprite, object.palette, object.drawn_facing(), object.frame,

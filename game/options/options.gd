@@ -91,6 +91,8 @@ var video_mode: StringName = &"windowed"
 ## Interface stays inside the 160x144 rectangle centred in it, so nothing the
 ## cartridge laid out moves.
 var screen_fill: bool = true
+## SMOOTH SCROLL: see [member Gen2WorldAPI.pass_fraction]. Off is the hardware's.
+var smooth_scroll: bool = true
 ## Whole steps of zoom away from the fitting scale, kept between sessions
 ## because it is a view preference rather than part of a run.
 var zoom_step: int = 0
@@ -218,6 +220,7 @@ func to_dict() -> Dictionary:
 		"sfx_volume": sfx_volume,
 		"video_mode": String(video_mode),
 		"screen_fill": screen_fill,
+		"smooth_scroll": smooth_scroll,
 		"zoom_step": zoom_step,
 		"max_fps": max_fps,
 		"second_screen": String(second_screen),
@@ -255,6 +258,7 @@ static func parse(raw: Variant) -> Gen2Options:
 	options.sfx_volume = clampi(int(row.get("sfx_volume", 7)), 0, MAX_VOLUME)
 	options.video_mode = _one_of(row.get("video_mode", ""), VIDEO_MODES)
 	options.screen_fill = bool(row.get("screen_fill", true))
+	options.smooth_scroll = bool(row.get("smooth_scroll", true))
 	options.zoom_step = clampi(int(row.get("zoom_step", 0)), -32, 32)
 	options.game_speed = _one_of(row.get("game_speed", ""), GAME_SPEEDS)
 	options.ui_theme = _one_of(row.get("ui_theme", ""), UI_THEMES)

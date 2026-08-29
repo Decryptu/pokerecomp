@@ -57,19 +57,27 @@ const EXPECTED_MARKERS: Dictionary = {
 ## is: what a wrong geometry looks like is a row running off the right edge.
 const SCREEN_COLUMNS: int = 20
 
+## `maps/CherrygroveMart.asm`, the one gated shelf: the clerk `checkevent
+## EVENT_GAVE_MYSTERY_EGG_TO_ELM` and opens MART_CHERRYGROVE or its _DEX, the
+## same list with POKE_BALL in front. That is the whole of when a POKE BALL goes
+## on sale, so it is walked rather than read. Group 26 map 4 in both pins.
+const CHERRYGROVE_GROUP: int = 26
+const CHERRYGROVE_MART: int = 4
+const CLERK_CELL: Vector2i = Vector2i(1, 3)
+const CLERK_FACE: Vector2i = Vector2i(2, 3)
+const EVENT_GAVE_MYSTERY_EGG_TO_ELM: int = 31
+const POKE_BALL: int = 5
+const STEP_CAP: int = 32
+
 
 func run(r: RefCounted) -> void:
 	_r = r
-	for game_id: StringName in _r.GAME_IDS:
-		var data: GameData = GameData.open(game_id)
-		if data == null:
-			_r.fail("%s cache is unavailable. Import roms/%s.gbc first." % [game_id, game_id])
-			continue
-		_r.game_id = game_id
-		_verify_texts(data)
-		_verify_markers(data)
-		_verify_lists(data)
-	_r.game_id = &""
+	_r.each_game(func() -> void:
+		_verify_texts(_r.data)
+		_verify_markers(_r.data)
+		_verify_lists(_r.data)
+		_verify_poke_ball_gate()
+	)
 
 
 func _verify_texts(data: GameData) -> void:
@@ -167,3 +175,63 @@ func _marts(data: GameData) -> Array:
 		if not mart.is_empty():
 			out.append(mart)
 	return out
+
+
+## Off the running script rather than the table: a wrong mart id, a wrong
+## `checkevent` or an unresolved `iftrue` all look like one shelf both ways.
+func _verify_poke_ball_gate() -> void:
+	var before: Array = _clerk_shelf(false)
+	var after: Array = _clerk_shelf(true)
+	_r.check(
+		not before.has(POKE_BALL) and not before.is_empty(),
+		"the clerk sells %s before the egg is delivered" % [before]
+	)
+	_r.check(
+		after.has(POKE_BALL),
+		"the clerk sells %s after the egg is delivered" % [after]
+	)
+	_r.check(
+		after.size() == before.size() + 1 and after.slice(1) == before,
+		"the two shelves are %s and %s, which is not one POKE BALL apart" % [
+			before, after,
+		]
+	)
+	_r.note("Cherrygrove sells %d items, %d once the egg is delivered" % [
+		before.size(), after.size(),
+	])
+
+
+func _clerk_shelf(delivered: bool) -> Array:
+	var state := Gen2WorldState.new()
+	if delivered:
+		state.set_event_flag(EVENT_GAVE_MYSTERY_EGG_TO_ELM, true)
+	var world: Gen2WorldAPI = _r.open_world(
+		CHERRYGROVE_GROUP, CHERRYGROVE_MART, CLERK_FACE, state
+	)
+	if world == null:
+		return []
+	world.player_facing = Gen2WorldSprite.FACING_LEFT
+	world.interact()
+	for _step: int in STEP_CAP:
+		var request: Dictionary = world.pending_runtime_request()
+		if StringName(request.get("kind", &"")) == &"mart_requested":
+			var resolved: Dictionary = Gen2WorldHost.resolve_runtime_request(world, request)
+			var mart: Dictionary = (resolved.get("data", {}) as Dictionary).get("mart", {})
+			var items: Array = []
+			for entry: Dictionary in Gen2WorldMartHost.entries(world.data, mart):
+				items.append(int(entry["item"]))
+			return items
+		if not request.is_empty():
+			world.complete_runtime_request({"ok": true})
+			continue
+		if not world.pending_script_wait().is_empty():
+			world.advance_script_presentation_frame()
+			continue
+		if world.script_input_waiting():
+			world.choose_script_input(0)
+			continue
+		break
+	_r.fail("the Cherrygrove clerk staged no shop with the egg %s" % [
+		"delivered" if delivered else "still in hand",
+	])
+	return []
