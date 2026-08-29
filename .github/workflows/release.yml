@@ -347,6 +347,14 @@ jobs:
 
           app="$RUNNER_TEMP/dd/Build/Products/Release-iphoneos/pokerecomp.app"
           [ -d "$app" ] || { echo "::error::no built .app"; exit 1; }
+          # The exporter writes these three whether or not the preset gives them
+          # a sentence, and an empty purpose string is what a store shows a
+          # player as a permission this app wants. It wants none of them.
+          for key in NSCameraUsageDescription NSMicrophoneUsageDescription \
+              NSPhotoLibraryUsageDescription; do
+            /usr/libexec/PlistBuddy -c "Delete :$key" "$app/Info.plist" 2>/dev/null || true
+          done
+          plutil -lint "$app/Info.plist"
           rm -rf "$RUNNER_TEMP/ipa" && mkdir -p "$RUNNER_TEMP/ipa/Payload"
           cp -R "$app" "$RUNNER_TEMP/ipa/Payload/"
           (cd "$RUNNER_TEMP/ipa" && zip -qry "$GITHUB_WORKSPACE/dist/pokerecomp-${v}-ios.ipa" Payload)
@@ -513,6 +521,26 @@ jobs:
             | sed "s/{VERSION}/${v}/g" | sed '/./,$!d')"
           gh release create "${{ needs.version.outputs.tag }}" \
             --title "$v" --notes "$notes" staged/*
+
+      # The feed AltStore and SideStore poll. Rebuilt from the releases rather
+      # than edited, and committed to `main` because the raw file on that branch
+      # is the URL players have already added.
+      - name: Refresh the AltStore source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git fetch --depth 1 origin main
+          git checkout -B main FETCH_HEAD
+          tools/altstore_source.sh "${{ github.repository }}"
+          git add .github/altstore/source.json
+          # A re-run of a tag that is already listed has nothing to commit, and
+          # an empty commit fails the step rather than the release.
+          git diff --cached --quiet && { echo "already listed"; exit 0; }
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -m "List ${{ needs.version.outputs.version }} in the AltStore source"
+          git push origin main
 
       - name: Announce on Discord
         env:
