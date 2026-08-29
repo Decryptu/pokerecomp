@@ -1146,12 +1146,30 @@ static func _read_events(
 		return _error("Map %d/%d events are outside the ROM." % [group, number])
 	at += RomLayout.MAP_EVENT_HEADER_SIZE
 
-	var warps: Array = []
+	var out: Dictionary = {"ok": true}
+	for reader: Callable in [_read_warp_events, _read_coord_events, _read_bg_events]:
+		var read: Dictionary = reader.call(rom, at, group, number, cell_width, cell_height)
+		if not read["ok"]:
+			return read
+		at = int(read["at"])
+		out[String(read["kind"])] = read["events"]
+	var objects: Dictionary = _read_object_events(rom, bank, at, group, number)
+	if not objects["ok"]:
+		return objects
+	out["objects"] = objects["events"]
+	return out
+
+
+## Each reader answers `{ok, kind, events, at}`, `at` being where the next starts.
+static func _read_warp_events(
+	rom: RomFile, at: int, group: int, number: int, cell_width: int, cell_height: int
+) -> Dictionary:
 	if not rom.in_bounds(at):
 		return _error("Map %d/%d has no warp-event count." % [group, number])
-	var warp_count: int = rom.u8(at)
+	var count: int = rom.u8(at)
 	at += 1
-	for _i: int in warp_count:
+	var warps: Array = []
+	for _i: int in count:
 		if not rom.in_bounds(at, RomLayout.MAP_WARP_EVENT_SIZE):
 			return _error("Map %d/%d warp events are truncated." % [group, number])
 		var y: int = rom.u8(at)
@@ -1166,105 +1184,105 @@ static func _read_events(
 			"map_number": rom.u8(at + 4),
 		})
 		at += RomLayout.MAP_WARP_EVENT_SIZE
+	return {"ok": true, "kind": "warps", "events": warps, "at": at}
 
-	var coord_events: Array = []
+
+static func _read_coord_events(
+	rom: RomFile, at: int, group: int, number: int, cell_width: int, cell_height: int
+) -> Dictionary:
 	if not rom.in_bounds(at):
 		return _error("Map %d/%d has no coordinate-event count." % [group, number])
-	var coord_count: int = rom.u8(at)
+	var count: int = rom.u8(at)
 	at += 1
-	for _i: int in coord_count:
+	var coord_events: Array = []
+	for _i: int in count:
 		if not rom.in_bounds(at, RomLayout.MAP_COORD_EVENT_SIZE):
 			return _error("Map %d/%d coordinate events are truncated." % [group, number])
-		var coord_y: int = rom.u8(at + 1)
-		var coord_x: int = rom.u8(at + 2)
-		if not _valid_coord(coord_x, coord_y, cell_width, cell_height):
+		var y: int = rom.u8(at + 1)
+		var x: int = rom.u8(at + 2)
+		if not _valid_coord(x, y, cell_width, cell_height):
 			return _error("Map %d/%d has an out-of-bounds coordinate event." % [group, number])
 		coord_events.append({
 			"scene": rom.u8(at),
-			"x": coord_x,
-			"y": coord_y,
+			"x": x,
+			"y": y,
 			"script": rom.u16le(at + 4),
 		})
 		at += RomLayout.MAP_COORD_EVENT_SIZE
+	return {"ok": true, "kind": "coord_events", "events": coord_events, "at": at}
 
-	var bg_events: Array = []
+
+static func _read_bg_events(
+	rom: RomFile, at: int, group: int, number: int, cell_width: int, cell_height: int
+) -> Dictionary:
 	if not rom.in_bounds(at):
 		return _error("Map %d/%d has no background-event count." % [group, number])
-	var bg_count: int = rom.u8(at)
+	var count: int = rom.u8(at)
 	at += 1
-	for _i: int in bg_count:
+	var bg_events: Array = []
+	for _i: int in count:
 		if not rom.in_bounds(at, RomLayout.MAP_BG_EVENT_SIZE):
 			return _error("Map %d/%d background events are truncated." % [group, number])
-		var bg_y: int = rom.u8(at)
-		var bg_x: int = rom.u8(at + 1)
-		if not _valid_coord(bg_x, bg_y, cell_width, cell_height):
+		var y: int = rom.u8(at)
+		var x: int = rom.u8(at + 1)
+		if not _valid_coord(x, y, cell_width, cell_height):
 			return _error("Map %d/%d has an out-of-bounds background event." % [group, number])
 		bg_events.append({
-			"x": bg_x,
-			"y": bg_y,
+			"x": x,
+			"y": y,
 			"type": rom.u8(at + 2),
 			"script": rom.u16le(at + 3),
 		})
 		at += RomLayout.MAP_BG_EVENT_SIZE
+	return {"ok": true, "kind": "bg_events", "events": bg_events, "at": at}
 
-	var objects: Array = []
+
+static func _read_object_events(
+	rom: RomFile, bank: int, at: int, group: int, number: int
+) -> Dictionary:
 	if not rom.in_bounds(at):
 		return _error("Map %d/%d has no object-event count." % [group, number])
-	var object_count: int = rom.u8(at)
+	var count: int = rom.u8(at)
 	at += 1
-	for _i: int in object_count:
+	var objects: Array = []
+	for _i: int in count:
 		if not rom.in_bounds(at, RomLayout.MAP_OBJECT_EVENT_SIZE):
 			return _error("Map %d/%d object events are truncated." % [group, number])
-		var object_y: int = rom.u8(at + 1) - 4
-		var object_x: int = rom.u8(at + 2) - 4
-		# Object templates may sit in the runtime's six-cell connection padding,
-		# so unlike warps and coordinate events they are not constrained to the
-		# map's interior dimensions.
 		var radius: int = rom.u8(at + 4)
 		var palette_type: int = rom.u8(at + 7)
-		var hour_1: int = rom.u8(at + 5)
-		var hour_2: int = rom.u8(at + 6)
-		# The source macro writes -1 as $FF to select the time-of-day mask in
-		# hour_2. Preserve that sentinel as a signed value in the cache.
-		if hour_1 == 0xFF:
-			hour_1 = -1
-		if hour_2 == 0xFF:
-			hour_2 = -1
 		var event_flag: int = rom.u16le(at + 11)
 		if event_flag == 0xFFFF:
 			event_flag = -1
 		var object_type: int = palette_type & 0x0F
 		var object_script: int = rom.u16le(at + 9)
-		var trainer: Dictionary = {}
-		if object_type == OBJECTTYPE_TRAINER:
-			trainer = _read_trainer_record(rom, bank, object_script)
+		# Object templates may sit in the runtime's six-cell connection padding, so
+		# unlike warps and coordinate events they are not bounded by the map.
 		var object: Dictionary = {
 			"sprite": rom.u8(at),
-			"x": object_x,
-			"y": object_y,
+			"x": rom.u8(at + 2) - 4,
+			"y": rom.u8(at + 1) - 4,
 			"movement": rom.u8(at + 3),
 			"x_radius": radius & 0x0F,
 			"y_radius": radius >> 4,
-			"hour_1": hour_1,
-			"hour_2": hour_2,
+			"hour_1": _object_hour(rom.u8(at + 5)),
+			"hour_2": _object_hour(rom.u8(at + 6)),
 			"palette": palette_type >> 4,
 			"object_type": object_type,
 			"sight_range": rom.u8(at + 8),
 			"script": object_script,
 			"event_flag": event_flag,
 		}
-		if not trainer.is_empty():
-			object["trainer"] = trainer
+		if object_type == OBJECTTYPE_TRAINER:
+			var trainer: Dictionary = _read_trainer_record(rom, bank, object_script)
+			if not trainer.is_empty():
+				object["trainer"] = trainer
 		objects.append(object)
 		at += RomLayout.MAP_OBJECT_EVENT_SIZE
+	return {"ok": true, "kind": "objects", "events": objects, "at": at}
 
-	return {
-		"ok": true,
-		"warps": warps,
-		"coord_events": coord_events,
-		"bg_events": bg_events,
-		"objects": objects,
-}
+
+static func _object_hour(raw: int) -> int:
+	return -1 if raw == 0xFF else raw
 
 
 ## Decodes the source trainer macro referenced by an OBJECTTYPE_TRAINER event.

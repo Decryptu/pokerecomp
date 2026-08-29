@@ -106,6 +106,53 @@ static func purchase(
 	quantity: int = 1,
 	persist: bool = true
 ) -> Dictionary:
+	var checked: Dictionary = _purchase_refusal(world, mart, item, quantity)
+	if not bool(checked["ok"]):
+		return checked
+	var is_bargain: bool = bool(checked["is_bargain"])
+	var selected: Dictionary = checked["entry"]
+	var price: int = int(checked["price"])
+	var total: int = int(checked["total"])
+	var next_quantity: int = int(checked["next_quantity"])
+	var balance: int = int(checked["balance"])
+	var merchant_closed_flag: int = Gen2WorldState.ENGINE_GOLDENROD_UNDERGROUND_MERCHANT_CLOSED \
+		if Gen2WorldState.is_crystal_profile(world.data) \
+		else Gen2WorldState.ENGINE_GOLDENROD_UNDERGROUND_MERCHANT_CLOSED_GOLD_SILVER
+	var before: Gen2WorldSnapshot = world.snapshot()
+	var applied: Dictionary = world.state.apply_changes({}, {}, {
+		"items": {item: next_quantity},
+		"money": {MONEY_ACCOUNT: balance - total},
+		"engine_flags": {
+			merchant_closed_flag: true,
+		} if is_bargain else {},
+	})
+	if not bool(applied.get("ok", false)):
+		return _failure(&"purchase_state_failed", applied)
+	var committed: Dictionary = Gen2WorldTransaction.run(world, save, before, persist)
+	if not bool(committed.get("ok", false)):
+		return committed
+	if is_bargain:
+		var next_sold_items: Dictionary = {}
+		var previous_sold_items: Variant = mart.get("_sold_items", {})
+		if previous_sold_items is Dictionary:
+			next_sold_items = (previous_sold_items as Dictionary).duplicate()
+		next_sold_items[item] = true
+		mart["_sold_items"] = next_sold_items
+	return {
+		"ok": true,
+		"item": item,
+		"name": selected.get("name", "UNKNOWN"),
+		"quantity": quantity,
+		"price": price,
+		"total": total,
+		"balance": balance - total,
+		"owned": next_quantity,
+	}
+
+
+static func _purchase_refusal(
+	world: Gen2WorldAPI, mart: Dictionary, item: int, quantity: int
+) -> Dictionary:
 	if world == null or world.data == null or world.state == null:
 		return _failure(&"missing_world", {})
 	if quantity <= 0:
@@ -139,38 +186,14 @@ static func purchase(
 			"item": item, "price": price, "quantity": quantity,
 			"total": total, "balance": balance,
 		})
-	var merchant_closed_flag: int = Gen2WorldState.ENGINE_GOLDENROD_UNDERGROUND_MERCHANT_CLOSED \
-		if Gen2WorldState.is_crystal_profile(world.data) \
-		else Gen2WorldState.ENGINE_GOLDENROD_UNDERGROUND_MERCHANT_CLOSED_GOLD_SILVER
-	var before: Gen2WorldSnapshot = world.snapshot()
-	var applied: Dictionary = world.state.apply_changes({}, {}, {
-		"items": {item: next_quantity},
-		"money": {MONEY_ACCOUNT: balance - total},
-		"engine_flags": {
-			merchant_closed_flag: true,
-		} if is_bargain else {},
-	})
-	if not bool(applied.get("ok", false)):
-		return _failure(&"purchase_state_failed", applied)
-	var committed: Dictionary = Gen2WorldTransaction.run(world, save, before, persist)
-	if not bool(committed.get("ok", false)):
-		return committed
-	if is_bargain:
-		var next_sold_items: Dictionary = {}
-		var previous_sold_items: Variant = mart.get("_sold_items", {})
-		if previous_sold_items is Dictionary:
-			next_sold_items = (previous_sold_items as Dictionary).duplicate()
-		next_sold_items[item] = true
-		mart["_sold_items"] = next_sold_items
 	return {
 		"ok": true,
-		"item": item,
-		"name": selected.get("name", "UNKNOWN"),
-		"quantity": quantity,
+		"is_bargain": is_bargain,
+		"entry": selected,
 		"price": price,
 		"total": total,
-		"balance": balance - total,
-		"owned": next_quantity,
+		"next_quantity": next_quantity,
+		"balance": balance,
 	}
 
 

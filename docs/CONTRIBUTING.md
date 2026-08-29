@@ -293,6 +293,5 @@ the suite.
 
 Complexity counts `if`, `elif`, `while`, `for`, `and`, `or`, an inline `if` and
 one per `match` arm. Over the ceiling, the remedy is a lookup table, a guard
-clause or a named helper, never a nested ternary. The functions still over it are
-listed in that test and the list may only shrink: the test also fails on a line
-that no longer names a function over the ceiling.
+clause or a named helper, never a nested ternary. No function is over it today,
+and the test's `OVER_COMPLEXITY` list is empty: keep it that way.

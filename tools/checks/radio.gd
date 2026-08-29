@@ -166,28 +166,7 @@ func _verify_shows(_data: GameData, game_id: StringName, crystal: bool) -> void:
 				"kanto_badges": 0xFF if seed_index % 3 == 0 else 0,
 				"lucky_number": 12345,
 			}, random)
-			var last: String = ""
-			for frame: int in SHOW_FRAMES:
-				if show.finished():
-					break
-				# Midnight arrives halfway through, which is the only way
-				# Buena's ten shutdown lines are ever reached.
-				if frame == SHOW_FRAMES / 2:
-					show.set_hour(0 if hour >= Gen2RadioShow.NITE_HOUR else 20)
-				visited[show.segment()] = true
-				show.advance_frame()
-				if not show.ran_segment.is_empty():
-					visited[show.ran_segment] = true
-				var bottom: String = show.lines()[1]
-				if bottom == last:
-					continue
-				last = bottom
-				lines_seen += 1
-				if bottom.strip_edges().is_empty():
-					continue
-				if bottom.contains("{") \
-					or (bottom.contains("  ") and not bottom.begins_with(" ")):
-					blank.append("%s ch%d: \"%s\"" % [game_id, channel, bottom])
+			lines_seen += _walk_show(show, hour, game_id, channel, visited, blank)
 	_r.check(
 		blank.is_empty(),
 		"%s: a radio line has an unfilled buffer in it: %s" % [
@@ -208,6 +187,40 @@ func _verify_shows(_data: GameData, game_id: StringName, crystal: bool) -> void:
 	print("%s radio shows: %d of %d segments run, %d lines printed." % [
 		game_id, visited.size() - 1, Gen2RadioShow.SEGMENTS.size() - 1, lines_seen,
 	])
+
+
+func _walk_show(
+	show: Gen2RadioShow,
+	hour: int,
+	game_id: StringName,
+	channel: int,
+	visited: Dictionary,
+	blank: Array[String],
+) -> int:
+	var last: String = ""
+	var lines_seen: int = 0
+	for frame: int in SHOW_FRAMES:
+		if show.finished():
+			break
+		# Midnight arrives halfway through, which is the only way
+		# Buena's ten shutdown lines are ever reached.
+		if frame == SHOW_FRAMES / 2:
+			show.set_hour(0 if hour >= Gen2RadioShow.NITE_HOUR else 20)
+		visited[show.segment()] = true
+		show.advance_frame()
+		if not show.ran_segment.is_empty():
+			visited[show.ran_segment] = true
+		var bottom: String = show.lines()[1]
+		if bottom == last:
+			continue
+		last = bottom
+		lines_seen += 1
+		if bottom.strip_edges().is_empty():
+			continue
+		if bottom.contains("{") \
+			or (bottom.contains("  ") and not bottom.begins_with(" ")):
+			blank.append("%s ch%d: \"%s\"" % [game_id, channel, bottom])
+	return lines_seen
 
 
 ## Every station's track has to be a real imported music record, or tuning to it

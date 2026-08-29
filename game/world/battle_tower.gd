@@ -455,7 +455,22 @@ func reward_for(pack: Dictionary) -> int:
 ## The mobile rows are no-ops with a reason: each writes a byte in SRAM bank 5
 ## that only the mobile adapter's own routines read, and none of them reaches a
 ## script the player can talk to.
+## The four actions whose whole body is the challenge state they write.
+const CHALLENGE_STATE_ACTIONS: Dictionary = {
+	ACTION_SAVE_AND_QUIT: SAVED_AND_LEFT,
+	ACTION_CHALLENGE_CANCELED: NO_CHALLENGE,
+	ACTION_SET_WON_CHALLENGE: WON_CHALLENGE,
+	ACTION_SET_RECEIVED_REWARD: RECEIVED_REWARD,
+}
+const PARTY_CHECK_ACTIONS: Array[int] = [ACTION_LEVEL_CHECK, ACTION_UBERS_CHECK]
+
+
 func action(index: int, context: Dictionary = {}) -> int:
+	if CHALLENGE_STATE_ACTIONS.has(index):
+		challenge_state = int(CHALLENGE_STATE_ACTIONS[index])
+		return -1
+	if PARTY_CHECK_ACTIONS.has(index):
+		return _party_check(index, context.get("party", {}) as Dictionary)
 	match index:
 		ACTION_CHECK_EXPLANATION_READ:
 			if not bool(context.get("save_is_yours", true)):
@@ -465,10 +480,6 @@ func action(index: int, context: Dictionary = {}) -> int:
 			save_file_flags |= FLAG_EXPLANATION_READ
 		ACTION_GET_CHALLENGE_STATE:
 			return challenge_state
-		ACTION_SAVE_AND_QUIT:
-			challenge_state = SAVED_AND_LEFT
-		ACTION_CHALLENGE_CANCELED:
-			challenge_state = NO_CHALLENGE
 		ACTION_SAVE_LEVEL_GROUP:
 			level_group = chosen_group
 		ACTION_LOAD_LEVEL_GROUP:
@@ -476,12 +487,6 @@ func action(index: int, context: Dictionary = {}) -> int:
 			return chosen_group
 		ACTION_CHECK_SAVE_FILE_IS_YOURS:
 			return 1 if bool(context.get("save_is_yours", true)) else 0
-		ACTION_LEVEL_CHECK:
-			var over: int = level_check(context.get("party", {}) as Dictionary, chosen_group)
-			return 0 if over < 0 else group_level(chosen_group)
-		ACTION_UBERS_CHECK:
-			var uber: int = ubers_check(context.get("party", {}) as Dictionary, chosen_group)
-			return 0 if uber < 0 else group_level(chosen_group)
 		ACTION_RESET_DATA:
 			reset_trainers()
 		ACTION_CHOOSE_REWARD:
@@ -490,8 +495,10 @@ func action(index: int, context: Dictionary = {}) -> int:
 				choose_reward(random as RandomNumberGenerator)
 		ACTION_GIVE_REWARD:
 			return reward_for(context.get("pack", {}) as Dictionary)
-		ACTION_SET_WON_CHALLENGE:
-			challenge_state = WON_CHALLENGE
-		ACTION_SET_RECEIVED_REWARD:
-			challenge_state = RECEIVED_REWARD
 	return -1
+
+
+func _party_check(index: int, party: Dictionary) -> int:
+	var refused: int = level_check(party, chosen_group) if index == ACTION_LEVEL_CHECK \
+		else ubers_check(party, chosen_group)
+	return 0 if refused < 0 else group_level(chosen_group)

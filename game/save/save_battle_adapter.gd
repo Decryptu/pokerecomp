@@ -65,17 +65,9 @@ static func from_battle_party(
 	game_id: StringName, rom_sha1: String, slot: int, party: Gen2Party, player_name: String = "",
 	source_save: Gen2SaveData = null
 ) -> Gen2SaveData:
-	if party == null or party.mons.is_empty() or party.mons.size() > Gen2Party.MAX_SIZE:
+	var egg_count: int = _egg_slots(party, source_save)
+	if egg_count < 0:
 		return null
-	var egg_count: int = 0
-	if source_save != null:
-		for member: Gen2SaveMon in source_save.party:
-			if member != null and member.is_egg:
-				egg_count += 1
-		if egg_count > 0 and source_save.party.size() - egg_count != party.mons.size():
-			return null
-		if source_save.party.size() > Gen2Party.MAX_SIZE:
-			return null
 	var out: Gen2SaveData = (
 		Gen2SaveData.from_dict(source_save.to_dict())
 		if source_save != null else Gen2SaveData.new()
@@ -116,6 +108,22 @@ static func from_battle_party(
 			saved_mon.original_trainer = previous.original_trainer
 		out.party.append(saved_mon)
 	return out
+
+
+static func _egg_slots(party: Gen2Party, source_save: Gen2SaveData) -> int:
+	if party == null or party.mons.is_empty() or party.mons.size() > Gen2Party.MAX_SIZE:
+		return -1
+	if source_save == null:
+		return 0
+	var egg_count: int = 0
+	for member: Gen2SaveMon in source_save.party:
+		if member != null and member.is_egg:
+			egg_count += 1
+	if egg_count > 0 and source_save.party.size() - egg_count != party.mons.size():
+		return -1
+	if source_save.party.size() > Gen2Party.MAX_SIZE:
+		return -1
+	return egg_count
 
 
 ## The fighting half of a saved party. An egg keeps its party slot on the

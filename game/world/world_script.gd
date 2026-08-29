@@ -846,11 +846,10 @@ static func scan_references(
 ) -> Dictionary:
 	## Scans only commands understood by this slice. An unknown command stops the
 	## scan because its operand width cannot be inferred safely.
-	var scripts: Array = []
-	var texts: Array = []
-	var movements: Array = []
-	var command_queues: Array = []
-	var elevators: Array = []
+	var out: Dictionary = {
+		"scripts": [], "texts": [], "movements": [],
+		"command_queues": [], "elevators": [],
+	}
 	var at: int = 0
 	var command_count: int = 0
 	while at < data.size() and command_count < MAX_COMMANDS:
@@ -858,61 +857,74 @@ static func scan_references(
 		if not bool(command.get("ok", false)):
 			break
 		var opcode: int = int(command["opcode"])
-		match opcode:
-			SCALL, SJUMP:
-				scripts.append({"bank": bank, "address": int(command["address"])})
-			IFEQUAL, IFNOTEQUAL, IFFALSE, IFTRUE, IFGREATER, IFLESS:
-				scripts.append({"bank": bank, "address": int(command["address"])})
-			FARSCALL, FARSJUMP:
-				scripts.append({"bank": int(command["bank"]), "address": int(command["address"])})
-			WRITETEXT, JUMPTEXTFACEPLAYER:
-				texts.append({"bank": bank, "address": int(command["address"])})
-			GETSTRING:
-				texts.append({"bank": bank, "address": int(command["address"])})
-			JUMPTEXT:
-				if crystal_commands:
-					texts.append({"bank": bank, "address": int(command["address"])})
-			FARWRITETEXT:
-				texts.append({"bank": int(command["bank"]), "address": int(command["address"])})
-			FARJUMPTEXT:
-				if crystal_commands:
-					texts.append({"bank": int(command["bank"]), "address": int(command["address"])})
-				else:
-					texts.append({"bank": bank, "address": int(command["address"])})
-		var source: int = Gen2WorldScript.source_opcode(opcode, crystal_commands)
-		match source:
-			0x68, 0x69:
-				movements.append({"bank": bank, "address": int(command["address"])})
-			0x63:
-				texts.append({"bank": bank, "address": int(command["win_address"])})
-				texts.append({"bank": bank, "address": int(command["loss_address"])})
-			0x8C, 0x8E:
-				scripts.append({"bank": bank, "address": int(command["address"])})
-			0x97:
-				## phonecall passes a caller-name text pointer to PhoneCall. It is
-				## not a script pointer and must be collected as text data.
-				texts.append({"bank": bank, "address": int(command["address"])})
-			0x7C:
-				## writecmdqueue points at a cmdqueue entry, which is data rather
-				## than script, so it is collected as its own kind.
-				command_queues.append({"bank": bank, "address": int(command["address"])})
-			0x94:
-				## elevator points at an `elevfloor` list, which is data rather
-				## than script, and `Elevator.LoadPointer` reads it out of the
-				## map scripts bank the command itself sits in.
-				elevators.append({"bank": bank, "address": int(command["address"])})
+		_scan_opcode(out, command, opcode, bank, crystal_commands)
+		_scan_source_opcode(
+			out, command, Gen2WorldScript.source_opcode(opcode, crystal_commands), bank
+		)
 		at += int(command["width"])
 		command_count += 1
 		if not continues_after(opcode, crystal_commands):
 			break
-	return {
-		"scripts": scripts, "texts": texts, "movements": movements,
-		"command_queues": command_queues, "elevators": elevators,
-	}
+	return out
 
 
-## Decodes the bounded text-command slice collected by the importer. Map text
-## begins with text_start and ends with the source done command $57. The generic
+static func _scan_opcode(
+	out: Dictionary, command: Dictionary, opcode: int, bank: int, crystal_commands: bool
+) -> void:
+	var scripts: Array = out["scripts"]
+	var texts: Array = out["texts"]
+	match opcode:
+		SCALL, SJUMP:
+			scripts.append({"bank": bank, "address": int(command["address"])})
+		IFEQUAL, IFNOTEQUAL, IFFALSE, IFTRUE, IFGREATER, IFLESS:
+			scripts.append({"bank": bank, "address": int(command["address"])})
+		FARSCALL, FARSJUMP:
+			scripts.append({"bank": int(command["bank"]), "address": int(command["address"])})
+		WRITETEXT, JUMPTEXTFACEPLAYER:
+			texts.append({"bank": bank, "address": int(command["address"])})
+		GETSTRING:
+			texts.append({"bank": bank, "address": int(command["address"])})
+		JUMPTEXT:
+			if crystal_commands:
+				texts.append({"bank": bank, "address": int(command["address"])})
+		FARWRITETEXT:
+			texts.append({"bank": int(command["bank"]), "address": int(command["address"])})
+		FARJUMPTEXT:
+			if crystal_commands:
+				texts.append({"bank": int(command["bank"]), "address": int(command["address"])})
+			else:
+				texts.append({"bank": bank, "address": int(command["address"])})
+
+
+static func _scan_source_opcode(
+	out: Dictionary, command: Dictionary, source: int, bank: int
+) -> void:
+	match source:
+		0x68, 0x69:
+			(out["movements"] as Array).append({"bank": bank, "address": int(command["address"])})
+		0x63:
+			var texts: Array = out["texts"]
+			texts.append({"bank": bank, "address": int(command["win_address"])})
+			texts.append({"bank": bank, "address": int(command["loss_address"])})
+		0x8C, 0x8E:
+			(out["scripts"] as Array).append({"bank": bank, "address": int(command["address"])})
+		0x97:
+			## phonecall passes a caller-name text pointer to PhoneCall. It is
+			## not a script pointer and must be collected as text data.
+			(out["texts"] as Array).append({"bank": bank, "address": int(command["address"])})
+		0x7C:
+			## writecmdqueue points at a cmdqueue entry, which is data rather
+			## than script, so it is collected as its own kind.
+			(out["command_queues"] as Array).append({
+				"bank": bank, "address": int(command["address"]),
+			})
+		0x94:
+			## elevator points at an `elevfloor` list, which is data rather than
+			## script, and `Elevator.LoadPointer` reads it out of the map scripts
+			## bank the command itself sits in.
+			(out["elevators"] as Array).append({"bank": bank, "address": int(command["address"])})
+
+
 ## Decodes one `cmdqueue` entry: `dbw type, address` and two filler bytes
 ## (macros/scripts/maps.asm). Answers the type and the data pointer only; what
 ## the pointer means is the type's business.

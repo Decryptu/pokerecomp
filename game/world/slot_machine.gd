@@ -711,50 +711,51 @@ func _update_reel_objects(reel: Reel) -> void:
 
 
 ## `ReelActionJumptable`, on the reel this pass is spinning.
+## `Slots_ReelActionTable`: the method each action runs. Actions 2 to 6 set a
+## rate and nothing else, so they are [constant REEL_SPIN_RATES] instead.
+const REEL_METHODS: Dictionary = {
+	REEL_ACTION_STOP_REEL_IGNORE_JOYPAD: &"_stop_reel_delay",
+	REEL_ACTION_STOP_REEL1: &"_action_stop_reel1",
+	REEL_ACTION_STOP_REEL2: &"_action_stop_reel2",
+	REEL_ACTION_STOP_REEL3: &"_action_stop_reel3",
+	REEL_ACTION_SET_UP_REEL2_SKIP_TO_7: &"_action_set_up_skip",
+	REEL_ACTION_WAIT_REEL2_SKIP_TO_7: &"_action_wait_skip",
+	REEL_ACTION_FAST_SPIN_REEL2_UNTIL_LINED_UP_7S: &"_action_fast_spin_sevens",
+	REEL_ACTION_START_SLOW_ADVANCE_REEL3: &"_action_start_slow_advance",
+	REEL_ACTION_WAIT_SLOW_ADVANCE_REEL3: &"_action_wait_slow_advance",
+	REEL_ACTION_INIT_GOLEM: &"_action_init_golem",
+	REEL_ACTION_WAIT_GOLEM: &"_action_wait_golem",
+	REEL_ACTION_END_GOLEM: &"_action_end_golem",
+	REEL_ACTION_INIT_CHANSEY: &"_action_init_chansey",
+	REEL_ACTION_WAIT_CHANSEY: &"_action_wait_chansey",
+	REEL_ACTION_WAIT_EGG: &"_action_wait_egg",
+	REEL_ACTION_DROP_REEL: &"_action_drop_reel",
+}
+const REEL_SPIN_RATES: Dictionary = {
+	2: RATE_QUADRUPLE, 3: RATE_DOUBLE, REEL_ACTION_NORMAL_RATE: RATE_NORMAL,
+	5: 2, 6: RATE_QUARTER,
+}
+
+
 func _reel_action(index: int) -> void:
 	var reel: Reel = _reels[index]
-	match reel.action:
-		REEL_ACTION_DO_NOTHING:
-			return
-		REEL_ACTION_STOP_REEL_IGNORE_JOYPAD:
-			_stop_reel_delay(reel)
-		2, 3, REEL_ACTION_NORMAL_RATE, 5, 6:
-			reel.spin_rate = [16, 8, 4, 2, 1][reel.action - 2]
-		REEL_ACTION_STOP_REEL1:
-			_action_stop_reel1(reel)
-		REEL_ACTION_STOP_REEL2:
-			_action_stop_reel2(reel)
-		REEL_ACTION_STOP_REEL3:
-			_action_stop_reel3(reel)
-		REEL_ACTION_SET_UP_REEL2_SKIP_TO_7:
-			_action_set_up_skip(reel)
-		REEL_ACTION_WAIT_REEL2_SKIP_TO_7:
-			_action_wait_skip(reel)
-		REEL_ACTION_FAST_SPIN_REEL2_UNTIL_LINED_UP_7S:
-			if _check_first_two(reel) and _first_two_sevens:
-				_stop_reel(reel)
-		REEL_ACTION_START_SLOW_ADVANCE_REEL3:
-			_action_start_slow_advance(reel)
-		REEL_ACTION_WAIT_SLOW_ADVANCE_REEL3:
-			_action_wait_slow_advance(reel)
-		REEL_ACTION_INIT_GOLEM:
-			_action_init_golem(reel)
-		REEL_ACTION_WAIT_GOLEM:
-			_action_wait_golem(reel)
-		REEL_ACTION_END_GOLEM:
-			_delay = 0
-			reel.action = REEL_ACTION_WAIT_GOLEM
-			reel.spin_rate = 0
-		REEL_ACTION_INIT_CHANSEY:
-			_action_init_chansey(reel)
-		REEL_ACTION_WAIT_CHANSEY:
-			_action_wait_chansey(reel)
-		REEL_ACTION_WAIT_EGG:
-			_action_wait_egg(reel)
-		REEL_ACTION_DROP_REEL:
-			_action_drop_reel(reel)
-		_:
-			return
+	if REEL_SPIN_RATES.has(reel.action):
+		reel.spin_rate = int(REEL_SPIN_RATES[reel.action])
+		return
+	var method: StringName = StringName(REEL_METHODS.get(reel.action, &""))
+	if not method.is_empty():
+		call(method, reel)
+
+
+func _action_fast_spin_sevens(reel: Reel) -> void:
+	if _check_first_two(reel) and _first_two_sevens:
+		_stop_reel(reel)
+
+
+func _action_end_golem(reel: Reel) -> void:
+	_delay = 0
+	reel.action = REEL_ACTION_WAIT_GOLEM
+	reel.spin_rate = 0
 
 
 ## `Slots_StopReel`, which is the rate, the ignore-joypad action and the delay.

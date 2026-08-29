@@ -68,39 +68,20 @@ static func give_to_party(
 	persist: bool = true,
 	mail: Gen2SaveMail = null
 ) -> Dictionary:
-	if world == null or world.data == null or world.state == null:
-		return Gen2WorldTransaction.failure(&"missing_world", {})
+	var refused: Dictionary = _give_item_refusal(world, item)
+	if not refused.is_empty():
+		return refused
 	var definition: Dictionary = world.data.item(item)
-	if definition.is_empty():
-		return Gen2WorldTransaction.failure(&"unknown_item", {"item": item})
-	if not Gen2WorldPack.can_hold(world.data, item):
-		return Gen2WorldTransaction.failure(&"item_cannot_be_held", {"item": item})
 	var owned: int = world.state.item_quantity(item)
-	if owned <= 0:
-		return Gen2WorldTransaction.failure(&"insufficient_item_quantity", {"item": item})
 	var opened: Dictionary = Gen2WorldTransaction.begin(world, save)
 	if not bool(opened.get("ok", false)):
 		return opened
 	var candidate: Gen2SaveData = opened["candidate"]
 	var mon: Gen2SaveMon = _party_member(candidate, party_index)
-	if mon == null:
-		return Gen2WorldTransaction.failure(&"unknown_party_member", {"party_index": party_index})
-	if mon.is_egg:
-		return Gen2WorldTransaction.failure(&"cannot_hold_egg", {"party_index": party_index})
+	var refused_mon: Dictionary = _give_mon_refusal(world, mon, party_index, item, swap, mail)
+	if not refused_mon.is_empty():
+		return refused_mon
 	var held: int = mon.item
-	## `.please_remove_mail`, which is asked before `.already_holding_item`: a
-	## held mail is not offered as a swap at all.
-	if Gen2HeldItem.is_mail(held):
-		return Gen2WorldTransaction.failure(&"holding_mail", {"party_index": party_index})
-	if held > 0 and not swap:
-		return Gen2WorldTransaction.failure(&"already_holding", {
-			"party_index": party_index, "held": held,
-			"held_name": world.data.item_name(held),
-		})
-	## `GivePartyItem`'s own tail: a mail item with no message behind it would
-	## be a held item the MAIL row could not read.
-	if Gen2HeldItem.is_mail(item) and mail == null:
-		return Gen2WorldTransaction.failure(&"mail_not_written", {"item": item})
 	var changes: Dictionary = {item: owned - 1}
 	if held > 0:
 		## `GiveItemToPokemon` runs before `ReceiveItemFromPokemon`, so the entry
@@ -132,6 +113,43 @@ static func give_to_party(
 		"held": held,
 		"held_name": world.data.item_name(held) if held > 0 else "",
 	}
+
+
+static func _give_item_refusal(world: Gen2WorldAPI, item: int) -> Dictionary:
+	if world == null or world.data == null or world.state == null:
+		return Gen2WorldTransaction.failure(&"missing_world", {})
+	if world.data.item(item).is_empty():
+		return Gen2WorldTransaction.failure(&"unknown_item", {"item": item})
+	if not Gen2WorldPack.can_hold(world.data, item):
+		return Gen2WorldTransaction.failure(&"item_cannot_be_held", {"item": item})
+	if world.state.item_quantity(item) <= 0:
+		return Gen2WorldTransaction.failure(&"insufficient_item_quantity", {"item": item})
+	return {}
+
+
+static func _give_mon_refusal(
+	world: Gen2WorldAPI, mon: Gen2SaveMon, party_index: int, item: int,
+	swap: bool, mail: Gen2SaveMail
+) -> Dictionary:
+	if mon == null:
+		return Gen2WorldTransaction.failure(&"unknown_party_member", {"party_index": party_index})
+	if mon.is_egg:
+		return Gen2WorldTransaction.failure(&"cannot_hold_egg", {"party_index": party_index})
+	var held: int = mon.item
+	## `.please_remove_mail`, which is asked before `.already_holding_item`: a
+	## held mail is not offered as a swap at all.
+	if Gen2HeldItem.is_mail(held):
+		return Gen2WorldTransaction.failure(&"holding_mail", {"party_index": party_index})
+	if held > 0 and not swap:
+		return Gen2WorldTransaction.failure(&"already_holding", {
+			"party_index": party_index, "held": held,
+			"held_name": world.data.item_name(held),
+		})
+	## `GivePartyItem`'s own tail: a mail item with no message behind it would
+	## be a held item the MAIL row could not read.
+	if Gen2HeldItem.is_mail(item) and mail == null:
+		return Gen2WorldTransaction.failure(&"mail_not_written", {"item": item})
+	return {}
 
 
 ## `TakePartyItem`. An empty hand and a full pack are both refusals with their
