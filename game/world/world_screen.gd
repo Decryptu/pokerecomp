@@ -372,9 +372,10 @@ func _set_caption(text: String) -> void:
 	_caption.text = _caption_text + _rate_text
 
 
-## The reading changes once a second and the line is rebuilt only then, so this
-## is drawn on the frame it is measuring, and `lock` is shown only when there is
-## one. See [method Gen2WorldAnimation.FrameClock.rate].
+## The reading changes once a second and the line is rebuilt only then, so this is
+## drawn on the frame it is measuring. `lock` shows only when there is one; `sub`
+## is screen pixels to a hardware one, and 1:1 is none of the smoothing reaching
+## the panel. See [method Gen2WorldAnimation.FrameClock.rate].
 func _refresh_frame_rate() -> void:
 	if _world == null or _caption == null or not _caption.visible:
 		return
@@ -383,9 +384,10 @@ func _refresh_frame_rate() -> void:
 		return
 	_rate_reading = rate
 	var lock: int = int(rate["lock"])
-	_rate_text = "   %.0f fps   hw %.0f/s   worst %.1f ms%s" % [
+	var steps: int = _screen.subpixel_steps()
+	_rate_text = "   %.0f fps   hw %.0f/s   worst %.1f ms%s   sub 1:%d" % [
 		float(rate["fps"]), float(rate["hardware"]), float(rate["worst_ms"]),
-		"" if lock < 1 else "   lock 1:%d" % lock,
+		"" if lock < 1 else "   lock 1:%d" % lock, steps,
 	]
 	_caption.text = _caption_text + _rate_text
 

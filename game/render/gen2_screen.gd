@@ -75,6 +75,8 @@ var subpixel: bool = false:
 		subpixel = value
 		_fit()
 
+var _subpixel_steps: int = 1
+
 ## Whether the buffer outside the 160x144 rectangle is filled by this screen.
 ##
 ## On by default, and the reason a screen written without a thought for the
@@ -706,13 +708,18 @@ static func buffer_for(area: Vector2, at_scale: float) -> Vector2i:
 	)
 
 
-## The finest step [param whole] can be divided into, since the container shrinks
-## the buffer by a whole number and [constant SUBPIXEL_STEPS_MAX] is the ceiling.
+## The finest step [param whole] divides into, the container shrinking the buffer
+## by a whole number and [constant SUBPIXEL_STEPS_MAX] being the ceiling. One with
+## no divisor under it is a prime, and only a small window asks for those.
 static func _subpixel_for(whole: int) -> int:
 	for steps: int in range(mini(whole, SUBPIXEL_STEPS_MAX), 1, -1):
 		if whole % steps == 0:
 			return steps
-	return 1
+	return whole
+
+
+func subpixel_steps() -> int:
+	return _subpixel_steps
 
 
 func _fit() -> void:
@@ -741,6 +748,7 @@ func _fit() -> void:
 		_container.stretch_shrink = 1
 		_container.size = Vector2(view)
 		_container.scale = Vector2(scale_now, scale_now)
+	_subpixel_steps = steps
 	_viewport.canvas_transform = Transform2D().scaled(Vector2(steps, steps))
 	# Nearest is what keeps a hardware pixel a square block of screen pixels, in
 	# here and in the viewport that [member subpixel] magnifies inside, and it is
