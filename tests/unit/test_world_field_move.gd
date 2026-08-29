@@ -86,6 +86,15 @@ const HEADBUTT_STAND_CELL: Vector2i = Vector2i(0, 2)
 const ENVIRONMENT_TOWN: int = 1
 const ENVIRONMENT_DUNGEON: int = 7
 
+## The two Ruins of Alph chambers whose walls a field move opens, at their own
+## Crystal group and numbers so `unown_wall_event` recognises them. Both are
+## DUNGEON and neither is dark, which is what makes the Aerodactyl room the one
+## place Flash works on a lit map.
+const RUINS_GROUP: int = Gen2WorldAPI.RUINS_OF_ALPH_GROUP
+const KABUTO_CHAMBER: int = Gen2WorldAPI.RUINS_OF_ALPH_KABUTO_CHAMBER
+const AERODACTYL_CHAMBER: int = Gen2WorldAPI.RUINS_OF_ALPH_AERODACTYL_CHAMBER
+const ESCAPE_KABUTO_DOOR: Vector2i = Vector2i(1, 3)
+
 var _directory: String = ""
 
 
@@ -134,6 +143,8 @@ func _write_cache() -> void:
 		_map(ESCAPE_TOWN, TILESET_CUTTABLE, 0, ENVIRONMENT_TOWN),
 		_map(ESCAPE_CAVE, TILESET_NO_ENTRY, 0, ENVIRONMENT_CAVE),
 		_map(ESCAPE_POKECENTER, TILESET_POKECENTER, 0, ENVIRONMENT_INDOOR),
+		_map(KABUTO_CHAMBER, TILESET_NO_ENTRY, 0, ENVIRONMENT_DUNGEON, RUINS_GROUP),
+		_map(AERODACTYL_CHAMBER, TILESET_NO_ENTRY, 0, ENVIRONMENT_DUNGEON, RUINS_GROUP),
 	])
 	# `SpawnPoints`, with the town as the one spawn this cache carries and the
 	# Pokemon Center standing in for SPAWN_NEW_BARK, which is the row a
@@ -261,7 +272,9 @@ func _tileset(number: int) -> Dictionary:
 	}
 
 
-func _map(number: int, tileset: int, palette: int = 0, environment: int = 0) -> Dictionary:
+func _map(
+	number: int, tileset: int, palette: int = 0, environment: int = 0, group: int = 1
+) -> Dictionary:
 	var blocks: Array = []
 	for index: int in 16:
 		blocks.append(BLOCK_FLOOR)
@@ -315,16 +328,23 @@ func _map(number: int, tileset: int, palette: int = 0, environment: int = 0) -> 
 				"x": ESCAPE_CENTRE_DOOR.x, "y": ESCAPE_CENTRE_DOOR.y, "destination": 1,
 				"map_group": 1, "map_number": ESCAPE_POKECENTER,
 			},
+			{
+				"x": ESCAPE_KABUTO_DOOR.x, "y": ESCAPE_KABUTO_DOOR.y, "destination": 1,
+				"map_group": RUINS_GROUP, "map_number": KABUTO_CHAMBER,
+			},
 		]
-	elif number in [ESCAPE_CAVE, ESCAPE_POKECENTER]:
+		collision[ESCAPE_KABUTO_DOOR.y * 8 + ESCAPE_KABUTO_DOOR.x] = COLL_PIT
+	elif group == RUINS_GROUP or number in [ESCAPE_CAVE, ESCAPE_POKECENTER]:
 		collision[ESCAPE_INSIDE_DOOR.y * 8 + ESCAPE_INSIDE_DOOR.x] = COLL_PIT
 		warps = [{
 			"x": ESCAPE_INSIDE_DOOR.x, "y": ESCAPE_INSIDE_DOOR.y,
 			"destination": 1 if number == ESCAPE_CAVE else 2,
 			"map_group": 1, "map_number": ESCAPE_TOWN,
 		}]
+		if group == RUINS_GROUP:
+			warps[0]["destination"] = 3
 	return {
-		"group": 1,
+		"group": group,
 		"number": number,
 		"tileset": tileset,
 		"palette": palette,
@@ -1065,20 +1085,37 @@ func test_a_map_reload_restores_the_whirlpool_and_drops_a_staged_request() -> vo
 	assert_true(world.pending_whirlpool().is_empty())
 
 
-func test_the_whirlpool_traps_a_player_until_it_is_removed() -> void:
-	# .CheckTile answers before .TrySurf, so the cell is enterable but not
-	# leavable: Script_ForcedMovement only spins the player around.
+## `.CheckTile` answers before `.TrySurf`, so the cell is entered and then
+## `Script_ForcedMovement` runs: `step_dig 16`, a `turn_in` back the way the
+## player came, another `step_dig 16` and a `turn_head`. `turn_in` reaches
+## `TurningStep` and `InitStep`, so the whirlpool spits the player out rather
+## than holding them; the fall's cell is still not somewhere they can stay.
+func test_the_whirlpool_spits_the_player_back_out_the_way_they_came() -> void:
 	var world: Gen2WorldAPI = _whirlpool_world()
-	assert_true(bool(world.move_result(Vector2i.DOWN).get("ok", false)))
+	var entered: Dictionary = world.move_result(Vector2i.DOWN)
+	assert_true(bool(entered.get("ok", false)))
 	assert_eq(world.player_cell, WHIRLPOOL_CELL)
+	assert_eq(world.player_facing, Gen2WorldSprite.FACING_DOWN)
+	while world.player_step_in_progress():
+		world.advance_player_step_pass()
 
 	var spun: Dictionary = world.move_result(Vector2i.DOWN)
 	assert_eq(spun["kind"], &"forced_turn")
-	assert_eq(world.player_cell, WHIRLPOOL_CELL)
+	assert_eq(spun["from_cell"], WHIRLPOOL_CELL)
+	assert_eq(world.player_cell, WHIRLPOOL_STAND_CELL, "one cell back the way in")
 	assert_eq(world.player_facing, Gen2WorldSprite.FACING_UP)
-	assert_eq(world.move_result(Vector2i.UP)["kind"], &"forced_turn")
-	assert_eq(world.player_facing, Gen2WorldSprite.FACING_DOWN)
-	assert_eq(world.player_cell, WHIRLPOOL_CELL)
+	## 16 + 8 + 16, and the whole run spins: `step_dig` is STEP_TYPE_SLEEP with
+	## OBJECT_ACTION_SPIN and `turn_in` is TurningStep's.
+	assert_eq(int(spun["passes"]), Gen2WorldAPI.FORCED_TURN_SLEEP_PASSES * 2 + 8)
+	assert_true(world.player_step_in_progress())
+	assert_true(
+		Gen2WorldMovement.SPINNING_KINDS.has(world.player_step_kind()),
+		String(world.player_step_kind())
+	)
+	for _spent: int in int(spun["passes"]):
+		world.advance_player_step_pass()
+	assert_false(world.player_step_in_progress())
+	assert_eq(world.player_cell, WHIRLPOOL_STAND_CELL)
 
 	# Removing it from the neighbouring cell frees it.
 	world.player_cell = WHIRLPOOL_STAND_CELL
@@ -1228,10 +1265,11 @@ func test_the_waterfall_climb_spins_the_player_counterclockwise() -> void:
 			seen.append(world.player_drawn_facing())
 	for index: int in seen.size():
 		assert_eq(seen[index], wanted[(index / 4) % 4], "pass %d" % index)
-	## The logical facing never moved, so the climb still ends facing up, and the
-	## drawing goes back to it the moment the run drains.
-	assert_eq(world.player_facing, Gen2WorldSprite.FACING_UP)
-	assert_eq(world.player_drawn_facing(), Gen2WorldSprite.FACING_UP)
+	## The spin writes OBJECT_DIRECTION, which is `wPlayerDirection`, and nothing
+	## after the script puts it back, so the climb ends a quarter turn per cell
+	## round from DOWN: three steps here, so LEFT.
+	assert_eq(world.player_facing, Gen2WorldSprite.FACING_LEFT)
+	assert_eq(world.player_drawn_facing(), Gen2WorldSprite.FACING_LEFT)
 
 
 ## The landing re-derives the player state the way a warp does, so a climb that
@@ -1270,14 +1308,18 @@ func test_a_map_change_clears_a_pending_waterfall() -> void:
 
 ## Flash. `.CheckUseFlash` checks the badge and then the map's own palette byte,
 ## and nothing else: it is the one field move that never looks at a tile.
-func _flash_world(with_badge: bool = true, map_number: int = 3) -> Gen2WorldAPI:
+func _flash_world(
+	with_badge: bool = true, map_number: int = 3, group: int = 1
+) -> Gen2WorldAPI:
 	var data: GameData = GameData.open_directory(_directory)
 	var state := Gen2WorldState.new()
 	if with_badge:
 		state.set_engine_flag(Gen2WorldState.badge_flag(
 			Gen2WorldFieldMove.BADGE_ZEPHYR, Gen2WorldState.is_crystal_profile(data)
 		))
-	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, map_number, Vector2i(1, 1), state)
+	var world: Gen2WorldAPI = Gen2WorldAPI.open(
+		data, group, map_number, Vector2i(1, 1), state
+	)
 	_knowing_party(world, Gen2WorldFieldMove.MOVE_FLASH)
 	return world
 
@@ -1980,3 +2022,208 @@ func test_a_post_champion_slot_continues_at_new_bark() -> void:
 		data, Gen2WorldSnapshot.from_dict(encoded)
 	)
 	assert_eq(legacy.map_id(), world.map_id())
+
+
+## `engine/events/unown_walls.asm`. `SpecialAerodactylChamber` and
+## `SpecialKabutoChamber` each compare the map attributes pointer, so the answer
+## is the map and nothing else.
+func test_the_unown_wall_chambers_answer_only_on_their_own_map() -> void:
+	var chamber: Gen2WorldAPI = _flash_world(true, AERODACTYL_CHAMBER, RUINS_GROUP)
+	assert_eq(
+		chamber.unown_wall_event(Gen2WorldAPI.EVENT_WALL_OPENED_IN_AERODACTYL_CHAMBER),
+		Gen2WorldAPI.EVENT_WALL_OPENED_IN_AERODACTYL_CHAMBER
+	)
+	assert_eq(
+		chamber.unown_wall_event(Gen2WorldAPI.EVENT_WALL_OPENED_IN_KABUTO_CHAMBER), -1,
+		"the other chamber's wall is another map's"
+	)
+
+	var elsewhere: Gen2WorldAPI = _flash_world()
+	assert_eq(
+		elsewhere.unown_wall_event(Gen2WorldAPI.EVENT_WALL_OPENED_IN_AERODACTYL_CHAMBER), -1
+	)
+
+
+## `.CheckUseFlash` asks the chamber before it reads `wTimeOfDayPalset`, so the
+## Aerodactyl room is the one lit map Flash works on, and the wall opens for the
+## asking rather than for the light.
+func test_flash_opens_the_aerodactyl_wall_on_a_map_that_is_not_dark() -> void:
+	var world: Gen2WorldAPI = _flash_world(true, AERODACTYL_CHAMBER, RUINS_GROUP)
+	assert_false(Gen2WorldPalette.is_dark(world.current_map.palette))
+
+	var staged: Dictionary = world.flash_request()
+	assert_true(bool(staged.get("ok", false)), String(staged.get("reason", "")))
+	assert_eq(
+		int(staged["wall_event"]), Gen2WorldAPI.EVENT_WALL_OPENED_IN_AERODACTYL_CHAMBER
+	)
+	assert_false(world.state.is_event_flag_active(
+		Gen2WorldAPI.EVENT_WALL_OPENED_IN_AERODACTYL_CHAMBER
+	), "the flag waits for the text, as BlindingFlash does")
+
+	var used: Dictionary = world.complete_flash()
+	assert_true(bool(used.get("ok", false)))
+	assert_true(world.state.is_event_flag_active(
+		Gen2WorldAPI.EVENT_WALL_OPENED_IN_AERODACTYL_CHAMBER
+	))
+	assert_true(world.state.used_flash(), "BlindingFlash still sets its own flag")
+
+
+## Everywhere else the darkness is still the whole test, and no wall opens.
+func test_flash_on_a_lit_map_outside_the_chamber_is_still_refused() -> void:
+	var world: Gen2WorldAPI = _flash_world(true, 1)
+	var refused: Dictionary = world.flash_request()
+	assert_false(bool(refused.get("ok", true)))
+	assert_eq(refused["reason"], &"not_dark")
+
+	var dark: Gen2WorldAPI = _flash_world()
+	var used: Dictionary = dark.complete_flash() if bool(
+		dark.flash_request().get("ok", false)
+	) else {}
+	assert_eq(int(used.get("wall_event", 0)), -1, "no wall on an ordinary cave")
+
+
+## `EscapeRopeOrDig`'s `.escaperope` farcalls `SpecialKabutoChamber` inside
+## `.DoDig`, so the flag is written while the chamber is still the loaded map.
+func test_an_escape_rope_opens_the_kabuto_wall_and_dig_does_not() -> void:
+	var world: Gen2WorldAPI = _escape_world()
+	world.player_cell = ESCAPE_KABUTO_DOOR
+	assert_true(bool(world.try_warp().get("ok", false)))
+	assert_eq(world.map_id(), Vector2i(RUINS_GROUP, KABUTO_CHAMBER))
+
+	var roped: Dictionary = world.escape_rope_request()
+	assert_true(bool(roped.get("ok", false)), String(roped.get("reason", "")))
+	assert_eq(int(roped["wall_event"]), Gen2WorldAPI.EVENT_WALL_OPENED_IN_KABUTO_CHAMBER)
+	assert_true(world.state.is_event_flag_active(
+		Gen2WorldAPI.EVENT_WALL_OPENED_IN_KABUTO_CHAMBER
+	))
+
+	## `.DoDig`'s Dig branch skips the farcall, so digging out leaves it shut.
+	var digger: Gen2WorldAPI = _escape_world()
+	digger.player_cell = ESCAPE_KABUTO_DOOR
+	digger.try_warp()
+	assert_true(bool(digger.dig_request().get("ok", false)))
+	assert_false(digger.state.is_event_flag_active(
+		Gen2WorldAPI.EVENT_WALL_OPENED_IN_KABUTO_CHAMBER
+	))
+
+
+## `.ResetSurfingOrBikingState`: the bike goes away on the three environments it
+## names and stays on every other, which is why a cave may be ridden through.
+func test_a_map_load_puts_the_bike_away_indoors_and_keeps_it_in_a_cave() -> void:
+	for row: Array in [
+		[ESCAPE_CAVE, Gen2WorldAPI.MOVEMENT_BIKE],
+		[ESCAPE_POKECENTER, Gen2WorldAPI.MOVEMENT_WALK],
+	]:
+		var world: Gen2WorldAPI = _escape_world()
+		assert_true(bool(world.bike_request().get("ok", false)))
+		world.player_cell = ESCAPE_CAVE_DOOR if int(row[0]) == ESCAPE_CAVE \
+			else ESCAPE_CENTRE_DOOR
+		assert_true(bool(world.try_warp().get("ok", false)))
+		assert_eq(world.movement_mode, StringName(row[1]), "map %d" % int(row[0]))
+	## A DUNGEON is the third, and the Kabuto chamber is one.
+	var dungeon: Gen2WorldAPI = _escape_world()
+	assert_true(bool(dungeon.bike_request().get("ok", false)))
+	dungeon.player_cell = ESCAPE_KABUTO_DOOR
+	dungeon.try_warp()
+	assert_eq(dungeon.movement_mode, Gen2WorldAPI.MOVEMENT_WALK)
+	assert_eq(dungeon.player_sprite_number, Gen2WorldSprite.SPRITE_PLAYER)
+
+
+## `.CheckForcedBiking` runs before both other branches, and `.TrySurf` and
+## `TrySurfOW` read the same flag: Route 16 and Route 17 are the two maps that
+## set it, and neither getting off nor surfing off is allowed while it is up.
+func test_always_on_bike_forces_the_bike_back_and_refuses_surf() -> void:
+	var world: Gen2WorldAPI = _surf_world()
+	world.state.set_engine_flag(Gen2WorldState.always_on_bike_flag(world.data), true)
+	assert_true(world.always_on_bike())
+
+	assert_eq(world.surf_request()["reason"], &"cannot_surf")
+	assert_false(world._surf_prompt_applies(WATER_CELL))
+
+	## `.CheckForcedBiking` runs first, so a map load puts the bike back on.
+	var forced: Gen2WorldAPI = _escape_world()
+	forced.state.set_engine_flag(
+		Gen2WorldState.always_on_bike_flag(forced.data), true
+	)
+	forced.player_cell = ESCAPE_CAVE_DOOR
+	assert_true(bool(forced.try_warp().get("ok", false)))
+	assert_eq(forced.movement_mode, Gen2WorldAPI.MOVEMENT_BIKE)
+	assert_eq(forced.player_sprite_number, Gen2WorldSprite.SPRITE_PLAYER_BIKE)
+	## `.TryBike` reads `.CheckEnvironment` first and only then the flag, so the
+	## refusal is the flag's on a map the bike may be ridden on at all.
+	forced.player_cell = Vector2i(4, 4)
+	assert_eq(forced.bike_request()["reason"], &"always_on_bike")
+	## The forced branch runs before `.ResetSurfingOrBikingState`, so even an
+	## indoor map keeps the bike on while the flag is up.
+	forced.player_cell = ESCAPE_INSIDE_DOOR
+	assert_true(bool(forced.try_warp().get("ok", false)))
+	forced.player_cell = ESCAPE_CENTRE_DOOR
+	assert_true(bool(forced.try_warp().get("ok", false)))
+	assert_eq(forced.movement_mode, Gen2WorldAPI.MOVEMENT_BIKE)
+
+
+## data/text/common_2.asm: every one of these is `text_ram` and a `line`, so a
+## nickname short enough to fit one line still prints two.
+func test_every_used_line_carries_the_source_break() -> void:
+	for move: int in Gen2WorldFieldMove.USED_TEXTS:
+		var said: String = Gen2WorldFieldMove.used_text(move, "AB")
+		assert_true(said.contains("\n"), "move $%02x: %s" % [move, said])
+		assert_false(said.contains("%s"), "move $%02x kept its marker" % move)
+	## `_BlindingFlashText` and `_TeleportReturnText` name nobody at all.
+	assert_eq(
+		Gen2WorldFieldMove.used_text(Gen2WorldFieldMove.MOVE_FLASH, "AB"),
+		"A blinding FLASH\nlights the area!"
+	)
+	assert_eq(
+		Gen2WorldFieldMove.used_text(Gen2WorldFieldMove.MOVE_CUT, "AB"), "AB used\nCUT!"
+	)
+	assert_eq(Gen2WorldFieldMove.used_text(Gen2WorldFieldMove.MOVE_FLY, "AB"), "")
+
+
+## `player_step_span()` against `player_step_offset_cells()` over the whole
+## climb: the two say the same thing, so a renderer can move to the newer one
+## without its drawing shifting. Moving `from` to `to` by `progress` is the
+## offset's own answer, cell for cell.
+func test_the_step_span_is_the_offset_taken_apart_step_by_step() -> void:
+	var world: Gen2WorldAPI = _waterfall_world()
+	assert_true(bool(world.waterfall_request().get("ok", false)))
+	var applied: Dictionary = world.complete_waterfall()
+	var seen: Array[Vector2i] = []
+	for _spent: int in int(applied["passes"]):
+		var span: Dictionary = world.player_step_span()
+		assert_false(span.is_empty())
+		assert_eq(span["kind"], &"turn_waterfall")
+		assert_eq((span["to"] as Vector2i) - (span["from"] as Vector2i), Vector2i.UP)
+		var walked: Vector2 = Vector2(span["from"] as Vector2i).lerp(
+			Vector2(span["to"] as Vector2i), float(span["progress"])
+		)
+		assert_almost_eq(
+			walked, Vector2(world.player_cell) + world.player_step_offset_cells(),
+			Vector2(0.001, 0.001)
+		)
+		if not seen.has(span["from"] as Vector2i):
+			seen.append(span["from"] as Vector2i)
+		world.advance_player_step_pass()
+	## One entry per step of the climb, in order, from the fall's foot up.
+	assert_eq(seen.size(), int(applied["steps"]))
+	assert_eq(seen[0], WATERFALL_STAND_CELL)
+	assert_eq(seen[seen.size() - 1] + Vector2i.UP, WATERFALL_LANDING_CELL)
+	assert_true(world.player_step_span().is_empty(), "empty once the run drains")
+
+
+## The same seam on an object, and the case the offset cannot answer: a stream
+## that turns sums to one vector, so which two cells the step in flight runs
+## between is unrecoverable from it.
+func test_an_object_step_span_survives_a_stream_that_turns() -> void:
+	var object := Gen2WorldObject.new()
+	object.cell = Vector2i(4, 4)
+	object.queue_step(Vector2i.RIGHT, 8, false, Vector2i.RIGHT)
+	object.queue_step(Vector2i.UP, 8, false, Vector2i.UP)
+	var first: Dictionary = object.step_span()
+	assert_eq(first["from"], Vector2i(3, 5))
+	assert_eq(first["to"], Vector2i(4, 5))
+	for _spent: int in 8:
+		object.tick_step()
+	var second: Dictionary = object.step_span()
+	assert_eq(second["from"], Vector2i(4, 5))
+	assert_eq(second["to"], Vector2i(4, 4))

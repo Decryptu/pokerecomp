@@ -33,7 +33,7 @@ user://mods/<id>/
 | `id` | Lowercase `[a-z0-9][a-z0-9_-]*`. Addresses the directory and the registry keys |
 | `name` | Shown to the player |
 | `version` | The mod's own version. Strict `major.minor.patch` |
-| `api_version` | The contract this mod is written against. Current: `Gen2ModManifest.API_VERSION`, 21. A host accepts 1 to 21 |
+| `api_version` | The oldest host this mod runs on, not a number to keep current: raise it when the mod starts using a newer seam. `Gen2ModManifest.API_VERSION` is 24 and a host accepts 1 to 24. [Contract versions](#contract-versions) says what each added |
 | `entry` | A `.gd` path inside the mod directory, or inside the pack when there is one |
 | `pack` | Optional `.pck` or `.zip` beside `mod.json`, holding the mod's files |
 | `description` | Optional |
@@ -93,6 +93,39 @@ Two example mods are in `mods/examples/`. Copy either into `user://mods/`.
 
 The examples are excluded from every export preset. A distributed build ships the
 loader and no mod.
+
+## Contract versions
+
+What each `api_version` added. Declare the oldest one that carries every seam the
+mod reaches; a host refuses a number above its own, and an older number still
+runs, since every version so far has only added.
+
+| Version | Added |
+|---|---|
+| 1 | The mod boundary, and the world renderer registered through it |
+| 2 | Visible wild encounters |
+| 3 | Mart rows and named action axes |
+| 4 | Egg moves and the content seam |
+| 5 | A run's own rules and difficulty |
+| 6 | Who is standing where, for a visible-encounter provider |
+| 7 | A mod actor that can be talked to, and hidden-item requests |
+| 8 | A page on the stats screen |
+| 9 | An item naming the evolution using it causes |
+| 10 | Screen fill kept out of a view that declined the hardware buffer |
+| 11 | The battle entrance resolved for a renderer with no background plane |
+| 12 | Changing the view from inside the game |
+| 13 | Five read-only policies |
+| 14 | Ownership answered where it changes, and ink carrying its own field |
+| 15 | A visible encounter asking for a glow |
+| 16 | Every wild rolling its own DVs, and a shiny drawn shiny |
+| 17 | Plain battler events, and a thrown ball |
+| 18 | The four seams the mods repository asked to close |
+| 19 | A visible population stepped on overworld frames, snapshot kept current |
+| 20 | A capture seen, a line added to a battle, stacked shiny rolls |
+| 21 | Reading the run, a notice over the map, and keeping a page |
+| 22 | `Gen2WorldScreen.world()`, `Gen2WorldAPI.player_drawn_facing()`, `Gen2WorldObject.drawn_facing()`, and the `preview_waterfall` and `preview_flash` pairs |
+| 23 | `Gen2WorldAPI.unown_wall_event()` and `always_on_bike()`, and `Gen2WorldFieldMove`'s field-move texts |
+| 24 | `Gen2WorldAPI.player_step_span()` and `Gen2WorldObject.step_span()` |
 
 ## Installing
 
@@ -1495,9 +1528,11 @@ answer `step`, `jump_step` and `turn`. It is empty while nothing is stepping.
 `NormalStep`, which sets `OBJECT_ACTION_SPIN`: the walker spins counterclockwise
 through DOWN, RIGHT, UP, LEFT, one quarter-turn every four passes, instead of
 facing the way it is going. `Gen2WorldAPI.player_drawn_facing()` and
-`Gen2WorldObject.drawn_facing()` are that spin; the logical facing never moves, so
-a waterfall climb still ends facing up. Draw from those two, not from
-`player_facing` and `facing`.
+`Gen2WorldObject.drawn_facing()` are that spin. Draw from those two, not from
+`player_facing` and `facing`, which hold still for the length of a step.
+`SetFacingCounterclockwiseSpin` writes `OBJECT_DIRECTION`, which is
+`wPlayerDirection` itself, and nothing after the script puts it back, so a climb
+lands facing a quarter turn per cell round from DOWN rather than up.
 
 Waterfall is the one field move whose whole answer is movement.
 `complete_waterfall()` commits the landing cell at once and then runs the column as
@@ -1506,6 +1541,17 @@ many cells below the landing as the climb is tall and counts down to zero. Its
 answer carries `steps` and `passes`, and the surfer stays a surfer until the last
 step lands them ashore. A renderer that draws a fall as a vertical wall reads the
 offset as height.
+
+`Gen2WorldAPI.player_step_span()` and `Gen2WorldObject.step_span()` say which two
+cells the step in flight runs between: `{from, to, progress, kind}`, and `{}` while
+nothing steps. Moving `from` to `to` by `progress` is exactly what the offset
+above answers, so the two never disagree; the span is the one to read when the
+plan a renderer draws is not a plain grid. A view that folds a run of plan into
+height, or lifts or ramps it, puts `from` and `to` through its own geometry and
+moves between the two answers, which stays continuous where a fractional cell
+cannot: the fractional cell is one number and the fold is a step in it. The offset
+sums the whole remaining run into one vector, which cannot be taken apart again
+once a scripted stream turns.
 
 A hop is the one step with a second axis.
 `Gen2WorldAPI.player_height_offset_pixels()` and

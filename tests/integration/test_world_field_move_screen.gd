@@ -324,6 +324,11 @@ func test_choosing_cut_shows_the_message_and_defers_the_block_change() -> void:
 	assert_null(_world_screen._party_host)
 	assert_true(_world_screen._field_move_text)
 	assert_eq(_shown_text(), "TESTMON used CUT!")
+	## `_UseCutText`'s own `line`: the move name is the second row whether or not
+	## the nickname is short enough for both to fit on one.
+	assert_eq(_world_screen._text_box.text_lines(), PackedStringArray([
+		"TESTMON used", "CUT!",
+	]))
 	# Script_Cut writes the block only after UseCutText.
 	assert_eq(world.block_at(TREE_BLOCK.x, TREE_BLOCK.y), BLOCK_TREE)
 	assert_false(world.can_walk_to(TREE_CELL))
@@ -1291,6 +1296,9 @@ func test_facing_a_cut_tree_with_only_the_hm_asks_and_cuts() -> void:
 	world.run_event_queue(true)
 	_world_screen._show_script_results(world.choose_script_input(0))
 	assert_eq(_shown_text(), "PLAYER used CUT!")
+	assert_eq(_world_screen._text_box.text_lines(), PackedStringArray([
+		"PLAYER used", "CUT!",
+	]), "the A-press path says the same words as the submenu")
 	assert_eq(world.block_at(TREE_BLOCK.x, TREE_BLOCK.y), BLOCK_TREE)
 	_world_screen._acknowledge_field_move_text()
 	assert_eq(world.block_at(TREE_BLOCK.x, TREE_BLOCK.y), BLOCK_TREE_CUT)
@@ -1333,3 +1341,42 @@ func test_the_moves_row_appears_only_with_an_offer_and_runs_the_move() -> void:
 	assert_eq(_shown_text(), "PLAYER used CUT!")
 	_world_screen._acknowledge_field_move_text()
 	assert_eq(world.block_at(TREE_BLOCK.x, TREE_BLOCK.y), BLOCK_TREE_CUT)
+
+
+## `.SweetScent` writes its own line and waits for a button before it rolls, so a
+## miss is two boxes: "used SWEET SCENT!" and then `_SweetScentNothingText`.
+## The fixture's floor is not a tile `CanEncounterWildMon` accepts, which is the
+## miss the source's `iffalse SweetScentNothing` takes.
+func test_a_sweet_scent_that_finds_nothing_still_says_it_was_used() -> void:
+	await _open_world(true, Gen2WorldFieldMove.MOVE_SWEET_SCENT)
+	var party: Gen2PartyScreen = await _open_party()
+	party.handle_button(Gen2Button.A)
+	party.handle_button(Gen2Button.A)
+	await get_tree().process_frame
+
+	assert_true(_world_screen._field_move_text)
+	assert_eq(_world_screen._text_box.text_lines(), PackedStringArray([
+		"TESTMON used", "SWEET SCENT!", "Looks like there's", "nothing here…",
+	]))
+	## Two boxes rather than one: the `waitbutton` between the two `writetext`s.
+	## A press while a page is still printing is spent on the printing, so each
+	## box is waited out the way a player waits for it.
+	assert_true(_world_screen._text_box.has_pages_left())
+	_world_screen._text_box.finish()
+	_world_screen._acknowledge_field_move_text()
+	assert_true(_world_screen._field_move_text, "the miss is still up")
+	assert_false(_world_screen._text_box.has_pages_left())
+	_world_screen._text_box.finish()
+	_world_screen._acknowledge_field_move_text()
+	assert_false(_world_screen._field_move_text)
+
+
+## `Script_UseFlash` writes `_BlindingFlashText` and calls no GetPartyNickname,
+## so Flash is the one field move whose line names nobody.
+func test_the_flash_line_is_the_blinding_flash_text() -> void:
+	await _open_world(true, Gen2WorldFieldMove.MOVE_FLASH, Gen2WorldFieldMove.BADGE_ZEPHYR)
+	var rows: Dictionary = _world_screen._field_move_rows(0, "TESTMON")
+	assert_eq(
+		String((rows[Gen2WorldFieldMove.MOVE_FLASH] as Array)[2]),
+		"A blinding FLASH\nlights the area!"
+	)

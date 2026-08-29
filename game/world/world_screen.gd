@@ -45,6 +45,9 @@ const SFX_STRENGTH: int = 0x1B
 ## constants/sfx_constants.asm's SFX_BUBBLEBEAM, which Script_UsedWaterfall plays
 ## after its text and before the first climbing step.
 const SFX_WATERFALL: int = 0x51
+## constants/sfx_constants.asm's SFX_FLASH, played by `UseFlashTextScript`'s own
+## `text_asm` rather than by `BlindingFlash`, which fades in silence.
+const SFX_FLASH: int = 0xA9
 ## constants/sfx_constants.asm's SFX_SANDSTORM, which is what ShakeHeadbuttTree
 ## plays (engine/events/field_moves.asm). SFX_HEADBUTT is a battle-move effect
 ## and is referenced by nothing in either pin's overworld code.
@@ -1095,16 +1098,15 @@ func _advance_day_cycle(delta: float) -> void:
 ## `.CheckTile`'s forced walk, which the source polls every frame with no input: a
 ## waterfall pushes the player back down and a door, staircase or cave tile steps
 ## them off it. The step already in progress paces it.
-## PLAYERMOVEMENT_FORCE_TURN is deliberately not drained here: its
-## `Script_ForcedMovement` is a queued script whose two step_dig runs pace the
-## spin, and this project renders none of that, so draining it per frame would flip
-## the facing at the frame rate. `move_result()` answers it on the movement attempt
-## instead, which is where a player meets it.
+## PLAYERMOVEMENT_FORCE_TURN is drained here too: `.CheckTile` reads the standing
+## tile before `.GetAction`'s direction is honoured, so a whirlpool spits the
+## player back out with nothing pressed. Its own run is what stops it repeating,
+## since the cell it leaves them on is not a whirlpool.
 func _advance_forced_movement() -> void:
 	if not _objects_may_move() or _world.script_input_waiting() \
 		or _world.player_step_in_progress():
 		return
-	if StringName(_world.forced_movement().get("kind", &"none")) != &"walk":
+	if StringName(_world.forced_movement().get("kind", &"none")) == &"none":
 		return
 	var forced: Dictionary = _world.advance_forced_movement()
 	if bool(forced.get("ok", false)):
@@ -6189,8 +6191,7 @@ func _on_start_menu_field_move(action: Dictionary) -> void:
 
 
 ## What a chosen field action does, whichever list chose it. A slot of -1 is a
-## move used from its own HM rather than by a party member, which changes the
-## name in the text and the Surf sprite and nothing else.
+## move used from its own HM, which changes the name and the Surf sprite only.
 func _run_party_action(action: Dictionary) -> void:
 	# `PokemonActionSubmenu`'s `.quit` reaches `ExitAllMenus`, so a field move
 	# leaves the overworld rather than reopening the menu behind it.
@@ -6212,55 +6213,58 @@ func _run_party_action(action: Dictionary) -> void:
 
 
 ## Each field move: what it asks the world, the refusal, the line and what
-## follows it. [param user] is in the text already: Teleport's
-## `_TeleportReturnText` names nobody.
+## follows it. Every line is [constant Gen2WorldFieldMove.USED_TEXTS]' own. Fly
+## is the one row with no line: its script writes nothing before the region map.
 func _field_move_rows(slot: int, user: String) -> Dictionary:
+	var says: Callable = Gen2WorldFieldMove.used_text.bind(user)
 	return {
 		Gen2WorldFieldMove.MOVE_CUT: [
-			_world.cut_request, _cut_refusal, "%s used CUT!" % user, Callable(),
+			_world.cut_request, _cut_refusal,
+			says.call(Gen2WorldFieldMove.MOVE_CUT), Callable(),
 		],
 		Gen2WorldFieldMove.MOVE_SURF: [
 			_world.surf_request.bind(_party_species(slot)), _surf_refusal,
-			"%s used SURF!" % user, Callable(),
+			says.call(Gen2WorldFieldMove.MOVE_SURF), Callable(),
 		],
 		Gen2WorldFieldMove.MOVE_STRENGTH: [
 			_world.strength_request.bind(_party_species(slot)), _strength_refusal,
-			"%s used STRENGTH!" % user, Callable(),
+			says.call(Gen2WorldFieldMove.MOVE_STRENGTH), Callable(),
 		],
 		Gen2WorldFieldMove.MOVE_WHIRLPOOL: [
 			_world.whirlpool_request, _whirlpool_refusal,
-			"%s used WHIRLPOOL!" % user, Callable(),
+			says.call(Gen2WorldFieldMove.MOVE_WHIRLPOOL), Callable(),
 		],
 		Gen2WorldFieldMove.MOVE_WATERFALL: [
 			_world.waterfall_request, _waterfall_refusal,
-			"%s used WATERFALL!" % user, Callable(),
+			says.call(Gen2WorldFieldMove.MOVE_WATERFALL), Callable(),
 		],
 		Gen2WorldFieldMove.MOVE_FLASH: [
-			_world.flash_request, _flash_refusal, "%s used FLASH!" % user, Callable(),
+			_world.flash_request, _flash_refusal,
+			says.call(Gen2WorldFieldMove.MOVE_FLASH), Callable(),
 		],
-		## _UseHeadbuttText is "did a HEADBUTT!", not the "used" the others share.
 		Gen2WorldFieldMove.MOVE_HEADBUTT: [
 			_world.headbutt_request, _field_move_refused,
-			"%s did a HEADBUTT!" % user, Callable(),
+			says.call(Gen2WorldFieldMove.MOVE_HEADBUTT), Callable(),
 		],
 		Gen2WorldFieldMove.MOVE_ROCK_SMASH: [
 			_world.rock_smash_request, _field_move_refused,
-			"%s used ROCK SMASH!" % user, Callable(),
+			says.call(Gen2WorldFieldMove.MOVE_ROCK_SMASH), Callable(),
 		],
 		Gen2WorldFieldMove.MOVE_FLY: [
 			_world.fly_request, _field_move_refused, "", _open_fly_map,
 		],
 		Gen2WorldFieldMove.MOVE_SWEET_SCENT: [
-			_world.sweet_scent_request.bind(_encounter_random), _sweet_scent_refusal,
-			"%s used SWEET SCENT!" % user, _after_sweet_scent,
+			_world.sweet_scent_request.bind(_encounter_random),
+			_sweet_scent_refusal.bind(user),
+			says.call(Gen2WorldFieldMove.MOVE_SWEET_SCENT), _after_sweet_scent,
 		],
 		Gen2WorldFieldMove.MOVE_DIG: [
-			_world.dig_request, _field_move_refused, "%s used DIG!" % user,
-			_after_escape,
+			_world.dig_request, _field_move_refused,
+			says.call(Gen2WorldFieldMove.MOVE_DIG), _after_escape,
 		],
 		Gen2WorldFieldMove.MOVE_TELEPORT: [
 			_world.teleport_request, _field_move_refused,
-			"Return to the last\n#MON CENTER.", _after_escape,
+			says.call(Gen2WorldFieldMove.MOVE_TELEPORT), _after_escape,
 		],
 	}
 
@@ -6317,48 +6321,49 @@ func _party_species(slot: int) -> int:
 func _cut_refusal(reason: StringName) -> String:
 	match reason:
 		&"badge_required":
-			return "Sorry! A new BADGE is required."
+			return Gen2WorldFieldMove.BADGE_REQUIRED_TEXT
 		&"nothing_to_cut":
-			return "There's nothing to CUT here."
-	return "Can't use that here."
+			return Gen2WorldFieldMove.CUT_NOTHING_TEXT
+	return Gen2WorldFieldMove.CANT_USE_TEXT
 
 
 func _surf_refusal(reason: StringName) -> String:
 	match reason:
 		&"badge_required":
-			return "Sorry! A new BADGE is required."
+			return Gen2WorldFieldMove.BADGE_REQUIRED_TEXT
 		&"already_surfing":
-			return "You're already SURFING."
+			return Gen2WorldFieldMove.ALREADY_SURFING_TEXT
 		&"cannot_surf":
-			return "You can't SURF here."
-	return "Can't use that here."
+			return Gen2WorldFieldMove.CANT_SURF_TEXT
+	return Gen2WorldFieldMove.CANT_USE_TEXT
 
 
 ## .FailWhirlpool has no text of its own; see [method _field_move_refused]. Cut
 ## is the exception, not the rule.
 func _whirlpool_refusal(reason: StringName) -> String:
-	if reason == &"badge_required":
-		return "Sorry! A new BADGE is required."
-	return "Can't use that here."
+	return _badge_or_generic(reason)
 
 
 ## CheckMapCanWaterfall has no message at all, so only the badge has a line.
 func _waterfall_refusal(reason: StringName) -> String:
-	if reason == &"badge_required":
-		return "Sorry! A new BADGE is required."
-	return "Can't use that here."
+	return _badge_or_generic(reason)
 
 
 ## A lit map has no refusal text of its own; only the badge has a line.
 func _flash_refusal(reason: StringName) -> String:
-	if reason == &"badge_required":
-		return "Sorry! A new BADGE is required."
-	return "Can't use that here."
+	return _badge_or_generic(reason)
 
 
-## `SweetScentNothing`: a tile with no wild says what a map with no table does.
-func _sweet_scent_refusal(_reason: StringName) -> String:
-	return "Looks like there's\nnothing here…"
+func _badge_or_generic(reason: StringName) -> String:
+	return Gen2WorldFieldMove.BADGE_REQUIRED_TEXT if reason == &"badge_required" \
+		else Gen2WorldFieldMove.CANT_USE_TEXT
+
+
+## `SweetScentNothing`, which `.SweetScent` reaches only after its own
+## `writetext`/`waitbutton`: the miss is a second box, not the only one.
+func _sweet_scent_refusal(_reason: StringName, user: String) -> String:
+	return Gen2WorldFieldMove.used_text(Gen2WorldFieldMove.MOVE_SWEET_SCENT, user) \
+		+ Gen2TextStream.PAGE_BREAK + Gen2WorldFieldMove.SWEET_SCENT_NOTHING_TEXT
 
 
 ## `FieldMoveFailed`, shared by every field move with no text of its own: Fly's
@@ -6367,15 +6372,13 @@ func _sweet_scent_refusal(_reason: StringName) -> String:
 ## `AskRockSmashScript`'s `_MaySmashText` belongs to the other path, where the
 ## runner owns it, and Headbutt is gated on `CheckPartyMove` and the tile alone.
 func _field_move_refused(_reason: StringName) -> String:
-	return "Can't use that here."
+	return Gen2WorldFieldMove.CANT_USE_TEXT
 
 
 ## .TryStrength's only refusal is CheckBadge's, since it checks nothing else;
 ## anything past it is this project's own guard, not a cartridge branch.
 func _strength_refusal(reason: StringName) -> String:
-	if reason == &"badge_required":
-		return "Sorry! A new BADGE is required."
-	return "Can't use that here."
+	return _badge_or_generic(reason)
 
 
 ## `GiveTakePartyMonItem`'s two answers. TAKE is a bag transaction and says so in
@@ -6523,10 +6526,8 @@ func _show_field_move_text(text: String, blink_cursor: bool = true) -> void:
 
 
 ## The acknowledge that closes a field-move message. A staged move commits here
-## rather than when it was resolved, because Script_Cut only reaches
-## CutDownTreeOrGrass after UseCutText and UsedSurfScript only reaches
-## SurfStartStep after its waitbutton. A refusal has nothing staged and just
-## closes.
+## rather than when it was resolved: Script_Cut reaches CutDownTreeOrGrass only
+## after UseCutText, and UsedSurfScript SurfStartStep only after its waitbutton.
 func _acknowledge_field_move_text() -> void:
 	## A text longer than the box is several `waitbutton`s, so a press with a page
 	## still behind it spends itself on the box rather than on the move. A
@@ -6581,10 +6582,9 @@ func _acknowledge_field_move_text() -> void:
 	_refresh_labels()
 
 
-## Each commit reports its own audio, below. Strength is the one that plays
-## nothing: Script_UsedStrength has no PlaySFX, because SFX_STRENGTH belongs to
-## the boulder that moves later rather than to the flag being set, and neither
-## does Flash. All redraw anyway, since the party overlay closed over the map.
+## Each commit reports its own audio. Strength plays nothing: SFX_STRENGTH
+## belongs to the boulder that moves later, not to the flag being set. All redraw
+## anyway, since the party overlay closed over the map.
 func _commit_field_move(applied: Dictionary, label: String) -> void:
 	if bool(applied.get("ok", false)):
 		match StringName(applied.get("kind", &"")):
@@ -6597,10 +6597,9 @@ func _commit_field_move(applied: Dictionary, label: String) -> void:
 			&"waterfall_applied":
 				_play_sfx(SFX_WATERFALL)
 			&"flash_used":
-				# BlindingFlash has no sound of its own: it fades to white,
-				# swaps the palette set and fades back. The palette is the whole
-				# of what changed, so the renderer is told the new row rather
-				# than just asked to redraw.
+				# The palette is the whole of what BlindingFlash changed, so the
+				# renderer is told the new row rather than asked to redraw.
+				_play_sfx(SFX_FLASH)
 				if _renderer != null:
 					_renderer.set_time_of_day(_render_time_of_day())
 				if _animation != null:
@@ -6640,13 +6639,12 @@ func _commit_field_move(applied: Dictionary, label: String) -> void:
 	_refresh_labels()
 
 
-## HeadbuttScript after ShakeHeadbuttTree: TreeMonEncounter either sets
-## wScriptVar and reaches startbattle, or falls to .no_battle, which is
-## HeadbuttNothingText and a waitbutton. The tree is unchanged either way.
+## HeadbuttScript after ShakeHeadbuttTree: TreeMonEncounter either reaches
+## startbattle or falls to `.no_battle`. The tree is unchanged either way.
 func _finish_headbutt(applied: Dictionary) -> void:
 	var encounter: Variant = applied.get("encounter", {})
 	if not encounter is Dictionary or (encounter as Dictionary).is_empty():
-		_show_field_move_text("Nope. Nothing…")
+		_show_field_move_text(Gen2WorldFieldMove.HEADBUTT_NOTHING_TEXT)
 		return
 	_refresh_labels()
 	_start_battle_request({
@@ -6657,8 +6655,7 @@ func _finish_headbutt(applied: Dictionary) -> void:
 
 
 ## RockSmashScript after the rock is gone: RockMonEncounter either reaches
-## startbattle or the script ends. Unlike Headbutt there is no nothing-text,
-## because `.done` is a bare `end`.
+## startbattle or `.done`, a bare `end` with no nothing-text.
 func _finish_rock_smash(applied: Dictionary) -> void:
 	var encounter: Variant = applied.get("encounter", {})
 	if not encounter is Dictionary or (encounter as Dictionary).is_empty():
@@ -7285,39 +7282,29 @@ func _spawn_grass_rustles() -> void:
 		_renderer.refresh()
 
 
-## The yes half of an Ask*Script. Each move's own request is what decides
-## whether anything happens, exactly as in the submenu path; the difference is
-## that a refusal here is silent, because AskCutScript's `.CheckMap` failure
-## falls straight to `closetext` with no text of its own.
+## The yes half of an Ask*Script, running the same request the submenu does. A
+## refusal is silent here: AskCutScript's `.CheckMap` falls to `closetext`.
 func _use_prompted_field_move(move: int, slot: int) -> void:
 	if _world == null:
 		return
-	var requested: Dictionary = {}
-	var label: String = ""
-	match move:
-		Gen2WorldFieldMove.MOVE_CUT:
-			requested = _world.cut_request()
-			label = "used CUT!"
-		Gen2WorldFieldMove.MOVE_SURF:
-			requested = _world.surf_request(_party_species(slot))
-			label = "used SURF!"
-		Gen2WorldFieldMove.MOVE_WHIRLPOOL:
-			requested = _world.whirlpool_request()
-			label = "used WHIRLPOOL!"
-		Gen2WorldFieldMove.MOVE_WATERFALL:
-			requested = _world.waterfall_request()
-			label = "used WATERFALL!"
-		Gen2WorldFieldMove.MOVE_HEADBUTT:
-			requested = _world.headbutt_request()
-			label = "did a HEADBUTT!"
-	if not bool(requested.get("ok", false)):
+	var asks: Dictionary = {
+		Gen2WorldFieldMove.MOVE_CUT: _world.cut_request,
+		Gen2WorldFieldMove.MOVE_SURF: _world.surf_request.bind(_party_species(slot)),
+		Gen2WorldFieldMove.MOVE_WHIRLPOOL: _world.whirlpool_request,
+		Gen2WorldFieldMove.MOVE_WATERFALL: _world.waterfall_request,
+		Gen2WorldFieldMove.MOVE_HEADBUTT: _world.headbutt_request,
+	}
+	if not asks.has(move):
 		return
-	_show_field_move_text("%s %s" % [_prompted_field_move_name(slot), label])
+	if not bool(((asks[move] as Callable).call() as Dictionary).get("ok", false)):
+		return
+	_show_field_move_text(
+		Gen2WorldFieldMove.used_text(move, _prompted_field_move_name(slot))
+	)
 
 
-## GetPartyNickname, which every one of these scripts calls before its own text.
-## A move used from its HM rather than from a party member has no nickname to
-## read, so the line says who did use it: `<PLAYER> used CUT!`.
+## GetPartyNickname, which every one of these scripts calls before its text. A
+## move used from its HM has no nickname, so the line names the player instead.
 func _prompted_field_move_name(slot: int) -> String:
 	if slot < 0:
 		return _player_display_name()
@@ -7328,9 +7315,8 @@ func _prompted_field_move_name(slot: int) -> String:
 	return _mon_display_name(member as Gen2SaveMon) if member is Gen2SaveMon else "#MON"
 
 
-## `PlaceString`'s own `<PLAYER>`, which is `wPlayerName`. A world with no save
-## selected is a screenshot tool or a test and says PLAYER, the same fallback
-## the start menu's STATUS row takes.
+## `PlaceString`'s `<PLAYER>`, which is `wPlayerName`. With no save selected it
+## says PLAYER, the fallback the start menu's STATUS row takes.
 func _player_display_name() -> String:
 	var player: String = _world.player_name() if _world != null else ""
 	return player if not player.is_empty() else "PLAYER"

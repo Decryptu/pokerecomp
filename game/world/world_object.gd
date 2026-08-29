@@ -469,7 +469,7 @@ func walk_frame() -> int:
 	return (step_frame >> 2) & 3
 
 
-## The facing this object is DRAWN with; [member facing] never moves.
+## The facing this object is DRAWN with while a spin walks.
 ## See [constant Gen2WorldMovement.SPINNING_KINDS].
 func drawn_facing() -> int:
 	if step_passes_remaining > 0 and step_kind in Gen2WorldMovement.SPINNING_KINDS:
@@ -523,3 +523,19 @@ func step_offset_cells() -> Vector2:
 		behind -= Vector2(step_direction) \
 			* (float(step_passes_remaining) / float(step_passes_total))
 	return behind
+
+
+## [method Gen2WorldAPI.player_step_span] for an object.
+func step_span() -> Dictionary:
+	if step_passes_remaining <= 0 or step_passes_total <= 0:
+		return {}
+	var ahead := Vector2i.ZERO
+	for entry: Dictionary in queued_steps:
+		ahead += entry["direction"] as Vector2i
+	var landing: Vector2i = cell - ahead
+	return {
+		"from": landing - step_direction,
+		"to": landing,
+		"progress": 1.0 - float(step_passes_remaining) / float(step_passes_total),
+		"kind": step_kind,
+	}
