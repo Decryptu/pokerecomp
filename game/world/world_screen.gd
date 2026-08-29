@@ -372,12 +372,9 @@ func _set_caption(text: String) -> void:
 	_caption.text = _caption_text + _rate_text
 
 
-## `fps` is host frames drawn, `hw` the hardware frames the pump spent, which is
-## 59.7 on a machine keeping up and whatever GAME SPEED multiplies that by, and
-## `worst` the longest single frame of the second, which is where a stutter shows
-## and an average hides it. The reading changes once a second and the line is
-## rebuilt only then: this is drawn on the frame it is measuring.
-## See [method Gen2WorldAnimation.FrameClock.rate].
+## The reading changes once a second and the line is rebuilt only then, so this
+## is drawn on the frame it is measuring, and `lock` is shown only when there is
+## one. See [method Gen2WorldAnimation.FrameClock.rate].
 func _refresh_frame_rate() -> void:
 	if _world == null or _caption == null or not _caption.visible:
 		return
@@ -385,8 +382,10 @@ func _refresh_frame_rate() -> void:
 	if rate.is_empty() or rate == _rate_reading:
 		return
 	_rate_reading = rate
-	_rate_text = "   %.0f fps   hw %.0f/s   worst %.1f ms" % [
+	var lock: int = int(rate["lock"])
+	_rate_text = "   %.0f fps   hw %.0f/s   worst %.1f ms%s" % [
 		float(rate["fps"]), float(rate["hardware"]), float(rate["worst_ms"]),
+		"" if lock < 1 else "   lock 1:%d" % lock,
 	]
 	_caption.text = _caption_text + _rate_text
 
@@ -807,10 +806,9 @@ func _process(delta: float) -> void:
 
 ## SMOOTH SCROLL. Where the drawn frame stands in the pass: whole frames off
 ## `NextOverworldFrame`'s countdown plus the part of the next one the clock has
-## banked. Banked real time and not a frame count, because a host frame is
-## 16.667 ms against the cartridge's 16.742: a tick spends sometimes no frame and
-## sometimes two, and a count alone jumps 0, 1 or 2 pixels for nothing. Called
-## every drawn frame, not every spent one.
+## banked. Banked real time and not a frame count, because a tick spends
+## sometimes no frame and sometimes two and a count alone jumps 0, 1 or 2 pixels
+## for nothing. Called every drawn frame, not every spent one.
 func _apply_pass_fraction(remainder: float = 0.0) -> void:
 	if _world == null:
 		return

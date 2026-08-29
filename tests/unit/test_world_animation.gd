@@ -596,12 +596,37 @@ func _repeats(owed: Array[int]) -> int:
 	return count
 
 
-## A host that hitches is not steady, so the lock drops and the clock goes back
-## to measuring time until the frames settle again.
-func test_a_hitching_host_is_not_locked_to() -> void:
+## A hitch is a machine that stalled rather than a panel that changed rate, so
+## the frames it swallowed are spent and the lock stands. Only a run of frames at
+## a new length puts the clock back on measured time.
+func test_a_hitch_is_spent_and_only_a_new_rate_drops_the_lock() -> void:
 	var clock := Gen2WorldAnimation.FrameClock.new()
 	for _host: int in 60:
 		clock.tick(1.0 / 60.0)
 	assert_eq(clock.tick(1.0 / 60.0), 1, "steady frames are locked to")
 	## A tenth of a second, which is six frames the world still owes.
 	assert_gt(clock.tick(0.1), 1, "a stall is spent rather than counted as one")
+	assert_eq(clock._divider, 1, "one stall is not a new frame rate")
+	for _host: int in Gen2WorldAnimation.FrameClock.LOCK_MISS_RUN:
+		clock.tick(1.0 / 144.0)
+	assert_eq(clock._divider, 0, "a run of them is, and 144 Hz divides nothing")
+
+
+## A panel that missed a present is the same panel: the tick that carries two of
+## its frames spends both and keeps the lock, which is what a machine dropping
+## one frame a second reported as `hw 59/s` and a stutter every twelve frames
+## while the lock was reacquired.
+func test_a_missed_present_keeps_the_lock_and_is_still_spent() -> void:
+	var clock := Gen2WorldAnimation.FrameClock.new()
+	for _warm: int in 60:
+		clock.tick(1.0 / 120.0)
+	assert_eq(clock._divider, 2, "120 Hz is two host frames to a hardware one")
+	var spent: int = 0
+	for _second: int in 5:
+		for _host: int in 119:
+			spent += clock.tick(1.0 / 120.0)
+		spent += clock.tick(2.0 / 120.0)
+	assert_eq(clock._divider, 2, "a missed present is not a new frame rate")
+	## 605 host frames of the 600 a second each carries, halved.
+	assert_eq(spent, 302, "the missed present is spent rather than lost")
+	assert_eq(int(clock.rate()["lock"]), 2, "and the reading says so")

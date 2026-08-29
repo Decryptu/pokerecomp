@@ -24,11 +24,8 @@ const TIMER_WATER_PALETTE: Array = [0, 1, 2, 1]
 ## Real seconds into hardware frames, for every screen that spends them.
 ##
 ## One instance per pump, and the whole conversion: the remainder is banked here
-## so nothing downstream keeps one, and the cap is applied here so no screen can
-## forget it. The app block's GAME SPEED is applied here and nowhere else, which
-## is what keeps it off the sound driver: [Gen2AudioPlayer] fills its generator
-## from the output's own demand rather than from a game frame, so music, effects
-## and cries keep the cartridge's tempo and pitch at every setting.
+## so nothing downstream keeps one, the cap is applied here so no screen can
+## forget it, and [method Gen2Options.speed_scale] is applied here and nowhere else.
 class FrameClock extends RefCounted:
 	## How long [method rate] averages over before it publishes a new reading.
 	const RATE_WINDOW_SECONDS: float = 1.0
@@ -41,12 +38,17 @@ class FrameClock extends RefCounted:
 	const LOCK_STEADY_TICKS: int = 12
 	const LOCK_SPREAD: float = 0.08
 	const LOCK_MAX_DIVIDER: int = 8
+	const LOCK_MISS_RUN: int = 3
+	## The most host frames one tick is worth. A missed present hands over a delta
+	## two frames long and is still the same panel; past this the host stalled.
+	const MAX_HOST_STEPS: int = 4
 
 	var _elapsed: float = 0.0
 	## The host's frame smoothed, how many ran at that length, how many of them a
 	## hardware frame lasts while locked, and the phase between two.
 	var _interval: float = 0.0
 	var _steady: int = 0
+	var _misses: int = 0
 	var _divider: int = 0
 	var _phase: int = 0
 	var _window_seconds: float = 0.0
@@ -59,9 +61,9 @@ class FrameClock extends RefCounted:
 	## because the settings object is shared and edited in place.
 	func tick(delta: float) -> int:
 		var scale: float = Gen2OptionsStore.current().speed_scale()
-		_watch(delta, FRAME_SECONDS / maxf(scale, 0.01))
+		var steps: int = _watch(delta, FRAME_SECONDS / maxf(scale, 0.01))
 		if _divider > 0:
-			return _locked(delta)
+			return _locked(delta, steps)
 		_elapsed = minf(
 			_elapsed + delta * scale,
 			FRAME_SECONDS * float(MAX_CATCHUP_FRAMES),
@@ -71,37 +73,48 @@ class FrameClock extends RefCounted:
 		_measure(delta, frames)
 		return frames
 
-	## One hardware frame every [member _divider] host frames.
-	func _locked(delta: float) -> int:
-		_phase += 1
-		var frames: int = 0
-		if _phase >= _divider:
-			_phase = 0
-			frames = 1
+	## One hardware frame every [member _divider] of the [param steps] host frames.
+	func _locked(delta: float, steps: int) -> int:
+		_phase += steps
+		var frames: int = mini(_phase / _divider, MAX_CATCHUP_FRAMES)
+		_phase -= frames * _divider
 		_elapsed = FRAME_SECONDS * float(_phase) / float(_divider)
 		_measure(delta, frames)
 		return frames
 
+	## How many host frames [param delta] covered, keeping the lock up to date.
 	## [param target] is one hardware frame in real seconds at this GAME SPEED.
-	func _watch(delta: float, target: float) -> void:
-		if _interval <= 0.0 or absf(delta - _interval) > _interval * LOCK_SPREAD:
+	func _watch(delta: float, target: float) -> int:
+		var steps: int = 1 if _interval <= 0.0 \
+			else clampi(roundi(delta / _interval), 1, MAX_HOST_STEPS)
+		var host: float = delta / float(steps)
+		if _interval <= 0.0 or absf(host - _interval) > _interval * LOCK_SPREAD:
+			## An odd delta read as the new frame length throws away both the
+			## lock and the estimate the next delta is judged against. Only a
+			## run of them is a host that has really changed rate.
+			_misses += 1
+			if _interval > 0.0 and _misses < LOCK_MISS_RUN:
+				return steps
+			_misses = 0
 			_interval = maxf(delta, 0.0001)
 			_steady = 0
 			_divider = 0
-			return
-		_interval += (delta - _interval) * 0.25
-		_steady += 1
+			return 1
+		_misses = 0
+		_interval += (host - _interval) * 0.25
+		_steady = mini(_steady + 1, LOCK_STEADY_TICKS)
 		if _steady < LOCK_STEADY_TICKS:
-			return
+			return steps
 		var per_frame: float = target / _interval
 		var divider: int = roundi(per_frame)
 		if divider < 1 or divider > LOCK_MAX_DIVIDER \
 			or absf(per_frame - float(divider)) > LOCK_TOLERANCE * float(divider):
 			_divider = 0
-			return
+			return steps
 		if _divider != divider:
 			_phase = 0
 		_divider = divider
+		return steps
 
 	## The banked remainder, as a share of one hardware frame.
 	func remainder() -> float:
@@ -114,6 +127,7 @@ class FrameClock extends RefCounted:
 		_elapsed = 0.0
 		_interval = 0.0
 		_steady = 0
+		_misses = 0
 		_divider = 0
 		_phase = 0
 		_window_seconds = 0.0
@@ -124,11 +138,12 @@ class FrameClock extends RefCounted:
 
 	## The last completed second of this pump, as `fps` (host frames drawn),
 	## `hardware` (hardware frames spent, which is 59.7 on a machine keeping up
-	## and whatever GAME SPEED multiplies that by) and `worst_ms` (the longest
-	## single host frame in the window, which is the number a stutter shows in
-	## and an average hides). Empty until the first window closes, and empty again
-	## after a reset, so a pump driven by hand rather than by a clock reports
-	## nothing instead of reporting zero.
+	## and whatever GAME SPEED multiplies that by), `worst_ms` (the longest single
+	## host frame in the window, which is the number a stutter shows in and an
+	## average hides) and `lock` (host frames to a hardware one, or 0 while the
+	## clock is measuring time rather than counting them). Empty until the first
+	## window closes, and empty again after a reset, so a pump driven by hand
+	## rather than by a clock reports nothing instead of reporting zero.
 	func rate() -> Dictionary:
 		return _rate
 
@@ -143,6 +158,7 @@ class FrameClock extends RefCounted:
 			"fps": float(_window_ticks) / _window_seconds,
 			"hardware": float(_window_frames) / _window_seconds,
 			"worst_ms": _window_worst * 1000.0,
+			"lock": _divider,
 		}
 		_window_seconds = 0.0
 		_window_ticks = 0
