@@ -5,13 +5,21 @@ break put in by hand only makes it ragged. -->
 
 ## New in this release
 
-Three things: one for Android, two for iPhone and iPad.
+Mostly about how walking looks and feels, plus three screens the port had left plain.
 
-**pokerecomp has an AltStore and SideStore source.** Add it once and every future release arrives as an update instead of a file you download and re-install by hand. The URL is `https://raw.githubusercontent.com/Decryptu/pokerecomp/main/.github/altstore/source.json`. In AltStore or SideStore, open **Sources**, tap **+**, and paste it. The app still signs on your own machine with your own Apple ID, and a free Apple ID still needs re-signing every 7 days.
+**The map scrolls smoothly.** The camera used to move a whole Game Boy pixel at a time, sixty times a second, which on a modern panel is twelve screen pixels a jump and reads as a row of stills rather than motion. With SMOOTH SCROLL on, the picture now sits on a screen pixel instead: over 900 frames of walking through New Bark Town on a 120 Hz display, 457 of them used to move nothing at all, and now 15 do. The picture itself is unchanged, pixel for pixel; only where it sits between two of them is new.
 
-**The Android back button no longer quits the game.** It used to close the app outright wherever you pressed it, mid-battle included. In the game it now opens the pause menu, or backs out of whatever is on screen. In the launcher it closes the sheet you have open, then walks back to the shelf, and only asks "Quit pokerecomp?" once there is nothing left to back out of.
+**Walking no longer stutters at every cell.** A held direction dropped one drawn frame and doubled the next, once per step, at every frame rate. That is gone: 240 frames of the same walk now run 151 frames in a row of steady motion and stop only at the map edge. A frame the system swallows also costs the frame it swallowed and nothing else, where before one dropped frame a second was enough to unsettle the pacing for the next twelve.
 
-**The iOS build asks for nothing.** The exporter wrote camera, microphone and photo library permission entries into the app whether or not it wanted them, and an empty entry is what a store shows you as a permission the app is asking for. pokerecomp uses none of the three, so all three are now removed from the build.
+**The shop opens on the map.** The cartridge prints the clerk's welcome and opens BUY/SELL/QUIT over it with the town still behind both, and the port drew the buy list under all of it and spent a button press on the welcome. The press is gone and the counter looks right.
+
+**Saving says what it is doing, everywhere.** CHANGE BOX used to switch boxes silently, MOVE PKMN W/O MAIL opened its listing with nothing in front of it, and the cable club and Battle Tower wrote their saves with a blank screen. All three now ask first and show the save, as the START menu already did. The Hall of Fame draws SAVING RECORD before an induction.
+
+**Waterfalls, whirlpools and the Ruins of Alph.** A waterfall climb is paced one cell at a time with the climber spinning up it, and a fall drawn to the top row of the map no longer refuses. A whirlpool spits the player back out instead of holding them. Flash in the Aerodactyl Chamber and an Escape Rope in the Kabuto Chamber each open their wall, which neither did before.
+
+**On a phone or handheld, the on-screen controller stays put.** Android reports its own Back button, navigation bar and volume rocker as key events, and one of them read as a keyboard being picked up: the controller vanished mid-game and the map grew into the space. Only a controller you actually plug in takes over now.
+
+**For mod authors**, `api_version` is 25. A world actor can ask whether the party is physically with the player, so a follower puts itself away at a healing machine, the Day Care counter and a trade. A visible wild encounter can walk from cell to cell instead of teleporting. And a step in flight says which two cells it runs between, for a renderer whose world is not a flat grid.
 
 ## Which file
 
