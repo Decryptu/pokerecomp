@@ -347,6 +347,14 @@ jobs:
 
           app="$RUNNER_TEMP/dd/Build/Products/Release-iphoneos/pokerecomp.app"
           [ -d "$app" ] || { echo "::error::no built .app"; exit 1; }
+          # The exporter writes these three whether or not the preset gives them
+          # a sentence, and an empty purpose string is what a store shows a
+          # player as a permission this app wants. It wants none of them.
+          for key in NSCameraUsageDescription NSMicrophoneUsageDescription \
+              NSPhotoLibraryUsageDescription; do
+            /usr/libexec/PlistBuddy -c "Delete :$key" "$app/Info.plist" 2>/dev/null || true
+          done
+          plutil -lint "$app/Info.plist"
           rm -rf "$RUNNER_TEMP/ipa" && mkdir -p "$RUNNER_TEMP/ipa/Payload"
           cp -R "$app" "$RUNNER_TEMP/ipa/Payload/"
           (cd "$RUNNER_TEMP/ipa" && zip -qry "$GITHUB_WORKSPACE/dist/pokerecomp-${v}-ios.ipa" Payload)
