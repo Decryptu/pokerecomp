@@ -190,6 +190,35 @@ func test_clock_set_wraps_each_source_dial_and_reaches_the_speech() -> void:
 	assert_true(_screen.current() is Gen2OakSpeechScreen)
 
 
+## `OakTimeWhatHoursText` and `OakTimeWhoaMinutesText` are each a `text_asm` that
+## places the value its YES/NO is about: the hour at `hlcoord 1, 16`, the box's
+## second line, the minutes at `hlcoord 7, 14` beside `Whoa!`. Without it the box
+## asks nothing.
+func test_each_yes_no_names_the_value_it_is_asking_about() -> void:
+	_begin()
+	_screen.handle_button(Gen2Button.A)
+	_settle()
+	var clock: Gen2ClockSetScreen = _screen.current() as Gen2ClockSetScreen
+	for _page: int in 3:
+		_settle()
+		clock.handle_button(Gen2Button.A)
+	_settle()
+	var box: Gen2TextBox = clock.get("_text_box")
+	assert_eq(Array(box.text_lines()), ["What time is it?"])
+
+	clock.handle_button(Gen2Button.A)
+	_settle()
+	assert_eq(Array(box.text_lines()), ["What?", "DAY 10 o'clock?"])
+
+	clock.handle_button(Gen2Button.A)
+	_settle()
+	assert_eq(Array(box.text_lines()), ["How many minutes?"])
+
+	clock.handle_button(Gen2Button.A)
+	_settle()
+	assert_eq(Array(box.text_lines()), ["Whoa! 0 min.?"])
+
+
 ## `.loop` and `.HourIsSet` end on `ld c, 10 / call DelayFrames`, and
 ## `InterpretTwoOptionMenu` on `ld c, $f`, so neither a dial nor a YES/NO reads
 ## a button on the frame it is drawn.

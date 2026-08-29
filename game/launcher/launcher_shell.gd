@@ -162,6 +162,7 @@ func _build() -> void:
 	_apply_layout()
 	_place_toast()
 	_focus = Gen2FocusGuard.attach(self)
+	_focus.edge_targets = {Gen2Button.DOWN: _dock_landing}
 
 
 ## The wall clock, on the twenty-four hour dial the rest of the project uses.
@@ -386,11 +387,17 @@ func _rebuild_dock() -> void:
 		select(_current)
 
 
-## The dock overlaps the page by design, which makes Godot's geometric focus
-## search prefer the large page control above it over a neighbouring disc.
-## Own the dock's axes explicitly: horizontal movement stays in the dock and
-## wraps, while up returns to the current page. Keyboard and controller arrows
-## are both the same ui_* actions here.
+## The dock floats over the page, so a page longer than the window has nothing
+## below its last control. Down out of a page lands on the disc it is on.
+func _dock_landing(from: Control) -> Control:
+	if _dock_host == null or not _dock_host.visible or _dock.is_ancestor_of(from):
+		return null
+	return _buttons.get(_current) as Control
+
+
+## The dock overlaps the page, so Godot's geometric search prefers the large page
+## control above a disc over the neighbouring disc. The dock owns its own axes:
+## left and right stay in it and wrap, up returns to the page.
 func _on_dock_input(event: InputEvent, id: StringName) -> void:
 	var at: int = -1
 	for index: int in _entries.size():

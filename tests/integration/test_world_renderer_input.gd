@@ -90,6 +90,35 @@ func _press(keycode: Key) -> InputEventKey:
 	return key
 
 
+func _pad(button: JoyButton) -> InputEventJoypadButton:
+	var event := InputEventJoypadButton.new()
+	event.button_index = button
+	event.pressed = true
+	return event
+
+
+## A game menu is driven by the eight buttons and nothing else, so what a pad has
+## to prove is that its own events make them: a face button, the d-pad, and the
+## [InputEventAction] a held direction repeats as ([Gen2InputRuntime]).
+func test_a_controller_opens_and_walks_the_start_menu() -> void:
+	await _open_world_with_renderer()
+	_world_screen._unhandled_input(_pad(JOY_BUTTON_START))
+	await get_tree().process_frame
+	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
+	assert_not_null(host, "START on a pad opens the pause menu")
+	var first: int = host.cursor()
+
+	_world_screen._unhandled_input(_pad(JOY_BUTTON_DPAD_DOWN))
+	var second: int = host.cursor()
+	assert_ne(second, first, "the d-pad moves the cursor")
+
+	var repeat := InputEventAction.new()
+	repeat.action = Gen2Button.action(Gen2Button.DOWN)
+	repeat.pressed = true
+	_world_screen._unhandled_input(repeat)
+	assert_ne(host.cursor(), second, "a held direction keeps moving it")
+
+
 func test_a_renderer_receives_the_input_the_screen_does_not_use() -> void:
 	var renderer: Node = await _open_world_with_renderer()
 	assert_true(renderer.has_method(Gen2ModHost.RENDERER_INPUT_METHOD))

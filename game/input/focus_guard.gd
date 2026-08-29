@@ -1,25 +1,30 @@
 class_name Gen2FocusGuard
 extends Node
 
-## Gives a controller somewhere to start. Godot moves focus on `ui_up` and the
-## rest of that family, but only once something already has focus, and nothing
-## does when a screen opens. A ring is only put up while the player is on a
-## keyboard or a pad, and never taken away again, because a click that dropped
-## focus would empty the field the click had just filled. A modal takes the whole
-## guard with it: everything below is still focusable, so without that the
-## geometric search joins a control in the modal to one on the page behind. Add
-## one with [method attach] and call [method refresh] when the screen changes.
+## Gives a controller somewhere to start, and somewhere to go. Godot moves focus
+## on `ui_up` and the rest of that family, but only once something already has
+## it, and nothing does when a screen opens. The ring goes up only for a keyboard
+## or a pad, and is never taken away, since a click that dropped focus would
+## empty the field it had just filled. A modal takes the whole guard with it, or
+## the geometric search joins a control in it to one on the page behind.
 
-## Nodes in this group are modal: while one is in the tree, it is the only part
-## of the screen the guard looks at. Named rather than typed so the guard owes
-## nothing to the launcher, and joined by whoever puts a layer over a screen
-## ([Gen2LauncherSheet] is the one that does today).
+## Nodes in this group are modal: while one is in the tree it is the only part of
+## the screen the guard looks at. Named rather than typed, so the guard owes
+## nothing to the launcher; [Gen2LauncherSheet] is what joins it today.
 const MODAL_GROUP: StringName = &"gen2_focus_modal"
 
-## Where focus should land when there is somewhere better than the first control
-## in tree order. A screen whose first control is a corner toggle would otherwise
-## start a pad there rather than on what the screen is about.
+const SIDES: Dictionary = {
+	&"left": Vector2.LEFT, &"right": Vector2.RIGHT,
+	&"up": Vector2.UP, &"down": Vector2.DOWN,
+}
+
+## Where focus should land when tree order is not the best answer: a screen whose
+## first control is a corner toggle would start a pad there rather than on it.
 var preferred: Control = null
+## Direction to a [Callable] taking the control being left and answering where to
+## go when nothing on the screen lies that way. A floating dock is over the page
+## rather than under it, so a long page's last control has nothing below it.
+var edge_targets: Dictionary = {}
 
 var _root: Control = null
 
@@ -40,9 +45,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		_root.get_viewport().set_input_as_handled()
 
 
-## Attaches a guard to [param root] and returns it. The guard is a child of the
-## screen it watches, so it goes away with it.
+## Attaches a guard to [param root] and returns it, or returns the one already
+## there: two guards answer the same arrow twice and the ring moves two controls
+## a press. A guard is a child of the screen it watches and goes away with it.
 static func attach(root: Control) -> Gen2FocusGuard:
+	var existing := root.get_node_or_null(^"FocusGuard") as Gen2FocusGuard
+	if existing != null:
+		return existing
 	var guard := Gen2FocusGuard.new()
 	guard.name = "FocusGuard"
 	guard._root = root
@@ -52,13 +61,11 @@ static func attach(root: Control) -> Gen2FocusGuard:
 
 func _ready() -> void:
 	Gen2InputRuntime.instance().device_changed.connect(_on_device_changed)
-	# One frame late: a screen built in code has nothing to focus while its own
-	# _ready is still running.
+	# One frame late: a screen built in code has nothing to focus yet.
 	refresh.call_deferred()
 
 
-## Puts focus on the first control that can take it, if the player is using a
-## device that wants one and nothing has it already.
+## Puts the ring on the first control that can take it, if the device wants one.
 func refresh() -> void:
 	if _root == null or not _root.is_inside_tree():
 		return
@@ -78,9 +85,8 @@ func refresh() -> void:
 		target.grab_focus()
 
 
-## The part of the screen the guard is allowed to look at: the last modal added
-## under [member _root], or the whole screen when there is none. The last, so a
-## sheet opened over a sheet owns the arrows.
+## What the guard may look at: the last modal under [member _root], so a sheet
+## opened over a sheet owns the arrows, or the whole screen when there is none.
 func _effective_root() -> Control:
 	var top: Control = _root
 	for node: Node in _root.get_tree().get_nodes_in_group(MODAL_GROUP):
@@ -97,8 +103,7 @@ func _wanted() -> Control:
 		preferred != null
 		and is_instance_valid(preferred)
 		and preferred.is_visible_in_tree()
-		and preferred.focus_mode == Control.FOCUS_ALL
-		and not _is_disabled(preferred)
+		and _focusable(preferred)
 	):
 		return preferred
 	return first_focusable(_effective_root())
@@ -108,10 +113,9 @@ func _on_device_changed(_kind: StringName) -> void:
 	refresh()
 
 
-## Directional fallback for layouts Godot cannot join geometrically, notably
-## the page host and the floating dock. It only receives an unhandled action,
-## so native traversal inside rows, sliders, text fields and scroll panes keeps
-## precedence.
+## Directional fallback for layouts Godot cannot join geometrically. It sees only
+## an unhandled action, so native traversal inside rows, sliders, text fields and
+## scroll panes keeps precedence.
 func move_focus(direction: Vector2) -> bool:
 	if _root == null or not _root.is_inside_tree() or direction == Vector2.ZERO:
 		return false
@@ -121,25 +125,41 @@ func move_focus(direction: Vector2) -> bool:
 	if current == null or not top.is_ancestor_of(current):
 		refresh()
 		return viewport.gui_get_focus_owner() != null
-	var best: Control = _neighbor(current, direction, focusable_controls(top))
-	if best == null:
+	var best: Control = _toward(current, direction, focusable_controls(top), top == _root)
+	if best == null or best == current:
 		return false
 	best.grab_focus()
 	return true
 
 
-## Godot's automatic search is unreliable across nested cards, scroll panes and
-## the floating dock. Explicit neighbours make the same visual layout produce
-## the same route for arrows, WASD mappings and controller d-pads.
+## Godot's automatic search is unreliable across nested cards and scroll panes.
+## Explicit neighbours give arrows, WASD and a d-pad the one visible route.
 func _refresh_focus_neighbors() -> void:
 	if _root == null or not _root.is_inside_tree():
 		return
-	var controls: Array[Control] = focusable_controls(_effective_root())
+	var top: Control = _effective_root()
+	var controls: Array[Control] = focusable_controls(top)
+	var edges: bool = top == _root
 	for control: Control in controls:
-		_set_neighbor(control, &"left", _neighbor(control, Vector2.LEFT, controls))
-		_set_neighbor(control, &"right", _neighbor(control, Vector2.RIGHT, controls))
-		_set_neighbor(control, &"up", _neighbor(control, Vector2.UP, controls))
-		_set_neighbor(control, &"down", _neighbor(control, Vector2.DOWN, controls))
+		for side: StringName in SIDES:
+			var direction: Vector2 = SIDES[side]
+			_set_neighbor(control, side, _toward(control, direction, controls, edges))
+
+
+## The neighbour that way, or the screen's edge target. [param edges] is false
+## inside a modal, whose own edges are its own.
+func _toward(
+	current: Control, direction: Vector2, controls: Array[Control], edges: bool
+) -> Control:
+	var best: Control = _neighbor(current, direction, controls)
+	if best != null or not edges:
+		return best
+	var make: Variant = edge_targets.get(Gen2Button.from_vector(Vector2i(direction)))
+	if make is not Callable:
+		return null
+	var target := (make as Callable).call(current) as Control
+	return target if target != null and target != current and target.is_visible_in_tree() \
+		else null
 
 
 static func _neighbor(
@@ -174,21 +194,9 @@ static func _set_neighbor(control: Control, side: StringName, target: Control) -
 		&"down": control.focus_neighbor_bottom = path
 
 
-## The first control under [param root] that would accept focus, depth first in
-## tree order, which for a screen built top to bottom is the first one a reader
-## would point at.
+## The first control under [param root] that would accept focus, depth first.
 static func first_focusable(root: Node) -> Control:
-	for child: Node in root.get_children():
-		var control := child as Control
-		if control != null:
-			if not control.visible:
-				continue
-			if control.focus_mode == Control.FOCUS_ALL and not _is_disabled(control):
-				return control
-		var found: Control = first_focusable(child)
-		if found != null:
-			return found
-	return null
+	return _first_focusable(root, true)
 
 
 static func focusable_controls(root: Node) -> Array[Control]:
@@ -203,16 +211,40 @@ static func _collect_focusable(root: Node, out: Array[Control]) -> void:
 		if control != null:
 			if not control.is_visible_in_tree():
 				continue
-			if control.focus_mode == Control.FOCUS_ALL and not _is_disabled(control) \
-				and not _scroll_with_controls(control):
+			if _takes_focus(control):
 				out.append(control)
 		_collect_focusable(child, out)
 
 
+## Whether the ring may rest here. One rule, so where it lands and where it may
+## travel are the same set; a landing spot it cannot leave strands a controller.
+static func _takes_focus(control: Control) -> bool:
+	return _focusable(control) and not _scroll_with_controls(control)
+
+
+static func _focusable(control: Control) -> bool:
+	return control.focus_mode == Control.FOCUS_ALL and not _is_disabled(control)
+
+
+static func _first_focusable(root: Node, skip_panes: bool) -> Control:
+	for child: Node in root.get_children():
+		var control := child as Control
+		if control != null:
+			if not control.visible:
+				continue
+			if _focusable(control) and not (skip_panes and _scroll_with_controls(control)):
+				return control
+		var found: Control = _first_focusable(child, skip_panes)
+		if found != null:
+			return found
+	return null
+
+
+## A pane takes focus so prose can be read without a pointer, and answers an up
+## or a down by scrolling ([Gen2LauncherScroll]). One holding controls is a dead
+## end: it eats every direction and the controls are never reached.
 static func _scroll_with_controls(control: Control) -> bool:
-	if not control is ScrollContainer:
-		return false
-	return first_focusable(control) != null
+	return control is ScrollContainer and _first_focusable(control, false) != null
 
 
 static func _is_disabled(control: Control) -> bool:

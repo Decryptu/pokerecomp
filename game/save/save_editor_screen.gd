@@ -181,7 +181,6 @@ func _build_ui() -> void:
 
 	_status = Gen2LauncherUI.muted(_palette, "")
 	root.add_child(_status)
-	Gen2FocusGuard.attach(self)
 
 
 ## The page's own edges, standing off the notch, the rounded corners and the home
