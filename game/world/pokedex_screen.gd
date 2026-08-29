@@ -87,7 +87,6 @@ var _message_frames: int = 0
 var _area: Gen2TownMapScreen = null
 
 var _page: Gen2PokedexPage = null
-## The screen this is drawn in, and the 160x144 layer inside it.
 var _screen: Gen2Screen = null
 var _field: Control = null
 var _background: TextureRect = null
@@ -718,8 +717,6 @@ func _build_ui() -> void:
 	_field.add_child(_background)
 
 
-## The screen the opener wants this drawn in, handed over before it is added to
-## the tree. Without one the field goes in whichever screen this ends up inside.
 ## Draws the listing with no arrow on it, for a display that shows the dex
 ## without being able to walk it. The blink is left running: it costs nothing and
 ## the flag is checked where the arrow is placed.
@@ -731,7 +728,6 @@ func set_screen(screen: Gen2Screen) -> void:
 	_screen = screen
 
 
-## The field lives in a screen this node may not own, so it goes by hand.
 func _exit_tree() -> void:
 	if _field != null:
 		Gen2Screen.drop_on_exit(_field)

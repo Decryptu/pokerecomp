@@ -52,7 +52,6 @@ var _page: int = Gen2TrainerCard.PAGE_1
 var _frames: int = 0
 var _background: TextureRect = null
 var _badges: Array = []
-## This screen's hardware-frame clock.
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 
 

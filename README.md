@@ -299,22 +299,45 @@ Only the map you are on is live, exactly as on the cartridge.
 
 ### Game speed, window and frame rate
 
-Settings > Application carries three more that reach the engine:
+Settings > Application carries four more that reach the engine:
 
 | Setting | What it does |
 |---|---|
 | Game speed | Normal, double or half. Everything counted in hardware frames runs at that multiple: walking, animations, text, battle |
 | Window | Windowed, fullscreen or borderless |
-| Frame rate | 30, 60, 120, 144 or uncapped |
+| Scrolling | Hardware or smooth. See [Scrolling](#scrolling) |
+| Frame rate | Display, or a cap of 30, 60, 120 or 144 |
 
 Sound is deliberately outside game speed. The driver is fed by the audio
 output's own demand rather than by a game frame, so music, effects and cries keep
 the cartridge's tempo and pitch at every setting.
 
+**Leave frame rate on Display.** It draws one frame per refresh, which is the
+only setting whose frames each reach the panel once. A cap below the panel's own
+rate is a sleep and not a refresh, so the same picture is shown for one refresh,
+then three, then two, and the overworld appears to move 0, 1 or 2 pixels however
+even the game is underneath. The caps are there to save battery.
+
+#### Scrolling
+
+The overworld moves two pixels once every two frames, which is what the hardware
+did and what a Game Boy's own screen smeared over. **Smooth** draws the frame in
+between one pixel on, so the map moves a pixel a frame, lands on the cartridge's
+own pixel at every pass boundary, and takes the same sixteen frames to cross a
+cell. Nothing in the game is timed differently either way.
+
+Under both, the pump counts the host's own frames once it has seen enough of
+them at one length to be sure of it, rather than measuring time: a hardware frame
+is 16.742 ms and a host one is the panel's, so a count taken off measured time
+slips a whole frame every 3.7 seconds against the frames the player is shown. A
+panel whose refresh divides no hardware frame, 144 Hz among them, is measured
+instead.
+
 Development shortcuts are debug-build only, along with the map and cell readout.
 That readout carries `fps` (host frames drawn), `hw` (hardware frames the pump
-spent, 59.7 a second when keeping up) and `worst` (the longest single frame of
-the last second, where a stutter shows and an average hides it).
+spent, 59.7 a second while measuring time and the panel's own divided rate while
+counting its frames) and `worst` (the longest single frame of the last second,
+where a stutter shows and an average hides it).
 
 | Scene | Keys |
 |---|---|

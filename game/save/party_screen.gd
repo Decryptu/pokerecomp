@@ -156,7 +156,6 @@ var _menu_page: Gen2MenuPage = null
 var _message: String = ""
 ## Whether this is being read rather than driven. See [method set_read_only].
 var _read_only: bool = false
-## This screen's hardware-frame clock.
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 ## `OpenPartyStats`' own screen, standing over the whole party menu while it is
 ## up, and the page that draws it.

@@ -299,6 +299,7 @@ var _breed_random := RandomNumberGenerator.new()
 var _selected_rod: StringName = Gen2WorldEncounter.METHOD_OLD_ROD
 ## The overworld's hardware-frame clock: see [method _process].
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
+var _pass_moved: bool = false
 ## `(frame, button)` input, recorded from a run and played back into another.
 ## Both are opt-in and off in play. A replay applies a log's entries on the frame
 ## that recorded them, from inside the pump, so a host that owes two frames
@@ -371,12 +372,10 @@ func _set_caption(text: String) -> void:
 	_caption.text = _caption_text + _rate_text
 
 
-## `fps` is host frames drawn, `hw` the hardware frames the pump spent, which is
-## 59.7 on a machine keeping up and whatever GAME SPEED multiplies that by, and
-## `worst` the longest single frame of the second, which is where a stutter shows
-## and an average hides it. The reading changes once a second and the line is
-## rebuilt only then: this is drawn on the frame it is measuring.
-## See [method Gen2WorldAnimation.FrameClock.rate].
+## The reading changes once a second and the line is rebuilt only then, so this is
+## drawn on the frame it is measuring. `lock` shows only when there is one; `sub`
+## is screen pixels to a hardware one, and 1:1 is none of the smoothing reaching
+## the panel. See [method Gen2WorldAnimation.FrameClock.rate].
 func _refresh_frame_rate() -> void:
 	if _world == null or _caption == null or not _caption.visible:
 		return
@@ -384,8 +383,11 @@ func _refresh_frame_rate() -> void:
 	if rate.is_empty() or rate == _rate_reading:
 		return
 	_rate_reading = rate
-	_rate_text = "   %.0f fps   hw %.0f/s   worst %.1f ms" % [
+	var lock: int = int(rate["lock"])
+	var steps: int = _screen.subpixel_steps()
+	_rate_text = "   %.0f fps   hw %.0f/s   worst %.1f ms%s   sub 1:%d" % [
 		float(rate["fps"]), float(rate["hardware"]), float(rate["worst_ms"]),
+		"" if lock < 1 else "   lock 1:%d" % lock, steps,
 	]
 	_caption.text = _caption_text + _rate_text
 
@@ -633,6 +635,11 @@ func _build_renderer() -> void:
 		_renderer.call(Gen2ModHost.RENDERER_ACTORS_METHOD, _actors)
 	if _renderer.has_method(Gen2ModHost.RENDERER_ENCOUNTERS_METHOD):
 		_renderer.call(Gen2ModHost.RENDERER_ENCOUNTERS_METHOD, _encounters)
+	## SMOOTH SCROLL again: a pass drawn a pixel at a time still steps a whole
+	## hardware pixel, twelve screen ones on a laptop panel. A native view is
+	## already at the window's resolution. See [member Gen2Screen.subpixel].
+	_screen.subpixel = Gen2OptionsStore.current().smooth_scroll \
+		and Gen2ModHost.renderer_uses_hardware_viewport(_renderer)
 	_set_renderer_world()
 	_renderer.set_time_of_day(_render_time_of_day())
 	_apply_renderer_interface_style()
@@ -795,12 +802,34 @@ func cycle_view() -> Dictionary:
 func _process(delta: float) -> void:
 	for _frame: int in _frame_clock.tick(delta):
 		advance_frame()
+	_apply_pass_fraction(_frame_clock.remainder())
 	_refresh_frame_rate()
 	_advance_day_cycle(delta)
 	## Every drawn frame rather than every hardware frame: above sixty a drawn
 	## frame can carry no hardware one, and a screen opened by the press that
 	## drawn frame served would show the map around it until the next.
 	_apply_interface_mask()
+
+
+## SMOOTH SCROLL. Where the drawn frame stands in the pass: whole frames off
+## `NextOverworldFrame`'s countdown plus the part of the next one the clock has
+## banked. Banked real time and not a frame count, because a tick spends
+## sometimes no frame and sometimes two and a count alone jumps 0, 1 or 2 pixels
+## for nothing. Called every drawn frame, not every spent one.
+func _apply_pass_fraction(remainder: float = 0.0) -> void:
+	if _world == null:
+		return
+	var before: float = _world.pass_fraction
+	## Clamped: a world that has spent no frame reads zero, a whole pass.
+	var spent: float = clampf(
+		float(Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS - _overworld_delay),
+		0.0, float(Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS - 1)
+	)
+	_world.pass_fraction = 0.0 if not Gen2OptionsStore.current().smooth_scroll \
+		else (spent + clampf(remainder, 0.0, 1.0)) \
+			/ float(Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS)
+	## Only while the pass is moving something, so a still map is drawn once.
+	_refresh_if(_pass_moved and _world.pass_fraction != before)
 
 
 ## Spends [param count] hardware frames. Public beside [method advance_frame] so
@@ -848,7 +877,9 @@ func advance_frame() -> void:
 	var map_pass: bool = _overworld_delay <= 0
 	if map_pass:
 		_overworld_delay = Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS
+		_pass_moved = false
 	_advance_presentation(map_pass)
+	_apply_pass_fraction()
 	_advance_movement(map_pass)
 	_advance_population(map_pass)
 	_advance_waits(map_pass)
@@ -862,6 +893,7 @@ func advance_frame() -> void:
 ## Redraws when [param moved] says something under the renderer changed.
 func _refresh_if(moved: bool) -> void:
 	if moved and _renderer != null:
+		_pass_moved = true
 		_renderer.refresh()
 
 
@@ -915,7 +947,8 @@ func _advance_movement(map_pass: bool) -> void:
 	if map_pass:
 		_advance_forced_movement()
 		_advance_held_direction()
-		_refresh_if(_world != null and _world.advance_player_step_pass())
+		var stepped: bool = _world != null and _world.advance_player_step_pass()
+		_refresh_if(stepped)
 		## `CheckPlayerState` reads the step flags at the end of `HandleMap`,
 		## after `HandleMapObjects`, so the step that finishes on this frame is
 		## the one whose events this frame runs.
@@ -924,6 +957,11 @@ func _advance_movement(map_pass: bool) -> void:
 			var landed: Dictionary = _pending_step_events
 			_pending_step_events = {}
 			_complete_player_step(landed)
+		## Polled again on the pass a step lands on: the poll above ran while the
+		## step was still in flight and refused it, so a held direction started the
+		## next step a pass late and the walk froze a frame and doubled the next.
+		if stepped and _world != null and not _world.player_step_in_progress():
+			_advance_held_direction()
 	## Not the pass's: an emote's own countdown stands in for the `pause` between
 	## `ShowEmoteScript`'s two movements, and a script's `DelayFrames` is spent
 	## from inside the command rather than by `NextOverworldFrame`.
@@ -3771,9 +3809,7 @@ func preview_card_flip(coins: int = 100, frames: int = 0) -> void:
 	for _frame: int in maxi(frames, 0):
 		if _card_flip_host == null:
 			break
-		## The `WaitSFX` steps are the driver's, and a screenshot spends no wall
-		## clock for an effect to finish in, so each is cut rather than waited
-		## out, the way `preview_slot_machine` does it.
+		## Cut rather than waited out, the way `preview_slot_machine` does it.
 		if _audio_player != null and host.game() != null \
 			and host.game().waiting_for_sfx():
 			_audio_player.stop_effects()

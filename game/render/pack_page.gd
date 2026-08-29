@@ -101,7 +101,6 @@ const ATTRIBUTES: Array = [
 var font: Gen2Font = null
 ## Which text-box border the player chose, for the box the description sits in.
 var frame_style: int = 0
-## The VRAM window, as one indices strip per tile number.
 var _tiles: Dictionary = {}
 ## `PackGFX` and `PackFGFX`, each as the whole four-pocket strip.
 var _pockets: PackedByteArray = PackedByteArray()

@@ -101,8 +101,7 @@ func run(r: RefCounted) -> void:
 	_verify_rules()
 
 
-## The cache against a second reading of the dump, which is what says the walk
-## found the records rather than seven runs that happen to decompress.
+## The cache against a second reading of the dump: the walk found the records.
 func _verify_section(game_id: StringName, data: GameData) -> void:
 	var rom: RomFile = RomFile.open_verified("res://roms/%s.gbc" % game_id)
 	if not _r.check(rom != null, "%s: roms/%s.gbc is unreadable." % [game_id, game_id]):

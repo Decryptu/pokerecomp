@@ -162,7 +162,7 @@ func test_out_of_range_values_are_clamped_rather_than_refused() -> void:
 	assert_eq(options.textbox_frame, Gen2Options.FRAME_COUNT - 1)
 	assert_eq(options.video_mode, &"windowed")
 	assert_eq(options.game_speed, &"normal")
-	assert_eq(options.max_fps, 60, "an unlisted frame cap falls back to 60")
+	assert_eq(options.max_fps, 0, "an unlisted frame cap falls back to the display")
 
 
 ## SCREEN FILL and its zoom step are view preferences rather than part of a run,
@@ -249,3 +249,14 @@ func test_current_shares_one_object_until_forgotten() -> void:
 
 	Gen2OptionsStore.use_test_path()
 	assert_eq(Gen2OptionsStore.current().music_volume, 7)
+
+
+## `Engine.max_fps` is a sleep and not a vblank, so a cap below the panel's own
+## rate shows a frame for one refresh, then three, then two. 60 was the default
+## before that was understood, so a file carrying it moves with the default; a
+## rate the player picked stays where they put it.
+func test_the_old_frame_cap_default_moves_to_the_display() -> void:
+	assert_eq(Gen2Options.new().max_fps, 0, "the display's own rate is default")
+	assert_eq(Gen2Options.parse({"format_version": 1, "max_fps": 60}).max_fps, 0)
+	assert_eq(Gen2Options.parse({"format_version": 1, "max_fps": 30}).max_fps, 30)
+	assert_eq(Gen2Options.parse({"format_version": 2, "max_fps": 60}).max_fps, 60)

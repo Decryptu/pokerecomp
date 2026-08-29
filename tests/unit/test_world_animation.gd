@@ -550,3 +550,83 @@ func test_the_frame_clock_reports_a_second_of_drawn_and_hardware_frames() -> voi
 
 	clock.reset()
 	assert_eq(clock.rate(), {}, "a reading across a gap is not reported")
+
+
+## The frame clock counts the host's own frames once it has seen enough of them
+## at one length to be sure of it. Measuring time instead leaves the world
+## slipping against the frames the player is shown: 16.667 ms of host against
+## 16.742 of hardware is a whole frame every 3.7 seconds, and half a pass of
+## drift is a pixel of the overworld.
+func test_the_frame_clock_locks_to_a_steady_host_frame() -> void:
+	for row: Array in [
+		## A 60 Hz panel: one hardware frame per host frame, forever.
+		[1.0 / 60.0, [1]],
+		## A 120 Hz one: one every second host frame.
+		[1.0 / 120.0, [0, 1]],
+		## 144 Hz divides neither, so the clock keeps measuring time and the
+		## host frames do not all owe the same.
+		[1.0 / 144.0, []],
+	]:
+		var host: float = float(row[0])
+		var clock := Gen2WorldAnimation.FrameClock.new()
+		for _warm: int in 60:
+			clock.tick(host)
+		var owed: Array[int] = []
+		for _tick: int in 240:
+			owed.append(clock.tick(host))
+		var cadence: Array = row[1]
+		if cadence.is_empty():
+			assert_ne(
+				_repeats(owed), owed.size() / 2,
+				"%.0f Hz divides no hardware frame" % (1.0 / host)
+			)
+			continue
+		for index: int in owed.size():
+			assert_eq(
+				owed[index], int(cadence[index % cadence.size()]),
+				"%.0f Hz, host frame %d" % [1.0 / host, index]
+			)
+
+
+## How many of [param owed] are one, which at a locked 120 Hz is every second.
+func _repeats(owed: Array[int]) -> int:
+	var count: int = 0
+	for value: int in owed:
+		count += 1 if value > 0 else 0
+	return count
+
+
+## A hitch is a machine that stalled rather than a panel that changed rate, so
+## the frames it swallowed are spent and the lock stands. Only a run of frames at
+## a new length puts the clock back on measured time.
+func test_a_hitch_is_spent_and_only_a_new_rate_drops_the_lock() -> void:
+	var clock := Gen2WorldAnimation.FrameClock.new()
+	for _host: int in 60:
+		clock.tick(1.0 / 60.0)
+	assert_eq(clock.tick(1.0 / 60.0), 1, "steady frames are locked to")
+	## A tenth of a second, which is six frames the world still owes.
+	assert_gt(clock.tick(0.1), 1, "a stall is spent rather than counted as one")
+	assert_eq(clock._divider, 1, "one stall is not a new frame rate")
+	for _host: int in Gen2WorldAnimation.FrameClock.LOCK_MISS_RUN:
+		clock.tick(1.0 / 144.0)
+	assert_eq(clock._divider, 0, "a run of them is, and 144 Hz divides nothing")
+
+
+## A panel that missed a present is the same panel: the tick that carries two of
+## its frames spends both and keeps the lock, which is what a machine dropping
+## one frame a second reported as `hw 59/s` and a stutter every twelve frames
+## while the lock was reacquired.
+func test_a_missed_present_keeps_the_lock_and_is_still_spent() -> void:
+	var clock := Gen2WorldAnimation.FrameClock.new()
+	for _warm: int in 60:
+		clock.tick(1.0 / 120.0)
+	assert_eq(clock._divider, 2, "120 Hz is two host frames to a hardware one")
+	var spent: int = 0
+	for _second: int in 5:
+		for _host: int in 119:
+			spent += clock.tick(1.0 / 120.0)
+		spent += clock.tick(2.0 / 120.0)
+	assert_eq(clock._divider, 2, "a missed present is not a new frame rate")
+	## 605 host frames of the 600 a second each carries, halved.
+	assert_eq(spent, 302, "the missed present is spent rather than lost")
+	assert_eq(int(clock.rate()["lock"]), 2, "and the reading says so")

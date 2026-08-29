@@ -122,7 +122,6 @@ var _stats: Gen2MonStatsScreen = null
 var _stats_page: Gen2StatsScreenPage = null
 var _menu_page: Gen2MenuPage = null
 var _page: Gen2PCBoxPage = null
-## The screen this is drawn in, and the 160x144 layer inside it.
 var _screen: Gen2Screen = null
 var _field: Control = null
 var _backdrop: Gen2Screen.Field = null
@@ -1030,7 +1029,6 @@ func set_screen(screen: Gen2Screen) -> void:
 	_screen = screen
 
 
-## The field lives in a screen this node may not own, so it goes by hand.
 func _exit_tree() -> void:
 	if _field != null:
 		Gen2Screen.drop_on_exit(_field)

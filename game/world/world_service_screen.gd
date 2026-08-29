@@ -132,9 +132,7 @@ var _mart: Dictionary = {}
 var _mart_entries: Array = []
 var _mart_quantity: int = 1
 var _mart_purchased: bool = false
-## `BuyMenu`'s own layer, which owns all 160x144 the way the region map does: the
-## scrolling list's own scroll and cursor, which of `BuyMenuLoop`'s four states
-## it is in, and the boxes waiting on a press.
+## The shop's own layer: `BuyMenu`'s 160x144, or a box standing on the map.
 var _mart_view: TextureRect = null
 var _mart_page: Gen2MartPage = null
 var _mart_menu_page: Gen2MenuPage = null
@@ -145,7 +143,7 @@ var _mart_after: StringName = MART_LIST
 var _mart_confirm: int = 0
 ## `SellMenu`'s own list, which is the pack rather than the shop's stock.
 var _mart_sell_entries: Array = []
-var _mart_top: int = MART_TOP_BUY
+var _mart_over_map: bool = false
 ## `wCurElevatorFloors` and `wElevatorOriginFloor`: the list the host resolved
 ## and the row `.FindCurrentFloor` matched, plus this screen's own scroll.
 var _elevator: Dictionary = {}
@@ -608,9 +606,8 @@ func _open_menu(input: Dictionary) -> void:
 	_render_rows()
 
 
-## `BuyMenu`, which is a screen of its own rather than a box over the map: the
-## panel steps aside for it the way it does for the region map, and the shop's
-## own intro box is the first thing it prints.
+## The shop. `MartDialog` opens on the map: `MENU_BACKUP_TILES` on the welcome
+## box and on `MenuHeader_BuySell`, and no `BuyMenu` screen until BUY is chosen.
 func _open_mart(mart: Dictionary) -> void:
 	_mode = MODE.MART
 	_mart = mart.duplicate(true)
@@ -627,15 +624,16 @@ func _open_mart(mart: Dictionary) -> void:
 		_mart_view.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		_mart_view.size = Vector2(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 		_mart_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		## Displayed after the panel's own view, which is [method
-		## Gen2Screen.display]'s z-order: the shop owns all 160x144 while it is
-		## up and the menu behind it is hidden anyway.
+		## After the panel's own view, which is [method Gen2Screen.display]'s
+		## z-order: the menu behind the shop is hidden anyway.
 		_service_hardware.display(_mart_view)
-	_mart_top = MART_TOP_BUY
 	_refresh_mart_sell_entries()
-	## `.HowMayIHelpYou` prints `MartWelcomeText` and hands the loop to
-	## `.TopMenu`; every other shop type prints its own intro over `BuyMenu`.
-	_show_mart_text(_mart_text("intro"), MART_TOP if _mart_standard() else MART_LIST)
+	## `.HowMayIHelpYou` hands the loop to `.TopMenu`; every other shop type
+	## prints its intro through `MartTextbox`, which waits before `BuyMenu`.
+	if _mart_standard():
+		_show_mart_top(_mart_text("intro"))
+		return
+	_show_mart_text(_mart_text("intro"), MART_LIST, true)
 
 
 ## Whether this shop is `MartDialog`'s, which is the one that runs
@@ -685,8 +683,9 @@ func _fill_mart_markers(text: String, filled: Dictionary) -> String:
 ## A box the shop is holding on, laid out into the pages `JoyWaitAorB` steps
 ## through. An empty text goes straight on, which is what a cache imported
 ## before the mart's own words leaves.
-func _show_mart_text(text: String, after: StringName) -> void:
+func _show_mart_text(text: String, after: StringName, over_map: bool = false) -> void:
 	_mart_after = after
+	_mart_over_map = over_map
 	_mart_pages = [] if text.strip_edges().is_empty() \
 		else Gen2TextLayout.lay_out(text, MART_TEXT_COLUMNS, MART_TEXT_ROWS)
 	if _mart_pages.is_empty():
@@ -696,17 +695,29 @@ func _show_mart_text(text: String, after: StringName) -> void:
 	_render_mart()
 
 
+## `.HowMayIHelpYou` and `.AnythingElse`: `PrintText` returns without a press, so
+## the menu opens over the box, and `CopyMenuHeader` reloads its `db 1` default.
+func _show_mart_top(text: String) -> void:
+	_mart_pages = Gen2TextLayout.lay_out(text, MART_TEXT_COLUMNS, MART_TEXT_ROWS)
+	_mart_stage = MART_TOP
+	_mart_over_map = true
+	_cursor = MART_TOP_BUY
+	_render_mart()
+
+
 func _advance_mart_text() -> void:
 	if not _mart_pages.is_empty():
 		_mart_pages.remove_at(0)
 	if not _mart_pages.is_empty():
 		_render_mart()
 		return
-	if _mart_after == MART_LIST or _mart_after == MART_TOP or _mart_after == MART_SELL:
+	if _mart_after == MART_TOP:
+		_show_mart_top(_mart_text("ask_more"))
+		return
+	if _mart_after == MART_LIST or _mart_after == MART_SELL:
 		_mart_stage = _mart_after
+		_mart_over_map = false
 		_cursor = 0
-		if _mart_after == MART_TOP:
-			_cursor = _mart_top
 		_render_mart()
 		return
 	_close_mart()
@@ -721,7 +732,6 @@ func _mart_row_count() -> int:
 	return rows + 1 if rows < Gen2MartPage.LIST_HEIGHT else Gen2MartPage.LIST_HEIGHT
 
 
-## Whichever of the shop's stock and the player's pack the stage is showing.
 func _mart_list() -> Array:
 	return _mart_sell_entries if _mart_stage in MART_SELL_STAGES else _mart_entries
 
@@ -894,13 +904,13 @@ func _buy_mart_selection() -> void:
 ## only `.Quit` and the four single-list shop types print the come-again box.
 func _leave_mart() -> void:
 	if _mart_standard():
-		_show_mart_text(_mart_text("ask_more"), MART_TOP)
+		_show_mart_top(_mart_text("ask_more"))
 		return
 	_quit_mart()
 
 
 func _quit_mart() -> void:
-	_show_mart_text(_mart_text("come_again"), &"exit")
+	_show_mart_text(_mart_text("come_again"), &"exit", true)
 
 
 ## `.TopMenu`'s three rows. `VerticalMenu` answers carry on B, which `.quit`
@@ -915,10 +925,10 @@ func _press_mart_top(button: int) -> void:
 			_quit_mart()
 			return
 		Gen2Button.A:
-			_mart_top = _cursor
 			match _cursor:
 				MART_TOP_BUY:
 					_mart_stage = MART_LIST
+					_mart_over_map = false
 					_cursor = 0
 					_mart_scroll = 0
 				MART_TOP_SELL:
@@ -936,9 +946,10 @@ func _press_mart_top(button: int) -> void:
 func _open_mart_sell() -> void:
 	_refresh_mart_sell_entries()
 	if _mart_sell_entries.is_empty():
-		_show_mart_text(_mart_text("ask_more"), MART_TOP)
+		_show_mart_top(_mart_text("ask_more"))
 		return
 	_mart_stage = MART_SELL
+	_mart_over_map = false
 	_cursor = 0
 	_mart_scroll = 0
 	_mart_quantity = 1
@@ -1063,11 +1074,15 @@ func _close_mart() -> void:
 	if _mart_view != null:
 		Gen2Screen.drop(_mart_view)
 		_mart_view = null
+	_mart_over_map = false
 	_set_overlay_open(false)
 
 
 func _render_mart() -> void:
 	if _mart_view == null or _data == null:
+		return
+	if _mart_over_map:
+		_render_mart_over_map()
 		return
 	if _mart_page == null:
 		_mart_page = Gen2MartPage.from_data(_data)
@@ -1098,14 +1113,24 @@ func _render_mart() -> void:
 		return
 	if _mart_stage == MART_CONFIRM or _mart_stage == MART_SELL_CONFIRM:
 		_blend_mart_menu(image, Gen2MenuBox.yes_no(), ["YES", "NO"], _mart_confirm)
-	elif _mart_stage == MART_TOP:
-		## `MenuHeader_BuySell`'s `menu_coords 0, 0, 7, 8`.
-		_blend_mart_menu(
-			image,
-			Gen2MenuBox.from_coords(0, 0, 7, 8, Gen2MenuBox.STATICMENU_CURSOR),
-			MART_TOP_ROWS, _cursor
-		)
 	Gen2PicImage.show(_mart_view, image)
+
+
+## The speech box and `MenuHeader_BuySell`'s `menu_coords 0, 0, 7, 8` over it.
+func _render_mart_over_map() -> void:
+	if _service_page == null:
+		_service_page = Gen2WorldServicePage.from_data(_data)
+	if _service_page == null:
+		return
+	var page: PackedStringArray = _mart_pages[0] if not _mart_pages.is_empty() \
+		else PackedStringArray()
+	var image: Image = _service_page.render(
+		"", "", MART_TOP_ROWS if _mart_stage == MART_TOP else [], _cursor,
+		"\n".join(page),
+		Gen2MenuBox.from_coords(0, 0, 7, 8, Gen2MenuBox.STATICMENU_CURSOR)
+	)
+	if image != null:
+		Gen2PicImage.show(_mart_view, image)
 
 
 func _blend_mart_menu(

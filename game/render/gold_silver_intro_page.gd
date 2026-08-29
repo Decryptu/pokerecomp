@@ -285,9 +285,8 @@ func draw(movie: Gen2GoldSilverIntro) -> Image:
 	if movie == null:
 		return Gen2PicImage.canvas_image(pixels, WIDTH, HEIGHT)
 	var behind: PackedByteArray = _draw_background(pixels, movie)
-	# The lower OAM index wins a pixel, so a slot only paints where no earlier
-	# one did: Charizard's small fireball sits behind the big one it is spawned
-	# after, and the note behind Pikachu.
+	# Charizard's small fireball sits behind the big one it is spawned after, and
+	# the note behind Pikachu.
 	var taken := PackedByteArray()
 	taken.resize(WIDTH * HEIGHT)
 	for entry: Dictionary in shadow_oam(movie):
@@ -312,7 +311,6 @@ func shadow_oam(movie: Gen2GoldSilverIntro) -> Array[Dictionary]:
 		var at: Vector2i = sprite["at"]
 		var flip_x: bool = bool(sprite["flip_x"])
 		for part: Array in ordering["parts"]:
-			# `UpdateAnimFrame` stops at `wShadowOAMEnd` rather than growing.
 			if out.size() >= SHADOW_OAM_SPRITES:
 				return out
 			var dx: int = int(part[1])

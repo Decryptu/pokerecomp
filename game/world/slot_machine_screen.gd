@@ -24,7 +24,6 @@ var _text: String = ""
 ## `wMenuCursorY` for whichever of the two menus is up.
 var _bet_cursor: int = 1
 var _yes_no_cursor: int = 1
-## Whether this frame's pass has already run, which a press does.
 var _acted: bool = false
 var _open: bool = false
 

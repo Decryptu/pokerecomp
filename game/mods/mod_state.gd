@@ -54,8 +54,7 @@ static func disabled_ids() -> Array[StringName]:
 	return out
 
 
-## Returns false only when the change could not be written, in which case the
-## in-memory set is rolled back so it never disagrees with the file.
+## As [method set_selected_view], for the enabled set.
 static func set_enabled(id: StringName, enabled: bool) -> bool:
 	_ensure_loaded()
 	if String(id).is_empty():

@@ -95,6 +95,20 @@ func _build() -> void:
 			_options.screen_fill = index == 1
 			_persist()
 	)))
+	app.add_child(Gen2LauncherUI.field(_theme, "Scrolling", Gen2LauncherUI.segmented(
+		_theme, ["Hardware", "Smooth"], 1 if _options.smooth_scroll else 0,
+		func(index: int) -> void:
+			_options.smooth_scroll = index == 1
+			_persist()
+	)))
+	app.add_child(Gen2LauncherUI.muted(
+		_theme,
+		"The overworld moves two pixels at a time, once every two frames, which "
+		+ "is what a Game Boy did and what its screen smeared over. Smooth draws "
+		+ "the frame in between, so the map moves a pixel a frame and lands on "
+		+ "the same pixel the hardware did. Nothing in the game is timed "
+		+ "differently either way."
+	))
 	app.add_child(Gen2LauncherUI.field(_theme, "Second screen", Gen2LauncherUI.segmented(
 		_theme, _titles(Gen2Options.SECOND_SCREENS),
 		maxi(Gen2Options.SECOND_SCREENS.find(_options.second_screen), 0),
@@ -126,13 +140,21 @@ func _build() -> void:
 	)))
 	var fps_labels: Array[String] = []
 	for fps: int in Gen2Options.FPS_CHOICES:
-		fps_labels.append("Max" if fps == 0 else str(fps))
+		fps_labels.append("Display" if fps == 0 else str(fps))
 	app.add_child(Gen2LauncherUI.field(_theme, "Frame rate", Gen2LauncherUI.segmented(
 		_theme, fps_labels, maxi(Gen2Options.FPS_CHOICES.find(_options.max_fps), 0),
 		func(index: int) -> void:
 			_options.max_fps = Gen2Options.FPS_CHOICES[index]
 			_persist()
 	)))
+	app.add_child(Gen2LauncherUI.muted(
+		_theme,
+		"Display draws one frame per refresh, which is the only setting whose "
+		+ "frames each reach the panel once. A number below the panel's own rate "
+		+ "is a sleep and not a refresh, so the same picture is shown for one "
+		+ "refresh, then three, then two, and walking stutters however even the "
+		+ "game is underneath. Pick one only to save battery."
+	))
 
 	var controls: VBoxContainer = _card(column, "Controls")
 	var section: Gen2ControlsSection = Gen2ControlsSection.create(

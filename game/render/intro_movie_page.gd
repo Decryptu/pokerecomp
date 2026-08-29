@@ -228,7 +228,6 @@ func draw(movie: Gen2IntroMovie) -> Image:
 	var background: Array = _draw_background(pixels, movie)
 	var behind: PackedByteArray = background[0]
 	var forced: PackedByteArray = background[1]
-	# The lower OAM index wins a pixel.
 	var taken := PackedByteArray()
 	taken.resize(WIDTH * HEIGHT)
 	for entry: Dictionary in shadow_oam(movie):
@@ -250,7 +249,6 @@ func shadow_oam(movie: Gen2IntroMovie) -> Array[Dictionary]:
 		var flip_x: bool = bool(sprite["flip_x"])
 		var flip_y: bool = bool(sprite["flip_y"])
 		for part: Array in ordering["parts"]:
-			# `UpdateAnimFrame` stops at `wShadowOAMEnd` rather than growing.
 			if out.size() >= SHADOW_OAM_SPRITES:
 				return out
 			var dy: int = int(part[0])

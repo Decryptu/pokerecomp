@@ -12,8 +12,6 @@ var _r: RefCounted = null
 ## because its whirlpool is the one a Crystal playthrough meets.
 
 
-## constants/map_constants.asm, DUNGEONS group. Crystal's extra maps push
-## Dragon's Den B1F eight places later within the same group.
 const DEN_GROUP: int = 3
 const DEN_NUMBER_CRYSTAL: int = 81
 const DEN_NUMBER_GOLD_SILVER: int = 73

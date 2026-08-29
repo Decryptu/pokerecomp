@@ -203,7 +203,6 @@ func _on_splash_finished() -> void:
 func _start_profile_setup() -> void:
 	_gender_screen = Gen2GenderScreen.new()
 	if not _gender_screen.open(_data):
-		# Never parented, so it is freed outright rather than queued.
 		_gender_screen.free()
 		_gender_screen = null
 		_start_clock()
