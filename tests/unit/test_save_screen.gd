@@ -379,6 +379,74 @@ func test_the_party_list_refuses_a_transfer_that_would_leave_nobody_standing() -
 
 ## `_MovePKMNWithoutMail`: left and right load another list, the submenu drops
 ## RELEASE, and the second A puts the Pokemon where the insert cursor stands.
+## `engine/menus/save.asm`'s one sequence, which every save in the game runs:
+## the routine's own question, `AskOverwriteSaveFile`, the SAVING box and
+## `SavedTheGame`. Only `SaveMenu`'s half of it was built.
+func test_the_save_sequence_asks_twice_and_then_spends_its_frames() -> void:
+	var written: Array = []
+	var prompt: Gen2SavePrompt = Gen2SavePrompt.open(
+		Gen2SavePrompt.Kind.CHANGE_BOX, "RED",
+		func() -> Dictionary:
+			written.append(true)
+			return {"ok": true}
+	)
+	## A three-line question carries no cursor until it has been prompted past.
+	assert_eq(prompt.lines, Gen2SavePrompt.CHANGE_BOX_LINES)
+	assert_eq(prompt.cursor, -1)
+	prompt.confirm(true)
+	assert_eq(prompt.cursor, 0)
+	prompt.confirm(true)
+	assert_eq(prompt.lines, Gen2SavePrompt.OVERWRITE_LINES)
+	prompt.confirm(true)
+	prompt.confirm(true)
+	assert_eq(prompt.step, Gen2SavePrompt.Step.SAVING)
+
+	prompt.frames_elapsed(Gen2SavePrompt.SAVING_FRAMES - 1)
+	assert_eq(written.size(), 0, "the box is up for sixteen frames first")
+	prompt.frames_elapsed(1)
+	assert_eq(written.size(), 1)
+	assert_true(prompt.writing_now())
+	prompt.frames_elapsed(Gen2SavePrompt.WRITE_FRAMES)
+	assert_eq(prompt.step, Gen2SavePrompt.Step.SAVED)
+	assert_true(prompt.sfx_owed())
+	assert_eq(prompt.lines[0], "RED saved")
+	prompt.frames_elapsed(Gen2SavePrompt.DONE_FRAMES)
+	assert_true(prompt.finished())
+	assert_false(prompt.refused())
+
+
+## `.refused`'s carry, and `Link_SaveGame`, whose caller `TryQuickSave` asks no
+## question of its own.
+func test_a_no_refuses_and_the_link_save_opens_on_the_overwrite_question() -> void:
+	var refused: Gen2SavePrompt = Gen2SavePrompt.open(
+		Gen2SavePrompt.Kind.MOVE_MON, "RED", Callable()
+	)
+	refused.confirm(true)
+	refused.cancel()
+	assert_true(refused.finished())
+	assert_true(refused.refused())
+
+	var quick: Gen2SavePrompt = Gen2SavePrompt.open(
+		Gen2SavePrompt.Kind.LINK, "RED", func() -> Dictionary:
+			return {"ok": false, "reason": &"disk_full"}
+	)
+	assert_eq(quick.step, Gen2SavePrompt.Step.OVERWRITE)
+	quick.confirm(true)
+	quick.confirm(true)
+	quick.frames_elapsed(Gen2SavePrompt.SAVING_FRAMES + Gen2SavePrompt.WRITE_FRAMES)
+	## A write that failed is this port's own step, and it ends as a NO does.
+	assert_eq(quick.step, Gen2SavePrompt.Step.FAILED)
+	assert_string_contains(quick.lines[1], "disk_full")
+	quick.confirm(true)
+	assert_true(quick.refused())
+
+
+func _spend_insert_frames() -> void:
+	_box_screen.advance_saving_frames(
+		Gen2SavePrompt.LEAVE_ON_FRAMES + Gen2SavePrompt.INSERT_SAVED_FRAMES
+	)
+
+
 func test_move_without_mail_reorders_a_list_and_moves_between_two() -> void:
 	var save: Gen2SaveData = _save_with_two()
 	var third: Gen2BattleMon = Gen2BattleMon.create(
@@ -405,6 +473,14 @@ func test_move_without_mail_reorders_a_list_and_moves_between_two() -> void:
 	_box_screen.handle_button(Gen2Button.UP)
 	_box_screen.handle_button(Gen2Button.UP)
 	_box_screen.handle_button(Gen2Button.A)
+	## `MovePKMNWithoutMail_InsertMon`'s twenty frames and the twenty-four
+	## `MoveMonWOMail_InsertMon_SaveGame` spends behind `SFX_SAVE`, which read no
+	## joypad: the list only comes back once both are spent.
+	assert_eq(
+		String(_box_screen.box_snapshot()["prompt"]), Gen2SavePrompt.SAVING_LEAVE_ON
+	)
+	assert_true(_box_screen.handle_button(Gen2Button.B))
+	_spend_insert_frames()
 	assert_eq(String((save.party[0] as Gen2SaveMon).nickname), "THIRD")
 	assert_eq(save.party.size(), 3)
 
@@ -419,6 +495,7 @@ func test_move_without_mail_reorders_a_list_and_moves_between_two() -> void:
 	_box_screen.handle_button(Gen2Button.A)
 	_box_screen.handle_button(Gen2Button.RIGHT)
 	_box_screen.handle_button(Gen2Button.A)
+	_spend_insert_frames()
 	assert_eq(save.party.size(), 2)
 	assert_not_null(save.boxes[0].slots[0])
 	assert_eq(String((save.boxes[0].slots[0] as Gen2SaveMon).nickname), "THIRD")

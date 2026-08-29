@@ -4,22 +4,18 @@ extends Control
 ## The overworld pause menu (engine/menus/start_menu.asm). The list, `_Option`,
 ## `SaveMenu` and every box the pack opens are the cartridge's own screens through
 ## [Gen2StartMenuPage] and [Gen2PackPage], drawn into whichever [Gen2Screen] the
-## host hands over; a caller that hands over none keeps the window-resolution
-## panel below. Pokedex, Pokemon and Pokegear are screens the world already owns,
-## so this only reports the choice through [signal action_chosen]. Pack and Save
-## live here as internal modes.
+## host hands over; a caller handing over none keeps the panel below. Pokedex,
+## Pokemon and Pokegear are the world's, so this only reports the choice.
 
-## Emitted for an available entry this screen does not own itself
-## (Pokedex, Pokemon, Pokegear, Player); the caller opens the matching screen.
-## [param id] is the registering mod's own id where the row is a mod's and the
-## action needs to know whose it is, and is empty for every cartridge row.
+## An available entry this screen does not own (Pokedex, Pokemon, Pokegear,
+## Player); the caller opens it. [param id] is the registering mod's where the
+## row is a mod's, and empty for every cartridge row.
 signal action_chosen(kind: StringName, id: StringName)
 ## Emitted on Exit or cancel from the top-level list.
 signal closed
 ## `.Field`'s PACKSTATE_QUITRUNSCRIPT: an ITEMMENU_CLOSE item whose effect
-## succeeded, so the pack quits and the overworld runs what the effect queued.
-## The payload is the resolved effect, because the screen hosting the world is
-## the one that can cast a rod or draw a warp.
+## succeeded, so the pack quits and the overworld runs what it queued. The
+## payload is the resolved effect: only the world's host can cast a rod.
 signal field_item_used(request: Dictionary)
 
 ## `EvoStoneEffect`'s own `EvolvePokemon`: the pack has already written the party
@@ -44,6 +40,17 @@ enum Mode {
 	SAVE_FAILED, QUIT_ASK, LAUNCHER_ASK, RESET_ASK, OPTIONS, MODS, MOD_OPTIONS,
 	FIELD_MOVES,
 }
+
+## The prompt's step as one of this screen's modes, so its box is drawn the way
+## every other question here is.
+const SAVE_PROMPT_MODES: Dictionary = {
+	Gen2SavePrompt.Step.ASK: Mode.SAVE_ASK,
+	Gen2SavePrompt.Step.OVERWRITE: Mode.SAVE_OVERWRITE,
+	Gen2SavePrompt.Step.SAVING: Mode.SAVE_SAVING,
+	Gen2SavePrompt.Step.SAVED: Mode.SAVE_SAVED,
+	Gen2SavePrompt.Step.FAILED: Mode.SAVE_FAILED,
+}
+
 
 ## The two-row boxes, by the cursor each toggles and the method that repaints it.
 const TOGGLE_MODES: Dictionary = {
@@ -84,16 +91,9 @@ const CONFIRM_HANDLERS: Dictionary = {
 	Mode.FIELD_MOVES: &"_confirm_field_move",
 }
 
-## `SaveMenu`'s four texts, out of `data/text/common_3.asm` on Crystal and
-## `common_2.asm` on Gold and Silver, which no importer reads and which this
-## project authors beside its other engine text. Verbatim, one entry a line, so
-## the box scrolls where `_ContText` scrolls.
-const SAVE_ASK_LINES: Array[String] = [
-	"Would you like to", "save the game?",
-]
-## `AlreadyASaveFileText`. `AnotherSaveFileText` is its sibling for a save file
-## belonging to another player, and `CompareLoadedAndSavedPlayerID` cannot
-## reach it here: a world is always played from the slot it was started in.
+## `SaveMenu`'s question. The words and the frames are [Gen2SavePrompt]'s: every
+## save runs one routine, and only the question in front of it differs.
+const SAVE_ASK_LINES: Array[String] = Gen2SavePrompt.ASK_LINES
 ## `_StartMenuContestEndText`, which `StartMenu_Quit` asks over the same
 ## `YesNoMenuHeader` box the save question uses. Authored here beside the save
 ## texts for the same reason: no importer reads either.
@@ -112,34 +112,16 @@ const LAUNCHER_ASK_LINES: Array[String] = [
 const RESET_ASK_LINES: Array[String] = [
 	"You pressed the", "RESET buttons.", "Reset the game?",
 ]
-const SAVE_OVERWRITE_LINES: Array[String] = [
-	"There is already a", "save file. Is it", "OK to overwrite?",
-]
-const SAVE_SAVING_LINES: Array[String] = [
-	"SAVING… DON'T TURN", "OFF THE POWER.",
-]
-## `_SavedTheGameText`, whose `<PLAYER>` is filled from the save.
-## `RestoreThePPOfWhichMoveText`, `PPRestoredText` and the refusal the pack owes
-## PP UP, whose ceiling the save model does not carry. The first two are
-## `text_far` stubs in `data/text/common_2.asm` that no script reaches, so they
-## are this screen's the way the save boxes below are; the third is this port's
-## own words, because the cartridge has no such refusal.
+## `RestoreThePPOfWhichMoveText` and `PPRestoredText`, `text_far` stubs no script
+## reaches, so they are this screen's the way the questions above are. The third
+## is this port's own words: the save model carries no PP UP ceiling.
 const RESTORE_PP_WHICH_MOVE: String = "Restore the PP of\nwhich move?"
 const PP_RESTORED: String = "PP was restored."
 const PP_UP_UNSUPPORTED: String = "PP UP has no effect\nin this port yet."
 
-const SAVE_SAVED_LINES: Array[String] = [
-	"%s saved", "the game.",
-]
-
-## `SavingDontTurnOffThePower`'s own `ld c, 16`, then `SavedTheGame`'s 32 before
-## the words and 30 after them.
-const SAVE_SAVING_FRAMES: int = 16
-const SAVE_WRITE_FRAMES: int = 32
-const SAVE_DONE_FRAMES: int = 30
-## `ld de, SFX_SAVE` (constants/sfx_constants.asm; the comment column there is
-## hex).
-const SFX_SAVE: int = 0x25
+const SAVE_SAVING_FRAMES: int = Gen2SavePrompt.SAVING_FRAMES
+const SAVE_WRITE_FRAMES: int = Gen2SavePrompt.WRITE_FRAMES
+const SAVE_DONE_FRAMES: int = Gen2SavePrompt.DONE_FRAMES
 
 ## `SwitchItemsInBag`' own two, both hexadecimal the way the constants file
 ## counts: `.place_insert` asks for SFX_SWITCH_POKEMON twice through
@@ -168,11 +150,10 @@ const TEXT_FALLBACKS: Dictionary = {
 }
 
 
-## The pack's submenus, all `MENU_BACKUP_TILES` boxes over the pack's own screen.
-##
+## The pack's submenus, `MENU_BACKUP_TILES` boxes over the pack's own screen.
 ## `MenuHeader_UsableKeyItem` and its five siblings differ only in where the box
-## starts: `menu_coords 13, y, SCREEN_WIDTH - 1, TEXTBOX_Y - 1` with y chosen so
-## the rows end on the text box, which is `TEXTBOX_Y - 1 - 2 * items`.
+## starts: `menu_coords 13, y, SCREEN_WIDTH - 1, TEXTBOX_Y - 1`, y being
+## `TEXTBOX_Y - 1 - 2 * items` so the rows end on the text box.
 const ITEM_MENU_LEFT: int = 13
 const ITEM_MENU_RIGHT: int = 19
 const ITEM_MENU_BOTTOM: int = 11
@@ -281,7 +262,8 @@ var _save_line: int = 0
 var _save_cursor: int = -1
 var _save_frames: int = 0
 var _save_clock := Gen2WorldAnimation.FrameClock.new()
-var _save_result: Dictionary = {}
+## `SaveMenu`'s own sequence while one is up, and null the rest of the time.
+var _save_prompt: Gen2SavePrompt = null
 
 var _options_menu: Gen2WorldOptionsMenu = null
 
@@ -336,14 +318,9 @@ func _ready() -> void:
 		entry.call()
 
 
-## `save_action` is called with no arguments and must return a Dictionary
-## shaped like Gen2WorldScreen.persist_world_snapshot()'s result (an "ok" key,
-## with "reason" on failure). Kept as a Callable so this screen does not need
-## to know how a snapshot is written or where saves live.
-##
-## Mirrors Gen2BoxScreen.set_context(): open() may be called before or after this
-## node enters the tree, so opening the list defers to _ready() until it is in
-## one, and runs immediately here otherwise.
+## `save_action` takes no arguments and answers an "ok" key, with a "reason"
+## behind a false one: a Callable, so this screen does not know where saves live.
+## Called before or after the node enters the tree, the way the box screen is.
 func open(world: Gen2WorldAPI, data: GameData, save_action: Callable, previous_cursor: int = 0) -> bool:
 	_world = world
 	_data = data
@@ -357,12 +334,10 @@ func open(world: Gen2WorldAPI, data: GameData, save_action: Callable, previous_c
 
 
 ## The save the pack's USE applies to, and whether that write reaches disk.
-## Optional: without it the pack still lists items and refuses to use one, which
-## is what a screenshot tool driving an injected world gets.
-##
-## Passed rather than wrapped in a Callable the way `save_action` is, because
-## using an item is a Gen2WorldPartyHost transaction over this same save, not a
-## world-snapshot write only the world screen knows how to do.
+## Without it the pack lists items and refuses to use one, which is what a
+## screenshot tool driving an injected world gets. Passed rather than wrapped the
+## way `save_action` is: USE is a [Gen2WorldPartyHost] transaction over this same
+## save, not a snapshot write only the world screen can do.
 func set_party_context(save: Gen2SaveData, persist: bool = true) -> void:
 	_pack_save = save
 	_pack_persist = persist
@@ -761,6 +736,7 @@ func _contest_status() -> Dictionary:
 
 
 func _open_list_mode() -> void:
+	_save_prompt = null
 	_mode = Mode.LIST
 	## The row the menu reopens on is the one it was left on, which may be past
 	## the window a previous open left behind.
@@ -823,14 +799,11 @@ func _open_mods_mode() -> void:
 	_render_mods()
 
 
-## The rows the MODS entry shows: the host's own VIEW row where the player has
-## more than one view to choose from, then one row per mod that registered a
-## setting. The view is the host's and not any mod's: `Gen2ModHost` holds one
-## selection for both surfaces, persists it and draws it on the launcher's mod
-## page, and a mod registering a VIEW button of its own would be a private copy of
-## that state, six of them for six mods. This is the same list on the surface a
-## player is already changing what a mod does from, which is the only place a
-## shipped build has: `V` is behind [method Gen2DebugKeys.enabled].
+## The rows MODS shows: the host's own VIEW row where there is more than one view
+## to choose from, then one row per mod that registered a setting. The view is
+## the host's rather than any mod's, since `Gen2ModHost` holds one selection for
+## both surfaces; `V` is behind [method Gen2DebugKeys.enabled], so this is the
+## only place a shipped build can change it.
 func _mod_rows() -> Array:
 	var rows: Array = []
 	if Gen2ModHost.instance().view_ids().size() > 1:
@@ -2053,14 +2026,45 @@ func _render_pack_result() -> void:
 
 ## `SaveMenu`'s first question. `LoadStandardMenuHeader` and
 ## `DisplaySaveInfoOnSave` put the info box up before it, and both stay up for
-## every mode below.
+## every mode below. [Gen2SavePrompt] is the sequence; this draws its box.
 func _open_save_confirm_mode() -> void:
-	_enter_save_mode(Mode.SAVE_ASK, SAVE_ASK_LINES, 0)
+	_save_prompt = Gen2SavePrompt.open(
+		Gen2SavePrompt.Kind.MENU,
+		_pack_save.player_name if _pack_save != null else "",
+		_save_action
+	)
+	_sync_save_prompt()
+
+
+func _sync_save_prompt() -> void:
+	if _save_prompt == null:
+		return
+	if _save_prompt.refused():
+		## `.refused`'s carry, which `StartMenu_Save` answers with 0.
+		_save_prompt = null
+		_open_list_mode()
+		return
+	if _save_prompt.finished():
+		## `StartMenu_Save`'s `ld a, 1`, `StartMenu`'s exit and not `.Reopen`.
+		_save_prompt = null
+		closed.emit()
+		return
+	if _save_prompt.sfx_owed():
+		## `SavedTheGame` reaches it through `WaitPlaySFX`; the wait behind it is
+		## not spent, for the reason the intro cry's is not.
+		sfx_requested.emit(Gen2SavePrompt.SFX_SAVE, true)
+	_mode = SAVE_PROMPT_MODES[_save_prompt.step]
+	_save_lines = _save_prompt.lines.duplicate()
+	_save_line = _save_prompt.line
+	_save_cursor = _save_prompt.cursor
+	_save_frames = _save_prompt.frames
+	_render_save()
 
 
 ## The yes/no's own cursor, `YesNoMenuHeader`'s `db 1` default, and the words
 ## the box holds. [param cursor_index] below zero is a mode with no box at all.
 func _enter_save_mode(mode: Mode, lines: Array, cursor_index: int) -> void:
+	_save_prompt = null
 	_mode = mode
 	_save_lines = lines.duplicate()
 	_save_line = 0
@@ -2105,35 +2109,23 @@ func _confirm_save() -> void:
 				closed.emit()
 			else:
 				soft_reset_confirmed.emit()
-		Mode.SAVE_ASK:
-			if _save_cursor == 1:
-				_open_list_mode()
-			else:
-				_enter_save_mode(Mode.SAVE_OVERWRITE, SAVE_OVERWRITE_LINES, -1)
-		Mode.SAVE_OVERWRITE:
-			## `_ContText`'s own `PromptButton` before the third line, which
-			## `AlreadyASaveFileText` is the only one of these texts to carry.
-			if _save_cursor < 0:
-				_save_line = 1
-				_save_cursor = 0
-				_render_save()
-			elif _save_cursor == 1:
-				_open_list_mode()
-			else:
-				_enter_save_mode(Mode.SAVE_SAVING, SAVE_SAVING_LINES, -1)
-		## The two timed modes read no button, since `SavingDontTurnOffThePower`
-		## zeroes the joypad bytes before it prints.
-		Mode.SAVE_SAVING, Mode.SAVE_SAVED:
-			pass
+		## `SavingDontTurnOffThePower` zeroes the joypad bytes before it prints,
+		## and the prompt refuses a button on both timed steps.
+		Mode.SAVE_ASK, Mode.SAVE_OVERWRITE, Mode.SAVE_SAVING, Mode.SAVE_SAVED, \
 		Mode.SAVE_FAILED:
-			_open_list_mode()
+			if _save_prompt != null:
+				_save_prompt.confirm(_save_cursor == 0)
+				_sync_save_prompt()
 
 
 ## B is `YesNoBox`'s no wherever a question is up, and `PromptButton`'s other
 ## button while the text still has a line to come. The two timed modes read no
 ## joypad at all.
 func _cancel_save() -> void:
-	if _save_cursor < 0 and _mode in [Mode.SAVE_OVERWRITE, Mode.RESET_ASK]:
+	if _save_prompt != null:
+		_save_prompt.cancel()
+		_sync_save_prompt()
+	elif _save_cursor < 0 and _mode == Mode.RESET_ASK:
 		_confirm_save()
 	elif _mode == Mode.RESET_ASK:
 		## B is `YesNoBox`'s NO, and the menu was opened for the question alone.
@@ -2164,22 +2156,10 @@ func ask_soft_reset() -> void:
 ## One hardware frame of the two timed modes. Public so a test or a preview owns
 ## its own frames rather than sampling a screen mid-flight.
 func advance_save_frame() -> void:
-	if _mode != Mode.SAVE_SAVING and _mode != Mode.SAVE_SAVED:
+	if _save_prompt == null:
 		return
-	_save_frames += 1
-	match _mode:
-		Mode.SAVE_SAVING:
-			if _save_frames == SAVE_SAVING_FRAMES:
-				_write_save()
-			elif _save_frames == SAVE_SAVING_FRAMES + SAVE_WRITE_FRAMES:
-				_show_save_result()
-		## Exactly, not past: the host is freed a frame later and this would
-		## otherwise emit again on every frame in between.
-		Mode.SAVE_SAVED:
-			if _save_frames == SAVE_DONE_FRAMES:
-				## `StartMenu_Save`'s `ld a, 1`, which is `StartMenu`'s exit
-				## rather than its `.Reopen`.
-				closed.emit()
+	_save_prompt.frame()
+	_sync_save_prompt()
 
 
 func advance_save_frames(count: int) -> void:
@@ -2198,29 +2178,6 @@ func _process(delta: float) -> void:
 		return
 	for _frame: int in _save_clock.tick(delta):
 		advance_save_frame()
-
-
-func _write_save() -> void:
-	_save_result = _save_action.call() if _save_action.is_valid() \
-		else {"ok": false, "reason": &"no_save_action"}
-
-
-## `SavedTheGame`'s words and `SFX_SAVE` behind them. A refused write is this
-## project's own line: the cartridge has no failure path, because its write is
-## to SRAM it has already checked.
-func _show_save_result() -> void:
-	if not bool(_save_result.get("ok", false)):
-		_enter_save_mode(Mode.SAVE_FAILED, [
-			"Save failed:", String(_save_result.get("reason", "unknown")),
-		], 0)
-		return
-	var player_name: String = _pack_save.player_name if _pack_save != null else ""
-	_enter_save_mode(Mode.SAVE_SAVED, [
-		SAVE_SAVED_LINES[0] % player_name, SAVE_SAVED_LINES[1],
-	], -1)
-	## `WaitSFX` after it is not spent, for the reason the intro cry's is not.
-	## `SavedTheGame` reaches SFX_SAVE through `WaitPlaySFX`.
-	sfx_requested.emit(SFX_SAVE, true)
 
 
 ## `DisplaySaveInfoOnSave`'s four rows: the same fields [Gen2TrainerCard]'s

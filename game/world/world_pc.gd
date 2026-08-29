@@ -3,12 +3,9 @@ extends RefCounted
 
 ## `engine/events/pokecenter_pc.asm`: the Pokemon Center's top menu, the item PC
 ## behind its `<PLAYER>'S PC` row, and the two transactions that move a stack
-## between the bag and `wPCItems`. Scene-free like the other world hosts: the rows
-## and their per-state lists are the source's own tables, a host draws whichever
-## list is returned, and the commit boundary is [Gen2WorldTransaction]. Every row
-## of both lists is built, MAIL BOX being `_PlayerMailBoxMenu` over the save's own
-## mailbox, DECORATION [Gen2WorldDecoration]'s and HALL OF FAME [Gen2HallOfFame]'s
-## viewer.
+## between the bag and `wPCItems`. Scene-free like the other world hosts, with
+## [Gen2WorldTransaction] the commit boundary. MAIL BOX is `_PlayerMailBoxMenu`,
+## DECORATION [Gen2WorldDecoration]'s and HALL OF FAME [Gen2HallOfFame]'s.
 
 ## `PokemonCenterPC.Jumptable` indexes.
 const PCPCITEM_PLAYERS_PC: int = 0
@@ -81,8 +78,8 @@ const MAILBOX_EGG: String = "An EGG can't hold\nany MAIL."
 const MAILBOX_MOVED: String = "The MAIL was moved\nfrom the MAILBOX."
 
 ## The top menu behind BILL'S PC, as `{row, name}` in the source's own order.
-## Every row of it is built: MOVE PKMN W/O MAIL is [Gen2BoxScreen]'s `MODE_MOVE`,
-## which is `_MovePKMNWithoutMail`'s own two joypad passes over the same listing.
+## MOVE PKMN W/O MAIL is [Gen2BoxScreen]'s `MODE_MOVE`, `_MovePKMNWithoutMail`'s
+## own two joypad passes over the same listing.
 static func bills_pc_menu() -> Array:
 	var out: Array = []
 	for row: int in BILLS_PC_ROWS.size():
@@ -156,10 +153,20 @@ static func can_open(save: Gen2SaveData) -> bool:
 	return save != null and not save.party.is_empty()
 
 
-## The bag as rows a deposit list can draw, and the PC as rows a withdraw or
-## toss list can. Both keep the order the map holds, which is the order the
-## items were received: `wPCItems` is a packed array `ReceiveItemFromPC` appends
-## to, and `SwitchItemsInBag` is the only thing that reorders one.
+## `IsAnyMonHoldingMail`, which refuses the whole of MOVE PKMN W/O MAIL. It walks
+## the party alone, so a boxed Pokemon holding mail does not stop it.
+static func any_party_mon_holds_mail(save: Gen2SaveData) -> bool:
+	if save == null:
+		return false
+	for mon: Gen2SaveMon in save.party:
+		if mon != null and Gen2HeldItem.is_mail(mon.item):
+			return true
+	return false
+
+
+## The bag as rows a deposit list can draw, and the PC as rows a withdraw or toss
+## list can. Both keep the received order: `wPCItems` is a packed array
+## `ReceiveItemFromPC` appends to and `SwitchItemsInBag` alone reorders.
 static func bag_entries(data: GameData, state: Gen2WorldState) -> Array:
 	return _entries(data, state.items() if state != null else {})
 
@@ -188,10 +195,9 @@ static func _entries(data: GameData, owned: Dictionary) -> Array:
 	return out
 
 
-## `PlayerDepositItemMenu`: the stack leaves `wNumItems` and arrives in
-## `wNumPCItems`. The source refuses an item whose `CheckItemMenu` attribute is
-## one of the three `.no_toss` rows, which is what keeps a key item out of the
-## PC.
+## `PlayerDepositItemMenu`: the stack leaves `wNumItems` for `wNumPCItems`. An
+## item whose `CheckItemMenu` attribute is one of the three `.no_toss` rows is
+## refused, which is what keeps a key item out of the PC.
 static func deposit(
 	world: Gen2WorldAPI, save: Gen2SaveData, item: int, quantity: int = 1,
 	persist: bool = true
@@ -258,10 +264,9 @@ static func _transfer(
 		return Gen2WorldTransaction.failure(&"item_stack_full", {
 			"item": item, "quantity": quantity, "owned": destination,
 		})
-	## `ReceiveItem` fails on a full destination list before anything is taken
-	## from the source, which is what `.PackFull` and `.NoRoomInPC` report. The
-	## bag's own check is per pocket, so it goes through the pack's; the PC is
-	## one flat list of fifty.
+	## `ReceiveItem` fails on a full destination before anything leaves the
+	## source, which `.PackFull` and `.NoRoomInPC` report. The bag's check is per
+	## pocket and goes through the pack's; the PC is one flat list of fifty.
 	if to_pc:
 		if destination == 0 and world.state.pc_items().size() >= Gen2WorldPack.MAX_PC_ITEMS:
 			return Gen2WorldTransaction.failure(&"pc_full", {"item": item})
@@ -353,10 +358,9 @@ static func mailbox_to_pack(
 	}
 
 
-## `.AttachMail`, once `PartyMenuSelect` has picked a member. The two refusals
-## in front of it are the caller's, because both print and go back to the same
-## list: an egg cannot hold mail and a member already holding an item is not
-## asked to swap.
+## `.AttachMail`, once `PartyMenuSelect` has picked a member. Its two refusals
+## are the caller's, both printing and going back to the same list: an egg cannot
+## hold mail, and a member already holding an item is not asked to swap.
 static func mailbox_attach(
 	world: Gen2WorldAPI, save: Gen2SaveData, index: int, slot: int,
 	persist: bool = true

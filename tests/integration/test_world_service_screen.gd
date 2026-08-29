@@ -123,6 +123,52 @@ func test_players_house_pc_opens_the_item_pc_and_resumes_the_waiting_script() ->
 	assert_false(_world_screen._world.script_input_waiting())
 
 
+## `special TryQuickSave`, which the cable club and the Battle Tower both ask for
+## before they start. `Link_SaveGame` has no question of its own, so the box that
+## opens is `AskOverwriteSaveFile`'s; writing with nothing on screen was the
+## defect.
+func test_try_quick_save_asks_before_it_writes_and_answers_the_script() -> void:
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(Fixture.directory()))
+	scripts["48:6195"] = [
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_TRY_QUICK_SAVE, 0,
+		Gen2WorldScript.END,
+	]
+	RomCache.write_json(RomCache.world_scripts_path(Fixture.directory()), scripts)
+	_data = GameData.open_directory(Fixture.directory())
+	await _open_world()
+	_world_screen._world.current_map.events["coord_events"][0]["script"] = 0x6195
+	_world_screen._show_script_results(
+		_world_screen._world.dispatch_script_events(Vector2i(7, 6))
+	)
+	await get_tree().process_frame
+
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	assert_not_null(host)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_SAVE)
+	_world_screen._injected_save.world = null
+	assert_eq(host._save_prompt.lines, Gen2SavePrompt.OVERWRITE_LINES)
+	host.handle_button(Gen2Button.A)
+	host.handle_button(Gen2Button.A)
+	assert_eq(host._save_prompt.step, Gen2SavePrompt.Step.SAVING)
+	host.advance_save_frames(
+		Gen2SavePrompt.SAVING_FRAMES + Gen2SavePrompt.WRITE_FRAMES
+		+ Gen2SavePrompt.DONE_FRAMES
+	)
+	await get_tree().process_frame
+	assert_null(_world_screen._service_host)
+	assert_not_null(_world_screen._injected_save.world, "the write landed")
+
+
+## Both questions taken with YES, and every frame the two boxes behind them own.
+func _answer_save_prompt(host: Gen2WorldServiceScreen) -> void:
+	for _press: int in 4:
+		host.handle_button(Gen2Button.A)
+	host.advance_save_frames(
+		Gen2SavePrompt.SAVING_FRAMES + Gen2SavePrompt.WRITE_FRAMES
+		+ Gen2SavePrompt.DONE_FRAMES
+	)
+
+
 ## `BillsPC_ChangeBoxSubmenu`: SWITCH writes `wCurBox`, NAME opens the keyboard
 ## over `sBoxNames`, and PRINT answers `GetBoxCount` before it reaches the
 ## printer that is not there.
@@ -136,11 +182,13 @@ func test_change_box_switches_names_and_prints_a_box() -> void:
 	host.handle_button(Gen2Button.A)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOX_LIST)
 
-	## The second box, then SWITCH.
+	## The second box, then SWITCH, which is `ChangeBoxSaveGame`: the question,
+	## the overwrite question and the save behind them.
 	host.handle_button(Gen2Button.DOWN)
 	host.handle_button(Gen2Button.A)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOX_SUBMENU)
 	host.handle_button(Gen2Button.A)
+	_answer_save_prompt(host)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOX_LIST)
 	assert_eq(host._box_index, 1)
 	assert_eq(host._save.current_box, 1)
@@ -210,6 +258,74 @@ func test_pokemon_center_pc_opens_the_top_menu_and_bills_pc_behind_it() -> void:
 	host.handle_button(Gen2Button.DOWN)
 	host.handle_button(Gen2Button.A)
 	await _finish_pokemon_center_pc(host)
+
+
+## `.Switch`: `ChangeBoxSaveGame` asks, saves behind its own box, and puts
+## `wCurBox` between the two halves. Silently switching the box was the defect.
+func test_change_box_asks_and_saves_before_the_box_moves() -> void:
+	await _open_pokemon_center_pc()
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	host.handle_button(Gen2Button.A)
+	host.handle_button(Gen2Button.DOWN)
+	host.handle_button(Gen2Button.DOWN)
+	host.handle_button(Gen2Button.A)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOX_LIST)
+	host.handle_button(Gen2Button.DOWN)
+	host.handle_button(Gen2Button.A)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOX_SUBMENU)
+	host.handle_button(Gen2Button.A)
+
+	## Three lines, so the question is prompted past before the yes/no is on it.
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_SAVE)
+	assert_eq(host._save_prompt.lines, Gen2SavePrompt.CHANGE_BOX_LINES)
+	assert_eq(host._save_prompt.cursor, -1)
+	host.handle_button(Gen2Button.A)
+	assert_eq(host._save_prompt.cursor, 0)
+	host.handle_button(Gen2Button.A)
+	assert_eq(host._save_prompt.lines, Gen2SavePrompt.OVERWRITE_LINES)
+	host.handle_button(Gen2Button.A)
+	host.handle_button(Gen2Button.A)
+	assert_eq(host._save_prompt.step, Gen2SavePrompt.Step.SAVING)
+	assert_eq(int(host._save.current_box), 0, "not until the write")
+
+	host.advance_save_frames(Gen2SavePrompt.SAVING_FRAMES)
+	assert_eq(int(host._save.current_box), 1, "`wCurBox` sits between the halves")
+	host.advance_save_frames(
+		Gen2SavePrompt.WRITE_FRAMES + Gen2SavePrompt.DONE_FRAMES
+	)
+	assert_null(host._save_prompt)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOX_LIST)
+
+
+## `BillsPC_MovePKMNMenu`: `IsAnyMonHoldingMail` refuses the row outright, and
+## `StartMoveMonWOMail_SaveGame` is what stands in front of the listing.
+func test_move_without_mail_refuses_a_party_holding_mail_and_saves_otherwise() -> void:
+	await _open_pokemon_center_pc()
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	host.handle_button(Gen2Button.A)
+	(host._save.party[0] as Gen2SaveMon).item = Gen2HeldItem.MAIL_ITEMS[0]
+	for _step: int in 3:
+		host.handle_button(Gen2Button.DOWN)
+	host.handle_button(Gen2Button.A)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_TEXT)
+	assert_string_contains(host._summary, "holding MAIL")
+	host.handle_button(Gen2Button.A)
+	host.handle_button(Gen2Button.A)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOXES)
+
+	## Without the mail the row asks its own question, and a NO is `.refused`'s
+	## carry: back to the machine's menu with no listing opened.
+	(host._save.party[0] as Gen2SaveMon).item = 0
+	for _step: int in 3:
+		host.handle_button(Gen2Button.DOWN)
+	host.handle_button(Gen2Button.A)
+	assert_eq(host._save_prompt.lines, Gen2SavePrompt.MOVE_MON_LINES)
+	host.handle_button(Gen2Button.A)
+	host.handle_button(Gen2Button.DOWN)
+	host.handle_button(Gen2Button.A)
+	assert_null(host._save_prompt)
+	assert_null(host._boxes)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOXES)
 
 
 ## `special PokemonCenterPC` from a coord event, which is how every test above

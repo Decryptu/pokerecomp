@@ -8,6 +8,9 @@ const TILE: int = Gen2Font.TILE
 
 ## `Rate`'s two texts, one box each at the fixture's short lengths.
 const RATING_PAGES: int = 2
+## `InitDisplayForHallOfFame`'s record box, which `HallOfFame_FadeOutMusic` puts
+## up in front of the whole induction.
+const SAVING_PAGES: int = 1
 
 var _data: GameData = null
 
@@ -36,28 +39,29 @@ func _save(species_list: Array, eggs: Array = []) -> Gen2SaveData:
 
 func test_pages_follow_the_party_and_end_with_the_player() -> void:
 	var pages: Array = Gen2HallOfFame.pages(_data, _save([1, 4]))
-	assert_eq(pages.size(), 2 + RATING_PAGES)
-	assert_eq(StringName(pages[0]["kind"]), Gen2HallOfFame.PAGE_MON)
+	assert_eq(pages.size(), SAVING_PAGES + 2 + RATING_PAGES)
+	assert_eq(StringName(pages[0]["kind"]), Gen2HallOfFame.PAGE_SAVING)
+	assert_eq(StringName(pages[1]["kind"]), Gen2HallOfFame.PAGE_MON)
 	## `SCGB_PLAYER_OR_MON_FRONTPIC_PALS`, which the Hall of Fame asks for and
 	## which reaches `GetMonNormalOrShinyPalettePointer`: a shiny is inducted in
 	## its own colours, the same DV word the letter beside it comes from.
-	assert_false(bool(pages[0]["shiny"]), "the fixture's party is not shiny")
+	assert_false(bool(pages[1]["shiny"]), "the fixture's party is not shiny")
 
 	var shiny_save: Gen2SaveData = _save([1, 4])
 	shiny_save.party[0].dvs = Gen2Stats.SHINY_DVS
 	var shiny_pages: Array = Gen2HallOfFame.pages(_data, shiny_save)
-	assert_true(bool(shiny_pages[0]["shiny"]))
-	assert_false(bool(shiny_pages[1]["shiny"]), "and only the one that is")
+	assert_true(bool(shiny_pages[1]["shiny"]))
+	assert_false(bool(shiny_pages[2]["shiny"]), "and only the one that is")
 	## The stored records take the same road: an induction is written and read
 	## back, so a shiny in the viewer is drawn shiny however long ago it won.
 	var stored: Array = Gen2HallOfFame.inducted([], shiny_save)
 	var replayed: Array = Gen2HallOfFame.record_pages(_data, stored[0])
 	assert_true(bool(replayed[0]["shiny"]), "the stored record kept it")
-	assert_eq(int(pages[0]["species"]), 1)
-	assert_eq(int(pages[0]["dex_number"]), 1)
-	assert_eq(int(pages[1]["species"]), 4)
-	assert_eq(StringName(pages[2]["kind"]), Gen2HallOfFame.PAGE_PLAYER)
-	assert_eq(String(pages[2]["player_name"]), "ASH")
+	assert_eq(int(pages[1]["species"]), 1)
+	assert_eq(int(pages[1]["dex_number"]), 1)
+	assert_eq(int(pages[2]["species"]), 4)
+	assert_eq(StringName(pages[3]["kind"]), Gen2HallOfFame.PAGE_PLAYER)
+	assert_eq(String(pages[3]["player_name"]), "ASH")
 
 
 ## `HOF_AnimatePlayerPic` ends on `farcall ProfOaksPCRating`, so the player's
@@ -65,8 +69,8 @@ func test_pages_follow_the_party_and_end_with_the_player() -> void:
 ## picked plays on the last of them.
 func test_the_player_panel_carries_the_oak_rating() -> void:
 	var pages: Array = Gen2HallOfFame.pages(_data, _save([1]))
-	var counts: Dictionary = pages[1]
-	var rating: Dictionary = pages[2]
+	var counts: Dictionary = pages[2]
+	var rating: Dictionary = pages[3]
 	assert_eq(StringName(counts["kind"]), Gen2HallOfFame.PAGE_PLAYER)
 	assert_eq(StringName(rating["kind"]), Gen2HallOfFame.PAGE_PLAYER)
 	assert_string_contains(String((counts["lines"] as Array)[0]), "SEEN")
@@ -82,46 +86,46 @@ func test_a_cache_without_the_ratings_shows_the_bare_panel() -> void:
 	RomCache.write_json(RomCache.manifest_path(Fixture.directory()), manifest)
 	var data: GameData = GameData.open_directory(Fixture.directory())
 	var pages: Array = Gen2HallOfFame.pages(data, _save([1]))
-	assert_eq(pages.size(), 2)
-	assert_false(pages[1].has("lines"))
+	assert_eq(pages.size(), SAVING_PAGES + 2)
+	assert_false(pages[2].has("lines"))
 
 
 ## GetHallOfFameParty skips EGG without consuming a slot, so the egg is neither
 ## inducted nor counted against the six.
 func test_an_egg_is_skipped_and_the_player_page_still_follows() -> void:
 	var pages: Array = Gen2HallOfFame.pages(_data, _save([1, 4, 7], [1]))
-	assert_eq(pages.size(), 2 + RATING_PAGES)
-	assert_eq(int(pages[0]["species"]), 1)
-	assert_eq(int(pages[1]["species"]), 7)
-	assert_eq(StringName(pages[2]["kind"]), Gen2HallOfFame.PAGE_PLAYER)
+	assert_eq(pages.size(), SAVING_PAGES + 2 + RATING_PAGES)
+	assert_eq(int(pages[1]["species"]), 1)
+	assert_eq(int(pages[2]["species"]), 7)
+	assert_eq(StringName(pages[3]["kind"]), Gen2HallOfFame.PAGE_PLAYER)
 
 
 ## LoadHOFTeam's carry falls straight through to HOF_AnimatePlayerPic, so a
 ## party with nothing to induct still reaches the player's own panel.
 func test_a_party_of_only_eggs_answers_the_player_page_alone() -> void:
 	var pages: Array = Gen2HallOfFame.pages(_data, _save([1, 4], [0, 1]))
-	assert_eq(pages.size(), RATING_PAGES)
-	assert_eq(StringName(pages[0]["kind"]), Gen2HallOfFame.PAGE_PLAYER)
+	assert_eq(pages.size(), SAVING_PAGES + RATING_PAGES)
+	assert_eq(StringName(pages[1]["kind"]), Gen2HallOfFame.PAGE_PLAYER)
 
 
 ## DisplayHOFMon prints the species name and the nickname in two places, so a
 ## mon that was never renamed shows the same word twice rather than a blank.
 func test_an_unnamed_mon_takes_its_species_name_as_its_nickname() -> void:
 	var pages: Array = Gen2HallOfFame.pages(_data, _save([1]))
-	assert_eq(String(pages[0]["nickname"]), String(pages[0]["species_name"]))
-	assert_false(String(pages[0]["species_name"]).is_empty())
+	assert_eq(String(pages[1]["nickname"]), String(pages[1]["species_name"]))
+	assert_false(String(pages[1]["species_name"]).is_empty())
 
 
 func test_a_nickname_is_kept() -> void:
 	var save: Gen2SaveData = _save([1])
 	(save.party[0] as Gen2SaveMon).nickname = "SPARKY"
 	var pages: Array = Gen2HallOfFame.pages(_data, save)
-	assert_eq(String(pages[0]["nickname"]), "SPARKY")
+	assert_eq(String(pages[1]["nickname"]), "SPARKY")
 
 
 func test_pages_stop_at_a_full_party() -> void:
 	var pages: Array = Gen2HallOfFame.pages(_data, _save([1, 2, 3, 4, 5, 6, 7]))
-	assert_eq(pages.size(), Gen2HallOfFame.MAX_MONS + RATING_PAGES)
+	assert_eq(pages.size(), SAVING_PAGES + Gen2HallOfFame.MAX_MONS + RATING_PAGES)
 
 
 func test_a_missing_cache_or_save_answers_nothing() -> void:
@@ -135,7 +139,7 @@ func test_a_mon_panel_draws_both_boxes_on_a_full_screen_buffer() -> void:
 	var page_renderer: Gen2HallOfFamePage = Gen2HallOfFamePage.from_data(_data)
 	assert_not_null(page_renderer)
 	var pages: Array = Gen2HallOfFame.pages(_data, _save([1]))
-	var indices: PackedByteArray = page_renderer.draw(pages[0])
+	var indices: PackedByteArray = page_renderer.draw(pages[1])
 	assert_eq(indices.size(), Gen2Screen.WIDTH * Gen2Screen.HEIGHT)
 	assert_true(_has_ink(indices, Gen2HallOfFamePage.MON_TOP_BOX))
 	assert_true(_has_ink(indices, Gen2HallOfFamePage.MON_BOTTOM_BOX))
@@ -146,7 +150,7 @@ func test_a_mon_panel_draws_both_boxes_on_a_full_screen_buffer() -> void:
 func test_the_player_panel_draws_its_name_box_and_the_rating_box() -> void:
 	var page_renderer: Gen2HallOfFamePage = Gen2HallOfFamePage.from_data(_data)
 	var pages: Array = Gen2HallOfFame.pages(_data, _save([1]))
-	var indices: PackedByteArray = page_renderer.draw(pages[1])
+	var indices: PackedByteArray = page_renderer.draw(pages[2])
 	assert_eq(indices.size(), Gen2Screen.WIDTH * Gen2Screen.HEIGHT)
 	assert_true(_has_ink(indices, Gen2HallOfFamePage.PLAYER_BOX))
 	assert_true(_has_ink(indices, Gen2HallOfFamePage.MON_BOTTOM_BOX))
@@ -195,7 +199,7 @@ func test_the_dex_row_draws_two_label_tiles_and_leaves_column_six_blank() -> voi
 	var page_renderer: Gen2HallOfFamePage = Gen2HallOfFamePage.from_data(_data)
 	assert_not_null(page_renderer)
 	var pages: Array = Gen2HallOfFame.pages(_data, _save([1]))
-	var indices: PackedByteArray = page_renderer.draw(pages[0])
+	var indices: PackedByteArray = page_renderer.draw(pages[1])
 	# The fixture fills each sheet with an index of its own, so a drawn pixel
 	# says which strip it came from: 1 is battle_font, 3 is the main font.
 	assert_eq(_index_at(indices, Vector2i(1, 13)), 1, "№ comes off the battle strip")

@@ -6,18 +6,13 @@ extends Control
 ## hosts and API.
 
 signal completed(results: Array)
-## The sound this screen asks for, played by whoever owns the driver. Nothing here
-## reaches [Gen2AudioPlayer]: the world screen owns the one player a map's music
-## and its effects share, so a second surface asking for a sound goes through it.
-## [Gen2WorldAudioHost] is an inspection probe that renders no samples and must
-## never stand in for it. [param waited] is `WaitPlaySFX`, or a `WaitSFX` spent in
-## front of the sound by hand: the cartridge holds there until the four effect
-## channels are free, so the request can never be the one `PlaySFX`'s priority gate
-## refuses. The wait itself is not spent.
+## The sound this screen asks for, played by whoever owns the driver: the world
+## screen owns the one player a map's music and its effects share, and
+## [Gen2WorldAudioHost] is an inspection probe that must never stand in for it.
+## [param waited] is `WaitPlaySFX`, or a `WaitSFX` spent by hand, so the request
+## can never be the one `PlaySFX`'s priority gate refuses; the wait is not spent.
 signal sfx_requested(index: int, waited: bool)
-## `PlayMonCry2` from a screen this one opens, the box screen's stats page today.
-## Passed on for the same reason [signal sfx_requested] is: the world screen owns
-## the one player.
+## `PlayMonCry2` from a screen this one opens, passed on for the same reason.
 signal cry_requested(species: int)
 
 enum MODE {
@@ -27,6 +22,7 @@ enum MODE {
 	PC_DECO, PC_DECO_LIST, PC_DECO_SIDE,
 	PC_BOX_SUBMENU,
 	PC_MAILBOX, PC_MAIL_SUBMENU, PC_MAIL_CONFIRM,
+	PC_SAVE,
 	ELEVATOR,
 }
 
@@ -46,25 +42,22 @@ const BOX_SCENE := preload("res://game/save/box_screen.tscn")
 ## and the move tutor open.
 const PARTY_SCENE: PackedScene = preload("res://game/save/party_screen.tscn")
 
-## `wPokegearRadioMusicPlaying`, which is what `ExitPokegearRadio_HandleMusic`
-## branches on: zero while nothing in this overlay has touched the music, and
-## one of the source's own two values once the radio card has.
+## `wPokegearRadioMusicPlaying`, which `ExitPokegearRadio_HandleMusic` branches
+## on: zero until the radio card has touched the music, then one of its two.
 const RADIO_MUSIC_SILENT: int = 0
 const RADIO_MUSIC_RESTART_MAP: int = 0xFE
 const RADIO_MUSIC_ENTER_MAP: int = 0xFF
 
 const WorldMenu := preload("res://game/world/world_menu.gd")
 
-## `BuyMenuLoop`'s four states: the list `ScrollingMenu` runs, the quantity
-## `SelectQuantityToBuy` asks for, `MartConfirmPurchase`'s yes/no, and a box
-## waiting on `JoyWaitAorB`.
+## `BuyMenuLoop`'s four states: `ScrollingMenu`'s list, `SelectQuantityToBuy`'s
+## quantity, `MartConfirmPurchase`'s yes/no and a box on `JoyWaitAorB`.
 const MART_LIST: StringName = &"list"
 const MART_QUANTITY: StringName = &"quantity"
 const MART_CONFIRM: StringName = &"confirm"
 const MART_MESSAGE: StringName = &"message"
-## `StandardMart`'s own jumptable, which only `MartDialog` runs: the BUY/SELL/QUIT
-## menu and the three states `SellMenu` adds behind its SELL row. The other four
-## shop types open `BuyMenu` and nothing else.
+## `StandardMart`'s jumptable, which only `MartDialog` runs: the BUY/SELL/QUIT
+## menu and the three states behind SELL. The other four shops open `BuyMenu`.
 const MART_TOP: StringName = &"top"
 const MART_SELL: StringName = &"sell"
 const MART_SELL_QUANTITY: StringName = &"sell_quantity"
@@ -73,16 +66,14 @@ const MART_SELL_STAGES: Array[StringName] = [
 	MART_SELL, MART_SELL_QUANTITY, MART_SELL_CONFIRM,
 ]
 ## `MenuHeader_BuySell`'s three rows, inline in `engine/items/mart.asm` and
-## reached by no script, so they are this screen's the way [Gen2WorldPC]'s
-## BILL'S PC rows are.
+## reached by no script, the way [Gen2WorldPC]'s BILL'S PC rows are.
 const MART_TOP_ROWS: Array[String] = ["BUY", "SELL", "QUIT"]
 const MART_TOP_BUY: int = 0
 const MART_TOP_SELL: int = 1
 const MART_TOP_QUIT: int = 2
 ## Which of `GetMartDialogGroup.MartTextFunctionPointers`' groups a variant
-## reads. The rooftop sale takes the standard group, which is why it has no
-## prefix of its own; the bargain shop's `MARTTEXT_HOW_MANY` slot is
-## `BuyMenuLoop` rather than a text, so it asks no quantity.
+## reads. The rooftop sale takes the standard group; the bargain shop's
+## `MARTTEXT_HOW_MANY` slot is `BuyMenuLoop`, so it asks no quantity.
 const MART_TEXT_PREFIX: Dictionary = {
 	&"standard": "", &"bitter": "bitter_", &"bargain": "bargain_",
 	&"pharmacy": "pharmacy_", &"rooftop_mart_1": "", &"rooftop_mart_2": "",
@@ -101,8 +92,7 @@ const SFX_CALL: int = 0x6A
 const SFX_NO_SIGNAL: int = 0x6C
 
 ## `BillsPC_ChangeBoxSubmenu.MenuData`'s four rows, inline in `bills_pc.asm` and
-## reached by no script, so they are this screen's the way the machine's own top
-## menu is.
+## reached by no script, so they are this screen's the way the top menu is.
 const BOX_SUBMENU_SWITCH: int = 0
 const BOX_SUBMENU_NAME: int = 1
 const BOX_SUBMENU_PRINT: int = 2
@@ -119,10 +109,18 @@ const MART_TEXT_ROWS: int = 2
 ## `text_decimal` marker says which of the two numbers it wants.
 const HRAM_FIRST: int = 0xFF00
 
+## The one writer, handed over by whoever opened this screen: the same
+## `SaveGameData` the START menu's SAVE row reaches.
+var save_action: Callable = Callable()
+
 var _world: Gen2WorldAPI = null
 var _data: GameData = null
 var _save: Gen2SaveData = null
 var _persist: bool = false
+## The save sequence while one is up, and what to do once it has finished.
+var _save_prompt: Gen2SavePrompt = null
+var _save_after: StringName = &""
+var _save_clock := Gen2WorldAnimation.FrameClock.new()
 var _request: Dictionary = {}
 var _resolved: Dictionary = {}
 var _mode: int = -1
@@ -217,12 +215,11 @@ const BOX_LIST_ROWS: int = 4
 const PC_ROW_MODES: Array = [
 	MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES, MODE.PC_BOX_LIST, MODE.PC_BOX_SUBMENU,
 	MODE.PC_DECO, MODE.PC_DECO_LIST, MODE.PC_DECO_SIDE,
-	MODE.PC_MAILBOX, MODE.PC_MAIL_SUBMENU, MODE.PC_MAIL_CONFIRM,
+	MODE.PC_MAILBOX, MODE.PC_MAIL_SUBMENU, MODE.PC_MAIL_CONFIRM, MODE.PC_SAVE,
 ]
-## The `db rows` byte of every scrolling menu this screen hosts, which is how
-## many of its list a window shows at once. `wMenuScrollPosition` is one value
-## here, the way it is one address on the cartridge: only one of these lists is
-## ever open.
+## The `db rows` byte of every scrolling menu here, which is how much of its list
+## a window shows. `wMenuScrollPosition` is one value, the way it is one address
+## on the cartridge: only one of these lists is ever open.
 const SCROLLING_ROWS: Dictionary = {
 	MODE.PC_BOX_LIST: BOX_LIST_ROWS,
 	## `MailboxPC.TopMenuData`, `.PCItemsMenuData` and
@@ -440,10 +437,9 @@ func handle_button(button: int) -> bool:
 	return false
 
 
-## `PCItemsJoypad`'s `.select_1` and `.a_select_2`, which are one press of
-## `SwitchItemsInBag` over `wPCItems`. Only the two lists that show the PC's own
-## items reach it: a deposit is `DepositSellPack`, whose joypad handler has no
-## SELECT in it.
+## `PCItemsJoypad`'s `.select_1` and `.a_select_2`, one press of
+## `SwitchItemsInBag` over `wPCItems`. A deposit is `DepositSellPack`, whose
+## joypad handler has no SELECT in it.
 func _press_pc_item_select() -> bool:
 	if _mode != MODE.PC_ITEM_LIST \
 		or _pc_action == Gen2WorldPC.PLAYERSPCITEM_DEPOSIT_ITEM:
@@ -506,6 +502,22 @@ func open_prompt(
 		return false
 	_host_prompt = true
 	_open_menu({"text": text, "choices": Gen2WorldMenu.YES_NO_KEYS})
+	return true
+
+
+## `TryQuickSave`: no question of its own, so it opens on the overwrite one and
+## answers the script with whether it wrote.
+func open_quick_save(
+	world: Gen2WorldAPI, data: GameData, save: Gen2SaveData, persist: bool
+) -> bool:
+	_world = world
+	_data = data
+	_save = save
+	_persist = persist
+	if _world == null or _data == null:
+		_show_error("A quick save has no world or cartridge cache.")
+		return false
+	_open_save_prompt(Gen2SavePrompt.Kind.LINK, &"quick_save")
 	return true
 
 
@@ -1180,12 +1192,8 @@ func _finish_apricorns() -> void:
 
 ## `Mom_SetUpDepositMenu` and `Mom_SetUpWithdrawMenu` over
 ## `Mom_WithdrawDepositMenuJoypad`. The model owns the amount and the cursor;
-## this owns the box and the blink.
-##
-## `Mom_Wait10Frames` stands between the box and the joypad so a press that
-## opened it cannot be read as a press on it. The world screen spends the press
-## that reaches here, so those ten frames are not held: what they are for is
-## already true.
+## this owns the box and the blink. `Mom_Wait10Frames` is not held: the world
+## screen already spends the press that opened the box.
 func _open_mom_bank(values: Dictionary) -> void:
 	_mode = MODE.MOM_BANK
 	_mom_dial = Gen2WorldMoneyDial.open(
@@ -1219,9 +1227,16 @@ func _finish_mom_bank(amount: int) -> void:
 	_finish_runtime({"ok": true, "amount": amount})
 
 
-## The digit under the cursor is drawn for sixteen frames in every thirty-two,
-## so only a crossing of the half period is redrawn.
-func _process(_delta: float) -> void:
+## The save sequence's frames, and the money dial's cursor, whose digit is drawn
+## for sixteen frames in every thirty-two: only a crossing of that is redrawn.
+func _process(delta: float) -> void:
+	if _save_prompt != null:
+		for _frame: int in _save_clock.tick(delta):
+			_save_prompt.frame()
+			_advance_save_prompt()
+			if _save_prompt == null:
+				return
+		return
 	if _mode != MODE.MOM_BANK or _mom_dial == null:
 		return
 	var was_up: bool = _mom_cursor_up()
@@ -1444,7 +1459,18 @@ func _confirm_bills_pc_row(row: int) -> void:
 		Gen2WorldPC.BILLSPCITEM_CHANGE_BOX:
 			_open_box_list()
 		Gen2WorldPC.BILLSPCITEM_MOVE_WITHOUT_MAIL:
-			_open_boxes(Gen2BoxScreen.MODE_MOVE)
+			## `BillsPC_MovePKMNMenu`, whose two halves are the mail refusal
+			## and `StartMoveMonWOMail_SaveGame`.
+			if Gen2WorldPC.any_party_mon_holds_mail(_save):
+				_open_pc_text(
+					[
+						"\n".join(Gen2SavePrompt.MON_HOLDING_MAIL_LINES.slice(0, 2)),
+						"\n".join(Gen2SavePrompt.MON_HOLDING_MAIL_LINES.slice(2, 4)),
+					],
+					&"bills_pc", "BILL's PC"
+				)
+			else:
+				_open_save_prompt(Gen2SavePrompt.Kind.MOVE_MON, &"move_mons")
 		Gen2WorldPC.BILLSPCITEM_SEE_YA:
 			_leave_bills_pc()
 
@@ -1665,6 +1691,94 @@ func _leave_decorations() -> void:
 	_finish_runtime({"ok": true, "script_value": 0})
 
 
+## `ChangeBoxSaveGame` and `StartMoveMonWOMail_SaveGame`, which [Gen2SavePrompt]
+## owns; this draws the box it is holding and spends its frames.
+func _open_save_prompt(kind: Gen2SavePrompt.Kind, after: StringName) -> void:
+	_save_after = after
+	_save_prompt = Gen2SavePrompt.open(
+		kind, _save.player_name if _save != null else "", _write_service_save
+	)
+	_save_clock.reset()
+	set_process(true)
+	_render_save_prompt()
+
+
+## `SaveGameData`, which the opener hands over. A screen driven with no writer
+## behind it answers the same success without touching a file, the way a
+## transaction with `persist` off does.
+func _write_service_save() -> Dictionary:
+	if not save_action.is_valid():
+		return {"ok": true, "kind": &"not_persisted"}
+	return save_action.call()
+
+
+## Hardware frames of the save sequence. Public so a test owns its own.
+func advance_save_frames(count: int) -> void:
+	for _step: int in count:
+		if _save_prompt == null:
+			return
+		_save_prompt.frame()
+		_advance_save_prompt()
+
+
+## A on the box is YES where the cursor stands on it, and B is `YesNoBox`'s NO.
+func _press_save_prompt(accepted: bool) -> void:
+	if _save_prompt == null:
+		return
+	if accepted:
+		_save_prompt.confirm(_cursor == 0)
+	else:
+		_save_prompt.cancel()
+	_advance_save_prompt()
+
+
+func _render_save_prompt() -> void:
+	if _save_prompt == null:
+		return
+	_mode = MODE.PC_SAVE
+	_cursor = maxi(_save_prompt.cursor, 0)
+	_pc_rows = [{"row": 0, "name": "YES"}, {"row": 1, "name": "NO"}] \
+		if _save_prompt.cursor >= 0 else []
+	_summary = "\n".join(_save_prompt.lines.slice(_save_prompt.line))
+	_status = ""
+	_render_rows()
+
+
+## A, B and a frame all sync the same way: the prompt decides what its step
+## reads.
+func _advance_save_prompt() -> void:
+	if _save_prompt == null:
+		return
+	if _save_prompt.writing_now() and _save_after == &"change_box":
+		## `ChangeBoxSaveGame` puts `wCurBox` between the two halves, so the
+		## write switches the box rather than the answer.
+		_box_index = _box_submenu_index
+		if _save != null:
+			_save.current_box = _box_index
+	if _save_prompt.sfx_owed():
+		sfx_requested.emit(Gen2SavePrompt.SFX_SAVE, true)
+	if not _save_prompt.finished():
+		_render_save_prompt()
+		return
+	var refused: bool = _save_prompt.refused()
+	var after: StringName = _save_after
+	_save_prompt = null
+	_save_after = &""
+	set_process(false)
+	if after == &"quick_save":
+		## TRUE for a save that was written, FALSE for one that was not.
+		_finish_runtime({"ok": true, "script_value": 0 if refused else 1})
+		return
+	if after == &"change_box":
+		_open_box_list()
+		return
+	if refused:
+		## `.refused`'s carry, which `BillsPC_MovePKMNMenu` takes to `.quit`.
+		_open_bills_pc_menu()
+		return
+	_open_boxes(Gen2BoxScreen.MODE_MOVE)
+
+
 ## A run of the PC's own boxes, acknowledged one at a time.
 func _open_pc_text(pages: Array, after: StringName, label: String) -> void:
 	_mode = MODE.PC_TEXT
@@ -1698,6 +1812,9 @@ func _advance_pc_text() -> void:
 		return
 	if _pc_after == &"decoration":
 		_open_decorations()
+		return
+	if _pc_after == &"bills_pc":
+		_open_bills_pc_menu()
 		return
 	_open_pc(&"pokemon_center")
 
@@ -1759,13 +1876,13 @@ func _open_box_submenu(index: int) -> void:
 func _confirm_box_submenu(row: int) -> void:
 	match row:
 		BOX_SUBMENU_SWITCH:
-			## `.Switch`: `wCurBox` and nothing else, and the box it is already
-			## on is a `ret z` rather than a second save.
-			if _box_submenu_index != _box_index:
-				_box_index = _box_submenu_index
-				if _save != null:
-					_save.current_box = _box_index
-			_open_box_list()
+			## `.Switch`: the box it is already on is a `ret z` rather than a
+			## save, and any other one is `ChangeBoxSaveGame`, which asks before
+			## it writes and puts `wCurBox` between its two halves.
+			if _box_submenu_index == _box_index:
+				_open_box_list()
+			else:
+				_open_save_prompt(Gen2SavePrompt.Kind.CHANGE_BOX, &"change_box")
 		BOX_SUBMENU_NAME:
 			_open_box_naming()
 		BOX_SUBMENU_PRINT:
@@ -1987,6 +2104,7 @@ func _open_boxes(mode: int) -> void:
 	add_child(host)
 	host.set_context(_data, _save, _persist, true, mode, _box_index)
 	host.cry_requested.connect(_on_boxes_cry)
+	host.sfx_requested.connect(sfx_requested.emit)
 	host.closed.connect(_on_boxes_closed)
 
 
@@ -2374,6 +2492,9 @@ func _confirm() -> void:
 			return
 		_confirm_pc_item()
 		return
+	if _mode == MODE.PC_SAVE:
+		_press_save_prompt(true)
+		return
 	if _mode == MODE.PC_TEXT:
 		_advance_pc_text()
 		return
@@ -2387,53 +2508,72 @@ func _confirm() -> void:
 		_finish_runtime({"ok": true, "script_value": 1})
 
 
+## B, by mode. `.cancel`, `.shutdown` and `VerticalMenu`'s carry are one thing:
+## back to the list the mode was opened from, and out off the top menu.
+const CANCEL_HANDLERS: Dictionary = {
+	MODE.PC_BOXES: &"_leave_bills_pc",
+	MODE.PC_BOX_LIST: &"_open_bills_pc_menu",
+	MODE.PC_BOX_SUBMENU: &"_open_box_list",
+	MODE.PC: &"_shut_down_pc",
+	MODE.PC_ITEMS: &"_cancel_pc_items",
+	MODE.PC_ITEM_LIST: &"_cancel_pc_item_list",
+	MODE.PC_MAILBOX: &"_open_pc_items",
+	MODE.PC_MAIL_SUBMENU: &"_open_mailbox",
+	MODE.PC_MAIL_CONFIRM: &"_refuse_mail_to_pack",
+	MODE.PC_DECO: &"_leave_decorations",
+	MODE.PC_DECO_LIST: &"_open_decorations",
+	MODE.PC_DECO_SIDE: &"_cancel_deco_side",
+	MODE.PC_SAVE: &"_refuse_save_prompt",
+	MODE.PC_TEXT: &"_advance_pc_text",
+	MODE.MENU: &"_finish_input_cancelled",
+	MODE.PHONE: &"_cancel_phone",
+	MODE.TOWN_MAP: &"_cancel_town_map",
+}
+
+
 func _cancel() -> void:
-	if _mode == MODE.PC_BOXES:
-		## `.cancel`: B off the top menu is the same way out SEE YA! is.
-		_leave_bills_pc()
-	elif _mode == MODE.PC_BOX_LIST:
-		_open_bills_pc_menu()
-	elif _mode == MODE.PC_BOX_SUBMENU:
-		## `VerticalMenu`'s carry, which `.ret c` takes back to `.loop`.
-		_open_box_list()
-	elif _mode == MODE.PC:
-		## `.shutdown`: B off the top menu is the same shut-down TURN OFF is.
+	if CANCEL_HANDLERS.has(_mode):
+		call(CANCEL_HANDLERS[_mode])
+
+
+func _shut_down_pc() -> void:
+	_finish_runtime({"ok": true, "script_value": 0})
+
+
+func _cancel_pc_items() -> void:
+	if _pc_house:
 		_finish_runtime({"ok": true, "script_value": 0})
-	elif _mode == MODE.PC_ITEMS:
-		if _pc_house:
-			_finish_runtime({"ok": true, "script_value": 0})
-		else:
-			_open_pc(&"pokemon_center")
-	elif _mode == MODE.PC_ITEM_LIST:
-		## `.b_2`: the mark is dropped and the list stays up.
-		if _pc_switch >= 0:
-			_pc_switch = -1
-			_render_rows()
-			return
-		_open_pc_items()
-	elif _mode == MODE.PC_MAILBOX:
-		## `ScrollingMenu`'s PAD_B, which is `.exit` and the way back to the
-		## menu `_PlayerMailBoxMenu` was called from.
-		_open_pc_items()
-	elif _mode == MODE.PC_MAIL_SUBMENU:
-		## `VerticalMenu`'s carry, which `.subexit` takes back to `.loop`.
-		_open_mailbox()
-	elif _mode == MODE.PC_MAIL_CONFIRM:
-		_confirm_mail_to_pack(false)
-	elif _mode == MODE.PC_DECO:
-		_leave_decorations()
-	elif _mode == MODE.PC_DECO_LIST:
-		_open_decorations()
-	elif _mode == MODE.PC_DECO_SIDE:
-		_open_decoration_category(_deco_slot)
-	elif _mode == MODE.PC_TEXT:
-		## Both `PromptButton` answers advance the box; neither leaves early.
-		_advance_pc_text()
-	elif _mode == MODE.MENU:
-		_finish_input_cancelled()
-	elif _mode == MODE.PHONE:
-		_finish_runtime({"ok": true, "script_value": 0, "cancelled": true})
-	elif _mode == MODE.TOWN_MAP and _town_map != null:
+	else:
+		_open_pc(&"pokemon_center")
+
+
+## `.b_2`: the mark is dropped and the list stays up.
+func _cancel_pc_item_list() -> void:
+	if _pc_switch >= 0:
+		_pc_switch = -1
+		_render_rows()
+		return
+	_open_pc_items()
+
+
+func _refuse_mail_to_pack() -> void:
+	_confirm_mail_to_pack(false)
+
+
+func _refuse_save_prompt() -> void:
+	_press_save_prompt(false)
+
+
+func _cancel_deco_side() -> void:
+	_open_decoration_category(_deco_slot)
+
+
+func _cancel_phone() -> void:
+	_finish_runtime({"ok": true, "script_value": 0, "cancelled": true})
+
+
+func _cancel_town_map() -> void:
+	if _town_map != null:
 		_town_map.close()
 
 
@@ -2575,7 +2715,7 @@ func _box_count_note() -> Dictionary:
 
 
 ## An overlay owns all 160x144 while it is up: the mart, box storage, a Pokegear
-## card and the region map are each a screen rather than a box over this one.
+## card and the region map are screens rather than boxes over this one.
 func _set_overlay_open(open: bool) -> void:
 	_overlay_open = open
 	_apply_layer_visibility()
@@ -2650,6 +2790,10 @@ func _service_box() -> Gen2MenuBox:
 		MODE.PC_MAIL_CONFIRM:
 			## `YesNoBox`'s own box, which `.PutInPack` opens over its question.
 			return Gen2MenuBox.yes_no()
+		MODE.PC_SAVE:
+			## The same `YesNoBox`, and nothing at all on the timed steps: they
+			## are a box with no question on it.
+			return Gen2MenuBox.yes_no() if _pc_rows.size() == 2 else null
 		MODE.PC_DECO:
 			return _deco_category_box()
 		MODE.PC_DECO_SIDE:
@@ -2749,7 +2893,7 @@ func _option_count() -> int:
 	if _mode in [
 		MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES, MODE.PC_BOX_LIST,
 		MODE.PC_DECO, MODE.PC_DECO_LIST, MODE.PC_DECO_SIDE, MODE.PC_BOX_SUBMENU,
-		MODE.PC_MAILBOX, MODE.PC_MAIL_SUBMENU, MODE.PC_MAIL_CONFIRM,
+		MODE.PC_MAILBOX, MODE.PC_MAIL_SUBMENU, MODE.PC_MAIL_CONFIRM, MODE.PC_SAVE,
 	]:
 		return _pc_rows.size()
 	if _mode == MODE.PC_ITEM_LIST:

@@ -1,28 +1,26 @@
 class_name Gen2BoxScreen
 extends Control
 
-## Bill's PC's two lists, on the hardware's own grid. [Gen2PCBoxPage] is the
-## picture and `engine/pokemon/bills_pc.asm` is the model. `_DepositPKMN` and
-## `_WithdrawPKMN` are this one screen with a different list loaded, and
-## `_BillsPC`'s own top menu is the panel's, which is what opens this in either
-## mode. A on a row opens the submenu both jumptables reach: the transfer, STATS,
-## RELEASE and CANCEL. Left and right do nothing, because the only routine that
-## reads them is `MoveMonWithoutMail_DPad` and that screen is not built.
+## Bill's PC's three lists, on the hardware's own grid. [Gen2PCBoxPage] is the
+## picture and `engine/pokemon/bills_pc.asm` is the model. `_DepositPKMN`,
+## `_WithdrawPKMN` and `_MovePKMNWithoutMail` are this one screen with a
+## different list loaded, opened from the panel's own top menu. A on a row opens
+## the submenu each jumptable reaches; left and right belong to
+## `MoveMonWithoutMail_DPad` alone.
 
 signal closed(result: Dictionary)
 ## `PlayMonCry2` from the stats screen this one can open, played by whoever owns
 ## the audio player: nothing here reaches [Gen2AudioPlayer].
 signal cry_requested(species: int)
+## `MoveMonWOMail_InsertMon_SaveGame`'s `SFX_SAVE`, played by the driver's owner.
+signal sfx_requested(index: int, waited: bool)
 
-## The PC is drawn in hardware pixels and the panel it is opened from is ordinary
-## UI at window resolution, so the screen carries a [Gen2Screen] of its own, the
-## way [Gen2TownMapScreen] does.
+## The PC is drawn in hardware pixels and the panel it opens from is ordinary UI,
+## so the screen carries a [Gen2Screen] of its own the way the region map does.
 
-## `PCString_*` and `.PartyPKMN`. All of them are engine strings inside
-## `bills_pc.asm` that no script points at, so nothing imports them and they are
-## the host's, like the contest judging lines. "PKMN" is the two tiles `<PK>` and
-## `<MN>`, which is what [method Gen2Text.encode] makes of it; "#" is the POKé
-## ligature and has no tile in either font.
+## `PCString_*` and `.PartyPKMN`, engine strings inside `bills_pc.asm` that no
+## script points at, so they are the host's the way the contest lines are. "PKMN"
+## is the two tiles `<PK>` and `<MN>` and "#" is the POKé ligature.
 const PROMPT_CHOOSE: String = "Choose a PKMN."
 const PROMPT_WHATS_UP: String = "What's up?"
 const PROMPT_RELEASE: String = "Release PKMN?"
@@ -103,6 +101,10 @@ var _scroll: int = 0
 ## The line the bottom box carries, which is `PCString_ChooseaPKMN` until a
 ## transfer answers.
 var _prompt: String = PROMPT_CHOOSE
+## `MovePKMNWithoutMail_InsertMon`'s two waits, and the clock that spends them.
+var _saving_frames: int = 0
+var _saving_saved: bool = false
+var _saving_clock := Gen2WorldAnimation.FrameClock.new()
 ## `_DepositPKMN` or `_WithdrawPKMN`, and the submenu, the release yes/no and
 ## the stats screen either of them can put over the listing.
 var _mode: int = MODE_DEPOSIT
@@ -319,6 +321,9 @@ func _refusal(result: Dictionary, fallback: String) -> String:
 ## A takes the row the cursor stands on and B leaves. Left and right belong to
 ## MOVE PKMN W/O MAIL alone and do nothing here.
 func handle_button(button: int) -> bool:
+	if _saving_frames > 0:
+		## Two `DelayFrames`, which read no joypad.
+		return true
 	if _stats != null:
 		return _stats.handle_button(button)
 	if _release_open:
@@ -590,8 +595,6 @@ func _sprite() -> TextureRect:
 	return node
 
 
-## The cursor's row is the selection whether or not there is anything to draw
-## it with: a cache carrying no font still stores and withdraws.
 ## Drawing only. The selection is [method _sync_selection]'s, so a caller that
 ## picked a slot by hand keeps it and a cache carrying no font still draws
 ## nothing without losing one.
@@ -778,9 +781,7 @@ func _refresh_pic(mon: Gen2SaveMon) -> void:
 	var image: Image = Gen2PicImage.from_atlas(
 		_data.atlas_indices(pic["atlas"]), _data.atlas(pic["atlas"]), pic,
 		## `_CGB_BillsPC` reaches `GetMonNormalOrShinyPalettePointer`, so the
-		## selected Pokemon is drawn shiny here the way it is on its own stats
-		## page. The headless page beside this one already asked; the live node
-		## did not, which is the same screen answering two ways.
+		## selection is drawn shiny here the way it is on its own stats page.
 		_data.palette(mon.species, Gen2Stats.is_shiny(mon.dvs))
 	)
 	Gen2PicImage.show(_pic, image)
@@ -924,8 +925,9 @@ func _begin_move() -> void:
 
 
 ## `.a_button_2`: `BillsPC_CheckSpaceInDestination` and then
-## `MovePKMNWithoutMail_InsertMon`, which puts the Pokemon where the cursor
-## stands and shifts everything behind it down.
+## `MovePKMNWithoutMail_InsertMon`, which puts up a box for twenty frames, moves
+## the Pokemon and saves behind it. The move lands in front of the box here
+## rather than behind it, which the box itself covers.
 func _insert_moved_mon() -> void:
 	var result: Dictionary = Gen2SaveStorage.move_mon(
 		_save, _data, _move_from_loaded, _move_from_index, _loaded,
@@ -939,7 +941,42 @@ func _insert_moved_mon() -> void:
 		) == &"no_room_in_destination" else _refusal(result, PROMPT_NO_ROOM)
 		_refresh()
 		return
-	_end_move()
+	_prompt = Gen2SavePrompt.SAVING_LEAVE_ON
+	_saving_frames = Gen2SavePrompt.LEAVE_ON_FRAMES
+	_saving_saved = false
+	set_process(true)
+	_refresh()
+
+
+## `MoveMonWOMail_InsertMon_SaveGame`'s `SFX_SAVE` and twenty-four frames, with
+## the box still up: the save runs behind it.
+func _saved_moved_mon() -> void:
+	sfx_requested.emit(Gen2SavePrompt.SFX_SAVE, true)
+	_saving_frames = Gen2SavePrompt.INSERT_SAVED_FRAMES
+	_saving_saved = true
+
+
+## The two waits, one hardware frame at a time. Public so a test owns its own.
+func advance_saving_frames(count: int) -> void:
+	for _step: int in count:
+		if _saving_frames <= 0:
+			return
+		_saving_frames -= 1
+		if _saving_frames > 0:
+			continue
+		if _saving_saved:
+			set_process(false)
+			_saving_saved = false
+			_end_move()
+		else:
+			_saved_moved_mon()
+
+
+func _process(delta: float) -> void:
+	if _saving_frames <= 0:
+		set_process(false)
+		return
+	advance_saving_frames(_saving_clock.tick(delta))
 
 
 ## `.Cancel` and `.b_button_2` alike: the first pass again, on the list the

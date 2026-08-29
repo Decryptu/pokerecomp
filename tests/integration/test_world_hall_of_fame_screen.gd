@@ -57,6 +57,11 @@ func test_the_overlay_opens_with_one_page_per_party_member_and_the_player() -> v
 	_world_screen.open_hall_of_fame()
 	await get_tree().process_frame
 	assert_not_null(_host())
+	## `InitDisplayForHallOfFame`'s record box stands in front of the panels and
+	## moves on by itself after a hundred frames.
+	assert_eq(_host().remaining(), 1 + 2 + RATING_PAGES)
+	assert_eq(StringName(_host().current_page()["kind"]), Gen2HallOfFame.PAGE_SAVING)
+	_spend_record_box()
 	assert_eq(_host().remaining(), 2 + RATING_PAGES)
 	assert_eq(StringName(_host().current_page()["kind"]), Gen2HallOfFame.PAGE_MON)
 
@@ -77,6 +82,7 @@ func test_a_key_walks_the_pages_and_the_last_one_closes_the_overlay() -> void:
 	await _open_world(1)
 	_world_screen.open_hall_of_fame()
 	await get_tree().process_frame
+	_spend_record_box()
 	assert_eq(_host().remaining(), 1 + RATING_PAGES)
 
 	_host().handle_button(Gen2Button.A)
@@ -101,6 +107,7 @@ func test_an_unrelated_key_does_not_advance_a_page() -> void:
 	await _open_world(2)
 	_world_screen.open_hall_of_fame()
 	await get_tree().process_frame
+	_spend_record_box()
 	var before: int = _host().remaining()
 	assert_false(_host().handle_button(Gen2Button.B))
 	assert_eq(_host().remaining(), before)
@@ -150,7 +157,21 @@ func test_the_halloffame_command_opens_the_overlay() -> void:
 
 
 ## The panels are answered one at a time; a test that only wants the overlay
-## closed does not care how many there were.
+## closed does not care how many there were. The record box in front of them
+## reads no joypad, so its frames are spent first.
 func _advance_to_the_end() -> void:
+	if StringName(_host().current_page()["kind"]) == Gen2HallOfFame.PAGE_SAVING:
+		_spend_record_box()
 	while _world_screen._hall_of_fame_host != null:
 		_host().handle_button(Gen2Button.A)
+
+
+## `HallOfFame_FadeOutMusic`'s `ld c, 100` behind `InitDisplayForHallOfFame`.
+func _spend_record_box() -> void:
+	assert_eq(
+		StringName(_host().current_page()["kind"]), Gen2HallOfFame.PAGE_SAVING
+	)
+	var before: int = _host().remaining()
+	assert_true(_host().handle_button(Gen2Button.A), "the box reads no joypad")
+	assert_eq(_host().remaining(), before, "and does not advance on one")
+	_host().advance_saving_frames(Gen2SavePrompt.SAVING_RECORD_FRAMES)
