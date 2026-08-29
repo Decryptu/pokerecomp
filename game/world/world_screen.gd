@@ -3638,6 +3638,7 @@ func _preview_pc(mode: StringName) -> void:
 	if not host.open_pc_machine(_world, _data, save, false, mode):
 		Gen2Screen.drop(host)
 		return
+	host.save_action = persist_world_snapshot
 	host.completed.connect(_on_service_completed)
 	host.sfx_requested.connect(_play_sfx)
 	host.cry_requested.connect(_play_species_cry)
@@ -3662,6 +3663,7 @@ func preview_mom_bank(mode: StringName, saved: int, held: int) -> void:
 	if not host.open_mom_bank(_world, _data, mode, saved, held):
 		Gen2Screen.drop(host)
 		return
+	host.save_action = persist_world_snapshot
 	host.completed.connect(_on_service_completed)
 	host.sfx_requested.connect(_play_sfx)
 	host.cry_requested.connect(_play_species_cry)
@@ -5489,6 +5491,7 @@ func _open_service_host() -> void:
 		_script_prompt = "Service request unavailable"
 		_refresh_labels()
 		return
+	host.save_action = persist_world_snapshot
 	host.completed.connect(_on_service_completed)
 	host.sfx_requested.connect(_play_sfx)
 	host.cry_requested.connect(_play_species_cry)
@@ -6706,6 +6709,7 @@ func _open_host_prompt(text: String) -> bool:
 	if not host.open_prompt(_world, _data, save, _injected_save == null, text):
 		Gen2Screen.drop(host)
 		return false
+	host.save_action = persist_world_snapshot
 	host.completed.connect(_on_service_completed)
 	host.sfx_requested.connect(_play_sfx)
 	host.cry_requested.connect(_play_species_cry)
@@ -6742,6 +6746,7 @@ func _open_service_overlay(kind: StringName) -> void:
 		_script_prompt = "%s unavailable" % label
 		_refresh_labels()
 		return
+	host.save_action = persist_world_snapshot
 	host.completed.connect(_on_service_completed)
 	host.sfx_requested.connect(_play_sfx)
 	host.cry_requested.connect(_play_species_cry)
@@ -6772,6 +6777,7 @@ func _open_fly_map(request: Dictionary) -> void:
 		_script_prompt = "Region map unavailable"
 		_refresh_labels()
 		return
+	host.save_action = persist_world_snapshot
 	host.completed.connect(_on_service_completed)
 	host.sfx_requested.connect(_play_sfx)
 	host.cry_requested.connect(_play_species_cry)
@@ -7182,16 +7188,41 @@ func _request_bug_contest_judging(_request: Dictionary) -> StringName:
 	return &"return"
 
 
-## `TryQuickSave` writes the save where it stands and answers TRUE; a write that
-## fails answers FALSE, which is the same "no" the source gives a player who
-## declines.
+## `TryQuickSave`, which is `Link_SaveGame`: the overwrite question, the SAVING
+## box and `SavedTheGame`, on the service screen where BILL'S PC's already are. A
+## driver with no scene behind it still writes rather than hanging.
 func _request_quick_save(_request: Dictionary) -> StringName:
+	if _service_host == null and _open_quick_save_screen():
+		return &"break"
 	var written: Dictionary = persist_world_snapshot()
 	_show_script_results(_world.complete_runtime_request({
 		"ok": true,
 		"script_value": 1 if bool(written.get("ok", false)) else 0,
 	}))
 	return &"return"
+
+
+func _open_quick_save_screen() -> bool:
+	var host: Gen2WorldServiceScreen = SERVICE_SCENE.instantiate() as Gen2WorldServiceScreen
+	if host == null:
+		return false
+	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	host.z_index = 20
+	host.set_screen(_screen)
+	add_child(host)
+	var save: Gen2SaveData = _injected_save if _injected_save != null \
+		else _selected_runtime_save()
+	host.save_action = persist_world_snapshot
+	if not host.open_quick_save(_world, _data, save, _injected_save == null):
+		Gen2Screen.drop(host)
+		return false
+	host.completed.connect(_on_service_completed)
+	host.sfx_requested.connect(_play_sfx)
+	host.cry_requested.connect(_play_species_cry)
+	_service_host = host
+	_script_prompt = "Saving"
+	_refresh_labels()
+	return true
 
 
 func _request_swarm(request: Dictionary) -> StringName:

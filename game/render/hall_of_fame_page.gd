@@ -1,13 +1,12 @@
 class_name Gen2HallOfFamePage
 extends RefCounted
 
-## One Hall of Fame induction panel, on the tile grid the hardware uses. Positions
-## are `engine/events/halloffame.asm`'s own: DisplayHOFMon's two text boxes, its
-## frontpic at (6,5) and every field row it prints, plus
-## HOF_AnimatePlayerPic's name box for the player's page. `halloffame.asm:298`
-## calls `LoadFontsBattleExtra` first, so the panel prints with the battle-extra
-## strip over $60 to $78. Node-free; the Pokemon's own pic is not in that buffer,
-## having its own palette, and is composed over the page by the screen.
+## One Hall of Fame induction panel, on the tile grid the hardware uses.
+## Positions are `engine/events/halloffame.asm`'s own: `DisplayHOFMon`'s two text
+## boxes, its frontpic at (6,5) and every field row, plus
+## `HOF_AnimatePlayerPic`'s name box. `LoadFontsBattleExtra` runs first, so the
+## panel prints with the battle-extra strip over $60 to $78. Node-free: the pic
+## has its own palette and is composed over the page by the screen.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20
@@ -18,11 +17,10 @@ const MON_TOP_BOX: Rect2i = Rect2i(0, 0, 20, 5)
 const MON_BOTTOM_BOX: Rect2i = Rect2i(0, 12, 20, 6)
 const CAPTION: Vector2i = Vector2i(1, 2)
 const CAPTION_TEXT: String = "New Hall of Famer!"
-## `_HallOfFamePC.DisplayMonAndStrings` draws this caption instead: `.TimeFamer`
-## at `hlcoord 1, 2` and then `PrintNum` `lb bc, 1, 3` over `hlcoord 2, 2`, so
-## the count is right-aligned in three columns and the words start at column 5.
-## `.HOFMaster` is its unreachable sibling: `cp HOF_MASTER_COUNT + 1` needs 201
-## and `wHallOfFameCount` stops at 200 (`docs/bugs_and_glitches.md`).
+## `_HallOfFamePC.DisplayMonAndStrings` draws this instead: `PrintNum`'s
+## `lb bc, 1, 3` over `hlcoord 2, 2`, so the count is right-aligned in three
+## columns and the words start at column 5. `.HOFMaster` is unreachable: it needs
+## 201 and `wHallOfFameCount` stops at 200 (`docs/bugs_and_glitches.md`).
 const FAMER_TEXT: String = "-Time Famer"
 const FAMER_COUNT: Vector2i = Vector2i(2, 2)
 const FAMER_DIGITS: int = 3
@@ -72,6 +70,8 @@ const TEXT_AT: Vector2i = Vector2i(1, 14)
 const TEXT_COLUMNS: int = MON_BOTTOM_BOX.size.x - 2
 const TEXT_ROWS: int = 2
 const TEXT_LINE_SPACING: int = 2
+## `PrintText`'s own `hlcoord 1, 14` again, over a cleared screen.
+const SAVING_AT: Vector2i = Vector2i(1, 14)
 
 ## `Textbox` draws with wTextboxFrame, which the in-game OPTION menu's FRAME row
 ## and the launcher's settings both write, so the panel is drawn in whichever
@@ -98,7 +98,10 @@ func draw(page: Dictionary) -> PackedByteArray:
 	indices.resize(COLUMNS * TILE * ROWS * TILE)
 	if font == null:
 		return indices
-	if StringName(page.get("kind", &"")) == Gen2HallOfFame.PAGE_PLAYER:
+	var kind: StringName = StringName(page.get("kind", &""))
+	if kind == Gen2HallOfFame.PAGE_SAVING:
+		_draw_saving(page, indices)
+	elif kind == Gen2HallOfFame.PAGE_PLAYER:
 		_draw_player(page, indices)
 	else:
 		_draw_mon(page, indices)
@@ -146,10 +149,8 @@ func _draw_mon(page: Dictionary, indices: PackedByteArray) -> void:
 	_text(indices, width, "%0*d" % [OT_DIGITS, int(page.get("ot_id", 0))], OT_NUMBER)
 
 
-## The player's page is the name box and the empty bottom one. The source also
-## slides in the player's own pic and prints the trainer ID and PLAY TIME beneath
-## the name; the project imports no player pic and its save model carries neither
-## number, so nothing stands in for them.
+## The name box and the empty bottom one. The source also slides in the player's
+## pic and prints the trainer ID and PLAY TIME, none of which this project has.
 func _draw_player(page: Dictionary, indices: PackedByteArray) -> void:
 	var width: int = COLUMNS * TILE
 	_box(indices, width, PLAYER_BOX)
@@ -160,6 +161,16 @@ func _draw_player(page: Dictionary, indices: PackedByteArray) -> void:
 		_text(
 			indices, width, String(lines[index]),
 			TEXT_AT + Vector2i(0, index * TEXT_LINE_SPACING)
+		)
+
+
+## `InitDisplayForHallOfFame`: no box, since it prints into a cleared tilemap.
+func _draw_saving(page: Dictionary, indices: PackedByteArray) -> void:
+	var lines: Array = page.get("lines", [])
+	for index: int in lines.size():
+		_text(
+			indices, COLUMNS * TILE, String(lines[index]),
+			SAVING_AT + Vector2i(0, index * TEXT_LINE_SPACING)
 		)
 
 

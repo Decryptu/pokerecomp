@@ -2,19 +2,16 @@ class_name Gen2HallOfFameScreen
 extends Control
 
 ## The screen behind `halloffame`, embedded in the overworld the way the PC and
-## the mart overlays are. `HallOfFame` saves, walks the party one panel at a time
-## and then shows the player's own with `ProfOaksPCRating` printed into it. What
-## is here is that walk, advanced by A; the credits, the two pic slides and the
-## palette rotations are not. `_HallOfFamePC` reuses the same walk over a stored
-## record. The source pauses 60 frames per panel and moves on by itself; this
-## waits for a key instead, since there is no animation to watch yet and a timer
-## would only be a delay.
+## the mart overlays are: the record box, then `AnimateHallOfFame`'s walk over
+## the party and the player's own panel, advanced by A. The two pic slides and
+## the palette rotations are not here, and the source's 60 frames a panel are a
+## key press instead, there being no animation to watch. `_HallOfFamePC` reuses
+## the same walk over a stored record.
 
 signal closed()
 
 ## `ProfOaksPCRating`'s `PlayMusic MUSIC_NONE` and `PlaySFX`, which reach the
-## overworld's own player rather than one of this screen's: the same way the
-## Pokedex asks for a cry.
+## overworld's own player the way the Pokedex's cry does.
 signal rating_reached(sfx: int)
 
 const BACKDROP: Color = Color.WHITE
@@ -32,6 +29,9 @@ var _index: int = 0
 var _page_renderer: Gen2HallOfFamePage = null
 var _background: TextureRect = null
 var _pic: TextureRect = null
+## `HallOfFame_FadeOutMusic`'s `ld c, 100` behind the record box, and its clock.
+var _saving_frames: int = 0
+var _saving_clock := Gen2WorldAnimation.FrameClock.new()
 
 
 ## [param pages] is [method Gen2HallOfFame.pages]. An empty list closes at once
@@ -72,6 +72,9 @@ func current_page() -> Dictionary:
 ## [member cancelled] says afterwards, and START skips the rest of this team.
 ## `AnimateHallOfFame` reads neither, so an induction ignores them.
 func handle_button(button: int) -> bool:
+	if _saving_frames > 0:
+		## `HallOfFame_FadeOutMusic` ends on `DelayFrames`, which reads nothing.
+		return true
 	if button == Gen2Button.A:
 		advance()
 		return true
@@ -112,10 +115,29 @@ func _build() -> void:
 	add_child(_background)
 
 
+## Hardware frames of the record box. Public so a test owns its own.
+func advance_saving_frames(count: int) -> void:
+	for _step: int in count:
+		if _saving_frames <= 0:
+			return
+		_saving_frames -= 1
+		if _saving_frames <= 0:
+			set_process(false)
+			advance()
+
+
+func _process(delta: float) -> void:
+	advance_saving_frames(_saving_clock.tick(delta))
+
+
 func _refresh() -> void:
 	var page: Dictionary = current_page()
 	if page.is_empty() or _background == null:
 		return
+	if StringName(page.get("kind", &"")) == Gen2HallOfFame.PAGE_SAVING:
+		_saving_frames = Gen2SavePrompt.SAVING_RECORD_FRAMES
+		_saving_clock.reset()
+		set_process(true)
 	if page.has("sfx"):
 		rating_reached.emit(int(page["sfx"]))
 	var indices: PackedByteArray = _page_renderer.draw(page)

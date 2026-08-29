@@ -174,6 +174,11 @@ func test_the_hall_of_fame_runs_into_unskippable_credits() -> void:
 	await _open_world()
 	_world_screen.open_hall_of_fame()
 	await get_tree().process_frame
+	## `InitDisplayForHallOfFame`'s record box reads no joypad and moves on after
+	## a hundred frames of its own.
+	_world_screen._hall_of_fame_host.advance_saving_frames(
+		Gen2SavePrompt.SAVING_RECORD_FRAMES
+	)
 	while _world_screen._hall_of_fame_host != null:
 		_world_screen._hall_of_fame_host.handle_button(Gen2Button.A)
 	await get_tree().process_frame

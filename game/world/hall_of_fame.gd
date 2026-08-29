@@ -2,19 +2,18 @@ class_name Gen2HallOfFame
 extends RefCounted
 
 ## The induction sequence `halloffame` asks for, as pages a screen can draw.
-## `AnimateHallOfFame` walks the party built by `GetHallOfFameParty`, showing one
-## panel per Pokemon and then the player's own, so the order and the contents are
-## that routine's. `HOF_AnimatePlayerPic` ends on `farcall ProfOaksPCRating`,
-## whose two texts print into the empty box that panel opens, so the player's
-## panel is answered once per box. The player's panel wants a trainer ID and PLAY
-## TIME the save model has neither of, so those lines are absent rather than drawn
-## as zeros.
+## `AnimateHallOfFame` walks the party `GetHallOfFameParty` built, one panel per
+## Pokemon and then the player's, which `HOF_AnimatePlayerPic` answers once per
+## box `ProfOaksPCRating` prints into it. That panel's trainer ID and PLAY TIME
+## are absent rather than zeros: the save model carries neither.
 
 ## GetHallOfFameParty's own cap: it copies at most a full party and stops on the
 ## -1 terminator.
 const MAX_MONS: int = 6
 
 const PAGE_MON: StringName = &"mon"
+## `InitDisplayForHallOfFame`'s record box, in front of the panels.
+const PAGE_SAVING: StringName = &"saving"
 const PAGE_PLAYER: StringName = &"player"
 
 ## `sHallOfFame`'s own thirty records and `HOF_MASTER_COUNT`, which is where
@@ -25,9 +24,9 @@ const MASTER_COUNT: int = 200
 const MAX_NICKNAME: int = 10
 
 
-## The pages, in AnimateHallOfFame's order: every non-egg party member, then the
-## player. An empty or egg-only party still answers the player's page, matching
-## LoadHOFTeam's carry falling straight through to HOF_AnimatePlayerPic.
+## The pages, in `HallOfFame`'s order: the record box, then every non-egg party
+## member, then the player. An empty or egg-only party still answers the player's
+## page, matching `LoadHOFTeam`'s carry falling through to `HOF_AnimatePlayerPic`.
 ##
 ## [param state] is what `Rate` counts; without it, or without the rating table,
 ## the player's page is the bare panel the source never stops on.
@@ -37,14 +36,17 @@ static func pages(
 	var out: Array = []
 	if data == null or save == null:
 		return out
+	out.append({"kind": PAGE_SAVING, "lines": Gen2SavePrompt.SAVING_RECORD_LINES})
+	var inducted_mons: int = 0
 	for mon: Gen2SaveMon in save.party:
-		if out.size() >= MAX_MONS:
+		if inducted_mons >= MAX_MONS:
 			break
 		## GetHallOfFameParty skips EGG without consuming a slot, so an egg is
 		## not inducted and does not shorten the list either.
 		if mon.is_egg:
 			continue
 		out.append(_mon_page(data, mon))
+		inducted_mons += 1
 	out.append_array(_player_pages(data, save, state))
 	return out
 
