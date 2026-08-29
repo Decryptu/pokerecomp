@@ -53,58 +53,50 @@ static func import_to_cache(
 		return result
 
 	var tilesets: Array = result["tilesets"]
-	if not RomCache.write_json(RomCache.overworld_sprites_path(directory), result["sprites"]):
-		return {"ok": false, "message": "Could not write overworld sprite data."}
-	if not RomCache.write_json(
-		RomCache.overworld_sprite_palettes_path(directory), result["sprite_palettes"]
-	):
-		return {"ok": false, "message": "Could not write overworld sprite palettes."}
-	if not RomCache.write_section(
-		RomCache.overworld_effects_path(directory),
-		RomCache.blob_path(RomCache.overworld_effects_path(directory)),
-		result["effects"],
-	):
-		return {"ok": false, "message": "Could not write overworld effect sprites."}
-	if not RomCache.write_json(RomCache.world_tilesets_path(directory), tilesets):
-		return {"ok": false, "message": "Could not write overworld tileset data."}
-	if not RomCache.write_json(RomCache.world_palettes_path(directory), result["palettes"]):
-		return {"ok": false, "message": "Could not write overworld palette data."}
-	if not RomCache.write_json(RomCache.world_roofs_path(directory), result["roofs"]):
-		return {"ok": false, "message": "Could not write overworld roof data."}
-	if not RomCache.write_json(
-		RomCache.world_animation_assets_path(directory), result["animation_assets"]
-	):
-		return {"ok": false, "message": "Could not write overworld animation data."}
-	if not RomCache.write_json(RomCache.world_maps_path(directory), result["maps"]):
-		return {"ok": false, "message": "Could not write overworld map data."}
-	if not RomCache.write_payload_map(
-		RomCache.world_scripts_path(directory),
-		RomCache.blob_path(RomCache.world_scripts_path(directory)),
-		result["scripts"],
-	):
-		return {"ok": false, "message": "Could not write overworld script data."}
-	if not RomCache.write_section(
-		RomCache.world_standard_scripts_path(directory),
-		RomCache.blob_path(RomCache.world_standard_scripts_path(directory)),
-		result["standard_scripts"],
-	):
-		return {"ok": false, "message": "Could not write standard overworld script data."}
-	if not RomCache.write_payload_map(
-		RomCache.world_text_path(directory),
-		RomCache.blob_path(RomCache.world_text_path(directory)),
-		result["text"],
-	):
-		return {"ok": false, "message": "Could not write overworld text data."}
-	if not RomCache.write_payload_map(
-		RomCache.world_movements_path(directory),
-		RomCache.blob_path(RomCache.world_movements_path(directory)),
-		result["movements"],
-	):
-		return {"ok": false, "message": "Could not write overworld movement data."}
-	if not RomCache.write_json(
-		RomCache.world_command_queues_path(directory), result["command_queues"]
-	):
-		return {"ok": false, "message": "Could not write overworld command queue data."}
+	## Every world section: writer, path, payload blob where it has one, message.
+	var writes: Array = [
+		[RomCache.write_json, RomCache.overworld_sprites_path(directory),
+			result["sprites"], "overworld sprite data"],
+		[RomCache.write_json, RomCache.overworld_sprite_palettes_path(directory),
+			result["sprite_palettes"], "overworld sprite palettes"],
+		[RomCache.write_section, RomCache.overworld_effects_path(directory),
+			RomCache.blob_path(RomCache.overworld_effects_path(directory)),
+			result["effects"], "overworld effect sprites"],
+		[RomCache.write_json, RomCache.world_tilesets_path(directory),
+			tilesets, "overworld tileset data"],
+		[RomCache.write_json, RomCache.world_palettes_path(directory),
+			result["palettes"], "overworld palette data"],
+		[RomCache.write_json, RomCache.world_roofs_path(directory),
+			result["roofs"], "overworld roof data"],
+		[RomCache.write_json, RomCache.world_animation_assets_path(directory),
+			result["animation_assets"], "overworld animation data"],
+		[RomCache.write_json, RomCache.world_maps_path(directory),
+			result["maps"], "overworld map data"],
+		[RomCache.write_payload_map, RomCache.world_scripts_path(directory),
+			RomCache.blob_path(RomCache.world_scripts_path(directory)),
+			result["scripts"], "overworld script data"],
+		[RomCache.write_section, RomCache.world_standard_scripts_path(directory),
+			RomCache.blob_path(RomCache.world_standard_scripts_path(directory)),
+			result["standard_scripts"], "standard overworld script data"],
+		[RomCache.write_payload_map, RomCache.world_text_path(directory),
+			RomCache.blob_path(RomCache.world_text_path(directory)),
+			result["text"], "overworld text data"],
+		[RomCache.write_payload_map, RomCache.world_movements_path(directory),
+			RomCache.blob_path(RomCache.world_movements_path(directory)),
+			result["movements"], "overworld movement data"],
+		[RomCache.write_json, RomCache.world_command_queues_path(directory),
+			result["command_queues"], "overworld command queue data"],
+		[RomCache.write_indices, RomCache.mon_menu_icons_path(directory),
+			result["menu_icons"], "the species icon table"],
+		[RomCache.write_indices, RomCache.held_item_icon_path(directory),
+			result["held_item_pixels"], "the held item icons"],
+		[RomCache.write_json, RomCache.party_menu_icon_palettes_path(directory),
+			result["icon_palettes"], "the party menu icon palettes"],
+	]
+	for write: Array in writes:
+		var writer: Callable = write[0]
+		if not bool(writer.callv(write.slice(1, write.size() - 1))):
+			return {"ok": false, "message": "Could not write %s." % write[-1]}
 
 	var graphics: Dictionary = result["graphics"]
 	for number: int in graphics:
@@ -123,18 +115,6 @@ static func import_to_cache(
 			RomCache.overworld_icon_path(directory, number), icon_graphics[number]
 		):
 			return {"ok": false, "message": "Could not write overworld icon %d." % number}
-	if not RomCache.write_indices(
-		RomCache.mon_menu_icons_path(directory), result["menu_icons"]
-	):
-		return {"ok": false, "message": "Could not write the species icon table."}
-	if not RomCache.write_indices(
-		RomCache.held_item_icon_path(directory), result["held_item_pixels"]
-	):
-		return {"ok": false, "message": "Could not write the held item icons."}
-	if not RomCache.write_json(
-		RomCache.party_menu_icon_palettes_path(directory), result["icon_palettes"]
-	):
-		return {"ok": false, "message": "Could not write the party menu icon palettes."}
 
 	return {
 		"ok": true,

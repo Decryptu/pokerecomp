@@ -15,6 +15,8 @@ const CHANNELS: int = 4
 ## per 8x8 tile on each axis.
 const FIELD_STRIDE: int = 4
 const TRANSPARENT := Color(0.0, 0.0, 0.0, 0.0)
+## A sprite never draws its first colour.
+const TRANSPARENT_INDEX: int = 0
 ## The alpha byte a picture the hardware could have drawn carries everywhere.
 const OPAQUE: int = 255
 

@@ -350,7 +350,7 @@ func start_step(direction: Vector2i, frames: int) -> void:
 ## Adds one step of a scripted stream to the trail. The first one starts at
 ## once and the rest wait their turn, so a five-step applymovement is drawn as
 ## five steps rather than as one arrival.
-## [param facing] is the direction the object is drawn looking while this step
+## [param new_facing] is the direction the object is drawn looking while this step
 ## runs, which is not the step's own vector for a `jump_step` and is the whole of
 ## a queued `turn_head`. `NormalStep` writes OBJECT_FACING as it starts the step,
 ## so a stream applied in one call still turns one step at a time rather than

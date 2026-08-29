@@ -105,7 +105,7 @@ var enemy_off_field: bool = false
 
 
 ## Starts [param index] of `BattleAnimations`, null when the cache has no such
-## animation. [param param] is `wBattleAnimParam` and [param enemy_turn] is
+## animation. [param param] is `wBattleAnimParam` and [param on_enemy_turn] is
 ## `hBattleTurn`, the two inputs set before `PlayBattleAnim`.
 static func create(
 	anim_data: Gen2BattleAnimData, index: int, on_enemy_turn: bool = false,

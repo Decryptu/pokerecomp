@@ -147,7 +147,7 @@ func _load_sheet(indices: PackedByteArray) -> void:
 
 ## The whole screen as tile numbers, in the order `Pack_InitGFX` writes them.
 ##
-## [param pocket] is `wCurPocket`, which picks both the picture and the name.
+## [code]wCurPocket[/code] is `wCurPocket`, which picks both the picture and the name.
 ## [param rows] is the visible listing, at most [constant LIST_HEIGHT] entries of
 ## the three shapes [constant ROW_ITEM] names, and [param cursor] which of them
 ## the arrow stands on, or -1 while `PlaceHollowCursor` has taken it away.

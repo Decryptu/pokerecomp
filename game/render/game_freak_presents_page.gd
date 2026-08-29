@@ -15,8 +15,6 @@ const ROWS: int = 18
 ## `ClearTilemap` leaves the blank tile everywhere, which through
 ## PREDEFPAL_GAMEFREAK_LOGO_BG is black.
 const BLANK_INDEX: int = 0
-## A sprite never draws its first colour.
-const TRANSPARENT_INDEX: int = 0
 
 ## Shadow OAM counts from (8, 16), so a coordinate reaches the screen eight less
 ## across and sixteen less down.
@@ -194,7 +192,7 @@ func _draw_sprite(
 	# `dbsprite`'s attribute byte names the object palette. Only Gold's logo is
 	# drawn through palette 1, which is the one the rotation moves.
 	var palette: PackedColorArray = _object_palette(phase, bool(entry["logo"]))
-	if palette.size() <= TRANSPARENT_INDEX:
+	if palette.size() <= Gen2PicImage.TRANSPARENT_INDEX:
 		return
 	_blit_sprite_tile(
 		pixels, palette,
@@ -346,7 +344,7 @@ func _blit_sprite_tile(
 			if from < 0 or from >= tiles.size():
 				continue
 			var value: int = tiles[from]
-			if value == TRANSPARENT_INDEX or value >= palette.size():
+			if value == Gen2PicImage.TRANSPARENT_INDEX or value >= palette.size():
 				continue
 			var at_pixel: int = row + target_x
 			if taken[at_pixel] != 0:

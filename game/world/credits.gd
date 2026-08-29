@@ -123,7 +123,7 @@ var _third: int = 0
 var _skippable: bool = false
 
 
-## [param skippable] is `STATUSFLAGS_HALL_OF_FAME_F`, which is set by the time
+## [param can_skip] is `STATUSFLAGS_HALL_OF_FAME_F`, which is set by the time
 ## the induction it follows has been through once. Null when the cache carries no
 ## credits script.
 static func create(data: GameData, can_skip: bool = false) -> Gen2Credits:

@@ -87,7 +87,6 @@ var _message_frames: int = 0
 var _area: Gen2TownMapScreen = null
 
 var _page: Gen2PokedexPage = null
-## The 160x144 field inside the hardware screen, and the one layer drawn into it.
 ## The screen this is drawn in, and the 160x144 layer inside it.
 var _screen: Gen2Screen = null
 var _field: Control = null

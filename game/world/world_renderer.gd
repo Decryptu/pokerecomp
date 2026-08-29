@@ -1270,7 +1270,7 @@ func _effect_sheet(sheet_name: String) -> Dictionary:
 
 ## One 8x8 tile of an effect sheet. Index 0 is the transparent colour here, as it
 ## is for every object: these are sprites, not background.
-## [param rotation] is `.FlashPalettes`' rotate-left count, which only a sheet
+## [param rotation_step] is `.FlashPalettes`' rotate-left count, which only a sheet
 ## carrying its own palette can be asked for.
 func _draw_effect_tile(
 	sheet: Dictionary, tile: int, palette_index: int, flip_x: bool, at: Vector2,

@@ -3868,63 +3868,9 @@ static func verify_frames(rom: RomFile, layout: Dictionary) -> Dictionary:
 static func verify_battle_graphics(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var data: PackedByteArray = rom.bytes()
 
-	# The bar palettes are known values rather than a shape, so they are checked
-	# as the species names are: against what they have to say.
-	for index: int in RomLayout.BAR_PALETTE_NAMES.size():
-		var entry: int = RomLayout.bar_palette_offset(layout, index)
-		var wanted: Array = RomLayout.BAR_PALETTES[index]
-		for colour: int in wanted.size():
-			var read: int = rom.u16le(entry + colour * Gen2Palette.COLOR_BYTES)
-			if read != int(wanted[colour]):
-				return {
-					"ok": false,
-					"message": "Bar palette %s colour %d: expected $%04X, read $%04X." % [
-						RomLayout.BAR_PALETTE_NAMES[index], colour, wanted[colour], read,
-					],
-				}
-
-	# `StatsScreenPagePals` and `StatsScreenPals`, one run and one check: the
-	# three tints are the three page palettes' own colour 1, so a run that reads
-	# right in both halves cannot be the wrong run.
-	for index: int in RomLayout.STATS_PAGE_PALETTES:
-		var page: int = RomLayout.stats_page_palette_offset(layout, index)
-		var wanted_page: Array = RomLayout.STATS_SCREEN_PAGE_PALETTES[index]
-		for colour: int in wanted_page.size():
-			var read_page: int = rom.u16le(page + colour * Gen2Palette.COLOR_BYTES)
-			if read_page != int(wanted_page[colour]):
-				return {
-					"ok": false,
-					"message": "Stats page palette %d colour %d: expected $%04X, read $%04X." % [
-						index, colour, wanted_page[colour], read_page,
-					],
-				}
-		var tint: int = rom.u16le(RomLayout.stats_page_tint_offset(layout, index))
-		if tint != int(RomLayout.STATS_SCREEN_PAGE_TINTS[index]):
-			return {
-				"ok": false,
-				"message": "Stats page tint %d: expected $%04X, read $%04X." % [
-					index, RomLayout.STATS_SCREEN_PAGE_TINTS[index], tint,
-				],
-			}
-
-	# `BattleObjectPals`, checked the same way and for the same reason: a palette
-	# table one table out still decodes into colours.
-	for index: int in RomLayout.BATTLE_OBJECT_PALETTES_STORED:
-		var wanted: Array = RomLayout.BATTLE_OBJECT_PALETTES[index]
-		for colour: int in wanted.size():
-			var read: int = rom.u16le(
-				int(layout["battle_object_palettes"])
-					+ (index * RomLayout.BATTLE_OBJECT_PALETTE_COLORS + colour)
-					* Gen2Palette.COLOR_BYTES
-			)
-			if read != int(wanted[colour]):
-				return {
-					"ok": false,
-					"message": "Battle object palette %s colour %d: expected $%04X, read $%04X." % [
-						RomLayout.BATTLE_OBJECT_PALETTE_NAMES[index], colour,
-						wanted[colour], read,
-					],
-				}
+	var palettes: Dictionary = _verify_battle_palettes(rom, layout)
+	if not palettes["ok"]:
+		return palettes
 
 	var battle_font: PackedByteArray = Gen2Tiles.decode_2bpp_strip(
 		data, int(layout["battle_font"]), RomLayout.BATTLE_FONT_TILES
@@ -3998,6 +3944,64 @@ static func verify_battle_graphics(rom: RomFile, layout: Dictionary) -> Dictiona
 				return {"ok": false, "message": "%s tile %d repeats an earlier one." % [name, tile]}
 			seen.append(pixels)
 
+	return {"ok": true, "message": ""}
+
+
+## One palette's colours against the values the source spells out.
+static func _verify_colours(
+	rom: RomFile, offset: int, wanted: Array, label: String
+) -> Dictionary:
+	for colour: int in wanted.size():
+		var read: int = rom.u16le(offset + colour * Gen2Palette.COLOR_BYTES)
+		if read != int(wanted[colour]):
+			return {
+				"ok": false,
+				"message": "%s colour %d: expected $%04X, read $%04X." % [
+					label, colour, wanted[colour], read,
+				],
+			}
+	return {"ok": true, "message": ""}
+
+
+## The bar palettes, `StatsScreenPagePals` with `StatsScreenPals`' three tints,
+## and `BattleObjectPals`. Each tint is its page palette's own colour 1.
+static func _verify_battle_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
+	for index: int in RomLayout.BAR_PALETTE_NAMES.size():
+		var bar: Dictionary = _verify_colours(
+			rom, RomLayout.bar_palette_offset(layout, index),
+			RomLayout.BAR_PALETTES[index],
+			"Bar palette %s" % RomLayout.BAR_PALETTE_NAMES[index],
+		)
+		if not bar["ok"]:
+			return bar
+
+	for index: int in RomLayout.STATS_PAGE_PALETTES:
+		var page: Dictionary = _verify_colours(
+			rom, RomLayout.stats_page_palette_offset(layout, index),
+			RomLayout.STATS_SCREEN_PAGE_PALETTES[index],
+			"Stats page palette %d" % index,
+		)
+		if not page["ok"]:
+			return page
+		var tint: int = rom.u16le(RomLayout.stats_page_tint_offset(layout, index))
+		if tint != int(RomLayout.STATS_SCREEN_PAGE_TINTS[index]):
+			return {
+				"ok": false,
+				"message": "Stats page tint %d: expected $%04X, read $%04X." % [
+					index, RomLayout.STATS_SCREEN_PAGE_TINTS[index], tint,
+				],
+			}
+
+	for index: int in RomLayout.BATTLE_OBJECT_PALETTES_STORED:
+		var object_palette: Dictionary = _verify_colours(
+			rom,
+			int(layout["battle_object_palettes"])
+				+ index * RomLayout.BATTLE_OBJECT_PALETTE_COLORS * Gen2Palette.COLOR_BYTES,
+			RomLayout.BATTLE_OBJECT_PALETTES[index],
+			"Battle object palette %s" % RomLayout.BATTLE_OBJECT_PALETTE_NAMES[index],
+		)
+		if not object_palette["ok"]:
+			return object_palette
 	return {"ok": true, "message": ""}
 
 

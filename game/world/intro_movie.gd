@@ -785,7 +785,11 @@ func _scene_attribute_bands() -> void:
 	var attr := PackedByteArray()
 	attr.resize(RomLayout.INTRO_MAP_BYTES)
 	for row: int in MAP_ROWS:
-		var value: int = 1 if row < 12 else (2 if row < 15 else 3)
+		var value: int = 3
+		if row < 12:
+			value = 1
+		elif row < 15:
+			value = 2
 		for column: int in MAP_COLUMNS:
 			attr[row * MAP_COLUMNS + column] = value
 	_attr_override = attr

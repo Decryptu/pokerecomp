@@ -43,31 +43,10 @@ static func prepare(
 
 	match kind:
 		&"wild":
-			var species: int = int(values.get("pokemon", 0))
-			var level: int = int(values.get("level", 0))
-			if not _valid_species(data, species):
-				return _failure(&"invalid_wild_species", {"species": species})
-			if level < 1 or level > Gen2Experience.MAX_LEVEL:
-				return _failure(&"invalid_wild_level", {"level": level})
-			var wild_mon: Gen2BattleMon = Gen2BattleMon.create(
-				data, species, level, data.moves_at_level(species, level),
-				wild_dvs(values, battle_type, species, generator)
-			)
-			# LoadEnemyMon's .TreeMon branch: a headbutt encounter whose species
-			# is in CheckSleepingTreeMon's list for the current time of day
-			# enters asleep for TREEMON_SLEEP_TURNS. The caller answers the list
-			# question, since only it knows the time of day and the profile;
-			# Gold and Silver never say true, having neither routine nor data.
-			if wild_mon != null and bool(values.get("asleep", false)):
-				wild_mon.status = Gen2WorldTreemon.SLEEP_TURNS
-			## `LoadEnemyMon`'s second `BATTLETYPE_ROAMING` branch: a roamer whose
-			## struct has been initialised comes back on the stored HP rather than
-			## on a full bar, which is what makes chipping one down between
-			## encounters worth doing. The uninitialised case carries no `hp` and
-			## keeps the stats it was just built with.
-			if wild_mon != null and int(values.get("hp", 0)) > 0:
-				wild_mon.hp = clampi(int(values["hp"]), 1, wild_mon.max_hp())
-			enemy_party = Gen2Party.of(wild_mon)
+			var wild: Dictionary = _wild_party(data, values, battle_type, generator)
+			if not wild["ok"]:
+				return wild
+			enemy_party = wild["party"]
 		&"trainer":
 			trainer_class = int(values.get("trainer_group", 0))
 			trainer_index = int(values.get("trainer_id", 0))
@@ -126,14 +105,38 @@ static func prepare(
 	}
 
 
-## `LoadEnemyMon`'s `.InitDVs` for a wild, which decides whether the Pokemon in
-## the grass is shiny, has a bad stat or answers a different Hidden Power. Rolled
-## here rather than in each of the nine callers: this is the one place a wild is
-## built, and [param generator] is the battle's own. Three cases keep an answer of
-## their own, in the source's order: a request already carrying `dvs` keeps it,
-## which is what leaves a player the Pokemon they walked up to;
-## BATTLETYPE_FORCESHINY writes [constant Gen2Stats.SHINY_DVS]; and a wild UNOWN
-## rerolls until its letter is one the Ruins of Alph puzzle has unlocked.
+## `LoadEnemyMon` for a wild, on the run's own generator.
+static func _wild_party(
+	data: GameData, values: Dictionary, battle_type: int,
+	generator: RandomNumberGenerator
+) -> Dictionary:
+	var species: int = int(values.get("pokemon", 0))
+	var level: int = int(values.get("level", 0))
+	if not _valid_species(data, species):
+		return _failure(&"invalid_wild_species", {"species": species})
+	if level < 1 or level > Gen2Experience.MAX_LEVEL:
+		return _failure(&"invalid_wild_level", {"level": level})
+	var wild_mon: Gen2BattleMon = Gen2BattleMon.create(
+		data, species, level, data.moves_at_level(species, level),
+		wild_dvs(values, battle_type, species, generator)
+	)
+	# LoadEnemyMon's .TreeMon branch: a headbutt encounter whose species is in
+	# CheckSleepingTreeMon's list for the current time of day enters asleep for
+	# TREEMON_SLEEP_TURNS. The caller answers the list question, since only it
+	# knows the time of day and the profile; Gold and Silver never say true,
+	# having neither routine nor data.
+	if wild_mon != null and bool(values.get("asleep", false)):
+		wild_mon.status = Gen2WorldTreemon.SLEEP_TURNS
+	## `LoadEnemyMon`'s second `BATTLETYPE_ROAMING` branch: a roamer whose struct
+	## has been initialised comes back on the stored HP rather than on a full bar,
+	## which is what makes chipping one down between encounters worth doing. The
+	## uninitialised case carries no `hp` and keeps the stats it was just built
+	## with.
+	if wild_mon != null and int(values.get("hp", 0)) > 0:
+		wild_mon.hp = clampi(int(values["hp"]), 1, wild_mon.max_hp())
+	return {"ok": true, "party": Gen2Party.of(wild_mon)}
+
+
 static func earnings(battle: Gen2Battle, state: Gen2WorldState, won: bool) -> Dictionary:
 	var result: Dictionary = {
 		"money": {}, "prize_shown": 0, "prize_line": &"", "pay_day": 0,
@@ -182,6 +185,14 @@ static func credit_earnings(state: Gen2WorldState, money: Dictionary) -> void:
 	state.apply_changes({}, {}, {"money": balances})
 
 
+## `LoadEnemyMon`'s `.InitDVs` for a wild, which decides whether the Pokemon in
+## the grass is shiny, has a bad stat or answers a different Hidden Power. Rolled
+## here rather than in each of the nine callers: this is the one place a wild is
+## built, and [param generator] is the battle's own. Three cases keep an answer of
+## their own, in the source's order: a request already carrying `dvs` keeps it,
+## which is what leaves a player the Pokemon they walked up to;
+## BATTLETYPE_FORCESHINY writes [constant Gen2Stats.SHINY_DVS]; and a wild UNOWN
+## rerolls until its letter is one the Ruins of Alph puzzle has unlocked.
 static func wild_dvs(
 	values: Dictionary, battle_type: int, species: int, generator: RandomNumberGenerator
 ) -> int:

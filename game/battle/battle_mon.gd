@@ -207,7 +207,7 @@ const CAUGHT_LOCATION_MASK: int = 0x7F
 var caught_location: int = 0
 
 
-## Builds a Pokémon at a level, at full health, knowing [param moves].
+## Builds a Pokémon at a level, at full health, knowing [param known_moves].
 ##
 ## Returns null for a species the cache does not have, because a battle with a
 ## Pokémon that has no base stats is not something to paper over.

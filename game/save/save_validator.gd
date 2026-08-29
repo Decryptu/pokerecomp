@@ -7,6 +7,16 @@ extends RefCounted
 ## the same formulas the battle engine uses.
 
 static func validate(save: Gen2SaveData, data: GameData) -> Dictionary:
+	var header: Dictionary = _validate_header(save, data)
+	if not header["ok"]:
+		return header
+	var world_result: Dictionary = _validate_world(save.world, data)
+	if not world_result["ok"]:
+		return world_result
+	return _validate_storage(save, data)
+
+
+static func _validate_header(save: Gen2SaveData, data: GameData) -> Dictionary:
 	if save == null:
 		return _failure("the save is missing")
 	if data == null:
@@ -29,10 +39,10 @@ static func validate(save: Gen2SaveData, data: GameData) -> Dictionary:
 		return _failure("the party cannot contain more than six Pokémon")
 	if not save.boxes_shape_valid or save.boxes.size() != Gen2SaveData.BOX_COUNT:
 		return _failure("the save does not contain exactly %d PC boxes" % Gen2SaveData.BOX_COUNT)
-	var world_result: Dictionary = _validate_world(save.world, data)
-	if not world_result["ok"]:
-		return world_result
+	return {"ok": true, "message": ""}
 
+
+static func _validate_storage(save: Gen2SaveData, data: GameData) -> Dictionary:
 	for index: int in save.party.size():
 		var mon: Gen2SaveMon = save.party[index]
 		var result: Dictionary = _validate_mon(mon, data, index)

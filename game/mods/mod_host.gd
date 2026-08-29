@@ -753,7 +753,7 @@ func repel_renewal_item(bag: Dictionary) -> int:
 ## draws for one wild before it settles, which is the later games' charm. The host
 ## keeps the first [method Gen2Stats.is_shiny] accepts and otherwise the last, and
 ## clamps to [constant MAX_SHINY_ROLLS]; 0 and 1 both mean the cartridge's own
-## single roll. [param context] carries the encounter but not the bag, since
+## single roll. [code]context[/code] carries the encounter but not the bag, since
 ## [method inventory] is live and this would be one snapshot per wild. Two
 ## providers COMPOSE ADDITIVELY rather than by registration order: refusing the
 ## second would make two charms an install error over a number with an obvious join.
@@ -1170,7 +1170,7 @@ func menu_entries(menu: StringName) -> Array:
 	return entries.duplicate(true)
 
 
-## The start-menu entries [param context] leaves visible, in registration order.
+## The start-menu entries [code]context[/code] leaves visible, in registration order.
 ##
 ## An entry that registered no `visible` predicate is always listed, which is
 ## every entry written before this existed. One that did is asked with a copy of

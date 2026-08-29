@@ -2868,7 +2868,7 @@ static func region_is_kanto(landmark_id: int, crystal: bool = true) -> bool:
 ##
 ## [param landmark_id] is `GetWorldMapLocation`'s, [param trainer_class] and
 ## [param trainer_id] are `wOtherTrainerClass` and `wOtherTrainerID` (class 0
-## being a wild fight), and [param time_of_day] is `wTimeOfDay`.
+## being a wild fight), and [param day_period] is `wTimeOfDay`.
 static func battle_music(
 	battle_kind: int,
 	trainer_class: int,

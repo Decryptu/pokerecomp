@@ -155,7 +155,7 @@ static func list_box(count: int, contest: bool = false) -> Gen2MenuBox:
 ## The menu over the map: the whole screen, transparent everywhere the map is
 ## still showing. [param description] is `.MenuDesc`'s two lines and is drawn
 ## only when MENU ACCOUNT is on, which is what `.IsMenuAccountOn` decides.
-## [param box] overrides the geometry for a list the cartridge does not have:
+## [param frame] overrides the geometry for a list the cartridge does not have:
 ## the MOVES row's own is `PopulateMonMenu`'s wider box, since its rows are move
 ## names rather than the eight-character words the source list holds.
 func render_list(

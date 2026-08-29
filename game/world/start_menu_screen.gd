@@ -1073,7 +1073,7 @@ func _pack_map(text: String) -> PackedInt32Array:
 
 
 ## The pack's screen with one of its `MENU_BACKUP_TILES` boxes over it.
-## [param draw] writes tiles into the map the pack just built, so the box wears
+## [param draw_page] writes tiles into the map the pack just built, so the box wears
 ## the attrmap `_CGB_PackPals` left rather than being a layer of its own.
 func _pack_overlay(text: String, draw_page: Callable) -> Image:
 	if _pack_page == null:
@@ -1476,6 +1476,7 @@ func _party_targets() -> Array:
 			continue
 		# Max HP is derived, not stored, the same way Gen2PartyScreen derives it.
 		var battle_mon: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(_data, mon)
+		var max_hp: int = 0 if battle_mon == null else battle_mon.max_hp()
 		targets.append({
 			"index": targets.size(),
 			"species": mon.species,
@@ -1484,7 +1485,7 @@ func _party_targets() -> Array:
 				else String(_data.species(mon.species).get("name", "UNKNOWN")),
 			"level": mon.level,
 			"hp": mon.hp,
-			"max_hp": 0 if mon.is_egg else (battle_mon.max_hp() if battle_mon != null else 0),
+			"max_hp": 0 if mon.is_egg else max_hp,
 			"status": mon.status,
 			"fainted": not mon.is_egg and mon.hp <= 0,
 			"egg": mon.is_egg,
@@ -2058,7 +2059,7 @@ func _open_save_confirm_mode() -> void:
 
 
 ## The yes/no's own cursor, `YesNoMenuHeader`'s `db 1` default, and the words
-## the box holds. [param cursor] below zero is a mode with no box at all.
+## the box holds. [param cursor_index] below zero is a mode with no box at all.
 func _enter_save_mode(mode: Mode, lines: Array, cursor_index: int) -> void:
 	_mode = mode
 	_save_lines = lines.duplicate()

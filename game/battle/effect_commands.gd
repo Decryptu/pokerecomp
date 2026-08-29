@@ -1355,21 +1355,23 @@ static func _check_immune(turn: Gen2Turn) -> void:
 
 ## Dream Eater's own rule is folded into this shared check rather than being a
 ## step, so a target that is not asleep reads as a miss.
+## `.Missed`'s own tail, which every gate in the hit check shares.
+static func _miss(turn: Gen2Turn, event: StringName = Gen2Battle.MISSED) -> void:
+	turn.missed = true
+	turn.emit(event, {"target": turn.target})
+	if not CONTINUES_AFTER_MISS.has(turn.effect()):
+		_failure_text(turn)
+
+
 static func _check_hit(turn: Gen2Turn) -> void:
 	if turn.immune:
-		turn.missed = true
-		turn.emit(Gen2Battle.NO_EFFECT, {"target": turn.target})
-		if not CONTINUES_AFTER_MISS.has(turn.effect()):
-			_failure_text(turn)
+		_miss(turn, Gen2Battle.NO_EFFECT)
 		return
 
 	# `.DreamEater`, first.
 	if turn.effect() == Gen2MoveEffect.DREAM_EATER \
 		and not Gen2Status.is_asleep(turn.defender().status):
-		turn.missed = true
-		turn.emit(Gen2Battle.MISSED, {"target": turn.target})
-		if not CONTINUES_AFTER_MISS.has(turn.effect()):
-			_failure_text(turn)
+		_miss(turn)
 		return
 
 	# `.Protect`, second, and ahead of everything but the Dream Eater question.
@@ -1378,20 +1380,14 @@ static func _check_hit(turn: Gen2Turn) -> void:
 	# without any of them knowing about it. Ahead of `.LockOn`, so a Protect
 	# turns a locked-on move away *and* leaves the flag standing for the next one.
 	if Gen2Substatus.has(turn.defender().substatus, Gen2Substatus.PROTECT):
-		turn.missed = true
 		turn.emit(Gen2Battle.PROTECTING_ITSELF, {"target": turn.target})
-		turn.emit(Gen2Battle.MISSED, {"target": turn.target})
-		if not CONTINUES_AFTER_MISS.has(turn.effect()):
-			_failure_text(turn)
+		_miss(turn)
 		return
 
 	# `.DrainSub`, third: nothing drains out of a doll, so the two effects that
 	# heal off what they deal read as a miss rather than a hit healing nothing.
 	if _substitute_refuses(turn) and turn.effect() in DRAINING_EFFECTS:
-		turn.missed = true
-		turn.emit(Gen2Battle.MISSED, {"target": turn.target})
-		if not CONTINUES_AFTER_MISS.has(turn.effect()):
-			_failure_text(turn)
+		_miss(turn)
 		return
 
 	# `.LockOn`, fourth. The flag is the target's, not the aimer's, and is spent on
@@ -1411,10 +1407,7 @@ static func _check_hit(turn: Gen2Turn) -> void:
 	# `.FlyDigMoves`, fifth, and behind the lock-on question for that reason.
 	if _is_hidden(turn.defender().substatus) \
 		and not _can_hit_hidden(turn.move_number, turn.defender().substatus):
-		turn.missed = true
-		turn.emit(Gen2Battle.MISSED, {"target": turn.target})
-		if not CONTINUES_AFTER_MISS.has(turn.effect()):
-			_failure_text(turn)
+		_miss(turn)
 		return
 
 	# `.ThunderRain`, ahead of the stat modifiers and the roll: Thunder never
@@ -1455,10 +1448,7 @@ static func _check_hit(turn: Gen2Turn) -> void:
 		return
 	# `.Miss` keeps the worked-out damage for Jump Kick alone, since
 	# `BattleCommand_FailureText` is about to take an eighth of it off the user.
-	turn.missed = true
-	turn.emit(Gen2Battle.MISSED, {"target": turn.target})
-	if not CONTINUES_AFTER_MISS.has(turn.effect()):
-		_failure_text(turn)
+	_miss(turn)
 
 
 ## `BattleCommand_FailureText`, the half of it that is state rather than words.

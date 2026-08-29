@@ -142,7 +142,7 @@ var _stopped: bool = false
 var _failed: bool = false
 
 
-## An interpreter positioned at [param address] inside [param region], which
+## An interpreter positioned at [param start_address] inside [param region], which
 ## starts at [param base_address].
 ##
 ## [param param] is `wBattleAnimParam`, which the caller sets before playing;
@@ -162,7 +162,7 @@ static func create(
 	return script
 
 
-## Decodes one command at [param start_address]. Returns
+## Decodes one command at [param at_address]. Returns
 ## [code]{ ok, name, byte, operands, size, target }[/code]; `target` is the
 ## start_address a branch would take, or -1. A delay byte answers [constant WAIT] with
 ## its own value as its single operand.

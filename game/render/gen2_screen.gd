@@ -677,7 +677,7 @@ func _max_zoom_step() -> int:
 	return fit_factor(size)
 
 
-## The buffer a scale of [param scale] needs to cover [param area], rounded up
+## The buffer a scale of [param at_scale] needs to cover [param area], rounded up
 ## to a whole block on each axis past the hardware's own screen so the 160x144
 ## interface rectangle lands on a whole tile.
 static func buffer_for(area: Vector2, at_scale: float) -> Vector2i:

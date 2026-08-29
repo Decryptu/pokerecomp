@@ -86,6 +86,24 @@ static func resolve(
 				values["dvs"] = int(roaming.get("dvs", 0))
 			return roamer
 
+	var mon: Dictionary = _wild_mon(record, method, time_of_day, generator, options)
+	if mon.is_empty():
+		return {}
+	var level: int = int(mon["level"])
+	if _blocked_by_repel(level, options):
+		return {}
+	var source: StringName = StringName(options.get("source", SOURCE_NORMAL))
+	return _wild_result(
+		method, source, int(mon["slot"]), int(mon["species"]), level, rate,
+		encounter_roll, int(mon["level_roll"]), force_encounter, roaming_roll, roaming_index
+	)
+
+
+## `ChooseWildEncounter`: the drawn slot, with `.surfmon`'s variance spent.
+static func _wild_mon(
+	record: Dictionary, method: StringName, time_of_day: int,
+	generator: RandomNumberGenerator, options: Dictionary
+) -> Dictionary:
 	var slots: Array = _slots(record, method, time_of_day)
 	var slot: int = _choose_slot(generator, method)
 	if slot < 0 or slot >= slots.size():
@@ -97,25 +115,52 @@ static func resolve(
 	var level: int = int((selected as Dictionary).get("level", 0))
 	if species < 1 or species > RomLayout.SPECIES_COUNT or level < 1 or level > RomLayout.MAX_LEVEL:
 		return {}
-	## `ChooseWildEncounter`'s last test, after `ValidateTempWildMonSpecies` and
-	## on the drawn slot rather than the table: a wild UNOWN is refused outright
-	## while `wUnlockedUnowns` is zero, which is every save before the first
-	## Ruins of Alph puzzle. The step finds nothing; it does not draw again.
+	## The last test, after `ValidateTempWildMonSpecies` and on the drawn slot
+	## rather than the table: a wild UNOWN is refused outright while
+	## `wUnlockedUnowns` is zero, which is every save before the first Ruins of
+	## Alph puzzle.
 	if species == RomLayout.UNOWN_SPECIES and int(options.get("unlocked_unowns", -1)) == 0:
 		return {}
-
 	var level_roll: int = -1
 	if method == METHOD_SURF:
 		level_roll = generator.randi_range(0, 255)
-		level += _surf_level_bonus(level_roll)
-		level = mini(level, RomLayout.MAX_LEVEL)
-	if _blocked_by_repel(level, options):
+		level = mini(level + _surf_level_bonus(level_roll), RomLayout.MAX_LEVEL)
+	return {"slot": slot, "species": species, "level": level, "level_roll": level_roll}
+
+
+static func _fishing_slot(entries: Array, slot_roll: int) -> Dictionary:
+	for index: int in entries.size():
+		var entry: Variant = entries[index]
+		if not entry is Dictionary:
+			continue
+		if slot_roll <= int((entry as Dictionary).get("threshold", -1)):
+			return {"slot": index, "entry": (entry as Dictionary).duplicate(true)}
+	return {}
+
+
+## `.TimeGroups`: a row may name a time-of-day pair rather than a species.
+static func _fishing_mon(entry: Dictionary, time_groups: Array, time_of_day: int) -> Dictionary:
+	if not entry.has("time_group"):
+		return {
+			"species": int(entry.get("species", 0)),
+			"level": int(entry.get("level", 0)),
+			"time_group": -1,
+		}
+	var time_group: int = int(entry["time_group"])
+	if time_group < 0 or time_group >= time_groups.size():
 		return {}
-	var source: StringName = StringName(options.get("source", SOURCE_NORMAL))
-	return _wild_result(
-		method, source, slot, species, level, rate, encounter_roll, level_roll,
-		force_encounter, roaming_roll, roaming_index
-	)
+	var time_entry: Variant = time_groups[time_group]
+	if not time_entry is Dictionary:
+		return {}
+	var time_key: String = "night" if time_of_day >= Gen2WorldPalette.TIME_NIGHT else "day"
+	var chosen: Variant = (time_entry as Dictionary).get(time_key, {})
+	if not chosen is Dictionary:
+		return {}
+	return {
+		"species": int((chosen as Dictionary).get("species", 0)),
+		"level": int((chosen as Dictionary).get("level", 0)),
+		"time_group": time_group,
+	}
 
 
 static func resolve_fishing(
@@ -147,35 +192,16 @@ static func resolve_fishing(
 	if not entries is Array or (entries as Array).is_empty():
 		return {}
 	var slot_roll: int = generator.randi_range(0, 255)
-	var selected: Dictionary = {}
-	var slot: int = -1
-	for index: int in (entries as Array).size():
-		var entry: Variant = (entries as Array)[index]
-		if not entry is Dictionary:
-			continue
-		if slot_roll <= int((entry as Dictionary).get("threshold", -1)):
-			selected = (entry as Dictionary).duplicate(true)
-			slot = index
-			break
-	if selected.is_empty():
+	var picked: Dictionary = _fishing_slot(entries as Array, slot_roll)
+	if picked.is_empty():
 		return {}
-
-	var time_group: int = -1
-	var species: int = int(selected.get("species", 0))
-	var level: int = int(selected.get("level", 0))
-	if selected.has("time_group"):
-		time_group = int(selected["time_group"])
-		if time_group < 0 or time_group >= time_groups.size():
-			return {}
-		var time_entry: Variant = time_groups[time_group]
-		if not time_entry is Dictionary:
-			return {}
-		var time_key: String = "night" if time_of_day >= Gen2WorldPalette.TIME_NIGHT else "day"
-		var chosen: Variant = (time_entry as Dictionary).get(time_key, {})
-		if not chosen is Dictionary:
-			return {}
-		species = int((chosen as Dictionary).get("species", 0))
-		level = int((chosen as Dictionary).get("level", 0))
+	var slot: int = int(picked["slot"])
+	var mon: Dictionary = _fishing_mon(picked["entry"], time_groups, time_of_day)
+	if mon.is_empty():
+		return {}
+	var time_group: int = int(mon["time_group"])
+	var species: int = int(mon["species"])
+	var level: int = int(mon["level"])
 	if species < 1 or species > RomLayout.SPECIES_COUNT or level < 1 or level > RomLayout.MAX_LEVEL:
 		return {}
 	return {

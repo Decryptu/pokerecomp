@@ -1359,7 +1359,7 @@ func tmhm_move(number: int) -> int:
 
 
 ## CanLearnTMHMMove's own scan of TMHMMoves for wPutativeTMHMMove: the one-based
-## number that teaches [param move], or 0. The source takes the first match, so
+## number that teaches [param move_number], or 0. The source takes the first match, so
 ## this does too.
 func tmhm_number_for_move(move_number: int) -> int:
 	if move_number <= 0:
@@ -1719,8 +1719,6 @@ func special_text(run: String, name: String) -> String:
 	return String((boxes as Dictionary).get(name, "")) if boxes is Dictionary else ""
 
 
-## Whether the cartridge shipped [param run] at all, which is not the same
-## question as whether one box of it is empty.
 ## The WRAM address a `text_ram` in one of those boxes names, by the name
 ## `RomLayout`'s own `special_text_ram` gives it, or -1 on a cartridge that
 ## ships no such buffer.
@@ -1728,6 +1726,8 @@ func special_text_ram(name: String) -> int:
 	return int(_special_text_ram.get(name, -1))
 
 
+## Whether the cartridge shipped [param run] at all, which is not the same
+## question as whether one box of it is empty.
 func has_special_text(run: String) -> bool:
 	return (_special_text.get(run, {}) as Dictionary).size() > 0 \
 		if _special_text.get(run, {}) is Dictionary else false

@@ -1061,7 +1061,7 @@ func lucky_number_day() -> int:
 ## `LoadOrRegenerateLuckyIDNumber`. `sLuckyNumberDay` holds `wCurDay + 1`, so a
 ## stored zero is "no number has ever been drawn" rather than "drawn on day
 ## zero", and a day whose stored value already matches keeps the number it had.
-## [param roll] is spent only when a new number is drawn, which is the two
+## [param random] is spent only when a new number is drawn, which is the two
 ## `Random` calls the source makes in that branch alone.
 func refresh_lucky_id_number(day: int, random: RandomNumberGenerator) -> bool:
 	var stamp: int = (day + 1) & 0xFF

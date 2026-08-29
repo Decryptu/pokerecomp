@@ -12,8 +12,6 @@ extends RefCounted
 const TILE: int = Gen2Tiles.TILE_WIDTH
 const COLUMNS: int = 20
 const ROWS: int = 18
-## A sprite never draws its first colour.
-const TRANSPARENT_INDEX: int = 0
 ## The shadow-OAM origin [Gen2GameFreakPresentsPage] records.
 const OAM_ORIGIN := Vector2i(8, 16)
 ## `wShadowOAM` holds forty sprites.
@@ -494,7 +492,7 @@ func _gs_palette(row: int, column: int) -> int:
 ## and the one after it the bottom.
 func _draw_sprite(pixels: PackedInt32Array, entry: Dictionary) -> void:
 	var palette: PackedColorArray = _palette(_object, int(entry["palette"]))
-	if palette.size() <= TRANSPARENT_INDEX:
+	if palette.size() <= Gen2PicImage.TRANSPARENT_INDEX:
 		return
 	var table: PackedInt32Array = Gen2PicImage.lookup(palette)
 	var to := Vector2i(int(entry["x"]) - OAM_ORIGIN.x, int(entry["y"]) - OAM_ORIGIN.y)
@@ -646,7 +644,7 @@ func _blit_sprite_tile(
 			if from < 0 or from >= tiles.size():
 				continue
 			var value: int = tiles[from]
-			if value == TRANSPARENT_INDEX or value >= table.size():
+			if value == Gen2PicImage.TRANSPARENT_INDEX or value >= table.size():
 				continue
 			var at_pixel: int = row + target_x
 			if _taken[at_pixel] != 0:
