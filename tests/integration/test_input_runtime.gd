@@ -104,6 +104,27 @@ func test_automatic_shows_the_controller_only_while_a_finger_is_on_the_screen() 
 	assert_false(_runtime.touch_controls_shown(), "a pad puts them away")
 
 
+## Reported from a released Android build: Android's Back put the on-screen
+## controller away and grew the game screen into the room it left, on `auto`
+## only, since `always` never asks which device is in use. A phone's own
+## furniture arrives as key events and a phone has no keyboard to pick up.
+func test_a_phone_key_does_not_put_the_on_screen_controller_away() -> void:
+	_runtime._handheld = true
+	_runtime._input(InputEventScreenTouch.new())
+	assert_true(_runtime.touch_controls_shown(), "a finger shows them")
+
+	var back := InputEventKey.new()
+	back.physical_keycode = KEY_BACK
+	back.pressed = true
+	_runtime._input(back)
+	assert_eq(_runtime.device(), Gen2InputDevice.TOUCH, "Back is the phone, not a keyboard")
+	assert_true(_runtime.touch_controls_shown(), "and the controller stays up")
+
+	_runtime._input(InputEventJoypadButton.new())
+	assert_false(_runtime.touch_controls_shown(), "a pad plugged into it still does")
+	_runtime._handheld = Gen2InputDevice.is_handheld()
+
+
 func test_the_pinned_modes_ignore_the_device() -> void:
 	for pair: Array in [[Gen2Options.TOUCH_ALWAYS, true], [Gen2Options.TOUCH_NEVER, false]]:
 		var options := Gen2Options.new()

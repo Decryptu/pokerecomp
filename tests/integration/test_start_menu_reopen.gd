@@ -104,3 +104,27 @@ func test_back_opens_the_start_menu_and_then_closes_it() -> void:
 	assert_not_null(_screen._start_menu_host, "a back press on the map is a pause")
 	_screen._on_back_requested()
 	assert_null(_screen._start_menu_host, "and the next one backs out of it")
+
+
+## Reported from a released Android build: Back over the map put the on-screen
+## controller away and the game screen grew into the room it left, on `auto`
+## only. `always` hid it because that mode never asks which device is in use.
+func test_back_leaves_the_on_screen_controller_where_it_was() -> void:
+	var runtime: Gen2InputRuntime = Gen2InputRuntime.instance()
+	runtime._input(InputEventScreenTouch.new())
+	assert_true(runtime.touch_controls_shown(), "a finger shows the controller")
+	var pad: Gen2TouchPad = _pad()
+	assert_not_null(pad, "the world screen builds one")
+	var was: Rect2 = Rect2(pad.position, pad.size)
+
+	_screen._on_back_requested()
+	await get_tree().process_frame
+	assert_true(runtime.touch_controls_shown(), "and Back is not another device")
+	assert_eq(Rect2(pad.position, pad.size), was, "the split does not move")
+
+
+func _pad() -> Gen2TouchPad:
+	for node: Node in _screen.find_children("*", "Control", true, false):
+		if node is Gen2TouchPad:
+			return node
+	return null

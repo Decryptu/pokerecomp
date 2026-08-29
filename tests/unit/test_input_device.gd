@@ -25,6 +25,56 @@ func test_a_mouse_event_emulated_from_a_touch_reads_as_touch() -> void:
 	assert_eq(Gen2InputDevice.kind_of(click), Gen2InputDevice.TOUCH)
 
 
+## Android sends Back, its navigation bar and its volume rocker as key events,
+## and a phone has no keyboard of its own. Read as one they put the on-screen
+## controller away mid-game and the screen grew into the room it left, which is
+## what a player reported.
+func test_a_phone_has_no_keyboard_and_no_mouse_to_pick_up() -> void:
+	var back := InputEventKey.new()
+	back.physical_keycode = KEY_BACK
+	assert_eq(Gen2InputDevice.evidence_of(back, true), &"")
+	assert_eq(Gen2InputDevice.evidence_of(InputEventMouseButton.new(), true), &"")
+	assert_eq(
+		Gen2InputDevice.evidence_of(InputEventScreenTouch.new(), true), Gen2InputDevice.TOUCH
+	)
+	assert_eq(
+		Gen2InputDevice.evidence_of(InputEventJoypadButton.new(), true),
+		Gen2InputDevice.GAMEPAD,
+		"a pad plugged into a phone is still a pad",
+	)
+
+
+func test_evidence_is_the_kind_for_everything_a_player_holds() -> void:
+	var typed := InputEventKey.new()
+	typed.physical_keycode = KEY_Z
+	assert_eq(Gen2InputDevice.evidence_of(typed, false), Gen2InputDevice.KEYBOARD)
+	assert_eq(
+		Gen2InputDevice.evidence_of(InputEventScreenTouch.new(), false), Gen2InputDevice.TOUCH
+	)
+	assert_eq(
+		Gen2InputDevice.evidence_of(InputEventJoypadButton.new(), false),
+		Gen2InputDevice.GAMEPAD,
+	)
+	assert_eq(
+		Gen2InputDevice.evidence_of(InputEventMouseButton.new(), false), Gen2InputDevice.MOUSE
+	)
+
+
+## A desk knocked while the player holds a pad would otherwise hide the
+## interface they are looking at, and a drifting stick would do it with nobody
+## in the room. A click and a push past the deadzone are evidence; neither of
+## these is.
+func test_a_pointer_that_moved_and_a_stick_that_did_not_are_not_evidence() -> void:
+	assert_eq(Gen2InputDevice.kind_of(InputEventMouseMotion.new()), Gen2InputDevice.MOUSE)
+	assert_eq(Gen2InputDevice.evidence_of(InputEventMouseMotion.new(), false), &"")
+
+	var drift := InputEventJoypadMotion.new()
+	drift.axis_value = Gen2InputActions.DEADZONE - 0.01
+	assert_eq(Gen2InputDevice.evidence_of(drift, false), &"")
+	drift.axis_value = Gen2InputActions.DEADZONE
+	assert_eq(Gen2InputDevice.evidence_of(drift, false), Gen2InputDevice.GAMEPAD)
+
+
 func test_pointers_are_the_kinds_that_need_no_focus_ring() -> void:
 	assert_true(Gen2InputDevice.is_pointer(Gen2InputDevice.MOUSE))
 	assert_true(Gen2InputDevice.is_pointer(Gen2InputDevice.TOUCH))
