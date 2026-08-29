@@ -539,8 +539,24 @@ func refresh() -> void:
 ## nothing else, so an earthquake moves the background under the sprites standing
 ## on it rather than moving the picture.
 func _background_camera() -> Vector2:
-	var camera: Vector2 = _world.view_origin_pixels()
+	var camera: Vector2 = _camera_pixels()
 	return camera if _effects == null else camera + _effects.offset()
+
+
+## The camera, snapped to the finest step this surface can draw: at six screen
+## pixels to a hardware one the map scrolls six times as often, and one snap
+## shared by every quad and sprite is what stops them crawling against each
+## other. At one step this is [method Gen2WorldAPI.view_origin_pixels] exactly.
+func _camera_pixels() -> Vector2:
+	var steps: float = float(_subpixel_steps())
+	return (_world.view_origin_subpixel() * steps).round() / steps
+
+
+func _subpixel_steps() -> int:
+	var surface: Viewport = get_viewport()
+	if surface == null:
+		return 1
+	return maxi(1, int(surface.canvas_transform.get_scale().x))
 
 
 ## Lays the map quads out under this frame's camera.
@@ -718,7 +734,7 @@ func _draw() -> void:
 		draw_rect(Rect2(Vector2.ZERO, Vector2(view_pixels())), _background_color, true)
 		return
 
-	var camera_pixels: Vector2 = _world.view_origin_pixels()
+	var camera_pixels: Vector2 = _camera_pixels()
 	var background: Vector2 = _background_camera()
 	_draw_hidden_trees(background)
 	if not _transition_cells.is_empty():

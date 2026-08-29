@@ -157,8 +157,7 @@ const TEXT_FALLBACKS: Dictionary = {
 const ITEM_MENU_LEFT: int = 13
 const ITEM_MENU_RIGHT: int = 19
 const ITEM_MENU_BOTTOM: int = 11
-## `YesNoBox`'s own `lb bc, SCREEN_WIDTH - 6, 7`, which `_YesNoBox` turns into
-## left 14, right 19, top 7, bottom 11.
+## [method Gen2MenuBox.yes_no]'s box: left 14, right 19, top 7, bottom 11.
 const YES_NO_AT: Vector2i = Vector2i(14, 7)
 const YES_NO_SPAN: Vector2i = Vector2i(5, 4)
 ## `TossItem_MenuHeader`: `menu_coords 15, 9, SCREEN_WIDTH - 1, TEXTBOX_Y - 1`.

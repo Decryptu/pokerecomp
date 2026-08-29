@@ -633,6 +633,11 @@ func _build_renderer() -> void:
 		_renderer.call(Gen2ModHost.RENDERER_ACTORS_METHOD, _actors)
 	if _renderer.has_method(Gen2ModHost.RENDERER_ENCOUNTERS_METHOD):
 		_renderer.call(Gen2ModHost.RENDERER_ENCOUNTERS_METHOD, _encounters)
+	## SMOOTH SCROLL again: a pass drawn a pixel at a time still steps a whole
+	## hardware pixel, twelve screen ones on a laptop panel. A native view is
+	## already at the window's resolution. See [member Gen2Screen.subpixel].
+	_screen.subpixel = Gen2OptionsStore.current().smooth_scroll \
+		and Gen2ModHost.renderer_uses_hardware_viewport(_renderer)
 	_set_renderer_world()
 	_renderer.set_time_of_day(_render_time_of_day())
 	_apply_renderer_interface_style()

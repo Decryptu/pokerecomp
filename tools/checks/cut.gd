@@ -12,8 +12,7 @@ var _r: RefCounted = null
 ## out of the forest.
 
 
-## constants/map_constants.asm, DUNGEONS group. Crystal's extra maps push
-## Ilex Forest eight places later within the same group.
+## constants/map_constants.asm, DUNGEONS group; Crystal's sit eight later.
 const ILEX_GROUP: int = 3
 const ILEX_NUMBER_CRYSTAL: int = 52
 const ILEX_NUMBER_GOLD_SILVER: int = 44

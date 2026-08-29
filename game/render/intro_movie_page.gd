@@ -228,7 +228,6 @@ func draw(movie: Gen2IntroMovie) -> Image:
 	var background: Array = _draw_background(pixels, movie)
 	var behind: PackedByteArray = background[0]
 	var forced: PackedByteArray = background[1]
-	# The lower OAM index wins a pixel.
 	var taken := PackedByteArray()
 	taken.resize(WIDTH * HEIGHT)
 	for entry: Dictionary in shadow_oam(movie):

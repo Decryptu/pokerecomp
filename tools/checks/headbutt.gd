@@ -12,9 +12,7 @@ var _r: RefCounted = null
 ## games.
 
 
-## constants/map_constants.asm, DUNGEONS group. Crystal's extra maps push
-## Ilex Forest eight places later within the same group, as validate_cut.gd
-## records for the same map.
+## constants/map_constants.asm, DUNGEONS group; Crystal's sit eight later.
 const ILEX_GROUP: int = 3
 const ILEX_NUMBER_CRYSTAL: int = 52
 const ILEX_NUMBER_GOLD_SILVER: int = 44

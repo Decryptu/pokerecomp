@@ -10,8 +10,7 @@ extends RefCounted
 const STATICMENU_ENABLE_LEFT_RIGHT: int = Gen2MenuBox.STATICMENU_ENABLE_LEFT_RIGHT
 const STATICMENU_WRAP: int = Gen2MenuBox.STATICMENU_WRAP
 
-## `YesNoBox`'s own `lb bc, SCREEN_WIDTH - 6, 7`, which `_YesNoBox` turns into
-## the five-wide, four-tall box at (14,7). A `choice` pending value carries no
+## [method Gen2MenuBox.yes_no]'s box. A `choice` pending value carries no
 ## `loadmenu` header, since `Script_yesorno` never loads one, so this is the
 ## box every such prompt falls back to.
 const YES_NO_LEFT: int = 14

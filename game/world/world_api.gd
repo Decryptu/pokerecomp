@@ -817,8 +817,13 @@ func view_surround_offset() -> Vector2i:
 ## [method visible_origin_cells] for a hardware-sized view. Whole pixels: the map
 ## quads and every sprite standing on them are placed from this one number.
 func view_origin_pixels() -> Vector2:
-	return (visible_origin_cells() * float(CELL_PIXELS) \
-		- Vector2(view_surround_offset())).round()
+	return view_origin_subpixel().round()
+
+
+## The same before it is rounded, for a surface able to draw between two pixels.
+func view_origin_subpixel() -> Vector2:
+	return visible_origin_cells() * float(CELL_PIXELS) \
+		- Vector2(view_surround_offset())
 
 
 ## The player's screen pixel, which is PLAYER_VIEW_CELL for as long as the

@@ -2,13 +2,12 @@ class_name Gen2Screen
 extends Control
 
 ## A Game Boy Color screen: 160x144 pixels, scaled by a whole number to fit. What
-## the game draws goes into a hardware-sized [SubViewport] blown up by an integer
-## factor, since any other scale resamples an 8x8 tile into something that crawls
-## when it moves. [method display_native] is a second layer behind it at window
-## resolution. [member expanded] widens the buffer instead of framing it, and
-## [method display] still centres a 160x144 rectangle in it, so only the surround
-## grows. SCREEN FILL is read here rather than by each screen, which is what makes
-## a screen written next year responsive without saying anything about it.
+## the game draws goes into a [SubViewport] blown up by an integer factor, since
+## any other scale resamples an 8x8 tile into something that crawls when it moves.
+## [method display_native] is a second layer behind it at window resolution, and
+## [member expanded] widens the buffer instead of framing it while
+## [method display] still centres a 160x144 rectangle in it. SCREEN FILL is read
+## here rather than by each screen.
 
 const WIDTH: int = 160
 const HEIGHT: int = 144
@@ -26,6 +25,10 @@ const BUFFER_STEP: int = 32
 ## How far past the fitting scale a player may zoom out. Three steps reaches
 ## MIN_SCALE from a 1x window, and the same three from any other.
 const ZOOM_OUT_STEPS: int = 3
+## The most steps of one hardware pixel [member subpixel] will draw at. Each
+## costs the whole buffer's fill rate, and six already turns a twelve-pixel jump
+## into a two-pixel one.
+const SUBPIXEL_STEPS_MAX: int = 6
 
 ## After a resize changes the factor. Nothing in the game should care.
 signal scale_changed(factor: int)
@@ -60,6 +63,17 @@ var zoom_step: int = 0:
 		_fit()
 
 var _zoom_step: int = 0
+
+## Whether the buffer is drawn at a whole multiple of its own resolution, so a
+## view in it can place itself on a screen pixel rather than a hardware one.
+## Everything keeps hardware-pixel coordinates: the canvas transform does the
+## magnification the container used to and the picture is the same one.
+var subpixel: bool = false:
+	set(value):
+		if subpixel == value:
+			return
+		subpixel = value
+		_fit()
 
 ## Whether the buffer outside the 160x144 rectangle is filled by this screen.
 ##
@@ -141,6 +155,8 @@ func _ready() -> void:
 	# The viewport's size is the container's divided by the shrink factor, and
 	# writing it directly is refused at runtime.
 	resized.connect(_fit)
+	_viewport.canvas_item_default_texture_filter = \
+		Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
 	_content = Control.new()
 	_content.name = "Content"
 	_content.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -178,11 +194,9 @@ func _ready() -> void:
 
 
 ## Takes SCREEN FILL from the options file and applies it, for every screen rather
-## than the two that remembered to ask: a window is not 10:9, and a screen that
-## does not fill it leaves bars a player reads as a fault. What a screen puts in
-## the room is its own business; having the room is not. Public and idempotent
-## because the option is the file's rather than this frame's, so a caller that
-## changed it after the screen entered the tree is obeyed.
+## than the two that remembered to ask. What a screen puts in the room is its own
+## business; having the room is not. Public and idempotent because the option is
+## the file's, so a caller that changed it after this entered the tree is obeyed.
 func apply_screen_fill() -> void:
 	expanded = Gen2OptionsStore.current().screen_fill
 
@@ -224,6 +238,7 @@ func native_size() -> Vector2i:
 ## The drawn buffer in hardware pixels: 160x144 unless [member expanded].
 func view_size() -> Vector2i:
 	return _view_size
+
 
 
 ## The cartridge's own 160x144 screen, in the native layer's own pixels.
@@ -691,6 +706,15 @@ static func buffer_for(area: Vector2, at_scale: float) -> Vector2i:
 	)
 
 
+## The finest step [param whole] can be divided into, since the container shrinks
+## the buffer by a whole number and [constant SUBPIXEL_STEPS_MAX] is the ceiling.
+static func _subpixel_for(whole: int) -> int:
+	for steps: int in range(mini(whole, SUBPIXEL_STEPS_MAX), 1, -1):
+		if whole % steps == 0:
+			return steps
+	return 1
+
+
 func _fit() -> void:
 	var factor: int = fit_factor(size)
 	# A resize moves the fitting scale, so a step chosen against the old one can
@@ -703,20 +727,25 @@ func _fit() -> void:
 	var drawn: Vector2 = Vector2(view) * scale_now
 
 	# A whole-number scale keeps the proven shrink path, where the container is
-	# the drawn size and the viewport is that divided by the factor. Below one
-	# the shrink cannot express the ratio, so the container is the buffer and the
-	# texture is scaled down instead.
+	# the drawn size and the viewport is that divided by what the canvas
+	# transform does not magnify. Below one the shrink cannot express the ratio,
+	# so the container is the buffer and the texture is scaled down instead.
+	var steps: int = 1
 	if scale_now >= 1.0 and is_equal_approx(scale_now, roundf(scale_now)):
-		_container.stretch_shrink = int(roundf(scale_now))
+		var whole: int = int(roundf(scale_now))
+		steps = _subpixel_for(whole) if subpixel else 1
+		_container.stretch_shrink = whole / steps
 		_container.scale = Vector2.ONE
 		_container.size = drawn
 	else:
 		_container.stretch_shrink = 1
 		_container.size = Vector2(view)
 		_container.scale = Vector2(scale_now, scale_now)
-	# Nearest is what keeps a hardware pixel a square block of screen pixels, and
-	# it is the wrong answer in the one place the picture is made smaller rather
-	# than larger: dropping three pixels in four turns a tree wall into moire.
+	_viewport.canvas_transform = Transform2D().scaled(Vector2(steps, steps))
+	# Nearest is what keeps a hardware pixel a square block of screen pixels, in
+	# here and in the viewport that [member subpixel] magnifies inside, and it is
+	# the wrong answer in the one place the picture is made smaller rather than
+	# larger: dropping three pixels in four turns a tree wall into moire.
 	_container.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST if scale_now >= 1.0 \
 		else CanvasItem.TEXTURE_FILTER_LINEAR
 	# Centred rather than anchored: an uneven margin is visible.

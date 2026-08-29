@@ -316,9 +316,8 @@ func draw(scene: Gen2TitleScene) -> Image:
 	var pixels: PackedInt32Array = _compose(scene, behind)
 	_draw_copyright_window(pixels, scene)
 
-	# The lower OAM index wins a pixel, so a slot only paints where no earlier
-	# one did: Gold's bird is copied into the last struct, so every trail spawned
-	# after it still takes a lower slot and covers it.
+	# Gold's bird is copied into the last struct, so every trail spawned after it
+	# still takes a lower slot and covers it.
 	_taken.resize(width * height)
 	_taken.fill(0)
 	for entry: Dictionary in sprites:
