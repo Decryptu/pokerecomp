@@ -1115,23 +1115,9 @@ func start_world_battle(
 		if save != null else Gen2WorldBattleAdapter.fallback_party(_data)
 	)
 	var crystal: bool = Gen2WorldState.is_crystal_profile(_data)
-	var badge_mask: int = player_badges
-	if badge_mask < 0 and save != null and save.world != null \
-		and save.world.world_state != null:
-		badge_mask = save.world.world_state.badge_mask(crystal)
-	if badge_mask < 0:
-		badge_mask = 0
-	## `wUnlockedUnowns`, which `CheckUnownLetter` gates a rolled wild Unown's
-	## letter on. Stamped here because the adapter is scene-free and this is the
-	## one path that has the save; a request without it takes whatever it rolled.
-	var stamped: Dictionary = request.duplicate(true)
-	if save != null and save.world != null and save.world.world_state != null:
-		var stamped_values: Variant = stamped.get("values", stamped)
-		if stamped_values is Dictionary:
-			(stamped_values as Dictionary)["unlocked_unowns"] = \
-				save.world.world_state.unlocked_unowns(crystal)
 	var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(
-		_data, stamped, player_party, _rng, badge_mask, _injected_rules
+		_data, _stamped_request(request, save, crystal), player_party, _rng,
+		_world_badge_mask(save, crystal, player_badges), _injected_rules
 	)
 	if not bool(prepared.get("ok", false)):
 		_emit_world_battle_failure(
@@ -1139,7 +1125,38 @@ func start_world_battle(
 			prepared.get("details", {})
 		)
 		return false
+	_begin_world_battle(prepared, save)
+	if bool(prepared.get("trainer_battle", false)):
+		show_message("%s\nwants to battle!" % _enemy_battler_label())
+	else:
+		_announce()
+	return true
 
+
+func _world_badge_mask(save: Gen2SaveData, crystal: bool, player_badges: int) -> int:
+	if player_badges >= 0:
+		return player_badges
+	if save == null or save.world == null or save.world.world_state == null:
+		return 0
+	return maxi(save.world.world_state.badge_mask(crystal), 0)
+
+
+## [param request] with `wUnlockedUnowns`, which `CheckUnownLetter` gates a rolled
+## wild Unown's letter on. Stamped here because the adapter is scene-free and this
+## is the one path that has the save; a request without it takes whatever it
+## rolled.
+func _stamped_request(request: Dictionary, save: Gen2SaveData, crystal: bool) -> Dictionary:
+	var stamped: Dictionary = request.duplicate(true)
+	if save == null or save.world == null or save.world.world_state == null:
+		return stamped
+	var stamped_values: Variant = stamped.get("values", stamped)
+	if stamped_values is Dictionary:
+		(stamped_values as Dictionary)["unlocked_unowns"] = \
+			save.world.world_state.unlocked_unowns(crystal)
+	return stamped
+
+
+func _begin_world_battle(prepared: Dictionary, save: Gen2SaveData) -> void:
 	_world_battle_active = true
 	_world_battle_request = (prepared.get("request", {}) as Dictionary).duplicate(true)
 	_world_battle_tutorial = bool(_world_battle_request.get("tutorial", false))
@@ -1177,22 +1194,18 @@ func start_world_battle(
 	_dex_received = false
 	_init_battle_display()
 	_play_battle_music()
-	## The Dude's bag, not the player's, which is why the world hands none.
 	if _world_battle_tutorial:
-		## `.DudeTutorial` forces TEXT_DELAY_MED over the player's own TEXT SPEED.
-		if _box != null:
-			_box.reveal_speed = 1.0 / (Gen2Options.FRAME_SECONDS * Gen2Options.TEXT_DELAY_MED)
-		_stop_auto_input()
-		set_battle_pack(DUDE_PACK, DUDE_PACK_QUANTITIES)
-		set_capture_balls(
-			[Gen2WorldPartyHost.ITEM_POKE_BALL], DUDE_PACK_QUANTITIES
-		)
+		_set_up_dude_tutorial()
 
-	if bool(prepared.get("trainer_battle", false)):
-		show_message("%s\nwants to battle!" % _enemy_battler_label())
-	else:
-		_announce()
-	return true
+
+## The Dude's bag, not the player's, which is why the world hands none.
+func _set_up_dude_tutorial() -> void:
+	## `.DudeTutorial` forces TEXT_DELAY_MED over the player's own TEXT SPEED.
+	if _box != null:
+		_box.reveal_speed = 1.0 / (Gen2Options.FRAME_SECONDS * Gen2Options.TEXT_DELAY_MED)
+	_stop_auto_input()
+	set_battle_pack(DUDE_PACK, DUDE_PACK_QUANTITIES)
+	set_capture_balls([Gen2WorldPartyHost.ITEM_POKE_BALL], DUDE_PACK_QUANTITIES)
 
 
 ## Public screenshot driver for the overworld battle loss boundary. It starts a
@@ -4552,7 +4565,23 @@ func _reopen_menu_layer() -> void:
 func _refresh_menu_layer() -> void:
 	if _menu_layer == null:
 		return
-	var signature: String = "%s|%s|%d|%d|%d|%s|%s|%s" % [
+	var signature: String = _menu_signature()
+	if signature == _menu_drawn:
+		return
+	_menu_drawn = signature
+	## The move rows and which one the cursor is on are part of the snapshot, so
+	## the annotations move with the menu as well as with the battle.
+	_refresh_annotations()
+
+	if _info_layer != null:
+		_info_layer.visible = false
+	if _battle_menu_layer != null:
+		_battle_menu_layer.visible = false
+	_draw_menu_layer()
+
+
+func _menu_signature() -> String:
+	return "%s|%s|%d|%d|%d|%s|%s|%s" % [
 		_switch_stage, _menu_stage,
 		_switch_offer.selected_index() if _switch_offer != null else (
 			_switch_menu.cursor if _switch_menu != null else -1
@@ -4573,17 +4602,9 @@ func _refresh_menu_layer() -> void:
 		## whether the page still draws what the layer is holding.
 		_party_page.animation_signature() if _party_page != null else "",
 	]
-	if signature == _menu_drawn:
-		return
-	_menu_drawn = signature
-	## The move rows and which one the cursor is on are part of the snapshot, so
-	## the annotations move with the menu as well as with the battle.
-	_refresh_annotations()
 
-	if _info_layer != null:
-		_info_layer.visible = false
-	if _battle_menu_layer != null:
-		_battle_menu_layer.visible = false
+
+func _draw_menu_layer() -> void:
 	match _switch_stage:
 		&"contest_replace":
 			_draw_contest_stats()
@@ -4594,8 +4615,6 @@ func _refresh_menu_layer() -> void:
 		&"pick", &"refused":
 			_draw_party_page()
 			return
-	## Each of these is a list in front of the fight, and each owns the joypad
-	## while it stands, so at most one of them is up at a time.
 	if _forget_stage != &"":
 		_draw_forget_stage()
 		return
@@ -5689,104 +5708,117 @@ func _renderer_input_free() -> bool:
 func _handle_button(button: int) -> bool:
 	if _capture_nickname_host != null:
 		return _capture_nickname_host.handle_button(button)
-
-	if _forget_stage != &"":
-		_answer_forget(button)
-		return true
-
-	if _switch_stage != &"":
-		_answer_switch(button)
-		return true
-
-	if _menu_stage != &"":
-		_answer_menu(button)
-		return true
-
-	if _pack_move_selecting:
-		match button:
-			Gen2Button.RIGHT, Gen2Button.DOWN:
-				_pack_move_index = posmod(_pack_move_index + 1, _pack_move_slots.size())
-				_show_pack_move_selection()
-			Gen2Button.LEFT, Gen2Button.UP:
-				_pack_move_index = posmod(_pack_move_index - 1, _pack_move_slots.size())
-				_show_pack_move_selection()
-			Gen2Button.A:
-				_use_pack_item(
-					_pack_item, _pack_move_target, int(_pack_move_slots[_pack_move_index])
-				)
-			Gen2Button.B:
-				_close_pack_move()
-				open_battle_pack()
-			_:
-				return false
-		return true
-
-	if _pack_action_stage != &"":
-		match button:
-			Gen2Button.RIGHT, Gen2Button.DOWN:
-				_pack_action_index = posmod(_pack_action_index + 1, PACK_ACTIONS.size())
-				_reopen_menu_layer()
-			Gen2Button.LEFT, Gen2Button.UP:
-				_pack_action_index = posmod(_pack_action_index - 1, PACK_ACTIONS.size())
-				_reopen_menu_layer()
-			Gen2Button.A:
-				var over: StringName = _pack_action_stage
-				_pack_action_stage = &""
-				if _pack_action_index == 0:
-					if over == &"capture":
-						throw_capture_ball()
-					else:
-						use_selected_pack_item()
-				else:
-					_reopen_menu_layer()
-			Gen2Button.B:
-				## `.Quit` is a bare `ret`, so the list the row was chosen from
-				## is still standing under the box that just closed.
-				_pack_action_stage = &""
-				_reopen_menu_layer()
-			_:
-				return false
-		return true
-
-	if _pack_selecting:
-		match button:
-			Gen2Button.RIGHT, Gen2Button.DOWN:
-				select_pack_row(_pack_index + 1)
-			Gen2Button.LEFT, Gen2Button.UP:
-				select_pack_row(_pack_index - 1)
-			Gen2Button.A:
-				## `BattleMenu_Pack.tutorial` discards what `TutorialPack` answered
-				## and throws a POKE BALL anyway, so there is no USE submenu.
-				if _world_battle_tutorial:
-					_pack_selecting = false
-					_throw_ball(Gen2WorldPartyHost.ITEM_POKE_BALL, &"pack")
-				else:
-					_open_pack_action(&"pack")
-			Gen2Button.B:
-				close_battle_pack()
-			_:
-				return false
-		return true
-
-	if _capture_selecting:
-		match button:
-			Gen2Button.RIGHT, Gen2Button.DOWN:
-				select_capture_ball(_capture_ball_index + 1)
-			Gen2Button.LEFT, Gen2Button.UP:
-				select_capture_ball(_capture_ball_index - 1)
-			Gen2Button.A:
-				_open_pack_action(&"capture")
-			Gen2Button.B:
-				_clear_capture_action()
-				show_message("Choose an action.")
-			_:
-				return false
-		return true
-
+	for row: Array in [
+		[_forget_stage != &"", _answer_forget],
+		[_switch_stage != &"", _answer_switch],
+		[_menu_stage != &"", _answer_menu],
+	]:
+		if bool(row[0]):
+			(row[1] as Callable).call(button)
+			return true
+	for row: Array in _keyed_modals():
+		if bool(row[0]):
+			return (row[1] as Callable).call(button)
 	if button == Gen2Button.A:
 		advance()
 		return true
 	return false
+
+
+## The modal states with a key map of their own, in the order they claim a press.
+## A button none of them names is refused rather than falling through to the A
+## press below them.
+func _keyed_modals() -> Array:
+	return [
+		[_pack_move_selecting, _button_pack_move],
+		[_pack_action_stage != &"", _button_pack_action],
+		[_pack_selecting, _button_pack],
+		[_capture_selecting, _button_capture],
+	]
+
+
+func _button_pack_move(button: int) -> bool:
+	match button:
+		Gen2Button.RIGHT, Gen2Button.DOWN:
+			_pack_move_index = posmod(_pack_move_index + 1, _pack_move_slots.size())
+			_show_pack_move_selection()
+		Gen2Button.LEFT, Gen2Button.UP:
+			_pack_move_index = posmod(_pack_move_index - 1, _pack_move_slots.size())
+			_show_pack_move_selection()
+		Gen2Button.A:
+			_use_pack_item(
+				_pack_item, _pack_move_target, int(_pack_move_slots[_pack_move_index])
+			)
+		Gen2Button.B:
+			_close_pack_move()
+			open_battle_pack()
+		_:
+			return false
+	return true
+
+
+func _button_pack_action(button: int) -> bool:
+	match button:
+		Gen2Button.RIGHT, Gen2Button.DOWN:
+			_pack_action_index = posmod(_pack_action_index + 1, PACK_ACTIONS.size())
+			_reopen_menu_layer()
+		Gen2Button.LEFT, Gen2Button.UP:
+			_pack_action_index = posmod(_pack_action_index - 1, PACK_ACTIONS.size())
+			_reopen_menu_layer()
+		Gen2Button.A:
+			var over: StringName = _pack_action_stage
+			_pack_action_stage = &""
+			if _pack_action_index != 0:
+				_reopen_menu_layer()
+			elif over == &"capture":
+				throw_capture_ball()
+			else:
+				use_selected_pack_item()
+		Gen2Button.B:
+			## `.Quit` is a bare `ret`, so the list the row was chosen from
+			## is still standing under the box that just closed.
+			_pack_action_stage = &""
+			_reopen_menu_layer()
+		_:
+			return false
+	return true
+
+
+func _button_pack(button: int) -> bool:
+	match button:
+		Gen2Button.RIGHT, Gen2Button.DOWN:
+			select_pack_row(_pack_index + 1)
+		Gen2Button.LEFT, Gen2Button.UP:
+			select_pack_row(_pack_index - 1)
+		Gen2Button.A:
+			## `BattleMenu_Pack.tutorial` discards what `TutorialPack` answered
+			## and throws a POKE BALL anyway, so there is no USE submenu.
+			if _world_battle_tutorial:
+				_pack_selecting = false
+				_throw_ball(Gen2WorldPartyHost.ITEM_POKE_BALL, &"pack")
+			else:
+				_open_pack_action(&"pack")
+		Gen2Button.B:
+			close_battle_pack()
+		_:
+			return false
+	return true
+
+
+func _button_capture(button: int) -> bool:
+	match button:
+		Gen2Button.RIGHT, Gen2Button.DOWN:
+			select_capture_ball(_capture_ball_index + 1)
+		Gen2Button.LEFT, Gen2Button.UP:
+			select_capture_ball(_capture_ball_index - 1)
+		Gen2Button.A:
+			_open_pack_action(&"capture")
+		Gen2Button.B:
+			_clear_capture_action()
+			show_message("Choose an action.")
+		_:
+			return false
+	return true
 
 
 ## Development drivers for a screen with no battle menu: they take a turn, hurt

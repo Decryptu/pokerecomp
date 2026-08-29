@@ -3618,79 +3618,84 @@ func _player_cell() -> Vector2i:
 
 
 func _read_runtime_variable(variable: int) -> Dictionary:
+	var readers: Dictionary = _runtime_variable_readers()
+	if not readers.has(variable):
+		return {
+			"ok": false,
+			"reason": &"unsupported_runtime_variable",
+			"variable": variable,
+		}
+	var answer: Variant = (readers[variable] as Callable).call()
+	if answer == null:
+		return {"ok": false, "reason": &"missing_party_summary", "variable": variable}
+	_script_value = int(answer)
+	return {"ok": true}
+
+
+## `_GetVarAction`'s table. A reader answers null for state nothing staged.
+func _runtime_variable_readers() -> Dictionary:
 	var clock: Dictionary = _request.get("clock", {})
 	var hour: int = int(clock.get("hour", _clock_hour()))
 	var day: int = int(clock.get("day", 0))
-	match variable:
-		0x01: # VAR_PARTYCOUNT
-			var party: Dictionary = _request.get("party", {})
-			if party.is_empty():
-				return {
-					"ok": false, "reason": &"missing_party_summary", "variable": variable,
-				}
-			_script_value = int(party.get("count", 0))
-		0x04: # VAR_TIMEOFDAY
-			_script_value = Gen2WorldClock.new(hour, 0, day).time_of_day()
-		0x07: # VAR_BADGES
-			_script_value = _staged_badge_count()
-		0x0A: # VAR_HOUR
-			_script_value = hour
-		0x0B: # VAR_WEEKDAY
-			_script_value = day
-		0x09: # VAR_FACING
-			_script_value = int(_request.get("facing", -1))
-		0x0C: # VAR_MAPGROUP
-			_script_value = int(_request.get("map_group", -1))
-		0x0D: # VAR_MAPNUMBER
-			_script_value = int(_request.get("map_number", -1))
-		0x0E: # VAR_UNOWNCOUNT
-			## `.count_unown` walks wUnownDex and stops at the first empty slot,
-			## which is the size of the list here. All three Ruins of Alph
-			## scientists and the Kabuto chamber's wall read it.
-			_script_value = state.unown_caught_count() if state != null else 0
-		0x0F: # VAR_ENVIRONMENT
-			_script_value = int(_request.get("environment", -1))
-		0x05: # VAR_DEXCAUGHT
-			_script_value = state.caught_count() if state != null else 0
-		0x06: # VAR_DEXSEEN
-			_script_value = state.seen_count() if state != null else 0
-		0x10: # VAR_BOXSPACE
-			## `.BoxFreeSpace` opens SRAM for the count; the party mirror carries
-			## it here for the same reason it carries VAR_PARTYCOUNT, and an
-			## absent mirror fails rather than inventing an empty box.
-			var storage: Dictionary = _request.get("party", {})
-			if not storage.has("box_free_space"):
-				return {
-					"ok": false, "reason": &"missing_party_summary", "variable": variable,
-				}
-			_script_value = int(storage.get("box_free_space", 0))
-		0x12: # VAR_XCOORD
-			_script_value = _player_cell().x
-		0x13: # VAR_YCOORD
-			_script_value = _player_cell().y
-		0x14: # VAR_SPECIALPHONECALL
-			_script_value = _current_special_phone_call()
-		0x16: # VAR_KURT_APRICORNS
-			## _GetVarAction reads wKurtApricornQuantity, saved player data whose
-			## only writer is SelectApricornForKurt. A selection made inside this
-			## invocation shadows the committed byte, as the WRAM write does.
-			_script_value = _kurt_apricorn_quantity()
-		0x17: # VAR_CALLERID
-			_script_value = int(_phone_context.get("caller_id", -1))
-		0x18: # VAR_BLUECARDBALANCE
-			_script_value = _blue_card_balance()
-		0x19: # VAR_BUENAS_PASSWORD
-			_script_value = state.buenas_password() if state != null else 0
-		0x1A: # VAR_KENJI_BREAK_TIMER
-			_script_value = _staged_kenji_break_timer if _has_staged_kenji_break_timer \
-				else (state.kenji_break_timer() if state != null else 0)
-		_:
-			return {
-				"ok": false,
-				"reason": &"unsupported_runtime_variable",
-				"variable": variable,
-			}
-	return {"ok": true}
+	return {
+		0x01: _var_party_count, # VAR_PARTYCOUNT
+		0x04: func() -> Variant: return Gen2WorldClock.new(hour, 0, day).time_of_day(), # VAR_TIMEOFDAY
+		0x05: func() -> Variant: return state.caught_count() if state != null else 0, # VAR_DEXCAUGHT
+		0x06: func() -> Variant: return state.seen_count() if state != null else 0, # VAR_DEXSEEN
+		0x07: func() -> Variant: return _staged_badge_count(), # VAR_BADGES
+		0x09: func() -> Variant: return int(_request.get("facing", -1)), # VAR_FACING
+		0x0A: func() -> Variant: return hour, # VAR_HOUR
+		0x0B: func() -> Variant: return day, # VAR_WEEKDAY
+		0x0C: func() -> Variant: return int(_request.get("map_group", -1)), # VAR_MAPGROUP
+		0x0D: func() -> Variant: return int(_request.get("map_number", -1)), # VAR_MAPNUMBER
+		0x0E: _var_unown_count, # VAR_UNOWNCOUNT
+		0x0F: func() -> Variant: return int(_request.get("environment", -1)), # VAR_ENVIRONMENT
+		0x10: _var_box_free_space, # VAR_BOXSPACE
+		0x12: func() -> Variant: return _player_cell().x, # VAR_XCOORD
+		0x13: func() -> Variant: return _player_cell().y, # VAR_YCOORD
+		0x14: func() -> Variant: return _current_special_phone_call(), # VAR_SPECIALPHONECALL
+		0x16: _var_kurt_apricorns, # VAR_KURT_APRICORNS
+		0x17: func() -> Variant: return int(_phone_context.get("caller_id", -1)), # VAR_CALLERID
+		0x18: func() -> Variant: return _blue_card_balance(), # VAR_BLUECARDBALANCE
+		0x19: func() -> Variant: return state.buenas_password() if state != null else 0, # VAR_BUENAS_PASSWORD
+		0x1A: _var_kenji_break_timer, # VAR_KENJI_BREAK_TIMER
+	}
+
+
+func _var_party_count() -> Variant:
+	var party: Dictionary = _request.get("party", {})
+	if party.is_empty():
+		return null
+	return int(party.get("count", 0))
+
+
+## `.BoxFreeSpace` opens SRAM for the count; the party mirror carries it here for
+## the same reason it carries VAR_PARTYCOUNT, and an absent mirror fails rather
+## than inventing an empty box.
+func _var_box_free_space() -> Variant:
+	var storage: Dictionary = _request.get("party", {})
+	if not storage.has("box_free_space"):
+		return null
+	return int(storage.get("box_free_space", 0))
+
+
+## `.count_unown` walks wUnownDex and stops at the first empty slot, which is the
+## size of the list here. All three Ruins of Alph scientists and the Kabuto
+## chamber's wall read it.
+func _var_unown_count() -> Variant:
+	return state.unown_caught_count() if state != null else 0
+
+
+## _GetVarAction reads wKurtApricornQuantity, saved player data whose only writer
+## is SelectApricornForKurt. A selection made inside this invocation shadows the
+## committed byte, as the WRAM write does.
+func _var_kurt_apricorns() -> Variant:
+	return _kurt_apricorn_quantity()
+
+
+func _var_kenji_break_timer() -> Variant:
+	return _staged_kenji_break_timer if _has_staged_kenji_break_timer \
+		else (state.kenji_break_timer() if state != null else 0)
 
 
 ## `writevar`, which is `_GetVarAction` for a RETVAR_ADDR_DE row and then a
@@ -7001,47 +7006,7 @@ func _complete() -> Dictionary:
 		return _complete_result()
 	if state == null:
 		return _fail(&"missing_world_state", {})
-	var runtime_changes: Dictionary = {}
-	if not _staged_items.is_empty():
-		runtime_changes["items"] = _staged_items.duplicate()
-	if not _staged_money.is_empty():
-		runtime_changes["money"] = _staged_money.duplicate()
-	if _staged_coins >= 0:
-		runtime_changes["coins"] = _staged_coins
-	if not _staged_phone_contacts.is_empty():
-		runtime_changes["phone_contacts"] = _staged_phone_contacts.duplicate()
-	if not _staged_script_memory.is_empty():
-		runtime_changes["script_memory"] = _staged_script_memory.duplicate()
-	if _has_staged_just_battled:
-		runtime_changes["just_battled"] = _staged_just_battled
-	if _has_staged_swarm:
-		runtime_changes["swarm"] = _staged_swarm.duplicate()
-	if _has_staged_special_phone_call:
-		runtime_changes["pending_special_phone_call"] = _staged_special_phone_call
-	if _has_staged_kurt_apricorn_quantity:
-		runtime_changes["kurt_apricorn_quantity"] = _staged_kurt_apricorn_quantity
-	if not _staged_fruit_trees.is_empty():
-		runtime_changes["fruit_trees"] = _staged_fruit_trees.duplicate()
-	if _has_staged_kenji_break_timer:
-		runtime_changes["kenji_break_timer"] = _staged_kenji_break_timer
-	if _has_staged_lucky_number_days_left:
-		runtime_changes["lucky_number_days_left"] = _staged_lucky_number_days_left
-	if _has_staged_lucky_id_number:
-		runtime_changes["lucky_id_number"] = _staged_lucky_id_number
-		runtime_changes["lucky_number_day"] = _staged_lucky_number_day
-	if not _staged_caught_species.is_empty():
-		runtime_changes["caught_species"] = _staged_caught_species.duplicate()
-	if not _staged_best_magikarp.is_empty():
-		runtime_changes["best_magikarp"] = _staged_best_magikarp.duplicate()
-	if _staged_blue_card_balance >= 0:
-		runtime_changes["blue_card_balance"] = _staged_blue_card_balance
-	if _staged_mom_savings_flags >= 0:
-		runtime_changes["mom_savings_flags"] = _staged_mom_savings_flags
-	if not _staged_engine_flags.is_empty():
-		runtime_changes["engine_flags"] = _staged_engine_flags.duplicate()
-	if _reset_phone_receive_timer:
-		runtime_changes["phone_receive_cycle"] = 0
-		runtime_changes["phone_receive_minutes"] = Gen2WorldState.PHONE_RECEIVE_DELAYS[0]
+	var runtime_changes: Dictionary = _staged_runtime_changes()
 	var applied: Dictionary = state.apply_changes(
 		_staged_flags, _staged_scenes, runtime_changes
 	)
@@ -7067,6 +7032,44 @@ func _complete() -> Dictionary:
 	if _has_staged_dst:
 		_events.append({"type": &"dst_changed", "enabled": _staged_dst_enabled})
 	return _complete_result()
+
+
+func _staged_runtime_changes() -> Dictionary:
+	var out: Dictionary = {}
+	for row: Array in [
+		["items", not _staged_items.is_empty(), _staged_items.duplicate()],
+		["money", not _staged_money.is_empty(), _staged_money.duplicate()],
+		["coins", _staged_coins >= 0, _staged_coins],
+		["phone_contacts", not _staged_phone_contacts.is_empty(),
+			_staged_phone_contacts.duplicate()],
+		["script_memory", not _staged_script_memory.is_empty(),
+			_staged_script_memory.duplicate()],
+		["just_battled", _has_staged_just_battled, _staged_just_battled],
+		["swarm", _has_staged_swarm, _staged_swarm.duplicate()],
+		["pending_special_phone_call", _has_staged_special_phone_call,
+			_staged_special_phone_call],
+		["kurt_apricorn_quantity", _has_staged_kurt_apricorn_quantity,
+			_staged_kurt_apricorn_quantity],
+		["fruit_trees", not _staged_fruit_trees.is_empty(), _staged_fruit_trees.duplicate()],
+		["kenji_break_timer", _has_staged_kenji_break_timer, _staged_kenji_break_timer],
+		["lucky_number_days_left", _has_staged_lucky_number_days_left,
+			_staged_lucky_number_days_left],
+		["lucky_id_number", _has_staged_lucky_id_number, _staged_lucky_id_number],
+		["lucky_number_day", _has_staged_lucky_id_number, _staged_lucky_number_day],
+		["caught_species", not _staged_caught_species.is_empty(),
+			_staged_caught_species.duplicate()],
+		["best_magikarp", not _staged_best_magikarp.is_empty(),
+			_staged_best_magikarp.duplicate()],
+		["blue_card_balance", _staged_blue_card_balance >= 0, _staged_blue_card_balance],
+		["mom_savings_flags", _staged_mom_savings_flags >= 0, _staged_mom_savings_flags],
+		["engine_flags", not _staged_engine_flags.is_empty(), _staged_engine_flags.duplicate()],
+		["phone_receive_cycle", _reset_phone_receive_timer, 0],
+		["phone_receive_minutes", _reset_phone_receive_timer,
+			Gen2WorldState.PHONE_RECEIVE_DELAYS[0]],
+	]:
+		if bool(row[1]):
+			out[row[0]] = row[2]
+	return out
 
 
 func _complete_result() -> Dictionary:

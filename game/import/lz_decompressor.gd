@@ -70,62 +70,74 @@ func decompress(data: PackedByteArray, offset: int) -> PackedByteArray:
 			length = (((command & 0x03) << 8) | data[pos]) + 1
 			pos += 1
 
-		match op:
-			Op.LITERAL:
-				if pos + length > size:
-					return _fail()
-				out.append_array(data.slice(pos, pos + length))
-				pos += length
-
-			Op.ITERATE:
-				if pos >= size:
-					return _fail()
-				var value: int = data[pos]
-				pos += 1
-				for _i: int in length:
-					out.append(value)
-
-			Op.ALTERNATE:
-				if pos + 2 > size:
-					return _fail()
-				var even: int = data[pos]
-				var odd: int = data[pos + 1]
-				pos += 2
-				for i: int in length:
-					out.append(odd if i & 1 else even)
-
-			Op.ZERO:
-				for _i: int in length:
-					out.append(0)
-
-			_:
-				if pos >= size:
-					return _fail()
-				var source: int = 0
-				var high: int = data[pos]
-				pos += 1
-				if high & LONG_OFFSET_MASK:
-					source = out.size() - (high & 0x7F) - 1
-				else:
-					if pos >= size:
-						return _fail()
-					source = (high << 8) | data[pos]
-					pos += 1
-
-				if source < 0 or source >= out.size():
-					return _fail()
-
-				var table: PackedByteArray = _bit_reversal_table()
-				for i: int in length:
-					var from: int = source - i if op == Op.REVERSED else source + i
-					if from < 0 or from >= out.size():
-						return _fail()
-					out.append(table[out[from]] if op == Op.FLIPPED else out[from])
+		var step: Dictionary = _back_reference(data, out, pos, op, length) \
+			if op >= Op.REPEAT else _inline_bytes(data, pos, op, length)
+		if step.is_empty():
+			return _fail()
+		out.append_array(step["bytes"])
+		pos = int(step["pos"])
 
 		if out.size() > MAX_OUTPUT:
 			return _fail()
 
 	return out
+
+
+## Literal, iterate, alternate and zero. Empty for a stream that ends inside one.
+func _inline_bytes(data: PackedByteArray, pos: int, op: int, length: int) -> Dictionary:
+	var size: int = data.size()
+	var bytes: PackedByteArray = PackedByteArray()
+	match op:
+		Op.LITERAL:
+			if pos + length > size:
+				return {}
+			return {"pos": pos + length, "bytes": data.slice(pos, pos + length)}
+		Op.ITERATE:
+			if pos >= size:
+				return {}
+			for _i: int in length:
+				bytes.append(data[pos])
+			return {"pos": pos + 1, "bytes": bytes}
+		Op.ALTERNATE:
+			if pos + 2 > size:
+				return {}
+			for i: int in length:
+				bytes.append(data[pos + 1] if i & 1 else data[pos])
+			return {"pos": pos + 2, "bytes": bytes}
+		Op.ZERO:
+			bytes.resize(length)
+			return {"pos": pos, "bytes": bytes}
+	return {}
+
+
+## Repeat, flipped and reversed. Empty when the stream or the source runs out.
+func _back_reference(
+	data: PackedByteArray, out: PackedByteArray, pos: int, op: int, length: int
+) -> Dictionary:
+	var size: int = data.size()
+	if pos >= size:
+		return {}
+	var source: int = 0
+	var high: int = data[pos]
+	pos += 1
+	if high & LONG_OFFSET_MASK:
+		source = out.size() - (high & 0x7F) - 1
+	else:
+		if pos >= size:
+			return {}
+		source = (high << 8) | data[pos]
+		pos += 1
+	if source < 0 or source >= out.size():
+		return {}
+	var table: PackedByteArray = _bit_reversal_table()
+	var bytes: PackedByteArray = PackedByteArray()
+	for i: int in length:
+		var from: int = source - i if op == Op.REVERSED else source + i
+		if from < 0 or from >= out.size() + bytes.size():
+			return {}
+		var value: int = out[from] if from < out.size() else bytes[from - out.size()]
+		bytes.append(table[value] if op == Op.FLIPPED else value)
+	return {"pos": pos, "bytes": bytes}
 
 
 ## Convenience for callers that only care whether it worked.

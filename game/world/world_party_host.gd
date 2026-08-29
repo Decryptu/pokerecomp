@@ -1148,33 +1148,14 @@ static func capture_wild(
 	var opened: Dictionary = Gen2WorldTransaction.begin(world, save)
 	if not bool(opened.get("ok", false)):
 		return _failure(StringName(opened["reason"]), opened.get("details", {}))
-	## `Ball_BoxIsFullMessage`, which stands in front of everything else the
-	## effect does: no line is said about the ball and the ball is not spent.
-	if save.party.size() >= Gen2SaveData.MAX_PARTY:
-		var storage: Dictionary = save.deposit_box_slot()
-		if not bool(storage.get("ok", false)):
-			return _failure(&"storage_full", {"ball": ball})
-	var definition: Dictionary = world.data.item(ball)
-	if definition.is_empty():
-		return _failure(&"unknown_ball", {"ball": ball})
-	if int(definition.get("pocket", 0)) != RomLayout.ITEM_POCKET_BALL:
-		return _failure(&"item_is_not_a_ball", {"ball": ball})
-	if ball not in CAPTURE_BALLS:
-		return _failure(&"unsupported_ball_effect", {"ball": ball})
-	if world.state == null or world.state.item_quantity(ball) <= 0:
-		return _failure(&"insufficient_ball_quantity", {"ball": ball})
 	## `SetCaughtData`'s own landmark, which is the area a Nuzlocke counts by:
 	## [param caught_location] is the caller's override for a catch whose
 	## landmark is not the map the player stands on, and every caller that has
 	## none passes 0 and takes the map's.
 	var catch_landmark: int = caught_location if caught_location > 0 else world.landmark_backup()
-	## The Nuzlocke's first rule, at the one place a ball is ever thrown: only
-	## the encounter that claimed this area may be thrown at, and
-	## [member Gen2WorldAPI.nuzlocke_area_open] is what the battle claimed when
-	## it opened.
-	if world.rules != null and world.rules.is_nuzlocke() \
-		and world.nuzlocke_area_open != catch_landmark:
-		return _failure(&"nuzlocke_encounter_spent", {"landmark": catch_landmark})
+	var refused: Dictionary = _capture_refusal(world, save, ball, catch_landmark)
+	if not refused.is_empty():
+		return refused
 	var generator: RandomNumberGenerator = random if random != null else RandomNumberGenerator.new()
 	if random == null:
 		generator.randomize()
@@ -1182,30 +1163,13 @@ static func capture_wild(
 		world.data, wild, ball, generator, battle_type, thrower
 	)
 	var candidate: Gen2SaveData = opened["candidate"]
-	var destination: Dictionary = {}
-	var box_full: bool = false
-	if bool(outcome.get("caught", false)):
-		var captured: Gen2SaveMon = _captured_mon(world.data, save, wild, ball)
-		if captured == null:
-			return _failure(&"could_not_create_captured_pokemon", outcome)
-		## `SetCaughtData` runs on the caught Pokemon itself.
-		set_caught_data(
-			captured, wild.level, world.object_time_of_day, world.player_female(),
-			catch_landmark
-		)
-		## `SendMonIntoBox`'s own `ShiftBoxMon`: a catch that lands in a box goes
-		## to the front of it, which every other deposit does not.
-		destination = candidate.add_party_or_box(captured, true)
-		if not bool(destination.get("ok", false)):
-			return _failure(StringName(destination.get("reason", &"storage_full")), {
-				"ball": ball, "outcome": outcome,
-			})
-		box_full = _fills_its_box(candidate, destination)
-		## The area is already spent by the claim that opened the battle; this
-		## only records that its encounter was taken rather than beaten. On the
-		## candidate, so a rolled-back catch takes the record back with it.
-		if world.rules != null and world.rules.is_nuzlocke():
-			Gen2Nuzlocke.note_caught(candidate.nuzlocke, catch_landmark)
+	var stored: Dictionary = _store_capture(
+		world, save, candidate, wild, ball, outcome, catch_landmark
+	)
+	if not bool(stored.get("ok", false)):
+		return stored
+	var destination: Dictionary = stored["destination"]
+	var box_full: bool = bool(stored["box_full"])
 	var before: Gen2WorldSnapshot = world.snapshot()
 	## After the snapshot the rollback below restores, so a refused candidate
 	## save takes the dex flag back with the ball.
@@ -1244,6 +1208,72 @@ static func capture_wild(
 		"species": wild.species,
 		"destination": destination.duplicate(true),
 		"box_full": box_full,
+	}
+
+
+static func _capture_refusal(
+	world: Gen2WorldAPI, save: Gen2SaveData, ball: int, catch_landmark: int
+) -> Dictionary:
+	## `Ball_BoxIsFullMessage`, which stands in front of everything else the
+	## effect does: no line is said about the ball and the ball is not spent.
+	if save.party.size() >= Gen2SaveData.MAX_PARTY:
+		var storage: Dictionary = save.deposit_box_slot()
+		if not bool(storage.get("ok", false)):
+			return _failure(&"storage_full", {"ball": ball})
+	var definition: Dictionary = world.data.item(ball)
+	if definition.is_empty():
+		return _failure(&"unknown_ball", {"ball": ball})
+	if int(definition.get("pocket", 0)) != RomLayout.ITEM_POCKET_BALL:
+		return _failure(&"item_is_not_a_ball", {"ball": ball})
+	if ball not in CAPTURE_BALLS:
+		return _failure(&"unsupported_ball_effect", {"ball": ball})
+	if world.state == null or world.state.item_quantity(ball) <= 0:
+		return _failure(&"insufficient_ball_quantity", {"ball": ball})
+	## The Nuzlocke's first rule, at the one place a ball is ever thrown: only
+	## the encounter that claimed this area may be thrown at, and
+	## [member Gen2WorldAPI.nuzlocke_area_open] is what the battle claimed when
+	## it opened.
+	if world.rules != null and world.rules.is_nuzlocke() \
+		and world.nuzlocke_area_open != catch_landmark:
+		return _failure(&"nuzlocke_encounter_spent", {"landmark": catch_landmark})
+	return {}
+
+
+static func _store_capture(
+	world: Gen2WorldAPI,
+	save: Gen2SaveData,
+	candidate: Gen2SaveData,
+	wild: Gen2BattleMon,
+	ball: int,
+	outcome: Dictionary,
+	catch_landmark: int
+) -> Dictionary:
+	if not bool(outcome.get("caught", false)):
+		return {"ok": true, "destination": {}, "box_full": false}
+	var captured: Gen2SaveMon = _captured_mon(world.data, save, wild, ball)
+	if captured == null:
+		return _failure(&"could_not_create_captured_pokemon", outcome)
+	## `SetCaughtData` runs on the caught Pokemon itself.
+	set_caught_data(
+		captured, wild.level, world.object_time_of_day, world.player_female(),
+		catch_landmark
+	)
+	## `SendMonIntoBox`'s own `ShiftBoxMon`: a catch that lands in a box goes
+	## to the front of it, which every other deposit does not.
+	var destination: Dictionary = candidate.add_party_or_box(captured, true)
+	if not bool(destination.get("ok", false)):
+		return _failure(StringName(destination.get("reason", &"storage_full")), {
+			"ball": ball, "outcome": outcome,
+		})
+	## The area is already spent by the claim that opened the battle; this
+	## only records that its encounter was taken rather than beaten. On the
+	## candidate, so a rolled-back catch takes the record back with it.
+	if world.rules != null and world.rules.is_nuzlocke():
+		Gen2Nuzlocke.note_caught(candidate.nuzlocke, catch_landmark)
+	return {
+		"ok": true,
+		"destination": destination,
+		"box_full": _fills_its_box(candidate, destination),
 	}
 
 
