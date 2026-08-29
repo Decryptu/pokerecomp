@@ -3637,6 +3637,42 @@ func pending_runtime_request() -> Dictionary:
 	return _active_script.pending_runtime_request() if _active_script != null else {}
 
 
+const PARTY_HOLDER_REQUESTS: Dictionary = {
+	&"day_care_requested": &"day_care",
+	&"trade_requested": &"trade",
+	&"party_heal_requested": &"heal_machine",
+}
+
+const PARTY_HOLDER_DAY_CARE_ROLES: Array[StringName] = [&"man", &"lady"]
+
+const PARTY_HOLDER_WAITS: Dictionary = {
+	&"heal_machine_anim": &"heal_machine",
+}
+
+const PARTY_HOLDER_HALL_OF_FAME: StringName = &"hall_of_fame"
+
+
+func party_holder() -> StringName:
+	var request: Dictionary = pending_runtime_request()
+	var kind: StringName = StringName(request.get("kind", &""))
+	if kind == &"day_care_requested":
+		var values: Dictionary = request.get("values", {})
+		return &"day_care" if StringName(values.get("role", &"")) \
+			in PARTY_HOLDER_DAY_CARE_ROLES else &""
+	if PARTY_HOLDER_REQUESTS.has(kind):
+		return PARTY_HOLDER_REQUESTS[kind]
+	var wait: Dictionary = pending_script_wait()
+	var holder: StringName = PARTY_HOLDER_WAITS.get(StringName(wait.get("kind", &"")), &"")
+	if holder == &"heal_machine" \
+		and int(wait.get("machine_type", 0)) == Gen2WorldEffects.HEAL_MACHINE_HALL_OF_FAME:
+		return PARTY_HOLDER_HALL_OF_FAME
+	return holder
+
+
+func party_with_player() -> bool:
+	return String(party_holder()).is_empty()
+
+
 func pending_script_input() -> Dictionary:
 	return _active_script.pending_input() if _active_script != null else {}
 

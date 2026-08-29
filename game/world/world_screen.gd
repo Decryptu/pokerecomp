@@ -975,8 +975,7 @@ func _advance_population(map_pass: bool) -> void:
 	## Gated on the same predicate the map's own objects step behind, so a
 	## provider's frame count is the time the player spent on the overworld: a
 	## population stands still behind a battle, a menu, a text box and a fade.
-	## Not the pass's: a wild is drawn between cells like an object mid-step.
-	if _encounters != null and _objects_may_move() and _encounters.advance_frame():
+	if _encounters != null and _objects_may_move() and _encounters.advance_frame(map_pass):
 		_play_encounter_sounds()
 		_refresh_if(true)
 	## Deliberately not gated with it: an actor owns no state the host validates
@@ -3157,11 +3156,15 @@ func preview_visible_encounter_glow() -> void:
 	_preview_visible_encounter(true)
 
 
-func _preview_visible_encounter(glow: bool) -> void:
+func preview_visible_encounter_walk() -> void:
+	_preview_visible_encounter(false, true)
+
+
+func _preview_visible_encounter(glow: bool, walk: bool = false) -> void:
 	if _world == null or _encounters == null or _renderer == null:
 		return
-	_encounters.set_providers([PreviewEncounters.new(_world, glow)])
-	advance_frames(2)
+	_encounters.set_providers([PreviewEncounters.new(_world, glow, walk)])
+	advance_frames(2 + (Gen2WorldEncounters.STEP_PASSES if walk else 0))
 	_script_prompt = "Debug visible encounter preview"
 	_renderer.refresh()
 	_refresh_labels()
@@ -3178,7 +3181,7 @@ class PreviewEncounters extends RefCounted:
 
 	var _entries: Array = []
 
-	func _init(world: Gen2WorldAPI, glow: bool = false) -> void:
+	func _init(world: Gen2WorldAPI, glow: bool = false, walk: bool = false) -> void:
 		var cells: Dictionary = world.visible_encounter_cells()
 		var tables: Dictionary = world.active_encounter_tables()
 		for method: Variant in cells:
@@ -3200,7 +3203,18 @@ class PreviewEncounters extends RefCounted:
 			}
 			if glow:
 				entry["glow"] = {"color": GLOW_COLOR, "amount": GLOW_AMOUNT}
+			if walk:
+				entry["step"] = _walkable(cells[method], Vector2i(nearest), world)
 			_entries.append(entry)
+
+	static func _walkable(
+		cells: PackedVector2Array, from: Vector2i, world: Gen2WorldAPI
+	) -> Vector2i:
+		for direction: Vector2i in Gen2WorldEncounters.STEP_DIRECTIONS:
+			var target: Vector2i = from + direction
+			if cells.has(Vector2(target)) and target != world.player_cell:
+				return direction
+		return Vector2i.ZERO
 
 	func set_context(_context: Dictionary) -> void:
 		pass
