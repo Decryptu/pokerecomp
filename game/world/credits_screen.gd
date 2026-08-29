@@ -19,7 +19,6 @@ var _credits: Gen2Credits = null
 var _page: Gen2CreditsPage = null
 var _view: TextureRect = null
 var _held: Array = []
-## This screen's hardware-frame clock.
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 
 

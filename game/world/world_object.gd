@@ -497,7 +497,6 @@ func is_idle() -> bool:
 	return idle_passes_remaining > 0
 
 
-## [method step_offset_cells] in pixels.
 func step_offset(cell_pixels: int, fraction: float = 0.0) -> Vector2i:
 	var offset: Vector2 = step_offset_cells(fraction) * float(cell_pixels)
 	return Vector2i(int(round(offset.x)), int(round(offset.y)))

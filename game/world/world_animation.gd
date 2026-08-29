@@ -52,6 +52,10 @@ class FrameClock extends RefCounted:
 		_measure(delta, frames)
 		return frames
 
+	## The banked remainder, as a share of one hardware frame.
+	func remainder() -> float:
+		return _elapsed / FRAME_SECONDS
+
 	## Drops the banked remainder, for a pump that was not running: a screen that
 	## comes back owes frames from now rather than from when it stopped. The
 	## measurement window goes with it, since a reading across a gap is a lie.

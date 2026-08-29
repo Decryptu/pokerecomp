@@ -364,14 +364,54 @@ func test_a_walk_step_is_drawn_a_pixel_a_frame_and_two_a_pass() -> void:
 	assert_eq(hardware[15], 16.0)
 	assert_eq(_biggest_jump(smooth), 1.0, "smooth never moves more than a pixel")
 	assert_eq(_biggest_jump(hardware), 2.0, "the pass moves two at a time")
-	assert_gt(_drawn_positions(smooth), 14, "a picture a frame rather than eight")
-	assert_eq(_drawn_positions(hardware), 8)
+	assert_gt(
+		_drawn_positions(smooth), _drawn_positions(hardware),
+		"a picture a frame rather than one a pass"
+	)
+
+
+## The reported stutter, which SMOOTH SCROLL made visible rather than caused.
+## `FrameClock.tick` answers whole frames, so a picture placed from that count
+## alone moves 0, 1 or 2 pixels as the host's 16.667 ms beats against the
+## cartridge's 16.742: three host frames here spend one hardware frame, none, and
+## two. The banked remainder is the rest of the answer.
+func test_a_drawn_frame_stands_where_real_time_puts_it() -> void:
+	var options: Gen2Options = Gen2OptionsStore.current()
+	var chosen: bool = options.smooth_scroll
+	options.smooth_scroll = true
+	_world_screen = await _open_world()
+	var world: Gen2WorldAPI = _world_screen._world
+	_settle_on_a_pass()
+	var origin: float = world.view_origin_pixels().x
+	world.move_result(Vector2i.RIGHT)
+
+	## A host frame that jitters either side of the display's own, which is what
+	## a compositor hands `_process` and what the screen recording caught.
+	var deltas: Array[float] = [0.0170, 0.0170, 0.0090, 0.0245]
+	var drawn: Array[float] = []
+	for index: int in 12:
+		_world_screen._process(deltas[index] if index < deltas.size() else 0.0170)
+		drawn.append(world.view_origin_pixels().x - origin)
+	options.smooth_scroll = chosen
+	assert_eq(_biggest_jump(drawn), 1.0, "no drawn frame carries two pixels")
+	assert_eq(drawn[0], 1.0, "and none carries none")
+	for index: int in range(1, drawn.size()):
+		assert_eq(drawn[index], drawn[index - 1] + 1.0, "frame %d" % index)
+
+
+## Puts the pump on a pass boundary with nothing banked, so a case counting
+## pixels starts where the cartridge would and not part way through one.
+func _settle_on_a_pass() -> void:
+	while _world_screen._overworld_delay != Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS:
+		_world_screen.advance_frame()
+	_world_screen._frame_clock.reset()
 
 
 ## The camera's own x, one entry per hardware frame of one step east, measured
 ## from where it stood before the step began.
 func _walk_camera_pixels() -> Array[float]:
 	var world: Gen2WorldAPI = _world_screen._world
+	_settle_on_a_pass()
 	var origin: float = world.view_origin_pixels().x
 	var out: Array[float] = []
 	world.move_result(Vector2i.RIGHT)

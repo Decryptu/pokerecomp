@@ -368,7 +368,6 @@ var _phone_ring_request: Dictionary = {}
 var _player_step_direction: Vector2i = Vector2i.ZERO
 var _player_step_passes_total: int = 0
 var _player_step_passes_remaining: int = 0
-## Gen2WorldObject.step_began for the player.
 var _player_step_began: bool = false
 ## Whether the step in flight is a ledge hop, which is the only one the source
 ## gives a jump arc. See player_jump_offset().

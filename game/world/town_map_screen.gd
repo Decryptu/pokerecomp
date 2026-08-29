@@ -85,7 +85,6 @@ var _nests: Array = []
 var _oam: StringName = OAM_NESTS
 var _select_held: bool = false
 var _nest_icons: Array[TextureRect] = []
-## This screen's hardware-frame clock.
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 
 

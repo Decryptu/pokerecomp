@@ -690,12 +690,22 @@ whole cell the instant one begins. A camera following it pans a step early;
 whenever no step is in flight.
 
 **SMOOTH SCROLL** (`Gen2Options.smooth_scroll`, on by default, Settings >
-Application > Scrolling) is `Gen2WorldAPI.pass_fraction`: 0.0 on the overworld
-pass itself and 0.5 on the hardware frame after it. Every interpolated position
-above reads it, so a renderer framing its own view gets the smoothing for free
-and a renderer reading `Gen2WorldObject.step_offset()` passes it in. It moves
-nothing the engine decides: the step takes the same sixteen frames, lands on the
-same cell, and stands on the cartridge's own pixel at every pass boundary.
+Application > Scrolling) is `Gen2WorldAPI.pass_fraction`: where the frame being
+drawn stands inside the overworld pass, 0.0 at its start and just under 1.0 at
+its end. Every interpolated position above reads it, so a renderer framing its
+own view gets the smoothing for free and a renderer reading
+`Gen2WorldObject.step_offset()` passes it in. It moves nothing the engine
+decides: the step takes the same sixteen frames, lands on the same cell, and
+stands on the cartridge's own pixel at every pass boundary.
+
+It is set from banked real time rather than from a count of spent frames, which
+matters more than the interpolation does. A host frame is 16.667 ms and a
+hardware one 16.742, so a `_process` tick spends sometimes no frame and sometimes
+two; a position placed from that count alone moves 0, 1 or 2 pixels with nothing
+in the game behind the difference. `Gen2WorldScreen` sets `pass_fraction` once
+per drawn frame from the whole frames spent plus the part of the next one the
+clock is holding, so the picture stands within half a pixel of the clock however
+the host's frames land.
 
 The host constructs a renderer per world, so the view can change while the game
 runs. `Gen2WorldScreen.select_view()` is that switch and `cycle_view()` is what

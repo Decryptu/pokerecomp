@@ -796,6 +796,7 @@ func cycle_view() -> Dictionary:
 func _process(delta: float) -> void:
 	for _frame: int in _frame_clock.tick(delta):
 		advance_frame()
+	_apply_pass_fraction(_frame_clock.remainder())
 	_refresh_frame_rate()
 	_advance_day_cycle(delta)
 	## Every drawn frame rather than every hardware frame: above sixty a drawn
@@ -804,20 +805,26 @@ func _process(delta: float) -> void:
 	_apply_interface_mask()
 
 
-## SMOOTH SCROLL, off `NextOverworldFrame`'s own countdown: a run driven by hand
-## stands on a pass and draws what the cartridge drew whatever the option says.
-func _apply_pass_fraction() -> void:
+## SMOOTH SCROLL. Where the drawn frame stands in the pass: whole frames off
+## `NextOverworldFrame`'s countdown plus the part of the next one the clock has
+## banked. Banked real time and not a frame count, because a host frame is
+## 16.667 ms against the cartridge's 16.742: a tick spends sometimes no frame and
+## sometimes two, and a count alone jumps 0, 1 or 2 pixels for nothing. Called
+## every drawn frame, not every spent one.
+func _apply_pass_fraction(remainder: float = 0.0) -> void:
 	if _world == null:
 		return
-	var whole: bool = _overworld_delay >= Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS
+	var before: float = _world.pass_fraction
+	## Clamped: a world that has spent no frame reads zero, a whole pass.
+	var spent: float = clampf(
+		float(Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS - _overworld_delay),
+		0.0, float(Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS - 1)
+	)
 	_world.pass_fraction = 0.0 if not Gen2OptionsStore.current().smooth_scroll \
-		else float(Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS - _overworld_delay) \
+		else (spent + clampf(remainder, 0.0, 1.0)) \
 			/ float(Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS)
-	## Only when the pass moved something, so a still map costs what it did.
-	if whole:
-		_pass_moved = false
-		return
-	_refresh_if(_pass_moved and _world.pass_fraction > 0.0)
+	## Only while the pass is moving something, so a still map is drawn once.
+	_refresh_if(_pass_moved and _world.pass_fraction != before)
 
 
 ## Spends [param count] hardware frames. Public beside [method advance_frame] so
@@ -865,6 +872,7 @@ func advance_frame() -> void:
 	var map_pass: bool = _overworld_delay <= 0
 	if map_pass:
 		_overworld_delay = Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS
+		_pass_moved = false
 	_advance_presentation(map_pass)
 	_apply_pass_fraction()
 	_advance_movement(map_pass)
