@@ -47,18 +47,9 @@ func _initialize() -> void:
 	var landmark: int = int(args[2]) if args.size() > 2 else Gen2TownMap.JOHTO_LANDMARK
 	var mode: String = args[3] if args.size() > 3 else "town_map"
 	var species: int = int(mode.split(":")[1]) if mode.begins_with("area:") else 0
-	var hall_of_fame: bool = false
-	var steps: Array = []
-	for token: String in (args[4] if args.size() > 4 else "").split(",", false):
-		var key: String = token.strip_edges().to_lower()
-		if key == "hof":
-			hall_of_fame = true
-		elif key.begins_with("f"):
-			steps.append(["frames", maxi(1, int(key.substr(1)))])
-		elif key == "rel":
-			steps.append(["release", Gen2Button.SELECT])
-		elif BUTTONS.has(key):
-			steps.append(["press", int(BUTTONS[key])])
+	var parsed: Dictionary = _parse_presses(args[4] if args.size() > 4 else "")
+	var hall_of_fame: bool = bool(parsed["hall_of_fame"])
+	var steps: Array = parsed["steps"]
 
 	if mode in ["clock", "phone", "radio"]:
 		_capture_card(data, StringName(mode), args[1], steps)
@@ -71,15 +62,7 @@ func _initialize() -> void:
 		push_error("The %s cache holds no region map." % args[0])
 		quit(1)
 		return
-	for step: Array in steps:
-		match String(step[0]):
-			"frames":
-				for _frame: int in int(step[1]):
-					host.advance_frame()
-			"release":
-				host.release_button(int(step[1]))
-			_:
-				host.handle_button(int(step[1]))
+	_drive(host, steps)
 
 	var error: Error = host.render().save_png(args[1])
 	if error != OK:
@@ -100,6 +83,34 @@ func _initialize() -> void:
 			host.map().first_landmark(), host.map().last_landmark(),
 		])
 	quit(0)
+
+
+static func _parse_presses(spec: String) -> Dictionary:
+	var hall_of_fame: bool = false
+	var steps: Array = []
+	for token: String in spec.split(",", false):
+		var key: String = token.strip_edges().to_lower()
+		if key == "hof":
+			hall_of_fame = true
+		elif key.begins_with("f"):
+			steps.append(["frames", maxi(1, int(key.substr(1)))])
+		elif key == "rel":
+			steps.append(["release", Gen2Button.SELECT])
+		elif BUTTONS.has(key):
+			steps.append(["press", int(BUTTONS[key])])
+	return {"steps": steps, "hall_of_fame": hall_of_fame}
+
+
+static func _drive(host: Gen2TownMapScreen, steps: Array) -> void:
+	for step: Array in steps:
+		match String(step[0]):
+			"frames":
+				for _frame: int in int(step[1]):
+					host.advance_frame()
+			"release":
+				host.release_button(int(step[1]))
+			_:
+				host.handle_button(int(step[1]))
 
 
 func _open(

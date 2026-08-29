@@ -15,8 +15,8 @@ const CHECKS: String = "res://tools/checks"
 ## topic can still be asked for on its own.
 const GROUPS: Dictionary = {
 	&"field_moves": [
-		&"cut", &"surf", &"whirlpool", &"strength", &"headbutt", &"rock_smash",
-		&"field_move_prompts",
+		&"cut", &"surf", &"whirlpool", &"strength", &"waterfall", &"headbutt",
+		&"rock_smash", &"field_move_prompts",
 	],
 	&"terrain": [
 		&"ledge_hops", &"ice_slides", &"side_walls", &"drawn_blocks", &"story_map_ids",

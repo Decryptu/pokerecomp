@@ -319,37 +319,12 @@ static func apply(
 			})
 		slot = side
 	var standing: int = world.state.maptile_decoration(slot)
-	var text: String = ""
-	var next: int = standing
-	if is_put_away(data, deco):
-		## `DecoAction_TryPutItAway` clears the slot before it looks at what was
-		## in it, so an empty slot is still cleared and the box is the refusal.
-		if standing == 0:
-			return {"ok": true, "changed": false, "text": TEXT_NOTHING_TO_PUT_AWAY}
-		next = 0
-		text = put_away_text(decoration_name(data, standing))
-	else:
-		if not owns(data, world.state, deco):
-			return Gen2WorldTransaction.failure(&"decoration_not_owned", {
-				"decoration": deco,
-			})
-		if standing == deco:
-			## `DecoAction_SetItUp.alreadythere` is the one refusal that leaves
-			## the slot alone.
-			return {"ok": true, "changed": false, "text": TEXT_ALREADY_SET_UP}
-		next = deco
-		text = set_up_text(decoration_name(data, deco)) if standing == 0 \
-			else put_away_and_set_up_text(
-				decoration_name(data, standing), decoration_name(data, deco)
-			)
-	var writes: Dictionary = {slot: next}
-	## `DecoAction_SetItUp_Ornament.getwhichside`: a doll set up on one side is
-	## taken off the other, so the room never holds two of the same ornament.
-	if next != 0 and (slot == SLOT_LEFT_ORNAMENT or slot == SLOT_RIGHT_ORNAMENT):
-		var other: StringName = SLOT_RIGHT_ORNAMENT if slot == SLOT_LEFT_ORNAMENT \
-			else SLOT_LEFT_ORNAMENT
-		if world.state.maptile_decoration(other) == next:
-			writes[other] = 0
+	var change: Dictionary = _decoration_change(data, world, deco, standing)
+	if not change.has("next"):
+		return change
+	var next: int = int(change["next"])
+	var text: String = String(change["text"])
+	var writes: Dictionary = _decoration_writes(world, slot, next)
 	var before: Gen2WorldSnapshot = world.snapshot()
 	for written: StringName in writes:
 		if world.state.set_maptile_decoration(written, int(writes[written])):
@@ -364,3 +339,38 @@ static func apply(
 	return {
 		"ok": true, "changed": true, "text": text, "slot": slot, "decoration": next,
 	}
+
+
+static func _decoration_change(
+	data: GameData, world: Gen2WorldAPI, deco: int, standing: int
+) -> Dictionary:
+	if is_put_away(data, deco):
+		## `DecoAction_TryPutItAway` clears the slot before it looks at what was
+		## in it, so an empty slot is still cleared and the box is the refusal.
+		if standing == 0:
+			return {"ok": true, "changed": false, "text": TEXT_NOTHING_TO_PUT_AWAY}
+		return {"next": 0, "text": put_away_text(decoration_name(data, standing))}
+	if not owns(data, world.state, deco):
+		return Gen2WorldTransaction.failure(&"decoration_not_owned", {"decoration": deco})
+	if standing == deco:
+		## `DecoAction_SetItUp.alreadythere` is the one refusal that leaves the
+		## slot alone.
+		return {"ok": true, "changed": false, "text": TEXT_ALREADY_SET_UP}
+	var text: String = set_up_text(decoration_name(data, deco)) if standing == 0 \
+		else put_away_and_set_up_text(
+			decoration_name(data, standing), decoration_name(data, deco)
+		)
+	return {"next": deco, "text": text}
+
+
+## `DecoAction_SetItUp_Ornament.getwhichside`: a doll set up on one side is taken
+## off the other, so the room never holds two of the same ornament.
+static func _decoration_writes(world: Gen2WorldAPI, slot: StringName, next: int) -> Dictionary:
+	var writes: Dictionary = {slot: next}
+	if next == 0 or (slot != SLOT_LEFT_ORNAMENT and slot != SLOT_RIGHT_ORNAMENT):
+		return writes
+	var other: StringName = SLOT_RIGHT_ORNAMENT if slot == SLOT_LEFT_ORNAMENT \
+		else SLOT_LEFT_ORNAMENT
+	if world.state.maptile_decoration(other) == next:
+		writes[other] = 0
+	return writes

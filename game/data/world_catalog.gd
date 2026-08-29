@@ -611,41 +611,7 @@ func _attribute_maps() -> void:
 	## the busiest scripts are reached from dozens of maps.
 	var references: Dictionary = {}
 	for map: Gen2WorldMap in _data.world_maps():
-		var bank: int = int(map.events.get("bank", 0))
-		var pending: Array = []
-		for source: String in ["objects", "bg_events", "coord_events"]:
-			for raw: Variant in map.events.get(source, []):
-				if raw is Dictionary and int((raw as Dictionary).get("script", 0)) > 0:
-					pending.append([bank, int((raw as Dictionary)["script"])])
-		var scripts: Dictionary = map.scripts
-		if int(scripts.get("address", 0)) > 0:
-			pending.append([int(scripts.get("bank", bank)), int(scripts["address"])])
-		for raw: Variant in scripts.get("callbacks", []):
-			if raw is Dictionary and int((raw as Dictionary).get("script", 0)) > 0:
-				pending.append([int(scripts.get("bank", bank)), int((raw as Dictionary)["script"])])
-		var seen: Dictionary = {}
-		for _step: int in MAX_SCRIPT_COMMANDS:
-			if pending.is_empty():
-				break
-			var entry: Array = pending.pop_back()
-			var key: int = (int(entry[0]) & 0xFF) << ID_BANK_SHIFT \
-				| (int(entry[1]) & ID_ADDRESS_MASK)
-			if seen.has(key):
-				continue
-			seen[key] = true
-			if not owner.has(key):
-				owner[key] = Vector2i(map.group, map.number)
-			if not references.has(key):
-				var body: PackedByteArray = _data.world_script(int(entry[0]), int(entry[1]))
-				references[key] = Gen2WorldScript.scan_references(
-					body, int(entry[0]), int(entry[1]), crystal
-				).get("scripts", []) if not body.is_empty() else []
-			for referenced: Variant in references[key]:
-				if referenced is Dictionary:
-					pending.append([
-						int((referenced as Dictionary)["bank"]),
-						int((referenced as Dictionary)["address"]),
-					])
+		_walk_map_scripts(map, crystal, owner, references)
 	for id: Variant in _rows:
 		var row: Dictionary = _rows[id]
 		if row.has("map") or not row.has("address"):
@@ -657,6 +623,49 @@ func _attribute_maps() -> void:
 			if owner.has(key):
 				row["map"] = owner[key]
 				break
+
+
+func _walk_map_scripts(
+	map: Gen2WorldMap, crystal: bool, owner: Dictionary, references: Dictionary
+) -> void:
+	var bank: int = int(map.events.get("bank", 0))
+	var scripts: Dictionary = map.scripts
+	var script_bank: int = int(scripts.get("bank", bank))
+	var pending: Array = []
+	for source: String in ["objects", "bg_events", "coord_events"]:
+		_append_scripts(pending, map.events.get(source, []), bank)
+	if int(scripts.get("address", 0)) > 0:
+		pending.append([script_bank, int(scripts["address"])])
+	_append_scripts(pending, scripts.get("callbacks", []), script_bank)
+	var seen: Dictionary = {}
+	for _step: int in MAX_SCRIPT_COMMANDS:
+		if pending.is_empty():
+			break
+		var entry: Array = pending.pop_back()
+		var key: int = (int(entry[0]) & 0xFF) << ID_BANK_SHIFT \
+			| (int(entry[1]) & ID_ADDRESS_MASK)
+		if seen.has(key):
+			continue
+		seen[key] = true
+		if not owner.has(key):
+			owner[key] = Vector2i(map.group, map.number)
+		if not references.has(key):
+			var body: PackedByteArray = _data.world_script(int(entry[0]), int(entry[1]))
+			references[key] = Gen2WorldScript.scan_references(
+				body, int(entry[0]), int(entry[1]), crystal
+			).get("scripts", []) if not body.is_empty() else []
+		for referenced: Variant in references[key]:
+			if referenced is Dictionary:
+				pending.append([
+					int((referenced as Dictionary)["bank"]),
+					int((referenced as Dictionary)["address"]),
+				])
+
+
+static func _append_scripts(pending: Array, events: Variant, bank: int) -> void:
+	for raw: Variant in events:
+		if raw is Dictionary and int((raw as Dictionary).get("script", 0)) > 0:
+			pending.append([bank, int((raw as Dictionary)["script"])])
 
 
 ## Whether [param name] is the next few commands after [param at]. The cartridge

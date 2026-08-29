@@ -662,6 +662,10 @@ func _process(_delta: float) -> bool:
 		return true
 	if _base < 0:
 		_start()
+	return _spend_frame()
+
+
+func _spend_frame() -> bool:
 	var at: int = _clip_frame() - _base
 	## A host frame can carry more than one hardware frame, so the scripted ones
 	## are drained up to `at` rather than matched against it.

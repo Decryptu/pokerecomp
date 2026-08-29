@@ -974,47 +974,9 @@ func register_menu_entry(menu: StringName, id: StringName, entry: Dictionary) ->
 	if label.is_empty():
 		return {"ok": false, "reason": &"menu_entry_missing_label", "detail": String(id)}
 	var registered: Dictionary = {"kind": id, "label": label}
-	if menu == MENU_PACK_POCKET:
-		var pocket: int = int(entry.get("pocket", 0))
-		if pocket < FIRST_MOD_POCKET:
-			return {"ok": false, "reason": &"reserved_pocket", "detail": String(id)}
-		registered["pocket"] = pocket
-	elif menu == MENU_MART:
-		var item: int = int(entry.get("item", 0))
-		if item <= 0:
-			return {"ok": false, "reason": &"invalid_mart_item", "detail": String(id)}
-		registered["item"] = item
-		if entry.has("price"):
-			var price: int = int(entry["price"])
-			if price < 0:
-				return {"ok": false, "reason": &"invalid_mart_price", "detail": String(id)}
-			registered["price"] = price
-		if entry.has("available"):
-			var available: Variant = entry["available"]
-			if not available is Callable or not (available as Callable).is_valid():
-				return {"ok": false, "reason": &"invalid_mart_filter", "detail": String(id)}
-			registered["available"] = available
-	else:
-		var action: StringName = StringName(entry.get("action", &""))
-		if String(action).is_empty():
-			var handler: Variant = entry.get("handler", null)
-			registered["available"] = handler is Callable and (handler as Callable).is_valid()
-			if bool(registered["available"]):
-				registered["handler"] = handler
-		elif not START_ACTIONS.has(action):
-			return {"ok": false, "reason": &"unknown_menu_action", "detail": String(action)}
-		else:
-			registered["action"] = action
-			registered["available"] = true
-			## Which page the row opens, for a mod with more than one row: the
-			## row's own id otherwise, which is the mod's id in every example.
-			if action == START_ACTION_OPEN_MOD_PAGE:
-				registered["page"] = StringName(entry.get("page", id))
-		if entry.has("visible"):
-			var visible: Variant = entry["visible"]
-			if not visible is Callable or not (visible as Callable).is_valid():
-				return {"ok": false, "reason": &"invalid_menu_visibility", "detail": String(id)}
-			registered["visible"] = visible
+	var refusal: Dictionary = _fill_menu_entry(menu, id, entry, registered)
+	if not refusal.is_empty():
+		return refusal
 	var entries: Array = _menu_entries.get(menu, [])
 	for existing: Dictionary in entries:
 		if StringName(existing.get("kind", &"")) == id:
@@ -1022,6 +984,72 @@ func register_menu_entry(menu: StringName, id: StringName, entry: Dictionary) ->
 	entries.append(registered)
 	_menu_entries[menu] = entries
 	return {"ok": true, "id": id}
+
+
+func _fill_menu_entry(
+	menu: StringName, id: StringName, entry: Dictionary, registered: Dictionary
+) -> Dictionary:
+	if menu == MENU_PACK_POCKET:
+		return _fill_pocket_entry(id, entry, registered)
+	if menu == MENU_MART:
+		return _fill_mart_entry(id, entry, registered)
+	return _fill_start_entry(id, entry, registered)
+
+
+func _fill_pocket_entry(
+	id: StringName, entry: Dictionary, registered: Dictionary
+) -> Dictionary:
+	var pocket: int = int(entry.get("pocket", 0))
+	if pocket < FIRST_MOD_POCKET:
+		return {"ok": false, "reason": &"reserved_pocket", "detail": String(id)}
+	registered["pocket"] = pocket
+	return {}
+
+
+func _fill_mart_entry(
+	id: StringName, entry: Dictionary, registered: Dictionary
+) -> Dictionary:
+	var item: int = int(entry.get("item", 0))
+	if item <= 0:
+		return {"ok": false, "reason": &"invalid_mart_item", "detail": String(id)}
+	registered["item"] = item
+	if entry.has("price"):
+		var price: int = int(entry["price"])
+		if price < 0:
+			return {"ok": false, "reason": &"invalid_mart_price", "detail": String(id)}
+		registered["price"] = price
+	if entry.has("available"):
+		var available: Variant = entry["available"]
+		if not available is Callable or not (available as Callable).is_valid():
+			return {"ok": false, "reason": &"invalid_mart_filter", "detail": String(id)}
+		registered["available"] = available
+	return {}
+
+
+func _fill_start_entry(
+	id: StringName, entry: Dictionary, registered: Dictionary
+) -> Dictionary:
+	var action: StringName = StringName(entry.get("action", &""))
+	if String(action).is_empty():
+		var handler: Variant = entry.get("handler", null)
+		registered["available"] = handler is Callable and (handler as Callable).is_valid()
+		if bool(registered["available"]):
+			registered["handler"] = handler
+	elif not START_ACTIONS.has(action):
+		return {"ok": false, "reason": &"unknown_menu_action", "detail": String(action)}
+	else:
+		registered["action"] = action
+		registered["available"] = true
+		## Which page the row opens, for a mod with more than one row: the
+		## row's own id otherwise, which is the mod's id in every example.
+		if action == START_ACTION_OPEN_MOD_PAGE:
+			registered["page"] = StringName(entry.get("page", id))
+	if entry.has("visible"):
+		var visible: Variant = entry["visible"]
+		if not visible is Callable or not (visible as Callable).is_valid():
+			return {"ok": false, "reason": &"invalid_menu_visibility", "detail": String(id)}
+		registered["visible"] = visible
+	return {}
 
 
 ## Adds one row to the PARTY MEMBER submenu, the box a party slot opens. Unlike

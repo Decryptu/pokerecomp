@@ -1486,6 +1486,27 @@ the slow commands, 8 for plain, 4 for bike speed. A pass is two hardware frames
 `Gen2WorldObject.frame` is the cartridge's `Facings` index, 0 to 3, changing every
 four passes.
 
+`Gen2WorldAPI.player_step_kind()` names which movement the step in flight is, so a
+renderer can draw a climb as a climb rather than as a walk north. A scripted stream
+answers the movement command's own name; a walk, a ledge hop and a turn in place
+answer `step`, `jump_step` and `turn`. It is empty while nothing is stepping.
+
+`turn_away`, `turn_in` and `turn_waterfall` reach `TurningStep` rather than
+`NormalStep`, which sets `OBJECT_ACTION_SPIN`: the walker spins counterclockwise
+through DOWN, RIGHT, UP, LEFT, one quarter-turn every four passes, instead of
+facing the way it is going. `Gen2WorldAPI.player_drawn_facing()` and
+`Gen2WorldObject.drawn_facing()` are that spin; the logical facing never moves, so
+a waterfall climb still ends facing up. Draw from those two, not from
+`player_facing` and `facing`.
+
+Waterfall is the one field move whose whole answer is movement.
+`complete_waterfall()` commits the landing cell at once and then runs the column as
+a step run of `turn_waterfall`, one cell every four passes, so the offset opens as
+many cells below the landing as the climb is tall and counts down to zero. Its
+answer carries `steps` and `passes`, and the surfer stays a surfer until the last
+step lands them ashore. A renderer that draws a fall as a vertical wall reads the
+offset as height.
+
 A hop is the one step with a second axis.
 `Gen2WorldAPI.player_height_offset_pixels()` and
 `Gen2WorldObject.height_offset_pixels()` return how far above the ground the sprite

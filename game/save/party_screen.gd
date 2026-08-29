@@ -419,6 +419,10 @@ func _confirm() -> void:
 	if StringName(entry.get("option", &"")) == OPTION_CANCEL:
 		_close_submenu()
 		return
+	_confirm_submenu(entry)
+
+
+func _confirm_submenu(entry: Dictionary) -> void:
 	match StringName(entry.get("kind", &"")):
 		&"field_move":
 			var move: int = int(entry.get("move", 0))
@@ -461,17 +465,21 @@ func _confirm() -> void:
 				"name": _display_name(_save.party[_member_cursor]),
 			})
 		&"option":
-			match StringName(entry.get("option", &"")):
-				OPTION_ITEM:
-					_open_item_menu()
-				OPTION_MAIL:
-					_open_mail_menu()
-				OPTION_SWITCH:
-					_begin_switch()
-				OPTION_STATS:
-					_open_stats()
-				OPTION_MOVE:
-					_open_moves()
+			_confirm_option(StringName(entry.get("option", &"")))
+
+
+func _confirm_option(option: StringName) -> void:
+	match option:
+		OPTION_ITEM:
+			_open_item_menu()
+		OPTION_MAIL:
+			_open_mail_menu()
+		OPTION_SWITCH:
+			_begin_switch()
+		OPTION_STATS:
+			_open_stats()
+		OPTION_MOVE:
+			_open_moves()
 
 
 ## `MonMenu_Stats` reaches `OpenPartyStats`, which is `StatsScreenInit` over the

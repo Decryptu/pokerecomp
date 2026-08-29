@@ -810,7 +810,8 @@ func _draw_row_entries(
 			+ Vector2(object.step_offset(Gen2WorldAPI.CELL_PIXELS)) - camera_pixels \
 			+ SPRITE_LIFT
 		var texture: Texture2D = _actor_texture(
-			object.sprite, object.palette, object.facing, object.frame, object.big_object_shape()
+			object.sprite, object.palette, object.drawn_facing(), object.frame,
+			object.big_object_shape()
 		)
 		# The same sprite offset the player's hop takes, so a `jump_step` in a
 		# movement stream arcs rather than sliding.
@@ -834,7 +835,7 @@ func _draw_player(background: Vector2) -> Vector2:
 	## the hop leaves behind stay on the ground.
 	var jump: Vector2 = Vector2(0, _world.player_jump_offset())
 	var player_texture: Texture2D = _actor_texture(
-		_world.player_sprite(), _world.player_palette(), _world.player_facing,
+		_world.player_sprite(), _world.player_palette(), _world.player_drawn_facing(),
 		_world.player_walk_frame()
 	)
 	if player_texture != null:

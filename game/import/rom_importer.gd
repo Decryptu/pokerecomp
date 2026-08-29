@@ -449,47 +449,54 @@ static func verify_game_freak_presents(rom: RomFile, layout: Dictionary) -> Dict
 static func _verify_presents_sprites(rom: RomFile, entry: Dictionary) -> Dictionary:
 	var stars: int = int(entry.get("stars", -1))
 	if stars >= 0:
-		if not rom.in_bounds(stars, RomLayout.PRESENTS_STARS_TILES * Gen2Tiles.TILE_BYTES):
-			return {"ok": false, "message": "The splash star graphic is outside the cartridge."}
-		# splash.asm INCBINs the stars directly behind the logo, so the two pin
-		# each other.
-		var after: int = int(entry.get("gfx", -1)) \
-			+ RomLayout.PRESENTS_GFX_TILES * Gen2Tiles.TILE_1BPP_BYTES
-		if stars != after:
-			return {
-				"ok": false,
-				"message": "The splash stars are not behind the logo graphic.",
-			}
-		for index: int in RomLayout.PRESENTS_STAR_TILES:
-			if _tile_2bpp_lit(rom, stars, index) == 0:
-				return {"ok": false, "message": "Splash star tile %d is blank." % index}
-		# `.Frameset_GSGameFreakLogoSparkle` runs its three tiles as one spark
-		# closing in on its own centre, so tile n is blank across its outer n rows
-		# top and bottom and lit on the two just inside them, and each carries
-		# fewer lit pixels than the one before.
-		var last_lit: int = Gen2Tiles.TILE_PIXELS + 1
-		for index: int in RomLayout.PRESENTS_SPARKLE_TILES:
-			var tile: int = RomLayout.PRESENTS_STAR_TILES + index
-			for row: int in Gen2Tiles.TILE_HEIGHT:
-				var edge: bool = row < index or row >= Gen2Tiles.TILE_HEIGHT - index
-				var rim: bool = row == index or row == Gen2Tiles.TILE_HEIGHT - 1 - index
-				var lit_row: bool = _row_2bpp_lit(rom, stars, tile, row)
-				if edge == lit_row or (rim and not lit_row):
-					return {
-						"ok": false,
-						"message": "Sparkle tile %d row %d does not close in." % [
-							index, row,
-						],
-					}
-			var lit: int = _tile_2bpp_lit(rom, stars, tile)
-			if lit >= last_lit:
+		return _verify_presents_stars(rom, entry, stars)
+	return _verify_presents_ditto(rom, entry)
+
+
+static func _verify_presents_stars(rom: RomFile, entry: Dictionary, stars: int) -> Dictionary:
+	if not rom.in_bounds(stars, RomLayout.PRESENTS_STARS_TILES * Gen2Tiles.TILE_BYTES):
+		return {"ok": false, "message": "The splash star graphic is outside the cartridge."}
+	# splash.asm INCBINs the stars directly behind the logo, so the two pin
+	# each other.
+	var after: int = int(entry.get("gfx", -1)) \
+		+ RomLayout.PRESENTS_GFX_TILES * Gen2Tiles.TILE_1BPP_BYTES
+	if stars != after:
+		return {
+			"ok": false,
+			"message": "The splash stars are not behind the logo graphic.",
+		}
+	for index: int in RomLayout.PRESENTS_STAR_TILES:
+		if _tile_2bpp_lit(rom, stars, index) == 0:
+			return {"ok": false, "message": "Splash star tile %d is blank." % index}
+	# `.Frameset_GSGameFreakLogoSparkle` runs its three tiles as one spark
+	# closing in on its own centre, so tile n is blank across its outer n rows
+	# top and bottom and lit on the two just inside them, and each carries
+	# fewer lit pixels than the one before.
+	var last_lit: int = Gen2Tiles.TILE_PIXELS + 1
+	for index: int in RomLayout.PRESENTS_SPARKLE_TILES:
+		var tile: int = RomLayout.PRESENTS_STAR_TILES + index
+		for row: int in Gen2Tiles.TILE_HEIGHT:
+			var edge: bool = row < index or row >= Gen2Tiles.TILE_HEIGHT - index
+			var rim: bool = row == index or row == Gen2Tiles.TILE_HEIGHT - 1 - index
+			var lit_row: bool = _row_2bpp_lit(rom, stars, tile, row)
+			if edge == lit_row or (rim and not lit_row):
 				return {
 					"ok": false,
-					"message": "Sparkle tile %d is not smaller than the one before." % index,
+					"message": "Sparkle tile %d row %d does not close in." % [
+						index, row,
+					],
 				}
-			last_lit = lit
-		return {"ok": true, "message": "GameFreak Presents verified."}
+		var lit: int = _tile_2bpp_lit(rom, stars, tile)
+		if lit >= last_lit:
+			return {
+				"ok": false,
+				"message": "Sparkle tile %d is not smaller than the one before." % index,
+			}
+		last_lit = lit
+	return {"ok": true, "message": "GameFreak Presents verified."}
 
+
+static func _verify_presents_ditto(rom: RomFile, entry: Dictionary) -> Dictionary:
 	var ditto: int = int(entry.get("ditto", -1))
 	if ditto < 0:
 		return {"ok": false, "message": "This cartridge has neither a splash star nor a Ditto."}
@@ -717,6 +724,13 @@ static func _verify_gs_title(rom: RomFile, entry: Dictionary) -> Dictionary:
 			"message": "The title tilemap is %d bytes, not whole rows." % tilemap.size(),
 		}
 
+	var trail: Dictionary = _verify_gs_title_trail(rom, entry)
+	if not trail["ok"]:
+		return trail
+	return _verify_gs_title_palettes(rom, entry)
+
+
+static func _verify_gs_title_trail(rom: RomFile, entry: Dictionary) -> Dictionary:
 	var trail: int = int(entry["trail"])
 	var trail_tiles: int = int(entry["trail_tiles"])
 	if not rom.in_bounds(trail, trail_tiles * Gen2Tiles.TILE_BYTES):
@@ -734,12 +748,10 @@ static func _verify_gs_title(rom: RomFile, entry: Dictionary) -> Dictionary:
 	var bird_at: int = trail + trail_tiles * Gen2Tiles.TILE_BYTES
 	if int(entry["bird"]) != bird_at:
 		return {"ok": false, "message": "The title bird is not behind the trail."}
-	var bird: Dictionary = _verify_title_run(
-		rom, "bird", bird_at, int(entry["bird_tiles"])
-	)
-	if not bird["ok"]:
-		return bird
+	return _verify_title_run(rom, "bird", bird_at, int(entry["bird_tiles"]))
 
+
+static func _verify_gs_title_palettes(rom: RomFile, entry: Dictionary) -> Dictionary:
 	var size: int = Gen2Palette.COLOR_BYTES
 	var bg: int = int(entry["bg_palette"])
 	var ob: int = int(entry["ob_palette"])
@@ -2492,6 +2504,36 @@ static func verify_mail(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if entry.is_empty():
 		return {"ok": false, "message": "The cartridge has no mail block."}
 
+	var items: Dictionary = _verify_mail_items(rom, entry)
+	if not items["ok"]:
+		return items
+	var input: Dictionary = _verify_mail_input(rom, layout, entry)
+	if not input["ok"]:
+		return input
+
+	var gfx: int = int(entry.get("gfx", -1))
+	if not rom.in_bounds(gfx, RomLayout.MAIL_GFX_BYTES):
+		return {"ok": false, "message": "Mail graphics run past the cartridge."}
+	var ends: Dictionary = {
+		gfx: MAIL_GFX_FIRST_TILE,
+		gfx + RomLayout.MAIL_GFX_BYTES - RomLayout.TILE_BYTES_1BPP: MAIL_GFX_LAST_TILE,
+	}
+	for at: int in ends:
+		if Array(rom.slice(at, RomLayout.TILE_BYTES_1BPP)) != Array(ends[at] as Array):
+			return {"ok": false, "message": "Mail graphics tile at $%X is not its own." % at}
+
+	var palettes: Dictionary = _verify_mail_palettes(rom, entry)
+	if not palettes["ok"]:
+		return palettes
+
+	if not rom.in_bounds(
+		int(entry.get("icon", -1)), RomLayout.MAIL_ICON_TILES * RomLayout.TILE_BYTES_2BPP
+	):
+		return {"ok": false, "message": "The mail icon is outside the cartridge."}
+	return {"ok": true, "message": "Mail tables, graphics and palettes verified."}
+
+
+static func _verify_mail_items(rom: RomFile, entry: Dictionary) -> Dictionary:
 	var items: int = int(entry.get("items", -1))
 	if not rom.in_bounds(items, RomLayout.MAIL_ITEM_COUNT + 1):
 		return {"ok": false, "message": "MailItems is outside the cartridge."}
@@ -2505,7 +2547,12 @@ static func verify_mail(rom: RomFile, layout: Dictionary) -> Dictionary:
 			}
 	if rom.u8(items + RomLayout.MAIL_ITEM_COUNT) != RomLayout.MAIL_ITEM_END:
 		return {"ok": false, "message": "MailItems does not end in -1."}
+	return {"ok": true}
 
+
+static func _verify_mail_input(
+	rom: RomFile, layout: Dictionary, entry: Dictionary
+) -> Dictionary:
 	var chars: int = int(entry.get("input_chars", -1))
 	var block: int = RomLayout.MAIL_INPUT_TABLES * RomLayout.MAIL_INPUT_TABLE_ROWS \
 		* RomLayout.MAIL_INPUT_ROW_BYTES
@@ -2532,18 +2579,10 @@ static func verify_mail(rom: RomFile, layout: Dictionary) -> Dictionary:
 		)
 		if Array(rom.slice(command, RomLayout.MAIL_INPUT_ROW_BYTES)) != Array(expected_row):
 			return {"ok": false, "message": "Mail input table %d has no command row." % table}
+	return {"ok": true}
 
-	var gfx: int = int(entry.get("gfx", -1))
-	if not rom.in_bounds(gfx, RomLayout.MAIL_GFX_BYTES):
-		return {"ok": false, "message": "Mail graphics run past the cartridge."}
-	var ends: Dictionary = {
-		gfx: MAIL_GFX_FIRST_TILE,
-		gfx + RomLayout.MAIL_GFX_BYTES - RomLayout.TILE_BYTES_1BPP: MAIL_GFX_LAST_TILE,
-	}
-	for at: int in ends:
-		if Array(rom.slice(at, RomLayout.TILE_BYTES_1BPP)) != Array(ends[at] as Array):
-			return {"ok": false, "message": "Mail graphics tile at $%X is not its own." % at}
 
+static func _verify_mail_palettes(rom: RomFile, entry: Dictionary) -> Dictionary:
 	var palettes: int = int(entry.get("palettes", -1))
 	var palette_bytes: int = RomLayout.MAIL_PALETTE_COUNT * RomLayout.MAIL_PALETTE_COLOURS * 2
 	if not rom.in_bounds(palettes, palette_bytes):
@@ -2559,12 +2598,7 @@ static func verify_mail(rom: RomFile, layout: Dictionary) -> Dictionary:
 			}
 		if rom.u16le(at_row + (RomLayout.MAIL_PALETTE_COLOURS - 1) * 2) != 0:
 			return {"ok": false, "message": "Mail palette %d does not end in black." % index}
-
-	if not rom.in_bounds(
-		int(entry.get("icon", -1)), RomLayout.MAIL_ICON_TILES * RomLayout.TILE_BYTES_2BPP
-	):
-		return {"ok": false, "message": "The mail icon is outside the cartridge."}
-	return {"ok": true, "message": "Mail tables, graphics and palettes verified."}
+	return {"ok": true}
 
 
 ## `BattleTowerTrainers`' two ends, which is what says the run is the run.
@@ -4284,39 +4318,48 @@ static func _read_one_trainer(rom: RomFile, at: int) -> Dictionary:
 	while rom.in_bounds(pos) and rom.u8(pos) != RomLayout.TRAINER_PARTY_END:
 		if party.size() >= RomLayout.MAX_TRAINER_PARTY_SIZE:
 			return {}
-		if not rom.in_bounds(pos, 2):
+		var mon: Dictionary = _read_trainer_mon(rom, pos, mon_type)
+		if mon.is_empty():
 			return {}
-		var level: int = rom.u8(pos)
-		var species: int = rom.u8(pos + 1)
-		if level < 1 or level > RomLayout.MAX_LEVEL:
-			return {}
-		if species < 1 or species > RomLayout.SPECIES_COUNT:
-			return {}
-		pos += 2
-
-		var extra: int = RomLayout.trainer_mon_extra_size(mon_type)
-		if not rom.in_bounds(pos, extra):
-			return {}
-		var item: int = 0
-		var moves: Array = []
-		if mon_type == RomLayout.TRAINER_MON_ITEM or mon_type == RomLayout.TRAINER_MON_ITEM_MOVES:
-			item = rom.u8(pos)
-			pos += 1
-		if mon_type == RomLayout.TRAINER_MON_MOVES or mon_type == RomLayout.TRAINER_MON_ITEM_MOVES:
-			for slot: int in RomLayout.TRAINER_MON_MOVE_COUNT:
-				var move: int = rom.u8(pos + slot)
-				if move > RomLayout.MOVE_COUNT:
-					return {}
-				moves.append(move)
-			pos += RomLayout.TRAINER_MON_MOVE_COUNT
-
-		party.append({"level": level, "species": species, "item": item, "moves": moves})
+		pos = int(mon["_next"])
+		mon.erase("_next")
+		party.append(mon)
 
 	if not rom.in_bounds(pos) or party.is_empty():
 		return {}
 	pos += 1
 
 	return {"name": name, "type": mon_type, "party": party, "_next": pos}
+
+
+static func _read_trainer_mon(rom: RomFile, at: int, mon_type: int) -> Dictionary:
+	var pos: int = at
+	if not rom.in_bounds(pos, 2):
+		return {}
+	var level: int = rom.u8(pos)
+	var species: int = rom.u8(pos + 1)
+	if level < 1 or level > RomLayout.MAX_LEVEL:
+		return {}
+	if species < 1 or species > RomLayout.SPECIES_COUNT:
+		return {}
+	pos += 2
+
+	if not rom.in_bounds(pos, RomLayout.trainer_mon_extra_size(mon_type)):
+		return {}
+	var item: int = 0
+	var moves: Array = []
+	if mon_type == RomLayout.TRAINER_MON_ITEM or mon_type == RomLayout.TRAINER_MON_ITEM_MOVES:
+		item = rom.u8(pos)
+		pos += 1
+	if mon_type == RomLayout.TRAINER_MON_MOVES or mon_type == RomLayout.TRAINER_MON_ITEM_MOVES:
+		for slot: int in RomLayout.TRAINER_MON_MOVE_COUNT:
+			var move: int = rom.u8(pos + slot)
+			if move > RomLayout.MOVE_COUNT:
+				return {}
+			moves.append(move)
+		pos += RomLayout.TRAINER_MON_MOVE_COUNT
+
+	return {"level": level, "species": species, "item": item, "moves": moves, "_next": pos}
 
 
 ## The trainer party table, checked by everything known about it independently:

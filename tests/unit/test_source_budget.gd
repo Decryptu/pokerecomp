@@ -18,33 +18,12 @@ const MAX_COMPLEXITY: int = 20
 const MAX_COMMENT_BLOCK: int = 8
 ## Comment lines under [constant COUNTED_ROOTS]. A ceiling, not a target: lower
 ## it whenever a pass leaves room, and never raise it.
-const MAX_COMMENT_LINES: int = 37884
+const MAX_COMMENT_LINES: int = 37882
 
-## The functions still over [constant MAX_COMPLEXITY], as `path:function`. Delete
-## a line when you fix one. The test fails on a line that no longer names a
-## function over the ceiling, so this cannot rot and cannot grow.
-const OVER_COMPLEXITY: Array[String] = [
-	"game/data/world_catalog.gd:_attribute_maps",
-	"game/import/rom_importer.gd:_read_one_trainer",
-	"game/import/rom_importer.gd:_verify_gs_title",
-	"game/import/rom_importer.gd:_verify_presents_sprites",
-	"game/import/rom_importer.gd:verify_mail",
-	"game/import/world_importer.gd:_read_events",
-	"game/mods/mod_host.gd:register_menu_entry",
-	"game/save/party_screen.gd:_confirm",
-	"game/save/save_battle_adapter.gd:from_battle_party",
-	"game/world/battle_tower.gd:action",
-	"game/world/slot_machine.gd:_reel_action",
-	"game/world/world_bag_host.gd:give_to_party",
-	"game/world/world_decoration.gd:apply",
-	"game/world/world_mart_host.gd:purchase",
-	"game/world/world_party_host.gd:teach_tm_hm",
-	"game/world/world_script.gd:scan_references",
-	"tools/checks/radio.gd:_verify_shows",
-	"tools/preview_town_map.gd:_initialize",
-	"tools/record_clip.gd:_process",
-	"tools/trace_world_script.gd:_run",
-]
+## The functions still over [constant MAX_COMPLEXITY], as `path:function`. Empty,
+## and it stays empty: a function over the ceiling fails the test rather than
+## joining a list.
+const OVER_COMPLEXITY: Array[String] = []
 
 
 func test_no_function_is_over_the_complexity_ceiling() -> void:

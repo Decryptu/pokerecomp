@@ -640,41 +640,12 @@ static func teach_tm_hm(
 	forget_slot: int = -1,
 	persist: bool = true
 ) -> Dictionary:
-	if world == null or save == null or world.data == null:
-		return _failure(&"missing_save", {})
-	if world.state == null or world.state.item_quantity(item) <= 0:
-		return _failure(&"insufficient_item_quantity", {"item": item})
-	var move: int = Gen2WorldTMHM.move_for_item(world.data, item)
-	if move <= 0:
-		return _failure(&"not_a_tm_hm", {"item": item})
-	if party_index < 0 or party_index >= save.party.size():
-		return _failure(&"invalid_party_index", {"party_index": party_index})
-	var mon: Gen2SaveMon = save.party[party_index] as Gen2SaveMon
-	if mon == null:
-		return _failure(&"invalid_party_index", {"party_index": party_index})
-	# ChooseMonToLearnTMHM refuses an egg with SFX_WRONG and reopens the list, so
-	# an egg never reaches TeachTMHM at all.
-	if mon.is_egg:
-		return _failure(&"cannot_teach_egg", {"party_index": party_index})
-	if not Gen2WorldTMHM.can_learn(world.data, mon.species, move):
-		return _failure(&"not_compatible", {"species": mon.species, "move": move})
-	if Gen2WorldTMHM.knows_move(mon.moves, move):
-		return _failure(&"already_knows_move", {"move": move})
-	var slot: int = Gen2WorldTMHM.first_empty_slot(mon.moves)
-	var forgot: int = 0
-	if slot < 0:
-		# ForgetMove's own refusals, answering before the candidate save is built
-		# the way every refusal above them does.
-		if forget_slot < 0:
-			return _failure(&"moveset_full", {
-				"party_index": party_index, "move": move, "moves": mon.moves.duplicate(),
-			})
-		if forget_slot >= mon.moves.size():
-			return _failure(&"invalid_forget_slot", {"forget_slot": forget_slot})
-		forgot = int(mon.moves[forget_slot])
-		if Gen2MoveForget.is_hm_move(forgot):
-			return _failure(&"cannot_forget_hm", {"forget_slot": forget_slot, "forgot": forgot})
-		slot = forget_slot
+	var checked: Dictionary = _teach_tm_hm_refusal(world, save, item, party_index, forget_slot)
+	if not bool(checked["ok"]):
+		return checked
+	var move: int = int(checked["move"])
+	var slot: int = int(checked["slot"])
+	var forgot: int = int(checked["forgot"])
 
 	var opened: Dictionary = Gen2WorldTransaction.begin(world, save)
 	if not bool(opened.get("ok", false)):
@@ -719,6 +690,47 @@ static func teach_tm_hm(
 		"happiness": learner.happiness,
 		"happiness_change": learner.happiness - happiness,
 	}
+
+
+static func _teach_tm_hm_refusal(
+	world: Gen2WorldAPI, save: Gen2SaveData, item: int, party_index: int, forget_slot: int
+) -> Dictionary:
+	if world == null or save == null or world.data == null:
+		return _failure(&"missing_save", {})
+	if world.state == null or world.state.item_quantity(item) <= 0:
+		return _failure(&"insufficient_item_quantity", {"item": item})
+	var move: int = Gen2WorldTMHM.move_for_item(world.data, item)
+	if move <= 0:
+		return _failure(&"not_a_tm_hm", {"item": item})
+	if party_index < 0 or party_index >= save.party.size():
+		return _failure(&"invalid_party_index", {"party_index": party_index})
+	var mon: Gen2SaveMon = save.party[party_index] as Gen2SaveMon
+	if mon == null:
+		return _failure(&"invalid_party_index", {"party_index": party_index})
+	# ChooseMonToLearnTMHM refuses an egg with SFX_WRONG and reopens the list, so
+	# an egg never reaches TeachTMHM at all.
+	if mon.is_egg:
+		return _failure(&"cannot_teach_egg", {"party_index": party_index})
+	if not Gen2WorldTMHM.can_learn(world.data, mon.species, move):
+		return _failure(&"not_compatible", {"species": mon.species, "move": move})
+	if Gen2WorldTMHM.knows_move(mon.moves, move):
+		return _failure(&"already_knows_move", {"move": move})
+	var slot: int = Gen2WorldTMHM.first_empty_slot(mon.moves)
+	var forgot: int = 0
+	if slot < 0:
+		# ForgetMove's own refusals, answering before the candidate save is built
+		# the way every refusal above them does.
+		if forget_slot < 0:
+			return _failure(&"moveset_full", {
+				"party_index": party_index, "move": move, "moves": mon.moves.duplicate(),
+			})
+		if forget_slot >= mon.moves.size():
+			return _failure(&"invalid_forget_slot", {"forget_slot": forget_slot})
+		forgot = int(mon.moves[forget_slot])
+		if Gen2MoveForget.is_hm_move(forgot):
+			return _failure(&"cannot_forget_hm", {"forget_slot": forget_slot, "forgot": forgot})
+		slot = forget_slot
+	return {"ok": true, "move": move, "slot": slot, "forgot": forgot}
 
 
 ## `LearnMove` on its own, without the TM/HM that usually reaches it: what an

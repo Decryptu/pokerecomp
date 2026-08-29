@@ -77,13 +77,32 @@ func _run() -> void:
 	var lines: PackedStringArray = PackedStringArray(["# frame bank:addr opcode name"])
 	var frame: int = 0
 
-	for step: String in args[5].split(",", false):
+	var walked: int = _walk(screen, lines, args[5], frame)
+	if walked < 0:
+		quit(2)
+		return
+	frame = walked
+
+	print("talking from %s facing %d" % [screen._world.player_cell, screen._world.player_facing])
+	frame = _spend(screen, lines, frame, maxi(1, int(args[6])))
+
+	Gen2WorldScriptRunner.trace_commands = false
+	FileAccess.open(args[7], FileAccess.WRITE).store_string("\n".join(lines) + "\n")
+	print("wrote %d commands to %s" % [lines.size() - 1, args[7]])
+	root.remove_child(screen)
+	screen.free()
+	quit(0)
+
+
+func _walk(
+	screen: Gen2WorldScreen, lines: PackedStringArray, spec: String, frame: int
+) -> int:
+	for step: String in spec.split(",", false):
 		var parts: PackedStringArray = step.split(":")
 		var button: int = _button_for(parts[0])
 		if button == Gen2Button.NONE:
 			push_error("a walk step is <up|down|left|right>:<count>")
-			quit(2)
-			return
+			return -1
 		var cells: int = int(parts[1]) if parts.size() > 1 else 1
 		if cells == 0:
 			var turns: int = 0
@@ -110,10 +129,13 @@ func _run() -> void:
 				screen.advance_frame()
 				_collect(screen, lines, frame)
 				frame += 1
+	return frame
 
-	print("talking from %s facing %d" % [screen._world.player_cell, screen._world.player_facing])
+
+func _spend(
+	screen: Gen2WorldScreen, lines: PackedStringArray, frame: int, limit: int
+) -> int:
 	var idle: int = 0
-	var limit: int = maxi(1, int(args[6]))
 	while frame < limit:
 		if frame % PRESS_EVERY == 0:
 			screen.press_button(Gen2Button.A)
@@ -128,13 +150,7 @@ func _run() -> void:
 				break
 		else:
 			idle = 0
-
-	Gen2WorldScriptRunner.trace_commands = false
-	FileAccess.open(args[7], FileAccess.WRITE).store_string("\n".join(lines) + "\n")
-	print("wrote %d commands to %s" % [lines.size() - 1, args[7]])
-	root.remove_child(screen)
-	screen.free()
-	quit(0)
+	return frame
 
 
 ## Drains whatever the runner has executed since the last frame, and drains a
