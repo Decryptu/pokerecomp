@@ -10,6 +10,31 @@ const MAX_BYTES: int = 128
 const MAX_COMMANDS: int = 128
 const STEP_END: int = 0x47
 
+## The three commands reaching `TurningStep` rather than `NormalStep`
+## (engine/overworld/movement.asm). It sets OBJECT_ACTION_SPIN, so the walker
+## spins counterclockwise instead of facing the way it is going.
+const SPINNING_KINDS: Array[StringName] = [&"turn_away", &"turn_in", &"turn_waterfall"]
+
+## `CounterclockwiseSpinAction`'s `.facings`.
+const SPIN_FACINGS: Array[int] = [
+	Gen2WorldSprite.FACING_DOWN, Gen2WorldSprite.FACING_RIGHT,
+	Gen2WorldSprite.FACING_UP, Gen2WorldSprite.FACING_LEFT,
+]
+
+
+## One pass of `CounterclockwiseSpinAction` on OBJECT_STEP_FRAME: bits 0 and 1 a
+## four-pass timer, bits 4 and 5 the facing. `InitStep` never touches this byte, so
+## a stream's steps share one turn.
+static func spin_advance(frame: int) -> int:
+	var timer: int = (frame & 0x0F) + 1
+	if timer < 4:
+		return (frame & 0x30) | timer
+	return ((frame & 0x30) + 0x10) & 0x30
+
+
+static func spin_facing(frame: int) -> int:
+	return SPIN_FACINGS[(frame >> 4) & 3]
+
 static func decode(data: PackedByteArray) -> Dictionary:
 	if data.is_empty():
 		return {"ok": false, "reason": &"missing_movement"}

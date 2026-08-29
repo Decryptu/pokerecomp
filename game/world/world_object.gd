@@ -77,6 +77,9 @@ var frame: int = 0
 ## increments it once per hardware frame of a step and masks it to four bits, and
 ## the drawn frame is its two high bits, so the drawing changes every four frames.
 var step_frame: int = 0
+## Which command is walking, and OBJECT_STEP_FRAME's spin use for it.
+var step_kind: StringName = &""
+var spin_frame: int = 0
 var active: bool = false
 var deleted: bool = false
 var emote_id: int = -1
@@ -347,23 +350,21 @@ func start_step(direction: Vector2i, frames: int) -> void:
 	_begin_step(direction, frames)
 
 
-## Adds one step of a scripted stream to the trail. The first one starts at
-## once and the rest wait their turn, so a five-step applymovement is drawn as
-## five steps rather than as one arrival.
-## [param new_facing] is the direction the object is drawn looking while this step
-## runs, which is not the step's own vector for a `jump_step` and is the whole of
-## a queued `turn_head`. `NormalStep` writes OBJECT_FACING as it starts the step,
-## so a stream applied in one call still turns one step at a time rather than
-## walking its whole path already facing the last command's way.
+## Adds one step of a scripted stream to the trail. The first starts at once and
+## the rest wait, so a five-step applymovement is drawn as five steps rather than
+## as one arrival. [param new_facing] is the direction it is drawn looking, not the
+## step's vector for a `jump_step` and the whole of a queued `turn_head`:
+## `NormalStep` writes it as the step starts, so a stream still turns a step at a
+## time.
 func queue_step(
 	direction: Vector2i, frames: int, jumping: bool = false,
-	new_facing: Vector2i = Vector2i.ZERO
+	new_facing: Vector2i = Vector2i.ZERO, kind: StringName = &""
 ) -> void:
 	if step_passes_remaining > 0 or not queued_steps.is_empty():
 		scripted_steps = true
 		queued_steps.append({
 			"direction": direction, "frames": maxi(0, frames), "jumping": jumping,
-			"facing": new_facing,
+			"facing": new_facing, "kind": kind,
 		})
 		return
 	apply_direction(new_facing)
@@ -372,7 +373,7 @@ func queue_step(
 	if frames <= 0 and direction == Vector2i.ZERO:
 		return
 	scripted_steps = true
-	_begin_step(direction, frames, jumping)
+	_begin_step(direction, frames, jumping, kind)
 
 
 ## `Movement_tree_shake`: 24 frames of STEP_TYPE_SLEEP with
@@ -397,7 +398,10 @@ static func sleep_frames(length: int) -> int:
 	return length if length > 0 else 0x100
 
 
-func _begin_step(direction: Vector2i, frames: int, jumping: bool = false) -> void:
+func _begin_step(
+	direction: Vector2i, frames: int, jumping: bool = false, kind: StringName = &""
+) -> void:
+	step_kind = kind
 	# `StepFunction_NPCJump` is the only step type running `UpdateJumpPosition`,
 	# and every step begun after it replaces the type, so the arc ends here.
 	step_jumping = jumping
@@ -415,6 +419,8 @@ func _begin_step(direction: Vector2i, frames: int, jumping: bool = false) -> voi
 func tick_step() -> bool:
 	if step_passes_remaining <= 0:
 		return false
+	if step_kind in Gen2WorldMovement.SPINNING_KINDS:
+		spin_frame = Gen2WorldMovement.spin_advance(spin_frame)
 	if step_direction != Vector2i.ZERO or weird_tree:
 		advance_walk_frame()
 	step_passes_remaining -= 1
@@ -438,10 +444,13 @@ func _start_next_queued_step() -> void:
 		apply_direction(next.get("facing", Vector2i.ZERO))
 		if int(next["frames"]) > 0 or next["direction"] != Vector2i.ZERO:
 			_begin_step(
-				next["direction"], int(next["frames"]), bool(next.get("jumping", false))
+				next["direction"], int(next["frames"]), bool(next.get("jumping", false)),
+				StringName(next.get("kind", &""))
 			)
 			return
 	scripted_steps = false
+	step_kind = &""
+	spin_frame = 0
 
 
 func is_stepping() -> bool:
@@ -458,6 +467,14 @@ func advance_walk_frame() -> void:
 
 func walk_frame() -> int:
 	return (step_frame >> 2) & 3
+
+
+## The facing this object is DRAWN with; [member facing] never moves.
+## See [constant Gen2WorldMovement.SPINNING_KINDS].
+func drawn_facing() -> int:
+	if step_passes_remaining > 0 and step_kind in Gen2WorldMovement.SPINNING_KINDS:
+		return Gen2WorldMovement.spin_facing(spin_frame)
+	return facing
 
 
 ## Starts the wait a movement template takes before deciding again. The source
@@ -487,10 +504,8 @@ func step_offset(cell_pixels: int) -> Vector2i:
 	return Vector2i(int(round(offset.x)), int(round(offset.y)))
 
 
-## How far above the ground this object is drawn, in world pixels and positive
-## upward, matching Gen2WorldAPI.player_height_offset_pixels(). Zero unless a
-## `jump_step` is in flight; presentation only, the cell having committed to the
-## landing cell when the jump started.
+## [method Gen2WorldAPI.player_height_offset_pixels] for an object: zero unless a
+## `jump_step` is in flight.
 func height_offset_pixels() -> float:
 	if not step_jumping or step_passes_total <= 0:
 		return 0.0
@@ -499,10 +514,7 @@ func height_offset_pixels() -> float:
 	))
 
 
-## The same offset in fractional walk cells, for a renderer that does not think
-## in hardware pixels, matching Gen2WorldAPI.player_step_offset_cells(). One
-## in-flight step is at most a cell behind; a scripted stream commits its whole
-## path at once, so its trail is as many cells behind as it has left to draw.
+## [method Gen2WorldAPI.player_step_offset_cells] for an object.
 func step_offset_cells() -> Vector2:
 	var behind := Vector2.ZERO
 	for entry: Dictionary in queued_steps:

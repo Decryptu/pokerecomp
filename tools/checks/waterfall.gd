@@ -9,6 +9,8 @@ var _r: RefCounted = null
 
 
 ## Pinned so a cache change is loud. A column is a waterfall cell with none below it.
+## An edge column is one drawn up to the map's own top row, where the climb stops
+## on the last row rather than on the first cell that is not a waterfall.
 const EXPECTED_CENSUS: Dictionary = {
 	# game id: [waterfall cells, columns, edge columns, maps carrying one]
 	&"gold": [164, 34, 4, 4],
@@ -58,7 +60,6 @@ func _sweep_columns(game_id: StringName, data: GameData, crystal: bool) -> void:
 			var climbed: Dictionary = _climb(data, crystal, map, foot)
 			if bool(climbed.get("edge", false)):
 				edge_columns += 1
-				continue
 			if not bool(climbed.get("ok", false)):
 				refused.append("%d/%d %s: %s" % [
 					map.group, map.number, foot, climbed.get("reason", "unknown"),
@@ -83,16 +84,15 @@ func _sweep_columns(game_id: StringName, data: GameData, crystal: bool) -> void:
 			game_id, [cells, columns, edge_columns, maps], expected,
 		]
 	)
-	print("%s waterfall: %d cells, %d columns over %d maps, %d climbed, %d run off the map." % [
-		game_id, cells, columns, maps, columns - edge_columns, edge_columns,
+	print("%s waterfall: %d cells, %d columns over %d maps, all climbed, %d of them to the map's top row." % [
+		game_id, cells, columns, maps, edge_columns,
 	])
 
 
-## One column, from the water below its foot. `edge` marks one whose top is the
-## map's own top row: the cartridge would read the border block there, never a
-## waterfall (asserted below), and stop with the player in the connection padding.
-## Nothing outside the map is a cell here, so the climb refuses and the player
-## stays. Four columns each cartridge.
+## One column, from the water below its foot. `edge` marks one drawn up to the
+## map's own top row, where the climb ends on that row: the cartridge reads the
+## border block above it, never a waterfall (asserted below), and stops one row
+## further into padding this port has no cell for.
 func _climb(
 	data: GameData, crystal: bool, map: Gen2WorldMap, foot: Vector2i
 ) -> Dictionary:
@@ -108,15 +108,17 @@ func _climb(
 	if world.player_cell != stand:
 		return {"ok": false, "reason": "staging moved the player"}
 	var applied: Dictionary = world.complete_waterfall()
-	if StringName(applied.get("reason", &"")) == &"climb_left_the_map":
-		return {"ok": true, "edge": true}
 	if not bool(applied.get("ok", false)):
 		return {"ok": false, "reason": String(applied.get("reason", "unknown"))}
-	return _verify_pacing(world, applied, stand)
+	var edge: bool = int(applied["cell"].y) == 0 \
+		and Gen2WorldFieldMove.waterfall_tile(world.collision_code_at(applied["cell"]))
+	var paced: Dictionary = _verify_pacing(world, applied, stand, edge)
+	paced["edge"] = edge
+	return paced
 
 
 func _verify_pacing(
-	world: Gen2WorldAPI, applied: Dictionary, stand: Vector2i
+	world: Gen2WorldAPI, applied: Dictionary, stand: Vector2i, edge: bool = false
 ) -> Dictionary:
 	var steps: int = int(applied["steps"])
 	var landing: Vector2i = applied["cell"]
@@ -124,7 +126,7 @@ func _verify_pacing(
 		return {"ok": false, "reason": "climbed %d cells" % steps}
 	if landing != stand + Vector2i.UP * steps:
 		return {"ok": false, "reason": "landed at %s, not %d cells up" % [landing, steps]}
-	if Gen2WorldFieldMove.waterfall_tile(world.collision_code_at(landing)):
+	if not edge and Gen2WorldFieldMove.waterfall_tile(world.collision_code_at(landing)):
 		return {"ok": false, "reason": "landed back on the fall"}
 	if world.player_cell != landing:
 		return {"ok": false, "reason": "the cell did not commit"}

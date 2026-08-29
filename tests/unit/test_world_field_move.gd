@@ -1209,6 +1209,31 @@ func test_complete_waterfall_paces_the_climb_one_cell_at_a_time() -> void:
 	assert_eq(world.player_cell, WATERFALL_LANDING_CELL)
 
 
+## `turn_waterfall` reaches `TurningStep`, which sets OBJECT_ACTION_SPIN, so the
+## climber spins counterclockwise all the way up: `CounterclockwiseSpinAction`
+## steps DOWN, RIGHT, UP, LEFT one quarter-turn every four passes, and the frame
+## runs on across the whole climb rather than restarting each cell.
+func test_the_waterfall_climb_spins_the_player_counterclockwise() -> void:
+	var world: Gen2WorldAPI = _waterfall_world()
+	assert_true(bool(world.waterfall_request().get("ok", false)))
+	var applied: Dictionary = world.complete_waterfall()
+	var wanted: Array[int] = [
+		Gen2WorldSprite.FACING_DOWN, Gen2WorldSprite.FACING_RIGHT,
+		Gen2WorldSprite.FACING_UP, Gen2WorldSprite.FACING_LEFT,
+	]
+	var seen: Array[int] = [world.player_drawn_facing()]
+	for spent: int in int(applied["passes"]):
+		world.advance_player_step_pass()
+		if world.player_step_in_progress():
+			seen.append(world.player_drawn_facing())
+	for index: int in seen.size():
+		assert_eq(seen[index], wanted[(index / 4) % 4], "pass %d" % index)
+	## The logical facing never moved, so the climb still ends facing up, and the
+	## drawing goes back to it the moment the run drains.
+	assert_eq(world.player_facing, Gen2WorldSprite.FACING_UP)
+	assert_eq(world.player_drawn_facing(), Gen2WorldSprite.FACING_UP)
+
+
 ## The landing re-derives the player state the way a warp does, so a climb that
 ## ends on land puts the surfer back on foot. Paced, that happens when the run
 ## drains: the climber is still surfing while the fall is being climbed.

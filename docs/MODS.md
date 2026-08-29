@@ -1491,6 +1491,14 @@ renderer can draw a climb as a climb rather than as a walk north. A scripted str
 answers the movement command's own name; a walk, a ledge hop and a turn in place
 answer `step`, `jump_step` and `turn`. It is empty while nothing is stepping.
 
+`turn_away`, `turn_in` and `turn_waterfall` reach `TurningStep` rather than
+`NormalStep`, which sets `OBJECT_ACTION_SPIN`: the walker spins counterclockwise
+through DOWN, RIGHT, UP, LEFT, one quarter-turn every four passes, instead of
+facing the way it is going. `Gen2WorldAPI.player_drawn_facing()` and
+`Gen2WorldObject.drawn_facing()` are that spin; the logical facing never moves, so
+a waterfall climb still ends facing up. Draw from those two, not from
+`player_facing` and `facing`.
+
 Waterfall is the one field move whose whole answer is movement.
 `complete_waterfall()` commits the landing cell at once and then runs the column as
 a step run of `turn_waterfall`, one cell every four passes, so the offset opens as

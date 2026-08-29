@@ -3299,18 +3299,39 @@ func preview_field_move_use() -> void:
 	_preview_field_move_use(Gen2WorldFieldMove.MOVE_CUT, Gen2WorldFieldMove.BADGE_HIVE)
 
 
-## The same pair for Surf, which needs the scene opened beside water and facing
-## it; Cut's matching requirement is a cuttable tile.
+## The same pair for Surf, which needs the scene opened beside water.
 func preview_surf() -> void:
+	_face_surfable_water()
 	_preview_field_move(Gen2WorldFieldMove.MOVE_SURF, Gen2WorldFieldMove.BADGE_FOG)
 
 
 func preview_surf_use() -> void:
+	_face_surfable_water()
 	_preview_field_move_use(Gen2WorldFieldMove.MOVE_SURF, Gen2WorldFieldMove.BADGE_FOG)
 
 
-## And for Whirlpool, facing a COLL_WHIRLPOOL cell: Dragon's Den B1F, Route 41
-## and Route 27 are the only maps that carry one.
+## `.TrySurf` reads the faced tile, so facing anywhere else photographs a refusal.
+func _face_surfable_water() -> void:
+	if _world == null:
+		return
+	var standing: int = _world.tile_permissions_at(_world.player_cell)
+	for facing: int in [
+		Gen2WorldSprite.FACING_DOWN, Gen2WorldSprite.FACING_UP,
+		Gen2WorldSprite.FACING_LEFT, Gen2WorldSprite.FACING_RIGHT,
+	]:
+		_world.player_facing = facing
+		var target: Vector2i = _world.facing_cell()
+		if _world.collision_permission_at(target) != Gen2WorldCollision.WATER_TILE:
+			continue
+		var face: int = Gen2WorldCollision.face_mask_for_direction(
+			_world.facing_direction()
+		)
+		if face == 0 or (standing & face) == 0:
+			return
+
+
+## And for Whirlpool, facing a COLL_WHIRLPOOL cell: Dragon's Den B1F, Route 41 and
+## Route 27 are the only maps that carry one.
 func preview_whirlpool() -> void:
 	_preview_field_move(Gen2WorldFieldMove.MOVE_WHIRLPOOL, Gen2WorldFieldMove.BADGE_GLACIER)
 
@@ -3337,17 +3358,23 @@ func preview_strength_use() -> void:
 ## And for Waterfall, in the water at a fall's foot; the facing is the driver's,
 ## below. The climb is paced, so the frames after the second call are the climb.
 func preview_waterfall() -> void:
-	_preview_field_move(
-		Gen2WorldFieldMove.MOVE_WATERFALL, Gen2WorldFieldMove.BADGE_RISING,
-		Gen2WorldSprite.FACING_UP
-	)
+	_stage_waterfall_world()
+	_preview_field_move(Gen2WorldFieldMove.MOVE_WATERFALL, Gen2WorldFieldMove.BADGE_RISING)
 
 
 func preview_waterfall_use() -> void:
-	_preview_field_move_use(
-		Gen2WorldFieldMove.MOVE_WATERFALL, Gen2WorldFieldMove.BADGE_RISING,
-		Gen2WorldSprite.FACING_UP
-	)
+	_stage_waterfall_world()
+	_preview_field_move_use(Gen2WorldFieldMove.MOVE_WATERFALL, Gen2WorldFieldMove.BADGE_RISING)
+
+
+## The world a climber is in: `CheckMapCanWaterfall` passes only FACE_UP, and a
+## fall's foot is water, where `.CheckSurfing` puts them on the surf sprite.
+func _stage_waterfall_world() -> void:
+	if _world == null:
+		return
+	_world.player_facing = Gen2WorldSprite.FACING_UP
+	_world.set_movement_mode(Gen2WorldAPI.MOVEMENT_SURF)
+	_world.player_sprite_number = Gen2WorldSprite.SPRITE_SURF
 
 
 ## And for Flash, which checks no tile and is what makes a dark cave
@@ -3360,18 +3387,16 @@ func preview_flash_use() -> void:
 	_preview_field_move_use(Gen2WorldFieldMove.MOVE_FLASH, Gen2WorldFieldMove.BADGE_ZEPHYR)
 
 
-func _preview_field_move_use(move: int, badge: int, facing: int = -1) -> void:
+func _preview_field_move_use(move: int, badge: int) -> void:
 	if _field_move_text:
 		_acknowledge_field_move_text()
 		return
-	_preview_field_move(move, badge, facing)
+	_preview_field_move(move, badge)
 	if _party_host != null:
 		_party_host.handle_button(Gen2Button.A)
 
 
-## [param facing] is for the one move that refuses on it: only FACE_UP passes
-## `CheckMapCanWaterfall`. The other five read no player state.
-func _preview_field_move(move: int, badge: int, facing: int = -1) -> void:
+func _preview_field_move(move: int, badge: int) -> void:
 	if _world == null or _data == null:
 		return
 	var save: Gen2SaveData = _embedded_party_save()
@@ -3387,8 +3412,6 @@ func _preview_field_move(move: int, badge: int, facing: int = -1) -> void:
 	## the next catch, purchase or party change reported nothing but failure.
 	teacher.pp[0] = int(_data.move(move).get("pp", 0))
 	_injected_save = save
-	if facing >= 0:
-		_world.player_facing = facing
 	_world.state.set_engine_flag(Gen2WorldState.badge_flag(
 		badge, Gen2WorldState.is_crystal_profile(_data)
 	))

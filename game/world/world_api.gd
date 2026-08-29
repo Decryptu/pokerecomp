@@ -375,6 +375,8 @@ var _player_scripted_steps: bool = false
 ## The player's own OBJECT_STEP_FRAME. See Gen2WorldObject.step_frame.
 var _player_step_frame: int = 0
 var _player_step_kind: StringName = &""
+## OBJECT_STEP_FRAME's spin use. See [method Gen2WorldMovement.spin_advance].
+var _player_spin_frame: int = 0
 ## What runs when the player's queued run drains.
 var _player_step_tail: Callable = Callable()
 ## Frames left of the counted wait a script is standing in, -1 while it is not
@@ -844,9 +846,8 @@ const JUMP_OFFSETS: Array[int] = [
 ]
 
 
-## How far above its cell the player is drawn this frame, zero unless a ledge hop
-## is in flight. Presentation only: `player_cell` committed to the landing cell
-## when the hop started.
+## [method player_height_offset_pixels] in the renderer's own downward-positive
+## draw space.
 func player_jump_offset() -> int:
 	if not _player_jumping or _player_step_passes_total <= 0:
 		return 0
@@ -867,20 +868,16 @@ static func jump_offset_at(spent: int, total: int) -> int:
 
 
 ## How far above the ground the player is drawn this frame, in world pixels and
-## positive upward: the mod-facing spelling of player_jump_offset(), which is the
-## same arc in the renderer's own downward-positive draw space. Zero at rest, on
-## an ordinary step, and on the frame a hop completes. Presentation only: the
-## cell, the collision, the triggers and the snapshot are already at the landing
-## cell while this is above zero.
+## positive upward. Zero at rest, on an ordinary step, and on the frame a hop
+## completes. Presentation only: the cell, the collision, the triggers and the
+## snapshot are already at the landing cell while this is above zero.
 func player_height_offset_pixels() -> float:
 	return float(-player_jump_offset())
 
 
-## The in-flight walk step's presentation offset in fractional walk cells,
-## from 1.0 cell behind player_cell down to zero, so a renderer that does not
-## think in hardware pixels (a 3D or free-roam mod) can still smooth against
-## it without reverse-engineering CELL_PIXELS.
-##
+## The in-flight step's presentation offset in fractional walk cells, from 1.0
+## cell behind player_cell down to zero, so a renderer that does not think in
+## hardware pixels can smooth against it without reverse-engineering CELL_PIXELS.
 ## A scripted movement commits its whole path at once, so while its trail drains
 ## this is as many cells behind as the player has left to be drawn walking.
 func player_step_offset_cells() -> Vector2:
@@ -898,6 +895,14 @@ func player_step_offset_cells() -> Vector2:
 ## name, one of [constant SCRIPTED_STEP_PASSES]' keys. Empty while nothing steps.
 func player_step_kind() -> StringName:
 	return _player_step_kind if _player_step_passes_remaining > 0 else &""
+
+
+## The facing the player is DRAWN with: [member player_facing] except while a
+## spinning command walks, and the logical facing never moves.
+func player_drawn_facing() -> int:
+	if player_step_kind() in Gen2WorldMovement.SPINNING_KINDS:
+		return Gen2WorldMovement.spin_facing(_player_spin_frame)
+	return player_facing
 
 
 ## The player's `Facings` frame, 0 to 3. `Gen2WorldObject.walk_frame()` for an
@@ -921,11 +926,7 @@ func _start_player_step(
 
 
 ## One step of a scripted stream, behind whatever the player is already walking.
-## See Gen2WorldObject.queue_step().
-## [param facing] is the direction the player is drawn looking while this step
-## runs, the way [method Gen2WorldObject.queue_step] takes one: `NormalStep`
-## writes OBJECT_FACING as the step starts, so a stream applied in one call still
-## turns a step at a time.
+## See [method Gen2WorldObject.queue_step], which takes the same [param facing].
 func _queue_player_step(
 	direction: Vector2i, frames: int, jumping: bool = false,
 	facing: Vector2i = Vector2i.ZERO, kind: StringName = STEP_KIND_WALK
@@ -996,6 +997,7 @@ func _clear_player_step() -> void:
 	## nothing; running it against the cell being left would.
 	_player_step_tail = Callable()
 	_player_step_kind = &""
+	_player_spin_frame = 0
 	_player_step_began = false
 	_player_jumping = false
 	_player_step_direction = Vector2i.ZERO
@@ -1014,6 +1016,8 @@ func _clear_player_step() -> void:
 func advance_player_step_pass() -> bool:
 	if _player_step_passes_remaining <= 0:
 		return false
+	if _player_step_kind in Gen2WorldMovement.SPINNING_KINDS:
+		_player_spin_frame = Gen2WorldMovement.spin_advance(_player_spin_frame)
 	_player_step_frame = (_player_step_frame + 1) & 0x0F
 	_player_step_passes_remaining -= 1
 	if _player_step_passes_remaining <= 0:
@@ -1508,17 +1512,18 @@ func complete_waterfall() -> Dictionary:
 	var size: Vector2i = map_size_cells()
 	var cell: Vector2i = player_cell
 	var climbed: int = 0
-	## The column is bounded by the map, and MAX_CLIMB is that bound rather than
-	## a guess: a stream that never left a waterfall would otherwise not end.
+	## A fall drawn up to the top row ends there: `.CheckContinueWaterfall` reads
+	## the border block above it, never a waterfall, so the cartridge stops one row
+	## into padding this has no cell for. Silver Cave Room 2's is the only one.
 	while climbed < size.y:
 		var next: Vector2i = cell + Vector2i.UP
 		if next.y < 0:
-			return _waterfall_failure(&"climb_left_the_map")
+			break
 		cell = next
 		climbed += 1
 		if not Gen2WorldFieldMove.waterfall_tile(collision_code_at(cell)):
 			break
-	if climbed <= 0 or Gen2WorldFieldMove.waterfall_tile(collision_code_at(cell)):
+	if climbed <= 0:
 		return _waterfall_failure(&"climb_did_not_finish")
 	player_cell = cell
 	player_facing = Gen2WorldSprite.FACING_UP
@@ -4596,7 +4601,7 @@ func _apply_object_movement(event: Dictionary) -> Array:
 				# advance_scripted_steps_pass().
 				object.queue_step(
 					direction * cells, int(SCRIPTED_STEP_PASSES[kind]) * cells, jumping,
-					direction,
+					direction, kind,
 				)
 				_advance_followers(object_index, vacated)
 			else:
