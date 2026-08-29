@@ -45,7 +45,12 @@ Nothing is signed with a paid certificate, so each platform asks once:
 - **iOS**: the `.ipa` is deliberately **unsigned**. Install it with
   [AltStore](https://altstore.io) or [SideStore](https://sidestore.io), which
   sign it on your own machine with your own Apple ID. A free Apple ID works and
-  needs re-signing weekly.
+  needs re-signing weekly. Add this source to either one and every release
+  arrives as an update:
+
+  ```
+  https://raw.githubusercontent.com/Decryptu/pokerecomp/main/.github/altstore/source.json
+  ```
 - **Switch**: extract the zip at the root of your microSD and launch
   `pokerecomp` from the homebrew menu. It needs a console that already runs
   homebrew; nothing here installs one.

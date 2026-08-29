@@ -514,6 +514,26 @@ jobs:
           gh release create "${{ needs.version.outputs.tag }}" \
             --title "$v" --notes "$notes" staged/*
 
+      # The feed AltStore and SideStore poll. Rebuilt from the releases rather
+      # than edited, and committed to `main` because the raw file on that branch
+      # is the URL players have already added.
+      - name: Refresh the AltStore source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git fetch --depth 1 origin main
+          git checkout -B main FETCH_HEAD
+          tools/altstore_source.sh "${{ github.repository }}"
+          git add .github/altstore/source.json
+          # A re-run of a tag that is already listed has nothing to commit, and
+          # an empty commit fails the step rather than the release.
+          git diff --cached --quiet && { echo "already listed"; exit 0; }
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -m "List ${{ needs.version.outputs.version }} in the AltStore source"
+          git push origin main
+
       - name: Announce on Discord
         env:
           DISCORD_RELEASE_WEBHOOK: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
