@@ -24,8 +24,6 @@ const MAX_COMMENT_LINES: int = 37887
 ## a line when you fix one. The test fails on a line that no longer names a
 ## function over the ceiling, so this cannot rot and cannot grow.
 const OVER_COMPLEXITY: Array[String] = [
-	"game/audio/gen2_apu.gd:_render_square",
-	"game/audio/gen2_apu.gd:write",
 	"game/battle/battle_screen.gd:_handle_button",
 	"game/battle/battle_screen.gd:_refresh_menu_layer",
 	"game/battle/battle_screen.gd:start_world_battle",

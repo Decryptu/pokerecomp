@@ -2,18 +2,20 @@ class_name Gen2LauncherFilePicker
 extends FileDialog
 
 ## The one file picker every launcher dialog is built from, reached through
-## [method Gen2LauncherUI.file_picker] and shown with [method show_picker]. Three
+## [method Gen2LauncherUI.file_picker] and shown with [method show_picker]. Four
 ## ways a platform offers a file, in the order they are preferred: the engine's
-## own native dialog, which Windows, macOS, Linux and Android all answer and whose
-## Android grant covers the one file chosen; the `NativeFilePicker` singleton for
-## iOS, where `DisplayServerIOS` implements no `file_dialog_show`, which hands back
-## a file already copied into app storage; and the built-in browser for anything
-## left, rooted per [method _pointerless_start_dir].
+## native dialog, which Windows, macOS, Linux and Android answer and whose Android
+## grant covers the one file chosen; the `NativeFilePicker` singleton for iOS,
+## where `DisplayServerIOS` implements no `file_dialog_show`; [Gen2BrowseSheet]
+## wherever there is no pointer; and the engine's own browser for the rest.
 
 ## The plugin's singleton, present only on a build that carries it.
 const NATIVE_SINGLETON: StringName = &"NativeFilePicker"
 
 var _native: Object = null
+var _palette: Gen2LauncherTheme = null
+## Where the sheet last was, shared so a second import starts where the first ended.
+static var _last_dir: String = ""
 
 
 static func create(
@@ -23,6 +25,7 @@ static func create(
 	patterns: PackedStringArray,
 ) -> Gen2LauncherFilePicker:
 	var dialog := Gen2LauncherFilePicker.new()
+	dialog._palette = palette
 	dialog.file_mode = picker_mode
 	dialog.filters = patterns
 	dialog.title = title_text
@@ -39,73 +42,22 @@ static func create(
 	return dialog
 
 
-## Points the browser at [method _pointerless_start_dir] before it is shown.
-##
-## Set here rather than in [method create]: the dialog is built once at startup
-## and reaches its directory through a `chdir`, which only holds once it is in
-## the tree. A volume that refuses its name with the trailing slash is tried
-## without one, and a refusal leaves the engine's own answer in place.
-func _open_where_a_pad_can_reach() -> void:
-	if access != FileDialog.ACCESS_FILESYSTEM:
-		return
-	var start: String = _pointerless_start_dir()
-	if start.is_empty():
-		return
-	# Every time, not only the first: the dialog remembers where it was left, and
-	# a machine that cannot climb back up would be stuck wherever it last went.
-	current_dir = start
-	if not current_dir.begins_with(start):
-		current_dir = start.trim_suffix("/")
-
-
-## Where the engine's own browser should open on a machine with no pointer, or
-## an empty string where it should keep the engine's answer.
-##
-## The browser's file list takes the d-pad and descends fine, but its path field
-## is a [LineEdit] and eats left and right, so the toolbar's "up" button behind
-## it cannot be reached: a console can walk down the tree and never back up.
-## Starting at the top of the volume means it never has to. The app's own data
-## sits several levels down, which is exactly the corner it cannot climb out of.
-static func _pointerless_start_dir() -> String:
-	if DisplayServer.has_feature(DisplayServer.FEATURE_MOUSE):
-		return ""
-	return volume_root(OS.get_data_dir())
-
-
-## The top of the volume [param path] is on, as a directory a browser can open.
-##
-## `/` on anything Unix-shaped. Horizon names a volume with a colon and mounts
-## each one at its own root, so the SD card is `sdmc:/` and there is nothing
-## above it.
-static func volume_root(path: String) -> String:
-	var root: String = path
-	while true:
-		var parent: String = root.get_base_dir()
-		if parent.is_empty() or parent == root:
-			break
-		root = parent
-	if root.is_empty():
-		return ""
-	return root + "/" if root.ends_with(":") else root
-
-
-## Whether the browser in 3. above would list anything the app may then open. A
-## sandboxed platform reaching this far has only its own data to offer.
+## Whether a browser would list anything the app may then open: a sandboxed
+## platform reaching this far has only its own data.
 func _can_browse_freely() -> bool:
 	if _native != null:
 		return true
-	return (
-		DisplayServer.has_feature(DisplayServer.FEATURE_NATIVE_DIALOG_FILE)
-		or not OS.has_feature("mobile")
-	)
+	return use_native_dialog_here() or not OS.has_feature("mobile")
 
 
 ## Asks for a file. [signal FileDialog.file_selected] carries the answer and
-## [signal FileDialog.canceled] the refusal, whichever of the three presented it.
+## [signal FileDialog.canceled] the refusal, whichever of the four presented it.
 func show_picker(fallback_size: Vector2i) -> void:
 	if _native == null:
-		_open_where_a_pad_can_reach()
-		popup_centered(fallback_size)
+		if uses_browse_sheet():
+			show_browse_sheet()
+		else:
+			popup_centered(fallback_size)
 		return
 	# One singleton serves every picker on screen, and a request left outstanding
 	# by a backgrounded app would otherwise still be listening when the next one
@@ -149,3 +101,46 @@ func _release_native() -> void:
 	if _native.file_selected.is_connected(_on_native_selected):
 		_native.file_selected.disconnect(_on_native_selected)
 		_native.canceled.disconnect(_on_native_cancelled)
+
+
+## Whether the launcher browses for the file itself: only where nothing else
+## can, since a machine with no pointer cannot drive the engine's browser.
+func uses_browse_sheet() -> bool:
+	return (
+		_native == null
+		and access == FileDialog.ACCESS_FILESYSTEM
+		and not use_native_dialog_here()
+		and not DisplayServer.has_feature(DisplayServer.FEATURE_MOUSE)
+	)
+
+
+## Whether [member FileDialog.use_native_dialog] gets a dialog of the platform's own.
+static func use_native_dialog_here() -> bool:
+	return DisplayServer.has_feature(DisplayServer.FEATURE_NATIVE_DIALOG_FILE)
+
+
+## Shows the sheet over whatever screen added this picker. Public for the preview.
+func show_browse_sheet(dir: String = "") -> void:
+	if not dir.is_empty():
+		_last_dir = dir
+	var host := get_parent() as Control
+	if host == null:
+		canceled.emit()
+		return
+	if _last_dir.is_empty():
+		_last_dir = Gen2BrowseSheet.start_dir()
+	var sheet: Gen2BrowseSheet = Gen2BrowseSheet.browse(
+		_palette, title, _last_dir, extensions(), current_file
+	)
+	# A chosen row closes the sheet, so the close is where the answer is counted.
+	var answered: Array[bool] = [false]
+	sheet.chosen.connect(func(path: String) -> void:
+		answered[0] = true
+		file_selected.emit(path)
+	)
+	sheet.closed.connect(func() -> void:
+		_last_dir = sheet.directory()
+		if not answered[0]:
+			canceled.emit()
+	)
+	sheet.open(host)

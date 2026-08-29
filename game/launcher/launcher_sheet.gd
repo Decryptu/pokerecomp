@@ -123,7 +123,7 @@ func open(host: Control) -> void:
 	await get_tree().process_frame
 	# The sheet is modal, so focus goes into it whatever the player is using: a
 	# pad needs it to navigate and a keyboard needs it for the cancel below.
-	var first: Control = Gen2FocusGuard.first_focusable(_card)
+	var first: Control = _first_focus()
 	if first != null:
 		first.grab_focus()
 	_card.pivot_offset = _card.size * 0.5
@@ -134,6 +134,12 @@ func open(host: Control) -> void:
 	tween.tween_property(_card, "scale", Vector2.ONE, 0.22).set_ease(
 		Tween.EASE_OUT
 	).set_trans(Tween.TRANS_BACK)
+
+
+## Where an opened sheet puts the pad. A subclass with a better answer than the
+## first control on the card overrides this.
+func _first_focus() -> Control:
+	return Gen2FocusGuard.first_focusable(_card)
 
 
 func close() -> void:

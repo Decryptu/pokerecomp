@@ -191,10 +191,7 @@ func write(address: int, value: int) -> void:
 	if address == 0xFF26:
 		_registers[index] = value & 0x80
 		if (value & 0x80) == 0:
-			for cleared: int in 0xFF26 - FIRST_REGISTER:
-				_registers[cleared] = 0
-			for channel: int in 4:
-				_enabled[channel] = 0
+			_power_off()
 		return
 	# Every register except NR52 is inert while the APU is powered down.
 	if _registers[0xFF26 - FIRST_REGISTER] == 0:
@@ -203,17 +200,7 @@ func write(address: int, value: int) -> void:
 	var channel: int = index / 5
 	match address:
 		0xFF12, 0xFF17, 0xFF21:
-			_volume_init[channel] = value >> 4
-			_powered[channel] = 1 if (value >> 3) != 0 else 0
-			# Zombie mode: rewriting the envelope of a live channel nudges its
-			# volume instead of reloading it.
-			if _powered[channel] != 0 and _enabled[channel] != 0:
-				if _env_step[channel] == 0 and _env_inc[channel] != 0:
-					_volume[channel] += 1 if (value & 0x08) != 0 else 2
-				else:
-					_volume[channel] = 16 - _volume[channel]
-				_volume[channel] &= 0x0F
-				_env_step[channel] = value & 0x07
+			_write_envelope(channel, value)
 		0xFF1C:
 			_volume[2] = (value >> 5) & 0x03
 			_volume_init[2] = _volume[2]
@@ -229,13 +216,9 @@ func write(address: int, value: int) -> void:
 			_set_enabled(2, (value & 0x80) != 0)
 		0xFF14, 0xFF19, 0xFF1E:
 			_freq[channel] = (_freq[channel] & 0x00FF) | ((value & 0x07) << 8)
-			_len_enabled[channel] = 1 if (value & 0x40) != 0 else 0
-			if (value & 0x80) != 0:
-				_trigger(channel)
+			_write_control(channel, value)
 		0xFF23:
-			_len_enabled[3] = 1 if (value & 0x40) != 0 else 0
-			if (value & 0x80) != 0:
-				_trigger(3)
+			_write_control(3, value)
 		0xFF22:
 			_freq[3] = value >> 4
 			_lfsr_wide = (value & 0x08) == 0
@@ -244,9 +227,41 @@ func write(address: int, value: int) -> void:
 			_master_left = (value >> 4) & 0x07
 			_master_right = value & 0x07
 		0xFF25:
-			for output: int in 4:
-				_on_left[output] = (value >> (4 + output)) & 1
-				_on_right[output] = (value >> output) & 1
+			_write_output_mix(value)
+
+
+func _power_off() -> void:
+	for cleared: int in 0xFF26 - FIRST_REGISTER:
+		_registers[cleared] = 0
+	for channel: int in 4:
+		_enabled[channel] = 0
+
+
+## NR12, NR22 and NR42. Zombie mode: rewriting the envelope of a live channel
+## nudges its volume instead of reloading it.
+func _write_envelope(channel: int, value: int) -> void:
+	_volume_init[channel] = value >> 4
+	_powered[channel] = 1 if (value >> 3) != 0 else 0
+	if _powered[channel] == 0 or _enabled[channel] == 0:
+		return
+	if _env_step[channel] == 0 and _env_inc[channel] != 0:
+		_volume[channel] += 1 if (value & 0x08) != 0 else 2
+	else:
+		_volume[channel] = 16 - _volume[channel]
+	_volume[channel] &= 0x0F
+	_env_step[channel] = value & 0x07
+
+
+func _write_control(channel: int, value: int) -> void:
+	_len_enabled[channel] = 1 if (value & 0x40) != 0 else 0
+	if (value & 0x80) != 0:
+		_trigger(channel)
+
+
+func _write_output_mix(value: int) -> void:
+	for output: int in 4:
+		_on_left[output] = (value >> (4 + output)) & 1
+		_on_right[output] = (value >> output) & 1
 
 
 ## Renders one LCD frame. The returned buffer is reused, so a caller that keeps
@@ -316,6 +331,23 @@ func _trigger(channel: int) -> void:
 	_len_counter[channel] = 0
 
 
+## One sample of channel 1's sweep; a switch-off is read back off `_enabled`.
+func _advance_sweep(freq_inc: int) -> int:
+	_sweep_counter += _sweep_inc
+	while _sweep_counter > FREQ_INC_REF:
+		if _sweep_shift != 0:
+			var step: int = _sweep_freq >> _sweep_shift
+			_freq[0] = (_freq[0] + (step if _sweep_up else -step)) & 0xFFFF
+			if _freq[0] > 2047:
+				_enabled[0] = 0
+			else:
+				freq_inc = (DMG_CLOCK / ((2048 - _freq[0]) << 5)) * 16 * 8
+		elif _sweep_rate != 0:
+			_enabled[0] = 0
+		_sweep_counter -= FREQ_INC_REF
+	return freq_inc
+
+
 func _render_square(mix: PackedInt32Array, channel: int) -> void:
 	if _powered[channel] == 0 or _enabled[channel] == 0 or _freq[channel] >= 2048:
 		return
@@ -362,20 +394,8 @@ func _render_square(mix: PackedInt32Array, channel: int) -> void:
 					volume = clampi(volume, 0, MAX_CHAN_VOLUME)
 				env_counter -= FREQ_INC_REF
 		if channel == 0 and _sweep_inc != 0:
-			_sweep_counter += _sweep_inc
-			while _sweep_counter > FREQ_INC_REF:
-				if _sweep_shift != 0:
-					var step: int = _sweep_freq >> _sweep_shift
-					_freq[0] = (_freq[0] + (step if _sweep_up else -step)) & 0xFFFF
-					if _freq[0] > 2047:
-						enabled = false
-						_enabled[0] = 0
-					else:
-						freq_inc = (DMG_CLOCK / ((2048 - _freq[0]) << 5)) * 16 * 8
-				elif _sweep_rate != 0:
-					enabled = false
-					_enabled[0] = 0
-				_sweep_counter -= FREQ_INC_REF
+			freq_inc = _advance_sweep(freq_inc)
+			enabled = _enabled[0] != 0
 		var total: int = freq_counter + freq_inc
 		if total > FREQ_INC_REF:
 			@warning_ignore("integer_division")
