@@ -23,6 +23,7 @@ concurrency:
 
 permissions:
   contents: write
+  pull-requests: write
 
 env:
   GODOT_VERSION: 4.8-dev4
@@ -522,26 +523,6 @@ jobs:
           gh release create "${{ needs.version.outputs.tag }}" \
             --title "$v" --notes "$notes" staged/*
 
-      # The feed AltStore and SideStore poll. Rebuilt from the releases rather
-      # than edited, and committed to `main` because the raw file on that branch
-      # is the URL players have already added.
-      - name: Refresh the AltStore source
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          git fetch --depth 1 origin main
-          git checkout -B main FETCH_HEAD
-          tools/altstore_source.sh "${{ github.repository }}"
-          git add .github/altstore/source.json
-          # A re-run of a tag that is already listed has nothing to commit, and
-          # an empty commit fails the step rather than the release.
-          git diff --cached --quiet && { echo "already listed"; exit 0; }
-          git -c user.name='github-actions[bot]' \
-              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-              commit -m "List ${{ needs.version.outputs.version }} in the AltStore source"
-          git push origin main
-
       - name: Announce on Discord
         env:
           DISCORD_RELEASE_WEBHOOK: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
@@ -554,3 +535,38 @@ jobs:
             -H 'Content-Type: application/json' \
             --data "$(jq -cn --arg content "$release_url" '{content: $content}')" \
             "$DISCORD_RELEASE_WEBHOOK"
+
+      # The feed AltStore and SideStore poll. Rebuilt from the releases rather
+      # than edited, and landed on `main` through a pull request: the raw file
+      # on that branch is the URL players add, and the `Protect main` ruleset
+      # takes nothing else. After the announcement, so a refusal here costs the
+      # feed one release rather than costing everyone the post.
+      - name: Refresh the AltStore source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          v="${{ needs.version.outputs.version }}"
+          branch="altstore-$v"
+          git fetch --depth 1 origin main
+          git checkout -B "$branch" FETCH_HEAD
+          tools/altstore_source.sh "${{ github.repository }}"
+          git add .github/altstore/source.json
+          # A re-run of a tag that is already listed has nothing to commit, and
+          # an empty commit fails the step rather than the release.
+          git diff --cached --quiet && { echo "already listed"; exit 0; }
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -m "List $v in the AltStore source"
+          git push --force origin "$branch"
+          gh pr create --base main --head "$branch" \
+            --title "List $v in the AltStore source" \
+            --body "\`tools/altstore_source.sh\` output for the $v release."
+          # The branch is a second old before the merge is asked for, and GitHub
+          # answers "not mergeable" until it has worked the base out.
+          for _ in 1 2 3 4 5 6; do
+            gh pr merge "$branch" --merge --delete-branch && exit 0
+            sleep 10
+          done
+          echo "::error::the feed pull request would not merge"
+          exit 1

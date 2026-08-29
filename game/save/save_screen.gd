@@ -46,6 +46,9 @@ func _ready() -> void:
 	_data = _data_override if _data_override != null else _resolve_data()
 	_build_ui()
 	_refresh()
+	var input: Gen2InputRuntime = Gen2InputRuntime.instance()
+	if input != null and not input.back_requested.is_connected(_on_back_requested):
+		input.back_requested.connect(_on_back_requested)
 
 
 ## Test and tooling seam for synthetic caches. Production callers use the
@@ -824,6 +827,14 @@ func _open_party() -> void:
 		)
 		return
 	get_tree().change_scene_to_file.call_deferred("res://game/save/party_screen.tscn")
+
+
+func _on_back_requested() -> void:
+	var sheets: Array[Node] = find_children("", "Gen2LauncherSheet", true, false)
+	if not sheets.is_empty():
+		(sheets[sheets.size() - 1] as Gen2LauncherSheet).close()
+		return
+	_back_to_launcher()
 
 
 ## The same transition the launcher opened this screen with, walked the other

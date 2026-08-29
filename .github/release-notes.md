@@ -5,9 +5,11 @@ break put in by hand only makes it ragged. -->
 
 ## New in this release
 
-Two things, both for iPhone and iPad.
+Three things: one for Android, two for iPhone and iPad.
 
 **pokerecomp has an AltStore and SideStore source.** Add it once and every future release arrives as an update instead of a file you download and re-install by hand. The URL is `https://raw.githubusercontent.com/Decryptu/pokerecomp/main/.github/altstore/source.json`. In AltStore or SideStore, open **Sources**, tap **+**, and paste it. The app still signs on your own machine with your own Apple ID, and a free Apple ID still needs re-signing every 7 days.
+
+**The Android back button no longer quits the game.** It used to close the app outright wherever you pressed it, mid-battle included. In the game it now opens the pause menu, or backs out of whatever is on screen. In the launcher it closes the sheet you have open, then walks back to the shelf, and only asks "Quit pokerecomp?" once there is nothing left to back out of.
 
 **The iOS build asks for nothing.** The exporter wrote camera, microphone and photo library permission entries into the app whether or not it wanted them, and an empty entry is what a store shows you as a permission the app is asking for. pokerecomp uses none of the three, so all three are now removed from the build.
 

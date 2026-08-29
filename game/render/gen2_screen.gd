@@ -322,7 +322,6 @@ static func drop_children(parent: Node) -> void:
 		drop(child)
 
 
-## The viewport itself, for a caller that needs to read the drawn frame.
 func viewport() -> SubViewport:
 	return _viewport
 

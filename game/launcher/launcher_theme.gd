@@ -145,7 +145,6 @@ func tint_for(game_id: StringName) -> Color:
 	return GAME_TINTS.get(game_id, accent)
 
 
-## A translucent accent wash, used behind a selected control.
 func accent_wash(alpha: float = 0.14) -> Color:
 	var wash: Color = accent
 	wash.a = alpha

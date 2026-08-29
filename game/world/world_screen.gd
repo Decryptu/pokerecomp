@@ -348,6 +348,8 @@ func _ready() -> void:
 	var input: Gen2InputRuntime = Gen2InputRuntime.instance()
 	if input != null and not input.reset_chord_pressed.is_connected(_on_reset_chord):
 		input.reset_chord_pressed.connect(_on_reset_chord)
+	if input != null and not input.back_requested.is_connected(_on_back_requested):
+		input.back_requested.connect(_on_back_requested)
 
 
 ## Why the overworld could not be built, on the two labels the debug readout
@@ -1867,6 +1869,13 @@ func _end_nuzlocke_run(save: Gen2SaveData) -> void:
 func _soft_reset() -> void:
 	if is_inside_tree():
 		get_tree().change_scene_to_file.call_deferred(SAVE_SCENE)
+
+
+## Offered as a B, which backs out of whatever owns the screen. Nothing on a
+## bare map takes one, and a press nobody took is the pause menu.
+func _on_back_requested() -> void:
+	if not press_button(Gen2Button.B):
+		press_button(Gen2Button.START)
 
 
 ## The reset chord, from anywhere the world is up. The first one ever asks first,
