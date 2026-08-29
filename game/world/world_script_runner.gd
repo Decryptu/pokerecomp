@@ -4235,9 +4235,13 @@ func _special_heal_machine_anim(special: int) -> Dictionary:
 	## `ld a, [wPartyCount] / and a / ret z`: an empty party leaves the
 	## machine alone and spends nothing.
 	if balls > 0:
+		## `machine_type` rides along for [method Gen2WorldAPI.party_holder].
 		return _stage_frame_wait(
 			balls * HEAL_MACHINE_BALL_FRAMES + HEAL_MACHINE_FLASH_FRAMES,
-			{"special": special, "kind": &"heal_machine_anim"}
+			{
+				"special": special, "kind": &"heal_machine_anim",
+				"machine_type": machine_type,
+			}
 		)
 	return {"ok": true}
 

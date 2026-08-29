@@ -49,6 +49,7 @@ const KIND_HELP: Dictionary = {
 	&"unown_puzzle": "frames, picture: special UnownPuzzle. 0 Kabuto, 1 Omanyte, 2 Aerodactyl, 3 Ho-Oh, 4 to 7 solved",
 	&"visible_encounter": "cell: a shiny of the map's own table on the eligible cell nearest the player",
 	&"visible_encounter_glow": "cell: the same population with ordinary DVs wearing an entry's glow",
+	&"visible_encounter_walk": "cell: the same population halfway through the one step the host runs for it",
 	&"field_moves_menu": "cell: the start menu's MOVES row and the HM list. Needs a registered field-move source",
 	&"repel_renewal": "cell: the question a Repel running out asks. Needs a registered renewal provider",
 	&"mod_notice": "badge: Gen2ModHost.request_notice's banner over the map, wearing that badge",

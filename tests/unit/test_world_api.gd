@@ -1621,7 +1621,7 @@ func test_gold_profile_specials_normalize_onto_the_crystal_handlers() -> void:
 	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(gold_directory))
 	scripts["48:6400"] = [
 		Gen2WorldScript.SETVAL, 1,
-		Gen2WorldScript.SPECIAL, 61, 0, # HealMachineAnim
+		Gen2WorldScript.SPECIAL, 61, 0, # HealMachineAnim, one lower on this profile
 		Gen2WorldScript.GOLD_END,
 	]
 	scripts["48:6410"] = [
@@ -7669,6 +7669,134 @@ func test_a_visible_encounter_entry_is_validated_against_the_snapshot() -> void:
 	provider.set("overrides", {})
 	driver.advance_frame()
 	assert_eq(driver.entries().size(), 1)
+
+
+## The one fact a world actor cannot infer: whether the party is physically with
+## the player. False for the Day Care counter, the trade cable and both machines,
+## and true again on the frame the host answers.
+func test_the_party_holder_names_the_scene_the_party_is_in() -> void:
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
+	scripts["48:6900"] = [
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_DAY_CARE_MAN, 0,
+		Gen2WorldScript.END,
+	]
+	scripts["48:6910"] = [
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_DAY_CARE_MON_1, 0,
+		Gen2WorldScript.END,
+	]
+	scripts["48:6920"] = [
+		Gen2WorldScript.SETVAL, Gen2WorldScriptRunner.HEAL_MACHINE_HALL_OF_FAME,
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_HEAL_MACHINE_ANIM, 0,
+		Gen2WorldScript.END,
+	]
+	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
+	var data: GameData = GameData.open_directory(_directory)
+
+	## The counter opens its own party list, so the balls are over it.
+	var care: Gen2WorldAPI = _party_holder_world(data, 0x6900)
+	assert_eq(care.dispatch_script_events()[0]["status"], &"waiting")
+	assert_eq(care.party_holder(), &"day_care")
+	assert_false(care.party_with_player())
+	care.complete_runtime_request({})
+	assert_true(care.party_with_player(), "true again on the frame it is answered")
+
+	## The other three Day Care specials talk about a Pokemon already deposited
+	## and take nothing.
+	var talk: Gen2WorldAPI = _party_holder_world(data, 0x6910)
+	assert_eq(talk.dispatch_script_events()[0]["status"], &"waiting")
+	assert_true(talk.party_with_player())
+
+	## `HealMachineAnim` position 2 is the Hall of Fame's machine, named apart
+	## from a heal so a mod can tell the two scenes.
+	var hall: Gen2WorldAPI = _party_holder_world(data, 0x6920)
+	hall.set_party_summary(1, false)
+	hall.dispatch_script_events()
+	assert_eq(hall.party_holder(), Gen2WorldAPI.PARTY_HOLDER_HALL_OF_FAME)
+
+
+func _party_holder_world(data: GameData, script: int) -> Gen2WorldAPI:
+	var map: Gen2WorldMap = data.world_map(1, 1)
+	map.events["coord_events"][0]["script"] = script
+	return Gen2WorldAPI.open(data, 1, 1, Vector2i(7, 6))
+
+
+## A visible encounter walks the way a map object does: the host owns the cell
+## for the length of the step, both ends answer for a battle, and the sprite is
+## drawn between them.
+func test_a_visible_encounter_walks_to_the_next_cell() -> void:
+	var world := _drawable_world()
+	var driver := Gen2WorldEncounters.new()
+	var provider: Object = _pulse_provider()
+	provider.set("dvs", 0)
+	driver.set_providers([provider])
+	driver.set_world(world)
+	## The fixture's two water cells, which are the one adjacent pair of eligible
+	## cells it ships. The surf table offers the same species and level the grass
+	## one does, so the entry is admitted on either.
+	var from := Vector2i(11, 11)
+	var direction := Vector2i.RIGHT
+	var to: Vector2i = from + direction
+	var surf: PackedVector2Array = world.visible_encounter_cells()[
+		Gen2WorldEncounter.METHOD_SURF
+	]
+	assert_true(surf.has(Vector2(from)) and surf.has(Vector2(to)), "an adjacent pair")
+
+	provider.set("overrides", {"cell": from, "step": direction})
+	driver.advance_frame()
+	assert_eq(Vector2i(driver.entries()[0]["cell"]), from, "the cell it left")
+	assert_eq(int(driver.entries()[0]["facing"]), world.facing_for_direction(direction))
+	assert_almost_eq(float(driver.entries()[0]["step_span"]["progress"]), 0.0, 0.0001)
+
+	## Both cells answer while the walk runs, which is what `occupied` already
+	## holds for a mid-step object.
+	assert_false(driver.battle_request_at(from).is_empty())
+	assert_false(driver.battle_request_at(to).is_empty())
+
+	## Spent on map passes, and the sprite is drawn between the two cells.
+	for _tick: int in Gen2WorldEncounters.STEP_PASSES / 2:
+		driver.advance_frame()
+	assert_almost_eq(float(driver.entries()[0]["step_span"]["progress"]), 0.5, 0.0001)
+	assert_eq(
+		Vector2(driver.actor_entries()[0]["position_cells"]),
+		Vector2(from) + Vector2(direction) * 0.5
+	)
+
+	## It lands on the target, and stays there while the provider keeps naming
+	## the cell it stepped off.
+	for _tick: int in Gen2WorldEncounters.STEP_PASSES / 2:
+		driver.advance_frame()
+	assert_eq(Vector2i(driver.entries()[0]["cell"]), to, "it landed")
+	assert_false(driver.entries()[0].has("step_span"))
+	driver.advance_frame()
+	assert_eq(Vector2i(driver.entries()[0]["cell"]), to, "the row that asked did not undo it")
+
+	## A frame that is not the map's own pass spends nothing of a walk.
+	provider.set("overrides", {"cell": to, "step": -direction})
+	driver.advance_frame()
+	var progress: float = float(driver.entries()[0]["step_span"]["progress"])
+	driver.advance_frame(false)
+	assert_almost_eq(float(driver.entries()[0]["step_span"]["progress"]), progress, 0.0001)
+
+
+## A step the host will not run costs the step and not the entry: the wild
+## stands where it is.
+func test_a_refused_visible_encounter_step_leaves_the_wild_standing() -> void:
+	var world := _drawable_world()
+	var driver := Gen2WorldEncounters.new()
+	var provider: Object = _pulse_provider()
+	provider.set("dvs", 0)
+	driver.set_providers([provider])
+	driver.set_world(world)
+	for bad: Variant in [
+		Vector2i(1, 1),        # not one of the four directions
+		Vector2i.ZERO,         # no step asked for
+		Vector2i.UP,           # (5, 9) is not an eligible cell
+	]:
+		provider.set("overrides", {"step": bad})
+		driver.advance_frame()
+		assert_eq(driver.entries().size(), 1, str(bad))
+		assert_eq(Vector2i(driver.entries()[0]["cell"]), Vector2i(5, 10), str(bad))
+		assert_false(driver.entries()[0].has("step_span"), str(bad))
 
 
 ## The optional `glow`: quantized by the host, applied to every colour but the

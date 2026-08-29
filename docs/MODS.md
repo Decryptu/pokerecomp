@@ -33,7 +33,7 @@ user://mods/<id>/
 | `id` | Lowercase `[a-z0-9][a-z0-9_-]*`. Addresses the directory and the registry keys |
 | `name` | Shown to the player |
 | `version` | The mod's own version. Strict `major.minor.patch` |
-| `api_version` | The oldest host this mod runs on, not a number to keep current: raise it when the mod starts using a newer seam. `Gen2ModManifest.API_VERSION` is 24 and a host accepts 1 to 24. [Contract versions](#contract-versions) says what each added |
+| `api_version` | The oldest host this mod runs on, not a number to keep current: raise it when the mod starts using a newer seam. `Gen2ModManifest.API_VERSION` is 25 and a host accepts 1 to 25. [Contract versions](#contract-versions) says what each added |
 | `entry` | A `.gd` path inside the mod directory, or inside the pack when there is one |
 | `pack` | Optional `.pck` or `.zip` beside `mod.json`, holding the mod's files |
 | `description` | Optional |
@@ -126,6 +126,7 @@ runs, since every version so far has only added.
 | 22 | `Gen2WorldScreen.world()`, `Gen2WorldAPI.player_drawn_facing()`, `Gen2WorldObject.drawn_facing()`, and the `preview_waterfall` and `preview_flash` pairs |
 | 23 | `Gen2WorldAPI.unown_wall_event()` and `always_on_bike()`, and `Gen2WorldFieldMove`'s field-move texts |
 | 24 | `Gen2WorldAPI.player_step_span()` and `Gen2WorldObject.step_span()` |
+| 25 | `Gen2WorldAPI.party_with_player()` and `party_holder()`, and a visible encounter walking to the next cell |
 
 ## Installing
 
@@ -1066,6 +1067,20 @@ resolve a deterministic logical cell, quantize the facing angle to one of the fo
 source directions using the source tie-breaking, and pass both to the existing
 interaction path.
 
+### Where the party is
+
+`Gen2WorldAPI.party_with_player()` is false for exactly the frames the party is
+not physically in the player's hands, and `party_holder()` names the scene that
+has it: `heal_machine` at a Pokemon Center or in Elm's Lab, `hall_of_fame` at that
+machine, `day_care` over either counter, and `trade` in the cable. Both are read
+off the running script's own pending state and hold nothing, so the answer is true
+again on the frame the host finishes the scene.
+
+A mod drawing a party member on the map puts it away for those frames. Do not
+reach for `script_busy()` or `script_stops_the_map()` instead: both are true for
+every textbox, sign and menu, so a follower hiding on them blinks out whenever the
+player reads a signpost.
+
 ## Putting one sprite in the world
 
 A mod that wants a follower, a pet, a marker over an object or a ghost of a
@@ -1179,6 +1194,7 @@ Each entry of `encounters()`:
 | `species`, `level` | Must be offered by that table |
 | `dvs` | The packed DV word, carried into the battle unchanged |
 | `pulse` | Optional. Ask for the shiny sparkle over this entry |
+| `step` | Optional `Vector2i`, one of `Gen2WorldEncounters.STEP_DIRECTIONS`. Ask the host to walk this entry to the adjacent cell |
 | `glow` | Optional `{color: Color, amount: float}`. Walks the Pokemon's colours toward `color` by `amount`, leaving colour 0 alone. Presentation only |
 
 Anything else is dropped, including an entry naming `shiny`: shininess is
@@ -1207,6 +1223,18 @@ What the host does with a valid population:
   route entered in daylight therefore turns over to its night species as each
   wild is replaced, rather than emptying at six. A new entry is checked against
   the tables in force now, so `generation` never moves for an hour boundary.
+- Runs the step an entry asked for, over `Gen2WorldEncounters.STEP_PASSES` map
+  passes, which is a map object's own walk. While it runs the host owns the
+  entry's cell: `cell` is the cell it left, `facing` is the way it walks, the
+  sprite is drawn sliding between the two, and the player meets it on EITHER
+  cell, which is what `occupied` already holds for a mid-step object. The entry
+  stands on the target once it lands, and stays there until the provider names
+  that cell itself, so the row that asked for the step does not undo it.
+- Refuses a step that is not one of the four directions, whose target is not
+  eligible for the same method the entry stands on, or whose target is occupied,
+  the player's cell, or held by another entry. A refused step costs the step and
+  not the entry: the wild stands. A step asked for while one is in flight is
+  dropped the same way, so a provider may ask on every frame.
 - Discards the population, its sprites and any running pulse on a map change.
 - Plays `ANIM_SEND_OUT_MON` with the shiny param over a pulsing shiny entry, sound
   included. A request inside `Gen2WorldEncounters.PULSE_FRAMES` of the last one is

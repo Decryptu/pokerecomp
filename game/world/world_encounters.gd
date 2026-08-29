@@ -29,8 +29,13 @@ const SHINY_ANIM_PARAM: int = 1
 ## provider may ask on every frame and get the cadence it asked for once.
 const PULSE_FRAMES: int = 600
 
-## The four `Gen2WorldSprite` facings.
 const MAX_FACING: int = Gen2WorldSprite.FACING_RIGHT
+
+const STEP_PASSES: int = Gen2WorldAPI.STEP_PASSES_NPC_WALK
+
+const STEP_DIRECTIONS: Array[Vector2i] = [
+	Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT,
+]
 
 ## How many steps an entry's `glow` amount is rounded onto, and the palette colour
 ## it leaves alone. The rung count is the host's rather than the mod's: both world
@@ -50,7 +55,7 @@ var _anim_data: Gen2BattleAnimData = null
 ## a stale snapshot from a fresh one.
 var _generation: int = 0
 var _context: Dictionary = {}
-## Validated entries this frame, each with the provider that produced it.
+## Validated entries this frame. [member _owners] is which provider produced each.
 var _entries: Array = []
 ## Entry id to the provider that owns it, so a battle result reaches the right
 ## one after the entry itself is gone.
@@ -69,6 +74,8 @@ var _encounters_off: bool = false
 var _admitted: Dictionary = {}
 ## Entry id to the frame its last pulse started on.
 var _pulsed: Dictionary = {}
+var _steps: Dictionary = {}
+var _landed: Dictionary = {}
 var _pulse: Gen2BattleAnimPlayer = null
 var _pulse_id: StringName = &""
 ## What the running pulse's commands asked for this frame: the screen owns the
@@ -106,23 +113,37 @@ func set_world(world: Gen2WorldAPI, anim_data: Gen2BattleAnimData = null) -> voi
 
 ## One hardware frame: every provider steps, and what they answer becomes this
 ## frame's population. Answers whether anything a view draws changed.
-func advance_frame() -> bool:
+func advance_frame(map_pass: bool = true) -> bool:
 	if _providers.is_empty():
 		return false
 	_frame += 1
 	_frame_commands = []
+	var walked: bool = _tick_steps() if map_pass else false
 	_push_context_changes()
 	for provider: Object in _providers:
 		provider.call("advance_frame")
 	var before: Array = _entries
 	_collect()
-	var moved: bool = _changed(before, _entries)
+	var moved: bool = walked or _changed(before, _entries)
 	return _advance_pulse() or moved
 
 
+func _tick_steps() -> bool:
+	if _steps.is_empty():
+		return false
+	for id: Variant in _steps.keys():
+		var step: Dictionary = _steps[id]
+		step["remaining"] = int(step["remaining"]) - 1
+		if int(step["remaining"]) > 0:
+			continue
+		_landed[id] = step["to"]
+		_steps.erase(id)
+	return true
+
+
 ## The validated population, each entry `{id, cell, facing, species, level, dvs,
-## shiny, pulse}` and an optional `glow`. `shiny` is the host's own answer from
-## the DVs; a provider that sends one is refused.
+## shiny, pulse}` and an optional `glow` and `step_span`. `shiny` is the host's
+## own answer from the DVs; a provider that sends one is refused.
 func entries() -> Array:
 	return _entries
 
@@ -140,7 +161,7 @@ func actor_entries() -> Array:
 		out.append({
 			"icon": icon,
 			"facing": int(entry["facing"]),
-			"position_cells": Vector2(entry["cell"]),
+			"position_cells": Vector2(entry["cell"]) + step_offset(entry),
 			# `GetMonNormalOrShinyPalettePointer`: the species' own four colours,
 			# which is what makes a shiny one visible before the battle starts,
 			# walked toward an entry's own light when it asked for one.
@@ -171,7 +192,8 @@ func pulse_anchor() -> Variant:
 		return null
 	for entry: Dictionary in _entries:
 		if StringName(entry["id"]) == _pulse_id:
-			return Vector2(entry["cell"]) * float(Gen2WorldAPI.CELL_PIXELS)
+			return (Vector2(entry["cell"]) + step_offset(entry)) \
+				* float(Gen2WorldAPI.CELL_PIXELS)
 	return null
 
 
@@ -201,7 +223,7 @@ func frame_commands() -> Array:
 ## are not rolled again.
 func battle_request_at(cell: Vector2i) -> Dictionary:
 	for entry: Dictionary in _entries:
-		if entry["cell"] != cell:
+		if entry["cell"] != cell and not _walking_into(entry, cell):
 			continue
 		return {
 			"kind": &"battle_requested",
@@ -231,6 +253,8 @@ func _reset() -> void:
 	_owners = {}
 	_admitted = {}
 	_pulsed = {}
+	_steps = {}
+	_landed = {}
 	_pulse = null
 	_pulse_id = &""
 	_frame_commands = []
@@ -338,19 +362,116 @@ func _collect() -> void:
 		for raw: Variant in answer as Array:
 			if _entries.size() >= MAX_ENTRIES:
 				break
-			var entry: Dictionary = _validate(raw)
+			var entry: Dictionary = _validate(_held(raw))
 			if entry.is_empty() or seen.has(entry["id"]):
 				continue
 			seen[entry["id"]] = true
 			admitted[entry["id"]] = entry["admission"]
 			entry.erase("admission")
 			_owners[entry["id"]] = provider
+			_step_entry(entry, raw as Dictionary)
 			_entries.append(entry)
 			if bool(entry["pulse"]):
 				_start_pulse(entry)
 		if _entries.size() >= MAX_ENTRIES:
 			break
 	_admitted = admitted
+	_prune_walks(seen)
+
+
+func _prune_walks(seen: Dictionary) -> void:
+	for id: Variant in _steps.keys():
+		if not seen.has(id):
+			_steps.erase(id)
+	for id: Variant in _landed.keys():
+		if not seen.has(id):
+			_landed.erase(id)
+
+
+func _held(raw: Variant) -> Variant:
+	if not raw is Dictionary or _world == null:
+		return raw
+	var row: Dictionary = raw as Dictionary
+	var id: StringName = StringName(row.get("id", &""))
+	if _steps.has(id):
+		var step: Dictionary = _steps[id]
+		row = row.duplicate()
+		row["cell"] = step["from"]
+		row["facing"] = _world.facing_for_direction(step["direction"])
+		return row
+	if not _landed.has(id):
+		return raw
+	if Vector2i(row.get("cell", Vector2i(-1, -1))) == Vector2i(_landed[id]):
+		_landed.erase(id)
+		return raw
+	row = row.duplicate()
+	row["cell"] = _landed[id]
+	return row
+
+
+func _step_entry(entry: Dictionary, raw: Dictionary) -> void:
+	var id: StringName = StringName(entry["id"])
+	var direction := Vector2i(raw.get("step", Vector2i.ZERO))
+	if not _steps.has(id) and _step_allowed(entry, direction):
+		_steps[id] = {
+			"from": Vector2i(entry["cell"]),
+			"to": Vector2i(entry["cell"]) + direction,
+			"direction": direction,
+			"remaining": STEP_PASSES,
+		}
+		entry["facing"] = _world.facing_for_direction(direction)
+	if not _steps.has(id):
+		return
+	var step: Dictionary = _steps[id]
+	entry["step_span"] = {
+		"from": step["from"],
+		"to": step["to"],
+		"progress": 1.0 - float(step["remaining"]) / float(STEP_PASSES),
+		"kind": &"step",
+	}
+
+
+## The target has to be eligible for the SAME method: an entry keeps its
+## admission only while it stands on one method's cells, so a wild walking from
+## grass onto water would be rechecked against the surf table and dropped.
+func _step_allowed(entry: Dictionary, direction: Vector2i) -> bool:
+	if not direction in STEP_DIRECTIONS:
+		return false
+	var target: Vector2i = Vector2i(entry["cell"]) + direction
+	if _eligible_method(target) != _eligible_method(Vector2i(entry["cell"])):
+		return false
+	var occupied: PackedVector2Array = _context.get("occupied", PackedVector2Array())
+	if occupied.has(Vector2(target)):
+		return false
+	var player: Dictionary = _context.get("player", {})
+	if Vector2i(player.get("cell", Vector2i(-1, -1))) == target:
+		return false
+	return not _cell_taken(target, StringName(entry["id"]))
+
+
+func _cell_taken(cell: Vector2i, id: StringName) -> bool:
+	for other: Dictionary in _entries:
+		if StringName(other["id"]) != id and Vector2i(other["cell"]) == cell:
+			return true
+	for other_id: Variant in _steps:
+		if StringName(other_id) == id:
+			continue
+		if Vector2i((_steps[other_id] as Dictionary)["to"]) == cell:
+			return true
+	return false
+
+
+func _walking_into(entry: Dictionary, cell: Vector2i) -> bool:
+	var step: Variant = _steps.get(StringName(entry["id"]), null)
+	return step is Dictionary and Vector2i((step as Dictionary)["to"]) == cell
+
+
+static func step_offset(entry: Dictionary) -> Vector2:
+	var span: Variant = entry.get("step_span", null)
+	if not span is Dictionary:
+		return Vector2.ZERO
+	var row: Dictionary = span
+	return Vector2(Vector2i(row["to"]) - Vector2i(row["from"])) * float(row["progress"])
 
 
 ## One entry against the context it was given. An id, a cell inside the eligible
@@ -404,8 +525,6 @@ func _validate(raw: Variant) -> Dictionary:
 ## An entry's optional `{color, amount}`, with the amount rounded onto
 ## [constant GLOW_RUNGS]. A malformed one costs the glow and not the entry: it is
 ## presentation, and a wild without one is still a wild the host can vouch for.
-## An amount that rounds to nothing answers empty, so an entry not glowing this
-## frame carries no key and asks for no second texture.
 static func _glow(raw: Variant) -> Dictionary:
 	if not raw is Dictionary:
 		return {}
