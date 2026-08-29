@@ -256,3 +256,23 @@ func test_a_page_break_blinks_even_when_the_text_runs_on() -> void:
 	assert_true(box.advance())
 	assert_false(box.has_pages_left())
 	assert_false(box.cursor_visible(), "and the last page does not")
+
+
+## `Paragraph` clears the box and starts at the top line, which is what
+## [constant Gen2TextStream.PAGE_BREAK] means here. A blank line spells the same
+## `para` in a source string and does not: it fills the top row and pushes the
+## text onto the bottom one, so a hand-written text says `para` with the marker.
+func test_a_blank_line_is_not_a_page_break() -> void:
+	var text: String = "This tree can be\nCUT!"
+	assert_eq(
+		Gen2TextLayout.lay_out(text + Gen2TextStream.PAGE_BREAK + "Want to use CUT?", 18, 2),
+		[
+			PackedStringArray(["This tree can be", "CUT!"]),
+			PackedStringArray(["Want to use CUT?"]),
+		]
+	)
+	assert_eq(
+		Gen2TextLayout.lay_out(text + "\n\nWant to use CUT?", 18, 2)[1],
+		PackedStringArray(["", "Want to use CUT?"]),
+		"a blank line is a line"
+	)

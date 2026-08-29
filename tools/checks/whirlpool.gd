@@ -158,22 +158,28 @@ func _verify_dragons_den(game_id: StringName, data: GameData, crystal: bool) -> 
 	)
 
 	# .CheckSurfable reads the permission with TALK masked off, so the whirlpool
-	# is water and a surfing player swims onto it. .CheckTile then traps them:
-	# Script_ForcedMovement only spins the player around.
+	# is water and a surfing player swims onto it. Script_ForcedMovement then
+	# spins them and, through turn_in's own InitStep, walks them back out.
 	_r.check(
 		bool(world.move_result(Vector2i.DOWN).get("ok", false))
 			and world.player_cell == DEN_CELL,
 		"%s: Dragon's Den whirlpool refused a surfing step onto it." % game_id
 	)
+	while world.player_step_in_progress():
+		world.advance_player_step_pass()
 	var spun: Dictionary = world.move_result(Vector2i.DOWN)
 	_r.check(
 		StringName(spun.get("kind", &"")) == &"forced_turn"
-			and world.player_cell == DEN_CELL
-			and world.player_facing == Gen2WorldSprite.FACING_UP,
-		"%s: Dragon's Den whirlpool did not spin the player in place: %s." % [
+			and world.player_cell == approach
+			and world.player_facing == Gen2WorldSprite.FACING_UP
+			and int(spun.get("passes", 0))
+				== Gen2WorldAPI.FORCED_TURN_SLEEP_PASSES * 2 + Gen2WorldAPI.STEP_PASSES_WALK,
+		"%s: Dragon's Den whirlpool did not spit the player back out: %s." % [
 			game_id, JSON.stringify(spun),
 		]
 	)
+	while world.player_step_in_progress():
+		world.advance_player_step_pass()
 
 	world.player_cell = approach
 	world.player_facing = Gen2WorldSprite.FACING_DOWN

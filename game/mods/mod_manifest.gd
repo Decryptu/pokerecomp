@@ -9,11 +9,11 @@ extends RefCounted
 ## against an older one still runs, since every version so far has only added.
 
 const FILENAME: String = "mod.json"
-## Bumped when the host contract changes in a way an existing mod would notice.
-## What each version added is in the commit history; `docs/MODS.md` documents the
-## current contract only. An optional field a mod may send and an older host may
-## drop is deliberately not a bump.
-const API_VERSION: int = 21
+## Bumped in the same commit as any seam added to the contract, so a mod has a
+## number that says the seam is there: `docs/MODS.md` lists what each version
+## added. An optional field a mod may send and an older host may drop is
+## deliberately not a bump.
+const API_VERSION: int = 23
 ## The oldest contract this host still answers. See [constant API_VERSION].
 const MIN_API_VERSION: int = 1
 ## Ids address directories and registry keys, so they stay to a plain lowercase

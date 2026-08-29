@@ -152,6 +152,44 @@ const HM_FIELD_MOVES: Array[int] = [
 ]
 
 
+## What each move's own script writes, from data/text/common_2.asm, kept here
+## because the party submenu, the A-press prompt and the script runner all say
+## them. `%s` is `GetPartyNickname`'s buffer and each break is the source's own
+## `line`, which a name short enough to fit one line would otherwise lose.
+const USED_TEXTS: Dictionary = {
+	MOVE_CUT: "%s used\nCUT!",
+	MOVE_SURF: "%s used\nSURF!",
+	MOVE_STRENGTH: "%s used\nSTRENGTH!",
+	MOVE_WHIRLPOOL: "%s used\nWHIRLPOOL!",
+	MOVE_WATERFALL: "%s used\nWATERFALL!",
+	MOVE_HEADBUTT: "%s did a\nHEADBUTT!",
+	MOVE_ROCK_SMASH: "%s used\nROCK SMASH!",
+	MOVE_SWEET_SCENT: "%s used\nSWEET SCENT!",
+	MOVE_DIG: "%s used\nDIG!",
+	## `_BlindingFlashText` and `_TeleportReturnText`: neither script calls
+	## GetPartyNickname, so neither line names anyone.
+	MOVE_FLASH: "A blinding FLASH\nlights the area!",
+	MOVE_TELEPORT: "Return to the last\n#MON CENTER.",
+}
+
+## `FieldMoveFailed`'s `_CantUseItemText`, shared by every move with no refusal
+## of its own, and the five that have one.
+const CANT_USE_TEXT: String = "Can't use that\nhere."
+const BADGE_REQUIRED_TEXT: String = "Sorry! A new BADGE\nis required."
+const CUT_NOTHING_TEXT: String = "There's nothing to\nCUT here."
+const CANT_SURF_TEXT: String = "You can't SURF\nhere."
+const ALREADY_SURFING_TEXT: String = "You're already\nSURFING."
+const HEADBUTT_NOTHING_TEXT: String = "Nope. Nothing…"
+const SWEET_SCENT_NOTHING_TEXT: String = "Looks like there's\nnothing here…"
+
+
+## [constant USED_TEXTS]' row with the nickname filled in, or "" for a move with
+## no line of its own.
+static func used_text(move: int, user: String) -> String:
+	var text: String = String(USED_TEXTS.get(move, ""))
+	return text % user if text.contains("%s") else text
+
+
 static func is_field_move(move: int) -> bool:
 	return FIELD_MOVES.has(move)
 

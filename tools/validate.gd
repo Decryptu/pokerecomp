@@ -16,7 +16,7 @@ const CHECKS: String = "res://tools/checks"
 const GROUPS: Dictionary = {
 	&"field_moves": [
 		&"cut", &"surf", &"whirlpool", &"strength", &"waterfall", &"headbutt",
-		&"rock_smash", &"field_move_prompts",
+		&"rock_smash", &"field_move_prompts", &"unown_walls",
 	],
 	&"terrain": [
 		&"ledge_hops", &"ice_slides", &"side_walls", &"drawn_blocks", &"story_map_ids",

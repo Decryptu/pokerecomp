@@ -127,7 +127,9 @@ static func put_away_text(name: String) -> String:
 
 ## `PutAwayAndSetUpText`, whose second half is a `para` rather than a line.
 static func put_away_and_set_up_text(put_away: String, set_up: String) -> String:
-	return "Put away the\n%s\n\nand set up the\n%s." % [put_away, set_up]
+	return "Put away the\n%s%sand set up the\n%s." % [
+		put_away, Gen2TextStream.PAGE_BREAK, set_up,
+	]
 
 
 ## `GetDecoName`: a row's type decides which parts its name is spelled from, and

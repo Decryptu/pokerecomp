@@ -469,7 +469,7 @@ func walk_frame() -> int:
 	return (step_frame >> 2) & 3
 
 
-## The facing this object is DRAWN with; [member facing] never moves.
+## The facing this object is DRAWN with while a spin walks.
 ## See [constant Gen2WorldMovement.SPINNING_KINDS].
 func drawn_facing() -> int:
 	if step_passes_remaining > 0 and step_kind in Gen2WorldMovement.SPINNING_KINDS:

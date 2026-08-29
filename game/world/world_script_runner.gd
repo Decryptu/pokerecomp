@@ -415,16 +415,17 @@ const STRENGTH_OW_ALREADY_ACTIVE: int = 2
 ## that shows them is reached only through `callasm`, which has no runner; see
 ## _stage_strength_boulder().
 const STRENGTH_ASK_TEXT: String = \
-	"A #MON may be\nable to move this.\n\nWant to use\nSTRENGTH?"
+	"A #MON may be\nable to move this." + Gen2TextStream.PAGE_BREAK \
+	+ "Want to use\nSTRENGTH?"
 const STRENGTH_MAY_MOVE_TEXT: String = "A #MON may be\nable to move this."
 const STRENGTH_BOULDERS_MOVE_TEXT: String = "Boulders may now\nbe moved!"
 ## data/text/common_2.asm again, for AskRockSmashScript. `HasRockSmash` answers
 ## 1 when CheckPartyMove fails, which is the `ifequal 1, .no` that reaches
 ## _MaySmashText; anything else asks.
 const ROCK_SMASH_ASK_TEXT: String = \
-	"This rock looks\nbreakable.\n\nWant to use ROCK\nSMASH?"
+	"This rock looks\nbreakable." + Gen2TextStream.PAGE_BREAK \
+	+ "Want to use ROCK\nSMASH?"
 const ROCK_SMASH_MAY_SMASH_TEXT: String = "Maybe a #MON\ncan break this."
-const ROCK_SMASH_USED_TEXT: String = "%s used\nROCK SMASH!"
 ## Script_earthquake's operand in RockSmashScript, kept because the runner
 ## reports the request rather than shaking anything.
 const ROCK_SMASH_EARTHQUAKE: int = 84
@@ -436,17 +437,21 @@ const SFX_STRENGTH: int = 0x1B
 ## reaches. Synthesized rather than decoded for the reason AskStrengthScript's
 ## are: each is reached through `CallScript` on a link-time address, so there is
 ## no pointer in the pins to follow. All five are byte identical between them.
-const CUT_ASK_TEXT: String = "This tree can be\nCUT!\n\nWant to use CUT?"
+const CUT_ASK_TEXT: String = "This tree can be\nCUT!" \
+	+ Gen2TextStream.PAGE_BREAK + "Want to use CUT?"
 const CUT_CAN_TEXT: String = "This tree can be\nCUT!"
 const SURF_ASK_TEXT: String = "The water is calm.\nWant to SURF?"
 const WHIRLPOOL_ASK_TEXT: String = \
-	"A whirlpool is in\nthe way.\n\nWant to use\nWHIRLPOOL?"
+	"A whirlpool is in\nthe way." + Gen2TextStream.PAGE_BREAK \
+	+ "Want to use\nWHIRLPOOL?"
 const WHIRLPOOL_MAY_PASS_TEXT: String = \
-	"It's a vicious\nwhirlpool!\n\nA #MON may be\nable to pass it."
+	"It's a vicious\nwhirlpool!" + Gen2TextStream.PAGE_BREAK \
+	+ "A #MON may be\nable to pass it."
 const WATERFALL_ASK_TEXT: String = "Do you want to use\nWATERFALL?"
 const WATERFALL_HUGE_TEXT: String = "Wow, it's a huge\nwaterfall."
 const HEADBUTT_ASK_TEXT: String = \
-	"A #MON could be\nin this tree.\n\nWant to HEADBUTT\nit?"
+	"A #MON could be\nin this tree." + Gen2TextStream.PAGE_BREAK \
+	+ "Want to HEADBUTT\nit?"
 ## A field-move prompt has no source address to push a frame at, since
 ## CallScript's operand is a link-time one the pins do not resolve. The bare
 ## `end` frame still has to sit in the CPU's switchable window for _push_frame,
@@ -516,8 +521,9 @@ const EVENT_PLAYERS_HOUSE_2F_CONSOLE: int = 1857
 const EVENT_PLAYERS_HOUSE_2F_DOLL_1: int = 1858
 const EVENT_PLAYERS_HOUSE_2F_DOLL_2: int = 1859
 const EVENT_PLAYERS_HOUSE_2F_BIG_DOLL: int = 1860
-## `engine/events/unown_walls.asm`'s two reading chambers. Crystal's alone: the
-## other two walls open from a scene script rather than a special.
+## `engine/events/unown_walls.asm`'s two `special` chambers. Crystal's alone: the
+## other two are farcalled from field-move code rather than reached by a script,
+## so they live with the moves that open them (Gen2WorldAPI.unown_wall_event).
 const EVENT_WALL_OPENED_IN_HO_OH_CHAMBER: int = 806
 const EVENT_WALL_OPENED_IN_OMANYTE_CHAMBER: int = 808
 
@@ -6488,7 +6494,9 @@ func _stage_strength_used(slot: int) -> Dictionary:
 	var name: String = _field_move_user_name(slot)
 	_pending = {
 		"type": &"text",
-		"text": "%s used\nSTRENGTH!" % name,
+		"text": Gen2WorldFieldMove.used_text(
+			Gen2WorldFieldMove.MOVE_STRENGTH, name
+		),
 		"internal_text": true,
 		"special": &"strength_used",
 		"name": name,
@@ -6614,7 +6622,7 @@ func _stage_rock_smash_used(slot: int) -> Dictionary:
 	var name: String = _field_move_user_name(slot)
 	_pending = {
 		"type": &"text",
-		"text": ROCK_SMASH_USED_TEXT % name,
+		"text": Gen2WorldFieldMove.used_text(Gen2WorldFieldMove.MOVE_ROCK_SMASH, name),
 		"internal_text": true,
 		"special": &"rock_smash_used",
 		"source": _request.duplicate(true),

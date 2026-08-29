@@ -10,10 +10,12 @@ const MAX_BYTES: int = 128
 const MAX_COMMANDS: int = 128
 const STEP_END: int = 0x47
 
-## The three commands reaching `TurningStep` rather than `NormalStep`
-## (engine/overworld/movement.asm). It sets OBJECT_ACTION_SPIN, so the walker
-## spins counterclockwise instead of facing the way it is going.
-const SPINNING_KINDS: Array[StringName] = [&"turn_away", &"turn_in", &"turn_waterfall"]
+## The commands that set OBJECT_ACTION_SPIN, so the walker spins counterclockwise
+## instead of facing the way it is going: the three reaching `TurningStep` rather
+## than `NormalStep`, and `Movement_step_dig`, which spins standing still.
+const SPINNING_KINDS: Array[StringName] = [
+	&"turn_away", &"turn_in", &"turn_waterfall", &"step_dig",
+]
 
 ## `CounterclockwiseSpinAction`'s `.facings`.
 const SPIN_FACINGS: Array[int] = [

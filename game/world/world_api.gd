@@ -69,6 +69,8 @@ const STEP_PASSES_FAST: int = 4
 ## then the new facing is written and two more, so a turn on the spot costs
 ## four frames and no cell.
 const STEP_PASSES_TURN: int = 4
+## `Script_ForcedMovement`'s own `step_dig 16`, twice per whirlpool.
+const FORCED_TURN_SLEEP_PASSES: int = 16
 ## How long each scripted step command takes, from the `STEP_*` speed it passes to
 ## `InitStep` and that row of `StepVectors`. Every command here reaches `InitStep`
 ## and they differ only in the step type set over the top; the turning rows keep
@@ -898,7 +900,8 @@ func player_step_kind() -> StringName:
 
 
 ## The facing the player is DRAWN with: [member player_facing] except while a
-## spinning command walks, and the logical facing never moves.
+## spinning command walks. The spin also writes OBJECT_DIRECTION, so a stream
+## that ends leaves [member player_facing] where it stopped.
 func player_drawn_facing() -> int:
 	if player_step_kind() in Gen2WorldMovement.SPINNING_KINDS:
 		return Gen2WorldMovement.spin_facing(_player_spin_frame)
@@ -1090,14 +1093,11 @@ const FIELD_MOVE_SOURCE_PARTY: StringName = &"party"
 const FIELD_MOVE_SOURCE_ITEM: StringName = &"item"
 
 
-## WHERE a field move would be used from, which is the one question every entrance
-## to one asks: `{kind, move, slot, item}`, and `{}` when nothing can use it. The
-## party is asked first and answers exactly what [method party_slot_with_move]
-## did, so with no registered source every field move resolves the way it always
-## has; only when no slot knows the move is an alternate source considered, and
-## only for the seven HM moves. The badge is deliberately NOT part of this: every
-## `Try*OW` tests its own `CheckBadge` in the source's order, so a player carrying
-## HM01 without the Hive Badge is told about the badge.
+## WHERE a field move would be used from: `{kind, move, slot, item}`, and `{}`
+## when nothing can use it. The party answers first and exactly what [method
+## party_slot_with_move] did; only when no slot knows the move is an alternate
+## source considered, and only for the seven HM moves. The badge is deliberately
+## not part of this, since every `Try*OW` tests `CheckBadge` in its own order.
 func field_move_source(move_id: int) -> Dictionary:
 	var slot: int = party_slot_with_move(move_id)
 	if slot >= 0:
@@ -1111,9 +1111,8 @@ func field_move_source(move_id: int) -> Dictionary:
 
 
 ## The HM in the bag that teaches [param move_id] while a registered provider
-## allows that move, or 0. Which item teaches which move is `GetTMHMItemMove`'s
-## answer rather than a second table, so a cartridge whose HMs differ needs
-## nothing here.
+## allows it, or 0. Which item teaches which move is `GetTMHMItemMove`'s answer
+## rather than a second table.
 func item_field_move_source(move_id: int) -> int:
 	if data == null or state == null \
 		or not Gen2WorldFieldMove.is_hm_field_move(move_id) \
@@ -1126,13 +1125,10 @@ func item_field_move_source(move_id: int) -> int:
 	return 0
 
 
-## Every HM field move an item can currently supply and the party cannot, as
+## Every HM field move an item can supply and the party cannot, as
 ## `{move, item, badge}` in [constant Gen2WorldFieldMove.HM_FIELD_MOVES] order.
-##
-## The badge IS applied here, unlike in [method field_move_source]: this is what
-## a menu of usable moves is built from, and a row that can only answer "a new
-## BADGE is required" is not something to offer. A party member that knows the
-## move keeps its own submenu row and is not repeated here.
+## The badge IS applied here, unlike in [method field_move_source]: a row that
+## can only answer "a new BADGE is required" is not worth offering.
 func item_field_move_offers() -> Array:
 	var out: Array = []
 	if data == null or state == null:
@@ -1151,14 +1147,14 @@ func item_field_move_offers() -> Array:
 	return out
 
 
-## Clears the mirror so a stale count cannot answer a later read after the
-## caller stops refreshing it (for example, closing the injected preview save).
+## Cleared so a stale count cannot answer a read after the caller stops
+## refreshing it, for example when the injected preview save closes.
 func clear_party_summary() -> void:
 	_party_summary = {}
 
 
-## Empty when no caller has set a summary yet; a script-visible read must fail
-## rather than invent a count in that case.
+## Empty until a caller sets one: a script-visible read fails rather than
+## inventing a count.
 func party_summary() -> Dictionary:
 	return _party_summary.duplicate()
 
@@ -1234,13 +1230,36 @@ func cancel_fishing() -> Dictionary:
 	return _fishing.cancel()
 
 
+## `engine/events/unown_walls.asm`'s two farcalled chambers: `FlashFunction`
+## reaches `SpecialAerodactylChamber` and `EscapeRopeOrDig`'s escape-rope branch
+## reaches `SpecialKabutoChamber`, so neither is a `special` the runner can see.
+## Ho-Oh's and Omanyte's are, and live there. Crystal's alone.
+const RUINS_OF_ALPH_GROUP: int = 3
+const RUINS_OF_ALPH_KABUTO_CHAMBER: int = 24
+const RUINS_OF_ALPH_AERODACTYL_CHAMBER: int = 26
+const EVENT_WALL_OPENED_IN_KABUTO_CHAMBER: int = 807
+const EVENT_WALL_OPENED_IN_AERODACTYL_CHAMBER: int = 809
+const UNOWN_WALL_MAPS: Dictionary = {
+	EVENT_WALL_OPENED_IN_KABUTO_CHAMBER: RUINS_OF_ALPH_KABUTO_CHAMBER,
+	EVENT_WALL_OPENED_IN_AERODACTYL_CHAMBER: RUINS_OF_ALPH_AERODACTYL_CHAMBER,
+}
+
+
+## [param event] while the player stands in that wall's own chamber, or -1,
+## which is each routine's `GetMapAttributesPointer` comparison.
+func unown_wall_event(event: int) -> int:
+	if current_map == null or data == null \
+		or not Gen2WorldState.is_crystal_profile(data) \
+		or current_map.group != RUINS_OF_ALPH_GROUP \
+		or current_map.number != int(UNOWN_WALL_MAPS.get(event, -1)):
+		return -1
+	return event
+
+
 ## engine/events/overworld.asm's CutFunction. Every field move below is staged
-## rather than applied, because each source script shows its text and waits on the
-## button before it changes anything: `*_request` records and `complete_*` writes.
-## The refusal order is load bearing too: `.CheckAble` tests ENGINE_HIVEBADGE
-## before it ever looks at the tile, so a player without the badge is told about
-## the badge even while facing a cuttable tree. A match records the block,
-## replacement and animation the way CheckMapForSomethingToCut fills wCutWhirlpool*.
+## rather than applied, since each script shows its text and waits before it
+## changes anything: `*_request` records and `complete_*` writes. The refusal
+## order is load bearing: `.CheckAble` tests ENGINE_HIVEBADGE before the tile.
 func cut_request() -> Dictionary:
 	if current_map == null or current_tileset == null:
 		return _cut_failure(&"missing_map")
@@ -1276,16 +1295,14 @@ func cut_request() -> Dictionary:
 	return _pending_cut.duplicate(true)
 
 
-## Empty until cut_request() succeeds. A host shows its text while this is set.
+## Empty until cut_request() succeeds.
 func pending_cut() -> Dictionary:
 	return _pending_cut.duplicate(true)
 
 
-## CutDownTreeOrGrass: writes the replacement into the loaded map's block grid.
-## change_block() already re-resolves collision through the tileset and drops the
-## override on a map change or reload, which is the cartridge's own behavior,
-## since the routine writes wOverworldMapBlocks and a map load re-reads the
-## block data from ROM. The tree regrows on the next visit.
+## CutDownTreeOrGrass, which writes wOverworldMapBlocks: change_block() drops the
+## override on a map load exactly as re-reading the block data from ROM does, so
+## the tree regrows on the next visit.
 func complete_cut() -> Dictionary:
 	if _pending_cut.is_empty():
 		return _cut_failure(&"no_pending_cut")
@@ -1314,7 +1331,6 @@ static func _cut_failure(reason: StringName) -> Dictionary:
 ## before the tile, so a player without the Fog Badge is told about the badge
 ## whether or not the water in front is surfable, CheckBadge itself being what
 ## pushes that text. [param species] is the chosen party member's, for GetSurfType.
-## The source's wBikeFlags branch has no counterpart here, since no bike exists.
 func surf_request(species: int = 0) -> Dictionary:
 	if current_map == null or current_tileset == null:
 		return _surf_failure(&"missing_map")
@@ -1329,6 +1345,8 @@ func surf_request(species: int = 0) -> Dictionary:
 	## badge rather than before it (`TrySurfOW`).
 	if field_move_source(Gen2WorldFieldMove.MOVE_SURF).is_empty():
 		return _surf_failure(&"move_not_known")
+	if always_on_bike():
+		return _surf_failure(&"cannot_surf")
 	if movement_mode == MOVEMENT_SURF:
 		return _surf_failure(&"already_surfing")
 	var target: Vector2i = facing_cell()
@@ -1355,17 +1373,15 @@ func surf_request(species: int = 0) -> Dictionary:
 	return _pending_surf.duplicate(true)
 
 
-## Empty until surf_request() succeeds. A host shows its text while this is set.
+## Empty until surf_request() succeeds.
 func pending_surf() -> Dictionary:
 	return _pending_surf.duplicate(true)
 
 
 ## The rest of UsedSurfScript after its waitbutton: writevar VAR_MOVEMENT,
 ## UpdatePlayerSprite, then SurfStartStep's single slow_step into the water.
-##
-## That step is an applymovement, not player input, so it neither consumes a
-## repel step nor rolls an encounter, and it is not re-validated: .TrySurf
-## already checked the cell, and the movement engine does not check again.
+## An applymovement rather than input, so it spends no repel step, rolls no
+## encounter and is not re-validated.
 func complete_surf() -> Dictionary:
 	if _pending_surf.is_empty():
 		return _surf_failure(&"no_pending_surf")
@@ -1389,9 +1405,8 @@ static func _surf_failure(reason: StringName) -> Dictionary:
 
 
 ## WhirlpoolFunction .TryWhirlpool, filling the same wCutWhirlpool* slots Cut
-## does. ENGINE_GLACIERBADGE is checked before the tile, the order .CheckAble has,
-## and no player state at all: the source neither requires nor refuses surfing, so
-## a player facing a whirlpool from land resolves too.
+## does. ENGINE_GLACIERBADGE before the tile, and no player state at all, so a
+## player facing a whirlpool from land resolves too.
 func whirlpool_request() -> Dictionary:
 	if current_map == null or current_tileset == null:
 		return _whirlpool_failure(&"missing_map")
@@ -1425,14 +1440,13 @@ func whirlpool_request() -> Dictionary:
 	return _pending_whirlpool.duplicate(true)
 
 
-## Empty until whirlpool_request() succeeds. A host shows its text while this is set.
+## Empty until whirlpool_request() succeeds.
 func pending_whirlpool() -> Dictionary:
 	return _pending_whirlpool.duplicate(true)
 
 
-## DisappearWhirlpool, which writes the replacement block and re-runs
-## GetMovementPermissions exactly as CutDownTreeOrGrass does, so the override
-## dies with the loaded map and the whirlpool returns on the next visit.
+## DisappearWhirlpool, which writes the replacement block as CutDownTreeOrGrass
+## does, so the whirlpool returns with the next map load.
 func complete_whirlpool() -> Dictionary:
 	if _pending_whirlpool.is_empty():
 		return _whirlpool_failure(&"no_pending_whirlpool")
@@ -1458,10 +1472,9 @@ static func _whirlpool_failure(reason: StringName) -> Dictionary:
 
 
 ## WaterfallFunction .TryWaterfall: CheckBadge ENGINE_RISINGBADGE, then
-## CheckMapCanWaterfall, which is two tests and no more: `wPlayerDirection & $c`
-## must be FACE_UP, and wTileUp must satisfy CheckWaterfallTile. It reads no player
-## state, so it neither requires nor refuses surfing, and its refusal is
-## FieldMoveFailed's generic line.
+## CheckMapCanWaterfall, which is `wPlayerDirection & $c` being FACE_UP and
+## wTileUp satisfying CheckWaterfallTile. No player state, so it neither
+## requires nor refuses surfing.
 func waterfall_request() -> Dictionary:
 	if current_map == null or current_tileset == null:
 		return _waterfall_failure(&"missing_map")
@@ -1491,7 +1504,7 @@ func waterfall_request() -> Dictionary:
 	return _pending_waterfall.duplicate(true)
 
 
-## Empty until waterfall_request() succeeds. A host shows its text while this is set.
+## Empty until waterfall_request() succeeds.
 func pending_waterfall() -> Dictionary:
 	return _pending_waterfall.duplicate(true)
 
@@ -1502,8 +1515,8 @@ func pending_waterfall() -> Dictionary:
 ## cell that is not a waterfall. Each step is an applymovement: no collision, no
 ## repel step, no encounter. Paced like a scripted stream, the cell committing at
 ## once and the column drawn a cell at a time, so a renderer can carry the player
-## up the fall's face; the landing state is re-derived when the run drains rather
-## than here, and the answer reports the mode it will leave.
+## up the fall's face. [method _finish_waterfall_climb] is what the run drains
+## into, and the answer reports the mode it will leave.
 func complete_waterfall() -> Dictionary:
 	if _pending_waterfall.is_empty():
 		return _waterfall_failure(&"no_pending_waterfall")
@@ -1530,7 +1543,7 @@ func complete_waterfall() -> Dictionary:
 	var passes: int = int(SCRIPTED_STEP_PASSES[&"turn_waterfall"])
 	for _step: int in climbed:
 		_queue_player_step(Vector2i.UP, passes, false, Vector2i.UP, &"turn_waterfall")
-	_player_step_tail = _apply_map_setup_player_state
+	_player_step_tail = _finish_waterfall_climb
 	return {
 		"ok": true,
 		"kind": &"waterfall_applied",
@@ -1540,6 +1553,15 @@ func complete_waterfall() -> Dictionary:
 		"passes": climbed * passes,
 		"movement_mode": _setup_movement_mode(cell),
 	}
+
+
+## `SetFacingCounterclockwiseSpin` writes OBJECT_DIRECTION, which is
+## `wPlayerDirection` itself, and `movement_step_sleep`'s OBJECT_ACTION_STAND
+## reads it back rather than restoring anything: the climb ends a quarter turn
+## per cell round from DOWN. The landing state follows, as a warp's does.
+func _finish_waterfall_climb() -> void:
+	player_facing = Gen2WorldMovement.spin_facing(_player_spin_frame)
+	_apply_map_setup_player_state()
 
 
 static func _waterfall_failure(reason: StringName) -> Dictionary:
@@ -1564,31 +1586,44 @@ func flash_request() -> Dictionary:
 		Gen2WorldFieldMove.BADGE_ZEPHYR, Gen2WorldState.is_crystal_profile(data)
 	)):
 		return _flash_failure(&"badge_required")
-	if not Gen2WorldPalette.is_dark(current_map.palette):
-		return _flash_failure(&"not_dark")
-	if state.used_flash():
-		return _flash_failure(&"already_lit")
+	## `.CheckUseFlash` asks `SpecialAerodactylChamber` before the palette, so
+	## Flash works in that one room whatever the light.
+	var chamber: int = unown_wall_event(EVENT_WALL_OPENED_IN_AERODACTYL_CHAMBER)
+	if chamber < 0:
+		if not Gen2WorldPalette.is_dark(current_map.palette):
+			return _flash_failure(&"not_dark")
+		if state.used_flash():
+			return _flash_failure(&"already_lit")
 	_pending_flash = {
 		"ok": true,
 		"kind": &"flash_requested",
 		"move": Gen2WorldFieldMove.MOVE_FLASH,
+		"wall_event": chamber,
 	}
 	return _pending_flash.duplicate(true)
 
 
-## Empty until flash_request() succeeds. A host shows its text while this is set.
+## Empty until flash_request() succeeds.
 func pending_flash() -> Dictionary:
 	return _pending_flash.duplicate(true)
 
 
-## `BlindingFlash`, which Script_UseFlash reaches only after its text: the flag
-## goes on and every palette the map draws with changes with it.
+## `BlindingFlash`, reached only after Script_UseFlash's text: the flag goes on
+## and every palette the map draws with changes with it.
 func complete_flash() -> Dictionary:
 	if _pending_flash.is_empty():
 		return _flash_failure(&"no_pending_flash")
+	var wall_event: int = int(_pending_flash.get("wall_event", -1))
 	_pending_flash = {}
 	state.set_used_flash(true)
-	return {"ok": true, "kind": &"flash_used", "time_of_day": map_time_of_day()}
+	if wall_event >= 0:
+		state.set_event_flag(wall_event, true)
+	return {
+		"ok": true,
+		"kind": &"flash_used",
+		"time_of_day": map_time_of_day(),
+		"wall_event": wall_event,
+	}
 
 
 static func _flash_failure(reason: StringName) -> Dictionary:
@@ -1619,19 +1654,15 @@ func headbutt_request() -> Dictionary:
 	return _pending_headbutt.duplicate(true)
 
 
-## Empty until headbutt_request() succeeds. A host shows its text while this is
-## set, exactly as it does for the other staged moves.
+## Empty until headbutt_request() succeeds.
 func pending_headbutt() -> Dictionary:
 	return _pending_headbutt.duplicate(true)
 
 
 ## TreeMonEncounter: the map's treemon set, then GetTreeMons' profile limit,
-## then GetTreeMon's score and rolls. A miss is HeadbuttScript's .no_battle
-## branch, which is HeadbuttNothingText and no battle, so it is an applied
-## result with an empty encounter rather than a failure.
-##
-## The tree is not changed and the map is not touched: unlike Cut and
-## Whirlpool, ShakeHeadbuttTree is an animation over a block that stays.
+## then GetTreeMon's score and rolls. A miss is `.no_battle`, so it is an applied
+## result with an empty encounter rather than a failure. The tree stands:
+## ShakeHeadbuttTree is an animation, not a block change.
 func complete_headbutt(random: RandomNumberGenerator) -> Dictionary:
 	if _pending_headbutt.is_empty():
 		return _headbutt_failure(&"no_pending_headbutt")
@@ -1758,11 +1789,9 @@ func complete_rock_smash(random: RandomNumberGenerator) -> Dictionary:
 
 
 ## `Script_disappear`: `DeleteObjectStruct` plus
-## `ApplyEventActionAppearDisappear`, which writes the object's own event flag
-## only when it has one. Fifteen of the sixteen rocks carry `-1`, so they are
-## gone until the map reloads and back on the next visit; Mt. Moon Square's
-## carries `EVENT_MT_MOON_SQUARE_ROCK`, so that one stays smashed, which is what
-## gates the Clefairy dance.
+## `ApplyEventActionAppearDisappear`, which writes the object's event flag only
+## when it has one. Fifteen of the sixteen rocks carry `-1` and are back on the
+## next visit; Mt. Moon Square's stays smashed and gates the Clefairy dance.
 func smash_object(object_index: int) -> Dictionary:
 	if current_map == null or object_index < 0 or object_index >= objects.size():
 		return {"ok": false, "reason": &"missing_object"}
@@ -1777,8 +1806,8 @@ func smash_object(object_index: int) -> Dictionary:
 	return {"ok": true, "object_index": object_index, "event_flag": object.event_flag}
 
 
-## RockMonEncounter over the imported RockMonMaps and the ROCK set. Unlike a
-## tree it carries no BATTLETYPE_TREE, so nothing about it can start asleep.
+## RockMonEncounter over the imported RockMonMaps and the ROCK set. No
+## BATTLETYPE_TREE, so nothing out of a rock starts asleep.
 func _rock_encounter(random: RandomNumberGenerator) -> Dictionary:
 	var set_number: int = data.treemon_set_for_map(
 		current_map.group, current_map.number, true
@@ -1901,7 +1930,7 @@ func strength_request(species: int = 0) -> Dictionary:
 	return _pending_strength.duplicate(true)
 
 
-## Empty until strength_request() succeeds. A host shows its text while this is set.
+## Empty until strength_request() succeeds.
 func pending_strength() -> Dictionary:
 	return _pending_strength.duplicate(true)
 
@@ -3717,10 +3746,10 @@ func _field_move_prompt_request(cell: Vector2i) -> Dictionary:
 
 
 ## TrySurfOW's own checks, less the badge and the party the runner makes: not
-## already surfing, facing water, and CheckDirection's face mask. The bike flag
-## is not modelled, since nothing in this project sets one.
+## already surfing, facing water, CheckDirection's face mask and the bike flag
+## Route 16 and Route 17 set.
 func _surf_prompt_applies(cell: Vector2i) -> bool:
-	if movement_mode == MOVEMENT_SURF:
+	if movement_mode == MOVEMENT_SURF or always_on_bike():
 		return false
 	if collision_permission_at(cell) != Gen2WorldCollision.WATER_TILE:
 		return false
@@ -5836,9 +5865,8 @@ func forced_movement() -> Dictionary:
 	return Gen2WorldCollision.forced_action(collision_code_at(player_cell))
 
 
-## Applies whatever the standing tile forces, with no input at all, because the
-## source polls .CheckTile every frame rather than only on a press. Empty when
-## the tile forces nothing.
+## Whatever the standing tile forces, with no input: the source polls .CheckTile
+## every frame rather than only on a press. Empty when the tile forces nothing.
 func advance_forced_movement() -> Dictionary:
 	var forced: Dictionary = forced_movement()
 	match StringName(forced.get("kind", &"none")):
@@ -5850,26 +5878,40 @@ func advance_forced_movement() -> Dictionary:
 
 
 ## PLAYERMOVEMENT_FORCE_TURN, which queues Script_ForcedMovement: it reads
-## VAR_FACING, the committed facing rather than the pressed direction, and applies
-## a stream of step_dig, turn_in and turn_head. None of those opcodes moves a cell,
-## so the whole effect is that the player is spun to face the way they came. A
-## player who surfs onto a whirlpool therefore cannot walk off it, which is the
-## cartridge's own behavior and not a gap here.
+## VAR_FACING and runs `step_dig 16`, `turn_in <back>`, `step_dig 16`,
+## `turn_head <back>`. `turn_in` reaches `TurningStep` and so `InitStep`, which
+## moves a cell, so a whirlpool spits the player back rather than holding them.
+## `step_dig` is `STEP_TYPE_SLEEP` with OBJECT_ACTION_SPIN: it spins in place.
 func _forced_turn() -> Dictionary:
-	player_facing = facing_for_direction(-_direction_for_facing(player_facing))
+	var back: Vector2i = -_direction_for_facing(player_facing)
+	var landing: Vector2i = player_cell + back
+	var from_cell: Vector2i = player_cell
+	if _cell_in_bounds(landing):
+		player_cell = landing
+		_advance_followers(-1, from_cell)
+	player_facing = facing_for_direction(back)
+	## `Movement_step_dig` seeds OBJECT_STEP_FRAME from its direction, so the spin
+	## opens on `.facings`' row for it rather than at DOWN.
+	_player_spin_frame = (TURNING_DIRECTION_ORDER.find(back) << 4) & 0x30
+	_queue_player_step(Vector2i.ZERO, FORCED_TURN_SLEEP_PASSES, false, back, &"step_dig")
+	if player_cell != from_cell:
+		_queue_player_step(back, STEP_PASSES_WALK, false, back, &"turn_in")
+	_queue_player_step(Vector2i.ZERO, FORCED_TURN_SLEEP_PASSES, false, back, &"step_dig")
 	return {
 		"ok": true,
 		"kind": &"forced_turn",
 		"cell": player_cell,
+		"from_cell": from_cell,
 		"facing": player_facing,
+		"passes": FORCED_TURN_SLEEP_PASSES * 2
+			+ (STEP_PASSES_WALK if player_cell != from_cell else 0),
 	}
 
 
 ## .continue_walk: STEP_WALK through .DoStep, which never consults permissions, so
-## a forced step commits into a cell an ordinary step would refuse. It reaches
-## .CheckTile before .TrySurf, so it also never runs .ExitWater: a forced step from
-## water onto land keeps the surfing state. No shipped map places a forced tile
-## where either matters; both are kept because the source has no guard for them.
+## a forced step commits into a cell an ordinary step would refuse, and reaches
+## .CheckTile before .TrySurf, so it never runs .ExitWater either. No shipped map
+## places a forced tile where either matters.
 func _forced_step(direction: Vector2i, destination: Vector2i) -> Dictionary:
 	var from_map: Vector2i = map_id()
 	var from_cell: Vector2i = player_cell
@@ -6067,25 +6109,46 @@ func _cell_at_connection_edge(cell: Vector2i, direction_name: String) -> bool:
 
 
 ## engine/overworld/map_setup.asm's CheckUpdatePlayerSprite, which every warp and
-## connection reaches through warp_connection.asm. The cartridge re-derives the
-## player state from the cell it lands on rather than carrying it over:
-## .CheckSurfing starts surfing on water and keeps an existing surf state,
-## .ResetSurfingOrBikingState restores PLAYER_NORMAL anywhere else. Without it a
-## warp taken from a water tile lands on dry land still surfing, where nothing
-## but water is a legal step. .CheckForcedBiking has no counterpart here.
+## connection reaches through warp_connection.asm: the player state is re-derived
+## from the cell landed on rather than carried over.
 func _apply_map_setup_player_state() -> void:
 	var mode: StringName = _setup_movement_mode(player_cell)
 	if mode == movement_mode:
 		return
 	movement_mode = mode
-	player_sprite_number = Gen2WorldSprite.SPRITE_SURF if mode == MOVEMENT_SURF \
-		else _walking_sprite()
+	player_sprite_number = _map_setup_sprite(mode)
 
 
+func _map_setup_sprite(mode: StringName) -> int:
+	if mode == MOVEMENT_SURF:
+		return Gen2WorldSprite.SPRITE_SURF
+	if mode == MOVEMENT_BIKE:
+		return Gen2WorldSprite.player_bike_sprite(_player_female)
+	return _walking_sprite()
+
+
+## `.ResetSurfingOrBikingState`'s three, and no more: a cave and a gate are
+## legal to ride through, which is why `.CheckEnvironment` mounts one there.
+const BIKE_DISMOUNT_ENVIRONMENTS: Array[int] = [
+	ENVIRONMENT_INDOOR, ENVIRONMENT_5, ENVIRONMENT_DUNGEON,
+]
+
+
+## `CheckUpdatePlayerSprite`'s three branches in its own order: `.CheckForcedBiking`,
+## then `.CheckSurfing`, then `.ResetSurfingOrBikingState`.
 func _setup_movement_mode(cell: Vector2i) -> StringName:
+	if state != null and state.is_engine_flag_active(
+		Gen2WorldState.always_on_bike_flag(data)
+	):
+		return MOVEMENT_BIKE
 	if collision_permission_at(cell) == Gen2WorldCollision.WATER_TILE:
 		return MOVEMENT_SURF
-	return MOVEMENT_WALK if movement_mode == MOVEMENT_SURF else movement_mode
+	if movement_mode == MOVEMENT_SURF:
+		return MOVEMENT_WALK
+	if movement_mode == MOVEMENT_BIKE and current_map != null \
+		and BIKE_DISMOUNT_ENVIRONMENTS.has(current_map.environment):
+		return MOVEMENT_WALK
+	return movement_mode
 
 
 func _apply_map(
@@ -6349,14 +6412,10 @@ func visited_flypoints() -> Array[int]:
 	return out
 
 
-## `SweetScentEncounter`, the whole of what the party submenu's SWEET SCENT row
-## does: a wild appears where one could have been stepped into.
-##
-## Its own gates, in the source's order: `CanEncounterWildMon` for the tile,
-## then the Bug Contest's own tables, then the map's rate and
-## `ChooseWildEncounter`. The rate is read but never rolled against, which is
-## what makes the move worth using; the five-step cooldown a map entry sets is
-## not consulted either, since nothing here is a step.
+## `SweetScentEncounter`: a wild appears where one could have been stepped into.
+## Its gates in the source's order are `CanEncounterWildMon`, the Bug Contest's
+## own tables, then the map's rate and `ChooseWildEncounter`. The rate is read
+## and never rolled against, and no step means no cooldown either.
 func sweet_scent_request(random: RandomNumberGenerator = null) -> Dictionary:
 	if current_map == null or data == null:
 		return _sweet_scent_failure(&"missing_map")
@@ -6379,14 +6438,10 @@ static func _sweet_scent_failure(reason: StringName) -> Dictionary:
 	return {"ok": false, "kind": &"sweet_scent_failed", "reason": reason}
 
 
-## `TeleportFunction`: the outdoor-only escape to wherever the last Pokemon
-## Center was. Its whole test is the map being outdoors and the last spawn map
-## being a spawn point, and it checks no badge at all.
-##
-## The warp is applied here rather than staged, because `.TeleportScript` is the
-## source's own script and everything in it but its shared tail is animation
-## this project has no frames for. That tail is [method _escape_map_tail], which
-## [method warp_to_spawn] runs.
+## `TeleportFunction`: the outdoor-only escape to the last Pokemon Center, whose
+## whole test is the map being outdoors and that spawn being a spawn point. No
+## badge. Applied rather than staged, since everything in `.TeleportScript` but
+## [method _escape_map_tail] is animation this project has no frames for.
 func teleport_request() -> Dictionary:
 	if current_map == null:
 		return _teleport_failure(&"missing_map")
@@ -6412,12 +6467,9 @@ static func _teleport_failure(reason: StringName) -> Dictionary:
 	return {"ok": false, "kind": &"teleport_failed", "reason": reason}
 
 
-## `DigFunction`, which is `EscapeRopeOrDig` with the Dig half of its type byte:
-## a cave or a dungeon, and a recorded dig warp, and out through the warp the
-## player came in by.
-##
-## The source keeps three separate bytes and refuses when any is zero, which is
-## the same test as this project's record being empty.
+## `DigFunction`, `EscapeRopeOrDig` with the Dig half of its type byte: a cave or
+## a dungeon and a recorded dig warp, out through the warp the player came in by.
+## The source's three bytes each refusing on zero is this record being empty.
 func dig_request() -> Dictionary:
 	if current_map == null:
 		return _dig_failure(&"missing_map")
@@ -6464,7 +6516,7 @@ func bike_request() -> Dictionary:
 		}
 	if movement_mode != MOVEMENT_BIKE:
 		return _bike_failure(&"cannot_use_bike")
-	if state.is_engine_flag_active(Gen2WorldState.always_on_bike_flag(data)):
+	if always_on_bike():
 		return _bike_failure(&"always_on_bike")
 	movement_mode = MOVEMENT_WALK
 	player_sprite_number = _walking_sprite()
@@ -6473,6 +6525,13 @@ func bike_request() -> Dictionary:
 		"music": map_music_track(),
 		"sprite": player_sprite_number,
 	}
+
+
+## `BIKEFLAGS_ALWAYS_ON_BIKE_F`: Route 16 and Route 17 set it, and it refuses
+## both getting off and surfing.
+func always_on_bike() -> bool:
+	return state != null \
+		and state.is_engine_flag_active(Gen2WorldState.always_on_bike_flag(data))
 
 
 ## `.CheckEnvironment`: outdoors, a cave or a gate, and standing on a tile whose
@@ -6499,6 +6558,11 @@ func escape_rope_request() -> Dictionary:
 	var checked: StringName = _check_can_dig()
 	if checked != &"":
 		return _escape_rope_failure(checked)
+	## `.escaperope`'s `farcall SpecialKabutoChamber`, which runs while the
+	## chamber is still the loaded map.
+	var wall_event: int = unown_wall_event(EVENT_WALL_OPENED_IN_KABUTO_CHAMBER)
+	if wall_event >= 0:
+		state.set_event_flag(wall_event, true)
 	var warped: Dictionary = warp_to_dig_point()
 	if not bool(warped.get("ok", false)):
 		return _escape_rope_failure(StringName(warped.get("reason", &"no_dig_warp")))
@@ -6506,6 +6570,7 @@ func escape_rope_request() -> Dictionary:
 		"ok": true,
 		"kind": &"escape_rope_requested",
 		"warp": warped,
+		"wall_event": wall_event,
 	}
 
 
@@ -6528,13 +6593,11 @@ static func _escape_rope_failure(reason: StringName) -> Dictionary:
 
 
 ## `CheckForHiddenItems`, the whole of the Itemfinder: a BGEVENT_ITEM whose flag
-## is still clear, inside the screen the player stands in the middle of. The window
-## is the source's own arithmetic on the bottom right corner, four cells up and
-## left of the player and four down and five right. Below, every BGEVENT_ITEM on
-## the current map as `{cell, item, flag, taken}` whether or not it has been picked
-## up, read and scene-free so a probe can walk a map with no game running. The
-## map's own events and nothing past them; an event whose three bytes do not decode
-## is dropped rather than offered with a zero item.
+## is still clear, inside the screen the player stands in the middle of, which is
+## four cells up and left and four down and five right. Below, every BGEVENT_ITEM
+## on the map as `{cell, item, flag, taken}` whether or not it has been taken, and
+## scene-free so a probe can walk a map with no game running. An event whose three
+## bytes do not decode is dropped rather than offered with a zero item.
 func hidden_items() -> Array:
 	var out: Array = []
 	if current_map == null:
