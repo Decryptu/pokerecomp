@@ -165,6 +165,11 @@ func _on_touch_controls_changed(shown: bool) -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
 		queue_redraw()
+	elif what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		# The engine releases every pressed action when the app goes to the
+		# background and the finger that was down sends no up, so the pad has to
+		# forget it or that button is held here, released there, and dead.
+		release_all()
 
 
 func _input(event: InputEvent) -> void:

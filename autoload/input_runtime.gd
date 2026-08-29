@@ -10,16 +10,14 @@ extends Node
 ## `-s` script compiles before the tree that owns the autoloads exists.
 
 signal device_changed(kind: StringName)
-## The effective answer, after both the setting and the active device. Also
-## emitted when the frontmost controller changes, since that changes which pad
-## should be drawing even though the setting has not moved.
+## The effective answer, after both the setting and the active device. Emitted for
+## a change of frontmost controller too, which changes which pad should draw.
 signal touch_controls_changed(shown: bool)
 ## A rebind landed. What is bound has already been installed in the [InputMap]
 ## by the time this arrives; a screen only needs it to redraw a legend.
 signal scheme_changed()
-## A + B + START + SELECT, the console's own reset, reported once per press of
-## the chord. The machine's rather than the game's, so it is detected here and
-## whichever screen is up decides what a reset costs.
+## A + B + START + SELECT, the console's own reset, reported once per press. The
+## machine's rather than the game's, so whichever screen is up decides its cost.
 signal reset_chord_pressed()
 
 var _scheme: Dictionary = {}
@@ -43,12 +41,10 @@ var _repeat_open: Dictionary = {}
 ## Whether all four reset buttons were down last frame, so the chord fires once
 ## per press rather than once per frame it is held.
 var _reset_chord_down: bool = false
-## Every on-screen controller in the tree, innermost last. A battle opened over
-## the map puts a second one on screen, and only the top of this stack may draw
-## or read a finger.
+## Every on-screen controller in the tree, innermost last: a battle over the map
+## puts a second one up, and only the top of this stack draws or reads a finger.
 ## Typed as Control rather than as the pad, which keeps this script off the one
-## that draws it: the pad has to name this class, and two class names that name
-## each other do not compile.
+## that draws it; two class names that name each other do not compile.
 var _pads: Array[Control] = []
 
 ## `JoyTextDelay`, which is the whole of the hardware's menu auto-repeat
@@ -62,8 +58,7 @@ const REPEAT_INTERVAL_FRAMES: int = 5
 const FRAME_SECONDS: float = 1.0 / 60.0
 
 ## The four buttons a Game Boy resets on. `home/init.asm` wires them to the
-## hardware rather than to any routine, so the chord works from anywhere the
-## console is running and is not something the game can decline.
+## hardware rather than to a routine, so no game code can decline the chord.
 const RESET_CHORD: Array[int] = [
 	Gen2Button.A, Gen2Button.B, Gen2Button.START, Gen2Button.SELECT,
 ]
@@ -72,11 +67,10 @@ const RESET_CHORD: Array[int] = [
 static var _instance: Gen2InputRuntime = null
 
 
-## Named relative to the root rather than as `/root/InputRuntime`: a script
-## handed to `-s` runs outside the active scene tree, where an absolute path
-## makes even `get_node_or_null` push an error before returning null. The
-## no-runtime answer is the intended one for every headless run, so it has to be
-## silent.
+## Named relative to the root rather than as `/root/InputRuntime`: a script handed
+## to `-s` runs outside the active scene tree, where an absolute path makes even
+## `get_node_or_null` push an error, and no runtime is the intended headless
+## answer.
 static func instance() -> Gen2InputRuntime:
 	if _instance == null:
 		var loop: SceneTree = Engine.get_main_loop() as SceneTree
@@ -154,9 +148,9 @@ func touch_controls_shown() -> bool:
 
 ## Turns the on-screen controller back on and writes it to the options file.
 ##
-## The escape from [constant Gen2Options.TOUCH_NEVER], which is the one setting
-## that can leave a touch-only player with nothing to press. It restores `auto`
-## rather than `always`, so a pad the player picks up again still hides it.
+## The escape from [constant Gen2Options.TOUCH_NEVER], the one setting that can
+## leave a touch-only player with nothing to press. It restores `auto` rather than
+## `always`, so a pad picked up again still hides it.
 func reveal_touch_controls() -> bool:
 	if _touch_mode != Gen2Options.TOUCH_NEVER:
 		return false
@@ -192,12 +186,11 @@ func active_touch_pad() -> Control:
 	return _pads.back() if not _pads.is_empty() else null
 
 
-## Presses a button from something that is not a device: the on-screen
-## controller, a preview, or a test.
-##
-## Sent as an [InputEventAction] through [method Input.parse_input_event] rather
-## than delivered to a screen directly, so it takes the same path a key does and
-## arrives at both the event handlers and [method Input.is_action_pressed].
+## Presses a button from something that is not a device: the on-screen controller,
+## a preview, or a test. Sent as an [InputEventAction] through
+## [method Input.parse_input_event], so it takes the same path a key does and
+## reaches both the event handlers and [method Input.is_action_pressed]. That is a
+## state, so every caller owes the matching [method release].
 func press(button: int) -> void:
 	_send(button, true)
 
@@ -221,12 +214,12 @@ func send_action(action: StringName, pressed: bool) -> void:
 	Input.parse_input_event(event)
 
 
-## Whether this event is a directional press nothing should act on. An analog
-## stick reports a fresh [InputEventJoypadMotion] on every value change and each
-## is an action press, so one push walked a menu the length of the list; a held
-## key repeats at the OS rate for the same reason. The extras are swallowed in
-## front of the engine's own focus navigation, and
-## [method _advance_direction_repeat] puts back the repeat the hardware had.
+## Whether this event is a directional press nothing should act on. A stick sends
+## a fresh [InputEventJoypadMotion] on every value change and each is an action
+## press, so one push walked a menu the length of its list; a held key repeats at
+## the OS rate for the same reason. The extras are swallowed in front of the
+## engine's own focus navigation, and [method _advance_direction_repeat] puts back
+## the repeat the hardware had.
 func _gate_direction_repeat(event: InputEvent) -> bool:
 	var button: int = Gen2Button.direction_in(event)
 	if button == Gen2Button.NONE:
@@ -240,10 +233,9 @@ func _gate_direction_repeat(event: InputEvent) -> bool:
 	return false
 
 
-## The direction currently held, most recently pressed first, or [constant
-## Gen2Button.NONE]. Polled rather than read off events, because walking
-## continues while a direction is held and the operating system's key repeat is
-## not the rate the hardware walked at.
+## The direction currently held, or [constant Gen2Button.NONE]. Polled rather than
+## read off events: walking continues while a direction is held, and the operating
+## system's key repeat is not the rate the hardware walked at.
 func held_direction() -> int:
 	return _direction_order.back() if not _direction_order.is_empty() else Gen2Button.NONE
 
@@ -290,10 +282,23 @@ func _advance_direction_repeat(delta: float) -> void:
 			continue
 		_repeat_clock[button] = FRAME_SECONDS * float(REPEAT_INTERVAL_FRAMES)
 		_repeat_open[button] = true
-		## Only a press. A release would take the action away from
-		## [method Gen2Button.held] while the player is still holding the button,
-		## and the map walks on that answer.
-		send_action(Gen2Button.action(button), true)
+		_emit_repeat(button)
+
+
+## One repeat, pushed into the tree rather than sent through
+## [method Input.parse_input_event]: a repeat is an edge, not a state. `Input`
+## keeps an action's API half apart from its device half and reports either as
+## pressed, and only an action release clears the API half, so a repeat sent as a
+## press latched the direction. The key came up, [method Gen2Button.held] stayed
+## true, and the walk, the menu and the repeat ran on with nothing to stop them.
+func _emit_repeat(button: int) -> void:
+	var viewport: Viewport = get_viewport()
+	if viewport == null:
+		return
+	var event := InputEventAction.new()
+	event.action = Gen2Button.action(button)
+	event.pressed = true
+	viewport.push_input(event)
 
 
 ## Whether a direction is down on either vocabulary; see

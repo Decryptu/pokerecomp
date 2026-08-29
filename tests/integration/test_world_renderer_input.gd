@@ -119,6 +119,53 @@ func test_a_controller_opens_and_walks_the_start_menu() -> void:
 	assert_ne(host.cursor(), second, "a held direction keeps moving it")
 
 
+## The reported defect, end to end. A repeat used to be sent as an action press,
+## which latched the direction in `Input`: the key came up, the pause menu went
+## on scrolling and the player went on walking with nothing able to stop them.
+func test_a_held_direction_stops_the_menu_the_moment_the_key_comes_up() -> void:
+	await _open_world_with_renderer()
+	var runtime: Gen2InputRuntime = Gen2InputRuntime.instance()
+	_world_screen._unhandled_input(_pad(JOY_BUTTON_START))
+	await get_tree().process_frame
+	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
+	assert_not_null(host)
+
+	Input.parse_input_event(_key(true))
+	runtime._input(_key(true))
+	await get_tree().process_frame
+	var at: int = host.cursor()
+	var moved: int = 0
+	for _frame: int in 120:
+		runtime._advance_direction_repeat(Gen2InputRuntime.FRAME_SECONDS)
+		if host.cursor() != at:
+			moved += 1
+			at = host.cursor()
+	assert_gt(moved, 15, "two seconds of a held key walks the list")
+
+	## Two frames: one for the release to reach the input state, one for the
+	## runtime's own poll of it, which is what the walk reads.
+	Input.parse_input_event(_key(false))
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_eq(runtime.held_direction(), Gen2Button.NONE, "the walk stops with it")
+
+	at = host.cursor()
+	var after: int = 0
+	for _frame: int in 120:
+		runtime._advance_direction_repeat(Gen2InputRuntime.FRAME_SECONDS)
+		if host.cursor() != at:
+			after += 1
+			at = host.cursor()
+	assert_eq(after, 0, "and so does the menu")
+
+
+func _key(pressed: bool) -> InputEventKey:
+	var key := InputEventKey.new()
+	key.physical_keycode = KEY_DOWN
+	key.pressed = pressed
+	return key
+
+
 func test_a_renderer_receives_the_input_the_screen_does_not_use() -> void:
 	var renderer: Node = await _open_world_with_renderer()
 	assert_true(renderer.has_method(Gen2ModHost.RENDERER_INPUT_METHOD))
