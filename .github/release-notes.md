@@ -5,29 +5,19 @@ break put in by hand only makes it ragged. -->
 
 ## New in this release
 
-This one is all about catching. Every number a thrown ball uses was checked against a real cartridge, case by case, and a lot of them were wrong.
+Two things reported since the last release, and the rest of what landed with them.
 
-**The seven balls Kurt makes now work.** Take him apricorns, get a Level Ball or a Lure Ball or a Heavy Ball back, and the game refused to let you throw it. All seven do what they are supposed to do now, including the ones that famously do nothing: the Moon Ball never helped on a real cartridge either, and it does not here.
+**Starting a new game asks its questions properly again.** Oak asks you to set the clock, and the two confirmations had lost the thing they were confirming: the game said "What?" and then "Whoa!" over an empty screen and waited for a YES or a NO. They now read the way the cartridge reads them, "What? / DAY 10 o'clock?" and "Whoa! 0 min.?", so you can see what you are agreeing to.
 
-**A Pokemon you catch arrives the way you left it.** It used to turn up at full health with its status cured. Catch one at 3 HP while it is asleep and that is what joins your party, which is what the cartridge does and what makes weakening one worth doing.
+**A controller can get through the launcher.** Nothing was highlighted on Settings, About or any other page long enough to scroll, and holding a direction threw the page around instead of moving between things. The highlight now lands on a real control, walks the whole page, and reaches the row of buttons along the bottom from anywhere. Holding a direction on a page of text scrolls it a tenth of a screen at a time rather than a whole page. The save editor moved two rows for every press and now moves one.
 
-**Every Pokemon you caught was being treated as a traded one.** They were given a random trainer ID instead of yours, so they collected the extra experience a traded Pokemon gets, for the rest of the game. They get your ID now.
+**The catching tutorial is played, not skipped.** The Dude in Cherrygrove used to hand you the line about a caught Pokemon and nothing else. He now fights the battle, works the pack and throws the ball himself, at the pace a real cartridge does it.
 
-**Catch rates match the cartridge exactly.** Health, sleep, freeze, every ball's multiplier and the odd corners of the arithmetic the original got wrong. A Pokemon with more than 341 maximum health really is easier to catch at full health than at half on a real cartridge, and it is here too.
+**A file can be picked without a mouse.** The system file browser needs a pointer, which a Switch and most handhelds do not have, so importing a cartridge meant leaving the dump at the root of the SD card. There is a browser built into the launcher now: one button per row, a d-pad walks it, and nothing on it has to be typed. Exporting a save also suggests a filename, which is the whole name where there is no keyboard.
 
-**A caught Pokemon comes with full PP**, which it did not before.
+**The mods list fits a phone.** On a narrow window each row's switch, bin and arrow get their own line, so "Hidden ..." is "Hidden Stats" and four cards fit where five were crammed.
 
-**Catches go into the box you have open, at the top of it.** They were going to the first box with room anywhere in storage, and to the bottom. If the open box is full the throw is refused, the game says so, and you keep the ball.
-
-**Throwing a ball costs your turn.** A ball that broke free used to be free: the wild Pokemon just stood there. It attacks now.
-
-**A ball thrown at another trainer's Pokemon is thrown.** You see it knocked away, you get both lines about it, and you lose the ball, exactly as you should.
-
-**The pack asks USE or QUIT.** Picking a ball used to ask you which ball a second time. It asks the question the cartridge asks instead.
-
-**Catching a new species adds it to the POKEDEX in front of you.** The line about new data and the entry page behind it were both missing.
-
-**A Pokemon on the end of a rod says it was hooked** when the fight starts, instead of saying it appeared. The game now knows a fishing battle from any other, which is also the one battle a Lure Ball helps in.
+**CHANGE BOX in the PC works.** It was drawing a single broken row instead of the fourteen boxes. The mailbox and the box list are also drawn where the cartridge draws them, spacing and frame included.
 
 ## Which file
 
