@@ -51,7 +51,7 @@ var games: Array[StringName] = []
 var directory: String = ""
 
 
-## Reads and validates the manifest in [param directory].
+## Reads and validates the manifest in [param folder].
 ## Returns { ok, manifest } or { ok: false, reason, detail }.
 static func read(folder: String) -> Dictionary:
 	var path: String = "%s/%s" % [folder, FILENAME]

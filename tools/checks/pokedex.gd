@@ -84,56 +84,10 @@ func _validate(game_id: StringName) -> String:
 		print("FAIL %s: the page would not build" % game_id)
 		return ""
 
-	# Every species' four footprint tiles, checked for being inside the strip and
-	# for carrying a picture: the grid's own tail is blank, and a species landing
-	# in it would be a stride error rather than an absent footprint.
 	var indices: PackedByteArray = data.tile_indices("footprints")
-	@warning_ignore("integer_division")
-	var width: int = indices.size() / Gen2Tiles.TILE_HEIGHT
-	var blank: Array[int] = []
-	for species: int in range(1, SPECIES + 1):
-		var tiles: PackedInt32Array = data.footprint_tiles(species)
-		if tiles.size() != RomLayout.FOOTPRINT_TILES:
-			print("FAIL %s: species %d has no footprint" % [game_id, species])
-			return ""
-		var lit: int = 0
-		for tile: int in tiles:
-			if (tile + 1) * Gen2Tiles.TILE_WIDTH > width:
-				print("FAIL %s: footprint tile %d of species %d is off the strip" % [
-					game_id, tile, species,
-				])
-				return ""
-			for y: int in Gen2Tiles.TILE_HEIGHT:
-				for x: int in Gen2Tiles.TILE_WIDTH:
-					if indices[y * width + tile * Gen2Tiles.TILE_WIDTH + x] != 0:
-						lit += 1
-		if lit == 0:
-			blank.append(species)
-	if not blank.is_empty():
-		print("FAIL %s: %d species have a blank footprint: %s" % [
-			game_id, blank.size(), blank.slice(0, 8),
-		])
+	if not _check_footprints(data, game_id, indices):
 		return ""
-
-	# Every entry screen, so a species whose dex record is short or whose pic is
-	# missing is found here rather than on the screen.
-	var short_entries: Array[int] = []
-	for species: int in range(1, RomLayout.SPECIES_COUNT + 1):
-		var entry: Dictionary = data.dex_entry(species)
-		if entry.is_empty() or String(entry.get("category", "")).is_empty():
-			short_entries.append(species)
-			continue
-		page.load_footprint(data, species)
-		var map: PackedInt32Array = page.entry_map(
-			species, String(data.species(species).get("name", "")), entry, true, Gen2Pokedex.PAGE_1, 0
-		)
-		if map.size() != Gen2PokedexPage.COLUMNS * Gen2PokedexPage.ROWS:
-			print("FAIL %s: species %d drew no entry screen" % [game_id, species])
-			return ""
-	if not short_entries.is_empty():
-		print("FAIL %s: %d species carry no dex entry: %s" % [
-			game_id, short_entries.size(), short_entries.slice(0, 8),
-		])
+	if not _check_entries(data, game_id, page):
 		return ""
 
 	# `Pokedex_PlaceTypeString` reads a fixed-width table, so the two search rows
@@ -169,3 +123,59 @@ func _validate(game_id: StringName) -> String:
 		data.tile_indices("unown_font").hex_encode().sha1_text().substr(0, 8),
 		question.hex_encode().sha1_text().substr(0, 8),
 	]
+
+
+## Every species' four footprint tiles, checked for being inside the strip and
+## for carrying a picture: the grid's own tail is blank, and a species landing in
+## it would be a stride error rather than an absent footprint.
+func _check_footprints(data: GameData, game_id: StringName, indices: PackedByteArray) -> bool:
+	@warning_ignore("integer_division")
+	var width: int = indices.size() / Gen2Tiles.TILE_HEIGHT
+	var blank: Array[int] = []
+	for species: int in range(1, SPECIES + 1):
+		var tiles: PackedInt32Array = data.footprint_tiles(species)
+		if tiles.size() != RomLayout.FOOTPRINT_TILES:
+			print("FAIL %s: species %d has no footprint" % [game_id, species])
+			return false
+		var lit: int = 0
+		for tile: int in tiles:
+			if (tile + 1) * Gen2Tiles.TILE_WIDTH > width:
+				print("FAIL %s: footprint tile %d of species %d is off the strip" % [
+					game_id, tile, species,
+				])
+				return false
+			for y: int in Gen2Tiles.TILE_HEIGHT:
+				for x: int in Gen2Tiles.TILE_WIDTH:
+					if indices[y * width + tile * Gen2Tiles.TILE_WIDTH + x] != 0:
+						lit += 1
+		if lit == 0:
+			blank.append(species)
+	if blank.is_empty():
+		return true
+	print("FAIL %s: %d species have a blank footprint: %s" % [
+		game_id, blank.size(), blank.slice(0, 8),
+	])
+	return false
+
+
+## Every entry screen, so a short dex record is found here rather than on it.
+func _check_entries(data: GameData, game_id: StringName, page: Gen2PokedexPage) -> bool:
+	var short_entries: Array[int] = []
+	for species: int in range(1, RomLayout.SPECIES_COUNT + 1):
+		var entry: Dictionary = data.dex_entry(species)
+		if entry.is_empty() or String(entry.get("category", "")).is_empty():
+			short_entries.append(species)
+			continue
+		page.load_footprint(data, species)
+		var map: PackedInt32Array = page.entry_map(
+			species, String(data.species(species).get("name", "")), entry, true, Gen2Pokedex.PAGE_1, 0
+		)
+		if map.size() != Gen2PokedexPage.COLUMNS * Gen2PokedexPage.ROWS:
+			print("FAIL %s: species %d drew no entry screen" % [game_id, species])
+			return false
+	if short_entries.is_empty():
+		return true
+	print("FAIL %s: %d species carry no dex entry: %s" % [
+		game_id, short_entries.size(), short_entries.slice(0, 8),
+	])
+	return false

@@ -52,7 +52,7 @@ static func host_seconds() -> float:
 		else Time.get_unix_time_from_system()
 
 
-## The clock [param day], [param hour] and [param minute] a snapshot carries,
+## The clock [param day_value], [param hour_value] and [param minute_value] a snapshot carries,
 ## moved on by the real seconds between the host second it was written at
 ## ([param stamp]) and now. The same time back when there is no stamp, which is a
 ## save written before one was kept, or when the stamp is ahead of now, which is

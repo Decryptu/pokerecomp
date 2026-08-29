@@ -18,8 +18,6 @@ const MAP_ROWS: int = Gen2GoldSilverIntro.MAP_ROWS
 
 ## Shadow OAM counts from (8, 16).
 const OAM_ORIGIN := Vector2i(8, 16)
-## A sprite never draws its first colour.
-const TRANSPARENT_INDEX: int = 0
 ## Where a BG tile number stops reading `vTiles2` and starts reading `vTiles1`,
 ## which only the fire cutscene loads a second sheet into.
 const HIGH_TILE: int = 0x80
@@ -403,7 +401,7 @@ func _draw_sprite(
 	behind: PackedByteArray, taken: PackedByteArray
 ) -> void:
 	var palette: PackedColorArray = movie.object_palette(int(entry["palette"]))
-	if palette.size() <= TRANSPARENT_INDEX:
+	if palette.size() <= Gen2PicImage.TRANSPARENT_INDEX:
 		return
 	_blit_sprite_tile(
 		pixels,
@@ -441,13 +439,13 @@ func _blit_sprite_tile(
 			var pixel: int = _starter_pixel(starter, tile, column, row, flip_x, flip_y) \
 				if not starter.is_empty() \
 				else _pixel(strip, tile, column, row, flip_x, flip_y)
-			if pixel == TRANSPARENT_INDEX:
+			if pixel == Gen2PicImage.TRANSPARENT_INDEX:
 				continue
 			var at_pixel: int = y * WIDTH + x
 			if taken[at_pixel] != 0:
 				continue
 			taken[at_pixel] = 1
-			if not behind.is_empty() and behind[at_pixel] != TRANSPARENT_INDEX:
+			if not behind.is_empty() and behind[at_pixel] != Gen2PicImage.TRANSPARENT_INDEX:
 				continue
 			pixels[at_pixel] = table[pixel]
 

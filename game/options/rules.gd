@@ -254,13 +254,13 @@ func is_nuzlocke() -> bool:
 	return challenge == CHALLENGE_NUZLOCKE
 
 
-## The name a screen shows for [param challenge]. Unknown reads as the
+## The name a screen shows for [param challenge_name]. Unknown reads as the
 ## cartridge's own game, which is what an unreadable save is played as.
 static func challenge_title(challenge_name: StringName) -> String:
 	return String(CHALLENGE_TITLES.get(challenge_name, CHALLENGE_TITLES[CHALLENGE_VANILLA]))
 
 
-## What [param challenge] actually does, said once here because the launcher is
+## What [param challenge_name] actually does, said once here because the launcher is
 ## the only thing that says it and a second copy there would go stale.
 static func challenge_detail(challenge_name: StringName) -> String:
 	match challenge_name:

@@ -716,21 +716,7 @@ func _apply_screen_fill() -> void:
 ## whole surface; such a renderer is told instead and closes its own surround,
 ## which is the only way a wedge reaches the edge of a filled window.
 func _apply_interface_mask() -> void:
-	var owned: bool = (
-		_battle_transition != null
-		or _battle_host != null or _service_host != null or _party_host != null
-		or _hall_of_fame_host != null or _trainer_card_host != null
-		or _mod_page_host != null
-		or _link_host != null
-		or _pokedex_host != null or _credits_host != null
-		or _evolution_host != null or _hatch_host != null
-		or _nickname_host != null
-		or _name_rater_host != null or _move_deleter_host != null
-		or _move_tutor_host != null or _day_care_host != null
-		or _unown_puzzle_host != null or _slot_machine_host != null
-		or _card_flip_host != null or _diploma_host != null
-		or _unown_printer_host != null or _mail_host != null
-	)
+	var owned: bool = _battle_transition != null or _any_host_open(FULLSCREEN_HOSTS)
 	_screen.interface_masked = _screen.expanded and owned \
 		and Gen2ModHost.renderer_uses_hardware_viewport(_renderer)
 	if _interface_owned_pushed and owned == _interface_owned:
@@ -1160,28 +1146,49 @@ func _advance_held_direction() -> void:
 	_world.note_standing_still()
 
 
-## Whether any embedded screen is up. Every overlay is named here and nowhere
-## else: the six callers below each need a different set of the other pauses, but
-## they all need this one, and adding an overlay to five of six lists by hand is
-## what the Cut and Hall of Fame work each paid for once.
+## Every embedded screen that hides the map, named once for the two readers
+## below: adding an overlay to one list by hand is what the Cut and Hall of Fame
+## work each paid for. The start menu is a box the map is still visible around.
+const FULLSCREEN_HOSTS: Array[StringName] = [
+	&"_battle_host",
+	&"_service_host",
+	&"_party_host",
+	&"_hall_of_fame_host",
+	&"_trainer_card_host",
+	&"_mod_page_host",
+	&"_link_host",
+	&"_pokedex_host",
+	&"_credits_host",
+	&"_evolution_host",
+	&"_hatch_host",
+	&"_nickname_host",
+	&"_name_rater_host",
+	&"_move_deleter_host",
+	&"_move_tutor_host",
+	&"_day_care_host",
+	&"_unown_puzzle_host",
+	&"_slot_machine_host",
+	&"_card_flip_host",
+	&"_diploma_host",
+	&"_unown_printer_host",
+	&"_mail_host",
+]
+
+
+func _any_host_open(host_names: Array[StringName]) -> bool:
+	for host_name: StringName in host_names:
+		if get(host_name) != null:
+			return true
+	return false
+
+
+## Whether any embedded screen is up. The six callers below each need a different
+## set of the other pauses, but they all need this one.
 func _overlay_open() -> bool:
 	## A map fade is not an overlay, but nothing may move or be pressed inside
 	## one either: `RunMapSetupScript` runs with the joypad unread.
 	return not _map_fade.is_empty() or _battle_transition != null \
-		or _battle_host != null or _service_host != null \
-		or _start_menu_host != null or _party_host != null \
-		or _hall_of_fame_host != null or _trainer_card_host != null \
-		or _mod_page_host != null \
-		or _link_host != null \
-		or _pokedex_host != null or _credits_host != null \
-		or _evolution_host != null or _hatch_host != null \
-		or _nickname_host != null \
-		or _name_rater_host != null or _move_deleter_host != null \
-		or _move_tutor_host != null \
-		or _day_care_host != null or _unown_puzzle_host != null \
-		or _slot_machine_host != null or _card_flip_host != null \
-		or _diploma_host != null or _unown_printer_host != null \
-		or _mail_host != null
+		or _start_menu_host != null or _any_host_open(FULLSCREEN_HOSTS)
 
 
 ## Wandering objects keep to themselves while anything else owns the world: a
@@ -3806,14 +3813,9 @@ func _tap_puzzle(button: int) -> void:
 	host.release_button(button)
 
 
-## Public screenshot driver and scene-test entry for `OverworldHatchEgg`: it stands
-## an egg with one cycle left in the first party slot of an injected save, spends
-## the egg step, and opens the sequence on whatever hatched. [param species] is
-## what is inside the egg; 0 takes the first species the cache holds, so the driver
-## works on all three without a table. Below, one of the five fade specials on the
-## map that is already open, for a screenshot: the frames it spends are the
-## script's on the real path, so this opens the fade and the caller advances into
-## it.
+## One of the five fade specials on the map that is already open, for a
+## screenshot: the frames it spends are the script's on the real path, so this
+## opens the fade and the caller advances into it.
 func preview_script_fade(special: int) -> void:
 	if not Gen2WorldScriptRunner.FADE_ORDERS_OF.has(special):
 		return
@@ -3826,6 +3828,11 @@ func preview_script_fade(special: int) -> void:
 	})
 
 
+## Public screenshot driver and scene-test entry for `OverworldHatchEgg`: it
+## stands an egg with one cycle left in the first party slot of an injected save,
+## spends the egg step, and opens the sequence on whatever hatched. [param species]
+## is what is inside the egg; 0 takes the first species the cache holds, so the
+## driver works on all three without a table.
 func preview_egg_hatch(species: int = 0) -> void:
 	if _world == null or _data == null or _hatch_host != null:
 		return

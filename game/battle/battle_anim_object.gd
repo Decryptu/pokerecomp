@@ -78,7 +78,7 @@ var _frame_flags: int = 0
 
 
 ## `InitBattleAnimation`. [param row] is a `BattleAnimObjects` row and
-## [param tile_id] is what `GetBattleAnimTileOffset` answered for its graphics.
+## [param tile] is what `GetBattleAnimTileOffset` answered for its graphics.
 static func create(
 	object_index: int, row: Dictionary, tile: int,
 	at_x: int, at_y: int, parameter: int

@@ -75,7 +75,7 @@ static func fly(
 
 
 ## `TownMap_GetCurrentLandmark` has already run, so [param landmark] is resolved
-## and never `LANDMARK_SPECIAL`. [param hall_of_fame] opens the whole Kanto map.
+## and never `LANDMARK_SPECIAL`. [param after_hall_of_fame] opens the whole Kanto map.
 static func create(
 	landmark: int, is_crystal: bool, after_hall_of_fame: bool = false,
 	on_screen: StringName = SCREEN_TOWN_MAP

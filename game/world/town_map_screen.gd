@@ -67,7 +67,6 @@ var _female: bool = false
 var _time_of_day: int = Gen2WorldPalette.TIME_MORNING
 var _frames: int = 0
 var _open: bool = false
-## The 160x144 field inside the hardware screen, which everything is drawn into.
 ## The screen this is drawn in, and the 160x144 layer inside it.
 var _screen: Gen2Screen = null
 var _field: Control = null

@@ -5895,11 +5895,16 @@ func _money_balance(account: int) -> int:
 
 
 func _coins_value() -> int:
-	return _staged_coins if _staged_coins >= 0 else (state.coins() if state != null else 0)
+	if _staged_coins >= 0:
+		return _staged_coins
+	return state.coins() if state != null else 0
 
 
+## `CompareBytes`' three answers: 0 short, 1 exact, 2 over.
 func _compare_amount(current: int, requested: int) -> int:
-	return 0 if current < requested else (1 if current == requested else 2)
+	if current < requested:
+		return 0
+	return 1 if current == requested else 2
 
 
 func _decode_bcd(bytes: PackedByteArray) -> int:

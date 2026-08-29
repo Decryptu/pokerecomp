@@ -1723,11 +1723,8 @@ static func _apply_item_effect(
 	var definition: Dictionary = data.item(item)
 	if definition.is_empty():
 		return {"ok": false, "reason": &"unknown_item", "item": item}
-	if item in [ITEM_REPEL, ITEM_SUPER_REPEL, ITEM_MAX_REPEL]:
-		return {
-			"ok": true, "effect": &"repel",
-			"repel_steps": 100 if item == ITEM_REPEL else (200 if item == ITEM_SUPER_REPEL else 250),
-		}
+	if REPEL_STEPS.has(item):
+		return {"ok": true, "effect": &"repel", "repel_steps": REPEL_STEPS[item]}
 	if item == Gen2WorldPack.ITEM_SACRED_ASH:
 		return _apply_sacred_ash(data, save)
 	if party_index < 0 or party_index >= save.party.size():
@@ -1751,17 +1748,34 @@ static func _apply_item_effect(
 	var vitamin: Dictionary = _apply_vitamin(data, mon, item)
 	if not vitamin.is_empty():
 		return vitamin
-	var max_hp: int = _max_hp(data, mon)
-	# `RevivePokemon`'s own `cp REVIVE / jr z, .revive_half_hp`: REVIVE is the
-	# only half, so MAX_REVIVE and REVIVAL_HERB both reach `ReviveFullHP`.
-	if item in [ITEM_REVIVE, ITEM_MAX_REVIVE, ITEM_REVIVAL_HERB]:
-		if mon.hp > 0:
-			return {"ok": false, "reason": &"item_has_no_effect"}
-		mon.hp = maxi(max_hp / 2, 1) if item == ITEM_REVIVE else max_hp
-		return _with_bitterness(
-			data, mon, item, {"ok": true, "effect": &"revive", "healed": mon.hp}
-		)
+	if REVIVE_ITEMS.has(item):
+		return _apply_revive(data, mon, item)
+	return _apply_heal(data, mon, definition, item)
 
+
+## `RepelEffect`'s three step counts, the byte it writes to `wRepelEffect`.
+const REPEL_STEPS: Dictionary = {
+	ITEM_REPEL: 100, ITEM_SUPER_REPEL: 200, ITEM_MAX_REPEL: 250,
+}
+## `RevivePokemon`'s own `cp REVIVE / jr z, .revive_half_hp`: REVIVE is the only
+## half, so MAX_REVIVE and REVIVAL_HERB both reach `ReviveFullHP`.
+const REVIVE_ITEMS: Array[int] = [ITEM_REVIVE, ITEM_MAX_REVIVE, ITEM_REVIVAL_HERB]
+
+
+static func _apply_revive(data: GameData, mon: Gen2SaveMon, item: int) -> Dictionary:
+	if mon.hp > 0:
+		return {"ok": false, "reason": &"item_has_no_effect"}
+	var max_hp: int = _max_hp(data, mon)
+	mon.hp = maxi(max_hp / 2, 1) if item == ITEM_REVIVE else max_hp
+	return _with_bitterness(
+		data, mon, item, {"ok": true, "effect": &"revive", "healed": mon.hp}
+	)
+
+
+static func _apply_heal(
+	data: GameData, mon: Gen2SaveMon, definition: Dictionary, item: int
+) -> Dictionary:
+	var max_hp: int = _max_hp(data, mon)
 	var status_mask: int = int(definition.get("status_mask", 0))
 	var heal_amount: int = int(definition.get("heal_amount", 0))
 	var cleared: int = mon.status & status_mask
@@ -1780,6 +1794,7 @@ static func _apply_item_effect(
 		"ok": true, "effect": &"party_item", "healed": healed,
 		"status_cleared": cleared,
 	})
+
 
 
 ## `RareCandyEffect`: one level, `CalcExpAtLevel` back onto the experience,

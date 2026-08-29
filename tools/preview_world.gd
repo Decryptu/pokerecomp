@@ -170,38 +170,8 @@ func _initialize() -> void:
 			quit(1)
 			return
 		_output_path = args[3]
-		var kind_arg: String = args[5] if args.size() >= 6 else "effects"
-		if kind_arg == "help":
-			for kind: StringName in KIND_HELP:
-				print("%-24s %s" % [kind, KIND_HELP[kind]])
-			quit(0)
+		if not _read_live_options(args):
 			return
-		if kind_arg.contains("@"):
-			var halves: PackedStringArray = kind_arg.split("@")
-			kind_arg = halves[0]
-			var at: PackedStringArray = halves[1].split(",")
-			if at.size() == 2:
-				_kind_cell = Vector2i(int(at[0]), int(at[1]))
-		_kind = StringName(kind_arg)
-		if args.size() >= 9:
-			var shape: PackedStringArray = args[8].split("x")
-			if shape.size() == 2:
-				_window = Vector2i(int(shape[0]), int(shape[1]))
-		for extra: String in args.slice(9):
-			if extra == "touch":
-				var options: Gen2Options = Gen2OptionsStore.current()
-				options.touch_mode = Gen2Options.TOUCH_ALWAYS
-				Gen2InputRuntime.instance().apply_options(options)
-			elif extra == "framed":
-				Gen2OptionsStore.current().screen_fill = false
-			elif extra.begins_with("zoom="):
-				Gen2OptionsStore.current().zoom_step = int(extra.trim_prefix("zoom="))
-			elif extra.begins_with("view="):
-				_view = StringName(extra.trim_prefix("view="))
-			elif extra == "bare":
-				_bare = true
-			elif extra.begins_with("hour="):
-				_hour = int(extra.trim_prefix("hour="))
 		_build_live(
 			data, int(args[1]), int(args[2]),
 			Vector2i(int(args[6]), int(args[7])) if args.size() >= 8 else Vector2i(-1, -1),
@@ -227,6 +197,42 @@ func _initialize() -> void:
 		(map.events.get("objects", []) as Array).size(),
 	])
 	quit(0)
+
+
+func _read_live_options(args: PackedStringArray) -> bool:
+	var kind_arg: String = args[5] if args.size() >= 6 else "effects"
+	if kind_arg == "help":
+		for kind: StringName in KIND_HELP:
+			print("%-24s %s" % [kind, KIND_HELP[kind]])
+		quit(0)
+		return false
+	if kind_arg.contains("@"):
+		var halves: PackedStringArray = kind_arg.split("@")
+		kind_arg = halves[0]
+		var at: PackedStringArray = halves[1].split(",")
+		if at.size() == 2:
+			_kind_cell = Vector2i(int(at[0]), int(at[1]))
+	_kind = StringName(kind_arg)
+	if args.size() >= 9:
+		var shape: PackedStringArray = args[8].split("x")
+		if shape.size() == 2:
+			_window = Vector2i(int(shape[0]), int(shape[1]))
+	for extra: String in args.slice(9):
+		if extra == "touch":
+			var options: Gen2Options = Gen2OptionsStore.current()
+			options.touch_mode = Gen2Options.TOUCH_ALWAYS
+			Gen2InputRuntime.instance().apply_options(options)
+		elif extra == "framed":
+			Gen2OptionsStore.current().screen_fill = false
+		elif extra.begins_with("zoom="):
+			Gen2OptionsStore.current().zoom_step = int(extra.trim_prefix("zoom="))
+		elif extra.begins_with("view="):
+			_view = StringName(extra.trim_prefix("view="))
+		elif extra == "bare":
+			_bare = true
+		elif extra.begins_with("hour="):
+			_hour = int(extra.trim_prefix("hour="))
+	return true
 
 
 ## The production screen on a real map, with every effect sprite running at

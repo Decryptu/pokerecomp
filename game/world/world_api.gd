@@ -1030,7 +1030,7 @@ func set_party_summary(
 	return {"ok": true}
 
 
-## CheckPartyMove: the first party slot whose own move list carries [param move],
+## CheckPartyMove: the first party slot whose own move list carries [param move_id],
 ## or -1 when none does. Eggs are skipped, empty and terminator slots end the walk,
 ## and the answer is the slot index the source leaves in `wCurPartyMon`. Every
 ## field move is gated on this: the party submenu reaches `CutFunction` and friends
@@ -1074,7 +1074,7 @@ func field_move_source(move_id: int) -> Dictionary:
 	return {"kind": FIELD_MOVE_SOURCE_ITEM, "move": move_id, "slot": -1, "item": item}
 
 
-## The HM in the bag that teaches [param move] while a registered provider
+## The HM in the bag that teaches [param move_id] while a registered provider
 ## allows that move, or 0. Which item teaches which move is `GetTMHMItemMove`'s
 ## answer rather than a second table, so a cartridge whose HMs differ needs
 ## nothing here.
@@ -2173,33 +2173,8 @@ func encounter_request(
 ) -> Dictionary:
 	if current_map == null or data == null:
 		return {}
-	if method in [
-		Gen2WorldEncounter.METHOD_OLD_ROD,
-		Gen2WorldEncounter.METHOD_GOOD_ROD,
-		Gen2WorldEncounter.METHOD_SUPER_ROD,
-	]:
-		if inventory == null or not inventory.owns_rod(method):
-			return {}
-		var context: Dictionary = _fishing_context(method)
-		if not bool(context.get("ok", false)):
-			return {}
-		var fish_group: int = int(context["fish_group"])
-		var selected_group: int = int(context["selected_fish_group"])
-		var fishing_record: Dictionary = context["record"]
-		var fishing: Dictionary = Gen2WorldEncounter.resolve_fishing(
-			fishing_record, method, object_time_of_day, data.world_fishing_time_groups(),
-			random, force_encounter
-		)
-		if fishing.is_empty():
-			return {}
-		fishing["map"] = map_id()
-		fishing["cell"] = player_cell
-		fishing["fish_group"] = fish_group
-		fishing["selected_fish_group"] = selected_group
-		fishing["movement"] = movement_mode
-		fishing["facing"] = player_facing
-		fishing["facing_cell"] = context["facing_cell"]
-		return fishing
+	if method in ROD_METHODS:
+		return _fishing_request(method, random, force_encounter)
 	if method != &"auto" and method not in [
 		Gen2WorldEncounter.METHOD_GRASS, Gen2WorldEncounter.METHOD_SURF,
 	]:
@@ -2224,24 +2199,7 @@ func encounter_request(
 	## `RandomEncounter`'s Bug Contest branch, which replaces the map's own
 	## tables with `ContestMons` and the rate with the standing tile's own.
 	if bug_contest_active():
-		var contest: Dictionary = Gen2WorldBugContest.resolve(
-			data.bug_contest_mons(),
-			Gen2WorldCollision.is_long_grass(collision_code_at(player_cell)),
-			random if random != null else RandomNumberGenerator.new(),
-			force_encounter,
-			{
-				"map_music": state.map_music(),
-				"cleanse_tag": cleanse_tag,
-				"repel_steps": state.repel_steps(),
-				"lead_level": lead_level,
-			}
-		)
-		if contest.is_empty():
-			return {}
-		contest["map"] = map_id()
-		contest["cell"] = player_cell
-		contest["movement"] = movement_mode
-		return contest
+		return _bug_contest_request(random, force_encounter, lead_level, cleanse_tag)
 	var source: StringName = Gen2WorldEncounter.SOURCE_NORMAL
 	var record: Dictionary = data.world_encounter(terrain_method, current_map.group, current_map.number)
 	if state.swarm_active_on(current_map.group, current_map.number):
@@ -2278,6 +2236,65 @@ func encounter_request(
 	resolved["fish_group"] = current_map.fish_group
 	resolved["movement"] = movement_mode
 	return resolved
+
+
+## The three rods, which `FishFunction` reaches rather than `RandomEncounter`.
+const ROD_METHODS: Array[StringName] = [
+	Gen2WorldEncounter.METHOD_OLD_ROD,
+	Gen2WorldEncounter.METHOD_GOOD_ROD,
+	Gen2WorldEncounter.METHOD_SUPER_ROD,
+]
+
+
+func _fishing_request(
+	method: StringName, random: RandomNumberGenerator, force_encounter: bool
+) -> Dictionary:
+	if inventory == null or not inventory.owns_rod(method):
+		return {}
+	var context: Dictionary = _fishing_context(method)
+	if not bool(context.get("ok", false)):
+		return {}
+	var fishing: Dictionary = Gen2WorldEncounter.resolve_fishing(
+		context["record"], method, object_time_of_day, data.world_fishing_time_groups(),
+		random, force_encounter
+	)
+	if fishing.is_empty():
+		return {}
+	fishing["map"] = map_id()
+	fishing["cell"] = player_cell
+	fishing["fish_group"] = int(context["fish_group"])
+	fishing["selected_fish_group"] = int(context["selected_fish_group"])
+	fishing["movement"] = movement_mode
+	fishing["facing"] = player_facing
+	fishing["facing_cell"] = context["facing_cell"]
+	return fishing
+
+
+## `RandomEncounter`'s Bug Contest branch, which replaces the map's own tables
+## with `ContestMons` and the rate with the standing tile's own.
+func _bug_contest_request(
+	random: RandomNumberGenerator, force_encounter: bool, lead_level: int,
+	cleanse_tag: bool
+) -> Dictionary:
+	var contest: Dictionary = Gen2WorldBugContest.resolve(
+		data.bug_contest_mons(),
+		Gen2WorldCollision.is_long_grass(collision_code_at(player_cell)),
+		random if random != null else RandomNumberGenerator.new(),
+		force_encounter,
+		{
+			"map_music": state.map_music(),
+			"cleanse_tag": cleanse_tag,
+			"repel_steps": state.repel_steps(),
+			"lead_level": lead_level,
+		}
+	)
+	if contest.is_empty():
+		return {}
+	contest["map"] = map_id()
+	contest["cell"] = player_cell
+	contest["movement"] = movement_mode
+	return contest
+
 
 
 func set_repel_steps(steps: int) -> void:
@@ -3250,7 +3267,7 @@ static func placements_around(
 
 
 ## Where [param target] sits, in [param source]'s block coordinates, for a
-## connection running [param direction] out of [param source].
+## connection running [param connection] out of [param source].
 ##
 ## The four cases are `_connected_drawn_block_at`'s own arithmetic read the
 ## other way round: it takes a padding block to a cell of the target, and this
@@ -4140,29 +4157,35 @@ func _enqueue_script(request: Dictionary) -> void:
 	if not request.has("party") and not _party_summary.is_empty():
 		request["party"] = _party_summary.duplicate()
 	if not request.has("field_move_items"):
-		## The scene-free runner reads `CheckPartyMove` off the party mirror and
-		## can reach neither the bag nor the mod host, so the alternate source is
-		## resolved here and handed over the way collision and the clock are.
-		## Absent when nothing supplies one, which is every unmodded game.
-		var alternates: Dictionary = {}
-		for move_id: int in Gen2WorldFieldMove.HM_FIELD_MOVES:
-			var item: int = item_field_move_source(move_id)
-			if item > 0:
-				alternates[move_id] = item
+		var alternates: Dictionary = _field_move_items()
 		if not alternates.is_empty():
 			request["field_move_items"] = alternates
 	if not request.has("player_name") and not _player_name.is_empty():
 		request["player_name"] = _player_name
 	if not request.has("object_event_flags"):
-		## `disappear` and `appear` write an object's event flag where the source
-		## does, inside the script, so a later `checkevent` on the same flag sees
-		## it. The runner holds no object table, so it is handed the flag per
-		## object index the way it is handed collision and the clock.
-		var object_flags: Array[int] = []
-		for object: Gen2WorldObject in objects:
-			object_flags.append(object.event_flag)
-		request["object_event_flags"] = object_flags
+		request["object_event_flags"] = _object_event_flags()
 	_script_queue.append(request)
+
+
+## The runner reads `CheckPartyMove` off the party mirror and can reach neither
+## the bag nor the mod host, so an item standing in for an HM is resolved here.
+func _field_move_items() -> Dictionary:
+	var alternates: Dictionary = {}
+	for move_id: int in Gen2WorldFieldMove.HM_FIELD_MOVES:
+		var item: int = item_field_move_source(move_id)
+		if item > 0:
+			alternates[move_id] = item
+	return alternates
+
+
+## `disappear` and `appear` write an object's event flag inside the script, so
+## the runner, holding no object table, is handed one flag per object index.
+func _object_event_flags() -> Array[int]:
+	var flags: Array[int] = []
+	for object: Gen2WorldObject in objects:
+		flags.append(object.event_flag)
+	return flags
+
 
 
 func _queue_map_callbacks(callback_type: int) -> void:
@@ -4520,6 +4543,7 @@ func _apply_object_movement(event: Dictionary) -> Array:
 		})
 		return generated
 	var object: Gen2WorldObject = objects[object_index]
+	var key: String = _object_key(map_group, map_number, object_index)
 	## `ApplyMovement` freezes the map around the object it is about to walk,
 	## and the wait this command stages is what thaws it again.
 	freeze_all_other_objects(object_index)
@@ -4563,64 +4587,72 @@ func _apply_object_movement(event: Dictionary) -> Array:
 					"cell": destination,
 				})
 			continue
-		match kind:
-			&"show_object":
-				object.deleted = false
-				object.active = true
-				var show_key: String = _object_key(map_group, map_number, object_index)
-				_object_visibility_overrides[show_key] = true
-				_transient_object_visibility_overrides[show_key] = true
-			&"hide_object":
-				object.active = false
-				var hide_key: String = _object_key(map_group, map_number, object_index)
-				_object_visibility_overrides[hide_key] = false
-				_transient_object_visibility_overrides[hide_key] = true
-			&"remove_object":
-				object.deleted = true
-				object.active = false
-				_object_followers.erase(_object_key(map_group, map_number, object_index))
-				generated.append({"type": &"object_deleted", "object_index": object_index})
-				break
-			&"show_emote":
-				object.set_emote(object.emote_id, true)
-			&"hide_emote":
-				object.set_emote(object.emote_id, false)
-			&"step_sleep":
-				## STEP_TYPE_SLEEP counts OBJECT_STEP_DURATION down one frame at a
-				## time before the stream reads its next command, so a sleep is part
-				## of what an applymovement wait waits for.
-				object.queue_wait(int(command.get("length", 0)))
-			&"step_stop":
-				break
-			&"tree_shake":
-				## `Movement_tree_shake` shakes the object, not the screen: the
-				## stream sleeps 24 frames while OBJECT_ACTION_WEIRD_TREE cycles
-				## its drawing. The event stays for a host that plays a sound
-				## over it; nothing else is asked of it.
-				object.queue_tree_shake(TREE_SHAKE_FRAMES)
-				generated.append({
-					"type": &"tree_shake_requested",
-					"object_index": object_index,
-					"cell": object.cell,
-					"frames": TREE_SHAKE_FRAMES,
-				})
-			&"rock_smash":
-				generated.append({
-					"type": &"rock_smash_effect_requested",
-					"object_index": object_index,
-					"cell": object.cell,
-				})
-			&"set_sliding", &"remove_sliding", &"fix_facing", &"remove_fixed_facing":
-				pass
-			_:
-				generated.append({
-					"type": &"movement_command_requested", "object_index": object_index,
-					"command": command.duplicate(true),
-				})
-	var key: String = _object_key(map_group, map_number, object_index)
+		if not _movement_effect(kind, command, object, key, object_index, generated):
+			break
 	_object_position_overrides[key] = object.cell
 	_object_facing_overrides[key] = final_facing
 	return generated
+
+
+## One movement command that is not a step or a turn. False ends the stream.
+func _movement_effect(
+	kind: StringName, command: Dictionary, object: Gen2WorldObject, key: String,
+	object_index: int, generated: Array
+) -> bool:
+	match kind:
+		&"show_object":
+			object.deleted = false
+			object.active = true
+			_object_visibility_overrides[key] = true
+			_transient_object_visibility_overrides[key] = true
+		&"hide_object":
+			object.active = false
+			_object_visibility_overrides[key] = false
+			_transient_object_visibility_overrides[key] = true
+		&"remove_object":
+			object.deleted = true
+			object.active = false
+			_object_followers.erase(key)
+			generated.append({"type": &"object_deleted", "object_index": object_index})
+			return false
+		&"show_emote":
+			object.set_emote(object.emote_id, true)
+		&"hide_emote":
+			object.set_emote(object.emote_id, false)
+		&"step_sleep":
+			## STEP_TYPE_SLEEP counts OBJECT_STEP_DURATION down one frame at a
+			## time before the stream reads its next command, so a sleep is part
+			## of what an applymovement wait waits for.
+			object.queue_wait(int(command.get("length", 0)))
+		&"step_stop":
+			return false
+		&"tree_shake":
+			## `Movement_tree_shake` shakes the object, not the screen: the
+			## stream sleeps 24 frames while OBJECT_ACTION_WEIRD_TREE cycles
+			## its drawing. The event stays for a host that plays a sound
+			## over it; nothing else is asked of it.
+			object.queue_tree_shake(TREE_SHAKE_FRAMES)
+			generated.append({
+				"type": &"tree_shake_requested",
+				"object_index": object_index,
+				"cell": object.cell,
+				"frames": TREE_SHAKE_FRAMES,
+			})
+		&"rock_smash":
+			generated.append({
+				"type": &"rock_smash_effect_requested",
+				"object_index": object_index,
+				"cell": object.cell,
+			})
+		&"set_sliding", &"remove_sliding", &"fix_facing", &"remove_fixed_facing":
+			pass
+		_:
+			generated.append({
+				"type": &"movement_command_requested", "object_index": object_index,
+				"command": command.duplicate(true),
+			})
+	return true
+
 
 
 func _clear_transient_object_visibility_overrides() -> void:
@@ -5177,16 +5209,21 @@ func can_object_walk_to(
 		collision_code_at(moving.cell), collision_code_at(cell), direction
 	):
 		return false
+	return _cells_unoccupied(checked_cells, moving)
+
+
+func _cells_unoccupied(cells: Array[Vector2i], moving: Gen2WorldObject) -> bool:
 	for object: Gen2WorldObject in objects:
 		if object == moving or not object.active or object.deleted:
 			continue
-		for checked: Vector2i in checked_cells:
+		for checked: Vector2i in cells:
 			if object.occupies(checked):
 				return false
-	for checked: Vector2i in checked_cells:
+	for checked: Vector2i in cells:
 		if checked == player_cell:
 			return false
 	return true
+
 
 
 ## `WillObjectRemainOnWater` checks the two cells a big object newly occupies,

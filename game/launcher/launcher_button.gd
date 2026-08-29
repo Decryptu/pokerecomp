@@ -124,24 +124,19 @@ func set_active(active: bool) -> void:
 	repaint()
 
 
-func repaint() -> void:
-	if _theme == null:
-		return
-	var radius: float = _radius()
+func _paint() -> Dictionary:
+	# Reached means hovered, focused or the current choice. The three look the
+	# same on purpose: a pad moving onto a control has to read exactly as a
+	# pointer resting on it.
+	var reached: bool = _lit or _active
+	var fill: Color = _theme.surface
+	var border: Color = Color(0, 0, 0, 0)
+	var ink: Color = _theme.on_surface
 	# Only enough room either side of the glyph to keep it off the edge: a button
 	# is mostly icon, which is what makes one readable at a glance and at a
 	# distance.
 	var pad_x: int = 0 if text.is_empty() else 20
 	var pad_y: int = 8
-	var fill: Color = _theme.surface
-	var border: Color = Color(0, 0, 0, 0)
-	var ink: Color = _theme.on_surface
-	# Reached means hovered, focused or the current choice. The three look the
-	# same on purpose: a pad moving onto a control has to read exactly as a
-	# pointer resting on it.
-	var reached: bool = _lit or _active
-	var icon_side: float = _side * DOCK_ICON_SHARE if variant == Variant.DOCK else ICON_SIDE
-
 	match variant:
 		Variant.PRIMARY:
 			fill = _theme.accent
@@ -169,6 +164,20 @@ func repaint() -> void:
 		Variant.NEUTRAL, Variant.DOCK, Variant.HERO:
 			fill = _theme.accent if reached else _theme.surface
 			ink = _theme.on_accent if reached else _theme.on_surface
+	return {"fill": fill, "border": border, "ink": ink, "pad_x": pad_x, "pad_y": pad_y}
+
+
+func repaint() -> void:
+	if _theme == null:
+		return
+	var radius: float = _radius()
+	var paint: Dictionary = _paint()
+	var fill: Color = paint["fill"]
+	var border: Color = paint["border"]
+	var ink: Color = paint["ink"]
+	var pad_x: int = paint["pad_x"]
+	var pad_y: int = paint["pad_y"]
+	var icon_side: float = _side * DOCK_ICON_SHARE if variant == Variant.DOCK else ICON_SIDE
 
 	_style("normal", fill, border, radius, pad_x, pad_y)
 	_style("hover", _hovered(fill), _hovered(border), radius, pad_x, pad_y)

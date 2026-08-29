@@ -198,16 +198,38 @@ static func read_bug_contest(rom: RomFile, configured: Dictionary) -> Dictionary
 	if mons_offset < 0 or mon_count <= 0 or pointer_offset < 0 or contestant_count <= 0:
 		return _error("Bug Contest layout is incomplete.")
 
-	var mons: Array = []
-	for index: int in mon_count:
-		var at: int = mons_offset + index * 4
+	var mons_read: Dictionary = _read_contest_mons(rom, mons_offset, mon_count)
+	if not bool(mons_read.get("ok", false)):
+		return mons_read
+	var mons: Array = mons_read["rows"]
+	var contestants_read: Dictionary = _read_contestants(rom, pointer_offset, contestant_count)
+	if not bool(contestants_read.get("ok", false)):
+		return contestants_read
+	var contestants: Array = contestants_read["rows"]
+
+	var anchor: Dictionary = _validate_bug_contest(mons, contestants)
+	if not bool(anchor.get("ok", false)):
+		return anchor
+	return {
+		"ok": true,
+		"bug_contest": {"mons": mons, "contestants": contestants},
+		"mon_count": mons.size(),
+		"contestant_count": contestants.size(),
+	}
+
+
+
+static func _read_contest_mons(rom: RomFile, offset: int, count: int) -> Dictionary:
+	var rows: Array = []
+	for index: int in count:
+		var at: int = offset + index * 4
 		if not rom.in_bounds(at, 4):
 			return _error("ContestMons row %d is outside the ROM." % index)
 		var percent: int = rom.u8(at)
 		var species: int = rom.u8(at + 1)
 		var min_level: int = rom.u8(at + 2)
 		var max_level: int = rom.u8(at + 3)
-		var last: bool = index == mon_count - 1
+		var last: bool = index == count - 1
 		# The last row's percentage is `db -1`, which is what stops
 		# ChooseWildEncounter_BugContest's walk however the earlier rows fall.
 		if last != (percent == 0xFF):
@@ -215,16 +237,20 @@ static func read_bug_contest(rom: RomFile, configured: Dictionary) -> Dictionary
 		if species < 1 or species > RomLayout.SPECIES_COUNT \
 			or min_level < 1 or max_level < min_level or max_level > RomLayout.MAX_LEVEL:
 			return _error("ContestMons row %d is out of range." % index)
-		mons.append({
+		rows.append({
 			"percent": percent, "species": species,
 			"min_level": min_level, "max_level": max_level,
 		})
+	return {"ok": true, "rows": rows}
 
-	var bank: int = floori(float(pointer_offset) / float(RomFile.BANK_SIZE))
-	var contestants: Array = []
-	for index: int in contestant_count:
+
+## `BugContestantPointers`, eleven bytes a record, in the table's own bank.
+static func _read_contestants(rom: RomFile, offset: int, count: int) -> Dictionary:
+	var bank: int = floori(float(offset) / float(RomFile.BANK_SIZE))
+	var rows: Array = []
+	for index: int in count:
 		# Entry zero is the player's, so the ten AI contestants start at one.
-		var entry: int = pointer_offset + (index + 1) * 2
+		var entry: int = offset + (index + 1) * 2
 		if not rom.in_bounds(entry, 2):
 			return _error("BugContestantPointers entry %d is outside the ROM." % index)
 		var pointer: int = rom.u16le(entry)
@@ -242,21 +268,12 @@ static func read_bug_contest(rom: RomFile, configured: Dictionary) -> Dictionary
 				"species": species,
 				"score": rom.u16le(at + 3 + placing * 3),
 			})
-		contestants.append({
+		rows.append({
 			"trainer_class": rom.u8(at),
 			"trainer": rom.u8(at + 1),
 			"placings": placings,
 		})
-
-	var anchor: Dictionary = _validate_bug_contest(mons, contestants)
-	if not bool(anchor.get("ok", false)):
-		return anchor
-	return {
-		"ok": true,
-		"bug_contest": {"mons": mons, "contestants": contestants},
-		"mon_count": mons.size(),
-		"contestant_count": contestants.size(),
-	}
+	return {"ok": true, "rows": rows}
 
 
 ## The first and last row of each table, which all three cartridges ship the
@@ -521,6 +538,18 @@ static func _read_roaming_maps(
 	if first != _ROAM_ANCHORS["first"] or last_pair != _ROAM_ANCHORS["last"]:
 		return _error("Roaming map table has unexpected anchors.")
 
+	var mons_read: Dictionary = _read_roam_mons(layout, configured)
+	if not bool(mons_read.get("ok", false)):
+		return mons_read
+	return {
+		"ok": true,
+		"count": rows.size(),
+		"roaming": {"maps": rows, "mons": mons_read["mons"]},
+	}
+
+
+## `InitRoamMons`, whose species, level and starting map are immediates.
+static func _read_roam_mons(layout: Dictionary, configured: Dictionary) -> Dictionary:
 	var roaming: Variant = configured.get("roaming", null)
 	if not roaming is Array or (roaming as Array).is_empty():
 		return _error("Roaming Pokémon definitions are missing.")
@@ -544,7 +573,7 @@ static func _read_roaming_maps(
 			"map_group": group,
 			"map_number": number,
 		})
-	return {"ok": true, "count": rows.size(), "roaming": {"maps": rows, "mons": mons}}
+	return {"ok": true, "mons": mons}
 
 
 ## TreeMonMaps, RockMonMaps and the TreeMons pointer table, plus Crystal's

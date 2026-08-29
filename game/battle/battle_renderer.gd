@@ -534,7 +534,7 @@ func _grayscale() -> PackedColorArray:
 	return _data.battle_grayscale_palette()
 
 
-## `CopyPals`: colour [param index] of the result is colour
+## `CopyPals`: colour [code]index[/code] of the result is colour
 ## [code](byte >> index * 2) & 3[/code] of the pristine palette, which is why a
 ## remap never compounds.
 static func _remap(palette: PackedColorArray, dmg: int) -> PackedColorArray:

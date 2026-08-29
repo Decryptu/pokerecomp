@@ -22,8 +22,6 @@ const ROWS: int = Gen2IntroMovie.ROWS
 
 ## Shadow OAM counts from (8, 16).
 const OAM_ORIGIN := Vector2i(8, 16)
-## A sprite never draws its first colour.
-const TRANSPARENT_INDEX: int = 0
 ## Where a BG tile number stops reading from the low sheet and starts reading
 ## from the one at `vTiles1`.
 const HIGH_TILE: int = 0x80
@@ -295,24 +293,15 @@ func _draw_background(pixels: PackedInt32Array, movie: Gen2IntroMovie) -> Array:
 	behind.resize(WIDTH * HEIGHT)
 	forced.resize(WIDTH * HEIGHT)
 	var screen: PackedByteArray = movie.screen_tilemap()
-	var tables: Array[PackedInt32Array] = []
-	for slot: int in Gen2IntroMovie.BG_PALETTES:
-		var palette: PackedColorArray = movie.palette(slot)
-		tables.append(
-			PackedInt32Array() if palette.is_empty() else Gen2PicImage.lookup(palette)
-		)
-	var low: PackedByteArray = _sheet(movie, movie.sheet("bg"))
-	var low_first: int = movie.sheet_first_tile("bg")
-	var high: PackedByteArray = _sheet(movie, movie.sheet("bg_high"))
-	var high_first: int = movie.sheet_first_tile("bg_high")
-	# A bare `Request2bpp` writes over whichever sheet the tile number would
-	# otherwise read, so the run it covers is looked at before either of them.
-	var overlay: Array = movie.tile_overlay()
-	var overlay_strip: PackedByteArray = _sheet(
-		movie, String(overlay[2])
-	) if overlay.size() == 3 else PackedByteArray()
-	var overlay_first: int = int(overlay[0]) if overlay.size() == 3 else 0
-	var overlay_count: int = int(overlay[1]) if overlay.size() == 3 else 0
+	var sources: Dictionary = _bg_sources(movie)
+	var tables: Array = sources["tables"]
+	var low: PackedByteArray = sources["low"]
+	var low_first: int = sources["low_first"]
+	var high: PackedByteArray = sources["high"]
+	var high_first: int = sources["high_first"]
+	var overlay_strip: PackedByteArray = sources["overlay_strip"]
+	var overlay_first: int = sources["overlay_first"]
+	var overlay_count: int = sources["overlay_count"]
 	var scy: int = movie.scroll().y
 	## `hSCX` is constant across a scanline, so the map cell, its attribute and
 	## its sheet are resolved once per run of pixels inside one tile rather than
@@ -355,11 +344,7 @@ func _draw_background(pixels: PackedInt32Array, movie: Gen2IntroMovie) -> Array:
 			var flip_x: bool = bool(byte & ATTR_XFLIP)
 			@warning_ignore("integer_division")
 			var stride: int = strip.size() / TILE
-			# What `_pixel` answers for a tile the sheet does not reach.
-			var from: int = -1
-			if index >= 0 and (index + 1) * TILE <= stride:
-				from = ((TILE - 1 - in_tile_y) if bool(byte & ATTR_YFLIP) else in_tile_y) \
-					* stride + index * TILE
+			var from: int = _row_offset(index, stride, in_tile_y, byte)
 			var priority: bool = (byte & ATTR_PRIORITY) != 0
 			for step: int in run:
 				var source_x: int = in_tile_x + step
@@ -373,6 +358,37 @@ func _draw_background(pixels: PackedInt32Array, movie: Gen2IntroMovie) -> Array:
 				pixels[at_pixel] = table[pixel]
 			x += run
 	return [behind, forced]
+
+
+## The palette lookups, the two background sheets and the run a bare
+## `Request2bpp` writes over either of them.
+func _bg_sources(movie: Gen2IntroMovie) -> Dictionary:
+	var tables: Array[PackedInt32Array] = []
+	for slot: int in Gen2IntroMovie.BG_PALETTES:
+		var palette: PackedColorArray = movie.palette(slot)
+		tables.append(
+			PackedInt32Array() if palette.is_empty() else Gen2PicImage.lookup(palette)
+		)
+	var overlay: Array = movie.tile_overlay()
+	var overlaid: bool = overlay.size() == 3
+	return {
+		"tables": tables,
+		"low": _sheet(movie, movie.sheet("bg")),
+		"low_first": movie.sheet_first_tile("bg"),
+		"high": _sheet(movie, movie.sheet("bg_high")),
+		"high_first": movie.sheet_first_tile("bg_high"),
+		"overlay_strip": _sheet(movie, String(overlay[2])) if overlaid else PackedByteArray(),
+		"overlay_first": int(overlay[0]) if overlaid else 0,
+		"overlay_count": int(overlay[1]) if overlaid else 0,
+	}
+
+
+## Where one tile's pixel row starts, `OAM_YFLIP` spent. -1 is off the sheet.
+static func _row_offset(index: int, stride: int, in_tile_y: int, byte: int) -> int:
+	if index < 0 or (index + 1) * TILE > stride:
+		return -1
+	var row: int = (TILE - 1 - in_tile_y) if bool(byte & ATTR_YFLIP) else in_tile_y
+	return row * stride + index * TILE
 
 
 ## One shadow-OAM entry, off the sheet its struct was loaded into. The position
@@ -403,7 +419,7 @@ func _draw_sprite(
 	if strip.is_empty():
 		return
 	var palette: PackedColorArray = movie.object_palette(int(entry["palette"]))
-	if palette.size() <= TRANSPARENT_INDEX:
+	if palette.size() <= Gen2PicImage.TRANSPARENT_INDEX:
 		return
 	_blit_sprite_tile(
 		pixels, strip, palette, tile,
@@ -441,13 +457,13 @@ func _blit_sprite_tile(
 			if x < 0 or x >= WIDTH:
 				continue
 			var pixel: int = strip[from + ((TILE - 1 - column) if flip_x else column)]
-			if pixel == TRANSPARENT_INDEX:
+			if pixel == Gen2PicImage.TRANSPARENT_INDEX:
 				continue
 			var at_pixel: int = line + x
 			if taken[at_pixel] != 0:
 				continue
 			taken[at_pixel] = 1
-			if not behind.is_empty() and behind[at_pixel] != TRANSPARENT_INDEX:
+			if not behind.is_empty() and behind[at_pixel] != Gen2PicImage.TRANSPARENT_INDEX:
 				continue
 			pixels[at_pixel] = table[pixel]
 

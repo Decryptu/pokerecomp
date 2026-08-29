@@ -198,7 +198,7 @@ func _load_sheet(data: GameData, name: String, first_tile: int, count: int) -> v
 
 
 ## The whole 160x144 page as palette indices. [param page] is a `TRAINERCARD*`
-## page number and [param card] one row of [method Gen2TrainerCard.page].
+## page number and [param page] one row of [method Gen2TrainerCard.page].
 func draw(page: Dictionary) -> PackedByteArray:
 	var map: PackedInt32Array = _blank_map()
 	_draw_border(map, Vector2i.ZERO, TOP_BORDER_ROWS)
