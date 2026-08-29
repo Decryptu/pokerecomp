@@ -5,7 +5,9 @@ break put in by hand only makes it ragged. -->
 
 ## New in this release
 
-Two things reported since the last release, and the rest of what landed with them.
+Three things reported since the last release, and the rest of what landed with them.
+
+**A held direction lets go when you do.** This is the big one. Holding a direction latched it: the menu carried on scrolling after you let go of the key, and if you closed the menu your character walked off in that direction with no way to stop them. The direction you had held could not be pressed again either, so the game became unplayable until you restarted it. It affected the keyboard, every controller and the launcher as well as the game, and it is fixed at the cause: a repeat is now sent to the screen that needs it instead of being recorded as a button that is still down.
 
 **Starting a new game asks its questions properly again.** Oak asks you to set the clock, and the two confirmations had lost the thing they were confirming: the game said "What?" and then "Whoa!" over an empty screen and waited for a YES or a NO. They now read the way the cartridge reads them, "What? / DAY 10 o'clock?" and "Whoa! 0 min.?", so you can see what you are agreeing to.
 
@@ -16,6 +18,8 @@ Two things reported since the last release, and the rest of what landed with the
 **A file can be picked without a mouse.** The system file browser needs a pointer, which a Switch and most handhelds do not have, so importing a cartridge meant leaving the dump at the root of the SD card. There is a browser built into the launcher now: one button per row, a d-pad walks it, and nothing on it has to be typed. Exporting a save also suggests a filename, which is the whole name where there is no keyboard.
 
 **The mods list fits a phone.** On a narrow window each row's switch, bin and arrow get their own line, so "Hidden ..." is "Hidden Stats" and four cards fit where five were crammed.
+
+**A button held when the app goes to the background is let go.** Take a call or switch apps mid-step on a phone and that button stayed down as far as the on-screen controller was concerned, so it never worked again until you restarted.
 
 **CHANGE BOX in the PC works.** It was drawing a single broken row instead of the fourteen boxes. The mailbox and the box list are also drawn where the cartridge draws them, spacing and frame included.
 
