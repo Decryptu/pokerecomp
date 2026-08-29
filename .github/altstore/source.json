@@ -2,6 +2,7 @@
   "name": "pokerecomp",
   "identifier": "io.github.decryptu.pokerecomp",
   "sourceURL": "https://raw.githubusercontent.com/Decryptu/pokerecomp/main/.github/altstore/source.json",
+  "fediUsername": "decrypt",
   "subtitle": "Gold, Silver and Crystal, rebuilt in Godot",
   "description": "A native Godot 4 reimplementation of the Generation 2 Game Boy Color games: Gold, Silver and Crystal. Written from scratch in GDScript, not an emulator, a static recompilation or a disassembly.\n\nNo game data ships with the app. You supply your own cartridge dump, which is SHA-1 verified, decoded once into a cache, and then released.\n\nThree challenge modes are built in, mods are supported, and the same save works on every platform pokerecomp runs on.",
   "iconURL": "https://raw.githubusercontent.com/Decryptu/pokerecomp/main/app_icon.png",

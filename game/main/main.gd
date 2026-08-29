@@ -39,6 +39,9 @@ func _ready() -> void:
 	_print_allowlist()
 	_refresh_games()
 	_report_previous_crash()
+	var input: Gen2InputRuntime = Gen2InputRuntime.instance()
+	if input != null and not input.back_requested.is_connected(_on_back_requested):
+		input.back_requested.connect(_on_back_requested)
 
 
 ## Rebuilt whole when the appearance changes, which is the only way a launcher
@@ -222,6 +225,44 @@ func _confirm_mod_replace(path: String, mod_name: String) -> void:
 		import_mod_path(path, true)
 	)
 	sheet.add_action(replace)
+	sheet.open(self)
+
+
+func _on_back_requested() -> void:
+	if _importing:
+		return
+	if _close_top_layer():
+		return
+	if _shell != null and _shell.current_page() != &"shelf":
+		_shell.select(&"shelf")
+		return
+	_confirm_quit()
+
+
+func _close_top_layer() -> bool:
+	var pickers: Array[Gen2LauncherFilePicker] = [_file_dialog, _mod_dialog]
+	for picker: Gen2LauncherFilePicker in pickers:
+		if picker != null and picker.visible:
+			picker.hide()
+			return true
+	var sheets: Array[Node] = find_children("", "Gen2LauncherSheet", true, false)
+	if sheets.is_empty():
+		return false
+	var top: Gen2LauncherSheet = sheets[sheets.size() - 1] as Gen2LauncherSheet
+	top.close()
+	return true
+
+
+func _confirm_quit() -> void:
+	var sheet: Gen2LauncherSheet = Gen2LauncherSheet.create(_palette, "Quit pokerecomp")
+	sheet.body().add_child(Gen2LauncherUI.muted(
+		_palette, "Close the app? Nothing is running, so there is nothing to lose."
+	))
+	var quit: Gen2LauncherButton = Gen2LauncherButton.create(
+		_palette, "Quit", Gen2LauncherButton.Variant.DANGER, &"power"
+	)
+	quit.pressed.connect(func() -> void: get_tree().quit())
+	sheet.add_action(quit)
 	sheet.open(self)
 
 
@@ -451,6 +492,9 @@ func preview_sheet(view: StringName) -> void:
 		&"report":
 			select_page(&"about")
 			_about.open_report_sheet()
+		&"quit":
+			select_page(&"shelf")
+			_confirm_quit()
 		&"toast":
 			# The one message that stays until it is dismissed, over the shelf's
 			# own action row, which is what its dismiss button has to clear.

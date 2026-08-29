@@ -701,3 +701,27 @@ func test_only_the_platforms_with_a_probe_shell_out() -> void:
 		Gen2LauncherBattery._shells_out(), OS.get_name() in ["macOS", "Windows"],
 		"a process is launched for those two and nothing else",
 	)
+
+
+## Android's Back on the launcher. It quit the app outright before, from any page
+## and over any sheet; it now closes what is open, walks back to the shelf, and
+## only asks about quitting on a bare shelf.
+func test_back_closes_what_is_open_before_it_asks_about_quitting() -> void:
+	await _open_launcher()
+	var shell: Gen2LauncherShell = _launcher.get("_shell")
+
+	_launcher.select_page(&"about")
+	_launcher.call("_on_back_requested")
+	assert_eq(shell.current_page(), &"shelf", "a page other than the shelf is the way back")
+
+	_launcher.call("_confirm_quit")
+	await get_tree().process_frame
+	assert_eq(_sheet_count(), 1, "a bare shelf asks first")
+	_launcher.call("_on_back_requested")
+	await get_tree().process_frame
+	assert_eq(_sheet_count(), 0, "and a second Back is the cancel on that question")
+
+
+## The sheets open over the launcher, innermost last.
+func _sheet_count() -> int:
+	return _launcher.find_children("", "Gen2LauncherSheet", true, false).size()

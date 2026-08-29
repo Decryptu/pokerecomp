@@ -19,6 +19,8 @@ signal scheme_changed()
 ## A + B + START + SELECT, the console's own reset, reported once per press. The
 ## machine's rather than the game's, so whichever screen is up decides its cost.
 signal reset_chord_pressed()
+## Android's own Back, with `quit_on_go_back` off so nothing quits unasked.
+signal back_requested()
 
 var _scheme: Dictionary = {}
 ## What the player bound each mod's own actions to, keyed by action name. See
@@ -238,6 +240,11 @@ func _gate_direction_repeat(event: InputEvent) -> bool:
 ## system's key repeat is not the rate the hardware walked at.
 func held_direction() -> int:
 	return _direction_order.back() if not _direction_order.is_empty() else Gen2Button.NONE
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		back_requested.emit()
 
 
 func _process(delta: float) -> void:

@@ -68,7 +68,6 @@ static func create(
 	return button
 
 
-## A square button carrying only an icon.
 static func icon_only(
 	palette: Gen2LauncherTheme,
 	glyph: StringName,

@@ -226,3 +226,17 @@ class RepeatCounter extends Node:
 	func _input(event: InputEvent) -> void:
 		if event is InputEventAction and event.is_action_pressed(&"gen2_down"):
 			seen += 1
+
+
+## Android's Back reaches every node as a notification. The runtime turns it into
+## one signal so the screen that is up decides what it costs, and
+## `quit_on_go_back` is off so nothing leaves the app on its own.
+func test_the_back_notification_is_reported_as_a_signal() -> void:
+	var fired: Array = []
+	_runtime.back_requested.connect(func() -> void: fired.append(true))
+	_runtime.notification(NOTIFICATION_WM_GO_BACK_REQUEST)
+	assert_eq(fired.size(), 1, "one press, one report")
+	assert_false(
+		ProjectSettings.get_setting("application/config/quit_on_go_back", true),
+		"the engine must not quit before a screen has answered",
+	)

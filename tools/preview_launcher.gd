@@ -86,7 +86,8 @@ func _process(_delta: float) -> bool:
 			# goes, so the ordinary shot below lands in the middle of it, which
 			# is the screen worth photographing.
 			_launcher.import_rom_path(_mod)
-		elif _view in ["manage", "touch", "binding", "browse", "delete_mod", "bugs", "report", "toast"]:
+		elif _view in ["manage", "touch", "binding", "browse", "delete_mod", "bugs", "report",
+				"toast", "quit"]:
 			_launcher._preview_browse_dir = _mod
 			_launcher.preview_sheet(StringName(_view))
 		elif not _view.is_empty():

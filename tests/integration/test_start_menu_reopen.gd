@@ -94,3 +94,13 @@ func test_the_reopened_menu_keeps_the_cursor() -> void:
 	_screen._on_trainer_card_closed()
 	var reopened: Gen2WorldStartMenu = _screen._start_menu_host.get("_menu")
 	assert_eq(reopened.cursor, moved)
+
+
+## Android's Back over the map. Offered as a B first, which nothing on a bare map
+## takes, so it lands on the same menu START opens; with the menu up the B is
+## taken and closes it, rather than opening a second one.
+func test_back_opens_the_start_menu_and_then_closes_it() -> void:
+	_screen._on_back_requested()
+	assert_not_null(_screen._start_menu_host, "a back press on the map is a pause")
+	_screen._on_back_requested()
+	assert_null(_screen._start_menu_host, "and the next one backs out of it")

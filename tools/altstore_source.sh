@@ -40,6 +40,7 @@ gh api "repos/$repo/releases" --paginate --jq '.[]' \
     | { name: "pokerecomp",
         identifier: $bundle,
         sourceURL: ($assets + "/source.json"),
+        fediUsername: "decrypt",
         subtitle: "Gold, Silver and Crystal, rebuilt in Godot",
         description: $description,
         iconURL: $icon,
