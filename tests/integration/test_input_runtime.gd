@@ -153,15 +153,48 @@ func test_a_held_direction_repeats_at_the_source_rate_and_not_faster() -> void:
 	## The repeat the gate owes, spent as frames rather than as presses.
 	_runtime.press(Gen2Button.DOWN)
 	await _settle()
-	var owed: int = 0
-	for _frame: int in Gen2InputRuntime.REPEAT_DELAY_FRAMES + 1:
-		_runtime._advance_direction_repeat(Gen2InputRuntime.FRAME_SECONDS)
-		if bool(_runtime._repeat_open.get(Gen2Button.DOWN, false)):
-			owed += 1
-			_runtime._repeat_open[Gen2Button.DOWN] = false
-	assert_eq(owed, 1, "one repeat in the first fifteen frames, not fifteen")
+	assert_eq(_spend(Gen2InputRuntime.REPEAT_DELAY_FRAMES + 1), 1,
+		"one repeat in the first fifteen frames, not fifteen")
 	_runtime.release(Gen2Button.DOWN)
 	await _settle()
+
+
+func _key(pressed: bool) -> InputEventKey:
+	var key := InputEventKey.new()
+	key.physical_keycode = KEY_DOWN
+	key.pressed = pressed
+	return key
+
+
+## Spends [param frames] of repeat and answers how many reached the tree.
+func _spend(frames: int) -> int:
+	var counter := RepeatCounter.new()
+	add_child_autoqfree(counter)
+	for _frame: int in frames:
+		_runtime._advance_direction_repeat(Gen2InputRuntime.FRAME_SECONDS)
+	var seen: int = counter.seen
+	counter.queue_free()
+	return seen
+
+
+## A repeat is an edge, not a state. `Input` keeps an action's API state apart
+## from its device state and reports either as pressed, and only an action
+## release clears the API half, so a repeat sent through
+## [method Input.parse_input_event] latched the direction: the key came up, the
+## action stayed pressed, and the walk, the menu and the repeat itself all ran on
+## with nothing able to stop them.
+func test_a_held_direction_lets_go_the_moment_the_key_does() -> void:
+	Input.parse_input_event(_key(true))
+	_runtime._input(_key(true))
+	await _settle()
+	assert_eq(_runtime.held_direction(), Gen2Button.DOWN)
+	assert_gt(_spend(120), 15, "two seconds of a held key is repeating")
+
+	Input.parse_input_event(_key(false))
+	await _settle()
+	assert_false(Input.is_action_pressed(&"gen2_down"), "a repeat must not latch it")
+	assert_eq(_runtime.held_direction(), Gen2Button.NONE, "the walk stops with the key")
+	assert_eq(_spend(120), 0, "and so does the menu")
 
 
 ## Four buttons at once is a state no single press says, so the chord is polled
@@ -182,3 +215,14 @@ func test_the_reset_chord_is_reported_once_while_it_is_held() -> void:
 	for button: int in Gen2InputRuntime.RESET_CHORD:
 		_runtime.release(button)
 	await _settle()
+
+
+## Counts the repeats the runtime pushes into the tree, which is what a screen
+## sees. [member Gen2InputRuntime._repeat_open] cannot be read for this: the gate
+## clears it as the event arrives, and the event arrives inside the same call.
+class RepeatCounter extends Node:
+	var seen: int = 0
+
+	func _input(event: InputEvent) -> void:
+		if event is InputEventAction and event.is_action_pressed(&"gen2_down"):
+			seen += 1

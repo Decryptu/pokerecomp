@@ -18,7 +18,7 @@ const MAX_COMPLEXITY: int = 20
 const MAX_COMMENT_BLOCK: int = 8
 ## Comment lines under [constant COUNTED_ROOTS]. A ceiling, not a target: lower
 ## it whenever a pass leaves room, and never raise it.
-const MAX_COMMENT_LINES: int = 37886
+const MAX_COMMENT_LINES: int = 37884
 
 ## The functions still over [constant MAX_COMPLEXITY], as `path:function`. Delete
 ## a line when you fix one. The test fails on a line that no longer names a
