@@ -20,8 +20,8 @@ var _gesture := Gen2TapGesture.new()
 
 
 func _ready() -> void:
-	# Found by type rather than by name: both scenes that use a frame build the
-	# same two children, and neither should have to agree on a path as well.
+	# Found by type rather than by name: no scene using a frame should have to
+	# agree on a node path as well.
 	for child: Node in get_children():
 		if child is Gen2Screen:
 			_screen = child

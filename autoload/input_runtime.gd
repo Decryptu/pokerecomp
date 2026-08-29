@@ -29,6 +29,7 @@ var _mod_controls: Dictionary = {}
 var _touch_mode: StringName = Gen2Options.TOUCH_AUTO
 var _layout: Gen2TouchLayout = Gen2TouchLayout.new()
 var _device: StringName = Gen2InputDevice.KEYBOARD
+var _handheld: bool = Gen2InputDevice.is_handheld()
 var _touch_shown: bool = false
 ## Held directions in the order they were pressed, so the newest wins. Two
 ## directions at once is normal play, not an error: a player turning a corner
@@ -316,21 +317,17 @@ static func _direction_pressed(button: int) -> bool:
 
 
 ## Watches every event and consumes none, except a directional press the
-## hardware would not have reported: see [method _gate_direction_repeat]. Device
-## recon has to see input the screens never get, including the mouse motion that
-## says the player has put the pad down.
+## hardware would not have reported: see [method _gate_direction_repeat]. What
+## counts as another device being picked up is
+## [method Gen2InputDevice.evidence_of] rather than where the event came from.
 func _input(event: InputEvent) -> void:
 	if _gate_direction_repeat(event):
 		var viewport: Viewport = get_viewport()
 		if viewport != null:
 			viewport.set_input_as_handled()
 		return
-	var kind: StringName = Gen2InputDevice.kind_of(event)
+	var kind: StringName = Gen2InputDevice.evidence_of(event, _handheld)
 	if kind.is_empty():
-		return
-	# Mouse motion alone is not evidence: a desk knocked while the player holds
-	# a pad would hide the interface they are looking at. A click is.
-	if kind == Gen2InputDevice.MOUSE and event is InputEventMouseMotion:
 		return
 	_set_device(kind)
 

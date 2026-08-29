@@ -39,12 +39,9 @@ static func kind_for_hardware(has_pad: bool, has_touch: bool) -> StringName:
 
 
 ## The device kind an event came from, or an empty name for an event that says
-## nothing about one.
-##
-## Mouse events emulated from a touch carry [constant
-## InputEvent.DEVICE_ID_EMULATION] and are reported as touch. Without that,
-## `emulate_mouse_from_touch` (on by default, and what makes the launcher work
-## under a finger) would flip the answer back to mouse on every tap.
+## nothing about one. A mouse event emulated from a touch carries [constant
+## InputEvent.DEVICE_ID_EMULATION]: without that, `emulate_mouse_from_touch`
+## would flip the answer to mouse on every tap of the launcher.
 static func kind_of(event: InputEvent) -> StringName:
 	if event is InputEventScreenTouch or event is InputEventScreenDrag:
 		return TOUCH
@@ -55,6 +52,27 @@ static func kind_of(event: InputEvent) -> StringName:
 	if event is InputEventMouse:
 		return TOUCH if event.device == InputEvent.DEVICE_ID_EMULATION else MOUSE
 	return &""
+
+
+## The kind an event is evidence the player has picked up, or an empty name.
+## Android sends its Back button, its navigation bar and its volume rocker as
+## key events, and a [param handheld] has no keyboard or mouse of its own:
+## reading Back as one put the on-screen controller away mid-game.
+static func evidence_of(event: InputEvent, handheld: bool) -> StringName:
+	var kind: StringName = kind_of(event)
+	if handheld and (kind == KEYBOARD or kind == MOUSE):
+		return &""
+	# A knocked desk and a drifting stick are nobody's hands; a click is.
+	if event is InputEventMouseMotion:
+		return &""
+	var motion := event as InputEventJoypadMotion
+	if motion != null and absf(motion.axis_value) < Gen2InputActions.DEADZONE:
+		return &""
+	return kind
+
+
+static func is_handheld() -> bool:
+	return OS.has_feature("mobile")
 
 
 static func label(kind: StringName) -> String:
