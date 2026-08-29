@@ -947,7 +947,8 @@ func _advance_movement(map_pass: bool) -> void:
 	if map_pass:
 		_advance_forced_movement()
 		_advance_held_direction()
-		_refresh_if(_world != null and _world.advance_player_step_pass())
+		var stepped: bool = _world != null and _world.advance_player_step_pass()
+		_refresh_if(stepped)
 		## `CheckPlayerState` reads the step flags at the end of `HandleMap`,
 		## after `HandleMapObjects`, so the step that finishes on this frame is
 		## the one whose events this frame runs.
@@ -956,6 +957,11 @@ func _advance_movement(map_pass: bool) -> void:
 			var landed: Dictionary = _pending_step_events
 			_pending_step_events = {}
 			_complete_player_step(landed)
+		## Polled again on the pass a step lands on: the poll above ran while the
+		## step was still in flight and refused it, so a held direction started the
+		## next step a pass late and the walk froze a frame and doubled the next.
+		if stepped and _world != null and not _world.player_step_in_progress():
+			_advance_held_direction()
 	## Not the pass's: an emote's own countdown stands in for the `pause` between
 	## `ShowEmoteScript`'s two movements, and a script's `DelayFrames` is spent
 	## from inside the command rather than by `NextOverworldFrame`.

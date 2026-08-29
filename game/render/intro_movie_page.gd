@@ -249,7 +249,6 @@ func shadow_oam(movie: Gen2IntroMovie) -> Array[Dictionary]:
 		var flip_x: bool = bool(sprite["flip_x"])
 		var flip_y: bool = bool(sprite["flip_y"])
 		for part: Array in ordering["parts"]:
-			# `UpdateAnimFrame` stops at `wShadowOAMEnd` rather than growing.
 			if out.size() >= SHADOW_OAM_SPRITES:
 				return out
 			var dy: int = int(part[0])

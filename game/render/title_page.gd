@@ -340,7 +340,6 @@ func shadow_oam(scene: Gen2TitleScene) -> Array[Dictionary]:
 		var at: Vector2i = sprite["at"]
 		var name: String = _sprite_sheet(kind)
 		for part: Vector3i in _oam_set(kind, int(sprite.get("tile", 0))):
-			# `UpdateAnimFrame` stops at `wShadowOAMEnd` rather than growing.
 			if out.size() >= SHADOW_OAM_SPRITES:
 				return out
 			var tile: int = int(sprite.get("tile", 0)) if name == "title_crystal" else part.z
