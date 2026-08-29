@@ -189,17 +189,20 @@ func _finish_capture(binding: Dictionary) -> void:
 
 
 ## While capturing, every key and pad event belongs to the binding rather than to
-## the sheet, so the parent's cancel is deliberately not reached. That used to
-## leave a player on a pad alone with no way out but to bind something and then
-## remove it, so a capture now reads the press and acts on the release: a tap
-## binds, and holding past [constant HOLD_CANCEL_MSEC] closes the sheet instead.
-## The mouse and a finger still work as they did.
+## the sheet, so the parent's cancel is never reached. A capture reads the press
+## and acts on the release: a tap binds, holding past [constant HOLD_CANCEL_MSEC]
+## closes the sheet, and a pad player is left a way out. Mouse and finger are as
+## they were.
 func _unhandled_input(event: InputEvent) -> void:
 	if not _capturing:
 		super._unhandled_input(event)
 		return
 	if event is InputEventMouse or event is InputEventScreenTouch \
-		or event is InputEventScreenDrag or event is InputEventAction:
+		or event is InputEventScreenDrag:
+		return
+	if event is InputEventAction:
+		# A held direction's own repeat: it must not walk the ring behind here.
+		accept_event()
 		return
 	if event.is_echo():
 		return

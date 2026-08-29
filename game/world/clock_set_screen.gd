@@ -14,9 +14,9 @@ enum Phase { WOKE_UP, HOUR, HOUR_CONFIRM, MINUTE, MINUTE_CONFIRM, RESPONSE, DONE
 
 const TILE: int = Gen2Font.TILE
 
-## `SetDayOfWeek`'s own `.WeekdayStrings`, padded the way the source pads them so
-## the name is centred in its nine-wide box. Drawn by Mom's errand rather than
-## here; this is where the strings live because the dial page is shared.
+## `SetDayOfWeek`'s own `.WeekdayStrings`, padded the way the source pads them to
+## centre the name in its nine-wide box. Drawn by Mom's errand; here because the
+## dial page is shared.
 const DAYS: Array[String] = [
 	" SUNDAY", " MONDAY", " TUESDAY", "WEDNESDAY", "THURSDAY", " FRIDAY", "SATURDAY",
 ]
@@ -34,10 +34,9 @@ const DAY_HOUR: int = 10
 const NITE_HOUR: int = 18
 const NOON_HOUR: int = 12
 
-## `.loop` and `.HourIsSet` both end on `ld c, 10 / call DelayFrames` before
-## their input loop, and `InterpretTwoOptionMenu` holds `ld c, $f` after an
-## answer, so neither a dial nor a YES/NO reads a button on the frame it is
-## drawn.
+## `.loop` and `.HourIsSet` end on `ld c, 10 / call DelayFrames` before their
+## input loop and `InterpretTwoOptionMenu` holds `ld c, $f` after an answer, so
+## neither a dial nor a YES/NO reads a button on the frame it is drawn.
 const DIAL_DELAY_FRAMES: int = 10
 const YES_NO_DELAY_FRAMES: int = 15
 
@@ -102,9 +101,8 @@ func advance_frames(count: int) -> void:
 		if _text_box != null:
 			_text_box.advance_frame()
 		if not _waiting:
-			# The YES/NO box is `YesNoBox`, which runs after its question has
-			# finished printing, so the screen behind the box is redrawn on the
-			# frame the reveal ends.
+			# `YesNoBox` runs after its question has printed, so the screen
+			# behind the box is redrawn on the frame the reveal ends.
 			if _text_box != null and _revealing != _text_box.is_revealing():
 				_render()
 			continue
@@ -199,9 +197,8 @@ func _accept_confirm(yes: bool) -> void:
 	_begin_response()
 
 
-## `OakSpeech`'s `farcall InitClock` opens on `RotateFourPalettesRight`: the
-## caller faded to black over the gender screen, this screen is built behind it
-## and comes back in. `PrintText OakTimeWokeUpText` is what follows.
+## `OakSpeech`'s `farcall InitClock` opens on `RotateFourPalettesRight`: the fade
+## to black was over the gender screen, and this one comes back in behind it.
 func _begin() -> void:
 	_presentation.clear()
 	_presentation.push_rotate_four_right()
@@ -234,12 +231,16 @@ func _begin_minute() -> void:
 	_hold(DIAL_DELAY_FRAMES)
 
 
-## `.ClearScreen` takes the dial off before either question, so a YES/NO box
-## stands on an otherwise empty screen.
+## `.ClearScreen` takes the dial off before either question. `OakTimeWhatHoursText`
+## places the hour at `hlcoord 1, 16`, the box's second line, and
+## `OakTimeWhoaMinutesText` the minutes at `hlcoord 7, 14` beside `Whoa!`.
 func _begin_confirm() -> void:
 	_phase = Phase.HOUR_CONFIRM if _phase == Phase.HOUR else Phase.MINUTE_CONFIRM
 	_confirm_cursor = 0
-	_show_line("What?" if _phase == Phase.HOUR_CONFIRM else "Whoa!")
+	if _phase == Phase.HOUR_CONFIRM:
+		_show_line("What?\n%s?" % _hour_value())
+		return
+	_show_line("Whoa! %s?" % _minute_value())
 
 
 ## `.MinutesAreSet`: `OakText_ResponseToSetTime` prints the time it was given and
@@ -298,10 +299,10 @@ func _render() -> void:
 	var value_text: String = ""
 	if _phase == Phase.HOUR:
 		kind = &"hour"
-		value_text = "%s o'clock" % _hour_text()
+		value_text = _hour_value()
 	elif _phase == Phase.MINUTE:
 		kind = &"minutes"
-		value_text = "%d min." % _minute
+		value_text = _minute_value()
 	# Every BG palette on screen goes through the frame's own byte, which is what
 	# a hardware fade does to a screen carrying more than one palette.
 	var colors: PackedColorArray = Gen2IntroPresentation.apply_bgp(
@@ -314,6 +315,16 @@ func _render() -> void:
 	if _text_box != null:
 		_text_box.palette = colors
 		_revealing = _text_box.is_revealing()
+
+
+## `DisplayHourOClock`, printed by the dial and by the hour's own question.
+func _hour_value() -> String:
+	return "%s o'clock" % _hour_text()
+
+
+## `DisplayMinutesWithMinString`, the same for the minutes.
+func _minute_value() -> String:
+	return "%d min." % _minute
 
 
 ## `PrintHour` prints `GetTimeOfDayString`'s own MORN/DAY/NITE ahead of the

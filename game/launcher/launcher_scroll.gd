@@ -1,19 +1,21 @@
 class_name Gen2LauncherScroll
 extends ScrollContainer
 
-## A vertical scroll pane that can be read without a pointer, since Godot gives
-## neither thing by default. A pad walking the controls inside a pane has to bring
-## the pane with it, and a pane whose content is mostly text has stretches with
-## nothing focusable, so the pane itself takes focus and reads an up or a down as
-## scrolling. It only takes focus when it has somewhere to go. A finger is the
-## third way: [constant Control.MOUSE_FILTER_STOP] ends a pointer event at the
-## control it reaches and every launcher button is STOP, so the pane reads the
-## touch in [method Node._input] and leaves the engine's own drag switched off.
+## A vertical scroll pane that can be read without a pointer, which Godot does
+## not give. A pad walking the controls inside brings the pane with it; a pane of
+## prose has nothing focusable, so it takes focus itself and reads an up or a down
+## as scrolling. A finger is the third way: [constant Control.MOUSE_FILTER_STOP]
+## ends a pointer event at the button it reaches, so the pane reads the touch in
+## [method Node._input] and leaves the engine's own drag off.
 
 ## How far one press moves the pane, as a fraction of what it shows.
 const PAGE: float = 0.42
+## How far one repeat of a held direction moves it: a repeat every five frames
+## ([Gen2InputRuntime]) carrying a page each would be five screens a second.
+const LINE: float = 0.10
 ## How far a finger travels before the touch is a scroll rather than a tap.
 const TOUCH_DEADZONE: float = 12.0
+const WAYS: Dictionary = {Gen2Button.DOWN: 1, Gen2Button.UP: -1}
 
 ## The finger this pane is following, or -1.
 var _touch_index: int = -1
@@ -25,10 +27,9 @@ var _touch_dragging: bool = false
 
 static func create() -> Gen2LauncherScroll:
 	var scroll := Gen2LauncherScroll.new()
-	# Never `SCROLL_MODE_DISABLED`: that adds the child's whole minimum width to
-	# the pane, so one row wider than the window widens the launcher itself
-	# rather than being held inside the pane. Hidden instead, and the rows stack
-	# or wrap ([FieldRow], `controls_section.gd`) so nothing needs the axis.
+	# Never `SCROLL_MODE_DISABLED`: that adds the child's whole minimum width, so
+	# one row wider than the window widens the launcher rather than being held
+	# inside. Hidden instead, and the rows wrap so nothing needs the axis.
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.follow_focus = true
@@ -63,26 +64,26 @@ func _gui_input(event: InputEvent) -> void:
 		accept_event()
 
 
-## The repeat a held direction produces is an [InputEventAction]
-## ([method Gen2InputRuntime._advance_direction_repeat]), and the engine routes
-## no action to `_gui_input`, so a pane holding focus reads its repeats here.
+## A held direction repeats as an [InputEventAction], and the engine routes no
+## action to `_gui_input`, so a pane holding focus reads its repeats here.
 func _unhandled_input(event: InputEvent) -> void:
 	if has_focus() and _scroll_by(event):
 		get_viewport().set_input_as_handled()
 
 
+## Whether the pane took the direction. One already at that end of its travel
+## does not, or the player is stranded on a page they have finished reading.
 func _scroll_by(event: InputEvent) -> bool:
 	if not _scrollable():
 		return false
-	var step: float = maxf(size.y * PAGE, 40.0)
-	match Gen2Button.direction_in(event):
-		Gen2Button.DOWN:
-			scroll_vertical = int(float(scroll_vertical) + step)
-			return true
-		Gen2Button.UP:
-			scroll_vertical = int(float(scroll_vertical) - step)
-			return true
-	return false
+	var way: int = int(WAYS.get(Gen2Button.direction_in(event), 0))
+	if way == 0:
+		return false
+	var at: int = scroll_vertical
+	# A repeat is an InputEventAction; a press the player made is not.
+	var fraction: float = LINE if event is InputEventAction else PAGE
+	scroll_vertical = int(float(at) + float(way) * maxf(size.y * fraction, 40.0))
+	return scroll_vertical != at
 
 
 func _on_screen_touch(touch: InputEventScreenTouch) -> void:
@@ -127,11 +128,10 @@ func _takes_touches(point: Vector2) -> bool:
 	return true
 
 
-## Takes the press off the button the finger landed on, now that the finger has
-## turned out to be scrolling. [BaseButton] tracks a touch itself, and nothing
-## public cancels one; disabling clears the attempt and re-enabling in the same
-## call leaves the button live for the release that is still to come, which is
-## what clears its own record of the finger.
+## Takes the press off the button the finger landed on, now that it has turned
+## out to be scrolling. [BaseButton] tracks a touch itself and nothing public
+## cancels one; disabling clears the attempt and re-enabling in the same call
+## leaves it live for the release that clears its own record of the finger.
 func _release_pressed_button() -> void:
 	_cancel_card_presses(self)
 	var button: BaseButton = _button_at(self, _touch_from)
@@ -161,8 +161,7 @@ static func _button_at(node: Node, point: Vector2) -> BaseButton:
 	return null
 
 
-## Whether there is more here than fits, which is the only case where the pane is
-## worth stopping on.
+## Whether there is more here than fits, the only case worth stopping on.
 func _scrollable() -> bool:
 	var bar: VScrollBar = get_v_scroll_bar()
 	return bar != null and bar.max_value > bar.page

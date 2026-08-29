@@ -134,6 +134,104 @@ func test_a_mouse_is_left_alone() -> void:
 	assert_null(_focus_owner())
 
 
+## A scroll pane takes focus so prose can be read without a pointer, and answers
+## every up and down by scrolling. Landing the ring on one that holds controls
+## left a pad with no visible focus and no way past the page.
+func test_the_ring_never_lands_on_a_pane_that_holds_controls() -> void:
+	for page: StringName in [&"settings", &"about"]:
+		_use(InputEventJoypadButton.new())
+		_launcher.select_page(page)
+		await get_tree().process_frame
+		await get_tree().process_frame
+		var focused: Control = _focus_owner()
+		assert_not_null(focused, String(page))
+		assert_false(focused is ScrollContainer, "%s stranded the ring on its pane" % page)
+		assert_true(focused is BaseButton, String(page))
+
+
+## Every control on a scrolling page has to be reachable, and the page has to be
+## leavable: the walk ends on the dock rather than on a control with nothing
+## under it.
+func test_a_pad_walks_the_whole_settings_page_and_leaves_it() -> void:
+	_use(InputEventJoypadButton.new())
+	_launcher.select_page(&"settings")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var guard: Gen2FocusGuard = _launcher.find_child("FocusGuard", true, false)
+	var seen: Array[Control] = []
+	var on_dock: bool = false
+	for _step: int in 200:
+		var focused: Control = _focus_owner()
+		if focused == null:
+			break
+		if not seen.has(focused):
+			seen.append(focused)
+		if focused is Gen2LauncherButton and (focused as Gen2LauncherButton).tooltip_text == "Settings":
+			on_dock = true
+			break
+		if not guard.move_focus(Vector2.DOWN):
+			break
+		# The pane brings the newly focused control into view, and the next
+		# neighbour is chosen from where things are once it has.
+		await get_tree().process_frame
+	assert_true(on_dock, "down never reached the dock")
+	assert_gt(seen.size(), 5, "the walk skipped the page")
+
+
+## `JoyTextDelay`'s repeat arrives as one action press ([Gen2InputRuntime]), and
+## a screen that answered it twice would cross a page before the player let go.
+func test_one_repeat_of_a_held_direction_moves_the_ring_one_control() -> void:
+	_use(InputEventJoypadButton.new())
+	_launcher.select_page(&"settings")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var from: Control = _focus_owner()
+	assert_not_null(from)
+	var next: Control = from.get_node_or_null(from.focus_neighbor_bottom) as Control
+	assert_not_null(next, "the guard names what is below")
+
+	var runtime: Gen2InputRuntime = Gen2InputRuntime.instance()
+	runtime.send_action(Gen2Button.action(Gen2Button.DOWN), true)
+	await get_tree().process_frame
+	assert_same(_focus_owner(), next, "one repeat is one control, not two")
+	runtime.send_action(Gen2Button.action(Gen2Button.DOWN), false)
+	await get_tree().process_frame
+
+
+## A pane that answered a direction at the end of its travel was a trap: down
+## scrolled nothing forever and the dock was never reached.
+func test_a_pane_hands_a_direction_on_once_it_has_nowhere_left_to_scroll() -> void:
+	var pane: Gen2LauncherScroll = Gen2LauncherScroll.create()
+	pane.size = Vector2(200, 100)
+	add_child_autofree(pane)
+	var tall := Control.new()
+	tall.custom_minimum_size = Vector2(200, 2000)
+	pane.add_child(tall)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var down := InputEventAction.new()
+	down.action = Gen2Button.action(Gen2Button.DOWN)
+	down.pressed = true
+	assert_true(pane._scroll_by(down), "there is room below")
+	for _step: int in 400:
+		if not pane._scroll_by(down):
+			break
+	assert_false(pane._scroll_by(down), "the bottom hands the press on")
+
+	var up := InputEventAction.new()
+	up.action = Gen2Button.action(Gen2Button.UP)
+	up.pressed = true
+	assert_true(pane._scroll_by(up), "and up still moves from there")
+
+
+func test_two_attaches_on_one_screen_are_one_guard() -> void:
+	var root := Control.new()
+	add_child_autofree(root)
+	var first: Gen2FocusGuard = Gen2FocusGuard.attach(root)
+	assert_same(Gen2FocusGuard.attach(root), first, "two rings move two controls a press")
+
+
 func test_the_first_focusable_skips_what_cannot_take_focus() -> void:
 	var root := Control.new()
 	add_child_autofree(root)
@@ -148,6 +246,32 @@ func test_the_first_focusable_skips_what_cannot_take_focus() -> void:
 	root.add_child(wanted)
 
 	assert_same(Gen2FocusGuard.first_focusable(root), wanted)
+
+
+func test_the_first_focusable_enters_a_pane_rather_than_stopping_on_it() -> void:
+	var root := Control.new()
+	add_child_autofree(root)
+	var pane := ScrollContainer.new()
+	pane.focus_mode = Control.FOCUS_ALL
+	root.add_child(pane)
+	var inside := Button.new()
+	pane.add_child(inside)
+
+	assert_same(Gen2FocusGuard.first_focusable(root), inside)
+	assert_false(Gen2FocusGuard.focusable_controls(root).has(pane))
+
+
+## A pane with nothing focusable in it is the one that keeps the ring: scrolling
+## it is the only way past a wall of prose without a pointer.
+func test_a_pane_of_prose_still_takes_the_ring() -> void:
+	var root := Control.new()
+	add_child_autofree(root)
+	var pane := ScrollContainer.new()
+	pane.focus_mode = Control.FOCUS_ALL
+	root.add_child(pane)
+	pane.add_child(Label.new())
+
+	assert_same(Gen2FocusGuard.first_focusable(root), pane)
 
 
 func test_nothing_focusable_is_not_an_error() -> void:
