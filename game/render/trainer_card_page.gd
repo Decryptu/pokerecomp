@@ -158,7 +158,6 @@ static func from_data(
 	return out
 
 
-## Whether the cache carried every sheet this page needs.
 func ready() -> bool:
 	return font != null and not _tiles.is_empty()
 

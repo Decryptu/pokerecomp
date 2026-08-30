@@ -112,7 +112,6 @@ func _ready() -> void:
 	_refresh()
 
 
-## Which step is on screen, for the checks and the screenshot tool.
 func step() -> int:
 	return _step
 

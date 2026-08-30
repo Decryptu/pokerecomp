@@ -174,7 +174,6 @@ func row_count() -> int:
 	return 6 if is_box or is_mail else 5
 
 
-## Which row the case switch, DEL and END sit on.
 func command_row() -> int:
 	return row_count() - 1
 

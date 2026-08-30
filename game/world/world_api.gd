@@ -195,6 +195,10 @@ var world_hour: int = 6
 var world_minute: int = 0
 var dst_enabled: bool = false
 var movement_mode: StringName = MOVEMENT_WALK
+## Whether the next committed walk takes bike speed. No cartridge state: the
+## screen polls [method Gen2ModHost.run_button_held] and pushes it in, so a
+## replay reproduces a run rather than reading a live keyboard.
+var run_held: bool = false
 ## `DOWN`, `UP`, `LEFT`, `RIGHT`: the direction constants' own order, which is
 ## both `.FinishFacing`'s row order and `.GetAction`'s test order.
 const TURNING_DIRECTION_ORDER: Array[Vector2i] = [
@@ -642,7 +646,6 @@ func tune_radio(knob: int) -> Dictionary:
 	return tuned
 
 
-## The programme the tuned station is reading, or null on dead air.
 func radio_show() -> Gen2RadioShow:
 	return _radio_show
 
@@ -5676,7 +5679,9 @@ func _follow_object_is_visible(object_index: int) -> bool:
 ## approach do: MovementFunction_Follow is HandleMovementData over the queued
 ## leader commands, so every one of them lands in NormalStep and never reaches
 ## CanObjectMoveInDirection.
-func _advance_followers(leader_index: int, leader_from_cell: Vector2i) -> void:
+func _advance_followers(
+	leader_index: int, leader_from_cell: Vector2i, passes: int = STEP_PASSES_WALK
+) -> void:
 	if current_map == null:
 		return
 	var relations: Array = []
@@ -5695,14 +5700,17 @@ func _advance_followers(leader_index: int, leader_from_cell: Vector2i) -> void:
 	for entry: Dictionary in relations:
 		_step_follower(
 			int(entry["index"]), leader_from_cell,
-			bool((entry["relation"] as Dictionary).get("exact", true))
+			bool((entry["relation"] as Dictionary).get("exact", true)), passes
 		)
 
 
 ## One follower's step toward [param target_cell], which is the cell its leader
 ## has just left. An index below zero is the player, who is the object the
 ## source counts as zero and who is the follower in every `follow <NPC>, PLAYER`.
-func _step_follower(follower_index: int, target_cell: Vector2i, exact: bool) -> void:
+func _step_follower(
+	follower_index: int, target_cell: Vector2i, exact: bool,
+	passes: int = STEP_PASSES_WALK
+) -> void:
 	var follower_cell: Vector2i = player_cell
 	var follower: Gen2WorldObject = null
 	if follower_index >= 0:
@@ -5734,17 +5742,18 @@ func _step_follower(follower_index: int, target_cell: Vector2i, exact: bool) -> 
 	var destination: Vector2i = follower_cell + direction
 	if not _cell_in_bounds(destination):
 		return
-	# The player's own walk duration, not the slower wandering one:
+	# The leader's own step duration, not the slower wandering one:
 	# QueueFollowerFirstStep queues `movement_step` and the queue after it holds
-	# the leader's own command bytes.
+	# the leader's own command bytes. A running player leaves a follower on the
+	# walk row a cell behind every step.
 	if follower == null:
 		player_cell = destination
 		player_facing = facing_for_direction(direction)
-		_queue_player_step(direction, STEP_PASSES_WALK)
+		_queue_player_step(direction, passes)
 		return
 	follower.cell = destination
 	follower.apply_direction(direction)
-	follower.queue_step(direction, STEP_PASSES_WALK)
+	follower.queue_step(direction, passes)
 	var override_key: String = _object_key(
 		current_map.group, current_map.number, follower_index
 	)
@@ -5868,9 +5877,10 @@ func move_result(direction: Vector2i) -> Dictionary:
 	player_cell = destination
 	player_facing = facing_for_direction(direction)
 	count_step()
-	_advance_followers(-1, from_cell)
+	var passes: int = _step_frames_for_movement()
+	_advance_followers(-1, from_cell, passes)
 	_do_step(direction)
-	_start_player_step(direction, _step_frames_for_movement())
+	_start_player_step(direction, passes)
 	return {
 		"ok": true,
 		"kind": kind,
@@ -6558,8 +6568,13 @@ func dig_request() -> Dictionary:
 ## which is `big_step` and so four frames, and `STEP_WALK`'s eight otherwise.
 ## `.BikeCheck`'s downhill branch is not modelled: `BIKEFLAGS_DOWNHILL_F` is set
 ## by nothing in either pin, so no map can ask for the slower non-down step.
+## [member run_held] is the one addition the cartridge has no branch for, and it
+## reaches the walk alone.
 func _step_frames_for_movement() -> int:
-	return STEP_PASSES_FAST if movement_mode == MOVEMENT_BIKE else STEP_PASSES_WALK
+	if movement_mode == MOVEMENT_BIKE:
+		return STEP_PASSES_FAST
+	return STEP_PASSES_FAST if run_held and movement_mode == MOVEMENT_WALK \
+		else STEP_PASSES_WALK
 
 
 ## `BikeFunction`'s `.TryBike`: `.CheckEnvironment` first, then the state the

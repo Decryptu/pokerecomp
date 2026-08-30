@@ -152,7 +152,6 @@ func banner_block() -> int:
 	return _block
 
 
-## The BG map, which is what is on screen: one tile number per cell.
 func bg_map() -> PackedInt32Array:
 	return _bg_map.duplicate()
 
@@ -205,7 +204,6 @@ func skippable() -> bool:
 	return _skippable
 
 
-## What [Gen2CreditsPage] needs to draw one frame.
 func frame_state() -> Dictionary:
 	return {
 		"map": bg_map(),

@@ -313,7 +313,6 @@ func active() -> bool:
 	return _frame < _duration and _duration > 0
 
 
-## Whether any effect sprite is still on screen.
 func sprites_active() -> bool:
 	return not _sprites.is_empty()
 

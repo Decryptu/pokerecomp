@@ -119,7 +119,6 @@ func _build() -> void:
 	invitation.add_child(_bay_label)
 
 	_art = TextureRect.new()
-	_art.texture = ART.get(game_id, null)
 	_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -127,7 +126,17 @@ func _build() -> void:
 	_art.material = _side_fade
 	add_child(_art)
 
+	refresh_art()
 	set_imported(false)
+
+
+## The player's own picture, or the shipped shell. The stretch mode above is what
+## contains a picture of any shape inside the shell's box.
+func refresh_art() -> void:
+	if _art == null:
+		return
+	var custom: Texture2D = Gen2CartridgeArt.texture_for(game_id)
+	_art.texture = custom if custom != null else ART.get(game_id, null)
 
 
 ## Hides the download icon and the cartridge's name inside an empty bay, leaving

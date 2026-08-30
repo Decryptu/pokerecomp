@@ -142,12 +142,10 @@ func enemy_turn() -> bool:
 	return _enemy_turn
 
 
-## The imported tables the callbacks resolve their sine and framesets through.
 func data() -> Gen2BattleAnimData:
 	return _data
 
 
-## Which cartridge this animation came from, which only the bg effect table asks.
 func profile() -> StringName:
 	return _data.profile()
 

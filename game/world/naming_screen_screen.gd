@@ -77,7 +77,6 @@ func _ready() -> void:
 		_refresh()
 
 
-## The live model, so a driver can read the entry without going through a redraw.
 func model() -> Gen2NamingScreen:
 	return _screen
 

@@ -306,7 +306,6 @@ func occupied_rect() -> Rect2i:
 	return Rect2i(Vector2i(position.floor()), Vector2i(size.floor()))
 
 
-## Tiles of text that fit across the interior.
 func text_columns() -> int:
 	return maxi(columns - TEXT_LEFT * 2, 0)
 

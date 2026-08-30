@@ -1054,3 +1054,39 @@ func test_the_scanline_window_reports_the_side_it_is_open_over() -> void:
 	var sunk: Vector2 = sinking.battler_window_offset(false)
 	assert_eq(sunk.x, 0.0, "a vertical window moves nothing sideways")
 	assert_eq(sunk.y, 5.0, "the rows still on screen carry the whole push")
+
+
+## The reported defect: `DoBattle` slides the player's trainer back pic off the
+## square before the first Pokemon is sent out, and a player mashing A through
+## `WildPokemonAppearedText` ran the send-out into that slide. The map was
+## reseeded with the new picture and the remaining steps walked it left, leaving
+## two columns of it beside its own square for the rest of the fight.
+## `SlideBattlePicOut` reads no joypad, so the press reaches nothing.
+func test_a_press_reaches_nothing_while_a_pic_slides_off_its_square() -> void:
+	await _open_battle()
+	_battle_screen.show_matchup(16, 155, 7, 9)
+	var guard: int = 8000
+	while not _battle_screen.sliding() and guard > 0:
+		guard -= 1
+		if not _battle_screen.frames_running():
+			_battle_screen.finish()
+			_battle_screen.advance()
+		_battle_screen.advance_frame()
+	assert_gt(guard, 0, "the opening reaches SlideBattlePicOut")
+
+	var stages: int = _battle_screen._entrance_stages.size()
+	_battle_screen.press_button(Gen2Button.A)
+	assert_true(_battle_screen.sliding(), "the slide is still owed after the press")
+	assert_eq(
+		_battle_screen._entrance_stages.size(), stages,
+		"and nothing behind it ran"
+	)
+
+	# The other half of the same seam: whatever got the screen there, a map with
+	# both pictures put back has nothing left to walk one of them off it.
+	_battle_screen._reseed_bg_map()
+	assert_false(_battle_screen.sliding(), "a reseeded map owes no slide")
+	assert_eq(
+		_battle_screen._bg_map, Gen2BattleScreenMap.seeded(),
+		"both pictures stand on their own squares and nowhere else"
+	)

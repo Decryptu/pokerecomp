@@ -144,7 +144,6 @@ func device() -> StringName:
 	return _device
 
 
-## Whether the on-screen controller should be drawn right now.
 func touch_controls_shown() -> bool:
 	return _touch_shown
 

@@ -359,6 +359,5 @@ func _place_all() -> void:
 	layout_changed.emit()
 
 
-## Where cartridge [param index] sits relative to the middle, in slots.
 func _slot(index: int) -> float:
 	return _shortest(float(index) - _scroll)

@@ -15,6 +15,12 @@ const PROBE_MOD_ID: StringName = &"launcher_probe"
 ## loaded script by path: two mods sharing a directory would have the first
 ## one's entry script run for the second.
 const VIEW_MOD_ID: StringName = &"launcher_view_probe"
+## The sources these tests follow. Unfollowed after each one, or a test that
+## fails part way leaves the next one reading a feed it never added.
+const PROBE_FEEDS: Array[String] = [
+	"https://mods.example.com/update-all.json",
+	"https://mods.example.com/update-queue.json",
+]
 
 
 func after_each() -> void:
@@ -30,6 +36,11 @@ func after_each() -> void:
 	DirAccess.remove_absolute(_view_archive)
 	Gen2ModInstaller.uninstall(PROBE_MOD_ID)
 	Gen2ModInstaller.uninstall(VIEW_MOD_ID)
+	for feed: String in PROBE_FEEDS:
+		Gen2ModIndex.unfollow(feed)
+	for game_id: StringName in RomRegistry.ORDER:
+		Gen2CartridgeArt.revert(game_id)
+	_clear_art_scratch()
 
 
 ## The mods page on its own, which is what every mod workflow but the file
@@ -362,6 +373,67 @@ func test_a_source_names_the_mods_a_newer_version_is_listed_for() -> void:
 	}))
 	assert_false(page.status_text().contains("can be updated"))
 	Gen2ModIndex.forget_cache(feed)
+
+
+## The header carries one button and it offers whichever of its two actions is
+## worth pressing: read the sources while nothing is known to be out of date, and
+## download every update once something is.
+func test_the_header_button_offers_update_all_once_a_source_lists_one() -> void:
+	_write_probe_mod_zip()
+	assert_true(bool(Gen2ModInstaller.install_zip(_mod_archive).get("ok", false)))
+	Gen2ModHost.reset()
+	Gen2ModHost.instance().discover()
+
+	var feed: String = PROBE_FEEDS[0]
+	assert_true(bool(Gen2ModIndex.follow(feed).get("ok", false)))
+	var page: Gen2ModsPage = _mods_page()
+	var button: Gen2LauncherButton = page._check_updates_button
+	assert_eq(button.get("_glyph"), &"refresh_square", "nothing to update yet")
+
+	page.receive_feed_response(feed, true, JSON.stringify({
+		"schema_version": Gen2ModIndex.SCHEMA_VERSION,
+		"name": "Example",
+		"mods": [{"id": String(PROBE_MOD_ID), "name": "Launcher Probe", "version": "9.9.9",
+			"download": "https://example.com/probe.zip"}],
+	}))
+	assert_eq(page.available_update_count(), 1)
+	assert_eq(button.get("_glyph"), &"download", "the same button is now Update all")
+	assert_eq(button.text, "", "and it is still icon sized for a phone")
+	assert_string_contains(button.tooltip_text, "1 mod update")
+	assert_eq(
+		StringName((page.update_rows()[0] as Dictionary)["id"]), PROBE_MOD_ID,
+		"one press is the installed mods a source has something newer for"
+	)
+
+
+## Update all walks its queue whatever each row answers, and a row whose download
+## never starts is the refusal a single press of that row would give.
+func test_update_all_walks_its_queue_and_reports_what_it_installed() -> void:
+	_write_probe_mod_zip()
+	assert_true(bool(Gen2ModInstaller.install_zip(_mod_archive).get("ok", false)))
+	Gen2ModHost.reset()
+	Gen2ModHost.instance().discover()
+
+	var feed: String = PROBE_FEEDS[1]
+	assert_true(bool(Gen2ModIndex.follow(feed).get("ok", false)))
+	var page: Gen2ModsPage = _mods_page()
+	page.receive_feed_response(feed, true, JSON.stringify({
+		"schema_version": Gen2ModIndex.SCHEMA_VERSION,
+		"name": "Example",
+		"mods": [{"id": String(PROBE_MOD_ID), "name": "Launcher Probe", "version": "9.9.9",
+			"download": "https://example.com/probe.zip"}],
+	}))
+	assert_eq(page.available_update_count(), 1)
+
+	# No test reaches a server, so the transport is taken away: every row then
+	# answers the way one whose download could not be started does.
+	page._http = null
+	page.download_all()
+	for _frame: int in 4:
+		await get_tree().process_frame
+	assert_eq(page._update_queue.size(), 0, "the queue is drained rather than stuck")
+	assert_string_contains(page.status_text(), "No mod update could be installed")
+	assert_false(page._check_updates_button.disabled, "and the button is pressable again")
 
 
 ## A toast with nothing to say occupies nothing: not drawn, and not in the hit
@@ -725,3 +797,99 @@ func test_back_closes_what_is_open_before_it_asks_about_quitting() -> void:
 ## The sheets open over the launcher, innermost last.
 func _sheet_count() -> int:
 	return _launcher.find_children("", "Gen2LauncherSheet", true, false).size()
+
+
+## The scratch directory the art store is exercised in, so a run never writes a
+## picture onto one of this machine's own cartridges. The one test that has to
+## use the real root reverts it in `after_each`.
+const ART_SCRATCH: String = "user://cartridge_art_tests"
+
+
+func _clear_art_scratch() -> void:
+	var listing: PackedStringArray = DirAccess.get_files_at(ART_SCRATCH)
+	for entry: String in listing:
+		DirAccess.remove_absolute("%s/%s" % [ART_SCRATCH, entry])
+	DirAccess.remove_absolute(ART_SCRATCH)
+
+
+func _write_image(path: String, width: int, height: int) -> String:
+	var image: Image = Image.create_empty(width, height, false, Image.FORMAT_RGBA8)
+	image.fill(Color.REBECCA_PURPLE)
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	image.save_png(path)
+	return path
+
+
+## What is stored is a picture this project encoded, not the file that was
+## chosen, and it is never larger than the shell it stands in for.
+func test_chosen_cartridge_art_is_re_encoded_and_fitted_to_the_shell() -> void:
+	var source: String = _write_image("%s/source.png" % ART_SCRATCH, 3000, 1500)
+	assert_false(Gen2CartridgeArt.has_custom_art(&"gold", ART_SCRATCH))
+
+	var taken: Dictionary = Gen2CartridgeArt.adopt(&"gold", source, ART_SCRATCH)
+	assert_true(bool(taken.get("ok", false)), JSON.stringify(taken))
+	assert_true(Gen2CartridgeArt.has_custom_art(&"gold", ART_SCRATCH))
+
+	var texture: Texture2D = Gen2CartridgeArt.texture_for(&"gold", ART_SCRATCH)
+	assert_not_null(texture)
+	assert_eq(texture.get_size().x, float(Gen2CartridgeArt.STORED_SIDE), "the long side")
+	assert_eq(texture.get_size().y, float(Gen2CartridgeArt.STORED_SIDE / 2), "aspect kept")
+
+	## Smaller than the shell is left where it is: a 32x32 sprite is drawn small
+	## rather than smeared over a cartridge.
+	assert_true(bool(Gen2CartridgeArt.adopt(
+		&"gold", _write_image("%s/small.png" % ART_SCRATCH, 32, 48), ART_SCRATCH
+	).get("ok", false)))
+	assert_eq(
+		Gen2CartridgeArt.texture_for(&"gold", ART_SCRATCH).get_size(), Vector2(32, 48),
+		"and the texture is the new picture rather than the cached first one"
+	)
+
+	assert_true(Gen2CartridgeArt.revert(&"gold", ART_SCRATCH))
+	assert_false(Gen2CartridgeArt.has_custom_art(&"gold", ART_SCRATCH))
+	assert_null(Gen2CartridgeArt.texture_for(&"gold", ART_SCRATCH))
+	assert_false(Gen2CartridgeArt.revert(&"gold", ART_SCRATCH), "nothing left to remove")
+
+
+## Every way a chosen file can be refused, each with a sentence rather than an
+## error: the file is the player's own and the launcher has to say why.
+func test_a_file_that_is_not_cartridge_art_is_refused_with_a_reason() -> void:
+	DirAccess.make_dir_recursive_absolute(ART_SCRATCH)
+	var text: String = "%s/notes.txt" % ART_SCRATCH
+	var file: FileAccess = FileAccess.open(text, FileAccess.WRITE)
+	file.store_string("PNG? no.")
+	file.close()
+
+	var rows: Array = [
+		[&"unknown_cartridge", Gen2CartridgeArt.adopt(&"", text, ART_SCRATCH)],
+		[&"missing_file", Gen2CartridgeArt.adopt(&"gold", "%s/nope.png" % ART_SCRATCH, ART_SCRATCH)],
+		[&"not_an_image", Gen2CartridgeArt.adopt(&"gold", text, ART_SCRATCH)],
+	]
+	for row: Array in rows:
+		var answer: Dictionary = row[1]
+		assert_false(bool(answer.get("ok", false)), String(row[0]))
+		assert_eq(StringName(answer["reason"]), StringName(row[0]))
+		assert_false(Gen2CartridgeArt.refusal_text(row[0]).is_empty(), String(row[0]))
+	assert_false(Gen2CartridgeArt.has_custom_art(&"gold", ART_SCRATCH), "and nothing was stored")
+
+
+## The cartridge draws the player's picture where it has one and the shipped
+## shell where it has not, contained inside the shell's own box whatever shape
+## the picture is.
+func test_a_cartridge_wears_the_players_own_art_and_goes_back_to_the_default() -> void:
+	var card: Gen2Cartridge = autofree(
+		Gen2Cartridge.create(Gen2LauncherTheme.active(), &"gold")
+	)
+	var art: TextureRect = card.get("_art")
+	assert_eq(art.stretch_mode, TextureRect.STRETCH_KEEP_ASPECT_CENTERED, "contained, not stretched")
+	assert_eq(art.texture, Gen2Cartridge.ART[&"gold"], "the shipped shell")
+
+	assert_true(bool(Gen2CartridgeArt.adopt(
+		&"gold", _write_image("%s/mine.png" % ART_SCRATCH, 700, 300)
+	).get("ok", false)))
+	card.refresh_art()
+	assert_ne(art.texture, Gen2Cartridge.ART[&"gold"], "the player\'s own")
+
+	Gen2CartridgeArt.revert(&"gold")
+	card.refresh_art()
+	assert_eq(art.texture, Gen2Cartridge.ART[&"gold"])

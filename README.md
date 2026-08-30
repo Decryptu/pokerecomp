@@ -132,6 +132,11 @@ A cache is never migrated. An update that changes its format discards the old
 one, and the launcher's manage sheet says so: import the same dump again. Saves
 live under their own root and are not touched.
 
+The same sheet, behind the three dots above the shelf, also swaps a cartridge's
+picture for one of your own: any PNG, WebP or JPEG, scaled to fit the shell
+whatever shape it is, with a way back to the shipped art. It is kept under
+`user://` beside the saves, so an update does not ask for it again.
+
 | Data | Contents |
 |---|---|
 | Species | Names, base stats, types, held items, egg groups, TM/HM flags |

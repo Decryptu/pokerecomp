@@ -140,7 +140,6 @@ func other_mode() -> StringName:
 	return LIGHT if is_dark() else DARK
 
 
-## The colour the stage is lit in while [param game_id] is selected.
 func tint_for(game_id: StringName) -> Color:
 	return GAME_TINTS.get(game_id, accent)
 

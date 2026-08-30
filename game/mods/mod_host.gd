@@ -149,6 +149,12 @@ const REPEL_PROVIDER_METHODS: Array[String] = ["repel_to_use"]
 const CATCH_EXPERIENCE_METHODS: Array[String] = ["awards_catch_experience"]
 const BATTLE_INFO_METHODS: Array[String] = ["annotate_battle"]
 const SHINY_ROLLS_METHODS: Array[String] = ["shiny_rolls"]
+const RUN_BUTTON_METHODS: Array[String] = ["runs_while_held"]
+const EXPERIENCE_SCALE_METHODS: Array[String] = ["experience_scale"]
+
+## A scale is a mod's number and the range is the host's, as with the rolls above.
+const MIN_EXPERIENCE_SCALE: float = 0.1
+const MAX_EXPERIENCE_SCALE: float = 10.0
 
 ## The most DV words the host will draw for one wild, whatever a provider asks
 ## for. A roll is cheap, but the count is a mod's number and the ceiling is the
@@ -250,6 +256,8 @@ var _repel_renewals: Dictionary = {}
 var _catch_experience: Dictionary = {}
 var _battle_info: Dictionary = {}
 var _shiny_rolls: Dictionary = {}
+var _run_buttons: Dictionary = {}
+var _experience_scales: Dictionary = {}
 var _battle_renderers: Dictionary = {}
 ## The one id the player's view is chosen by, read from [Gen2ModState] when the
 ## host is built and written back whenever it changes. It is a bare id and may
@@ -686,7 +694,6 @@ func visible_encounter_ids() -> Array:
 	return _visible_encounters.keys()
 
 
-## Every registered provider, in registration order.
 func visible_encounter_providers() -> Array:
 	return _visible_encounters.values()
 
@@ -806,6 +813,55 @@ static func awards_catch_experience() -> bool:
 		if bool(provider.call("awards_catch_experience")):
 			return true
 	return false
+
+
+## Registers a RUN BUTTON policy under [param id]: `runs_while_held()` is the
+## mod's switch and nothing else. Not save bound; see `docs/MODS.md`.
+func register_run_button(id: StringName, provider: Object) -> Dictionary:
+	return _register_provider(_run_buttons, RUN_BUTTON_METHODS, id, provider)
+
+
+func run_button_ids() -> Array:
+	return _run_buttons.keys()
+
+
+## A provider says so and B is down. Static and null-safe for the same reason
+## [method allows_item_field_move] is.
+static func run_button_held() -> bool:
+	if _instance == null or not Gen2Button.held(Gen2Button.B):
+		return false
+	for provider: Object in _instance._run_buttons.values():
+		if bool(provider.call("runs_while_held")):
+			return true
+	return false
+
+
+## Registers an EXPERIENCE SCALE policy for [param manifest]'s own run, save
+## bound for the reason [method register_catch_experience] is.
+func register_experience_scale(manifest: Gen2ModManifest, provider: Object) -> Dictionary:
+	if not _owns_manifest(manifest):
+		return {"ok": false, "reason": &"unknown_mod_save_owner"}
+	return _register_provider(
+		_experience_scales, EXPERIENCE_SCALE_METHODS, manifest.id, provider
+	)
+
+
+func experience_scale_ids() -> Array:
+	return _experience_scales.keys()
+
+
+## Every scale MULTIPLIED together, which is the join a scale has, and clamped. A
+## negative, a NAN or an infinity is not a number and is dropped.
+static func experience_scale() -> float:
+	if _instance == null:
+		return 1.0
+	var scale: float = 1.0
+	for provider: Object in _instance._experience_scales.values():
+		var answered: float = float(provider.call("experience_scale"))
+		if not is_finite(answered) or answered < 0.0:
+			continue
+		scale *= answered
+	return clampf(scale, MIN_EXPERIENCE_SCALE, MAX_EXPERIENCE_SCALE)
 
 
 ## Registers a BATTLE INFORMATION provider under [param id]: read-only annotations
@@ -1146,7 +1202,6 @@ func register_page(id: StringName, entry: Dictionary) -> Dictionary:
 	return {"ok": true, "id": id}
 
 
-## The ids with a page, in registration order.
 func page_ids() -> Array:
 	return _pages.keys()
 

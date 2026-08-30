@@ -153,7 +153,6 @@ func last_music_request() -> Dictionary:
 	return _last_music.duplicate()
 
 
-## Whether a song is running in the driver right now.
 func music_playing() -> bool:
 	return _audio != null and bool(_audio.audio_status().get("music_active", false))
 

@@ -44,6 +44,9 @@ var _read_once: Dictionary = {}
 ## count either way.
 var _reading_quietly: bool = false
 var _check_updates_button: Gen2LauncherButton = null
+## Update all is a queue: the page's one request is serialised behind `_busy`.
+var _update_queue: Array = []
+var _updated: int = 0
 var _install_button: Gen2LauncherButton = null
 ## Its own request, because the page's other one is serialised behind `_busy`
 ## and an icon must never make a player wait for a download or a feed.
@@ -105,9 +108,9 @@ func _build() -> void:
 	_check_updates_button = Gen2LauncherButton.icon_only(
 		_theme, &"refresh_square", Gen2LauncherButton.Variant.NEUTRAL, 42.0
 	)
-	_check_updates_button.tooltip_text = "Check all followed sources for mod updates"
-	_check_updates_button.pressed.connect(check_for_updates)
+	_check_updates_button.pressed.connect(_on_update_button)
 	actions.add_child(_check_updates_button)
+	_sync_update_button()
 	_install_button = Gen2LauncherButton.create(
 		_theme, "Install", Gen2LauncherButton.Variant.PRIMARY, &"plus"
 	)
@@ -165,7 +168,9 @@ func _may_fetch_unprompted() -> bool:
 ## project's own index, and without this it would list nothing until the player
 ## thought to press Check for updates.
 func _read_unread_sources() -> void:
-	if _busy or not _check_queue.is_empty() or not _may_fetch_unprompted():
+	if _busy or not _check_queue.is_empty() or not _update_queue.is_empty():
+		return
+	if not _may_fetch_unprompted():
 		return
 	for source: Dictionary in Gen2ModIndex.followed():
 		var feed: String = String(source["feed"])
@@ -175,7 +180,7 @@ func _read_unread_sources() -> void:
 	if _check_queue.is_empty():
 		return
 	_reading_quietly = true
-	_check_updates_button.set_disabled_state(true)
+	_sync_update_button()
 	_check_next_source()
 
 
@@ -189,6 +194,7 @@ func _relist() -> void:
 	)
 	var failures: Array = host.failures()
 	_note.text = "Loaded from %s" % Gen2ModHost.ROOT
+	_sync_update_button()
 
 	if groups.is_empty() and failures.is_empty():
 		_list.add_child(_empty_state())
@@ -425,25 +431,22 @@ func fetch_feed(feed: String) -> void:
 	_fetch_feed(feed)
 
 
-## Reads every followed source one at a time. This only updates cached index
-## metadata: an archive is downloaded exclusively by the separate download
-## button on a mod row after an update is shown.
+## Reads every followed source one at a time, and downloads nothing.
 func check_for_updates() -> void:
-	if _busy or not _check_queue.is_empty():
+	if _busy or not _check_queue.is_empty() or not _update_queue.is_empty():
 		return
 	# Never empty: every build follows this project's own index.
 	for source: Dictionary in Gen2ModIndex.followed():
 		_read_once[String(source["feed"])] = true
 		_check_queue.append(String(source["feed"]))
 	_reading_quietly = false
-	_check_updates_button.set_disabled_state(true)
+	_sync_update_button()
 	_status("Checking mod sources for updates...", _theme.muted)
 	_check_next_source()
 
 
 func _check_next_source() -> void:
 	if _check_queue.is_empty():
-		_check_updates_button.set_disabled_state(false)
 		var quietly: bool = _reading_quietly
 		_reading_quietly = false
 		refresh()
@@ -462,14 +465,73 @@ func _check_next_source() -> void:
 
 
 func available_update_count() -> int:
-	var count: int = 0
+	return update_rows().size()
+
+
+## Every installed mod a source offers a newer version of, and nothing else.
+func update_rows() -> Array:
+	var out: Array = []
 	for group: Dictionary in Gen2ModCatalogue.groups(
 		Gen2ModHost.instance().manifests(), Gen2ModIndex.followed(), _listings
 	):
 		for row: Dictionary in group["rows"] as Array:
-			if StringName(row.get("update", &"")) == Gen2ModIndex.UPDATE_AVAILABLE:
-				count += 1
-	return count
+			if Gen2ModCatalogue.action_for(row) == &"update":
+				out.append(row)
+	return out
+
+
+## The header's one button is two actions: read the sources, or take the updates.
+func _on_update_button() -> void:
+	if available_update_count() > 0:
+		download_all()
+		return
+	check_for_updates()
+
+
+func download_all() -> void:
+	if _busy or not _check_queue.is_empty() or not _update_queue.is_empty():
+		return
+	_update_queue = update_rows()
+	if _update_queue.is_empty():
+		return
+	_updated = 0
+	_sync_update_button()
+	_download_next_update()
+
+
+func _download_next_update() -> void:
+	if _update_queue.is_empty():
+		var count: int = _updated
+		_updated = 0
+		_sync_update_button()
+		_status(
+			"Updated %d mod%s." % [count, "" if count == 1 else "s"] if count > 0
+				else "No mod update could be installed.",
+			_theme.accent if count > 0 else _theme.error,
+		)
+		return
+	download(_update_queue.pop_front() as Dictionary, func(ok: bool) -> void:
+		if ok:
+			_updated += 1
+		_download_next_update()
+	)
+
+
+## Which action the button offers, called wherever a queue or a listing moves.
+func _sync_update_button() -> void:
+	if _check_updates_button == null:
+		return
+	var updates: int = available_update_count()
+	var draining: bool = not _update_queue.is_empty()
+	_check_updates_button.set_disabled_state(
+		_busy or draining or not _check_queue.is_empty()
+	)
+	_check_updates_button.variant = Gen2LauncherButton.Variant.PRIMARY if updates > 0 \
+		else Gen2LauncherButton.Variant.NEUTRAL
+	_check_updates_button.set_glyph(&"download" if updates > 0 else &"refresh_square")
+	_check_updates_button.tooltip_text = "Download and install %d mod update%s" % [
+		updates, "" if updates == 1 else "s",
+	] if updates > 0 else "Check all followed sources for mod updates"
 
 
 func _fetch_feed(feed: String, finished: Callable = Callable()) -> void:
@@ -529,25 +591,37 @@ func _installed_versions() -> Dictionary:
 
 
 ## Downloads and installs one listed row, which is the same press for a mod that
-## is absent, out of date, or being reinstalled.
-func download(row: Dictionary) -> void:
+## is absent, out of date, or reinstalled. [param finished] takes whether it landed.
+func download(row: Dictionary, finished: Callable = Callable()) -> void:
 	if not Gen2ModIndex.is_downloadable(String(row.get("download", ""))):
 		_status("%s has no download in its source." % row.get("name", "That mod"), _theme.error)
+		_settled(finished, false)
 		return
 	_pending = row.duplicate(true)
 	_status("Downloading %s..." % row["name"], _theme.muted)
-	_request(String(row["download"]), func(
+	var started: bool = _request(String(row["download"]), func(
 		result: int, code: int, _headers: PackedStringArray, body: PackedByteArray
 	) -> void:
 		var pending: Dictionary = _pending
 		_pending = {}
 		if pending.is_empty():
+			_settled(finished, false)
 			return
 		if result != HTTPRequest.RESULT_SUCCESS or code != 200:
 			_status("%s could not be downloaded (HTTP %d)." % [pending["name"], code], _theme.error)
+			_settled(finished, false)
 			return
-		install_entry_bytes(pending, body)
+		_settled(finished, bool(install_entry_bytes(pending, body).get("ok", false)))
 	)
+	if not started:
+		_pending = {}
+		_settled(finished, false)
+
+
+## Deferred rather than nested: a batch of ten is otherwise ten frames of stack.
+func _settled(finished: Callable, ok: bool) -> void:
+	if finished.is_valid():
+		finished.call_deferred(ok)
 
 
 ## Installs a downloaded archive for [param row]. Separate from the request

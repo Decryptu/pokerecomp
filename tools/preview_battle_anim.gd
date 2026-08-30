@@ -7,7 +7,7 @@ extends SceneTree
 ## documented below.
 ##
 ##   Godot --path . -s res://tools/preview_battle_anim.gd -- \
-##       <game> <output.png> <move> <side> <frames> [scene_off]
+##       <game> <output.png> <move> <side> <frames> [scene_off] [matchup=<enemy>,<player>]
 
 const WINDOW_SIZE := Vector2i(1152, 648)
 ## Enough frames for the scene to lay out before anything is driven, and enough
@@ -25,6 +25,10 @@ const PRESS_AFTER: int = 40
 ## number, so it cannot collide with one.
 const CATCH_MOVE: int = -1
 
+## `matchup=` is what a picture reported against one pair is shot as.
+const DEFAULT_MATCHUP: Vector2i = Vector2i(16, 155)
+const MATCHUP_LEVEL: int = 20
+
 var _screen: Gen2BattleScreen = null
 var _output_path: String = ""
 var _move: int = 1
@@ -40,6 +44,7 @@ var _scene_off: bool = false
 var _with_intro: bool = false
 var _miss: bool = false
 var _frames: int = 0
+var _matchup: Vector2i = DEFAULT_MATCHUP
 
 
 func _initialize() -> void:
@@ -64,6 +69,14 @@ func _initialize() -> void:
 	else:
 		_frames_in = int(args[4])
 	for flag: String in args.slice(5):
+		if flag.begins_with("matchup="):
+			var pair: PackedStringArray = flag.trim_prefix("matchup=").split(",", false)
+			if pair.size() != 2:
+				push_error("matchup= wants <enemy>,<player>")
+				quit(1)
+				return
+			_matchup = Vector2i(int(pair[0]), int(pair[1]))
+			continue
 		match flag:
 			"scene_off":
 				_scene_off = true
@@ -225,7 +238,7 @@ func _drive_entrance() -> bool:
 	if _side_is_enemy:
 		_screen.show_trainer(1, 0)
 	else:
-		_screen.show_matchup(16, 155, 20, 20)
+		_show_matchup()
 	if _range_lo >= 0:
 		# `InitBattleDisplay` and `BattleIntroSlidingPics` are frames of the
 		# opening like any other; a diff against the cartridge trace wants them
@@ -243,6 +256,10 @@ func _drive_entrance() -> bool:
 			continue
 		_screen.advance_frame()
 	return true
+
+
+func _show_matchup() -> void:
+	_screen.show_matchup(_matchup.x, _matchup.y, MATCHUP_LEVEL, MATCHUP_LEVEL)
 
 
 ## Everything `DoBattle` spends before its first menu, so a turn driven after
@@ -265,7 +282,7 @@ func _settle_entrance() -> void:
 ## Pokemon is caught or gets out, since only `anim_checkpokeball` tells the two
 ## endings apart.
 func _drive_capture() -> bool:
-	_screen.show_matchup(16, 155, 20, 20)
+	_show_matchup()
 	while _screen.intro_running():
 		_screen.advance_frame()
 	_settle_entrance()
@@ -322,7 +339,7 @@ func _drive() -> bool:
 		return _drive_entrance()
 	if _move == CATCH_MOVE:
 		return _drive_capture()
-	_screen.show_matchup(16, 155, 20, 20)
+	_show_matchup()
 	while _screen.intro_running():
 		_screen.advance_frame()
 	_settle_entrance()

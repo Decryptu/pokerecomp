@@ -73,7 +73,6 @@ func text() -> String:
 	return _text
 
 
-## What the machine is asking the player for, if anything.
 func prompt() -> int:
 	return _machine.prompt() if _machine != null else Gen2SlotMachine.Prompt.NONE
 

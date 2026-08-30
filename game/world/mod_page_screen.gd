@@ -110,7 +110,6 @@ func _scroll_by(delta: int) -> bool:
 	return true
 
 
-## The rows on screen now, which is what a test or a screenshot reads back.
 func visible_rows() -> Array:
 	return _rows.slice(_scroll, _scroll + VISIBLE_ROWS)
 

@@ -232,7 +232,6 @@ func display_native(node: Node) -> void:
 	_native.add_child(node)
 
 
-## The native layer's rectangle in window pixels.
 func native_size() -> Vector2i:
 	return Vector2i((Vector2(_view_size) * _draw_scale).round())
 
@@ -548,7 +547,6 @@ func play_view_cover(rebuild: Callable) -> void:
 	set_process(true)
 
 
-## Whether a view switch is still being covered.
 func view_cover_active() -> bool:
 	return _cover != null and _cover.visible
 

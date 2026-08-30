@@ -2257,14 +2257,24 @@ func _award_share(
 	var block: Dictionary = Gen2Experience.shared_block(
 		defeated.base_stat_exp_shape(), defeated.base_exp(), halved, recipients.size()
 	)
-	var award: int = Gen2Experience.award_for(
+	var award: int = _scaled_award(Gen2Experience.award_for(
 		defeated.level, int(block["base_exp"]), is_trainer_battle
-	)
+	))
 	var stat_gains: Dictionary = block["stats"]
 	for index: int in recipients:
 		var learner: Gen2BattleMon = party(PLAYER).at(int(index))
 		if learner != null and not learner.is_fainted():
 			_give_experience_to(learner, int(index), award, stat_gains, by_exp_share, events)
+
+
+## The one place a registered experience scale is applied, so everything a player
+## means by 2x is downstream. It truncates the way `Gen2Experience` does, with a
+## non-zero award floored at 1 or a 0.5x run would never level at all.
+func _scaled_award(award: int) -> int:
+	var scale: float = Gen2ModHost.experience_scale()
+	if is_equal_approx(scale, 1.0) or award <= 0:
+		return award
+	return clampi(maxi(int(float(award) * scale), 1), 0, Gen2Experience.MAX_EXP)
 
 
 ## What a won battle owes when nothing simulated the turns that won it: every

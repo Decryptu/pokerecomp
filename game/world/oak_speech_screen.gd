@@ -135,7 +135,6 @@ func advance_frames(count: int) -> void:
 			_finish_queue()
 
 
-## Which beat is showing, zero-based, for a driver that wants to step to one.
 func beat_index() -> int:
 	return _index
 

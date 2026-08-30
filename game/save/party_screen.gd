@@ -677,7 +677,6 @@ func _close_submenu() -> void:
 	_refresh()
 
 
-## Test and host seam: the submenu as the screen currently shows it.
 func submenu_snapshot() -> Dictionary:
 	return {
 		"open": _submenu_open,

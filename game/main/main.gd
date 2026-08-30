@@ -22,6 +22,7 @@ var _title_backdrop: Gen2LauncherTitleBackdrop = null
 
 var _file_dialog: Gen2LauncherFilePicker = null
 var _mod_dialog: Gen2LauncherFilePicker = null
+var _art_dialog: Gen2LauncherFilePicker = null
 var _preview_browse_dir: String = ""
 var _update_http: HTTPRequest = null
 
@@ -30,6 +31,8 @@ var _selected_game_id: StringName = &""
 ## The game a re-import is replacing, so a cache is only overwritten by a dump
 ## of the cartridge it already holds.
 var _reimport_game_id: StringName = &""
+## The cartridge whose picture the open art dialog will replace.
+var _art_game_id: StringName = &""
 var _status: Dictionary = {"kind": &"info", "title": "", "detail": ""}
 
 
@@ -100,6 +103,12 @@ func _build_dialogs() -> void:
 
 	_mod_dialog = _picker("Choose a mod .zip", PackedStringArray(["*.zip; Mod archive"]))
 	_mod_dialog.file_selected.connect(func(path: String) -> void: import_mod_path(path))
+
+	_art_dialog = _picker(
+		"Choose cartridge art",
+		PackedStringArray(["*.png, *.webp, *.jpg, *.jpeg; Image"]),
+	)
+	_art_dialog.file_selected.connect(func(path: String) -> void: adopt_cartridge_art(path))
 
 	# Created once and reused. The check only ever runs from the button.
 	_update_http = HTTPRequest.new()
@@ -343,6 +352,26 @@ func _open_manage_sheet(game_id: StringName) -> void:
 		)
 		body.add_child(delete)
 
+	var art: Gen2LauncherButton = Gen2LauncherButton.create(
+		_palette, "Use your own art", Gen2LauncherButton.Variant.NEUTRAL, &"folder"
+	)
+	art.tooltip_text = "Replace this cartridge's picture with an image of your own"
+	art.pressed.connect(func() -> void:
+		_art_game_id = game_id
+		sheet.close()
+		_art_dialog.show_picker(Vector2i(920, 620))
+	)
+	body.add_child(art)
+	if Gen2CartridgeArt.has_custom_art(game_id):
+		var default_art: Gen2LauncherButton = Gen2LauncherButton.create(
+			_palette, "Use the default art", Gen2LauncherButton.Variant.NEUTRAL, &"refresh"
+		)
+		default_art.pressed.connect(func() -> void:
+			sheet.close()
+			revert_cartridge_art(game_id)
+		)
+		body.add_child(default_art)
+
 	var reimport: Gen2LauncherButton = Gen2LauncherButton.create(
 		_palette,
 		"Re-import" if state != RomCache.STATE_MISSING else "Import",
@@ -374,6 +403,45 @@ static func cache_state_text(state: StringName) -> String:
 		RomCache.STATE_INCOMPLETE:
 			return "The last import did not finish. Import the cartridge again."
 	return "No cache exists for this cartridge yet."
+
+
+## Public and separate from the dialog for the reason
+## [method Gen2ModsPage.install_entry_bytes] is: a test needs no OS file dialog.
+func adopt_cartridge_art(path: String) -> Dictionary:
+	var game_id: StringName = _art_game_id
+	_art_game_id = &""
+	var taken: Dictionary = Gen2CartridgeArt.adopt(game_id, path)
+	if not bool(taken.get("ok", false)):
+		_set_status(
+			&"error",
+			"That art was not used.",
+			Gen2CartridgeArt.refusal_text(StringName(taken.get("reason", &""))),
+		)
+		return taken
+	_refresh_cartridge_art(game_id)
+	_set_status(
+		&"success",
+		"%s is wearing your own art." % RomRegistry.title_for(game_id),
+		"Cartridge options has a way back to the default.",
+	)
+	return taken
+
+
+func revert_cartridge_art(game_id: StringName) -> void:
+	if not Gen2CartridgeArt.revert(game_id):
+		return
+	_refresh_cartridge_art(game_id)
+	_set_status(
+		&"info",
+		"%s is wearing its own art again." % RomRegistry.title_for(game_id),
+		"The picture you chose was removed.",
+	)
+
+
+func _refresh_cartridge_art(game_id: StringName) -> void:
+	var seated: Gen2Cartridge = _shelf.cartridge(game_id)
+	if seated != null:
+		seated.refresh_art()
 
 
 func _open_cache_folder(game_id: StringName) -> void:
