@@ -901,6 +901,14 @@ func player_step_offset_cells() -> Vector2:
 	)
 
 
+## How far into its own run the step in flight is. The one place the fraction is
+## spent, so a span and an offset taken apart cannot disagree by half a pass.
+static func step_progress(remaining: int, total: int, fraction: float = 0.0) -> float:
+	if remaining <= 0 or total <= 0:
+		return 0.0
+	return 1.0 - maxf(float(remaining) - fraction, 0.0) / float(total)
+
+
 ## The cells a step in flight is still behind its landing cell, for the player
 ## and for every object: two answers computed apart slide the map under them.
 static func step_behind_cells(
@@ -931,8 +939,9 @@ func player_step_span() -> Dictionary:
 	return {
 		"from": landing - _player_step_direction,
 		"to": landing,
-		"progress": 1.0 - float(_player_step_passes_remaining) \
-			/ float(_player_step_passes_total),
+		"progress": step_progress(
+			_player_step_passes_remaining, _player_step_passes_total, pass_fraction
+		),
 		"kind": _player_step_kind,
 	}
 

@@ -221,6 +221,58 @@ func test_an_actors_entry_is_resolved_to_the_sprite_the_map_objects_use() -> voi
 	RomCache.clear(ActorFixture.directory())
 
 
+## SMOOTH SCROLL reaches an actor. Its pose is read again on the drawn frame, not
+## once a hardware frame: an actor standing on the player's own offset answers
+## differently at every fraction, and one held for the whole hardware frame stands
+## still for a frame and jumps a whole pixel on the next beside a sliding player.
+func test_an_actor_pose_is_taken_again_on_a_drawn_frame() -> void:
+	var world: Gen2WorldAPI = _actor_world()
+	var actor := TestActor.new()
+	actor.out = [{"icon": 1, "position_cells": Vector2(0, 0)}]
+	var actors := Gen2WorldActors.new()
+	actors.set_actors([actor])
+	actors.set_world(world)
+	var reads: int = actor.reads
+
+	actor.out = [{"icon": 1, "position_cells": Vector2(0, 0.5)}]
+	assert_true(actors.refresh_pose(), "the pose moved without a hardware frame")
+	assert_eq(actors.sprites()[0]["position_cells"], Vector2(0, 0.5))
+	assert_gt(actor.reads, reads, "and the mod was asked again")
+	assert_eq(actor.frames, 0, "no hardware frame was spent for it")
+	assert_false(actors.refresh_pose(), "a pose that has not moved is not a redraw")
+	RomCache.clear(ActorFixture.directory())
+
+
+## The two cells a pose runs between, for a view whose plan is not a plain grid:
+## a fractional `position_cells` cuts across a fold and a span does not. A span
+## that is not one is dropped rather than drawn at a cell nothing asked for.
+func test_an_actor_entry_carries_a_span_and_a_broken_one_is_dropped() -> void:
+	var world: Gen2WorldAPI = _actor_world()
+	var actor := TestActor.new()
+	actor.out = [{
+		"icon": 1, "position_cells": Vector2(4, 4.5),
+		"span": {"from": Vector2i(4, 5), "to": Vector2i(4, 4), "progress": 0.5},
+	}]
+	var actors := Gen2WorldActors.new()
+	actors.set_actors([actor])
+	actors.set_world(world)
+	var span: Dictionary = actors.sprites()[0]["span"]
+	assert_eq(span["from"], Vector2i(4, 5))
+	assert_eq(span["to"], Vector2i(4, 4))
+	assert_almost_eq(float(span["progress"]), 0.5, 0.0001)
+	assert_eq(StringName(span["kind"]), &"step", "a span that names no kind is a step")
+
+	for broken: Variant in [
+		null, "span", {"to": Vector2i(4, 4)}, {"from": Vector2i(4, 5)},
+	]:
+		actor.out = [{"icon": 1, "position_cells": Vector2(4, 4), "span": broken}]
+		actors.refresh_pose()
+		assert_true(
+			(actors.sprites()[0]["span"] as Dictionary).is_empty(), str(broken)
+		)
+	RomCache.clear(ActorFixture.directory())
+
+
 ## `.Frameset_PartyMon`: two sets of eight, nine passes each.
 func test_an_icon_actor_steps_the_strips_two_frames_at_the_framesets_rate() -> void:
 	var world: Gen2WorldAPI = _actor_world()

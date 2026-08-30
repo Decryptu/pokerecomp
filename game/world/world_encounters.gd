@@ -154,6 +154,7 @@ func actor_entries() -> Array:
 	var out: Array = []
 	if _world == null or _world.data == null:
 		return out
+	_refresh_step_spans()
 	for entry: Dictionary in _entries:
 		var icon: int = _world.data.mon_menu_icon(int(entry["species"]))
 		if icon <= 0:
@@ -162,6 +163,8 @@ func actor_entries() -> Array:
 			"icon": icon,
 			"facing": int(entry["facing"]),
 			"position_cells": Vector2(entry["cell"]) + step_offset(entry),
+			# The same walk as two cells. See [method Gen2WorldActors.sprites].
+			"span": entry.get("step_span", {}),
 			# `GetMonNormalOrShinyPalettePointer`: the species' own four colours,
 			# which is what makes a shiny one visible before the battle starts,
 			# walked toward an entry's own light when it asked for one.
@@ -422,13 +425,27 @@ func _step_entry(entry: Dictionary, raw: Dictionary) -> void:
 		entry["facing"] = _world.facing_for_direction(direction)
 	if not _steps.has(id):
 		return
-	var step: Dictionary = _steps[id]
-	entry["step_span"] = {
+	entry["step_span"] = _span_for(_steps[id])
+
+
+## Built where it is read: a span held from the pass jumps beside a sliding player.
+func _span_for(step: Dictionary) -> Dictionary:
+	return {
 		"from": step["from"],
 		"to": step["to"],
-		"progress": 1.0 - float(step["remaining"]) / float(STEP_PASSES),
+		"progress": Gen2WorldAPI.step_progress(
+			int(step["remaining"]), STEP_PASSES,
+			_world.pass_fraction if _world != null else 0.0
+		),
 		"kind": &"step",
 	}
+
+
+func _refresh_step_spans() -> void:
+	for entry: Dictionary in _entries:
+		var step: Variant = _steps.get(StringName(entry["id"]), null)
+		if step is Dictionary:
+			entry["step_span"] = _span_for(step as Dictionary)
 
 
 ## The target has to be eligible for the SAME method: an entry keeps its

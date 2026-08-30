@@ -302,7 +302,6 @@ func finished() -> bool:
 	return (_index & (1 << SLOTS_END_LOOP_F)) != 0
 
 
-## What the host is being asked for this frame, and by which box.
 func prompt() -> int:
 	return _prompt
 

@@ -25,6 +25,7 @@ func after_each() -> void:
 		_world_screen.free()
 		_world_screen = null
 	RomCache.clear(Fixture.directory())
+	Gen2ModHost.reset()
 
 
 ## `_ContText`'s two `TextScroll` steps, which the box spends on its own frames.
@@ -367,6 +368,63 @@ func test_a_walk_step_is_drawn_a_pixel_a_frame_and_two_a_pass() -> void:
 	assert_gt(
 		_drawn_positions(smooth), _drawn_positions(hardware),
 		"a picture a frame rather than one a pass"
+	)
+
+
+## An actor standing on the fraction, which is what a follower reading the
+## player's own offset is.
+const SLIDING_ACTOR_SOURCE: String = """extends RefCounted
+
+var world = null
+
+func set_world(value) -> void:
+	world = value
+
+func advance_frame() -> void:
+	pass
+
+func sprites() -> Array:
+	var at: float = 3.0 + (0.0 if world == null else world.pass_fraction)
+	return [{"icon": 1, "position_cells": Vector2(at, 4)}]
+"""
+
+
+## SMOOTH SCROLL reaches a mod actor. Its pose used to be taken once a hardware
+## frame, so a follower stood still for a drawn frame and moved a whole hardware
+## pixel on the next while the player beside it slid a sixth of one.
+func test_a_mod_actors_pose_moves_on_every_drawn_frame() -> void:
+	var script := GDScript.new()
+	script.source_code = SLIDING_ACTOR_SOURCE
+	script.reload()
+	assert_true(
+		Gen2ModHost.instance().register_world_actor(&"slider", script.new())["ok"]
+	)
+	var options: Gen2Options = Gen2OptionsStore.current()
+	var chosen: bool = options.smooth_scroll
+	options.smooth_scroll = true
+	_world_screen = await _open_world()
+	_settle_on_a_pass()
+	_world_screen._world.move_result(Vector2i.RIGHT)
+
+	## Half a hardware frame each, so most of these spend none at all: those are
+	## the drawn frames the pose used to be held through.
+	var drawn: Array[Vector2] = []
+	for _frame: int in 8:
+		_world_screen._process(FRAME * 0.5)
+		drawn.append(Vector2(
+			float(_world_screen._world.frame_number),
+			(_world_screen._actors.sprites()[0]["position_cells"] as Vector2).x
+		))
+	options.smooth_scroll = chosen
+
+	var moved_without_a_frame: int = 0
+	for index: int in range(1, drawn.size()):
+		if drawn[index].x == drawn[index - 1].x \
+			and not is_equal_approx(drawn[index].y, drawn[index - 1].y):
+			moved_without_a_frame += 1
+	assert_gt(
+		moved_without_a_frame, 0,
+		"the pose is read again on a drawn frame that spent no hardware one"
 	)
 
 

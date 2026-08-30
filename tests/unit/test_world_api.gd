@@ -7789,6 +7789,21 @@ func test_a_visible_encounter_walks_to_the_next_cell() -> void:
 		Vector2(from) + Vector2(direction) * 0.5
 	)
 
+	## SMOOTH SCROLL reaches the wild as well: the drawn frame stands part way
+	## into the pass, and the sprite is read there rather than where the pass
+	## left it. The row a view draws carries the same walk as a span.
+	world.pass_fraction = 0.5
+	var walked: float = Gen2WorldAPI.step_progress(
+		Gen2WorldEncounters.STEP_PASSES / 2, Gen2WorldEncounters.STEP_PASSES, 0.5
+	)
+	var drawn: Dictionary = driver.actor_entries()[0]
+	assert_almost_eq(
+		Vector2(drawn["position_cells"]),
+		Vector2(from) + Vector2(direction) * walked, Vector2(0.0001, 0.0001)
+	)
+	assert_almost_eq(float((drawn["span"] as Dictionary)["progress"]), walked, 0.0001)
+	world.pass_fraction = 0.0
+
 	## It lands on the target, and stays there while the provider keeps naming
 	## the cell it stepped off.
 	for _tick: int in Gen2WorldEncounters.STEP_PASSES / 2:

@@ -2184,31 +2184,36 @@ func test_every_used_line_carries_the_source_break() -> void:
 ## climb: the two say the same thing, so a renderer can move to the newer one
 ## without its drawing shifting. Moving `from` to `to` by `progress` is the
 ## offset's own answer, cell for cell.
+## Walked at three fractions, not at the pass boundary alone: SMOOTH SCROLL puts
+## the drawn frame part way into a pass, and a span that ignored it disagreed
+## with the offset by half a pass on every frame between two.
 func test_the_step_span_is_the_offset_taken_apart_step_by_step() -> void:
-	var world: Gen2WorldAPI = _waterfall_world()
-	assert_true(bool(world.waterfall_request().get("ok", false)))
-	var applied: Dictionary = world.complete_waterfall()
-	var seen: Array[Vector2i] = []
-	for _spent: int in int(applied["passes"]):
-		var span: Dictionary = world.player_step_span()
-		assert_false(span.is_empty())
-		assert_eq(span["kind"], &"turn_waterfall")
-		assert_eq((span["to"] as Vector2i) - (span["from"] as Vector2i), Vector2i.UP)
-		var walked: Vector2 = Vector2(span["from"] as Vector2i).lerp(
-			Vector2(span["to"] as Vector2i), float(span["progress"])
-		)
-		assert_almost_eq(
-			walked, Vector2(world.player_cell) + world.player_step_offset_cells(),
-			Vector2(0.001, 0.001)
-		)
-		if not seen.has(span["from"] as Vector2i):
-			seen.append(span["from"] as Vector2i)
-		world.advance_player_step_pass()
-	## One entry per step of the climb, in order, from the fall's foot up.
-	assert_eq(seen.size(), int(applied["steps"]))
-	assert_eq(seen[0], WATERFALL_STAND_CELL)
-	assert_eq(seen[seen.size() - 1] + Vector2i.UP, WATERFALL_LANDING_CELL)
-	assert_true(world.player_step_span().is_empty(), "empty once the run drains")
+	for fraction: float in [0.0, 0.5, 0.75]:
+		var world: Gen2WorldAPI = _waterfall_world()
+		world.pass_fraction = fraction
+		assert_true(bool(world.waterfall_request().get("ok", false)))
+		var applied: Dictionary = world.complete_waterfall()
+		var seen: Array[Vector2i] = []
+		for _spent: int in int(applied["passes"]):
+			var span: Dictionary = world.player_step_span()
+			assert_false(span.is_empty())
+			assert_eq(span["kind"], &"turn_waterfall")
+			assert_eq((span["to"] as Vector2i) - (span["from"] as Vector2i), Vector2i.UP)
+			var walked: Vector2 = Vector2(span["from"] as Vector2i).lerp(
+				Vector2(span["to"] as Vector2i), float(span["progress"])
+			)
+			assert_almost_eq(
+				walked, Vector2(world.player_cell) + world.player_step_offset_cells(),
+				Vector2(0.001, 0.001), str(fraction)
+			)
+			if not seen.has(span["from"] as Vector2i):
+				seen.append(span["from"] as Vector2i)
+			world.advance_player_step_pass()
+		## One entry per step of the climb, in order, from the fall's foot up.
+		assert_eq(seen.size(), int(applied["steps"]))
+		assert_eq(seen[0], WATERFALL_STAND_CELL)
+		assert_eq(seen[seen.size() - 1] + Vector2i.UP, WATERFALL_LANDING_CELL)
+		assert_true(world.player_step_span().is_empty(), "empty once the run drains")
 
 
 ## The same seam on an object, and the case the offset cannot answer: a stream
@@ -2227,3 +2232,15 @@ func test_an_object_step_span_survives_a_stream_that_turns() -> void:
 	var second: Dictionary = object.step_span()
 	assert_eq(second["from"], Vector2i(4, 5))
 	assert_eq(second["to"], Vector2i(4, 4))
+
+	## And an object's span takes the fraction its own offset takes, so a view
+	## reading either one of them is moved by SMOOTH SCROLL.
+	for fraction: float in [0.0, 0.5, 0.75]:
+		var span: Dictionary = object.step_span(fraction)
+		var walked: Vector2 = Vector2(span["from"] as Vector2i).lerp(
+			Vector2(span["to"] as Vector2i), float(span["progress"])
+		)
+		assert_almost_eq(
+			walked, Vector2(object.cell) + object.step_offset_cells(fraction),
+			Vector2(0.001, 0.001), str(fraction)
+		)

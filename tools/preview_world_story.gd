@@ -8260,7 +8260,6 @@ func _events_at_cells(world: Gen2WorldAPI, targets: Array) -> Dictionary:
 	return {"events": [], "cell": Vector2i(-1, -1)}
 
 
-## The failure a leg answers with when a step refuses.
 func _leg_failed(path: Array, label: String, result: Dictionary) -> Dictionary:
 	return {"ok": false, "path": path, "reason": "%s: %s" % [label, result.get("reason", "")]}
 

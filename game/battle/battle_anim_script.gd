@@ -213,7 +213,6 @@ func delay() -> int:
 	return _delay
 
 
-## Where the next byte will be read from, as the cartridge addresses it.
 func address() -> int:
 	return _address
 

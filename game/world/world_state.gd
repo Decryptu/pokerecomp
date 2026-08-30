@@ -750,7 +750,6 @@ func link_transport() -> Gen2LinkTransport:
 	return _link_transport
 
 
-## The live Mystery Gift section, edited in place the way the tower's record is.
 func mystery_gift() -> Dictionary:
 	return _mystery_gift
 

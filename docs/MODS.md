@@ -33,7 +33,7 @@ user://mods/<id>/
 | `id` | Lowercase `[a-z0-9][a-z0-9_-]*`. Addresses the directory and the registry keys |
 | `name` | Shown to the player |
 | `version` | The mod's own version. Strict `major.minor.patch` |
-| `api_version` | The oldest host this mod runs on, not a number to keep current: raise it when the mod starts using a newer seam. `Gen2ModManifest.API_VERSION` is 26 and a host accepts 1 to 26. [Contract versions](#contract-versions) says what each added |
+| `api_version` | The oldest host this mod runs on, not a number to keep current: raise it when the mod starts using a newer seam. `Gen2ModManifest.API_VERSION` is 27 and a host accepts 1 to 27. [Contract versions](#contract-versions) says what each added |
 | `entry` | A `.gd` path inside the mod directory, or inside the pack when there is one |
 | `pack` | Optional `.pck` or `.zip` beside `mod.json`, holding the mod's files |
 | `description` | Optional |
@@ -128,6 +128,7 @@ runs, since every version so far has only added.
 | 24 | `Gen2WorldAPI.player_step_span()` and `Gen2WorldObject.step_span()` |
 | 25 | `Gen2WorldAPI.party_with_player()` and `party_holder()`, and a visible encounter walking to the next cell |
 | 26 | A run button, and a scale on every experience award |
+| 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 
 ## Installing
 
@@ -1175,10 +1176,17 @@ Each entry of `sprites()` names cartridge art and nothing else:
 | `position_cells` | Where to draw it, in fractional walk cells |
 | `colors` | Optional. Four colours instead of the map's sprite palette. What a visible encounter wears, so a shiny one is shiny before the battle starts |
 | `emote` | Optional. `Gen2WorldActors.EMOTE_SHOCK` through `EMOTE_GRASS_RUSTLE`, drawn two rows above the sprite as `SpawnEmote` puts one over a map object. It is state, not an edge: up for as long as the entry keeps asking. An index outside the twelve is no emote |
+| `span` | Optional `{from, to, progress, kind}`, the shape `Gen2WorldObject.step_span()` answers: the two cells this pose runs between. A view whose plan is a grid reads `position_cells` and ignores it; one that folds plan into height puts both ends through its own geometry, which a fractional cell cannot do across a fold. A span missing an end is dropped rather than drawn |
 
 The host resolves the strip, the palette, the time of day and the icon's two-frame
 animation, so a mod never composes pixels. An entry naming art the cache does not
 carry is dropped.
+
+A pose is read once a DRAWN frame, not once a hardware one, so an actor standing
+on `player_step_offset_cells()` or on `pass_fraction` slides with SMOOTH SCROLL
+rather than jumping a whole hardware pixel every other frame. `advance_frame()` is
+still the hardware clock's and is where an actor's own state moves; `sprites()` is
+asked again afterwards, so it must stay a read.
 
 An actor's sprite is presentation. It occupies no cell, blocks nothing, nobody
 talks to it, no trainer sees it and it is in no snapshot. Actors are sorted into
@@ -1639,11 +1647,14 @@ answer carries `steps` and `passes`, and the surfer stays a surfer until the las
 step lands them ashore. A renderer that draws a fall as a vertical wall reads the
 offset as height.
 
-`Gen2WorldAPI.player_step_span()` and `Gen2WorldObject.step_span()` say which two
-cells the step in flight runs between: `{from, to, progress, kind}`, and `{}` while
+`Gen2WorldAPI.player_step_span()` and `Gen2WorldObject.step_span(fraction)` say
+which two cells the step in flight runs between: `{from, to, progress, kind}`, and `{}` while
 nothing steps. Moving `from` to `to` by `progress` is exactly what the offset
 above answers, so the two never disagree; the span is the one to read when the
-plan a renderer draws is not a plain grid. A view that folds a run of plan into
+plan a renderer draws is not a plain grid. `player_step_span()` spends the world's
+own `pass_fraction`, and an object's takes it as the same argument
+`step_offset_cells()` does, so SMOOTH SCROLL reaches whichever of the two a view
+reads. A view that folds a run of plan into
 height, or lifts or ramps it, puts `from` and `to` through its own geometry and
 moves between the two answers, which stays continuous where a fractional cell
 cannot: the fractional cell is one number and the fold is a step in it. The offset

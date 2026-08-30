@@ -3,8 +3,8 @@ extends RefCounted
 
 ## The sprites a mod puts in the world, driven and resolved by the host: a mod
 ## wanting a follower or a marker registers an actor rather than a whole renderer,
-## and the screen drives it with one `advance_frame` per world frame and one
-## `sprites()` read after it. PRESENTATION and nothing else: an actor's sprite
+## and the screen drives it with one `advance_frame` per world frame and a
+## `sprites()` read per DRAWN one. PRESENTATION and nothing else: an actor's sprite
 ## occupies no cell, blocks nothing, is talked to by nobody, is seen by no trainer
 ## and is in no snapshot, which is why it is a layer of its own rather than a map
 ## object. A mod names cartridge art and never composes pixels, the strip, palette
@@ -94,6 +94,14 @@ func advance_frame() -> bool:
 	_frame += 1
 	for actor: Object in _actors:
 		actor.call("advance_frame")
+	return refresh_pose()
+
+
+## The pose again at the fraction the drawn frame stands at: [method
+## advance_frame] is the hardware clock's and this is the panel's.
+func refresh_pose() -> bool:
+	if not has_actors():
+		return false
 	var before: Array = _sprites
 	_collect()
 	return _changed(before, _sprites)
@@ -119,9 +127,8 @@ func interact(cell: Vector2i, facing: int) -> bool:
 
 
 ## An actor's one-shot outbox, drained once a world frame and emptied by the
-## drain. A pose belongs in [method sprites], which is a read asked once a frame
-## however many times the screen redraws; an edge belongs here, asked for once
-## and spent once.
+## drain. A pose belongs in [method sprites], which is a read; an edge belongs
+## here, asked for once and spent once.
 ##
 ## Every entry is validated against [constant REQUEST_KINDS] here, so the screen
 ## is handed requests it can spend rather than whatever a mod wrote.
@@ -156,7 +163,7 @@ func _resolve_request(entry: Variant) -> Dictionary:
 	return {}
 
 
-## { sprite, facing, frame, position_cells, colors, emote }, sorted by the row
+## { sprite, facing, frame, position_cells, span, colors, emote }, sorted by the row
 ## stood on and then by registration order, the way the map's own objects are.
 ## `colors` is empty for everything but a visible encounter, and `emote` is
 ## [constant EMOTE_NONE] unless the entry asked for one.
@@ -214,10 +221,28 @@ func _resolve(entry: Variant, order: int) -> Dictionary:
 		# only way a shiny one is a shiny one before the battle starts. A view
 		# that does not read this draws the ordinary palette and is not wrong.
 		"colors": row.get("colors", PackedColorArray()),
+		# `step_span`'s own shape, or empty: a fractional cell cuts across a fold.
+		"span": _resolved_span(row),
 		# `SpawnEmote`'s bubble, two rows above the sprite. State rather than an
 		# edge: it is up for as long as the entry keeps asking, so the mod owns
 		# the duration and the host owns the pixels.
 		"emote": _resolve_emote(row),
+	}
+
+
+## A span missing an end is no span rather than a wrong one.
+static func _resolved_span(row: Dictionary) -> Dictionary:
+	var span: Variant = row.get("span", null)
+	if span is not Dictionary:
+		return {}
+	var entry: Dictionary = span
+	if not entry.has("from") or not entry.has("to"):
+		return {}
+	return {
+		"from": Vector2i(entry["from"]),
+		"to": Vector2i(entry["to"]),
+		"progress": clampf(float(entry.get("progress", 0.0)), 0.0, 1.0),
+		"kind": StringName(entry.get("kind", &"step")),
 	}
 
 
@@ -257,6 +282,7 @@ func _changed(before: Array, after: Array) -> bool:
 		var was: Dictionary = before[index]
 		var now: Dictionary = after[index]
 		if was["position_cells"] != now["position_cells"] \
+			or was["span"] != now["span"] \
 			or int(was["facing"]) != int(now["facing"]) \
 			or int(was["frame"]) != int(now["frame"]) \
 			or int(was["emote"]) != int(now["emote"]) \
