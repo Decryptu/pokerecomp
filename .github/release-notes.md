@@ -5,21 +5,15 @@ break put in by hand only makes it ragged. -->
 
 ## New in this release
 
-Mostly about how walking looks and feels, plus three screens the port had left plain.
+One reported bug, one thing the mods page was missing, and two ways to make the game your own.
 
-**The map scrolls smoothly.** The camera used to move a whole Game Boy pixel at a time, sixty times a second, which on a modern panel is twelve screen pixels a jump and reads as a row of stills rather than motion. With SMOOTH SCROLL on, the picture now sits on a screen pixel instead: over 900 frames of walking through New Bark Town on a 120 Hz display, 457 of them used to move nothing at all, and now 15 do. The picture itself is unchanged, pixel for pixel; only where it sits between two of them is new.
+**Your own Pokemon no longer has a duplicate beside it.** A battle slides your trainer picture off its square before your first Pokemon is sent out, and pressing A through "Wild LEDYBA appeared!" ran the battle on in the middle of that slide: the new picture was put back and the rest of the slide walked it two columns left, leaving a strip of it at the edge of the screen for the rest of the fight. That is where the doubled sprite came from, and why it was a different width every time. Nothing in the game reads a button during a slide any more, which is what the cartridge does.
 
-**Walking no longer stutters at every cell.** A held direction dropped one drawn frame and doubled the next, once per step, at every frame rate. That is gone: 240 frames of the same walk now run 151 frames in a row of steady motion and stop only at the map edge. A frame the system swallows also costs the frame it swallowed and nothing else, where before one dropped frame a second was enough to unsettle the pacing for the next twelve.
+**Update all.** The mods page had one button for checking your sources for updates. It is now that button until something is out of date, and a download button after, saying how many. One press downloads and installs every update in turn.
 
-**The shop opens on the map.** The cartridge prints the clerk's welcome and opens BUY/SELL/QUIT over it with the town still behind both, and the port drew the buy list under all of it and spent a button press on the welcome. The press is gone and the counter looks right.
+**Put your own art on a cartridge.** The three dots above the shelf now take a picture of your own for the cartridge you are looking at, and give the shipped one back whenever you want it. Any PNG, WebP or JPEG; it is scaled to fit the cartridge whatever shape it is, and kept beside your saves, so an update never asks for it again.
 
-**Saving says what it is doing, everywhere.** CHANGE BOX used to switch boxes silently, MOVE PKMN W/O MAIL opened its listing with nothing in front of it, and the cable club and Battle Tower wrote their saves with a blank screen. All three now ask first and show the save, as the START menu already did. The Hall of Fame draws SAVING RECORD before an induction.
-
-**Waterfalls, whirlpools and the Ruins of Alph.** A waterfall climb is paced one cell at a time with the climber spinning up it, and a fall drawn to the top row of the map no longer refuses. A whirlpool spits the player back out instead of holding them. Flash in the Aerodactyl Chamber and an Escape Rope in the Kabuto Chamber each open their wall, which neither did before.
-
-**On a phone or handheld, the on-screen controller stays put.** Android reports its own Back button, navigation bar and volume rocker as key events, and one of them read as a keyboard being picked up: the controller vanished mid-game and the map grew into the space. Only a controller you actually plug in takes over now.
-
-**For mod authors**, `api_version` is 25. A world actor can ask whether the party is physically with the player, so a follower puts itself away at a healing machine, the Day Care counter and a trade. A visible wild encounter can walk from cell to cell instead of teleporting. And a step in flight says which two cells it runs between, for a renderer whose world is not a flat grid.
+**For mod authors**, `api_version` is 26, and both new seams are for quality-of-life mods. A mod can turn B into running shoes: on foot, a step taken while B is held goes at bike speed, your follower keeps up, and a recorded run replays at the same speed. And a mod can scale experience, from a half to five times, applied at the one place every award passes through, so the participant split, the Exp. Share, level ups, move offers and evolutions all follow from it. Stat experience is left exactly as the cartridge pays it.
 
 ## Which file
 
