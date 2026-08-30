@@ -2031,12 +2031,8 @@ func _run_next_anim_step() -> void:
 				_push_view()
 				return
 			ANIM_WAIT_SFX:
-				## `WaitSFX` is a real wait while the driver is being serviced and
-				## no wait at all when it is not: a run with no audio device leaves
-				## the channels as the sound left them, so `effect_playing()` would
-				## answer true for the rest of the run and this plan would never
-				## finish. The rendered-frame count is what tells the two apart,
-				## and it costs one frame either way.
+				## `WaitSFX`, bounded by
+				## [constant Gen2AudioPlayer.SERVICE_GAP_FRAMES] as the world's is.
 				if _audio_player != null and _audio_player.effect_playing():
 					var rendered: int = _audio_player.timeline_updates()
 					var still: int = 0 if int(step.get("rendered", -1)) != rendered \

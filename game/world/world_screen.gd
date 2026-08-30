@@ -27,7 +27,6 @@ const PREVIEW_COVER_FRAMES: int = 10
 ## confirmed against neighbouring $0a/$0f/$1a), played by .TryJump as the hop
 ## starts. Played directly rather than through _handle_audio_request(), which
 ## expects a runtime request to acknowledge; a hop is movement, not a script.
-## _play_current_map_music() below is the precedent for this shape.
 const SFX_JUMP_OVER_LEDGE: int = 0x16
 ## constants/sfx_constants.asm's SFX_PLACE_PUZZLE_PIECE_DOWN, played by
 ## OWCutAnimation before its sprite animation. The animation itself is not
@@ -1036,10 +1035,9 @@ func _advance_waits(map_pass: bool) -> void:
 	_advance_audio_wait()
 
 
-## The one wait whose condition is the audio device's rather than a counter's.
-## The same rule the battle's `ANIM_WAIT_SFX` follows: a driver nobody is
-## servicing leaves `effect_playing()` true for the rest of the run, so the
-## rendered-frame count is what decides whether this is a wait at all.
+## The one wait whose condition is the audio device's rather than a counter's,
+## bounded by [constant Gen2AudioPlayer.SERVICE_GAP_FRAMES] as the battle's
+## `ANIM_WAIT_SFX` is.
 func _advance_audio_wait() -> void:
 	var audio_rendered: int = _audio_player.timeline_updates() if _audio_player != null else 0
 	_audio_still_frames = 0 if audio_rendered != _audio_rendered_seen \
@@ -7933,9 +7931,7 @@ func _sync_host_clock() -> void:
 
 func _handle_audio_request(request: Dictionary) -> Array:
 	if _audio_player == null:
-		_script_prompt = "Audio unavailable: player is not ready"
-		_refresh_labels()
-		return []
+		return _skip_audio_request(&"audio_player_not_ready")
 	var kind: StringName = StringName(request.get("values", {}).get("kind", &""))
 	if kind == &"sound_wait":
 		if _audio_player.effect_playing():
@@ -7950,15 +7946,7 @@ func _handle_audio_request(request: Dictionary) -> Array:
 		resolve_request["source"] = _world.pending_runtime_request().get("source", {})
 	var resolved: Dictionary = Gen2WorldHost.resolve_runtime_request(_world, resolve_request)
 	if not bool(resolved.get("ok", false)):
-		if kind == &"encounter_music":
-			var skipped: Array = _world.complete_runtime_request({
-				"ok": true, "audio_played": false,
-				"audio_unavailable": resolved.get("reason", &"audio_data_unavailable"),
-			})
-			return skipped
-		_script_prompt = "Audio unavailable: %s" % String(resolved.get("reason", "unknown"))
-		_refresh_labels()
-		return []
+		return _skip_audio_request(StringName(resolved.get("reason", &"audio_data_unavailable")))
 	var record: Dictionary = resolved.get("data", {}).get("audio", {})
 	if kind == &"music_fadeout":
 		record["fade_time"] = int(request.get("values", {}).get("fade_time", 0))
@@ -7967,15 +7955,7 @@ func _handle_audio_request(request: Dictionary) -> Array:
 		bool(request.get("values", {}).get("restart", false))
 	)
 	if not bool(playback.get("ok", false)):
-		if kind == &"encounter_music":
-			var skipped: Array = _world.complete_runtime_request({
-				"ok": true, "audio_played": false,
-				"audio_unavailable": playback.get("reason", &"audio_playback_failed"),
-			})
-			return skipped
-		_script_prompt = "Audio unavailable: %s" % String(playback.get("reason", "unknown"))
-		_refresh_labels()
-		return []
+		return _skip_audio_request(StringName(playback.get("reason", &"audio_playback_failed")))
 	var completed: Dictionary = Gen2WorldHost.complete_runtime_request(
 		_world, {"ok": true, "audio_played": bool(playback.get("played", false))}
 	)
@@ -7986,6 +7966,19 @@ func _handle_audio_request(request: Dictionary) -> Array:
 		_refresh_labels()
 		return []
 	return completed.get("results", [])
+
+
+## A sound the driver cannot answer still ends its command. The cartridge cannot
+## miss one; here a record no import produced would leave the script pending
+## with nothing left to advance it, which the player can only restart out of.
+func _skip_audio_request(reason: StringName) -> Array:
+	_script_prompt = "Audio unavailable: %s" % String(reason)
+	_refresh_labels()
+	if _world == null:
+		return []
+	return _world.complete_runtime_request({
+		"ok": true, "audio_played": false, "audio_unavailable": reason,
+	})
 
 
 func _audio_assets() -> Dictionary:

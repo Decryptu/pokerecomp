@@ -4,25 +4,28 @@ extends SceneTree
 ##
 ##   Godot --headless --path . -s res://tools/preview_mom_scene.gd -- <game> [png] [frame]
 ##
-## The story walker proves the script's results; what it cannot say is whether the
-## presentation runs. Crystal's trigger is the two coord events at (8,4) and (9,4);
-## Gold and Silver ship none and `sdefer` the same script from the map entry, which
-## is why their checkpoints sit later. A run that moves one exits non-zero.
+## The story walker proves the script's results, never that the presentation runs,
+## and a run that moves a checkpoint exits non-zero. Crystal triggers on the coord
+## events at (8,4) and (9,4); Gold and Silver `sdefer` it from the map entry.
 
 const WINDOW_SIZE := Vector2i(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 const FRAME: float = 1.0 / 59.7275
-## Long enough for the walk, the emote's fifteen frames and the text to appear.
-const TRACE_FRAMES: int = 600
+## Long enough for the whole conversation, which the trace answers as it goes.
+const TRACE_FRAMES: int = 4000
 
-## The frame the emote, Mom's first drawn step and the text box each first
-## appear on, per profile. Every interval between them is the source's:
+## The frame the emote, Mom's first drawn step, the text box and the script's own
+## `end` each land on, per profile. Every interval between them is the source's:
 ## `showemote EMOTE_SHOCK, MOM1, 15` is 30 frames of emote, and the walk is
-## `MomWalksToPlayerMovement`'s own steps.
+## `MomWalksToPlayerMovement`'s own steps, both counted in overworld passes.
 const CHECKPOINTS: Dictionary = {
-	&"crystal": {&"emote": 3, &"walk": 32, &"text": 48},
-	&"gold": {&"emote": 10, &"walk": 40, &"text": 88},
-	&"silver": {&"emote": 10, &"walk": 40, &"text": 88},
+	&"crystal": {&"emote": 17, &"walk": 46, &"text": 77, &"done": 1909},
+	&"gold": {&"emote": 17, &"walk": 47, &"text": 143, &"done": 2039},
+	&"silver": {&"emote": 17, &"walk": 47, &"text": 143, &"done": 2039},
 }
+
+## Both pieces are `channel_count 3` on all three profiles, so a fourth music
+## channel on is the town still playing under `playmusic MUSIC_MOM`.
+const MUSIC_CHANNELS: int = 3
 
 ## `constants/map_constants.asm`, and `Gen2WorldSpawn`'s own group.
 const PLAYERS_HOUSE_1F: int = 6
@@ -105,6 +108,8 @@ func _sample() -> Dictionary:
 		"mom_offset": mom.step_offset_cells() if mom != null else Vector2.ZERO,
 		"emote": mom != null and mom.emote_visible,
 		"text": _screen._text_box != null and _screen._text_box.visible,
+		"channels": _screen._audio_player.audio_status()["active_channels"],
+		"prompt": _screen._script_prompt,
 	}
 
 
@@ -122,6 +127,9 @@ func _process(_delta: float) -> bool:
 	if not _started:
 		_started = true
 		_screen.move_player(Vector2i(0, 1))
+	if not _trace.is_empty() and bool(_trace[-1]["waiting_input"]):
+		# Every question answered YES, the way the other preview drivers do.
+		_screen.press_button(Gen2Button.A)
 	_screen._process(FRAME)
 	_trace.append(_sample())
 	if _frames == _capture_frame and not _output_path.is_empty():
@@ -146,23 +154,40 @@ func _checkpoints_hold() -> bool:
 		print("no pinned checkpoints for %s" % _game)
 		return true
 	var held: bool = true
-	for name: StringName in [&"emote", &"walk", &"text"]:
+	for name: StringName in [&"emote", &"walk", &"text", &"done"]:
 		var at: int = _first_frame(name)
 		var want: int = int(expected[name])
 		if at != want:
 			printerr("%s %s first appears on frame %d, not %d" % [_game, name, at, want])
 			held = false
+	held = _channels_hold() and held
 	print("%s checkpoints %s" % [_game, "hold" if held else "MOVED"])
 	return held
 
 
+func _channels_hold() -> bool:
+	for row: Dictionary in _trace:
+		var music: Array = (row["channels"] as Array).filter(
+			func(channel: int) -> bool: return channel <= Gen2SoundEngine.NUM_MUSIC_CHANNELS
+		)
+		if music.size() <= MUSIC_CHANNELS:
+			continue
+		printerr("%s frame %d has %s on for a three-channel piece" % [
+			_game, row["frame"], music,
+		])
+		return false
+	return true
+
+
 func _first_frame(name: StringName) -> int:
+	var after: int = _first_frame(&"text") if name == &"done" else -1
 	for row: Dictionary in _trace:
 		var showing: bool = false
 		match name:
 			&"emote": showing = bool(row["emote"])
 			&"walk": showing = row["mom_offset"] != Vector2.ZERO
-			_: showing = bool(row["text"])
+			&"text": showing = bool(row["text"])
+			_: showing = int(row["frame"]) > after and not bool(row["script_busy"])
 		if showing:
 			return int(row["frame"])
 	return -1
@@ -179,7 +204,7 @@ func _report() -> void:
 			continue
 		last = without
 		changes += 1
-		print("f%4d  script %s  input %s  player %s  mom %s%s%s  text %s" % [
+		print("f%4d  script %s  input %s  player %s  mom %s%s%s  text %s  chan %s  %s" % [
 			row["frame"],
 			"busy" if row["script_busy"] else "idle",
 			"wait" if row["waiting_input"] else "-   ",
@@ -187,5 +212,7 @@ func _report() -> void:
 			" stepping" if row["mom_offset"] != Vector2.ZERO else "",
 			" emote" if row["emote"] else "",
 			"up" if row["text"] else "-",
+			row["channels"],
+			row["prompt"],
 		])
 	print("%d frames, %d changes" % [_trace.size(), changes])
