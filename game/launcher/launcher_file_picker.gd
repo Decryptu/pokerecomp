@@ -114,12 +114,10 @@ func uses_browse_sheet() -> bool:
 	)
 
 
-## Whether [member FileDialog.use_native_dialog] gets a dialog of the platform's own.
 static func use_native_dialog_here() -> bool:
 	return DisplayServer.has_feature(DisplayServer.FEATURE_NATIVE_DIALOG_FILE)
 
 
-## Shows the sheet over whatever screen added this picker. Public for the preview.
 func show_browse_sheet(dir: String = "") -> void:
 	if not dir.is_empty():
 		_last_dir = dir

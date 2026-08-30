@@ -70,15 +70,17 @@ func _build(title: String) -> void:
 	_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_scroll.content().add_child(_body)
 
+	# The body scrolls and so sits inside the pane's ring inset; the actions do
+	# not, and would otherwise be that much wider than every row above them.
 	_actions = Gen2LauncherUI.column(Gen2LauncherUI.GAP_MD)
-	_column.add_child(_actions)
+	_column.add_child(_inset(_actions))
 
 	# A cross in the corner never says with what, which is the pad's question.
 	_dismiss = Gen2LauncherHint.create(_theme, &"ui_cancel", "Close")
 	_dismiss.set_focusable(true)
 	_dismiss.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_dismiss.pressed.connect(close)
-	_column.add_child(_dismiss)
+	_column.add_child(_inset(_dismiss))
 
 	## The window, and the rows themselves: a sheet is filled after it is built,
 	## so the fit is redone when the body grows rather than only when it opens.
@@ -104,6 +106,14 @@ func _fit() -> void:
 	_scroll.custom_minimum_size.y = maxf(
 		minf(_scroll.content().get_combined_minimum_size().y, room), 0.0
 	)
+
+
+func _inset(control: Control) -> MarginContainer:
+	var holder := MarginContainer.new()
+	for side: String in ["left", "right"]:
+		holder.add_theme_constant_override("margin_" + side, Gen2LauncherScroll.RING_INSET)
+	holder.add_child(control)
+	return holder
 
 
 func body() -> VBoxContainer:
