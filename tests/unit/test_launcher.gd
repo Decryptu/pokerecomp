@@ -15,6 +15,12 @@ const PROBE_MOD_ID: StringName = &"launcher_probe"
 ## loaded script by path: two mods sharing a directory would have the first
 ## one's entry script run for the second.
 const VIEW_MOD_ID: StringName = &"launcher_view_probe"
+## The sources these tests follow. Unfollowed after each one, or a test that
+## fails part way leaves the next one reading a feed it never added.
+const PROBE_FEEDS: Array[String] = [
+	"https://mods.example.com/update-all.json",
+	"https://mods.example.com/update-queue.json",
+]
 
 
 func after_each() -> void:
@@ -30,6 +36,8 @@ func after_each() -> void:
 	DirAccess.remove_absolute(_view_archive)
 	Gen2ModInstaller.uninstall(PROBE_MOD_ID)
 	Gen2ModInstaller.uninstall(VIEW_MOD_ID)
+	for feed: String in PROBE_FEEDS:
+		Gen2ModIndex.unfollow(feed)
 
 
 ## The mods page on its own, which is what every mod workflow but the file
@@ -362,6 +370,67 @@ func test_a_source_names_the_mods_a_newer_version_is_listed_for() -> void:
 	}))
 	assert_false(page.status_text().contains("can be updated"))
 	Gen2ModIndex.forget_cache(feed)
+
+
+## The header carries one button and it offers whichever of its two actions is
+## worth pressing: read the sources while nothing is known to be out of date, and
+## download every update once something is.
+func test_the_header_button_offers_update_all_once_a_source_lists_one() -> void:
+	_write_probe_mod_zip()
+	assert_true(bool(Gen2ModInstaller.install_zip(_mod_archive).get("ok", false)))
+	Gen2ModHost.reset()
+	Gen2ModHost.instance().discover()
+
+	var feed: String = PROBE_FEEDS[0]
+	assert_true(bool(Gen2ModIndex.follow(feed).get("ok", false)))
+	var page: Gen2ModsPage = _mods_page()
+	var button: Gen2LauncherButton = page._check_updates_button
+	assert_eq(button.get("_glyph"), &"refresh_square", "nothing to update yet")
+
+	page.receive_feed_response(feed, true, JSON.stringify({
+		"schema_version": Gen2ModIndex.SCHEMA_VERSION,
+		"name": "Example",
+		"mods": [{"id": String(PROBE_MOD_ID), "name": "Launcher Probe", "version": "9.9.9",
+			"download": "https://example.com/probe.zip"}],
+	}))
+	assert_eq(page.available_update_count(), 1)
+	assert_eq(button.get("_glyph"), &"download", "the same button is now Update all")
+	assert_eq(button.text, "", "and it is still icon sized for a phone")
+	assert_string_contains(button.tooltip_text, "1 mod update")
+	assert_eq(
+		StringName((page.update_rows()[0] as Dictionary)["id"]), PROBE_MOD_ID,
+		"one press is the installed mods a source has something newer for"
+	)
+
+
+## Update all walks its queue whatever each row answers, and a row whose download
+## never starts is the refusal a single press of that row would give.
+func test_update_all_walks_its_queue_and_reports_what_it_installed() -> void:
+	_write_probe_mod_zip()
+	assert_true(bool(Gen2ModInstaller.install_zip(_mod_archive).get("ok", false)))
+	Gen2ModHost.reset()
+	Gen2ModHost.instance().discover()
+
+	var feed: String = PROBE_FEEDS[1]
+	assert_true(bool(Gen2ModIndex.follow(feed).get("ok", false)))
+	var page: Gen2ModsPage = _mods_page()
+	page.receive_feed_response(feed, true, JSON.stringify({
+		"schema_version": Gen2ModIndex.SCHEMA_VERSION,
+		"name": "Example",
+		"mods": [{"id": String(PROBE_MOD_ID), "name": "Launcher Probe", "version": "9.9.9",
+			"download": "https://example.com/probe.zip"}],
+	}))
+	assert_eq(page.available_update_count(), 1)
+
+	# No test reaches a server, so the transport is taken away: every row then
+	# answers the way one whose download could not be started does.
+	page._http = null
+	page.download_all()
+	for _frame: int in 4:
+		await get_tree().process_frame
+	assert_eq(page._update_queue.size(), 0, "the queue is drained rather than stuck")
+	assert_string_contains(page.status_text(), "No mod update could be installed")
+	assert_false(page._check_updates_button.disabled, "and the button is pressable again")
 
 
 ## A toast with nothing to say occupies nothing: not drawn, and not in the hit

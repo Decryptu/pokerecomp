@@ -1363,8 +1363,6 @@ func _init_battle_display() -> void:
 	Gen2BattleScreenMap.clear_intro_box(_bg_map)
 	_intro_message = ""
 	_entrance_stages = []
-	_slides = []
-	_slid_pixels = {Gen2Battle.PLAYER: 0.0, Gen2Battle.ENEMY: 0.0}
 	_frontpic = null
 	_bg_vbank1 = PackedByteArray()
 	_hud_balls = []
@@ -2278,6 +2276,9 @@ func _audio_assets() -> Dictionary:
 func _reseed_bg_map() -> void:
 	_bg_map = Gen2BattleScreenMap.seeded()
 	_faints.clear()
+	## A slide still owed walks the picture this put back off its own square.
+	_slides.clear()
+	_slid_pixels = {Gen2Battle.PLAYER: 0.0, Gen2Battle.ENEMY: 0.0}
 
 
 ## How full the exp bar is, in `PlaceExpBar`'s own pixels. The committed value:
@@ -3593,10 +3594,6 @@ func _confirm_forget_slot() -> void:
 func advance() -> void:
 	if _box == null:
 		return
-	## `BattleIntroSlidingPics` is a run of unconditional `DelayFrame`s with
-	## nothing reading a button, so a press during the slide does nothing at all.
-	if _intro != null:
-		return
 	## The exp bar stopped at a level boundary is under `.LoopLevels`' own
 	## `StdBattleTextbox`, which blocks on a button: this press is that button,
 	## and it lets the loop run on into the next level's fill rather than
@@ -3609,14 +3606,9 @@ func advance() -> void:
 		## releases, the same as the first one.
 		_play_anim_sound(SFX_EXP_BAR)
 		return
-	## A bar the source is still animating has not printed its message yet, so
-	## there is nothing for a press to advance past. Without this the press
-	## would pop the next event and the held line would never be shown.
-	if bars_animating() or fainting():
-		return
-	## An animation is a run of unconditional delays, the way the intro is, so a
-	## press during one reaches nothing.
-	if animation_running():
+	## `BattleIntroSlidingPics`, `SlideBattlePicOut` and every other run of frames
+	## this screen counts is delays with nothing reading a button.
+	if frames_running():
 		return
 	if _box.advance():
 		return
