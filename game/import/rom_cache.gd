@@ -77,7 +77,7 @@ const BYTES_KEY: String = "bytes"
 ## a dump the owner still has, so re-importing costs a few seconds and a
 ## migration would have to carry every past shape forever. Nothing but the cache
 ## is thrown away, since saves live under their own root.
-const FORMAT_VERSION: int = 97
+const FORMAT_VERSION: int = 98
 
 ## What [method state] answers. A stale cache is told from a missing one because
 ## they need different things said to whoever is looking at it: one is a
@@ -368,7 +368,6 @@ static func read_json(path: String) -> Variant:
 
 
 ## One cached grid of cartridge bytes, packed on the way out of JSON.
-##
 ## A JSON number returns as a float, and an Array of them costs about twenty-six
 ## resident bytes per cartridge byte. Map block, map collision and tileset lookup
 ## tables are byte grids read once per drawn tile and resident for every map at
@@ -406,7 +405,6 @@ static func write_payload_map(
 
 ## Writes a section whose byte runs are named fields rather than whole values,
 ## as the audio records and the standard-script table are.
-##
 ## Only a [code]bytes[/code] field holding an array is moved. Nothing else is
 ## touched: plenty of cached arrays are small numbers without being cartridge
 ## payloads, and a mart list or an encounter rate must stay an array.

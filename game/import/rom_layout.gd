@@ -242,7 +242,6 @@ const AUDIO_CRY_COUNT: int = 68
 ## `PokemonCries` (data/pokemon/cries.asm): `mon_cry index, pitch, length` per
 ## species, six bytes a row. 255 rows, not 251: the table pads to `$ff` with four
 ## silent CRY_NIDORAN_M rows the way the pic tables pad.
-##
 ## The table is what makes a cry per species rather than per stream: Ivysaur and
 ## Venusaur both play CRY_BULBASAUR and differ only in these two words.
 const MON_CRY_COUNT: int = 255
@@ -430,7 +429,6 @@ const DEXMODE_UNOWN: int = 3
 ## its evolutions, then a zero byte, then its level-up moves as level and move
 ## pairs, then another zero byte. One pointer answers both questions, which is
 ## why the two are decoded in the same pass rather than as separate tables.
-##
 ## The pointers are two bytes rather than three: the entries sit in the pointer
 ## table's own bank, so there is no bank number to store.
 const EVOS_ATTACKS_POINTER_SIZE: int = 2
@@ -588,7 +586,6 @@ const MAP_ENTRY_SIGN_TILES: int = 14
 
 ## The battle HUD's own graphics, which sit in the same section as the font and
 ## the text box borders and are the rest of what a battle screen draws.
-##
 ## [code]battle_font[/code] is 2bpp and carries "HP:", the HP bar's nine fill
 ## levels and the screen's odds and ends. The two HUD borders are 1bpp, the boxes
 ## a name and level sit in. The exp bar is 2bpp, seven fills and two ends.
@@ -899,7 +896,6 @@ const CARD_PALETTE_CLASSES: Array[int] = [0, 1, 3, 2, 4, 7, 6, 5]
 const CARD_BADGE_PALETTE_COLORS: int = 4
 
 ## The region map (`_TownMap` and `PokegearMap`, engine/pokegear/pokegear.asm).
-##
 ## `Pokegear_LoadGFX` builds one VRAM window for both screens: `TownMapGFX` at
 ## `vTiles2`, `PokegearGFX` at `vTiles2 tile $30` and `PokegearSpritesGFX` at
 ## `vTiles0`, which is where the cursor's tiles come from. All three are LZ runs.
@@ -935,7 +931,6 @@ const FLY_MAP_LABEL_FIRST_TILE: int = POKEGEAR_FIRST_TILE
 ## `RadioTilemapRLE`, `PhoneTilemapRLE` and `ClockTilemapRLE`: the other three
 ## Pokegear cards, one contiguous run in that order directly behind
 ## `PokegearSpritesGFX`, byte identical on all three cartridges.
-##
 ## `Pokegear_LoadTilemapRLE` reads the *tile* first and its run length second,
 ## the opposite way round from the comment above it, and writes from (0,0) until
 ## `-1`. Each card is twelve rows; `Textbox` draws the four below them.
@@ -975,7 +970,6 @@ const TOWN_MAP_PALETTE_COLORS: int = 4
 const TOWN_MAP_PALETTE_FIRST_COLOR: int = 0x53FC
 
 ## The credits (`engine/movie/credits.asm`).
-##
 ## `CreditsScript`'s commands, `const_def -1, -1`: the byte a command is not is a
 ## `CreditsStringsPointers` index.
 const CREDITS_END: int = 0xFF
@@ -1024,7 +1018,6 @@ const CREDITS_SCRIPT_MAX_BYTES: int = 1024
 const CREDITS_STRING_MAX_BYTES: int = 64
 
 ## The intro movie (`CrystalIntro`, engine/movie/intro.asm).
-##
 ## Every graphic, tilemap, attrmap and palette the movie draws is one contiguous
 ## section behind the code, in the INCBIN order below, and each entry starts on a
 ## sixteen-byte boundary from the first. So one pinned offset walks all
@@ -1209,6 +1202,38 @@ const LINK_TRADE_CABLE_ROWS_BYTES: int = 40
 ## `_CGB_Unused0D` is SCGB_DIPLOMA's own layout and its `WipeAttrmap` puts every
 ## cell on palette 0.
 const PREDEFPAL_DIPLOMA: int = 0x1B
+
+## The `lb bc` each `TradeAnim_CopyBoxFromDEtoHL` is given.
+const TRADE_ANIM_GAME_BOY_SIZE: Vector2i = Vector2i(6, 8)
+const TRADE_ANIM_LINK_CABLE_SIZE: Vector2i = Vector2i(12, 3)
+const TRADE_ANIM_GAME_BOY_CELLS: int = 48
+const TRADE_ANIM_LINK_CABLE_CELLS: int = 36
+
+## `TradeAnimation`'s art (engine/movie/trade_animation.asm): nine INCBINs end to
+## end with no alignment, so one pinned address walks the lot, each entry's own
+## length being where the next begins. `game_boy_cable` is `game_boy.2bpp` and
+## `link_cable.2bpp` concatenated by the Makefile. `cable` is two tiles and not
+## the four `LoadTradeBallAndCableGFX` asks for: that request runs on into
+## `bubble`, and nothing draws what it took, the bulge naming only tile one.
+const TRADE_ANIM_SECTION: Array[Array] = [
+	["game_boy_tilemap", "map", TRADE_ANIM_GAME_BOY_CELLS],
+	["link_cable_tilemap", "map", TRADE_ANIM_LINK_CABLE_CELLS],
+	["arrow_right", "raw", 1],
+	["arrow_left", "raw", 1],
+	["cable", "raw", 2],
+	["bubble", "raw", 4],
+	["game_boy_cable", "lz", 49],
+	["ball", "raw", 6],
+	["poof", "raw", 12],
+]
+## `ld de, vTiles2 tile $31`, and what the run decompresses to.
+const TRADE_ANIM_SHEET_FIRST_TILE: int = 0x31
+const TRADE_ANIM_SHEET_TILES: int = 49
+## Character codes whose font tile the layout overwrites with an arrow sheet.
+const TRADE_ANIM_RIGHT_ARROW_CODE: int = 0xED
+const TRADE_ANIM_LEFT_ARROW_CODE: int = 0xEE
+## `PalPacket_TradeTube`'s first entry, and object palette 7 as well.
+const PREDEFPAL_TRADE_TUBE: int = 0x1C
 
 ## `PrinterStatusStringPointers`' eight strings in table order, by the status
 ## each names. `null` is the empty string a status of zero prints, which is what
@@ -1496,7 +1521,6 @@ const NAME_RATER_TEXT_ORDER: Array[String] = [
 ## deferred list print, by run name, then the layout key and the stub names in
 ## the file's own order. One table rather than one accessor per routine: a
 ## routine that gets built adds a row here and needs no importer of its own.
-##
 ## A run whose layout offset is zero is not on the cartridge. `poke_seer`,
 ## `seer_advice` and `buena_prize` are Crystal's alone, and Gold and Silver's
 ## `SpecialsPointers` is short enough that no script of theirs can reach one.
@@ -1564,6 +1588,17 @@ const SPECIAL_TEXT_RUNS: Dictionary = {
 		["link_cant_battle_text", ["cant_battle"]],
 		["link_abnormal_mon_text", ["abnormal_mon"]],
 		["link_ask_trade_text", ["ask_trade"]],
+	],
+	## `TradeAnimation`'s boxes. Five runs because the stubs live inside the four
+	## routines that print them, in the file's order rather than the script's.
+	## `_MonNameSentToText` is left out: it is a `text_start` with nothing in it,
+	## so it imports as an empty string a decode failure cannot be told from.
+	"trade": [
+		["trade_sent_text", ["was_sent"]],
+		["trade_farewell_text", ["bids_farewell", "name_bids_farewell"]],
+		["trade_take_care_text", ["take_good_care"]],
+		["trade_sends_text", ["for_your_mon_sends", "ot_sends"]],
+		["trade_will_trade_text", ["will_trade", "for_your_mon_will_trade"]],
 	],
 	## `DoMysteryGift`'s eight, one contiguous run behind
 	## `.String_PressAToLink_BToCancel`. Every box the routine can end on is
@@ -1705,7 +1740,6 @@ const BATTLE_ANIM_SINE_WAVE: Array[int] = [
 
 ## The eight `PAL_BATTLE_OB_*` object palettes an animation object's palette byte
 ## indexes, and which of them the cartridge stores.
-##
 ## Only six are stored. `_CGB_BattleScreenLayout` (engine/gfx/cgb_layouts.asm)
 ## copies `BattleObjectPals` into `wOBPals1` from slot 2 on, four colours each,
 ## and fills slots 0 and 1 from the two battlers' own two-colour palettes through
@@ -1738,7 +1772,6 @@ const BATTLE_OBJECT_PALETTES: Array = [
 ## or red depending on how much is left, and the exp bar in blue. They are two
 ## colours each like a species' palette, white and black being implied, and they
 ## sit immediately before the species palettes in every game.
-##
 ## The names are the cache's keys, and the order is the cartridge's.
 const BAR_PALETTE_NAMES: Array = ["hp_green", "hp_yellow", "hp_red", "exp"]
 
@@ -1754,7 +1787,6 @@ const BAR_PALETTES: Array = [
 ## the stats screen's three page indicators wear, then the three single colours
 ## `LoadStatsScreenPals` writes over colour 0 of `wBGPals1` palettes 0 and 2, so
 ## the open page tints the whole lower screen and the exp bar's trough.
-##
 ## The two labels are read as one record because the second follows the first
 ## with nothing between it, which is what locates both from one pin.
 const STATS_PAGE_PALETTES: int = 3
@@ -1804,7 +1836,6 @@ const BAR_STEP_PIXELS: int = 2
 ## Trainer classes are numbered from 1; class 0 is the player, who has a palette
 ## in the table but no pic in it. Crystal added one class to the sixty-six Gold
 ## and Silver have, so the count lives in the layout rather than here.
-##
 ## Every trainer pic is this square, unlike a Pokémon's front pic.
 const TRAINER_PIC_TILES: int = 7
 
@@ -1812,7 +1843,6 @@ const TRAINER_PIC_TILES: int = 7
 ## per class, holding the individual trainers. "LEADER" is the class name every
 ## gym leader shares; FALKNER is stored inside class 1's party entry beside the
 ## Pokémon he brings, so a class's identity always means reading two tables.
-##
 ## Two-byte pointers in the pointer table's own bank, like [member evos_attacks]:
 ## the entries share that bank, so there is no bank number to store.
 const TRAINER_PARTY_POINTER_SIZE: int = 2
@@ -2422,6 +2452,10 @@ const GOLD_SILVER: Dictionary = {
 	# `LinkTextboxAtHL` instead. The same address on Gold and on Silver.
 	"link_border": 0x29D5B,
 	"link_trade_tilemaps": -1,
+	# `TradeGameBoyTilemap`, which `TRADE_ANIM_SECTION` walks the run from.
+	# rgblink's own address out of a build byte identical to this dump, and the
+	# same on Gold and on Silver.
+	"trade_anim": 0x29713,
 	# `InitMysteryGiftLayout` at Gold and Silver's own addresses, which is three
 	# art runs rather than Crystal's one: thirty-two tiles of `MysteryGiftGFX`,
 	# `MysteryGiftBackgroundGFX`'s 1bpp question mark and border doubled into
@@ -2615,6 +2649,12 @@ const GOLD_SILVER: Dictionary = {
 		## `wBufferTrademonNickname`, which `_LinkAskTradeForText` names with a
 		## `text_ram` whose address is in the text data itself.
 		"trademon_nickname": 0xCEEF,
+		## `TradeAnimation`'s four `text_ram` buffers: who sent each Pokemon and
+		## what species it is.
+		"player_trademon_species_name": 0xC5D1,
+		"player_trademon_sender_name": 0xC5E7,
+		"ot_trademon_species_name": 0xC602,
+		"ot_trademon_sender_name": 0xC618,
 		## The two names `_MysteryGiftSentText` and `_MysteryGiftSentHomeText`
 		## spell: the partner who sent the gift and the player it came home to.
 		## Gold and Silver's Mystery Gift block sits a page below Crystal's, the
@@ -2629,6 +2669,13 @@ const GOLD_SILVER: Dictionary = {
 	"link_cant_battle_text": 0x289A8,
 	"link_abnormal_mon_text": 0x289BD,
 	"link_ask_trade_text": 0x28D51,
+	## `TradeAnimation`'s five stub blocks, in the file's order and the same on
+	## Gold and on Silver.
+	"trade_sent_text": 0x2958B,
+	"trade_farewell_text": 0x295AB,
+	"trade_take_care_text": 0x295D3,
+	"trade_sends_text": 0x295F3,
+	"trade_will_trade_text": 0x29618,
 	"mystery_gift_text": 0x29F31,
 	"magikarp_measure_text": 0xFBCAD,
 	"magikarp_record_text": 0xFBDEC,
@@ -2998,6 +3045,7 @@ const CRYSTAL: Dictionary = {
 	},
 	"link_border": 0x16CFC1,
 	"link_trade_tilemaps": 0x16D465,
+	"trade_anim": 0x298C7,
 	# `UnownDexATile`, the two 1bpp tiles `_UnownPrinter` requests into the
 	# menu's own A and B glyphs, seven bytes behind `UnownDexVacantString`.
 	"unown_printer_glyphs": 0x16D9C,
@@ -3192,6 +3240,10 @@ const CRYSTAL: Dictionary = {
 		"seer_ot": 0xD02A,
 		"seer_caught_level": 0xD036,
 		"trademon_nickname": 0xD004,
+		"player_trademon_species_name": 0xC6D1,
+		"player_trademon_sender_name": 0xC6E7,
+		"ot_trademon_species_name": 0xC703,
+		"ot_trademon_sender_name": 0xC719,
 		"mystery_gift_partner_name": 0xC903,
 		"mystery_gift_player_name": 0xC953,
 	},
@@ -3202,6 +3254,11 @@ const CRYSTAL: Dictionary = {
 	"link_cant_battle_text": 0x28AAF,
 	"link_abnormal_mon_text": 0x28AC4,
 	"link_ask_trade_text": 0x28EB8,
+	"trade_sent_text": 0x29732,
+	"trade_farewell_text": 0x29752,
+	"trade_take_care_text": 0x2977A,
+	"trade_sends_text": 0x2979A,
+	"trade_will_trade_text": 0x297BF,
 	"mystery_gift_text": 0x1049FD,
 	"magikarp_measure_text": 0xFBBA9,
 	"magikarp_record_text": 0xFBCE8,
@@ -3372,7 +3429,6 @@ static func is_characterised(id: StringName) -> bool:
 
 ## Translates the bank number stored in a pic pointer into the bank the data is
 ## really in.
-##
 ## The tables were written before the pic sections were shuffled between banks
 ## and nobody rebuilt them, so the game repairs each pointer as it loads it.
 ## Reproducing that is not optional: the stored numbers are simply wrong.
@@ -3713,7 +3769,6 @@ static func egg_move_pointer_offset(layout: Dictionary, species: int) -> int:
 
 ## How many bytes one evolution entry occupies. [constant EVOLVE_STAT] carries a
 ## second parameter and so is a byte longer than the rest.
-##
 ## The cartridge never needs this: it skips the evolutions by reading bytes until
 ## it meets the terminator, which works because no byte inside an entry is ever
 ## zero. Something that decodes them rather than skipping them does need it.
@@ -3729,7 +3784,6 @@ static func type_name_pointer_offset(layout: Dictionary, type_number: int) -> in
 
 
 ## Whether a byte is a type number the matchup chart could be talking about.
-##
 ## The type numbers are sparse, and the run between the two groups is padding
 ## that a move's type byte may legitimately hold but that no matchup names. A
 ## walk that has left the table lands in that gap almost immediately, which is
@@ -3756,7 +3810,6 @@ static func oak_text_stub_offset(rom: RomFile, layout: Dictionary, name: String)
 
 
 ## Where the word for Unown form [param form] starts, form 1 being A.
-##
 ## The pointer is bank-local, so the table's own bank is the whole address.
 static func unown_word_offset(rom: RomFile, layout: Dictionary, form: int) -> int:
 	var table: int = int(layout.get("unown_words", -1))

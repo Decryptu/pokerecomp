@@ -9,6 +9,20 @@ extends RefCounted
 ## and a screen tilemap on Crystal against nine tiles and no tilemap on Gold and
 ## Silver, which is the whole difference between the two trade screens.
 
+## `TradeAnimation` is swept over every species the corpus ships.
+
+## The trade animation's census: the frame each half ends on, the sounds it asks
+## for and the cries.
+const TRADE_ANIM_FRAMES: Dictionary = {
+	&"crystal": [2546, 2409], &"gold": [2480, 2480], &"silver": [2480, 2480],
+}
+const TRADE_ANIM_SFX: int = 32
+const TRADE_ANIM_CRIES: int = 2
+const TRADE_ANIM_GIVEN: int = 152
+const TRADE_ANIM_RECEIVED: int = 25
+## Where the offered Pokemon's picture and its stats are both on screen.
+const TRADE_ANIM_DRAWN_FRAME: int = 180
+
 ## `newgroup CABLE_CLUB`, the same group and numbers in both pins.
 const CABLE_CLUB_GROUP: int = 20
 const POKECENTER_2F: int = 1
@@ -49,6 +63,10 @@ func run(r: RefCounted) -> void:
 	_r.each_game(func() -> void:
 		_verify_border()
 		_verify_texts()
+		_verify_trade_anim_art()
+		_verify_trade_anim_texts()
+		_verify_trade_anim_run()
+		_verify_trade_anim_corpus()
 		_verify_no_cable()
 		_verify_with_peer()
 		_verify_time_capsule_receptionist()
@@ -131,6 +149,172 @@ func _verify_texts() -> void:
 		address > 0 and ask.contains("%s%04X>" % [Gen2TextStream.RAM_MARKER, address]),
 		"ask_trade does not name wBufferTrademonNickname (%04X)" % address
 	)
+
+
+## Every entry of the art run at the size its loader asks VRAM for, and both
+## tilemaps naming tiles the one sheet behind them holds.
+func _verify_trade_anim_art() -> void:
+	var data: GameData = _r.data
+	if not _r.check(data.has_trade_anim(), "no trade animation art in the cache"):
+		return
+	var first: int = RomLayout.TRADE_ANIM_SHEET_FIRST_TILE
+	for row: Array in RomLayout.TRADE_ANIM_SECTION:
+		var name: String = String(row[0])
+		if String(row[1]) == "map":
+			var cells: PackedByteArray = data.trade_anim_tilemap(name)
+			if not _r.check(
+				cells.size() == int(row[2]), "trade %s is %d cells" % [name, cells.size()]
+			):
+				continue
+			for cell: int in cells:
+				if not _r.check(
+					cell >= first and cell < first + RomLayout.TRADE_ANIM_SHEET_TILES,
+					"trade %s names tile $%02x, outside its sheet" % [name, cell]
+				):
+					break
+			continue
+		var strip: PackedByteArray = data.tile_indices("trade_anim_%s" % name)
+		_r.check(
+			strip.size() == int(row[2]) * Gen2Tiles.TILE_WIDTH * Gen2Tiles.TILE_HEIGHT,
+			"trade sheet %s is not %d tiles" % [name, int(row[2])]
+		)
+	_r.check(
+		data.trade_anim_palette("tube").size() == Gen2Palette.COLORS_PER_PIC,
+		"the trade tube palette is not four colours"
+	)
+
+
+## The boxes, each by the `text_ram` it names.
+func _verify_trade_anim_texts() -> void:
+	var data: GameData = _r.data
+	if not _r.check(data.has_special_text("trade"), "no trade text run in the cache"):
+		return
+	for row: Array in [
+		["was_sent", "player_trademon_species_name"],
+		["bids_farewell", "ot_trademon_sender_name"],
+		["name_bids_farewell", "ot_trademon_species_name"],
+		["ot_sends", "ot_trademon_sender_name"],
+		["will_trade", "ot_trademon_sender_name"],
+		["for_your_mon_sends", "player_trademon_sender_name"],
+		["for_your_mon_will_trade", "player_trademon_sender_name"],
+		["take_good_care", "ot_trademon_species_name"],
+	]:
+		var text: String = data.special_text("trade", String(row[0]))
+		var address: int = data.special_text_ram(String(row[1]))
+		_r.check(
+			address > 0 and text.contains(
+				"%s%04X>" % [Gen2TextStream.RAM_MARKER, address]
+			),
+			"trade box %s does not name %s: %s" % [row[0], row[1], text]
+		)
+	_r.check(
+		data.special_text("trade", "take_good_care").begins_with("Take good care of"),
+		"take_good_care reads %s" % data.special_text("trade", "take_good_care")
+	)
+
+
+## Both halves whole: every command, every sprite and every sound.
+func _verify_trade_anim_run() -> void:
+	var expected: Array = TRADE_ANIM_FRAMES[_r.game_id]
+	for half: int in 2:
+		var movie: Gen2TradeAnimation = _trade_anim_movie(
+			TRADE_ANIM_GIVEN, TRADE_ANIM_RECEIVED, half
+		)
+		if not _r.check(movie != null, "the trade animation will not build"):
+			return
+		var sfx: int = 0
+		var cries: int = 0
+		for event: Dictionary in _trade_anim_events(movie):
+			if StringName(event["type"]) == &"play_sfx":
+				sfx += 1
+			elif StringName(event["type"]) == &"play_cry":
+				cries += 1
+		_r.check(movie.finished(), "half %d never set its exit bit" % half)
+		_r.check(
+			movie.frame() == int(expected[half]),
+			"half %d ran %d frames, not %d" % [half, movie.frame(), int(expected[half])]
+		)
+		_r.check(sfx == TRADE_ANIM_SFX, "half %d asked for %d sounds" % [half, sfx])
+		_r.check(cries == TRADE_ANIM_CRIES, "half %d played %d cries" % [half, cries])
+	var page: Gen2TradeAnimationPage = Gen2TradeAnimationPage.from_data(_r.data)
+	if not _r.check(page != null, "the trade animation page will not build"):
+		return
+	var drawn: Gen2TradeAnimation = _trade_anim_movie(
+		TRADE_ANIM_GIVEN, TRADE_ANIM_RECEIVED, 0
+	)
+	for _frame: int in TRADE_ANIM_DRAWN_FRAME:
+		drawn.advance_frame()
+	var image: Image = page.draw(drawn)
+	_r.check(
+		_ink(image) > (image.get_width() * image.get_height()) / 20,
+		"the trade animation drew a near-empty frame at %d" % TRADE_ANIM_DRAWN_FRAME
+	)
+
+
+## Every species the cartridge ships, as far as the frame its picture is up:
+## what this catches is one whose pic the movie cannot draw.
+func _verify_trade_anim_corpus() -> void:
+	var data: GameData = _r.data
+	var page: Gen2TradeAnimationPage = Gen2TradeAnimationPage.from_data(data)
+	if page == null:
+		return
+	for species: int in range(1, data.species_count() + 1):
+		var movie: Gen2TradeAnimation = _trade_anim_movie(species, species, 0)
+		if movie == null:
+			return
+		for _frame: int in 3:
+			movie.advance_frame()
+		if not _r.check(
+			not movie.frontpic_pixels().is_empty(),
+			"species %d reached no frontpic" % species
+		):
+			return
+		if not _r.check(
+			movie.frontpic_palette().size() == Gen2Palette.COLORS_PER_PIC,
+			"species %d drew no frontpic palette" % species
+		):
+			return
+
+
+func _trade_anim_movie(given: int, received: int, half: int) -> Gen2TradeAnimation:
+	var data: GameData = _r.data
+	return Gen2TradeAnimation.create(
+		data, Gen2BattleAnimData.from_game_data(data),
+		{
+			"player": {
+				"species": given,
+				"species_name": String(data.species(given).get("name", "")),
+				"sender_name": "RED", "ot_name": "RED", "ot_id": 12345,
+				"caught_gender": 1,
+			},
+			"ot": {
+				"species": received,
+				"species_name": String(data.species(received).get("name", "")),
+				"sender_name": "BLUE", "ot_name": "BLUE", "ot_id": 54321,
+				"caught_gender": 2,
+			},
+			"link_mode": Gen2LinkSession.LINK_TRADECENTER,
+		},
+		half
+	)
+
+
+func _trade_anim_events(movie: Gen2TradeAnimation) -> Array:
+	var out: Array = []
+	var guard: int = 20000
+	while not movie.finished() and guard > 0:
+		out.append_array(movie.advance_frame())
+		guard -= 1
+	return out
+
+
+static func _ink(image: Image) -> int:
+	var count: int = 0
+	for y: int in image.get_height():
+		for x: int in image.get_width():
+			if image.get_pixel(x, y) != Color.WHITE:
+				count += 1
+	return count
 
 
 ## The path a single console gets, which is the only one a player without a

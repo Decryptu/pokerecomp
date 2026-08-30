@@ -1,14 +1,13 @@
 extends SceneTree
 
 ## Dumps the opening's shadow OAM, one line per sprite per frame, against a real
-## cache. `phase` is `presents`, `intro`, `gs_intro` or `title`, and the artefact is
-## the one `.claude/verification.md` step 2 asks for: two faithful implementations
-## of `PlaySpriteAnimations` put the same sprites in the same slots on the same
-## frames. A line is `frame slot y x tile`, the OAM bytes as a cartridge's own
-## buffer holds them at the frame boundary. Arguments:
-## `<game> <phase> [out.txt] [frames]`.
+## cache. `phase` is `presents`, `intro`, `gs_intro`, `title` or `trade`, and the
+## artefact is the one `.claude/verification.md` step 2 asks for: two faithful
+## implementations of `PlaySpriteAnimations` put the same sprites in the same
+## slots on the same frames. A line is `frame slot y x tile`, the OAM bytes as a
+## cartridge's buffer holds them. `<game> <phase> [out.txt] [frames]`.
 
-const PHASES: Array[String] = ["presents", "intro", "gs_intro", "title"]
+const PHASES: Array[String] = ["presents", "intro", "gs_intro", "title", "trade"]
 
 ## The title screen runs until its own timeout, which is longer than anything
 ## worth diffing; this is well past `TitleScreenEnd`'s own count.
@@ -59,6 +58,8 @@ func _initialize() -> void:
 			lines = _trace_intro(data)
 		"gs_intro":
 			lines = _trace_gs_intro(data)
+		"trade":
+			lines = _trace_trade(data)
 		_:
 			lines = _trace_title(data)
 	if args.size() > 2:
@@ -159,6 +160,37 @@ func _trace_gs_intro(data: GameData) -> PackedStringArray:
 		if movie.scene() != scene:
 			scene = movie.scene()
 			print("frame %d: scene %d" % [frame, scene])
+		movie.advance_frame()
+		frame += 1
+	print("frame %d: finished" % frame)
+	return out
+
+
+## `TradeAnimation`'s first half, on the pair the oracle puts a cartridge into.
+func _trace_trade(data: GameData) -> PackedStringArray:
+	var page: Gen2TradeAnimationPage = Gen2TradeAnimationPage.from_data(data)
+	if page == null:
+		push_error("%s has no trade animation art." % data.id)
+		return PackedStringArray()
+	var movie: Gen2TradeAnimation = Gen2TradeAnimation.create(
+		data, Gen2BattleAnimData.from_game_data(data), {
+			"player": {
+				"species": 152, "species_name": "CHIKORITA", "sender_name": "RED",
+				"ot_name": "RED", "ot_id": 12345, "caught_gender": 1,
+			},
+			"ot": {
+				"species": 25, "species_name": "PIKACHU", "sender_name": "BLUE",
+				"ot_name": "BLUE", "ot_id": 54321, "caught_gender": 2,
+			},
+			"link_mode": Gen2LinkSession.LINK_TRADECENTER,
+		}
+	)
+	var out := PackedStringArray()
+	var frame: int = 0
+	while not movie.finished() and frame < MOVIE_FRAME_CAP:
+		_append_frame(out, frame, page.shadow_oam(movie))
+		if _shots.has(frame):
+			page.draw(movie).save_png("%s_f%d.png" % [_shot_prefix, frame])
 		movie.advance_frame()
 		frame += 1
 	print("frame %d: finished" % frame)
