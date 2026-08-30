@@ -900,3 +900,95 @@ func test_an_egg_is_offered_stats_and_switch_and_no_move_row() -> void:
 	## `EggStatsJoypad` answers A with `.quit` rather than with a page.
 	screen.handle_button(Gen2Button.A)
 	assert_signal_emitted(screen, "closed")
+
+
+## `BillsPCDepositFuncDeposit` ends with `xor a` into both cursor bytes, and
+## `DepositPokemon` plays the stored Pokemon's cry on the way.
+func test_a_deposit_puts_the_cursor_back_on_the_first_row_and_plays_a_cry() -> void:
+	var save: Gen2SaveData = _save_with_two()
+	var third: Gen2BattleMon = Gen2BattleMon.create(
+		_data, Fixture.GEODUDE, 12, [Fixture.GROWL]
+	)
+	save.party.append(Gen2SaveBattleAdapter.from_battle_mon(third))
+	await _open_box_screen(save)
+	watch_signals(_box_screen)
+	_box_screen.handle_button(Gen2Button.DOWN)
+	_box_screen.handle_button(Gen2Button.DOWN)
+	_box_screen.handle_button(Gen2Button.A)
+	_box_screen.handle_button(Gen2Button.A)
+
+	assert_eq(save.party.size(), 2)
+	assert_signal_emitted_with_parameters(_box_screen, "cry_requested", [Fixture.GEODUDE])
+	var snapshot: Dictionary = _box_screen.box_snapshot()
+	assert_eq(int(snapshot["cursor"]), 0)
+	assert_eq(int(snapshot["scroll"]), 0)
+	assert_eq(snapshot["submenu"], [], "the submenu went with the row")
+
+
+## `.box_full` prints and returns to `.Submenu`, which is still on screen; only
+## `BillsPC_CheckMail_PreventBlackout` takes `BillsPCDepositFuncCancel` back to
+## the list. Neither menu carries `STATICMENU_WRAP`.
+func test_a_full_box_refuses_under_the_submenu_which_does_not_wrap() -> void:
+	var save: Gen2SaveData = _save_with_two()
+	for slot: int in Gen2SaveBox.CAPACITY:
+		save.boxes[0].slots[slot] = Gen2SaveBattleAdapter.from_battle_mon(
+			Gen2BattleMon.create(_data, Fixture.GEODUDE, 5, [Fixture.GROWL])
+		)
+	await _open_box_screen(save)
+	watch_signals(_box_screen)
+	_box_screen.handle_button(Gen2Button.A)
+	## Four rows, and up on the first stays on it.
+	_box_screen.handle_button(Gen2Button.UP)
+	assert_eq(int(_box_screen.box_snapshot()["submenu_cursor"]), 0)
+	for _press: int in 6:
+		_box_screen.handle_button(Gen2Button.DOWN)
+	assert_eq(int(_box_screen.box_snapshot()["submenu_cursor"]), 3)
+
+	for _press: int in 3:
+		_box_screen.handle_button(Gen2Button.UP)
+	_box_screen.handle_button(Gen2Button.A)
+	assert_eq(save.party.size(), 2, "nothing left the party")
+	var snapshot: Dictionary = _box_screen.box_snapshot()
+	assert_eq(String(snapshot["prompt"]), Gen2BoxScreen.PROMPT_BOX_FULL)
+	assert_eq(snapshot["submenu"], Gen2BoxScreen.SUBMENU_ROWS)
+	assert_signal_emitted_with_parameters(
+		_box_screen, "sfx_requested", [Gen2BoxScreen.SFX_WRONG, true]
+	)
+
+
+## `.a_button_2` reaches `.Init` without restoring the backup `.b_button_2` puts
+## back, so the first pass resumes on the list the Pokemon was moved into.
+func test_a_finished_move_stays_on_the_list_it_moved_into() -> void:
+	var save: Gen2SaveData = _save_with_two()
+	await _open_box_screen(save, Gen2BoxScreen.MODE_MOVE)
+	_box_screen.handle_button(Gen2Button.LEFT)
+	assert_eq(int(_box_screen.box_snapshot()["loaded"]), Gen2BoxScreen.LOADED_PARTY)
+	_box_screen.handle_button(Gen2Button.A)
+	_box_screen.handle_button(Gen2Button.A)
+	_box_screen.handle_button(Gen2Button.RIGHT)
+	_box_screen.handle_button(Gen2Button.A)
+	_spend_insert_frames()
+
+	assert_eq(save.party.size(), 1)
+	assert_eq(int(_box_screen.box_snapshot()["loaded"]), 1, "the box it went into")
+	assert_eq(String(_box_screen.box_snapshot()["prompt"]), Gen2BoxScreen.PROMPT_CHOOSE)
+
+
+## `.CheckTrivialMove`: the row the insert cursor points at has already shifted
+## up by the one that left, so a move down the same list lands in front of it.
+func test_a_move_down_one_list_lands_in_front_of_the_row_it_points_at() -> void:
+	var save: Gen2SaveData = _save_with_two()
+	for nickname: String in ["THIRD", "FOURTH"]:
+		var extra: Gen2SaveMon = Gen2SaveBattleAdapter.from_battle_mon(
+			Gen2BattleMon.create(_data, Fixture.GEODUDE, 12, [Fixture.GROWL])
+		)
+		extra.nickname = nickname
+		save.party.append(extra)
+	var moved: Dictionary = Gen2SaveStorage.move_mon(
+		save, _data, Gen2BoxScreen.LOADED_PARTY, 0, Gen2BoxScreen.LOADED_PARTY, 2, false
+	)
+	assert_true(moved["ok"], String(moved.get("reason", "")))
+	var order: Array[String] = []
+	for mon: Gen2SaveMon in save.party:
+		order.append(mon.nickname)
+	assert_eq(order, ["", "SPARKY", "THIRD", "FOURTH"], "GEODUDE carries no nickname")

@@ -2,12 +2,12 @@ extends SceneTree
 
 ## Photographs a window-resolution save-section screen for a cached cartridge.
 ##
-##   Godot --path . -s res://tools/preview_saves.gd -- <out.png> [light|dark] [WxH] [page]
+##   Godot --path . -s res://tools/preview_saves.gd -- <out.png> [light|dark] [WxH] [page] [game]
 ##
-## [page] is `saves`, `new`, `party`, `boxes` or `editor`. They are one command
-## because they are one section and share this harness. The size is what says
-## whether a page is responsive, so it is an argument rather than a constant: a
-## phone portrait and a desktop window are the same command twice.
+## [page] is `saves`, `new`, `party`, `boxes`, `boxes_move` or `editor`; [game]
+## picks a cartridge rather than the first cached one. The size is an argument
+## rather than a constant: a phone portrait and a desktop window are one command
+## twice, and it is what says whether a page is responsive.
 
 var _output: String = ""
 var _frames: int = 0
@@ -36,7 +36,10 @@ func _initialize() -> void:
 	# path does not resolve from outside the running scene, so the runtime is
 	# found on the root by name.
 	var runtime: Node = root.get_node_or_null(NodePath("GameRuntime"))
+	var wanted: StringName = StringName(args[4]) if args.size() > 4 else &""
 	for game_id: StringName in RomRegistry.ORDER:
+		if not wanted.is_empty() and game_id != wanted:
+			continue
 		var data: GameData = GameData.open(game_id)
 		if data != null:
 			runtime.call("select_game", game_id)
@@ -52,6 +55,7 @@ func _initialize() -> void:
 		"new": "res://game/save/save_screen.tscn",
 		"party": "res://game/save/party_screen.tscn",
 		"boxes": "res://game/save/box_screen.tscn",
+		"boxes_move": "res://game/save/box_screen.tscn",
 		"editor": "res://game/save/save_editor_screen.tscn",
 	}
 	if not scenes.has(page):
@@ -59,6 +63,12 @@ func _initialize() -> void:
 		quit(2)
 		return
 	_screen = load(String(scenes[page])).instantiate()
+	if page == "boxes_move":
+		_screen.set_context(
+			Gen2GameRuntime.data_or_any(),
+			Gen2GameRuntime.selected_save_or_null(), false, false,
+			Gen2BoxScreen.MODE_MOVE
+		)
 	root.add_child(_screen)
 	## `_ready` runs on the first frame rather than on `add_child` from here, so
 	## the form is opened once the pane it lives in exists, which is the order a

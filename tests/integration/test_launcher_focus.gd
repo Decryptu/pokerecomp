@@ -281,6 +281,24 @@ func test_nothing_focusable_is_not_an_error() -> void:
 	assert_null(Gen2FocusGuard.first_focusable(root))
 
 
+## A guard with nothing to focus has to let the arrow past. Reporting the ring
+## someone else was holding as its own left every direction press claimed, and
+## the screen routing its own buttons behind the guard never saw one.
+func test_a_guard_with_nothing_to_focus_does_not_claim_a_direction() -> void:
+	var elsewhere := Button.new()
+	add_child_autofree(elsewhere)
+	var root := Control.new()
+	add_child_autofree(root)
+	root.add_child(Label.new())
+	var guard: Gen2FocusGuard = Gen2FocusGuard.attach(root)
+	elsewhere.grab_focus()
+	await get_tree().process_frame
+
+	assert_same(_focus_owner(), elsewhere)
+	assert_false(guard.move_focus(Vector2.DOWN))
+	assert_same(_focus_owner(), elsewhere, "and it is left where it was")
+
+
 ## A modal is where a pad has to be, and where it was has to come back, or
 ## closing a sheet would strand the player with nothing selected.
 func test_a_sheet_takes_the_ring_and_gives_it_back() -> void:

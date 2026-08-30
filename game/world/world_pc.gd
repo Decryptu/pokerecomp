@@ -60,8 +60,7 @@ const BILLS_PC_NEEDS_POKEMON: String = "You gotta have\n#MON to call!"
 
 ## `MailboxPC.SubMenuData`'s four rows, inline menu strings the way BILL'S PC's
 ## own five are, and the five `text_far` stubs `.PutInPack` and `.AttachMail`
-## print through. Kept here rather than imported for the same reason: nothing
-## points at them, so there is no table to walk.
+## print through. Kept here for the same reason: nothing points at them.
 const MAILBOXITEM_READ: int = 0
 const MAILBOXITEM_PUT_IN_PACK: int = 1
 const MAILBOXITEM_ATTACH: int = 2

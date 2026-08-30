@@ -192,8 +192,13 @@ func test_change_box_switches_names_and_prints_a_box() -> void:
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOX_LIST)
 	assert_eq(host._box_index, 1)
 	assert_eq(host._save.current_box, 1)
+	## `.loop` copies the header again, so the list comes back on its first row
+	## rather than on the box that was just switched to.
+	assert_eq(host._cursor, 0)
+	assert_eq(host._pc_scroll, 0)
 
 	## PRINT over an empty box is `.EmptyBox` rather than a send.
+	host.handle_button(Gen2Button.DOWN)
 	host.handle_button(Gen2Button.A)
 	for _step: int in 2:
 		host.handle_button(Gen2Button.DOWN)
@@ -314,10 +319,10 @@ func test_move_without_mail_refuses_a_party_holding_mail_and_saves_otherwise() -
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOXES)
 
 	## Without the mail the row asks its own question, and a NO is `.refused`'s
-	## carry: back to the machine's menu with no listing opened.
+	## carry: back to the machine's menu with no listing opened. `.UseBillsPC`
+	## puts that menu back on the row it left, so MOVE is under the cursor still.
 	(host._save.party[0] as Gen2SaveMon).item = 0
-	for _step: int in 3:
-		host.handle_button(Gen2Button.DOWN)
+	assert_eq(host._cursor, Gen2WorldPC.BILLSPCITEM_MOVE_WITHOUT_MAIL)
 	host.handle_button(Gen2Button.A)
 	assert_eq(host._save_prompt.lines, Gen2SavePrompt.MOVE_MON_LINES)
 	host.handle_button(Gen2Button.A)
@@ -326,6 +331,101 @@ func test_move_without_mail_refuses_a_party_holding_mail_and_saves_otherwise() -
 	assert_null(host._save_prompt)
 	assert_null(host._boxes)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOXES)
+
+
+## `PC_PlayBootSound`, `PC_PlayChoosePCSound` and `PC_PlayShutdownSound`, the
+## three the machine spends on its own: one on the way in, one on every row but
+## TURN OFF, and one on `.shutdown`.
+func test_the_machine_boots_chooses_and_shuts_down_with_its_own_sounds() -> void:
+	await _open_pokemon_center_pc()
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	watch_signals(host)
+	assert_true(host.open_pc_machine(
+		host._world, _data, host._save, false, &"pokemon_center"
+	))
+	assert_signal_emitted_with_parameters(
+		host, "sfx_requested", [Gen2WorldServiceScreen.SFX_BOOT_PC, true]
+	)
+	host.handle_button(Gen2Button.A)
+	assert_signal_emitted_with_parameters(
+		host, "sfx_requested", [Gen2WorldServiceScreen.SFX_CHOOSE_PC_OPTION, true]
+	)
+
+	## `.loop` is behind the boot sound, so coming back to it plays nothing.
+	host.handle_button(Gen2Button.B)
+	assert_signal_emit_count(host, "sfx_requested", 2)
+	host.handle_button(Gen2Button.B)
+	assert_signal_emitted_with_parameters(
+		host, "sfx_requested", [Gen2WorldServiceScreen.SFX_SHUT_DOWN_PC, true]
+	)
+	await get_tree().process_frame
+	assert_null(_world_screen._service_host)
+
+
+## `ProfOaksPC`: `_OakPCText1`'s question first, `ProfOaksPCBoot` behind a YES,
+## and `_OakPCText4` on the way out whichever way it was answered. The row used
+## to open on the rating with neither box around it.
+func test_the_oak_pc_row_asks_first_and_closes_with_its_own_line() -> void:
+	await _open_pokemon_center_pc()
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	host._world.state.set_engine_flag(Gen2WorldState.ENGINE_POKEDEX, true)
+	host._open_pc(&"pokemon_center")
+	var rows: Array = []
+	for row: Dictionary in host._pc_rows:
+		rows.append(int(row["row"]))
+	host._cursor = rows.find(Gen2WorldPC.PCPCITEM_OAKS_PC)
+	host.handle_button(Gen2Button.A)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_OAK_ASK)
+	assert_eq(host._summary, _data.oak_pc_text("ask"))
+
+	## NO is `.shutdown`: the closing line and nothing rated.
+	host.handle_button(Gen2Button.DOWN)
+	host.handle_button(Gen2Button.A)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_TEXT)
+	assert_eq(host._summary, _data.oak_pc_text("closed"))
+	host.handle_button(Gen2Button.A)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC)
+
+	## YES rates first, and the same line is still the last box.
+	host._cursor = rows.find(Gen2WorldPC.PCPCITEM_OAKS_PC)
+	host.handle_button(Gen2Button.A)
+	host.handle_button(Gen2Button.A)
+	var boot: Dictionary = Gen2ProfOaksPC.boot(_data, host._world.state)
+	assert_eq(host._summary, String((boot["pages"] as Array)[0]))
+	for _page: int in (boot["pages"] as Array).size():
+		host.handle_button(Gen2Button.A)
+	assert_eq(host._summary, _data.oak_pc_text("closed"))
+	host.handle_button(Gen2Button.A)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC)
+
+
+## The reported defect. The box screen owns the whole screen while BILL'S PC is
+## open and the world routes its buttons, so a focus ring put up before
+## `set_context` said it was embedded claimed every direction on the way in and
+## the listing never left its first row.
+func test_the_deposit_list_walks_on_real_presses_with_focus_held_elsewhere() -> void:
+	await _open_pokemon_center_pc()
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	host.handle_button(Gen2Button.A)
+	host.handle_button(Gen2Button.DOWN)
+	host.handle_button(Gen2Button.A)
+	var boxes: Gen2BoxScreen = host._boxes
+	assert_not_null(boxes)
+	assert_null(boxes.get_node_or_null(^"FocusGuard"), "the world routes these buttons")
+
+	var elsewhere := Button.new()
+	add_child_autofree(elsewhere)
+	elsewhere.grab_focus()
+	await get_tree().process_frame
+	for step: int in 2:
+		var press := InputEventAction.new()
+		press.action = Gen2Button.action(Gen2Button.DOWN)
+		press.pressed = true
+		get_tree().root.push_input(press)
+		await get_tree().process_frame
+		assert_eq(int(boxes.box_snapshot()["cursor"]), step + 1)
+	boxes.close_embedded()
+	await get_tree().process_frame
 
 
 ## `special PokemonCenterPC` from a coord event, which is how every test above
