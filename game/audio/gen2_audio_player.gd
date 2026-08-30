@@ -155,14 +155,16 @@ func play_record(
 	var music: bool = _is_music(request_kind)
 	var key: String = "%d:%d" % [int(record.get("bank", -1)), int(record.get("address", -1))]
 	if music:
-		# `PlayMusic MUSIC_NONE` is `_InitSound`, not a stream: it is how the
-		# source stops everything.
+		# The source stops before it starts: `PlayMusic MUSIC_NONE` is
+		# `_InitSound`, and every caller that starts a piece spends one first,
+		# because `_PlayMusic` only loads the channels the new header names.
 		if int(record.get("index", -1)) == 0:
 			_engine.init_sound()
 			_music_key = ""
 			return {"ok": true, "played": true, "stopped": true}
 		if not restart and key == _music_key:
 			return {"ok": true, "played": false, "continued": true}
+		_engine.init_sound()
 
 	_start_stream()
 	var started: bool = false

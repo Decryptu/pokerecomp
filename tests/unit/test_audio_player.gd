@@ -16,18 +16,42 @@ func before_each() -> void:
 	_player.set_process(false)
 
 
-## One looping channel stream, so a started track stays started.
-func _record(bank: int, index: int = 1) -> Dictionary:
+## One looping channel stream, so a started track stays started. [param channel]
+## is the hardware channel it loads, which is `LoadChannel`'s own low three bits.
+func _record(bank: int, index: int = 1, channel: int = 0) -> Dictionary:
 	return {
 		"index": index,
 		"bank": bank,
 		"address": 0x4000,
 		"data_address": 0x4000,
 		"bytes": [
-			0x00, 0x03, 0x40,
+			channel, 0x03, 0x40,
 			0xD8, 0x10, 0xB1, 0xD4, 0x1F, 0xFC, 0x03, 0x40,
 		],
 	}
+
+
+## The same stream under a `channel_count 2` header, on channels 1 and 2.
+func _two_channel_record(bank: int) -> Dictionary:
+	var record: Dictionary = _record(bank)
+	record["bytes"] = [
+		0x40, 0x06, 0x40,
+		0x01, 0x06, 0x40,
+		0xD8, 0x10, 0xB1, 0xD4, 0x1F, 0xFC, 0x06, 0x40,
+	]
+	return record
+
+
+## `Music_Mom` names channels 2, 3 and 4 and `Music_NewBarkTown` 1, 2 and 3, and
+## `_PlayMusic` only loads the ones its own header names. Every source caller
+## spends `PlayMusic MUSIC_NONE` in front of it for this reason: without one the
+## town's first channel plays on under Mom's theme, at the town's own tempo.
+func test_a_new_piece_stops_the_channels_it_does_not_name() -> void:
+	assert_true(_player.play_record(_two_channel_record(2), &"map_music")["played"])
+	assert_eq(_player.audio_status()["active_channels"], [1, 2] as Array[int])
+
+	assert_true(_player.play_record(_record(3, 1, 1), &"music")["played"])
+	assert_eq(_player.audio_status()["active_channels"], [2] as Array[int])
 
 
 ## The app block's two volumes are the game's, not only the launcher's: they are
