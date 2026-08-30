@@ -2238,21 +2238,63 @@ func _award_experience(events: Array) -> void:
 func _give_experience_for(defeated: Gen2BattleMon, events: Array) -> void:
 	var participants: Array = (_participants[PLAYER] as Dictionary).keys()
 	var holders: Array = _exp_share_holders()
-	var halved: bool = not holders.is_empty()
+	var living: Array = _living_party_indices()
+	## Neither later generation halves, so a claimed share suppresses the halving.
+	var share: float = Gen2ModHost.experience_bystander_share({
+		"participants": participants.duplicate(),
+		"exp_share_holders": holders.duplicate(),
+		"living": living.duplicate(),
+		"is_trainer_battle": is_trainer_battle,
+	})
+	var halved: bool = not holders.is_empty() and share <= 0.0
 
-	_award_share(defeated, participants, halved, false, events)
+	var award: int = _award_share(defeated, participants, halved, false, events)
 	_award_share(defeated, holders, halved, true, events)
+	_award_bystanders(defeated, participants, holders, living, halved, share, award, events)
 
 	_participants[PLAYER] = {party(PLAYER).active: true}
 
 
+## Every living index neither pass paid, at [param share] of [param award]. Its
+## stat experience is the participant pass's block unchanged.
+func _award_bystanders(
+	defeated: Gen2BattleMon, participants: Array, holders: Array, living: Array,
+	halved: bool, share: float, award: int, events: Array
+) -> void:
+	if share <= 0.0 or award <= 0 or participants.is_empty():
+		return
+	var block: Dictionary = Gen2Experience.shared_block(
+		defeated.base_stat_exp_shape(), defeated.base_exp(), halved, participants.size()
+	)
+	var scaled: int = clampi(maxi(int(float(award) * share), 1), 0, Gen2Experience.MAX_EXP)
+	for index: int in living:
+		if participants.has(index) or holders.has(index):
+			continue
+		var learner: Gen2BattleMon = party(PLAYER).at(int(index))
+		if learner == null:
+			continue
+		_give_experience_to(
+			learner, int(index), scaled, block["stats"], false, events, true
+		)
+
+
+func _living_party_indices() -> Array:
+	var out: Array = []
+	var party_side: Gen2Party = party(PLAYER)
+	for index: int in party_side.size():
+		var member: Gen2BattleMon = party_side.at(index)
+		if member != null and not member.is_fainted():
+			out.append(index)
+	return out
+
+
 ## One of the two passes: the block divided among [param recipients], then handed
-## to each of them that is still standing.
+## to each of them that is still standing. Answers what one recipient was paid.
 func _award_share(
 	defeated: Gen2BattleMon, recipients: Array, halved: bool, by_exp_share: bool, events: Array
-) -> void:
+) -> int:
 	if recipients.is_empty():
-		return
+		return 0
 	var block: Dictionary = Gen2Experience.shared_block(
 		defeated.base_stat_exp_shape(), defeated.base_exp(), halved, recipients.size()
 	)
@@ -2264,6 +2306,7 @@ func _award_share(
 		var learner: Gen2BattleMon = party(PLAYER).at(int(index))
 		if learner != null and not learner.is_fainted():
 			_give_experience_to(learner, int(index), award, stat_gains, by_exp_share, events)
+	return award
 
 
 ## The one place a registered experience scale is applied, so everything a player
@@ -2476,7 +2519,7 @@ func _exp_share_holders() -> Array:
 
 func _give_experience_to(
 	learner: Gen2BattleMon, index: int, award: int, stat_gains: Dictionary,
-	by_exp_share: bool, events: Array
+	by_exp_share: bool, events: Array, bystander: bool = false
 ) -> void:
 	learner.gain_exp(award)
 	events.append({
@@ -2485,6 +2528,8 @@ func _give_experience_to(
 		# Which pass this came from. The cartridge prints one line either way; this
 		# tells a Pokémon in both passes from one awarded twice otherwise.
 		"exp_share": by_exp_share,
+		# Neither pass: a BYSTANDER SHARE paid a Pokemon that never fought.
+		"bystander": bystander,
 	})
 
 	learner.gain_stat_exp(stat_gains)

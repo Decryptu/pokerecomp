@@ -1892,6 +1892,7 @@ func test_the_provider_registrations_share_one_set_of_rules() -> void:
 	for register: Callable in [
 		func(p: Object) -> Dictionary: return host.register_catch_experience(stranger, p),
 		func(p: Object) -> Dictionary: return host.register_experience_scale(stranger, p),
+		func(p: Object) -> Dictionary: return host.register_experience_bystanders(stranger, p),
 	]:
 		assert_eq(StringName(register.call(same.new())["reason"]), &"unknown_mod_save_owner")
 
@@ -2038,6 +2039,147 @@ func experience_scale() -> float:
 	assert_eq(Gen2ModHost.experience_scale(), Gen2ModHost.MAX_EXPERIENCE_SCALE)
 	provider.set("value", 0.001)
 	assert_eq(Gen2ModHost.experience_scale(), Gen2ModHost.MIN_EXPERIENCE_SCALE)
+
+
+## A share is claimed exclusively, clamped to the host's ceiling, and answers the
+## cartridge for anything that is not a number.
+func test_a_bystander_share_is_exclusive_and_held_inside_the_hosts_range() -> void:
+	Gen2ModHost.reset()
+	assert_eq(Gen2ModHost.experience_bystander_share({}), 0.0, "no host at all")
+
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	var manifest: Gen2ModManifest = _loaded_manifest()
+	var policy := GDScript.new()
+	policy.source_code = """extends RefCounted
+var value: float = 0.5
+var seen: Dictionary = {}
+func experience_bystander_share(context: Dictionary) -> float:
+	seen = context
+	return value
+"""
+	policy.reload()
+	var provider: Object = policy.new()
+	assert_true(bool(host.register_experience_bystanders(manifest, provider).get("ok", false)))
+	assert_eq(host.experience_bystander_ids(), [manifest.id])
+	assert_eq(Gen2ModHost.experience_bystander_share({"living": [0, 1]}), 0.5)
+	assert_eq((provider.get("seen") as Dictionary)["living"], [0, 1])
+
+	var second := Gen2ModManifest.new()
+	second.id = &"other"
+	host._manifests[second.id] = second
+	assert_eq(
+		StringName(host.register_experience_bystanders(second, policy.new())["reason"]),
+		&"duplicate_experience_bystanders",
+		"two fractions have no join that does not depend on load order"
+	)
+
+	for refused: float in [NAN, INF, -INF]:
+		provider.set("value", refused)
+		assert_eq(Gen2ModHost.experience_bystander_share({}), 0.0, "not a number")
+	provider.set("value", -1.0)
+	assert_eq(Gen2ModHost.experience_bystander_share({}), 0.0)
+	provider.set("value", 4.0)
+	assert_eq(
+		Gen2ModHost.experience_bystander_share({}), Gen2ModHost.MAX_BYSTANDER_SHARE,
+		"nothing is paid more than a fighter"
+	)
+
+
+## The later generations' split: a bystander is paid a fraction of the fighter's
+## own award, once and last, and a claimed share suppresses the cartridge halving
+## so turning it on never cuts the fighter.
+func test_a_registered_bystander_share_pays_the_rest_of_the_party() -> void:
+	Gen2ModHost.reset()
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	var manifest: Gen2ModManifest = _loaded_manifest()
+	var policy := GDScript.new()
+	policy.source_code = """extends RefCounted
+var value: float = 0.0
+func experience_bystander_share(_context: Dictionary) -> float:
+	return value
+"""
+	policy.reload()
+	var provider: Object = policy.new()
+	assert_true(bool(host.register_experience_bystanders(manifest, provider).get("ok", false)))
+
+	var directory: String = RomCache.directory_for(&"modbystandertest", "0123456789abcdef")
+	var data: GameData = BattleFixture.build(directory)
+	var awards: Dictionary = {}
+	var flags: Dictionary = {}
+	var stat_gains: Dictionary = {}
+	for share: float in [0.0, 0.5, 1.0]:
+		provider.set("value", share)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 12345
+		var bench: Gen2BattleMon = Gen2BattleMon.create(
+			data, BattleFixture.PIKACHU, 5, [BattleFixture.THUNDERBOLT]
+		)
+		var battle: Gen2Battle = Gen2Battle.create_parties(
+			data,
+			Gen2Party.create([
+				Gen2BattleMon.create(
+					data, BattleFixture.PIKACHU, 5, [BattleFixture.THUNDERBOLT]
+				),
+				bench,
+			]),
+			Gen2Party.of(Gen2BattleMon.create(
+				data, BattleFixture.BULBASAUR, 5, [BattleFixture.TACKLE]
+			)),
+			rng, true
+		)
+		var paid: Dictionary = {}
+		for event: Dictionary in battle.award_win_experience():
+			if StringName(event["type"]) == Gen2Battle.EXP_GAINED:
+				paid[int(event["index"])] = int(event["amount"])
+				flags[share] = bool(event.get("bystander", false)) if int(event["index"]) == 1 \
+					else flags.get(share, false)
+			elif StringName(event["type"]) == Gen2Battle.STAT_EXP_GAINED \
+				and int(event["index"]) == 1:
+				stat_gains[share] = event["gains"]
+		awards[share] = paid
+	assert_eq(awards[0.0], {0: 67}, "the cartridge pays the fighter alone")
+	assert_eq(awards[0.5], {0: 67, 1: 33}, "Gen 6's half, floored the way a scale is")
+	assert_eq(awards[1.0], {0: 67, 1: 67}, "Gen 8 pays the whole party in full")
+	assert_true(bool(flags[1.0]), "a line for a Pokemon that never fought")
+	assert_false(flags[0.0], "nothing is a bystander at the cartridge's own share")
+	assert_eq(
+		stat_gains[1.0], stat_gains.get(0.5, stat_gains[1.0]),
+		"a bystander's EVs are the cartridge's hidden gain, not a rate"
+	)
+
+	## With a living Exp. Share holder the cartridge halves the block before both
+	## passes. A claimed share suppresses that, or turning the feature on would
+	## cut the award of the Pokemon that did the fighting.
+	var held: Dictionary = {}
+	for share: float in [0.0, 1.0]:
+		provider.set("value", share)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 12345
+		var holder: Gen2BattleMon = Gen2BattleMon.create(
+			data, BattleFixture.PIKACHU, 5, [BattleFixture.THUNDERBOLT]
+		)
+		holder.item = Gen2Experience.EXP_SHARE_ITEM
+		var battle: Gen2Battle = Gen2Battle.create_parties(
+			data,
+			Gen2Party.create([
+				Gen2BattleMon.create(
+					data, BattleFixture.PIKACHU, 5, [BattleFixture.THUNDERBOLT]
+				),
+				holder,
+			]),
+			Gen2Party.of(Gen2BattleMon.create(
+				data, BattleFixture.BULBASAUR, 5, [BattleFixture.TACKLE]
+			)),
+			rng, true
+		)
+		var paid: Dictionary = {}
+		for event: Dictionary in battle.award_win_experience():
+			if StringName(event["type"]) == Gen2Battle.EXP_GAINED:
+				paid[int(event["index"])] = paid.get(int(event["index"]), 0) + int(event["amount"])
+		held[share] = paid
+	assert_eq(held[0.0], {0: 33, 1: 33}, "the cartridge halves the block for both passes")
+	assert_eq(held[1.0], {0: 67, 1: 67}, "a claimed share never cuts the fighter")
+	RomCache.clear(directory)
 
 
 ## The one seam is the award itself, so every figure a player sees moves with it.

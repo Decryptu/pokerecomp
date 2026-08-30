@@ -151,6 +151,9 @@ const BATTLE_INFO_METHODS: Array[String] = ["annotate_battle"]
 const SHINY_ROLLS_METHODS: Array[String] = ["shiny_rolls"]
 const RUN_BUTTON_METHODS: Array[String] = ["runs_while_held"]
 const EXPERIENCE_SCALE_METHODS: Array[String] = ["experience_scale"]
+const EXPERIENCE_BYSTANDER_METHODS: Array[String] = ["experience_bystander_share"]
+
+const MAX_BYSTANDER_SHARE: float = 1.0
 
 ## A scale is a mod's number and the range is the host's, as with the rolls above.
 const MIN_EXPERIENCE_SCALE: float = 0.1
@@ -258,6 +261,8 @@ var _battle_info: Dictionary = {}
 var _shiny_rolls: Dictionary = {}
 var _run_buttons: Dictionary = {}
 var _experience_scales: Dictionary = {}
+## The one BYSTANDER SHARE policy, exclusive for [member _event_mutators]' reason.
+var _experience_bystanders: Dictionary = {}
 var _battle_renderers: Dictionary = {}
 ## The one id the player's view is chosen by, read from [Gen2ModState] when the
 ## host is built and written back whenever it changes. It is a bare id and may
@@ -728,14 +733,10 @@ static func allows_item_field_move(move: int) -> bool:
 	return false
 
 
-## Registers a REPEL RENEWAL provider under [param id]: which owned Repel to
-## offer when an active one runs out on a step.
-##
-## [param provider] is a [RefCounted] answering
-## [constant REPEL_PROVIDER_METHODS]: `repel_to_use(inventory)` is handed a
-## read-only `{item: quantity}` copy of the bag and answers one item number, or
-## 0 for none. Which of the three to prefer is the mod's; the prompt, the
-## transaction, the step count and the encounter ordering are the host's.
+## Registers a REPEL RENEWAL provider under [param id]: `repel_to_use(inventory)`
+## is handed a read-only copy of the bag and answers which owned Repel to offer
+## when an active one runs out, or 0. Which of the three to prefer is the mod's;
+## the prompt, the transaction, the step count and the ordering are the host's.
 func register_repel_renewal(id: StringName, provider: Object) -> Dictionary:
 	return _register_provider(_repel_renewals, REPEL_PROVIDER_METHODS, id, provider)
 
@@ -786,12 +787,9 @@ static func shiny_roll_count(context: Dictionary) -> int:
 
 
 ## Registers a CATCH EXPERIENCE policy for [param manifest]'s own run: whether a
-## successful wild capture awards the caught Pokemon's experience. Save bound, so
-## [param manifest] is the capability the way it is for
-## [method register_save_lifecycle] and a manifest this host did not discover
-## registers nothing. [param provider] answers `awards_catch_experience()`, read
-## every capture rather than once, so a mod that switched its own option off
-## mid-run is off from the next throw.
+## successful wild capture awards the caught Pokemon's experience. Save bound the
+## way [method register_save_lifecycle] is, and `awards_catch_experience()` is
+## read every capture rather than once. See `docs/MODS.md`.
 func register_catch_experience(manifest: Gen2ModManifest, provider: Object) -> Dictionary:
 	if not _owns_manifest(manifest):
 		return {"ok": false, "reason": &"unknown_mod_save_owner"}
@@ -864,13 +862,43 @@ static func experience_scale() -> float:
 	return clampf(scale, MIN_EXPERIENCE_SCALE, MAX_EXPERIENCE_SCALE)
 
 
+## Registers the one BYSTANDER SHARE policy, save bound the way
+## [method register_experience_scale] is. See `docs/MODS.md`.
+func register_experience_bystanders(manifest: Gen2ModManifest, provider: Object) -> Dictionary:
+	if not _owns_manifest(manifest):
+		return {"ok": false, "reason": &"unknown_mod_save_owner"}
+	if not _experience_bystanders.is_empty() and not _experience_bystanders.has(manifest.id):
+		return {
+			"ok": false, "reason": &"duplicate_experience_bystanders",
+			"detail": "%s: claimed by %s" % [manifest.id, _experience_bystanders.keys()[0]],
+		}
+	return _register_provider(
+		_experience_bystanders, EXPERIENCE_BYSTANDER_METHODS, manifest.id, provider
+	)
+
+
+func experience_bystander_ids() -> Array:
+	return _experience_bystanders.keys()
+
+
+## A fraction of a participant's award; 0.0 is the cartridge, and so is anything
+## that is not a number. Static and null-safe as [method experience_scale] is.
+static func experience_bystander_share(context: Dictionary) -> float:
+	if _instance == null or _instance._experience_bystanders.is_empty():
+		return 0.0
+	var provider: Object = _instance._experience_bystanders.values()[0]
+	var answered: float = float(
+		provider.call("experience_bystander_share", context.duplicate(true))
+	)
+	if not is_finite(answered):
+		return 0.0
+	return clampf(answered, 0.0, MAX_BYSTANDER_SHARE)
+
+
 ## Registers a BATTLE INFORMATION provider under [param id]: read-only annotations
 ## drawn on the hardware interface over whichever battle renderer is selected.
-## [param provider] answers `annotate_battle(snapshot)` with an array of
-## placements on the 20x18 tile grid, each `{"at": Vector2i}` plus either a `text`
-## string or a `tile` of 8x8 pixel indices. The snapshot is
-## [method Gen2BattleScreen.info_snapshot], so a provider computes nothing the
-## host already knows.
+## `annotate_battle(snapshot)` answers placements on the 20x18 tile grid off
+## [method Gen2BattleScreen.info_snapshot]. See `docs/MODS.md`.
 func register_battle_info(id: StringName, provider: Object) -> Dictionary:
 	return _register_provider(_battle_info, BATTLE_INFO_METHODS, id, provider)
 

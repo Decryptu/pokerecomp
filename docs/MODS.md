@@ -33,7 +33,7 @@ user://mods/<id>/
 | `id` | Lowercase `[a-z0-9][a-z0-9_-]*`. Addresses the directory and the registry keys |
 | `name` | Shown to the player |
 | `version` | The mod's own version. Strict `major.minor.patch` |
-| `api_version` | The oldest host this mod runs on, not a number to keep current: raise it when the mod starts using a newer seam. `Gen2ModManifest.API_VERSION` is 27 and a host accepts 1 to 27. [Contract versions](#contract-versions) says what each added |
+| `api_version` | The oldest host this mod runs on, not a number to keep current: raise it when the mod starts using a newer seam. `Gen2ModManifest.API_VERSION` is the number [Contract versions](#contract-versions) ends on, and a host accepts 1 to that. [Contract versions](#contract-versions) says what each added |
 | `entry` | A `.gd` path inside the mod directory, or inside the pack when there is one |
 | `pack` | Optional `.pck` or `.zip` beside `mod.json`, holding the mod's files |
 | `description` | Optional |
@@ -130,6 +130,7 @@ runs, since every version so far has only added.
 | 26 | A run button, and a scale on every experience award |
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
+| 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
 
 ## Installing
 
@@ -1022,6 +1023,45 @@ the rest. Three things it does not do: stat experience is the cartridge's own EV
 gain and is not scaled; the product truncates the way every division in
 `Gen2Experience` does, with a non-zero award floored at 1 so a 0.5x run still
 levels; and the result is clamped to `Gen2Experience.MAX_EXP`.
+
+## Paying a Pokemon that never fought
+
+`register_experience_bystanders(manifest, provider)` answers what a living party
+member paid by neither cartridge pass receives, as a fraction of a participant's
+own award. 0.0 is the cartridge and is what an unregistered host does; 0.5 is
+Gen 6's Exp. Share and 1.0 is Gen 8's.
+
+```gdscript
+class Multi:
+	func experience_bystander_share(context: Dictionary) -> float:
+		return 0.5 if not (context["exp_share_holders"] as Array).is_empty() else 0.0
+```
+
+The context carries what the split would otherwise have to be guessed at:
+
+| Field | Is |
+|---|---|
+| `participants` | Party indices the first pass paid |
+| `exp_share_holders` | Party indices the second pass paid |
+| `living` | Every unfainted party index |
+| `is_trainer_battle` | Whether the award already carries the trainer bonus |
+
+Registered with the manifest `register()` was handed, and **exclusive**: the
+second registration is refused with `duplicate_experience_bystanders` whoever
+makes it. A share is not a product the way a scale is, and multiplying two mods'
+fractions would let load order decide what a party is paid.
+
+Three things the host does around it. A claimed share above zero **suppresses the
+cartridge halving**, since neither later generation halves and enabling the
+feature would otherwise cut the fighter's award. A bystander is paid **once and
+last**, after both passes, with the participant pass's award scaled and floored
+at 1 the way every scaled award is. Its stat experience is the participant pass's
+block unchanged: a bystander's EVs are the cartridge's hidden gain rather than a
+rate. The `exp_gained` event carries `bystander` beside `exp_share`, so a line
+printed for a Pokemon that never fought is told from either pass.
+
+`award_win_experience()` and `award_capture_experience()` both run the same pass,
+so a skipped fight and a capture split the same way.
 
 ## Annotating the battle
 
