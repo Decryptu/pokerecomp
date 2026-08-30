@@ -124,7 +124,9 @@ func move_focus(direction: Vector2) -> bool:
 	var current: Control = viewport.gui_get_focus_owner()
 	if current == null or not top.is_ancestor_of(current):
 		refresh()
-		return viewport.gui_get_focus_owner() != null
+		# The ring this guard placed, not one left elsewhere on the page.
+		var landed: Control = viewport.gui_get_focus_owner()
+		return landed != null and top.is_ancestor_of(landed)
 	var best: Control = _toward(current, direction, focusable_controls(top), top == _root)
 	if best == null or best == current:
 		return false

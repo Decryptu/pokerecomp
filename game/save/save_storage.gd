@@ -1,12 +1,9 @@
 class_name Gen2SaveStorage
 extends RefCounted
 
-## Atomic party and PC-box transactions for a validated project save.
-##
-## Each operation edits a deep candidate, validates it against the selected
-## cartridge cache, writes it through the save store, and only then updates the
-## shared runtime save object. A failed write or validation therefore leaves
-## both the in-memory and on-disk save untouched.
+## Atomic party and PC-box transactions for a validated project save. Each edits
+## a deep candidate, validates it, writes it through the save store and only then
+## updates the shared save, so a failed write leaves both copies untouched.
 
 
 static func deposit_party_to_box(
@@ -77,11 +74,10 @@ static func withdraw_box_to_party(
 	}, persist)
 
 
-## `RemoveMonFromPartyOrBox` behind `BillsPCDepositFuncRelease` and Bill's PC's
-## own `.release`: the same atomic write the two transfers make, with nothing on
-## the other end of it. Both of the source's refusals are the caller's, since
-## both are boxes it prints before the yes/no: `BillsPC_IsMonAnEgg` and, for the
-## party alone, `BillsPC_CheckMail_PreventBlackout`.
+## `RemoveMonFromPartyOrBox` behind both `.release`s: the same atomic write the
+## transfers make, with nothing on the other end. `BillsPC_IsMonAnEgg` and
+## `BillsPC_CheckMail_PreventBlackout` are the caller's, printed before the
+## yes/no.
 static func release_party_member(
 	save: Gen2SaveData, data: GameData, party_index: int, persist: bool = true
 ) -> Dictionary:
@@ -124,12 +120,9 @@ static func release_box_slot(
 
 ## `MovePKMNWithoutMail_InsertMon`'s four branches in one: the mon leaves
 ## [param from_index] of one list and is inserted at [param to_index] of the
-## other, everything behind it shifting down. A list is the party when it is
-## `Gen2BoxScreen.LOADED_PARTY` and the box before it otherwise, which is
-## `wBillsPC_LoadedBox`'s own numbering.
-##
-## `BillsPC_CheckSpaceInDestination` is the one refusal, and only for a move
-## between two lists: a reorder inside one cannot overflow it.
+## other. A list is the party at `Gen2BoxScreen.LOADED_PARTY` and the box before
+## it otherwise, `wBillsPC_LoadedBox`'s own numbering.
+## `BillsPC_CheckSpaceInDestination` is the one refusal, and only across lists.
 static func move_mon(
 	save: Gen2SaveData,
 	data: GameData,
@@ -154,7 +147,10 @@ static func move_mon(
 	if from_loaded == to_loaded:
 		var reordered: Array = source.duplicate()
 		reordered.remove_at(from_index)
-		reordered.insert(clampi(to_index, 0, reordered.size()), mon)
+		## `.CheckTrivialMove`: the row pointed at has already shifted up by the
+		## one that left, so the insert row loses one when it came from above.
+		var at: int = to_index - 1 if to_index > from_index else to_index
+		reordered.insert(clampi(at, 0, reordered.size()), mon)
 		_write_loaded_list(candidate, from_loaded, reordered)
 	else:
 		var destination: Array = _loaded_list(candidate, to_loaded)

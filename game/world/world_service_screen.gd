@@ -10,7 +10,7 @@ signal completed(results: Array)
 ## screen owns the one player a map's music and its effects share, and
 ## [Gen2WorldAudioHost] is an inspection probe that must never stand in for it.
 ## [param waited] is `WaitPlaySFX`, or a `WaitSFX` spent by hand, so the request
-## can never be the one `PlaySFX`'s priority gate refuses; the wait is not spent.
+## is never the one `PlaySFX`'s gate refuses; the wait itself is not spent.
 signal sfx_requested(index: int, waited: bool)
 ## `PlayMonCry2` from a screen this one opens, passed on for the same reason.
 signal cry_requested(species: int)
@@ -22,6 +22,7 @@ enum MODE {
 	PC_DECO, PC_DECO_LIST, PC_DECO_SIDE,
 	PC_BOX_SUBMENU,
 	PC_MAILBOX, PC_MAIL_SUBMENU, PC_MAIL_CONFIRM,
+	PC_OAK_ASK,
 	PC_SAVE,
 	ELEVATOR,
 }
@@ -34,12 +35,10 @@ const FLOOR_NAMES: Array[String] = [
 ## `Elevator_MenuData`'s `db 4, 0`: four rows of floors are shown at a time.
 const ELEVATOR_ROWS: int = 4
 
-## `PokemonCenterPC`'s own box storage, which is the one row that opens a screen
-## rather than a list. It is added as a child the way the MAP card adds the
-## region map, so the top menu is still there when the box screen closes.
+## `PokemonCenterPC`'s box storage, added as a child the way MAP adds the map.
 const BOX_SCENE := preload("res://game/save/box_screen.tscn")
-## `.AttachMail`'s own `PartyMenuSelect`, which is the same list the day care
-## and the move tutor open.
+const OAK_PC: String = "PROF.OAK'S PC"
+## `.AttachMail`'s `PartyMenuSelect`, the list the day care also opens.
 const PARTY_SCENE: PackedScene = preload("res://game/save/party_screen.tscn")
 
 ## `wPokegearRadioMusicPlaying`, which `ExitPokegearRadio_HandleMusic` branches
@@ -84,6 +83,10 @@ const SFX_TRANSACTION: int = 0x22
 ## `PC_PlaySwapItemsSound`, which asks for the same effect twice through
 ## `WaitPlaySFX`. Hexadecimal, the way `constants/sfx_constants.asm` counts.
 const SFX_SWITCH_POKEMON: int = 0x20
+## `PC_PlayBootSound`, `PC_PlayShutdownSound` and `PC_PlayChoosePCSound`.
+const SFX_BOOT_PC: int = 0x0D
+const SFX_SHUT_DOWN_PC: int = 0x0E
+const SFX_CHOOSE_PC_OPTION: int = 0x0F
 ## `BillsPC_PlaceEmptyBoxString_SFX`'s own `SFX_WRONG`.
 const SFX_WRONG: int = 0x19
 ## `PokegearPhone_MakePhoneCall`'s own `SFX_CALL`, and the `SFX_NO_SIGNAL`
@@ -213,27 +216,35 @@ const BOX_LIST_ROWS: int = 4
 const PC_ROW_MODES: Array = [
 	MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES, MODE.PC_BOX_LIST, MODE.PC_BOX_SUBMENU,
 	MODE.PC_DECO, MODE.PC_DECO_LIST, MODE.PC_DECO_SIDE,
-	MODE.PC_MAILBOX, MODE.PC_MAIL_SUBMENU, MODE.PC_MAIL_CONFIRM, MODE.PC_SAVE,
+	MODE.PC_MAILBOX, MODE.PC_MAIL_SUBMENU, MODE.PC_MAIL_CONFIRM, MODE.PC_OAK_ASK,
+	MODE.PC_SAVE,
 ]
 ## The `db rows` byte of every scrolling menu here, which is how much of its list
 ## a window shows. `wMenuScrollPosition` is one value, the way it is one address
 ## on the cartridge: only one of these lists is ever open.
 const SCROLLING_ROWS: Dictionary = {
 	MODE.PC_BOX_LIST: BOX_LIST_ROWS,
-	## `MailboxPC.TopMenuData`, `.PCItemsMenuData` and
-	## `_PlayerDecorationMenu.ScrollingMenuData`.
+	## `.TopMenuData`, `.PCItemsMenuData` and `.ScrollingMenuData`.
 	MODE.PC_MAILBOX: 4,
 	MODE.PC_ITEM_LIST: 4,
 	MODE.PC_DECO_LIST: 8,
 }
+## No `STATICMENU_WRAP`, and every `ScrollingMenu`, whose `_2DMENU_EXIT_UP` and
+## `_DOWN` hand an end to a scroll rather than to the other end of the list.
+const NO_WRAP_MODES: Array = [
+	MODE.PC_BOXES, MODE.PC_BOX_LIST, MODE.PC_BOX_SUBMENU, MODE.PC_ITEM_LIST,
+	MODE.PC_MAILBOX, MODE.PC_MAIL_SUBMENU, MODE.PC_MAIL_CONFIRM, MODE.PC_OAK_ASK,
+	MODE.PC_DECO_SIDE,
+]
 var _pc_scroll: int = 0
-## `wCurBox`, which CHANGE BOX writes and both lists read. It is the save's, so
-## the box a deposit lands in outlives the machine being switched off.
+## `wCurBox`, which CHANGE BOX writes and both lists read. The save's, so the box
+## a deposit lands in outlives the machine being switched off.
 var _box_index: int = 0
-## Whether storage was opened without the Pokemon Center machine around it, so
-## its B leaves the host rather than stepping back to a menu. See
-## [method open_bills_pc].
+## Whether storage was opened without the machine around it, so its B leaves the
+## host rather than stepping back to a menu. See [method open_bills_pc].
 var _bills_pc_only: bool = false
+## `.UseBillsPC`'s `push af`/`pop bc` around a row's routine.
+var _bills_pc_cursor: int = 0
 ## Whether the menu on screen is the host's own question rather than a script's.
 ## See [method open_prompt].
 var _host_prompt: bool = false
@@ -480,10 +491,9 @@ func _build_ui() -> void:
 
 
 ## A YES/NO the HOST asks rather than one a script staged: the same
-## `Script_yesorno` box in the same place, answered back to whoever opened this
-## instead of into the script runner. [method completed] carries one
-## `{kind: &"host_choice", choice}` row, choice 0 for YES and 1 for NO, and -1
-## when it was cancelled.
+## `Script_yesorno` box in the same place, answered back to whoever opened this.
+## [method completed] carries one `{kind: &"host_choice", choice}` row, choice 0
+## for YES and 1 for NO, and -1 when it was cancelled.
 func open_prompt(
 	world: Gen2WorldAPI,
 	data: GameData,
@@ -1217,8 +1227,7 @@ func _finish_apricorns() -> void:
 
 ## `Mom_SetUpDepositMenu` and `Mom_SetUpWithdrawMenu` over
 ## `Mom_WithdrawDepositMenuJoypad`. The model owns the amount and the cursor;
-## this owns the box and the blink. `Mom_Wait10Frames` is not held: the world
-## screen already spends the press that opened the box.
+## this owns the box and the blink. `Mom_Wait10Frames` is not held.
 func _open_mom_bank(values: Dictionary) -> void:
 	_mode = MODE.MOM_BANK
 	_mom_dial = Gen2WorldMoneyDial.open(
@@ -1313,9 +1322,8 @@ func open_mom_bank(
 	return true
 
 
-## BILL'S PC on its own, without the machine's top menu in front of it: the
-## opening a registered start-menu action asks for. `PC_CheckPartyForPokemon` is
-## the same refusal the machine has, applied here rather than trusted.
+## BILL'S PC on its own, the opening a registered start-menu action asks for.
+## `PC_CheckPartyForPokemon` is applied here rather than trusted.
 func open_bills_pc(
 	world: Gen2WorldAPI,
 	data: GameData,
@@ -1333,12 +1341,13 @@ func open_bills_pc(
 		_show_error("Storage needs a party.")
 		return false
 	_bills_pc_only = true
+	_bills_pc_cursor = 0
 	_open_bills_pc_menu()
 	return true
 
 
-## `special PokemonCenterPC` and `special PlayersHousePC` without a script in
-## front of them, for the screenshot drivers: no preview map carries either cell.
+## `special PokemonCenterPC` and `special PlayersHousePC` with no script in front
+## of them, for the screenshot drivers: no preview map carries either cell.
 func open_pc_machine(
 	world: Gen2WorldAPI,
 	data: GameData,
@@ -1353,9 +1362,14 @@ func open_pc_machine(
 	if _world == null or _data == null:
 		_show_error("The PC has no world or cartridge cache.")
 		return false
-	if not Gen2WorldPC.can_open(_save):
-		_show_error("The PC needs a party.")
-		return false
+	## `PC_CheckPartyForPokemon`, which answers with its own sound and shuts down
+	## again. `_PlayersHousePC` never asks it: the bedroom's PC is items and mail.
+	if mode != &"players_house" and not Gen2WorldPC.can_open(_save):
+		sfx_requested.emit(SFX_CHOOSE_PC_OPTION, false)
+		_finish_runtime({"ok": true, "script_value": 0, "cancelled": true})
+		return true
+	## `PC_PlayBootSound`, once per machine rather than per return to its menu.
+	sfx_requested.emit(SFX_BOOT_PC, true)
 	_open_pc(mode)
 	return true
 
@@ -1375,7 +1389,6 @@ func _leave_bills_pc() -> void:
 func _open_pc(mode: StringName) -> void:
 	_pc_house = mode == &"players_house"
 	if not _pc_house and not Gen2WorldPC.can_open(_save):
-		## `.PokecenterPCCantUseText`: the machine answers and shuts down again.
 		_finish_runtime({"ok": true, "script_value": 0, "cancelled": true})
 		return
 	if _pc_house:
@@ -1420,9 +1433,8 @@ func _open_pc_item_list(action: int) -> void:
 	_refresh_pc_entries()
 	if _pc_entries.is_empty():
 		## `.CheckItemsInBag`'s `.PlayersPCNoItemsText`, which the source prints
-		## for a deposit. The other two open an empty scrolling menu there, which
-		## can only be cancelled, so they are refused with the same box rather
-		## than drawn empty.
+		## for a deposit. The other two would open a list that can only be
+		## cancelled, so they take the same box rather than being drawn empty.
 		_status = _data.pokecenter_pc_text("no_items")
 		_render_rows()
 		return
@@ -1465,6 +1477,7 @@ func _confirm_pc_row() -> void:
 		MODE.PC_MAILBOX: _open_mail_submenu,
 		MODE.PC_MAIL_SUBMENU: _confirm_mail_submenu,
 		MODE.PC_MAIL_CONFIRM: _confirm_mail_row,
+		MODE.PC_OAK_ASK: _confirm_oak_ask,
 		MODE.PC: _confirm_pc_menu_row,
 	}
 	var handler: Callable = handlers.get(_mode, _confirm_player_pc_row)
@@ -1476,6 +1489,7 @@ func _confirm_box_list_row(row: int) -> void:
 
 
 func _confirm_bills_pc_row(row: int) -> void:
+	_bills_pc_cursor = _cursor
 	match row:
 		Gen2WorldPC.BILLSPCITEM_WITHDRAW:
 			_open_boxes(Gen2BoxScreen.MODE_WITHDRAW)
@@ -1525,8 +1539,13 @@ func _confirm_mail_row(row: int) -> void:
 
 
 func _confirm_pc_menu_row(row: int) -> void:
+	## `PC_PlayChoosePCSound`, which every row but TURN OFF opens on.
+	if row != Gen2WorldPC.PCPCITEM_TURN_OFF:
+		sfx_requested.emit(SFX_CHOOSE_PC_OPTION, true)
 	match row:
 		Gen2WorldPC.PCPCITEM_BILLS_PC:
+			## `BillsPC` reaches `_BillsPC` afresh, on its own first row.
+			_bills_pc_cursor = 0
 			_open_bills_pc_menu()
 		Gen2WorldPC.PCPCITEM_PLAYERS_PC:
 			_open_pc_items()
@@ -1546,6 +1565,8 @@ func _confirm_player_pc_row(row: int) -> void:
 		Gen2WorldPC.PLAYERSPCITEM_TOSS_ITEM:
 			_open_pc_item_list(row)
 		Gen2WorldPC.PLAYERSPCITEM_MAIL_BOX:
+			## `MailboxPC` writes `wCurMessageIndex` on the way in.
+			_mail_index = 0
 			_open_mailbox()
 		Gen2WorldPC.PLAYERSPCITEM_DECORATION:
 			_open_decorations()
@@ -1618,12 +1639,31 @@ func _change_pc_quantity(step: int) -> void:
 ## returns to the loop. A cache with no rating table has nothing to print, which
 ## is what an empty boot says.
 func _open_pc_oak() -> void:
-	var boot: Dictionary = Gen2ProfOaksPC.boot(_data, _world.state)
-	if boot.is_empty():
+	if Gen2ProfOaksPC.boot(_data, _world.state).is_empty():
 		_status = "PROF.OAK'S PC needs a cache that carries its ratings."
 		return
+	_mode = MODE.PC_OAK_ASK
+	_cursor = 0
+	_pc_rows = [{"row": 0, "name": "YES"}, {"row": 1, "name": "NO"}]
+	_title = OAK_PC
+	_summary = _data.oak_pc_text("ask")
+	_status = ""
+	_render_rows()
+
+
+## `ProfOaksPCBoot` behind the YES. A NO is the same `.shutdown` B reaches.
+func _confirm_oak_ask(row: int) -> void:
+	if row != 0:
+		_open_oak_closed()
+		return
+	var boot: Dictionary = Gen2ProfOaksPC.boot(_data, _world.state)
 	_pc_sfx = int(boot["sfx"])
-	_open_pc_text(boot["pages"], &"top", "PROF.OAK'S PC")
+	_open_pc_text(boot["pages"], &"oak_closed", OAK_PC)
+
+
+## `.shutdown`'s `_OakPCText4`, which both answers pass through.
+func _open_oak_closed() -> void:
+	_open_pc_text([_data.oak_pc_text("closed")], &"top", OAK_PC)
 
 
 ## `_PlayerDecorationMenu`'s top menu: only a category the player owns something
@@ -1841,6 +1881,9 @@ func _advance_pc_text() -> void:
 	if _pc_after == &"bills_pc":
 		_open_bills_pc_menu()
 		return
+	if _pc_after == &"oak_closed":
+		_open_oak_closed()
+		return
 	_open_pc(&"pokemon_center")
 
 
@@ -1854,7 +1897,7 @@ func _open_bills_pc_menu() -> void:
 		_open_pc_text([Gen2WorldPC.BILLS_PC_NEEDS_POKEMON], &"top", "BILL's PC")
 		return
 	_mode = MODE.PC_BOXES
-	_cursor = 0
+	_cursor = _bills_pc_cursor
 	_box_index = clampi(
 		_save.current_box if _save != null else 0, 0, Gen2SaveData.BOX_COUNT - 1
 	)
@@ -1870,8 +1913,10 @@ func _open_bills_pc_menu() -> void:
 ## Choosing one opens `BillsPC_ChangeBoxSubmenu`.
 func _open_box_list() -> void:
 	_mode = MODE.PC_BOX_LIST
-	_cursor = _box_index
-	_pc_scroll = clampi(_box_index - BOX_LIST_ROWS + 1, 0, Gen2SaveData.BOX_COUNT - BOX_LIST_ROWS)
+	## `.loop` copies the header and zeroes `wMenuScrollPosition` every time
+	## round, so the picker opens on the first box rather than on `wCurBox`.
+	_cursor = 0
+	_pc_scroll = 0
 	_pc_rows = []
 	for index: int in Gen2SaveData.BOX_COUNT:
 		_pc_rows.append({
@@ -1980,9 +2025,8 @@ func _refresh_box_counts() -> void:
 
 
 ## BILL'S PC's own two lists. The panel steps aside for the box screen the way it
-## does for the region map, so the menu is still there when the boxes close.
-## `_PlayerMailBoxMenu`: `InitMail` answers zero when `sMailboxCount` is, and
-## the routine prints `.EmptyMailboxText` instead of opening the list.
+## does for the region map. `_PlayerMailBoxMenu`: `InitMail` answers zero when
+## `sMailboxCount` is, and prints `.EmptyMailboxText` instead of a list.
 func _open_mailbox() -> void:
 	_pc_rows = Gen2WorldPC.mailbox_entries(_save)
 	if _pc_rows.is_empty():
@@ -1993,7 +2037,7 @@ func _open_mailbox() -> void:
 		return
 	_mode = MODE.PC_MAILBOX
 	## `MailboxPC` keeps `wCurMessageIndex` across the submenu, so the list
-	## reopens on the message that was just acted on rather than at the top.
+	## reopens on the message just acted on.
 	_cursor = clampi(_mail_index, 0, _pc_rows.size() - 1)
 	_title = _data.pokecenter_pc_row("mail_box", true)
 	_summary = ""
@@ -2081,8 +2125,10 @@ func _open_mail_attach() -> void:
 	host.mouse_filter = Control.MOUSE_FILTER_STOP
 	host.z_index = 5
 	host.set_screen(_service_hardware)
-	add_child(host)
+	## Before the tree: a screen told it is embedded afterwards has already put
+	## up the focus ring that swallows the arrows this screen routes.
 	host.set_context(_data, _save, true)
+	add_child(host)
 	host.selection_made.connect(_on_mail_attach_selected)
 	host.open_selection()
 
@@ -2126,8 +2172,8 @@ func _open_boxes(mode: int) -> void:
 	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	host.z_index = 5
 	host.set_screen(_service_hardware)
-	add_child(host)
 	host.set_context(_data, _save, _persist, true, mode, _box_index)
+	add_child(host)
 	host.cry_requested.connect(_on_boxes_cry)
 	host.sfx_requested.connect(sfx_requested.emit)
 	host.closed.connect(_on_boxes_closed)
@@ -2298,9 +2344,8 @@ func _on_card_switched(direction: int) -> void:
 
 ## `wPokegearRadioMusicPlaying`, for the host that owns the driver:
 ## `ExitPokegearRadio_HandleMusic` restarts the map's music only when the radio
-## card has played something over it, and every other service leaves it alone.
-## The restart lands when this overlay closes rather than when the card does,
-## since the overlay is what the world is waiting on rather than the card.
+## card has played something over it. The restart lands when this overlay closes
+## rather than when the card does: the overlay is what the world waits on.
 func radio_music_playing() -> int:
 	return _radio_music
 
@@ -2455,7 +2500,8 @@ func _move_cursor(delta: int) -> void:
 	var count: int = _option_count()
 	if count <= 0:
 		return
-	_cursor = wrapi(_cursor + delta, 0, count)
+	_cursor = clampi(_cursor + delta, 0, count - 1) if NO_WRAP_MODES.has(_mode) \
+		else wrapi(_cursor + delta, 0, count)
 	if _mode == MODE.PC_ITEM_LIST:
 		_pc_quantity = 1
 	## `ScrollingMenu` keeps the cursor inside its own window and moves the
@@ -2505,7 +2551,7 @@ func _confirm() -> void:
 	if _mode in [
 		MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES, MODE.PC_BOX_LIST,
 		MODE.PC_DECO, MODE.PC_DECO_LIST, MODE.PC_DECO_SIDE, MODE.PC_BOX_SUBMENU,
-		MODE.PC_MAILBOX, MODE.PC_MAIL_SUBMENU, MODE.PC_MAIL_CONFIRM,
+		MODE.PC_MAILBOX, MODE.PC_MAIL_SUBMENU, MODE.PC_MAIL_CONFIRM, MODE.PC_OAK_ASK,
 	]:
 		_confirm_pc_row()
 		return
@@ -2545,6 +2591,7 @@ const CANCEL_HANDLERS: Dictionary = {
 	MODE.PC_MAILBOX: &"_open_pc_items",
 	MODE.PC_MAIL_SUBMENU: &"_open_mailbox",
 	MODE.PC_MAIL_CONFIRM: &"_refuse_mail_to_pack",
+	MODE.PC_OAK_ASK: &"_open_oak_closed",
 	MODE.PC_DECO: &"_leave_decorations",
 	MODE.PC_DECO_LIST: &"_open_decorations",
 	MODE.PC_DECO_SIDE: &"_cancel_deco_side",
@@ -2562,11 +2609,13 @@ func _cancel() -> void:
 
 
 func _shut_down_pc() -> void:
+	sfx_requested.emit(SFX_SHUT_DOWN_PC, true)
 	_finish_runtime({"ok": true, "script_value": 0})
 
 
 func _cancel_pc_items() -> void:
 	if _pc_house:
+		sfx_requested.emit(SFX_SHUT_DOWN_PC, true)
 		_finish_runtime({"ok": true, "script_value": 0})
 	else:
 		_open_pc(&"pokemon_center")
@@ -2812,8 +2861,8 @@ func _service_box() -> Gen2MenuBox:
 		MODE.PC_MAIL_SUBMENU:
 			## `.SubMenuHeader`'s `menu_coords 0, 0, 13, 9`.
 			return Gen2MenuBox.from_coords(0, 0, 13, 9, Gen2MenuBox.STATICMENU_CURSOR)
-		MODE.PC_MAIL_CONFIRM:
-			## `YesNoBox`'s own box, which `.PutInPack` opens over its question.
+		MODE.PC_MAIL_CONFIRM, MODE.PC_OAK_ASK:
+			## `YesNoBox`, which `.PutInPack` and `ProfOaksPC` open over theirs.
 			return Gen2MenuBox.yes_no()
 		MODE.PC_SAVE:
 			## The same `YesNoBox`, and nothing at all on the timed steps: they
@@ -2919,6 +2968,7 @@ func _option_count() -> int:
 		MODE.PC, MODE.PC_ITEMS, MODE.PC_BOXES, MODE.PC_BOX_LIST,
 		MODE.PC_DECO, MODE.PC_DECO_LIST, MODE.PC_DECO_SIDE, MODE.PC_BOX_SUBMENU,
 		MODE.PC_MAILBOX, MODE.PC_MAIL_SUBMENU, MODE.PC_MAIL_CONFIRM, MODE.PC_SAVE,
+		MODE.PC_OAK_ASK,
 	]:
 		return _pc_rows.size()
 	if _mode == MODE.PC_ITEM_LIST:

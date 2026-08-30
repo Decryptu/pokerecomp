@@ -4,10 +4,8 @@ extends RefCounted
 ## Bill's PC on the tile grid the hardware uses (`engine/pokemon/bills_pc.asm`).
 ## `Gen2BoxScreen` owns the party, the boxes and what a row may do; this is the
 ## picture, the way [Gen2PackPage] is the pack's. Every position is the source's
-## own: `BillsPC_BoxName`'s header box, `BillsPC_RefreshTextboxes`' listing,
-## `PCMonInfo`'s left column and `BillsPC_PlaceString`'s bottom box. Node-free;
-## the selected Pokemon's pic and the cursor are drawn through palettes of their
-## own and are composed over the page by the screen.
+## own. Node-free; the selected Pokemon's pic and the cursor carry palettes of
+## their own and are composed over the page by the screen.
 
 const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20
@@ -18,13 +16,11 @@ const ROWS: int = 18
 const NAME_BOX: Rect2i = Rect2i(8, 0, 12, 3)
 const NAME_AT: Vector2i = Vector2i(10, 1)
 
-## `hlcoord 8, 2 / lb bc, 10, 10`, whose top corners are then overwritten with
-## `└` and `┘` so the listing joins the header box above it rather than closing
-## against it.
+## `hlcoord 8, 2 / lb bc, 10, 10`, whose top corners are overwritten with `└` and
+## `┘` so the listing joins the header box rather than closing against it.
 const LIST_BOX: Rect2i = Rect2i(8, 2, 12, 12)
 const LIST_AT: Vector2i = Vector2i(9, 4)
-## `ld a, $5 / ld [wBillsPC_NumMonsOnScreen], a`, and the two rows a nickname
-## steps by.
+## `ld a, $5 / ld [wBillsPC_NumMonsOnScreen], a`, and a nickname's two rows.
 const LIST_HEIGHT: int = 5
 const ROW_SPACING: int = 2
 ## `.CancelString`, the row `CopyBoxmonSpecies` terminates every list with.
@@ -34,9 +30,8 @@ const CANCEL: String = "CANCEL"
 const PROMPT_BOX: Rect2i = Rect2i(0, 15, 20, 3)
 const PROMPT_AT: Vector2i = Vector2i(1, 16)
 
-## `PCMonInfo`'s own column. The pic is seven tiles square at `hlcoord 1, 4`,
-## laid down column by column (`ld [hli], a / add 7`), which is the order
-## `GetMonFrontpic` decompresses into.
+## `PCMonInfo`'s own column. The pic is seven tiles square at `hlcoord 1, 4`, laid
+## down column by column (`ld [hli], a / add 7`), `GetMonFrontpic`'s own order.
 const PIC_AT: Vector2i = Vector2i(1, 4)
 const PIC_TILES: int = 7
 const LEVEL_AT: Vector2i = Vector2i(1, 12)
@@ -44,23 +39,25 @@ const GENDER_AT: Vector2i = Vector2i(5, 12)
 const ITEM_AT: Vector2i = Vector2i(7, 12)
 const SPECIES_AT: Vector2i = Vector2i(1, 14)
 
-## `PrintLevel`'s `<LV>`, and the two markers `BillsPC_InitGFX` copies
-## `PCMailGFX` over: `$5c` for a held mail and `$5d` for any other held item.
-## Everything on the page is printed with the battle-extra strip loaded, which
-## `BillsPC_InitGFX` does before it copies `PCMailGFX` over two of its tiles.
+## `PrintLevel`'s `<LV>`, and the four tiles `BillsPC_InitGFX` copies `PCMailGFX`
+## over the battle-extra strip's own `$5c` to `$5f`: a held mail, any other held
+## item, and the two arrows `BillsPC_MoveMonWOMail_BoxNameAndArrows` puts either
+## side of the box name.
 const FONT: StringName = Gen2Text.FONT_BATTLE_EXTRA
 const CODE_LEVEL: int = 0x6E
 const MAIL_CODE: int = 0x5C
 const ITEM_CODE: int = 0x5D
+const ARROW_RIGHT_CODE: int = 0x5E
+const ARROW_LEFT_CODE: int = 0x5F
+const ARROW_LEFT_AT: Vector2i = Vector2i(8, 1)
+const ARROW_RIGHT_AT: Vector2i = Vector2i(19, 1)
 
-## `BillsPC_UpdateSelectionCursor`'s OAM, as (x, y, tile, x flip, y flip) in
-## screen pixels: `dbsprite` is x tile, y tile, x pixel, y pixel, and the
-## hardware's own 8 and 16 pixel bias is taken off here. The whole set moves down
-## sixteen pixels per cursor row, so only the row inside the listing is stored.
-## The two profiles draw different rings out of different sheets: Crystal's
-## twenty-four objects are two tiles flipped into four edges, and Gold and
-## Silver's twenty are six tiles with no flip in them. Reading either set out of
-## the other's sheet draws the side pieces along the top.
+## `BillsPC_UpdateSelectionCursor`'s OAM as (x, y, tile, x flip, y flip) in
+## screen pixels, pinned to the source's own operands by `tools/checks/pc.gd`.
+## The set moves down sixteen pixels a row, so only the first row is stored.
+## Crystal's twenty-four objects are two tiles flipped into four edges; Gold and
+## Silver's twenty are six tiles with no flip. Reading either set out of the
+## other's sheet draws the side pieces along the top.
 const CURSOR_STEP: int = 16
 const CURSOR_SPRITES: Array = [
 	[72, 22, 0, false, false], [80, 22, 0, false, false],
@@ -68,11 +65,11 @@ const CURSOR_SPRITES: Array = [
 	[104, 22, 0, false, false], [112, 22, 0, false, false],
 	[120, 22, 0, false, false], [128, 22, 0, false, false],
 	[136, 22, 0, false, false], [143, 22, 0, false, false],
-	[72, 46, 0, false, true], [80, 46, 0, false, true],
-	[88, 46, 0, false, true], [96, 46, 0, false, true],
-	[104, 46, 0, false, true], [112, 46, 0, false, true],
-	[120, 46, 0, false, true], [128, 46, 0, false, true],
-	[136, 46, 0, false, true], [143, 46, 0, false, true],
+	[72, 41, 0, false, true], [80, 41, 0, false, true],
+	[88, 41, 0, false, true], [96, 41, 0, false, true],
+	[104, 41, 0, false, true], [112, 41, 0, false, true],
+	[120, 41, 0, false, true], [128, 41, 0, false, true],
+	[136, 41, 0, false, true], [143, 41, 0, false, true],
 	[70, 30, 1, false, false], [70, 33, 1, false, true],
 	[145, 30, 1, true, false], [145, 33, 1, true, true],
 ]
@@ -95,7 +92,7 @@ var frame_style: int = 0
 var font: Gen2Font = null
 ## Which cartridge's cursor set the screen draws.
 var _profile: StringName = RomRegistry.CRYSTAL
-## `PCMailGFX`, the two markers a held item is printed as.
+## `PCMailGFX`: the two markers a held item is printed as and the two arrows.
 var _mail: PackedByteArray = PackedByteArray()
 
 
@@ -115,10 +112,9 @@ static func from_data(data: GameData) -> Gen2PCBoxPage:
 
 ## The whole 160x144 page as palette indices.
 ##
-## [param state] is the screen's own: `box_name`, the visible `rows` of at most
-## [constant LIST_HEIGHT] nicknames with `cancel` on the last one, `prompt` for
-## the line the bottom box carries, and `mon` for whatever `PCMonInfo` prints
-## about the row the cursor stands on.
+## [param state] is the screen's own: `box_name`, `arrows` for MOVE PKMN W/O
+## MAIL's own two, the visible `rows` with `cancel` on the last one, `prompt` for
+## the bottom box, and `mon` for what `PCMonInfo` prints beside the cursor.
 func draw(state: Dictionary) -> PackedByteArray:
 	var indices := PackedByteArray()
 	indices.resize(COLUMNS * TILE * ROWS * TILE)
@@ -127,6 +123,9 @@ func draw(state: Dictionary) -> PackedByteArray:
 	var width: int = COLUMNS * TILE
 	_box(indices, width, NAME_BOX)
 	_text(indices, width, String(state.get("box_name", "")), NAME_AT)
+	if bool(state.get("arrows", false)):
+		_marker(indices, width, ARROW_LEFT_CODE, ARROW_LEFT_AT)
+		_marker(indices, width, ARROW_RIGHT_CODE, ARROW_RIGHT_AT)
 	_box(indices, width, LIST_BOX)
 	## The two corners `BillsPC_RefreshTextboxes` writes over the frame it has
 	## just drawn, which is what joins the two boxes into one.
@@ -231,8 +230,8 @@ func _code(indices: PackedByteArray, width: int, code: int, at: Vector2i) -> voi
 	font.draw_code(code, indices, width, at.x * TILE, at.y * TILE, FONT)
 
 
-## One of `PCMailGFX`'s two tiles, which sit where the battle-extra strip's own
-## $5c and $5d would be: the copy is made after `LoadFontsBattleExtra`.
+## One of `PCMailGFX`'s four tiles; the copy is made after
+## `LoadFontsBattleExtra`.
 func _marker(
 	indices: PackedByteArray, width: int, code: int, at: Vector2i
 ) -> void:
