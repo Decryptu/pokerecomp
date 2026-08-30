@@ -175,16 +175,17 @@ static func _purchase_refusal(
 	var total: int = price * quantity
 	var owned: int = world.state.item_quantity(item)
 	var next_quantity: int = owned + quantity
-	if next_quantity > MAX_ITEM_STACK:
-		return _failure(&"item_stack_full", {
-			"item": item, "quantity": quantity, "owned": owned,
-			"maximum": MAX_ITEM_STACK,
-		})
+	## `BuyMenuLoop` runs `CompareMoney` before `ReceiveItem`: price refuses first.
 	var balance: int = world.state.money(MONEY_ACCOUNT)
 	if total < 0 or total > balance:
 		return _failure(&"insufficient_money", {
 			"item": item, "price": price, "quantity": quantity,
 			"total": total, "balance": balance,
+		})
+	if next_quantity > MAX_ITEM_STACK:
+		return _failure(&"item_stack_full", {
+			"item": item, "quantity": quantity, "owned": owned,
+			"maximum": MAX_ITEM_STACK,
 		})
 	return {
 		"ok": true,
@@ -212,8 +213,7 @@ static func can_sell(data: GameData, item: int) -> bool:
 	return Gen2WorldPack.can_toss(data, item)
 
 
-## `DisplaySellingPrice`: the whole stack is multiplied and then halved, so the
-## shift is on the total rather than on each unit's price.
+## `DisplaySellingPrice`: the shift is on the multiplied total, not on each unit.
 static func sell_price(data: GameData, item: int, quantity: int = 1) -> int:
 	if data == null or quantity <= 0:
 		return 0
