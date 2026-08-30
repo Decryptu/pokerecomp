@@ -13,6 +13,12 @@ extends Node
 ## nothing to the launcher; [Gen2LauncherSheet] is what joins it today.
 const MODAL_GROUP: StringName = &"gen2_focus_modal"
 
+## Nodes in this group are reached only through an [member edge_targets] entry
+## and steer themselves from their own [method Control._gui_input]. A tab strip
+## needs it: up from a page has to land on the tab that page belongs to, and the
+## search answers with whichever tab sits above the control being left.
+const ASIDE_GROUP: StringName = &"gen2_focus_aside"
+
 const SIDES: Dictionary = {
 	&"left": Vector2.LEFT, &"right": Vector2.RIGHT,
 	&"up": Vector2.UP, &"down": Vector2.DOWN,
@@ -22,7 +28,7 @@ const SIDES: Dictionary = {
 ## first control is a corner toggle would start a pad there rather than on it.
 var preferred: Control = null
 ## Direction to a [Callable] taking the control being left and answering where to
-## go when nothing on the screen lies that way. A floating dock is over the page
+## go when nothing on the screen lies that way. A floating bar is over the page
 ## rather than under it, so a long page's last control has nothing below it.
 var edge_targets: Dictionary = {}
 
@@ -85,15 +91,15 @@ func refresh() -> void:
 		target.grab_focus()
 
 
-## What the guard may look at: the last modal under [member _root], so a sheet
-## opened over a sheet owns the arrows, or the whole screen when there is none.
+## The last modal in the tree, so a sheet opened over a sheet owns the arrows,
+## or the whole screen when there is none. Ancestry is not the test: a launcher
+## sheet is opened over the screen rather than inside the shell, and a guard that
+## looked only under itself left every control in one with no neighbours.
 func _effective_root() -> Control:
 	var top: Control = _root
 	for node: Node in _root.get_tree().get_nodes_in_group(MODAL_GROUP):
 		var control := node as Control
-		if control == null or not control.is_visible_in_tree():
-			continue
-		if control == _root or _root.is_ancestor_of(control):
+		if control != null and control.is_visible_in_tree():
 			top = control
 	return top
 
@@ -164,31 +170,91 @@ func _toward(
 		else null
 
 
+## How far off the line of travel a control may sit, per unit along it.
+const CONE: float = 2.0
+
+## The control [param direction] reaches. Three rules on top of the distance,
+## each a defect before it was a rule: a candidate starts past the edge being
+## left rather than past its centre, one lined up with what is being left beats
+## one that is not, and nothing outside [constant CONE] is reached. The settings
+## rail broke all three: 507 across, level with the rows, and the only thing
+## below the last of them.
 static func _neighbor(
 	current: Control, direction: Vector2, controls: Array[Control]
 ) -> Control:
-	var origin: Vector2 = current.get_global_rect().get_center()
+	var here: Rect2 = current.get_global_rect()
+	var origin: Vector2 = here.get_center()
 	var best: Control = null
 	var best_score: float = INF
+	var best_lined_up: bool = false
 	for candidate: Control in controls:
 		if candidate == current:
 			continue
-		var delta: Vector2 = candidate.get_global_rect().get_center() - origin
-		var forward: float = delta.dot(direction)
-		if forward <= 1.0:
+		var there: Rect2 = candidate.get_global_rect()
+		if _gap_along(here, there, direction) <= 1.0:
 			continue
+		var delta: Vector2 = there.get_center() - origin
 		var sideways: float = absf(delta.cross(direction))
+		var forward: float = delta.dot(direction)
+		var lined_up: bool = _overlaps_across(here, there, direction) \
+			and _shares_pane(current, candidate)
+		if not lined_up and sideways > forward * CONE:
+			continue
 		var score: float = forward + sideways * 2.5
-		if score < best_score:
-			best_score = score
-			best = candidate
+		if lined_up != best_lined_up:
+			if not lined_up:
+				continue
+		elif score >= best_score:
+			continue
+		best_score = score
+		best_lined_up = lined_up
+		best = candidate
 	return best
 
 
+## A pane taller than its window puts its last rows past its own bottom, so a
+## button under the pane measured nearer than the next row.
+static func _shares_pane(current: Control, candidate: Control) -> bool:
+	var pane: ScrollContainer = _pane_of(current)
+	return pane == null or pane == _pane_of(candidate)
+
+
+static func _pane_of(control: Control) -> ScrollContainer:
+	var walk: Node = control
+	while walk != null:
+		var pane := walk as ScrollContainer
+		if pane != null:
+			return pane
+		walk = walk.get_parent()
+	return null
+
+
+static func _gap_along(here: Rect2, there: Rect2, direction: Vector2) -> float:
+	if absf(direction.y) > absf(direction.x):
+		return there.position.y - here.end.y if direction.y > 0.0 \
+			else here.position.y - there.end.y
+	return there.position.x - here.end.x if direction.x > 0.0 \
+		else here.position.x - there.end.x
+
+
+## Whether two rectangles share the axis [param direction] does not travel.
+static func _overlaps_across(here: Rect2, there: Rect2, direction: Vector2) -> bool:
+	if absf(direction.y) > absf(direction.x):
+		return here.position.x < there.end.x and there.position.x < here.end.x
+	return here.position.y < there.end.y and there.position.y < here.end.y
+
+
+static func set_dead_end(control: Control, side: StringName) -> void:
+	_set_neighbor(control, side, null)
+
+
+## An empty neighbour is not "nothing that way" to the engine but "search the
+## viewport yourself", which walked out of a sheet on the first press with
+## nowhere to go. A control with no neighbour is pointed at itself.
 static func _set_neighbor(control: Control, side: StringName, target: Control) -> void:
-	var path := NodePath()
-	if target != null:
-		path = control.get_path_to(target)
+	var path: NodePath = control.get_path_to(
+		target if target != null else control
+	)
 	match side:
 		&"left": control.focus_neighbor_left = path
 		&"right": control.focus_neighbor_right = path
@@ -211,7 +277,7 @@ static func _collect_focusable(root: Node, out: Array[Control]) -> void:
 	for child: Node in root.get_children():
 		var control := child as Control
 		if control != null:
-			if not control.is_visible_in_tree():
+			if not control.is_visible_in_tree() or control.is_in_group(ASIDE_GROUP):
 				continue
 			if _takes_focus(control):
 				out.append(control)
@@ -232,7 +298,7 @@ static func _first_focusable(root: Node, skip_panes: bool) -> Control:
 	for child: Node in root.get_children():
 		var control := child as Control
 		if control != null:
-			if not control.visible:
+			if not control.visible or control.is_in_group(ASIDE_GROUP):
 				continue
 			if _focusable(control) and not (skip_panes and _scroll_with_controls(control)):
 				return control

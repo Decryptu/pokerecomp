@@ -41,14 +41,14 @@ func _build() -> void:
 		add_child(_binding_row(button))
 	_build_mod_actions()
 
-	add_child(Gen2LauncherUI.field(_theme, "On-screen buttons", Gen2LauncherUI.segmented(
-		_theme,
-		["Automatic", "Always", "Never"],
+	add_child(Gen2LauncherUI.choice(
+		_theme, &"touch", "On-screen buttons", ["Automatic", "Always", "Never"],
 		maxi(Gen2Options.TOUCH_MODES.find(_options.touch_mode), 0),
 		func(index: int) -> void:
 			_options.touch_mode = Gen2Options.TOUCH_MODES[index]
-			changed.emit()
-	)))
+			changed.emit(),
+		_host
+	))
 	add_child(Gen2LauncherUI.muted(
 		_theme,
 		"Automatic shows them while you are using the touchscreen. If you turn "
@@ -81,14 +81,12 @@ func _build_mod_actions() -> void:
 	))
 	for action: Dictionary in actions:
 		add_child(_mod_row(action))
-	add_child(Gen2LauncherUI.field(_theme, "Mod buttons on screen", Gen2LauncherUI.segmented(
-		_theme,
-		["Off", "On"],
-		1 if _options.touch_layout.mod_buttons_shown else 0,
-		func(index: int) -> void:
-			_options.touch_layout.mod_buttons_shown = index == 1
+	add_child(Gen2LauncherUI.switch(
+		_theme, &"touch", "Mod buttons on screen", _options.touch_layout.mod_buttons_shown,
+		func(on: bool) -> void:
+			_options.touch_layout.mod_buttons_shown = on
 			changed.emit()
-	)))
+	))
 	add_child(Gen2LauncherUI.muted(
 		_theme,
 		"Off by default so a mod cannot cover the screen. Switch them on and "

@@ -65,7 +65,7 @@ func _build() -> void:
 	add_child(scroll)
 	_list = Gen2LauncherUI.column(Gen2LauncherUI.GAP_MD)
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(_list)
+	scroll.content().add_child(_list)
 
 	_status = Gen2LauncherUI.muted(_theme, "")
 	add_child(_status)
@@ -76,7 +76,7 @@ func refresh() -> void:
 	# Never empty: the project's own index is followed by every build.
 	for source: Dictionary in Gen2ModIndex.followed():
 		_list.add_child(_card(source))
-	_list.add_child(Gen2LauncherUI.dock_safe_space())
+	_list.add_child(Gen2LauncherUI.bottom_safe_space())
 
 
 func _card(source: Dictionary) -> Control:

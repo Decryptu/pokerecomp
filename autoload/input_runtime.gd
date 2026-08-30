@@ -27,6 +27,8 @@ var _scheme: Dictionary = {}
 ## [method Gen2ModHost.register_action].
 var _mod_controls: Dictionary = {}
 var _touch_mode: StringName = Gen2Options.TOUCH_AUTO
+## Which letters a badge prints for a pad button. See [member Gen2Options.pad_layout].
+var _pad_layout: StringName = Gen2InputActions.PAD_LAYOUT_AUTO
 var _layout: Gen2TouchLayout = Gen2TouchLayout.new()
 var _device: StringName = Gen2InputDevice.KEYBOARD
 var _handheld: bool = Gen2InputDevice.is_handheld()
@@ -91,6 +93,8 @@ func _ready() -> void:
 		DisplayServer.is_touchscreen_available(),
 	)
 	apply_options(Gen2OptionsStore.current())
+	# Under `auto` a pad arriving changes every legend on screen.
+	Input.joy_connection_changed.connect(_on_joypad_changed)
 
 
 ## Installs an options object's control scheme and touch settings. The settings
@@ -102,6 +106,7 @@ func apply_options(options: Gen2Options) -> void:
 	_mod_controls = options.mod_controls
 	_touch_mode = options.touch_mode
 	_layout = options.touch_layout
+	_pad_layout = options.pad_layout
 	Gen2InputActions.install(_scheme)
 	install_mod_actions()
 	scheme_changed.emit()
@@ -138,6 +143,10 @@ func touch_layout() -> Gen2TouchLayout:
 
 func touch_mode() -> StringName:
 	return _touch_mode
+
+
+func pad_layout() -> StringName:
+	return _pad_layout
 
 
 func device() -> StringName:
@@ -329,6 +338,11 @@ func _input(event: InputEvent) -> void:
 	if kind.is_empty():
 		return
 	_set_device(kind)
+
+
+func _on_joypad_changed(_device_id: int, _connected: bool) -> void:
+	if _pad_layout == Gen2InputActions.PAD_LAYOUT_AUTO:
+		scheme_changed.emit()
 
 
 func _set_device(kind: StringName) -> void:

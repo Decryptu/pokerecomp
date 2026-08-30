@@ -12,6 +12,8 @@ extends VBoxContainer
 
 ## Asks the launcher for its file picker: the page owns no OS dialog.
 signal install_requested
+## What [method hints] would answer has changed; the shell owns the bar.
+signal hints_changed
 
 ## A feed and a mod archive are both small. This stops a hostile or broken server
 ## streaming forever into memory.
@@ -127,7 +129,7 @@ func _build() -> void:
 	_list_view.add_child(scroll)
 	_list = Gen2LauncherUI.column(Gen2LauncherUI.GAP_MD)
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(_list)
+	scroll.content().add_child(_list)
 
 
 ## The page's primary action is stable while the source check starts and stops
@@ -198,7 +200,7 @@ func _relist() -> void:
 
 	if groups.is_empty() and failures.is_empty():
 		_list.add_child(_empty_state())
-		_list.add_child(Gen2LauncherUI.dock_safe_space())
+		_list.add_child(Gen2LauncherUI.bottom_safe_space())
 		return
 	for group: Dictionary in groups:
 		_list.add_child(Gen2LauncherUI.caption(_theme, String(group["label"])))
@@ -208,7 +210,7 @@ func _relist() -> void:
 		_list.add_child(Gen2LauncherUI.caption(_theme, "Not loaded"))
 		for failure: Dictionary in failures:
 			_list.add_child(_refusal(failure))
-	_list.add_child(Gen2LauncherUI.dock_safe_space())
+	_list.add_child(Gen2LauncherUI.bottom_safe_space())
 	_fetch_next_icon()
 
 
@@ -371,13 +373,12 @@ func _row_for(id: StringName) -> Dictionary:
 	return {}
 
 
-## Opens one mod's own page. Everything the list does not carry is there.
 func open_mod(id: StringName) -> void:
 	var row: Dictionary = _row_for(id)
 	if row.is_empty():
 		return
 	if _detail == null:
-		_detail = Gen2ModDetailPage.create(_theme)
+		_detail = Gen2ModDetailPage.create(_theme, _host)
 		_detail.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		_detail.closed.connect(show_list)
 		_detail.enabled_changed.connect(set_enabled)
@@ -388,7 +389,6 @@ func open_mod(id: StringName) -> void:
 	_show(_detail)
 
 
-## Opens the sources page: what the player follows, and what to add.
 func open_sources() -> void:
 	if _sources == null:
 		_sources = Gen2ModSourcesPage.create(_theme)
@@ -402,6 +402,16 @@ func open_sources() -> void:
 	_show(_sources)
 
 
+## A sub-view answers cancel itself, so the shell's way back is not offered.
+func hints() -> Array:
+	if current_view() != &"list":
+		return [{"action": &"ui_cancel", "label": "Mods", "run": show_list}]
+	return [{
+		"action": &"ui_menu", "label": "Install from file",
+		"run": func() -> void: install_requested.emit(),
+	}]
+
+
 func show_list() -> void:
 	refresh()
 	_show(_list_view)
@@ -410,9 +420,9 @@ func show_list() -> void:
 func _show(view: Control) -> void:
 	for child: Node in _views.get_children():
 		(child as Control).visible = child == view
+	hints_changed.emit()
 
 
-## The view on screen, for a test that would otherwise have to guess.
 func current_view() -> StringName:
 	if _detail != null and _detail.visible:
 		return &"mod"
@@ -431,7 +441,6 @@ func fetch_feed(feed: String) -> void:
 	_fetch_feed(feed)
 
 
-## Reads every followed source one at a time, and downloads nothing.
 func check_for_updates() -> void:
 	if _busy or not _check_queue.is_empty() or not _update_queue.is_empty():
 		return
@@ -468,7 +477,6 @@ func available_update_count() -> int:
 	return update_rows().size()
 
 
-## Every installed mod a source offers a newer version of, and nothing else.
 func update_rows() -> Array:
 	var out: Array = []
 	for group: Dictionary in Gen2ModCatalogue.groups(
@@ -480,7 +488,6 @@ func update_rows() -> Array:
 	return out
 
 
-## The header's one button is two actions: read the sources, or take the updates.
 func _on_update_button() -> void:
 	if available_update_count() > 0:
 		download_all()
@@ -517,7 +524,6 @@ func _download_next_update() -> void:
 	)
 
 
-## Which action the button offers, called wherever a queue or a listing moves.
 func _sync_update_button() -> void:
 	if _check_updates_button == null:
 		return
@@ -618,7 +624,6 @@ func download(row: Dictionary, finished: Callable = Callable()) -> void:
 		_settled(finished, false)
 
 
-## Deferred rather than nested: a batch of ten is otherwise ten frames of stack.
 func _settled(finished: Callable, ok: bool) -> void:
 	if finished.is_valid():
 		finished.call_deferred(ok)

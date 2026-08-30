@@ -118,6 +118,8 @@ var controls: Dictionary = Gen2InputActions.defaults()
 ## action is not one of the cartridge's eight and an uninstalled mod's leftover
 ## row should be visibly not one of them.
 var mod_controls: Dictionary = {}
+## See [method Gen2InputActions.resolve_pad_layout].
+var pad_layout: StringName = Gen2InputActions.PAD_LAYOUT_AUTO
 var touch_mode: StringName = TOUCH_AUTO
 var touch_layout: Gen2TouchLayout = Gen2TouchLayout.new()
 ## Whether the player has answered the question the reset chord asks the first
@@ -232,6 +234,7 @@ func to_dict() -> Dictionary:
 		"rules": rules.to_dict(),
 		"controls": Gen2InputActions.to_dict(controls),
 		"mod_controls": mod_controls.duplicate(true),
+		"pad_layout": String(pad_layout),
 		"touch_mode": String(touch_mode),
 		"touch_layout": touch_layout.to_dict(),
 		"soft_reset_acknowledged": soft_reset_acknowledged,
@@ -274,6 +277,7 @@ static func parse(raw: Variant) -> Gen2Options:
 	options.rules = Gen2Rules.parse(row.get("rules"))
 	options.controls = Gen2InputActions.sanitize(row.get("controls"))
 	options.mod_controls = Gen2InputActions.sanitize_mod_controls(row.get("mod_controls"))
+	options.pad_layout = _one_of(row.get("pad_layout", ""), Gen2InputActions.PAD_LAYOUTS)
 	options.touch_mode = _one_of(row.get("touch_mode", ""), TOUCH_MODES)
 	options.touch_layout = Gen2TouchLayout.parse(row.get("touch_layout"))
 	options.soft_reset_acknowledged = bool(row.get("soft_reset_acknowledged", false))

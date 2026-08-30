@@ -13,7 +13,6 @@ extends Control
 signal selection_changed(game_id: StringName)
 signal insert_requested(game_id: StringName)
 signal play_requested(game_id: StringName)
-signal layout_changed
 
 ## How big a cartridge beside the selection is, as a fraction of it.
 const SIDE: float = 0.56
@@ -31,19 +30,10 @@ const MIN_HEIGHT: float = 130.0
 const EXILE: float = 2.6
 ## Where a cartridge has faded out completely, in slots.
 const VANISH: float = 1.34
-## The most of the stage its own furniture may measure away. The controls above
-## and the floating dock below are laid over the shelf rather than beside it, so
-## past this the cartridge is what disappears: a phone in landscape is where the
-## two together first ask for more height than the shelf has to give.
-const FURNITURE_MAX_SHARE: float = 0.5
 ## How far a pointer may move while pressed and still count as a click.
 const TAP: float = 6.0
 
 var selected: int = 0
-## Space owned by controls above and by the floating dock below. The cartridge
-## is measured in what remains, so neither can be pushed outside a short window.
-var top_inset: float = 0.0
-var bottom_inset: float = Gen2LauncherButton.DOCK_SIDE + Gen2LauncherUI.DOCK_VERTICAL_PADDING
 
 var _theme: Gen2LauncherTheme = null
 var _cartridges: Array[Gen2Cartridge] = []
@@ -103,11 +93,6 @@ func selected_id() -> StringName:
 
 func selected_cartridge() -> Gen2Cartridge:
 	return _cartridges[selected] if selected < _cartridges.size() else null
-
-
-func set_top_inset(value: float) -> void:
-	top_inset = maxf(value, 0.0)
-	_place_all()
 
 
 ## Moves the carousel onto [param index], wrapping rather than clamping: the row
@@ -301,14 +286,10 @@ func _shortest(delta: float) -> float:
 func _place_all() -> void:
 	if _cartridges.is_empty() or size.x <= 0.0:
 		return
-	bottom_inset = Gen2LauncherUI.dock_reserve(get_window())
-	# Both insets give way together, so the cartridge stays centred between them
-	# rather than sliding under whichever one was asked to yield.
-	var furniture: float = top_inset + bottom_inset
-	var squeeze: float = minf(1.0, size.y * FURNITURE_MAX_SHARE / maxf(furniture, 1.0))
-	var usable_height: float = maxf(size.y - furniture * squeeze, 1.0)
+	# The page owns the room its own plate and the hint bar take, so the stage is
+	# given a rectangle it may fill rather than one it has to measure out of.
 	var hero_height: float = minf(
-		clampf(usable_height * 0.88, MIN_HEIGHT, MAX_HEIGHT), usable_height
+		clampf(size.y * 0.88, MIN_HEIGHT, MAX_HEIGHT), size.y
 	)
 	var hero_width: float = hero_height * Gen2Cartridge.ASPECT
 	# The whole row fits whenever fitting it leaves a cartridge worth looking at.
@@ -321,7 +302,7 @@ func _place_all() -> void:
 	hero_width = minf(hero_width, fitted)
 	hero_height = hero_width / Gen2Cartridge.ASPECT
 	_stride = hero_width * (0.5 + GAP + SIDE * 0.5)
-	var middle: Vector2 = Vector2(size.x * 0.5, top_inset * squeeze + usable_height * 0.5)
+	var middle: Vector2 = Vector2(size.x * 0.5, size.y * 0.5)
 
 	# Furthest from the middle first, so the selected cartridge is drawn last and
 	# nothing beside it overlaps the one being looked at. Draw order is child
@@ -356,7 +337,6 @@ func _place_all() -> void:
 		)
 		card.visible = card.modulate.a > 0.0
 		card.set_highlighted(reach < 0.5 and has_focus())
-	layout_changed.emit()
 
 
 func _slot(index: int) -> float:

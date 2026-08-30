@@ -90,24 +90,24 @@ func _toolbar() -> Control:
 	_fields = GridContainer.new()
 	_fields.add_theme_constant_override("h_separation", 24)
 	column.add_child(_fields)
-	_fields.add_child(Gen2LauncherUI.field(_theme, "Size", Gen2LauncherUI.slider(
-		_theme,
+	_fields.add_child(Gen2LauncherUI.level(
+		_theme, &"touch", "Size",
 		int(roundf(_options.touch_layout.scale * SCALE_STEPS)),
 		int(Gen2TouchLayout.MIN_SCALE * SCALE_STEPS),
 		int(Gen2TouchLayout.MAX_SCALE * SCALE_STEPS),
 		func(value: int) -> void:
 			_options.touch_layout.scale = float(value) / SCALE_STEPS
 			_pad.queue_redraw()
-	)))
-	_fields.add_child(Gen2LauncherUI.field(_theme, "Opacity", Gen2LauncherUI.slider(
-		_theme,
+	))
+	_fields.add_child(Gen2LauncherUI.level(
+		_theme, &"touch", "Opacity",
 		int(roundf(_options.touch_layout.opacity * OPACITY_STEPS)),
 		int(Gen2TouchLayout.MIN_OPACITY * OPACITY_STEPS),
 		int(Gen2TouchLayout.MAX_OPACITY * OPACITY_STEPS),
 		func(value: int) -> void:
 			_options.touch_layout.opacity = float(value) / OPACITY_STEPS
 			_pad.queue_redraw()
-	)))
+	))
 	return host
 
 
