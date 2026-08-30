@@ -377,8 +377,9 @@ func _set_caption(text: String) -> void:
 
 ## The reading changes once a second and the line is rebuilt only then, so this is
 ## drawn on the frame it is measuring. `lock` shows only when there is one; `sub`
-## is screen pixels to a hardware one, and 1:1 is none of the smoothing reaching
-## the panel. See [method Gen2WorldAnimation.FrameClock.rate].
+## is screen pixels to a hardware one, `1:1` none of the smoothing reaching the
+## panel, and `native` a view drawing at the window's own resolution, which needs
+## none. See [method Gen2WorldAnimation.FrameClock.rate].
 func _refresh_frame_rate() -> void:
 	if _world == null or _caption == null or not _caption.visible:
 		return
@@ -387,10 +388,11 @@ func _refresh_frame_rate() -> void:
 		return
 	_rate_reading = rate
 	var lock: int = int(rate["lock"])
-	var steps: int = _screen.subpixel_steps()
-	_rate_text = "   %.0f fps   hw %.0f/s   worst %.1f ms%s   sub 1:%d" % [
+	var native: bool = not Gen2ModHost.renderer_uses_hardware_viewport(_renderer)
+	_rate_text = "   %.0f fps   hw %.0f/s   worst %.1f ms%s   sub %s" % [
 		float(rate["fps"]), float(rate["hardware"]), float(rate["worst_ms"]),
-		"" if lock < 1 else "   lock 1:%d" % lock, steps,
+		"" if lock < 1 else "   lock 1:%d" % lock,
+		"native" if native else "1:%d" % _screen.subpixel_steps(),
 	]
 	_caption.text = _caption_text + _rate_text
 
@@ -832,7 +834,13 @@ func _apply_pass_fraction(remainder: float = 0.0) -> void:
 		else (spent + clampf(remainder, 0.0, 1.0)) \
 			/ float(Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS)
 	## Only while the pass is moving something, so a still map is drawn once.
-	_refresh_if(_pass_moved and _world.pass_fraction != before)
+	if not _pass_moved or _world.pass_fraction == before:
+		return
+	## A mod actor's pose is the panel's frame, or it judders against the player.
+	## Not while one is being spent: `advance_frame` takes that one itself.
+	if not _spending_frame and _actors != null:
+		_actors.refresh_pose()
+	_refresh_if(true)
 
 
 ## Spends [param count] hardware frames. Public beside [method advance_frame] so

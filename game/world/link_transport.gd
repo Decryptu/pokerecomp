@@ -47,7 +47,6 @@ const GENERATION_1: int = 1
 const GENERATION_2: int = 2
 
 
-## Whether a peer is on the other end at all. Everything else asks this first.
 func connected() -> bool:
 	return not peer.is_empty()
 

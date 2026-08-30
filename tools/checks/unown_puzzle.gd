@@ -232,7 +232,6 @@ func _strip_at(x: int, y: int, side: int) -> int:
 	return (y % TILE) * side * side * TILE + tile * TILE + x % TILE
 
 
-## Which border tile, if any, a piece-local tile takes.
 func _border_for(local: int) -> int:
 	return BORDERED.find(local)
 

@@ -1825,8 +1825,7 @@ func _reset_action_counters(side: int, effect: int) -> void:
 		actor.rage_count = 0
 
 
-## Both sides use a move slot, which is the common case and the whole of a battle
-## that has one Pokémon a side.
+## Both sides use a move slot, which is the common case.
 func take_turn(player_slot: int, enemy_slot: int) -> Array:
 	return take_actions(use_move(player_slot), use_move(enemy_slot))
 

@@ -519,8 +519,9 @@ func step_offset_cells(fraction: float = 0.0) -> Vector2:
 	)
 
 
-## [method Gen2WorldAPI.player_step_span] for an object.
-func step_span() -> Dictionary:
+## [method Gen2WorldAPI.player_step_span] for an object, at the fraction
+## [method step_offset_cells] takes, so the two cannot disagree.
+func step_span(fraction: float = 0.0) -> Dictionary:
 	if step_passes_remaining <= 0 or step_passes_total <= 0:
 		return {}
 	var ahead := Vector2i.ZERO
@@ -530,6 +531,8 @@ func step_span() -> Dictionary:
 	return {
 		"from": landing - step_direction,
 		"to": landing,
-		"progress": 1.0 - float(step_passes_remaining) / float(step_passes_total),
+		"progress": Gen2WorldAPI.step_progress(
+			step_passes_remaining, step_passes_total, fraction
+		),
 		"kind": step_kind,
 	}

@@ -1317,7 +1317,6 @@ func _update_low_health_alarm() -> void:
 	_audio_player.set_low_health_alarm(GameData.hp_bar_palette_name(lit) == "hp_red")
 
 
-## Whether any bar is still moving, which is what holds the next message back.
 func bars_animating() -> bool:
 	return not _bars.is_empty() or _exp_bar != null
 

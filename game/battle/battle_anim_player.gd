@@ -155,8 +155,6 @@ func anim_index() -> int:
 	return _anim_index
 
 
-## The video state the background effects write: scanline tables, screen scroll,
-## palette remaps and the tilemap.
 func background() -> Gen2BattleAnimBackground:
 	return _background
 
@@ -226,8 +224,7 @@ func tiles() -> Array:
 	return _tiles
 
 
-## The commands the last [method advance_frame] ran, each
-## [code]{ name, byte, operands }[/code] as [Gen2BattleAnimScript] reports them.
+## Each [code]{ name, byte, operands }[/code], as the script reports them.
 func frame_commands() -> Array:
 	return _frame_commands
 
