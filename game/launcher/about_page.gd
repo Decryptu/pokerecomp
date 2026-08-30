@@ -49,7 +49,7 @@ func _build() -> void:
 		+ "decoded from a cartridge you own and dumped yourself.",
 	))
 	var check: Gen2LauncherButton = Gen2LauncherButton.create(
-		_theme, "Check for updates", Gen2LauncherButton.Variant.NEUTRAL, &"refresh"
+		_theme, "Check for updates", Gen2LauncherButton.Variant.NEUTRAL, &"restart"
 	)
 	check.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	check.pressed.connect(func() -> void: update_check_requested.emit())
