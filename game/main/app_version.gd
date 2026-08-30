@@ -2,7 +2,7 @@ class_name Gen2AppVersion
 extends RefCounted
 
 ## Host application version. Keep this numeric value aligned with export metadata.
-const VERSION: String = "0.1.14"
+const VERSION: String = "0.1.15"
 const CHANNEL: String = "alpha"
 
 ## Where the project lives, stated once: the release check derives its pages

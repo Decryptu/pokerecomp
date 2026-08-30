@@ -5,19 +5,15 @@ break put in by hand only makes it ragged. -->
 
 ## New in this release
 
-One reported bug that closed fifteen more with it, the last movie the cartridge had left, and a reset that works wherever you press it.
+A reported bug in the music, a launcher that says which button does what, and a bench share of an experience award for mods.
 
-**The PC's lists answer the arrows again.** Withdrawing and depositing would not move past the first Pokemon in the list, at a Pokemon Center and from the start menu alike. A focus ring meant for the launcher was going up over the box screen and eating every direction press. Reading the whole machine against the disassembly afterwards paid for a good deal more: the cursor returns to the top row after a transfer, the Pokemon cries when it is stored, taken out or released, a full box or a full party says so under the menu you asked from instead of throwing you back to the list, every refusal makes the sound it should, a finished MOVE PKMN W/O MAIL stays on the list you moved into, the stats page you open from a box walks that box, the box picker opens on BOX 1, PROF.OAK'S PC asks before it rates your Pokedex and says goodbye afterwards, and the machine plays its boot, choose and shutdown sounds. The selection ring on Crystal was five pixels out and left a loose line floating above the row below it; it closes now.
+**Mom's music no longer plays under the town's.** Talking to Mom downstairs started the phone tutorial music while the town's lead kept playing, at a speed that did not match. A music start loads only the channels the new piece names, which is why the cartridge stops the piece in front of every one of them; this port did not. Every music request the game makes stops first now. A sound whose record a cache does not carry skips its script command instead of leaving it pending with nothing to advance it, which is one way a conversation could stick.
 
-**The trade animation plays.** The tube, the ball, the cable and your Pokemon riding through it, one command a frame the way the cartridge spends them, behind both a link trade and an in-game one. Checked frame by frame against a real cartridge: 361 of 361 sprite states on Crystal and 405 of 405 on Gold and Silver, in order.
+**The launcher says which button does what.** The four unlabelled discs are a named tab strip along the top, flanked by the shoulder badges that step it. Every screen prints the actions it offers along the bottom, wearing the control you are actually holding: the badge is read from your own bindings, so a rebind, a pad being plugged in or a hand leaving the keys each change what is drawn. Settings is five sections behind a rail instead of one long scroll, every option is drawn as the same row, and the cartridge options moved off a floating disc onto a plate that names the cartridge. Pad badges print the letters your pad prints; Auto reads the controller that is connected, and Nintendo and Xbox are the two manual answers under Appearance. The cartridge picture, the mods check, the Application settings and the update check are drawn with new glyphs, and a Close chip's words stay readable with the pointer on them.
 
-**A + B + START + SELECT resets from anywhere.** The console's own chord was wired to the overworld alone, so pressing it in a battle, in a menu, on the title screen or in the launcher did nothing at all. Every screen answers it now, and the overworld still asks first where there is room for the question. Your save page counts how many resets a slot has spent.
+**A mart refuses on the price before the stack.** An order that was both unaffordable and over the 99 stack said PACK FULL, where the cartridge says you have not got the money.
 
-**SMOOTH SCROLL is smooth in more places.** A follower, a visible wild Pokemon and a jump down a ledge all move on the same fraction of a step the player does, rather than in eight jumps. A follower taking a ledge arcs over it instead of walking through it.
-
-**A cartridge bay says which kind of empty it is.** A cache written by an older build looked exactly like a cartridge you had never imported. The shelf now tells the two apart, says so in a line under the bay, and puts the one button that fixes it in front of the file picker.
-
-**For mod authors**, `api_version` is 28. A mod can switch trainer sightings off the way it can switch wild encounters off, without touching a flag. An actor can name the two cells it runs between, and the drawn row carries the height that comes with it, so a 3D view has the arc to work with.
+**For mod authors**, `api_version` is 29. `register_experience_bystanders` pays every living party member a fraction of the fighter's own award: 0.0 is the cartridge, 0.5 is Gen 6's Exp. Share, 1.0 is Gen 8's. A claimed share suppresses the cartridge halving, and a bystander is paid once and last.
 
 ## Which file
 

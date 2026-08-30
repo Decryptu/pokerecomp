@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="pokerecomp"
-config/version="0.1.14"
+config/version="0.1.15"
 run/main_scene="res://game/main/main.tscn"
 config/quit_on_go_back=false
 config/features=PackedStringArray("4.8", "GL Compatibility")
