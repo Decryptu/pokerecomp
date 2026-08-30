@@ -54,7 +54,6 @@ static func volume_root(path: String) -> String:
 	return root + "/" if root.ends_with(":") else root
 
 
-## The directory above [param dir], or an empty string at the top of a volume.
 static func parent_of(dir: String) -> String:
 	var root: String = volume_root(dir)
 	if dir.trim_suffix("/") == root.trim_suffix("/"):
@@ -160,7 +159,6 @@ func _first_focus() -> Control:
 	return row if row != null else super()
 
 
-## The list is rebuilt under the focus, so a descent leaves a pad on a freed row.
 func _focus_first() -> void:
 	if not is_inside_tree():
 		return

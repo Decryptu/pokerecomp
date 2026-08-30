@@ -57,7 +57,9 @@ func _build(title: String) -> void:
 	_card = Gen2LauncherCard.floating(_theme, Gen2LauncherTheme.RADIUS_LG, 26, 34)
 	centre.add_child(_card)
 
-	_column = Gen2LauncherUI.column(Gen2LauncherUI.GAP_MD)
+	# Every boundary crossing the pane crosses its ring inset too, so the column
+	# is short by it and the one boundary below the pane adds it back.
+	_column = Gen2LauncherUI.column(Gen2LauncherUI.GAP_MD - Gen2LauncherScroll.RING_INSET)
 	_card.add_child(_column)
 
 	var heading: Label = Gen2LauncherUI.title(_theme, title)
@@ -80,7 +82,9 @@ func _build(title: String) -> void:
 	_dismiss.set_focusable(true)
 	_dismiss.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_dismiss.pressed.connect(close)
-	_column.add_child(_inset(_dismiss))
+	var way_out: MarginContainer = _inset(_dismiss)
+	way_out.add_theme_constant_override("margin_top", Gen2LauncherScroll.RING_INSET)
+	_column.add_child(way_out)
 
 	## The window, and the rows themselves: a sheet is filled after it is built,
 	## so the fit is redone when the body grows rather than only when it opens.
