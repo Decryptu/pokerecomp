@@ -25,6 +25,7 @@ const KIND_HELP: Dictionary = {
 	&"mart_sell": "cell in front of the counter: the SELL row (DepositSellPack)",
 	&"pokepic": "cell: Script_pokepic's box over the map, holding Chikorita",
 	&"pet_actor": "cell: a mod's world actor one cell ahead, pressed with A so it wears a showemote heart",
+	&"pet_actor_arc": "cell: the same actor mid-ledge, at the top of the arc its span names",
 	&"warp": "warp tile: MapSetupScript_Door at its whitest, the frame the new map loads on",
 	&"script_fade": "special, frames: one of the five fade specials over the map",
 	&"door": "door mat: .CheckWarp's carpet, standing on an interior door's mat",

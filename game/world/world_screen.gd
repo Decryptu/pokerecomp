@@ -18,6 +18,8 @@ const PARTY_SCENE: PackedScene = preload("res://game/save/party_screen.tscn")
 ## This port's boot menu, where a cartridge taken out goes.
 const LAUNCHER_SCENE: String = "res://game/main/main.tscn"
 const AUDIO_PLAYER_SCRIPT := preload("res://game/audio/gen2_audio_player.gd")
+## Where `JUMP_OFFSETS` is at its highest, for [method preview_pet_actor_arc].
+const PREVIEW_ARC_TOP_PROGRESS: float = 0.4
 ## How far into a view switch's close [method preview_view_cover] photographs:
 ## part way down the scatter, where the wipe is readable and the screen is not
 ## yet black.
@@ -3262,6 +3264,19 @@ func preview_pet_actor() -> void:
 	_refresh_labels()
 
 
+## The same actor mid-ledge, photographing `height_offset_pixels` in the picture.
+func preview_pet_actor_arc() -> void:
+	if _world == null or _actors == null or _renderer == null:
+		return
+	_world.player_facing = Gen2WorldSprite.FACING_UP
+	var pet := PreviewPet.new(_world)
+	pet.jump_progress = PREVIEW_ARC_TOP_PROGRESS
+	_actors.set_actors([pet])
+	_actors.refresh_pose()
+	_script_prompt = "Debug actor arc preview"
+	_refresh_labels()
+
+
 ## What a mod's actor is, in the fewest lines that exercise the optional half.
 class PreviewPet extends RefCounted:
 	const CYNDAQUIL: int = 155
@@ -3269,6 +3284,8 @@ class PreviewPet extends RefCounted:
 	var _world: Gen2WorldAPI = null
 	var _petted: bool = false
 	var _cried: bool = false
+	## Below zero stands; at or above it the entry carries a `jump_step` span.
+	var jump_progress: float = -1.0
 
 	func _init(world: Gen2WorldAPI) -> void:
 		_world = world
@@ -3287,6 +3304,11 @@ class PreviewPet extends RefCounted:
 		}
 		if _petted:
 			entry["emote"] = Gen2WorldActors.EMOTE_HEART
+		if jump_progress >= 0.0:
+			entry["span"] = {
+				"from": _cell() + Vector2i.DOWN, "to": _cell() + Vector2i.UP,
+				"progress": jump_progress, "kind": Gen2WorldAPI.STEP_KIND_HOP,
+			}
 		return [entry]
 
 	func interact(cell: Vector2i, _facing: int) -> bool:

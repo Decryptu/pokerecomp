@@ -1200,6 +1200,20 @@ func test_a_ledge_hop_lifts_the_sprite_and_an_ordinary_step_does_not() -> void:
 	assert_eq(highest, 12.0, "the top of .y_offsets, above the ground")
 	assert_eq(lifted.player_height_offset_pixels(), 0.0, "and back down on landing")
 
+	## Every reader since SMOOTH SCROLL holds a progress rather than a
+	## spent-and-total pair, and the two spellings have to answer the same entry
+	## at every duration the source hops at.
+	for total: int in [Gen2WorldAPI.STEP_PASSES_HOP, 8, 12, 16, 32]:
+		for spent: int in total + 1:
+			assert_eq(
+				Gen2WorldAPI.jump_offset_at(spent, total),
+				Gen2WorldAPI.jump_offset_for(float(spent) / float(total)),
+				"%d of %d" % [spent, total]
+			)
+	assert_eq(Gen2WorldAPI.jump_offset_at(1, 0), 0, "a hop of no passes is flat")
+	assert_eq(Gen2WorldAPI.jump_offset_for(-1.0), Gen2WorldAPI.JUMP_OFFSETS[0])
+	assert_eq(Gen2WorldAPI.jump_offset_for(2.0), Gen2WorldAPI.JUMP_OFFSETS[-1])
+
 	var walker: Gen2WorldAPI = _world(Vector2i(5, 11))
 	assert_true(bool(walker.move_result(Vector2i.UP).get("ok", false)))
 	assert_eq(walker.player_jump_offset(), 0)

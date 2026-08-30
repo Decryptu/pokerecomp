@@ -129,6 +129,7 @@ runs, since every version so far has only added.
 | 25 | `Gen2WorldAPI.party_with_player()` and `party_holder()`, and a visible encounter walking to the next cell |
 | 26 | A run button, and a scale on every experience award |
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
+| 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 
 ## Installing
 
@@ -1178,6 +1179,15 @@ Each entry of `sprites()` names cartridge art and nothing else:
 | `emote` | Optional. `Gen2WorldActors.EMOTE_SHOCK` through `EMOTE_GRASS_RUSTLE`, drawn two rows above the sprite as `SpawnEmote` puts one over a map object. It is state, not an edge: up for as long as the entry keeps asking. An index outside the twelve is no emote |
 | `span` | Optional `{from, to, progress, kind}`, the shape `Gen2WorldObject.step_span()` answers: the two cells this pose runs between. A view whose plan is a grid reads `position_cells` and ignores it; one that folds plan into height puts both ends through its own geometry, which a fractional cell cannot do across a fold. A span missing an end is dropped rather than drawn |
 
+`sprites()` answers one key more than a mod sends. `height_offset_pixels` is the
+hop's second axis, in world pixels and positive upward: zero unless the entry's
+`span` names one of `Gen2WorldAPI.JUMP_STEP_KINDS`, and otherwise the entry
+`UpdateJumpPosition`'s table is on at that span's `progress`. It is what makes an
+actor taking a ledge arc over it rather than slide through it, and a 3D view
+stands its card on it the way it stands the player's on
+`player_height_offset_pixels()`. There is no key to send for it: the span already
+says everything.
+
 The host resolves the strip, the palette, the time of day and the icon's two-frame
 animation, so a mod never composes pixels. An entry naming art the cache does not
 carry is dropped.
@@ -1669,7 +1679,9 @@ is drawn, in world pixels and positive upward, which is `UpdateJumpPosition`'s
 step, and on the frame the hop completes. Only a ledge hop and the three
 `jump_step` commands raise it, each covering two cells. Presentation only: the
 cell, the collision, the triggers and the snapshot are at the landing cell for the
-whole arc.
+whole arc. `Gen2WorldAPI.jump_offset_for(progress)` is that table read directly,
+for a caller holding a span's `progress` rather than a spent-and-total pair;
+`jump_offset_at(spent, total)` spends it.
 
 Not covered: the teleport, skyfall and dig step types. `teleport_from`,
 `teleport_to`, `skyfall` and `step_dig` reach the caller as a

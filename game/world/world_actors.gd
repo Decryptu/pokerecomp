@@ -109,11 +109,10 @@ func refresh_pose() -> bool:
 
 ## A press of A that no cartridge object, background event or tile branch
 ## answered, offered to the actors in registration order; the first answering true
-## consumes it. [param cell] is the player's faced cell and [param facing] the
-## player's own, so an actor tests its own pose and the host never has to invent
-## an occupancy notion for a sprite that occupies nothing. Offered ONLY after
-## [method Gen2WorldAPI.interact] answered nothing, so no cartridge interaction
-## can be shadowed by a mod.
+## consumes it. [param cell] is the player's faced cell and [param facing] their
+## own, so an actor tests its own pose and the host invents no occupancy for a
+## sprite that occupies nothing. Offered ONLY after
+## [method Gen2WorldAPI.interact] answered nothing, so nothing is shadowed.
 func interact(cell: Vector2i, facing: int) -> bool:
 	for actor: Object in _actors:
 		if not actor.has_method(ACTOR_INTERACT_METHOD):
@@ -163,10 +162,10 @@ func _resolve_request(entry: Variant) -> Dictionary:
 	return {}
 
 
-## { sprite, facing, frame, position_cells, span, colors, emote }, sorted by the row
-## stood on and then by registration order, the way the map's own objects are.
-## `colors` is empty for everything but a visible encounter, and `emote` is
-## [constant EMOTE_NONE] unless the entry asked for one.
+## { sprite, facing, frame, position_cells, span, height_offset_pixels, colors,
+## emote }, sorted by the row stood on and then by registration order, the way
+## the map's own objects are. `colors` is empty but for a visible encounter, and
+## `emote` is [constant EMOTE_NONE] unless one was asked for.
 func sprites() -> Array:
 	return _sprites
 
@@ -210,6 +209,7 @@ func _resolve(entry: Variant, order: int) -> Dictionary:
 		int(row.get("facing", Gen2WorldSprite.FACING_DOWN)),
 		Gen2WorldSprite.FACING_DOWN, Gen2WorldSprite.FACING_RIGHT
 	)
+	var span: Dictionary = _resolved_span(row)
 	return {
 		"sprite": sprite,
 		"facing": facing,
@@ -222,7 +222,10 @@ func _resolve(entry: Variant, order: int) -> Dictionary:
 		# that does not read this draws the ordinary palette and is not wrong.
 		"colors": row.get("colors", PackedColorArray()),
 		# `step_span`'s own shape, or empty: a fractional cell cuts across a fold.
-		"span": _resolved_span(row),
+		"span": span,
+		# The hop's second axis, so a view that folds plan into height stands a
+		# card on the arc rather than on the ground under it.
+		"height_offset_pixels": _span_height_offset_pixels(span),
 		# `SpawnEmote`'s bubble, two rows above the sprite. State rather than an
 		# edge: it is up for as long as the entry keeps asking, so the mod owns
 		# the duration and the host owns the pixels.
@@ -244,6 +247,14 @@ static func _resolved_span(row: Dictionary) -> Dictionary:
 		"progress": clampf(float(entry.get("progress", 0.0)), 0.0, 1.0),
 		"kind": StringName(entry.get("kind", &"step")),
 	}
+
+
+## [method Gen2WorldObject.height_offset_pixels] for an actor, off the span it
+## already carries: zero unless its kind is a hop.
+static func _span_height_offset_pixels(span: Dictionary) -> float:
+	if not Gen2WorldAPI.JUMP_STEP_KINDS.has(span.get("kind", &"")):
+		return 0.0
+	return float(-Gen2WorldAPI.jump_offset_for(float(span["progress"])))
 
 
 ## An out-of-range index is no emote rather than a wrong sheet, the way art the

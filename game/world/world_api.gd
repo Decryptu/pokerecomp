@@ -852,9 +852,7 @@ func player_step_in_progress() -> bool:
 
 
 ## `UpdateJumpPosition`'s `.y_offsets`: the pixel a jumping sprite is drawn above
-## its own cell, one entry per frame of the hop. The accumulator the source
-## indexes it with is stepped by the step vector and halved, which over a hop's
-## two STEP_WALK halves is one entry a frame.
+## its own cell, one entry per frame of the hop.
 const JUMP_OFFSETS: Array[int] = [
 	-4, -6, -8, -10, -11, -12, -12, -12, -11, -10, -9, -8, -6, -4, 0, 0,
 ]
@@ -869,16 +867,20 @@ func player_jump_offset() -> int:
 	return jump_offset_at(spent, _player_step_passes_total)
 
 
-## The table entry a jump of [param total] frames is on after [param spent] of
-## them. `UpdateJumpPosition` indexes it with an accumulator stepped by the step
-## vector and halved, so a hop covering two cells in 16 frames advances one entry
-## a frame and every other duration covers the same table at its own rate: the
+## The table entry a hop is on [param progress] of the way through its flight.
+## `UpdateJumpPosition` indexes it with an accumulator stepped by the step vector
+## and halved, so every duration covers the same table at its own rate: the
 ## proportion is the accumulator.
+static func jump_offset_for(progress: float) -> int:
+	var index: int = floori(clampf(progress, 0.0, 1.0) * float(JUMP_OFFSETS.size()))
+	return JUMP_OFFSETS[clampi(index, 0, JUMP_OFFSETS.size() - 1)]
+
+
+## The same for a caller holding the passes rather than the proportion.
 static func jump_offset_at(spent: int, total: int) -> int:
 	if total <= 0:
 		return 0
-	var index: int = spent * JUMP_OFFSETS.size() / total
-	return JUMP_OFFSETS[clampi(index, 0, JUMP_OFFSETS.size() - 1)]
+	return jump_offset_for(float(spent) / float(total))
 
 
 ## How far above the ground the player is drawn this frame, in world pixels and
