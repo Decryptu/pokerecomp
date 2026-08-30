@@ -362,6 +362,48 @@ func test_a_sheet_takes_the_ring_and_gives_it_back() -> void:
 	assert_same(_focus_owner(), before)
 
 
+## A sheet is opened over the whole screen rather than inside the shell, so it is
+## the shell's sibling and not its child. A guard that only looked under itself
+## left every control in the sheet with no neighbours, and an empty neighbour is
+## the engine's own viewport-wide search: one press walked onto the page behind.
+func test_a_pad_cannot_walk_out_of_a_sheet() -> void:
+	_use(InputEventJoypadButton.new())
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var palette: Gen2LauncherTheme = Gen2LauncherTheme.active()
+	var sheet: Gen2LauncherSheet = Gen2LauncherSheet.create(palette, "Gold")
+	for label: String in ["Open cache folder", "Delete cache", "Use your own art"]:
+		sheet.body().add_child(Gen2LauncherButton.create(
+			palette, label, Gen2LauncherButton.Variant.NEUTRAL
+		))
+	sheet.add_action(Gen2LauncherButton.create(
+		palette, "Re-import", Gen2LauncherButton.Variant.PRIMARY
+	))
+	sheet.open(_launcher)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var guard: Gen2FocusGuard = _launcher.find_child("FocusGuard", true, false)
+	for way: Vector2 in [Vector2.DOWN, Vector2.UP, Vector2.LEFT, Vector2.RIGHT]:
+		for _step: int in 12:
+			guard.move_focus(way)
+			await get_tree().process_frame
+			assert_true(
+				sheet.is_ancestor_of(_focus_owner()),
+				"%s left the sheet at %s" % [way, _focus_owner()],
+			)
+	# And the engine's own traversal, which is what an empty neighbour hands the
+	# press to and what the guard never sees.
+	for control: Control in Gen2FocusGuard.focusable_controls(sheet):
+		for side: NodePath in [
+			control.focus_neighbor_top, control.focus_neighbor_bottom,
+			control.focus_neighbor_left, control.focus_neighbor_right,
+		]:
+			assert_false(side.is_empty(), "every side of %s names one" % control)
+			assert_true(sheet.is_ancestor_of(control.get_node(side)))
+	sheet.close()
+
+
 ## The cancel used to be read in _gui_input, which only ever reaches the focused
 ## control, and the sheet itself never holds focus.
 func test_cancel_closes_a_sheet_from_a_button_inside_it() -> void:

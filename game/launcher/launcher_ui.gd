@@ -471,8 +471,7 @@ class SettingRow extends Button:
 		_value.text = "" if _choices.is_empty() else String(_choices[_at])
 		_bar.value = float(_at)
 		if _switch != null:
-			_switch.set_pressed_no_signal(_at == 1)
-			_switch.queue_redraw()
+			_switch.show_state(_at == 1)
 		var reached: bool = has_focus() or is_hovered()
 		_name.add_theme_color_override("font_color", _theme.muted)
 		_value.add_theme_color_override(

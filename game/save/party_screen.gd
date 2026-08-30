@@ -977,7 +977,7 @@ func _build_ui() -> void:
 	page.add_child(scroll)
 	var body: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_MD)
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(body)
+	scroll.content().add_child(body)
 	_cards = Gen2LauncherUI.column(Gen2LauncherUI.GAP_SM)
 	_cards.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.add_child(_cards)

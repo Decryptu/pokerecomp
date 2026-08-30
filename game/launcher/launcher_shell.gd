@@ -429,6 +429,8 @@ func _rebuild_tabs() -> void:
 		)
 		button.tooltip_text = String(entry["label"])
 		button.add_to_group(Gen2FocusGuard.ASIDE_GROUP)
+		for side: StringName in Gen2FocusGuard.SIDES:
+			Gen2FocusGuard.set_dead_end(button, side)
 		button.pressed.connect(select.bind(id))
 		button.gui_input.connect(_on_tab_input.bind(id))
 		_tab_strip.add_child(button)

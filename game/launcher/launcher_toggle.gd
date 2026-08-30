@@ -47,8 +47,22 @@ func _draw() -> void:
 		draw_style_box(_theme.focus_ring(TRACK.y * 0.5), Rect2(Vector2.ZERO, TRACK))
 
 
+## Moves the knob without a press or a sound, for a switch another control owns.
+## [member BaseButton.button_pressed] is what a switch answers and [member
+## _slide] is what it draws: setting the first left the second where it was.
+func show_state(on: bool) -> void:
+	if on == button_pressed:
+		return
+	set_pressed_no_signal(on)
+	_slide_to(on)
+
+
 func _on_toggled(on: bool) -> void:
 	Gen2LauncherAudio.play(&"click")
+	_slide_to(on)
+
+
+func _slide_to(on: bool) -> void:
 	if not is_inside_tree():
 		_slide = 1.0 if on else 0.0
 		return

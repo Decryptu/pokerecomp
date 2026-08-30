@@ -82,7 +82,7 @@ func _build() -> void:
 	stack.resized.connect(func() -> void: stack.add_theme_constant_override(
 		"margin_right", int(maxf(stack.size.x - ROWS_WIDTH, 0.0))
 	))
-	scroll.add_child(stack)
+	scroll.content().add_child(stack)
 
 	for section: Dictionary in SECTIONS:
 		var id := StringName(section["id"])

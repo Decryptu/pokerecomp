@@ -64,7 +64,7 @@ func _build() -> void:
 	add_child(scroll)
 	_body = Gen2LauncherUI.column(Gen2LauncherUI.GAP_MD)
 	_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(_body)
+	scroll.content().add_child(_body)
 
 	_status = Gen2LauncherUI.muted(_theme, "")
 	add_child(_status)

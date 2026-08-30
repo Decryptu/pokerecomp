@@ -129,7 +129,7 @@ func _build() -> void:
 	_list_view.add_child(scroll)
 	_list = Gen2LauncherUI.column(Gen2LauncherUI.GAP_MD)
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(_list)
+	scroll.content().add_child(_list)
 
 
 ## The page's primary action is stable while the source check starts and stops
@@ -373,7 +373,6 @@ func _row_for(id: StringName) -> Dictionary:
 	return {}
 
 
-## Opens one mod's own page. Everything the list does not carry is there.
 func open_mod(id: StringName) -> void:
 	var row: Dictionary = _row_for(id)
 	if row.is_empty():
@@ -390,7 +389,6 @@ func open_mod(id: StringName) -> void:
 	_show(_detail)
 
 
-## Opens the sources page: what the player follows, and what to add.
 func open_sources() -> void:
 	if _sources == null:
 		_sources = Gen2ModSourcesPage.create(_theme)
@@ -443,7 +441,6 @@ func fetch_feed(feed: String) -> void:
 	_fetch_feed(feed)
 
 
-## Reads every followed source one at a time, and downloads nothing.
 func check_for_updates() -> void:
 	if _busy or not _check_queue.is_empty() or not _update_queue.is_empty():
 		return
@@ -480,7 +477,6 @@ func available_update_count() -> int:
 	return update_rows().size()
 
 
-## Every installed mod a source offers a newer version of, and nothing else.
 func update_rows() -> Array:
 	var out: Array = []
 	for group: Dictionary in Gen2ModCatalogue.groups(

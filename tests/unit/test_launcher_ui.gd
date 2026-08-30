@@ -410,6 +410,51 @@ func test_a_switch_row_flips_on_a_press_and_carries_no_focus_of_its_own() -> voi
 	assert_true(row.switch_node().button_pressed, "the switch follows the row")
 
 
+## What the switch answers and what it draws are two values, and a row that set
+## only the first left every switch on the page drawn as on for good.
+func test_a_switch_moves_its_knob_and_not_only_its_answer() -> void:
+	var switch: Gen2LauncherToggle = Gen2LauncherToggle.create(_light, true)
+	add_child_autofree(switch)
+	await get_tree().process_frame
+	assert_almost_eq(switch._slide, 1.0, 0.01, "it starts where it was made")
+
+	switch.show_state(false)
+	await wait_seconds(0.3)
+	assert_false(switch.button_pressed)
+	assert_almost_eq(switch._slide, 0.0, 0.01, "and the knob went with it")
+
+	switch.show_state(true)
+	await wait_seconds(0.3)
+	assert_almost_eq(switch._slide, 1.0, 0.01)
+
+
+## A focus ring is drawn outside the control it rings, and a pane clips what
+## leaves it, so a row as wide as the pane lost both ends of its ring.
+func test_a_scroll_pane_keeps_room_for_a_focus_ring() -> void:
+	var pane: Gen2LauncherScroll = Gen2LauncherScroll.create()
+	add_child_autofree(pane)
+	var row: Gen2LauncherUI.SettingRow = Gen2LauncherUI.choice(
+		_light, &"display", "Window", ["Windowed", "Fullscreen"], 0,
+		func(_index: int) -> void: pass
+	)
+	pane.content().add_child(row)
+	pane.size = Vector2(400, 200)
+	await wait_process_frames(2)
+
+	var ring := row.get_theme_stylebox(&"focus") as StyleBoxFlat
+	var reach: float = ring.expand_margin_left
+	assert_gt(reach, 0.0, "the ring is drawn outside the row")
+	assert_lte(
+		reach, float(Gen2LauncherScroll.RING_INSET), "and the pane keeps room for it"
+	)
+	assert_gte(row.global_position.x - pane.global_position.x, reach, "on the left")
+	assert_gte(
+		pane.global_position.x + pane.size.x - row.global_position.x - row.size.x,
+		reach,
+		"and on the right",
+	)
+
+
 func test_the_stage_holds_one_cartridge_per_supported_game() -> void:
 	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false)
 	add_child_autofree(page)

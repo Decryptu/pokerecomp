@@ -143,7 +143,6 @@ func _draw_cell() -> void:
 	_cell.draw_style_box(_theme.box(ink, 2.0), inner)
 
 
-## The shared reading, or an empty dictionary while none has been taken.
 static func _cached_reading() -> Dictionary:
 	_lock.lock()
 	var out: Dictionary = _shared.duplicate()

@@ -68,7 +68,7 @@ func _build(title: String) -> void:
 	_column.add_child(_scroll)
 	_body = Gen2LauncherUI.column(Gen2LauncherUI.GAP_MD)
 	_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_scroll.add_child(_body)
+	_scroll.content().add_child(_body)
 
 	_actions = Gen2LauncherUI.column(Gen2LauncherUI.GAP_SM)
 	_column.add_child(_actions)

@@ -53,7 +53,6 @@ static func texture_for(game_id: StringName, directory: String = ROOT) -> Textur
 	return texture
 
 
-## Answers `{ok}` or `{ok, reason}` the way an install does.
 static func adopt(
 	game_id: StringName, source: String, directory: String = ROOT
 ) -> Dictionary:
@@ -77,7 +76,6 @@ static func adopt(
 	return _store(game_id, _fitted(image), directory)
 
 
-## Answers whether there was anything to remove.
 static func revert(game_id: StringName, directory: String = ROOT) -> bool:
 	var path: String = path_for(game_id, directory)
 	if not FileAccess.file_exists(path):

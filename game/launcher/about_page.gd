@@ -36,7 +36,7 @@ func _build() -> void:
 	add_child(scroll)
 	var column: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_LG)
 	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(column)
+	scroll.content().add_child(column)
 
 	var build: VBoxContainer = _card(column, "This build")
 	build.add_child(Gen2LauncherUI.body(

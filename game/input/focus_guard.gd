@@ -91,15 +91,15 @@ func refresh() -> void:
 		target.grab_focus()
 
 
-## What the guard may look at: the last modal under [member _root], so a sheet
-## opened over a sheet owns the arrows, or the whole screen when there is none.
+## The last modal in the tree, so a sheet opened over a sheet owns the arrows,
+## or the whole screen when there is none. Ancestry is not the test: a launcher
+## sheet is opened over the screen rather than inside the shell, and a guard that
+## looked only under itself left every control in one with no neighbours.
 func _effective_root() -> Control:
 	var top: Control = _root
 	for node: Node in _root.get_tree().get_nodes_in_group(MODAL_GROUP):
 		var control := node as Control
-		if control == null or not control.is_visible_in_tree():
-			continue
-		if control == _root or _root.is_ancestor_of(control):
+		if control != null and control.is_visible_in_tree():
 			top = control
 	return top
 
@@ -226,10 +226,17 @@ static func _overlaps_across(here: Rect2, there: Rect2, direction: Vector2) -> b
 	return here.position.y < there.end.y and there.position.y < here.end.y
 
 
+static func set_dead_end(control: Control, side: StringName) -> void:
+	_set_neighbor(control, side, null)
+
+
+## An empty neighbour is not "nothing that way" to the engine but "search the
+## viewport yourself", which walked out of a sheet on the first press with
+## nowhere to go. A control with no neighbour is pointed at itself.
 static func _set_neighbor(control: Control, side: StringName, target: Control) -> void:
-	var path := NodePath()
-	if target != null:
-		path = control.get_path_to(target)
+	var path: NodePath = control.get_path_to(
+		target if target != null else control
+	)
 	match side:
 		&"left": control.focus_neighbor_left = path
 		&"right": control.focus_neighbor_right = path

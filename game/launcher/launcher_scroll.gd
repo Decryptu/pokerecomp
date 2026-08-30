@@ -15,14 +15,22 @@ const PAGE: float = 0.42
 const LINE: float = 0.10
 ## How far a finger travels before the touch is a scroll rather than a tap.
 const TOUCH_DEADZONE: float = 12.0
+## Room kept either side of the content: a ring is drawn outside the control it
+## rings and a pane clips what leaves it.
+const RING_INSET: int = 8
 const WAYS: Dictionary = {Gen2Button.DOWN: 1, Gen2Button.UP: -1}
 
+var _content: MarginContainer = null
 ## The finger this pane is following, or -1.
 var _touch_index: int = -1
 ## Where it landed, in window units, so the button under it can be let go of.
 var _touch_from: Vector2 = Vector2.ZERO
 var _touch_travel: float = 0.0
 var _touch_dragging: bool = false
+
+
+func content() -> MarginContainer:
+	return _content
 
 
 static func create() -> Gen2LauncherScroll:
@@ -33,6 +41,11 @@ static func create() -> Gen2LauncherScroll:
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.follow_focus = true
+	scroll._content = MarginContainer.new()
+	scroll._content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for side: String in ["left", "right"]:
+		scroll._content.add_theme_constant_override("margin_" + side, RING_INSET)
+	scroll.add_child(scroll._content)
 	return scroll
 
 
@@ -44,7 +57,6 @@ func _ready() -> void:
 	_refresh_focus_mode()
 
 
-## The finger, read before the GUI has a chance to stop it at a button.
 func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		_on_screen_touch(event)

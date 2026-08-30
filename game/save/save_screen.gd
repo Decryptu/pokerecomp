@@ -229,7 +229,7 @@ func _build_ui() -> void:
 	_page.add_child(details)
 	_details_box = Gen2LauncherUI.column(Gen2LauncherUI.GAP_MD)
 	_details_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	details.add_child(_details_box)
+	details.content().add_child(_details_box)
 
 	_shell.add_page(&"saves", "Saves", &"save", _page)
 
