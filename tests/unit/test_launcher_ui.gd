@@ -282,7 +282,8 @@ func test_every_glyph_the_launcher_asks_for_is_one_the_set_draws() -> void:
 	var used: Array[StringName] = [
 		&"shelf", &"mods", &"settings", &"about", &"play", &"plus", &"back",
 		&"folder", &"trash", &"refresh", &"download", &"check", &"warning",
-		&"save", &"dots", &"close", &"power", &"refresh_square",
+		&"save", &"dots", &"close", &"power", &"refresh_all", &"restart",
+		&"gallery",
 		&"bug", &"github", &"discord",
 	]
 	for glyph: StringName in used:
@@ -297,7 +298,7 @@ func test_mod_update_controls_stay_icon_sized_for_mobile() -> void:
 	var check: Gen2LauncherButton = page.get("_check_updates_button")
 	assert_not_null(check)
 	assert_eq(check.text, "", "the page-wide check does not widen the mobile header")
-	assert_eq(check.get("_glyph"), &"refresh_square")
+	assert_eq(check.get("_glyph"), &"refresh_all")
 	var actions: Array[Control] = page._action_buttons({
 		"name": "Example", "installed": true,
 		"update": Gen2ModIndex.UPDATE_AVAILABLE,

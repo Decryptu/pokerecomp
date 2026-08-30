@@ -31,7 +31,6 @@ static func create(
 
 func _build(words: String) -> void:
 	focus_mode = Control.FOCUS_NONE
-	flat = true
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	size_flags_vertical = Control.SIZE_SHRINK_CENTER
 

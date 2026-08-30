@@ -379,7 +379,7 @@ func _open_manage_sheet(game_id: StringName) -> void:
 		body.add_child(delete)
 
 	var art: Gen2LauncherButton = Gen2LauncherButton.create(
-		_palette, "Use your own art", Gen2LauncherButton.Variant.NEUTRAL, &"folder"
+		_palette, "Use your own art", Gen2LauncherButton.Variant.NEUTRAL, &"gallery"
 	)
 	art.tooltip_text = "Replace this cartridge's picture with an image of your own"
 	art.pressed.connect(func() -> void:

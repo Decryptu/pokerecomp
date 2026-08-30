@@ -388,7 +388,7 @@ func test_the_header_button_offers_update_all_once_a_source_lists_one() -> void:
 	assert_true(bool(Gen2ModIndex.follow(feed).get("ok", false)))
 	var page: Gen2ModsPage = _mods_page()
 	var button: Gen2LauncherButton = page._check_updates_button
-	assert_eq(button.get("_glyph"), &"refresh_square", "nothing to update yet")
+	assert_eq(button.get("_glyph"), &"refresh_all", "nothing to update yet")
 
 	page.receive_feed_response(feed, true, JSON.stringify({
 		"schema_version": Gen2ModIndex.SCHEMA_VERSION,

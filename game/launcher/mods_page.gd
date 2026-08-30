@@ -108,7 +108,7 @@ func _build() -> void:
 	actions.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	head.add_child(actions)
 	_check_updates_button = Gen2LauncherButton.icon_only(
-		_theme, &"refresh_square", Gen2LauncherButton.Variant.NEUTRAL, 42.0
+		_theme, &"refresh_all", Gen2LauncherButton.Variant.NEUTRAL, 42.0
 	)
 	_check_updates_button.pressed.connect(_on_update_button)
 	actions.add_child(_check_updates_button)
@@ -534,7 +534,7 @@ func _sync_update_button() -> void:
 	)
 	_check_updates_button.variant = Gen2LauncherButton.Variant.PRIMARY if updates > 0 \
 		else Gen2LauncherButton.Variant.NEUTRAL
-	_check_updates_button.set_glyph(&"download" if updates > 0 else &"refresh_square")
+	_check_updates_button.set_glyph(&"download" if updates > 0 else &"refresh_all")
 	_check_updates_button.tooltip_text = "Download and install %d mod update%s" % [
 		updates, "" if updates == 1 else "s",
 	] if updates > 0 else "Check all followed sources for mod updates"
