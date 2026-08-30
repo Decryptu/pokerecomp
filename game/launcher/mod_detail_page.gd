@@ -21,14 +21,18 @@ var _head: HBoxContainer = null
 var _icon: Control = null
 var _status: Label = null
 var _row: Dictionary = {}
+## Where a choice sheet opens. Null until the page is put on a screen.
+var _host: Control = null
 
-## The view switch's node name. See [method _view_field].
 const VIEW_SWITCH_NAME: StringName = &"ViewSwitch"
 
 
-static func create(palette: Gen2LauncherTheme) -> Gen2ModDetailPage:
+static func create(
+	palette: Gen2LauncherTheme, host: Control = null
+) -> Gen2ModDetailPage:
 	var page := Gen2ModDetailPage.new()
 	page._theme = palette
+	page._host = host
 	page._build()
 	return page
 
@@ -59,7 +63,7 @@ func _build() -> void:
 	add_child(scroll)
 	_body = Gen2LauncherUI.column(Gen2LauncherUI.GAP_MD)
 	_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(_body)
+	scroll.content().add_child(_body)
 
 	_status = Gen2LauncherUI.muted(_theme, "")
 	add_child(_status)
@@ -109,7 +113,7 @@ func set_row(row: Dictionary) -> void:
 		for option: Dictionary in options:
 			fields.add_child(_option_field(mod_id(), option))
 		_body.add_child(panel)
-	_body.add_child(Gen2LauncherUI.dock_safe_space())
+	_body.add_child(Gen2LauncherUI.bottom_safe_space())
 
 
 ## The strip of facts and the buttons that act on them: what is installed, what
@@ -120,12 +124,12 @@ func _summary(row: Dictionary) -> Control:
 	panel.add_child(column)
 
 	var installed: String = String(row["installed_version"])
-	column.add_child(Gen2LauncherUI.field(
+	column.add_child(Gen2LauncherUI.stacked(
 		_theme, "Installed", _value(installed if not installed.is_empty() else "Not installed")
 	))
 	var listed: String = String(row["listed_version"])
 	if bool(row["listed"]):
-		column.add_child(Gen2LauncherUI.field(
+		column.add_child(Gen2LauncherUI.stacked(
 			_theme, "Offered", _value(listed if not listed.is_empty() else "no version given")
 		))
 	# What it is for, so a player reads it before pressing Play rather than after
@@ -135,7 +139,7 @@ func _summary(row: Dictionary) -> Control:
 	var titles: Array[String] = manifest.game_titles() if manifest != null \
 		else Gen2ModManifest.titles_for(row.get("listed_games", []))
 	if not titles.is_empty():
-		column.add_child(Gen2LauncherUI.field(_theme, "For", _value(", ".join(titles))))
+		column.add_child(Gen2LauncherUI.stacked(_theme, "For", _value(", ".join(titles))))
 
 	var actions: HFlowContainer = Gen2LauncherUI.actions()
 	column.add_child(actions)
@@ -219,18 +223,16 @@ func _view_field(id: StringName) -> Control:
 		covers = "Overworld only"
 	elif not world:
 		covers = "Battle only"
-	var switch: Gen2LauncherToggle = Gen2LauncherToggle.create(
-		_theme, host.selected_view() == id
+	var row: Gen2LauncherUI.SettingRow = Gen2LauncherUI.switch(
+		_theme, &"sparkle", covers, host.selected_view() == id,
+		func(on: bool) -> void:
+			_report(host.select_view(id if on else Gen2ModHost.BUILT_IN_RENDERER))
+			set_row(_row)
 	)
 	## Named so it can be found in the tree: the enable switch above it is the
-	## other toggle on this page and the two are not interchangeable.
-	switch.name = VIEW_SWITCH_NAME
-	switch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	switch.toggled.connect(func(on: bool) -> void:
-		_report(host.select_view(id if on else Gen2ModHost.BUILT_IN_RENDERER))
-		set_row(_row)
-	)
-	return Gen2LauncherUI.field(_theme, covers, switch)
+	## other one on this page and the two are not interchangeable.
+	row.name = VIEW_SWITCH_NAME
+	return row
 
 
 func _option_field(id: StringName, option: Dictionary) -> Control:
@@ -245,21 +247,23 @@ func _option_field(id: StringName, option: Dictionary) -> Control:
 			press.pressed.connect(func() -> void:
 				_report(Gen2ModHost.instance().press_option(id, key))
 			)
-			return Gen2LauncherUI.field(_theme, label, press)
+			return Gen2LauncherUI.stacked(_theme, label, press)
 		Gen2ModHost.OPTION_NUMBER:
 			# Typed rather than dialled: a seed is one field with ten thousand
 			# values and no player wants to hold an arrow through it.
-			return Gen2LauncherUI.field(_theme, label, Gen2LauncherUI.number(
+			return Gen2LauncherUI.stacked(_theme, label, Gen2LauncherUI.number(
 				_theme, int(option.get("value", 0)), int(option.get("minimum", 0)),
 				int(option.get("maximum", 0)), int(option.get("step", 1)),
 				func(value: int) -> void:
 					_report(Gen2ModHost.instance().set_option(id, key, value))
 			))
-	return Gen2LauncherUI.field(_theme, label, Gen2LauncherUI.segmented(
-		_theme, option.get("labels", []) as Array, int(option.get("index", 0)),
+	return Gen2LauncherUI.choice(
+		_theme, &"mods", label, option.get("labels", []) as Array,
+		int(option.get("index", 0)),
 		func(index: int) -> void:
-			_report(Gen2ModHost.instance().set_option_index(id, key, index))
-	))
+			_report(Gen2ModHost.instance().set_option_index(id, key, index)),
+		_host
+	)
 
 
 func _report(result: Dictionary) -> void:

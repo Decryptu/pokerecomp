@@ -54,21 +54,21 @@ func test_switching_pages_hands_the_ring_to_the_new_one() -> void:
 	assert_true(focused.is_visible_in_tree(), "focus never lands on a hidden page")
 
 
-func test_down_from_the_cartridge_reaches_the_floating_dock() -> void:
+func test_up_from_the_cartridge_reaches_the_tab_strip() -> void:
 	_use(InputEventJoypadButton.new())
 	await get_tree().process_frame
 	await get_tree().process_frame
 	var stage: Gen2CartridgeStage = _focus_owner() as Gen2CartridgeStage
 	assert_not_null(stage)
 	var guard: Gen2FocusGuard = _launcher.find_child("FocusGuard", true, false)
-	assert_true(guard.move_focus(Vector2.DOWN))
+	assert_true(guard.move_focus(Vector2.UP))
 	var focused: Control = _focus_owner()
 	assert_not_null(focused)
 	assert_true(focused is Gen2LauncherButton)
 	assert_ne(focused, stage)
 
 
-func test_left_and_right_stay_inside_the_floating_dock() -> void:
+func test_left_and_right_stay_inside_the_tab_strip() -> void:
 	_use(InputEventJoypadButton.new())
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -79,29 +79,32 @@ func test_left_and_right_stay_inside_the_floating_dock() -> void:
 	var right := InputEventAction.new()
 	right.action = &"ui_right"
 	right.pressed = true
-	shell._on_dock_input(right, &"mods")
-	assert_same(_focus_owner(), buttons[&"settings"], "right stays on the dock")
+	shell._on_tab_input(right, &"mods")
+	assert_same(_focus_owner(), buttons[&"settings"], "right stays on the strip")
 	var left := InputEventAction.new()
 	left.action = &"ui_left"
 	left.pressed = true
-	shell._on_dock_input(left, &"settings")
-	assert_same(_focus_owner(), mods, "left stays on the dock")
+	shell._on_tab_input(left, &"settings")
+	assert_same(_focus_owner(), mods, "left stays on the strip")
 
 
-func test_up_from_the_dock_returns_to_the_current_page() -> void:
+func test_down_from_the_tab_strip_returns_to_the_current_page() -> void:
 	_use(InputEventJoypadButton.new())
 	await get_tree().process_frame
 	await get_tree().process_frame
 	var shell: Gen2LauncherShell = _launcher.get("_shell")
 	var buttons: Dictionary = shell.get("_buttons")
-	(buttons[&"mods"] as Control).grab_focus()
-	var up := InputEventAction.new()
-	up.action = &"ui_up"
-	up.pressed = true
-	shell._on_dock_input(up, &"mods")
+	(buttons[&"shelf"] as Control).grab_focus()
+	var down := InputEventAction.new()
+	down.action = &"ui_down"
+	down.pressed = true
+	shell._on_tab_input(down, &"shelf")
 	assert_true(_focus_owner() is Gen2CartridgeStage)
 
 
+## The header row is the top of the mods page, and what is under it is however
+## many mods this machine happens to have. So the route asserted is the one that
+## holds on an empty catalogue too: along the row, and up out of the page.
 func test_mod_page_builds_a_visible_logical_focus_route() -> void:
 	_use(InputEventJoypadButton.new())
 	_launcher.select_page(&"mods")
@@ -114,11 +117,12 @@ func test_mod_page_builds_a_visible_logical_focus_route() -> void:
 	assert_false(right.is_empty(), "the page explicitly names the next control")
 	var next: Control = install.get_node(right) as Control
 	assert_eq(next.text, "Sources", "right follows the visible action row")
-	var down: NodePath = install.focus_neighbor_bottom
-	assert_false(down.is_empty(), "down enters the page rather than losing focus")
-	var below: Control = install.get_node(down) as Control
-	assert_true(below.is_visible_in_tree())
-	assert_ne(below, install)
+
+	var guard: Gen2FocusGuard = _launcher.find_child("FocusGuard", true, false)
+	assert_true(guard.move_focus(Vector2.UP), "up leaves the page for the strip")
+	var tab: Control = _focus_owner()
+	assert_true(tab is Gen2LauncherButton)
+	assert_eq((tab as Gen2LauncherButton).text, "Mods", "on the tab the page belongs to")
 
 
 ## A mouse needs no ring, and putting one up would move it away from whatever
@@ -149,33 +153,22 @@ func test_the_ring_never_lands_on_a_pane_that_holds_controls() -> void:
 		assert_true(focused is BaseButton, String(page))
 
 
-## Every control on a scrolling page has to be reachable, and the page has to be
-## leavable: the walk ends on the dock rather than on a control with nothing
-## under it.
-func test_a_pad_walks_the_whole_settings_page_and_leaves_it() -> void:
+## The settings page is a rail beside its rows: right leaves the rail for them,
+## left comes back, and up is always a way out of the page.
+func test_a_pad_crosses_the_settings_page_and_leaves_it() -> void:
 	_use(InputEventJoypadButton.new())
 	_launcher.select_page(&"settings")
 	await get_tree().process_frame
 	await get_tree().process_frame
 	var guard: Gen2FocusGuard = _launcher.find_child("FocusGuard", true, false)
-	var seen: Array[Control] = []
-	var on_dock: bool = false
-	for _step: int in 200:
-		var focused: Control = _focus_owner()
-		if focused == null:
-			break
-		if not seen.has(focused):
-			seen.append(focused)
-		if focused is Gen2LauncherButton and (focused as Gen2LauncherButton).tooltip_text == "Settings":
-			on_dock = true
-			break
-		if not guard.move_focus(Vector2.DOWN):
-			break
-		# The pane brings the newly focused control into view, and the next
-		# neighbour is chosen from where things are once it has.
-		await get_tree().process_frame
-	assert_true(on_dock, "down never reached the dock")
-	assert_gt(seen.size(), 5, "the walk skipped the page")
+	var rail: Control = _focus_owner()
+	assert_true(guard.move_focus(Vector2.RIGHT), "right leaves the rail for the rows")
+	await get_tree().process_frame
+	assert_ne(_focus_owner(), rail)
+	assert_true(guard.move_focus(Vector2.LEFT), "left comes back to it")
+	await get_tree().process_frame
+	assert_same(_focus_owner().get_parent(), rail.get_parent())
+	assert_true(guard.move_focus(Vector2.UP), "and up is a way out of the page")
 
 
 ## `JoyTextDelay`'s repeat arrives as one action press ([Gen2InputRuntime]), and

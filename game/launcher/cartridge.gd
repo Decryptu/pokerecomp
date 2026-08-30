@@ -140,7 +140,6 @@ func _build() -> void:
 	set_cache_state(RomCache.STATE_MISSING)
 
 
-## The player's own picture, or the shipped shell.
 func refresh_art() -> void:
 	if _art == null:
 		return
@@ -167,7 +166,6 @@ func set_cache_state(state: StringName, note: String = "") -> void:
 	queue_redraw()
 
 
-## Applied by the stage after it has sized and placed this cartridge.
 func set_depth(distance: int) -> void:
 	depth = distance
 	_bay_label.visible = distance == 0
@@ -305,7 +303,6 @@ func _on_hover(entered: bool) -> void:
 	tween.tween_property(self, "_hop", -8.0 if entered else 0.0, 0.18)
 
 
-## The cartridge dropping into its bay, played once an import succeeds.
 func play_insert() -> void:
 	if not is_inside_tree():
 		return

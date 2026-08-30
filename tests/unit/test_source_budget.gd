@@ -18,7 +18,7 @@ const MAX_COMPLEXITY: int = 20
 const MAX_COMMENT_BLOCK: int = 8
 ## Comment lines under [constant COUNTED_ROOTS]. A ceiling, not a target: lower
 ## it whenever a pass leaves room, and never raise it.
-const MAX_COMMENT_LINES: int = 37876
+const MAX_COMMENT_LINES: int = 37875
 
 ## The functions still over [constant MAX_COMPLEXITY], as `path:function`. Empty,
 ## and it stays empty: a function over the ceiling fails the test rather than
@@ -121,17 +121,23 @@ func _collect(directory: String, out: PackedStringArray) -> void:
 		_collect(directory.path_join(child), out)
 
 
-## Every top-level function in [param source] with its cyclomatic complexity,
-## counted the way a linter counts it: one for the function, one per `if`,
-## `elif`, `while`, `for`, `and`, `or` and inline `if`, and one per `match` arm,
-## whether the arm opens a block or carries its body on the same line.
+## Every function in [param source] with its cyclomatic complexity, counted the
+## way a linter counts it: one for the function, one per `if`, `elif`, `while`,
+## `for`, `and`, `or` and inline `if`, and one per `match` arm, whether the arm
+## opens a block or carries its body on the same line.
+##
+## An inner class's methods are functions too. Counting only the ones at column
+## zero charged every one of them to whichever top-level function came last,
+## which put `Gen2LauncherUI.level` at 33 for code in the class below it.
 func _functions(source: PackedStringArray) -> Array[Dictionary]:
 	var branches := RegEx.create_from_string(
 		"(?<![A-Za-z0-9_.])(if|elif|while|for|and|or)(?![A-Za-z0-9_])"
 	)
-	var opener := RegEx.create_from_string("^(static\\s+)?func\\s+([A-Za-z0-9_]+)")
+	var opener := RegEx.create_from_string("^\\t*(static\\s+)?func\\s+([A-Za-z0-9_]+)")
+	var inner := RegEx.create_from_string("^class\\s+([A-Za-z0-9_]+)")
 	var out: Array[Dictionary] = []
 	var current: Dictionary = {}
+	var scope: String = ""
 	## One entry per open `match`: the indent the statement sits at, so an arm is
 	## a line one deeper. An arm ends in a colon or carries its whole body after
 	## one, and both are a branch: a one-line arm hid 89 of them here once.
@@ -140,9 +146,13 @@ func _functions(source: PackedStringArray) -> Array[Dictionary]:
 	for raw: String in source:
 		var code: String = _code(raw)
 		var text: String = code.strip_edges()
+		var nested: RegExMatch = inner.search(code)
+		if nested != null:
+			scope = nested.get_string(1) + "."
 		var opened: RegExMatch = opener.search(code)
-		if opened != null and not code.begins_with("\t"):
-			current = {"name": opened.get_string(2), "complexity": 1}
+		if opened != null:
+			var where: String = scope if code.begins_with("\t") else ""
+			current = {"name": where + opened.get_string(2), "complexity": 1}
 			out.append(current)
 			matches.clear()
 			continue

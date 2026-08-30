@@ -1,11 +1,10 @@
 class_name Gen2LauncherButton
 extends Button
 
-## Every button the launcher draws, in the weights it uses.
-##
-## Godot lays out a button's own icon and label, so the glyph is handed over as
-## a texture rather than parked by hand. What this class adds is the palette, the
-## press sound and a hover that lifts the round dock buttons.
+## Every button the launcher draws, in the weights it uses. Godot lays out a
+## button's own icon and label, so the glyph is handed over as a texture rather
+## than parked by hand; what this adds is the palette, the press sound and a
+## hover that lifts the tabs.
 
 enum Variant {
 	## The one action a screen is about: a filled accent pill.
@@ -24,17 +23,15 @@ enum Variant {
 	DANGER,
 	## One choice inside a segmented track.
 	SEGMENT,
-	## A round icon button, used along the bottom dock.
-	DOCK,
-	## The one thing a screen is for, written plainly until it is reached. It
-	## carries no colour of its own so that hover, focus and the current choice
-	## are the only accent on the page, which is what makes a pad legible.
-	HERO,
+	## One page in the top tab strip: a pill carrying a glyph, and its name too
+	## where the row is wide enough.
+	TAB,
 }
 
 const ICON_SIDE: float = 23.0
-const DOCK_SIDE: float = 76.0
-const DOCK_ICON_SHARE: float = 0.42
+## The pill a tab is drawn in, and the square it shrinks to with no room for its
+## name. [constant Gen2LauncherUI.TOUCH_TARGET]: it is pressed while walking.
+const TAB_HEIGHT: float = 48.0
 
 var variant: Variant = Variant.NEUTRAL
 ## Played on press. A cartridge action overrides it with its own clip.
@@ -49,7 +46,7 @@ var _active: bool = false
 ## rather than a themed colour, so reaching a button has to repaint rather than
 ## swap a stylebox.
 var _lit: bool = false
-var _side: float = DOCK_SIDE
+var _side: float = TAB_HEIGHT
 
 
 static func create(
@@ -91,9 +88,20 @@ func set_side(side: float) -> void:
 	repaint()
 
 
-## A round dock button with its name written underneath by the caller.
-static func dock(palette: Gen2LauncherTheme, glyph: StringName) -> Gen2LauncherButton:
-	return icon_only(palette, glyph, Variant.DOCK, DOCK_SIDE)
+static func tab(
+	palette: Gen2LauncherTheme, glyph: StringName, label: String
+) -> Gen2LauncherButton:
+	var button: Gen2LauncherButton = create(palette, label, Variant.TAB, glyph)
+	button.custom_minimum_size = Vector2(0, TAB_HEIGHT)
+	button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return button
+
+
+## Drops or restores a tab's words. The glyph stays either way.
+func set_labelled(labelled: bool, label: String) -> void:
+	text = label if labelled else ""
+	custom_minimum_size = Vector2(0.0 if labelled else TAB_HEIGHT, TAB_HEIGHT)
+	repaint()
 
 
 func _init() -> void:
@@ -137,6 +145,8 @@ func _paint() -> Dictionary:
 	# distance.
 	var pad_x: int = 0 if text.is_empty() else 20
 	var pad_y: int = 8
+	if variant == Variant.TAB:
+		return _tab_paint()
 	match variant:
 		Variant.PRIMARY:
 			fill = _theme.accent
@@ -159,12 +169,28 @@ func _paint() -> Dictionary:
 			ink = _theme.on_surface if _active else _theme.muted
 			pad_x = 14
 			pad_y = 7
-		# A plain chip with no outline: reaching it fills it with the accent and
-		# turns the glyph white, which is the whole of the state it carries.
-		Variant.NEUTRAL, Variant.DOCK, Variant.HERO:
+		# A plain chip: reaching it fills it with the accent.
+		Variant.NEUTRAL:
 			fill = _theme.accent if reached else _theme.surface
 			ink = _theme.on_accent if reached else _theme.on_surface
 	return {"fill": fill, "border": border, "ink": ink, "pad_x": pad_x, "pad_y": pad_y}
+
+
+## A tab says two things where the rest of the set says one, so being current and
+## being reached are drawn apart.
+func _tab_paint() -> Dictionary:
+	var fill: Color = Color(0, 0, 0, 0)
+	var ink: Color = _theme.muted
+	if _lit:
+		fill = _theme.accent
+		ink = _theme.on_accent
+	elif _active:
+		fill = _theme.surface
+		ink = _theme.on_surface
+	return {
+		"fill": fill, "border": Color(0, 0, 0, 0), "ink": ink,
+		"pad_x": 10 if text.is_empty() else 18, "pad_y": 8,
+	}
 
 
 func repaint() -> void:
@@ -177,7 +203,7 @@ func repaint() -> void:
 	var ink: Color = paint["ink"]
 	var pad_x: int = paint["pad_x"]
 	var pad_y: int = paint["pad_y"]
-	var icon_side: float = _side * DOCK_ICON_SHARE if variant == Variant.DOCK else ICON_SIDE
+	var icon_side: float = ICON_SIDE
 
 	_style("normal", fill, border, radius, pad_x, pad_y)
 	_style("hover", _hovered(fill), _hovered(border), radius, pad_x, pad_y)
@@ -186,7 +212,7 @@ func repaint() -> void:
 		radius, pad_x, pad_y)
 	# Focus is not hover or the active value. A heavy accent ring standing clear
 	# of the button is always present, so keyboard and controller users can locate
-	# the cursor even on a filled primary button or the already-selected dock page,
+	# the cursor even on a filled primary button or the already-selected tab,
 	# where a flush ring would only read as a slightly larger button.
 	add_theme_stylebox_override(
 		"focus", _theme.padded(_theme.focus_ring(radius, 3), pad_x, pad_y)
@@ -210,10 +236,6 @@ func repaint() -> void:
 	add_theme_constant_override("h_separation", 9 if not text.is_empty() else 0)
 
 
-func _fills_on_focus() -> bool:
-	return variant == Variant.NEUTRAL or variant == Variant.DOCK or variant == Variant.HERO
-
-
 func set_disabled_state(off: bool) -> void:
 	disabled = off
 	repaint()
@@ -221,13 +243,11 @@ func set_disabled_state(off: bool) -> void:
 
 func _radius() -> float:
 	match variant:
-		Variant.PRIMARY, Variant.DANGER, Variant.HERO:
+		Variant.TAB:
 			return Gen2LauncherTheme.RADIUS_PILL
-		Variant.DOCK:
-			return _side * 0.5
 		Variant.SEGMENT:
 			return Gen2LauncherTheme.RADIUS_SM - 2.0
-	return Gen2LauncherTheme.RADIUS_SM
+	return Gen2LauncherTheme.RADIUS_MD
 
 
 func _style(
@@ -255,8 +275,8 @@ func _centre_pivot() -> void:
 	pivot_offset = size * 0.5
 
 
-## Only the round dock buttons move: a row of them is the launcher's one place
-## where a pointer wants to feel the target.
+## Only the tabs move: the strip is the launcher's one place where a pointer
+## wants to feel the target under it.
 func _on_hover(entered: bool) -> void:
 	if disabled:
 		return
@@ -268,9 +288,9 @@ func _on_hover(entered: bool) -> void:
 		repaint()
 	if entered:
 		Gen2LauncherAudio.play(&"hover")
-	if variant != Variant.DOCK or not is_inside_tree():
+	if variant != Variant.TAB or not is_inside_tree():
 		return
 	_centre_pivot()
 	var tween: Tween = create_tween()
 	tween.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
-	tween.tween_property(self, "scale", Vector2.ONE * (1.12 if entered else 1.0), 0.18)
+	tween.tween_property(self, "scale", Vector2.ONE * (1.07 if entered else 1.0), 0.18)

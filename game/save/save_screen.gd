@@ -229,7 +229,7 @@ func _build_ui() -> void:
 	_page.add_child(details)
 	_details_box = Gen2LauncherUI.column(Gen2LauncherUI.GAP_MD)
 	_details_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	details.add_child(_details_box)
+	details.content().add_child(_details_box)
 
 	_shell.add_page(&"saves", "Saves", &"save", _page)
 
@@ -564,13 +564,13 @@ func _build_new_game_form(body: VBoxContainer) -> void:
 ## here rather than in Settings because it belongs to the run: a Nuzlocke that
 ## could be switched off after a death would not be one.
 func _build_challenge_field(body: VBoxContainer) -> void:
-	body.add_child(Gen2LauncherUI.caption(_palette, "Mode"))
 	var titles: Array = []
 	for challenge: StringName in Gen2Rules.CHALLENGES:
 		titles.append(Gen2Rules.challenge_title(challenge))
 	var detail: Label = Gen2LauncherUI.muted(_palette, "")
-	body.add_child(Gen2LauncherUI.segmented(
-		_palette, titles, maxi(Gen2Rules.CHALLENGES.find(_new_game_challenge), 0),
+	body.add_child(Gen2LauncherUI.choice(
+		_palette, &"sparkle", "Mode", titles,
+		maxi(Gen2Rules.CHALLENGES.find(_new_game_challenge), 0),
 		func(index: int) -> void:
 			_new_game_challenge = Gen2Rules.CHALLENGES[index]
 			detail.text = Gen2Rules.challenge_detail(_new_game_challenge)

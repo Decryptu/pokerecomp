@@ -86,7 +86,7 @@ static func chip(
 	return _made(skin, skin.padded(skin.floating(skin.surface, radius, spread), padding))
 
 
-## A surface that genuinely floats: sheets, toasts and the bottom dock. Never put
+## A surface that genuinely floats: sheets, toasts and the hint bar. Never put
 ## one inside a container that clips, because the shadow is drawn outside it.
 static func floating(
 	skin: Gen2LauncherTheme,

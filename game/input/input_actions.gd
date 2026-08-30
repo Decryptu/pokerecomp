@@ -32,12 +32,21 @@ const ALL_DEVICES: int = -1
 ##
 ## `ui_accept` ships as Enter, Keypad Enter and Space, and `ui_cancel` as Escape
 ## alone, so on a machine with no keyboard every focus ring in the launcher can
-## be moved and nothing under it can be chosen. The eight game buttons are the
-## player's to rebind; these two are the engine's, and are added rather than
-## replaced so the keys keep working.
+## be moved and nothing under it can be chosen. The page pair and the menu key
+## are missing the same way, and these five are added rather than replaced.
 const UI_PAD_BUTTONS: Dictionary = {
 	&"ui_accept": JOY_BUTTON_A,
 	&"ui_cancel": JOY_BUTTON_B,
+	&"ui_menu": JOY_BUTTON_Y,
+	&"ui_page_up": JOY_BUTTON_LEFT_SHOULDER,
+	&"ui_page_down": JOY_BUTTON_RIGHT_SHOULDER,
+}
+
+## `ui_menu` ships as the Menu key, which most keyboards do not have and no
+## legend should print. Replaced with the third key of the Z, X, C row: Tab is
+## Godot's own focus step, and A and B are already Z and X.
+const UI_KEYS: Dictionary = {
+	&"ui_menu": KEY_C,
 }
 
 ## How many bindings one button may carry. The remap UI shows a fixed number of
@@ -118,6 +127,56 @@ const PAD_BUTTON_NAMES: Dictionary = {
 	JOY_BUTTON_TOUCHPAD: "Touchpad",
 }
 
+## What a pad prints on its face buttons, per layout. Godot reports SDL
+## positions, so `JOY_BUTTON_A` is the bottom button whatever is printed on it:
+## Xbox prints A there and Nintendo prints B.
+const PAD_LAYOUT_AUTO: StringName = &"auto"
+const PAD_LAYOUT_XBOX: StringName = &"xbox"
+const PAD_LAYOUT_NINTENDO: StringName = &"nintendo"
+const PAD_LAYOUTS: Array[StringName] = [
+	PAD_LAYOUT_AUTO, PAD_LAYOUT_XBOX, PAD_LAYOUT_NINTENDO,
+]
+
+const PAD_FACE_LABELS: Dictionary = {
+	PAD_LAYOUT_XBOX: {
+		JOY_BUTTON_A: "A", JOY_BUTTON_B: "B", JOY_BUTTON_X: "X", JOY_BUTTON_Y: "Y",
+		JOY_BUTTON_LEFT_SHOULDER: "LB", JOY_BUTTON_RIGHT_SHOULDER: "RB",
+	},
+	PAD_LAYOUT_NINTENDO: {
+		JOY_BUTTON_A: "B", JOY_BUTTON_B: "A", JOY_BUTTON_X: "Y", JOY_BUTTON_Y: "X",
+		JOY_BUTTON_LEFT_SHOULDER: "L", JOY_BUTTON_RIGHT_SHOULDER: "R",
+	},
+}
+
+const PAD_BADGES: Dictionary = {
+	JOY_BUTTON_BACK: "Back",
+	JOY_BUTTON_START: "Start",
+	JOY_BUTTON_GUIDE: "Home",
+	JOY_BUTTON_LEFT_STICK: "LS",
+	JOY_BUTTON_RIGHT_STICK: "RS",
+	JOY_BUTTON_DPAD_UP: "Up",
+	JOY_BUTTON_DPAD_DOWN: "Down",
+	JOY_BUTTON_DPAD_LEFT: "Left",
+	JOY_BUTTON_DPAD_RIGHT: "Right",
+}
+
+const KEY_BADGES: Dictionary = {
+	KEY_ESCAPE: "Esc",
+	KEY_ENTER: "Enter",
+	KEY_KP_ENTER: "Enter",
+	KEY_BACKSPACE: "Bksp",
+	KEY_SPACE: "Space",
+	KEY_PAGEUP: "PgUp",
+	KEY_PAGEDOWN: "PgDn",
+	KEY_UP: "Up",
+	KEY_DOWN: "Down",
+	KEY_LEFT: "Left",
+	KEY_RIGHT: "Right",
+}
+
+const NINTENDO_PAD_WORDS: Array[String] = ["nintendo", "switch", "joy-con", "joycon", "wii"]
+
+
 ## Axis name by sign, negative first.
 const PAD_AXIS_NAMES: Dictionary = {
 	JOY_AXIS_LEFT_X: ["Left stick left", "Left stick right"],
@@ -159,23 +218,33 @@ static func install(scheme: Dictionary) -> void:
 	install_ui_pad_buttons()
 
 
-## Gives [constant UI_PAD_BUTTONS] to the engine's own UI actions. Idempotent:
-## an action that already answers to that button is left alone.
+## Gives [constant UI_PAD_BUTTONS] and [constant UI_KEYS] to the engine's own UI
+## actions. Idempotent.
 static func install_ui_pad_buttons() -> void:
 	for action: StringName in UI_PAD_BUTTONS:
-		if not InputMap.has_action(action):
-			continue
-		var code: int = int(UI_PAD_BUTTONS[action])
-		var bound: bool = false
-		for existing: InputEvent in InputMap.action_get_events(action):
-			if existing is InputEventJoypadButton and existing.button_index == code:
-				bound = true
-				break
-		if bound:
-			continue
-		var event := InputEventJoypadButton.new()
-		event.device = ALL_DEVICES
-		event.button_index = code as JoyButton
+		_add_ui_binding(action, {"kind": KIND_PAD_BUTTON, "code": int(UI_PAD_BUTTONS[action])})
+	for action: StringName in UI_KEYS:
+		_replace_ui_key(action, int(UI_KEYS[action]))
+
+
+## Takes the engine's keys off [param action] so a legend prints a real one.
+static func _replace_ui_key(action: StringName, code: int) -> void:
+	if not InputMap.has_action(action):
+		return
+	for existing: InputEvent in InputMap.action_get_events(action):
+		if existing is InputEventKey:
+			InputMap.action_erase_event(action, existing)
+	_add_ui_binding(action, {"kind": KIND_KEY, "code": code})
+
+
+static func _add_ui_binding(action: StringName, binding: Dictionary) -> void:
+	if not InputMap.has_action(action):
+		return
+	for existing: InputEvent in InputMap.action_get_events(action):
+		if from_event(existing) == binding:
+			return
+	var event: InputEvent = to_event(binding)
+	if event != null:
 		InputMap.action_add_event(action, event)
 
 
@@ -265,6 +334,56 @@ static func describe(binding: Dictionary) -> String:
 				return "Pad axis %d%s" % [code, "-" if int(binding.get("sign", 1)) < 0 else "+"]
 			return String(names[0 if int(binding.get("sign", 1)) < 0 else 1])
 	return "Unbound"
+
+
+## Resolves [constant PAD_LAYOUT_AUTO] against the pad plugged in.
+static func resolve_pad_layout(chosen: StringName) -> StringName:
+	if PAD_FACE_LABELS.has(chosen):
+		return chosen
+	if OS.has_feature("switch"):
+		return PAD_LAYOUT_NINTENDO
+	for device: int in Input.get_connected_joypads():
+		var name: String = Input.get_joy_name(device).to_lower()
+		for word: String in NINTENDO_PAD_WORDS:
+			if name.contains(word):
+				return PAD_LAYOUT_NINTENDO
+	return PAD_LAYOUT_XBOX
+
+
+## What is printed on the control a binding names, in the width of a key cap.
+static func badge(binding: Dictionary, layout: StringName = PAD_LAYOUT_AUTO) -> String:
+	var code: int = int(binding.get("code", 0))
+	match StringName(binding.get("kind", &"")):
+		KIND_KEY:
+			var labelled: int = _labelled_key(code)
+			return KEY_BADGES.get(labelled, OS.get_keycode_string(labelled))
+		KIND_PAD_BUTTON:
+			var faces: Dictionary = PAD_FACE_LABELS[resolve_pad_layout(layout)]
+			return faces.get(code, PAD_BADGES.get(code, "?"))
+		KIND_PAD_AXIS:
+			# The last word of the sentence [method describe] would have said.
+			var words: PackedStringArray = describe(binding).split(" ", false)
+			return "" if words.is_empty() else String(words[-1]).capitalize()
+	return ""
+
+
+## The badge for [param action] on [param device], read out of the [InputMap] so
+## a rebind and the engine's own `ui_*` family need no second copy of either.
+static func action_badge(
+	action: StringName, device: StringName, layout: StringName = PAD_LAYOUT_AUTO
+) -> String:
+	if not InputMap.has_action(action):
+		return ""
+	var wanted: StringName = DEVICE_GAMEPAD if device == Gen2InputDevice.GAMEPAD \
+		else DEVICE_KEYBOARD
+	for event: InputEvent in InputMap.action_get_events(action):
+		var binding: Dictionary = from_event(event)
+		if binding.is_empty() or device_of(binding) != wanted:
+			continue
+		var text: String = badge(binding, layout)
+		if not text.is_empty():
+			return text
+	return ""
 
 
 ## Reads a scheme back out of the options file.

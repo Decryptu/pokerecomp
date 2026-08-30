@@ -204,7 +204,7 @@ func _scrolled(page: Control) -> Control:
 	var scroll: Gen2LauncherScroll = Gen2LauncherScroll.create()
 	scroll.name = page.name
 	page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(page)
+	scroll.content().add_child(page)
 	return scroll
 
 

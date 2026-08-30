@@ -1,7 +1,7 @@
 extends Control
 
 ## The launcher: a shelf of cartridges, plus the mods, settings and about pages
-## reachable from the dock under it.
+## reachable from the tabs above it.
 ##
 ## It owns presentation and workflow, while the ROM and cache layers remain
 ## responsible for verification and decoding. Everything it draws is built in
@@ -82,7 +82,7 @@ func _build() -> void:
 	_shelf.play_requested.connect(_launch_game)
 	_shelf.manage_requested.connect(_open_manage_sheet)
 	_shelf.selection_changed.connect(_on_cartridge_selected)
-	# The backdrop follows the shelf being on screen rather than the dock being
+	# The backdrop follows the shelf being on screen rather than the tab being
 	# pressed, so a sheet, a restored page or anything else that reveals the
 	# shelf without a page signal brings the picture and its music back too.
 	_shelf.visibility_changed.connect(_refresh_backdrop)
@@ -591,6 +591,12 @@ func preview_mods_view(view: StringName, id: StringName = &"") -> void:
 			_mods.open_sources()
 		_:
 			_mods.show_list()
+
+
+## Preview seam: opens one of the settings page's five sections.
+func preview_settings_section(id: StringName) -> void:
+	select_page(&"settings")
+	_settings.select_section(id)
 
 
 ## Preview seam: opens a real launcher sheet without synthesising a pointer
