@@ -230,7 +230,6 @@ func _link_button(
 	return button
 
 
-## Shown after a release check answers, in the colour its outcome deserves.
 func set_update_result(message: String, colour: Color) -> void:
 	_result.text = message
 	_result.add_theme_color_override("font_color", colour)

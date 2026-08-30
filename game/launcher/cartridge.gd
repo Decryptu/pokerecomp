@@ -166,7 +166,6 @@ func set_cache_state(state: StringName, note: String = "") -> void:
 	queue_redraw()
 
 
-## Applied by the stage after it has sized and placed this cartridge.
 func set_depth(distance: int) -> void:
 	depth = distance
 	_bay_label.visible = distance == 0

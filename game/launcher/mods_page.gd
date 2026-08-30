@@ -488,7 +488,6 @@ func update_rows() -> Array:
 	return out
 
 
-## The header's one button is two actions: read the sources, or take the updates.
 func _on_update_button() -> void:
 	if available_update_count() > 0:
 		download_all()
@@ -525,7 +524,6 @@ func _download_next_update() -> void:
 	)
 
 
-## Which action the button offers, called wherever a queue or a listing moves.
 func _sync_update_button() -> void:
 	if _check_updates_button == null:
 		return
@@ -626,7 +624,6 @@ func download(row: Dictionary, finished: Callable = Callable()) -> void:
 		_settled(finished, false)
 
 
-## Deferred rather than nested: a batch of ten is otherwise ten frames of stack.
 func _settled(finished: Callable, ok: bool) -> void:
 	if finished.is_valid():
 		finished.call_deferred(ok)

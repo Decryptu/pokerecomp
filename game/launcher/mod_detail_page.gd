@@ -24,7 +24,6 @@ var _row: Dictionary = {}
 ## Where a choice sheet opens. Null until the page is put on a screen.
 var _host: Control = null
 
-## The view row's node name. See [method _view_field].
 const VIEW_SWITCH_NAME: StringName = &"ViewSwitch"
 
 

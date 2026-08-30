@@ -57,7 +57,7 @@ func _build(title: String) -> void:
 	_card = Gen2LauncherCard.floating(_theme, Gen2LauncherTheme.RADIUS_LG, 26, 34)
 	centre.add_child(_card)
 
-	_column = Gen2LauncherUI.column(Gen2LauncherUI.GAP_LG)
+	_column = Gen2LauncherUI.column(Gen2LauncherUI.GAP_MD)
 	_card.add_child(_column)
 
 	var heading: Label = Gen2LauncherUI.title(_theme, title)
@@ -70,7 +70,7 @@ func _build(title: String) -> void:
 	_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_scroll.content().add_child(_body)
 
-	_actions = Gen2LauncherUI.column(Gen2LauncherUI.GAP_SM)
+	_actions = Gen2LauncherUI.column(Gen2LauncherUI.GAP_MD)
 	_column.add_child(_actions)
 
 	# A cross in the corner never says with what, which is the pad's question.
@@ -84,7 +84,7 @@ func _build(title: String) -> void:
 	## so the fit is redone when the body grows rather than only when it opens.
 	add_to_group(Gen2FocusGuard.MODAL_GROUP)
 	resized.connect(_fit)
-	_body.minimum_size_changed.connect(_fit)
+	_scroll.content().minimum_size_changed.connect(_fit)
 	_fit()
 
 
@@ -99,8 +99,10 @@ func _fit() -> void:
 	_card.custom_minimum_size.x = maxf(width, 0.0)
 	var chrome: float = _card.get_combined_minimum_size().y - _scroll.custom_minimum_size.y
 	var room: float = size.y - MARGIN * 2.0 - chrome
+	# The pane's content, not the rows: it keeps room for a ring around them, and
+	# measuring the rows alone left the pane short by it.
 	_scroll.custom_minimum_size.y = maxf(
-		minf(_body.get_combined_minimum_size().y, room), 0.0
+		minf(_scroll.content().get_combined_minimum_size().y, room), 0.0
 	)
 
 

@@ -117,10 +117,20 @@ func refresh() -> void:
 	add_theme_stylebox_override("pressed", _chip(pad, true))
 	add_theme_stylebox_override("disabled", _chip(pad, false))
 	# A chip a pad can rest on gets the ring every other control gets.
-	add_theme_stylebox_override("focus", _theme.padded(
-		_theme.focus_ring(Gen2LauncherTheme.RADIUS_PILL, 3), pad + 4, 6
-	) if focus_mode == Control.FOCUS_ALL else _chip(pad, _lit))
+	add_theme_stylebox_override("focus", _focus_chip(pad))
 	_measure()
+
+
+## The ring goes over the filled chip, never instead of it: the ink is the
+## fill's, and a ring alone left light words on a light page.
+func _focus_chip(pad: int) -> StyleBoxFlat:
+	if focus_mode != Control.FOCUS_ALL:
+		return _chip(pad, _lit)
+	var style: StyleBoxFlat = _chip(pad, true)
+	style.border_color = _theme.accent
+	style.set_border_width_all(3)
+	style.set_expand_margin_all(float(Gen2LauncherTheme.FOCUS_GAP))
+	return style
 
 
 func _chip(pad: int, filled: bool) -> StyleBoxFlat:

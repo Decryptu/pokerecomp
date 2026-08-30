@@ -196,7 +196,8 @@ static func _neighbor(
 		var delta: Vector2 = there.get_center() - origin
 		var sideways: float = absf(delta.cross(direction))
 		var forward: float = delta.dot(direction)
-		var lined_up: bool = _overlaps_across(here, there, direction)
+		var lined_up: bool = _overlaps_across(here, there, direction) \
+			and _shares_pane(current, candidate)
 		if not lined_up and sideways > forward * CONE:
 			continue
 		var score: float = forward + sideways * 2.5
@@ -209,6 +210,23 @@ static func _neighbor(
 		best_lined_up = lined_up
 		best = candidate
 	return best
+
+
+## A pane taller than its window puts its last rows past its own bottom, so a
+## button under the pane measured nearer than the next row.
+static func _shares_pane(current: Control, candidate: Control) -> bool:
+	var pane: ScrollContainer = _pane_of(current)
+	return pane == null or pane == _pane_of(candidate)
+
+
+static func _pane_of(control: Control) -> ScrollContainer:
+	var walk: Node = control
+	while walk != null:
+		var pane := walk as ScrollContainer
+		if pane != null:
+			return pane
+		walk = walk.get_parent()
+	return null
 
 
 static func _gap_along(here: Rect2, there: Rect2, direction: Vector2) -> float:

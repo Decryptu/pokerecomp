@@ -43,7 +43,7 @@ static func create() -> Gen2LauncherScroll:
 	scroll.follow_focus = true
 	scroll._content = MarginContainer.new()
 	scroll._content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	for side: String in ["left", "right"]:
+	for side: String in ["left", "right", "top", "bottom"]:
 		scroll._content.add_theme_constant_override("margin_" + side, RING_INSET)
 	scroll.add_child(scroll._content)
 	return scroll

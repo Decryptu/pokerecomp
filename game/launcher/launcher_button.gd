@@ -243,13 +243,11 @@ func set_disabled_state(off: bool) -> void:
 
 func _radius() -> float:
 	match variant:
-		Variant.PRIMARY, Variant.DANGER:
-			return Gen2LauncherTheme.RADIUS_PILL
 		Variant.TAB:
 			return Gen2LauncherTheme.RADIUS_PILL
 		Variant.SEGMENT:
 			return Gen2LauncherTheme.RADIUS_SM - 2.0
-	return Gen2LauncherTheme.RADIUS_SM
+	return Gen2LauncherTheme.RADIUS_MD
 
 
 func _style(

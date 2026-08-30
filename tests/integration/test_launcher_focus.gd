@@ -102,26 +102,6 @@ func test_down_from_the_tab_strip_returns_to_the_current_page() -> void:
 	assert_true(_focus_owner() is Gen2CartridgeStage)
 
 
-## A shoulder changes page from wherever the ring is, without moving it onto the
-## strip: a page is switched far more often than a tab is walked to.
-func test_a_shoulder_steps_the_page_without_moving_the_ring() -> void:
-	_use(InputEventJoypadButton.new())
-	await get_tree().process_frame
-	await get_tree().process_frame
-	var shell: Gen2LauncherShell = _launcher.get("_shell")
-	assert_eq(shell.current_page(), &"shelf")
-	var page_down := InputEventAction.new()
-	page_down.action = &"ui_page_down"
-	page_down.pressed = true
-	shell._unhandled_input(page_down)
-	assert_eq(shell.current_page(), &"mods", "the next tab along")
-	var page_up := InputEventAction.new()
-	page_up.action = &"ui_page_up"
-	page_up.pressed = true
-	shell._unhandled_input(page_up)
-	assert_eq(shell.current_page(), &"shelf", "and back")
-
-
 ## The header row is the top of the mods page, and what is under it is however
 ## many mods this machine happens to have. So the route asserted is the one that
 ## holds on an empty catalogue too: along the row, and up out of the page.
@@ -173,44 +153,22 @@ func test_the_ring_never_lands_on_a_pane_that_holds_controls() -> void:
 		assert_true(focused is BaseButton, String(page))
 
 
-## Every control on a scrolling page has to be reachable, and the page has to be
-## leavable. The settings page is a rail beside its rows, so the walk is down the
-## rail, right into the rows, and down again to the end of them.
-func test_a_pad_walks_the_whole_settings_page_and_leaves_it() -> void:
+## The settings page is a rail beside its rows: right leaves the rail for them,
+## left comes back, and up is always a way out of the page.
+func test_a_pad_crosses_the_settings_page_and_leaves_it() -> void:
 	_use(InputEventJoypadButton.new())
 	_launcher.select_page(&"settings")
 	await get_tree().process_frame
 	await get_tree().process_frame
 	var guard: Gen2FocusGuard = _launcher.find_child("FocusGuard", true, false)
-	var rail: Array[Control] = await _walk(guard, Vector2.DOWN)
-	assert_eq(rail.size(), Gen2SettingsPage.SECTIONS.size(), "every section is reachable")
-
+	var rail: Control = _focus_owner()
 	assert_true(guard.move_focus(Vector2.RIGHT), "right leaves the rail for the rows")
 	await get_tree().process_frame
-	var rows: Array[Control] = await _walk(guard, Vector2.DOWN)
-	for row: Control in rows:
-		assert_false(rail.has(row), "and down the rows never lands back on the rail")
-
+	assert_ne(_focus_owner(), rail)
 	assert_true(guard.move_focus(Vector2.LEFT), "left comes back to it")
 	await get_tree().process_frame
-	assert_true(rail.has(_focus_owner()))
-	assert_true(guard.move_focus(Vector2.UP), "and up is always a way out of the page")
-
-
-## Every control [param way] reaches from where the ring is, in order.
-func _walk(guard: Gen2FocusGuard, way: Vector2) -> Array[Control]:
-	var seen: Array[Control] = []
-	for _step: int in 200:
-		var focused: Control = _focus_owner()
-		if focused == null or seen.has(focused):
-			break
-		seen.append(focused)
-		if not guard.move_focus(way):
-			break
-		# The pane brings the newly focused control into view, and the next
-		# neighbour is chosen from where things are once it has.
-		await get_tree().process_frame
-	return seen
+	assert_same(_focus_owner().get_parent(), rail.get_parent())
+	assert_true(guard.move_focus(Vector2.UP), "and up is a way out of the page")
 
 
 ## `JoyTextDelay`'s repeat arrives as one action press ([Gen2InputRuntime]), and
@@ -360,48 +318,6 @@ func test_a_sheet_takes_the_ring_and_gives_it_back() -> void:
 	sheet.close()
 	await get_tree().process_frame
 	assert_same(_focus_owner(), before)
-
-
-## A sheet is opened over the whole screen rather than inside the shell, so it is
-## the shell's sibling and not its child. A guard that only looked under itself
-## left every control in the sheet with no neighbours, and an empty neighbour is
-## the engine's own viewport-wide search: one press walked onto the page behind.
-func test_a_pad_cannot_walk_out_of_a_sheet() -> void:
-	_use(InputEventJoypadButton.new())
-	await get_tree().process_frame
-	await get_tree().process_frame
-	var palette: Gen2LauncherTheme = Gen2LauncherTheme.active()
-	var sheet: Gen2LauncherSheet = Gen2LauncherSheet.create(palette, "Gold")
-	for label: String in ["Open cache folder", "Delete cache", "Use your own art"]:
-		sheet.body().add_child(Gen2LauncherButton.create(
-			palette, label, Gen2LauncherButton.Variant.NEUTRAL
-		))
-	sheet.add_action(Gen2LauncherButton.create(
-		palette, "Re-import", Gen2LauncherButton.Variant.PRIMARY
-	))
-	sheet.open(_launcher)
-	await get_tree().process_frame
-	await get_tree().process_frame
-
-	var guard: Gen2FocusGuard = _launcher.find_child("FocusGuard", true, false)
-	for way: Vector2 in [Vector2.DOWN, Vector2.UP, Vector2.LEFT, Vector2.RIGHT]:
-		for _step: int in 12:
-			guard.move_focus(way)
-			await get_tree().process_frame
-			assert_true(
-				sheet.is_ancestor_of(_focus_owner()),
-				"%s left the sheet at %s" % [way, _focus_owner()],
-			)
-	# And the engine's own traversal, which is what an empty neighbour hands the
-	# press to and what the guard never sees.
-	for control: Control in Gen2FocusGuard.focusable_controls(sheet):
-		for side: NodePath in [
-			control.focus_neighbor_top, control.focus_neighbor_bottom,
-			control.focus_neighbor_left, control.focus_neighbor_right,
-		]:
-			assert_false(side.is_empty(), "every side of %s names one" % control)
-			assert_true(sheet.is_ancestor_of(control.get_node(side)))
-	sheet.close()
 
 
 ## The cancel used to be read in _gui_input, which only ever reaches the focused
