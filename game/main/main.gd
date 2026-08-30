@@ -12,6 +12,24 @@ extends Control
 ## the frames cost the import very little, short enough to read as motion.
 const IMPORT_YIELD_MS: int = 80
 
+## Shelf label and sheet sentence per cache state, in the player's words: a cache
+## is never migrated ([constant RomCache.FORMAT_VERSION]) and is asked for again.
+const CACHE_STATE_COPY: Dictionary = {
+	RomCache.STATE_USABLE: ["", "This cartridge is imported and verified."],
+	RomCache.STATE_STALE: [
+		"Update needed",
+		"This version reads cartridges differently. Import your file again to play.",
+	],
+	RomCache.STATE_INCOMPLETE: [
+		"Import unfinished",
+		"The last import stopped early. Import your file again to play.",
+	],
+	RomCache.STATE_MISSING: ["", "No cartridge file has been imported yet."],
+}
+
+## Said beside both lines that ask for a file again, which read as "start again".
+const SAVES_ARE_SAFE: String = "Your saved games are not affected."
+
 var _palette: Gen2LauncherTheme = null
 var _shell: Gen2LauncherShell = null
 var _shelf: Gen2ShelfPage = null
@@ -174,14 +192,20 @@ func _refresh_backdrop() -> void:
 func _refresh_games() -> void:
 	for game_id: StringName in RomRegistry.ORDER:
 		var data: GameData = GameData.open(game_id)
-		_shelf.set_slot_state(game_id, data != null, _cartridge_detail(game_id, data))
+		var state: StringName = cache_state_for(game_id) if data == null \
+			else RomCache.STATE_USABLE
+		_shelf.set_slot_state(game_id, state, _cartridge_detail(game_id, data, state))
 	_shelf.set_busy(_importing)
 	_refresh_backdrop()
 
 
-func _cartridge_detail(game_id: StringName, data: GameData) -> String:
+func cache_state_for(game_id: StringName) -> StringName:
+	return RomCache.state(RomCache.directory_for(game_id, RomRegistry.sha1_for(game_id)))
+
+
+func _cartridge_detail(game_id: StringName, data: GameData, state: StringName) -> String:
 	if data == null:
-		return ""
+		return cache_state_note(state)
 	var slots: Array = Gen2SaveStore.slots_for(game_id, data.sha1, data)
 	var ready_slots: int = 0
 	for row: Dictionary in slots:
@@ -331,6 +355,8 @@ func _open_manage_sheet(game_id: StringName) -> void:
 	)
 	var body: VBoxContainer = sheet.body()
 	body.add_child(Gen2LauncherUI.muted(_palette, cache_state_text(state)))
+	if needs_reimport(state):
+		body.add_child(Gen2LauncherUI.muted(_palette, SAVES_ARE_SAFE))
 	var directory: Label = Gen2LauncherUI.muted(_palette, path)
 	directory.add_theme_color_override("font_color", _palette.faint)
 	body.add_child(directory)
@@ -372,37 +398,57 @@ func _open_manage_sheet(game_id: StringName) -> void:
 		)
 		body.add_child(default_art)
 
-	var reimport: Gen2LauncherButton = Gen2LauncherButton.create(
-		_palette,
-		"Re-import" if state != RomCache.STATE_MISSING else "Import",
-		Gen2LauncherButton.Variant.PRIMARY,
-		&"download",
-	)
-	reimport.pressed.connect(func() -> void:
-		_reimport_game_id = game_id
-		sheet.close()
-		_open_import_dialog()
-	)
-	sheet.add_action(reimport)
+	sheet.add_action(_reimport_action(
+		sheet, game_id, "Re-import" if state != RomCache.STATE_MISSING else "Import"
+	))
 	sheet.open(self)
 
 
-## What the manage sheet says about a cache in [param state]. Takes the state
-## rather than a cartridge so the four sentences can be asserted without a cache
-## on disk to put a build's own cartridges at risk.
-##
-## A cache is never migrated ([constant RomCache.FORMAT_VERSION]), so a build
-## that has moved on says so and asks for the dump again rather than reporting
-## the cartridge as never imported.
+## The manage sheet answers the same states, but it is a workbench.
+func _open_update_sheet(game_id: StringName, state: StringName) -> void:
+	var sheet: Gen2LauncherSheet = Gen2LauncherSheet.create(
+		_palette, RomRegistry.title_for(game_id)
+	)
+	var body: VBoxContainer = sheet.body()
+	var sentence: Label = Gen2LauncherUI.body(_palette, cache_state_text(state))
+	sentence.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.add_child(sentence)
+	body.add_child(Gen2LauncherUI.muted(_palette, SAVES_ARE_SAFE))
+	sheet.add_action(_reimport_action(sheet, game_id, "Import again"))
+	sheet.open(self)
+
+
+func _reimport_action(
+	sheet: Gen2LauncherSheet, game_id: StringName, label: String
+) -> Gen2LauncherButton:
+	var button: Gen2LauncherButton = Gen2LauncherButton.create(
+		_palette, label, Gen2LauncherButton.Variant.PRIMARY, &"download"
+	)
+	button.pressed.connect(func() -> void:
+		_reimport_game_id = game_id
+		sheet.close()
+		_show_import_picker()
+	)
+	return button
+
+
+static func cache_state_note(state: StringName) -> String:
+	return _cache_state_copy(state, 0)
+
+
+## Takes a state rather than a cartridge, so the four sentences can be asserted
+## without a cache on disk to put a build's own cartridges at risk.
 static func cache_state_text(state: StringName) -> String:
-	match state:
-		RomCache.STATE_USABLE:
-			return "This cartridge is imported and verified."
-		RomCache.STATE_STALE:
-			return "This cache was written by an older build. Import the cartridge again."
-		RomCache.STATE_INCOMPLETE:
-			return "The last import did not finish. Import the cartridge again."
-	return "No cache exists for this cartridge yet."
+	return _cache_state_copy(state, 1)
+
+
+static func needs_reimport(state: StringName) -> bool:
+	return state == RomCache.STATE_STALE or state == RomCache.STATE_INCOMPLETE
+
+
+static func _cache_state_copy(state: StringName, column: int) -> String:
+	var row: Array = CACHE_STATE_COPY.get(state, ["", ""])
+	return String(row[column])
 
 
 ## Public and separate from the dialog for the reason
@@ -493,6 +539,9 @@ func launcher_snapshot() -> Dictionary:
 		games[String(game_id)] = {
 			"title": RomRegistry.title_for(game_id),
 			"imported": data != null,
+			"cache_state": String(
+				RomCache.STATE_USABLE if data != null else cache_state_for(game_id)
+			),
 			"selected": game_id == _selected_game_id,
 			"save_slots": Gen2SaveStore.slots_for(game_id, data.sha1, data) if data != null else [],
 		}
@@ -521,13 +570,13 @@ func preview_fade_step(step: int) -> void:
 	_shell.preview_fade_step(step)
 
 
-## Preview seam: shows the shelf as if these cartridges were imported, so the
-## empty and full states can be photographed on one machine. Changes nothing on
-## disk and is never called by the launcher itself.
+## Preview seam: every bay photographed on one machine. Nothing on disk moves.
 func preview_slot_states(states: Dictionary) -> void:
 	for game_id: StringName in RomRegistry.ORDER:
-		var imported: bool = bool(states.get(String(game_id), false))
-		_shelf.set_slot_state(game_id, imported, "Ready. 2 saves" if imported else "")
+		var state := StringName(states.get(String(game_id), RomCache.STATE_MISSING))
+		var detail: String = "Ready. 2 saves" if state == RomCache.STATE_USABLE \
+			else cache_state_note(state)
+		_shelf.set_slot_state(game_id, state, detail)
 	_refresh_backdrop()
 
 
@@ -551,6 +600,9 @@ func preview_sheet(view: StringName) -> void:
 		&"manage":
 			select_page(&"shelf")
 			_open_manage_sheet(_shelf.selected_id())
+		&"update":
+			select_page(&"shelf")
+			_open_update_sheet(_shelf.selected_id(), RomCache.STATE_STALE)
 		&"touch":
 			select_page(&"settings")
 			_settings._open_touch_layout()
@@ -601,7 +653,7 @@ func _launch_game(game_id: StringName) -> void:
 		return
 	var data: GameData = GameData.open(game_id)
 	if data == null:
-		_open_import_dialog()
+		_open_import_dialog(game_id)
 		return
 	if not GameRuntime.select_game(game_id):
 		_set_status(
@@ -621,7 +673,19 @@ func _launch_game(game_id: StringName) -> void:
 	get_tree().change_scene_to_file.call_deferred("res://game/save/save_screen.tscn")
 
 
-func _open_import_dialog(_game_id: StringName = &"") -> void:
+## A cartridge this build cannot read was imported once; an empty bay was not.
+func _open_import_dialog(game_id: StringName = &"") -> void:
+	if _importing:
+		return
+	var state: StringName = cache_state_for(game_id) if not game_id.is_empty() \
+		else RomCache.STATE_MISSING
+	if needs_reimport(state):
+		_open_update_sheet(game_id, state)
+		return
+	_show_import_picker()
+
+
+func _show_import_picker() -> void:
 	if _importing:
 		return
 	_set_status(

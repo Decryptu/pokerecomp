@@ -128,8 +128,9 @@ A few seconds per game. The cache is keyed by game and hash and lives in Godot's
 `user://`, never in the project or an export. `--verify` checks without writing.
 
 A cache is never migrated. An update that changes its format discards the old
-one, and the launcher's manage sheet says so: import the same dump again. Saves
-live under their own root and are not touched.
+one. The shelf marks that cartridge "Update needed", and pressing it says why and
+opens the picker: import the same dump again. Saves live under their own root and
+are not touched.
 
 The same sheet, behind the three dots above the shelf, also swaps a cartridge's
 picture for one of your own: any PNG, WebP or JPEG, scaled to fit the shell

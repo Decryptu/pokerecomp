@@ -17,6 +17,9 @@ const ART: Dictionary = {
 ## The cartridge shells are 1058 by 1201.
 const ASPECT: float = 1058.0 / 1201.0
 
+const BAY_ICON_SIDE: float = 44.0
+const FAR_BAY_ICON_SIDE: float = 26.0
+
 const SIDE_FADE_SHADER: String = """
 shader_type canvas_item;
 
@@ -31,6 +34,8 @@ void fragment() {
 """
 
 var game_id: StringName = &""
+## Which of the three bays this draws.
+var cache_state: StringName = RomCache.STATE_MISSING
 var imported: bool = false
 ## How far the cartridge is from the selected one, which decides its size and
 ## how far back it stands. Set by [Gen2CartridgeStage].
@@ -44,6 +49,7 @@ var _bay_label: Label = null
 ## The icon and the name inside an empty bay, hidden together by
 ## [method set_bay_prompt].
 var _bay_prompt: VBoxContainer = null
+var _bay_note: Label = null
 var _hover: bool = false
 var _side_fade: ShaderMaterial = null
 var _bay_side_fade: ShaderMaterial = null
@@ -109,7 +115,7 @@ func _build() -> void:
 	invitation.offset_top = 0.0
 	invitation.offset_bottom = 0.0
 	_bay.add_child(invitation)
-	_bay_icon = Gen2LauncherIcon.create(&"download", 44.0, _theme.faint)
+	_bay_icon = Gen2LauncherIcon.create(&"download", BAY_ICON_SIDE, _theme.faint)
 	_bay_icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	invitation.add_child(_bay_icon)
 	_bay_label = Gen2LauncherUI.muted(_theme, RomRegistry.title_for(game_id))
@@ -117,6 +123,10 @@ func _build() -> void:
 	_bay_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_bay_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	invitation.add_child(_bay_label)
+	_bay_note = Gen2LauncherUI.tag(_theme, "")
+	_bay_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_bay_note.add_theme_color_override("font_color", _theme.accent)
+	invitation.add_child(_bay_note)
 
 	_art = TextureRect.new()
 	_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -127,11 +137,10 @@ func _build() -> void:
 	add_child(_art)
 
 	refresh_art()
-	set_imported(false)
+	set_cache_state(RomCache.STATE_MISSING)
 
 
-## The player's own picture, or the shipped shell. The stretch mode above is what
-## contains a picture of any shape inside the shell's box.
+## The player's own picture, or the shipped shell.
 func refresh_art() -> void:
 	if _art == null:
 		return
@@ -139,20 +148,21 @@ func refresh_art() -> void:
 	_art.texture = custom if custom != null else ART.get(game_id, null)
 
 
-## Hides the download icon and the cartridge's name inside an empty bay, leaving
-## the silhouette alone.
-##
-## For a caller that wants the shape rather than the invitation: the lower
-## display draws one to say no game is running, and nothing can be dropped on it.
+## Leaves an empty bay its silhouette alone, for a caller that wants the shape
+## rather than the invitation: the lower display draws one to say no game is
+## running, and nothing can be dropped on it.
 func set_bay_prompt(on: bool) -> void:
 	if _bay_prompt != null:
 		_bay_prompt.visible = on
 
 
-func set_imported(state: bool) -> void:
-	imported = state
-	_art.visible = state
-	_bay.visible = not state
+func set_cache_state(state: StringName, note: String = "") -> void:
+	cache_state = state
+	imported = state == RomCache.STATE_USABLE
+	_art.visible = imported
+	_bay.visible = not imported
+	_bay_note.text = note if not imported and state != RomCache.STATE_MISSING else ""
+	_paint_bay()
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	queue_redraw()
 
@@ -161,8 +171,20 @@ func set_imported(state: bool) -> void:
 func set_depth(distance: int) -> void:
 	depth = distance
 	_bay_label.visible = distance == 0
-	_bay_icon.set_glyph(&"download", 44.0 if distance == 0 else 26.0, _theme.faint)
+	_paint_bay()
 	queue_redraw()
+
+
+## One place dresses the bay: its size belongs to the depth pass and its glyph to
+## the cache state, and each repainting alone undid the other.
+func _paint_bay() -> void:
+	var wants_file: bool = not imported and cache_state != RomCache.STATE_MISSING
+	_bay_icon.set_glyph(
+		&"refresh" if wants_file else &"download",
+		BAY_ICON_SIDE if depth == 0 else FAR_BAY_ICON_SIDE,
+		_theme.accent if wants_file else _theme.faint,
+	)
+	_bay_note.visible = wants_file and depth == 0 and not _bay_note.text.is_empty()
 
 
 ## The selected cartridge is untouched. A left neighbour fades from 100% at its
@@ -288,7 +310,7 @@ func play_insert() -> void:
 	if not is_inside_tree():
 		return
 	Gen2LauncherAudio.play(&"insert")
-	set_imported(true)
+	set_cache_state(RomCache.STATE_USABLE)
 	_art.modulate.a = 0.0
 	_hop = -size.y * 0.7
 	_squash = Vector2(1.04, 1.04)
@@ -322,13 +344,13 @@ func play_start() -> void:
 
 func play_eject() -> void:
 	if not is_inside_tree():
-		set_imported(false)
+		set_cache_state(RomCache.STATE_MISSING)
 		return
 	Gen2LauncherAudio.play(&"eject")
 	var tween: Tween = create_tween()
 	tween.tween_property(self, "_hop", -size.y * 0.6, 0.24).set_ease(Tween.EASE_OUT)
 	tween.parallel().tween_property(_art, "modulate:a", 0.0, 0.24)
 	await tween.finished
-	set_imported(false)
+	set_cache_state(RomCache.STATE_MISSING)
 	_hop = 0.0
 	_art.modulate.a = 1.0

@@ -76,9 +76,9 @@ func selected_id() -> StringName:
 	return _stage.selected_id()
 
 
-func set_slot_state(game_id: StringName, imported: bool, detail: String) -> void:
+func set_slot_state(game_id: StringName, state: StringName, detail: String) -> void:
 	_details[game_id] = detail
-	_stage.set_imported(game_id, imported)
+	_stage.set_cache_state(game_id, state, detail)
 	_refresh_action()
 
 
@@ -158,9 +158,11 @@ func _refresh_action() -> void:
 	if card == null:
 		return
 	var title: String = RomRegistry.title_for(id)
-	if card.imported:
+	# Shown for a cache this build cannot read too, which it used to hide over.
+	var known: bool = card.cache_state != RomCache.STATE_MISSING
+	if known:
 		_manage.tooltip_text = "%s options. %s" % [title, _details.get(id, "Ready")]
-	_manage.visible = card.imported
+	_manage.visible = known
 	_sync_stage_inset()
 
 
