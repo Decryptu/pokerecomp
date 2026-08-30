@@ -5,15 +5,19 @@ break put in by hand only makes it ragged. -->
 
 ## New in this release
 
-One reported bug, one thing the mods page was missing, and two ways to make the game your own.
+One reported bug that closed fifteen more with it, the last movie the cartridge had left, and a reset that works wherever you press it.
 
-**Your own Pokemon no longer has a duplicate beside it.** A battle slides your trainer picture off its square before your first Pokemon is sent out, and pressing A through "Wild LEDYBA appeared!" ran the battle on in the middle of that slide: the new picture was put back and the rest of the slide walked it two columns left, leaving a strip of it at the edge of the screen for the rest of the fight. That is where the doubled sprite came from, and why it was a different width every time. Nothing in the game reads a button during a slide any more, which is what the cartridge does.
+**The PC's lists answer the arrows again.** Withdrawing and depositing would not move past the first Pokemon in the list, at a Pokemon Center and from the start menu alike. A focus ring meant for the launcher was going up over the box screen and eating every direction press. Reading the whole machine against the disassembly afterwards paid for a good deal more: the cursor returns to the top row after a transfer, the Pokemon cries when it is stored, taken out or released, a full box or a full party says so under the menu you asked from instead of throwing you back to the list, every refusal makes the sound it should, a finished MOVE PKMN W/O MAIL stays on the list you moved into, the stats page you open from a box walks that box, the box picker opens on BOX 1, PROF.OAK'S PC asks before it rates your Pokedex and says goodbye afterwards, and the machine plays its boot, choose and shutdown sounds. The selection ring on Crystal was five pixels out and left a loose line floating above the row below it; it closes now.
 
-**Update all.** The mods page had one button for checking your sources for updates. It is now that button until something is out of date, and a download button after, saying how many. One press downloads and installs every update in turn.
+**The trade animation plays.** The tube, the ball, the cable and your Pokemon riding through it, one command a frame the way the cartridge spends them, behind both a link trade and an in-game one. Checked frame by frame against a real cartridge: 361 of 361 sprite states on Crystal and 405 of 405 on Gold and Silver, in order.
 
-**Put your own art on a cartridge.** The three dots above the shelf now take a picture of your own for the cartridge you are looking at, and give the shipped one back whenever you want it. Any PNG, WebP or JPEG; it is scaled to fit the cartridge whatever shape it is, and kept beside your saves, so an update never asks for it again.
+**A + B + START + SELECT resets from anywhere.** The console's own chord was wired to the overworld alone, so pressing it in a battle, in a menu, on the title screen or in the launcher did nothing at all. Every screen answers it now, and the overworld still asks first where there is room for the question. Your save page counts how many resets a slot has spent.
 
-**For mod authors**, `api_version` is 26, and both new seams are for quality-of-life mods. A mod can turn B into running shoes: on foot, a step taken while B is held goes at bike speed, your follower keeps up, and a recorded run replays at the same speed. And a mod can scale experience, from a half to five times, applied at the one place every award passes through, so the participant split, the Exp. Share, level ups, move offers and evolutions all follow from it. Stat experience is left exactly as the cartridge pays it.
+**SMOOTH SCROLL is smooth in more places.** A follower, a visible wild Pokemon and a jump down a ledge all move on the same fraction of a step the player does, rather than in eight jumps. A follower taking a ledge arcs over it instead of walking through it.
+
+**A cartridge bay says which kind of empty it is.** A cache written by an older build looked exactly like a cartridge you had never imported. The shelf now tells the two apart, says so in a line under the bay, and puts the one button that fixes it in front of the file picker.
+
+**For mod authors**, `api_version` is 28. A mod can switch trainer sightings off the way it can switch wild encounters off, without touching a flag. An actor can name the two cells it runs between, and the drawn row carries the height that comes with it, so a 3D view has the arc to work with.
 
 ## Which file
 
