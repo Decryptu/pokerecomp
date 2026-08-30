@@ -122,6 +122,9 @@ func test_a_shoulder_steps_the_page_without_moving_the_ring() -> void:
 	assert_eq(shell.current_page(), &"shelf", "and back")
 
 
+## The header row is the top of the mods page, and what is under it is however
+## many mods this machine happens to have. So the route asserted is the one that
+## holds on an empty catalogue too: along the row, and up out of the page.
 func test_mod_page_builds_a_visible_logical_focus_route() -> void:
 	_use(InputEventJoypadButton.new())
 	_launcher.select_page(&"mods")
@@ -134,11 +137,12 @@ func test_mod_page_builds_a_visible_logical_focus_route() -> void:
 	assert_false(right.is_empty(), "the page explicitly names the next control")
 	var next: Control = install.get_node(right) as Control
 	assert_eq(next.text, "Sources", "right follows the visible action row")
-	var down: NodePath = install.focus_neighbor_bottom
-	assert_false(down.is_empty(), "down enters the page rather than losing focus")
-	var below: Control = install.get_node(down) as Control
-	assert_true(below.is_visible_in_tree())
-	assert_ne(below, install)
+
+	var guard: Gen2FocusGuard = _launcher.find_child("FocusGuard", true, false)
+	assert_true(guard.move_focus(Vector2.UP), "up leaves the page for the strip")
+	var tab: Control = _focus_owner()
+	assert_true(tab is Gen2LauncherButton)
+	assert_eq((tab as Gen2LauncherButton).text, "Mods", "on the tab the page belongs to")
 
 
 ## A mouse needs no ring, and putting one up would move it away from whatever

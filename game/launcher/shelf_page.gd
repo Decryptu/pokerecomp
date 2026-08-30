@@ -1,10 +1,10 @@
 class_name Gen2ShelfPage
 extends VBoxContainer
 
-## The launcher's home: the cartridge carousel and the plate under it naming
-## whatever is in the middle. The page reports what was clicked and displays what
-## it is told; every import, refusal and launch belongs to the launcher, and what
-## can be done to a cartridge is said on the hint bar.
+## The launcher's home: the cartridge carousel, and nothing else. The page
+## reports what was clicked and displays what it is told; every import, refusal
+## and launch belongs to the launcher, and what can be done to a cartridge is
+## said on the hint bar.
 
 signal insert_requested(game_id: StringName)
 signal play_requested(game_id: StringName)
@@ -16,9 +16,7 @@ signal hints_changed
 
 var _theme: Gen2LauncherTheme = null
 var _stage: Gen2CartridgeStage = null
-var _plate: Gen2LauncherCard = null
-var _name: Label = null
-var _state: Label = null
+var _gap: Control = null
 var _details: Dictionary = {}
 var _compact: bool = false
 var _busy: bool = false
@@ -39,32 +37,20 @@ func _build() -> void:
 	_stage.selection_changed.connect(_on_selection_changed)
 	_stage.insert_requested.connect(func(id: StringName) -> void: insert_requested.emit(id))
 	_stage.play_requested.connect(func(id: StringName) -> void: play_requested.emit(id))
+	add_child(_top_gap())
 	add_child(_stage)
-	add_child(_build_plate())
 	add_child(Gen2LauncherUI.bottom_safe_space())
-	_refresh_plate()
 
 
-## The name of whatever is in the middle, and a line for its state. A chip
-## because it stands on the artwork behind the shelf, not on a page colour.
-func _build_plate() -> Control:
-	var centre := CenterContainer.new()
-	centre.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_plate = Gen2LauncherCard.chip(_theme, Gen2LauncherTheme.RADIUS_PILL, 14, 16)
-	_plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	centre.add_child(_plate)
-	var column: VBoxContainer = Gen2LauncherUI.column(0)
-	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_plate.add_child(column)
-	_name = Gen2LauncherUI.title(_theme, "", Gen2LauncherTheme.FONT_TITLE)
-	_name.add_theme_color_override("font_color", _theme.on_surface)
-	_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	column.add_child(_name)
-	_state = Gen2LauncherUI.tag(_theme, "")
-	_state.add_theme_color_override("font_color", _theme.with_alpha(_theme.on_surface, 0.7))
-	_state.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	column.add_child(_state)
-	return centre
+func _top_gap() -> Control:
+	_gap = Control.new()
+	_gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_gap.custom_minimum_size.y = _gap_height()
+	return _gap
+
+
+func _gap_height() -> float:
+	return float(Gen2LauncherUI.GAP_MD if _compact else Gen2LauncherUI.GAP_LG * 2)
 
 
 func stage() -> Gen2CartridgeStage:
@@ -112,7 +98,6 @@ func selected_id() -> StringName:
 func set_slot_state(game_id: StringName, state: StringName, detail: String) -> void:
 	_details[game_id] = detail
 	_stage.set_cache_state(game_id, state, detail)
-	_refresh_plate()
 	hints_changed.emit()
 
 
@@ -136,22 +121,9 @@ func set_compact(compact: bool) -> void:
 	if compact == _compact:
 		return
 	_compact = compact
-	_refresh_plate()
+	_gap.custom_minimum_size.y = _gap_height()
 
 
 func _on_selection_changed(game_id: StringName) -> void:
-	_refresh_plate()
 	selection_changed.emit(game_id)
 	hints_changed.emit()
-
-
-func _refresh_plate() -> void:
-	var id: StringName = _stage.selected_id()
-	if _name == null or id.is_empty():
-		return
-	_name.text = RomRegistry.title_for(id)
-	_name.add_theme_font_size_override(
-		"font_size", Gen2LauncherTheme.FONT_TITLE if _compact else Gen2LauncherTheme.FONT_DISPLAY
-	)
-	var detail: String = String(_details.get(id, ""))
-	_state.text = detail if not detail.is_empty() else "Ready to play"

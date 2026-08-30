@@ -428,6 +428,7 @@ func _rebuild_tabs() -> void:
 			theme_palette, entry["glyph"], String(entry["label"])
 		)
 		button.tooltip_text = String(entry["label"])
+		button.add_to_group(Gen2FocusGuard.ASIDE_GROUP)
 		button.pressed.connect(select.bind(id))
 		button.gui_input.connect(_on_tab_input.bind(id))
 		_tab_strip.add_child(button)
@@ -470,7 +471,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	step_page(delta)
 
 
-## Up out of a page lands on the tab that page belongs to.
 func _tab_landing(from: Control) -> Control:
 	if _tabs == null or not _tabs.visible or _tabs.is_ancestor_of(from):
 		return null

@@ -135,8 +135,6 @@ func set_compact(compact: bool) -> void:
 	_apply_rail()
 
 
-## A column beside the rows where there is width, a strip of glyphs above them
-## where there is not.
 func _apply_rail() -> void:
 	vertical = _compact
 	_rail.vertical = not _compact

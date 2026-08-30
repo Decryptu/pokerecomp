@@ -289,7 +289,7 @@ func _place_all() -> void:
 	# The page owns the room its own plate and the hint bar take, so the stage is
 	# given a rectangle it may fill rather than one it has to measure out of.
 	var hero_height: float = minf(
-		clampf(size.y * 0.94, MIN_HEIGHT, MAX_HEIGHT), size.y
+		clampf(size.y * 0.88, MIN_HEIGHT, MAX_HEIGHT), size.y
 	)
 	var hero_width: float = hero_height * Gen2Cartridge.ASPECT
 	# The whole row fits whenever fitting it leaves a cartridge worth looking at.

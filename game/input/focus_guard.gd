@@ -13,6 +13,12 @@ extends Node
 ## nothing to the launcher; [Gen2LauncherSheet] is what joins it today.
 const MODAL_GROUP: StringName = &"gen2_focus_modal"
 
+## Nodes in this group are reached only through an [member edge_targets] entry
+## and steer themselves from their own [method Control._gui_input]. A tab strip
+## needs it: up from a page has to land on the tab that page belongs to, and the
+## search answers with whichever tab sits above the control being left.
+const ASIDE_GROUP: StringName = &"gen2_focus_aside"
+
 const SIDES: Dictionary = {
 	&"left": Vector2.LEFT, &"right": Vector2.RIGHT,
 	&"up": Vector2.UP, &"down": Vector2.DOWN,
@@ -164,14 +170,15 @@ func _toward(
 		else null
 
 
-## How far off the line of travel a control may sit and still be reached, as a
-## multiple of how far along it is. Without a limit, the nearest thing below a
-## settings row was the rail beside it: 35 pixels down and 507 across, which a
-## score alone ranked first because nothing else was below at all.
+## How far off the line of travel a control may sit, per unit along it.
 const CONE: float = 2.0
 
-## The control [param direction] reaches. Anything lined up with what is being
-## left beats anything that is not, whatever the distances.
+## The control [param direction] reaches. Three rules on top of the distance,
+## each a defect before it was a rule: a candidate starts past the edge being
+## left rather than past its centre, one lined up with what is being left beats
+## one that is not, and nothing outside [constant CONE] is reached. The settings
+## rail broke all three: 507 across, level with the rows, and the only thing
+## below the last of them.
 static func _neighbor(
 	current: Control, direction: Vector2, controls: Array[Control]
 ) -> Control:
@@ -184,11 +191,11 @@ static func _neighbor(
 		if candidate == current:
 			continue
 		var there: Rect2 = candidate.get_global_rect()
-		var delta: Vector2 = there.get_center() - origin
-		var forward: float = delta.dot(direction)
-		if forward <= 1.0:
+		if _gap_along(here, there, direction) <= 1.0:
 			continue
+		var delta: Vector2 = there.get_center() - origin
 		var sideways: float = absf(delta.cross(direction))
+		var forward: float = delta.dot(direction)
 		var lined_up: bool = _overlaps_across(here, there, direction)
 		if not lined_up and sideways > forward * CONE:
 			continue
@@ -202,6 +209,14 @@ static func _neighbor(
 		best_lined_up = lined_up
 		best = candidate
 	return best
+
+
+static func _gap_along(here: Rect2, there: Rect2, direction: Vector2) -> float:
+	if absf(direction.y) > absf(direction.x):
+		return there.position.y - here.end.y if direction.y > 0.0 \
+			else here.position.y - there.end.y
+	return there.position.x - here.end.x if direction.x > 0.0 \
+		else here.position.x - there.end.x
 
 
 ## Whether two rectangles share the axis [param direction] does not travel.
@@ -237,7 +252,7 @@ static func _collect_focusable(root: Node, out: Array[Control]) -> void:
 	for child: Node in root.get_children():
 		var control := child as Control
 		if control != null:
-			if not control.is_visible_in_tree():
+			if not control.is_visible_in_tree() or control.is_in_group(ASIDE_GROUP):
 				continue
 			if _takes_focus(control):
 				out.append(control)
@@ -258,7 +273,7 @@ static func _first_focusable(root: Node, skip_panes: bool) -> Control:
 	for child: Node in root.get_children():
 		var control := child as Control
 		if control != null:
-			if not control.visible:
+			if not control.visible or control.is_in_group(ASIDE_GROUP):
 				continue
 			if _focusable(control) and not (skip_panes and _scroll_with_controls(control)):
 				return control

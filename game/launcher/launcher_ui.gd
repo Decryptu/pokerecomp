@@ -281,7 +281,7 @@ static func stacked(theme: Gen2LauncherTheme, text: String, control: Control) ->
 
 ## One setting as a full-width row: a glyph, the name over its value, and the
 ## chevron that opens the choices. It replaced a label beside a segmented track,
-## which was a focus stop per choice and wider than a phone held upright.
+## a focus stop per choice and wider than a phone held upright.
 static func choice(
 	theme: Gen2LauncherTheme, glyph: StringName, label: String, choices: Array,
 	selected: int, handler: Callable, host: Control = null
@@ -301,7 +301,6 @@ static func switch(
 	return made
 
 
-## A row whose value is a number with a bar under it.
 static func level(
 	theme: Gen2LauncherTheme, glyph: StringName, label: String, value: int,
 	minimum: int, maximum: int, handler: Callable, format: Callable = Callable()
@@ -321,7 +320,7 @@ static func level(
 
 ## See [method choice]. A [Button] so the ring, the sound and the keyboard come
 ## for nothing; its contents are a row anchored over it, since a [Button] lays
-## out one icon and one label and this has four things.
+## out one icon and one label.
 class SettingRow extends Button:
 	## Whether a press cycles the value rather than opening the list.
 	var cycles: bool = false

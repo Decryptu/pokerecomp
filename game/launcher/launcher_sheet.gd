@@ -18,7 +18,7 @@ const MARGIN: float = 24.0
 
 var _theme: Gen2LauncherTheme = null
 var _body: VBoxContainer = null
-var _actions: HBoxContainer = null
+var _actions: VBoxContainer = null
 var _dismiss: Gen2LauncherHint = null
 var _card: Gen2LauncherCard = null
 var _scroll: Gen2LauncherScroll = null
@@ -70,8 +70,7 @@ func _build(title: String) -> void:
 	_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_scroll.add_child(_body)
 
-	_actions = Gen2LauncherUI.row(Gen2LauncherUI.GAP_SM)
-	_actions.alignment = BoxContainer.ALIGNMENT_END
+	_actions = Gen2LauncherUI.column(Gen2LauncherUI.GAP_SM)
 	_column.add_child(_actions)
 
 	# A cross in the corner never says with what, which is the pad's question.
@@ -110,6 +109,7 @@ func body() -> VBoxContainer:
 
 
 func add_action(button: Control) -> void:
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_actions.add_child(button)
 
 

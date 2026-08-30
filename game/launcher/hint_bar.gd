@@ -3,7 +3,7 @@ extends Control
 
 ## The row of [Gen2LauncherHint] chips along the bottom of a launcher screen and
 ## the keyboard and pad routes that answer them. A screen declares what it does
-## once, as data, and that declaration is the chips, the presses on them and the
+## once, as data, and that declaration is the chips, the presses and the
 ## shortcut: a legend written apart from what it names goes stale.
 
 ## Actions the bar answers. Accept is not one: it belongs to the focus ring.
