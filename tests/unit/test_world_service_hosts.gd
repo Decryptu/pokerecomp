@@ -254,6 +254,9 @@ func test_bargain_script_keeps_the_source_monday_morning_gate() -> void:
 
 func test_mart_purchase_refuses_crossing_the_source_item_stack_limit() -> void:
 	var mart: Dictionary = _data.world_mart(0)
+	## `BuyMenuLoop` asks `CompareMoney` first, so the stack is only what refuses
+	## once the whole order is affordable.
+	_world.state.apply_changes({}, {}, {"money": {0: 999999}})
 	var before: Dictionary = _world.snapshot().to_dict()
 	var result: Dictionary = Gen2WorldMartHost.purchase(
 		_world, _save, mart, 7, Gen2WorldMartHost.MAX_ITEM_STACK, false
@@ -261,6 +264,17 @@ func test_mart_purchase_refuses_crossing_the_source_item_stack_limit() -> void:
 	assert_false(result["ok"])
 	assert_eq(result["reason"], &"item_stack_full")
 	assert_eq(_world.snapshot().to_dict(), before)
+
+
+## `BuyMenuLoop`'s own order: `CompareMoney` runs before `ReceiveItem`, so an
+## order that fails both is refused on the price.
+func test_mart_purchase_refuses_on_money_before_the_stack_limit() -> void:
+	var mart: Dictionary = _data.world_mart(0)
+	var result: Dictionary = Gen2WorldMartHost.purchase(
+		_world, _save, mart, 7, Gen2WorldMartHost.MAX_ITEM_STACK, false
+	)
+	assert_false(result["ok"])
+	assert_eq(result["reason"], &"insufficient_money")
 
 
 func test_phone_summary_uses_imported_contact_and_trainer_class() -> void:
