@@ -273,6 +273,55 @@ func test_an_actor_entry_carries_a_span_and_a_broken_one_is_dropped() -> void:
 	RomCache.clear(ActorFixture.directory())
 
 
+## An actor taking a ledge arcs over it, off the same table a map object's
+## `jump_step` is on. Drawn flat, the follower slid through the ledge in 2D and
+## down the face in 3D, because nothing answered a height for it.
+func test_an_actor_on_a_jump_span_is_lifted_by_the_source_table() -> void:
+	var world: Gen2WorldAPI = _actor_world()
+	var actor := TestActor.new()
+	var actors := Gen2WorldActors.new()
+	actors.set_actors([actor])
+	actors.set_world(world)
+
+	var highest: float = 0.0
+	for step: int in 17:
+		var progress: float = float(step) / 16.0
+		actor.out = [{
+			"icon": 1, "position_cells": Vector2(4, 4),
+			"span": {
+				"from": Vector2i(4, 5), "to": Vector2i(4, 3),
+				"progress": progress, "kind": &"jump_step",
+			},
+		}]
+		actors.refresh_pose()
+		var lift: float = float(actors.sprites()[0]["height_offset_pixels"])
+		assert_eq(
+			lift, float(-Gen2WorldAPI.jump_offset_for(progress)),
+			"the entry the table is on at %f" % progress
+		)
+		highest = maxf(highest, lift)
+	assert_eq(highest, 12.0, "`.y_offsets` tops out twelve pixels up")
+	assert_eq(
+		float(actors.sprites()[0]["height_offset_pixels"]), 0.0,
+		"and back on the ground where it lands"
+	)
+
+	## Every other kind is flat, including the one a span defaults to.
+	for kind: Variant in [&"step", &"turn", null]:
+		var span: Dictionary = {"from": Vector2i(4, 5), "to": Vector2i(4, 4), "progress": 0.5}
+		if kind != null:
+			span["kind"] = kind
+		actor.out = [{"icon": 1, "position_cells": Vector2(4, 4), "span": span}]
+		actors.refresh_pose()
+		assert_eq(float(actors.sprites()[0]["height_offset_pixels"]), 0.0, str(kind))
+
+	## An entry with no span at all still answers the key rather than nothing.
+	actor.out = [{"icon": 1, "position_cells": Vector2(4, 4)}]
+	actors.refresh_pose()
+	assert_eq(float(actors.sprites()[0]["height_offset_pixels"]), 0.0, "no span, no lift")
+	RomCache.clear(ActorFixture.directory())
+
+
 ## `.Frameset_PartyMon`: two sets of eight, nine passes each.
 func test_an_icon_actor_steps_the_strips_two_frames_at_the_framesets_rate() -> void:
 	var world: Gen2WorldAPI = _actor_world()

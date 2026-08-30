@@ -219,3 +219,38 @@ func test_a_save_from_a_later_format_is_refused_rather_than_guessed_at() -> void
 	raw["format_version"] = Gen2SaveData.FORMAT_VERSION + 1
 
 	assert_false(Gen2SaveData.migrate_dict(raw)["ok"])
+
+
+## The count survives the reset because it is patched into the file rather than
+## written through the save the reset is throwing away. Everything else in the
+## document has to come back unchanged, so the round trip through JSON is
+## asserted rather than assumed.
+func test_the_reset_count_is_patched_into_the_slot_and_nothing_else_moves() -> void:
+	var save: Gen2SaveData = _write_slot(0)
+	var before: Dictionary = save.to_dict()
+
+	assert_eq(Gen2SaveStore.bump_reset_count(_data.id, _data.sha1, 0), 1)
+	assert_eq(Gen2SaveStore.bump_reset_count(_data.id, _data.sha1, 0), 2)
+
+	var reloaded: Gen2SaveData = Gen2SaveStore.load_result(
+		_data.id, _data.sha1, 0, _data
+	)["save"]
+	assert_eq(reloaded.reset_count, 2)
+	before["reset_count"] = 2
+	assert_eq(reloaded.to_dict(), before, "the rest of the slot is untouched")
+
+
+## The backup carries the same number, so a slot recovered from it does not
+## forget the hunt.
+func test_the_backup_copy_is_counted_too() -> void:
+	_write_slot(0)
+	Gen2SaveStore.bump_reset_count(_data.id, _data.sha1, 0)
+	DirAccess.remove_absolute(Gen2SaveStore.path_for(_data.id, _data.sha1, 0))
+	var recovered: Dictionary = Gen2SaveStore.load_result(_data.id, _data.sha1, 0, _data)
+	assert_true(recovered["ok"], String(recovered["message"]))
+	assert_eq((recovered["save"] as Gen2SaveData).reset_count, 1)
+
+
+func test_counting_an_empty_slot_refuses_rather_than_writing_one() -> void:
+	assert_eq(Gen2SaveStore.bump_reset_count(_data.id, _data.sha1, 3), -1)
+	assert_false(Gen2SaveStore.exists(_data.id, _data.sha1, 3))

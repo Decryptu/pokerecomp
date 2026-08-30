@@ -13,7 +13,7 @@ const FILENAME: String = "mod.json"
 ## number that says the seam is there: `docs/MODS.md` lists what each version
 ## added. An optional field a mod may send and an older host may drop is
 ## deliberately not a bump.
-const API_VERSION: int = 27
+const API_VERSION: int = 28
 ## The oldest contract this host still answers. See [constant API_VERSION].
 const MIN_API_VERSION: int = 1
 ## Ids address directories and registry keys, so they stay to a plain lowercase

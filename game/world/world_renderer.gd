@@ -142,14 +142,11 @@ func set_fade(order: int, white_fill: bool = false) -> void:
 	queue_redraw()
 
 
-## Repaints the tiles the last animation frame rewrote.
-##
-## The sequence touches one or two of a tileset's tiles per frame, so recolouring
-## the whole strip was almost all of the frame's cost. A palette command is the
-## exception and recolours every tile drawn with that row, but it is still a
-## repaint of the strips already cached rather than a rebuild of them: the
-## graphics, the roof and the quads are all unchanged, and only the colours a
-## tile is written through are not.
+## Repaints the tiles the last animation frame rewrote. The sequence touches one
+## or two of a tileset's tiles per frame, so recolouring the whole strip was
+## almost all of the frame's cost. A palette command recolours every tile drawn
+## with that row and is still a repaint rather than a rebuild: the graphics, the
+## roof and the quads are unchanged, and only the colours are not.
 func refresh_animation() -> void:
 	if _animation == null or _atlas == null:
 		_rebuild_atlas()
@@ -392,10 +389,9 @@ func _palette_tables(palettes: Array) -> Array:
 ## [param cells] is [method Gen2BattleTransition.cells], [param tiles] the two
 ## tiles `LoadBattleTransitionGFX` loads as index buffers, and [param palette] the
 ## four colours the whole map is flooded with while a trainer's ball is up. An
-## empty palette is the wild branch, which floods nothing: its black tile is colour
-## 3 of whatever palette the cell was already drawn in, and every overworld
-## palette's colour 3 is the same (7,7,7), so both kinds of wedge come out the same
-## dark grey. [param order] is the flash's `wBGP`, applied to the background alone.
+## empty palette is the wild branch, which floods nothing: its black tile is
+## colour 3 of whatever palette the cell was drawn in, and every overworld
+## palette's colour 3 is (7,7,7). [param order] is the flash's `wBGP`.
 func set_transition(
 	cells: PackedByteArray, tiles: PackedByteArray, palette: PackedColorArray,
 	sprites: int = Gen2BattleTransition.SPRITES_ALL, opponent: int = -1,
@@ -559,14 +555,12 @@ func _subpixel_steps() -> int:
 	return maxi(1, int(surface.canvas_transform.get_scale().x))
 
 
-## Lays the map quads out under this frame's camera.
-##
-## The order is the order the cartridge's own buffer would be read in if it had
-## one this wide: the border block under everything, then each connected map
-## furthest first, then `wOverworldMapBlocks` itself over the top. That last one
-## is what keeps the three-block margin byte for byte the cartridge's -- a
-## connection strip stops at the `length` the macro stored, and a neighbour map
-## drawn whole does not -- so nothing a 20x18 screen can reach changes.
+## Lays the map quads out under this frame's camera, in the order the cartridge's
+## own buffer would be read in if it had one this wide: the border block under
+## everything, then each connected map furthest first, then `wOverworldMapBlocks`
+## over the top. That last one keeps the three-block margin byte for byte the
+## cartridge's, since a connection strip stops at the `length` the macro stored
+## and a neighbour map drawn whole does not.
 func _sync_map_layers() -> void:
 	if _world == null or _world.current_map == null or _world.current_tileset == null \
 		or _atlas == null:
@@ -958,9 +952,12 @@ func _draw_actor(sprite: Dictionary, camera_pixels: Vector2) -> void:
 	)
 	if texture == null:
 		return
-	draw_texture(texture, pixel)
+	# The same sprite offset an object's `jump_step` takes, so an actor on a
+	# ledge arcs over it rather than sliding through it.
+	var jump := Vector2(0, -float(sprite.get("height_offset_pixels", 0.0)))
+	draw_texture(texture, pixel + jump)
 	if _in_grass(Vector2i(roundi(cell_position.x), roundi(cell_position.y))):
-		_draw_grass_over(pixel, _background_camera())
+		_draw_grass_over(pixel + jump, _background_camera())
 	## The same bubble a map object's `showemote` puts up, over an actor that
 	## asked for one. Drawn after the grass, as an object's is: `SpawnEmote` is
 	## its own OAM and stands over the tuft rather than behind it.

@@ -745,3 +745,8 @@ func _print_allowlist() -> void:
 		lines.append("  %-8s %s" % [RomRegistry.title_for(id), RomRegistry.sha1_for(id)])
 	print("pokerecomp supported cartridges:")
 	print("\n".join(lines))
+
+
+## A reset lands here: nothing is behind the chord left to reset.
+func claim_soft_reset() -> bool:
+	return true

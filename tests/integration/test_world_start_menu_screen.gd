@@ -196,7 +196,7 @@ func test_the_reset_question_is_asked_once_and_answered_either_way() -> void:
 	Gen2OptionsStore.save(options)
 
 	await _open_world()
-	_world_screen._on_reset_chord()
+	assert_true(_world_screen.claim_soft_reset(), "the chord is claimed to ask")
 	await get_tree().process_frame
 	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
 	assert_not_null(host, "the chord opened the menu to ask")
@@ -212,6 +212,29 @@ func test_the_reset_question_is_asked_once_and_answered_either_way() -> void:
 	assert_true(
 		Gen2OptionsStore.current().soft_reset_acknowledged,
 		"and is never asked again"
+	)
+	assert_false(
+		_world_screen.claim_soft_reset(),
+		"an answered chord is the runtime's to carry out"
+	)
+
+
+## The chord a shiny hunter actually presses is the one inside a battle, and the
+## screen there has no room for the question. It used to be swallowed with
+## nothing said, so the first four buttons of a hunt did nothing at all.
+func test_a_chord_with_no_room_for_the_question_is_left_to_the_runtime() -> void:
+	Gen2OptionsStore.use_test_path()
+	var options: Gen2Options = Gen2OptionsStore.current()
+	options.soft_reset_acknowledged = false
+	Gen2OptionsStore.save(options)
+
+	await _open_world()
+	_world_screen._open_start_menu()
+	await get_tree().process_frame
+	assert_not_null(_world_screen._start_menu_host, "something owns the screen")
+	assert_false(
+		_world_screen.claim_soft_reset(),
+		"no room to ask, so the reset happens rather than nothing"
 	)
 
 

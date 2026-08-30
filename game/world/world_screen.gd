@@ -15,12 +15,11 @@ const FLOWER_MAIL: int = 0xB6
 const SERVICE_SCENE: PackedScene = preload("res://game/world/world_service_screen.tscn")
 const START_MENU_SCENE: PackedScene = preload("res://game/world/start_menu_screen.tscn")
 const PARTY_SCENE: PackedScene = preload("res://game/save/party_screen.tscn")
-## The launcher is this port's boot menu and the save screen is its title
-## screen, so a cartridge taken out goes to the first and a console reset to the
-## second, where CONTINUE is.
+## This port's boot menu, where a cartridge taken out goes.
 const LAUNCHER_SCENE: String = "res://game/main/main.tscn"
-const SAVE_SCENE: String = "res://game/save/save_screen.tscn"
 const AUDIO_PLAYER_SCRIPT := preload("res://game/audio/gen2_audio_player.gd")
+## Where `JUMP_OFFSETS` is at its highest, for [method preview_pet_actor_arc].
+const PREVIEW_ARC_TOP_PROGRESS: float = 0.4
 ## How far into a view switch's close [method preview_view_cover] photographs:
 ## part way down the scatter, where the wipe is readable and the screen is not
 ## yet black.
@@ -353,8 +352,6 @@ func _ready() -> void:
 	_data = _injected_data if _injected_data != null else _selected_runtime_data()
 	_build_world()
 	var input: Gen2InputRuntime = Gen2InputRuntime.instance()
-	if input != null and not input.reset_chord_pressed.is_connected(_on_reset_chord):
-		input.reset_chord_pressed.connect(_on_reset_chord)
 	if input != null and not input.back_requested.is_connected(_on_back_requested):
 		input.back_requested.connect(_on_back_requested)
 
@@ -1925,15 +1922,17 @@ func _end_nuzlocke_run(save: Gen2SaveData) -> void:
 	## lists what the run caught and what it lost, and it will not open this one
 	## again.
 	if is_inside_tree():
-		get_tree().change_scene_to_file.call_deferred(SAVE_SCENE)
+		get_tree().change_scene_to_file.call_deferred(Gen2GameRuntime.SAVE_SCENE)
 
 
-## `Reset`, which on hardware is the four buttons wired straight to the console
-## and nothing the game may decline. Nothing is written: what is on disk is what
-## the last SAVE put there, which is the whole point of the shortcut.
+## `Reset`, the four buttons wired straight to the console. What one costs is
+## [Gen2GameRuntime]'s, which answers the chord for every screen.
 func _soft_reset() -> void:
-	if is_inside_tree():
-		get_tree().change_scene_to_file.call_deferred(SAVE_SCENE)
+	var runtime: Gen2GameRuntime = Gen2GameRuntime.instance()
+	if runtime != null:
+		runtime.soft_reset()
+	elif is_inside_tree():
+		get_tree().change_scene_to_file.call_deferred(Gen2GameRuntime.SAVE_SCENE)
 
 
 ## Offered as a B, which backs out of whatever owns the screen. Nothing on a
@@ -1943,21 +1942,18 @@ func _on_back_requested() -> void:
 		press_button(Gen2Button.START)
 
 
-## The reset chord, from anywhere the world is up. The first one ever asks first,
-## over the pause menu's own box, so a player who hit four buttons by accident
-## does not lose the walk between here and their last save; after that answer it
-## resets where it is pressed. A fight or an overlay owning the screen has no
-## room for the question, so the first chord there is refused and the second,
-## once the question has been answered on the map, is not.
-func _on_reset_chord() -> void:
-	if _world == null:
-		return
-	if Gen2OptionsStore.current().soft_reset_acknowledged:
-		_soft_reset()
-		return
+## The first chord ever asks over the pause menu's own box, so four buttons hit
+## by accident do not cost the walk since the last save. Only that one is
+## claimed, and only where there is room for the box: a fight owns the screen,
+## and a chord there resets rather than being swallowed.
+func claim_soft_reset() -> bool:
+	if _world == null or Gen2OptionsStore.current().soft_reset_acknowledged:
+		return false
+	var before: Gen2StartMenuScreen = _start_menu_host
 	_open_start_menu_host(func(host: Gen2StartMenuScreen) -> void:
 		host.ask_soft_reset()
 	)
+	return _start_menu_host != null and _start_menu_host != before
 
 
 ## One player event's lines put up in order, the tail run once the last has been
@@ -3268,6 +3264,19 @@ func preview_pet_actor() -> void:
 	_refresh_labels()
 
 
+## The same actor mid-ledge, photographing `height_offset_pixels` in the picture.
+func preview_pet_actor_arc() -> void:
+	if _world == null or _actors == null or _renderer == null:
+		return
+	_world.player_facing = Gen2WorldSprite.FACING_UP
+	var pet := PreviewPet.new(_world)
+	pet.jump_progress = PREVIEW_ARC_TOP_PROGRESS
+	_actors.set_actors([pet])
+	_actors.refresh_pose()
+	_script_prompt = "Debug actor arc preview"
+	_refresh_labels()
+
+
 ## What a mod's actor is, in the fewest lines that exercise the optional half.
 class PreviewPet extends RefCounted:
 	const CYNDAQUIL: int = 155
@@ -3275,6 +3284,8 @@ class PreviewPet extends RefCounted:
 	var _world: Gen2WorldAPI = null
 	var _petted: bool = false
 	var _cried: bool = false
+	## Below zero stands; at or above it the entry carries a `jump_step` span.
+	var jump_progress: float = -1.0
 
 	func _init(world: Gen2WorldAPI) -> void:
 		_world = world
@@ -3293,6 +3304,11 @@ class PreviewPet extends RefCounted:
 		}
 		if _petted:
 			entry["emote"] = Gen2WorldActors.EMOTE_HEART
+		if jump_progress >= 0.0:
+			entry["span"] = {
+				"from": _cell() + Vector2i.DOWN, "to": _cell() + Vector2i.UP,
+				"progress": jump_progress, "kind": Gen2WorldAPI.STEP_KIND_HOP,
+			}
 		return [entry]
 
 	func interact(cell: Vector2i, _facing: int) -> bool:

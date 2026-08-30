@@ -2,6 +2,8 @@ extends GutTest
 
 ## The live scheme and the active device, driven the way the game drives them.
 
+const Fixture := preload("res://tests/unit/battle_fixture.gd")
+
 var _runtime: Gen2InputRuntime = null
 
 
@@ -261,3 +263,82 @@ func test_the_back_notification_is_reported_as_a_signal() -> void:
 		ProjectSettings.get_setting("application/config/quit_on_go_back", true),
 		"the engine must not quit before a screen has answered",
 	)
+
+
+## The chord is the console's, so it belongs to the process rather than to the
+## overworld. It used to be connected in the world screen alone, which left the
+## opening, the launcher and every menu over the map with no answer to it at
+## all, and a battle, where a shiny hunter presses it, swallowing the first one.
+func test_the_chord_is_owned_by_the_runtime_for_every_screen() -> void:
+	var runtime: Gen2GameRuntime = Gen2GameRuntime.instance()
+	assert_eq(
+		_runtime.reset_chord_pressed.is_connected(runtime._on_reset_chord),
+		Gen2GameRuntime.is_player_launch(),
+		"one owner, and it is not a screen; a tier is not a player"
+	)
+	assert_false(
+		Gen2GameRuntime.claims_soft_reset(null),
+		"no scene is not a screen that took the chord"
+	)
+	var plain := Node.new()
+	assert_false(
+		Gen2GameRuntime.claims_soft_reset(plain),
+		"a screen with nothing to say leaves the reset to the runtime"
+	)
+	plain.free()
+	## The launcher's own answer: a reset lands on the title screen, so a chord
+	## pressed on the boot menu has nothing behind it to reset.
+	var claiming := Control.new()
+	claiming.set_script(preload("res://game/main/main.gd"))
+	assert_true(Gen2GameRuntime.claims_soft_reset(claiming))
+	claiming.free()
+
+
+## What a shiny hunt is measured in. The count has to reach the file, because
+## the reset it counts takes the process with it, and it has to reach the shared
+## save object too, so the page drawn next says the same number.
+func test_a_reset_counts_against_the_open_slot_and_reaches_the_file() -> void:
+	var runtime: Gen2GameRuntime = Gen2GameRuntime.instance()
+	var game: StringName = runtime.selected_game_id
+	var slot: int = runtime.selected_save_slot
+	var directory: String = RomCache.directory_for(&"resettest", "0123456789abcdef")
+	var data: GameData = Fixture.build(directory)
+	var mon: Gen2BattleMon = Gen2BattleMon.create(
+		data, Fixture.PIKACHU, 20, [Fixture.TACKLE], Gen2BattleMon.PERFECT_DVS
+	)
+	var save: Gen2SaveData = Gen2SaveBattleAdapter.from_battle_party(
+		data.id, data.sha1, 0, Gen2Party.create([mon]), "RED"
+	)
+	assert_true(Gen2SaveStore.save(save, data)["ok"])
+	## Primed rather than selected: the fixture cache is not a cartridge the
+	## registry knows, and what is under test is the count rather than the load.
+	runtime.selected_game_id = data.id
+	runtime.selected_save_slot = 0
+	runtime._save = save
+	runtime._save_key = "%s:%d" % [data.id, 0]
+
+	assert_eq(runtime.count_soft_reset(), 1, "the first reset of the hunt")
+	assert_eq(save.reset_count, 1, "and the page reads it")
+	var reloaded: Dictionary = Gen2SaveStore.load_result(data.id, data.sha1, 0, data)
+	assert_eq((reloaded["save"] as Gen2SaveData).reset_count, 1, "the file has it")
+
+	runtime.selected_game_id = game
+	runtime.selected_save_slot = slot
+	runtime.reload_selected_save()
+	for copy: String in [
+		Gen2SaveStore.path_for(data.id, data.sha1, 0),
+		Gen2SaveStore.backup_path_for(data.id, data.sha1, 0),
+	]:
+		DirAccess.remove_absolute(copy)
+	DirAccess.remove_absolute(Gen2SaveStore.directory_for(data.id, data.sha1))
+	RomCache.clear(directory)
+
+
+## Nothing to count against is answered rather than invented: a development run
+## with no slot open still resets, it just records nothing.
+func test_a_reset_with_no_slot_counts_nothing() -> void:
+	var runtime: Gen2GameRuntime = Gen2GameRuntime.instance()
+	var slot: int = runtime.selected_save_slot
+	runtime.selected_save_slot = -1
+	assert_eq(runtime.count_soft_reset(), -1)
+	runtime.selected_save_slot = slot
