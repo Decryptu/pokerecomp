@@ -4,15 +4,16 @@ extends SceneTree
 ## set of cartridges present.
 ##
 ##   Godot --path . -s res://tools/preview_launcher.gd -- <out.png> [light|dark] \
-##       [width] [height] [page] [empty|mixed|full] [view] [mod id] [scroll] \
+##       [width] [height] [page] [empty|mixed|full|stale] [view] [mod id] [scroll] \
 ##       [focus index] [fade step] [insets]
 ##
 ## Every argument is documented at the parse below. Opens a real window.
 
 const STATES: Dictionary = {
-	"empty": {"gold": false, "silver": false, "crystal": false},
-	"mixed": {"gold": true, "silver": false, "crystal": false},
-	"full": {"gold": true, "silver": true, "crystal": true},
+	"empty": {"gold": "missing", "silver": "missing", "crystal": "missing"},
+	"mixed": {"gold": "usable", "silver": "missing", "crystal": "missing"},
+	"full": {"gold": "usable", "silver": "usable", "crystal": "usable"},
+	"stale": {"gold": "stale", "silver": "usable", "crystal": "incomplete"},
 }
 
 var _output: String = ""
@@ -86,8 +87,8 @@ func _process(_delta: float) -> bool:
 			# goes, so the ordinary shot below lands in the middle of it, which
 			# is the screen worth photographing.
 			_launcher.import_rom_path(_mod)
-		elif _view in ["manage", "touch", "binding", "browse", "delete_mod", "bugs", "report",
-				"toast", "quit"]:
+		elif _view in ["manage", "update", "touch", "binding", "browse", "delete_mod", "bugs",
+				"report", "toast", "quit"]:
 			_launcher._preview_browse_dir = _mod
 			_launcher.preview_sheet(StringName(_view))
 		elif not _view.is_empty():

@@ -594,7 +594,6 @@ func _build_idle() -> Node:
 	## Any id: the silhouette is the same shape for all three and its prompt, which
 	## is the only part that names one, is off.
 	var slot: Gen2Cartridge = Gen2Cartridge.create(skin, RomRegistry.ORDER[0])
-	slot.set_imported(false)
 	## The shape, not the invitation: an empty bay on the shelf asks for a dump
 	## to be dropped on it, and nothing can be dropped on a panel.
 	slot.set_bay_prompt(false)

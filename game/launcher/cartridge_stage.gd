@@ -131,10 +131,10 @@ func step(direction: int) -> void:
 	select(selected + direction)
 
 
-func set_imported(game_id: StringName, state: bool) -> void:
+func set_cache_state(game_id: StringName, state: StringName, note: String) -> void:
 	var target: Gen2Cartridge = cartridge(game_id)
-	if target != null and target.imported != state:
-		target.set_imported(state)
+	if target != null and target.cache_state != state:
+		target.set_cache_state(state, note)
 
 
 func _on_pressed(index: int) -> void:

@@ -503,7 +503,7 @@ func _find_toast(node: Node) -> Gen2LauncherToast:
 
 ## There is no cache migration by design, so the one thing the launcher owes a
 ## player whose cache a build has outgrown is a sentence saying which of the
-## four states it is in and that the dump is wanted again.
+## four states it is in and that the file is wanted again.
 func test_every_cache_state_says_something_different() -> void:
 	var main := preload("res://game/main/main.gd")
 	var said: Dictionary = {}
@@ -514,12 +514,45 @@ func test_every_cache_state_says_something_different() -> void:
 		var text: String = main.cache_state_text(state)
 		assert_false(text.is_empty(), "%s says nothing" % state)
 		assert_false(said.has(text), "%s repeats another state's line" % state)
+		assert_false(text.to_lower().contains("cache"), "%s says it in cache terms" % state)
 		said[text] = true
 	for state: StringName in [RomCache.STATE_STALE, RomCache.STATE_INCOMPLETE]:
 		assert_true(
-			main.cache_state_text(state).contains("Import the cartridge again"),
-			"%s asks for the dump" % state
+			main.cache_state_text(state).contains("Import your file again"),
+			"%s asks for the file" % state
 		)
+		assert_true(main.needs_reimport(state), "%s is a press worth interrupting" % state)
+		assert_false(main.cache_state_note(state).is_empty(), "%s labels its bay" % state)
+	for state: StringName in [RomCache.STATE_USABLE, RomCache.STATE_MISSING]:
+		assert_false(main.needs_reimport(state), "%s needs no explanation" % state)
+		assert_true(main.cache_state_note(state).is_empty(), "%s labels no bay" % state)
+
+
+## Pressing a cartridge this build cannot read explains itself before the file
+## picker lands on the player: they imported this one already, and an OS dialog
+## with no reason in front of it reads as the game having lost their cartridge.
+func test_a_cartridge_needing_its_file_again_is_explained_first() -> void:
+	await _open_launcher()
+	var main := preload("res://game/main/main.gd")
+	_launcher.call("_open_update_sheet", RomRegistry.GOLD, RomCache.STATE_STALE)
+	await get_tree().process_frame
+
+	assert_eq(_sheet_count(), 1, "the press opened the sentence, not the picker")
+	var text: String = _sheet_text()
+	assert_string_contains(text, main.cache_state_text(RomCache.STATE_STALE))
+	assert_string_contains(text, main.SAVES_ARE_SAFE)
+	assert_string_contains(text, "Import again")
+
+
+## Every label on the open sheet, joined, which is what a player reads on it.
+func _sheet_text() -> String:
+	var parts: PackedStringArray = []
+	for sheet: Node in _launcher.find_children("", "Gen2LauncherSheet", true, false):
+		for label: Node in sheet.find_children("", "Label", true, false):
+			parts.append((label as Label).text)
+		for button: Node in sheet.find_children("", "Gen2LauncherButton", true, false):
+			parts.append((button as Button).text)
+	return "\n".join(parts)
 
 
 ## A mod archive whose entry registers a renderer of each kind, for the view

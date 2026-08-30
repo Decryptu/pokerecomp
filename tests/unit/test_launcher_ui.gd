@@ -671,7 +671,7 @@ func test_an_icon_button_shrinks_its_actual_rect_without_a_container() -> void:
 func test_landscape_keeps_at_least_two_fifths_of_the_stage_for_the_cartridge() -> void:
 	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, true)
 	add_child_autofree(page)
-	page.set_slot_state(&"gold", true, "Ready")
+	page.set_slot_state(&"gold", RomCache.STATE_USABLE, "Ready")
 	# The last is short enough that the dock alone asks for more than half the
 	# stage, which is what [constant Gen2CartridgeStage.FURNITURE_MAX_SHARE] caps.
 	var sizes: Array[Vector2] = [
@@ -749,12 +749,39 @@ func test_ejecting_a_cartridge_empties_its_bay() -> void:
 	page.size = Vector2(900, 600)
 	await get_tree().process_frame
 	var card: Gen2Cartridge = page.cartridge(RomRegistry.GOLD)
-	page.set_slot_state(RomRegistry.GOLD, true, "Ready")
+	page.set_slot_state(RomRegistry.GOLD, RomCache.STATE_USABLE, "Ready")
 	assert_true(card.imported)
 
 	await card.play_eject()
 	assert_false(card.imported, "the bay is empty again")
 	assert_almost_eq(card.position.y, card.rest_y(), 0.5, "and back where it stood")
+
+
+## A cache an older build wrote is not an empty bay. The player imported this
+## cartridge once, so a bay identical to one that was never filled sends them
+## looking for a bug instead of at the one line that explains it.
+func test_a_cartridge_needing_its_file_again_does_not_look_unimported() -> void:
+	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false)
+	add_child_autofree(page)
+	page.size = Vector2(900, 600)
+	await get_tree().process_frame
+	var card: Gen2Cartridge = page.cartridge(RomRegistry.GOLD)
+
+	page.set_slot_state(RomRegistry.GOLD, RomCache.STATE_MISSING, "")
+	assert_false(card._bay_note.visible, "an empty bay has nothing to add")
+	assert_false(page._manage.visible, "and nothing to manage")
+	var empty_glyph: StringName = card._bay_icon.glyph
+
+	page.set_slot_state(RomRegistry.GOLD, RomCache.STATE_STALE, "Update needed")
+	assert_false(card.imported, "it still cannot be played")
+	assert_true(card._bay_note.visible)
+	assert_eq(card._bay_note.text, "Update needed")
+	assert_ne(card._bay_icon.glyph, empty_glyph, "and it is not the same invitation")
+	assert_true(page._manage.visible, "its folder and its delete are reachable")
+
+	page.set_slot_state(RomRegistry.GOLD, RomCache.STATE_USABLE, "Ready. 2 saves")
+	assert_true(card.imported)
+	assert_false(card._bay_note.visible, "a seated cartridge hides the bay whole")
 
 
 func test_the_toast_says_which_kind_of_message_it_is_showing() -> void:
