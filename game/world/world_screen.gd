@@ -2,7 +2,6 @@ class_name Gen2WorldScreen
 extends Control
 
 ## Cartridge-backed overworld screen.
-##
 ## A validated world snapshot is authoritative. The explicit map and cell are
 ## retained as a development entry point for scene tests and cache inspection.
 
@@ -177,6 +176,9 @@ var _evolution_save: Gen2SaveData = null
 ## `OverworldHatchEgg`'s screen and the save whose party it has already written.
 var _hatch_host: Gen2EggHatchScreen = null
 var _hatch_save: Gen2SaveData = null
+## `TradeAnimation` and the script results it stands in front of.
+var _trade_anim_host: Gen2TradeAnimationScreen = null
+var _trade_anim_results: Array = []
 ## `GiveANickname_YesNo`'s screen, standing between `givepoke` staging the
 ## request and the party host applying it.
 var _nickname_host: Gen2NicknamePromptScreen = null
@@ -588,7 +590,6 @@ func _build_world() -> void:
 
 
 ## Hands this world to the lower display, where the build has one.
-##
 ## The display itself belongs to [Gen2GameRuntime] and is up in the launcher too;
 ## all this screen owns is which world is on it. Handed back on the way out, so
 ## closing a game puts the launcher's own mark back rather than leaving the last
@@ -608,7 +609,6 @@ func _exit_tree() -> void:
 
 ## Builds the view for the selected renderer and attaches it to the layer that
 ## renderer asked for.
-##
 ## Constructed through the mod host, so a registered renderer replaces this view
 ## without the screen knowing what it draws with. A renderer answering the
 ## surface question false gets the screen's rectangle at window resolution
@@ -859,6 +859,7 @@ const FRAME_HOSTS: Array[Array] = [
 	["_battle_host", "advance_hardware_frame"],
 	["_evolution_host", "advance_frame"],
 	["_link_host", "advance_frame"],
+	["_trade_anim_host", "advance_frame"],
 	["_hatch_host", "advance_frame"],
 	["_nickname_host", "advance_frame"],
 	["_name_rater_host", "advance_frame"],
@@ -1163,7 +1164,6 @@ func _advance_forced_movement() -> void:
 
 ## Walking goes on while a direction is held, whatever is holding it: a key, a
 ## stick, a d-pad or a thumb on the on-screen controller.
-##
 ## Polled rather than driven by repeated events, because the rate a held key
 ## repeats at belongs to the operating system and has nothing to do with the
 ## hardware. The poll runs once per hardware frame, which is what the source
@@ -1215,6 +1215,7 @@ const FULLSCREEN_HOSTS: Array[StringName] = [
 	&"_pokedex_host",
 	&"_credits_host",
 	&"_evolution_host",
+	&"_trade_anim_host",
 	&"_hatch_host",
 	&"_nickname_host",
 	&"_name_rater_host",
@@ -1337,6 +1338,9 @@ const OVERLAY_HOSTS: Array[StringName] = [
 	## loop suspended, and the pack path reaches it with the pack still open
 	## behind it, so its B is the animation's cancel rather than the pack's back.
 	&"_evolution_host",
+	## `TradeAnimation` stands over whatever ran the trade, the trade room's own
+	## screen included, and answers no button.
+	&"_trade_anim_host",
 	## The same rule for `OverworldHatchEgg`, which `PlayerEvents` runs with the
 	## map loop suspended in exactly the same place.
 	&"_hatch_host",
@@ -1520,18 +1524,26 @@ func _complete_pending_request(result: Dictionary = {"ok": true}) -> Dictionary:
 
 
 ## A request that spends no press on the cartridge, settled where it is staged.
-## Empty when the host refused it, which leaves the caller its own prompt: a
-## save with no party heals nothing, and that is a reason, not a press.
-func _complete_unattended_request() -> Array:
+## A refusal leaves the caller its own prompt: a save with no party heals
+## nothing, and that is a reason, not a press. An `NPCTrade` that took is the
+## one of these with a movie behind it, and its results wait for it.
+func _settle_unattended_request() -> StringName:
 	var settled: Dictionary = _complete_pending_request()
 	if not bool(settled.get("ok", false)):
 		_script_prompt = "Host unavailable: %s" % String(settled.get("reason", "unknown"))
-		return []
-	return settled.get("results", [])
+		return &"none"
+	var results: Array = settled.get("results", [])
+	if results.is_empty():
+		return &"none"
+	var summary: Dictionary = settled.get("transaction", {})
+	if bool(summary.get("accepted", false)) \
+		and _open_trade_animation(summary.get("animation", {}), results):
+		return &"break"
+	_show_script_results(results)
+	return &"return"
 
 
 ## Zoom, on the keys every map program uses for it and on the wheel.
-##
 ## Only while the map itself has the screen: a text box, a menu or a script is
 ## laid out against the 160x144 rectangle and moving the surface under one is
 ## the player losing their place. A framed screen refuses the step, since there
@@ -1751,7 +1763,6 @@ func _spend_step_happiness() -> void:
 ## `DoEggStep` and the `PLAYEREVENT_HATCH` it raises. The party lives on the
 ## save, so the walk counts the step and this spends it, the way
 ## [method _spend_step_happiness] does for `StepHappiness`.
-##
 ## `HatchEggs` walks the whole party, so every egg the pass left on zero hatches
 ## in one screen rather than one per step.
 func _spend_egg_steps() -> void:
@@ -1779,7 +1790,6 @@ func _spend_egg_steps() -> void:
 ## carries to 4 and which resets the counter whether or not anything is
 ## poisoned. The party lives on the save, so the walk counts the step and this
 ## spends it, the way [method _spend_step_happiness] does for `StepHappiness`.
-##
 ## Answers whether it took the screen: a faint is `PLAYEREVENT_WHITEOUT`'s own
 ## script, and everything a step still owes waits behind its presses.
 func _spend_poison_steps() -> bool:
@@ -1975,7 +1985,6 @@ func _show_player_event(texts: PackedStringArray, after: Callable) -> void:
 ## `DayCareStep`, which `CountStep` reaches on every step that did not hatch an
 ## egg: `jr nz, .hatch` jumps over the `farcall`, and the hatch screen standing
 ## is what says this step was one of those.
-##
 ## The two slots live in the world state rather than on the save, so nothing here
 ## is a save transaction; what it can produce is `DAYCAREMAN_HAS_EGG_F`, which
 ## the man outside the Day-Care reads.
@@ -2009,6 +2018,43 @@ func _open_hatch(hatches: Array, save: Gen2SaveData) -> void:
 	_refresh_labels()
 
 
+## `RunTradeAnimScript`. [param results] are shown when the movie ends. False
+## when the cache carries no trade art, which leaves them to the caller.
+func _open_trade_animation(context: Dictionary, results: Array = []) -> bool:
+	if _trade_anim_host != null or _data == null or context.is_empty():
+		return false
+	var host := Gen2TradeAnimationScreen.new()
+	host.set_context(_data, context)
+	host.closed.connect(_on_trade_animation_closed)
+	host.cry_requested.connect(_play_species_cry)
+	host.sfx_requested.connect(_play_sfx)
+	host.music_requested.connect(_play_evolution_music)
+	host.z_index = 40
+	_trade_anim_results = results.duplicate(true)
+	_trade_anim_host = host
+	_screen.display(host)
+	if _trade_anim_host == null:
+		_trade_anim_results = []
+		return false
+	_script_prompt = "Trading"
+	_refresh_labels()
+	return true
+
+
+func _on_trade_animation_closed() -> void:
+	var host: Gen2TradeAnimationScreen = _trade_anim_host
+	_trade_anim_host = null
+	if host != null:
+		Gen2Screen.drop(host)
+	var results: Array = _trade_anim_results
+	_trade_anim_results = []
+	if _renderer != null:
+		_renderer.refresh()
+	_refresh_labels()
+	if not results.is_empty():
+		_show_script_results(results)
+
+
 ## `InitName`, which writes whatever the naming screen left into the row's
 ## nickname. `.nonickname` reaches this too, with the species name.
 func _on_hatch_named(party_index: int, nickname: String) -> void:
@@ -2026,7 +2072,6 @@ func _on_hatch_named(party_index: int, nickname: String) -> void:
 ## of the fourteen, every starter among them. `GiveANickname_YesNo` stands
 ## between `TryAddMonToParty` and the row being named, so the request is left
 ## pending while the screen is up and the party host applies it with the answer.
-##
 ## False when the routine reaches no prompt and the request may be settled where
 ## it was staged: an egg, a gift that names an OT, and the storage that has room
 ## for neither, which is `.FailedToGiveMon`.
@@ -2068,7 +2113,6 @@ func _open_gift_nickname(request: Dictionary) -> bool:
 ## question the gift path asks and reaches no "sent to BILL's PC" line: the box
 ## branch prints nothing and the script's `ContestResults_PartyFullText` is what
 ## BUGCONTEST_BOXED_MON reaches instead.
-##
 ## False when the routine reaches no prompt: nothing was caught, and `.BoxFull`,
 ## which writes nothing and answers BUGCONTEST_BOXED_MON where it stands.
 func _open_contest_nickname(_request: Dictionary = {}) -> bool:
@@ -2683,7 +2727,6 @@ func _after_map_settled() -> bool:
 
 
 ## The renewal offer a Repel running out owes, or false when nothing is owed.
-##
 ## Nothing at all without a registered provider: an unregistered host answers 0
 ## and the step rolls exactly as it always did. The fact is held rather than
 ## consumed on the step it happened, so an offer landing on a step a warp, a
@@ -3028,7 +3071,6 @@ func persist_world_snapshot() -> Dictionary:
 
 ## `GameTimer`, one call per hardware frame. The play timer belongs to the save
 ## rather than to the world, since the cartridge keeps it in wPlayerData.
-##
 ## Two source gates decide whether it counts, and neither is `_overlay_open()`:
 ## a battle, the pack and the start menu all keep counting. `wGameTimerPaused`
 ## is cleared for `Script_halloffame` alone (engine/overworld/scripting.asm:2318)
@@ -3793,7 +3835,6 @@ const SLOT_MACHINE_MENU_FRAME_CAP: int = 16
 
 ## Public screenshot driver and scene-test entry for `special SlotMachine`,
 ## which only the two Game Corners reach and no fixture cell does.
-##
 ## [param coins] is the balance the machine opens with, [param lucky] the
 ## `wScriptVar` the map's own `setval` leaves, and [param frames] how far into
 ## the game to drive: the machine is pressed past its bet menu and then handed
@@ -3843,7 +3884,6 @@ const CARD_FLIP_PROMPT_FRAME_CAP: int = 240
 
 ## Public screenshot driver and scene-test entry for `special CardFlip`, which
 ## only the two Game Corners reach and no fixture cell does.
-##
 ## [param coins] is the balance the table opens with and [param frames] how far
 ## into the game to drive: every `YesNoBox` is answered YES and every
 ## `WaitPressAorB` pressed, so the table deals, toggles and pays without the
@@ -3996,6 +4036,36 @@ func preview_egg_hatch(species: int = 0) -> void:
 	_open_hatch([summary], save)
 
 
+## Public screenshot driver for `TradeAnimation`, which no fixture cell reaches:
+## the movie is opened over the map with no trade behind it, so its close writes
+## nothing. [param frames] is how far in the picture is taken.
+func preview_trade_animation(frames: int = 0, half: int = 0) -> void:
+	if _world == null or _data == null or _trade_anim_host != null:
+		return
+	var save: Gen2SaveData = _embedded_party_save()
+	if save == null or save.party.is_empty():
+		_script_prompt = "Trade preview needs a party"
+		_refresh_labels()
+		return
+	var given: Gen2SaveMon = save.party[0]
+	var received: Gen2SaveMon = save.party[mini(1, save.party.size() - 1)]
+	var context: Dictionary = Gen2WorldPartyHost.trade_animation_context(
+		_data, given, received, save.player_name, "BLUE",
+		Gen2LinkSession.LINK_TRADECENTER
+	)
+	var host := Gen2TradeAnimationScreen.new()
+	host.set_context(_data, context, half)
+	host.closed.connect(_on_trade_animation_closed)
+	host.z_index = 40
+	_trade_anim_host = host
+	_screen.display(host)
+	for _frame: int in maxi(frames, 0):
+		if _trade_anim_host == null:
+			return
+		_trade_anim_host.advance_frame()
+	_refresh_labels()
+
+
 ## Public screenshot driver for `GiveANickname_YesNo`, which no fixture cell
 ## reaches: a `givepoke` is somebody's map script. The prompt is opened over the
 ## map with no request behind it, so its close writes nothing.
@@ -4060,7 +4130,6 @@ func _first_stone_evolution() -> Dictionary:
 ## presentation: it stands the first party member on the first LEVEL evolution
 ## the cache holds and opens the screen on it, which is the one path a stone
 ## cannot reach, since `.pressed_b` lets B cancel this one and not that one.
-##
 ## The party row is left alone. [method _on_evolution_resolved] applies it, the
 ## same way the after-battle pass does, so the preview is that pass rather than
 ## a picture of it.
@@ -4180,7 +4249,6 @@ func preview_mod_views() -> void:
 ## Public screenshot driver for the MOVES entry, which needs a registered
 ## field-move source before it exists at all: one call opens the menu on the row
 ## and a second opens the list of moves the bag can supply.
-##
 ## The provider and the HM are synthetic, exactly as [method preview_pet_actor]'s
 ## actor is; the row, the list and the move behind it are the host's own.
 func preview_field_moves_menu() -> void:
@@ -4380,7 +4448,6 @@ func preview_pack_toss() -> void:
 ## four move slots and grants a TM or HM that member can learn, on an injected
 ## save so nothing persists, then advances one menu step per call: Pack, the
 ## TM/HM, USE, YES, the party member, ForgetMove's ask, and the move list.
-##
 ## The granted item is whichever TM or HM this species can actually learn, since
 ## a development save's first member is whatever the cache holds; a species that
 ## can learn none reports that rather than opening a menu it cannot fill.
@@ -4443,7 +4510,6 @@ func _teachable_tmhm_for(species: int) -> int:
 ## Public screenshot driver for the battle-request host path. It starts the
 ## same request shape emitted by [Gen2WorldScriptRunner], without pretending a
 ## map event was present in the selected development map.
-##
 ## [param battle_type] is `wBattleType`, so
 ## [constant Gen2Battle.BATTLETYPE_FORCESHINY] opens the fight the Lake of Rage
 ## Gyarados is met in.
@@ -5587,7 +5653,6 @@ func _open_service_host() -> void:
 
 ## Opens the induction sequence `halloffame` asks for. Public so the screenshot
 ## tool and the scene tests can reach it without replaying the whole route.
-##
 ## The party is the active save's, so an injected or development save inducts
 ## whatever it is carrying. A cache with no font answers nothing rather than
 ## drawing an empty screen.
@@ -5670,6 +5735,7 @@ func _open_link_screen(screen_mode: int) -> bool:
 		_link_transport(), screen_mode, _injected_save == null
 	)
 	host.closed.connect(_on_link_screen_closed)
+	host.traded.connect(_on_link_traded)
 	_link_host = host
 	_screen.display(host)
 	if _link_host == null:
@@ -5679,6 +5745,11 @@ func _open_link_screen(screen_mode: int) -> bool:
 		else "Trade Center"
 	_refresh_labels()
 	return true
+
+
+## `LinkTrade`'s `.do_trade`, which comes back to the trade screen.
+func _on_link_traded(result: Dictionary) -> void:
+	_open_trade_animation(result.get("animation", {}))
 
 
 func _on_link_screen_closed() -> void:
@@ -5764,7 +5835,6 @@ func _on_hall_of_fame_rating(sfx: int) -> void:
 
 
 ## `Script_credits`, which farcalls `RedCredits` and then ends the script.
-##
 ## [param skippable] is the `wStatusFlags` byte `Credits` is handed: `RedCredits`
 ## passes the live one, which by Red has the Hall of Fame bit in it, while
 ## `HallOfFame` pushes the byte before setting that bit, so the induction's own
@@ -7211,11 +7281,7 @@ func _handle_runtime_request(request: Dictionary) -> StringName:
 		if opened != &"prompt":
 			return opened
 	elif kind in Gen2WorldHost.UNATTENDED_REQUESTS:
-		var settled: Array = _complete_unattended_request()
-		if settled.is_empty():
-			return &"none"
-		_show_script_results(settled)
-		return &"return"
+		return _settle_unattended_request()
 	elif kind in SERVICE_HOST_REQUESTS:
 		_open_service_host()
 		return &"break"
@@ -7731,7 +7797,6 @@ func map_name_sign_passes() -> int:
 ## `InitMapNameSign`'s own decision, raised where the map load leaves it: the
 ## sign is a window over the bottom four rows and the map keeps moving behind it,
 ## which is why a connection crossing shows one without stopping the camera.
-##
 ## Gold and Silver ship neither the routine nor `MapEntryFrameGFX`, so the world
 ## asks for no sign there and the page would answer none either.
 func _raise_map_name_sign() -> void:
@@ -8002,7 +8067,6 @@ func _mod_hidden_items() -> Array:
 ## gate: `verbosegiveitem`'s own transaction through the ordinary script path, so
 ## the fanfare, the box and the pacing are the world screen's exactly as they are
 ## for a give the map itself makes.
-##
 ## One per frame, since the first one's box owns the world until it is pressed
 ## past, and the rest wait in the host's queue.
 func _spend_item_gift_requests() -> void:
@@ -8140,7 +8204,6 @@ func _start_sound_schedule(schedule: Array) -> void:
 
 
 ## One frame of that schedule, spent from the same pump the script's own wait is.
-##
 ## A `wait` entry is `WaitPlaySFX`, and it is a real wait only while the driver
 ## is being serviced: a run with no audio device leaves the channels as the last
 ## sound left them, so `effect_playing()` would answer true for the rest of the

@@ -24,6 +24,7 @@ const KIND_HELP: Dictionary = {
 	&"mart": "cell in front of the counter: BuyMenu",
 	&"mart_sell": "cell in front of the counter: the SELL row (DepositSellPack)",
 	&"pokepic": "cell: Script_pokepic's box over the map, holding Chikorita",
+	&"trade_animation": "frames, half: TradeAnimation over the map, that many frames into the half named",
 	&"pet_actor": "cell: a mod's world actor one cell ahead, pressed with A so it wears a showemote heart",
 	&"pet_actor_arc": "cell: the same actor mid-ledge, at the top of the arc its span names",
 	&"warp": "warp tile: MapSetupScript_Door at its whitest, the frame the new map loads on",
@@ -333,6 +334,7 @@ const STAGERS: Dictionary = {
 	&"script_fade": &"_stage_script_fade",
 	&"level_evolution": &"_stage_level_evolution",
 	&"egg_hatch": &"_stage_egg_hatch",
+	&"trade_animation": &"_stage_trade_animation",
 	&"gift_nickname": &"_stage_gift_nickname",
 	&"whiteout": &"_stage_whiteout",
 	&"unown_puzzle": &"_stage_unown_puzzle",
@@ -494,6 +496,10 @@ func _stage_level_evolution() -> void:
 ## five hundred frames of picture, so the first number is how far into it to
 ## photograph and the second is the species inside the egg, 0 for the first the cache
 ## holds.
+func _stage_trade_animation() -> void:
+	_screen.preview_trade_animation(maxi(_cell.x, 0), maxi(_cell.y, 0))
+
+
 func _stage_egg_hatch() -> void:
 	_screen.preview_egg_hatch(maxi(_cell.y, 0))
 	for _frame: int in maxi(_cell.x, 0):

@@ -2,7 +2,6 @@ class_name Gen2WorldPartyHost
 extends RefCounted
 
 ## Scene-free transactions for party-owned overworld operations.
-##
 ## A script can stage world changes and then pause for a gift, egg or NPC trade.
 ## The host builds a candidate save first, resumes the script, and only writes
 ## the candidate after both sides have succeeded. The six-party limit is
@@ -433,6 +432,46 @@ static func commit_link_trade(
 		"received_slot": save.party.size() - 1,
 		"partner": String(peer.get("name", "")),
 		"evolution": evolution.duplicate(true),
+		"animation": trade_animation_context(
+			world.data, given, received, save.player_name,
+			String(peer.get("name", "")),
+			int(peer.get("link_mode", Gen2LinkSession.LINK_TRADECENTER))
+		),
+	}
+
+
+## What `TradeAnimation` is handed: `wPlayerTrademon*` for the Pokemon leaving
+## and `wOTTrademon*` for the one arriving. The names are the species' own,
+## `TradeAnim_GetNicknamename` calling `GetPokemonName`.
+static func trade_animation_context(
+	data: GameData,
+	given: Gen2SaveMon,
+	received: Gen2SaveMon,
+	sender: String,
+	ot_sender: String,
+	link_mode: int
+) -> Dictionary:
+	return {
+		"player": _trade_animation_half(data, given, sender),
+		"ot": _trade_animation_half(data, received, ot_sender),
+		"link_mode": link_mode,
+	}
+
+
+static func _trade_animation_half(
+	data: GameData, mon: Gen2SaveMon, sender: String
+) -> Dictionary:
+	if mon == null:
+		return {}
+	var species: int = Gen2TradeAnimation.EGG if mon.is_egg else mon.species
+	return {
+		"species": species,
+		"species_name": String(data.species(mon.species).get("name", "")),
+		"sender_name": sender,
+		"ot_name": mon.original_trainer,
+		"ot_id": mon.ot_id,
+		"caught_gender": mon.caught_gender,
+		"shiny": Gen2Stats.is_shiny(mon.dvs),
 	}
 
 
@@ -469,7 +508,6 @@ static func record_link_battle(
 ## `HealParty`'s own walk, without the transaction around it: full HP, no status
 ## and full PP for every party member that is not an egg. Answers how many rows
 ## it moved, or -1 for a row the battle adapter cannot read.
-##
 ## Shared, because the whiteout heals the same party [method heal_party] does and
 ## reaches it from a screen rather than from a `special`.
 static func heal_party_rows(data: GameData, save: Gen2SaveData) -> int:
@@ -848,7 +886,6 @@ static func change_happiness(data: GameData, happiness: int, kind: int) -> int:
 ## `HaircutOrGrooming`'s `Random` walk over one of the three tables: subtract
 ## each threshold in turn and take the row that borrows. [param roll] is the
 ## byte `Random` answered and [param crystal] picks the overrun's own address.
-##
 ## Answers `{"script_value": int, "happiness_kind": int}`. A kind no
 ## `HappinessChanges` row exists for leaves [method change_happiness]'s byte
 ## alone, which is exactly what the cartridge's overrun does with it.
@@ -870,7 +907,6 @@ static func groom_outcome(routine: StringName, roll: int, crystal: bool) -> Dict
 ## member that is not an egg, saturating at 255 rather than wrapping, and
 ## reaching no `HappinessChanges` row at all. The step counter that decides how
 ## often is [method Gen2WorldState.count_step]'s.
-##
 ## Answers the slots that moved, so a caller can persist only when the walk
 ## actually changed something.
 static func apply_step_happiness(save: Gen2SaveData, times: int = 1) -> Array[int]:
@@ -958,7 +994,6 @@ static func gift_destination(save: Gen2SaveData) -> StringName:
 ## front taking one hatch cycle off every egg, and stops on the first egg whose
 ## counter reaches zero, so an egg behind that one keeps its cycle for that
 ## step. Answers the party index of the egg that is ready to hatch, or -1.
-##
 ## The counter lives in the happiness byte, which is what `GiveEgg` wrote and
 ## what `HatchEggs` reads; [method apply_step_happiness] skips eggs for the same
 ## reason.
@@ -1132,7 +1167,6 @@ static func contest_return_mons(save: Gen2SaveData) -> int:
 ## the save/world writeback. A caught mon enters the party when there is room and
 ## otherwise goes to the front of the box the player has open, which is the one
 ## `SendMonIntoBox` deposits into.
-##
 ## [param thrower] is the player's active battler, which LEVEL_BALL and LOVE_BALL
 ## read; see [method _ball_multiplier].
 static func capture_wild(
@@ -1373,7 +1407,6 @@ static func _apply_contest_mon(
 ## party or the box: `NamingScreen` writes into `wPartyMonNicknames` or
 ## `sBoxMonNicknames` rather than into the struct the catch built, so the rename
 ## is its own write and not part of [method capture_wild]'s transaction.
-##
 ## [param destination] is that method's own answer. Nothing is written when the
 ## player kept the species name, which is what NO and an empty entry both leave
 ## in `wStringBuffer1`.
@@ -1611,6 +1644,12 @@ static func _apply_trade_request(
 			"kind": &"trade", "accepted": true, "trade_id": trade_id,
 			"given_species": requested.species,
 			"received_species": received.species,
+			## `DoNPCTrade` fills the trade buffers and `.TradeAnimation` runs
+			## straight off them.
+			"animation": trade_animation_context(
+				world.data, requested, received, candidate.player_name,
+				String(trade.get("ot_name", "")), Gen2LinkSession.LINK_TRADECENTER
+			),
 		},
 	}
 
@@ -1813,7 +1852,6 @@ static func _apply_heal(
 ## `UpdateStatsAfterItem`'s max-HP delta added to the current HP,
 ## `LevelUpHappinessMod`, `LearnLevelMoves` and then `EvolvePokemon` with
 ## `wForceEvolution` clear. `MAX_LEVEL` is `NoEffectMessage` rather than a clamp.
-##
 ## The happiness row is `HAPPINESS_GAINLEVEL` flat: `LevelUpHappinessMod`'s
 ## at-home row compares the caught landmark against the *battle's* landmark, and
 ## a field item is not in one.
@@ -2118,7 +2156,6 @@ static func contest_mon_from(wild: Gen2BattleMon) -> Dictionary:
 
 
 ## `PokeBallEffect`'s roll, from `wEnemyMonCatchRate` down to `wFinalCatchRate`.
-##
 ## [param battle_type] is `wBattleType`: BATTLETYPE_TUTORIAL catches without a
 ## roll, the way a MASTER_BALL does. [param thrower] is the player's active
 ## battler, which LEVEL_BALL reads a level off and LOVE_BALL a species and a
@@ -2157,7 +2194,6 @@ static func _capture_outcome(
 
 ## `wFinalCatchRate`: everything `PokeBallEffect` settles between
 ## `ld a, [wEnemyMonCatchRate]` and the `call Random` that reads the answer.
-##
 ## Split out from the throw because the cartridge can be asked the same question
 ## directly: `.claude/oracle/battle/catch_rate.py` runs those instructions on a
 ## real dump for a grid of cases, and [param case] is that grid's own row. The
@@ -2424,7 +2460,6 @@ static func rename_party_mon(
 ## `HatchEggs` for one party slot: the egg becomes the Pokemon it was carrying.
 ## Everything here is the source's own order, and every one of the seven writes
 ## has a reader in this project, which is why none is left out.
-##
 ## Answers the summary the screen shows, or an empty dictionary when the slot is
 ## not an egg that is ready.
 static func hatch_egg(
@@ -2490,7 +2525,6 @@ static func _failure(reason: StringName, details: Dictionary) -> Dictionary:
 ## `EvolveAfterBattle`. Both halves are gated on
 ## `STATUSFLAGS2_REACHED_GOLDENROD_F`, and both are pure party writes, so the
 ## whole routine is one call the world boundary makes on a battle it won.
-##
 ## Returns what changed, for a caller that wants to say so: an empty dictionary
 ## when neither half did anything.
 static func give_pokerus_and_convert_berries(
@@ -2633,7 +2667,6 @@ static func apply_pokerus_tick(save: Gen2SaveData, days: int) -> bool:
 ## `CalcMagikarpLength`, in feet and inches. [param dvs] is MON_DVS' two bytes
 ## and [param player_id] is wPlayerID, read high byte first the way the routine
 ## reads it.
-##
 ## `.BCLessThanDE`'s `ret c / ret nc` is reproduced rather than fixed: the low
 ## byte is never reached, so the row is chosen on the threshold's high byte
 ## alone, which is what `MagikarpLengths`' own comment says the table really
@@ -2692,7 +2725,6 @@ static func magikarp_beats_record(length: Vector2i, record: Dictionary) -> bool:
 
 ## `CheckForLuckyNumberWinners`, as one walk over the ID numbers the party
 ## mirror carries.
-##
 ## [param stored_ids] and [param stored_species] are every box slot in one list,
 ## which is what the source's open-box pass plus its `.BoxesLoop` skipping
 ## `wCurBox` add up to. Answers `{script_value, species, in_storage}`, where a
@@ -2751,7 +2783,6 @@ static func _lucky_number_score(wanted: String, mon_id: int) -> int:
 
 ## `GiveShuckle`. A level 15 SHUCKLE holding a BERRY, named SHUCKIE under
 ## MANIA's name and ID, with `SetGiftPartyMonCaughtData`'s CAUGHT_BY_UNKNOWN.
-##
 ## `TryAddMonToParty` and nothing else: a full party is `.NotGiven`, which
 ## answers zero and never reaches a box. The daily flag behind it is the
 ## script's own `setflag`, which has already run by here.
@@ -2802,7 +2833,6 @@ static func odd_egg_row(rolled: int, probabilities: Array) -> int:
 ## The Day-Care Man's Odd Egg. `AddMobileMonToParty` appends the row as it
 ## stands, with `wTempOddEggNickname` as the OT and the row's own `dname` as the
 ## nickname, so nothing about it is rolled except which of the fourteen it is.
-##
 ## The party-full refusal is the script's own `readvar VAR_PARTYCOUNT` ahead of
 ## the special, so the routine is never entered with a full party and appending
 ## cannot fail; it is answered here as well because a mod can call the special

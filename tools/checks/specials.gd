@@ -64,6 +64,9 @@ const SPECIAL_TEXT_RAM_NAMES: Array[String] = [
 	## `wMysteryGiftPartnerName` and `wMysteryGiftPlayerName`, the two names
 	## `_MysteryGiftSentText` and `_MysteryGiftSentHomeText` spell.
 	"mystery_gift_partner_name", "mystery_gift_player_name",
+	## `TradeAnimation`'s four.
+	"player_trademon_species_name", "player_trademon_sender_name",
+	"ot_trademon_species_name", "ot_trademon_sender_name",
 ]
 
 const SPECIALS_POINTERS_SIZE: int = 169

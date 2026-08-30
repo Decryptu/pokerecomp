@@ -162,6 +162,7 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	verify_slots,
 	verify_printer,
 	verify_link_border,
+	verify_trade_anim,
 	verify_card_flip,
 	verify_credits,
 	verify_menu_text,
@@ -614,7 +615,6 @@ const TITLE_RUN_GAP_MAX: int = 16
 
 
 ## The title screen's art, which is two different screens under one key.
-##
 ## Crystal's three LZ runs and its palettes are one contiguous section in
 ## `engine/movie/title.asm`'s INCBIN order, so each pins the next: a run that
 ## decompresses to the wrong number of tiles, or whose neighbour does not follow
@@ -1259,7 +1259,6 @@ static func verify_day_care_text(rom: RomFile, layout: Dictionary) -> Dictionary
 ## opens on has to be its own. A run the layout gives no offset is skipped
 ## rather than failed, which is what Gold and Silver's three Crystal-only rows
 ## are.
-##
 ## `SPECIAL_TEXT_FIRST_BOX` is the identifying line per run, so a wrong pin is
 ## caught here rather than by a screen printing the wrong routine's box.
 const SPECIAL_TEXT_FIRST_BOX: Dictionary = {
@@ -1270,6 +1269,9 @@ const SPECIAL_TEXT_FIRST_BOX: Dictionary = {
 	"poke_seer": ["see_all", "I see all."],
 	"buena_prize": ["ask_which_prize", "Which prize would"],
 	"mystery_gift": ["canceled", "The link has been"],
+	## Four of the trade's boxes open on a `text_ram` marker whose address
+	## differs by profile, so the anchor is the one that opens on a literal.
+	"trade": ["take_good_care", "Take good care of"],
 }
 
 
@@ -1634,9 +1636,59 @@ static func _aligned(value: int, to: int) -> int:
 	return ((value + to - 1) / to) * to
 
 
+## `TradeAnimation`'s art run, walked whole from its one pinned address: every
+## entry landing on the size its loader asks VRAM for is what says that address
+## is right. {name: PackedByteArray} in `TRADE_ANIM_SECTION` order, or empty.
+static func read_trade_anim_section(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var at: int = int(layout.get("trade_anim", -1))
+	if at < 0:
+		return {}
+	var lz := Gen2Lz.new()
+	var out: Dictionary = {}
+	for row: Array in RomLayout.TRADE_ANIM_SECTION:
+		var name: String = String(row[0])
+		var kind: String = String(row[1])
+		var wanted: int = int(row[2]) if kind == "map" \
+			else int(row[2]) * Gen2Tiles.TILE_BYTES
+		var raw: PackedByteArray = PackedByteArray()
+		var consumed: int = 0
+		if kind == "lz":
+			raw = lz.decompress(rom.bytes(), at)
+			consumed = lz.consumed
+			if lz.failed:
+				return {}
+		else:
+			if not rom.in_bounds(at, wanted):
+				return {}
+			raw = rom.slice(at, wanted)
+			consumed = wanted
+		if raw.size() != wanted:
+			return {}
+		out[name] = raw
+		at += consumed
+	return out
+
+
+## The walk above is most of the check; what is left is that the two tilemaps
+## name tiles the one sheet behind them holds.
+static func verify_trade_anim(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var section: Dictionary = read_trade_anim_section(rom, layout)
+	if section.is_empty():
+		return {"ok": false, "message": "The trade animation section does not walk."}
+	var first: int = RomLayout.TRADE_ANIM_SHEET_FIRST_TILE
+	var last: int = first + RomLayout.TRADE_ANIM_SHEET_TILES - 1
+	for name: String in ["game_boy_tilemap", "link_cable_tilemap"]:
+		for cell: int in (section[name] as PackedByteArray):
+			if cell < first or cell > last:
+				return {
+					"ok": false,
+					"message": "The trade %s names a tile outside its sheet." % name,
+				}
+	return {"ok": true, "message": "The trade animation art verified."}
+
+
 ## The intro movie. The section walk above is most of the check; what is left is
 ## content, and the two palette runs INCLUDEd inside the code rather than in it.
-##
 ## `unown_1.pal` is byte-identical to the first palette of `fade.pal`, which is
 ## the same "two INCLUDEs of one picture check each other" the copyright string
 ## gives the credits: the two are pinned independently, so each confirms the
@@ -1694,7 +1746,6 @@ static func verify_intro_movie(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## `_UnownPuzzle`'s art. The walk is most of the check: seven records whose
 ## lengths are the sizes the routine copies into VRAM, each address the previous
 ## entry's own consumed length, so one wrong pin fails the next entry.
-##
 ## What the walk cannot see is that a puzzle picture is square: the four are
 ## six by six tiles because `ConvertLoadedPuzzlePieces` doubles them into the
 ## twelve-by-twelve grid the sixteen three-by-three pieces are cut from.
@@ -1852,7 +1903,6 @@ static func verify_card_flip(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## `GoldSilverIntro`. The section walk is most of the check; what is left is the
 ## three palette runs outside it and the two metatile maps, which name their own
 ## `.bin` entries and so check the pair.
-##
 ## `predef_pals` is checked against `game_freak_presents.object_palette`, which
 ## this layout pins independently: that offset is `PREDEFPAL_GAMEFREAK_LOGO_OB`,
 ## index 77 of the same table, so each address confirms the other for nothing.
@@ -2342,7 +2392,6 @@ const MENU_DESCRIPTION_LAST: String = "Quit and\nbe judged."
 
 
 ## The start menu's description run and the pack's five texts.
-##
 ## The run is checked by content at both ends and by shape in between: nine
 ## strings, each terminated inside its own bound, which no neighbouring text run
 ## in the bank satisfies with those two at the ends. The five texts are checked
@@ -2626,7 +2675,6 @@ static func read_challenge_menu_rows(rom: RomFile, layout: Dictionary) -> Packed
 ## The whole Battle Tower block: the 70 trainers, the ten level groups of 21
 ## Pokemon as the party-mon structs they are, the two per-class tables, the 120
 ## trainer lines, the level menu's own rows and the challenge menu's three.
-##
 ## Empty on Gold and Silver, which is what [GameData] answers "no tower" from.
 func _import_battle_tower(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if not RomLayout.has_battle_tower(layout):
@@ -2969,7 +3017,6 @@ static func verify_text_bg_palette(rom: RomFile, layout: Dictionary) -> Dictiona
 
 ## `LoadGenderScreenPal` and `LoadGenderScreenLightBlueTile`, whose bytes sit
 ## thirteen apart in the same routine pair.
-##
 ## The palette's eight bytes appear once in the dump, so they pin themselves.
 ## The tile does not: sixteen bytes of one repeated index occur hundreds of
 ## times, so it is checked for being exactly that, on the index the palette's
@@ -3174,7 +3221,6 @@ static func verify_pc(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 
 ## Walks the type matchup chart from its offset to the terminator.
-##
 ## Returns an Array of { attacker, defender, multiplier, negated_by_foresight },
 ## empty if the walk ran away without finding an end. Rows after the $FE marker
 ## carry the flag: they stop applying once Foresight identifies the defender,
@@ -3210,7 +3256,6 @@ static func read_matchups(rom: RomFile, layout: Dictionary) -> Array:
 
 
 ## The matchup chart, checked by the shape a chart of exceptions has to have.
-##
 ## No name and no number, but hard to land on by accident: every row is two
 ## sparse type numbers and one of three multipliers, the run must reach $FE then
 ## $FF at exactly the right distance, and both ends are known content. A wrong
@@ -3345,7 +3390,6 @@ static func read_evos_attacks(rom: RomFile, layout: Dictionary, species: int) ->
 ## One species' inherited move list from EggMovePointers. Returns { moves } on
 ## success, including an empty list, and an empty Dictionary for a malformed
 ## pointer, move id or unterminated list.
-##
 ## The address has no bank byte, so it must name the switchable window and is
 ## resolved against the pointer table's bank. The walk stops at that bank's end,
 ## not merely the dump's end: continuing into the next bank would turn a missing
@@ -3747,7 +3791,6 @@ static func verify_pokedex(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 ## The font carries no name and no number, so it is checked against the one
 ## thing that is known about it independently: the charmap.
-##
 ## The font is indexed by character code, so the letters and digits [Gen2Text]
 ## claims must have ink and the runs it has no character for must be blank. Those
 ## runs sit between the alphabets, so an offset out by one tile drags a blank
@@ -4087,7 +4130,6 @@ static func _ink(pixels: PackedByteArray) -> int:
 
 
 ## The three trainer tables, each checked by what is known about it independently.
-##
 ## Checked together because they are three views of one numbering, so a mistake
 ## shows up as the three disagreeing: names say what a class is, the palette
 ## table has one entry more than the pic table because the player owns the first,
@@ -4599,7 +4641,6 @@ func _import_world_sections(
 
 
 ## Imports [param rom] into its cache directory, replacing whatever was there.
-##
 ## [param on_progress] is called as [code](stage, done, total)[/code] if given.
 ## Returns { ok, message, directory, species, elapsed_ms }.
 ## [param yield_ms] is how often the one long stretch of this hands the main loop
@@ -4816,6 +4857,7 @@ func import_rom(
 		"town_map": _import_town_map(rom, layout),
 		"intro_movie": _import_intro_movie(rom, layout),
 		"gs_intro": _import_gs_intro(rom, layout),
+		"trade_anim": _import_trade_anim(rom, layout),
 		"oak_ratings": _import_oak_ratings(rom, layout),
 		"pokecenter_pc": _import_pokecenter_pc(rom, layout),
 		"decorations": _import_decorations(rom, layout),
@@ -5000,7 +5042,6 @@ func _import_species(rom: RomFile, layout: Dictionary, on_progress: Callable) ->
 
 ## The two dex orderings, keyed by the mode that reads each. Empty on any layout
 ## failure, which the caller reports rather than caching a half table.
-##
 ## The third ordering, DEXMODE_OLD, has no table: `.OldMode` counts from 1 to
 ## 251, so storing it would be storing the species range twice.
 func _import_dex_orders(rom: RomFile, layout: Dictionary) -> Dictionary:
@@ -5047,7 +5088,6 @@ func _import_moves(rom: RomFile, layout: Dictionary, on_progress: Callable) -> A
 
 ## data/moves/tmhm_moves.asm's TMHMMoves, in TMNUM order. Empty on any layout or
 ## content failure, which the caller reports rather than caching a half table.
-##
 ## Checked rather than trusted: every entry has to be a real move number, the
 ## terminating zero has to be there, and HM01's row has to be CUT. The last is
 ## what actually pins the table, since a nearby run of bytes can pass the first
@@ -5072,7 +5112,6 @@ func _import_tmhm_moves(rom: RomFile, layout: Dictionary) -> Array:
 
 ## data/events/happiness_changes.asm's HappinessChanges, one row of three signed
 ## changes per HAPPINESS_* constant. Empty on any layout or content failure.
-##
 ## Checked rather than trusted: no change is larger than twenty either way, and
 ## the first row has to be `+5, +3, +2`, which is what pins the table. Signed
 ## because `ChangeHappiness` reads the byte as one: its `cp $64` puts everything
@@ -5149,7 +5188,6 @@ func _import_mail_palettes(rom: RomFile, layout: Dictionary) -> Array:
 
 
 ## StringBufferPointers as WRAM addresses, in `text_buffer` argument order.
-##
 ## Stored rather than derived because the addresses move between Gold/Silver and
 ## Crystal, and a `TX_RAM` operand is an address: without the table there is no
 ## way back from `$CFA4` to the buffer a script filled.
@@ -5163,7 +5201,6 @@ func _import_string_buffer_pointers(rom: RomFile, layout: Dictionary) -> Array:
 ## The intro texts, decoded to strings the way species names are, since each is
 ## one whole value rather than a run a script indexes into. `<PLAYER>` stays a
 ## marker: the screen that prints it is the one that knows the name.
-##
 ## A text a profile does not ship is left out rather than stored empty, so a
 ## caller can tell "Gold has no gender screen" from "the text failed to decode".
 func _import_intro_text(rom: RomFile, layout: Dictionary) -> Dictionary:
@@ -5494,7 +5531,6 @@ func _import_stats_screen_palettes(rom: RomFile, layout: Dictionary) -> Dictiona
 
 ## The six `BattleObjectPals` an animation object is drawn with, four colours
 ## each rather than a pair, since `_CGB_BattleScreenLayout` copies them in whole.
-##
 ## Slots 0 and 1 are not here and are not table rows: the layout fills them from
 ## the two battlers' own palettes, so an object asking for either is asking for
 ## whoever is on the field.
@@ -5516,7 +5552,6 @@ func _import_battle_object_palettes(rom: RomFile, layout: Dictionary) -> Diction
 ## `_CGB_TrainerCard`'s palettes: its eight background slots, each a trainer
 ## class pair `LoadPalette_White_Col1_Col2_Black` expands, and the badge object
 ## palette it takes from `PredefPals` whole.
-##
 ## Slot 0 is trainer class 0, the player, whose pair sits in the class table but
 ## whose class the pic tables skip, so this is the only place it is read.
 func _import_card_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
@@ -5534,7 +5569,6 @@ func _import_card_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 
 ## `_CGB_Pokedex`'s three palettes.
-##
 ## `interface` is PREDEFPAL_POKEDEX, the four colours the whole screen is drawn
 ## through; `question_mark` is what an unseen species' Slowpoke picture wears,
 ## which `_CGB_Pokedex` fills the 7x7 pic box with; `cursor` is object palette 7,
@@ -5705,7 +5739,6 @@ func _import_presents_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 ## The credits: `CreditsScript`, every `CreditsStringsPointers` entry as the tile
 ## codes it is, `CreditsPalettes` and `.Frames`' block indices.
-##
 ## The strings stay codes rather than text for the same reason the copyright
 ## screen's does: `CreditsStringsPointers.Copyright` is nothing but tile numbers
 ## into `CopyrightGFX`, which `Credits` loads over $60 the way `Copyright` does.
@@ -5748,7 +5781,6 @@ func _packed_palette(rom: RomFile, at: int, colors: int) -> Array:
 ## The pack screen's data half: `DrawPocketName`'s 5x12 tilemap and the palettes
 ## `_CGB_PackPals` fills the attrmap with. The graphics go through the tile table
 ## with the rest of the strips.
-##
 ## Both palette sets are six palettes, not the eight the copy asks for; the two
 ## past them are read out of whatever follows and no attribute names them.
 func _import_pack(rom: RomFile, layout: Dictionary) -> Dictionary:
@@ -5792,7 +5824,6 @@ func _import_copyright_palette(rom: RomFile, layout: Dictionary) -> Array:
 
 ## The intro movie's tile strips and its four BG maps with their attribute
 ## planes, all out of one walk of the section.
-##
 ## A map is a byte run keyed by a name, so it is written the way a strip is and
 ## read back with `GameData.intro_map()`; it is not a sheet and gets no entry in
 ## the manifest's tile table. `Intro_LoadTilemap` copies the top-left 20x18 of
@@ -5828,7 +5859,6 @@ func _import_intro_sheets(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## The intro movie's palettes: the five sixteen-palette runs inside the section,
 ## `Intro_Scene24_ApplyPaletteFade`'s eight and `Intro_Scene20_AppearUnown`'s
 ## two, plus the names of the maps written beside the sheets.
-##
 ## The fades `CrystalIntro_UnownFade` and `Intro_FadeUnownWordPals` run through
 ## are `for hue, 32` tables the assembler generates, not cartridge data, so they
 ## are computed in [Gen2IntroMovie] rather than imported.
@@ -5857,6 +5887,52 @@ func _import_intro_movie(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return {"palettes": palettes, "maps": maps}
 
 
+## The trade's five tile strips and two tilemaps, out of one walk. A tilemap is
+## a cell run rather than pixels, written the way the intro's BG maps are.
+func _import_trade_anim_sheets(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var section: Dictionary = read_trade_anim_section(rom, layout)
+	if section.is_empty():
+		return {}
+	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
+	var out: Dictionary = {}
+	for row: Array in RomLayout.TRADE_ANIM_SECTION:
+		var name: String = String(row[0])
+		var path: String = RomCache.tile_path(directory, "trade_anim_%s" % name)
+		if String(row[1]) == "map":
+			if not RomCache.write_indices(path, section[name]):
+				return {}
+			continue
+		var tiles: int = int(row[2])
+		if not RomCache.write_indices(
+			path, Gen2Tiles.decode_2bpp_strip(section[name], 0, tiles)
+		):
+			return {}
+		out["trade_anim_%s" % name] = _strip_sheet_entry(tiles)
+	return out
+
+
+## `_CGB_TradeTube`'s TRADE_TUBE entry, which is every background cell of the
+## tube animation and object palette 7. Its other three are ROUTES, which no
+## cell of a wiped attrmap shows, and object palette 0 is the party menu's.
+func _import_trade_anim(rom: RomFile, layout: Dictionary) -> Dictionary:
+	if read_trade_anim_section(rom, layout).is_empty():
+		return {}
+	var maps: Array = []
+	for row: Array in RomLayout.TRADE_ANIM_SECTION:
+		if String(row[1]) == "map":
+			maps.append(String(row[0]))
+	return {
+		"maps": maps,
+		"palettes": {
+			"tube": _packed_palette(
+				rom,
+				RomLayout.predef_palette_offset(layout, RomLayout.PREDEFPAL_TRADE_TUBE),
+				RomLayout.PREDEF_PALETTE_COLORS
+			),
+		},
+	}
+
+
 ## `GoldSilverIntro`'s seven tile strips. The two `.tilemap`s and two `.bin`s are
 ## metatile data rather than pixels, so they go beside the movie's own entry
 ## through [method _import_gs_intro] rather than into the tile table.
@@ -5881,7 +5957,6 @@ func _import_gs_intro_sheets(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 
 ## `GoldSilverIntro`'s metatile maps and its palettes.
-##
 ## The four `.tilemap`/`.bin` runs are byte runs keyed by a name, written the way
 ## the Crystal movie's BG maps are and read back with `GameData.gs_intro_map()`.
 ## The palettes are `Intro_LoadMagikarpPalettes`' pair, the shellder and lapras
@@ -5965,7 +6040,6 @@ func _import_shrink_pics(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## The title screen's palettes and, on Gold and Silver, its tilemap. The
 ## graphics themselves go through [method _import_title_sheets] with the rest of
 ## the tile strips.
-##
 ## Crystal's sixteen palettes are one run `_TitleScreen` copies whole into both
 ## buffers; Gold and Silver's are five background and two object palettes that
 ## `GetSGBLayout` and `LoadTitleScreenPals` load separately, so they are kept
@@ -6257,7 +6331,6 @@ func _import_pc_sheets(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 
 ## `Pokedex_LoadGFX`'s two LZ runs, each as one strip of tiles.
-##
 ## Kept out of the fixed table [method _import_tiles] uses for the same reason
 ## the region map's are: a compressed run has to be decompressed before its tile
 ## count is even known.
@@ -6288,7 +6361,6 @@ func _import_pokedex_sheets(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 
 ## The title screen's graphics, each as one strip of tiles.
-##
 ## Every one but the trail is an LZ run, so they cannot go through the fixed
 ## table [method _import_tiles] uses: each is decompressed first and the strip
 ## written from the result. The names are the source's own symbols with the
@@ -6343,7 +6415,6 @@ func _strip_sheet_entry(tiles: int) -> Dictionary:
 ## on its own because thirty-four bytes of code sit between it and the run;
 ## everything from `UnownPuzzleCursorGFX` on is one walk, each address the
 ## previous entry's consumed length, with no alignment between them.
-##
 ## Returns {name: PackedByteArray} in `UNOWN_PUZZLE_SECTION` order plus
 ## `tile_borders`, or an empty Dictionary if any entry does not decompress to
 ## its own size.
@@ -6424,11 +6495,9 @@ func _import_unown_puzzle(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 
 ## `_SlotMachine`'s data run, walked whole from `Reel1Tilemap`.
-##
 ## The three reel strips and `SlotsTilemap` are raw bytes and the three graphics
 ## runs are LZ, laid out in that order with nothing between them; every entry
 ## landing on its own size is what says the address is right.
-##
 ## Returns {name: PackedByteArray} in `SLOTS_SECTION` order, or an empty
 ## Dictionary if any entry does not.
 static func read_slots_section(rom: RomFile, layout: Dictionary) -> Dictionary:
@@ -6518,7 +6587,6 @@ func _import_slots_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 
 ## `_CardFlip`'s art run, walked whole from `.palettes`.
-##
 ## Returns {name: PackedByteArray} in `CARD_FLIP_SECTION` order plus `tilemap`,
 ## the run's own tail, or an empty Dictionary if any entry does not land on its
 ## size. Unlike the slot machine's the run has no alignment fill between
@@ -6755,7 +6823,6 @@ func _import_card_flip_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## `PlaceDiplomaOnScreen`'s art: `DiplomaGFX` decompressed, and the two whole
 ## screens of tile numbers laid out behind its stream. The art itself is what
 ## says the address is right, since each tilemap has to index inside it.
-##
 ## Returns {tiles, page1, page2}, or an empty Dictionary if any part does not
 ## land on its own size.
 static func read_diploma_section(rom: RomFile, layout: Dictionary) -> Dictionary:
@@ -7331,6 +7398,7 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 	written.merge(_import_pc_sheets(rom, layout), true)
 	written.merge(_import_intro_sheets(rom, layout), true)
 	written.merge(_import_gs_intro_sheets(rom, layout), true)
+	written.merge(_import_trade_anim_sheets(rom, layout), true)
 	written.merge(_import_unown_puzzle_sheets(rom, layout), true)
 	written.merge(_import_slots_sheets(rom, layout), true)
 	written.merge(_import_card_flip_sheets(rom, layout), true)
@@ -7434,7 +7502,6 @@ func _import_pics(
 	## Gold and Silver's table stops at NUM_POKEMON, so `_GetFrontpic` answers
 	## EGG with `ld hl, EggPic` and the pic is at an address like a back pic.
 	## Their picture is a different one.
-	##
 	## Crystal's run carries two animation frames that nothing reads:
 	## `GetEggFrontpic` is `GetMonFrontpic`, not `GetAnimatedFrontpic`, and
 	## `AnimateMon_CheckIfPokemon` refuses EGG before any script is read.

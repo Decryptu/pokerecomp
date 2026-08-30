@@ -4,7 +4,6 @@ extends RefCounted
 ## A decoded cartridge, read back out of the cache: the importer's counterpart
 ## and the only way the engine sees cartridge content. [RefCounted] and
 ## scene-free, so a battle or menu can run in a test.
-##
 ## JSON has one number type, so every cached number returns as a float and every
 ## comparison against an int quietly fails; coercion happens here, once. Index
 ## buffers and world sections load on first use, because reading them at open()
@@ -84,6 +83,7 @@ var _slots_text: Dictionary = {}
 var _card_flip: Dictionary = {}
 var _card_flip_text: Dictionary = {}
 var _gs_intro: Dictionary = {}
+var _trade_anim: Dictionary = {}
 var _menu_text: Dictionary = {}
 var _mart_text: Dictionary = {}
 var _name_rater_text: Dictionary = {}
@@ -187,6 +187,7 @@ const MANIFEST_DICTIONARIES: Dictionary = {
 	"card_flip": "_card_flip",
 	"card_flip_text": "_card_flip_text",
 	"gs_intro": "_gs_intro",
+	"trade_anim": "_trade_anim",
 	"menu_text": "_menu_text",
 	"mart_text": "_mart_text",
 	"name_rater_text": "_name_rater_text",
@@ -795,7 +796,6 @@ func world_encounter_count(method: StringName) -> int:
 
 ## One battle animation region: the cached bytes plus the bank and address the
 ## cartridge holds them at, so an in-bank pointer resolves by subtraction.
-##
 ## [param name] is `scripts`, `objects`, `framesets` or `oam_sets`. Answers
 ## [code]{ bank, address, count, data }[/code], empty when the section is absent
 ## or the name is not one of the four.
@@ -814,7 +814,6 @@ func battle_anim_region(name: StringName) -> Dictionary:
 
 ## Where one animation's script starts, as the cartridge addresses it, or -1
 ## when the index is outside `BattleAnimations`.
-##
 ## The table is the first bytes of the scripts region, so this reads it rather
 ## than a copy: index 0 is `BattleAnim_Dummy` and the rest are move numbers.
 func battle_anim_address(index: int) -> int:
@@ -1044,7 +1043,6 @@ func overworld_sprite_palette(palette_index: int, time_of_day: int) -> PackedCol
 
 
 ## One of the cartridge's four-colour background palette groups.
-##
 ## Decoded once and kept: there are forty-two groups, they never change, and the
 ## overworld asks for them again every time an animated tile redraws the atlas.
 func world_palette(number: int) -> PackedColorArray:
@@ -1065,7 +1063,6 @@ func world_palette(number: int) -> PackedColorArray:
 ## The three tilesets `home/map.asm` gates `LoadMapGroupRoof` on: "These tilesets
 ## support dynamic per-mapgroup roof tiles." Every other tileset owns tiles
 ## $0A..$12 itself, so writing a roof over them is the map's own art destroyed.
-##
 ## pokegold ships no `TilesetBattleTowerOutside` and its gate is the two Johto
 ## rows alone, which is also why every tileset past index 3 sits one lower
 ## there; the numbers below are each pin's own.
@@ -1138,7 +1135,6 @@ func roof_palette(map_group: int, night: bool) -> PackedColorArray:
 ## a map group's nine roof tiles are copied over `vTiles2 tile $0a`, so they
 ## replace whatever the tileset's own strip holds there. A group with no roof
 ## (`cp -1 / ret z`) is handed its strip back unchanged.
-##
 ## [param roof] is [method map_group_roof]'s answer, passed in rather than a map,
 ## because the overworld's animated strip goes through here on every pass that
 ## rotates a tile and the group is already resolved by then.
@@ -1185,7 +1181,6 @@ func world_animation_asset(name: String) -> PackedByteArray:
 
 
 ## Indexed 2bpp pixels for one tileset's overworld tiles, loaded on demand.
-##
 ## The strip is [constant RomLayout.TILESET_TILE_COUNT] tiles wide and is indexed
 ## by the metatile byte itself, so both graphics blocks are addressable; see that
 ## constant for what sits where.
@@ -1206,7 +1201,6 @@ func species(number: int) -> Dictionary:
 
 ## A species' level-up moves, in the cartridge's own order, as
 ## { level, move } with both coerced back to int.
-##
 ## The order is not sorted and must not be: it decides which four moves a fresh
 ## Pokémon ends up with, and one species' list genuinely is out of order. See
 ## [Gen2Learnset], which is what turns this into an answer.
@@ -1216,7 +1210,6 @@ func learnset(number: int) -> Array:
 
 ## How a species evolves, as { method, parameter, condition, target }. Empty for
 ## the ones that do not.
-##
 ## [code]method[/code] is one of the [code]RomLayout.EVOLVE_*[/code] constants and
 ## decides what [code]parameter[/code] means: a level, an item, a held item or a
 ## time of day. [code]condition[/code] is only ever set by
@@ -1228,7 +1221,6 @@ func evolutions(number: int) -> Array:
 ## The moves a species can inherit from its father, in `EggMovePointers`' own
 ## order. Empty for the 145 or 146 species that inherit none, and for a mod
 ## species that named none.
-##
 ## Move numbers alone: an egg move has no level, unlike a [method learnset] row.
 ## Which of them a hatched Pokémon actually knows is the breeding rule rather
 ## than this table: [method Gen2WorldDayCare.inherits_move] is that rule, and this
@@ -1242,7 +1234,6 @@ func egg_moves(number: int) -> Array[int]:
 
 ## A species' Pokedex entry as { category, height, weight, pages }, or an empty
 ## Dictionary if there is no such number.
-##
 ## [code]height[/code] and [code]weight[/code] are the cartridge's own numbers,
 ## not measurements: see [method RomImporter.read_dex_entry]. [code]pages[/code]
 ## is the two description pages, in order. It goes through [method species] so a
@@ -1420,7 +1411,6 @@ func mail_palette(index: int) -> PackedColorArray:
 
 ## Which `text_buffer` argument a `TX_RAM` address names, or -1 for an address
 ## this cartridge does not use as a string buffer.
-##
 ## `TextCommand_RAM` prints from a raw WRAM pointer while `getstring` and
 ## `verbosegiveitem` fill buffers by number, so a runner that only knows the
 ## numbers cannot answer a `text_ram`. StringBufferPointers is the way across.
@@ -1518,7 +1508,6 @@ func _matchup_row(key: int) -> Dictionary:
 ## How effective [param attacking] is against a defender of one or two types, in
 ## tenths, accumulated the way the cartridge accumulates it: start at ten,
 ## multiply by each matching type in turn, truncate after each.
-##
 ## The number a battle announces, not the one it deals damage with. The hardware
 ## computes them separately and they disagree: a move resisted by both halves of
 ## a dual type reports 2 rather than 2.5. Use [method type_matchup] per type for
@@ -1592,7 +1581,6 @@ func card_palette(slot: int) -> PackedColorArray:
 
 ## One of the eight `PAL_BATTLE_OB_*` object palettes an animation object is
 ## drawn with, whole.
-##
 ## Slots 0 and 1 are the two battlers' own and are not in the table:
 ## `_CGB_BattleScreenLayout` fills them from whoever is on the field, so a caller
 ## passes those two in as [param enemy] and [param player] pairs. Everything from
@@ -1804,7 +1792,6 @@ func pokecenter_pc_row(name: String, players: bool = false) -> String:
 
 ## `.WhichPC`: which rows each of the menu's per-state lists offers, as indices
 ## into the row order above. Empty on a cache imported without them.
-##
 ## JSON numbers come back as floats, so the rows are converted here rather than
 ## at every reader.
 func pokecenter_pc_lists(players: bool = false) -> Array:
@@ -1989,6 +1976,26 @@ func gs_intro_map(name: String) -> PackedByteArray:
 ## for the entries the scenes take out of `PredefPals`.
 func gs_intro_palette(name: String) -> PackedColorArray:
 	var stored: Variant = (_gs_intro.get("palettes", {}) as Dictionary).get(name, [])
+	var colors := PackedColorArray()
+	if not stored is Array:
+		return colors
+	for packed: Variant in stored as Array:
+		colors.append(Gen2Palette.from_packed(int(packed)))
+	return colors
+
+
+## All three cartridges ship the art, so a false here is an old cache.
+func has_trade_anim() -> bool:
+	return not (_trade_anim.get("maps", []) as Array).is_empty()
+
+
+## One of the trade animation's two tilemaps, in tile numbers.
+func trade_anim_tilemap(name: String) -> PackedByteArray:
+	return tile_indices("trade_anim_%s" % name)
+
+
+func trade_anim_palette(name: String) -> PackedColorArray:
+	var stored: Variant = (_trade_anim.get("palettes", {}) as Dictionary).get(name, [])
 	var colors := PackedColorArray()
 	if not stored is Array:
 		return colors
@@ -2719,7 +2726,6 @@ func tile_indices(name: String) -> PackedByteArray:
 
 
 ## Where a species sits in its atlas, and how much of that cell it fills.
-##
 ## Cells are the size of the largest pic of their kind so a slot can be found by
 ## arithmetic; a smaller pic sits in the top-left of its cell and the rest is
 ## blank. Returns { atlas, slot, width, height } in pixels, or an empty
@@ -2777,7 +2783,6 @@ func egg_palette(shiny: bool = false) -> PackedColorArray:
 
 ## A mod's own picture for a numbered row, in [method species_pic]'s shape but
 ## carrying the pixels instead of an atlas cell to crop.
-##
 ## The atlases hold exactly the cartridge's slots, so a defined species or
 ## trainer class has no cell to point at and supplies decoded indices on its own
 ## row instead. [method Gen2PicImage.atlas_cell] takes either, which is what lets
@@ -2820,7 +2825,6 @@ func species_pic_animation(number: int, unown_form: int = 0) -> Dictionary:
 ## `AnimateFrontpic`'s record for a species, or for one of Unown's letters when
 ## [param unown_form] is a letter rather than zero: { height, script, idle,
 ## frames }, the scripts and each frame as a [PackedByteArray].
-##
 ## Empty for Gold and Silver, which have no pic animation at all, and for an egg:
 ## `AnimateMon_CheckIfPokemon` refuses `EGG` before anything is read, so the
 ## cartridge's own egg tables are never reached through here.
@@ -3228,7 +3232,6 @@ func _coerce_service_value(value: Variant, blob: PackedByteArray) -> Variant:
 
 
 ## Resolves one cached byte run, whichever way the cache holds it.
-##
 ## A record carrying a [constant RomCache.PAYLOAD_KEY] is a span into the
 ## section's blob. A bare Array is read inline, which is what a hand-written test
 ## fixture holds. The two never have to be told apart by shape: the key says

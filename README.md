@@ -93,8 +93,7 @@ download the new file and replace the old one. Saves live elsewhere and survive.
 >   file you are told your friend is not ready, which is what one Game Boy has
 >   always been told.
 >
-> Missing: the trade animation, and some pixel-level divergences in the opening
-> movies and title screen.
+> Missing: some pixel-level divergences in the opening movies and title screen.
 
 ## Getting started
 

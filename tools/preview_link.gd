@@ -1,13 +1,13 @@
 extends SceneTree
 
 ## Captures the cable club's two screens against a real imported cache.
-##
 ##   Godot --headless --path . -s res://tools/preview_link.gd -- <game> <out.png> [screen]
-##
 ## [screen] is `trade`, `wait`, `confirm`, `record` or `all`, the default. The trade
 ## screen is the one page whose picture differs between the two cartridges for a
 ## reason rather than by accident, so the same call on the three caches is the whole
 ## comparison. Composed into an [Image], so this runs headless.
+## `anim` draws the movie behind the trade instead, six sampled frames;
+## `anim:<frame>[,<frame>...]` names its own.
 
 const COLUMNS: int = 2
 const SCREENS: Array[String] = ["wait", "trade", "confirm", "record"]
@@ -20,6 +20,10 @@ const PLAYER_PARTY: Array[String] = [
 const PARTNER_PARTY: Array[String] = ["BULBASAUR", "SQUIRTLE", "CHARMANDER"]
 const PLAYER_NAME: String = "GOLD"
 const PARTNER_NAME: String = "KRIS"
+
+const ANIM_PLAYER: int = 152
+const ANIM_PARTNER: int = 25
+const ANIM_FRAMES: Array[int] = [40, 260, 420, 700, 1500, 2100]
 
 
 func _initialize() -> void:
@@ -43,6 +47,9 @@ func _initialize() -> void:
 		return
 
 	var wanted: String = args[2] if args.size() > 2 else "all"
+	if wanted.begins_with("anim"):
+		_capture_animation(data, args[0], args[1], wanted)
+		return
 	var screens: Array[String] = SCREENS.duplicate() if wanted == "all" \
 		else ([wanted] as Array[String])
 	var columns: int = mini(COLUMNS, screens.size())
@@ -114,3 +121,60 @@ func _record() -> Dictionary:
 		record, {"name": "SILVER", "id": 7}, &"losses"
 	)
 	return record
+
+
+func _capture_animation(data: GameData, game: String, path: String, wanted: String) -> void:
+	var page: Gen2TradeAnimationPage = Gen2TradeAnimationPage.from_data(data)
+	var movie: Gen2TradeAnimation = Gen2TradeAnimation.create(
+		data, Gen2BattleAnimData.from_game_data(data), _anim_context(data)
+	)
+	if page == null or movie == null:
+		push_error("The %s cache carries no trade animation art." % game)
+		quit(1)
+		return
+	var frames: Array[int] = ANIM_FRAMES.duplicate()
+	if wanted.contains(":"):
+		frames.clear()
+		for value: String in wanted.split(":")[1].split(","):
+			frames.append(int(value))
+	frames.sort()
+	var columns: int = mini(3, frames.size())
+	@warning_ignore("integer_division")
+	var rows: int = (frames.size() + columns - 1) / columns
+	var sheet: Image = Image.create_empty(
+		columns * Gen2Screen.WIDTH, rows * Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8
+	)
+	for index: int in frames.size():
+		while not movie.finished() and movie.frame() < frames[index]:
+			movie.advance_frame()
+		var tile: Image = page.draw(movie)
+		@warning_ignore("integer_division")
+		sheet.blit_rect(tile, Rect2i(Vector2i.ZERO, tile.get_size()), Vector2i(
+			(index % columns) * Gen2Screen.WIDTH, (index / columns) * Gen2Screen.HEIGHT
+		))
+	if sheet.save_png(path) != OK:
+		push_error("Could not write %s" % path)
+		quit(1)
+		return
+	print("Wrote %s (%dx%d), frames %s." % [
+		path, sheet.get_width(), sheet.get_height(), str(frames),
+	])
+	quit(0)
+
+
+func _anim_context(data: GameData) -> Dictionary:
+	return {
+		"player": {
+			"species": ANIM_PLAYER,
+			"species_name": String(data.species(ANIM_PLAYER).get("name", "")),
+			"sender_name": PLAYER_NAME, "ot_name": PLAYER_NAME,
+			"ot_id": 12345, "caught_gender": 1,
+		},
+		"ot": {
+			"species": ANIM_PARTNER,
+			"species_name": String(data.species(ANIM_PARTNER).get("name", "")),
+			"sender_name": PARTNER_NAME, "ot_name": PARTNER_NAME,
+			"ot_id": 54321, "caught_gender": 2,
+		},
+		"link_mode": Gen2LinkSession.LINK_TRADECENTER,
+	}
