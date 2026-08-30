@@ -46,9 +46,7 @@ var party: Array = []
 ## Contest runs. The cartridge leaves them in `wPartyMon` and drops
 ## `wPartyCount` to 1; this project moves them here, so nothing that walks the
 ## party has to know about the mask. `ContestReturnMons` puts them back. Like
-## `mailbox` this defaults rather than versioning: an empty list is the truth
-## about a slot written before the mask existed and about every slot outside a
-## contest.
+## `mailbox` it defaults rather than versioning.
 var contest_stashed_party: Array = []
 var boxes: Array = []
 var world: Gen2WorldSnapshot = null
@@ -112,6 +110,10 @@ var mystery_gift: Dictionary = Gen2MysteryGift.default_section()
 ## dictionary is the truth about every other slot and about every slot written
 ## before the challenge existed. See [Gen2Nuzlocke].
 var nuzlocke: Dictionary = {}
+## How many times the run has been soft reset, which the cartridge has nowhere
+## to put. Written by [method Gen2SaveStore.bump_reset_count] alone, never
+## through this object, which holds the walk the reset throws away.
+var reset_count: int = 0
 
 
 func _init() -> void:
@@ -156,6 +158,7 @@ func to_dict() -> Dictionary:
 		"link_record": link_record.duplicate(true),
 		"mystery_gift": mystery_gift.duplicate(true),
 		"nuzlocke": nuzlocke.duplicate(true),
+		"reset_count": reset_count,
 		"box_names": box_names.duplicate(),
 		"mailbox": _mailbox_dicts(),
 		"world": world.to_dict() if world != null else {},
@@ -205,6 +208,7 @@ static func _read_header(out: Gen2SaveData, source: Dictionary) -> void:
 	out.link_record = Gen2LinkSession.normalize_record(source.get("link_record", {}))
 	out.mystery_gift = Gen2MysteryGift.normalize(source.get("mystery_gift", {}))
 	out.nuzlocke = Gen2Nuzlocke.normalize(source.get("nuzlocke", {}))
+	out.reset_count = maxi(int(source.get("reset_count", 0)), 0)
 
 
 static func _read_lists(out: Gen2SaveData, source: Dictionary) -> void:
@@ -289,8 +293,8 @@ static func _read_run(out: Gen2SaveData, source: Dictionary) -> void:
 ## slot label, 3 no player trainer ID (which migrates to zero rather than being
 ## invented, since a rolled ID would change an existing save's headbutt
 ## encounters), 4 neither gender nor a play timer, and 5 no per-mod namespace. The
-## `run` block joined version 6 after it shipped and is not a version of its own:
-## it defaults to nothing, which is the truth about a slot written before it.
+## The `run` block and the reset count joined version 6 after it shipped and are
+## not versions of their own: each defaults to nothing.
 static func migrate_dict(raw: Variant) -> Dictionary:
 	if not raw is Dictionary:
 		return {"ok": false, "message": "save data is not an object"}

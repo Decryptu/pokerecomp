@@ -27,17 +27,17 @@ var pending_new_game_label: String = ""
 ## read back out of the installation's settings once the intro is over.
 var pending_new_game_challenge: StringName = Gen2Rules.CHALLENGE_VANILLA
 
+## This port's title screen, where a console reset lands and CONTINUE is.
+const SAVE_SCENE: String = "res://game/save/save_screen.tscn"
+
 ## The autoload, cached after the first lookup.
 static var _instance: Gen2GameRuntime = null
 
 
-## The live runtime, or null outside a scene tree that has one.
-##
-## Named relative to the root rather than as `/root/GameRuntime`, and reached
-## through this rather than through the `GameRuntime` global, for the reason
-## [method Gen2InputRuntime.instance] gives: a script handed to `-s` compiles
-## before the autoloads exist, so a screen naming the global by identifier fails
-## to compile at all and takes every tool that loads it down with it.
+## The live runtime, or null outside a scene tree that has one. Named relative
+## to the root rather than as `/root/GameRuntime`, and reached through this
+## rather than the `GameRuntime` global, for the reason
+## [method Gen2InputRuntime.instance] gives.
 static func instance() -> Gen2GameRuntime:
 	if _instance == null:
 		var loop: SceneTree = Engine.get_main_loop() as SceneTree
@@ -109,6 +109,57 @@ func _ready() -> void:
 	apply_display_options(Gen2OptionsStore.current())
 	_attach_second_screen()
 	load_mods()
+	_watch_reset_chord.call_deferred()
+
+
+## Deferred because the input runtime readies behind this one. Refused outside a
+## player's launch, where a tier pressing four buttons would lose its own scene.
+func _watch_reset_chord() -> void:
+	var input: Gen2InputRuntime = Gen2InputRuntime.instance()
+	if input == null or not is_player_launch():
+		return
+	if not input.reset_chord_pressed.is_connected(_on_reset_chord):
+		input.reset_chord_pressed.connect(_on_reset_chord)
+
+
+## `home/init.asm` wires the four buttons to the console rather than to a
+## routine, so no screen may decline one. Owning the chord here rather than in
+## the overworld makes that true of the opening and of a battle too.
+func _on_reset_chord() -> void:
+	var loop: SceneTree = Engine.get_main_loop() as SceneTree
+	if loop == null or claims_soft_reset(loop.current_scene):
+		return
+	soft_reset()
+
+
+## Whether the screen that is up has taken the chord for itself. Most have
+## nothing to say about it and leave the reset here.
+static func claims_soft_reset(scene: Node) -> bool:
+	return scene != null and scene.has_method(&"claim_soft_reset") \
+		and bool(scene.call(&"claim_soft_reset"))
+
+
+## Nothing of the run is written: what is on disk is what the last SAVE put
+## there, which is the point of the shortcut. The count is the one exception.
+func soft_reset() -> void:
+	count_soft_reset()
+	var loop: SceneTree = Engine.get_main_loop() as SceneTree
+	if loop != null:
+		loop.change_scene_to_file.call_deferred(SAVE_SCENE)
+
+
+## The open slot's reset count, raised by one in the file and in the shared save
+## object, or -1 with no slot open.
+func count_soft_reset() -> int:
+	var save: Gen2SaveData = selected_save_or_null()
+	if save == null:
+		return -1
+	var counted: int = Gen2SaveStore.bump_reset_count(
+		save.game_id, save.rom_sha1, save.slot
+	)
+	if counted >= 0:
+		save.reset_count = counted
+	return counted
 
 
 ## Brings the lower display up for the whole process rather than for the world: a
@@ -178,12 +229,10 @@ static func apply_display_options(options: Gen2Options) -> void:
 
 
 ## Discovers and runs every mod under [constant Gen2ModHost.ROOT], returning the
-## ids that loaded. The directory is created when it is absent so a player has
-## somewhere to put one without being told the path.
-##
-## [param game_id] is the cartridge a mod's `games` declaration is checked
-## against. Empty at boot, because the launcher lists what is installed before a
-## cartridge is chosen and an unrestricted list is the honest answer there.
+## ids that loaded. The directory is created when absent, so a player has
+## somewhere to put one without being told the path. [param game_id] is what a
+## mod's `games` declaration is checked against, and is empty at boot: the
+## launcher lists what is installed before a cartridge is chosen.
 func load_mods(game_id: StringName = &"") -> Array:
 	if not DirAccess.dir_exists_absolute(Gen2ModHost.ROOT):
 		DirAccess.make_dir_recursive_absolute(Gen2ModHost.ROOT)
@@ -211,14 +260,10 @@ func load_mods(game_id: StringName = &"") -> Array:
 	return _loaded_mods
 
 
-## Whether this process runs the mods it finds.
-##
-## A headless run or one driving a `-s` tool script is a check, a test tier or a
-## screenshot, and a mod that swaps the renderer or shuffles a table changes what
-## those measure without saying so anywhere in their output. Such a run discovers
-## mods, so a list is still right, and loads none unless `--mods` is passed. A
-## player's own launch is neither, so what they switched on in the launcher is
-## what runs.
+## Whether this process runs the mods it finds. A headless or `-s` run is a
+## check, a tier or a screenshot, and a mod that swaps the renderer changes what
+## those measure without saying so: it discovers mods and loads none unless
+## `--mods` is passed. A player's launch runs what the launcher switched on.
 static func mods_are_allowed() -> bool:
 	var args: PackedStringArray = OS.get_cmdline_args()
 	if args.has("--mods") or OS.get_cmdline_user_args().has("--mods"):
@@ -253,12 +298,9 @@ func select_game(game_id: StringName) -> bool:
 
 
 ## Reloads the mods a cartridge is entitled to, when the cartridge changes.
-##
-## Every mod's entry script runs again against a fresh host, because a `games`
-## declaration decides what a mod may register at all and a registration made for
-## the previous cartridge would outlive it. Reached only from
-## [method select_game], which the launcher calls on Play and after an import,
-## not while the player walks along the shelf.
+## Every entry script runs again against a fresh host, because a `games`
+## declaration decides what a mod may register and a registration made for the
+## previous cartridge would outlive it. Only [method select_game] reaches it.
 func _retarget_mods(game_id: StringName) -> void:
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	if host.target_game() == game_id:

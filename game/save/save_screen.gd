@@ -102,10 +102,9 @@ func open_new_slot() -> bool:
 ## Starts a new game in the selected slot by running the cartridge's own intro.
 ## Nothing is written here: `NewGame` reaches `InitializeWorld` only after
 ## `PlayerProfileSetup` and `OakSpeech` have returned, so the slot is staged on
-## [GameRuntime] and [Gen2IntroScreen] writes it once the trainer has a name and a
-## gender, and abandoning the intro leaves no file behind. [param label] is the
-## save file's decorative name, optional; [param challenge] overrides the form's
-## own pick, which is what a test and a driver use.
+## [GameRuntime] and [Gen2IntroScreen] writes it once the trainer has a name and
+## a gender. [param label] is the file's decorative name and [param challenge]
+## overrides the form's own pick, which is what a driver uses.
 func create_new_game(label: String = "", challenge: StringName = &"") -> bool:
 	if _data == null:
 		_set_status(&"error", "New game unavailable.", "No imported cartridge cache is selected.")
@@ -368,6 +367,8 @@ func _refresh_details() -> void:
 	if save != null:
 		body.add_child(Gen2LauncherUI.muted(_palette, "Player: %s" % save.player_name))
 		body.add_child(Gen2LauncherUI.muted(_palette, "Mode: %s" % _challenge_title(save)))
+		## What a shiny hunt costs, and a number the cartridge could not keep.
+		body.add_child(Gen2LauncherUI.muted(_palette, "Resets: %d" % save.reset_count))
 		var over: bool = Gen2Nuzlocke.run_over(save.nuzlocke)
 		var save_actions: HFlowContainer = Gen2LauncherUI.actions()
 		body.add_child(save_actions)
@@ -918,3 +919,8 @@ func _set_status(kind: StringName, title: String, detail: String) -> void:
 		Gen2LauncherAudio.play(&"error")
 	if _shell != null:
 		_shell.toast().show_message(kind, title, detail)
+
+
+## A reset lands here: nothing is behind the chord left to reset.
+func claim_soft_reset() -> bool:
+	return true

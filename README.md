@@ -264,7 +264,13 @@ the game knows which one you used.
 | A | `Z`, Space | Bottom face button |
 | B | `X`, Escape | Right face button |
 | START | Enter | Start |
-| SELECT | Backspace, Shift | Back |
+| SELECT | Backspace, Tab | Back |
+
+A, B, START and SELECT together is the console's own reset, from anywhere: the
+opening, a menu, a battle or the map. It returns to the save screen without
+writing anything, so what you get back is your last SAVE, and the slot counts
+how many times you have done it. The count is on the save page under Mode, which
+is what a shiny hunt is measured in. The first reset asks before it happens.
 
 Keys bind by physical position, so WASD stays under the same four fingers on a
 layout that spells them differently; settings shows each binding as the key

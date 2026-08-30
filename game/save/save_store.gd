@@ -310,13 +310,11 @@ static func create_development_save(data: GameData, slot: int) -> Gen2SaveData:
 
 
 ## Creates the source-shaped Crystal new-game save. Crystal initializes an empty
-## party before the player reaches Elm's Lab, and the imported GIVEPOKE script
-## creates the first party member later. The optional fourth argument remains
-## accepted for callers from the earlier development launcher but is deliberately
-## ignored, so a new save cannot skip the story handoff. [param random] rolls
-## wPlayerID, the one roll in this project that is an identity rather than a game
-## event, so an absent generator randomizes here instead of being refused; pass
-## one when a run has to reproduce itself, since GetTreeScore reads the result.
+## party before Elm's Lab and the imported GIVEPOKE script creates the first
+## member later; the fourth argument is accepted and ignored, so a new save
+## cannot skip the story handoff. [param random] rolls wPlayerID, the one roll
+## here that is an identity rather than a game event, so an absent generator
+## randomizes rather than being refused; pass one for a reproducible run.
 static func create_new_game(
 	data: GameData, slot: int, player_name: String, _starter_species: int = -1,
 	random: RandomNumberGenerator = null
@@ -370,6 +368,47 @@ static func delete_slot(game_id: StringName, rom_sha1: String, slot: int) -> boo
 		if FileAccess.file_exists(path) and DirAccess.remove_absolute(path) == OK:
 			removed = true
 	return removed
+
+
+## Adds one to the soft-reset count in a slot file and returns the new total, or
+## -1 when neither copy can be read. Patched into the document rather than
+## written through a [Gen2SaveData], which would persist the discarded walk.
+static func bump_reset_count(game_id: StringName, rom_sha1: String, slot: int) -> int:
+	if not _valid_slot(slot):
+		return -1
+	var primary: String = path_for(game_id, rom_sha1, slot)
+	var backup: String = backup_path_for(game_id, rom_sha1, slot)
+	var document: Dictionary = _read_document(primary)
+	if not bool(document.get("ok", false)):
+		document = _read_document(backup)
+	if not bool(document.get("ok", false)):
+		return -1
+	var body: Dictionary = document["data"]
+	var counted: int = maxi(int(body.get("reset_count", 0)), 0) + 1
+	body["reset_count"] = counted
+	var text: String = _wrap(JSON.stringify(body, "\t"))
+	if not bool(_write_file(primary, text).get("ok", false)):
+		return -1
+	_write_file(backup, text)
+	return counted
+
+
+## One slot copy as the object it stores, unvalidated and unmigrated.
+static func _read_document(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path):
+		return {"ok": false}
+	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return {"ok": false}
+	var text: String = file.get_as_text()
+	file.close()
+	var container: Dictionary = _unwrap(text)
+	if not bool(container["ok"]):
+		return {"ok": false}
+	var parser := JSON.new()
+	if parser.parse(String(container["payload"])) != OK or parser.data is not Dictionary:
+		return {"ok": false}
+	return {"ok": true, "data": parser.data as Dictionary}
 
 
 static func _write_file(target: String, document: String) -> Dictionary:
