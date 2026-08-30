@@ -7149,7 +7149,7 @@ func _script_block_cell(source_cell: Vector2i) -> Vector2i:
 
 
 func _find_sight_request() -> Dictionary:
-	if current_map == null:
+	if current_map == null or state.trainer_sightings_off():
 		return {}
 	var bank: int = int(current_map.events.get("bank", 0))
 	var rows: Array = current_map.events.get("objects", [])

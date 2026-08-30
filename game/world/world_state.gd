@@ -209,6 +209,9 @@ var _pending_day_care_steps: int = 0
 ## `wStatusFlags`' `STATUSFLAGS_NO_WILD_ENCOUNTERS_F`, which `wildoff` sets and
 ## `wildon` clears around a scripted sequence.
 var _wild_encounters_off: bool = false
+## No cartridge byte: a staged run's own switch beside the one above. The
+## trainer still stands, still draws and still talks; only the sighting is gone.
+var _trainer_sightings_off: bool = false
 ## The Bug Catching Contest's own counters. `wParkBallsRemaining` and the clock
 ## reading `StartBugContestTimer` copies to `wBugContestStartTime`; whether a
 ## contest is running at all is `ENGINE_BUG_CONTEST_TIMER`, which is an engine
@@ -483,6 +486,7 @@ func to_dict() -> Dictionary:
 		"poison_step_count": _poison_step_count,
 		"happiness_step_count": _happiness_step_count,
 		"wild_encounters_off": _wild_encounters_off,
+		"trainer_sightings_off": _trainer_sightings_off,
 		"park_balls": _park_balls,
 		"bug_contest_started": _bug_contest_started.duplicate(),
 		"contest_mon": _contest_mon.duplicate(),
@@ -584,6 +588,9 @@ static func from_dict(raw: Variant) -> Gen2WorldState:
 	restored._poison_step_count = int(source.get("poison_step_count", 0)) & 0xFF
 	restored._happiness_step_count = int(source.get("happiness_step_count", 0)) & 1
 	restored.set_wild_encounters_off(bool(source.get("wild_encounters_off", false)))
+	restored.set_trainer_sightings_off(
+		bool(source.get("trainer_sightings_off", false))
+	)
 	restored.set_park_balls(int(source.get("park_balls", 0)))
 	restored._bug_contest_started = _clock_dict(_map(source, "bug_contest_started"))
 	var caught: Dictionary = _map(source, "contest_mon")
@@ -676,6 +683,7 @@ func restore_from_dict(raw: Variant) -> void:
 	_pending_step_happiness = 0
 	_pending_egg_steps = 0
 	_wild_encounters_off = restored._wild_encounters_off
+	_trainer_sightings_off = restored._trainer_sightings_off
 	_park_balls = restored._park_balls
 	_bug_contest_started = restored._bug_contest_started.duplicate()
 	_contest_mon = restored._contest_mon.duplicate()
@@ -1547,9 +1555,7 @@ func set_contest_second_party_species(species: int) -> void:
 	changed.emit()
 
 
-## Which of the ten contestants are not in this contest, as
-## `{index: true}`, read off the event flags
-## `SelectRandomBugContestContestants` set.
+## `SelectRandomBugContestContestants`' own flags, as `{index: true}`.
 func withdrawn_bug_contestants() -> Dictionary:
 	var out: Dictionary = {}
 	for index: int in Gen2WorldBugContest.NUM_CONTESTANTS:
@@ -1566,6 +1572,17 @@ func set_wild_encounters_off(value: bool) -> void:
 	if _wild_encounters_off == value:
 		return
 	_wild_encounters_off = value
+	changed.emit()
+
+
+func trainer_sightings_off() -> bool:
+	return _trainer_sightings_off
+
+
+func set_trainer_sightings_off(value: bool) -> void:
+	if _trainer_sightings_off == value:
+		return
+	_trainer_sightings_off = value
 	changed.emit()
 
 

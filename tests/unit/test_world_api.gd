@@ -2443,6 +2443,34 @@ func test_trainer_sight_queues_the_first_facing_trainer_in_range() -> void:
 	assert_true(world.dispatch_sight_events().is_empty())
 
 
+## The switch a staged run asks for, beside `wildoff`'s own: the trainer still
+## stands, still draws and still talks, and only the sighting is gone. Without
+## it a benchmark walking a route is stopped and every frame after it measures a
+## text box.
+func test_trainer_sightings_can_be_switched_off_without_touching_a_flag() -> void:
+	var world: Gen2WorldAPI = _world(Vector2i(5, 4))
+	var trainer: Gen2WorldObject = world.objects[0]
+	trainer.object_type = Gen2WorldObject.OBJECTTYPE_TRAINER
+	trainer.sight_range = 3
+	trainer.facing = Gen2WorldSprite.FACING_UP
+
+	world.state.set_trainer_sightings_off(true)
+	assert_true(world.dispatch_sight_events().is_empty())
+	assert_true(trainer.active, "the trainer is still standing there")
+	assert_false(
+		trainer.event_flag_active(world.state),
+		"and its own flag was not set: it has not been beaten"
+	)
+
+	## It rides the snapshot the way `wild_encounters_off` does, so a driver asks
+	## for it in the state it injects rather than at the door.
+	var restored: Gen2WorldState = Gen2WorldState.from_dict(world.state.to_dict())
+	assert_true(restored.trainer_sightings_off())
+
+	world.state.set_trainer_sightings_off(false)
+	assert_eq(world.dispatch_sight_events().size(), 1, "and the sighting comes back")
+
+
 func test_trainer_approach_path_uses_the_source_longer_axis_first() -> void:
 	assert_eq(
 		Gen2WorldAPI.trainer_approach_path(Vector2i(1, 1), Vector2i(4, 3)),
