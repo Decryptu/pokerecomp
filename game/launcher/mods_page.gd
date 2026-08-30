@@ -12,6 +12,8 @@ extends VBoxContainer
 
 ## Asks the launcher for its file picker: the page owns no OS dialog.
 signal install_requested
+## What [method hints] would answer has changed; the shell owns the bar.
+signal hints_changed
 
 ## A feed and a mod archive are both small. This stops a hostile or broken server
 ## streaming forever into memory.
@@ -198,7 +200,7 @@ func _relist() -> void:
 
 	if groups.is_empty() and failures.is_empty():
 		_list.add_child(_empty_state())
-		_list.add_child(Gen2LauncherUI.dock_safe_space())
+		_list.add_child(Gen2LauncherUI.bottom_safe_space())
 		return
 	for group: Dictionary in groups:
 		_list.add_child(Gen2LauncherUI.caption(_theme, String(group["label"])))
@@ -208,7 +210,7 @@ func _relist() -> void:
 		_list.add_child(Gen2LauncherUI.caption(_theme, "Not loaded"))
 		for failure: Dictionary in failures:
 			_list.add_child(_refusal(failure))
-	_list.add_child(Gen2LauncherUI.dock_safe_space())
+	_list.add_child(Gen2LauncherUI.bottom_safe_space())
 	_fetch_next_icon()
 
 
@@ -377,7 +379,7 @@ func open_mod(id: StringName) -> void:
 	if row.is_empty():
 		return
 	if _detail == null:
-		_detail = Gen2ModDetailPage.create(_theme)
+		_detail = Gen2ModDetailPage.create(_theme, _host)
 		_detail.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		_detail.closed.connect(show_list)
 		_detail.enabled_changed.connect(set_enabled)
@@ -402,6 +404,16 @@ func open_sources() -> void:
 	_show(_sources)
 
 
+## A sub-view answers cancel itself, so the shell's way back is not offered.
+func hints() -> Array:
+	if current_view() != &"list":
+		return [{"action": &"ui_cancel", "label": "Mods", "run": show_list}]
+	return [{
+		"action": &"ui_menu", "label": "Install from file",
+		"run": func() -> void: install_requested.emit(),
+	}]
+
+
 func show_list() -> void:
 	refresh()
 	_show(_list_view)
@@ -410,9 +422,9 @@ func show_list() -> void:
 func _show(view: Control) -> void:
 	for child: Node in _views.get_children():
 		(child as Control).visible = child == view
+	hints_changed.emit()
 
 
-## The view on screen, for a test that would otherwise have to guess.
 func current_view() -> StringName:
 	if _detail != null and _detail.visible:
 		return &"mod"

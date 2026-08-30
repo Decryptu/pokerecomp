@@ -620,13 +620,13 @@ func test_a_mod_registering_renderers_is_switched_on_from_its_own_page() -> void
 	add_child_autofree(detail)
 	detail.set_row(row)
 
-	var switch: Gen2LauncherToggle = detail.find_child(
+	var switch: Gen2LauncherUI.SettingRow = detail.find_child(
 		String(Gen2ModDetailPage.VIEW_SWITCH_NAME), true, false
 	)
 	assert_not_null(switch, "a mod that registered a renderer gets a view switch")
-	assert_false(switch.button_pressed, "and starts on the built-in view")
+	assert_eq(switch.index(), 0, "and starts on the built-in view")
 
-	switch.button_pressed = true
+	switch.pressed.emit()
 	assert_eq(host.selected_view(), VIEW_MOD_ID)
 	assert_eq(host.selected_world_renderer(), VIEW_MOD_ID)
 	assert_eq(host.selected_battle_renderer(), VIEW_MOD_ID)
@@ -635,11 +635,11 @@ func test_a_mod_registering_renderers_is_switched_on_from_its_own_page() -> void
 	)
 
 	## set_row rebuilt the card, so the switch that is up now is a new node.
-	var again: Gen2LauncherToggle = detail.find_child(
+	var again: Gen2LauncherUI.SettingRow = detail.find_child(
 		String(Gen2ModDetailPage.VIEW_SWITCH_NAME), true, false
 	)
-	assert_true(again.button_pressed, "the rebuilt row shows the view as on")
-	again.button_pressed = false
+	assert_eq(again.index(), 1, "the rebuilt row shows the view as on")
+	again.pressed.emit()
 	assert_eq(host.selected_view(), Gen2ModHost.BUILT_IN_RENDERER)
 
 	Gen2ModHost.reset()
@@ -732,26 +732,25 @@ func test_a_crashed_session_is_reported_at_the_next_launch() -> void:
 	)
 
 
-## A wide window is not a short one. The band above the carousel used to be
-## given up on a flat 600 px of stage height, which sent the button to the top
-## right corner of a 1920x600 window where the cartridge still had 130 px to
-## spare underneath it.
-func test_the_cartridge_options_button_only_leaves_the_carousel_when_the_stage_is_short() -> void:
-	var desktop: float = Gen2LauncherButton.DOCK_SIDE + Gen2LauncherUI.GAP_LG
-	var touch: float = Gen2LauncherUI.TOUCH_TARGET + Gen2LauncherUI.GAP_LG
-	for stage: Vector2 in [Vector2(1860, 539), Vector2(2340, 559), Vector2(1220, 739)]:
-		assert_false(
-			Gen2ShelfPage.corners_manage(stage, desktop),
-			"a %s stage has the room" % stage,
-		)
-	assert_false(Gen2ShelfPage.corners_manage(Vector2(812, 335), touch), "a phone held over")
-	# Tall is never cornered, whatever the band costs: the button is above the
-	# carousel on every portrait window and that is where a thumb expects it.
-	assert_false(Gen2ShelfPage.corners_manage(Vector2(390, 700), touch))
-	# Short enough that the band would come out of the cartridge rather than out
-	# of the space around it.
-	assert_true(Gen2ShelfPage.corners_manage(Vector2(1240, 240), touch))
-	assert_true(Gen2ShelfPage.corners_manage(Vector2(1240, 300), desktop))
+## Every action the shelf offers says which button performs it, and the set
+## changes with what is actually in the bay: an empty one cannot be played and
+## has nothing to open options on.
+func test_the_shelf_names_a_button_for_everything_it_offers() -> void:
+	var page: Gen2ShelfPage = Gen2ShelfPage.create(Gen2LauncherTheme.active(), false)
+	add_child_autofree(page)
+	page.set_slot_state(&"gold", RomCache.STATE_MISSING, "No cartridge yet")
+	assert_eq(_hint_labels(page.hints()), ["Add cartridge"], "an empty bay is filled, not played")
+	page.set_slot_state(&"gold", RomCache.STATE_USABLE, "Ready")
+	assert_eq(_hint_labels(page.hints()), ["Play", "Options"])
+	page.set_busy(true)
+	assert_eq(page.hints(), [], "and an import offers nothing at all")
+
+
+static func _hint_labels(entries: Array) -> Array:
+	var out: Array = []
+	for entry: Dictionary in entries:
+		out.append(String(entry["label"]))
+	return out
 
 
 func _open_launcher_keeping_the_marker() -> void:

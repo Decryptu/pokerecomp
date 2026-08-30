@@ -1,31 +1,27 @@
 class_name Gen2ShelfPage
 extends VBoxContainer
 
-## The launcher's home: the cartridge carousel and the one or two things you can
-## do with whatever is in the middle of it.
-##
-## The page reports what was clicked and displays what it is told. Every import,
-## refusal and launch belongs to the launcher.
+## The launcher's home: the cartridge carousel and the plate under it naming
+## whatever is in the middle. The page reports what was clicked and displays what
+## it is told; every import, refusal and launch belongs to the launcher, and what
+## can be done to a cartridge is said on the hint bar.
 
 signal insert_requested(game_id: StringName)
 signal play_requested(game_id: StringName)
 signal manage_requested(game_id: StringName)
 ## The shell paints its backdrop for the selected cartridge.
 signal selection_changed(game_id: StringName)
-
-## How much of the stage's height the band above the carousel may cost. The band
-## is reserved rather than found, so a short window pays for it out of the
-## cartridge. Past this share the cartridge has given up more than the button is
-## worth and the button goes to the corner instead. A flat height cannot answer
-## this: 600 px cornered the button on a 1920x600 window where the cartridge
-## still had 130 px to spare below it.
-const MANAGE_BAND_SHARE: float = 0.22
+## What [method hints] would answer has changed; the shell owns the bar.
+signal hints_changed
 
 var _theme: Gen2LauncherTheme = null
 var _stage: Gen2CartridgeStage = null
-var _manage: Gen2LauncherButton = null
+var _plate: Gen2LauncherCard = null
+var _name: Label = null
+var _state: Label = null
 var _details: Dictionary = {}
 var _compact: bool = false
+var _busy: bool = false
 
 
 static func create(palette: Gen2LauncherTheme, compact: bool) -> Gen2ShelfPage:
@@ -37,25 +33,38 @@ static func create(palette: Gen2LauncherTheme, compact: bool) -> Gen2ShelfPage:
 
 
 func _build() -> void:
-	add_theme_constant_override("separation", Gen2LauncherUI.GAP_LG)
+	add_theme_constant_override("separation", Gen2LauncherUI.GAP_MD)
 
 	_stage = Gen2CartridgeStage.create(_theme, RomRegistry.ORDER)
 	_stage.selection_changed.connect(_on_selection_changed)
 	_stage.insert_requested.connect(func(id: StringName) -> void: insert_requested.emit(id))
 	_stage.play_requested.connect(func(id: StringName) -> void: play_requested.emit(id))
-
-	_manage = Gen2LauncherButton.icon_only(
-		_theme, &"dots", Gen2LauncherButton.Variant.DOCK, _action_side()
-	)
-	_manage.tooltip_text = "Cartridge options"
-	_manage.pressed.connect(func() -> void: manage_requested.emit(_stage.selected_id()))
 	add_child(_stage)
-	_stage.add_child(_manage)
-	_stage.resized.connect(_place_manage)
-	_stage.layout_changed.connect(_place_manage)
+	add_child(_build_plate())
+	add_child(Gen2LauncherUI.bottom_safe_space())
+	_refresh_plate()
 
-	_refresh_action()
-	_place_manage.call_deferred()
+
+## The name of whatever is in the middle, and a line for its state. A chip
+## because it stands on the artwork behind the shelf, not on a page colour.
+func _build_plate() -> Control:
+	var centre := CenterContainer.new()
+	centre.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_plate = Gen2LauncherCard.chip(_theme, Gen2LauncherTheme.RADIUS_PILL, 14, 16)
+	_plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	centre.add_child(_plate)
+	var column: VBoxContainer = Gen2LauncherUI.column(0)
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_plate.add_child(column)
+	_name = Gen2LauncherUI.title(_theme, "", Gen2LauncherTheme.FONT_TITLE)
+	_name.add_theme_color_override("font_color", _theme.on_surface)
+	_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	column.add_child(_name)
+	_state = Gen2LauncherUI.tag(_theme, "")
+	_state.add_theme_color_override("font_color", _theme.with_alpha(_theme.on_surface, 0.7))
+	_state.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	column.add_child(_state)
+	return centre
 
 
 func stage() -> Gen2CartridgeStage:
@@ -66,6 +75,30 @@ func stage() -> Gen2CartridgeStage:
 ## page is about and what ui_left and ui_right then turn.
 func focus_target() -> Control:
 	return _stage
+
+
+func hints() -> Array:
+	if _busy:
+		return []
+	var id: StringName = _stage.selected_id()
+	var card: Gen2Cartridge = _stage.selected_cartridge()
+	var playable: bool = card != null and card.imported
+	var entries: Array = [{
+		"action": &"ui_accept",
+		"label": "Play" if playable else "Add cartridge",
+		"run": func() -> void:
+			if playable:
+				play_requested.emit(id)
+			else:
+				insert_requested.emit(id),
+	}]
+	if card != null and card.cache_state != RomCache.STATE_MISSING:
+		entries.append({
+			"action": &"ui_menu",
+			"label": "Options",
+			"run": func() -> void: manage_requested.emit(id),
+		})
+	return entries
 
 
 func cartridge(game_id: StringName) -> Gen2Cartridge:
@@ -79,11 +112,16 @@ func selected_id() -> StringName:
 func set_slot_state(game_id: StringName, state: StringName, detail: String) -> void:
 	_details[game_id] = detail
 	_stage.set_cache_state(game_id, state, detail)
-	_refresh_action()
+	_refresh_plate()
+	hints_changed.emit()
 
 
+## An import leaves nothing worth pressing, so the bar empties.
 func set_busy(busy: bool) -> void:
-	_manage.set_disabled_state(busy)
+	if busy == _busy:
+		return
+	_busy = busy
+	hints_changed.emit()
 
 
 ## Moves the selection onto [param game_id], used after an import so the freshly
@@ -98,75 +136,22 @@ func set_compact(compact: bool) -> void:
 	if compact == _compact:
 		return
 	_compact = compact
-	_manage.set_side(_action_side())
-	_sync_stage_inset()
-	_place_manage.call_deferred()
+	_refresh_plate()
 
 
 func _on_selection_changed(game_id: StringName) -> void:
-	_refresh_action()
-	_place_manage.call_deferred()
+	_refresh_plate()
 	selection_changed.emit(game_id)
+	hints_changed.emit()
 
 
-func _action_side() -> float:
-	return Gen2LauncherUI.TOUCH_TARGET if _compact else Gen2LauncherButton.DOCK_SIDE
-
-
-## Whether a stage of [param stage_size] sends the button to its corner rather
-## than reserving [param band] above the carousel for it. Separate from the
-## placement because the placement needs a real window behind it and this rule
-## is the whole of what went wrong.
-static func corners_manage(stage_size: Vector2, band: float) -> bool:
-	return stage_size.x > stage_size.y and band > stage_size.y * MANAGE_BAND_SHARE
-
-
-func _place_manage() -> void:
-	if _stage == null or _manage == null:
-		return
-	var card: Gen2Cartridge = _stage.selected_cartridge()
-	if card == null:
-		return
-	var band: float = _action_side() + Gen2LauncherUI.GAP_LG
-	var cornered: bool = corners_manage(_stage.size, band)
-	var side: float = Gen2LauncherUI.TOUCH_TARGET if cornered else _action_side()
-	if not is_equal_approx(_manage.size.x, side):
-		_manage.set_side(side)
-	var inset: float = 0.0 if cornered or not _manage.visible else side + Gen2LauncherUI.GAP_LG
-	if not is_equal_approx(_stage.top_inset, inset):
-		_stage.set_top_inset(inset)
-		return
-	if cornered:
-		# Clear of the edge, because a disc flush into the corner reads as
-		# something that slipped rather than something placed there.
-		_manage.position = Vector2(
-			_stage.size.x - side - Gen2LauncherUI.GAP_MD, float(Gen2LauncherUI.GAP_MD)
-		)
-		_stage.move_child(_manage, _stage.get_child_count() - 1)
-		return
-	var gap: float = Gen2LauncherUI.GAP_MD + card.size.x * 0.05
-	_manage.position = Vector2(
-		(_stage.size.x - _manage.size.x) * 0.5,
-		maxf(0.0, card.position.y - _manage.size.y - gap),
-	)
-	_stage.move_child(_manage, _stage.get_child_count() - 1)
-
-
-func _refresh_action() -> void:
+func _refresh_plate() -> void:
 	var id: StringName = _stage.selected_id()
-	var card: Gen2Cartridge = _stage.selected_cartridge()
-	if card == null:
+	if _name == null or id.is_empty():
 		return
-	var title: String = RomRegistry.title_for(id)
-	# Shown for a cache this build cannot read too, which it used to hide over.
-	var known: bool = card.cache_state != RomCache.STATE_MISSING
-	if known:
-		_manage.tooltip_text = "%s options. %s" % [title, _details.get(id, "Ready")]
-	_manage.visible = known
-	_sync_stage_inset()
-
-
-func _sync_stage_inset() -> void:
-	if _stage == null or _manage == null:
-		return
-	_place_manage()
+	_name.text = RomRegistry.title_for(id)
+	_name.add_theme_font_size_override(
+		"font_size", Gen2LauncherTheme.FONT_TITLE if _compact else Gen2LauncherTheme.FONT_DISPLAY
+	)
+	var detail: String = String(_details.get(id, ""))
+	_state.text = detail if not detail.is_empty() else "Ready to play"

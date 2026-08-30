@@ -7,7 +7,7 @@ extends Control
 ## rather than against its own content, because a [CenterContainer] grants a card
 ## its minimum size whatever that is and a sheet with more rows than the window is
 ## tall hung its actions off the bottom edge. The body scrolls and the card is
-## capped, so the title, the actions and the close button are always on screen.
+## capped, so the title, the actions and the way out are always on screen.
 
 signal closed
 
@@ -19,6 +19,7 @@ const MARGIN: float = 24.0
 var _theme: Gen2LauncherTheme = null
 var _body: VBoxContainer = null
 var _actions: HBoxContainer = null
+var _dismiss: Gen2LauncherHint = null
 var _card: Gen2LauncherCard = null
 var _scroll: Gen2LauncherScroll = null
 ## The card's own chrome: the title row, the actions row and the padding, which
@@ -59,17 +60,9 @@ func _build(title: String) -> void:
 	_column = Gen2LauncherUI.column(Gen2LauncherUI.GAP_LG)
 	_card.add_child(_column)
 
-	var head: HBoxContainer = Gen2LauncherUI.row(Gen2LauncherUI.GAP_MD)
-	_column.add_child(head)
 	var heading: Label = Gen2LauncherUI.title(_theme, title)
-	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head.add_child(heading)
-	var dismiss: Gen2LauncherButton = Gen2LauncherButton.icon_only(
-		_theme, &"close", Gen2LauncherButton.Variant.QUIET, 36.0
-	)
-	dismiss.tooltip_text = "Close"
-	dismiss.pressed.connect(close)
-	head.add_child(dismiss)
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_column.add_child(heading)
 
 	_scroll = Gen2LauncherScroll.create()
 	_column.add_child(_scroll)
@@ -80,6 +73,13 @@ func _build(title: String) -> void:
 	_actions = Gen2LauncherUI.row(Gen2LauncherUI.GAP_SM)
 	_actions.alignment = BoxContainer.ALIGNMENT_END
 	_column.add_child(_actions)
+
+	# A cross in the corner never says with what, which is the pad's question.
+	_dismiss = Gen2LauncherHint.create(_theme, &"ui_cancel", "Close")
+	_dismiss.set_focusable(true)
+	_dismiss.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_dismiss.pressed.connect(close)
+	_column.add_child(_dismiss)
 
 	## The window, and the rows themselves: a sheet is filled after it is built,
 	## so the fit is redone when the body grows rather than only when it opens.
@@ -154,5 +154,6 @@ func close() -> void:
 ## button inside it would have gone nowhere.
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
-		accept_event()
+		# Handled on the viewport: the hint bar listens for the same press.
+		get_viewport().set_input_as_handled()
 		close()

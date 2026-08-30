@@ -260,16 +260,15 @@ func test_the_bug_rules_are_named_and_each_one_can_be_moved_by_hand() -> void:
 		if child is Gen2LauncherSheet:
 			sheet = child
 	assert_not_null(sheet)
-	var switches: Array[Gen2LauncherToggle] = []
+	var switches: Array[Gen2LauncherUI.SettingRow] = []
 	for entry: Node in sheet.body().get_children():
 		for control: Node in entry.get_children():
-			for half: Node in control.get_children():
-				if half is Gen2LauncherToggle:
-					switches.append(half)
+			if control is Gen2LauncherUI.SettingRow:
+				switches.append(control)
 	assert_eq(switches.size(), Gen2Rules.FLAGS.size(), "one switch per bug")
 
 	var first: Dictionary = (opened["flags"] as Array)[0]
-	switches[0].button_pressed = not bool(first["on"])
+	switches[0].pressed.emit()
 	var moved: Dictionary = page.rules_snapshot()
 	assert_eq(StringName(moved["mode"]), Gen2Rules.MODE_CUSTOM)
 	assert_ne(bool((moved["flags"] as Array)[0]["on"]), bool(first["on"]))

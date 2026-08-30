@@ -76,7 +76,7 @@ func refresh() -> void:
 	# Never empty: the project's own index is followed by every build.
 	for source: Dictionary in Gen2ModIndex.followed():
 		_list.add_child(_card(source))
-	_list.add_child(Gen2LauncherUI.dock_safe_space())
+	_list.add_child(Gen2LauncherUI.bottom_safe_space())
 
 
 func _card(source: Dictionary) -> Control:

@@ -260,29 +260,22 @@ func _scripts_under(root: String) -> Array[String]:
 
 ## A launcher page scrolls vertically only, so nothing inside one may measure
 ## wider than the window it is given: a portrait phone is the ordinary case.
-func test_a_settings_row_stacks_rather_than_running_off_a_narrow_page() -> void:
-	var choices: Array = ["Windowed", "Fullscreen", "Borderless"]
-	var control: Control = Gen2LauncherUI.segmented(_light, choices, 0, func(_i: int) -> void: pass)
-	var row: Control = Gen2LauncherUI.field(_light, "Window", control)
+func test_a_settings_row_fits_a_narrow_page_and_never_widens_it() -> void:
+	var row: Gen2LauncherUI.SettingRow = Gen2LauncherUI.choice(
+		_light, &"display", "Window", ["Windowed", "Fullscreen", "Borderless"], 0,
+		func(_index: int) -> void: pass
+	)
 	var host := Control.new()
 	add_child_autofree(host)
 	host.add_child(row)
-	var label: Control = row.get_child(0)
-
-	# The row never asks for more than the control itself, so no page is widened
-	# by one and then measured as fitting.
-	var wanted: float = Gen2LauncherUI.preferred_width(control)
-	assert_lt(row.get_combined_minimum_size().x, wanted)
-
-	row.size = Vector2(wanted + label.get_combined_minimum_size().x + 100.0, 0.0)
+	row.size = Vector2(320.0, 0.0)
 	await wait_process_frames(2)
-	assert_gt(control.position.x, label.size.x, "side by side while both fit")
-
-	row.size = Vector2(wanted + 10.0, 0.0)
-	await wait_process_frames(2)
-	assert_eq(control.position.x, 0.0, "stacked once they do not")
-	assert_gt(control.position.y, label.size.y, "the control under the label")
-	assert_eq(control.size.x, row.size.x, "the control takes the whole width once stacked")
+	assert_lte(row.get_combined_minimum_size().x, 320.0, "a phone is not widened by a row")
+	assert_gte(
+		row.get_combined_minimum_size().y,
+		Gen2LauncherUI.TOUCH_TARGET,
+		"and every row is at least a finger tall",
+	)
 
 
 func test_every_glyph_the_launcher_asks_for_is_one_the_set_draws() -> void:
@@ -378,45 +371,43 @@ func test_a_card_pads_its_child_and_carries_no_shadow_unless_it_floats() -> void
 	floating.free()
 
 
-func test_a_segmented_control_moves_its_choice_and_reports_the_index() -> void:
+## The one control every setting is drawn as. Left and right move the value in
+## place, which is what makes a page of them one focus stop per setting rather
+## than one per answer.
+func test_a_setting_row_steps_its_value_and_reports_the_index() -> void:
 	var chosen: Array[int] = []
-	var control: Control = Gen2LauncherUI.segmented(
-		_light, ["One", "Two", "Three"], 0, func(index: int) -> void: chosen.append(index)
+	var row: Gen2LauncherUI.SettingRow = Gen2LauncherUI.choice(
+		_light, &"display", "Window", ["One", "Two", "Three"], 0,
+		func(index: int) -> void: chosen.append(index)
 	)
-	add_child_autofree(control)
+	add_child_autofree(row)
 	await get_tree().process_frame
 
-	var buttons: Array[Gen2LauncherButton] = []
-	for child: Node in (control.get_meta(&"wrapping_row") as Control).get_children():
-		buttons.append(child)
-	assert_true(buttons[0].is_active())
-	buttons[2].pressed.emit()
-	assert_eq(chosen, [2] as Array[int])
-	assert_true(buttons[2].is_active())
-	assert_false(buttons[0].is_active(), "only one segment can be chosen")
+	assert_eq(row.value_text(), "One")
+	row.step(1)
+	assert_eq(chosen, [1] as Array[int])
+	assert_eq(row.value_text(), "Two")
+	row.step(-1)
+	row.step(-1)
+	assert_eq(row.index(), 0, "and it clamps rather than wrapping round")
+	assert_eq(chosen, [1, 0] as Array[int], "a step that changes nothing reports nothing")
 
 
-## A page body gives its children the whole column, and a segmented track filled
-## it while its three choices sat bunched at the left. The track is the choices,
-## so it is as wide as they are while they fit on one line.
-func test_a_segmented_track_is_as_wide_as_its_choices_and_no_wider() -> void:
-	var control: Control = Gen2LauncherUI.segmented(
-		_light, ["Vanilla", "Hard", "Nuzlocke"], 0, func(_index: int) -> void: pass
+## A two-answer setting wears a switch rather than a chevron, and the switch is
+## drawn by the row rather than being a second thing to focus inside it.
+func test_a_switch_row_flips_on_a_press_and_carries_no_focus_of_its_own() -> void:
+	var flips: Array[bool] = []
+	var row: Gen2LauncherUI.SettingRow = Gen2LauncherUI.switch(
+		_light, &"sparkle", "Battle scene", false, func(on: bool) -> void: flips.append(on)
 	)
-	var body := VBoxContainer.new()
-	add_child_autofree(body)
-	body.add_child(control)
-	body.size = Vector2(900.0, 200.0)
-	await wait_process_frames(2)
+	add_child_autofree(row)
+	await get_tree().process_frame
 
-	var wanted: float = Gen2LauncherUI.preferred_width(control)
-	assert_gt(control.size.x, wanted - 1.0, "the row itself is given the column")
-	assert_almost_eq(control.get_child(0).size.x, wanted, 1.0)
-
-	# Narrower than one line, the track takes what there is and the flow wraps.
-	body.size = Vector2(wanted / 2.0, 200.0)
-	await wait_process_frames(2)
-	assert_almost_eq(control.get_child(0).size.x, wanted / 2.0, 1.0)
+	assert_eq(row.switch_node().focus_mode, Control.FOCUS_NONE)
+	assert_false(row.switch_node().button_pressed)
+	row.pressed.emit()
+	assert_eq(flips, [true] as Array[bool])
+	assert_true(row.switch_node().button_pressed, "the switch follows the row")
 
 
 func test_the_stage_holds_one_cartridge_per_supported_game() -> void:
@@ -672,8 +663,6 @@ func test_landscape_keeps_at_least_two_fifths_of_the_stage_for_the_cartridge() -
 	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, true)
 	add_child_autofree(page)
 	page.set_slot_state(&"gold", RomCache.STATE_USABLE, "Ready")
-	# The last is short enough that the dock alone asks for more than half the
-	# stage, which is what [constant Gen2CartridgeStage.FURNITURE_MAX_SHARE] caps.
 	var sizes: Array[Vector2] = [
 		Vector2(568, 240), Vector2(780, 300), Vector2(900, 360), Vector2(480, 150)
 	]
@@ -683,12 +672,11 @@ func test_landscape_keeps_at_least_two_fifths_of_the_stage_for_the_cartridge() -
 		var stage: Gen2CartridgeStage = page.stage()
 		var card: Gen2Cartridge = stage.selected_cartridge()
 		assert_gte(card.size.y, stage.size.y * 0.4)
-		assert_false(card.get_rect().intersects(page._manage.get_rect()))
-		# Wherever it lands, it lands on the stage: a disc half over the edge
-		# is a disc half missing.
+		# The plate names what the carousel is showing, so it is under the row
+		# rather than over it at every shape the page is given.
 		assert_true(
-			Rect2(Vector2.ZERO, stage.size).encloses(page._manage.get_rect()),
-			"the button is on the stage at %s" % dimensions,
+			Rect2(Vector2.ZERO, stage.size).encloses(card.get_rect()),
+			"the cartridge is on the stage at %s" % dimensions,
 		)
 
 
@@ -769,7 +757,7 @@ func test_a_cartridge_needing_its_file_again_does_not_look_unimported() -> void:
 
 	page.set_slot_state(RomRegistry.GOLD, RomCache.STATE_MISSING, "")
 	assert_false(card._bay_note.visible, "an empty bay has nothing to add")
-	assert_false(page._manage.visible, "and nothing to manage")
+	assert_eq(page.hints().size(), 1, "and nothing to manage")
 	var empty_glyph: StringName = card._bay_icon.glyph
 
 	page.set_slot_state(RomRegistry.GOLD, RomCache.STATE_STALE, "Update needed")
@@ -777,7 +765,7 @@ func test_a_cartridge_needing_its_file_again_does_not_look_unimported() -> void:
 	assert_true(card._bay_note.visible)
 	assert_eq(card._bay_note.text, "Update needed")
 	assert_ne(card._bay_icon.glyph, empty_glyph, "and it is not the same invitation")
-	assert_true(page._manage.visible, "its folder and its delete are reachable")
+	assert_eq(page.hints().size(), 2, "its folder and its delete are reachable")
 
 	page.set_slot_state(RomRegistry.GOLD, RomCache.STATE_USABLE, "Ready. 2 saves")
 	assert_true(card.imported)
@@ -881,8 +869,8 @@ func test_the_about_page_offers_both_ways_to_report_a_bug() -> void:
 	assert_has(opened, Gen2AppVersion.REPOSITORY, "and the project itself on the page")
 
 
-func test_a_narrow_shell_gives_its_dock_discs_a_finger_to_hit() -> void:
-	# The dock is the one row that has to be pressed while walking, so what it
+func test_a_narrow_shell_drops_its_tab_names_and_keeps_a_finger_to_hit() -> void:
+	# The strip is the one row that has to be pressed while walking, so what it
 	# gets from a phone's width is asserted rather than the width itself.
 	var shell: Gen2LauncherShell = Gen2LauncherShell.create(_light)
 	add_child_autofree(shell)
@@ -894,25 +882,32 @@ func test_a_narrow_shell_gives_its_dock_discs_a_finger_to_hit() -> void:
 	shell.size = Vector2(390, 844)
 	await get_tree().process_frame
 	assert_true(shell.compact, "a phone held upright is not a desktop")
-	for button: Gen2LauncherButton in _buttons_under(shell):
+	for button: Gen2LauncherButton in shell.tabs():
 		assert_gte(
-			button.custom_minimum_size.x,
+			button.custom_minimum_size.y,
 			Gen2LauncherUI.TOUCH_TARGET,
-			"every disc is at least a finger wide",
+			"every tab is at least a finger tall",
 		)
-		assert_lte(button.custom_minimum_size.x, Gen2LauncherShell.PHONE_PORTRAIT_DOCK_SIDE)
+		assert_eq(button.text, "", "and carries no words it has no room for")
 	shell.size = Vector2(844, 390)
 	await get_tree().process_frame
 	assert_true(shell.compact, "a phone held sideways is still a phone")
-	for button: Gen2LauncherButton in _buttons_under(shell):
-		assert_between(
-			button.custom_minimum_size.x,
-			Gen2LauncherUI.TOUCH_TARGET,
-			Gen2LauncherShell.PHONE_LANDSCAPE_DOCK_SIDE,
-		)
+	assert_false(
+		Gen2LauncherShell.names_tabs(Vector2(844, 390), 4),
+		"a short landscape row has the width and not the height",
+	)
 	shell.size = Vector2(1280, 800)
 	await get_tree().process_frame
 	assert_false(shell.compact, "and a desktop is not a phone")
+	for button: Gen2LauncherButton in shell.tabs():
+		assert_ne(button.text, "", "which names every tab")
+
+
+## A strip with one entry is not a strip, whatever the window measures: the save
+## screen and the party screen each add exactly one page.
+func test_one_page_is_never_drawn_as_a_row_of_tabs() -> void:
+	assert_false(Gen2LauncherShell.names_tabs(Vector2(1920, 1080), 1))
+	assert_true(Gen2LauncherShell.names_tabs(Vector2(1920, 1080), 4))
 
 
 func test_the_screen_furniture_is_taken_out_of_the_room_a_page_is_given() -> void:
@@ -922,10 +917,9 @@ func test_the_screen_furniture_is_taken_out_of_the_room_a_page_is_given() -> voi
 	var window: Window = get_tree().root
 	assert_eq(Gen2LauncherUI.safe_area_insets(window)["top"], 59.0)
 	assert_eq(
-		Gen2LauncherUI.dock_reserve(window),
-		Gen2LauncherShell.dock_side_for(window.get_visible_rect().size, 4, Gen2LauncherUI.preview_insets)
-			+ Gen2LauncherUI.DOCK_VERTICAL_PADDING + 34.0,
-		"a page's tail clears the dock and the home indicator together",
+		Gen2LauncherUI.bottom_reserve(window),
+		Gen2LauncherShell.bottom_band(window.get_visible_rect().size) + 34.0,
+		"a page's tail clears the hint bar and the home indicator together",
 	)
 	Gen2LauncherUI.preview_insets = {}
 	assert_eq(Gen2LauncherUI.safe_area_insets(window)["bottom"], 0.0, "and a desktop has neither")

@@ -2,22 +2,20 @@ class_name Gen2LauncherUI
 extends RefCounted
 
 ## Small shared pieces every launcher page builds from: text, rows, and the
-## composite controls (segmented choice, number and slider) that replace Godot's
-## own.
+## setting row every option in this project is drawn as.
 
 const GAP_XS: int = 4
 const GAP_SM: int = 8
 const GAP_MD: int = 14
 const GAP_LG: int = 22
-## The side a mod's icon is drawn at: a whole multiple of its native 32, so the
-## cartridge's own pixels stay square.
+## A whole multiple of a mod icon's native 32, so its pixels stay square.
 const MOD_ICON_SIDE: float = 64.0
-## Room around a dock disc before the page may put its final control underneath.
-const DOCK_VERTICAL_PADDING: float = 28.0
+## Room around the hint bar before the page may put its final control underneath.
+const BAR_VERTICAL_PADDING: float = 24.0
 
 ## The smallest square a finger can be asked to hit, in launcher units. Apple
 ## and Google both name 44 and 48 device-independent points; the larger is used
-## because a dock disc is aimed at while walking.
+## because a chip on the bottom bar is aimed at while walking.
 const TOUCH_TARGET: float = 48.0
 
 
@@ -175,17 +173,17 @@ static var preview_density: float = 0.0
 static var preview_insets: Dictionary = {}
 
 
-## How much a scrolling page keeps clear along its bottom edge: the dock's own
-## room plus whatever the screen takes under it for a home indicator.
-static func dock_reserve(window: Window) -> float:
+## How much a scrolling page keeps clear along its bottom edge: the hint bar's
+## own room plus whatever the screen takes under it for a home indicator.
+static func bottom_reserve(window: Window) -> float:
 	var viewport_size: Vector2 = window.get_visible_rect().size if window != null else Vector2.ZERO
-	return Gen2LauncherShell.dock_side_for(viewport_size, 4, safe_area_insets(window)) \
-		+ dock_padding(viewport_size) + float(safe_area_insets(window)["bottom"])
+	return Gen2LauncherShell.bottom_band(viewport_size) \
+		+ float(safe_area_insets(window)["bottom"])
 
 
-static func dock_padding(viewport_size: Vector2) -> float:
+static func bar_padding(viewport_size: Vector2) -> float:
 	return 12.0 if viewport_size.x > viewport_size.y and viewport_size.y < 600.0 \
-		else DOCK_VERTICAL_PADDING
+		else BAR_VERTICAL_PADDING
 
 
 static func title(theme: Gen2LauncherTheme, text: String, size: int = Gen2LauncherTheme.FONT_TITLE) -> Label:
@@ -263,227 +261,249 @@ static func spacer() -> Control:
 	return gap
 
 
-static func dock_safe_space() -> Control:
+static func bottom_safe_space() -> Control:
 	var gap := Control.new()
-	gap.custom_minimum_size.y = Gen2LauncherButton.DOCK_SIDE + DOCK_VERTICAL_PADDING
+	gap.custom_minimum_size.y = TOUCH_TARGET + BAR_VERTICAL_PADDING
 	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# The home indicator's height is only knowable once there is a window to ask.
 	gap.tree_entered.connect(
-		func() -> void: gap.custom_minimum_size.y = dock_reserve(gap.get_window())
+		func() -> void: gap.custom_minimum_size.y = bottom_reserve(gap.get_window())
 	)
 	return gap
 
 
-## How wide a control wants to be, which is its minimum unless it holds a row
-## that wraps: such a row measures as one column, so a [FieldRow] would squeeze a
-## whole track into a column even where it fits unwrapped. A control that wraps
-## points at the row with `wrapping_row`, and this adds back what wrapping hid.
-## Measured on the call rather than stored, because a minimum is not settled
-## until the control is in a tree with a font.
-static func preferred_width(control: Control) -> float:
-	var minimum: float = control.get_combined_minimum_size().x
-	if not control.has_meta(&"wrapping_row"):
-		return minimum
-	var flow := control.get_meta(&"wrapping_row") as HFlowContainer
-	if flow == null:
-		return minimum
-	var wanted: float = 0.0
-	var widest: float = 0.0
-	var counted: int = 0
-	for child: Node in flow.get_children():
-		var item := child as Control
-		if item == null or not item.visible:
-			continue
-		var item_wide: float = item.get_combined_minimum_size().x
-		wanted += item_wide
-		widest = maxf(widest, item_wide)
-		counted += 1
-	if counted == 0:
-		return minimum
-	wanted += float((counted - 1) * flow.get_theme_constant(&"h_separation", &"HFlowContainer"))
-	return minimum - widest + wanted
-
-
-## Label on the left, control on the right, which is every settings line.
-static func field(theme: Gen2LauncherTheme, text: String, control: Control) -> Control:
-	var line := FieldRow.new()
-	var label: Label = body(theme, text)
-	label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	line.add_child(label)
-	control.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+static func stacked(theme: Gen2LauncherTheme, text: String, control: Control) -> Control:
+	var line: VBoxContainer = column(GAP_XS)
+	line.add_child(tag(theme, text))
 	line.add_child(control)
 	return line
 
 
-## The two halves of a [method field], side by side while they both fit and
-## stacked when they do not. Every launcher page scrolls vertically only, so a row
-## wider than the window is cut off rather than reachable, and a settings row is
-## exactly the shape that outgrows a portrait phone. A [Container] is not usable
-## here: from 4.8.dev4 the engine answers a container's minimum size itself and
-## never calls a script's [method Control._get_minimum_size], and asking for less
-## than both halves is the whole point of this row.
-class FieldRow extends Control:
-	var _pending: bool = false
+## One setting as a full-width row: a glyph, the name over its value, and the
+## chevron that opens the choices. It replaced a label beside a segmented track,
+## which was a focus stop per choice and wider than a phone held upright.
+static func choice(
+	theme: Gen2LauncherTheme, glyph: StringName, label: String, choices: Array,
+	selected: int, handler: Callable, host: Control = null
+) -> SettingRow:
+	return SettingRow.make(theme, glyph, label, choices, selected, handler, host)
 
-	func _init() -> void:
-		resized.connect(_queue_layout)
 
-	func _ready() -> void:
-		for half: Control in _halves():
-			half.minimum_size_changed.connect(_queue_layout)
-			half.visibility_changed.connect(_queue_layout)
-		_queue_layout()
+static func switch(
+	theme: Gen2LauncherTheme, glyph: StringName, label: String, on: bool, handler: Callable
+) -> SettingRow:
+	var made: SettingRow = SettingRow.make(
+		theme, glyph, label, ["Off", "On"], 1 if on else 0,
+		func(index: int) -> void: handler.call(index == 1)
+	)
+	made.cycles = true
+	made.show_switch()
+	return made
 
-	## What [method Container.queue_sort] does: at most one layout per frame,
-	## so a half whose minimum size answers the width it was just given cannot
-	## drive this in circles.
-	func _queue_layout() -> void:
-		update_minimum_size()
-		if _pending:
+
+## A row whose value is a number with a bar under it.
+static func level(
+	theme: Gen2LauncherTheme, glyph: StringName, label: String, value: int,
+	minimum: int, maximum: int, handler: Callable, format: Callable = Callable()
+) -> SettingRow:
+	var choices: Array = []
+	var spell: Callable = format if format.is_valid() \
+		else func(amount: int) -> String: return str(amount)
+	for step: int in range(minimum, maximum + 1):
+		choices.append(spell.call(step))
+	var made: SettingRow = SettingRow.make(
+		theme, glyph, label, choices, value - minimum,
+		func(index: int) -> void: handler.call(index + minimum)
+	)
+	made.show_bar()
+	return made
+
+
+## See [method choice]. A [Button] so the ring, the sound and the keyboard come
+## for nothing; its contents are a row anchored over it, since a [Button] lays
+## out one icon and one label and this has four things.
+class SettingRow extends Button:
+	## Whether a press cycles the value rather than opening the list.
+	var cycles: bool = false
+
+	var _theme: Gen2LauncherTheme = null
+	var _choices: Array = []
+	var _at: int = 0
+	var _handler: Callable = Callable()
+	var _host: Control = null
+	var _row: HBoxContainer = null
+	var _name: Label = null
+	var _value: Label = null
+	var _bar: ProgressBar = null
+	var _chevron: Gen2LauncherIcon = null
+	var _switch: Gen2LauncherToggle = null
+
+	static func make(
+		palette: Gen2LauncherTheme, glyph: StringName, label: String, choices: Array,
+		selected: int, handler: Callable, host: Control = null
+	) -> SettingRow:
+		var made := SettingRow.new()
+		made._theme = palette
+		made._choices = choices
+		made._at = clampi(selected, 0, maxi(choices.size() - 1, 0))
+		made._handler = handler
+		made._host = host
+		made._build(glyph, label)
+		return made
+
+	func _build(glyph: StringName, label: String) -> void:
+		focus_mode = Control.FOCUS_ALL
+		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		_row = Gen2LauncherUI.row(GAP_MD)
+		_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		add_child(_row)
+		if not glyph.is_empty():
+			var mark: Gen2LauncherIcon = Gen2LauncherIcon.create(glyph, 22.0, _theme.muted)
+			mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			_row.add_child(mark)
+		var column: VBoxContainer = Gen2LauncherUI.column(1)
+		column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		column.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		_row.add_child(column)
+		_name = Gen2LauncherUI.tag(_theme, label)
+		column.add_child(_name)
+		_value = Gen2LauncherUI.title(_theme, "", Gen2LauncherTheme.FONT_TITLE)
+		column.add_child(_value)
+		_bar = ProgressBar.new()
+		_bar.show_percentage = false
+		_bar.custom_minimum_size.y = 4.0
+		_bar.max_value = maxf(float(_choices.size() - 1), 1.0)
+		_bar.visible = false
+		column.add_child(_bar)
+		_chevron = Gen2LauncherIcon.create(&"chevron", 20.0, _theme.muted)
+		_chevron.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		_row.add_child(_chevron)
+		pressed.connect(_on_pressed)
+		focus_entered.connect(_repaint)
+		focus_exited.connect(_repaint)
+		mouse_entered.connect(_repaint)
+		mouse_exited.connect(_repaint)
+		tree_entered.connect(_measure)
+		_row.minimum_size_changed.connect(_measure)
+		_repaint()
+
+	## Draws the value as a bar as well as a number, and takes the chevron away:
+	## the row is adjusted in place and opens nothing.
+	func show_bar() -> void:
+		_bar.visible = true
+		_chevron.visible = false
+		_repaint()
+
+	## Puts a switch where the chevron was. It is drawn rather than pressed: a
+	## stop inside a row is one a pad cannot leave.
+	func show_switch() -> void:
+		_chevron.visible = false
+		_value.visible = false
+		_switch = Gen2LauncherToggle.create(_theme, _at == 1)
+		_switch.focus_mode = Control.FOCUS_NONE
+		_switch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_switch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		_row.add_child(_switch)
+		_repaint()
+
+	func value_text() -> String:
+		return _value.text
+
+	func index() -> int:
+		return _at
+
+	func switch_node() -> Gen2LauncherToggle:
+		return _switch
+
+	## Moves the value [param delta] along, clamped rather than wrapped.
+	func step(delta: int) -> void:
+		var wanted: int = clampi(_at + delta, 0, _choices.size() - 1)
+		if wanted == _at:
 			return
-		_pending = true
-		_layout.call_deferred()
+		set_index(wanted)
+		Gen2LauncherAudio.play(&"hover")
 
-	func _halves() -> Array[Control]:
-		var found: Array[Control] = []
-		for child: Node in get_children():
-			var control := child as Control
-			if control != null and control.visible:
-				found.append(control)
-		return found
+	func set_index(wanted: int) -> void:
+		_at = clampi(wanted, 0, maxi(_choices.size() - 1, 0))
+		_repaint()
+		if _handler.is_valid():
+			_handler.call(_at)
 
-	## Measured against the width actually given, which is why the row asks to be
-	## re-measured whenever it is resized.
-	func _stacks(halves: Array[Control]) -> bool:
-		var wanted: float = halves[0].get_combined_minimum_size().x \
-			+ float(GAP_MD) + Gen2LauncherUI.preferred_width(halves[1])
-		return size.x > 0.0 and size.x < wanted
+	## Left and right change the value; the guard sees what is left over.
+	func _gui_input(event: InputEvent) -> void:
+		match Gen2Button.direction_in(event):
+			Gen2Button.LEFT:
+				accept_event()
+				step(-1)
+			Gen2Button.RIGHT:
+				accept_event()
+				step(1)
 
-	func _get_minimum_size() -> Vector2:
-		var halves: Array[Control] = _halves()
-		if halves.size() < 2:
-			return Vector2.ZERO
-		var label: Vector2 = halves[0].get_combined_minimum_size()
-		var control: Vector2 = halves[1].get_combined_minimum_size()
-		# The width asked for is the control's alone, never the whole row's: a row
-		# that asked for both halves would be granted them, and would then always
-		# measure as fitting and never stack. The label is what gives instead.
-		if _stacks(halves):
-			return Vector2(control.x, label.y + float(GAP_XS) + control.y)
-		return Vector2(control.x, maxf(label.y, control.y))
-
-	func _layout() -> void:
-		_pending = false
-		var halves: Array[Control] = _halves()
-		if halves.size() < 2:
+	func _on_pressed() -> void:
+		Gen2LauncherAudio.play(&"click")
+		if _choices.size() <= 1:
 			return
-		var label: Vector2 = halves[0].get_combined_minimum_size()
-		if _stacks(halves):
-			_place(halves[0], Rect2(0.0, 0.0, size.x, label.y))
-			_place(halves[1], Rect2(
-				0.0, label.y + float(GAP_XS), size.x, size.y - label.y - float(GAP_XS)
-			))
+		if cycles or _bar.visible or _host == null:
+			set_index(posmod(_at + 1, _choices.size()))
 			return
-		var control_width: float = Gen2LauncherUI.preferred_width(halves[1])
-		var label_width: float = maxf(size.x - control_width - float(GAP_MD), 0.0)
-		_place(halves[0], Rect2(0.0, 0.0, label_width, size.y))
-		_place(halves[1], Rect2(label_width + float(GAP_MD), 0.0, control_width, size.y))
+		_open_list()
 
-	## [method Container.fit_child_in_rect] for the flags both halves carry:
-	## the whole width given, however narrow, and their own height centred in
-	## it. The width is not clamped to the minimum, which is what lets a long
-	## label be squeezed rather than widening the page.
-	static func _place(half: Control, rect: Rect2) -> void:
-		var high: float = half.get_combined_minimum_size().y
-		half.position = Vector2(
-			rect.position.x, rect.position.y + floorf((rect.size.y - high) / 2.0)
+	## The choices as a sheet of rows, the current one ticked.
+	func _open_list() -> void:
+		var sheet: Gen2LauncherSheet = Gen2LauncherSheet.create(_theme, _name.text)
+		for slot: int in _choices.size():
+			var pick: Gen2LauncherButton = Gen2LauncherButton.create(
+				_theme, String(_choices[slot]), Gen2LauncherButton.Variant.NEUTRAL,
+				&"check" if slot == _at else &""
+			)
+			pick.set_active(slot == _at)
+			pick.pressed.connect(func() -> void:
+				set_index(slot)
+				sheet.close()
+			)
+			sheet.body().add_child(pick)
+		sheet.open(_host)
+
+	func _repaint() -> void:
+		if _theme == null:
+			return
+		_value.text = "" if _choices.is_empty() else String(_choices[_at])
+		_bar.value = float(_at)
+		if _switch != null:
+			_switch.set_pressed_no_signal(_at == 1)
+			_switch.queue_redraw()
+		var reached: bool = has_focus() or is_hovered()
+		_name.add_theme_color_override("font_color", _theme.muted)
+		_value.add_theme_color_override(
+			"font_color", _theme.accent if reached else _theme.text
 		)
-		half.size = Vector2(rect.size.x, high)
+		for state: String in ["normal", "hover", "pressed", "disabled"]:
+			add_theme_stylebox_override(state, _theme.padded(_theme.box(
+				_theme.accent_wash(0.08) if reached else _theme.panel,
+				Gen2LauncherTheme.RADIUS_MD, _theme.accent_wash(0.5) if reached else _theme.line
+			), 18, 12))
+		add_theme_stylebox_override("focus", _theme.padded(
+			_theme.focus_ring(Gen2LauncherTheme.RADIUS_MD, 3), 18, 12
+		))
+		_measure()
 
-
-## A row of choices in one track, the chosen one filled.
-static func segmented(
-	theme: Gen2LauncherTheme, choices: Array, selected: int, handler: Callable
-) -> Control:
-	var track: Gen2LauncherCard = Gen2LauncherCard.well(theme, Gen2LauncherTheme.RADIUS_SM, 3)
-	# Wraps for the same reason [FieldRow] stacks: a five-choice track is wider
-	# than a phone held upright, and the page it sits in has no second axis.
-	var line: HFlowContainer = actions(2)
-	track.add_child(line)
-	var buttons: Array[Gen2LauncherButton] = []
-	for index: int in choices.size():
-		var button: Gen2LauncherButton = Gen2LauncherButton.create(
-			theme, String(choices[index]), Gen2LauncherButton.Variant.SEGMENT
-		)
-		button.custom_minimum_size = Vector2(0, 30)
-		button.add_theme_font_size_override("font_size", Gen2LauncherTheme.FONT_SMALL)
-		buttons.append(button)
-		line.add_child(button)
-		button.pressed.connect(func() -> void:
-			for other: Gen2LauncherButton in buttons:
-				other.set_active(false)
-			button.set_active(true)
-			handler.call(index)
-		)
-	if selected >= 0 and selected < buttons.size():
-		buttons[selected].set_active(true)
-	track.set_meta(&"wrapping_row", line)
-	var hug := HugRow.new()
-	hug.add_child(track)
-	## A [FieldRow] asks a wrapping control how wide it would like to be; a page
-	## body does not, and gives it the whole column. Carried onto the wrapper so
-	## a segmented control in a field is measured exactly as it was.
-	hug.set_meta(&"wrapping_row", line)
-	return hug
-
-
-## One control kept at the width it would like rather than the width it is given.
-## An [HFlowContainer] measures as one column, since that is the narrowest it can
-## be drawn, so a track asking for its minimum would always stack. This asks for
-## that minimum, which is what lets it wrap on a phone, and then draws the child
-## at [method Gen2LauncherUI.preferred_width] whenever the row is wide enough. A
-## [Container] is not usable here for the reason [FieldRow] gives.
-class HugRow extends Control:
-	var _pending: bool = false
-
-	func _init() -> void:
-		resized.connect(_queue_layout)
-
-	func _ready() -> void:
-		var child: Control = _child()
-		if child != null:
-			child.minimum_size_changed.connect(_queue_layout)
-		_queue_layout()
-
-	func _queue_layout() -> void:
-		update_minimum_size()
-		if _pending:
+	## A [Button] answers its own minimum size in C++ and never calls a script's
+	## [method Control._get_minimum_size].
+	func _measure() -> void:
+		var chrome: StyleBox = get_theme_stylebox(&"normal")
+		var wanted: Vector2 = _row.get_combined_minimum_size()
+		if chrome == null:
 			return
-		_pending = true
-		_layout.call_deferred()
-
-	func _child() -> Control:
-		for node: Node in get_children():
-			var control := node as Control
-			if control != null and control.visible:
-				return control
-		return null
-
-	func _get_minimum_size() -> Vector2:
-		var child: Control = _child()
-		return child.get_combined_minimum_size() if child != null else Vector2.ZERO
-
-	func _layout() -> void:
-		_pending = false
-		var child: Control = _child()
-		if child == null:
-			return
-		var wide: float = Gen2LauncherUI.preferred_width(child)
-		child.position = Vector2.ZERO
-		child.size = Vector2(
-			minf(wide, size.x) if size.x > 0.0 else wide,
-			maxf(size.y, child.get_combined_minimum_size().y)
-		)
+		wanted += chrome.get_minimum_size()
+		custom_minimum_size.y = maxf(wanted.y, TOUCH_TARGET + 12.0)
+		# The anchored row ignores the stylebox padding, so it is put back as
+		# offsets or the bar runs out past the card's own edge.
+		_row.offset_left = chrome.get_margin(SIDE_LEFT)
+		_row.offset_top = chrome.get_margin(SIDE_TOP)
+		_row.offset_right = -chrome.get_margin(SIDE_RIGHT)
+		_row.offset_bottom = -chrome.get_margin(SIDE_BOTTOM)
 
 
 ## One whole number, typed or stepped. A slider is the wrong shape for a value
@@ -506,35 +526,6 @@ static func number(
 	field_edit.add_theme_color_override("font_color", theme.text)
 	box.value_changed.connect(func(changed: float) -> void: handler.call(int(changed)))
 	return box
-
-
-## [param format] spells the readout, for a row the cartridge shows as something
-## other than the byte it stores: OPTION's own frame row is `UpdateFrame`'s
-## `add '1'`, so a stored 0 reads TYPE 1. Omitted, the readout is the number.
-static func slider(
-	theme: Gen2LauncherTheme, value: int, minimum: int, maximum: int, handler: Callable,
-	format: Callable = Callable()
-) -> Control:
-	var spell: Callable = format if format.is_valid() \
-		else func(amount: int) -> String: return str(amount)
-	var line: HBoxContainer = row(GAP_MD)
-	var bar := HSlider.new()
-	bar.min_value = minimum
-	bar.max_value = maximum
-	bar.step = 1
-	bar.value = value
-	bar.custom_minimum_size = Vector2(170, 22)
-	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var readout: Label = muted(theme, spell.call(value))
-	readout.custom_minimum_size = Vector2(52, 0)
-	readout.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	bar.value_changed.connect(func(changed: float) -> void:
-		readout.text = spell.call(int(changed))
-		handler.call(int(changed))
-	)
-	line.add_child(bar)
-	line.add_child(readout)
-	return line
 
 
 ## The one file picker every launcher dialog is built from. The platform

@@ -22,7 +22,7 @@ const SIDES: Dictionary = {
 ## first control is a corner toggle would start a pad there rather than on it.
 var preferred: Control = null
 ## Direction to a [Callable] taking the control being left and answering where to
-## go when nothing on the screen lies that way. A floating dock is over the page
+## go when nothing on the screen lies that way. A floating bar is over the page
 ## rather than under it, so a long page's last control has nothing below it.
 var edge_targets: Dictionary = {}
 
@@ -164,25 +164,51 @@ func _toward(
 		else null
 
 
+## How far off the line of travel a control may sit and still be reached, as a
+## multiple of how far along it is. Without a limit, the nearest thing below a
+## settings row was the rail beside it: 35 pixels down and 507 across, which a
+## score alone ranked first because nothing else was below at all.
+const CONE: float = 2.0
+
+## The control [param direction] reaches. Anything lined up with what is being
+## left beats anything that is not, whatever the distances.
 static func _neighbor(
 	current: Control, direction: Vector2, controls: Array[Control]
 ) -> Control:
-	var origin: Vector2 = current.get_global_rect().get_center()
+	var here: Rect2 = current.get_global_rect()
+	var origin: Vector2 = here.get_center()
 	var best: Control = null
 	var best_score: float = INF
+	var best_lined_up: bool = false
 	for candidate: Control in controls:
 		if candidate == current:
 			continue
-		var delta: Vector2 = candidate.get_global_rect().get_center() - origin
+		var there: Rect2 = candidate.get_global_rect()
+		var delta: Vector2 = there.get_center() - origin
 		var forward: float = delta.dot(direction)
 		if forward <= 1.0:
 			continue
 		var sideways: float = absf(delta.cross(direction))
+		var lined_up: bool = _overlaps_across(here, there, direction)
+		if not lined_up and sideways > forward * CONE:
+			continue
 		var score: float = forward + sideways * 2.5
-		if score < best_score:
-			best_score = score
-			best = candidate
+		if lined_up != best_lined_up:
+			if not lined_up:
+				continue
+		elif score >= best_score:
+			continue
+		best_score = score
+		best_lined_up = lined_up
+		best = candidate
 	return best
+
+
+## Whether two rectangles share the axis [param direction] does not travel.
+static func _overlaps_across(here: Rect2, there: Rect2, direction: Vector2) -> bool:
+	if absf(direction.y) > absf(direction.x):
+		return here.position.x < there.end.x and there.position.x < here.end.x
+	return here.position.y < there.end.y and there.position.y < here.end.y
 
 
 static func _set_neighbor(control: Control, side: StringName, target: Control) -> void:

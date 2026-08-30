@@ -91,6 +91,8 @@ func _process(_delta: float) -> bool:
 				"report", "toast", "quit"]:
 			_launcher._preview_browse_dir = _mod
 			_launcher.preview_sheet(StringName(_view))
+		elif _page == "settings" and not _view.is_empty():
+			_launcher.preview_settings_section(StringName(_view))
 		elif not _view.is_empty():
 			_launcher.preview_mods_view(StringName(_view), StringName(_mod))
 	# After the seams, so the page being photographed is the one that scrolls, and

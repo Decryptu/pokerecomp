@@ -15,7 +15,7 @@ var _theme: Gen2LauncherTheme = null
 var _result: Label = null
 ## The report sheet's own answer line, rebuilt with the sheet.
 var _report_result: Label = null
-## What a sheet opens over. The page itself is swapped out with the dock, so a
+## What a sheet opens over. The page itself is swapped out with the tab, so a
 ## sheet parented to it would vanish with the page behind it.
 var _host: Control = null
 
@@ -102,12 +102,18 @@ func _build() -> void:
 		hash_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		hash_label.add_theme_color_override("font_color", _theme.faint)
 		line.add_child(hash_label)
-	column.add_child(Gen2LauncherUI.dock_safe_space())
+	column.add_child(Gen2LauncherUI.bottom_safe_space())
 
 
 ## The two ways to report, named for who each is for rather than for the service
 ## behind it: one player has a GitHub account and one has never seen an issue
 ## tracker, and both need to end up somewhere the report is read.
+func hints() -> Array:
+	return [{
+		"action": &"ui_menu", "label": "Report a problem", "run": open_report_sheet,
+	}]
+
+
 func open_report_sheet() -> void:
 	var sheet: Gen2LauncherSheet = Gen2LauncherSheet.create(_theme, "Report a bug")
 	var body: VBoxContainer = sheet.body()
