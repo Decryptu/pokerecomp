@@ -169,7 +169,6 @@ func import_sav_path(path: String, slot: int = -1) -> bool:
 	return true
 
 
-## Read-only state used by scene tests and screenshot drivers.
 func save_screen_snapshot() -> Dictionary:
 	return {
 		"game_id": String(_data.id) if _data != null else "",

@@ -297,7 +297,6 @@ func type_is_physical(number: int) -> bool:
 	return number < RomLayout.SPECIAL_TYPES_START
 
 
-## Which mod claimed [param number], for a launcher listing what it will change.
 func owner_of(kind: StringName, number: int) -> StringName:
 	return StringName((_owners.get(kind, {}) as Dictionary).get(number, &""))
 

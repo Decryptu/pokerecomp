@@ -5,6 +5,7 @@ extends GutTest
 ## has never seen can reach it.
 
 const ROOT: String = "user://mod_tests"
+const BattleFixture := preload("res://tests/unit/battle_fixture.gd")
 
 var _directory: String = ""
 
@@ -1829,11 +1830,11 @@ func test_a_fetched_icon_is_cached_and_read_back_without_the_network() -> void:
 	assert_not_null(Gen2ModArt.cached_icon(url, directory))
 
 
-## The four object registrations added for the Quality of Life seams all go
-## through one shape, so the rules are checked once rather than four times: a
+## The object registrations added for the Quality of Life seams all go through
+## one shape, so the rules are checked once rather than once per policy: a
 ## RefCounted that is never a Node, every method the host will call, and one
 ## claim per id.
-func test_the_four_provider_registrations_share_one_set_of_rules() -> void:
+func test_the_provider_registrations_share_one_set_of_rules() -> void:
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	var manifest: Gen2ModManifest = _loaded_manifest()
 	var node := Node2D.new()
@@ -1850,6 +1851,9 @@ func test_the_four_provider_registrations_share_one_set_of_rules() -> void:
 		[&"info", Gen2ModHost.BATTLE_INFO_METHODS[0],
 			func(id: StringName, p: Object) -> Dictionary:
 				return host.register_battle_info(id, p)],
+		[&"run", Gen2ModHost.RUN_BUTTON_METHODS[0],
+			func(id: StringName, p: Object) -> Dictionary:
+				return host.register_run_button(id, p)],
 		[manifest.id, Gen2ModHost.CATCH_EXPERIENCE_METHODS[0],
 			func(_id: StringName, p: Object) -> Dictionary:
 				return host.register_catch_experience(manifest, p)],
@@ -1875,6 +1879,7 @@ func test_the_four_provider_registrations_share_one_set_of_rules() -> void:
 	assert_eq(host.field_move_source_ids(), [&"field"])
 	assert_eq(host.repel_renewal_ids(), [&"repel"])
 	assert_eq(host.battle_info_ids(), [&"info"])
+	assert_eq(host.run_button_ids(), [&"run"])
 	assert_eq(host.catch_experience_ids(), [manifest.id])
 
 	## The catch policy is save bound, so a manifest this host never discovered
@@ -1884,10 +1889,11 @@ func test_the_four_provider_registrations_share_one_set_of_rules() -> void:
 	var same := GDScript.new()
 	same.source_code = "extends RefCounted\nfunc awards_catch_experience() -> bool:\n\treturn true\n"
 	same.reload()
-	assert_eq(
-		StringName(host.register_catch_experience(stranger, same.new())["reason"]),
-		&"unknown_mod_save_owner"
-	)
+	for register: Callable in [
+		func(p: Object) -> Dictionary: return host.register_catch_experience(stranger, p),
+		func(p: Object) -> Dictionary: return host.register_experience_scale(stranger, p),
+	]:
+		assert_eq(StringName(register.call(same.new())["reason"]), &"unknown_mod_save_owner")
 
 
 ## The three static answers a game with no mods must reach without building a
@@ -1977,3 +1983,110 @@ func test_a_start_menu_entry_without_a_predicate_is_always_listed() -> void:
 		"label": "ATLAS", "handler": func() -> void: pass,
 	}).get("ok", false)))
 	assert_eq(host.start_menu_entries({"party_count": 0}).size(), 1)
+
+
+## The run button is the mod's switch and the button is the host's, so neither
+## alone runs. `Input.action_press` is what stands in for a held B: the host asks
+## `Gen2Button`, which is the same read the world's own poll makes.
+func test_running_needs_both_a_provider_and_the_button() -> void:
+	Gen2ModHost.reset()
+	assert_false(Gen2ModHost.run_button_held(), "no host at all")
+
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	var policy := GDScript.new()
+	policy.source_code = """extends RefCounted
+var on: bool = true
+func runs_while_held() -> bool:
+	return on
+"""
+	policy.reload()
+	var provider: Object = policy.new()
+	assert_true(bool(host.register_run_button(&"shoes", provider).get("ok", false)))
+	assert_false(Gen2ModHost.run_button_held(), "the button is not down")
+
+	Input.action_press(Gen2Button.ACTIONS[Gen2Button.B])
+	assert_true(Gen2ModHost.run_button_held())
+	provider.set("on", false)
+	assert_false(Gen2ModHost.run_button_held(), "read on the step, not once")
+	Input.action_release(Gen2Button.ACTIONS[Gen2Button.B])
+
+
+## Two scales multiply, an answer that is not a number is dropped rather than
+## carried into the product, and the product is held inside the host's range.
+func test_experience_scales_multiply_and_are_held_inside_the_hosts_range() -> void:
+	Gen2ModHost.reset()
+	assert_eq(Gen2ModHost.experience_scale(), 1.0, "no host at all")
+
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	var manifest: Gen2ModManifest = _loaded_manifest()
+	var policy := GDScript.new()
+	policy.source_code = """extends RefCounted
+var value: float = 2.0
+func experience_scale() -> float:
+	return value
+"""
+	policy.reload()
+	var provider: Object = policy.new()
+	assert_true(bool(host.register_experience_scale(manifest, provider).get("ok", false)))
+	assert_eq(Gen2ModHost.experience_scale(), 2.0)
+
+	for refused: float in [-1.0, NAN, INF]:
+		provider.set("value", refused)
+		assert_eq(Gen2ModHost.experience_scale(), 1.0, "an answer that is not a scale")
+
+	provider.set("value", 1000.0)
+	assert_eq(Gen2ModHost.experience_scale(), Gen2ModHost.MAX_EXPERIENCE_SCALE)
+	provider.set("value", 0.001)
+	assert_eq(Gen2ModHost.experience_scale(), Gen2ModHost.MIN_EXPERIENCE_SCALE)
+
+
+## The one seam is the award itself, so every figure a player sees moves with it.
+## A 0.5x run still levels: the product truncates the way every division in
+## `Gen2Experience` does, and a non-zero award is floored at 1.
+func test_a_registered_scale_moves_the_award_and_leaves_stat_experience_alone() -> void:
+	Gen2ModHost.reset()
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	var manifest: Gen2ModManifest = _loaded_manifest()
+	var policy := GDScript.new()
+	policy.source_code = """extends RefCounted
+var value: float = 1.0
+func experience_scale() -> float:
+	return value
+"""
+	policy.reload()
+	var provider: Object = policy.new()
+	assert_true(bool(host.register_experience_scale(manifest, provider).get("ok", false)))
+
+	var directory: String = RomCache.directory_for(&"modexptest", "0123456789abcdef")
+	var data: GameData = BattleFixture.build(directory)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 12345
+	var awards: Dictionary = {}
+	var stats: Dictionary = {}
+	for scale: float in [1.0, 2.0, 0.5, Gen2ModHost.MIN_EXPERIENCE_SCALE]:
+		provider.set("value", scale)
+		var battle: Gen2Battle = Gen2Battle.create_parties(
+			data,
+			Gen2Party.of(Gen2BattleMon.create(
+				data, BattleFixture.PIKACHU, 5, [BattleFixture.THUNDERBOLT]
+			)),
+			Gen2Party.of(Gen2BattleMon.create(
+				data, BattleFixture.BULBASAUR, 5, [BattleFixture.TACKLE]
+			)),
+			rng, true
+		)
+		var events: Array = battle.award_win_experience()
+		for event: Dictionary in events:
+			if StringName(event["type"]) == Gen2Battle.EXP_GAINED:
+				awards[scale] = int(event["amount"])
+			elif StringName(event["type"]) == Gen2Battle.STAT_EXP_GAINED:
+				stats[scale] = event["gains"]
+	assert_eq(awards[1.0], 67, "the unscaled trainer award")
+	assert_eq(awards[2.0], 134)
+	assert_eq(awards[0.5], 33, "truncated, the way the cartridge divides")
+	assert_eq(awards[Gen2ModHost.MIN_EXPERIENCE_SCALE], 6)
+	assert_eq(
+		stats[2.0], stats[1.0],
+		"stat experience is the cartridge's own EV gain and is not scaled"
+	)
+	RomCache.clear(directory)

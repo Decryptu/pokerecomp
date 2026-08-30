@@ -311,6 +311,9 @@ var _input_replay: Dictionary = {}
 var _replaying_input: bool = false
 ## What a replay is holding down, in place of the runtime's own poll.
 var _replay_held_direction: int = Gen2Button.NONE
+## Beside the held direction: a hold that changes a step's duration and is not in
+## the log makes every replay taken while running wrong.
+var _replay_running: bool = false
 ## Whether a frame is being spent right now, which is what tells a press
 ## delivered from inside the pump from one that arrived between two frames.
 var _spending_frame: bool = false
@@ -1080,7 +1083,6 @@ func record_input() -> void:
 	_recording_input = true
 
 
-## The recorded `(frame, kind, button)` entries, in the order they were consumed.
 func input_recording() -> Array:
 	return _input_recording.duplicate(true)
 
@@ -1094,9 +1096,12 @@ func replay_input(entries: Array) -> void:
 			continue
 		var entry: Dictionary = raw
 		var frame: int = int(entry.get("frame", 0))
-		var at: Dictionary = _input_replay.get(frame, {"hold": Gen2Button.NONE, "presses": []})
+		var at: Dictionary = _input_replay.get(
+			frame, {"hold": Gen2Button.NONE, "run": false, "presses": []}
+		)
 		if String(entry.get("kind", "")) == "hold":
 			at["hold"] = int(entry.get("button", Gen2Button.NONE))
+			at["run"] = bool(entry.get("run", false))
 		else:
 			(at["presses"] as Array).append(int(entry.get("button", Gen2Button.NONE)))
 		_input_replay[frame] = at
@@ -1106,6 +1111,7 @@ func replay_input(entries: Array) -> void:
 func _apply_replayed_input(frame: int) -> void:
 	var at: Dictionary = _input_replay.get(frame, {})
 	_replay_held_direction = int(at.get("hold", Gen2Button.NONE))
+	_replay_running = bool(at.get("run", false))
 	for button: int in at.get("presses", []) as Array:
 		press_button(button)
 
@@ -1163,9 +1169,14 @@ func _advance_held_direction() -> void:
 	## was held rather than what the world did with it.
 	var direction: int = _replay_held_direction if _replaying_input \
 		else Gen2InputRuntime.instance().held_direction()
+	var running: bool = _replay_running if _replaying_input \
+		else Gen2ModHost.run_button_held()
+	if _world != null:
+		_world.run_held = running
 	if _recording_input and _world != null and direction != Gen2Button.NONE:
 		_input_recording.append({
 			"frame": _world.frame_number, "kind": "hold", "button": direction,
+			"run": running,
 		})
 	if not _objects_may_move() or _world.script_input_waiting() \
 		or _world.player_step_in_progress():

@@ -71,7 +71,6 @@ func step() -> STEP:
 	return _step
 
 
-## What the last exchange answered, empty before one has run.
 func result() -> Dictionary:
 	return _result.duplicate()
 

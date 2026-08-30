@@ -82,7 +82,6 @@ func frame_count() -> int:
 	return _frame_tiles / RomLayout.FRAME_TILES
 
 
-## Whether the battle-extra strip was in the cache this was read from.
 func has_battle_extra() -> bool:
 	return _battle_extra_width > 0 and _battle_extra_tiles > 0
 

@@ -33,7 +33,7 @@ user://mods/<id>/
 | `id` | Lowercase `[a-z0-9][a-z0-9_-]*`. Addresses the directory and the registry keys |
 | `name` | Shown to the player |
 | `version` | The mod's own version. Strict `major.minor.patch` |
-| `api_version` | The oldest host this mod runs on, not a number to keep current: raise it when the mod starts using a newer seam. `Gen2ModManifest.API_VERSION` is 25 and a host accepts 1 to 25. [Contract versions](#contract-versions) says what each added |
+| `api_version` | The oldest host this mod runs on, not a number to keep current: raise it when the mod starts using a newer seam. `Gen2ModManifest.API_VERSION` is 26 and a host accepts 1 to 26. [Contract versions](#contract-versions) says what each added |
 | `entry` | A `.gd` path inside the mod directory, or inside the pack when there is one |
 | `pack` | Optional `.pck` or `.zip` beside `mod.json`, holding the mod's files |
 | `description` | Optional |
@@ -127,6 +127,7 @@ runs, since every version so far has only added.
 | 23 | `Gen2WorldAPI.unown_wall_event()` and `always_on_bike()`, and `Gen2WorldFieldMove`'s field-move texts |
 | 24 | `Gen2WorldAPI.player_step_span()` and `Gen2WorldObject.step_span()` |
 | 25 | `Gen2WorldAPI.party_with_player()` and `party_holder()`, and a visible encounter walking to the next cell |
+| 26 | A run button, and a scale on every experience award |
 
 ## Installing
 
@@ -972,6 +973,53 @@ The opponent is not pretended to have fainted. Everything is spent between the
 Gotcha line and the nickname prompt.
 
 The catching tutorial and a Bug Contest catch are excluded.
+
+## Running
+
+`register_run_button(id, provider)` walks the player at bike speed while B is
+held. The cartridge has no such branch, so this adds one:
+
+```gdscript
+class Shoes:
+	func runs_while_held() -> bool:
+		return enabled
+```
+
+The provider is the switch and nothing else. Whether B is down, and whether
+running is allowed where the player is standing, are the host's: only a step in
+`MOVEMENT_WALK` moves, since the bike is already fast and surf and every scripted
+stream carry their own duration. It is read on the step rather than once, so a
+setting turned off mid-run is off from the next one.
+
+A step is still one step. Encounter counts, Repel steps, the bike-step counter
+and every tile event stay per step rather than per frame, a follower takes the
+duration the player's step actually took, and an input recording carries the run
+state beside the held direction so a replay reproduces the run.
+
+## Scaling experience
+
+`register_experience_scale(manifest, provider)` multiplies every experience
+award. 1.0 is none:
+
+```gdscript
+class Curve:
+	func experience_scale() -> float:
+		return 2.0
+```
+
+Registered with the manifest `register()` was handed, because the run is what the
+scale belongs to. Two providers compose by MULTIPLICATION, which is the join a
+scale has, and the product is held between `Gen2ModHost.MIN_EXPERIENCE_SCALE` and
+`MAX_EXPERIENCE_SCALE`. A negative, a NAN or an infinity is a provider answering
+nothing rather than a number and is dropped.
+
+The one seam is the award `Gen2Experience.award_for` returns, so the participant
+split, the Exp. Share halving, the level-up loop, the move offers and evolution
+eligibility are all downstream of it, and a skipped fight and a capture scale with
+the rest. Three things it does not do: stat experience is the cartridge's own EV
+gain and is not scaled; the product truncates the way every division in
+`Gen2Experience` does, with a non-zero award floored at 1 so a 0.5x run still
+levels; and the result is clamped to `Gen2Experience.MAX_EXP`.
 
 ## Annotating the battle
 

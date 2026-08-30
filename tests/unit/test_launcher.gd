@@ -38,6 +38,9 @@ func after_each() -> void:
 	Gen2ModInstaller.uninstall(VIEW_MOD_ID)
 	for feed: String in PROBE_FEEDS:
 		Gen2ModIndex.unfollow(feed)
+	for game_id: StringName in RomRegistry.ORDER:
+		Gen2CartridgeArt.revert(game_id)
+	_clear_art_scratch()
 
 
 ## The mods page on its own, which is what every mod workflow but the file
@@ -794,3 +797,99 @@ func test_back_closes_what_is_open_before_it_asks_about_quitting() -> void:
 ## The sheets open over the launcher, innermost last.
 func _sheet_count() -> int:
 	return _launcher.find_children("", "Gen2LauncherSheet", true, false).size()
+
+
+## The scratch directory the art store is exercised in, so a run never writes a
+## picture onto one of this machine's own cartridges. The one test that has to
+## use the real root reverts it in `after_each`.
+const ART_SCRATCH: String = "user://cartridge_art_tests"
+
+
+func _clear_art_scratch() -> void:
+	var listing: PackedStringArray = DirAccess.get_files_at(ART_SCRATCH)
+	for entry: String in listing:
+		DirAccess.remove_absolute("%s/%s" % [ART_SCRATCH, entry])
+	DirAccess.remove_absolute(ART_SCRATCH)
+
+
+func _write_image(path: String, width: int, height: int) -> String:
+	var image: Image = Image.create_empty(width, height, false, Image.FORMAT_RGBA8)
+	image.fill(Color.REBECCA_PURPLE)
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	image.save_png(path)
+	return path
+
+
+## What is stored is a picture this project encoded, not the file that was
+## chosen, and it is never larger than the shell it stands in for.
+func test_chosen_cartridge_art_is_re_encoded_and_fitted_to_the_shell() -> void:
+	var source: String = _write_image("%s/source.png" % ART_SCRATCH, 3000, 1500)
+	assert_false(Gen2CartridgeArt.has_custom_art(&"gold", ART_SCRATCH))
+
+	var taken: Dictionary = Gen2CartridgeArt.adopt(&"gold", source, ART_SCRATCH)
+	assert_true(bool(taken.get("ok", false)), JSON.stringify(taken))
+	assert_true(Gen2CartridgeArt.has_custom_art(&"gold", ART_SCRATCH))
+
+	var texture: Texture2D = Gen2CartridgeArt.texture_for(&"gold", ART_SCRATCH)
+	assert_not_null(texture)
+	assert_eq(texture.get_size().x, float(Gen2CartridgeArt.STORED_SIDE), "the long side")
+	assert_eq(texture.get_size().y, float(Gen2CartridgeArt.STORED_SIDE / 2), "aspect kept")
+
+	## Smaller than the shell is left where it is: a 32x32 sprite is drawn small
+	## rather than smeared over a cartridge.
+	assert_true(bool(Gen2CartridgeArt.adopt(
+		&"gold", _write_image("%s/small.png" % ART_SCRATCH, 32, 48), ART_SCRATCH
+	).get("ok", false)))
+	assert_eq(
+		Gen2CartridgeArt.texture_for(&"gold", ART_SCRATCH).get_size(), Vector2(32, 48),
+		"and the texture is the new picture rather than the cached first one"
+	)
+
+	assert_true(Gen2CartridgeArt.revert(&"gold", ART_SCRATCH))
+	assert_false(Gen2CartridgeArt.has_custom_art(&"gold", ART_SCRATCH))
+	assert_null(Gen2CartridgeArt.texture_for(&"gold", ART_SCRATCH))
+	assert_false(Gen2CartridgeArt.revert(&"gold", ART_SCRATCH), "nothing left to remove")
+
+
+## Every way a chosen file can be refused, each with a sentence rather than an
+## error: the file is the player's own and the launcher has to say why.
+func test_a_file_that_is_not_cartridge_art_is_refused_with_a_reason() -> void:
+	DirAccess.make_dir_recursive_absolute(ART_SCRATCH)
+	var text: String = "%s/notes.txt" % ART_SCRATCH
+	var file: FileAccess = FileAccess.open(text, FileAccess.WRITE)
+	file.store_string("PNG? no.")
+	file.close()
+
+	var rows: Array = [
+		[&"unknown_cartridge", Gen2CartridgeArt.adopt(&"", text, ART_SCRATCH)],
+		[&"missing_file", Gen2CartridgeArt.adopt(&"gold", "%s/nope.png" % ART_SCRATCH, ART_SCRATCH)],
+		[&"not_an_image", Gen2CartridgeArt.adopt(&"gold", text, ART_SCRATCH)],
+	]
+	for row: Array in rows:
+		var answer: Dictionary = row[1]
+		assert_false(bool(answer.get("ok", false)), String(row[0]))
+		assert_eq(StringName(answer["reason"]), StringName(row[0]))
+		assert_false(Gen2CartridgeArt.refusal_text(row[0]).is_empty(), String(row[0]))
+	assert_false(Gen2CartridgeArt.has_custom_art(&"gold", ART_SCRATCH), "and nothing was stored")
+
+
+## The cartridge draws the player's picture where it has one and the shipped
+## shell where it has not, contained inside the shell's own box whatever shape
+## the picture is.
+func test_a_cartridge_wears_the_players_own_art_and_goes_back_to_the_default() -> void:
+	var card: Gen2Cartridge = autofree(
+		Gen2Cartridge.create(Gen2LauncherTheme.active(), &"gold")
+	)
+	var art: TextureRect = card.get("_art")
+	assert_eq(art.stretch_mode, TextureRect.STRETCH_KEEP_ASPECT_CENTERED, "contained, not stretched")
+	assert_eq(art.texture, Gen2Cartridge.ART[&"gold"], "the shipped shell")
+
+	assert_true(bool(Gen2CartridgeArt.adopt(
+		&"gold", _write_image("%s/mine.png" % ART_SCRATCH, 700, 300)
+	).get("ok", false)))
+	card.refresh_art()
+	assert_ne(art.texture, Gen2Cartridge.ART[&"gold"], "the player\'s own")
+
+	Gen2CartridgeArt.revert(&"gold")
+	card.refresh_art()
+	assert_eq(art.texture, Gen2Cartridge.ART[&"gold"])

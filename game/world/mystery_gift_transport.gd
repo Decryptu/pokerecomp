@@ -24,7 +24,6 @@ var peer: Dictionary = {}
 var role: int = IR_RECEIVER
 
 
-## Whether anybody is in the window at all. Everything else asks this first.
 func connected() -> bool:
 	return not peer.is_empty()
 

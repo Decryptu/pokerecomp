@@ -235,7 +235,6 @@ func select_tab(kind: StringName) -> bool:
 	return true
 
 
-## The tab the cursor is on, for a host reporting what the panel shows.
 func selected_kind() -> StringName:
 	return _tabs.selected_kind()
 
@@ -249,7 +248,6 @@ func frame() -> Image:
 	return texture.get_image() if texture != null else null
 
 
-## The viewport itself, for a host that can show it directly rather than copy it.
 func viewport() -> SubViewport:
 	return _viewport
 

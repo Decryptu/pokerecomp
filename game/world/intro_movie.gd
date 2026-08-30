@@ -395,12 +395,10 @@ func scroll_x_at(line: int) -> int:
 	return _ly_shown[maxi(line - 1, 0)]
 
 
-## One background palette, as colours a page can draw with.
 func palette(index: int) -> PackedColorArray:
 	return _palette_at(index)
 
 
-## One object palette, which is the same run's second half.
 func object_palette(index: int) -> PackedColorArray:
 	return _palette_at(BG_PALETTES + index)
 
@@ -432,7 +430,6 @@ func tile_overlay() -> Array:
 	return _overlay
 
 
-## The 32x32 BG map and its attribute plane, as the cache holds them.
 func bg_map() -> PackedByteArray:
 	return _data.intro_map(String(_vram.get("map", ""))) if _data != null \
 		else PackedByteArray()

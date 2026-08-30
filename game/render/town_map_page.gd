@@ -240,7 +240,6 @@ func tilemap(
 	return map
 
 
-## Whether the three card tilemaps are in the cache this page was built from.
 func cards_ready() -> bool:
 	return _cards.size() == RomLayout.POKEGEAR_CARD_ORDER.size()
 

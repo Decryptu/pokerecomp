@@ -65,7 +65,6 @@ func _ready() -> void:
 		_refresh()
 
 
-## The live menu, so a driver can read the cursor without going through a redraw.
 func menu() -> Gen2WorldMenu:
 	return _menu
 

@@ -155,7 +155,6 @@ func bgp() -> int:
 	return _bgp
 
 
-## Where the player pic sits, in tiles.
 func column() -> int:
 	return _column
 

@@ -93,7 +93,6 @@ static func open(kind: Kind, player_name: String, write: Callable) -> Gen2SavePr
 	return prompt
 
 
-## Waiting on a button rather than on its own frames.
 func reads_joypad() -> bool:
 	return step in [Step.ASK, Step.OVERWRITE, Step.FAILED]
 

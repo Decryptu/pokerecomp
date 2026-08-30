@@ -201,7 +201,6 @@ static func max_cursor_sprites() -> int:
 	return maxi(CURSOR_SPRITES.size(), CURSOR_SPRITES_GOLD.size())
 
 
-## The profile's own OAM table.
 func cursor_set() -> Array:
 	return CURSOR_SPRITES if _profile == RomRegistry.CRYSTAL else CURSOR_SPRITES_GOLD
 

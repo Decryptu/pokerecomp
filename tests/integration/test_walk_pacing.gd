@@ -339,3 +339,76 @@ func test_a_warp_back_into_the_same_landmark_raises_no_sign() -> void:
 		_world.map_name_sign_pending(), Fixture.HOME_MAP_LANDMARK,
 		"and the house's own landmark is what the sign names"
 	)
+
+
+## `Gen2ModHost.register_run_button`'s whole effect on the pacing: a walk takes
+## the bike's own four passes while the button is held, and nothing else moves.
+## The bike is already fast, and surf and every scripted stream carry their own
+## row.
+func test_running_takes_the_fast_row_and_only_for_a_walk() -> void:
+	assert_eq(_world._step_frames_for_movement(), Gen2WorldAPI.STEP_PASSES_WALK)
+	_world.run_held = true
+	assert_eq(_world._step_frames_for_movement(), Gen2WorldAPI.STEP_PASSES_FAST)
+	for mode: StringName in [Gen2WorldAPI.MOVEMENT_SURF, Gen2WorldAPI.MOVEMENT_BIKE]:
+		_world.movement_mode = mode
+		var passes: int = Gen2WorldAPI.STEP_PASSES_FAST \
+			if mode == Gen2WorldAPI.MOVEMENT_BIKE else Gen2WorldAPI.STEP_PASSES_WALK
+		assert_eq(_world._step_frames_for_movement(), passes, String(mode))
+
+
+## A follower queued on the walk row falls a cell behind a running leader every
+## step, so it takes the duration the player's step actually took.
+func test_a_follower_takes_the_duration_the_leaders_step_took() -> void:
+	_world.player_cell = Vector2i(5, 4)
+	_world._start_object_follow({
+		"map_group": Fixture.MAP_GROUP, "map_number": Fixture.MAP_NUMBER,
+		"object_index": 0, "target_index": -1, "exact": true,
+	})
+	var follower: Gen2WorldObject = _world.objects[0]
+	assert_eq(follower.cell, Vector2i(5, 3), "standing on the cell the player leaves into")
+
+	_world.run_held = true
+	assert_true(bool(_world.move_result(Vector2i(0, 1)).get("ok", false)))
+	assert_eq(follower.cell, Vector2i(5, 4), "it stepped into the vacated cell")
+	assert_eq(
+		follower.step_passes_total, Gen2WorldAPI.STEP_PASSES_FAST,
+		"and over the same four passes the run took"
+	)
+
+
+## The run state goes in the log beside the held direction, or a replay taken
+## while running walks at the wrong speed and lands somewhere else. The provider
+## is registered rather than mocked: the recording is what the pump polled.
+func test_a_recording_carries_the_run_state_and_a_replay_reads_it_back() -> void:
+	Gen2ModHost.reset()
+	var policy := GDScript.new()
+	policy.source_code = "extends RefCounted\nfunc runs_while_held() -> bool:\n\treturn true\n"
+	policy.reload()
+	assert_true(bool(
+		Gen2ModHost.instance().register_run_button(&"shoes", policy.new()).get("ok", false)
+	))
+	_screen = await _screen_at(Fixture.WARP_CELL + Vector2i.DOWN)
+	## Held rather than called: `_advance_held_direction` polls the input runtime,
+	## which is the poll the run state is recorded beside.
+	for button: int in [Gen2Button.B, Gen2Button.LEFT]:
+		Input.action_press(Gen2Button.ACTIONS[button])
+	await get_tree().process_frame
+	_screen.record_input()
+	for _frame: int in _walk_screen_frames():
+		_screen.advance_frame()
+	for button: int in [Gen2Button.B, Gen2Button.LEFT]:
+		Input.action_release(Gen2Button.ACTIONS[button])
+	Gen2ModHost.reset()
+
+	var holds: Array = _screen.input_recording().filter(
+		func(entry: Dictionary) -> bool: return String(entry["kind"]) == "hold"
+	)
+	assert_false(holds.is_empty(), "the pump polled a held direction")
+	for entry: Dictionary in holds:
+		assert_true(bool(entry["run"]), "recorded beside the direction")
+
+	## Replayed with no host and no button down at all, the log is still the run.
+	_screen.replay_input(holds)
+	_screen._apply_replayed_input(int((holds[0] as Dictionary)["frame"]))
+	_screen._advance_held_direction()
+	assert_true(_screen._world.run_held)

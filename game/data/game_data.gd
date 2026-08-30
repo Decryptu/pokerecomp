@@ -564,14 +564,12 @@ func world_standard_script(index: int) -> Dictionary:
 	return entry
 
 
-## Raw bounded text bytes indexed by the cartridge's bank and CPU address.
 func world_text(bank: int, address: int) -> PackedByteArray:
 	return _payload_bytes(
 		_text().get(Gen2WorldScript.pointer_key(bank, address), []), _blob("text")
 	)
 
 
-## Raw bounded movement bytes indexed by the script bank and movement pointer.
 func world_movement(bank: int, address: int) -> PackedByteArray:
 	return _payload_bytes(
 		_movements().get(Gen2WorldScript.pointer_key(bank, address), []), _blob("movements")
