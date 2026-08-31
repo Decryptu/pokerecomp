@@ -18,6 +18,12 @@ sprites, text, maps or audio. Three layers enforce it:
 `roms/.gdignore` keeps Godot from importing or exporting that directory while
 tools still read it with `FileAccess`. Do not delete it.
 
+`.githooks/pre-push` runs `tools/release.sh --gates`, which is every check CI
+makes that needs no engine: the release notes render to a body with sections,
+the version agrees across its four files, and the comment total is under the
+ceiling `tests/unit/test_source_budget.gd` records. It takes under a second and
+the same hooks path enables it.
+
 ## Map
 
 | Path | Owns |

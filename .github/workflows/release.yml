@@ -60,6 +60,16 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      # Here rather than only in `publish`, which is seven builds and a quarter
+      # of an hour later. A body that renders to nothing is a one-line edit to
+      # fix and there is no reason to pay for the templates first.
+      - name: The release notes render to a body
+        run: |
+          set -euo pipefail
+          notes="$(sed '/^<!--/,/-->$/d' .github/release-notes.md | sed '/./,$!d')"
+          grep -q '^## ' <<<"$notes" \
+            || { echo "::error::release notes rendered no sections"; exit 1; }
+
   templates:
     needs: version
     uses: ./.github/workflows/export-templates.yml

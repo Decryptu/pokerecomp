@@ -7,6 +7,7 @@ extends GutTest
 
 const PRESETS: String = "res://export_presets.cfg"
 const ALTSTORE_SOURCE: String = "res://.github/altstore/source.json"
+const RELEASE_NOTES: String = "res://.github/release-notes.md"
 
 ## Preset names `.github/workflows/release.yml` exports by. Renaming one in the
 ## editor would leave the workflow asking for a preset that is not there, and
@@ -245,3 +246,58 @@ func test_the_altstore_source_describes_the_ios_preset() -> void:
 		assert_string_contains(String(version["downloadURL"]),
 			"/releases/download/v%s/" % version["version"], "the download is that release's own")
 		assert_gt(int(version["size"]), 0, "%s carries its byte count" % version["version"])
+
+
+## `.github/workflows/release.yml`'s own `sed '/^<!--/,/-->$/d'`, which is what
+## the published body is. The editing note names `## Added` in its own prose, so
+## a rewrite that starts from the first one in the file lands inside the note and
+## takes its closing marker with it; the range then runs to the end and the whole
+## file renders as nothing. 0.1.17 published an empty body that way and 0.1.18
+## spent a seven-target build finding out, so the contract is a test now.
+static func _rendered_notes() -> PackedStringArray:
+	var out := PackedStringArray()
+	var dropping: bool = false
+	for line: String in FileAccess.get_file_as_string(RELEASE_NOTES).split("\n"):
+		if dropping:
+			dropping = not line.strip_edges().ends_with("-->")
+			continue
+		if line.begins_with("<!--"):
+			dropping = not line.strip_edges().ends_with("-->")
+			continue
+		out.append(line)
+	while out.size() > 0 and out[0].strip_edges().is_empty():
+		out.remove_at(0)
+	return out
+
+
+func test_the_release_notes_render_to_a_body_that_opens_on_a_section() -> void:
+	var body: PackedStringArray = _rendered_notes()
+	assert_gt(body.size(), 0, "the release notes render to nothing")
+	if body.size() > 0:
+		assert_true(body[0].begins_with("## "), "the body opens on %s" % body[0])
+	var sections: int = 0
+	for line: String in body:
+		if line.begins_with("## "):
+			sections += 1
+	assert_gt(sections, 0, "the body carries no section")
+
+
+func test_the_release_notes_editing_note_is_opened_once_and_closed() -> void:
+	var opens: int = 0
+	var closes: int = 0
+	for line: String in FileAccess.get_file_as_string(RELEASE_NOTES).split("\n"):
+		if line.begins_with("<!--"):
+			opens += 1
+		if line.strip_edges().ends_with("-->"):
+			closes += 1
+	assert_eq(opens, 1, "one editing note")
+	assert_eq(closes, opens, "every editing note is closed")
+
+
+## The one punctuation `CLAUDE.md` forbids outright, checked where a body is
+## written rather than left to a reader.
+func test_the_release_notes_carry_no_em_dash() -> void:
+	assert_false(
+		FileAccess.get_file_as_string(RELEASE_NOTES).contains(char(0x2014)),
+		"the release notes carry an em dash"
+	)
