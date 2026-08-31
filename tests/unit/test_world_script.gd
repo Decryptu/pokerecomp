@@ -39,12 +39,15 @@ func test_command_parser_reads_profile_specific_object_commands() -> void:
 	assert_eq(gold_coins["width"], 2)
 	assert_eq(gold_coins["string_buffer"], 4)
 
+	## Both profiles' `getcoins` macro is `db getcoins_command / db string_buffer`
+	## and `Script_getcoins` ends in one `GetStringBuffer`, so there is no second
+	## buffer on either. Reading one ate the byte after every Crystal `getcoins`.
 	var crystal_coins: Dictionary = Gen2WorldScript.command_at(
-		PackedByteArray([0x3E, 4, 5]), 0, true
+		PackedByteArray([0x3E, 4]), 0, true
 	)
 	assert_true(crystal_coins["ok"])
-	assert_eq(crystal_coins["width"], 3)
-	assert_eq(crystal_coins["string_buffer_2"], 5)
+	assert_eq(crystal_coins["width"], 2)
+	assert_eq(crystal_coins["string_buffer"], 4)
 
 
 func test_crystal_trainer_and_tutorial_commands_use_the_pinned_layout() -> void:

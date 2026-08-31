@@ -136,6 +136,9 @@ var _cur_party_species: int = 0
 ## Which balance window `engine/menus/menu_2.asm` left standing, empty for none.
 var _money_window: StringName = &""
 
+const PIKACHU: int = 25
+const PIKACHU_DEBUG_LEVEL: int = 5
+
 const PHONE_RARE_ROLL_ATTEMPTS: int = 128
 const PHONE_CONTACT_GOT: int = 0
 const PHONE_CONTACTS_FULL: int = 1
@@ -430,9 +433,8 @@ const ROCK_SMASH_ASK_TEXT: String = \
 	"This rock looks\nbreakable." + Gen2TextStream.PAGE_BREAK \
 	+ "Want to use ROCK\nSMASH?"
 const ROCK_SMASH_MAY_SMASH_TEXT: String = "Maybe a #MON\ncan break this."
-## Script_earthquake's operand in RockSmashScript, kept because the runner
-## reports the request rather than shaking anything.
 const ROCK_SMASH_EARTHQUAKE: int = 84
+static var ROCK_SMASH_MOVEMENT: PackedByteArray = PackedByteArray([0x57, 10, 0x47])
 ## constants/sfx_constants.asm, whose comment column is hex. RockSmashScript
 ## plays the boulder's own sound rather than one of its own.
 const SFX_STRENGTH: int = 0x1B
@@ -1665,7 +1667,7 @@ func _complete_plain_request(
 		_stage_trainer_approach()
 	if smash_after_sound:
 		_rock_smash_after_sound = false
-		_stage_rock_smashed()
+		_stage_rock_smash_shake()
 	if not notify_after_sound.is_empty():
 		_item_notify_after_sound = {}
 		_stage_item_notify(
@@ -1880,7 +1882,14 @@ func complete_wait() -> Dictionary:
 	var hide_emote_object: int = int(
 		_pending.get("hide_emote_object", Gen2WorldObject.NONE_INDEX)
 	)
+	var rock_smash_step: int = int(_pending.get("rock_smash_step", 0))
 	_pending = {}
+	if rock_smash_step == 1:
+		_stage_rock_smash_movement()
+		return advance()
+	if rock_smash_step == 2:
+		_stage_rock_smashed()
+		return advance()
 	if hide_emote_object != Gen2WorldObject.NONE_INDEX:
 		_emit_object_event(&"object_emote", {
 			"object_index": hide_emote_object,
@@ -1977,6 +1986,7 @@ const COMMAND_HANDLERS: Dictionary = {
 	Gen2WorldScript.CHECKCELLNUM: &"_command_checkcellnum",
 	Gen2WorldScript.SPECIAL: &"_command_special",
 	Gen2WorldScript.RANDOM: &"_command_random",
+	Gen2WorldScript.XYCOMPARE: &"_command_xycompare",
 	Gen2WorldScript.GIVEITEM: &"_command_giveitem",
 	Gen2WorldScript.TAKEITEM: &"_command_takeitem",
 	Gen2WorldScript.CHECKITEM: &"_command_checkitem",
@@ -2026,6 +2036,27 @@ const COMMAND_HANDLERS: Dictionary = {
 ## no script in either pin prints what they leave.
 const HANDLED_BASE: Array[int] = [
 	Gen2WorldScript.GETNUM, Gen2WorldScript.GETCURLANDMARKNAME,
+]
+
+
+## Whether [method _execute] dispatches [param opcode]; the corpus sweeps it.
+static func handles_opcode(opcode: int, crystal_commands: bool = true) -> bool:
+	if opcode == Gen2WorldScript.FARJUMPTEXT \
+		or (crystal_commands and opcode == Gen2WorldScript.JUMPTEXT) \
+		or Gen2WorldScript.is_waitbutton(opcode, crystal_commands) \
+		or Gen2WorldScript.is_promptbutton(opcode, crystal_commands) \
+		or Gen2WorldScript.is_terminal(opcode, crystal_commands):
+		return true
+	if crystal_commands and (opcode in [0x9F, 0xA8, 0xA9] \
+		or CRYSTAL_NAME_COMMANDS.has(opcode)):
+		return true
+	var source: int = Gen2WorldScript.source_opcode(opcode, crystal_commands)
+	return source in OBJECT_SOURCE_OPCODES or LATER_HANDLERS.has(source) \
+		or COMMAND_HANDLERS.has(opcode) or opcode in HANDLED_BASE
+
+
+const OBJECT_SOURCE_OPCODES: Array[int] = [
+	0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6D, 0x6E, 0x6F, 0x70, 0x71, 0x72, 0x75, 0x76,
 ]
 
 
@@ -2083,6 +2114,11 @@ func _execute_early_command(opcode: int, command: Dictionary, bank: int) -> Dict
 			"frames": int(command.get("value", 0)) * WAIT_FRAMES_PER_UNIT,
 		})
 		return _stage_frame_wait(int(command.get("value", 0)) * WAIT_FRAMES_PER_UNIT)
+	if _crystal_commands() and CRYSTAL_NAME_COMMANDS.has(opcode):
+		return call(CRYSTAL_NAME_COMMANDS[opcode], command)
+	if opcode == 0xA9 and _crystal_commands():
+		_script_value = 1
+		return {"ok": true}
 	if opcode == 0x9F and _crystal_commands():
 		## Crystal inserts verbosegiveitemvar at this raw byte. Normalizing first
 		## turns it into pokegold's swarm command.
@@ -2102,6 +2138,64 @@ func _execute_early_command(opcode: int, command: Dictionary, bank: int) -> Dict
 			return variable_given
 		return _stage_give_item_script(variable_item, variable_name)
 	return {}
+
+
+const CRYSTAL_NAME_COMMANDS: Dictionary = {
+	0xA5: &"_command_getlandmarkname",
+	0xA6: &"_command_gettrainerclassname",
+	0xA7: &"_command_getname",
+}
+
+const NAME_TYPE_MON: int = 1
+const NAME_TYPE_MOVE: int = 2
+const NAME_TYPE_ITEM: int = 4
+const NAME_TYPE_TRAINER: int = 7
+
+
+func _command_getlandmarkname(command: Dictionary) -> Dictionary:
+	var landmark: int = int(command.get("landmark", 0))
+	_set_text_buffer(
+		int(command.get("string_buffer", 0)),
+		data.landmark_name(landmark) if data != null else "",
+		&"landmark_name", {"landmark": landmark}
+	)
+	return {"ok": true}
+
+
+func _command_gettrainerclassname(command: Dictionary) -> Dictionary:
+	return _fill_name_buffer(
+		NAME_TYPE_TRAINER, int(command.get("trainer_group", 0)),
+		int(command.get("string_buffer", 0))
+	)
+
+
+func _command_getname(command: Dictionary) -> Dictionary:
+	return _fill_name_buffer(
+		int(command.get("name_type", 0)), int(command.get("value", 0)),
+		int(command.get("string_buffer", 0))
+	)
+
+
+func _fill_name_buffer(name_type: int, index: int, buffer: int) -> Dictionary:
+	var named: String = ""
+	if data != null:
+		match name_type:
+			NAME_TYPE_MON:
+				named = String(data.species(index).get("name", ""))
+			NAME_TYPE_MOVE:
+				named = String(data.move(index).get("name", ""))
+			NAME_TYPE_ITEM:
+				named = data.item_name(index)
+			NAME_TYPE_TRAINER:
+				named = data.trainer_name(index)
+	_set_text_buffer(
+		buffer, named, &"object_name", {"name_type": name_type, "index": index}
+	)
+	return {"ok": true}
+
+
+func _command_xycompare(_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	return {"ok": true}
 
 
 func _command_scall(_opcode: int, command: Dictionary, bank: int) -> Dictionary:
@@ -2709,6 +2803,8 @@ const LATER_HANDLERS: Dictionary = {
 	0x56: &"_command_closepokepic",
 	0x57: &"_command_two_d_menu",
 	0x58: &"_command_two_d_menu",
+	0x59: &"_command_loadpikachudata",
+	0x5A: &"_command_randomwildmon",
 	0x5B: &"_command_loadtemptrainer",
 	0x5C: &"_command_loadwildmon",
 	0x5D: &"_command_loadtrainer",
@@ -2743,9 +2839,13 @@ const LATER_HANDLERS: Dictionary = {
 	0x6C: &"_command_variablesprite",
 	0x8A: &"_command_pause",
 	0x8B: &"_command_pause",
-	0x8C: &"_command_sdefer",
+	0x88: &"_command_autoinput",
 	0x89: &"_command_newloadmap",
+	0x8C: &"_command_sdefer",
 	0x8D: &"_command_warpcheck",
+	0x8E: &"_command_stopandsjump",
+	0x91: &"_command_reloadend",
+	0x92: &"_command_endall",
 	0x93: &"_command_pokemart",
 	0x94: &"_command_elevator",
 	0x95: &"_command_trade",
@@ -2794,6 +2894,48 @@ func _command_closepokepic(_source_opcode: int, _command: Dictionary, _bank: int
 
 func _command_two_d_menu(source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
 	return _stage_menu(source_opcode == 0x57, command)
+
+
+func _command_loadpikachudata(_source_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	_battle_setup = _new_battle_setup({
+		"kind": &"wild", "pokemon": PIKACHU, "level": PIKACHU_DEBUG_LEVEL,
+	})
+	_emit_runtime_event(&"battle_setup_changed", _battle_setup)
+	return {"ok": true}
+
+
+func _command_randomwildmon(_source_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	return {"ok": true}
+
+
+func _command_autoinput(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
+	_emit_runtime_event(&"auto_input_requested", {
+		"bank": int(command.get("bank", 0)),
+		"address": int(command.get("address", 0)),
+	})
+	return {"ok": true}
+
+
+func _command_stopandsjump(_source_opcode: int, command: Dictionary, bank: int) -> Dictionary:
+	var jumped: Dictionary = _replace_frame(bank, int(command.get("address", 0)))
+	if not bool(jumped.get("ok", false)):
+		return jumped
+	return _stage_frame_wait(Gen2WorldAPI.passes_in_frames(1))
+
+
+func _command_reloadend(source_opcode: int, command: Dictionary, bank: int) -> Dictionary:
+	var reloaded: Dictionary = _command_newloadmap(source_opcode, command, bank)
+	if not bool(reloaded.get("ok", false)):
+		return reloaded
+	_frames.pop_back()
+	if _frames.is_empty():
+		return _complete()
+	return {"ok": true}
+
+
+func _command_endall(_source_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
+	_frames.clear()
+	return _complete()
 
 
 func _command_loadtemptrainer(_source_opcode: int, _command: Dictionary, bank: int) -> Dictionary:
@@ -2916,8 +3058,11 @@ func _command_scripttalkafter(_source_opcode: int, _command: Dictionary, bank: i
 
 
 func _command_endifjustbattled(_source_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
-	if _just_battled():
-		_frames.clear()
+	if not _just_battled():
+		return {"ok": true}
+	_frames.pop_back()
+	if _frames.is_empty():
+		return _complete()
 	return {"ok": true}
 
 
@@ -2967,15 +3112,21 @@ func _command_showemote(_source_opcode: int, command: Dictionary, _bank: int) ->
 	)
 
 
-## Script_earthquake is `ScriptCall` on `applymovement PLAYER,
-## wEarthquakeMovementDataBuffer`, whose stream is `step_shake n` then `step_sleep (n
-## & %00111111)`. The shake starts and the movement wait is that sleep, since
-## step_shake itself reaches ContinueReadingMovement without spending a frame.
 func _command_earthquake(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
-	_emit_runtime_event(&"earthquake_requested", {
-		"strength": int(command.get("value", 0)),
+	return _stage_earthquake(int(command.get("value", 0)))
+
+
+## `Script_earthquake` is `ScriptCall` on `applymovement PLAYER,
+## wEarthquakeMovementDataBuffer`; its sleep is in passes like every movement.
+func _stage_earthquake(value: int, values: Dictionary = {}) -> Dictionary:
+	_emit_object_event(&"player_movement_requested", {
+		"bank": int(_request.get("bank", 0)),
+		"movement": Gen2WorldMovement.earthquake_stream(value),
 	})
-	return _stage_frame_wait(int(command.get("value", 0)) & 0x3F)
+	var wait: Dictionary = {"object_index": Gen2WorldObject.PLAYER_INDEX}
+	for key: Variant in values:
+		wait[key] = values[key]
+	return _stage_movement_wait(wait)
 
 
 func _command_changemapblocks(_source_opcode: int, command: Dictionary, bank: int) -> Dictionary:
@@ -3077,15 +3228,15 @@ func _command_variablesprite(_source_opcode: int, command: Dictionary, _bank: in
 
 
 ## Both write wScriptDelay when their operand is nonzero and reuse whatever is in it
-## when it is zero. `Script_pause` then spends `DelayFrames 2` per unit inside the
-## command; `Script_deactivatefacing` hands the same count to SCRIPT_WAIT, which
-## WaitScript decrements once per frame.
+## when it is zero, and both cost two hardware frames a unit: `Script_pause`
+## spends `DelayFrames 2` inside the command, and SCRIPT_WAIT's own `WaitScript`
+## runs once per overworld pass.
 func _command_pause(source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
 	var delay_operand: int = int(command.get("value", 0))
 	if delay_operand != 0:
 		_script_delay = delay_operand
 	var delay_frames: int = _script_delay * PAUSE_FRAMES_PER_UNIT \
-		if source_opcode == 0x8A else _script_delay
+		if source_opcode == 0x8A else Gen2WorldAPI.passes_in_frames(_script_delay)
 	_emit_runtime_event(&"script_timing_requested", {
 		"kind": &"pause" if source_opcode == 0x8A else &"deactivate_facing",
 		"value": delay_operand,
@@ -6860,14 +7011,23 @@ func _stage_rock_smash_used(slot: int) -> Dictionary:
 	return {"ok": true}
 
 
-## Everything RockSmashScript does after its text: `playsound SFX_STRENGTH`,
-## `earthquake 84`, the rock's one-command movement, `disappear LAST_TALKED` and
-## then RockMonEncounter. The sound and the shake are reported as events like
-## every other presentation request. `readmem wTempWildMonSpecies` and `iffalse
-## .done` test the roll, so a species of zero ends the script and anything else
-## reaches `randomwildmon`, `startbattle` and `reloadmapafterbattle`.
+## RockSmashScript past its sound, a staged wait at a time.
+func _stage_rock_smash_shake() -> Dictionary:
+	return _stage_earthquake(ROCK_SMASH_EARTHQUAKE, {"rock_smash_step": 1})
+
+
+func _stage_rock_smash_movement() -> Dictionary:
+	_emit_object_event(&"object_movement_requested", {
+		"object_index": _last_talked_object_index,
+		"bank": int(_request.get("bank", 0)),
+		"movement": ROCK_SMASH_MOVEMENT,
+	})
+	return _stage_movement_wait({
+		"object_index": _last_talked_object_index, "rock_smash_step": 2,
+	})
+
+
 func _stage_rock_smashed() -> void:
-	_emit_runtime_event(&"earthquake_requested", {"duration": ROCK_SMASH_EARTHQUAKE})
 	## `disappear LAST_TALKED` is DeleteObjectStruct plus
 	## ApplyEventActionAppearDisappear. The delete is reported as
 	## `object_deleted` rather than a visibility override, so a rock with no

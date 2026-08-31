@@ -4464,7 +4464,6 @@ const SCRIPT_EVENT_HANDLERS: Dictionary = {
 	&"wild_encounters_changed": &"_script_wild_encounters",
 	&"command_queue_written": &"_script_queue_write",
 	&"command_queue_deleted": &"_script_queue_delete",
-	&"earthquake_requested": &"_script_earthquake",
 	&"object_follow": &"_script_object_follow",
 	&"object_stop_follow": &"_script_object_stop_follow",
 	&"player_face_object": &"_script_player_face_object",
@@ -4632,12 +4631,6 @@ func _script_queue_delete(event: Dictionary) -> Array:
 	return [apply_command_queue_delete(int(event.get("queue_id", -1)))]
 
 
-func _script_earthquake(event: Dictionary) -> Array:
-	return [{
-		"type": &"screen_shake_requested", "strength": int(event.get("strength", 0)),
-	}]
-
-
 ## `wObjectFollow_Leader` and `wObjectFollow_Follower` are one byte each, so a
 ## second `follow` replaces the pair rather than adding to it.
 func _script_object_follow(event: Dictionary) -> Array:
@@ -4773,6 +4766,14 @@ func _apply_player_override(type: StringName, event: Dictionary) -> bool:
 	return false
 
 
+func _movement_stream(event: Dictionary) -> PackedByteArray:
+	if event.has("movement"):
+		return PackedByteArray(event["movement"])
+	return data.world_movement(
+		int(event.get("bank", 0)), int(event.get("address", 0))
+	)
+
+
 func _apply_object_movement(event: Dictionary) -> Array:
 	var generated: Array = []
 	var map_group: int = int(event.get("map_group", -1))
@@ -4782,10 +4783,7 @@ func _apply_object_movement(event: Dictionary) -> Array:
 		or object_index < 0 or object_index >= objects.size():
 		generated.append({"type": &"movement_failed", "reason": &"invalid_object"})
 		return generated
-	var raw: PackedByteArray = data.world_movement(
-		int(event.get("bank", 0)), int(event.get("address", 0))
-	)
-	var decoded: Dictionary = Gen2WorldMovement.decode(raw)
+	var decoded: Dictionary = Gen2WorldMovement.decode(_movement_stream(event))
 	if not bool(decoded.get("ok", false)):
 		generated.append({
 			"type": &"movement_failed", "reason": decoded.get("reason", &"invalid_movement"),
@@ -4925,10 +4923,7 @@ func _apply_player_movement(event: Dictionary) -> Array:
 	var map_number: int = int(event.get("map_number", -1))
 	if current_map == null or map_group != current_map.group or map_number != current_map.number:
 		return [{"type": &"movement_failed", "reason": &"invalid_map"}]
-	var raw: PackedByteArray = data.world_movement(
-		int(event.get("bank", 0)), int(event.get("address", 0))
-	)
-	var decoded: Dictionary = Gen2WorldMovement.decode(raw)
+	var decoded: Dictionary = Gen2WorldMovement.decode(_movement_stream(event))
 	if not bool(decoded.get("ok", false)):
 		return [{
 			"type": &"movement_failed", "reason": decoded.get("reason", &"invalid_movement"),

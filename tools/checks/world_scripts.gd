@@ -21,6 +21,13 @@ const PLAYER_OPERAND_COMMANDS: Array[String] = [
 	"turnobject", "showemote", "disappear",
 ]
 
+## The two with no runner on purpose: each names an address absent from the pins.
+const NO_RUNNER: Array[String] = ["callasm", "memcallasm"]
+
+const PINS: Dictionary = {
+	&"gold": "pokegold", &"silver": "pokegold", &"crystal": "pokecrystal",
+}
+
 var _r: RefCounted = null
 
 ## Reports how far the cached overworld script and text resources can be read.
@@ -35,6 +42,72 @@ func run(r: RefCounted) -> void:
 	for game_id: StringName in _r.GAME_IDS:
 		if not _validate(game_id):
 			_r.fail("%s: the cached scripts and text did not read back." % game_id)
+		_check_command_widths(game_id)
+
+
+## Every command byte's name and width against the pin's own
+## `macros/scripts/events.asm`, where a `db` is one byte and a `dw` is two.
+func _check_command_widths(game_id: StringName) -> void:
+	var pin: String = _reference_root().path_join(String(PINS[game_id]))
+	var path: String = pin.path_join("macros/scripts/events.asm")
+	if not FileAccess.file_exists(path):
+		_r.note("%s is not checked out, so no command widths were compared." % pin.get_file())
+		return
+	var crystal: bool = game_id == &"crystal"
+	var compared: int = 0
+	for row: Dictionary in _macro_commands(FileAccess.get_file_as_string(path)):
+		var opcode: int = int(row["opcode"])
+		var name: String = String(row["name"])
+		compared += 1
+		_r.check(
+			Gen2WorldScript.command_width(opcode, crystal) == int(row["width"]) \
+				and String(Gen2WorldScript.command_name(opcode, crystal)) == name,
+			"%s: %s ($%02X) is %s wide and named %s, not %d and %s." % [
+				game_id, name, opcode,
+				Gen2WorldScript.command_width(opcode, crystal),
+				Gen2WorldScript.command_name(opcode, crystal),
+				int(row["width"]), name,
+			]
+		)
+	_r.note("%s: %d command macros compared." % [game_id, compared])
+
+
+## `const <name>_command ; $xx` and its `MACRO`, as { opcode, name, width }. A
+## body that is not plain `db`, `dw` and `map_id` lines branches on its operands
+## and is skipped; the unit tier pins those six.
+func _macro_commands(source: String) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var pattern := RegEx.create_from_string(
+		"const (\\w+)_command ; \\$([0-9a-f]{2})\\n(?:EXPORT[^\\n]*\\n)?MACRO \\1\\n([\\s\\S]*?)\\nENDM"
+	)
+	for found: RegExMatch in pattern.search_all(source):
+		var width: int = 0
+		var known: bool = true
+		for raw: String in found.get_string(3).split("\n"):
+			var line: String = raw.strip_edges()
+			if line.is_empty() or line.begins_with(";"):
+				continue
+			elif line.begins_with("db "):
+				width += 1
+			elif line.begins_with("dw ") or line.begins_with("map_id"):
+				width += 2
+			else:
+				known = false
+		if not known:
+			continue
+		out.append({
+			"opcode": found.get_string(2).hex_to_int(),
+			"name": found.get_string(1).lstrip("_"),
+			"width": width,
+		})
+	return out
+
+
+func _reference_root() -> String:
+	var override: String = OS.get_environment("GEN2_REFERENCE_ROOT")
+	if override != "":
+		return override
+	return ProjectSettings.globalize_path("res://").path_join(".references")
 
 
 func _validate(game_id: StringName) -> bool:
@@ -63,6 +136,7 @@ func _validate(game_id: StringName) -> bool:
 	var failure_reasons: Dictionary = {}
 	var failure_opcodes: Dictionary = {}
 	var command_names: Dictionary = {}
+	var unhandled: Dictionary = {}
 	var player_operands: Dictionary = {}
 	for raw_key: Variant in (scripts_value as Dictionary):
 		# Read through GameData rather than off the JSON: the cache stores byte
@@ -87,6 +161,7 @@ func _validate(game_id: StringName) -> bool:
 				break
 			var name: String = String(command.get("name", ""))
 			command_names[name] = int(command_names.get(name, 0)) + 1
+			_tally_unhandled(command, name, crystal_commands, unhandled)
 			_tally_object_operands(command, name, player_operands)
 			command_count += 1
 			steps += 1
@@ -138,14 +213,32 @@ func _validate(game_id: StringName) -> bool:
 	print("  invalid_text_samples=%s" % JSON.stringify(invalid_text_samples))
 	print("  commands=%s" % command_names)
 	print("  player_operands=%s" % player_operands)
-	if not unproved.is_empty():
-		print("FAIL %s: %s name PLAYER and nothing proves the runtime reaches them" % [
-			game_id, unproved,
-		])
+	_report_failure(game_id, unhandled, "have no runtime handler")
+	_report_failure(
+		game_id, unproved, "name PLAYER and nothing proves the runtime reaches them"
+	)
 	_print_ram_markers(data, ram_addresses, number_markers)
 	print("  raw_byte_markers=%s" % raw_bytes)
 	_print_standard_table(game_id)
-	return raw_bytes.is_empty() and unproved.is_empty()
+	return [raw_bytes, unproved, unhandled].all(
+		func(tally: Dictionary) -> bool: return tally.is_empty()
+	)
+
+
+func _report_failure(game_id: StringName, tally: Dictionary, why: String) -> void:
+	if tally.is_empty():
+		return
+	print("FAIL %s: %s %s" % [game_id, tally, why])
+
+
+func _tally_unhandled(
+	command: Dictionary, name: String, crystal_commands: bool, tally: Dictionary
+) -> void:
+	if NO_RUNNER.has(name):
+		return
+	if Gen2WorldScriptRunner.handles_opcode(int(command["opcode"]), crystal_commands):
+		return
+	tally[name] = int(tally.get(name, 0)) + 1
 
 
 ## Both operand keys are read, so `follow <NPC>, PLAYER` counts once.
