@@ -1051,9 +1051,9 @@ second registration is refused with `duplicate_experience_bystanders` whoever
 makes it. A share is not a product the way a scale is, and multiplying two mods'
 fractions would let load order decide what a party is paid.
 
-Three things the host does around it. A claimed share above zero **suppresses the
-cartridge halving**, since neither later generation halves and enabling the
-feature would otherwise cut the fighter's award. A bystander is paid **once and
+A claimed share above zero suppresses the cartridge halving, since neither later
+generation halves and enabling the feature would otherwise cut the fighter's
+award. A bystander is paid **once and
 last**, after both passes, with the participant pass's award scaled and floored
 at 1 the way every scaled award is. Its stat experience is the participant pass's
 block unchanged: a bystander's EVs are the cartridge's hidden gain rather than a
@@ -1523,7 +1523,7 @@ already share, so a mod never composes pixels:
 effect number: `item` (the default, the jingle a hidden item plays), `key_item`,
 `get_badge`, `transaction` and `none`.
 
-**`SFX_SHINE` is deliberately not among them.** The sparkle means a shiny Pokémon
+`SFX_SHINE` is deliberately not among them. The sparkle means a shiny Pokémon
 and nothing else, and a mod firing it for something ordinary teaches a player to
 distrust it.
 

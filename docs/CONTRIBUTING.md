@@ -35,15 +35,15 @@ tools still read it with `FileAccess`. Do not delete it.
 
 Five boundaries are load-bearing and not obvious from one file:
 
-- **Raw byte runs never go into JSON.** A decimal array costs ~4 bytes on disk
+- **Raw byte runs never go into JSON:** a decimal array costs ~4 bytes on disk
   and ~26 resident per cartridge byte. Use `RomCache.write_payload_map()` or
   `write_section()`; both leave an `[offset, length]` span and move the bytes to
   a `.bin` blob. Only a named `bytes` field moves.
-- **World sections load on first use.** The launcher, pic viewer and battle
+- **World sections load on first use:** the launcher, pic viewer and battle
   never read scripts, text or audio.
-- **Never match a keycode in a screen; match a `Gen2Button`.** An embedded host
+- **Never match a keycode in a screen; match a `Gen2Button`:** an embedded host
   takes `handle_button(button)`, so a test presses a button, not a key.
-- **Anything printed is already in the bug report.** `Gen2Diagnostics` installs
+- **Anything printed is already in the bug report:** `Gen2Diagnostics` installs
   a [Logger] with `OS.add_logger`, so every `print`, `push_warning`,
   `push_error` and runtime error reaches the session log and the report a player
   attaches to an issue. Never add a second reporting path beside a message; add
@@ -258,17 +258,17 @@ The repository is kept small on purpose.
 **Extend, do not add.** A new feature belongs in the file that already owns its
 subject. Before creating any file, name the existing one it cannot go in.
 
-- **Tools.** Do not add a script per feature. `tools/validate.gd` takes a new
+- **Tools:** do not add a script per feature. `tools/validate.gd` takes a new
   topic as a table entry; `tools/preview_*.gd` are per screen, not per scene or
   per check. A one-off you ran once is not a tool: delete it.
-- **Tests.** One file per subject, not per behaviour. Add cases to the existing
+- **Tests:** one file per subject, not per behaviour. Add cases to the existing
   file. A behaviour is tested once, at the layer that owns it; re-asserting it
   at a second layer buys nothing and costs the suite. Keep slow work
   (real caches, whole-movie runs, frame sweeps) out of the default suite.
-- **Docs.** State each fact once, where it is enforced, and link instead of
+- **Docs:** state each fact once, where it is enforced, and link instead of
   repeating. Source findings and constants go next to the code; contracts go in
   `docs/`.
-- **Comments.** Write none you do not have to: a name, a guard clause or a small
+- **Comments:** write none you do not have to; a name, a guard clause or a small
   named helper says it once and cannot go stale. The one worth writing is a
   source fact, the pret symbol a behaviour comes from plus the line saying why it
   is not obvious. Never restate the line below, no section banners, no doc
