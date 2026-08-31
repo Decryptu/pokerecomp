@@ -867,7 +867,10 @@ func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 		if not bool(outcome.get("ok", true)):
 			return _fail(StringName(outcome.get("reason", &"script_failed")), outcome)
 		if _pending:
-			return _waiting_result()
+			## As below: a command with a waiting result of its own has drained
+			## the events, and a second loses them. `faceplayer` before a `trade`
+			## or a `special BankOfMom` is the visible half.
+			return outcome if outcome.has("status") else _waiting_result()
 		if _completed:
 			## A terminal command returns _complete()'s own result, which has
 			## already drained the events; asking for a second one would hand the

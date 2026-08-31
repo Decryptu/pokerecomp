@@ -1,31 +1,29 @@
 extends SceneTree
 
-## Traces `MeetMomRightScript` through the world screen, frame by frame.
+## `MeetMomRightScript` through the world screen, frame by frame.
 ##
 ##   Godot --headless --path . -s res://tools/preview_mom_scene.gd -- <game> [png] [frame]
 ##
 ## The story walker proves the script's results, never that the presentation runs,
 ## and a run that moves a checkpoint exits non-zero. Crystal triggers on the coord
-## events at (8,4) and (9,4); Gold and Silver `sdefer` it from the map entry.
+## events at (8,4) and (9,4), Gold and Silver `sdefer` it from the map entry, and
+## `MomScript` is then talked to from the cell the scene left free.
 
 const WINDOW_SIZE := Vector2i(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 const FRAME: float = 1.0 / 59.7275
-## Long enough for the whole conversation, which the trace answers as it goes.
 const TRACE_FRAMES: int = 4000
 
 ## The frame the emote, Mom's first drawn step, the text box and the script's own
-## `end` each land on, per profile. Every interval between them is the source's:
-## `showemote EMOTE_SHOCK, MOM1, 15` is 30 frames of emote, and the walk is
-## `MomWalksToPlayerMovement`'s own steps, both counted in overworld passes.
+## `end` land on. `showemote EMOTE_SHOCK, MOM1, 15` is 30 frames and the walk is
+## `MomWalksToPlayerMovement`, both counted in overworld passes.
 const CHECKPOINTS: Dictionary = {
 	&"crystal": {&"emote": 17, &"walk": 46, &"text": 77, &"done": 1909},
 	&"gold": {&"emote": 17, &"walk": 47, &"text": 143, &"done": 2039},
 	&"silver": {&"emote": 17, &"walk": 47, &"text": 143, &"done": 2039},
 }
 
-## Who looks at whom while the text is up: Crystal's `turnobject PLAYER, LEFT`
-## and Mom's `turn_head RIGHT` against pokegold's walk downstairs and her own
-## `turnobject ..., UP`. The cells read the same whether those ran or not.
+## Who looks at whom at the text: Crystal's `turnobject PLAYER, LEFT` and Mom's
+## `turn_head RIGHT` against pokegold's `turnobject ..., UP`.
 const FACINGS_AT_TEXT: Dictionary = {
 	&"crystal": {&"player": Gen2WorldSprite.FACING_LEFT, &"mom": Gen2WorldSprite.FACING_RIGHT},
 	&"gold": {&"player": Gen2WorldSprite.FACING_DOWN, &"mom": Gen2WorldSprite.FACING_UP},
@@ -33,16 +31,18 @@ const FACINGS_AT_TEXT: Dictionary = {
 }
 const FACING_NAMES: Array[String] = ["down", "up", "left", "right"]
 
-## Both pieces are `channel_count 3` on all three profiles, so a fourth music
-## channel on is the town still playing under `playmusic MUSIC_MOM`.
 const MUSIC_CHANNELS: int = 3
 
-## `constants/map_constants.asm`, and `Gen2WorldSpawn`'s own group.
 const PLAYERS_HOUSE_1F: int = 6
-## `MomWalksToPlayerMovement` starts here, and the player is met at (9,4).
 const MOM_OBJECT: int = 0
 const APPROACH_CELL := Vector2i(9, 3)
 const TRIGGER_CELL := Vector2i(9, 4)
+## Where `MomScript` is talked to once the scene has finished: her walk back
+## leaves her on (7,4) on Crystal and (7,3) on pokegold.
+const TALK_CELLS: Dictionary = {
+	&"crystal": Vector2i(8, 4), &"gold": Vector2i(8, 3), &"silver": Vector2i(8, 3),
+}
+const MOM_FACING_AT_TALK: int = Gen2WorldSprite.FACING_RIGHT
 
 var _game: StringName = &""
 var _screen: Gen2WorldScreen = null
@@ -50,6 +50,8 @@ var _output_path: String = ""
 var _capture_frame: int = TRACE_FRAMES
 var _frames: int = 0
 var _started: bool = false
+var _talk_frame: int = -1
+var _talk_facing: int = -1
 var _trace: Array[Dictionary] = []
 
 
@@ -93,16 +95,13 @@ func _initialize() -> void:
 	save.world = world.snapshot()
 	_screen.set_data(data)
 	_screen.set_save(save)
-	## The trace owns the clock. Without this the screen spends host frames of
-	## its own before the trace starts, and the row an event lands on moves by
-	## one from run to run.
+	## The trace owns the clock: host frames of its own move every row by one.
 	_screen.process_mode = Node.PROCESS_MODE_DISABLED
 	root.add_child(_screen)
 	current_scene = _screen
 
 
-## One row per source frame, so a gap in the presentation is a run of frames
-## with nothing happening rather than a missing event.
+## One row per source frame, so a gap is a run of frames rather than a hole.
 func _sample() -> Dictionary:
 	var world: Gen2WorldAPI = _screen._world
 	var mom: Gen2WorldObject = null
@@ -142,8 +141,13 @@ func _process(_delta: float) -> bool:
 	if not _trace.is_empty() and bool(_trace[-1]["waiting_input"]):
 		# Every question answered YES, the way the other preview drivers do.
 		_screen.press_button(Gen2Button.A)
+	elif not _trace.is_empty() and not bool(_trace[-1]["script_busy"]):
+		_drive_talk()
 	_screen._process(FRAME)
 	_trace.append(_sample())
+	if _talk_frame < 0 and _first_frame(&"done") >= 0 and bool(_trace[-1]["text"]):
+		_talk_frame = _frames
+		_talk_facing = int(_trace[-1]["mom_facing"])
 	if _frames == _capture_frame and not _output_path.is_empty():
 		var image: Image = Gen2ToolPath.capture(root)
 		if image == null:
@@ -158,8 +162,22 @@ func _process(_delta: float) -> bool:
 	return true
 
 
-## The first frame each of the three checkpoints appears on, against the pinned
-## row. Reported as a line per checkpoint so a shift names itself.
+func _drive_talk() -> void:
+	var world: Gen2WorldAPI = _screen._world
+	if _talk_frame >= 0 or _first_frame(&"text") < 0:
+		return
+	var target: Vector2i = TALK_CELLS.get(_game, Vector2i(8, 4))
+	var step := Vector2i(signi(target.x - world.player_cell.x), 0)
+	if step == Vector2i.ZERO:
+		step = Vector2i(0, signi(target.y - world.player_cell.y))
+	if step == Vector2i.ZERO and world.player_facing == Gen2WorldSprite.FACING_LEFT:
+		_screen.press_button(Gen2Button.A)
+		return
+	_screen.move_player(step if step != Vector2i.ZERO else Vector2i(-1, 0))
+
+
+## The first frame each checkpoint appears on, a line each so a shift names
+## itself.
 func _checkpoints_hold() -> bool:
 	var expected: Dictionary = CHECKPOINTS.get(_game, {})
 	if expected.is_empty():
@@ -173,6 +191,7 @@ func _checkpoints_hold() -> bool:
 			printerr("%s %s first appears on frame %d, not %d" % [_game, name, at, want])
 			held = false
 	held = _facings_hold() and held
+	held = _talk_facing_holds() and held
 	held = _channels_hold() and held
 	print("%s checkpoints %s" % [_game, "hold" if held else "MOVED"])
 	return held
@@ -195,6 +214,20 @@ func _facings_hold() -> bool:
 		])
 		held = false
 	return held
+
+
+## `MovementFunction_Standing`'s STEP_TYPE_RESTORE resets once and stands, so a
+## standing object holds what `MomScript`'s own `faceplayer` gives it.
+func _talk_facing_holds() -> bool:
+	if _talk_frame < 0:
+		printerr("%s never got MomScript's own box up" % _game)
+		return false
+	if _talk_facing == MOM_FACING_AT_TALK:
+		return true
+	printerr("%s faceplayer left Mom looking %s, not %s" % [
+		_game, _facing_name(_talk_facing), _facing_name(MOM_FACING_AT_TALK),
+	])
+	return false
 
 
 func _facing_name(facing: int) -> String:
@@ -229,7 +262,6 @@ func _first_frame(name: StringName) -> int:
 	return -1
 
 
-## Prints only where something changed, which is what makes a stall readable.
 func _report() -> void:
 	var last: Dictionary = {}
 	var changes: int = 0

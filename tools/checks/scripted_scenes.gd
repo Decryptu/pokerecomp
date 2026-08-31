@@ -1,8 +1,8 @@
 extends RefCounted
 
-## Long source-script movements whose leader and player-follower paths cross
-## several turns. Each row is driven from the imported map event, one hardware
-## frame at a time, on every cartridge profile.
+## Conversations driven from the imported map events on every cartridge profile:
+## two long movement scenes a hardware frame at a time, and every object whose
+## script opens on `faceplayer`.
 ##
 ##   Godot --headless --path . -s res://tools/validate.gd -- scripted_scenes
 
@@ -22,18 +22,30 @@ const GUIDE_FOLLOWER_WAYPOINTS: Array[Vector2i] = [
 	Vector2i(10, 6), Vector2i(24, 11), Vector2i(24, 11),
 ]
 const GUIDE_MOVEMENT_FRAMES: Array[int] = [32, 48, 56, 64, 152, 16]
-## Which way the player looks at the box after each stream: the follow's own
-## answer, then `turnobject PLAYER` UP, UP, LEFT and RIGHT. Stream 6 has no box
-## behind it, and pokegold ships Crystal's guide script.
+## Which way the player looks at each box: the follow's own answer, then
+## `turnobject PLAYER` UP, UP, LEFT and RIGHT. Stream 6 has no box behind it.
 const NO_TEXT_AFTER: int = -1
 const GUIDE_PLAYER_FACINGS: Array[int] = [
 	Gen2WorldSprite.FACING_UP, Gen2WorldSprite.FACING_UP,
 	Gen2WorldSprite.FACING_UP, Gen2WorldSprite.FACING_LEFT,
 	Gen2WorldSprite.FACING_RIGHT, NO_TEXT_AFTER,
 ]
-## `turnobject CHERRYGROVECITY_GRAMPS, LEFT`, the object half of it.
 const GUIDE_GIFT_FACING: int = Gen2WorldSprite.FACING_LEFT
 const DUDE_MOVEMENT_FRAMES: Array[Array] = [[48, 48], [40, 40]]
+
+## Both open on `Script_faceplayer`, named rather than numbered because
+## pokegold's is $6A and Crystal's $6B.
+const FACE_PLAYER_COMMANDS: Array[StringName] = [&"faceplayer", &"jumptextfaceplayer"]
+const TALKABLE_OBJECT_TYPES: Array[int] = [
+	Gen2WorldObject.OBJECTTYPE_SCRIPT, Gen2WorldObject.OBJECTTYPE_TRAINER,
+]
+const MOVEMENT_WAIT_FRAMES: int = 256
+const NEIGHBOURS: Dictionary = {
+	Gen2WorldSprite.FACING_UP: [Vector2i(0, 1), Gen2WorldSprite.FACING_DOWN],
+	Gen2WorldSprite.FACING_DOWN: [Vector2i(0, -1), Gen2WorldSprite.FACING_UP],
+	Gen2WorldSprite.FACING_LEFT: [Vector2i(1, 0), Gen2WorldSprite.FACING_RIGHT],
+	Gen2WorldSprite.FACING_RIGHT: [Vector2i(-1, 0), Gen2WorldSprite.FACING_LEFT],
+}
 
 var _r: RefCounted = null
 
@@ -48,6 +60,7 @@ func run(r: RefCounted) -> void:
 		_check_guide(game_id, data)
 		for trigger_index: int in ROUTE_TRIGGERS.size():
 			_check_tutorial(game_id, data, trigger_index)
+		_check_face_player(game_id, data)
 
 
 func _check_guide(game_id: StringName, data: GameData) -> void:
@@ -179,8 +192,8 @@ func _drain(world: Gen2WorldAPI, initial: Array, tracked_object: int) -> Diction
 		var input: Dictionary = world.pending_script_input()
 		var input_type: StringName = StringName(input.get("type", &""))
 		if input_type in [&"text", &"button"]:
-			## What the `turnobject` before this box left. A dropped turn moves
-			## nobody, so the waypoints above cannot see one.
+			## What the `turnobject` before this box left: a dropped turn moves
+			## nobody, so no waypoint above can see one.
 			if not movements.is_empty() and not (movements[-1] as Dictionary).has("facing"):
 				(movements[-1] as Dictionary)["facing"] = world.player_facing
 				(movements[-1] as Dictionary)["leader_facing"] = \
@@ -215,3 +228,81 @@ func _drain(world: Gen2WorldAPI, initial: Array, tracked_object: int) -> Diction
 		if results.is_empty():
 			results = world.run_event_queue(false)
 	return {"ok": false, "reason": "script did not terminate in 512 transitions"}
+
+
+## Every object whose script opens on `faceplayer`, from each side it is
+## reachable from and in a world of its own, since a second press would resume
+## the standing conversation. Nothing else asks whether the turn survives a
+## paused or refused command; the party is there because `readvar VAR_BOXSPACE`,
+## `trade` and `GetFirstPokemonHappiness` read one.
+func _check_face_player(game_id: StringName, data: GameData) -> void:
+	var talked: int = 0
+	var missed: int = 0
+	var wrong: Array[String] = []
+	for map: Gen2WorldMap in data.world_maps():
+		var listed: Gen2WorldAPI = Gen2WorldAPI.open(data, map.group, map.number, Vector2i.ZERO)
+		if listed == null:
+			continue
+		for candidate: Gen2WorldObject in listed.objects:
+			if not _opens_on_face_player(data, listed, candidate):
+				continue
+			for facing: int in NEIGHBOURS:
+				var world: Gen2WorldAPI = Gen2WorldAPI.open(
+					data, map.group, map.number, Vector2i.ZERO
+				)
+				var object: Gen2WorldObject = world.objects[candidate.index]
+				if not _talk_from(world, object, facing):
+					continue
+				talked += 1
+				var turned: int = (world.objects[object.index] as Gen2WorldObject).facing
+				var wanted: int = int((NEIGHBOURS[facing] as Array)[1])
+				if turned == wanted:
+					continue
+				missed += 1
+				if wrong.size() < 8:
+					wrong.append("map %d/%d object %d looking %d, not %d" % [
+						map.group, map.number, object.index, turned, wanted,
+					])
+	for line: String in wrong:
+		_r.check(false, "%s: faceplayer left %s" % [game_id, line])
+	_r.check(missed == 0, "%s: faceplayer missed %d of %d talks." % [game_id, missed, talked])
+	print("%s: faceplayer turned %d of %d talks" % [game_id, talked - missed, talked])
+
+
+func _opens_on_face_player(
+	data: GameData, world: Gen2WorldAPI, object: Gen2WorldObject
+) -> bool:
+	if not object.object_type in TALKABLE_OBJECT_TYPES or object.event_script <= 0:
+		return false
+	var bank: int = int(world.current_map.events.get("bank", 0))
+	var raw: PackedByteArray = data.world_script(bank, object.event_script)
+	if raw.is_empty():
+		return false
+	return Gen2WorldScript.command_name(
+		int(raw[0]), Gen2WorldState.is_crystal_profile(data)
+	) in FACE_PLAYER_COMMANDS
+
+
+## Stands the player on one neighbouring cell looking at [param object] and
+## presses A. False where a wall, an object or a counter rules that side out.
+func _talk_from(world: Gen2WorldAPI, object: Gen2WorldObject, facing: int) -> bool:
+	var cell: Vector2i = object.cell + ((NEIGHBOURS[facing] as Array)[0] as Vector2i)
+	if cell.x < 0 or cell.y < 0 \
+		or cell.x >= world.current_map.collision_width \
+		or cell.y >= world.current_map.collision_height:
+		return false
+	if world.object_at(cell) != null or not world.can_walk_to(cell):
+		return false
+	world.player_cell = cell
+	world.player_facing = facing
+	if world.object_at(world.object_facing_cell()) != object:
+		return false
+	world.set_party_summary(1, false, [155] as Array[int], [[33]], ["CHIKORITA"], [false])
+	world.interact()
+	## The Copycat spins between her two `faceplayer`s.
+	for _frame: int in MOVEMENT_WAIT_FRAMES:
+		if StringName(world.pending_script_wait().get("wait", &"")) \
+			!= Gen2WorldScriptRunner.WAIT_MOVEMENT:
+			break
+		world.advance_script_presentation_frame()
+	return true

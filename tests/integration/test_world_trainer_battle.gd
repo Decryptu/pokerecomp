@@ -12,6 +12,15 @@ const STORY_OBJECT: int = 0x6210
 const STORY_TEXT: int = 0x7200
 const STORY_EVENT_FLAG: int = 8
 
+## `CatchTutorial` from the first frame of the fight to the last, measured on a
+## Crystal cartridge through Route 29's own tutorial: 1,529 hardware frames, of
+## which the battle menu is 53. Reading `DudeAutoInputs`' durations as frames
+## rather than as `GetJoypad` polls made that menu 2,042 on its own, which is
+## half a minute of a fight nobody can play sitting on FIGHT. The ceiling is the
+## cartridge's own count; the guard is what says the stream stalled outright.
+const DUDE_TUTORIAL_FRAMES: int = 1529
+const DUDE_FRAME_GUARD: int = 8000
+
 var _data: GameData = null
 var _world_screen: Gen2WorldScreen = null
 
@@ -588,14 +597,21 @@ func test_the_dude_plays_the_catching_tutorial_and_keeps_nothing() -> void:
 		if _world_screen._active_battle_save != null else 0
 
 	var messages: Array[String] = []
-	var guard: int = 8000
-	while _world_screen._battle_host != null and guard > 0:
-		guard -= 1
+	var throw_frame: int = -1
+	var frames: int = 0
+	while _world_screen._battle_host != null and frames < DUDE_FRAME_GUARD:
+		frames += 1
 		var line: String = String(host.battle_snapshot()["message"])
 		if messages.is_empty() or messages.back() != line:
 			messages.append(line)
+			if throw_frame < 0 and line == "DUDE used the\nPOKE BALL.":
+				throw_frame = frames
 		host.advance_hardware_frame()
-	assert_gt(guard, 0, "the tutorial answers itself: %s" % JSON.stringify(messages))
+	assert_lt(frames, DUDE_FRAME_GUARD, "the tutorial answers itself: %s" % JSON.stringify(messages))
+	print("dude: ball thrown on frame %d, tutorial over on %d" % [throw_frame, frames])
+	assert_between(throw_frame, 1, DUDE_TUTORIAL_FRAMES,
+		"the Dude reached the ball on frame %d" % throw_frame)
+	assert_lt(frames, DUDE_FRAME_GUARD, "the tutorial ran %d frames" % frames)
 	await get_tree().process_frame
 	await get_tree().process_frame
 

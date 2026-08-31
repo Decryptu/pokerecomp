@@ -4,28 +4,21 @@ extends SceneTree
 ## order it ran and with the `bank:address` the cartridge would hold for it. The
 ## port half of `.claude/oracle/overworld/trace_script.py`: the line is
 ## `frame bank:addr opcode name`, so a branch taken on the wrong side of a flag
-## shows up as the first differing address. The walk list is the steps taken before
-## A is pressed, a count of zero being a turn on the spot; A is then pressed every
-## fourteenth frame, the cadence the cartridge trace mashes at. Arguments:
-## `<game> <group> <map> <x> <y> <dir:count,...> <frames> <out.txt>`.
+## shows up as the first differing address. Arguments:
+## `<game> <group> <map> <x> <y> <dir:count,...> <frames> <out.txt> [new|dev]`.
+## The walk is untraced setup, `a:<count>` pressing A past a scene script in the
+## way, and the save is the new game the oracle's own checkpoints hold.
 
-## The cartridge trace's own pace: slow enough that a box waiting for a press is
-## not pressed twice.
+## The cartridge trace's own pace: slow enough not to press a box twice.
 const PRESS_EVERY: int = 14
-## A scratch root, so a run cannot reach the owner's own saves: the world is
-## given a save because half the script commands read one, VAR_BOXSPACE and
-## VAR_PARTYCOUNT among them, and a world with none fails the command rather
-## than inventing an empty party.
+## A scratch root, so a run cannot reach the owner's own saves. There is one at
+## all because VAR_BOXSPACE, VAR_PARTYCOUNT and half the rest read a save.
 const SAVE_ROOT: String = "user://trace_world_script_slots"
-## Frames with no script running before a run is called finished.
 const IDLE_FRAMES: int = 90
 
 
-## The runner being drained, held across the frame it finishes on.
 var _runner: Gen2WorldScriptRunner = null
 var _seen: int = 0
-## Set once a conversation has run and ended. One talk is the artefact, and a
-## press into the object it was with starts the same one over.
 var _finished: bool = false
 
 
@@ -37,7 +30,9 @@ func _run() -> void:
 	await process_frame
 	var args: PackedStringArray = OS.get_cmdline_user_args()
 	if args.size() < 8:
-		push_error("usage: <game> <group> <map> <x> <y> <dir:count,...> <frames> <out.txt>")
+		push_error(
+			"usage: <game> <group> <map> <x> <y> <dir:count,...> <frames> <out.txt> [new|dev]"
+		)
 		quit(2)
 		return
 	if Gen2ToolPath.refuses(args[7]):
@@ -51,9 +46,11 @@ func _run() -> void:
 
 	DirAccess.make_dir_recursive_absolute(SAVE_ROOT)
 	Gen2SaveStore.use_root(SAVE_ROOT)
-	var save: Gen2SaveData = Gen2SaveStore.create_development_save(data, 0)
+	var development: bool = args.size() > 8 and args[8] == "dev"
+	var save: Gen2SaveData = Gen2SaveStore.create_development_save(data, 0) if development \
+		else Gen2SaveStore.create_new_game(data, 0, "ASH")
 	if save == null:
-		push_error("no development save")
+		push_error("no save")
 		quit(2)
 		return
 	save.world = null
@@ -77,11 +74,15 @@ func _run() -> void:
 	var lines: PackedStringArray = PackedStringArray(["# frame bank:addr opcode name"])
 	var frame: int = 0
 
-	var walked: int = _walk(screen, lines, args[5], frame)
+	var setup: PackedStringArray = PackedStringArray()
+	var walked: int = _walk(screen, setup, args[5], frame)
 	if walked < 0:
 		quit(2)
 		return
 	frame = walked
+	_runner = null
+	_seen = 0
+	_finished = false
 
 	print("talking from %s facing %d" % [screen._world.player_cell, screen._world.player_facing])
 	frame = _spend(screen, lines, frame, maxi(1, int(args[6])))
@@ -100,10 +101,19 @@ func _walk(
 	for step: String in spec.split(",", false):
 		var parts: PackedStringArray = step.split(":")
 		var button: int = _button_for(parts[0])
-		if button == Gen2Button.NONE:
-			push_error("a walk step is <up|down|left|right>:<count>")
-			return -1
 		var cells: int = int(parts[1]) if parts.size() > 1 else 1
+		if parts[0].to_lower() == "a":
+			for press: int in cells:
+				for spent: int in PRESS_EVERY:
+					if spent == 0:
+						screen.press_button(Gen2Button.A)
+					screen.advance_frame()
+					_collect(screen, lines, frame)
+					frame += 1
+			continue
+		if button == Gen2Button.NONE:
+			push_error("a walk step is <up|down|left|right|a>:<count>")
+			return -1
 		if cells == 0:
 			var turns: int = 0
 			while turns < 16 and screen._world.player_facing != _facing_for(button):
@@ -153,10 +163,8 @@ func _spend(
 	return frame
 
 
-## Drains whatever the runner has executed since the last frame, and drains a
-## runner that finished inside the frame before letting go of it: the commands
-## after the last wait all run on one frame, and a sample that only ever looks
-## at the live runner loses every one of them.
+## Drains what the runner ran since the last frame, and a runner that finished
+## inside it: the commands after the last wait all run on one frame.
 func _collect(screen: Gen2WorldScreen, lines: PackedStringArray, frame: int) -> void:
 	var runner: Gen2WorldScriptRunner = screen._world._active_script
 	if runner != _runner:
@@ -182,8 +190,6 @@ func _drain(lines: PackedStringArray, frame: int) -> void:
 	_seen = trace.size()
 
 
-## The facing a held direction settles on, which is what says a turn on the spot
-## has been taken.
 func _facing_for(button: int) -> int:
 	match button:
 		Gen2Button.UP: return Gen2WorldSprite.FACING_UP

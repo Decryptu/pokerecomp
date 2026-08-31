@@ -5078,8 +5078,9 @@ func _apply_result_events(result: Dictionary) -> Dictionary:
 
 
 func _finish_script_result(result: Dictionary) -> Dictionary:
+	## Before the refusal: the commands in front of the failing one did run.
 	if not bool(result.get("ok", false)):
-		return result
+		return _apply_result_events(result)
 	if result.has("clock"):
 		var clock: Dictionary = result.get("clock", {})
 		set_world_clock(
