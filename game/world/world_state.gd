@@ -105,16 +105,15 @@ const ENGINE_KURT_MAKING_BALLS: int = 80
 const ENGINE_ALL_FRUIT_TREES: int = 84
 
 ## wBikeFlags' BIKEFLAGS_STRENGTH_ACTIVE_F, three engine flags ahead of the badge
-## section and so profile split the same way. Nothing in the pinned engine/ or
-## home/ ever clears it: SetStrengthFlag is the only writer, so it persists for
-## the save across maps, warps and snapshots.
+## section and so profile split the same way. `SetStrengthFlag` is its one writer
+## and `ResetBikeFlags` its one clear, so it lives exactly one map load.
 const ENGINE_STRENGTH_ACTIVE: int = 24
 const ENGINE_STRENGTH_ACTIVE_GOLD_SILVER: int = 23
-## The next flag in the same byte: `BIKEFLAGS_ALWAYS_ON_BIKE_F`, which is the
-## whole of `.CantGetOffBike`. `BIKEFLAGS_DOWNHILL_F` follows it and is read by
-## `DoPlayerMovement` alone, which no map ever sets.
+## The next two flags in the same byte: `BIKEFLAGS_ALWAYS_ON_BIKE_F` is the whole
+## of `.CantGetOffBike`, and `BIKEFLAGS_DOWNHILL_F` is Route 17's, unmodelled.
 const ENGINE_ALWAYS_ON_BIKE: int = 25
 const ENGINE_ALWAYS_ON_BIKE_GOLD_SILVER: int = 24
+const ENGINE_DOWNHILL: int = 26
 
 ## wBadges spans wJohtoBadges then wKantoBadges as one contiguous flag_array, and
 ## VAR_BADGES counts both bytes, not Johto alone. These are Crystal indices:
@@ -990,6 +989,20 @@ static func always_on_bike_flag(data: GameData) -> int:
 		else ENGINE_ALWAYS_ON_BIKE_GOLD_SILVER
 
 
+## `ResetBikeFlags` (`home/flag.asm`), which zeroes `wBikeFlags` whole.
+func reset_bike_flags(crystal: bool = true) -> bool:
+	var did_change: bool = false
+	for index: int in [ENGINE_STRENGTH_ACTIVE, ENGINE_ALWAYS_ON_BIKE, ENGINE_DOWNHILL]:
+		var flag: int = engine_flag(index, crystal)
+		if not _engine_flags.has(flag):
+			continue
+		_engine_flags.erase(flag)
+		did_change = true
+	if did_change:
+		changed.emit()
+	return did_change
+
+
 ## Mirrors _GetVarAction's .CountBadges: a popcount over both badge bytes.
 func badge_count(crystal: bool = true) -> int:
 	var count: int = 0
@@ -1010,14 +1023,12 @@ func badge_mask(crystal: bool = true) -> int:
 	return mask
 
 
-## Clears only source daily engine flags; story flags such as Hall of Fame
-## survive the day boundary. `CheckDailyResetTimer` (`engine/overworld/time.asm`)
-## zeroes the whole `wDailyFlags1` byte, so every flag in it goes together.
-## Listed by Crystal index because only the ones this project writes are
-## modelled; add one as soon as something sets it, or it survives the day.
-const DAILY_ENGINE_FLAGS: Array[int] = [
-	ENGINE_KURT_MAKING_BALLS, ENGINE_ALL_FRUIT_TREES,
-	ENGINE_GOLDENROD_UNDERGROUND_MERCHANT_CLOSED,
+## `CheckDailyResetTimer` (`engine/overworld/time.asm`) zeroes `wDailyFlags1`
+## through `wSwarmFlags` and the three phone runs behind them, so every engine
+## flag in those bytes goes together. Inclusive Crystal index runs, which
+## `engine_flag()` resolves onto Gold and Silver.
+const DAILY_ENGINE_FLAG_RUNS: Array[Vector2i] = [
+	Vector2i(80, 97), Vector2i(101, 158), Vector2i(160, 161),
 ]
 
 
@@ -1025,17 +1036,24 @@ func reset_daily_flags(
 	crystal: bool = true, random: RandomNumberGenerator = null
 ) -> bool:
 	var did_change: bool = false
-	for crystal_index: int in DAILY_ENGINE_FLAGS:
-		var flag: int = engine_flag(crystal_index, crystal)
-		if not _engine_flags.has(flag):
-			continue
-		_engine_flags.erase(flag)
-		did_change = true
-	## `CheckDailyResetTimer` does not only clear the flag bytes: the same
-	## branch steps `wKenjiBreakTimer` and resamples it when it runs out, so a
-	## day passing is what moves the Route 27 sailor's break along.
-	## The same branch is where every day-counted timer this project keeps is
-	## stepped, since a weekday alone cannot say how many days have passed.
+	for run: Vector2i in DAILY_ENGINE_FLAG_RUNS:
+		for crystal_index: int in range(run.x, run.y + 1):
+			var flag: int = engine_flag(crystal_index, crystal)
+			if not _engine_flags.has(flag):
+				continue
+			_engine_flags.erase(flag)
+			did_change = true
+	## Crystal's `_SwarmWildmonCheck` reads `wSwarmFlags` before either map, so
+	## the byte going is what ends a swarm; pokegold's reads the map alone.
+	if crystal:
+		for kind: int in _swarm_maps.size():
+			if _swarm_maps[kind] == Vector2i(-1, -1):
+				continue
+			_swarm_maps[kind] = Vector2i(-1, -1)
+			did_change = true
+	## The same branch steps `wKenjiBreakTimer` and resamples it when it runs
+	## out, and every day-counted timer this project keeps is stepped here too:
+	## a weekday alone cannot say how many days have passed.
 	if _lucky_number_days_left > 0:
 		_lucky_number_days_left -= 1
 		did_change = true

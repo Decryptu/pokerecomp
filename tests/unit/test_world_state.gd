@@ -224,30 +224,68 @@ func test_bargain_merchant_closed_uses_the_gold_silver_flag_when_requested() -> 
 	assert_false(gold_state.bargain_merchant_closed(true))
 
 
-func test_reset_daily_flags_clears_the_matching_profiles_merchant_flag_only() -> void:
-	var gold_state := Gen2WorldState.new()
-	gold_state.set_engine_flag(
-		Gen2WorldState.ENGINE_GOLDENROD_UNDERGROUND_MERCHANT_CLOSED_GOLD_SILVER
-	)
-	assert_false(gold_state.reset_daily_flags(true))
-	assert_true(gold_state.bargain_merchant_closed(false))
-	assert_true(gold_state.reset_daily_flags(false))
-	assert_false(gold_state.bargain_merchant_closed(false))
-
-
-## CheckDailyResetTimer zeroes the whole wDailyFlags1 byte, so Kurt's flag goes
-## with the merchant's. Without it he never finishes a ball.
-func test_reset_daily_flags_clears_kurts_flag_on_both_profiles() -> void:
+## CheckDailyResetTimer zeroes wDailyFlags1, wDailyFlags2, wSwarmFlags and the
+## three phone runs, so Kurt's ball, the merchant, the Bug Contest, a rematch,
+## a caller's daily item and both swarm bits go together. The four indices
+## between the runs live in other bytes and stand. Without this a phone contact
+## hands over its item once per save rather than once per day.
+func test_reset_daily_flags_clears_every_flag_the_daily_bytes_hold() -> void:
+	var daily: Array[int] = [
+		Gen2WorldState.ENGINE_KURT_MAKING_BALLS,
+		Gen2WorldState.ENGINE_DAILY_BUG_CONTEST,
+		Gen2WorldState.ENGINE_GOLDENROD_UNDERGROUND_MERCHANT_CLOSED,
+		97, 101, 124, 125, 134, 135, 158, 160, 161,
+	]
+	var kept: Array[int] = [98, 99, 100, 159]
 	for crystal: bool in [true, false]:
 		var state := Gen2WorldState.new()
-		var flag: int = Gen2WorldState.engine_flag(
-			Gen2WorldState.ENGINE_KURT_MAKING_BALLS, crystal
-		)
-		state.set_engine_flag(flag)
-		assert_false(state.reset_daily_flags(not crystal))
-		assert_true(state.is_engine_flag_active(flag))
+		for index: int in daily + kept:
+			state.set_engine_flag(Gen2WorldState.engine_flag(index, crystal))
 		assert_true(state.reset_daily_flags(crystal))
-		assert_false(state.is_engine_flag_active(flag))
+		for index: int in daily:
+			assert_false(
+				state.is_engine_flag_active(Gen2WorldState.engine_flag(index, crystal))
+			)
+		for index: int in kept:
+			assert_true(
+				state.is_engine_flag_active(Gen2WorldState.engine_flag(index, crystal))
+			)
+
+
+## ResetBikeFlags zeroes wBikeFlags whole on every HandleNewMap, so a used
+## Strength, an always-on bike and a downhill slope all end with the map.
+func test_reset_bike_flags_clears_the_whole_byte_on_both_profiles() -> void:
+	for crystal: bool in [true, false]:
+		var state := Gen2WorldState.new()
+		var byte: Array[int] = [
+			Gen2WorldState.ENGINE_STRENGTH_ACTIVE,
+			Gen2WorldState.ENGINE_ALWAYS_ON_BIKE,
+			Gen2WorldState.ENGINE_DOWNHILL,
+		]
+		for index: int in byte:
+			state.set_engine_flag(Gen2WorldState.engine_flag(index, crystal))
+		assert_true(state.reset_bike_flags(crystal))
+		assert_false(state.reset_bike_flags(crystal))
+		for index: int in byte:
+			assert_false(
+				state.is_engine_flag_active(Gen2WorldState.engine_flag(index, crystal))
+			)
+
+
+## Crystal's _SwarmWildmonCheck reads wSwarmFlags before either map, so the same
+## reset ends a swarm. pokegold's reads the map alone and its swarm has no end.
+func test_reset_daily_flags_ends_a_crystal_swarm_only() -> void:
+	var crystal_state := Gen2WorldState.new()
+	crystal_state.set_swarm_map(Vector2i(1, 2))
+	crystal_state.set_swarm_map(Vector2i(3, 4), true, 0, Gen2WorldState.SWARM_YANMA)
+	assert_true(crystal_state.reset_daily_flags(true))
+	assert_false(crystal_state.swarm_active_on(1, 2))
+	assert_false(crystal_state.swarm_active_on(3, 4))
+
+	var gold_state := Gen2WorldState.new()
+	gold_state.set_swarm_map(Vector2i(1, 2))
+	assert_false(gold_state.reset_daily_flags(false))
+	assert_true(gold_state.swarm_active_on(1, 2))
 
 
 func test_the_saved_kurt_quantity_survives_a_snapshot_round_trip() -> void:

@@ -2004,8 +2004,8 @@ func pending_strength() -> Dictionary:
 
 
 ## SetStrengthFlag: the engine flag plus wStrengthSpecies, which is only read
-## back by Script_UsedStrength's own cry. Nothing in the pinned sources ever
-## clears the flag, so this is the one write and it persists for the save.
+## back by Script_UsedStrength's own cry. `ResetBikeFlags` takes it off again on
+## the next map, so a boulder outlives nothing but the map it stands on.
 func complete_strength() -> Dictionary:
 	if _pending_strength.is_empty():
 		return _strength_failure(&"no_pending_strength")
@@ -2022,8 +2022,7 @@ func complete_strength() -> Dictionary:
 	}
 
 
-## Whether BIKEFLAGS_STRENGTH_ACTIVE_F is set, the single condition
-## DoPlayerMovement.CheckStrengthBoulder and TryStrengthOW both read.
+## BIKEFLAGS_STRENGTH_ACTIVE_F, the one condition CheckStrengthBoulder reads.
 func strength_active() -> bool:
 	return state.is_engine_flag_active(
 		Gen2WorldState.strength_active_flag(Gen2WorldState.is_crystal_profile(data))
@@ -6445,9 +6444,12 @@ func _apply_map(
 	# EnterMap's own SetUpFiveStepWildEncounterCooldown, which is why the first
 	# steps out of a door are quiet.
 	state.set_wild_encounter_cooldown(Gen2WorldState.WILD_ENCOUNTER_COOLDOWN_STEPS)
-	# ResetFlashIfOutOfCave, which runs in map setup: stepping out into a route
-	# or a town puts the light out, and a cave to cave doorway does not.
+	# HandleNewMap's own resets: ResetBikeFlags drops a used Strength with the
+	# map, ResetFlashIfOutOfCave puts the light out on a route or a town, and
+	# HandleContinueMap behind it runs ClearCmdQueue over every written queue.
+	state.reset_bike_flags(Gen2WorldState.is_crystal_profile(data))
 	state.clear_flash_if_outdoors(target_map.environment)
+	_command_queues.clear()
 	current_map = target_map
 	_map_placements = {}
 	_connected_objects = []
@@ -6777,8 +6779,7 @@ func always_on_bike() -> bool:
 
 
 ## `.CheckEnvironment`: outdoors, a cave or a gate, and standing on a tile whose
-## permission's low nibble is `FLOOR_TILE`. Water and every wall code fail it, so
-## a surfing player can never be on a bike either.
+## permission's low nibble is `FLOOR_TILE`. Water and every wall code fail it.
 func _can_ride_bike_here() -> bool:
 	if not _is_outdoor(current_map.environment) \
 		and current_map.environment not in [ENVIRONMENT_CAVE, ENVIRONMENT_GATE]:
@@ -7198,6 +7199,10 @@ func reload_current_map() -> Dictionary:
 
 func _on_world_state_changed() -> void:
 	set_object_time(object_hour, object_time_of_day)
+	## RefreshMapSprites runs CheckUpdatePlayerSprite after HandleNewMap's own
+	## callback, and Route 16 and Route 17 set the flag from theirs.
+	if always_on_bike() and movement_mode != MOVEMENT_BIKE:
+		_apply_map_setup_player_state()
 
 
 ## `GetMonSprite` itself: a variable slot resolves through the table and is
