@@ -13,20 +13,15 @@ right. Rewrite from the line that is exactly `## Added`: an edit that searches
 for the first one in the file lands inside this note and takes its closing
 marker with it, which is how 0.1.17 published an empty body. -->
 
-## Added
-
-- Sixty-six people, Pokemon and trainers move the way their map row says. A Pokemon standing in as a map object alternates its two drawings; the eighteen objects on the two spinning rows hold a facing for thirty-two frames and take the next off their own table, which for fourteen trainers is the direction they are watching.
-
 ## Fixed
 
-- Route 29's catching tutorial played as an ordinary wild battle. The Dude sat on the battle menu for thirty-four seconds with your own buttons still live; he now reaches the pack and throws the ball on the frame the cartridge does.
-- Mom talked about the Bank of Mom without turning to look at you, and so did Tim, Emy, Kim and the Copycat. Twenty-eight conversations on Crystal and twenty-five on Gold and Silver lost the turn a script owes you when it opens.
-- A conversation that paused on a menu or a question dropped everything the commands in front of it had already done.
-- A step an NPC was refused left it facing the way it started.
-- An NPC could wander off the edge of the screen. It stops where the cartridge stops it, whatever its movement radius allows.
-- The cell an NPC is walking out of did not block until it arrived, so two of them could stand on one tile.
-- A fast random spin could stand twice on the same facing.
-- A rolled step wait of zero passed instantly instead of lasting 256 passes.
+- Every question and every list a conversation opens stood over the wrong lines. A box carries the last thing said before the question, so Mom's day-of-the-week dial no longer sits over "#MON GEAR, or just #GEAR." and her phone question no longer sits over "Come home to adjust your clock". 116 of Crystal's 155 questions and 92 of Gold and Silver's 122 were showing text nobody had just read.
+- Mom's day-of-the-week picker asked nothing and painted the room white. It asks "What day is it?" over the house, and the box under it reads " 6:00 AM DST, is that OK?" on a twelve-hour clock.
+- Six script commands were read at the wrong width or not read at all, so a conversation that reached one stopped where it stood. Twelve fewer Crystal scripts and four fewer on Gold and Silver now stop on a byte no command owns.
+- Eleven more commands were decoded and then refused, among them the two the phone scripts name 119 times.
+- An earthquake shook for half as long as the cartridge shakes it and froze nobody while it ran, and Rock Smash's own shake had no strength at all.
+- The shop list carried seventeen sites the cartridge does not ship, each selling two Potions, Whirl Island B1F among them.
+- The POKéGEAR clock and the Daylight Saving box read the time through two different routines. Both are `PrintHoursMins` now.
 
 `api_version` stays 29 and nothing on the boundary moved.
 
