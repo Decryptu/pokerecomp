@@ -137,11 +137,10 @@ const SCREEN_FADED_TEXT: Dictionary = {
 	Gen2Screens.REFLECT: "%s's REFLECT faded!",
 }
 
-## `CatchTutorial.DudeTutorial`, which puts the player's name back afterwards.
 const DUDE_NAME: String = "DUDE"
 
 ## `CatchTutorial.LoadDudeData`: one POTION, and five POKE BALLs because
-## `ld a, POKE_BALL` writes the quantity byte as well as the item byte.
+## `ld a, POKE_BALL` writes the quantity byte too.
 const DUDE_PACK: Array[int] = [
 	Gen2WorldPartyHost.ITEM_POTION, Gen2WorldPartyHost.ITEM_POKE_BALL,
 ]
@@ -150,9 +149,9 @@ const DUDE_PACK_QUANTITIES: Dictionary = {
 	Gen2WorldPartyHost.ITEM_POKE_BALL: Gen2WorldPartyHost.ITEM_POKE_BALL,
 }
 
-## `DudeAutoInputs`: a button and the byte after it, held for one poll more than
-## its own value, and a battle polls once a hardware frame. Measured through the
-## cartridge's own `GetJoypad`: RIGHT lands on frame 10, DOWN on 1021, A on 2042.
+## `DudeAutoInputs`: a button and the byte after it, held for one `GetJoypad`
+## poll more than its value (`home/joypad.asm`'s `.auto`), which is not a frame.
+## See [constant DUDE_POLLS_PER_FRAME].
 const DUDE_AUTO_INPUT: Dictionary = {
 	&"text": [[Gen2Button.NONE, 0x50], [Gen2Button.A, 0x00]],
 	&"pack": [
@@ -165,6 +164,15 @@ const DUDE_AUTO_INPUT: Dictionary = {
 		[Gen2Button.NONE, 0xFE], [Gen2Button.NONE, 0xFE], [Gen2Button.NONE, 0xFE],
 		[Gen2Button.NONE, 0xFE], [Gen2Button.A, 0x00],
 	],
+}
+
+## Polls one frame of each stage is worth: `.wait_input` spends a `DelayFrame` a
+## pass and `Do2DMenuRTCJoypad.loopRTC` spends none. Measured on a cartridge
+## through Route 29's tutorial, from the `_DudeAutoInput_*` call: A lands on
+## frame 80 of the text stream, DOWN on 29 and A on 53 of the menu's, RIGHT on 51
+## and A on 102 of the pack's.
+const DUDE_POLLS_PER_FRAME: Dictionary = {
+	&"text": 1.0, &"menu": 36.0, &"pack": 0.176,
 }
 
 var _data: GameData = null
@@ -287,6 +295,7 @@ var _auto_input: Array = []
 var _auto_input_index: int = 0
 var _auto_input_delay: int = 0
 var _auto_input_stage: StringName = &""
+var _auto_input_polls: float = 0.0
 ## The bars' and the intro's clock: see [method _process].
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
 ## The same, for the party page's icons. Kept apart because they animate while
@@ -877,6 +886,7 @@ func _stop_auto_input() -> void:
 	_auto_input_index = 0
 	_auto_input_delay = 0
 	_auto_input_stage = &""
+	_auto_input_polls = 0.0
 
 
 ## Which of `_DudeAutoInput_A`, `_RightA` and `_DownA` this poll installs, from
@@ -895,19 +905,27 @@ func _dude_auto_input_stage() -> StringName:
 	return &""
 
 
-## `GetJoypad`'s `.auto` branch, one poll. The tutorial is the only stream here.
+## `GetJoypad`'s `.auto` branch, spent this frame's worth of polls.
 func _tick_auto_input() -> void:
 	if not _world_battle_active or not _world_battle_tutorial:
 		return
 	var stage: StringName = _dude_auto_input_stage()
 	if stage != _auto_input_stage:
 		_auto_input_stage = stage
+		_auto_input_polls = 0.0
 		if stage == &"":
 			_auto_input = []
 		else:
 			_start_auto_input(DUDE_AUTO_INPUT[stage])
 	if _auto_input_index >= _auto_input.size():
 		return
+	_auto_input_polls += float(DUDE_POLLS_PER_FRAME.get(_auto_input_stage, 1.0))
+	while _auto_input_polls >= 1.0 and _auto_input_index < _auto_input.size():
+		_auto_input_polls -= 1.0
+		_spend_auto_input_poll()
+
+
+func _spend_auto_input_poll() -> void:
 	if _auto_input_delay > 0:
 		_auto_input_delay -= 1
 		return
