@@ -15,13 +15,16 @@ marker with it, which is how 0.1.17 published an empty body. -->
 
 ## Fixed
 
-- Every question and every list a conversation opens stood over the wrong lines. A box carries the last thing said before the question, so Mom's day-of-the-week dial no longer sits over "#MON GEAR, or just #GEAR." and her phone question no longer sits over "Come home to adjust your clock". 116 of Crystal's 155 questions and 92 of Gold and Silver's 122 were showing text nobody had just read.
-- Mom's day-of-the-week picker asked nothing and painted the room white. It asks "What day is it?" over the house, and the box under it reads " 6:00 AM DST, is that OK?" on a twelve-hour clock.
-- Six script commands were read at the wrong width or not read at all, so a conversation that reached one stopped where it stood. Twelve fewer Crystal scripts and four fewer on Gold and Silver now stop on a byte no command owns.
-- Eleven more commands were decoded and then refused, among them the two the phone scripts name 119 times.
-- An earthquake shook for half as long as the cartridge shakes it and froze nobody while it ran, and Rock Smash's own shake had no strength at all.
-- The shop list carried seventeen sites the cartridge does not ship, each selling two Potions, Whirl Island B1F among them.
-- The POKéGEAR clock and the Daylight Saving box read the time through two different routines. Both are `PrintHoursMins` now.
+- A day passing put almost nothing back. A phone contact handed over its daily item once per save, a rematch offer never expired, the Bug Catching Contest closed for good after one entry, and the Dunsparce and Yanma swarms never ended. Forty-four of Crystal's daily flags are cleared at the day boundary now, where three were.
+- Strength lasted the rest of the game once it had been used. It ends with the map the boulder was pushed on, which is where the cartridge ends it.
+- A boulder could fall through a hole named by a different map's table, because a written command queue outlived the map that wrote it.
+- The Hall of Fame's player panel printed neither the trainer ID nor PLAY TIME and drew no picture, and no panel played the Pokemon's cry. An induction runs on its own timer instead of waiting for A on every panel.
+- The trainer card kept its `#DEX` label on screen for a player who has no Pokedex yet.
+- A held direction steered an ice slide. The cartridge drops the whole d-pad for the length of one.
+- Nothing bumped. Every refused step in the game was silent, on land, on water and on ice.
+- A step off an ice tile ran at walking speed, and a sliding player walked instead of standing still on the ice.
+- The naming screen drew no icon: no species, no player, no Poke Ball, and no gender sign beside a nickname.
+- The decoration menu lost CANCEL at six owned ornaments, and talking to one doll printed every box after it as well.
 
 `api_version` stays 29 and nothing on the boundary moved.
 
