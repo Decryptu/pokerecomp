@@ -3,21 +3,31 @@ standing text and only takes {VERSION}. One line per paragraph, per bullet and
 per table row: GitHub reflows a release body to the reader's window, and a line
 break put in by hand only makes it ragged.
 
-It is a changelog, not an essay. `## Added`, `## Changed`, `## Fixed`, one
-bullet per change, and no opening sentence summarising the release: a reader
-scanning for their own bug does not want a paragraph about the shape of the
-work. No `**Bold label.**` in front of a bullet, no contrast frame on every
-line ("X rather than Y", "not X, Y"), and no em-dash. `CLAUDE.md`'s "Writing"
-section is the whole rule; a reader called an earlier body AI-written and was
-right. -->
+It is a changelog, not an essay. `## Added`, `## Changed`, `## Added
+
+- Every in-game trade is a conversation. The trader's offer and its yes/no, the party list, the refusal for a cancel and the one for the wrong Pokemon, the cable line, the thanks and the fanfare, with the map's music back behind the last box. All seven swapped in silence before.
+- A trade happens once. Each of the seven has its own flag, and the trader asks after the Pokemon it took when you talk to it again.
+- The stats screen animates the Pokemon and plays its cry. On Crystal a fainted, frozen or sleeping one is silent there; on Gold and Silver it sounds whatever its status.
+- "You can't get off here!" on Routes 16 and 17. The Bicycle's other two lines now come out of the cartridge with your own name in them, and it says the same thing used from SELECT as from the pack.
+- The Bug Catching Contest plays its own music.
+- Fly, Teleport and loading a save scatter Raikou and Entei across Johto.
+- The party menu answers ABLE or NOT ABLE beside each Pokemon while you are teaching a TM or HM or holding an evolution stone, and its gender while the Day-Care or a trader is asking, in the column the HP bar sits in the rest of the time.
 
 ## Fixed
 
-- Pokemon gender was inverted, so a Pokemon that should have been male read female. `GetGender` compares a byte built from the Attack and Speed DVs against the species ratio, and this port had that comparison the wrong way round. It affects the save editor, the box, the stats page, the Hall of Fame, both Day-Care parents, the gender an egg hatches with, Attract, and the in-game trades that ask for a particular gender. Gender is worked out from the DVs every time it is read, so no existing save needs repairing.
-- The policeman in Elm's Lab answered SILVER for you. The naming screen opens now, and leaving it blank still gives SILVER, the way the cartridge does.
-- The script command that turns the player did nothing, everywhere it is used, so no scene ever turned you. Mom's Pokegear scene and the old man's tour of Cherrygrove were the two you would notice.
-- The Cherrygrove guide dragged you around facing wherever the walk was going to end. A follower turns as each step begins now.
-- The "!" bubble never appeared over your own head, and `disappear PLAYER`, which takes you off screen in Lance's room while the reporter runs about, did nothing either.
+- Raikou and Entei moved on every map load. They move when you cross a map connection, walk through a door, fall through a floor or ride the magnet train.
+- Which map a roaming Pokemon refuses to move onto, and whether a scatter may leave one where it stood. Both rules were the wrong way round.
+- The Radio Tower's five floors kept whatever was playing outside them, and Mahogany Mart played the Suicune battle theme.
+- Mounting the bike or starting to surf replayed the map's own track, and the right piece only turned up on the next map.
+- The Pokemon a trade gives you took the slot the one you gave up left. It arrives last in the party.
+- A traded Pokemon carried no gift landmark and the wrong gender.
+- The stats screen and an evolution drew the Pokemon unmirrored and centred. It is mirrored and stands against the far column, and an Unown draws the letter its DVs pick.
+- A Pokemon at level 100 had its level drawn a cell too wide, over the HP bar, in the party menu, the battle screen, the stats page, Bill's PC and the Hall of Fame.
+- A caller telling you about a rare Pokemon on their route always read the morning table.
+- Dig, an Escape Rope and Teleport printed their line over the map they arrived on rather than the one they left.
+- Strength's cry and its second line were missing when it was used from the party menu.
+- Strength, Flash and Teleport's return each cost a button press the cartridge does not ask for.
+- The item PC refused to take a key item.
 
 `api_version` stays 29 and nothing on the boundary moved.
 
