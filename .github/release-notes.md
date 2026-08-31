@@ -3,12 +3,20 @@ standing text and only takes {VERSION}. One line per paragraph, per bullet and
 per table row: GitHub reflows a release body to the reader's window, and a line
 break put in by hand only makes it ragged.
 
-It is a changelog, not an essay. `## Added`, `## Changed`, `## Added
+It is a changelog, not an essay. `## Added`, `## Changed`, `## Fixed`, one
+bullet per change, and no opening sentence summarising the release: a reader
+scanning for their own bug does not want a paragraph about the shape of the
+work. No `**Bold label.**` in front of a bullet, no contrast frame on every
+line ("X rather than Y", "not X, Y"), and no em-dash. `CLAUDE.md`'s "Writing"
+section is the whole rule; a reader called an earlier body AI-written and was
+right. -->
+
+## Added
 
 - Every in-game trade is a conversation. The trader's offer and its yes/no, the party list, the refusal for a cancel and the one for the wrong Pokemon, the cable line, the thanks and the fanfare, with the map's music back behind the last box. All seven swapped in silence before.
 - A trade happens once. Each of the seven has its own flag, and the trader asks after the Pokemon it took when you talk to it again.
 - The stats screen animates the Pokemon and plays its cry. On Crystal a fainted, frozen or sleeping one is silent there; on Gold and Silver it sounds whatever its status.
-- "You can't get off here!" on Routes 16 and 17. The Bicycle's other two lines now come out of the cartridge with your own name in them, and it says the same thing used from SELECT as from the pack.
+- "You can't get off here!" on Routes 16 and 17. The Bicycle's other two lines come out of the cartridge now with your own name in them, and it says the same thing used from SELECT as from the pack.
 - The Bug Catching Contest plays its own music.
 - Fly, Teleport and loading a save scatter Raikou and Entei across Johto.
 - The party menu answers ABLE or NOT ABLE beside each Pokemon while you are teaching a TM or HM or holding an evolution stone, and its gender while the Day-Care or a trader is asking, in the column the HP bar sits in the rest of the time.
@@ -21,7 +29,7 @@ It is a changelog, not an essay. `## Added`, `## Changed`, `## Added
 - Mounting the bike or starting to surf replayed the map's own track, and the right piece only turned up on the next map.
 - The Pokemon a trade gives you took the slot the one you gave up left. It arrives last in the party.
 - A traded Pokemon carried no gift landmark and the wrong gender.
-- The stats screen and an evolution drew the Pokemon unmirrored and centred. It is mirrored and stands against the far column, and an Unown draws the letter its DVs pick.
+- The stats screen and an evolution drew the Pokemon unmirrored and centred. It is mirrored and stands against the far column now, and an Unown draws the letter its DVs pick.
 - A Pokemon at level 100 had its level drawn a cell too wide, over the HP bar, in the party menu, the battle screen, the stats page, Bill's PC and the Hall of Fame.
 - A caller telling you about a rare Pokemon on their route always read the morning table.
 - Dig, an Escape Rope and Teleport printed their line over the map they arrived on rather than the one they left.
