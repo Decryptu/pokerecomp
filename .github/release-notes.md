@@ -3,7 +3,17 @@ standing text and only takes {VERSION}. One line per paragraph, per bullet and
 per table row: GitHub reflows a release body to the reader's window, and a line
 break put in by hand only makes it ragged.
 
-It is a changelog, not an essay. `## Added
+It is a changelog, not an essay. `## Added`, `## Changed`, `## Fixed`, one
+bullet per change, and no opening sentence summarising the release: a reader
+scanning for their own bug does not want a paragraph about the shape of the
+work. No `**Bold label.**` in front of a bullet, no contrast frame on every
+line ("X rather than Y", "not X, Y"), and no em-dash. `CLAUDE.md`'s "Writing"
+section is the whole rule; a reader called an earlier body AI-written and was
+right. Rewrite from the line that is exactly `## Added`: an edit that searches
+for the first one in the file lands inside this note and takes its closing
+marker with it, which is how 0.1.17 published an empty body. -->
+
+## Added
 
 - Sixty-six people, Pokemon and trainers move the way their map row says. A Pokemon standing in as a map object alternates its two drawings; the eighteen objects on the two spinning rows hold a facing for thirty-two frames and take the next off their own table, which for fourteen trainers is the direction they are watching.
 
