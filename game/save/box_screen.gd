@@ -530,6 +530,7 @@ func _open_stats() -> void:
 	_stats.closed.connect(_close_stats)
 	_stats.cry_requested.connect(func(species: int) -> void: cry_requested.emit(species))
 	_stats.announce()
+	set_process(true)
 	_refresh()
 
 
@@ -541,6 +542,7 @@ func _close_stats() -> void:
 	_cursor = at - _scroll
 	_sync_selection()
 	_stats = null
+	set_process(_saving_frames > 0)
 	_prompt = PROMPT_WHATS_UP
 	_refresh()
 
@@ -707,22 +709,14 @@ func _refresh_stats_pic(snapshot: Dictionary) -> void:
 	var species: int = int(snapshot.get("species", 0))
 	if species <= 0 or _data == null:
 		return
-	var egg: bool = bool(snapshot.get("egg", false))
-	var pic: Dictionary = _data.egg_pic() if egg else _data.species_pic(species)
-	if pic.is_empty():
-		return
-	var art: Image = Gen2PicImage.from_atlas(
-		_data.atlas_indices(pic["atlas"]), _data.atlas(pic["atlas"]), pic,
-		_data.egg_palette() if egg \
-			else _data.palette(species, bool(snapshot.get("shiny", false)))
-	)
+	var art: Image = Gen2StatsScreenPage.pic_image(_data, snapshot, _stats)
 	if art == null:
 		return
 	Gen2PicImage.show(_pic, art)
 	_pic.size = Vector2(art.get_size())
-	var cell: int = Gen2StatsScreenPage.pic_size()
-	_pic.position = Vector2(Gen2StatsScreenPage.pic_position()) + Vector2(
-		float(cell - art.get_width()) * 0.5, float(cell - art.get_height())
+	_pic.position = Vector2(
+		Vector2i(Gen2StatsScreenPage.pic_position())
+		+ Gen2StatsScreenPage.pic_origin(art.get_size(), snapshot)
 	)
 
 
@@ -990,10 +984,18 @@ func advance_saving_frames(count: int) -> void:
 
 
 func _process(delta: float) -> void:
+	var frames: int = _saving_clock.tick(delta)
+	## `StatsScreen_WaitAnim` behind `BillsPC_StatsScreen`, the one loop this
+	## screen runs that is not the save wait.
+	if _stats != null:
+		for _pic_frame: int in frames:
+			_stats.advance_animation()
+		_refresh_stats_pic(_stats.snapshot())
+		return
 	if _saving_frames <= 0:
 		set_process(false)
 		return
-	advance_saving_frames(_saving_clock.tick(delta))
+	advance_saving_frames(frames)
 
 
 ## `.b_button_2`: the first pass again, on the list the Pokemon was chosen from.

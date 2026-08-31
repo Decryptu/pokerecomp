@@ -248,8 +248,8 @@ static func lookup(
 ## bit-reverses every byte as it loads, mirroring each tile's pixels, and
 ## `PlaceGraphic`'s `.right` then walks the tile columns with `dec hl`. Reversing
 ## the columns alone scrambles the sprite. The two compose exactly into
-## [method Image.flip_x]. `PrepMonFrontpic` is the one caller that sets the flag
-## and the Oak speech the one screen that reaches it.
+## [method Image.flip_x]. `PrepMonFrontpic` sets the flag itself, so Oak's
+## speech, the mail, the stats screen and an evolution all draw mirrored.
 static func x_flipped(image: Image) -> Image:
 	if image == null:
 		return image
@@ -279,6 +279,71 @@ static func frontpic_pad_rows(height: int) -> int:
 	if height >= FRONTPIC_TILES or height <= 0:
 		return 0
 	return FRONTPIC_TILES - height
+
+
+## Where the seven-tile cell leaves a front pic, in pixels: bottom-aligned, one
+## blank column in, and on the other side of the cell when the picture is
+## mirrored. [param size] is the pic's own pixel size.
+static func frontpic_origin(size: Vector2i, mirrored: bool = false) -> Vector2i:
+	@warning_ignore("integer_division")
+	var columns: int = size.x / Gen2Tiles.TILE_WIDTH
+	@warning_ignore("integer_division")
+	var rows: int = size.y / Gen2Tiles.TILE_WIDTH
+	return Vector2i(
+		frontpic_pad_columns(columns, mirrored), frontpic_pad_rows(rows)
+	) * Gen2Tiles.TILE_WIDTH
+
+
+## The 7x7 box a [Gen2PicAnimation] leaves, read out of the strip
+## [method Gen2BattleRenderer.padded_pic] produced: a box cell is
+## `column * side + row` and its value is a tile number down the strip's own
+## columns, which is `PokeAnim_PlaceGraphic`'s own numbering.
+static func animation_box_indices(
+	box: PackedByteArray, pixels: PackedByteArray, side: int
+) -> PackedByteArray:
+	var span: int = side * Gen2Tiles.TILE_WIDTH
+	var out := PackedByteArray()
+	if box.size() != side * side or pixels.is_empty() or side <= 0:
+		return out
+	out.resize(span * span)
+	@warning_ignore("integer_division")
+	var strip: int = pixels.size() / span
+	for column: int in side:
+		for row: int in side:
+			var tile: int = int(box[column * side + row])
+			@warning_ignore("integer_division")
+			var source_x: int = (tile / side) * Gen2Tiles.TILE_WIDTH
+			var source_y: int = (tile % side) * Gen2Tiles.TILE_WIDTH
+			if source_x + Gen2Tiles.TILE_WIDTH > strip:
+				continue
+			for line: int in Gen2Tiles.TILE_WIDTH:
+				var from: int = (source_y + line) * strip + source_x
+				var to: int = (row * Gen2Tiles.TILE_WIDTH + line) * span \
+					+ column * Gen2Tiles.TILE_WIDTH
+				for x: int in Gen2Tiles.TILE_WIDTH:
+					out[to + x] = pixels[from + x]
+	return out
+
+
+## `LoadOrientedFrontpic`'s `.x_flip` on its own: every tile's pixels reversed
+## where its column is not. That is what a strip an animation indexes by tile
+## number needs, because `PokeAnim_PlaceGraphic` runs the columns back itself.
+static func tile_flipped_indices(indices: PackedByteArray, width: int) -> PackedByteArray:
+	if width <= 0:
+		return indices
+	var out := PackedByteArray()
+	out.resize(indices.size())
+	@warning_ignore("integer_division")
+	var height: int = indices.size() / width
+	@warning_ignore("integer_division")
+	var tiles: int = width / Gen2Tiles.TILE_WIDTH
+	for y: int in height:
+		var row: int = y * width
+		for tile: int in tiles:
+			var left: int = tile * Gen2Tiles.TILE_WIDTH
+			for x: int in Gen2Tiles.TILE_WIDTH:
+				out[row + left + x] = indices[row + left + Gen2Tiles.TILE_WIDTH - 1 - x]
+	return out
 
 
 ## The same mirror on an index buffer, for a caller that will recolour it.

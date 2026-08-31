@@ -34,6 +34,9 @@ var _staged_special_phone_call: int = 0
 var _has_staged_kurt_apricorn_quantity: bool = false
 var _staged_kurt_apricorn_quantity: int = 0
 var _staged_fruit_trees: Dictionary = {}
+## `wTradeFlags`, and the audio steps `TradedForText` owes before the last box.
+var _staged_npc_trades: Dictionary = {}
+var _npc_trade_after_sound: Dictionary = {}
 var _has_staged_kenji_break_timer: bool = false
 var _staged_kenji_break_timer: int = 0
 var _has_staged_lucky_number_days_left: bool = false
@@ -433,6 +436,26 @@ const ROCK_SMASH_EARTHQUAKE: int = 84
 ## plays the boulder's own sound rather than one of its own.
 const SFX_STRENGTH: int = 0x1B
 
+## `TradeTexts`' five rows.
+const TRADE_DIALOG_INTRO: int = 0
+const TRADE_DIALOG_CANCEL: int = 1
+const TRADE_DIALOG_WRONG: int = 2
+const TRADE_DIALOG_COMPLETE: int = 3
+const TRADE_DIALOG_AFTER: int = 4
+## `GetTradeMonNames`' tail, written over the name's terminator when the row
+## asks for a gender. TRADE_GENDER_EITHER writes nothing.
+const TRADE_GENDER_SYMBOLS: Dictionary = {
+	RomLayout.TRADE_GENDER_MALE: "\u2642", RomLayout.TRADE_GENDER_FEMALE: "\u2640",
+}
+## `TradedForText`'s own tail in order: the `PlayMusic MUSIC_NONE` its `text_asm`
+## spends, the `sound_dex_fanfare_80_109` behind it, and the `RestartMapMusic`
+## `NPCTrade` runs before the last box. The movie leaves MUSIC_EVOLUTION playing.
+const TRADE_AFTER_TEXT_AUDIO: Array[Array] = [
+	[&"music", {"address": 0}],
+	[&"sound", {"address": 0x0A}],
+	[&"map_music", {"restart": true}],
+]
+
 ## data/text/common_2.asm, for the five Ask*Scripts TryTileCollisionEvent
 ## reaches. Synthesized rather than decoded for the reason AskStrengthScript's
 ## are: each is reached through `CallScript` on a link-time address, so there is
@@ -787,6 +810,7 @@ const PENDING_RESUMES: Dictionary = {
 	&"text/rock_smash_ask": &"_resume_rock_smash_text",
 	&"choice/rock_smash_ask": &"_resume_rock_smash_choice",
 	&"text/rock_smash_used": &"_resume_rock_smash_used",
+	&"choice/npc_trade_intro": &"_resume_trade_intro",
 }
 
 ## The continuations that carry their payload in a `_pending` key rather than a
@@ -798,6 +822,8 @@ const PENDING_CONTINUATIONS: Dictionary = {
 	"buena_prize_after_text": &"_resume_buena_after_text",
 	"party_selection_after_text": &"_resume_party_selection",
 	"special_after_text": &"_resume_special_after_text",
+	"npc_trade_after_cable": &"_resume_trade_cable",
+	"npc_trade_after_traded": &"_resume_trade_traded",
 }
 
 
@@ -1287,7 +1313,7 @@ const COMPLETION_HANDLERS: Dictionary = {
 	&"mart_requested": &"_complete_plain_request",
 	&"audio_requested": &"_complete_plain_request",
 	&"pokemon_requested": &"_complete_plain_request",
-	&"trade_requested": &"_complete_plain_request",
+	&"trade_requested": &"_complete_trade",
 	&"pc_requested": &"_complete_plain_request",
 	&"party_heal_requested": &"_complete_plain_request",
 	&"town_map_requested": &"_complete_plain_request",
@@ -1617,7 +1643,14 @@ func _complete_plain_request(
 		if kind == &"audio_requested" else {}
 	var mom_after_sound: int = _bank_of_mom_after_sound \
 		if kind == &"audio_requested" else -1
+	var trade_after_sound: Dictionary = _npc_trade_after_sound \
+		if kind == &"audio_requested" else {}
 	_pending = {}
+	if not trade_after_sound.is_empty():
+		_npc_trade_after_sound = {}
+		return _trade_result(_stage_trade_audio(
+			trade_after_sound["trade"], int(trade_after_sound["step"])
+		))
 	if mom_after_sound >= 0:
 		_bank_of_mom_after_sound = -1
 		var receipt: String = _mom_receipt_box
@@ -1636,6 +1669,35 @@ func _complete_plain_request(
 			bool(notify_after_sound.get("finish", false))
 		)
 	return advance()
+
+
+## `NPCTrade` past `DoNPCTrade` and its movie: `GetTradeMonNames` again, then
+## `TradedForText`. A request that settled itself falls back to the plain
+## completion, so a driver that draws nothing still reads the host's answer.
+func _complete_trade(
+	kind: StringName, request: Dictionary, result: Dictionary
+) -> Dictionary:
+	var values: Dictionary = request.get("values", {})
+	var record: Dictionary = Gen2WorldPartyHost.trade_record(data, values)
+	if record.is_empty() or not values.has("party_index") \
+		or not bool(result.get("ok", false)) \
+		or not bool(result.get("accepted", false)):
+		return _complete_plain_request(kind, request, result)
+	_script_value = int(result.get("script_value", 1))
+	_events.append({
+		"type": &"runtime_request_completed",
+		"kind": kind,
+		"request": request.duplicate(true),
+		"result": result.duplicate(true),
+	})
+	_pending = {}
+	_set_trade_names(record)
+	var traded: String = _special_box("npc_trade", "traded_for")
+	if traded.is_empty():
+		return _fail(&"missing_special_text", values)
+	return _trade_result(_stage_internal_text(traded, false, {
+		"npc_trade_after_traded": values.duplicate(),
+	}))
 
 
 func _complete_rival_name(
@@ -3079,6 +3141,9 @@ func _command_elevator(_source_opcode: int, command: Dictionary, bank: int) -> D
 	})
 
 
+## `NPCTrade` (`engine/events/npc_trade.asm`), which `Script_trade` is a
+## `farcall` to and nothing else: every word a trader says is in that routine
+## rather than in the map script, and so is the once-only gate.
 func _command_trade(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
 	var trade: Dictionary = {"trade_id": int(command.get("value", 0))}
 	## A patched site names both halves; an unpatched one names neither
@@ -3086,7 +3151,159 @@ func _command_trade(_source_opcode: int, command: Dictionary, _bank: int) -> Dic
 	for key: String in ["offered_species", "requested_species"]:
 		if command.has(key):
 			trade[key] = int(command[key])
-	return _stage_runtime_request(&"trade_requested", trade)
+	var record: Dictionary = Gen2WorldPartyHost.trade_record(data, trade)
+	if record.is_empty():
+		return _stage_runtime_request(&"trade_requested", trade)
+	_set_trade_names(record)
+	## `PrintTradeText TRADE_DIALOG_INTRO` and the `YesNoBox` over it. A cache
+	## with no `npc_trade` run has no conversation, so the swap settles alone.
+	var asked: String = _trade_dialog_text(record, TRADE_DIALOG_INTRO)
+	if asked.is_empty():
+		return _stage_runtime_request(&"trade_requested", trade)
+	if _npc_trade_done(int(trade["trade_id"])):
+		return _trade_box(record, TRADE_DIALOG_AFTER, true)
+	_pending = {
+		"type": &"choice",
+		"command": &"trade",
+		"choices": [&"yes", &"no"],
+		"text": asked,
+		"special": &"npc_trade_intro",
+		"trade": trade,
+		"source": _request.duplicate(true),
+	}
+	return _waiting_result()
+
+
+## `GetTradeMonNames`, run in front of every box: the wanted species into
+## `wStringBuffer1` with the row's gender symbol on it, the offered one into
+## `wStringBuffer2`, and the wanted name again, plain, into
+## `wMonOrItemNameBuffer`.
+func _set_trade_names(record: Dictionary) -> void:
+	if data == null:
+		return
+	var wanted: String = String(
+		data.species(int(record.get("requested_species", 0))).get("name", "")
+	)
+	_set_text_ram("mon_or_item_name", wanted)
+	_set_text_buffer(
+		RomLayout.STRING_BUFFER_2,
+		String(data.species(int(record.get("offered_species", 0))).get("name", "")),
+		&"npc_trade_names"
+	)
+	_set_text_buffer(
+		RomLayout.STRING_BUFFER_1,
+		wanted + String(TRADE_GENDER_SYMBOLS.get(int(record.get("gender", 0)), "")),
+		&"npc_trade_names"
+	)
+
+
+## One `TradeTexts` cell. Crystal's two NEWBIE boxes sit in their own run.
+func _trade_dialog_text(record: Dictionary, dialog: int) -> String:
+	var name: String = RomLayout.trade_text_name(
+		_crystal_commands(), dialog, int(record.get("dialog", 0))
+	)
+	if name.is_empty():
+		return ""
+	return _special_box(
+		"npc_trade_newbie" if name in RomLayout.TRADE_NEWBIE_TEXTS else "npc_trade",
+		name
+	)
+
+
+func _trade_box(
+	record: Dictionary, dialog: int, finish: bool, values: Dictionary = {}
+) -> Dictionary:
+	var box: String = _trade_dialog_text(record, dialog)
+	if box.is_empty():
+		return _fail(&"missing_special_text", {"trade_dialog": dialog})
+	return _stage_internal_text(box, finish, values)
+
+
+## `TradeFlagAction`'s CHECK_FLAG, over the staged bit and the saved one.
+func _npc_trade_done(trade_id: int) -> bool:
+	if _staged_npc_trades.has(trade_id):
+		return bool(_staged_npc_trades[trade_id])
+	return state != null and state.npc_trade_done(trade_id)
+
+
+## The `YesNoBox` behind TRADE_DIALOG_INTRO. NO is TRADE_DIALOG_CANCEL; YES opens
+## the party list under PARTYMENUACTION_GIVE_MON.
+func _resume_trade_intro(choice: int) -> Dictionary:
+	var trade: Dictionary = (_pending.get("trade", {}) as Dictionary).duplicate()
+	_pending = {}
+	if choice != 0:
+		return _trade_result(_trade_box(
+			Gen2WorldPartyHost.trade_record(data, trade), TRADE_DIALOG_CANCEL, true
+		))
+	_stage_runtime_request(&"party_selection_requested", {
+		"routine": &"npc_trade", "trade": trade,
+	})
+	return _waiting_result()
+
+
+## `SelectTradeOrDayCareMon` and the two tests behind it: the row's own species
+## and `CheckTradeGender`. A refusal of either is TRADE_DIALOG_WRONG.
+func _finish_trade_selection(trade: Dictionary, result: Dictionary) -> Dictionary:
+	var record: Dictionary = Gen2WorldPartyHost.trade_record(data, trade)
+	_set_trade_names(record)
+	var party_index: int = int(result.get("party_index", -1))
+	if party_index < 0:
+		return _trade_result(_trade_box(record, TRADE_DIALOG_CANCEL, true))
+	var dvs: Array = result.get("dvs", [])
+	var species: int = int(result.get("species", 0))
+	var dv_word: int = ((int(dvs[0]) << 8) | int(dvs[1])) if dvs.size() >= 2 else 0
+	if species != int(record.get("requested_species", 0)) \
+		or not Gen2WorldPartyHost.trade_gender_matches(
+			data, species, dv_word,
+			int(record.get("gender", RomLayout.TRADE_GENDER_EITHER))
+		):
+		return _trade_result(_trade_box(record, TRADE_DIALOG_WRONG, true))
+	## `ld b, SET_FLAG`, spent in front of the cable line and of the swap.
+	_staged_npc_trades[int(trade["trade_id"])] = true
+	var carried: Dictionary = trade.duplicate()
+	carried["party_index"] = party_index
+	var cable: String = _special_box("npc_trade", "cable")
+	if cable.is_empty():
+		return _fail(&"missing_special_text", carried)
+	return _trade_result(_stage_internal_text(cable, false, {
+		"npc_trade_after_cable": carried,
+	}))
+
+
+## `NPCTradeCableText`'s prompt, behind which `DoNPCTrade` and the movie run.
+func _resume_trade_cable(_choice: int) -> Dictionary:
+	var carried: Dictionary = _pending["npc_trade_after_cable"]
+	_pending = {}
+	_finish_after_pending = false
+	_stage_runtime_request(&"trade_requested", carried)
+	return _waiting_result()
+
+
+## `TradedForText`, printed once the movie is over, and the three audio steps
+## it and `RestartMapMusic` spend before TRADE_DIALOG_COMPLETE.
+func _resume_trade_traded(_choice: int) -> Dictionary:
+	var carried: Dictionary = _pending["npc_trade_after_traded"]
+	_pending = {}
+	_finish_after_pending = false
+	return _trade_result(_stage_trade_audio(carried, 0))
+
+
+func _stage_trade_audio(carried: Dictionary, step: int) -> Dictionary:
+	if step >= TRADE_AFTER_TEXT_AUDIO.size():
+		return _trade_box(
+			Gen2WorldPartyHost.trade_record(data, carried), TRADE_DIALOG_COMPLETE, true
+		)
+	_npc_trade_after_sound = {"trade": carried, "step": step + 1}
+	var row: Array = TRADE_AFTER_TEXT_AUDIO[step]
+	return _stage_audio_request(StringName(row[0]), (row[1] as Dictionary).duplicate())
+
+
+## `advance` turns a staged pending into a result, the way the Bank of Mom's
+## steps are answered.
+func _trade_result(staged: Dictionary) -> Dictionary:
+	if staged.has("status") or not bool(staged.get("ok", false)):
+		return staged
+	return advance()
 
 
 func _command_askforphonenumber(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
@@ -5933,6 +6150,9 @@ func _finish_party_selection(request: Dictionary, result: Dictionary) -> Diction
 	var values: Dictionary = request.get("values", {})
 	var special: int = int(values.get("special", 0))
 	var routine: StringName = StringName(values.get("routine", &""))
+	if routine == &"npc_trade":
+		_pending = {}
+		return _finish_trade_selection(values.get("trade", {}), result)
 	var party_index: int = int(result.get("party_index", -1))
 	if party_index < 0:
 		## `SelectMonFromParty`'s carry. Three of the six routines answer
@@ -7068,6 +7288,7 @@ func _staged_runtime_changes() -> Dictionary:
 		["kurt_apricorn_quantity", _has_staged_kurt_apricorn_quantity,
 			_staged_kurt_apricorn_quantity],
 		["fruit_trees", not _staged_fruit_trees.is_empty(), _staged_fruit_trees.duplicate()],
+		["npc_trades", not _staged_npc_trades.is_empty(), _staged_npc_trades.duplicate()],
 		["kenji_break_timer", _has_staged_kenji_break_timer, _staged_kenji_break_timer],
 		["lucky_number_days_left", _has_staged_lucky_number_days_left,
 			_staged_lucky_number_days_left],

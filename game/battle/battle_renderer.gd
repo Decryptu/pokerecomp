@@ -417,14 +417,14 @@ static func pic_stride(pixels: PackedByteArray, side: int) -> int:
 
 ## [param front] is whether `PadFrontpic` runs over this one: a back pic fills
 ## its own box and a trainer's is already the whole 7x7, so neither is padded.
-## Static because the placement is the whole of the picture and takes no screen:
-## a check sweeping three caches builds the box the way the renderer does.
-## [param animation] is the same species' `front_anim` cell, which becomes the
-## tile columns behind the box: `GetAnimatedEnemyFrontpic` loads them at
-## `7 * 7 tiles` past the picture and `.GetTilemap` addresses them from there.
+## Static because a check sweeping three caches builds the box the way the
+## renderer does. [param animation] is the same species' `front_anim` cell, which
+## becomes the tile columns behind the box: `GetAnimatedEnemyFrontpic` loads them
+## at `7 * 7 tiles` past the picture. [param mirrored] is `wBoxAlignment`, whose
+## `LoadOrientedFrontpic` flips each tile's own pixels as it loads.
 static func padded_pic(
 	data: GameData, pic: Dictionary, side: int, front: bool = false,
-	animation: Dictionary = {}
+	animation: Dictionary = {}, mirrored: bool = false
 ) -> PackedByteArray:
 	var box: int = side * TILE
 	var extra: int = _animation_columns(animation, side) * TILE
@@ -462,7 +462,7 @@ static func padded_pic(
 			out[(y + pad_y) * strip + x + pad_x] = indices[y * stride + x]
 	if extra > 0:
 		_append_animation(data, animation, out, strip, side)
-	return out
+	return Gen2PicImage.tile_flipped_indices(out, strip) if mirrored else out
 
 
 ## How many tile columns of `side` an animation's own `w * h` tiles need. Zero

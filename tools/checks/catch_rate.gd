@@ -64,24 +64,19 @@ const PINNED: Array = [
 	[[0x05, 25, 255, 341, 341, 0, 10, 50, 0], 85],
 	[[0x05, 25, 255, 400, 400, 0, 10, 50, 0], 67],
 	[[0x05, 25, 255, 400, 200, 0, 10, 50, 0], 135],
-	# Great and Ultra.
-	[[0x04, 25, 100, 100, 100, 0, 10, 50, 0], 50],
+	[[0x04, 25, 100, 100, 100, 0, 10, 50, 0], 50],  # Great and Ultra.
 	[[0x02, 25, 100, 100, 100, 0, 10, 50, 0], 66],
-	# Lure Ball, which is three times the rate and only on a rod battle.
-	[[0xA0, 25, 100, 100, 100, 0, 10, 50, 0], 33],
+	[[0xA0, 25, 100, 100, 100, 0, 10, 50, 0], 33],  # Lure Ball, which is three times the rate and only on a rod battle.
 	[[0xA0, 25, 100, 100, 100, 0, 10, 50, 1], 85],
-	# Fast Ball, whose list is three species long: MAGNEMITE against MR. MIME.
-	[[0xA1, 81, 100, 100, 100, 0, 10, 50, 0], 85],
+	[[0xA1, 81, 100, 100, 100, 0, 10, 50, 0], 85],  # Fast Ball, whose list is three species long: MAGNEMITE against MR. MIME.
 	[[0xA1, 122, 100, 100, 100, 0, 10, 50, 0], 33],
-	# Moon Ball never boosts anything, NIDORINA included.
-	[[0xA5, 30, 100, 100, 100, 0, 10, 50, 0], 33],
+	[[0xA5, 30, 100, 100, 100, 0, 10, 50, 0], 33],  # Moon Ball never boosts anything, NIDORINA included.
 	# Love Ball boosts a matching gender rather than a differing one, and
 	# answers nothing for a genderless species. Both DVs are $FFFF here, so
 	# both sides are male wherever the ratio allows one.
 	[[0xA6, 25, 100, 100, 100, 0, 10, 50, 0], 85],
 	[[0xA6, 201, 100, 100, 100, 0, 10, 50, 0], 33],
-	# Friend Ball has no multiplier row at all: its effect is the happiness.
-	[[0xA4, 25, 100, 100, 100, 0, 10, 50, 0], 33],
+	[[0xA4, 25, 100, 100, 100, 0, 10, 50, 0], 33],  # Friend Ball has no multiplier row at all: its effect is the happiness.
 	# Level Ball skips the health term outright, so its answer is the multiplied
 	# rate: eight times under a quarter of the player's level, then four, then
 	# two, then nothing once the wild has caught up.
@@ -89,8 +84,7 @@ const PINNED: Array = [
 	[[0x9F, 25, 45, 100, 100, 0, 10, 40, 0], 180],
 	[[0x9F, 25, 45, 100, 100, 0, 20, 40, 0], 90],
 	[[0x9F, 25, 45, 100, 100, 0, 50, 40, 0], 45],
-	# Heavy Ball: twenty off a light species, forty onto SNORLAX.
-	[[0x9D, 25, 100, 100, 100, 0, 10, 50, 0], 26],
+	[[0x9D, 25, 100, 100, 100, 0, 10, 50, 0], 26],  # Heavy Ball: twenty off a light species, forty onto SNORLAX.
 	[[0x9D, 143, 100, 100, 100, 0, 10, 50, 0], 46],
 ]
 

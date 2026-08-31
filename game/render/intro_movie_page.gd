@@ -39,8 +39,7 @@ const ATTR_YFLIP: int = 0x40
 const ATTR_PRIORITY: int = 0x80
 
 const OAM_SETS: Array[Dictionary] = [
-	# 0: SPRITE_ANIM_OAMSET_INTRO_SUICUNE_1 (.OAMData_IntroSuicune1, 36 sprites)
-	{"vtile": 0x00, "parts": [
+	{"vtile": 0x00, "parts": [  # 0: SPRITE_ANIM_OAMSET_INTRO_SUICUNE_1 (.OAMData_IntroSuicune1, 36 sprites)
 		[-24, 8, 0x05, 0x00], [-24, 16, 0x06, 0x00], [-24, 24, 0x07, 0x00],
 		[-16, -24, 0x11, 0x00], [-16, -16, 0x12, 0x00], [-16, -8, 0x13, 0x00],
 		[-16, 0, 0x14, 0x00], [-16, 8, 0x15, 0x00], [-16, 16, 0x16, 0x00],
@@ -54,8 +53,7 @@ const OAM_SETS: Array[Dictionary] = [
 		[8, 24, 0x47, 0x00], [16, -32, 0x50, 0x00], [16, -24, 0x51, 0x00],
 		[16, 24, 0x57, 0x00]
 	]},
-	# 1: SPRITE_ANIM_OAMSET_INTRO_SUICUNE_2 (.OAMData_IntroSuicune2, 28 sprites)
-	{"vtile": 0x08, "parts": [
+	{"vtile": 0x08, "parts": [  # 1: SPRITE_ANIM_OAMSET_INTRO_SUICUNE_2 (.OAMData_IntroSuicune2, 28 sprites)
 		[-24, 0, 0x04, 0x00], [-24, 8, 0x05, 0x00], [-24, 16, 0x06, 0x00],
 		[-16, -24, 0x11, 0x00], [-16, -16, 0x12, 0x00], [-16, -8, 0x13, 0x00],
 		[-16, 0, 0x14, 0x00], [-16, 8, 0x15, 0x00], [-16, 16, 0x16, 0x00],
@@ -66,8 +64,7 @@ const OAM_SETS: Array[Dictionary] = [
 		[8, -8, 0x43, 0x00], [8, 0, 0x44, 0x00], [8, 8, 0x45, 0x00], [16, -8, 0x53, 0x00],
 		[16, 0, 0x54, 0x00], [16, 8, 0x55, 0x00]
 	]},
-	# 2: SPRITE_ANIM_OAMSET_INTRO_SUICUNE_3 (.OAMData_IntroSuicune3, 30 sprites)
-	{"vtile": 0x60, "parts": [
+	{"vtile": 0x60, "parts": [  # 2: SPRITE_ANIM_OAMSET_INTRO_SUICUNE_3 (.OAMData_IntroSuicune3, 30 sprites)
 		[-24, 0, 0x04, 0x00], [-24, 8, 0x05, 0x00], [-16, -24, 0x11, 0x00],
 		[-16, -16, 0x12, 0x00], [-16, -8, 0x13, 0x00], [-16, 0, 0x14, 0x00],
 		[-16, 8, 0x15, 0x00], [-16, 16, 0x16, 0x00], [-16, 24, 0x17, 0x00],
@@ -79,8 +76,7 @@ const OAM_SETS: Array[Dictionary] = [
 		[16, -16, 0x52, 0x00], [16, -8, 0x53, 0x00], [16, 0, 0x54, 0x00],
 		[16, 8, 0x55, 0x00]
 	]},
-	# 3: SPRITE_ANIM_OAMSET_INTRO_SUICUNE_4 (.OAMData_IntroSuicune4, 31 sprites)
-	{"vtile": 0x68, "parts": [
+	{"vtile": 0x68, "parts": [  # 3: SPRITE_ANIM_OAMSET_INTRO_SUICUNE_4 (.OAMData_IntroSuicune4, 31 sprites)
 		[-16, -24, 0x11, 0x00], [-16, -16, 0x12, 0x00], [-16, -8, 0x13, 0x00],
 		[-16, 0, 0x14, 0x00], [-16, 8, 0x15, 0x00], [-16, 16, 0x16, 0x00],
 		[-16, 24, 0x17, 0x00], [-8, -32, 0x20, 0x00], [-8, -24, 0x21, 0x00],
@@ -92,8 +88,7 @@ const OAM_SETS: Array[Dictionary] = [
 		[8, 0, 0x44, 0x00], [8, 8, 0x45, 0x00], [16, -24, 0x51, 0x00],
 		[16, -16, 0x52, 0x00], [16, 0, 0x54, 0x00], [16, 8, 0x55, 0x00]
 	]},
-	# 4: SPRITE_ANIM_OAMSET_INTRO_PICHU_1 (.OAMData_IntroPichu, 25 sprites)
-	{"vtile": 0x00, "parts": [
+	{"vtile": 0x00, "parts": [  # 4: SPRITE_ANIM_OAMSET_INTRO_PICHU_1 (.OAMData_IntroPichu, 25 sprites)
 		[-20, -20, 0x00, 0x09], [-20, -12, 0x01, 0x09], [-20, -4, 0x02, 0x09],
 		[-20, 4, 0x03, 0x09], [-20, 12, 0x04, 0x09], [-12, -20, 0x10, 0x09],
 		[-12, -12, 0x11, 0x09], [-12, -4, 0x12, 0x09], [-12, 4, 0x13, 0x09],
@@ -104,8 +99,7 @@ const OAM_SETS: Array[Dictionary] = [
 		[12, -12, 0x41, 0x09], [12, -4, 0x42, 0x09], [12, 4, 0x43, 0x09],
 		[12, 12, 0x44, 0x09]
 	]},
-	# 5: SPRITE_ANIM_OAMSET_INTRO_PICHU_2 (.OAMData_IntroPichu, 25 sprites)
-	{"vtile": 0x05, "parts": [
+	{"vtile": 0x05, "parts": [  # 5: SPRITE_ANIM_OAMSET_INTRO_PICHU_2 (.OAMData_IntroPichu, 25 sprites)
 		[-20, -20, 0x00, 0x09], [-20, -12, 0x01, 0x09], [-20, -4, 0x02, 0x09],
 		[-20, 4, 0x03, 0x09], [-20, 12, 0x04, 0x09], [-12, -20, 0x10, 0x09],
 		[-12, -12, 0x11, 0x09], [-12, -4, 0x12, 0x09], [-12, 4, 0x13, 0x09],
@@ -116,8 +110,7 @@ const OAM_SETS: Array[Dictionary] = [
 		[12, -12, 0x41, 0x09], [12, -4, 0x42, 0x09], [12, 4, 0x43, 0x09],
 		[12, 12, 0x44, 0x09]
 	]},
-	# 6: SPRITE_ANIM_OAMSET_INTRO_PICHU_3 (.OAMData_IntroPichu, 25 sprites)
-	{"vtile": 0x0A, "parts": [
+	{"vtile": 0x0A, "parts": [  # 6: SPRITE_ANIM_OAMSET_INTRO_PICHU_3 (.OAMData_IntroPichu, 25 sprites)
 		[-20, -20, 0x00, 0x09], [-20, -12, 0x01, 0x09], [-20, -4, 0x02, 0x09],
 		[-20, 4, 0x03, 0x09], [-20, 12, 0x04, 0x09], [-12, -20, 0x10, 0x09],
 		[-12, -12, 0x11, 0x09], [-12, -4, 0x12, 0x09], [-12, 4, 0x13, 0x09],
@@ -128,8 +121,7 @@ const OAM_SETS: Array[Dictionary] = [
 		[12, -12, 0x41, 0x09], [12, -4, 0x42, 0x09], [12, 4, 0x43, 0x09],
 		[12, 12, 0x44, 0x09]
 	]},
-	# 7: SPRITE_ANIM_OAMSET_INTRO_WOOPER (.OAMData_IntroWooper, 16 sprites)
-	{"vtile": 0x50, "parts": [
+	{"vtile": 0x50, "parts": [  # 7: SPRITE_ANIM_OAMSET_INTRO_WOOPER (.OAMData_IntroWooper, 16 sprites)
 		[-16, -20, 0x00, 0x0A], [-16, -12, 0x01, 0x0A], [-16, -4, 0x02, 0x0A],
 		[-16, 4, 0x03, 0x0A], [-8, -20, 0x04, 0x0A], [-8, -12, 0x05, 0x0A],
 		[-8, -4, 0x06, 0x0A], [-8, 4, 0x07, 0x0A], [0, -20, 0x08, 0x0A],
@@ -137,39 +129,32 @@ const OAM_SETS: Array[Dictionary] = [
 		[8, -20, 0x0C, 0x0A], [8, -12, 0x0D, 0x0A], [8, -4, 0x0E, 0x0A],
 		[8, 4, 0x0F, 0x0A]
 	]},
-	# 8: SPRITE_ANIM_OAMSET_INTRO_UNOWN_1 (.OAMData_IntroUnown1, 1 sprites)
-	{"vtile": 0x00, "parts": [
+	{"vtile": 0x00, "parts": [  # 8: SPRITE_ANIM_OAMSET_INTRO_UNOWN_1 (.OAMData_IntroUnown1, 1 sprites)
 		[-4, -4, 0x00, 0x00]
 	]},
-	# 9: SPRITE_ANIM_OAMSET_INTRO_UNOWN_2 (.OAMData_IntroUnown2, 3 sprites)
-	{"vtile": 0x01, "parts": [
+	{"vtile": 0x01, "parts": [  # 9: SPRITE_ANIM_OAMSET_INTRO_UNOWN_2 (.OAMData_IntroUnown2, 3 sprites)
 		[0, -8, 0x00, 0x00], [-8, -8, 0x01, 0x00], [-8, 0, 0x02, 0x00]
 	]},
-	# 10: SPRITE_ANIM_OAMSET_INTRO_UNOWN_3 (.OAMData_IntroUnown3, 7 sprites)
-	{"vtile": 0x04, "parts": [
+	{"vtile": 0x04, "parts": [  # 10: SPRITE_ANIM_OAMSET_INTRO_UNOWN_3 (.OAMData_IntroUnown3, 7 sprites)
 		[8, -16, 0x00, 0x00], [0, -16, 0x01, 0x00], [-8, -16, 0x02, 0x00],
 		[-8, -8, 0x03, 0x00], [-16, -8, 0x04, 0x00], [-16, 0, 0x05, 0x00],
 		[-16, 8, 0x06, 0x00]
 	]},
-	# 11: SPRITE_ANIM_OAMSET_INTRO_UNOWN_F_2_1 (.OAMData_IntroUnownF2_1, 4 sprites)
-	{"vtile": 0x00, "parts": [
+	{"vtile": 0x00, "parts": [  # 11: SPRITE_ANIM_OAMSET_INTRO_UNOWN_F_2_1 (.OAMData_IntroUnownF2_1, 4 sprites)
 		[-8, -8, 0x00, 0x00], [-8, 0, 0x00, 0x20], [0, -8, 0x00, 0x40], [0, 0, 0x00, 0x60]
 	]},
-	# 12: SPRITE_ANIM_OAMSET_INTRO_UNOWN_F_2_2 (.OAMData_IntroUnownF2_2, 8 sprites)
-	{"vtile": 0x01, "parts": [
+	{"vtile": 0x01, "parts": [  # 12: SPRITE_ANIM_OAMSET_INTRO_UNOWN_F_2_2 (.OAMData_IntroUnownF2_2, 8 sprites)
 		[-8, -16, 0x00, 0x00], [-8, -8, 0x01, 0x00], [-8, 0, 0x01, 0x20],
 		[-8, 8, 0x00, 0x20], [0, -16, 0x00, 0x40], [0, -8, 0x01, 0x40], [0, 0, 0x01, 0x60],
 		[0, 8, 0x00, 0x60]
 	]},
-	# 13: SPRITE_ANIM_OAMSET_INTRO_UNOWN_F_2_3 (.OAMData_IntroUnownF2_3, 12 sprites)
-	{"vtile": 0x03, "parts": [
+	{"vtile": 0x03, "parts": [  # 13: SPRITE_ANIM_OAMSET_INTRO_UNOWN_F_2_3 (.OAMData_IntroUnownF2_3, 12 sprites)
 		[-24, -8, 0x00, 0x00], [-16, -8, 0x01, 0x00], [-8, -8, 0x02, 0x00],
 		[-24, 0, 0x00, 0x20], [-16, 0, 0x01, 0x20], [-8, 0, 0x02, 0x20],
 		[0, -8, 0x02, 0x40], [8, -8, 0x01, 0x40], [16, -8, 0x00, 0x40], [0, 0, 0x02, 0x60],
 		[8, 0, 0x01, 0x60], [16, 0, 0x00, 0x60]
 	]},
-	# 14: SPRITE_ANIM_OAMSET_INTRO_UNOWN_F_2_4 (.OAMData_IntroUnownF2_4_5, 20 sprites)
-	{"vtile": 0x08, "parts": [
+	{"vtile": 0x08, "parts": [  # 14: SPRITE_ANIM_OAMSET_INTRO_UNOWN_F_2_4 (.OAMData_IntroUnownF2_4_5, 20 sprites)
 		[-20, -16, 0x00, 0x00], [-20, -8, 0x01, 0x00], [-20, 0, 0x02, 0x00],
 		[-20, 8, 0x03, 0x00], [-12, -16, 0x04, 0x00], [-12, -8, 0x05, 0x00],
 		[-12, 0, 0x06, 0x00], [-12, 8, 0x07, 0x00], [-4, -16, 0x08, 0x00],
@@ -178,8 +163,7 @@ const OAM_SETS: Array[Dictionary] = [
 		[12, -16, 0x10, 0x00], [12, -8, 0x11, 0x00], [12, 0, 0x12, 0x00],
 		[12, 8, 0x13, 0x00]
 	]},
-	# 15: SPRITE_ANIM_OAMSET_INTRO_UNOWN_F_2_5 (.OAMData_IntroUnownF2_4_5, 20 sprites)
-	{"vtile": 0x1C, "parts": [
+	{"vtile": 0x1C, "parts": [  # 15: SPRITE_ANIM_OAMSET_INTRO_UNOWN_F_2_5 (.OAMData_IntroUnownF2_4_5, 20 sprites)
 		[-20, -16, 0x00, 0x00], [-20, -8, 0x01, 0x00], [-20, 0, 0x02, 0x00],
 		[-20, 8, 0x03, 0x00], [-12, -16, 0x04, 0x00], [-12, -8, 0x05, 0x00],
 		[-12, 0, 0x06, 0x00], [-12, 8, 0x07, 0x00], [-4, -16, 0x08, 0x00],
@@ -188,8 +172,7 @@ const OAM_SETS: Array[Dictionary] = [
 		[12, -16, 0x10, 0x00], [12, -8, 0x11, 0x00], [12, 0, 0x12, 0x00],
 		[12, 8, 0x13, 0x00]
 	]},
-	# 16: SPRITE_ANIM_OAMSET_INTRO_SUICUNE_AWAY (.OAMData_IntroSuicuneAway, 20 sprites)
-	{"vtile": 0x80, "parts": [
+	{"vtile": 0x80, "parts": [  # 16: SPRITE_ANIM_OAMSET_INTRO_SUICUNE_AWAY (.OAMData_IntroSuicuneAway, 20 sprites)
 		[0, 8, 0x00, 0x81], [8, 16, 0x00, 0x81], [16, 24, 0x00, 0x81],
 		[24, 32, 0x00, 0x81], [32, 40, 0x00, 0x81], [24, 48, 0x00, 0x81],
 		[16, 56, 0x00, 0x81], [8, 64, 0x00, 0x81], [0, 72, 0x00, 0x81],

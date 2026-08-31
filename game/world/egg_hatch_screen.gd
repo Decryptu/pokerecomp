@@ -504,27 +504,12 @@ func _place_pic() -> void:
 func _draw_animation_box() -> void:
 	if _pic == null or _animation == null:
 		return
-	var square: int = BOX * BOX
-	if _animation.box.size() != square or _animation_pixels.is_empty():
+	var indices: PackedByteArray = Gen2PicImage.animation_box_indices(
+		_animation.box, _animation_pixels, BOX
+	)
+	if indices.is_empty():
 		return
 	var side: int = BOX * TILE
-	@warning_ignore("integer_division")
-	var strip: int = _animation_pixels.size() / side
-	var indices: PackedByteArray = PackedByteArray()
-	indices.resize(side * side)
-	for column: int in BOX:
-		for row: int in BOX:
-			var tile: int = int(_animation.box[column * BOX + row])
-			@warning_ignore("integer_division")
-			var source_x: int = (tile / BOX) * TILE
-			var source_y: int = (tile % BOX) * TILE
-			if source_x + TILE > strip:
-				continue
-			for line: int in TILE:
-				var from: int = (source_y + line) * strip + source_x
-				var to: int = (row * TILE + line) * side + column * TILE
-				for x: int in TILE:
-					indices[to + x] = _animation_pixels[from + x]
 	var image: Image = Gen2PicImage.from_indices(
 		indices, side, side,
 		_data.palette(int(current_hatch().get("species", 0)), _hatch_shiny())

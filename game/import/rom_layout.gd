@@ -309,6 +309,43 @@ const TRADE_NAME_LENGTH: int = 11
 const TRADE_GENDER_EITHER: int = 0
 const TRADE_GENDER_MALE: int = 1
 const TRADE_GENDER_FEMALE: int = 2
+## Crystal's fourth set, the one `DoNPCTrade` tests for CAUGHT_BY_GIRL. Gold and
+## Silver ship three sets, so no row of theirs reaches it.
+const TRADE_DIALOGSET_GIRL: int = 3
+
+## `TradeTexts`, transcribed: `TRADE_DIALOG_*` rows by `TRADE_DIALOGSET_*`
+## columns, each cell naming a stub. Crystal's NEWBIE column shares variant 2
+## until the trade has happened and then takes two texts Gold and Silver lack.
+const TRADE_TEXTS: Array[String] = [
+	"intro_1", "intro_2", "intro_2", "intro_3",
+	"cancel_1", "cancel_2", "cancel_2", "cancel_3",
+	"wrong_1", "wrong_2", "wrong_2", "wrong_3",
+	"complete_1", "complete_2", "complete_4", "complete_3",
+	"after_1", "after_2", "after_4", "after_3",
+]
+const TRADE_TEXTS_GOLD_SILVER: Array[String] = [
+	"intro_1", "intro_2", "intro_3",
+	"cancel_1", "cancel_2", "cancel_3",
+	"wrong_1", "wrong_2", "wrong_3",
+	"complete_1", "complete_2", "complete_3",
+	"after_1", "after_2", "after_3",
+]
+## The two cells in their own run, because only Crystal ships them.
+const TRADE_NEWBIE_TEXTS: Array[String] = ["complete_4", "after_4"]
+## The stubs' own order in the file, variant-major where `TradeTexts` is
+## dialog-major, which is the order a run of stubs is read at.
+const TRADE_TEXT_ORDER: Array[String] = [
+	"intro_1", "cancel_1", "wrong_1", "complete_1", "after_1",
+	"intro_2", "cancel_2", "wrong_2", "complete_2", "after_2",
+	"intro_3", "cancel_3", "wrong_3", "complete_3", "after_3",
+]
+
+
+static func trade_text_name(crystal: bool, dialog: int, dialog_set: int) -> String:
+	var table: Array[String] = TRADE_TEXTS if crystal else TRADE_TEXTS_GOLD_SILVER
+	var sets: int = 4 if crystal else 3
+	var cell: int = dialog * sets + clampi(dialog_set, 0, sets - 1)
+	return "" if cell < 0 or cell >= table.size() else table[cell]
 
 ## Type numbers are sparse: $00-$09 are the physical types, $14-$1B the special
 ## ones, and the run between is padding that still has a name entry. Reading all
@@ -1613,6 +1650,14 @@ const SPECIAL_TEXT_RUNS: Dictionary = {
 		"ask_which_prize", "is_that_right", "here_you_go", "not_enough_points",
 		"no_room", "come_again",
 	]]],
+	## `NPCTrade`'s own words, which no `special` reaches: `Script_trade` is a
+	## `farcall` to it and every line a trader says is inside. Two runs because
+	## `TradedForText`'s `text_asm` sits between the pair and the fifteen.
+	"npc_trade": [
+		["npc_trade_cable_text", ["cable", "traded_for"]],
+		["npc_trade_text", TRADE_TEXT_ORDER],
+	],
+	"npc_trade_newbie": [["npc_trade_newbie_text", TRADE_NEWBIE_TEXTS]],
 }
 
 ## `engine/events/move_deleter.asm`'s eight, in the file's own order rather than
@@ -2225,8 +2270,7 @@ const GOLD_SILVER: Dictionary = {
 		"toss_ask": 0x194569,
 		"toss_ask_quantity": 0x19457F,
 		"toss_threw": 0x19459C,
-		# The six a field item says, in the same file and located the same way.
-		"escape_rope": 0x1940AE,
+		"escape_rope": 0x1940AE,  # The six a field item says, in the same file and located the same way.
 		"itemfinder_nearby": 0x19443B,
 		"itemfinder_nope": 0x19446D,
 		"sacred_ash": 0x194529,
@@ -2334,8 +2378,7 @@ const GOLD_SILVER: Dictionary = {
 		"kanto": 0x920BB,
 		"palette_map": 0x91EAC,
 		"palette": 0xBB6E,
-		# `PokegearPals` is one run: no Kris, so no second city palette.
-		"palette_female": -1,
+		"palette_female": -1,  # `PokegearPals` is one run: no Kris, so no second city palette.
 		"landmarks": 0x92382,
 		"landmark_count": LANDMARK_COUNT_GOLD_SILVER,
 	},
@@ -2385,8 +2428,7 @@ const GOLD_SILVER: Dictionary = {
 		"the_end": 0xCBCBD,
 		"script": 0x87A36,
 		"strings": 0x87B65,
-		# `PlaceFarString`, so the strings are not in the table's own bank.
-		"strings_bank": 0x70,
+		"strings_bank": 0x70,  # `PlaceFarString`, so the strings are not in the table's own bank.
 		# NUM_CREDITS_STRINGS, STAFF and COPYRIGHT
 		# (constants/credits_constants.asm). All three are checked against the
 		# script and the copyright screen rather than trusted.
@@ -2442,8 +2484,7 @@ const GOLD_SILVER: Dictionary = {
 		"crystal": -1,
 		"palettes": -1,
 	},
-	# `CrystalIntro` is Crystal's; Gold and Silver run `GoldSilverIntro` below.
-	"intro_movie": {"section": -1, "fade": -1, "unown_pals": -1},
+	"intro_movie": {"section": -1, "fade": -1, "unown_pals": -1},  # `CrystalIntro` is Crystal's; Gold and Silver run `GoldSilverIntro` below.
 	# `_UnownPuzzle`'s art, the same two pins as Crystal's at Gold and Silver's
 	# own addresses. Both cartridges carry it at the same offsets.
 	"unown_puzzle": {"tile_borders": 0xE1F30, "section": 0xE1FD2},
@@ -2481,8 +2522,7 @@ const GOLD_SILVER: Dictionary = {
 	"slots_bet_text": 0x93630,
 	"slots_play_again_text": 0x93683,
 	"slots_result_text": 0x93730,
-	# `_CardFlip`'s run at Gold and Silver's own addresses, the same on both.
-	"card_flip": {"section": 0xE14E8, "palettes": 0xE14A0},
+	"card_flip": {"section": 0xE14E8, "palettes": 0xE14A0},  # `_CardFlip`'s run at Gold and Silver's own addresses, the same on both.
 	"card_flip_text": 0x198313,
 	# `GoldSilverIntro`'s art section. `Intro_WaterGFX1` is the only pinned
 	# address in it: the section is contiguous and sixteen-byte aligned, so the
@@ -2517,8 +2557,7 @@ const GOLD_SILVER: Dictionary = {
 	# reason trainer_card is.
 	"pokedex": {
 		"entry_pointers": 0x44360,
-		# BANK("Pokedex Entries 001-064") through 193-251.
-		"entry_banks": [0x68, 0x69, 0x6A, 0x6B],
+		"entry_banks": [0x68, 0x69, 0x6A, 0x6B],  # BANK("Pokedex Entries 001-064") through 193-251.
 		"order_alpha": 0x40C65,
 		"order_new": 0x40D60,
 		# The screen's own graphics; see POKEDEX_TILES for how these were
@@ -2664,6 +2703,8 @@ const GOLD_SILVER: Dictionary = {
 		## way their link block does.
 		"mystery_gift_partner_name": 0xC803,
 		"mystery_gift_player_name": 0xC853,
+		## `wMonOrItemNameBuffer`, which `StringBufferPointers` has no index for.
+		"mon_or_item_name": 0xCF48,
 	},
 	## Gold and Silver's own WRAM address for the same byte; their link block sits
 	## a page lower than Crystal's.
@@ -2689,6 +2730,11 @@ const GOLD_SILVER: Dictionary = {
 	"poke_seer_text": 0,
 	"seer_advice_text": 0,
 	"buena_prize_text": 0,
+	## `NPCTrade`'s stubs, located from `_NPCTradeCableText`'s own far pointer,
+	## which hits once per dump. Three dialog sets here against Crystal's four.
+	"npc_trade_cable_text": 0xFCD20,
+	"npc_trade_text": 0xFCD3C,
+	"npc_trade_newbie_text": 0,
 	## The Battle Tower's three stub runs, which Gold and Silver ship no routine
 	## to reach; see the `battle_tower` block in the Crystal layout.
 	"battle_tower_excuse_text": 0,
@@ -2716,8 +2762,7 @@ const GOLD_SILVER: Dictionary = {
 	"phone_call_texts": 0x1980FC,
 	"phone_just_talk_bank": 0x24,
 	"phone_just_talk_address": 0x462F,
-	# SpecialCallOnlyWhenOutside and SpecialCallWhereverYouAre in engine/phone/phone.asm.
-	"phone_condition_outside": 0x4190,
+	"phone_condition_outside": 0x4190,  # SpecialCallOnlyWhenOutside and SpecialCallWhereverYouAre in engine/phone/phone.asm.
 	"phone_condition_anywhere": 0x419F,
 	"music_pointers": 0xE906E,
 	"music_count": 93,
@@ -2803,8 +2848,7 @@ const CRYSTAL: Dictionary = {
 	"base_stats": 0x51424,
 	"pic_pointers": 0x120000,
 	"unown_pic_pointers": 0x124000,
-	# The same table; Crystal has no Gold and Silver intro to pin it under.
-	"predef_pals": 0x9DF6,
+	"predef_pals": 0x9DF6,  # The same table; Crystal has no Gold and Silver intro to pin it under.
 	# `AnimateFrontpic`'s five tables, Crystal's alone: pokegold ships no
 	# `pic_animation.asm`, no bitmasks and no frames, and both of its send-outs
 	# reach `PlayStereoCry` directly. Every address here is rgblink's own, from a
@@ -2831,8 +2875,7 @@ const CRYSTAL: Dictionary = {
 	"palettes": 0xA8CE,
 	"move_names": 0x1C9F29,
 	"item_names": 0x1C8000,
-	# The two description tables; see the Gold and Silver block above.
-	"item_descriptions": 0x1C8987,
+	"item_descriptions": 0x1C8987,  # The two description tables; see the Gold and Silver block above.
 	"move_descriptions": 0x2CB52,
 	"item_attributes": 0x67C1,
 	"item_status_actions": 0xF071,
@@ -2893,8 +2936,7 @@ const CRYSTAL: Dictionary = {
 	"bar_palettes": 0xA8BE,
 	"stats_screen_palettes": 0x8F52,
 	"battle_font": 0xF8600,
-	# `FontsExtra2_UpArrowGFX`, its own 2bpp tile here.
-	"up_arrow": {"offset": 0xF9424, "bits": 2},
+	"up_arrow": {"offset": 0xF9424, "bits": 2},  # `FontsExtra2_UpArrowGFX`, its own 2bpp tile here.
 	# `MapEntryFrameGFX`, the map name sign's own fourteen tiles. It is the entry
 	# before `FontsExtra2_UpArrowGFX` in `gfx/font.asm` and ends exactly where
 	# that one starts, which is what checks the address. Gold and Silver ship
@@ -2903,8 +2945,7 @@ const CRYSTAL: Dictionary = {
 	"enemy_hud": 0xF8AC0,
 	"player_hud": 0xF8AE0,
 	"exp_bar": 0xF8B10,
-	# See the Gold and Silver block above.
-	"ball_icons": 0x2C172,
+	"ball_icons": 0x2C172,  # See the Gold and Silver block above.
 	"minimize_pic": 0xCC725,
 	"battle_transition": {
 		"tiles": 0x8C2F4, "palette": 0x8C6A1, "dark_palette": 0x8C6A9,
@@ -2982,8 +3023,7 @@ const CRYSTAL: Dictionary = {
 		"scene_palettes": 3,
 		"frames": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
 	},
-	# See the Gold and Silver block above for how this was located.
-	"copyright": {"gfx": 0xE4000, "tiles": 29, "string": 0x63FD, "palette": 0xA066},
+	"copyright": {"gfx": 0xE4000, "tiles": 29, "string": 0x63FD, "palette": 0xA066},  # See the Gold and Silver block above for how this was located.
 	# See the Gold and Silver block above for how these were located. Crystal
 	# ships no star or sparkle: its beat is the Ditto, whose compressed run
 	# cannot be searched for as bytes and was instead found by decompressing at
@@ -3090,8 +3130,7 @@ const CRYSTAL: Dictionary = {
 	# tile, sixteen bytes of one repeated index, is not, so it is taken from the
 	# `ld de` operand thirteen bytes past the palette. Crystal only.
 	"gender_screen": {"tile": 0x48E71, "palette": 0x48E5C},
-	# See the Gold and Silver block above for how these were located.
-	"shrink_pics": {"first": 0x4D249, "second": 0x4D2D9},
+	"shrink_pics": {"first": 0x4D249, "second": 0x4D2D9},  # See the Gold and Silver block above for how these were located.
 	# `gfx/font/bg_text.pal`, BG palette 7. Located from `LoadOW_BGPal7`'s own
 	# `ld hl` operand, whose `ld de` is wBGPals1 + PAL_BG_TEXT; the eight bytes
 	# are unique in the dump as well.
@@ -3252,6 +3291,7 @@ const CRYSTAL: Dictionary = {
 		"ot_trademon_sender_name": 0xC719,
 		"mystery_gift_partner_name": 0xC903,
 		"mystery_gift_player_name": 0xC953,
+		"mon_or_item_name": 0xD050,
 	},
 	## `wOtherPlayerLinkMode`, the byte all three receptionist scripts `readmem`
 	## after `CheckLinkTimeout_Receptionist`. Located off those three `readmem`s
@@ -3275,6 +3315,9 @@ const CRYSTAL: Dictionary = {
 	"poke_seer_text": 0x4F28C,
 	"seer_advice_text": 0x4F2E8,
 	"buena_prize_text": 0x8B072,
+	"npc_trade_cable_text": 0xFCF7B,
+	"npc_trade_text": 0xFCF97,
+	"npc_trade_newbie_text": 0xFCFE2,
 	"odd_eggs": 0x1FB552,
 	## `engine/events/battle_tower/rules.asm`'s three stub runs; Crystal only.
 	"battle_tower_excuse_text": 0x8B22C,
@@ -3296,8 +3339,7 @@ const CRYSTAL: Dictionary = {
 	"phone_call_texts": 0x1C5580,
 	"phone_just_talk_bank": 0x24,
 	"phone_just_talk_address": 0x4660,
-	# Crystal's relocated special-call condition routines.
-	"phone_condition_outside": 0x4188,
+	"phone_condition_outside": 0x4188,  # Crystal's relocated special-call condition routines.
 	"phone_condition_anywhere": 0x4197,
 	"music_pointers": 0xE906E,
 	"music_count": 103,
@@ -3366,8 +3408,7 @@ const CRYSTAL: Dictionary = {
 		# CheckSleepingTreeMon and data/wild/treemons_asleep.asm are Crystal
 		# only; pokegold ships neither. File order is Nite, Day, Morn.
 		"asleep_treemons": {"nite": 0x3EB5D, "day": 0x3EB69, "morn": 0x3EB6F},
-		# See the Gold and Silver block above for how these two were located.
-		"bug_contest_mons": 0x97D87,
+		"bug_contest_mons": 0x97D87,  # See the Gold and Silver block above for how these two were located.
 		"bug_contest_mon_count": 11,
 		"bug_contestants": 0x13783,
 		"bug_contestant_count": 10,

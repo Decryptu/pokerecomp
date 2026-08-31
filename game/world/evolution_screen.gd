@@ -344,10 +344,13 @@ func _open_frontpic_animation() -> void:
 	if bool(plan.get("statused", false)) or record.is_empty():
 		_open_congratulations()
 		return
-	_animation = Gen2PicAnimation.new(record, Gen2PicAnimation.ANIM_MON_EVOLVE)
+	## `.LoadFrontpic` sets `wBoxAlignment` before `GetAnimatedFrontpic` and the
+	## `AnimateFrontpic` below it runs with the flag still up, so the animated
+	## stage is mirrored the same way the still one is.
+	_animation = Gen2PicAnimation.new(record, Gen2PicAnimation.ANIM_MON_EVOLVE, true)
 	_animation_pixels = Gen2BattleRenderer.padded_pic(
 		_data, _data.species_pic(species), BOX, true,
-		_data.species_pic_animation(species)
+		_data.species_pic_animation(species), true
 	)
 	_phase = Phase.ANIMATE
 	_advance_frontpic_animation()
@@ -416,17 +419,14 @@ func _draw_species(species: int) -> void:
 		_data.atlas_indices(pic["atlas"]), _data.atlas(pic["atlas"]), pic,
 		_data.palette(species, _plan_shiny())
 	)
+	## `.PlaceFrontpic` is `PrepMonFrontpic`, which sets `wBoxAlignment`, so the
+	## stage on screen is mirrored and a pic shorter than the block is
+	## bottom-aligned against the far column.
+	image = Gen2PicImage.x_flipped(image)
 	Gen2PicImage.show(_pic, image)
 	_pic.size = Vector2(image.get_size())
-	## `PadFrontpic` bottom-aligns a pic shorter than the block one column in,
-	## which is where `PlaceGraphic`'s tile numbers put it.
-	@warning_ignore("integer_division")
-	var columns: int = image.get_width() / TILE
-	@warning_ignore("integer_division")
-	var rows: int = image.get_height() / TILE
 	_pic.position = Vector2(
-		(PIC_AT.x + Gen2PicImage.frontpic_pad_columns(columns)) * TILE,
-		(PIC_AT.y + Gen2PicImage.frontpic_pad_rows(rows)) * TILE
+		PIC_AT * TILE + Gen2PicImage.frontpic_origin(image.get_size(), true)
 	)
 
 
@@ -436,27 +436,12 @@ func _draw_species(species: int) -> void:
 func _draw_animation_box() -> void:
 	if _pic == null or _animation == null:
 		return
-	var square: int = BOX * BOX
-	if _animation.box.size() != square or _animation_pixels.is_empty():
+	var indices: PackedByteArray = Gen2PicImage.animation_box_indices(
+		_animation.box, _animation_pixels, BOX
+	)
+	if indices.is_empty():
 		return
 	var side: int = BOX * TILE
-	@warning_ignore("integer_division")
-	var strip: int = _animation_pixels.size() / side
-	var indices: PackedByteArray = PackedByteArray()
-	indices.resize(side * side)
-	for column: int in BOX:
-		for row: int in BOX:
-			var tile: int = int(_animation.box[column * BOX + row])
-			@warning_ignore("integer_division")
-			var source_x: int = (tile / BOX) * TILE
-			var source_y: int = (tile % BOX) * TILE
-			if source_x + TILE > strip:
-				continue
-			for line: int in TILE:
-				var from: int = (source_y + line) * strip + source_x
-				var to: int = (row * TILE + line) * side + column * TILE
-				for x: int in TILE:
-					indices[to + x] = _animation_pixels[from + x]
 	var image: Image = Gen2PicImage.from_indices(
 		indices, side, side,
 		_data.palette(int(current_plan().get("new_species", 0)), _plan_shiny())

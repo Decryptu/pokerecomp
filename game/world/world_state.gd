@@ -292,6 +292,9 @@ var _kurt_apricorn_quantity: int = 0
 ## and cleared for every tree at once by `ResetFruitTrees`. Kept as the set of
 ## picked tree ids because the source's own question is per tree.
 var _picked_fruit_trees: Dictionary = {}
+## `wTradeFlags`, one bit per `NPC_TRADE_*` index. `TradeFlagAction` is an NPC
+## trade's whole once-only gate: no map script guards one.
+var _npc_trades: Dictionary = {}
 ## `wRegisteredItem`. `wWhichRegisteredItem`'s pocket and slot number have no
 ## counterpart in the flat item model: `CheckRegisteredItem` uses them to find
 ## the entry again in its packed pocket array and clears both when the item is
@@ -512,6 +515,7 @@ func to_dict() -> Dictionary:
 		"maptile_decorations": _maptile_decorations.duplicate(),
 		"kurt_apricorn_quantity": _kurt_apricorn_quantity,
 		"picked_fruit_trees": _picked_fruit_trees.duplicate(),
+		"npc_trades": _npc_trades.duplicate(),
 		"registered_item": _registered_item,
 		"day_care_man": _day_care_man,
 		"day_care_lady": _day_care_lady,
@@ -561,6 +565,7 @@ static func from_dict(raw: Variant) -> Gen2WorldState:
 	)
 	_seed_counts(restored._pc_items, _map(source, "pc_items"), 1, -1, Gen2WorldPack.MAX_PC_ITEMS)
 	_seed_flags(restored._picked_fruit_trees, _map(source, "picked_fruit_trees"), 1)
+	_seed_flags(restored._npc_trades, _map(source, "npc_trades"), 0)
 	restored._swarm_maps[SWARM_YANMA] = _vector_from_value(
 		source.get("yanma_swarm_map", [-1, -1])
 	)
@@ -706,6 +711,7 @@ func restore_from_dict(raw: Variant) -> void:
 	_maptile_decorations = restored._maptile_decorations.duplicate()
 	_kurt_apricorn_quantity = restored._kurt_apricorn_quantity
 	_picked_fruit_trees = restored._picked_fruit_trees.duplicate()
+	_npc_trades = restored._npc_trades.duplicate()
 	_registered_item = restored._registered_item
 	_day_care_man = restored._day_care_man
 	_day_care_lady = restored._day_care_lady
@@ -1646,6 +1652,11 @@ func picked_fruit_trees() -> Dictionary:
 	return _picked_fruit_trees.duplicate()
 
 
+## `TradeFlagAction`'s CHECK_FLAG over `wTradeFlags`.
+func npc_trade_done(trade_id: int) -> bool:
+	return bool(_npc_trades.get(trade_id, false))
+
+
 ## `CountStep`: the two step counters, the Repel countdown, and `StepHappiness`
 ## on the pass `wStepCount` wraps. One call per step the player finishes, from
 ## wherever the step was taken.
@@ -2184,6 +2195,8 @@ const CHANGE_MAPS: Array[Array] = [
 		PHONE_CONTACT_CAPACITY, &"phone_contact_capacity"],
 	["fruit_trees", "_picked_fruit_trees", MERGE_FLAGS, 1, RomLayout.FRUIT_TREE_COUNT,
 		UNBOUNDED, &"invalid_fruit_trees", &"invalid_fruit_trees", UNBOUNDED, &""],
+	["npc_trades", "_npc_trades", MERGE_FLAGS, 0, UNBOUNDED, UNBOUNDED,
+		&"invalid_npc_trades", &"invalid_npc_trade", UNBOUNDED, &""],
 	["seen_species", "_seen_species", MERGE_FLAGS, 1, UNBOUNDED, UNBOUNDED,
 		&"invalid_seen_species", &"invalid_seen_species", UNBOUNDED, &""],
 	["caught_species", "_caught_species", MERGE_FLAGS, 1, UNBOUNDED, UNBOUNDED,

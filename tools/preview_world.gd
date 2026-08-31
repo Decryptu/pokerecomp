@@ -34,6 +34,7 @@ const KIND_HELP: Dictionary = {
 	&"ledge": "start cell: the ledge hop at the top of its arc, walking south until one allows it",
 	&"map_name_sign": "cell: InitMapNameSign's window, raised by walking west onto the neighbouring map",
 	&"yes_no": "script, presses: Script_yesorno's box over the map's script",
+	&"npc_trade": "cell below the trader: NPCTrade's own TRADE_DIALOG_INTRO with the YesNoBox over it",
 	&"battle_tower": "A presses, DOWN presses: BattleTower1FReceptionistScript, talked to from the cell below her",
 	&"name_rater": "presses: special NameRater. 0 is the introduction, 2 the last page with YES/NO, 4 the party list",
 	&"move_deleter": "presses: special MoveDeletion, the same three stages",
@@ -347,6 +348,7 @@ const STAGERS: Dictionary = {
 	&"move_tutor": &"_stage_party_routine",
 	&"battle_tower": &"_stage_battle_tower",
 	&"yes_no": &"_stage_yes_no",
+	&"npc_trade": &"_stage_npc_trade",
 	&"mart_top": &"_stage_mart",
 	&"mart": &"_stage_mart",
 	&"mart_sell": &"_stage_mart",
@@ -652,6 +654,20 @@ func _stage_yes_no() -> void:
 	for _press: int in WARP_FRAME_CAP:
 		if StringName(_screen._world.pending_script_input().get(
 			"command", &"")) == &"yesorno":
+			break
+		_screen.press_button(Gen2Button.A)
+		for _frame: int in 20:
+			_screen.advance_frame()
+
+
+## `NPCTrade` from the cell below the trader: TRADE_DIALOG_INTRO with the
+## `YesNoBox` over it. `crystal 1 3 ... npc_trade 2 4` is Tim's own.
+func _stage_npc_trade() -> void:
+	_screen.press_button(Gen2Button.UP)
+	_screen.interact()
+	for _press: int in WARP_FRAME_CAP:
+		if StringName(_screen._world.pending_script_input().get(
+			"command", &"")) == &"trade":
 			break
 		_screen.press_button(Gen2Button.A)
 		for _frame: int in 20:

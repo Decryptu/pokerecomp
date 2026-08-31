@@ -50,9 +50,13 @@ const EXPECTED_OUT_OF_TABLE: Dictionary = {&"crystal": 1, &"gold": 0, &"silver":
 const EXPECTED_FADE_FRAMES: Dictionary = {46: 8, 47: 28, 48: 8, 49: 8, 50: 8}
 
 ## `data/events/special_pointers.asm`'s own length, the same in both pins.
-## The three runs Crystal alone ships. `poke_seer`, `seer_advice` and
-## `buena_prize` sit past the end of Gold and Silver's `SpecialsPointers`.
-const CRYSTAL_ONLY_TEXT_RUNS: Array[String] = ["poke_seer", "buena_prize", "battle_tower"]
+## The runs Crystal alone ships. `poke_seer`, `seer_advice` and `buena_prize`
+## sit past the end of Gold and Silver's `SpecialsPointers`.
+const CRYSTAL_ONLY_TEXT_RUNS: Array[String] = [
+	"poke_seer", "buena_prize", "battle_tower",
+	## Crystal's fourth trade dialog set. Gold and Silver ship three.
+	"npc_trade_newbie",
+]
 
 ## The `special_text_ram` names a box may fill beyond the string buffers, which
 ## is what `Gen2WorldScriptRunner._set_text_ram` writes through.
@@ -67,6 +71,8 @@ const SPECIAL_TEXT_RAM_NAMES: Array[String] = [
 	## `TradeAnimation`'s four.
 	"player_trademon_species_name", "player_trademon_sender_name",
 	"ot_trademon_species_name", "ot_trademon_sender_name",
+	## `wMonOrItemNameBuffer`, which `GetTradeMonNames` fills.
+	"mon_or_item_name",
 ]
 
 const SPECIALS_POINTERS_SIZE: int = 169

@@ -42,7 +42,7 @@ const GROUPS: Dictionary = {
 		&"mon_specials", &"specials", &"day_care", &"unown_puzzle", &"slots",
 		&"card_flip", &"move_effects", &"phone", &"decorations", &"mail",
 		&"mystery_gift", &"variable_sprites", &"prize_money",
-		&"battle_tower",
+		&"battle_tower", &"npc_trade",
 	],
 	&"trainers": [&"crystal_route30_trainer", &"gold_route30_trainer"],
 }

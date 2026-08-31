@@ -336,3 +336,54 @@ func test_a_tile_is_drawn_in_the_palette_its_attrmap_slot_names() -> void:
 		[PackedColorArray([Color.WHITE, Color.RED, Color.BLACK, Color.BLACK])]
 	)
 	assert_eq(clamped.get_pixel(tile, 0), Color.RED)
+
+
+## `LoadOrientedFrontpic`'s `.x_flip` on its own, which is what a strip an
+## animation indexes by tile number needs: `PokeAnim_PlaceGraphic` runs the
+## columns back itself, so the buffer owes only each tile's own pixels.
+func test_tile_flipped_indices_mirrors_inside_a_tile_and_not_across_two() -> void:
+	var tile: int = Gen2Tiles.TILE_WIDTH
+	var indices := PackedByteArray()
+	indices.resize(tile * 2)
+	indices[0] = 1
+
+	var flipped: PackedByteArray = Gen2PicImage.tile_flipped_indices(indices, tile * 2)
+
+	assert_eq(int(flipped[tile - 1]), 1, "the lit pixel crosses its own tile")
+	assert_eq(int(flipped[tile * 2 - 1]), 0, "and does not cross into the next")
+
+
+## `PadFrontpic` leaves a shorter pic bottom-aligned one column in, and
+## `PlaceGraphic`'s `.right` puts that blank column on the other side.
+func test_frontpic_origin_puts_a_mirrored_pic_against_the_far_column() -> void:
+	var tile: int = Gen2Tiles.TILE_WIDTH
+	var five := Vector2i(5 * tile, 5 * tile)
+
+	assert_eq(Gen2PicImage.frontpic_origin(five), Vector2i(tile, 2 * tile))
+	assert_eq(Gen2PicImage.frontpic_origin(five, true), Vector2i(tile, 2 * tile))
+	assert_eq(
+		Gen2PicImage.frontpic_origin(Vector2i(6 * tile, 6 * tile), true),
+		Vector2i(0, tile), "a six-wide pic has its blank column on the right"
+	)
+
+
+## `PokeAnim_PlaceGraphic`'s box read out of the strip [method
+## Gen2BattleRenderer.padded_pic] builds: a cell is `column * side + row` and its
+## value is a tile number down the strip's own columns.
+func test_animation_box_indices_reads_the_strip_by_tile_number() -> void:
+	var side: int = 2
+	var tile: int = Gen2Tiles.TILE_WIDTH
+	var span: int = side * tile
+	var pixels := PackedByteArray()
+	pixels.resize(span * span)
+	## Tile 3 is the strip's second column, second row; light its first pixel.
+	pixels[tile * span + tile] = 7
+	var box := PackedByteArray([3, 0, 0, 0])
+
+	var out: PackedByteArray = Gen2PicImage.animation_box_indices(box, pixels, side)
+
+	assert_eq(int(out[0]), 7, "box cell 0 is the screen's top-left")
+	assert_eq(
+		Gen2PicImage.animation_box_indices(PackedByteArray([0]), pixels, side).size(), 0,
+		"a box that is not side by side draws nothing"
+	)
