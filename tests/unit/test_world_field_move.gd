@@ -535,9 +535,9 @@ func test_complete_strength_sets_the_flag_only_after_the_request() -> void:
 	assert_true(world.pending_strength().is_empty())
 
 
-## Nothing clears the flag, so it has to outlive the map reload and the warp that
-## drop every staged field-move request.
-func test_strength_stays_active_across_a_map_reload_and_a_warp() -> void:
+## MapSetupScript_ReloadMap runs no HandleNewMap, so a reload keeps the flag that
+## the warp behind it drops through ResetBikeFlags.
+func test_strength_survives_a_map_reload_and_ends_at_the_next_warp() -> void:
 	var world: Gen2WorldAPI = _strength_world()
 	assert_true(world.strength_request()["ok"])
 	assert_true(world.complete_strength()["ok"])
@@ -548,7 +548,7 @@ func test_strength_stays_active_across_a_map_reload_and_a_warp() -> void:
 	world.player_cell = SHORE_CELL
 	assert_true(world.try_warp()["ok"])
 	assert_eq(world.map_id(), Vector2i(1, 2))
-	assert_true(world.strength_active())
+	assert_false(world.strength_active())
 
 
 ## A staged request dies with the loaded map beside the other three, because
@@ -2205,13 +2205,16 @@ func test_always_on_bike_forces_the_bike_back_and_refuses_surf() -> void:
 	assert_eq(world.surf_request()["reason"], &"cannot_surf")
 	assert_false(world._surf_prompt_applies(WATER_CELL))
 
-	## `.CheckForcedBiking` runs first, so a map load puts the bike back on.
+	## `ResetBikeFlags` zeroes the byte ahead of HandleNewMap's own callback, so
+	## the two maps that force a bike set the flag again on every load, and
+	## `.CheckForcedBiking` puts the bike back on when they do.
 	var forced: Gen2WorldAPI = _escape_world()
+	forced.player_cell = ESCAPE_CAVE_DOOR
+	assert_true(bool(forced.try_warp().get("ok", false)))
+	assert_false(forced.always_on_bike())
 	forced.state.set_engine_flag(
 		Gen2WorldState.always_on_bike_flag(forced.data), true
 	)
-	forced.player_cell = ESCAPE_CAVE_DOOR
-	assert_true(bool(forced.try_warp().get("ok", false)))
 	assert_eq(forced.movement_mode, Gen2WorldAPI.MOVEMENT_BIKE)
 	assert_eq(forced.player_sprite_number, Gen2WorldSprite.SPRITE_PLAYER_BIKE)
 	## `.TryBike` reads `.CheckEnvironment` first and only then the flag, so the
@@ -2222,8 +2225,14 @@ func test_always_on_bike_forces_the_bike_back_and_refuses_surf() -> void:
 	## indoor map keeps the bike on while the flag is up.
 	forced.player_cell = ESCAPE_INSIDE_DOOR
 	assert_true(bool(forced.try_warp().get("ok", false)))
+	forced.state.set_engine_flag(
+		Gen2WorldState.always_on_bike_flag(forced.data), true
+	)
 	forced.player_cell = ESCAPE_CENTRE_DOOR
 	assert_true(bool(forced.try_warp().get("ok", false)))
+	forced.state.set_engine_flag(
+		Gen2WorldState.always_on_bike_flag(forced.data), true
+	)
 	assert_eq(forced.movement_mode, Gen2WorldAPI.MOVEMENT_BIKE)
 
 

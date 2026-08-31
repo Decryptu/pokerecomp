@@ -1494,6 +1494,20 @@ func test_a_boulder_pushed_onto_open_floor_fires_no_stone_table() -> void:
 	assert_false(result["boulder_pushed"].has("fall_script"), JSON.stringify(result))
 
 
+## HandleNewMap falls into HandleContinueMap, whose ClearCmdQueue empties the
+## queue on every map load; MapSetupScript_ReloadMap reaches neither.
+func test_a_written_command_queue_dies_with_the_map_but_not_with_a_reload() -> void:
+	var world: Gen2WorldAPI = _stone_table_world([
+		{"warp": STONE_WARP, "object": STONE_OBJECT, "script": STONE_SCRIPT},
+	])
+	assert_eq(world.command_queues().size(), 1)
+	world.reload_current_map()
+	assert_eq(world.command_queues().size(), 1)
+	world.player_cell = Vector2i(6, 6)
+	assert_true(bool(world.try_warp().get("ok", false)))
+	assert_true(world.command_queues().is_empty())
+
+
 ## HandleStoneQueue reads the queue that was written, so a map whose callback
 ## never ran has none and nothing falls.
 func test_no_stone_table_fires_without_a_written_queue() -> void:
@@ -6039,6 +6053,9 @@ func test_world_snapshot_round_trips_map_player_and_mutable_state() -> void:
 	state.set_hall_of_fame()
 	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(8, 6), state)
 	world.set_world_clock(2, 7, 12)
+	## The clock crossing a day is CheckDailyResetTimer, which ends a Crystal
+	## swarm, so the one this round trip carries is set after it.
+	world.state.set_swarm_map(Vector2i(1, 1))
 	world.set_daylight_saving_time_enabled(true)
 	world.player_facing = Gen2WorldSprite.FACING_LEFT
 	assert_true(world.set_movement_mode(Gen2WorldAPI.MOVEMENT_SURF)["ok"])
