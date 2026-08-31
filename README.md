@@ -171,6 +171,14 @@ and about are in the dock underneath. Light and dark, and the same layout works
 on a phone. The clock and the charge across the top are the machine's own; a
 device whose charge cannot be read shows none rather than a full cell.
 
+<p align="center">
+  <img src="assets/brand/launcher.webp" alt="The launcher's Play page, a shelf of three cartridges" width="820">
+</p>
+
+<p align="center">
+  <img src="assets/brand/mods.webp" alt="The launcher's Mods page, listing installed mods" width="820">
+</p>
+
 Play opens the save screen: validated slots, naming, export and import, `.sav`
 import, party inspection, and a save editor that cannot produce a save the game
 will not load. A new game asks which mode it is played in, then opens on the
@@ -317,6 +325,10 @@ Settings > Application carries four more that reach the engine:
 | Window | Windowed, fullscreen or borderless |
 | Scrolling | Hardware or smooth. See [Scrolling](#scrolling) |
 | Frame rate | Display, or a cap of 30, 60, 120 or 144 |
+
+<p align="center">
+  <img src="assets/brand/settings.webp" alt="Settings, Application: window, screen, scrolling, second screen and game speed" width="820">
+</p>
 
 Sound sits outside game speed. The driver is fed by the audio output's own
 demand, not by a game frame, so music, effects and cries keep the cartridge's

@@ -7,6 +7,9 @@ listings, wiki links or talks.
 |---|---|
 | `logo.png` | 1000x1000, transparent cartridge mark |
 | `banner.png` | 1500x500, logo and wordmark on a light background |
+| `launcher.webp` | 1653x1080, the launcher's Play page |
+| `mods.webp` | 1653x1080, the launcher's Mods page |
+| `settings.webp` | 1653x1080, Settings > Application |
 
 On dark backgrounds, use `logo.png` with a separate wordmark. Do not restyle or
 recolour either asset or imply endorsement. Neither is a Nintendo, Game Freak
