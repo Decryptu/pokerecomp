@@ -17,10 +17,9 @@ const MON_TOP_BOX: Rect2i = Rect2i(0, 0, 20, 5)
 const MON_BOTTOM_BOX: Rect2i = Rect2i(0, 12, 20, 6)
 const CAPTION: Vector2i = Vector2i(1, 2)
 const CAPTION_TEXT: String = "New Hall of Famer!"
-## `_HallOfFamePC.DisplayMonAndStrings` draws this instead: `PrintNum`'s
-## `lb bc, 1, 3` over `hlcoord 2, 2`, so the count is right-aligned in three
-## columns and the words start at column 5. `.HOFMaster` is unreachable: it needs
-## 201 and `wHallOfFameCount` stops at 200 (`docs/bugs_and_glitches.md`).
+## `_HallOfFamePC.DisplayMonAndStrings` draws this instead: `lb bc, 1, 3` over
+## `hlcoord 2, 2`, so the words start at column 5. `.HOFMaster` is unreachable,
+## needing 201 where `wHallOfFameCount` stops at 200.
 const FAMER_TEXT: String = "-Time Famer"
 const FAMER_COUNT: Vector2i = Vector2i(2, 2)
 const FAMER_DIGITS: int = 3
@@ -37,23 +36,24 @@ const DEX_DIGITS: int = 3
 const SPECIES_NAME: Vector2i = Vector2i(7, 13)
 const GENDER: Vector2i = Vector2i(18, 13)
 const NICKNAME_SLASH: Vector2i = Vector2i(8, 14)
-## `PrintLevel` writes `<LV>` and then the number left-aligned beside it. Its
-## three-digit branch backs over the `<LV>`, which no level in these games
-## reaches: 100 is the cap and the branch is `cp 100` on a byte.
+## `PrintLevel` writes `<LV>` and the number left-aligned beside it, its
+## three-digit branch backing over the `<LV>`.
 const LEVEL: Vector2i = Vector2i(1, 16)
 ## `<ID>`, `№`, `/` at `hlcoord 7, 16`, then five digits at `hlcoord 10, 16`.
 const OT_LABEL: Vector2i = Vector2i(7, 16)
 const OT_NUMBER: Vector2i = Vector2i(10, 16)
 const OT_DIGITS: int = 5
 
-## The codes the panel places directly, the way the source does: `ld [hl], '№'`
-## puts a byte down, it does not print a string, and a bracketed marker is not
-## something [method Gen2Text.encode] will produce.
+## The codes the panel places directly: `ld [hl], '№'` puts a byte down, and a
+## bracketed marker is not something [method Gen2Text.encode] will produce.
 const CODE_NUMERO: int = 0x74
 const CODE_DOT: int = 0xF2
 const CODE_ID: int = 0x73
 const CODE_LEVEL: int = 0x6E
 const CODE_SLASH: int = 0xF3
+## `HALLOFFAME_COLON` copies `FontExtra + 13 tiles`, which is `<COLON>` at $6d,
+## over tile $63. Drawn through the main font: the battle-extra strip owns $63.
+const CODE_COLON: int = 0x6D
 
 ## Everything on a panel is printed with the battle-extra strip loaded.
 const FONT: StringName = Gen2Text.FONT_BATTLE_EXTRA
@@ -63,6 +63,20 @@ const FONT: StringName = Gen2Text.FONT_BATTLE_EXTRA
 ## into.
 const PLAYER_BOX: Rect2i = Rect2i(0, 2, 11, 10)
 const PLAYER_NAME: Vector2i = Vector2i(2, 4)
+## `HOF_LoadTrainerFrontpic`, then `PlaceGraphic` at `hlcoord 12, 5`.
+const PLAYER_PIC_AT: Vector2i = Vector2i(12, 5)
+## `<ID>`, `№`, `/` at `hlcoord 1, 6`, then five digits at `hlcoord 4, 6`.
+const PLAYER_ID_LABEL: Vector2i = Vector2i(1, 6)
+const PLAYER_ID_NUMBER: Vector2i = Vector2i(4, 6)
+const PLAYER_ID_DIGITS: int = 5
+## `.PlayTime` at `hlcoord 1, 8`, three hour digits at `hlcoord 3, 9`, the
+## `ld [hl], HALLOFFAME_COLON` behind them, and two minute digits.
+const PLAY_TIME_LABEL: Vector2i = Vector2i(1, 8)
+const PLAY_TIME_TEXT: String = "PLAY TIME"
+const PLAY_TIME_HOURS: Vector2i = Vector2i(3, 9)
+const PLAY_TIME_HOUR_DIGITS: int = 3
+const PLAY_TIME_COLON: Vector2i = Vector2i(6, 9)
+const PLAY_TIME_MINUTES: Vector2i = Vector2i(7, 9)
 ## `PrintText`'s own first line (`hlcoord 1, 14`) and the interior it prints
 ## into, which is every text box's: one tile of margin each side and two lines
 ## two rows apart.
@@ -117,6 +131,11 @@ static func pic_size() -> int:
 	return PIC_TILES * TILE
 
 
+## Where the screen puts the player's own front pic, in pixels.
+static func player_pic_position() -> Vector2i:
+	return PLAYER_PIC_AT * TILE
+
+
 func _draw_mon(page: Dictionary, indices: PackedByteArray) -> void:
 	var width: int = COLUMNS * TILE
 	_box(indices, width, MON_TOP_BOX)
@@ -153,13 +172,28 @@ func _draw_mon(page: Dictionary, indices: PackedByteArray) -> void:
 	_text(indices, width, "%0*d" % [OT_DIGITS, int(page.get("ot_id", 0))], OT_NUMBER)
 
 
-## The name box and the empty bottom one. The source also slides in the player's
-## pic and prints the trainer ID and PLAY TIME, none of which this project has.
+## `HOF_AnimatePlayerPic`'s two boxes. The picture is the screen's, as a mon
+## panel's is.
 func _draw_player(page: Dictionary, indices: PackedByteArray) -> void:
 	var width: int = COLUMNS * TILE
 	_box(indices, width, PLAYER_BOX)
 	_box(indices, width, MON_BOTTOM_BOX)
 	_text(indices, width, String(page.get("player_name", "")), PLAYER_NAME)
+	_code(indices, width, CODE_ID, PLAYER_ID_LABEL)
+	_code(indices, width, CODE_NUMERO, PLAYER_ID_LABEL + Vector2i(1, 0))
+	_code(indices, width, CODE_SLASH, PLAYER_ID_LABEL + Vector2i(2, 0))
+	_text(indices, width, "%0*d" % [
+		PLAYER_ID_DIGITS, int(page.get("player_id", 0)),
+	], PLAYER_ID_NUMBER)
+	_text(indices, width, PLAY_TIME_TEXT, PLAY_TIME_LABEL)
+	_text(indices, width, "%*d" % [
+		PLAY_TIME_HOUR_DIGITS, int(page.get("hours", 0)),
+	], PLAY_TIME_HOURS)
+	font.draw_code(
+		CODE_COLON, indices, width,
+		PLAY_TIME_COLON.x * TILE, PLAY_TIME_COLON.y * TILE, Gen2Text.FONT_MAIN
+	)
+	_text(indices, width, String(page.get("minutes", "")), PLAY_TIME_MINUTES)
 	var lines: Array = page.get("lines", [])
 	for index: int in lines.size():
 		_text(

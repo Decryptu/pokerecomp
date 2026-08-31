@@ -78,14 +78,17 @@ func test_the_overworld_does_not_move_while_the_overlay_is_open() -> void:
 	assert_eq(_world_screen._world.player_cell, before)
 
 
-func test_a_key_walks_the_pages_and_the_last_one_closes_the_overlay() -> void:
+func test_the_panels_time_out_and_the_last_page_closes_the_overlay() -> void:
 	await _open_world(1)
 	_world_screen.open_hall_of_fame()
 	await get_tree().process_frame
 	_spend_record_box()
 	assert_eq(_host().remaining(), 1 + RATING_PAGES)
 
-	_host().handle_button(Gen2Button.A)
+	## `.DisplayNewHallOfFamer` reads no joypad either: the panel stands for its
+	## own `DelayFrames` and then moves on.
+	assert_eq(StringName(_host().current_page()["kind"]), Gen2HallOfFame.PAGE_MON)
+	_host().advance_hold_frames(Gen2HallOfFame.panel_frames(_data))
 	assert_eq(StringName(_host().current_page()["kind"]), Gen2HallOfFame.PAGE_PLAYER)
 	assert_eq(_host().remaining(), RATING_PAGES)
 
@@ -102,14 +105,32 @@ func test_a_key_walks_the_pages_and_the_last_one_closes_the_overlay() -> void:
 	assert_true(_world_screen.move_player(Vector2i.DOWN))
 
 
-## A key the panel does not use is refused rather than swallowed as an advance.
-func test_an_unrelated_key_does_not_advance_a_page() -> void:
+## `HOF_AnimatePlayerPic` slides the player's own front pic in beside the name
+## box, so the panel behind the rating is not text alone.
+func test_the_player_panel_draws_the_trainer_pic() -> void:
+	await _open_world(1)
+	_world_screen.open_hall_of_fame()
+	await get_tree().process_frame
+	_spend_record_box()
+	_host().advance_hold_frames(Gen2HallOfFame.panel_frames(_data))
+	assert_eq(StringName(_host().current_page()["kind"]), Gen2HallOfFame.PAGE_PLAYER)
+	assert_not_null(_host()._pic.texture)
+	assert_eq(
+		_host()._pic.position.x,
+		float(Gen2HallOfFamePage.player_pic_position().x),
+		"PlaceGraphic at hlcoord 12, 5"
+	)
+
+
+## An induction's panels read no joypad at all, so neither A nor B moves one on.
+func test_no_key_advances_an_induction_panel() -> void:
 	await _open_world(2)
 	_world_screen.open_hall_of_fame()
 	await get_tree().process_frame
 	_spend_record_box()
 	var before: int = _host().remaining()
-	assert_false(_host().handle_button(Gen2Button.B))
+	assert_true(_host().handle_button(Gen2Button.B))
+	assert_true(_host().handle_button(Gen2Button.A))
 	assert_eq(_host().remaining(), before)
 
 
@@ -156,14 +177,17 @@ func test_the_halloffame_command_opens_the_overlay() -> void:
 	assert_not_null(_world_screen._hall_of_fame_host)
 
 
-## The panels are answered one at a time; a test that only wants the overlay
-## closed does not care how many there were. The record box in front of them
-## reads no joypad, so its frames are spent first.
+## An induction reads no joypad until the player's own panel, so every page in
+## front of that one is spent as frames and the rating boxes as presses.
 func _advance_to_the_end() -> void:
-	if StringName(_host().current_page()["kind"]) == Gen2HallOfFame.PAGE_SAVING:
-		_spend_record_box()
 	while _world_screen._hall_of_fame_host != null:
-		_host().handle_button(Gen2Button.A)
+		match StringName(_host().current_page().get("kind", &"")):
+			Gen2HallOfFame.PAGE_SAVING:
+				_host().advance_hold_frames(Gen2SavePrompt.SAVING_RECORD_FRAMES)
+			Gen2HallOfFame.PAGE_MON:
+				_host().advance_hold_frames(Gen2HallOfFame.panel_frames(_data))
+			_:
+				_host().handle_button(Gen2Button.A)
 
 
 ## `HallOfFame_FadeOutMusic`'s `ld c, 100` behind `InitDisplayForHallOfFame`.
@@ -174,4 +198,4 @@ func _spend_record_box() -> void:
 	var before: int = _host().remaining()
 	assert_true(_host().handle_button(Gen2Button.A), "the box reads no joypad")
 	assert_eq(_host().remaining(), before, "and does not advance on one")
-	_host().advance_saving_frames(Gen2SavePrompt.SAVING_RECORD_FRAMES)
+	_host().advance_hold_frames(Gen2SavePrompt.SAVING_RECORD_FRAMES)

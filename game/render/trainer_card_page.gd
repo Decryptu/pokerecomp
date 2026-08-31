@@ -39,10 +39,8 @@ const TOP_BORDER_ROWS: int = 5
 const BOTTOM_BORDER_ROWS: int = 6
 const BOTTOM_BORDER_AT: Vector2i = Vector2i(0, 8)
 
-## `.Name_Money` is one string placed at (2,2), and its `next` macro is
-## `<NEXT>`, which `NextLineChar` moves `SCREEN_WIDTH * 2` by, so its three lines
-## land two rows apart: NAME/ on row 2, the empty line on row 4 where the ID
-## tiles go, and MONEY on row 6.
+## `.Name_Money` is one string at (2,2) whose `next` moves `SCREEN_WIDTH * 2`,
+## so NAME/ is on row 2, the ID tiles' empty line on row 4 and MONEY on row 6.
 const NAME_LABEL_AT: Vector2i = Vector2i(2, 2)
 const MONEY_LABEL_AT: Vector2i = Vector2i(2, 6)
 const NAME_LABEL: String = "NAME/"
@@ -75,6 +73,11 @@ const DEX_LABEL: String = "#DEX"
 const PLAY_TIME_LABEL: String = "PLAY TIME"
 const DEX_COUNT_AT: Vector2i = Vector2i(15, 10)
 const DEX_DIGITS: int = 3
+## `ClearBox` at `hlcoord 1, 9` with `lb bc, 2, 17` when STATUSFLAGS_POKEDEX_F
+## is clear, which takes the whole #DEX row and not only its count.
+const NO_DEX_CLEAR_AT: Vector2i = Vector2i(1, 9)
+const NO_DEX_CLEAR_ROWS: int = 2
+const NO_DEX_CLEAR_COLUMNS: int = 17
 ## `hlcoord 11, 12` for the hours, then `inc hl` past the separator column.
 const HOURS_AT: Vector2i = Vector2i(11, 12)
 const HOURS_DIGITS: int = 4
@@ -94,8 +97,7 @@ const BADGES_LABEL: String = "  BADGES"
 const BADGES_LABEL_GOLD_SILVER: String = "BADGES"
 const BADGES_LABEL_AT: Vector2i = Vector2i(10, 15)
 const BADGES_LABEL_AT_GOLD_SILVER: Vector2i = Vector2i(12, 15)
-## The arrow that ends it. Part of the same string on the cartridge; kept apart
-## here only because it is a character code rather than a letter.
+## The arrow that ends it, a character code rather than a letter.
 const BADGES_ARROW_CODE: int = 0xED
 
 ## Pages 2 and 3: `.BadgesTilemap`'s "BADGES" in card tiles, then the leaders'
@@ -114,13 +116,11 @@ const LEADER_FACE_ROWS: int = 3
 const LEADER_FACE_TILES: int = 10
 const LEADER_STRIDE: int = 4
 
-## `_CGB_TrainerCard`'s attribute map, as `FillBoxCGB` writes it: rows first, then
-## columns. Its palette slots are [constant RomLayout.CARD_PALETTE_CLASSES]' own
-## order, and the leader boxes are filled whatever page is on screen, since the
-## layout runs once in `.InitRAM`. Both gender branches are the source's: the
-## whole card takes the opposite gender's palette and the pic area the player's
-## own, Clair's box is filled only for Kris, and the top-right corner is written
-## twice, the second write being the one that lasts.
+## `_CGB_TrainerCard`'s attribute map in [constant
+## RomLayout.CARD_PALETTE_CLASSES]' order, filled whatever page is on screen
+## since the layout runs once in `.InitRAM`. The card takes the opposite
+## gender's palette and the pic area the player's own, Clair's box is filled
+## only for Kris, and the top-right corner is written twice.
 const ATTRIBUTE_LEADER_BOXES: Array[Dictionary] = [
 	{"at": Vector2i(2, 11), "palette": 1},
 	{"at": Vector2i(6, 11), "palette": 2},
@@ -276,12 +276,19 @@ func _draw_page_1(map: PackedInt32Array, page: Dictionary) -> void:
 	_tilemap(map, STATUS_TILEMAP, STATUS_TILEMAP_AT)
 	_draw_badges_label(map)
 	## `CountSetBits` over wPokedexCaught, three digits and no leading zeros.
-	if bool(page.get("pokedex", false)):
-		_text(map, "%*d" % [DEX_DIGITS, int(page.get("caught", 0))], DEX_COUNT_AT)
+	_text(map, "%*d" % [DEX_DIGITS, int(page.get("caught", 0))], DEX_COUNT_AT)
+	if not bool(page.get("pokedex", false)):
+		_clear_box(map, NO_DEX_CLEAR_AT, NO_DEX_CLEAR_ROWS, NO_DEX_CLEAR_COLUMNS)
 	_text(map, String(page.get("hours", "")), HOURS_AT)
 	_text(map, String(page.get("minutes", "")), MINUTES_AT)
 	if bool(page.get("separator", true)):
 		_put(map, SEPARATOR_AT, SEPARATOR_COLON_TILE)
+
+
+func _clear_box(map: PackedInt32Array, at: Vector2i, rows: int, columns: int) -> void:
+	for row: int in rows:
+		for column: int in columns:
+			_put(map, at + Vector2i(column, row), BLANK_TILE)
 
 
 ## `.Badges` and the arrow that ends it. The string and its column are the one

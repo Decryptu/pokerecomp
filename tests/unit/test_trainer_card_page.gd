@@ -86,15 +86,37 @@ func test_the_blinking_separator_is_the_only_difference_a_frame_makes() -> void:
 	)
 
 
-## The dex row is not printed at all without STATUSFLAGS_POKEDEX_F, which is
-## what the source's own ClearBox leaves behind.
-func test_the_dex_count_is_absent_without_the_pokedex() -> void:
+## Without STATUSFLAGS_POKEDEX_F the source clears `hlcoord 1, 9` over two rows
+## and seventeen columns, which takes the #DEX label as well as its count.
+func test_the_whole_dex_row_is_cleared_without_the_pokedex() -> void:
 	var card: Dictionary = _card()
 	card["pokedex"] = false
-	var changed: Array = _changed_tiles(_page.draw(_card()), _page.draw(card))
+	var without: PackedByteArray = _page.draw(card)
+	var changed: Array = _changed_tiles(_page.draw(_card()), without)
 	assert_false(changed.is_empty())
 	for at: Vector2i in changed:
 		assert_eq(at.y, Gen2TrainerCardPage.DEX_COUNT_AT.y)
+	assert_true(
+		Gen2TrainerCardPage.DEX_LABEL_AT in changed,
+		"the label goes with the count"
+	)
+	var blank: PackedByteArray = _page.draw(card)
+	for row: int in Gen2TrainerCardPage.NO_DEX_CLEAR_ROWS:
+		for column: int in Gen2TrainerCardPage.NO_DEX_CLEAR_COLUMNS:
+			var at: Vector2i = Gen2TrainerCardPage.NO_DEX_CLEAR_AT \
+				+ Vector2i(column, row)
+			assert_true(_tile_is_blank(blank, at), "%s is cleared" % at)
+
+
+## Whether every pixel of a tile is the page's background index.
+func _tile_is_blank(indices: PackedByteArray, at: Vector2i) -> bool:
+	var tile: int = Gen2TrainerCardPage.TILE
+	for y: int in tile:
+		for x: int in tile:
+			var offset: int = (at.y * tile + y) * Gen2Screen.WIDTH + at.x * tile + x
+			if offset < indices.size() and indices[offset] != 0:
+				return false
+	return true
 
 
 ## Page 2 replaces the status box with the leaders' faces, and the top half of

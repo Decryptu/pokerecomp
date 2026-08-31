@@ -5694,6 +5694,7 @@ func open_hall_of_fame() -> void:
 	var host := Gen2HallOfFameScreen.new()
 	host.set_context(_data, pages)
 	host.closed.connect(_on_hall_of_fame_closed)
+	host.cry_requested.connect(_play_species_cry)
 	host.rating_reached.connect(_on_hall_of_fame_rating)
 	_hall_of_fame_host = host
 	_screen.display(host)

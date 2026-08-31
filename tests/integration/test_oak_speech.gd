@@ -80,6 +80,21 @@ func test_the_pics_follow_the_routines_own_order() -> void:
 	assert_eq(int(beats[5]["pic"]), Gen2OakSpeech.Pic.PLAYER)
 
 
+## `DrawIntroPlayerPic` and `HOF_LoadTrainerFrontpic` load the same picture, so
+## the intro and the Hall of Fame read one seam rather than two.
+func test_the_player_picture_is_one_seam_for_the_intro_and_the_hall_of_fame() -> void:
+	var side: int = RomLayout.INTRO_PLAYER_PIC_COLUMNS * Gen2Font.TILE
+	for female: bool in [false, true]:
+		var cell: Dictionary = Gen2OakSpeech.player_cell(_data, female)
+		assert_eq(int(cell["width"]), side)
+		assert_eq(int(cell["height"]), side)
+		assert_eq(
+			int((cell["indices"] as PackedByteArray)[0]), 3 if female else 2,
+			"ChrisPic and KrisPic are different sheets"
+		)
+		assert_false(Gen2OakSpeech.player_palette(_data, female).is_empty())
+
+
 func test_a_cache_without_the_texts_has_no_speech() -> void:
 	RomCache.write_json(RomCache.intro_text_path(Fixture.directory()), {})
 	assert_eq(Gen2OakSpeech.beats(GameData.open_directory(Fixture.directory())), [])

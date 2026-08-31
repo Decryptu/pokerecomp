@@ -2209,6 +2209,7 @@ func _open_hall_of_fame(index: int) -> void:
 	_hof_index = index
 	_set_overlay_open(true)
 	host.z_index = 5
+	host.cry_requested.connect(cry_requested.emit)
 	host.closed.connect(_on_hall_of_fame_closed)
 	_service_hardware.display(host)
 
