@@ -470,7 +470,7 @@ func _show_pic(kind: int) -> void:
 	match kind:
 		Gen2OakSpeech.Pic.OAK:
 			palette = _data.trainer_palette(Gen2OakSpeech.POKEMON_PROF)
-			cell = _trainer_cell(Gen2OakSpeech.POKEMON_PROF)
+			cell = Gen2OakSpeech.trainer_cell(_data, Gen2OakSpeech.POKEMON_PROF)
 		Gen2OakSpeech.Pic.MON:
 			# `PrepMonFrontpic` sets wBoxAlignment before `PlaceGraphic`, and
 			# `Intro_PrepTrainerPic` does not, so only this beat is mirrored.
@@ -483,8 +483,9 @@ func _show_pic(kind: int) -> void:
 					cell["indices"], int(cell["width"])
 				)
 		Gen2OakSpeech.Pic.PLAYER:
-			palette = _player_palette()
-			cell = _player_cell()
+			var female: bool = _gender == Gen2SaveData.GENDER_FEMALE
+			palette = Gen2OakSpeech.player_palette(_data, female)
+			cell = Gen2OakSpeech.player_cell(_data, female)
 	if cell.is_empty():
 		return
 	_pic_cell = cell
@@ -508,15 +509,6 @@ func _redraw_pic(colors: PackedColorArray) -> void:
 	))
 
 
-func _trainer_cell(trainer_class: int) -> Dictionary:
-	var pic: Dictionary = _data.trainer_pic(trainer_class)
-	if pic.is_empty():
-		return {}
-	return Gen2PicImage.atlas_cell(
-		_data.atlas_indices(pic["atlas"]), _data.atlas(pic["atlas"]), pic
-	)
-
-
 func _species_cell(species: int) -> Dictionary:
 	var pic: Dictionary = _data.species_pic(species)
 	if pic.is_empty():
@@ -524,39 +516,6 @@ func _species_cell(species: int) -> Dictionary:
 	return Gen2PicImage.atlas_cell(
 		_data.atlas_indices(pic["atlas"]), _data.atlas(pic["atlas"]), pic
 	)
-
-
-func _player_palette() -> PackedColorArray:
-	if not Gen2WorldState.is_crystal_profile(_data):
-		return _data.trainer_palette(Gen2OakSpeech.CAL)
-	return _data.card_palette(1 if _gender == Gen2SaveData.GENDER_FEMALE else 0)
-
-
-func _player_cell() -> Dictionary:
-	if not Gen2WorldState.is_crystal_profile(_data):
-		# pokegold NamePlayer and ShrinkPlayer use trainer class CAL.
-		return _trainer_cell(Gen2OakSpeech.CAL)
-	var sheet: String = (
-		"intro_player_female"
-		if _gender == Gen2SaveData.GENDER_FEMALE else "intro_player_male"
-	)
-	var strip: PackedByteArray = _data.tile_indices(sheet)
-	var tiles: int = RomLayout.INTRO_PLAYER_PIC_TILES
-	var tile: int = Gen2Font.TILE
-	if strip.size() < tiles * tile * tile:
-		return {}
-	var width: int = RomLayout.INTRO_PLAYER_PIC_COLUMNS * tile
-	var indices := PackedByteArray()
-	indices.resize(width * RomLayout.INTRO_PLAYER_PIC_ROWS * tile)
-	var strip_width: int = tiles * tile
-	for row: int in RomLayout.INTRO_PLAYER_PIC_ROWS:
-		for column: int in RomLayout.INTRO_PLAYER_PIC_COLUMNS:
-			var source_tile: int = row * RomLayout.INTRO_PLAYER_PIC_COLUMNS + column
-			for y: int in tile:
-				for x: int in tile:
-					indices[(row * tile + y) * width + column * tile + x] = \
-						strip[y * strip_width + source_tile * tile + x]
-	return {"indices": indices, "width": width, "height": width}
 
 
 func _start_audio() -> void:

@@ -962,6 +962,9 @@ static func _write_battle_graphics(cache_directory: String, manifest: Dictionary
 	var sheet_tiles: Dictionary = {
 		"exp_bar": [RomLayout.EXP_BAR_TILES, 2],
 		"battle_font": [RomLayout.BATTLE_FONT_TILES, 1],
+		## `_LoadFontsExtra1`'s strip, on an index of its own so a code the
+		## battle strip also owns says which of the two it was drawn from.
+		"font_extra": [RomLayout.FONT_EXTRA_TILES, 2],
 		"enemy_hud": [RomLayout.ENEMY_HUD_TILES, 2],
 		"player_hud": [RomLayout.PLAYER_HUD_TILES, 3],
 		"font": [RomLayout.FONT_TILES, 3],
@@ -988,6 +991,10 @@ static func _write_battle_graphics(cache_directory: String, manifest: Dictionary
 		## `LoadGenderScreenLightBlueTile`'s one tile, on the index the real one
 		## carries, since the page reads the fill out of it rather than assuming.
 		"gender_screen": [RomLayout.GENDER_SCREEN_TILES, RomLayout.GENDER_SCREEN_FILL_INDEX],
+		## `DrawIntroPlayerPic`'s ChrisPic and KrisPic, which `HOF_LoadTrainerFrontpic`
+		## loads as well. A different index each, so a capture says which was drawn.
+		"intro_player_male": [RomLayout.INTRO_PLAYER_PIC_TILES, 2],
+		"intro_player_female": [RomLayout.INTRO_PLAYER_PIC_TILES, 3],
 		## `ShrinkPlayer`'s two pictures, flat fills like the rest: what a test
 		## checks is when each is drawn, not what is in it.
 		"shrink_1": [RomLayout.SHRINK_PIC_TILES, 2],

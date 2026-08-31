@@ -4,11 +4,9 @@ extends RefCounted
 ## The induction sequence `halloffame` asks for, as pages a screen can draw.
 ## `AnimateHallOfFame` walks the party `GetHallOfFameParty` built, one panel per
 ## Pokemon and then the player's, which `HOF_AnimatePlayerPic` answers once per
-## box `ProfOaksPCRating` prints into it. That panel's trainer ID and PLAY TIME
-## are absent rather than zeros: the save model carries neither.
+## box `ProfOaksPCRating` prints into it.
 
-## GetHallOfFameParty's own cap: it copies at most a full party and stops on the
-## -1 terminator.
+## `GetHallOfFameParty`'s own cap, and its `-1` terminator.
 const MAX_MONS: int = 6
 
 const PAGE_MON: StringName = &"mon"
@@ -22,6 +20,16 @@ const MAX_RECORDS: int = 30
 const MASTER_COUNT: int = 200
 ## `hof_mon`'s nickname field, which is `MON_NAME_LENGTH - 1`.
 const MAX_NICKNAME: int = 10
+
+## `.DisplayNewHallOfFamer`'s `ld c, 60` behind Crystal's `HOF_AnimateFrontpic`
+## and pokegold's `ld c, 180` behind its bare `PlayMonCry`.
+const PANEL_FRAMES_CRYSTAL: int = 60
+const PANEL_FRAMES_GOLD_SILVER: int = 180
+
+
+static func panel_frames(data: GameData) -> int:
+	return PANEL_FRAMES_CRYSTAL if Gen2WorldState.is_crystal_profile(data) \
+		else PANEL_FRAMES_GOLD_SILVER
 
 
 ## The pages, in `HallOfFame`'s order: the record box, then every non-egg party
@@ -58,7 +66,16 @@ static func pages(
 static func _player_pages(
 	data: GameData, save: Gen2SaveData, state: Gen2WorldState
 ) -> Array:
-	var panel: Dictionary = {"kind": PAGE_PLAYER, "player_name": save.player_name}
+	var time: Gen2GameTime = save.game_time if save.game_time != null else Gen2GameTime.new()
+	var panel: Dictionary = {
+		"kind": PAGE_PLAYER,
+		"player_name": save.player_name,
+		"player_id": save.player_id,
+		"female": save.gender == Gen2SaveData.GENDER_FEMALE,
+		## `lb bc, 2, 3`, one digit narrower than the trainer card's own row.
+		"hours": time.hours,
+		"minutes": time.minutes_text(),
+	}
 	var rating: Dictionary = Gen2ProfOaksPC.rate(data, state)
 	if rating.is_empty():
 		return [panel]
@@ -86,8 +103,8 @@ static func _mon_page(data: GameData, mon: Gen2SaveMon) -> Dictionary:
 	return {
 		"kind": PAGE_MON,
 		"species": mon.species,
-		## Gen 2 species numbers are dex numbers, which is why DisplayHOFMon
-		## prints wCurPartySpecies straight into the №. field.
+		## Gen 2 species numbers are dex numbers, so `DisplayHOFMon` prints
+		## `wCurPartySpecies` straight into the №. field.
 		"dex_number": mon.species,
 		"species_name": species_name,
 		"nickname": nickname,
@@ -98,9 +115,8 @@ static func _mon_page(data: GameData, mon: Gen2SaveMon) -> Dictionary:
 		## `wUnownLetter`: an Unown in the Hall of Fame is its own letter, not A.
 		"unown_form": Gen2Stats.unown_letter(mon.dvs) \
 			if mon.species == RomLayout.UNOWN_SPECIES else 0,
-		## `SCGB_PLAYER_OR_MON_FRONTPIC_PALS`, which is the layout the Hall of
-		## Fame asks for and which reaches `GetMonNormalOrShinyPalettePointer`.
-		## The other fact about the DV word the pic needs, so it rides beside it.
+		## `SCGB_PLAYER_OR_MON_FRONTPIC_PALS` reaches
+		## `GetMonNormalOrShinyPalettePointer`.
 		"shiny": Gen2Stats.is_shiny(mon.dvs),
 	}
 
@@ -176,8 +192,7 @@ static func record_pages(data: GameData, record: Dictionary) -> Array:
 	return out
 
 
-## The stored shape, checked rather than trusted: JSON numbers come back as
-## floats and a hand-edited save can carry anything.
+## The stored shape, checked rather than trusted: a save can carry anything.
 static func parse_records(raw: Variant) -> Array:
 	var out: Array = []
 	if not raw is Array:

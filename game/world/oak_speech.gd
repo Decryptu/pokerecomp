@@ -53,6 +53,52 @@ const DEFAULT_MALE: String = "CHRIS"
 const DEFAULT_FEMALE: String = "KRIS"
 
 
+## `DrawIntroPlayerPic` and `HOF_LoadTrainerFrontpic` load the same picture:
+## ChrisPic or KrisPic on Crystal, and CAL's own trainer pic on Gold and Silver,
+## which ship neither. One seam, so the intro and the Hall of Fame cannot drift.
+static func player_cell(data: GameData, female: bool) -> Dictionary:
+	if data == null:
+		return {}
+	if not Gen2WorldState.is_crystal_profile(data):
+		return trainer_cell(data, CAL)
+	var sheet: String = "intro_player_female" if female else "intro_player_male"
+	var strip: PackedByteArray = data.tile_indices(sheet)
+	var tile: int = Gen2Font.TILE
+	var tiles: int = RomLayout.INTRO_PLAYER_PIC_TILES
+	if strip.size() < tiles * tile * tile:
+		return {}
+	var width: int = RomLayout.INTRO_PLAYER_PIC_COLUMNS * tile
+	var indices := PackedByteArray()
+	indices.resize(width * RomLayout.INTRO_PLAYER_PIC_ROWS * tile)
+	var strip_width: int = tiles * tile
+	for row: int in RomLayout.INTRO_PLAYER_PIC_ROWS:
+		for column: int in RomLayout.INTRO_PLAYER_PIC_COLUMNS:
+			var source_tile: int = row * RomLayout.INTRO_PLAYER_PIC_COLUMNS + column
+			for y: int in tile:
+				for x: int in tile:
+					indices[(row * tile + y) * width + column * tile + x] = \
+						strip[y * strip_width + source_tile * tile + x]
+	return {"indices": indices, "width": width, "height": width}
+
+
+## `SCGB_PLAYER_OR_MON_FRONTPIC_PALS` with `wCurPartySpecies` zero.
+static func player_palette(data: GameData, female: bool) -> PackedColorArray:
+	if data == null:
+		return PackedColorArray()
+	if not Gen2WorldState.is_crystal_profile(data):
+		return data.trainer_palette(CAL)
+	return data.card_palette(1 if female else 0)
+
+
+static func trainer_cell(data: GameData, trainer_class: int) -> Dictionary:
+	var pic: Dictionary = data.trainer_pic(trainer_class) if data != null else {}
+	if pic.is_empty():
+		return {}
+	return Gen2PicImage.atlas_cell(
+		data.atlas_indices(pic["atlas"]), data.atlas(pic["atlas"]), pic
+	)
+
+
 ## Source order, each `{ pic, text, key, enter, clears_after }`. `_OakText2` and
 ## `_OakText4` are two `PrintText` calls over one pic and so two beats, while
 ## `_OakText3` is a bare promptbutton and is none. `clears_after` is the

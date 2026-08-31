@@ -156,6 +156,39 @@ func test_the_player_panel_draws_its_name_box_and_the_rating_box() -> void:
 	assert_true(_has_ink(indices, Gen2HallOfFamePage.MON_BOTTOM_BOX))
 
 
+## `HOF_AnimatePlayerPic` prints the trainer ID at `hlcoord 1, 6` and the play
+## timer under `.PlayTime`, both of which the save carries.
+func test_the_player_panel_prints_the_trainer_id_and_the_play_timer() -> void:
+	var save: Gen2SaveData = _save([1])
+	save.player_id = 456
+	save.game_time = Gen2GameTime.create(7, 5, 0, 0)
+	var page: Dictionary = Gen2HallOfFame.pages(_data, save)[2]
+	assert_eq(int(page["player_id"]), 456)
+	assert_eq(int(page["hours"]), 7)
+	assert_eq(String(page["minutes"]), "05")
+	var indices: PackedByteArray = Gen2HallOfFamePage.from_data(_data).draw(page)
+	# The fixture fills each sheet with an index of its own: 1 is battle_font,
+	# 3 the main font, and the colon is the one glyph read from the main strip.
+	assert_eq(_index_at(indices, Gen2HallOfFamePage.PLAYER_ID_LABEL), 1, "<ID>")
+	assert_eq(_index_at(indices, Gen2HallOfFamePage.PLAYER_ID_NUMBER), 3, "the digits")
+	assert_eq(_index_at(indices, Gen2HallOfFamePage.PLAY_TIME_LABEL), 3, "PLAY TIME")
+	assert_eq(
+		_index_at(indices, Gen2HallOfFamePage.PLAY_TIME_COLON), 2,
+		"the colon comes off FontExtra rather than the battle strip"
+	)
+	assert_eq(Gen2Text.character(Gen2HallOfFamePage.CODE_COLON), ":")
+
+
+## `.DisplayNewHallOfFamer`'s `ld c, 60` and pokegold's `ld c, 180`: an induction
+## panel holds for frames rather than for a press.
+func test_the_panel_hold_is_profile_split() -> void:
+	assert_eq(
+		Gen2HallOfFame.panel_frames(_data),
+		Gen2HallOfFame.PANEL_FRAMES_CRYSTAL if Gen2WorldState.is_crystal_profile(_data)
+		else Gen2HallOfFame.PANEL_FRAMES_GOLD_SILVER
+	)
+
+
 ## Any non-zero palette index inside a tile rectangle. Index 0 is the page's
 ## own background, so ink means something was drawn there.
 func _has_ink(indices: PackedByteArray, box: Rect2i) -> bool:
