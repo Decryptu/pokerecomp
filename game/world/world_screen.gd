@@ -5490,9 +5490,8 @@ func _advance_script_input() -> void:
 ## so a text ending in `<DONE>` owes no press of its own and the script runs on the
 ## moment its last page is up. The box reaches that page three ways: shown whole,
 ## turned to by the press that clears a `<PARA>`, or scrolled into by `_ContText`,
-## and only the first two are a press. The scroll ends on a frame, which is why
-## [method advance_frame] asks this as well; without it every `<CONT>`-terminated
-## text cost one press more than the cartridge spends.
+## and only the first two are a press. The scroll ends on a frame instead, which
+## is why [method advance_frame] asks this as well.
 func _continue_if_text_settled() -> bool:
 	if _text_box == null or not _text_box.visible or _world == null:
 		return false
@@ -7312,9 +7311,8 @@ func _apply_text_pause(event: Dictionary, flags: Dictionary) -> StringName:
 		return &"break"
 	if _text_box == null or _text_box.font == null:
 		return &"none"
-	# `LoadBlinkingCursor` is `Paragraph`, `_ContText` and `PromptText`; a
-	# `writetext` whose text ends in `done` reaches none of them, so its last page
-	# carries no arrow and the script runs straight on.
+	# A `writetext` whose text ends in `done` reaches no `LoadBlinkingCursor`, so
+	# its last page carries no arrow and the script runs straight on.
 	_text_awaits_press = bool(event.get("prompt", true))
 	if int(event.get("cry", 0)) > 0:
 		_play_species_cry(int(event["cry"]))

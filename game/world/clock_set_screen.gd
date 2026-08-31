@@ -21,6 +21,10 @@ const DAYS: Array[String] = [
 	" SUNDAY", " MONDAY", " TUESDAY", "WEDNESDAY", "THURSDAY", " FRIDAY", "SATURDAY",
 ]
 
+## `SetDayOfWeek`'s `.loop` draws its own `Textbox` at `hlcoord 0, 12` and prints
+## `.OakTimeWhatDayIsItText` into it, so the dial carries no map text.
+const DAY_QUESTION: String = "What day is it?"
+
 ## `_OakTimeWokeUpText`. `<……>` is `SixDotsCharText`, which is two ellipsis
 ## tiles, so each of the first two lines is twelve.
 const WOKE_UP_TEXT: String = "%s\n%s%sZzz… Hm? Wha…?\nYou woke me up!%sWill you check the\nclock for me?"

@@ -17,10 +17,20 @@ const TRACE_FRAMES: int = 4000
 ## `end` land on. `showemote EMOTE_SHOCK, MOM1, 15` is 30 frames and the walk is
 ## `MomWalksToPlayerMovement`, both counted in overworld passes.
 const CHECKPOINTS: Dictionary = {
-	&"crystal": {&"emote": 17, &"walk": 46, &"text": 77, &"done": 1909},
-	&"gold": {&"emote": 17, &"walk": 47, &"text": 143, &"done": 2039},
-	&"silver": {&"emote": 17, &"walk": 47, &"text": 143, &"done": 2039},
+	&"crystal": {&"emote": 17, &"walk": 46, &"text": 77, &"done": 1921},
+	&"gold": {&"emote": 17, &"walk": 47, &"text": 143, &"done": 2051},
+	&"silver": {&"emote": 17, &"walk": 47, &"text": 143, &"done": 2051},
 }
+
+## The five boxes the scene asks over, in order and the same on all three.
+## `SetDayOfWeek` draws its own; the rest are a `writetext`'s last page.
+const QUESTIONS: Array[String] = [
+	"What day is it?",
+	" SUNDAY, is it?",
+	"Is it Daylight\nSaving Time now?",
+	" 6:00 AM DST,\nis that OK?",
+	"know how to use\nthe PHONE?",
+]
 
 ## Who looks at whom at the text: Crystal's `turnobject PLAYER, LEFT` and Mom's
 ## `turn_head RIGHT` against pokegold's `turnobject ..., UP`.
@@ -121,7 +131,16 @@ func _sample() -> Dictionary:
 		"text": _screen._text_box != null and _screen._text_box.visible,
 		"channels": _screen._audio_player.audio_status()["active_channels"],
 		"prompt": _screen._script_prompt,
+		"asking": _asking(world),
 	}
+
+
+## The question a choice or a menu opens over: the map script's own last page.
+func _asking(world: Gen2WorldAPI) -> String:
+	var pending: Dictionary = world.pending_script_input()
+	if StringName(pending.get("type", &"")) not in [&"choice", &"menu"]:
+		return ""
+	return String(pending.get("text", ""))
 
 
 func _process(_delta: float) -> bool:
@@ -138,6 +157,14 @@ func _process(_delta: float) -> bool:
 	if not _started:
 		_started = true
 		_screen.move_player(Vector2i(0, 1))
+	# Before the press below, so a capture keeps the box that press would answer.
+	if _frames == _capture_frame and not _output_path.is_empty():
+		var image: Image = Gen2ToolPath.capture(root)
+		if image == null:
+			quit(1)
+			return true
+		image.save_png(_output_path)
+		print("Wrote %s at frame %d" % [_output_path, _frames])
 	if not _trace.is_empty() and bool(_trace[-1]["waiting_input"]):
 		# Every question answered YES, the way the other preview drivers do.
 		_screen.press_button(Gen2Button.A)
@@ -148,13 +175,6 @@ func _process(_delta: float) -> bool:
 	if _talk_frame < 0 and _first_frame(&"done") >= 0 and bool(_trace[-1]["text"]):
 		_talk_frame = _frames
 		_talk_facing = int(_trace[-1]["mom_facing"])
-	if _frames == _capture_frame and not _output_path.is_empty():
-		var image: Image = Gen2ToolPath.capture(root)
-		if image == null:
-			quit(1)
-			return true
-		image.save_png(_output_path)
-		print("Wrote %s at frame %d" % [_output_path, _frames])
 	if _frames < maxi(TRACE_FRAMES, _capture_frame):
 		return false
 	_report()
@@ -190,11 +210,22 @@ func _checkpoints_hold() -> bool:
 		if at != want:
 			printerr("%s %s first appears on frame %d, not %d" % [_game, name, at, want])
 			held = false
+	held = _questions_hold() and held
 	held = _facings_hold() and held
 	held = _talk_facing_holds() and held
 	held = _channels_hold() and held
 	print("%s checkpoints %s" % [_game, "hold" if held else "MOVED"])
 	return held
+
+
+func _questions_hold() -> bool:
+	var asked: Array[String] = _questions()
+	if Array(asked) == Array(QUESTIONS):
+		return true
+	printerr("%s asks %s, not %s" % [
+		_game, JSON.stringify(asked), JSON.stringify(QUESTIONS),
+	])
+	return false
 
 
 func _facings_hold() -> bool:
@@ -285,3 +316,23 @@ func _report() -> void:
 			row["prompt"],
 		])
 	print("%d frames, %d changes" % [_trace.size(), changes])
+	for row: Dictionary in _trace:
+		if not String(row["asking"]).is_empty() \
+			and _first_asking(String(row["asking"])) == int(row["frame"]):
+			print("  f%4d asks %s" % [row["frame"], JSON.stringify(row["asking"])])
+
+
+func _first_asking(question: String) -> int:
+	for row: Dictionary in _trace:
+		if String(row["asking"]) == question:
+			return int(row["frame"])
+	return -1
+
+
+func _questions() -> Array[String]:
+	var out: Array[String] = []
+	for row: Dictionary in _trace:
+		var asking: String = String(row["asking"])
+		if not asking.is_empty() and (out.is_empty() or out[out.size() - 1] != asking):
+			out.append(asking)
+	return out

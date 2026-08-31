@@ -53,17 +53,6 @@ func test_zero_columns_lays_nothing_out_rather_than_looping() -> void:
 	assert_eq(Gen2TextLayout.wrap_lines("HELLO", 0).size(), 0)
 
 
-func test_pages_hold_as_many_lines_as_the_box_shows() -> void:
-	var lines := PackedStringArray(["a", "b", "c", "d"])
-	assert_eq(Gen2TextLayout.paginate(lines, ROWS).size(), 2)
-
-
-func test_a_part_full_last_page_is_kept() -> void:
-	var pages: Array = Gen2TextLayout.paginate(PackedStringArray(["a", "b", "c"]), ROWS)
-	assert_eq(pages.size(), 2)
-	assert_eq(pages[1], PackedStringArray(["c"]))
-
-
 func test_laying_out_gives_pages_of_lines_that_all_fit() -> void:
 	var text: String = "BULBASAUR used TACKLE! It's not very effective against a GHOST."
 	var pages: Array = Gen2TextLayout.lay_out(text, COLUMNS, ROWS)
@@ -275,4 +264,23 @@ func test_a_blank_line_is_not_a_page_break() -> void:
 		Gen2TextLayout.lay_out(text + "\n\nWant to use CUT?", 18, 2)[1],
 		PackedStringArray(["", "Want to use CUT?"]),
 		"a blank line is a line"
+	)
+
+
+## `Paragraph` clears the box and prints again, so a menu opened over the box
+## stands over the final page. `.WeekdayStrings`' own leading space survives the
+## wrap, since `PlaceString` prints it.
+func test_the_standing_page_is_the_last_one_and_keeps_its_padding() -> void:
+	var text: String = "%sfirst page%ssecond page%s SUNDAY, is it?" % [
+		"", Gen2TextStream.PAGE_BREAK, Gen2TextStream.PAGE_BREAK,
+	]
+	assert_eq(Gen2TextLayout.standing_page(text), " SUNDAY, is it?")
+	assert_eq(Gen2TextLayout.standing_page(""), "")
+	## `_ContText` scrolls rather than clearing, so its page carries the line
+	## that was underneath.
+	assert_eq(
+		Gen2TextLayout.standing_page("one%stwo%sthree" % [
+			Gen2TextStream.PAGE_BREAK, Gen2TextStream.SCROLL_BREAK,
+		]),
+		"two\nthree"
 	)

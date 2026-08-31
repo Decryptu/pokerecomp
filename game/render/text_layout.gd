@@ -2,13 +2,16 @@ class_name Gen2TextLayout
 extends RefCounted
 
 ## Breaking a string into the lines and pages a text box can show. Pure rules, no
-## font and no screen: it counts tiles and returns strings, so a conversation's
-## pagination can be checked without drawing anything. Widths count tiles, never
-## characters: a ligature like "'s" is two characters in one glyph, so
-## [method String.length] overstates a line and wraps it a column early. The
-## cartridges do not wrap at runtime, their text being pre-broken at authoring
-## time, which works when every string is known in advance and does not when a mod
-## adds one or a name runs long.
+## font and no screen, so a conversation's pagination can be checked without
+## drawing anything. Widths count tiles rather than characters, since a ligature
+## like "'s" is two of one and [method String.length] would wrap a column early.
+## The cartridges do not wrap at all, their text being pre-broken at authoring
+## time; a mod's string and a long name are what needs it.
+
+
+## `Textbox`'s inner area: `TEXTBOX_INNERW` wide, and two rows two apart.
+const TEXTBOX_COLUMNS: int = 18
+const TEXTBOX_ROWS: int = 2
 
 
 ## Breaks [param text] into lines of at most [param columns] tiles.
@@ -22,8 +25,8 @@ static func wrap_lines(text: String, columns: int) -> PackedStringArray:
 
 	for paragraph: String in text.split("\n"):
 		var line: String = ""
-		for word: String in paragraph.split(" ", false):
-			var candidate: String = word if line.is_empty() else "%s %s" % [line, word]
+		for word: String in _spaced_words(paragraph):
+			var candidate: String = line + word
 			if Gen2Text.encoded_length(candidate) <= columns:
 				line = candidate
 				continue
@@ -31,6 +34,10 @@ static func wrap_lines(text: String, columns: int) -> PackedStringArray:
 			if not line.is_empty():
 				out.append(line)
 				line = ""
+				word = word.lstrip(" ")
+				if Gen2Text.encoded_length(word) <= columns:
+					line = word
+					continue
 
 			# A word too long for a line of its own is cut rather than allowed to
 			# run off the edge. Nothing in these games is that long, but a mod's
@@ -46,32 +53,23 @@ static func wrap_lines(text: String, columns: int) -> PackedStringArray:
 	return out
 
 
-## Groups lines into pages of at most [param rows], each page being what the box
-## shows before it waits to be advanced.
-static func paginate(lines: PackedStringArray, rows: int) -> Array:
-	var out: Array = []
-	if rows <= 0:
-		return out
-
-	var page: PackedStringArray = PackedStringArray()
-	for line: String in lines:
-		page.append(line)
-		if page.size() == rows:
-			out.append(page)
-			page = PackedStringArray()
-
-	if not page.is_empty():
-		out.append(page)
+## Each word with the spaces in front of it, so a line keeps the padding
+## `PlaceString` prints. Only a wrap drops the spaces it breaks at.
+static func _spaced_words(paragraph: String) -> PackedStringArray:
+	var out: PackedStringArray = PackedStringArray()
+	var trimmed: String = paragraph.rstrip(" ")
+	var at: int = 0
+	while at < trimmed.length():
+		var start: int = at
+		while at < trimmed.length() and trimmed[at] == " ":
+			at += 1
+		while at < trimmed.length() and trimmed[at] != " ":
+			at += 1
+		out.append(trimmed.substr(start, at - start))
 	return out
 
 
-## Both steps at once, honouring the two waits [Gen2TextStream] marks.
-##
-## `Paragraph` clears the box and starts again at the top line, so its page
-## begins empty. `_ContText` scrolls by one line and writes at the bottom, so
-## its page begins with the line that was underneath: with a two-line box that
-## is the previous page's second line, and dropping it loses a line out of every
-## paragraph that runs past two.
+## [method lay_out_pages] with each page's lines alone.
 static func lay_out(text: String, columns: int, rows: int) -> Array:
 	var out: Array = []
 	for page: Dictionary in lay_out_pages(text, columns, rows):
@@ -130,6 +128,17 @@ static func lay_out_pages(text: String, columns: int, rows: int) -> Array:
 	if not page.is_empty():
 		out.append({"lines": page, "enter": enter, "carried": carried})
 	return out
+
+
+## What a box is left holding once [param text] has been printed to its end.
+## `Paragraph` clears it between paragraphs, so a menu opens over the final page.
+static func standing_page(
+	text: String, columns: int = TEXTBOX_COLUMNS, rows: int = TEXTBOX_ROWS
+) -> String:
+	var pages: Array = lay_out_pages(text, columns, rows)
+	if pages.is_empty():
+		return ""
+	return "\n".join(pages[pages.size() - 1]["lines"])
 
 
 ## The longest prefix of [param word] that fits in [param columns] tiles.

@@ -1699,7 +1699,7 @@ func test_gold_profile_specials_normalize_onto_the_crystal_handlers() -> void:
 		"kind": &"test", "bank": 48, "script": 0x6410,
 		"clock": {"day": 1, "hour": 10, "minute": 5},
 	})
-	assert_eq(dst.advance()["event"]["text"], "10:05 DST,\nis that OK?")
+	assert_eq(dst.advance()["event"]["text"], "10:05 AM DST,\nis that OK?")
 	assert_eq(dst.advance(true)["event"]["type"], &"choice")
 	var dst_result: Dictionary = dst.advance(true, 0)
 	assert_eq(dst_result["status"], &"complete", JSON.stringify(dst_result))
@@ -4130,6 +4130,38 @@ func test_a_choice_carries_the_text_the_open_box_is_still_showing() -> void:
 	assert_eq(closed.advance(true)["event"]["text"], "")
 
 
+## `Paragraph` clears the box at every `<PARA>`, so what a several-page text
+## leaves for `YesNoBox` to stand over is its last page. Carrying the whole
+## string put the opening lines of `MomGivesPokegearText` under `SetDayOfWeek`'s
+## dial and of `ComeHomeForDSTText` under the phone question behind it.
+func test_a_choice_over_a_paged_text_carries_that_text_s_last_page_alone() -> void:
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
+	scripts["48:6644"] = [
+		Gen2WorldScript.WRITETEXT, 0x40, 0x70,
+		Gen2WorldScript.YESORNO,
+		Gen2WorldScript.END,
+	]
+	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
+	var text: Dictionary = RomCache.read_json(RomCache.world_text_path(_directory))
+	text["48:7040"] = [
+		Gen2WorldScript.TEXT_START, 0x80, 0x81,
+		Gen2TextStream.CHAR_PARA, 0x82, 0x83,
+		Gen2WorldScript.TEXT_TERMINATOR,
+	]
+	RomCache.write_json(RomCache.world_text_path(_directory), text)
+	var data: GameData = GameData.open_directory(_directory)
+
+	var runner := Gen2WorldScriptRunner.begin(data, Gen2WorldState.new(), {
+		"kind": &"test", "bank": 48, "script": 0x6644,
+	})
+	assert_eq(
+		runner.advance()["event"]["text"], "AB%sCD" % Gen2TextStream.PAGE_BREAK
+	)
+	var choice: Dictionary = runner.advance(true)
+	assert_eq(choice["event"]["type"], &"choice")
+	assert_eq(choice["event"]["text"], "CD", JSON.stringify(choice))
+
+
 ## `_GetVarAction.BoxFreeSpace` is `MONS_PER_BOX - [sBoxCount]`. Route 29's
 ## catching tutorial reads it before it hands a POKé BALL over, so an
 ## unsupported variable stops that NPC talking at all.
@@ -4194,7 +4226,7 @@ func test_initial_dst_specials_publish_source_confirmation_text_and_commit_state
 		"clock": {"day": 1, "hour": 10, "minute": 5},
 	})
 	var enabled_text: Dictionary = enabled.advance()
-	assert_eq(enabled_text["event"]["text"], "10:05 DST,\nis that OK?")
+	assert_eq(enabled_text["event"]["text"], "10:05 AM DST,\nis that OK?")
 	var enabled_choice: Dictionary = enabled.advance(true)
 	assert_eq(enabled_choice["event"]["type"], &"choice")
 	var enabled_result: Dictionary = enabled.advance(true, 0)
@@ -4206,7 +4238,7 @@ func test_initial_dst_specials_publish_source_confirmation_text_and_commit_state
 		"clock": {"day": 1, "hour": 10, "minute": 5},
 	})
 	var disabled_text: Dictionary = disabled.advance()
-	assert_eq(disabled_text["event"]["text"], "10:05,\nis that OK?")
+	assert_eq(disabled_text["event"]["text"], "10:05 AM,\nis that OK?")
 	var disabled_choice: Dictionary = disabled.advance(true)
 	assert_eq(disabled_choice["event"]["type"], &"choice")
 	var disabled_result: Dictionary = disabled.advance(true, 0)
