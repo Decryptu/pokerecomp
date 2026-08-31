@@ -3,13 +3,12 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies Headbutt against freshly imported real caches, for both command
-## profiles. Expected values come from the pinned sources: TryHeadbuttOW and
-## HeadbuttScript, the five treemon routines behind them, CheckHeadbuttTreeTile,
-## and the two data/wild tables. The real-cartridge counterpart to
-## tests/unit/test_world_treemon.gd and the headbutt half of
-## tests/unit/test_world_field_move.gd, both of which use hand-built tables. Ilex
-## Forest is the acceptance case, because its trees are the same cells in all three
-## games.
+## profiles, against TryHeadbuttOW and HeadbuttScript, the five treemon routines
+## behind them, CheckHeadbuttTreeTile and the two data/wild tables. The
+## real-cartridge counterpart to tests/unit/test_world_treemon.gd and the headbutt
+## half of tests/unit/test_world_field_move.gd, both of which use hand-built
+## tables. Ilex Forest is the acceptance case: its trees are the same cells in all
+## three games.
 
 
 const ILEX_GROUP: int = 3

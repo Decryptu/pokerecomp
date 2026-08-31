@@ -3,13 +3,11 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies Whirlpool and the forced-tile layer against freshly imported real
-## caches, for both command profiles. Expected values come from the pinned sources:
-## WhirlpoolFunction and TryWhirlpoolMenu, CheckWhirlpoolTile,
-## WhirlpoolBlockPointers and `DoPlayerMovement.CheckTile`. All four are byte
-## identical between the pins, and WhirlpoolBlockPointers names only TILESET_JOHTO,
-## which is $01 in both games. The real-cartridge counterpart to
-## tests/unit/test_world_field_move.gd; Dragon's Den B1F is the acceptance case,
-## because its whirlpool is the one a Crystal playthrough meets.
+## caches, for both command profiles, against WhirlpoolFunction, TryWhirlpoolMenu,
+## CheckWhirlpoolTile, WhirlpoolBlockPointers and `DoPlayerMovement.CheckTile`.
+## All four are byte identical between the pins and WhirlpoolBlockPointers names
+## only TILESET_JOHTO, $01 in both. The real-cartridge counterpart to
+## tests/unit/test_world_field_move.gd; Dragon's Den B1F is the acceptance case.
 
 
 const DEN_GROUP: int = 3

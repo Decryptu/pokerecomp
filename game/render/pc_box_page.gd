@@ -149,13 +149,21 @@ func draw(state: Dictionary) -> PackedByteArray:
 	return indices
 
 
+## `PrintLevel` through the box's own font.
+func _draw_level(indices: PackedByteArray, width: int, level: int) -> void:
+	var at: Vector2i = LEVEL_AT
+	if Gen2Font.level_glyph_shown(level):
+		_code(indices, width, CODE_LEVEL, at)
+		at += Vector2i(1, 0)
+	_text(indices, width, str(level), at)
+
+
 ## `PCMonInfo`'s fields. It returns before any of them for an empty row and
 ## after the pic for an egg, which is why a state with no `mon` draws neither.
 func _draw_mon(indices: PackedByteArray, width: int, mon: Dictionary) -> void:
 	if mon.is_empty():
 		return
-	_code(indices, width, CODE_LEVEL, LEVEL_AT)
-	_text(indices, width, str(int(mon.get("level", 0))), LEVEL_AT + Vector2i(1, 0))
+	_draw_level(indices, width, int(mon.get("level", 0)))
 	_text(indices, width, String(mon.get("gender", " ")), GENDER_AT)
 	_text(indices, width, String(mon.get("species_name", "")), SPECIES_AT)
 	var item: int = int(mon.get("item", 0))

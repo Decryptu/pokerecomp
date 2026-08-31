@@ -3,13 +3,12 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies `DecorationAttributes` and the `DecorationNames` run behind it against
-## freshly imported real caches, in all three games, and the name
+## freshly imported real caches in all three games, and the name
 ## [Gen2WorldDecoration] spells from each row. One pinned address per cartridge
-## finds the lot, so what says the address is right is the content: fifty-three rows
-## whose types, actions, event flags and block or sprite bytes are all the source's.
-## The two pins are byte identical bar one name, Gold and Silver spelling the third
-## console "NINTENDO64" where Crystal spells it "NINTENDO 64", which is why the
-## whole run is not compared between cartridges.
+## finds the lot, so what says the address is right is the content: fifty-three
+## rows whose types, actions, event flags and block or sprite bytes are the
+## source's. The pins are byte identical bar one name, Gold and Silver spelling the
+## third console "NINTENDO64" where Crystal spells it "NINTENDO 64".
 
 ## Every row, as [name, type, action, event flag, block or sprite]. The name is
 ## what `GetDecoName` assembles, not the `DecorationNames` entry the row points

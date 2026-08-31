@@ -671,6 +671,9 @@ func _status_string(page: Dictionary) -> String:
 
 ## `PrintLevel`: the `<LV>` tile and then the number left-aligned beside it.
 func draw_level(into: PackedByteArray, width: int, at: Vector2i, level: int) -> void:
+	if not Gen2Font.level_glyph_shown(level):
+		_text(into, width, str(level), at)
+		return
 	_code(into, width, CODE_LEVEL, at)
 	_text(into, width, str(level), at + Vector2i(1, 0))
 

@@ -63,6 +63,12 @@ const MAX_SUBMENU_ITEMS: int = 8
 ## `UseOnWhichPKMNString` for the `PARTYMENUACTION_HEALING_ITEM` that
 ## `.SelectMilkDrinkRecipient` sets. Engine text no importer reads, like the rest
 ## of `data/text/common_*.asm`.
+## `constants/menu_constants.asm`'s PARTYMENUACTION_*. Two reach this screen:
+## `SelectMonFromParty`'s own zero, which every service writes, and the GIVE_MON
+## both `SelectTradeOrDayCareMon` callers write.
+const ACTION_CHOOSE_POKEMON: int = 0
+const ACTION_GIVE_MON: int = 6
+
 const PROMPT_CHOOSE: String = "Choose a #MON."
 const PROMPT_USE_ON_WHICH: String = "Use on which PKMN?"
 
@@ -143,6 +149,8 @@ var _switch_from: int = -1
 ## the caller wrote into `wPartyMenuActionText`.
 var _selecting: bool = false
 var _select_prompt: String = PROMPT_CHOOSE
+## `wPartyMenuActionText`, which decides the column beside the nicknames.
+var _select_action: int = ACTION_CHOOSE_POKEMON
 
 ## The hardware screen the embedded view is drawn in, and the two pages drawn
 ## into it. Handed over by the opener or found around this node; never a second
@@ -207,8 +215,11 @@ func set_context(data: GameData, save: Gen2SaveData, embedded: bool = false) -> 
 ## `PartyMenuStrings` row that caller writes; the default is the
 ## PARTYMENUACTION_CHOOSE_POKEMON `SelectMonFromParty` writes with its own
 ## `xor a`.
-func open_selection(prompt: String = PROMPT_CHOOSE) -> void:
+func open_selection(
+	prompt: String = PROMPT_CHOOSE, action: int = ACTION_CHOOSE_POKEMON
+) -> void:
 	_selecting = true
+	_select_action = action
 	_select_prompt = prompt
 	_member_cursor = 0
 	_submenu_open = false
@@ -795,6 +806,11 @@ func _moves_page_advance() -> void:
 
 ## `WritePartyMenuTilemap`'s rows, in [Gen2BattleSwitchMenu]'s own shape plus the
 ## `egg` [Gen2PartyMenuPage] needs, which a battle party never carries.
+## `PartyMenuQualityPointers`' `.Gender`, both `SelectTradeOrDayCareMon` callers.
+func _gender_column() -> bool:
+	return _selecting and _select_action == ACTION_GIVE_MON
+
+
 func _rows() -> Array:
 	var out: Array = []
 	if _save == null:
@@ -814,6 +830,9 @@ func _rows() -> Array:
 			"status": mon.status,
 			"fainted": not mon.is_egg and mon.hp <= 0,
 			"egg": mon.is_egg,
+			"quality": Gen2PartyMenuPage.gender_quality(
+				Gen2BattleMon.gender_for(_data, mon.species, mon.dvs)
+			),
 		})
 	return out
 
@@ -852,6 +871,7 @@ func _render_hardware() -> void:
 		"" if _read_only else _prompt(),
 		_switch_from < 0 and not _read_only,
 		_switch_from,
+		_gender_column(),
 	)
 	if image == null:
 		return

@@ -291,6 +291,27 @@ func test_every_quality_lands_in_its_own_column() -> void:
 	assert_eq(_ink_in_tile(image, Gen2PartyMenuPage.STATUS.x, 2), 0, "a healthy status is blank")
 
 
+## `PartyMenuQualityPointers`: `.TMHM`, `.EvoStone` and `.Gender` each print one
+## string at `hlcoord 12, 2` where `.Default` puts the HP bar and its digits, so
+## neither the numbers nor the bar is drawn at all under one of them.
+func test_a_quality_column_replaces_the_hp_bar_and_its_digits() -> void:
+	var rows: Array = _rows(1)
+	rows[0]["quality"] = Gen2PartyMenuPage.NOT_ABLE
+	var image: Image = _page().render(rows, 0, "", true, -1, true)
+
+	assert_ne(
+		_ink_in_tile(image, Gen2PartyMenuPage.QUALITY.x, 2), 0, "the quality string"
+	)
+	assert_eq(
+		_ink_in_tile(image, Gen2PartyMenuPage.HP_DIGITS.x + 1, 1), 0, "no HP numbers"
+	)
+	assert_eq(
+		_ink_in_tile(image, Gen2PartyMenuPage.HP_BAR.x, 2), 0, "no HP: and no bar"
+	)
+	## Level and status stay in all four sets.
+	assert_ne(_ink_in_tile(image, Gen2PartyMenuPage.LEVEL.x, 2), 0, "the level")
+
+
 ## `PlaceStatusString` checks the health before it looks at the byte, so FNT wins
 ## over anything on it.
 func test_a_status_prints_and_fainting_wins_over_it() -> void:

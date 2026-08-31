@@ -471,7 +471,8 @@ func _build_world() -> void:
 	## through [method set_save]: a Nuzlocke slot then played as the cartridge's
 	## own game, which is the one difference a rules block exists to make.
 	var save_rules: Gen2Rules = selected_save.run_rules if selected_save != null else null
-	if selected_save != null and selected_save.world != null:
+	var continued: bool = selected_save != null and selected_save.world != null
+	if continued:
 		_world = Gen2WorldAPI.open_snapshot(_data, selected_save.world, save_rules)
 		if _world == null:
 			_show_load_failure(
@@ -533,6 +534,10 @@ func _build_world() -> void:
 	_world.random_seed = run_seed
 
 	_world.schedule_random = _encounter_random
+	## `Continue`'s `farcall JumpRoamMons`, which is the menu's and not the map
+	## load's, so it is spent here.
+	if continued:
+		_world.jump_roaming(_encounter_random)
 	_world.script_random = _encounter_random
 	_world.object_random = _object_random
 	_world.breed_random = _breed_random
@@ -2243,12 +2248,11 @@ func _on_name_rater_closed() -> void:
 
 ## The Day-Care's five specials, hosted exactly as `special NameRater` is. The
 ## routine writes the party, the two slots and the money itself, so nothing is
-## staged: the cartridge's own routines write WRAM straight and the save is only
-## committed when the player saves. Below, `special UnownPuzzle`, whose
-## `FadeToMenu` and `ExitAllMenus` are what the host's own overlay already is; and
-## `_Diploma`'s page, or `_PrintDiploma`'s with the printer's own status box over
-## it, where the screen owns both loops and this only hands it the two things the
-## page prints that the cache does not carry.
+## staged: the cartridge writes WRAM straight and the save is committed when the
+## player saves. Below, `special UnownPuzzle`, whose `FadeToMenu` and
+## `ExitAllMenus` are what the host's overlay already is; and `_Diploma`'s page,
+## or `_PrintDiploma`'s with the printer's status box over it, where the screen
+## owns both loops and this hands it only what the cache does not carry.
 func _open_diploma(request: Dictionary) -> bool:
 	if _diploma_host != null or _world == null or _data == null:
 		return false
@@ -5009,13 +5013,11 @@ func _open_battle_host(request: Dictionary) -> void:
 
 
 ## The Nuzlocke's first rule, at the one place every battle is opened. An area
-## gives up one encounter, and it gives it up the moment the Pokemon is met rather
-## than when a ball lands: beating it or running from it spends it just the same,
-## which is the rule's "no second chances". The claim is written to disk here for
-## the same reason a death is, so a reload cannot hand the area back. Two wild
-## battles claim nothing: the Bug Catching Contest has its own park balls, and a
-## roamer belongs to no area at all, its landmark being wherever it caught the
-## player.
+## gives up one encounter the moment the Pokemon is met rather than when a ball
+## lands: beating it or running spends it just the same, which is "no second
+## chances". The claim is written to disk here for the same reason a death is, so
+## a reload cannot hand the area back. Two wild battles claim nothing: the Bug
+## Catching Contest has its own park balls, and a roamer belongs to no area.
 func _claim_nuzlocke_encounter(
 	host: Gen2BattleScreen, values: Dictionary, save: Gen2SaveData
 ) -> void:
@@ -5552,12 +5554,12 @@ func _start_trainer_approach(request: Dictionary) -> void:
 
 ## One hardware frame of `SeenByTrainerScript`'s presentation: the shock emote's
 ## own count, the movement delay, then one planned cell at a time. The object's
-## step_passes_remaining (set by
-## [method Gen2WorldAPI.advance_trainer_approach_step]) is spent by the same
+## step_passes_remaining, set by
+## [method Gen2WorldAPI.advance_trainer_approach_step], is spent by the same
 ## frame, while step_offset() still gives the renderer 16-frame interpolation.
-## [param map_pass] is whether this hardware frame runs `HandleMap`'s own pass.
-## The two countdowns in front of the walk are the script's `DelayFrames` and are
-## spent on every frame; the walk itself is `HandleObjectStep`'s and is not.
+## [param map_pass] is whether this frame runs `HandleMap`'s own pass. The two
+## countdowns in front of the walk are the script's `DelayFrames` and are spent
+## every frame; the walk itself is `HandleObjectStep`'s and is not.
 func _advance_trainer_approach(map_pass: bool) -> void:
 	if _world == null:
 		_trainer_approach = {}
@@ -7020,7 +7022,11 @@ func _apply_fly_choice(results: Array) -> bool:
 		if spawn < 0:
 			_refresh_labels()
 			return true
-		var warped: Dictionary = _world.warp_to_spawn(spawn)
+		## `.FlyScript`'s `newloadmap MAPSETUP_FLY`, whose setup script opens on
+		## `JumpRoamMons`: a flight scatters the beasts rather than stepping them.
+		var warped: Dictionary = _world.warp_to_spawn(
+			spawn, Gen2WorldAPI.MAP_ENTRY_FLY
+		)
 		if bool(warped.get("ok", false)):
 			_refresh_after_escape()
 		return true
@@ -7649,14 +7655,13 @@ func money_window_open() -> bool:
 	return _money_window != null
 
 
-## `HaircutOrGrooming`'s own `call ChangeHappiness`. The row is the runner's, since
-## the roll that picked it has to belong to the seeded generator; the byte it
-## changes belongs to the save this screen holds. Below, `RemoveMonFromPartyOrBox`
-## with REMOVE_PARTY, which `ReturnShuckie` runs on the row the player handed back,
-## and `GivePokeMail`, the item onto the member's own MON_ITEM and the script's
-## message into its `sPartyMail` row. Both are events rather than runtime requests:
-## each routine answers nothing and runs straight on, and the write is the same
-## save write a happiness change is.
+## `HaircutOrGrooming`'s own `call ChangeHappiness`. The row is the runner's,
+## since the roll that picked it belongs to the seeded generator; the byte it
+## changes belongs to this screen's save. Below, `RemoveMonFromPartyOrBox` with
+## REMOVE_PARTY, which `ReturnShuckie` runs on the row handed back, and
+## `GivePokeMail`, the item onto MON_ITEM and the message into `sPartyMail`. Both
+## are events rather than runtime requests: each routine answers nothing and runs
+## straight on, and the write is the save write a happiness change is.
 func _give_party_mail(event: Dictionary) -> void:
 	var save: Gen2SaveData = _embedded_party_save()
 	var slot: int = int(event.get("slot", -1))
@@ -7761,8 +7766,9 @@ func _apply_party_happiness(event: Dictionary) -> void:
 ## `SelectMonFromParty` opened by one of `engine/events/haircut.asm`'s four
 ## routines. The same list the Name Rater and the move deleter open, and the
 ## same `_party_host` the start menu uses, so an overlay is named in one place
-## and a press reaches it through one branch.
-func _open_party_selection(_request: Dictionary = {}) -> bool:
+## and a press reaches it through one branch. The trade reaches
+## `SelectTradeOrDayCareMon` instead, so it alone asks for the gender column.
+func _open_party_selection(request: Dictionary = {}) -> bool:
 	if _party_host != null or _world == null or _data == null:
 		return false
 	var save: Gen2SaveData = _embedded_party_save()
@@ -7782,7 +7788,14 @@ func _open_party_selection(_request: Dictionary = {}) -> bool:
 	host.cry_requested.connect(_on_pokedex_cry_requested)
 	host.set_screen(_screen)
 	add_child(host)
-	host.open_selection()
+	host.open_selection(
+		Gen2PartyScreen.PROMPT_CHOOSE,
+		Gen2PartyScreen.ACTION_GIVE_MON \
+			if StringName((request.get("values", {}) as Dictionary).get(
+				"routine", &""
+			)) == &"npc_trade" \
+			else Gen2PartyScreen.ACTION_CHOOSE_POKEMON
+	)
 	_party_host = host
 	_party_selection = {"save": save}
 	_script_prompt = "Choose a #MON"

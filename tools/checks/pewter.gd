@@ -3,13 +3,12 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies the walk back from Fuchsia City to Vermilion, through Diglett's Cave
-## onto Route 2, and north to Pewter Gym, for both command profiles. Three findings
+## onto Route 2 and north to Pewter Gym, for both command profiles. Three findings
 ## carry the leg. The way back is five plain connections with one gate at the
-## start, not the walk through Lavender and Saffron the route came by, because
-## Route 12 connects west onto Route 11 and Route 11 declares no warps at all. The
-## Route 11 crossing lands inside the pocket the Snorlax's two-by-two body seals
-## off Vermilion's east edge. And Diglett's Cave is three disjoint regions joined by
-## two ladders, so it is crossed by warps rather than walked.
+## start rather than the walk through Lavender and Saffron: Route 12 connects west
+## onto Route 11, which declares no warps at all. The Route 11 crossing lands in
+## the pocket the Snorlax's two-by-two body seals off Vermilion's east edge. And
+## Diglett's Cave is three regions joined by two ladders, so it is crossed.
 
 
 ## constants/map_constants.asm. Only Diglett's Cave splits between the profiles.

@@ -20,6 +20,9 @@ const HP_BAR: Vector2i = Vector2i(11, 2)
 const HP_DIGITS: Vector2i = Vector2i(13, 1)
 const LEVEL: Vector2i = Vector2i(8, 2)
 const STATUS: Vector2i = Vector2i(5, 2)
+## `PlacePartyMonTMHMCompatibility`, `PlacePartyMonEvoStoneCompatibility` and
+## `PlacePartyMonGender` all print at `hlcoord 12, 2`, over the HP bar's column.
+const QUALITY: Vector2i = Vector2i(12, 2)
 
 ## `PlacePartyNicknames.end` steps back two columns from the row below the last
 ## nickname, which is where CANCEL prints.
@@ -44,6 +47,16 @@ const PROMPT: Vector2i = Vector2i(1, 16)
 
 ## Both HP numbers print through `PrintNum` three digits wide, space padded.
 const HP_NUMBER_DIGITS: int = 3
+
+## `.string_able`/`.string_not_able`, shared by the TM/HM and stone columns, and
+## `PlacePartyMonGender`'s own three.
+const ABLE: String = "ABLE"
+const NOT_ABLE: String = "NOT ABLE"
+const GENDER_STRINGS: Dictionary = {
+	Gen2BattleMon.GENDER_MALE: "♂…MALE",
+	Gen2BattleMon.GENDER_FEMALE: "♀…FEMALE",
+}
+const GENDER_UNKNOWN: String = "…UNKNOWN"
 
 ## Shadow OAM's own origin, which every sprite here is placed through.
 const OAM_ORIGIN := Vector2i(8, 16)
@@ -103,6 +116,15 @@ var _icons: Array = []
 var frame_style: int = 0
 
 
+## `PlacePartyMonGender`, whose `.unknown` is `GetGender`'s carry.
+static func gender_quality(gender: StringName) -> String:
+	return String(GENDER_STRINGS.get(gender, GENDER_UNKNOWN))
+
+
+static func able_quality(able: bool) -> String:
+	return ABLE if able else NOT_ABLE
+
+
 static func from_data(source: GameData) -> Gen2PartyMenuPage:
 	var glyphs: Gen2Font = Gen2Font.from_data(source)
 	var panels: Gen2BattleHud = Gen2BattleHud.from_data(source)
@@ -120,9 +142,12 @@ static func from_data(source: GameData) -> Gen2PartyMenuPage:
 ## after the last member. [param rows] is [member Gen2BattleSwitchMenu.rows].
 ## `SwitchPartyMons` opens through `InitPartyMenuNoCancel`, so [param cancel] is
 ## false while a member is being moved, and [param held] is that member's row,
-## which wears `▷` instead of nothing.
+## which wears `▷` instead of nothing. [param quality] is the four
+## `PartyMenuQualityPointers` rows that are not `.Default`: each replaces the HP
+## bar and its digits with one string, which the row carries as `quality`.
 func render(
-	rows: Array, cursor: int, prompt: String, cancel: bool = true, held: int = -1
+	rows: Array, cursor: int, prompt: String, cancel: bool = true, held: int = -1,
+	quality: bool = false
 ) -> Image:
 	var width: int = Gen2Screen.WIDTH
 	var height: int = Gen2Screen.HEIGHT
@@ -130,7 +155,7 @@ func render(
 	page.resize(width * height)
 
 	for index: int in rows.size():
-		_draw_member(page, width, index, rows[index])
+		_draw_member(page, width, index, rows[index], quality)
 	if cancel:
 		font.draw_text(
 			Gen2BattleSwitchMenu.cancel_label(), page, width,
@@ -149,8 +174,9 @@ func render(
 			PackedColorArray([Color.WHITE, Color.BLACK])
 		)
 	)
-	for index: int in rows.size():
-		_blend_bar(pixels, index, rows[index])
+	if not quality:
+		for index: int in rows.size():
+			_blend_bar(pixels, index, rows[index])
 	_blend_icons(pixels, rows.size())
 	return Gen2PicImage.canvas_image(pixels, width, height)
 
@@ -287,7 +313,10 @@ static func blend_tile(
 	)
 
 
-func _draw_member(page: PackedByteArray, width: int, index: int, row: Dictionary) -> void:
+func _draw_member(
+	page: PackedByteArray, width: int, index: int, row: Dictionary,
+	quality: bool = false
+) -> void:
 	var step: int = index * ROW_STEP
 	var hp: int = int(row.get("hp", 0))
 	var max_hp: int = int(row.get("max_hp", 0))
@@ -302,15 +331,22 @@ func _draw_member(page: PackedByteArray, width: int, index: int, row: Dictionary
 	## party cannot hold one.
 	if bool(row.get("egg", false)):
 		return
-	font.draw_text(
-		"%s/%s" % [
-			str(hp).lpad(HP_NUMBER_DIGITS), str(max_hp).lpad(HP_NUMBER_DIGITS),
-		],
-		page, width, HP_DIGITS.x * TILE, (HP_DIGITS.y + step) * TILE
-	)
-	hud.draw_bar_frame(
-		page, width, Vector2i(HP_BAR.x, HP_BAR.y + step), Gen2BattleTiles.HP_BAR_END
-	)
+	if quality:
+		font.draw_text(
+			String(row.get("quality", "")), page, width,
+			QUALITY.x * TILE, (QUALITY.y + step) * TILE
+		)
+	else:
+		font.draw_text(
+			"%s/%s" % [
+				str(hp).lpad(HP_NUMBER_DIGITS), str(max_hp).lpad(HP_NUMBER_DIGITS),
+			],
+			page, width, HP_DIGITS.x * TILE, (HP_DIGITS.y + step) * TILE
+		)
+		hud.draw_bar_frame(
+			page, width, Vector2i(HP_BAR.x, HP_BAR.y + step),
+			Gen2BattleTiles.HP_BAR_END
+		)
 	hud.draw_level(page, width, Vector2i(LEVEL.x, LEVEL.y + step), int(row.get("level", 0)))
 	font.draw_text(
 		_status_string(row), page, width, STATUS.x * TILE, (STATUS.y + step) * TILE

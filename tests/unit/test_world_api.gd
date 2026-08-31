@@ -304,7 +304,14 @@ func _write_cache(game_id: String = "testworld") -> void:
 			"time_groups": [],
 		},
 		"roaming": {
-			"maps": [{"map_group": 1, "map_number": 1, "connections": []}],
+			"maps": [
+				{"map_group": 1, "map_number": 1, "connections": [
+					{"map_group": 1, "map_number": 2},
+				]},
+				{"map_group": 1, "map_number": 2, "connections": [
+					{"map_group": 1, "map_number": 1},
+				]},
+			],
 			"mons": [{"species": 0xF3, "level": 40, "map_group": 1, "map_number": 2}],
 		},
 		"probabilities": {
@@ -940,60 +947,76 @@ func test_crystal_verbosegiveitemvar_reads_kurts_quantity_without_staging_a_swar
 	assert_eq(state.swarm_map(), Vector2i(-1, -1))
 
 
-func test_random_unseen_wild_mon_uses_morning_rare_slots_and_seen_species() -> void:
+## `.GetGrassmon` reads its rare slot out of the time-of-day row and then
+## `pop hl` restores the pointer from before that offset, so the four common
+## species it is weighed against are the morning ones whatever the hour.
+func test_random_unseen_wild_mon_reads_rare_by_hour_and_common_by_morning() -> void:
 	_write_service_cache()
 	var species: Array = []
-	for number: int in 27:
+	for number: int in 40:
 		species.append({"number": number + 1, "name": "MON%d" % (number + 1)})
 	RomCache.write_json(RomCache.species_path(_directory), species)
 	var phone: Dictionary = RomCache.read_json(RomCache.world_phone_path(_directory))
 	phone["contacts"][0]["map_group"] = 1
 	phone["contacts"][0]["map_number"] = 1
 	RomCache.write_json(RomCache.world_phone_path(_directory), phone)
-	var morning: Array = []
-	for index: int in RomLayout.WILD_GRASS_SLOT_COUNT:
-		morning.append({
-			"level": 5,
-			"species": 16 if index < 4 else 25 + index - 4,
-		})
-	var day: Array = morning.duplicate(true)
-	var night: Array = morning.duplicate(true)
-	RomCache.write_json(RomCache.world_encounters_path(_directory), {
-		"grass": {"1:1": {
-			"map": "1:1", "rates": [255, 255, 255],
-			"slots": [morning, day, night],
-		}},
-		"water": {}, "fishing": {"groups": [], "time_groups": []},
-	})
 	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
 	scripts["48:6250"] = [Gen2WorldScript.SPECIAL, 91, 0, Gen2WorldScript.END]
 	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
+
+	## The night row's own rares, told about at 20:00 and never at 06:00.
+	_write_grass_rows(25, 31)
 	var data: GameData = GameData.open_directory(_directory)
-	var unseen_runner := Gen2WorldScriptRunner.begin(data, Gen2WorldState.from_dict({}), {
-		"kind": &"phone", "bank": 48, "script": 0x6250,
-		"phone": {"caller_id": 0},
-	})
-	var unseen: Dictionary = unseen_runner.advance()
-	assert_eq(unseen["status"], &"complete", JSON.stringify(unseen))
-	assert_true(_event_value(
-		unseen["events"], &"phone_special_requested", "internal_text"
-	))
-	assert_between(
-		int(_event_value(unseen["events"], &"phone_special_requested", "species")),
-		25, 27
+	assert_between(_unseen_rare_species(data, 20, {}), 31, 33)
+	assert_between(_unseen_rare_species(data, 6, {}), 25, 27)
+
+	## The same call with the night row's rares set to the morning row's own
+	## common species, which is the half the bug leaves standing.
+	_write_grass_rows(25, 16)
+	var common_at_night: GameData = GameData.open_directory(_directory)
+	for _round: int in 12:
+		assert_eq(_unseen_rare_species(common_at_night, 20, {}), 0)
+
+	assert_eq(
+		_unseen_rare_species(data, 6, {"seen_species": {25: true, 26: true, 27: true}}),
+		0, "CheckSeenMon refuses a species the player has met"
 	)
 
-	var seen_runner := Gen2WorldScriptRunner.begin(
-		data, Gen2WorldState.from_dict({"seen_species": {25: true, 26: true, 27: true}}), {
-			"kind": &"phone", "bank": 48, "script": 0x6250,
-			"phone": {"caller_id": 0},
-		}
-	)
-	var seen: Dictionary = seen_runner.advance()
-	assert_eq(seen["status"], &"complete", JSON.stringify(seen))
-	assert_false(_event_value(
-		seen["events"], &"phone_special_requested", "internal_text"
-	))
+
+## One grass record for map 1:1 whose morning row's rare slots start at
+## [param morning_rare] and whose night row's start at [param night_rare]. Slots
+## 1 to 4 are species 16 to 19 in both, which is what a rare one is weighed
+## against.
+func _write_grass_rows(morning_rare: int, night_rare: int) -> void:
+	var rows: Array = []
+	for rare: int in [morning_rare, morning_rare, night_rare]:
+		var row: Array = []
+		for index: int in RomLayout.WILD_GRASS_SLOT_COUNT:
+			row.append({
+				"level": 5, "species": (16 + index) if index < 4 else rare + index - 4,
+			})
+		rows.append(row)
+	RomCache.write_json(RomCache.world_encounters_path(_directory), {
+		"grass": {"1:1": {
+			"map": "1:1", "rates": [255, 255, 255], "slots": rows,
+		}},
+		"water": {}, "fishing": {"groups": [], "time_groups": []},
+	})
+
+
+## `special RandomUnseenWildMon` on the phone at [param hour], as the species it
+## reported, or 0 when it had nothing to tell the player about.
+func _unseen_rare_species(data: GameData, hour: int, state: Dictionary) -> int:
+	var runner := Gen2WorldScriptRunner.begin(data, Gen2WorldState.from_dict(state), {
+		"kind": &"phone", "bank": 48, "script": 0x6250,
+		"phone": {"caller_id": 0},
+		"clock": {"day": 0, "hour": hour, "minute": 0},
+	})
+	var result: Dictionary = runner.advance()
+	assert_eq(result["status"], &"complete", JSON.stringify(result))
+	if not _event_value(result["events"], &"phone_special_requested", "internal_text"):
+		return 0
+	return int(_event_value(result["events"], &"phone_special_requested", "species"))
 
 
 func test_script_text_expands_a_source_string_buffer() -> void:
@@ -4327,6 +4350,43 @@ func test_roaming_mons_move_on_map_setup_and_not_on_elapsed_time() -> void:
 	var moved: Array = world.last_schedule().get("roaming", [])
 	assert_eq(moved.size(), 1)
 	assert_eq(world.roaming_mons()[0]["map_number"], 1)
+
+
+## `data/maps/setup_scripts.asm`: only `_Connection` and the `_Fall`/`_Door`/
+## `_Train` body carry `UpdateRoamMons`, and only `_Teleport` and `_Fly` carry
+## `JumpRoamMons`, so a script `warp`, a blackout and a `reloadmap` move nobody.
+func test_which_map_entry_methods_move_a_roamer() -> void:
+	for row: Array in [
+		[Gen2WorldAPI.MAP_ENTRY_WARP, false],
+		[Gen2WorldAPI.MAP_ENTRY_RELOADMAP, false],
+		[Gen2WorldAPI.MAP_ENTRY_CONTINUE, false],
+		[Gen2WorldAPI.MAP_ENTRY_BADWARP, false],
+		[Gen2WorldAPI.MAP_ENTRY_CONNECTION, true],
+		[Gen2WorldAPI.MAP_ENTRY_DOOR, true],
+		[Gen2WorldAPI.MAP_ENTRY_FALL, true],
+		[Gen2WorldAPI.MAP_ENTRY_TRAIN, true],
+		[Gen2WorldAPI.MAP_ENTRY_FLY, true],
+		[Gen2WorldAPI.MAP_ENTRY_TELEPORT, true],
+	]:
+		## Standing the roamer on the player's own map settles both routines on
+		## the same answer: 1:1's one connection is 1:2, and a jump may not land
+		## on the map the player is on, so either way it ends at 1:2.
+		var world: Gen2WorldAPI = _world(Vector2i(6, 6), Gen2WorldState.from_dict({
+			"roaming_mons": [
+				{"species": 0xF3, "level": 40, "map_group": 1, "map_number": 1},
+			],
+		}))
+		var random := RandomNumberGenerator.new()
+		random.seed = 2
+		var schedule: Dictionary = world.advance_schedule(random, int(row[0]))
+		assert_eq(
+			not (schedule["roaming"] as Array).is_empty(), bool(row[1]),
+			"map entry method %02x" % int(row[0])
+		)
+		assert_eq(
+			int(world.roaming_mons()[0]["map_number"]), 2 if bool(row[1]) else 1,
+			"map entry method %02x" % int(row[0])
+		)
 
 
 func test_map_transition_queues_target_callbacks_for_the_next_script_pump() -> void:

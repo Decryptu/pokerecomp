@@ -809,6 +809,91 @@ func test_a_beaten_roamer_is_not_walked() -> void:
 	assert_eq(int(state.roaming_mons()[0]["map_group"]), Gen2WorldState.ROAM_MAP_N_A)
 
 
+## `.Update`'s retry compares a candidate with `wRoamMons_Last*`, the pair
+## `_BackUpMapIndices` recorded one roaming update ago, and never with the map
+## the roamer already stands on. So a connection to the backed-up map is the one
+## the roamer will not take, however many times it is offered.
+func test_a_roamer_refuses_the_backed_up_map_and_not_its_own() -> void:
+	var rows: Array = [
+		{"map_group": 1, "map_number": 1, "connections": [
+			{"map_group": 1, "map_number": 2}, {"map_group": 1, "map_number": 3},
+		]},
+		{"map_group": 1, "map_number": 2, "connections": []},
+		{"map_group": 1, "map_number": 3, "connections": []},
+	]
+	for seed_value: int in 20:
+		## The player stands on the backed-up map too, so `JumpRoamMon` cannot
+		## put the roamer there either and 1:2 is unreachable by any path.
+		var state: Gen2WorldState = Gen2WorldState.from_dict({
+			"roaming_mons": [
+				{"species": 243, "level": 40, "map_group": 1, "map_number": 1},
+			],
+			"roam_last_map": [1, 2],
+		})
+		var generator := RandomNumberGenerator.new()
+		generator.seed = seed_value
+		state.advance_roaming(rows, generator, Vector2i(1, 2))
+		assert_ne(
+			int(state.roaming_mons()[0]["map_number"]), 2,
+			"seed %d walked onto wRoamMons_Last" % seed_value
+		)
+	## And `_BackUpMapIndices` behind the walk shifts the pair, so the map just
+	## entered is what the next update will refuse.
+	var shifted: Gen2WorldState = Gen2WorldState.from_dict({
+		"roaming_mons": [{"species": 243, "level": 40, "map_group": 1, "map_number": 1}],
+		"roam_cur_map": [1, 3],
+	})
+	var shift_random := RandomNumberGenerator.new()
+	shift_random.seed = 1
+	shifted.advance_roaming(rows, shift_random, Vector2i(1, 1))
+	assert_eq(shifted.to_dict()["roam_last_map"], [1, 3])
+	assert_eq(shifted.to_dict()["roam_cur_map"], [1, 1])
+
+
+## `.Update` looks its row up before it rolls, so a roamer standing where
+## `RoamMaps` names no row stays and spends nothing.
+func test_a_roamer_off_the_roaming_graph_spends_no_draw() -> void:
+	var rows: Array = [
+		{"map_group": 1, "map_number": 1, "connections": [
+			{"map_group": 1, "map_number": 2},
+		]},
+	]
+	var state := Gen2WorldState.new()
+	state.ensure_roaming_mons(
+		[{"species": 243, "level": 40, "map_group": 4, "map_number": 9}]
+	)
+	var generator := RandomNumberGenerator.new()
+	generator.seed = 3
+	var untouched := RandomNumberGenerator.new()
+	untouched.seed = 3
+
+	assert_eq(state.advance_roaming(rows, generator, Vector2i(1, 1)), [])
+	assert_eq(int(state.roaming_mons()[0]["map_number"]), 9)
+	assert_eq(generator.randi(), untouched.randi(), "no roll was taken")
+
+
+## `JumpRoamMon` rerolls only while the index names the map the PLAYER stands
+## on, so a jump may land a roamer back where it already was and never lands it
+## on the player.
+func test_a_roaming_jump_refuses_the_player_map_alone() -> void:
+	var rows: Array = [
+		{"map_group": 1, "map_number": 1, "connections": []},
+		{"map_group": 1, "map_number": 2, "connections": []},
+	]
+	var state := Gen2WorldState.new()
+	state.ensure_roaming_mons(
+		[{"species": 243, "level": 40, "map_group": 1, "map_number": 1}]
+	)
+	var generator := RandomNumberGenerator.new()
+	generator.seed = 5
+	for _round: int in 12:
+		state.jump_roaming(rows, generator, Vector2i(1, 2))
+		assert_eq(
+			int(state.roaming_mons()[0]["map_number"]), 1,
+			"1:2 is the player's map, so 1:1 is the only landing"
+		)
+
+
 ## `wStatusFlags`' flash bit is saved player data, so a cave lit before a save is
 ## still lit when the slot is opened again.
 func test_flash_survives_a_snapshot() -> void:

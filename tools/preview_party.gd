@@ -1,13 +1,13 @@
 extends SceneTree
 
-## Captures the window-resolution save overlays against a real cache: the party,
-## the PC boxes and the start menu's pack.
+## The window-resolution save overlays against a real cache. Opens a window.
 ##
 ##   Godot --path . -s res://tools/preview_party.gd -- <game> <out.png> \
-##       [party|box|pack|select|stats] [presses] [shiny]
+##       [party|give|box|pack|select|stats] [presses] [shiny] [max]
 ##
-## The PC's pic and the stats page draw a shiny lead; the party menu's icons
-## deliberately do not, which is the cartridge's own answer. Opens a window.
+## The PC's pic and the stats page draw a shiny lead and the party menu's icons do
+## not, the cartridge's own answer; `max` puts the lead at level 100, the one
+## level `PrintLevel` drops the `<LV>` glyph for.
 
 const FRAMES_BEFORE_CAPTURE: int = 6
 
@@ -27,6 +27,7 @@ const BUTTONS: Dictionary = {
 var _output_path: String = ""
 var _what: String = "party"
 var _shiny: bool = false
+var _lead_level: int = 0
 var _programs: Array[String] = [""]
 var _at: int = 0
 var _screen: Control = null
@@ -41,7 +42,8 @@ func _initialize() -> void:
 	var args: PackedStringArray = OS.get_cmdline_user_args()
 	if args.size() < 2:
 		push_error(
-			"Usage: preview_party.gd -- <game> <out.png> [party|box|pack|select|stats]"
+			"Usage: preview_party.gd -- <game> <out.png> [party|give|box|pack|select|stats]"
+			+ " [presses] [shiny] [max]"
 		)
 		quit(1)
 		return
@@ -57,6 +59,8 @@ func _initialize() -> void:
 		for program: String in args[3].split(";"):
 			_programs.append(program)
 	_shiny = args.has("shiny")
+	if args.has("max"):
+		_lead_level = RomLayout.MAX_LEVEL
 
 	var directory: String = _find_cache(game)
 	if directory.is_empty():
@@ -102,6 +106,8 @@ func _build(data: GameData) -> Control:
 	## the icons beside it are right to stay as they are.
 	if _shiny and not save.party.is_empty():
 		save.party[0].dvs = Gen2Stats.SHINY_DVS
+	if _lead_level > 0 and not save.party.is_empty():
+		save.party[0].level = _lead_level
 	if _what == "box":
 		var boxes := Gen2BoxScreen.new()
 		boxes.set_context(data, save, false, true)
@@ -119,6 +125,11 @@ func _build(data: GameData) -> Control:
 			return null
 	var party := Gen2PartyScreen.new()
 	party.set_context(data, save, true)
+	## `SelectTradeOrDayCareMon`, the only list drawn under GIVE_MON.
+	if _what == "give":
+		party.open_selection(
+			Gen2PartyScreen.PROMPT_CHOOSE, Gen2PartyScreen.ACTION_GIVE_MON
+		)
 	return party
 
 

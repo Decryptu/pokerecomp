@@ -41,6 +41,8 @@ const ENGINE_BIKE_SHOP_CALL_GOLD_SILVER: int = 19
 ## `GROUP_N_A`/`MAP_N_A`, which `BattleEnd_HandleRoamMons` writes over a
 ## roamer's map bytes once it has been caught or defeated.
 const ROAM_MAP_N_A: int = -1
+## Both source reroll loops are unbounded; the cap stops a mod's dead-end graph.
+const ROAM_ROLL_ATTEMPTS: int = 128
 ## `StoreSwarmMapIndices`' own two arguments, `constants/script_constants.asm`.
 const SWARM_DUNSPARCE: int = 0
 const SWARM_YANMA: int = 1
@@ -234,6 +236,9 @@ var _contest_second_party_species: int = 0
 var _swarm_maps: Array[Vector2i] = [Vector2i(-1, -1), Vector2i(-1, -1)]
 var _fishing_swarm_species: int = 0
 var _roaming_mons: Array = []
+## `wRoamMons_Cur*` and `wRoamMons_Last*`, `_BackUpMapIndices`' two pairs.
+var _roam_cur_map := Vector2i(ROAM_MAP_N_A, ROAM_MAP_N_A)
+var _roam_last_map := Vector2i(ROAM_MAP_N_A, ROAM_MAP_N_A)
 var _seen_species: Dictionary = {}
 ## wPokedexCaught, the second half of `SetSeenAndCaughtMon`. Kept beside the
 ## seen array rather than derived from the party, because the cartridge's own
@@ -498,6 +503,8 @@ func to_dict() -> Dictionary:
 		"yanma_swarm_map": [_swarm_maps[SWARM_YANMA].x, _swarm_maps[SWARM_YANMA].y],
 		"fishing_swarm_species": _fishing_swarm_species,
 		"roaming_mons": _copy_roaming_mons(_roaming_mons),
+		"roam_cur_map": [_roam_cur_map.x, _roam_cur_map.y],
+		"roam_last_map": [_roam_last_map.x, _roam_last_map.y],
 		"seen_species": _seen_species.duplicate(),
 		"caught_species": _caught_species.duplicate(),
 		"unown_dex": _unown_dex.duplicate(),
@@ -568,6 +575,12 @@ static func from_dict(raw: Variant) -> Gen2WorldState:
 	_seed_flags(restored._npc_trades, _map(source, "npc_trades"), 0)
 	restored._swarm_maps[SWARM_YANMA] = _vector_from_value(
 		source.get("yanma_swarm_map", [-1, -1])
+	)
+	restored._roam_cur_map = _vector_from_value(
+		source.get("roam_cur_map", [ROAM_MAP_N_A, ROAM_MAP_N_A])
+	)
+	restored._roam_last_map = _vector_from_value(
+		source.get("roam_last_map", [ROAM_MAP_N_A, ROAM_MAP_N_A])
 	)
 	restored._used_flash = bool(source.get("used_flash", false))
 	restored._bike_step = clampi(int(source.get("bike_step", 0)), 0, MAX_BIKE_STEP)
@@ -696,6 +709,8 @@ func restore_from_dict(raw: Variant) -> void:
 	_swarm_maps = restored._swarm_maps.duplicate()
 	_fishing_swarm_species = restored._fishing_swarm_species
 	_roaming_mons = _copy_roaming_mons(restored._roaming_mons)
+	_roam_cur_map = restored._roam_cur_map
+	_roam_last_map = restored._roam_last_map
 	_seen_species = restored._seen_species.duplicate()
 	_caught_species = restored._caught_species.duplicate()
 	_unown_dex = restored._unown_dex.duplicate()
@@ -995,14 +1010,11 @@ func badge_mask(crystal: bool = true) -> int:
 	return mask
 
 
-## Clears only source daily engine flags. Story flags such as Hall of Fame
-## survive the day boundary.
-##
-## `CheckDailyResetTimer` (`engine/overworld/time.asm`) zeroes the whole
-## `wDailyFlags1` byte, so every flag in it goes together. Listed by Crystal
-## index because only the ones this project writes are modelled; add a flag
-## here as soon as something sets it, or it survives the day the cartridge
-## clears it on.
+## Clears only source daily engine flags; story flags such as Hall of Fame
+## survive the day boundary. `CheckDailyResetTimer` (`engine/overworld/time.asm`)
+## zeroes the whole `wDailyFlags1` byte, so every flag in it goes together.
+## Listed by Crystal index because only the ones this project writes are
+## modelled; add one as soon as something sets it, or it survives the day.
 const DAILY_ENGINE_FLAGS: Array[int] = [
 	ENGINE_KURT_MAKING_BALLS, ENGINE_ALL_FRUIT_TREES,
 	ENGINE_GOLDENROD_UNDERGROUND_MERCHANT_CLOSED,
@@ -1193,12 +1205,10 @@ func set_blue_card_balance(points: int) -> void:
 
 ## True unless [param data] is a verified Gold or Silver cache, matching
 ## `Gen2WorldScriptRunner._crystal_commands()`. Both engine flag tables and
-## `_GetVarAction.CountBadges` agree on everything except this table's offset, so
-## every profile-dependent flag lookup here keys off the same question the script
-## command-width split already answers. A null cache answers Crystal, which is what
-## every caller with no cache in hand has always meant; a caller holding only an id
-## asks [method is_crystal_game_id] instead, which knows the difference between
-## "not told" and "told Gold".
+## `_GetVarAction.CountBadges` agree except on this table's offset, so every
+## profile-dependent flag lookup keys off the question the script command-width
+## split already answers. A null cache answers Crystal; a caller holding only an
+## id asks [method is_crystal_game_id], which knows "not told" from "told Gold".
 static func is_crystal_profile(data: GameData) -> bool:
 	return data == null or is_crystal_game_id(data.id)
 
@@ -1658,13 +1668,10 @@ func npc_trade_done(trade_id: int) -> bool:
 
 
 ## `CountStep`: the two step counters, the Repel countdown, and `StepHappiness`
-## on the pass `wStepCount` wraps. One call per step the player finishes, from
-## wherever the step was taken.
-##
-## `DoRepelStep` stands in front of the counters, and the step a Repel runs out
-## on reaches `.doscript` with carry: nothing below that test is charged, so
-## that step counts for neither poison, happiness, an egg nor the Day-Care.
-## Answers whether the step was counted.
+## on the pass `wStepCount` wraps, once per step the player finishes wherever it
+## was taken. `DoRepelStep` stands in front of the counters and the step a Repel
+## runs out on reaches `.doscript` with carry, so that step counts for neither
+## poison, happiness, an egg nor the Day-Care. Answers whether it was counted.
 func count_step() -> bool:
 	if _repel_steps > 0:
 		_repel_steps -= 1
@@ -1947,12 +1954,10 @@ func set_species_caught(species: int, caught: bool = true) -> void:
 
 
 ## `UpdateUnownDex`: appends the form unless it is already listed. The walk stops
-## at the first empty slot, so a form only ever reaches the end of the list, and
-## a full twenty-six returns without writing anything.
-##
-## Its caller is what limits this, not the routine: `GeneratePartyMonStats` runs
-## it only for a PARTYMON, so an Unown that goes straight to the PC is caught
-## without entering the dex.
+## at the first empty slot, so a form only reaches the end of the list and a full
+## twenty-six writes nothing. Its caller is the limit rather than the routine:
+## `GeneratePartyMonStats` runs it only for a PARTYMON, so an Unown sent straight
+## to the PC is caught without entering the dex.
 func update_unown_dex(form: int) -> void:
 	if form < 1 or form > RomLayout.UNOWN_FORMS:
 		return
@@ -2008,11 +2013,27 @@ func set_species_seen(species: int, seen: bool = true) -> void:
 		_seen_species.erase(species)
 
 
-## Advances each active roaming Pokémon using the source's connected-map
-## selection. A zero in the source's five-bit mask performs a random jump to a
-## roaming map; otherwise the low two bits select one of the current row's
-## connections and retry when that index is absent.
-func advance_roaming(map_rows: Array, random: RandomNumberGenerator = null) -> Array:
+## `UpdateRoamMons`: each active roamer walks one step of the connection graph.
+## [param player_map] is `wMapGroup`/`wMapNumber`, the map being entered.
+func advance_roaming(
+	map_rows: Array, random: RandomNumberGenerator = null,
+	player_map: Vector2i = Vector2i(ROAM_MAP_N_A, ROAM_MAP_N_A)
+) -> Array:
+	return _walk_roaming(map_rows, random, player_map, false)
+
+
+## `JumpRoamMons`, run by Fly, Teleport and a Continue: every active roamer
+## takes `JumpRoamMon` straight and none follows a connection.
+func jump_roaming(
+	map_rows: Array, random: RandomNumberGenerator = null,
+	player_map: Vector2i = Vector2i(ROAM_MAP_N_A, ROAM_MAP_N_A)
+) -> Array:
+	return _walk_roaming(map_rows, random, player_map, true)
+
+
+func _walk_roaming(
+	map_rows: Array, random: RandomNumberGenerator, player_map: Vector2i, jump: bool
+) -> Array:
 	if _roaming_mons.is_empty() or map_rows.is_empty():
 		return []
 	## A schedule tick is stateful even when no mon moves: every failed attempt
@@ -2020,21 +2041,19 @@ func advance_roaming(map_rows: Array, random: RandomNumberGenerator = null) -> A
 	## than introducing an unrepeatable random source inside persistent state.
 	if random == null:
 		return []
-	var generator: RandomNumberGenerator = random
 	var moved: Array = []
 	var changed_state: bool = false
 	for index: int in _roaming_mons.size():
 		var mon: Dictionary = _roaming_mons[index]
 		var current := Vector2i(int(mon.get("map_group", -1)), int(mon.get("map_number", -1)))
-		## `UpdateRoamMons`' own `cp GROUP_N_A / jr z`: a roamer that has been
-		## caught or defeated is skipped rather than walked, and skipping it
-		## spends none of `.Update`'s draws either.
+		## `cp GROUP_N_A / jr z`: a roamer caught or defeated is skipped, and
+		## skipping it spends none of the draws it would have made.
 		if current.x == ROAM_MAP_N_A:
 			continue
-		var target: Vector2i = _roaming_target(map_rows, current, generator)
-		if target == Vector2i(-1, -1):
-			continue
-		if target == current:
+		var step: Dictionary = _roam_jump(map_rows, player_map, random) if jump \
+			else _roaming_target(map_rows, current, player_map, random)
+		var target: Vector2i = step.get("to", Vector2i(ROAM_MAP_N_A, ROAM_MAP_N_A))
+		if target == Vector2i(ROAM_MAP_N_A, ROAM_MAP_N_A) or target == current:
 			continue
 		mon["map_group"] = target.x
 		mon["map_number"] = target.y
@@ -2044,10 +2063,21 @@ func advance_roaming(map_rows: Array, random: RandomNumberGenerator = null) -> A
 			"species": int(mon.get("species", 0)),
 			"from": current,
 			"to": target,
+			## `.Update` jumps on a zero in its five-bit mask, so a connection
+			## walk still scatters about one pass in thirty-two.
+			"jumped": bool(step.get("jumped", false)),
 		})
+	_back_up_map_indices(player_map)
 	if changed_state:
 		changed.emit()
 	return moved
+
+
+## `_BackUpMapIndices`, which both roaming routines end on. `.Update` refuses to
+## walk onto the Last pair, which is the player's map one roaming update ago.
+func _back_up_map_indices(player_map: Vector2i) -> void:
+	_roam_last_map = _roam_cur_map
+	_roam_cur_map = player_map
 
 
 static func map_scene_key(map_group: int, map_number: int) -> String:
@@ -2080,12 +2110,11 @@ func _copy_roaming_mons(source: Array) -> Array:
 
 
 ## `BattleEnd_HandleRoamMons`, which every roaming battle ends through. A win,
-## which is the source's word for caught or defeated alike, empties the struct: the
-## HP becomes 0, the two map bytes `GROUP_N_A`/`MAP_N_A` and the species byte 0, so
-## `CheckEncounterRoamMon` can never select that slot again. Any other ending stores
-## the HP the fight left the roamer on. [param dvs] is the word `.Roaming` rolled
-## on the first encounter and read back on every later one, stored beside the HP so
-## a roamer keeps the Pokemon it was, shininess included.
+## the source's word for caught or defeated alike, empties the struct: HP 0, the
+## map bytes `GROUP_N_A`/`MAP_N_A` and the species byte 0, so
+## `CheckEncounterRoamMon` can never select that slot again. Any other ending
+## stores the HP the fight left. [param dvs] is the word `.Roaming` rolled on the
+## first encounter and read back after, so a roamer keeps the Pokemon it was.
 func note_roam_battle_end(species: int, won: bool, hp: int, dvs: int) -> bool:
 	for index: int in _roaming_mons.size():
 		var mon: Dictionary = _roaming_mons[index]
@@ -2107,39 +2136,71 @@ func note_roam_battle_end(species: int, won: bool, hp: int, dvs: int) -> bool:
 	return false
 
 
+## `.Update`: the row for [param current] is found before any roll, so a roamer
+## on a map `RoamMaps` does not name spends nothing and stays. A zero in the
+## five-bit mask hands it to `JumpRoamMon`; otherwise the low two bits index the
+## row's connections, and a target is refused for being `wRoamMons_Last*` rather
+## than for being where the roamer stands.
 func _roaming_target(
-	map_rows: Array, current: Vector2i, random: RandomNumberGenerator
-) -> Vector2i:
-	for _attempt: int in 128:
+	map_rows: Array, current: Vector2i, player_map: Vector2i, random: RandomNumberGenerator
+) -> Dictionary:
+	var connections: Array = _roam_connections(map_rows, current)
+	if connections.is_empty():
+		return {}
+	for _attempt: int in ROAM_ROLL_ATTEMPTS:
 		var roll: int = random.randi_range(0, 255)
 		if (roll & 0x1F) == 0:
-			for _jump_attempt: int in 128:
-				var random_row: Dictionary = map_rows[random.randi_range(0, map_rows.size() - 1)]
-				var jump := Vector2i(
-					int(random_row.get("map_group", -1)), int(random_row.get("map_number", -1))
-				)
-				if jump != current:
-					return jump
-			continue
-		var row: Dictionary = {}
-		for raw: Variant in map_rows:
-			if not raw is Dictionary:
-				continue
-			if int(raw.get("map_group", -1)) == current.x \
-				and int(raw.get("map_number", -1)) == current.y:
-				row = raw
-				break
-		var connections: Variant = row.get("connections", [])
+			return _roam_jump(map_rows, player_map, random)
 		var connection_index: int = roll & 0x03
-		if not connections is Array or connection_index >= (connections as Array).size():
+		if connection_index >= connections.size():
 			continue
-		var target: Dictionary = (connections as Array)[connection_index]
+		var target: Variant = connections[connection_index]
+		if not target is Dictionary:
+			continue
 		var next := Vector2i(
-			int(target.get("map_group", -1)), int(target.get("map_number", -1))
+			int((target as Dictionary).get("map_group", ROAM_MAP_N_A)),
+			int((target as Dictionary).get("map_number", ROAM_MAP_N_A))
 		)
-		if next != current:
-			return next
-	return Vector2i(-1, -1)
+		if next != _roam_last_map:
+			return {"to": next, "jumped": false}
+	return {}
+
+
+## `JumpRoamMon`: a uniform index into `RoamMaps`, rerolled while it names the
+## map the PLAYER stands on. The roamer's own is not refused.
+func _roam_jump(
+	map_rows: Array, player_map: Vector2i, random: RandomNumberGenerator
+) -> Dictionary:
+	var mask: int = 1
+	while mask < map_rows.size():
+		mask <<= 1
+	mask -= 1
+	for _attempt: int in ROAM_ROLL_ATTEMPTS:
+		var index: int = random.randi_range(0, 255) & mask
+		if index >= map_rows.size():
+			continue
+		var row: Variant = map_rows[index]
+		if not row is Dictionary:
+			continue
+		var jump := Vector2i(
+			int((row as Dictionary).get("map_group", ROAM_MAP_N_A)),
+			int((row as Dictionary).get("map_number", ROAM_MAP_N_A))
+		)
+		if jump != player_map:
+			return {"to": jump, "jumped": true}
+	return {}
+
+
+func _roam_connections(map_rows: Array, current: Vector2i) -> Array:
+	for raw: Variant in map_rows:
+		if not raw is Dictionary:
+			continue
+		if int((raw as Dictionary).get("map_group", ROAM_MAP_N_A)) != current.x \
+			or int((raw as Dictionary).get("map_number", ROAM_MAP_N_A)) != current.y:
+			continue
+		var connections: Variant = (raw as Dictionary).get("connections", [])
+		return connections as Array if connections is Array else []
+	return []
 
 
 ## Whether [param order] names every key of [param source] exactly once, which

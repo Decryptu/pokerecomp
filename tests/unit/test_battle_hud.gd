@@ -100,6 +100,31 @@ func test_a_tile_outside_the_page_draws_nothing() -> void:
 	assert_eq(_drawn(page, Gen2BattleTiles.LAST_TILE + 1), 0)
 
 
+## `PrintLevel`: "3-digit numbers overwrite the :L", on a `cp 100` the source
+## calls distinct from MAX_LEVEL. `PlacePartyMonLevel` carries the same test, and
+## both reach here. The symbol is a battle-font tile and a digit a font tile, so
+## the index a cell is drawn in says which of the two stands in it.
+func test_a_three_digit_level_overwrites_the_level_symbol() -> void:
+	_write_cache()
+	var hud: Gen2BattleHud = Gen2BattleHud.from_data(_data())
+	assert_not_null(hud)
+	assert_eq(_level_cells(hud, 99), [2, 3, 3, 0] as Array[int])
+	assert_eq(_level_cells(hud, 100), [3, 3, 3, 0] as Array[int])
+
+
+## The first index of each of the four cells a level could reach, drawn into a
+## buffer that wide so nothing else can put ink in them.
+func _level_cells(hud: Gen2BattleHud, level: int) -> Array[int]:
+	var width: int = 4 * Gen2Tiles.TILE_WIDTH
+	var into: PackedByteArray = PackedByteArray()
+	into.resize(width * Gen2Tiles.TILE_HEIGHT)
+	hud.draw_level(into, width, Vector2i.ZERO, level)
+	var out: Array[int] = []
+	for column: int in 4:
+		out.append(int(into[column * Gen2Tiles.TILE_WIDTH]))
+	return out
+
+
 func test_a_full_bar_is_full_and_an_empty_one_is_empty() -> void:
 	assert_eq(Gen2BattleHud.bar_pixels(20, 20, 48), 48)
 	assert_eq(Gen2BattleHud.bar_pixels(0, 20, 48), 0)

@@ -138,10 +138,14 @@ func _draw_mon(page: Dictionary, indices: PackedByteArray) -> void:
 	_code(indices, width, CODE_SLASH, NICKNAME_SLASH)
 	_text(indices, width, String(page.get("nickname", "")), NICKNAME_SLASH + Vector2i(1, 0))
 
-	_code(indices, width, CODE_LEVEL, LEVEL)
 	## PRINTNUM_LEFTALIGN, so the digits start against the symbol rather than
 	## being padded out to the field's width.
-	_text(indices, width, str(int(page.get("level", 0))), LEVEL + Vector2i(1, 0))
+	var level: int = int(page.get("level", 0))
+	var level_at: Vector2i = LEVEL
+	if Gen2Font.level_glyph_shown(level):
+		_code(indices, width, CODE_LEVEL, LEVEL)
+		level_at += Vector2i(1, 0)
+	_text(indices, width, str(level), level_at)
 
 	_code(indices, width, CODE_ID, OT_LABEL)
 	_code(indices, width, CODE_NUMERO, OT_LABEL + Vector2i(1, 0))
