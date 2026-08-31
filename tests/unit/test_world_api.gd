@@ -4219,6 +4219,71 @@ func test_object_visibility_override_survives_a_map_change() -> void:
 	assert_false(world.objects[0].active)
 
 
+## Object zero is the player, and `GetScriptObject` hands it to every object
+## command exactly as it hands over an NPC. Each row here is a real operand in
+## the corpus, counted by `tools/checks/world_scripts.gd`, and each was a silent
+## no-op while the runner answered "no object" for PLAYER: the cells were right,
+## so nothing that measured cells could see it. Raw Crystal opcodes, and PLAYER
+## is operand 0.
+func test_turnobject_on_the_player_turns_the_player() -> void:
+	var world: Gen2WorldAPI = _object_script_world([
+		0x76, 0, Gen2WorldSprite.FACING_RIGHT, Gen2WorldScript.END,
+	])
+	assert_eq(world.player_facing, Gen2WorldSprite.FACING_DOWN)
+	assert_eq(world.dispatch_script_events()[0]["status"], &"complete")
+	assert_eq(world.player_facing, Gen2WorldSprite.FACING_RIGHT)
+
+
+## `showemote EMOTE_SHOCK, PLAYER, 15` is the "!" over the player's own head, and
+## it is 49 of the corpus's `showemote` sites.
+func test_showemote_on_the_player_puts_the_bubble_over_the_player() -> void:
+	var world: Gen2WorldAPI = _object_script_world([0x75, 1, 0, 2, Gen2WorldScript.END])
+	assert_eq(world.dispatch_script_events()[0]["status"], &"waiting")
+	assert_eq(world.player_emote(), 1)
+	assert_false((world.objects[0] as Gen2WorldObject).emote_visible,
+		"the bubble belongs to the player, not to whatever sits at index zero")
+
+	for _frame: int in 3:
+		assert_true(world.advance_script_wait_frame().is_empty())
+	assert_eq(world.player_emote(), 1, "still up while the pause runs")
+	assert_eq(_final_status(world.advance_script_wait_frame()), &"complete")
+	assert_eq(world.player_emote(), Gen2WorldActors.EMOTE_NONE)
+
+
+## `faceobject PLAYER, LAST_TALKED` opens `SeenByTrainerScript`, so this is every
+## trainer who spots the player as well as the two receptionists who name an
+## object outright.
+func test_faceobject_on_the_player_turns_the_player_toward_the_object() -> void:
+	var world: Gen2WorldAPI = _object_script_world([0x6C, 0, 2, Gen2WorldScript.END])
+	assert_eq(world.player_cell, Vector2i(7, 6))
+	assert_eq((world.objects[0] as Gen2WorldObject).cell, Vector2i(5, 6))
+	assert_eq(world.dispatch_script_events()[0]["status"], &"complete")
+	assert_eq(world.player_facing, Gen2WorldSprite.FACING_LEFT)
+
+
+## `disappear PLAYER` is `DeleteObjectStruct` on object zero, which takes the
+## player out of OAM. Lance's room is the corpus's one site, and the player is
+## gone from it while Mary runs about.
+func test_disappear_on_the_player_takes_the_player_out_of_the_drawing() -> void:
+	var world: Gen2WorldAPI = _object_script_world([0x6E, 0, Gen2WorldScript.END])
+	assert_true(world.player_visible())
+	assert_eq(world.dispatch_script_events()[0]["status"], &"complete")
+	assert_false(world.player_visible())
+	assert_true((world.objects[0] as Gen2WorldObject).active,
+		"and no map object is deleted in its place")
+
+
+## A map load rebuilds every object struct, object zero included, so neither of
+## the two above outlives the map it ran on.
+func test_the_player_record_is_rebuilt_by_a_map_load() -> void:
+	var world: Gen2WorldAPI = _object_script_world([0x6E, 0, Gen2WorldScript.END])
+	assert_eq(world.dispatch_script_events()[0]["status"], &"complete")
+	assert_false(world.player_visible())
+	world.player_cell = Vector2i(6, 6)
+	assert_true(world.try_warp()["ok"])
+	assert_true(world.player_visible())
+
+
 ## Opens map 1/1 standing on the coordinate event at (7, 6) with
 ## [param script_bytes] behind it, so a test can drive one object command.
 func _object_script_world(script_bytes: Array) -> Gen2WorldAPI:

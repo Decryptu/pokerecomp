@@ -307,10 +307,6 @@ func flood_palette() -> PackedColorArray:
 	)
 
 
-func _tile_palettes() -> Array:
-	return _tile_palettes_for(_world.current_map, _world.current_tileset)
-
-
 ## The palettes the current map's tile strip was coloured with, which
 ## [method _atlas_for] already resolved and kept.
 func _current_palettes() -> Array:
@@ -849,12 +845,17 @@ func _draw_player(background: Vector2) -> Vector2:
 		_world.player_sprite(), _world.player_palette(), _world.player_drawn_facing(),
 		_world.player_walk_frame()
 	)
+	if not _world.player_visible():
+		## `disappear PLAYER` takes object zero out of OAM.
+		return player
 	if player_texture != null:
 		draw_texture(player_texture, player + jump)
 		if _in_grass(_world.player_cell):
 			_draw_grass_over(player + jump, background)
 		if _world.fishing_busy():
 			_draw_fishing_rod(player + jump)
+		if _world.player_emote() != Gen2WorldActors.EMOTE_NONE:
+			_draw_emote(_world.player_emote(), player + jump)
 	else:
 		var marker := Rect2(Vector2(player.x, player.y), Vector2(16, 16))
 		draw_rect(marker, PLAYER_COLOR, false, 1.0)

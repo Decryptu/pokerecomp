@@ -404,7 +404,7 @@ func _on_name_choice(chosen: String) -> void:
 
 func _open_naming() -> void:
 	_naming = Gen2NamingScreenScreen.new()
-	if not _naming.open(_data, Gen2OakSpeech.NAME_PROMPT):
+	if not _naming.open(_data, Gen2NamingScreenScreen.PROMPT_PLAYER):
 		_naming.free()
 		_naming = null
 		_enter_next_beat()

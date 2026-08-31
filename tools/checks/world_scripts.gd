@@ -7,6 +7,20 @@ extends RefCounted
 ## parse failures and the unwired `0415` marker below come from too.
 const NOT_A_TEXT: Array[String] = ["96:4081"]
 
+## constants/map_object_constants.asm's PLAYER.
+const PLAYER_OBJECT_ID: int = 0
+
+## The commands the corpus points at PLAYER. Each writes the player's own struct
+## on hardware and is a silent no-op if the runtime drops object zero, and the
+## cells come out the same either way, so nothing that measures cells sees one.
+## All but two are proved in `tests/unit/test_world_api.gd`; `follow` is the
+## Cherrygrove guide in `scripted_scenes.gd`, and `follownotexact`, unused by
+## either pin, shares `follow`'s match arm. One unlisted here is unproved.
+const PLAYER_OPERAND_COMMANDS: Array[String] = [
+	"applymovement", "faceobject", "follow", "follownotexact",
+	"turnobject", "showemote", "disappear",
+]
+
 var _r: RefCounted = null
 
 ## Reports how far the cached overworld script and text resources can be read.
@@ -49,6 +63,7 @@ func _validate(game_id: StringName) -> bool:
 	var failure_reasons: Dictionary = {}
 	var failure_opcodes: Dictionary = {}
 	var command_names: Dictionary = {}
+	var player_operands: Dictionary = {}
 	for raw_key: Variant in (scripts_value as Dictionary):
 		# Read through GameData rather than off the JSON: the cache stores byte
 		# runs as spans into a blob, and this checks the path the runtime uses.
@@ -72,12 +87,18 @@ func _validate(game_id: StringName) -> bool:
 				break
 			var name: String = String(command.get("name", ""))
 			command_names[name] = int(command_names.get(name, 0)) + 1
+			_tally_object_operands(command, name, player_operands)
 			command_count += 1
 			steps += 1
 			offset += int(command["width"])
 			if not Gen2WorldScript.continues_after(int(command["opcode"]), crystal_commands):
 				walk_end_count += 1
 				break
+
+	var unproved: Dictionary = {}
+	for name: String in player_operands:
+		if not PLAYER_OPERAND_COMMANDS.has(name):
+			unproved[name] = player_operands[name]
 
 	var invalid_text: int = 0
 	var invalid_text_reasons: Dictionary = {}
@@ -116,10 +137,24 @@ func _validate(game_id: StringName) -> bool:
 	print("  invalid_text_reasons=%s" % invalid_text_reasons)
 	print("  invalid_text_samples=%s" % JSON.stringify(invalid_text_samples))
 	print("  commands=%s" % command_names)
+	print("  player_operands=%s" % player_operands)
+	if not unproved.is_empty():
+		print("FAIL %s: %s name PLAYER and nothing proves the runtime reaches them" % [
+			game_id, unproved,
+		])
 	_print_ram_markers(data, ram_addresses, number_markers)
 	print("  raw_byte_markers=%s" % raw_bytes)
 	_print_standard_table(game_id)
-	return raw_bytes.is_empty()
+	return raw_bytes.is_empty() and unproved.is_empty()
+
+
+## Both operand keys are read, so `follow <NPC>, PLAYER` counts once.
+func _tally_object_operands(command: Dictionary, name: String, tally: Dictionary) -> void:
+	for key: String in ["object_id", "object_id_2"]:
+		if int(command.get(key, -1)) != PLAYER_OBJECT_ID:
+			continue
+		tally[name] = int(tally.get(name, 0)) + 1
+		return
 
 
 ## Resolves one "bank:address" cache key through the runtime accessor.

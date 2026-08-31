@@ -226,25 +226,28 @@ func test_badge_stat_boosts_are_active_battle_values_and_clear_cleanly() -> void
 
 ## Attract's "opposite gender" rule reads [method Gen2BattleMon.gender], which
 ## `GetGender` works out from the species ratio and the Attack and Speed DVs
-## combined into one byte, not a coin flip. Bulbasaur is 12.5% female (ratio 31);
-## Pikachu is an even 50/50 (ratio 127), which is why it checks the boundary,
-## since a combined value equal to the ratio reads female.
-func test_gender_reads_the_combined_dv_byte_against_the_species_ratio() -> void:
-	var mostly_male := func(attack: int, speed: int) -> Gen2BattleMon:
-		var dvs: int = Gen2Stats.pack_dvs(attack, 0, speed, 0)
-		return Gen2BattleMon.create(_data, Fixture.BULBASAUR, 50, [], dvs)
+## combined into one byte, not a coin flip. Counted over the whole 256-value
+## domain rather than sampled at the boundary: a sampled pair can be read
+## backwards, but the female share cannot, because each GENDER_F* constant is
+## named for the share it produces. Bulbasaur's ratio 31 is 32 of 256 and
+## Pikachu's 127 is 128 of 256, which is the 12.5% and the 50% they are named
+## for. A combined value equal to the ratio is female, so the count is ratio + 1.
+func test_the_female_share_of_the_dv_domain_is_the_ratio_the_species_is_named_for() -> void:
+	for species: int in [Fixture.BULBASAUR, Fixture.PIKACHU]:
+		var ratio: int = int(_data.species(species).get("gender_ratio", 255))
+		var female: int = 0
+		for attack: int in 16:
+			for speed: int in 16:
+				var dvs: int = Gen2Stats.pack_dvs(attack, 0, speed, 0)
+				if Gen2BattleMon.gender_for(_data, species, dvs) == &"female":
+					female += 1
+		assert_eq(female, ratio + 1, "species %d, ratio %d" % [species, ratio])
 
-	assert_eq(mostly_male.call(0, 0).gender(), &"male")
-	assert_eq(mostly_male.call(15, 15).gender(), &"female")
-
-	var even_odds := func(attack: int, speed: int) -> Gen2BattleMon:
-		var dvs: int = Gen2Stats.pack_dvs(attack, 0, speed, 0)
-		return Gen2BattleMon.create(_data, Fixture.PIKACHU, 50, [], dvs)
-
-	# 126 is one under Pikachu's own ratio of 127; 127 is the ratio itself, and
-	# the cartridge reads a value equal to the ratio as female, not male.
-	assert_eq(even_odds.call(7, 14).gender(), &"male")
-	assert_eq(even_odds.call(7, 15).gender(), &"female")
+	# The two ends of the domain, so the count above cannot pass on an inverted
+	# comparison that happens to answer the same total.
+	var perfect: int = Gen2Stats.pack_dvs(15, 0, 15, 0)
+	assert_eq(Gen2BattleMon.gender_for(_data, Fixture.BULBASAUR, perfect), &"male")
+	assert_eq(Gen2BattleMon.gender_for(_data, Fixture.BULBASAUR, 0), &"female")
 
 
 func test_gender_is_none_for_a_genderless_species() -> void:

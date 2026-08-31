@@ -30,6 +30,30 @@ func after_each() -> void:
 	RomCache.clear(Fixture.directory())
 
 
+## Every runtime request the runner can stage has to reach something that draws
+## it, and the four tables below are the whole set of answers there are. Without
+## this, `special NameRival` staged a request nothing opened, so the policeman
+## asked the question and [Gen2WorldHost]'s default answered SILVER for the
+## player. A kind that genuinely has nothing to draw belongs in
+## [constant Gen2WorldHost.UNATTENDED_REQUESTS] with the reason beside it.
+func test_every_runtime_request_kind_reaches_a_screen_or_is_named_unattended() -> void:
+	var answered: Dictionary = {}
+	for kind: StringName in Gen2WorldScreen.REQUEST_HANDLERS:
+		answered[kind] = true
+	for kind: StringName in Gen2WorldScreen.REQUEST_OPENERS:
+		answered[kind] = true
+	for kind: StringName in Gen2WorldScreen.SERVICE_HOST_REQUESTS:
+		answered[kind] = true
+	for kind: StringName in Gen2WorldHost.UNATTENDED_REQUESTS:
+		answered[kind] = true
+	var unanswered: Array[StringName] = []
+	for kind: StringName in Gen2WorldScriptRunner.COMPLETION_HANDLERS:
+		if not answered.has(kind):
+			unanswered.append(kind)
+	assert_eq(unanswered, [] as Array[StringName],
+		"these staged requests reach no screen and are not named unattended")
+
+
 func test_mart_entries_use_imported_items_and_prices() -> void:
 	var mart: Dictionary = _data.world_mart(0)
 	var entries: Array = Gen2WorldMartHost.entries(_data, mart)

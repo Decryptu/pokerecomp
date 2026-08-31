@@ -187,6 +187,7 @@ var _nickname_answer: String = ""
 var _nickname_preview: bool = false
 ## `special NameRater`'s screen and the save whose party row it may rename.
 var _name_rater_host: Gen2NameRaterScreen = null
+var _rival_name_host: Gen2NamingScreenScreen = null
 var _name_rater_save: Gen2SaveData = null
 ## `special MoveDeletion`'s screen. It needs no save of its own beside it: the
 ## moves and their PP belong to the save it was handed and it writes them itself.
@@ -1217,6 +1218,7 @@ const FULLSCREEN_HOSTS: Array[StringName] = [
 	&"_hatch_host",
 	&"_nickname_host",
 	&"_name_rater_host",
+	&"_rival_name_host",
 	&"_move_deleter_host",
 	&"_move_tutor_host",
 	&"_day_care_host",
@@ -1331,41 +1333,27 @@ func press_button(button: int) -> bool:
 ## refusing the ones it has no use for, which is what keeps a stray press from
 ## reaching the map behind it.
 ## The overlays that own the whole screen, in the order a press is offered them.
+## Each runs with the map loop suspended behind it, by `givepoke`, `opentext` or
+## a `special` of its own, and owns every button until its own exit.
 const OVERLAY_HOSTS: Array[StringName] = [
-	## In front of every other overlay: `EvolveAfterBattle` runs with the map
-	## loop suspended, and the pack path reaches it with the pack still open
-	## behind it, so its B is the animation's cancel rather than the pack's back.
+	## In front of every other overlay: the pack path reaches `EvolveAfterBattle`
+	## with the pack still open behind it, so its B is the animation's cancel
+	## rather than the pack's back.
 	&"_evolution_host",
 	## `TradeAnimation` stands over whatever ran the trade, the trade room's own
 	## screen included, and answers no button.
 	&"_trade_anim_host",
-	## The same rule for `OverworldHatchEgg`, which `PlayerEvents` runs with the
-	## map loop suspended in exactly the same place.
 	&"_hatch_host",
-	## `GivePoke` runs inside `givepoke`, with the map loop suspended behind the
-	## script the same way, and its own naming screen is reached through it.
 	&"_nickname_host",
-	## `special NameRater` runs inside `opentext`, so the map loop is suspended
-	## behind it the same way and its own two screens are reached through it.
 	&"_name_rater_host",
-	## `special MoveTutor` and `special MoveDeletion`, the same shape again.
+	&"_rival_name_host",
 	&"_move_tutor_host",
 	&"_move_deleter_host",
-	## The Day-Care's five, one screen with the same shape again.
 	&"_day_care_host",
-	## `special UnownPrinter`, which owns the whole screen until B off its list.
 	&"_unown_printer_host",
-	## `special Diploma`, which owns the whole screen until a button, and
-	## `special PrintDiploma`, which owns it until B.
 	&"_diploma_host",
-	## `special UnownPuzzle`, which owns the whole screen until START or the
-	## last piece.
 	&"_unown_puzzle_host",
-	## `special SlotMachine`, which owns the whole screen until the player says
-	## no to another game or runs out of coins.
 	&"_slot_machine_host",
-	## `special CardFlip`, the Game Corner's other machine, which owns the screen
-	## on the same terms.
 	&"_card_flip_host",
 	## Before the PC and the party overlay because the Hall of Fame is the one
 	## overlay a script opens with nothing behind it: there is no map to go back
@@ -3187,6 +3175,7 @@ func preview_effect_sprites(kind: StringName = &"effects") -> void:
 		if nearest == null or object.cell.distance_squared_to(_world.player_cell) \
 			< nearest.cell.distance_squared_to(_world.player_cell):
 			nearest = object
+	_world.set_player_emote(0, true)
 	if nearest == null:
 		_script_prompt = "No visible object for the emote"
 	else:
@@ -7072,19 +7061,18 @@ const REQUEST_OPENERS: Dictionary = {
 	&"move_tutor_requested": [&"_open_move_tutor", &"continue", {}],
 	&"day_care_requested": [&"_open_day_care", &"continue", {}],
 	&"pokedex_entry_requested": [&"_open_pokedex_entry", &"continue", {}],
-	## A cartridge whose cache has no slots or card flip art gives the coins back
-	## untouched rather than stopping the script.
+	## No slots or card flip art gives the coins back rather than stopping.
 	&"slot_machine_requested": [&"_open_slot_machine", &"coins", {}],
 	&"card_flip_requested": [&"_open_card_flip", &"coins", {}],
-	## `ret z` on an empty dex, and the same answer for a cache with no glyphs or
-	## no diploma art: the script runs straight on and writes nothing either.
+	## `ret z` on an empty dex, and the same for a cache with no glyphs or art.
 	&"unown_printer_requested": [&"_open_unown_printer", &"values", {"ok": true}],
 	&"diploma_requested": [&"_open_diploma", &"values", {"ok": true}],
-	## A cache with no puzzle art answers an unsolved board, which is the
-	## `iftrue` the map takes either way.
+	## No puzzle art answers an unsolved board, the `iftrue` the map takes anyway.
 	&"unown_puzzle_requested": [
 		&"_open_unown_puzzle", &"values", {"ok": true, "script_value": 0},
 	],
+	## A cache with no keyboards answers blank, which `InitName` reads as SILVER.
+	&"rival_name_requested": [&"_open_rival_name", &"values", {"ok": true}],
 	&"pokemon_requested": [&"_open_gift_nickname", &"prompt", {}],
 	&"contest_mon_requested": [&"_open_contest_nickname", &"prompt", {}],
 }
@@ -7310,6 +7298,37 @@ func _open_requested_page(kind: StringName, request: Dictionary) -> StringName:
 
 func _open_link_record(_request: Dictionary) -> bool:
 	return _open_link_screen(Gen2LinkScreen.MODE_RECORD)
+
+
+func _open_rival_name(_request: Dictionary) -> bool:
+	if _rival_name_host != null or _world == null or _data == null:
+		return false
+	var host := Gen2NamingScreenScreen.new()
+	if not host.open(
+		_data, Gen2NamingScreenScreen.PROMPT_RIVAL, Gen2NamingScreenScreen.KIND_PLAYER
+	):
+		return false
+	host.closed.connect(_on_rival_named)
+	host.z_index = 30
+	_rival_name_host = host
+	_screen.display(host)
+	_script_prompt = "Rival's name"
+	_refresh_labels()
+	return true
+
+
+func _on_rival_named(entered: String) -> void:
+	var host: Gen2NamingScreenScreen = _rival_name_host
+	_rival_name_host = null
+	if host != null:
+		Gen2Screen.drop(host)
+	if _renderer != null:
+		_renderer.refresh()
+	if _world != null:
+		_show_script_results(
+			_world.complete_runtime_request({"ok": true, "name": entered})
+		)
+	_refresh_labels()
 
 
 func _request_trainer_approach(request: Dictionary) -> StringName:

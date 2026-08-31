@@ -6,7 +6,7 @@ extends SceneTree
 ##
 ##   Godot --path . -s res://tools/preview_naming_screen.gd -- crystal /tmp/name.png [presses]
 ##
-## A `mail` argument after the presses opens `_ComposeMailMessage` instead.
+## A `mail` argument opens `_ComposeMailMessage`, a `rival` one NAME_RIVAL.
 ## [presses] is a button script: `r`, `l`, `u`, `d`, `a`, `b`, `s` and `c`.
 
 const WINDOW_SIZE := Vector2i(1152, 648)
@@ -48,9 +48,11 @@ func _initialize() -> void:
 	root.set_content_scale_size(WINDOW_SIZE)
 	root.size = WINDOW_SIZE
 	var mail: bool = args.has("mail")
+	var prompt: String = Gen2NamingScreenScreen.PROMPT_RIVAL if args.has("rival") \
+		else Gen2NamingScreenScreen.PROMPT_PLAYER
 	_screen = Gen2NamingScreenScreen.new()
 	if not _screen.open(
-		data, "" if mail else "YOUR NAME?",
+		data, "" if mail else prompt,
 		Gen2NamingScreenScreen.KIND_MAIL if mail else Gen2NamingScreenScreen.KIND_PLAYER
 	):
 		push_error("The %s cache carries no naming screen data." % args[0])
@@ -60,7 +62,8 @@ func _initialize() -> void:
 	root.add_child(_screen)
 	current_scene = _screen
 
-	var presses: String = args[2] if args.size() > 2 and args[2] != "mail" else ""
+	var presses: String = args[2] \
+		if args.size() > 2 and args[2] not in ["mail", "rival"] else ""
 	for key: String in presses:
 		if BUTTONS.has(key):
 			_screen.handle_button(int(BUTTONS[key]))

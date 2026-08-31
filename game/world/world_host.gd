@@ -7,20 +7,17 @@ extends RefCounted
 ## pending with a specific reason rather than being guessed or acknowledged as
 ## if the subsystem had run.
 
-## The requests the host settles out of the save alone. `special HealParty`,
-## `giveegg` and a `givepoke` that names an OT each run to completion inside the
-## command that asked for them and the script runs straight on, so a screen
-## completes one where it is staged rather than waiting for a press.
-## `pokemon_requested` is here for those and no further: `GivePoke`'s `.wildmon`
-## branch reaches `GiveANickname_YesNo`, so a screen that can draw one intercepts
-## the request in front of this list and a driver that cannot settles it here with
-## the species name, which is what NO answers.
+## The requests the host settles out of the save alone: `special HealParty`,
+## `giveegg`, `GiveDratini` and a `givepoke` that names an OT each run to
+## completion inside the command that asked, so a screen completes one where it
+## is staged rather than waiting for a press. `pokemon_requested` is here for
+## those and no further: `GivePoke`'s `.wildmon` branch reaches
+## `GiveANickname_YesNo`, so a screen that can draw one intercepts it in front of
+## this list and a driver that cannot settles it with the species name, which is
+## what NO answers.
 const UNATTENDED_REQUESTS: Array[StringName] = [
 	&"party_heal_requested", &"pokemon_requested", &"trade_requested",
-	&"contest_mon_requested",
-	## `GiveDratini` draws nothing at all: it rewrites four move slots in a row
-	## the party already holds and the script runs straight on.
-	&"dratini_moveset_requested",
+	&"contest_mon_requested", &"dratini_moveset_requested",
 ]
 
 
@@ -67,16 +64,14 @@ static func complete_runtime_request(
 			"request": request.duplicate(true),
 			"results": resumed,
 		}
-	## `_DisplayLinkRecord` draws a page over a save field and writes nothing, and
-	## a room console with no cable has nothing to exchange: both run to
-	## completion where they are staged. A screen that can draw either intercepts
-	## the request in front of this.
+	## `_DisplayLinkRecord` writes nothing and a room console with no cable has
+	## nothing to exchange, so both run to completion where they are staged. A
+	## screen that can draw either intercepts in front of this.
 	if kind in [&"battle_requested", &"swarm_requested",
 		&"link_record_requested", &"link_room_requested"]:
 		return {"ok": true, "handled": true, "results": world.complete_runtime_request(result)}
-	## None of the three reads cartridge data of its own: the region map's
-	## landmark, the bank dial's amount and whether `TryQuickSave` wrote are the
-	## whole answer, and the runner owns what is done with it.
+	## None of the three reads cartridge data: the landmark, the dial's amount and
+	## whether `TryQuickSave` wrote are the whole answer.
 	if kind in [
 		&"town_map_requested", &"mom_bank_dial_requested", &"quick_save_requested",
 	]:

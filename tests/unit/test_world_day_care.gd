@@ -21,10 +21,10 @@ const DITTO: int = Fixture.DITTO
 
 ## Two DV words giving opposite genders at GENDER_F50, whose Defense DVs and
 ## Special low bits differ so `.CheckDVs` does not refuse the pair. The Attack
-## and Speed nibbles are what `GetGender` reads: `$0` is male at a 127 ratio and
-## `$F` is female.
-const MALE_DVS: int = 0x0A05
-const FEMALE_DVS: int = 0xF3FE
+## and Speed nibbles are what `GetGender` reads: `$FF` is above a 127 ratio and
+## so male, `$00` is below it and so female.
+const MALE_DVS: int = 0xF3FE
+const FEMALE_DVS: int = 0x0A05
 
 const CACHE_ID: StringName = &"daycaretest"
 const CACHE_SHA1: String = "0123456789abcdef"
