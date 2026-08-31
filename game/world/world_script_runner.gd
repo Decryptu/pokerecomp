@@ -1033,10 +1033,9 @@ func _resume_pocket_is_full(_choice: int) -> Dictionary:
 	return _waiting_result()
 
 
-## Script_UsedStrength's second writetext, _MoveBoulderText.
 func _resume_strength_used(_choice: int) -> Dictionary:
 	_stage_internal_text(
-		"%s can\nmove boulders." % String(_pending.get("name", "#MON")), true
+		Gen2WorldFieldMove.move_boulders_text(String(_pending.get("name", "#MON"))), true
 	)
 	return _waiting_result()
 
@@ -6488,18 +6487,21 @@ func _field_move_user_name(slot: int) -> String:
 	return String(names[slot]) if slot < names.size() else "#MON"
 
 
-## SetStrengthFlag plus Script_UsedStrength's two texts. The cry and its three
-## frame pause are presentation the runner does not own, so the two writetexts
-## become two pauses back to back, which is what a reader sees either way.
+## SetStrengthFlag plus Script_UsedStrength. `_UseStrengthText` ends in `done`
+## with no `waitbutton` behind it, so its box owes no press, and the `cry 0` is
+## `wStrengthSpecies`. Only `pause 3` is dropped, six frames before the next box.
 func _stage_strength_used(slot: int) -> Dictionary:
 	_staged_engine_flags[Gen2WorldState.strength_active_flag(_crystal_commands())] = true
 	var name: String = _field_move_user_name(slot)
+	var species: Array = _request.get("party", {}).get("species", [])
 	_pending = {
 		"type": &"text",
 		"text": Gen2WorldFieldMove.used_text(
 			Gen2WorldFieldMove.MOVE_STRENGTH, name
 		),
 		"internal_text": true,
+		"prompt": false,
+		"cry": int(species[slot]) if slot >= 0 and slot < species.size() else 0,
 		"special": &"strength_used",
 		"name": name,
 		"source": _request.duplicate(true),

@@ -2,14 +2,13 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the Pokegear radio card and the one thing in the overworld that reads
-## what it leaves behind: Vermilion City's Snorlax. Expected values come from the
-## pinned sources' radio tables, `SnorlaxAwake`, the BIG_OBJECT row and
-## maps/VermilionCity.asm. Two findings carry it. The Poke Flute channel is the only
-## way a track other than the map's own reaches `wMapMusic`, because a station's
-## music id is neither of the two sentinels the exit restores on. And the Snorlax is
-## a BIG_OBJECT filling four cells rather than one, which is why SnorlaxAwake's five
-## proximity coordinates are the cells they are.
+## Verifies the Pokegear radio card, everything else that writes `wMapMusic`, and
+## the one thing in the overworld reading what the card leaves behind: Vermilion
+## City's Snorlax. Expected values come from the pinned sources' radio tables,
+## `GetMapMusic`, `SnorlaxAwake`, the BIG_OBJECT row and maps/VermilionCity.asm.
+## The Poke Flute channel is the only station whose track survives the card
+## closing, its id being neither sentinel; and the Snorlax is a BIG_OBJECT filling
+## four cells, which is why SnorlaxAwake's five proximity coordinates are those.
 
 
 ## constants/map_constants.asm.
@@ -26,10 +25,8 @@ const CAVE_MOUTH: Vector2i = Vector2i(34, 7)
 const SNORLAX_CELL: Vector2i = Vector2i(34, 8)
 const SNORLAX_OBJECT: int = 4
 const TALK_FROM: Vector2i = Vector2i(34, 10)
-## One cell fewer than this pin held until 2026-08-10, for the reason
-## `tools/checks/celadon.gd`'s own count records: (26,7) carries a
-## `SPRITE_MACHOP` object, which this build cannot draw and which used to be
-## walked through as well.
+## Walkable city cells. (26,7) is not one: it carries a `SPRITE_MACHOP` object,
+## for the reason `tools/checks/celadon.gd`'s own count records.
 const CITY_CELLS: int = 318
 
 ## engine/events/specials.asm's SnorlaxAwake.ProximityCoords, in source order:
@@ -71,6 +68,8 @@ const SPECIES_SNORLAX: int = 143
 const SNORLAX_LEVEL: int = 50
 const BATTLETYPE_FORCEITEM: int = 10
 
+## MahoganyMart1F and the Radio Tower's five floors, in either pin.
+const SPECIAL_MUSIC_MAPS: int = 6
 ## Long enough for a hundred lines at `PrintRadioLine`'s own 100 frames, which
 ## walks the longest station (Buena's twenty-one segments) several times over.
 const SHOW_FRAMES: int = 12000
@@ -87,6 +86,7 @@ func run(r: RefCounted) -> void:
 		var crystal: bool = Gen2WorldState.is_crystal_profile(_data)
 		_verify_stations(_data, game_id, crystal)
 		_verify_music_records(_data, game_id, crystal)
+		_verify_map_music(_data, game_id, crystal)
 		_verify_shows(_data, game_id, crystal)
 		_verify_big_object_census(_data, game_id)
 		_verify_snorlax(_data, game_id, crystal)
@@ -234,6 +234,74 @@ func _verify_music_records(_data: GameData, game_id: StringName, crystal: bool) 
 			not _data.world_audio(&"music", song).is_empty(),
 			"%s: channel %d wants music record %d, which this cache lacks." % [
 				game_id, channel, song,
+			]
+		)
+
+
+## `GetMapMusic` over the whole corpus: an ordinary header is a track the cache
+## ships and the two that are not answer their own pair.
+func _verify_map_music(_data: GameData, game_id: StringName, crystal: bool) -> void:
+	var special: Array[Gen2WorldMap] = []
+	var missing: Array[String] = []
+	for map: Gen2WorldMap in _data.world_maps():
+		var header: int = map.music
+		if header == Gen2WorldAPI.MUSIC_MAHOGANY_MART \
+			or (header & Gen2WorldAPI.RADIO_TOWER_MUSIC) != 0:
+			special.append(map)
+			continue
+		if _data.world_audio(&"music", header).is_empty():
+			missing.append("%d/%d wants %d" % [map.group, map.number, header])
+	_r.check(
+		missing.is_empty(),
+		"%s: %d maps name a music record this cache lacks: %s" % [
+			game_id, missing.size(), ", ".join(missing.slice(0, 6)),
+		]
+	)
+	_r.check(
+		special.size() == SPECIAL_MUSIC_MAPS,
+		"%s: %d maps carry a special music header, not %d." % [
+			game_id, special.size(), SPECIAL_MUSIC_MAPS,
+		]
+	)
+	for map: Gen2WorldMap in special:
+		_verify_special_music(_data, game_id, crystal, map)
+	_r.note("%s map music: %d headers resolved, %d of them a pair." % [
+		game_id, _data.world_maps().size(), special.size(),
+	])
+
+
+func _verify_special_music(
+	_data: GameData, game_id: StringName, crystal: bool, map: Gen2WorldMap
+) -> void:
+	var mahogany: bool = map.music == Gen2WorldAPI.MUSIC_MAHOGANY_MART
+	var flag: int = Gen2WorldState.engine_flag(
+		Gen2WorldState.ENGINE_ROCKETS_IN_MAHOGANY if mahogany \
+			else Gen2WorldState.ENGINE_ROCKETS_IN_RADIO_TOWER,
+		crystal
+	)
+	var expected: Array[int] = [
+		Gen2WorldAPI.MUSIC_CHERRYGROVE_CITY, Gen2WorldAPI.MUSIC_ROCKET_HIDEOUT,
+	]
+	if not mahogany:
+		expected = [
+			map.music & (Gen2WorldAPI.RADIO_TOWER_MUSIC - 1),
+			Gen2WorldRadio.MUSIC_ROCKET_OVERTURE,
+		]
+	for rockets: int in 2:
+		var state := Gen2WorldState.new()
+		state.set_engine_flag(flag, rockets == 1)
+		var world: Gen2WorldAPI = Gen2WorldAPI.open(
+			_data, map.group, map.number, Vector2i.ZERO, state
+		)
+		if world == null:
+			_r.fail("%s: map %d/%d is missing." % [game_id, map.group, map.number])
+			return
+		_r.check(
+			world.map_music_track() == expected[rockets]
+				and not _data.world_audio(&"music", expected[rockets]).is_empty(),
+			"%s: map %d/%d with rockets=%d answered %d, not record %d." % [
+				game_id, map.group, map.number, rockets,
+				world.map_music_track(), expected[rockets],
 			]
 		)
 

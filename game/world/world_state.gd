@@ -1480,6 +1480,8 @@ const ENGINE_SAFARI_ZONE: int = 18
 ## Five entries further down the same run (data/events/engine_flags.asm), so it
 ## shifts on Gold and Silver the way every flag past ENGINE_MOBILE_SYSTEM does.
 const ENGINE_REACHED_GOLDENROD: int = 22
+## The last entry of the same run, which `GetMapMusic` reads in Mahogany Mart.
+const ENGINE_ROCKETS_IN_MAHOGANY: int = 23
 ## `ENGINE_DAILY_BUG_CONTEST`, the once-a-day flag the officer checks.
 const ENGINE_DAILY_BUG_CONTEST: int = 81
 ## `BugCatchingContestantEventFlagTable`, whose ten entries are the same numbers

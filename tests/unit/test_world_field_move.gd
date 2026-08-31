@@ -1612,6 +1612,10 @@ func test_dig_takes_the_warp_the_cave_was_entered_by() -> void:
 
 	var dug: Dictionary = world.dig_request()
 	assert_true(bool(dug.get("ok", false)), String(dug.get("reason", "")))
+	## `.UsedDigScript` prints on the map being left and warps behind its
+	## `waitbutton`, so the request stages and the acknowledge moves.
+	assert_eq(world.map_id(), Vector2i(1, ESCAPE_CAVE))
+	assert_true(bool(world.complete_escape().get("ok", false)))
 	assert_eq(world.map_id(), Vector2i(1, ESCAPE_TOWN))
 	assert_eq(world.player_cell, ESCAPE_CAVE_DOOR)
 
@@ -1650,6 +1654,7 @@ func test_an_escape_aborts_a_running_contest_and_clears_both_status_flags() -> v
 	world.player_cell = Vector2i(4, 4)
 
 	assert_true(bool(world.dig_request().get("ok", false)))
+	assert_true(bool(world.complete_escape().get("ok", false)))
 	assert_false(world.state.is_engine_flag_active(timer), "the contest is over")
 	assert_false(world.state.is_engine_flag_active(safari))
 	assert_true(
@@ -1670,6 +1675,7 @@ func test_an_escape_with_no_contest_running_owes_the_party_nothing() -> void:
 	world.try_warp()
 	world.player_cell = Vector2i(4, 4)
 	assert_true(bool(world.escape_rope_request().get("ok", false)))
+	assert_true(bool(world.complete_escape().get("ok", false)))
 	assert_false(world.take_contest_abort())
 	## `Script_AbortBugContest`'s `iffalse .finish` jumps the setflag too.
 	assert_false(world.state.is_engine_flag_active(daily))
@@ -1686,15 +1692,70 @@ func test_the_bike_goes_on_and_off_outdoors_and_carries_its_own_music() -> void:
 	assert_eq(world.player_sprite_number, Gen2WorldSprite.SPRITE_PLAYER_BIKE)
 	assert_eq(world.map_music_track(), Gen2WorldFieldMove.MUSIC_BICYCLE)
 
+	assert_eq(world.state.map_music(), Gen2WorldFieldMove.MUSIC_BICYCLE,
+		"`.GetOnBike` writes `wMapMusic` before it plays it")
+	assert_eq(int(on["music"]), Gen2WorldFieldMove.MUSIC_BICYCLE)
+
 	var off: Dictionary = world.bike_request()
 	assert_true(bool(off.get("ok", false)), String(off.get("reason", "")))
 	assert_eq(world.movement_mode, Gen2WorldAPI.MOVEMENT_WALK)
 	assert_eq(world.player_sprite_number, Gen2WorldSprite.SPRITE_PLAYER)
 	assert_ne(world.map_music_track(), Gen2WorldFieldMove.MUSIC_BICYCLE)
+	assert_eq(world.state.map_music(), world.current_map.music,
+		"`Script_GetOffBike`'s `special PlayMapMusic` puts the map's own back")
+
+
+## `SpecialMapMusic`'s surf branch reaches `wMapMusic` through
+## `UsedSurfScript`'s `special PlayMapMusic`, and `.ExitWater` spends another one.
+func test_surfing_puts_the_surf_track_in_wmapmusic_and_landing_takes_it_out() -> void:
+	var world: Gen2WorldAPI = _surf_world()
+	var map_track: int = world.current_map.music
+	assert_true(bool(world.surf_request().get("ok", false)))
+	assert_true(bool(world.complete_surf().get("ok", false)))
+	assert_eq(world.state.map_music(), Gen2WorldFieldMove.MUSIC_SURF)
+
+	_drain_player_step(world)
+	assert_eq(StringName(world.move_result(Vector2i.UP)["kind"]), &"exit_water")
+	assert_eq(world.state.map_music(), map_track)
+
+
+## `GetMapMusic`: the two header values that name a pair of tracks rather than
+## one, and `SpecialMapMusic`'s own contest branch.
+func test_the_two_special_map_headers_and_the_contest_gate_pick_their_own_track() -> void:
+	var world: Gen2WorldAPI = _escape_world()
+	var crystal: bool = Gen2WorldState.is_crystal_profile(world.data)
+	var mahogany: int = Gen2WorldState.engine_flag(
+		Gen2WorldState.ENGINE_ROCKETS_IN_MAHOGANY, crystal
+	)
+	var tower: int = Gen2WorldState.engine_flag(
+		Gen2WorldState.ENGINE_ROCKETS_IN_RADIO_TOWER, crystal
+	)
+
+	world.current_map.music = Gen2WorldAPI.MUSIC_MAHOGANY_MART
+	assert_eq(world.map_music_track(), Gen2WorldAPI.MUSIC_CHERRYGROVE_CITY)
+	world.state.set_engine_flag(mahogany, true)
+	assert_eq(world.map_music_track(), Gen2WorldAPI.MUSIC_ROCKET_HIDEOUT)
+
+	## `RadioTower1F`'s own header: the bit plus MUSIC_GOLDENROD_CITY.
+	world.current_map.music = Gen2WorldAPI.RADIO_TOWER_MUSIC | 0x3D
+	assert_eq(world.map_music_track(), 0x3D, "the bit is masked off, not asked for")
+	world.state.set_engine_flag(tower, true)
+	assert_eq(world.map_music_track(), Gen2WorldRadio.MUSIC_ROCKET_OVERTURE)
+
+	world.current_map.music = 0x0A
+	assert_eq(world.map_music_track(), 0x0A, "an ordinary header is itself")
+	world.state.set_engine_flag(
+		Gen2WorldState.engine_flag(Gen2WorldState.ENGINE_BUG_CONTEST_TIMER, crystal), true
+	)
+	assert_eq(world.map_music_track(), 0x0A, "this map is not one of the two gates")
+	world.current_map.group = Gen2WorldAPI.NATIONAL_PARK_GATE_GROUP
+	world.current_map.number = Gen2WorldAPI.NATIONAL_PARK_GATE_MAPS[0]
+	assert_eq(world.map_music_track(), Gen2WorldAPI.MUSIC_BUG_CATCHING_CONTEST_RANKING)
 
 
 ## `.CheckEnvironment` again: a cave is a place to ride and an indoor map is not,
-## and `.GetOffBike` refuses while BIKEFLAGS_ALWAYS_ON_BIKE_F is set.
+## and `.GetOffBike` runs `Script_CantGetOffBike` while BIKEFLAGS_ALWAYS_ON_BIKE_F
+## is set.
 func test_the_bike_is_refused_indoors_and_cannot_be_left_where_it_is_forced() -> void:
 	var indoors: Gen2WorldAPI = _escape_world(ESCAPE_POKECENTER, Vector2i(4, 4))
 	assert_eq(StringName(indoors.bike_request()["reason"]), &"cannot_use_bike")
@@ -1703,7 +1764,9 @@ func test_the_bike_is_refused_indoors_and_cannot_be_left_where_it_is_forced() ->
 	assert_true(bool(cave.bike_request().get("ok", false)), "a cave is rideable")
 
 	cave.state.set_engine_flag(Gen2WorldState.always_on_bike_flag(cave.data), true)
-	assert_eq(StringName(cave.bike_request()["reason"]), &"always_on_bike")
+	var forced_off: Dictionary = cave.bike_request()
+	assert_eq(StringName(forced_off["kind"]), &"bike_cant_get_off")
+	assert_true(bool(forced_off["ok"]), "`.done` answers 1, so the pack closes on the line")
 	assert_eq(cave.movement_mode, Gen2WorldAPI.MOVEMENT_BIKE, "still riding")
 
 
@@ -1739,6 +1802,7 @@ func test_an_escape_rope_takes_the_same_warp_dig_does_and_knows_no_move() -> voi
 
 	var escaped: Dictionary = world.escape_rope_request()
 	assert_true(bool(escaped.get("ok", false)), String(escaped.get("reason", "")))
+	assert_true(bool(world.complete_escape().get("ok", false)))
 	assert_eq(world.map_id(), Vector2i(1, ESCAPE_TOWN))
 	assert_eq(world.player_cell, ESCAPE_CAVE_DOOR)
 
@@ -1762,6 +1826,7 @@ func test_teleport_returns_to_the_last_pokemon_centre_from_outdoors() -> void:
 
 	var teleported: Dictionary = world.teleport_request()
 	assert_true(bool(teleported.get("ok", false)), String(teleported.get("reason", "")))
+	assert_true(bool(world.complete_escape().get("ok", false)))
 	assert_eq(world.map_id(), Vector2i(1, ESCAPE_TOWN))
 	assert_eq(world.player_cell, SPAWN_CELL)
 
@@ -2152,7 +2217,7 @@ func test_always_on_bike_forces_the_bike_back_and_refuses_surf() -> void:
 	## `.TryBike` reads `.CheckEnvironment` first and only then the flag, so the
 	## refusal is the flag's on a map the bike may be ridden on at all.
 	forced.player_cell = Vector2i(4, 4)
-	assert_eq(forced.bike_request()["reason"], &"always_on_bike")
+	assert_eq(forced.bike_request()["kind"], &"bike_cant_get_off")
 	## The forced branch runs before `.ResetSurfingOrBikingState`, so even an
 	## indoor map keeps the bike on while the flag is up.
 	forced.player_cell = ESCAPE_INSIDE_DOOR

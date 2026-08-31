@@ -45,6 +45,13 @@ const SFX_WATERFALL: int = 0x51
 ## constants/sfx_constants.asm's SFX_FLASH, played by `UseFlashTextScript`'s own
 ## `text_asm` rather than by `BlindingFlash`, which fades in silence.
 const SFX_FLASH: int = 0xA9
+const FIELD_MOVE_TEXT_RUNS_ON: Array[int] = [
+	Gen2WorldFieldMove.MOVE_STRENGTH, Gen2WorldFieldMove.MOVE_FLASH,
+	Gen2WorldFieldMove.MOVE_TELEPORT,
+]
+## `.TeleportScript`'s `pause 60`, two frames a unit, where the other two
+## escapes spend a `waitbutton`.
+const TELEPORT_PAUSE_FRAMES: int = 120
 ## constants/sfx_constants.asm's SFX_SANDSTORM, which is what ShakeHeadbuttTree
 ## plays (engine/events/field_moves.asm). SFX_HEADBUTT is a battle-move effect
 ## and is referenced by nothing in either pin's overworld code.
@@ -252,6 +259,10 @@ var _player_event_after: Callable = Callable()
 ## page ends in `<DONE>` does not: `MapTextbox` prints and returns, and the
 ## press is the `waitbutton` behind the command.
 var _text_awaits_press: bool = true
+## Whether the field-move box up now owes a press, and the frames it spends
+## first when it does not.
+var _field_move_text_waits: bool = true
+var _field_move_text_frames: int = 0
 ## How many presses [method preview_text_scroll] will spend looking for one.
 const PREVIEW_TEXT_PRESSES: int = 8
 ## `ProfOaksPCBoot`'s three texts, one page at a time, and the sfx `Rate` leaves
@@ -1026,6 +1037,7 @@ func _advance_waits(map_pass: bool) -> void:
 	## `_ContText`'s scroll ends on a frame rather than on a press, and the page
 	## it lands on may be the text's last, which is where the script runs on.
 	_continue_if_text_settled()
+	_continue_if_field_move_text_settled()
 	if not _trainer_approach.is_empty():
 		_advance_trainer_approach(map_pass)
 	if _world != null and _world.phone_ring_active():
@@ -6192,22 +6204,10 @@ func _on_field_item_used(request: Dictionary) -> void:
 		return
 	match StringName(request.get("effect", &"")):
 		Gen2WorldPack.FIELD_EFFECT_BICYCLE:
-			## `Script_GetOnBike` and `Script_GetOffBike`, both of which are a
-			## line, a `waitbutton` and `special UpdatePlayerSprite`. The music is
-			## the function's own rather than either script's.
-			var on: bool = StringName(
-				(request.get("bike", {}) as Dictionary).get("kind", &"")
-			) == &"bike_on"
-			var bike_name: String = _data.item_name(int(request.get("item", 0)))
-			_show_field_move_text(
-				"Got on the\n%s." % bike_name if on else "Got off\nthe %s." % bike_name
-			)
-			_play_current_map_music()
-			if _renderer != null:
-				_renderer.refresh()
+			_on_bike_used(request)
+		## Printed on the map being left; the acknowledge takes the warp.
 		Gen2WorldPack.FIELD_EFFECT_ESCAPE_ROPE:
 			_show_field_move_text(_field_item_text("escape_rope", "Used an\nESCAPE ROPE."))
-			_refresh_after_escape()
 		Gen2WorldPack.FIELD_EFFECT_ROD:
 			var rods: Array[StringName] = _world.available_fishing_rods()
 			select_fishing_rod(rods.find(StringName(request.get("rod", &""))))
@@ -6245,6 +6245,33 @@ func _on_field_item_used(request: Dictionary) -> void:
 					"squirtbottle", "Sprinkled water.\nBut nothing\nhappened…"
 				))
 	_refresh_labels()
+
+
+## `BikeFunction`'s three scripts. Each of the two that say a line has a
+## `_Register` copy with none, so the Bicycle used from SELECT is silent.
+func _on_bike_used(request: Dictionary) -> void:
+	var kind: StringName = StringName(
+		(request.get("bike", {}) as Dictionary).get("kind", &"")
+	)
+	if kind == &"bike_cant_get_off":
+		_show_field_move_text(
+			_field_item_text("cant_get_off_bike", "You can't get off\nhere!")
+		)
+		return
+	if not bool(request.get("registered", false)):
+		var bike_name: String = _data.item_name(int(request.get("item", 0)))
+		var on: bool = kind == &"bike_on"
+		var line: String = _field_item_text(
+			"got_on_bike" if on else "got_off_bike",
+			"<PLAYER> got on the\n%s." % bike_name if on \
+				else "<PLAYER> got off\nthe %s." % bike_name
+		)
+		_show_field_move_text(
+			Gen2TextStream.fill_marker(line, Gen2TextStream.RAM_MARKER, bike_name)
+		)
+	_play_current_map_music()
+	if _renderer != null:
+		_renderer.refresh()
 
 
 ## One of `data/text/common_2.asm`'s field-item lines, with `<PLAYER>` filled
@@ -6373,7 +6400,8 @@ func _field_move_rows(slot: int, user: String) -> Dictionary:
 		],
 		Gen2WorldFieldMove.MOVE_STRENGTH: [
 			_world.strength_request.bind(_party_species(slot)), _strength_refusal,
-			says.call(Gen2WorldFieldMove.MOVE_STRENGTH), Callable(),
+			says.call(Gen2WorldFieldMove.MOVE_STRENGTH),
+			_after_strength.bind(slot, user),
 		],
 		Gen2WorldFieldMove.MOVE_WHIRLPOOL: [
 			_world.whirlpool_request, _whirlpool_refusal,
@@ -6403,13 +6431,14 @@ func _field_move_rows(slot: int, user: String) -> Dictionary:
 			_sweet_scent_refusal.bind(user),
 			says.call(Gen2WorldFieldMove.MOVE_SWEET_SCENT), _after_sweet_scent,
 		],
+		## Both print on the map being left, so the warp is the acknowledge's.
 		Gen2WorldFieldMove.MOVE_DIG: [
 			_world.dig_request, _field_move_refused,
-			says.call(Gen2WorldFieldMove.MOVE_DIG), _after_escape,
+			says.call(Gen2WorldFieldMove.MOVE_DIG), Callable(),
 		],
 		Gen2WorldFieldMove.MOVE_TELEPORT: [
 			_world.teleport_request, _field_move_refused,
-			says.call(Gen2WorldFieldMove.MOVE_TELEPORT), _after_escape,
+			says.call(Gen2WorldFieldMove.MOVE_TELEPORT), Callable(),
 		],
 	}
 
@@ -6431,10 +6460,20 @@ func _run_field_move(action: Dictionary) -> void:
 		)
 		return
 	if not String(row[2]).is_empty():
-		_show_field_move_text(row[2])
+		var runs_on: bool = FIELD_MOVE_TEXT_RUNS_ON.has(move)
+		_show_field_move_text(
+			row[2], not runs_on, not runs_on,
+			TELEPORT_PAUSE_FRAMES if move == Gen2WorldFieldMove.MOVE_TELEPORT else 0
+		)
 	var after: Callable = row[3]
 	if after.is_valid():
 		after.call(answer)
+
+
+## `Script_UsedStrength` past its first box: `cry 0` on `wStrengthSpecies`.
+func _after_strength(_answer: Dictionary, slot: int, user: String) -> void:
+	_play_species_cry(_party_species(slot))
+	_player_event_texts.append(Gen2WorldFieldMove.move_boulders_text(user))
 
 
 func _after_sweet_scent(answer: Dictionary) -> void:
@@ -6444,10 +6483,6 @@ func _after_sweet_scent(answer: Dictionary) -> void:
 		"values": found["values"],
 		"encounter": found.duplicate(true),
 	})
-
-
-func _after_escape(_answer: Dictionary) -> void:
-	_refresh_after_escape()
 
 
 ## GetSurfType reads wPartySpecies at wCurPartyMon; the submenu action carries
@@ -6650,24 +6685,43 @@ func _run_heal_transfer(action: Dictionary) -> void:
 	if not bool(result.get("ok", false)):
 		_show_field_move_text("It won't have any effect.")
 		return
-	## `PARTYMENUTEXT_HEAL_HP`, which is the line every healing item shares.
-	## `ItemActionText` is followed by `JoyWaitAorB`, which loads no cursor, so
-	## the line waits without an arrow the way `ProfOaksPCBoot`'s pages do.
+	## `PARTYMENUTEXT_HEAL_HP`, behind `ItemActionText`'s own `JoyWaitAorB`,
+	## which waits without an arrow the way `ProfOaksPCBoot`'s pages do.
 	_show_field_move_text(
 		"%s\nrecovered health!" % String(action.get("target_name", "")), false
 	)
 
 
 ## [param blink_cursor] is whether the wait behind the line is one of the three
-## routines that call `LoadBlinkingCursor`, not whether it waits at all.
-func _show_field_move_text(text: String, blink_cursor: bool = true) -> void:
+## routines that call `LoadBlinkingCursor`, not whether it waits at all;
+## [param waits] is whether it waits, and [param frames] how many it spends
+## first when it does not.
+func _show_field_move_text(
+	text: String, blink_cursor: bool = true, waits: bool = true, frames: int = 0
+) -> void:
 	_field_move_text = true
+	_field_move_text_waits = waits
+	_field_move_text_frames = frames
 	if _text_box != null and _text_box.font != null:
 		_apply_text_box_options()
 		_text_box.show_text(text, blink_cursor)
 		_text_box.visible = true
-	_script_prompt = "A: continue"
+	_script_prompt = "A: continue" if waits else ""
 	_refresh_labels()
+
+
+## The three used-texts with no press behind them: `_UseStrengthText`, which the
+## `cry 0` and second box follow, `_BlindingFlashText`, whose `text_asm` plays
+## SFX_FLASH and returns a blank, and `_TeleportReturnText` with its `pause 60`.
+func _continue_if_field_move_text_settled() -> void:
+	if not _field_move_text or _field_move_text_waits or _text_box == null:
+		return
+	if _text_box.is_scrolling() or _text_box.has_pages_left():
+		return
+	if _field_move_text_frames > 0:
+		_field_move_text_frames -= 1
+		return
+	_acknowledge_field_move_text()
 
 
 ## The acknowledge that closes a field-move message. A staged move commits here
@@ -6717,6 +6771,9 @@ func _acknowledge_field_move_text() -> void:
 	if not _world.pending_flash().is_empty():
 		_commit_field_move(_world.complete_flash(), "Flash")
 		return
+	if not _world.pending_escape().is_empty():
+		_commit_field_move(_world.complete_escape(), "Escape")
+		return
 	if not _world.pending_headbutt().is_empty():
 		_commit_field_move(_world.complete_headbutt(_encounter_random), "Headbutt")
 		return
@@ -6739,6 +6796,10 @@ func _commit_field_move(applied: Dictionary, label: String) -> void:
 				_play_sfx(SFX_WHIRLPOOL)
 			&"strength_applied":
 				pass
+			## `.UsedDigOrEscapeRopeScript`'s sound, in front of its own warp.
+			&"escape_applied":
+				_play_sfx(SFX_WARP_TO)
+				_refresh_after_escape()
 			&"waterfall_applied":
 				_play_sfx(SFX_WATERFALL)
 			&"flash_used":
@@ -7249,6 +7310,8 @@ func _apply_text_pause(event: Dictionary, flags: Dictionary) -> StringName:
 	# `writetext` whose text ends in `done` reaches none of them, so its last page
 	# carries no arrow and the script runs straight on.
 	_text_awaits_press = bool(event.get("prompt", true))
+	if int(event.get("cry", 0)) > 0:
+		_play_species_cry(int(event["cry"]))
 	if _oak_pc_pages.is_empty():
 		_apply_text_box_options()
 		_text_box.show_text(String(event.get("text", "")), _text_awaits_press)

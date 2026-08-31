@@ -6,15 +6,14 @@ var _r: RefCounted = null
 ## caches, over every item row rather than a sampled one. Expected values come from
 ## the pinned sources' `.ItemBallsKey_LoadSubmenu`, which asks `_CheckTossableItem`,
 ## `CheckSelectableItem` and `CheckItemMenu` in that order, `RegisterItem`, and
-## `.GiveItem`. `data/items/attributes.asm` is byte identical between the pins. The
-## point of sweeping all 256 rows is that a permission bit read the wrong way round
-## is invisible on the one item a screen test picks: the bit is set on the item that
-## *cannot* do the thing, so an inverted read offers TOSS on every key item.
+## `.GiveItem`. `data/items/attributes.asm` is byte identical between the pins.
+## All 256 rows are swept because a bit read the wrong way round is invisible on
+## the one item a screen test picks: it is set on the item that *cannot* do the
+## thing, so an inverted read offers TOSS on every key item.
 
 ## The ten rows whose field-menu nibble is ITEMMENU_CLOSE, byte identical
 ## between the pins. The unit tier writes the nibble onto its own fixture, so
-## only a real cache can say which rows actually carry it: the Coin Case reads
-## like one and is ITEMMENU_CURRENT, printing its count inside the pack.
+## only a real cache can say which rows carry it.
 const CLOSE_ITEMS: Dictionary = {
 	0x07: "BICYCLE",
 	0x13: "ESCAPE ROPE",
@@ -59,6 +58,7 @@ const REGISTERABLE_KEY_ITEMS: Dictionary = {
 ## `ItemAttributes` is 256 rows on both pins, the last of which is the terminator
 ## the item list never reaches.
 const ITEM_ROWS: int = 255
+const NO_DEPOSIT_ROWS: Array[int] = [1, 2, 3]
 
 ## What fits between the text box's own borders: `Textbox`'s interior is 18
 ## columns and `PrintItemDescription` is handed the cell one in from the left.
@@ -75,6 +75,7 @@ func run(r: RefCounted) -> void:
 		_verify_registerable(game_id, data)
 		_verify_submenus(game_id, data)
 		_verify_field_effects(game_id, data)
+		_verify_deposit_rule(game_id, data)
 		_verify_key_item_effects(game_id, data)
 		_verify_screen(game_id, data)
 		_verify_descriptions(game_id, data)
@@ -220,6 +221,24 @@ func _verify_field_effects(game_id: StringName, data: GameData) -> void:
 				game_id, number, deco,
 			]
 		)
+
+
+## `.TryDepositItem`'s jumptable, whose rows 1, 2 and 3 are `.no_toss`: no item
+## carries one, so the item PC takes key items too and CANT_TOSS only decides
+## the quantity.
+func _verify_deposit_rule(game_id: StringName, data: GameData) -> void:
+	var refused: Array[String] = []
+	for number: int in range(1, ITEM_ROWS + 1):
+		if data.item(number).is_empty():
+			continue
+		if Gen2WorldPack.field_use_kind(data, number) in NO_DEPOSIT_ROWS:
+			refused.append("$%02X (%s)" % [number, data.item_name(number)])
+	_r.check(
+		refused.is_empty(),
+		"%s: %d rows the item PC would refuse: %s" % [
+			game_id, refused.size(), ", ".join(refused.slice(0, 6)),
+		]
+	)
 
 
 ## The three key items whose effect is a `farsjump` at a named map script, each

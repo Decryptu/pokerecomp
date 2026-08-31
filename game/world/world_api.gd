@@ -281,37 +281,22 @@ var block_revision: int = 0
 ## cartridge would have drawn, so the player keeps the place
 ## [constant PLAYER_VIEW_CELL] puts him in and only the surround grows.
 var view_pixels: Vector2i = VIEW_PIXELS
-## A resolved but uncommitted Cut, held between cut_request() and complete_cut()
-## the way Script_Cut holds wCutWhirlpool* across its writetext. Cleared with the
-## block overrides, since the block it names belongs to the loaded map.
+## One resolved but uncommitted field move each, held between its `*_request()`
+## and `complete_*()` the way Script_Cut holds wCutWhirlpool* across its
+## writetext. Every one is cleared with the loaded map, since a request cannot
+## outlive the map it was made on: most name a cell, block or object index that
+## belongs to it, and Strength, Flash and the escapes, which name none, would
+## otherwise refuse every later use with `*_in_progress`.
 var _pending_cut: Dictionary = {}
-## The same for Surf, held between surf_request() and complete_surf() while
-## UsedSurfScript shows its text. The cell it names belongs to the loaded map,
-## so it is cleared beside the Cut request.
 var _pending_surf: Dictionary = {}
-## The same for Whirlpool, which shares the source's wCutWhirlpool* slots with
-## Cut and is cleared beside it for the same reason.
 var _pending_whirlpool: Dictionary = {}
-## The same for Strength, held while Script_UsedStrength shows its text. It names
-## no cell or block, but it is cleared with the others anyway: the source queues
-## Script_StrengthFromMenu and runs it at once, so a request cannot outlive the
-## map it was made on.
 var _pending_strength: Dictionary = {}
-## The same for Waterfall, held while Script_UsedWaterfall shows its text. It
-## names the faced cell, so it is cleared with the loaded map like the rest.
+var _pending_escape: Dictionary = {}
 var _pending_waterfall: Dictionary = {}
-## The same for Flash. It names no cell or block, but it is cleared with the
-## others so a request left unacknowledged across a map load cannot refuse every
-## later Flash with flash_in_progress.
 var _pending_flash: Dictionary = {}
-## The same for Headbutt, held while HeadbuttScript shows UseHeadbuttText. It
-## names the faced tree, so it is cleared with the loaded map like the rest;
-## the encounter behind it is only rolled on the commit, since TreeMonEncounter
-## runs after that text.
+## The encounter behind this one is rolled on the commit, since TreeMonEncounter
+## runs after UseHeadbuttText.
 var _pending_headbutt: Dictionary = {}
-## The same for Rock Smash, held while RockSmashScript shows UseRockSmashText.
-## It names the faced rock's object index, so it is cleared with the loaded map
-## like the rest.
 var _pending_rock_smash: Dictionary = {}
 ## wPlayerID, mirrored from the selected save the way _party_summary mirrors
 ## its party. GetTreeScore is the only reader; -1 means no save has set one,
@@ -587,22 +572,57 @@ func _init_map_name_sign() -> void:
 	_map_name_sign = current
 
 
-## GetMapMusic_MaybeSpecial: SpecialMapMusic answers first, so a surfing player
-## carries MUSIC_SURF across map loads and warps. Its Bug Contest branch has no
-## counterpart here, since no contest timer exists.
+## `GetMapMusic`'s two special header values and what it answers them with, the
+## same numbers on all three cartridges.
+const MUSIC_MAHOGANY_MART: int = 0x64
+const RADIO_TOWER_MUSIC: int = 0x80
+const MUSIC_CHERRYGROVE_CITY: int = 0x26
+const MUSIC_ROCKET_HIDEOUT: int = 0x48
+const MUSIC_BUG_CATCHING_CONTEST_RANKING: int = 0x58
+
+
+## GetMapMusic_MaybeSpecial: SpecialMapMusic answers first, so MUSIC_SURF crosses
+## map loads and the two National Park gates play the ranking piece for a contest.
 func map_music_track() -> int:
 	if movement_mode == MOVEMENT_SURF:
 		return Gen2WorldFieldMove.MUSIC_SURF
-	## `BikeFunction` writes `wMapMusic` itself rather than going through
-	## `SpecialMapMusic`, so the track is the bike's until the player gets off.
+	if _is_national_park_gate() and bug_contest_active():
+		return MUSIC_BUG_CATCHING_CONTEST_RANKING
+	## `BikeFunction` writes `wMapMusic` itself; `SpecialMapMusic`'s own `.bike`
+	## branch is unreferenced.
 	if movement_mode == MOVEMENT_BIKE:
 		return Gen2WorldFieldMove.MUSIC_BICYCLE
-	return current_map.music if current_map != null else Gen2WorldState.MUSIC_NONE
+	return _map_header_music()
 
 
-## PlayMapMusic on map entry. Answers whether the track actually changed, which
-## is both the source's own "do not restart the same piece" rule and what keeps
-## a tuned radio station playing until the player leaves the map.
+func _is_national_park_gate() -> bool:
+	return current_map != null and current_map.group == NATIONAL_PARK_GATE_GROUP \
+		and NATIONAL_PARK_GATE_MAPS.has(current_map.number)
+
+
+## `GetMapMusic`: a raw header is the wrong piece on six maps. The Radio Tower's
+## five carry `RADIO_TOWER_MUSIC | MUSIC_GOLDENROD_CITY`, $BD unmasked.
+func _map_header_music() -> int:
+	if current_map == null:
+		return Gen2WorldState.MUSIC_NONE
+	var header: int = current_map.music
+	var crystal: bool = Gen2WorldState.is_crystal_profile(data)
+	if header == MUSIC_MAHOGANY_MART:
+		return MUSIC_ROCKET_HIDEOUT if state.is_engine_flag_active(
+			Gen2WorldState.engine_flag(Gen2WorldState.ENGINE_ROCKETS_IN_MAHOGANY, crystal)
+		) else MUSIC_CHERRYGROVE_CITY
+	if (header & RADIO_TOWER_MUSIC) == 0:
+		return header
+	if state.is_engine_flag_active(Gen2WorldState.engine_flag(
+		Gen2WorldState.ENGINE_ROCKETS_IN_RADIO_TOWER, crystal
+	)):
+		return Gen2WorldRadio.MUSIC_ROCKET_OVERTURE
+	return header & (RADIO_TOWER_MUSIC - 1)
+
+
+## PlayMapMusic, which every map entry and every change of movement mode runs.
+## Answers whether the track actually changed, which is both the source's own "do
+## not restart the same piece" rule and what keeps a tuned station playing.
 func _apply_map_music() -> bool:
 	return state.play_map_music(map_music_track())
 
@@ -1447,6 +1467,7 @@ func complete_surf() -> Dictionary:
 	movement_mode = MOVEMENT_SURF
 	player_sprite_number = int(request["sprite"])
 	player_cell = request["cell"]
+	_apply_map_music()
 	_start_player_step(request["direction"], STEP_PASSES_NPC_WALK, false, &"slow_step")
 	return {
 		"ok": true,
@@ -5940,6 +5961,7 @@ func move_result(direction: Vector2i) -> Dictionary:
 	if exiting_water:
 		movement_mode = MOVEMENT_WALK
 		player_sprite_number = _walking_sprite()
+		_apply_map_music()
 		kind = &"exit_water"
 	elif movement_mode == MOVEMENT_SURF:
 		kind = &"water_move"
@@ -6318,6 +6340,7 @@ func _apply_map(
 	_pending_surf.clear()
 	_pending_whirlpool.clear()
 	_pending_strength.clear()
+	_pending_escape.clear()
 	_pending_waterfall.clear()
 	_pending_headbutt.clear()
 	_pending_rock_smash.clear()
@@ -6584,8 +6607,8 @@ static func _sweet_scent_failure(reason: StringName) -> Dictionary:
 
 ## `TeleportFunction`: the outdoor-only escape to the last Pokemon Center, whose
 ## whole test is the map being outdoors and that spawn being a spawn point. No
-## badge. Applied rather than staged, since everything in `.TeleportScript` but
-## [method _escape_map_tail] is animation this project has no frames for.
+## badge. Staged rather than applied: `.TeleportScript` prints its line on the
+## map being left and spends `pause 60` before `special WarpToSpawnPoint`.
 func teleport_request() -> Dictionary:
 	if current_map == null:
 		return _teleport_failure(&"missing_map")
@@ -6596,15 +6619,7 @@ func teleport_request() -> Dictionary:
 	var spawn: int = spawn_index_of(last_spawn_map)
 	if spawn < 0:
 		return _teleport_failure(&"no_spawn_point")
-	var warped: Dictionary = warp_to_spawn(spawn)
-	if not bool(warped.get("ok", false)):
-		return _teleport_failure(StringName(warped.get("reason", &"missing_spawn")))
-	return {
-		"ok": true,
-		"kind": &"teleport_requested",
-		"move": Gen2WorldFieldMove.MOVE_TELEPORT,
-		"warp": warped,
-	}
+	return _stage_escape(&"teleport_requested", Gen2WorldFieldMove.MOVE_TELEPORT, spawn)
 
 
 static func _teleport_failure(reason: StringName) -> Dictionary:
@@ -6622,15 +6637,7 @@ func dig_request() -> Dictionary:
 	var checked: StringName = _check_can_dig()
 	if checked != &"":
 		return _dig_failure(checked)
-	var warped: Dictionary = warp_to_dig_point()
-	if not bool(warped.get("ok", false)):
-		return _dig_failure(StringName(warped.get("reason", &"no_dig_warp")))
-	return {
-		"ok": true,
-		"kind": &"dig_requested",
-		"move": Gen2WorldFieldMove.MOVE_DIG,
-		"warp": warped,
-	}
+	return _stage_escape(&"dig_requested", Gen2WorldFieldMove.MOVE_DIG, -1)
 
 
 ## `DoPlayerMovement`'s own speed for a committed step: `STEP_BIKE` while riding,
@@ -6647,9 +6654,9 @@ func _step_frames_for_movement() -> int:
 
 
 ## `BikeFunction`'s `.TryBike`: `.CheckEnvironment` first, then the state the
-## player is in. Getting off is refused while `BIKEFLAGS_ALWAYS_ON_BIKE_F` is
-## set, which is `Script_CantGetOffBike`; the two get-on and get-off scripts are
-## the caller's, since both are text and a sprite update.
+## player is in. `BIKEFLAGS_ALWAYS_ON_BIKE_F` queues `Script_CantGetOffBike`
+## rather than refusing, so `.done` answers 1 and the pack closes on its line.
+## The three scripts are the caller's, each being text and a sprite update.
 func bike_request() -> Dictionary:
 	if current_map == null:
 		return _bike_failure(&"missing_map")
@@ -6658,20 +6665,22 @@ func bike_request() -> Dictionary:
 	if movement_mode == MOVEMENT_WALK:
 		movement_mode = MOVEMENT_BIKE
 		player_sprite_number = Gen2WorldSprite.player_bike_sprite(_player_female)
+		_apply_map_music()
 		return {
 			"ok": true, "kind": &"bike_on",
-			"music": Gen2WorldFieldMove.MUSIC_BICYCLE,
+			"music": state.map_music(),
 			"sprite": player_sprite_number,
 		}
 	if movement_mode != MOVEMENT_BIKE:
 		return _bike_failure(&"cannot_use_bike")
 	if always_on_bike():
-		return _bike_failure(&"always_on_bike")
+		return {"ok": true, "kind": &"bike_cant_get_off", "sprite": player_sprite_number}
 	movement_mode = MOVEMENT_WALK
 	player_sprite_number = _walking_sprite()
+	_apply_map_music()
 	return {
 		"ok": true, "kind": &"bike_off",
-		"music": map_music_track(),
+		"music": state.map_music(),
 		"sprite": player_sprite_number,
 	}
 
@@ -6712,15 +6721,40 @@ func escape_rope_request() -> Dictionary:
 	var wall_event: int = unown_wall_event(EVENT_WALL_OPENED_IN_KABUTO_CHAMBER)
 	if wall_event >= 0:
 		state.set_event_flag(wall_event, true)
-	var warped: Dictionary = warp_to_dig_point()
+	var staged: Dictionary = _stage_escape(&"escape_rope_requested", 0, -1)
+	staged["wall_event"] = wall_event
+	_pending_escape["wall_event"] = wall_event
+	return staged
+
+
+## The three escapes print their line on the map they leave: a `waitbutton` or
+## `pause 60` sits behind it and `special WarpToSpawnPoint` behind that.
+## [param spawn] below zero is the recorded dig warp rather than a spawn.
+func _stage_escape(kind: StringName, move_id: int, spawn: int) -> Dictionary:
+	_pending_escape = {"ok": true, "kind": kind, "move": move_id, "spawn": spawn}
+	return _pending_escape.duplicate(true)
+
+
+func pending_escape() -> Dictionary:
+	return _pending_escape.duplicate(true)
+
+
+## The warp the staged escape owes, taken once its line has been acknowledged.
+func complete_escape() -> Dictionary:
+	if _pending_escape.is_empty():
+		return {"ok": false, "kind": &"escape_failed", "reason": &"no_pending_escape"}
+	var staged: Dictionary = _pending_escape
+	_pending_escape = {}
+	var spawn: int = int(staged["spawn"])
+	var warped: Dictionary = warp_to_spawn(spawn) if spawn >= 0 else warp_to_dig_point()
 	if not bool(warped.get("ok", false)):
-		return _escape_rope_failure(StringName(warped.get("reason", &"no_dig_warp")))
-	return {
-		"ok": true,
-		"kind": &"escape_rope_requested",
-		"warp": warped,
-		"wall_event": wall_event,
-	}
+		return {
+			"ok": false, "kind": &"escape_failed",
+			"reason": StringName(warped.get("reason", &"no_dig_warp")),
+		}
+	staged["kind"] = &"escape_applied"
+	staged["warp"] = warped
+	return staged
 
 
 ## `.CheckCanDig`: a cave or a dungeon, and all three bytes of the recorded dig
@@ -7054,6 +7088,7 @@ func reload_current_map() -> Dictionary:
 	_pending_surf.clear()
 	_pending_whirlpool.clear()
 	_pending_strength.clear()
+	_pending_escape.clear()
 	_pending_waterfall.clear()
 	_pending_headbutt.clear()
 	_pending_rock_smash.clear()

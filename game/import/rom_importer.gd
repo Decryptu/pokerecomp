@@ -2362,8 +2362,7 @@ const INTRO_TEXT_OPENINGS: Dictionary = {
 
 
 ## What each pack text opens with once its `text` macro byte is past. Short
-## anchors, the way the intro texts are anchored.
-## The pack's own five, and the six a field item says. Every one is
+## anchors, the way the intro texts are anchored. Every one is
 ## `data/text/common_*.asm`, which no other importer reads, so each is pinned by
 ## its own opening rather than by a table.
 const PACK_TEXT_OPENINGS: Dictionary = {
@@ -2379,6 +2378,9 @@ const PACK_TEXT_OPENINGS: Dictionary = {
 	## MENU_DESCRIPTION_FIRST does.
 	"sacred_ash": "<PLAYER>'s POKéMON",
 	"squirtbottle": "<PLAYER> sprinkled",
+	"cant_get_off_bike": "You can't get off",
+	"got_on_bike": "<PLAYER> got on the",
+	"got_off_bike": "<PLAYER> got off",
 	"coin_case": "Coins:",
 	"blue_card": "You now have",
 	"sent_trophy_home": "There was a trophy",

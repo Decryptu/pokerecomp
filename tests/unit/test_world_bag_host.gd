@@ -139,13 +139,19 @@ func test_a_stack_moves_between_the_bag_and_the_pc_and_back() -> void:
 	assert_eq(_world.state.pc_item_quantity(POTION), 0, "an emptied stack is gone")
 
 
-## `.no_toss` keeps a key item out of the PC, which is the same permission bit
-## TOSS reads.
-func test_a_key_item_cannot_be_deposited() -> void:
+## `.TryDepositItem`'s jumptable is `CheckItemMenu`'s value, not the CANT_TOSS
+## bit: a key item's is `ITEMMENU_CLOSE`, which is one of its four `.tossable`
+## rows, so the PC takes it. `TossItemFromPC` is what refuses it afterwards.
+func test_a_key_item_is_deposited_and_then_cannot_be_tossed() -> void:
 	var result: Dictionary = Gen2WorldPC.deposit(_world, _save, KEY_ITEM, 1, false)
-	assert_false(bool(result["ok"]))
-	assert_eq(result["reason"], &"item_cannot_be_deposited")
-	assert_eq(_world.state.pc_item_quantity(KEY_ITEM), 0)
+	assert_true(bool(result["ok"]), String(result.get("reason", "")))
+	assert_eq(_world.state.pc_item_quantity(KEY_ITEM), 1)
+	assert_eq(_world.state.item_quantity(KEY_ITEM), 0)
+
+	var tossed: Dictionary = Gen2WorldPC.toss(_world, _save, KEY_ITEM, 1, false)
+	assert_false(bool(tossed["ok"]))
+	assert_eq(tossed["reason"], &"item_cannot_be_tossed")
+	assert_eq(_world.state.pc_item_quantity(KEY_ITEM), 1)
 
 
 ## `.NoRoomInPC`: `ReceiveItem` fails before anything leaves the bag, so a full
