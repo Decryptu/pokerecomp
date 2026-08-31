@@ -38,6 +38,15 @@
       ],
       "versions": [
         {
+          "version": "0.1.17",
+          "buildVersion": "0.1.17",
+          "date": "2026-08-31T12:56:17Z",
+          "localizedDescription": null,
+          "downloadURL": "https://github.com/Decryptu/pokerecomp/releases/download/v0.1.17/pokerecomp-0.1.17-ios.ipa",
+          "size": 23495267,
+          "minOSVersion": "15.0"
+        },
+        {
           "version": "0.1.16",
           "buildVersion": "0.1.16",
           "date": "2026-08-31T08:22:30Z",
@@ -182,11 +191,11 @@
           "minOSVersion": "15.0"
         }
       ],
-      "version": "0.1.16",
-      "versionDate": "2026-08-31T08:22:30Z",
-      "versionDescription": "## Fixed\n\n- Pokemon gender was inverted, so a Pokemon that should have been male read female. `GetGender` compares a byte built from the Attack and Speed DVs against the species ratio, and this port had that comparison the wrong way round. It affects the save editor, the box, the stats page, the Hall of Fame, both Day-Care parents, the gender an egg hatches with, Attract, and the in-game trades that ask for a particular gender. Gender is worked out from the DVs every time it is read, so no existing save needs repairing.\n- The policeman in Elm's Lab answered SILVER for you. The naming screen opens now, and leaving it blank still gives SILVER, the way the cartridge does.\n- The script command that turns the player did nothing, everywhere it is used, so no scene ever turned you. Mom's Pokegear scene and the old man's tour of Cherrygrove were the two you would notice.\n- The Cherrygrove guide dragged you around facing wherever the walk was going to end. A follower turns as each step begins now.\n- The \"!\" bubble never appeared over your own head, and `disappear PLAYER`, which takes you off screen in Lance's room while the reporter runs about, did nothing either.\n\n`api_version` stays 29 and nothing on the boundary moved.\n\npokerecomp is not an emulator. It rebuilds the game from a Game Boy Color cartridge you dump yourself, and verifies the file before using it. No game data ships with this release, so you need your own Crystal, Gold or Silver ROM.\n\n## Which file\n\n| You have | Download |\n|---|---|\n| Windows, any PC from the last 15 years | `pokerecomp-0.1.16-windows-x86_64.exe` |\n| Windows on a Snapdragon or Surface Pro X | `pokerecomp-0.1.16-windows-arm64.exe` |\n| A Mac | `pokerecomp-0.1.16-macos.zip` |\n| Linux on a desktop or laptop | `pokerecomp-0.1.16-linux-x86_64` |\n| Linux on a Raspberry Pi, an SBC or an arm64 handheld | `pokerecomp-0.1.16-linux-arm64` |\n| Android, including handhelds like the Ayn Thor | `pokerecomp-0.1.16-android.apk` |\n| iPhone or iPad | `pokerecomp-0.1.16-ios.ipa` |\n| A Nintendo Switch running homebrew | `pokerecomp-0.1.16-switch.zip` |\n\nEvery download is one file. `sha256sums.txt` covers all of them.\n\n## First launch\n\n- **Windows** may show a blue \"Windows protected your PC\" box, because the build is not signed by a paid certificate. Click **More info**, then **Run anyway**.\n- **macOS**: the app is ad-hoc signed and not notarized, so double-clicking it is refused. **Right-click the app, choose Open, then Open again.** Only the first launch needs this.\n- **Linux**: `chmod +x pokerecomp-0.1.16-linux-x86_64` and run it.\n- **Android**: your phone will ask you to allow installing from this source.\n- **iOS**: the `.ipa` is deliberately **unsigned**. Install it with [AltStore](https://altstore.io) or [SideStore](https://sidestore.io), which sign it on your own machine with your own Apple ID. A free Apple ID works; apps signed that way need re-signing every 7 days. Add pokerecomp's source once, in **Sources** > **+**, and every later release shows up as an update: `https://raw.githubusercontent.com/Decryptu/pokerecomp/main/.github/altstore/source.json`\n- **Switch**: extract the zip at the root of your microSD, so the file lands at `switch/pokerecomp.nro`, and launch **pokerecomp** from the homebrew menu. It needs a console that already runs homebrew; nothing here installs one.\n\n## Updating\n\nThe launcher's about page tells you when a newer release exists. It does not install it: download the new file and replace the old one. **Your saves are kept separately and survive it**, on every platform.\n",
-      "downloadURL": "https://github.com/Decryptu/pokerecomp/releases/download/v0.1.16/pokerecomp-0.1.16-ios.ipa",
-      "size": 23477929
+      "version": "0.1.17",
+      "versionDate": "2026-08-31T12:56:17Z",
+      "versionDescription": null,
+      "downloadURL": "https://github.com/Decryptu/pokerecomp/releases/download/v0.1.17/pokerecomp-0.1.17-ios.ipa",
+      "size": 23495267
     }
   ]
 }
