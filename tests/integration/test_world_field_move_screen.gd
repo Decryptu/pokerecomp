@@ -275,6 +275,23 @@ func _shown_text() -> String:
 	return " ".join(_world_screen._text_box.text_lines())
 
 
+## Frames [method _settle] will spend. A box that runs on without a press waits
+## for its own scroll first, and how long that takes belongs to the text speed
+## and the length of the message rather than to a constant a test can pin.
+const SETTLE_FRAMES: int = 120
+
+
+## Spends host frames until [param predicate] holds. One `await process_frame`
+## is one frame of the host, not one of the screen, and a loaded runner leaves
+## the two a frame or more apart.
+func _settle(predicate: Callable) -> bool:
+	for _frame: int in SETTLE_FRAMES:
+		if bool(predicate.call()):
+			return true
+		await get_tree().process_frame
+	return bool(predicate.call())
+
+
 func _labels(items: Array) -> Array:
 	var out: Array = []
 	for entry: Dictionary in items:
@@ -549,14 +566,16 @@ func test_choosing_strength_shows_the_message_and_defers_the_flag() -> void:
 	var party: Gen2PartyScreen = await _open_party()
 	party.handle_button(Gen2Button.A)
 	party.handle_button(Gen2Button.A)
-	## `_UseStrengthText` ends in `done` with no `waitbutton` behind it, so this
-	## box is up before a frame passes and gone after one.
+	## `_UseStrengthText` ends in `done` with no `waitbutton` behind it, so the
+	## first box is up before a frame passes and runs on once its own scroll has
+	## settled.
 	assert_eq(_shown_text(), "TESTMON used STRENGTH!")
-	await get_tree().process_frame
+	assert_true(await _settle(func() -> bool:
+		return _shown_text() == "TESTMON can move boulders."
+	), "the second box never arrived")
 
 	assert_null(_world_screen._party_host)
 	assert_true(_world_screen._field_move_text)
-	assert_eq(_shown_text(), "TESTMON can move boulders.")
 	assert_false(world.strength_active())
 
 	_world_screen._acknowledge_field_move_text()
