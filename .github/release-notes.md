@@ -5,15 +5,17 @@ break put in by hand only makes it ragged. -->
 
 ## New in this release
 
-A reported bug in the music, a launcher that says which button does what, and a bench share of an experience award for mods.
+Four reported bugs, every one of them in what the game shows you rather than in what it decides.
 
-**Mom's music no longer plays under the town's.** Talking to Mom downstairs started the phone tutorial music while the town's lead kept playing, at a speed that did not match. A music start loads only the channels the new piece names, which is why the cartridge stops the piece in front of every one of them; this port did not. Every music request the game makes stops first now. A sound whose record a cache does not carry skips its script command instead of leaving it pending with nothing to advance it, which is one way a conversation could stick.
+**Pokemon were nearly always female.** Gender is worked out by comparing a byte built from the Attack and Speed DVs against the species ratio, and this port had that comparison the wrong way round, so a Pokemon that should have been male read female. Everything that reads a gender was wrong with it: the save editor, the box, the stats page, the Hall of Fame, both Day-Care parents, the gender an egg hatches with, Attract, and the in-game trades that ask for a particular one. Nothing is stored, so no save needs fixing: a Pokemon you already have reads the right way round from now on.
 
-**The launcher says which button does what.** The four unlabelled discs are a named tab strip along the top, flanked by the shoulder badges that step it. Every screen prints the actions it offers along the bottom, wearing the control you are actually holding: the badge is read from your own bindings, so a rebind, a pad being plugged in or a hand leaving the keys each change what is drawn. Settings is five sections behind a rail instead of one long scroll, every option is drawn as the same row, and the cartridge options moved off a floating disc onto a plate that names the cartridge. Pad badges print the letters your pad prints; Auto reads the controller that is connected, and Nintendo and Xbox are the two manual answers under Appearance. The cartridge picture, the mods check, the Application settings and the update check are drawn with new glyphs, and a Close chip's words stay readable with the pointer on them.
+**The policeman lets you name your rival.** He asked what the thief called himself and then answered SILVER for you. The naming screen opens now, and leaving it blank still gives SILVER, the way the cartridge does.
 
-**A mart refuses on the price before the stack.** An order that was both unaffordable and over the 99 stack said PACK FULL, where the cartridge says you have not got the money.
+**People turn to look at you again.** Mom did not look up when she stopped you about the Pokegear, and the old man showing you around Cherrygrove faced you every way but the right one. The script command that turns you was doing nothing at all, everywhere it is used, so no scene had ever turned you since this port could run one. The old man also dragged you around facing wherever the walk was going to end rather than turning as he went.
 
-**For mod authors**, `api_version` is 29. `register_experience_bystanders` pays every living party member a fraction of the fighter's own award: 0.0 is the cartridge, 0.5 is Gen 6's Exp. Share, 1.0 is Gen 8's. A claimed share suppresses the cartridge halving, and a bystander is paid once and last.
+**The "!" bubble appears over your own head.** Every surprise in the game puts one there and none of them drew it. So did `disappear PLAYER`, which is what takes you off screen in Lance's room while the reporter runs about looking for you.
+
+**For mod authors**, `api_version` stays 29 and nothing on the boundary moved.
 
 ## Which file
 
