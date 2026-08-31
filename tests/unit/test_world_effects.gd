@@ -343,12 +343,15 @@ func test_an_icon_actor_steps_the_strips_two_frames_at_the_framesets_rate() -> v
 	RomCache.clear(ActorFixture.directory())
 
 
-## A map object's icon is copied into both VRAM halves, so it shows one frame
-## forever; only an actor asks for the second.
-func test_a_map_objects_icon_never_reaches_the_strips_second_frame() -> void:
+## `Facings`' up row is tiles $04 to $07 whatever the sprite, which for an icon
+## is its second drawing. A map object reaches it by facing up, which is what
+## `SetFacingBounce` alternates, and by nothing else: the walking rows belong to
+## an actor.
+func test_a_map_objects_icon_reaches_the_second_frame_only_by_facing_up() -> void:
 	var sprite: Gen2WorldSprite = Gen2WorldSprite.from_mon_icon(1)
 	assert_eq(sprite.frame_tile_offset(Gen2WorldSprite.FACING_DOWN, 1), 0)
-	assert_eq(sprite.frame_tile_offset(Gen2WorldSprite.FACING_UP, 3), 0)
+	assert_eq(sprite.frame_tile_offset(Gen2WorldSprite.FACING_LEFT, 3), 0)
+	assert_eq(sprite.frame_tile_offset(Gen2WorldSprite.FACING_UP, 0), 4)
 
 
 func test_actor_sprites_are_sorted_by_row_and_read_once_a_frame() -> void:

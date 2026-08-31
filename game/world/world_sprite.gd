@@ -25,9 +25,8 @@ const FACING_RIGHT: int = 3
 ## `GetUsedSprite` copies that many twice; see [method frame_tile_offset].
 const WALKING_HALF_TILES: int = 12
 
-## Tiles in one frame of a mon icon. `LoadOverworldMonIcon` asks for eight, which
-## is the two `.Frameset_PartyMon` steps through; see [member
-## animate_icon_frames] for why only an actor gets the second.
+## Tiles in one frame of a mon icon. `LoadOverworldMonIcon` asks for eight, the
+## two `.Frameset_PartyMon` steps through.
 const MON_ICON_FRAME_TILES: int = 4
 
 ## data/sprites/player_sprites.asm's ChrisStateSprites and KrisStateSprites, the
@@ -83,12 +82,9 @@ var tiles: int = 0
 var sprite_type: int = TYPE_STILL
 var default_palette: int = 0
 var icon_number: int = 0
-## Whether a mon icon's two 4-tile frames are both drawn. False for a map
-## object, because the cartridge does not animate one: `GetUsedSprite` copies an
-## icon's eight tiles into `vTiles0` and `vTiles1` both, so the walking rows of
-## `Facings` land on the same picture and the object shows its first frame
-## forever. A mod's world actor is not a map object and asks for the animation
-## the strip carries, which is the two frames `Gen2PartyMenuPage` steps through.
+## Whether `Facings`' walking rows reach the icon's second frame. A map object
+## never asks: only OBJECT_ACTION_BOUNCE animates one, through the up row. A
+## mod's actor is not a map object and steps the strip the party menu steps.
 var animate_icon_frames: bool = false
 
 
@@ -136,8 +132,13 @@ func is_walking() -> bool:
 ## the renderer, and so does frame 3 of down and up.
 func frame_tile_offset(facing: int, frame: int) -> int:
 	if sprite_type == TYPE_MON_ICON:
-		return MON_ICON_FRAME_TILES if animate_icon_frames and is_walking_frame(frame) \
-			and tiles >= MON_ICON_FRAME_TILES * 2 else 0
+		if tiles < MON_ICON_FRAME_TILES * 2:
+			return 0
+		## `Facings`' up row is tiles $04 to $07, an icon's second drawing rather
+		## than another view, which is what `SetFacingBounce` alternates onto.
+		if facing == FACING_UP:
+			return MON_ICON_FRAME_TILES
+		return MON_ICON_FRAME_TILES if animate_icon_frames and is_walking_frame(frame) else 0
 	if tiles <= 4 or sprite_type == TYPE_STILL:
 		return 0
 	var facing_index: int = clampi(facing, FACING_DOWN, FACING_RIGHT)

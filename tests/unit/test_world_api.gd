@@ -2698,15 +2698,19 @@ func test_snapshot_ignores_transient_player_step() -> void:
 
 ## The fixture's single object stands still. These tests hand it a wandering
 ## template so the data-driven driver has something to decide about.
+## The player stands three cells from the fixture's object, because
+## `IsObjectMovingOffEdgeOfScreen` refuses a step off the ten by nine cells the
+## screen shows and the object sits at (5, 6).
 func _wandering_world(
 	movement: int = Gen2WorldObject.MOVEMENT_WANDER, x_radius: int = 2, y_radius: int = 2,
-	start: Vector2i = Vector2i(12, 10)
+	start: Vector2i = Vector2i(8, 6)
 ) -> Gen2WorldAPI:
 	var world: Gen2WorldAPI = _world(start)
 	var object: Gen2WorldObject = world.objects[0]
 	object.movement = movement
 	object.x_radius = x_radius
 	object.y_radius = y_radius
+	object.restore_default_movement()
 	return world
 
 
@@ -2797,7 +2801,9 @@ func test_a_big_object_checks_both_cells_on_its_new_edge() -> void:
 ## NPCs ignore it, but at these two pins both branches of
 ## CanObjectMoveInDirection reach the same HasObjectReachedMovementLimit.
 func test_a_swim_wander_object_moves_across_its_pond_within_its_radius() -> void:
-	var world: Gen2WorldAPI = _world(Vector2i(8, 6))
+	# The player stands beside the pond so IsObjectMovingOffEdgeOfScreen, the
+	# other refusal in CanObjectMoveInDirection, is not the thing under test.
+	var world: Gen2WorldAPI = _world(Vector2i(10, 8))
 	var object: Gen2WorldObject = world.objects[0]
 	object.cell = Vector2i(11, 11)
 	object.initial_cell = object.cell
@@ -2849,7 +2855,9 @@ func test_blocked_wander_object_keeps_its_cell_and_waits() -> void:
 	random.seed = 77
 	var start: Vector2i = object.cell
 
-	assert_false(world.advance_object_steps_pass(random))
+	# InitStep writes the facing before CanObjectMoveInDirection refuses, so the
+	# driver still reports a drawing change on the frame the step is blocked.
+	assert_true(world.advance_object_steps_pass(random))
 	assert_eq(object.cell, start)
 	assert_false(object.is_stepping())
 	# _RandomWalkContinue's .new_duration branch waits again rather than
@@ -2879,6 +2887,99 @@ func test_wander_object_never_leaves_its_source_radius() -> void:
 	# The same run has to prove the object actually wandered, or a driver that
 	# never moved anything would pass the bound above.
 	assert_gt(visited.size(), 1, "object never moved")
+
+
+## `MovementFunction_SpinCounterclockwise` and `_SpinClockwise`: sixteen passes
+## on the row's own facing, then the next one out of the table, for ever.
+## Measured against a real cartridge at 32 hardware frames a facing.
+func test_fixed_spin_templates_walk_their_own_facing_table() -> void:
+	for movement: int in [
+		Gen2WorldObject.MOVEMENT_SPINCOUNTERCLOCKWISE,
+		Gen2WorldObject.MOVEMENT_SPINCLOCKWISE,
+	]:
+		var world: Gen2WorldAPI = _wandering_world(movement)
+		var object: Gen2WorldObject = world.objects[0]
+		var random := RandomNumberGenerator.new()
+		random.seed = 3
+		var start: Vector2i = object.cell
+		var table: Array = Gen2WorldObject.SPIN_NEXT_FACING[movement]
+
+		assert_eq(object.facing, Gen2WorldSprite.FACING_LEFT \
+			if movement == Gen2WorldObject.MOVEMENT_SPINCOUNTERCLOCKWISE \
+			else Gen2WorldSprite.FACING_RIGHT)
+		for turn: int in 8:
+			var before: int = object.facing
+			_advance_object_frames(world, Gen2WorldObject.SPIN_HOLD_PASSES, random)
+			assert_eq(object.facing, before, "turned early on turn %d" % turn)
+			_advance_object_frames(world, 1, random)
+			assert_eq(object.facing, int(table[before]))
+		assert_eq(object.cell, start)
+		assert_false(object.is_stepping())
+
+
+## `MovementFunction_RandomSpinFast` rerolls a repeat onto the opposite facing,
+## so the drawing changes on every one of its waits.
+func test_the_fast_random_spin_never_repeats_a_facing() -> void:
+	var world: Gen2WorldAPI = _wandering_world(Gen2WorldObject.MOVEMENT_SPINRANDOM_FAST)
+	var object: Gen2WorldObject = world.objects[0]
+	var random := RandomNumberGenerator.new()
+	random.seed = 99
+
+	var facings: Dictionary = {}
+	for _turn: int in 200:
+		var before: int = object.facing
+		while object.tick_idle():
+			pass
+		world.advance_object_steps_pass(random)
+		assert_ne(object.facing, before)
+		facings[object.facing] = true
+	assert_eq(facings.size(), 4, "the reroll must still reach all four facings")
+
+
+## `SetFacingBounce`: eight passes on `Facings`' down row and eight on its up
+## row, which for a mon icon are the icon's two drawings. Measured against a
+## real cartridge at 16 hardware frames a drawing.
+func test_a_bouncing_object_alternates_the_two_icon_rows() -> void:
+	var world: Gen2WorldAPI = _wandering_world(Gen2WorldObject.MOVEMENT_POKEMON)
+	var object: Gen2WorldObject = world.objects[0]
+	var random := RandomNumberGenerator.new()
+	random.seed = 1
+	var start: Vector2i = object.cell
+
+	assert_eq(object.facing, Gen2WorldSprite.FACING_DOWN)
+	for _step: int in 7:
+		world.advance_object_steps_pass(random)
+		assert_eq(object.facing, Gen2WorldSprite.FACING_DOWN)
+	assert_true(world.advance_object_steps_pass(random))
+	assert_eq(object.facing, Gen2WorldSprite.FACING_UP)
+	for _step: int in 7:
+		world.advance_object_steps_pass(random)
+		assert_eq(object.facing, Gen2WorldSprite.FACING_UP)
+	world.advance_object_steps_pass(random)
+	assert_eq(object.facing, Gen2WorldSprite.FACING_DOWN)
+	assert_eq(object.cell, start)
+	assert_false(object.is_stepping())
+
+
+## `IsObjectMovingOffEdgeOfScreen`, the refusal beside the movement radius: an
+## object may not step off the ten by nine cells the screen shows, whatever its
+## radius allows. Measured against a real cartridge.
+func test_an_object_refuses_a_step_off_the_screen() -> void:
+	var world: Gen2WorldAPI = _wandering_world(
+		Gen2WorldObject.MOVEMENT_WALK_LEFT_RIGHT, 3, 0
+	)
+	var object: Gen2WorldObject = world.objects[0]
+	var random := RandomNumberGenerator.new()
+	random.seed = 12
+
+	# The object sits at (5, 6) and the player at (8, 6), so the band's left
+	# half is four columns out and the right half is not.
+	var visited: Dictionary = {}
+	for _frame: int in 4000:
+		world.advance_object_steps_pass(random)
+		visited[object.cell.x] = true
+	assert_true(visited.has(4), "the object never reached the near edge")
+	assert_false(visited.has(3), "the object stepped off the screen")
 
 
 func test_spin_templates_turn_without_starting_a_step() -> void:

@@ -285,8 +285,11 @@ func _verify_swimming_objects(game_id: StringName, data: GameData, crystal: bool
 	if swimmers.size() != SWIM_OBJECT_CENSUS:
 		return
 
+	# Three cells north of the Lapras, because `IsObjectMovingOffEdgeOfScreen`
+	# refuses a step off the ten by nine cells the screen shows and the whole
+	# radius has to sit inside that window for the limit to be what is measured.
 	var world: Gen2WorldAPI = Gen2WorldAPI.open(
-		data, UNION_CAVE_GROUP, number, Vector2i.ZERO, Gen2WorldState.new()
+		data, UNION_CAVE_GROUP, number, LAPRAS_CELL + Vector2i(0, -3), Gen2WorldState.new()
 	)
 	if world == null:
 		_r.fail("%s: Union Cave B2F is missing." % game_id)

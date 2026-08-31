@@ -2,9 +2,8 @@ class_name Gen2WorldObject
 extends RefCounted
 
 ## Scene-free state for one map-object event. Script pointers and event flags
-## remain data here. The movement templates implemented in this slice cover
-## the source's standing, fixed-facing, axis-wander and random-wander rows.
-## Scripted movement and follower state are driven by the world event runtime.
+## remain data here; scripted movement and follower state are driven by the
+## world event runtime.
 
 const MOVEMENT_STILL: int = 1
 const MOVEMENT_WANDER: int = 2
@@ -21,20 +20,38 @@ const MOVEMENT_FOLLOW: int = 19
 const MOVEMENT_SCRIPTED: int = 20
 ## SPRITEMOVEDATA_STRENGTH_BOULDER. The constants file's comment column is hex,
 ## hence $19 and not 19, which is SPRITEMOVEDATA_FOLLOWING ($13). A boulder
-## decides nothing, so it is in neither movement_supported() nor
-## movement_advances() and only reacts to a push.
+## decides nothing, so it is in neither set below and only reacts to a push.
 const MOVEMENT_STRENGTH_BOULDER: int = 0x19
 ## SPRITEMOVEDATA_SMASHABLE_ROCK, below the boulder and in neither set for the
-## same reason. Its flags1 are the boulder's minus the palette bit and plus
-## USE_OBP1, so only the movement byte tells the two apart.
+## same reason. It shares the boulder's flags1 and differs in flags2 (USE_OBP1)
+## and palette flags, so the movement byte is what tells the two apart.
 const MOVEMENT_SMASHABLE_ROCK: int = 0x18
 ## SPRITEMOVEDATA_SUDOWOODO, in neither set for the same reason. Route 36's weird
 ## tree is the only object on it and `.CheckCanUseSquirtbottle` the only reader.
 const MOVEMENT_SUDOWOODO: int = 0x17
 const MOVEMENT_SWIM_WANDER: int = 0x24
-## The three rows data/sprites/map_objects.asm gives BIG_OBJECT in their palette
-## flags. Only two objects in either game use one: the player's bedroom big doll
-## and Vermilion City's Snorlax. BIGDOLLASYM is referenced by no map.
+## SPRITEMOVEDATA_POKEMON: `MovementFunction_Bouncing` stands the object still
+## and leaves the drawing to OBJECT_ACTION_BOUNCE. See tick_bounce().
+const MOVEMENT_POKEMON: int = 0x16
+const MOVEMENT_SPINCOUNTERCLOCKWISE: int = 0x1E
+const MOVEMENT_SPINCLOCKWISE: int = 0x1F
+## `_MovementSpinRepeat`'s `ld a, $10`, spent as a STEP_TYPE_SLEEP.
+const SPIN_HOLD_PASSES: int = 16
+## `.facings_counterclockwise` and `.facings_clockwise`, both indexed by the
+## facing the object holds now. Measured against a cartridge.
+const SPIN_NEXT_FACING: Dictionary = {
+	MOVEMENT_SPINCOUNTERCLOCKWISE: [
+		Gen2WorldSprite.FACING_RIGHT, Gen2WorldSprite.FACING_LEFT,
+		Gen2WorldSprite.FACING_DOWN, Gen2WorldSprite.FACING_UP,
+	],
+	MOVEMENT_SPINCLOCKWISE: [
+		Gen2WorldSprite.FACING_LEFT, Gen2WorldSprite.FACING_RIGHT,
+		Gen2WorldSprite.FACING_UP, Gen2WorldSprite.FACING_DOWN,
+	],
+}
+## The three rows data/sprites/map_objects.asm gives BIG_OBJECT. Two objects in
+## either game use one, the bedroom doll and Vermilion's Snorlax; no map names
+## BIGDOLLASYM.
 const MOVEMENT_BIGDOLLSYM: int = 0x15
 const MOVEMENT_BIGDOLLASYM: int = 0x20
 const MOVEMENT_BIGDOLL: int = 0x21
@@ -69,18 +86,15 @@ var sight_range: int = 0
 var event_script: int = 0
 var event_flag: int = 0
 ## Whether [member event_flag] was set when the table was built.
-## `ReadObjectEvents` reads it at map load and `wMapObjects` carries the answer
-## until the next, so only `appear` and `disappear`, which edit the live struct
-## too, move anything mid-map. Kept across a mid-script object reload.
+## `ReadObjectEvents` reads it at map load, so only `appear` and `disappear`,
+## which edit the live struct too, move anything mid-map.
 var flag_hidden: bool = false
 var trainer_data: Dictionary = {}
 var facing: int = Gen2WorldSprite.FACING_DOWN
-## The `Facings` frame this object is drawn on, 0 to 3: two standing and two
-## walking. Derived from step_frame; see walk_frame().
+## The `Facings` frame, 0 to 3: two standing and two walking. See walk_frame().
 var frame: int = 0
-## OBJECT_STEP_FRAME. `SetFacingStepAction` (engine/overworld/map_object_action.asm)
-## increments it once per hardware frame of a step and masks it to four bits, and
-## the drawn frame is its two high bits, so the drawing changes every four frames.
+## OBJECT_STEP_FRAME. `SetFacingStepAction` increments it once a frame masked to
+## four bits, and the drawn frame is its two high bits.
 var step_frame: int = 0
 ## Which command is walking, and OBJECT_STEP_FRAME's spin use for it.
 var step_kind: StringName = &""
@@ -104,24 +118,19 @@ var step_began: bool = false
 ## OBJECT_ACTION_WEIRD_TREE, while the sleep a `tree_shake` queued runs. See
 ## queue_tree_shake().
 var weird_tree: bool = false
-## The rest of a scripted movement stream, still to be drawn. An applymovement
-## commits every cell of its path at once, so the whole path is behind the
-## committed cell until these drain; each entry is one `{direction, frames}`
-## step of it, in stream order.
+## The rest of a scripted movement stream, still to be drawn: an applymovement
+## commits every cell of its path at once. One `{direction, frames}` an entry.
 var queued_steps: Array = []
-## True while the trail above belongs to a script rather than to the movement
-## templates, which is what tells the two drivers apart:
-## Gen2WorldAPI.advance_object_steps_pass() decides movement and skips a frozen
-## object, advance_scripted_steps_pass() only draws and is not gated at all.
+## True while the trail above belongs to a script, which is what tells the two
+## drivers apart: Gen2WorldAPI.advance_object_steps_pass() decides movement and
+## skips a frozen object, advance_scripted_steps_pass() only draws.
 var scripted_steps: bool = false
 ## OBJECT_FLAGS2 FROZEN_F. `HandleStepType` returns before every step function
-## for a frozen object, so it neither steps, nor spends its wait, nor decides;
-## `FreezeAllOtherObjects` is the only thing in the game that sets it and
-## `ApplyMovement` is its only caller.
+## for a frozen object, so it neither steps, nor waits, nor decides.
+## `FreezeAllOtherObjects` sets it and `ApplyMovement` is its only caller.
 var frozen: bool = false
-## Frames this object waits before its movement template decides again. The
-## source keeps this in OBJECT_STEP_DURATION while the object sits in
-## STEP_TYPE_SLEEP (engine/overworld/map_objects.asm, StepFunction_Sleep).
+## Passes this object waits before its movement template decides again:
+## OBJECT_STEP_DURATION under `StepFunction_Sleep`.
 var idle_passes_remaining: int = 0
 
 
@@ -149,16 +158,14 @@ static func from_event(
 		out.trainer_data = (trainer as Dictionary).duplicate(true)
 	if out.event_flag == 0xFFFF:
 		out.event_flag = -1
-	out.facing = out.initial_facing()
+	out.restore_default_movement()
 	return out
 
 
-## Carries the live presentation of the object this replaces at the same index:
-## its emote, the trail it is still being drawn walking, and whether a movement
-## stream deleted it. The cartridge never rebuilds a struct for the reasons this
-## project rebuilds a record, `ApplyObjectFacing` and the rest writing into the
-## one already there, so without this a `turnobject` between a `showemote` and
-## its `applymovement` empties the trail the script is waiting on.
+## Carries the live presentation of the object this replaces at the same index.
+## The cartridge writes into the struct already there rather than rebuilding it,
+## so without this a `turnobject` between a `showemote` and its `applymovement`
+## empties the trail the script is waiting on.
 func carry_presentation_from(previous: Gen2WorldObject) -> void:
 	if previous == null:
 		return
@@ -177,13 +184,21 @@ func carry_presentation_from(previous: Gen2WorldObject) -> void:
 	deleted = previous.deleted
 
 
+## `ResetObject`: the movement row's own facing, and `_MovementSpinInit`'s first
+## hold on it before `_MovementSpinTurnLeft` reaches the table.
+func restore_default_movement() -> void:
+	facing = initial_facing()
+	idle_passes_remaining = SPIN_HOLD_PASSES if movement in SPIN_NEXT_FACING else 0
+
+
+## data/sprites/map_objects.asm's facing column.
 func initial_facing() -> int:
 	match movement:
 		MOVEMENT_FIXED_UP:
 			return Gen2WorldSprite.FACING_UP
-		MOVEMENT_FIXED_LEFT:
+		MOVEMENT_FIXED_LEFT, MOVEMENT_SPINCOUNTERCLOCKWISE:
 			return Gen2WorldSprite.FACING_LEFT
-		MOVEMENT_FIXED_RIGHT:
+		MOVEMENT_FIXED_RIGHT, MOVEMENT_SPINCLOCKWISE:
 			return Gen2WorldSprite.FACING_RIGHT
 		_:
 			return Gen2WorldSprite.FACING_DOWN
@@ -239,8 +254,7 @@ func big_object_shape() -> int:
 
 
 ## WillObjectIntersectBigObject: a big object fills a two-by-two square anchored
-## on its own cell, so it blocks four cells and can be faced from any of them.
-## Every other object is the single cell IsNPCAtCoord compares against.
+## on its own cell. Every other object is the single cell IsNPCAtCoord takes.
 func occupies(target: Vector2i) -> bool:
 	if not is_big_object():
 		return cell == target
@@ -249,22 +263,43 @@ func occupies(target: Vector2i) -> bool:
 		and offset.y >= 0 and offset.y < BIG_OBJECT_SIZE
 
 
+## OBJECT_LAST_MAP_X/Y, which `CopyCoordsTileToLastCoordsTile` only catches up
+## when a step ends. `IsNPCAtCoord` compares it too, so a cell being walked out
+## of still blocks; `CheckFacingObject` refuses it, so nothing is talked to here.
+func vacating_cell() -> Vector2i:
+	return cell - step_direction if is_stepping() else cell
+
+
 func movement_supported() -> bool:
 	return movement in [
 		MOVEMENT_STILL, MOVEMENT_WANDER, MOVEMENT_SPINRANDOM_SLOW,
 		MOVEMENT_WALK_UP_DOWN, MOVEMENT_WALK_LEFT_RIGHT,
 		MOVEMENT_FIXED_DOWN, MOVEMENT_FIXED_UP, MOVEMENT_FIXED_LEFT,
 		MOVEMENT_FIXED_RIGHT, MOVEMENT_SPINRANDOM_FAST, MOVEMENT_SWIM_WANDER,
+		MOVEMENT_POKEMON, MOVEMENT_SPINCOUNTERCLOCKWISE, MOVEMENT_SPINCLOCKWISE,
 	]
 
 
-## The templates that decide something: the three random-walk and two
-## random-spin rows. Standing and fixed-facing resolve once and never ask again.
+## The templates that decide something: the three random-walk rows and the four
+## spins. Standing and fixed-facing resolve once, and a bounce is an action.
 func movement_advances() -> bool:
 	return movement in [
 		MOVEMENT_WANDER, MOVEMENT_WALK_UP_DOWN, MOVEMENT_WALK_LEFT_RIGHT,
 		MOVEMENT_SWIM_WANDER, MOVEMENT_SPINRANDOM_SLOW, MOVEMENT_SPINRANDOM_FAST,
+		MOVEMENT_SPINCOUNTERCLOCKWISE, MOVEMENT_SPINCLOCKWISE,
 	]
+
+
+## `SetFacingBounce`: OBJECT_STEP_FRAME counts one a pass and its bit 3 picks
+## `Facings`' down row or its up row, an icon's two drawings.
+func tick_bounce() -> bool:
+	step_frame = (step_frame + 1) & 0x0F
+	var wanted: int = Gen2WorldSprite.FACING_UP if (step_frame & 0x08) != 0 \
+		else Gen2WorldSprite.FACING_DOWN
+	if facing == wanted:
+		return false
+	facing = wanted
+	return true
 
 
 ## Exact time-window test from CheckObjectTime in the source runtime. Ranges
@@ -300,6 +335,9 @@ func trainer_flag_active(state: Gen2WorldState) -> bool:
 	return flag >= 0 and state != null and state.is_event_flag_active(flag)
 
 
+## `HasObjectReachedMovementLimit` refuses OBJECT_INIT_X or _Y plus or minus
+## OBJECT_RADIUS, and `.InitRadius` adds one to each nibble on the way in, so the
+## band is the map's own radius either side and inclusive.
 func can_leave_to(destination: Vector2i) -> bool:
 	return destination.x >= initial_cell.x - x_radius \
 		and destination.x <= initial_cell.x + x_radius \

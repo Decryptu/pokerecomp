@@ -3,13 +3,12 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## The imported map corpus against the pins' own copies of the same bytes. pret
-## assembles to a bit-identical ROM, so the `.blk`, metatile, collision and palette
-## map files are the cartridge's own bytes read a second way. Agreement proves the
-## importer's addressing, stride and fold, which is where an offset read one row out
-## hides; it proves nothing about what the bytes mean, and `drawn_blocks` and
+## assembles to a bit-identical ROM, so the `.blk`, metatile, collision and
+## palette map files are the cartridge's own bytes read a second way. Agreement
+## proves the importer's addressing, stride and fold; `drawn_blocks` and
 ## `side_walls` are the semantic half. Every identity comes from the pin's own
-## tables rather than from a number, because `Tileset0` and `TilesetJohto` are the
-## same record under two labels. A missing checkout skips rather than fails.
+## tables, because `Tileset0` and `TilesetJohto` are one record under two
+## labels. A missing checkout skips rather than fails.
 
 const PINS: Dictionary = {
 	&"gold": "pokegold", &"silver": "pokegold", &"crystal": "pokecrystal",
@@ -28,6 +27,30 @@ const ROOF_FILES: Array[String] = [
 
 ## `constants/hardware.inc`: `OAM_BANK1 equ 1 << B_OAM_BANK1`.
 const OAM_BANK1: int = 1 << 3
+
+## Every `SPRITEMOVEDATA_*` an `object_event` in either corpus names, and what
+## answers it here. Transcribed rather than read off `Gen2WorldObject`.
+const MODELLED_MOVEMENT: Dictionary = {
+	"SPRITEMOVEDATA_STILL": "movement_supported",
+	"SPRITEMOVEDATA_WANDER": "movement_advances",
+	"SPRITEMOVEDATA_SPINRANDOM_SLOW": "movement_advances",
+	"SPRITEMOVEDATA_WALK_UP_DOWN": "movement_advances",
+	"SPRITEMOVEDATA_WALK_LEFT_RIGHT": "movement_advances",
+	"SPRITEMOVEDATA_STANDING_DOWN": "movement_supported",
+	"SPRITEMOVEDATA_STANDING_UP": "movement_supported",
+	"SPRITEMOVEDATA_STANDING_LEFT": "movement_supported",
+	"SPRITEMOVEDATA_STANDING_RIGHT": "movement_supported",
+	"SPRITEMOVEDATA_SPINRANDOM_FAST": "movement_advances",
+	"SPRITEMOVEDATA_POKEMON": "tick_bounce",
+	"SPRITEMOVEDATA_SUDOWOODO": "is_sudowoodo",
+	"SPRITEMOVEDATA_SMASHABLE_ROCK": "is_smashable_rock",
+	"SPRITEMOVEDATA_STRENGTH_BOULDER": "is_strength_boulder",
+	"SPRITEMOVEDATA_SPINCOUNTERCLOCKWISE": "movement_advances",
+	"SPRITEMOVEDATA_SPINCLOCKWISE": "movement_advances",
+	"SPRITEMOVEDATA_BIGDOLLSYM": "is_big_object",
+	"SPRITEMOVEDATA_BIGDOLL": "is_big_object",
+	"SPRITEMOVEDATA_SWIM_WANDER": "movement_advances",
+}
 
 var _pins: Dictionary = {}
 var _root: String = ""
@@ -50,6 +73,7 @@ func _check_game() -> void:
 	_check_blocks(pin)
 	_check_tilesets(pin)
 	_check_roofs(pin)
+	_check_object_movement(pin)
 
 
 # --- Map block arrays -------------------------------------------------------
@@ -101,9 +125,8 @@ func _check_blocks(pin: String) -> void:
 
 ## The highest block [param map] names, and a failure when that is past its
 ## tileset's own table. A metatile run's length is only the distance to the next
-## label, so `RomLayout.tileset_block_counts` is the one number here the pins
-## state nowhere: this is what says the imported length covers the corpus, and
-## `TilesetForest`'s 40 is why it is checked rather than assumed.
+## label, so `RomLayout.tileset_block_counts` is the one number the pins state
+## nowhere; `TilesetForest`'s 40 is why it is checked rather than assumed.
 func _check_block_reach(id: String, map: Gen2WorldMap) -> int:
 	var tileset: Gen2WorldTileset = _r.data.world_tileset(map.tileset)
 	if tileset == null:
@@ -204,12 +227,10 @@ func _check_palette_reach(number: int, tileset: Gen2WorldTileset) -> void:
 # --- Roofs ------------------------------------------------------------------
 
 
-## `MapGroupRoofs`, `RoofPals` and the strip `LoadMapGroupRoof` writes over.
-##
-## The two tables are compared against the pin's own text, and the strip is
-## checked from the other side: a group that names a roof must change tiles
-## $0A..$12 of every tileset it draws with, since a copy that lands somewhere
-## else or reads the wrong run is silent until someone looks at a town.
+## `MapGroupRoofs`, `RoofPals` and the strip `LoadMapGroupRoof` writes over. The
+## tables are compared against the pin's text and the strip from the other side:
+## a group naming a roof must change tiles $0A..$12 of every tileset it draws
+## with, since a copy landing elsewhere is silent until someone sees a town.
 func _check_roofs(pin: String) -> void:
 	var groups: PackedByteArray = _roof_groups(pin)
 	var palettes: Array = _roof_palettes(pin)
@@ -403,6 +424,72 @@ func _roof_palettes(pin: String) -> Array:
 # --- Comparison -------------------------------------------------------------
 
 
+# --- Object movement rows ---------------------------------------------------
+
+
+## Every `object_event`'s movement byte against the pin's own `maps/*.asm`, and
+## every row the corpus names against what answers it here. The second half is
+## how the two fixed spins and the bouncing icon were found standing still.
+func _check_object_movement(pin: String) -> void:
+	var numbers: Dictionary = _movement_numbers(pin)
+	var attributes: Dictionary = _attributes(pin)
+	var objects: int = 0
+	var used: Dictionary = {}
+	for entry: Dictionary in _map_ids(pin):
+		var id: String = entry["id"]
+		var map: Gen2WorldMap = _r.data.world_map(entry["group"], entry["number"])
+		var label: String = String(attributes.get(id, {}).get("label", ""))
+		if map == null or label == "":
+			continue
+		var rows: Array = map.events.get("objects", [])
+		var pinned: PackedStringArray = _pinned_movement(pin, label)
+		if pinned.size() != rows.size():
+			_report("%s has %d objects, the pin has %d." % [id, rows.size(), pinned.size()])
+			continue
+		for index: int in pinned.size():
+			var name: String = pinned[index]
+			used[name] = true
+			objects += 1
+			var wanted: int = int(numbers.get(name, -1))
+			var ours: int = int((rows[index] as Dictionary).get("movement", -1))
+			if ours != wanted:
+				_report("%s object %d moves on $%02X, the pin says %s ($%02X)." % [
+					id, index, ours, name, wanted
+				])
+	for name: String in used:
+		if not MODELLED_MOVEMENT.has(name):
+			_report("%s is used by the corpus and nothing here answers it." % name)
+	_r.note("objects: %d movement rows compared, %d distinct" % [objects, used.size()])
+	if objects == 0:
+		_report("no object movement row was compared, so the layer proved nothing.")
+
+
+## `const SPRITEMOVEDATA_*`, whose `const_def` opens at zero.
+func _movement_numbers(pin: String) -> Dictionary:
+	return _parsed(pin, &"movement_numbers", func() -> Dictionary:
+		var out: Dictionary = {}
+		var next: int = 0
+		for line: String in _lines(pin.path_join("constants/map_object_constants.asm")):
+			if not line.begins_with("const SPRITEMOVEDATA_"):
+				continue
+			out[line.substr(6).strip_edges()] = next
+			next += 1
+		return out
+	)
+
+
+## Each `object_event`'s fourth operand, in the order the map file writes them.
+func _pinned_movement(pin: String, label: String) -> PackedStringArray:
+	var out: PackedStringArray = []
+	for line: String in _lines(pin.path_join("maps/%s.asm" % label)):
+		if not line.begins_with("object_event"):
+			continue
+		var fields: PackedStringArray = _fields(line)
+		if fields.size() > 3:
+			out.append(fields[3])
+	return out
+
+
 ## Reports the first differing byte of [param ours] against [param pinned] over
 ## [param length] bytes, and a length disagreement as its own failure.
 func _compare(
@@ -431,8 +518,7 @@ func _report(message: String) -> void:
 
 
 ## `constants/map_constants.asm` in order: `newgroup` opens a group and each
-## `map_const` is the next map in it, so this is the same walk that gives
-## `MapGroupPointers` its indices.
+## `map_const` is the next map in it, the walk `MapGroupPointers` is indexed by.
 func _map_ids(pin: String) -> Array:
 	return _parsed(pin, &"map_ids", func() -> Array:
 		var out: Array = []
@@ -470,8 +556,7 @@ func _attributes(pin: String) -> Dictionary:
 	)
 
 
-## `<Label>_Blocks:` to the `.blk` it includes. Several labels can stand over
-## one `INCBIN`, which is how two maps share blockdata.
+## `<Label>_Blocks:` to the `.blk` it includes; several labels can share one.
 func _blockdata(pin: String) -> Dictionary:
 	return _parsed(pin, &"blockdata", func() -> Dictionary:
 		return _includes(pin.path_join("data/maps/blocks.asm"))
@@ -632,8 +717,7 @@ func _parsed(pin: String, key: StringName, body: Callable) -> Variant:
 	return cache[key]
 
 
-## A source file with its comments and indentation gone, so a caller matches on
-## the directive alone.
+## A source file with its comments and indentation gone.
 func _lines(path: String) -> PackedStringArray:
 	var out: PackedStringArray = []
 	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
