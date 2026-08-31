@@ -90,8 +90,8 @@ download the new file and replace the old one. Saves live elsewhere and survive.
 >   so the second player is your own other save file. The three receptionists,
 >   the Trade Center, the Colosseum's link battle, the link record, and Mystery
 >   Gift's five gifts a day all work between two of your saves. With one save
->   file you are told your friend is not ready, which is what one Game Boy has
->   always been told.
+>   file you are told your friend is not ready, the same answer one Game Boy has
+>   always given.
 >
 > Missing: some pixel-level divergences in the opening movies and title screen.
 
@@ -191,22 +191,21 @@ one. Every save made before this update is a Vanilla run.
 | **Hard** | Every trainer scores with all ten of the game's own AI layers instead of the handful its class carries, switches out often, and brings a party 15% higher with perfect DVs and full stat experience. One global rule each, so the teams are still the ones the cartridge wrote. |
 | **Nuzlocke** | The [challenge](https://bulbapedia.bulbagarden.net/wiki/Nuzlocke_Challenge)'s rules, enforced by the game. |
 
-A Nuzlocke here plays itself by the rules rather than asking you to:
+The game enforces the Nuzlocke rules itself:
 
-- **One catch per area.** The first wild Pokemon you meet on a route, in a cave
+- **One catch per area:** the first wild Pokemon you meet on a route, in a cave
   or in a town is the only one you may throw a ball at there. It is spent
-  whether you catch it, beat it or run: the ball menu then says so instead of
-  opening. The area is the met location the Pokemon's own summary shows, so a
-  whole cave is one encounter rather than one per floor. Roamers and the Bug
-  Catching Contest belong to no area and spend nothing.
-- **A faint is death.** A Pokemon that faints is released on the way out of the
+  whether you catch it, beat it or run, and the ball menu then says so. The area
+  is the met location the Pokemon's own summary shows, so a whole cave is one
+  encounter. Roamers and the Bug Catching Contest belong to no area and spend
+  nothing.
+- **A faint is death:** a Pokemon that faints is released on the way out of the
   battle and never comes back. It is written to disk the moment it happens, so
   quitting and reopening the slot cannot undo it.
-- **Every Pokemon is nicknamed.** The YES/NO is skipped and the keyboard opens
+- **Every Pokemon is nicknamed:** the YES/NO is skipped and the keyboard opens
   outright, for a catch, a gift and a hatched egg alike.
-- **A wipe ends the run.** Losing your last Pokemon is not a walk back to a
-  Pokemon Center: nothing is healed, no money is halved, and the slot is
-  finished. It stays on the shelf marked "Run over" with what it caught and
+- **A wipe ends the run:** losing your last Pokemon heals nothing and halves no
+  money. The slot stays on the shelf marked "Run over" with what it caught and
   what it lost, and it cannot be continued.
 
 The start menu wires every source entry:
@@ -319,23 +318,23 @@ Settings > Application carries four more that reach the engine:
 | Scrolling | Hardware or smooth. See [Scrolling](#scrolling) |
 | Frame rate | Display, or a cap of 30, 60, 120 or 144 |
 
-Sound is deliberately outside game speed. The driver is fed by the audio
-output's own demand rather than by a game frame, so music, effects and cries keep
-the cartridge's tempo and pitch at every setting.
+Sound sits outside game speed. The driver is fed by the audio output's own
+demand, not by a game frame, so music, effects and cries keep the cartridge's
+tempo and pitch at every setting.
 
-**Leave frame rate on Display.** It draws one frame per refresh, which is the
-only setting whose frames each reach the panel once. A cap below the panel's own
-rate is a sleep and not a refresh, so the same picture is shown for one refresh,
-then three, then two, and the overworld appears to move 0, 1 or 2 pixels however
-even the game is underneath. The caps are there to save battery.
+Leave frame rate on Display unless you are saving battery. It is the only
+setting whose frames each reach the panel once. A cap below the panel's own rate
+is a sleep, not a refresh, so the same picture is shown for one refresh, then
+three, then two, and the overworld appears to move 0, 1 or 2 pixels however even
+the game is underneath.
 
 #### Scrolling
 
-The overworld moves two pixels once every two frames, which is what the hardware
-did and what a Game Boy's own screen smeared over. **Smooth** draws the frame in
-between one pixel on, so the map moves a pixel a frame, lands on the cartridge's
-own pixel at every pass boundary, and takes the same sixteen frames to cross a
-cell. Nothing in the game is timed differently either way.
+The overworld moves two pixels once every two frames, as the hardware did and as
+a Game Boy's own screen smeared over. **Smooth** draws the frame in between one
+pixel on, so the map moves a pixel a frame, lands on the cartridge's own pixel at
+every pass boundary, and takes the same sixteen frames to cross a cell. Nothing
+in the game is timed differently either way.
 
 Under both, the pump counts the host's own frames once it has seen enough of
 them at one length to be sure of it, rather than measuring time: a hardware frame
