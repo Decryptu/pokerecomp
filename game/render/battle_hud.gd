@@ -167,10 +167,13 @@ func draw_exp_bar(
 
 
 ## The level symbol and the number, left-aligned after it, which is how a level
-## is written everywhere in these games.
+## is written everywhere in these games until the number needs three digits.
 func draw_level(into: PackedByteArray, width: int, at: Vector2i, level: int) -> void:
-	tiles.draw(Gen2BattleTiles.LEVEL, into, width, at.x * TILE, at.y * TILE)
-	font.draw_text("%d" % level, into, width, (at.x + 1) * TILE, at.y * TILE)
+	var column: int = at.x
+	if Gen2Font.level_glyph_shown(level):
+		tiles.draw(Gen2BattleTiles.LEVEL, into, width, at.x * TILE, at.y * TILE)
+		column += 1
+	font.draw_text("%d" % level, into, width, column * TILE, at.y * TILE)
 
 
 ## "HP:", the empty bar and the cap that closes it: everything about a bar that

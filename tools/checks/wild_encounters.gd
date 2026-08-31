@@ -2,14 +2,13 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies where a wild encounter can be rolled at all, against freshly imported
-## real caches, for all three cartridges. The expected shape comes from
-## RandomEncounter, CanEncounterWildMon, CheckWildEncounterCooldown,
-## CheckGrassCollision and CheckIceTile. The visible-encounter sweep is checked
-## against the same rule on the same corpus: `visible_encounter_cells` has to name
-## exactly the cells the step roll accepts. The census is the point: an encounter
-## cell is a small minority of a map's walkable cells, and the defect this exists to
-## catch was every land cell rolling.
+## Where a wild encounter can be rolled at all, against freshly imported real
+## caches on all three cartridges, plus the roaming graph the three beasts walk.
+## The shape comes from RandomEncounter, CanEncounterWildMon,
+## CheckWildEncounterCooldown, CheckGrassCollision and CheckIceTile, and
+## `visible_encounter_cells` has to name exactly the cells the step roll accepts.
+## The census is the point: an encounter cell is a small minority of a map's
+## walkable cells, and the defect this exists to catch was every land cell.
 
 ## Census of the real caches, pinned so a cache or a rule change is loud.
 ## Per game: encounter cells, maps holding one, and cells refused for ice.
@@ -41,7 +40,88 @@ func run(r: RefCounted) -> void:
 		_census()
 		_verify_wild_patch_indices()
 		_verify_rolled_dvs()
+		_verify_roaming_walk()
 	)
+
+
+## `UpdateRoamMons` passes per starting map, enough to measure the graph.
+const ROAM_WALK_UPDATES: int = 400
+
+
+## `UpdateRoamMons` and `JumpRoamMon` over the whole of `RoamMaps` on each
+## cartridge, from every row: every landing is a real map, a connection step is
+## a connection and never `wRoamMons_Last*`, and a jump never lands on the
+## player. The census is the point, since a roamer stuck on its first map breaks
+## no rule.
+func _verify_roaming_walk() -> void:
+	var rows: Array = _r.data.world_roaming_maps()
+	if not _r.check(rows.size() == RomLayout.ROAM_MAP_COUNT,
+		"RoamMaps holds %d rows, not %d." % [rows.size(), RomLayout.ROAM_MAP_COUNT]):
+		return
+	var known: Dictionary = {}
+	for row: Dictionary in rows:
+		known[Vector2i(int(row["map_group"]), int(row["map_number"]))] = true
+	var reached: Dictionary = {}
+	var jumps: int = 0
+	for start: Vector2i in known:
+		var state := Gen2WorldState.from_dict({"roaming_mons": [{
+			"species": 243, "level": 40,
+			"map_group": start.x, "map_number": start.y,
+		}]})
+		var generator := RandomNumberGenerator.new()
+		generator.seed = start.x * 256 + start.y
+		var player: Vector2i = start
+		for pass_index: int in ROAM_WALK_UPDATES:
+			var last: Array = state.to_dict()["roam_last_map"]
+			var before: Vector2i = _roamer_map(state)
+			var moved: Array = state.advance_roaming(rows, generator, player)
+			var now: Vector2i = _roamer_map(state)
+			reached[now] = true
+			if not _r.check(known.has(now), "a roamer walked to %s." % now):
+				return
+			if moved.is_empty():
+				continue
+			if bool(moved[0]["jumped"]):
+				## `JumpRoamMon` refuses the player's map alone, so a jump may
+				## land on `wRoamMons_Last` where a connection step may not.
+				jumps += 1
+				if not _r.check(now != player, "a jump landed on the player at %s." % now):
+					return
+			else:
+				if not _r.check(_connects(rows, before, now),
+					"a roamer stepped to %s, which %s does not connect to." % [now, before]):
+					return
+				if not _r.check(now != Vector2i(int(last[0]), int(last[1])),
+					"a roamer walked onto wRoamMons_Last %s." % now):
+					return
+			## The player follows the roamer, so a jump always has one to refuse.
+			player = now if now != player else before
+	_r.check(
+		reached.size() == known.size(),
+		"a roamer reached %d of the %d roaming maps." % [reached.size(), known.size()]
+	)
+	_r.check(jumps > 0, "no pass of the sweep took `JumpRoamMon`.")
+	_r.note("roaming: %d maps reached, %d jumps in %d passes" % [
+		reached.size(), jumps, known.size() * ROAM_WALK_UPDATES,
+	])
+
+
+func _roamer_map(state: Gen2WorldState) -> Vector2i:
+	var mon: Dictionary = state.roaming_mons()[0]
+	return Vector2i(int(mon["map_group"]), int(mon["map_number"]))
+
+
+## Whether [param to] is one of [param source]'s own connections.
+func _connects(rows: Array, source: Vector2i, to: Vector2i) -> bool:
+	for row: Dictionary in rows:
+		if Vector2i(int(row["map_group"]), int(row["map_number"])) != source:
+			continue
+		for connection: Dictionary in row["connections"]:
+			if Vector2i(
+				int(connection["map_group"]), int(connection["map_number"])
+			) == to:
+				return true
+	return false
 
 
 ## How many wilds the DV sweep builds per cartridge. Big enough for the shiny
@@ -55,14 +135,12 @@ const DV_SWEEP_SPECIES: int = 19
 const DV_SWEEP_LEVEL: int = 5
 
 
-## `LoadEnemyMon`'s `.InitDVs` against the real caches: every wild the game builds
-## now rolls its own DVs, where before only a visible encounter carried any and all
-## eight other sources entered at 15/15/15/15. The sweep is the point: one wild
-## proves nothing about a roll. Four claims, in the source's own order of
-## precedence: a request carrying `dvs` keeps them; `BATTLETYPE_FORCESHINY` writes
-## the shiny word, which is the red Gyarados; an ordinary wild spreads over the
-## whole 16-bit word with every nibble reaching both ends of 0 to 15; and a wild
-## UNOWN takes only a letter the puzzle has unlocked, per set.
+## `LoadEnemyMon`'s `.InitDVs` against the real caches, where before only a
+## visible encounter carried DVs and the other eight sources entered at
+## 15/15/15/15. Four claims in the source's order of precedence: a request
+## carrying `dvs` keeps them; `BATTLETYPE_FORCESHINY` writes the shiny word, the
+## red Gyarados; an ordinary wild spreads over the whole 16-bit word with every
+## nibble reaching both ends; and a wild UNOWN takes only an unlocked letter.
 func _verify_rolled_dvs() -> void:
 	var party: Gen2Party = Gen2WorldBattleAdapter.fallback_party(_r.data)
 	if not _r.check(party != null, "no party could be built for the DV sweep."):
@@ -493,9 +571,8 @@ func _verify_union_cave() -> void:
 
 ## Every map in the cache, so a rule change is one number rather than one map.
 ## Every index of the four wild sources beside the map tables is patchable and
-## reads back through `GameData`, on a real cache. An off-by-one in either
-## direction, or a source a reader takes from somewhere else, shows here and
-## nowhere in a hand-built fixture.
+## reads back through `GameData` on a real cache, so an off-by-one either way, or
+## a source read from somewhere else, shows here and in no fixture.
 func _verify_wild_patch_indices() -> void:
 	var overlay := Gen2ContentOverlay.new()
 	var data: GameData = GameData.open(_r.game_id)

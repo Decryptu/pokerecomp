@@ -136,6 +136,7 @@ var _cur_party_species: int = 0
 ## Which balance window `engine/menus/menu_2.asm` left standing, empty for none.
 var _money_window: StringName = &""
 
+const PHONE_RARE_ROLL_ATTEMPTS: int = 128
 const PHONE_CONTACT_GOT: int = 0
 const PHONE_CONTACTS_FULL: int = 1
 const PHONE_CONTACT_REFUSED: int = 2
@@ -5969,66 +5970,72 @@ func _phone_contact() -> Dictionary:
 	return data.world_phone_contact(contact_id)
 
 
-func _phone_wild_mon_name() -> String:
+## `LookUpWildmonsForMapDE` over the Johto grass table and then the Kanto one,
+## as `[morning_row, current_time_row]`. Empty when neither names the caller.
+func _phone_grass_rows() -> Array:
 	var contact: Dictionary = _phone_contact()
 	var record: Dictionary = data.world_encounter(
 		Gen2WorldEncounter.METHOD_GRASS,
 		int(contact.get("map_group", -1)), int(contact.get("map_number", -1))
 	) if data != null else {}
 	var slots: Variant = record.get("slots", [])
+	if not slots is Array:
+		return []
 	var hour: int = int((_request.get("clock", {}) as Dictionary).get("hour", 0))
 	var time_of_day: int = Gen2WorldClock.new(hour).time_of_day()
-	if not slots is Array or time_of_day < 0 or time_of_day >= (slots as Array).size():
+	if time_of_day < 0 or time_of_day >= (slots as Array).size():
+		return []
+	var rows: Array = [(slots as Array)[0], (slots as Array)[time_of_day]]
+	for row: Variant in rows:
+		if not row is Array or (row as Array).size() < RomLayout.WILD_GRASS_SLOT_COUNT:
+			return []
+	return rows
+
+
+## `RandomPhoneWildMon`, which masks its roll to one of the first four grass
+## slots rather than taking the weighted encounter draw.
+func _phone_wild_mon_name() -> String:
+	var rows: Array = _phone_grass_rows()
+	if rows.is_empty():
 		return ""
-	var selected: Variant = (slots as Array)[time_of_day]
-	if not selected is Array or (selected as Array).size() < 4:
+	var slot: Variant = (rows[1] as Array)[_random.randi_range(0, 3)]
+	if not slot is Dictionary:
 		return ""
-	## RandomPhoneWildMon masks the cartridge RNG to select one of the first
-	## four grass slots, rather than using the ordinary weighted encounter roll.
-	var raw_slot: Variant = (selected as Array)[_random.randi_range(0, 3)]
-	if not raw_slot is Dictionary:
-		return ""
-	var species: int = int((raw_slot as Dictionary).get("species", 0))
+	var species: int = int((slot as Dictionary).get("species", 0))
 	if species <= 0 or data.species(species).is_empty():
 		return ""
 	return String(data.species(species).get("name", ""))
 
 
+## `RandomUnseenWildMon`: one of the three rarest slots at the current time of
+## day, refused when it is common or already seen. `.GetGrassmon` takes that slot
+## from the time-of-day row and `pop hl` then restores the pointer from before
+## the offset, so the four commons weighed against it are always the morning
+## ones. That half is what `docs/bugs_and_glitches.md`'s fix closes.
 func _phone_unseen_rare_species() -> int:
-	var contact: Dictionary = _phone_contact()
-	var record: Dictionary = data.world_encounter(
-		Gen2WorldEncounter.METHOD_GRASS,
-		int(contact.get("map_group", -1)), int(contact.get("map_number", -1))
-	) if data != null else {}
-	var slots: Variant = record.get("slots", [])
-	if not slots is Array or (slots as Array).is_empty():
+	var rows: Array = _phone_grass_rows()
+	if rows.is_empty():
 		return 0
-	## Crystal's routine reads wTimeOfDay but fails to use it when applying
-	## the table offset, so the shipped game always examines the morning row.
-	var morning: Variant = (slots as Array)[0]
-	if not morning is Array or (morning as Array).size() < RomLayout.WILD_GRASS_SLOT_COUNT:
-		return 0
-	var common_species: Array[int] = []
+	var common: Array[int] = []
 	for index: int in 4:
-		var common: Variant = (morning as Array)[index]
-		if common is Dictionary:
-			common_species.append(int((common as Dictionary).get("species", 0)))
-	for _attempt: int in 128:
+		var entry: Variant = (rows[0] as Array)[index]
+		if entry is Dictionary:
+			common.append(int((entry as Dictionary).get("species", 0)))
+	var species: int = _phone_rare_slot_species(rows[1] as Array)
+	if species <= 0 or common.has(species) or data.species(species).is_empty() \
+		or (state != null and state.has_seen_species(species)):
+		return 0
+	return species
+
+
+## `.randloop1`, a two-bit draw rerolled until it is not zero.
+func _phone_rare_slot_species(row: Array) -> int:
+	for _attempt: int in PHONE_RARE_ROLL_ATTEMPTS:
 		var roll: int = _random.randi() & 0x03
 		if roll == 0:
 			continue
-		var slot_index: int = 4 + roll - 1
-		var rare: Variant = (morning as Array)[slot_index]
-		if not rare is Dictionary:
-			return 0
-		var species: int = int((rare as Dictionary).get("species", 0))
-		if species <= 0 or common_species.has(species):
-			return 0
-		if state != null and state.has_seen_species(species):
-			return 0
-		if data == null or data.species(species).is_empty():
-			return 0
-		return species
+		var rare: Variant = row[4 + roll - 1]
+		return int((rare as Dictionary).get("species", 0)) if rare is Dictionary else 0
 	return 0
 
 
@@ -6138,12 +6145,10 @@ func _decode_bcd(bytes: PackedByteArray) -> int:
 	return value
 
 
-## `engine/events/haircut.asm` past its `farcall SelectMonFromParty`.
-##
-## The carry the party list answers a B press or its CANCEL row with is
-## `.nope`/`.cancel`, which is `xor a` in every one of the four; an EGG is
-## `.egg`'s own 1, and only the three grooming routines test for it, because
-## `BillsGrandfather` has no such branch and answers EGG as a species like any
+## `engine/events/haircut.asm` past its `farcall SelectMonFromParty`. The carry
+## the party list answers a B press or its CANCEL row with is `.nope`/`.cancel`,
+## `xor a` in all four; an EGG is `.egg`'s own 1, tested by the three grooming
+## routines alone, since `BillsGrandfather` answers EGG as a species like any
 ## other. `GetCurNickname` names the member for the three and `GetPokemonName`
 ## the species for the fourth, both into wStringBuffer3.
 func _finish_party_selection(request: Dictionary, result: Dictionary) -> Dictionary:
@@ -6548,13 +6553,12 @@ func _stage_strength_boulder() -> Dictionary:
 
 
 ## engine/events/misc_scripts.asm's FindItemInBallScript, synthesized. An item
-## ball's script pointer is not code: it is the `itemball` macro's
-## `db item, quantity`, which is copied into wItemBallData before
-## PLAYEREVENT_ITEMBALL is raised, so the seam is the object type rather than a
-## script address. Source order is receive, `disappear LAST_TALKED`, then the
-## text, so the ball is already gone when the box is drawn; its own `pause 60` is
-## the acknowledge here, since nothing draws a text box that closes itself. The
-## receive seam preserves the no-room branch without committing anything.
+## ball's script pointer is not code but the `itemball` macro's
+## `db item, quantity`, copied into wItemBallData before PLAYEREVENT_ITEMBALL is
+## raised, so the seam is the object type rather than a script address. Source
+## order is receive, `disappear LAST_TALKED`, then the text, so the ball is gone
+## when the box is drawn; its `pause 60` is the acknowledge here. The receive
+## seam preserves the no-room branch without committing anything.
 func _stage_item_ball() -> Dictionary:
 	var item: int = int(_request.get("item", 0))
 	var quantity: int = maxi(1, int(_request.get("quantity", 1)))
@@ -6644,14 +6648,13 @@ func _fruit_tree_picked(tree_id: int) -> bool:
 	return state.fruit_tree_picked(tree_id)
 
 
-## HiddenItemScript, the BGEVENT_ITEM half of the same source area. The pointer is
-## the `hiddenitem` macro's `dwb event, item`, handed over the way an item ball's
-## two bytes are. The differences from [method _stage_item_ball] are the flag and
-## the object: there is no object to hide, and the flag `callasm SetMemEvent`
-## writes is the record's own rather than the object's. `_PlayerFoundItemText` is
-## `_FoundItemText`'s wording, so the two share one constant. The source writes the
-## text before `giveitem` and sets the flag after it, so a full pocket leaves both
-## the item and the flag untouched.
+## HiddenItemScript, the BGEVENT_ITEM half of the same source area. The pointer
+## is the `hiddenitem` macro's `dwb event, item`, handed over the way an item
+## ball's two bytes are. It differs from [method _stage_item_ball] in the flag and
+## the object: nothing is hidden, and the flag `callasm SetMemEvent` writes is the
+## record's rather than the object's. `_PlayerFoundItemText` is `_FoundItemText`'s
+## wording, so the two share a constant. The source writes the text before
+## `giveitem` and sets the flag after it, so a full pocket changes neither.
 func _stage_hidden_item() -> Dictionary:
 	var item: int = int(_request.get("item", 0))
 	var flag: int = int(_request.get("flag", -1))
@@ -6732,12 +6735,11 @@ func _stage_strength_used(slot: int) -> Dictionary:
 
 ## engine/overworld/events.asm's TryTileCollisionEvent, from `.cut` on: the five
 ## field-move branches a faced tile can reach, each a `Try*OW` gate and then an
-## `Ask*Script`. Synthesized for the reason AskStrengthScript is, and dispatched on
-## the request kind rather than a standard-script index because these are reached
-## through `CallScript`. Which move the tile offers is [Gen2WorldAPI]'s answer,
-## since only it can read the map; what is left here is the party and the badge.
-## Three of the five have a refusal text and two do not: TryHeadbuttOW and
-## TrySurfOW return no carry and the player event ends with nothing shown.
+## `Ask*Script`. Synthesized for the reason AskStrengthScript is, and dispatched
+## on the request kind rather than a standard-script index because these are
+## reached through `CallScript`. Which move the tile offers is [Gen2WorldAPI]'s
+## answer; what is left here is the party and the badge. TryHeadbuttOW and
+## TrySurfOW have no refusal text: they return no carry and nothing is shown.
 func _stage_field_move_prompt() -> Dictionary:
 	var party: Dictionary = _request.get("party", {})
 	if party.is_empty():
@@ -6856,13 +6858,11 @@ func _stage_rock_smash_used(slot: int) -> Dictionary:
 
 
 ## Everything RockSmashScript does after its text: `playsound SFX_STRENGTH`,
-## `earthquake 84`, the rock's own one-command movement, `disappear LAST_TALKED`
-## and then RockMonEncounter. The sound and the shake are reported as events,
-## the way the runner reports every other presentation request.
-##
-## `readmem wTempWildMonSpecies` and `iffalse .done` are what test the roll, so
-## a species of zero ends the script and anything else reaches `randomwildmon`,
-## `startbattle` and `reloadmapafterbattle`.
+## `earthquake 84`, the rock's one-command movement, `disappear LAST_TALKED` and
+## then RockMonEncounter. The sound and the shake are reported as events like
+## every other presentation request. `readmem wTempWildMonSpecies` and `iffalse
+## .done` test the roll, so a species of zero ends the script and anything else
+## reaches `randomwildmon`, `startbattle` and `reloadmapafterbattle`.
 func _stage_rock_smashed() -> void:
 	_emit_runtime_event(&"earthquake_requested", {"duration": ROCK_SMASH_EARTHQUAKE})
 	## `disappear LAST_TALKED` is DeleteObjectStruct plus

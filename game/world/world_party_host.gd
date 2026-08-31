@@ -1091,13 +1091,12 @@ static func whited_out_text(player_name: String) -> String:
 
 
 ## `Script_Whiteout` past its own text: `HealParty`, `HalveMoney`,
-## `GetWhiteoutSpawn` and the `WarpToSpawnPoint` behind them, in that order. The
-## last is [method Gen2WorldAPI.warp_to_spawn]'s own tail here, since every escape
-## shares it. One routine, because every way of blacking out reaches this one
-## script: a battle lost anywhere goes through `Script_reloadmapafterbattle`, and
-## the last party member fainting to poison through `.Script_MonFaintedToPoison`.
-## The spawn is read back through `IsSpawnPoint`, so a map `blackoutmod` named is
-## honoured and SPAWN_HOME is what a player who has entered no Center gets.
+## `GetWhiteoutSpawn` and the `WarpToSpawnPoint` behind them, in that order, the
+## last being [method Gen2WorldAPI.warp_to_spawn]'s own tail since every escape
+## shares it. One routine, because every way of blacking out reaches this script:
+## a battle lost anywhere through `Script_reloadmapafterbattle`, the last party
+## member fainting to poison through `.Script_MonFaintedToPoison`. The spawn is
+## read back through `IsSpawnPoint`, so a `blackoutmod` map is honoured.
 static func whiteout(
 	world: Gen2WorldAPI, save: Gen2SaveData, persist: bool = true
 ) -> Dictionary:
@@ -1334,14 +1333,13 @@ static func _fills_its_box(save: Gen2SaveData, destination: Dictionary) -> bool:
 	return box != null and box.occupied_count() >= Gen2SaveBox.CAPACITY
 
 
-## `CheckPartyFullAfterContest`, which takes home whatever the Bug Catching
-## Contest caught. `wContestMon` is a party struct already, so the party branch is
-## a copy and the box branch an `InsertPokemonIntoBox`, each behind its own
-## `GiveANickname_YesNo`, and `SetCaughtData` is then overwritten with
+## `CheckPartyFullAfterContest`, which takes home what the Bug Catching Contest
+## caught. `wContestMon` is already a party struct, so the party branch is a copy
+## and the box branch an `InsertPokemonIntoBox`, each behind its own
+## `GiveANickname_YesNo`, and `SetCaughtData` is overwritten with
 ## LANDMARK_NATIONAL_PARK. Three things a reading gets wrong: `.BoxFull` writes
-## nothing and still answers BUGCONTEST_BOXED_MON, so a full party over a full box
-## loses the catch; the box branch prints no "sent to BILL's PC" line; and
-## `wContestMon` is cleared on every branch but that last one.
+## nothing and still answers BUGCONTEST_BOXED_MON, losing the catch; the box
+## branch prints no "sent to BILL's PC"; and only that branch keeps `wContestMon`.
 static func _apply_contest_mon(
 	world: Gen2WorldAPI,
 	candidate: Gen2SaveData,
@@ -2403,14 +2401,13 @@ static func _failed_wobbles(catch_rate: int, random: RandomNumberGenerator) -> i
 	return 3
 
 
-## `GeneratePartyMonStats`' wild branch, which is what `TryAddMonToParty` and
-## `SendMonIntoBox` both build the caught row out of. Four of these read wrong from
-## the outside and are the source's own. The Pokemon keeps the health and status
-## it was standing there with, because `PokeBallEffect` pushes `wEnemyMonStatus`
-## and `wEnemyMonHP` in front of `LoadEnemyMon` and writes them back after it. Its
-## PP is full, because `FillPP` ran over whatever the fight had drained. Its stat
-## experience is zero and its experience the minimum for its level. The trainer ID
-## is `wPlayerID`: a Pokemon caught by the player is not a traded one.
+## `GeneratePartyMonStats`' wild branch, which `TryAddMonToParty` and
+## `SendMonIntoBox` both build the caught row out of. Four of these read wrong
+## from outside and are the source's own. The Pokemon keeps the health and status
+## it stood there with, because `PokeBallEffect` pushes `wEnemyMonStatus` and
+## `wEnemyMonHP` around `LoadEnemyMon`. Its PP is full, `FillPP` having run over
+## what the fight drained. Its stat experience is zero and its experience the
+## minimum for its level, and its trainer ID is `wPlayerID`.
 static func _captured_mon(
 	data: GameData,
 	save: Gen2SaveData,

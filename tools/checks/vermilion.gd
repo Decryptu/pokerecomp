@@ -3,13 +3,12 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies Vermilion City, its gym and the passage up from the dock against
-## freshly imported real caches, for both command profiles. `VermilionCity.asm` and
-## its `.blk` are byte identical between the pins and the gym differs only in
-## Surge's text, so nothing here is profile split. The one thing worth pinning is
-## that this gym is not its Gen 1 self: there is no trash-can puzzle,
-## `VermilionGym_MapScripts` declaring neither a scene nor a callback, so the gym is
-## open from the door. The gate is outside it, the whole 42-cell yard walled off by
-## a single COLL_CUT_TREE on (13,18), which makes Cut the price of the badge.
+## freshly imported real caches, for both command profiles. `VermilionCity.asm`
+## and its `.blk` are byte identical between the pins and the gym differs only in
+## Surge's text. The thing worth pinning is that this gym is not its Gen 1 self:
+## `VermilionGym_MapScripts` declares neither a scene nor a callback, so there is
+## no trash-can puzzle and the gym is open from the door. The gate is outside it,
+## the 42-cell yard walled off by one COLL_CUT_TREE on (13,18).
 
 
 ## constants/map_constants.asm: the VERMILION group is 12 and the FAST_SHIP

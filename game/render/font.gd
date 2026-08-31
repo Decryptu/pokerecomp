@@ -34,6 +34,12 @@ var _extra_width: int = 0
 var _extra_tiles: int = 0
 
 
+## `PrintLevel`'s `cp 100`, "distinct from MAX_LEVEL": three digits overwrite the
+## `<LV>` rather than widening the field. `PlacePartyMonLevel` repeats the test.
+static func level_glyph_shown(level: int) -> bool:
+	return level < 100
+
+
 ## Reads both sheets out of a cache, or null if that cache has no font in it.
 static func from_data(data: GameData) -> Gen2Font:
 	if data == null:

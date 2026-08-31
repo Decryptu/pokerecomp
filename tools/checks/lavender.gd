@@ -4,12 +4,11 @@ var _r: RefCounted = null
 
 ## Verifies the walk east out of Saffron to Lavender Town and the EXPN CARD the
 ## Kanto Radio Tower hands over, for both command profiles. Two findings carry the
-## leg. Route 8's five trainers look like a wall and are not one: the three bikers
-## stand in a column facing west, and the route's eight `$a3` hop-down ledges drop
+## leg. Route 8's five trainers look like a wall and are not: the three bikers
+## stand in a column facing west and the route's eight `$a3` hop-down ledges drop
 ## an eastbound walk onto row 8 east of them, so only Super Nerd Tom's line cannot
-## be routed around. And the town needs no errand of its own, but the tower does:
-## its gentleman gates the EXPN CARD on EVENT_RETURNED_MACHINE_PART, so the Power
-## Plant the Cascade Badge needed is what puts the Kanto station back on the air.
+## be routed around. And the tower's gentleman gates the EXPN CARD on
+## EVENT_RETURNED_MACHINE_PART, so the Power Plant puts the station back on air.
 
 
 ## constants/map_constants.asm: gates belong to the group of the route they open

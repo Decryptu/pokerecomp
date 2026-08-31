@@ -2100,19 +2100,17 @@ func bug_contest_minutes_remaining() -> int:
 	)
 
 
-## `BugContestResultsWarpScript`'s index in `StdScripts`, the same 22 in both
-## pins the way `StrengthBoulderScript` is the same 14. It warps to the results
-## gate and falls into `BugContestResultsScript`, which is what clears
-## `ENGINE_BUG_CONTEST_TIMER` and runs the judging.
+## `BugContestResultsWarpScript`'s index in `StdScripts`, 22 in both pins the way
+## `StrengthBoulderScript` is 14. It warps to the results gate and falls into
+## `BugContestResultsScript`, which clears `ENGINE_BUG_CONTEST_TIMER` and judges.
 const STD_BUG_CONTEST_RESULTS_WARP: int = 22
 
 
-## `CheckTimeEvents`' contest branch: the timer is read once a step, and the
-## reading that runs out queues `BugCatchingContestOverScript`, which is the
-## sound, the line and the warp back to the gate. Out of balls reaches the same
-## warp through `BugCatchingContestOutOfBallsScript`, so both are one answer.
-##
-## Answers the queued results, or an empty Array while the contest runs on.
+## `CheckTimeEvents`' contest branch: the timer is read once a step and the
+## reading that runs out queues `BugCatchingContestOverScript`, the sound, the
+## line and the warp back to the gate. Out of balls reaches the same warp through
+## `BugCatchingContestOutOfBallsScript`, so both are one answer. Answers the
+## queued results, or an empty Array while the contest runs on.
 func check_bug_contest_timer() -> Array:
 	if not bug_contest_active():
 		return []
@@ -2178,10 +2176,9 @@ func judge_bug_contest(random: RandomNumberGenerator) -> Dictionary:
 	return result
 
 
-## `CanEncounterWildMon`: the whole condition on the tile the player is standing
-## on, before the rate is even read. Without it every step on open ground rolls,
-## which is both an encounter outside the grass and, over a walk, several times
-## the rate the cartridge has.
+## `CanEncounterWildMon`: the whole condition on the tile the player stands on,
+## before the rate is read. Without it every step on open ground rolls, which is
+## an encounter outside the grass and several times the cartridge's rate.
 func can_encounter_wild_mon() -> bool:
 	return can_encounter_wild_mon_at(player_cell)
 
@@ -2200,13 +2197,11 @@ func can_encounter_wild_mon_at(cell: Vector2i) -> bool:
 	return not Gen2WorldCollision.is_ice(code)
 
 
-## Every cell of the current map a wild could be met on, grouped by the method the
-## terrain resolves to, as [method encounter_request] resolves it: WATER_TILE is
-## `surf` and LAND_TILE is `grass`, and a cave or dungeon floor is grass whether or
-## not it is drawn as grass. One narrowing on
-## [method can_encounter_wild_mon]: a cell nothing can stand on is not offered,
-## since a cave's walls pass the gate and a Pokemon cannot be put inside one. The
-## map's own collision grid and nothing past it.
+## Every cell of the current map a wild could be met on, grouped the way
+## [method encounter_request] resolves the terrain: WATER_TILE is `surf`,
+## LAND_TILE is `grass`, and a cave or dungeon floor is grass drawn as grass or
+## not. One narrowing on [method can_encounter_wild_mon]: a cell nothing can
+## stand on is not offered, since a cave's walls pass the gate. Collision only.
 func visible_encounter_cells() -> Dictionary:
 	var out: Dictionary = {
 		Gen2WorldEncounter.METHOD_GRASS: PackedVector2Array(),
@@ -2234,10 +2229,9 @@ func wild_encounters_off() -> bool:
 	return state.wild_encounters_off()
 
 
-## What [method active_encounter_tables] resolves against, and nothing else: the
+## What [method active_encounter_tables] resolves against and nothing else: the
 ## hour the objects are drawn at, the Bug Contest and a swarm on this map. Three
-## reads rather than two table builds, so a caller may ask on every frame whether
-## the tables have moved without building one to find out.
+## reads rather than two table builds, so a caller may ask every frame.
 func encounter_tables_key() -> Array:
 	if current_map == null or data == null:
 		return []
@@ -2249,11 +2243,10 @@ func encounter_tables_key() -> Array:
 
 
 ## The wild table each method would resolve against right now, with the Bug
-## Contest's and the swarm's substitutions already made and the time of day
-## already picked. `slots` is the flat list of `{species, min_level, max_level}`
-## a roll would choose from, which is what a caller populating a map with visible
-## Pokemon needs and what it must not derive for itself. The two bounds are equal
-## for every table but the Bug Contest's, which rolls a level of its own.
+## Contest's and the swarm's substitutions made and the time of day picked.
+## `slots` is the flat `{species, min_level, max_level}` list a roll would choose
+## from, which a caller populating a map with visible Pokemon must not derive for
+## itself. The bounds are equal but for the Bug Contest's own level roll.
 func active_encounter_tables() -> Dictionary:
 	var out: Dictionary = {}
 	if current_map == null or data == null:
@@ -2451,14 +2444,62 @@ func roaming_mons() -> Array:
 	return state.roaming_mons()
 
 
-func advance_roaming(random: RandomNumberGenerator = null) -> Array:
-	return state.advance_roaming(data.world_roaming_maps(), random)
+func advance_roaming(
+	random: RandomNumberGenerator = null, entry: int = MAP_ENTRY_CONNECTION
+) -> Array:
+	var rows: Array = data.world_roaming_maps()
+	match int(ROAM_BY_MAP_ENTRY.get(entry, ROAM_NONE)):
+		ROAM_UPDATE:
+			return state.advance_roaming(rows, random, map_id())
+		ROAM_JUMP:
+			return state.jump_roaming(rows, random, map_id())
+	return []
+
+
+## `Continue`'s own `farcall JumpRoamMons`, which is in the menu rather than in
+## `MapSetupScript_Continue`: opening a file scatters the beasts once.
+func jump_roaming(random: RandomNumberGenerator = null) -> Array:
+	return state.jump_roaming(data.world_roaming_maps(), random, map_id())
+
+
+## `hMapEntryMethod`, which picks the `MapSetupScripts` entry a map load runs.
+const MAP_ENTRY_WARP: int = 0xF1
+const MAP_ENTRY_CONTINUE: int = 0xF2
+const MAP_ENTRY_RELOADMAP: int = 0xF3
+const MAP_ENTRY_TELEPORT: int = 0xF4
+const MAP_ENTRY_DOOR: int = 0xF5
+const MAP_ENTRY_FALL: int = 0xF6
+const MAP_ENTRY_CONNECTION: int = 0xF7
+const MAP_ENTRY_LINKRETURN: int = 0xF8
+const MAP_ENTRY_TRAIN: int = 0xF9
+const MAP_ENTRY_SUBMENU: int = 0xFA
+const MAP_ENTRY_BADWARP: int = 0xFB
+const MAP_ENTRY_FLY: int = 0xFC
+
+const ROAM_NONE: int = 0
+const ROAM_UPDATE: int = 1
+const ROAM_JUMP: int = 2
+
+## Which roaming routine each setup script carries, with the fall-throughs in
+## `data/maps/setup_scripts.asm` spent: `_Fall` runs `_Door`'s body and `_Door`
+## runs `_Train`'s, and `_Teleport` runs `_Fly`'s. A method named by no row moves
+## no roamer, so a script `warp`, a blackout and a `reloadmap` move none.
+const ROAM_BY_MAP_ENTRY: Dictionary = {
+	MAP_ENTRY_TELEPORT: ROAM_JUMP,
+	MAP_ENTRY_DOOR: ROAM_UPDATE,
+	MAP_ENTRY_FALL: ROAM_UPDATE,
+	MAP_ENTRY_CONNECTION: ROAM_UPDATE,
+	MAP_ENTRY_TRAIN: ROAM_UPDATE,
+	MAP_ENTRY_FLY: ROAM_JUMP,
+}
 
 
 ## Applies one host schedule tick to the imported roaming graph. Swarm state is
 ## returned alongside it so a clock, radio event or save host can publish one
 ## coherent update without reaching into Gen2WorldState.
-func advance_schedule(random: RandomNumberGenerator = null) -> Dictionary:
+func advance_schedule(
+	random: RandomNumberGenerator = null, entry: int = MAP_ENTRY_CONNECTION
+) -> Dictionary:
 	if random == null and not state.roaming_mons().is_empty():
 		return {
 			"ok": false,
@@ -2469,7 +2510,7 @@ func advance_schedule(random: RandomNumberGenerator = null) -> Dictionary:
 			"yanma_swarm_map": state.swarm_map(Gen2WorldState.SWARM_YANMA),
 			"fishing_swarm_species": state.fishing_swarm_species(),
 		}
-	var moved: Array = advance_roaming(random)
+	var moved: Array = advance_roaming(random, entry)
 	return {
 		"ok": true,
 		"kind": &"world_schedule_updated",
@@ -5202,11 +5243,12 @@ func try_warp(cell: Vector2i = player_cell) -> Dictionary:
 				"warp": walked, "map_group": from_map.x, "map_number": from_map.y,
 			}
 	# `wPrevWarp` is the warp walked through, which is what a Dig or an Escape
-	# Rope comes back out of.
+	# Rope comes back out of. `WarpToNewMapScript`, the pitfall and the magnet
+	# train name DOOR, FALL and TRAIN, which are one setup-script body.
 	_apply_map(
 		target_map, target_tileset,
 		Vector2i(int(target_warp["x"]), int(target_warp["y"])), false,
-		warp_index_at(cell)
+		warp_index_at(cell), MAP_ENTRY_DOOR
 	)
 	return {
 		"ok": true,
@@ -5322,7 +5364,9 @@ func try_connection(direction: Vector2i) -> Dictionary:
 
 	var from_map: Vector2i = map_id()
 	var from_cell: Vector2i = player_cell
-	_apply_map(target_map, target_tileset, target_cell)
+	_apply_map(
+		target_map, target_tileset, target_cell, false, 0, MAP_ENTRY_CONNECTION
+	)
 	## `CheckMovingOffEdgeOfMap` answers a step that has ALREADY landed: the
 	## player walks the whole step onto the cell the connection strip's blocks
 	## are drawn in, and only then does `EdgeWarpScript`'s `MAPSETUP_CONNECTION`
@@ -6324,6 +6368,7 @@ func _apply_map(
 	target_cell: Vector2i,
 	custom_facing: bool = false,
 	from_warp: int = 0,
+	entry: int = MAP_ENTRY_WARP,
 ) -> void:
 	# The one breadcrumb a bug report cannot do without: every warp, connection
 	# and load reaches this, so a log always says which map the player was on.
@@ -6386,8 +6431,9 @@ func _apply_map(
 	# the objects that owned them.
 	_load_objects()
 	# The cartridge moves roaming Pokémon in map setup, not on a timer, so a
-	# player who stands still does not watch them cross Johto.
-	_last_schedule = advance_schedule(schedule_random)
+	# player who stands still does not watch them cross Johto, and which routine
+	# a load runs is the entry method's to say.
+	_last_schedule = advance_schedule(schedule_random, entry)
 	# PlayMapMusic runs in map setup, so leaving a map is what ends a tuned radio
 	# station: its own track is not this map's, so the comparison fails and the
 	# map's music wins.
@@ -6399,14 +6445,12 @@ func _apply_map(
 	_object_masks_pending = true
 
 
-## `.SaveDigWarp` and `.SetSpawn`, both of which run on a map change and both of
-## which only ever fire on the way from an outdoor map into an indoor one.
-##
-## The dig warp is the warp the player came through, so it is only recorded on
-## the path that used one; a scripted `warp` names a destination rather than a
-## warp number and leaves the last walked one standing, which is what the
-## cartridge's own `wPrevWarp` does. Mount Moon Square and the Tin Tower roof are
-## outdoor maps reached from indoor ones and are refused by name.
+## `.SaveDigWarp` and `.SetSpawn`, which run on a map change and only ever fire
+## on the way from an outdoor map into an indoor one. The dig warp is the warp
+## the player came through, so it is recorded only on the path that used one; a
+## scripted `warp` names a destination rather than a warp number and leaves the
+## last walked one standing, as `wPrevWarp` does. Mount Moon Square and the Tin
+## Tower roof are outdoor maps reached from indoor ones, refused by name.
 func _record_escape_points(target_map: Gen2WorldMap, from_warp: int) -> void:
 	if current_map == null or not _is_outdoor(current_map.environment) \
 			or not _is_indoor(target_map.environment):
@@ -6508,7 +6552,7 @@ func take_contest_abort() -> bool:
 ## `EnterMapSpawnPoint` plus the map load behind it: the player put down at
 ## spawn [param index], facing the way a warp leaves them. Answers the same
 ## record a warp does, or a refusal when the cache holds no such spawn.
-func warp_to_spawn(index: int) -> Dictionary:
+func warp_to_spawn(index: int, entry: int = MAP_ENTRY_WARP) -> Dictionary:
 	var point: Dictionary = data.spawn_point(index) if data != null else {}
 	if point.is_empty():
 		return {"ok": false, "kind": &"spawn_warp", "reason": &"missing_spawn"}
@@ -6522,7 +6566,10 @@ func warp_to_spawn(index: int) -> Dictionary:
 	var from_map: Vector2i = map_id()
 	var from_cell: Vector2i = player_cell
 	_escape_map_tail()
-	_apply_map(target_map, target_tileset, Vector2i(int(point["x"]), int(point["y"])))
+	_apply_map(
+		target_map, target_tileset, Vector2i(int(point["x"]), int(point["y"])),
+		false, 0, entry
+	)
 	return {
 		"ok": true,
 		"kind": &"spawn_warp",
@@ -6746,7 +6793,10 @@ func complete_escape() -> Dictionary:
 	var staged: Dictionary = _pending_escape
 	_pending_escape = {}
 	var spawn: int = int(staged["spawn"])
-	var warped: Dictionary = warp_to_spawn(spawn) if spawn >= 0 else warp_to_dig_point()
+	## Dig and an Escape Rope both `newloadmap MAPSETUP_DOOR`, which
+	## [method warp_to_dig_point] carries; `.TeleportScript` names its own.
+	var warped: Dictionary = warp_to_spawn(spawn, MAP_ENTRY_TELEPORT) if spawn >= 0 \
+		else warp_to_dig_point()
 	if not bool(warped.get("ok", false)):
 		return {
 			"ok": false, "kind": &"escape_failed",
@@ -7057,7 +7107,8 @@ func warp_to_dig_point() -> Dictionary:
 	_escape_map_tail()
 	_apply_map(
 		target_map, target_tileset,
-		Vector2i(int(destination["x"]), int(destination["y"]))
+		Vector2i(int(destination["x"]), int(destination["y"])),
+		false, 0, MAP_ENTRY_DOOR
 	)
 	return {
 		"ok": true,

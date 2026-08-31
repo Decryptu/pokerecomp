@@ -1463,8 +1463,28 @@ func _party_targets() -> Array:
 			"status": mon.status,
 			"fainted": not mon.is_egg and mon.hp <= 0,
 			"egg": mon.is_egg,
+			"quality": _target_quality_text(mon),
 		})
 	return targets
+
+
+## `PlacePartyMonTMHMCompatibility`'s `CanLearnTMHMMove` and
+## `PlacePartyMonEvoStoneCompatibility`'s walk, which is the plain question here:
+## its ten-byte window and three-byte stride, the two bugs
+## `docs/bugs_and_glitches.md` records, reach every stone entry in both corpora,
+## Eevee's three being the first three.
+func _target_quality_text(mon: Gen2SaveMon) -> String:
+	var item: int = int(_selected_item().get("item", 0))
+	match _target_quality():
+		&"tmhm":
+			return Gen2PartyMenuPage.able_quality(Gen2WorldTMHM.can_learn(
+				_data, mon.species, Gen2WorldTMHM.move_for_item(_data, item)
+			))
+		&"evo_stone":
+			return Gen2PartyMenuPage.able_quality(not Gen2Evolution.item_evolution(
+				_data, Gen2SaveBattleAdapter.to_battle_mon(_data, mon), item
+			).is_empty())
+	return ""
 
 
 ## `PartyMenuStrings`, picked by the `wPartyMenuActionText` each of the three
@@ -2390,7 +2410,20 @@ func _move_list_image() -> Image:
 func _target_image() -> Image:
 	if _party_menu_page() == null:
 		return null
-	return _target_page.render(_party_targets(), _target_cursor, _target_prompt())
+	return _target_page.render(
+		_party_targets(), _target_cursor, _target_prompt(), true, -1,
+		_target_quality() != &""
+	)
+
+
+## `GetPartyMenuQualityIndexes` for the two actions the pack writes:
+## `ChooseMonToLearnTMHM`'s TEACH_TMHM and `EvoStoneEffect`'s EVO_STONE.
+func _target_quality() -> StringName:
+	if _teaching:
+		return &"tmhm"
+	return &"evo_stone" if int(_selected_item().get(
+		"item", 0
+	)) in Gen2Evolution.STONE_ITEMS else &""
 
 
 func _mod_rows_image() -> Image:

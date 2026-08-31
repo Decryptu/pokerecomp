@@ -4,12 +4,10 @@ var _r: RefCounted = null
 
 ## Sweeps Mystery Gift against freshly imported real caches on all three
 ## cartridges: both gift tables end to end, every box `DoMysteryGift` can end on,
-## the screen each cartridge draws, and the whole decision chain the routine runs
-## between the exchange and the gift. The class this exists to stop is a chain that
-## answers the wrong box: every refusal in `DoMysteryGift` is one `jp` away from the
-## next, and a test that drives only the happy path never sees the other seven. So
-## the chain is driven once per outcome, with the section built to reach exactly
-## that jump.
+## the screen each cartridge draws, and the whole decision chain between the
+## exchange and the gift. The class this stops is a chain answering the wrong box:
+## every refusal in `DoMysteryGift` is one `jp` from the next and a happy-path test
+## never sees the other seven, so the chain is driven once per outcome.
 
 ## `MysteryGiftItems` and `MysteryGiftDecos`. The first and last row of each is
 ## what tells a table read forwards from one read backwards, and the pair of

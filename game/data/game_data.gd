@@ -1472,14 +1472,13 @@ func mod_type_numbers() -> Array[int]:
 	return _overlay.defined_numbers(Gen2ContentOverlay.KIND_TYPE)
 
 
-## How effective [param attacking] is against [param defending], in tenths: 0 for
-## an immunity, 5 for a resistance, 20 for a weakness, 10 otherwise. Tenths
-## because that is what the cartridge stores and what the damage formula divides
-## by, truncating after each of a defender's two types. Only exceptions are
-## listed, so an absent pair is neutral, as is a type missing from the chart.
-## [param foresight] cancels the Ghost immunities and nothing else. The key keeps
-## both ids whole so a mod type cannot alias a cartridge pair, and the overlay is
-## asked only when a mod loaded, this being the damage formula's own path.
+## How effective [param attacking] is against [param defending], in tenths: 0 an
+## immunity, 5 a resistance, 20 a weakness, 10 otherwise. Tenths because that is
+## what the cartridge stores and what the damage formula divides by, truncating
+## after each of a defender's two types. Only exceptions are listed, so an absent
+## pair is neutral, as is a type missing from the chart. [param foresight]
+## cancels the Ghost immunities alone. The key keeps both ids whole so a mod type
+## cannot alias a cartridge pair, and the overlay is asked only when a mod loaded.
 func type_matchup(attacking: int, defending: int, foresight: bool = false) -> int:
 	var key: int = Gen2ContentOverlay.matchup_number(attacking, defending)
 	if _overlay != null and not _overlay.is_empty():
@@ -2101,14 +2100,12 @@ func mystery_gift_table(decorations: bool) -> Array:
 	return (_mystery_gift.get("decos" if decorations else "items", []) as Array).duplicate()
 
 
-## `LinkCommsBorderGFX`'s own strip and, on Crystal alone, the three tilemaps the
-## trade screen is laid out from. A cache imported before the border existed
-## carries neither, which is what [method has_link_border] answers for; a cache
-## with the strip but no screen is Gold or Silver, whose trade screen is two
-## `LinkTextboxAtHL` boxes rather than a tilemap.
-## Below it, `wOtherPlayerLinkMode`, whose address the two cartridges do not
-## share: a runner writing Crystal's would leave Gold's read as zero and send
-## every player down the "can't link to the past" branch.
+## `LinkCommsBorderGFX`'s strip and, on Crystal alone, the three tilemaps the
+## trade screen is laid out from. A cache imported before the border carries
+## neither, which [method has_link_border] answers for; one with the strip and no
+## screen is Gold or Silver, whose trade screen is two `LinkTextboxAtHL` boxes.
+## Below it, `wOtherPlayerLinkMode`, whose address the cartridges do not share: a
+## runner writing Crystal's leaves Gold's zero and "can't link to the past".
 func other_player_link_mode_address() -> int:
 	return _other_player_link_mode
 

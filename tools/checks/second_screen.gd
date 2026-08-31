@@ -2,14 +2,13 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Verifies the lower display against freshly imported real caches, on all three
-## cartridges. Three things only a real cache can say. That every tab the START
-## menu's gate opens has a page this cache can actually draw. That every tab's icon
-## is really in the sheet it names, at the pixels it names, rather than a rectangle
-## of one colour cut from the wrong place. And that Kris's own pack and card picture
-## are taken where Crystal ships them and fall back to Chris's where pokegold does
-## not. The gate itself is asserted against the START menu in
-## tests/unit/test_second_screen.gd, which needs no cartridge.
+## Verifies the lower display against freshly imported real caches on all three
+## cartridges. Three things only a real cache can say: that every tab the START
+## menu's gate opens has a page this cache can draw; that every tab's icon is in
+## the sheet it names at the pixels it names, rather than one colour cut from the
+## wrong place; and that Kris's pack and card picture are taken where Crystal ships
+## them and fall back to Chris's where pokegold does not. The gate itself is
+## asserted in tests/unit/test_second_screen.gd, which needs no cartridge.
 
 ## Every state the three gates can be in, as `[party, pokedex, pokegear]`. All
 ## eight, because a run reaches most of them: the Pokegear arrives before the dex

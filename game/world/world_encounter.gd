@@ -74,11 +74,10 @@ static func resolve(
 				method, SOURCE_ROAMING, -1, int(roaming["species"]), roaming_level,
 				rate, encounter_roll, -1, force_encounter, roaming_roll, roaming_index
 			)
-			## `CheckEncounterRoamMon`'s own `ld a, BATTLETYPE_ROAMING`, and the
-			## two struct fields `LoadEnemyMon` branches on it for: a roamer whose
-			## HP byte is still zero rolls its DVs on this encounter and keeps
-			## them, and one that has been fought before comes back on the HP the
-			## last fight left it at.
+			## `ld a, BATTLETYPE_ROAMING`, and the two struct fields `LoadEnemyMon`
+			## branches on it for: a roamer whose HP byte is still zero rolls its
+			## DVs here and keeps them, and one already fought comes back on the
+			## HP that fight left it at.
 			var values: Dictionary = roamer["values"]
 			values["battle_type"] = Gen2Battle.BATTLETYPE_ROAMING
 			if int(roaming.get("hp", 0)) > 0:
@@ -117,8 +116,7 @@ static func _wild_mon(
 		return {}
 	## The last test, after `ValidateTempWildMonSpecies` and on the drawn slot
 	## rather than the table: a wild UNOWN is refused outright while
-	## `wUnlockedUnowns` is zero, which is every save before the first Ruins of
-	## Alph puzzle.
+	## `wUnlockedUnowns` is zero, so on every save before the first Alph puzzle.
 	if species == RomLayout.UNOWN_SPECIES and int(options.get("unlocked_unowns", -1)) == 0:
 		return {}
 	var level_roll: int = -1
@@ -255,13 +253,11 @@ static func _wild_result(
 	}
 
 
-## `FindNest`: every landmark one region holds [param species] at, in the order
-## its own tables name them and each landmark once. [param region] is the cache's
-## name for `FindNest`'s `e`, and [param roaming_mons] the live
-## [method Gen2WorldState.roaming_mons].
-##
-## Neither swarm table is read. Only the Johto walk reads the roamers, and only
-## `wRoamMon1` and `wRoamMon2`, so Gold and Silver's third never appears.
+## `FindNest`: every landmark one region holds [param species] at, in table order
+## and each landmark once. [param region] is the cache's name for `FindNest`'s
+## `e`, [param roaming_mons] the live [method Gen2WorldState.roaming_mons].
+## Neither swarm table is read, and only the Johto walk reads the roamers, and
+## only `wRoamMon1` and `wRoamMon2`, so Gold and Silver's third has no nest.
 static func nests(
 	data: GameData, species: int, region: String, roaming_mons: Array = []
 ) -> Array:
@@ -300,9 +296,8 @@ static func _holds_species(row: Dictionary, species: int) -> bool:
 
 
 ## `.AppendNest`: `GetWorldMapLocation` for the map, appended unless the list
-## already holds it. `LANDMARK_SPECIAL` is zero and the list it searches is
-## zero-filled, so a map with no landmark of its own always reports a hit and is
-## never appended.
+## already holds it. The list it searches is zero-filled and `LANDMARK_SPECIAL`
+## is zero, so a map with no landmark of its own is never appended.
 static func _append_nest(out: Array, data: GameData, map_key: String) -> void:
 	var parts: PackedStringArray = map_key.split(":")
 	if parts.size() != 2:
@@ -352,8 +347,8 @@ static func _slots(record: Dictionary, method: StringName, time_of_day: int) -> 
 
 ## The slots [method resolve] would draw from, as
 ## `{species, min_level, max_level}`. A cartridge table names one level per slot,
-## so the two bounds are equal; the shape is the Bug Contest's as well, whose
-## rows are a range. See [method Gen2WorldAPI.active_encounter_tables].
+## so the bounds are equal; the shape is the Bug Contest's, whose rows are a
+## range. See [method Gen2WorldAPI.active_encounter_tables].
 static func active_slots(record: Dictionary, method: StringName, time_of_day: int) -> Array:
 	var out: Array = []
 	for slot: Variant in _slots(record, method, time_of_day):
@@ -400,10 +395,9 @@ static func _resolve_roaming(
 	var mon: Variant = (mons as Array)[selected_index]
 	if not mon is Dictionary:
 		return result
-	## `CheckEncounterRoamMon` compares the map bytes alone, and a roamer that has
-	## been caught or defeated carries `GROUP_N_A` in them, so the compare is what
-	## keeps the emptied slot out of an encounter. The species test is this port's
-	## own: a record the cache seeded with no species is not a Pokemon either.
+	## `CheckEncounterRoamMon` compares the map bytes alone, and an emptied slot
+	## carries `GROUP_N_A` in them, so the compare is what keeps it out. The
+	## species test is this port's own, for a record the cache seeded blank.
 	if int((mon as Dictionary).get("species", 0)) <= 0:
 		return result
 	if int((mon as Dictionary).get("map_group", -1)) != map_group \

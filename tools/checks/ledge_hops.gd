@@ -4,12 +4,10 @@ var _r: RefCounted = null
 
 ## Verifies the two `DoPlayerMovement` branches a step is refused into against
 ## freshly imported real caches, for both command profiles: `.TryJump` and the
-## `.CheckWarp` behind it. The expected codes come from the pinned sources'
-## `.TryJump`, its `.ledge_table`, `.EdgeWarps` and the collision permissions. The
-## real-cartridge counterpart to tests/unit/test_world_collision.gd, which uses
-## synthetic caches. It also pins what gates Route 30's corridor north, which
-## tools/preview_world_story.gd walks: terrain and hops carry the route, and
-## EVENT_ROUTE_30_BATTLE opens the last two cells.
+## `.CheckWarp` behind it, against the pinned `.TryJump`, its `.ledge_table`,
+## `.EdgeWarps` and the collision permissions. The real-cartridge counterpart to
+## tests/unit/test_world_collision.gd. It also pins what gates Route 30's corridor
+## north: terrain and hops carry it, and EVENT_ROUTE_30_BATTLE opens the last two.
 
 const ROUTE30_GROUP: int = 26
 const ROUTE30_NUMBER: int = 1
@@ -188,14 +186,13 @@ func _reachable(world: Gen2WorldAPI) -> Dictionary:
 	return seen
 
 
-## `.CheckWarp` over the whole corpus. Every warp event standing on one of
+## `.CheckWarp` over the whole corpus. A warp event on one of
 ## `CheckDirectionalWarp`'s four carpets takes nothing on the step that lands on
-## it, because `CheckWarpTile` clears carry there. What the press does next is
-## decided by the cell the carpet names, since `.CheckWarp` sits after
-## `.TryStep`: a wall there leaves the warp as the only answer, which is every
-## door, and a walkable cell there means the press steps off instead. The two
-## ports are the whole of that second set on all three cartridges, and their
-## warps are taken by `OlivinePortSailorAtGangwayScript` rather than by walking.
+## it, because `CheckWarpTile` clears carry there. The cell the carpet names
+## decides what the press does next, `.CheckWarp` sitting after `.TryStep`: a wall
+## leaves the warp as the only answer, which is every door, and a walkable cell
+## means the press steps off. The two ports are the whole of that second set on
+## all three cartridges, and `OlivinePortSailorAtGangwayScript` takes their warps.
 func _verify_warp_carpets(game_id: StringName, data: GameData) -> void:
 	var carpets: int = 0
 	var stepped_off: int = 0

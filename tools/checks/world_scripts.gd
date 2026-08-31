@@ -198,11 +198,10 @@ func _tally_ram_markers(text: String, tally: Dictionary) -> void:
 ## Which `text_ram` targets the corpus names, split by whether the runner can
 ## answer one. Everything it can is a StringBufferPointers entry, which is what
 ## `Gen2WorldScriptRunner._text_buffer_ram` fills; an address outside that table
-## names storage nothing here writes and reaches the player as `<RAM_xxxx>`.
-##
-## Gold and Silver each carry one unwired entry, `0415`, and it is not a text:
-## the reference scanner reaches 94:4188 through bytes that are not commands,
-## the same speculation the parse failures above come from.
+## names storage nothing here writes and reaches the player as `<RAM_xxxx>`. Gold
+## and Silver each carry one unwired entry, `0415`, and it is not a text: the
+## reference scanner reaches 94:4188 through bytes that are not commands, the same
+## speculation the parse failures above come from.
 func _print_ram_markers(data: GameData, tally: Dictionary, numbers: int) -> void:
 	var buffers: Array[int] = data.string_buffer_addresses()
 	var wired: int = 0

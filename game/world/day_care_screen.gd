@@ -448,7 +448,9 @@ func _open_party() -> void:
 	host.mouse_filter = Control.MOUSE_FILTER_STOP
 	host.selection_made.connect(_on_selected)
 	add_child(host)
-	host.open_selection()
+	host.open_selection(
+		Gen2PartyScreen.PROMPT_CHOOSE, Gen2PartyScreen.ACTION_GIVE_MON
+	)
 	_party = host
 	_text_box.visible = false
 	_phase = Phase.PARTY
