@@ -43,41 +43,32 @@ const TRAINER_SHOCK_EMOTE: int = 0
 ## the operand is `wScriptDelay` and `ShowEmoteScript`'s `pause 0` spends
 ## two frames a unit (`Gen2WorldScriptRunner.PAUSE_FRAMES_PER_UNIT`).
 const TRAINER_SHOCK_FRAMES: int = 60
-## StepVectors' normal-speed row: 2 pixels per frame for 8 frames, the source
-## duration for ordinary player walking (engine/overworld/map_objects.asm). The
-## trainer approach shares it: see advance_trainer_approach_step().
+## StepVectors' normal row: 2 pixels a frame for 8, the player's own walk. The
+## trainer approach shares it; see advance_trainer_approach_step().
 const STEP_PASSES_WALK: int = 8
-## A ledge hop is two chained STEP_WALK-duration cells back to back
-## (engine/overworld/map_objects.asm's StepFunction_PlayerJump: .initjump/
-## .stepjump then .initland/.stepland, each timed by the same InitStep call
-## the ordinary walk uses). OBJECT_JUMP_HEIGHT/UpdateJumpPosition supplies the
-## vertical arc exposed by player_jump_offset() and drawn by the world renderer.
+## A ledge hop is two chained STEP_WALK cells: `StepFunction_PlayerJump`'s
+## .initjump/.stepjump then .initland/.stepland, each timed by the walk's own
+## InitStep. `UpdateJumpPosition` is the arc player_jump_offset() exposes.
 const STEP_PASSES_HOP: int = STEP_PASSES_WALK * 2
-## StepVectors' slow row: 1 pixel per frame for 16 frames. _RandomWalkContinue
-## calls InitStep with a direction of 0 to 3, which indexes that first row, so
-## a wandering object steps at half the player's walking speed.
+## StepVectors' slow row: 1 pixel a frame for 16. _RandomWalkContinue calls
+## InitStep with a direction of 0 to 3, which indexes it.
 const STEP_PASSES_NPC_WALK: int = 16
 ## MovementFunction_Strength calls InitStep with `direction | 0`, so a pushed
 ## boulder indexes that same slow row and slides at a wandering NPC's speed.
 const STEP_PASSES_BOULDER_PUSH: int = STEP_PASSES_NPC_WALK
 ## `Movement_tree_shake`'s own `ld a, 24`, spent as a STEP_TYPE_SLEEP.
 const TREE_SHAKE_FRAMES: int = 24
-## StepVectors' fast row: 4 pixels per frame for 4 frames, which the bike-speed
-## movement commands reach through `STEP_BIKE`.
+## StepVectors' fast row: 4 pixels a frame for 4, reached through `STEP_BIKE`.
 const STEP_PASSES_FAST: int = 4
-## `StepFunction_Turn` (engine/overworld/map_objects.asm): two frames standing,
-## then the new facing is written and two more, so a turn on the spot costs
-## four frames and no cell.
+## `StepFunction_Turn`: two frames standing, the new facing, two more.
 const STEP_PASSES_TURN: int = 4
-## `Script_ForcedMovement`'s own `step_dig 16`, twice per whirlpool.
+## `Script_ForcedMovement`'s `step_dig 16`, twice per whirlpool.
 const FORCED_TURN_SLEEP_PASSES: int = 16
-## How long each scripted step command takes, from the `STEP_*` speed it passes to
-## `InitStep` and that row of `StepVectors`. Every command here reaches `InitStep`
-## and they differ only in the step type set over the top; the turning rows keep
-## the direction the command names, `turn_away` not reversing it. The frames are
-## one cell's, and the three jumping rows cover two, `JumpStep`'s jumptable being
-## `.Jump` then `.Land`. `turn_step` is the one command not here: `TurnStep` never
-## calls `InitStep`, so it is filed with `turn_head` below.
+## How long each scripted step command takes, from the `STEP_*` speed it hands
+## `InitStep` and that row of `StepVectors`. They differ only in the step type
+## set over the top, and the turning rows keep the direction the command names.
+## The frames are one cell's; the three jumping rows cover two. `turn_step` is
+## not here: `TurnStep` never calls `InitStep`, so it sits with `turn_head`.
 const SCRIPTED_STEP_PASSES: Dictionary = {
 	&"slow_step": STEP_PASSES_NPC_WALK,
 	&"step": STEP_PASSES_WALK,
@@ -96,18 +87,23 @@ const STEP_KIND_WALK: StringName = &"step"
 const STEP_KIND_HOP: StringName = &"jump_step"
 const STEP_KIND_TURN: StringName = &"turn"
 
-## The three rows of SCRIPTED_STEP_PASSES that are a hop: two cells, twice the
-## frames, and the arc `UpdateJumpPosition` draws over them.
+## SCRIPTED_STEP_PASSES' three hops: two cells and `UpdateJumpPosition`'s arc.
 const JUMP_STEP_KINDS: Array[StringName] = [
 	&"slow_jump_step", &"jump_step", &"fast_jump_step",
 ]
-## The commands that only change a facing. `TurnHead` writes the direction and
-## stands; `TurnStep` writes it two frames in and stands for two more.
+## The two commands that only change a facing: `TurnHead` writes the direction
+## and stands, `TurnStep` writes it two frames in and stands for two more.
 const SCRIPTED_TURN_KINDS: Array[StringName] = [&"turn_head", &"turn_step"]
 ## RandomStepDuration_Slow and _Fast mask the source random byte before storing
 ## it as the wait preceding the next movement decision.
 const IDLE_MASK_SLOW: int = 0x7F
 const IDLE_MASK_FAST: int = 0x1F
+## `StepFunction_Sleep` decrements before testing, so a rolled 0 wraps to 256.
+const IDLE_PASSES_WRAP: int = 256
+## `IsObjectMovingOffEdgeOfScreen`'s window, relative to the player, who stands
+## four cells into the ten by nine `wXCoord`/`wYCoord` name. Inclusive.
+const OBJECT_SCREEN_MIN: Vector2i = Vector2i(-4, -4)
+const OBJECT_SCREEN_MAX: Vector2i = Vector2i(5, 4)
 
 ## Crystal background event types from script_constants.asm. READ and the four
 ## facing variants point directly at a script. IFSET and IFNOTSET point at a
@@ -5470,23 +5466,26 @@ func can_object_walk_to(
 	return _cells_unoccupied(checked_cells, moving)
 
 
+## `WillObjectBumpIntoSomeoneElse`: `IsNPCAtCoord` over every struct, the
+## player's included, on both pairs. See [method Gen2WorldObject.vacating_cell].
 func _cells_unoccupied(cells: Array[Vector2i], moving: Gen2WorldObject) -> bool:
 	for object: Gen2WorldObject in objects:
 		if object == moving or not object.active or object.deleted:
 			continue
 		for checked: Vector2i in cells:
-			if object.occupies(checked):
+			if object.occupies(checked) or object.vacating_cell() == checked:
 				return false
+	var player_vacating: Vector2i = player_cell - _player_step_direction \
+		if player_step_in_progress() else player_cell
 	for checked: Vector2i in cells:
-		if checked == player_cell:
+		if checked == player_cell or checked == player_vacating:
 			return false
 	return true
 
 
 
-## `WillObjectRemainOnWater` checks the two cells a big object newly occupies,
-## not its already occupied anchor row or column. With no movement direction a
-## caller is asking about the whole footprint, which is the useful public form.
+## `WillObjectRemainOnWater` checks the two cells a big object newly occupies.
+## With no direction a caller is asking about the whole footprint.
 func _object_landing_cells(
 	moving: Gen2WorldObject, destination: Vector2i, direction: Vector2i
 ) -> Array[Vector2i]:
@@ -5515,9 +5514,8 @@ func _object_landing_cells(
 ## slice. Scripted movement is executed by the script runner, while followers
 ## advance after each successful player step.
 ##
-## One movement decision per eligible object per call. A caller wanting the
-## source's pacing uses advance_object_steps_pass(), which spends the step and
-## idle durations this records.
+## One decision per eligible object per call. A caller wanting the source's
+## pacing uses advance_object_steps_pass(), which spends the durations.
 func advance_objects(random: RandomNumberGenerator) -> int:
 	var moved: int = 0
 	for object: Gen2WorldObject in objects:
@@ -5532,41 +5530,68 @@ func advance_objects(random: RandomNumberGenerator) -> int:
 ## a facing or a direction, then records how long the resulting step or wait
 ## lasts. Returns true when the object committed to a new cell.
 func _decide_object_movement(object: Gen2WorldObject, random: RandomNumberGenerator) -> bool:
-	if object.movement in [
-		Gen2WorldObject.MOVEMENT_SPINRANDOM_SLOW, Gen2WorldObject.MOVEMENT_SPINRANDOM_FAST
-	]:
-		# MovementFunction_RandomSpinSlow and _Fast set a facing and go straight
-		# to their own wait; neither ever starts a step.
-		object.facing = random.randi_range(
-			Gen2WorldSprite.FACING_DOWN, Gen2WorldSprite.FACING_RIGHT
-		)
-		var spin_mask: int = IDLE_MASK_SLOW \
-			if object.movement == Gen2WorldObject.MOVEMENT_SPINRANDOM_SLOW else IDLE_MASK_FAST
-		object.start_idle(random.randi() & spin_mask)
+	if _decide_object_spin(object, random):
 		return false
 	var direction: Vector2i = object.next_direction(random)
 	if direction == Vector2i.ZERO:
 		return false
+	# InitStep writes the facing before CanObjectMoveInDirection is asked, so a
+	# refused step still turns the object.
+	object.apply_direction(direction)
 	var destination: Vector2i = object.cell + direction
 	if not object.can_leave_to(destination) \
+		or not _object_stays_on_screen(destination) \
 		or not can_object_walk_to(destination, object, direction):
 		# _RandomWalkContinue's .new_duration branch: a blocked object keeps its
 		# cell and waits again before trying another direction.
-		object.start_idle(random.randi() & IDLE_MASK_SLOW)
+		object.start_idle(_rolled_idle_passes(random, IDLE_MASK_SLOW))
 		return false
 	object.cell = destination
-	object.apply_direction(direction)
 	object.start_step(direction, STEP_PASSES_NPC_WALK)
 	return true
 
 
+## The four spin templates: pick a facing, wait, never step.
+func _decide_object_spin(object: Gen2WorldObject, random: RandomNumberGenerator) -> bool:
+	if object.movement in Gen2WorldObject.SPIN_NEXT_FACING:
+		var table: Array = Gen2WorldObject.SPIN_NEXT_FACING[object.movement]
+		object.facing = int(table[clampi(object.facing, 0, table.size() - 1)])
+		object.start_idle(Gen2WorldObject.SPIN_HOLD_PASSES)
+		return true
+	if object.movement == Gen2WorldObject.MOVEMENT_SPINRANDOM_SLOW:
+		object.facing = random.randi() & 3
+		object.start_idle(_rolled_idle_passes(random, IDLE_MASK_SLOW))
+		return true
+	if object.movement != Gen2WorldObject.MOVEMENT_SPINRANDOM_FAST:
+		return false
+	# MovementFunction_RandomSpinFast turns a repeat into the opposite facing,
+	# `xor %00001100` on the direction being `^ 3` here, so it never stands twice.
+	var rolled: int = random.randi() & 3
+	object.facing = rolled if rolled != object.facing else rolled ^ 3
+	object.start_idle(_rolled_idle_passes(random, IDLE_MASK_FAST))
+	return true
+
+
+## `RandomStepDuration_Slow` and `_Fast`. See [constant IDLE_PASSES_WRAP].
+func _rolled_idle_passes(random: RandomNumberGenerator, mask: int) -> int:
+	var rolled: int = random.randi() & mask
+	return rolled if rolled > 0 else IDLE_PASSES_WRAP
+
+
+## `IsObjectMovingOffEdgeOfScreen`, the refusal beside the movement radius in
+## `CanObjectMoveInDirection`; MOVE_ANYWHERE skips both. Measured: Cherrygrove's
+## teacher settles on the far cell of its band from four columns, not eight.
+func _object_stays_on_screen(destination: Vector2i) -> bool:
+	var offset: Vector2i = destination - player_cell
+	return offset.x >= OBJECT_SCREEN_MIN.x and offset.x <= OBJECT_SCREEN_MAX.x \
+		and offset.y >= OBJECT_SCREEN_MIN.y and offset.y <= OBJECT_SCREEN_MAX.y
+
+
 ## One hardware frame of the data-driven movement templates.
 ##
-## Per frame an object spends one frame of an in-flight step, one frame of its
-## wait, or takes a new decision: the source's STEP_TYPE_CONTINUE_WALK,
-## STEP_TYPE_SLEEP and STEP_TYPE_FROM_MOVEMENT cycle. The cell commits when the
-## step starts, matching InitStep and the player path, and only the presentation
-## offset trails. Returns true when something a renderer draws changed.
+## An object spends a frame of an in-flight step, a frame of its wait, or takes
+## a decision: STEP_TYPE_CONTINUE_WALK, _SLEEP and _FROM_MOVEMENT. The cell
+## commits when the step starts, as InitStep does, and the offset trails.
 func advance_object_steps_pass(random: RandomNumberGenerator) -> bool:
 	if random == null or objects.is_empty():
 		return false
@@ -5574,9 +5599,8 @@ func advance_object_steps_pass(random: RandomNumberGenerator) -> bool:
 	for object: Gen2WorldObject in objects:
 		if not object.active or object.deleted:
 			continue
-		# A scripted trail belongs to advance_scripted_steps_pass(), which runs
-		# while a script does. Draining it here as well would walk it at twice
-		# the speed on every frame both drivers run.
+		# A scripted trail belongs to advance_scripted_steps_pass(). Draining it
+		# here too would walk it at twice the speed while both drivers run.
 		if object.scripted_steps:
 			continue
 		# `HandleStepType` returns before every step function while FROZEN_F is
@@ -5584,20 +5608,24 @@ func advance_object_steps_pass(random: RandomNumberGenerator) -> bool:
 		# no decision. `applymovement` is what freezes the rest of the map.
 		if object.frozen:
 			continue
-		# A step in flight is drained whatever put it there, so a pushed
-		# boulder slides even though its template never decides anything.
-		# StepFunction_StrengthBoulder ends by standing the boulder back up
-		# without rolling a wait, which is why only a template that decides
-		# reaches start_idle below.
+		# A step in flight is drained whatever put it there, so a pushed boulder
+		# slides even though its template decides nothing.
+		# StepFunction_StrengthBoulder rolls no wait, which is why only a
+		# deciding template reaches start_idle below.
 		if object.is_stepping():
 			if object.tick_step():
 				changed = true
 				if not object.is_stepping() and object.movement_advances():
 					# StepFunction_ContinueWalk rolls a new wait the moment
-					# the step duration reaches zero, so a wandering object
-					# pauses between steps instead of walking without
-					# stopping.
-					object.start_idle(random.randi() & IDLE_MASK_SLOW)
+					# the step duration reaches zero.
+					object.start_idle(_rolled_idle_passes(random, IDLE_MASK_SLOW))
+			continue
+		# `MovementFunction_Bouncing` decides nothing and leaves the picture to
+		# OBJECT_ACTION_BOUNCE, which `HandleObjectAction` runs every pass. No
+		# _remember_object_position(): this is a drawing, not a facing.
+		if object.movement == Gen2WorldObject.MOVEMENT_POKEMON:
+			if object.tick_bounce():
+				changed = true
 			continue
 		if not object.movement_advances():
 			continue
@@ -5613,11 +5641,10 @@ func advance_object_steps_pass(random: RandomNumberGenerator) -> bool:
 	return changed
 
 
-## Drains the presentation trail an `applymovement` left on the objects it moved,
-## and nothing else. Separate from [method advance_object_steps_pass] because that
-## one decides movement and a caller stops calling it while a script runs, which
-## is exactly when a scripted stream needs drawing. This decides nothing and
-## writes no cell: every cell the stream names committed when it was applied.
+## Drains the presentation trail an `applymovement` left, and nothing else.
+## Separate from [method advance_object_steps_pass] because a caller stops
+## calling that while a script runs, which is when a stream needs drawing. No
+## cell is written: every one the stream names committed when it was applied.
 ## Below, `FreezeAllOtherObjects`: `ApplyMovement` freezes every object with a
 ## sprite and clears the bit on the one it is about to move, and
 ## `UnfreezeFollowerObject` behind it keeps a `follow` pair walking together.

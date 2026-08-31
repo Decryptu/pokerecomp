@@ -7230,9 +7230,8 @@ func _ss_aqua_disembark(
 	return {"ok": true}
 
 
-## _push_boulder_at() for a boulder that may land on a `stonetable` pit: the
-## fall script is queued by the push that commits the cell, and the boulder
-## needs its own slide finished before the next push can reach it.
+## _push_boulder_at() for a boulder that may land on a `stonetable` pit, whose
+## fall script the push that commits the cell queues.
 func _push_boulder_run(
 	world: Gen2WorldAPI,
 	approach: Vector2i,
@@ -7249,13 +7248,11 @@ func _push_boulder_run(
 	)
 	if not bool(fall.get("terminal", true)):
 		return {"ok": false, "reason": "fall script did not finish: %s" % fall.get("reason", "")}
-	_settle_object_steps(world, random)
 	return pushed
 
 
-## Spends hardware frames until no object is mid-step. A pushed boulder slides
-## for STEP_PASSES_BOULDER_PUSH frames and refuses a second push until it stands
-## again, so this has to spend the frames rather than ask for them at once.
+## Spends hardware frames until no object is mid-step, one at a time: a pushed
+## boulder slides for STEP_PASSES_BOULDER_PUSH of them.
 func _settle_object_steps(world: Gen2WorldAPI, random: RandomNumberGenerator) -> void:
 	for _frame: int in OBJECT_STEP_FRAME_BUDGET:
 		var stepping: bool = false
@@ -7609,10 +7606,11 @@ func _storm_badge_leg(
 	return {"ok": true}
 
 
-## Walks to [param approach] and steps into [param direction], which is a push
-## rather than a step because a boulder stands there. DoPlayerMovement.CheckNPC
-## bumps the player on a push, so the step reports blocked and the boulder moving
-## is the success signal.
+## Walks to [param approach] and steps into [param direction], a push rather
+## than a step because a boulder stands there. DoPlayerMovement.CheckNPC bumps
+## the player, so the step reports blocked and the boulder moving is the success
+## signal. Every push starts settled: a sliding boulder holds
+## OBJECT_LAST_MAP_X/Y on the cell it is leaving, which the next push may need.
 func _push_boulder_at(
 	world: Gen2WorldAPI,
 	approach: Vector2i,
@@ -7621,6 +7619,7 @@ func _push_boulder_at(
 	random: RandomNumberGenerator,
 	data: GameData,
 ) -> Dictionary:
+	_settle_object_steps(world, random)
 	var walked: Dictionary = _walk_cell_resolving(world, approach, save, random, data)
 	if not bool(walked.get("ok", false)):
 		return walked
