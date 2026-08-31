@@ -42,6 +42,11 @@ const MOVEMENT_BIGDOLL: int = 0x21
 ## "big doll height".
 const BIG_OBJECT_SIZE: int = 2
 
+## What an object index names. Object zero is the player, which every object
+## command may name, so NONE_INDEX rather than PLAYER_INDEX is the refusal.
+const PLAYER_INDEX: int = -1
+const NONE_INDEX: int = -2
+
 const OBJECTTYPE_SCRIPT: int = 0
 const OBJECTTYPE_ITEMBALL: int = 1
 const OBJECTTYPE_TRAINER: int = 2

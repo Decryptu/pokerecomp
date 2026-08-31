@@ -48,9 +48,6 @@ const SHRINK_CLEAR_AT: Vector2i = Vector2i(6, 5)
 ## 4`, x `9 * 8`; hardware OAM counts from (-8, -16).
 const SHRINK_SPRITE_AT: Vector2i = Vector2i(64, 60)
 
-## `.PlayerNameString`, printed above the naming screen's entry.
-const NAME_PROMPT: String = "YOUR NAME?"
-
 ## `home/string.asm`'s InitName substitutes these for a blank entry.
 const DEFAULT_MALE: String = "CHRIS"
 const DEFAULT_FEMALE: String = "KRIS"

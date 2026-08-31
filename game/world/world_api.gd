@@ -188,6 +188,9 @@ var current_tileset: Gen2WorldTileset = null
 var player_cell: Vector2i = Vector2i.ZERO
 var player_facing: int = Gen2WorldSprite.FACING_DOWN
 var objects: Array = []
+## Object zero: `showemote`'s bubble and `disappear`'s deletion, the two things
+## the object commands write onto the player beyond the fields above.
+var _player_object: Gen2WorldObject = Gen2WorldObject.new()
 var object_hour: int = 6
 var object_time_of_day: int = Gen2WorldPalette.TIME_MORNING
 var world_day: int = 0
@@ -2864,12 +2867,26 @@ func advance_frame_counter() -> int:
 	return frame_number
 
 
-## One hardware frame of every object's emote countdown.
+## One hardware frame of every object's emote countdown, the player's included.
 func advance_emotes_frame() -> bool:
-	var changed: bool = false
+	var changed: bool = _player_object.tick_emote()
 	for object: Gen2WorldObject in objects:
 		changed = object.tick_emote() or changed
 	return changed
+
+
+func player_emote() -> int:
+	return _player_object.emote_id if _player_object.emote_visible \
+		else Gen2WorldActors.EMOTE_NONE
+
+
+func set_player_emote(emote_id: int, visible: bool, duration: int = 0) -> void:
+	_player_object.set_emote(emote_id, visible, duration)
+
+
+## False while `disappear PLAYER` holds: `DeleteObjectStruct` on object zero.
+func player_visible() -> bool:
+	return not _player_object.deleted
 
 
 ## The grass rustles `NormalStep` spawned this frame, taken once. `ShakeGrass` runs
@@ -4465,8 +4482,9 @@ func _script_player_facing(event: Dictionary) -> Array:
 
 
 func _script_write_object_position(event: Dictionary) -> Array:
-	var index: int = int(event.get("object_index", -1))
-	if not _event_names_loaded_object(event, index):
+	var index: int = int(event.get("object_index", Gen2WorldObject.NONE_INDEX))
+	if index == Gen2WorldObject.PLAYER_INDEX \
+		or not _event_names_loaded_object(event, index):
 		return [{"type": &"object_change_failed", "reason": &"invalid_object"}]
 	var key: String = _object_key(
 		int(event.get("map_group", -1)), int(event.get("map_number", -1)), index
@@ -4575,29 +4593,37 @@ func _script_object_stop_follow(_event: Dictionary) -> Array:
 
 
 func _script_player_face_object(event: Dictionary) -> Array:
-	var target: int = int(event.get("target_index", -1))
-	if _event_names_loaded_object(event, target):
+	var target: int = int(event.get("target_index", Gen2WorldObject.NONE_INDEX))
+	if target >= 0 and _event_names_loaded_object(event, target):
 		player_facing = _facing_toward(
 			player_cell, (objects[target] as Gen2WorldObject).cell
 		)
 	return []
 
 
-## Whether [param event] names the loaded map and an object on it. Every event
-## that edits one is refused rather than applied to whatever is at that index on
-## another map.
+## Whether [param event] names the loaded map and an actor on it: an object in
+## range, or the player. An event that edits one is refused rather than applied
+## to whatever sits at that index on another map.
 func _event_names_loaded_object(event: Dictionary, index: int) -> bool:
-	return current_map != null \
-		and int(event.get("map_group", -1)) == current_map.group \
-		and int(event.get("map_number", -1)) == current_map.number \
-		and index >= 0 and index < objects.size()
+	if current_map == null \
+		or int(event.get("map_group", -1)) != current_map.group \
+		or int(event.get("map_number", -1)) != current_map.number:
+		return false
+	return index == Gen2WorldObject.PLAYER_INDEX \
+		or (index >= 0 and index < objects.size())
+
+
+func _object_record(index: int) -> Gen2WorldObject:
+	if index == Gen2WorldObject.PLAYER_INDEX:
+		return _player_object
+	return objects[index] if index >= 0 and index < objects.size() else null
 
 
 func _apply_local_object_event(type: StringName, event: Dictionary) -> Array:
-	var index: int = int(event.get("object_index", -1))
+	var index: int = int(event.get("object_index", Gen2WorldObject.NONE_INDEX))
 	if not _event_names_loaded_object(event, index):
 		return [{"type": &"object_change_failed", "reason": &"invalid_object"}]
-	var object: Gen2WorldObject = objects[index]
+	var object: Gen2WorldObject = _object_record(index)
 	match type:
 		&"object_deleted":
 			object.deleted = true
@@ -4621,7 +4647,9 @@ func _apply_local_object_event(type: StringName, event: Dictionary) -> Array:
 func _apply_object_override(type: StringName, event: Dictionary) -> bool:
 	var map_group: int = int(event.get("map_group", -1))
 	var map_number: int = int(event.get("map_number", -1))
-	var index: int = int(event.get("object_index", -1))
+	var index: int = int(event.get("object_index", Gen2WorldObject.NONE_INDEX))
+	if index == Gen2WorldObject.PLAYER_INDEX:
+		return _apply_player_override(type, event)
 	if index < 0:
 		return false
 	var key: String = _object_key(map_group, map_number, index)
@@ -4657,6 +4685,34 @@ func _apply_object_override(type: StringName, event: Dictionary) -> bool:
 					(objects[target] as Gen2WorldObject).cell
 				)
 	return true
+
+
+## The same writes against object zero. Nothing is recorded for the next object
+## load, and `ApplyEventActionAppearDisappear` finds the player's event flag is
+## -1, so `disappear PLAYER` has no flag half either.
+func _apply_player_override(type: StringName, event: Dictionary) -> bool:
+	if not _event_names_loaded_object(event, Gen2WorldObject.PLAYER_INDEX):
+		return false
+	match type:
+		&"object_visibility":
+			_player_object.deleted = not bool(event.get("active", false))
+		&"object_position":
+			var cell: Variant = event.get("cell", Vector2i.ZERO)
+			if not cell is Vector2i:
+				return false
+			player_cell = cell
+		&"object_facing":
+			player_facing = clampi(
+				int(event.get("facing", Gen2WorldSprite.FACING_DOWN)),
+				Gen2WorldSprite.FACING_DOWN, Gen2WorldSprite.FACING_RIGHT
+			)
+		&"object_face_object":
+			var target: int = int(event.get("target_index", Gen2WorldObject.NONE_INDEX))
+			if target >= 0 and target < objects.size():
+				player_facing = _facing_toward(
+					player_cell, (objects[target] as Gen2WorldObject).cell
+				)
+	return false
 
 
 func _apply_object_movement(event: Dictionary) -> Array:
@@ -5645,8 +5701,10 @@ func _start_object_follow(event: Dictionary) -> void:
 	var map_number: int = int(event.get("map_number", -1))
 	if map_group != current_map.group or map_number != current_map.number:
 		return
-	var follower_index: int = int(event.get("object_index", -2))
-	var leader_index: int = int(event.get("target_index", -2))
+	var follower_index: int = int(
+		event.get("object_index", Gen2WorldObject.NONE_INDEX)
+	)
+	var leader_index: int = int(event.get("target_index", Gen2WorldObject.NONE_INDEX))
 	if not _follow_object_is_visible(leader_index):
 		return
 	_object_followers.clear()
@@ -5675,7 +5733,7 @@ func _start_object_follow(event: Dictionary) -> void:
 
 func _follow_object_is_visible(object_index: int) -> bool:
 	if object_index < 0:
-		return object_index == -1
+		return object_index == Gen2WorldObject.PLAYER_INDEX and player_visible()
 	if object_index >= objects.size():
 		return false
 	var object: Gen2WorldObject = objects[object_index]
@@ -5756,20 +5814,20 @@ func _step_follower(
 	# The leader's own step duration, not the slower wandering one:
 	# QueueFollowerFirstStep queues `movement_step` and the queue after it holds
 	# the leader's own command bytes. A running player leaves a follower on the
-	# walk row a cell behind every step.
+	# walk row a cell behind every step. The facing rides that queued step, since
+	# a whole stream queues in one call and MovementFunction_Follow turns a
+	# follower as each step begins rather than all at once.
 	if follower == null:
 		player_cell = destination
-		player_facing = facing_for_direction(direction)
-		_queue_player_step(direction, passes)
+		_queue_player_step(direction, passes, false, direction)
 		return
 	follower.cell = destination
-	follower.apply_direction(direction)
-	follower.queue_step(direction, passes)
+	follower.queue_step(direction, passes, false, direction)
 	var override_key: String = _object_key(
 		current_map.group, current_map.number, follower_index
 	)
 	_object_position_overrides[override_key] = follower.cell
-	_object_facing_overrides[override_key] = follower.facing
+	_object_facing_overrides[override_key] = facing_for_direction(direction)
 
 
 ## Moves one cell or enters a neighboring map when the step leaves a connected map
@@ -7125,6 +7183,9 @@ func connected_map_objects() -> Array:
 ## rather than on the way into it. See Gen2WorldObject.carry_presentation_from().
 func _load_objects(carry_presentation: bool = false) -> void:
 	var previous: Array = objects if carry_presentation else []
+	## `ReadObjectEvents` clears every object struct, object zero included.
+	if not carry_presentation:
+		_player_object = Gen2WorldObject.new()
 	objects = []
 	if current_map == null or data == null:
 		return

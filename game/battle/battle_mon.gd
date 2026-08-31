@@ -499,11 +499,13 @@ func persistent_dvs() -> int:
 	return int(transform_original.get("dvs", dvs))
 
 
-## `GetGender`'s answer, from the species ratio and this Pokémon's Attack and
-## Speed DVs: the cartridge folds the Attack DV into a byte's high nibble and the
-## Speed DV into its low, then compares against the ratio. Ratio 0 is always male
-## and 254 always female with no comparison at all, 255 is genderless, and
-## otherwise below the ratio is male, so a higher ratio means likelier female.
+## `GetGender`, which folds the Attack DV into a byte's high nibble and the Speed
+## DV into its low and compares that against the species ratio. Ratio 0 is always
+## male, 254 always female and 255 genderless, with no comparison at all.
+## Otherwise `cp b` puts the ratio against the byte and `jr c` takes male, so a
+## byte ABOVE the ratio is male and one equal to it is female; the source's own
+## comment there reads the other way round. `ratio + 1` values of 256 are female,
+## which is the percentage each GENDER_F* constant is named for.
 const GENDER_F0: int = 0
 const GENDER_F100: int = 254
 const GENDER_UNKNOWN: int = 255
@@ -531,7 +533,7 @@ static func gender_for(data_source: GameData, species_number: int, mon_dvs: int)
 		return GENDER_FEMALE
 
 	var combined: int = (Gen2Stats.attack_dv(mon_dvs) << 4) | Gen2Stats.speed_dv(mon_dvs)
-	return GENDER_MALE if combined < ratio else GENDER_FEMALE
+	return GENDER_MALE if combined > ratio else GENDER_FEMALE
 
 
 ## The two type numbers, which are the same number twice for a single-type

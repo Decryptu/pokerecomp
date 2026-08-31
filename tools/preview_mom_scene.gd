@@ -23,6 +23,16 @@ const CHECKPOINTS: Dictionary = {
 	&"silver": {&"emote": 17, &"walk": 47, &"text": 143, &"done": 2039},
 }
 
+## Who looks at whom while the text is up: Crystal's `turnobject PLAYER, LEFT`
+## and Mom's `turn_head RIGHT` against pokegold's walk downstairs and her own
+## `turnobject ..., UP`. The cells read the same whether those ran or not.
+const FACINGS_AT_TEXT: Dictionary = {
+	&"crystal": {&"player": Gen2WorldSprite.FACING_LEFT, &"mom": Gen2WorldSprite.FACING_RIGHT},
+	&"gold": {&"player": Gen2WorldSprite.FACING_DOWN, &"mom": Gen2WorldSprite.FACING_UP},
+	&"silver": {&"player": Gen2WorldSprite.FACING_DOWN, &"mom": Gen2WorldSprite.FACING_UP},
+}
+const FACING_NAMES: Array[String] = ["down", "up", "left", "right"]
+
 ## Both pieces are `channel_count 3` on all three profiles, so a fourth music
 ## channel on is the town still playing under `playmusic MUSIC_MOM`.
 const MUSIC_CHANNELS: int = 3
@@ -106,6 +116,8 @@ func _sample() -> Dictionary:
 		"player": world.player_cell,
 		"mom": mom.cell if mom != null else Vector2i(-1, -1),
 		"mom_offset": mom.step_offset_cells() if mom != null else Vector2.ZERO,
+		"player_facing": world.player_drawn_facing(),
+		"mom_facing": mom.facing if mom != null else -1,
 		"emote": mom != null and mom.emote_visible,
 		"text": _screen._text_box != null and _screen._text_box.visible,
 		"channels": _screen._audio_player.audio_status()["active_channels"],
@@ -160,9 +172,33 @@ func _checkpoints_hold() -> bool:
 		if at != want:
 			printerr("%s %s first appears on frame %d, not %d" % [_game, name, at, want])
 			held = false
+	held = _facings_hold() and held
 	held = _channels_hold() and held
 	print("%s checkpoints %s" % [_game, "hold" if held else "MOVED"])
 	return held
+
+
+func _facings_hold() -> bool:
+	var expected: Dictionary = FACINGS_AT_TEXT.get(_game, {})
+	var at: int = _first_frame(&"text")
+	if expected.is_empty() or at < 0 or at >= _trace.size():
+		return true
+	var row: Dictionary = _trace[at]
+	var held: bool = true
+	for who: StringName in expected:
+		var facing: int = int(row["%s_facing" % who])
+		var want: int = int(expected[who])
+		if facing == want:
+			continue
+		printerr("%s %s faces %s at the text, not %s" % [
+			_game, who, _facing_name(facing), _facing_name(want),
+		])
+		held = false
+	return held
+
+
+func _facing_name(facing: int) -> String:
+	return FACING_NAMES[facing] if facing >= 0 and facing < FACING_NAMES.size() else "?"
 
 
 func _channels_hold() -> bool:
@@ -204,11 +240,12 @@ func _report() -> void:
 			continue
 		last = without
 		changes += 1
-		print("f%4d  script %s  input %s  player %s  mom %s%s%s  text %s  chan %s  %s" % [
+		print("f%4d  script %s  input %s  player %s %s  mom %s %s%s%s  text %s  chan %s  %s" % [
 			row["frame"],
 			"busy" if row["script_busy"] else "idle",
 			"wait" if row["waiting_input"] else "-   ",
-			row["player"], row["mom"],
+			row["player"], _facing_name(int(row["player_facing"])),
+			row["mom"], _facing_name(int(row["mom_facing"])),
 			" stepping" if row["mom_offset"] != Vector2.ZERO else "",
 			" emote" if row["emote"] else "",
 			"up" if row["text"] else "-",

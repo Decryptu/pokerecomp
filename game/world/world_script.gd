@@ -570,10 +570,6 @@ static func is_promptbutton(opcode: int, crystal_commands: bool = true) -> bool:
 	return opcode == PROMPTBUTTON if crystal_commands else opcode == 0x54
 
 
-static func is_faceplayer(opcode: int, crystal_commands: bool = true) -> bool:
-	return opcode == FACEPLAYER if crystal_commands else opcode == GOLD_FACEPLAYER
-
-
 static func is_text_jump(opcode: int, crystal_commands: bool = true) -> bool:
 	return opcode in [FARJUMPTEXT, JUMPTEXT] if crystal_commands else opcode in [0x51, 0x52]
 

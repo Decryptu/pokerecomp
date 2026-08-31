@@ -39,10 +39,12 @@ var palette: PackedColorArray = PackedColorArray():
 
 
 
-## `.PlayerNameString`'s "YOUR NAME?" is the caller's, since the same screen
-## names a Pokemon, the rival and Mom under its own prompt. Answers false when
-## the cache carried no keyboards, which the caller reports rather than opening
-## a screen with nothing on it.
+## `NamingScreenJumptable`'s own strings. One keyboard names a Pokemon, the
+## player and the rival; only the line over it differs, so it is the caller's.
+const PROMPT_PLAYER: String = "YOUR NAME?"
+const PROMPT_RIVAL: String = "RIVAL'S NAME?"
+
+
 func open(data: GameData, prompt: String, kind: StringName = KIND_PLAYER) -> bool:
 	_prompt = prompt
 	_page = Gen2NamingScreenPage.from_data(data)

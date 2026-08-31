@@ -67,7 +67,7 @@ var _last_text: Dictionary = {}
 ## so the question a choice answers is the last text the script wrote; without it
 ## a host has nothing but the command's own name to print.
 var _standing_text: String = ""
-var _last_talked_object_index: int = -1
+var _last_talked_object_index: int = Gen2WorldObject.NONE_INDEX
 var _last_item: int = 0
 var _staged_warp: Dictionary = {}
 var _script_value: int = 0
@@ -489,6 +489,9 @@ const FRUIT_TREE_OBTAINED_TEXT: String = "Hey! It's\n%s!\nObtained\n%s!"
 const FRUIT_TREE_FULL_TEXT: String = "Hey! It's\n%s!\nBut the PACK is\nfull…"
 ## The `disappear LAST_TALKED` operand (constants/map_object_constants.asm).
 const LAST_TALKED: int = 0xFE
+## PLAYER and the first `object_const_def` id.
+const PLAYER_OBJECT_ID: int = 0
+const FIRST_MAP_OBJECT_ID: int = 2
 ## wBattleResult, which startbattle copies into wScriptVar
 ## (constants/battle_constants.asm).
 const BATTLE_RESULT_WIN: int = 0
@@ -671,7 +674,9 @@ static func begin(
 	else:
 		runner._random.randomize()
 	runner._reset_phone_receive_timer = bool(request.get("reset_receive_timer", false))
-	runner._last_talked_object_index = int(request.get("object_index", -1))
+	runner._last_talked_object_index = int(
+		request.get("object_index", Gen2WorldObject.NONE_INDEX)
+	)
 	runner._last_item = int(request.get("item", 0))
 	runner.player_name = String(request.get("player_name", ""))
 	var bank: int = int(request.get("bank", 0))
@@ -1262,7 +1267,11 @@ func _stage_yes_or_no(tag: StringName, values: Dictionary) -> Dictionary:
 
 
 ## What answers each runtime request the host has finished, as the handler that
-## reads it. The key is the pending request's own kind.
+## reads it. The key is the pending request's own kind. `_complete_plain_request`
+## puts the host's answer in wScriptVar and runs on, and for most of these that
+## answer is nothing: the routine drew a page, held for a button and wrote
+## nothing a script reads, and the map's own `waitbutton` presses what it left
+## standing. The five that do answer a value say so beside them.
 const COMPLETION_HANDLERS: Dictionary = {
 	&"catch_tutorial_requested": &"_complete_catch_tutorial",
 	&"swarm_requested": &"_complete_swarm",
@@ -1286,8 +1295,6 @@ const COMPLETION_HANDLERS: Dictionary = {
 	## `BugContestJudging` answers with the placing, which the results script
 	## reads out of wScriptVar exactly as the marts and the PC do.
 	&"bug_contest_judging_requested": &"_complete_plain_request",
-	## Neither routine writes anything a script reads: each returns and the
-	## map's own `waitbutton` presses the text it left standing.
 	&"name_rater_requested": &"_complete_plain_request",
 	&"move_deleter_requested": &"_complete_plain_request",
 	## `MoveTutor` answers FALSE when the move was learned and -1 when the
@@ -1299,25 +1306,17 @@ const COMPLETION_HANDLERS: Dictionary = {
 	## `CheckPartyFullAfterContest`'s own three answers, which
 	## `BugContestResults_DidNotLeaveMons` branches on twice.
 	&"contest_mon_requested": &"_complete_plain_request",
-	## `PlayRadio` holds until A or B and writes nothing; the station it
-	## opened is the request's own.
+	## `PlayRadio` opens the request's own station.
 	&"map_radio_requested": &"_complete_plain_request",
 	## `NewPokedexEntry` behind `GameCornerPrizeMonCheckDex`'s dex writes,
 	## which are staged here rather than in the screen.
 	&"pokedex_entry_requested": &"_complete_plain_request",
-	## `GiveDratini` rewrites four move slots and answers nothing: every one
-	## of its scripts runs straight on.
 	&"dratini_moveset_requested": &"_complete_plain_request",
-	## `_Diploma`, `_PrintDiploma` and `_UnownPrinter` write nothing either:
-	## the page stands until a button and the script runs on behind it.
 	&"diploma_requested": &"_complete_plain_request",
 	&"unown_printer_requested": &"_complete_plain_request",
 	## `TryQuickSave` answers TRUE for a save that was written and FALSE for
 	## one that was not, which is the branch both of its sites read.
 	&"quick_save_requested": &"_complete_plain_request",
-	## `_DisplayLinkRecord` draws one page and holds for a button, and the
-	## three link rooms' own consoles run their exchange and come back to a
-	## `newloadmap`. Neither writes anything the script reads.
 	&"link_record_requested": &"_complete_plain_request",
 	&"link_room_requested": &"_complete_plain_request",
 	&"rival_name_requested": &"_complete_rival_name",
@@ -1813,9 +1812,11 @@ func complete_wait() -> Dictionary:
 		return {
 			"ok": false, "status": &"failed", "reason": &"script_wait_not_pending",
 		}
-	var hide_emote_object: int = int(_pending.get("hide_emote_object", -1))
+	var hide_emote_object: int = int(
+		_pending.get("hide_emote_object", Gen2WorldObject.NONE_INDEX)
+	)
 	_pending = {}
-	if hide_emote_object >= 0:
+	if hide_emote_object != Gen2WorldObject.NONE_INDEX:
 		_emit_object_event(&"object_emote", {
 			"object_index": hide_emote_object,
 			"emote_id": _loaded_emote,
@@ -1953,8 +1954,6 @@ const COMMAND_HANDLERS: Dictionary = {
 	Gen2WorldScript.GIVEEGG: &"_command_givepoke",
 	Gen2WorldScript.GIVEPOKEMAIL: &"_command_givepokemail",
 	Gen2WorldScript.CHECKPOKEMAIL: &"_command_checkpokemail",
-	Gen2WorldScript.GOLD_FACEPLAYER: &"_command_gold_faceplayer",
-	Gen2WorldScript.FACEPLAYER: &"_command_gold_faceplayer",
 }
 
 ## The two commands with nothing behind them yet: `getnum` reads a number into
@@ -2531,10 +2530,6 @@ func _command_checkpokemail(_opcode: int, command: Dictionary, _bank: int) -> Di
 	return _check_poke_mail(command)
 
 
-func _command_gold_faceplayer(opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
-	if Gen2WorldScript.is_faceplayer(opcode, _crystal_commands()):
-		pass
-	return {"ok": true}
 ## A command whose numbers a mod may have moved, substituted before it runs.
 ##
 ## The site is addressed by the byte it sits at, `frame.address + offset`, which
@@ -3199,30 +3194,33 @@ func _command_battletowertext(_source_opcode: int, command: Dictionary, _bank: i
 	return _stage_battle_tower_text(int(command.get("value", 1)))
 
 
+func _apply_movement(object_index: int, address: int) -> Dictionary:
+	var walks_player: bool = object_index == Gen2WorldObject.PLAYER_INDEX
+	var values: Dictionary = {
+		"bank": int(_request.get("bank", 0)), "address": address,
+	}
+	if not walks_player:
+		values["object_index"] = object_index
+	_emit_object_event(
+		&"player_movement_requested" if walks_player else &"object_movement_requested",
+		values
+	)
+	return _stage_movement_wait({"object_index": object_index})
+
+
 func _execute_object_command(source_opcode: int, command: Dictionary) -> Dictionary:
 	match source_opcode:
 		0x67:
 			_last_talked_object_index = _object_index_from_id(int(command["object_id"]))
 		0x68:
-			var movement_event_type: StringName = &"player_movement_requested" \
-				if int(command.get("object_id", 0)) == 0 else &"object_movement_requested"
-			var movement_values: Dictionary = {
-				"bank": int(_request.get("bank", 0)),
-				"address": int(command.get("address", 0)),
-			}
-			var moved_index: int = -1
-			if movement_event_type == &"object_movement_requested":
-				moved_index = _object_index_from_id(int(command.get("object_id", 0)))
-				movement_values["object_index"] = moved_index
-			_emit_object_event(movement_event_type, movement_values)
-			return _stage_movement_wait({"object_index": moved_index})
+			return _apply_movement(
+				_object_index_from_id(int(command.get("object_id", 0))),
+				int(command.get("address", 0))
+			)
 		0x69:
-			_emit_object_event(&"object_movement_requested", {
-				"object_index": _last_talked_object_index,
-				"bank": int(_request.get("bank", 0)),
-				"address": int(command.get("address", 0)),
-			})
-			return _stage_movement_wait({"object_index": _last_talked_object_index})
+			return _apply_movement(
+				_last_talked_object_index, int(command.get("address", 0))
+			)
 		0x6A:
 			_face_player()
 		0x6B:
@@ -6275,13 +6273,13 @@ func _emit_runtime_event(kind: StringName, values: Dictionary) -> void:
 func _object_index_from_id(object_id: int) -> int:
 	if object_id in [0xFE, 0xFF]:
 		return _last_talked_object_index
-	if object_id == 0:
-		return -1
-	if object_id <= 0:
-		return -1
+	if object_id == PLAYER_OBJECT_ID:
+		return Gen2WorldObject.PLAYER_INDEX
+	if object_id < FIRST_MAP_OBJECT_ID:
+		return Gen2WorldObject.NONE_INDEX
 	# object_const_def starts map-object constants at 2. The cache omits the
 	# player object, so source id 2 is array index zero.
-	return object_id - 2
+	return object_id - FIRST_MAP_OBJECT_ID
 
 
 func _emit_object_event(event_type: StringName, values: Dictionary) -> void:

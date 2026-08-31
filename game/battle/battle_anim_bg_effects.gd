@@ -370,18 +370,6 @@ static func _deform_screen(
 		progress = (progress + offset) & 0xFF
 
 
-## `InitSurfWaves`: the 64-entry wave the Surf effect then rotates past the
-## window one entry a frame.
-static func _init_surf_waves(
-	player: Gen2BattleAnimPlayer, amplitude: int, offset: int
-) -> void:
-	var background: Gen2BattleAnimBackground = player.background()
-	var progress: int = 0
-	for index: int in Gen2BattleAnimBackground.SURF_WAVE_LENGTH:
-		background.surf_wave[index] = _sine(player, progress, amplitude)
-		progress = (progress + offset) & 0xFF
-
-
 ## `DeformWater`: a wave that grows outwards from one line in both directions,
 ## stopping at whichever end of the window it reaches first.
 static func _deform_water(

@@ -286,13 +286,6 @@ static func _read_mart_list_at(rom: RomFile, offset: int) -> Dictionary:
 	return {"ok": true, "items": items}
 
 
-static func _read_price_mart(rom: RomFile, bank: int, address: int, name: String) -> Dictionary:
-	if not _valid_cpu_address(address):
-		return _error("%s mart has an invalid CPU address." % name)
-	var offset: int = RomFile.linear(bank, address)
-	return _read_price_mart_at(rom, offset, name)
-
-
 static func _read_price_mart_at(rom: RomFile, offset: int, name: String) -> Dictionary:
 	if not rom.in_bounds(offset):
 		return _error("%s mart is outside the cartridge." % name)

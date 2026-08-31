@@ -22,6 +22,17 @@ const GUIDE_FOLLOWER_WAYPOINTS: Array[Vector2i] = [
 	Vector2i(10, 6), Vector2i(24, 11), Vector2i(24, 11),
 ]
 const GUIDE_MOVEMENT_FRAMES: Array[int] = [32, 48, 56, 64, 152, 16]
+## Which way the player looks at the box after each stream: the follow's own
+## answer, then `turnobject PLAYER` UP, UP, LEFT and RIGHT. Stream 6 has no box
+## behind it, and pokegold ships Crystal's guide script.
+const NO_TEXT_AFTER: int = -1
+const GUIDE_PLAYER_FACINGS: Array[int] = [
+	Gen2WorldSprite.FACING_UP, Gen2WorldSprite.FACING_UP,
+	Gen2WorldSprite.FACING_UP, Gen2WorldSprite.FACING_LEFT,
+	Gen2WorldSprite.FACING_RIGHT, NO_TEXT_AFTER,
+]
+## `turnobject CHERRYGROVECITY_GRAMPS, LEFT`, the object half of it.
+const GUIDE_GIFT_FACING: int = Gen2WorldSprite.FACING_LEFT
 const DUDE_MOVEMENT_FRAMES: Array[Array] = [[48, 48], [40, 40]]
 
 var _r: RefCounted = null
@@ -70,9 +81,22 @@ func _check_guide(game_id: StringName, data: GameData) -> void:
 			"%s: Guide Gent movement %d left the player at %s, expected %s." % [
 				game_id, index + 1, row.get("player"), GUIDE_FOLLOWER_WAYPOINTS[index],
 			])
+		_r.check(int(row.get("facing", -1)) == GUIDE_PLAYER_FACINGS[index],
+			"%s: Guide Gent movement %d ended with the player facing %d, expected %d." % [
+				game_id, index + 1, int(row.get("facing", -1)),
+				GUIDE_PLAYER_FACINGS[index],
+			])
 	_r.check(not (world.objects[GUIDE_OBJECT] as Gen2WorldObject).active,
 		"%s: Guide Gent did not disappear at his door." % game_id)
-	print("%s: Guide Gent %d movement frames" % [game_id, int(run_result.get("movement_frames", 0))])
+	if movements.size() == GUIDE_PLAYER_FACINGS.size():
+		_r.check(int((movements[4] as Dictionary).get("leader_facing", -1)) == GUIDE_GIFT_FACING,
+			"%s: Guide Gent faces %d for the gift, expected %d." % [
+				game_id, int((movements[4] as Dictionary).get("leader_facing", -1)),
+				GUIDE_GIFT_FACING,
+			])
+	print("%s: Guide Gent %d movement frames" % [
+		game_id, int(run_result.get("movement_frames", 0)),
+	])
 
 
 func _check_tutorial(game_id: StringName, data: GameData, trigger_index: int) -> void:
@@ -155,6 +179,12 @@ func _drain(world: Gen2WorldAPI, initial: Array, tracked_object: int) -> Diction
 		var input: Dictionary = world.pending_script_input()
 		var input_type: StringName = StringName(input.get("type", &""))
 		if input_type in [&"text", &"button"]:
+			## What the `turnobject` before this box left. A dropped turn moves
+			## nobody, so the waypoints above cannot see one.
+			if not movements.is_empty() and not (movements[-1] as Dictionary).has("facing"):
+				(movements[-1] as Dictionary)["facing"] = world.player_facing
+				(movements[-1] as Dictionary)["leader_facing"] = \
+					(world.objects[tracked_object] as Gen2WorldObject).facing
 			results = world.run_event_queue(true)
 			continue
 		if input_type in [&"choice", &"menu"]:
