@@ -2,10 +2,8 @@ extends SceneTree
 
 ## Exercises map-entry callbacks and one facing interaction from an imported
 ## cartridge cache without opening the ROM at runtime.
-##
 ##   Godot --headless --path . -s res://tools/preview_world_story.gd -- \
 ##     crystal 3 19 3 5 1 37,1744 home story
-##
 ## The optional seventh argument is a comma-separated event flag list. `home`
 ## follows the bedroom stair warp out; `story` drives the Mom and New Bark events.
 
@@ -207,7 +205,6 @@ const ROUTE_27_LANDFALL: Vector2i = Vector2i(18, 10)
 
 ## Tohjo Falls, west to east (`maps/TohjoFalls.asm`, `maps/Route27.asm`). The
 ## two mouths are Route 27 cells; everything between them is inside the cave.
-##
 ## The west door lands on (13,15) in an eight-cell pocket whose only water is to
 ## the left, so the surf starts on (10,14). The climb's foot is (8,12), directly
 ## below the four-cell `COLL_WATERFALL` column at x 8, and the descent's top is
@@ -622,7 +619,6 @@ const EVENT_FOUGHT_SNORLAX: int = 1872
 const EVENT_VERMILION_CITY_SNORLAX: int = 1904
 
 ## Diglett's Cave, the one door into west Kanto (`maps/DiglettsCave.asm`).
-##
 ## Three walkable regions, not one tunnel, so it is crossed by warps: the
 ## Vermilion entrance sits in a 14-cell room whose only ladder is (5,31); that
 ## lands on (17,33) in the 99-cell middle, which reaches the second ladder on
@@ -3335,7 +3331,6 @@ func _radio_tower_path(
 
 
 ## The card-key shutter on Radio Tower 3F and the Rocket boss on 5F.
-##
 ## `CardKeySlotScript` is a BGEVENT_UP at (14,2), so it is read by facing up
 ## from (14,3). It changeblocks the shutter open and sets
 ## EVENT_USED_THE_CARD_KEY_IN_THE_RADIO_TOWER, which is what
@@ -3529,7 +3524,6 @@ func _goldenrod_underground_card_key(
 
 
 ## Goldenrod City to the fake director on Radio Tower 5F, and back out.
-##
 ## The climb is one shaft: 1F (15,0), 2F (0,0), 3F (7,0), 4F (0,0). 2F's stairs
 ## are behind the Black Belt on (0,1), whom `RadioTowerRocketsScript` already
 ## hid, and 3F's other staircase at (17,0) is behind the card-key shutter, which
@@ -4449,7 +4443,6 @@ func _ride_waterfall_down(
 
 
 ## Route 26's heal house and the Victory Road Gate badge check.
-##
 ## The gate is not walked with _gate_leg(): that helper reaches the far warp
 ## with _warp_step(), which assigns the cell rather than walking to it, and the
 ## badge check is a coord event at (10,11) that only a real walk can meet.
@@ -4511,7 +4504,6 @@ func _victory_road_gate_leg(
 
 
 ## Victory Road and Route 23 to the Indigo Plateau Pokemon Center.
-##
 ## Victory Road is a warp maze, not one floor: the gate's entrance region
 ## reaches only the ladder at (1,49), whose pair lands on (1,35) in a second
 ## region, whose ladder at (13,31) lands on (13,17) in the third. Only that
@@ -4684,7 +4676,6 @@ func _elite_four_leg(
 ## sets SCENE_LANCESROOM_APPROACH_LANCE, which arms the coord events on (4,5)
 ## and (5,5), and stepping onto one runs the approach, the battle and the whole
 ## champion scene through to `warpfacing UP, HALL_OF_FAME, 4, 13`.
-##
 ## The cell is stepped onto rather than walked to, the way the Plateau rival
 ## coord event is: a resolving walk would re-dispatch it until it ran out of
 ## attempts.
@@ -4744,7 +4735,6 @@ func _lances_room_leg(
 ## so SCENE_HALLOFFAME_ENTER usually runs inside the champion drain and this
 ## step's own dispatch finds nothing left. [param carried] is that drain's count
 ## of the one event this leg exists to reach.
-##
 ## `halloffame` is a presentation boundary: it commits ENGINE_HALL_OF_FAME and
 ## emits `hall_of_fame_requested`, which no screen answers yet.
 func _hall_of_fame_leg(
@@ -4919,7 +4909,6 @@ func _ss_aqua_crossing(
 
 ## New Bark Town back to Olivine City, the way the route first walked it, in
 ## reverse where it overlaps and forward where it does not.
-##
 ## Two of the joins are gate buildings rather than map connections: Route 31's
 ## west edge is wall on every row, so `Route31VioletGate` is the only way into
 ## Violet City, and Ecruteak's west exit is `Route38EcruteakGate`.
@@ -4967,7 +4956,6 @@ func _walk_west_to_olivine(
 
 
 ## Elm's lab, for the ticket he only offers once the Elite Four is beaten.
-##
 ## `ProfElmScript` reads `EVENT_BEAT_ELITE_FOUR` before anything else it could
 ## give, so this is the first thing he answers with now
 ## (`maps/ElmsLab.asm`'s ElmGiveTicketScript).
@@ -5001,7 +4989,6 @@ func _elm_ss_ticket(
 
 
 ## The worried grandpa on 1F, which is where the walked route stops.
-##
 ## `WorriedGrandpaSceneLeft` is a coord event on the pair below the ship's
 ## entrance and it retires itself with `setscene SCENE_FASTSHIP1F_NOOP`, so it is
 ## stepped onto once rather than walked to.
@@ -5055,7 +5042,6 @@ func _ss_aqua_interior(
 
 
 ## B1F's on-duty sailor, who is the only thing that reveals the lazy one.
-##
 ## `FastShipB1FSailorScript` reaches its `clearevent
 ## EVENT_FAST_SHIP_CABINS_NNW_NNE_NE_SAILOR` only with FIRST_TIME, LAZY_SAILOR
 ## and INFORMED all clear, which is exactly the outbound first trip. Stepping
@@ -5115,7 +5101,6 @@ func _ss_aqua_b1f_sailor(
 
 
 ## The lazy sailor in the NE cabin, whose own script stands the B1F pair down.
-##
 ## `FastShipLazySailorScript` is a trainer battle inside an OBJECTTYPE_SCRIPT
 ## object, and its tail is what matters here: `setevent
 ## EVENT_FAST_SHIP_LAZY_SAILOR` and `setmapscene FAST_SHIP_B1F,
@@ -5152,7 +5137,6 @@ func _ss_aqua_lazy_sailor(
 
 ## West past the stood-down sailors to the captain's cabin, and the docking the
 ## granddaughter's scene runs.
-##
 ## With the scene retired the coord events are inert, so the sailor left standing
 ## on (31,6) leaves (30,6) open and B1F's west stairs are reachable. The
 ## granddaughter's own scene is the way back east: it walks the player through
@@ -5197,7 +5181,6 @@ func _ss_aqua_granddaughter(
 
 
 ## The Vermilion Port dock to the Thunder Badge, the route's first Kanto leg.
-##
 ## Nothing gates it. `VermilionGym_MapScripts` declares neither a scene nor a
 ## callback, so the gym is open from the door and Surge answers as soon as he is
 ## faced; `VermilionGymSurgeScript` is his own `checkflag ENGINE_THUNDERBADGE`,
@@ -5268,7 +5251,6 @@ func _thunder_badge_path(
 
 
 ## Vermilion Gym to the Marsh Badge, by way of Route 6 and Saffron City.
-##
 ## The gym exit reloads the city, so the yard's tree has grown back and is cut a
 ## second time from the inside. Saffron is then a gate crossing rather than a
 ## connection, and its own gym is a warp maze: nine rooms with no doors between
@@ -5327,7 +5309,6 @@ func _marsh_badge_path(
 
 
 ## The warp maze, then Sabrina.
-##
 ## Every pad is one half of a bidirectional pair, so a wrong one is recoverable
 ## rather than fatal, but only warp 17 reaches Sabrina's room at all. The walk
 ## between pads is ordinary: within a room the floor is open, and the BFS treats
@@ -5385,7 +5366,6 @@ func _saffron_gym_leg(
 
 
 ## Saffron Gym to the Rainbow Badge, by way of Route 7 and Celadon City.
-##
 ## The maze is walked back out pad for pad, since every pad is one half of a
 ## bidirectional pair. Saffron's west edge is a connection into Route 7 the way
 ## its south one is into Route 6, and carries no more traffic: the crossing is
@@ -5454,7 +5434,6 @@ func _rainbow_badge_path(
 
 
 ## The yard's tree, then Erika.
-##
 ## Cutting (28,35) is what joins the city to the gym yard at all. The walk to
 ## Erika crosses three sight lines it cannot route around, so the trainers the
 ## walk resolves are reported with her.
@@ -5578,7 +5557,6 @@ func _cerulean_approach_path(
 
 
 ## Cerulean City through the errand the Cascade Badge waits on.
-##
 ## The first Kanto badge whose gate is an errand rather than a cell, and the
 ## errand runs in the order the cartridge forces: the Power Plant manager arms
 ## the gym, the gym's grunt arms Route 24 and Route 25, Route 24's grunt names
@@ -6246,7 +6224,6 @@ func _pewter_leg(
 
 ## Vermilion's Snorlax, which is the only thing between the walked route and
 ## west Kanto.
-##
 ## Tuning is the whole interaction: `SnorlaxAwake` compares `wMapMusic` against
 ## the Poke Flute channel and takes its false branch otherwise, so the dial is
 ## moved to 20.0 and the Pokegear closed before it is talked to. The card the
@@ -6533,7 +6510,6 @@ func _seafoam_gym_leg(
 
 
 ## Seafoam Gym back up the coast to Viridian Gym and the Earth Badge.
-##
 ## The way back is the way down reversed, water included: Route 20's east shore,
 ## Cinnabar, Route 21 and Pallet's own pond, then three connections north. The
 ## gym at the end has no puzzle and no trainer in it. Both its objects carry
@@ -7159,7 +7135,6 @@ func _cerulean_machine_part(
 
 
 ## Runs the coord event on [param cell], whichever way the walk gets there.
-##
 ## Open work item 15: a resolving walk aimed at a live coord event re-dispatches
 ## its own target and never settles, so the target is [param approach] and the
 ## last step is a plain move_result(). But the walk to that approach can cross
@@ -7372,7 +7347,6 @@ func _talk_to_on_water(
 ## The lighthouse floors reached by ladder on the way up and by hole on the way
 ## down, from Olivine City's door back to it. [param phase] is "first" for
 ## Jasmine's SecretPotion errand and "cure" for the visit that carries it.
-##
 ## The climb is not the obvious one: 4F's ladder at (3,5) reaches the half of 5F
 ## that cannot see the 6F stairs at (9,15), so the route drops back to 3F
 ## through the hole at 4F (9,3) and climbs the other shaft.
@@ -7458,7 +7432,6 @@ func _lighthouse_shaft(
 
 ## maps/OlivineCafe.asm's sailor at (4,3), who hands over HM04 behind
 ## EVENT_GOT_HM04_STRENGTH. The cafe is Olivine City warp 7 at (7,21).
-##
 ## The HM is then taught through Gen2WorldPartyHost.teach_tm_hm(), the same
 ## transaction the pack's own USE reaches, so the route learns STRENGTH the way a
 ## player does rather than writing a move slot behind the game's back.

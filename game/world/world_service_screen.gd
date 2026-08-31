@@ -1974,6 +1974,8 @@ func _open_box_naming() -> void:
 		_status = "The naming keyboard is not in this cache."
 		_render_rows()
 		return
+	## `.Box`'s `PokeBallSpriteGFX`, the one row whose icon is not a walker.
+	host.set_sprite_icon(_data, Gen2NamingScreenScreen.SPRITE_POKE_BALL)
 	_naming = host
 	_set_overlay_open(true)
 	host.z_index = 5

@@ -58,7 +58,6 @@ const HP_FRACTIONS: Array[float] = [1.0, 0.3, 0.05]
 ## bytes on. Every screen in [constant SHINY_LAYOUTS] asks for one or the other,
 ## so a species whose shiny entry never reached the cache would draw its ordinary
 ## colours on all five however carefully each one asked.
-##
 ## Swept rather than sampled: the pair is per species and the importer reads them
 ## from one table, so one missing entry is the whole failure mode.
 func _verify_shiny_palettes() -> void:

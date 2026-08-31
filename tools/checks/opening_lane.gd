@@ -5,7 +5,6 @@ var _r: RefCounted = null
 ## Validates the cache records required by the first playable lane. This is a
 ## read-only cache audit: it never opens a ROM and never treats a missing
 ## opening record as a presentation fallback.
-##
 ##   Godot --headless --path . -s res://tools/validate.gd -- opening_lane
 
 ## Longer than the whole boot: Crystal's movie is 2,340 frames and Gold and
@@ -147,7 +146,6 @@ func _audit_audio_records(data: GameData, audio_counts: Dictionary) -> Array[Str
 	return out
 
 ## What the title screen puts around itself in a window that is not 10:9.
-##
 ## `LoadTitleScreenTilemap` writes all thirty-two columns of the BG map and the
 ## hardware shows twenty, so the surround is the twelve the screen never reached,
 ## repeated. Two things would break it and neither is visible in a 160x144

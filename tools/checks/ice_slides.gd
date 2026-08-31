@@ -4,12 +4,13 @@ var _r: RefCounted = null
 
 ## Sweeps every ice cell on every map of all three cartridges through the slide
 ## `DoPlayerMovement.CheckForced` and `CheckStandingOnIce` produce, rather than
-## sampling the Ice Path. The expected shapes come from the pinned
-## player_movement.asm, identical in both: a step onto ice leaves
-## `wPlayerTurningDirection` set, the next poll ORs that direction back into
-## `wCurInput`, and the run ends at the first refused step. Two invariants are what
-## a broken slide trips: it has to terminate, which it only does because a refusal
-## clears the byte, and with nothing held it has to keep the one direction.
+## sampling the Ice Path. A step onto ice leaves `wPlayerTurningDirection` set and
+## the next poll rebuilds `wCurInput` as `(input and PAD_BUTTONS) or forced`.
+
+## Three invariants are what a broken slide trips: it has to terminate, which it
+## only does because a refusal clears the byte; it has to keep the one direction
+## against every held key as well as against none, the d-pad being masked off; and
+## each of its steps is `STEP_ICE`, the fast row, rather than a walk.
 
 ## A slide can be no longer than the map, so anything past this is a loop.
 const RUN_CEILING: int = 512
@@ -83,10 +84,12 @@ func _run_one(
 	]
 	if not bool(world.player_input_move(direction).get("ok", false)):
 		return false
+	## The first step is off the ice cell this run starts on, so it is already a
+	## slide even though nothing has been held yet.
+	if not _drain_step(world, where, true):
+		return false
 	var steps: int = 0
 	while world.standing_on_ice():
-		if not _drain_step(world, where):
-			return false
 		## `.CheckForced` with nothing held at all, which is the whole point of
 		## the routine: the slide supplies its own direction.
 		var forced: Vector2i = world.effective_input_direction(Vector2i.ZERO)
@@ -94,6 +97,14 @@ func _run_one(
 			where, str(forced)
 		]):
 			return false
+		for held: Vector2i in [
+			Vector2i.DOWN, Vector2i.UP, Vector2i.LEFT, Vector2i.RIGHT
+		]:
+			if not _r.check(
+				world.effective_input_direction(held) == direction,
+				"%s: a held %s steered the slide." % [where, str(held)]
+			):
+				return false
 		steps += 1
 		if not _r.check(steps < RUN_CEILING, "%s: the slide never ended." % where):
 			return false
@@ -104,14 +115,27 @@ func _run_one(
 				not world.standing_on_ice(),
 				"%s: a refused step left the slide running." % where
 			)
+		if not _drain_step(world, where, true):
+			return false
 	return true
 
 
-func _drain_step(world: Gen2WorldAPI, where: String) -> bool:
+func _drain_step(world: Gen2WorldAPI, where: String, sliding: bool) -> bool:
 	var passes: int = 0
 	while world.player_step_in_progress():
+		if sliding and not _r.check(
+			world.player_walk_frame() == 0,
+			"%s: a slide advanced its walk frame." % where
+		):
+			return false
 		world.advance_player_step_pass()
 		passes += 1
 		if not _r.check(passes < PASS_CEILING, "%s: a step never finished." % where):
 			return false
+	## `STEP_ICE` is `fast_slide_step`, the four-pass row: half a walk.
+	if sliding and not _r.check(
+		passes == Gen2WorldAPI.STEP_PASSES_FAST,
+		"%s: a slide step spent %d passes." % [where, passes]
+	):
+		return false
 	return true

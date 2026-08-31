@@ -2,9 +2,7 @@ extends SceneTree
 
 ## Renders a scene and writes it to a PNG, so UI work can be checked without a
 ## human having to press Play and describe what they see.
-##
 ##   Godot --path . -s res://tools/screenshot.gd -- <scene> <output.png> [frames] [method] [times]
-##
 ## The optional method/times pair calls a no-argument method on the scene root
 ## before capturing, which is how a screen is photographed mid-interaction. Opens a
 ## real window for a moment: rendering needs a display.

@@ -167,7 +167,6 @@ func _verify_text(game_id: StringName, data: GameData) -> void:
 
 
 ## Whole spins on a pinned seed, every bet and both machines.
-##
 ## What is asserted is the source's own arithmetic rather than a pinned outcome:
 ## the coins the bet took, the payout the match is worth, the reels standing on
 ## symbols their own strips carry, and a match that is really lined up on one of

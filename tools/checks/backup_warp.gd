@@ -4,7 +4,6 @@ extends RefCounted
 ## cartridges: `wBackupWarpNumber`, `wBackupMapGroup` and `wBackupMapNumber`, which
 ## `SavePlayerData` copies into `sCurMapData` and which two unrelated routines both
 ## read. Expected values come from the pinned pokecrystal and pokegold sources.
-##
 ## The finding the topic carries: a `warp_event` whose destination is -1 names no
 ## warp and no map of its own, and this port read the placeholder beside it, so the
 ## stairs out of every Pokemon Center's second floor led nowhere.

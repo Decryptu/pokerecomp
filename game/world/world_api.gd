@@ -991,6 +991,8 @@ func player_walk_frame() -> int:
 	## drawing even though OBJECT_STEP_FRAME itself retains its counter.
 	if _player_step_passes_remaining <= 0 or _player_step_direction == Vector2i.ZERO:
 		return 0
+	if _player_step_kind in Gen2WorldMovement.SLIDING_KINDS:
+		return 0
 	return (_player_step_frame >> 2) & 3
 
 
@@ -1096,7 +1098,8 @@ func advance_player_step_pass() -> bool:
 		return false
 	if _player_step_kind in Gen2WorldMovement.SPINNING_KINDS:
 		_player_spin_frame = Gen2WorldMovement.spin_advance(_player_spin_frame)
-	_player_step_frame = (_player_step_frame + 1) & 0x0F
+	if not _player_step_kind in Gen2WorldMovement.SLIDING_KINDS:
+		_player_step_frame = (_player_step_frame + 1) & 0x0F
 	_player_step_passes_remaining -= 1
 	if _player_step_passes_remaining <= 0:
 		_start_next_player_step()
@@ -5998,9 +6001,7 @@ func move_result(direction: Vector2i) -> Dictionary:
 			## `CountStep`, so the step that leaves a map costs no repel step;
 			## try_connection() owns the facing and the step's own frames.
 			return transition
-		## `.NotMoving`, which reaches `._WalkInPlace`.
-		_stand_in_place()
-		return {"ok": false, "kind": &"move", "reason": &"map_edge"}
+		return _refused_move(direction, &"map_edge")
 	if forced_walk:
 		return _forced_step(direction, destination)
 	if not can_walk_to(destination, direction):
@@ -6015,8 +6016,7 @@ func move_result(direction: Vector2i) -> Dictionary:
 			return hop
 		if not pushed.is_empty():
 			return pushed
-		_stand_in_place()
-		return {"ok": false, "kind": &"move", "reason": &"blocked"}
+		return _refused_move(direction, &"blocked")
 	var from_map: Vector2i = map_id()
 	var from_cell: Vector2i = player_cell
 	## .TrySurf's .ExitWater: .GetOutOfWater restores PLAYER_NORMAL and the walking
@@ -6032,13 +6032,19 @@ func move_result(direction: Vector2i) -> Dictionary:
 		kind = &"exit_water"
 	elif movement_mode == MOVEMENT_SURF:
 		kind = &"water_move"
+	## `.TryStep` reads `wPlayerTileCollision`, the cell being left, and its ice
+	## branch sits in front of `.BikeCheck`.
+	var kind_of_step: StringName = STEP_KIND_WALK
+	var passes: int = _step_frames_for_movement()
+	if Gen2WorldCollision.is_ice(collision_code_at(from_cell)):
+		kind_of_step = &"fast_slide_step"
+		passes = STEP_PASSES_FAST
 	player_cell = destination
 	player_facing = facing_for_direction(direction)
 	count_step()
-	var passes: int = _step_frames_for_movement()
 	_advance_followers(-1, from_cell, passes)
 	_do_step(direction)
-	_start_player_step(direction, passes)
+	_start_player_step(direction, passes, false, kind_of_step)
 	return {
 		"ok": true,
 		"kind": kind,
@@ -6047,6 +6053,19 @@ func move_result(direction: Vector2i) -> Dictionary:
 		"to_map": from_map,
 		"to_cell": player_cell,
 	}
+
+
+## `.NotMoving`: `._WalkInPlace` clears the turning byte and `.BumpSound` plays
+## SFX_BUMP, unless `.CheckWarp` raised `wWalkingIntoEdgeWarp`, which it does
+## whenever the standing cell carries the carpet naming the pressed direction,
+## warp or no warp. `.Surf` never runs `.CheckWarp`.
+func _refused_move(direction: Vector2i, reason: StringName) -> Dictionary:
+	_stand_in_place()
+	var into_carpet: bool = movement_mode != MOVEMENT_SURF \
+		and Gen2WorldCollision.directional_warp_direction(
+			collision_code_at(player_cell)
+		) == direction
+	return {"ok": false, "kind": &"move", "reason": reason, "bump": not into_carpet}
 
 
 ## `.DoStep`'s own tail: the walking direction is stored as `$80 | direction`
@@ -6078,18 +6097,13 @@ func standing_on_ice() -> bool:
 	return Gen2WorldCollision.is_ice(collision_code_at(player_cell))
 
 
-## `.CheckForced`, then `.GetAction`. The forced bit is OR'd into `wCurInput`
-## rather than replacing it, so a held direction and the slide's own can both be
-## set and `.GetAction`'s own test order decides between them: down, up, left,
-## right. [param held] is Vector2i.ZERO when nothing is held.
+## `.CheckForced`, then `.GetAction`. `and PAD_BUTTONS` drops the whole d-pad
+## before the slide's own direction is OR'd in, so a held key reaches
+## `.GetAction` on no frame of a slide.
 func effective_input_direction(held: Vector2i) -> Vector2i:
 	if not standing_on_ice():
 		return held
-	var forced: Vector2i = TURNING_DIRECTION_ORDER[_player_turning_direction & 3]
-	for candidate: Vector2i in TURNING_DIRECTION_ORDER:
-		if candidate == held or candidate == forced:
-			return candidate
-	return held
+	return TURNING_DIRECTION_ORDER[_player_turning_direction & 3]
 
 
 ## .CheckTile for the cell the player stands on: whether the tile overrides input,

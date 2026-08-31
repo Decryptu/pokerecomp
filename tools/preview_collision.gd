@@ -6,7 +6,6 @@ extends SceneTree
 ## permission come from the same two sources the runtime reads, so a wall drawn
 ## without a red square is a real disagreement rather than a rendering offset.
 ## Objects are not drawn: this is the map's own answer.
-##
 ##   Godot --headless --path . -s res://tools/preview_collision.gd -- crystal 26 2 /tmp/route31.png
 
 const SCALE: int = 3

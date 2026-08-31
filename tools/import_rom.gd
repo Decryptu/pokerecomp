@@ -1,9 +1,7 @@
 extends SceneTree
 
 ## Imports a cartridge into the user:// cache, headlessly.
-##
 ##   Godot --headless --path . -s res://tools/import_rom.gd -- [file-or-dir ...]
-##
 ## Defaults to res://roms. Exits 0 only if every candidate imported. Add
 ## --verify to stop after the layout check without writing a cache.
 

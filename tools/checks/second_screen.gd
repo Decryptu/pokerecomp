@@ -41,7 +41,6 @@ func run(r: RefCounted) -> void:
 
 
 ## Every tab any gate can open has the page renderer that tab is built from.
-##
 ## A tab whose page refuses would be a row on the panel that opens a black
 ## rectangle, which is worse than the tab not being there.
 func _verify_pages(game_id: StringName, data: GameData) -> void:

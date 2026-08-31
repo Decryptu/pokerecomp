@@ -464,7 +464,9 @@ func tick_step() -> bool:
 		return false
 	if step_kind in Gen2WorldMovement.SPINNING_KINDS:
 		spin_frame = Gen2WorldMovement.spin_advance(spin_frame)
-	if step_direction != Vector2i.ZERO or weird_tree:
+	if step_kind in Gen2WorldMovement.SLIDING_KINDS:
+		frame = 0
+	elif step_direction != Vector2i.ZERO or weird_tree:
 		advance_walk_frame()
 	step_passes_remaining -= 1
 	if step_passes_remaining <= 0:

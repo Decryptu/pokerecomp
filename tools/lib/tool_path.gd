@@ -39,7 +39,6 @@ static func refusal(path: String) -> String:
 
 
 ## The picture a preview tool is about to write, or null with the reason printed.
-##
 ## `--headless` has no viewport texture, so `get_image()` answers null there and
 ## a tool run that way otherwise calls `save_png` on it once a frame until
 ## `godot.sh`'s wall clock cap. Every tool here is a windowed run; this is what

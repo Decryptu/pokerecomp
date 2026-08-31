@@ -1,9 +1,7 @@
 extends SceneTree
 
 ## Prints the decoded text tables out of the cache, headlessly.
-##
 ##   Godot --headless --path . -s res://tools/dump_tables.gd -- <game> [table]
-##
 ## The written counterpart of the contact sheet: a bad offset in a name table
 ## produces plausible words rather than an error, so the check is reading the
 ## output. <game> is a registry id; [table] is species, moves, items, types,
@@ -156,7 +154,6 @@ func _dump(directory: String, table: String) -> void:
 
 
 ## Every species' level-up moves, in the cartridge's order rather than sorted.
-##
 ## Reading them is the check the runtime one cannot be: the levels and move
 ## numbers are in range whatever a wrong offset does, but a learnset that reads
 ## Tackle at 1 and Growl at 4 for Bulbasaur is right and one that does not is not.
@@ -378,7 +375,6 @@ func _name_at(names: Array, number: int) -> String:
 
 
 ## The chart as a grid, attacker down the side and defender across the top.
-##
 ## Nobody checks a list of 110 rows; a grid gets checked, because the published
 ## table has the same shape and a wrong cell stands out. Only the seventeen real
 ## types are shown: the padding numbers between the two groups have names but no

@@ -3193,6 +3193,10 @@ func _open_capture_nickname() -> bool:
 		## A Nuzlocke nicknames every catch, so the question is not asked.
 		_rules().is_nuzlocke()
 	)
+	## `.Pokemon`'s icon and sign, off the DVs the battle already rolled.
+	host.set_species(
+		_enemy, _battle.enemy.dvs if _battle != null else -1
+	)
 	host.named.connect(_on_capture_named)
 	host.closed.connect(_on_capture_nickname_closed)
 	host.z_index = 30

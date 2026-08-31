@@ -1,10 +1,8 @@
 extends SceneTree
 
 ## Photographs the lower display against a real cache.
-##
 ##   Godot --path . -s res://tools/preview_second_screen.gd -- \
 ##       <game> <out.png> [tab] [progress] [panel] [theme]
-##
 ## `progress` is the only thing that decides which tabs exist: `start`, `starter`,
 ## `gear` or `full`. `panel` is a lower display's own `WIDTHxHEIGHT`, defaulting to
 ## the AYN Thor's 1240x1080. The picture is the canvas itself, one pixel per pixel.

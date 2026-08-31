@@ -1,10 +1,8 @@
 extends SceneTree
 
 ## The window-resolution save overlays against a real cache. Opens a window.
-##
 ##   Godot --path . -s res://tools/preview_party.gd -- <game> <out.png> \
 ##       [party|give|box|pack|select|stats] [presses] [shiny] [max]
-##
 ## The PC's pic and the stats page draw a shiny lead and the party menu's icons do
 ## not, the cartridge's own answer; `max` puts the lead at level 100, the one
 ## level `PrintLevel` drops the `<LV>` glyph for.

@@ -1,9 +1,7 @@
 extends SceneTree
 
 ## `MeetMomRightScript` through the world screen, frame by frame.
-##
 ##   Godot --headless --path . -s res://tools/preview_mom_scene.gd -- <game> [png] [frame]
-##
 ## The story walker proves the script's results, never that the presentation runs,
 ## and a run that moves a checkpoint exits non-zero. Crystal triggers on the coord
 ## events at (8,4) and (9,4), Gold and Silver `sdefer` it from the map entry, and

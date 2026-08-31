@@ -4,9 +4,7 @@ extends SceneTree
 ## one screen in this project drawn through four cartridge colours rather than a
 ## white-to-black pair, and every one is a different VRAM window over the same 1bpp
 ## run, so the picture is what says a transcription is right.
-##
 ##   Godot --headless --path . -s res://tools/preview_mail.gd -- crystal /tmp/mail.png [type]
-##
 ## [type] is a `MailGFXPointers` index, 0 to 9, or `all` for a contact sheet.
 
 const COLUMNS: int = 5

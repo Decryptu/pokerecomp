@@ -369,7 +369,6 @@ func _crossings(
 ## Ledge hops included, the way `tools/preview_world_story.gd`'s own
 ## _reachable_step() walks: Route 8 is the map where leaving them out would claim
 ## a wall of three bikers the eastbound walk never meets.
-##
 ## [param closed] cells are treated as unwalkable, which is how an unavoidable
 ## cell is proved: shut it and see what stops being reachable.
 func _region(

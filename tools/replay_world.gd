@@ -334,7 +334,6 @@ func _run(
 
 ## The compared artefact: the world snapshot the save would carry, the play timer
 ## beside it, the frame both are read at, and the party.
-##
 ## The party is what a battle changes, the snapshot carrying none of it: HP, level,
 ## experience, moves and PP are the whole outcome of a fight, so a route that
 ## fights is only proved replayable by comparing them.

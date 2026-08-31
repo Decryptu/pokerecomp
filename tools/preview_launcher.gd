@@ -2,11 +2,9 @@ extends SceneTree
 
 ## Photographs the launcher in one appearance, at one window size, with a chosen
 ## set of cartridges present.
-##
 ##   Godot --path . -s res://tools/preview_launcher.gd -- <out.png> [light|dark] \
 ##       [width] [height] [page] [empty|mixed|full|stale] [view] [mod id] [scroll] \
 ##       [focus index] [fade step] [insets]
-##
 ## Every argument is documented at the parse below. Opens a real window.
 
 const STATES: Dictionary = {

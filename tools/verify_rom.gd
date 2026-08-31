@@ -1,9 +1,7 @@
 extends SceneTree
 
 ## Runs the import gate against a real cartridge without adding one to the repo.
-##
 ##   Godot --headless --path . -s res://tools/verify_rom.gd -- [file-or-dir ...]
-##
 ## Defaults to res://roms, the gitignored drop folder; absolute host paths work
 ## too. Exits 0 only if every candidate verified as a supported cartridge.
 

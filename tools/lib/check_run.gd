@@ -2,7 +2,6 @@ extends RefCounted
 
 ## The harness every `tools/validate.gd` topic shares: the three cartridges, the
 ## failure list, and the world helpers a map check needs.
-##
 ## A topic is a script under `tools/checks/` with `func run(r) -> void`. It
 ## reports through [method check] and prints its own census lines with
 ## [method note]; the runner owns the exit code.

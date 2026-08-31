@@ -1,9 +1,7 @@
 extends SceneTree
 
 ## What a drawn frame costs, per screen, in milliseconds.
-##
 ##   Godot --path . -s res://tools/profile.gd -- [subject ...] [game] [frames]
-##
 ## Neither a check nor a preview can say what sixty frames cost, which is the only
 ## question that decides whether a weaker machine holds its frame rate. A real
 ## window, vsync off and no frame cap, with every subject driven by counted

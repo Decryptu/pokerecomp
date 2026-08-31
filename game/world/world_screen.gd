@@ -28,6 +28,9 @@ const PREVIEW_COVER_FRAMES: int = 10
 ## starts. Played directly rather than through _handle_audio_request(), which
 ## expects a runtime request to acknowledge; a hop is movement, not a script.
 const SFX_JUMP_OVER_LEDGE: int = 0x16
+## constants/sfx_constants.asm's SFX_BUMP, which `.NotMoving` plays for a poll
+## that pressed a direction and committed nothing.
+const SFX_BUMP: int = 0x24
 ## constants/sfx_constants.asm's SFX_PLACE_PUZZLE_PIECE_DOWN, played by
 ## OWCutAnimation before its sprite animation. The animation itself is not
 ## rendered here; the sound is. Not SFX_CUT, which is $38 and is the battle
@@ -1204,8 +1207,7 @@ func _advance_held_direction() -> void:
 		return
 	## `.CheckForced` sits in front of `.GetAction` in all three of
 	## `.TranslateIntoMovement`'s branches, so a player standing on ice keeps
-	## walking with nothing held at all and a held direction is only obeyed when
-	## `.GetAction` tests it before the slide's own.
+	## walking with nothing held and obeys nothing that is.
 	var held: Vector2i = Vector2i.ZERO if direction == Gen2Button.NONE \
 		else Gen2Button.vector(direction)
 	var walking: Vector2i = _world.effective_input_direction(held)
@@ -1662,6 +1664,8 @@ func move_player(direction: Vector2i) -> bool:
 			if _renderer != null:
 				_renderer.refresh()
 			_refresh_labels()
+		else:
+			_play_bump_sfx(movement)
 		return false
 	## A whirlpool spins the player rather than moving them, so nothing a completed
 	## step owes applies: no warp, no encounter, no repel step.
@@ -1678,6 +1682,16 @@ func move_player(direction: Vector2i) -> bool:
 		_refresh_labels()
 		return true
 	return _after_player_move(movement)
+
+
+## `.BumpSound` opens on `CheckSFX` and returns on carry, so a refusal during
+## any effect is silent.
+func _play_bump_sfx(movement: Dictionary) -> void:
+	if not bool(movement.get("bump", false)):
+		return
+	if _audio_player == null or _audio_player.effect_playing():
+		return
+	_play_sfx(SFX_BUMP)
 
 
 ## What a step owes the rest of the screen on the frame it starts: the sounds
@@ -2099,6 +2113,7 @@ func _open_gift_nickname(request: Dictionary) -> bool:
 		Gen2WorldPartyHost.SENT_TO_BOX_FORMAT if destination == &"box" else "",
 		"", _nuzlocke_names_everything()
 	)
+	host.set_species(species)
 	_nickname_answer = species_name
 	host.named.connect(_on_gift_named)
 	host.closed.connect(_on_gift_nickname_closed)
@@ -2133,6 +2148,7 @@ func _open_contest_nickname(_request: Dictionary = {}) -> bool:
 		return false
 	var host := Gen2NicknamePromptScreen.new()
 	host.set_context(_data, species_name, "", "", _nuzlocke_names_everything())
+	host.set_species(int(caught.get("species", 0)), int(caught.get("dvs", -1)))
 	_nickname_answer = species_name
 	host.named.connect(_on_gift_named)
 	host.closed.connect(_on_gift_nickname_closed)
@@ -4086,6 +4102,7 @@ func preview_gift_nickname(species: int = 0, boxed: bool = false) -> void:
 		_data, species_name,
 		Gen2WorldPartyHost.SENT_TO_BOX_FORMAT if boxed else ""
 	)
+	host.set_species(chosen)
 	_nickname_answer = species_name
 	_nickname_preview = true
 	host.named.connect(_on_gift_named)
@@ -7375,6 +7392,9 @@ func _open_rival_name(_request: Dictionary) -> bool:
 		_data, Gen2NamingScreenScreen.PROMPT_RIVAL, Gen2NamingScreenScreen.KIND_PLAYER
 	):
 		return false
+	## `.Rival`'s own `RivalSpriteGFX`, which is why the rival's naming screen
+	## does not show the player.
+	host.set_sprite_icon(_data, Gen2NamingScreenScreen.SPRITE_RIVAL)
 	host.closed.connect(_on_rival_named)
 	host.z_index = 30
 	_rival_name_host = host

@@ -4,7 +4,6 @@ var _r: RefCounted = null
 
 ## Verifies the first Route 30 trainer against a freshly imported Crystal cache.
 ## The expected record comes from the pinned pokecrystal Route30 map source.
-##
 ##   Godot --headless --path . -s res://tools/validate.gd -- crystal_route30_trainer
 
 const MAP_GROUP: int = 26

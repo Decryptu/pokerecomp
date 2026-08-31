@@ -1,9 +1,7 @@
 extends SceneTree
 
 ## Renders an imported pic atlas or tile sheet to a PNG so it can be looked at.
-##
 ##   Godot --headless --path . -s res://tools/preview_pics.gd -- <game> <out.png> [what] [--shiny]
-##
 ## The cache stores colour indices rather than pixels, with a palette applied at
 ## draw time so shiny is free; this applies one, which is the only way to tell a
 ## correct decode from a plausible wrong one. The font comes out folded to sixteen
@@ -150,7 +148,6 @@ func _render(
 
 
 ## One palette per cell of an atlas, in slot order.
-##
 ## The three kinds of atlas are indexed differently: a species atlas by species,
 ## the trainer atlas by class, and Unown's by letter form, all twenty-six of
 ## which are the one species and so share its colours.

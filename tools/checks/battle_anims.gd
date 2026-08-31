@@ -307,7 +307,6 @@ func _verify_the_entrance(game_id: StringName, data: GameData) -> void:
 
 ## `DoBattleTransition` on a real cache: the two tiles it wipes with, the palette
 ## it floods the map with, and all four animations run to the end.
-##
 ## The tiles are content whose value is known independently, which is what checks
 ## the address: one of them is solid colour 3 and the other is the chequered
 ## square, and no other pair of tiles in the dump is that.
@@ -530,7 +529,6 @@ func _verify_substitute_pic(game_id: StringName, data: GameData) -> void:
 
 ## Every animation played through [Gen2BattleAnimPlayer], which is the script
 ## plus the object pool, the tile window and the shadow OAM.
-##
 ## Nothing here asserts what an animation looks like; what it pins is that all
 ## 278 spawn, step and retire their objects inside the cartridge's own limits,
 ## and it prints the inventory of what is still to build.

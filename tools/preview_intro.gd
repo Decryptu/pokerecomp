@@ -1,9 +1,7 @@
 extends SceneTree
 
 ## Captures the new-game opening screens against a real cache.
-##
 ##   Godot --path . -s res://tools/preview_intro.gd -- <game> <out.png> [what] [steps] [WxH]
-##
 ## `what` is `copyright`, `presents`, `title`, `gender`, `clock`, `speech` or
 ## `shrink`; `steps` is how many source frames to run first, several separated by
 ## commas writing one file each. `WxH` photographs the opening in a real window

@@ -3,7 +3,6 @@ extends RefCounted
 ## Conversations driven from the imported map events on every cartridge profile:
 ## two long movement scenes a hardware frame at a time, and every object whose
 ## script opens on `faceplayer`.
-##
 ##   Godot --headless --path . -s res://tools/validate.gd -- scripted_scenes
 
 const CHERRYGROVE_CITY := Vector2i(26, 3)
