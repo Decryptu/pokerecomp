@@ -1,21 +1,25 @@
 <!-- The top section is rewritten for each release; everything below it is the
 standing text and only takes {VERSION}. One line per paragraph, per bullet and
 per table row: GitHub reflows a release body to the reader's window, and a line
-break put in by hand only makes it ragged. -->
+break put in by hand only makes it ragged.
 
-## New in this release
+It is a changelog, not an essay. `## Added`, `## Changed`, `## Fixed`, one
+bullet per change, and no opening sentence summarising the release: a reader
+scanning for their own bug does not want a paragraph about the shape of the
+work. No `**Bold label.**` in front of a bullet, no contrast frame on every
+line ("X rather than Y", "not X, Y"), and no em-dash. `CLAUDE.md`'s "Writing"
+section is the whole rule; a reader called an earlier body AI-written and was
+right. -->
 
-Four reported bugs, every one of them in what the game shows you rather than in what it decides.
+## Fixed
 
-**Pokemon were nearly always female.** Gender is worked out by comparing a byte built from the Attack and Speed DVs against the species ratio, and this port had that comparison the wrong way round, so a Pokemon that should have been male read female. Everything that reads a gender was wrong with it: the save editor, the box, the stats page, the Hall of Fame, both Day-Care parents, the gender an egg hatches with, Attract, and the in-game trades that ask for a particular one. Nothing is stored, so no save needs fixing: a Pokemon you already have reads the right way round from now on.
+- Pokemon gender was inverted, so a Pokemon that should have been male read female. `GetGender` compares a byte built from the Attack and Speed DVs against the species ratio, and this port had that comparison the wrong way round. It affects the save editor, the box, the stats page, the Hall of Fame, both Day-Care parents, the gender an egg hatches with, Attract, and the in-game trades that ask for a particular gender. Gender is worked out from the DVs every time it is read, so no existing save needs repairing.
+- The policeman in Elm's Lab answered SILVER for you. The naming screen opens now, and leaving it blank still gives SILVER, the way the cartridge does.
+- The script command that turns the player did nothing, everywhere it is used, so no scene ever turned you. Mom's Pokegear scene and the old man's tour of Cherrygrove were the two you would notice.
+- The Cherrygrove guide dragged you around facing wherever the walk was going to end. A follower turns as each step begins now.
+- The "!" bubble never appeared over your own head, and `disappear PLAYER`, which takes you off screen in Lance's room while the reporter runs about, did nothing either.
 
-**The policeman lets you name your rival.** He asked what the thief called himself and then answered SILVER for you. The naming screen opens now, and leaving it blank still gives SILVER, the way the cartridge does.
-
-**People turn to look at you again.** Mom did not look up when she stopped you about the Pokegear, and the old man showing you around Cherrygrove faced you every way but the right one. The script command that turns you was doing nothing at all, everywhere it is used, so no scene had ever turned you since this port could run one. The old man also dragged you around facing wherever the walk was going to end rather than turning as he went.
-
-**The "!" bubble appears over your own head.** Every surprise in the game puts one there and none of them drew it. So did `disappear PLAYER`, which is what takes you off screen in Lance's room while the reporter runs about looking for you.
-
-**For mod authors**, `api_version` stays 29 and nothing on the boundary moved.
+`api_version` stays 29 and nothing on the boundary moved.
 
 ## Which file
 
