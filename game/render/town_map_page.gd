@@ -68,7 +68,8 @@ const CARD_TEXT_AT: Vector2i = Vector2i(1, 14)
 const CARD_TEXT_SPACING: int = 2
 
 ## `.Clock`'s own string, and `Pokegear_UpdateClock`: a 14x5 box cleared at
-## (3,5), `_GearTodayText`'s weekday at (6,6) and `PrintHoursMins` at (6,8).
+## (3,5), `_GearTodayText`'s weekday at (6,6) and [method Gen2WorldClock.reading]
+## at (6,8).
 const CLOCK_SWITCH_TEXT: String = " SWITCH▶"
 const CLOCK_SWITCH_AT: Vector2i = Vector2i(12, 1)
 const CLOCK_CLEAR_AT: Vector2i = Vector2i(3, 5)
@@ -256,20 +257,9 @@ func clock_tilemap(
 		for column: int in CLOCK_CLEAR_COLUMNS:
 			_put(map, CLOCK_CLEAR_AT + Vector2i(column, row), BLANK_TILE)
 	_draw_string(map, CLOCK_DAY_AT, Gen2TextStream.weekday_name(weekday) + "DAY")
-	_draw_string(map, CLOCK_TIME_AT, _clock_reading(hour, minute))
+	_draw_string(map, CLOCK_TIME_AT, Gen2WorldClock.reading(hour, minute))
 	_draw_card_icons(map, owned)
 	return map
-
-
-## `PrintHoursMins`: the hour space-padded to two tiles, the minute with its
-## leading zero, and AM or PM one tile past it. Midnight and noon are both
-## printed as twelve, which is what its two branches do with a zero hour.
-static func _clock_reading(hour: int, minute: int) -> String:
-	var hour24: int = posmod(hour, 24)
-	var reading: int = hour24 % 12
-	if reading == 0:
-		reading = 12
-	return "%2d:%02d %s" % [reading, posmod(minute, 60), "AM" if hour24 < 12 else "PM"]
 
 
 ## `.Radio`: the tuned station's own name under the dial, and whatever

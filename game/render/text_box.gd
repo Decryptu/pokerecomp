@@ -33,9 +33,7 @@ const CURSOR_CODE: int = 0xEE
 const CURSOR_COLUMN: int = 18
 ## `PromptButton.blink_cursor` reads `hVBlankCounter` and `and 1 << 4`, so the
 ## arrow is up for sixteen frames and the border's own '─' is back for the
-## next sixteen (`home/joypad.asm`). Counted in seconds rather than frames for
-## the reason [member reveal_speed] is a rate: the period is the same either
-## way and this does not assume 60 Hz.
+## next sixteen (`home/joypad.asm`).
 const CURSOR_BLINK_FRAMES: int = 16
 const FRAME_SECONDS: float = Gen2WorldAnimation.FRAME_SECONDS
 
@@ -245,8 +243,7 @@ func text_lines() -> PackedStringArray:
 
 ## Whether a page after this one is still waiting, which is what the blinking
 ## arrow means. A screen putting a menu over the box waits for both this and
-## [method is_revealing] to be false, since the cartridge prints the whole text
-## before it opens one.
+## [method is_revealing] to be false: the cartridge prints the whole text first.
 func has_pages_left() -> bool:
 	return _page + 1 < _pages.size()
 
@@ -262,10 +259,8 @@ func finish() -> void:
 
 ## What a button press does: moves to the next page. Returns false once there is
 ## nothing left, having emitted [signal finished]. A press while the page is still
-## printing is SPENT and does nothing else: the cartridge has no path from a press
-## to the end of a page, `PrintLetterDelay` being the only thing a button reaches
-## while text is running. Completing the page on the press instead let a repeated
-## one tear through a whole text a page per press.
+## printing is SPENT: `PrintLetterDelay` is the only thing a button reaches while
+## text is running, so no press on the cartridge finishes a page early.
 func advance() -> bool:
 	if _pages.is_empty():
 		return false

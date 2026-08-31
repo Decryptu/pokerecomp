@@ -78,6 +78,18 @@ static func catch_up(
 	}
 
 
+## `PrintHoursMins`: the hour space-padded to two tiles, the minute with its
+## leading zero, and AM or PM one tile past the blank `inc hl` steps over.
+static func reading(hour_value: int, minute_value: int) -> String:
+	var hour24: int = posmod(hour_value, HOURS_PER_DAY)
+	var digits: int = hour24 % 12
+	if digits == 0:
+		digits = 12
+	return "%2d:%02d %s" % [
+		digits, posmod(minute_value, MINUTES_PER_HOUR), "AM" if hour24 < 12 else "PM",
+	]
+
+
 func time_of_day() -> int:
 	if hour < MORN_START:
 		return Gen2WorldPalette.TIME_NIGHT

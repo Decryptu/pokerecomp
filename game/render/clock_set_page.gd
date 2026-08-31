@@ -2,18 +2,15 @@ class_name Gen2ClockSetPage
 extends RefCounted
 
 ## `InitClock` and `SetDayOfWeek` on the hardware tile grid. The two one-tile
-## arrows stand where the source loads its temporary arrow graphics.
-##
-## The speech box is drawn here only for a caller that has no [Gen2TextBox] of
-## its own: `InitClock` reaches every one of its lines through `PrintText`, so
+## arrows stand where the source loads its temporary arrow graphics. The speech
+## box is drawn here only for a caller with no [Gen2TextBox] of its own:
 ## [Gen2ClockSetScreen] passes an empty prompt and puts a real box over this.
 
 const TILE: int = Gen2Font.TILE
 
 ## `.loop`, `.HourIsSet` and `SetDayOfWeek.loop` each place their own `Textbox`,
-## its two arrows and its value, and differ in nothing else. Each row is the box
-## as (left, top, right, bottom), the column both arrows stand in, and where the
-## value is printed; both arrows sit on the box's own border rows.
+## its two arrows and its value, and differ in nothing else: the box as
+## (left, top, right, bottom), the arrows' shared column, and the value's corner.
 const DIALS: Dictionary = {
 	&"hour": {"box": Vector4i(3, 7, 19, 11), "arrow_x": 11, "value": Vector2i(4, 9)},
 	&"minutes": {"box": Vector4i(11, 7, 19, 11), "arrow_x": 15, "value": Vector2i(12, 9)},
@@ -34,12 +31,15 @@ static func from_data(data: GameData) -> Gen2ClockSetPage:
 ## [param kind] is which of [constant DIALS] is drawn, and empty draws none.
 ## `InitClock`'s `.ClearScreen` runs before each `YesNoBox`, so a confirm has
 ## no dial; `SetDayOfWeek` keeps its own up behind the question instead.
+## [param over_map] is the screen behind: `InitClock` runs `ClearTilemap` first
+## and `SetDayOfWeek`, called from a map script, clears nothing at all.
 func render(
 	value: String, prompt: String, confirm_cursor: int, kind: StringName,
-	palette: PackedColorArray = PackedColorArray()
+	palette: PackedColorArray = PackedColorArray(), over_map: bool = false
 ) -> Image:
 	var indices := PackedByteArray()
 	indices.resize(Gen2Screen.WIDTH * Gen2Screen.HEIGHT)
+	var drawn: Array[Rect2i] = []
 	if DIALS.has(kind):
 		var dial: Dictionary = DIALS[kind]
 		var at: Vector4i = dial["box"]
@@ -51,7 +51,9 @@ func render(
 		var arrow_x: int = int(dial["arrow_x"]) * TILE
 		_draw_arrow(indices, arrow_x, (at.y + 1) * TILE, false)
 		_draw_arrow(indices, arrow_x, at.w * TILE, true)
+		drawn.append(Rect2i(at.x, at.y, at.z - at.x + 1, at.w - at.y + 1))
 	if not prompt.is_empty():
+		drawn.append(Rect2i(0, 12, 20, 6))
 		var speech := Gen2MenuBox.from_coords(0, 12, 19, 17, 0)
 		menu.draw(speech, [], -1, indices, Gen2Screen.WIDTH)
 		var pages: Array = Gen2TextLayout.lay_out(prompt, 18, 2)
@@ -65,9 +67,24 @@ func render(
 		var yes_no := Gen2MenuBox.from_coords(14, 7, 19, 11,
 			Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_NO_TOP_SPACING)
 		menu.draw(yes_no, ["YES", "NO"], confirm_cursor, indices, Gen2Screen.WIDTH)
-	return Gen2PicImage.from_indices(indices, Gen2Screen.WIDTH, Gen2Screen.HEIGHT,
+		drawn.append(Rect2i(14, 7, 6, 5))
+	var image: Image = Gen2PicImage.from_indices(
+		indices, Gen2Screen.WIDTH, Gen2Screen.HEIGHT,
 		palette if palette.size() == 4 else Gen2Palette.pic_palette(
-			PackedColorArray([Color.WHITE, Color.BLACK])))
+			PackedColorArray([Color.WHITE, Color.BLACK]))
+	)
+	return _boxes_only(image, drawn) if over_map else image
+
+
+## [param image] with everything outside [param drawn] left transparent.
+static func _boxes_only(image: Image, drawn: Array[Rect2i]) -> Image:
+	var out := Image.create_empty(
+		Gen2Screen.WIDTH, Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8
+	)
+	for rect: Rect2i in drawn:
+		var pixels := Rect2i(rect.position * TILE, rect.size * TILE)
+		out.blit_rect(image, pixels, pixels.position)
+	return out
 
 
 func _draw_arrow(indices: PackedByteArray, x: int, y: int, down: bool) -> void:

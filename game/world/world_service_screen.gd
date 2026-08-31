@@ -608,9 +608,8 @@ func _open_menu(input: Dictionary) -> void:
 	_choices = _menu.options.duplicate(true)
 	_cursor = _menu.selected_index()
 	_title = "MENU"
-	## The question the box behind this menu is still showing. A command name is
-	## an internal key, never something the cartridge prints, so it is not a
-	## fallback: an unattached menu says nothing rather than saying "yesorno".
+	## The question the box behind this menu is still showing. An unattached menu
+	## says nothing: a command name is an internal key, never a printed one.
 	_summary = String(input.get("text", ""))
 	_status = ""
 	_render_rows()
@@ -2823,9 +2822,9 @@ func _dial_image() -> Image:
 	if _clock_page == null:
 		return null
 	var day: int = clampi(_cursor, 0, Gen2ClockSetScreen.DAYS.size() - 1)
-	var prompt: String = _summary if not _summary.is_empty() \
-		else "What day is it?"
-	return _clock_page.render(Gen2ClockSetScreen.DAYS[day], prompt, -1, &"day")
+	return _clock_page.render(
+		Gen2ClockSetScreen.DAYS[day], _summary, -1, &"day", PackedColorArray(), true
+	)
 
 
 ## The `menu_coords` box this mode's own list sits in. `null` draws no box,

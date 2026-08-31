@@ -24,6 +24,10 @@ const PLAYER_OPERAND_COMMANDS: Array[String] = [
 ## The two with no runner on purpose: each names an address absent from the pins.
 const NO_RUNNER: Array[String] = ["callasm", "memcallasm"]
 
+## What draws over the box a `writetext` left standing. `loadmenu` only stores
+## the header.
+const CHOICE_COMMANDS: Array[String] = ["yesorno", "verticalmenu", "2dmenu"]
+
 const PINS: Dictionary = {
 	&"gold": "pokegold", &"silver": "pokegold", &"crystal": "pokecrystal",
 }
@@ -43,6 +47,71 @@ func run(r: RefCounted) -> void:
 		if not _validate(game_id):
 			_r.fail("%s: the cached scripts and text did not read back." % game_id)
 		_check_command_widths(game_id)
+		_check_standing_boxes(game_id)
+
+
+## Every choice and menu in the corpus against the text in front of it:
+## `Paragraph` clears the box at each page break, so the question is the last page.
+func _check_standing_boxes(game_id: StringName) -> void:
+	var data: GameData = GameData.open(game_id)
+	if data == null:
+		return
+	var scripts: Variant = RomCache.read_json(RomCache.world_scripts_path(data.directory))
+	if not scripts is Dictionary:
+		return
+	var sites: int = 0
+	var paged: int = 0
+	var over: Array[String] = []
+	for raw_key: Variant in (scripts as Dictionary):
+		for text_key: String in _choice_questions(data, String(raw_key), game_id == &"crystal"):
+			sites += 1
+			var text: String = _decoded_text(data, text_key)
+			if Gen2TextLayout.lay_out_pages(
+				text, Gen2TextLayout.TEXTBOX_COLUMNS, Gen2TextLayout.TEXTBOX_ROWS
+			).size() > 1:
+				paged += 1
+			var lines: PackedStringArray = Gen2TextLayout.standing_page(text).split("\n")
+			if lines.size() > Gen2TextLayout.TEXTBOX_ROWS:
+				over.append("%s is %d lines" % [text_key, lines.size()])
+	print("  choice_boxes=%d over_one_page=%d" % [sites, paged])
+	for entry: String in over:
+		print("FAIL %s: %s" % [game_id, entry])
+	if not over.is_empty():
+		_r.fail("%s: a standing box does not fit the text box." % game_id)
+
+
+## The text each of [param key]'s choices answers: the last `writetext` in front.
+func _choice_questions(data: GameData, key: String, crystal: bool) -> PackedStringArray:
+	var out := PackedStringArray()
+	var bytes: PackedByteArray = _pointer_bytes(data, key, false)
+	var bank: String = key.split(":")[0]
+	var last: String = ""
+	var offset: int = 0
+	var steps: int = 0
+	while offset < bytes.size() and steps < Gen2WorldScript.MAX_COMMANDS:
+		var command: Dictionary = Gen2WorldScript.command_at(bytes, offset, crystal)
+		if not bool(command.get("ok", false)):
+			break
+		var name: String = String(command.get("name", ""))
+		if name == "writetext":
+			last = "%s:%X" % [bank, int(command["address"])]
+		elif name == "farwritetext":
+			last = "%d:%X" % [int(command["bank"]), int(command["address"])]
+		elif CHOICE_COMMANDS.has(name) and not last.is_empty():
+			out.append(last)
+		steps += 1
+		offset += int(command["width"])
+		if not Gen2WorldScript.continues_after(int(command["opcode"]), crystal):
+			break
+	return out
+
+
+func _decoded_text(data: GameData, key: String) -> String:
+	var decoded: Dictionary = Gen2TextStream.decode(_pointer_bytes(data, key, true), 0, {
+		"far": func(bank: int, address: int) -> PackedByteArray:
+			return data.world_text(bank, address),
+	})
+	return String(decoded.get("text", ""))
 
 
 ## Every command byte's name and width against the pin's own

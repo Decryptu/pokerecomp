@@ -185,10 +185,10 @@ func test_a_card_carries_the_icon_row() -> void:
 ## `PrintHoursMins`: twelve-hour, the hour space-padded and the minute not, and
 ## both midnight and noon printed as twelve.
 func test_the_clock_card_prints_the_source_reading() -> void:
-	assert_eq(Gen2TownMapPage._clock_reading(0, 7), "12:07 AM")
-	assert_eq(Gen2TownMapPage._clock_reading(12, 0), "12:00 PM")
-	assert_eq(Gen2TownMapPage._clock_reading(9, 30), " 9:30 AM")
-	assert_eq(Gen2TownMapPage._clock_reading(23, 59), "11:59 PM")
+	assert_eq(Gen2WorldClock.reading(0, 7), "12:07 AM")
+	assert_eq(Gen2WorldClock.reading(12, 0), "12:00 PM")
+	assert_eq(Gen2WorldClock.reading(9, 30), " 9:30 AM")
+	assert_eq(Gen2WorldClock.reading(23, 59), "11:59 PM")
 	var map: PackedInt32Array = _page.clock_tilemap([], 3, 13, 5, "")
 	assert_eq(_text(map, Gen2TownMapPage.CLOCK_DAY_AT, 9), "WEDNESDAY")
 	assert_eq(_text(map, Gen2TownMapPage.CLOCK_TIME_AT, 8), " 1:05 PM")

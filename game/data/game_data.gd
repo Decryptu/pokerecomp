@@ -1806,7 +1806,7 @@ func pokecenter_pc_lists(players: bool = false) -> Array:
 
 
 ## One of the routine's own six texts, by the name
-## `RomLayout.POKECENTER_PC_TEXTS` gives it.
+## `RomLayout.POKECENTER_PC_TEXT_AT` gives it.
 func pokecenter_pc_text(name: String) -> String:
 	var texts: Variant = _pokecenter_pc.get("texts", {})
 	return String((texts as Dictionary).get(name, "")) if texts is Dictionary else ""

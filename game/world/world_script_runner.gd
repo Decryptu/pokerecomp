@@ -886,7 +886,7 @@ func advance(acknowledge: bool = false, choice: int = -1) -> Dictionary:
 ## empty result when it is spent and the command loop takes over.
 func _resume_pending(acknowledge: bool, choice: int) -> Dictionary:
 	if _pending.has("text"):
-		_standing_text = String(_pending["text"])
+		_set_standing_text(String(_pending["text"]))
 	var pending_type: StringName = StringName(_pending.get("type", &""))
 	var request: Dictionary = _pending.get("request", {})
 	if pending_type == &"runtime_request" \
@@ -5262,7 +5262,7 @@ func _special_party_selection(special: int) -> Dictionary:
 		var asked: String = _special_box("photo_studio", "which_mon")
 		if asked.is_empty():
 			return {"ok": false, "reason": &"missing_special_text", "special": special}
-		_standing_text = asked
+		_set_standing_text(asked)
 	return _stage_runtime_request(&"party_selection_requested", {
 		"special": special,
 		"routine": PARTY_SELECTION_ROUTINE_OF[special],
@@ -6084,7 +6084,7 @@ func _stage_day_of_week_menu() -> void:
 		"command": &"set_day_of_week",
 		"options": WEEKDAY_NAMES.duplicate(),
 		"header": {"default": 1, "data_flags": 1 << 5},
-		"text": _standing_text,
+		"text": Gen2ClockSetScreen.DAY_QUESTION,
 		"special": &"set_day_of_week",
 		"source": _request.duplicate(true),
 	}
@@ -6106,10 +6106,13 @@ func _stage_dst_confirmation_text(enabled: bool) -> void:
 	var clock: Dictionary = _request.get("clock", {})
 	var hour: int = clampi(int(clock.get("hour", 0)), 0, 23)
 	var minute: int = clampi(int(clock.get("minute", 0)), 0, 59)
-	var time_text: String = "%02d:%02d" % [hour, minute]
 	_pending = {
 		"type": &"text",
-		"text": "%s%s,\nis that OK?" % [time_text, " DST" if enabled else ""],
+		## `.Text` farcalls `PrintHoursMins` at `decoord 1, 14` and returns
+		## `_DSTIsThatOKText`, which carries on from where the AM or PM ended.
+		"text": "%s%s,\nis that OK?" % [
+			Gen2WorldClock.reading(hour, minute), " DST" if enabled else "",
+		],
 		"special": &"initial_dst_confirmation",
 		"source": _request.duplicate(true),
 	}
@@ -7156,6 +7159,12 @@ func _stage_button(command: Dictionary) -> Dictionary:
 	return {"ok": true}
 
 
+## `Paragraph` clears the box between paragraphs, so a menu opens over the last
+## page of the text rather than over all of it.
+func _set_standing_text(text: String) -> void:
+	_standing_text = Gen2TextLayout.standing_page(text)
+
+
 func _stage_choice(command: Dictionary, choices: Array) -> Dictionary:
 	_pending = {
 		"type": &"choice",
@@ -7183,12 +7192,10 @@ func _show_text(bank: int, address: int, finish_after: bool) -> Dictionary:
 		"text": String(decoded.get("text", "")),
 		"bank": bank,
 		"address": address,
-		## `Script_writetext` is `MapTextbox` and returns: only `<PROMPT>`,
-		## `text_promptbutton` and `text_waitbutton` spend a press inside the
-		## text. A text ending in `<DONE>` therefore owes none of its own, and
-		## the press belongs to the `waitbutton` behind the command.
-		## `JumpTextScript` carries that `waitbutton` itself, which is what
-		## [param finish_after] names.
+		## Only `<PROMPT>`, `text_promptbutton` and `text_waitbutton` spend a
+		## press inside the text, so a text ending in `<DONE>` owes none and the
+		## press belongs to the `waitbutton` behind the command. `JumpTextScript`
+		## carries that one itself, which is what [param finish_after] names.
 		"prompt": finish_after or bool(decoded.get("prompt", false)),
 		"source": _request.duplicate(true),
 	}
