@@ -52,6 +52,7 @@ func _check_game() -> void:
 		sizes[tiles] = int(sizes.get(tiles, 0)) + 1
 		_check_placement(image, species, tiles)
 		_check_battle_block(pic, species, tiles)
+		_check_stats_pic(species, tiles)
 		animated += 1 if _check_battler_feet(pic, species) else 0
 	_r.note("pokepic %d of %d species, sizes %s, %d animated strips" % [
 		drawn, LAST_SPECIES - FIRST_SPECIES + 1, sizes, animated
@@ -144,6 +145,31 @@ func _check_battle_block(pic: Dictionary, species: int, tiles: Vector2i) -> void
 	_r.check(
 		not outside,
 		"species %d draws outside its own pic in the battle block." % species
+	)
+
+
+## The same pad on the stats screen, where `PrepMonFrontpic` sets
+## `wBoxAlignment`: the blank column `PadFrontpic` lays in front of the picture
+## ends up on the other side, so padding it the unmirrored way is right about a
+## 5x5 and a column out on every 6x6.
+func _check_stats_pic(species: int, tiles: Vector2i) -> void:
+	var snapshot: Dictionary = {"species": species, "egg": false, "shiny": false}
+	var art: Image = Gen2StatsScreenPage.pic_image(_r.data, snapshot)
+	if not _r.check(art != null, "species %d draws no stats picture." % species):
+		return
+	var origin: Vector2i = Gen2StatsScreenPage.pic_origin(art.get_size(), snapshot)
+	var expected := Vector2i(
+		Gen2PicImage.frontpic_pad_columns(tiles.x, true),
+		Gen2PicImage.frontpic_pad_rows(tiles.y)
+	) * Gen2Font.TILE
+	_r.check(
+		origin == expected,
+		"species %d sits at %s on the stats screen, not %s." % [species, origin, expected]
+	)
+	_r.check(
+		origin.x + art.get_width() <= Gen2StatsScreenPage.pic_size()
+		and origin.y + art.get_height() <= Gen2StatsScreenPage.pic_size(),
+		"species %d runs past the stats screen's own cell." % species
 	)
 
 

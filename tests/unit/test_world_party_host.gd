@@ -10,6 +10,10 @@ var _data: GameData = null
 var _world: Gen2WorldAPI = null
 var _save: Gen2SaveData = null
 var _random := RandomNumberGenerator.new()
+## The fixture trade's two species names, which the boxes name rather than the
+## row's nickname.
+var _wanted: String = ""
+var _offered: String = ""
 
 
 func before_each() -> void:
@@ -317,7 +321,11 @@ func test_a_full_party_boxes_no_egg_and_answers_zero() -> void:
 	assert_eq(_save.to_dict(), before)
 
 
-func test_npc_trade_uses_the_imported_record_and_replaces_the_requested_slot() -> void:
+## `DoNPCTrade` is `RemoveMonFromPartyOrBox` then `TryAddMonToParty`, so the
+## Pokemon that arrives is last in the party and the slots behind the one that
+## left move up. Every write after it is `Trade_GetAttributeOfLastPartymon`'s.
+func test_npc_trade_uses_the_imported_record_and_appends_the_received_slot() -> void:
+	var behind: int = _save.party[1].species
 	_set_script(0x6220)
 	_world.dispatch_script_events(Vector2i(2, 2))
 	var result: Dictionary = Gen2WorldHost.complete_runtime_request(
@@ -325,10 +333,90 @@ func test_npc_trade_uses_the_imported_record_and_replaces_the_requested_slot() -
 	)
 	assert_true(result["ok"])
 	assert_eq(_save.party.size(), 2)
-	assert_eq(_save.party[0].species, 74)
-	assert_eq(_save.party[0].nickname, "ROCKY")
-	assert_eq(_save.party[0].original_trainer, "KYLE")
-	assert_eq(_save.party[0].ot_id, 48926)
+	assert_eq(_save.party[0].species, behind, "the slot behind moved up")
+	assert_eq(_save.party[1].species, 74)
+	assert_eq(_save.party[1].nickname, "ROCKY")
+	assert_eq(_save.party[1].original_trainer, "KYLE")
+	assert_eq(_save.party[1].ot_id, 48926)
+	## `SetGiftPartyMonCaughtData` with the dialog set's own `b`: zeroed level
+	## and time bytes, LANDMARK_GIFT, and the gender bit only for a GIRL trader.
+	assert_eq(_save.party[1].caught_level, 0)
+	assert_eq(_save.party[1].caught_time, 0)
+	assert_eq(_save.party[1].caught_location, Gen2WorldPartyHost.LANDMARK_GIFT)
+	assert_eq(_save.party[1].caught_gender, 0)
+
+
+## `NPCTrade`'s own conversation, which no map script carries: the flag it opens
+## on, TRADE_DIALOG_INTRO, the `YesNoBox` over it, `SelectTradeOrDayCareMon` and
+## the two boxes behind the swap. A NO is TRADE_DIALOG_CANCEL and writes nothing.
+func test_a_refused_trade_prints_the_cancel_box_and_swaps_nothing() -> void:
+	_add_trade_texts()
+	var before: Dictionary = _save.to_dict()
+	_set_script(0x6220)
+	var asked: Array = _world.dispatch_script_events(Vector2i(2, 2))
+	assert_eq(String(asked[0]["event"]["text"]), "I collect #MON.\nDo you have\n%s?" % _wanted)
+	assert_eq(StringName(asked[0]["event"]["type"]), &"choice")
+	var refused: Array = _world.run_event_queue(true, 1)
+	assert_eq(String(refused[0]["event"]["text"]), "You don't want to\ntrade? Aww…")
+	assert_eq(_world.run_event_queue(true)[0]["status"], &"complete")
+	assert_eq(_save.to_dict(), before)
+
+
+## The wrong species out of the list is TRADE_DIALOG_WRONG, and the flag is not
+## set: `TradeFlagAction`'s SET_FLAG sits behind both tests.
+func test_the_wrong_species_prints_the_wrong_box_and_leaves_the_flag_clear() -> void:
+	_add_trade_texts()
+	_set_script(0x6220)
+	_world.dispatch_script_events(Vector2i(2, 2))
+	_world.run_event_queue(true, 0)
+	var wrong: Array = _world.complete_runtime_request({
+		"ok": true, "party_index": 1, "species": 74, "dvs": [0x96, 0x66],
+	})
+	assert_eq(String(wrong[0]["event"]["text"]), "Huh? That's not\n%s." % _wanted)
+	assert_eq(_world.run_event_queue(true)[0]["status"], &"complete")
+	assert_false(_world.state.npc_trade_done(0))
+
+
+## The whole of a trade that takes: the cable line, the swap, `TradedForText`,
+## the three audio steps `PlayMusic MUSIC_NONE`, the fanfare and
+## `RestartMapMusic`, then TRADE_DIALOG_COMPLETE. The flag is set in front of all
+## of it, so a second visit is TRADE_DIALOG_AFTER and swaps nothing.
+func test_a_trade_that_takes_runs_the_whole_conversation_and_sets_its_flag() -> void:
+	_add_trade_texts()
+	_set_script(0x6220)
+	_world.dispatch_script_events(Vector2i(2, 2))
+	_world.run_event_queue(true, 0)
+	var cable: Array = _world.complete_runtime_request({
+		"ok": true, "party_index": 0, "species": 155,
+		"dvs": [(_save.party[0].dvs >> 8) & 0xFF, _save.party[0].dvs & 0xFF],
+	})
+	assert_eq(String(cable[0]["event"]["text"]), "OK, connect the\nGame Link Cable.")
+	var swapped: Array = _world.run_event_queue(true)
+	assert_eq(
+		StringName(swapped[0]["event"]["request"]["kind"]), &"trade_requested",
+		JSON.stringify(swapped)
+	)
+	var traded: Dictionary = Gen2WorldHost.complete_runtime_request(
+		_world, {}, _save, false, _random
+	)
+	assert_eq(
+		String(traded["results"][0]["event"]["text"]),
+		"%s traded\n%s for\n%s." % [_save.player_name, _wanted, _offered]
+	)
+	var audio: Array = []
+	var spent: Array = _world.run_event_queue(true)
+	for _step: int in Gen2WorldScriptRunner.TRADE_AFTER_TEXT_AUDIO.size():
+		audio.append(StringName(spent[0]["event"]["request"]["values"]["kind"]))
+		spent = _world.complete_runtime_request({"ok": true})
+	assert_eq(audio, [&"music", &"sound", &"map_music"] as Array)
+	assert_eq(String(spent[0]["event"]["text"]), "Yay! I got myself\n%s!" % _wanted)
+	assert_eq(_world.run_event_queue(true)[0]["status"], &"complete")
+	assert_true(_world.state.npc_trade_done(0))
+
+	_set_script(0x6220)
+	var again: Array = _world.dispatch_script_events(Vector2i(2, 2))
+	assert_eq(String(again[0]["event"]["text"]), "Hi, how's my old\n%s doing?" % _offered)
+	assert_eq(_world.run_event_queue(true)[0]["status"], &"complete")
 
 
 func test_explicit_trade_slot_still_checks_the_record_gender() -> void:
@@ -1456,6 +1544,35 @@ func _add_trade_record() -> void:
 		"ot_name": "KYLE",
 		"gender": RomLayout.TRADE_GENDER_EITHER,
 	}])
+
+
+## The `npc_trade` run and the buffers its boxes name, so the conversation
+## `NPCTrade` holds runs in GUT. Crystal's own WRAM addresses, which is what the
+## fixture's other `<RAM_` markers already assume, and `StringBufferPointers`'
+## order: buffers 3, 4, 5, 2, 1 and the two battle nicknames.
+func _add_trade_texts() -> void:
+	_wanted = String(_data.species(155).get("name", ""))
+	_offered = String(_data.species(74).get("name", ""))
+	RomCache.write_json(RomCache.text_buffers_path(Fixture.directory()), [
+		0xD099, 0xD0AC, 0xD0BF, 0xD086, 0xD073, 0xC616, 0xC621,
+	])
+	var manifest: Dictionary = RomCache.read_manifest(Fixture.directory())
+	manifest["special_text_ram"] = {"mon_or_item_name": 0xD050}
+	manifest["special_text"] = {
+		"npc_trade": {
+			"cable": "OK, connect the\nGame Link Cable.",
+			"traded_for": "<PLAYER> traded\n<RAM_D050> for\n<RAM_D086>.",
+			"intro_1": "I collect #MON.\nDo you have\n<RAM_D073>?",
+			"cancel_1": "You don't want to\ntrade? Aww…",
+			"wrong_1": "Huh? That's not\n<RAM_D073>.",
+			"complete_1": "Yay! I got myself\n<RAM_D073>!",
+			"after_1": "Hi, how's my old\n<RAM_D086> doing?",
+		},
+	}
+	RomCache.write_json(RomCache.manifest_path(Fixture.directory()), manifest)
+	_data = GameData.open_directory(Fixture.directory())
+	_world.data = _data
+	_world.set_player_name(_save.player_name)
 
 
 func _add_party_item_metadata() -> void:

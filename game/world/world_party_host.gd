@@ -358,12 +358,11 @@ static func heal_party(
 
 ## The link trade's own commit, which is `LinkTrade`'s `.do_trade` tail: the
 ## offered slot leaves through `RemoveMonFromPartyOrBox` and the received Pokemon
-## is appended by `AddTempmonToParty`, so it lands at the END of the party rather
-## than in the slot that was emptied. That is the one place the link trade differs
-## from the in-game one. `wForceEvolution` is set over the append, so a species
-## that evolves by trade evolves here and nowhere else. Mail travels with each
-## Pokemon because it hangs off the row. [param incoming] is the peer's
-## [Gen2SaveMon] dictionary and [param peer] names the trainer it came from.
+## is appended, so it lands at the END of the party. `DoNPCTrade` spends the same
+## pair. `wForceEvolution` is set over the append, which is where the two differ:
+## a species that evolves by trade evolves here and nowhere else. Mail hangs off
+## the row and travels with it. [param incoming] is the peer's [Gen2SaveMon]
+## dictionary and [param peer] names the trainer it came from.
 static func commit_link_trade(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -1545,8 +1544,10 @@ static func _apply_pokemon_request(
 		mon.original_trainer = ot_name
 		## `SetGiftPartyMonCaughtData`: a `givepoke` that names an OT is
 		## somebody's present, so its level byte is zero and its
-		## landmark is LANDMARK_GIFT rather than this map.
-		set_caught_data(mon, 0, -1, world.player_female(), LANDMARK_GIFT)
+		## landmark is LANDMARK_GIFT rather than this map. The gender bit is
+		## `.otnameloop`'s `b`, the byte behind the OT name, which is
+		## `Route35GoldenrodGate.asm`'s `db 0 ; unused` on the one site with one.
+		set_caught_data(mon, 0, -1, false, LANDMARK_GIFT)
 	elif result.has("nickname"):
 		## `GiveANickname_YesNo` and `InitNickname`: the `.wildmon` branch,
 		## which is the thirteen `givepoke` sites that name no OT. The screen
@@ -1593,20 +1594,10 @@ static func _apply_trade_request(
 ) -> Dictionary:
 	var values: Dictionary = request.get("values", {})
 	var trade_id: int = int(values.get("trade_id", -1))
-	var trade: Dictionary = world.data.world_trade(trade_id)
+	var trade: Dictionary = trade_record(world.data, values)
 	if trade.is_empty():
 		return {"ok": false, "reason": &"unknown_trade", "trade_id": trade_id}
-	## A visible-catalog site may name its own two halves. Applied to this
-	## call's COPY of the record: one cartridge trade row is named by more
-	## than one site, and writing the row would move the other one too. The
-	## nickname, OT, item and DVs stay the record's, since they belong to the
-	## Pokemon the cartridge wrote rather than to the species.
-	for half: Array in [
-		["offered_species", "offered_species"], ["requested_species", "requested_species"],
-	]:
-		if values.has(half[0]) and int(values[half[0]]) > 0:
-			trade[half[1]] = int(values[half[0]])
-	var requested_index: int = int(result.get("party_index", -1))
+	var requested_index: int = int(values.get("party_index", result.get("party_index", -1)))
 	if requested_index < 0 or requested_index >= candidate.party.size():
 		requested_index = _find_trade_candidate(world.data, candidate, trade)
 	if requested_index < 0:
@@ -1618,8 +1609,9 @@ static func _apply_trade_request(
 	var requested: Gen2SaveMon = candidate.party[requested_index]
 	if requested.species != int(trade["requested_species"]):
 		return {"ok": false, "reason": &"trade_candidate_mismatch"}
-	if not _trade_gender_matches(
-		world.data, requested, int(trade.get("gender", RomLayout.TRADE_GENDER_EITHER))
+	if not trade_gender_matches(
+		world.data, requested.species, requested.dvs,
+		int(trade.get("gender", RomLayout.TRADE_GENDER_EITHER))
 	):
 		return {"ok": false, "reason": &"trade_candidate_gender_mismatch"}
 	var received: Gen2SaveMon = _new_mon(
@@ -1631,17 +1623,28 @@ static func _apply_trade_request(
 	received.nickname = String(trade.get("nickname", ""))
 	received.original_trainer = String(trade.get("ot_name", ""))
 	received.ot_id = int(trade.get("ot_id", 0))
-	candidate.party[requested_index] = received
+	## `SetGiftPartyMonCaughtData` with `b` from the dialog set: `rrc b` puts bit
+	## 0 in CAUGHT_GENDER_MASK, so only a GIRL trader is recorded as female.
+	set_caught_data(
+		received, 0, -1,
+		int(trade.get("dialog", 0)) >= RomLayout.TRADE_DIALOGSET_GIRL, LANDMARK_GIFT
+	)
+	## `RemoveMonFromPartyOrBox` closes the gap and `TryAddMonToParty` writes at
+	## `wPartyCount`, so what arrives is last and the slots behind move up. That
+	## is why `DoNPCTrade` fills the row through `Trade_GetAttributeOfLastPartymon`.
+	candidate.party.remove_at(requested_index)
+	candidate.party.append(received)
 	return {
 		"ok": true, "accepted": true, "script_value": 1,
 		"register_caught": received.species,
-		## A trade lands in the party slot the given Pokemon left, which is
-		## the PARTYMON `GeneratePartyMonStats` registers.
+		## The append is the PARTYMON `GeneratePartyMonStats` registers.
 		"register_unown": _unown_form(
 			received.species, received.dvs, {"destination": &"party"}
 		),
 		"summary": {
 			"kind": &"trade", "accepted": true, "trade_id": trade_id,
+			"given_slot": requested_index,
+			"received_slot": candidate.party.size() - 1,
 			"given_species": requested.species,
 			"received_species": received.species,
 			## `DoNPCTrade` fills the trade buffers and `.TradeAnimation` runs
@@ -1740,6 +1743,22 @@ static func _new_mon(
 	return out
 
 
+## One `NPCTrades` row with a catalog site's two halves written over a COPY of
+## it: one row is named by more than one site, and writing the row would move
+## the other. The nickname, OT, item and DVs stay the record's.
+static func trade_record(data: GameData, values: Dictionary) -> Dictionary:
+	if data == null:
+		return {}
+	var record: Dictionary = data.world_trade(int(values.get("trade_id", -1)))
+	if record.is_empty():
+		return {}
+	var out: Dictionary = record.duplicate(true)
+	for key: String in ["offered_species", "requested_species"]:
+		if values.has(key) and int(values[key]) > 0:
+			out[key] = int(values[key])
+	return out
+
+
 static func _find_trade_candidate(data: GameData, save: Gen2SaveData, trade: Dictionary) -> int:
 	var requested_species: int = int(trade.get("requested_species", 0))
 	var required_gender: int = int(trade.get("gender", RomLayout.TRADE_GENDER_EITHER))
@@ -1747,24 +1766,23 @@ static func _find_trade_candidate(data: GameData, save: Gen2SaveData, trade: Dic
 		var mon: Gen2SaveMon = save.party[index]
 		if mon == null or mon.is_egg or mon.species != requested_species:
 			continue
-		if _trade_gender_matches(data, mon, required_gender):
+		if trade_gender_matches(data, mon.species, mon.dvs, required_gender):
 			return index
 	return -1
 
 
-static func _trade_gender_matches(
-	data: GameData, mon: Gen2SaveMon, required_gender: int
+## `CheckTradeGender`. Takes the species and DV word rather than a row, so the
+## party list's own answer reaches the same test the commit does.
+static func trade_gender_matches(
+	data: GameData, species: int, dvs: int, required_gender: int
 ) -> bool:
 	if required_gender == RomLayout.TRADE_GENDER_EITHER:
 		return true
-	var battle_mon: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(data, mon)
-	if battle_mon == null:
-		return false
+	var gender: StringName = Gen2BattleMon.gender_for(data, species, dvs)
 	if required_gender == RomLayout.TRADE_GENDER_MALE:
-		return battle_mon.gender() == Gen2BattleMon.GENDER_MALE
-	if required_gender == RomLayout.TRADE_GENDER_FEMALE:
-		return battle_mon.gender() == Gen2BattleMon.GENDER_FEMALE
-	return false
+		return gender == Gen2BattleMon.GENDER_MALE
+	return required_gender == RomLayout.TRADE_GENDER_FEMALE \
+		and gender == Gen2BattleMon.GENDER_FEMALE
 
 
 static func _apply_item_effect(

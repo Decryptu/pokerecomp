@@ -26,14 +26,10 @@ const MAP_IDS: Dictionary = {
 ## missing one, and would otherwise read a scene off whatever sits there.
 ## name: [dimensions on a Gold or Silver cache, dimensions on a Crystal cache].
 const WRONG_PROFILE_MAPS: Dictionary = {
-	# MOUNT_MORTAR_B1F on Gold and Silver, OLIVINE_LIGHTHOUSE_3F on Crystal
-	&"ILEX_FOREST": [Vector2i(20, 18), Vector2i(10, 9)],
-	# GOLDENROD_UNDERGROUND_WAREHOUSE, SLOWPOKE_WELL_B1F
-	&"MAHOGANY_MART_1F": [Vector2i(10, 9), Vector2i(10, 9)],
-	# MOUNT_MORTAR_1F_INSIDE, OLIVINE_LIGHTHOUSE_1F
-	&"TEAM_ROCKET_BASE_B2F": [Vector2i(20, 27), Vector2i(10, 9)],
-	# MOUNT_MORTAR_2F_INSIDE, OLIVINE_LIGHTHOUSE_2F
-	&"TEAM_ROCKET_BASE_B3F": [Vector2i(20, 18), Vector2i(10, 9)],
+	&"ILEX_FOREST": [Vector2i(20, 18), Vector2i(10, 9)],  # MOUNT_MORTAR_B1F on Gold and Silver, OLIVINE_LIGHTHOUSE_3F on Crystal
+	&"MAHOGANY_MART_1F": [Vector2i(10, 9), Vector2i(10, 9)],  # GOLDENROD_UNDERGROUND_WAREHOUSE, SLOWPOKE_WELL_B1F
+	&"TEAM_ROCKET_BASE_B2F": [Vector2i(20, 27), Vector2i(10, 9)],  # MOUNT_MORTAR_1F_INSIDE, OLIVINE_LIGHTHOUSE_1F
+	&"TEAM_ROCKET_BASE_B3F": [Vector2i(20, 18), Vector2i(10, 9)],  # MOUNT_MORTAR_2F_INSIDE, OLIVINE_LIGHTHOUSE_2F
 }
 
 

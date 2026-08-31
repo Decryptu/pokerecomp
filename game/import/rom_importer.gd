@@ -1272,6 +1272,8 @@ const SPECIAL_TEXT_FIRST_BOX: Dictionary = {
 	## Four of the trade's boxes open on a `text_ram` marker whose address
 	## differs by profile, so the anchor is the one that opens on a literal.
 	"trade": ["take_good_care", "Take good care of"],
+	"npc_trade": ["cable", "OK, connect the"],
+	"npc_trade_newbie": ["complete_4", "Uh? What happened?"],
 }
 
 

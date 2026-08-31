@@ -33,18 +33,15 @@ const BUBBLE_SHEETS: Array[Array] = [["icon", 0x00, 8], ["bubble", 0x10, 4]]
 ## The `spriteanimoam` rows the movie names, in [Gen2TradeAnimation]'s order.
 ## A part is (dy, dx, tile, attributes), the order `dbsprite` emits.
 const OAM_SETS: Array[Dictionary] = [
-	# 0: TRADE_POKE_BALL_1 (TradePokeBall1, 4)
-	{"vtile": 0x00, "parts": [
+	{"vtile": 0x00, "parts": [  # 0: TRADE_POKE_BALL_1 (TradePokeBall1, 4)
 		[-8, -8, 0x00, 0x80], [-8, 0, 0x00, 0xA0], [0, -8, 0x01, 0x80],
 		[0, 0, 0x01, 0xA0],
 	]},
-	# 1: TRADE_POKE_BALL_2 (MagnetTrainRed, 4)
-	{"vtile": 0x02, "parts": [
+	{"vtile": 0x02, "parts": [  # 1: TRADE_POKE_BALL_2 (MagnetTrainRed, 4)
 		[-8, -8, 0x00, 0x80], [-8, 0, 0x01, 0x80], [0, -8, 0x02, 0x80],
 		[0, 0, 0x03, 0x80],
 	]},
-	# 2: TRADE_POOF_1 (TradePoofBubble, 16)
-	{"vtile": 0x06, "parts": [
+	{"vtile": 0x06, "parts": [  # 2: TRADE_POOF_1 (TradePoofBubble, 16)
 		[-16, -16, 0x00, 0x00], [-16, -8, 0x01, 0x00], [-8, -16, 0x02, 0x00],
 		[-8, -8, 0x03, 0x00], [-16, 0, 0x01, 0x20], [-16, 8, 0x00, 0x20],
 		[-8, 0, 0x03, 0x20], [-8, 8, 0x02, 0x20], [0, -16, 0x02, 0x40],
@@ -52,8 +49,7 @@ const OAM_SETS: Array[Dictionary] = [
 		[0, 0, 0x03, 0x60], [0, 8, 0x02, 0x60], [8, 0, 0x01, 0x60],
 		[8, 8, 0x00, 0x60],
 	]},
-	# 3: TRADE_POOF_2 (TradePoofBubble, 16)
-	{"vtile": 0x0A, "parts": [
+	{"vtile": 0x0A, "parts": [  # 3: TRADE_POOF_2 (TradePoofBubble, 16)
 		[-16, -16, 0x00, 0x00], [-16, -8, 0x01, 0x00], [-8, -16, 0x02, 0x00],
 		[-8, -8, 0x03, 0x00], [-16, 0, 0x01, 0x20], [-16, 8, 0x00, 0x20],
 		[-8, 0, 0x03, 0x20], [-8, 8, 0x02, 0x20], [0, -16, 0x02, 0x40],
@@ -61,8 +57,7 @@ const OAM_SETS: Array[Dictionary] = [
 		[0, 0, 0x03, 0x60], [0, 8, 0x02, 0x60], [8, 0, 0x01, 0x60],
 		[8, 8, 0x00, 0x60],
 	]},
-	# 4: TRADE_POOF_3 (TradePoofBubble, 16)
-	{"vtile": 0x0E, "parts": [
+	{"vtile": 0x0E, "parts": [  # 4: TRADE_POOF_3 (TradePoofBubble, 16)
 		[-16, -16, 0x00, 0x00], [-16, -8, 0x01, 0x00], [-8, -16, 0x02, 0x00],
 		[-8, -8, 0x03, 0x00], [-16, 0, 0x01, 0x20], [-16, 8, 0x00, 0x20],
 		[-8, 0, 0x03, 0x20], [-8, 8, 0x02, 0x20], [0, -16, 0x02, 0x40],
@@ -70,28 +65,23 @@ const OAM_SETS: Array[Dictionary] = [
 		[0, 0, 0x03, 0x60], [0, 8, 0x02, 0x60], [8, 0, 0x01, 0x60],
 		[8, 8, 0x00, 0x60],
 	]},
-	# 5: TRADE_TUBE_BULGE_1 (TradeTubeBulge, 4)
-	{"vtile": 0x12, "parts": [
+	{"vtile": 0x12, "parts": [  # 5: TRADE_TUBE_BULGE_1 (TradeTubeBulge, 4)
 		[-8, -8, 0x00, 0x07], [-8, 0, 0x00, 0x27], [0, -8, 0x00, 0x47],
 		[0, 0, 0x00, 0x67],
 	]},
-	# 6: TRADE_TUBE_BULGE_2 (TradeTubeBulge, 4)
-	{"vtile": 0x13, "parts": [
+	{"vtile": 0x13, "parts": [  # 6: TRADE_TUBE_BULGE_2 (TradeTubeBulge, 4)
 		[-8, -8, 0x00, 0x07], [-8, 0, 0x00, 0x27], [0, -8, 0x00, 0x47],
 		[0, 0, 0x00, 0x67],
 	]},
-	# 7: TRADEMON_ICON_1 (RedWalk, 4)
-	{"vtile": 0x00, "parts": [
+	{"vtile": 0x00, "parts": [  # 7: TRADEMON_ICON_1 (RedWalk, 4)
 		[-8, -8, 0x00, 0x00], [-8, 0, 0x01, 0x00], [0, -8, 0x02, 0x00],
 		[0, 0, 0x03, 0x00],
 	]},
-	# 8: TRADEMON_ICON_2 (RedWalk, 4)
-	{"vtile": 0x04, "parts": [
+	{"vtile": 0x04, "parts": [  # 8: TRADEMON_ICON_2 (RedWalk, 4)
 		[-8, -8, 0x00, 0x00], [-8, 0, 0x01, 0x00], [0, -8, 0x02, 0x00],
 		[0, 0, 0x03, 0x00],
 	]},
-	# 9: TRADEMON_BUBBLE (TradePoofBubble, 16)
-	{"vtile": 0x10, "parts": [
+	{"vtile": 0x10, "parts": [  # 9: TRADEMON_BUBBLE (TradePoofBubble, 16)
 		[-16, -16, 0x00, 0x00], [-16, -8, 0x01, 0x00], [-8, -16, 0x02, 0x00],
 		[-8, -8, 0x03, 0x00], [-16, 0, 0x01, 0x20], [-16, 8, 0x00, 0x20],
 		[-8, 0, 0x03, 0x20], [-8, 8, 0x02, 0x20], [0, -16, 0x02, 0x40],

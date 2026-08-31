@@ -86,8 +86,7 @@ const CONTINUE: int = -1
 ## `["fill", bytes, index]` a `ByteFill` or `MailGFX_GenerateMonochromeTiles
 ## Color2`, both of which write a constant rather than a picture.
 const LOADS: Array = [
-	# FLOWER_MAIL
-	[
+	[  # FLOWER_MAIL
 		["at", FIRST_TILE],
 		["gfx", G_FLOWER_BORDER, 64, 1],
 		["gfx", G_ODDISH, 32, 3],
@@ -95,8 +94,7 @@ const LOADS: Array = [
 		["gfx", G_FLOWER, 32, 1],
 		["gfx", CONTINUE, 32, 2],
 	],
-	# SURF_MAIL
-	[
+	[  # SURF_MAIL
 		["at", FIRST_TILE],
 		["gfx", G_SURF_BORDER, 64, 2],
 		["gfx", G_LAPRAS, 48, 3],
@@ -106,8 +104,7 @@ const LOADS: Array = [
 		["gfx", G_LARGE_SHAPES, 64, 1],
 		["gfx", CONTINUE, 64, 2],
 	],
-	# LITEBLUEMAIL
-	[
+	[  # LITEBLUEMAIL
 		["at", FIRST_TILE],
 		["gfx", G_LITEBLUE_BORDER, 64, 2],
 		["gfx", G_DRATINI, 48, 3],
@@ -117,8 +114,7 @@ const LOADS: Array = [
 		["gfx", G_LARGE_SHAPES, 64, 1],
 		["gfx", CONTINUE, 64, 2],
 	],
-	# PORTRAITMAIL
-	[
+	[  # PORTRAITMAIL
 		["at", FIRST_TILE],
 		["gfx", G_PORTRAIT_BORDER, 40, 2],
 		["gfx", G_PORTRAIT_UNDERLINE, 8, 2],
@@ -126,8 +122,7 @@ const LOADS: Array = [
 		["gfx", G_LARGE_POKEBALL, 32, 1],
 		["gfx", G_SMALL_POKEBALL, 8, 2],
 	],
-	# LOVELY_MAIL
-	[
+	[  # LOVELY_MAIL
 		["at", FIRST_TILE],
 		["gfx", G_LOVELY_BORDER, 40, 2],
 		["gfx", G_POLIWAG, 48, 3],
@@ -135,8 +130,7 @@ const LOADS: Array = [
 		["gfx", G_LARGE_HEART, 32, 2],
 		["gfx", G_SMALL_HEART, 8, 1],
 	],
-	# EON_MAIL
-	[
+	[  # EON_MAIL
 		["at", FIRST_TILE],
 		["gfx", G_EON_BORDER_1, 8, 2],
 		["gfx", G_EON_BORDER_2, 8, 1],
@@ -148,8 +142,7 @@ const LOADS: Array = [
 		["gfx", G_LARGE_CIRCLE, 32, 1],
 		["gfx", G_EON_BORDER_2, 8, 2],
 	],
-	# MORPH_MAIL
-	[
+	[  # MORPH_MAIL
 		["at", FIRST_TILE],
 		["fill", 40, 2],
 		["gfx", G_MORPH_CORNER + 24, 8, 2],
@@ -159,8 +152,7 @@ const LOADS: Array = [
 		["gfx", G_MORPH_DIVIDER, 8, 2],
 		["gfx", G_DITTO, 48, 3],
 	],
-	# BLUESKY_MAIL
-	[
+	[  # BLUESKY_MAIL
 		["at", FIRST_TILE],
 		["gfx", G_EON_BORDER_1, 8, 2],
 		["fill", 8, 3],
@@ -172,8 +164,7 @@ const LOADS: Array = [
 		["gfx", G_CLOUD + 16, 16, 1],
 		["gfx", G_CLOUD + 40, 8, 1],
 	],
-	# MUSIC_MAIL
-	[
+	[  # MUSIC_MAIL
 		["at", FIRST_TILE],
 		["gfx", G_MUSIC_BORDER, 32, 2],
 		["gfx", G_MORPH_BORDER, 16, 2],
@@ -182,8 +173,7 @@ const LOADS: Array = [
 		["gfx", G_LARGE_NOTE, 24, 1],
 		["gfx", G_SMALL_NOTE, 8, 1],
 	],
-	# MIRAGE_MAIL
-	[
+	[  # MIRAGE_MAIL
 		["at", FIRST_TILE],
 		["fill", 40, 2],
 		["gfx", G_GRASS, 8, 2],
@@ -222,8 +212,7 @@ const BORDER2: Array = [
 ## counts (`ld b, 18 / 2`), `seq` is `Mail_Place6TileRow`, `g2` and `g3` are the
 ## two `Mail_Draw*Graphic` blocks, and `pic` is `PrepMonFrontpic`.
 const PLACES: Array = [
-	# FLOWER_MAIL
-	[
+	[  # FLOWER_MAIL
 		["border"], ["row", 2, 15, 0x3D, 16],
 		["g2", 16, 13, 0x39], ["g2", 2, 13, 0x39],
 		["g2", 2, 2, 0x3E], ["g2", 5, 3, 0x3E], ["g2", 10, 2, 0x3E],
@@ -231,8 +220,7 @@ const PLACES: Array = [
 		["g2", 3, 4, 0x42], ["g2", 12, 3, 0x42], ["g2", 14, 2, 0x42],
 		["g2", 2, 10, 0x42], ["g2", 14, 11, 0x42],
 	],
-	# SURF_MAIL
-	[
+	[  # SURF_MAIL
 		["border"], ["row", 2, 15, 0x3F, 16], ["g3", 15, 14, 0x39],
 		["g2", 2, 2, 0x44], ["g2", 15, 11, 0x44],
 		["g2", 3, 12, 0x4C], ["g2", 15, 2, 0x4C], ["g2", 6, 3, 0x50],
@@ -252,22 +240,18 @@ const PLACES: Array = [
 		["put", 9, 2, 0x42], ["put", 14, 5, 0x42], ["put", 3, 10, 0x42],
 		["put", 6, 11, 0x43],
 	],
-	# PORTRAITMAIL
-	[
+	[  # PORTRAITMAIL
 		["border2"], ["row", 8, 15, 0x36, 10], ["icons"], ["pic", 1, 10],
 	],
-	# LOVELY_MAIL
-	[
+	[  # LOVELY_MAIL
 		["border2"], ["row", 2, 15, 0x3C, 16], ["g3", 15, 14, 0x36], ["icons"],
 	],
-	# EON_MAIL
-	[
+	[  # EON_MAIL
 		["altrow", 0, 0, 0x31, 9], ["altrow", 1, 17, 0x31, 9],
 		["altcol", 0, 1, 0x33, 8], ["altcol", 19, 0, 0x33, 8],
 		["row", 2, 15, 0x35, 16], ["g3", 15, 14, 0x36], ["icons"],
 	],
-	# MORPH_MAIL
-	[
+	[  # MORPH_MAIL
 		["border2"],
 		["g2", 1, 1, 0x31], ["g2", 17, 15, 0x31],
 		["put", 1, 3, 0x31], ["put", 3, 1, 0x31],
@@ -281,28 +265,24 @@ const PLACES: Array = [
 		["row", 6, 1, 0x3A, 13], ["row", 1, 16, 0x3A, 13],
 		["g3", 3, 13, 0x3B],
 	],
-	# BLUESKY_MAIL
-	[
+	[  # BLUESKY_MAIL
 		["row", 0, 0, 0x31, 20], ["col", 0, 1, 0x31, 16], ["col", 19, 1, 0x31, 16],
 		["row", 0, 17, 0x32, 20], ["row", 0, 16, 0x33, 20],
 		# Three `Mail_Place6TileRow`s in a row without reloading `a`, so each
 		# starts where the last stopped: $34, then $3a, then $40.
 		["seq", 2, 2, 0x34, 6], ["seq", 3, 3, 0x3A, 6], ["seq", 4, 4, 0x40, 6],
-		# `dec hl / ld [hl], $7f`: the last tile of the third row is blanked.
-		["put", 9, 4, BLANK_TILE],
+		["put", 9, 4, BLANK_TILE],  # `dec hl / ld [hl], $7f`: the last tile of the third row is blanked.
 		["g2", 15, 14, 0x45],
 		["put", 15, 16, 0x49], ["put", 16, 16, 0x4A],
 		["g3", 12, 1, 0x4B], ["g3", 15, 4, 0x4B],
 		["row", 2, 11, 0x51, 16], ["g2", 10, 3, 0x52],
 	],
-	# MUSIC_MAIL
-	[
+	[  # MUSIC_MAIL
 		["altrow", 0, 0, 0x31, 9], ["altrow", 1, 17, 0x31, 9],
 		["altcol", 0, 1, 0x33, 8], ["altcol", 19, 0, 0x33, 8],
 		["altrow", 2, 15, 0x35, 7], ["g3", 15, 14, 0x37], ["icons"],
 	],
-	# MIRAGE_MAIL
-	[
+	[  # MIRAGE_MAIL
 		["border2"], ["row", 1, 16, 0x36, 18], ["g3", 15, 14, 0x37],
 		["put", 15, 16, 0x38], ["put", 16, 16, 0x39],
 		["altrow", 1, 1, 0x3F, 9],

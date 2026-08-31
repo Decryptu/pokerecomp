@@ -24,6 +24,10 @@ var _mons: Array = []
 var _cursor: int = 0
 ## `wStatsScreenFlags`' page bits, `StatsScreenMain` opening on `PINK_PAGE`.
 var _page: int = PINK_PAGE
+## `.AnimateEgg`'s `ANIM_MON_MENU` and the strip it walks. Crystal alone ships
+## them, so both stay empty on Gold and Silver.
+var _animation: Gen2PicAnimation = null
+var _animation_pixels: PackedByteArray = PackedByteArray()
 
 
 static func create(data: GameData, mons: Array, start_cursor: int = 0) -> Gen2MonStatsScreen:
@@ -34,17 +38,62 @@ static func create(data: GameData, mons: Array, start_cursor: int = 0) -> Gen2Mo
 	return out
 
 
-## `MonStatsInit` reaches `StatsScreen_PlaceFrontpic`, which plays the cry unless
-## the Pokémon is an egg or `CheckFaintedFrzSlp` answers yes. Called by the host
-## once the screen is up, and again by [method handle_button] on every UP or DOWN.
+## `StatsScreen_PlaceFrontpic`, called once the screen is up and again by
+## [method handle_button] on every UP or DOWN. Crystal's cry is `ANIM_MON_MENU`'s
+## opening `PokeAnim_CryNoWait`, so a Pokemon `CheckFaintedFrzSlp` answers yes
+## for takes `.AnimateMon`'s still picture and is silent; Gold and Silver ship no
+## animation and call `PlayMonCry` themselves, whatever the status.
 func announce() -> void:
+	_animation = null
+	_animation_pixels = PackedByteArray()
 	var mon: Gen2SaveMon = current()
-	if mon == null or mon.is_egg:
+	if mon == null or mon.is_egg or _data == null:
+		return
+	var record: Dictionary = _data.pic_animation(mon.species, _unown_form(mon))
+	if record.is_empty():
+		cry_requested.emit(mon.species)
 		return
 	if mon.hp <= 0 or Gen2Status.has(mon.status, Gen2Status.FREEZE) \
 		or Gen2Status.is_asleep(mon.status):
 		return
-	cry_requested.emit(mon.species)
+	var mirrored: bool = Gen2StatsScreenPage.pic_mirrored(mon.species, false)
+	_animation = Gen2PicAnimation.new(
+		record, Gen2PicAnimation.ANIM_MON_MENU, mirrored
+	)
+	_animation_pixels = Gen2BattleRenderer.padded_pic(
+		_data, Gen2StatsScreenPage.pic_record(_data, snapshot()),
+		Gen2PicAnimation.BOX, true,
+		_data.species_pic_animation(mon.species, _unown_form(mon)), mirrored
+	)
+
+
+## One hardware frame of `StatsScreen_WaitAnim`'s `SetUpPokeAnim`, which stops on
+## the frame `PokeAnim_Finish` sets its own exit and leaves the base picture up.
+func advance_animation() -> void:
+	if _animation == null:
+		return
+	var mon: Gen2SaveMon = current()
+	if _animation.advance() != &"" and mon != null:
+		cry_requested.emit(mon.species)
+	if _animation.finished():
+		_animation = null
+		_animation_pixels = PackedByteArray()
+
+
+## The box the animation is on, empty once it has ended and where there is none.
+func animation_indices() -> PackedByteArray:
+	if _animation == null:
+		return PackedByteArray()
+	return Gen2PicImage.animation_box_indices(
+		_animation.box, _animation_pixels, Gen2PicAnimation.BOX
+	)
+
+
+## `GetUnownLetter` over the row's DVs, which the screen runs before it draws.
+func _unown_form(mon: Gen2SaveMon) -> int:
+	if mon == null or mon.species != RomLayout.UNOWN_SPECIES:
+		return 0
+	return Gen2Stats.unown_letter(mon.dvs)
 
 
 func current() -> Gen2SaveMon:
@@ -137,6 +186,7 @@ func snapshot() -> Dictionary:
 		"egg": false,
 		"page": _page,
 		"species": mon.species,
+		"unown_form": _unown_form(mon),
 		"dex_number": mon.species,
 		"species_name": String(species.get("name", "")),
 		"nickname": mon.nickname if not mon.nickname.is_empty() \

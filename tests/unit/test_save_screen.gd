@@ -807,6 +807,31 @@ func test_the_stats_screen_walks_the_party_without_wrapping_and_cries() -> void:
 	assert_eq(get_signal_emit_count(screen, "cry_requested"), 1)
 
 
+## `PrepMonFrontpic` sets `wBoxAlignment` and `.AnimateEgg` writes TRUE itself,
+## so the picture is mirrored. `.unown` and `.unownegg` clear it, because a
+## mirrored Unown reads as the wrong letter, and an egg is `wCurPartySpecies`
+## EGG rather than UNOWN, so it is mirrored like the rest.
+func test_the_stats_pic_is_mirrored_for_everything_but_an_unown() -> void:
+	assert_true(Gen2StatsScreenPage.pic_mirrored(Fixture.GEODUDE, false))
+	assert_false(Gen2StatsScreenPage.pic_mirrored(RomLayout.UNOWN_SPECIES, false))
+	assert_true(Gen2StatsScreenPage.pic_mirrored(RomLayout.UNOWN_SPECIES, true))
+
+
+## `StatsScreen_PlaceFrontpic` opens on `GetUnownLetter`, so an Unown is drawn as
+## the letter its DVs pick rather than as the species' own picture, and
+## `EggStatsScreen` draws `GetEggFrontpic`'s.
+func test_the_stats_pic_is_the_letter_for_an_unown_and_the_egg_for_an_egg() -> void:
+	var letter: Dictionary = Gen2StatsScreenPage.pic_record(_data, {
+		"species": RomLayout.UNOWN_SPECIES, "unown_form": 3, "egg": false,
+	})
+	assert_eq(String(letter.get("atlas", "")), "unown_front")
+	assert_eq(int(letter.get("slot", -1)), 2, "the form counts from one")
+	assert_eq(
+		Gen2StatsScreenPage.pic_record(_data, {"species": Fixture.GEODUDE, "egg": true}),
+		_data.egg_pic()
+	)
+
+
 ## `.PrintNextLevel` and `.CalcExpToNextLevel` on the pink page: the debt is the
 ## curve's own next step less what the Pokémon has.
 func test_the_pink_page_owes_the_experience_its_next_level_costs() -> void:

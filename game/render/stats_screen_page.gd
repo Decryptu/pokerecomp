@@ -202,6 +202,71 @@ static func pic_size() -> int:
 	return PIC_TILES * TILE
 
 
+## `PrepMonFrontpic` sets `wBoxAlignment` and `.AnimateEgg` writes TRUE itself,
+## so this screen's picture is mirrored. `.unown` and `.unownegg` clear it, a
+## mirrored letter reading as the wrong one; an egg is EGG rather than UNOWN.
+static func pic_mirrored(species: int, egg: bool) -> bool:
+	return egg or species != RomLayout.UNOWN_SPECIES
+
+
+## The picture the screen draws: an egg's own, the letter
+## `StatsScreen_PlaceFrontpic`'s opening `GetUnownLetter` picks, or the species'
+## front pic.
+static func pic_record(data: GameData, snapshot: Dictionary) -> Dictionary:
+	if data == null:
+		return {}
+	if bool(snapshot.get("egg", false)):
+		return data.egg_pic()
+	var form: int = int(snapshot.get("unown_form", 0))
+	if int(snapshot.get("species", 0)) == RomLayout.UNOWN_SPECIES and form > 0:
+		return data.unown_pic(form - 1)
+	return data.species_pic(int(snapshot.get("species", 0)))
+
+
+## The picture as the screen has it this frame: `ANIM_MON_MENU`'s own box while
+## it runs and `PrepMonFrontpic`'s mirrored still one otherwise. A null
+## [param stats] is the still picture alone.
+static func pic_image(
+	data: GameData, snapshot: Dictionary, stats: Gen2MonStatsScreen = null
+) -> Image:
+	var palette: PackedColorArray = pic_palette(data, snapshot)
+	var box: PackedByteArray = stats.animation_indices() if stats != null \
+		else PackedByteArray()
+	if not box.is_empty():
+		return Gen2PicImage.from_indices(box, pic_size(), pic_size(), palette)
+	var pic: Dictionary = pic_record(data, snapshot)
+	if pic.is_empty():
+		return null
+	var art: Image = Gen2PicImage.from_atlas(
+		data.atlas_indices(pic["atlas"]), data.atlas(pic["atlas"]), pic, palette
+	)
+	if art == null:
+		return null
+	return Gen2PicImage.x_flipped(art) if pic_mirrored(
+		int(snapshot.get("species", 0)), bool(snapshot.get("egg", false))
+	) else art
+
+
+## Where that picture sits: the animation fills the cell, so only a still one is
+## padded.
+static func pic_origin(size: Vector2i, snapshot: Dictionary) -> Vector2i:
+	if size.x >= pic_size():
+		return Vector2i.ZERO
+	return Gen2PicImage.frontpic_origin(size, pic_mirrored(
+		int(snapshot.get("species", 0)), bool(snapshot.get("egg", false))
+	))
+
+
+static func pic_palette(data: GameData, snapshot: Dictionary) -> PackedColorArray:
+	if data == null:
+		return PackedColorArray()
+	if bool(snapshot.get("egg", false)):
+		return data.egg_palette()
+	return data.palette(
+		int(snapshot.get("species", 0)), bool(snapshot.get("shiny", false))
+	)
+
+
 ## How many pages the screen turns between: the cartridge's three plus whatever
 ## mods have registered, capped at [constant MAX_PAGES]. Every page number in
 ## this screen is one-based off [constant PINK_PAGE], so the last is this.

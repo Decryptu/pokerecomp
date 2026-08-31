@@ -768,7 +768,14 @@ func _process(delta: float) -> void:
 	if _view == null or _page == null:
 		return
 	var frames: int = _frame_clock.tick(delta)
-	if frames == 0 or _submenu_open or _item_menu_open or _stats != null:
+	if frames == 0 or _submenu_open or _item_menu_open:
+		return
+	## `StatsScreen_WaitAnim` is the stats screen's own loop, and the party
+	## icons behind it are not being stepped while it is up.
+	if _stats != null:
+		for _pic_frame: int in frames:
+			_stats.advance_animation()
+		_render_hardware()
 		return
 	if _moves != null:
 		for _icon_frame: int in frames:
@@ -882,33 +889,18 @@ func _render_moves() -> void:
 	Gen2PicImage.show(_view, _moves_page.render(_moves.snapshot(), _data))
 
 
-## `PrepMonFrontpic` centres a seven-tile cell on `hlcoord 0, 0` and sits a
-## smaller pic on its bottom, which is what the Pokedex and the Hall of Fame do
-## with the same cell.
+## `PrepMonFrontpic`'s own seven-tile cell on `hlcoord 0, 0`, which mirrors the
+## picture and bottom-aligns a smaller one against the far column.
 func _blend_stats_pic(image: Image, snapshot: Dictionary) -> void:
 	var species: int = int(snapshot.get("species", 0))
 	if species <= 0:
 		return
-	## `EggStatsScreen` draws the egg rather than what is inside it, which is
-	## `GetEggFrontpic`'s own picture and its own palette entry.
-	var egg: bool = bool(snapshot.get("egg", false))
-	var pic: Dictionary = _data.egg_pic() if egg else _data.species_pic(species)
-	if pic.is_empty():
-		return
-	var art: Image = Gen2PicImage.from_atlas(
-		_data.atlas_indices(pic["atlas"]), _data.atlas(pic["atlas"]), pic,
-		_data.egg_palette() if egg \
-			else _data.palette(species, bool(snapshot.get("shiny", false)))
-	)
+	var art: Image = Gen2StatsScreenPage.pic_image(_data, snapshot, _stats)
 	if art == null:
 		return
-	var cell: int = Gen2StatsScreenPage.pic_size()
-	var at: Vector2i = Gen2StatsScreenPage.pic_position()
-	@warning_ignore("integer_division")
-	var origin := Vector2i(
-		at.x + (cell - art.get_width()) / 2, at.y + cell - art.get_height()
-	)
-	image.blit_rect(art, Rect2i(Vector2i.ZERO, art.get_size()), origin)
+	image.blit_rect(art, Rect2i(Vector2i.ZERO, art.get_size()), Vector2i(
+		Gen2StatsScreenPage.pic_position()
+	) + Gen2StatsScreenPage.pic_origin(art.get_size(), snapshot))
 
 
 ## `.GetTopCoord` for the mon's own submenu, and the fixed box whichever of
