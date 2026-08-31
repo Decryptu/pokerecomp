@@ -41,25 +41,19 @@ const BADGE_HIVE: int = 1
 const BADGE_PLAIN: int = 2
 const BADGE_FOG: int = 3
 const BADGE_GLACIER: int = 6
-## `.TryFly`'s own `CheckBadge ENGINE_STORMBADGE`, the sixth badge.
 const BADGE_STORM: int = 5
-## WaterfallFunction's .TryWaterfall: ENGINE_RISINGBADGE.
 const BADGE_RISING: int = 7
-## FlashFunction's .CheckUseFlash: ENGINE_ZEPHYRBADGE, the least of the eight.
 const BADGE_ZEPHYR: int = 0
 
 ## GetSurfType's comparison, constants/pokemon_constants.asm.
 const SPECIES_PIKACHU: int = 0x19
 
-## `SpecialMapMusic` returns this ahead of the map header's while the player is
-## surfing, so it belongs to Surf. `UsedSurfScript` calls no PlaySFX.
+## The two tracks `Gen2WorldAPI.map_music_track` names for a player not walking.
 const MUSIC_SURF: int = 0x21
-## `BikeFunction` writes this to `wMapMusic`, so it survives a map load.
 const MUSIC_BICYCLE: int = 0x13
 
-## Which badge each gated field move asks `CheckBadge` for, as the badge-order
-## index the constants above are. A move that is not here has no badge gate:
-## Headbutt, Rock Smash, Dig, Teleport, Sweet Scent and the two heals.
+## Which badge each gated field move asks `CheckBadge` for. A move that is not
+## here has none: Headbutt, Rock Smash, Dig, Teleport, Sweet Scent and the heals.
 const MOVE_BADGES: Dictionary = {
 	MOVE_CUT: BADGE_HIVE,
 	MOVE_SURF: BADGE_FOG,
@@ -154,8 +148,7 @@ const HM_FIELD_MOVES: Array[int] = [
 
 ## What each move's own script writes, from data/text/common_2.asm, kept here
 ## because the party submenu, the A-press prompt and the script runner all say
-## them. `%s` is `GetPartyNickname`'s buffer and each break is the source's own
-## `line`, which a name short enough to fit one line would otherwise lose.
+## them. `%s` is `GetPartyNickname`'s buffer and each break the source's `line`.
 const USED_TEXTS: Dictionary = {
 	MOVE_CUT: "%s used\nCUT!",
 	MOVE_SURF: "%s used\nSURF!",
@@ -171,6 +164,9 @@ const USED_TEXTS: Dictionary = {
 	MOVE_FLASH: "A blinding FLASH\nlights the area!",
 	MOVE_TELEPORT: "Return to the last\n#MON CENTER.",
 }
+
+## `Script_UsedStrength`'s second box, which both callers of the first reach.
+const MOVE_BOULDERS_TEXT: String = "%s can\nmove boulders."
 
 ## `FieldMoveFailed`'s `_CantUseItemText`, shared by every move with no refusal
 ## of its own, and the five that have one.
@@ -188,6 +184,10 @@ const SWEET_SCENT_NOTHING_TEXT: String = "Looks like there's\nnothing here…"
 static func used_text(move: int, user: String) -> String:
 	var text: String = String(USED_TEXTS.get(move, ""))
 	return text % user if text.contains("%s") else text
+
+
+static func move_boulders_text(user: String) -> String:
+	return MOVE_BOULDERS_TEXT % user
 
 
 static func is_field_move(move: int) -> bool:

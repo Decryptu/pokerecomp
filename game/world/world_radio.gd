@@ -28,20 +28,22 @@ const NUM_RADIO_CHANNELS_GOLD_SILVER: int = 10
 ## data/radio/channel_music.asm's RadioChannelSongs, by canonical channel id.
 ## The Gold/Silver table is this one without its Buena's row, so indexing by
 ## channel rather than by position keeps one copy.
-const CHANNEL_SONGS: Array[int] = [
-	29,  # MUSIC_POKEMON_TALK
-	9,   # MUSIC_POKEMON_CENTER
-	1,   # MUSIC_TITLE
-	18,  # MUSIC_GAME_CORNER
-	96,  # MUSIC_BUENAS_PASSWORD, Crystal only
-	21,  # MUSIC_VIRIDIAN_CITY
-	19,  # MUSIC_BICYCLE
-	86,  # MUSIC_ROCKET_OVERTURE
-	64,  # MUSIC_POKE_FLUTE_CHANNEL
-	75,  # MUSIC_RUINS_OF_ALPH_RADIO
-	90,  # MUSIC_LAKE_OF_RAGE_ROCKET_RADIO
-]
+const MUSIC_POKEMON_TALK: int = 29
+const MUSIC_POKEMON_CENTER: int = 9
+const MUSIC_TITLE: int = 1
+const MUSIC_GAME_CORNER: int = 18
+const MUSIC_BUENAS_PASSWORD: int = 96
+const MUSIC_VIRIDIAN_CITY: int = 21
+const MUSIC_ROCKET_OVERTURE: int = 86
 const MUSIC_POKE_FLUTE_CHANNEL: int = 64
+const MUSIC_RUINS_OF_ALPH_RADIO: int = 75
+const MUSIC_LAKE_OF_RAGE_ROCKET_RADIO: int = 90
+const CHANNEL_SONGS: Array[int] = [
+	MUSIC_POKEMON_TALK, MUSIC_POKEMON_CENTER, MUSIC_TITLE, MUSIC_GAME_CORNER,
+	MUSIC_BUENAS_PASSWORD, MUSIC_VIRIDIAN_CITY, Gen2WorldFieldMove.MUSIC_BICYCLE,
+	MUSIC_ROCKET_OVERTURE, MUSIC_POKE_FLUTE_CHANNEL, MUSIC_RUINS_OF_ALPH_RADIO,
+	MUSIC_LAKE_OF_RAGE_ROCKET_RADIO,
+]
 ## constants/music_constants.asm. Neither is a real track: they are the two
 ## sentinels `ExitPokegearRadio_HandleMusic` compares
 ## `wPokegearRadioMusicPlaying` against, which is why a tuned station's own id

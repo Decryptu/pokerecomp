@@ -2214,10 +2214,10 @@ const GOLD_SILVER: Dictionary = {
 	## Nested the way the trainer card is, so the -1 for what Gold and Silver do
 	## not ship stays out of the flat offset checks. `_OakText3` is a bare
 	## `text_promptbutton` and carries no words, so it has no offset here.
-	# `engine/menus/start_menu.asm`'s description run and `data/text/common_2.asm`'s
-	# five pack texts, encoded from the source and matched. Each hits once per
-	# dump except the two refusals, which the cartridge copies elsewhere too; the
-	# offsets below are the common_2 copy beside the toss texts.
+	# `engine/menus/start_menu.asm`'s description run and the `data/text/common_2.asm`
+	# boxes the pack and the field items say, encoded from the source and matched.
+	# Each hits once per dump except the two refusals and the bike's two name lines,
+	# copied elsewhere too; these are the copy beside the toss texts.
 	"menu_text": {
 		"descriptions": 0x12B15,
 		"oak_no_time": 0x1945B2,
@@ -2231,6 +2231,9 @@ const GOLD_SILVER: Dictionary = {
 		"itemfinder_nope": 0x19446D,
 		"sacred_ash": 0x194529,
 		"squirtbottle": 0x1944FF,
+		"cant_get_off_bike": 0x19435E,
+		"got_on_bike": 0x194376,
+		"got_off_bike": 0x19438B,
 		# `_CoinCaseCountText` ends with `done` rather than `text_end` here, so
 		# `DoTextUntilTerminator` indexes `TextCommands` with $57 and runs off
 		# the table: the arbitrary code execution pokegold's own comment names.
@@ -2861,6 +2864,9 @@ const CRYSTAL: Dictionary = {
 		"itemfinder_nope": 0x1C0AA9,
 		"sacred_ash": 0x1C0B65,
 		"squirtbottle": 0x1C0B3B,
+		"cant_get_off_bike": 0x1C099A,
+		"got_on_bike": 0x1C09B2,
+		"got_off_bike": 0x1C09C7,
 		"coin_case": 0x1C5C7B,
 		"blue_card": 0x1C5C5E,
 		"sent_trophy_home": 0x1C5D03,

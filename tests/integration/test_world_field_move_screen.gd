@@ -540,8 +540,8 @@ func test_submenu_lists_strength_for_a_mon_that_knows_it() -> void:
 
 
 ## .TryStrength checks the badge and stops, so the entry resolves facing open
-## floor with no boulder in sight, and the flag waits for the acknowledge the way
-## Cut's block change does.
+## floor with no boulder in sight. `Script_UsedStrength` is two boxes, and the
+## flag waits for the second one's acknowledge the way Cut's block change does.
 func test_choosing_strength_shows_the_message_and_defers_the_flag() -> void:
 	await _open_strength_world()
 	var world: Gen2WorldAPI = _world_screen._world
@@ -549,11 +549,14 @@ func test_choosing_strength_shows_the_message_and_defers_the_flag() -> void:
 	var party: Gen2PartyScreen = await _open_party()
 	party.handle_button(Gen2Button.A)
 	party.handle_button(Gen2Button.A)
+	## `_UseStrengthText` ends in `done` with no `waitbutton` behind it, so this
+	## box is up before a frame passes and gone after one.
+	assert_eq(_shown_text(), "TESTMON used STRENGTH!")
 	await get_tree().process_frame
 
 	assert_null(_world_screen._party_host)
 	assert_true(_world_screen._field_move_text)
-	assert_eq(_shown_text(), "TESTMON used STRENGTH!")
+	assert_eq(_shown_text(), "TESTMON can move boulders.")
 	assert_false(world.strength_active())
 
 	_world_screen._acknowledge_field_move_text()

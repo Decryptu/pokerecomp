@@ -1374,6 +1374,8 @@ func _use_field_item(item: int) -> void:
 		## `CantUseItem`, which is the one thing the two jumptables disagree on.
 		_show_pack_result(_use_refusal(&"item_effect_failed", item), false)
 		return
+	## `.CheckIfRegistered`: the Bicycle's two scripts each have a silent copy.
+	request["registered"] = _using_registered
 	field_item_used.emit(request)
 
 

@@ -1655,12 +1655,10 @@ func copyright_palette() -> PackedColorArray:
 	return colors
 
 
-## One of the pack's five texts (`oak_no_time`, `no_mon`, `toss_ask`,
-## `toss_ask_quantity`, `toss_threw`) or the six a field item says
-## (`escape_rope`, `itemfinder_nearby`, `itemfinder_nope`, `sacred_ash`,
-## `squirtbottle`, `coin_case`), still carrying [Gen2TextStream]'s markers
-## for the quantity, the player and the item name. Empty on a cache imported before them,
-## which is the caller's cue to use its own wording.
+## One of the pack's own boxes or the ones a field item says, by the name
+## `RomImporter.PACK_TEXT_OPENINGS` gives it, still carrying [Gen2TextStream]'s
+## markers. Empty on a cache imported before it, which is the caller's cue to use
+## its own wording.
 func menu_text(key: String) -> String:
 	return String(_menu_text.get(key, ""))
 

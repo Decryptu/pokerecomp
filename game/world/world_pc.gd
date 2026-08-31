@@ -14,9 +14,8 @@ const PCPCITEM_OAKS_PC: int = 2
 const PCPCITEM_HALL_OF_FAME: int = 3
 const PCPCITEM_TURN_OFF: int = 4
 
-## `PokemonCenterPC.WhichPC`, the three lists `.ChooseWhichPCListToUse` picks
-## between: before the Pokedex, after it, and after the Hall of Fame. The lists
-## themselves are imported.
+## `PokemonCenterPC.WhichPC`, the three imported lists `.ChooseWhichPCListToUse`
+## picks between: before the Pokedex, after it, and after the Hall of Fame.
 const PCPC_BEFORE_POKEDEX: int = 0
 const PCPC_BEFORE_HOF: int = 1
 const PCPC_POSTGAME: int = 2
@@ -194,9 +193,9 @@ static func _entries(data: GameData, owned: Dictionary) -> Array:
 	return out
 
 
-## `PlayerDepositItemMenu`: the stack leaves `wNumItems` for `wNumPCItems`. An
-## item whose `CheckItemMenu` attribute is one of the three `.no_toss` rows is
-## refused, which is what keeps a key item out of the PC.
+## `PlayerDepositItemMenu`: the stack leaves `wNumItems` for `wNumPCItems`.
+## `.TryDepositItem` refuses only the three `CheckItemMenu` values no item
+## carries, so a key item goes in at the quantity `_CheckTossableItem` picks.
 static func deposit(
 	world: Gen2WorldAPI, save: Gen2SaveData, item: int, quantity: int = 1,
 	persist: bool = true
@@ -204,8 +203,7 @@ static func deposit(
 	return _transfer(world, save, item, quantity, true, persist)
 
 
-## `PlayerWithdrawItemMenu`, which is the same move the other way and refuses
-## nothing: anything in the PC came out of the bag.
+## `PlayerWithdrawItemMenu`, the same move the other way and refusing nothing.
 static func withdraw(
 	world: Gen2WorldAPI, save: Gen2SaveData, item: int, quantity: int = 1,
 	persist: bool = true
@@ -249,8 +247,6 @@ static func _transfer(
 	var definition: Dictionary = world.data.item(item)
 	if definition.is_empty():
 		return Gen2WorldTransaction.failure(&"unknown_item", {"item": item})
-	if to_pc and not Gen2WorldPack.can_toss(world.data, item):
-		return Gen2WorldTransaction.failure(&"item_cannot_be_deposited", {"item": item})
 	var bag: int = world.state.item_quantity(item)
 	var pc: int = world.state.pc_item_quantity(item)
 	var source: int = bag if to_pc else pc
