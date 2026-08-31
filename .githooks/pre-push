@@ -1,0 +1,34 @@
+#!/bin/sh
+# Refuses a push that CI would refuse, in under a second.
+#
+# Both of the last release's failures were of this shape: a comment line over
+# the recorded ceiling, and an editing note whose closing marker an edit had
+# taken with it. Each cost a full CI run to learn, and the second cost seven
+# builds. `tools/release.sh --gates` is the same set of checks the release
+# itself runs, so there is one definition of them.
+#
+# Enabled per-clone (hooks are not cloned) with:
+#   git config core.hooksPath .githooks
+
+set -e
+
+root=$(git rev-parse --show-toplevel)
+
+if [ -x "$root/tools/release.sh" ]; then
+	"$root/tools/release.sh" --gates || {
+		echo "" >&2
+		echo "pre-push: fix the above, or push with --no-verify if you mean it." >&2
+		exit 1
+	}
+fi
+
+# `CLAUDE.md` forbids naming a tool, an assistant or a company anywhere in the
+# history. A commit that does cannot be edited once it is on a protected branch.
+range=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || echo "origin/main")
+found=$(git log --format='%an <%ae>%n%B' "$range..HEAD" 2>/dev/null \
+	| grep -niE 'generated with|co-authored' || true)
+if [ -n "$found" ]; then
+	echo "pre-push: the commits carry an attribution trailer:" >&2
+	echo "$found" | sed 's/^/    /' >&2
+	exit 1
+fi

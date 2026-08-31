@@ -97,7 +97,8 @@ download the new file and replace the old one. Saves live elsewhere and survive.
 
 ## Getting started
 
-You need Godot 4.8 or newer. Enable the commit guard once per clone:
+You need Godot 4.8 or newer. Enable the hooks once per clone. The commit one
+refuses cartridge data; the push one runs the checks CI runs that need no engine.
 
 ```bash
 git config core.hooksPath .githooks
