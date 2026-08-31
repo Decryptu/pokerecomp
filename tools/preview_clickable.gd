@@ -1,9 +1,7 @@
 extends SceneTree
 
 ## Checks that every button a launcher screen shows can actually be pressed.
-##
 ##   Godot --path . -s res://tools/preview_clickable.gd
-##
 ## Not headless and not a `tools/checks/` topic: it reads `root` and
 ## `gui_get_hovered_control()`, so it needs a real window. A button drawn in the
 ## right place is still dead if something transparent is sitting on top of it, and

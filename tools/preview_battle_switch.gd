@@ -4,7 +4,6 @@ extends SceneTree
 ## `BattleMenu`'s own four rows and the `MoveSelectionScreen` behind FIGHT,
 ## `OfferSwitch`'s yes/no box over the field, `AskUseNextPokemon`'s box in the same
 ## place, and the party list they open. The stages are [constant MENU_STAGES] and [constant WORLD_STAGES].
-##
 ##   Godot --path . -s res://tools/preview_battle_switch.gd -- \
 ##       crystal /tmp/s.png [stage] [presses] [passes]
 

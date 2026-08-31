@@ -1,9 +1,7 @@
 extends SceneTree
 
 ## Captures the credits against a real imported cache, one source frame at a time.
-##
 ##   Godot --headless --path . -s res://tools/preview_credits.gd -- crystal /tmp/c.png [frame] [live]
-##
 ## [frame] is how many source frames to spend before the shot; a `CREDITS_WAIT` tick
 ## is thirteen frames, several separated by `;` write one file each, and a frame
 ## suffixed `b` holds B down for it. `live` drives the production world screen's own

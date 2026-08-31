@@ -7104,21 +7104,61 @@ func test_ice_forces_nothing_once_the_player_has_stood_still() -> void:
 	assert_eq(world.effective_input_direction(Vector2i.LEFT), Vector2i.LEFT)
 
 
-## `.CheckForced` ORs its bit into wCurInput rather than replacing it, so both
-## directions are set and `.GetAction`'s own test order decides: down, up, left,
-## right. A held DOWN therefore beats a slide running right, and a held UP does
-## not beat a slide running down.
-func test_a_held_direction_beats_the_slide_only_in_getactions_order() -> void:
+## `.CheckForced`'s `and PAD_BUTTONS` drops the whole d-pad before it ORs the
+## slide's own direction in, so no held key reaches `.GetAction` while a slide is
+## running: the four presses and nothing held all answer the same way.
+func test_a_held_direction_never_beats_the_slide() -> void:
 	var world: Gen2WorldAPI = _world(Vector2i(1, 1))
 	world.player_facing = world.facing_for_direction(Vector2i.RIGHT)
 	assert_true(bool(world.player_input_move(Vector2i.RIGHT).get("ok", false)))
 	_finish_step(world)
-	assert_eq(world.effective_input_direction(Vector2i.DOWN), Vector2i.DOWN)
-	assert_eq(world.effective_input_direction(Vector2i.UP), Vector2i.UP)
-	assert_eq(world.effective_input_direction(Vector2i.LEFT), Vector2i.LEFT)
-	# Right against right is still right, and nothing held is the slide's own.
-	assert_eq(world.effective_input_direction(Vector2i.RIGHT), Vector2i.RIGHT)
-	assert_eq(world.effective_input_direction(Vector2i.ZERO), Vector2i.RIGHT)
+	for held: Vector2i in [
+		Vector2i.DOWN, Vector2i.UP, Vector2i.LEFT, Vector2i.RIGHT, Vector2i.ZERO
+	]:
+		assert_eq(world.effective_input_direction(held), Vector2i.RIGHT, str(held))
+
+
+## `.TryStep` reads the tile the player is standing on and its `.ice` branch
+## sits in front of `.BikeCheck`, so a step off an ice cell is `STEP_ICE`. That
+## is `fast_slide_step`, `StepVectors`' four-pass row, and `SlideStep` sets
+## OBJECT_ACTION_STAND, so the drawing holds frame 0 for the whole slide.
+func test_a_slide_step_is_the_fast_row_and_does_not_animate() -> void:
+	var world: Gen2WorldAPI = _world(Vector2i(1, 1))
+	world.player_facing = world.facing_for_direction(Vector2i.RIGHT)
+	# The first step is onto the ice from a walking tile: eight passes and the
+	# ordinary walk cycle.
+	assert_true(bool(world.player_input_move(Vector2i.RIGHT).get("ok", false)))
+	var walking: int = 0
+	while world.player_step_in_progress():
+		walking += 1
+		world.advance_player_step_pass()
+	assert_eq(walking, Gen2WorldAPI.STEP_PASSES_WALK)
+
+	assert_true(world.standing_on_ice())
+	assert_true(bool(world.player_input_move(Vector2i.RIGHT).get("ok", false)))
+	var sliding: int = 0
+	while world.player_step_in_progress():
+		assert_eq(world.player_walk_frame(), 0)
+		sliding += 1
+		world.advance_player_step_pass()
+	assert_eq(sliding, Gen2WorldAPI.STEP_PASSES_FAST)
+
+
+## `.NotMoving` reaches `.BumpSound` for every refused press with a direction,
+## and `.CheckWarp` raises `wWalkingIntoEdgeWarp` first when the player stands on
+## the carpet naming that direction, which is what keeps a door silent.
+func test_a_refused_step_reports_the_bump_unless_it_is_an_edge_warp() -> void:
+	var world: Gen2WorldAPI = _world(Vector2i(8, 6))
+	var blocked: Dictionary = world.move_result(Vector2i.RIGHT)
+	assert_false(bool(blocked.get("ok", false)))
+	assert_true(bool(blocked.get("bump", false)), JSON.stringify(blocked))
+
+	# The carpet at (13,4) faces UP and the cell above it is the wall an
+	# interior door always has, so the step is refused and stays silent.
+	var carpet: Gen2WorldAPI = _world(Vector2i(13, 4))
+	var quiet: Dictionary = carpet.move_result(Vector2i.UP)
+	assert_false(bool(quiet.get("ok", false)))
+	assert_false(bool(quiet.get("bump", false)), JSON.stringify(quiet))
 
 
 ## `.CheckTurning`'s first test is wPlayerTurningDirection, so the tap-to-turn

@@ -1209,12 +1209,11 @@ func _resume_party_selection(_choice: int) -> Dictionary:
 	return _waiting_result()
 
 
-## describedecoration is a local script in the cartridge. Its text must be
-## acknowledged before the one decoration that needs a host, the town map, calls
-## OverworldTownMap, which preserves the source's
-## opentext/waitbutton/special/closetext/end order.
+## describedecoration is a `ScriptJump`, so its script replaces the caller and
+## its own `end` ends the run: text, `special OverworldTownMap`, then over.
 func _resume_special_after_text(_choice: int) -> Dictionary:
 	var decoration_special: int = int(_pending.get("special_after_text", -1))
+	var finish: bool = bool(_pending.get("finish_after_special", false))
 	_pending = {}
 	_finish_after_pending = false
 	var special_result: Dictionary = _execute_special(decoration_special)
@@ -1222,7 +1221,10 @@ func _resume_special_after_text(_choice: int) -> Dictionary:
 		return _fail(
 			StringName(special_result.get("reason", &"special_failed")), special_result
 		)
-	return _waiting_result() if _pending else advance()
+	if _pending:
+		_finish_after_pending = finish
+		return _waiting_result()
+	return _complete() if finish else advance()
 
 
 ## The five Ask*Scripts TryTileCollisionEvent reaches, all one shape: opentext,
@@ -3929,24 +3931,25 @@ func _stage_decoration_description(description: int) -> Dictionary:
 				DECO_TOWN_MAP:
 					_stage_internal_text("It's the TOWN MAP.", false)
 					_pending["special_after_text"] = SPECIAL_OVERWORLD_TOWN_MAP
+					_pending["finish_after_special"] = true
 					return {"ok": true}
 				DECO_PIKACHU_POSTER:
-					return _stage_internal_text("It's a poster of a\ncute PIKACHU.", false)
+					return _stage_internal_text("It's a poster of a\ncute PIKACHU.", true)
 				DECO_CLEFAIRY_POSTER:
-					return _stage_internal_text("It's a poster of a\ncute CLEFAIRY.", false)
+					return _stage_internal_text("It's a poster of a\ncute CLEFAIRY.", true)
 				DECO_JIGGLYPUFF_POSTER:
-					return _stage_internal_text("It's a poster of a\ncute JIGGLYPUFF.", false)
+					return _stage_internal_text("It's a poster of a\ncute JIGGLYPUFF.", true)
 				_:
 					## `DecorationDesc_NullPoster` is an `end` and prints nothing.
-					return {"ok": true}
+					return _complete()
 		DECODESC_BIG_DOLL:
-			return _stage_internal_text("A giant doll! It's\nfluffy and cuddly.", false)
+			return _stage_internal_text("A giant doll! It's\nfluffy and cuddly.", true)
 		DECODESC_LEFT_DOLL, DECODESC_RIGHT_DOLL, DECODESC_CONSOLE:
 			## `DecorationDesc_OrnamentOrConsole` names whatever stands in that
 			## slot; the box is one text with the name written into it.
 			return _stage_internal_text("It's an adorable\n%s." % Gen2WorldDecoration.decoration_name(
 				data, state.maptile_decoration(DECODESC_SLOTS[description]) if state != null else 0
-			), false)
+			), true)
 	return _fail(&"invalid_decoration_description", {"description": description})
 
 

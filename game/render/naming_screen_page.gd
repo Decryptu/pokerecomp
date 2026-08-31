@@ -49,6 +49,11 @@ const ENTRY_AT_MAIL: Vector2i = Vector2i(2, 2)
 const MAIL_ICON_AT: Vector2i = Vector2i(1, 1)
 ## The first `.Frameset_PartyMon` entry, four tiles of the eight loaded.
 const MAIL_ICON_TILES: int = 4
+## `depixel 4, 4, 4, 0` less shadow OAM's own (8, 16) origin, which is not the
+## tile grid, so it is kept in pixels.
+const PROMPT_ICON_AT: Vector2i = Vector2i(24, 20)
+## `.Pokemon`'s `hlcoord 1, 2`: a tilemap write, not an object.
+const GENDER_AT: Vector2i = Vector2i(1, 2)
 ## The cursor steps two tiles per column and two per row, so a keyboard cell is
 ## two tiles wide even where its character is one.
 const CELL: int = 2
@@ -117,7 +122,10 @@ func ready() -> bool:
 
 ## The whole 160x144 page as palette indices, for [param screen] as it stands
 ## and the prompt printed above the entry.
-func draw(screen: Gen2NamingScreen, prompt: String) -> PackedByteArray:
+func draw(
+	screen: Gen2NamingScreen, prompt: String,
+	icon: PackedByteArray = PackedByteArray(), gender: int = 0
+) -> PackedByteArray:
 	var map: PackedInt32Array = PackedInt32Array()
 	map.resize(COLUMNS * ROWS)
 	map.fill(BORDER_TILE)
@@ -130,12 +138,16 @@ func draw(screen: Gen2NamingScreen, prompt: String) -> PackedByteArray:
 	## entry is what says whose mail is being written.
 	if not screen.is_mail:
 		_string(map, prompt, PROMPT_AT)
+		if gender != 0:
+			_put(map, GENDER_AT, gender)
 	_entry(map, screen)
 	_keyboard(map, screen)
 
 	var indices: PackedByteArray = _compose(map)
 	if screen.is_mail:
 		_mail_icon(indices)
+	else:
+		_prompt_icon(indices, icon)
 	_cursor(indices, screen)
 	return indices
 
@@ -153,6 +165,25 @@ func _mail_icon(indices: PackedByteArray) -> void:
 		_blit(
 			indices, _icon_tiles, quadrant, MAIL_ICON_AT, false, false, true,
 			Vector2i((quadrant & 1) * TILE, (quadrant >> 1) * TILE)
+		)
+
+
+## `.Frameset_RedWalk`'s first entry over the caller's strip. Its three later
+## entries need a frame pump this screen has not got, as the blinking cursor
+## does.
+func _prompt_icon(indices: PackedByteArray, icon: PackedByteArray) -> void:
+	if icon.size() < MAIL_ICON_TILES * TILE * TILE:
+		return
+	var width: int = icon.size() / TILE
+	for quadrant: int in MAIL_ICON_TILES:
+		var cell := PackedByteArray()
+		cell.resize(TILE * TILE)
+		for y: int in TILE:
+			for x: int in TILE:
+				cell[y * TILE + x] = icon[y * width + quadrant * TILE + x]
+		_blit(
+			indices, {0: cell}, 0, Vector2i.ZERO, false, false, true,
+			PROMPT_ICON_AT + Vector2i((quadrant & 1) * TILE, (quadrant >> 1) * TILE)
 		)
 
 

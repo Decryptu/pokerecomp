@@ -6,7 +6,6 @@ extends SceneTree
 ## same registers in the same order on the same frames. Kinds are `music`, `sfx`,
 ## `cry` and `mon_cry`; the id is the record index, the species for `mon_cry`, or
 ## `all` to sweep the table into `<prefix>_<index>`.
-##
 ##   ... -s res://tools/render_audio.gd -- crystal music 1 600 /tmp/out
 
 

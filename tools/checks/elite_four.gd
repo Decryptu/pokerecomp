@@ -86,7 +86,6 @@ func run(r: RefCounted) -> void:
 
 
 ## The one door in, and the prepare callback that resets the leg.
-##
 ## This is the one map here worth entering: `MAPCALLBACK_NEWMAP` is what
 ## `IndigoPlateauPokecenter1FPrepareElite4Callback` hangs off, and it is a
 ## reset, so it is checked by setting every flag it clears beforehand.
@@ -244,7 +243,6 @@ func _verify_hall_of_fame(data: GameData, game_id: StringName) -> void:
 ## The two block changes a room turns on, checked as reachability rather than as
 ## collision bytes: the entrance scene has to cut the arrival warp off, and the
 ## boss has to open a door that was solid before them.
-##
 ## [param seal] and [param door] are source walk cells, which a `changeblock`
 ## takes; a block spans 2x2 of them, so the block index is the cell halved.
 func _verify_doors(

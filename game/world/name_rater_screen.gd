@@ -266,6 +266,11 @@ func _open_naming() -> void:
 		_ending = Gen2NameRater.ENDING_SAME_NAME
 		_end_named(_nickname)
 		return
+	## `.Pokemon`'s `LoadMenuMonIcon` and `farcall GetGender`, off the row itself.
+	_naming.set_species_icon(
+		_data, mon.species,
+		Gen2NamingScreenScreen.gender_sign(_data, mon.species, mon.dvs)
+	)
 	_text_box.visible = false
 	_naming.closed.connect(_on_named)
 	add_child(_naming)

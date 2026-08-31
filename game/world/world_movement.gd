@@ -17,6 +17,14 @@ const SPINNING_KINDS: Array[StringName] = [
 	&"turn_away", &"turn_in", &"turn_waterfall", &"step_dig",
 ]
 
+## The three commands reaching `SlideStep`, with `DoPlayerMovement.TryStep`'s
+## `STEP_ICE`. `SlideStep` sets OBJECT_ACTION_STAND, whose `SetFacingStandAction`
+## advances the walk frame only while the drawn one is odd; every duration is a
+## multiple of four, so a slide holds frame 0.
+const SLIDING_KINDS: Array[StringName] = [
+	&"slow_slide_step", &"slide_step", &"fast_slide_step",
+]
+
 ## `CounterclockwiseSpinAction`'s `.facings`.
 const SPIN_FACINGS: Array[int] = [
 	Gen2WorldSprite.FACING_DOWN, Gen2WorldSprite.FACING_RIGHT,

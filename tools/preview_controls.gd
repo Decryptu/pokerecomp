@@ -2,9 +2,7 @@ extends SceneTree
 
 ## Captures the overworld with the on-screen controller shown, in whichever
 ## orientation the window is given.
-##
 ##   Godot --path . --resolution 480x960 -s res://tools/preview_controls.gd -- <out.png> [mod]
-##
 ## A `mod` argument registers two controls of a mod's own and switches their
 ## on-screen buttons on. The controller is forced on for the capture, since `auto`
 ## would correctly hide it on a desktop; the options file is never written.

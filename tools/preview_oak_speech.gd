@@ -2,9 +2,7 @@ extends SceneTree
 
 ## Captures Oak's speech against a real imported cache: the real trainer-class
 ## pic, the real Wooper front pic, the real font and the real text-box frame.
-##
 ##   Godot --path . -s res://tools/preview_oak_speech.gd -- crystal /tmp/oak.png [advance|choices|player]
-##
 ## [advance] is how many A presses to make before the capture, so 0 is the first
 ## page of `_OakText1` and enough of them reaches the naming screen.
 

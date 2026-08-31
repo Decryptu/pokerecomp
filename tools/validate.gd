@@ -5,7 +5,6 @@ extends SceneTree
 ## pokegold sources and are named in each topic's own file. A topic is a script
 ## under `tools/checks/` with `func run(r) -> void`, found by its file name; add one
 ## there rather than writing another entry point.
-##
 ##   Godot --headless --path . -s res://tools/validate.gd -- all cut surf
 
 const CheckRun := preload("res://tools/lib/check_run.gd")

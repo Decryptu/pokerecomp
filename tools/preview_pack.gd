@@ -1,10 +1,8 @@
 extends SceneTree
 
 ## Captures the pack against a real imported cache.
-##
 ##   Godot --headless --path . -s res://tools/preview_pack.gd -- \
 ##       crystal /tmp/pack.png [items|balls|key|tmhm|use|give] [presses] [female]
-##
 ## The world behind it is a new game holding enough of each pocket to scroll, with a
 ## development party so `use` and `give` reach `.Party`'s own list. [presses] is a
 ## `u,d,l,r,a,b,s` list driven into the real screen before the shot.

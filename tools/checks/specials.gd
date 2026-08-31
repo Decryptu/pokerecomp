@@ -18,7 +18,6 @@ const EXPECTED_DEFERRED: Dictionary = {
 	## to a modern platform. The cable club's own sixteen rows have left this
 	## list with the Battle Tower's seven, `DisplayLinkRecord`, which sat in the
 	## link block without being link play, and Mystery Gift's three.
-	##
 	## The bank a routine sits in decides nothing: `GiveOddEgg` and
 	## `AskRememberPassword` sat here for being mobile neighbours, and both are
 	## reached by an ordinary NPC. Read the call sites before adding a row.
@@ -190,7 +189,6 @@ func _verify_slow_cry(data: GameData) -> void:
 ## dumps: each has to decode to something, and every `text_ram` marker left in
 ## one has to name an address the cache can fill. An unresolved marker is what a
 ## wrong pin looks like from the screen that prints the box.
-##
 ## A run the cartridge does not ship is checked to be absent rather than empty:
 ## Gold and Silver's `SpecialsPointers` is short enough that no script of theirs
 ## can reach the Poke Seer, Buena or her prize counter.

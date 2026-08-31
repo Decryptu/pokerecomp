@@ -37,7 +37,6 @@ var _r: RefCounted = null
 ## Reports how far the cached overworld script and text resources can be read.
 ## This tool only reads the derived user cache. It never writes cartridge data
 ## into the project.
-##
 ##   Godot --headless --path . -s res://tools/validate.gd -- world_scripts
 
 

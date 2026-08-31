@@ -283,7 +283,6 @@ func _check_roofs(pin: String) -> void:
 ## Every (map group, tileset) pair the corpus really draws: the strip a map is
 ## given must hold that group's own roof at tiles $0A..$12 and its tileset's own
 ## tiles everywhere else.
-##
 ## The roof itself is compared against the pin's `gfx/tilesets/roofs/*.png`
 ## rather than against the cache, so a wrong offset or a wrong run is caught by
 ## the source and not by a second reading of the same bytes. rgbgfx maps the

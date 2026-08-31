@@ -1,10 +1,8 @@
 extends SceneTree
 
 ## Captures the Pokedex against a real imported cache.
-##
 ##   Godot --headless --path . -s res://tools/preview_pokedex.gd -- \
 ##       crystal /tmp/dex.png [list|entry|option|search|results|unown] [presses]
-##
 ## The world behind it is a new game with every species seen and every second one
 ## caught, which puts a full listing, both row states and a real entry on screen at
 ## once. `f<n>` in [presses] spends n hardware frames, which catches the arrow blink.
@@ -98,7 +96,6 @@ func _initialize() -> void:
 ## A world whose dex is filled far enough to draw every row state: seen up to
 ## [constant SEEN], caught on every second one, and the Unown dex unlocked so the
 ## OPTION screen offers its fourth row.
-##
 ## [constant UNSEEN] is left out so one row is the not-seen one, which is the
 ## only row that draws `LoadQuestionMarkPic`'s picture.
 static func _state() -> Gen2WorldState:

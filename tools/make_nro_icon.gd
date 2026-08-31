@@ -1,9 +1,7 @@
 extends SceneTree
 
 ## Writes the 256x256 JPEG an NRO carries, out of the repository's own PNG.
-##
 ##     Godot --headless --path . -s res://tools/make_nro_icon.gd -- <out.jpg>
-##
 ## `elf2nro --icon=` takes a JPEG of exactly that size and nothing else, and the
 ## repository's icon is a 1024 PNG, so one is made from the other at package time
 ## rather than the same picture being committed twice. Godot does it rather than

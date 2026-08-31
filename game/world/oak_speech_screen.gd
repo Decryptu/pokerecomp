@@ -409,6 +409,10 @@ func _open_naming() -> void:
 		_naming = null
 		_enter_next_beat()
 		return
+	## `.Player`'s `GetPlayerIcon`, which is the sprite the gender screen picked.
+	_naming.set_sprite_icon(
+		_data, Gen2WorldSprite.player_normal_sprite(_gender == Gen2SaveData.GENDER_FEMALE)
+	)
 	_naming.closed.connect(_on_named)
 	add_child(_naming)
 	_hide_speech(true)

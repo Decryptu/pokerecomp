@@ -3,7 +3,6 @@ extends SceneTree
 ## Renders one imported map's expanded 4x4-tile blocks to a PNG, or photographs
 ## the real screen on that map. `live help` prints [constant KIND_HELP], which is
 ## every kind and what its two numbers mean.
-##
 ##   Godot --headless --path . -s res://tools/preview_world.gd -- gold 1 1 /tmp/w.png
 ##   Godot --path . -s res://tools/preview_world.gd -- crystal 26 2 /tmp/out.png \
 ##       live [kind] [x y] [WxH] [touch] [framed] [zoom=<n>] [view=<mod id>]

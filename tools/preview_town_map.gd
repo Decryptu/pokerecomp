@@ -1,10 +1,8 @@
 extends SceneTree
 
 ## Captures the region map against a real imported cache.
-##
 ##   Godot --headless --path . -s res://tools/preview_town_map.gd -- \
 ##       crystal /tmp/map.png [landmark] [card|clock|phone|radio|area:<species>|fly[:all]] [presses]
-##
 ## [landmark] is `TownMap_GetCurrentLandmark`'s answer, which picks the region and
 ## where the player icon stands. `hof` widens the Kanto window, `sel`/`rel` press and
 ## release the dex area's held SELECT, and `f<n>` spends n frames for the nest blink.

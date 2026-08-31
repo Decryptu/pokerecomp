@@ -5,7 +5,6 @@ extends SceneTree
 ## so the world spends exactly one hardware frame per recorded frame. Nothing here
 ## steps the screen by hand for that reason: the game runs its ordinary `_process`,
 ## mods included, and only the buttons are scripted. [constant USAGE] is every key.
-##
 ##   Godot --path . --mods --write-movie /tmp/clip.avi --fixed-fps 60 \
 ##     -s res://tools/record_clip.gd -- <game> <group> <map> [key=value ...]
 
@@ -955,7 +954,6 @@ func _perform(action: String) -> void:
 ## The wild a provider has put on the map nearest the player, met the way walking
 ## onto it meets it. Faces the player at it first, since a clip of an encounter
 ## is a clip of the thing on screen.
-##
 ## Not the same as `wild-`: that one invents a battle and the entry standing on
 ## the map is not part of it, so its Pokemon is still there afterwards however
 ## the fight ended.

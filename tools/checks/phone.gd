@@ -75,7 +75,6 @@ func _contacts(game_id: StringName, data: GameData) -> void:
 
 
 ## `MomTriesToBuySomething`'s whole block against `data/items/mom_phone.asm`.
-##
 ## The two tables are pinned here rather than read off the cache, so a wrong
 ## address fails on content: the ladder's ten triggers and costs, the five she
 ## picks between, and which of each is a doll. Both scripts have to reach Mom's

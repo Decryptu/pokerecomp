@@ -3,9 +3,7 @@ extends SceneTree
 ## Captures the production Hall of Fame overlay against a real imported cache,
 ## which is what makes it worth looking at: the panel draws a real front pic, the
 ## real font and the real text-box frame.
-##
 ##   Godot --path . -s res://tools/preview_hall_of_fame.gd -- crystal /tmp/hof.png [page]
-##
 ## A fourth argument of `shiny` makes the lead shiny. [page] is how many times to
 ## advance, so 0 is the first party member and the last pages are the player's own.
 

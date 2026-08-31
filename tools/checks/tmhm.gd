@@ -76,7 +76,6 @@ func run(r: RefCounted) -> void:
 
 
 ## home/hm_moves.asm's IsHMMove against the cartridge's own HM rows.
-##
 ## The two lists are separate in the source and could drift: IsHMMove is a
 ## hand-written array, TMHMMoves rows 51 to 57 are the items. ForgetMove reads
 ## the first, so this checks they name the same seven moves in each real cache,

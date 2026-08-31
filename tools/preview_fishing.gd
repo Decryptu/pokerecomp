@@ -3,7 +3,6 @@ extends SceneTree
 ## Captures the production fishing cast screen. With only an output path it uses
 ## the deterministic integration fixture; pass a real imported cache and map to
 ## capture authentic map art instead.
-##
 ##   Godot --path . -s res://tools/preview_fishing.gd -- /tmp/fishing.png
 ##   Godot --path . -s res://tools/preview_fishing.gd -- /tmp/fishing.png silver 2 5
 

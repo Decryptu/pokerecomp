@@ -7,7 +7,6 @@ var _r: RefCounted = null
 ## Gold and Silver share one command profile
 ## (Gen2WorldScriptRunner._crystal_commands() returns false for both), so this
 ## also covers Silver's opcode layout for this flow.
-##
 ##   Godot --headless --path . -s res://tools/validate.gd -- gold_route30_trainer
 
 const MAP_GROUP: int = 26

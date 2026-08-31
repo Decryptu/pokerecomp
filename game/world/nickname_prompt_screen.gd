@@ -25,6 +25,10 @@ enum Phase {
 var _data: GameData = null
 ## `wStringBuffer1`, which is the species name until the player replaces it.
 var _species_name: String = ""
+## `wCurPartySpecies` and `GetGender`'s answer for the row `.Pokemon` draws
+## from; a caller naming by species name alone has no icon.
+var _species: int = 0
+var _gender_sign: int = 0
 ## `_WasSentToBillsPCText`/`_BallSentToPCText` when the Pokemon landed in the
 ## box, empty otherwise. A format, because both read the name buffer the naming
 ## screen has just written rather than the species name the question asked with.
@@ -59,6 +63,12 @@ func set_context(
 	_forced = forced
 	_question = question if not question.is_empty() \
 		else Gen2WorldPartyHost.caught_nickname_question(species_name)
+
+
+## `.Pokemon`'s icon. [param dvs] is `GetGender`'s input; -1 leaves the sign off.
+func set_species(species: int, dvs: int = -1) -> void:
+	_species = species
+	_gender_sign = Gen2NamingScreenScreen.gender_sign(_data, species, dvs)
 
 
 func _ready() -> void:
@@ -210,6 +220,8 @@ func _answer_question(yes: bool) -> void:
 		_naming = null
 		_after_question()
 		return
+	if _species > 0:
+		_naming.set_species_icon(_data, _species, _gender_sign)
 	_text_box.visible = false
 	_naming.closed.connect(_on_named)
 	add_child(_naming)

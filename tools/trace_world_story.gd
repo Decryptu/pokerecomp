@@ -2,7 +2,6 @@ extends SceneTree
 
 ## Prints the imported map event pointers and bounded script command streams for
 ## story tracing. This reads the derived cache only and never opens a cartridge.
-##
 ##   Godot --headless --path . -s res://tools/trace_world_story.gd -- \
 ##     crystal 24 4 24 5 24 1
 

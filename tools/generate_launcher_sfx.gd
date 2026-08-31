@@ -1,10 +1,8 @@
 extends SceneTree
 
 ## Renders the launcher's sound effects to `assets/launcher/sfx/*.wav`.
-##
 ## The sounds are synthesised rather than sampled so the repository carries no
 ## third-party audio. Run after changing any recipe below:
-##
 ##     Godot --headless -s res://tools/generate_launcher_sfx.gd
 
 const OUTPUT_DIR: String = "res://assets/launcher/sfx"

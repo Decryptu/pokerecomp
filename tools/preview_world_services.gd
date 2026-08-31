@@ -5,7 +5,6 @@ extends SceneTree
 ## mode's second box is photographed. The modes are `apricorn`, `town_map`,
 ## `pokegear`, `trainer_card`, `oak_pc`, `pc`, `decoration`, `hall_of_fame`,
 ## `battle_tower_room` and `unown_dex`; with none the mart is drawn.
-##
 ##   Godot --path . -s res://tools/preview_world_services.gd -- /tmp/pc.png pc a,down,a
 
 const WINDOW_SIZE := Vector2i(1152, 648)

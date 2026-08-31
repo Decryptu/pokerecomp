@@ -258,8 +258,12 @@ static func category_rows(
 	var header: int = _header_of(data, slot)
 	if header >= 0:
 		out.append({"deco": header, "name": decoration_name(data, header)})
-	if out.size() < CATEGORY_MENU_HEIGHT:
-		out.append({"deco": 0, "name": decoration_name(data, 0)})
+	## `FindOwnedDecosInCategory` appends CANCEL before anything counts the rows
+	## and `.beyond_eight` takes it back off, so six owned rows are eight and
+	## lose it.
+	out.append({"deco": 0, "name": decoration_name(data, 0)})
+	if out.size() >= CATEGORY_MENU_HEIGHT:
+		out.pop_back()
 	return out
 
 

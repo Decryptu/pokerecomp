@@ -1,9 +1,7 @@
 extends SceneTree
 
 ## Prints Prof Oak's PC against a real imported cache.
-##
 ##   Godot --headless --path . -s res://tools/preview_prof_oaks_pc.gd -- crystal [caught]
-##
 ## Without `caught` it walks every threshold `FindOakRating` bands into, which is
 ## the whole table and the boundary either side of each row. With one it prints
 ## the three pages `ProfOaksPCBoot` shows for that many owned, with the seen

@@ -3,14 +3,15 @@ extends SceneTree
 ## Captures the naming screen against a real imported cache, which is what makes it
 ## worth looking at: the keyboard, the border, the two entry markers and the cursor
 ## bracket are all cartridge graphics rather than stand-ins.
-##
 ##   Godot --path . -s res://tools/preview_naming_screen.gd -- crystal /tmp/name.png [presses]
-##
-## A `mail` argument opens `_ComposeMailMessage`, a `rival` one NAME_RIVAL.
-## [presses] is a button script: `r`, `l`, `u`, `d`, `a`, `b`, `s` and `c`.
+
+## A `mail` argument opens `_ComposeMailMessage`, a `rival` one NAME_RIVAL and a
+## `mon` one NAME_MON. [presses] is a button script: `r`, `l`, `u`, `d`, `a`, `b`, `s` and `c`.
 
 const WINDOW_SIZE := Vector2i(1152, 648)
 const SETTLE_FRAMES: int = 8
+## CYNDAQUIL, whose menu icon and gender sign are both worth looking at.
+const PREVIEW_SPECIES: int = 155
 
 const BUTTONS: Dictionary = {
 	"u": Gen2Button.UP,
@@ -48,22 +49,38 @@ func _initialize() -> void:
 	root.set_content_scale_size(WINDOW_SIZE)
 	root.size = WINDOW_SIZE
 	var mail: bool = args.has("mail")
+	var mon: bool = args.has("mon")
 	var prompt: String = Gen2NamingScreenScreen.PROMPT_RIVAL if args.has("rival") \
 		else Gen2NamingScreenScreen.PROMPT_PLAYER
+	if mon:
+		prompt = Gen2WorldPartyHost.nickname_prompt(
+			String(data.species(PREVIEW_SPECIES).get("name", ""))
+		)
+	var kind: StringName = Gen2NamingScreenScreen.KIND_PLAYER
+	if mail:
+		kind = Gen2NamingScreenScreen.KIND_MAIL
+	elif mon:
+		kind = Gen2NamingScreenScreen.KIND_MON
 	_screen = Gen2NamingScreenScreen.new()
-	if not _screen.open(
-		data, "" if mail else prompt,
-		Gen2NamingScreenScreen.KIND_MAIL if mail else Gen2NamingScreenScreen.KIND_PLAYER
-	):
+	if not _screen.open(data, "" if mail else prompt, kind):
 		push_error("The %s cache carries no naming screen data." % args[0])
 		quit(1)
 		return
+	## The icon is the caller's on every screen but mail.
+	if mon:
+		_screen.set_species_icon(
+			data, PREVIEW_SPECIES, Gen2NamingScreenScreen.MALE_SIGN
+		)
+	elif args.has("rival"):
+		_screen.set_sprite_icon(data, Gen2NamingScreenScreen.SPRITE_RIVAL)
+	elif not mail:
+		_screen.set_sprite_icon(data, Gen2WorldSprite.SPRITE_PLAYER)
 	_screen.scale = Vector2(4, 4)
 	root.add_child(_screen)
 	current_scene = _screen
 
 	var presses: String = args[2] \
-		if args.size() > 2 and args[2] not in ["mail", "rival"] else ""
+		if args.size() > 2 and args[2] not in ["mail", "rival", "mon"] else ""
 	for key: String in presses:
 		if BUTTONS.has(key):
 			_screen.handle_button(int(BUTTONS[key]))

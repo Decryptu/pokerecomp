@@ -691,7 +691,6 @@ func _crossings(
 ## Ledge hops included, mirroring `tools/preview_world_story.gd`'s
 ## _reachable_step(): a region drawn without them would claim walls that a real
 ## walk can cross, which is exactly the mistake these counts are here to catch.
-##
 ## [param closed] cells are treated as unwalkable, which is how an unavoidable
 ## cell is proved: shut it and see what stops being reachable.
 func _region(

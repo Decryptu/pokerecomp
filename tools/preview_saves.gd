@@ -1,9 +1,7 @@
 extends SceneTree
 
 ## Photographs a window-resolution save-section screen for a cached cartridge.
-##
 ##   Godot --path . -s res://tools/preview_saves.gd -- <out.png> [light|dark] [WxH] [page] [game]
-##
 ## [page] is `saves`, `new`, `party`, `boxes`, `boxes_move` or `editor`; [game]
 ## picks a cartridge rather than the first cached one. The size is an argument
 ## rather than a constant: a phone portrait and a desktop window are one command

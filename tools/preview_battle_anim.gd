@@ -5,7 +5,6 @@ extends SceneTree
 ## queue walked to the animation it wants, and a counted number of frames spent
 ## inside it. The flags and the `catch`, `0`, `miss` and frame-range forms are
 ## documented below.
-##
 ##   Godot --path . -s res://tools/preview_battle_anim.gd -- \
 ##       <game> <output.png> <move> <side> <frames> [scene_off] [matchup=<enemy>,<player>]
 
@@ -206,7 +205,6 @@ func _prefix() -> String:
 
 
 ## One hardware frame of the opening, with the press a person would make.
-##
 ## `WildPokemonAppearedText`, `WantsToBattleText` and the `cont` inside
 ## `BattleText_EnemySentOut` all wait on a button; this counts
 ## [constant PRESS_AFTER] frames of the line standing finished and then presses,
