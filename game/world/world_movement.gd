@@ -37,6 +37,12 @@ static func spin_advance(frame: int) -> int:
 static func spin_facing(frame: int) -> int:
 	return SPIN_FACINGS[(frame >> 4) & 3]
 
+
+## `EarthquakeMovement`: `step_shake`'s displacement, its low six bits the sleep.
+static func earthquake_stream(value: int) -> PackedByteArray:
+	return PackedByteArray([0x55, value & 0xFF, 0x46, value & 0x3F, STEP_END])
+
+
 static func decode(data: PackedByteArray) -> Dictionary:
 	if data.is_empty():
 		return {"ok": false, "reason": &"missing_movement"}

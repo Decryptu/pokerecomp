@@ -4913,9 +4913,10 @@ func test_hangup_holds_the_script_for_the_whole_hang_up_sequence() -> void:
 
 
 ## `Script_pause` delays two frames per counted unit inside the command, and
-## `Script_deactivatefacing` hands the same count to SCRIPT_WAIT, which
-## `WaitScript` spends one a frame. Both write wScriptDelay only when their
-## operand is nonzero, which is what makes `pause 0` reuse it.
+## `Script_deactivatefacing` hands the same count to SCRIPT_WAIT, whose
+## `WaitScript` runs once per overworld pass, which is two frames as well. Both
+## write wScriptDelay only when their operand is nonzero, which is what makes
+## `pause 0` reuse it.
 func test_pause_and_deactivatefacing_spend_their_own_frame_counts() -> void:
 	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
 	# pause 3, deactivatefacing 0, end.
@@ -4931,16 +4932,17 @@ func test_pause_and_deactivatefacing_spend_their_own_frame_counts() -> void:
 
 	assert_eq(runner.complete_wait()["status"], &"waiting")
 	assert_eq(
-		runner.pending_wait()["frames"], 3,
-		"a zero operand reuses wScriptDelay, and WaitScript spends one a frame"
+		runner.pending_wait()["frames"], Gen2WorldAPI.passes_in_frames(3),
+		"a zero operand reuses wScriptDelay, and WaitScript spends one a pass"
 	)
 	assert_eq(runner.complete_wait()["status"], &"complete")
 
 
 ## `Script_earthquake` is `ScriptCall` on `applymovement PLAYER,
-## wEarthquakeMovementDataBuffer`, whose stream shakes and then sleeps the low
-## six bits of the operand.
-func test_earthquake_waits_out_the_sleep_its_own_movement_carries() -> void:
+## wEarthquakeMovementDataBuffer`, so it hands the world the same
+## `player_movement_requested` an ordinary `applymovement` does and waits on the
+## movement rather than on a frame count.
+func test_earthquake_applies_its_own_movement_to_the_player() -> void:
 	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
 	scripts["48:6170"] = [0x78, 84, Gen2WorldScript.END]
 	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
@@ -4952,12 +4954,104 @@ func test_earthquake_waits_out_the_sleep_its_own_movement_carries() -> void:
 	var result: Dictionary = runner.advance()
 
 	assert_eq(result["status"], &"waiting")
-	assert_eq(runner.pending_wait()["frames"], 84 & 0x3F)
+	assert_eq(
+		runner.pending_wait().get("wait", &""),
+		Gen2WorldScriptRunner.WAIT_MOVEMENT
+	)
 	assert_true(result["events"].any(func(event: Dictionary) -> bool:
-		return event.get("type", &"") == &"earthquake_requested" \
-			and int(event.get("strength", 0)) == 84
+		return event.get("type", &"") == &"player_movement_requested" \
+			and PackedByteArray(event.get("movement", [])) \
+				== Gen2WorldMovement.earthquake_stream(84)
 	), JSON.stringify(result["events"]))
-	assert_eq(runner.complete_wait()["status"], &"complete")
+
+
+## The whole duration is the stream's `step_sleep`, which is counted in overworld
+## passes like every other movement: `earthquake 84` is twenty passes.
+func test_an_earthquake_holds_the_player_for_its_own_sleep() -> void:
+	RomCache.write_json(RomCache.world_scripts_path(_directory), {
+		"48:6070": [0x78, 84, Gen2WorldScript.END],
+	})
+	var data: GameData = GameData.open_directory(_directory)
+	data.world_map(1, 1).events["coord_events"][0]["script"] = 0x6070
+	var world := Gen2WorldAPI.open(data, 1, 1, Vector2i(7, 6))
+	var results: Array = _run_script(world, world.dispatch_script_events())
+
+	assert_eq(_final_status(results), &"complete")
+	var events: Array = _all_events(results)
+	var shakes: Array = events.filter(func(event: Dictionary) -> bool:
+		return event.get("type", &"") == &"screen_shake_requested"
+	)
+	assert_eq(shakes.size(), 1)
+	assert_eq(int((shakes[0] as Dictionary)["strength"]), 84)
+
+
+## `Script_endall` drops the whole stack; `Script_reloadend` is `newloadmap` and
+## then `Script_end`, which returns to a caller; `Script_stopandsjump` jumps and
+## yields a pass. None of the three had a handler, so each answered
+## `unsupported_runtime_command`.
+func test_the_three_script_enders_dispatch() -> void:
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
+	# scall .sub, newloadmap 5, end | .sub: reloadend 1
+	scripts["48:6190"] = [0x00, 0xA0, 0x61, 0x8A, 5, Gen2WorldScript.END]
+	scripts["48:61A0"] = [0x92, 1]
+	# The same with endall, which the caller never comes back from.
+	scripts["48:61B0"] = [0x00, 0xC0, 0x61, 0x8A, 5, Gen2WorldScript.END]
+	scripts["48:61C0"] = [0x93]
+	# stopandsjump to a bare end.
+	scripts["48:61D0"] = [0x8F, 0xE0, 0x61]
+	scripts["48:61E0"] = [Gen2WorldScript.END]
+	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
+	var data: GameData = GameData.open_directory(_directory)
+
+	var reloaded := Gen2WorldScriptRunner.begin(data, Gen2WorldState.new(), {
+		"kind": &"test", "bank": 48, "script": 0x6190,
+	})
+	var reload_result: Dictionary = reloaded.advance()
+	assert_eq(reload_result["status"], &"complete")
+	assert_eq(
+		_types_of(reload_result).count(&"map_entry_method_requested"), 2,
+		"reloadend ended its own frame and the caller ran on"
+	)
+
+	var ended := Gen2WorldScriptRunner.begin(data, Gen2WorldState.new(), {
+		"kind": &"test", "bank": 48, "script": 0x61B0,
+	})
+	var end_result: Dictionary = ended.advance()
+	assert_eq(end_result["status"], &"complete")
+	assert_eq(
+		_types_of(end_result).count(&"map_entry_method_requested"), 0,
+		"endall dropped the caller too"
+	)
+
+	var jumped := Gen2WorldScriptRunner.begin(data, Gen2WorldState.new(), {
+		"kind": &"test", "bank": 48, "script": 0x61D0,
+	})
+	var jump_result: Dictionary = jumped.advance()
+	assert_eq(jump_result["status"], &"waiting", JSON.stringify(jump_result))
+	assert_eq(jumped.complete_wait()["status"], &"complete")
+
+
+## `Script_getlandmarkname` and `Script_gettrainerclassname`, Crystal's own two
+## raw bytes. Both had operands nobody decoded and no handler at all, and the
+## phone scripts name them 119 times between them.
+func test_the_crystal_name_commands_fill_their_string_buffers() -> void:
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
+	# getlandmarkname STRING_BUFFER_4, 1 | gettrainerclassname STRING_BUFFER_5, 1
+	scripts["48:6200"] = [
+		0xA5, 1, RomLayout.STRING_BUFFER_4,
+		0xA6, 1, RomLayout.STRING_BUFFER_5,
+		Gen2WorldScript.END,
+	]
+	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
+	var data: GameData = GameData.open_directory(_directory)
+	var runner := Gen2WorldScriptRunner.begin(data, Gen2WorldState.new(), {
+		"kind": &"test", "bank": 48, "script": 0x6200,
+	})
+
+	assert_eq(runner.advance()["status"], &"complete")
+	var buffers: Dictionary = runner.text_context().get("buffers", {})
+	assert_eq(String(buffers.get(RomLayout.STRING_BUFFER_4, "")), data.landmark_name(1))
+	assert_eq(String(buffers.get(RomLayout.STRING_BUFFER_5, "")), data.trainer_name(1))
 
 
 ## An event is handed to its caller once. The runner drains its list on every
@@ -4974,12 +5068,12 @@ func test_a_script_hands_each_event_to_its_caller_once() -> void:
 	})
 
 	var shaken: Dictionary = runner.advance()
-	assert_eq(_types_of(shaken).count(&"earthquake_requested"), 1)
+	assert_eq(_types_of(shaken).count(&"player_movement_requested"), 1)
 
 	var paused: Dictionary = runner.complete_wait()
 	assert_eq(paused["status"], &"waiting")
 	assert_eq(
-		_types_of(paused).count(&"earthquake_requested"), 0,
+		_types_of(paused).count(&"player_movement_requested"), 0,
 		"the shake was already delivered"
 	)
 

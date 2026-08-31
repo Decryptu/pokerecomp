@@ -276,6 +276,7 @@ const COMMAND_WIDTHS: Dictionary = {
 		CLOSETEXT, YESORNO, CLOSEWINDOW, WAITBUTTON, ENDCALLBACK
 	],
 	2: [
+		GETCOINS,
 		SETSCENE, SETVAL, ADDVAL, RANDOM, READVAR, WRITEVAR, CHECKITEM, ADDCELLNUM,
 		DELCELLNUM, CHECKCELLNUM, CHECKTIME, CHECKPOKE, GETNUM, GETCURLANDMARKNAME,
 		REANCHORMAP, WRITEUNUSEDBYTE
@@ -308,9 +309,9 @@ static func _width_of(runs: Dictionary) -> Dictionary:
 			out[opcode] = width
 	return out
 
-## The opcodes Crystal and pokegold give different widths, as [crystal, gold].
+## The opcodes the two profiles give different widths, as [crystal, gold]. A zero
+## falls through to the later table rather than meaning "no command".
 const PROFILE_COMMAND_WIDTHS: Dictionary = {
-	GETCOINS: [3, 2],
 	FARJUMPTEXT: [4, 3],
 	JUMPTEXT: [3, 1],
 	PROMPTBUTTON: [1, 2],
@@ -323,7 +324,9 @@ const PROFILE_COMMAND_WIDTHS: Dictionary = {
 
 static func command_width(opcode: int, crystal_commands: bool = true) -> int:
 	if PROFILE_COMMAND_WIDTHS.has(opcode):
-		return PROFILE_COMMAND_WIDTHS[opcode][0 if crystal_commands else 1]
+		var profile_width: int = PROFILE_COMMAND_WIDTHS[opcode][0 if crystal_commands else 1]
+		if profile_width > 0:
+			return profile_width
 	if WIDTH_OF.has(opcode):
 		return WIDTH_OF[opcode]
 	if crystal_commands:
@@ -359,9 +362,9 @@ static func _later_command_width(opcode: int) -> int:
 			return 1
 		0x5C, 0x5D, 0x69, 0x6B, 0x6C, 0x6F, 0x75, 0x76, 0x7C, 0x7E, 0x83, 0x84, 0x8C, 0x8E, 0x94, 0x97, 0x9B, 0x9D, 0x9E:
 			return 3
-		0x60, 0x61, 0x62, 0x67, 0x6D, 0x6E, 0x72, 0x73, 0x77, 0x78, 0x7D, 0x89, 0x8A, 0x8B, 0x91, 0x95, 0x96, 0x99, 0x9A:
+		0x60, 0x61, 0x62, 0x67, 0x6D, 0x6E, 0x72, 0x73, 0x77, 0x7D, 0x89, 0x8A, 0x8B, 0x91, 0x95, 0x96, 0x99, 0x9A:
 			return 2
-		0x68, 0x71, 0x74, 0x79, 0x80, 0x88, 0x93:
+		0x68, 0x71, 0x74, 0x78, 0x79, 0x80, 0x88, 0x93:
 			return 4
 		0x63:
 			return 5
@@ -662,17 +665,21 @@ const OPERANDS: Dictionary = {
 	GETCOINS: [["string_buffer", OPERAND_U8]],
 }
 
-## The rows Crystal reads differently: the four commands it inserted, which have
-## no pokegold opcode behind them, and `getcoins`, which takes a second buffer.
-## A row here is the whole answer, so nothing else is read.
+## The rows Crystal reads differently: the commands it inserted, which have no
+## pokegold opcode behind them. A row here is the whole answer.
 const CRYSTAL_OPERANDS: Dictionary = {
 	0x9F: [["item", OPERAND_U8], ["variable", OPERAND_U8]],
 	0xA0: [
 		["flag", OPERAND_U8], ["map_group", OPERAND_U8], ["map_number", OPERAND_U8]
 	],
 	0xA4: [["value", OPERAND_U8]],
+	0xA5: [["landmark", OPERAND_U8], ["string_buffer", OPERAND_U8]],
+	0xA6: [["trainer_group", OPERAND_U8], ["string_buffer", OPERAND_U8]],
+	0xA7: [
+		["name_type", OPERAND_U8], ["value", OPERAND_U8],
+		["string_buffer", OPERAND_U8]
+	],
 	0xA8: [["value", OPERAND_U8]],
-	GETCOINS: [["string_buffer", OPERAND_U8], ["string_buffer_2", OPERAND_U8]],
 }
 
 ## The commands past the seam, on pokegold's numbering.

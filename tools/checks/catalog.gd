@@ -26,9 +26,9 @@ const RED_GYARADOS: int = 130
 ## Per game: total rows, and the count under each kind in
 ## [constant Gen2WorldCatalog.KINDS]' own order.
 const EXPECTED_CENSUS: Dictionary = {
-	&"gold": [465, 3, 9, 15, 8, 9, 352, 16, 53],
-	&"silver": [465, 3, 9, 15, 8, 9, 352, 16, 53],
-	&"crystal": [532, 3, 11, 14, 9, 6, 419, 16, 54],
+	&"gold": [449, 3, 9, 15, 8, 9, 352, 16, 37],
+	&"silver": [449, 3, 9, 15, 8, 9, 352, 16, 37],
+	&"crystal": [516, 3, 11, 14, 9, 6, 419, 16, 38],
 }
 
 ## The legendaries and set pieces every profile has to place, and at what level.

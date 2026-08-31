@@ -908,12 +908,17 @@ func test_talking_to_a_rock_asks_and_then_smashes_it() -> void:
 	)
 	# Answered on the world rather than through Gen2WorldHost, which would want
 	# audio data this synthetic cache does not carry.
-	var completed: Array = world.complete_runtime_request({"ok": true})
-	assert_eq(completed[0]["status"], &"complete", JSON.stringify(completed))
+	var shaken: Array = world.complete_runtime_request({"ok": true})
+	assert_eq(shaken[0]["status"], &"waiting", JSON.stringify(shaken))
 	assert_true(
-		_has_event(completed[0]["events"], &"screen_shake_requested"),
-		"earthquake 84 is reported"
+		_has_event(shaken[0]["events"], &"screen_shake_requested"),
+		"earthquake 84 is its own applymovement"
 	)
+	assert_not_null(world.object_at(ROCK_CELL), "the rock stands until the shake ends")
+
+	# The shake's own `step_sleep`, then the rock's `rock_smash 10`.
+	var completed: Array = world.finish_script_waits()
+	assert_eq(completed[0]["status"], &"complete", JSON.stringify(completed))
 	assert_null(world.object_at(ROCK_CELL), "disappear LAST_TALKED took the rock")
 	assert_true(world.can_walk_to(ROCK_CELL))
 
@@ -932,7 +937,8 @@ func test_a_talked_rock_that_rolls_an_encounter_asks_for_a_battle() -> void:
 	world.run_event_queue(true)
 	world.choose_script_input(0)
 	world.run_event_queue(true)
-	var after_sound: Array = world.complete_runtime_request({"ok": true})
+	world.complete_runtime_request({"ok": true})
+	var after_sound: Array = world.finish_script_waits()
 	assert_eq(after_sound[0]["status"], &"waiting", JSON.stringify(after_sound))
 	var request: Dictionary = after_sound[0]["event"]["request"]
 	assert_eq(request["kind"], &"battle_requested")

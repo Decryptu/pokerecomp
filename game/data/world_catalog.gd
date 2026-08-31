@@ -514,6 +514,9 @@ func _record_script_site(
 			## `db dialog_id / dw mart_id`, so the dialog is the byte and the
 			## mart index the word behind it.
 			var mart: int = int(command.get("address", 0))
+			## `world_mart` answers an out-of-range index with a default shelf.
+			if mart < 0 or mart >= _data.world_mart_count():
+				return
 			_add(KIND_SHOP, bank, address, offset, {
 				"mart": mart,
 				"dialog": int(command.get("value", 0)),
