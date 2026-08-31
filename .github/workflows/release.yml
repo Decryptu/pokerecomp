@@ -520,6 +520,10 @@ jobs:
           # anyone noticed; dropped here rather than trusted to be remembered.
           notes="$(sed '/^<!--/,/-->$/d' .github/release-notes.md \
             | sed "s/{VERSION}/${v}/g" | sed '/./,$!d')"
+          # An unclosed editing note swallows the whole file, which is how
+          # 0.1.17 shipped with no body at all and the job still said success.
+          grep -q '^## ' <<<"$notes" \
+            || { echo "::error::release notes rendered no sections"; exit 1; }
           gh release create "${{ needs.version.outputs.tag }}" \
             --title "$v" --notes "$notes" staged/*
 
