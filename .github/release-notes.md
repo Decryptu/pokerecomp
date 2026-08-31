@@ -3,39 +3,20 @@ standing text and only takes {VERSION}. One line per paragraph, per bullet and
 per table row: GitHub reflows a release body to the reader's window, and a line
 break put in by hand only makes it ragged.
 
-It is a changelog, not an essay. `## Added`, `## Changed`, `## Fixed`, one
-bullet per change, and no opening sentence summarising the release: a reader
-scanning for their own bug does not want a paragraph about the shape of the
-work. No `**Bold label.**` in front of a bullet, no contrast frame on every
-line ("X rather than Y", "not X, Y"), and no em-dash. `CLAUDE.md`'s "Writing"
-section is the whole rule; a reader called an earlier body AI-written and was
-right. -->
+It is a changelog, not an essay. `## Added
 
-## Added
-
-- Every in-game trade is a conversation. The trader's offer and its yes/no, the party list, the refusal for a cancel and the one for the wrong Pokemon, the cable line, the thanks and the fanfare, with the map's music back behind the last box. All seven swapped in silence before.
-- A trade happens once. Each of the seven has its own flag, and the trader asks after the Pokemon it took when you talk to it again.
-- The stats screen animates the Pokemon and plays its cry. On Crystal a fainted, frozen or sleeping one is silent there; on Gold and Silver it sounds whatever its status.
-- "You can't get off here!" on Routes 16 and 17. The Bicycle's other two lines come out of the cartridge now with your own name in them, and it says the same thing used from SELECT as from the pack.
-- The Bug Catching Contest plays its own music.
-- Fly, Teleport and loading a save scatter Raikou and Entei across Johto.
-- The party menu answers ABLE or NOT ABLE beside each Pokemon while you are teaching a TM or HM or holding an evolution stone, and its gender while the Day-Care or a trader is asking, in the column the HP bar sits in the rest of the time.
+- Sixty-six people, Pokemon and trainers move the way their map row says. A Pokemon standing in as a map object alternates its two drawings; the eighteen objects on the two spinning rows hold a facing for thirty-two frames and take the next off their own table, which for fourteen trainers is the direction they are watching.
 
 ## Fixed
 
-- Raikou and Entei moved on every map load. They move when you cross a map connection, walk through a door, fall through a floor or ride the magnet train.
-- Which map a roaming Pokemon refuses to move onto, and whether a scatter may leave one where it stood. Both rules were the wrong way round.
-- The Radio Tower's five floors kept whatever was playing outside them, and Mahogany Mart played the Suicune battle theme.
-- Mounting the bike or starting to surf replayed the map's own track, and the right piece only turned up on the next map.
-- The Pokemon a trade gives you took the slot the one you gave up left. It arrives last in the party.
-- A traded Pokemon carried no gift landmark and the wrong gender.
-- The stats screen and an evolution drew the Pokemon unmirrored and centred. It is mirrored and stands against the far column now, and an Unown draws the letter its DVs pick.
-- A Pokemon at level 100 had its level drawn a cell too wide, over the HP bar, in the party menu, the battle screen, the stats page, Bill's PC and the Hall of Fame.
-- A caller telling you about a rare Pokemon on their route always read the morning table.
-- Dig, an Escape Rope and Teleport printed their line over the map they arrived on rather than the one they left.
-- Strength's cry and its second line were missing when it was used from the party menu.
-- Strength, Flash and Teleport's return each cost a button press the cartridge does not ask for.
-- The item PC refused to take a key item.
+- Route 29's catching tutorial played as an ordinary wild battle. The Dude sat on the battle menu for thirty-four seconds with your own buttons still live; he now reaches the pack and throws the ball on the frame the cartridge does.
+- Mom talked about the Bank of Mom without turning to look at you, and so did Tim, Emy, Kim and the Copycat. Twenty-eight conversations on Crystal and twenty-five on Gold and Silver lost the turn a script owes you when it opens.
+- A conversation that paused on a menu or a question dropped everything the commands in front of it had already done.
+- A step an NPC was refused left it facing the way it started.
+- An NPC could wander off the edge of the screen. It stops where the cartridge stops it, whatever its movement radius allows.
+- The cell an NPC is walking out of did not block until it arrived, so two of them could stand on one tile.
+- A fast random spin could stand twice on the same facing.
+- A rolled step wait of zero passed instantly instead of lasting 256 passes.
 
 `api_version` stays 29 and nothing on the boundary moved.
 
