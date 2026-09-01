@@ -2425,8 +2425,6 @@ func _on_unown_puzzle_closed(solved: bool) -> void:
 func _open_slot_machine(request: Dictionary) -> bool:
 	if _slot_machine_host != null or _world == null or _data == null:
 		return false
-	if _refuse_coin_game(request):
-		return false
 	var values: Dictionary = request.get("values", {})
 	var host := Gen2SlotMachineScreen.new()
 	## The bias, the reel manipulation and both streak rolls come off the
@@ -2466,31 +2464,11 @@ func _on_slot_machine_closed(coins: int) -> void:
 	}))
 
 
-## `CheckCoinsAndCoinCase`'s `scf`. The guard is the special's, so a request
-## without one is a preview naming its own balance.
-func _refuse_coin_game(request: Dictionary) -> bool:
-	if not (request.get("values", {}) as Dictionary).has("special"):
-		return false
-	var line: String = Gen2WorldPack.coin_game_refusal(_world.state)
-	if line.is_empty():
-		return false
-	if _text_box != null and _text_box.font != null:
-		_apply_text_box_options()
-		_text_awaits_press = false
-		_text_box.show_text(line, false)
-		_text_box.visible = true
-	_script_prompt = line
-	_refresh_labels()
-	return true
-
-
 ## `special CardFlip`. Its objects are drawn in `wOBPals1` palette 0, which
 ## `CardFlip_InitAttrPals` never writes, so the map's own `PAL_OW_RED` is handed
 ## over with the request.
 func _open_card_flip(request: Dictionary) -> bool:
 	if _card_flip_host != null or _world == null or _data == null:
-		return false
-	if _refuse_coin_game(request):
 		return false
 	var values: Dictionary = request.get("values", {})
 	var host := Gen2CardFlipScreen.new()

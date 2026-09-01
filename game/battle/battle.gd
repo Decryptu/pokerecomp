@@ -570,6 +570,8 @@ var _pending_switch_offer: int = -1
 ## `wOptions`' BATTLE_SHIFT bit, as the caller's own setting rather than a read
 ## of the options file: the engine is scene-free and takes its rules injected.
 var battle_style_set: bool = false
+## `CheckBattleScene`'s answer, injected the same way and read by `present` alone.
+var battle_scene_on: bool = true
 
 ## Whether `AskUseNextPokemon` was answered for the faint standing. Asked once,
 ## a NO whose run fails falling through to `ForcePlayerMonChoice`.

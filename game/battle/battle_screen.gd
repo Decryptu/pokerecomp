@@ -1355,10 +1355,10 @@ func entrance_running() -> bool:
 ## it there. Every caller that has just built a battle reaches this, which is the
 ## same order the source uses, `InitBattleDisplay` before `BattleStartMessage`.
 func _init_battle_display() -> void:
-	## `wOptions`' BATTLE_SHIFT bit. The engine takes it injected rather than
-	## reading the options file itself, since it is scene-free; this is the one
-	## place every battle here passes through.
+	## The engine is scene-free, so `wOptions` is injected here, the one place
+	## every battle passes through.
 	_battle.battle_style_set = Gen2OptionsStore.current().battle_style_set
+	_battle.battle_scene_on = Gen2OptionsStore.current().battle_scene
 	## `InitBattleDisplay` draws both pics, so the letters start from the party
 	## the same way the species above do; every later change is a send-out.
 	_enemy_unown_form = Gen2Battle.unown_form_of(_battle.enemy)

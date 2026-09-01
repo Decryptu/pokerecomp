@@ -48,7 +48,7 @@ func _write_card_flip_script() -> void:
 	RomCache.write_json(RomCache.world_scripts_path(directory), scripts)
 
 
-func _open_world() -> void:
+func _open_world(carrying_case: bool = true) -> void:
 	var packed: PackedScene = load("res://game/world/world_screen.tscn")
 	_world_screen = packed.instantiate() as Gen2WorldScreen
 	_world_screen.map_group = Fixture.MAP_GROUP
@@ -57,7 +57,12 @@ func _open_world() -> void:
 	## `wCoins` is set where the state is built: nothing writes it outside a
 	## world transaction, which is the boundary the table's own result goes
 	## through when it closes.
-	var state := Gen2WorldState.new({}, {}, {}, {}, COINS)
+	## `CheckCoinsAndCoinCase` stands in front of `StartGameCornerGame` and
+	## asks the bag as well as the balance, so the case is in it.
+	var state := Gen2WorldState.new(
+		{}, {}, {Gen2WorldPack.ITEM_COIN_CASE: 1} if carrying_case else {},
+		{}, COINS if carrying_case else 0
+	)
 	var world: Gen2WorldAPI = Gen2WorldAPI.open(
 		_data, Fixture.MAP_GROUP, Fixture.MAP_NUMBER, PLAYER_CELL, state
 	)
@@ -163,3 +168,21 @@ func test_a_played_round_reaches_the_world_state() -> void:
 		_world_screen._world.state.coins(), walked,
 		"the balance the table left must reach the world"
 	)
+
+
+## `CheckCoinsAndCoinCase`'s `scf`, which `CardFlip` answers with `ret c`:
+## `StartGameCornerGame` never runs, `_NoCoinsText` ends in `prompt` and so owes
+## a press of its own, and the map is the player's again once it is spent.
+func test_an_empty_purse_leaves_the_table_shut() -> void:
+	await _open_world(false)
+	_run_script()
+	assert_null(_host(), "no coins must not open the table")
+	assert_true(_world_screen._text_awaits_press, "the line ends in `prompt`")
+	assert_false(_world_screen.move_player(Vector2i.RIGHT), "the box holds the map")
+	for _frame: int in 240:
+		if not _world_screen._world.script_busy():
+			break
+		_world_screen.advance_frame()
+		_world_screen.press_button(Gen2Button.A)
+	assert_false(_world_screen._world.script_busy(), "the press ends the script")
+	assert_true(_world_screen.move_player(Vector2i.RIGHT))
