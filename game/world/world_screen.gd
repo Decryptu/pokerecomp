@@ -1347,10 +1347,6 @@ func press_button(button: int) -> bool:
 	return _handle_button(button)
 
 
-## Routes one button to whatever owns the screen, and reports whether anything
-## took it. A pause that owns the world swallows every button rather than
-## refusing the ones it has no use for, which is what keeps a stray press from
-## reaching the map behind it.
 ## The overlays that own the whole screen, in the order a press is offered them.
 ## Each runs with the map loop suspended behind it, by `givepoke`, `opentext` or
 ## a `special` of its own, and owns every button until its own exit.
@@ -1400,8 +1396,12 @@ func _handle_button(button: int) -> bool:
 	## First, because a battle hides the map entirely and owns every button while
 	## it does. The fight takes it through this funnel rather than reading events
 	## of its own, so a press inside a battle is recorded once, by the world, and
-	## a replayed log reaches the fight (`tools/replay_world.gd`).
-	if _battle_host != null:
+	## a replayed log reaches the fight (`tools/replay_world.gd`). An overlay the
+	## fight opened stands in front of it and takes the press: unconditional here,
+	## `NewPokedexEntry`'s page never saw its B and a first catch of a species
+	## froze with the entry on screen.
+	if _battle_host != null and not _any_host_open(OVERLAY_HOSTS) \
+		and not _any_host_open(ANSWERING_HOSTS):
 		_battle_host.press_button(button)
 		return true
 	if _input_locked():
@@ -4662,9 +4662,34 @@ func preview_catch_nickname() -> bool:
 	return false
 
 
-## Enough for the battle's own opening, the throw and the shakes, each of which
-## is a box printing at the OPTION screen's own speed.
+## Enough for the battle's own opening, the throw and the shakes, each a box
+## printing at the OPTION screen's own speed.
 const CATCH_NICKNAME_FRAMES: int = 1200
+
+
+func preview_catch_dex() -> bool:
+	if _world == null or _world.state == null:
+		return false
+	_world.state.set_engine_flag(Gen2WorldStartMenu.ENGINE_POKEDEX, true)
+	preview_capture()
+	settle_battle_transition()
+	for _frame: int in CATCH_NICKNAME_FRAMES:
+		if _battle_host == null:
+			return false
+		if _preview_throw_master_ball():
+			break
+		_battle_host.advance_hardware_frame()
+	for _frame: int in CATCH_NICKNAME_FRAMES:
+		if _pokedex_host != null:
+			_script_prompt = "New dex entry"
+			_refresh_labels()
+			return true
+		if _battle_host == null:
+			return false
+		_battle_host.finish()
+		_battle_host.advance()
+		_battle_host.advance_hardware_frame()
+	return false
 
 
 ## Public screenshot driver for a resolved imported wild encounter. It uses the
@@ -5111,9 +5136,8 @@ func _on_capture_requested(ball: int) -> void:
 	_refresh_labels()
 
 
-## `NewPokedexEntry` behind `Text_GotchaMonWasCaught`: the page stands over the
-## battle, and the battle waits for it. The world opens it because the world owns
-## the dex; a cache with no entry for the species answers straight away.
+## `NewPokedexEntry` behind `Text_GotchaMonWasCaught`, which the battle waits
+## for. A cache with no entry for the species answers straight away.
 func _on_battle_dex_entry_requested(species: int) -> void:
 	if _battle_host == null:
 		return
@@ -5121,8 +5145,6 @@ func _on_battle_dex_entry_requested(species: int) -> void:
 		_battle_host.complete_dex_entry()
 
 
-## `UseDisposableItem` inside a battle: the effect has already landed on the
-## party the battle owns, so all the world does is take the row down by one.
 ## `InitNickname` behind `PokeBallEffect`'s own `YesNoBox`. The battle screen
 ## owns the question and the keyboard, because the routine runs inside the
 ## fight; the row it names is on the save this screen handed the catch.
@@ -5140,6 +5162,8 @@ func _apply_capture_nickname(capture: Dictionary) -> void:
 		_script_prompt = "Nickname refused: %s" % String(named.get("reason", "unknown"))
 
 
+## `UseDisposableItem` inside a battle: the effect has already landed on the
+## party the battle owns, so all the world does is take the row down by one.
 func _on_battle_item_used(item: int, _target: int) -> void:
 	if _world == null or _world.inventory == null:
 		return
@@ -7735,11 +7759,15 @@ func _open_pokedex_entry(request: Dictionary) -> bool:
 	if species <= 0:
 		return false
 	var host := Gen2PokedexScreen.new()
+	## The fight that asked for the page draws on a screen of its own: given the
+	## world's, the page is drawn under the battle and nobody can see it.
+	host.set_screen(
+		_battle_host.hardware_screen() if _battle_host != null else _screen
+	)
 	if not host.open_entry(_data, _world, species):
 		host.free()
 		return false
 	host.z_index = 10
-	host.set_screen(_screen)
 	add_child(host)
 	host.closed.connect(_on_pokedex_entry_closed)
 	host.cry_requested.connect(_on_pokedex_cry_requested)

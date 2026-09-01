@@ -3150,6 +3150,11 @@ func _is_bug_contest_battle() -> bool:
 	return _battle != null and _battle.battle_type == Gen2Battle.BATTLETYPE_CONTEST
 
 
+## The screen the fight draws on, for an overlay the world opens over it.
+func hardware_screen() -> Gen2Screen:
+	return _screen
+
+
 func _capture_failure(reason: StringName) -> Dictionary:
 	return {"ok": false, "reason": reason}
 

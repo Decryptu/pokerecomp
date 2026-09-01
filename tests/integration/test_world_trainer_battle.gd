@@ -2139,6 +2139,54 @@ func test_a_first_catch_says_its_dex_line_and_asks_for_the_page() -> void:
 	assert_eq(asked.size(), 1, "and the page was asked for once")
 
 
+## `NewPokedexEntry` stands in front of the fight that asked for it, so the B
+## that closes the page has to reach the page. Routed to the battle, that press
+## was swallowed by a fight already waiting on the page and neither ever moved:
+## a first catch of a species froze with the entry on screen.
+func test_the_new_dex_page_takes_the_press_that_closes_it() -> void:
+	await _open_world()
+	_world_screen._world.state.set_engine_flag(Gen2WorldState.ENGINE_POKEDEX, true)
+	assert_true(bool(_world_screen._world.state.apply_changes(
+		{}, {}, {"items": {Gen2WorldPartyHost.ITEM_MASTER_BALL: 1}}
+	).get("ok", false)))
+	_world_screen.preview_wild_encounter()
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var host: Gen2BattleScreen = _battle_host()
+	assert_not_null(host)
+	assert_true(host.begin_capture()["ok"])
+	assert_true(host.select_capture_ball(
+		host.available_capture_balls().find(Gen2WorldPartyHost.ITEM_MASTER_BALL)
+	)["ok"])
+	assert_true(host.throw_capture_ball()["ok"])
+	_settle_frames(host)
+	for _frame: int in 1200:
+		if _world_screen.get("_pokedex_host") != null:
+			break
+		_world_screen.press_button(Gen2Button.A)
+		_world_screen.advance_frame()
+	var page: Gen2PokedexScreen = _world_screen.get("_pokedex_host")
+	assert_not_null(page, "the page opened over the fight")
+	assert_eq(
+		page.get("_screen"), host.hardware_screen(),
+		"and drew on the fight's own screen rather than under it"
+	)
+
+	_world_screen.press_button(Gen2Button.B)
+	assert_null(_world_screen.get("_pokedex_host"), "and the page took the press")
+	for _frame: int in 1200:
+		if host.get("_capture_nickname_host") != null:
+			break
+		_world_screen.press_button(Gen2Button.A)
+		_world_screen.advance_frame()
+	assert_not_null(
+		host.get("_capture_nickname_host"),
+		"the catch runs on to `AskGiveNicknameText` behind the page"
+	)
+	await get_tree().process_frame
+
+
 ## A species already in the dex adds no data and opens no page.
 func test_a_catch_of_a_known_species_says_no_dex_line() -> void:
 	await _open_world()
