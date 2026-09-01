@@ -323,15 +323,13 @@ const DIRECTIONAL_WARPS: Dictionary = {
 }
 
 
-## CheckDirectionalWarp: a carpet clears carry, so `CheckWarpTile` refuses it and
-## the step that lands on one takes no warp. Only `DoPlayerMovement.CheckWarp`
+## CheckDirectionalWarp: a carpet clears carry, so only `DoPlayerMovement.CheckWarp`
 ## takes these, and only for the one direction the carpet names.
 static func is_directional_warp(collision_code: int) -> bool:
 	return DIRECTIONAL_WARPS.values().has(collision_code)
 
 
-## Which direction [param collision_code] has to be walked in to warp, or
-## Vector2i.ZERO when it is not a carpet.
+## The direction [param collision_code] warps in, Vector2i.ZERO for no carpet.
 static func directional_warp_direction(collision_code: int) -> Vector2i:
 	for direction: Vector2i in DIRECTIONAL_WARPS:
 		if int(DIRECTIONAL_WARPS[direction]) == collision_code:

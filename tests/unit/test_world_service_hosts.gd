@@ -591,6 +591,62 @@ func _write_services_at(directory: String) -> void:
 	})
 
 
+## `Elevator`'s `.FindCurrentFloor` fails with `scf` when the backup map is on no
+## floor row, and `Script_elevator`'s `ret c` swallows it: the car draws no menu,
+## wScriptVar stays FALSE and the script runs on. It is not a refused request.
+func test_an_elevator_that_cannot_place_itself_leaves_the_script_running() -> void:
+	_set_elevator_script()
+	assert_eq(_world.backup_warp, {})
+	var waiting: Array = _world.dispatch_script_events(Vector2i(7, 6))
+	assert_eq(waiting[0]["status"], &"waiting")
+	assert_eq(_world.pending_runtime_request()["kind"], &"elevator_requested")
+	var resolved: Dictionary = Gen2WorldHost.resolve_runtime_request(_world)
+	assert_true(bool(resolved["ok"]), JSON.stringify(resolved))
+	assert_eq(int(resolved["data"]["elevator"]["current"]), -1)
+	var complete: Dictionary = Gen2WorldHost.complete_runtime_request(
+		_world, {"ok": true}, _save, false
+	)
+	assert_eq(complete["results"][0]["status"], &"complete", JSON.stringify(complete))
+
+
+## The same list with the backup warp standing on one of its rows, which is every
+## ordinary ride.
+func test_an_elevator_places_itself_on_the_backup_warps_floor() -> void:
+	_set_elevator_script()
+	_world.backup_warp = {
+		"map_group": Fixture.MAP_GROUP, "map_number": Fixture.MAP_NUMBER, "warp": 1,
+	}
+	_world.dispatch_script_events(Vector2i(7, 6))
+	var resolved: Dictionary = Gen2WorldHost.resolve_runtime_request(_world)
+	assert_eq(int(resolved["data"]["elevator"]["current"]), 1)
+
+
+## `elevfloor`'s two rows behind a `Script_elevator` on the fixture's coord event.
+## The first row names a map nothing here stands on; the second is this map.
+func _set_elevator_script() -> void:
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(Fixture.directory()))
+	scripts[Gen2WorldScript.pointer_key(Fixture.BANK, 0x6300)] = [
+		0x95, 0x10, 0x40, 0x91,
+	]
+	scripts[Gen2WorldScript.pointer_key(Fixture.BANK, 0x4010)] = [
+		2, 4, 4, 21, 5, 5, 3, Fixture.MAP_GROUP, Fixture.MAP_NUMBER, 0xFF,
+	]
+	RomCache.write_json(RomCache.world_scripts_path(Fixture.directory()), scripts)
+	var maps: Array = RomCache.read_json(RomCache.world_maps_path(Fixture.directory()))
+	for raw: Dictionary in maps:
+		if int(raw.get("group", -1)) != Fixture.MAP_GROUP \
+		or int(raw.get("number", -1)) != Fixture.MAP_NUMBER:
+			continue
+		var events: Dictionary = raw.get("events", {})
+		events["coord_events"] = [{"x": 7, "y": 6, "script": 0x6300}]
+		raw["events"] = events
+	RomCache.write_json(RomCache.world_maps_path(Fixture.directory()), maps)
+	_data = GameData.open_directory(Fixture.directory())
+	_world = Gen2WorldAPI.open(
+		_data, Fixture.MAP_GROUP, Fixture.MAP_NUMBER, Vector2i(7, 6), _world.state
+	)
+
+
 func _set_mart_script(dialog_id: int = Gen2WorldMartHost.MARTTYPE_STANDARD) -> void:
 	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(Fixture.directory()))
 	scripts[Gen2WorldScript.pointer_key(Fixture.BANK, 0x6300)] = [0x94, dialog_id, 0x00, 0x40, 0x91]

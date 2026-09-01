@@ -3,11 +3,9 @@ extends RefCounted
 
 ## `MoveTutor` and `CheckCanLearnMoveTutorMove` (`engine/events/move_tutor.asm`),
 ## the rules half. [Gen2MoveTutorScreen] is the routine and
-## [method Gen2WorldPartyHost.teach_tutor_move] owns the transaction.
-##
-## Crystal only: `TMHMMoves` ends at HM07 on both Gold and Silver, so
-## [method move_for_value] answers 0 there and no map script reaches the special
-## anyway.
+## [method Gen2WorldPartyHost.teach_tutor_move] owns the transaction. Crystal
+## only: `TMHMMoves` ends at HM07 on Gold and Silver, so [method move_for_value]
+## answers 0 there and no map script reaches the special anyway.
 
 ## constants/script_constants.asm's MOVETUTOR_* run, which the map's own
 ## `verticalmenu` leaves in wScriptVar. Its fourth row is CANCEL, which the

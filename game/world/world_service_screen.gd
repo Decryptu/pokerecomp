@@ -535,6 +535,11 @@ func open_quick_save(
 func _open_elevator(elevator: Dictionary) -> void:
 	_mode = MODE.ELEVATOR
 	_elevator = elevator.duplicate(true)
+	if int(_elevator.get("current", -1)) < 0:
+		## `.FindCurrentFloor`'s `jr c, .quit` is in front of
+		## `Elevator_AskWhichFloor`; `completed` is connected after this returns.
+		_finish_runtime.call_deferred({"ok": true})
+		return
 	_elevator_scroll = 0
 	## `ld a, 1` is the header's default option, and `xor a / ld
 	## [wMenuScrollPosition], a` puts the window at the top whatever floor the

@@ -321,9 +321,9 @@ static func _resolve_elevator(world: Gen2WorldAPI, values: Dictionary) -> Dictio
 			"ok": false,
 			"reason": StringName(floors.get("reason", &"elevator_data_unavailable")),
 		}
-	## `.FindCurrentFloor` walks the list for the row whose map is the
-	## backup warp's, and quits the whole routine when none is: the car
-	## does not know where it is standing, so it does not move.
+	## `.FindCurrentFloor` walks the list for the row whose map is the backup
+	## warp's, and its failure is a `scf` `Script_elevator`'s `ret c` swallows.
+	## So -1 is a ride that does not happen, never a refused request.
 	var rows: Array = floors["floors"]
 	var current: int = -1
 	for index: int in rows.size():
@@ -332,8 +332,6 @@ static func _resolve_elevator(world: Gen2WorldAPI, values: Dictionary) -> Dictio
 			and int(row["map_number"]) == int(world.backup_warp.get("map_number", -1)):
 			current = index
 			break
-	if current < 0:
-		return {"ok": false, "reason": &"elevator_floor_unknown"}
 	return {
 		"ok": true,
 		"data": {"elevator": {"floors": rows, "current": current}},

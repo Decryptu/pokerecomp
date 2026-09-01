@@ -2735,12 +2735,9 @@ static func magikarp_beats_record(length: Vector2i, record: Dictionary) -> bool:
 	return length.y > int(record.get("inches", 0))
 
 
-## `CheckForLuckyNumberWinners`, as one walk over the ID numbers the party
-## mirror carries. [param stored_ids] and [param stored_species] are every box
-## slot in one list, which is what the source's open-box pass plus its
-## `.BoxesLoop` skipping `wCurBox` add up to. Answers `{script_value, species,
-## in_storage}`, where a zero script value is the routine's own "found nothing"
-## and leaves both boxes unprinted.
+## `CheckForLuckyNumberWinners`. [param stored_ids] and [param stored_species] are
+## every box slot in one list, which is the source's open-box pass plus its
+## `.BoxesLoop` skipping `wCurBox`. A zero script value is "found nothing".
 static func lucky_number_match(
 	lucky_id: int, party_ids: Array, party_species: Array, party_eggs: Array,
 	stored_ids: Array, stored_species: Array
