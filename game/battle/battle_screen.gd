@@ -3918,15 +3918,15 @@ func _finish_world_battle() -> void:
 
 ## What `BattleEnd_HandleRoamMons` reads out of `wEnemyMon` on the way out of a
 ## wild battle: the species it was, the HP it is leaving on and the DVs it was
-## built with. Empty when there is no enemy to read, which is every path that
-## ends before one exists.
+## built with, plus the level `wEnemyMonLevel` keeps past the fight. Empty when
+## there is no enemy to read, which is every path that ends before one exists.
 func _enemy_battler_record() -> Dictionary:
 	if _battle == null:
 		return {}
 	var enemy: Gen2BattleMon = _battle.party(Gen2Battle.ENEMY).active_mon()
 	if enemy == null:
 		return {}
-	return {"species": enemy.species, "hp": enemy.hp, "dvs": enemy.dvs}
+	return {"species": enemy.species, "hp": enemy.hp, "dvs": enemy.dvs, "level": enemy.level}
 
 
 func _finish_world_capture(capture: Dictionary) -> void:

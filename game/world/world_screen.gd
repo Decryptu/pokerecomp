@@ -137,6 +137,8 @@ var _script_fade_white: bool = false
 ## it has finished.
 var _battle_transition: Gen2BattleTransition = null
 var _battle_transition_request: Dictionary = {}
+## `wEnemyMonLevel`, which `ClearBattleRAM` zeroes only behind the transition.
+var _last_enemy_level: int = 0
 ## `wLandmarkSignTimer` and the window the sign is drawn in. The map load decides
 ## whether there is a sign (`Gen2WorldAPI.map_name_sign_pending`); the sixty
 ## passes it stands for are spent here, like every other overworld countdown.
@@ -4948,7 +4950,8 @@ func _start_battle_request(request: Dictionary) -> void:
 
 
 ## `StartTrainerBattle_DetermineWhichAnimation`'s two bits, and the ball only a
-## trainer's own transition draws.
+## trainer's own transition draws. What the lead is measured against is the
+## PREVIOUS battle's enemy, which `docs/bugs_and_glitches.md` calls out.
 func _build_battle_transition(request: Dictionary) -> Gen2BattleTransition:
 	if _world == null or _data == null:
 		return null
@@ -4964,9 +4967,8 @@ func _build_battle_transition(request: Dictionary) -> Gen2BattleTransition:
 	## wavy outro belong to.
 	var cave: bool = environment in Gen2WorldAPI.CAVE_ENVIRONMENTS
 	var lead: int = _battle_lead_level()
-	var opponent: int = int(values.get("level", lead))
 	return Gen2BattleTransition.create(
-		lead + Gen2BattleTransition.STRONGER_MARGIN < opponent,
+		lead + Gen2BattleTransition.STRONGER_MARGIN < _last_enemy_level,
 		cave,
 		int(values.get("trainer_class", 0)) > 0,
 		_render_time_of_day() == Gen2WorldPalette.TIME_DARK,
@@ -4975,13 +4977,16 @@ func _build_battle_transition(request: Dictionary) -> Gen2BattleTransition:
 	)
 
 
-## `wBattleMonLevel`, which is the party's own lead rather than the battle's:
-## the transition is picked before `InitBattleMon` has run.
+## `wBattleMonLevel` as `FindFirstAliveMonAndStartBattle` writes it in front of
+## the transition: the first party member with HP left, not the lead.
 func _battle_lead_level() -> int:
 	var save: Gen2SaveData = _injected_save if _injected_save != null \
 		else _selected_runtime_save()
 	if save == null or save.party.is_empty():
 		return 1
+	for mon: Gen2SaveMon in save.party:
+		if mon != null and mon.hp > 0:
+			return int(mon.level)
 	return int((save.party[0] as Gen2SaveMon).level)
 
 
@@ -5294,6 +5299,10 @@ func _on_battle_finished(result: Dictionary) -> void:
 	if _world == null:
 		return
 	_last_battle_outcome = StringName(result.get("outcome", &""))
+	## `wEnemyMon` outlives the fight; the next transition reads its level.
+	var last_enemy: Variant = result.get("enemy", {})
+	if last_enemy is Dictionary and (last_enemy as Dictionary).has("level"):
+		_last_enemy_level = int((last_enemy as Dictionary)["level"])
 	_record_roam_battle(result)
 	if not _link_battle_peer.is_empty():
 		_record_link_battle(result)

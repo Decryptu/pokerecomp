@@ -1449,6 +1449,57 @@ func test_the_battle_track_is_chosen_before_the_transition_on_one_driver() -> vo
 	assert_eq(driver.get_parent(), _world_screen)
 
 
+## `FindFirstAliveMonAndStartBattle` writes `wBattleMonLevel` from the first
+## party member with HP left, and `wEnemyMonLevel` still holds the last battle's
+## enemy because `ClearBattleRAM` runs behind the transition. Both are what
+## `StartTrainerBattle_DetermineWhichAnimation` reads.
+func test_the_transition_reads_the_first_alive_mon_and_the_last_enemy() -> void:
+	await _open_world(true)
+	var save: Gen2SaveData = _world_screen._injected_save
+	while save.party.size() < 2:
+		save.party.append(Gen2SaveMon.from_dict((save.party[0] as Gen2SaveMon).to_dict()))
+	var lead: Gen2SaveMon = save.party[0]
+	var second: Gen2SaveMon = save.party[1]
+	lead.level = 50
+	second.level = 5
+
+	_world_screen._last_enemy_level = 0
+	assert_eq(
+		_world_screen._battle_lead_level(), 50, "the lead while it is still standing"
+	)
+	var request: Dictionary = {"values": {"level": 90, "trainer_class": 1}}
+	var first: Gen2BattleTransition = _world_screen._build_battle_transition(request)
+	assert_not_null(first)
+	assert_eq(
+		first.scene(), &"init",
+		"nothing has been fought yet, so the enemy level compared against is zero"
+	)
+	assert_false(_stronger(first), "level 90 in the request never reaches the choice")
+
+	## A fainted lead hands `wBattleMonLevel` to the next slot with HP.
+	lead.hp = 0
+	assert_eq(_world_screen._battle_lead_level(), 5, "the first alive one")
+
+	_world_screen._on_battle_finished({
+		"outcome": Gen2WorldBattleAdapter.OUTCOME_WON,
+		"enemy": {"species": 1, "hp": 0, "dvs": 0, "level": 40},
+	})
+	assert_eq(_world_screen._last_enemy_level, 40, "`wEnemyMon` outlives the fight")
+	assert_true(
+		_stronger(_world_screen._build_battle_transition(request)),
+		"5 + 3 is under the 40 the last battle left behind"
+	)
+
+
+## Which pair of animations a transition took: `TRANS_STRONGER_F` is bit 0 of
+## `StartingPoints`' index, so the two stronger runs are rows 1 and 3.
+func _stronger(transition: Gen2BattleTransition) -> bool:
+	if transition == null:
+		return false
+	return transition._scene == Gen2BattleTransition.SCENES[1] \
+		or transition._scene == Gen2BattleTransition.SCENES[3]
+
+
 ## `StartBattle`: `DoBattleTransition` owns every frame between the encounter
 ## resolving and the battle screen existing, and the map is what it draws over.
 func test_a_battle_runs_its_transition_before_the_overlay_exists() -> void:

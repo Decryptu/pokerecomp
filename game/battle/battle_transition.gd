@@ -471,10 +471,7 @@ func _zoom_step() -> void:
 ## `ClearSprites` empties shadow OAM, and every background palette is filled with
 ## zero, which is what takes whatever the outro left to black.
 func _finish() -> void:
-	## Added rather than assigned: `..._SpinToBlack.end` and
-	## `..._SpeckleToBlack.done` each spend three `DelayFrame`s of their own
-	## before writing `BATTLETRANSITION_FINISH`, and those are the outro's frames
-	## rather than the tail's.
+	## Added rather than assigned: [constant SPIN_END_FRAMES] belongs to the outro.
 	_delay += TAIL_FRAMES
 	_finished = true
 	_sprites = SPRITES_NONE
