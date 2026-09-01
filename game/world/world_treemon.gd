@@ -2,12 +2,8 @@ class_name Gen2WorldTreemon
 extends RefCounted
 
 ## The headbutt-tree and rock-smash encounter rolls
-## (engine/events/treemons.asm), which share their tables.
-##
-## TreeMonEncounter is four questions: has this map a set, is the set under this
-## profile's limit, does GetTreeMon's score and roll make an encounter, and which
-## row does SelectTreeMon land on. Only the last two are random; the caller
-## resolves the lookups through [GameData]. The generator is required rather than
+## (engine/events/treemons.asm), which share their tables. The caller resolves
+## the lookups through [GameData]; the generator is required rather than
 ## defaulted, so nothing here can roll on an uninjected one.
 
 ## GetTreeScore's three answers (constants/pokemon_data_constants.asm).

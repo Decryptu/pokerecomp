@@ -1914,7 +1914,10 @@ func test_the_party_submenu_switch_row_moves_a_member() -> void:
 	party.handle_button(Gen2Button.A)
 	assert_same(save.party[0], second, "the two traded places")
 	assert_same(save.party[1], first)
-	assert_eq(played, [Gen2PartyScreen.SFX_SWITCH_POKEMON])
+	## `.ClearSprite` runs once per row, so the effect is asked for twice.
+	assert_eq(played, [
+		Gen2PartyScreen.SFX_SWITCH_POKEMON, Gen2PartyScreen.SFX_SWITCH_POKEMON,
+	] as Array[int])
 	assert_eq(int(party.submenu_snapshot()["switch_from"]), -1)
 	assert_eq(party._row_count(), 3, "and CANCEL is back")
 

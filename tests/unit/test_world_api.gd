@@ -1508,6 +1508,58 @@ func test_a_written_command_queue_dies_with_the_map_but_not_with_a_reload() -> v
 	assert_true(world.command_queues().is_empty())
 
 
+## WriteCmdQueue fills the lowest free entry of four and drops the fifth write;
+## DelCmdQueue matches on the type byte and frees the slot for a later write.
+func test_the_command_queue_holds_four_entries_and_deletes_by_type() -> void:
+	var world: Gen2WorldAPI = _stone_table_world([
+		{"warp": STONE_WARP, "object": STONE_OBJECT, "script": STONE_SCRIPT},
+	])
+	for _extra: int in 4:
+		world.apply_command_queue_write(48, 0x6200)
+	assert_eq(world.command_queues().size(), Gen2WorldScript.CMDQUEUE_CAPACITY)
+	for slot_type: int in world.command_queue_types():
+		assert_eq(slot_type, Gen2WorldScript.CMDQUEUE_STONETABLE)
+	var deleted: Dictionary = world.apply_command_queue_delete(
+		Gen2WorldScript.CMDQUEUE_STONETABLE
+	)
+	assert_false(deleted.has("removed"), JSON.stringify(deleted))
+	assert_eq(world.command_queues().size(), Gen2WorldScript.CMDQUEUE_CAPACITY - 1)
+	var missing: Dictionary = world.apply_command_queue_delete(
+		Gen2WorldScript.CMDQUEUE_STONETABLE + 1
+	)
+	assert_false(bool(missing["removed"]), JSON.stringify(missing))
+	# The freed slot is the one the next write takes, which is why the delete is
+	# by slot rather than by a handle.
+	world.apply_command_queue_write(48, 0x6200)
+	assert_eq(world.command_queues().size(), Gen2WorldScript.CMDQUEUE_CAPACITY)
+
+
+## `Script_delcmdqueue`'s operand is a type byte and its `ret c` runs on the found
+## path, so a delete that hits leaves wScriptVar FALSE and one that misses sets
+## it TRUE. The script here sets event 24 only on the found path.
+func test_delcmdqueue_matches_a_type_and_answers_false_when_it_deletes() -> void:
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
+	scripts["48:6270"] = [
+		0x7E, Gen2WorldScript.CMDQUEUE_STONETABLE,
+		Gen2WorldScript.IFTRUE, 0x79, 0x62,
+		Gen2WorldScript.SETEVENT, 24, 0,
+		Gen2WorldScript.END,
+	]
+	scripts["48:6279"] = [Gen2WorldScript.END]
+	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
+	var data: GameData = GameData.open_directory(_directory)
+	for types: Array in [[Gen2WorldScript.CMDQUEUE_STONETABLE, 0, 0, 0], [1, 1, 1, 1]]:
+		var state := Gen2WorldState.new()
+		var runner := Gen2WorldScriptRunner.begin(data, state, {
+			"kind": &"test", "bank": 48, "script": 0x6270,
+		})
+		runner.cmd_queue_types.assign(types)
+		var result: Dictionary = runner.advance()
+		assert_eq(result["status"], &"complete", JSON.stringify(result))
+		var hit: bool = int(types[0]) == Gen2WorldScript.CMDQUEUE_STONETABLE
+		assert_eq(state.is_event_flag_active(24), hit, JSON.stringify(result))
+
+
 ## HandleStoneQueue reads the queue that was written, so a map whose callback
 ## never ran has none and nothing falls.
 func test_no_stone_table_fires_without_a_written_queue() -> void:

@@ -306,8 +306,8 @@ var _player_name: String = ""
 ## trainer ID is. Crystal only: pokegold ships no KrisStateSprites, so a Gold or
 ## Silver world stays male whatever a caller sets.
 var _player_female: bool = false
-var _command_queues: Dictionary = {}
-var _next_command_queue_id: int = 0
+## wCmdQueue: four fixed entries, empty where the type byte is CMDQUEUE_NULL.
+var _command_queue_slots: Array[Dictionary] = _empty_command_queue_slots()
 var _fishing: Gen2WorldFishing = Gen2WorldFishing.new()
 ## Supplies the roaming jumps performed during map setup. A caller that needs a
 ## reproducible route sets its own generator; otherwise map setup randomizes.
@@ -3220,28 +3220,45 @@ func change_block(block_x: int, block_y: int, block: int) -> Dictionary:
 	}
 
 
-func command_queues() -> Array:
-	var out: Array = []
-	for key: Variant in _command_queues:
-		out.append((_command_queues[key] as Dictionary).duplicate(true))
+static func _empty_command_queue_slots() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for _slot: int in Gen2WorldScript.CMDQUEUE_CAPACITY:
+		out.append({})
 	return out
 
 
+func command_queues() -> Array:
+	var out: Array = []
+	for queue: Dictionary in _command_queue_slots:
+		if not queue.is_empty():
+			out.append(queue.duplicate(true))
+	return out
+
+
+## The type byte in each of the four slots, CMDQUEUE_NULL for a free one.
+func command_queue_types() -> Array[int]:
+	var out: Array[int] = []
+	for queue: Dictionary in _command_queue_slots:
+		out.append(int(queue.get("type", Gen2WorldScript.CMDQUEUE_NULL)))
+	return out
+
+
+## `WriteCmdQueue`: the lowest free entry, and no write at all when all four hold.
 func apply_command_queue_write(bank: int, address: int) -> Dictionary:
-	var key: String = "%d:%04X" % [bank, address]
-	var queue_id: int = _next_command_queue_id
-	_next_command_queue_id += 1
-	var queue: Dictionary = {"id": queue_id, "bank": bank, "address": address}
-	# The imported payload, so a written queue carries what it does and not only
-	# where it came from. A queue the cartridge has no entry for stays pointer
-	# only, which is what every type but CMDQUEUE_STONETABLE is.
+	var queue: Dictionary = {"bank": bank, "address": address}
+	# A queue the cartridge has no entry for stays pointer only, which is what
+	# every type but CMDQUEUE_STONETABLE is.
 	if data != null:
 		var record: Dictionary = data.world_command_queue(bank, address)
 		if not record.is_empty():
 			queue["type"] = int(record.get("type", 0))
 			queue["rows"] = record.get("rows", [])
-	_command_queues[key] = queue
-	return {"ok": true, "kind": &"command_queue_written", "queue": _command_queues[key]}
+	for slot: int in _command_queue_slots.size():
+		if not _command_queue_slots[slot].is_empty():
+			continue
+		_command_queue_slots[slot] = queue
+		return {"ok": true, "kind": &"command_queue_written", "queue": queue.duplicate(true)}
+	return {"ok": true, "kind": &"command_queue_written", "queue": queue, "written": false}
 
 
 ## The one-based warp index `HandleStoneQueue.check_on_warp` counts, or 0 when
@@ -3259,12 +3276,10 @@ func warp_index_at(cell: Vector2i) -> int:
 
 
 ## `CmdQueue_StoneTable` and `HandleStoneQueue`, as one question: which script does
-## this boulder's cell fire? The source's own order, all five tests. The object
-## must be a Strength boulder, standing on a pit tile, not mid-step, on a warp
-## event, and named by a written CMDQUEUE_STONETABLE row for that warp; any refusal
-## answers an empty Dictionary. The row's object id is an `object_const_def`
-## constant, which starts at 2, so it is compared against the object's own index
-## plus two, the same mapping `applymovement` uses.
+## this boulder's cell fire? The guards below are the source's own order, and any
+## refusal answers an empty Dictionary. The row's object id is an
+## `object_const_def` constant, which starts at 2, so it is compared against the
+## object's own index plus two, the same mapping `applymovement` uses.
 func stone_queue_script(boulder: Gen2WorldObject) -> Dictionary:
 	if boulder == null or not boulder.is_strength_boulder() or boulder.is_stepping():
 		return {}
@@ -3274,9 +3289,9 @@ func stone_queue_script(boulder: Gen2WorldObject) -> Dictionary:
 	if warp <= 0:
 		return {}
 	var object_id: int = boulder.index + 2
-	for key: Variant in _command_queues:
-		var queue: Dictionary = _command_queues[key]
-		if int(queue.get("type", 0)) != Gen2WorldScript.CMDQUEUE_STONETABLE:
+	for queue: Dictionary in _command_queue_slots:
+		if int(queue.get("type", Gen2WorldScript.CMDQUEUE_NULL)) \
+			!= Gen2WorldScript.CMDQUEUE_STONETABLE:
 			continue
 		for row: Dictionary in queue.get("rows", []):
 			if int(row.get("warp", -1)) != warp or int(row.get("object", -1)) != object_id:
@@ -3287,14 +3302,18 @@ func stone_queue_script(boulder: Gen2WorldObject) -> Dictionary:
 	return {}
 
 
-func apply_command_queue_delete(queue_id: int) -> Dictionary:
-	for key: Variant in _command_queues:
-		var queue: Dictionary = _command_queues[key]
-		if int(queue.get("id", -1)) != queue_id:
+## `DelCmdQueue`: matched on the type byte, and the first slot carrying it.
+func apply_command_queue_delete(queue_type: int) -> Dictionary:
+	for slot: int in _command_queue_slots.size():
+		if int(_command_queue_slots[slot].get("type", Gen2WorldScript.CMDQUEUE_NULL)) \
+			!= queue_type:
 			continue
-		_command_queues.erase(key)
-		return {"ok": true, "kind": &"command_queue_deleted", "queue_id": queue_id}
-	return {"ok": true, "kind": &"command_queue_deleted", "queue_id": queue_id, "removed": false}
+		_command_queue_slots[slot] = {}
+		return {"ok": true, "kind": &"command_queue_deleted", "queue_type": queue_type}
+	return {
+		"ok": true, "kind": &"command_queue_deleted",
+		"queue_type": queue_type, "removed": false,
+	}
 
 
 ## The expanded graphics tile at a map-space tile coordinate, or -1 outside
@@ -3976,11 +3995,7 @@ func run_event_queue(acknowledge: bool = false, choice: int = -1) -> Array:
 				if _object_masks_pending:
 					load_object_masks()
 				break
-			var request: Dictionary = _script_queue.pop_front()
-			_active_script = Gen2WorldScriptRunner.begin(
-				data, state, request, Callable(self, "_validate_script_warp"),
-				script_random
-			)
+			_active_script = _begin_script(_script_queue.pop_front())
 		var result: Dictionary = _active_script.advance(accept, selected_choice)
 		accept = false
 		selected_choice = -1
@@ -4062,11 +4077,7 @@ func _drain_script_queue() -> Array:
 			_queue_map_scene()
 			if _script_queue.is_empty():
 				break
-		var request: Dictionary = _script_queue.pop_front()
-		_active_script = Gen2WorldScriptRunner.begin(
-			data, state, request, Callable(self, "_validate_script_warp"),
-			script_random
-		)
+		_active_script = _begin_script(_script_queue.pop_front())
 		var next: Dictionary = _active_script.advance()
 		if StringName(next.get("status", &"")) == &"waiting":
 			results.append(_apply_result_events(next))
@@ -4637,6 +4648,15 @@ func _script_wild_encounters(event: Dictionary) -> Array:
 	return [{"type": &"wild_encounters_changed", "enabled": enabled}]
 
 
+## The live wCmdQueue types ride along so both queue commands see the map's four.
+func _begin_script(request: Dictionary) -> Gen2WorldScriptRunner:
+	var runner: Gen2WorldScriptRunner = Gen2WorldScriptRunner.begin(
+		data, state, request, Callable(self, "_validate_script_warp"), script_random
+	)
+	runner.cmd_queue_types = command_queue_types()
+	return runner
+
+
 func _script_queue_write(event: Dictionary) -> Array:
 	return [apply_command_queue_write(
 		int(event.get("bank", 0)), int(event.get("address", 0))
@@ -4644,7 +4664,9 @@ func _script_queue_write(event: Dictionary) -> Array:
 
 
 func _script_queue_delete(event: Dictionary) -> Array:
-	return [apply_command_queue_delete(int(event.get("queue_id", -1)))]
+	return [apply_command_queue_delete(
+		int(event.get("queue_type", Gen2WorldScript.CMDQUEUE_NULL))
+	)]
 
 
 ## `wObjectFollow_Leader` and `wObjectFollow_Follower` are one byte each, so a
@@ -6463,7 +6485,7 @@ func _apply_map(
 	# HandleContinueMap behind it runs ClearCmdQueue over every written queue.
 	state.reset_bike_flags(Gen2WorldState.is_crystal_profile(data))
 	state.clear_flash_if_outdoors(target_map.environment)
-	_command_queues.clear()
+	_command_queue_slots = _empty_command_queue_slots()
 	current_map = target_map
 	_map_placements = {}
 	_connected_objects = []

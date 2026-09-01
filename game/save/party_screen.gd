@@ -83,8 +83,7 @@ const PROMPT_TEACH_WHICH: String = "Teach which PKMN?"
 ## `SwitchPartyMons`' own `PARTYMENUACTION_MOVE` string, `MoveToWhereString`.
 const PROMPT_MOVE_TO_WHERE: String = "Move to where?"
 
-## `constants/sfx_constants.asm`'s SFX_SWITCH_POKEMON, which
-## `_SwitchPartyMons.ClearSprite` plays once the two rows have traded places.
+## `constants/sfx_constants.asm`'s SFX_SWITCH_POKEMON.
 const SFX_SWITCH_POKEMON: int = 0x20
 
 ## `_PokemonNotEnoughHPText` and `_ItemCantUseOnMonText`, the two refusals the
@@ -644,7 +643,9 @@ func _finish_switch() -> void:
 		var held: Gen2SaveMon = _save.party[from]
 		_save.party[from] = _save.party[_member_cursor]
 		_save.party[_member_cursor] = held
-		## `SwitchPartyMons` is `WaitPlaySFX`.
+		## `.ClearSprite` runs once per row and ends on `WaitPlaySFX`, so the
+		## effect is asked for twice and the second waits the first out.
+		sfx_requested.emit(SFX_SWITCH_POKEMON, true)
 		sfx_requested.emit(SFX_SWITCH_POKEMON, true)
 	_member_cursor = clampi(_member_cursor, 0, _row_count() - 1)
 	## The icons are respawned rather than stepped: `LoadPartyMenuGFX` and

@@ -11,6 +11,9 @@ extends RefCounted
 var data: GameData = null
 var state: Gen2WorldState = null
 var warp_validator: Callable = Callable()
+## wCmdQueue's four type bytes, set by the caller from the live queue and left as
+## this invocation's writes and deletes leave them.
+var cmd_queue_types: Array[int] = []
 
 var _request: Dictionary = {}
 var _frames: Array = []
@@ -2588,13 +2591,13 @@ func _command_setflag(_opcode: int, command: Dictionary, _bank: int) -> Dictiona
 
 func _command_checkflag(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
 	_script_value = 1 if _engine_flag_active(int(command["flag"])) else 0
+	return {"ok": true}
+
+
 ## `Script_wildon` and `Script_wildoff`, which write
 ## `STATUSFLAGS_NO_WILD_ENCOUNTERS_F` outright rather than through a
 ## staged flag: it is scratch the next map entry does not clear, and the
 ## scripts that turn it off all turn it back on themselves.
-	return {"ok": true}
-
-
 func _command_wildon(_opcode: int, _command: Dictionary, _bank: int) -> Dictionary:
 	_emit_runtime_event(&"wild_encounters_changed", {"enabled": true})
 	return {"ok": true}
@@ -3167,19 +3170,43 @@ func _command_refreshmap(_source_opcode: int, _command: Dictionary, _bank: int) 
 	return {"ok": true}
 
 
+## `Script_writecmdqueue`: `WriteCmdQueue` fills the lowest free entry of four and
+## drops the write when all four are taken, so a full queue is silent.
 func _command_writecmdqueue(_source_opcode: int, command: Dictionary, bank: int) -> Dictionary:
-	_emit_runtime_event(&"command_queue_written", {
-		"bank": bank, "address": int(command.get("address", 0)),
-	})
+	var address: int = int(command.get("address", 0))
+	var slot: int = _cmd_queue_slots().find(Gen2WorldScript.CMDQUEUE_NULL)
+	if slot < 0:
+		return {"ok": true}
+	cmd_queue_types[slot] = _command_queue_type(bank, address)
+	_emit_runtime_event(&"command_queue_written", {"bank": bank, "address": address})
 	return {"ok": true}
 
 
+## `Script_delcmdqueue`, whose operand is the entry's type byte rather than a
+## handle. Its `ret c` runs on the found path, so `wScriptVar` stays FALSE when an
+## entry was deleted and is TRUE only when the type matched nothing.
 func _command_delcmdqueue(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
-	_script_value = 1
-	_emit_runtime_event(&"command_queue_deleted", {
-		"queue_id": int(command.get("value", -1)),
-	})
+	var queue_type: int = int(command.get("value", Gen2WorldScript.CMDQUEUE_NULL))
+	var slot: int = _cmd_queue_slots().find(queue_type)
+	_script_value = 1 if slot < 0 else 0
+	if slot < 0:
+		return {"ok": true}
+	cmd_queue_types[slot] = Gen2WorldScript.CMDQUEUE_NULL
+	_emit_runtime_event(&"command_queue_deleted", {"queue_type": queue_type})
 	return {"ok": true}
+
+
+func _cmd_queue_slots() -> Array[int]:
+	while cmd_queue_types.size() < Gen2WorldScript.CMDQUEUE_CAPACITY:
+		cmd_queue_types.append(Gen2WorldScript.CMDQUEUE_NULL)
+	return cmd_queue_types
+
+
+func _command_queue_type(bank: int, address: int) -> int:
+	if data == null:
+		return Gen2WorldScript.CMDQUEUE_NULL
+	var record: Dictionary = data.world_command_queue(bank, address)
+	return int(record.get("type", Gen2WorldScript.CMDQUEUE_NULL))
 
 
 func _command_playmusic(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
