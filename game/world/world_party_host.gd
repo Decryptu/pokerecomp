@@ -905,9 +905,8 @@ static func groom_outcome(routine: StringName, roll: int, crystal: bool) -> Dict
 ## `StepHappiness`, spent [param times] over: one flat point to every party
 ## member that is not an egg, saturating at 255 rather than wrapping, and
 ## reaching no `HappinessChanges` row at all. The step counter that decides how
-## often is [method Gen2WorldState.count_step]'s.
-## Answers the slots that moved, so a caller can persist only when the walk
-## actually changed something.
+## often is [method Gen2WorldState.count_step]'s. Answers the slots that moved,
+## so a caller can persist only when the walk actually changed something.
 static func apply_step_happiness(save: Gen2SaveData, times: int = 1) -> Array[int]:
 	var moved: Array[int] = []
 	if save == null or times <= 0:
@@ -2208,13 +2207,12 @@ static func _capture_outcome(
 	}
 
 
-## `wFinalCatchRate`: everything `PokeBallEffect` settles between
-## `ld a, [wEnemyMonCatchRate]` and the `call Random` that reads the answer.
-## Split out from the throw because the cartridge can be asked the same question
-## directly: `.claude/oracle/battle/catch_rate.py` runs those instructions on a
-## real dump for a grid of cases, and [param case] is that grid's own row. The
-## keys are the bytes the routine reads, named for the WRAM labels it reads them
-## from.
+## `wFinalCatchRate`: everything `PokeBallEffect` settles between `ld a,
+## [wEnemyMonCatchRate]` and the `call Random` that reads the answer. Split out
+## from the throw because the cartridge can be asked the same question directly:
+## `.claude/oracle/battle/catch_rate.py` runs those instructions on a real dump
+## for a grid of cases, and [param case] is that grid's own row. The keys are
+## the bytes the routine reads, named for the WRAM labels it reads them from.
 static func final_catch_rate(data: GameData, ball: int, case: Dictionary) -> int:
 	var catch_rate: int = _ball_multiplier(data, ball, int(case["base_rate"]), case)
 	## `.skip_or_return_from_ball_fn`'s own `cp LEVEL_BALL`: a Level Ball jumps
@@ -2681,11 +2679,10 @@ static func apply_pokerus_tick(save: Gen2SaveData, days: int) -> bool:
 
 ## `CalcMagikarpLength`, in feet and inches. [param dvs] is MON_DVS' two bytes
 ## and [param player_id] is wPlayerID, read high byte first the way the routine
-## reads it.
-## `.BCLessThanDE`'s `ret c / ret nc` is reproduced rather than fixed: the low
-## byte is never reached, so the row is chosen on the threshold's high byte
-## alone, which is what `MagikarpLengths`' own comment says the table really
-## means. Fixing it would move every length in the game by up to a foot.
+## reads it. `.BCLessThanDE`'s `ret c / ret nc` is reproduced rather than fixed:
+## the low byte is never reached, so the row is chosen on the threshold's high
+## byte alone, which is what `MagikarpLengths`' own comment says the table
+## really means. Fixing it would move every length in the game by up to a foot.
 static func magikarp_length(dvs: PackedByteArray, player_id: int) -> Vector2i:
 	var id_high: int = _rotate_right((player_id >> 8) & 0xFF)
 	var id_low: int = _rotate_right(player_id & 0xFF)
@@ -2739,12 +2736,11 @@ static func magikarp_beats_record(length: Vector2i, record: Dictionary) -> bool:
 
 
 ## `CheckForLuckyNumberWinners`, as one walk over the ID numbers the party
-## mirror carries.
-## [param stored_ids] and [param stored_species] are every box slot in one list,
-## which is what the source's open-box pass plus its `.BoxesLoop` skipping
-## `wCurBox` add up to. Answers `{script_value, species, in_storage}`, where a
-## zero script value is the routine's own "found nothing" and leaves both boxes
-## unprinted.
+## mirror carries. [param stored_ids] and [param stored_species] are every box
+## slot in one list, which is what the source's open-box pass plus its
+## `.BoxesLoop` skipping `wCurBox` add up to. Answers `{script_value, species,
+## in_storage}`, where a zero script value is the routine's own "found nothing"
+## and leaves both boxes unprinted.
 static func lucky_number_match(
 	lucky_id: int, party_ids: Array, party_species: Array, party_eggs: Array,
 	stored_ids: Array, stored_species: Array

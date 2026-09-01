@@ -124,6 +124,7 @@ static func build(game_id: StringName = GAME_ID) -> GameData:
 	_write_unown_puzzle(cache_directory, manifest)
 	_write_slots(cache_directory, manifest)
 	_write_card_flip(cache_directory, manifest)
+	_write_magnet_train(manifest)
 	_write_credits(cache_directory, manifest, crystal_commands)
 	_write_name_input_chars(cache_directory)
 	_write_intro_text(cache_directory, crystal_commands)
@@ -645,6 +646,19 @@ static func _write_unown_puzzle(cache_directory: String, manifest: Dictionary) -
 ## from the cache is a run of the right length per name, since every symbol is
 ## addressed by tile number. The reels *are* the cartridge's, because the rules
 ## read them.
+## `MagnetTrainBGTiles` and `MagnetTrainTilemap`, whose codes only have to be
+## tiles of the tileset's first graphics block, which is what the check on the
+## real cartridges reads them as.
+static func _write_magnet_train(manifest: Dictionary) -> void:
+	var bg: Array = []
+	for cell: int in RomLayout.MAGNET_TRAIN_BG_BYTES:
+		bg.append(cell % RomLayout.TILESET_BLOCK_TILES)
+	var fg: Array = []
+	for cell: int in RomLayout.MAGNET_TRAIN_FG_BYTES:
+		fg.append((cell + 1) % RomLayout.TILESET_BLOCK_TILES)
+	manifest["magnet_train"] = {"bg": bg, "fg": fg}
+
+
 static func _write_slots(cache_directory: String, manifest: Dictionary) -> void:
 	var sheets: Dictionary = manifest.get("tiles", {})
 	var fill: int = 1

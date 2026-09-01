@@ -82,6 +82,7 @@ var _slots: Dictionary = {}
 var _slots_text: Dictionary = {}
 var _card_flip: Dictionary = {}
 var _card_flip_text: Dictionary = {}
+var _magnet_train: Dictionary = {}
 var _gs_intro: Dictionary = {}
 var _trade_anim: Dictionary = {}
 var _menu_text: Dictionary = {}
@@ -186,6 +187,7 @@ const MANIFEST_DICTIONARIES: Dictionary = {
 	"slots_text": "_slots_text",
 	"card_flip": "_card_flip",
 	"card_flip_text": "_card_flip_text",
+	"magnet_train": "_magnet_train",
 	"gs_intro": "_gs_intro",
 	"trade_anim": "_trade_anim",
 	"menu_text": "_menu_text",
@@ -836,9 +838,8 @@ func battle_anim_sine() -> PackedByteArray:
 	return _payload_bytes(value, _blob("battle_anims"))
 
 
-## One `battleanimobj` row as
-## [code]{ flags, y_fix, frameset, function, palette, gfx }[/code], empty when
-## the index is outside `BattleAnimObjects`.
+## One `battleanimobj` row as [code]{ flags, y_fix, frameset, function, palette,
+## gfx }[/code], empty when the index is outside `BattleAnimObjects`.
 func battle_anim_object(index: int) -> Dictionary:
 	var region: Dictionary = battle_anim_region(&"objects")
 	if region.is_empty() or index < 0 or index >= int(region["count"]):
@@ -1209,11 +1210,10 @@ func learnset(number: int) -> Array:
 
 
 ## How a species evolves, as { method, parameter, condition, target }. Empty for
-## the ones that do not.
-## [code]method[/code] is one of the [code]RomLayout.EVOLVE_*[/code] constants and
-## decides what [code]parameter[/code] means: a level, an item, a held item or a
-## time of day. [code]condition[/code] is only ever set by
-## [constant RomLayout.EVOLVE_STAT].
+## the ones that do not. [code]method[/code] is one of the
+## [code]RomLayout.EVOLVE_*[/code] constants and decides what
+## [code]parameter[/code] means: a level, an item, a held item or a time of day.
+## [code]condition[/code] is only ever set by [constant RomLayout.EVOLVE_STAT].
 func evolutions(number: int) -> Array:
 	return _rows(species(number), "evolutions", ["method", "parameter", "condition", "target"])
 
@@ -1686,10 +1686,9 @@ func move_deleter_text(name: String) -> String:
 	return String(_move_deleter_text.get(name, ""))
 
 
-## One of the Day-Care's own boxes, by the name
-## `RomLayout.DAY_CARE_TEXT_RUNS` gives its stub, still carrying
-## [Gen2TextStream]'s markers for the nickname and money it prints. Empty on a
-## cache imported before them.
+## One of the Day-Care's own boxes, by the name `RomLayout.DAY_CARE_TEXT_RUNS`
+## gives its stub, still carrying [Gen2TextStream]'s markers for the nickname
+## and money it prints. Empty on a cache imported before them.
 func day_care_text(name: String) -> String:
 	return String(_day_care_text.get(name, ""))
 
@@ -2157,6 +2156,18 @@ func slots_reel(reel: int) -> PackedByteArray:
 	for symbol: Variant in (stored as Array)[reel] as Array:
 		out.append(int(symbol))
 	return out
+
+
+func magnet_train_tilemap(name: String) -> PackedByteArray:
+	var out := PackedByteArray()
+	for code: Variant in _magnet_train.get(name, []) as Array:
+		out.append(int(code))
+	return out
+
+
+func has_magnet_train() -> bool:
+	return magnet_train_tilemap("bg").size() == RomLayout.MAGNET_TRAIN_BG_BYTES \
+		and magnet_train_tilemap("fg").size() == RomLayout.MAGNET_TRAIN_FG_BYTES
 
 
 ## `SlotsTilemap`, the twelve rows above the text box.
@@ -3226,11 +3237,10 @@ func _coerce_service_value(value: Variant, blob: PackedByteArray) -> Variant:
 	return value
 
 
-## Resolves one cached byte run, whichever way the cache holds it.
-## A record carrying a [constant RomCache.PAYLOAD_KEY] is a span into the
-## section's blob. A bare Array is read inline, which is what a hand-written test
-## fixture holds. The two never have to be told apart by shape: the key says
-## which one this is.
+## Resolves one cached byte run, whichever way the cache holds it. A record
+## carrying a [constant RomCache.PAYLOAD_KEY] is a span into the section's blob.
+## A bare Array is read inline, which is what a hand-written test fixture holds.
+## The two never have to be told apart by shape: the key says which one this is.
 func _payload_bytes(value: Variant, blob: PackedByteArray) -> PackedByteArray:
 	if value is PackedByteArray:
 		return value

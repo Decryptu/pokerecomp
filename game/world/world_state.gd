@@ -47,12 +47,11 @@ const ROAM_ROLL_ATTEMPTS: int = 128
 const SWARM_DUNSPARCE: int = 0
 const SWARM_YANMA: int = 1
 const TEMPORARY_MAP_RELOAD_FLAGS: Array[int] = [0, 1, 2, 3, 4, 5, 6, 7]
-## Crystal maps STATUSFLAGS_HALL_OF_FAME_F through the source engine flag
-## table to ENGINE_CREDITS_SKIP, and the Goldenrod bargain merchant uses the
-## daily ENGINE_GOLDENROD_UNDERGROUND_MERCHANT_CLOSED flag. Both names are
-## Crystal indices, called out explicitly because pokegold's shorter engine
-## flag table (see the badge comment below) puts the same symbol one index
-## lower there.
+## Crystal maps STATUSFLAGS_HALL_OF_FAME_F through the source engine flag table
+## to ENGINE_CREDITS_SKIP, and the Goldenrod bargain merchant uses the daily
+## ENGINE_GOLDENROD_UNDERGROUND_MERCHANT_CLOSED flag. Both names are Crystal
+## indices, called out explicitly because pokegold's shorter engine flag table
+## (see the badge comment below) puts the same symbol one index lower there.
 const ENGINE_CREDITS_SKIP: int = 15
 const ENGINE_HALL_OF_FAME: int = ENGINE_CREDITS_SKIP
 ## `CheckReceivedDex`'s own flag, which is what the Pokemon Center PC's list

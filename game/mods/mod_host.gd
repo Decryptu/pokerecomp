@@ -2050,8 +2050,7 @@ static func renderer_handles_input(renderer: Node, event: InputEvent) -> bool:
 	return _renderer_takes_input(renderer, RENDERER_INPUT_METHOD, event)
 
 
-## The same for a battle renderer. See
-## [constant RENDERER_BATTLE_INPUT_METHOD].
+## The same for a battle renderer. See [constant RENDERER_BATTLE_INPUT_METHOD].
 static func renderer_handles_battle_input(renderer: Node, event: InputEvent) -> bool:
 	return _renderer_takes_input(renderer, RENDERER_BATTLE_INPUT_METHOD, event)
 

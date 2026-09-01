@@ -1357,6 +1357,8 @@ const COMPLETION_HANDLERS: Dictionary = {
 	## one that was not, which is the branch both of its sites read.
 	&"quick_save_requested": &"_complete_plain_request",
 	&"link_record_requested": &"_complete_plain_request",
+	## `MagnetTrain` answers nothing: the script's own `warpcheck` is next.
+	&"magnet_train_requested": &"_complete_plain_request",
 	&"link_room_requested": &"_complete_plain_request",
 	&"rival_name_requested": &"_complete_rival_name",
 	&"battle_requested": &"_complete_battle",
@@ -1616,10 +1618,9 @@ func _complete_day_care(
 func _complete_coin_game(
 	kind: StringName, request: Dictionary, result: Dictionary
 ) -> Dictionary:
-	## `_SlotMachine` and `_CardFlip` both write `wCoins` themselves, over
-	## and over, so what comes back is the balance rather than a delta.
-	## Nothing reads `wScriptVar` after either: every map `closetext` and
-	## `end`.
+	## `_SlotMachine` and `_CardFlip` both write `wCoins` themselves, over and
+	## over, so what comes back is the balance rather than a delta. Nothing
+	## reads `wScriptVar` after either: every map `closetext` and `end`.
 	if not bool(result.get("ok", false)):
 		return _fail(
 			StringName(result.get("reason", &"slot_machine_failed")), result
@@ -3102,10 +3103,9 @@ func _command_showemote(_source_opcode: int, command: Dictionary, _bank: int) ->
 	if emote_id == 0xFF:
 		emote_id = _loaded_emote
 	_loaded_emote = emote_id
-	## `cp LAST_TALKED / jr z` keeps hLastTalked as it was only when the
-	## operand is LAST_TALKED itself; every other id becomes the new one,
-	## which is what the two `applymovementlasttalked`s inside
-	## ShowEmoteScript then move.
+	## `cp LAST_TALKED / jr z` keeps hLastTalked as it was only when the operand
+	## is LAST_TALKED itself; every other id becomes the new one, which is what
+	## the two `applymovementlasttalked`s inside ShowEmoteScript then move.
 	var emote_object_id: int = int(command.get("object_id", 0))
 	if emote_object_id != LAST_TALKED:
 		_last_talked_object_index = _object_index_from_id(emote_object_id)
@@ -4629,16 +4629,13 @@ func _special_heal_machine_anim(special: int) -> Dictionary:
 	return {"ok": true}
 
 
-## engine/events/magnet_train.asm's MagnetTrain is scroll positions, graphics, music
-## and a VBlank cutscene handler. It reads wScriptVar for the direction and writes
-## nothing the overworld can observe; the warp itself is the `warpcheck` that follows
-## it.
-func _special_magnet_train(special: int) -> Dictionary:
-	_emit_runtime_event(&"presentation_special_applied", {
-		"special": special, "kind": &"magnet_train",
+## engine/events/magnet_train.asm's MagnetTrain reads wScriptVar for the
+## direction and runs its own loop with the map suspended behind it, so the script
+## waits here. It writes nothing: the warp is the `warpcheck` that follows.
+func _special_magnet_train(_special: int) -> Dictionary:
+	return _stage_runtime_request(&"magnet_train_requested", {
 		"to_goldenrod": _script_value != 0,
 	})
-	return {"ok": true}
 
 
 ## engine/events/prof_oaks_pc.asm's ProfOaksPCBoot prints, counts the set bits in
@@ -5708,10 +5705,9 @@ func _mom_result(staged: Dictionary) -> Dictionary:
 ## `_pending`'s own `special`, which is a routine's name wherever a handler
 ## claims the box and the cartridge's index wherever nothing does. Read as a
 ## name, so an index is simply not one: comparing the two is an engine error
-## rather than a false answer.
-## `BattleTowerRoomMenu_UpdatePickLevelMenu`'s `.a_button` and `.b_button`: the
-## CANCEL row and B both leave with `$a` in wScriptVar, and a level row is
-## refused by either check before it is stored.
+## rather than a false answer. `BattleTowerRoomMenu_UpdatePickLevelMenu`'s
+## `.a_button` and `.b_button`: the CANCEL row and B both leave with `$a` in
+## wScriptVar, and a level row is refused by either check before it is stored.
 func _resolve_room_menu(choice: int) -> Dictionary:
 	var groups: int = int(_pending.get("groups", RomLayout.BATTLETOWER_LEVEL_GROUPS))
 	_pending = {}

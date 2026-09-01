@@ -67,9 +67,8 @@ const CONVERSION_2_MOVE: int = 176
 const SLEEP_TALK_MOVE: int = 214
 
 ## Two to five hits, the cartridge's own weighted roll; and exactly two, always,
-## for [constant DOUBLE_HIT]. Both run one list,
-## [constant MULTI_HIT_SEQUENCE], and `endloop` tells them apart by reading the
-## effect byte back off the turn.
+## for [constant DOUBLE_HIT]. Both run one list, [constant MULTI_HIT_SEQUENCE],
+## and `endloop` tells them apart by reading the effect byte back off the turn.
 const MULTI_HIT: int = 29
 const DOUBLE_HIT: int = 44
 ## Twineedle: the same two hits as [constant DOUBLE_HIT], with a chance of

@@ -350,9 +350,8 @@ var _last_schedule: Dictionary = {}
 var _phone_ring: Gen2WorldPhoneRing = null
 var _phone_ring_request: Dictionary = {}
 ## Transient presentation offset for the player's own walk step. player_cell
-## already holds the committed destination; this only paces how far behind it
-## a renderer draws the sprite. Never read by collision, events or the
-## snapshot.
+## already holds the committed destination; this only paces how far behind it a
+## renderer draws the sprite. Never read by collision, events or the snapshot.
 var _player_step_direction: Vector2i = Vector2i.ZERO
 var _player_step_passes_total: int = 0
 var _player_step_passes_remaining: int = 0

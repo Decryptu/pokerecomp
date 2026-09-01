@@ -1270,12 +1270,11 @@ func _party_from(species: int, level: int) -> Gen2Party:
 	return Gen2Party.create(members)
 
 
-## Both HP totals, for a caller that has its own numbers.
-## The committed HP, which is what [method battle_snapshot] and every caller
-## that places state reads. It does not animate on its own: `AnimateHPBar` is
-## called by `DoEnemyDamage` and its siblings, not by every write to
-## `wBattleMonHP`, so the bar is started by the events that mean damage or
-## healing and this snaps.
+## Both HP totals, for a caller that has its own numbers. The committed HP,
+## which is what [method battle_snapshot] and every caller that places state
+## reads. It does not animate on its own: `AnimateHPBar` is called by
+## `DoEnemyDamage` and its siblings, not by every write to `wBattleMonHP`, so
+## the bar is started by the events that mean damage or healing and this snaps.
 func set_hp(enemy: int, enemy_max: int, player: int, player_max: int) -> void:
 	if enemy != _enemy_hp or enemy_max != _enemy_max_hp:
 		_bars.erase(Gen2Battle.ENEMY)
@@ -1874,8 +1873,7 @@ const SFX_SUPER_EFFECTIVE: int = 0xAD
 
 ## `AnimateExpBar`'s two: `.PlayExpBarSound`'s at the head of every segment, and
 ## the one `.LoopLevels` and `.skip_exp_bar_animation` both play before their
-## grew-to-level line.
-## `BattleStartMessage`'s own, in front of a trainer's line.
+## grew-to-level line. `BattleStartMessage`'s own, in front of a trainer's line.
 const SFX_SHINE: int = 0x5E
 
 ## The twenty frames `BattleStartMessage` spends after `SFX_SHINE`, and the forty
@@ -1895,10 +1893,9 @@ const HUD_BALL_NORMAL: int = 0
 const HUD_BALL_STATUSED: int = 1
 const HUD_BALL_FAINTED: int = 2
 const HUD_BALL_EMPTY: int = 3
-## `DrawEnemyHUDBorder`'s `hlcoord 1, 2` and
-## `DrawPlayerPartyIconHUDBorder`'s `hlcoord 18, 10`, and the four tiles each
-## walks out from there: a side, the corner under it, the far corner and the
-## bottom edge between them.
+## `DrawEnemyHUDBorder`'s `hlcoord 1, 2` and `DrawPlayerPartyIconHUDBorder`'s
+## `hlcoord 18, 10`, and the four tiles each walks out from there: a side, the
+## corner under it, the far corner and the bottom edge between them.
 const HUD_BORDER_AT: Dictionary = {false: Vector2i(1, 2), true: Vector2i(18, 10)}
 const HUD_BORDER_TILES: Dictionary = {
 	false: [0x6D, 0x74, 0x78, 0x76], true: [0x73, 0x5C, 0x6F, 0x76],
@@ -2084,11 +2081,10 @@ func _run_next_anim_step() -> void:
 
 
 ## `RunBattleAnimScript`, which is `ClearBattleAnims` and then a frame loop. The
-## tilemap the battle is showing is what the effects edit, so it goes in here and
-## comes back out at the end.
-## A cache carrying no animation layer answers with no player, and the step is
-## skipped rather than the whole framing: the delays and the hud belong to the
-## screen, not to the data.
+## tilemap the battle is showing is what the effects edit, so it goes in here
+## and comes back out at the end. A cache carrying no animation layer answers
+## with no player, and the step is skipped rather than the whole framing: the
+## delays and the hud belong to the screen, not to the data.
 func _start_script(index: int) -> bool:
 	if _anim_data == null:
 		return false
@@ -5213,14 +5209,13 @@ func _apply_event_state(event: Dictionary) -> void:
 			# it is a benched participant rather than the one on screen.
 			_refresh_exp_bar()
 		Gen2Battle.GREW_LEVEL:
-			# The level number in the panel belongs to whoever is on screen, so it
-			# only moves when the index that grew is the one currently active: a
-			# benched participant can level up too, and this screen has no bench
-			# to show it on.
-			# The bar itself is not recomputed here: `.LoopLevels` is inside
-			# `AnimateExpBar`, so from the award until the walk ends the animation
-			# owns the bar and [method advance_bars] commits the real count when
-			# it arrives.
+			# The level number in the panel belongs to whoever is on screen, so
+			# it only moves when the index that grew is the one currently
+			# active: a benched participant can level up too, and this screen
+			# has no bench to show it on. The bar itself is not recomputed here:
+			# `.LoopLevels` is inside `AnimateExpBar`, so from the award until
+			# the walk ends the animation owns the bar and [method advance_bars]
+			# commits the real count when it arrives.
 			if int(event["index"]) == _battle.party(Gen2Battle.PLAYER).active:
 				_player_level = int(event["new_level"])
 				_push_view()

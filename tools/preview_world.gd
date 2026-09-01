@@ -26,6 +26,7 @@ const KIND_HELP: Dictionary = {
 	&"mart_sell": "cell in front of the counter: the SELL row (DepositSellPack)",
 	&"pokepic": "cell: Script_pokepic's box over the map, holding Chikorita",
 	&"trade_animation": "frames, half: TradeAnimation over the map, that many frames into the half named",
+	&"magnet_train": "frames, direction: special MagnetTrain, that many frames in. Direction 1 rides to Goldenrod",
 	&"pet_actor": "cell: a mod's world actor one cell ahead, pressed with A so it wears a showemote heart",
 	&"pet_actor_arc": "cell: the same actor mid-ledge, at the top of the arc its span names",
 	&"warp": "warp tile: MapSetupScript_Door at its whitest, the frame the new map loads on",
@@ -263,6 +264,7 @@ func _build_live(data: GameData, group: int, number: int, cell: Vector2i) -> voi
 		&"battle_transition", &"level_evolution", &"egg_hatch", &"name_rater",
 		&"move_deleter", &"move_tutor", &"day_care", &"unown_puzzle", &"slot_machine",
 		&"card_flip", &"tile_anim", &"ice_slide", &"whiteout", &"gift_nickname",
+		&"magnet_train",
 	]:
 		_screen.start_cell = cell
 	## Pinned so two captures of the same map are the same picture: the seed the
@@ -337,6 +339,7 @@ const STAGERS: Dictionary = {
 	&"level_evolution": &"_stage_level_evolution",
 	&"egg_hatch": &"_stage_egg_hatch",
 	&"trade_animation": &"_stage_trade_animation",
+	&"magnet_train": &"_stage_magnet_train",
 	&"gift_nickname": &"_stage_gift_nickname",
 	&"whiteout": &"_stage_whiteout",
 	&"unown_puzzle": &"_stage_unown_puzzle",
@@ -501,6 +504,10 @@ func _stage_level_evolution() -> void:
 ## holds.
 func _stage_trade_animation() -> void:
 	_screen.preview_trade_animation(maxi(_cell.x, 0), maxi(_cell.y, 0))
+
+
+func _stage_magnet_train() -> void:
+	_screen.preview_magnet_train(maxi(_cell.x, 0), maxi(_cell.y, 0))
 
 
 func _stage_egg_hatch() -> void:
