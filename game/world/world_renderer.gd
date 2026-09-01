@@ -48,6 +48,8 @@ var _background_color: Color = FALLBACK_BACKGROUND
 var _actor_textures: Dictionary = {}
 var _priority_atlas: ImageTexture = null
 var _priority_indices: PackedByteArray = PackedByteArray()
+## `HideSprites`: no map object and no player reaches OAM.
+var sprites_hidden: bool = false
 var _effect_sheets: Dictionary = {}
 var _effect_textures: Dictionary = {}
 ## The palette order the map fades are one step of, and `FillWhiteBGColor`
@@ -736,9 +738,11 @@ func _draw() -> void:
 	## objects left in OAM are the player and, in a scripted battle, whoever
 	## `hLastTalked` names.
 	var battlers_only: bool = _transition_sprites == Gen2BattleTransition.SPRITES_BATTLERS
-	var drawn: Array = _row_entries(battlers_only)
-	_draw_row_entries(drawn, camera_pixels, background, battlers_only)
-	var player: Vector2 = _draw_player(background)
+	var player: Vector2 = Vector2(_world.player_view_pixel()) + SPRITE_LIFT
+	if not sprites_hidden:
+		var drawn: Array = _row_entries(battlers_only)
+		_draw_row_entries(drawn, camera_pixels, background, battlers_only)
+		player = _draw_player(background)
 	if battlers_only:
 		return
 	_draw_free_sprites(camera_pixels, player)
@@ -1246,6 +1250,9 @@ func _draw_effect_sprites(object_index: int, pixel: Vector2) -> void:
 
 
 func _draw_effect_sprite(sprite: Dictionary, anchor: Vector2) -> void:
+	if sprite.has("icon"):
+		_draw_fly_mon(sprite, anchor)
+		return
 	var sheet: Dictionary = _effect_sheet(String(sprite["kind"]))
 	if sheet.is_empty():
 		return
@@ -1258,6 +1265,32 @@ func _draw_effect_sprite(sprite: Dictionary, anchor: Vector2) -> void:
 			anchor + Vector2(tile["offset"] as Vector2i),
 			int(sprite.get("rotation", 0)),
 		)
+
+
+## `.OAMData_RedWalk` names PAL_OW_RED, so the icon wears the player's own
+## overworld palette.
+func _draw_fly_mon(sprite: Dictionary, anchor: Vector2) -> void:
+	var tiles: Array = sprite["tiles"]
+	if tiles.is_empty() or _world == null or _world.data == null:
+		return
+	var icon: Gen2WorldSprite = _world.data.overworld_icon(int(sprite["icon"]))
+	var tile: Dictionary = tiles[0]
+	var facing: int = Gen2WorldSprite.FACING_UP if int(tile["tile"]) == 1 \
+		else Gen2WorldSprite.FACING_DOWN
+	var texture: Texture2D = _actor_texture(
+		icon, 0, facing, 0, Gen2WorldSprite.BIG_SHAPE_NONE,
+		_sprite_palette(int(sprite["palette"]))
+	) if icon != null else null
+	if texture == null:
+		return
+	var at: Vector2 = anchor + Vector2(tile["offset"] as Vector2i)
+	var size := Vector2(texture.get_width(), texture.get_height())
+	if bool(tile["flip_x"]):
+		draw_texture_rect(
+			texture, Rect2(at + Vector2(size.x, 0.0), Vector2(-size.x, size.y)), false
+		)
+		return
+	draw_texture(texture, at)
 
 
 ## A sheet with a `colors` of its own is the heal machine, whose palette

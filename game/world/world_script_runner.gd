@@ -657,6 +657,12 @@ const PARTY_SELECTION_REFUSAL_OF: Dictionary = {
 	&"check_poke_mail": Gen2WorldPartyHost.POKEMAIL_REFUSED,
 }
 
+## The two `.cancel`s that are a `PrintText` rather than a script value.
+const PARTY_SELECTION_CANCEL_BOX: Dictionary = {
+	&"poke_seer": ["poke_seer", "do_nothing"],
+	&"photo_studio": ["photo_studio", "no_photo"],
+}
+
 ## `CelebiShrineEvent`'s own loop: `ld a, 160` into wFrameCounter and
 ## `ld c, 2 / call DelayFrames` per pass, so the cutscene stands for twice its
 ## own counter. There is no sprite-anim layer outside the intro, so what it owes
@@ -1373,7 +1379,12 @@ func complete_runtime_request(result: Dictionary) -> Dictionary:
 			"ok": false, "status": &"failed", "reason": &"runtime_request_kind_mismatch",
 			"details": {"kind": kind},
 		}
-	return call(COMPLETION_HANDLERS[kind], kind, request, result)
+	var answered: Dictionary = call(COMPLETION_HANDLERS[kind], kind, request, result)
+	## `_stage_*`'s bare `{"ok": true}` reads as the script having finished, which
+	## dropped every box a party-selection handler staged.
+	if not _pending.is_empty() and not answered.has("status"):
+		return _waiting_result()
+	return answered
 
 
 func _complete_catch_tutorial(
@@ -6324,7 +6335,13 @@ func _finish_party_selection(request: Dictionary, result: Dictionary) -> Diction
 		## something other than zero for it, so the refusal is theirs to name.
 		_script_value = int(PARTY_SELECTION_REFUSAL_OF.get(routine, 0))
 		_pending = {}
-		return advance()
+		var cancel: Array = PARTY_SELECTION_CANCEL_BOX.get(routine, [])
+		if cancel.is_empty():
+			return advance()
+		var cancel_box: String = _special_box(String(cancel[0]), String(cancel[1]))
+		if cancel_box.is_empty():
+			return {"ok": false, "reason": &"missing_special_text", "special": special}
+		return _stage_internal_text(cancel_box, false, {"special": special})
 	var species: int = int(result.get("species", 0))
 	_cur_party_species = species
 	if routine == &"bills_grandfather":

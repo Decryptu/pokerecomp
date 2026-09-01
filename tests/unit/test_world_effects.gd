@@ -580,3 +580,66 @@ func test_the_outbox_passes_a_cry_and_drops_everything_else() -> void:
 	assert_eq(int(taken[0]["species"]), 155)
 	assert_eq(actors.take_requests(), [], "The drain empties the outbox.")
 	RomCache.clear(ActorFixture.directory())
+
+
+## `FlyFromAnim` holds the icon on the player's own row for $40 frames and then
+## rises two pixels a frame; `FlyToAnim` descends from four pixels above the
+## screen and stops on the frame its row comes back round to the departure's.
+func test_the_two_flight_animations_run_the_source_rows() -> void:
+	var effects := Gen2WorldEffects.new()
+	effects.start_fly(7, false)
+	var first: Dictionary = effects.sprites()[0]
+	assert_eq(first["kind"], Gen2WorldEffects.SPRITE_FLY_MON)
+	assert_eq(first["icon"], 7)
+	assert_eq((first["tiles"][0] as Dictionary)["offset"], Vector2i(64, 60))
+
+	for _frame: int in Gen2WorldEffects.FLY_HOLD_FRAMES - 1:
+		effects.advance_frame()
+	assert_eq(_fly_offset(effects), Vector2i(64, 60), "nothing moves until VAR2 is $40")
+	effects.advance_frame()
+	assert_eq(_fly_offset(effects), Vector2i(64, 58), "then two pixels a frame")
+
+	for _frame: int in Gen2WorldEffects.FLY_FROM_FRAMES:
+		effects.advance_frame()
+	assert_false(effects.sprites_active(), "128 frames and the sprites are gone")
+
+	effects.start_fly(7, true)
+	assert_eq(_fly_offset(effects), Vector2i(64, 228),
+		"the arrival's own row, which the OAM byte has wrapped")
+	for _frame: int in 44:
+		effects.advance_frame()
+	assert_eq(_fly_offset(effects), Vector2i(64, 60), "and lands where the departure left")
+	effects.advance_frame()
+	assert_eq(_fly_offset(effects), Vector2i(64, 60), "`ret z` stops it there")
+
+
+## `.SpawnLeaf` puts a leaf at column zero every eight frames, at one of four
+## rows, and `SpriteAnimFunc_FlyLeaf` walks it two pixels out and one up.
+func test_a_flight_spawns_one_leaf_every_eight_frames() -> void:
+	var effects := Gen2WorldEffects.new()
+	effects.start_fly(7, false)
+	assert_eq(effects.sprites().size(), 2, "the icon and the first leaf")
+	var leaf: Dictionary = effects.sprites()[1]
+	assert_eq(leaf["kind"], Gen2WorldEffects.SPRITE_CUT_LEAF)
+	assert_eq((leaf["tiles"][0] as Dictionary)["offset"], Vector2i(-12, 44))
+
+	for _frame: int in Gen2WorldEffects.FLY_LEAF_INTERVAL:
+		effects.advance_frame()
+	assert_eq(effects.sprites().size(), 3)
+	assert_eq((effects.sprites()[1]["tiles"][0] as Dictionary)["offset"],
+		Vector2i(4, 36), "two out and one up a frame")
+	assert_eq((effects.sprites()[2]["tiles"][0] as Dictionary)["offset"],
+		Vector2i(-12, 60), "the next row up the `and $18` cycle")
+
+
+## `FlyFunction_FrameTimer` plays SFX_FLY while its counter is still $40 or more
+## and a multiple of eight, which is nine times leaving and once arriving.
+func test_the_flight_sound_follows_the_frame_counter() -> void:
+	assert_eq(Gen2WorldEffects.fly_sfx_frames(false).size(), 9)
+	assert_eq(Gen2WorldEffects.fly_sfx_frames(false)[0], 0)
+	assert_eq(Gen2WorldEffects.fly_sfx_frames(false)[1], 8)
+	assert_eq(Gen2WorldEffects.fly_sfx_frames(true), [0] as Array[int])
+
+
+func _fly_offset(effects: Gen2WorldEffects) -> Vector2i:
+	return (effects.sprites()[0]["tiles"][0] as Dictionary)["offset"]

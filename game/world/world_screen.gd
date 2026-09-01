@@ -73,6 +73,9 @@ const MUSIC_HALL_OF_FAME: int = 20
 ## `wPlayerTileCollision` is.
 const SFX_ENTER_DOOR: int = 0x1F
 const SFX_WARP_TO: int = 0x13
+## `FlyFunction_FrameTimer`'s own sound, and what the fly preview flies on.
+const SFX_FLY: int = 0x18
+const PREVIEW_FLY_SPECIES: int = 155
 const SFX_EXIT_BUILDING: int = 0x23
 const COLL_DOOR: int = 0x71
 const COLL_WARP_PANEL: int = 0x7C
@@ -107,6 +110,8 @@ var _encounters: Gen2WorldEncounters = null
 var _battle_encounter_id: StringName = &""
 ## The headbutt result waiting for ShakeHeadbuttTree's 32 frames to be spent.
 var _pending_headbutt_finish: Dictionary = {}
+## `.FlyScript` while it runs.
+var _pending_fly: Dictionary = {}
 ## The step in flight whose `PlayerEvents` are still owed, empty while none is.
 ## `CheckPlayerState` reads `PLAYERSTEP_STOP_F`, so the warp, the coord events
 ## and the wild roll all belong to the frame the step lands on.
@@ -1029,6 +1034,7 @@ func _advance_population(map_pass: bool) -> void:
 ## What a frame owes something already waiting on it, each behind the trail it
 ## waits for.
 func _advance_waits(map_pass: bool) -> void:
+	_advance_fly()
 	if not _pending_headbutt_finish.is_empty() \
 		and (_effects == null or not _effects.sprites_active()):
 		var headbutt: Dictionary = _pending_headbutt_finish
@@ -3175,6 +3181,16 @@ func preview_effect_sprites(kind: StringName = &"effects") -> void:
 				Gen2WorldAPI.STEP_PASSES_HOP,
 			)
 		_script_prompt = "Debug cut animation preview"
+		_renderer.refresh()
+		_refresh_labels()
+		return
+	if kind == &"fly":
+		## `FlyFromAnim` past its hold, with leaves still crossing the screen.
+		_effects.start_fly(_world.data.mon_menu_icon(PREVIEW_FLY_SPECIES), false)
+		_renderer.sprites_hidden = true
+		for _frame: int in 80:
+			_effects.advance_frame()
+		_script_prompt = "Debug fly animation preview"
 		_renderer.refresh()
 		_refresh_labels()
 		return
@@ -7063,15 +7079,70 @@ func _apply_fly_choice(results: Array) -> bool:
 		if spawn < 0:
 			_refresh_labels()
 			return true
-		## `.FlyScript`'s `newloadmap MAPSETUP_FLY`, whose setup script opens on
-		## `JumpRoamMons`: a flight scatters the beasts rather than stepping them.
-		var warped: Dictionary = _world.warp_to_spawn(
-			spawn, Gen2WorldAPI.MAP_ENTRY_FLY
-		)
-		if bool(warped.get("ok", false)):
-			_refresh_after_escape()
+		_start_fly(spawn)
 		return true
 	return false
+
+
+## `.FlyScript`: `callasm HideSprites`, `FlyFromAnim`, the warp, `FlyToAnim`,
+## then `.ReturnFromFly`'s `RespawnPlayer` and `UpdatePlayerSprite`.
+func _start_fly(spawn: int) -> void:
+	_begin_fly_animation(false, {"spawn": spawn})
+	if _renderer != null:
+		_renderer.sprites_hidden = true
+	_refresh_labels()
+
+
+func _begin_fly_animation(arriving: bool, fields: Dictionary) -> void:
+	_pending_fly = fields.duplicate()
+	_pending_fly["arriving"] = arriving
+	_pending_fly["frame"] = 0
+	_pending_fly["sfx"] = Gen2WorldEffects.fly_sfx_frames(arriving)
+	if _effects != null:
+		_effects.start_fly(_fly_icon(), arriving)
+
+
+## `wTempIconSpecies`, which `FlyFunction_InitGFX` reads off `wCurPartyMon`.
+func _fly_icon() -> int:
+	if _world == null or _data == null:
+		return 0
+	var source: Dictionary = _world.field_move_source(Gen2WorldFieldMove.MOVE_FLY)
+	var slot: int = maxi(int(source.get("slot", 0)), 0)
+	var species: Array = _world.party_summary().get("species", [])
+	if slot >= species.size():
+		return 0
+	return _data.mon_menu_icon(int(species[slot]))
+
+
+func _advance_fly() -> void:
+	if _pending_fly.is_empty():
+		return
+	var frame: int = int(_pending_fly["frame"])
+	if (_pending_fly["sfx"] as Array).has(frame):
+		_play_sfx(SFX_FLY)
+	_pending_fly["frame"] = frame + 1
+	if _effects != null and _effects.sprites_active():
+		return
+	if bool(_pending_fly["arriving"]):
+		_finish_fly()
+		return
+	var spawn: int = int(_pending_fly["spawn"])
+	## `newloadmap MAPSETUP_FLY`, whose setup script opens on `JumpRoamMons`: a
+	## flight scatters the beasts rather than stepping them.
+	var warped: Dictionary = _world.warp_to_spawn(spawn, Gen2WorldAPI.MAP_ENTRY_FLY)
+	if not bool(warped.get("ok", false)):
+		_finish_fly()
+		return
+	_refresh_after_escape()
+	_begin_fly_animation(true, {"spawn": spawn})
+
+
+func _finish_fly() -> void:
+	_pending_fly = {}
+	if _renderer != null:
+		_renderer.sprites_hidden = false
+		_renderer.refresh()
+	_refresh_labels()
 
 
 func _on_service_completed(results: Array) -> void:

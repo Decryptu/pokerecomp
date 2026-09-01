@@ -18,6 +18,7 @@ const KIND_HELP: Dictionary = {
 	&"catch_tutorial": "frames: the Dude's own fight, which answers itself, that many frames in",
 	&"catch_dex": "none: NewPokedexEntry's page, over the fight the catch that opened it is still in",
 	&"cut": "cell: OWCutAnimation's two halves and the jump shadow",
+	&"fly": "none: FlyFromAnim 80 frames in, with HideSprites' empty OAM behind it",
 	&"tile_anim": "frames: the map that many AnimateTileset frames in",
 	&"unown_wall": "cell: DisplayUnownWords' box. Group 3 maps 23 to 26 say HO-OH, ESCAPE, WATER, LIGHT",
 	&"mart_top": "cell in front of the counter: MartWelcomeText and MenuHeader_BuySell over the map",
@@ -313,7 +314,7 @@ func _settle_mon_special(host_property: String) -> void:
 ## The kinds that drove themselves to the frame they want. Every other kind
 ## stages a sprite and then spends the frames it needs.
 const SELF_DRIVEN_KINDS: Array[StringName] = [
-	&"warp", &"door", &"map_name_sign", &"ledge", &"heal_machine",
+	&"warp", &"door", &"map_name_sign", &"ledge", &"heal_machine", &"fly",
 	&"battle", &"battle_transition", &"level_evolution", &"egg_hatch",
 	&"catch_tutorial",
 	&"name_rater", &"move_deleter", &"move_tutor", &"day_care",

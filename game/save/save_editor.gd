@@ -50,9 +50,6 @@ func commit() -> Dictionary:
 	return result
 
 
-# --- Player -----------------------------------------------------------------
-
-
 func set_player_name(name: String) -> Dictionary:
 	var trimmed: String = name.strip_edges()
 	if trimmed.is_empty():
@@ -69,9 +66,6 @@ func set_label(label: String) -> Dictionary:
 		return _refuse("the slot name is at most %d characters" % Gen2SaveData.MAX_LABEL)
 	save.label = trimmed
 	return _changed()
-
-
-# --- Party ------------------------------------------------------------------
 
 
 ## Creates a member at [param level] of [param species], with the moves that
@@ -104,9 +98,6 @@ func move_party_member(from_index: int, to_index: int) -> Dictionary:
 	save.party.remove_at(from_index)
 	save.party.insert(to_index, mon)
 	return _changed()
-
-
-# --- One Pokemon ------------------------------------------------------------
 
 
 ## Changing species re-runs experience against the new growth curve and
@@ -251,9 +242,6 @@ func max_hp_for(mon: Gen2SaveMon) -> int:
 	)
 
 
-# --- Boxes ------------------------------------------------------------------
-
-
 func box(index: int) -> Gen2SaveBox:
 	if index < 0 or index >= save.boxes.size():
 		return null
@@ -281,9 +269,6 @@ func remove_box_member(box_index: int, slot: int) -> Dictionary:
 		return _refuse("that box slot is empty")
 	target.slots[slot] = null
 	return _changed()
-
-
-# --- World ------------------------------------------------------------------
 
 
 ## The bag, money, flags and dex all live in the world snapshot, so a save
@@ -398,9 +383,6 @@ func set_clock(day: int, hour: int, minute: int) -> Dictionary:
 	save.world.world_hour = clampi(hour, 0, Gen2WorldClock.HOURS_PER_DAY - 1)
 	save.world.world_minute = clampi(minute, 0, Gen2WorldClock.MINUTES_PER_HOUR - 1)
 	return _changed()
-
-
-# --- Internals --------------------------------------------------------------
 
 
 ## Level and experience must agree, so setting either sets both: experience

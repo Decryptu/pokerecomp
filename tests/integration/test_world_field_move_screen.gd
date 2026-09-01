@@ -1408,3 +1408,25 @@ func test_the_flash_line_is_the_blinding_flash_text() -> void:
 		String((rows[Gen2WorldFieldMove.MOVE_FLASH] as Array)[2]),
 		"A blinding FLASH\nlights the area!"
 	)
+
+
+## `.FlyScript`: `HideSprites`, `FlyFromAnim`'s 128 frames, the warp, then
+## `FlyToAnim`'s 64 and `.ReturnFromFly`. The fixture ships no spawn point, so
+## the warp refuses and the run ends there; what this covers is that no frame of
+## either animation is skipped and that the map is not warped under the first.
+func test_the_fly_script_spends_its_animation_before_the_warp() -> void:
+	await _open_world()
+	var world: Gen2WorldAPI = _world_screen._world
+	var was: Vector2i = world.player_cell
+	_world_screen._start_fly(0)
+	assert_true(_world_screen._renderer.sprites_hidden, "callasm HideSprites")
+	assert_true(_world_screen._effects.sprites_active())
+
+	for _frame: int in Gen2WorldEffects.FLY_FROM_FRAMES - 1:
+		_world_screen.advance_frame()
+	assert_false(_world_screen._pending_fly.is_empty(), "still leaving")
+	assert_eq(world.player_cell, was, "the warp is behind the animation")
+
+	_world_screen.advance_frame()
+	assert_true(_world_screen._pending_fly.is_empty())
+	assert_false(_world_screen._renderer.sprites_hidden, "RespawnPlayer")

@@ -52,11 +52,8 @@ func size() -> int:
 	return ROWS.size()
 
 
-## `OptionsControl`. Its two odd branches, `.CheckMenuAccount` writing
-## OPT_MENU_ACCOUNT back before its own `inc` and `.UpPressed` special-casing
-## OPT_FRAME, each land on exactly the value the plain step would, so this is a
-## plain wrap in both directions. The source's own comments call them
-## unexplained.
+## `OptionsControl`, whose two branches the source's own comments call
+## unexplained each land on the value a plain wrap would.
 func move(delta: int) -> bool:
 	if delta == 0:
 		return false
