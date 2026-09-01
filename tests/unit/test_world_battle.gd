@@ -304,6 +304,48 @@ func test_a_wild_unown_only_takes_an_unlocked_letter() -> void:
 	assert_gt(ungated.size(), 3, "an ungated roll reaches past one set")
 
 
+## `LoadEnemyMon.CheckMagikarpArea` floors a wild Magikarp's length outside Lake
+## of Rage: three rolls in five reroll anything under four feet. Inside the group
+## the filter is skipped, so the same seed keeps its short ones.
+func test_a_wild_magikarp_is_floored_outside_lake_of_rage() -> void:
+	assert_lt(
+		_short_magikarp({"map_group": 5, "map_number": 3}),
+		_short_magikarp({
+			"map_group": Gen2WorldBattleAdapter.GROUP_LAKE_OF_RAGE, "map_number": 6,
+		}),
+		"the floor drops short Magikarp only outside the lake"
+	)
+	## The pair of `cp`s is an OR, so a map numbered 6 in any group skips it too.
+	assert_eq(
+		_short_magikarp({"map_group": 5, "map_number": Gen2WorldBattleAdapter.MAP_LAKE_OF_RAGE}),
+		_short_magikarp({
+			"map_group": Gen2WorldBattleAdapter.GROUP_LAKE_OF_RAGE, "map_number": 6,
+		}),
+		"map number 6 skips the floor in every group"
+	)
+
+
+## How many of 200 rolled wild Magikarp came out under four feet, off one seeded
+## generator so each map answers the same sequence.
+func _short_magikarp(values: Dictionary) -> int:
+	var generator := RandomNumberGenerator.new()
+	generator.seed = 1234
+	var request: Dictionary = values.duplicate()
+	request["player_id"] = 0x1234
+	var short: int = 0
+	for _wild: int in 200:
+		var word: int = Gen2WorldBattleAdapter.wild_dvs(
+			request, Gen2Battle.BATTLETYPE_NORMAL,
+			Gen2WorldPartyHost.SPECIES_MAGIKARP, generator
+		)
+		var length: Vector2i = Gen2WorldPartyHost.magikarp_length(
+			PackedByteArray([(word >> 8) & 0xFF, word & 0xFF]), 0x1234
+		)
+		if length.x < Gen2WorldBattleAdapter.MAGIKARP_FLOOR_FEET:
+			short += 1
+	return short
+
+
 ## How many of [param count] rolled wilds came out shiny, off one seeded
 ## generator so the two halves of the test above draw the same sequence.
 func _shiny_wilds(count: int) -> int:

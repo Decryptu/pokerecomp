@@ -2,13 +2,11 @@ class_name Gen2WorldDayCare
 extends RefCounted
 
 ## `engine/events/daycare.asm` and `engine/pokemon/breeding.asm`, the rules half.
-## The two Day-Care slots are world state rather than party members: the cartridge
-## keeps them in `wBreedMon1` and `wBreedMon2`, boxmon structs beside the flag byte
-## that says whether each is occupied. This answers what the three routines ask of
-## that state and nothing else. What a reading gets wrong is which parent a field
-## comes from: `wBreedMotherOrNonDitto` is set once in `DayCare_InitBreeding` and
-## then read by four routines that each pick a different side of it, so it is
-## computed once here as [method mother_or_non_ditto] and passed down.
+## The two slots are world state rather than party members: `wBreedMon1` and
+## `wBreedMon2` are boxmon structs beside the flag byte saying each is occupied.
+## `wBreedMotherOrNonDitto` is set once in `DayCare_InitBreeding` and then read by
+## four routines picking different sides of it, so it is computed once here as
+## [method mother_or_non_ditto].
 
 ## `wDayCareMan`'s four bits (constants/ram_constants.asm).
 const MAN_HAS_MON: int = 1 << 0

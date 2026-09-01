@@ -1777,7 +1777,7 @@ func _treemon_encounter(cell: Vector2i, random: RandomNumberGenerator) -> Dictio
 	var asleep: bool = Gen2WorldTreemon.starts_asleep(
 		species, data.asleep_treemons(object_time_of_day)
 	)
-	return {
+	return _stamp_encounter({
 		"kind": &"wild_encounter_requested",
 		"method": Gen2WorldEncounter.METHOD_HEADBUTT,
 		"source": Gen2WorldEncounter.SOURCE_TREE,
@@ -1799,7 +1799,19 @@ func _treemon_encounter(cell: Vector2i, random: RandomNumberGenerator) -> Dictio
 			"battle_type": Gen2Battle.BATTLETYPE_TREE,
 			"asleep": asleep,
 		},
-	}
+	})
+
+
+## `wMapGroup`, `wMapNumber` and `wPlayerID`, read by `LoadEnemyMon`'s DV roll.
+func _stamp_encounter(request: Dictionary) -> Dictionary:
+	var values: Variant = request.get("values", null)
+	if not values is Dictionary:
+		return request
+	var stamped: Dictionary = values as Dictionary
+	stamped["map_group"] = current_map.group if current_map != null else -1
+	stamped["map_number"] = current_map.number if current_map != null else -1
+	stamped["player_id"] = _player_id
+	return request
 
 
 static func _headbutt_failure(reason: StringName) -> Dictionary:
@@ -1895,7 +1907,7 @@ func _rock_encounter(random: RandomNumberGenerator) -> Dictionary:
 		return {}
 	var species: int = int(resolved["species"])
 	var level: int = int(resolved["level"])
-	return {
+	return _stamp_encounter({
 		"kind": &"wild_encounter_requested",
 		"method": Gen2WorldEncounter.METHOD_ROCK_SMASH,
 		"source": Gen2WorldEncounter.SOURCE_ROCK,
@@ -1908,7 +1920,7 @@ func _rock_encounter(random: RandomNumberGenerator) -> Dictionary:
 		"encounter_roll": int(resolved["encounter_roll"]),
 		"slot_roll": int(resolved["slot_roll"]),
 		"values": {"kind": &"wild", "pokemon": species, "level": level},
-	}
+	})
 
 
 static func _rock_smash_failure(reason: StringName) -> Dictionary:
@@ -2347,6 +2359,7 @@ func encounter_request(
 	if resolved.is_empty():
 		return {}
 	resolved["map"] = map_id()
+	_stamp_encounter(resolved)
 	resolved["cell"] = player_cell
 	resolved["fish_group"] = current_map.fish_group
 	resolved["movement"] = movement_mode
@@ -2376,6 +2389,7 @@ func _fishing_request(
 	if fishing.is_empty():
 		return {}
 	fishing["map"] = map_id()
+	_stamp_encounter(fishing)
 	fishing["cell"] = player_cell
 	fishing["fish_group"] = int(context["fish_group"])
 	fishing["selected_fish_group"] = int(context["selected_fish_group"])
@@ -2406,6 +2420,7 @@ func _bug_contest_request(
 	if contest.is_empty():
 		return {}
 	contest["map"] = map_id()
+	_stamp_encounter(contest)
 	contest["cell"] = player_cell
 	contest["movement"] = movement_mode
 	return contest

@@ -40,6 +40,7 @@ func run(r: RefCounted) -> void:
 		_census()
 		_verify_wild_patch_indices()
 		_verify_rolled_dvs()
+		_verify_magikarp_filter()
 		_verify_roaming_walk()
 	)
 
@@ -207,6 +208,98 @@ func _verify_rolled_dvs() -> void:
 			seen.size() == allowed.size(),
 			"set %d reached %d of its %d letters." % [set_index, seen.size(), allowed.size()]
 		)
+
+
+## `LoadEnemyMon.CheckMagikarpArea` over every map that can produce a Magikarp:
+## the request has to carry the map the filter reads, and the floor has to drop
+## short Magikarp everywhere but the group and map number the two `cp`s name.
+func _verify_magikarp_filter() -> void:
+	var maps: Array = _magikarp_maps()
+	if not _r.check(not maps.is_empty(), "no map holds a wild MAGIKARP."):
+		return
+	var skipped: Array = []
+	var unstamped: int = 0
+	for pair: Vector2i in maps:
+		var world: Gen2WorldAPI = _r.open_world(pair.x, pair.y, Vector2i.ZERO)
+		if world == null:
+			continue
+		world.set_player_id(0x1234)
+		world.state.set_wild_encounter_cooldown(0)
+		var request: Dictionary = world.encounter_request(
+			RandomNumberGenerator.new(), true, Gen2WorldEncounter.METHOD_SURF
+		)
+		var values: Variant = request.get("values", null)
+		if not values is Dictionary:
+			continue
+		var carried: Dictionary = values as Dictionary
+		if int(carried.get("map_group", -1)) != pair.x \
+			or int(carried.get("map_number", -1)) != pair.y \
+			or int(carried.get("player_id", -1)) != 0x1234:
+			unstamped += 1
+			continue
+		if _short_magikarp_share(carried) != _short_magikarp_share({}):
+			skipped.append(pair)
+	_r.check(unstamped == 0, "%d wild requests carried no map." % unstamped)
+	for pair: Vector2i in skipped:
+		_r.check(
+			pair.x == Gen2WorldBattleAdapter.GROUP_LAKE_OF_RAGE \
+				or pair.y == Gen2WorldBattleAdapter.MAP_LAKE_OF_RAGE,
+			"map %d/%d skipped the Magikarp floor." % [pair.x, pair.y]
+		)
+	_r.check(
+		_short_magikarp_share({"map_group": 5, "map_number": 3}) \
+			< _short_magikarp_share({
+				"map_group": Gen2WorldBattleAdapter.GROUP_LAKE_OF_RAGE, "map_number": 6,
+			}),
+		"the floor dropped no short Magikarp outside the lake."
+	)
+	_r.note("Magikarp floor: %d maps, %d of them skipping it." % [
+		maps.size(), skipped.size(),
+	])
+
+
+func _magikarp_maps() -> Array:
+	var out: Array = []
+	for region: String in ["johto", "kanto"]:
+		for row: Dictionary in _r.data.world_encounter_region_rows(&"surf", region):
+			if not _holds_magikarp(row):
+				continue
+			var pair: PackedStringArray = String(row.get("map", "")).split(":")
+			if pair.size() == 2:
+				out.append(Vector2i(int(pair[0]), int(pair[1])))
+	return out
+
+
+static func _holds_magikarp(row: Dictionary) -> bool:
+	for key: Variant in row:
+		var slots: Variant = row[key]
+		if not slots is Array:
+			continue
+		for slot: Variant in slots as Array:
+			if slot is Dictionary \
+				and int((slot as Dictionary).get("species", 0)) \
+					== Gen2WorldPartyHost.SPECIES_MAGIKARP:
+				return true
+	return false
+
+
+func _short_magikarp_share(values: Dictionary) -> int:
+	var generator := RandomNumberGenerator.new()
+	generator.seed = 20260912
+	var request: Dictionary = values.duplicate()
+	request["player_id"] = 0x1234
+	var short: int = 0
+	for _wild: int in 256:
+		var word: int = Gen2WorldBattleAdapter.wild_dvs(
+			request, Gen2Battle.BATTLETYPE_NORMAL,
+			Gen2WorldPartyHost.SPECIES_MAGIKARP, generator
+		)
+		var length: Vector2i = Gen2WorldPartyHost.magikarp_length(
+			PackedByteArray([(word >> 8) & 0xFF, word & 0xFF]), 0x1234
+		)
+		if length.x < Gen2WorldBattleAdapter.MAGIKARP_FLOOR_FEET:
+			short += 1
+	return short
 
 
 ## One wild built through the whole adapter, so the sweep measures the path a
