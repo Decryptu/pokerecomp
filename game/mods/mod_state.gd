@@ -26,8 +26,7 @@ static func selected_view() -> StringName:
 	return _view
 
 
-## Returns false only when the change could not be written, in which case the
-## in-memory value is rolled back so it never disagrees with the file.
+## False only when the write failed, which rolls the in-memory value back.
 static func set_selected_view(id: StringName) -> bool:
 	_ensure_loaded()
 	if String(id).is_empty():

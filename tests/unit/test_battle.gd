@@ -1149,7 +1149,7 @@ func test_hyper_beam_locks_the_user_out_the_turn_after_it_connects() -> void:
 	assert_false(Gen2Substatus.has(battle.player.substatus, Gen2Substatus.RECHARGING))
 
 
-func test_switching_out_clears_confusion_and_recharge() -> void:
+func test_switching_out_clears_confusion_and_keeps_its_count() -> void:
 	var battle: Gen2Battle = _party_battle(
 		[_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE]), _mon(Fixture.BULBASAUR, 50, [Fixture.TACKLE])],
 		[_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])]
@@ -1159,7 +1159,7 @@ func test_switching_out_clears_confusion_and_recharge() -> void:
 	battle.take_actions(Gen2Battle.switch_to(1), Gen2Battle.use_move(0))
 	var bulbasaur: Gen2BattleMon = battle.player
 	assert_eq(bulbasaur.substatus, Gen2Substatus.NONE)
-	assert_eq(bulbasaur.confusion_turns, 0)
+	assert_eq(bulbasaur.confusion_turns, 4)
 
 
 func test_a_two_turn_move_charges_then_hits_on_the_next() -> void:
@@ -4637,3 +4637,35 @@ func test_a_faint_taken_in_a_turn_costs_happiness() -> void:
 		battle.player.happiness,
 		Gen2WorldPartyHost.change_happiness(_data, before, Gen2Battle.HAPPINESS_FAINTED)
 	)
+
+
+func test_a_berserk_gene_holder_is_confused_and_gains_two_attack_stages() -> void:
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE]),
+		_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
+	)
+	battle.player.item = Gen2HeldItem.BERSERK_GENE_ITEM
+	var events: Array = battle.take_turn(0, 0)
+	var activated: Dictionary = _first(events, Gen2Battle.ITEM_ACTIVATED)
+	assert_eq(int(activated.get("side", -1)), Gen2Battle.PLAYER)
+	assert_eq(int(activated.get("item", 0)), Gen2HeldItem.BERSERK_GENE_ITEM)
+	assert_eq(battle.player.item, 0)
+	assert_eq(battle.player.stage("attack"), 2)
+	assert_true(Gen2Substatus.has(battle.player.substatus, Gen2Substatus.CONFUSED))
+	# One short of the 256 it was set to: the turn it fired on has already
+	# checked the confusion and spent one.
+	assert_eq(battle.player.confusion_turns, Gen2Battle.BERSERK_GENE_CONFUSION_TURNS - 1)
+	assert_eq(int(_first(events, Gen2Battle.CONFUSE_INFLICTED).get("target", -1)), Gen2Battle.PLAYER)
+
+
+func test_a_berserk_gene_runs_on_the_confusion_count_the_last_pokemon_left() -> void:
+	var battle: Gen2Battle = _party_battle(
+		[_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE]), _mon(Fixture.BULBASAUR, 50, [Fixture.TACKLE])],
+		[_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])]
+	)
+	battle.player.substatus |= Gen2Substatus.CONFUSED
+	battle.player.confusion_turns = 3
+	battle.party(Gen2Battle.PLAYER).at(1).item = Gen2HeldItem.BERSERK_GENE_ITEM
+	battle.take_actions(Gen2Battle.switch_to(1), Gen2Battle.use_move(0))
+	battle.take_turn(0, 0)
+	assert_eq(battle.player.confusion_turns, 2)

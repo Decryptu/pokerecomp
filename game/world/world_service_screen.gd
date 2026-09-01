@@ -837,14 +837,10 @@ func _move_mart_cursor(delta: int) -> void:
 func _press_mart_quantity(button: int) -> void:
 	var maximum: int = Gen2WorldMartHost.MAX_ITEM_STACK
 	match button:
-		Gen2Button.UP:
-			_mart_quantity = 1 if _mart_quantity >= maximum else _mart_quantity + 1
-		Gen2Button.DOWN:
-			_mart_quantity = maximum if _mart_quantity <= 1 else _mart_quantity - 1
-		Gen2Button.RIGHT:
-			_mart_quantity = mini(_mart_quantity + 10, maximum)
-		Gen2Button.LEFT:
-			_mart_quantity = maxi(_mart_quantity - 10, 1)
+		Gen2Button.UP, Gen2Button.DOWN, Gen2Button.LEFT, Gen2Button.RIGHT:
+			_mart_quantity = Gen2WorldQuantityPrompt.stepped(
+				_mart_quantity, button, maximum
+			)
 		Gen2Button.B:
 			_mart_stage = MART_LIST
 		Gen2Button.A:
@@ -1017,14 +1013,10 @@ func _press_mart_sell_list(button: int) -> void:
 func _press_mart_sell_quantity(button: int) -> void:
 	var maximum: int = maxi(1, int(_mart_selection().get("quantity", 1)))
 	match button:
-		Gen2Button.UP:
-			_mart_quantity = 1 if _mart_quantity >= maximum else _mart_quantity + 1
-		Gen2Button.DOWN:
-			_mart_quantity = maximum if _mart_quantity <= 1 else _mart_quantity - 1
-		Gen2Button.RIGHT:
-			_mart_quantity = mini(_mart_quantity + 10, maximum)
-		Gen2Button.LEFT:
-			_mart_quantity = maxi(_mart_quantity - 10, 1)
+		Gen2Button.UP, Gen2Button.DOWN, Gen2Button.LEFT, Gen2Button.RIGHT:
+			_mart_quantity = Gen2WorldQuantityPrompt.stepped(
+				_mart_quantity, button, maximum
+			)
 		Gen2Button.B:
 			_mart_stage = MART_SELL
 		Gen2Button.A:
@@ -1631,11 +1623,14 @@ func _filled(text: String, applied: Dictionary) -> String:
 	)
 
 
+## `SelectQuantityToToss`' dial: one either way, and zero wraps to the stack.
 func _change_pc_quantity(step: int) -> void:
 	if _cursor < 0 or _cursor >= _pc_entries.size():
 		return
 	var owned: int = int(_pc_entries[_cursor].get("quantity", 1))
-	_pc_quantity = clampi(_pc_quantity + step, 1, maxi(1, owned))
+	_pc_quantity = Gen2WorldQuantityPrompt.stepped(
+		_pc_quantity, Gen2Button.UP if step > 0 else Gen2Button.DOWN, owned
+	)
 	_render_rows()
 
 

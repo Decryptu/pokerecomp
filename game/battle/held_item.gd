@@ -99,6 +99,9 @@ const PIKACHU: int = 25
 const METAL_POWDER_ITEM: int = 35
 const DITTO: int = 132
 
+## `HandleBerserkGene`'s `sub BERSERK_GENE`; its held effect is HELD_NONE.
+const BERSERK_GENE_ITEM: int = 0x98
+
 ## `MailItems` (data/items/mail_items.asm). Pinned rather than read from
 ## [GameData] because the battle engine takes no cache; the table is imported
 ## beside it and `tools/checks/mail.gd` holds the two together on all three

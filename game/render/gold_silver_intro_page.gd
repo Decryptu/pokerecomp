@@ -304,10 +304,8 @@ func shadow_oam(movie: Gen2GoldSilverIntro) -> Array[Dictionary]:
 	return out
 
 
-## The BG map, sampled through `hSCX` and the scanline's own `hSCY`. Both are
-## bytes and the map is 256 pixels square, so the sampling wraps rather than
-## clipping. Returns each pixel's own colour index, which is what an `OAM_PRIO`
-## sprite is drawn against.
+## The BG map through `hSCX` and the scanline's `hSCY`, wrapping at 256 the way
+## [method Gen2IntroMoviePage._draw_background] does, and each pixel's index out.
 func _draw_background(
 	pixels: PackedInt32Array, movie: Gen2GoldSilverIntro
 ) -> PackedByteArray:

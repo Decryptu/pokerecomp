@@ -349,8 +349,7 @@ func selected_world_renderer() -> StringName:
 	return _selected_view if _world_renderers.has(_selected_view) else BUILT_IN_RENDERER
 
 
-## A fresh renderer node for the selected world renderer, falling back to the
-## built-in one so a screen always has something to draw with.
+## A fresh node for the selected world renderer, or the built-in one.
 func create_world_renderer() -> Node:
 	return _create(_world_renderers, selected_world_renderer(), Gen2WorldRenderer)
 
@@ -984,8 +983,7 @@ func selected_battle_renderer() -> StringName:
 	return _selected_view if _battle_renderers.has(_selected_view) else BUILT_IN_RENDERER
 
 
-## A fresh renderer node for the selected battle renderer, falling back to the
-## built-in one so a screen always has something to draw with.
+## A fresh node for the selected battle renderer, or the built-in one.
 func create_battle_renderer() -> Node:
 	return _create(_battle_renderers, selected_battle_renderer(), Gen2BattleRenderer)
 
