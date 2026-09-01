@@ -10,9 +10,8 @@ extends RefCounted
 ## which is an argmin rather than a rule, so [method choose_slot] takes it
 ## directly. Percent chances use the cartridge's `X * 255 / 100` macro.
 
-## Everything one scoring layer is allowed to read, gathered once so a handler
-## takes the fact it needs rather than a thirteenth positional argument.
-## The cartridge reads all of this straight out of WRAM; this is that page.
+## Everything one scoring layer is allowed to read, which the cartridge reads
+## straight out of WRAM.
 class Context extends RefCounted:
 	var attacker: Gen2BattleMon = null
 	var defender: Gen2BattleMon = null
@@ -86,29 +85,21 @@ const STATUS_ONLY_EFFECTS: Array = [
 	Gen2MoveEffect.SLEEP, Gen2MoveEffect.TOXIC, Gen2MoveEffect.POISON, Gen2MoveEffect.PARALYZE,
 ]
 
-## [constant RomLayout.AI_AGGRESSIVE] does not punish a move for dealing less
-## damage than the hardest hitter if losing the mon over it is the point.
-## Effect bytes, not moves: Selfdestruct and Explosion share one, and so do
-## every double and multi-hit move.
+## `RecklessMoves`, exempt from `AI_Aggressive`'s punishment. Effect bytes, not
+## moves: Selfdestruct and Explosion share one, and so does every multi-hit.
 const RECKLESS_EFFECTS: Array = [7, 27, 29, 44] # SELFDESTRUCT, RAMPAGE, MULTI_HIT, DOUBLE_HIT
 
-## [constant RomLayout.AI_RISKY] treats these two as a special case: a move
-## that faints the user (Selfdestruct, Explosion) or skips the damage formula
-## for a guaranteed kill (Horn Drill, Fissure, Guillotine, Sheer Cold) is worth
-## holding back on unless already hurt.
+## `RiskyEffects`: a move that faints the user or skips the formula for a
+## guaranteed kill, held back on unless the user is already hurt.
 const RISKY_EFFECTS: Array = [7, 38] # SELFDESTRUCT, OHKO
 
-## [constant RomLayout.AI_OPPORTUNIST] discourages these particular moves, by
-## number, once its own HP is low: `data/battle/ai/stall_moves.asm` in
-## pokecrystal. Every one of them either does nothing to the opponent's HP or
-## buys time, which is a poor trade when the trade might not come.
+## `data/battle/ai/stall_moves.asm`, by move number: what `AI_Opportunist`
+## discourages once its own HP is low.
 const STALL_MOVE_NUMBERS: Array = [
 	14, 39, 43, 45, 50, 54, 68, 73, 74, 81, 96, 97, 99, 102, 103, 106, 110, 111, 112, 113, 114,
 	115, 116, 117, 133, 144, 150, 151, 159, 160, 164, 172,
 ]
 
-## The screen each of the three screen moves would raise, which is the whole of
-## `AI_Redundant`'s `.LightScreen`, `.Reflect` and `.Safeguard`.
 ## `AI_Redundant`'s rows that are one substatus bit on the target, by the move
 ## effect that would set it.
 const REDUNDANT_TARGET_SUBSTATUS: Dictionary = {
@@ -172,19 +163,15 @@ const USEFUL_MOVE_NUMBERS: Array[int] = [
 ## exempts.
 const SANDSTORM_IMMUNE_TYPES: Array = Gen2Weather.SANDSTORM_EXEMPT_TYPES
 
-## [constant RomLayout.AI_CAUTIOUS] discourages these once it is no longer the
-## first turn, because a move whose value is a residual effect (Leech Seed,
-## Toxic-family status, a screen) has usually already paid for itself or not
-## at all by then: `data/battle/ai/residual_moves.asm` in pokecrystal.
+## `data/battle/ai/residual_moves.asm`, by move number: what `AI_Cautious`
+## discourages once the first turn has passed.
 const RESIDUAL_MOVE_NUMBERS: Array = [54, 73, 77, 78, 86, 116, 117, 139, 144, 160, 164, 191]
 
 
-## What the enemy does with its turn: pull its Pokemon out, reach for an item, or
-## use a move. `AI_SwitchOrTryItem`, which runs before the turn and settles ahead
-## of it: switching is considered first and an item only when it is refused,
-## which is the cartridge's `DontSwitch` fallthrough rather than a separate
-## decision. [param item_switch_flags] is the class's own
-## [constant RomLayout.ATTR_AI_ITEM_SWITCH].
+## `AI_SwitchOrTryItem`: pull the Pokemon out, reach for an item, or use a move.
+## An item is only considered once the switch is refused, which is the
+## cartridge's `DontSwitch` fallthrough. [param item_switch_flags] is the class's
+## own [constant RomLayout.ATTR_AI_ITEM_SWITCH].
 static func choose_action(
 	battle: Gen2Battle, item_switch_flags: int, move_slot: int, rng: RandomNumberGenerator
 ) -> Dictionary:
@@ -236,13 +223,11 @@ static func _locked_in(mon: Gen2BattleMon) -> bool:
 
 
 ## Picks a move slot for [param attacker] against [param defender], scored the
-## way [param ai_move_weights] says to. The two turn counts are `wEnemyTurnsTaken`
-## and `wPlayerTurnsTaken` read before the turn is spent, which is when the
-## cartridge reads them; every handler wants the same thing out of them, whether
-## this is the Pokemon's first turn out. [param has_bench] and
-## [param matchup_score] are `FindAliveEnemyMons` and `CheckPlayerMoveTypeMatchups`
-## supplied rather than read, since this scores a pairing rather than a battle.
-## Always returns a slot in range: an unusable one becomes Struggle.
+## way [param ai_move_weights] says to. The two turn counts are
+## `wEnemyTurnsTaken` and `wPlayerTurnsTaken` read before the turn is spent.
+## [param has_bench] and [param matchup_score] are `FindAliveEnemyMons` and
+## `CheckPlayerMoveTypeMatchups` supplied rather than read, since this scores a
+## pairing rather than a battle.
 static func choose_slot(
 	attacker: Gen2BattleMon,
 	defender: Gen2BattleMon,
@@ -348,6 +333,12 @@ static func _move_at(mon: Gen2BattleMon, data: GameData, slot: int) -> Dictionar
 	return data.move(int(mon.moves[slot]))
 
 
+## The `ld a, [de] / and a / ret z` every scoring loop opens with: an empty slot
+## ends the walk, and PP and Disable are not asked about anywhere in this file.
+static func _is_empty_slot(mon: Gen2BattleMon, slot: int) -> bool:
+	return slot >= mon.moves.size() or int(mon.moves[slot]) == 0
+
+
 static func _effect(move: Dictionary) -> int:
 	return int(move.get("effect", 0))
 
@@ -405,6 +396,12 @@ const AI_79_PERCENT_MINUS_ONE: int = 200
 ## `28 percent - 1`, which is 70, and `AI_Smart_Encore` alone.
 const AI_28_PERCENT_MINUS_ONE: int = 70
 
+## `90 percent + 1`, which is 230: `AI_Cautious`'s own roll.
+const AI_90_PERCENT_PLUS_ONE: int = 230
+
+## `31 percent + 1`, which is 80, and the badly-poisoned arm of the evasion tail.
+const AI_31_PERCENT_PLUS_ONE: int = 80
+
 ## `EncoreMoves`: what the AI thinks is worth locking the player into, by move
 ## number. `AI_Smart_Encore` reads it only for a move it has already decided is
 ## weak against the enemy in front of it.
@@ -424,12 +421,9 @@ static func _skip_80_20(rng: RandomNumberGenerator) -> bool:
 	return rng.randi_range(0, 255) < 50
 
 
-## [constant RomLayout.AI_BASIC]: nothing redundant. A status move against an
-## already-statused target, confusion against a confused one, Disable or Encore
-## against a locked one, Attract against a target in love or of the same or
-## unknown gender, and a second Mist or Focus Energy, which is why those two read
-## the attacker rather than the defender. A standing Substitute reads the attacker
-## for the same reason; Leech Seed, Nightmare and Spikes read the target.
+## [constant RomLayout.AI_BASIC]: nothing redundant. Mist, Focus Energy,
+## Substitute and Mean Look read the attacker's own side, because that is where
+## each of them lands; everything else reads the target's.
 static func _apply_basic(scores: Array, c: Context) -> void:
 	for slot: int in Gen2BattleMon.MAX_MOVES:
 		if not c.attacker.can_use(slot):
@@ -452,7 +446,10 @@ static func _is_redundant(effect: int, c: Context) -> bool:
 	if WEATHER_FOR_EFFECT.has(effect):
 		return c.weather == int(WEATHER_FOR_EFFECT[effect])
 	if STATUS_ONLY_EFFECTS.has(effect):
-		return Gen2Status.is_afflicted(c.defender.status)
+		# `AI_Basic`'s two clauses behind `StatusOnlyEffects`: a target that
+		# already carries a status, and one standing behind its own Safeguard.
+		return Gen2Status.is_afflicted(c.defender.status) \
+			or Gen2Screens.has(c.defender_screens, Gen2Screens.SAFEGUARD)
 	# Four labels on one body: healing a full bar does nothing, whatever the
 	# weather would have made of it.
 	if HEALING_EFFECTS.has(effect):
@@ -806,10 +803,8 @@ static func _smart_stomp(scores: Array, slot: int, c: Context) -> void:
 static func _smart_fly_or_dig(scores: Array, slot: int, c: Context) -> void:
 	if _is_semi_invulnerable(c.defender) and _faster(c.attacker, c.defender):
 		_encourage(scores, slot, 3)
-## `AI_Smart_MirrorMove`: without a remembered player move, a faster AI
-## dismisses Mirror Move because it will act before seeing one. A useful
-## remembered move gets one 50% encouragement and, when the AI is faster, a
-## second 90% encouragement.
+## `AI_Smart_MirrorMove`: a faster AI acts before seeing a move, so with nothing
+## remembered it dismisses this.
 static func _smart_mirror_move(scores: Array, slot: int, c: Context) -> void:
 	var copied: int = c.defender.last_counter_move
 	if copied == 0:
@@ -824,10 +819,8 @@ static func _smart_mirror_move(scores: Array, slot: int, c: Context) -> void:
 		_encourage(scores, slot, 1)
 
 
-## `AI_Smart_Mimic`: wait for a move when slower, dismiss the blind attempt
-## when faster, and only copy above half health. A resisted last move is
-## discouraged; a super-effective or source-listed useful one gets its own 50%
-## encouragement.
+## `AI_Smart_Mimic`: wait for a move when slower, dismiss the blind attempt when
+## faster, and only copy above half health.
 static func _smart_mimic(scores: Array, slot: int, c: Context) -> void:
 	var copied: int = c.defender.last_counter_move
 	if copied == 0:
@@ -856,9 +849,7 @@ static func _smart_mimic(scores: Array, slot: int, c: Context) -> void:
 
 
 ## `AI_Smart_Snore` and `AI_Smart_SleepTalk` are one source body. A sleep count
-## of one wakes before the move and is discouraged; every other value gets the
-## smart layer's encouragement. The basic layer independently discourages the
-## awake case, leaving it a bad choice overall as on the cartridge.
+## of one wakes before the move; every other value is encouraged.
 static func _smart_sleep_talk(scores: Array, slot: int, c: Context) -> void:
 	if (c.attacker.status & Gen2Status.SLEEP_MASK) == 1:
 		_discourage(scores, slot, 3)
@@ -866,12 +857,11 @@ static func _smart_sleep_talk(scores: Array, slot: int, c: Context) -> void:
 		_encourage(scores, slot, 3)
 
 
-## `AI_Smart_Conversion2`'s documented bug: once the player has a remembered
-## move, the smart layer almost always discourages the very response designed
-## for it. The no-last-move branch reads past move zero in the cartridge; this
-## model leaves that undefined lookup neutral rather than inventing ROM bytes.
+## `AI_Smart_Conversion2`'s documented bug: a remembered move almost always
+## discourages the very response designed for it. The no-last-move branch reads
+## past move zero on the cartridge and is left neutral here.
 static func _smart_conversion_2(scores: Array, slot: int, c: Context) -> void:
-	if c.defender.last_counter_move != 0 and not _rolls_under(c.rng, 25):
+	if c.defender.last_move_used != 0 and not _rolls_under(c.rng, 25):
 		_discourage(scores, slot, 1)
 
 
@@ -910,11 +900,9 @@ static func _smart_sandstorm(scores: Array, slot: int, c: Context) -> void:
 		_encourage(scores, slot, 1)
 
 
-## `AI_Smart_RainDance` and `AI_Smart_SunnyDay`, one routine with two type pairs:
-## the weather is a bad idea if it would suit the target and a good one if it
-## would hurt it, and otherwise worth setting only with a move that wants it. The
-## two types are tested in the cartridge's order, so a Water/Fire target under
-## Rain Dance is a Water target.
+## `AI_Smart_RainDance` and `AI_Smart_SunnyDay`, one routine with two type pairs.
+## The two types are tested in the cartridge's order, so a Water/Fire target
+## under Rain Dance is a Water target.
 static func _smart_weather_move(
 	scores: Array, slot: int, c: Context, favours_target: int, disfavours_target: int, wanted_moves: Array
 ) -> void:
@@ -953,12 +941,9 @@ static func _good_weather_type(
 		_encourage(scores, slot, 2)
 
 
-## `AI_Smart_TrapTarget`: pointless against a target already bound, and worth two
-## against one that is losing health anyway or has only just come out, provided
-## the user has enough left to hold it there.
-##
-## The five states it encourages on are Toxic and the four bits
-## `and 1 << SUBSTATUS_IN_LOVE | 1 << SUBSTATUS_ROLLOUT | 1 << SUBSTATUS_IDENTIFIED
+## `AI_Smart_TrapTarget`: pointless against a target already bound. The five
+## states it encourages on are Toxic and the four bits
+## `1 << SUBSTATUS_IN_LOVE | 1 << SUBSTATUS_ROLLOUT | 1 << SUBSTATUS_IDENTIFIED
 ## | 1 << SUBSTATUS_NIGHTMARE` tests in one instruction.
 static func _smart_trap_target(scores: Array, slot: int, c: Context) -> void:
 	var worth_it: bool = c.defender.trapped_turns <= 0 and (
@@ -1004,7 +989,7 @@ static func _smart_reset_stats(scores: Array, slot: int, c: Context) -> void:
 static func _smart_confuse(scores: Array, slot: int, c: Context) -> void:
 	if _above_half(c.defender):
 		return
-	if _roll(c.rng, 90):
+	if not _roll(c.rng, 10):
 		_discourage(scores, slot, 1)
 	if not _above_quarter(c.defender):
 		_discourage(scores, slot, 1)
@@ -1083,11 +1068,9 @@ static func _smart_pain_split(scores: Array, slot: int, c: Context) -> void:
 		_discourage(scores, slot, 1)
 
 
-## `AI_Smart_LockOn`, whose two halves ask opposite questions. With the player
-## already locked on, aiming again is wasted: every inaccurate move the enemy
-## knows is encouraged instead and Lock On itself is dismissed, the walk stopping
-## at the first empty slot. Without it the ladder is health, then speed, then
-## whether the accuracy is actually a problem.
+## `AI_Smart_LockOn`, whose two halves ask opposite questions. Already locked on,
+## every inaccurate move the enemy knows is encouraged and Lock On is dismissed.
+## Without it the ladder is health, then speed, then the accuracy itself.
 static func _smart_lock_on(scores: Array, slot: int, c: Context) -> void:
 	if Gen2Substatus.has(c.defender.substatus, Gen2Substatus.LOCK_ON):
 		for other: int in Gen2BattleMon.MAX_MOVES:
@@ -1152,11 +1135,9 @@ static func _lock_on_has_wanting_move(
 const LOCK_ON_WANTED_ACCURACY: int = 180
 
 
-## `AI_Smart_Spite`: worth it against a move the target is nearly out of, wasted
-## against one it has plenty of.
-##
-## The target has not moved yet in the first branch, so there is nothing to drain
-## and the question is only whether the enemy would get to see a move first.
+## `AI_Smart_Spite`: worth it against a move the target is nearly out of. With
+## nothing remembered there is nothing to drain, so the first branch only asks
+## whether the enemy would get to see a move at all.
 static func _smart_spite(scores: Array, slot: int, c: Context) -> void:
 	var last_move: int = c.defender.last_counter_move
 	if last_move == 0:
@@ -1214,15 +1195,16 @@ static func _smart_foresight(scores: Array, slot: int, c: Context) -> void:
 	_encourage(scores, slot, 2)
 
 
-## `AI_Smart_MeanLook`: the source only wants the trap from above half health,
-## with a live bench, or against a player who is already trapped in a costly
-## state. The Toxic branch is intentionally the cartridge's bug: it encourages
-## Mean Look because the AI's own Pokémon is badly poisoned.
+## `AI_Smart_MeanLook`: the trap wants half health and a player with somewhere
+## to run. The Toxic branch is the cartridge's own bug, encouraging Mean Look
+## because the AI's own Pokémon is badly poisoned.
 static func _smart_mean_look(scores: Array, slot: int, c: Context) -> void:
-	if c.attacker.hp * 2 < c.attacker.max_hp():
-		_discourage(scores, slot)
+	if not _above_half(c.attacker):
+		_discourage(scores, slot, 1)
 		return
-	if not c.has_bench:
+	# `AICheckLastPlayerMon`: the *player's* bench, not the AI's. A trap is only
+	# worth setting on somebody who has somewhere else to be.
+	if not c.defender_has_bench:
 		_discourage(scores, slot)
 		return
 
@@ -1260,10 +1242,7 @@ static func _smart_pursuit(scores: Array, slot: int, c: Context) -> void:
 	_discourage(scores, slot, 1)
 
 
-## `AI_Smart_Protect`: one ladder of tests, first match winning, and the two exits
-## are asymmetric. `.encourage` is an 80% roll and one point off; `.discourage` is
-## a two-point penalty that an 8% roll skips outright, and `.greatly_discourage`
-## adds a point and falls into it, so the worst case is three.
+## `AI_Smart_Protect`: one ladder of tests, first match winning.
 ##
 static func _smart_protect(scores: Array, slot: int, c: Context) -> void:
 	if c.attacker.protect_count != 0:
@@ -1318,11 +1297,9 @@ static func _smart_protect_discourage(
 const PROTECT_DISCOURAGE_SKIP_PERCENT: int = 8
 
 
-## `AI_Smart_Endure`: the same opening test as Protect, then health, then the one
-## reason to want to survive on a single point. Reversal is looked for by effect
-## rather than by move number, which is `AIHasMoveEffect`, and Flail carries the
-## same byte. `.no_reversal` is the other reason: `wEnemySubStatus5`, the flag a
-## Lock On the player used left on the enemy.
+## `AI_Smart_Endure`: Protect's opening test, then health, then the one reason to
+## survive on a single point. Reversal is looked for by effect, so Flail counts
+## too; `.no_reversal` reads the enemy's own Lock On flag.
 static func _smart_endure(scores: Array, slot: int, c: Context) -> void:
 	if c.attacker.protect_count != 0 or _at_max_hp(c.attacker):
 		_discourage(scores, slot, 2)
@@ -1343,11 +1320,6 @@ static func _smart_endure(scores: Array, slot: int, c: Context) -> void:
 
 
 ## `AIHasMoveEffect`: whether this Pokémon knows any move carrying [param effect].
-##
-## An empty slot ends the search rather than being skipped, which is the source's
-## own `and a / jr z, .no`, and PP and Disable are not asked about at all. The
-## first costs nothing on a packed move list and is kept because the list is only
-## packed by convention.
 static func _has_move_effect(mon: Gen2BattleMon, data: GameData, effect: int) -> bool:
 	for slot: int in Gen2BattleMon.MAX_MOVES:
 		if slot >= mon.moves.size() or int(mon.moves[slot]) == 0:
@@ -1418,8 +1390,8 @@ static func _apply_aggressive(scores: Array, c: Context) -> void:
 	var best_slot: int = -1
 	var best_damage: int = -1
 	for slot: int in Gen2BattleMon.MAX_MOVES:
-		if not attacker.can_use(slot):
-			continue
+		if _is_empty_slot(attacker, slot):
+			break
 		var move: Dictionary = _move_at(attacker, data, slot)
 		if _power(move) <= 0:
 			continue
@@ -1428,11 +1400,14 @@ static func _apply_aggressive(scores: Array, c: Context) -> void:
 			best_damage = damage
 			best_slot = slot
 
-	if best_slot == -1 or best_damage <= 0:
+	# `.gotstrongestmove` only refuses on `c` still zero, which is no damaging
+	# move at all. A move the player is immune to has already set `c`, so a
+	# whole moveset that lands for nothing still discourages all but the last.
+	if best_slot == -1:
 		return
 
 	for slot: int in Gen2BattleMon.MAX_MOVES:
-		if slot == best_slot or not attacker.can_use(slot):
+		if slot == best_slot or _is_empty_slot(attacker, slot):
 			continue
 		var move: Dictionary = _move_at(attacker, data, slot)
 		if _power(move) < 2:
@@ -1442,14 +1417,11 @@ static func _apply_aggressive(scores: Array, c: Context) -> void:
 		_discourage(scores, slot, 1)
 
 
-## `AIDamageCalc`: the AI's own damage prediction, which is `EnemyAttackDamage`
-## and `BattleCommand_DamageCalc` themselves rather than an approximation, so it
-## reads the player's screens exactly as a real hit would.
+## `AIDamageCalc`: `EnemyAttackDamage` and `BattleCommand_DamageCalc` themselves,
+## so it reads the player's screens exactly as a real hit would.
 ## [constant Gen2Damage.CONSTANT_DAMAGE_EFFECTS] answers with
-## `BattleCommand_ConstantDamage`'s own number instead; without that branch
-## Seismic Toss, Night Shade and Super Fang are read at power 1. [param constant]
-## is what `AI_Smart_PriorityHit` is missing. Psywave's prediction really rolls,
-## and the roll is spent on the one generator both sides share.
+## `BattleCommand_ConstantDamage`'s own number; [param constant] is the branch
+## `AI_Smart_PriorityHit` is missing.
 static func _estimate_damage(c: Context, move: Dictionary, constant: bool = true) -> int:
 	var effect: int = _effect(move)
 	if constant and Gen2Damage.CONSTANT_DAMAGE_EFFECTS.has(effect):
@@ -1480,30 +1452,39 @@ static func _apply_cautious(scores: Array, c: Context) -> void:
 		var move: Dictionary = _move_at(attacker, data, slot)
 		if not RESIDUAL_MOVE_NUMBERS.has(int(move.get("number", 0))):
 			continue
-		if _roll(rng, 90):
+		if _rolls_under(rng, AI_90_PERCENT_PLUS_ONE):
 			_discourage(scores, slot, 1)
 		elif Gen2Rules.hardware(&"cautious_ai_abandons_remaining_moves"):
 			return
 
 
-## [constant RomLayout.AI_STATUS]: dismiss a status move the defender's typing
-## shrugs off. Toxic and Poison need no poison-type shortcut, since a Poison-type
-## defender against a Poison-type move already reads
-## [constant RomLayout.MATCHUP_NO_EFFECT] out of the real chart.
+## [constant RomLayout.AI_STATUS]: dismiss anything the defender's typing shrugs
+## off. Its comment says status moves; the code reads the four named status
+## effects and then every move that does damage, and passes over the rest.
 static func _apply_status(scores: Array, c: Context) -> void:
 	var attacker: Gen2BattleMon = c.attacker
 	var defender: Gen2BattleMon = c.defender
 	var data: GameData = c.data
 	for slot: int in Gen2BattleMon.MAX_MOVES:
-		if not attacker.can_use(slot):
-			continue
+		if _is_empty_slot(attacker, slot):
+			break
 		var move: Dictionary = _move_at(attacker, data, slot)
 		var effect: int = _effect(move)
-		if not STATUS_ONLY_EFFECTS.has(effect) and _power(move) > 0:
-			continue
+		if effect == Gen2MoveEffect.TOXIC or effect == Gen2MoveEffect.POISON:
+			# `.poisonimmunity` stands in front of the chart, and the chart
+			# cannot answer it: Poison against Poison is resisted rather than
+			# refused, and Steel is the only typing the move itself cannot touch.
+			if defender.types().has(RomLayout.TYPE_POISON):
+				_discourage(scores, slot)
+				continue
+		elif effect != Gen2MoveEffect.SLEEP and effect != Gen2MoveEffect.PARALYZE:
+			# Everything past the four named effects is read only when it does
+			# damage, so this layer dismisses an immune attack and passes over a
+			# status move it has no rule for.
+			if _power(move) <= 0:
+				continue
 
-		var move_type: int = int(move.get("type", RomLayout.TYPE_NORMAL))
-		if data.type_effectiveness(move_type, defender.types()) == RomLayout.MATCHUP_NO_EFFECT:
+		if _matchup(c, move) == RomLayout.MATCHUP_NO_EFFECT:
 			_discourage(scores, slot)
 
 
@@ -1526,10 +1507,10 @@ static func _apply_risky(scores: Array, c: Context) -> void:
 		if RISKY_EFFECTS.has(_effect(move)):
 			if _at_max_hp(attacker):
 				continue
-			if _roll(rng, 79):
+			if _rolls_under(rng, AI_79_PERCENT_MINUS_ONE):
 				continue
 
-		if _estimate_damage(c, move) >= defender.hp:
+		if _estimate_damage(c, move) > defender.hp:
 			_encourage(scores, slot, 5)
 
 
@@ -1593,7 +1574,7 @@ static func _smart_selfdestruct(scores: Array, slot: int, c: Context) -> void:
 ## already made up its mind.
 static func _evasion_tail(scores: Array, slot: int, c: Context) -> void:
 	if _badly_poisoned(c.defender):
-		if not _rolls_under(c.rng, AI_39_PERCENT_PLUS_ONE):
+		if not _rolls_under(c.rng, AI_31_PERCENT_PLUS_ONE):
 			_encourage(scores, slot, 2)
 		return
 	if Gen2Substatus.has(c.defender.substatus, Gen2Substatus.LEECH_SEED):
@@ -1774,9 +1755,8 @@ static func _smart_disable(scores: Array, slot: int, c: Context) -> void:
 	_discourage(scores, slot, 1)
 
 
-## `AI_Smart_Counter` and `AI_Smart_MirrorCoat`, which are one routine reading
-## the other half of the physical/special split: three remembered hits of the
-## right half make it worth the guess, and the last one seen decides a tie.
+## `AI_Smart_Counter` and `AI_Smart_MirrorCoat`, one routine reading either half
+## of the physical/special split.
 static func _smart_counter(scores: Array, slot: int, c: Context, physical: bool) -> void:
 	var seen: int = 0
 	for number: int in c.defender_used_moves:
@@ -1866,9 +1846,7 @@ static func _smart_priority_hit(scores: Array, slot: int, c: Context) -> void:
 		_encourage(scores, slot, 3)
 
 
-## `AI_Smart_Curse`, two routines under one label: a Ghost pays half its own HP
-## and wants the trade to be the last one, and everything else is reading
-## whether an attack raise will be spent.
+## `AI_Smart_Curse`, two routines under one label, split on the user's typing.
 static func _smart_curse(scores: Array, slot: int, c: Context) -> void:
 	if c.attacker.types().has(RomLayout.TYPE_GHOST):
 		_smart_ghost_curse(scores, slot, c)
@@ -1918,8 +1896,7 @@ static func _smart_ghost_curse(scores: Array, slot: int, c: Context) -> void:
 		_encourage(scores, slot, 2)
 
 
-## `AI_Smart_Rollout`: a run that has to survive several turns, so anything that
-## might interrupt it, or any accuracy gap, is a reason to stop.
+## `AI_Smart_Rollout`: anything that might interrupt the run is a reason to stop.
 static func _smart_rollout(scores: Array, slot: int, c: Context) -> void:
 	var risky: bool = Gen2Substatus.has(
 		c.attacker.substatus, Gen2Substatus.ATTRACTED | Gen2Substatus.CONFUSED
@@ -1962,9 +1939,7 @@ static func _smart_attract(scores: Array, slot: int, c: Context) -> void:
 	_encourage(scores, slot, 1)
 
 
-## `AI_Smart_Earthquake` and `AI_Smart_Gust`: the same routine reading Dig or
-## Fly. A player already underground or airborne is punished from in front, and
-## one that has only used the move before is a guess taken from behind.
+## `AI_Smart_Earthquake` and `AI_Smart_Gust`, one routine reading Dig or Fly.
 static func _smart_ground_or_air(
 	scores: Array, slot: int, c: Context, move_number: int, flag: int
 ) -> void:
