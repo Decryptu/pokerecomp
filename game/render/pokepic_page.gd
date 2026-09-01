@@ -2,12 +2,11 @@ class_name Gen2PokepicPage
 extends RefCounted
 
 ## `Pokepic` (engine/events/pokepic.asm): the box a script's `pokepic` command
-## shows a species in, on the hardware tile grid. `MenuBox` at
-## `menu_coords 6, 4, 14, 13`, then `PlaceGraphic` writing a 7x7 block of the
-## front pic one tile in from the box's top-left corner. `_CGB_Pokepic` fills the
-## whole box with `PAL_BG_GRAY`, so the pic wears the map's first background
-## palette rather than the species' own colours: the picture a script shows is
-## grey. Node-free.
+## shows a species in, on the hardware tile grid. `MenuBox` at `menu_coords 6,
+## 4, 14, 13`, then `PlaceGraphic` writing a 7x7 block of the front pic one tile
+## in from the box's top-left corner. `_CGB_Pokepic` fills the whole box with
+## `PAL_BG_GRAY`, so the pic wears the map's first background palette rather
+## than the species' own colours: the picture a script shows is grey. Node-free.
 
 const TILE: int = Gen2Font.TILE
 

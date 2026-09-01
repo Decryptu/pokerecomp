@@ -951,12 +951,11 @@ func _perform(action: String) -> void:
 				_screen.select_view(StringName(action.trim_prefix("view-")))
 
 
-## The wild a provider has put on the map nearest the player, met the way walking
-## onto it meets it. Faces the player at it first, since a clip of an encounter
-## is a clip of the thing on screen.
-## Not the same as `wild-`: that one invents a battle and the entry standing on
-## the map is not part of it, so its Pokemon is still there afterwards however
-## the fight ended.
+## The wild a provider has put on the map nearest the player, met the way
+## walking onto it meets it. Faces the player at it first, since a clip of an
+## encounter is a clip of the thing on screen. Not the same as `wild-`: that one
+## invents a battle and the entry standing on the map is not part of it, so its
+## Pokemon is still there afterwards however the fight ended.
 func _meet_visible_encounter(shiny_only: bool) -> void:
 	var encounters: Object = _screen.get("_encounters")
 	var world: Gen2WorldAPI = _screen.get("_world")

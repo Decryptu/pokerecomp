@@ -54,11 +54,10 @@ signal page_changed(kind: StringName)
 signal redrawn()
 
 ## The whole drawn surface, in hardware pixels. Never smaller than
-## [constant CANVAS_MIN]: the page is a fixed 160x144 and the tab row has to hold
-## an icon.
-## The display this is shown on, in its own pixels. Only the idle screen is drawn
-## at this size: it is launcher UI rather than hardware pixels, and type laid out
-## in a 206-pixel canvas and blown up six times is unreadable.
+## [constant CANVAS_MIN]: the page is a fixed 160x144 and the tab row has to
+## hold an icon. The display this is shown on, in its own pixels. Only the idle
+## screen is drawn at this size: it is launcher UI rather than hardware pixels,
+## and type laid out in a 206-pixel canvas and blown up six times is unreadable.
 var panel_size: Vector2i = IDLE_PANEL:
 	set(value):
 		var clamped := Vector2i(maxi(value.x, 64), maxi(value.y, 64))

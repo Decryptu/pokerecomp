@@ -86,9 +86,8 @@ const DEX_LAST_CATEGORY: String = "TIMETRAVEL"
 const DEX_LAST_HEIGHT: int = 200
 const DEX_LAST_WEIGHT: int = 110
 
-## The species each order table opens with, known from pret's
-## `NewPokedexOrder` (Chikorita, the first of the new dex) and
-## `AlphabeticalPokedexOrder` (Abra).
+## The species each order table opens with, known from pret's `NewPokedexOrder`
+## (Chikorita, the first of the new dex) and `AlphabeticalPokedexOrder` (Abra).
 const DEX_ORDER_NEW_FIRST: int = 152
 const DEX_ORDER_ALPHA_FIRST: int = 63
 
@@ -164,6 +163,7 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	verify_link_border,
 	verify_trade_anim,
 	verify_card_flip,
+	verify_magnet_train,
 	verify_credits,
 	verify_menu_text,
 	verify_mart_text,
@@ -1258,9 +1258,8 @@ static func verify_day_care_text(rom: RomFile, layout: Dictionary) -> Dictionary
 ## Rater's is: every stub in the run has to decode, and the box each routine
 ## opens on has to be its own. A run the layout gives no offset is skipped
 ## rather than failed, which is what Gold and Silver's three Crystal-only rows
-## are.
-## `SPECIAL_TEXT_FIRST_BOX` is the identifying line per run, so a wrong pin is
-## caught here rather than by a screen printing the wrong routine's box.
+## are. `SPECIAL_TEXT_FIRST_BOX` is the identifying line per run, so a wrong pin
+## is caught here rather than by a screen printing the wrong routine's box.
 const SPECIAL_TEXT_FIRST_BOX: Dictionary = {
 	"magikarp": ["measure", "Let me measure"],
 	"lucky_number": ["match_party", "Congratulations!"],
@@ -1900,6 +1899,33 @@ static func verify_card_flip(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if int(entry.get("palettes", -1)) < 0:
 		return {"ok": false, "message": "No pin for the card flip's palettes."}
 	return {"ok": true, "message": "Card flip verified."}
+
+
+## `MagnetTrain`'s two tilemaps: the strip's symmetry and the tile numbers.
+static func verify_magnet_train(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var section: Dictionary = read_magnet_train(rom, layout)
+	if section.is_empty():
+		return {"ok": false, "message": "The magnet train's tilemaps do not walk."}
+
+	# The bushes above and below the train are the same two rows, which a walk
+	# landing anywhere else in the bank has no reason to repeat.
+	var bg: PackedByteArray = section["bg"]
+	var columns: int = RomLayout.MAGNET_TRAIN_BG_COLUMNS
+	var rows: int = RomLayout.MAGNET_TRAIN_BG_ROWS
+	for cell: int in columns * 2:
+		if bg[cell] != bg[(rows - 2) * columns + cell]:
+			return {"ok": false, "message": "The magnet train's bushes do not repeat."}
+
+	# Both name tiles of the tileset's first graphics block, which is what a
+	# station map has at `vTiles2`.
+	for name: String in ["bg", "fg"]:
+		for code: int in (section[name] as PackedByteArray):
+			if code >= RomLayout.TILESET_BLOCK_TILES:
+				return {
+					"ok": false,
+					"message": "The magnet train's %s tilemap names tile $%02X." % [name, code],
+				}
+	return {"ok": true, "message": "Magnet train verified."}
 
 
 ## `GoldSilverIntro`. The section walk is most of the check; what is left is the
@@ -3020,12 +3046,11 @@ static func verify_text_bg_palette(rom: RomFile, layout: Dictionary) -> Dictiona
 
 
 ## `LoadGenderScreenPal` and `LoadGenderScreenLightBlueTile`, whose bytes sit
-## thirteen apart in the same routine pair.
-## The palette's eight bytes appear once in the dump, so they pin themselves.
-## The tile does not: sixteen bytes of one repeated index occur hundreds of
-## times, so it is checked for being exactly that, on the index the palette's
-## light blue sits at. Both are -1 on Gold and Silver, which ship no gender
-## screen at all.
+## thirteen apart in the same routine pair. The palette's eight bytes appear
+## once in the dump, so they pin themselves. The tile does not: sixteen bytes of
+## one repeated index occur hundreds of times, so it is checked for being
+## exactly that, on the index the palette's light blue sits at. Both are -1 on
+## Gold and Silver, which ship no gender screen at all.
 static func verify_gender_screen(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var entry: Dictionary = layout.get("gender_screen", {})
 	var palette: int = int(entry.get("palette", -1))
@@ -4875,6 +4900,7 @@ func import_rom(
 		"slots_text": _import_slots_text(rom, layout),
 		"card_flip": _import_card_flip(rom, layout),
 		"card_flip_text": _import_card_flip_text(rom, layout),
+		"magnet_train": _import_magnet_train(rom, layout),
 		"unown_words": Array(read_unown_words(rom, layout)),
 		"unown_walls": Array(read_unown_walls(rom, layout)),
 		"odd_eggs": read_odd_eggs(rom, layout),
@@ -5572,12 +5598,11 @@ func _import_card_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return {"background": background, "badge": badge}
 
 
-## `_CGB_Pokedex`'s three palettes.
-## `interface` is PREDEFPAL_POKEDEX, the four colours the whole screen is drawn
-## through; `question_mark` is what an unseen species' Slowpoke picture wears,
-## which `_CGB_Pokedex` fills the 7x7 pic box with; `cursor` is object palette 7,
-## the arrow's own. All three are four colours stored whole rather than as a
-## pair, the way `card_badge_palette` is.
+## `_CGB_Pokedex`'s three palettes. `interface` is PREDEFPAL_POKEDEX, the four
+## colours the whole screen is drawn through; `question_mark` is what an unseen
+## species' Slowpoke picture wears, which `_CGB_Pokedex` fills the 7x7 pic box
+## with; `cursor` is object palette 7, the arrow's own. All three are four
+## colours stored whole rather than as a pair, the way `card_badge_palette` is.
 func _import_pokedex_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var entry: Dictionary = layout.get("pokedex", {})
 	var out: Dictionary = {}
@@ -5827,12 +5852,11 @@ func _import_copyright_palette(rom: RomFile, layout: Dictionary) -> Array:
 
 
 ## The intro movie's tile strips and its four BG maps with their attribute
-## planes, all out of one walk of the section.
-## A map is a byte run keyed by a name, so it is written the way a strip is and
-## read back with `GameData.intro_map()`; it is not a sheet and gets no entry in
-## the manifest's tile table. `Intro_LoadTilemap` copies the top-left 20x18 of
-## one into `wTilemap`, which is why the whole 32x32 is kept rather than a
-## screen.
+## planes, all out of one walk of the section. A map is a byte run keyed by a
+## name, so it is written the way a strip is and read back with
+## `GameData.intro_map()`; it is not a sheet and gets no entry in the manifest's
+## tile table. `Intro_LoadTilemap` copies the top-left 20x18 of one into
+## `wTilemap`, which is why the whole 32x32 is kept rather than a screen.
 func _import_intro_sheets(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var section: Dictionary = read_intro_section(rom, layout)
 	if section.is_empty():
@@ -6043,11 +6067,10 @@ func _import_shrink_pics(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 ## The title screen's palettes and, on Gold and Silver, its tilemap. The
 ## graphics themselves go through [method _import_title_sheets] with the rest of
-## the tile strips.
-## Crystal's sixteen palettes are one run `_TitleScreen` copies whole into both
-## buffers; Gold and Silver's are five background and two object palettes that
-## `GetSGBLayout` and `LoadTitleScreenPals` load separately, so they are kept
-## apart under the names the source gives them.
+## the tile strips. Crystal's sixteen palettes are one run `_TitleScreen` copies
+## whole into both buffers; Gold and Silver's are five background and two object
+## palettes that `GetSGBLayout` and `LoadTitleScreenPals` load separately, so
+## they are kept apart under the names the source gives them.
 func _import_title(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var entry: Dictionary = layout.get("title", {})
 	if entry.is_empty():
@@ -6415,13 +6438,12 @@ func _strip_sheet_entry(tiles: int) -> Dictionary:
 	}
 
 
-## `_UnownPuzzle`'s art section. `PuzzlePieceBorderData.TileBordersGFX` is pinned
-## on its own because thirty-four bytes of code sit between it and the run;
-## everything from `UnownPuzzleCursorGFX` on is one walk, each address the
-## previous entry's consumed length, with no alignment between them.
-## Returns {name: PackedByteArray} in `UNOWN_PUZZLE_SECTION` order plus
-## `tile_borders`, or an empty Dictionary if any entry does not decompress to
-## its own size.
+## `_UnownPuzzle`'s art section. `PuzzlePieceBorderData.TileBordersGFX` is
+## pinned on its own because thirty-four bytes of code sit between it and the
+## run; everything from `UnownPuzzleCursorGFX` on is one walk, each address the
+## previous entry's consumed length, with no alignment between them. Returns
+## {name: PackedByteArray} in `UNOWN_PUZZLE_SECTION` order plus `tile_borders`,
+## or an empty Dictionary if any entry does not decompress to its own size.
 static func read_unown_puzzle_section(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var entry: Dictionary = layout.get("unown_puzzle", {})
 	var borders: int = int(entry.get("tile_borders", -1))
@@ -6498,12 +6520,11 @@ func _import_unown_puzzle(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return {"palette": palette}
 
 
-## `_SlotMachine`'s data run, walked whole from `Reel1Tilemap`.
-## The three reel strips and `SlotsTilemap` are raw bytes and the three graphics
-## runs are LZ, laid out in that order with nothing between them; every entry
-## landing on its own size is what says the address is right.
-## Returns {name: PackedByteArray} in `SLOTS_SECTION` order, or an empty
-## Dictionary if any entry does not.
+## `_SlotMachine`'s data run, walked whole from `Reel1Tilemap`. The three reel
+## strips and `SlotsTilemap` are raw bytes and the three graphics runs are LZ,
+## laid out in that order with nothing between them; every entry landing on its
+## own size is what says the address is right. Returns {name: PackedByteArray}
+## in `SLOTS_SECTION` order, or an empty Dictionary if any entry does not.
 static func read_slots_section(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var at: int = int((layout.get("slots", {}) as Dictionary).get("section", -1))
 	if at < 0:
@@ -6579,6 +6600,28 @@ func _import_slots(rom: RomFile, layout: Dictionary) -> Dictionary:
 			rom, at, RomLayout.SLOTS_PALETTES * RomLayout.PREDEF_PALETTE_COLORS
 		),
 	}
+
+
+## The two tilemaps, or empty when either run is outside the cartridge.
+static func read_magnet_train(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var entry: Dictionary = layout.get("magnet_train", {}) as Dictionary
+	var bg: int = int(entry.get("bg", -1))
+	var fg: int = int(entry.get("fg", -1))
+	if bg < 0 or fg < 0 \
+		or not rom.in_bounds(bg, RomLayout.MAGNET_TRAIN_BG_BYTES) \
+		or not rom.in_bounds(fg, RomLayout.MAGNET_TRAIN_FG_BYTES):
+		return {}
+	return {
+		"bg": rom.slice(bg, RomLayout.MAGNET_TRAIN_BG_BYTES),
+		"fg": rom.slice(fg, RomLayout.MAGNET_TRAIN_FG_BYTES),
+	}
+
+
+func _import_magnet_train(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var section: Dictionary = read_magnet_train(rom, layout)
+	if section.is_empty():
+		return {}
+	return {"bg": Array(section["bg"]), "fg": Array(section["fg"])}
 
 
 ## The slot machine's seven boxes, by the name `RomLayout.SLOTS_TEXT_RUNS` gives

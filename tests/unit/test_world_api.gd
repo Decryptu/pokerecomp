@@ -5740,10 +5740,11 @@ func test_newloadmap_carries_its_entry_method_and_does_not_end_the_script() -> v
 	assert_true(state.is_event_flag_active(44), "the command after newloadmap ran")
 
 
-## MagnetTrain is scroll positions, graphics, music and a VBlank cutscene. It
-## reads wScriptVar for the direction, which a preceding SETVAL loads, and
-## writes nothing the overworld can observe.
-func test_magnet_train_special_reports_its_direction_and_writes_nothing() -> void:
+## MagnetTrain runs its own loop with the map suspended behind it, so the script
+## waits on the ride rather than running on. It reads wScriptVar for the
+## direction, which a preceding SETVAL loads, and writes nothing the overworld
+## can observe.
+func test_magnet_train_special_waits_on_the_ride_and_writes_nothing() -> void:
 	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
 	for row: Array in [["48:6160", 1], ["48:6170", 0]]:
 		scripts[row[0]] = [
@@ -5761,14 +5762,12 @@ func test_magnet_train_special_reports_its_direction_and_writes_nothing() -> voi
 
 		var result: Dictionary = runner.advance()
 
-		assert_eq(result["status"], &"complete", JSON.stringify(result))
+		assert_eq(result["status"], &"waiting", JSON.stringify(result))
 		assert_eq(state.event_flags().size(), 0)
 		assert_eq(state.engine_flags().size(), 0)
-		assert_true(result["events"].any(func(event: Dictionary) -> bool:
-			return event.get("type", &"") == &"presentation_special_applied" \
-				and event.get("kind", &"") == &"magnet_train" \
-				and bool(event.get("to_goldenrod", false)) == bool(row[2])
-		), JSON.stringify(result["events"]))
+		var request: Dictionary = result["event"]["request"]
+		assert_eq(request["kind"], &"magnet_train_requested")
+		assert_eq(bool(request["values"]["to_goldenrod"]), bool(row[2]))
 
 
 ## GetMonSprite's `.Variable` branch reads wVariableSprites and falls through to

@@ -253,10 +253,9 @@ static func export_slot(
 	return {"ok": true, "message": "", "path": target_path}
 
 
-## Reads an exported file into the next free slot. The file is validated
-## against the selected cache before anything is written, and its recorded
-## game and cartridge must match, so one cartridge's save cannot land under
-## another's.
+## Reads an exported file into the next free slot. The file is validated against
+## the selected cache before anything is written, and its recorded game and
+## cartridge must match, so one cartridge's save cannot land under another's.
 static func import_slot(source_path: String, data: GameData) -> Dictionary:
 	if data == null:
 		return _failure("no cartridge cache is selected")

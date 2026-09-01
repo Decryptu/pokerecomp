@@ -27,6 +27,7 @@ const REQUEST_HANDLERS: Dictionary = {
 	&"mart_requested": &"_request_mart",
 	&"apricorn_selection_requested": &"_request_apricorns",
 	&"audio_requested": &"_request_audio",
+	&"magnet_train_requested": &"_request_magnet_train",
 }
 
 ## SPECIALCALL_ASSISTANT (constants/phone_constants.asm), armed by beating
@@ -3753,13 +3754,12 @@ func _lake_crossing(
 	return _walk_cell_resolving(world, landfall, save, random, data, true)
 
 
-## Blackthorn City to the Rising Badge. The
-## badge is not won in the gym: `BlackthornGymClairScript` sets only
-## `EVENT_BEAT_CLAIR` and swaps the two Blackthorn gramps so the Dragon's Den door
-## at (20,1) opens. `maps/DragonShrine.asm` is what runs
-## `setflag ENGINE_RISINGBADGE` on Crystal, at the end of the elder's five-question
-## quiz; Gold and Silver have no shrine and put the same line in
-## `DragonsDenB1FDragonFangScript`.
+## Blackthorn City to the Rising Badge. The badge is not won in the gym:
+## `BlackthornGymClairScript` sets only `EVENT_BEAT_CLAIR` and swaps the two
+## Blackthorn gramps so the Dragon's Den door at (20,1) opens.
+## `maps/DragonShrine.asm` is what runs `setflag ENGINE_RISINGBADGE` on Crystal,
+## at the end of the elder's five-question quiz; Gold and Silver have no shrine
+## and put the same line in `DragonsDenB1FDragonFangScript`.
 func _rising_badge_path(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -4675,10 +4675,9 @@ func _elite_four_leg(
 ## Lance's room. Nothing here is talked to: `LancesRoomDoorLocksBehindYouScript`
 ## sets SCENE_LANCESROOM_APPROACH_LANCE, which arms the coord events on (4,5)
 ## and (5,5), and stepping onto one runs the approach, the battle and the whole
-## champion scene through to `warpfacing UP, HALL_OF_FAME, 4, 13`.
-## The cell is stepped onto rather than walked to, the way the Plateau rival
-## coord event is: a resolving walk would re-dispatch it until it ran out of
-## attempts.
+## champion scene through to `warpfacing UP, HALL_OF_FAME, 4, 13`. The cell is
+## stepped onto rather than walked to, the way the Plateau rival coord event is:
+## a resolving walk would re-dispatch it until it ran out of attempts.
 func _lances_room_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -5433,10 +5432,9 @@ func _rainbow_badge_path(
 	return _celadon_gym_leg(world, save, random, data, path)
 
 
-## The yard's tree, then Erika.
-## Cutting (28,35) is what joins the city to the gym yard at all. The walk to
-## Erika crosses three sight lines it cannot route around, so the trainers the
-## walk resolves are reported with her.
+## The yard's tree, then Erika. Cutting (28,35) is what joins the city to the
+## gym yard at all. The walk to Erika crosses three sight lines it cannot route
+## around, so the trainers the walk resolves are reported with her.
 func _celadon_gym_leg(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -8524,12 +8522,11 @@ func _drain_phone_ring(world: Gen2WorldAPI) -> Array:
 	return []
 
 
-## Runs a dispatched event list to its terminal state. [param require_events]
-## is set by a step whose whole point is that an imported script ran: without
-## it an empty [param initial] drains in zero iterations and reports terminal,
-## so a step that silently found nothing to talk to passes. Map-entry steps
-## leave it false, since a map with no entry callback legitimately dispatches
-## nothing.
+## Runs a dispatched event list to its terminal state. [param require_events] is
+## set by a step whose whole point is that an imported script ran: without it an
+## empty [param initial] drains in zero iterations and reports terminal, so a
+## step that silently found nothing to talk to passes. Map-entry steps leave it
+## false, since a map with no entry callback legitimately dispatches nothing.
 func _drain_story(
 	world: Gen2WorldAPI,
 	initial: Array,
@@ -8568,6 +8565,7 @@ func _drain_story(
 		"apricorns_given": [],
 		"approaches": [],
 		"catch_tutorials": 0,
+		"magnet_train_rides": 0,
 		"waits": 0,
 		"waits_spent": 0,
 		"hall_of_fame": _hall_of_fame_events(results),
@@ -8593,6 +8591,7 @@ func _drain_story(
 		"purchases": state["purchases"],
 		"apricorns_given": state["apricorns_given"],
 		"catch_tutorials": state["catch_tutorials"],
+		"magnet_train_rides": state["magnet_train_rides"],
 		"hall_of_fame": state["hall_of_fame"],
 		"credits": state["credits"],
 		"approaches": state["approaches"],
@@ -8655,6 +8654,20 @@ func _request_rival_name(world: Gen2WorldAPI, _request: Dictionary, state: Dicti
 			named.get("details", {})
 		)
 	return named.get("results", [])
+
+
+## `special MagnetTrain` waits on a cutscene a walk has no screen for, and writes
+## nothing, so the walk answers it and the `warpcheck` behind it moves.
+func _request_magnet_train(
+	world: Gen2WorldAPI, request: Dictionary, state: Dictionary
+) -> Array:
+	state["magnet_train_rides"] += 1
+	var movie := Gen2MagnetTrain.create(
+		bool((request.get("values", {}) as Dictionary).get("to_goldenrod", false))
+	)
+	while not movie.finished():
+		movie.advance_frame()
+	return world.complete_runtime_request({"ok": true, "frames": movie.frame()})
 
 
 func _request_party_host(world: Gen2WorldAPI, _request: Dictionary, state: Dictionary) -> Array:

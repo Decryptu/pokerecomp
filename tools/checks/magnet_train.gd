@@ -82,6 +82,8 @@ const STATION_EAST_TRAIN_DOOR: Vector2i = Vector2i(11, 5)
 const STATION_ARRIVAL_COORD: Vector2i = Vector2i(11, 6)
 
 ## The errand's own flags, from constants/event_flags.asm.
+const RIDE_FRAME_CAP: int = 2000
+
 const EVENT_RETURNED_MACHINE_PART: int = 201
 const EVENT_MET_COPYCAT_FOUND_OUT_ABOUT_LOST_ITEM: int = 207
 const EVENT_GOT_LOST_ITEM_FROM_FAN_CLUB: int = 210
@@ -98,6 +100,7 @@ func run(r: RefCounted) -> void:
 		_verify_copycat(data, game_id)
 		_verify_fan_club(data, game_id)
 		_verify_stations(data, game_id)
+		_verify_ride(data, game_id)
 
 
 ## Every door on the errand and the ride, by the warp it stands on and the
@@ -220,6 +223,51 @@ func _verify_fan_club(data: GameData, game_id: StringName) -> void:
 		)
 	print("%s fan club: a %d-cell room, the Clefairy guy faced from the west and his doll below him." % [
 		game_id, region.size(),
+	])
+
+
+## The ride itself, drawn against the station's own tileset.
+func _verify_ride(data: GameData, game_id: StringName) -> void:
+	if not _r.check(
+		data.has_magnet_train(),
+		"%s: the cache carries no magnet train tilemaps." % game_id
+	):
+		return
+	var world: Gen2WorldAPI = _open(
+		data, SAFFRON_GROUP, SAFFRON_MAGNET_TRAIN_STATION, STATION_LOBBY_LANDING
+	)
+	if world == null:
+		return
+	var page: Gen2MagnetTrainPage = Gen2MagnetTrainPage.create(
+		data, world.current_tileset, Gen2WorldPalette.TIME_DAY, false
+	)
+	if not _r.check(page != null, "%s: the ride does not draw." % game_id):
+		return
+	var movie: Gen2MagnetTrain = Gen2MagnetTrain.create(false)
+	var seen: int = 0
+	var scrolls: int = 0
+	var last: int = movie.line_offsets()[0]
+	while not movie.finished() and movie.frame() < RIDE_FRAME_CAP:
+		var image: Image = page.draw(movie)
+		_r.check(
+			image != null and image.get_size() == Vector2i(Gen2Screen.WIDTH, Gen2Screen.HEIGHT),
+			"%s: frame %d of the ride is not a screen." % [game_id, movie.frame()]
+		)
+		if page.player_pixels > 0:
+			seen += 1
+		movie.advance_frame()
+		if movie.line_offsets()[0] != last:
+			scrolls += 1
+		last = movie.line_offsets()[0]
+	_r.check(seen > 0, "%s: the player is never drawn through the window." % game_id)
+	_r.check(
+		scrolls == movie.frame(),
+		"%s: the bushes stand still on %d of the ride's %d frames." % [
+			game_id, movie.frame() - scrolls, movie.frame(),
+		]
+	)
+	print("%s ride: %d frames, the player drawn on %d of them." % [
+		game_id, movie.frame(), seen,
 	])
 
 

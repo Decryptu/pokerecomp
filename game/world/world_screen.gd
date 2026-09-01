@@ -193,6 +193,7 @@ var _evolution_save: Gen2SaveData = null
 ## `OverworldHatchEgg`'s screen and the save whose party it has already written.
 var _hatch_host: Gen2EggHatchScreen = null
 var _hatch_save: Gen2SaveData = null
+var _magnet_train_host: Gen2MagnetTrainScreen = null
 ## `TradeAnimation` and the script results it stands in front of.
 var _trade_anim_host: Gen2TradeAnimationScreen = null
 var _trade_anim_results: Array = []
@@ -635,12 +636,11 @@ func _exit_tree() -> void:
 
 
 ## Builds the view for the selected renderer and attaches it to the layer that
-## renderer asked for.
-## Constructed through the mod host, so a registered renderer replaces this view
-## without the screen knowing what it draws with. A renderer answering the
-## surface question false gets the screen's rectangle at window resolution
-## instead of the hardware viewport, which is what a 3D or HD view needs; text
-## boxes and menus above it stay hardware pixels either way.
+## renderer asked for. Constructed through the mod host, so a registered
+## renderer replaces this view without the screen knowing what it draws with. A
+## renderer answering the surface question false gets the screen's rectangle at
+## window resolution instead of the hardware viewport, which is what a 3D or HD
+## view needs; text boxes and menus above it stay hardware pixels either way.
 func _build_renderer() -> void:
 	if _world == null:
 		return
@@ -887,6 +887,7 @@ const FRAME_HOSTS: Array[Array] = [
 	["_evolution_host", "advance_frame"],
 	["_link_host", "advance_frame"],
 	["_trade_anim_host", "advance_frame"],
+	["_magnet_train_host", "advance_frame"],
 	["_hatch_host", "advance_frame"],
 	["_nickname_host", "advance_frame"],
 	["_name_rater_host", "advance_frame"],
@@ -1244,6 +1245,7 @@ const FULLSCREEN_HOSTS: Array[StringName] = [
 	&"_credits_host",
 	&"_evolution_host",
 	&"_trade_anim_host",
+	&"_magnet_train_host",
 	&"_hatch_host",
 	&"_nickname_host",
 	&"_name_rater_host",
@@ -1368,6 +1370,8 @@ const OVERLAY_HOSTS: Array[StringName] = [
 	## `TradeAnimation` stands over whatever ran the trade, the trade room's own
 	## screen included, and answers no button.
 	&"_trade_anim_host",
+	## `MagnetTrain` is the same shape: its own loop and no joypad.
+	&"_magnet_train_host",
 	&"_hatch_host",
 	&"_nickname_host",
 	&"_name_rater_host",
@@ -2093,6 +2097,44 @@ func _open_trade_animation(context: Dictionary, results: Array = []) -> bool:
 	_script_prompt = "Trading"
 	_refresh_labels()
 	return true
+
+
+## `special MagnetTrain`, which borrows the station's own tileset and the clock's
+## time of day rather than the indoor map's palette row: the ride's first pass
+## reloads `SCGB_MAPPALS` with `wEnvironment` forced to TOWN.
+func _open_magnet_train(request: Dictionary) -> bool:
+	if _magnet_train_host != null or _world == null or _data == null:
+		return false
+	var host := Gen2MagnetTrainScreen.new()
+	if not host.open(
+		_data, _world.current_tileset,
+		bool((request.get("values", {}) as Dictionary).get("to_goldenrod", false)),
+		_world.object_time_of_day, _world.player_female()
+	):
+		host.free()
+		_script_prompt = "Magnet train unavailable: magnet_train_art_unavailable"
+		return false
+	host.closed.connect(_on_magnet_train_closed)
+	host.sfx_requested.connect(_play_sfx)
+	host.music_requested.connect(_play_music)
+	host.z_index = 40
+	_magnet_train_host = host
+	_screen.display(host)
+	_script_prompt = "Magnet train"
+	_refresh_labels()
+	return true
+
+
+## `.done`, whose `warpcheck` is where the map's music comes back.
+func _on_magnet_train_closed() -> void:
+	var host: Gen2MagnetTrainScreen = _magnet_train_host
+	_magnet_train_host = null
+	if host != null:
+		Gen2Screen.drop(host)
+	_script_prompt = ""
+	if _renderer != null:
+		_renderer.refresh()
+	_show_script_results(_world.complete_runtime_request({"ok": true}))
 
 
 func _on_trade_animation_closed() -> void:
@@ -4105,6 +4147,20 @@ func preview_egg_hatch(species: int = 0) -> void:
 ## Public screenshot driver for `TradeAnimation`, which no fixture cell reaches:
 ## the movie is opened over the map with no trade behind it, so its close writes
 ## nothing. [param frames] is how far in the picture is taken.
+## `special MagnetTrain`, driven the way the trade animation is: frames in, then
+## the direction.
+func preview_magnet_train(frames: int = 0, to_goldenrod: int = 0) -> void:
+	if _world == null or _data == null or _magnet_train_host != null:
+		return
+	if not _open_magnet_train({"values": {"to_goldenrod": to_goldenrod != 0}}):
+		return
+	for _frame: int in maxi(frames, 0):
+		if _magnet_train_host == null:
+			return
+		_magnet_train_host.advance_frame()
+	_refresh_labels()
+
+
 func preview_trade_animation(frames: int = 0, half: int = 0) -> void:
 	if _world == null or _data == null or _trade_anim_host != null:
 		return
@@ -4574,12 +4630,11 @@ func _teachable_tmhm_for(species: int) -> int:
 	return 0
 
 
-## Public screenshot driver for the battle-request host path. It starts the
-## same request shape emitted by [Gen2WorldScriptRunner], without pretending a
-## map event was present in the selected development map.
-## [param battle_type] is `wBattleType`, so
-## [constant Gen2Battle.BATTLETYPE_FORCESHINY] opens the fight the Lake of Rage
-## Gyarados is met in.
+## Public screenshot driver for the battle-request host path. It starts the same
+## request shape emitted by [Gen2WorldScriptRunner], without pretending a map
+## event was present in the selected development map. [param battle_type] is
+## `wBattleType`, so [constant Gen2Battle.BATTLETYPE_FORCESHINY] opens the fight
+## the Lake of Rage Gyarados is met in.
 func preview_battle_request(
 	species: int = 16, at_level: int = 5,
 	battle_type: int = Gen2Battle.BATTLETYPE_NORMAL
@@ -7283,6 +7338,7 @@ const REQUEST_OPENERS: Dictionary = {
 	],
 	## A cache with no keyboards answers blank, which `InitName` reads as SILVER.
 	&"rival_name_requested": [&"_open_rival_name", &"values", {"ok": true}],
+	&"magnet_train_requested": [&"_open_magnet_train", &"values", {"ok": true}],
 	&"pokemon_requested": [&"_open_gift_nickname", &"prompt", {}],
 	&"contest_mon_requested": [&"_open_contest_nickname", &"prompt", {}],
 }

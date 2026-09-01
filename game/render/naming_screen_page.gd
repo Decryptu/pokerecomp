@@ -57,14 +57,13 @@ const GENDER_AT: Vector2i = Vector2i(1, 2)
 ## The cursor steps two tiles per column and two per row, so a keyboard cell is
 ## two tiles wide even where its character is one.
 const CELL: int = 2
-## `.OAMData_TextEntryCursor`'s four sprites and
-## `.OAMData_TextEntryCursorBig`'s ten. `dbsprite` is
-## `db (y_tile * 8) + y_px, (x_tile * 8) + x_px` (`macros/gfx.asm`), so the
-## four sit at pixel (-1,-1), (0,-1), (-1,0) and (0,0), each 8x8 and each
-## drawing only its own top row and left column: a 9x9 outline hugging one
-## letter tile, not a 2x2 block of them. The big one runs x 0..32 in eights
-## over the same two rows, so it is 40x9 and its left edge carries no -1.
-## The z of each entry is its flip pair: bit 0 x, bit 1 y.
+## `.OAMData_TextEntryCursor`'s four sprites and `.OAMData_TextEntryCursorBig`'s
+## ten. `dbsprite` is `db (y_tile * 8) + y_px, (x_tile * 8) + x_px`
+## (`macros/gfx.asm`), so the four sit at pixel (-1,-1), (0,-1), (-1,0) and
+## (0,0), each 8x8 and each drawing only its own top row and left column: a 9x9
+## outline hugging one letter tile, not a 2x2 block of them. The big one runs x
+## 0..32 in eights over the same two rows, so it is 40x9 and its left edge
+## carries no -1. The z of each entry is its flip pair: bit 0 x, bit 1 y.
 const CURSOR_SPRITES: Array[Vector3i] = [
 	Vector3i(-1, -1, 0), Vector3i(0, -1, 1),
 	Vector3i(-1, 0, 2), Vector3i(0, 0, 3),

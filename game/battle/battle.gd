@@ -555,9 +555,8 @@ var _forced_out: bool = false
 ## Which side was blown out, for a screen that has to say who left.
 var _forced_out_side: int = -1
 
-## The half-run turn a Baton Pass stopped, as
-## [code]{"acting": Array, "actions": Dictionary, "index": int}[/code], which
-## [method pass_to] lets finish.
+## The half-run turn a Baton Pass stopped, as [code]{"acting": Array, "actions":
+## Dictionary, "index": int}[/code], which [method pass_to] lets finish.
 var _pending_turn: Dictionary = {}
 
 ## The side owing a Baton Pass target, or -1. `ForcePickSwitchMonInBattle` cannot

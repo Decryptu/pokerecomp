@@ -374,9 +374,8 @@ static func _resolve_phone_call(
 	var caller_name: Dictionary = Gen2WorldScript.decode_text(caller_name_raw)
 	if not bool(caller_name.get("ok", false)):
 		return {"ok": false, "reason": &"phone_caller_name_unavailable"}
-	## The source phonecall command passes a text pointer directly to
-	## PhoneCall. It does not identify a phone contact or dispatch a
-	## contact script.
+	## The source phonecall command passes a text pointer directly to PhoneCall.
+	## It does not identify a phone contact or dispatch a contact script.
 	return {
 		"ok": true,
 		"data": {

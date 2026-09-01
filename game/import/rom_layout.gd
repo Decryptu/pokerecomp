@@ -447,9 +447,8 @@ const DEX_ENTRY_MAX_CATEGORY_LENGTH: int = MAX_NAME_LENGTH
 
 ## Pointers are two bytes and bank-local, and the bank is chosen by species
 ## rather than stored: GetDexEntryPointer (engine/pokedex/pokedex_2.asm) rotates
-## `species - 1` twice and masks to NUM_DEX_ENTRY_BANKS bits, which is
-## `(species - 1) >> 6`. The four sections are species 1-64, 65-128, 129-192 and
-## 193-251.
+## `species - 1` twice and masks to NUM_DEX_ENTRY_BANKS bits, which is `(species
+## - 1) >> 6`. The four sections are species 1-64, 65-128, 129-192 and 193-251.
 const DEX_ENTRY_POINTER_SIZE: int = 2
 const DEX_ENTRY_BANK_SPECIES: int = 64
 const DEX_ENTRY_BANK_COUNT: int = 4
@@ -1199,10 +1198,9 @@ const PREDEFPAL_UNOWN_PUZZLE: int = 0x4C
 ## `PlaceDiplomaOnScreen`'s art (`engine/events/diploma.asm`): `DiplomaGFX` is
 ## one LZ strip and the two tilemaps behind it are whole screens of tile
 ## numbers, uncompressed and laid out in the file's own order. Identical on all
-## three cartridges.
-## `MysteryGiftItems` and `MysteryGiftDecos`, which are the same length and sit
-## next to each other in both pins: thirty-seven rows each, and an index past
-## either end is `MysteryGiftFallbackItem`.
+## three cartridges. `MysteryGiftItems` and `MysteryGiftDecos`, which are the
+## same length and sit next to each other in both pins: thirty-seven rows each,
+## and an index past either end is `MysteryGiftFallbackItem`.
 const MYSTERY_GIFT_TABLE_ROWS: int = 37
 ## `LoadMysteryGiftBackgroundGFX`'s `ld bc, wBGMapBufferEnd - wBGMapBuffer`: 120
 ## 1bpp bytes, which `FarCopyBytesDouble` turns into fifteen tiles whose second
@@ -1283,6 +1281,18 @@ const PRINTER_STATUS_STRINGS: Array[String] = [
 ## `_UnownPrinter`'s two `Request1bpp` glyphs, which the menu prints as `♂` and
 ## `♀`: a bold A for PRINT and a bold B for CANCEL.
 const UNOWN_PRINTER_GLYPH_TILES: int = 2
+
+## `MagnetTrainBGTiles`, a 2x18 strip `DrawMagnetTrain.FillAlt` repeats across
+## the BG map, and `MagnetTrainTilemap`, the 20x4 train over it. Both name tiles
+## of `TILESET_TRAIN_STATION`, which is in VRAM at every call site.
+const MAGNET_TRAIN_BG_COLUMNS: int = 2
+const MAGNET_TRAIN_BG_ROWS: int = 18
+const MAGNET_TRAIN_BG_BYTES: int = MAGNET_TRAIN_BG_COLUMNS * MAGNET_TRAIN_BG_ROWS
+const MAGNET_TRAIN_FG_COLUMNS: int = 20
+const MAGNET_TRAIN_FG_ROWS: int = 4
+const MAGNET_TRAIN_FG_BYTES: int = MAGNET_TRAIN_FG_COLUMNS * MAGNET_TRAIN_FG_ROWS
+## `hlbgcoord 0, 6`.
+const MAGNET_TRAIN_FG_ROW: int = 6
 
 
 ## `_SlotMachine`'s own data run (engine/games/slot_machine.asm), as
@@ -2511,6 +2521,8 @@ const GOLD_SILVER: Dictionary = {
 		"prompt": 0x29F01, "palette": 0x9AAA, "palettes": 1,
 		"items": 0x2C530, "decos": 0x2C555,
 	},
+	# The ride's two tilemaps, at the same addresses on Gold and on Silver.
+	"magnet_train": {"bg": 0x8D00C, "fg": 0x8D124},
 	# `UnownDexATile` behind `UnownDexVacantString`, and `GBPrinterStrings`
 	# behind `PrinterStatusStringPointers`' first entry.
 	"unown_printer_glyphs": 0x16FCC,
@@ -3092,6 +3104,8 @@ const CRYSTAL: Dictionary = {
 	"link_border": 0x16CFC1,
 	"link_trade_tilemaps": 0x16D465,
 	"trade_anim": 0x298C7,
+	# The ride's two tilemaps, byte identical on all three cartridges.
+	"magnet_train": {"bg": 0x8CD82, "fg": 0x8CEFF},
 	# `UnownDexATile`, the two 1bpp tiles `_UnownPrinter` requests into the
 	# menu's own A and B glyphs, seven bytes behind `UnownDexVacantString`.
 	"unown_printer_glyphs": 0x16D9C,
