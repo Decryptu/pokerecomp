@@ -4008,6 +4008,26 @@ func test_heal_machine_anim_special_emits_presentation_event_without_state_chang
 	)
 
 
+## `CelebiShrineEvent` holds the script for its own loop: one `DelayFrame` on
+## the way in and two frames a pass, and `CelebiEvent_CountDown` reads its
+## counter before decrementing, so the pass that reads zero is spent as well.
+func test_the_celebi_shrine_event_waits_for_the_loop_it_runs() -> void:
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
+	scripts["48:6360"] = [
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_CELEBI_SHRINE_EVENT, 0,
+		Gen2WorldScript.END,
+	]
+	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
+	var data: GameData = GameData.open_directory(_directory)
+	var runner := Gen2WorldScriptRunner.begin(data, Gen2WorldState.new(), {
+		"kind": &"test", "bank": 48, "script": 0x6360,
+	})
+	var result: Dictionary = runner.advance()
+	assert_eq(result["status"], &"waiting", JSON.stringify(result))
+	assert_eq(StringName(result["event"]["kind"]), &"celebi_shrine")
+	assert_eq(int(result["event"]["frames"]), 323, JSON.stringify(result))
+
+
 ## `.HallOfFame`'s sequence is the only one that differs: two effects around
 ## `.FlashPalettes8Times` where the other two start `MUSIC_HEAL` under it.
 func test_heal_machine_sounds_follow_the_sequence_the_machine_type_selects() -> void:

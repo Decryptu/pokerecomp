@@ -40,6 +40,13 @@ const EXPECTED_CENSUS: Dictionary = {
 }
 
 
+## Map objects standing on a side-wall cell, from the same caches.
+const EXPECTED_OBJECT_CENSUS: Dictionary = {
+	&"crystal": {0xB2: 2},
+	&"gold": {0xB2: 5},
+}
+
+
 func run(r: RefCounted) -> void:
 	_r = r
 	for game_id: StringName in [&"crystal", &"gold"]:
@@ -49,6 +56,7 @@ func run(r: RefCounted) -> void:
 			continue
 		_verify_codes(game_id)
 		_verify_census(game_id, data)
+		_verify_object_census(game_id, data)
 	_verify_celadon_mansion_roof()
 
 
@@ -109,6 +117,30 @@ func _verify_census(game_id: StringName, data: GameData) -> void:
 			false,
 			"%s: $%02X has %d cells with no expected count; census is stale." % [
 				game_id, code, int(counts[code]),
+			]
+		)
+
+
+## `CanObjectLeaveTile` never reads the walking direction, so an object on a $b2
+## cell cannot step at all. Seven objects stand on one across the two pins, every
+## one a standing or still movement type.
+func _verify_object_census(game_id: StringName, data: GameData) -> void:
+	var counts: Dictionary = {}
+	for map: Gen2WorldMap in data.world_maps():
+		for event: Dictionary in map.events.get("objects", []) as Array:
+			var cell := Vector2i(int(event.get("x", 0)), int(event.get("y", 0)))
+			if cell.x < 0 or cell.y < 0 or cell.x >= map.collision_width \
+				or cell.y >= map.collision_height:
+				continue
+			var code: int = int(map.collision[cell.y * map.collision_width + cell.x])
+			if code >= 0xB0 and code <= 0xCF:
+				counts[code] = int(counts.get(code, 0)) + 1
+	var expected: Dictionary = EXPECTED_OBJECT_CENSUS[game_id]
+	for code: int in EXPECTED_FACE_MASK:
+		_r.check(
+			int(counts.get(code, 0)) == int(expected.get(code, 0)),
+			"%s: %d map objects stand on $%02X, expected %d." % [
+				game_id, int(counts.get(code, 0)), code, int(expected.get(code, 0)),
 			]
 		)
 

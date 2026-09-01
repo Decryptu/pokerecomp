@@ -50,6 +50,9 @@ const HP_BAR_END: int = 0x6B
 ## The seven partial fills of the exp bar. Its empty and full tiles are the HP
 ## bar's own: only the middle of it is drawn from a sheet of its own.
 const EXP_BAR_FIRST_PARTIAL: int = 0x55
+## `ExpBarGFX`' ninth tile, no part of the bar: a battle loads nine at $55 and
+## the stats screen eight, and this one is `DrawEnemyHUDBorder`'s ball.
+const CAUGHT_BALL: int = 0x5D
 
 ## The level symbol, printed before a number.
 const LEVEL: int = 0x6E

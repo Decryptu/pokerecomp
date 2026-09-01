@@ -209,21 +209,33 @@ func test_tile_permissions_gold_silver_enter_rule_always_sets_face_down() -> voi
 
 
 ## engine/overworld/npc_movement.asm's CanObjectLeaveTile and
-## WillObjectBumpIntoTile, byte-identical between both pinned repositories.
+## WillObjectBumpIntoTile, byte-identical between both pinned repositories. The
+## leave half never reads the walking direction, so it answers per code alone.
 func test_side_wall_step_blocked_matches_the_leave_and_enter_rules() -> void:
 	var open_code: int = 0x00
-	# Leaving a RIGHT_WALL tile moving RIGHT is blocked (leave rule).
-	assert_true(Gen2WorldCollision.side_wall_step_blocked(0xB0, open_code, Vector2i.RIGHT))
-	# Leaving the same tile moving LEFT, UP or DOWN is not.
-	assert_false(Gen2WorldCollision.side_wall_step_blocked(0xB0, open_code, Vector2i.LEFT))
-	assert_false(Gen2WorldCollision.side_wall_step_blocked(0xB0, open_code, Vector2i.UP))
-	# Entering a LEFT_WALL tile from the west (moving RIGHT) is blocked
-	# (enter rule: the destination's own mask contains FACE_LEFT, the
-	# opposite of RIGHT).
+	# Leaving a RIGHT_WALL tile is allowed in every direction, RIGHT included:
+	# `GetSideWallDirectionMask` returns RIGHT_MASK, and RIGHT_MASK & 3 indexes
+	# the entry RIGHT_MASK does not share a bit with.
+	for direction: Vector2i in [Vector2i.RIGHT, Vector2i.LEFT, Vector2i.UP, Vector2i.DOWN]:
+		assert_false(
+			Gen2WorldCollision.side_wall_step_blocked(0xB0, open_code, direction),
+			"a right wall lets an object leave"
+		)
+	# An UP_WALL tile refuses every one of them, and so do the three corner
+	# codes whose mask carries DOWN_MASK or lands on LEFT_MASK.
+	for code: int in [0xB2, 0xB5, 0xB6, 0xB7]:
+		for direction: Vector2i in [Vector2i.RIGHT, Vector2i.LEFT, Vector2i.UP, Vector2i.DOWN]:
+			assert_true(
+				Gen2WorldCollision.side_wall_step_blocked(code, open_code, direction),
+				"code %02x holds an object where it stands" % code
+			)
+	# Entering a LEFT_WALL tile from the west (moving RIGHT) is blocked: the
+	# destination's own mask contains FACE_LEFT, the opposite of RIGHT. That
+	# half does read the direction.
 	assert_true(Gen2WorldCollision.side_wall_step_blocked(open_code, 0xB1, Vector2i.RIGHT))
 	assert_false(Gen2WorldCollision.side_wall_step_blocked(open_code, 0xB1, Vector2i.LEFT))
-	# A RIGHT_WALL/LEFT_WALL pair blocks crossing in both directions even
-	# though both tiles are plain LAND_TILE permission.
+	# A RIGHT_WALL/LEFT_WALL pair still blocks crossing in both directions,
+	# through the enter rule alone.
 	assert_true(Gen2WorldCollision.side_wall_step_blocked(0xB0, 0xB1, Vector2i.RIGHT))
 	assert_true(Gen2WorldCollision.side_wall_step_blocked(0xB1, 0xB0, Vector2i.LEFT))
 	# A zero or diagonal direction never blocks.
