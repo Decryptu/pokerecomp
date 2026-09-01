@@ -1538,10 +1538,10 @@ func _spikes_damage(side: int, events: Array) -> void:
 		note_faint(side, events)
 
 
-## `UpdateUsedMoves`: remembered once, four kept, and a fifth drops the oldest
-## rather than being ignored, which is why it is a queue and not a capped set.
-func _record_used_move(move_number: int) -> void:
-	if move_number == 0 or player_used_moves.has(move_number):
+## `UpdateUsedMoves`, on the player's own side alone: remembered once, four kept,
+## and a fifth drops the oldest rather than being ignored.
+func record_used_move(side: int, move_number: int) -> void:
+	if side != PLAYER or move_number == 0 or player_used_moves.has(move_number):
 		return
 	player_used_moves.append(move_number)
 	if player_used_moves.size() > Gen2BattleMon.MAX_MOVES:
@@ -2757,9 +2757,6 @@ func _act(side: int, slot: int, move_number: int, events: Array) -> void:
 		or Gen2Substatus.has(active_substatus, Gen2Substatus.BIDE)
 	) and move_number != 0
 
-	if side == PLAYER:
-		_record_used_move(move_number)
-
 	# Whether the Pokémon can move at all is asked before the effect is looked up,
 	# which is the cartridge's arrangement: every move goes through it, so no
 	# sequence has to remember to include it.
@@ -2815,8 +2812,6 @@ func run_move_effect(turn: Gen2Turn, depth: int = 0) -> void:
 			turn.emit(MOVE_FAILED)
 			turn.end()
 			return
-		if turn.side == PLAYER:
-			_record_used_move(number)
 		var called_turn: Gen2Turn = Gen2Turn.create(
 			self, turn.side, -1, number, called_move, turn.events
 		)

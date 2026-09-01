@@ -1903,6 +1903,10 @@ func test_the_last_member_fainting_to_poison_opens_the_whiteout() -> void:
 	for _step: int in Gen2WorldState.POISON_STEP_PHASE:
 		state.count_step()
 	assert_true(_world_screen._spend_poison_steps(), "the pass takes the turn")
+	## `.PlayPoisonSFX` floods the background and spends four frames before
+	## `.Script_MonFaintedToPoison` reaches its own `opentext`.
+	assert_false(_world_screen._field_move_text, "the flash comes first")
+	_world_screen.advance_frames(Gen2WorldPalette.POISON_FLASH_FRAMES)
 	assert_true(_world_screen._field_move_text, "the faint owns the box")
 	assert_eq(mon.hp, 0)
 	assert_eq(mon.status, Gen2Status.NONE, "the faint clears the status")
@@ -1960,6 +1964,7 @@ func test_a_nuzlocke_wipe_ends_the_run_instead_of_whiting_out() -> void:
 	assert_true(save.party.is_empty(), "the faint took the row off the party")
 	assert_eq((save.nuzlocke["graveyard"] as Array).size(), 1)
 	assert_eq(String((save.nuzlocke["graveyard"] as Array)[0]["nickname"]), "CYNDER")
+	_world_screen.advance_frames(Gen2WorldPalette.POISON_FLASH_FRAMES)
 	var said: String = ""
 	for _press: int in 200:
 		said += "".join(_world_screen._text_box.text_lines())

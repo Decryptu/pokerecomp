@@ -753,6 +753,9 @@ static func _used_move_text(turn: Gen2Turn) -> void:
 	if not turn.called:
 		turn.attacker().last_move_used = turn.move_number
 		turn.attacker().last_counter_move = turn.move_number
+	# `UpdateUsedMoves` runs inside `UsedMoveText`, so a turn that announces
+	# nothing remembers nothing.
+	turn.battle.record_used_move(turn.side, turn.move_number)
 	turn.emit(Gen2Battle.USED_MOVE, {"move": turn.move_number})
 
 

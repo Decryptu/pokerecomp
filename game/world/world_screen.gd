@@ -125,6 +125,9 @@ var _map_fade: Dictionary = {}
 ## `FadeOutToWhite` holds the screen white until its own `FadeInFromWhite` runs,
 ## so the last row of a finished fade stays applied rather than snapping back.
 var _script_fade: Dictionary = {}
+## `LoadPoisonBGPals`' own `DelayFrames`, and what the poison step owes behind it.
+var _poison_flash_frames: int = 0
+var _poison_flash_after: Callable = Callable()
 var _script_fade_order: int = Gen2WorldPalette.FADE_IDENTITY
 var _script_fade_white: bool = false
 ## `DoBattleTransition` and the battle it is in front of: the encounter is
@@ -946,6 +949,7 @@ func _advance_presentation(map_pass: bool) -> void:
 	## and nothing else runs while `RunMapSetupScript` is spending its own.
 	_advance_map_fade()
 	_advance_script_fade()
+	_advance_poison_flash()
 	## `DoBattleTransition`'s own `.loop`, which owns every frame between the
 	## encounter and the battle screen.
 	_advance_battle_transition()
@@ -1810,11 +1814,10 @@ func _spend_egg_steps() -> void:
 
 
 ## `DoPoisonStep`, which `CountStep` reaches on the pass `wPoisonStepCount`
-## carries to 4 and which resets the counter whether or not anything is
-## poisoned. The party lives on the save, so the walk counts the step and this
-## spends it, the way [method _spend_step_happiness] does for `StepHappiness`.
-## Answers whether it took the screen: a faint is `PLAYEREVENT_WHITEOUT`'s own
-## script, and everything a step still owes waits behind its presses.
+## carries to 4 and which resets the counter whether or not anything is poisoned.
+## The party lives on the save, so the walk counts the step and this spends it.
+## Answers whether it took the screen: everything a step still owes waits behind
+## the presses a faint's own `PLAYEREVENT_WHITEOUT` script asks for.
 func _spend_poison_steps() -> bool:
 	if _world == null or _world.state == null or _data == null:
 		return false
@@ -1827,6 +1830,7 @@ func _spend_poison_steps() -> bool:
 	var pass_result: Dictionary = Gen2WorldPartyHost.apply_poison_step(_data, save)
 	if bool(pass_result.get("sfx", false)):
 		_play_sfx(SFX_POISON)
+		_start_poison_flash()
 	var texts: PackedStringArray = pass_result.get("texts", PackedStringArray())
 	if texts.is_empty():
 		if not PackedInt32Array(pass_result.get("damaged", PackedInt32Array())).is_empty():
@@ -1841,17 +1845,44 @@ func _spend_poison_steps() -> bool:
 		lines.append(Gen2Nuzlocke.death_text(Gen2Nuzlocke.grave_name(_data, lost)))
 	if bool(pass_result.get("whiteout", false)):
 		lines.append_array(_whiteout_texts())
-		_show_player_event(lines, _finish_whiteout)
+		_hold_poison_flash(_show_player_event.bind(lines, _finish_whiteout))
 	else:
 		_persist_after_poison_step(save)
-		_show_player_event(lines, Callable())
+		_hold_poison_flash(_show_player_event.bind(lines, Callable()))
 	return true
 
 
-## The save write the poison pass owes. `DoPoisonStep` writes WRAM and the
-## cartridge commits on the player's own save, but this port keeps the party on
-## disk, so a pass that moved HP is written where it happened; a whiteout writes
-## once at the end of its own script instead.
+## `.PlayPoisonSFX` floods the background and spends four frames of its own.
+func _start_poison_flash() -> void:
+	_poison_flash_frames = Gen2WorldPalette.POISON_FLASH_FRAMES
+	if _renderer != null and _renderer.has_method("set_poison_flash"):
+		_renderer.set_poison_flash(true)
+
+
+func _hold_poison_flash(after: Callable) -> void:
+	if _poison_flash_frames <= 0:
+		after.call()
+		return
+	_poison_flash_after = after
+
+
+func _advance_poison_flash() -> void:
+	if _poison_flash_frames <= 0:
+		return
+	_poison_flash_frames -= 1
+	if _poison_flash_frames > 0:
+		return
+	if _renderer != null and _renderer.has_method("set_poison_flash"):
+		_renderer.set_poison_flash(false)
+	var after: Callable = _poison_flash_after
+	_poison_flash_after = Callable()
+	if after.is_valid():
+		after.call()
+
+
+## The save write the poison pass owes. `DoPoisonStep` writes WRAM, but this port
+## keeps the party on disk, so a pass that moved HP is written where it happened;
+## a whiteout writes once at the end of its own script instead.
 func _persist_after_poison_step(save: Gen2SaveData) -> void:
 	if save == null or _data == null or _injected_save != null:
 		return

@@ -240,6 +240,7 @@ func _teach(forget_slot: int) -> void:
 				Gen2MoveForget.forgot_text(_mon_name(), _forgotten_name(forget_slot)),
 				learned,
 			]
+			sfx_requested.emit(Gen2MoveForget.SFX_SWITCH_POKEMON, false)
 		_end(Gen2MoveTutor.SCRIPT_VALUE_LEARNED, learned)
 		return
 	var reason: StringName = StringName(result.get("reason", &""))

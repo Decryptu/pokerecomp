@@ -136,6 +136,16 @@ func test_a_pokemon_that_is_alive_never_shows_an_empty_bar() -> void:
 	assert_eq(Gen2BattleHud.bar_pixels(1, 999, 48), 1)
 
 
+## `ComputeHPBarPixels`' divisor is one byte, so a maximum over 255 shifts both
+## product and divisor right two bits, and both shifts truncate: 300 of 401 is
+## 35 exactly and 36 the way the routine divides it.
+func test_a_maximum_over_a_byte_is_divided_the_way_the_routine_divides_it() -> void:
+	assert_eq(Gen2BattleHud.bar_pixels(300, 401, 48), 36)
+	assert_eq(300 * 48 / 401, 35, "and not the exact fraction")
+	assert_eq(Gen2BattleHud.bar_pixels(400, 401, 48), 48, "a nearly full bar still fills")
+	assert_eq(Gen2BattleHud.bar_pixels(128, 256, 48), 24, "an exact half is unchanged")
+
+
 func test_a_bar_is_as_full_as_the_fraction_behind_it() -> void:
 	assert_eq(Gen2BattleHud.bar_pixels(10, 20, 48), 24)
 	assert_eq(Gen2BattleHud.bar_pixels(5, 20, 48), 12)
