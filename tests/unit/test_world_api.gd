@@ -9667,3 +9667,30 @@ func test_the_trainer_house_reads_the_mystery_gift_flag() -> void:
 		var world: Gen2WorldAPI = _special_world(state)
 		_run_special(world)
 		assert_eq(world.state.is_event_flag_active(31), linked == 1)
+
+
+## `PokeSeer`'s `.cancel` and `PhotoStudio`'s are both a `PrintText` rather than
+## a script value, which is what a cancelled party list owes on those two
+## specials alone. A staged box is a pause, so the answer says so: a completion
+## handler that stages one and reports the plain `{"ok": true}` of `_stage_*`
+## has its box dropped with the script.
+func test_a_cancelled_party_list_prints_the_two_boxes_that_have_one() -> void:
+	for row: Array in [
+		[Gen2WorldScriptRunner.SPECIAL_POKE_SEER, "You did nothing.", "You met KARP at ."],
+		[Gen2WorldScriptRunner.SPECIAL_PHOTO_STUDIO, "No picture?", "Hold still."],
+	]:
+		for chosen: int in [-1, 0]:
+			_write_special_script([
+				Gen2WorldScript.SPECIAL, int(row[0]), 0, Gen2WorldScript.END,
+			])
+			var world: Gen2WorldAPI = _special_world()
+			var results: Array = _run_special(world)
+			while world.pending_runtime_request().is_empty():
+				results = _run_script(world, world.run_event_queue(true))
+			results = _run_script(world, world.complete_runtime_request({
+				"ok": true, "party_index": chosen, "species": 1, "nickname": "KARP",
+				"original_trainer": "RED", "ot_id": 0, "level": 10,
+				"caught_level": 5, "caught_time": 1, "caught_location": 2,
+			}))
+			assert_eq(results[0]["status"], &"waiting")
+			assert_eq(results[0]["event"]["text"], String(row[1 if chosen < 0 else 2]))

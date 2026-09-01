@@ -76,9 +76,6 @@ func _check_game() -> void:
 	_check_object_movement(pin)
 
 
-# --- Map block arrays -------------------------------------------------------
-
-
 func _check_blocks(pin: String) -> void:
 	var attributes: Dictionary = _attributes(pin)
 	var blockdata: Dictionary = _blockdata(pin)
@@ -140,9 +137,6 @@ func _check_block_reach(id: String, map: Gen2WorldMap) -> int:
 			id, highest, map.tileset, tileset.block_count
 		])
 	return highest
-
-
-# --- Metatiles, collision and palette maps ----------------------------------
 
 
 func _check_tilesets(pin: String) -> void:
@@ -222,9 +216,6 @@ func _check_palette_reach(number: int, tileset: Gen2WorldTileset) -> void:
 		_report("tileset %d names tile %d, past its %d-byte palette map." % [
 			number, highest, tileset.palette_map.size()
 		])
-
-
-# --- Roofs ------------------------------------------------------------------
 
 
 ## `MapGroupRoofs`, `RoofPals` and the strip `LoadMapGroupRoof` writes over. The
@@ -420,12 +411,6 @@ func _roof_palettes(pin: String) -> Array:
 	)
 
 
-# --- Comparison -------------------------------------------------------------
-
-
-# --- Object movement rows ---------------------------------------------------
-
-
 ## Every `object_event`'s movement byte against the pin's own `maps/*.asm`, and
 ## every row the corpus names against what answers it here. The second half is
 ## how the two fixed spins and the bouncing icon were found standing still.
@@ -513,9 +498,6 @@ func _report(message: String) -> void:
 	printerr("%-8s %s" % [_r.game_id, message])
 
 
-# --- The pinned sources -----------------------------------------------------
-
-
 ## `constants/map_constants.asm` in order: `newgroup` opens a group and each
 ## `map_const` is the next map in it, the walk `MapGroupPointers` is indexed by.
 func _map_ids(pin: String) -> Array:
@@ -580,7 +562,6 @@ func _label_paths(pin: String, relative: String) -> Dictionary:
 	return _parsed(pin, StringName(relative), func() -> Dictionary:
 		return _includes(pin.path_join(relative))
 	)
-
 
 
 ## The tilesets `home/map.asm` gates `LoadMapGroupRoof` on, read off the pin's
@@ -702,9 +683,6 @@ func _includes(path: String) -> Dictionary:
 		elif line.ends_with(":") or line.ends_with("::"):
 			pending.append(line.trim_suffix(":").trim_suffix(":"))
 	return out
-
-
-# --- Files ------------------------------------------------------------------
 
 
 ## One pin's parse of [param key], computed once per run. Every table here is

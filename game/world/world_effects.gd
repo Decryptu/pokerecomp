@@ -24,6 +24,7 @@ const SPRITE_CUT_TREE: StringName = &"cut_tree"
 const SPRITE_CUT_LEAF: StringName = &"cut_grass"
 const SPRITE_SHADOW: StringName = &"shadow"
 const SPRITE_HEAL_MACHINE: StringName = &"heal_machine"
+const SPRITE_FLY_MON: StringName = &"fly_mon"
 
 ## `HealMachineAnim`'s two OAM tables, as (screen pixel, tile, flip). An OAM byte
 ## pair is (y + 16, x + 8), so each `dbsprite` is read back to the pixel the
@@ -63,9 +64,25 @@ const HEAL_MACHINE_BALL_FRAMES: int = 30
 const HEAL_MACHINE_FLASH_INTERVAL: int = 10
 const HEAL_MACHINE_FLASHES: int = 8
 
+const FLY_FROM_FRAMES: int = 128
+const FLY_TO_FRAMES: int = 64
+const FLY_MON_X: int = 80
+const FLY_MON_Y: int = 84
+const FLY_TO_START_Y: int = 252
+const FLY_HOLD_FRAMES: int = 0x40
+const FLY_FROM_SWING_STEP: int = 8
+const FLY_FROM_SWING_MAX: int = 0x40
+const FLY_TO_SWING: int = 11 * 8
+const FLY_TO_SWING_STEP: int = 2
+const FLY_MON_FRAME_LENGTH: int = 9
+const FLY_LEAF_INTERVAL: int = 8
+const FLY_LEAF_SWING: int = 0x40
+const FLY_LEAF_LIMIT: int = 0x100 - 9 * 8
+
 ## constants/sprite_data_constants.asm. Every emote-object spawn names its
 ## palette: PAL_OW_EMOTE for the dust and the emote bubbles, PAL_OW_TREE for the
 ## grass and for `.OAMData_Tree`.
+const PAL_OW_RED: int = 0
 const PAL_OW_EMOTE: int = 5
 const PAL_OW_TREE: int = 6
 const PAL_OW_ROCK: int = 7
@@ -265,6 +282,39 @@ func start_heal_machine(machine_type: int, balls: int) -> void:
 	})
 
 
+## `FlyFromAnim` and `FlyToAnim`, one record whose frame counter drives the icon
+## and every leaf in the air. The two `depixel`s and every offset below are OAM
+## coordinates, which count from (8, 16). `SpriteAnimFunc_FlyFrom` holds until
+## VAR2 reaches $40, then rises two pixels a frame while VAR4 widens the swing to
+## $40; `SpriteAnimFunc_FlyTo` descends two a frame into a swing narrowing by two
+## and stops on the frame its wrapped row matches the departure's.
+## `.Frameset_RedWalk` alternates the icon's two drawings every nine frames and
+## `.SpawnLeaf` puts a leaf at column zero every eight.
+func start_fly(icon: int, arriving: bool) -> void:
+	_sprites.append({
+		"kind": SPRITE_FLY_MON,
+		"cell": Vector2i.ZERO,
+		"object_index": -1,
+		"screen": true,
+		"palette": PAL_OW_RED,
+		"frame": 0,
+		"duration": FLY_TO_FRAMES if arriving else FLY_FROM_FRAMES,
+		"icon": maxi(icon, 0),
+		"arriving": arriving,
+	})
+
+
+## Where `FlyFunction_FrameTimer` reaches `ld de, SFX_FLY`.
+static func fly_sfx_frames(arriving: bool) -> Array[int]:
+	var out: Array[int] = []
+	var counter: int = FLY_TO_FRAMES if arriving else FLY_FROM_FRAMES
+	for frame: int in counter:
+		var left: int = counter - frame
+		if left >= FLY_HOLD_FRAMES and left % 8 == 0:
+			out.append(frame)
+	return out
+
+
 ## The three sprites that are temporary map objects on the cartridge, so their
 ## countdowns are `HandleMap`'s passes rather than screen frames
 ## (Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS). The other four are a routine's own
@@ -342,6 +392,9 @@ func offset() -> Vector2:
 func sprites() -> Array:
 	var out: Array = []
 	for sprite: Dictionary in _sprites:
+		if StringName(sprite["kind"]) == SPRITE_FLY_MON:
+			out.append_array(_fly_records(sprite))
+			continue
 		out.append({
 			"kind": sprite["kind"],
 			"cell": sprite["cell"],
@@ -493,6 +546,85 @@ func _tiles_for(sprite: Dictionary) -> Array:
 				})
 			return dust
 	return []
+
+
+func _fly_records(sprite: Dictionary) -> Array:
+	var frame: int = int(sprite["frame"])
+	var arriving: bool = bool(sprite["arriving"])
+	var out: Array = [{
+		"kind": SPRITE_FLY_MON,
+		"cell": Vector2i.ZERO,
+		"object_index": -1,
+		"screen": true,
+		"palette": PAL_OW_RED,
+		"rotation": 0,
+		"frame": frame,
+		"icon": int(sprite["icon"]),
+		"tiles": _fly_mon_tiles(arriving, frame),
+	}]
+	for spawned: int in range(0, frame + 1, FLY_LEAF_INTERVAL):
+		var leaf: Dictionary = _fly_leaf_tile(spawned, frame - spawned)
+		if leaf.is_empty():
+			continue
+		out.append({
+			"kind": SPRITE_CUT_LEAF,
+			"cell": Vector2i.ZERO,
+			"object_index": -1,
+			"screen": true,
+			"palette": PAL_OW_TREE,
+			"rotation": 0,
+			"frame": frame - spawned,
+			"tiles": [leaf],
+		})
+	return out
+
+
+func _fly_mon_tiles(arriving: bool, frame: int) -> Array:
+	var at: Vector2i = _fly_mon_pixel(arriving, frame) + Vector2i(-8, -8)
+	var step: int = int(float(frame % (FLY_MON_FRAME_LENGTH * 4)) / float(FLY_MON_FRAME_LENGTH))
+	var tiles: Array = []
+	for index: int in 4:
+		tiles.append({
+			"offset": at + Vector2i((index & 1) * 8, (index >> 1) * 8),
+			"tile": step & 1,
+			"flip_x": step == 3,
+		})
+	return tiles
+
+
+func _fly_mon_pixel(arriving: bool, frame: int) -> Vector2i:
+	var moves: int = _fly_moves(arriving, frame)
+	var swing: int = _fly_swing(arriving, moves)
+	var swung: int = 0 if moves == 0 else _signed(_cosine((moves - 1) & 0xFF, swing))
+	var y: int = FLY_TO_START_Y + 2 * moves if arriving else FLY_MON_Y - 2 * moves
+	return Vector2i(FLY_MON_X + swung - 8, (y & 0xFF) - 16)
+
+
+func _fly_moves(arriving: bool, frame: int) -> int:
+	if arriving:
+		return mini(frame, ((FLY_MON_Y - FLY_TO_START_Y) & 0xFF) / 2)
+	return clampi(frame - FLY_HOLD_FRAMES + 1, 0, FLY_MON_Y / 2)
+
+
+func _fly_swing(arriving: bool, moves: int) -> int:
+	if moves == 0:
+		return 0
+	if arriving:
+		return maxi(FLY_TO_SWING - FLY_TO_SWING_STEP * (moves - 1), 0)
+	return mini(FLY_FROM_SWING_STEP * (moves - 1), FLY_FROM_SWING_MAX)
+
+
+func _fly_leaf_tile(spawned: int, age: int) -> Dictionary:
+	var x: int = 2 * age
+	if x >= FLY_LEAF_LIMIT:
+		return {}
+	var y: int = ((spawned & 0x18) << 1) + 0x40 - age
+	var swung: int = _signed(_cosine(age & 0xFF, FLY_LEAF_SWING))
+	return {
+		"offset": Vector2i(x + swung - 8, y - 16) + CUT_LEAF_OFFSET,
+		"tile": 0,
+		"flip_x": false,
+	}
 
 
 ## `.FlashPalettes` rotates the four colours of the palette left by one and

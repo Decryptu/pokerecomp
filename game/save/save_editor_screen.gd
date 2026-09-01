@@ -129,9 +129,6 @@ func reload_now() -> bool:
 	return true
 
 
-# --- Layout -----------------------------------------------------------------
-
-
 func _build_ui() -> void:
 	_palette = Gen2LauncherTheme.active()
 	theme = _palette.control_theme()
@@ -412,9 +409,6 @@ func _build_dex_tab() -> Control:
 	return page
 
 
-# --- Refresh ----------------------------------------------------------------
-
-
 func _refresh() -> void:
 	if _editor == null:
 		_set_status("No save is open.")
@@ -564,9 +558,6 @@ func _refresh_dex() -> void:
 	numbers.sort()
 	for species: Variant in numbers:
 		_dex_list.add_item("%d %s" % [int(species), _species_name(int(species))])
-
-
-# --- Helpers ----------------------------------------------------------------
 
 
 func _set_badge(index: int, pressed: bool) -> void:

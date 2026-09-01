@@ -65,7 +65,7 @@ func test_the_app_volumes_and_a_host_scale_reach_the_drivers_mix() -> void:
 	options.sfx_volume = 0
 	# Edited in place while the player runs, which is what the settings slider
 	# does, so the level has to be read rather than taken once at startup.
-	_player._apply_volume()
+	_player._apply_settings()
 	var status: Dictionary = _player.audio_status()
 	assert_almost_eq(float(status["music_gain"]), 1.0, 0.001)
 	assert_almost_eq(float(status["sfx_gain"]), 0.0, 0.001)
@@ -255,3 +255,32 @@ func test_the_low_health_alarm_is_the_danger_bit_and_its_timer() -> void:
 	_player._engine.low_health_alarm |= 12
 	_player.set_low_health_alarm(false)
 	assert_eq(_player._engine.low_health_alarm, 0, "the timer went with it")
+
+
+## `Options_Sound` toggles the STEREO bit and spends `RestartMapMusic` on the
+## change, because `Music_StereoPanning` has already narrowed `channel.tracks`
+## and only a restart widens them again. The option is shared and edited in
+## place, so the player follows it rather than being told.
+func test_the_sound_option_reaches_the_driver_and_restarts_the_piece() -> void:
+	var options: Gen2Options = Gen2OptionsStore.current()
+	var was: bool = options.stereo
+	options.stereo = false
+	_player._apply_settings()
+	assert_false(_player._engine.stereo)
+
+	assert_true(_player.play_record(_record(2), &"map_music")["played"])
+	var key: String = _player.audio_status()["music_key"]
+
+	options.stereo = true
+	_player._apply_settings()
+	assert_true(_player._engine.stereo, "the driver follows the SOUND option live")
+	assert_eq(_player.audio_status()["music_key"], key,
+		"RestartMapMusic starts the same piece again")
+	assert_true(_player.audio_status()["music_active"])
+
+	_player.stop_all()
+	options.stereo = not options.stereo
+	_player._apply_settings()
+	assert_eq(_player.audio_status()["music_key"], "",
+		"a map with no music is `PlayMusic MUSIC_NONE` twice")
+	options.stereo = was

@@ -12,7 +12,6 @@ extends RefCounted
 ## filled with the result's own [code]detail[/code]; a reason wanting anything
 ## else is a branch in [method text].
 const WORDING: Dictionary = {
-	# Choosing and reading the archive.
 	&"not_a_zip": "%s is not a .zip archive.",
 	&"archive_not_found": "%s could not be read.",
 	&"archive_unreadable": "That archive could not be opened.",
@@ -22,7 +21,6 @@ const WORDING: Dictionary = {
 	&"archive_too_many_entries": "That archive is too large to be a mod.",
 	&"unsafe_archive_entry": "The archive tries to write outside the mod folder (%s).",
 
-	# What the manifest says.
 	&"missing_manifest": "The mod has no %s.",
 	&"unreadable_manifest": "The mod's %s could not be read.",
 	&"invalid_manifest": "The mod's %s is not valid JSON.",
@@ -40,13 +38,11 @@ const WORDING: Dictionary = {
 	&"art_escapes_mod": "The mod's icon or thumbnail points outside the mod folder (%s).",
 	&"pack_not_a_resource_pack": "A mod's pack has to be a .pck or .zip (%s).",
 
-	# Writing it into place.
 	&"could_not_create_mod_directory": "The mod folder could not be created.",
 	&"could_not_stage_archive": "The download could not be written to disk.",
 	&"could_not_write_mod_file": "%s could not be written.",
 	&"already_installed": "It is already installed.",
 
-	# Running it.
 	&"missing_mod_pack": "The mod's resource pack %s is missing.",
 	&"mod_pack_unreadable": "The mod's resource pack %s could not be opened.",
 	&"missing_entry_script": "The entry script %s is missing.",
@@ -64,7 +60,6 @@ const WORDING: Dictionary = {
 	&"invalid_mod_save_id": "That mod id cannot own save data.",
 	&"mod_save_too_large": "That mod's save data is larger than 64 KiB.",
 
-	# What it registered.
 	&"invalid_renderer": "A mod registered a renderer with no id or script.",
 	&"renderer_not_instantiable": "%s's renderer could not be created.",
 	&"renderer_not_a_node": "%s's renderer is not a Node.",
@@ -141,7 +136,6 @@ const WORDING: Dictionary = {
 	&"reserved_effect_command": "\"%s\" is one of the engine's own steps.",
 	&"duplicate_move_effect": "Two mods both claimed the same move effect (%s).",
 
-	# Index feeds.
 	&"empty_index_url": "Enter an index address first.",
 	&"index_url_not_https": "An index must be an https address.",
 	&"index_not_json": "That address did not return an index.",

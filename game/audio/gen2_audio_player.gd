@@ -47,7 +47,7 @@ var stereo: bool = false:
 var volume_scale: float = 1.0:
 	set(value):
 		volume_scale = maxf(value, 0.0)
-		_apply_volume()
+		_apply_settings()
 
 var _player: AudioStreamPlayer = null
 var _generator: AudioStreamGenerator = null
@@ -58,6 +58,9 @@ var _timeline_updates: int = 0
 var _engine: Gen2SoundEngine = null
 var _apu: Gen2Apu = null
 var _music_key: String = ""
+## What a SOUND change restarts.
+var _music_record: Dictionary = {}
+var _music_assets: Dictionary = {}
 var _buffer: PackedVector2Array = PackedVector2Array()
 ## How much of the generator is kept filled, in driver frames. Raised by an
 ## underrun and never lowered inside a run: a device that stuttered once will do
@@ -94,13 +97,13 @@ func _init() -> void:
 
 func _ready() -> void:
 	stereo = Gen2OptionsStore.current().stereo
-	_apply_volume()
+	_apply_settings()
 	_start_stream()
 	set_process(true)
 
 
 func _process(delta: float) -> void:
-	_apply_volume()
+	_apply_settings()
 	_service_timeline(delta)
 
 
@@ -117,15 +120,19 @@ func _notification(what: int) -> void:
 			_starved_seconds = maxf(_starved_seconds, STALL_SECONDS - RESUME_GRACE_SECONDS)
 
 
-## The app block's two volumes, pushed to the driver's mix rather than to the
-## stream player: music and effects share the four hardware channels, so one
-## level on the output could not tell them apart. Read every frame because the
-## settings object is shared and edited in place, and pushed only when a number
-## actually moves.
-func _apply_volume() -> void:
+## The settings the driver owns. The two volumes reach its mix rather than the
+## stream player, since music and effects share the four hardware channels. Read
+## every frame because the object is shared and edited in place, and pushed only
+## when a value moves; a SOUND change also spends `Options_Sound`'s own
+## `RestartMapMusic`, because `Music_StereoPanning` has already narrowed
+## `channel.tracks` and only a restart widens them again.
+func _apply_settings() -> void:
 	if _engine == null:
 		return
 	var options: Gen2Options = Gen2OptionsStore.current()
+	if options.stereo != stereo:
+		stereo = options.stereo
+		_restart_music()
 	var music: float = float(options.music_volume) / float(Gen2Options.MAX_VOLUME)
 	var sfx: float = float(options.sfx_volume) / float(Gen2Options.MAX_VOLUME)
 	music *= volume_scale
@@ -160,7 +167,7 @@ func play_record(
 		# because `_PlayMusic` only loads the channels the new header names.
 		if int(record.get("index", -1)) == 0:
 			_engine.init_sound()
-			_music_key = ""
+			_forget_music()
 			return {"ok": true, "played": true, "stopped": true}
 		if not restart and key == _music_key:
 			return {"ok": true, "played": false, "continued": true}
@@ -195,6 +202,8 @@ func play_record(
 		return {"ok": false, "played": false, "reason": &"audio_record_unplayable"}
 	if music:
 		_music_key = key
+		_music_record = record
+		_music_assets = assets
 	return {
 		"ok": true,
 		"played": true,
@@ -204,6 +213,18 @@ func play_record(
 		"bank": int(record.get("bank", -1)),
 		"address": int(record.get("address", -1)),
 	}
+
+
+func _forget_music() -> void:
+	_music_key = ""
+	_music_record = {}
+	_music_assets = {}
+
+
+func _restart_music() -> void:
+	if _music_record.is_empty():
+		return
+	play_record(_music_record, &"map_music", _music_assets, true)
 
 
 ## `SFXChannelsOff`, which the Unown sounds spend in front of their own
@@ -219,10 +240,10 @@ func fade_out(frames: int = 0) -> bool:
 		if not _engine.any_channel_active():
 			return false
 		_engine.init_sound()
-		_music_key = ""
+		_forget_music()
 		return true
 	_engine.start_fade(frames)
-	_music_key = ""
+	_forget_music()
 	return true
 
 
@@ -243,12 +264,14 @@ func fade_to(record: Dictionary, frames: int, assets: Dictionary = {}) -> bool:
 	_start_stream()
 	_engine.start_fade(frames, record)
 	_music_key = key
+	_music_record = record
+	_music_assets = assets
 	return true
 
 
 func stop_all() -> void:
 	_engine.init_sound()
-	_music_key = ""
+	_forget_music()
 	if _player != null:
 		_player.stop()
 	_playback = null
