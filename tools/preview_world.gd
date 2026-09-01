@@ -16,6 +16,7 @@ const KIND_HELP: Dictionary = {
 	&"effects": "cell: the emote, boulder dust, grass rustle and headbutt tree over the first visible object",
 	&"battle": "cell: the wild fight preview_battle_request starts, settled past its transition",
 	&"catch_tutorial": "frames: the Dude's own fight, which answers itself, that many frames in",
+	&"catch_dex": "none: NewPokedexEntry's page, over the fight the catch that opened it is still in",
 	&"cut": "cell: OWCutAnimation's two halves and the jump shadow",
 	&"tile_anim": "frames: the map that many AnimateTileset frames in",
 	&"unown_wall": "cell: DisplayUnownWords' box. Group 3 maps 23 to 26 say HO-OH, ESCAPE, WATER, LIGHT",
@@ -317,7 +318,7 @@ const SELF_DRIVEN_KINDS: Array[StringName] = [
 	&"catch_tutorial",
 	&"name_rater", &"move_deleter", &"move_tutor", &"day_care",
 	&"ice_slide", &"whiteout", &"view_cover", &"gift_nickname",
-	&"catch_nickname", &"mom_bank", &"bills_pc", &"players_pc",
+	&"catch_nickname", &"catch_dex", &"mom_bank", &"bills_pc", &"players_pc",
 	&"pokemon_center_pc", &"start_menu", &"mod_notice", &"mod_page",
 	&"reset_question", &"launcher_question",
 ]
