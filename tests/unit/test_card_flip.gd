@@ -212,3 +212,25 @@ func test_the_result_box_blinks_no_arrow() -> void:
 	assert_true(_drive_to(game, Prompt.PRESS))
 	assert_eq(game.state(), State.TABULATE_THE_RESULT)
 	assert_false(game.blinking_cursor(), "\"Yeah!\" and \"Darn…\" load no cursor")
+
+
+## `.loop2` is three iterations of border-on then `ClearSprites`, so the six
+## half-steps alternate from lit and the card is revealed over a dark table.
+func test_the_three_flashes_end_dark() -> void:
+	var game: Gen2CardFlip = _table()
+	assert_true(_drive_to(game, Prompt.CHOOSE))
+	game.press_a()
+	var lit: Array[bool] = []
+	for _frame: int in 240:
+		if game.state() != State.CHOOSE_A_CARD:
+			break
+		lit.append(game.border_at() >= 0)
+		_step(game)
+	assert_eq(lit.size(), Gen2CardFlip.FLASHES * 2 * Gen2CardFlip.TOGGLE_FRAMES)
+	for half: int in Gen2CardFlip.FLASHES * 2:
+		var want: bool = half % 2 == 0
+		for frame: int in Gen2CardFlip.TOGGLE_FRAMES:
+			assert_eq(
+				lit[half * Gen2CardFlip.TOGGLE_FRAMES + frame], want,
+				"half-step %d is %s" % [half, "lit" if want else "dark"]
+			)

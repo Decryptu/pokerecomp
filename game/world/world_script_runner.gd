@@ -5385,9 +5385,9 @@ func _special_game_corner_prize_mon_check_dex(special: int) -> Dictionary:
 	})
 
 
-## `DoNthMenu` over the five words of today's category, and the answer is whether the
-## row matches the low nibble of `wBuenasPassword`. The category is the high nibble,
-## which is what the radio show drew this morning.
+## `DoNthMenu` over the category's `NUM_PASSWORDS_PER_CATEGORY` words, and the
+## answer is whether the row matches the low nibble of `wBuenasPassword`. The
+## category is the high nibble, which is what the radio show drew this morning.
 func _special_buenas_password(special: int) -> Dictionary:
 	var password: int = _buenas_password()
 	if password < 0:

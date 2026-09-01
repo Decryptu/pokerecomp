@@ -10,6 +10,8 @@ const TEXT: Color = Color("#f4f7fb")
 const MUTED: Color = Color("#9eacc0")
 const BATTLE_SCENE: PackedScene = preload("res://game/battle/battle_screen.tscn")
 const FLOWER_MAIL: int = 0xB6
+## `CheckOwnMon`'s `rept NAME_LENGTH_JAPANESE - 2` plus the comparison behind it.
+const OT_NAME_COMPARED: int = 5
 
 const SERVICE_SCENE: PackedScene = preload("res://game/world/world_service_screen.tscn")
 const START_MENU_SCENE: PackedScene = preload("res://game/world/start_menu_screen.tscn")
@@ -8590,7 +8592,7 @@ func _refresh_party_summary() -> void:
 			if (int(mon.pokerus) & 0x0F) != 0:
 				has_pokerus = true
 			happiness.append(int(mon.happiness))
-			own_ot.append(_is_own_mon(save, mon))
+			own_ot.append(int(mon.ot_id) == int(save.player_id))
 			held_items.append(int(mon.item))
 			levels.append(int(mon.level))
 			id_numbers.append(int(mon.ot_id))
@@ -8621,8 +8623,9 @@ func _refresh_party_summary() -> void:
 			## offers to hand a POKé BALL over.
 			"box_free_space": save.box_free_space(),
 			## Per slot, for the two specials that read a happiness byte or an
-			## OT: `GetFirstPokemonHappiness` and
-			## `FindPartyMonThatSpeciesYourTrainerID`.
+			## ID: `GetFirstPokemonHappiness` and
+			## `_FindPartyMonThatSpeciesYourTrainerID`, which tests `wPlayerID`
+			## alone and never the OT name.
 			"happiness": happiness,
 			"own_ot": own_ot,
 			## `CheckOwnMonAnywhere`'s answer for every species at once: a mon in
@@ -8646,11 +8649,13 @@ func _refresh_party_summary() -> void:
 	)
 
 
-## `CheckOwnMon`'s three tests: the species is the caller's question, and what is
-## left is the player's own ID and OT name.
-func _is_own_mon(save: Gen2SaveData, mon: Gen2SaveMon) -> bool:
+## `CheckOwnMon`'s three tests: the species is the caller's question, the ID is
+## `wPlayerID`, and `rept NAME_LENGTH_JAPANESE - 2` plus the comparison behind
+## it decides the OT name on its first five letters.
+static func _is_own_mon(save: Gen2SaveData, mon: Gen2SaveMon) -> bool:
 	return int(mon.ot_id) == int(save.player_id) \
-		and mon.original_trainer == save.player_name
+		and mon.original_trainer.left(OT_NAME_COMPARED) \
+			== save.player_name.left(OT_NAME_COMPARED)
 
 
 ## Every box slot's OT ID and species, in box then slot order. One list rather

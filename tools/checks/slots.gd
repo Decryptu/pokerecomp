@@ -34,6 +34,13 @@ const PAYOUTS: Array[int] = [300, 50, 6, 8, 10, 15]
 ## once and two banks index it.
 const SECTION: Dictionary = {"slots_1": 37, "slots_2": 64, "slots_3": 64}
 
+## `Slots_StopReel3`'s two blocks, as (threshold, action) walked in order. The
+## first is the one `and a / jr nz, .biased` falls through on, a bias of
+## SLOTS_SEVEN, and Chansey is in it alone. The thresholds are `71 percent - 1`,
+## `47 percent + 1`, `24 percent - 1`, `63 percent` and `31 percent + 1`.
+const REEL3_SEVEN_BIAS: Array[Array] = [[180, 9], [120, 16], [60, 18], [0, 21]]
+const REEL3_OTHER_BIAS: Array[Array] = [[160, 9], [80, 16], [0, 18]]
+
 ## `Slots_InitBias.Normal` and `.Lucky`, as (threshold, symbol).
 const BIAS_NORMAL: Array[Array] = [
 	[1, 0x00], [3, 0x04], [10, 0x14], [20, 0x10], [40, 0x0C], [48, 0x08], [255, -1],
@@ -87,6 +94,27 @@ func _verify_tables() -> void:
 		Gen2SlotMachine.BIAS_LUCKY == BIAS_LUCKY,
 		"the lucky bias table is not `Slots_InitBias.Lucky`."
 	)
+	_verify_reel3_rolls()
+
+
+## Every byte `Random` can answer, against a second reading of the two blocks.
+func _verify_reel3_rolls() -> void:
+	for symbol: int in [0x00, 0x04, 0x08, 0x0C, 0x10, 0x14, -1]:
+		var rows: Array[Array] = REEL3_SEVEN_BIAS if symbol == 0 else REEL3_OTHER_BIAS
+		for roll: int in 256:
+			var want: int = 0
+			for row: Array in rows:
+				if roll >= int(row[0]):
+					want = int(row[1])
+					break
+			var got: int = Gen2SlotMachine.reel3_action(symbol, roll)
+			if got == want:
+				continue
+			_r.fail(
+				"`Slots_StopReel3` on bias %d roll %d answers %d, not %d."
+				% [symbol, roll, got, want]
+			)
+			return
 
 
 ## The cache against a second reading of the dump: the walk found the records.
@@ -166,11 +194,9 @@ func _verify_text(game_id: StringName, data: GameData) -> void:
 	)
 
 
-## Whole spins on a pinned seed, every bet and both machines.
-## What is asserted is the source's own arithmetic rather than a pinned outcome:
-## the coins the bet took, the payout the match is worth, the reels standing on
-## symbols their own strips carry, and a match that is really lined up on one of
-## the rows the bet paid for.
+## Whole spins on a pinned seed, every bet and both machines, against the
+## source's own arithmetic rather than a pinned outcome: the coins the bet took,
+## the payout the match is worth, and a match really lined up on a paid row.
 func _verify_spins(game_id: StringName, data: GameData) -> void:
 	var spins: int = 0
 	var wins: int = 0

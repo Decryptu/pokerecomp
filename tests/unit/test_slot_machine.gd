@@ -244,3 +244,21 @@ func test_every_window_is_three_symbols_of_the_strip() -> void:
 		assert_eq(window.size(), 3)
 		for symbol: int in window:
 			assert_true(symbol in [0x00, 0x04, 0x08, 0x0C, 0x10, 0x14])
+
+
+## `Slots_StopReel3`'s `and a / jr nz, .biased`: SLOTS_SEVEN is the zero that
+## falls through, so Chansey belongs to the seven bias and to nothing else.
+func test_only_a_seven_bias_can_throw_chansey() -> void:
+	var chansey: int = Gen2SlotMachine.REEL_ACTION_INIT_CHANSEY
+	var seen: Array[int] = []
+	for roll: int in 256:
+		var action: int = Gen2SlotMachine.reel3_action(Gen2SlotMachine.SLOTS_SEVEN, roll)
+		if not seen.has(action):
+			seen.append(action)
+		for other: int in [0x04, 0x08, 0x0C, 0x10, 0x14, Gen2SlotMachine.SLOTS_NO_BIAS]:
+			assert_ne(
+				Gen2SlotMachine.reel3_action(other, roll), chansey,
+				"bias %d roll %d must not reach Chansey" % [other, roll]
+			)
+	assert_true(seen.has(chansey), "a seven bias reaches Chansey below `24 percent - 1`")
+	assert_eq(seen.size(), 4, "the seven block has all four modes in it")
