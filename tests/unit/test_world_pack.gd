@@ -434,3 +434,18 @@ func test_an_order_that_is_not_a_permutation_is_refused() -> void:
 		{"ok": false, "reason": &"invalid_item_order"}
 	)
 	assert_eq(state.items().keys(), [ITEM_ANTIDOTE, ITEM_POTION])
+
+
+## `CheckCoinsAndCoinCase`: no coins is answered before the Coin Case is looked
+## for, and the Game Corner's two games share the one guard.
+func test_a_coin_game_names_the_first_thing_missing() -> void:
+	var broke := Gen2WorldState.new({}, {}, {Gen2WorldPack.ITEM_COIN_CASE: 1})
+	assert_eq(Gen2WorldPack.coin_game_refusal(broke), Gen2WorldPack.NO_COINS_TEXT)
+	var caseless := Gen2WorldState.new({}, {}, {ITEM_POTION: 1})
+	caseless.apply_changes({}, {}, {"coins": 50})
+	assert_eq(
+		Gen2WorldPack.coin_game_refusal(caseless), Gen2WorldPack.NO_COIN_CASE_TEXT
+	)
+	var playable := Gen2WorldState.new({}, {}, {Gen2WorldPack.ITEM_COIN_CASE: 1})
+	playable.apply_changes({}, {}, {"coins": 1})
+	assert_eq(Gen2WorldPack.coin_game_refusal(playable), "")

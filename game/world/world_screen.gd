@@ -2425,6 +2425,8 @@ func _on_unown_puzzle_closed(solved: bool) -> void:
 func _open_slot_machine(request: Dictionary) -> bool:
 	if _slot_machine_host != null or _world == null or _data == null:
 		return false
+	if _refuse_coin_game(request):
+		return false
 	var values: Dictionary = request.get("values", {})
 	var host := Gen2SlotMachineScreen.new()
 	## The bias, the reel manipulation and both streak rolls come off the
@@ -2464,11 +2466,31 @@ func _on_slot_machine_closed(coins: int) -> void:
 	}))
 
 
+## `CheckCoinsAndCoinCase`'s `scf`. The guard is the special's, so a request
+## without one is a preview naming its own balance.
+func _refuse_coin_game(request: Dictionary) -> bool:
+	if not (request.get("values", {}) as Dictionary).has("special"):
+		return false
+	var line: String = Gen2WorldPack.coin_game_refusal(_world.state)
+	if line.is_empty():
+		return false
+	if _text_box != null and _text_box.font != null:
+		_apply_text_box_options()
+		_text_awaits_press = false
+		_text_box.show_text(line, false)
+		_text_box.visible = true
+	_script_prompt = line
+	_refresh_labels()
+	return true
+
+
 ## `special CardFlip`. Its objects are drawn in `wOBPals1` palette 0, which
 ## `CardFlip_InitAttrPals` never writes, so the map's own `PAL_OW_RED` is handed
 ## over with the request.
 func _open_card_flip(request: Dictionary) -> bool:
 	if _card_flip_host != null or _world == null or _data == null:
+		return false
+	if _refuse_coin_game(request):
 		return false
 	var values: Dictionary = request.get("values", {})
 	var host := Gen2CardFlipScreen.new()
@@ -7965,12 +7987,8 @@ func _on_party_selection_made(party_index: int) -> void:
 		_refresh_labels()
 		return
 	var result: Dictionary = {"ok": true, "party_index": -1}
-	## `CheckCurPartyMonFainted` walks `wPartyMon1HP` for every slot but the
-	## chosen one, so the whole column travels with the row that was picked.
-	var party_fainted: Array = []
-	if save != null:
-		for member: Variant in save.party:
-			party_fainted.append(member is Gen2SaveMon and (member as Gen2SaveMon).hp <= 0)
+	## The whole column travels with the row that was picked.
+	var party_fainted: Array = save.party_fainted_flags() if save != null else []
 	if save != null and party_index >= 0 and party_index < save.party.size():
 		var mon: Gen2SaveMon = save.party[party_index] as Gen2SaveMon
 		if mon != null:

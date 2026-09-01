@@ -2318,3 +2318,21 @@ func test_an_object_step_span_survives_a_stream_that_turns() -> void:
 			walked, Vector2(object.cell) + object.step_offset_cells(fraction),
 			Vector2(0.001, 0.001), str(fraction)
 		)
+
+
+## `ReplaceTimeOfDayPals` masks with `maskbits NUM_MAP_PALETTES` rather than
+## clamping, so a map header past PALETTE_DARK reads one of the three repeats of
+## PALETTE_AUTO's row instead of the cave's.
+func test_a_map_palette_past_the_last_one_wraps_onto_auto() -> void:
+	for palette: int in [5, 6, 7, 13]:
+		assert_eq(
+			Gen2WorldPalette.map_time_of_day(palette, Gen2WorldPalette.TIME_DAY),
+			Gen2WorldPalette.TIME_DAY,
+			"palette %d" % palette
+		)
+	assert_eq(
+		Gen2WorldPalette.map_time_of_day(
+			Gen2WorldPalette.PALETTE_DARK, Gen2WorldPalette.TIME_DAY
+		),
+		Gen2WorldPalette.TIME_DARK
+	)

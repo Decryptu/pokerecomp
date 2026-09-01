@@ -444,7 +444,7 @@ static func deposit_refusal(save: Gen2SaveData, party_index: int) -> String:
 		return TEXT_CANT_BREED_EGG
 	## `CheckCurPartyMonFainted`, which refuses the *last* healthy member rather
 	## than a fainted one: a fainted member may be deposited if another can walk.
-	if _last_healthy(save, party_index):
+	if save.others_all_fainted(party_index):
 		return TEXT_LAST_ALIVE_MON
 	if Gen2HeldItem.is_mail(mon.item):
 		return TEXT_REMOVE_MAIL
@@ -563,18 +563,6 @@ static func _can_learn_tm_hm(data: GameData, species: int, number: int) -> bool:
 	if index >= (flags as Array).size():
 		return false
 	return int((flags as Array)[index]) & (1 << (bit & 7)) != 0
-
-
-## `CheckCurPartyMonFainted`, which is `.OutOfUsableMons` when no *other* member
-## can still walk.
-static func _last_healthy(save: Gen2SaveData, party_index: int) -> bool:
-	for index: int in save.party.size():
-		if index == party_index:
-			continue
-		var other: Gen2SaveMon = save.party[index] as Gen2SaveMon
-		if other != null and not other.is_egg and other.hp > 0:
-			return false
-	return true
 
 
 ## `.day_care_lady`'s three `inc [hl]`: one point of experience, with the high

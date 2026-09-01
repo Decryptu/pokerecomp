@@ -22,17 +22,21 @@ const PALETTE_NITE: int = 2
 const PALETTE_MORN: int = 3
 const PALETTE_DARK: int = 4
 
-## `.BrightnessLevels`, one row per [constant PALETTE_AUTO] and its four
-## neighbours, read by the clock's own time of day. The cartridge packs each row
-## into a byte two bits at a time and `GetTimePalette` picks the pair back out;
-## the byte is not kept here because nothing else reads it.
+## `.BrightnessLevels`, read by the clock's own time of day; `GetTimePalette`
+## picks each row's pair out of a packed byte. `ReplaceTimeOfDayPals` indexes it
+## with `maskbits NUM_MAP_PALETTES`, `and %111`, so the three rows past
+## `PALETTE_DARK` repeat `PALETTE_AUTO`'s.
 const BRIGHTNESS_LEVELS: Array = [
 	[TIME_MORNING, TIME_DAY, TIME_NIGHT, TIME_DARK],
 	[TIME_DAY, TIME_DAY, TIME_DAY, TIME_DAY],
 	[TIME_NIGHT, TIME_NIGHT, TIME_NIGHT, TIME_NIGHT],
 	[TIME_MORNING, TIME_MORNING, TIME_MORNING, TIME_MORNING],
 	[TIME_DARK, TIME_DARK, TIME_DARK, TIME_DARK],
+	[TIME_MORNING, TIME_DAY, TIME_NIGHT, TIME_DARK],
+	[TIME_MORNING, TIME_DAY, TIME_NIGHT, TIME_DARK],
+	[TIME_MORNING, TIME_DAY, TIME_NIGHT, TIME_DARK],
 ]
+const PALETTE_MASK: int = 0x07
 
 
 ## Which of the four palette rows a map draws with right now.
@@ -46,7 +50,7 @@ static func map_time_of_day(
 ) -> int:
 	if map_palette == PALETTE_DARK:
 		return TIME_NIGHT if used_flash else TIME_DARK
-	var row: Array = BRIGHTNESS_LEVELS[clampi(map_palette, 0, BRIGHTNESS_LEVELS.size() - 1)]
+	var row: Array = BRIGHTNESS_LEVELS[map_palette & PALETTE_MASK]
 	return int(row[clampi(clock_time_of_day, 0, row.size() - 1)])
 
 

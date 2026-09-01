@@ -493,7 +493,7 @@ func _blackout_refusal() -> String:
 		return ""
 	if rows().size() < BLACKOUT_ROWS:
 		return PROMPT_LAST_MON
-	if _all_others_fainted():
+	if _save.others_all_fainted(_cursor + _scroll):
 		return PROMPT_NO_USABLE
 	# `wBillsPC_MonHasMail`, which `BillsPC_PrintMonInfo` writes for the row the
 	# cursor stands on rather than for a stored selection.
@@ -501,20 +501,6 @@ func _blackout_refusal() -> String:
 	if mon != null and not mon.is_egg and Gen2HeldItem.is_mail(mon.item):
 		return PROMPT_REMOVE_MAIL
 	return ""
-
-
-## `CheckCurPartyMonFainted`: whether every party member but the chosen one has
-## no HP left. `wCurPartyMon` is `wBillsPC_CursorPosition` plus the scroll, so
-## the one left out is the row under the cursor.
-func _all_others_fainted() -> bool:
-	var chosen: int = _cursor + _scroll
-	for index: int in _save.party.size():
-		if index == chosen:
-			continue
-		var mon: Gen2SaveMon = _save.party[index]
-		if mon != null and mon.hp > 0:
-			return false
-	return true
 
 
 ## `BillsPC_StatsScreen`, `StatsScreenInit` over this screen. `_StatsScreenDPad`

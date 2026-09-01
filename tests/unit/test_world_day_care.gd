@@ -249,6 +249,9 @@ func test_an_egg_and_the_last_healthy_member_are_each_refused() -> void:
 	var save: Gen2SaveData = Gen2SaveData.new()
 	var egg: Gen2SaveMon = _mon(CUBONE)
 	egg.is_egg = true
+	# `DayCare_GiveEgg` zeroes MON_HP after `CalcMonStats`, which is what makes
+	# `CheckCurPartyMonFainted` count an egg as fainted.
+	egg.hp = 0
 	save.party = [egg, _mon(HOOTHOOT)]
 	assert_eq(
 		Gen2WorldDayCare.deposit_refusal(save, 0),
