@@ -947,6 +947,13 @@ func test_the_pokerus_tick_floors_the_days_and_keeps_the_strain() -> void:
 	assert_false(Gen2WorldPartyHost.apply_pokerus_tick(_save, 1), "nothing left to spend")
 
 
+## `.TrySpreadPokerus`'s two `cp`s, both macro results with a byte added: the
+## direction roll is `50 percent + 1`, which is 128 rather than 129.
+func test_the_two_pokerus_spread_rolls_are_the_macro_values() -> void:
+	assert_eq(Gen2WorldPartyHost.POKERUS_SPREAD_ROLL, 33 * 0xFF / 100 + 1)
+	assert_eq(Gen2WorldPartyHost.POKERUS_FORWARD_ROLL, 50 * 0xFF / 100 + 1)
+
+
 ## `.randomPokerusLoop` and `.infectMon`, the two pieces of arithmetic a reading
 ## gets wrong: both durations come off the STRAIN nibble, not off the byte.
 func test_the_two_pokerus_bytes_are_the_source_arithmetic() -> void:

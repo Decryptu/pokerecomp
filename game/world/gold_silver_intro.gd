@@ -1087,7 +1087,6 @@ func _spawn(object: StringName, at: Vector2i) -> Dictionary:
 	return actor
 
 
-## `ReinitSpriteAnimFrame`: a new frameset, back at its first entry.
 func _reinit_frameset(actor: Dictionary, frameset: StringName) -> void:
 	actor["frameset"] = frameset
 	actor["frame"] = -1

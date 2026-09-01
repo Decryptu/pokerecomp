@@ -271,7 +271,6 @@ static func run(
 	return true
 
 
-## `BattleBGEffects_IncAnonJumptableIndex`.
 static func _inc(effect: Gen2BattleAnimBgEffect) -> void:
 	effect.jumptable_index = (effect.jumptable_index + 1) & 0xFF
 

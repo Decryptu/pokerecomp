@@ -515,8 +515,10 @@ const GENDER_FEMALE: StringName = &"female"
 const GENDER_NONE: StringName = &"genderless"
 
 
+## `CheckOppositeGender` reads the party struct and `wEnemyBackupDVs` behind a
+## Transform, which is why the copied identity is not asked.
 func gender() -> StringName:
-	return gender_for(data, species, dvs)
+	return gender_for(data, persistent_species(), persistent_dvs())
 
 
 ## The same answer for a Pokémon that is not in a battle, so the Hall of Fame's

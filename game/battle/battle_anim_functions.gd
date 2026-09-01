@@ -171,7 +171,6 @@ static func run(
 		return false
 	(FUNCTIONS[object.function] as Callable).call(player, player.data(), object)
 	return true
-## `BattleAnim_IncAnonJumptableIndex`.
 static func _inc(object: Gen2BattleAnimObject) -> void:
 	object.jumptable_index = (object.jumptable_index + 1) & 0xFF
 

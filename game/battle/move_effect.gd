@@ -1791,6 +1791,9 @@ const ACCURACY_DOWN: int = STAT_DOWN_BASE + 5
 const SP_DEF_UP_2: int = STAT_UP_2_BASE + 4
 const SPEED_DOWN_HIT: int = STAT_DOWN_HIT_BASE + 2
 
+## The one member of that run `.ComputerMiss` lets past.
+const ACCURACY_DOWN_HIT: int = STAT_DOWN_HIT_BASE + 5
+
 ## `EFFECT_UNUSED_2B`, `EFFECT_DEFROST_OPPONENT` and `EFFECT_PRIORITY_HIT`. The
 ## first two are on no move in either pin and are here because `AI_Smart` has a
 ## handler for each; a mod naming one on its own move reaches them.

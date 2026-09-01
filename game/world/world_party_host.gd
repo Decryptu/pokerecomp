@@ -153,6 +153,11 @@ const MANIA_OT_NAME: String = "MANIA"
 const SHUCKIE_NICKNAME: String = "SHUCKIE"
 const SHUCKIE_LEVEL: int = 15
 const SHUCKIE_HAPPY_THRESHOLD: int = 150
+
+## `.TrySpreadPokerus`'s two rolls: `cp 33 percent + 1` and `cp 50 percent + 1`,
+## which are 84 + 1 and 127 + 1 under the macro's integer division.
+const POKERUS_SPREAD_ROLL: int = 85
+const POKERUS_FORWARD_ROLL: int = 128
 ## `constants/script_constants.asm`'s own five.
 const SHUCKIE_WRONG_MON: int = 0
 const SHUCKIE_REFUSED: int = 1
@@ -2625,7 +2630,7 @@ static func _give_pokerus(
 static func _try_spread_pokerus(
 	save: Gen2SaveData, carrier: int, random: RandomNumberGenerator
 ) -> Dictionary:
-	if _random_byte(random) >= 85:
+	if _random_byte(random) >= POKERUS_SPREAD_ROLL:
 		return {}
 	var count: int = save.party.size()
 	if count <= 1:
@@ -2633,7 +2638,8 @@ static func _try_spread_pokerus(
 	var strain_source: int = save.party[carrier].pokerus
 	## `ld a, b / cp 2 / jr c`: b is how many party members are left including
 	## the carrier, so a carrier in the last slot can only walk backwards.
-	var forwards: bool = carrier < count - 1 and _random_byte(random) >= 129
+	var forwards: bool = carrier < count - 1 \
+		and _random_byte(random) >= POKERUS_FORWARD_ROLL
 	var step: int = 1 if forwards else -1
 	var index: int = carrier
 	while true:

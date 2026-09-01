@@ -170,7 +170,6 @@ func wait_for_other_player_to_exit(transport: Gen2LinkTransport) -> void:
 	reset_serial_registers(transport)
 
 
-## `Link_ResetSerialRegistersAfterLinkClosure`.
 func reset_serial_registers(transport: Gen2LinkTransport) -> void:
 	connection_status = CONNECTION_NOT_ESTABLISHED
 	if transport != null:
