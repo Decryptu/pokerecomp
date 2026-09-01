@@ -68,8 +68,7 @@ static func snapshot(ids: Array) -> Dictionary:
 	return out
 
 
-## Returns false only when the change could not be written, in which case the
-## in-memory value is rolled back so it never disagrees with the file.
+## False only when the write failed, which rolls the in-memory value back.
 ##
 ## A bound run takes the write instead of the file: the value belongs to the slot
 ## being played, and writing it installation-wide would change every other slot

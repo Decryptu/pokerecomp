@@ -135,12 +135,8 @@ const FRAMESET_RESTART: StringName = &"restart"
 const FLIP_X: int = 1
 
 const SHADOW_OAM_SPRITES: int = 40
-## How many of those each OAM set takes, which is the `db` count each
-## `.OAMData_*` opens with. The geometry is [Gen2GoldSilverIntroPage]'s; only the
-## count belongs here, because a full buffer stops the sprite pass:
-## `UpdateAnimFrame` returns carry at `wShadowOAMEnd` and
-## `DoNextFrameForAllSprites` answers it with `jr c, .done`, so every struct in a
-## later slot loses its own sequence for that frame as well as its picture.
+## Each `.OAMData_*`'s own `db` count, kept for the reason
+## [constant Gen2IntroMovie.OAM_SET_SIZES] gives.
 const OAM_SET_SIZES: Array[int] = [
 	1, 1, 4, 4, 6, 6, 27, 27, 29, 2, 1, 16, 16, 16, 16, 16, 16, 16, 5, 5, 5, 4,
 	16, 36, 25, 25, 25,
@@ -218,8 +214,7 @@ var _scx: int = 0
 var _scy: int = 0
 var _global_x: int = 0
 var _global_y: int = 0
-## `wLYOverrides` under `hLCDCPointer` = LOW(rSCY): one `hSCY` per scanline. Off
-## when [member _ly_active] is false, which is `hLCDCPointer` zero.
+## `wLYOverrides` under `hLCDCPointer` = LOW(rSCY): one `hSCY` per scanline.
 var _ly: PackedByteArray = PackedByteArray()
 var _ly_active: bool = false
 ## `wLYOverrides2`, the sine the overrides are built from.
@@ -317,11 +312,7 @@ func scroll() -> Vector2i:
 	return Vector2i(_scx, _scy)
 
 
-## The `hSCY` for one scanline, which is `wLYOverrides` while `hLCDCPointer`
-## points at rSCY and plain `hSCY` otherwise. `LCD` fires on `STAT_MODE_0` and
-## writes the entry `rLY` names, so the line after it is the one drawn with it;
-## `VBlank_Cutscene` writes entry zero, which is why the first two lines share
-## it.
+## [method Gen2IntroMovie.scroll_x_at] over rSCY: the same scanline-late read.
 func scroll_y_at(line: int) -> int:
 	if not _ly_active or line < 0 or line >= _ly.size():
 		return _scy
@@ -869,8 +860,7 @@ func _set_palettes(background: PackedInt32Array, objects: PackedInt32Array) -> v
 		_ob_palettes[index] = objects[index]
 
 
-## The cache holds a palette as colours; the reordering above works on the
-## cartridge's packed 15-bit values, so they are read back as those.
+## Read back as the packed 15-bit values the reordering above works on.
 func _packed(name: String) -> PackedInt32Array:
 	var out := PackedInt32Array()
 	if _data == null:
@@ -1401,8 +1391,7 @@ func _actor_frame(actor: Dictionary) -> Array:
 	return frames[at]
 
 
-## `AnimSeqs_Sine`: a = d * sin(a * pi/32), read out of `BattleAnimSineWave`
-## rather than derived, and zero without one.
+## `AnimSeqs_Sine`, out of `BattleAnimSineWave` and zero without one.
 func _sine_at(angle: int, amplitude: int) -> int:
 	if _sine == null:
 		return 0

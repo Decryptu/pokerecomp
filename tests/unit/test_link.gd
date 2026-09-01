@@ -288,6 +288,24 @@ func test_a_link_battle_writes_the_record_it_produced() -> void:
 	assert_eq(int(save.link_record["wins"]), 1)
 
 
+## `BadgeStatBoosts` and `DoBadgeTypeBoosts` both `ret nz` on `wLinkMode`, so a
+## link partner meets an unboosted party however many badges the player has.
+func test_a_link_battle_pays_no_badge_boost() -> void:
+	var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(
+		_data,
+		{"values": {
+			"kind": &"link_battle", "trainer_name": "BLUE",
+			"enemy_party": [_mon(SPECIES_TWO).to_dict()],
+		}},
+		Gen2WorldBattleAdapter.fallback_party(_data, SPECIES_ONE, 5, 1),
+		RandomNumberGenerator.new(), 0xFFFF
+	)
+	assert_true(bool(prepared.get("ok", false)), String(prepared.get("reason", "")))
+	var battle: Gen2Battle = prepared["battle"]
+	assert_eq(battle.player_badge_mask, 0)
+	assert_eq(battle.player.stat("attack"), int(battle.player.stats["attack"]))
+
+
 ## A link battle is a whole-party exchange with no trainer class behind it,
 ## which is `battle_tower`'s shape one caller further out.
 func test_a_link_battle_request_builds_the_peers_party() -> void:

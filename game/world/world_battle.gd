@@ -91,9 +91,12 @@ static func prepare(
 
 	if enemy_party == null or enemy_party.is_wiped():
 		return _failure(&"missing_enemy_party")
+	## `BadgeStatBoosts` and `DoBadgeTypeBoosts` both `ret nz` on `wLinkMode` and
+	## on `wInBattleTowerBattle`: no badge bonus outside a single-player fight.
+	var badges: int = 0 if kind in [&"battle_tower", &"link_battle"] else player_badges
 	var battle: Gen2Battle = Gen2Battle.create_parties(
 		data, player_party, enemy_party, generator,
-		kind in [&"trainer", &"battle_tower", &"link_battle"], player_badges, battle_rules
+		kind in [&"trainer", &"battle_tower", &"link_battle"], badges, battle_rules
 	)
 	if battle == null:
 		return _failure(&"battle_setup_failed")

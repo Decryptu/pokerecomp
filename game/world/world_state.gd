@@ -751,9 +751,8 @@ func restore_from_dict(raw: Variant) -> void:
 	changed.emit()
 
 
-## The live Battle Tower record, which callers edit in place: every write to it
-## is a write to SRAM the cartridge would have made straight away, and there is
-## no transaction between the receptionist and the section.
+## The live Battle Tower record, edited in place: every write is one the
+## cartridge would have made to SRAM straight away.
 func battle_tower() -> Gen2BattleTower:
 	return _battle_tower
 

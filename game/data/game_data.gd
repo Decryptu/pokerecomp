@@ -2019,9 +2019,8 @@ func intro_palette(name: String) -> PackedColorArray:
 	return colors
 
 
-## Whether the cache carries `_UnownPuzzle`'s art, which is the whole of what
-## the screen needs: a cartridge with no pin answers false and the special
-## refuses rather than opening an empty board.
+## Whether the cache carries `_UnownPuzzle`'s art. False refuses the special
+## rather than opening an empty board.
 func has_unown_puzzle() -> bool:
 	return not (_unown_puzzle.get("palette", []) as Array).is_empty()
 
@@ -2133,9 +2132,8 @@ func printer_status_string(name: String) -> String:
 	return String(_printer_strings.get(name, ""))
 
 
-## Whether the cache carries `_SlotMachine`'s art, which is the whole of what
-## the screen needs: a cartridge with no pin answers false and the special
-## refuses rather than opening an empty machine.
+## Whether the cache carries `_SlotMachine`'s art. False refuses the special
+## rather than opening an empty machine.
 func has_slots() -> bool:
 	return not (_slots.get("palettes", []) as Array).is_empty()
 

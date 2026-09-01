@@ -5336,6 +5336,7 @@ const LINES: Dictionary = {
 		&"item:item",
 		&"name:side",
 	],
+	Gen2Battle.ITEM_ACTIVATED: ["%s's %s activated!", &"name:side", &"item:item"],
 	Gen2Battle.ENDURED: ["%s hung on with %s!", &"name:target", &"item:item"],
 	Gen2Battle.PROTECTED_ITSELF: ["%s PROTECTED itself!", &"name:side"],
 	Gen2Battle.PROTECTING_ITSELF: ["%s's PROTECTING itself!", &"name:target"],

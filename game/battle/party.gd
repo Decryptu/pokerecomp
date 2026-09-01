@@ -97,8 +97,13 @@ func send_out(index: int) -> bool:
 		return false
 
 	var leaving: Gen2BattleMon = active_mon()
+	## `wPlayerConfuseCount` is written by confusing moves and cleared by no
+	## entrance, so `HandleBerserkGene` reads the byte the last Pokemon left.
+	var confuse_count: int = leaving.confusion_turns if leaving != null else 0
 	if leaving != null:
 		leaving.reset_stages()
 		leaving.reset_volatile()
 	active = index
+	if active_mon() != null:
+		active_mon().confusion_turns = confuse_count
 	return true

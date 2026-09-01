@@ -165,6 +165,9 @@ const RECOVERED_WITH_ITEM: StringName = &"recovered_with_item"
 const RECOVERED_USING_ITEM: StringName = &"recovered_using_item"
 const RESTORED_PP: StringName = &"restored_pp"
 const ITEM_HEALED_CONFUSION: StringName = &"item_healed_confusion"
+## `BattleText_UsersStringBuffer1Activated`, the line a held item says when it
+## works on its own holder. Only the Berserk Gene reaches it with cartridge data.
+const ITEM_ACTIVATED: StringName = &"item_activated"
 
 ## `HungOnText`: a Focus Band held the Pokémon on one hit point. The line names
 ## the item, which is why [code]item[/code] is on it. Endure's own line is
@@ -424,6 +427,11 @@ const PP_ITEM_AMOUNTS: Dictionary = {
 	ITEM_ETHER: 10, ITEM_ELIXER: 10, ITEM_MYSTERYBERRY: 5,
 	ITEM_MAX_ETHER: 0, ITEM_MAX_ELIXER: 0,
 }
+
+## `HandleBerserkGene`'s `BattleCommand_AttackUp2`, and the count it never
+## writes: a zero byte decremented once is 255 more turns after this one.
+const BERSERK_GENE_STAGES: int = 2
+const BERSERK_GENE_CONFUSION_TURNS: int = 256
 
 ## `wBattleType`. Only the values `TryToRunAwayFromBattle` branches on are named;
 ## everything else reaches the ordinary speed check.
@@ -1582,6 +1590,9 @@ func take_actions(player_action: Dictionary, enemy_action: Dictionary) -> Array:
 	if _pending_baton_pass >= 0 or _pending_switch_offer >= 0:
 		return events
 
+	# In front of `BattleMenu`, so it is paid before the refusal below too.
+	_handle_berserk_gene(events)
+
 	# Settled before anything is spent, because `TryPlayerSwitch` runs at menu
 	# time: the refusal jumps back to `BattleMenuPKMN_Loop` with no turn taken.
 	if _is_switch(player_action) and switch_blocked():
@@ -2048,6 +2059,47 @@ func _tick_held_items(events: Array) -> void:
 		use_hp_berry(side, events)
 		use_status_berry(side, events)
 		use_confusion_berry(side, events)
+
+
+## `HandleBerserkGene`, at the top of the loop and before either side has chosen:
+## the holder spends the Gene, is confused, and takes `BattleCommand_AttackUp2`'s
+## two stages. A Pokemon put out mid-turn waits for the next one. No count is
+## written, so the confusion runs on the byte [method Gen2Party.send_out] carried
+## over, and a zero one wraps to 256 (`docs/bugs_and_glitches.md`).
+func _handle_berserk_gene(events: Array) -> void:
+	for side: int in [PLAYER, ENEMY]:
+		var holder: Gen2BattleMon = mon(side)
+		if holder == null or holder.item != Gen2HeldItem.BERSERK_GENE_ITEM:
+			continue
+		var used: int = holder.item
+		holder.item = 0
+		var was_confused: bool = Gen2Substatus.has(
+			holder.substatus, Gen2Substatus.CONFUSED
+		)
+		holder.substatus |= Gen2Substatus.CONFUSED
+		if holder.confusion_turns <= 0:
+			holder.confusion_turns = BERSERK_GENE_CONFUSION_TURNS
+		var by: int = mini(BERSERK_GENE_STAGES, Gen2Stats.MAX_STAGE - holder.stage("attack"))
+		if by > 0:
+			holder.change_stage("attack", by)
+		events.append({"type": ITEM_ACTIVATED, "side": side, "item": used})
+		events.append({
+			"type": STAT_CHANGED if by > 0 else STAT_CHANGE_FAILED,
+			"target": side, "stat": "attack",
+			"by": by if by > 0 else BERSERK_GENE_STAGES,
+		})
+		if was_confused:
+			continue
+		events.append({
+			"type": ANIMATION,
+			"index": Gen2BattleAnimPlayer.ANIM_CONFUSED,
+			"param": battle_anim_param,
+			"after_anim": Gen2BattleAnimPlayer.AFTER_ANIM_NONE,
+			"enemy_turn": side == ENEMY,
+			"effectiveness": RomLayout.MATCHUP_EFFECTIVE,
+			"restore_user_pic": false,
+		})
+		events.append({"type": CONFUSE_INFLICTED, "target": side})
 
 
 ## `HandleDefrost`: each frozen side thaws on its own roll, the only thing making

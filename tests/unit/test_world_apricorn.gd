@@ -151,6 +151,16 @@ func test_the_quantity_dial_wraps_at_both_ends() -> void:
 	assert_eq(prompt.value, 2)
 
 
+## The dial as a step, which the mart's box and the item PC's row take instead
+## of keeping a prompt.
+func test_the_quantity_dial_steps_for_a_caller_that_keeps_the_number() -> void:
+	assert_eq(Gen2WorldQuantityPrompt.stepped(1, Gen2Button.DOWN, 7), 7)
+	assert_eq(Gen2WorldQuantityPrompt.stepped(7, Gen2Button.UP, 7), 1)
+	assert_eq(Gen2WorldQuantityPrompt.stepped(3, Gen2Button.RIGHT, 7), 7)
+	assert_eq(Gen2WorldQuantityPrompt.stepped(5, Gen2Button.LEFT, 7), 1)
+	assert_eq(Gen2WorldQuantityPrompt.stepped(99, Gen2Button.UP, 7), 1)
+
+
 func test_the_quantity_dial_pages_by_ten_and_stops_at_the_ceiling() -> void:
 	var prompt: Gen2WorldQuantityPrompt = Gen2WorldQuantityPrompt.open(25)
 	prompt.press(Gen2Button.RIGHT)
