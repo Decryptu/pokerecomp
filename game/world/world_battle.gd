@@ -11,6 +11,19 @@ const OUTCOME_CAUGHT: StringName = &"caught"
 const OUTCOME_RAN: StringName = &"ran"
 const OUTCOME_CANCELLED: StringName = &"cancelled"
 
+## `CheckMagikarpArea`'s two `cp`s, the same numbers in both pins.
+const GROUP_LAKE_OF_RAGE: int = 9
+const MAP_LAKE_OF_RAGE: int = 6
+## `HIGH(1536)`, `LOW(1616)`, `LOW(1600)` and `HIGH(1024)`, all read against a
+## length in feet and inches: the unit-conversion entry in the bug docs.
+const MAGIKARP_HUGE_FEET: int = 6
+const MAGIKARP_HUGE_INCHES: int = 80
+const MAGIKARP_LARGE_INCHES: int = 64
+const MAGIKARP_FLOOR_FEET: int = 4
+const MAGIKARP_HUGE_SKIP: int = 12
+const MAGIKARP_LARGE_SKIP: int = 50
+const MAGIKARP_FLOOR_SKIP: int = 100
+
 
 static func prepare(
 	data: GameData,
@@ -187,12 +200,9 @@ static func credit_earnings(state: Gen2WorldState, money: Dictionary) -> void:
 
 ## `LoadEnemyMon`'s `.InitDVs` for a wild, which decides whether the Pokemon in
 ## the grass is shiny, has a bad stat or answers a different Hidden Power. Rolled
-## here rather than in each of the nine callers: this is the one place a wild is
-## built, and [param generator] is the battle's own. Three cases keep an answer of
-## their own, in the source's order: a request already carrying `dvs` keeps it,
-## which is what leaves a player the Pokemon they walked up to;
-## BATTLETYPE_FORCESHINY writes [constant Gen2Stats.SHINY_DVS]; and a wild UNOWN
-## rerolls until its letter is one the Ruins of Alph puzzle has unlocked.
+## here rather than in each of the nine callers, on the battle's own generator.
+## Two cases keep an answer of their own, in the source's order: a request
+## carrying `dvs` keeps it, and BATTLETYPE_FORCESHINY writes the shiny word.
 static func wild_dvs(
 	values: Dictionary, battle_type: int, species: int, generator: RandomNumberGenerator
 ) -> int:
@@ -207,38 +217,63 @@ static func wild_dvs(
 		"map_group": int(values.get("map_group", -1)),
 		"map_number": int(values.get("map_number", -1)),
 	})
-	## -1 is what an unstamped request means, and is every caller that is not the
-	## world screen: no gate, which is how a preview tool or a test keeps the
+	## -1 is an unstamped request: no gate, so a preview tool or a test keeps the
 	## letter it rolled.
 	var unlocked: int = int(values.get("unlocked_unowns", -1))
-	var word: int = _roll_dvs(generator, species, unlocked)
+	var word: int = _roll_dvs(generator, species, unlocked, values)
 	## The charm's extra rolls sit past the source, which takes one: the first
 	## shiny is kept and otherwise the last stands, so 0 and 1 are both vanilla.
 	for _extra: int in maxi(0, rolls - 1):
 		if Gen2Stats.is_shiny(word):
 			break
-		word = _roll_dvs(generator, species, unlocked)
+		word = _roll_dvs(generator, species, unlocked, values)
 	return word
 
 
-## Two `BattleRandom` bytes, high byte first, rerolled while the letter they give a
-## wild Unown is locked, which is `CheckUnownLetter`'s `jr c, .GenerateDVs`.
-## Unbounded the way the source's is, and safe for the same reason: the mask is
-## narrowed to the four real sets first and every one of them holds letters, so any
-## mask left standing is one a roll reaches. A mask of nothing is the save that has
-## solved no puzzle, and there `ChooseWildEncounter` refuses a wild Unown outright,
-## so a caller reaching here with one has already left the cartridge's own path.
+## Two `BattleRandom` bytes, high byte first, rerolled while `CheckUnownLetter`
+## or the Magikarp filters refuse them. Unbounded the way the source's is, and
+## safe for the same reason: the mask is narrowed to the four real sets, every
+## one holds letters, and a wild Unown is refused outright on an empty mask.
 static func _roll_dvs(
-	generator: RandomNumberGenerator, species: int, unlocked_unowns: int
+	generator: RandomNumberGenerator, species: int, unlocked_unowns: int,
+	values: Dictionary = {}
 ) -> int:
 	var gated: bool = species == RomLayout.UNOWN_SPECIES and unlocked_unowns > 0
 	var mask: int = unlocked_unowns & ((1 << Gen2WorldState.UNOWN_LETTER_SETS.size()) - 1)
 	while true:
 		var word: int = (generator.randi_range(0, 255) << 8) | generator.randi_range(0, 255)
-		if not gated or mask == 0 \
-			or Gen2WorldState.unown_letter_unlocked(Gen2Stats.unown_letter(word), mask):
+		if gated and mask != 0 \
+			and not Gen2WorldState.unown_letter_unlocked(Gen2Stats.unown_letter(word), mask):
+			continue
+		if _magikarp_accepted(word, species, generator, values):
 			return word
 	return 0
+
+
+## `LoadEnemyMon.Magikarp` and `.CheckMagikarpArea`, which make a very long wild
+## Magikarp rarer and a short one rarer still. False is `jr .GenerateDVs`.
+static func _magikarp_accepted(
+	dvs: int, species: int, generator: RandomNumberGenerator, values: Dictionary
+) -> bool:
+	if species != Gen2WorldPartyHost.SPECIES_MAGIKARP:
+		return true
+	var length: Vector2i = Gen2WorldPartyHost.magikarp_length(
+		PackedByteArray([(dvs >> 8) & 0xFF, dvs & 0xFF]),
+		int(values.get("player_id", 0))
+	)
+	if length.x == MAGIKARP_HUGE_FEET \
+		and generator.randi_range(0, 255) >= MAGIKARP_HUGE_SKIP:
+		if length.y >= MAGIKARP_HUGE_INCHES:
+			return false
+		if generator.randi_range(0, 255) >= MAGIKARP_LARGE_SKIP \
+			and length.y >= MAGIKARP_LARGE_INCHES:
+			return false
+	if int(values.get("map_group", -1)) == GROUP_LAKE_OF_RAGE \
+		or int(values.get("map_number", -1)) == MAP_LAKE_OF_RAGE:
+		return true
+	if generator.randi_range(0, 255) < MAGIKARP_FLOOR_SKIP:
+		return true
+	return length.x >= MAGIKARP_FLOOR_FEET
 
 
 ## `PlayBattleMusic`'s track, off the request alone.
