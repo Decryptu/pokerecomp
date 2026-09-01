@@ -577,16 +577,19 @@ func _draw_panels() -> void:
 	var enemy_hud: bool = bool(_view.get("enemy_hud_visible", true))
 	var player_hud: bool = bool(_view.get("player_hud_visible", true))
 	var border: Array = _view.get("trainer_hud_border", []) as Array
+	var enemy_caught: bool = bool(_view.get("enemy_caught", false))
 
 	# The player's panel prints its own HP numbers, so it moves with the bar; the
 	# enemy's does not, which is why both sit in one layer keyed on all of it.
 	if _layer_changed(&"panels", [
 		enemy_name, enemy_level, player_name, player_level, player_hp, player_max_hp,
-		enemy_hud, player_hud, border, raster,
+		enemy_hud, player_hud, border, enemy_caught, raster,
 	]):
 		var panels: PackedByteArray = _new_buffer()
 		if enemy_hud:
-			_hud.draw_enemy(panels, Gen2Screen.WIDTH, enemy_name, enemy_level)
+			_hud.draw_enemy(
+				panels, Gen2Screen.WIDTH, enemy_name, enemy_level, enemy_caught
+			)
 		if player_hud:
 			_hud.draw_player(
 				panels, Gen2Screen.WIDTH, player_name, player_level, player_hp, player_max_hp

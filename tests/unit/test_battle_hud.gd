@@ -198,6 +198,36 @@ func test_the_hud_draws_its_panels_where_the_hardware_puts_them() -> void:
 	assert_eq(_ink_in_row(screen, 5), 0, "nothing between the two panels")
 
 
+## `DrawEnemyHUDBorder`'s tail: a wild battle whose species the Pokedex already
+## holds carries `ExpBarGFX`' ninth tile under the enemy's name, and nothing else
+## on the panel moves.
+func test_a_caught_species_marks_the_enemy_panel_with_a_ball() -> void:
+	_write_cache()
+	var hud: Gen2BattleHud = Gen2BattleHud.from_data(_data())
+
+	var plain: PackedByteArray = PackedByteArray()
+	plain.resize(Gen2Screen.WIDTH * Gen2Screen.HEIGHT)
+	hud.draw_enemy(plain, Gen2Screen.WIDTH, "PIDGEY", 5)
+
+	var caught: PackedByteArray = PackedByteArray()
+	caught.resize(Gen2Screen.WIDTH * Gen2Screen.HEIGHT)
+	hud.draw_enemy(caught, Gen2Screen.WIDTH, "PIDGEY", 5, true)
+
+	## Row 1 already carries the level, so the ball is the difference between
+	## the two panels rather than everything drawn on the row.
+	assert_eq(
+		_ink_in_row(caught, Gen2BattleHud.ENEMY_CAUGHT.y)
+			- _ink_in_row(plain, Gen2BattleHud.ENEMY_CAUGHT.y),
+		Gen2Font.TILE * Gen2Font.TILE,
+		"one tile of ball"
+	)
+	assert_eq(
+		_ink_in_row(caught, Gen2BattleHud.ENEMY_NAME.y),
+		_ink_in_row(plain, Gen2BattleHud.ENEMY_NAME.y),
+		"the name row is untouched"
+	)
+
+
 func test_the_hp_bar_fill_is_drawn_apart_from_the_panel() -> void:
 	# The fill is the only part of a panel that is not black on white, so it is
 	# a layer of its own and the panel must not draw it.

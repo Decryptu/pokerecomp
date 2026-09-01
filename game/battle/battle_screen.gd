@@ -1700,9 +1700,8 @@ func _begin_slide(side: int) -> void:
 	})
 
 
-## `BattleStart_TrainerHuds`: the player's party balls always, the opponent's as
-## well when there is a trainer behind them, each six sprites hanging under a
-## border of four tile kinds.
+## `BattleStart_TrainerHuds`: the player's party balls always, the opponent's
+## when a trainer is behind them, six sprites under a border of four tile kinds.
 func _build_trainer_huds() -> void:
 	_hud_balls = []
 	_hud_border = []
@@ -1712,9 +1711,8 @@ func _build_trainer_huds() -> void:
 
 
 ## One side of it. `LoadTrainerHudOAM` walks six slots from
-## [constant HUD_BALL_AT] in [constant HUD_BALL_STEP]'s direction, taking the
-## tile `StageBallTilesData` staged for each, and `PlaceHUDBorderTiles` draws the
-## frame from a corner outwards in the same direction.
+## [constant HUD_BALL_AT] in [constant HUD_BALL_STEP]'s direction, and
+## `PlaceHUDBorderTiles` draws the frame from a corner outwards the same way.
 func _add_trainer_hud(side: int) -> void:
 	var player_side: bool = side == Gen2Battle.PLAYER
 	var at: Vector2i = HUD_BALL_AT[player_side]
@@ -6068,6 +6066,9 @@ func _push_view() -> void:
 			and _anim_hud_hidden != Gen2Battle.ENEMY,
 		"player_hud_visible": _player_hud_visible \
 			and _anim_hud_hidden != Gen2Battle.PLAYER,
+		## `DrawEnemyHUDBorder`'s last line, which leaves on `wBattleMode`: only
+		## a wild battle marks a species the Pokedex already holds.
+		"enemy_caught": _enemy_caught_before and _enemy_trainer_class == 0,
 		## `BattleStart_TrainerHuds`' party balls and the frame they hang in.
 		"trainer_hud_balls": _hud_balls,
 		"trainer_hud_border": _hud_border,

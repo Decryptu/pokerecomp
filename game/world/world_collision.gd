@@ -219,8 +219,8 @@ const COLL_UP_RIGHT_WALL: int = 0xB6
 const COLL_UP_LEFT_WALL: int = 0xB7
 
 ## .MovementPermissionsData, indexed by a wall or buoy code's low three bits:
-## which of the standing tile's edges it walls off, in FACE_* terms. Numerically
-## identical to LEDGE_FACE_MASK, and two tables in the source as well.
+## which of the standing tile's edges it walls off. Numerically LEDGE_FACE_MASK,
+## and two tables in the source as well.
 const SIDE_WALL_FACE_MASK: Array[int] = [
 	FACE_RIGHT,               # COLL_RIGHT_WALL/BUOY
 	FACE_LEFT,                # COLL_LEFT_WALL/BUOY
@@ -245,17 +245,24 @@ static func side_wall_face_mask(collision_code: int) -> int:
 	return SIDE_WALL_FACE_MASK[collision_code & 0x07]
 
 
+## `CanObjectLeaveTile`'s answer per code. It means to index `.dir_masks` by
+## wWalkingDirection, but the `ld a, [hl]` that would read it is missing, so it
+## indexes by `GetSideWallDirectionMask`'s own mask ANDed with 3 and tests the
+## mask against that entry: four codes refuse every step and four allow it.
+const SIDE_WALL_LEAVE_BLOCKED: Array[bool] = [
+	false, false, true, false, false, true, true, true,
+]
+
+
 ## engine/overworld/npc_movement.asm's CanObjectLeaveTile (on [param from_code])
-## and WillObjectBumpIntoTile (on [param to_code]). Both index a differently
-## bit-packed table, GetSideWallDirectionMask's, keyed by wWalkingDirection
-## rather than wFacingDirection, and produce the identical per-code result, so
-## the FACE_* table is reused instead of encoding the rule twice. Both games ship
-## npc_movement.asm byte identical, hence no profile argument here.
+## and WillObjectBumpIntoTile (on [param to_code]); only the second reads the
+## direction. Both pins ship the file byte identical, hence no profile argument.
 static func side_wall_step_blocked(from_code: int, to_code: int, direction: Vector2i) -> bool:
 	var forward_face: int = face_mask_for_direction(direction)
 	if forward_face == 0:
 		return false
-	if (side_wall_face_mask(from_code) & forward_face) != 0:
+	if side_wall_face_mask(from_code) != 0 \
+		and SIDE_WALL_LEAVE_BLOCKED[from_code & 0x07]:
 		return true
 	return (side_wall_face_mask(to_code) & face_mask_for_direction(-direction)) != 0
 

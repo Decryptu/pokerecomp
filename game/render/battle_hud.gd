@@ -1,13 +1,10 @@
 class_name Gen2BattleHud
 extends RefCounted
 
-## The two status panels a battle draws, on the tile grid the hardware uses. The
-## enemy's hangs from a side on its left at the top, the player's from a side on
-## its right below the middle; neither is a box, but an edge and two corners with
-## the contents printed inside, which is why both come from the HUD sheets. The
-## player's also carries HP as numbers and an exp bar along its bottom edge, and
-## the enemy's has neither because the player is not supposed to know either
-## number. Node-free: it writes indices into a buffer.
+## The two status panels a battle draws, on the tile grid the hardware uses.
+## Neither is a box but an edge and two corners with the contents printed inside,
+## which is why both come from the HUD sheets. Only the player's carries HP as
+## numbers and an exp bar. Node-free: it writes indices into a buffer.
 
 const TILE: int = Gen2Font.TILE
 
@@ -20,6 +17,8 @@ const EXP_BAR_TILES: int = 8
 
 ## The enemy's panel: name, then level, then the bar and the edge under it.
 const ENEMY_NAME: Vector2i = Vector2i(1, 0)
+## `DrawEnemyHUDBorder`'s `hlcoord 1, 1`, under the name's first letter.
+const ENEMY_CAUGHT: Vector2i = Vector2i(1, 1)
 const ENEMY_LEVEL: Vector2i = Vector2i(6, 1)
 const ENEMY_BAR: Vector2i = Vector2i(2, 2)
 const ENEMY_EDGE: Vector2i = Vector2i(1, 2)
@@ -78,16 +77,20 @@ static func bar_pixels(current: int, maximum: int, length: int) -> int:
 
 
 ## The enemy's panel except for the bar's fill: the name, the level, the "HP:"
-## label, the cap that closes the bar and the edge under it.
-##
-## The fill is drawn separately as the one thing on the panel that is not black
-## on white. The hardware gives every tile its own palette; this layers instead,
-## which comes to the same picture and keeps the palette choice where the colour
-## is.
+## label, the cap that closes the bar and the edge under it. [param caught] is
+## `DrawEnemyHUDBorder`'s ball, drawn on a wild battle whose species the Pokedex
+## already has caught. The fill is a layer of its own as the one thing on the
+## panel that is not black on white, which keeps the palette choice where the
+## colour is.
 func draw_enemy(
-	into: PackedByteArray, width: int, name: String, level: int
+	into: PackedByteArray, width: int, name: String, level: int, caught: bool = false
 ) -> void:
 	font.draw_text(name, into, width, ENEMY_NAME.x * TILE, ENEMY_NAME.y * TILE)
+	if caught:
+		tiles.draw(
+			Gen2BattleTiles.CAUGHT_BALL, into, width,
+			ENEMY_CAUGHT.x * TILE, ENEMY_CAUGHT.y * TILE
+		)
 	draw_level(into, width, ENEMY_LEVEL, level)
 	draw_bar_frame(into, width, ENEMY_BAR, Gen2BattleTiles.HP_BAR_END)
 
@@ -150,14 +153,12 @@ func draw_hp_bar(
 		)
 
 
-## The exp bar, whose ends are the HP bar's own tiles and whose partial fills are
-## the only thing its own sheet is for. [param pixels] is `PlaceExpBar`'s own `b`:
-## a pixel count and never a ratio, `CalcExpBar` having already divided and rounded
-## it. `PlaceExpBar` starts at `hlcoord 17, 11` and writes with `ld [hld], a`, so
-## the full tiles land at the right-hand end and the run walks left, and unlike
-## `DrawBattleHPBar` it lays no empty template and writes $62 for every tile the
-## fill did not reach. [param at] is the bar's left-hand tile, the HUD's own
-## everywhere but the stats screen, where `LoadPinkPage` fills it in at (11,16).
+## The exp bar, whose ends are the HP bar's own tiles. [param pixels] is
+## `PlaceExpBar`'s `b`: a pixel count and never a ratio, `CalcExpBar` having
+## divided already. It starts at `hlcoord 17, 11` and writes with `ld [hld], a`,
+## so the run walks left from the right-hand end, and writes $62 for every tile
+## the fill did not reach. [param at] is the bar's left-hand tile, the HUD's own
+## everywhere but the stats screen's (11,16).
 func draw_exp_bar(
 	into: PackedByteArray, width: int, pixels: int, at: Vector2i = PLAYER_EXP
 ) -> void:
@@ -176,8 +177,8 @@ func draw_exp_bar(
 		tiles.draw(number, into, width, (right - tile) * TILE, top)
 
 
-## The level symbol and the number, left-aligned after it, which is how a level
-## is written everywhere in these games until the number needs three digits.
+## The level symbol and the number after it, which is how a level is written
+## everywhere in these games until the number needs three digits.
 func draw_level(into: PackedByteArray, width: int, at: Vector2i, level: int) -> void:
 	var column: int = at.x
 	if Gen2Font.level_glyph_shown(level):

@@ -666,10 +666,6 @@ const PARTY_SELECTION_CANCEL_BOX: Dictionary = {
 	&"photo_studio": ["photo_studio", "no_photo"],
 }
 
-## `CelebiShrineEvent`'s own loop: `ld a, 160` into wFrameCounter and
-## `ld c, 2 / call DelayFrames` per pass, so the cutscene stands for twice its
-## own counter. There is no sprite-anim layer outside the intro, so what it owes
-## a script is the wait and the battle type it leaves behind.
 ## `engine/events/poke_seer.asm`'s own readings.
 const SEER_UNKNOWN: String = "Unknown"
 const SEER_TIMES: Array[String] = ["Morning", "Day", "Night"]
@@ -686,8 +682,12 @@ const SEER_ADVICE: Array = [
 	[89, "mighty"], [100, "impressed"], [255, "more_care"],
 ]
 
+## `CelebiShrineEvent`: `ld a, 160` into wFrameCounter, two frames a pass, and
+## one `DelayFrame` in front. `CelebiEvent_CountDown` reads the counter before
+## it decrements, so the pass that reads zero is spent too.
 const CELEBI_SHRINE_PASSES: int = 160
 const CELEBI_SHRINE_FRAMES_PER_PASS: int = 2
+const CELEBI_SHRINE_ENTRY_FRAMES: int = 1
 const VARIABLE_SPRITE_BASE: int = 0xF0
 
 
@@ -5165,9 +5165,8 @@ func _special_check_caught_celebi(_special: int) -> Dictionary:
 	return {"ok": true}
 
 
-## The whole routine is a sprite-anim cutscene and a battle type. There is no
-## sprite-anim layer outside the intro, so what it owes a script is the wait its own
-## loop spends and the type the fight behind it starts with.
+## A sprite-anim cutscene and a battle type. There is no sprite-anim layer
+## outside the intro, so what it owes a script is the wait and the type.
 func _special_celebi_shrine_event(special: int) -> Dictionary:
 	_loaded_battle_type = Gen2Battle.BATTLETYPE_CELEBI
 	if not _battle_setup.is_empty():
@@ -5176,7 +5175,8 @@ func _special_celebi_shrine_event(special: int) -> Dictionary:
 		"special": special, "kind": &"celebi_shrine",
 	})
 	return _stage_frame_wait(
-		CELEBI_SHRINE_PASSES * CELEBI_SHRINE_FRAMES_PER_PASS,
+		CELEBI_SHRINE_ENTRY_FRAMES
+			+ (CELEBI_SHRINE_PASSES + 1) * CELEBI_SHRINE_FRAMES_PER_PASS,
 		{"special": special, "kind": &"celebi_shrine"}
 	)
 

@@ -14,7 +14,8 @@ extends SceneTree
 ## which is the pack's USE on that item.
 const KIND_HELP: Dictionary = {
 	&"effects": "cell: the emote, boulder dust, grass rustle and headbutt tree over the first visible object",
-	&"battle": "cell: the wild fight preview_battle_request starts, settled past its transition",
+	&"battle": "frames: the wild fight preview_battle_request starts, settled past its transition",
+	&"battle_caught": "frames: the same fight against a species the dex already holds",
 	&"catch_tutorial": "frames: the Dude's own fight, which answers itself, that many frames in",
 	&"catch_dex": "none: NewPokedexEntry's page, over the fight the catch that opened it is still in",
 	&"cut": "cell: OWCutAnimation's two halves and the jump shadow",
@@ -144,6 +145,8 @@ const TEXT_SETTLE_FRAMES: int = 20
 ## climb runs four passes a cell, so 26 lands a few cells up.
 const STAGED_FRAMES: int = 2
 const STAGED_FRAMES_BY_KIND: Dictionary = {&"cut": 12, &"waterfall_use": 26}
+
+const PREVIEW_BATTLE_SPECIES: int = 16 ## `preview_battle_request`'s PIDGEY.
 
 var _screen: Gen2WorldScreen = null
 var _output_path: String = ""
@@ -317,7 +320,8 @@ func _settle_mon_special(host_property: String) -> void:
 ## stages a sprite and then spends the frames it needs.
 const SELF_DRIVEN_KINDS: Array[StringName] = [
 	&"warp", &"door", &"map_name_sign", &"ledge", &"heal_machine", &"fly",
-	&"battle", &"battle_transition", &"level_evolution", &"egg_hatch",
+	&"battle", &"battle_caught", &"battle_transition", &"level_evolution",
+	&"egg_hatch",
 	&"catch_tutorial",
 	&"name_rater", &"move_deleter", &"move_tutor", &"day_care",
 	&"ice_slide", &"whiteout", &"view_cover", &"gift_nickname",
@@ -333,6 +337,7 @@ const SELF_DRIVEN_KINDS: Array[StringName] = [
 const STAGERS: Dictionary = {
 	&"unown_wall": &"_stage_unown_wall",
 	&"battle": &"_stage_battle",
+	&"battle_caught": &"_stage_battle",
 	&"catch_tutorial": &"_stage_catch_tutorial",
 	&"battle_transition": &"_stage_battle_transition",
 	&"script_fade": &"_stage_script_fade",
@@ -449,12 +454,20 @@ func _stage_unown_wall() -> void:
 	_screen.press_button(Gen2Button.A)
 
 
-## Past the transition and into the fight it opens, which is the one picture a battle
-## renderer staged on the map draws.
+## Past the transition and into the fight it opens. `battle_caught` marks the
+## species caught first and answers the appearance line, since the panel
+## `DrawEnemyHUDBorder`'s ball rides on is only up past it.
 func _stage_battle() -> void:
+	var frames: int = maxi(_cell.x, STAGED_FRAMES)
+	var caught: bool = _kind == &"battle_caught"
+	if caught:
+		_screen.world().state.set_species_caught(PREVIEW_BATTLE_SPECIES)
 	_screen.preview_battle_request()
 	_screen.settle_battle_transition()
-	_screen.advance_frames(STAGED_FRAMES)
+	_screen.advance_frames(frames)
+	for _press: int in (3 if caught else 0):
+		_screen.press_button(Gen2Button.A)
+		_screen.advance_frames(frames)
 
 
 ## `CatchTutorial`, played by `DudeAutoInputs` rather than by anybody. The first

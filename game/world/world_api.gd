@@ -4914,9 +4914,8 @@ func _movement_effect(
 			return false
 		&"tree_shake":
 			## `Movement_tree_shake` shakes the object, not the screen: the
-			## stream sleeps 24 frames while OBJECT_ACTION_WEIRD_TREE cycles
-			## its drawing. The event stays for a host that plays a sound
-			## over it; nothing else is asked of it.
+			## stream sleeps 24 frames while OBJECT_ACTION_WEIRD_TREE cycles its
+			## drawing. The event is there for a host that sounds it.
 			object.queue_tree_shake(TREE_SHAKE_FRAMES)
 			generated.append({
 				"type": &"tree_shake_requested",
