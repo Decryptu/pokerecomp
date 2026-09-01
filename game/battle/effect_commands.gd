@@ -59,7 +59,6 @@ const FALSE_SWIPE: StringName = &"falseswipe"
 ## lists carry no `stab`. A fixed number has no effectiveness to announce.
 const RESET_TYPE_MATCHUP: StringName = &"resettypematchup"
 
-## Heal Bell, which clears the status of every Pokémon in the user's party.
 const HEAL_BELL: StringName = &"healbell"
 
 ## Snore, which fails unless its user is asleep.
@@ -360,7 +359,6 @@ const FORCE_SWITCH: StringName = &"forceswitch"
 ## Baton Pass, which switches the side that used it and hands everything over.
 const BATON_PASS: StringName = &"batonpass"
 
-## Teleport, which takes its own user out of a wild battle and ends it as a draw.
 const TELEPORT: StringName = &"teleport"
 
 ## Foresight and Lock On, the two flags one side leaves on the other for the
@@ -369,16 +367,12 @@ const TELEPORT: StringName = &"teleport"
 const FORESIGHT: StringName = &"foresight"
 const LOCK_ON: StringName = &"lockon"
 
-## Spite, which takes two to five PP off the slot holding the target's last move.
 const SPITE: StringName = &"spite"
 
-## Pain Split, which writes the average of the two Pokémon's health into both.
 const PAIN_SPLIT: StringName = &"painsplit"
 
-## Thief, which moves the target's held item onto a thief carrying none.
 const THIEF: StringName = &"thief"
 
-## Pursuit, which doubles the finished figure against a side that is leaving.
 const PURSUIT: StringName = &"pursuit"
 
 ## Beat Up: one pass of its loop, and the line behind the loop that says nothing
@@ -1093,14 +1087,15 @@ static func _reset_type_matchup(turn: Gen2Turn) -> void:
 ## the one on the field included. The source zeroes all six bytes whether or not a
 ## slot holds anything, so a shorter party is the same thing. Its trailing
 ## `CalcPlayerStats` has no counterpart, a burn and a paralysis being applied when
-## a stat is read ([method Gen2BattleMon.stat]), and its `res SUBSTATUS_NIGHTMARE`
-## none either, no move here giving one.
+## a stat is read ([method Gen2BattleMon.stat]). Its opening `res
+## SUBSTATUS_NIGHTMARE` is the ringer's own, reached through Sleep Talk.
 static func _heal_bell(turn: Gen2Turn) -> void:
 	for mon: Gen2BattleMon in turn.battle.party(turn.side).mons:
 		if mon == null:
 			continue
 		mon.status = Gen2Status.NONE
 		mon.toxic_counter = 0
+	turn.attacker().substatus &= ~Gen2Substatus.NIGHTMARE
 	_animate_current_move(turn)
 	turn.emit(Gen2Battle.BELL_CHIMED)
 
@@ -1183,7 +1178,7 @@ static func _mirror_move(turn: Gen2Turn) -> void:
 static func _mimic(turn: Gen2Turn) -> void:
 	_clear_last_move_for_call(turn)
 	var copied: int = turn.defender().last_counter_move
-	var slot: int = turn.attacker().moves.find(Gen2MoveEffect.MIMIC_MOVE)
+	var slot: int = _last_slot_holding(turn.attacker(), Gen2MoveEffect.MIMIC_MOVE)
 	if _is_hidden(turn.defender().substatus) \
 		or copied == 0 or copied == Gen2Damage.STRUGGLE or slot < 0 \
 		or turn.attacker().moves.has(copied) or turn.data().move(copied).is_empty():
@@ -1194,6 +1189,12 @@ static func _mimic(turn: Gen2Turn) -> void:
 		return
 	_animate_current_move(turn)
 	turn.emit(Gen2Battle.MIMIC_LEARNED, {"move": copied, "slot": slot})
+
+
+## `.find_sketch` and `.find_mimic` walk backwards, so a Smeargle carrying four
+## SKETCHes spends the fourth.
+static func _last_slot_holding(mon: Gen2BattleMon, move_number: int) -> int:
+	return mon.moves.rfind(move_number)
 
 
 ## `BattleCommand_Metronome`: byte rejection over the 251 moves, then the
@@ -1257,13 +1258,16 @@ static func _sleep_talk(turn: Gen2Turn) -> void:
 	_fail_called_move(turn)
 
 
-## `BattleCommand_Sketch`: Mimic's validation plus the target's Substitute
-## refusal, then a permanent replacement carrying the copied move's base PP.
+## `BattleCommand_Sketch`: Mimic's validation plus a doll and a `SUBSTATUS5_OPP`
+## transform on the target, then a permanent replacement at the copy's base PP. A
+## transformed *user* is allowed, which is `docs/bugs_and_glitches.md`'s entry.
 static func _sketch(turn: Gen2Turn) -> void:
 	_clear_last_move_for_call(turn)
 	var copied: int = turn.defender().last_counter_move
-	var slot: int = turn.attacker().moves.find(Gen2MoveEffect.SKETCH_MOVE)
-	if _substitute_refuses(turn) or copied == 0 or copied == Gen2Damage.STRUGGLE \
+	var slot: int = _last_slot_holding(turn.attacker(), Gen2MoveEffect.SKETCH_MOVE)
+	if _substitute_refuses(turn) \
+		or Gen2Substatus.has(turn.defender().substatus, Gen2Substatus.TRANSFORMED) \
+		or copied == 0 or copied == Gen2Damage.STRUGGLE \
 		or slot < 0 or turn.attacker().moves.has(copied) \
 		or turn.data().move(copied).is_empty():
 		_fail_called_move(turn)
@@ -1766,6 +1770,9 @@ static func _check_status(turn: Gen2Turn) -> void:
 				turn.end()
 				return
 		else:
+			# `.woke_up` clears `SUBSTATUS_NIGHTMARE`, which has no gate of its
+			# own: left standing it costs an awake Pokemon a quarter a turn.
+			mon.substatus &= ~Gen2Substatus.NIGHTMARE
 			turn.emit(Gen2Battle.WOKE_UP)
 
 	if Gen2Status.has(mon.status, Gen2Status.FREEZE):

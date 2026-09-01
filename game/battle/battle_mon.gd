@@ -683,6 +683,13 @@ func replace_move(slot: int, move: int) -> bool:
 		return false
 	moves[slot] = move
 	pp[slot] = int(data.move(move).get("pp", 0))
+	# `BattleCommand_Sketch` writes the party struct with no transform test.
+	if not transform_original.is_empty():
+		var backup_moves: Array = transform_original["moves"]
+		var backup_pp: Array = transform_original["pp"]
+		if slot < backup_moves.size():
+			backup_moves[slot] = move
+			backup_pp[slot] = pp[slot]
 	return true
 
 

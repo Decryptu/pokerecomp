@@ -1907,8 +1907,9 @@ func _residual_leech_seed(side: int, events: Array) -> void:
 		note_faint(side, events)
 
 
-## Nothing here asks whether the sufferer is still asleep, because waking is what
-## clears the flag.
+## Nothing here asks whether the sufferer is still asleep: `.woke_up`,
+## `BattleCommand_HealBell`, `HealStatus` and `UseHeldStatusHealingItem` each clear
+## the flag. `AI_HealStatus` is the one that does not, a pret-recorded bug.
 func _residual_nightmare(side: int, events: Array) -> void:
 	var current: Gen2BattleMon = mon(side)
 	if not Gen2Substatus.has(current.substatus, Gen2Substatus.NIGHTMARE):
@@ -2173,10 +2174,11 @@ func use_status_berry(side: int, events: Array) -> bool:
 	if not Gen2HeldItem.heals_status(_held_effect(holder), holder.status):
 		return false
 
-	# The status byte alone: `UseHeldStatusHealingItem` never touches
-	# `SUBSTATUS_TOXIC`, so a cured Pokémon keeps the flag that ramps its next
-	# poison, and [member Gen2BattleMon.toxic_counter] is that flag.
+	# `UseHeldStatusHealingItem` follows the cleared byte with `res
+	# SUBSTATUS_TOXIC` and `res SUBSTATUS_NIGHTMARE`, both of which it was holding.
 	holder.status = Gen2Status.NONE
+	holder.toxic_counter = 0
+	holder.substatus &= ~Gen2Substatus.NIGHTMARE
 	var used: int = holder.item
 	holder.item = 0
 	events.append({"type": RECOVERED_USING_ITEM, "side": side, "item": used})
@@ -2466,6 +2468,8 @@ func _apply_party_item(
 	if cured != 0:
 		target.status = Gen2Status.NONE
 		target.toxic_counter = 0
+		if active: # `HealStatus` runs behind `IsItemUsedOnBattleMon`.
+			target.substatus &= ~Gen2Substatus.NIGHTMARE
 	var unconfused: bool = mask == 0xFF and active \
 		and Gen2Substatus.has(target.substatus, Gen2Substatus.CONFUSED)
 	if unconfused:

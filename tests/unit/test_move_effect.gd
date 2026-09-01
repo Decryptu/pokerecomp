@@ -2386,6 +2386,20 @@ func test_heal_bell_clears_the_toxic_ramp_with_the_poison() -> void:
 	assert_eq(battle.player.toxic_counter, 0)
 
 
+## `res SUBSTATUS_NIGHTMARE, [hl]` opens the routine, on the ringer's own
+## substatus. Sleep Talk is the way in: a Pokemon having a nightmare is asleep.
+func test_heal_bell_clears_the_ringers_nightmare() -> void:
+	var battle: Gen2Battle = _party_battle()
+	battle.player.status = 3
+	battle.player.substatus |= Gen2Substatus.NIGHTMARE
+	# Rung through Sleep Talk, so the command is run where a sleeping user
+	# reaches it rather than through the turn that would refuse the move.
+	var turn: Gen2Turn = _turn(battle, Fixture.HEAL_BELL)
+	Gen2EffectCommands.run(Gen2EffectCommands.HEAL_BELL, turn)
+	assert_eq(battle.player.status, Gen2Status.NONE)
+	assert_false(Gen2Substatus.has(battle.player.substatus, Gen2Substatus.NIGHTMARE))
+
+
 func test_snore_fails_awake_and_lands_asleep() -> void:
 	var awake: Gen2Battle = _battle()
 	var awake_turn: Gen2Turn = _run_move(awake, Fixture.SNORE)
@@ -4530,6 +4544,33 @@ func test_sketch_is_refused_by_the_targets_substitute() -> void:
 	battle.player.pp = [1]
 	battle.enemy.last_counter_move = Fixture.TACKLE
 	battle.enemy.substatus = Gen2Substatus.SUBSTITUTE
+	var turn: Gen2Turn = _turn(battle, Fixture.SKETCH)
+	Gen2EffectCommands.run(Gen2EffectCommands.SKETCH, turn)
+	assert_eq(battle.player.moves[0], Fixture.SKETCH)
+	assert_eq(_of_type(turn.events, Gen2Battle.MOVE_FAILED).size(), 1)
+
+
+## `.find_sketch` and `.find_mimic` walk the slots backwards, so a Smeargle
+## carrying four SKETCHes spends the fourth and keeps the first three.
+func test_sketch_replaces_the_last_sketch_slot() -> void:
+	var battle: Gen2Battle = _battle()
+	battle.player.moves = [Fixture.SKETCH, Fixture.SKETCH]
+	battle.player.pp = [1, 1]
+	battle.enemy.last_counter_move = Fixture.TACKLE
+	var turn: Gen2Turn = _turn(battle, Fixture.SKETCH)
+	Gen2EffectCommands.run(Gen2EffectCommands.SKETCH, turn)
+	assert_eq(battle.player.moves[0], Fixture.SKETCH)
+	assert_eq(battle.player.moves[1], Fixture.TACKLE)
+
+
+## `bit SUBSTATUS_TRANSFORMED, [hl]` on `SUBSTATUS5_OPP`: the copy is refused,
+## not the copier.
+func test_sketch_is_refused_by_a_transformed_target() -> void:
+	var battle: Gen2Battle = _battle()
+	battle.player.moves = [Fixture.SKETCH]
+	battle.player.pp = [1]
+	battle.enemy.last_counter_move = Fixture.TACKLE
+	battle.enemy.substatus = Gen2Substatus.TRANSFORMED
 	var turn: Gen2Turn = _turn(battle, Fixture.SKETCH)
 	Gen2EffectCommands.run(Gen2EffectCommands.SKETCH, turn)
 	assert_eq(battle.player.moves[0], Fixture.SKETCH)

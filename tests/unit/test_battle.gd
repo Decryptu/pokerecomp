@@ -737,6 +737,21 @@ func test_waking_up_does_not_cost_the_turn() -> void:
 	assert_eq(battle.player.status, Gen2Status.NONE)
 
 
+## `.woke_up` ends with `res SUBSTATUS_NIGHTMARE, [hl]`. Without it the quarter
+## keeps being taken off a Pokemon that is awake, every turn, until it switches.
+func test_waking_up_ends_the_nightmare() -> void:
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE]),
+		_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
+	)
+	battle.player.status = 1
+	battle.player.substatus |= Gen2Substatus.NIGHTMARE
+	var events: Array = battle.take_turn(0, 0)
+	assert_eq(_of_type(events, Gen2Battle.WOKE_UP).size(), 1)
+	assert_false(Gen2Substatus.has(battle.player.substatus, Gen2Substatus.NIGHTMARE))
+	assert_eq(_of_type(events, Gen2Battle.HURT_BY_NIGHTMARE).size(), 0)
+
+
 func test_a_frozen_pokemon_does_not_move() -> void:
 	var battle: Gen2Battle = _battle(
 		_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE]),
@@ -2693,6 +2708,25 @@ func test_a_status_berry_answers_the_moment_the_status_lands() -> void:
 	)
 	# And the enemy still got its move: the berry costs nothing.
 	assert_eq(_of_type(events, Gen2Battle.USED_MOVE).size(), 2)
+
+
+## `UseHeldStatusHealingItem` follows the cleared byte with `res SUBSTATUS_TOXIC`
+## and `res SUBSTATUS_NIGHTMARE`, both of which the byte was carrying.
+func test_a_status_berry_takes_the_toxic_ramp_and_the_nightmare_with_it() -> void:
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.PIKACHU, 50, [Fixture.GROWL]),
+		_mon(Fixture.CHARMANDER, 50, [Fixture.GROWL])
+	)
+	var holder: Gen2BattleMon = battle.mon(Gen2Battle.ENEMY)
+	holder.item = Fixture.MIRACLEBERRY
+	holder.status = Gen2Status.POISON
+	holder.toxic_counter = 4
+	holder.substatus |= Gen2Substatus.NIGHTMARE
+
+	battle.take_actions(Gen2Battle.use_move(0), Gen2Battle.use_move(0))
+	assert_eq(holder.status, Gen2Status.NONE)
+	assert_eq(holder.toxic_counter, 0)
+	assert_false(Gen2Substatus.has(holder.substatus, Gen2Substatus.NIGHTMARE))
 
 
 ## A berry that answers for one status says nothing about another.
