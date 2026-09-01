@@ -296,14 +296,36 @@ static func _alive_enough_to_switch(battle: Gen2Battle) -> bool:
 
 
 ## `FindEnemyMonsWithAtLeastQuarterMaxHP`, narrowing whoever was passed in.
+##
+## The name is the only quarter in it. `AICheckEnemyQuarterHP` doubles the HP
+## word twice with `sla c / rl b`; this routine writes `srl c / rl b`, so the low
+## byte is halved twice while the high byte is doubled twice and picks up the two
+## bits falling out of it. The comparison is then strictly greater, not the
+## comment's `>=`. Both pins ship it. See [method _shifted_hp].
 static func _at_least_quarter_hp(battle: Gen2Battle, candidates: Array) -> Array:
 	var party: Gen2Party = battle.party(Gen2Battle.ENEMY)
 	var out: Array = []
 	for index: int in candidates:
 		var member: Gen2BattleMon = party.at(int(index))
-		if member != null and member.hp * 4 >= member.max_hp():
+		if member != null and _shifted_hp(member.hp) > member.max_hp():
 			out.append(index)
 	return out
+
+
+## The `srl c / rl b` pair run twice over the HP word, as a number.
+##
+## For a maximum HP under 256 the whole thing comes to "current HP is not a
+## multiple of four": the high byte ends up holding the two bits the low byte
+## dropped, so anything but a multiple of four lands over 255 and clears any
+## maximum a party member can have.
+static func _shifted_hp(hp: int) -> int:
+	var high: int = (hp >> 8) & 0xFF
+	var low: int = hp & 0xFF
+	for _pass: int in 2:
+		var carry: int = low & 1
+		low >>= 1
+		high = ((high << 1) | carry) & 0xFF
+	return high * 256 + low
 
 
 ## `FindEnemyMonsThatResistPlayer`: nobody who would be hit super effectively by

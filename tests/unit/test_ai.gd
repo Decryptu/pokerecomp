@@ -385,24 +385,26 @@ func test_basic_discourages_a_second_mean_look_from_the_same_pokemon() -> void:
 		)
 
 
-## `AI_Smart_MeanLook`: a healthy user with a bench wants the trap against a
-## costly target state, while a low-health user or a lone user dismisses it.
+## `AI_Smart_MeanLook`: a healthy user wants the trap against a costly target
+## state, as long as the target has somewhere else to go. `AICheckLastPlayerMon`
+## reads the *player's* bench, and a user below half health is worth one point
+## against rather than the ten a dismissal costs.
 func test_smart_mean_look_reads_health_bench_and_target_state() -> void:
 	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.MEAN_LOOK, Fixture.TACKLE])
 	var charmander: Gen2BattleMon = _mon(Fixture.CHARMANDER, 50, [Fixture.TACKLE])
 
 	var lone: Array = [20, 20, 20, 20]
 	Gen2BattleAI._apply_smart(
-		lone, Gen2BattleAI.Context.of(pikachu, charmander, _data, _rng, 0, 0, Gen2Weather.NONE, Gen2Screens.NONE, Gen2Screens.NONE, false, Gen2AISwitch.BASE_SCORE)
+		lone, Gen2BattleAI.Context.of(pikachu, charmander, _data, _rng, 0, 0, Gen2Weather.NONE, Gen2Screens.NONE, Gen2Screens.NONE, true, Gen2AISwitch.BASE_SCORE, false)
 	)
-	assert_eq(int(lone[0]), 30, "a lone user cannot leave behind a Mean Look")
+	assert_eq(int(lone[0]), 30, "a target with nobody behind it has nothing to escape to")
 
 	pikachu.hp = pikachu.max_hp() / 4
 	var hurt: Array = [20, 20, 20, 20]
 	Gen2BattleAI._apply_smart(
-		hurt, Gen2BattleAI.Context.of(pikachu, charmander, _data, _rng, 0, 0, Gen2Weather.NONE, Gen2Screens.NONE, Gen2Screens.NONE, true, Gen2AISwitch.BASE_SCORE)
+		hurt, Gen2BattleAI.Context.of(pikachu, charmander, _data, _rng, 0, 0, Gen2Weather.NONE, Gen2Screens.NONE, Gen2Screens.NONE, true, Gen2AISwitch.BASE_SCORE, true)
 	)
-	assert_eq(int(hurt[0]), 30, "a user below half health should not trap")
+	assert_eq(int(hurt[0]), 21, "a user below half health is discouraged, not dismissed")
 
 	pikachu.hp = pikachu.max_hp()
 	charmander.substatus |= Gen2Substatus.IDENTIFIED
@@ -411,7 +413,7 @@ func test_smart_mean_look_reads_health_bench_and_target_state() -> void:
 		_rng.seed = seed_value
 		var scores: Array = [20, 20, 20, 20]
 		Gen2BattleAI._apply_smart(
-			scores, Gen2BattleAI.Context.of(pikachu, charmander, _data, _rng, 0, 0, Gen2Weather.NONE, Gen2Screens.NONE, Gen2Screens.NONE, true, Gen2AISwitch.BASE_SCORE - 1)
+			scores, Gen2BattleAI.Context.of(pikachu, charmander, _data, _rng, 0, 0, Gen2Weather.NONE, Gen2Screens.NONE, Gen2Screens.NONE, true, Gen2AISwitch.BASE_SCORE - 1, true)
 		)
 		wanted[int(scores[0])] = true
 	assert_true(wanted.has(17), "an identified target reaches Mean Look's strong branch")
@@ -1244,7 +1246,7 @@ func test_smart_conversion2_reproduces_the_source_last_move_bug() -> void:
 		Gen2BattleAI.DEFAULT_SCORE,
 		"with no remembered move the fixture's undefined lookup leaves it alone"
 	)
-	geodude.last_counter_move = Fixture.TACKLE
+	geodude.last_move_used = Fixture.TACKLE
 	var spread: Dictionary = _score_spread(pikachu, geodude, RomLayout.AI_SMART, 0)
 	assert_true(spread.has(Gen2BattleAI.DEFAULT_SCORE + 1), "the 90% discouragement")
 	assert_true(spread.has(Gen2BattleAI.DEFAULT_SCORE), "and the 10% that skips it")
@@ -1728,3 +1730,86 @@ func test_smart_rapid_spin_reads_the_enemys_own_side() -> void:
 			seen.append(score)
 	seen.sort()
 	assert_eq(seen, [Gen2BattleAI.DEFAULT_SCORE - 2, Gen2BattleAI.DEFAULT_SCORE])
+
+
+## `AI_Status`'s power gate runs the other way round from its own comment: the
+## four named status effects and every damaging move are read against the chart,
+## and a non-damaging move with no named effect is passed over untouched.
+func test_status_reads_damaging_moves_and_skips_the_rest() -> void:
+	var pikachu: Gen2BattleMon = _mon(
+		Fixture.PIKACHU, 50, [Fixture.THUNDERBOLT, Fixture.THUNDER_WAVE]
+	)
+	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
+	var scores: Array = _scores(pikachu, geodude, RomLayout.AI_STATUS)
+	assert_eq(int(scores[0]), 30, "an immune damaging move is dismissed")
+	assert_eq(int(scores[1]), 30, "and so is an immune paralysis")
+
+	var trapper: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.MEAN_LOOK])
+	var gastly: Gen2BattleMon = _mon(Fixture.GASTLY, 50, [Fixture.TACKLE])
+	assert_eq(
+		int(_scores(trapper, gastly, RomLayout.AI_STATUS)[0]), 20,
+		"a non-damaging move with no named status effect is passed over"
+	)
+
+
+## `.poisonimmunity` stands in front of the chart, which cannot answer it: Poison
+## against Poison is resisted rather than refused.
+func test_status_dismisses_a_poisoning_move_against_a_poison_type() -> void:
+	var bulbasaur: Gen2BattleMon = _mon(Fixture.BULBASAUR, 50, [Fixture.POISON_POWDER])
+	var gastly: Gen2BattleMon = _mon(Fixture.GASTLY, 50, [Fixture.TACKLE])
+	assert_eq(int(_scores(bulbasaur, gastly, RomLayout.AI_STATUS)[0]), 30)
+
+	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
+	assert_eq(
+		int(_scores(bulbasaur, geodude, RomLayout.AI_STATUS)[0]), 20,
+		"a Rock/Ground target is not poison immune, only resistant"
+	)
+
+
+## `AI_Basic`'s second clause behind `StatusOnlyEffects`: a Safeguard the target
+## is standing behind is as good a reason as a status it already carries.
+func test_basic_discourages_a_status_move_behind_safeguard() -> void:
+	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.THUNDER_WAVE, Fixture.TACKLE])
+	var charmander: Gen2BattleMon = _mon(Fixture.CHARMANDER, 50, [Fixture.TACKLE])
+	var open: Array = Gen2BattleAI.score_slots(
+		pikachu, charmander, _data, RomLayout.AI_BASIC, _rng
+	)
+	assert_eq(int(open[0]), 20, "nothing in the way of a paralysis")
+
+	var guarded: Array = Gen2BattleAI.score_slots(
+		pikachu, charmander, _data, RomLayout.AI_BASIC, _rng, 0, 0, Gen2Weather.NONE,
+		Gen2Screens.NONE, Gen2Screens.SAFEGUARD
+	)
+	assert_eq(int(guarded[0]), 30, "a Safeguard dismisses it")
+
+
+## `.gotstrongestmove` refuses only on no damaging move at all: the first one
+## sets the winner whatever its damage came to, so a moveset that lands for
+## nothing still has all but one of it discouraged.
+func test_aggressive_still_picks_a_winner_when_every_move_is_immune() -> void:
+	var pikachu: Gen2BattleMon = _mon(
+		Fixture.PIKACHU, 50, [Fixture.THUNDERBOLT, Fixture.THUNDER]
+	)
+	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
+	var scores: Array = _scores(pikachu, geodude, RomLayout.AI_AGGRESSIVE)
+	assert_eq(int(scores[0]), 21, "the earlier of two equal answers is punished")
+	assert_eq(int(scores[1]), 20, "and the later one is the winner")
+
+
+## `AI_Risky`'s own comparison is `wBattleMonHP - wCurDamage`, so a hit that
+## exactly matches the bar is not a KO the AI reaches for.
+func test_risky_wants_strictly_more_damage_than_the_bar() -> void:
+	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.THUNDERBOLT])
+	var charmander: Gen2BattleMon = _mon(Fixture.CHARMANDER, 50, [Fixture.TACKLE])
+	var context: Gen2BattleAI.Context = Gen2BattleAI.Context.of(
+		pikachu, charmander, _data, _rng
+	)
+	var damage: int = Gen2BattleAI._estimate_damage(
+		context, _data.move(Fixture.THUNDERBOLT)
+	)
+	assert_gt(damage, 1, "the fixture's Thunderbolt has to actually hurt")
+
+	charmander.hp = damage
+	assert_eq(int(_scores(pikachu, charmander, RomLayout.AI_RISKY)[0]), 20, "exactly the bar")
+	charmander.hp = damage - 1
+	assert_eq(int(_scores(pikachu, charmander, RomLayout.AI_RISKY)[0]), 15, "one under it")

@@ -299,3 +299,48 @@ func test_a_perish_count_without_the_flag_changes_nothing() -> void:
 	battle.enemy.perish_count = 1
 
 	assert_eq(int(Gen2AISwitch.evaluate(battle)["tier"]), 0)
+
+
+## `FindEnemyMonsWithAtLeastQuarterMaxHP` writes `srl c / rl b` where every other
+## fraction check writes `sla c / rl b`, so the low byte halves twice while the
+## high byte doubles twice and picks up the two bits it dropped. Under a maximum
+## of 256 that comes to "current HP is not a multiple of four", and the
+## comparison is strictly greater rather than the comment's `>=`.
+func test_the_quarter_hp_scan_is_a_multiple_of_four_test() -> void:
+	for maximum: int in [7, 40, 99, 160, 255]:
+		for hp: int in range(1, maximum + 1):
+			assert_eq(
+				Gen2AISwitch._shifted_hp(hp) > maximum, (hp % 4) != 0,
+				"%d of %d" % [hp, maximum]
+			)
+
+	# A multiple of four is the only value the shift leaves inside a byte, and
+	# even then the quarter it lands on has to clear the whole maximum.
+	assert_eq(Gen2AISwitch._shifted_hp(40), 10)
+	assert_eq(Gen2AISwitch._shifted_hp(41), 522, "bit 0 lands in the high byte")
+	assert_eq(Gen2AISwitch._shifted_hp(42), 266, "and so does bit 1")
+
+
+## The scan is what the perish and no-counter branches shortlist through, so a
+## bench Pokémon whose HP is a multiple of four is dropped from it however
+## healthy it is.
+func test_the_quarter_hp_scan_drops_a_full_bench_pokemon() -> void:
+	var battle: Gen2Battle = _battle(
+		_mon(Fixture.BULBASAUR, [Fixture.TACKLE]),
+		[
+			_mon(Fixture.PIKACHU, [Fixture.GROWL]),
+			_mon(Fixture.HOOTHOOT, [Fixture.EMBER]),
+			_mon(Fixture.CHARMANDER, [Fixture.EMBER]),
+		]
+	)
+	battle.enemy.substatus |= Gen2Substatus.PERISH
+	battle.enemy.perish_count = 1
+	var hoothoot: Gen2BattleMon = battle.party(Gen2Battle.ENEMY).at(1)
+	var charmander: Gen2BattleMon = battle.party(Gen2Battle.ENEMY).at(2)
+	hoothoot.hp = hoothoot.max_hp() - (hoothoot.max_hp() % 4)
+	charmander.hp = charmander.max_hp() - (charmander.max_hp() % 4) - 1
+
+	assert_eq(
+		int(Gen2AISwitch.evaluate(battle)["index"]), 2,
+		"the shortlist skips the Hoothoot sitting on a multiple of four"
+	)
