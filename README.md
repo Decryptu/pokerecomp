@@ -6,7 +6,6 @@
   <img src="https://img.shields.io/badge/Godot-4.8.dev4-478CBF?style=flat-square&logo=godotengine&logoColor=white" alt="Godot 4.8.dev4">
   <img src="https://img.shields.io/badge/GDScript-355570?style=flat-square&logo=godotengine&logoColor=white" alt="GDScript">
   <img src="https://img.shields.io/badge/platforms-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux%20%C2%B7%20Android%20%C2%B7%20iOS%20%C2%B7%20Switch-8f8c98?style=flat-square" alt="Platforms">
-  <img src="https://img.shields.io/badge/arm64-Windows%20%C2%B7%20Linux%20%C2%B7%20Apple-8f8c98?style=flat-square" alt="arm64">
   <img src="https://img.shields.io/badge/status-alpha-e0a138?style=flat-square" alt="Status: alpha">
   <a href="https://github.com/Decryptu/pokerecomp/releases/latest"><img src="https://img.shields.io/github/v/release/Decryptu/pokerecomp?style=flat-square&color=4c9a5a&label=download" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-MIT-7d59d4?style=flat-square" alt="MIT licence"></a>
@@ -58,42 +57,9 @@ Nothing is signed with a paid certificate, so each platform asks once:
 The About page tells you when a newer release exists. It does not install it:
 download the new file and replace the old one. Saves live elsewhere and survive.
 
-> ### Status: alpha
->
-> Playable, not finished. What works today:
->
-> - **Import.** Every table below, resolved by a scene-free host without
->   reopening the ROM.
-> - **Battles.** Parties, switching, running, stats, damage, accuracy, turn
->   order, status and substatus effects, trainer AI, experience, levelling, move
->   learning and capture, on a real 160x144 screen and the hardware tile grid.
-> - **Overworld.** Real maps and connections, scripts, trainer battles, save-safe
->   blackout recovery, object lifecycle, followers, block edits, emotes, surf,
->   ledge hops, grass, fishing, roaming, repel and wild encounters, plus the
->   service overlay (marts, Kurt's errand, phone dispatch, music and cries).
->   Everything is counted in hardware frames spent by one clock, so a seed, an
->   input log and a frame number reproduce a walk exactly.
-> - **A screen that fills the window.** The map is drawn past 160x144 to whatever
->   shape the window is, with the connected maps around it and no black bars.
->   See [Screen fill](#screen-fill).
-> - **Saves.** Three slots, `.sav` import, and a 14-box PC with 20 slots a box.
->   Every party transaction commits through a validated candidate save.
-> - **Mods.** A mod under `user://mods/` can add or rebalance content, register
->   move effects, watch the world and battle event channels, add menu entries and
->   controls, and replace the world or battle renderer.
-> - **The story.** All three cartridges walk from Elm's lab to Red on Mt. Silver:
->   every Johto badge and its errand, then Kanto, all sixteen badges, the Hall of
->   Fame with Prof Oak's rating, and the credits.
-> - **The Battle Tower.** A full seven-trainer challenge: the room list, the
->   party rules, the sampled opponents, the save between battles and the prize.
-> - **The Cable Club and Mystery Gift.** There is no cable on a modern machine,
->   so the second player is your own other save file. The three receptionists,
->   the Trade Center, the Colosseum's link battle, the link record, and Mystery
->   Gift's five gifts a day all work between two of your saves. With one save
->   file you are told your friend is not ready, the same answer one Game Boy has
->   always given.
->
-> Missing: some pixel-level divergences in the opening movies and title screen.
+<p align="center">
+  <img src="assets/brand/launcher.webp" alt="The launcher's Play page, a shelf of three cartridges" width="820">
+</p>
 
 ## Getting started
 
@@ -171,10 +137,6 @@ cartridge's own outline: drop a dump on it, or click to browse. Mods, settings
 and about are in the dock underneath. Light and dark, and the same layout works
 on a phone. The clock and the charge across the top are the machine's own; a
 device whose charge cannot be read shows none rather than a full cell.
-
-<p align="center">
-  <img src="assets/brand/launcher.webp" alt="The launcher's Play page, a shelf of three cartridges" width="820">
-</p>
 
 <p align="center">
   <img src="assets/brand/mods.webp" alt="The launcher's Mods page, listing installed mods" width="820">
