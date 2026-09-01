@@ -4994,6 +4994,9 @@ func _special_toggle_decorations_visibility(special: int) -> Dictionary:
 
 
 func _special_slot_machine(special: int) -> Dictionary:
+	var shut: Dictionary = _coin_game_refusal()
+	if not shut.is_empty():
+		return shut
 	return _stage_runtime_request(&"slot_machine_requested", {
 		"special": special,
 		## `Slots_InitBias`' own `ld a, [wScriptVar] / and a`, which is
@@ -5004,10 +5007,32 @@ func _special_slot_machine(special: int) -> Dictionary:
 
 
 func _special_card_flip(special: int) -> Dictionary:
+	var shut: Dictionary = _coin_game_refusal()
+	if not shut.is_empty():
+		return shut
 	return _stage_runtime_request(&"card_flip_requested", {
 		"special": special,
 		"coins": _coins_value(),
 	})
+
+
+## `CheckCoinsAndCoinCase`, which `SlotMachine` and `CardFlip` answer with
+## `ret c`. Both texts end in `prompt`, so the box owes a press of its own.
+func _coin_game_refusal() -> Dictionary:
+	var line: String = Gen2WorldPack.coin_game_refusal_line(
+		_coins_value(), _item_quantity(Gen2WorldPack.ITEM_COIN_CASE)
+	)
+	if line.is_empty():
+		return {}
+	_pending = {
+		"type": &"text",
+		"text": line,
+		"internal_text": true,
+		"prompt": true,
+		"source": _request.duplicate(true),
+	}
+	_finish_after_pending = false
+	return {"ok": true}
 
 
 func _special_unown_puzzle(special: int) -> Dictionary:

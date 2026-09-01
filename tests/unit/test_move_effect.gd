@@ -2154,7 +2154,10 @@ func test_presents_fourth_row_heals_the_target_a_quarter() -> void:
 
 
 func test_a_present_to_a_target_at_full_health_is_refused() -> void:
+	# `.already_fully_healed` prints `PresentFailedText` only behind
+	# `jr nc, .do_animation`, so the refusal is said with the scene off.
 	var battle: Gen2Battle = _battle()
+	battle.battle_scene_on = false
 	var found: bool = false
 	for seed_value: int in range(1, 60):
 		_rng.seed = seed_value
@@ -2168,6 +2171,28 @@ func test_a_present_to_a_target_at_full_health_is_refused() -> void:
 		assert_eq(battle.enemy.hp, battle.enemy.max_hp(), "and nothing was healed")
 		break
 	assert_true(found, "the same one roll in five")
+
+
+func test_a_present_refused_with_the_scene_on_says_nothing() -> void:
+	var battle: Gen2Battle = _battle()
+	battle.battle_scene_on = true
+	var reached: bool = false
+	for seed_value: int in range(1, 60):
+		_rng.seed = seed_value
+		battle.enemy.hp = battle.enemy.max_hp()
+		var turn: Gen2Turn = _run_move(battle, Fixture.PRESENT)
+		if not _first(turn.events, Gen2Battle.HP_RESTORED).is_empty():
+			continue
+		if int(turn.power_override) > 0:
+			continue
+		reached = true
+		assert_true(
+			_first(turn.events, Gen2Battle.PRESENT_REFUSED).is_empty(),
+			"the scene being on is what skips the line"
+		)
+		assert_eq(battle.enemy.hp, battle.enemy.max_hp())
+		break
+	assert_true(reached, "the heal row is reached on one roll in five")
 
 
 func test_fury_cutter_doubles_once_per_consecutive_hit_and_stops_at_sixteen() -> void:

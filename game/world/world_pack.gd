@@ -367,16 +367,15 @@ const ITEM_ESCAPE_ROPE: int = 0x13
 ## prints its count inside the pack and closes nothing, so it has no field
 ## effect and the screen answers it where the other CURRENT rows are answered.
 const ITEM_COIN_CASE: int = 0x36
-## `CheckCoinsAndCoinCase`, which `SlotMachine` and `CardFlip` run first: an
-## empty purse is refused before the Coin Case is looked for.
+## `CheckCoinsAndCoinCase` tests `wCoins` before the bag.
 const NO_COINS_TEXT: String = "You have no coins."
 const NO_COIN_CASE_TEXT: String = "You don't have a\nCOIN CASE."
 
 
-static func coin_game_refusal(state: Gen2WorldState) -> String:
-	if state == null or state.coins() <= 0:
+static func coin_game_refusal_line(coins: int, coin_cases: int) -> String:
+	if coins <= 0:
 		return NO_COINS_TEXT
-	return "" if state.item_quantity(ITEM_COIN_CASE) > 0 else NO_COIN_CASE_TEXT
+	return "" if coin_cases > 0 else NO_COIN_CASE_TEXT
 
 
 ## `BlueCardEffect`, the Coin Case's twin: `MenuTextboxWaitButton` over the

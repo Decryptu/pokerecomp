@@ -58,7 +58,11 @@ func _open_world() -> void:
 	## `wCoins` is set where the state is built: nothing writes it outside a
 	## world transaction, which is the boundary the machine's own result goes
 	## through when it closes.
-	var state := Gen2WorldState.new({}, {}, {}, {}, COINS)
+	## `CheckCoinsAndCoinCase` stands in front of `StartGameCornerGame` and
+	## asks the bag as well as the balance, so the case is in it.
+	var state := Gen2WorldState.new(
+		{}, {}, {Gen2WorldPack.ITEM_COIN_CASE: 1}, {}, COINS
+	)
 	var world: Gen2WorldAPI = Gen2WorldAPI.open(
 		_data, Fixture.MAP_GROUP, Fixture.MAP_NUMBER, PLAYER_CELL, state
 	)

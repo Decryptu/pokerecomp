@@ -1011,7 +1011,9 @@ static func _present(turn: Gen2Turn) -> void:
 	_animate_current_move(turn)
 	var target: Gen2BattleMon = turn.defender()
 	if target.hp >= target.max_hp():
-		turn.emit(Gen2Battle.PRESENT_REFUSED, {"target": turn.target})
+		## `.already_fully_healed`'s `jr nc, .do_animation` skips the text.
+		if not turn.battle.battle_scene_on:
+			turn.emit(Gen2Battle.PRESENT_REFUSED, {"target": turn.target})
 		turn.end()
 		return
 
