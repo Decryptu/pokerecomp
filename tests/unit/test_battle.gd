@@ -3189,6 +3189,20 @@ func test_the_players_used_moves_are_remembered_once_and_cleared_on_a_switch() -
 	assert_eq(battle.player_used_moves, [] as Array[int], "the list describes the Pokemon")
 
 
+## `UpdateUsedMoves` is called from `UsedMoveText`, so a turn frozen solid never
+## announces a move and never remembers one.
+func test_a_move_that_is_never_announced_is_never_remembered() -> void:
+	var battle: Gen2Battle = Gen2Battle.create_parties(
+		_data, Gen2Party.of(_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE])),
+		Gen2Party.of(_mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])), _rng, true
+	)
+	battle.player.status = Gen2Status.FREEZE
+
+	battle.take_turn(0, 0)
+
+	assert_eq(battle.player_used_moves, [] as Array[int])
+
+
 ## The enemy's own send-out leaves the list alone: it records what the player has
 ## shown, not what it is being shown to.
 func test_an_enemy_switch_leaves_the_used_move_list_alone() -> void:

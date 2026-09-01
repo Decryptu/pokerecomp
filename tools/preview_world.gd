@@ -532,14 +532,17 @@ func _stage_gift_nickname() -> void:
 		_settle_mon_special("_nickname_host")
 
 
-## `Script_Whiteout`, which no fixture cell reaches: the party is poisoned down to its
-## last point and the pass `CountStep` owes is spent. The first number is how many of
-## its presses to spend, so 0 is the faint line, 1 the first page of `_WhitedOutText`
-## and 3 the map the player wakes up on.
+## `Script_Whiteout`, which no fixture cell reaches: the party is poisoned down to
+## its last point and the pass `CountStep` owes spent. The first number is presses,
+## so 0 is the faint line, 1 the first page of `_WhitedOutText` and 3 the map the
+## player wakes up on. A second number stops that many frames into
+## `.PlayPoisonSFX`'s own four instead, which is the flooded background.
 func _stage_whiteout() -> void:
 	_screen.preview_whiteout()
-	## The box reveals a letter at a time at the OPTION menu's own speed,
-	## so each press is given behind the frames its page costs.
+	if _cell.y > 0:
+		_screen.advance_frames(_cell.y)
+		return
+	## Each press is given behind the frames its own page costs to reveal.
 	for _press: int in maxi(_cell.x, 0) + 1:
 		for _frame: int in 120:
 			_screen.advance_frame()

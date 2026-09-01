@@ -11,6 +11,9 @@ extends RefCounted
 
 const TILE: int = Gen2Font.TILE
 
+## The widest maximum `ComputeHPBarPixels` divides by unshifted.
+const BAR_DIVISOR_MAX: int = 0xFF
+
 ## The HP bar is six tiles of eight pixels; the exp bar is eight.
 const HP_BAR_TILES: int = 6
 const EXP_BAR_TILES: int = 8
@@ -55,15 +58,22 @@ static func from_data(data: GameData) -> Gen2BattleHud:
 
 ## How much of a bar is lit, in pixels.
 ##
-## A Pokémon that is alive never shows an empty bar: the games round down and
-## then put one pixel back, so that fainting is the only thing that empties it.
+## A Pokémon that is alive never shows an empty bar: the games round down and put
+## one pixel back, so fainting is the only thing that empties it.
+## `ComputeHPBarPixels`' divisor is one byte, so a maximum over 255 has product and
+## divisor shifted right two bits first, both shifts truncating.
 static func bar_pixels(current: int, maximum: int, length: int) -> int:
 	if maximum <= 0 or current <= 0:
 		return 0
 	if current >= maximum:
 		return length
+	var product: int = current * length
+	var divisor: int = maximum
+	if maximum > BAR_DIVISOR_MAX:
+		product >>= 2
+		divisor >>= 2
 	@warning_ignore("integer_division")
-	var lit: int = current * length / maximum
+	var lit: int = product / divisor
 	return maxi(lit, 1)
 
 

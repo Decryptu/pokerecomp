@@ -127,6 +127,16 @@ const FADE_TO_BLACK_ORDERS: Array[int] = [0xE4, 0xF9, 0xFE, 0xFF]
 const FADE_FROM_BLACK_ORDERS: Array[int] = [0xFF, 0xFE, 0xF9, 0xE4]
 ## `DelayFrames`' own `ld c, 2` inside either loop.
 const FADE_STEP_FRAMES: int = 2
+
+## `LoadPoisonBGPals.cgb` writes `palred 28 + palgreen 21 + palblue 31` over all
+## eight background palettes: `ld c, 4 palettes` is 32 iterations of two bytes.
+const POISON_FLASH_COLOR: int = 28 | (21 << 5) | (31 << 10)
+const POISON_FLASH_FRAMES: int = 4
+
+
+static func poison_flash_palette() -> PackedColorArray:
+	var colour: Color = Gen2Palette.from_packed(POISON_FLASH_COLOR)
+	return PackedColorArray([colour, colour, colour, colour])
 ## `BattleTowerFade` is `FadeOutToWhite`'s four rows with `ld c, 7` instead.
 const BATTLE_TOWER_FADE_STEP_FRAMES: int = 7
 

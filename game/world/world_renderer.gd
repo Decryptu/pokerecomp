@@ -85,6 +85,7 @@ var _transition_opponent: int = -1
 ## their own colours. The map fade is the other shape and goes through
 ## [method set_fade], which is both.
 var _transition_order: int = Gen2BattleTransition.IDENTITY
+var _poison_flash: bool = false
 ## The one patterned tile of the pair, cached rather than drawn pixel by pixel:
 ## the transition is redrawn once for the screen and again over the lower half of
 ## every sprite standing in grass.
@@ -316,7 +317,22 @@ func _current_palettes() -> Array:
 	return entry["palettes"] if not entry.is_empty() else []
 
 
+## `LoadPoisonBGPals` writes `wBGPals2` alone, so the sprites keep their colours.
+func set_poison_flash(on: bool) -> void:
+	if on == _poison_flash:
+		return
+	_poison_flash = on
+	_rebuild_atlas()
+	queue_redraw()
+
+
 func _tile_palettes_for(map: Gen2WorldMap, tileset: Gen2WorldTileset) -> Array:
+	if _poison_flash:
+		var flooded: Array = []
+		var flash: PackedColorArray = Gen2WorldPalette.poison_flash_palette()
+		for _tile: int in tileset.tile_count:
+			flooded.append(flash)
+		return flooded
 	## `StartTrainerBattle_LoadPokeBallGraphics.pal_loop` puts every background
 	## tile on `PAL_BG_TEXT` and fills that one palette, which is why a trainer
 	## transition draws the whole map in four colours.

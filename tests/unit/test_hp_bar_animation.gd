@@ -76,6 +76,17 @@ func test_the_printed_hp_follows_the_bar_down() -> void:
 	assert_eq(int(seen[-1]), 0)
 
 
+## `LongAnim_UpdateVariables` steps the real HP one at a time and stops at the
+## first value that redraws the bar, so the number beside a draining bar is the
+## highest HP still on that pixel rather than the lowest.
+func test_the_long_branch_prints_the_hp_it_walked_to() -> void:
+	var animation: Gen2HpBarAnimation = Gen2HpBarAnimation.create(100, 0, 100)
+	animation.advance_frame()
+	animation.advance_frame()
+	assert_eq(animation.pixels(), Gen2HpBarAnimation.LENGTH_PX - 1)
+	assert_eq(animation.hp(), 99, "the first HP that draws 47 pixels of 48")
+
+
 ## The two source branches are keyed on whether the maximum reaches the bar's
 ## own width; both redraw one pixel at a time, so both take the same walk.
 func test_a_small_maximum_still_walks_pixel_by_pixel() -> void:

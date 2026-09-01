@@ -13,6 +13,9 @@ extends RefCounted
 ## How many moves a Pokémon can know at once, NUM_MOVES.
 const MOVE_SLOTS: int = 4
 
+## `Text_1_2_and_Poof`'s own `PlaySFX`, where the text turns into `_MoveForgotText`.
+const SFX_SWITCH_POKEMON: int = 0x20
+
 ## home/hm_moves.asm's `IsHMMove.HMMoves`, in source order. Seven, against the
 ## four [constant Gen2WorldFieldMove.FIELD_MOVES] the overworld acts on:
 ## forgetting is gated on every HM, not on the ones with a field effect here.
@@ -75,7 +78,7 @@ static func did_not_learn_text(mon_name: String, move_name: String) -> String:
 
 
 ## `Text_1_2_and_Poof` then `_MoveForgotText`, as one line where the source
-## shows two: the SFX_SWITCH_POKEMON between them has no route on either screen.
+## shows two. Its caller plays [constant SFX_SWITCH_POKEMON] with it.
 static func forgot_text(mon_name: String, old_move_name: String) -> String:
 	return "1, 2 and… Poof! %s forgot %s. And…" % [mon_name, old_move_name]
 

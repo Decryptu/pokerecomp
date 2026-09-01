@@ -5159,6 +5159,8 @@ func _apply_event_state(event: Dictionary) -> void:
 			# `FaintYourPokemon` and `FaintEnemyPokemon` sink the picture before
 			# either prints, so the line waits on the animation.
 			_begin_faint(int(event["side"]))
+		Gen2Battle.MOVE_FORGOTTEN:
+			_play_anim_sound(Gen2MoveForget.SFX_SWITCH_POKEMON)
 		Gen2Battle.SUBSTITUTE_PIC:
 			_set_substitute_pic(int(event["side"]), bool(event["raised"]))
 		Gen2Battle.MINIMIZED:
