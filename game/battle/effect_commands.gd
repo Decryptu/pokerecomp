@@ -873,7 +873,8 @@ static func _pay_day(turn: Gen2Turn) -> void:
 static func _transform(turn: Gen2Turn) -> void:
 	turn.attacker().last_move_used = 0 # ClearLastMove opens the source routine.
 	turn.attacker().last_counter_move = 0
-	if not turn.attacker().transform_into(turn.defender()):
+	if _is_hidden(turn.defender().substatus) \
+		or not turn.attacker().transform_into(turn.defender()):
 		turn.emit(Gen2Battle.MOVE_FAILED)
 		turn.end()
 		return
@@ -1183,7 +1184,8 @@ static func _mimic(turn: Gen2Turn) -> void:
 	_clear_last_move_for_call(turn)
 	var copied: int = turn.defender().last_counter_move
 	var slot: int = turn.attacker().moves.find(Gen2MoveEffect.MIMIC_MOVE)
-	if copied == 0 or copied == Gen2Damage.STRUGGLE or slot < 0 \
+	if _is_hidden(turn.defender().substatus) \
+		or copied == 0 or copied == Gen2Damage.STRUGGLE or slot < 0 \
 		or turn.attacker().moves.has(copied) or turn.data().move(copied).is_empty():
 		_fail_called_move(turn)
 		return
@@ -2476,7 +2478,9 @@ static func _attract(turn: Gen2Turn) -> void:
 
 	var user_gender: StringName = attacker.gender()
 	var target_gender: StringName = defender.gender()
-	if user_gender == Gen2BattleMon.GENDER_NONE or target_gender == Gen2BattleMon.GENDER_NONE \
+	if _is_hidden(defender.substatus) \
+		or user_gender == Gen2BattleMon.GENDER_NONE \
+		or target_gender == Gen2BattleMon.GENDER_NONE \
 		or user_gender == target_gender:
 		turn.emit(Gen2Battle.MOVE_FAILED)
 		return
@@ -3189,7 +3193,13 @@ static func _beat_up(turn: Gen2Turn) -> void:
 		turn.skip_to = BUILD_OPPONENT_RAGE
 		return
 	var member: Gen2BattleMon = party.at(index)
-	if member.is_fainted() or member.status != Gen2Status.NONE:
+	# `.got_mon`'s `cp [hl]` puts `wCurBattleMon` against the low byte of the
+	# member's HP rather than its slot, so a member whose HP ends in the active
+	# slot's number is asked for the Pokemon that is out. `cp b` reads the slot.
+	var status: int = member.status
+	if turn.side == Gen2Battle.PLAYER and (member.hp & 0xFF) == party.active:
+		status = party.active_mon().status
+	if member.is_fainted() or status != Gen2Status.NONE:
 		turn.skip_to = BUILD_OPPONENT_RAGE
 		return
 
@@ -3565,10 +3575,17 @@ static func _stat_change(command: StringName, turn: Gen2Turn) -> void:
 	if not turn.battle.mon(side).can_change_stage(stat_key, amount):
 		return
 
+	if not targets_user and _computer_stat_down_misses(turn):
+		return
+
 	if not targets_user and _substitute_refuses(turn):
 		return
 
 	if turn.failed_chance:
+		return
+
+	# `CheckHiddenOpponent`: a target part way through Fly or Dig is not there.
+	if not targets_user and _is_hidden(turn.battle.mon(side).substatus):
 		return
 
 	turn.stat_moved = turn.battle.mon(side).change_stage(stat_key, amount)
@@ -3583,6 +3600,19 @@ static func _stat_change(command: StringName, turn: Gen2Turn) -> void:
 		# other half, taking a raised doll off the picture, is undone by the
 		# `raisesub` two commands later in every list that reaches here.
 		turn.emit(Gen2Battle.MINIMIZED, {"side": side})
+
+
+## `BattleCommand_StatDown`'s `.ComputerMiss`: an enemy lowering one of the
+## player's stats fails a quarter of the time, exempting Lock-On and
+## `EFFECT_ACCURACY_DOWN_HIT`. It sits behind `.CantLower`, which never rolls.
+static func _computer_stat_down_misses(turn: Gen2Turn) -> bool:
+	if turn.side != Gen2Battle.ENEMY:
+		return false
+	if Gen2Substatus.has(turn.defender().substatus, Gen2Substatus.LOCK_ON):
+		return false
+	if turn.effect() == Gen2MoveEffect.ACCURACY_DOWN_HIT:
+		return false
+	return turn.rng().randi_range(0, 0xFF) < 64
 
 
 ## Minimize's move number, which is the whole of what `MinimizeDropSub` compares

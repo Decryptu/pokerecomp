@@ -60,7 +60,6 @@ func set_data(data: GameData) -> void:
 		_refresh()
 
 
-## Selects a project slot by number.
 func select_slot(slot: int) -> bool:
 	if slot < 0 or slot >= Gen2SaveStore.MAX_SLOTS:
 		return false

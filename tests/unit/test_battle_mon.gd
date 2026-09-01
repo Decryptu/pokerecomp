@@ -250,6 +250,27 @@ func test_the_female_share_of_the_dv_domain_is_the_ratio_the_species_is_named_fo
 	assert_eq(Gen2BattleMon.gender_for(_data, Fixture.BULBASAUR, 0), &"female")
 
 
+## `CheckOppositeGender` reads the player's own party struct and, for the enemy,
+## `wTempEnemyMonSpecies` with `wEnemyBackupDVs`, so a Transform never moves the
+## answer even though it has overwritten the battle struct's species and DVs.
+func test_gender_reads_the_identity_from_before_a_transform() -> void:
+	var male: Gen2BattleMon = Gen2BattleMon.create(
+		_data, Fixture.BULBASAUR, 50, [], Gen2Stats.pack_dvs(15, 0, 15, 0)
+	)
+	var female: Gen2BattleMon = Gen2BattleMon.create(
+		_data, Fixture.BULBASAUR, 50, [], Gen2Stats.pack_dvs(0, 0, 0, 0)
+	)
+	assert_eq(male.gender(), &"male")
+	assert_eq(female.gender(), &"female")
+
+	assert_true(male.transform_into(female))
+	assert_eq(male.dvs, female.dvs, "the battle struct did take the copied DVs")
+	assert_eq(male.gender(), &"male", "and the gender is still the party struct's")
+
+	male.restore_transform()
+	assert_eq(male.gender(), &"male")
+
+
 func test_gender_is_none_for_a_genderless_species() -> void:
 	# Every species this fixture does not name outright reads a gender ratio of
 	# 255, the cartridge's own "genderless" marker.

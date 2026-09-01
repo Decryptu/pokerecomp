@@ -4215,6 +4215,117 @@ func test_beat_up_skips_a_fainted_or_statused_member() -> void:
 		"one member landed a hit, so `beatupfailtext` says nothing")
 
 
+## `CheckHiddenOpponent`, which Attract, Mimic and Transform each spend and which
+## nothing here had: a target part way through Fly or Dig is not there to reach.
+func test_the_three_copying_moves_refuse_a_target_out_of_sight() -> void:
+	for flag: int in [Gen2Substatus.FLYING, Gen2Substatus.UNDERGROUND]:
+		var battle: Gen2Battle = Gen2Battle.create(
+			_data,
+			Gen2BattleMon.create(
+				_data, Fixture.BULBASAUR, 50, [Fixture.ATTRACT_MOVE, Fixture.MIMIC],
+				Gen2Stats.pack_dvs(0, 0, 0, 0)
+			),
+			Gen2BattleMon.create(
+				_data, Fixture.BULBASAUR, 50, [Fixture.TACKLE], Gen2Stats.pack_dvs(15, 0, 15, 0)
+			),
+			_rng
+		)
+		battle.enemy.substatus |= flag
+		battle.enemy.last_counter_move = Fixture.TACKLE
+
+		var attract: Gen2Turn = _turn(battle, Fixture.ATTRACT_MOVE)
+		Gen2EffectCommands.run(Gen2EffectCommands.ATTRACT, attract)
+		assert_false(Gen2Substatus.has(battle.enemy.substatus, Gen2Substatus.ATTRACTED))
+
+		var mimic: Gen2Turn = _turn(battle, Fixture.MIMIC)
+		Gen2EffectCommands.run(Gen2EffectCommands.MIMIC, mimic)
+		assert_false(battle.player.moves.has(Fixture.TACKLE), "nothing was copied")
+
+		var transform: Gen2Turn = _turn(battle, Fixture.TRANSFORM)
+		Gen2EffectCommands.run(Gen2EffectCommands.TRANSFORM, transform)
+		assert_false(Gen2Substatus.has(battle.player.substatus, Gen2Substatus.TRANSFORMED))
+
+
+## `BattleCommand_StatDown`'s `.ComputerMiss`: an enemy lowering a player stat
+## fails a quarter of the time, and the player's own drop never rolls.
+func test_an_enemy_stat_drop_misses_a_quarter_of_the_time() -> void:
+	var misses: int = 0
+	for seed_value: int in 200:
+		var battle: Gen2Battle = _battle()
+		battle.rng.seed = seed_value
+		var turn: Gen2Turn = _run_enemy_move(battle, Fixture.GROWL)
+		if battle.player.stages.get("attack", 0) == 0:
+			misses += 1
+			assert_false(turn.stat_moved)
+	assert_gt(misses, 20, "a quarter of 200")
+	assert_lt(misses, 80, "and not all of them")
+
+	for seed_value: int in 40:
+		var battle: Gen2Battle = _battle()
+		battle.rng.seed = seed_value
+		_run_move(battle, Fixture.GROWL)
+		assert_eq(int(battle.enemy.stages.get("attack", 0)), -1,
+			"the player's own drop never rolls")
+
+
+## Lock-On on the target exempts the drop, the bit sitting on whoever was aimed
+## at rather than on whoever used Lock-On. The command is run on its own because
+## `checkhit` stands in front of it in every stat-down list and `.LockOn` clears
+## the bit as it reads it, so the exemption is unreachable through a whole move.
+func test_lock_on_exempts_an_enemy_stat_drop_from_the_quarter() -> void:
+	for seed_value: int in 40:
+		var battle: Gen2Battle = _battle()
+		battle.rng.seed = seed_value
+		battle.player.substatus |= Gen2Substatus.LOCK_ON
+		var turn: Gen2Turn = Gen2Turn.create(
+			battle, Gen2Battle.ENEMY, 0, Fixture.GROWL, _data.move(Fixture.GROWL), []
+		)
+		Gen2EffectCommands.run(Gen2EffectCommands.ATTACK_DOWN, turn)
+		assert_true(turn.stat_moved, "seed_value %d" % seed_value)
+
+
+## The same gate `CheckHiddenOpponent` puts in front of the write.
+func test_an_enemy_stat_drop_refuses_a_target_out_of_sight() -> void:
+	var battle: Gen2Battle = _battle()
+	battle.player.substatus |= Gen2Substatus.LOCK_ON | Gen2Substatus.UNDERGROUND
+	_run_enemy_move(battle, Fixture.GROWL)
+	assert_eq(int(battle.player.stages.get("attack", 0)), 0)
+
+
+## `.got_mon`'s `cp [hl]`: the player's side compares `wCurBattleMon` against the
+## member's HP low byte, so a bench member whose HP ends in the active slot's own
+## number is asked for the active Pokemon's status. Slot 0 is out, so HP 256 on
+## the bench member reads Pikachu's byte and swings while paralyzed.
+func test_beat_up_reads_the_active_status_when_the_hp_low_byte_matches() -> void:
+	var battle: Gen2Battle = _beat_up_battle()
+	var party: Gen2Party = battle.party(Gen2Battle.PLAYER)
+	assert_eq(party.active, 0)
+	party.at(1).status = Gen2Status.PARALYSIS
+	party.at(1).hp = 0x100
+	party.at(2).hp = 0x105
+	party.at(2).status = Gen2Status.PARALYSIS
+	var turn: Gen2Turn = _run_move(battle, Fixture.BEAT_UP)
+
+	var swings: Array = _of_type(turn.events, Gen2Battle.BEAT_UP_ATTACK)
+	assert_eq(swings.size(), 2, "slot 2's own byte is read and refuses it")
+	assert_eq(int(swings[0]["index"]), 0)
+	assert_eq(int(swings[1]["index"]), 1, "paralyzed, and asked for slot 0's byte")
+
+
+## The same bench member with the active Pokemon statused: the borrowed byte
+## refuses a member that is perfectly healthy.
+func test_beat_up_refuses_a_healthy_member_when_the_active_one_is_statused() -> void:
+	var battle: Gen2Battle = _beat_up_battle()
+	var party: Gen2Party = battle.party(Gen2Battle.PLAYER)
+	party.at(0).status = Gen2Status.BURN
+	party.at(1).hp = 0x100
+	var turn: Gen2Turn = _run_move(battle, Fixture.BEAT_UP)
+
+	var swings: Array = _of_type(turn.events, Gen2Battle.BEAT_UP_ATTACK)
+	assert_eq(swings.size(), 1, "slot 0 is refused by its own byte, slot 1 by slot 0's")
+	assert_eq(int(swings[0]["index"]), 2)
+
+
 func test_beat_up_says_it_failed_when_no_member_could_swing() -> void:
 	var battle: Gen2Battle = _beat_up_battle()
 	for index: int in 3:

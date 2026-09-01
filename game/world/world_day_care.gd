@@ -263,7 +263,6 @@ static func grown_level(data: GameData, mon: Gen2SaveMon) -> int:
 	)
 
 
-## `GetPriceToRetrieveBreedmon`.
 static func price_to_retrieve(growth: int) -> int:
 	return RETRIEVE_BASE_PRICE + RETRIEVE_PRICE_PER_LEVEL * maxi(0, growth)
 

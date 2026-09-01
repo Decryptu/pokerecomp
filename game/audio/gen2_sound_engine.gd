@@ -276,7 +276,6 @@ func registered_bank_count() -> int:
 
 
 
-## `_InitSound`.
 func init_sound() -> void:
 	music_off()
 	apu.write(0xFF24, 0)
@@ -325,7 +324,6 @@ func music_off() -> void:
 	music_playing = false
 
 
-## `_PlayMusic`.
 func play_music(record: Dictionary) -> bool:
 	if not register_record(record):
 		return false
@@ -480,7 +478,6 @@ func any_channel_active() -> bool:
 
 
 
-## `_UpdateSound`.
 func update_sound() -> void:
 	if not music_playing:
 		return

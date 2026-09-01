@@ -245,7 +245,6 @@ static func create(
 	return machine
 
 
-## `Random`, one byte.
 func _random() -> int:
 	return _rng.randi() & 0xFF if _rng != null else 0
 
