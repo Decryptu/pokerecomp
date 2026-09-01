@@ -95,8 +95,8 @@ const MUSIC_GAME_CORNER: int = 0x12
 ## `SlotsAction_BetAndStart`'s own `ld a, 32`, and `SlotsAction_FlashIfWin`'s 16.
 const START_DELAY: int = 32
 const FLASH_FRAMES: int = 16
-## `Slots_WaitSFX`, which is sixteen frames rather than a wait, and
-## `Slots_AskPlayAgain`'s own sixty behind the ran-out-of-coins line.
+## `Slots_WaitSFX`, sixteen frames rather than a wait, and
+## `Slots_AskPlayAgain`'s sixty behind the ran-out-of-coins line.
 const WAIT_SFX_FRAMES: int = 16
 const RAN_OUT_FRAMES: int = 60
 ## `REEL_MANIP_COUNTER`'s own 4, one per reel.
@@ -105,10 +105,8 @@ const MANIP_COUNTER: int = 4
 const STOP_DELAY: int = 3
 
 ## `Slots_InitBias.Normal` and `.Lucky`: (threshold, symbol), walked until the
-## rolled byte is at or below a threshold. The thresholds are `percent`, which
-## is `x * $ff / 100` and so 2 for one percent, plus the source's own `+ 1` and
-## `- 1` where it has them; they are written out because rgbasm evaluates them
-## and GDScript will not call a function inside a constant.
+## rolled byte is at or below a threshold. A threshold is `percent`, which is
+## `x * $ff / 100`, plus the source's own `+ 1` and `- 1` where it has them.
 const BIAS_NORMAL: Array[Array] = [
 	[1, SLOTS_SEVEN],     # 1 percent - 1
 	[3, SLOTS_POKEBALL],  # 1 percent + 1
@@ -128,8 +126,8 @@ const BIAS_LUCKY: Array[Array] = [
 	[255, SLOTS_NO_BIAS], # 100 percent
 ]
 
-## `Slots_UpdateReelPositionAndOAM`: the first row's own y and the step down the
-## reel, in pixels, and how many objects one reel writes.
+## `Slots_UpdateReelPositionAndOAM`: the first row's y, the step down the reel
+## in pixels, and how many objects one reel writes.
 const REEL_TOP_Y: int = 10 * 8
 const REEL_ROW_STEP: int = 2 * 8
 const REEL_OBJECTS: int = 8
@@ -207,9 +205,8 @@ var _resume: StringName = &""
 var _stall: int = 0
 ## `WaitSFX`, which the host answers off its own driver.
 var _waiting_sfx: bool = false
-## The steps of an action that outlive the pass it started on: the `WaitSFX`,
-## `PlaySFX` and `PrintText` run a routine ends in, in the routine's own order.
-## A `wait` step holds the whole loop until the host says the channels are free.
+## The steps of an action that outlive the pass it started on, in the routine's
+## own order. A `wait` step holds the loop until the channels are free.
 var _script: Array = []
 ## The `PlaySFX`, `PrintText` and palette writes of this pass, for the host.
 var _events: Array = []
@@ -455,6 +452,8 @@ func _run_action() -> void:
 				return
 			_index += 1
 			_delay = FLASH_FRAMES
+			## `.GotIt` falls into `SlotsAction_FlashScreen`.
+			_flash_screen()
 		SLOTS_FLASH_SCREEN:
 			_flash_screen()
 		SLOTS_GIVE_EARNED_COINS:
@@ -471,8 +470,7 @@ func _run_action() -> void:
 		SLOTS_PAYOUT_ANIM:
 			_payout_anim()
 		SLOTS_RESTART_OR_QUIT:
-			## `Slots_DeilluminateBetLights` and then the wait, which is where
-			## the lights go out and the board stands still.
+			## `Slots_DeilluminateBetLights`, then the wait.
 			_bet = 0
 			_prompt = Prompt.PRESS
 			_prompt_name = &"restart"
@@ -574,13 +572,18 @@ func _reel1_has_seven() -> bool:
 	return false
 
 
-## `Slots_StopReel3`'s four-way roll, whose odds depend on whether the first two
-## reels stopped on matching sevens and on whether the spin is biased to seven.
+## `Slots_StopReel3`: the roll only happens once the first two reels have
+## stopped on matching sevens.
 func _stop_reel3_action() -> int:
 	if not _first_two_matching or not _first_two_sevens:
 		return REEL_ACTION_STOP_REEL3
-	if _bias != SLOTS_SEVEN:
-		var roll: int = _random()
+	return reel3_action(_bias, _random())
+
+
+## `.biased` is reached by `and a / jr nz`, so a bias of SLOTS_SEVEN is the zero
+## that falls through and Chansey is reachable from that block alone.
+static func reel3_action(symbol: int, roll: int) -> int:
+	if symbol == SLOTS_SEVEN:
 		if roll >= _percent(71) - 1:
 			return REEL_ACTION_STOP_REEL3
 		if roll >= _percent(47) + 1:
@@ -588,10 +591,9 @@ func _stop_reel3_action() -> int:
 		if roll >= _percent(24) - 1:
 			return REEL_ACTION_INIT_GOLEM
 		return REEL_ACTION_INIT_CHANSEY
-	var biased: int = _random()
-	if biased >= _percent(63):
+	if roll >= _percent(63):
 		return REEL_ACTION_STOP_REEL3
-	if biased >= _percent(31) + 1:
+	if roll >= _percent(31) + 1:
 		return REEL_ACTION_START_SLOW_ADVANCE_REEL3
 	return REEL_ACTION_INIT_GOLEM
 

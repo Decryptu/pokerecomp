@@ -761,3 +761,27 @@ func _write_menu_script() -> void:
 		},
 	})
 	_data = GameData.open_directory(Fixture.directory())
+
+
+## `CheckOwnMon`'s OT test walks `NAME_LENGTH_JAPANESE - 2` bytes and compares
+## one more, so a longer name is decided on its first five letters. The
+## terminator is one of the five, so a shorter name still has to match whole.
+func test_an_ot_name_is_own_on_its_first_five_letters() -> void:
+	var player := Gen2SaveData.new()
+	player.player_id = 0x1234
+	player.player_name = "MICHAEL"
+	for row: Array in [
+		["MICHAEL", true], ["MICHASHA", true], ["MICHA", true],
+		["MICH", false], ["MICKEY", false], ["michael", false],
+	]:
+		var mon := Gen2SaveMon.new()
+		mon.ot_id = player.player_id
+		mon.original_trainer = String(row[0])
+		assert_eq(
+			Gen2WorldScreen._is_own_mon(player, mon), bool(row[1]),
+			"OT \"%s\" against MICHAEL" % row[0]
+		)
+	var stranger := Gen2SaveMon.new()
+	stranger.ot_id = 0x1235
+	stranger.original_trainer = player.player_name
+	assert_false(Gen2WorldScreen._is_own_mon(player, stranger), "the ID is tested too")

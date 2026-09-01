@@ -75,9 +75,7 @@ const FLASHES: int = 3
 const PAYOUT_FRAMES: int = 2
 
 ## The two boxes that end in `prompt` rather than `done`, which is the only
-## thing that reaches `LoadBlinkingCursor`. `.TabulateTheResult` waits with
-## `WaitPressAorB_BlinkCursor` on a box that loaded none, and the routine's own
-## comment says so: no arrow blinks over "Yeah!" or "Darn…".
+## thing that reaches `LoadBlinkingCursor`: no arrow blinks over "Yeah!".
 const PROMPT_TEXTS: Array[String] = ["not_enough_coins", "shuffled"]
 
 ## `CardFlip_InitTilemap`'s `ld a, $29`, which is the green felt.
@@ -110,25 +108,20 @@ const FACE_UP_TILEMAP: Array[int] = [
 	0x1D, 0x1E, 0x1E, 0x1E, 0x1F,
 ]
 ## `.Deck`'s second column, the top-left tile of each Pokemon's three by three
-## picture. Its first column is the level as a character and is the digit for
-## the card's own level, so it is not a table here.
+## picture. Its first column is the level's own digit.
 const CARD_PIC_TILES: Array[int] = [0x4E, 0x57, 0x69, 0x60]
-## Where the level and the picture land inside the card, off the two `add hl`
-## in `CardFlip_DisplayCardFaceUp`: `3 + SCREEN_WIDTH` and `SCREEN_HEIGHT` on
-## top of it, which lands one column in and two rows down.
+## `CardFlip_DisplayCardFaceUp`'s two `add hl`: `3 + SCREEN_WIDTH`, then
+## `SCREEN_HEIGHT` on top of it.
 const CARD_LEVEL_AT: Vector2i = Vector2i(3, 1)
 const CARD_PIC_AT: Vector2i = Vector2i(1, 2)
 const CARD_PIC_SIZE: int = 3
 
 ## `CardFlip_BlankDiscardedCardSlot`'s six branches, by level: the row the pair
-## of tiles starts on and the two tiles for a live pair, with `$3d` replacing
-## whichever of them is the discarded half's own. The column is `13 + 2 * mon`
-## in every branch.
+## of tiles starts on. The column is `13 + 2 * mon` in every branch.
 const DISCARD_COLUMN: int = 13
 const DISCARD_ROWS: Array[int] = [3, 4, 6, 7, 9, 10]
 ## (top tile, bottom tile, which of the two `$3d` replaces when the paired card
-## is already discarded). `.Level1`, `.Level3` and `.Level5` mark the bottom and
-## the even levels the top, which is the half of the cell each owns.
+## is already discarded). Each level owns one half of the cell it shares.
 const DISCARD_TILES: Array[Array] = [
 	[0x36, 0x37, 1],
 	[0x3B, 0x3A, 0],
@@ -471,7 +464,9 @@ func _toggle_pass() -> void:
 func _flash_pass() -> void:
 	if _flash_left > 0:
 		_flash_left -= 1
-		_border_at = -1 if _flash_left % 2 == 1 else _which_card
+		## `press_a` spent the first of the six half-steps lit, so `.loop2`'s
+		## last is dark.
+		_border_at = -1 if _flash_left % 2 == 0 else _which_card
 		_delay = TOGGLE_FRAMES
 		return
 	_border_at = -1
@@ -574,8 +569,8 @@ func _cursor_down() -> bool:
 	return true
 
 
-## `.left_to_number_gp`, which every leftward step out of the Pokemon rows ends
-## on whichever column it started in.
+## `.left_to_number_gp`, one fixed cell whichever Pokemon column the step
+## started in.
 func _to_number_group() -> bool:
 	_cursor = Vector2i(COLUMN_NUMBER, ROW_FIRST_NUMBER)
 	return true
