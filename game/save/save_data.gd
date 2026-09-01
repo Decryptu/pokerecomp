@@ -347,6 +347,25 @@ func deposit_box_slot() -> Dictionary:
 	return {"ok": true, "box": box_index, "slot": empty_slot}
 
 
+## `CheckCurPartyMonFainted`: carry when every slot but [param party_index]
+## reads zero HP. `DayCare_GiveEgg` zeroes an egg's, so an egg is fainted here.
+func others_all_fainted(party_index: int) -> bool:
+	for index: int in party.size():
+		if index == party_index:
+			continue
+		var other: Gen2SaveMon = party[index] as Gen2SaveMon
+		if other != null and other.hp > 0:
+			return false
+	return true
+
+
+func party_fainted_flags() -> Array:
+	var out: Array = []
+	for member: Variant in party:
+		out.append(member is Gen2SaveMon and (member as Gen2SaveMon).hp <= 0)
+	return out
+
+
 ## `_GetVarAction`'s `.BoxFreeSpace`, which is `MONS_PER_BOX - [sBoxCount]` on
 ## the open box alone. A full one answers 0, which is the same refusal the
 ## source's zero gives every script that reads the var.
