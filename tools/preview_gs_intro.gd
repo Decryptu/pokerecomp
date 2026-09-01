@@ -67,8 +67,7 @@ func _initialize() -> void:
 	quit(0)
 
 
-## The whole movie, printing the frame each scene starts on and every sound it
-## asks for. This is the budget the boot cinema spends.
+## The whole movie, the way `tools/preview_intro_movie.gd` reports Crystal's.
 func _report(movie: Gen2GoldSilverIntro) -> void:
 	var scene: int = movie.scene()
 	print("scene 0 starts at frame 0")

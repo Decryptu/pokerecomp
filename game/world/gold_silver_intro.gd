@@ -134,7 +134,6 @@ const FRAMESET_RESTART: StringName = &"restart"
 ## `B_OAM_XFLIP` on a frameset entry, which flips each tile where it stands.
 const FLIP_X: int = 1
 
-## `wShadowOAM`, which is forty `SPRITEOAMSTRUCT`s and no more.
 const SHADOW_OAM_SPRITES: int = 40
 ## How many of those each OAM set takes, which is the `db` count each
 ## `.OAMData_*` opens with. The geometry is [Gen2GoldSilverIntroPage]'s; only the
@@ -253,8 +252,7 @@ var _actors: Array[Dictionary] = [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}]
 var _anim_count: int = 0
 ## `wShadowOAM`, written by the sprite pass alone. See [method sprites].
 var _shadow: Array[Dictionary] = []
-## Frames a scene spends inside `DelayFrames`, during which neither the
-## jumptable nor `PlaySpriteAnimations` runs.
+## Frames spent inside `DelayFrames`; see [Gen2IntroMovie].
 var _delay: int = 0
 var _frame: int = 0
 var _events: Array[Dictionary] = []
@@ -278,8 +276,7 @@ static func create(
 	return out
 
 
-## Whether [param data] carries the art the movie draws. A cache without it is
-## the caller's cue to skip the phase rather than to run it blank.
+## [method Gen2IntroMovie.available] for the Gold and Silver movie.
 static func available(data: GameData) -> bool:
 	return data != null and data.has_gs_intro()
 
@@ -1371,8 +1368,7 @@ func _sprite_starter(actor: Dictionary, first: int, second: int) -> void:
 	actor["x_offset"] = _cosine_at(cosine, 0x90)
 
 
-## `GetSpriteAnimFrame` and the end of a frameset. Returns false when the struct
-## is deleted.
+## `GetSpriteAnimFrame`; false once the struct is deleted.
 func _advance_actor(actor: Dictionary) -> bool:
 	var frameset: Dictionary = FRAMESETS[StringName(actor["frameset"])]
 	var frames: Array = frameset["frames"]

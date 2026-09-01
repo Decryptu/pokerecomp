@@ -59,6 +59,9 @@ const REGISTERABLE_KEY_ITEMS: Dictionary = {
 ## the item list never reaches.
 const ITEM_ROWS: int = 255
 const NO_DEPOSIT_ROWS: Array[int] = [1, 2, 3]
+## The TM and HM rows, whose ITEMMENU_PARTY nibble is `TeachTMHM` rather than an
+## `ItemEffects` entry.
+const TM_HM_PARTY_ROWS: int = 57
 
 ## What fits between the text box's own borders: `Textbox`'s interior is 18
 ## columns and `PrintItemDescription` is handed the cell one in from the left.
@@ -77,6 +80,7 @@ func run(r: RefCounted) -> void:
 		_verify_field_effects(game_id, data)
 		_verify_deposit_rule(game_id, data)
 		_verify_key_item_effects(game_id, data)
+		_verify_party_item_effects(game_id, data)
 		_verify_screen(game_id, data)
 		_verify_descriptions(game_id, data)
 
@@ -239,6 +243,60 @@ func _verify_deposit_rule(game_id: StringName, data: GameData) -> void:
 			game_id, refused.size(), ", ".join(refused.slice(0, 6)),
 		]
 	)
+
+
+## `ItemEffects` over every ITEMMENU_PARTY row of a real cache. A row
+## `_apply_item_effect` has no branch for answers "It won't have any effect"
+## where the cartridge does something; MYSTERYBERRY was one.
+func _verify_party_item_effects(game_id: StringName, data: GameData) -> void:
+	var unhandled: Array[String] = []
+	var covered: int = 0
+	var machines: int = 0
+	for number: int in range(1, ITEM_ROWS + 1):
+		var definition: Dictionary = data.item(number)
+		if definition.is_empty():
+			continue
+		if Gen2WorldPack.field_use_kind(data, number) != Gen2WorldPack.ITEMMENU_PARTY:
+			continue
+		if int(definition.get("pocket", 0)) == Gen2WorldPack.TYPE_TM_HM:
+			machines += 1
+			continue
+		if _party_effect_branch(number, definition):
+			covered += 1
+			continue
+		unhandled.append("$%02X (%s)" % [number, data.item_name(number)])
+	_r.check(
+		unhandled.is_empty(),
+		"%s: %d of %d party-menu items reach no effect branch: %s" % [
+			game_id, unhandled.size(), covered + unhandled.size(),
+			", ".join(unhandled.slice(0, 6)),
+		]
+	)
+	_r.check(
+		machines == TM_HM_PARTY_ROWS,
+		"%s: %d TM/HM party rows, expected %d" % [game_id, machines, TM_HM_PARTY_ROWS]
+	)
+	print("%s: %d party-menu item effects, %d TM/HM rows beside them." % [
+		game_id, covered, machines,
+	])
+
+
+## The branches `_apply_item_effect` picks between, read off the host's own
+## tables, so a table that loses a row takes this check red with it.
+func _party_effect_branch(item: int, definition: Dictionary) -> bool:
+	if item == Gen2WorldPartyHost.ITEM_RARE_CANDY or item == Gen2WorldPartyHost.ITEM_PP_UP:
+		return true
+	if Gen2WorldPartyHost.PP_RESTORE_ITEMS.has(item):
+		return true
+	if Gen2WorldPartyHost.VITAMINS.has(item):
+		return true
+	if item in Gen2WorldPartyHost.REVIVE_ITEMS:
+		return true
+	if item in Gen2Evolution.STONE_ITEMS \
+		or int((definition.get("evolution", {}) as Dictionary).get("method", 0)) != 0:
+		return true
+	return int(definition.get("heal_amount", 0)) > 0 \
+		or int(definition.get("status_mask", 0)) != 0
 
 
 ## The three key items whose effect is a `farsjump` at a named map script, each
