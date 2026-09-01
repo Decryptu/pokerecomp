@@ -15,16 +15,8 @@ marker with it, which is how 0.1.17 published an empty body. -->
 
 ## Fixed
 
-- A day passing put almost nothing back. A phone contact handed over its daily item once per save, a rematch offer never expired, the Bug Catching Contest closed for good after one entry, and the Dunsparce and Yanma swarms never ended. Forty-four of Crystal's daily flags are cleared at the day boundary now, where three were.
-- Strength lasted the rest of the game once it had been used. It ends with the map the boulder was pushed on, which is where the cartridge ends it.
-- A boulder could fall through a hole named by a different map's table, because a written command queue outlived the map that wrote it.
-- The Hall of Fame's player panel printed neither the trainer ID nor PLAY TIME and drew no picture, and no panel played the Pokemon's cry. An induction runs on its own timer instead of waiting for A on every panel.
-- The trainer card kept its `#DEX` label on screen for a player who has no Pokedex yet.
-- A held direction steered an ice slide. The cartridge drops the whole d-pad for the length of one.
-- Nothing bumped. Every refused step in the game was silent, on land, on water and on ice.
-- A step off an ice tile ran at walking speed, and a sliding player walked instead of standing still on the ice.
-- The naming screen drew no icon: no species, no player, no Poke Ball, and no gender sign beside a nickname.
-- The decoration menu lost CANCEL at six owned ornaments, and talking to one doll printed every box after it as well.
+- Catching a Pokemon the Pokedex had not recorded froze the game. Its new dex entry stands over the fight, the fight took every press, and the page never got the B that closes it. The Pokemon was already on disk, so a force quit came back standing on the encounter cell with it in the party.
+- That same page was drawn behind the battle, so none of it reached the screen.
 
 `api_version` stays 29 and nothing on the boundary moved.
 
