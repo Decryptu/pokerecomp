@@ -63,7 +63,6 @@ const FRIEND_BALL_HAPPINESS: int = 200
 ## The Bug Contest's own ball. It is never in the bag: `wParkBallsRemaining` is
 ## what holds it and `BattleMenu_Pack`'s contest branch loads it by name.
 const ITEM_PARK_BALL: int = 0xB1
-## `ConvertBerriesToBerryJuice`'s own three constants.
 ## `StatExpItemPointerOffsets`: the five vitamins and the stat experience each
 ## one raises. `MON_HP_EXP` and its four neighbours are words and the offsets
 ## name the high byte, so `VitaminEffect` reads and writes that byte alone: it
@@ -113,7 +112,7 @@ const HAPPINESS_PROBABILITIES: Dictionary = {
 const STRING_BUFFER_1: Dictionary = {true: 0xD073, false: 0xCF6B}
 const HAPPINESS_TABLE_OVERRUN_OPCODE: int = 0x21
 
-## `RareCandyEffect` and `RestorePPEffect`'s own five. PP UP is the sixth and
+## `RareCandyEffect` and `RestorePPEffect`'s own six. PP UP is the seventh and
 ## has no branch: `ApplyPPUp` raises a ceiling the save model does not carry, so
 ## the pack refuses it and says why (see `use_item`).
 const ITEM_RARE_CANDY: int = 0x20
@@ -122,11 +121,15 @@ const ITEM_ETHER: int = 0x3F
 const ITEM_MAX_ETHER: int = 0x40
 const ITEM_ELIXER: int = 0x41
 const ITEM_MAX_ELIXER: int = 0x15
-## `RestorePP.restore_some`'s own `ld c, 10`, and `.restore_all`, which the two
-## MAX rows take.
-const PP_RESTORE_STEP: int = 10
+const ITEM_MYSTERYBERRY: int = 0x96
+## `RestorePP.restore_some`'s `ld c, 10`, with `cp MYSTERYBERRY` taking the
+## `ld c, 5` in front of it; the two MAX rows take `.restore_all` instead.
+const PP_RESTORE_STEPS: Dictionary = {
+	ITEM_ETHER: 10, ITEM_ELIXER: 10, ITEM_MYSTERYBERRY: 5,
+}
+## Whether the item walks all four slots, which only the two ELIXERs do.
 const PP_RESTORE_ITEMS: Dictionary = {
-	ITEM_ETHER: false, ITEM_MAX_ETHER: false,
+	ITEM_ETHER: false, ITEM_MAX_ETHER: false, ITEM_MYSTERYBERRY: false,
 	ITEM_ELIXER: true, ITEM_MAX_ELIXER: true,
 }
 const PP_RESTORE_MAX_ITEMS: Array[int] = [ITEM_MAX_ETHER, ITEM_MAX_ELIXER]
@@ -621,7 +624,8 @@ static func use_item(
 		return _failure(StringName(opened["reason"]), opened.get("details", {}))
 	var candidate: Gen2SaveData = opened["candidate"]
 	var effect: Dictionary = _apply_item_effect(
-		world.data, candidate, item, party_index, move_slot, world.map_time_of_day()
+		world.data, candidate, item, party_index, move_slot,
+		world.map_time_of_day(), world.repel_steps()
 	)
 	if not bool(effect.get("ok", false)):
 		return _failure(StringName(effect.get("reason", &"item_has_no_effect")), effect)
@@ -1784,12 +1788,16 @@ static func trade_gender_matches(
 
 static func _apply_item_effect(
 	data: GameData, save: Gen2SaveData, item: int, party_index: int,
-	move_slot: int = -1, time_of_day: int = -1
+	move_slot: int = -1, time_of_day: int = -1, repel_steps: int = 0
 ) -> Dictionary:
 	var definition: Dictionary = data.item(item)
 	if definition.is_empty():
 		return {"ok": false, "reason": &"unknown_item", "item": item}
 	if REPEL_STEPS.has(item):
+		## `UseRepel`'s `ld a, [wRepelEffect] / and a / jp nz, PrintText`: the
+		## line is said and `UseDisposableItem` never reached.
+		if repel_steps > 0:
+			return {"ok": false, "reason": &"repel_still_in_effect", "item": item}
 		return {"ok": true, "effect": &"repel", "repel_steps": REPEL_STEPS[item]}
 	if item == Gen2WorldPack.ITEM_SACRED_ASH:
 		return _apply_sacred_ash(data, save)
@@ -1841,12 +1849,17 @@ static func _apply_revive(data: GameData, mon: Gen2SaveMon, item: int) -> Dictio
 static func _apply_heal(
 	data: GameData, mon: Gen2SaveMon, definition: Dictionary, item: int
 ) -> Dictionary:
+	## `IsMonFainted` stands in front of `ItemRestoreHP`, `UseStatusHealer` and
+	## `FullRestoreEffect` alike, and a faint clears no status byte, so an
+	## ANTIDOTE is refused on a fainted PSN row rather than curing it.
+	if mon.hp <= 0:
+		return {"ok": false, "reason": &"item_has_no_effect"}
 	var max_hp: int = _max_hp(data, mon)
 	var status_mask: int = int(definition.get("status_mask", 0))
 	var heal_amount: int = int(definition.get("heal_amount", 0))
 	var cleared: int = mon.status & status_mask
 	var healed: int = 0
-	if heal_amount > 0 and mon.hp > 0:
+	if heal_amount > 0:
 		var target_hp: int = max_hp if heal_amount >= Gen2Stats.MAX_STAT_VALUE else mini(
 			max_hp, mon.hp + heal_amount
 		)
@@ -1922,9 +1935,9 @@ static func _apply_rare_candy(
 
 
 ## `RestorePPEffect`: MAX ETHER and MAX ELIXER fill a move, ETHER and ELIXER add
-## ten, and the two ELIXERs walk all four slots where the two ETHERs need the
-## slot `MoveSelectionScreen` chose. A move already at its ceiling is
-## `.dont_restore`, and nothing restored at all is `WontHaveAnyEffectMessage`.
+## ten, MYSTERYBERRY five, and the two ELIXERs walk all four slots where the
+## other three need the slot `MoveSelectionScreen` chose. A move already at its
+## ceiling is `.dont_restore`, and nothing restored is `WontHaveAnyEffectMessage`.
 static func _apply_pp_restore(
 	data: GameData, mon: Gen2SaveMon, item: int, move_slot: int
 ) -> Dictionary:
@@ -1943,7 +1956,8 @@ static func _apply_pp_restore(
 		var current: int = int(mon.pp[slot])
 		if current >= maximum:
 			continue
-		var next: int = maximum if full else mini(maximum, current + PP_RESTORE_STEP)
+		var step: int = int(PP_RESTORE_STEPS.get(item, 0))
+		var next: int = maximum if full else mini(maximum, current + step)
 		restored += next - current
 		mon.pp[slot] = next
 	if restored <= 0:

@@ -118,6 +118,8 @@ const RESET_ASK_LINES: Array[String] = [
 const RESTORE_PP_WHICH_MOVE: String = "Restore the PP of\nwhich move?"
 const PP_RESTORED: String = "PP was restored."
 const PP_UP_UNSUPPORTED: String = "PP UP has no effect\nin this port yet."
+## `_RepelUsedEarlierIsStillInEffectText`, printed instead of spending the item.
+const REPEL_STILL_IN_EFFECT: String = "The REPEL used\nearlier is still\nin effect."
 
 const SAVE_SAVING_FRAMES: int = Gen2SavePrompt.SAVING_FRAMES
 const SAVE_WRITE_FRAMES: int = Gen2SavePrompt.WRITE_FRAMES
@@ -1830,6 +1832,8 @@ func _use_refusal(reason: StringName, item: int) -> String:
 			return "You have none of those."
 		&"pp_up_unsupported":
 			return PP_UP_UNSUPPORTED
+		&"repel_still_in_effect":
+			return REPEL_STILL_IN_EFFECT
 	return "Can't use that here: %s" % String(reason)
 
 

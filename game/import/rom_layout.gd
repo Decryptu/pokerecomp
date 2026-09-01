@@ -2999,18 +2999,12 @@ const CRYSTAL: Dictionary = {
 		"landmarks": 0x1CA8C3,
 		"landmark_count": LANDMARK_COUNT,
 	},
-	# See the Gold and Silver block above; the table is byte identical and only
-	# its address moves.
+	# Every row from here to `mom_phone` is the Gold and Silver block above with a
+	# moved address; `mom_phone`'s two scripts also move their `end` opcode.
 	"oak_ratings": 0x2667F,
-	# See the Gold and Silver block above; the run is byte identical and only its
-	# address moves.
 	"pokecenter_pc": 0x155FA,
 	"decorations": 0x26A4F,
-	# See the Gold and Silver block above; the table is byte identical and only
-	# its address moves.
 	"decoration_ids": 0x26F2B,
-	# See the Gold and Silver block above; only the address and the `end` opcode
-	# in the two scripts move.
 	"mom_phone": 0xFD0FD,
 	# See the Gold and Silver block above; the words are byte identical and only
 	# their address moves.

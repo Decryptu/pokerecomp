@@ -602,7 +602,9 @@ func test_the_pp_restorers_fill_one_move_or_all_four() -> void:
 		_world, _save, Gen2WorldPartyHost.ITEM_ETHER, 0, false, 0
 	)
 	assert_true(bool(ether["ok"]), JSON.stringify(ether))
-	assert_eq(_save.party[0].pp[0], mini(maximum, Gen2WorldPartyHost.PP_RESTORE_STEP))
+	assert_eq(_save.party[0].pp[0], mini(
+		maximum, int(Gen2WorldPartyHost.PP_RESTORE_STEPS[Gen2WorldPartyHost.ITEM_ETHER])
+	))
 
 	var maxed: Dictionary = Gen2WorldPartyHost.use_item(
 		_world, _save, Gen2WorldPartyHost.ITEM_MAX_ETHER, 0, false, 0
@@ -618,6 +620,69 @@ func test_the_pp_restorers_fill_one_move_or_all_four() -> void:
 	assert_false(bool(refused["ok"]))
 	assert_eq(StringName(refused["reason"]), &"item_has_no_effect")
 	assert_eq(_world.state.item_quantity(Gen2WorldPartyHost.ITEM_ELIXER), 1)
+
+
+## `RestorePP`'s `cp MYSTERYBERRY / ld c, 5`: the only PP restorer on five, and
+## the one `ItemEffects` row easy to miss because the item's own pocket row reads
+## as a berry. It takes the same one-slot path as an ETHER.
+func test_a_mysteryberry_restores_five_pp_to_the_chosen_move() -> void:
+	_world.state.apply_changes({}, {}, {"items": {
+		Gen2WorldPartyHost.ITEM_MYSTERYBERRY: 2,
+	}})
+	var mon: Gen2SaveMon = _save.party[0]
+	mon.moves = [1, 0, 0, 0]
+	mon.pp = [0, 0, 0, 0]
+
+	var asked: Dictionary = Gen2WorldPartyHost.use_item(
+		_world, _save, Gen2WorldPartyHost.ITEM_MYSTERYBERRY, 0, false
+	)
+	assert_eq(StringName(asked["reason"]), &"move_slot_required")
+
+	var used: Dictionary = Gen2WorldPartyHost.use_item(
+		_world, _save, Gen2WorldPartyHost.ITEM_MYSTERYBERRY, 0, false, 0
+	)
+	assert_true(bool(used["ok"]), JSON.stringify(used))
+	assert_eq(_save.party[0].pp[0], mini(int(_data.move(1).get("pp", 0)), 5))
+	assert_eq(_world.state.item_quantity(Gen2WorldPartyHost.ITEM_MYSTERYBERRY), 1)
+
+
+## `UseRepel`'s own `ld a, [wRepelEffect] / and a`: the line is printed in place
+## of `UseDisposableItem`, so a second Repel is neither spent nor stacked.
+func test_a_repel_over_a_live_one_is_refused_and_kept() -> void:
+	_world.state.apply_changes({}, {}, {"items": {
+		Gen2WorldPartyHost.ITEM_REPEL: 1, Gen2WorldPartyHost.ITEM_MAX_REPEL: 1,
+	}})
+
+	var first: Dictionary = Gen2WorldPartyHost.use_item(
+		_world, _save, Gen2WorldPartyHost.ITEM_REPEL, -1, false
+	)
+	assert_true(bool(first["ok"]), JSON.stringify(first))
+	assert_eq(_world.repel_steps(), 100)
+
+	var second: Dictionary = Gen2WorldPartyHost.use_item(
+		_world, _save, Gen2WorldPartyHost.ITEM_MAX_REPEL, -1, false
+	)
+	assert_false(bool(second["ok"]))
+	assert_eq(StringName(second["reason"]), &"repel_still_in_effect")
+	assert_eq(_world.repel_steps(), 100)
+	assert_eq(_world.state.item_quantity(Gen2WorldPartyHost.ITEM_MAX_REPEL), 1)
+
+
+## `IsMonFainted` in front of `ItemRestoreHP`, `UseStatusHealer` and
+## `FullRestoreEffect`. Nothing clears a party member's status byte when it
+## faints, so the reachable case is a member poisoned to zero.
+func test_a_status_healer_is_refused_on_a_fainted_member() -> void:
+	_world.state.apply_changes({}, {}, {"items": {0x09: 1}})
+	var mon: Gen2SaveMon = _save.party[0]
+	mon.hp = 0
+	mon.status = Gen2Status.POISON
+
+	var result: Dictionary = Gen2WorldPartyHost.use_item(_world, _save, 0x09, 0, false)
+
+	assert_false(bool(result["ok"]))
+	assert_eq(StringName(result["reason"]), &"item_has_no_effect")
+	assert_eq(_save.party[0].status, Gen2Status.POISON)
+	assert_eq(_world.state.item_quantity(0x09), 1)
 
 
 ## PP UP raises `PP_UP_MASK`, which [Gen2SaveMon] does not carry: the pack says

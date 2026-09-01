@@ -26,7 +26,6 @@ const OAM_ORIGIN := Vector2i(8, 16)
 ## from the one at `vTiles1`.
 const HIGH_TILE: int = 0x80
 
-## `wShadowOAM`, which is forty `SPRITEOAMSTRUCT`s and no more.
 const SHADOW_OAM_SPRITES: int = 40
 
 ## `dbsprite`'s attribute byte.

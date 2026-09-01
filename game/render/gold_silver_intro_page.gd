@@ -22,7 +22,6 @@ const OAM_ORIGIN := Vector2i(8, 16)
 ## which only the fire cutscene loads a second sheet into.
 const HIGH_TILE: int = 0x80
 
-## `wShadowOAM`, which is forty `SPRITEOAMSTRUCT`s and no more.
 const SHADOW_OAM_SPRITES: int = 40
 
 ## `dbsprite`'s attribute byte.
