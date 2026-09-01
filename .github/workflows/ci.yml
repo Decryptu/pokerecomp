@@ -8,6 +8,15 @@ on:
   push:
     branches: [main]
   pull_request:
+    # The AltStore feed pull request is opened by `github-actions[bot]`, and a
+    # `pull_request` run from a bot author is held for manual approval and
+    # expires unapproved: five of the last nine releases left a red `ci` run
+    # nobody could have read, and one was approved by hand. A pull request whose
+    # only changed file is listed here creates no run at all. Nothing is lost.
+    # `test_export_presets.gd` compares `source.json` against the iOS preset, so
+    # any change that would make the feed disagree with the preset is already
+    # red on the ordinary pull request that makes it.
+    paths-ignore: [".github/altstore/source.json"]
 
 concurrency:
   group: ci-${{ github.ref }}
