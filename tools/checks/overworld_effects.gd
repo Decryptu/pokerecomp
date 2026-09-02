@@ -17,8 +17,10 @@ const EXPECTED: Array = [
 	["heart", 4, 0xF8], ["bolt", 4, 0xF8], ["sleep", 4, 0xF8], ["fish", 4, 0xF8],
 	["shadow", 1, 0xFC], ["rod", 2, 0xFC], ["boulder_dust", 2, 0xFE],
 	["grass_rustle", 1, 0xFE], ["headbutt_tree", 8, 0x84], ["cut_tree", 4, 0x84],
-	["cut_grass", 4, 0x80], ["heal_machine", 2, 0x7C],
+	["cut_grass", 4, 0x80], ["heal_machine", 2, 0x7C], ["chris_fish", 8, 0x02],
 ]
+
+const CRYSTAL_ONLY: Array = [["kris_fish", 8, 0x02]]
 
 ## `gfx/overworld/heal_machine.pal`, the one sheet that carries a palette of its
 ## own instead of wearing an overworld one: `RGB 31, 31, 31`, `RGB 31, 19, 10`,
@@ -37,7 +39,10 @@ func run(r: RefCounted) -> void:
 
 func _check_game() -> void:
 	var lit: int = 0
-	for row: Array in EXPECTED:
+	var expected: Array = EXPECTED.duplicate()
+	if Gen2WorldState.is_crystal_profile(_r.data):
+		expected.append_array(CRYSTAL_ONLY)
+	for row: Array in expected:
 		var name: String = String(row[0])
 		var sheet: Dictionary = _r.data.overworld_effect(name)
 		if not _r.check(not sheet.is_empty(), "the %s sheet is not in the cache." % name):
@@ -90,4 +95,4 @@ func _check_game() -> void:
 					)
 		else:
 			_r.check(colors.is_empty(), "%s carries a palette it has no source for." % name)
-	_r.note("overworld effects: %d sheets, %d drawn pixels." % [EXPECTED.size(), lit])
+	_r.note("overworld effects: %d sheets, %d drawn pixels." % [expected.size(), lit])

@@ -128,16 +128,26 @@ const CUT_LEAF_RADIUS_BASE: int = 0x0400
 ## `.OAMData_Leaf`'s single `dbsprite -1, -1, 4, 4`.
 const CUT_LEAF_OFFSET := Vector2i(-4, -4)
 
-## The rod tile `FacingFishDown` and its three siblings add to the player's own
-## four, in Gen2WorldSprite's DOWN, UP, LEFT, RIGHT order: offset, which of the
-## two rod tiles, and whether it is mirrored. The player picture itself is the
-## standing one, so the rod is the whole difference.
+## The rod `FacingFishDown` and its three siblings add to the player's own four,
+## in Gen2WorldSprite's DOWN, UP, LEFT, RIGHT order: offset, which tile of the
+## gender's sheet, and whether it is mirrored. Down and up hang $fc, the sides $fd.
 const FISHING_ROD_TILES: Array = [
-	{"offset": Vector2i(0, 16), "tile": 0, "flip_x": false},
-	{"offset": Vector2i(0, -8), "tile": 0, "flip_x": false},
-	{"offset": Vector2i(-8, 5), "tile": 1, "flip_x": true},
-	{"offset": Vector2i(16, 5), "tile": 1, "flip_x": false},
+	{"offset": Vector2i(0, 16), "tile": 6, "flip_x": false},
+	{"offset": Vector2i(0, -8), "tile": 6, "flip_x": false},
+	{"offset": Vector2i(-8, 5), "tile": 7, "flip_x": true},
+	{"offset": Vector2i(16, 5), "tile": 7, "flip_x": false},
 ]
+
+## The other six, written over the player's own $02, $06 and $0a: a fishing player
+## is the standing top half and these, and right mirrors left and swaps its cells.
+const FISHING_BODY_TILES: Array = [
+	[{"tile": 0, "flip_x": false}, {"tile": 1, "flip_x": false}],
+	[{"tile": 2, "flip_x": false}, {"tile": 3, "flip_x": false}],
+	[{"tile": 4, "flip_x": false}, {"tile": 5, "flip_x": false}],
+	[{"tile": 5, "flip_x": true}, {"tile": 4, "flip_x": true}],
+]
+
+const FISHING_SHEETS: Array[String] = ["chris_fish", "kris_fish"]
 
 
 ## `MovementFunction_Shadow`: y offset 14 along the axis the jump is on and 12

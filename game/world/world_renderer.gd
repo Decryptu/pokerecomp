@@ -1,13 +1,11 @@
 class_name Gen2WorldRenderer
 extends Node2D
 
-## Draws the visible map page and the development player marker in hardware
-## pixels. It does not own map state; call [method set_world] when the API changes
-## or [method refresh] after a movement. The surface is the cartridge's 160x144
-## unless the world has been given a larger [member Gen2WorldAPI.view_pixels], in
-## which case the map fills all of it: the connected maps the graph places around
-## this one are drawn as well, on [Gen2WorldMapLayer] quads under the sprites, and
-## the border block fills whatever no map covers.
+## Draws the visible map page in hardware pixels. The surface is the cartridge's
+## 160x144 unless the world has been given a larger
+## [member Gen2WorldAPI.view_pixels], in which case the connected maps the graph
+## places around this one are drawn too, on [Gen2WorldMapLayer] quads under the
+## sprites, and the border block fills whatever no map covers.
 
 const PLAYER_COLOR: Color = Color("#d34a5a")
 const FALLBACK_BACKGROUND: Color = Color("#f5f1d8")
@@ -869,7 +867,8 @@ func _draw_player(background: Vector2) -> Vector2:
 		## `disappear PLAYER` takes object zero out of OAM.
 		return player
 	if player_texture != null:
-		draw_texture(player_texture, player + jump)
+		if not (_world.fishing_busy() and _draw_fishing_body(player_texture, player + jump)):
+			draw_texture(player_texture, player + jump)
 		if _in_grass(_world.player_cell):
 			_draw_grass_over(player + jump, background)
 		if _world.fishing_busy():
@@ -1150,17 +1149,49 @@ func _build_priority_atlas() -> void:
 	)
 
 
-## `FacingFishDown` and its three siblings: the standing player plus one tile of
-## the rod sheet, which is what `Script_FishCastRod`'s `fish_cast_rod` puts up
-## and `PutTheRodAway` takes down.
+func _fishing_sheet() -> Dictionary:
+	var sheet: Dictionary = _effect_sheet(
+		Gen2WorldEffects.FISHING_SHEETS[1 if _world.player_female() else 0]
+	)
+	return sheet if not sheet.is_empty() \
+		else _effect_sheet(Gen2WorldEffects.FISHING_SHEETS[0])
+
+
+## `LoadFishingGFX` replaces the player's own lower half, so the standing picture
+## is drawn to the waist and the sheet's pair finishes it.
+func _draw_fishing_body(player_texture: Texture2D, pixel: Vector2) -> bool:
+	var sheet: Dictionary = _fishing_sheet()
+	if sheet.is_empty():
+		return false
+	var size: Vector2 = player_texture.get_size()
+	var half: float = size.y * 0.5
+	draw_texture_rect_region(
+		player_texture, Rect2(pixel, Vector2(size.x, half)),
+		Rect2(Vector2.ZERO, Vector2(size.x, half))
+	)
+	var facing: int = clampi(
+		_world.player_facing, 0, Gen2WorldEffects.FISHING_BODY_TILES.size() - 1
+	)
+	var pair: Array = Gen2WorldEffects.FISHING_BODY_TILES[facing]
+	for cell: int in pair.size():
+		var tile: Dictionary = pair[cell]
+		_draw_effect_tile(
+			sheet, int(tile["tile"]), _world.player_palette(), bool(tile["flip_x"]),
+			pixel + Vector2(cell * Gen2Tiles.TILE_WIDTH, half)
+		)
+	return true
+
+
+## `FacingFishDown` and its three siblings: one more tile of the same sheet, put
+## up by `Script_FishCastRod`. Part of the facing, so it wears the player's palette.
 func _draw_fishing_rod(pixel: Vector2) -> void:
-	var sheet: Dictionary = _effect_sheet("rod")
+	var sheet: Dictionary = _fishing_sheet()
 	if sheet.is_empty():
 		return
 	var facing: int = clampi(_world.player_facing, 0, Gen2WorldEffects.FISHING_ROD_TILES.size() - 1)
 	var tile: Dictionary = Gen2WorldEffects.FISHING_ROD_TILES[facing]
 	_draw_effect_tile(
-		sheet, int(tile["tile"]), Gen2WorldEffects.PAL_OW_EMOTE, bool(tile["flip_x"]),
+		sheet, int(tile["tile"]), _world.player_palette(), bool(tile["flip_x"]),
 		pixel + Vector2(tile["offset"] as Vector2i),
 	)
 

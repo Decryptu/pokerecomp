@@ -395,7 +395,8 @@ func results_window_map(rows: Array) -> PackedInt32Array:
 ## not been caught keeps the placeholder height and weight the background draws,
 ## which is what the source's early `ret z` leaves on screen.
 func entry_map(
-	number: int, name: String, entry: Dictionary, caught: bool, page: int, cursor: int
+	number: int, name: String, entry: Dictionary, caught: bool, page: int, cursor: int,
+	menu_row: bool = true
 ) -> PackedInt32Array:
 	_unown_letters = false
 	var map: PackedInt32Array = blank_map()
@@ -411,7 +412,9 @@ func entry_map(
 	_put(map, 17, 7, HEIGHT_INCHES)
 	_text(map, 9, 9, "WT   ???lb")
 	_put(map, 0, 17, SELECT_OPTION[0])
-	_text(map, 1, 17, " PAGE AREA CRY PRNT")
+	## `_NewPokedexEntry` spaces over the rest of row 17: no button row, no cursor.
+	if menu_row:
+		_text(map, 1, 17, " PAGE AREA CRY PRNT")
 	_place_pic_corner(map, 1, 1)
 
 	_text(map, 9, 3, name)
@@ -438,7 +441,7 @@ func entry_map(
 	var body: String = String(pages[page]) if page < pages.size() else ""
 	_paragraph(map, 2, 11, body)
 	_place_footprint_cells(map)
-	if cursor >= 0 and cursor < Gen2PokedexScreen.ENTRY_BUTTONS.size():
+	if menu_row and cursor >= 0 and cursor < Gen2PokedexScreen.ENTRY_BUTTONS.size():
 		_put(map, ENTRY_CURSOR_COLUMNS[cursor], 17, CURSOR_CODE)
 	return map
 
@@ -748,9 +751,7 @@ func _blit_object(
 ## species' box is drawn with: `LoadQuestionMarkPic` decompresses
 ## `gfx/pokedex/question_mark.2bpp.lz` and copies its 7 * 7 tiles into the pic
 ## slot, column major like every pic and drawn through the dex's own
-## `question_mark` palette. Not `PokedexSlowpokeLZ`, which this used to draw:
-## that is a different asset, five Slowpoke reading a book decompressed to
-## `vTiles0` for the search screen and the listing's objects.
+## `question_mark` palette. `PokedexSlowpokeLZ` is a different asset.
 func unseen_pic() -> Image:
 	if _question_mark.is_empty() or _question_mark_palette.size() != Gen2Palette.COLORS_PER_PIC:
 		return null

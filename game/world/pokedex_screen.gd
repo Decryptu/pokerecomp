@@ -223,12 +223,10 @@ func _handle_list(button: int) -> bool:
 ## so A always turns the page rather than moving a cursor along a row whose
 ## other three entries would refuse.
 func _handle_entry(button: int) -> bool:
+	if _entry_only:
+		return _handle_new_entry(button)
 	match button:
 		Gen2Button.B:
-			## `NewPokedexEntry` has no listing under it, so B is what closes it.
-			if _entry_only:
-				closed.emit()
-				return true
 			## `wPrevDexEntryJumptableIndex`, which `Pokedex_UpdateMainScreen`
 			## and `Pokedex_UpdateSearchResultsScreen` each write before they
 			## open an entry: B goes back to whichever listing that was, not
@@ -256,6 +254,19 @@ func _handle_entry(button: int) -> bool:
 				_refresh()
 			return true
 	return false
+
+
+## `NewPokedexEntry` runs no jumptable: `WaitPressAorB_BlinkCursor`, page 2, that
+## wait again. A and B are one button and nothing else does anything.
+func _handle_new_entry(button: int) -> bool:
+	if button != Gen2Button.A and button != Gen2Button.B:
+		return false
+	if _dex.page == Gen2Pokedex.PAGE_1:
+		_dex.toggle_page()
+		_refresh()
+		return true
+	closed.emit()
+	return true
 
 
 ## `DexEntryScreen_MenuActionJumptable`. `.Print` needs a printer and does
@@ -603,7 +614,8 @@ func _render_entry_image(cursor: int) -> Image:
 	return _page.image(_page.entry_map(
 		species, String(entry["name"]), _data.dex_entry(species),
 		bool(entry["caught"]), int(entry["page"]),
-		_entry_cursor if cursor == 0 else -1
+		_entry_cursor if cursor == 0 else -1,
+		not _entry_only
 	), _selected_pic())
 
 
