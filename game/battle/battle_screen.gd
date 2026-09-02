@@ -2057,7 +2057,7 @@ func _run_next_anim_step() -> void:
 						_anim_delay = 1
 						return
 			ANIM_SFX:
-				_play_anim_sound(int(step["sfx"]))
+				_play_sfx(int(step["sfx"]))
 			ANIM_HIT_SOUND:
 				_play_hit_sound()
 			ANIM_SCRIPT:
@@ -2105,9 +2105,10 @@ func _after_anim_frame() -> void:
 	for command: Dictionary in _anim.frame_commands():
 		match StringName(command["name"]):
 			Gen2BattleAnimScript.SOUND:
-				_play_anim_sound(int((command["operands"] as Array)[1]))
+				var sound: Array = command["operands"]
+				_play_anim_sound(int(sound[1]), int(sound[0]))
 			Gen2BattleAnimScript.CRY:
-				_play_anim_cry()
+				_play_anim_cry(int((command["operands"] as Array)[0]))
 			Gen2BattleAnimScript.RAISE_SUB, Gen2BattleAnimScript.DROP_SUB:
 				# `BattleAnimCmd_RaiseSub` and `..._DropSub` write the actor's own
 				# tiles, and the actor is `hBattleTurn`, which is whose animation
@@ -2203,21 +2204,38 @@ func battle_music() -> int:
 	return _battle_music
 
 
-## `BattleAnimCmd_Sound`'s second operand, which is the SFX id `PlayStereoSFX`
-## is given. The first is the track and panning mask, which this project has no
-## stereo field to spend.
-func _play_anim_sound(sfx: int) -> void:
+## `PlaySFX`, which is every effect this screen plays that is not an animation's
+## own. Its `wCurSFX` gate is what stops two of them piling up; [param waited] is
+## a `WaitSFX` the source spends first, which the gate must not then refuse.
+func _play_sfx(sfx: int, waited: bool = false) -> void:
 	if _audio_player == null or _data == null:
 		return
 	var record: Dictionary = _data.world_audio(&"sfx", sfx)
 	if record.is_empty():
 		return
-	_audio_player.play_record(record, &"stereo_sfx", _audio_assets())
+	_audio_player.play_record(
+		record, &"waited_sfx" if waited else &"sound", _audio_assets()
+	)
+
+
+## `BattleAnimCmd_Sound`, the cartridge's one `PlayStereoSFX` caller: the second
+## operand is the SFX id and the first is what it pans by.
+func _play_anim_sound(sfx: int, tracks: int) -> void:
+	if _audio_player == null or _data == null:
+		return
+	var record: Dictionary = _data.world_audio(&"sfx", sfx)
+	if record.is_empty():
+		return
+	_audio_player.play_record(
+		record, &"stereo_sfx", _audio_assets(), false, Gen2BattleAnimScript.sound_panning(
+			tracks, bool(_anim_event.get("enemy_turn", false))
+		)
+	)
 
 
 ## `BattleAnimCmd_Cry`: whichever battler `hBattleTurn` names, at its own
 ## `PokemonCries` pitch and length plus the command's own `.CryData` row.
-func _play_anim_cry() -> void:
+func _play_anim_cry(pitch: int) -> void:
 	if _audio_player == null or _data == null:
 		return
 	var enemy_turn: bool = bool(_anim_event.get("enemy_turn", false))
@@ -2225,13 +2243,13 @@ func _play_anim_cry() -> void:
 	if record.is_empty():
 		return
 	_audio_player.play_record(
-		record, &"cry", _audio_assets(), false, cry_tracks(enemy_turn)
+		Gen2BattleAnimScript.cry_with_offsets(record, pitch), &"cry", _audio_assets(),
+		false, cry_tracks(enemy_turn)
 	)
 
 
 ## `PlayStereoCry` behind an entrance, which names its own species rather than
-## reading whoever is on the field: the event is spent where the source plays it,
-## which is before the panel it came with has been drawn.
+## reading the field: the event is spent before its own panel is drawn.
 func _play_entrance_cry(side: int, species: int) -> void:
 	if _audio_player == null or _data == null:
 		return
@@ -2265,7 +2283,7 @@ func _play_hit_sound() -> void:
 		sfx = SFX_SUPER_EFFECTIVE
 	elif effectiveness < RomLayout.MATCHUP_EFFECTIVE:
 		sfx = SFX_NOT_VERY_EFFECTIVE
-	_play_anim_sound(sfx)
+	_play_sfx(sfx, true)
 
 
 func _audio_assets() -> Dictionary:
@@ -2356,7 +2374,7 @@ func _start_exp_bar(event: Dictionary, from_pixels: int) -> void:
 	## `.PlayExpBarSound` runs before the first `.LoopBarAnimation`, so the sound
 	## leads the fill by its own ten frames.
 	if not _exp_bar.finished():
-		_play_anim_sound(SFX_EXP_BAR)
+		_play_sfx(SFX_EXP_BAR, true)
 	_push_view()
 
 
@@ -3620,7 +3638,7 @@ func advance() -> void:
 		_exp_bar.resume()
 		## The loop reaches `.PlayExpBarSound` again for the segment this press
 		## releases, the same as the first one.
-		_play_anim_sound(SFX_EXP_BAR)
+		_play_sfx(SFX_EXP_BAR, true)
 		return
 	## `BattleIntroSlidingPics`, `SlideBattlePicOut` and every other run of frames
 	## this screen counts is delays with nothing reading a button.
@@ -4472,10 +4490,10 @@ func _answer_switch_pick(button: int) -> void:
 func _resolve_switch(answer: Dictionary) -> void:
 	match StringName(answer.get("result", &"")):
 		Gen2BattleSwitchMenu.CHOSEN:
-			_play_anim_sound(Gen2BattleSwitchMenu.SFX_READ_TEXT_2)
+			_play_sfx(Gen2BattleSwitchMenu.SFX_READ_TEXT_2)
 			_commit_switch(int(answer.get("index", -1)))
 		Gen2BattleSwitchMenu.CANCELLED:
-			_play_anim_sound(Gen2BattleSwitchMenu.SFX_READ_TEXT_2)
+			_play_sfx(Gen2BattleSwitchMenu.SFX_READ_TEXT_2)
 			## A target list backed out of leaves the item where it was and
 			## reopens the pack it was chosen from.
 			if _switch_reason == &"item":
@@ -4492,7 +4510,7 @@ func _resolve_switch(answer: Dictionary) -> void:
 			## the list is the same answer as NO.
 			_decline_switch_offer()
 		Gen2BattleSwitchMenu.CANNOT_CANCEL:
-			_play_anim_sound(int(answer.get("sfx", 0)))
+			_play_sfx(int(answer.get("sfx", 0)))
 		_:
 			_show_switch_refusal(String(answer.get("text", "")))
 
@@ -5154,7 +5172,7 @@ func _apply_event_state(event: Dictionary) -> void:
 			# either prints, so the line waits on the animation.
 			_begin_faint(int(event["side"]))
 		Gen2Battle.MOVE_FORGOTTEN:
-			_play_anim_sound(Gen2MoveForget.SFX_SWITCH_POKEMON)
+			_play_sfx(Gen2MoveForget.SFX_SWITCH_POKEMON)
 		Gen2Battle.SUBSTITUTE_PIC:
 			_set_substitute_pic(int(event["side"]), bool(event["raised"]))
 		Gen2Battle.MINIMIZED:
@@ -5222,7 +5240,7 @@ func _apply_event_state(event: Dictionary) -> void:
 			## `SFX_HIT_END_OF_EXP_BAR`, then `WaitSFX`, then the line. Both
 			## paths play it: `.LoopLevels` for whoever is out and
 			## `.skip_exp_bar_animation` for a benched participant.
-			_play_anim_sound(SFX_HIT_END_OF_EXP_BAR)
+			_play_sfx(SFX_HIT_END_OF_EXP_BAR)
 			## `.skip_exp_bar_animation` draws the box once per award, after the
 			## last level it crossed, so a walk of several levels shows the
 			## stats it finished on rather than one box a level.

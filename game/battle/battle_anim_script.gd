@@ -75,6 +75,13 @@ const COMMANDS: Array[Dictionary] = [
 ## `.RunScript` never reaches the jumptable for one.
 const WAIT: StringName = &"wait"
 
+## `BattleAnimCmd_Sound`'s `.GetPanning`, indexed by `wCryTracks`.
+const SOUND_PANNING: Array[int] = [0xF0, 0x0F, 0xF0, 0x0F]
+
+## `BattleAnimCmd_Cry`'s `.CryData`, `[pitch, length]` added to what `LoadCry`
+## left. Growl's `anim_cry $0` and Roar's `$1` are the only two spent.
+const CRY_DATA: Array = [[0, 0xC0], [0, 0x40], [0, 0], [0, 0]]
+
 const OBJ: StringName = &"obj"
 const SOUND: StringName = &"sound"
 ## The two that write a battler's own picture rather than an animation object:
@@ -196,6 +203,25 @@ static func decode_command(
 		"ok": true, "name": command["name"], "byte": byte, "operands": operands,
 		"size": 1 + count, "target": target,
 	}
+
+
+## `wStereoPanningMask` for one `anim_sound`: its first operand, bit 0 flipped on
+## the enemy's turn, which is what puts a sound on the side it came from. The
+## `wSFXDuration` in the same byte is dropped; nothing in the driver reads it.
+static func sound_panning(byte: int, enemy_turn: bool) -> int:
+	return SOUND_PANNING[(byte ^ (1 if enemy_turn else 0)) & 0x03]
+
+
+## One `anim_cry` operand's `.CryData` row added to the species' record, the way
+## `PlaySlowCry` edits the record `LoadCry` just loaded.
+static func cry_with_offsets(record: Dictionary, byte: int) -> Dictionary:
+	var row: Array = CRY_DATA[byte & 0x03]
+	if record.is_empty() or (int(row[0]) == 0 and int(row[1]) == 0):
+		return record
+	var out: Dictionary = record.duplicate(true)
+	out["cry_pitch"] = (int(record.get("cry_pitch", 0)) + int(row[0])) & 0xFFFF
+	out["cry_length"] = (int(record.get("cry_length", 0)) + int(row[1])) & 0xFFFF
+	return out
 
 
 func finished() -> bool:

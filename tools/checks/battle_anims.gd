@@ -5,11 +5,9 @@ var _r: RefCounted = null
 ## Runs every battle animation out of a freshly imported real cache, on all three
 ## cartridges, and checks the four tables behind them. Expected values come from
 ## the pinned pokecrystal and pokegold sources: BattleAnimations, the three
-## data/battle_anims tables and the interpreter itself. The real-cartridge
-## counterpart to tests/unit/test_battle_anim_script.gd. What pins it is running
-## all 278 to completion rather than spot checking: an operand width that is wrong
-## by one byte still decodes, and only walking every body past every branch makes
-## it fall over.
+## data/battle_anims tables and the interpreter itself. What pins it is running
+## all 278 to completion rather than spot checking: an operand width wrong by one
+## byte still decodes, and only walking every body past every branch fails.
 
 
 ## `assert_table_length` in each pinned data file. All five are shared by the
@@ -71,6 +69,11 @@ const BODY_SLAM_BG_EFFECTS: Dictionary = {
 ## counts sum to this in every dump. Rows 0, 40 and 41 have no sheet.
 const EXPECTED_GFX_SHEETS: int = 39
 const EXPECTED_GFX_TILES: int = 659
+
+## `.GetPanning`'s left answer, and the two `anim_cry` sites in
+## data/moves/animations.asm: Growl's `.CryData` row 0 and Roar's row 1.
+const PANNING_LEFT: int = 0xF0
+const EXPECTED_CRY_ROWS: Array[int] = [0, 1]
 
 ## `NUM_BATTLE_BG_EFFECTS` in each pin, and the id the two lists part company on.
 ## pokegold ships no `BATTLE_BG_EFFECT_BODY_SLAM`, so from here its own list runs
@@ -851,7 +854,7 @@ func _verify_gfx(game_id: StringName, data: GameData) -> void:
 
 
 ## All 278, run to a top-level `anim_ret`. Nothing may fail, and nothing may
-## reach [constant MAX_FRAMES].
+## reach [constant MAX_FRAMES]. Every `anim_sound` is panned both ways.
 func _run_every_animation(game_id: StringName, data: GameData) -> void:
 	var region: Dictionary = data.battle_anim_region(&"scripts")
 	var count: int = int(region["count"])
@@ -859,6 +862,9 @@ func _run_every_animation(game_id: StringName, data: GameData) -> void:
 	var longest: int = 0
 	var longest_index: int = -1
 	var sounds: int = 0
+	var left: int = 0
+	var mirrored: int = 0
+	var cry_rows: Array[int] = []
 	for index: int in count:
 		var script: Gen2BattleAnimScript = _script(data, index)
 		if not _r.check(script != null, "%s: animation %d has no address." % [game_id, index]):
@@ -868,8 +874,17 @@ func _run_every_animation(game_id: StringName, data: GameData) -> void:
 			frames += 1
 			for command: Dictionary in script.advance_frame():
 				commands += 1
-				if command["name"] == Gen2BattleAnimScript.SOUND:
-					sounds += 1
+				var operands: Array = command["operands"]
+				if command["name"] == Gen2BattleAnimScript.CRY:
+					cry_rows.append(int(operands[0]) & 0x03)
+				if command["name"] != Gen2BattleAnimScript.SOUND:
+					continue
+				sounds += 1
+				var player_side: int = Gen2BattleAnimScript.sound_panning(int(operands[0]), false)
+				left += 1 if player_side == PANNING_LEFT else 0
+				mirrored += 1 if Gen2BattleAnimScript.sound_panning(
+					int(operands[0]), true
+				) != player_side else 0
 		_r.check(
 			not script.failed(),
 			"%s: animation %d ran off its region." % [game_id, index]
@@ -883,8 +898,21 @@ func _run_every_animation(game_id: StringName, data: GameData) -> void:
 		if frames > longest:
 			longest = frames
 			longest_index = index
+	_r.check(
+		mirrored == sounds,
+		"%s: %d of %d anim_sound pan to the same side on both turns." % [
+			game_id, sounds - mirrored, sounds,
+		]
+	)
+	_r.check(
+		cry_rows == EXPECTED_CRY_ROWS,
+		"%s: anim_cry rows %s, not the pinned %s." % [game_id, cry_rows, EXPECTED_CRY_ROWS]
+	)
 	print("%s: %d animations ran %d commands, %d of them anim_sound; longest %d frames (%d)." % [
 		game_id, count, commands, sounds, longest, longest_index,
+	])
+	print("%s: on the player's turn %d anim_sound pan left and %d right, each the other way on the enemy's; anim_cry rows %s." % [
+		game_id, left, sounds - left, cry_rows,
 	])
 
 

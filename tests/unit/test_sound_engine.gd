@@ -416,3 +416,26 @@ func test_a_fade_can_hand_over_to_the_song_queued_behind_it() -> void:
 	assert_false(engine.channels[0].channel_on)
 	assert_true(engine.channels[1].channel_on)
 	assert_eq(engine.music_fade, 0)
+
+
+## `PlayStereoSFX` is the only routine an `anim_sound` reaches, and with stereo on
+## it narrows each channel by `wStereoPanningMask` instead of leaving it on both
+## outputs. Mono falls through to `_PlaySFX`, which also zeroes `wSFXPriority`.
+func test_a_stereo_sfx_is_panned_by_its_mask() -> void:
+	var stream: Array = [[4, [0xD8, 0x10, 0xB1, 0xD4, 0x1F, 0xFF]]]
+
+	var right: Gen2SoundEngine = _engine()
+	right.stereo = true
+	right.stereo_panning_mask = 0x0F
+	right.sfx_priority = 1
+	assert_true(right.play_stereo_sfx(_record(stream)))
+	assert_eq(_values(_writes(right, 1), NR51)[0], 0x01, "right output only")
+	assert_eq(right.sfx_priority, 1, "`PlayStereoSFX` leaves wSFXPriority alone")
+
+	var mono: Gen2SoundEngine = _engine()
+	mono.stereo = false
+	mono.stereo_panning_mask = 0x0F
+	mono.sfx_priority = 1
+	assert_true(mono.play_stereo_sfx(_record(stream, 0x3C)))
+	assert_eq(_values(_writes(mono, 1), NR51)[0], 0x11, "`_PlaySFX` leaves both")
+	assert_eq(mono.sfx_priority, 0)

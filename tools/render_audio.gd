@@ -4,15 +4,15 @@ extends SceneTree
 ## writes a WAV plus the per-frame hardware-register trace beside it. The trace is
 ## the parity artefact: any faithful implementation of the same driver writes the
 ## same registers in the same order on the same frames. Kinds are `music`, `sfx`,
-## `cry` and `mon_cry`; the id is the record index, the species for `mon_cry`, or
-## `all` to sweep the table into `<prefix>_<index>`.
+## `stereo_sfx`, `cry` and `mon_cry`; the id is the record index, the species for
+## `mon_cry`, or `all` to sweep. The last argument is `wStereoPanningMask`.
 ##   ... -s res://tools/render_audio.gd -- crystal music 1 600 /tmp/out
 
 
 func _initialize() -> void:
 	var arguments: PackedStringArray = OS.get_cmdline_user_args()
 	if arguments.size() < 5:
-		printerr("usage: render_audio.gd -- <game> <music|sfx|cry> <id|all> <frames> <out-prefix> [stereo]")
+		printerr("usage: render_audio.gd -- <game> <music|sfx|stereo_sfx|cry> <id|all> <frames> <out-prefix> [stereo] [panning]")
 		quit(1)
 		return
 	var game: StringName = StringName(arguments[0])
@@ -23,6 +23,7 @@ func _initialize() -> void:
 		quit(2)
 		return
 	var stereo: bool = arguments.size() > 5 and arguments[5] == "1"
+	var panning: int = int(arguments[6]) if arguments.size() > 6 else 0
 
 	var data: GameData = GameData.open(game)
 	if data == null:
@@ -41,7 +42,9 @@ func _initialize() -> void:
 			if swept.is_empty():
 				break
 			_report(kind, index, swept)
-			if not _render(swept, kind, assets, frames, stereo, "%s_%d" % [prefix, index]):
+			if not _render(
+				swept, kind, assets, frames, stereo, panning, "%s_%d" % [prefix, index]
+			):
 				quit(1)
 				return
 			index += 1
@@ -55,7 +58,7 @@ func _initialize() -> void:
 		quit(1)
 		return
 	_report(kind, int(arguments[2]), entry)
-	if not _render(entry, kind, assets, frames, stereo, prefix):
+	if not _render(entry, kind, assets, frames, stereo, panning, prefix):
 		quit(1)
 		return
 	print("%s.wav: %d frames" % [prefix, frames])
@@ -81,9 +84,11 @@ func _report(kind: StringName, index: int, entry: Dictionary) -> void:
 
 func _render(
 	entry: Dictionary, kind: StringName, assets: Dictionary, frames: int,
-	stereo: bool, prefix: String
+	stereo: bool, panning: int, prefix: String
 ) -> bool:
-	var result: Dictionary = Gen2AudioRender.render(entry, kind, assets, frames, stereo, true)
+	var result: Dictionary = Gen2AudioRender.render(
+		entry, kind, assets, frames, stereo, true, panning
+	)
 	if not bool(result.get("ok", false)):
 		printerr("Render failed: %s" % result.get("reason", "unknown"))
 		return false
@@ -102,6 +107,6 @@ func _render(
 func _table(kind: StringName) -> StringName:
 	if kind == &"cry" or kind == &"cries" or kind == &"mon_cry":
 		return &"cries"
-	if kind == &"sfx" or kind == &"sound":
+	if kind == &"sfx" or kind == &"sound" or kind == &"stereo_sfx":
 		return &"sfx"
 	return &"music"

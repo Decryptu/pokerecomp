@@ -8483,10 +8483,22 @@ func _play_ledge_hop_sfx() -> void:
 ## `BattleAnimCmd_Sound` from a shiny pulse. The interpreter has no audio device,
 ## as it has none in a battle either, so the screen spends what its commands
 ## asked for. A cry is not one of them: the sparkle's script has no `anim_cry`.
+## The pulse plays on the enemy's side, as a battle plays it, so its sound pans
+## there.
 func _play_encounter_sounds() -> void:
+	if _audio_player == null or _data == null:
+		return
 	for command: Dictionary in _encounters.frame_commands():
-		if StringName(command["name"]) == Gen2BattleAnimScript.SOUND:
-			_play_sfx(int((command["operands"] as Array)[1]))
+		if StringName(command["name"]) != Gen2BattleAnimScript.SOUND:
+			continue
+		var operands: Array = command["operands"]
+		var record: Dictionary = _data.world_audio(&"sfx", int(operands[1]))
+		if record.is_empty():
+			continue
+		_audio_player.play_record(
+			record, &"stereo_sfx", _audio_assets(), false,
+			Gen2BattleAnimScript.sound_panning(int(operands[0]), true)
+		)
 
 
 func _start_heal_machine_sounds(event: Dictionary) -> void:

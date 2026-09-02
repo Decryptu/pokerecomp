@@ -3,17 +3,14 @@ extends RefCounted
 
 ## One battle animation playing: `RunBattleAnimScript`'s frame loop
 ## (engine/battle_anims/anim_commands.asm). [Gen2BattleAnimScript] is the
-## interpreter and [Gen2BattleAnimObject] is one object; this is what the
-## cartridge does with both once a frame, running the script until it yields,
-## stepping every live object and collecting what they would put in `wShadowOAM`.
-## Scene-free: a frame answers with sprites, a tile window and a palette per
-## sprite. [method unimplemented] reports what an animation asked for and did not
-## get, which cartridge data no longer produces.
+## interpreter and [Gen2BattleAnimObject] is one object; this runs the script
+## until it yields, steps every live object and collects what they would put in
+## `wShadowOAM`. [method unimplemented] reports what an animation asked for and
+## did not get.
 
 ## `NUM_BATTLE_ANIM_STRUCTS`: an eleventh object is simply not spawned.
 const MAX_OBJECTS: int = 10
 
-## Matters only because `BattleAnimCmd_ClearObjs` counts bytes, not objects.
 const OBJECT_STRUCT_BYTES: int = 24
 
 ## `BattleAnimCmd_ClearObjs` clears `$a0` bytes where the ten structs are `$f0`,
@@ -22,8 +19,7 @@ const OBJECT_STRUCT_BYTES: int = 24
 ## the cartridge's own bug (docs/bugs_and_glitches.md), reproduced.
 const CLEAR_OBJS_BYTES: int = 0xA0
 
-## The hardware's forty sprites. An object whose sprites would overrun aborts the
-## whole update, so a busy frame loses the objects after it rather than one.
+## The hardware's forty sprites.
 const MAX_SPRITES: int = 40
 
 ## The five sheets `anim_1gfx` through `anim_5gfx` may have loaded at once.
@@ -45,8 +41,7 @@ const GFX_ENEMYFEET: int = 0x29
 ## `vTiles0`, whose top `BattleAnimCmd_BattlerGFX_*` counts back from.
 const OBJECT_TILES: int = 0x80
 
-## Five background effects at once; a sixth is not queued, as an eleventh object
-## is not spawned.
+## `NUM_BG_EFFECTS`: a sixth is not queued.
 const MAX_BG_EFFECTS: int = Gen2BattleAnimBgEffects.MAX_EFFECTS
 
 ## What `Rollout_FillLYOverridesBackup` and `.playframe` check `wFXAnimID` for.
@@ -86,8 +81,7 @@ var _tiles: Array = []
 var _keep_sprites: bool = false
 var _sprites: Array = []
 ## What the last frame's `RunBattleAnimCommand` ran, for the caller that owns
-## what the interpreter does not: `anim_sound` and `anim_cry` need an audio
-## player, which this layer has none of.
+## what the interpreter does not: `anim_sound` and `anim_cry` need an audio player.
 var _frame_commands: Array = []
 var _unimplemented: Dictionary = {}
 ## `wActiveBGEffects`: five `battle_bg_effect` slots.
@@ -159,8 +153,7 @@ func background() -> Gen2BattleAnimBackground:
 	return _background
 
 
-## The live `wActiveBGEffects` slots, for a caller that wants more than the
-## screen they produced.
+## The live `wActiveBGEffects` slots.
 func bg_effects() -> Array:
 	var out: Array = []
 	for effect: Gen2BattleAnimBgEffect in _bg_effects:
@@ -181,8 +174,7 @@ func bump_object_index() -> void:
 	_last_object_index = (_last_object_index + 1) & 0xFF
 
 
-## `_QueueBattleAnimation`, which a battler-object effect calls with the same
-## four values `anim_obj` supplies.
+## `_QueueBattleAnimation`, with the four values `anim_obj` supplies.
 func queue_object(row: int, x: int, y: int, param: int) -> void:
 	_queue_object([row, x, y, param])
 
@@ -205,9 +197,7 @@ func failed() -> bool:
 
 ## The sprites the last frame put in `wShadowOAM`, each
 ## [code]{ y, x, tile, attributes }[/code] with the cartridge's own byte values.
-##
-## A y or x of zero is off screen, the way it is on hardware: OAM subtracts 16
-## and 8 from what is written.
+## A y or x of zero is off screen: OAM subtracts 16 and 8 from what is written.
 func sprites() -> Array:
 	return _sprites
 
@@ -271,8 +261,7 @@ func advance_frame() -> bool:
 	return true
 
 
-## `RunBattleAnimCommand`, plus the commands that reach past the interpreter into
-## the objects and the tile window.
+## `RunBattleAnimCommand`, plus the commands that reach past the interpreter.
 func _run_commands() -> void:
 	_frame_commands = _script.advance_frame()
 	for command: Dictionary in _frame_commands:
@@ -338,8 +327,7 @@ func _queue_object(operands: Array) -> void:
 		return
 
 
-## `BattleAnimCmd_*GFX`: each named sheet is loaded into the window in turn and
-## recorded in the tile dict, until the window is full.
+## `BattleAnimCmd_*GFX`: each named sheet into the window in turn, until full.
 func _load_graphics(operands: Array) -> void:
 	var next_tile: int = 0
 	var entry: int = 0
@@ -365,8 +353,7 @@ func _load_graphics(operands: Array) -> void:
 ## lift a battler's feet or head off the tilemap and move them as objects.
 ## The dict entries are crosswise with what is copied, `PLAYERHEAD` holding the
 ## enemy's rows, and the object rows are crossed the same way, so the two cancel.
-## Both crossings are the cartridge's and neither is tidied. The window tiles name
-## a tile of `vTiles2` in the numbering [Gen2BattleScreenMap] writes.
+## Both crossings are the cartridge's and neither is tidied.
 func _load_battler_graphics(rows: int) -> void:
 	var slot: int = _free_tile_dict_slot()
 	if slot < 0 or slot + 1 >= TILE_DICT_ENTRIES:
@@ -463,7 +450,7 @@ func _bg_effect_with_id(id: int) -> Gen2BattleAnimBgEffect:
 
 
 ## `_ExecuteBGEffects`: every live slot in order. An id past this profile's own
-## table is reported rather than run, which cartridge data never produces.
+## table is reported rather than run; cartridge data never produces one.
 func _execute_bg_effects() -> void:
 	for effect: Gen2BattleAnimBgEffect in _bg_effects:
 		if not effect.active():
@@ -475,10 +462,9 @@ func _execute_bg_effects() -> void:
 ## `BattleAnim_UpdateOAM_All`: every live object stepped and drawn in slot order,
 ## stopping at the first whose sprites would not fit. The slot's index byte is
 ## tested once, at the top of the loop, so an object whose own callback calls
-## `DeinitBattleAnimation` still reaches `BattleAnimOAMUpdate` and is **drawn one
-## last time where it stands**. Measured against a real cartridge: TACKLE's
-## `anim_incobj 1` frees the target's two rows on the frame it runs and OAM still
-## holds their fourteen sprites for that frame.
+## `DeinitBattleAnimation` is still drawn once more where it stands. Measured on a
+## cartridge: TACKLE's `anim_incobj 1` frees the target's two rows on the frame it
+## runs and OAM still holds their fourteen sprites.
 func _update_oam() -> void:
 	_sprites = []
 	for object: Gen2BattleAnimObject in _objects:
@@ -500,8 +486,7 @@ func _update_oam() -> void:
 
 ## `DoBattleAnimFrame`: the object's own motion callback, in
 ## [Gen2BattleAnimFunctions]. A callback outside the jumptable is reported rather
-## than run, which the importer's own range check makes unreachable from a
-## cartridge and a hand-built object can still ask for.
+## than run; only a hand-built object can reach that.
 func _do_battle_anim_frame(object: Gen2BattleAnimObject) -> void:
 	if not Gen2BattleAnimFunctions.run(self, object):
 		_note(&"functions", object.function)
