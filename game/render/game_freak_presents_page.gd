@@ -126,11 +126,8 @@ func draw(phase: Gen2GameFreakPresents) -> Image:
 	return Gen2PicImage.canvas_image(pixels, width, height)
 
 
-## Every live struct expanded into the shadow OAM the hardware would hold, in
-## struct order, which is the z-order `PlaySpriteAnimations` walks. One entry
-## per drawn tile, `y` and `x` the OAM bytes and `tile` the byte `dbsprite`
-## writes, so a trace of this compares to a cartridge's own buffer line for
-## line. [method draw] blits this same list rather than re-deriving it.
+## Every live struct expanded into the shadow OAM the hardware would hold, one
+## entry per drawn tile, in the z-order `PlaySpriteAnimations` walks.
 func shadow_oam(phase: Gen2GameFreakPresents) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if phase == null:

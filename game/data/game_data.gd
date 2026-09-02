@@ -1061,6 +1061,24 @@ func world_palette(number: int) -> PackedColorArray:
 	return out
 
 
+## `LoadSpecialMapPalette`'s eight, or nothing for a tileset with no set and for
+## the INDOOR Hall of Fame sharing `TILESET_ICE_PATH`.
+func special_map_palettes(tileset: int, environment: int) -> Array:
+	var index: int = RomLayout.SPECIAL_PALETTE_TILESETS.find(tileset)
+	if index < 0:
+		return []
+	if tileset == RomLayout.SPECIAL_PALETTE_ICE_PATH \
+		and (environment & 0x07) == RomLayout.SPECIAL_PALETTE_ENVIRONMENT_INDOOR:
+		return []
+	var base: int = RomLayout.SPECIAL_PALETTE_BASE + index * 8
+	if base + 8 > _palettes().size():
+		return []
+	var out: Array = []
+	for slot: int in 8:
+		out.append(world_palette(base + slot))
+	return out
+
+
 ## The three tilesets `home/map.asm` gates `LoadMapGroupRoof` on: "These tilesets
 ## support dynamic per-mapgroup roof tiles." Every other tileset owns tiles
 ## $0A..$12 itself, so writing a roof over them is the map's own art destroyed.

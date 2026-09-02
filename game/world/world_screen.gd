@@ -432,10 +432,8 @@ func hide_debug_readout() -> void:
 		_hint.visible = false
 
 
-## Supplies a cache-backed data source before the scene enters the tree. The
-## launcher continues to use GameRuntime; this boundary lets scene tests and
-## development tools exercise an explicitly selected cache without mutating
-## global runtime selection.
+## Supplies a cache-backed data source before the scene enters the tree, so a
+## test or a tool can name a cache without moving the runtime's own selection.
 func set_data(data: GameData) -> void:
 	_injected_data = data
 

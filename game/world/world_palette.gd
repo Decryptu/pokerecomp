@@ -1,12 +1,8 @@
 class_name Gen2WorldPalette
 extends RefCounted
 
-## Cartridge background palette selection for the overworld.
-##
-## The ROM stores 42 actual colour groups and a separate environment/time table
-## selects eight of them for the hardware's background palette slots. The
-## values below are the table from the map palette loader, kept here as data so
-## the renderer does not silently substitute a modern colour scheme.
+## `LoadMapPals`' background palette selection. The cartridge stores 42 colour
+## groups and an environment and time-of-day table names eight of them.
 
 const TIME_MORNING: int = 0
 const TIME_DAY: int = 1
@@ -203,10 +199,14 @@ static func tile_palettes(
 	fade_order: int = FADE_IDENTITY,
 	white_fill: bool = false,
 ) -> Array:
+	## `LoadMapPals` asks `LoadSpecialMapPalette` first, and its carry skips the
+	## environment and time-of-day pair entirely.
+	var special: Array = data.special_map_palettes(map.tileset, map.environment)
 	var slots: Array = palette_slots(map.environment, time_of_day)
 	var resolved: Array = []
 	for slot: int in slots.size():
-		var base: PackedColorArray = data.world_palette(int(slots[slot]))
+		var base: PackedColorArray = special[slot] if slot < special.size() \
+			else data.world_palette(int(slots[slot]))
 		var palette := PackedColorArray()
 		palette.append_array(base)
 		if slot == 3 and water_color >= 0 and base.size() >= 4:
