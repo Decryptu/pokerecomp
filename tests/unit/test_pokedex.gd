@@ -639,6 +639,32 @@ func test_the_entry_screen_prints_its_measurements_only_once_caught() -> void:
 	)
 
 
+## `_NewPokedexEntry` blanks row 17 over `.MenuItems`, so a page a catch opened
+## carries the border tile alone and no cursor.
+func test_a_caught_entry_page_has_no_menu_row() -> void:
+	var page: Gen2PokedexPage = _page()
+	var entry: Dictionary = _data.dex_entry(211)
+	var listed: PackedInt32Array = page.entry_map(
+		211, "MON211", entry, true, Gen2Pokedex.PAGE_1, 0
+	)
+	var caught: PackedInt32Array = page.entry_map(
+		211, "MON211", entry, true, Gen2Pokedex.PAGE_1, 0, false
+	)
+	assert_eq(_cell(listed, 0, 17), Gen2PokedexPage.SELECT_OPTION[0])
+	assert_eq(_cell(caught, 0, 17), Gen2PokedexPage.SELECT_OPTION[0])
+	assert_eq(_cell(listed, 2, 17), Gen2Text.encode("P")[0], "PAGE")
+	assert_eq(_cell(caught, 2, 17), Gen2PokedexPage.CURSOR_BLANK, "blanked")
+	assert_eq(
+		_cell(listed, Gen2PokedexPage.ENTRY_CURSOR_COLUMNS[0], 17),
+		Gen2PokedexPage.CURSOR_CODE,
+	)
+	assert_eq(
+		_cell(caught, Gen2PokedexPage.ENTRY_CURSOR_COLUMNS[0], 17),
+		Gen2PokedexPage.CURSOR_BLANK,
+		"no cursor to blink along a row that is not there",
+	)
+
+
 ## `Pokedex_DrawOptionScreenBG` draws the fourth row only once
 ## `wUnlockedUnownMode` is set, and the box under it carries whichever message
 ## the screen last asked for.

@@ -648,3 +648,26 @@ func test_the_flight_sound_follows_the_frame_counter() -> void:
 
 func _fly_offset(effects: Gen2WorldEffects) -> Vector2i:
 	return (effects.sprites()[0]["tiles"][0] as Dictionary)["offset"]
+
+
+## `FacingFishDown` and its three siblings, whose eight tiles are the whole of
+## `LoadFishingGFX`'s sheet: $02, $06 and $0a are the lower half of standing down,
+## up and left, and $fc and $fd are the rod. Right mirrors the left pair and swaps
+## the two cells, which is the only place the sheet is read out of order.
+func test_the_fishing_facings_name_their_own_sheet() -> void:
+	var body: Array = Gen2WorldEffects.FISHING_BODY_TILES
+	assert_eq(body.size(), 4)
+	for facing: int in body.size():
+		var pair: Array = body[facing]
+		assert_eq(pair.size(), 2, "one 8x8 cell either side of the waist")
+		for cell: Dictionary in pair:
+			assert_true(int(cell["tile"]) < 6, "the rod pair is not part of the body")
+	assert_eq(int((body[3][0] as Dictionary)["tile"]), 5, "right takes left's second cell")
+	assert_true(bool((body[3][1] as Dictionary)["flip_x"]), "and mirrors both of them")
+
+	var rod: Array = Gen2WorldEffects.FISHING_ROD_TILES
+	assert_eq(int((rod[0] as Dictionary)["tile"]), 6, "$fc hangs below")
+	assert_eq((rod[1] as Dictionary)["offset"], Vector2i(0, -8), "and above")
+	assert_eq(int((rod[2] as Dictionary)["tile"]), 7, "$fd reaches sideways")
+	assert_true(bool((rod[2] as Dictionary)["flip_x"]))
+	assert_false(bool((rod[3] as Dictionary)["flip_x"]))

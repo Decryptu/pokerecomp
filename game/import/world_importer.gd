@@ -16,10 +16,6 @@ const BGEVENT_IFNOTSET: int = 6
 ## which is [method _collect_conditional_bg_script]'s job.
 const BGEVENT_SCRIPT_TYPES: Array[int] = [0, 1, 2, 3, 4]
 
-## Imports the map table, map attributes, map events, tileset tables, overworld
-## object graphics and addressable overworld tile strips for a verified
-## Generation 2 cartridge.
-##
 ## Follows the official map macros and the runtime collision lookup: map blocks
 ## are 4x4 graphics tiles, walk coordinates 2x2 cells per block, and collision
 ## bytes use x as the low bit and y as the high bit.
@@ -621,6 +617,12 @@ const FIELD_MOVE_SHEETS: Array = [
 	## `HealMachineAnim.LoadGFX`'s two tiles at `vTiles0 tile $7c`: the machine's
 	## own bar and one ball. Both tiles are the signature, since a two-tile sheet
 	## whose first row is blank pins nothing on its own.
+	## `LoadFishingGFX`'s eight tiles: the lower half of standing down, up and
+	## left, which it writes over $02, $06 and $0a, and the rod pair at $fc.
+	["chris_fish", "chris_fish_gfx", 8, 0x02,
+		[0x3F, 0x32, 0x0F, 0x08, 0x17, 0x1F, 0x17, 0x1F]],
+	["kris_fish", "kris_fish_gfx", 8, 0x02,
+		[0x9F, 0xF2, 0x7F, 0x78, 0x1F, 0x1F, 0x17, 0x1F]],
 	["heal_machine", "heal_machine_gfx", 2, 0x7C,
 		[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7E, 0x00,
 		0x7E, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -671,6 +673,8 @@ static func _read_overworld_effects(rom: RomFile, layout: Dictionary) -> Diction
 		var offset: int = int(layout.get(String(sheet[1]), -1))
 		var sheet_tiles: int = int(sheet[2])
 		var signature: Array = sheet[4]
+		if offset == -1: # Kris's sheet, which only Crystal ships.
+			continue
 		if not rom.in_bounds(offset, sheet_tiles * Gen2Tiles.TILE_BYTES):
 			return _error("%s graphics are outside the cartridge." % name)
 		if Array(rom.slice(offset, signature.size())) != signature:

@@ -2229,8 +2229,12 @@ func test_the_new_dex_page_takes_the_press_that_closes_it() -> void:
 		"and drew on the fight's own screen rather than under it"
 	)
 
+	## `NewPokedexEntry` is two `WaitPressAorB_BlinkCursor` waits either side of
+	## page 2, so the first press turns the page and the second closes it.
 	_world_screen.press_button(Gen2Button.B)
-	assert_null(_world_screen.get("_pokedex_host"), "and the page took the press")
+	assert_not_null(_world_screen.get("_pokedex_host"), "the first press is page 2")
+	_world_screen.press_button(Gen2Button.B)
+	assert_null(_world_screen.get("_pokedex_host"), "and the second took the page down")
 	for _frame: int in 1200:
 		if host.get("_capture_nickname_host") != null:
 			break

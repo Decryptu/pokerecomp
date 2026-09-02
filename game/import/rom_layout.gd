@@ -2692,6 +2692,9 @@ const GOLD_SILVER: Dictionary = {
 	## located by their own bytes, which occur once per dump.
 	"heal_machine_gfx": 0x127D5,
 	"heal_machine_palette": 0x12828,
+	## `LoadFishingGFX`'s sheet, and no Kris here to pick a second one.
+	"chris_fish_gfx": 0x50580,
+	"kris_fish_gfx": -1,
 	"mart_table": 0x162FE,
 	"default_mart": 0x16469,
 	"bargain_mart": 0x15EDA,
@@ -3284,6 +3287,9 @@ const CRYSTAL: Dictionary = {
 	"cut_grass_gfx": 0x8C9CC,
 	"heal_machine_gfx": 0x123FC,
 	"heal_machine_palette": 0x12451,
+	## `LoadFishingGFX` picks between the two on `PLAYERGENDER_FEMALE_F`.
+	"chris_fish_gfx": 0xB84F2,
+	"kris_fish_gfx": 0xB8582,
 	"mart_table": 0x160A9,
 	"default_mart": 0x16214,
 	"bargain_mart": 0x15C51,
