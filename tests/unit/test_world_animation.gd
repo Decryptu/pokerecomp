@@ -171,6 +171,10 @@ func _write_cache() -> void:
 	var palettes: Array = []
 	for _group: int in RomLayout.WORLD_PALETTE_GROUP_COUNT:
 		palettes.append([0x7FFF, 0x421F, 0x2108, 0])
+	# `LoadSpecialMapPalette`'s six sets, appended the way the importer appends
+	# them and numbered so a slot says which set and which slot it came from.
+	for index: int in RomLayout.SPECIAL_PALETTE_TILESETS.size() * 8:
+		palettes.append([0x0100 + index, 0x0200 + index, 0x0300 + index, 0x0400 + index])
 	RomCache.write_json(RomCache.world_palettes_path(_directory), palettes)
 
 	var water: Array = []
@@ -514,6 +518,43 @@ func test_roof_colours_replace_two_slots_on_outdoor_maps_only() -> void:
 	assert_eq(Gen2WorldPalette.roof_colors(
 		data, Gen2WorldPalette.ENVIRONMENT_TOWN, Gen2WorldPalette.TIME_DAY, 2
 	)[0], Gen2Palette.from_packed(0x0003))
+
+
+## `LoadMapPals` asks `LoadSpecialMapPalette` first, and the carry it answers
+## with skips the environment and time-of-day selection whole: six Crystal
+## tilesets carry eight fixed palettes, and the clock cannot move any of them.
+func test_six_tilesets_take_a_fixed_palette_set_instead_of_the_time_of_day_row() -> void:
+	var data: GameData = GameData.open_directory(_directory)
+	for index: int in RomLayout.SPECIAL_PALETTE_TILESETS.size():
+		var tileset: int = RomLayout.SPECIAL_PALETTE_TILESETS[index]
+		var fixed: Array = data.special_map_palettes(tileset, 0)
+		assert_eq(fixed.size(), 8, "tileset %d carries eight" % tileset)
+		for slot: int in 8:
+			assert_eq(
+				(fixed[slot] as PackedColorArray)[0],
+				Gen2Palette.from_packed(0x0100 + index * 8 + slot),
+				"tileset %d slot %d" % [tileset, slot]
+			)
+	assert_eq(data.special_map_palettes(0x01, 0).size(), 0, "TILESET_JOHTO has none")
+
+	# `.ice_path`'s own `cp INDOOR`: the Hall of Fame shares the tileset and is
+	# the one map handed back to the ordinary selection.
+	assert_eq(data.special_map_palettes(
+		RomLayout.SPECIAL_PALETTE_ICE_PATH,
+		RomLayout.SPECIAL_PALETTE_ENVIRONMENT_INDOOR
+	).size(), 0)
+
+	var tiles: Gen2WorldTileset = data.world_tileset(UNROOFED_TILESET)
+	var house := Gen2WorldMap.from_cache({"group": 0, "tileset": 0x05, "environment": 3})
+	var plain := Gen2WorldMap.from_cache({"group": 0, "tileset": UNROOFED_TILESET, "environment": 3})
+	var drawn: Array = Gen2WorldPalette.tile_palettes(data, house, tiles)
+	var ordinary: Array = Gen2WorldPalette.tile_palettes(data, plain, tiles)
+	assert_eq(
+		(drawn[0] as PackedColorArray)[0],
+		Gen2Palette.from_packed(0x0100 + 3 * 8),
+		"a house tile takes the house set"
+	)
+	assert_eq((ordinary[0] as PackedColorArray)[0], Gen2Palette.from_packed(0x7FFF))
 
 
 ## The debug readout's frame-rate line, which is what says whether a stutter was

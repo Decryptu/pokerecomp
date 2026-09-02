@@ -267,10 +267,7 @@ func draw(movie: Gen2GoldSilverIntro) -> Image:
 
 
 ## Every live struct expanded into the shadow OAM the hardware would hold, in
-## struct order, which is the z-order `PlaySpriteAnimations` walks. `y` and `x`
-## are the OAM bytes and `tile` the byte `dbsprite` writes. [method draw] blits
-## this same list rather than re-deriving it, so a trace of it compares to a
-## cartridge's own buffer line for line.
+## the z-order `PlaySpriteAnimations` walks; see `Gen2GameFreakPresentsPage`.
 func shadow_oam(movie: Gen2GoldSilverIntro) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if movie == null:

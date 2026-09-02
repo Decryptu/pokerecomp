@@ -267,6 +267,19 @@ const WORLD_PALETTE_GROUP_BYTES: int = 8
 const WORLD_PALETTE_BYTES: int = WORLD_PALETTE_GROUP_COUNT * WORLD_PALETTE_GROUP_BYTES
 const WORLD_PALETTE_MAP_BYTES: int = 0x70
 
+## `LoadSpecialMapPalette` (engine/tilesets/tileset_palettes.asm): six Crystal
+## tilesets whose eight palettes are fixed, and its carry skips `LoadMapPals`'
+## environment and time-of-day selection whole. Appended to the palette groups.
+const SPECIAL_PALETTE_BASE: int = WORLD_PALETTE_GROUP_COUNT
+const SPECIAL_PALETTE_TILESETS: Array[int] = [0x15, 0x16, 0x1D, 0x05, 0x1B, 0x0D]
+## `.ice_path`'s `cp INDOOR`: the Hall of Fame shares the tileset and is handed back.
+const SPECIAL_PALETTE_ICE_PATH: int = 0x1D
+const SPECIAL_PALETTE_MANSION: int = 0x0D
+const PAL_BG_WATER: int = 3
+const PAL_BG_YELLOW: int = 4
+const PAL_BG_ROOF: int = 6
+const SPECIAL_PALETTE_ENVIRONMENT_INDOOR: int = 3
+
 ## `LoadMapGroupRoof` and `RoofPals`. A map group names one of five nine-tile
 ## roof runs, copied over `vTiles2 tile $0a` on every map load, and `_LoadMapPals`
 ## replaces colours 1 and 2 of `PAL_BG_ROOF` with that group's own pair on a TOWN
@@ -276,7 +289,6 @@ const MAP_GROUP_ROOF_COUNT: int = 27
 const ROOF_COUNT: int = 5
 const ROOF_TILES: int = 9
 const ROOF_TILE_BYTES: int = ROOF_TILES * 16
-const ROOF_PALETTE_BYTES: int = 8
 const ROOF_VRAM_TILE: int = 0x0A
 const WORLD_ANIMATION_BANK: int = 0x3F
 const WORLD_ANIMATION_COMMAND_BYTES: int = 4
@@ -2655,6 +2667,9 @@ const GOLD_SILVER: Dictionary = {
 	"tileset_block_counts": [128, 128, 128, 128, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 40],
 	"tileset_palette_bank": 0x02,
 	"world_palette_offset": 0xB75E,
+	## `LoadMapPals` here has no `LoadSpecialMapPalette` in front of it.
+	"special_map_palettes": [],
+	"mansion_palette_yellow": -1,
 	"roof_palettes": 0xB9AE,
 	"map_group_roofs": 0x1C021,
 	"roof_tiles": 0x1C03C,
@@ -3244,6 +3259,10 @@ const CRYSTAL: Dictionary = {
 	"tileset_block_counts": [128, 128, 128, 128, 128, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 40, 64, 64, 64, 64, 64],
 	"tileset_palette_bank": 0x13,
 	"world_palette_offset": 0xB319,
+	## In SPECIAL_PALETTE_TILESETS order. `MansionPalette1` is nine palettes: its
+	## seventh goes over PAL_BG_WATER and its ninth over PAL_BG_ROOF.
+	"special_map_palettes": [0x49501, 0x49550, 0x4959F, 0x495EE, 0x4963D, 0x4967D],
+	"mansion_palette_yellow": 0x496FE,
 	"roof_palettes": 0xB569,
 	"map_group_roofs": 0x1C021,
 	"roof_tiles": 0x1C03C,

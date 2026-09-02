@@ -814,9 +814,8 @@ func _ready() -> void:
 		_announce()
 
 
-## Supplies a cache-backed data source before the scene enters the tree. The
-## normal launcher path still resolves data from GameRuntime or the first
-## imported cache.
+## Supplies a cache-backed data source before the scene enters the tree; the
+## launcher still resolves its own from GameRuntime.
 func set_data(data: GameData) -> void:
 	_injected_data = data
 

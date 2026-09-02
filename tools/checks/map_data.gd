@@ -73,6 +73,7 @@ func _check_game() -> void:
 	_check_blocks(pin)
 	_check_tilesets(pin)
 	_check_roofs(pin)
+	_check_special_palettes(pin)
 	_check_object_movement(pin)
 
 
@@ -407,6 +408,87 @@ func _roof_palettes(pin: String) -> Array:
 		var out: Array = []
 		for group: int in packed.size() / 4:
 			out.append(packed.slice(group * 4, group * 4 + 4))
+		return out
+	)
+
+
+## `LoadSpecialMapPalette`'s six sets against the pin's own `.pal` files, with
+## `.ice_path`'s INDOOR exemption. `mansion_2` goes over PAL_BG_YELLOW,
+## `mansion_1`'s seventh over PAL_BG_WATER and its ninth over PAL_BG_ROOF.
+const SPECIAL_PALETTE_FILES: Dictionary = {
+	0x15: "pokecom_center", 0x16: "battle_tower_inside", 0x1D: "ice_path",
+	0x05: "house", 0x1B: "radio_tower", 0x0D: "mansion_1",
+}
+
+
+func _check_special_palettes(pin: String) -> void:
+	var crystal: bool = _r.game_id == &"crystal"
+	var compared: int = 0
+	for tileset: int in RomLayout.SPECIAL_PALETTE_TILESETS:
+		var ours: Array = _r.data.special_map_palettes(tileset, 0)
+		if not crystal:
+			_r.check(
+				ours.is_empty(),
+				"tileset %d has a special palette, which is Crystal's alone." % tileset
+			)
+			continue
+		var pinned: Array = _special_palette(pin, tileset)
+		if pinned.is_empty():
+			_report("the pin carries no palette for tileset %d." % tileset)
+			continue
+		if ours.size() != 8:
+			_report("tileset %d has %d special palettes, 8 expected." % [tileset, ours.size()])
+			continue
+		for slot: int in 8:
+			var colors: PackedColorArray = ours[slot]
+			for color: int in 4:
+				var want: Color = Gen2Palette.from_packed(int((pinned[slot] as Array)[color]))
+				if not colors[color].is_equal_approx(want):
+					_report("tileset %d %s colour %d is %s, the pin says %s." % [
+						tileset, BG_PALETTES[slot], color, colors[color], want,
+					])
+			compared += 1
+	if crystal:
+		_r.check(
+			_r.data.special_map_palettes(
+				RomLayout.SPECIAL_PALETTE_ICE_PATH,
+				RomLayout.SPECIAL_PALETTE_ENVIRONMENT_INDOOR
+			).is_empty(),
+			"the Hall of Fame's INDOOR ice path took the special palette."
+		)
+	_r.note("special map palettes: %d slots compared." % compared)
+
+
+func _special_palette(pin: String, tileset: int) -> Array:
+	var read: Array = _packed_palette(pin, String(SPECIAL_PALETTE_FILES[tileset]))
+	if tileset != RomLayout.SPECIAL_PALETTE_MANSION or read.size() < 9:
+		return read.slice(0, 8) if read.size() >= 8 else []
+	var yellow: Array = _packed_palette(pin, "mansion_2")
+	if yellow.is_empty():
+		return []
+	var out: Array = read.slice(0, 8)
+	out[RomLayout.PAL_BG_YELLOW] = yellow[0]
+	out[RomLayout.PAL_BG_WATER] = read[6]
+	out[RomLayout.PAL_BG_ROOF] = read[8]
+	return out
+
+
+func _packed_palette(pin: String, name: String) -> Array:
+	return _parsed(pin, StringName("special_palette_%s" % name), func() -> Array:
+		var packed: Array = []
+		for line: String in _lines(pin.path_join("gfx/tilesets/%s.pal" % name)):
+			if not line.begins_with("RGB "):
+				continue
+			var fields: PackedStringArray = _fields(line)
+			for index: int in range(0, fields.size() - 2, 3):
+				packed.append(
+					_number(fields[index])
+					| (_number(fields[index + 1]) << 5)
+					| (_number(fields[index + 2]) << 10)
+				)
+		var out: Array = []
+		for palette: int in packed.size() / 4:
+			out.append(packed.slice(palette * 4, palette * 4 + 4))
 		return out
 	)
 

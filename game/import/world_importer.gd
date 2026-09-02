@@ -792,27 +792,62 @@ static func _tileset_strip(raw_graphics: PackedByteArray) -> PackedByteArray:
 
 
 static func _read_world_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var offset: int = int(layout["world_palette_offset"])
-	var bytes: PackedByteArray = rom.slice(offset, RomLayout.WORLD_PALETTE_BYTES)
-	if bytes.size() != RomLayout.WORLD_PALETTE_BYTES:
+	var groups: Array = _read_palette_run(
+		rom, int(layout["world_palette_offset"]), RomLayout.WORLD_PALETTE_GROUP_COUNT
+	)
+	if groups.is_empty():
 		return _error("Overworld palette data is outside the cartridge.")
-
-	var groups: Array = []
-	for group: int in RomLayout.WORLD_PALETTE_GROUP_COUNT:
-		var colors: Array = []
-		for color: int in 4:
-			var at: int = group * RomLayout.WORLD_PALETTE_GROUP_BYTES + color * 2
-			colors.append(int(bytes[at]) | (int(bytes[at + 1]) << 8))
-		groups.append(colors)
+	var special: Variant = _read_special_map_palettes(rom, layout)
+	if special is Dictionary:
+		return special
+	groups.append_array(special as Array)
 	return {"ok": true, "groups": groups}
 
 
-## `LoadMapGroupRoof` and `_LoadMapPals`' own roof branch, as one record.
-##
-## The tiles are a plain 2bpp run of [constant RomLayout.ROOF_COUNT] nine-tile
-## roofs, and the palette pair is read whole rather than split: `RoofPals`' row
-## is morn/day's two colours then nite's two, and which half a map takes is the
-## renderer's question rather than the importer's.
+## `LoadSpecialMapPalette`'s six sets, appended so a renderer reads them the way
+## it reads any other group.
+static func _read_special_map_palettes(rom: RomFile, layout: Dictionary) -> Variant:
+	var offsets: Array = layout.get("special_map_palettes", [])
+	var out: Array = []
+	for index: int in offsets.size():
+		var tileset: int = int(RomLayout.SPECIAL_PALETTE_TILESETS[index])
+		var wanted: int = 9 if tileset == RomLayout.SPECIAL_PALETTE_MANSION else 8
+		var read: Array = _read_palette_run(rom, int(offsets[index]), wanted)
+		if read.is_empty():
+			return _error("A special map palette is outside the cartridge.")
+		if tileset == RomLayout.SPECIAL_PALETTE_MANSION:
+			var yellow: Array = _read_palette_run(
+				rom, int(layout.get("mansion_palette_yellow", 0)), 1
+			)
+			if yellow.is_empty():
+				return _error("The mansion's yellow palette is outside the cartridge.")
+			read[RomLayout.PAL_BG_YELLOW] = yellow[0]
+			read[RomLayout.PAL_BG_WATER] = read[6]
+			read[RomLayout.PAL_BG_ROOF] = read[8]
+			read.resize(8)
+		out.append_array(read)
+	return out
+
+
+static func _read_palette_run(rom: RomFile, offset: int, palettes: int) -> Array:
+	var bytes: PackedByteArray = rom.slice(
+		offset, palettes * RomLayout.WORLD_PALETTE_GROUP_BYTES
+	)
+	if bytes.size() != palettes * RomLayout.WORLD_PALETTE_GROUP_BYTES:
+		return []
+	var out: Array = []
+	for palette: int in palettes:
+		var colors: Array = []
+		for color: int in 4:
+			var at: int = palette * RomLayout.WORLD_PALETTE_GROUP_BYTES + color * 2
+			colors.append(int(bytes[at]) | (int(bytes[at + 1]) << 8))
+		out.append(colors)
+	return out
+
+
+## `LoadMapGroupRoof` and `_LoadMapPals`' roof branch as one record. `RoofPals`'
+## row is morn/day's two colours then nite's two, read whole: which half a map
+## takes is the renderer's question.
 static func _read_world_roofs(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var groups: PackedByteArray = rom.slice(
 		int(layout["map_group_roofs"]), RomLayout.MAP_GROUP_ROOF_COUNT
@@ -823,18 +858,11 @@ static func _read_world_roofs(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var raw: PackedByteArray = rom.slice(int(layout["roof_tiles"]), tile_bytes)
 	if raw.size() != tile_bytes:
 		return _error("The roof tiles are outside the cartridge.")
-	var palette_bytes: int = RomLayout.MAP_GROUP_ROOF_COUNT * RomLayout.ROOF_PALETTE_BYTES
-	var packed: PackedByteArray = rom.slice(int(layout["roof_palettes"]), palette_bytes)
-	if packed.size() != palette_bytes:
+	var palettes: Array = _read_palette_run(
+		rom, int(layout["roof_palettes"]), RomLayout.MAP_GROUP_ROOF_COUNT
+	)
+	if palettes.is_empty():
 		return _error("The roof palettes are outside the cartridge.")
-
-	var palettes: Array = []
-	for group: int in RomLayout.MAP_GROUP_ROOF_COUNT:
-		var colors: Array = []
-		for color: int in 4:
-			var at: int = group * RomLayout.ROOF_PALETTE_BYTES + color * 2
-			colors.append(int(packed[at]) | (int(packed[at + 1]) << 8))
-		palettes.append(colors)
 	var tiles: Array = []
 	for roof: int in RomLayout.ROOF_COUNT:
 		tiles.append(Array(Gen2Tiles.decode_2bpp_strip(
