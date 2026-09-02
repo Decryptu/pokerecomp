@@ -119,12 +119,12 @@ const CUT_LEAF_ORIGINS: Array[Vector2i] = [
 	Vector2i(16, 16), Vector2i(32, 16), Vector2i(16, 0), Vector2i(32, 0),
 ]
 
-## `Cut_SpawnAnimateLeaves` spawns four leaves an eighth of a turn apart, and
-## `SpriteAnimFunc_CutLeaves` steps each angle by three a frame while the radius
-## it is multiplied by grows by half a pixel.
+## `SpriteAnimFunc_CutLeaves` steps four leaves an eighth of a turn apart, each
+## by three of angle and half a pixel of radius from `Cut_SpawnLeaf`'s $4 seed.
 const CUT_LEAF_ANGLES: Array[int] = [0x00, 0x10, 0x20, 0x30]
 const CUT_LEAF_ANGLE_STEP: int = 3
 const CUT_LEAF_RADIUS_STEP: int = 0x80
+const CUT_LEAF_RADIUS_BASE: int = 0x0400
 ## `.OAMData_Leaf`'s single `dbsprite -1, -1, 4, 4`.
 const CUT_LEAF_OFFSET := Vector2i(-4, -4)
 
@@ -383,12 +383,9 @@ func offset() -> Vector2:
 
 
 ## What a renderer draws this frame: one record per live sprite, each carrying
-## the sheet it reads, the palette row it wears and the tiles `Facings` or the
-## frameset places, as pixel offsets from the anchor.
-##
-## The anchor is the cell for the headbutt tree, whose sprite stands still, and
-## the tracked object's own drawn position for the other two, which are
-## STEP_TYPE_TRACKING_OBJECT and follow whatever spawned them.
+## the sheet, the palette row and the tiles, as pixel offsets from the anchor.
+## That anchor is the cell for the headbutt tree, which stands still, and the
+## tracked object's own drawn position for the other two.
 func sprites() -> Array:
 	var out: Array = []
 	for sprite: Dictionary in _sprites:
@@ -488,7 +485,9 @@ func _tiles_for(sprite: Dictionary) -> Array:
 			## steps by three a frame and whose radius is the high byte of a
 			## sixteen-bit accumulator growing by $80, so it widens every second
 			## frame. `AnimSeqs_Sine` is the y offset and `AnimSeqs_Cosine` the x.
-			var radius: int = int(float(frame * CUT_LEAF_RADIUS_STEP) / 256.0)
+			var radius: int = (
+				CUT_LEAF_RADIUS_BASE + (frame + 1) * CUT_LEAF_RADIUS_STEP
+			) >> 8
 			var angle: int = (int(sprite["angle"]) + frame * CUT_LEAF_ANGLE_STEP) & 0xFF
 			return [{
 				"offset": (sprite["origin"] as Vector2i) + CUT_LEAF_OFFSET + Vector2i(
@@ -602,7 +601,7 @@ func _fly_mon_pixel(arriving: bool, frame: int) -> Vector2i:
 
 func _fly_moves(arriving: bool, frame: int) -> int:
 	if arriving:
-		return mini(frame, ((FLY_MON_Y - FLY_TO_START_Y) & 0xFF) / 2)
+		return mini(frame + 1, ((FLY_MON_Y - FLY_TO_START_Y) & 0xFF) / 2)
 	return clampi(frame - FLY_HOLD_FRAMES + 1, 0, FLY_MON_Y / 2)
 
 
@@ -614,12 +613,15 @@ func _fly_swing(arriving: bool, moves: int) -> int:
 	return mini(FLY_FROM_SWING_STEP * (moves - 1), FLY_FROM_SWING_MAX)
 
 
+## [param age] is `SpriteAnimFunc_FlyLeaf`'s run count, and `.SpawnLeaf` runs
+## behind `DoNextFrameForAllSprites`, so age zero is the frame before its first
+## move: nothing is drawn, and the deletion column is the run before this one.
 func _fly_leaf_tile(spawned: int, age: int) -> Dictionary:
-	var x: int = 2 * age
-	if x >= FLY_LEAF_LIMIT:
+	if age <= 0 or 2 * (age - 1) >= FLY_LEAF_LIMIT:
 		return {}
+	var x: int = 2 * age
 	var y: int = ((spawned & 0x18) << 1) + 0x40 - age
-	var swung: int = _signed(_cosine(age & 0xFF, FLY_LEAF_SWING))
+	var swung: int = _signed(_cosine((age - 1) & 0xFF, FLY_LEAF_SWING))
 	return {
 		"offset": Vector2i(x + swung - 8, y - 16) + CUT_LEAF_OFFSET,
 		"tile": 0,

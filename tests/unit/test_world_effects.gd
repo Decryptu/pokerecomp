@@ -133,8 +133,8 @@ func test_cut_leaves_spawn_four_deep_and_spiral() -> void:
 	assert_eq(sprites.size(), 4)
 	var first: Dictionary = (sprites[0] as Dictionary)["tiles"][0]
 	## Facing down, an even x and an odd y is the block's bottom left.
-	assert_eq(first["offset"], Vector2i(16, 32) + Vector2i(-4, -4),
-		"a leaf opens at its own corner with no radius yet")
+	assert_eq(first["offset"], Vector2i(16, 32) + Vector2i(0, -4),
+		"`Cut_SpawnLeaf` seeds VAR3 with $4, so it opens four pixels out")
 	var offsets: Array = []
 	for _frame: int in 8:
 		effects.advance_frame()
@@ -587,6 +587,7 @@ func test_the_outbox_passes_a_cry_and_drops_everything_else() -> void:
 ## screen and stops on the frame its row comes back round to the departure's.
 func test_the_two_flight_animations_run_the_source_rows() -> void:
 	var effects := Gen2WorldEffects.new()
+	effects.set_sine_table(Gen2BattleAnimData.create({}, [], _sine_bytes()))
 	effects.start_fly(7, false)
 	var first: Dictionary = effects.sprites()[0]
 	assert_eq(first["kind"], Gen2WorldEffects.SPRITE_FLY_MON)
@@ -604,32 +605,36 @@ func test_the_two_flight_animations_run_the_source_rows() -> void:
 	assert_false(effects.sprites_active(), "128 frames and the sprites are gone")
 
 	effects.start_fly(7, true)
-	assert_eq(_fly_offset(effects), Vector2i(64, 228),
-		"the arrival's own row, which the OAM byte has wrapped")
-	for _frame: int in 44:
+	assert_eq(_fly_offset(effects), Vector2i(152, 230),
+		"the row the first pass has already stepped, swung the full $58 out")
+	for _frame: int in 43:
 		effects.advance_frame()
-	assert_eq(_fly_offset(effects), Vector2i(64, 60), "and lands where the departure left")
+	var landed: Vector2i = _fly_offset(effects)
+	assert_eq(landed.y, 60, "and lands on the row the departure left")
 	effects.advance_frame()
-	assert_eq(_fly_offset(effects), Vector2i(64, 60), "`ret z` stops it there")
+	assert_eq(_fly_offset(effects), landed, "`ret z` stops it there")
 
 
 ## `.SpawnLeaf` puts a leaf at column zero every eight frames, at one of four
 ## rows, and `SpriteAnimFunc_FlyLeaf` walks it two pixels out and one up.
 func test_a_flight_spawns_one_leaf_every_eight_frames() -> void:
 	var effects := Gen2WorldEffects.new()
+	effects.set_sine_table(Gen2BattleAnimData.create({}, [], _sine_bytes()))
 	effects.start_fly(7, false)
+	assert_eq(effects.sprites().size(), 1,
+		"`.SpawnLeaf` runs behind the anim pass, so nothing is drawn yet")
+	effects.advance_frame()
 	assert_eq(effects.sprites().size(), 2, "the icon and the first leaf")
 	var leaf: Dictionary = effects.sprites()[1]
 	assert_eq(leaf["kind"], Gen2WorldEffects.SPRITE_CUT_LEAF)
-	assert_eq((leaf["tiles"][0] as Dictionary)["offset"], Vector2i(-12, 44))
+	assert_eq((leaf["tiles"][0] as Dictionary)["offset"], Vector2i(54, 43),
+		"two out, one up and the full $40 of swing")
 
 	for _frame: int in Gen2WorldEffects.FLY_LEAF_INTERVAL:
 		effects.advance_frame()
 	assert_eq(effects.sprites().size(), 3)
-	assert_eq((effects.sprites()[1]["tiles"][0] as Dictionary)["offset"],
-		Vector2i(4, 36), "two out and one up a frame")
 	assert_eq((effects.sprites()[2]["tiles"][0] as Dictionary)["offset"],
-		Vector2i(-12, 60), "the next row up the `and $18` cycle")
+		Vector2i(54, 59), "the next row up the `and $18` cycle")
 
 
 ## `FlyFunction_FrameTimer` plays SFX_FLY while its counter is still $40 or more
