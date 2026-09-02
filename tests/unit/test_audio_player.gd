@@ -284,3 +284,11 @@ func test_the_sound_option_reaches_the_driver_and_restarts_the_piece() -> void:
 	assert_eq(_player.audio_status()["music_key"], "",
 		"a map with no music is `PlayMusic MUSIC_NONE` twice")
 	options.stereo = was
+
+
+## A `stereo_sfx` request is `PlayStereoSFX`, so the mask it carries is
+## `wStereoPanningMask` rather than a cry's tracks.
+func test_a_stereo_sfx_request_carries_its_panning_mask() -> void:
+	_player._engine.stereo = true
+	assert_true(_player.play_record(_record(2), &"stereo_sfx", {}, false, 0x0F)["played"])
+	assert_eq(_player._engine.stereo_panning_mask, 0x0F)

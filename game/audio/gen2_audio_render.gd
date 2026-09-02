@@ -15,6 +15,7 @@ static func render(
 	frames: int,
 	stereo: bool = false,
 	trace: bool = false,
+	panning: int = 0,
 ) -> Dictionary:
 	if record.is_empty():
 		return {"ok": false, "reason": &"audio_data_unavailable"}
@@ -30,6 +31,9 @@ static func render(
 			started = engine.play_cry(record)
 		&"sfx", &"sound":
 			started = engine.play_sfx(record)
+		&"stereo_sfx":
+			engine.stereo_panning_mask = panning
+			started = engine.play_stereo_sfx(record)
 		_:
 			started = engine.play_music(record)
 	if not started:

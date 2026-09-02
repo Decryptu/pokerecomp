@@ -420,6 +420,30 @@ func play_sfx(record: Dictionary) -> bool:
 	return true
 
 
+## `PlayStereoSFX`, the one thing `anim_sound` reaches. With stereo off it is
+## [method play_sfx]; with it on the four channels are not cleared first and each
+## one's tracks are narrowed by [member stereo_panning_mask]. `wSFXDuration` and
+## the two channel fields it writes are read nowhere in the driver.
+func play_stereo_sfx(record: Dictionary) -> bool:
+	if not stereo:
+		return play_sfx(record)
+	if not register_record(record):
+		return false
+	music_off()
+	_music_id = int(record.get("index", 0))
+	_music_bank = int(record.get("bank", 0))
+	var address: int = int(record.get("address", 0))
+	var count: int = ((_music_byte(_music_bank, address) >> 6) & 0x03) + 1
+	for _channel: int in count:
+		address = _load_channel(address)
+		var channel: Channel = channels[_cur_channel]
+		channel.sfx = true
+		channel.tracks = _default_tracks(_cur_channel) & stereo_panning_mask
+		channel.channel_on = true
+	music_on()
+	return true
+
+
 ## `_PlayCry`. The record supplies the two `PokemonCries` parameters.
 func play_cry(record: Dictionary) -> bool:
 	if not register_record(record):

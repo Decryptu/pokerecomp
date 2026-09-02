@@ -281,3 +281,29 @@ func test_check_pokeball_answers_the_queue_and_then_a_break_free() -> void:
 		"`.finished` with `wWildMon` zero, which is the escape",
 	)
 	assert_eq(answers.size(), 2, "the caller's own array is not spent")
+
+
+## `BattleAnimCmd_Sound`'s `.GetCryTrack` flips bit 0 of the whole operand on the
+## enemy's turn and only then masks it, so `anim_sound 6, 2` pans left for the
+## player and right for the enemy.
+func test_an_anim_sound_pans_by_its_operand_and_the_turn() -> void:
+	assert_eq(Gen2BattleAnimScript.sound_panning((6 << 2) | 2, false), 0xF0)
+	assert_eq(Gen2BattleAnimScript.sound_panning((6 << 2) | 2, true), 0x0F)
+	assert_eq(Gen2BattleAnimScript.sound_panning((0 << 2) | 1, false), 0x0F)
+	assert_eq(Gen2BattleAnimScript.sound_panning((0 << 2) | 1, true), 0xF0)
+
+
+## `BattleAnimCmd_Cry`'s `.CryData`: Growl lengthens the cry by `$c0` and Roar by
+## `$40`, both added to what `LoadCry` left and both wrapping in sixteen bits.
+func test_an_anim_cry_adds_its_own_row_to_the_species_record() -> void:
+	var record: Dictionary = {"cry_pitch": 0x0100, "cry_length": 0xFFC0}
+	var growl: Dictionary = Gen2BattleAnimScript.cry_with_offsets(record, 0)
+	assert_eq(int(growl["cry_pitch"]), 0x0100)
+	assert_eq(int(growl["cry_length"]), 0x0080, "the length wraps in a word")
+
+	var roar: Dictionary = Gen2BattleAnimScript.cry_with_offsets(record, 1)
+	assert_eq(int(roar["cry_length"]), 0x0000)
+
+	var plain: Dictionary = Gen2BattleAnimScript.cry_with_offsets(record, 2)
+	assert_eq(int(plain["cry_length"]), 0xFFC0, "rows 2 and 3 add nothing")
+	assert_eq(int(Gen2BattleAnimScript.cry_with_offsets(record, 6)["cry_length"]), 0xFFC0)

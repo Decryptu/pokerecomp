@@ -150,7 +150,7 @@ func play_record(
 	request_kind: StringName,
 	assets: Dictionary = {},
 	restart: bool = false,
-	cry_tracks: int = 0,
+	track_mask: int = 0,
 ) -> Dictionary:
 	if request_kind == &"music_fadeout":
 		return {"ok": true, "played": fade_out(int(record.get("fade_time", 0)))}
@@ -180,8 +180,8 @@ func play_record(
 			# `PlayStereoCry` writes wCryTracks and puts 1 in wStereoPanningMask;
 			# `PlayMonCry2` zeroes both. Written per request rather than kept, so
 			# one battler's side cannot leak into the next cry.
-			_engine.cry_tracks = cry_tracks
-			_engine.stereo_panning_mask = 1 if cry_tracks != 0 else 0
+			_engine.cry_tracks = track_mask
+			_engine.stereo_panning_mask = 1 if track_mask != 0 else 0
 			started = _engine.play_cry(record)
 		&"sound", &"sfx", &"waited_sfx":
 			# `WaitPlaySFX` holds until the channels are free, so its sound is
@@ -194,8 +194,9 @@ func play_record(
 		&"stereo_sfx":
 			# `PlayStereoSFX`, which the battle animations reach directly: no
 			# `wCurSFX` gate in front of it, so an animation's own sound lands
-			# whatever is still ringing.
-			started = _engine.play_sfx(record)
+			# whatever is still ringing. `track_mask` is `wStereoPanningMask`.
+			_engine.stereo_panning_mask = track_mask
+			started = _engine.play_stereo_sfx(record)
 		_:
 			started = _engine.play_music(record)
 	if not started:
