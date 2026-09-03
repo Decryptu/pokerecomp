@@ -88,6 +88,23 @@ func test_wild_request_builds_a_one_mon_enemy_party() -> void:
 	assert_eq((prepared["battle"] as Gen2Battle).enemy.species, SPECIES_TWO)
 
 
+func test_a_battle_tower_request_marks_the_battle_for_its_ai_rules() -> void:
+	var opponent := Gen2SaveMon.new()
+	opponent.species = SPECIES_TWO
+	opponent.level = 5
+	opponent.moves = [TACKLE]
+	opponent.pp = [35]
+	opponent.hp = 10
+	var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(
+		_data, {"values": {
+			"kind": &"battle_tower", "trainer_class": 1,
+			"enemy_party": [opponent.to_dict()],
+		}}, _player_party(), RandomNumberGenerator.new()
+	)
+	assert_true(bool(prepared["ok"]), String(prepared.get("reason", "")))
+	assert_true((prepared["battle"] as Gen2Battle).in_battle_tower)
+
+
 ## `LoadEnemyMon.WildItem` spends its item roll before the two DV bytes. Sweep
 ## enough seeds to reach all three exits and compare the whole draw order.
 func test_a_wild_rolls_its_species_held_items_before_its_dvs() -> void:

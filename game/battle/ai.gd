@@ -189,7 +189,7 @@ static func choose_action(
 		if bool(switch["switch"]):
 			return Gen2Battle.switch_to(int(switch["index"]))
 
-	if not battle.enemy_items.is_empty() \
+	if not battle.in_battle_tower and not battle.enemy_items.is_empty() \
 			and Gen2AIItems.is_highest_level(battle.party(Gen2Battle.ENEMY)):
 		var item: int = Gen2AIItems.choose(
 			battle.mon(Gen2Battle.ENEMY), battle.enemy_items, item_switch_flags,
@@ -199,6 +199,17 @@ static func choose_action(
 			return Gen2Battle.use_item(item)
 
 	return Gen2Battle.use_move(move_slot)
+
+
+static func trainer_policy(data: GameData, trainer_class: int, battle_tower: bool) -> Dictionary:
+	var policy_class: int = 1 if battle_tower else trainer_class
+	if data == null or policy_class <= 0:
+		return {"move_weights": 0, "item_switch": 0}
+	var attributes: Dictionary = data.trainer_attributes(policy_class)
+	return {
+		"move_weights": int(attributes.get("ai_move_weights", 0)),
+		"item_switch": int(attributes.get("ai_item_switch", 0)),
+	}
 
 
 ## The two things that jump straight to `DontSwitch` without stopping the item

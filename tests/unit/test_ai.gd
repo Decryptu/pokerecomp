@@ -30,6 +30,25 @@ func _mon(species: int, level: int, moves: Array) -> Gen2BattleMon:
 	return Gen2BattleMon.create(_data, species, level, moves)
 
 
+func test_battle_tower_ai_uses_one_policy_and_never_an_item() -> void:
+	var falkner: Dictionary = _data.trainer_attributes(1)
+	var sampled_class: int = 2
+	var policy: Dictionary = Gen2BattleAI.trainer_policy(_data, sampled_class, true)
+	assert_eq(int(policy["move_weights"]), int(falkner["ai_move_weights"]))
+	assert_eq(int(policy["item_switch"]), int(falkner["ai_item_switch"]))
+
+	var player: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])
+	var enemy: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.TACKLE])
+	var battle: Gen2Battle = Gen2Battle.create_parties(
+		_data, Gen2Party.of(player), Gen2Party.of(enemy), _rng, true
+	)
+	battle.in_battle_tower = true
+	battle.enemy_items = [Gen2AIItems.FULL_RESTORE]
+	enemy.hp = 1
+	var action: Dictionary = Gen2BattleAI.choose_action(battle, 0, 0, _rng)
+	assert_eq(StringName(action["type"]), Gen2Battle.ACTION_MOVE)
+
+
 func test_types_discourages_a_move_the_defender_is_immune_to() -> void:
 	# Geodude is Rock/Ground, and this fixture's chart has Electric against
 	# Ground at x0: Thunderbolt does nothing, so Types has to prefer Tackle
