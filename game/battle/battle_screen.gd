@@ -3402,11 +3402,10 @@ func _random_slot(side: int) -> int:
 func _enemy_slot() -> int:
 	if _enemy_trainer_class == 0:
 		return _random_slot(Gen2Battle.ENEMY)
-	# The class's own imported mask under every challenge but hard, which scores
-	# with every layer rather than inventing a level or a stat.
-	var weights: int = _rules().ai_move_weights(
-		int(_data.trainer_attributes(_enemy_trainer_class).get("ai_move_weights", 0))
+	var policy: Dictionary = Gen2BattleAI.trainer_policy(
+		_data, _enemy_trainer_class, _battle.in_battle_tower
 	)
+	var weights: int = _rules().ai_move_weights(int(policy["move_weights"]))
 	return Gen2BattleAI.choose_slot(
 		_battle.mon(Gen2Battle.ENEMY), _battle.mon(Gen2Battle.PLAYER), _data, weights, _rng,
 		_battle.mon(Gen2Battle.ENEMY).turns_taken, _battle.mon(Gen2Battle.PLAYER).turns_taken,
@@ -3437,11 +3436,10 @@ func _enemy_action() -> Dictionary:
 	var slot: int = _enemy_slot()
 	if _enemy_trainer_class == 0:
 		return Gen2Battle.use_move(slot)
-	## The class's own imported word under every challenge but hard, which moves
-	## each class onto SWITCH_OFTEN.
-	var flags: int = _rules().ai_item_switch(int(
-		_data.trainer_attributes(_enemy_trainer_class).get("ai_item_switch", 0)
-	))
+	var policy: Dictionary = Gen2BattleAI.trainer_policy(
+		_data, _enemy_trainer_class, _battle.in_battle_tower
+	)
+	var flags: int = _rules().ai_item_switch(int(policy["item_switch"]))
 	return Gen2BattleAI.choose_action(_battle, flags, slot, _rng)
 
 

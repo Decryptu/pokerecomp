@@ -493,6 +493,8 @@ var rules: Gen2Rules = null
 ## encounter, which is the default, never sets it.
 var is_trainer_battle: bool = false
 
+var in_battle_tower: bool = false
+
 ## `wBattleType`, read by running alone so far and set on the world path by a
 ## `loadvar VAR_BATTLETYPE` before `startbattle`.
 var battle_type: int = BATTLETYPE_NORMAL

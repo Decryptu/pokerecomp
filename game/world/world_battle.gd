@@ -102,6 +102,7 @@ static func prepare(
 	if battle == null:
 		return _failure(&"battle_setup_failed")
 	battle.battle_type = battle_type
+	battle.in_battle_tower = kind == &"battle_tower"
 	## `InitEnemyTrainer` belongs to setting the opponent up rather than to
 	## whoever draws the fight, so every host gets the class's two items, its
 	## gym-leader happiness and `ComputeTrainerReward` from one place. Only a
