@@ -13,21 +13,17 @@ right. Rewrite from the line that is exactly `## Added`: an edit that searches
 for the first one in the file lands inside this note and takes its closing
 marker with it, which is how 0.1.17 published an empty body. -->
 
-## Fixed
+## Added
 
-- Battle animation sounds play on the side of the field the move came from. All 1,016 of them were centred; with stereo on they now pan 443 left and 573 right on your turn and the mirror on the enemy's.
-- GROWL and ROAR played the plain cry instead of the pitched one their animation asks for.
-- Six Crystal tilesets drew with the wrong colours: POKECOM_CENTER, BATTLE_TOWER_INSIDE, ICE_PATH, HOUSE, RADIO_TOWER and MANSION each carry eight fixed palettes and were taking the indoor or cave row. The Ice Path's floor was cave green.
-- Fishing drew you standing, holding a rod tile from the wrong sheet. The lower half of the sprite is the cartridge's own fishing pose, Kris's on Crystal.
-- The Pokedex page a new catch opens closed on B before its second page was ever shown, walked to other species on up and down, and stood on a PAGE/AREA/CRY/PRNT row the cartridge blanks.
-- Cut and Fly leaves ran a frame out of step. A cut leaf opened on your own corner rather than four pixels out, a Fly leaf was drawn on the frame it was made and deleted a frame early, and the arrival drew one extra frame with the icon centred.
-- The entrance shine, both exp bar sounds, the hit sound and four menu beeps skipped the check that stops a sound cutting itself off.
+- Wild Pokemon can carry their species' common and rare held items at the original 23% and 2% rates. Forced-item encounters always carry the common item.
 
 ## Changed
 
-- The cache format is 102. Re-import your cartridges once after updating: the six Crystal palette sets and the two fishing sheets are new imports.
+- The deterministic Gold, Silver and Crystal story routes reactivate Strength after Blackthorn Gym's door warp and stock enough Great Balls for Crystal's Dratini catches.
 
-`api_version` stays 29.
+## Fixed
+
+- Lock-On and Mind Reader hold their spawn position for the first frame before moving on the next frame.
 
 ## Which file
 
