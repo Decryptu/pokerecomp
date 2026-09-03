@@ -2410,6 +2410,7 @@ func _open_unown_printer(request: Dictionary) -> bool:
 		return false
 	host.closed.connect(_on_unown_printer_closed)
 	host.music_requested.connect(_play_music_track)
+	host.map_music_requested.connect(_play_current_map_music)
 	_unown_printer_host = host
 	_apply_interface_mask()
 	_script_prompt = "Unown printer"

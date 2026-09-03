@@ -175,6 +175,28 @@ func test_the_pokepic_box_refuses_a_species_the_cache_does_not_hold() -> void:
 	assert_null(Gen2PokepicPage.render(data, BattleFixture.CHARMANDER, null))
 
 
+## `PrintUnownStamp` restarts the map music when B cancels the printer send,
+## then returns to the browser rather than closing it.
+func test_cancelling_an_unown_print_restarts_the_map_music() -> void:
+	var screen := Gen2UnownPrinterScreen.new()
+	add_child_autofree(screen)
+	screen._open = true
+	screen.visible = true
+	var tracks: Array[int] = []
+	var restarts: Array[bool] = []
+	screen.music_requested.connect(func(track: int) -> void: tracks.append(track))
+	screen.map_music_requested.connect(func() -> void: restarts.append(true))
+
+	screen.handle_button(Gen2Button.A)
+	assert_eq(tracks, [Gen2UnownPrinterScreen.MUSIC_PRINTER])
+	assert_true(screen.printing())
+	screen.handle_button(Gen2Button.B)
+
+	assert_eq(restarts.size(), 1)
+	assert_false(screen.printing())
+	assert_true(screen.visible, "the browser stays open after the send is cancelled")
+
+
 ## `PlaceVerticalMenuItems` has no bound and needs none: every cartridge label is
 ## written to fit the box it is placed in. A label a mod registers is not, and
 ## unbounded it was drawn straight through the right-hand border and over

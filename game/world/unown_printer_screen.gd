@@ -11,6 +11,7 @@ extends Control
 
 signal closed()
 signal music_requested(index: int)
+signal map_music_requested()
 
 const MUSIC_PRINTER: int = Gen2DiplomaScreen.MUSIC_PRINTER
 const STATUS_CONNECTION_ERROR: String = Gen2DiplomaScreen.STATUS_CONNECTION_ERROR
@@ -65,7 +66,7 @@ func handle_button(button: int) -> bool:
 		## `CheckCancelPrint` reads B alone, and the send never ends on its own.
 		if button == Gen2Button.B:
 			_printing = false
-			music_requested.emit(0)
+			map_music_requested.emit()
 			_refresh()
 		return true
 	match button:
