@@ -74,7 +74,7 @@ const HM07_APPROACH: Vector2i = Vector2i(30, 7)
 ## before Goldenrod are stocked in Violet and Dratini's far lower catch rate is
 ## answered with the cheapest ball Blackthorn does stock.
 const POKE_BALLS_BOUGHT: int = 5
-const GREAT_BALLS_BOUGHT: int = 3
+const GREAT_BALLS_BOUGHT: int = 20
 ## Both marts are the standard six-by-four interior: object 1 on (1,3), standing
 ## right behind the counter on (2,3), so the clerk is talked to from (3,3)
 ## facing left.
@@ -3809,13 +3809,26 @@ func _blackthorn_gym_leg(
 	data: GameData,
 	path: Array,
 ) -> Dictionary:
-	if not world.strength_active():
-		return {"ok": false, "path": path, "reason": "Strength is not active"}
 	var to_gym: Dictionary = _warp_chain(
 		world, save, random, data, [Vector2i(18, 11), Vector2i(1, 7)]
 	)
 	if not bool(to_gym.get("ok", false)):
 		return _leg_failed(path, "Blackthorn Gym 2F unreachable", to_gym)
+
+	var asked: Dictionary = _talk_to(
+		world, Vector2i(5, 1), Gen2WorldSprite.FACING_RIGHT, save, random, data
+	)
+	path.append({
+		"step": "blackthorn_gym_ask_strength",
+		"map": _map_value(world),
+		"cell": _cell_value(world),
+		"run": asked.get("run", {}),
+		"strength_active": world.strength_active(),
+	})
+	if not bool(asked.get("ok", false)):
+		return _leg_failed(path, "Blackthorn AskStrengthScript failed", asked)
+	if not world.strength_active():
+		return {"ok": false, "path": path, "reason": "Strength did not become active"}
 
 	for leg: Dictionary in BLACKTHORN_GYM_PUSHES:
 		var pushes: Array = []
