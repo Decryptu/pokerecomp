@@ -30,7 +30,7 @@ func _write_cache() -> void:
 			"stats": {"hp": 50, "attack": 50, "defense": 50, "speed": 50,
 				"sp_attack": 50, "sp_defense": 50},
 			"types": [0, 0], "growth_rate": Gen2Experience.GROWTH_MEDIUM_FAST,
-			"base_exp": 50, "gender_ratio": 0,
+			"base_exp": 50, "gender_ratio": 0, "held_items": [0, 0],
 			"learnset": [{"level": 1, "move": TACKLE}],
 		},
 		{
@@ -38,7 +38,7 @@ func _write_cache() -> void:
 			"stats": {"hp": 60, "attack": 60, "defense": 60, "speed": 60,
 				"sp_attack": 60, "sp_defense": 60},
 			"types": [0, 0], "growth_rate": Gen2Experience.GROWTH_MEDIUM_FAST,
-			"base_exp": 60, "gender_ratio": 0,
+			"base_exp": 60, "gender_ratio": 0, "held_items": [17, 18],
 			"learnset": [{"level": 1, "move": TACKLE}],
 		},
 	])
@@ -86,6 +86,59 @@ func test_wild_request_builds_a_one_mon_enemy_party() -> void:
 	assert_false(prepared["trainer_battle"])
 	assert_eq((prepared["enemy_party"] as Gen2Party).size(), 1)
 	assert_eq((prepared["battle"] as Gen2Battle).enemy.species, SPECIES_TWO)
+
+
+## `LoadEnemyMon.WildItem` spends its item roll before the two DV bytes. Sweep
+## enough seeds to reach all three exits and compare the whole draw order.
+func test_a_wild_rolls_its_species_held_items_before_its_dvs() -> void:
+	var seen: Dictionary = {}
+	for seed_value: int in 2048:
+		var expected_rng := RandomNumberGenerator.new()
+		expected_rng.seed = seed_value
+		var first: int = expected_rng.randi_range(0, 255)
+		var expected_item: int = 0
+		if first >= Gen2WorldBattleAdapter.WILD_ITEM_NONE_ROLL:
+			expected_item = 18 \
+				if expected_rng.randi_range(0, 255) < Gen2WorldBattleAdapter.WILD_ITEM_RARE_ROLL \
+				else 17
+		var expected_dvs: int = (
+			expected_rng.randi_range(0, 255) << 8
+		) | expected_rng.randi_range(0, 255)
+
+		var actual_rng := RandomNumberGenerator.new()
+		actual_rng.seed = seed_value
+		var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(
+			_data, {"values": {"kind": &"wild", "pokemon": SPECIES_TWO, "level": 5}},
+			_player_party(), actual_rng
+		)
+		assert_true(prepared["ok"])
+		var wild: Gen2BattleMon = (prepared["battle"] as Gen2Battle).enemy
+		assert_eq(wild.item, expected_item)
+		assert_eq(wild.dvs, expected_dvs)
+		seen[expected_item] = true
+		if seen.size() == 3:
+			break
+	assert_eq(seen.size(), 3, "none, common and rare all occur")
+
+
+func test_a_force_item_wild_takes_item_one_without_spending_a_roll() -> void:
+	var expected_rng := RandomNumberGenerator.new()
+	expected_rng.seed = 91
+	var expected_dvs: int = (
+		expected_rng.randi_range(0, 255) << 8
+	) | expected_rng.randi_range(0, 255)
+	var actual_rng := RandomNumberGenerator.new()
+	actual_rng.seed = 91
+	var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(
+		_data, {"values": {
+			"kind": &"wild", "pokemon": SPECIES_TWO, "level": 5,
+			"battle_type": Gen2Battle.BATTLETYPE_FORCEITEM,
+		}}, _player_party(), actual_rng
+	)
+	assert_true(prepared["ok"])
+	var wild: Gen2BattleMon = (prepared["battle"] as Gen2Battle).enemy
+	assert_eq(wild.item, 17)
+	assert_eq(wild.dvs, expected_dvs)
 
 
 func test_battle_request_carries_the_players_badge_mask() -> void:
