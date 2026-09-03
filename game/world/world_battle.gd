@@ -1,9 +1,8 @@
 class_name Gen2WorldBattleAdapter
 extends RefCounted
 
-## Scene-free preparation of the battle requests emitted by the overworld
-## script runner. The battle screen owns presentation and input; this boundary
-## only validates source identifiers and builds the existing battle model.
+## Scene-free preparation of overworld battle requests. The battle screen owns
+## presentation and input; this boundary builds the existing battle model.
 
 const OUTCOME_WON: StringName = &"won"
 const OUTCOME_LOST: StringName = &"lost"
@@ -14,8 +13,8 @@ const OUTCOME_CANCELLED: StringName = &"cancelled"
 ## `CheckMagikarpArea`'s two `cp`s, the same numbers in both pins.
 const GROUP_LAKE_OF_RAGE: int = 9
 const MAP_LAKE_OF_RAGE: int = 6
-## `HIGH(1536)`, `LOW(1616)`, `LOW(1600)` and `HIGH(1024)`, all read against a
-## length in feet and inches: the unit-conversion entry in the bug docs.
+## The four length bytes are read against feet and inches, reproducing the
+## source's unit-conversion bug.
 const MAGIKARP_HUGE_FEET: int = 6
 const MAGIKARP_HUGE_INCHES: int = 80
 const MAGIKARP_LARGE_INCHES: int = 64
@@ -23,6 +22,8 @@ const MAGIKARP_FLOOR_FEET: int = 4
 const MAGIKARP_HUGE_SKIP: int = 12
 const MAGIKARP_LARGE_SKIP: int = 50
 const MAGIKARP_FLOOR_SKIP: int = 100
+const WILD_ITEM_NONE_ROLL: int = 192
+const WILD_ITEM_RARE_ROLL: int = 20
 
 
 static func prepare(
@@ -132,9 +133,11 @@ static func _wild_party(
 		return _failure(&"invalid_wild_species", {"species": species})
 	if level < 1 or level > Gen2Experience.MAX_LEVEL:
 		return _failure(&"invalid_wild_level", {"level": level})
+	var species_data: Dictionary = data.species(species)
+	var held_item: int = _wild_held_item(species_data, battle_type, generator)
 	var wild_mon: Gen2BattleMon = Gen2BattleMon.create(
 		data, species, level, data.moves_at_level(species, level),
-		wild_dvs(values, battle_type, species, generator)
+		wild_dvs(values, battle_type, species, generator), {}, held_item
 	)
 	# LoadEnemyMon's .TreeMon branch: a headbutt encounter whose species is in
 	# CheckSleepingTreeMon's list for the current time of day enters asleep for
@@ -151,6 +154,21 @@ static func _wild_party(
 	if wild_mon != null and int(values.get("hp", 0)) > 0:
 		wild_mon.hp = clampi(int(values["hp"]), 1, wild_mon.max_hp())
 	return {"ok": true, "party": Gen2Party.of(wild_mon)}
+
+
+## `LoadEnemyMon.WildItem`: 75% none, 23% common and 2% rare, before the DV
+## bytes. A force-item encounter takes the common slot without a roll.
+static func _wild_held_item(
+	species_data: Dictionary, battle_type: int, generator: RandomNumberGenerator
+) -> int:
+	var held: Array = species_data.get("held_items", []) as Array
+	var common: int = int(held[0]) if held.size() > 0 else 0
+	if battle_type == Gen2Battle.BATTLETYPE_FORCEITEM:
+		return common
+	if generator.randi_range(0, 255) < WILD_ITEM_NONE_ROLL:
+		return 0
+	var rare: int = int(held[1]) if held.size() > 1 else 0
+	return rare if generator.randi_range(0, 255) < WILD_ITEM_RARE_ROLL else common
 
 
 static func earnings(battle: Gen2Battle, state: Gen2WorldState, won: bool) -> Dictionary:
@@ -279,13 +297,9 @@ static func _magikarp_accepted(
 	return length.x >= MAGIKARP_FLOOR_FEET
 
 
-## `PlayBattleMusic`'s track, off the request alone.
-##
-## `FindFirstAliveMonAndStartBattle` runs `PlayBattleMusic` in front of
-## `DoBattleTransition`, so the piece starts before the fight is built: the
-## world screen asks here when the transition opens and the battle screen asks
-## again for the same track, which the driver continues rather than restarts.
-## Both read the one request, so neither can pick a different piece.
+## `FindFirstAliveMonAndStartBattle` plays this request's track before the
+## transition. The world and battle screens ask for the same track, so the
+## driver continues it across the handoff.
 static func music_for(
 	request: Dictionary, landmark_id: int, day_period: int, crystal: bool = true
 ) -> int:

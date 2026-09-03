@@ -39,6 +39,7 @@ func run(r: RefCounted) -> void:
 		_verify_gate_errand()
 		_census()
 		_verify_wild_patch_indices()
+		_verify_wild_held_items()
 		_verify_rolled_dvs()
 		_verify_magikarp_filter()
 		_verify_roaming_walk()
@@ -134,6 +135,34 @@ const DV_SWEEP_WILDS: int = 4096
 ## for not being UNOWN, whose letter gate is swept separately below.
 const DV_SWEEP_SPECIES: int = 19
 const DV_SWEEP_LEVEL: int = 5
+
+
+## Every species' two base item slots through `LoadEnemyMon.WildItem`.
+func _verify_wild_held_items() -> void:
+	var generator := RandomNumberGenerator.new()
+	generator.seed = 20260926
+	var rolled: int = 0
+	for species: int in range(1, RomLayout.SPECIES_COUNT + 1):
+		var row: Dictionary = _r.data.species(species)
+		var held: Array = row.get("held_items", []) as Array
+		if not _r.check(held.size() == 2, "species %d has %d held-item slots." % [species, held.size()]):
+			continue
+		var allowed: Array[int] = [0, int(held[0]), int(held[1])]
+		_r.check(
+			Gen2WorldBattleAdapter._wild_held_item(
+				row, Gen2Battle.BATTLETYPE_FORCEITEM, generator
+			) == int(held[0]),
+			"species %d did not force its first held item." % species
+		)
+		for _sample: int in 32:
+			var item: int = Gen2WorldBattleAdapter._wild_held_item(
+				row, Gen2Battle.BATTLETYPE_NORMAL, generator
+			)
+			_r.check(item in allowed, "species %d rolled item %d." % [species, item])
+			rolled += 1
+	_r.note("wild held items: %d species, %d ordinary rolls" % [
+		RomLayout.SPECIES_COUNT, rolled,
+	])
 
 
 ## `LoadEnemyMon`'s `.InitDVs` against the real caches, where before only a

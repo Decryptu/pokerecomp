@@ -436,6 +436,7 @@ const BERSERK_GENE_CONFUSION_TURNS: int = 256
 ## `wBattleType`. Only the values `TryToRunAwayFromBattle` branches on are named;
 ## everything else reaches the ordinary speed check.
 const BATTLETYPE_NORMAL: int = 0
+const BATTLETYPE_FORCEITEM: int = 1
 const BATTLETYPE_DEBUG: int = 2
 ## The Dude's tutorial, which `PokeBallEffect` catches without a roll.
 const BATTLETYPE_TUTORIAL: int = 3
