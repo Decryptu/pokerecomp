@@ -1636,6 +1636,7 @@ static func _lock_on_mind_reader(
 		object.var1 = 0x28
 		_reinit(object, (object.param & 0xF) + object.frameset)
 		object.param = (object.param & 0xF0) | 0x8
+		return
 	match object.jumptable_index:
 		1:
 			if object.var1 != 0:

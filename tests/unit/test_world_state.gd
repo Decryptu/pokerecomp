@@ -166,9 +166,7 @@ func test_strength_active_flag_is_profile_split_and_is_not_a_badge() -> void:
 	assert_eq(state.badge_count(false), 0)
 
 
-## Nothing in the pinned engine/ or home/ ever clears BIKEFLAGS_STRENGTH_ACTIVE_F,
-## and engine flags serialize with the world snapshot, so the flag has to outlive
-## a round trip and the map-reload reset that clears temporary event flags.
+## Snapshots and MapSetupScript_ReloadMap do not run a warp's ResetBikeFlags.
 func test_strength_active_flag_survives_round_trip_and_map_reload() -> void:
 	var state := Gen2WorldState.new()
 	state.set_engine_flag(Gen2WorldState.strength_active_flag(true))

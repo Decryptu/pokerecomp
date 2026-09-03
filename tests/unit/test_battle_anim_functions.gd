@@ -222,6 +222,23 @@ func test_sky_attack_cycles_the_dmg_object_palette() -> void:
 	assert_eq(_player.background().obp0, 0xA0, "$aa masked by the side's own byte")
 
 
+## `BattleAnimFunc_LockOnMindReader` returns after initializing the object, so
+## its first movement does not happen until the next frame.
+func test_lock_on_holds_its_spawn_position_for_the_first_frame() -> void:
+	var object: Gen2BattleAnimObject = _object(0x3E, 0x84, 0x30, 0x03)
+	_run(object)
+	assert_eq(object.jumptable_index, 1)
+	assert_eq(object.var1, 0x28)
+	assert_eq(object.param, 0x08)
+	assert_eq(object.x_offset, 0)
+	assert_eq(object.y_offset, 0)
+
+	_run(object)
+	assert_eq(object.var1, 0x27)
+	assert_ne(object.x_offset, 0)
+	assert_ne(object.y_offset, 0)
+
+
 ## `BattleAnimFunc_RockSmash` writes the frameset straight into the struct rather
 ## than through `ReinitBattleAnimFrameset`, so the frame it is on is not reset.
 func test_rock_smash_swaps_its_frameset_without_restarting_it() -> void:
