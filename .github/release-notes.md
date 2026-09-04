@@ -16,19 +16,10 @@ an empty body. -->
 
 ## Added
 
-- Battle Tower fights now use the cartridge's stored opponent stats, fixed trainer policy, pack restrictions and result flow.
-- Battle Tower entry heals the player's party and restores party state after the fight, including held items, moves and happiness.
-
-## Changed
-
-- Traded Pokemon now follow the cartridge's badge-based obedience thresholds and outcomes, while link and Battle Tower battles bypass obedience checks.
-- Battle effects now match cartridge damage, type-rounding, critical-stat, item, status, Bide, Rollout, recoil and turn-state behavior.
-
-## Fixed
-
-- Cancelling an Unown print resumes the current map music and keeps the Unown browser open.
-- Battle Tower opponents use the fixed move-scoring and switch policy without trainer-class inventory items.
-- Battle Tower result portraits, fainted panels and launcher focus now follow the source and current-page rules.
+- Red, Blue and Yellow are recognised and imported. A dump is verified by SHA-1, and the launcher then reads its 151 species with their stats, types, evolutions, level-up moves and Pokedex entries, plus 165 moves, 82 type matchups, 83 items, the 50 TMs, the 5 HMs and 47 trainer classes.
+- Every picture in those three cartridges is decoded too, in the cartridge's own palettes: 151 front sprites, 151 back sprites, the 47 trainer classes, and the two a battle puts behind the player and the old man.
+- A Generation 1 cartridge has no Play button yet. Nothing draws its world, its battles or its menus, so the launcher seats the dump, tells you what it read, and stops there.
+- The Pokemon and trainer sprite sheets of any cartridge can be dumped to a PNG for checking, in either generation.
 
 ## Which file
 
