@@ -8,11 +8,6 @@ extends RefCounted
 ## plausible garbage rather than an error and garbage in the cache is
 ## indistinguishable from real data later.
 
-## Atlas cells are the largest pic of their kind so a renderer can index them
-## arithmetically; smaller pics sit in the top-left of their cell and record
-## their real size.
-const ATLAS_COLUMNS: int = 16
-
 ## Falkner is trainer class 1 in all three games, and the class in the middle is
 ## a walk check on a table whose entries are terminated rather than padded. The
 ## class that ends the table differs between games and lives in [Gen2Layout].
@@ -7527,24 +7522,34 @@ func _read_egg_palette(rom: RomFile, layout: Dictionary) -> Dictionary:
 func _import_pics(
 	rom: RomFile, layout: Dictionary, species: Array, on_progress: Callable
 ) -> Dictionary:
-	var front: Dictionary = _new_atlas(Gen2Layout.FRONTPIC_MAX_TILES, Gen2Layout.SPECIES_COUNT)
-	var back: Dictionary = _new_atlas(Gen2Layout.BACKPIC_TILES, Gen2Layout.SPECIES_COUNT)
-	var unown_front: Dictionary = _new_atlas(Gen2Layout.FRONTPIC_MAX_TILES, Gen2Layout.UNOWN_FORMS)
+	var front: Dictionary = PokeTiles.new_atlas(
+		Gen2Layout.FRONTPIC_MAX_TILES, Gen2Layout.SPECIES_COUNT
+	)
+	var back: Dictionary = PokeTiles.new_atlas(
+		Gen2Layout.BACKPIC_TILES, Gen2Layout.SPECIES_COUNT
+	)
+	var unown_front: Dictionary = PokeTiles.new_atlas(
+		Gen2Layout.FRONTPIC_MAX_TILES, Gen2Layout.UNOWN_FORMS
+	)
 	# `GetAnimatedEnemyFrontpic` loads the tiles past the pic's own `w * h` out
 	# of the same decompressed run, into VRAM behind the padded 7x7 block. They
 	# are frames, not a picture, so they get an atlas rather than a slot in the
 	# one beside them.
 	var animated: bool = not Gen2Layout.pic_anim(layout).is_empty()
-	var front_anim: Dictionary = _new_atlas(Gen2Layout.FRONTPIC_MAX_TILES, Gen2Layout.SPECIES_COUNT)
-	var unown_front_anim: Dictionary = _new_atlas(
+	var front_anim: Dictionary = PokeTiles.new_atlas(
+		Gen2Layout.FRONTPIC_MAX_TILES, Gen2Layout.SPECIES_COUNT
+	)
+	var unown_front_anim: Dictionary = PokeTiles.new_atlas(
 		Gen2Layout.FRONTPIC_MAX_TILES, Gen2Layout.UNOWN_FORMS
 	)
-	var unown_back: Dictionary = _new_atlas(Gen2Layout.BACKPIC_TILES, Gen2Layout.UNOWN_FORMS)
+	var unown_back: Dictionary = PokeTiles.new_atlas(
+		Gen2Layout.BACKPIC_TILES, Gen2Layout.UNOWN_FORMS
+	)
 	# `EggPic` is entry EGG of `PokemonPicPointers`, past the 251 species and the
 	# unused slot between them, and `GetEggFrontpic` loads it the way any other
 	# front pic is loaded. It gets an atlas of its own because there is no
 	# species record to hang it on: EGG is a party species, not a Pokemon.
-	var egg_front: Dictionary = _new_atlas(Gen2Layout.FRONTPIC_MAX_TILES, 1)
+	var egg_front: Dictionary = PokeTiles.new_atlas(Gen2Layout.FRONTPIC_MAX_TILES, 1)
 	var egg_side: int = Gen2Layout.EGG_PIC_TILES
 	## Gold and Silver's table stops at NUM_POKEMON, so `_GetFrontpic` answers
 	## EGG with `ld hl, EggPic` and the pic is at an address like a back pic.
@@ -7561,10 +7566,12 @@ func _import_pics(
 			egg_side, egg_side, egg_front, 0
 		)
 	var trainer_classes: int = Gen2Layout.trainer_class_count(layout)
-	var trainers: Dictionary = _new_atlas(Gen2Layout.TRAINER_PIC_TILES, trainer_classes)
+	var trainers: Dictionary = PokeTiles.new_atlas(
+		Gen2Layout.TRAINER_PIC_TILES, trainer_classes
+	)
 	# `GetTrainerBackpic`'s three, which are the player standing on the field
 	# before a Pokemon is sent out rather than anybody's front pic.
-	var player_back: Dictionary = _new_atlas(
+	var player_back: Dictionary = PokeTiles.new_atlas(
 		Gen2Layout.PLAYER_BACKPIC_TILES, Gen2Layout.PLAYER_BACKPICS.size()
 	)
 	var backpics: Dictionary = layout.get("player_backpic", {}) as Dictionary
@@ -7661,26 +7668,8 @@ func _import_pics(
 		var atlas: Dictionary = atlases[name]
 		if not RomCache.write_indices(RomCache.pic_path(directory, name), atlas["pixels"]):
 			return {}
-		written[name] = {
-			"width": atlas["width"],
-			"height": atlas["height"],
-			"cell": atlas["cell"],
-			"columns": ATLAS_COLUMNS,
-			"decoded": atlas["decoded"],
-		}
+		written[name] = PokeTiles.atlas_record(atlas)
 	return written
-
-
-func _new_atlas(cell_tiles: int, cells: int) -> Dictionary:
-	var cell: int = cell_tiles * PokeTiles.TILE_WIDTH
-	var rows: int = ceili(float(cells) / ATLAS_COLUMNS)
-	var width: int = ATLAS_COLUMNS * cell
-	var height: int = rows * cell
-	var pixels: PackedByteArray = PackedByteArray()
-	pixels.resize(width * height)
-	return {
-		"pixels": pixels, "width": width, "height": height, "cell": cell, "decoded": 0,
-	}
 
 
 ## The same as [method _decode_into] for a pic the cartridge stores at an
@@ -7739,16 +7728,9 @@ func _blit_pic(
 	raw: PackedByteArray, columns: int, rows: int, atlas: Dictionary, slot: int,
 	skip_tiles: int = 0
 ) -> void:
-	var pixels: PackedByteArray = PokeTiles.decode_pic(
+	PokeTiles.blit_pic(PokeTiles.decode_pic(
 		raw.slice(skip_tiles * PokeTiles.TILE_BYTES) if skip_tiles > 0 else raw, columns, rows
-	)
-	var cell: int = atlas["cell"]
-	PokeTiles.blit(
-		pixels, columns * PokeTiles.TILE_WIDTH,
-		atlas["pixels"], atlas["width"],
-		(slot % ATLAS_COLUMNS) * cell, floori(float(slot) / float(ATLAS_COLUMNS)) * cell
-	)
-	atlas["decoded"] = int(atlas["decoded"]) + 1
+	), columns, atlas, slot)
 
 
 ## `AnimateFrontpic`'s tables: one record per species and one per Unown letter,

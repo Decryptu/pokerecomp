@@ -109,7 +109,7 @@ func _one_species(dex: int, entry: Dictionary) -> void:
 		_r.check(_is_real_type(int(type)), "%s carries type $%02X" % [name, type])
 	_r.check(int(entry["catch_rate"]) > 0, "%s has no catch rate" % name)
 	_r.check(int(entry["base_exp"]) > 0, "%s has no base experience" % name)
-	_r.check(int(entry["pics"]["front"]) > 0 and int(entry["pics"]["back"]) > 0,
+	_r.check(int(entry["pic_offsets"]["front"]) > 0 and int(entry["pic_offsets"]["back"]) > 0,
 		"%s has an unreachable pic" % name)
 	_dex_entry(name, entry["dex"])
 	_learnset(name, entry["learnset"])

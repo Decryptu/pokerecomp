@@ -1586,14 +1586,22 @@ func _build_matchups(rows: Array) -> void:
 			_foresight_matchups[key] = true
 
 
-## The four colours a species is drawn with, in index order. The cache stores
-## the cartridge's own 15-bit pair; white and black are implied.
+## The four colours a species is drawn with, in index order.
 func palette(number: int, shiny: bool = false) -> PackedColorArray:
 	var entry: Dictionary = species(number)
 	if entry.is_empty():
 		return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 
-	var stored: Array = entry["palette"]["shiny" if shiny else "normal"]
+	var entry_palette: Dictionary = entry["palette"]
+	# Generation 1's `SuperPalettes` row is all four colours and has no shiny
+	# half; Generation 2 stores only the two that sit between white and black.
+	if entry_palette.has("colors"):
+		var colors: PackedColorArray = PackedColorArray()
+		for packed: Variant in entry_palette["colors"] as Array:
+			colors.append(PokePalette.from_packed(int(packed)))
+		return colors
+
+	var stored: Array = entry_palette["shiny" if shiny else "normal"]
 	return PokePalette.pic_palette(PackedColorArray([
 		PokePalette.from_packed(int(stored[0])),
 		PokePalette.from_packed(int(stored[1])),
@@ -2708,8 +2716,12 @@ func battle_transition_palette(dark: bool = false) -> PackedColorArray:
 	return out
 
 
+## The kinds are the generation's own: Chris, Kris and the Dude in Generation 2,
+## the player and the old man in Generation 1.
 func player_backpic(kind: String) -> Dictionary:
-	var slot: int = Gen2Layout.PLAYER_BACKPICS.find(kind)
+	var kinds: Array[String] = Gen1Layout.PLAYER_BACKPICS if generation == RomRegistry.GEN1 \
+		else Gen2Layout.PLAYER_BACKPICS
+	var slot: int = kinds.find(kind)
 	if slot < 0:
 		return {}
 	var cell: int = int(atlas("player_back").get("cell", 0))
