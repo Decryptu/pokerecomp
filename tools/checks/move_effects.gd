@@ -86,6 +86,8 @@ func run(r: RefCounted) -> void:
 		_r.game_id = game_id
 		compared += _compare(pin, data)
 		_check_obedience_corpus(data)
+		_check_damage_matchup_corpus(data)
+		_check_critical_item_corpus(data)
 		_r.game_id = &""
 	if compared == 0:
 		print("no pin was checked out; move_effects compared nothing.")
@@ -250,3 +252,47 @@ func _check_obedience_corpus(data: GameData) -> void:
 				"move %d obedience exemption %d" % [number, mode])
 			checked += 1
 	print("%s: %d move obedience exemptions." % [data.id, checked])
+
+
+func _check_damage_matchup_corpus(data: GameData) -> void:
+	var rows: Array = JSON.parse_string(FileAccess.get_file_as_string(RomCache.matchups_path(data.directory)))
+	var user: Gen2BattleMon = Gen2BattleMon.create(data, 25, 50)
+	user.battle_types.assign([6, 6])
+	var checked: int = 0
+	for kind: int in [0, 1, 2, 3, 4, 5, 7, 8, 9, 20, 21, 22, 23, 24, 25, 26, 27]:
+		for species: int in range(1, 252):
+			var target: Gen2BattleMon = Gen2BattleMon.create(data, species, 50)
+			var expected: int = 13
+			for row: Dictionary in rows:
+				if int(row.attacker) != kind or not target.types().has(int(row.defender)):
+					continue
+				if int(row.multiplier) == 0:
+					expected = 0
+				elif expected > 0:
+					expected = maxi(expected * int(row.multiplier) / 10, 1)
+			var got: Dictionary = Gen2Damage.stab_damage(user, target, {"number": 33, "type": kind}, 13)
+			_r.check(int(got.damage) == expected, "type %d against species %d: %d, expected %d" % [kind, species, got.damage, expected])
+			checked += 1
+	print("%s: %d damage matchups in cartridge table order." % [data.id, checked])
+
+
+func _check_critical_item_corpus(data: GameData) -> void:
+	var checked: int = 0
+	for species: int in [83, 113]:
+		var item: int = 105 if species == 83 else 30
+		var battle: Gen2Battle = Gen2Battle.create(data, Gen2BattleMon.create(data, species, 50), Gen2BattleMon.create(data, 1, 50), RandomNumberGenerator.new())
+		battle.player.item = item
+		battle.player.substatus |= Gen2Substatus.FOCUS_ENERGY
+		for number: int in range(1, 252):
+			for seed_value: int in [1, 2, 3, 4]:
+				battle.rng.seed = seed_value
+				var expected_rng := RandomNumberGenerator.new()
+				expected_rng.seed = seed_value
+				var expected: bool = false
+				if int(data.move(number).power) > 0:
+					expected = expected_rng.randi_range(0, 255) < 64
+				var turn := Gen2Turn.create(battle, 0, 0, number, data.move(number), [])
+				Gen2EffectCommands.run(Gen2EffectCommands.CRITICAL, turn)
+				_r.check(turn.critical == expected and battle.rng.state == expected_rng.state, "species %d critical item, move %d, seed %d" % [species, number, seed_value])
+				checked += 1
+	print("%s: %d species-item critical decisions." % [data.id, checked])

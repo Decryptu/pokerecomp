@@ -1490,6 +1490,20 @@ func mod_type_numbers() -> Array[int]:
 	return _overlay.defined_numbers(Gen2ContentOverlay.KIND_TYPE)
 
 
+## BattleCommand_Stab walks TypeMatchups in table order, not the species' slots.
+func ordered_defending_types(attacking: int, defending: Array) -> Array:
+	var out: Array = []
+	var keys: Array = _matchups.keys()
+	for key: int in keys:
+		for kind: int in defending:
+			if key == Gen2ContentOverlay.matchup_number(attacking, kind) and not out.has(kind):
+				out.append(kind)
+	for kind: int in defending:
+		if not out.has(kind):
+			out.append(kind)
+	return out
+
+
 ## How effective [param attacking] is against [param defending], in tenths: 0 an
 ## immunity, 5 a resistance, 20 a weakness, 10 otherwise. Tenths because that is
 ## what the cartridge stores and what the damage formula divides by, truncating
@@ -1531,11 +1545,7 @@ func _matchup_row(key: int) -> Dictionary:
 ## damage. A single-type Pokemon carries its type in both slots and repeats skip.
 func type_effectiveness(attacking: int, defending: Array, foresight: bool = false) -> int:
 	var out: int = RomLayout.MATCHUP_EFFECTIVE
-	var applied: Array = []
-	for defending_type: int in defending:
-		if applied.has(defending_type):
-			continue
-		applied.append(defending_type)
+	for defending_type: int in ordered_defending_types(attacking, defending):
 		@warning_ignore("integer_division")
 		out = out * type_matchup(attacking, defending_type, foresight) \
 			/ RomLayout.MATCHUP_EFFECTIVE

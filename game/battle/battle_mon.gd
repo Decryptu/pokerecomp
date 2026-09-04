@@ -280,14 +280,6 @@ func set_badge_boosts(mask: int) -> void:
 		badge_stat_boosts["defense"] = true
 	if mask & (1 << 6):
 		badge_stat_boosts["sp_attack"] = true
-		# The source intends Glacier to raise both Special stats, but its
-		# second check uses the value left in A by the Special Attack boost.
-		# That makes the Special Defense boost appear only for unboosted
-		# Special Attack values 206..432 or 661 and above.
-		var unboosted_special: int = int(stats.get("sp_attack", 0))
-		if (unboosted_special >= 206 and unboosted_special <= 432) \
-			or unboosted_special >= 661:
-			badge_stat_boosts["sp_defense"] = true
 
 	badge_type_boost_mask = 0
 	var boosted_types: Array[int] = [
@@ -309,10 +301,14 @@ func clear_badge_boosts() -> void:
 
 
 func _badge_boosted(value: int, key: String) -> int:
+	if key == "sp_defense" and badge_stat_boosts.has("sp_attack"):
+		var special: int = Gen2Stats.apply_stage(int(stats.get("sp_attack", 0)), stage("sp_attack"))
+		if (special >= 206 and special <= 432) or special >= 661:
+			return mini(value + value / 8, Gen2Stats.MAX_STAT_VALUE)
 	if not badge_stat_boosts.has(key):
 		return value
 	@warning_ignore("integer_division")
-	return mini(value + maxi(value / 8, 1), Gen2Stats.MAX_STAT_VALUE)
+	return mini(value + value / 8, Gen2Stats.MAX_STAT_VALUE)
 
 
 func _stat(
@@ -328,11 +324,11 @@ func _stat(
 ## on the copy the stages did, which is why a critical hit reading
 ## [method unmodified_stat] is free of the burn as well as the stages.
 func stat(key: String) -> int:
-	var value: int = _badge_boosted(int(stats.get(key, 0)), key)
+	var value: int = int(stats.get(key, 0))
 	if not STAGED_STATS.has(key):
 		return value
 
-	var out: int = Gen2Stats.apply_stage(value, int(stages.get(key, 0)))
+	var out: int = _badge_boosted(Gen2Stats.apply_stage(value, int(stages.get(key, 0))), key)
 	if key == "attack" and Gen2Status.has(status, Gen2Status.BURN):
 		out = Gen2Status.apply_burn(out)
 	elif key == "speed" and Gen2Status.has(status, Gen2Status.PARALYSIS):
@@ -343,7 +339,7 @@ func stat(key: String) -> int:
 ## A stat with no stage applied, which is what a critical hit uses when the
 ## stages would work against the attacker.
 func unmodified_stat(key: String) -> int:
-	return _badge_boosted(int(stats.get(key, 0)), key)
+	return int(stats.get(key, 0))
 
 
 func stage(key: String) -> int:
@@ -354,29 +350,30 @@ func stage(key: String) -> int:
 ## `BattleCommand_StatUp` and `..._StatDown` both settle "already at the end" on
 ## the way in, ahead of the checks that refuse for another reason.
 func can_change_stage(key: String, by: int) -> bool:
+	return stage_has_room(key, by) and not _stat_at_limit(key, by)
+
+
+func stage_has_room(key: String, by: int) -> bool:
 	if not STAGED_STATS.has(key) and not STAGED_ODDS.has(key):
 		return false
-	var before: int = int(stages.get(key, 0))
-	var after: int = clampi(before + by, Gen2Stats.MIN_STAGE, Gen2Stats.MAX_STAGE)
-	if after == before:
-		return false
-	# RaiseStat moves the stage, recalculates, then puts the stage back and fails
-	# when the real stat has reached MAX_STAT_VALUE.
-	if by > 0 and STAGED_STATS.has(key) \
-			and Gen2Stats.apply_stage(int(stats.get(key, 0)), after) >= Gen2Stats.MAX_STAT_VALUE:
-		return false
-	return true
+	return clampi(stage(key) + by, Gen2Stats.MIN_STAGE, Gen2Stats.MAX_STAGE) != stage(key)
 
 
-## Moves a stage, and answers whether it actually moved: at the top or the bottom
-## the cartridge says so rather than silently doing nothing.
+func _stat_at_limit(key: String, by: int) -> bool:
+	if not STAGED_STATS.has(key):
+		return false
+	return stat(key) == (Gen2Stats.MAX_STAT_VALUE if by > 0 else 1)
+
+
+## RaiseStat and TryLowerStat inspect the old stat after writing the new stage;
+## failure rolls back one stage even when the command requested two.
 func change_stage(key: String, by: int) -> bool:
-	if not can_change_stage(key, by):
+	if not stage_has_room(key, by):
 		return false
-	var before: int = int(stages.get(key, 0))
-	var after: int = clampi(before + by, Gen2Stats.MIN_STAGE, Gen2Stats.MAX_STAGE)
-	stages[key] = after
-	return after != before
+	var limited: bool = _stat_at_limit(key, by)
+	var after: int = clampi(stage(key) + by, Gen2Stats.MIN_STAGE, Gen2Stats.MAX_STAGE)
+	stages[key] = after - signi(by) if limited else after
+	return not limited
 
 
 func reset_stages() -> void:

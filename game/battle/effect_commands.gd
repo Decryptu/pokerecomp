@@ -214,7 +214,7 @@ const TOXIC_TARGET: StringName = &"toxictarget"
 const FLINCH_TARGET: StringName = &"flinchtarget"
 const CONFUSE_TARGET: StringName = &"confusetarget"
 
-## Heals the attacker for half of what the hit calculated: the Absorb family, and
+## Heals the attacker for half of the damage taken: the Absorb family, and
 ## Dream Eater behind its own rule inside [constant CHECK_HIT].
 const DRAIN_TARGET: StringName = &"draintarget"
 
@@ -761,7 +761,7 @@ static func _do_turn(turn: Gen2Turn) -> void:
 
 	# "If we've gotten this far, this counts as a turn", ahead of the Struggle
 	# check, so Struggle counts even though it spends nothing.
-	turn.attacker().turns_taken += 1
+	turn.attacker().turns_taken = (turn.attacker().turns_taken + 1) & 0xFF
 
 	if turn.slot >= 0 and turn.move_number != Gen2Damage.STRUGGLE:
 		turn.attacker().spend_pp(turn.slot)
@@ -780,6 +780,7 @@ static func _store_energy(turn: Gen2Turn) -> void:
 		return
 	user.substatus &= ~Gen2Substatus.BIDE
 	turn.bide_release = true
+	turn.skip_to = UNLEASH_ENERGY
 	turn.damage = mini(user.bide_damage * 2, 0xFFFF)
 	user.bide_damage = 0
 	turn.emit(Gen2Battle.BIDE_UNLEASHED)
@@ -889,7 +890,8 @@ static func _critical(turn: Gen2Turn) -> void:
 	turn.critical = Gen2Damage.roll_critical(
 		turn.effective_move(), turn.rng(),
 		Gen2Substatus.has(attacker.substatus, Gen2Substatus.FOCUS_ENERGY),
-		Gen2HeldItem.effect_of(turn.data(), attacker.item) == Gen2HeldItem.CRITICAL_UP
+		Gen2HeldItem.effect_of(turn.data(), attacker.item) == Gen2HeldItem.CRITICAL_UP,
+		attacker.species, attacker.item
 	)
 
 
@@ -1545,6 +1547,7 @@ static func _apply_damage(turn: Gen2Turn) -> void:
 		return
 
 	turn.dealt = defender.take_damage(turn.damage)
+	turn.damage = turn.dealt # DoPlayerDamage and DoEnemyDamage replace wCurDamage on underflow.
 	# `wCriticalHit` at 2 is the one-hit line rather than the critical one, which
 	# is the only thing that tells an OHKO's own hit apart from any other.
 	turn.emit(Gen2Battle.OHKO if turn.one_hit_ko else Gen2Battle.HIT, {
@@ -1674,15 +1677,8 @@ static func _doubles_minimize_damage(turn: Gen2Turn) -> bool:
 	return turn.defender().minimized
 
 
-## A quarter of [member Gen2Turn.damage], the calculated number, at least one, and
-## never [member Gen2Turn.dealt]. `BattleCommand_Recoil` reads the same uncapped
-## `wCurDamage` [constant Gen2EffectCommands.DRAIN_TARGET] reads, so a move
-## calculating fifty against a target with three HP left costs a quarter of
-## fifty.
+## BattleCommand_Recoil takes at least one, even after a doll clears wCurDamage.
 static func _recoil(turn: Gen2Turn) -> void:
-	if turn.damage <= 0:
-		return
-
 	var attacker: Gen2BattleMon = turn.attacker()
 	@warning_ignore("integer_division")
 	var taken: int = attacker.take_damage(maxi(turn.damage / RECOIL_DIVISOR, 1))
@@ -1727,7 +1723,8 @@ static func _destiny_bond_takes_user(turn: Gen2Turn) -> void:
 
 ## `CantMove` cancels Bide, a two-turn move, Rollout or rampage, and makes a Fly
 ## or Dig user visible again, so a flinch cannot leave it untouchable.
-static func _cancel_charge(mon: Gen2BattleMon) -> void:
+static func _cant_move(mon: Gen2BattleMon) -> void:
+	mon.fury_cutter_count = 0
 	mon.substatus &= ~(Gen2Substatus.CHARGING | Gen2Substatus.FLYING | Gen2Substatus.UNDERGROUND)
 	mon.charged_move = 0
 	mon.substatus &= ~(Gen2Substatus.ROLLOUT | Gen2Substatus.RAMPAGING)
@@ -1739,53 +1736,56 @@ static func _cancel_charge(mon: Gen2BattleMon) -> void:
 	mon.bide_move = 0
 
 
-## The cartridge's own order: recharge, sleep, freeze, flinch, Disable's
-## countdown, confusion, Attract's roll, a belt-and-braces refusal for a Pokémon
-## still locked into the disabled move, then paralysis. A frozen Pokémon is never
-## asked about paralysis, the status byte saying one thing at a time.
-##
-## Waking up does not cost the turn: the counter runs out, the wake is printed and
-## the remaining checks continue, which is Generation 2's rule and not
-## Generation 1's. Confusion and Disable expire the same way.
-static func _check_status(turn: Gen2Turn) -> void:
+static func _check_sleep(turn: Gen2Turn) -> void:
 	var mon: Gen2BattleMon = turn.attacker()
-
-	if Gen2Substatus.has(mon.substatus, Gen2Substatus.RECHARGING):
-		_cancel_charge(mon)
-		mon.substatus &= ~Gen2Substatus.RECHARGING
-		turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"recharge"})
-		turn.end()
-		return
-
 	if Gen2Status.is_asleep(mon.status):
 		mon.status = Gen2Status.tick_sleep(mon.status)
 		if Gen2Status.is_asleep(mon.status):
-			_cancel_charge(mon)
 			turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"sleep"})
 			# `.fast_asleep` prints its line and only then looks at the move:
 			# Snore and Sleep Talk are used through a sleep, so the text stands
 			# and `CantMove` is what they skip.
 			if not SLEEPING_MOVES.has(turn.move_number):
+				_cant_move(mon)
 				turn.end()
 				return
 		else:
 			# `.woke_up` clears `SUBSTATUS_NIGHTMARE`, which has no gate of its
 			# own: left standing it costs an awake Pokemon a quarter a turn.
+			_cant_move(mon)
+			turn.locked = false
 			mon.substatus &= ~Gen2Substatus.NIGHTMARE
 			turn.emit(Gen2Battle.WOKE_UP)
+
+
+## CheckTurn checks recharge, sleep, freeze, flinch, Disable, confusion, Attract,
+## the disabled move, then paralysis.
+static func _check_status(turn: Gen2Turn) -> void:
+	var mon: Gen2BattleMon = turn.attacker()
+
+	if Gen2Substatus.has(mon.substatus, Gen2Substatus.RECHARGING):
+		_cant_move(mon)
+		mon.substatus &= ~Gen2Substatus.RECHARGING
+		turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"recharge"})
+		turn.end()
+		return
+
+	_check_sleep(turn)
+	if turn.ended:
+		return
 
 	if Gen2Status.has(mon.status, Gen2Status.FREEZE):
 		# Flame Wheel and Sacred Fire are the only moves used through a freeze.
 		# `CheckPlayerTurn` clears no bit, so the thaw is the `defrost` step in
 		# their own list, behind `applydamage`: a miss leaves the user frozen.
 		if not THAWING_MOVES.has(turn.move_number):
-			_cancel_charge(mon)
+			_cant_move(mon)
 			turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"freeze"})
 			turn.end()
 			return
 
 	if Gen2Substatus.has(mon.substatus, Gen2Substatus.FLINCHED):
-		_cancel_charge(mon)
+		_cant_move(mon)
 		mon.substatus &= ~Gen2Substatus.FLINCHED
 		turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"flinch"})
 		turn.end()
@@ -1807,14 +1807,15 @@ static func _check_status(turn: Gen2Turn) -> void:
 		else:
 			turn.emit(Gen2Battle.CONFUSED)
 			if Gen2Substatus.rolls_confusion_hit(turn.rng()):
-				_cancel_charge(mon)
+				mon.substatus &= ~Gen2Substatus.IN_LOOP
 				_hurt_self(turn)
+				_cant_move(mon)
 				turn.end()
 				return
 
 	if Gen2Substatus.has(mon.substatus, Gen2Substatus.ATTRACTED) \
 		and Gen2Substatus.rolls_attract_immobile(turn.rng()):
-		_cancel_charge(mon)
+		_cant_move(mon)
 		turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"attract"})
 		turn.end()
 		return
@@ -1824,14 +1825,14 @@ static func _check_status(turn: Gen2Turn) -> void:
 	# still names the slot asked for, so comparing slots would refuse it too.
 	if mon.disabled_slot >= 0 and mon.disabled_slot < mon.moves.size() \
 		and turn.move_number == int(mon.moves[mon.disabled_slot]):
-		_cancel_charge(mon)
+		_cant_move(mon)
 		turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"disabled"})
 		turn.end()
 		return
 
 	if Gen2Status.has(mon.status, Gen2Status.PARALYSIS) \
 		and Gen2Status.rolls_full_paralysis(turn.rng()):
-		_cancel_charge(mon)
+		_cant_move(mon)
 		turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"paralysis"})
 		turn.end()
 
@@ -1934,12 +1935,21 @@ static func _status_target(turn: Gen2Turn, flag: int) -> void:
 	# for the end of the turn.
 	turn.battle.use_status_berry(turn.target, turn.events)
 
+	_status_interrupts(turn, flag)
+
+
+static func _status_interrupts(turn: Gen2Turn, flag: int) -> void:
+	var defender: Gen2BattleMon = turn.defender()
 	# `BattleCommand_FreezeTarget`'s tail, behind the berry as the source puts it
 	# behind `UseHeldStatusHealingItem`'s `ret nz`: a freeze a berry already cured
 	# never sets the flag, so it stops no thaw.
 	if flag == Gen2Status.FREEZE \
 		and Gen2Status.has(defender.status, Gen2Status.FREEZE):
+		_cant_move(defender)
+		defender.substatus &= ~Gen2Substatus.RECHARGING
 		turn.battle.mark_just_got_frozen(turn.target)
+	if flag == Gen2Status.SLEEP_MASK and Gen2Status.is_asleep(defender.status):
+		_cant_move(defender)
 
 
 ## Whether the target's type refuses this status, which two of the five ask.
@@ -2023,9 +2033,12 @@ static func _flinch_target(turn: Gen2Turn) -> void:
 		return
 
 	var defender: Gen2BattleMon = turn.defender()
-	if defender.is_fainted():
+	if defender.is_fainted() or Gen2Status.is_asleep(defender.status) \
+		or Gen2Status.has(defender.status, Gen2Status.FREEZE):
 		return
-
+	if turn.battle.opponent_went_first(turn.side):
+		return
+	defender.substatus &= ~Gen2Substatus.RECHARGING
 	defender.substatus |= Gen2Substatus.FLINCHED
 
 
@@ -2073,9 +2086,7 @@ static func _confuse_target(turn: Gen2Turn) -> void:
 	turn.battle.use_confusion_berry(turn.target, turn.events)
 
 
-## Heals the attacker for half of what the hit calculated, at least one: half of
-## [member Gen2Turn.damage] rather than [member Gen2Turn.dealt], the uncapped
-## figure, so fifty against a target with three left heals twenty-five.
+## SapHealth reads wCurDamage after DoPlayerDamage or DoEnemyDamage clamps it.
 static func _drain_target(turn: Gen2Turn) -> void:
 	var attacker: Gen2BattleMon = turn.attacker()
 	@warning_ignore("integer_division")
@@ -2136,16 +2147,12 @@ static func _ohko(turn: Gen2Turn) -> void:
 		turn.end()
 		return
 
-	var accuracy: int = clampi(
+	turn.accuracy = clampi(
 		int(turn.move.get("accuracy", 0)) + (attacker.level - defender.level) * OHKO_LEVEL_BONUS,
 		0, Gen2Accuracy.ALWAYS_HITS
 	)
-	var chance: int = Gen2Accuracy.chance(
-		accuracy, attacker.stage("accuracy"), defender.stage("evasion")
-	)
-	if not Gen2Accuracy.rolls_hit(turn.rng(), chance):
-		turn.emit(Gen2Battle.MISSED, {"target": turn.target})
-		turn.end()
+	_check_hit(turn)
+	if turn.missed:
 		return
 
 	# `ld a, $ff / ld [hli], a / ld [hl], a` over `wCurDamage`, and `wCriticalHit`
@@ -2274,6 +2281,8 @@ static func _rollout_check(turn: Gen2Turn) -> void:
 	var mon: Gen2BattleMon = turn.attacker()
 	if not Gen2Substatus.has(mon.substatus, Gen2Substatus.ROLLOUT):
 		mon.rollout_count = 0
+	else:
+		turn.skip_to = DO_TURN
 
 
 ## `BattleCommand_RolloutPower`, both halves of Rollout: the count and the
@@ -3556,6 +3565,7 @@ static func _kings_rock(turn: Gen2Turn) -> void:
 	):
 		return
 
+	turn.defender().substatus &= ~Gen2Substatus.RECHARGING
 	turn.defender().substatus |= Gen2Substatus.FLINCHED
 
 
@@ -3583,7 +3593,7 @@ static func _stat_change(command: StringName, turn: Gen2Turn) -> void:
 		turn.stat_mist_blocked = true
 		return
 
-	if not turn.battle.mon(side).can_change_stage(stat_key, amount):
+	if not turn.battle.mon(side).stage_has_room(stat_key, amount):
 		return
 
 	if not targets_user and _computer_stat_down_misses(turn):
@@ -3805,7 +3815,7 @@ static func _disobedient_idle(turn: Gen2Turn) -> void:
 static func _hurt_self(turn: Gen2Turn) -> void:
 	var user: Gen2BattleMon = turn.attacker()
 	var dealt: int = user.take_damage(Gen2Damage.confusion_damage(
-		user, turn.rng(), turn.battle.screens[turn.side], turn.battle.is_link_battle
+		user, turn.battle.screens[turn.side], turn.battle.is_link_battle, turn.effective_move()
 	))
 	turn.emit(Gen2Battle.HURT_ITSELF, {
 		"amount": dealt, "hp": user.hp, "max_hp": user.max_hp(),
