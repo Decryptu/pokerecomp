@@ -131,12 +131,14 @@ func test_a_stage_at_the_end_of_its_range_reports_that_it_did_not_move() -> void
 	assert_eq(mon.stage("attack"), Gen2Stats.MAX_STAGE)
 
 
-func test_a_stage_that_would_leave_the_real_stat_at_999_is_put_back() -> void:
+func test_a_stat_can_reach_999_and_only_the_next_raise_fails() -> void:
 	var mon: Gen2BattleMon = Gen2BattleMon.create(_data, Fixture.PIKACHU, 50)
 	mon.stats["attack"] = 800
-	assert_false(mon.can_change_stage("attack", 1))
+	assert_true(mon.can_change_stage("attack", 1))
+	assert_true(mon.change_stage("attack", 1))
+	assert_eq(mon.stat("attack"), 999)
 	assert_false(mon.change_stage("attack", 1))
-	assert_eq(mon.stage("attack"), 0)
+	assert_eq(mon.stage("attack"), 1)
 
 
 func test_hp_has_no_stage() -> void:
@@ -216,7 +218,8 @@ func test_badge_stat_boosts_are_active_battle_values_and_clear_cleanly() -> void
 	assert_gt(mon.stat("attack"), attack)
 	assert_gt(mon.stat("defense"), defense)
 	assert_gt(mon.stat("speed"), speed)
-	assert_gt(mon.unmodified_stat("sp_attack"), special)
+	assert_gt(mon.stat("sp_attack"), special)
+	assert_eq(mon.unmodified_stat("sp_attack"), special)
 	assert_eq(mon.unmodified_stat("sp_defense"), special_defense)
 	assert_false(mon.badge_stat_boosts.has("sp_defense"))
 	mon.clear_badge_boosts()
@@ -358,3 +361,27 @@ func test_rolled_dvs_stay_inside_a_nibble_each() -> void:
 		assert_between(Gen2Stats.attack_dv(dvs), 0, Gen2Stats.MAX_DV)
 		assert_between(Gen2Stats.special_dv(dvs), 0, Gen2Stats.MAX_DV)
 		assert_eq(dvs & ~0xFFFF, 0)
+
+
+func test_stat_limit_refusals_roll_back_only_one_of_two_requested_stages() -> void:
+	var mon: Gen2BattleMon = Gen2BattleMon.create(_data, Fixture.PIKACHU, 50)
+	mon.stats.attack = 999
+	assert_false(mon.change_stage("attack", 2))
+	assert_eq(mon.stage("attack"), 1)
+	mon.stats.defense = 1
+	assert_false(mon.change_stage("defense", -2))
+	assert_eq(mon.stage("defense"), -1)
+
+
+func test_badges_follow_stage_rounding_and_glacier_reads_the_staged_special_attack() -> void:
+	var mon: Gen2BattleMon = Gen2BattleMon.create(_data, Fixture.PIKACHU, 50)
+	mon.stats.attack = 7
+	mon.stats.sp_attack = 150
+	mon.stats.sp_defense = 100
+	mon.set_badge_boosts(0x41)
+	mon.stages.attack = 1
+	assert_eq(mon.stat("attack"), 11)
+	assert_eq(mon.unmodified_stat("attack"), 7)
+	assert_eq(mon.stat("sp_defense"), 100)
+	mon.stages.sp_attack = 1
+	assert_eq(mon.stat("sp_defense"), 112)

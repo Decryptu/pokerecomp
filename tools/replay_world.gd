@@ -6,8 +6,8 @@ extends SceneTree
 ## [Gen2WorldSnapshot] JSON plus the play timer, which either matches byte for byte
 ## or does not. Four runs per route from the same seed and log: record, replay, and
 ## the same log driven by `_process` at 30 and 144 fps, which is what says the pump
-## rather than the host spends frames. The corpus is twenty-seven generated walks,
-## one scripted errand and one wild battle, the battle being the seam this closes.
+## rather than the host spends frames. Each of the three profiles runs nine
+## generated walks, one scripted errand and one wild battle: thirty-three routes.
 
 const GAMES: Array[StringName] = [&"gold", &"silver", &"crystal"]
 ## Twenty seconds of hardware frames: long enough for several walks, a script
@@ -298,8 +298,6 @@ func _run(
 	var battles: int = 0
 	if adaptive:
 		battles = _drive(screen, frames)
-	elif host_fps <= 0.0:
-		screen.advance_frames(frames)
 	elif host_fps <= 0.0:
 		screen.advance_frames(frames)
 	else:

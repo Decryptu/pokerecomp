@@ -204,11 +204,7 @@ static func stab_damage(
 		@warning_ignore("integer_division")
 		worked = worked * STAB_NUMERATOR / STAB_DENOMINATOR
 
-	var applied: Array = []
-	for defending_type: int in defending:
-		if applied.has(defending_type):
-			continue
-		applied.append(defending_type)
+	for defending_type: int in data.ordered_defending_types(move_type, defending):
 		var multiplier: int = data.type_matchup(move_type, defending_type, foresight)
 		if multiplier == RomLayout.MATCHUP_NO_EFFECT:
 			out["immune"] = true
@@ -267,20 +263,23 @@ static func apply_variation(damage: int, variation: int) -> int:
 ## `BattleCommand_Critical`'s roll, at the level below.
 static func roll_critical(
 	move: Dictionary, rng: RandomNumberGenerator, focus_energy: bool = false,
-	scope_lens: bool = false
+	scope_lens: bool = false, species: int = 0, item: int = 0
 ) -> bool:
 	if int(move.get("power", 0)) <= 0:
 		return false
 	return rng.randi_range(0, 255) < CRITICAL_CHANCES[
-		critical_level(int(move.get("number", 0)), focus_energy, scope_lens)
+		critical_level(int(move.get("number", 0)), focus_energy, scope_lens, species, item)
 	]
 
 
 ## Two for a high-critical move, one for Focus Energy, one for the Scope Lens,
 ## in `BattleCommand_Critical`'s own order.
 static func critical_level(
-	move_number: int, focus_energy: bool = false, scope_lens: bool = false
+	move_number: int, focus_energy: bool = false, scope_lens: bool = false,
+	species: int = 0, item: int = 0
 ) -> int:
+	if (species == 113 and item == 0x1E) or (species == 83 and item == 0x69):
+		return 2 # BattleCommand_Critical jumps straight to .Tally for these pairs.
 	var level: int = 0
 	if HIGH_CRITICAL_MOVES.has(move_number):
 		level += 2
@@ -295,14 +294,11 @@ static func roll_variation(rng: RandomNumberGenerator) -> int:
 	return rng.randi_range(MIN_VARIATION, MAX_VARIATION)
 
 
-## `HitSelfInConfusion`: the Pokémon's own Attack against its own Defense, stages
-## and burn read as a physical hit would, and no STAB, matchup or critical.
-##
-## [param screens] is the confused Pokémon's own side's, doubled off exactly as
-## `PlayerAttackDamage` doubles, so a Reflect halves what confusion takes.
+## `HitSelfInConfusion` reaches DamageCalc with the selected move's type and
+## effect intact. It never calls DamageVariation or consumes a random byte.
 static func confusion_damage(
-	mon: Gen2BattleMon, rng: RandomNumberGenerator, screens: int = Gen2Screens.NONE,
-	link_battle: bool = false
+	mon: Gen2BattleMon, screens: int = Gen2Screens.NONE,
+	link_battle: bool = false, move: Dictionary = {}
 ) -> int:
 	var defense: int = mon.stat("defense")
 	if Gen2Screens.has(screens, Gen2Screens.REFLECT):
@@ -310,11 +306,11 @@ static func confusion_damage(
 	var truncated: Array = truncate_stats(
 		mon.stat("attack"), defense, Gen2WorldState.is_crystal_profile(mon.data) and not link_battle
 	)
-	var damage: int = base_damage(
-		mon.level, CONFUSION_POWER, int(truncated[0]), int(truncated[1])
+	return damage_calc(
+		mon, CONFUSION_POWER, int(truncated[0]), int(truncated[1]),
+		int(move.get("effect", -1)) == Gen2MoveEffect.SELFDESTRUCT,
+		int(move.get("type", RomLayout.TYPE_NORMAL))
 	)
-	damage = mini(damage, DAMAGE_CAP) + MIN_DAMAGE
-	return apply_variation(damage, roll_variation(rng))
 
 
 ## `MagnitudePower` (`data/moves/magnitude_power.asm`), as [threshold, power,
@@ -480,7 +476,7 @@ static func _attack_stat(
 	var key: String = "attack" if physical else "sp_attack"
 	var out: int = attacker.unmodified_stat(key) \
 		if _ignores_stages(attacker, defender, move_type, critical) else attacker.stat(key)
-	if Gen2HeldItem.doubles_attack(attacker.species, attacker.item, physical):
+	if Gen2HeldItem.doubles_attack(attacker.persistent_species(), attacker.item, physical):
 		out *= 2
 	return out
 
@@ -511,7 +507,7 @@ static func _defense_stat(
 ## is `docs/bugs_and_glitches.md`'s Metal Powder entry. Turning
 ## `metal_powder_overflow` off keeps the boosted defence at the byte instead.
 static func metal_powder_pair(defender: Gen2BattleMon, pair: Array) -> Array:
-	if defender == null or not Gen2HeldItem.boosts_defence(defender.species, defender.item):
+	if defender == null or not Gen2HeldItem.boosts_defence(defender.persistent_species(), defender.item):
 		return pair
 	var attack: int = int(pair[0])
 	var boosted: int = Gen2HeldItem.metal_powder_defence(int(pair[1]))

@@ -612,7 +612,39 @@ func test_crystal_link_stats_use_one_shift_for_hits_and_confusion() -> void:
 	assert_eq(Gen2Damage.damage_stats(attacker, defender, 0, false, Gen2Screens.REFLECT), [6, 75])
 	assert_eq(Gen2Damage.damage_stats(attacker, defender, 0, false, Gen2Screens.REFLECT, true), [25, 44])
 	attacker.stats["defense"] = 600
-	var generator := RandomNumberGenerator.new()
-	generator.seed = 1
-	assert_between(Gen2Damage.confusion_damage(attacker, generator, Gen2Screens.REFLECT), 2, 3)
-	assert_between(Gen2Damage.confusion_damage(attacker, generator, Gen2Screens.REFLECT, true), 10, 12)
+	assert_eq(Gen2Damage.confusion_damage(attacker, Gen2Screens.REFLECT), 3)
+	assert_eq(Gen2Damage.confusion_damage(attacker, Gen2Screens.REFLECT, true), 12)
+
+
+func test_lucky_punch_and_stick_replace_the_other_critical_bonuses() -> void:
+	for pair: Array in [[113, 30], [83, 105]]:
+		for move: int in [Fixture.TACKLE, Fixture.SLASH]:
+			assert_eq(Gen2Damage.critical_level(move, true, false, pair[0], pair[1]), 2)
+			assert_eq(Gen2Damage.critical_level(move, true, false, 1, pair[1]), Gen2Damage.critical_level(move, true))
+
+
+func test_confusion_uses_the_selected_moves_item_boost_and_selfdestruct_effect() -> void:
+	var mon: Gen2BattleMon = _mon(Fixture.PIKACHU)
+	mon.stats.attack = 100
+	mon.stats.defense = 100
+	mon.item = Fixture.MAGNET
+	assert_eq(Gen2Damage.confusion_damage(mon, 0, false, {"type": 23}), 20)
+	assert_eq(Gen2Damage.confusion_damage(mon, 0, false, {"type": 20}), 19)
+	assert_eq(Gen2Damage.confusion_damage(mon, 0, false, {"type": 23, "effect": Gen2MoveEffect.SELFDESTRUCT}), 40)
+
+
+func test_species_items_read_the_persistent_species_through_transform() -> void:
+	for pair: Array in [[Fixture.CUBONE, Fixture.THICK_CLUB, 0], [Fixture.PIKACHU, Fixture.LIGHT_BALL, 20]]:
+		var user: Gen2BattleMon = _mon(pair[0])
+		var target: Gen2BattleMon = _mon(Fixture.GEODUDE)
+		user.item = pair[1]
+		assert_true(user.transform_into(target))
+		user.stats.attack = 100
+		user.stats.sp_attack = 100
+		target.stats.defense = 100
+		target.stats.sp_defense = 100
+		assert_eq(Gen2Damage.damage_stats(user, target, pair[2], false), [200, 100])
+	var ditto: Gen2BattleMon = _mon(Fixture.DITTO)
+	ditto.item = Fixture.METAL_POWDER
+	assert_true(ditto.transform_into(_mon(Fixture.PIKACHU)))
+	assert_eq(Gen2Damage.metal_powder_pair(ditto, [100, 100]), [100, 150])

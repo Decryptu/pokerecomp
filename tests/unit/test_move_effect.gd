@@ -402,12 +402,7 @@ func test_an_ordinary_move_spends_its_slot() -> void:
 	assert_eq(int(battle.player.pp[0]), before - 1)
 
 
-## A quarter of [member Gen2Turn.damage], the number the formula calculated,
-## never [member Gen2Turn.dealt], the number that actually came off a target
-## with less left than that: the real cartridge's own recoil reads the same
-## uncapped figure drain does. A target with 3 HP left against a hit worth 20
-## costs the attacker a quarter of 20, not a quarter of 3.
-func test_recoil_is_a_quarter_of_what_the_formula_calculated_and_never_nothing() -> void:
+func test_recoil_reads_the_damage_word_and_takes_at_least_one() -> void:
 	var battle: Gen2Battle = _battle()
 	var turn: Gen2Turn = _turn(battle)
 	turn.damage = 20
@@ -422,10 +417,10 @@ func test_recoil_is_a_quarter_of_what_the_formula_calculated_and_never_nothing()
 	assert_eq(int(_first(second.events, Gen2Battle.RECOIL)["amount"]), 1)
 
 
-func test_a_move_that_dealt_nothing_costs_nothing_in_recoil() -> void:
+func test_recoil_takes_one_even_after_a_substitute_clears_damage() -> void:
 	var turn: Gen2Turn = _turn(_battle())
 	Gen2EffectCommands.run(Gen2EffectCommands.RECOIL, turn)
-	assert_eq(turn.events.size(), 0)
+	assert_eq(int(_first(turn.events, Gen2Battle.RECOIL)["amount"]), 1)
 
 
 func test_flinch_hit_is_the_secondary_shape_with_flinch_target_in_it() -> void:
@@ -969,9 +964,7 @@ func test_the_two_drain_lists_differ_only_in_the_kings_rock_step() -> void:
 	)
 
 
-func test_drain_heals_half_of_what_was_calculated_not_what_was_taken() -> void:
-	# A target with three hit points left takes three, but the drain reads the
-	# uncapped fifty the formula worked out, the cartridge's own quirk.
+func test_drain_heals_half_the_hp_taken_after_the_damage_word_is_clamped() -> void:
 	var battle: Gen2Battle = _battle()
 	battle.enemy.hp = 3
 	battle.player.hp = 1
@@ -981,7 +974,7 @@ func test_drain_heals_half_of_what_was_calculated_not_what_was_taken() -> void:
 	assert_eq(turn.dealt, 3, "clamped to what was left to take")
 
 	Gen2EffectCommands.run(Gen2EffectCommands.DRAIN_TARGET, turn)
-	assert_eq(int(_first(turn.events, Gen2Battle.DRAINED)["amount"]), 25, "half of fifty, not of three")
+	assert_eq(int(_first(turn.events, Gen2Battle.DRAINED)["amount"]), 1, "half of the three HP taken")
 	assert_eq(_first(turn.events, Gen2Battle.DRAINED)["from"], turn.target)
 
 
@@ -1075,7 +1068,7 @@ func test_psywave_stays_inside_its_own_range() -> void:
 
 func test_ohko_rolls_its_own_accuracy_and_leaves_the_damage_to_applydamage() -> void:
 	# `OHKOHit` carries no `checkhit`: the command calls it itself, so the three
-	# moves are the one place a locked-on flying target is still out of reach.
+	# moves pass the same gates as every other hit.
 	# It carries no `damagestats` or `damagecalc` either, the damage being $FFFF.
 	var sequence: Array = Gen2MoveEffect.sequence_for(Gen2MoveEffect.OHKO)
 	assert_true(sequence.has(Gen2EffectCommands.OHKO))
@@ -1652,11 +1645,12 @@ func test_kings_rock_flinches_out_of_its_own_parameter() -> void:
 	var flinched: int = 0
 	for seed_value: int in 256:
 		battle.rng.seed = seed_value
-		battle.enemy.substatus = Gen2Substatus.NONE
+		battle.enemy.substatus = Gen2Substatus.RECHARGING
 		var turn: Gen2Turn = _turn(battle, Fixture.TACKLE)
 		Gen2EffectCommands.run(Gen2EffectCommands.KINGS_ROCK, turn)
 		if Gen2Substatus.has(battle.enemy.substatus, Gen2Substatus.FLINCHED):
 			flinched += 1
+			assert_false(Gen2Substatus.has(battle.enemy.substatus, Gen2Substatus.RECHARGING))
 
 	assert_between(flinched, 10, 60, "roughly thirty in 256 across 256 seeds")
 
@@ -3903,17 +3897,16 @@ func test_a_locked_on_flying_target_is_still_missed_by_the_ground_moves() -> voi
 	assert_false(_run_move(battle, Fixture.TACKLE).missed)
 
 
-## Fissure's own list has no `checkhit`, so the flag it is named against is
-## neither read nor spent by it.
-func test_fissure_never_reaches_the_lock_on_read() -> void:
+## OHKO calls CheckHit internally, including its Lock-On read.
+func test_fissure_reaches_the_lock_on_read_inside_ohko() -> void:
 	assert_false(
 		Gen2MoveEffect.sequence_for(Gen2MoveEffect.OHKO).has(Gen2EffectCommands.CHECK_HIT),
-		"`OHKOHit` rolls its own accuracy instead"
+		"the command calls CheckHit internally"
 	)
 	var battle: Gen2Battle = _battle()
 	battle.enemy.substatus |= Gen2Substatus.LOCK_ON
 	_run_move(battle, Fixture.FISSURE)
-	assert_true(Gen2Substatus.has(battle.enemy.substatus, Gen2Substatus.LOCK_ON))
+	assert_false(Gen2Substatus.has(battle.enemy.substatus, Gen2Substatus.LOCK_ON))
 
 
 ## `.Protect` is asked before `.LockOn`, so a Protect turns a locked-on move away
@@ -5008,3 +5001,148 @@ func test_a_disobedient_sleeping_move_preserves_encore_and_spends_no_pp() -> voi
 		assert_eq(battle.player.encore_turns, 3)
 		assert_eq(battle.player.status, 3)
 	assert_true(seen)
+
+
+func test_every_turn_refusal_clears_fury_cutter_and_move_locks() -> void:
+	for side: int in [Gen2Battle.PLAYER, Gen2Battle.ENEMY]:
+		for reason: String in ["recharge", "sleep", "freeze", "flinch", "confusion", "attract", "disabled", "paralysis"]:
+			var refused: bool = false
+			for seed_value: int in 32:
+				var battle: Gen2Battle = _battle()
+				battle.rng.seed = seed_value
+				var mon: Gen2BattleMon = battle.mon(side)
+				_arm_move_locks(mon)
+				match reason:
+					"recharge": mon.substatus |= Gen2Substatus.RECHARGING
+					"sleep": mon.status = 3
+					"freeze": mon.status = Gen2Status.FREEZE
+					"flinch": mon.substatus |= Gen2Substatus.FLINCHED
+					"confusion":
+						mon.substatus |= Gen2Substatus.CONFUSED | Gen2Substatus.IN_LOOP
+						mon.confusion_turns = 3
+					"attract": mon.substatus |= Gen2Substatus.ATTRACTED
+					"disabled":
+						mon.disabled_slot = 0
+						mon.disable_turns = 3
+					"paralysis": mon.status = Gen2Status.PARALYSIS
+				var turn := Gen2Turn.create(battle, side, 0, Fixture.TACKLE, _data.move(Fixture.TACKLE), [])
+				Gen2EffectCommands.run(Gen2EffectCommands.CHECK_STATUS, turn)
+				if not turn.ended:
+					continue
+				refused = true
+				_assert_move_locks_clear(mon)
+				if reason == "confusion":
+					assert_false(Gen2Substatus.has(mon.substatus, Gen2Substatus.IN_LOOP))
+				break
+			assert_true(refused, reason)
+
+
+func _arm_move_locks(mon: Gen2BattleMon) -> void:
+	mon.fury_cutter_count = 4
+	mon.charged_move = Fixture.TACKLE
+	mon.rampage_move = Fixture.TACKLE
+	mon.bide_move = Fixture.TACKLE
+	mon.substatus |= Gen2Substatus.CHARGING | Gen2Substatus.RAMPAGING | Gen2Substatus.BIDE | Gen2Substatus.ROLLOUT
+
+
+func _assert_move_locks_clear(mon: Gen2BattleMon) -> void:
+	assert_eq(mon.fury_cutter_count, 0)
+	assert_eq(mon.charged_move, 0)
+	assert_eq(mon.rampage_move, 0)
+	assert_eq(mon.bide_move, 0)
+	assert_eq(mon.substatus & (Gen2Substatus.CHARGING | Gen2Substatus.RAMPAGING | Gen2Substatus.BIDE | Gen2Substatus.ROLLOUT), 0)
+
+
+func test_waking_clears_locks_but_sleeping_moves_skip_the_reset() -> void:
+	for number: int in [Fixture.TACKLE, Fixture.SNORE, Fixture.SLEEP_TALK]:
+		var turn: Gen2Turn = _turn(_battle(), number)
+		_arm_move_locks(turn.attacker())
+		turn.locked = true
+		turn.attacker().status = 1
+		Gen2EffectCommands.run(Gen2EffectCommands.CHECK_STATUS, turn)
+		_assert_move_locks_clear(turn.attacker())
+		assert_false(turn.locked)
+		assert_false(turn.ended)
+		if number == Fixture.TACKLE:
+			continue
+		_arm_move_locks(turn.attacker())
+		turn.attacker().status = 3
+		Gen2EffectCommands.run(Gen2EffectCommands.CHECK_STATUS, turn)
+		assert_eq(turn.attacker().fury_cutter_count, 4)
+		assert_false(turn.ended)
+
+
+func test_sleep_and_freeze_cancel_locks_only_when_a_berry_did_not_cure_them() -> void:
+	for command: StringName in [Gen2EffectCommands.SLEEP_TARGET, Gen2EffectCommands.FREEZE_TARGET]:
+		for berry: int in [0, Fixture.MIRACLEBERRY]:
+			var turn: Gen2Turn = _turn(_battle(), Fixture.SLEEP_POWDER)
+			_arm_move_locks(turn.defender())
+			turn.defender().substatus |= Gen2Substatus.RECHARGING
+			turn.defender().item = berry
+			Gen2EffectCommands.run(command, turn)
+			if berry != 0:
+				assert_eq(turn.defender().fury_cutter_count, 4)
+				assert_true(Gen2Substatus.has(turn.defender().substatus, Gen2Substatus.RECHARGING))
+				continue
+			_assert_move_locks_clear(turn.defender())
+			assert_eq(Gen2Substatus.has(turn.defender().substatus, Gen2Substatus.RECHARGING), command == Gen2EffectCommands.SLEEP_TARGET)
+
+
+func test_flinching_clears_recharge_and_refuses_sleep_freeze_and_a_finished_turn() -> void:
+	for status: int in [Gen2Status.NONE, 3, Gen2Status.FREEZE]:
+		var turn: Gen2Turn = _turn(_battle())
+		turn.defender().status = status
+		turn.defender().substatus |= Gen2Substatus.RECHARGING
+		Gen2EffectCommands.run(Gen2EffectCommands.FLINCH_TARGET, turn)
+		assert_eq(Gen2Substatus.has(turn.defender().substatus, Gen2Substatus.FLINCHED), status == 0)
+		assert_eq(Gen2Substatus.has(turn.defender().substatus, Gen2Substatus.RECHARGING), status != 0)
+	var late: Gen2Turn = _turn(_battle())
+	late.side = Gen2Battle.ENEMY
+	late.target = Gen2Battle.PLAYER
+	Gen2EffectCommands.run(Gen2EffectCommands.FLINCH_TARGET, late)
+	assert_false(Gen2Substatus.has(late.defender().substatus, Gen2Substatus.FLINCHED))
+
+
+func test_ohko_obeys_immunity_protect_hidden_targets_and_x_accuracy() -> void:
+	for gate: int in [Gen2Substatus.PROTECT, Gen2Substatus.FLYING, Gen2Substatus.UNDERGROUND]:
+		var turn: Gen2Turn = _turn(_battle(), Fixture.OHKO_MOVE)
+		turn.defender().substatus = gate
+		turn.attacker().substatus |= Gen2Substatus.X_ACCURACY
+		Gen2EffectCommands.run(Gen2EffectCommands.OHKO, turn)
+		assert_true(turn.missed)
+		assert_eq(turn.damage, 0)
+	var immune: Gen2Turn = _turn(_battle(), Fixture.OHKO_MOVE)
+	immune.immune = true
+	Gen2EffectCommands.run(Gen2EffectCommands.OHKO, immune)
+	assert_true(immune.missed)
+	var aimed: Gen2Turn = _turn(_battle(), Fixture.OHKO_MOVE)
+	aimed.attacker().substatus |= Gen2Substatus.X_ACCURACY
+	aimed.move = aimed.move.duplicate()
+	aimed.move.accuracy = 0
+	Gen2EffectCommands.run(Gen2EffectCommands.OHKO, aimed)
+	assert_eq(aimed.damage, 65535)
+
+
+func test_confusion_damage_consumes_no_random_draw_after_the_hit_decision() -> void:
+	var turn: Gen2Turn = _turn(_battle())
+	var expected := RandomNumberGenerator.new()
+	expected.seed = 12345
+	expected.randi_range(0, 255)
+	turn.attacker().substatus = Gen2Substatus.CONFUSED
+	turn.attacker().confusion_turns = 3
+	Gen2EffectCommands.run(Gen2EffectCommands.CHECK_STATUS, turn)
+	assert_true(turn.ended)
+	assert_eq(turn.rng().state, expected.state)
+
+
+func test_lethal_damage_is_recorded_before_it_is_clamped_for_recoil() -> void:
+	for side: int in [Gen2Battle.PLAYER, Gen2Battle.ENEMY]:
+		var battle: Gen2Battle = _battle()
+		var turn := Gen2Turn.create(battle, side, 0, Fixture.TACKLE, _data.move(Fixture.TACKLE), [])
+		turn.defender().hp = 3
+		turn.damage = 50
+		Gen2EffectCommands.run(Gen2EffectCommands.APPLY_DAMAGE, turn)
+		assert_eq(turn.damage, 3)
+		assert_eq(int(battle.last_damage_taken(turn.target).damage), 50)
+		Gen2EffectCommands.run(Gen2EffectCommands.RECOIL, turn)
+		assert_eq(int(_first(turn.events, Gen2Battle.RECOIL).amount), 1)

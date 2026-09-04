@@ -2417,7 +2417,7 @@ func award_capture_experience() -> Array:
 ## whether or not it changed anything, `AI_TryItem` clearing the slot the moment a
 ## check said yes. What the cartridge clears beside it is
 ## [method _reset_action_counters]'s work and
-## [method reset_damage_taken]'s; Bide and Rage do not exist here yet.
+## [method reset_damage_taken]'s.
 func _use_trainer_item(side: int, item: int, events: Array) -> void:
 	if item == 0:
 		return
