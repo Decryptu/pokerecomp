@@ -47,6 +47,17 @@ static func monochrome() -> PackedColorArray:
 	]))
 
 
+## One palette read through a Game Boy shade register, [param shades] holding
+## the shade each colour index selects. `rBGP` is %11100100 wherever a map is
+## drawn, which is the identity and gives the palette back unchanged; an object
+## register is not, and its index 0 is transparent whatever shade it names.
+static func through_shades(colors: PackedColorArray, shades: Array[int]) -> PackedColorArray:
+	var out := PackedColorArray()
+	for shade: int in shades:
+		out.append(colors[shade] if shade >= 0 and shade < colors.size() else Color.MAGENTA)
+	return out
+
+
 ## Reads one species' entry as { normal, shiny }, each a two-colour array.
 static func decode_entry(data: PackedByteArray, offset: int) -> Dictionary:
 	return {

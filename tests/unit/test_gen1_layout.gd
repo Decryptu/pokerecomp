@@ -16,7 +16,7 @@ const REQUIRED_KEYS: Array[String] = [
 	"type_names_bank", "type_effects", "item_names", "item_prices", "tmhm_moves",
 	"mon_palettes", "super_palettes", "trainer_names", "evos_moves", "evos_moves_bank",
 	"cries", "font", "text_box", "map_headers", "map_header_banks", "map_songs",
-	"tilesets", "water_tilesets", "tileset_collision_bank",
+	"tilesets", "water_tilesets", "tileset_collision_bank", "overworld_sprites",
 ]
 
 
@@ -263,3 +263,119 @@ func test_the_object_row_widths_match_the_macro() -> void:
 		Gen1Layout.TM_FIRST_ITEM + Gen1Layout.TM_COUNT - 1, 0xFA,
 		"the last TM is item $FA"
 	)
+
+
+## `SetPal_Overworld`, branch by branch. A city's row is its map id plus one, so
+## the eleven of them run PAL_PALLET to PAL_SAFFRON in map order.
+func test_a_city_takes_its_own_row_and_a_route_takes_pal_route() -> void:
+	for map_id: int in Gen1Layout.NUM_CITY_MAPS:
+		assert_eq(
+			Gen1Layout.overworld_palette(RomRegistry.RED, map_id, 0), map_id + 1,
+			"city $%02X" % map_id
+		)
+	assert_eq(Gen1Layout.overworld_palette(RomRegistry.RED, 0x0C, 0), Gen1Layout.PAL_ROUTE)
+	assert_eq(
+		Gen1Layout.overworld_palette(RomRegistry.RED, Gen1Layout.FIRST_INDOOR_MAP - 1, 0),
+		Gen1Layout.PAL_ROUTE, "the last route id"
+	)
+
+
+func test_the_two_tilesets_answer_before_the_map_id() -> void:
+	for id: StringName in RomRegistry.ids_of_generation(RomRegistry.GEN1):
+		assert_eq(
+			Gen1Layout.overworld_palette(id, 0x00, Gen1Layout.TILESET_CEMETERY),
+			Gen1Layout.PAL_GRAYMON, "%s: Pallet Town's own id loses to CEMETERY" % id
+		)
+		assert_eq(
+			Gen1Layout.overworld_palette(id, 0x00, Gen1Layout.TILESET_CAVERN),
+			Gen1Layout.PAL_CAVE, "%s: and to CAVERN" % id
+		)
+
+
+func test_an_indoor_map_reads_the_map_it_was_entered_from() -> void:
+	# OAKS_LAB out of Pallet Town, then out of Route 1.
+	assert_eq(Gen1Layout.overworld_palette(RomRegistry.RED, 0x28, 0, 0x00), Gen1Layout.PAL_PALLET)
+	assert_eq(Gen1Layout.overworld_palette(RomRegistry.RED, 0x28, 0, 0x0C), Gen1Layout.PAL_ROUTE)
+	# `wLastMap` is unset before the first warp, which the routine reads as a
+	# map past the last city.
+	assert_eq(Gen1Layout.overworld_palette(RomRegistry.RED, 0x28, 0), Gen1Layout.PAL_ROUTE)
+
+
+func test_the_named_indoor_branches_ignore_the_last_map() -> void:
+	var named: Dictionary = {
+		Gen1Layout.CERULEAN_CAVE_2F: Gen1Layout.PAL_CAVE,
+		0xE3: Gen1Layout.PAL_CAVE,
+		Gen1Layout.CERULEAN_CAVE_1F: Gen1Layout.PAL_CAVE,
+		Gen1Layout.BRUNOS_ROOM: Gen1Layout.PAL_CAVE,
+		Gen1Layout.LORELEIS_ROOM: Gen1Layout.PAL_PALLET,
+	}
+	for map_id: int in named:
+		for last_map: int in [-1, 0x00, 0x0C]:
+			assert_eq(
+				Gen1Layout.overworld_palette(RomRegistry.RED, map_id, 0, last_map),
+				int(named[map_id]), "$%02X out of %d" % [map_id, last_map]
+			)
+	# One past `CERULEAN_CAVE_1F` is back on `wLastMap`.
+	assert_eq(
+		Gen1Layout.overworld_palette(RomRegistry.RED, Gen1Layout.CERULEAN_CAVE_1F + 1, 0, 0x00),
+		Gen1Layout.PAL_PALLET
+	)
+
+
+func test_only_yellow_names_the_two_link_rooms() -> void:
+	for map_id: int in [Gen1Layout.TRADE_CENTER, Gen1Layout.COLOSSEUM]:
+		assert_eq(
+			Gen1Layout.overworld_palette(RomRegistry.YELLOW, map_id, 0, 0x00),
+			Gen1Layout.PAL_GRAYMON, "yellow $%02X" % map_id
+		)
+		assert_eq(
+			Gen1Layout.overworld_palette(RomRegistry.RED, map_id, 0, 0x00),
+			Gen1Layout.PAL_PALLET, "red $%02X falls through to wLastMap" % map_id
+		)
+
+
+func test_every_palette_row_is_inside_the_table() -> void:
+	for id: StringName in RomRegistry.ids_of_generation(RomRegistry.GEN1):
+		var layout: Dictionary = Gen1Layout.for_id(id)
+		var count: int = Gen1Layout.super_palette_count(id)
+		assert_lt(
+			Gen1Layout.super_palette_offset(layout, count) - 1, GEN1_ROM_SIZE,
+			"%s SuperPalettes" % id
+		)
+		for map_id: int in Gen1Layout.map_count(id):
+			for tileset: int in Gen1Layout.tileset_count(id):
+				assert_between(
+					Gen1Layout.overworld_palette(id, map_id, tileset, 0x00), 0, count - 1,
+					"%s map $%02X tileset %d" % [id, map_id, tileset]
+				)
+
+
+## `GBPalNormal` writes %11010000, so an object's three drawn indices take
+## shades 0, 1 and 3 and never the palette's third colour.
+func test_the_object_register_skips_the_third_colour() -> void:
+	assert_eq(Gen1Layout.OBJECT_SHADES, [0, 0, 1, 3] as Array[int])
+	var colors := PackedColorArray([Color.RED, Color.GREEN, Color.BLUE, Color.BLACK])
+	assert_eq(
+		PokePalette.through_shades(colors, Gen1Layout.OBJECT_SHADES),
+		PackedColorArray([Color.RED, Color.RED, Color.GREEN, Color.BLACK])
+	)
+
+
+func test_every_sprite_row_is_inside_the_table() -> void:
+	for id: StringName in RomRegistry.ids_of_generation(RomRegistry.GEN1):
+		var layout: Dictionary = Gen1Layout.for_id(id)
+		assert_eq(
+			Gen1Layout.sprite_offset(layout, 1), int(layout["overworld_sprites"]),
+			"%s: picture id 1 is the first row" % id
+		)
+		assert_lt(
+			Gen1Layout.sprite_offset(layout, Gen1Layout.sprite_count(id))
+				+ Gen1Layout.SPRITE_RECORD_SIZE,
+			GEN1_ROM_SIZE, "%s SpriteSheetPointerTable" % id
+		)
+		# Twelve still sprites end every table, and the ten Yellow added are
+		# walking ones in front of them.
+		assert_eq(
+			Gen1Layout.sprite_count(id) - Gen1Layout.first_still_sprite(id) + 1, 12,
+			"%s still sprites" % id
+		)

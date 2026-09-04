@@ -55,6 +55,13 @@ static func linear(bank: int, address: int) -> int:
 	return bank * BANK_SIZE + (address & 0x3FFF)
 
 
+## The other way: the bank a dump offset falls in, for resolving a pointer that
+## carries an address but no bank number of its own.
+static func bank_of(offset: int) -> int:
+	@warning_ignore("integer_division")
+	return offset / BANK_SIZE
+
+
 func size() -> int:
 	return _bytes.size()
 

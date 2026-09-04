@@ -7,10 +7,13 @@ extends SceneTree
 ## without a red square is a real disagreement rather than a rendering offset.
 ## Objects are not drawn: this is the map's own answer.
 
-## Generation 1 is named by one flat map id and draws in the four Game Boy greys,
-## its colours being a Super Game Boy packet built from that id.
+## Generation 1 is named by one flat map id, and its four colours are the Super
+## Game Boy packet `SetPal_Overworld` builds from it. An indoor map the routine
+## does not name reads `wLastMap`, which no map carries, so a third argument
+## supplies it and a run without one draws `PAL_ROUTE`.
 ##   Godot --headless --path . -s res://tools/preview_collision.gd -- crystal 26 2 /tmp/route31.png
 ##   Godot --headless --path . -s res://tools/preview_collision.gd -- red 0 /tmp/pallet.png
+##   Godot --headless --path . -s res://tools/preview_collision.gd -- red 40 0 /tmp/oaks_lab.png
 
 const SCALE: int = 3
 const WALL_TINT: Color = Color(1.0, 0.0, 0.0, 0.75)
@@ -23,7 +26,8 @@ const CHECKER: int = 4
 func _initialize() -> void:
 	var args: PackedStringArray = OS.get_cmdline_user_args()
 	if args.size() < 3:
-		push_error("Usage: -s tools/preview_collision.gd -- <game> [group] <number> <output.png>")
+		push_error("Usage: -s tools/preview_collision.gd -- <game> [group] <number> <output.png>"
+			+ " (Generation 1: <game> <number> [last map] <output.png>)")
 		quit(1)
 		return
 	var out_path: String = args[args.size() - 1]
@@ -35,9 +39,12 @@ func _initialize() -> void:
 		push_error("No cache for %s. Import roms/%s first." % [args[0], args[0]])
 		quit(1)
 		return
-	# A three-argument call is Generation 1's group 0.
-	var group: int = int(args[1]) if args.size() > 3 else 0
-	var number: int = int(args[args.size() - 2])
+	# Generation 1 is one flat map id, so its optional third argument is
+	# `wLastMap` where Generation 2's second is the map group.
+	var flat: bool = data.generation == RomRegistry.GEN1 or args.size() <= 3
+	var group: int = 0 if flat else int(args[1])
+	var number: int = int(args[1]) if flat else int(args[2])
+	var last_map: int = int(args[2]) if flat and args.size() > 3 else -1
 
 	var map: Gen2WorldMap = data.world_map(group, number)
 	var tileset: Gen2WorldTileset = data.world_tileset(map.tileset) if map != null else null
@@ -46,7 +53,7 @@ func _initialize() -> void:
 		quit(1)
 		return
 
-	var image: Image = _draw_map(data, map, tileset)
+	var image: Image = _draw_map(data, map, tileset, last_map)
 	_tint_permissions(image, map, tileset, data.generation)
 	image.resize(image.get_width() * SCALE, image.get_height() * SCALE, Image.INTERPOLATE_NEAREST)
 	if image.save_png(out_path) != OK:
@@ -59,9 +66,11 @@ func _initialize() -> void:
 	quit(0)
 
 
-func _draw_map(data: GameData, map: Gen2WorldMap, tileset: Gen2WorldTileset) -> Image:
+func _draw_map(
+	data: GameData, map: Gen2WorldMap, tileset: Gen2WorldTileset, last_map: int
+) -> Image:
 	var indices: PackedByteArray = data.map_tile_indices(map, tileset)
-	var palettes: Array = _tile_palettes(data, map, tileset)
+	var palettes: Array = _tile_palettes(data, map, tileset, last_map)
 	var strip_width: int = tileset.tile_count * PokeTiles.TILE_WIDTH
 	var image := Image.create(
 		map.collision_width * CELL_PIXELS, map.collision_height * CELL_PIXELS,
@@ -92,15 +101,12 @@ func _draw_map(data: GameData, map: Gen2WorldMap, tileset: Gen2WorldTileset) -> 
 	return image
 
 
-## One palette per tile of the strip; Generation 1 assigns none, so all four
-## greys.
-func _tile_palettes(data: GameData, map: Gen2WorldMap, tileset: Gen2WorldTileset) -> Array:
+## One palette per tile of the strip.
+func _tile_palettes(
+	data: GameData, map: Gen2WorldMap, tileset: Gen2WorldTileset, last_map: int
+) -> Array:
 	if data.generation == RomRegistry.GEN1:
-		var greys: PackedColorArray = PokePalette.monochrome()
-		var out: Array = []
-		out.resize(tileset.tile_count)
-		out.fill(greys)
-		return out
+		return Gen2WorldPalette.gen1_tile_palettes(data, map, tileset, last_map)
 	return Gen2WorldPalette.tile_palettes(
 		data, map, tileset, Gen2WorldPalette.TIME_DAY, -1, -1
 	)

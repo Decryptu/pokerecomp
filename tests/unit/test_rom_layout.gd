@@ -223,7 +223,7 @@ func test_a_type_pointer_resolves_against_its_own_bank() -> void:
 	for id: StringName in RomRegistry.ids_of_generation(RomRegistry.GEN2):
 		var layout: Dictionary = Gen2Layout.for_id(id)
 		var table: int = Gen2Layout.type_name_pointer_offset(layout, 0)
-		var bank: int = Gen2Layout.bank_of(table)
+		var bank: int = RomFile.bank_of(table)
 		assert_eq(RomFile.linear(bank, 0x4000 + (table & 0x3FFF)), table)
 
 

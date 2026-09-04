@@ -389,7 +389,7 @@ func _trainer_party_classes() -> Array:
 ## real cartridge does for the one class with no party of its own.
 func _write_trainer_parties(data: PackedByteArray, classes: Array) -> void:
 	var table: int = int(_layout["trainer_parties"])
-	var bank: int = Gen2Layout.bank_of(table)
+	var bank: int = RomFile.bank_of(table)
 	var at: int = table + classes.size() * Gen2Layout.TRAINER_PARTY_POINTER_SIZE
 
 	for i: int in classes.size():
@@ -412,7 +412,7 @@ func _write_trainer_parties(data: PackedByteArray, classes: Array) -> void:
 			data[at] = Gen2Layout.TRAINER_PARTY_END
 			at += 1
 
-	assert(Gen2Layout.bank_of(at) == bank, "the filler table overran its own bank")
+	assert(RomFile.bank_of(at) == bank, "the filler table overran its own bank")
 
 
 func test_a_plausible_trainer_party_table_verifies() -> void:
@@ -539,7 +539,7 @@ func test_a_trainer_party_pointer_table_with_no_terminator_anywhere_fails() -> v
 	var last_pointer: int = int(_layout["trainer_parties"]) \
 		+ (count - 1) * Gen2Layout.TRAINER_PARTY_POINTER_SIZE
 	var address: int = data[last_pointer] | (data[last_pointer + 1] << 8)
-	var bank: int = Gen2Layout.bank_of(int(_layout["trainer_parties"]))
+	var bank: int = RomFile.bank_of(int(_layout["trainer_parties"]))
 	var at: int = RomFile.linear(bank, address)
 	for i: int in RomFile.BANK_SIZE - (at % RomFile.BANK_SIZE):
 		data[at + i] = 0x41
@@ -1302,7 +1302,7 @@ func test_an_egg_move_list_with_no_terminator_fails() -> void:
 	var data: PackedByteArray = _egg_move_dump()
 	var at: int = int(_layout["egg_move_pointers"]) \
 		+ Gen2Layout.SPECIES_COUNT * Gen2Layout.EGG_MOVE_POINTER_SIZE
-	var bank_end: int = (Gen2Layout.bank_of(at) + 1) * RomFile.BANK_SIZE
+	var bank_end: int = (RomFile.bank_of(at) + 1) * RomFile.BANK_SIZE
 	for i: int in bank_end - at:
 		data[at + i] = 1
 	assert_false(RomImporter.verify_egg_moves(_rom(data), _layout)["ok"])

@@ -1,13 +1,13 @@
 extends SceneTree
 
-## Draws every overworld sprite a cache holds as one contact sheet, so a human can
-## see at a glance whether the strip was read at the right offset and the frames
-## composed the right way round. Each sprite is a four-by-four block: the four
-## facings across and the four `Facings` frames down, so a correct walking sprite
-## reads as two poses alternating with the right column mirroring the left. A big
-## object draws as a scramble, which is a known gap:
-## [method Gen2WorldSprite.image_for] only knows the four-tile layout, not the
-## sixteen-tile 32x32 one.
+## Draws every overworld sprite a cache holds as one contact sheet, so a human
+## can see whether the strip was read at the right offset and the frames composed
+## the right way round. Each sprite is a four-by-four block: the four facings
+## across and the four `Facings` frames down, so a correct walking sprite reads
+## as two poses alternating with the right column mirroring the left. A big
+## object draws as a scramble: [method Gen2WorldSprite.image_for] knows only the
+## four-tile layout. Generation 1's sheets read the same way, its
+## `SpriteFacingAndAnimationTable` using the same order and the same $80 offset.
 
 const CELL: int = 16
 const COLUMNS: int = 8
@@ -34,7 +34,12 @@ func _initialize() -> void:
 		return
 
 	var count: int = data.overworld_sprite_count()
-	var rows: int = ceili(float(count) / float(COLUMNS)) + 1
+	# Generation 1 draws nothing over an object, so it takes no effects row.
+	var effects: Array[String] = []
+	if data.generation != RomRegistry.GEN1:
+		effects.append_array(Gen2Layout.EMOTE_NAMES)
+		effects.append("headbutt_tree")
+	var rows: int = ceili(float(count) / float(COLUMNS)) + (1 if not effects.is_empty() else 0)
 	var sheet := Image.create(COLUMNS * TILE_W, rows * TILE_H, false, Image.FORMAT_RGBA8)
 	sheet.fill(BACKGROUND)
 	for number: int in range(1, count + 1):
@@ -42,9 +47,7 @@ func _initialize() -> void:
 		if sprite == null:
 			continue
 		var indices: PackedByteArray = data.overworld_sprite_indices(number)
-		var palette: PackedColorArray = data.overworld_sprite_palette(
-			sprite.default_palette, Gen2WorldPalette.TIME_DAY
-		)
+		var palette: PackedColorArray = _sprite_palette(data, sprite)
 		var at := Vector2i(
 			((number - 1) % COLUMNS) * TILE_W + 1,
 			((number - 1) / COLUMNS) * TILE_H + 1
@@ -62,7 +65,7 @@ func _initialize() -> void:
 	## facings and no frames: a wrong offset shows up as noise here.
 	var effects_top: int = (rows - 1) * TILE_H + 1
 	var at_x: int = 1
-	for name: String in Gen2Layout.EMOTE_NAMES + ["headbutt_tree"] as Array[String]:
+	for name: String in effects:
 		var effect: Dictionary = data.overworld_effect(name)
 		if effect.is_empty():
 			continue
@@ -94,3 +97,11 @@ func _initialize() -> void:
 		args[0], count, COLUMNS,
 	])
 	quit(0)
+
+
+## A Generation 1 sprite carries no palette: `SetPal_Overworld` gives the screen
+## one `SuperPalettes` row and `rOBP0` remaps it, so the sheet shows a route's.
+func _sprite_palette(data: GameData, sprite: Gen2WorldSprite) -> PackedColorArray:
+	if data.generation == RomRegistry.GEN1:
+		return Gen2WorldPalette.gen1_object_colors(data.world_palette(Gen1Layout.PAL_ROUTE))
+	return data.overworld_sprite_palette(sprite.default_palette, Gen2WorldPalette.TIME_DAY)

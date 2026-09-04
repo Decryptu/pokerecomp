@@ -985,7 +985,7 @@ static func _reverse_byte(value: int) -> int:
 
 static func verify_landmarks(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var count: int = Gen2Layout.landmark_count(layout)
-	var bank: int = Gen2Layout.bank_of(Gen2Layout.landmark_offset(layout, 0))
+	var bank: int = RomFile.bank_of(Gen2Layout.landmark_offset(layout, 0))
 	if not rom.in_bounds(
 		Gen2Layout.landmark_offset(layout, 0), count * Gen2Layout.LANDMARK_RECORD_SIZE
 	):
@@ -993,7 +993,7 @@ static func verify_landmarks(rom: RomFile, layout: Dictionary) -> Dictionary:
 	for index: int in count:
 		var record: int = Gen2Layout.landmark_offset(layout, index)
 		var at: int = Gen2Layout.landmark_name_offset(rom, layout, index)
-		if Gen2Layout.bank_of(at) != bank:
+		if RomFile.bank_of(at) != bank:
 			return {
 				"ok": false,
 				"message": "Landmark %d's name pointer leaves bank $%02X." % [index, bank],
@@ -1031,7 +1031,7 @@ static func verify_oak_ratings(rom: RomFile, layout: Dictionary) -> Dictionary:
 		table, Gen2Layout.OAK_RATING_COUNT * Gen2Layout.OAK_RATING_SIZE
 	):
 		return {"ok": false, "message": "The Oak rating table is outside the cartridge."}
-	var bank: int = Gen2Layout.bank_of(table)
+	var bank: int = RomFile.bank_of(table)
 	var previous: int = -1
 	for index: int in Gen2Layout.OAK_RATING_COUNT:
 		var row: int = Gen2Layout.oak_rating_offset(layout, index)
@@ -1044,7 +1044,7 @@ static func verify_oak_ratings(rom: RomFile, layout: Dictionary) -> Dictionary:
 				],
 			}
 		previous = threshold
-		if Gen2Layout.bank_of(RomFile.linear(bank, rom.u16le(row + 3))) != bank:
+		if RomFile.bank_of(RomFile.linear(bank, rom.u16le(row + 3))) != bank:
 			return {
 				"ok": false,
 				"message": "Oak rating %d's text leaves bank $%02X." % [index, bank],
@@ -2147,7 +2147,7 @@ static func _verify_credits_strings(
 	var bank: int = int(entry["strings_bank"])
 	for index: int in int(entry["string_count"]):
 		var at: int = Gen2Layout.credits_string_offset(rom, layout, index)
-		if Gen2Layout.bank_of(at) != bank:
+		if RomFile.bank_of(at) != bank:
 			return {"ok": false, "message": "Credits string %d leaves bank $%02X." % [index, bank]}
 		if read_credits_string(rom, layout, index).is_empty():
 			return {"ok": false, "message": "Credits string %d has no terminator." % index}
@@ -3373,7 +3373,7 @@ static func read_evos_attacks(rom: RomFile, layout: Dictionary, species: int) ->
 	var address: int = rom.u16le(table)
 	if address < RomFile.BANK_SIZE or address >= RomFile.BANK_SIZE * 2:
 		return {}
-	var at: int = RomFile.linear(Gen2Layout.bank_of(table), address)
+	var at: int = RomFile.linear(RomFile.bank_of(table), address)
 
 	var evolutions: Array = []
 	while rom.in_bounds(at) and rom.u8(at) != Gen2Layout.EVOS_ATTACKS_END:
@@ -3429,7 +3429,7 @@ static func read_egg_moves(rom: RomFile, layout: Dictionary, species: int) -> Di
 	var address: int = rom.u16le(table)
 	if address < RomFile.BANK_SIZE or address >= RomFile.BANK_SIZE * 2:
 		return {}
-	var bank: int = Gen2Layout.bank_of(table)
+	var bank: int = RomFile.bank_of(table)
 	var at: int = RomFile.linear(bank, address)
 	var bank_end: int = mini((bank + 1) * RomFile.BANK_SIZE, rom.size())
 	var moves: Array[int] = []
@@ -4275,7 +4275,7 @@ static func _trainer_palette_check(
 static func read_trainer_parties(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var count: int = Gen2Layout.trainer_class_count(layout)
 	var table: int = int(layout["trainer_parties"])
-	var bank: int = Gen2Layout.bank_of(table)
+	var bank: int = RomFile.bank_of(table)
 
 	var pointers: Array = []
 	for trainer_class: int in range(1, count + 1):
@@ -4593,7 +4593,7 @@ static func verify_trainer_dvs(rom: RomFile, layout: Dictionary) -> Dictionary:
 static func type_name(rom: RomFile, layout: Dictionary, type_number: int) -> String:
 	var table: int = Gen2Layout.type_name_pointer_offset(layout, type_number)
 	var address: int = rom.u16le(table)
-	var offset: int = RomFile.linear(Gen2Layout.bank_of(table), address)
+	var offset: int = RomFile.linear(RomFile.bank_of(table), address)
 	return Gen2Text.decode(rom.bytes(), offset, Gen2Layout.MAX_NAME_LENGTH)
 
 
@@ -6163,7 +6163,7 @@ func _import_oak_ratings(rom: RomFile, layout: Dictionary) -> Dictionary:
 			# `rating` stores the sfx as a word, though every id is a byte.
 			"sfx": rom.u16le(row + 1),
 			"text": read_oak_text(
-				rom, layout, RomFile.linear(Gen2Layout.bank_of(row), rom.u16le(row + 3))
+				rom, layout, RomFile.linear(RomFile.bank_of(row), rom.u16le(row + 3))
 			),
 		})
 	out["ratings"] = rows

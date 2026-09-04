@@ -44,10 +44,155 @@ func run(r: RefCounted) -> void:
 		_verify_magikarp_filter()
 		_verify_roaming_walk()
 	)
+	_r.each_game_of(RomRegistry.GEN1, _verify_gen1_tables)
 
 
 ## `UpdateRoamMons` passes per starting map, enough to measure the graph.
 const ROAM_WALK_UPDATES: int = 400
+
+
+## Generation 1's `WildDataPointers` and `SuperRodData`: what the corpus holds
+## and the rows read end to end off pret's `data/wild`. Nothing rolls on it yet.
+const GEN1_CENSUS: Dictionary = {
+	&"red": {"grass": 55, "water": 3, "fishing_maps": 33, "fishing_groups": 10},
+	&"blue": {"grass": 55, "water": 3, "fishing_maps": 33, "fishing_groups": 10},
+	&"yellow": {"grass": 55, "water": 8, "fishing_maps": 31, "fishing_groups": 31},
+}
+
+## `Route1.asm`: rate 25 and ten slots of PIDGEY and RATTATA, by internal index.
+const GEN1_ROUTE_1: int = 0x0C
+const GEN1_ROUTE_1_RATE: int = 25
+const GEN1_ROUTE_1_SLOTS: Array = [
+	[3, 0x24], [3, 0xA5], [3, 0xA5], [2, 0xA5], [2, 0x24],
+	[3, 0x24], [3, 0x24], [4, 0xA5], [4, 0x24], [5, 0x24],
+]
+
+## `SeaRoutes.asm`, the water block Routes 19 and 20 share: rate 5 over ten
+## TENTACOOL, and no grass at all. Yellow gives the pair its own block.
+const GEN1_SEA_ROUTES: Array[int] = [0x1E, 0x1F]
+const GEN1_SEA_RATE: int = 5
+const GEN1_SEA_SPECIES: int = 0x18
+
+## `SuperRodData`'s first row, `.Group1`, and Yellow's own first row, which is
+## four slots with a threshold each rather than a uniform pick.
+const GEN1_ROD_MAP: int = 0x00
+const GEN1_ROD_SLOTS: Array = [[15, 0x18], [15, 0x47]]
+const GEN1_ROD_SLOTS_YELLOW: Array = [[10, 0x1B], [10, 0x18], [5, 0x1B], [20, 0x18]]
+
+
+## Every Generation 1 encounter table in the cache, on all three cartridges.
+func _verify_gen1_tables() -> void:
+	var census: Dictionary = {"grass": 0, "water": 0, "fishing_maps": 0, "fishing_groups": 0}
+	var maps: Array = _r.data.world_maps()
+	for map: Gen2WorldMap in maps:
+		for method: StringName in [&"grass", &"water"] as Array[StringName]:
+			var row: Dictionary = _r.data.world_encounter(method, 0, map.number)
+			if row.is_empty():
+				continue
+			census[String(method)] += 1
+			_gen1_slots(map.number, String(method), row)
+		if _r.data.world_fishing_map(map.number) > 0:
+			census["fishing_maps"] += 1
+	while not _r.data.world_fishing_group(census["fishing_groups"] + 1).is_empty():
+		census["fishing_groups"] += 1
+
+	var pinned: Dictionary = GEN1_CENSUS[_r.game_id]
+	for key: String in pinned:
+		_r.check(census[key] == int(pinned[key]), "the corpus holds %d %s tables, pinned %d." % [
+			census[key], key, int(pinned[key]),
+		])
+	_gen1_route_1()
+	_gen1_sea_routes()
+	_gen1_super_rod()
+	_r.note("gen1 encounters %s" % census)
+
+
+## One block's own rules: a rate a roll can hit, and ten slots naming a real
+## internal index. An empty block is never written, so every row here is live.
+func _gen1_slots(map_id: int, method: String, row: Dictionary) -> void:
+	var rate: int = int(row.get("rate", 0))
+	var slots: Array = row.get("slots", [])
+	_r.check(rate >= 1 and rate <= 255 and slots.size() == Gen1Layout.WILD_SLOT_COUNT,
+		"map %d's %s block reads rate %d over %d slots." % [
+			map_id, method, rate, slots.size(),
+		])
+	for slot: Dictionary in slots:
+		_r.check(
+			int(slot["species"]) >= 1 and int(slot["species"]) <= Gen1Layout.INDEX_COUNT
+			and int(slot["level"]) >= 1 and int(slot["level"]) <= 100,
+			"map %d's %s block holds level %d of index %d." % [
+				map_id, method, int(slot["level"]), int(slot["species"]),
+			]
+		)
+
+
+func _gen1_route_1() -> void:
+	var row: Dictionary = _r.data.world_encounter(&"grass", 0, GEN1_ROUTE_1)
+	if not _r.check(not row.is_empty(), "Route 1 has no grass table."):
+		return
+	_r.check(int(row["rate"]) == GEN1_ROUTE_1_RATE,
+		"Route 1's grass rate is %d." % int(row["rate"]))
+	# Yellow reshuffled Route 1's levels, so only Red and Blue are pinned whole.
+	if _r.game_id == RomRegistry.YELLOW:
+		return
+	_r.check(_gen1_rows(row["slots"]) == GEN1_ROUTE_1_SLOTS,
+		"Route 1's grass slots read %s." % [_gen1_rows(row["slots"])])
+
+
+## The one water block two maps share, which says a pointer is read twice.
+func _gen1_sea_routes() -> void:
+	var rows: Array = []
+	for map_id: int in GEN1_SEA_ROUTES:
+		var row: Dictionary = _r.data.world_encounter(&"surf", 0, map_id)
+		if not _r.check(not row.is_empty(), "map $%02X has no water table." % map_id):
+			return
+		rows.append(row)
+	_r.check(rows[0]["slots"] == rows[1]["slots"],
+		"Routes 19 and 20 no longer share one water block.")
+	for map_id: int in GEN1_SEA_ROUTES:
+		_r.check(_r.data.world_encounter(&"grass", 0, map_id).is_empty(),
+			"map $%02X has a grass table." % map_id)
+	if _r.game_id == RomRegistry.YELLOW:
+		return
+	_r.check(int(rows[0]["rate"]) == GEN1_SEA_RATE,
+		"the sea routes' water rate is %d." % int(rows[0]["rate"]))
+	for slot: Dictionary in rows[0]["slots"] as Array:
+		_r.check(int(slot["species"]) == GEN1_SEA_SPECIES,
+			"a sea route slot names index %d." % int(slot["species"]))
+
+
+## Pallet Town's group, and that every map the table names resolves to slots.
+func _gen1_super_rod() -> void:
+	var group: int = _r.data.world_fishing_map(GEN1_ROD_MAP)
+	if not _r.check(group > 0, "Pallet Town has no fishing group."):
+		return
+	var wanted: Array = GEN1_ROD_SLOTS_YELLOW if _r.game_id == RomRegistry.YELLOW \
+		else GEN1_ROD_SLOTS
+	var slots: Array = _r.data.world_fishing_group(group).get("slots", [])
+	_r.check(_gen1_rows(slots) == wanted, "Pallet Town's rod slots read %s." % [
+		_gen1_rows(slots),
+	])
+	# Yellow's four slots are picked by a byte threshold; Red and Blue reject a
+	# two-bit roll until it is under the group's own count, so no row carries one.
+	for map: Gen2WorldMap in _r.data.world_maps():
+		var named: int = _r.data.world_fishing_map(map.number)
+		if named == 0:
+			continue
+		var rows: Array = _r.data.world_fishing_group(named).get("slots", [])
+		_r.check(rows.size() >= 1 and rows.size() <= Gen1Layout.SUPER_ROD_MAX_SLOTS,
+			"map %d fishes over %d slots." % [map.number, rows.size()])
+		for slot: Dictionary in rows:
+			_r.check(
+				slot.has("threshold") == (_r.game_id == RomRegistry.YELLOW),
+				"map %d's rod slot carries the wrong pick." % map.number
+			)
+
+
+static func _gen1_rows(slots: Array) -> Array:
+	var out: Array = []
+	for slot: Dictionary in slots:
+		out.append([int(slot["level"]), int(slot["species"])])
+	return out
 
 
 ## `UpdateRoamMons` and `JumpRoamMon` over the whole of `RoamMaps` on each

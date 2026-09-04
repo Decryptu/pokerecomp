@@ -3736,7 +3736,7 @@ static func map_group_pointer_offset(layout: Dictionary, group: int) -> int:
 
 
 static func map_record_offset(layout: Dictionary, group_pointer: int, number: int) -> int:
-	return RomFile.linear(bank_of(int(layout["map_group_pointers"])), group_pointer) \
+	return RomFile.linear(RomFile.bank_of(int(layout["map_group_pointers"])), group_pointer) \
 		+ (number - 1) * MAP_RECORD_SIZE
 
 
@@ -3799,8 +3799,8 @@ static func trainer_palette_offset(layout: Dictionary, trainer_class: int) -> in
 
 
 ## Where a trainer class's own pointer sits in the trainer party table. The
-## pointer itself still has to be resolved through [method bank_of] on this
-## offset and [method RomFile.linear], the same as [method evos_attacks_pointer_offset].
+## pointer itself still has to be resolved through [method RomFile.bank_of] on
+## this offset and [method RomFile.linear], as [method evos_attacks_pointer_offset] is.
 static func trainer_party_pointer_offset(layout: Dictionary, trainer_class: int) -> int:
 	return int(layout["trainer_parties"]) + (trainer_class - 1) * TRAINER_PARTY_POINTER_SIZE
 
@@ -3836,7 +3836,7 @@ static func move_data_offset(layout: Dictionary, move: int) -> int:
 
 ## One species' entry in the combined evolution and level-up move table. The
 ## pointer is two bytes and the entry it names is in the pointer table's own
-## bank, so [method bank_of] on the table itself resolves it.
+## bank, so [method RomFile.bank_of] on the table itself resolves it.
 static func evos_attacks_pointer_offset(layout: Dictionary, species: int) -> int:
 	return int(layout["evos_attacks"]) + (species - 1) * EVOS_ATTACKS_POINTER_SIZE
 
@@ -3886,7 +3886,7 @@ static func oak_text_stub_offset(rom: RomFile, layout: Dictionary, name: String)
 	if not rom.in_bounds(table, OAK_RATING_SIZE) or not OAK_TEXT_STUBS.has(name):
 		return -1
 	var first: int = rom.u16le(table + 3) + int(OAK_TEXT_STUBS[name]) * OAK_TEXT_STUB_SIZE
-	return RomFile.linear(bank_of(table), first)
+	return RomFile.linear(RomFile.bank_of(table), first)
 
 
 ## Where the word for Unown form [param form] starts, form 1 being A.
@@ -3898,7 +3898,7 @@ static func unown_word_offset(rom: RomFile, layout: Dictionary, form: int) -> in
 	if not rom.in_bounds(table, UNOWN_WORD_ENTRIES * UNOWN_WORD_POINTER_SIZE):
 		return -1
 	var pointer: int = rom.u16le(table + form * UNOWN_WORD_POINTER_SIZE)
-	return RomFile.linear(bank_of(table), pointer)
+	return RomFile.linear(RomFile.bank_of(table), pointer)
 
 
 ## The letter [param code] spells under the `unown` charmap, or an empty string
@@ -4082,7 +4082,7 @@ static func landmark_name_offset(rom: RomFile, layout: Dictionary, index: int) -
 	var record: int = landmark_offset(layout, index)
 	if not rom.in_bounds(record, LANDMARK_RECORD_SIZE):
 		return -1
-	return RomFile.linear(bank_of(record), rom.u16le(record + 2))
+	return RomFile.linear(RomFile.bank_of(record), rom.u16le(record + 2))
 
 
 static func font_offset(layout: Dictionary) -> int:
@@ -4107,10 +4107,3 @@ static func stats_tiles_offset(layout: Dictionary) -> int:
 ## Frames are stored back to back in selection order, six tiles of 1bpp each.
 static func frame_offset(layout: Dictionary, frame: int) -> int:
 	return int(layout["frames"]) + frame * FRAME_TILES * PokeTiles.TILE_1BPP_BYTES
-
-
-## The bank a dump offset falls in, for resolving a pointer that carries an
-## address but no bank number of its own.
-static func bank_of(offset: int) -> int:
-	@warning_ignore("integer_division")
-	return offset / RomFile.BANK_SIZE
