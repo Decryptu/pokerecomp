@@ -1,7 +1,8 @@
 extends RefCounted
 
-## Every picture [Gen1SpriteCodec] decodes, swept on Red, Blue and Yellow: 151
-## front pics, 151 back pics, 47 trainer classes and two battle back pics. The
+## Every picture [Gen1SpriteCodec] decodes and the two fixed sheets beside them,
+## swept on Red, Blue and Yellow: 151 front pics, 151 back pics, 47 trainer
+## classes, two battle back pics, `FontGraphics` and `TextBoxGraphics`. The
 ## digests come from a run in which all 906 species pics, all 141 trainer pics
 ## and all six back pics matched the PNGs under a pinned checkout's
 ## `gfx/pokemon` and `gfx/trainers` pixel for pixel, those being what the
@@ -48,6 +49,13 @@ const MAX_MONEY: int = 9900
 ## `ChiefPic:` falls through to `ScientistPic`, so rows 27 and 28 are one picture.
 const SHARED_PIC_ROWS: Array[int] = [27, 28]
 
+## SHA-1 of each tile strip. All three cartridges hold the one font and the one
+## text box; re-earn these against `gfx/font/font.png` and `font_extra.png`.
+const SHEET_DIGESTS: Dictionary = {
+	"font": "8146fe98bbbd27f9d67509e3da62044b44785a3a",
+	"font_extra": "ca0735bbbf8d2ce178a3f06a8d95ac6395dc8f7e",
+}
+
 var _r: RefCounted = null
 
 
@@ -64,6 +72,7 @@ func _one_game() -> void:
 	_species_pics()
 	_trainer_pics()
 	_player_pics()
+	_sheets()
 	_digests()
 
 
@@ -141,6 +150,45 @@ func _player_pics() -> void:
 	_r.check(drawn[0] != drawn[1], "the player and the old man share a back pic.")
 
 
+## The import's own font check seen from the cache side, and addressed the way
+## the hardware addresses it: by character code.
+func _sheets() -> void:
+	var drawn: int = 0
+	for inked: Array in Gen1Layout.FONT_INK_RUNS:
+		for code: int in range(int(inked[0]), int(inked[1]) + 1):
+			_r.check(_sheet_ink("font", code), "font code $%02X (%s) is blank." % [
+				code, Gen1Text.character(code),
+			])
+			drawn += 1
+	for hole: Array in Gen1Layout.FONT_BLANK_RUNS:
+		for code: int in range(int(hole[0]), int(hole[1]) + 1):
+			_r.check(not _sheet_ink("font", code), "font code $%02X draws." % code)
+
+	var last: int = Gen1Layout.FONT_EXTRA_FIRST_CODE + Gen1Layout.FONT_EXTRA_TILES - 1
+	for code: int in range(Gen1Layout.FONT_EXTRA_FIRST_CODE, last + 1):
+		var wanted: bool = code != Gen1Layout.SPACE_CODE
+		_r.check(_sheet_ink("font_extra", code) == wanted,
+			"text box code $%02X %s." % [code, "is blank" if wanted else "draws"])
+	_r.note("gen1 sheets %d font codes drawn, %d text box tiles" % [
+		drawn, Gen1Layout.FONT_EXTRA_TILES,
+	])
+
+
+## Whether the tile one character code addresses has any pixel set.
+func _sheet_ink(name: String, code: int) -> bool:
+	var sheet: Dictionary = _r.data.tile_sheet(name)
+	var indices: PackedByteArray = _r.data.tile_indices(name)
+	var slot: int = code - int(sheet.get("first_code", 0))
+	var width: int = int(sheet.get("width", 0))
+	if slot < 0 or slot >= int(sheet.get("tiles", 0)) or width <= 0:
+		return false
+	for y: int in PokeTiles.TILE_HEIGHT:
+		for x: int in PokeTiles.TILE_WIDTH:
+			if indices[y * width + slot * PokeTiles.TILE_WIDTH + x] != 0:
+				return true
+	return false
+
+
 func _inked(name: String, dex: int, pic: Dictionary) -> void:
 	var cell: Dictionary = Gen2PicImage.atlas_cell(
 		_r.data.atlas_indices(name), _r.data.atlas(name), pic
@@ -196,4 +244,9 @@ func _digests() -> void:
 			continue
 		_r.check(digest == expected, "the %s atlas is %s, pinned %s." % [
 			name, digest, expected,
+		])
+	for name: String in SHEET_DIGESTS:
+		var digest: String = _sha1(_r.data.tile_indices(name))
+		_r.check(digest == String(SHEET_DIGESTS[name]), "the %s sheet is %s, pinned %s." % [
+			name, digest, SHEET_DIGESTS[name],
 		])

@@ -15,7 +15,7 @@ const REQUIRED_KEYS: Array[String] = [
 	"dex_entries", "dex_entries_bank", "moves", "move_names", "type_names",
 	"type_names_bank", "type_effects", "item_names", "item_prices", "tmhm_moves",
 	"mon_palettes", "super_palettes", "trainer_names", "evos_moves", "evos_moves_bank",
-	"cries",
+	"cries", "font", "text_box",
 ]
 
 
@@ -148,3 +148,70 @@ func test_a_pointer_row_resolves_through_its_own_bank() -> void:
 	data[0x103] = 0x7D
 	var rom: RomFile = RomFile.from_bytes(data, RomRegistry.RED)
 	assert_eq(Gen1Layout.pointer_target(rom, layout, "type_names", 1), 0x09 * 0x4000 + 0x3DAE)
+
+
+func test_the_font_sheets_are_addressed_by_character_code() -> void:
+	var red: Dictionary = Gen1Layout.for_id(RomRegistry.RED)
+	assert_eq(
+		Gen1Layout.font_glyph_offset(red, Gen1Layout.FONT_FIRST_CODE), int(red["font"]),
+		"the first font tile is the first code"
+	)
+	assert_eq(
+		Gen1Layout.font_glyph_offset(red, Gen1Layout.FONT_FIRST_CODE + 1)
+			- Gen1Layout.font_glyph_offset(red, Gen1Layout.FONT_FIRST_CODE),
+		PokeTiles.TILE_1BPP_BYTES, "FontGraphics is 1bpp"
+	)
+	assert_eq(
+		Gen1Layout.text_box_glyph_offset(red, Gen1Layout.FONT_EXTRA_FIRST_CODE + 1)
+			- Gen1Layout.text_box_glyph_offset(red, Gen1Layout.FONT_EXTRA_FIRST_CODE),
+		PokeTiles.TILE_BYTES, "TextBoxGraphics is 2bpp"
+	)
+
+
+func test_both_font_sheets_end_inside_the_cartridge() -> void:
+	for id: StringName in RomRegistry.ids_of_generation(RomRegistry.GEN1):
+		var layout: Dictionary = Gen1Layout.for_id(id)
+		assert_lt(
+			int(layout["font"]) + Gen1Layout.FONT_TILES * PokeTiles.TILE_1BPP_BYTES,
+			GEN1_ROM_SIZE, "%s font" % id
+		)
+		assert_lt(
+			int(layout["text_box"]) + Gen1Layout.FONT_EXTRA_TILES * PokeTiles.TILE_BYTES,
+			GEN1_ROM_SIZE, "%s text box" % id
+		)
+
+
+## The two runs are what checks the offset, so they have to cover the sheet
+## between them and leave nothing over.
+func test_the_font_runs_cover_every_tile_exactly_once() -> void:
+	var seen: Dictionary = {}
+	for run: Array in Gen1Layout.FONT_INK_RUNS + Gen1Layout.FONT_BLANK_RUNS:
+		for code: int in range(int(run[0]), int(run[1]) + 1):
+			assert_false(seen.has(code), "code $%02X is in two runs" % code)
+			seen[code] = true
+	assert_eq(seen.size(), Gen1Layout.FONT_TILES)
+	for code: int in range(
+		Gen1Layout.FONT_FIRST_CODE, Gen1Layout.FONT_FIRST_CODE + Gen1Layout.FONT_TILES
+	):
+		assert_true(seen.has(code), "code $%02X is in no run" % code)
+
+
+## Every blank code is one [Gen1Text] has no character for, and the space is the
+## only blank in the text box, which is the pair the import check turns on.
+func test_the_blank_run_is_exactly_what_the_charmap_leaves_out() -> void:
+	for run: Array in Gen1Layout.FONT_BLANK_RUNS:
+		for code: int in range(int(run[0]), int(run[1]) + 1):
+			assert_eq(Gen1Text.character(code), "<%02X>" % code, "code $%02X" % code)
+	for run: Array in Gen1Layout.FONT_INK_RUNS:
+		for code: int in range(int(run[0]), int(run[1]) + 1):
+			assert_ne(Gen1Text.character(code), "<%02X>" % code, "code $%02X" % code)
+
+
+func test_the_text_box_carries_its_own_border_and_space() -> void:
+	var last: int = Gen1Layout.FONT_EXTRA_FIRST_CODE + Gen1Layout.FONT_EXTRA_TILES - 1
+	assert_eq(last, Gen1Layout.SPACE_CODE, "the space is the sheet's last tile")
+	assert_between(
+		Gen1Layout.FRAME_VERTICAL_CODE, Gen1Layout.FONT_EXTRA_FIRST_CODE, last,
+		"the border's column is inside TextBoxGraphics"
+	)
+	assert_between(Gen1Layout.FRAME_VERTICAL_ROW, 1, 0xFF)

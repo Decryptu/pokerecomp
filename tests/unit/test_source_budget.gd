@@ -17,9 +17,9 @@ const MAX_COMMENT_BLOCK: int = 8
 ## it whenever a pass leaves room. It moves up only while a generation the tree
 ## did not carry is being brought in, and then by what that generation's own
 ## files cost: `game/gen1`, `game/rom/rom_import.gd` and `tools/checks/gen1_*`
-## are 256 lines of the 38001 here. The tree has no restatement left to pay for
-## them with, which two sweeps for it have now said.
-const MAX_COMMENT_LINES: int = 38001
+## are 286 lines of the 38030 here. The tree has no restatement left to pay for
+## them with, which three sweeps for it have now said.
+const MAX_COMMENT_LINES: int = 38030
 
 ## The functions still over [constant MAX_COMPLEXITY], as `path:function`. Empty,
 ## and it stays empty: a function over the ceiling fails the test rather than
