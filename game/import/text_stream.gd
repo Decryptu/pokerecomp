@@ -241,11 +241,15 @@ static func _step_command(
 				"at": at + 3,
 			}
 		TX_BCD:
-			# `dw address, db flags`, printed from live RAM this project does not
-			# model. Skipped rather than drawn wrong.
+			# `dw address, db flags`, a packed-decimal number out of live RAM.
+			# Marked the way TX_DECIMAL is; no Crystal text uses it, and every
+			# Generation 1 one that does is a price.
 			if not _has(data, at, 3):
 				return {"reason": &"truncated_text_command"}
-			return {"at": at + 3}
+			return {
+				"text": _decimal_string(context, data[at] | (data[at + 1] << 8)),
+				"at": at + 3,
+			}
 		TX_MOVE:
 			# `dw address` alone, and it prints nothing. Reading a third byte here
 			# slid every command behind it.

@@ -66,7 +66,11 @@ const MART_SELL_STAGES: Array[StringName] = [
 ]
 ## `MenuHeader_BuySell`'s three rows, inline in `engine/items/mart.asm` and
 ## reached by no script, the way [Gen2WorldPC]'s BILL'S PC rows are.
+## `BuySellQuitText` spells the same three, in a box `data/text_boxes.asm` puts
+## at (0,0) to (10,6) whose first row is the one under the border: the string is
+## placed at (2,1) rather than through `_InitVerticalMenuCursor`.
 const MART_TOP_ROWS: Array[String] = ["BUY", "SELL", "QUIT"]
+const GEN1_TOP_MENU_BOX := Rect2i(0, 0, 10, 6)
 const MART_TOP_BUY: int = 0
 const MART_TOP_SELL: int = 1
 const MART_TOP_QUIT: int = 2
@@ -143,6 +147,10 @@ var _mart_stage: StringName = MART_LIST
 var _mart_scroll: int = 0
 var _mart_pages: Array = []
 var _mart_after: StringName = MART_LIST
+## `SaveScreenTilesToBuffer1`: a Generation 1 shop photographs the screen behind
+## its greeting and restores it under every list, so the last box it printed
+## stays up while the player is choosing.
+var _mart_message: PackedStringArray = PackedStringArray()
 var _mart_confirm: int = 0
 ## `SellMenu`'s own list, which is the pack rather than the shop's stock.
 var _mart_sell_entries: Array = []
@@ -631,6 +639,7 @@ func _open_mart(mart: Dictionary) -> void:
 	_mart_quantity = 1
 	_mart_purchased = false
 	_mart_scroll = 0
+	_mart_message = PackedStringArray()
 	_cursor = 0
 	_set_overlay_open(true)
 	if _mart_view == null and _service_hardware != null:
@@ -702,6 +711,8 @@ func _show_mart_text(text: String, after: StringName, over_map: bool = false) ->
 	_mart_over_map = over_map
 	_mart_pages = [] if text.strip_edges().is_empty() \
 		else Gen2TextLayout.lay_out(text, MART_TEXT_COLUMNS, MART_TEXT_ROWS)
+	if not _mart_pages.is_empty():
+		_mart_message = _mart_pages[0]
 	if _mart_pages.is_empty():
 		_advance_mart_text()
 		return
@@ -713,6 +724,8 @@ func _show_mart_text(text: String, after: StringName, over_map: bool = false) ->
 ## the menu opens over the box, and `CopyMenuHeader` reloads its `db 1` default.
 func _show_mart_top(text: String) -> void:
 	_mart_pages = Gen2TextLayout.lay_out(text, MART_TEXT_COLUMNS, MART_TEXT_ROWS)
+	if not _mart_pages.is_empty():
+		_mart_message = _mart_pages[0]
 	_mart_stage = MART_TOP
 	_mart_over_map = true
 	_cursor = MART_TOP_BUY
@@ -738,12 +751,28 @@ func _advance_mart_text() -> void:
 	_finish_runtime({"ok": true, "script_value": 1 if _mart_purchased else 0})
 
 
+## Whether this shop is a Generation 1 counter.
+func _gen1_mart() -> bool:
+	return _data != null and _data.generation == RomRegistry.GEN1
+
+
 ## `w2DMenuNumRows`: the CANCEL row is only on offer when the whole list fits,
 ## because `ScrollingMenu_InitFlags` adds it to the row count and `.d_down`
-## stops scrolling at `size - height`.
+## stops scrolling at `size - height`. `DisplayListMenuID` instead fixes
+## `wMaxMenuItem` at 2 and prints a fourth name the cursor never reaches, so its
+## CANCEL is always on offer and its list always scrolls.
 func _mart_row_count() -> int:
 	var rows: int = _mart_list().size()
+	if _gen1_mart():
+		return mini(Gen2MartPage.GEN1_CURSOR_ROWS, rows + 1)
 	return rows + 1 if rows < Gen2MartPage.LIST_HEIGHT else Gen2MartPage.LIST_HEIGHT
+
+
+## Rows drawn, which is [method _mart_row_count] plus the look-ahead row.
+func _mart_drawn_rows() -> int:
+	if _gen1_mart():
+		return mini(Gen2MartPage.GEN1_LIST_HEIGHT, _mart_list().size() + 1 - _mart_scroll)
+	return _mart_row_count()
 
 
 func _mart_list() -> Array:
@@ -753,7 +782,7 @@ func _mart_list() -> Array:
 func _mart_rows() -> Array:
 	var entries: Array = _mart_list()
 	var out: Array = []
-	for row: int in _mart_row_count():
+	for row: int in _mart_drawn_rows():
 		var index: int = _mart_scroll + row
 		out.append({"cancel": true} if index >= entries.size() else entries[index])
 	return out
@@ -824,7 +853,9 @@ func _move_mart_cursor(delta: int) -> void:
 		if _mart_scroll > 0:
 			_mart_scroll -= 1
 	elif next >= rows:
-		if _mart_list().size() >= _mart_scroll + Gen2MartPage.LIST_HEIGHT:
+		var reach: int = Gen2MartPage.GEN1_CURSOR_ROWS if _gen1_mart() \
+			else Gen2MartPage.LIST_HEIGHT
+		if _mart_list().size() >= _mart_scroll + reach:
 			_mart_scroll += 1
 	else:
 		_cursor = next
@@ -937,10 +968,10 @@ func _press_mart_top(button: int) -> void:
 		PokeButton.A:
 			match _cursor:
 				MART_TOP_BUY:
-					_mart_stage = MART_LIST
-					_mart_over_map = false
-					_cursor = 0
+					## `PokemartBuyingGreetingText`; Generation 2's `.Buy` says
+					## nothing, and an empty box goes straight through.
 					_mart_scroll = 0
+					_show_mart_text(_mart_text("buy_intro"), MART_LIST, true)
 				MART_TOP_SELL:
 					_open_mart_sell()
 					return
@@ -955,15 +986,14 @@ func _press_mart_top(button: int) -> void:
 ## shop asks again rather than opening an empty list.
 func _open_mart_sell() -> void:
 	_refresh_mart_sell_entries()
-	if _mart_sell_entries.is_empty():
-		_show_mart_top(_mart_text("ask_more"))
-		return
-	_mart_stage = MART_SELL
-	_mart_over_map = false
-	_cursor = 0
 	_mart_scroll = 0
 	_mart_quantity = 1
-	_render_mart()
+	if _mart_sell_entries.is_empty():
+		## `PokemartItemBagEmptyText`, which Generation 2's `SellMenu` has no
+		## box for; both shops ask again behind it.
+		_show_mart_text(_mart_text("bag_empty"), MART_TOP, true)
+		return
+	_show_mart_text(_mart_text("sell_intro"), MART_SELL, true)
 
 
 ## The pack as rows this list can draw, at `GetMartPrice`'s halved price per
@@ -1087,6 +1117,9 @@ func _close_mart() -> void:
 func _render_mart() -> void:
 	if _mart_view == null or _data == null:
 		return
+	if _gen1_mart():
+		_render_gen1_mart()
+		return
 	if _mart_over_map:
 		_render_mart_over_map()
 		return
@@ -1096,7 +1129,6 @@ func _render_mart() -> void:
 		return
 	var page: PackedStringArray = _mart_pages[0] if not _mart_pages.is_empty() \
 		else PackedStringArray()
-	var selling: bool = _mart_stage in MART_SELL_STAGES
 	var listing: bool = _mart_stage == MART_LIST or _mart_stage == MART_SELL
 	var image: Image = _mart_page.render({
 		"money": _world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT),
@@ -1109,17 +1141,61 @@ func _render_mart() -> void:
 		## stage's alone.
 		"quantity": _mart_quantity \
 			if _mart_stage == MART_QUANTITY or _mart_stage == MART_SELL_QUANTITY else -1,
-		## `DisplaySellingPrice` halves the multiplied total, not each unit's
-		## price, so the two subtotals are not the same arithmetic.
-		"subtotal": Gen2WorldMartHost.sell_price(
-			_data, int(_mart_selection().get("item", 0)), _mart_quantity
-		) if selling else int(_mart_selection().get("price", 0)) * _mart_quantity,
+		"subtotal": _mart_subtotal(),
 	})
 	if image == null:
 		return
 	if _mart_stage == MART_CONFIRM or _mart_stage == MART_SELL_CONFIRM:
 		_blend_mart_menu(image, Gen2MenuBox.yes_no(), ["YES", "NO"], _mart_confirm)
 	Gen2PicImage.show(_mart_view, image)
+
+
+## `DisplayPokemartDialogue_` never leaves the map: the money box, the list box
+## and whatever `PrintText` last wrote all stand over it.
+func _render_gen1_mart() -> void:
+	if _service_page == null:
+		_service_page = Gen2WorldServicePage.from_data(_data)
+	if _mart_page == null:
+		_mart_page = Gen2MartPage.from_data(_data)
+	if _service_page == null or _mart_page == null:
+		return
+	var page: PackedStringArray = _mart_pages[0] if not _mart_pages.is_empty() \
+		else _mart_message
+	var image: Image = _service_page.render(
+		"", "", MART_TOP_ROWS if _mart_stage == MART_TOP else [], _cursor,
+		"\n".join(page),
+		Gen2MenuBox.from_coords(
+			GEN1_TOP_MENU_BOX.position.x, GEN1_TOP_MENU_BOX.position.y,
+			GEN1_TOP_MENU_BOX.end.x, GEN1_TOP_MENU_BOX.end.y,
+			Gen2MenuBox.STATICMENU_CURSOR | Gen2MenuBox.STATICMENU_NO_TOP_SPACING
+		)
+	)
+	if image == null:
+		return
+	var listing: bool = _mart_stage != MART_TOP and _mart_stage != MART_MESSAGE
+	var overlay: Image = _mart_page.render_gen1({
+		"money": _world.state.money(Gen2WorldMartHost.MONEY_ACCOUNT),
+		"rows": _mart_rows(),
+		"cursor": _cursor if _mart_stage == MART_LIST or _mart_stage == MART_SELL else -1,
+		"listing": listing,
+		"quantity": _mart_quantity \
+			if _mart_stage == MART_QUANTITY or _mart_stage == MART_SELL_QUANTITY else -1,
+		"subtotal": _mart_subtotal(),
+	})
+	if overlay != null:
+		image.blend_rect(overlay, Rect2i(Vector2i.ZERO, overlay.get_size()), Vector2i.ZERO)
+	if _mart_stage == MART_CONFIRM or _mart_stage == MART_SELL_CONFIRM:
+		_blend_mart_menu(image, Gen2MenuBox.yes_no(), ["YES", "NO"], _mart_confirm)
+	Gen2PicImage.show(_mart_view, image)
+
+
+## `DisplaySellingPrice` halves the multiplied total, not each unit's price, so
+## the two subtotals are not the same arithmetic.
+func _mart_subtotal() -> int:
+	var item: int = int(_mart_selection().get("item", 0))
+	if _mart_stage in MART_SELL_STAGES:
+		return Gen2WorldMartHost.sell_price(_data, item, _mart_quantity)
+	return int(_mart_selection().get("price", 0)) * _mart_quantity
 
 
 ## The speech box and `MenuHeader_BuySell`'s `menu_coords 0, 0, 7, 8` over it.

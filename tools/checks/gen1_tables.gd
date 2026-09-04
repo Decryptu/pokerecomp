@@ -8,7 +8,11 @@ extends RefCounted
 
 const SPECIES_COUNT: int = 151
 const MOVE_COUNT: int = 165
+## `NUM_ITEMS`, and the last row the table carries: `GetMachineName` and
+## `GetMachinePrice` put HM01 at $C4 and TM50 at $FA, so the cache runs that far
+## with the unnamed ids between them empty.
 const ITEM_COUNT: int = 83
+const ITEM_TABLE_COUNT: int = 250
 const TYPE_COUNT: int = 16
 const TRAINER_COUNT: int = 47
 const MATCHUP_COUNT: int = 82
@@ -211,8 +215,8 @@ func _types() -> void:
 
 func _items() -> void:
 	var data: GameData = _r.data
-	if not _r.check(data.item_count() == ITEM_COUNT, "%d items, expected %d" % [
-		data.item_count(), ITEM_COUNT
+	if not _r.check(data.item_count() == ITEM_TABLE_COUNT, "%d items, expected %d" % [
+		data.item_count(), ITEM_TABLE_COUNT
 	]):
 		return
 	for number: int in range(1, ITEM_COUNT + 1):
@@ -221,7 +225,18 @@ func _items() -> void:
 		_r.check(int(item["price"]) >= 0, "item %d is priced %d" % [number, item["price"]])
 	_r.check(String(data.item(1)["name"]) == "MASTER BALL", "item 1 is not the Master Ball")
 	_r.check(int(data.item(4)["price"]) == 200, "a Poke Ball is not 200")
-	_r.note("%d items" % ITEM_COUNT)
+	## `HiddenPrefix` and `TechnicalPrefix` either side of the gap, and
+	## `TechnicalMachinePrices`' first and last nybbles.
+	_r.check(String(data.item(Gen1Layout.HM_FIRST_ITEM)["name"]) == "HM01",
+		"$C4 is not HM01")
+	_r.check(int(data.item(Gen1Layout.HM_FIRST_ITEM)["price"]) == 0, "an HM has a price")
+	_r.check(String(data.item(Gen1Layout.TM_FIRST_ITEM)["name"]) == "TM01",
+		"$C9 is not TM01")
+	_r.check(int(data.item(Gen1Layout.TM_FIRST_ITEM)["price"]) == 3000, "TM01 is not 3000")
+	_r.check(int(data.item(ITEM_TABLE_COUNT)["price"]) == 2000, "TM50 is not 2000")
+	_r.check(String(data.item(Gen1Layout.ITEM_COUNT + 1)["name"]).is_empty(),
+		"$54 has a name")
+	_r.note("%d named items in a table of %d" % [ITEM_COUNT, ITEM_TABLE_COUNT])
 
 
 func _tmhm() -> void:

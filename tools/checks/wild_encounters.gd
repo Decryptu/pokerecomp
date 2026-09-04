@@ -77,25 +77,26 @@ const GEN1_ROLL_STEPS: int = 8000
 const GEN1_ROLL_SEED: int = 7
 const GEN1_ROLL_TOLERANCE: float = 0.01
 
-## `Route1.asm`: rate 25 and ten slots of PIDGEY and RATTATA, by internal index.
+## `Route1.asm`: rate 25 and ten slots of PIDGEY and RATTATA. The cartridge
+## names each by its internal index and the cache stores the dex number.
 const GEN1_ROUTE_1: int = 0x0C
 const GEN1_ROUTE_1_RATE: int = 25
 const GEN1_ROUTE_1_SLOTS: Array = [
-	[3, 0x24], [3, 0xA5], [3, 0xA5], [2, 0xA5], [2, 0x24],
-	[3, 0x24], [3, 0x24], [4, 0xA5], [4, 0x24], [5, 0x24],
+	[3, 16], [3, 19], [3, 19], [2, 19], [2, 16],
+	[3, 16], [3, 16], [4, 19], [4, 16], [5, 16],
 ]
 
 ## `SeaRoutes.asm`, the water block Routes 19 and 20 share: rate 5 over ten
 ## TENTACOOL, and no grass at all. Yellow gives the pair its own block.
 const GEN1_SEA_ROUTES: Array[int] = [0x1E, 0x1F]
 const GEN1_SEA_RATE: int = 5
-const GEN1_SEA_SPECIES: int = 0x18
+const GEN1_SEA_SPECIES: int = 72
 
 ## `SuperRodData`'s first row, `.Group1`, and Yellow's own first row, which is
 ## four slots with a threshold each rather than a uniform pick.
 const GEN1_ROD_MAP: int = 0x00
-const GEN1_ROD_SLOTS: Array = [[15, 0x18], [15, 0x47]]
-const GEN1_ROD_SLOTS_YELLOW: Array = [[10, 0x1B], [10, 0x18], [5, 0x1B], [20, 0x18]]
+const GEN1_ROD_SLOTS: Array = [[15, 72], [15, 60]]
+const GEN1_ROD_SLOTS_YELLOW: Array = [[10, 120], [10, 72], [5, 120], [20, 72]]
 
 
 ## Every Generation 1 encounter table in the cache, on all three cartridges.
@@ -289,7 +290,7 @@ func _gen1_sea_routes() -> void:
 		"the sea routes' water rate is %d." % int(rows[0]["rate"]))
 	for slot: Dictionary in rows[0]["slots"] as Array:
 		_r.check(int(slot["species"]) == GEN1_SEA_SPECIES,
-			"a sea route slot names index %d." % int(slot["species"]))
+			"a sea route slot names species %d." % int(slot["species"]))
 
 
 ## Pallet Town's group, and that every map the table names resolves to slots.

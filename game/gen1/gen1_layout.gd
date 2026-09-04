@@ -76,6 +76,10 @@ const TM_COUNT: int = 50
 const HM_COUNT: int = 5
 const HM_FIRST_ITEM: int = 0xC4
 const TM_FIRST_ITEM: int = HM_FIRST_ITEM + HM_COUNT
+## `GetMachineName` spells the name rather than reading one, and
+## `GetMachinePrice` takes a nybble of `TechnicalMachinePrices` and multiplies by
+## a thousand. `ret c` above it leaves an HM priceless.
+const MACHINE_PRICE_UNIT: int = 1000
 
 ## A `PokedexEntry`: category, feet, inches, weight in tenths of a pound, then
 ## `text_far`'s $17 with a `dab` pointer to the description.
@@ -155,6 +159,37 @@ const TEXT_SCRIPT_IDS: Dictionary = {
 	0xF5: "vending machine", 0xF6: "cable club receptionist", 0xF7: "prize vendor",
 	0xF9: "Pokemon Center PC", 0xFC: "the player's PC", 0xFD: "Bill's PC",
 	0xFE: "mart", 0xFF: "Pokemon Center nurse",
+}
+const TEXT_SCRIPT_MART: int = 0xFE
+const TEXT_SCRIPT_POKECENTER_NURSE: int = 0xFF
+
+## `script_mart` writes its inventory into the text pointer itself: the $FE,
+## a count, that many item ids, and a $FF nothing reads. `LoadItemList` copies
+## the run into `wItemList`, which is 16 bytes, so a longer count is a bad read.
+const MART_COUNT_AT: int = 1
+const MART_ITEMS_AT: int = 2
+const MART_MAX_ITEMS: int = 14
+
+## A `text_far` stub is `TX_FAR`, a two-byte address, a bank byte and a
+## `text_end`; a `text_pause` in front of one adds a byte, which is what makes
+## the second run below irregular. Each run is contiguous with the same deltas on
+## all three cartridges, so one pinned address apiece is enough.
+const TEXT_FAR_STUB_BYTES: int = 5
+
+## `engine/events/pokemart.asm`'s eleven stubs in file order, under the slot
+## names [Gen2WorldServiceScreen] gives a shop's boxes. The greeting is not among
+## them: `DisplayPokemartDialogue` prints it from home, so it is pinned alone.
+const MART_TEXT_AT: Dictionary = {
+	"buy_intro": 0x00, "final_price": 0x05, "thanks": 0x0A, "no_money": 0x0F,
+	"pack_full": 0x14, "sell_intro": 0x19, "sell_price": 0x1E,
+	"bag_empty": 0x23, "cant_buy": 0x28, "come_again": 0x2D, "ask_more": 0x32,
+}
+
+## `engine/events/pokecenter.asm`'s five, `shall_we_heal` and `farewell` each
+## carrying a `text_pause` ahead of the stub.
+const POKECENTER_TEXT_AT: Dictionary = {
+	"welcome": 0x00, "shall_we_heal": 0x05, "need_your_pokemon": 0x0B,
+	"fighting_fit": 0x10, "farewell": 0x15,
 }
 
 ## `MapHeaderPointers` is flat: one `dw` a map id, with `MapHeaderBanks` beside
@@ -357,6 +392,7 @@ const RED_BLUE: Dictionary = {
 	"type_effects": 0x3E474,
 	"item_names": 0x0472B,
 	"item_prices": 0x04608,
+	"tm_prices": 0x7BFA7,
 	"tmhm_moves": 0x13773,
 	"mon_palettes": 0x725C8,
 	"super_palettes": 0x72660,
@@ -366,6 +402,12 @@ const RED_BLUE: Dictionary = {
 	"cries": 0x39446,
 	"trainer_pics": 0x39914,
 	"trainer_pics_bank": 0x13,
+	## `DisplayPokemartDialogue`'s own greeting and the head of the two facility
+	## text runs [constant MART_TEXT_AT] and its neighbour walk. Every offset
+	## here is `pokered.sym`'s, which builds both dumps.
+	"mart_greeting": 0x02A55,
+	"mart_text": 0x06E0C,
+	"pokecenter_text": 0x0705D,
 	"font": 0x11A80,
 	"text_box": 0x12288,
 	"pic_player_back": 0x33E0A,
@@ -400,6 +442,7 @@ const YELLOW: Dictionary = {
 	"type_effects": 0x3E5FA,
 	"item_names": 0x045B7,
 	"item_prices": 0x04494,
+	"tm_prices": 0xF65F5,
 	"tmhm_moves": 0x1232D,
 	"mon_palettes": 0x72921,
 	"super_palettes": 0x729B9,
@@ -409,6 +452,9 @@ const YELLOW: Dictionary = {
 	"cries": 0x39462,
 	"trainer_pics": 0x39893,
 	"trainer_pics_bank": 0x13,
+	"mart_greeting": 0x02938,
+	"mart_text": 0x06B91,
+	"pokecenter_text": 0x06ED0,
 	"font": 0x10600,
 	"text_box": 0x10E18,
 	## Yellow moved both back pics out of "Pics 4" and into their own bank.
@@ -468,6 +514,46 @@ static func base_stats_offset(layout: Dictionary, dex: int) -> int:
 
 static func move_offset(layout: Dictionary, move: int) -> int:
 	return int(layout["moves"]) + (move - 1) * MOVE_DATA_SIZE
+
+
+## `PokedexOrder` inverted: dex number to internal index, row 0 unused so a dex
+## number indexes it directly.
+static func index_of_dex(rom: RomFile, layout: Dictionary) -> PackedInt32Array:
+	var out: PackedInt32Array = PackedInt32Array()
+	out.resize(Gen1Layout.SPECIES_COUNT + 1)
+	var order: int = int(layout["dex_order"])
+	for index: int in range(1, Gen1Layout.INDEX_COUNT + 1):
+		var dex: int = rom.u8(order + index - 1)
+		if dex >= 1 and dex <= Gen1Layout.SPECIES_COUNT:
+			out[dex] = index
+	return out
+
+
+## `PokedexOrder` read forwards: the dex number an internal index carries, or
+## zero for a slot no species claims.
+static func dex_of_index(rom: RomFile, layout: Dictionary, index: int) -> int:
+	if index < 1 or index > Gen1Layout.INDEX_COUNT:
+		return 0
+	return rom.u8(int(layout["dex_order"]) + index - 1)
+
+
+## A `dw` or a `dab` inside a banked cartridge: below $4000 is home, whatever
+## bank is switched in, so a pointer that carries no bank of its own is resolved
+## against the one it was read from only above that line.
+static func banked(bank: int, address: int) -> int:
+	return RomFile.linear(0 if address < RomFile.BANK_SIZE else bank, address)
+
+
+## One facility box's `text_far` stub: the run's own pinned head plus the slot's
+## delta. [param slots] is [constant MART_TEXT_AT] or its neighbour.
+## Answers -1 for a slot the table does not name.
+static func facility_text_offset(
+	layout: Dictionary, run: String, slots: Dictionary, name: String
+) -> int:
+	var at: int = int(layout.get(run, 0))
+	if at <= 0 or not slots.has(name):
+		return -1
+	return at + int(slots[name])
 
 
 static func item_price_offset(layout: Dictionary, item: int) -> int:

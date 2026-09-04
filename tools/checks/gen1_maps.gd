@@ -57,10 +57,10 @@ const OVERWORLD_PASSABLE: Array[int] = [
 
 ## The Power Plant's Voltorbs, Electrodes and Zapdos: an object with the TRAINER
 ## bit and a byte below `OPP_ID_OFFSET`, which is the only shape a wild one
-## takes: six Voltorbs, two Electrodes and Zapdos. Internal indexes, not dex
-## numbers.
+## takes: six Voltorbs, two Electrodes and Zapdos, as the dex numbers the cache
+## stores rather than the internal indexes the cartridge writes.
 const POWER_PLANT: int = 83
-const POWER_PLANT_WILD: Dictionary = {0x06: 6, 0x8D: 2, 0x4B: 1}
+const POWER_PLANT_WILD: Dictionary = {100: 6, 101: 2, 145: 1}
 
 ## `SilphCoElevator_Object`'s two warps name UNUSED_MAP_ED, which has no header:
 ## the elevator's own script rewrites the destination before either is taken.
@@ -105,6 +105,10 @@ const TEXT_CENSUS: Dictionary = {
 	&"yellow": {0x08: 675, 0x17: 429, 0x50: 6, 0xF5: 3, 0xF6: 12, 0xF7: 3,
 		0xFE: 14, 0xFF: 12},
 }
+
+## Rows of `script_mart` across the corpus. Yellow's Celadon 5F clerk sells one
+## more than Red and Blue's.
+const MART_ITEMS: Dictionary = {&"red": 97, &"blue": 97, &"yellow": 98}
 
 ## `_MtMoonPokecenterClipboardText`, the corpus's one empty box.
 const EMPTY_TEXTS: Dictionary = {&"red": 1, &"blue": 1, &"yellow": 1}
@@ -267,6 +271,32 @@ func _texts() -> void:
 	_r.check(empty == int(EMPTY_TEXTS[_r.game_id]),
 		"%d texts decoded to nothing, pinned %d." % [empty, int(EMPTY_TEXTS[_r.game_id])])
 	_r.note("gen1 texts %s" % [census])
+	_marts()
+
+
+## Every `script_mart` row's inline inventory: `LoadItemList` reads the count out
+## of the text pointer itself, so a stride that has slipped shows up as a shelf
+## naming an item the cartridge has no name for.
+func _marts() -> void:
+	var shelves: int = 0
+	var items: int = 0
+	for map: Gen2WorldMap in _maps.values():
+		for row: Dictionary in map.texts:
+			if int(row["command"]) != Gen1Layout.TEXT_SCRIPT_MART:
+				continue
+			var shelf: Array = row.get("items", [])
+			shelves += 1
+			items += shelf.size()
+			if not _r.check(not shelf.is_empty(), "map %d's shop is empty." % map.number):
+				continue
+			for item: Variant in shelf:
+				_r.check(not _r.data.item_name(int(item)).is_empty(),
+					"map %d's shop sells item %d, which has no name." % [map.number, int(item)])
+	_r.check(shelves == int(TEXT_CENSUS[_r.game_id][Gen1Layout.TEXT_SCRIPT_MART]),
+		"%d shops carry an inventory." % shelves)
+	_r.check(items == int(MART_ITEMS[_r.game_id]),
+		"the shops sell %d items, pinned %d." % [items, int(MART_ITEMS[_r.game_id])])
+	_r.note("gen1 shops %d selling %d items" % [shelves, items])
 
 
 ## Whether every code [param line] encodes to has ink behind it.

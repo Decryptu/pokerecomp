@@ -93,8 +93,30 @@ const DOWN_ARROW_CODE: int = 0xEE
 
 ## `PRINTNUM_MONEY` with six digits: the `¥` is printed in front of the first
 ## significant digit rather than at the field's left edge, so the whole thing is
-## seven cells right aligned.
+## seven cells right aligned, which is `PrintBCDNumber`'s shape too.
 const MONEY_CELLS: int = 7
+
+## Generation 1's shop stands over the map and frames its list. `MONEY_BOX_TEMPLATE`
+## is (11,0) to (19,2) with "MONEY" on its own top border row, and `LIST_MENU_BOX`
+## (4,2) to (19,12) (`data/text_boxes.asm`).
+const GEN1_MONEY_LABEL: String = "MONEY"
+const GEN1_MONEY_LABEL_AT: Vector2i = Vector2i(13, 0)
+const GEN1_LIST_AT: Vector2i = Vector2i(4, 2)
+const GEN1_LIST_SIZE: Vector2i = Vector2i(16, 11)
+## `PrintListMenuEntries`: `hlcoord 6, 4`, four names two rows apart, each price
+## one row down and five columns right of its name, and the cursor on column 5.
+const GEN1_NAME_AT: Vector2i = Vector2i(6, 4)
+const GEN1_CURSOR_COLUMN: int = 5
+const GEN1_PRICE_COLUMN: int = 11
+## `ld b, 4` names drawn against `wMaxMenuItem` 2, so the fourth row is a look
+## ahead the cursor never reaches.
+const GEN1_LIST_HEIGHT: int = 4
+const GEN1_CURSOR_ROWS: int = 3
+## A name runs to the box's own border: the price sits a row below it.
+const GEN1_NAME_CELLS: int = GEN1_LIST_AT.x + GEN1_LIST_SIZE.x - 1 - GEN1_NAME_AT.x
+## `DisplayChooseQuantityMenu`'s priced branch: `hlcoord 7, 9` with `lb b, 1,
+## c, 11`, the same box Generation 2 draws six rows lower.
+const GEN1_QUANTITY_AT: Vector2i = Vector2i(7, 9)
 
 var font: Gen2Font = null
 ## Which text-box border the player chose, for the three boxes this draws.
@@ -237,6 +259,91 @@ static func bank_window(
 ## `PrintNum` with `lb bc, 2, 4`: four digits, right aligned, no `¥`.
 static func coin_string(coins: int) -> String:
 	return ("%d" % maxi(coins, 0)).lpad(COIN_DIGITS)
+
+
+## `DisplayPokemartDialogue_` draws the money box and `DisplayListMenuID` the
+## list. Transparent everywhere else, so the map and the message box show.
+func render_gen1(state: Dictionary) -> Image:
+	if font == null:
+		return null
+	var image := Image.create_empty(
+		Gen2Screen.WIDTH, Gen2Screen.HEIGHT, false, Image.FORMAT_RGBA8
+	)
+	_blit_gen1_money(image, int(state.get("money", 0)))
+	if bool(state.get("listing", false)):
+		_blit_gen1_list(image, state)
+	if int(state.get("quantity", -1)) >= 0:
+		_blit_gen1_quantity(
+			image, int(state["quantity"]), int(state.get("subtotal", 0))
+		)
+	return image
+
+
+func _blit_gen1_quantity(image: Image, quantity: int, subtotal: int) -> void:
+	var indices: PackedByteArray = _panel(QUANTITY_SIZE)
+	var width: int = QUANTITY_SIZE.x * TILE
+	font.draw_box(frame_style, indices, width, 0, 0, QUANTITY_SIZE.x, QUANTITY_SIZE.y)
+	var inset: Vector2i = QUANTITY_TEXT_AT - QUANTITY_AT
+	_text(
+		indices, width,
+		"×%s" % String.num_int64(maxi(quantity, 0)).lpad(QUANTITY_DIGITS, "0"), inset
+	)
+	_text(
+		indices, width, money_string(subtotal),
+		Vector2i(SUBTOTAL_AT.x - QUANTITY_AT.x, inset.y)
+	)
+	_blit_panel(image, indices, QUANTITY_SIZE, GEN1_QUANTITY_AT)
+
+
+func _blit_gen1_money(image: Image, money: int) -> void:
+	var indices: PackedByteArray = _panel(MONEY_SIZE)
+	var width: int = MONEY_SIZE.x * TILE
+	font.draw_box(frame_style, indices, width, 0, 0, MONEY_SIZE.x, MONEY_SIZE.y)
+	_text(indices, width, GEN1_MONEY_LABEL, GEN1_MONEY_LABEL_AT - MONEY_AT)
+	_text(indices, width, money_string(money), MONEY_TEXT_AT - MONEY_AT)
+	_blit_panel(image, indices, MONEY_SIZE, MONEY_AT)
+
+
+func _blit_gen1_list(image: Image, state: Dictionary) -> void:
+	var indices: PackedByteArray = _panel(GEN1_LIST_SIZE)
+	var width: int = GEN1_LIST_SIZE.x * TILE
+	font.draw_box(frame_style, indices, width, 0, 0, GEN1_LIST_SIZE.x, GEN1_LIST_SIZE.y)
+	var rows: Array = state.get("rows", [])
+	for index: int in mini(rows.size(), GEN1_LIST_HEIGHT):
+		var row: Dictionary = rows[index]
+		var at: Vector2i = GEN1_NAME_AT - GEN1_LIST_AT + Vector2i(0, index * ROW_STEP)
+		if bool(row.get("cancel", false)):
+			_text(indices, width, CANCEL, at)
+			continue
+		_text(indices, width, String(row.get("name", "")), at, GEN1_NAME_CELLS)
+		_text(
+			indices, width, money_string(int(row.get("price", 0))),
+			Vector2i(GEN1_PRICE_COLUMN - GEN1_LIST_AT.x, at.y + 1)
+		)
+	var cursor: int = int(state.get("cursor", -1))
+	if cursor >= 0 and cursor < mini(rows.size(), GEN1_CURSOR_ROWS):
+		_code(indices, width, CURSOR_CODE, Vector2i(
+			GEN1_CURSOR_COLUMN - GEN1_LIST_AT.x,
+			GEN1_NAME_AT.y - GEN1_LIST_AT.y + cursor * ROW_STEP
+		))
+	_blit_panel(image, indices, GEN1_LIST_SIZE, GEN1_LIST_AT)
+
+
+static func _panel(size: Vector2i) -> PackedByteArray:
+	var out := PackedByteArray()
+	out.resize(size.x * TILE * size.y * TILE)
+	return out
+
+
+func _blit_panel(
+	image: Image, indices: PackedByteArray, size: Vector2i, at: Vector2i
+) -> void:
+	var part: Image = Gen2PicImage.from_indices(
+		indices, size.x * TILE, size.y * TILE,
+		PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+	)
+	if part != null:
+		image.blit_rect(part, Rect2i(Vector2i.ZERO, part.get_size()), at * TILE)
 
 
 func _draw_money(indices: PackedByteArray, width: int, money: int) -> void:
