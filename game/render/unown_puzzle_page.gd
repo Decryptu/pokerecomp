@@ -10,8 +10,8 @@ extends RefCounted
 ## `%10010011` being the unsigned tile base; and the cursor is red because
 ## `_CGB_UnownPuzzle` overwrites object colour 0, not because of a tile.
 
-const TILE: int = Gen2Tiles.TILE_WIDTH
-const TILE_PIXELS: int = Gen2Tiles.TILE_PIXELS
+const TILE: int = PokeTiles.TILE_WIDTH
+const TILE_PIXELS: int = PokeTiles.TILE_PIXELS
 ## `SCREEN_WIDTH` and `SCREEN_HEIGHT`.
 const SCREEN_COLUMNS: int = 20
 const SCREEN_ROWS: int = 18
@@ -109,14 +109,14 @@ static func from_data(data: GameData, puzzle: int) -> Gen2UnownPuzzlePage:
 	if data == null or not data.has_unown_puzzle():
 		return null
 	var page := Gen2UnownPuzzlePage.new()
-	var names: Array[String] = RomLayout.UNOWN_PUZZLE_PICTURES
+	var names: Array[String] = Gen2Layout.UNOWN_PUZZLE_PICTURES
 	var picture: PackedByteArray = data.unown_puzzle_indices(
 		names[posmod(puzzle, names.size())]
 	)
 	var borders: PackedByteArray = data.unown_puzzle_indices("tile_borders")
 	var cursor: PackedByteArray = data.unown_puzzle_indices("cursor")
 	var box: PackedByteArray = data.unown_puzzle_indices("start_cancel")
-	var side: int = RomLayout.UNOWN_PUZZLE_PICTURE_TILES
+	var side: int = Gen2Layout.UNOWN_PUZZLE_PICTURE_TILES
 	if picture.size() < side * side * TILE_PIXELS or borders.is_empty() \
 		or cursor.is_empty() or box.is_empty():
 		return null

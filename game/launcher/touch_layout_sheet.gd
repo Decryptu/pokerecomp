@@ -93,8 +93,8 @@ func _toolbar() -> Control:
 	_fields.add_child(Gen2LauncherUI.level(
 		_theme, &"touch", "Size",
 		int(roundf(_options.touch_layout.scale * SCALE_STEPS)),
-		int(Gen2TouchLayout.MIN_SCALE * SCALE_STEPS),
-		int(Gen2TouchLayout.MAX_SCALE * SCALE_STEPS),
+		int(PokeTouchLayout.MIN_SCALE * SCALE_STEPS),
+		int(PokeTouchLayout.MAX_SCALE * SCALE_STEPS),
 		func(value: int) -> void:
 			_options.touch_layout.scale = float(value) / SCALE_STEPS
 			_pad.queue_redraw()
@@ -102,8 +102,8 @@ func _toolbar() -> Control:
 	_fields.add_child(Gen2LauncherUI.level(
 		_theme, &"touch", "Opacity",
 		int(roundf(_options.touch_layout.opacity * OPACITY_STEPS)),
-		int(Gen2TouchLayout.MIN_OPACITY * OPACITY_STEPS),
-		int(Gen2TouchLayout.MAX_OPACITY * OPACITY_STEPS),
+		int(PokeTouchLayout.MIN_OPACITY * OPACITY_STEPS),
+		int(PokeTouchLayout.MAX_OPACITY * OPACITY_STEPS),
 		func(value: int) -> void:
 			_options.touch_layout.opacity = float(value) / OPACITY_STEPS
 			_pad.queue_redraw()
@@ -131,8 +131,8 @@ func _refresh_orientation() -> void:
 	if _orientation == null:
 		return
 	_place_pad()
-	var landscape: bool = Gen2TouchLayout.orientation_of(size) \
-		== Gen2TouchLayout.ORIENTATION_LANDSCAPE
+	var landscape: bool = PokeTouchLayout.orientation_of(size) \
+		== PokeTouchLayout.ORIENTATION_LANDSCAPE
 	_orientation.visible = not landscape
 	_fields.columns = 2 if landscape else 1
 	var insets: Dictionary = Gen2LauncherUI.safe_area_insets(get_window())
@@ -142,7 +142,7 @@ func _refresh_orientation() -> void:
 	var arranging: StringName = _pad.orientation()
 	_orientation.text = (
 		"Drag each group. This is the %s arrangement; turn the device to set the other."
-		% ("sideways" if arranging == Gen2TouchLayout.ORIENTATION_LANDSCAPE else "upright")
+		% ("sideways" if arranging == PokeTouchLayout.ORIENTATION_LANDSCAPE else "upright")
 	)
 
 

@@ -224,7 +224,7 @@ func repaint() -> void:
 	add_theme_color_override("font_disabled_color", _theme.faint)
 	add_theme_constant_override("icon_max_width", int(icon_side))
 	if not _glyph.is_empty():
-		icon = Gen2LauncherIcon.raster(
+		icon = PokeLauncherIcon.raster(
 			_glyph, icon_side, _theme.faint if disabled else ink
 		)
 	# Godot gives the icon the left slot and the label the rest of the width, so

@@ -129,9 +129,9 @@ func draw(state: Dictionary) -> PackedByteArray:
 	_box(indices, width, LIST_BOX)
 	## The two corners `BillsPC_RefreshTextboxes` writes over the frame it has
 	## just drawn, which is what joins the two boxes into one.
-	_frame_code(indices, width, RomLayout.FRAME_BOTTOM_LEFT, LIST_BOX.position)
+	_frame_code(indices, width, Gen2Layout.FRAME_BOTTOM_LEFT, LIST_BOX.position)
 	_frame_code(
-		indices, width, RomLayout.FRAME_BOTTOM_RIGHT,
+		indices, width, Gen2Layout.FRAME_BOTTOM_RIGHT,
 		Vector2i(LIST_BOX.position.x + LIST_BOX.size.x - 1, LIST_BOX.position.y)
 	)
 	var rows: Array = state.get("rows", [])
@@ -223,7 +223,7 @@ func _frame_code(
 	indices: PackedByteArray, width: int, within: int, at: Vector2i
 ) -> void:
 	font.draw_frame_code(
-		frame_style, RomLayout.FRAME_FIRST_CODE + within, indices, width,
+		frame_style, Gen2Layout.FRAME_FIRST_CODE + within, indices, width,
 		at.x * TILE, at.y * TILE
 	)
 
@@ -246,6 +246,6 @@ func _marker(
 	if _mail.is_empty():
 		return
 	Gen2Font.blit_slot(
-		_mail, RomLayout.PC_MAIL_TILES * TILE, code - MAIL_CODE,
+		_mail, Gen2Layout.PC_MAIL_TILES * TILE, code - MAIL_CODE,
 		indices, width, at.x * TILE, at.y * TILE
 	)

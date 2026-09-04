@@ -16,16 +16,16 @@ var _heard: Array = []
 func before_each() -> void:
 	_forget_view()
 	Gen2ModHost.reset()
-	DirAccess.remove_absolute(Gen2ModOptions.PATH)
-	Gen2ModOptions.reload()
+	DirAccess.remove_absolute(PokeModOptions.PATH)
+	PokeModOptions.reload()
 	_heard = []
 
 
 func after_each() -> void:
 	_forget_view()
 	Gen2ModHost.reset()
-	DirAccess.remove_absolute(Gen2ModOptions.PATH)
-	Gen2ModOptions.reload()
+	DirAccess.remove_absolute(PokeModOptions.PATH)
+	PokeModOptions.reload()
 
 
 ## Choosing a view writes the installation's own file, so a test that chooses one
@@ -91,8 +91,8 @@ func test_a_change_is_written_at_once_and_announced() -> void:
 	assert_eq(_heard, [[MOD, &"draw_distance", 0]])
 	# The file carries it before the press returns, the way the cartridge's own
 	# OPTION menu commits to wOptions rather than on the way out.
-	assert_true(FileAccess.file_exists(Gen2ModOptions.PATH))
-	Gen2ModOptions.reload()
+	assert_true(FileAccess.file_exists(PokeModOptions.PATH))
+	PokeModOptions.reload()
 	assert_eq(host.option(MOD, &"draw_distance"), 0)
 
 
@@ -100,11 +100,11 @@ func test_a_stored_value_survives_a_reload_and_is_typed_back_to_the_ladder() -> 
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	assert_true(bool(_distance(host).get("ok", false)))
 	assert_true(bool(host.set_option(MOD, &"draw_distance", 16).get("ok", false)))
-	Gen2ModOptions.reload()
+	PokeModOptions.reload()
 
 	# JSON reads 16 back as a float; the ladder registered an int, and the rung
 	# is the same rung.
-	assert_eq(Gen2ModOptions.value(MOD, &"draw_distance"), 16.0)
+	assert_eq(PokeModOptions.value(MOD, &"draw_distance"), 16.0)
 	assert_eq(host.option_index(MOD, &"draw_distance"), 1)
 	assert_eq(host.option(MOD, &"draw_distance"), 16)
 
@@ -142,7 +142,7 @@ func test_a_malformed_registration_is_refused_and_named() -> void:
 		var result: Dictionary = host.register_option(MOD, option)
 		assert_false(bool(result.get("ok", false)), "refused: %s" % option)
 		assert_false(
-			Gen2ModRefusal.text(result).begins_with(String(result.get("reason", &""))),
+			PokeModRefusal.text(result).begins_with(String(result.get("reason", &""))),
 			"worded: %s" % result.get("reason", &"")
 		)
 	assert_true(host.option_mod_ids().is_empty())
@@ -178,8 +178,8 @@ func test_uninstalling_a_mod_drops_what_it_stored() -> void:
 	assert_true(bool(host.set_option(MOD, &"draw_distance", 24).get("ok", false)))
 
 	assert_true(bool(Gen2ModInstaller.uninstall(MOD, "user://mod-options-test").get("ok", false)))
-	Gen2ModOptions.reload()
-	assert_null(Gen2ModOptions.value(MOD, &"draw_distance"))
+	PokeModOptions.reload()
+	assert_null(PokeModOptions.value(MOD, &"draw_distance"))
 	assert_eq(host.option(MOD, &"draw_distance"), 8)
 
 
@@ -187,7 +187,7 @@ func test_the_shipped_example_registers_the_setting_its_renderer_reads() -> void
 	# mods/examples/voxel_preview/ is what a mod author copies, so the pair is
 	# run rather than read: a key the renderer reads and the mod never
 	# registered would leave the camera on its constant and teach that.
-	var manifest: Dictionary = Gen2ModManifest.read("res://mods/examples/voxel_preview")
+	var manifest: Dictionary = PokeModManifest.read("res://mods/examples/voxel_preview")
 	assert_true(bool(manifest.get("ok", false)), "example manifest reads")
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	assert_true(bool(host.load_mod(manifest["manifest"]).get("ok", false)))
@@ -219,13 +219,13 @@ func test_a_new_save_records_the_settings_it_was_created_with() -> void:
 	host.activate_save(save)
 	# The installation moves on; the run does not, and the value the run is played
 	# with is the one it recorded.
-	Gen2ModOptions.unbind_run()
+	PokeModOptions.unbind_run()
 	assert_true(bool(host.set_option(MOD, &"draw_distance", 8).get("ok", false)))
 	host.activate_save(save)
 	assert_eq(host.option(MOD, &"draw_distance"), 24)
 
 	host.deactivate_save()
-	assert_false(Gen2ModOptions.run_bound())
+	assert_false(PokeModOptions.run_bound())
 	assert_eq(host.option(MOD, &"draw_distance"), 8, "and the launcher edits the installation")
 
 
@@ -270,5 +270,5 @@ func test_a_run_with_no_slot_plays_the_installations_settings() -> void:
 	assert_true(bool(_distance(host).get("ok", false)))
 	assert_true(bool(host.set_option(MOD, &"draw_distance", 16).get("ok", false)))
 	host.activate_save(null)
-	assert_false(Gen2ModOptions.run_bound())
+	assert_false(PokeModOptions.run_bound())
 	assert_eq(host.option(MOD, &"draw_distance"), 16)

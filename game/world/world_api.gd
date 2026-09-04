@@ -8,8 +8,8 @@ extends RefCounted
 ## event flags are supplied through a separate scene-free world state.
 
 const VIEW_CELLS: Vector2i = Vector2i(10, 9)
-const VIEW_TILES: Vector2i = VIEW_CELLS * RomLayout.MAP_BLOCK_CELL_WIDTH
-const CELL_PIXELS: int = Gen2Tiles.TILE_WIDTH * RomLayout.MAP_BLOCK_CELL_WIDTH
+const VIEW_TILES: Vector2i = VIEW_CELLS * Gen2Layout.MAP_BLOCK_CELL_WIDTH
+const CELL_PIXELS: int = PokeTiles.TILE_WIDTH * Gen2Layout.MAP_BLOCK_CELL_WIDTH
 ## The screen the cartridge draws, in pixels: 160x144.
 const VIEW_PIXELS: Vector2i = VIEW_CELLS * CELL_PIXELS
 ## `ChangeMap` copies a map into the middle of `wOverworldMapBlocks`, which is
@@ -124,7 +124,7 @@ const BGEVENT_COPY: int = 8
 ## overworld runs one pass per two hardware frames: every map object's step,
 ## every landmark sign countdown and every joypad read is a pass's, never a
 ## screen frame's. Measured on a real cartridge with
-## `.claude/oracle/overworld/trace_walk.py`: an ordinary walk step is eight
+## Measured on a real cartridge: an ordinary walk step is eight
 ## passes of two pixels and sixteen frames. Every `PASSES` count below is in
 ## that unit, and [Gen2WorldScreen] is what spends the two frames.
 const FRAMES_PER_OVERWORLD_PASS: int = 2
@@ -781,10 +781,10 @@ func visible_origin_cell() -> Vector2i:
 	if current_map == null:
 		return Vector2i.ZERO
 	return Vector2i(
-		floori(float(player_cell.x) / float(RomLayout.MAP_BLOCK_CELL_WIDTH))
-			* RomLayout.MAP_BLOCK_CELL_WIDTH - PLAYER_VIEW_CELL.x,
-		floori(float(player_cell.y) / float(RomLayout.MAP_BLOCK_CELL_WIDTH))
-			* RomLayout.MAP_BLOCK_CELL_WIDTH - PLAYER_VIEW_CELL.y
+		floori(float(player_cell.x) / float(Gen2Layout.MAP_BLOCK_CELL_WIDTH))
+			* Gen2Layout.MAP_BLOCK_CELL_WIDTH - PLAYER_VIEW_CELL.x,
+		floori(float(player_cell.y) / float(Gen2Layout.MAP_BLOCK_CELL_WIDTH))
+			* Gen2Layout.MAP_BLOCK_CELL_WIDTH - PLAYER_VIEW_CELL.y
 	)
 
 
@@ -793,8 +793,8 @@ func visible_subcell_offset_cells() -> Vector2i:
 	if current_map == null:
 		return Vector2i.ZERO
 	return Vector2i(
-		posmod(player_cell.x, RomLayout.MAP_BLOCK_CELL_WIDTH),
-		posmod(player_cell.y, RomLayout.MAP_BLOCK_CELL_WIDTH),
+		posmod(player_cell.x, Gen2Layout.MAP_BLOCK_CELL_WIDTH),
+		posmod(player_cell.y, Gen2Layout.MAP_BLOCK_CELL_WIDTH),
 	)
 
 
@@ -3321,17 +3321,17 @@ func apply_command_queue_delete(queue_type: int) -> Dictionary:
 func tile_index_at(tile_x: int, tile_y: int) -> int:
 	if current_map == null or current_tileset == null:
 		return -1
-	var map_tile_width: int = current_map.width_blocks * RomLayout.MAP_BLOCK_TILE_WIDTH
+	var map_tile_width: int = current_map.width_blocks * Gen2Layout.MAP_BLOCK_TILE_WIDTH
 
 	if tile_x < 0 or tile_y < 0 or tile_x >= map_tile_width \
-		or tile_y >= current_map.height_blocks * RomLayout.MAP_BLOCK_TILE_WIDTH:
+		or tile_y >= current_map.height_blocks * Gen2Layout.MAP_BLOCK_TILE_WIDTH:
 		return -1
 
 	var block: int = block_at(
-		floori(float(tile_x) / float(RomLayout.MAP_BLOCK_TILE_WIDTH)),
-		floori(float(tile_y) / float(RomLayout.MAP_BLOCK_TILE_WIDTH)),
+		floori(float(tile_x) / float(Gen2Layout.MAP_BLOCK_TILE_WIDTH)),
+		floori(float(tile_y) / float(Gen2Layout.MAP_BLOCK_TILE_WIDTH)),
 	)
-	var local_tile: int = (tile_y & 3) * RomLayout.MAP_BLOCK_TILE_WIDTH + (tile_x & 3)
+	var local_tile: int = (tile_y & 3) * Gen2Layout.MAP_BLOCK_TILE_WIDTH + (tile_x & 3)
 	return current_tileset.tile_index(block, local_tile)
 
 
@@ -3343,7 +3343,7 @@ func tile_index_at(tile_x: int, tile_y: int) -> int:
 ## division and bounds check for every tile of the same block row.
 func visible_tile_indices() -> PackedInt32Array:
 	return tile_indices_in_window(
-		visible_screen_origin_cell() * RomLayout.MAP_BLOCK_CELL_WIDTH,
+		visible_screen_origin_cell() * Gen2Layout.MAP_BLOCK_CELL_WIDTH,
 		VIEW_TILES,
 	)
 
@@ -3362,7 +3362,7 @@ func tile_indices_in_window(origin: Vector2i, size: Vector2i) -> PackedInt32Arra
 
 	# The window follows the player off the map, so a tile coordinate can be
 	# negative and the block divisions have to floor rather than truncate.
-	var tile_width: int = RomLayout.MAP_BLOCK_TILE_WIDTH
+	var tile_width: int = Gen2Layout.MAP_BLOCK_TILE_WIDTH
 	for y: int in size.y:
 		var tile_y: int = origin.y + y
 		var row: int = y * size.x
@@ -3625,15 +3625,15 @@ func collision_code_at(cell: Vector2i) -> int:
 		return -1
 	if _block_overrides.is_empty():
 		return current_map.collision_at(cell.x, cell.y)
-	var block_x: int = floori(float(cell.x) / float(RomLayout.MAP_BLOCK_CELL_WIDTH))
-	var block_y: int = floori(float(cell.y) / float(RomLayout.MAP_BLOCK_CELL_WIDTH))
+	var block_x: int = floori(float(cell.x) / float(Gen2Layout.MAP_BLOCK_CELL_WIDTH))
+	var block_y: int = floori(float(cell.y) / float(Gen2Layout.MAP_BLOCK_CELL_WIDTH))
 	var block: int = block_at(block_x, block_y)
 	if block == current_map.block_at(block_x, block_y):
 		return current_map.collision_at(cell.x, cell.y)
 	return current_tileset.collision_index(
 		block,
-		cell.x & (RomLayout.MAP_BLOCK_CELL_WIDTH - 1),
-		cell.y & (RomLayout.MAP_BLOCK_CELL_WIDTH - 1),
+		cell.x & (Gen2Layout.MAP_BLOCK_CELL_WIDTH - 1),
+		cell.y & (Gen2Layout.MAP_BLOCK_CELL_WIDTH - 1),
 	)
 
 
@@ -6576,7 +6576,7 @@ func spawn_index_of(map: Vector2i) -> int:
 ## when it is not or when none has been entered.
 func whiteout_spawn() -> int:
 	var index: int = spawn_index_of(last_spawn_map)
-	return index if index >= 0 else RomLayout.SPAWN_HOME
+	return index if index >= 0 else Gen2Layout.SPAWN_HOME
 
 
 ## `Script_AbortBugContest`, which is `checkflag ENGINE_BUG_CONTEST_TIMER`, the
@@ -7326,7 +7326,7 @@ func connected_map_objects() -> Array:
 	for placement: Dictionary in map_placements().values():
 		var map: Gen2WorldMap = placement["map"]
 		var offset: Vector2i = (placement["origin"] as Vector2i) \
-			* RomLayout.MAP_BLOCK_CELL_WIDTH
+			* Gen2Layout.MAP_BLOCK_CELL_WIDTH
 		var rows: Array = map.events.get("objects", [])
 		for index: int in rows.size():
 			var object: Gen2WorldObject = _object_from_event(index, rows[index])

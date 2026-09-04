@@ -153,7 +153,7 @@ func handle_button(button: int) -> bool:
 	if _page == null:
 		return false
 	if mode == MODE_RECORD:
-		if button in [Gen2Button.A, Gen2Button.B]:
+		if button in [PokeButton.A, PokeButton.B]:
 			closed.emit()
 		return true
 	if _frames > 0:
@@ -176,20 +176,20 @@ func _press_select(button: int) -> bool:
 	var rows: int = _rows(_list)
 	if _on_cancel:
 		match button:
-			Gen2Button.A:
+			PokeButton.A:
 				_leave()
-			Gen2Button.UP:
+			PokeButton.UP:
 				_on_cancel = false
 				_list = LIST_PARTNER
 				_index = maxi(_rows(LIST_PARTNER) - 1, 0)
-			Gen2Button.DOWN:
+			PokeButton.DOWN:
 				_on_cancel = false
 				_list = LIST_PLAYER
 				_index = 0
 		_refresh()
 		return true
 	match button:
-		Gen2Button.A:
+		PokeButton.A:
 			if _list == LIST_PARTNER:
 				## `.not_a_button`'s A branch opens `LinkMonStatsScreen` on the
 				## partner's row; the row the cursor is left on is the offer the
@@ -199,7 +199,7 @@ func _press_select(button: int) -> bool:
 			else:
 				_step = STEP.FOOTER
 				_footer = FOOTER_TRADE
-		Gen2Button.UP:
+		PokeButton.UP:
 			if _index > 0:
 				_index -= 1
 			elif _list == LIST_PARTNER:
@@ -207,7 +207,7 @@ func _press_select(button: int) -> bool:
 				_index = maxi(_rows(LIST_PLAYER) - 1, 0)
 			else:
 				_on_cancel = true
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			if _index + 1 < rows:
 				_index += 1
 			elif _list == LIST_PLAYER:
@@ -224,13 +224,13 @@ func _press_select(button: int) -> bool:
 ## offers the row.
 func _press_footer(button: int) -> bool:
 	match button:
-		Gen2Button.RIGHT:
+		PokeButton.RIGHT:
 			_footer = FOOTER_TRADE
-		Gen2Button.LEFT:
+		PokeButton.LEFT:
 			_footer = FOOTER_STATS
-		Gen2Button.B:
+		PokeButton.B:
 			_step = STEP.SELECT
-		Gen2Button.A:
+		PokeButton.A:
 			if _footer == FOOTER_STATS:
 				_step = STEP.SELECT
 				stats_requested.emit(LIST_PLAYER, _index)
@@ -275,14 +275,14 @@ func _refuse(lines: Array) -> void:
 
 func _press_confirm(button: int) -> bool:
 	match button:
-		Gen2Button.UP:
+		PokeButton.UP:
 			_confirm = 0
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			_confirm = 1
-		Gen2Button.B:
+		PokeButton.B:
 			_cancel_trade()
 			return true
-		Gen2Button.A:
+		PokeButton.A:
 			if _confirm == 0:
 				_commit()
 			else:

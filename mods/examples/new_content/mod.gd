@@ -21,7 +21,7 @@ const STATIC_FIELD: int = Gen2ContentOverlay.FIRST_MOD_NUMBER
 ## An effect byte no cartridge move carries.
 const RECOIL_AND_PARALYSE: int = 0xF0
 
-const ELECTRIC: int = RomLayout.TYPE_ELECTRIC
+const ELECTRIC: int = Gen2Layout.TYPE_ELECTRIC
 ## A type of the mod's own. Types are the one kind numbered from zero, the
 ## cartridge chart being zero-based, so a DEFINED one still sits past 256.
 const PLASMA: int = Gen2ContentOverlay.FIRST_MOD_NUMBER
@@ -38,7 +38,7 @@ const THUNDERBOLT: int = 85
 var _id: StringName = &""
 
 
-func register(host: Gen2ModHost, manifest: Gen2ModManifest) -> void:
+func register(host: Gen2ModHost, manifest: PokeModManifest) -> void:
 	_id = manifest.id
 	_add_a_type(host, manifest.id)
 	_add_a_species(host, manifest.id)
@@ -67,11 +67,11 @@ func _add_a_type(host: Gen2ModHost, id: StringName) -> void:
 		"physical": false,
 	})
 	# Multipliers are in tenths, the way the damage formula divides.
-	host.patch_type_matchup(id, PLASMA, RomLayout.TYPE_STEEL, {
-		"multiplier": RomLayout.MATCHUP_SUPER_EFFECTIVE,
+	host.patch_type_matchup(id, PLASMA, Gen2Layout.TYPE_STEEL, {
+		"multiplier": Gen2Layout.MATCHUP_SUPER_EFFECTIVE,
 	})
-	host.patch_type_matchup(id, RomLayout.TYPE_GROUND, PLASMA, {
-		"multiplier": RomLayout.MATCHUP_NOT_VERY_EFFECTIVE,
+	host.patch_type_matchup(id, Gen2Layout.TYPE_GROUND, PLASMA, {
+		"multiplier": Gen2Layout.MATCHUP_NOT_VERY_EFFECTIVE,
 	})
 
 
@@ -99,7 +99,7 @@ func _add_a_species(host: Gen2ModHost, id: StringName) -> void:
 		# The item below names EVOLVE_TRADE, which is the method rather than the
 		# target: a row with no held requirement ($FF) is what it answers.
 		"evolutions": [{
-			"method": RomLayout.EVOLVE_TRADE,
+			"method": Gen2Layout.EVOLVE_TRADE,
 			"parameter": Gen2Evolution.TRADE_NO_ITEM,
 			"condition": 0, "target": RAICHU,
 		}],
@@ -176,7 +176,7 @@ func _add_an_item_and_its_shelf(host: Gen2ModHost, id: StringName) -> void:
 		# USE opens the party list, and the evolution it causes is a fact the
 		# host acts on rather than a callback (`api_version` 9).
 		"field_menu": Gen2WorldPack.ITEMMENU_PARTY,
-		"evolution": {"method": RomLayout.EVOLVE_TRADE},
+		"evolution": {"method": Gen2Layout.EVOLVE_TRADE},
 	})
 	host.register_menu_entry(Gen2ModHost.MENU_PACK_POCKET, id, {
 		"label": "CURIOS",
@@ -476,7 +476,7 @@ class Population:
 ## The five registrations that change HOW the game is played rather than what is
 ## in it (`api_version` 13). Each is a read-only policy: the mod answers a
 ## question and the host owns the transaction, the screen and the text.
-func _play_differently(host: Gen2ModHost, manifest: Gen2ModManifest) -> void:
+func _play_differently(host: Gen2ModHost, manifest: PokeModManifest) -> void:
 	## An HM's field move without a party member who knows it. The host resolves
 	## which item teaches which move, whether it is in the bag, the badge, the
 	## tile and everything the move then does.
@@ -513,7 +513,7 @@ func _play_differently(host: Gen2ModHost, manifest: Gen2ModManifest) -> void:
 ## REACHED rather than a moment it passed, which is what lets a mod installed
 ## onto a save already played read what that save has. The page lists it. The
 ## notice says when a field moved.
-func _watch_the_run(host: Gen2ModHost, manifest: Gen2ModManifest) -> void:
+func _watch_the_run(host: Gen2ModHost, manifest: PokeModManifest) -> void:
 	## The page. The mod answers rows and nothing else: the host draws them with
 	## the screen's own frame and font, so a page needs no node and no art.
 	host.register_page(manifest.id, {"title": "BADGES", "rows": _badge_rows})

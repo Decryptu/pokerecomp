@@ -1,4 +1,4 @@
-class_name Gen2GameTime
+class_name PokeGameTime
 extends RefCounted
 
 ## The play timer the trainer card prints (`home/game_time.asm`, `GameTimer`). Not
@@ -31,8 +31,8 @@ var capped: bool = false
 static func create(
 	hours_value: int, minutes_value: int, seconds_value: int, frames_value: int,
 	capped_value: bool = false,
-) -> Gen2GameTime:
-	var time := Gen2GameTime.new()
+) -> PokeGameTime:
+	var time := PokeGameTime.new()
 	time.hours = clampi(hours_value, 0, CAPPED_HOURS)
 	time.minutes = clampi(minutes_value, 0, MINUTES_PER_HOUR - 1)
 	time.seconds = clampi(seconds_value, 0, SECONDS_PER_MINUTE - 1)
@@ -95,11 +95,11 @@ func to_dict() -> Dictionary:
 
 ## Clamped rather than refused, the way [Gen2Options] clamps: a play timer is
 ## not progress, and a damaged one should not cost the save.
-static func parse(raw: Variant) -> Gen2GameTime:
+static func parse(raw: Variant) -> PokeGameTime:
 	if raw is not Dictionary:
-		return Gen2GameTime.new()
+		return PokeGameTime.new()
 	var row: Dictionary = raw
-	return Gen2GameTime.create(
+	return PokeGameTime.create(
 		int(row.get("hours", 0)),
 		int(row.get("minutes", 0)),
 		int(row.get("seconds", 0)),

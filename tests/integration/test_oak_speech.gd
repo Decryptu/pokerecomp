@@ -42,7 +42,7 @@ func _press_a_until(stop: Callable, limit: int = 200) -> void:
 		_settle()
 		if stop.call():
 			return
-		_screen.handle_button(Gen2Button.A)
+		_screen.handle_button(PokeButton.A)
 
 
 func _at_naming() -> bool:
@@ -83,7 +83,7 @@ func test_the_pics_follow_the_routines_own_order() -> void:
 ## `DrawIntroPlayerPic` and `HOF_LoadTrainerFrontpic` load the same picture, so
 ## the intro and the Hall of Fame read one seam rather than two.
 func test_the_player_picture_is_one_seam_for_the_intro_and_the_hall_of_fame() -> void:
-	var side: int = RomLayout.INTRO_PLAYER_PIC_COLUMNS * Gen2Font.TILE
+	var side: int = Gen2Layout.INTRO_PLAYER_PIC_COLUMNS * Gen2Font.TILE
 	for female: bool in [false, true]:
 		var cell: Dictionary = Gen2OakSpeech.player_cell(_data, female)
 		assert_eq(int(cell["width"]), side)
@@ -144,7 +144,7 @@ func test_it_opens_on_the_first_beat() -> void:
 ## while any of that is running.
 func test_the_speech_opens_on_the_source_fades_before_the_first_pic() -> void:
 	assert_eq(_screen.animation_frames_left(), 32, "RotateFourPalettesLeft")
-	assert_true(_screen.handle_button(Gen2Button.A), "a press inside DelayFrames is swallowed")
+	assert_true(_screen.handle_button(PokeButton.A), "a press inside DelayFrames is swallowed")
 	_screen.advance_frames(32)
 	assert_eq(_screen.animation_frames_left(), 32 + 24, "then in from black and out to white")
 	_screen.advance_frames(56)
@@ -178,7 +178,7 @@ func test_the_pic_walks_right_before_the_name_menu_opens() -> void:
 				* Gen2IntroPresentation.MOVE_STEP_FRAMES:
 			break
 		_settle()
-		_screen.handle_button(Gen2Button.A)
+		_screen.handle_button(PokeButton.A)
 	assert_eq(_screen.animation_frames_left(), 40, "MovePlayerPicRight was queued")
 	assert_false(_screen.choosing_name(), "the menu is not up while the pic is walking")
 	_screen.advance_frames(39)
@@ -201,13 +201,13 @@ func test_oak_six_opens_the_source_choices_before_the_keyboard() -> void:
 	assert_true(_screen.choosing_name())
 	assert_false(_screen.naming())
 	assert_eq(_screen.beat_index(), 4)
-	assert_false(_screen.handle_button(Gen2Button.B), "STATICMENU_DISABLE_B")
+	assert_false(_screen.handle_button(PokeButton.B), "STATICMENU_DISABLE_B")
 
 
 func test_a_preset_name_skips_the_keyboard_and_resumes_the_speech() -> void:
 	_press_a_until(_at_name_choices)
-	_screen.handle_button(Gen2Button.DOWN)
-	_screen.handle_button(Gen2Button.A)
+	_screen.handle_button(PokeButton.DOWN)
+	_screen.handle_button(PokeButton.A)
 	# `MovePlayerPicLeft` walks the pic back before `_OakText7` is printed.
 	assert_eq(_screen.animation_frames_left(), 40)
 	_settle()
@@ -224,7 +224,7 @@ func test_a_preset_name_skips_the_keyboard_and_resumes_the_speech() -> void:
 func test_the_naming_screen_takes_the_buttons_while_it_is_open() -> void:
 	_press_a_until(_at_naming)
 	var beat: int = _screen.beat_index()
-	_screen.handle_button(Gen2Button.A)
+	_screen.handle_button(PokeButton.A)
 	assert_true(_screen.naming(), "still naming")
 	assert_eq(_screen.beat_index(), beat, "the speech did not move on")
 
@@ -232,9 +232,9 @@ func test_the_naming_screen_takes_the_buttons_while_it_is_open() -> void:
 func test_the_speech_resumes_and_ends_with_the_name_that_was_typed() -> void:
 	_press_a_until(_at_naming)
 	# One letter, then START to reach END and A to store it.
-	_screen.handle_button(Gen2Button.A)
-	_screen.handle_button(Gen2Button.START)
-	_screen.handle_button(Gen2Button.A)
+	_screen.handle_button(PokeButton.A)
+	_screen.handle_button(PokeButton.START)
+	_screen.handle_button(PokeButton.A)
 	_settle()
 	assert_false(_screen.naming(), "the keyboard closed")
 	assert_eq(_screen.player_name().length(), 1)
@@ -246,8 +246,8 @@ func test_the_speech_resumes_and_ends_with_the_name_that_was_typed() -> void:
 ## an empty name, which is what keeps the save validator's rule satisfiable.
 func test_ending_the_keyboard_empty_takes_the_default() -> void:
 	_press_a_until(_at_naming)
-	_screen.handle_button(Gen2Button.START)
-	_screen.handle_button(Gen2Button.A)
+	_screen.handle_button(PokeButton.START)
+	_screen.handle_button(PokeButton.A)
 	_settle()
 	assert_eq(_screen.player_name(), Gen2OakSpeech.DEFAULT_MALE)
 	_press_a_until(_done)
@@ -265,9 +265,9 @@ func test_a_female_intro_takes_the_female_default() -> void:
 			female.advance_frames(female.animation_frames_left())
 		if female.naming():
 			break
-		female.handle_button(Gen2Button.A)
-	female.handle_button(Gen2Button.START)
-	female.handle_button(Gen2Button.A)
+		female.handle_button(PokeButton.A)
+	female.handle_button(PokeButton.START)
+	female.handle_button(PokeButton.A)
 	for _step: int in 40:
 		female.advance_frames(female.animation_frames_left())
 	assert_eq(female.player_name(), Gen2OakSpeech.DEFAULT_FEMALE)
@@ -287,7 +287,7 @@ func test_the_speech_ends_on_the_shrink_rather_than_on_the_last_text() -> void:
 		# The page has to print before a press can turn it; only the shrink the
 		# last page starts is deliberately left unspent.
 		_screen.advance_frames(_screen.animation_frames_left())
-		_screen.handle_button(Gen2Button.A)
+		_screen.handle_button(PokeButton.A)
 	assert_eq(_finished.size(), 0, "the speech has not handed a name over yet")
 	assert_eq(_screen.animation_frames_left(), 8, "ShrinkPlayer's first DelayFrames")
 
@@ -302,6 +302,6 @@ func test_the_speech_ends_on_the_shrink_rather_than_on_the_last_text() -> void:
 ## for one.
 func test_other_buttons_do_not_advance_the_speech() -> void:
 	_settle()
-	assert_false(_screen.handle_button(Gen2Button.B))
-	assert_false(_screen.handle_button(Gen2Button.START))
+	assert_false(_screen.handle_button(PokeButton.B))
+	assert_false(_screen.handle_button(PokeButton.START))
 	assert_eq(_screen.beat_index(), 0)

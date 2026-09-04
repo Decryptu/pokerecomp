@@ -185,7 +185,7 @@ func _verify_slow_cry(data: GameData) -> void:
 	_r.check(checked >= 250, "%d species cries read, not 251" % checked)
 
 
-## Every `RomLayout.SPECIAL_TEXT_RUNS` box the cartridge ships, on all three
+## Every `Gen2Layout.SPECIAL_TEXT_RUNS` box the cartridge ships, on all three
 ## dumps: each has to decode to something, and every `text_ram` marker left in
 ## one has to name an address the cache can fill. An unresolved marker is what a
 ## wrong pin looks like from the screen that prints the box.
@@ -200,7 +200,7 @@ func _verify_special_text(data: GameData) -> void:
 		var address: int = data.special_text_ram(name)
 		if address >= 0:
 			fillable[address] = true
-	for raw_run: Variant in RomLayout.SPECIAL_TEXT_RUNS:
+	for raw_run: Variant in Gen2Layout.SPECIAL_TEXT_RUNS:
 		var subject: String = String(raw_run)
 		if subject in CRYSTAL_ONLY_TEXT_RUNS and data.id != &"crystal":
 			_r.check(
@@ -210,7 +210,7 @@ func _verify_special_text(data: GameData) -> void:
 			continue
 		if not _r.check(data.has_special_text(subject), "the %s subject is missing" % subject):
 			continue
-		for box: String in RomLayout.special_text_names(subject):
+		for box: String in Gen2Layout.special_text_names(subject):
 			var text: String = data.special_text(subject, box)
 			if not _r.check(
 				not text.is_empty(), "%s/%s decoded to nothing" % [subject, box]

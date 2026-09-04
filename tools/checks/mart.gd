@@ -82,12 +82,12 @@ func run(r: RefCounted) -> void:
 
 func _verify_texts(data: GameData) -> void:
 	var decoded: int = 0
-	for name: String in RomLayout.MART_TEXT_AT:
+	for name: String in Gen2Layout.MART_TEXT_AT:
 		if not data.mart_text(name).is_empty():
 			decoded += 1
 	_r.check(
-		decoded == RomLayout.MART_TEXT_AT.size(),
-		"%d of %d mart texts decoded" % [decoded, RomLayout.MART_TEXT_AT.size()]
+		decoded == Gen2Layout.MART_TEXT_AT.size(),
+		"%d of %d mart texts decoded" % [decoded, Gen2Layout.MART_TEXT_AT.size()]
 	)
 	for name: String in EXPECTED_TEXT_OPENINGS:
 		var text: String = data.mart_text(name)
@@ -102,7 +102,7 @@ func _verify_texts(data: GameData) -> void:
 ## Every marker in every box, counted by kind. A box carrying one the screen
 ## cannot fill would print `<NUM_C2DE>` at the player.
 func _verify_markers(data: GameData) -> void:
-	for name: String in RomLayout.MART_TEXT_AT:
+	for name: String in Gen2Layout.MART_TEXT_AT:
 		var counts: Dictionary = _markers(data.mart_text(name))
 		var expected: Dictionary = EXPECTED_MARKERS.get(
 			name, {"name": 0, "quantity": 0, "total": 0}

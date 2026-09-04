@@ -206,7 +206,7 @@ static func pic_size() -> int:
 ## so this screen's picture is mirrored. `.unown` and `.unownegg` clear it, a
 ## mirrored letter reading as the wrong one; an egg is EGG rather than UNOWN.
 static func pic_mirrored(species: int, egg: bool) -> bool:
-	return egg or species != RomLayout.UNOWN_SPECIES
+	return egg or species != Gen2Layout.UNOWN_SPECIES
 
 
 ## The picture the screen draws: an egg's own, the letter
@@ -218,7 +218,7 @@ static func pic_record(data: GameData, snapshot: Dictionary) -> Dictionary:
 	if bool(snapshot.get("egg", false)):
 		return data.egg_pic()
 	var form: int = int(snapshot.get("unown_form", 0))
-	if int(snapshot.get("species", 0)) == RomLayout.UNOWN_SPECIES and form > 0:
+	if int(snapshot.get("species", 0)) == Gen2Layout.UNOWN_SPECIES and form > 0:
 		return data.unown_pic(form - 1)
 	return data.species_pic(int(snapshot.get("species", 0)))
 
@@ -376,7 +376,7 @@ func render(page: Dictionary, data: GameData) -> Image:
 	if data == null:
 		return Gen2PicImage.from_indices(
 			indices, width, ROWS * TILE,
-			Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+			PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 		)
 
 	var egg: bool = bool(page.get("egg", false))

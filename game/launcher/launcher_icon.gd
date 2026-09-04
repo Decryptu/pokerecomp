@@ -1,4 +1,4 @@
-class_name Gen2LauncherIcon
+class_name PokeLauncherIcon
 extends TextureRect
 
 ## The launcher's custom filled icon set, rasterised from SVG at the size it is
@@ -52,8 +52,8 @@ const PATHS: Dictionary = {
 static var _cache: Dictionary = {}
 
 
-static func create(glyph_name: StringName, drawn_side: float, colour: Color) -> Gen2LauncherIcon:
-	var icon := Gen2LauncherIcon.new()
+static func create(glyph_name: StringName, drawn_side: float, colour: Color) -> PokeLauncherIcon:
+	var icon := PokeLauncherIcon.new()
 	icon.custom_minimum_size = Vector2(drawn_side, drawn_side)
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -111,7 +111,7 @@ func set_glyph(glyph_name: StringName, drawn_side: float, colour: Color) -> void
 	tint = colour
 	side = drawn_side
 	custom_minimum_size = Vector2(drawn_side, drawn_side)
-	texture = Gen2LauncherIcon.raster(glyph_name, drawn_side, colour)
+	texture = PokeLauncherIcon.raster(glyph_name, drawn_side, colour)
 
 
 

@@ -40,7 +40,7 @@ func _build() -> void:
 
 	var build: VBoxContainer = _card(column, "This build")
 	build.add_child(Gen2LauncherUI.body(
-		_theme, "pokerecomp %s" % Gen2AppVersion.display()
+		_theme, "pokerecomp %s" % PokeAppVersion.display()
 	))
 	build.add_child(Gen2LauncherUI.muted(
 		_theme,
@@ -74,10 +74,10 @@ func _build() -> void:
 	var links: HFlowContainer = Gen2LauncherUI.actions()
 	project.add_child(links)
 	links.add_child(_link_button(
-		"GitHub", &"github", Gen2AppVersion.REPOSITORY, Gen2LauncherButton.Variant.NEUTRAL
+		"GitHub", &"github", PokeAppVersion.REPOSITORY, Gen2LauncherButton.Variant.NEUTRAL
 	))
 	links.add_child(_link_button(
-		"Discord", &"discord", Gen2AppVersion.DISCORD, Gen2LauncherButton.Variant.NEUTRAL
+		"Discord", &"discord", PokeAppVersion.DISCORD, Gen2LauncherButton.Variant.NEUTRAL
 	))
 	links.add_child(Gen2LauncherUI.spacer())
 
@@ -125,7 +125,7 @@ func open_report_sheet() -> void:
 	body.add_child(_link_button(
 		"Open an issue on GitHub",
 		&"github",
-		Gen2AppVersion.ISSUES,
+		PokeAppVersion.ISSUES,
 		Gen2LauncherButton.Variant.PRIMARY,
 		sheet,
 	))
@@ -135,7 +135,7 @@ func open_report_sheet() -> void:
 	body.add_child(_link_button(
 		"Tell us on Discord",
 		&"discord",
-		Gen2AppVersion.DISCORD,
+		PokeAppVersion.DISCORD,
 		Gen2LauncherButton.Variant.NEUTRAL,
 		sheet,
 	))

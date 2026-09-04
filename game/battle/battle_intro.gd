@@ -43,8 +43,8 @@ const GOLD_LEAD_FRAMES: int = 1
 ## six rows, so a column contributes its top three.
 const SPRITE_COLUMNS: int = 6
 const SPRITE_ROWS: int = 3
-const SPRITE_FIRST_X: int = (Gen2BattleAnimBackground.SCREEN_WIDTH + 1) * Gen2Tiles.TILE_WIDTH
-const SPRITE_FIRST_Y: int = 8 * Gen2Tiles.TILE_HEIGHT
+const SPRITE_FIRST_X: int = (Gen2BattleAnimBackground.SCREEN_WIDTH + 1) * PokeTiles.TILE_WIDTH
+const SPRITE_FIRST_Y: int = 8 * PokeTiles.TILE_HEIGHT
 ## `PLAYER_SIDE` rows to a column in `vTiles0`, which is where `CopyBackpic`
 ## decompressed the pic before copying it into `vTiles2 tile $31`.
 const SPRITE_PIC_ROWS: int = Gen2BattleScreenMap.PLAYER_SIDE
@@ -104,8 +104,8 @@ func sprites() -> Array:
 		for row: int in SPRITE_ROWS:
 			out.append({
 				"tile": column * SPRITE_PIC_ROWS + row,
-				"x": SPRITE_FIRST_X + column * Gen2Tiles.TILE_WIDTH - walked * SPRITE_STEP,
-				"y": SPRITE_FIRST_Y + row * Gen2Tiles.TILE_HEIGHT,
+				"x": SPRITE_FIRST_X + column * PokeTiles.TILE_WIDTH - walked * SPRITE_STEP,
+				"y": SPRITE_FIRST_Y + row * PokeTiles.TILE_HEIGHT,
 			})
 	return out
 

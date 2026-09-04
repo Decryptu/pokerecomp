@@ -53,7 +53,7 @@ static func from_data(data: GameData) -> Gen2DiplomaPage:
 	if page.font == null or page.palette.is_empty() or page._tiles.is_empty():
 		return null
 	for map: PackedByteArray in page._maps:
-		if map.size() != RomLayout.DIPLOMA_TILEMAP_BYTES:
+		if map.size() != Gen2Layout.DIPLOMA_TILEMAP_BYTES:
 			return null
 	return page
 
@@ -140,9 +140,9 @@ func _text(indices: PackedByteArray, text: String, at: Vector2i) -> void:
 
 
 func _blit(into: PackedByteArray, code: int, at: Vector2i) -> void:
-	if code >= RomLayout.FONT_FIRST_CODE:
+	if code >= Gen2Layout.FONT_FIRST_CODE:
 		font.draw_code(code, into, WIDTH, at.x * TILE, at.y * TILE)
 		return
 	Gen2Font.blit_slot(
-		_tiles, RomLayout.DIPLOMA_TILES * TILE, code, into, WIDTH, at.x * TILE, at.y * TILE
+		_tiles, Gen2Layout.DIPLOMA_TILES * TILE, code, into, WIDTH, at.x * TILE, at.y * TILE
 	)

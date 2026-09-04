@@ -30,8 +30,8 @@ const MAX_DAMAGE: int = 0xFFFF
 
 ## `WeatherTypeModifiers`: what the weather does to a move of a given type.
 const TYPE_MODIFIERS: Dictionary = {
-	RAIN: {RomLayout.TYPE_WATER: BOOSTED, RomLayout.TYPE_FIRE: WEAKENED},
-	SUN: {RomLayout.TYPE_FIRE: BOOSTED, RomLayout.TYPE_WATER: WEAKENED},
+	RAIN: {Gen2Layout.TYPE_WATER: BOOSTED, Gen2Layout.TYPE_FIRE: WEAKENED},
+	SUN: {Gen2Layout.TYPE_FIRE: BOOSTED, Gen2Layout.TYPE_WATER: WEAKENED},
 }
 
 ## `WeatherMoveModifiers`: the one row that is keyed by effect rather than type,
@@ -46,7 +46,7 @@ const SANDSTORM_DIVISOR: int = 8
 ## `.SandstormDamage` checks these and `SUBSTATUS_UNDERGROUND` and nothing else,
 ## so Flying and a Pokémon in mid-Fly are both hit.
 const SANDSTORM_EXEMPT_TYPES: Array[int] = [
-	RomLayout.TYPE_ROCK, RomLayout.TYPE_GROUND, RomLayout.TYPE_STEEL,
+	Gen2Layout.TYPE_ROCK, Gen2Layout.TYPE_GROUND, Gen2Layout.TYPE_STEEL,
 ]
 
 

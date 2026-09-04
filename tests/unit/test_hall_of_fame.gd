@@ -161,7 +161,7 @@ func test_the_player_panel_draws_its_name_box_and_the_rating_box() -> void:
 func test_the_player_panel_prints_the_trainer_id_and_the_play_timer() -> void:
 	var save: Gen2SaveData = _save([1])
 	save.player_id = 456
-	save.game_time = Gen2GameTime.create(7, 5, 0, 0)
+	save.game_time = PokeGameTime.create(7, 5, 0, 0)
 	var page: Dictionary = Gen2HallOfFame.pages(_data, save)[2]
 	assert_eq(int(page["player_id"]), 456)
 	assert_eq(int(page["hours"]), 7)

@@ -111,7 +111,7 @@ func test_each_profile_arms_its_own_timer() -> void:
 
 ## `PAD_START | PAD_A`, and nothing else on its own.
 func test_start_or_a_answers_the_main_menu() -> void:
-	for button: int in [Gen2Button.START, Gen2Button.A]:
+	for button: int in [PokeButton.START, PokeButton.A]:
 		var scene: Gen2TitleScene = _scene(RomRegistry.GOLD)
 		_spend(scene, 4)
 		assert_false(scene.finished())
@@ -120,7 +120,7 @@ func test_start_or_a_answers_the_main_menu() -> void:
 		assert_eq(scene.selected_option(), Gen2TitleScene.OPTION_MAIN_MENU)
 
 	var ignored: Gen2TitleScene = _scene(RomRegistry.GOLD)
-	_spend(ignored, 8, [Gen2Button.LEFT])
+	_spend(ignored, 8, [PokeButton.LEFT])
 	assert_false(ignored.finished())
 
 
@@ -129,16 +129,16 @@ func test_start_or_a_answers_the_main_menu() -> void:
 func test_the_two_chords_are_answered_whole() -> void:
 	var deleting: Gen2TitleScene = _scene(RomRegistry.GOLD)
 	_spend(deleting, 2)
-	deleting.advance_frame([Gen2Button.UP, Gen2Button.B, Gen2Button.SELECT])
+	deleting.advance_frame([PokeButton.UP, PokeButton.B, PokeButton.SELECT])
 	assert_eq(deleting.selected_option(), Gen2TitleScene.OPTION_DELETE_SAVE_DATA)
 
 	var clock: Gen2TitleScene = _scene(RomRegistry.GOLD)
 	_spend(clock, 2)
-	clock.advance_frame([Gen2Button.DOWN, Gen2Button.B, Gen2Button.SELECT])
+	clock.advance_frame([PokeButton.DOWN, PokeButton.B, PokeButton.SELECT])
 	assert_eq(clock.selected_option(), Gen2TitleScene.OPTION_RESET_CLOCK)
 
 	var partial: Gen2TitleScene = _scene(RomRegistry.GOLD)
-	_spend(partial, 4, [Gen2Button.UP, Gen2Button.B])
+	_spend(partial, 4, [PokeButton.UP, PokeButton.B])
 	assert_false(partial.finished(), "two of the three is not the chord")
 
 

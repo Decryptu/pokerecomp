@@ -32,8 +32,8 @@ func test_the_page_is_the_hardware_screen() -> void:
 ## in the same column, two rows apart.
 func test_the_three_rows_start_in_one_column_two_rows_apart() -> void:
 	var indices: PackedByteArray = _page.draw()
-	var at: Vector2i = RomLayout.COPYRIGHT_AT * Gen2Font.TILE
-	for row: int in RomLayout.COPYRIGHT_STRING_ROWS:
+	var at: Vector2i = Gen2Layout.COPYRIGHT_AT * Gen2Font.TILE
+	for row: int in Gen2Layout.COPYRIGHT_STRING_ROWS:
 		var top: Vector2i = at + Vector2i(0, row * Gen2CopyrightPage.ROW_STRIDE * Gen2Font.TILE)
 		assert_eq(_index(indices, top), 3, "row %d is drawn" % row)
 		assert_eq(
@@ -49,7 +49,7 @@ func test_the_three_rows_start_in_one_column_two_rows_apart() -> void:
 
 func test_only_the_strings_own_columns_are_drawn() -> void:
 	var indices: PackedByteArray = _page.draw()
-	var at: Vector2i = RomLayout.COPYRIGHT_AT * Gen2Font.TILE
+	var at: Vector2i = Gen2Layout.COPYRIGHT_AT * Gen2Font.TILE
 	var last: Vector2i = at + Vector2i((Fixture.COPYRIGHT_TILES - 1) * Gen2Font.TILE, 0)
 	assert_eq(_index(indices, last), 3)
 	assert_eq(
@@ -60,9 +60,9 @@ func test_only_the_strings_own_columns_are_drawn() -> void:
 ## The screen is white on black: PREDEFPAL_GAMEFREAK_LOGO_BG's first colour is
 ## black, and `ClearTilemap` leaves index 0 everywhere the string is not.
 func test_the_blank_screen_is_the_palettes_first_colour() -> void:
-	assert_eq(_page.palette.size(), RomLayout.COPYRIGHT_PALETTE_COLORS)
+	assert_eq(_page.palette.size(), Gen2Layout.COPYRIGHT_PALETTE_COLORS)
 	assert_eq(_page.palette[0], Color.BLACK)
-	assert_eq(_page.palette[RomLayout.COPYRIGHT_PALETTE_COLORS - 1], Color.WHITE)
+	assert_eq(_page.palette[Gen2Layout.COPYRIGHT_PALETTE_COLORS - 1], Color.WHITE)
 	assert_eq(_index(_page.draw(), Vector2i.ZERO), Gen2CopyrightPage.BLANK_INDEX)
 
 

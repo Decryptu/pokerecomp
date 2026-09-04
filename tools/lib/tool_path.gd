@@ -1,4 +1,4 @@
-class_name Gen2ToolPath
+class_name PokeToolPath
 extends RefCounted
 
 ## Refuses an output path that would be written inside this project. A tool runs

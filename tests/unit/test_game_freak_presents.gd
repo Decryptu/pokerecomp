@@ -76,7 +76,7 @@ func test_the_two_words_go_up_on_the_source_frames() -> void:
 func test_the_words_sit_where_their_profile_puts_them() -> void:
 	assert_eq(_run(RomRegistry.CRYSTAL, 1).word_positions(), Presents.WORD_AT_CRYSTAL)
 	assert_eq(_run(&"silver", 1).word_positions(), Presents.WORD_AT_GOLD)
-	assert_eq(Presents.WORD_GAME_FREAK[4], RomLayout.PRESENTS_WORD_TILES)
+	assert_eq(Presents.WORD_GAME_FREAK[4], Gen2Layout.PRESENTS_WORD_TILES)
 	assert_eq(Presents.WORD_GAME_FREAK[3], Presents.WORD_GAME_FREAK[7], "both E's")
 	assert_eq(Presents.WORD_GAME_FREAK[1], Presents.WORD_GAME_FREAK[8], "both A's")
 
@@ -132,7 +132,7 @@ func test_the_transform_walks_every_fade_colour_and_then_starts_the_words() -> v
 		if step >= 0 and (steps.is_empty() or steps[steps.size() - 1] != step):
 			steps.append(step)
 	var wanted: Array[int] = []
-	for index: int in RomLayout.PRESENTS_DITTO_FADE_COLORS:
+	for index: int in Gen2Layout.PRESENTS_DITTO_FADE_COLORS:
 		wanted.append(index)
 	assert_eq(steps, wanted)
 	assert_eq(phase.scene(), 1, "the sprite is what moves the scene on")

@@ -473,8 +473,8 @@ func test_name_rater_special_stages_a_request_carrying_all_ten_boxes() -> void:
 	var resolved: Dictionary = Gen2WorldHost.resolve_runtime_request(_world)
 	assert_true(resolved["ok"], JSON.stringify(resolved))
 	var lines: Dictionary = resolved["data"]["name_rater_text"]
-	assert_eq(lines.size(), RomLayout.NAME_RATER_TEXT_ORDER.size())
-	for row_name: String in RomLayout.NAME_RATER_TEXT_ORDER:
+	assert_eq(lines.size(), Gen2Layout.NAME_RATER_TEXT_ORDER.size())
+	for row_name: String in Gen2Layout.NAME_RATER_TEXT_ORDER:
 		assert_false(String(lines[row_name]).is_empty(), row_name)
 
 
@@ -537,8 +537,8 @@ func test_move_deleter_special_stages_a_request_carrying_all_eight_boxes() -> vo
 	var resolved: Dictionary = Gen2WorldHost.resolve_runtime_request(_world)
 	assert_true(resolved["ok"], JSON.stringify(resolved))
 	var lines: Dictionary = resolved["data"]["move_deleter_text"]
-	assert_eq(lines.size(), RomLayout.MOVE_DELETER_TEXT_ORDER.size())
-	for row_name: String in RomLayout.MOVE_DELETER_TEXT_ORDER:
+	assert_eq(lines.size(), Gen2Layout.MOVE_DELETER_TEXT_ORDER.size())
+	for row_name: String in Gen2Layout.MOVE_DELETER_TEXT_ORDER:
 		assert_false(String(lines[row_name]).is_empty(), row_name)
 
 
@@ -566,7 +566,7 @@ func _write_services_at(directory: String) -> void:
 		## `ITEMATTR_PERMISSIONS`' can't-toss bit, which is what `SellMenu`'s
 		## `_CheckTossableItem` refuses a key item with.
 		if int(raw.get("number", 0)) == 8:
-			raw["permissions"] = RomLayout.ITEM_ATTRIBUTE_CANT_TOSS
+			raw["permissions"] = Gen2Layout.ITEM_ATTRIBUTE_CANT_TOSS
 	RomCache.write_json(RomCache.items_path(directory), items)
 	RomCache.write_json(RomCache.world_marts_path(directory), {
 		"marts": [{"index": 0, "bank": Fixture.BANK, "address": 0x4000, "items": [7, 8]}],

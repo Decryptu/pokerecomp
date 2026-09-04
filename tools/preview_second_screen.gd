@@ -71,7 +71,7 @@ func _initialize() -> void:
 		return
 	var game: StringName = StringName(args[0])
 	_output_path = args[1]
-	if Gen2ToolPath.refuses(_output_path):
+	if PokeToolPath.refuses(_output_path):
 		quit(2)
 		return
 	if args.size() > 2:

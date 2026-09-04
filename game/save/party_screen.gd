@@ -349,27 +349,27 @@ func handle_button(button: int) -> bool:
 	## `JoyWaitAorB` behind a refusal: the press that clears the box does nothing
 	## else, and a direction is not one of the two it waits for.
 	if not _message.is_empty():
-		if button == Gen2Button.A or button == Gen2Button.B:
+		if button == PokeButton.A or button == PokeButton.B:
 			_message = ""
 			_refresh()
 			return true
 		return false
 	if _party_size() == 0:
-		if button == Gen2Button.B:
+		if button == PokeButton.B:
 			_cancel()
 			return true
 		return false
 	match button:
-		Gen2Button.UP:
+		PokeButton.UP:
 			_move_cursor(-1)
 			return true
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			_move_cursor(1)
 			return true
-		Gen2Button.A:
+		PokeButton.A:
 			_confirm()
 			return true
-		Gen2Button.B:
+		PokeButton.B:
 			_cancel()
 			return true
 	return false

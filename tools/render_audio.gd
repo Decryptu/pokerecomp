@@ -19,7 +19,7 @@ func _initialize() -> void:
 	var kind: StringName = StringName(arguments[1])
 	var frames: int = int(arguments[3])
 	var prefix: String = arguments[4]
-	if Gen2ToolPath.refuses(prefix):
+	if PokeToolPath.refuses(prefix):
 		quit(2)
 		return
 	var stereo: bool = arguments.size() > 5 and arguments[5] == "1"
@@ -86,13 +86,13 @@ func _render(
 	entry: Dictionary, kind: StringName, assets: Dictionary, frames: int,
 	stereo: bool, panning: int, prefix: String
 ) -> bool:
-	var result: Dictionary = Gen2AudioRender.render(
+	var result: Dictionary = PokeAudioRender.render(
 		entry, kind, assets, frames, stereo, true, panning
 	)
 	if not bool(result.get("ok", false)):
 		printerr("Render failed: %s" % result.get("reason", "unknown"))
 		return false
-	if not Gen2AudioRender.write_wav(prefix + ".wav", result["pcm"]):
+	if not PokeAudioRender.write_wav(prefix + ".wav", result["pcm"]):
 		printerr("Cannot write %s.wav" % prefix)
 		return false
 	var trace := FileAccess.open(prefix + ".trace", FileAccess.WRITE)

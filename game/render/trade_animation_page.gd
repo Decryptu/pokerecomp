@@ -6,7 +6,7 @@ extends RefCounted
 ## Three sheets feed one code: the frontpic below the trade sheet's first tile,
 ## the sheet's own 49, and the font, its two arrow codes replaced.
 
-const TILE: int = Gen2Tiles.TILE_WIDTH
+const TILE: int = PokeTiles.TILE_WIDTH
 const WIDTH: int = Gen2Screen.WIDTH
 const HEIGHT: int = Gen2Screen.HEIGHT
 const MAP_COLUMNS: int = Gen2TradeAnimation.MAP_COLUMNS
@@ -113,8 +113,8 @@ static func from_data(data: GameData) -> Gen2TradeAnimationPage:
 	page._data = data
 	page._sheet = data.tile_indices("trade_anim_game_boy_cable")
 	page._arrows = {
-		RomLayout.TRADE_ANIM_RIGHT_ARROW_CODE: data.tile_indices("trade_anim_arrow_right"),
-		RomLayout.TRADE_ANIM_LEFT_ARROW_CODE: data.tile_indices("trade_anim_arrow_left"),
+		Gen2Layout.TRADE_ANIM_RIGHT_ARROW_CODE: data.tile_indices("trade_anim_arrow_right"),
+		Gen2Layout.TRADE_ANIM_LEFT_ARROW_CODE: data.tile_indices("trade_anim_arrow_left"),
 	}
 	for name: String in ["ball", "poof", "cable", "bubble"]:
 		page._objects[name] = data.tile_indices("trade_anim_%s" % name)
@@ -234,8 +234,8 @@ func _draw_window(
 func _background_lookup(movie: Gen2TradeAnimation) -> PackedInt32Array:
 	var colors: PackedColorArray = _data.trade_anim_palette("tube") \
 		if movie.tube_palette() else movie.frontpic_palette()
-	if colors.size() < Gen2Palette.COLORS_PER_PIC:
-		colors = Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+	if colors.size() < PokePalette.COLORS_PER_PIC:
+		colors = PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	return Gen2PicImage.lookup(_dmg_ordered(colors, movie.background_palette_index()))
 
 
@@ -257,19 +257,19 @@ func _code_tile(movie: Gen2TradeAnimation, code: int) -> PackedByteArray:
 func _build_code_tile(movie: Gen2TradeAnimation, code: int) -> PackedByteArray:
 	var out := PackedByteArray()
 	out.resize(TILE * TILE)
-	var first: int = RomLayout.TRADE_ANIM_SHEET_FIRST_TILE
+	var first: int = Gen2Layout.TRADE_ANIM_SHEET_FIRST_TILE
 	if code < first:
 		_copy_frontpic_tile(out, movie, code)
 		return out
-	if code < first + RomLayout.TRADE_ANIM_SHEET_TILES:
+	if code < first + Gen2Layout.TRADE_ANIM_SHEET_TILES:
 		_copy_strip_tile(out, _sheet, code - first)
 		return out
 	if _arrows.has(code):
 		_copy_strip_tile(out, _arrows[code], 0)
 		return out
 	## `Textbox`'s six border codes come off `Frames`, not the font's own run.
-	if code >= RomLayout.FRAME_FIRST_CODE \
-		and code < RomLayout.FRAME_FIRST_CODE + RomLayout.FRAME_TILES:
+	if code >= Gen2Layout.FRAME_FIRST_CODE \
+		and code < Gen2Layout.FRAME_FIRST_CODE + Gen2Layout.FRAME_TILES:
 		_font.draw_frame_code(frame_style, code, out, TILE, 0, 0)
 		return out
 	_font.draw_code(code, out, TILE, 0, 0, Gen2Text.FONT_BATTLE_EXTRA)
@@ -317,7 +317,7 @@ func _draw_sprite(
 	if located.is_empty():
 		return
 	var colors: PackedColorArray = _object_palette(movie, int(entry["palette"]))
-	if colors.size() < Gen2Palette.COLORS_PER_PIC:
+	if colors.size() < PokePalette.COLORS_PER_PIC:
 		return
 	var table: PackedInt32Array = Gen2PicImage.lookup(colors)
 	var at := Vector2i(int(entry["x"]) - OAM_ORIGIN.x, int(entry["y"]) - OAM_ORIGIN.y)

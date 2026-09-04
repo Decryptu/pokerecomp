@@ -17,8 +17,8 @@ const LAST_TILE: int = 0x78
 ## `StatsScreen_LoadFont` reaches further down: `LoadStatsScreenPageTilesGFX`
 ## parks seventeen tiles at $31, so the stats screen and the move screen assemble
 ## the same strip starting there.
-const STATS_FIRST_TILE: int = RomLayout.STATS_FIRST_TILE
-const STATS_TILES_AT: int = RomLayout.STATS_FIRST_TILE
+const STATS_FIRST_TILE: int = Gen2Layout.STATS_FIRST_TILE
+const STATS_TILES_AT: int = Gen2Layout.STATS_FIRST_TILE
 
 ## The page indicator squares `StatsScreen_LoadPageIndicators` writes as 2x2
 ## blocks: the small one for a page that is not open and the large one for the
@@ -121,7 +121,7 @@ static func stats_page(data: GameData) -> Gen2BattleTiles:
 	out._tiles.resize(out._width * TILE)
 
 	var sheets: Array = [
-		["stats_tiles", STATS_TILES_AT, 0, RomLayout.STATS_TILES],
+		["stats_tiles", STATS_TILES_AT, 0, Gen2Layout.STATS_TILES],
 		["exp_bar", EXP_BAR_AT, 0, 8],
 		["battle_font", BATTLE_FONT_AT, 0, -1],
 		["enemy_hud", ENEMY_HUD_AT, 0, -1],

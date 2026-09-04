@@ -72,7 +72,7 @@ const _TREEMON_ANCHORS: Dictionary = {
 
 
 static func verify_layout(rom: RomFile) -> Dictionary:
-	var result: Dictionary = read_world_encounters(rom, RomLayout.for_id(rom.id))
+	var result: Dictionary = read_world_encounters(rom, Gen2Layout.for_id(rom.id))
 	if not bool(result.get("ok", false)):
 		return {"ok": false, "message": String(result.get("message", "Wild encounter data failed validation."))}
 	return {"ok": true, "message": ""}
@@ -163,8 +163,8 @@ static func read_world_encounters(rom: RomFile, layout: Dictionary) -> Dictionar
 			"treemons": treemon_result["treemons"],
 			"bug_contest": contest_result["bug_contest"],
 			"probabilities": {
-				"grass": RomLayout.WILD_GRASS_PROBABILITIES,
-				"water": RomLayout.WILD_WATER_PROBABILITIES,
+				"grass": Gen2Layout.WILD_GRASS_PROBABILITIES,
+				"water": Gen2Layout.WILD_WATER_PROBABILITIES,
 			},
 		},
 		"counts": {
@@ -234,8 +234,8 @@ static func _read_contest_mons(rom: RomFile, offset: int, count: int) -> Diction
 		# ChooseWildEncounter_BugContest's walk however the earlier rows fall.
 		if last != (percent == 0xFF):
 			return _error("ContestMons row %d ends the table in the wrong place." % index)
-		if species < 1 or species > RomLayout.SPECIES_COUNT \
-			or min_level < 1 or max_level < min_level or max_level > RomLayout.MAX_LEVEL:
+		if species < 1 or species > Gen2Layout.SPECIES_COUNT \
+			or min_level < 1 or max_level < min_level or max_level > Gen2Layout.MAX_LEVEL:
 			return _error("ContestMons row %d is out of range." % index)
 		rows.append({
 			"percent": percent, "species": species,
@@ -262,7 +262,7 @@ static func _read_contestants(rom: RomFile, offset: int, count: int) -> Dictiona
 		var placings: Array = []
 		for placing: int in 3:
 			var species: int = rom.u8(at + 2 + placing * 3)
-			if species < 1 or species > RomLayout.SPECIES_COUNT:
+			if species < 1 or species > Gen2Layout.SPECIES_COUNT:
 				return _error("Bug contestant %d placing %d is out of range." % [index, placing])
 			placings.append({
 				"species": species,
@@ -317,10 +317,10 @@ static func _read_map_table(
 	var expected_count: int = int(configured.get("%s_count" % table_name, -1))
 	var is_grass: bool = table_name in ["grass_johto", "grass_kanto", "swarm_grass"]
 	var record_size: int = (
-		RomLayout.WILD_GRASS_RECORD_SIZE if is_grass else RomLayout.WILD_WATER_RECORD_SIZE
+		Gen2Layout.WILD_GRASS_RECORD_SIZE if is_grass else Gen2Layout.WILD_WATER_RECORD_SIZE
 	)
 	if expected_count == 0:
-		if offset >= 0 and (not rom.in_bounds(offset) or rom.u8(offset) != RomLayout.WILD_TABLE_END):
+		if offset >= 0 and (not rom.in_bounds(offset) or rom.u8(offset) != Gen2Layout.WILD_TABLE_END):
 			return _error("Empty wild encounter table %s is not terminated." % table_name)
 		return {"ok": true, "rows": {}}
 	if offset < 0 or expected_count < 0:
@@ -331,7 +331,7 @@ static func _read_map_table(
 	while true:
 		if not rom.in_bounds(at):
 			return _error("Wild encounter table %s has no sentinel." % table_name)
-		if rom.u8(at) == RomLayout.WILD_TABLE_END:
+		if rom.u8(at) == Gen2Layout.WILD_TABLE_END:
 			break
 		if rows.size() >= expected_count:
 			return _error("Wild encounter table %s exceeds its verified count." % table_name)
@@ -373,14 +373,14 @@ static func _read_record(
 	var row: Dictionary = {"map": map_key, "rate": rate}
 	if is_grass:
 		var rates: Array[int] = []
-		for time_of_day: int in RomLayout.WILD_TIME_COUNT:
+		for time_of_day: int in Gen2Layout.WILD_TIME_COUNT:
 			rates.append(rom.u8(at + 2 + time_of_day))
 		row["rates"] = rates
 		var slots: Array = []
-		for time_of_day: int in RomLayout.WILD_TIME_COUNT:
+		for time_of_day: int in Gen2Layout.WILD_TIME_COUNT:
 			var day_slots: Array = []
-			var slot_base: int = at + 5 + time_of_day * RomLayout.WILD_GRASS_SLOT_COUNT * 2
-			for slot: int in RomLayout.WILD_GRASS_SLOT_COUNT:
+			var slot_base: int = at + 5 + time_of_day * Gen2Layout.WILD_GRASS_SLOT_COUNT * 2
+			for slot: int in Gen2Layout.WILD_GRASS_SLOT_COUNT:
 				var entry: Dictionary = _slot(
 					rom.u8(slot_base + slot * 2), rom.u8(slot_base + slot * 2 + 1)
 				)
@@ -392,7 +392,7 @@ static func _read_record(
 		row["slots"] = slots
 	else:
 		var slots: Array = []
-		for slot: int in RomLayout.WILD_WATER_SLOT_COUNT:
+		for slot: int in Gen2Layout.WILD_WATER_SLOT_COUNT:
 			var entry: Dictionary = _slot(
 				rom.u8(at + 3 + slot * 2), rom.u8(at + 3 + slot * 2 + 1)
 			)
@@ -410,20 +410,20 @@ static func _read_fishing_groups(
 ) -> Dictionary:
 	var offset: int = int(configured.get("fish_groups", -1))
 	var expected_count: int = int(configured.get("fish_group_count", -1))
-	if offset < 0 or expected_count != RomLayout.FISH_GROUP_COUNT:
+	if offset < 0 or expected_count != Gen2Layout.FISH_GROUP_COUNT:
 		return _error("Fishing group layout is incomplete.")
 	var bank: int = floori(float(offset) / float(RomFile.BANK_SIZE))
 	var groups: Array = []
-	var data_end: int = offset + expected_count * RomLayout.FISH_GROUP_RECORD_SIZE
+	var data_end: int = offset + expected_count * Gen2Layout.FISH_GROUP_RECORD_SIZE
 	for group: int in expected_count:
-		var at: int = offset + group * RomLayout.FISH_GROUP_RECORD_SIZE
-		if not rom.in_bounds(at, RomLayout.FISH_GROUP_RECORD_SIZE):
+		var at: int = offset + group * Gen2Layout.FISH_GROUP_RECORD_SIZE
+		if not rom.in_bounds(at, Gen2Layout.FISH_GROUP_RECORD_SIZE):
 			return _error("Fishing group %d is outside the ROM." % group)
 		var chance: int = rom.u8(at)
 		if chance <= 0 or chance > 255:
 			return _error("Fishing group %d has an invalid chance." % group)
 		var rods: Array = []
-		for rod: int in RomLayout.FISH_ROD_COUNT:
+		for rod: int in Gen2Layout.FISH_ROD_COUNT:
 			var pointer: int = rom.u16le(at + 1 + rod * 2)
 			if pointer < 0x4000 or pointer > 0x7FFF:
 				return _error("Fishing group %d has an invalid rod pointer." % group)
@@ -434,11 +434,11 @@ static func _read_fishing_groups(
 			data_end = maxi(data_end, int(table["end"]))
 		groups.append({"chance": chance, "rods": rods})
 
-	if not rom.in_bounds(data_end, RomLayout.FISH_TIME_GROUP_COUNT * RomLayout.FISH_TIME_GROUP_SIZE):
+	if not rom.in_bounds(data_end, Gen2Layout.FISH_TIME_GROUP_COUNT * Gen2Layout.FISH_TIME_GROUP_SIZE):
 		return _error("Fishing time-group data is outside the ROM.")
 	var time_groups: Array = []
-	for group: int in RomLayout.FISH_TIME_GROUP_COUNT:
-		var at: int = data_end + group * RomLayout.FISH_TIME_GROUP_SIZE
+	for group: int in Gen2Layout.FISH_TIME_GROUP_COUNT:
+		var at: int = data_end + group * Gen2Layout.FISH_TIME_GROUP_SIZE
 		var day: Dictionary = _slot(rom.u8(at + 1), rom.u8(at))
 		var night: Dictionary = _slot(rom.u8(at + 3), rom.u8(at + 2))
 		if not bool(day.get("ok", false)) or not bool(night.get("ok", false)):
@@ -463,7 +463,7 @@ static func _read_fish_table(
 	var cursor: int = RomFile.linear(bank, pointer)
 	var entries: Array = []
 	var previous_threshold: int = -1
-	for _entry_index: int in RomLayout.FISH_MAX_ENTRIES:
+	for _entry_index: int in Gen2Layout.FISH_MAX_ENTRIES:
 		if not rom.in_bounds(cursor, 3):
 			return _error("Fishing group %d rod %d is outside the ROM." % [group, rod])
 		var threshold: int = rom.u8(cursor)
@@ -473,7 +473,7 @@ static func _read_fish_table(
 		var species: int = rom.u8(cursor + 1)
 		var level: int = rom.u8(cursor + 2)
 		if species == 0:
-			if level < 0 or level >= RomLayout.FISH_TIME_GROUP_COUNT:
+			if level < 0 or level >= Gen2Layout.FISH_TIME_GROUP_COUNT:
 				return _error("Fishing group %d rod %d has an invalid time group." % [group, rod])
 			entries.append({"threshold": threshold, "time_group": level})
 		else:
@@ -483,7 +483,7 @@ static func _read_fish_table(
 			slot.erase("ok")
 			slot["threshold"] = threshold
 			entries.append(slot)
-		if threshold == RomLayout.FISH_TABLE_END:
+		if threshold == Gen2Layout.FISH_TABLE_END:
 			return {"ok": true, "entries": entries, "end": cursor + 3}
 		cursor += 3
 	return _error("Fishing group %d rod %d has no sentinel." % [group, rod])
@@ -494,12 +494,12 @@ static func _read_roaming_maps(
 ) -> Dictionary:
 	var offset: int = int(configured.get("roam_maps", -1))
 	var expected_count: int = int(configured.get("roam_map_count", -1))
-	if offset < 0 or expected_count != RomLayout.ROAM_MAP_COUNT:
+	if offset < 0 or expected_count != Gen2Layout.ROAM_MAP_COUNT:
 		return _error("Roaming map layout is incomplete.")
 	var rows: Array = []
 	var at: int = offset
 	for _row_index: int in expected_count:
-		if not rom.in_bounds(at, 3) or rom.u8(at) == RomLayout.ROAM_TABLE_END:
+		if not rom.in_bounds(at, 3) or rom.u8(at) == Gen2Layout.ROAM_TABLE_END:
 			return _error("Roaming map table ended before its verified count.")
 		var group: int = rom.u8(at)
 		var number: int = rom.u8(at + 1)
@@ -529,7 +529,7 @@ static func _read_roaming_maps(
 			"map_number": number,
 			"connections": connections,
 		})
-	if not rom.in_bounds(at) or rom.u8(at) != RomLayout.ROAM_TABLE_END:
+	if not rom.in_bounds(at) or rom.u8(at) != Gen2Layout.ROAM_TABLE_END:
 		return _error("Roaming map table has no sentinel.")
 
 	var first: Array = [rows[0]["map_group"], rows[0]["map_number"]]
@@ -562,7 +562,7 @@ static func _read_roam_mons(layout: Dictionary, configured: Dictionary) -> Dicti
 		var level: int = int(mon.get("level", 0))
 		var group: int = int(mon.get("map_group", 0))
 		var number: int = int(mon.get("map_number", 0))
-		if species < 1 or species > RomLayout.SPECIES_COUNT or level < 1 or level > RomLayout.MAX_LEVEL:
+		if species < 1 or species > Gen2Layout.SPECIES_COUNT or level < 1 or level > Gen2Layout.MAX_LEVEL:
 			return _error("Roaming Pokémon definition has invalid battle values.")
 		var map_check: Dictionary = _validate_map(layout, group, number, "roaming")
 		if not bool(map_check.get("ok", false)):
@@ -590,7 +590,7 @@ static func read_treemons(
 	var set_count: int = int(configured.get("treemon_set_count", -1))
 	if pointer_offset < 0 or set_count < 1:
 		return _error("Treemon set layout is incomplete.")
-	var bank: int = RomLayout.bank_of(pointer_offset)
+	var bank: int = Gen2Layout.bank_of(pointer_offset)
 
 	var tree_maps: Dictionary = _read_treemon_maps(rom, layout, configured, "tree")
 	if not bool(tree_maps.get("ok", false)):
@@ -649,11 +649,11 @@ static func _read_treemon_maps(
 	while true:
 		if not rom.in_bounds(at):
 			return _error("Treemon %s map table has no sentinel." % kind)
-		if rom.u8(at) == RomLayout.TREEMON_TABLE_END:
+		if rom.u8(at) == Gen2Layout.TREEMON_TABLE_END:
 			break
 		if rows.size() >= expected_count:
 			return _error("Treemon %s map table exceeds its verified count." % kind)
-		if not rom.in_bounds(at, RomLayout.TREEMON_MAP_RECORD_SIZE):
+		if not rom.in_bounds(at, Gen2Layout.TREEMON_MAP_RECORD_SIZE):
 			return _error("Treemon %s map record is outside the ROM." % kind)
 		var group: int = rom.u8(at)
 		var number: int = rom.u8(at + 1)
@@ -665,7 +665,7 @@ static func _read_treemon_maps(
 			"map_number": number,
 			"set": rom.u8(at + 2),
 		})
-		at += RomLayout.TREEMON_MAP_RECORD_SIZE
+		at += Gen2Layout.TREEMON_MAP_RECORD_SIZE
 	if rows.size() != expected_count:
 		return _error("Treemon %s map table has %d rows, expected %d." % [
 			kind, rows.size(), expected_count,
@@ -695,10 +695,10 @@ static func _read_treemon_set(rom: RomFile, offset: int, index: int) -> Dictiona
 static func _read_treemon_table(rom: RomFile, offset: int, index: int) -> Dictionary:
 	var rows: Array = []
 	var at: int = offset
-	for _row: int in RomLayout.TREEMON_MAX_ROWS:
+	for _row: int in Gen2Layout.TREEMON_MAX_ROWS:
 		if not rom.in_bounds(at):
 			return _error("Treemon set %d is outside the ROM." % index)
-		if rom.u8(at) == RomLayout.TREEMON_TABLE_END:
+		if rom.u8(at) == Gen2Layout.TREEMON_TABLE_END:
 			if rows.is_empty():
 				return _error("Treemon set %d has an empty table." % index)
 			return {"ok": true, "rows": rows, "end": at + 1}
@@ -731,13 +731,13 @@ static func _read_asleep_treemons(rom: RomFile, configured: Dictionary) -> Dicti
 			continue
 		var species: Array = []
 		var at: int = offset
-		for _row: int in RomLayout.ASLEEP_TREEMON_MAX_ROWS:
+		for _row: int in Gen2Layout.ASLEEP_TREEMON_MAX_ROWS:
 			if not rom.in_bounds(at):
 				return _error("Asleep treemon list %s is outside the ROM." % key)
 			var value: int = rom.u8(at)
-			if value == RomLayout.ASLEEP_TREEMON_TABLE_END:
+			if value == Gen2Layout.ASLEEP_TREEMON_TABLE_END:
 				break
-			if value < 1 or value > RomLayout.SPECIES_COUNT:
+			if value < 1 or value > Gen2Layout.SPECIES_COUNT:
 				return _error("Asleep treemon list %s names an invalid species." % key)
 			species.append(value)
 			at += 1
@@ -770,7 +770,7 @@ static func _treemon_triple(row: Dictionary) -> Array:
 
 
 static func _validate_fishing_anchors(groups: Array, time_groups: Array) -> Dictionary:
-	if groups.size() != RomLayout.FISH_GROUP_COUNT or time_groups.size() != RomLayout.FISH_TIME_GROUP_COUNT:
+	if groups.size() != Gen2Layout.FISH_GROUP_COUNT or time_groups.size() != Gen2Layout.FISH_TIME_GROUP_COUNT:
 		return _error("Fishing table counts are incorrect.")
 	var shore_old: Dictionary = groups[0]["rods"][0][0]
 	if int(shore_old.get("threshold", 0)) != 179 or int(shore_old.get("species", 0)) != 0x81 \
@@ -791,16 +791,16 @@ static func _validate_fishing_anchors(groups: Array, time_groups: Array) -> Dict
 
 
 static func _slot(level: int, species: int) -> Dictionary:
-	if level < 1 or level > RomLayout.MAX_LEVEL:
+	if level < 1 or level > Gen2Layout.MAX_LEVEL:
 		return {"ok": false, "reason": "level"}
-	if species < 1 or species > RomLayout.SPECIES_COUNT:
+	if species < 1 or species > Gen2Layout.SPECIES_COUNT:
 		return {"ok": false, "reason": "species"}
 	return {"ok": true, "level": level, "species": species}
 
 
 static func _validate_map(layout: Dictionary, group: int, number: int, table_name: String) -> Dictionary:
-	var max_number: int = RomLayout.map_group_count(layout, group)
-	if group < 1 or group > RomLayout.MAP_GROUP_COUNT or max_number <= 0 \
+	var max_number: int = Gen2Layout.map_group_count(layout, group)
+	if group < 1 or group > Gen2Layout.MAP_GROUP_COUNT or max_number <= 0 \
 		or number < 1 or number > max_number:
 		return _error("Wild encounter table %s names invalid map %d/%d." % [table_name, group, number])
 	return {"ok": true}

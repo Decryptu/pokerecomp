@@ -1,13 +1,13 @@
 extends SceneTree
 
 ## Every effect command one turn of a battle runs here, in the same shape
-## `.claude/oracle/battle/trace_move_commands.py` prints off a real cartridge. It
+## the same trace prints off a real cartridge. It
 ## fights until one side is down, so the artefact is a whole wild battle rather than
 ## one turn. The two files diff line for line, so a step in the wrong place is the
 ## first difference; the opcode is printed as `--`, since this side carries no
 ## index. Arguments: `<game> <out.txt> <player_move> <enemy_move>`.
 
-## The matchup `.claude/oracle/battle/states/in_wild` stands in: a level five
+## The matchup the hardware trace opens on stands in: a level five
 ## Cyndaquil against the level two Rattata that state walked into. The DVs and
 ## the generator are this side's own, so the two fights are the same shape and
 ## not the same numbers.
@@ -29,7 +29,7 @@ func _initialize() -> void:
 		)
 		quit(1)
 		return
-	if Gen2ToolPath.refuses(args[1]):
+	if PokeToolPath.refuses(args[1]):
 		quit(2)
 		return
 	var data: GameData = GameData.open(StringName(args[0]))

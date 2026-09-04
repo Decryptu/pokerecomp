@@ -12,7 +12,7 @@ extends Gen2LauncherSheet
 signal bindings_changed()
 
 var _options: Gen2Options = null
-var _button: int = Gen2Button.NONE
+var _button: int = PokeButton.NONE
 ## The [InputMap] name of a mod's action while this sheet is editing one, empty
 ## while it is editing one of the eight. A mod's bindings live in their own
 ## namespace, so which list is being edited is which of these is set.
@@ -38,7 +38,7 @@ static func for_button(
 	sheet._theme = palette
 	sheet._options = options
 	sheet._button = button
-	sheet._label = Gen2Button.label(button)
+	sheet._label = PokeButton.label(button)
 	sheet._build(sheet._label)
 	sheet._build_rows()
 	return sheet
@@ -106,7 +106,7 @@ func _refresh() -> void:
 	var bindings: Array = _bindings()
 	for index: int in bindings.size():
 		var row: HBoxContainer = Gen2LauncherUI.row(Gen2LauncherUI.GAP_SM)
-		var description: Label = Gen2LauncherUI.body(_theme, Gen2InputActions.describe(bindings[index]))
+		var description: Label = Gen2LauncherUI.body(_theme, PokeInputActions.describe(bindings[index]))
 		description.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(description)
 		var remove: Gen2LauncherButton = Gen2LauncherButton.icon_only(
@@ -117,7 +117,7 @@ func _refresh() -> void:
 		remove.pressed.connect(func() -> void: _remove(index))
 		row.add_child(remove)
 		_list.add_child(row)
-	_add.set_disabled_state(bindings.size() >= Gen2InputActions.MAX_BINDINGS)
+	_add.set_disabled_state(bindings.size() >= PokeInputActions.MAX_BINDINGS)
 
 
 func _remove(index: int) -> void:
@@ -165,10 +165,10 @@ func _finish_capture(binding: Dictionary) -> void:
 	var bindings: Array = _bindings()
 	if bindings.has(binding):
 		_prompt.text = "%s is already on %s." % [
-			Gen2InputActions.describe(binding), _label
+			PokeInputActions.describe(binding), _label
 		]
 		return
-	var taken: Array[int] = Gen2InputActions.conflicts(
+	var taken: Array[int] = PokeInputActions.conflicts(
 		_options.controls, binding, _button
 	)
 	bindings.append(binding)
@@ -180,7 +180,7 @@ func _finish_capture(binding: Dictionary) -> void:
 	if not taken.is_empty():
 		var names: Array[String] = []
 		for other: int in taken:
-			names.append(Gen2Button.label(other))
+			names.append(PokeButton.label(other))
 		# Not refused: one key doing two things is the player's call, and a
 		# refusal here would be the settings page overruling them.
 		_prompt.text = "Also on %s." % ", ".join(names)
@@ -215,7 +215,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _begin_hold(event: InputEvent) -> void:
-	var binding: Dictionary = Gen2InputActions.from_event(event)
+	var binding: Dictionary = PokeInputActions.from_event(event)
 	if binding.is_empty() or not _is_pressed(event):
 		return
 	accept_event()
@@ -224,20 +224,20 @@ func _begin_hold(event: InputEvent) -> void:
 
 
 ## A key or a pad button releases; a stick releases by falling back inside the
-## deadzone, which is the same value [method Gen2InputActions.from_event] refuses
+## deadzone, which is the same value [method PokeInputActions.from_event] refuses
 ## to read as a binding at all.
 func _is_release_of_pending(event: InputEvent) -> bool:
 	if event is InputEventJoypadMotion:
 		var motion: InputEventJoypadMotion = event
-		return StringName(_pending.get("kind", &"")) == Gen2InputActions.KIND_PAD_AXIS \
+		return StringName(_pending.get("kind", &"")) == PokeInputActions.KIND_PAD_AXIS \
 			and int(_pending.get("code", -1)) == int(motion.axis) \
-			and absf(motion.axis_value) < Gen2InputActions.DEADZONE
-	return not _is_pressed(event) and Gen2InputActions.from_event(event) == _pending
+			and absf(motion.axis_value) < PokeInputActions.DEADZONE
+	return not _is_pressed(event) and PokeInputActions.from_event(event) == _pending
 
 
 ## `InputEventJoypadMotion` has no pressed state; every other event this reads
 ## does.
 static func _is_pressed(event: InputEvent) -> bool:
 	if event is InputEventJoypadMotion:
-		return not Gen2InputActions.from_event(event).is_empty()
+		return not PokeInputActions.from_event(event).is_empty()
 	return event.is_pressed()

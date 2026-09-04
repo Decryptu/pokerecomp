@@ -50,7 +50,7 @@ const EXPECTED_LINES: Dictionary = {
 
 ## `GetTradeMonNames`' tail. Only EMY's row asks for a gender in either pin.
 const GENDER_SYMBOLS: Dictionary = {
-	RomLayout.TRADE_GENDER_MALE: "♂", RomLayout.TRADE_GENDER_FEMALE: "♀",
+	Gen2Layout.TRADE_GENDER_MALE: "♂", Gen2Layout.TRADE_GENDER_FEMALE: "♀",
 }
 
 
@@ -128,7 +128,7 @@ func _verify_cell(
 		"trade %d names dialog set %d of %d" % [index, dialog_set, sets]
 	):
 		return
-	var name: String = RomLayout.trade_text_name(_r.crystal, dialog, dialog_set)
+	var name: String = Gen2Layout.trade_text_name(_r.crystal, dialog, dialog_set)
 	var box: String = String(runner.call(&"_trade_dialog_text", {
 		"dialog": dialog_set,
 	}, dialog))

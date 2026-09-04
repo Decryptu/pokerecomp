@@ -15,10 +15,10 @@ const SEEN: int = 251
 const UNSEEN: int = 1
 
 const BUTTONS: Dictionary = {
-	"u": Gen2Button.UP, "d": Gen2Button.DOWN,
-	"l": Gen2Button.LEFT, "r": Gen2Button.RIGHT,
-	"a": Gen2Button.A, "b": Gen2Button.B,
-	"sel": Gen2Button.SELECT, "start": Gen2Button.START,
+	"u": PokeButton.UP, "d": PokeButton.DOWN,
+	"l": PokeButton.LEFT, "r": PokeButton.RIGHT,
+	"a": PokeButton.A, "b": PokeButton.B,
+	"sel": PokeButton.SELECT, "start": PokeButton.START,
 }
 
 ## Which presses each named screen is reached by, so a caller naming one does not
@@ -47,7 +47,7 @@ func _initialize() -> void:
 		)
 		quit(1)
 		return
-	if Gen2ToolPath.refuses(args[1]):
+	if PokeToolPath.refuses(args[1]):
 		quit(2)
 		return
 	var data: GameData = GameData.open(StringName(args[0]))

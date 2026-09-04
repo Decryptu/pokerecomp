@@ -60,12 +60,12 @@ func image() -> Image:
 func handle_button(button: int) -> bool:
 	if _menu == null:
 		return false
-	if button == Gen2Button.A:
+	if button == PokeButton.A:
 		closed.emit(String(_menu.selected_value()) if _menu.selected_index() > 0 else "")
 		return true
-	if not Gen2Button.is_direction(button):
+	if not PokeButton.is_direction(button):
 		return false
-	if _menu.move(Gen2Button.vector(button)):
+	if _menu.move(PokeButton.vector(button)):
 		_refresh()
 	return true
 
@@ -87,6 +87,6 @@ func _refresh() -> void:
 
 ## The menu's own two colours unless a caller has handed a faded palette in.
 func _colors() -> PackedColorArray:
-	return palette if palette.size() == 4 else Gen2Palette.pic_palette(
+	return palette if palette.size() == 4 else PokePalette.pic_palette(
 		PackedColorArray([Color.WHITE, Color.BLACK])
 	)

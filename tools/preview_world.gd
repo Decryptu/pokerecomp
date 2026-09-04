@@ -74,7 +74,7 @@ const BADGE_NAMES: Array[String] = [
 
 ## `.forced_dpad`'s own order, which the first number indexes.
 const ICE_SLIDE_BUTTONS: Array[int] = [
-	Gen2Button.DOWN, Gen2Button.UP, Gen2Button.LEFT, Gen2Button.RIGHT,
+	PokeButton.DOWN, PokeButton.UP, PokeButton.LEFT, PokeButton.RIGHT,
 ]
 
 const WINDOW_SIZE := Vector2i(1152, 648)
@@ -169,7 +169,7 @@ func _initialize() -> void:
 		quit(1)
 		return
 
-	if Gen2ToolPath.refuses(args[3]):
+	if PokeToolPath.refuses(args[3]):
 		quit(2)
 		return
 
@@ -427,7 +427,7 @@ func _process(_delta: float) -> bool:
 	## frame has to be taken without them.
 	if _bare:
 		_screen.hide_debug_readout()
-	var image: Image = Gen2ToolPath.capture(root)
+	var image: Image = PokeToolPath.capture(root)
 	if image == null:
 		quit(1)
 		return true
@@ -450,8 +450,8 @@ func _stage_unown_wall() -> void:
 	## `writetext` is one page: the first press finishes the reveal the
 	## text speed is still spending, and the second ends the page, which
 	## is what runs `special DisplayUnownWords` and puts the box up.
-	_screen.press_button(Gen2Button.A)
-	_screen.press_button(Gen2Button.A)
+	_screen.press_button(PokeButton.A)
+	_screen.press_button(PokeButton.A)
 
 
 ## Past the transition and into the fight it opens. `battle_caught` marks the
@@ -466,7 +466,7 @@ func _stage_battle() -> void:
 	_screen.settle_battle_transition()
 	_screen.advance_frames(frames)
 	for _press: int in (3 if caught else 0):
-		_screen.press_button(Gen2Button.A)
+		_screen.press_button(PokeButton.A)
 		_screen.advance_frames(frames)
 
 
@@ -508,7 +508,7 @@ func _stage_level_evolution() -> void:
 		if evolving == null:
 			break
 		if evolving.awaiting_press():
-			_screen.press_button(Gen2Button.A)
+			_screen.press_button(PokeButton.A)
 
 
 ## `OverworldHatchEgg`, driven the same way and for the same reason: the sequence is
@@ -531,7 +531,7 @@ func _stage_egg_hatch() -> void:
 		if hatching == null:
 			break
 		if hatching.awaiting_press():
-			_screen.press_button(Gen2Button.A)
+			_screen.press_button(PokeButton.A)
 
 
 ## `GivePoke`'s own prompt. The presses are spent behind the frames the box owes,
@@ -547,7 +547,7 @@ func _stage_gift_nickname() -> void:
 		## NO on the question, so the mode photographs the routine's own
 		## boxes; the keyboard behind YES has `preview_naming_screen.gd`.
 		_screen.press_button(
-			Gen2Button.B if prompt.question_ready() else Gen2Button.A
+			PokeButton.B if prompt.question_ready() else PokeButton.A
 		)
 		_settle_mon_special("_nickname_host")
 
@@ -567,7 +567,7 @@ func _stage_whiteout() -> void:
 		for _frame: int in 120:
 			_screen.advance_frame()
 		if _press < maxi(_cell.x, 0):
-			_screen.press_button(Gen2Button.A)
+			_screen.press_button(PokeButton.A)
 
 
 ## `special UnownPuzzle`, which no fixture cell reaches. The first number is how many
@@ -579,8 +579,8 @@ func _stage_whiteout() -> void:
 ## picture.
 func _stage_unown_puzzle() -> void:
 	_screen.preview_unown_puzzle(
-		maxi(_cell.y, 0) % RomLayout.UNOWN_PUZZLE_PICTURES.size(),
-		maxi(_cell.y, 0) >= RomLayout.UNOWN_PUZZLE_PICTURES.size()
+		maxi(_cell.y, 0) % Gen2Layout.UNOWN_PUZZLE_PICTURES.size(),
+		maxi(_cell.y, 0) >= Gen2Layout.UNOWN_PUZZLE_PICTURES.size()
 	)
 	for _frame: int in maxi(_cell.x, 0):
 		if _screen.get("_unown_puzzle_host") == null:
@@ -626,7 +626,7 @@ func _stage_day_care() -> void:
 	for _press: int in maxi(_cell.x, 0):
 		if _screen.get("_day_care_host") == null:
 			break
-		_screen.press_button(Gen2Button.A)
+		_screen.press_button(PokeButton.A)
 		_settle_mon_special("_day_care_host")
 
 
@@ -642,7 +642,7 @@ func _stage_party_routine() -> void:
 	for _press: int in maxi(_cell.x, 0):
 		if _screen.get(host_property) == null:
 			break
-		_screen.press_button(Gen2Button.A)
+		_screen.press_button(PokeButton.A)
 		_settle_mon_special(host_property)
 
 
@@ -654,16 +654,16 @@ func _stage_party_routine() -> void:
 ## three different items, and the development save's party is not one.
 func _stage_battle_tower() -> void:
 	_stage_battle_tower_party()
-	_screen.press_button(Gen2Button.UP)
+	_screen.press_button(PokeButton.UP)
 	_screen.interact()
 	for _frame: int in TEXT_SETTLE_FRAMES:
 		_screen.advance_frame()
 	for _press: int in maxi(_cell.x, 0):
-		_screen.press_button(Gen2Button.A)
+		_screen.press_button(PokeButton.A)
 		for _frame: int in TEXT_SETTLE_FRAMES:
 			_screen.advance_frame()
 	for _press: int in maxi(_cell.y, 0):
-		_screen.press_button(Gen2Button.DOWN)
+		_screen.press_button(PokeButton.DOWN)
 		for _frame: int in TEXT_SETTLE_FRAMES:
 			_screen.advance_frame()
 
@@ -673,13 +673,13 @@ func _stage_battle_tower() -> void:
 ## `YesNoMenuHeader.MenuData`'s cursor. `crystal 26 3 ... yes_no 31 6` is
 ## Cherrygrove's guide.
 func _stage_yes_no() -> void:
-	_screen.press_button(Gen2Button.RIGHT)
+	_screen.press_button(PokeButton.RIGHT)
 	_screen.interact()
 	for _press: int in WARP_FRAME_CAP:
 		if StringName(_screen._world.pending_script_input().get(
 			"command", &"")) == &"yesorno":
 			break
-		_screen.press_button(Gen2Button.A)
+		_screen.press_button(PokeButton.A)
 		for _frame: int in 20:
 			_screen.advance_frame()
 
@@ -687,13 +687,13 @@ func _stage_yes_no() -> void:
 ## `NPCTrade` from the cell below the trader: TRADE_DIALOG_INTRO with the
 ## `YesNoBox` over it. `crystal 1 3 ... npc_trade 2 4` is Tim's own.
 func _stage_npc_trade() -> void:
-	_screen.press_button(Gen2Button.UP)
+	_screen.press_button(PokeButton.UP)
 	_screen.interact()
 	for _press: int in WARP_FRAME_CAP:
 		if StringName(_screen._world.pending_script_input().get(
 			"command", &"")) == &"trade":
 			break
-		_screen.press_button(Gen2Button.A)
+		_screen.press_button(PokeButton.A)
 		for _frame: int in 20:
 			_screen.advance_frame()
 
@@ -701,17 +701,17 @@ func _stage_npc_trade() -> void:
 ## The clerk behind the counter, talked to from the cell in front of him, so the
 ## shop is reached the way a player reaches it.
 func _stage_mart() -> void:
-	_screen.press_button(Gen2Button.LEFT)
+	_screen.press_button(PokeButton.LEFT)
 	_screen.interact()
 	for _press: int in MART_PRESSES:
-		_screen.press_button(Gen2Button.A)
+		_screen.press_button(PokeButton.A)
 	## `StandardMart`'s BUY/SELL/QUIT loop is what the welcome box hands
 	## the shop to. `mart` takes its BUY row, `mart_sell` the one below.
 	if _kind == &"mart_top":
 		return
 	if _kind == &"mart_sell":
-		_screen.press_button(Gen2Button.DOWN)
-	_screen.press_button(Gen2Button.A)
+		_screen.press_button(PokeButton.DOWN)
+	_screen.press_button(PokeButton.A)
 
 
 ## The floor panel, read from the cell below it: `bg_event 3, 0`'s own `elevator` is
@@ -730,10 +730,10 @@ func _stage_elevator() -> void:
 		"map_group": int(door["map_group"]),
 		"map_number": int(door["map_number"]),
 	}
-	_screen.press_button(Gen2Button.UP)
+	_screen.press_button(PokeButton.UP)
 	_screen.interact()
 	for _press: int in maxi(_cell.x, 0):
-		_screen.press_button(Gen2Button.DOWN)
+		_screen.press_button(PokeButton.DOWN)
 
 
 ## `MapSetupScript_Door` at its whitest: the step onto the warp tile and then
@@ -892,7 +892,7 @@ func _stage_start_menu() -> void:
 	)
 	_screen.preview_start_menu()
 	for _down: int in maxi(_cell.x, 0):
-		_screen.press_button(Gen2Button.DOWN)
+		_screen.press_button(PokeButton.DOWN)
 		_screen.advance_frame()
 
 
@@ -902,10 +902,10 @@ func _stage_start_menu() -> void:
 func _stage_pc() -> void:
 	_screen.call(SCREEN_DRIVER % _kind)
 	for _down: int in maxi(_cell.x, 0):
-		_screen.press_button(Gen2Button.DOWN)
+		_screen.press_button(PokeButton.DOWN)
 		_screen.advance_frame()
 	for _press: int in maxi(_cell.y, 0):
-		_screen.press_button(Gen2Button.A)
+		_screen.press_button(PokeButton.A)
 		_screen.advance_frame()
 
 
@@ -947,19 +947,19 @@ func _restore_selected_view() -> void:
 
 
 func _render(data: GameData, map: Gen2WorldMap, tileset: Gen2WorldTileset) -> Image:
-	var width: int = map.width_blocks * RomLayout.MAP_BLOCK_TILE_WIDTH * Gen2Tiles.TILE_WIDTH
-	var height: int = map.height_blocks * RomLayout.MAP_BLOCK_TILE_WIDTH * Gen2Tiles.TILE_HEIGHT
+	var width: int = map.width_blocks * Gen2Layout.MAP_BLOCK_TILE_WIDTH * PokeTiles.TILE_WIDTH
+	var height: int = map.height_blocks * Gen2Layout.MAP_BLOCK_TILE_WIDTH * PokeTiles.TILE_HEIGHT
 	var image := Image.create(width, height, false, Image.FORMAT_RGBA8)
 	var pixels: PackedByteArray = data.map_tile_indices(map, tileset)
-	var atlas_width: int = tileset.tile_count * Gen2Tiles.TILE_WIDTH
+	var atlas_width: int = tileset.tile_count * PokeTiles.TILE_WIDTH
 	var palettes: Array = Gen2WorldPalette.tile_palettes(data, map, tileset)
 
-	for tile_y: int in map.height_blocks * RomLayout.MAP_BLOCK_TILE_WIDTH:
-		for tile_x: int in map.width_blocks * RomLayout.MAP_BLOCK_TILE_WIDTH:
+	for tile_y: int in map.height_blocks * Gen2Layout.MAP_BLOCK_TILE_WIDTH:
+		for tile_x: int in map.width_blocks * Gen2Layout.MAP_BLOCK_TILE_WIDTH:
 			var block: int = map.block_at(tile_x >> 2, tile_y >> 2)
 			var tile: int = tileset.tile_index(block, (tile_y & 3) * 4 + (tile_x & 3))
-			for pixel_y: int in Gen2Tiles.TILE_HEIGHT:
-				for pixel_x: int in Gen2Tiles.TILE_WIDTH:
+			for pixel_y: int in PokeTiles.TILE_HEIGHT:
+				for pixel_x: int in PokeTiles.TILE_WIDTH:
 					var color_index: int = 0
 					var palette := PackedColorArray()
 					if tile < tileset.tile_count:

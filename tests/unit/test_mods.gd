@@ -15,8 +15,8 @@ func before_each() -> void:
 	_clear()
 	DirAccess.make_dir_recursive_absolute(_directory)
 	Gen2ModHost.reset()
-	DirAccess.remove_absolute(Gen2ModOptions.PATH)
-	Gen2ModOptions.reload()
+	DirAccess.remove_absolute(PokeModOptions.PATH)
+	PokeModOptions.reload()
 
 
 func after_each() -> void:
@@ -57,7 +57,7 @@ func _write_dependency_mod(
 	DirAccess.make_dir_recursive_absolute(directory)
 	_write("%s/mod.json" % directory, JSON.stringify({
 		"id": id, "name": id.capitalize(), "version": version,
-		"api_version": Gen2ModManifest.API_VERSION, "entry": "mod.gd",
+		"api_version": PokeModManifest.API_VERSION, "entry": "mod.gd",
 		"dependencies": dependencies,
 	}))
 	_write("%s/mod.gd" % directory, """extends RefCounted
@@ -71,7 +71,7 @@ func _valid_manifest() -> Dictionary:
 		"id": "voxel",
 		"name": "Voxel World",
 		"version": "1.0.0",
-		"api_version": Gen2ModManifest.API_VERSION,
+		"api_version": PokeModManifest.API_VERSION,
 		"entry": "mod.gd",
 	}
 
@@ -80,7 +80,7 @@ func _valid_manifest() -> Dictionary:
 ## check needs: the object, not an id that matches one.
 ## Its own directory and entry filename: Godot caches a loaded script by path,
 ## so two tests writing different code to one path would run the first one's.
-func _loaded_manifest() -> Gen2ModManifest:
+func _loaded_manifest() -> PokeModManifest:
 	var directory: String = "%s/lifecycle" % ROOT
 	DirAccess.make_dir_recursive_absolute(directory)
 	var source: Dictionary = _valid_manifest()
@@ -99,9 +99,9 @@ func _loaded_manifest() -> Gen2ModManifest:
 
 func test_a_valid_manifest_is_read_without_running_the_mod() -> void:
 	_write_manifest(_valid_manifest())
-	var result: Dictionary = Gen2ModManifest.read(_directory)
+	var result: Dictionary = PokeModManifest.read(_directory)
 	assert_true(result["ok"])
-	var manifest: Gen2ModManifest = result["manifest"]
+	var manifest: PokeModManifest = result["manifest"]
 	assert_eq(manifest.id, &"voxel")
 	assert_eq(manifest.name, "Voxel World")
 	assert_eq(manifest.entry_path(), "%s/mod.gd" % _directory)
@@ -109,31 +109,31 @@ func test_a_valid_manifest_is_read_without_running_the_mod() -> void:
 
 func test_a_manifest_built_for_another_host_is_refused() -> void:
 	var source: Dictionary = _valid_manifest()
-	source["api_version"] = Gen2ModManifest.API_VERSION + 1
+	source["api_version"] = PokeModManifest.API_VERSION + 1
 	_write_manifest(source)
-	assert_eq(Gen2ModManifest.read(_directory)["reason"], &"unsupported_api_version")
+	assert_eq(PokeModManifest.read(_directory)["reason"], &"unsupported_api_version")
 
 	## An OLDER contract still runs: every bump so far has only added to it, and
 	## refusing one would break every mod already installed.
-	source["api_version"] = Gen2ModManifest.MIN_API_VERSION
+	source["api_version"] = PokeModManifest.MIN_API_VERSION
 	_write_manifest(source)
-	assert_true(bool(Gen2ModManifest.read(_directory).get("ok", false)))
-	source["api_version"] = Gen2ModManifest.MIN_API_VERSION - 1
+	assert_true(bool(PokeModManifest.read(_directory).get("ok", false)))
+	source["api_version"] = PokeModManifest.MIN_API_VERSION - 1
 	_write_manifest(source)
-	assert_eq(Gen2ModManifest.read(_directory)["reason"], &"unsupported_api_version")
+	assert_eq(PokeModManifest.read(_directory)["reason"], &"unsupported_api_version")
 
 
 func test_manifest_versions_and_dependency_ranges_are_validated_before_code_runs() -> void:
 	var source: Dictionary = _valid_manifest()
 	source["version"] = "one"
 	assert_eq(
-		Gen2ModManifest.from_dictionary(source, _directory)["reason"],
+		PokeModManifest.from_dictionary(source, _directory)["reason"],
 		&"invalid_mod_version"
 	)
 	source["version"] = "1.0.0"
 	source["dependencies"] = {"core": ">=1.0 <2.0"}
 	assert_eq(
-		Gen2ModManifest.from_dictionary(source, _directory)["reason"],
+		PokeModManifest.from_dictionary(source, _directory)["reason"],
 		&"invalid_dependency_range"
 	)
 
@@ -144,22 +144,22 @@ func test_manifest_versions_and_dependency_ranges_are_validated_before_code_runs
 func test_the_games_declaration_is_validated_by_shape_and_not_by_registry() -> void:
 	var source: Dictionary = _valid_manifest()
 	source["games"] = "crystal"
-	assert_eq(Gen2ModManifest.from_dictionary(source, _directory)["reason"], &"invalid_games")
+	assert_eq(PokeModManifest.from_dictionary(source, _directory)["reason"], &"invalid_games")
 	source["games"] = ["Crystal"]
-	assert_eq(Gen2ModManifest.from_dictionary(source, _directory)["reason"], &"invalid_game")
-	source["games"] = ["gold", "silver", "crystal", "red"]
-	var read: Dictionary = Gen2ModManifest.from_dictionary(source, _directory)
+	assert_eq(PokeModManifest.from_dictionary(source, _directory)["reason"], &"invalid_game")
+	source["games"] = ["gold", "silver", "crystal", "emerald"]
+	var read: Dictionary = PokeModManifest.from_dictionary(source, _directory)
 	assert_true(read["ok"], "an id this host does not know is still a legal declaration")
-	var manifest: Gen2ModManifest = read["manifest"]
-	assert_eq(manifest.games, [&"gold", &"silver", &"crystal", &"red"] as Array[StringName])
-	assert_eq(manifest.game_titles(), ["Gold", "Silver", "Crystal", "red"] as Array[String])
+	var manifest: PokeModManifest = read["manifest"]
+	assert_eq(manifest.games, [&"gold", &"silver", &"crystal", &"emerald"] as Array[StringName])
+	assert_eq(manifest.game_titles(), ["Gold", "Silver", "Crystal", "emerald"] as Array[String])
 
 
 ## An absent declaration is every cartridge, and so is an unchosen one: the
 ## launcher lists what is installed before Play is pressed.
 func test_a_mod_declaring_no_games_is_for_every_cartridge() -> void:
-	var read: Dictionary = Gen2ModManifest.from_dictionary(_valid_manifest(), _directory)
-	var manifest: Gen2ModManifest = read["manifest"]
+	var read: Dictionary = PokeModManifest.from_dictionary(_valid_manifest(), _directory)
+	var manifest: PokeModManifest = read["manifest"]
 	assert_true(manifest.games.is_empty())
 	assert_true(manifest.supports_game(RomRegistry.GOLD))
 	assert_true(manifest.supports_game(&""))
@@ -170,7 +170,7 @@ func test_a_mod_for_another_cartridge_is_refused_by_name_and_not_run() -> void:
 	_write_dependency_mod("%s/crystal_only" % ROOT, "crystalonly", "1.0.0")
 	_write("%s/crystal_only/mod.json" % ROOT, JSON.stringify({
 		"id": "crystalonly", "name": "Crystal Only", "version": "1.0.0",
-		"api_version": Gen2ModManifest.API_VERSION, "entry": "mod.gd",
+		"api_version": PokeModManifest.API_VERSION, "entry": "mod.gd",
 		"games": ["crystal"],
 	}))
 	var host: Gen2ModHost = Gen2ModHost.instance()
@@ -179,7 +179,7 @@ func test_a_mod_for_another_cartridge_is_refused_by_name_and_not_run() -> void:
 	assert_eq(host.load_discovered(), [])
 	assert_eq(StringName(host.failures()[-1]["reason"]), &"incompatible_game")
 	assert_eq(
-		Gen2ModRefusal.text(host.failures()[-1]), "That mod is not for Gold.",
+		PokeModRefusal.text(host.failures()[-1]), "That mod is not for Gold.",
 		"the launcher has a line for it"
 	)
 
@@ -226,7 +226,7 @@ func test_retargeting_refuses_to_keep_a_different_eligible_mod_set() -> void:
 	_write_dependency_mod("%s/crystal_only" % ROOT, "crystalonly", "1.0.0")
 	_write("%s/crystal_only/mod.json" % ROOT, JSON.stringify({
 		"id": "crystalonly", "name": "Crystal Only", "version": "1.0.0",
-		"api_version": Gen2ModManifest.API_VERSION, "entry": "mod.gd",
+		"api_version": PokeModManifest.API_VERSION, "entry": "mod.gd",
 		"games": ["crystal"],
 	}))
 	var host: Gen2ModHost = Gen2ModHost.instance()
@@ -279,8 +279,8 @@ func test_a_manifest_is_the_capability_for_only_its_own_save_namespace() -> void
 	_write_dependency_mod("%s/save_owner" % ROOT, "save_owner", "1.0.0")
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	var found: Array = host.discover(ROOT)
-	var manifest: Gen2ModManifest = null
-	for candidate: Gen2ModManifest in found:
+	var manifest: PokeModManifest = null
+	for candidate: PokeModManifest in found:
 		if candidate.id == &"save_owner":
 			manifest = candidate
 	assert_not_null(manifest)
@@ -288,7 +288,7 @@ func test_a_manifest_is_the_capability_for_only_its_own_save_namespace() -> void
 	assert_true(host.write_save_data(manifest, save, {"chapter": 3})["ok"])
 	assert_eq(host.read_save_data(manifest, save), {"chapter": 3})
 
-	var impostor := Gen2ModManifest.new()
+	var impostor := PokeModManifest.new()
 	impostor.id = &"save_owner"
 	assert_eq(
 		host.write_save_data(impostor, save, {"chapter": 9})["reason"],
@@ -302,7 +302,7 @@ func test_an_entry_that_leaves_the_mod_directory_is_refused() -> void:
 		var source: Dictionary = _valid_manifest()
 		source["entry"] = entry
 		_write_manifest(source)
-		var result: Dictionary = Gen2ModManifest.read(_directory)
+		var result: Dictionary = PokeModManifest.read(_directory)
 		assert_false(result["ok"], "entry %s must be refused" % entry)
 
 
@@ -310,7 +310,7 @@ func test_a_native_entry_is_refused_because_ios_forbids_runtime_native_code() ->
 	var source: Dictionary = _valid_manifest()
 	source["entry"] = "mod.dll"
 	_write_manifest(source)
-	assert_eq(Gen2ModManifest.read(_directory)["reason"], &"entry_not_gdscript")
+	assert_eq(PokeModManifest.read(_directory)["reason"], &"entry_not_gdscript")
 
 
 func test_the_built_in_renderer_is_registered_before_any_mod_loads() -> void:
@@ -438,7 +438,7 @@ func test_a_visible_encounter_provider_is_refused_on_the_same_three_rules() -> v
 ## `save_activated`, so two slots cannot leak patches into one another.
 func test_a_save_lifecycle_provider_is_driven_and_its_overlay_cleared_per_save() -> void:
 	var host: Gen2ModHost = Gen2ModHost.instance()
-	var manifest: Gen2ModManifest = _loaded_manifest()
+	var manifest: PokeModManifest = _loaded_manifest()
 	var script := GDScript.new()
 	script.source_code = """extends RefCounted
 
@@ -460,7 +460,7 @@ func save_deactivated() -> void:
 	assert_eq(host.save_lifecycle_ids(), [manifest.id])
 
 	## A manifest this host never discovered is not the capability.
-	var stranger := Gen2ModManifest.new()
+	var stranger := PokeModManifest.new()
 	stranger.id = manifest.id
 	assert_eq(
 		host.register_save_lifecycle(stranger, script.new())["reason"],
@@ -492,7 +492,7 @@ func save_deactivated() -> void:
 ## installed, because the clear happens first.
 func test_a_failing_save_provider_leaves_no_earlier_patches_installed() -> void:
 	var host: Gen2ModHost = Gen2ModHost.instance()
-	var manifest: Gen2ModManifest = _loaded_manifest()
+	var manifest: PokeModManifest = _loaded_manifest()
 	var script := GDScript.new()
 	script.source_code = """extends RefCounted
 
@@ -521,7 +521,7 @@ func save_deactivated() -> void:
 
 func test_a_save_lifecycle_provider_is_refused_by_shape() -> void:
 	var host: Gen2ModHost = Gen2ModHost.instance()
-	var manifest: Gen2ModManifest = _loaded_manifest()
+	var manifest: PokeModManifest = _loaded_manifest()
 	var node := Node2D.new()
 	assert_eq(host.register_save_lifecycle(manifest, node)["reason"], &"invalid_save_provider")
 	node.free()
@@ -771,7 +771,7 @@ func test_a_broken_mod_is_reported_and_does_not_stop_the_others() -> void:
 	DirAccess.make_dir_recursive_absolute("%s/other" % ROOT)
 	_write("%s/other/mod.json" % ROOT, JSON.stringify({
 		"id": "other", "name": "Other", "version": "1.0.0",
-		"api_version": Gen2ModManifest.API_VERSION, "entry": "mod.gd",
+		"api_version": PokeModManifest.API_VERSION, "entry": "mod.gd",
 	}))
 	_write("%s/other/mod.gd" % ROOT, "extends RefCounted\n\nfunc register(_host, _manifest) -> void:\n\tpass\n")
 
@@ -807,9 +807,9 @@ func test_a_packed_mod_mounts_its_pack_and_runs_the_entry_inside_it() -> void:
 	})
 	_clear(_directory)
 
-	var read: Dictionary = Gen2ModManifest.read(directory)
+	var read: Dictionary = PokeModManifest.read(directory)
 	assert_true(read["ok"], JSON.stringify(read))
-	var manifest: Gen2ModManifest = read["manifest"]
+	var manifest: PokeModManifest = read["manifest"]
 	assert_true(manifest.packed())
 	assert_eq(manifest.entry_path(), "res://mods/packmod/main.gd")
 
@@ -841,13 +841,13 @@ func test_a_pack_that_points_outside_the_mod_is_refused() -> void:
 		escaping["pack"] = pack
 		_write_manifest(escaping)
 		assert_eq(
-			Gen2ModManifest.read(_directory)["reason"], &"pack_escapes_mod",
+			PokeModManifest.read(_directory)["reason"], &"pack_escapes_mod",
 			"pack %s must be refused" % pack
 		)
 	var source: Dictionary = _valid_manifest()
 	source["pack"] = "content.tar"
 	_write_manifest(source)
-	assert_eq(Gen2ModManifest.read(_directory)["reason"], &"pack_not_a_resource_pack")
+	assert_eq(PokeModManifest.read(_directory)["reason"], &"pack_not_a_resource_pack")
 
 
 ## Builds a zip at [param path] from { entry path: text } so an installer test
@@ -984,7 +984,7 @@ func test_a_refused_archive_writes_nothing() -> void:
 	_write_zip(bad_manifest, {
 		"packaged/mod.json": JSON.stringify({
 			"id": "packaged", "name": "Packaged", "version": "1.0.0",
-			"api_version": Gen2ModManifest.API_VERSION + 1, "entry": "mod.gd",
+			"api_version": PokeModManifest.API_VERSION + 1, "entry": "mod.gd",
 		}),
 		"packaged/mod.gd": "extends RefCounted\n",
 	})
@@ -1028,36 +1028,36 @@ func test_index_source_resolves_the_shapes_a_player_might_paste() -> void:
 		"https://github.com/someone/mods",
 		"https://github.com/someone/mods.git",
 	]:
-		var resolved: Dictionary = Gen2ModIndex.resolve_source(input)
+		var resolved: Dictionary = PokeModIndex.resolve_source(input)
 		assert_true(resolved["ok"], input)
 		assert_eq(resolved["feed"], expected, input)
 		assert_eq(resolved["label"], "someone/mods", input)
 
 	# A site root gains the feed name; a feed file is taken as given.
 	assert_eq(
-		Gen2ModIndex.resolve_source("https://mods.example.com/")["feed"],
+		PokeModIndex.resolve_source("https://mods.example.com/")["feed"],
 		"https://mods.example.com/index.json",
 	)
 	assert_eq(
-		Gen2ModIndex.resolve_source("https://mods.example.com/feed.json")["feed"],
+		PokeModIndex.resolve_source("https://mods.example.com/feed.json")["feed"],
 		"https://mods.example.com/feed.json",
 	)
 
 
 func test_index_source_refuses_plain_http_and_nothing() -> void:
 	# http would let anyone on the path rewrite the downloads the feed hands out.
-	var insecure: Dictionary = Gen2ModIndex.resolve_source("http://mods.example.com/")
+	var insecure: Dictionary = PokeModIndex.resolve_source("http://mods.example.com/")
 	assert_false(insecure["ok"])
 	assert_eq(insecure["reason"], &"index_url_not_https")
-	assert_eq(Gen2ModIndex.resolve_source("   ")["reason"], &"empty_index_url")
+	assert_eq(PokeModIndex.resolve_source("   ")["reason"], &"empty_index_url")
 
 
-func _feed(mods: Array, schema: int = Gen2ModIndex.SCHEMA_VERSION) -> String:
+func _feed(mods: Array, schema: int = PokeModIndex.SCHEMA_VERSION) -> String:
 	return JSON.stringify({"schema_version": schema, "name": "Example", "mods": mods})
 
 
 func test_index_feed_parses_entries_and_keeps_the_listing_order() -> void:
-	var parsed: Dictionary = Gen2ModIndex.parse_feed(_feed([
+	var parsed: Dictionary = PokeModIndex.parse_feed(_feed([
 		{"id": "voxel", "name": "Voxel", "version": "2.0.0",
 		 "download": "https://example.com/voxel.zip", "description": "A view"},
 		{"id": "second", "download": "https://example.com/second.zip"},
@@ -1075,34 +1075,34 @@ func test_index_feed_parses_entries_and_keeps_the_listing_order() -> void:
 ## A listing's `games` is the manifest's own field one step earlier, so a site
 ## can filter and the mod page can say what a mod is for before it is installed.
 func test_index_feed_carries_the_games_a_row_declares() -> void:
-	var parsed: Dictionary = Gen2ModIndex.parse_feed(_feed([
+	var parsed: Dictionary = PokeModIndex.parse_feed(_feed([
 		{"id": "voxel", "download": "https://example.com/voxel.zip",
-		 "games": ["gold", "silver", "gold", "Bad Id", 7, "red"]},
+		 "games": ["gold", "silver", "gold", "Bad Id", 7, "emerald"]},
 		{"id": "plain", "download": "https://example.com/plain.zip"},
 		{"id": "wrong", "download": "https://example.com/wrong.zip", "games": "crystal"},
 	]))
 	var entries: Array = parsed["entries"]
 	# Deduplicated, malformed ids dropped on their own, and an id this build has
 	# never heard of kept, because a feed may list a mod for a later cartridge.
-	assert_eq(entries[0]["games"], [&"gold", &"silver", &"red"] as Array[StringName])
+	assert_eq(entries[0]["games"], [&"gold", &"silver", &"emerald"] as Array[StringName])
 	# No list at all, and a list that is not a list, are both "every cartridge".
 	assert_eq(entries[1]["games"], [] as Array[StringName])
 	assert_eq(entries[2]["games"], [] as Array[StringName])
-	assert_eq(Gen2ModManifest.titles_for(entries[0]["games"]), ["Gold", "Silver", "red"] as Array[String])
+	assert_eq(PokeModManifest.titles_for(entries[0]["games"]), ["Gold", "Silver", "emerald"] as Array[String])
 
 
 func test_index_feed_of_an_unknown_schema_is_refused_outright() -> void:
 	# A later format may reuse a field name, so this is a gate and not a hint.
-	var parsed: Dictionary = Gen2ModIndex.parse_feed(
-		_feed([], Gen2ModIndex.SCHEMA_VERSION + 1)
+	var parsed: Dictionary = PokeModIndex.parse_feed(
+		_feed([], PokeModIndex.SCHEMA_VERSION + 1)
 	)
 	assert_false(parsed["ok"])
 	assert_eq(parsed["reason"], &"unsupported_index_schema")
-	assert_eq(Gen2ModIndex.parse_feed("not json")["reason"], &"index_not_json")
+	assert_eq(PokeModIndex.parse_feed("not json")["reason"], &"index_not_json")
 
 
 func test_index_feed_drops_unusable_rows_without_losing_the_rest() -> void:
-	var parsed: Dictionary = Gen2ModIndex.parse_feed(_feed([
+	var parsed: Dictionary = PokeModIndex.parse_feed(_feed([
 		{"name": "No id at all", "download": "https://example.com/a.zip"},
 		{"id": "insecure", "download": "http://example.com/b.zip"},
 		{"id": "no download"},
@@ -1121,23 +1121,23 @@ func test_following_an_index_persists_it_and_never_duplicates_a_feed() -> void:
 	var store: String = "%s/indexes.json" % ROOT
 	DirAccess.make_dir_recursive_absolute(ROOT)
 	# One source ships: this project's own. Everything after it is the player's.
-	assert_eq(Gen2ModIndex.followed(store).size(), 1)
-	assert_eq(Gen2ModIndex.followed(store)[0]["feed"], Gen2ModIndex.BUILT_IN_FEED)
+	assert_eq(PokeModIndex.followed(store).size(), 1)
+	assert_eq(PokeModIndex.followed(store)[0]["feed"], PokeModIndex.BUILT_IN_FEED)
 
-	var added: Dictionary = Gen2ModIndex.follow("someone/mods", store)
+	var added: Dictionary = PokeModIndex.follow("someone/mods", store)
 	assert_true(added["ok"])
 	assert_true(added["added"])
-	assert_eq(Gen2ModIndex.followed(store).size(), 2)
-	assert_eq(Gen2ModIndex.followed(store)[1]["label"], "someone/mods")
+	assert_eq(PokeModIndex.followed(store).size(), 2)
+	assert_eq(PokeModIndex.followed(store)[1]["label"], "someone/mods")
 
 	# The same feed reached by another URL shape is still the same feed.
-	var again: Dictionary = Gen2ModIndex.follow("https://github.com/someone/mods", store)
+	var again: Dictionary = PokeModIndex.follow("https://github.com/someone/mods", store)
 	assert_true(again["ok"])
 	assert_false(again["added"])
-	assert_eq(Gen2ModIndex.followed(store).size(), 2)
+	assert_eq(PokeModIndex.followed(store).size(), 2)
 
-	Gen2ModIndex.unfollow(added["feed"], store)
-	assert_eq(Gen2ModIndex.followed(store).size(), 1)
+	PokeModIndex.unfollow(added["feed"], store)
+	assert_eq(PokeModIndex.followed(store).size(), 1)
 
 
 ## A build that lost its own source would list nothing on a fresh install, and
@@ -1146,20 +1146,20 @@ func test_following_an_index_persists_it_and_never_duplicates_a_feed() -> void:
 func test_the_built_in_source_is_in_every_build_and_cannot_be_dropped() -> void:
 	var store: String = "%s/built_in.json" % ROOT
 	DirAccess.make_dir_recursive_absolute(ROOT)
-	assert_true(Gen2ModIndex.BUILT_IN_FEED.begins_with("https://"))
-	assert_true(Gen2ModIndex.is_built_in_source(Gen2ModIndex.BUILT_IN_FEED))
-	assert_false(Gen2ModIndex.is_built_in_source("https://example.com/index.json"))
+	assert_true(PokeModIndex.BUILT_IN_FEED.begins_with("https://"))
+	assert_true(PokeModIndex.is_built_in_source(PokeModIndex.BUILT_IN_FEED))
+	assert_false(PokeModIndex.is_built_in_source("https://example.com/index.json"))
 	# Resolving its own URL must land on itself, or the row and the fetch would
 	# be two different feeds.
 	assert_eq(
-		String(Gen2ModIndex.resolve_source(Gen2ModIndex.BUILT_IN_FEED)["feed"]),
-		Gen2ModIndex.BUILT_IN_FEED,
+		String(PokeModIndex.resolve_source(PokeModIndex.BUILT_IN_FEED)["feed"]),
+		PokeModIndex.BUILT_IN_FEED,
 	)
 
-	Gen2ModIndex.unfollow(Gen2ModIndex.BUILT_IN_FEED, store)
-	assert_eq(Gen2ModIndex.followed(store).size(), 1, "unfollowing it does nothing")
+	PokeModIndex.unfollow(PokeModIndex.BUILT_IN_FEED, store)
+	assert_eq(PokeModIndex.followed(store).size(), 1, "unfollowing it does nothing")
 
-	var again: Dictionary = Gen2ModIndex.follow(Gen2ModIndex.BUILT_IN_FEED, store)
+	var again: Dictionary = PokeModIndex.follow(PokeModIndex.BUILT_IN_FEED, store)
 	assert_true(again["ok"])
 	assert_false(again["added"], "following it again adds nothing")
 	assert_false(FileAccess.file_exists(store), "and nothing is written for it")
@@ -1167,13 +1167,13 @@ func test_the_built_in_source_is_in_every_build_and_cannot_be_dropped() -> void:
 	# A file that names it anyway, from a build that stored it, lists it once.
 	var file: FileAccess = FileAccess.open(store, FileAccess.WRITE)
 	file.store_string(JSON.stringify([
-		{"feed": Gen2ModIndex.BUILT_IN_FEED, "label": "stale label"},
+		{"feed": PokeModIndex.BUILT_IN_FEED, "label": "stale label"},
 		{"feed": "https://example.com/index.json", "label": "theirs"},
 	]))
 	file.close()
-	var rows: Array[Dictionary] = Gen2ModIndex.followed(store)
+	var rows: Array[Dictionary] = PokeModIndex.followed(store)
 	assert_eq(rows.size(), 2)
-	assert_eq(rows[0]["label"], Gen2ModIndex.BUILT_IN_LABEL)
+	assert_eq(rows[0]["label"], PokeModIndex.BUILT_IN_LABEL)
 	assert_eq(rows[1]["label"], "theirs")
 	DirAccess.remove_absolute(store)
 
@@ -1185,21 +1185,21 @@ func test_a_fetched_feed_is_cached_and_dropped_with_the_index() -> void:
 	var store: String = "%s/indexes.json" % ROOT
 	DirAccess.make_dir_recursive_absolute(ROOT)
 	var cache: String = "%s/index_cache" % ROOT
-	var feed: String = Gen2ModIndex.follow("someone/mods", store)["feed"]
-	assert_false(Gen2ModIndex.cached_feed(feed, cache)["ok"], "nothing cached before a fetch")
+	var feed: String = PokeModIndex.follow("someone/mods", store)["feed"]
+	assert_false(PokeModIndex.cached_feed(feed, cache)["ok"], "nothing cached before a fetch")
 
-	assert_true(Gen2ModIndex.cache_feed(feed, _feed([
+	assert_true(PokeModIndex.cache_feed(feed, _feed([
 		{"id": "voxel", "name": "Voxel", "version": "1.2.0",
 			"download": "https://example.com/voxel.zip"},
 	]), cache))
-	var cached: Dictionary = Gen2ModIndex.cached_feed(feed, cache)
+	var cached: Dictionary = PokeModIndex.cached_feed(feed, cache)
 	assert_true(cached["ok"], JSON.stringify(cached))
 	assert_eq((cached["entries"] as Array).size(), 1)
 	assert_eq(cached["entries"][0]["id"], &"voxel")
 	assert_true(int(cached["age"]) >= 0)
 
-	Gen2ModIndex.forget_cache(feed, cache)
-	assert_eq(Gen2ModIndex.cached_feed(feed, cache)["reason"], &"index_not_cached")
+	PokeModIndex.forget_cache(feed, cache)
+	assert_eq(PokeModIndex.cached_feed(feed, cache)["reason"], &"index_not_cached")
 
 
 ## A cache file that no longer parses costs the listing and nothing else.
@@ -1207,22 +1207,22 @@ func test_an_unreadable_cache_is_refused_like_any_other_feed() -> void:
 	var cache: String = "%s/index_cache" % ROOT
 	var feed: String = "https://mods.example.com/index.json"
 	DirAccess.make_dir_recursive_absolute(cache)
-	_write(Gen2ModIndex.cache_path(feed, cache), "{not json")
-	assert_eq(Gen2ModIndex.cached_feed(feed, cache)["reason"], &"index_not_cached")
+	_write(PokeModIndex.cache_path(feed, cache), "{not json")
+	assert_eq(PokeModIndex.cached_feed(feed, cache)["reason"], &"index_not_cached")
 
 
 ## What a listed version is to the copy on disk. A version either side cannot
 ## order is said to be unknown rather than guessed at: a feed is a stranger's
 ## file, and a version it made up is no reason to offer an update.
 func test_a_listed_version_is_compared_against_the_installed_one() -> void:
-	assert_eq(Gen2ModIndex.update_state("1.2.0", ""), Gen2ModIndex.NOT_INSTALLED)
-	assert_eq(Gen2ModIndex.update_state("1.2.0", "1.1.9"), Gen2ModIndex.UPDATE_AVAILABLE)
-	assert_eq(Gen2ModIndex.update_state("1.2.0", "1.2.0"), Gen2ModIndex.UP_TO_DATE)
-	assert_eq(Gen2ModIndex.update_state("1.2.0", "1.3.0"), Gen2ModIndex.INSTALLED_IS_NEWER)
-	assert_eq(Gen2ModIndex.update_state("latest", "1.2.0"), Gen2ModIndex.UNKNOWN)
-	assert_eq(Gen2ModIndex.update_state("", "1.2.0"), Gen2ModIndex.UNKNOWN)
+	assert_eq(PokeModIndex.update_state("1.2.0", ""), PokeModIndex.NOT_INSTALLED)
+	assert_eq(PokeModIndex.update_state("1.2.0", "1.1.9"), PokeModIndex.UPDATE_AVAILABLE)
+	assert_eq(PokeModIndex.update_state("1.2.0", "1.2.0"), PokeModIndex.UP_TO_DATE)
+	assert_eq(PokeModIndex.update_state("1.2.0", "1.3.0"), PokeModIndex.INSTALLED_IS_NEWER)
+	assert_eq(PokeModIndex.update_state("latest", "1.2.0"), PokeModIndex.UNKNOWN)
+	assert_eq(PokeModIndex.update_state("", "1.2.0"), PokeModIndex.UNKNOWN)
 
-	assert_eq(Gen2ModIndex.update_count([
+	assert_eq(PokeModIndex.update_count([
 		{"id": &"voxel", "version": "1.2.0"},
 		{"id": &"other", "version": "0.1.0"},
 		{"id": &"absent", "version": "9.9.9"},
@@ -1232,8 +1232,8 @@ func test_a_listed_version_is_compared_against_the_installed_one() -> void:
 func test_following_a_refused_url_stores_nothing() -> void:
 	var store: String = "%s/indexes.json" % ROOT
 	DirAccess.make_dir_recursive_absolute(ROOT)
-	assert_false(Gen2ModIndex.follow("http://mods.example.com/", store)["ok"])
-	assert_eq(Gen2ModIndex.followed(store).size(), 1, "the built-in one and nothing else")
+	assert_false(PokeModIndex.follow("http://mods.example.com/", store)["ok"])
+	assert_eq(PokeModIndex.followed(store).size(), 1, "the built-in one and nothing else")
 
 
 func test_menu_entries_are_registered_per_menu_and_kept_in_order() -> void:
@@ -1327,7 +1327,7 @@ func test_a_registered_action_is_bound_and_arrives_as_its_own_id() -> void:
 	assert_eq(StringName(actions[0]["name"]), &"mod_voxel_pitch_up")
 	assert_eq(actions[0]["default"], [{"kind": &"key", "code": KEY_R}])
 
-	Gen2InputActions.install_mod_actions(actions, {})
+	PokeInputActions.install_mod_actions(actions, {})
 	assert_true(InputMap.has_action(&"mod_voxel_pitch_up"))
 
 	var heard: Array = []
@@ -1342,7 +1342,7 @@ func test_a_registered_action_is_bound_and_arrives_as_its_own_id() -> void:
 	host.emit_action(seen["id"], seen["key"], true)
 	assert_eq(heard, [[&"voxel", &"pitch_up", true]])
 
-	Gen2InputActions.install_mod_actions([], {})
+	PokeInputActions.install_mod_actions([], {})
 	assert_false(
 		InputMap.has_action(&"mod_voxel_pitch_up"),
 		"a mod that is no longer loaded leaves no live action behind"
@@ -1353,7 +1353,7 @@ func test_registered_actions_form_named_axes_and_a_bounded_vector() -> void:
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	for key: StringName in [&"left", &"right", &"up", &"down"]:
 		assert_true(host.register_action(&"camera", {"key": key, "label": String(key)})["ok"])
-	Gen2InputActions.install_mod_actions(host.actions(), {})
+	PokeInputActions.install_mod_actions(host.actions(), {})
 	Input.action_press(&"mod_camera_right", 0.8)
 	Input.action_press(&"mod_camera_down", 0.8)
 	assert_almost_eq(host.action_axis(&"camera", &"left", &"right"), 0.8, 0.001)
@@ -1385,7 +1385,7 @@ func test_a_default_already_on_one_of_the_eight_is_dropped_and_reported() -> voi
 		"only the binding that would never have fired is gone"
 	)
 	assert_eq(StringName(host.failures()[-1]["reason"]), &"action_default_taken")
-	assert_string_contains(Gen2ModRefusal.text(host.failures()[-1]), "Up")
+	assert_string_contains(PokeModRefusal.text(host.failures()[-1]), "Up")
 
 
 func test_actions_refuse_a_missing_label_and_a_second_registration() -> void:
@@ -1421,7 +1421,7 @@ func test_a_button_setting_stores_nothing_and_acts_on_the_press() -> void:
 	assert_true(host.press_option(&"voxel", &"recentre")["ok"])
 	assert_eq(heard, [[&"voxel", &"recentre", null]])
 	assert_null(
-		Gen2ModOptions.value(&"voxel", &"recentre"), "a press is not a stored value"
+		PokeModOptions.value(&"voxel", &"recentre"), "a press is not a stored value"
 	)
 
 	assert_true(host.register_option(&"voxel", {
@@ -1437,7 +1437,7 @@ func test_a_button_setting_stores_nothing_and_acts_on_the_press() -> void:
 func test_a_number_setting_is_one_field_rather_than_a_ladder_of_digits() -> void:
 	# Values are per installation and outlive a host reset, so this owns the key
 	# it writes on both sides of the test.
-	Gen2ModOptions.forget(&"voxel")
+	PokeModOptions.forget(&"voxel")
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	assert_true(host.register_option(&"voxel", {
 		"key": &"seed", "label": "Seed", "kind": Gen2ModHost.OPTION_NUMBER,
@@ -1454,7 +1454,7 @@ func test_a_number_setting_is_one_field_rather_than_a_ladder_of_digits() -> void
 	)
 	assert_true(host.set_option(&"voxel", &"seed", 4321)["ok"])
 	assert_eq(heard, [4321])
-	assert_eq(Gen2ModOptions.value(&"voxel", &"seed"), 4321, "stored like any other value")
+	assert_eq(PokeModOptions.value(&"voxel", &"seed"), 4321, "stored like any other value")
 	# Either surface steps a number the same way it steps a ladder, and a
 	# number stops at its own end rather than wrapping into the other one.
 	assert_eq(int(host.adjust_option(&"voxel", &"seed", 1)["value"]), 4322)
@@ -1471,7 +1471,7 @@ func test_a_number_setting_is_one_field_rather_than_a_ladder_of_digits() -> void
 		})["reason"],
 		&"option_range_inverted"
 	)
-	Gen2ModOptions.forget(&"voxel")
+	PokeModOptions.forget(&"voxel")
 
 
 func test_a_loaded_mod_survives_its_own_registration() -> void:
@@ -1490,10 +1490,10 @@ func test_a_loaded_mod_survives_its_own_registration() -> void:
 ## The catalogue is where a mod's origin is decided, and origin is what makes
 ## removing one reversible or not. Nothing is written down for it: a mod belongs
 ## to the source that lists its id, and a mod nothing lists came from a file.
-func _manifest(id: String, version: String) -> Gen2ModManifest:
-	var made: Dictionary = Gen2ModManifest.from_dictionary({
+func _manifest(id: String, version: String) -> PokeModManifest:
+	var made: Dictionary = PokeModManifest.from_dictionary({
 		"id": id, "name": id.capitalize(), "version": version,
-		"api_version": Gen2ModManifest.API_VERSION, "entry": "mod.gd",
+		"api_version": PokeModManifest.API_VERSION, "entry": "mod.gd",
 	}, "%s/%s" % [ROOT, id])
 	return made["manifest"]
 
@@ -1558,7 +1558,7 @@ func test_a_tool_run_lists_the_mods_it_finds_and_runs_none_of_them() -> void:
 	assert_eq(GameRuntime.load_mods(), [], "nothing was run")
 	assert_true(
 		Gen2ModHost.instance().manifests().any(
-			func(manifest: Gen2ModManifest) -> bool: return manifest.id == &"quiet"
+			func(manifest: PokeModManifest) -> bool: return manifest.id == &"quiet"
 		),
 		"and the list is still right"
 	)
@@ -1717,7 +1717,7 @@ func test_a_chosen_view_survives_a_reload_and_falls_back_when_its_mod_is_gone() 
 
 
 ## A tiny square PNG on disk, which is what a mod's icon is.
-func _write_icon(path: String, side: int = Gen2ModArt.ICON_SIDE) -> void:
+func _write_icon(path: String, side: int = PokeModArt.ICON_SIDE) -> void:
 	var image: Image = Image.create_empty(side, side, false, Image.FORMAT_RGBA8)
 	image.fill(Color.REBECCA_PURPLE)
 	image.save_png(path)
@@ -1727,20 +1727,20 @@ func test_a_mod_gets_its_icon_and_thumbnail_by_dropping_them_beside_the_manifest
 	_write_manifest(_valid_manifest())
 	_write_icon("%s/icon.png" % _directory)
 	_write_icon("%s/thumbnail.webp" % _directory)
-	var read: Dictionary = Gen2ModManifest.read(_directory)
+	var read: Dictionary = PokeModManifest.read(_directory)
 	assert_true(read["ok"], "a mod carrying art is an ordinary mod")
-	var manifest: Gen2ModManifest = read["manifest"]
-	assert_eq(Gen2ModArt.icon_path(manifest), "%s/icon.png" % _directory)
-	assert_eq(Gen2ModArt.thumbnail_path(manifest), "%s/thumbnail.webp" % _directory)
-	assert_not_null(Gen2ModArt.icon_texture(Gen2ModArt.icon_path(manifest)))
+	var manifest: PokeModManifest = read["manifest"]
+	assert_eq(PokeModArt.icon_path(manifest), "%s/icon.png" % _directory)
+	assert_eq(PokeModArt.thumbnail_path(manifest), "%s/thumbnail.webp" % _directory)
+	assert_not_null(PokeModArt.icon_texture(PokeModArt.icon_path(manifest)))
 
 
 func test_a_mod_with_no_art_answers_with_nothing_rather_than_a_missing_path() -> void:
 	_write_manifest(_valid_manifest())
-	var manifest: Gen2ModManifest = Gen2ModManifest.read(_directory)["manifest"]
-	assert_eq(Gen2ModArt.icon_path(manifest), "")
-	assert_eq(Gen2ModArt.thumbnail_path(manifest), "")
-	assert_null(Gen2ModArt.icon_texture(""))
+	var manifest: PokeModManifest = PokeModManifest.read(_directory)["manifest"]
+	assert_eq(PokeModArt.icon_path(manifest), "")
+	assert_eq(PokeModArt.thumbnail_path(manifest), "")
+	assert_null(PokeModArt.icon_texture(""))
 
 
 func test_a_declared_icon_wins_and_one_that_leaves_the_mod_directory_is_refused() -> void:
@@ -1752,29 +1752,29 @@ func test_a_declared_icon_wins_and_one_that_leaves_the_mod_directory_is_refused(
 	var source: Dictionary = _valid_manifest()
 	source["icon"] = "art/face.png"
 	_write_manifest(source)
-	var manifest: Gen2ModManifest = Gen2ModManifest.read(_directory)["manifest"]
-	assert_eq(Gen2ModArt.icon_path(manifest), "%s/art/face.png" % _directory)
+	var manifest: PokeModManifest = PokeModManifest.read(_directory)["manifest"]
+	assert_eq(PokeModArt.icon_path(manifest), "%s/art/face.png" % _directory)
 
 	source["icon"] = "../../elsewhere/icon.png"
 	_write_manifest(source)
-	var escaped: Dictionary = Gen2ModManifest.read(_directory)
+	var escaped: Dictionary = PokeModManifest.read(_directory)
 	assert_false(escaped["ok"])
 	assert_eq(escaped["reason"], &"art_escapes_mod")
 
 
 func test_art_that_is_not_an_image_or_is_far_too_large_is_not_drawn() -> void:
 	_write("%s/icon.png" % _directory, "this is not a png")
-	assert_null(Gen2ModArt.icon_texture("%s/icon.png" % _directory), "rubbish decodes to nothing")
-	_write_icon("%s/big.png" % _directory, Gen2ModArt.MAX_ICON_SIDE + 8)
+	assert_null(PokeModArt.icon_texture("%s/icon.png" % _directory), "rubbish decodes to nothing")
+	_write_icon("%s/big.png" % _directory, PokeModArt.MAX_ICON_SIDE + 8)
 	assert_null(
-		Gen2ModArt.icon_texture("%s/big.png" % _directory),
+		PokeModArt.icon_texture("%s/big.png" % _directory),
 		"an icon past the side cap is refused rather than decoded"
 	)
 
 
 func test_a_listing_keeps_only_art_it_could_actually_fetch() -> void:
-	var parsed: Dictionary = Gen2ModIndex.parse_feed(JSON.stringify({
-		"schema_version": Gen2ModIndex.SCHEMA_VERSION,
+	var parsed: Dictionary = PokeModIndex.parse_feed(JSON.stringify({
+		"schema_version": PokeModIndex.SCHEMA_VERSION,
 		"mods": [{
 			"id": "voxel", "name": "Voxel", "version": "1.0.0",
 			"download": "https://example.test/voxel.zip",
@@ -1818,16 +1818,16 @@ func test_a_row_carries_the_installed_icon_and_the_listing_falls_back_to_its_url
 func test_a_fetched_icon_is_cached_and_read_back_without_the_network() -> void:
 	var directory: String = "%s/icon_cache" % ROOT
 	var url: String = "https://example.test/voxel/icon.png"
-	assert_true(Gen2ModArt.wants_fetch(url, directory), "nothing cached yet")
+	assert_true(PokeModArt.wants_fetch(url, directory), "nothing cached yet")
 	assert_false(
-		Gen2ModArt.wants_fetch("http://example.test/icon.png", directory),
+		PokeModArt.wants_fetch("http://example.test/icon.png", directory),
 		"plain http is never fetched"
 	)
 	_write_icon("%s/source.png" % _directory)
 	var bytes: PackedByteArray = FileAccess.get_file_as_bytes("%s/source.png" % _directory)
-	assert_true(Gen2ModArt.cache_icon(url, bytes, directory))
-	assert_false(Gen2ModArt.wants_fetch(url, directory), "and not fetched twice")
-	assert_not_null(Gen2ModArt.cached_icon(url, directory))
+	assert_true(PokeModArt.cache_icon(url, bytes, directory))
+	assert_false(PokeModArt.wants_fetch(url, directory), "and not fetched twice")
+	assert_not_null(PokeModArt.cached_icon(url, directory))
 
 
 ## The object registrations added for the Quality of Life seams all go through
@@ -1836,7 +1836,7 @@ func test_a_fetched_icon_is_cached_and_read_back_without_the_network() -> void:
 ## claim per id.
 func test_the_provider_registrations_share_one_set_of_rules() -> void:
 	var host: Gen2ModHost = Gen2ModHost.instance()
-	var manifest: Gen2ModManifest = _loaded_manifest()
+	var manifest: PokeModManifest = _loaded_manifest()
 	var node := Node2D.new()
 	var empty := GDScript.new()
 	empty.source_code = "extends RefCounted\n"
@@ -1884,7 +1884,7 @@ func test_the_provider_registrations_share_one_set_of_rules() -> void:
 
 	## The catch policy is save bound, so a manifest this host never discovered
 	## is not the capability even with the right id.
-	var stranger := Gen2ModManifest.new()
+	var stranger := PokeModManifest.new()
 	stranger.id = manifest.id
 	var same := GDScript.new()
 	same.source_code = "extends RefCounted\nfunc awards_catch_experience() -> bool:\n\treturn true\n"
@@ -1905,7 +1905,7 @@ func test_the_field_move_repel_and_catch_answers_are_off_until_a_mod_registers()
 	assert_false(Gen2ModHost.awards_catch_experience())
 
 	var host: Gen2ModHost = Gen2ModHost.instance()
-	var manifest: Gen2ModManifest = _loaded_manifest()
+	var manifest: PokeModManifest = _loaded_manifest()
 	var source := GDScript.new()
 	source.source_code = """extends RefCounted
 func allows_field_move(move: int) -> bool:
@@ -1988,7 +1988,7 @@ func test_a_start_menu_entry_without_a_predicate_is_always_listed() -> void:
 
 ## The run button is the mod's switch and the button is the host's, so neither
 ## alone runs. `Input.action_press` is what stands in for a held B: the host asks
-## `Gen2Button`, which is the same read the world's own poll makes.
+## `PokeButton`, which is the same read the world's own poll makes.
 func test_running_needs_both_a_provider_and_the_button() -> void:
 	Gen2ModHost.reset()
 	assert_false(Gen2ModHost.run_button_held(), "no host at all")
@@ -2005,11 +2005,11 @@ func runs_while_held() -> bool:
 	assert_true(bool(host.register_run_button(&"shoes", provider).get("ok", false)))
 	assert_false(Gen2ModHost.run_button_held(), "the button is not down")
 
-	Input.action_press(Gen2Button.ACTIONS[Gen2Button.B])
+	Input.action_press(PokeButton.ACTIONS[PokeButton.B])
 	assert_true(Gen2ModHost.run_button_held())
 	provider.set("on", false)
 	assert_false(Gen2ModHost.run_button_held(), "read on the step, not once")
-	Input.action_release(Gen2Button.ACTIONS[Gen2Button.B])
+	Input.action_release(PokeButton.ACTIONS[PokeButton.B])
 
 
 ## Two scales multiply, an answer that is not a number is dropped rather than
@@ -2019,7 +2019,7 @@ func test_experience_scales_multiply_and_are_held_inside_the_hosts_range() -> vo
 	assert_eq(Gen2ModHost.experience_scale(), 1.0, "no host at all")
 
 	var host: Gen2ModHost = Gen2ModHost.instance()
-	var manifest: Gen2ModManifest = _loaded_manifest()
+	var manifest: PokeModManifest = _loaded_manifest()
 	var policy := GDScript.new()
 	policy.source_code = """extends RefCounted
 var value: float = 2.0
@@ -2048,7 +2048,7 @@ func test_a_bystander_share_is_exclusive_and_held_inside_the_hosts_range() -> vo
 	assert_eq(Gen2ModHost.experience_bystander_share({}), 0.0, "no host at all")
 
 	var host: Gen2ModHost = Gen2ModHost.instance()
-	var manifest: Gen2ModManifest = _loaded_manifest()
+	var manifest: PokeModManifest = _loaded_manifest()
 	var policy := GDScript.new()
 	policy.source_code = """extends RefCounted
 var value: float = 0.5
@@ -2064,7 +2064,7 @@ func experience_bystander_share(context: Dictionary) -> float:
 	assert_eq(Gen2ModHost.experience_bystander_share({"living": [0, 1]}), 0.5)
 	assert_eq((provider.get("seen") as Dictionary)["living"], [0, 1])
 
-	var second := Gen2ModManifest.new()
+	var second := PokeModManifest.new()
 	second.id = &"other"
 	host._manifests[second.id] = second
 	assert_eq(
@@ -2091,7 +2091,7 @@ func experience_bystander_share(context: Dictionary) -> float:
 func test_a_registered_bystander_share_pays_the_rest_of_the_party() -> void:
 	Gen2ModHost.reset()
 	var host: Gen2ModHost = Gen2ModHost.instance()
-	var manifest: Gen2ModManifest = _loaded_manifest()
+	var manifest: PokeModManifest = _loaded_manifest()
 	var policy := GDScript.new()
 	policy.source_code = """extends RefCounted
 var value: float = 0.0
@@ -2188,7 +2188,7 @@ func experience_bystander_share(_context: Dictionary) -> float:
 func test_a_registered_scale_moves_the_award_and_leaves_stat_experience_alone() -> void:
 	Gen2ModHost.reset()
 	var host: Gen2ModHost = Gen2ModHost.instance()
-	var manifest: Gen2ModManifest = _loaded_manifest()
+	var manifest: PokeModManifest = _loaded_manifest()
 	var policy := GDScript.new()
 	policy.source_code = """extends RefCounted
 var value: float = 1.0

@@ -47,7 +47,7 @@ Five boundaries are load-bearing and not obvious from one file:
   a `.bin` blob. Only a named `bytes` field moves.
 - **World sections load on first use:** the launcher, pic viewer and battle
   never read scripts, text or audio.
-- **Never match a keycode in a screen; match a `Gen2Button`:** an embedded host
+- **Never match a keycode in a screen; match a `PokeButton`:** an embedded host
   takes `handle_button(button)`, so a test presses a button, not a key.
 - **Anything printed is already in the bug report:** `Gen2Diagnostics` installs
   a [Logger] with `OS.add_logger`, so every `print`, `push_warning`,
@@ -75,18 +75,47 @@ not corrected.
 trace. That trace is the parity artefact: any faithful implementation of the
 same driver writes the same registers in the same order on the same frames.
 
+## Generations
+
+Each generation owns its offsets, its importer and its text codec, and shares
+nothing else with another: a Generation 1 table has neither the record sizes nor
+the banking of a Generation 2 one, and a Generation 3 cartridge has neither of
+either. What is shared is the ROM layer, the cache and `GameData`.
+
+| Layer | Shared | Per generation |
+|---|---|---|
+| Dump | `RomFile`, `RomHeader`, `RomVerifier`, `RomRegistry` | the row's `generation` and `playable` |
+| Offsets | | `Gen1Layout`, `Gen2Layout` |
+| Text | | `Gen1Text`, `Gen2Text` |
+| Decode | `RomImport` chooses one | `Gen1Importer`, `RomImporter` |
+| Cache | `RomCache`, `GameData` | which sections get written |
+
+`RomImport` is the only place an importer is named, so adding a generation is a
+row there, a row in `RomRegistry` and nothing in the launcher. A class keeps a
+`Gen<n>` prefix while it encodes that generation's behaviour and takes the
+`Poke` prefix when a second generation uses it and it names no `Gen<n>` class
+itself; today that is 29 of them, and the count grows as work is genuinely
+shared rather than by renaming ahead of it.
+
+A generation whose importer runs and whose world is not built is `playable:
+false` in `RomRegistry`. The launcher seats such a cartridge, reads it and
+offers no Play; `main.gd`'s `_launch_game` is the one place that refuses.
+
 ## Offsets
 
-`rom_layout.gd` holds absolute positions per dump, and wrong offsets decode
-plausible neighbouring data, so `RomImporter.verify_layout()` runs every check
-before decoding. **When you add an offset, add its check** in the same commit;
-the checks themselves are the list, and they are in that function.
+`gen1_layout.gd` and `rom_layout.gd` hold absolute positions per dump, and wrong
+offsets decode plausible neighbouring data, so each generation's
+`verify_layout()` runs every check before decoding. **When you add an offset,
+add its check** in the same commit; the checks themselves are the list.
 
 Find data by searching a dump for independently known bytes (an encoded name,
 published base stats), then confirm structure against
-[pret](https://github.com/pret). Never copy an address across games: bank and
-address pairs differ. For graphics, encode the reference PNG as cartridge 1bpp,
-one byte per row with bit 7 leftmost, and search for the exact sequence.
+[pret](https://github.com/pret). Where a pinned disassembly builds the dump byte
+for byte, its `.sym` file gives the address outright and is better evidence;
+[REFERENCES.md](REFERENCES.md) says how. Never copy an address across games:
+bank and address pairs differ. For graphics, encode the reference PNG as
+cartridge 1bpp, one byte per row with bit 7 leftmost, and search for the exact
+sequence.
 
 ## Verifying
 
@@ -177,7 +206,7 @@ It writes the Debugger panel's whole list to `user://editor_errors.txt`, engine
 errors included, which is how a mod's `user://` scripts are seen. The panel holds
 what the session has analysed, so reload the project first for a full sweep.
 
-A tool that takes an output path guards it with `Gen2ToolPath.refuses()` before
+A tool that takes an output path guards it with `PokeToolPath.refuses()` before
 doing any work. A tool runs with `--path <this project>`, so a bare `out.png`
 lands in the checkout and the editor makes an `.import` beside it. The test is
 where the path resolves, not how it is spelt: `res://out.png` is absolute to
@@ -217,7 +246,7 @@ rather than behind a platform name:
 
 - Godot's `ui_accept` carries three keys and no pad button, so a machine with no
   keyboard could move every focus ring and choose nothing under it.
-  `Gen2InputActions.UI_PAD_BUTTONS` gives it one.
+  `PokeInputActions.UI_PAD_BUTTONS` gives it one.
 - The launcher draws in device-independent points, and a platform that cannot
   open a second window is one whose window is the whole screen and whose sizes
   are physical pixels. `Gen2LauncherUI.draws_in_screen_pixels` asks the display
@@ -280,7 +309,7 @@ subject. Before creating any file, name the existing one it cannot go in.
   is not obvious. Never restate the line below, no section banners, no doc
   comment on a self-evident function, and no paragraph of prose about a decision
   the code makes plainly. A comment explaining a workaround is a bug report: fix
-  the code instead. `rom_layout.gd` records how an offset was located, which is
+  the code instead. A layout file records how an offset was located, which is
   evidence for a number rather than restatement, and is still held to the cap.
 
 When something changes, replace the old text. Never append a correction.
@@ -295,7 +324,7 @@ the suite.
 |---|---|
 | Cyclomatic complexity of one function | 20 |
 | Lines in one comment block | 8 |
-| Comment lines under `game/`, `tools/` and `autoload/` | the number recorded in the test, which only goes down |
+| Comment lines under `game/`, `tools/` and `autoload/` | the number recorded in the test, which goes down except for a generation the tree did not carry before |
 
 Complexity counts `if`, `elif`, `while`, `for`, `and`, `or`, an inline `if` and
 one per `match` arm. Over the ceiling, the remedy is a lookup table, a guard

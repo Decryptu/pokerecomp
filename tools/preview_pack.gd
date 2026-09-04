@@ -11,9 +11,9 @@ const NEW_BARK_GROUP: int = 24
 const NEW_BARK_MAP: int = 7
 
 const BUTTONS: Dictionary = {
-	"u": Gen2Button.UP, "d": Gen2Button.DOWN,
-	"l": Gen2Button.LEFT, "r": Gen2Button.RIGHT,
-	"a": Gen2Button.A, "b": Gen2Button.B, "s": Gen2Button.SELECT,
+	"u": PokeButton.UP, "d": PokeButton.DOWN,
+	"l": PokeButton.LEFT, "r": PokeButton.RIGHT,
+	"a": PokeButton.A, "b": PokeButton.B, "s": PokeButton.SELECT,
 }
 
 ## Which presses each pocket is reached by, since the pack opens on Items and
@@ -56,7 +56,7 @@ func _capture() -> void:
 		)
 		quit(1)
 		return
-	if Gen2ToolPath.refuses(args[1]):
+	if PokeToolPath.refuses(args[1]):
 		quit(2)
 		return
 	var data: GameData = GameData.open(StringName(args[0]))
@@ -97,9 +97,9 @@ func _capture() -> void:
 		if StringName((rows[index] as Dictionary).get("kind", &"")) \
 			== Gen2WorldStartMenu.ITEM_PACK:
 			for _step: int in index - menu.cursor:
-				host.handle_button(Gen2Button.DOWN)
+				host.handle_button(PokeButton.DOWN)
 			break
-	host.handle_button(Gen2Button.A)
+	host.handle_button(PokeButton.A)
 	for token: String in tokens.split(",", false):
 		var key: String = token.strip_edges().to_lower()
 		if BUTTONS.has(key):

@@ -26,7 +26,7 @@ var palette: PackedColorArray = PackedColorArray()
 ## The strip as one row of tiles, and the code its first tile draws.
 var _indices: PackedByteArray = PackedByteArray()
 var _width: int = 0
-var _first_code: int = RomLayout.COPYRIGHT_FIRST_CODE
+var _first_code: int = Gen2Layout.COPYRIGHT_FIRST_CODE
 var _tiles: int = 0
 var _string: PackedByteArray = PackedByteArray()
 
@@ -45,7 +45,7 @@ static func from_data(data: GameData) -> Gen2CopyrightPage:
 	out._indices = indices
 	out._width = int(sheet.get("width", 0))
 	out._tiles = int(sheet.get("tiles", 0))
-	out._first_code = int(sheet.get("first_code", RomLayout.COPYRIGHT_FIRST_CODE))
+	out._first_code = int(sheet.get("first_code", Gen2Layout.COPYRIGHT_FIRST_CODE))
 	out._string = codes
 	out.palette = data.copyright_palette()
 	if out._width <= 0 or out._tiles <= 0:
@@ -63,11 +63,11 @@ func draw() -> PackedByteArray:
 	var page := PackedByteArray()
 	page.resize(width * ROWS * TILE)
 	page.fill(BLANK_INDEX)
-	var at: Vector2i = RomLayout.COPYRIGHT_AT
+	var at: Vector2i = Gen2Layout.COPYRIGHT_AT
 	var column: int = 0
 	var row: int = 0
 	for code: int in _string:
-		if code == RomLayout.COPYRIGHT_STRING_NEXT:
+		if code == Gen2Layout.COPYRIGHT_STRING_NEXT:
 			row += ROW_STRIDE
 			column = 0
 			continue

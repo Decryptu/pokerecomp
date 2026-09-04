@@ -135,9 +135,9 @@ func _summary(row: Dictionary) -> Control:
 	# What it is for, so a player reads it before pressing Play rather than after
 	# the mod refused to load. A mod that declares nothing is for every cartridge
 	# and says nothing here.
-	var manifest: Gen2ModManifest = row["manifest"]
+	var manifest: PokeModManifest = row["manifest"]
 	var titles: Array[String] = manifest.game_titles() if manifest != null \
-		else Gen2ModManifest.titles_for(row.get("listed_games", []))
+		else PokeModManifest.titles_for(row.get("listed_games", []))
 	if not titles.is_empty():
 		column.add_child(Gen2LauncherUI.stacked(_theme, "For", _value(", ".join(titles))))
 
@@ -170,11 +170,11 @@ func _summary(row: Dictionary) -> Control:
 ## the list already fetched for it. This page never asks the network: it is
 ## reached by pressing a row that has drawn the same picture already.
 func _draw_icon(row: Dictionary) -> void:
-	var texture: Texture2D = Gen2ModArt.icon_texture(String(row.get("icon", "")))
+	var texture: Texture2D = PokeModArt.icon_texture(String(row.get("icon", "")))
 	if texture == null:
 		var url: String = String(row.get("icon_url", ""))
 		if not url.is_empty():
-			texture = Gen2ModArt.cached_icon(url)
+			texture = PokeModArt.cached_icon(url)
 	if Gen2LauncherUI.set_mod_icon(_icon, texture):
 		return
 	var art: Control = Gen2LauncherUI.mod_icon(_theme, texture)
@@ -268,7 +268,7 @@ func _option_field(id: StringName, option: Dictionary) -> Control:
 
 func _report(result: Dictionary) -> void:
 	if not bool(result.get("ok", false)):
-		set_status(Gen2ModRefusal.text(result), _theme.error)
+		set_status(PokeModRefusal.text(result), _theme.error)
 
 
 func set_status(message: String, colour: Color) -> void:

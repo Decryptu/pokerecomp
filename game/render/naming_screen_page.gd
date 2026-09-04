@@ -98,15 +98,15 @@ static func from_data(data: GameData) -> Gen2NamingScreenPage:
 		return null
 	var out := Gen2NamingScreenPage.new()
 	out.font = glyphs
-	out._load_sheet(data, "naming_border", out._tiles, BORDER_TILE, RomLayout.NAMING_BORDER_TILES)
+	out._load_sheet(data, "naming_border", out._tiles, BORDER_TILE, Gen2Layout.NAMING_BORDER_TILES)
 	out._load_sheet(
-		data, "naming_middle_line", out._tiles, MIDDLE_LINE_TILE, RomLayout.NAMING_MARKER_TILES
+		data, "naming_middle_line", out._tiles, MIDDLE_LINE_TILE, Gen2Layout.NAMING_MARKER_TILES
 	)
 	out._load_sheet(
-		data, "naming_under_line", out._tiles, UNDER_LINE_TILE, RomLayout.NAMING_MARKER_TILES
+		data, "naming_under_line", out._tiles, UNDER_LINE_TILE, Gen2Layout.NAMING_MARKER_TILES
 	)
 	out._load_sheet(
-		data, "naming_cursor", out._cursor_tiles, CURSOR_CORNER_TILE, RomLayout.NAMING_CURSOR_TILES
+		data, "naming_cursor", out._cursor_tiles, CURSOR_CORNER_TILE, Gen2Layout.NAMING_CURSOR_TILES
 	)
 	out._load_sheet(data, "mail_icon", out._icon_tiles, 0, MAIL_ICON_TILES)
 	return out

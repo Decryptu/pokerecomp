@@ -91,7 +91,7 @@ func animation_indices() -> PackedByteArray:
 
 ## `GetUnownLetter` over the row's DVs, which the screen runs before it draws.
 func _unown_form(mon: Gen2SaveMon) -> int:
-	if mon == null or mon.species != RomLayout.UNOWN_SPECIES:
+	if mon == null or mon.species != Gen2Layout.UNOWN_SPECIES:
 		return 0
 	return Gen2Stats.unown_letter(mon.dvs)
 
@@ -113,28 +113,28 @@ func handle_button(button: int) -> bool:
 	## rather than with a page: an egg has no pages to turn.
 	var egg: bool = current() != null and current().is_egg
 	match button:
-		Gen2Button.B:
+		PokeButton.B:
 			closed.emit()
 			return true
-		Gen2Button.A:
+		PokeButton.A:
 			if egg or _page == _last_page():
 				closed.emit()
 				return true
 			_turn_page(1)
 			return true
-		Gen2Button.RIGHT:
+		PokeButton.RIGHT:
 			if egg:
 				return false
 			_turn_page(1)
 			return true
-		Gen2Button.LEFT:
+		PokeButton.LEFT:
 			if egg:
 				return false
 			_turn_page(-1)
 			return true
-		Gen2Button.UP:
+		PokeButton.UP:
 			return _move_cursor(-1)
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			return _move_cursor(1)
 	return false
 

@@ -97,19 +97,19 @@ func test_an_unreadable_block_falls_back_rather_than_refusing_the_rest() -> void
 ## so it can only ever ask for bits the scorer already reads.
 func test_hard_rewrites_a_trainer_classes_own_ai_layers() -> void:
 	var rules := Gen2Rules.new()
-	var imported: int = RomLayout.AI_BASIC | RomLayout.AI_SMART
+	var imported: int = Gen2Layout.AI_BASIC | Gen2Layout.AI_SMART
 	assert_eq(rules.ai_move_weights(imported), imported, "vanilla is the cartridge's own")
 
 	rules.challenge = Gen2Rules.CHALLENGE_HARD
-	assert_eq(rules.ai_move_weights(imported), RomLayout.AI_MOVE_WEIGHTS_MASK)
+	assert_eq(rules.ai_move_weights(imported), Gen2Layout.AI_MOVE_WEIGHTS_MASK)
 	assert_eq(
-		rules.ai_move_weights(0) & ~RomLayout.AI_MOVE_WEIGHTS_MASK, 0,
+		rules.ai_move_weights(0) & ~Gen2Layout.AI_MOVE_WEIGHTS_MASK, 0,
 		"and never a bit the scorer does not read"
 	)
 
 	rules.challenge = Gen2Rules.CHALLENGE_NUZLOCKE
 	assert_eq(
-		rules.ai_move_weights(RomLayout.AI_BASIC | (1 << 15)), RomLayout.AI_BASIC,
+		rules.ai_move_weights(Gen2Layout.AI_BASIC | (1 << 15)), Gen2Layout.AI_BASIC,
 		"a patched trainer cannot smuggle one in either"
 	)
 
@@ -119,19 +119,19 @@ func test_hard_rewrites_a_trainer_classes_own_ai_layers() -> void:
 ## item bits where the cartridge put them.
 func test_hard_moves_every_trainer_class_onto_switch_often() -> void:
 	var rules := Gen2Rules.new()
-	var imported: int = RomLayout.SWITCH_RARELY | RomLayout.CONTEXT_USE
+	var imported: int = Gen2Layout.SWITCH_RARELY | Gen2Layout.CONTEXT_USE
 	assert_eq(rules.ai_item_switch(imported), imported, "vanilla is the cartridge's own")
 
 	rules.challenge = Gen2Rules.CHALLENGE_HARD
 	assert_eq(
-		rules.ai_item_switch(imported), RomLayout.SWITCH_OFTEN | RomLayout.CONTEXT_USE
+		rules.ai_item_switch(imported), Gen2Layout.SWITCH_OFTEN | Gen2Layout.CONTEXT_USE
 	)
 	assert_eq(
-		rules.ai_item_switch(RomLayout.SWITCH_SOMETIMES), RomLayout.SWITCH_OFTEN,
+		rules.ai_item_switch(Gen2Layout.SWITCH_SOMETIMES), Gen2Layout.SWITCH_OFTEN,
 		"and never two switch answers at once"
 	)
 	assert_eq(
-		rules.ai_item_switch(1 << 15) & ~RomLayout.AI_ITEM_SWITCH_MASK, 0,
+		rules.ai_item_switch(1 << 15) & ~Gen2Layout.AI_ITEM_SWITCH_MASK, 0,
 		"a patched class cannot smuggle a bit in"
 	)
 

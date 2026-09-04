@@ -30,14 +30,14 @@ const TIER_HIGH: int = 3
 ## written inverted ("don't switch if the roll is under") and are stated here as
 ## the chance of switching, which is what they come to.
 const CHANCES: Dictionary = {
-	RomLayout.SWITCH_OFTEN: {TIER_LOW: 128, TIER_MID: 200, TIER_HIGH: 246},
-	RomLayout.SWITCH_RARELY: {TIER_LOW: 20, TIER_MID: 30, TIER_HIGH: 56},
-	RomLayout.SWITCH_SOMETIMES: {TIER_LOW: 50, TIER_MID: 128, TIER_HIGH: 206},
+	Gen2Layout.SWITCH_OFTEN: {TIER_LOW: 128, TIER_MID: 200, TIER_HIGH: 246},
+	Gen2Layout.SWITCH_RARELY: {TIER_LOW: 20, TIER_MID: 30, TIER_HIGH: 56},
+	Gen2Layout.SWITCH_SOMETIMES: {TIER_LOW: 50, TIER_MID: 128, TIER_HIGH: 206},
 }
 
 ## `EFFECTIVE + 1`: the cartridge tests "super effective" as "more than neutral"
 ## against a tenths figure, so anything above ten counts.
-const SUPER_EFFECTIVE: int = RomLayout.MATCHUP_EFFECTIVE + 1
+const SUPER_EFFECTIVE: int = Gen2Layout.MATCHUP_EFFECTIVE + 1
 
 ## What `.CheckEnemyMoveMatchups` adds per enemy move, and the figure a single
 ## super-effective move jumps straight to.
@@ -53,7 +53,7 @@ const THREAT_LOW: int = 5
 ## Whether this trainer switches, and to which party index.
 ##
 ## Answers [code]{"switch": bool, "index": int}[/code]. [param flags] is the
-## class's own [constant RomLayout.ATTR_AI_ITEM_SWITCH] word; a class with none
+## class's own [constant Gen2Layout.ATTR_AI_ITEM_SWITCH] word; a class with none
 ## of the three switch bits never switches, which is `AI_SwitchOrTryItem`'s own
 ## fallthrough to `DontSwitch`.
 static func decide(battle: Gen2Battle, flags: int, rng: RandomNumberGenerator) -> Dictionary:
@@ -218,7 +218,7 @@ static func _used_move_adjustment(battle: Gen2Battle, used: Array, enemy: Gen2Ba
 			return -1
 		if matchup == 0:
 			continue
-		if matchup >= RomLayout.MATCHUP_EFFECTIVE:
+		if matchup >= Gen2Layout.MATCHUP_EFFECTIVE:
 			best = 2
 			continue
 		best = maxi(best, 1)
@@ -244,9 +244,9 @@ static func _enemy_move_adjustment(
 		)
 		if matchup == 0:
 			continue
-		if matchup < RomLayout.MATCHUP_EFFECTIVE:
+		if matchup < Gen2Layout.MATCHUP_EFFECTIVE:
 			threat += WEIGHT_NOT_VERY_EFFECTIVE
-		elif matchup == RomLayout.MATCHUP_EFFECTIVE:
+		elif matchup == Gen2Layout.MATCHUP_EFFECTIVE:
 			threat += WEIGHT_NEUTRAL
 		else:
 			threat = WEIGHT_SUPER_EFFECTIVE
@@ -388,7 +388,7 @@ static func _best_answer(battle: Gen2Battle, candidates: Array) -> Dictionary:
 				int(move.get("type", 0)), player.types(),
 				Gen2Substatus.has(player.substatus, Gen2Substatus.IDENTIFIED)
 			)
-			if matchup < RomLayout.MATCHUP_EFFECTIVE:
+			if matchup < Gen2Layout.MATCHUP_EFFECTIVE:
 				continue
 			if matchup >= SUPER_EFFECTIVE:
 				quality = 2
@@ -433,7 +433,7 @@ static func _immune_to(battle: Gen2Battle, move_number: int) -> Array:
 ## two behaves as the first of them.
 static func _frequency(flags: int) -> int:
 	for bit: int in [
-		RomLayout.SWITCH_OFTEN, RomLayout.SWITCH_RARELY, RomLayout.SWITCH_SOMETIMES,
+		Gen2Layout.SWITCH_OFTEN, Gen2Layout.SWITCH_RARELY, Gen2Layout.SWITCH_SOMETIMES,
 	]:
 		if (flags & bit) != 0:
 			return bit

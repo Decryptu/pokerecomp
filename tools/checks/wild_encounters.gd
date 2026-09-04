@@ -57,8 +57,8 @@ const ROAM_WALK_UPDATES: int = 400
 ## no rule.
 func _verify_roaming_walk() -> void:
 	var rows: Array = _r.data.world_roaming_maps()
-	if not _r.check(rows.size() == RomLayout.ROAM_MAP_COUNT,
-		"RoamMaps holds %d rows, not %d." % [rows.size(), RomLayout.ROAM_MAP_COUNT]):
+	if not _r.check(rows.size() == Gen2Layout.ROAM_MAP_COUNT,
+		"RoamMaps holds %d rows, not %d." % [rows.size(), Gen2Layout.ROAM_MAP_COUNT]):
 		return
 	var known: Dictionary = {}
 	for row: Dictionary in rows:
@@ -142,7 +142,7 @@ func _verify_wild_held_items() -> void:
 	var generator := RandomNumberGenerator.new()
 	generator.seed = 20260926
 	var rolled: int = 0
-	for species: int in range(1, RomLayout.SPECIES_COUNT + 1):
+	for species: int in range(1, Gen2Layout.SPECIES_COUNT + 1):
 		var row: Dictionary = _r.data.species(species)
 		var held: Array = row.get("held_items", []) as Array
 		if not _r.check(held.size() == 2, "species %d has %d held-item slots." % [species, held.size()]):
@@ -161,7 +161,7 @@ func _verify_wild_held_items() -> void:
 			_r.check(item in allowed, "species %d rolled item %d." % [species, item])
 			rolled += 1
 	_r.note("wild held items: %d species, %d ordinary rolls" % [
-		RomLayout.SPECIES_COUNT, rolled,
+		Gen2Layout.SPECIES_COUNT, rolled,
 	])
 
 
@@ -226,7 +226,7 @@ func _verify_rolled_dvs() -> void:
 		for _wild: int in 256:
 			seen[Gen2Stats.unown_letter(Gen2WorldBattleAdapter.wild_dvs(
 				{"unlocked_unowns": 1 << set_index}, Gen2Battle.BATTLETYPE_NORMAL,
-				RomLayout.UNOWN_SPECIES, generator
+				Gen2Layout.UNOWN_SPECIES, generator
 			))] = true
 		for letter: int in seen:
 			_r.check(
@@ -462,7 +462,7 @@ func _verify_gate_errand() -> void:
 	world.state.set_engine_flag(
 		Gen2WorldState.engine_flag(Gen2WorldState.ENGINE_SAFARI_ZONE, crystal)
 	)
-	var escaped: Dictionary = world.warp_to_spawn(RomLayout.SPAWN_HOME)
+	var escaped: Dictionary = world.warp_to_spawn(Gen2Layout.SPAWN_HOME)
 	_r.check(
 		bool(escaped.get("ok", false)),
 		"an escape to SPAWN_HOME answered %s." % str(escaped.get("reason", ""))

@@ -117,7 +117,7 @@ func _verify_mons() -> void:
 		for index: int in Gen2BattleTower.NUM_UNIQUE_MON:
 			var bytes: PackedByteArray = _r.data.battle_tower_mon(group, index)
 			if not _r.check(
-				bytes.size() == RomLayout.BATTLETOWER_MON_BYTES,
+				bytes.size() == Gen2Layout.BATTLETOWER_MON_BYTES,
 				"BattleTowerMons %d/%d is %d bytes." % [group, index, bytes.size()]
 			):
 				return
@@ -196,7 +196,7 @@ func _verify_result_lines() -> void:
 			for kind: int in [1, 2]:
 				var before: int = random.state
 				var line: Dictionary = tower.trainer_line(_r.data, trainer_class, kind, random, index)
-				var expected: String = String(texts[RomLayout.BATTLETOWER_TEXT_KINDS[kind]][gender][index])
+				var expected: String = String(texts[Gen2Layout.BATTLETOWER_TEXT_KINDS[kind]][gender][index])
 				_r.check(line["text"] == expected and random.state == before,
 					"Tower result text lost the greeting's index")
 
@@ -210,7 +210,7 @@ func _verify_strings() -> void:
 		Array(_r.data.battle_tower().get("menu_rows", [])) == Array(EXPECTED_MENU_ROWS),
 		"The challenge menu reads %s." % [_r.data.battle_tower().get("menu_rows", [])]
 	)
-	for name: String in RomLayout.BATTLETOWER_MENU_TEXT_ORDER:
+	for name: String in Gen2Layout.BATTLETOWER_MENU_TEXT_ORDER:
 		_r.check(
 			not String((_r.data.battle_tower().get("menu_text", {}) as Dictionary).get(
 				name, ""
@@ -221,12 +221,12 @@ func _verify_strings() -> void:
 	## reads the neighbouring line rather than nothing, so the count is what says
 	## the run is the run and the emptiness is what says every entry is a text.
 	var texts: Dictionary = _r.data.battle_tower().get("texts", {}) as Dictionary
-	for kind: String in RomLayout.BATTLETOWER_TEXT_KINDS:
+	for kind: String in Gen2Layout.BATTLETOWER_TEXT_KINDS:
 		var arrays: Dictionary = texts.get(kind, {}) as Dictionary
 		for array: String in ["male", "female"]:
 			var lines: Array = arrays.get(array, []) as Array
-			var expected: int = RomLayout.BATTLETOWER_MALE_TEXTS if array == "male" \
-				else RomLayout.BATTLETOWER_FEMALE_TEXTS
+			var expected: int = Gen2Layout.BATTLETOWER_MALE_TEXTS if array == "male" \
+				else Gen2Layout.BATTLETOWER_FEMALE_TEXTS
 			if not _r.check(
 				lines.size() == expected,
 				"The %s %s lines number %d, not %d." % [array, kind, lines.size(), expected]

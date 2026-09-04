@@ -133,13 +133,13 @@ func test_a_leaves_only_once_the_script_has_run_out() -> void:
 	_world_screen.open_credits()
 	_stop_self_advancing()
 	await get_tree().process_frame
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 	assert_not_null(_host(), "and the press is still swallowed rather than refused")
-	_world_screen._credits_host.release_button(Gen2Button.A)
+	_world_screen._credits_host.release_button(PokeButton.A)
 
 	_host().advance_frames(WHOLE_SCRIPT_FRAMES)
 	assert_true(_host().credits().finished())
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 	await get_tree().process_frame
 	assert_null(_host())
 	assert_true(_world_screen.move_player(Vector2i.DOWN))
@@ -156,12 +156,12 @@ func test_a_release_reaches_the_overlay() -> void:
 	await get_tree().process_frame
 	assert_true(_advance_to_a_standing_wait(), "the credits reach a skippable wait")
 
-	_world_screen.press_button(Gen2Button.B)
+	_world_screen.press_button(PokeButton.B)
 	var skipped: int = _host().credits().timer()
 	_host().advance_frames(1)
 	assert_lt(_host().credits().timer(), skipped, "B is burning the wait down")
 
-	_host().release_button(Gen2Button.B)
+	_host().release_button(PokeButton.B)
 	var standing: int = _host().credits().timer()
 	_host().advance_frames(1)
 	assert_eq(_host().credits().timer(), standing, "and letting go stops it")
@@ -178,7 +178,7 @@ func test_the_hall_of_fame_runs_into_unskippable_credits() -> void:
 		var host: Gen2HallOfFameScreen = _world_screen._hall_of_fame_host
 		## The record box and every induction panel read no joypad and hold for
 		## their own `DelayFrames`; the rating boxes behind them answer A.
-		if host.handle_button(Gen2Button.A):
+		if host.handle_button(PokeButton.A):
 			host.advance_hold_frames(Gen2SavePrompt.SAVING_RECORD_FRAMES)
 	await get_tree().process_frame
 	assert_not_null(_host())

@@ -85,7 +85,7 @@ func _initialize() -> void:
 		quit(1)
 		return
 	_output_path = args[1]
-	if Gen2ToolPath.refuses(_output_path):
+	if PokeToolPath.refuses(_output_path):
 		quit(2)
 		return
 	_stage = args[2] if args.size() > 2 else "offer"
@@ -116,7 +116,7 @@ func _process(_delta: float) -> bool:
 	if _frames < SETTLE_FRAMES:
 		return false
 
-	var image: Image = Gen2ToolPath.capture(root)
+	var image: Image = PokeToolPath.capture(root)
 	if image == null:
 		quit(1)
 		return true
@@ -250,7 +250,7 @@ func _open_prize() -> void:
 			return
 		if String(snapshot["switch_stage"]) != "":
 			_read_question()
-			_screen._handle_button(Gen2Button.B)
+			_screen._handle_button(PokeButton.B)
 			continue
 		if String(snapshot["menu_stage"]) == "main" and not fight.is_over():
 			fight.enemy.hp = 1
@@ -334,7 +334,7 @@ func _open_world_stage() -> void:
 	for _press: int in 4:
 		if String(_screen.battle_snapshot()["menu_stage"]) == "main":
 			break
-		_screen._handle_button(Gen2Button.B)
+		_screen._handle_button(PokeButton.B)
 		_settle()
 
 
@@ -416,7 +416,7 @@ func _open_battle_stage() -> void:
 	_drain()
 	if _stage == "pick":
 		_read_question()
-		_screen._handle_button(Gen2Button.A)
+		_screen._handle_button(PokeButton.A)
 	for press: String in _presses:
 		_screen._handle_button(_button(press))
 	if _stage in ["offer", "use_next"]:
@@ -449,13 +449,13 @@ func _open_menu_stage(battle: Gen2Battle) -> void:
 		Gen2ModHost.instance().register_battle_info(&"preview", Annotations.new())
 	_drain_to_menu()
 	if _stage in ["move", "info"]:
-		_screen._handle_button(Gen2Button.A)
+		_screen._handle_button(PokeButton.A)
 	## `BattlePack`'s own list, over the bag the world hands the battle. The
 	## rows are a real cache's items, so the picture reads as the pack.
 	if _stage in ["pack", "info_pack"]:
 		_screen.set_battle_pack(PACK_ITEMS, PACK_QUANTITIES)
-		_screen._handle_button(Gen2Button.DOWN)
-		_screen._handle_button(Gen2Button.A)
+		_screen._handle_button(PokeButton.DOWN)
+		_screen._handle_button(PokeButton.A)
 	## The BALL pocket of the same list. Every row of
 	## `BallMultiplierFunctionTable` is reachable, so the picture is the
 	## whole of what a player can throw.
@@ -463,13 +463,13 @@ func _open_menu_stage(battle: Gen2Battle) -> void:
 		_screen.set_battle_pack(
 			Gen2WorldPartyHost.capture_ball_items(), BALL_QUANTITIES
 		)
-		_screen._handle_button(Gen2Button.DOWN)
-		_screen._handle_button(Gen2Button.A)
+		_screen._handle_button(PokeButton.DOWN)
+		_screen._handle_button(PokeButton.A)
 	## `BattleMenu_PKMN`'s party page, the other modal that covers the same
 	## cells: RIGHT from FIGHT is PKMN.
 	if _stage == "info_pkmn":
-		_screen._handle_button(Gen2Button.RIGHT)
-		_screen._handle_button(Gen2Button.A)
+		_screen._handle_button(PokeButton.RIGHT)
+		_screen._handle_button(PokeButton.A)
 	for press: String in _presses:
 		_screen._handle_button(_button(press))
 	_screen.finish()
@@ -542,12 +542,12 @@ func _read_question() -> void:
 
 func _button(name: String) -> int:
 	match name.strip_edges().to_lower():
-		"u": return Gen2Button.UP
-		"d": return Gen2Button.DOWN
-		"l": return Gen2Button.LEFT
-		"r": return Gen2Button.RIGHT
-		"b": return Gen2Button.B
-		_: return Gen2Button.A
+		"u": return PokeButton.UP
+		"d": return PokeButton.DOWN
+		"l": return PokeButton.LEFT
+		"r": return PokeButton.RIGHT
+		"b": return PokeButton.B
+		_: return PokeButton.A
 
 
 func _open_tower_stage() -> void:

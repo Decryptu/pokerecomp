@@ -48,12 +48,12 @@ const SOURCE_POCKET_NAMES: Dictionary = {
 ## numbers stay defined once. A set permission bit is what the item *cannot* do,
 ## which is why the source's own branch labels around
 ## `.ItemBallsKey_LoadSubmenu` read backwards.
-const CANT_SELECT: int = RomLayout.ITEM_ATTRIBUTE_CANT_SELECT
-const CANT_TOSS: int = RomLayout.ITEM_ATTRIBUTE_CANT_TOSS
-const ITEMMENU_NOUSE: int = RomLayout.ITEMMENU_NOUSE
-const ITEMMENU_CURRENT: int = RomLayout.ITEMMENU_CURRENT
-const ITEMMENU_PARTY: int = RomLayout.ITEMMENU_PARTY
-const ITEMMENU_CLOSE: int = RomLayout.ITEMMENU_CLOSE
+const CANT_SELECT: int = Gen2Layout.ITEM_ATTRIBUTE_CANT_SELECT
+const CANT_TOSS: int = Gen2Layout.ITEM_ATTRIBUTE_CANT_TOSS
+const ITEMMENU_NOUSE: int = Gen2Layout.ITEMMENU_NOUSE
+const ITEMMENU_CURRENT: int = Gen2Layout.ITEMMENU_CURRENT
+const ITEMMENU_PARTY: int = Gen2Layout.ITEMMENU_PARTY
+const ITEMMENU_CLOSE: int = Gen2Layout.ITEMMENU_CLOSE
 
 const ACTION_USE: StringName = &"use"
 const ACTION_GIVE: StringName = &"give"
@@ -182,13 +182,13 @@ static func list_rows(
 			"show_quantity": can_toss(data, item),
 		}
 		if tmhm:
-			var number: int = RomLayout.tmhm_number_for_item(
+			var number: int = Gen2Layout.tmhm_number_for_item(
 				item, data.tmhm_moves().size() if data != null else 0
 			)
 			var hm: bool = Gen2WorldTMHM.is_hm(item)
 			row["kind"] = Gen2PackPage.ROW_TM
 			row["hm"] = hm
-			row["number"] = number - RomLayout.TMHM_TM_COUNT if hm else number
+			row["number"] = number - Gen2Layout.TMHM_TM_COUNT if hm else number
 			row["name"] = data.move(
 				Gen2WorldTMHM.move_for_item(data, item)
 			).get("name", "") if data != null else ""

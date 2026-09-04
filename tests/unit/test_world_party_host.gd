@@ -188,9 +188,9 @@ func test_the_odd_egg_is_appended_as_the_row_it_rolled() -> void:
 	assert_eq(_save.party.size(), 3)
 	var egg: Gen2SaveMon = _save.party[2]
 	assert_true(egg.is_egg)
-	assert_eq(egg.level, RomLayout.ODD_EGG_LEVEL)
-	assert_eq(egg.nickname, RomLayout.ODD_EGG_NICKNAME)
-	assert_eq(egg.original_trainer, RomLayout.ODD_EGG_OT_NAME)
+	assert_eq(egg.level, Gen2Layout.ODD_EGG_LEVEL)
+	assert_eq(egg.nickname, Gen2Layout.ODD_EGG_NICKNAME)
+	assert_eq(egg.original_trainer, Gen2Layout.ODD_EGG_OT_NAME)
 	assert_eq(result["transaction"]["kind"], &"odd_egg")
 
 
@@ -424,9 +424,9 @@ func test_explicit_trade_slot_still_checks_the_record_gender() -> void:
 		_data, _save.party[0]
 	)
 	_data.world_trade(0)["gender"] = (
-		RomLayout.TRADE_GENDER_FEMALE
+		Gen2Layout.TRADE_GENDER_FEMALE
 		if requested_battle.gender() == Gen2BattleMon.GENDER_MALE
-		else RomLayout.TRADE_GENDER_MALE
+		else Gen2Layout.TRADE_GENDER_MALE
 	)
 	_set_script(0x6220)
 	_world.dispatch_script_events(Vector2i(2, 2))
@@ -812,7 +812,7 @@ func test_a_defined_item_may_name_a_trade_evolution_and_spends_the_held_item() -
 		Gen2ContentOverlay.KIND_ITEM, &"linkingcordtest", CORD_ITEM, {
 			"name": "LINKING CORD",
 			"field_menu": Gen2WorldPack.ITEMMENU_PARTY,
-			"evolution": {"method": RomLayout.EVOLVE_TRADE},
+			"evolution": {"method": Gen2Layout.EVOLVE_TRADE},
 		}
 	)
 	_world.state.apply_changes({}, {}, {"items": {CORD_ITEM: 1}})
@@ -970,7 +970,7 @@ func _add_party_evolution_metadata() -> void:
 		if int(raw["number"]) != 1:
 			continue
 		(raw["evolutions"] as Array).append({
-			"method": RomLayout.EVOLVE_ITEM, "parameter": 0x08,
+			"method": Gen2Layout.EVOLVE_ITEM, "parameter": 0x08,
 			"condition": 0, "target": 2,
 		})
 		break
@@ -978,7 +978,7 @@ func _add_party_evolution_metadata() -> void:
 		if int(raw["number"]) != 2:
 			continue
 		(raw["evolutions"] as Array).append({
-			"method": RomLayout.EVOLVE_TRADE, "parameter": CORD_HELD_ITEM,
+			"method": Gen2Layout.EVOLVE_TRADE, "parameter": CORD_HELD_ITEM,
 			"condition": 0, "target": 3,
 		})
 		break
@@ -1000,17 +1000,17 @@ const MT03_MOVE: int = 0x3A
 
 func _add_tmhm_metadata() -> void:
 	var table: Array = []
-	for index: int in RomLayout.TMHM_TM_COUNT + RomLayout.TMHM_HM_COUNT:
+	for index: int in Gen2Layout.TMHM_TM_COUNT + Gen2Layout.TMHM_HM_COUNT:
 		table.append(0x60 + index)
 	table[0] = TM_MOVE
-	table[RomLayout.TMHM_TM_COUNT + 3] = HM_MOVE
+	table[Gen2Layout.TMHM_TM_COUNT + 3] = HM_MOVE
 	table.append_array([MT01_MOVE, MT02_MOVE, MT03_MOVE])
 	RomCache.write_json(RomCache.tmhm_moves_path(Fixture.directory()), table)
 
 	var species: Array = RomCache.read_json(RomCache.species_path(Fixture.directory()))
 	for raw: Dictionary in species:
 		var flags: Array = []
-		flags.resize(RomLayout.TMHM_BYTES)
+		flags.resize(Gen2Layout.TMHM_BYTES)
 		for index: int in flags.size():
 			flags[index] = 0
 		if int(raw["number"]) == _save.party[0].species:
@@ -1514,8 +1514,8 @@ func test_the_catch_that_fills_a_box_raises_the_box_full_result() -> void:
 func test_catching_an_unown_into_the_party_enters_its_letter_in_the_unown_dex() -> void:
 	var dvs: int = Gen2Stats.pack_dvs(2, 0, 0, 0)
 	var wild: Gen2BattleMon = Gen2BattleMon.create(
-		_data, RomLayout.UNOWN_SPECIES, 5,
-		_data.moves_at_level(RomLayout.UNOWN_SPECIES, 5), dvs
+		_data, Gen2Layout.UNOWN_SPECIES, 5,
+		_data.moves_at_level(Gen2Layout.UNOWN_SPECIES, 5), dvs
 	)
 	assert_true(Gen2WorldPartyHost.capture_wild(
 		_world, _save, wild, 0x01, _random, 42, false
@@ -1535,14 +1535,14 @@ func test_an_unown_caught_into_a_box_does_not_enter_the_unown_dex() -> void:
 	while _save.party.size() < Gen2SaveData.MAX_PARTY:
 		_save.party.append(Gen2SaveMon.from_dict(_save.party[0].to_dict()))
 	var wild: Gen2BattleMon = Gen2BattleMon.create(
-		_data, RomLayout.UNOWN_SPECIES, 5,
-		_data.moves_at_level(RomLayout.UNOWN_SPECIES, 5), Gen2Stats.pack_dvs(2, 0, 0, 0)
+		_data, Gen2Layout.UNOWN_SPECIES, 5,
+		_data.moves_at_level(Gen2Layout.UNOWN_SPECIES, 5), Gen2Stats.pack_dvs(2, 0, 0, 0)
 	)
 	var result: Dictionary = Gen2WorldPartyHost.capture_wild(
 		_world, _save, wild, 0x01, _random, 42, false
 	)
 	assert_eq(result["destination"]["destination"], &"box")
-	assert_true(_world.state.has_caught_species(RomLayout.UNOWN_SPECIES))
+	assert_true(_world.state.has_caught_species(Gen2Layout.UNOWN_SPECIES))
 	assert_true(_world.state.unown_dex().is_empty())
 
 
@@ -1614,7 +1614,7 @@ func _add_trade_record() -> void:
 		"item": 0,
 		"ot_id": 48926,
 		"ot_name": "KYLE",
-		"gender": RomLayout.TRADE_GENDER_EITHER,
+		"gender": Gen2Layout.TRADE_GENDER_EITHER,
 	}])
 
 
@@ -1651,10 +1651,10 @@ func _add_party_item_metadata() -> void:
 	var items: Array = RomCache.read_json(RomCache.items_path(Fixture.directory()))
 	for raw: Dictionary in items:
 		var number: int = int(raw["number"])
-		raw["permissions"] = RomLayout.ITEM_ATTRIBUTE_CANT_SELECT
+		raw["permissions"] = Gen2Layout.ITEM_ATTRIBUTE_CANT_SELECT
 		raw["pocket"] = 0
-		raw["field_menu"] = RomLayout.ITEMMENU_PARTY
-		raw["battle_menu"] = RomLayout.ITEMMENU_PARTY
+		raw["field_menu"] = Gen2Layout.ITEMMENU_PARTY
+		raw["battle_menu"] = Gen2Layout.ITEMMENU_PARTY
 		raw["status_mask"] = 0
 		raw["heal_amount"] = 0
 		if number == 0x12:
@@ -1664,11 +1664,11 @@ func _add_party_item_metadata() -> void:
 		if number == 0x7A:
 			raw["heal_amount"] = 200
 		if number == 0x14:
-			raw["field_menu"] = RomLayout.ITEMMENU_CURRENT
+			raw["field_menu"] = Gen2Layout.ITEMMENU_CURRENT
 		if number == 0x05:
-			raw["pocket"] = RomLayout.ITEM_POCKET_BALL
+			raw["pocket"] = Gen2Layout.ITEM_POCKET_BALL
 			raw["field_menu"] = 0
-			raw["battle_menu"] = RomLayout.ITEMMENU_CLOSE
+			raw["battle_menu"] = Gen2Layout.ITEMMENU_CLOSE
 	RomCache.write_json(RomCache.items_path(Fixture.directory()), items)
 
 
@@ -1682,7 +1682,7 @@ func _add_capture_metadata() -> void:
 	for raw: Dictionary in items:
 		if int(raw["number"]) in [0x01, 0x02, 0x04, 0x05] \
 			or int(raw["number"]) in Gen2WorldPartyHost.CAPTURE_BALLS:
-			raw["pocket"] = RomLayout.ITEM_POCKET_BALL
+			raw["pocket"] = Gen2Layout.ITEM_POCKET_BALL
 	RomCache.write_json(RomCache.items_path(Fixture.directory()), items)
 
 
@@ -2099,7 +2099,7 @@ func test_the_whiteout_heals_and_halves_the_money_before_it_warps() -> void:
 		mon.status = Gen2Status.POISON
 	_world.state.apply_changes({}, {}, {"money": {0: 4001}})
 	_world.last_spawn_map = Vector2i(-1, -1)
-	assert_eq(_world.whiteout_spawn(), RomLayout.SPAWN_HOME,
+	assert_eq(_world.whiteout_spawn(), Gen2Layout.SPAWN_HOME,
 		"no Pokemon Center entered is SPAWN_HOME")
 	var result: Dictionary = Gen2WorldPartyHost.whiteout(_world, _save, false)
 	assert_false(bool(result["ok"]), "the fixture has no spawn to warp to")

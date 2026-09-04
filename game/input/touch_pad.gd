@@ -2,7 +2,7 @@ class_name Gen2TouchPad
 extends Control
 
 ## The on-screen controller: a d-pad, A and B, START and SELECT. It draws what
-## [Gen2TouchLayout] places and turns a finger into the same button a key or a pad
+## [PokeTouchLayout] places and turns a finger into the same button a key or a pad
 ## produces, so no screen has to know a touchscreen exists. Touches are read in
 ## [method _input] rather than [method _gui_input] because more than one finger is
 ## normal here and the GUI layer only tracks one pointer. In edit mode nothing is
@@ -20,7 +20,7 @@ const CROSS_ARM: float = 0.36
 ## bookkeeping in edit mode without ever colliding with a finger.
 const MOUSE_TOUCH_INDEX: int = -1
 
-var _layout: Gen2TouchLayout = Gen2TouchLayout.new()
+var _layout: PokeTouchLayout = PokeTouchLayout.new()
 ## Whether a caller handed one over. The settings preview edits the live layout
 ## object, so entering the tree must not swap it for the stored one.
 var _layout_given: bool = false
@@ -60,13 +60,13 @@ func _exit_tree() -> void:
 	Gen2InputRuntime.instance().release_touch_pad(self)
 
 
-func set_layout(new_layout: Gen2TouchLayout) -> void:
-	_layout = new_layout if new_layout != null else Gen2TouchLayout.new()
+func set_layout(new_layout: PokeTouchLayout) -> void:
+	_layout = new_layout if new_layout != null else PokeTouchLayout.new()
 	_layout_given = true
 	queue_redraw()
 
 
-func layout() -> Gen2TouchLayout:
+func layout() -> PokeTouchLayout:
 	return _layout
 
 
@@ -124,7 +124,7 @@ static func _covered(into: float, band: float) -> float:
 ## would lay out the sideways arrangement and put half of it off the glass.
 func orientation() -> StringName:
 	var window: Window = get_window()
-	return Gen2TouchLayout.orientation_of(
+	return PokeTouchLayout.orientation_of(
 		window.get_visible_rect().size if window != null else size
 	)
 
@@ -140,8 +140,8 @@ func button_at(point: Vector2) -> int:
 ## costs the mod its press rather than costing the player a step.
 func action_at(point: Vector2) -> StringName:
 	var button: int = button_at(point)
-	if button != Gen2Button.NONE:
-		return Gen2Button.action(button)
+	if button != PokeButton.NONE:
+		return PokeButton.action(button)
 	return _layout.mod_action_at(
 		point / Gen2LauncherUI.point_scale(self), area(), orientation()
 	)
@@ -294,12 +294,12 @@ func _draw() -> void:
 		return
 	var alpha: float = _layout.opacity
 	var placing: StringName = orientation()
-	_draw_cross(_layout.group_rect(Gen2TouchLayout.GROUP_PAD, rect, placing), alpha)
+	_draw_cross(_layout.group_rect(PokeTouchLayout.GROUP_PAD, rect, placing), alpha)
 	var rects: Dictionary = _layout.button_rects(rect, placing)
-	for button: int in [Gen2Button.A, Gen2Button.B]:
-		_draw_round(rects[button], Gen2Button.label(button), alpha, _is_held(button))
-	for button: int in [Gen2Button.SELECT, Gen2Button.START]:
-		_draw_pill(rects[button], Gen2Button.label(button), alpha, _is_held(button))
+	for button: int in [PokeButton.A, PokeButton.B]:
+		_draw_round(rects[button], PokeButton.label(button), alpha, _is_held(button))
+	for button: int in [PokeButton.SELECT, PokeButton.START]:
+		_draw_pill(rects[button], PokeButton.label(button), alpha, _is_held(button))
 	var mod_rects: Dictionary = _layout.mod_button_rects(rect, placing)
 	for action: StringName in mod_rects:
 		_draw_pill(
@@ -325,10 +325,10 @@ func _draw_cross(rect: Rect2, alpha: float) -> void:
 	)
 	for bar: Rect2 in [horizontal, vertical]:
 		_draw_rounded_box(bar, _tint(FILL, alpha), _tint(BORDER, alpha))
-	for button: int in Gen2Button.DIRECTIONS:
+	for button: int in PokeButton.DIRECTIONS:
 		if not _is_held(button):
 			continue
-		var step: Vector2 = Vector2(Gen2Button.vector(button))
+		var step: Vector2 = Vector2(PokeButton.vector(button))
 		var span: Vector2 = Vector2(
 			arm.x if step.x == 0.0 else (rect.size.x - arm.x) * 0.5,
 			arm.y if step.y == 0.0 else (rect.size.y - arm.y) * 0.5,
@@ -396,13 +396,13 @@ func _draw_label(rect: Rect2, text: String, alpha: float, size_points: float) ->
 
 
 func _is_held(button: int) -> bool:
-	return _held.has(Gen2Button.action(button))
+	return _held.has(PokeButton.action(button))
 
 
 ## Every cluster a drag may move: the stock four, then a mod's own buttons while
 ## the player has them switched on.
 func _placeable_groups() -> Array[StringName]:
-	var groups: Array[StringName] = Gen2TouchLayout.GROUPS.duplicate()
+	var groups: Array[StringName] = PokeTouchLayout.GROUPS.duplicate()
 	groups.append_array(_layout.mod_groups())
 	return groups
 

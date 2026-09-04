@@ -9,6 +9,9 @@ extends Control
 ## to the stage, which is the only node that knows whether one became a drag.
 
 const ART: Dictionary = {
+	&"red": preload("res://assets/cartridges/red.webp"),
+	&"blue": preload("res://assets/cartridges/blue.webp"),
+	&"yellow": preload("res://assets/cartridges/yellow.webp"),
 	&"gold": preload("res://assets/cartridges/gold.webp"),
 	&"silver": preload("res://assets/cartridges/silver.webp"),
 	&"crystal": preload("res://assets/cartridges/crystal.webp"),
@@ -34,7 +37,7 @@ void fragment() {
 """
 
 var game_id: StringName = &""
-## Which of the three bays this draws.
+## Which bay of [constant RomRegistry.ORDER] this draws.
 var cache_state: StringName = RomCache.STATE_MISSING
 var imported: bool = false
 ## How far the cartridge is from the selected one, which decides its size and
@@ -44,7 +47,7 @@ var depth: int = 0
 var _theme: Gen2LauncherTheme = null
 var _art: TextureRect = null
 var _bay: Control = null
-var _bay_icon: Gen2LauncherIcon = null
+var _bay_icon: PokeLauncherIcon = null
 var _bay_label: Label = null
 ## The icon and the name inside an empty bay, hidden together by
 ## [method set_bay_prompt].
@@ -115,7 +118,7 @@ func _build() -> void:
 	invitation.offset_top = 0.0
 	invitation.offset_bottom = 0.0
 	_bay.add_child(invitation)
-	_bay_icon = Gen2LauncherIcon.create(&"download", BAY_ICON_SIDE, _theme.faint)
+	_bay_icon = PokeLauncherIcon.create(&"download", BAY_ICON_SIDE, _theme.faint)
 	_bay_icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	invitation.add_child(_bay_icon)
 	_bay_label = Gen2LauncherUI.muted(_theme, RomRegistry.title_for(game_id))
@@ -143,7 +146,7 @@ func _build() -> void:
 func refresh_art() -> void:
 	if _art == null:
 		return
-	var custom: Texture2D = Gen2CartridgeArt.texture_for(game_id)
+	var custom: Texture2D = PokeCartridgeArt.texture_for(game_id)
 	_art.texture = custom if custom != null else ART.get(game_id, null)
 
 

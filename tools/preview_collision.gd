@@ -19,7 +19,7 @@ func _initialize() -> void:
 		push_error("Usage: -s tools/preview_collision.gd -- <game> <group> <number> <output.png>")
 		quit(1)
 		return
-	if Gen2ToolPath.refuses(args[3]):
+	if PokeToolPath.refuses(args[3]):
 		quit(2)
 		return
 	var data: GameData = GameData.open(StringName(args[0]))
@@ -41,24 +41,24 @@ func _initialize() -> void:
 	var palettes: Array = Gen2WorldPalette.tile_palettes(
 		data, map, tileset, Gen2WorldPalette.TIME_DAY, -1, -1
 	)
-	var strip_width: int = tileset.tile_count * Gen2Tiles.TILE_WIDTH
+	var strip_width: int = tileset.tile_count * PokeTiles.TILE_WIDTH
 	var image := Image.create(
 		map.collision_width * 16, map.collision_height * 16, false, Image.FORMAT_RGBA8
 	)
 
-	for tile_y: int in map.height_blocks * RomLayout.MAP_BLOCK_TILE_WIDTH:
-		for tile_x: int in map.width_blocks * RomLayout.MAP_BLOCK_TILE_WIDTH:
+	for tile_y: int in map.height_blocks * Gen2Layout.MAP_BLOCK_TILE_WIDTH:
+		for tile_x: int in map.width_blocks * Gen2Layout.MAP_BLOCK_TILE_WIDTH:
 			@warning_ignore("integer_division")
 			var block: int = map.block_at(
-				tile_x / RomLayout.MAP_BLOCK_TILE_WIDTH, tile_y / RomLayout.MAP_BLOCK_TILE_WIDTH
+				tile_x / Gen2Layout.MAP_BLOCK_TILE_WIDTH, tile_y / Gen2Layout.MAP_BLOCK_TILE_WIDTH
 			)
 			var tile: int = tileset.tile_index(
-				block, (tile_y % 4) * RomLayout.MAP_BLOCK_TILE_WIDTH + (tile_x % 4)
+				block, (tile_y % 4) * Gen2Layout.MAP_BLOCK_TILE_WIDTH + (tile_x % 4)
 			)
 			var palette: PackedColorArray = palettes[tile] if tile < palettes.size() \
 				else PackedColorArray()
-			for y: int in Gen2Tiles.TILE_HEIGHT:
-				for x: int in Gen2Tiles.TILE_WIDTH:
+			for y: int in PokeTiles.TILE_HEIGHT:
+				for x: int in PokeTiles.TILE_WIDTH:
 					var index: int = int(indices[y * strip_width + tile * 8 + x])
 					image.set_pixel(
 						tile_x * 8 + x, tile_y * 8 + y,

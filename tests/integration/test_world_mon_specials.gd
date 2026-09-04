@@ -108,9 +108,9 @@ func _press(button: int) -> void:
 ## Walks to the party list: hello, YES, which_mon, the press `prompt` waits for.
 func _reach_party() -> void:
 	_run_script()
-	_press(Gen2Button.A)
+	_press(PokeButton.A)
 	assert_eq(_host().phase(), Gen2NameRaterScreen.Phase.WHICH_MON)
-	_press(Gen2Button.A)
+	_press(PokeButton.A)
 
 
 func test_the_special_opens_the_routine_and_holds_the_world() -> void:
@@ -130,8 +130,8 @@ func test_no_on_the_introduction_ends_on_come_again() -> void:
 	await _open_world()
 	_run_script()
 	_settle()
-	_world_screen.press_button(Gen2Button.DOWN)
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.DOWN)
+	_world_screen.press_button(PokeButton.A)
 	assert_null(_host())
 	assert_true(_world_screen._text_box.visible)
 	assert_eq(
@@ -146,7 +146,7 @@ func test_the_ending_text_waits_on_the_scripts_own_waitbutton() -> void:
 	await _open_world()
 	_run_script()
 	_settle()
-	_world_screen.press_button(Gen2Button.B)
+	_world_screen.press_button(PokeButton.B)
 	assert_eq(
 		StringName(_world_screen._world.pending_script_input().get("type", &"")), &"button"
 	)
@@ -159,7 +159,7 @@ func test_the_party_list_is_select_mon_from_party() -> void:
 	assert_not_null(party)
 	assert_eq(party._prompt(), Gen2PartyScreen.PROMPT_CHOOSE)
 	## A on a member answers the caller rather than opening `MonSubmenu`.
-	party.handle_button(Gen2Button.A)
+	party.handle_button(PokeButton.A)
 	assert_null(_host().party_screen())
 	assert_eq(_host().phase(), Gen2NameRaterScreen.Phase.BETTER_NAME)
 
@@ -168,7 +168,7 @@ func test_the_party_list_is_select_mon_from_party() -> void:
 func test_cancelling_the_party_list_ends_on_come_again() -> void:
 	await _open_world()
 	_reach_party()
-	_host().party_screen().handle_button(Gen2Button.B)
+	_host().party_screen().handle_button(PokeButton.B)
 	assert_null(_host())
 	assert_eq(
 		" ".join(_world_screen._text_box.text_lines()),
@@ -182,7 +182,7 @@ func test_a_traded_member_ends_on_perfect_name_with_its_nickname_filled() -> voi
 	await _open_world()
 	_world_screen.active_save().party[0].ot_id += 1
 	_reach_party()
-	_host().party_screen().handle_button(Gen2Button.A)
+	_host().party_screen().handle_button(PokeButton.A)
 	assert_null(_host())
 	var shown: String = " ".join(_world_screen._text_box.text_lines())
 	assert_true(shown.contains("SPARKY"), shown)
@@ -195,7 +195,7 @@ func test_an_egg_ends_on_the_egg_text() -> void:
 	await _open_world()
 	_world_screen.active_save().party[0].is_egg = true
 	_reach_party()
-	_host().party_screen().handle_button(Gen2Button.A)
+	_host().party_screen().handle_button(PokeButton.A)
 	assert_null(_host())
 	assert_eq(
 		" ".join(_world_screen._text_box.text_lines()),
@@ -207,19 +207,19 @@ func test_an_egg_ends_on_the_egg_text() -> void:
 func test_a_new_name_is_written_to_the_party_row() -> void:
 	await _open_world()
 	_reach_party()
-	_host().party_screen().handle_button(Gen2Button.A)
+	_host().party_screen().handle_button(PokeButton.A)
 	_settle()
 	assert_eq(_host().phase(), Gen2NameRaterScreen.Phase.BETTER_ASK)
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 	assert_eq(_host().phase(), Gen2NameRaterScreen.Phase.WHAT_NAME)
-	_press(Gen2Button.A)
+	_press(PokeButton.A)
 	assert_eq(_host().phase(), Gen2NameRaterScreen.Phase.NAMING)
 
 	var naming: Gen2NamingScreenScreen = _host().naming_screen()
 	assert_not_null(naming)
 	naming.closed.emit("BOLT")
 	assert_eq(_host().phase(), Gen2NameRaterScreen.Phase.NAMED)
-	_press(Gen2Button.A)
+	_press(PokeButton.A)
 	assert_null(_host())
 	assert_eq(_world_screen.active_save().party[0].nickname, "BOLT")
 	assert_eq(
@@ -233,12 +233,12 @@ func test_a_new_name_is_written_to_the_party_row() -> void:
 func test_an_empty_entry_leaves_the_row_alone() -> void:
 	await _open_world()
 	_reach_party()
-	_host().party_screen().handle_button(Gen2Button.A)
+	_host().party_screen().handle_button(PokeButton.A)
 	_settle()
-	_world_screen.press_button(Gen2Button.A)
-	_press(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
+	_press(PokeButton.A)
 	_host().naming_screen().closed.emit("")
-	_press(Gen2Button.A)
+	_press(PokeButton.A)
 	assert_null(_host())
 	assert_eq(_world_screen.active_save().party[0].nickname, "SPARKY")
 	assert_eq(
@@ -279,12 +279,12 @@ func _settle_deleter() -> void:
 func _reach_move_list() -> void:
 	_run_script()
 	_settle_deleter()
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 	_settle_deleter()
-	_world_screen.press_button(Gen2Button.A)
-	_deleter().party_screen().handle_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
+	_deleter().party_screen().handle_button(PokeButton.A)
 	_settle_deleter()
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 
 
 func test_the_deleter_special_opens_its_own_routine() -> void:
@@ -303,10 +303,10 @@ func test_a_member_with_one_move_is_refused_before_the_list() -> void:
 	_world_screen.active_save().party[0].moves = [1, 0, 0, 0]
 	_run_script()
 	_settle_deleter()
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 	_settle_deleter()
-	_world_screen.press_button(Gen2Button.A)
-	_deleter().party_screen().handle_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
+	_deleter().party_screen().handle_button(PokeButton.A)
 	assert_null(_deleter())
 	assert_eq(
 		" ".join(_world_screen._text_box.text_lines()),
@@ -321,8 +321,8 @@ func test_the_move_list_neither_cycles_nor_swaps() -> void:
 	_reach_move_list()
 	var moves: Gen2MoveScreen = _deleter().move_screen()
 	assert_not_null(moves)
-	assert_false(moves.handle_button(Gen2Button.RIGHT))
-	assert_false(moves.handle_button(Gen2Button.LEFT))
+	assert_false(moves.handle_button(PokeButton.RIGHT))
+	assert_false(moves.handle_button(PokeButton.LEFT))
 	assert_eq(moves.snapshot()["held"], -1)
 
 
@@ -331,11 +331,11 @@ func test_the_move_list_neither_cycles_nor_swaps() -> void:
 func test_a_deleted_move_takes_its_pp_with_it() -> void:
 	await _open_deleter_world()
 	_reach_move_list()
-	_deleter().move_screen().handle_button(Gen2Button.DOWN)
-	_deleter().move_screen().handle_button(Gen2Button.A)
+	_deleter().move_screen().handle_button(PokeButton.DOWN)
+	_deleter().move_screen().handle_button(PokeButton.A)
 	assert_eq(_deleter().phase(), Gen2MoveDeleterScreen.Phase.DELETE_ASK)
 	_settle_deleter()
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 	assert_null(_deleter())
 	var mon: Gen2SaveMon = _world_screen.active_save().party[0]
 	assert_eq(mon.moves, [1, 0, 0, 0])
@@ -350,9 +350,9 @@ func test_a_deleted_move_takes_its_pp_with_it() -> void:
 func test_no_on_the_confirmation_leaves_the_moves_alone() -> void:
 	await _open_deleter_world()
 	_reach_move_list()
-	_deleter().move_screen().handle_button(Gen2Button.A)
+	_deleter().move_screen().handle_button(PokeButton.A)
 	_settle_deleter()
-	_world_screen.press_button(Gen2Button.B)
+	_world_screen.press_button(PokeButton.B)
 	assert_null(_deleter())
 	assert_eq(_world_screen.active_save().party[0].moves, [1, 2, 0, 0])
 	assert_eq(
@@ -384,14 +384,14 @@ func _write_tutor_script(value: int) -> void:
 func _write_tutor_tables(learnable: bool) -> void:
 	var directory: String = Fixture.directory()
 	var table: Array = []
-	for index: int in RomLayout.TMHM_TM_COUNT + RomLayout.TMHM_HM_COUNT:
+	for index: int in Gen2Layout.TMHM_TM_COUNT + Gen2Layout.TMHM_HM_COUNT:
 		table.append(0x60 + index)
 	table.append_array([TUTOR_MOVE, TUTOR_MOVE + 1, TUTOR_MOVE + 2])
 	RomCache.write_json(RomCache.tmhm_moves_path(directory), table)
 	var species: Array = RomCache.read_json(RomCache.species_path(directory))
 	for raw: Dictionary in species:
 		var flags: Array = []
-		flags.resize(RomLayout.TMHM_BYTES)
+		flags.resize(Gen2Layout.TMHM_BYTES)
 		for index: int in flags.size():
 			flags[index] = 0
 		# TMNUM 58 is MT01, bit index 57 counted from the low bit of byte 7.
@@ -434,7 +434,7 @@ func test_the_tutor_special_opens_the_party_list_first() -> void:
 func test_a_learned_move_answers_false_and_costs_happiness() -> void:
 	await _open_tutor_world()
 	_run_script()
-	_tutor().party_screen().handle_button(Gen2Button.A)
+	_tutor().party_screen().handle_button(PokeButton.A)
 	assert_null(_tutor())
 	var mon: Gen2SaveMon = _world_screen.active_save().party[0]
 	assert_eq(mon.moves, [1, TUTOR_MOVE, 0, 0])
@@ -447,7 +447,7 @@ func test_a_learned_move_answers_false_and_costs_happiness() -> void:
 func test_backing_out_of_the_list_answers_minus_one() -> void:
 	await _open_tutor_world()
 	_run_script()
-	_tutor().party_screen().handle_button(Gen2Button.B)
+	_tutor().party_screen().handle_button(PokeButton.B)
 	assert_null(_tutor())
 	assert_eq(_world_screen.active_save().party[0].moves, [1, 0, 0, 0])
 	assert_eq(_world_screen._world._active_script._script_value, Gen2MoveTutor.SCRIPT_VALUE_CANCELLED)
@@ -459,7 +459,7 @@ func test_backing_out_of_the_list_answers_minus_one() -> void:
 func test_an_incompatible_member_loops_back_to_the_list() -> void:
 	await _open_tutor_world(Gen2MoveTutor.VALUE_FLAMETHROWER, false)
 	_run_script()
-	_tutor().party_screen().handle_button(Gen2Button.A)
+	_tutor().party_screen().handle_button(PokeButton.A)
 	assert_eq(_tutor().phase(), Gen2MoveTutorScreen.Phase.REFUSAL)
 	assert_true(_tutor().box_text().contains("not compatible"))
 	## The line is three lines of text and the box pages, so the presses that
@@ -468,7 +468,7 @@ func test_an_incompatible_member_loops_back_to_the_list() -> void:
 	while guard > 0 and _tutor() != null \
 		and _tutor().phase() == Gen2MoveTutorScreen.Phase.REFUSAL:
 		_settle_tutor()
-		_world_screen.press_button(Gen2Button.A)
+		_world_screen.press_button(PokeButton.A)
 		guard -= 1
 	assert_not_null(_tutor())
 	assert_eq(_tutor().phase(), Gen2MoveTutorScreen.Phase.SELECT_MON)
@@ -483,17 +483,17 @@ func test_a_full_moveset_asks_and_refuses_an_hm_without_closing_the_list() -> vo
 	mon.moves = [Gen2MoveForget.HM_MOVES[0], 2, 3, 4]
 	mon.pp = [10, 10, 10, 10]
 	_run_script()
-	_tutor().party_screen().handle_button(Gen2Button.A)
+	_tutor().party_screen().handle_button(PokeButton.A)
 	assert_eq(_tutor().phase(), Gen2MoveTutorScreen.Phase.FORGET_ASK)
 	_settle_tutor()
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 	assert_eq(_tutor().phase(), Gen2MoveTutorScreen.Phase.FORGET_LIST)
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 	assert_eq(_tutor().phase(), Gen2MoveTutorScreen.Phase.FORGET_LIST, "the list stays open")
 	assert_eq(_tutor().box_text(), Gen2MoveForget.cant_forget_hm_text())
 	_settle_tutor()
-	_world_screen.press_button(Gen2Button.DOWN)
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.DOWN)
+	_world_screen.press_button(PokeButton.A)
 	assert_null(_tutor())
 	assert_eq(_world_screen.active_save().party[0].moves[1], TUTOR_MOVE)
 	assert_eq(_world_screen._world._active_script._script_value, Gen2MoveTutor.SCRIPT_VALUE_LEARNED)
@@ -536,7 +536,7 @@ func test_a_grooming_special_opens_the_party_list_with_no_box_of_its_own() -> vo
 func test_cancelling_the_list_answers_zero_and_changes_no_happiness() -> void:
 	await _run_haircut(Gen2WorldScriptRunner.SPECIAL_YOUNGER_HAIRCUT_BROTHER)
 	var before: int = _world_screen.active_save().party[0].happiness
-	_selection_list().handle_button(Gen2Button.B)
+	_selection_list().handle_button(PokeButton.B)
 	assert_null(_selection_list())
 	assert_eq(_world_screen._world._active_script._script_value, 0)
 	assert_eq(_world_screen.active_save().party[0].happiness, before)
@@ -549,7 +549,7 @@ func test_an_egg_answers_one_and_is_not_groomed() -> void:
 	var mon: Gen2SaveMon = _world_screen.active_save().party[0]
 	mon.is_egg = true
 	var before: int = mon.happiness
-	_selection_list().handle_button(Gen2Button.A)
+	_selection_list().handle_button(PokeButton.A)
 	assert_eq(_world_screen._world._active_script._script_value, 1)
 	assert_eq(mon.happiness, before)
 
@@ -566,7 +566,7 @@ func test_grooming_raises_happiness_and_leaves_the_chosen_species_standing() -> 
 	## walk lives. Pin the roll so this case is the row and not the overrun.
 	var script: Gen2WorldScriptRunner = _world_screen._world._active_script
 	script._random.seed = 1
-	_selection_list().handle_button(Gen2Button.A)
+	_selection_list().handle_button(PokeButton.A)
 	var runner: Gen2WorldScriptRunner = _world_screen._world._active_script
 	assert_gt(mon.happiness, 100, "HAPPINESS_GROOMING is a rise at every threshold")
 	assert_eq(runner._cur_party_species, mon.species)
@@ -580,7 +580,7 @@ func test_bills_grandfather_answers_the_chosen_species() -> void:
 	await _run_haircut(Gen2WorldScriptRunner.SPECIAL_BILLS_GRANDFATHER)
 	var mon: Gen2SaveMon = _world_screen.active_save().party[0]
 	var before: int = mon.happiness
-	_selection_list().handle_button(Gen2Button.A)
+	_selection_list().handle_button(PokeButton.A)
 	assert_eq(_world_screen._world._active_script._script_value, mon.species)
 	assert_eq(mon.happiness, before, "no row is walked here")
 
@@ -601,7 +601,7 @@ func test_a_balance_window_stands_over_the_map_until_closetext() -> void:
 	await _open_world()
 	_run_script()
 	assert_true(_world_screen.money_window_open())
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 	assert_false(_world_screen.money_window_open())
 
 
@@ -691,7 +691,7 @@ func test_checkpokemail_answers_refused_when_the_list_is_backed_out_of() -> void
 		Gen2WorldScript.CHECKPOKEMAIL, _mail_message(MAIL_LINE_1, MAIL_LINE_2)
 	)
 	assert_not_null(_selection_list())
-	_selection_list().handle_button(Gen2Button.B)
+	_selection_list().handle_button(PokeButton.B)
 	assert_eq(
 		_world_screen._world._active_script._script_value,
 		Gen2WorldPartyHost.POKEMAIL_REFUSED
@@ -702,7 +702,7 @@ func test_checkpokemail_answers_no_mail_for_an_empty_hand() -> void:
 	await _run_mail_script(
 		Gen2WorldScript.CHECKPOKEMAIL, _mail_message(MAIL_LINE_1, MAIL_LINE_2)
 	)
-	_selection_list().handle_button(Gen2Button.A)
+	_selection_list().handle_button(PokeButton.A)
 	assert_eq(
 		_world_screen._world._active_script._script_value,
 		Gen2WorldPartyHost.POKEMAIL_NO_MAIL
@@ -716,7 +716,7 @@ func test_checkpokemail_answers_wrong_mail_for_another_message() -> void:
 	_carry_mail(
 		_world_screen.active_save().party[0], _mail_message(MAIL_LINE_1, "somewhere else")
 	)
-	_selection_list().handle_button(Gen2Button.A)
+	_selection_list().handle_button(PokeButton.A)
 	assert_eq(
 		_world_screen._world._active_script._script_value,
 		Gen2WorldPartyHost.POKEMAIL_WRONG_MAIL
@@ -731,7 +731,7 @@ func test_checkpokemail_answers_last_mon_when_no_other_member_can_fight() -> voi
 	await _run_mail_script(Gen2WorldScript.CHECKPOKEMAIL, message)
 	_leave_one_member()
 	_carry_mail(_world_screen.active_save().party[0], message)
-	_selection_list().handle_button(Gen2Button.A)
+	_selection_list().handle_button(PokeButton.A)
 	assert_eq(
 		_world_screen._world._active_script._script_value,
 		Gen2WorldPartyHost.POKEMAIL_LAST_MON
@@ -745,7 +745,7 @@ func test_checkpokemail_hands_the_member_over_on_the_right_message() -> void:
 	var save: Gen2SaveData = _world_screen.active_save()
 	var mate: Gen2SaveMon = save.party[1]
 	_carry_mail(save.party[0], message)
-	_selection_list().handle_button(Gen2Button.A)
+	_selection_list().handle_button(PokeButton.A)
 	assert_eq(
 		_world_screen._world._active_script._script_value,
 		Gen2WorldPartyHost.POKEMAIL_CORRECT

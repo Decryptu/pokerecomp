@@ -81,20 +81,20 @@ func _any_playing(audio: Gen2LauncherAudio) -> bool:
 func test_every_named_icon_rasterises_rather_than_drawing_nothing() -> void:
 	# The glyphs are looked up by name, so a typo would silently draw an empty
 	# texture rather than fail.
-	for glyph: StringName in Gen2LauncherIcon.PATHS:
-		var raster: Texture2D = Gen2LauncherIcon.raster(glyph, 24.0, _light.text)
+	for glyph: StringName in PokeLauncherIcon.PATHS:
+		var raster: Texture2D = PokeLauncherIcon.raster(glyph, 24.0, _light.text)
 		assert_not_null(raster, String(glyph))
 		assert_gt(raster.get_width(), 0, String(glyph))
 		# The SVG text is what is rasterised, so the source has to be exported
 		# verbatim: Godot's SVG importer would ship the `.ctex` alone and every
 		# glyph would draw nothing outside the editor.
-		var import_path: String = "%s.import" % Gen2LauncherIcon.source_path(glyph)
+		var import_path: String = "%s.import" % PokeLauncherIcon.source_path(glyph)
 		assert_true(FileAccess.file_exists(import_path), import_path)
 		assert_string_contains(
 			FileAccess.get_file_as_string(import_path), 'importer="keep"', String(glyph)
 		)
-	assert_false(Gen2LauncherIcon.has_glyph(&"nonesuch"))
-	assert_eq(Gen2LauncherIcon.source_path(&"nonesuch"), "")
+	assert_false(PokeLauncherIcon.has_glyph(&"nonesuch"))
+	assert_eq(PokeLauncherIcon.source_path(&"nonesuch"), "")
 
 
 ## The built-in browser lists paths `FileAccess.open()` then refuses on every
@@ -287,7 +287,7 @@ func test_every_glyph_the_launcher_asks_for_is_one_the_set_draws() -> void:
 		&"bug", &"github", &"discord",
 	]
 	for glyph: StringName in used:
-		assert_true(Gen2LauncherIcon.has_glyph(glyph), String(glyph))
+		assert_true(PokeLauncherIcon.has_glyph(glyph), String(glyph))
 
 
 func test_mod_update_controls_stay_icon_sized_for_mobile() -> void:
@@ -301,7 +301,7 @@ func test_mod_update_controls_stay_icon_sized_for_mobile() -> void:
 	assert_eq(check.get("_glyph"), &"refresh_all")
 	var actions: Array[Control] = page._action_buttons({
 		"name": "Example", "installed": true,
-		"update": Gen2ModIndex.UPDATE_AVAILABLE,
+		"update": PokeModIndex.UPDATE_AVAILABLE,
 	})
 	var update: Gen2LauncherButton = actions[0] as Gen2LauncherButton
 	assert_eq(update.text, "", "an available update is the requested download-only button")
@@ -313,7 +313,7 @@ func test_mod_update_controls_stay_icon_sized_for_mobile() -> void:
 
 func test_a_mod_icon_keeps_its_square_whether_or_not_the_mod_has_a_picture() -> void:
 	var image: Image = Image.create_empty(
-		Gen2ModArt.ICON_SIDE, Gen2ModArt.ICON_SIDE, false, Image.FORMAT_RGBA8
+		PokeModArt.ICON_SIDE, PokeModArt.ICON_SIDE, false, Image.FORMAT_RGBA8
 	)
 	image.fill(Color.REBECCA_PURPLE)
 	var texture: ImageTexture = ImageTexture.create_from_image(image)
@@ -746,6 +746,28 @@ func test_ejecting_a_cartridge_empties_its_bay() -> void:
 	assert_almost_eq(card.position.y, card.rest_y(), 0.5, "and back where it stood")
 
 
+## A generation with an importer and no world reads its cartridge and cannot
+## start it, so the bar must not offer Play on a seated one.
+func test_a_seated_but_unplayable_cartridge_offers_nothing_to_press() -> void:
+	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false)
+	add_child_autofree(page)
+	page.size = Vector2(900, 600)
+	await get_tree().process_frame
+	# Unanimated, because the depth a bay reads is only settled once the slide is.
+	page.stage().select(RomRegistry.ORDER.find(RomRegistry.RED), false)
+	await get_tree().process_frame
+
+	page.set_slot_state(RomRegistry.RED, RomCache.STATE_MISSING, "")
+	assert_eq(page.hints()[0]["label"], "Add cartridge", "an empty bay still takes a dump")
+
+	page.set_slot_state(RomRegistry.RED, RomCache.STATE_USABLE, "Ready")
+	var labels: Array = []
+	for entry: Dictionary in page.hints():
+		labels.append(entry["label"])
+	assert_false(labels.has("Play"), "Red cannot be played yet")
+	assert_true(labels.has("Options"), "and its cache is still reachable")
+
+
 ## A cache an older build wrote is not an empty bay. The player imported this
 ## cartridge once, so a bay identical to one that was never filled sends them
 ## looking for a bug instead of at the one line that explains it.
@@ -755,6 +777,11 @@ func test_a_cartridge_needing_its_file_again_does_not_look_unimported() -> void:
 	page.size = Vector2(900, 600)
 	await get_tree().process_frame
 	var card: Gen2Cartridge = page.cartridge(RomRegistry.GOLD)
+	# The bay note and the hint bar both answer for the selected cartridge, so
+	# the carousel has to be on this one, and unanimated because the depth a bay
+	# reads is only settled once the slide is.
+	page.stage().select(RomRegistry.ORDER.find(RomRegistry.GOLD), false)
+	await get_tree().process_frame
 
 	page.set_slot_state(RomRegistry.GOLD, RomCache.STATE_MISSING, "")
 	assert_false(card._bay_note.visible, "an empty bay has nothing to add")
@@ -779,7 +806,7 @@ func test_the_toast_says_which_kind_of_message_it_is_showing() -> void:
 	await get_tree().process_frame
 
 	toast.show_message(&"error", "Import stopped.", "That file is not a cartridge.")
-	var icon: Gen2LauncherIcon = _icon_of(toast)
+	var icon: PokeLauncherIcon = _icon_of(toast)
 	assert_eq(icon.glyph, &"warning")
 	# The toast is a chip, so its status colours are the ones that can be read on
 	# one rather than the raw palette entries.
@@ -843,11 +870,11 @@ func _cartridges_of(stage: Gen2CartridgeStage) -> Array[Gen2Cartridge]:
 	return found
 
 
-func _icon_of(from: Node) -> Gen2LauncherIcon:
+func _icon_of(from: Node) -> PokeLauncherIcon:
 	var queue: Array[Node] = [from]
 	while not queue.is_empty():
 		var node: Node = queue.pop_front()
-		if node is Gen2LauncherIcon:
+		if node is PokeLauncherIcon:
 			return node
 		for child: Node in node.get_children():
 			queue.append(child)
@@ -865,9 +892,9 @@ func test_the_about_page_offers_both_ways_to_report_a_bug() -> void:
 	for button: Gen2LauncherButton in _buttons_under(page):
 		if not button.tooltip_text.is_empty():
 			opened.append(button.tooltip_text)
-	assert_has(opened, Gen2AppVersion.ISSUES, "the tracker, for anyone who uses one")
-	assert_has(opened, Gen2AppVersion.DISCORD, "the chat, for everyone else")
-	assert_has(opened, Gen2AppVersion.REPOSITORY, "and the project itself on the page")
+	assert_has(opened, PokeAppVersion.ISSUES, "the tracker, for anyone who uses one")
+	assert_has(opened, PokeAppVersion.DISCORD, "the chat, for everyone else")
+	assert_has(opened, PokeAppVersion.REPOSITORY, "and the project itself on the page")
 
 
 func test_a_narrow_shell_drops_its_tab_names_and_keeps_a_finger_to_hit() -> void:
@@ -937,7 +964,7 @@ func test_a_mod_row_fits_a_phone_rather_than_running_off_its_card() -> void:
 		"version": "1.0.0",
 		"installed": false,
 		"enabled": false,
-		"update": Gen2ModIndex.UNKNOWN,
+		"update": PokeModIndex.UNKNOWN,
 	}) as Gen2LauncherCard
 	page.add_child(download_card)
 	var stack: VBoxContainer = download_card.get_child(0) as VBoxContainer

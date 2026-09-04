@@ -5,7 +5,7 @@ extends VBoxContainer
 ## a JSON listing naming mods that live wherever their authors put them. Following
 ## one is trusting whoever publishes it, so none ships with the game and none is
 ## ever added on its own. The page decides nothing: following, forgetting and what
-## a URL resolves to are [Gen2ModIndex]'s, and fetching is the mods page's.
+## a URL resolves to are [PokeModIndex]'s, and fetching is the mods page's.
 
 signal closed
 signal followed(feed: String)
@@ -74,7 +74,7 @@ func _build() -> void:
 func refresh() -> void:
 	Gen2LauncherUI.clear(_list)
 	# Never empty: the project's own index is followed by every build.
-	for source: Dictionary in Gen2ModIndex.followed():
+	for source: Dictionary in PokeModIndex.followed():
 		_list.add_child(_card(source))
 	_list.add_child(Gen2LauncherUI.bottom_safe_space())
 
@@ -103,7 +103,7 @@ func _card(source: Dictionary) -> Control:
 	line.add_child(update)
 
 	# The built-in one is part of the build, so there is no button to drop it.
-	if not Gen2ModIndex.is_built_in_source(feed):
+	if not PokeModIndex.is_built_in_source(feed):
 		var forget: Gen2LauncherButton = Gen2LauncherButton.icon_only(
 			_theme, &"trash", Gen2LauncherButton.Variant.DANGER, 40.0
 		)
@@ -116,20 +116,20 @@ func _card(source: Dictionary) -> Control:
 ## How many mods the last good copy of a feed listed, and how old that copy is.
 ## A source never read says so rather than showing an empty count.
 static func _listing_line(feed: String) -> String:
-	var cached: Dictionary = Gen2ModIndex.cached_feed(feed)
+	var cached: Dictionary = PokeModIndex.cached_feed(feed)
 	if not bool(cached.get("ok", false)):
 		return "Not read yet"
 	var entries: Array = cached["entries"]
 	return "%d mod%s  read %s ago" % [
 		entries.size(), "" if entries.size() == 1 else "s",
-		Gen2ModIndex.age_text(int(cached.get("age", 0))),
+		PokeModIndex.age_text(int(cached.get("age", 0))),
 	]
 
 
 func _follow() -> void:
-	var result: Dictionary = Gen2ModIndex.follow(_entry.text)
+	var result: Dictionary = PokeModIndex.follow(_entry.text)
 	if not bool(result.get("ok", false)):
-		set_status(Gen2ModRefusal.text(result), _theme.error)
+		set_status(PokeModRefusal.text(result), _theme.error)
 		return
 	_entry.text = ""
 	refresh()
@@ -141,7 +141,7 @@ func _follow() -> void:
 ## leave the list unless they are installed, in which case they are a mod from a
 ## file like any other.
 func _unfollow(feed: String) -> void:
-	Gen2ModIndex.unfollow(feed)
+	PokeModIndex.unfollow(feed)
 	refresh()
 	set_status("Stopped following that source.", _theme.muted)
 	unfollowed.emit(feed)

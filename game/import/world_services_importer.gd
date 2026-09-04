@@ -13,7 +13,7 @@ const MAX_AUDIO_POINTERS: int = 512
 
 
 static func verify_layout(rom: RomFile) -> Dictionary:
-	var layout: Dictionary = RomLayout.for_id(rom.id)
+	var layout: Dictionary = Gen2Layout.for_id(rom.id)
 	if layout.is_empty():
 		return {"ok": false, "message": "No service layout for %s." % rom.id}
 	var result: Dictionary = read_services(rom, layout)
@@ -130,13 +130,13 @@ static func read_services(
 
 static func _read_marts(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var table: int = int(layout["mart_table"])
-	var bank: int = RomLayout.bank_of(table)
-	if not rom.in_bounds(table, RomLayout.MART_COUNT * RomLayout.MART_POINTER_SIZE):
+	var bank: int = Gen2Layout.bank_of(table)
+	if not rom.in_bounds(table, Gen2Layout.MART_COUNT * Gen2Layout.MART_POINTER_SIZE):
 		return _error("Mart pointer table is outside the cartridge.")
 
 	var marts: Array = []
-	for index: int in RomLayout.MART_COUNT:
-		var address: int = rom.u16le(table + index * RomLayout.MART_POINTER_SIZE)
+	for index: int in Gen2Layout.MART_COUNT:
+		var address: int = rom.u16le(table + index * Gen2Layout.MART_POINTER_SIZE)
 		var list: Dictionary = _read_mart_list(rom, bank, address, false)
 		if not bool(list.get("ok", false)):
 			return _error("Mart %d: %s" % [index, list.get("message", "invalid item list")])
@@ -188,27 +188,27 @@ static func _read_marts(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## table has to identify itself by content instead.
 static func read_fruit_trees(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var offset: int = int(layout.get("fruit_trees", 0))
-	if offset <= 0 or not rom.in_bounds(offset, RomLayout.FRUIT_TREE_COUNT):
+	if offset <= 0 or not rom.in_bounds(offset, Gen2Layout.FRUIT_TREE_COUNT):
 		return _error("Fruit tree item table is outside the cartridge.")
 	var items: Array = []
-	for index: int in RomLayout.FRUIT_TREE_COUNT:
+	for index: int in Gen2Layout.FRUIT_TREE_COUNT:
 		var item: int = rom.u8(offset + index)
-		if item <= 0 or item == RomLayout.MART_TERMINATOR:
+		if item <= 0 or item == Gen2Layout.MART_TERMINATOR:
 			return _error("Fruit tree %d holds invalid item %d." % [index + 1, item])
 		items.append(item)
 	## Rows 17 to 23 are the seven apricorns and are the only apricorns in the
 	## table, and the four Johto berry trees ahead of them all bear the same
 	## fruit. Either alone could match neighbouring data; together they do not.
 	var apricorns: Array = items.slice(
-		RomLayout.FRUIT_TREE_FIRST_APRICORN, RomLayout.FRUIT_TREE_FIRST_APRICORN + 7
+		Gen2Layout.FRUIT_TREE_FIRST_APRICORN, Gen2Layout.FRUIT_TREE_FIRST_APRICORN + 7
 	)
 	apricorns.sort()
-	if apricorns != RomLayout.FRUIT_TREE_APRICORNS:
+	if apricorns != Gen2Layout.FRUIT_TREE_APRICORNS:
 		return _error("Fruit tree rows 17 to 23 are not the seven apricorns.")
-	for index: int in RomLayout.FRUIT_TREE_COUNT:
-		var is_apricorn: bool = RomLayout.FRUIT_TREE_APRICORNS.has(int(items[index]))
-		var in_run: bool = index >= RomLayout.FRUIT_TREE_FIRST_APRICORN \
-			and index < RomLayout.FRUIT_TREE_FIRST_APRICORN + 7
+	for index: int in Gen2Layout.FRUIT_TREE_COUNT:
+		var is_apricorn: bool = Gen2Layout.FRUIT_TREE_APRICORNS.has(int(items[index]))
+		var in_run: bool = index >= Gen2Layout.FRUIT_TREE_FIRST_APRICORN \
+			and index < Gen2Layout.FRUIT_TREE_FIRST_APRICORN + 7
 		if is_apricorn != in_run:
 			return _error("Fruit tree %d breaks the apricorn run." % (index + 1))
 	if items.slice(0, 4).any(func(item: Variant) -> bool: return int(item) != int(items[0])):
@@ -224,38 +224,38 @@ static func read_fruit_trees(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## own terminator, so a shifted table fails rather than decoding its neighbour.
 static func read_spawns(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var spawn_offset: int = int(layout.get("spawn_points", 0))
-	var span: int = (RomLayout.SPAWN_COUNT + 1) * RomLayout.SPAWN_RECORD_SIZE
+	var span: int = (Gen2Layout.SPAWN_COUNT + 1) * Gen2Layout.SPAWN_RECORD_SIZE
 	if spawn_offset <= 0 or not rom.in_bounds(spawn_offset, span):
 		return _error("Spawn point table is outside the cartridge.")
 	var spawns: Array = []
-	for index: int in RomLayout.SPAWN_COUNT:
-		var at: int = spawn_offset + index * RomLayout.SPAWN_RECORD_SIZE
+	for index: int in Gen2Layout.SPAWN_COUNT:
+		var at: int = spawn_offset + index * Gen2Layout.SPAWN_RECORD_SIZE
 		var x: int = rom.u8(at + 2)
 		var y: int = rom.u8(at + 3)
-		if x != int(RomLayout.SPAWN_COORDINATES[index * 2]) \
-				or y != int(RomLayout.SPAWN_COORDINATES[index * 2 + 1]):
+		if x != int(Gen2Layout.SPAWN_COORDINATES[index * 2]) \
+				or y != int(Gen2Layout.SPAWN_COORDINATES[index * 2 + 1]):
 			return _error("Spawn %d is not at the coordinates the table pins." % index)
 		spawns.append({
 			"map_group": rom.u8(at), "map_number": rom.u8(at + 1), "x": x, "y": y,
 		})
-	for byte: int in RomLayout.SPAWN_RECORD_SIZE:
-		if rom.u8(spawn_offset + RomLayout.SPAWN_COUNT * RomLayout.SPAWN_RECORD_SIZE + byte) \
-				!= RomLayout.SPAWN_TERMINATOR:
+	for byte: int in Gen2Layout.SPAWN_RECORD_SIZE:
+		if rom.u8(spawn_offset + Gen2Layout.SPAWN_COUNT * Gen2Layout.SPAWN_RECORD_SIZE + byte) \
+				!= Gen2Layout.SPAWN_TERMINATOR:
 			return _error("The spawn point table does not end where it should.")
 
 	var fly_offset: int = int(layout.get("flypoints", 0))
-	var fly_span: int = RomLayout.FLYPOINT_COUNT * RomLayout.FLYPOINT_RECORD_SIZE + 1
+	var fly_span: int = Gen2Layout.FLYPOINT_COUNT * Gen2Layout.FLYPOINT_RECORD_SIZE + 1
 	if fly_offset <= 0 or not rom.in_bounds(fly_offset, fly_span):
 		return _error("Flypoint table is outside the cartridge.")
 	var flypoints: Array = []
-	for index: int in RomLayout.FLYPOINT_COUNT:
-		var at: int = fly_offset + index * RomLayout.FLYPOINT_RECORD_SIZE
+	for index: int in Gen2Layout.FLYPOINT_COUNT:
+		var at: int = fly_offset + index * Gen2Layout.FLYPOINT_RECORD_SIZE
 		var spawn: int = rom.u8(at + 1)
-		if spawn != int(RomLayout.FLYPOINT_SPAWNS[index]):
+		if spawn != int(Gen2Layout.FLYPOINT_SPAWNS[index]):
 			return _error("Flypoint %d does not name the spawn the table pins." % index)
 		flypoints.append({"landmark": rom.u8(at), "spawn": spawn})
-	if rom.u8(fly_offset + RomLayout.FLYPOINT_COUNT * RomLayout.FLYPOINT_RECORD_SIZE) \
-			!= RomLayout.FLYPOINT_TERMINATOR:
+	if rom.u8(fly_offset + Gen2Layout.FLYPOINT_COUNT * Gen2Layout.FLYPOINT_RECORD_SIZE) \
+			!= Gen2Layout.FLYPOINT_TERMINATOR:
 		return _error("The flypoint table does not end where it should.")
 	return {"ok": true, "data": {"spawns": spawns, "flypoints": flypoints}}
 
@@ -271,17 +271,17 @@ static func _read_mart_list_at(rom: RomFile, offset: int) -> Dictionary:
 	if not rom.in_bounds(offset):
 		return {"ok": false, "message": "record is outside the cartridge"}
 	var count: int = rom.u8(offset)
-	if count > RomLayout.MART_RECORD_MAX_ITEMS:
+	if count > Gen2Layout.MART_RECORD_MAX_ITEMS:
 		return {"ok": false, "message": "item count %d is too large" % count}
 	if not rom.in_bounds(offset + 1, count + 1):
 		return {"ok": false, "message": "item list is truncated"}
 	var items: Array = []
 	for item_index: int in count:
 		var item: int = rom.u8(offset + 1 + item_index)
-		if item <= 0 or item == RomLayout.MART_TERMINATOR:
+		if item <= 0 or item == Gen2Layout.MART_TERMINATOR:
 			return {"ok": false, "message": "item %d is invalid" % item}
 		items.append(item)
-	if rom.u8(offset + 1 + count) != RomLayout.MART_TERMINATOR:
+	if rom.u8(offset + 1 + count) != Gen2Layout.MART_TERMINATOR:
 		return {"ok": false, "message": "missing $FF terminator"}
 	return {"ok": true, "items": items}
 
@@ -290,16 +290,16 @@ static func _read_price_mart_at(rom: RomFile, offset: int, name: String) -> Dict
 	if not rom.in_bounds(offset):
 		return _error("%s mart is outside the cartridge." % name)
 	var count: int = rom.u8(offset)
-	if count > RomLayout.MART_RECORD_MAX_ITEMS or not rom.in_bounds(offset + 1, count * 3 + 1):
+	if count > Gen2Layout.MART_RECORD_MAX_ITEMS or not rom.in_bounds(offset + 1, count * 3 + 1):
 		return _error("%s mart is truncated." % name)
 	var items: Array = []
 	for index: int in count:
 		var at: int = offset + 1 + index * 3
 		var item: int = rom.u8(at)
-		if item <= 0 or item == RomLayout.MART_TERMINATOR:
+		if item <= 0 or item == Gen2Layout.MART_TERMINATOR:
 			return _error("%s mart item %d is invalid." % [name, index])
 		items.append({"item": item, "price": rom.u16le(at + 1)})
-	if rom.u8(offset + 1 + count * 3) != RomLayout.MART_TERMINATOR:
+	if rom.u8(offset + 1 + count * 3) != Gen2Layout.MART_TERMINATOR:
 		return _error("%s mart is missing its terminator." % name)
 	return {"ok": true, "items": items}
 
@@ -310,11 +310,11 @@ static func _read_phone(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return names_result
 	var non_trainer_names: Array = names_result.get("names", [])
 	var table: int = int(layout["phone_contacts"])
-	if not rom.in_bounds(table, RomLayout.PHONE_CONTACT_COUNT * RomLayout.PHONE_CONTACT_SIZE):
+	if not rom.in_bounds(table, Gen2Layout.PHONE_CONTACT_COUNT * Gen2Layout.PHONE_CONTACT_SIZE):
 		return _error("Phone contact table is outside the cartridge.")
 	var contacts: Array = []
-	for index: int in RomLayout.PHONE_CONTACT_COUNT:
-		var at: int = table + index * RomLayout.PHONE_CONTACT_SIZE
+	for index: int in Gen2Layout.PHONE_CONTACT_COUNT:
+		var at: int = table + index * Gen2Layout.PHONE_CONTACT_SIZE
 		var callee: Dictionary = _phone_pointer(rom, at + 5)
 		var caller: Dictionary = _phone_pointer(rom, at + 9)
 		if callee.is_empty() or caller.is_empty():
@@ -340,12 +340,12 @@ static func _read_phone(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 	var special_table: int = int(layout["special_phone_calls"])
 	if not rom.in_bounds(
-		special_table, RomLayout.SPECIAL_PHONE_CALL_COUNT * RomLayout.SPECIAL_PHONE_CALL_SIZE
+		special_table, Gen2Layout.SPECIAL_PHONE_CALL_COUNT * Gen2Layout.SPECIAL_PHONE_CALL_SIZE
 	):
 		return _error("Special phone-call table is outside the cartridge.")
 	var special_calls: Array = []
-	for index: int in RomLayout.SPECIAL_PHONE_CALL_COUNT:
-		var at: int = special_table + index * RomLayout.SPECIAL_PHONE_CALL_SIZE
+	for index: int in Gen2Layout.SPECIAL_PHONE_CALL_COUNT:
+		var at: int = special_table + index * Gen2Layout.SPECIAL_PHONE_CALL_SIZE
 		var script: Dictionary = _phone_pointer(rom, at + 3)
 		if script.is_empty():
 			return _error("Special phone call %d has an invalid script pointer." % index)
@@ -394,7 +394,7 @@ static func _read_phone(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## offset. Both end on `done`, so neither holds the routine for a button.
 static func _hang_up_texts(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var at: int = int(layout.get("phone_call_texts", -1))
-	var window: int = 2 * RomLayout.PHONE_CALL_TEXT_MAX_BYTES
+	var window: int = 2 * Gen2Layout.PHONE_CALL_TEXT_MAX_BYTES
 	if at < 0 or not rom.in_bounds(at, window):
 		return {}
 	var data: PackedByteArray = rom.slice(at, window)
@@ -443,7 +443,7 @@ static func _read_audio(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if not bool(sfx_result.get("ok", false)):
 		return sfx_result
 	var cry_result: Dictionary = _read_audio_table(
-		rom, int(layout["cry_pointers"]), RomLayout.AUDIO_CRY_COUNT, "cry",
+		rom, int(layout["cry_pointers"]), Gen2Layout.AUDIO_CRY_COUNT, "cry",
 		int(layout["cry_first_bank"]), int(layout["cry_first_address"])
 	)
 	if not bool(cry_result.get("ok", false)):
@@ -485,22 +485,22 @@ static func _read_audio(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## asks for it at. Pinned by value, since the shape alone does not locate it.
 static func _read_mon_cries(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var table: int = int(layout.get("mon_cries", -1))
-	var span: int = RomLayout.MON_CRY_COUNT * RomLayout.MON_CRY_ROW_SIZE
+	var span: int = Gen2Layout.MON_CRY_COUNT * Gen2Layout.MON_CRY_ROW_SIZE
 	if table < 0 or not rom.in_bounds(table, span):
 		return _error("Pokemon cry table is outside the cartridge.")
 	var rows: Array = []
-	for species: int in RomLayout.MON_CRY_COUNT:
-		var at: int = table + species * RomLayout.MON_CRY_ROW_SIZE
+	for species: int in Gen2Layout.MON_CRY_COUNT:
+		var at: int = table + species * Gen2Layout.MON_CRY_ROW_SIZE
 		var row: Dictionary = {
 			"index": rom.u16le(at),
 			"pitch": rom.u16le(at + 2),
 			"length": rom.u16le(at + 4),
 		}
-		if int(row["index"]) >= RomLayout.AUDIO_CRY_COUNT:
+		if int(row["index"]) >= Gen2Layout.AUDIO_CRY_COUNT:
 			return _error("Pokemon cry row %d names cry %d." % [species + 1, int(row["index"])])
 		rows.append(row)
-	for number: Variant in RomLayout.MON_CRY_PINS:
-		var pin: Array = RomLayout.MON_CRY_PINS[number]
+	for number: Variant in Gen2Layout.MON_CRY_PINS:
+		var pin: Array = Gen2Layout.MON_CRY_PINS[number]
 		var found: Dictionary = rows[int(number) - 1]
 		if int(found["index"]) != int(pin[0]) or int(found["pitch"]) != int(pin[1]) \
 				or int(found["length"]) != int(pin[2]):
@@ -525,7 +525,7 @@ static func _audio_data_window(rom: RomFile, row: Dictionary) -> Dictionary:
 	var bank_start: int = bank * RomFile.BANK_SIZE
 	var bank_end: int = mini(rom.size(), bank_start + RomFile.BANK_SIZE)
 	var start: int = bank_start
-	var end: int = mini(bank_end, start + RomLayout.AUDIO_MAX_RECORD_BYTES)
+	var end: int = mini(bank_end, start + Gen2Layout.AUDIO_MAX_RECORD_BYTES)
 	if end <= start:
 		return _error("Audio record has no readable data window.")
 	return {
@@ -542,12 +542,12 @@ static func _read_phone_non_trainer_names(rom: RomFile, layout: Dictionary) -> D
 	var count: int = int(layout.get("phone_non_trainer_name_count", -1))
 	if table < 0 or bank < 0 or count <= 0:
 		return _error("Phone non-trainer caller-name layout is incomplete.")
-	if not rom.in_bounds(table, count * RomLayout.PHONE_NON_TRAINER_NAME_POINTER_SIZE):
+	if not rom.in_bounds(table, count * Gen2Layout.PHONE_NON_TRAINER_NAME_POINTER_SIZE):
 		return _error("Phone non-trainer caller-name pointers are outside the cartridge.")
 	var names: Array = []
 	for index: int in count:
 		var address: int = rom.u16le(
-			table + index * RomLayout.PHONE_NON_TRAINER_NAME_POINTER_SIZE
+			table + index * Gen2Layout.PHONE_NON_TRAINER_NAME_POINTER_SIZE
 		)
 		if not _valid_cpu_address(address):
 			return _error("Phone non-trainer caller name %d has an invalid pointer." % index)
@@ -555,11 +555,11 @@ static func _read_phone_non_trainer_names(rom: RomFile, layout: Dictionary) -> D
 		if not rom.in_bounds(offset):
 			return _error("Phone non-trainer caller name %d is outside the cartridge." % index)
 		var end: int = offset
-		while end < rom.size() and end - offset < RomLayout.MAX_NAME_LENGTH + 16:
+		while end < rom.size() and end - offset < Gen2Layout.MAX_NAME_LENGTH + 16:
 			if rom.u8(end) == Gen2Text.TERMINATOR:
 				break
 			end += 1
-		if end >= rom.size() or end - offset >= RomLayout.MAX_NAME_LENGTH + 16:
+		if end >= rom.size() or end - offset >= Gen2Layout.MAX_NAME_LENGTH + 16:
 			return _error("Phone non-trainer caller name %d has no terminator." % index)
 		var raw: PackedByteArray = rom.slice(offset, end - offset + 1)
 		names.append({
@@ -629,10 +629,10 @@ static func _read_audio_assets(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var wave_bank: int = int(layout["wave_samples_bank"])
 	var wave_address: int = int(layout["wave_samples_address"])
 	if RomFile.linear(wave_bank, wave_address) != wave_offset \
-		or not rom.in_bounds(wave_offset, RomLayout.AUDIO_WAVE_SAMPLE_COUNT * RomLayout.AUDIO_WAVE_SAMPLE_BYTES):
+		or not rom.in_bounds(wave_offset, Gen2Layout.AUDIO_WAVE_SAMPLE_COUNT * Gen2Layout.AUDIO_WAVE_SAMPLE_BYTES):
 		return _error("Audio wave-sample table is outside the cartridge.")
 	var wave: PackedByteArray = rom.slice(
-		wave_offset, RomLayout.AUDIO_WAVE_SAMPLE_COUNT * RomLayout.AUDIO_WAVE_SAMPLE_BYTES
+		wave_offset, Gen2Layout.AUDIO_WAVE_SAMPLE_COUNT * Gen2Layout.AUDIO_WAVE_SAMPLE_BYTES
 	)
 	if wave[0] != 0x02 or wave[1] != 0x46 or wave[wave.size() - 2] != 0x43 \
 		or wave[wave.size() - 1] != 0x21:
@@ -642,9 +642,9 @@ static func _read_audio_assets(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var drum_bank: int = int(layout["drumkits_bank"])
 	var drum_address: int = int(layout["drumkits_address"])
 	if RomFile.linear(drum_bank, drum_address) != drum_offset \
-		or not rom.in_bounds(drum_offset, RomLayout.AUDIO_DRUMKIT_BYTES):
+		or not rom.in_bounds(drum_offset, Gen2Layout.AUDIO_DRUMKIT_BYTES):
 		return _error("Audio drum-kit data is outside the cartridge.")
-	var drumkits: PackedByteArray = rom.slice(drum_offset, RomLayout.AUDIO_DRUMKIT_BYTES)
+	var drumkits: PackedByteArray = rom.slice(drum_offset, Gen2Layout.AUDIO_DRUMKIT_BYTES)
 	if drumkits[0] != 0x5E or drumkits[1] != 0x4E or drumkits[drumkits.size() - 1] != 0xCB:
 		return _error("Audio drum-kit data does not match the known cartridge data.")
 
@@ -654,8 +654,8 @@ static func _read_audio_assets(rom: RomFile, layout: Dictionary) -> Dictionary:
 			"bank": wave_bank,
 			"address": wave_address,
 			"offset": wave_offset,
-			"sample_count": RomLayout.AUDIO_WAVE_SAMPLE_COUNT,
-			"sample_bytes": RomLayout.AUDIO_WAVE_SAMPLE_BYTES,
+			"sample_count": Gen2Layout.AUDIO_WAVE_SAMPLE_COUNT,
+			"sample_bytes": Gen2Layout.AUDIO_WAVE_SAMPLE_BYTES,
 			"bytes": Array(wave),
 			"byte_count": wave.size(),
 		},
@@ -673,7 +673,7 @@ static func _read_audio_table(
 	rom: RomFile, table: int, count: int, kind: String, expected_bank: int, expected_address: int
 ) -> Dictionary:
 	if count <= 0 or count > MAX_AUDIO_POINTERS \
-		or not rom.in_bounds(table, count * RomLayout.AUDIO_POINTER_SIZE):
+		or not rom.in_bounds(table, count * Gen2Layout.AUDIO_POINTER_SIZE):
 		return _error("%s pointer table is outside the cartridge." % kind)
 	var first: Dictionary = rom.far_pointer(table)
 	if int(first["bank"]) != expected_bank or int(first["address"]) != expected_address:
@@ -684,7 +684,7 @@ static func _read_audio_table(
 		)
 	var rows: Array = []
 	for index: int in count:
-		var pointer: Dictionary = rom.far_pointer(table + index * RomLayout.AUDIO_POINTER_SIZE)
+		var pointer: Dictionary = rom.far_pointer(table + index * Gen2Layout.AUDIO_POINTER_SIZE)
 		var bank: int = int(pointer["bank"])
 		var address: int = int(pointer["address"])
 		if not _valid_cpu_address(address) or not rom.in_bounds(RomFile.linear(bank, address)):

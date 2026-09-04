@@ -222,17 +222,17 @@ func cursor_name() -> String:
 func handle_button(button: int) -> bool:
 	if not _open or _map == null:
 		return false
-	if button == Gen2Button.A and _map.screen == Gen2TownMap.SCREEN_FLY:
+	if button == PokeButton.A and _map.screen == Gen2TownMap.SCREEN_FLY:
 		# `.pressedA` reads the flypoint's own spawn out of `Flypoints + 1`.
 		var row: Dictionary = _data.flypoint(_map.cursor) if _data != null else {}
 		_chosen_spawn = int(row.get("spawn", -1)) if not row.is_empty() else -1
 		close()
 		return true
-	if button == Gen2Button.B \
-		or (button == Gen2Button.A and _map.screen == Gen2TownMap.SCREEN_DEX_AREA):
+	if button == PokeButton.B \
+		or (button == PokeButton.A and _map.screen == Gen2TownMap.SCREEN_DEX_AREA):
 		close()
 		return true
-	if button == Gen2Button.SELECT and _map.screen == Gen2TownMap.SCREEN_DEX_AREA:
+	if button == PokeButton.SELECT and _map.screen == Gen2TownMap.SCREEN_DEX_AREA:
 		_select_held = true
 		_apply_select()
 		return true
@@ -247,7 +247,7 @@ func handle_button(button: int) -> bool:
 ## The other half of `hJoypadDown`, which a press-only host cannot say. Only the
 ## dex area's SELECT reads it.
 func release_button(button: int) -> void:
-	if button == Gen2Button.SELECT:
+	if button == PokeButton.SELECT:
 		_select_held = false
 
 
@@ -492,7 +492,7 @@ func _icon_from(sheet: String, first: int, flip: bool = false) -> Image:
 	if tiles.is_empty() or palette.is_empty():
 		return Gen2PicImage.canvas_image(out, ICON_SIZE, ICON_SIZE)
 	@warning_ignore("integer_division")
-	var strip_tiles: int = tiles.size() / Gen2Tiles.TILE_PIXELS
+	var strip_tiles: int = tiles.size() / PokeTiles.TILE_PIXELS
 	# Object colour zero is transparent under the hardware's own rules, which is
 	# what lets an icon sit over the map.
 	var table: PackedInt32Array = Gen2PicImage.lookup(palette)
@@ -558,12 +558,12 @@ func _nest_image() -> Image:
 		else PackedByteArray()
 	var palette: PackedColorArray = _object_palette()
 	var out: PackedInt32Array = Gen2PicImage.canvas(NEST_ICON_SIZE, NEST_ICON_SIZE)
-	if tiles.size() < Gen2Tiles.TILE_PIXELS or palette.is_empty():
+	if tiles.size() < PokeTiles.TILE_PIXELS or palette.is_empty():
 		return Gen2PicImage.canvas_image(out, NEST_ICON_SIZE, NEST_ICON_SIZE)
 	@warning_ignore("integer_division")
 	Gen2PicImage.blit_tile(
 		out, NEST_ICON_SIZE, NEST_ICON_SIZE, tiles,
-		tiles.size() / Gen2Tiles.TILE_PIXELS, NEST_TILE, 0, 0,
+		tiles.size() / PokeTiles.TILE_PIXELS, NEST_TILE, 0, 0,
 		Gen2PicImage.lookup(palette), false, false, 0
 	)
 	return Gen2PicImage.canvas_image(out, NEST_ICON_SIZE, NEST_ICON_SIZE)

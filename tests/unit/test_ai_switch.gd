@@ -9,9 +9,9 @@ extends GutTest
 
 const Fixture := preload("res://tests/unit/battle_fixture.gd")
 
-const OFTEN: int = RomLayout.SWITCH_OFTEN
-const RARELY: int = RomLayout.SWITCH_RARELY
-const SOMETIMES: int = RomLayout.SWITCH_SOMETIMES
+const OFTEN: int = Gen2Layout.SWITCH_OFTEN
+const RARELY: int = Gen2Layout.SWITCH_RARELY
+const SOMETIMES: int = Gen2Layout.SWITCH_SOMETIMES
 
 var _directory: String = ""
 var _data: GameData = null

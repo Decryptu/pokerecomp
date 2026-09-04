@@ -2,7 +2,7 @@ extends SceneTree
 
 ## Every script command a walked conversation runs on the real world screen, in the
 ## order it ran and with the `bank:address` the cartridge would hold for it. The
-## port half of `.claude/oracle/overworld/trace_script.py`: the line is
+## port half of the hardware script trace: the line is
 ## `frame bank:addr opcode name`, so a branch taken on the wrong side of a flag
 ## shows up as the first differing address. Arguments:
 ## `<game> <group> <map> <x> <y> <dir:count,...> <frames> <out.txt> [new|dev]`.
@@ -35,7 +35,7 @@ func _run() -> void:
 		)
 		quit(2)
 		return
-	if Gen2ToolPath.refuses(args[7]):
+	if PokeToolPath.refuses(args[7]):
 		quit(2)
 		return
 	var data: GameData = GameData.open(StringName(args[0]))
@@ -106,12 +106,12 @@ func _walk(
 			for press: int in cells:
 				for spent: int in PRESS_EVERY:
 					if spent == 0:
-						screen.press_button(Gen2Button.A)
+						screen.press_button(PokeButton.A)
 					screen.advance_frame()
 					_collect(screen, lines, frame)
 					frame += 1
 			continue
-		if button == Gen2Button.NONE:
+		if button == PokeButton.NONE:
 			push_error("a walk step is <up|down|left|right|a>:<count>")
 			return -1
 		if cells == 0:
@@ -148,7 +148,7 @@ func _spend(
 	var idle: int = 0
 	while frame < limit:
 		if frame % PRESS_EVERY == 0:
-			screen.press_button(Gen2Button.A)
+			screen.press_button(PokeButton.A)
 		screen.advance_frame()
 		_collect(screen, lines, frame)
 		frame += 1
@@ -192,17 +192,17 @@ func _drain(lines: PackedStringArray, frame: int) -> void:
 
 func _facing_for(button: int) -> int:
 	match button:
-		Gen2Button.UP: return Gen2WorldSprite.FACING_UP
-		Gen2Button.DOWN: return Gen2WorldSprite.FACING_DOWN
-		Gen2Button.LEFT: return Gen2WorldSprite.FACING_LEFT
-		Gen2Button.RIGHT: return Gen2WorldSprite.FACING_RIGHT
+		PokeButton.UP: return Gen2WorldSprite.FACING_UP
+		PokeButton.DOWN: return Gen2WorldSprite.FACING_DOWN
+		PokeButton.LEFT: return Gen2WorldSprite.FACING_LEFT
+		PokeButton.RIGHT: return Gen2WorldSprite.FACING_RIGHT
 	return Gen2WorldSprite.FACING_DOWN
 
 
 func _button_for(name: String) -> int:
 	match name.to_lower():
-		"up": return Gen2Button.UP
-		"down": return Gen2Button.DOWN
-		"left": return Gen2Button.LEFT
-		"right": return Gen2Button.RIGHT
-	return Gen2Button.NONE
+		"up": return PokeButton.UP
+		"down": return PokeButton.DOWN
+		"left": return PokeButton.LEFT
+		"right": return PokeButton.RIGHT
+	return PokeButton.NONE

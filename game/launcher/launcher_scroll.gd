@@ -18,7 +18,7 @@ const TOUCH_DEADZONE: float = 12.0
 ## Room kept either side of the content: a ring is drawn outside the control it
 ## rings and a pane clips what leaves it.
 const RING_INSET: int = 8
-const WAYS: Dictionary = {Gen2Button.DOWN: 1, Gen2Button.UP: -1}
+const WAYS: Dictionary = {PokeButton.DOWN: 1, PokeButton.UP: -1}
 
 var _content: MarginContainer = null
 ## The finger this pane is following, or -1.
@@ -88,7 +88,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _scroll_by(event: InputEvent) -> bool:
 	if not _scrollable():
 		return false
-	var way: int = int(WAYS.get(Gen2Button.direction_in(event), 0))
+	var way: int = int(WAYS.get(PokeButton.direction_in(event), 0))
 	if way == 0:
 		return false
 	var at: int = scroll_vertical

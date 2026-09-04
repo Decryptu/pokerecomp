@@ -9,9 +9,9 @@ extends GutTest
 const SHEET_TILES: int = 3
 const WIDTH: int = SHEET_TILES * Gen2Font.TILE
 
-const BATTLE_EXTRA_WIDTH: int = RomLayout.BATTLE_FONT_TILES * Gen2Font.TILE
-const FONT_EXTRA_WIDTH: int = RomLayout.FONT_EXTRA_TILES * Gen2Font.TILE
-## Not [constant Gen2Tiles.INK], so a pixel says which strip it came from.
+const BATTLE_EXTRA_WIDTH: int = Gen2Layout.BATTLE_FONT_TILES * Gen2Font.TILE
+const FONT_EXTRA_WIDTH: int = Gen2Layout.FONT_EXTRA_TILES * Gen2Font.TILE
+## Not [constant PokeTiles.INK], so a pixel says which strip it came from.
 const BATTLE_EXTRA_INK: int = 2
 const FONT_EXTRA_INK: int = 1
 
@@ -35,12 +35,12 @@ func after_each() -> void:
 func _write_cache() -> void:
 	var glyphs: PackedByteArray = PackedByteArray()
 	glyphs.resize(WIDTH * Gen2Font.TILE)
-	glyphs.fill(Gen2Tiles.INK)
+	glyphs.fill(PokeTiles.INK)
 	RomCache.write_indices(RomCache.tile_path(_directory, "font"), glyphs)
 
 	var frames: PackedByteArray = PackedByteArray()
-	frames.resize(RomLayout.FRAME_TILES * Gen2Font.TILE * Gen2Font.TILE)
-	frames.fill(Gen2Tiles.INK)
+	frames.resize(Gen2Layout.FRAME_TILES * Gen2Font.TILE * Gen2Font.TILE)
+	frames.fill(PokeTiles.INK)
 	RomCache.write_indices(RomCache.tile_path(_directory, "frames"), frames)
 
 	# The battle-extra strip, filled with a different index so a glyph taken
@@ -64,20 +64,20 @@ func _write_cache() -> void:
 		"tiles": {
 			"font": {
 				"width": WIDTH, "height": Gen2Font.TILE,
-				"tiles": SHEET_TILES, "first_code": RomLayout.FONT_FIRST_CODE,
+				"tiles": SHEET_TILES, "first_code": Gen2Layout.FONT_FIRST_CODE,
 			},
 			"frames": {
-				"width": RomLayout.FRAME_TILES * Gen2Font.TILE, "height": Gen2Font.TILE,
-				"tiles": RomLayout.FRAME_TILES, "first_code": RomLayout.FRAME_FIRST_CODE,
+				"width": Gen2Layout.FRAME_TILES * Gen2Font.TILE, "height": Gen2Font.TILE,
+				"tiles": Gen2Layout.FRAME_TILES, "first_code": Gen2Layout.FRAME_FIRST_CODE,
 			},
 			"battle_font": {
 				"width": BATTLE_EXTRA_WIDTH, "height": Gen2Font.TILE,
-				"tiles": RomLayout.BATTLE_FONT_TILES, "first_code": 0,
+				"tiles": Gen2Layout.BATTLE_FONT_TILES, "first_code": 0,
 			},
 			"font_extra": {
 				"width": FONT_EXTRA_WIDTH, "height": Gen2Font.TILE,
-				"tiles": RomLayout.FONT_EXTRA_TILES,
-				"first_code": RomLayout.FONT_EXTRA_FIRST_CODE,
+				"tiles": Gen2Layout.FONT_EXTRA_TILES,
+				"first_code": Gen2Layout.FONT_EXTRA_FIRST_CODE,
 			},
 		},
 	})
@@ -101,9 +101,9 @@ func test_a_cache_without_one_does_not() -> void:
 
 func test_a_code_lands_at_the_position_it_is_given() -> void:
 	var into: PackedByteArray = _canvas(2)
-	_font.draw_code(RomLayout.FONT_FIRST_CODE, into, 2 * Gen2Font.TILE, Gen2Font.TILE, 0)
+	_font.draw_code(Gen2Layout.FONT_FIRST_CODE, into, 2 * Gen2Font.TILE, Gen2Font.TILE, 0)
 	assert_eq(into[0], 0, "nothing before it")
-	assert_eq(into[Gen2Font.TILE], Gen2Tiles.INK, "and ink from the eighth pixel on")
+	assert_eq(into[Gen2Font.TILE], PokeTiles.INK, "and ink from the eighth pixel on")
 
 
 func test_a_code_below_the_sheet_draws_nothing() -> void:
@@ -115,7 +115,7 @@ func test_a_code_below_the_sheet_draws_nothing() -> void:
 
 func test_a_code_past_the_end_of_the_sheet_draws_nothing() -> void:
 	var into: PackedByteArray = _canvas(1)
-	_font.draw_code(RomLayout.FONT_FIRST_CODE + SHEET_TILES, into, Gen2Font.TILE, 0, 0)
+	_font.draw_code(Gen2Layout.FONT_FIRST_CODE + SHEET_TILES, into, Gen2Font.TILE, 0, 0)
 	assert_eq(into.count(0), into.size())
 
 
@@ -123,8 +123,8 @@ func test_text_advances_one_tile_per_glyph() -> void:
 	var into: PackedByteArray = _canvas(3)
 	var drawn: int = _font.draw_text("AB", into, 3 * Gen2Font.TILE, 0, 0)
 	assert_eq(drawn, 2)
-	assert_eq(into[0], Gen2Tiles.INK)
-	assert_eq(into[Gen2Font.TILE], Gen2Tiles.INK)
+	assert_eq(into[0], PokeTiles.INK)
+	assert_eq(into[Gen2Font.TILE], PokeTiles.INK)
 	assert_eq(into[Gen2Font.TILE * 2], 0, "and stops after the second")
 
 
@@ -138,14 +138,14 @@ func test_drawing_off_the_edge_clips_instead_of_failing() -> void:
 	# A box that runs off the screen should look wrong at the edge and be right
 	# everywhere else.
 	var into: PackedByteArray = _canvas(1)
-	_font.draw_code(RomLayout.FONT_FIRST_CODE, into, Gen2Font.TILE, Gen2Font.TILE - 2, 0)
-	assert_eq(into[Gen2Font.TILE - 1], Gen2Tiles.INK)
+	_font.draw_code(Gen2Layout.FONT_FIRST_CODE, into, Gen2Font.TILE, Gen2Font.TILE - 2, 0)
+	assert_eq(into[Gen2Font.TILE - 1], PokeTiles.INK)
 	assert_eq(into[0], 0)
 
 
 func test_negative_positions_clip_too() -> void:
 	var into: PackedByteArray = _canvas(1)
-	_font.draw_code(RomLayout.FONT_FIRST_CODE, into, Gen2Font.TILE, -Gen2Font.TILE, 0)
+	_font.draw_code(Gen2Layout.FONT_FIRST_CODE, into, Gen2Font.TILE, -Gen2Font.TILE, 0)
 	assert_eq(into.count(0), into.size())
 
 
@@ -153,21 +153,21 @@ func test_a_border_is_addressed_by_its_box_drawing_code() -> void:
 	# The frame tiles are loaded at $79 so the charmap's ┌ ─ ┐ │ └ ┘ name them
 	# directly; a border is printed as characters like anything else.
 	var into: PackedByteArray = _canvas(1)
-	_font.draw_frame_code(0, RomLayout.FRAME_FIRST_CODE, into, Gen2Font.TILE, 0, 0)
-	assert_eq(into[0], Gen2Tiles.INK)
+	_font.draw_frame_code(0, Gen2Layout.FRAME_FIRST_CODE, into, Gen2Font.TILE, 0, 0)
+	assert_eq(into[0], PokeTiles.INK)
 
 
 func test_a_code_outside_the_box_drawing_run_draws_no_border() -> void:
 	var into: PackedByteArray = _canvas(1)
 	_font.draw_frame_code(
-		0, RomLayout.FRAME_FIRST_CODE + RomLayout.FRAME_TILES, into, Gen2Font.TILE, 0, 0
+		0, Gen2Layout.FRAME_FIRST_CODE + Gen2Layout.FRAME_TILES, into, Gen2Font.TILE, 0, 0
 	)
 	assert_eq(into.count(0), into.size())
 
 
 func test_a_frame_that_was_never_cached_draws_nothing() -> void:
 	var into: PackedByteArray = _canvas(1)
-	_font.draw_frame_code(7, RomLayout.FRAME_FIRST_CODE, into, Gen2Font.TILE, 0, 0)
+	_font.draw_frame_code(7, Gen2Layout.FRAME_FIRST_CODE, into, Gen2Font.TILE, 0, 0)
 	assert_eq(into.count(0), into.size())
 	assert_eq(_font.frame_count(), 1, "this cache holds one")
 
@@ -195,7 +195,7 @@ func test_the_same_code_is_font_extras_with_the_main_font_loaded() -> void:
 ## three tiles never reach the screen through this path.
 func test_the_run_below_bold_d_is_not_drawn_from_font_extra() -> void:
 	var into: PackedByteArray = _canvas(1)
-	_font.draw_code(RomLayout.FONT_EXTRA_LOADED_FIRST - 1, into, Gen2Font.TILE, 0, 0)
+	_font.draw_code(Gen2Layout.FONT_EXTRA_LOADED_FIRST - 1, into, Gen2Font.TILE, 0, 0)
 	assert_eq(into[0], 0)
 
 
@@ -214,9 +214,9 @@ func test_a_cache_without_font_extra_draws_that_run_blank() -> void:
 func test_letters_still_come_from_the_main_font_under_the_battle_strip() -> void:
 	var into: PackedByteArray = _canvas(1)
 	_font.draw_code(
-		RomLayout.FONT_FIRST_CODE, into, Gen2Font.TILE, 0, 0, Gen2Text.FONT_BATTLE_EXTRA
+		Gen2Layout.FONT_FIRST_CODE, into, Gen2Font.TILE, 0, 0, Gen2Text.FONT_BATTLE_EXTRA
 	)
-	assert_eq(into[0], Gen2Tiles.INK, "$80 is outside the run that load replaces")
+	assert_eq(into[0], PokeTiles.INK, "$80 is outside the run that load replaces")
 
 
 func test_a_cache_without_the_battle_strip_refuses_that_run_rather_than_guessing() -> void:
@@ -233,8 +233,8 @@ func test_a_cache_without_the_battle_strip_refuses_that_run_rather_than_guessing
 	font.draw_code(0x74, into, Gen2Font.TILE, 0, 0, Gen2Text.FONT_BATTLE_EXTRA)
 	assert_eq(into[0], 0)
 	# And the letters it does have still draw.
-	font.draw_code(RomLayout.FONT_FIRST_CODE, into, Gen2Font.TILE, 0, 0)
-	assert_eq(into[0], Gen2Tiles.INK)
+	font.draw_code(Gen2Layout.FONT_FIRST_CODE, into, Gen2Font.TILE, 0, 0)
+	assert_eq(into[0], PokeTiles.INK)
 
 
 func test_a_bounded_run_that_fits_is_untouched() -> void:

@@ -39,7 +39,7 @@ var player_id: int = 0
 ## always male and nothing reads this there.
 var gender: int = GENDER_MALE
 ## wGameTimeHours .. wGameTimeFrames, the play timer the trainer card prints.
-var game_time: Gen2GameTime = null
+var game_time: PokeGameTime = null
 var label: String = ""
 var party: Array = []
 ## The party members `ContestDropOffMons` masks off while the Bug Catching
@@ -117,7 +117,7 @@ var reset_count: int = 0
 
 
 func _init() -> void:
-	game_time = Gen2GameTime.new()
+	game_time = PokeGameTime.new()
 	for _box_index: int in BOX_COUNT:
 		boxes.append(Gen2SaveBox.new())
 
@@ -148,7 +148,7 @@ func to_dict() -> Dictionary:
 		"player_name": player_name,
 		"player_id": player_id,
 		"gender": gender,
-		"game_time": game_time.to_dict() if game_time != null else Gen2GameTime.new().to_dict(),
+		"game_time": game_time.to_dict() if game_time != null else PokeGameTime.new().to_dict(),
 		"label": label,
 		"party": saved_party,
 		"contest_stashed_party": stashed_party,
@@ -201,7 +201,7 @@ static func _read_header(out: Gen2SaveData, source: Dictionary) -> void:
 	out.player_name = String(source.get("player_name", ""))
 	out.player_id = int(source.get("player_id", 0)) & 0xFFFF
 	out.gender = GENDER_FEMALE if int(source.get("gender", GENDER_MALE)) & 1 else GENDER_MALE
-	out.game_time = Gen2GameTime.parse(source.get("game_time", {}))
+	out.game_time = PokeGameTime.parse(source.get("game_time", {}))
 	out.label = String(source.get("label", ""))
 	out.current_box = clampi(int(source.get("current_box", 0)), 0, BOX_COUNT - 1)
 	out.hall_of_fame = Gen2HallOfFame.parse_records(source.get("hall_of_fame", []))
@@ -315,7 +315,7 @@ static func migrate_dict(raw: Variant) -> Dictionary:
 		if not migrated.has("gender"):
 			migrated["gender"] = GENDER_MALE
 		if not migrated.has("game_time"):
-			migrated["game_time"] = Gen2GameTime.new().to_dict()
+			migrated["game_time"] = PokeGameTime.new().to_dict()
 	if version < 6 and not migrated.has("mods"):
 		migrated["mods"] = {}
 	migrated["format_version"] = FORMAT_VERSION

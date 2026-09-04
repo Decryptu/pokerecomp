@@ -16,7 +16,7 @@ var _open_new_game: bool = false
 func _initialize() -> void:
 	var args: PackedStringArray = OS.get_cmdline_user_args()
 	_output = args[0]
-	if Gen2ToolPath.refuses(_output):
+	if PokeToolPath.refuses(_output):
 		quit(2)
 		return
 	var mode: String = args[1] if args.size() > 1 else "light"
@@ -81,7 +81,7 @@ func _process(_delta: float) -> bool:
 		_screen.call("open_new_slot")
 	if _frames < 26:
 		return false
-	var image: Image = Gen2ToolPath.capture(root)
+	var image: Image = PokeToolPath.capture(root)
 	if image == null:
 		quit(1)
 		return true

@@ -58,7 +58,7 @@ func _write_cache() -> void:
 			"ai_move_weights": 0, "ai_item_switch": 0,
 		},
 		"trainers": [{
-			"name": "ACE", "type": RomLayout.TRAINER_MON_NORMAL,
+			"name": "ACE", "type": Gen2Layout.TRAINER_MON_NORMAL,
 			"party": [{"level": 5, "species": SPECIES_TWO, "item": 0, "moves": []}],
 		}],
 	}])
@@ -365,7 +365,7 @@ func test_a_wild_unown_only_takes_an_unlocked_letter() -> void:
 		## X-Z alone, the last set and the smallest.
 		var word: int = Gen2WorldBattleAdapter.wild_dvs(
 			{"unlocked_unowns": 0b1000}, Gen2Battle.BATTLETYPE_NORMAL,
-			RomLayout.UNOWN_SPECIES, generator
+			Gen2Layout.UNOWN_SPECIES, generator
 		)
 		var letter: int = Gen2Stats.unown_letter(word)
 		assert_true(letter in [24, 25, 26], "letter %d is not in X-Z" % letter)
@@ -374,7 +374,7 @@ func test_a_wild_unown_only_takes_an_unlocked_letter() -> void:
 	var ungated: Dictionary = {}
 	for _wild: int in 32:
 		ungated[Gen2Stats.unown_letter(Gen2WorldBattleAdapter.wild_dvs(
-			{}, Gen2Battle.BATTLETYPE_NORMAL, RomLayout.UNOWN_SPECIES, generator
+			{}, Gen2Battle.BATTLETYPE_NORMAL, Gen2Layout.UNOWN_SPECIES, generator
 		))] = true
 	assert_gt(ungated.size(), 3, "an ungated roll reaches past one set")
 

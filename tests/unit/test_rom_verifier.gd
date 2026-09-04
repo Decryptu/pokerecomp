@@ -1,5 +1,7 @@
 extends GutTest
 
+const GEN2_ROM_SIZE: int = RomRegistry.SIZES[RomRegistry.GEN2]
+
 ## These tests never touch a real cartridge; the repo has none and must never
 ## gain one. Synthetic files cover the rejection paths, and the accept path is
 ## covered by asserting the registry's own hashes round-trip. Hashing a genuine
@@ -46,7 +48,7 @@ func test_wrong_size_is_rejected_before_hashing() -> void:
 
 
 func test_right_size_but_unknown_contents_is_rejected() -> void:
-	var path: String = _write_file("blank.gbc", RomRegistry.EXPECTED_SIZE)
+	var path: String = _write_file("blank.gbc", GEN2_ROM_SIZE)
 	var result: Dictionary = RomVerifier.identify(path)
 	assert_eq(result["status"], RomVerifier.Status.UNKNOWN_ROM)
 	assert_eq(result["sha1"].length(), 40, "sha1 should be 40 hex chars")
@@ -70,9 +72,24 @@ func test_sha1_of_unreadable_file_is_empty() -> void:
 	assert_eq(RomVerifier.sha1_of_file("user://nope.bin"), "")
 
 
-func test_registry_holds_exactly_the_three_gen2_games() -> void:
-	assert_eq(RomRegistry.BY_SHA1.size(), 3)
-	assert_eq(RomRegistry.ORDER.size(), 3)
+func test_registry_holds_every_supported_cartridge() -> void:
+	assert_eq(RomRegistry.BY_SHA1.size(), RomRegistry.ORDER.size())
+	assert_eq(RomRegistry.ids_of_generation(RomRegistry.GEN1).size(), 3)
+	assert_eq(RomRegistry.ids_of_generation(RomRegistry.GEN2).size(), 3)
+
+
+func test_every_row_carries_a_generation_with_a_dump_size() -> void:
+	for id: StringName in RomRegistry.ORDER:
+		var generation: int = RomRegistry.generation_for(id)
+		assert_true(RomRegistry.SIZES.has(generation), "%s has no size" % id)
+		assert_eq(RomRegistry.size_for(id), int(RomRegistry.SIZES[generation]))
+
+
+func test_a_gen1_sized_file_passes_the_prefilter() -> void:
+	# The prefilter refused everything but 2 MiB before Gen 1 was listed, which
+	# would have rejected Red on its length rather than on its hash.
+	var path: String = _write_file("gen1.gb", RomRegistry.SIZES[RomRegistry.GEN1])
+	assert_eq(RomVerifier.identify(path)["status"], RomVerifier.Status.UNKNOWN_ROM)
 
 
 func test_every_registry_id_round_trips() -> void:
@@ -100,3 +117,6 @@ func test_hashes_are_lowercase_hex() -> void:
 func test_unknown_id_yields_no_hash() -> void:
 	assert_eq(RomRegistry.sha1_for(&"emerald"), "")
 	assert_eq(RomRegistry.title_for(&"emerald"), "")
+	assert_eq(RomRegistry.generation_for(&"emerald"), 0)
+	assert_eq(RomRegistry.size_for(&"emerald"), 0)
+	assert_false(RomRegistry.is_playable(&"emerald"))

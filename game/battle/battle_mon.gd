@@ -283,12 +283,12 @@ func set_badge_boosts(mask: int) -> void:
 
 	badge_type_boost_mask = 0
 	var boosted_types: Array[int] = [
-		RomLayout.TYPE_FLYING, RomLayout.TYPE_BUG, RomLayout.TYPE_NORMAL,
-		RomLayout.TYPE_GHOST, RomLayout.TYPE_STEEL, RomLayout.TYPE_FIGHTING,
-		RomLayout.TYPE_ICE, RomLayout.TYPE_DRAGON, RomLayout.TYPE_ROCK,
-		RomLayout.TYPE_WATER, RomLayout.TYPE_ELECTRIC, RomLayout.TYPE_GRASS,
-		RomLayout.TYPE_POISON, RomLayout.TYPE_PSYCHIC, RomLayout.TYPE_FIRE,
-		RomLayout.TYPE_GROUND,
+		Gen2Layout.TYPE_FLYING, Gen2Layout.TYPE_BUG, Gen2Layout.TYPE_NORMAL,
+		Gen2Layout.TYPE_GHOST, Gen2Layout.TYPE_STEEL, Gen2Layout.TYPE_FIGHTING,
+		Gen2Layout.TYPE_ICE, Gen2Layout.TYPE_DRAGON, Gen2Layout.TYPE_ROCK,
+		Gen2Layout.TYPE_WATER, Gen2Layout.TYPE_ELECTRIC, Gen2Layout.TYPE_GRASS,
+		Gen2Layout.TYPE_POISON, Gen2Layout.TYPE_PSYCHIC, Gen2Layout.TYPE_FIRE,
+		Gen2Layout.TYPE_GROUND,
 	]
 	for badge: int in boosted_types.size():
 		if mask & (1 << badge):

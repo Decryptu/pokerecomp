@@ -55,7 +55,7 @@ static func from_data(data: GameData) -> Gen2UnownPrinterPage:
 		return null
 	var page := Gen2UnownPrinterPage.new()
 	page.font = Gen2Font.from_data(data)
-	page.palette = data.palette(RomLayout.UNOWN_SPECIES, false)
+	page.palette = data.palette(Gen2Layout.UNOWN_SPECIES, false)
 	page._data = data
 	page._glyphs = data.tile_indices("unown_printer_glyphs")
 	if page.font == null or page.palette.size() < 4 or page._glyphs.is_empty():
@@ -170,7 +170,7 @@ func _text(indices: PackedByteArray, text: String, at: Vector2i) -> void:
 			break
 		if BOLD_CODES.has(code):
 			Gen2Font.blit_slot(
-				_glyphs, RomLayout.UNOWN_PRINTER_GLYPH_TILES * TILE,
+				_glyphs, Gen2Layout.UNOWN_PRINTER_GLYPH_TILES * TILE,
 				BOLD_CODES.find(code), indices, WIDTH, x, at.y * TILE
 			)
 		else:

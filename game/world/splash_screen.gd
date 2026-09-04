@@ -106,7 +106,7 @@ func handle_button(button: int) -> bool:
 			_held.append(button)
 		return true
 	if button in [
-		Gen2Button.UP, Gen2Button.DOWN, Gen2Button.LEFT, Gen2Button.RIGHT
+		PokeButton.UP, PokeButton.DOWN, PokeButton.LEFT, PokeButton.RIGHT
 	]:
 		return true
 	if _cinema.phase() == Gen2BootCinema.PHASE_INTRO_MOVIE:
@@ -338,8 +338,8 @@ func _blank() -> Image:
 ## A cache imported before the palette was falls back to the black-on-white
 ## every other page here uses rather than refusing to draw.
 func _palette() -> PackedColorArray:
-	if _page == null or _page.palette.size() < RomLayout.COPYRIGHT_PALETTE_COLORS:
-		return Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+	if _page == null or _page.palette.size() < Gen2Layout.COPYRIGHT_PALETTE_COLORS:
+		return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	return _page.palette
 
 

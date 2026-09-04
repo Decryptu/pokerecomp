@@ -38,7 +38,7 @@ func _write_cache() -> void:
 	RomCache.write_json(RomCache.world_tilesets_path(_directory), [{
 		"number": 0,
 		"block_count": 1,
-		"tile_count": RomLayout.TILESET_TILE_COUNT,
+		"tile_count": Gen2Layout.TILESET_TILE_COUNT,
 		"meta": meta,
 		"collision": [],
 		"palette_map": [0],
@@ -52,7 +52,7 @@ func _write_cache() -> void:
 		# first. What tile_frames() has to recover.
 		"number": 1,
 		"block_count": 1,
-		"tile_count": RomLayout.TILESET_TILE_COUNT,
+		"tile_count": Gen2Layout.TILESET_TILE_COUNT,
 		"meta": meta,
 		"collision": [],
 		"palette_map": [0],
@@ -67,7 +67,7 @@ func _write_cache() -> void:
 		# after both so all four see the same `wTileAnimationTimer`.
 		"number": 2,
 		"block_count": 1,
-		"tile_count": RomLayout.TILESET_TILE_COUNT,
+		"tile_count": Gen2Layout.TILESET_TILE_COUNT,
 		"meta": meta,
 		"collision": [],
 		"palette_map": [0],
@@ -85,7 +85,7 @@ func _write_cache() -> void:
 		# palette, the flicker and both scrolls hang off.
 		"number": 3,
 		"block_count": 1,
-		"tile_count": RomLayout.TILESET_TILE_COUNT,
+		"tile_count": Gen2Layout.TILESET_TILE_COUNT,
 		"meta": meta,
 		"collision": [],
 		"palette_map": [0],
@@ -157,7 +157,7 @@ func _write_cache() -> void:
 		"collision_height": 2,
 	}])
 	var pixels := PackedByteArray()
-	pixels.resize(RomLayout.TILESET_TILE_COUNT * Gen2Tiles.TILE_PIXELS)
+	pixels.resize(Gen2Layout.TILESET_TILE_COUNT * PokeTiles.TILE_PIXELS)
 	RomCache.write_indices(RomCache.world_tile_path(_directory, 0), pixels)
 	RomCache.write_indices(RomCache.world_tile_path(_directory, 1), pixels)
 	RomCache.write_indices(RomCache.world_tile_path(_directory, 2), pixels)
@@ -165,15 +165,15 @@ func _write_cache() -> void:
 	# scrolls put it is the whole reading of their direction.
 	var scrolled: PackedByteArray = pixels.duplicate()
 	scrolled[0] = 1
-	scrolled[Gen2Tiles.TILE_WIDTH] = 1
+	scrolled[PokeTiles.TILE_WIDTH] = 1
 	RomCache.write_indices(RomCache.world_tile_path(_directory, 3), scrolled)
 
 	var palettes: Array = []
-	for _group: int in RomLayout.WORLD_PALETTE_GROUP_COUNT:
+	for _group: int in Gen2Layout.WORLD_PALETTE_GROUP_COUNT:
 		palettes.append([0x7FFF, 0x421F, 0x2108, 0])
 	# `LoadSpecialMapPalette`'s six sets, appended the way the importer appends
 	# them and numbered so a slot says which set and which slot it came from.
-	for index: int in RomLayout.SPECIAL_PALETTE_TILESETS.size() * 8:
+	for index: int in Gen2Layout.SPECIAL_PALETTE_TILESETS.size() * 8:
 		palettes.append([0x0100 + index, 0x0200 + index, 0x0300 + index, 0x0400 + index])
 	RomCache.write_json(RomCache.world_palettes_path(_directory), palettes)
 
@@ -207,7 +207,7 @@ func _write_cache() -> void:
 	var roof_tiles: Array = []
 	for roof: int in 2:
 		var run: Array = []
-		run.resize(RomLayout.ROOF_TILES * Gen2Tiles.TILE_PIXELS)
+		run.resize(Gen2Layout.ROOF_TILES * PokeTiles.TILE_PIXELS)
 		for index: int in run.size():
 			run[index] = roof + 1
 		roof_tiles.append(run)
@@ -269,12 +269,12 @@ func test_changed_tiles_reports_exactly_the_tiles_a_frame_rewrote() -> void:
 		var redraw: bool = animation.advance_frame()
 		var after: PackedByteArray = animation.current_indices()
 		var actually_changed: Array = []
-		var width: int = RomLayout.TILESET_TILE_COUNT * Gen2Tiles.TILE_WIDTH
-		for tile: int in RomLayout.TILESET_TILE_COUNT:
-			for pixel: int in Gen2Tiles.TILE_PIXELS:
+		var width: int = Gen2Layout.TILESET_TILE_COUNT * PokeTiles.TILE_WIDTH
+		for tile: int in Gen2Layout.TILESET_TILE_COUNT:
+			for pixel: int in PokeTiles.TILE_PIXELS:
 				@warning_ignore("integer_division")
-				var at: int = (pixel / Gen2Tiles.TILE_WIDTH) * width \
-					+ tile * Gen2Tiles.TILE_WIDTH + pixel % Gen2Tiles.TILE_WIDTH
+				var at: int = (pixel / PokeTiles.TILE_WIDTH) * width \
+					+ tile * PokeTiles.TILE_WIDTH + pixel % PokeTiles.TILE_WIDTH
 				if before[at] != after[at]:
 					actually_changed.append(tile)
 					break
@@ -378,7 +378,7 @@ func _tick_pair(animation: Gen2WorldAnimation) -> void:
 ## tile's first pixel is its own column of row zero rather than a tile-sized
 ## stride into the array.
 func _tree_frame(animation: Gen2WorldAnimation, tile: int) -> int:
-	return 0 if animation.current_indices()[tile * Gen2Tiles.TILE_WIDTH] == 1 else 1
+	return 0 if animation.current_indices()[tile * PokeTiles.TILE_WIDTH] == 1 else 1
 
 
 ## `ScrollTileRightLeft` is the cave, dark cave and ice path lists' only tick:
@@ -420,16 +420,16 @@ func test_the_cave_list_ticks_its_timer_from_the_horizontal_scroll_alone() -> vo
 ## Which column of tile [param tile]'s top row is lit, and which row of its
 ## first column is, for the two scrolls above.
 func _lit_column(animation: Gen2WorldAnimation, tile: int) -> int:
-	for x: int in Gen2Tiles.TILE_WIDTH:
-		if animation.current_indices()[tile * Gen2Tiles.TILE_WIDTH + x] != 0:
+	for x: int in PokeTiles.TILE_WIDTH:
+		if animation.current_indices()[tile * PokeTiles.TILE_WIDTH + x] != 0:
 			return x
 	return -1
 
 
 func _lit_row(animation: Gen2WorldAnimation, tile: int) -> int:
-	var width: int = RomLayout.TILESET_TILE_COUNT * Gen2Tiles.TILE_WIDTH
-	for y: int in Gen2Tiles.TILE_HEIGHT:
-		if animation.current_indices()[y * width + tile * Gen2Tiles.TILE_WIDTH] != 0:
+	var width: int = Gen2Layout.TILESET_TILE_COUNT * PokeTiles.TILE_WIDTH
+	for y: int in PokeTiles.TILE_HEIGHT:
+		if animation.current_indices()[y * width + tile * PokeTiles.TILE_WIDTH] != 0:
 			return y
 	return -1
 
@@ -443,9 +443,9 @@ func test_a_map_group_roof_replaces_nine_tiles_of_the_strip() -> void:
 	var data: GameData = GameData.open_directory(_directory)
 	var tileset: Gen2WorldTileset = data.world_tileset(ROOFED_TILESET)
 	var base: PackedByteArray = data.world_tileset_indices(ROOFED_TILESET)
-	var width: int = tileset.tile_count * Gen2Tiles.TILE_WIDTH
-	var left: int = RomLayout.ROOF_VRAM_TILE * Gen2Tiles.TILE_WIDTH
-	var span: int = RomLayout.ROOF_TILES * Gen2Tiles.TILE_WIDTH
+	var width: int = tileset.tile_count * PokeTiles.TILE_WIDTH
+	var left: int = Gen2Layout.ROOF_VRAM_TILE * PokeTiles.TILE_WIDTH
+	var span: int = Gen2Layout.ROOF_TILES * PokeTiles.TILE_WIDTH
 
 	assert_eq(data.map_group_roof(0), 0)
 	assert_eq(data.map_group_roof(1), 1)
@@ -455,7 +455,7 @@ func test_a_map_group_roof_replaces_nine_tiles_of_the_strip() -> void:
 		var map := Gen2WorldMap.from_cache({"group": group, "tileset": ROOFED_TILESET})
 		var drawn: PackedByteArray = data.map_tile_indices(map, tileset)
 		assert_eq(drawn.size(), base.size())
-		for y: int in Gen2Tiles.TILE_HEIGHT:
+		for y: int in PokeTiles.TILE_HEIGHT:
 			for x: int in width:
 				var inside: bool = x >= left and x < left + span
 				assert_eq(
@@ -500,14 +500,14 @@ func test_roof_colours_replace_two_slots_on_outdoor_maps_only() -> void:
 		data, Gen2WorldPalette.ENVIRONMENT_TOWN, Gen2WorldPalette.TIME_MORNING, 1
 	)
 	assert_eq(morning.size(), 2)
-	assert_eq(morning[0], Gen2Palette.from_packed(0x0002))
-	assert_eq(morning[1], Gen2Palette.from_packed(0x0003))
+	assert_eq(morning[0], PokePalette.from_packed(0x0002))
+	assert_eq(morning[1], PokePalette.from_packed(0x0003))
 	for time: int in [Gen2WorldPalette.TIME_NIGHT, Gen2WorldPalette.TIME_DARK]:
 		var night: PackedColorArray = Gen2WorldPalette.roof_colors(
 			data, Gen2WorldPalette.ENVIRONMENT_ROUTE, time, 1
 		)
-		assert_eq(night[0], Gen2Palette.from_packed(0x0004))
-		assert_eq(night[1], Gen2Palette.from_packed(0x0005))
+		assert_eq(night[0], PokePalette.from_packed(0x0004))
+		assert_eq(night[1], PokePalette.from_packed(0x0005))
 	for environment: int in [0, 3, 4, 6, 7]:
 		assert_eq(Gen2WorldPalette.roof_colors(
 			data, environment, Gen2WorldPalette.TIME_DAY, 1
@@ -517,7 +517,7 @@ func test_roof_colours_replace_two_slots_on_outdoor_maps_only() -> void:
 	assert_eq(data.map_group_roof(2), -1)
 	assert_eq(Gen2WorldPalette.roof_colors(
 		data, Gen2WorldPalette.ENVIRONMENT_TOWN, Gen2WorldPalette.TIME_DAY, 2
-	)[0], Gen2Palette.from_packed(0x0003))
+	)[0], PokePalette.from_packed(0x0003))
 
 
 ## `LoadMapPals` asks `LoadSpecialMapPalette` first, and the carry it answers
@@ -525,14 +525,14 @@ func test_roof_colours_replace_two_slots_on_outdoor_maps_only() -> void:
 ## tilesets carry eight fixed palettes, and the clock cannot move any of them.
 func test_six_tilesets_take_a_fixed_palette_set_instead_of_the_time_of_day_row() -> void:
 	var data: GameData = GameData.open_directory(_directory)
-	for index: int in RomLayout.SPECIAL_PALETTE_TILESETS.size():
-		var tileset: int = RomLayout.SPECIAL_PALETTE_TILESETS[index]
+	for index: int in Gen2Layout.SPECIAL_PALETTE_TILESETS.size():
+		var tileset: int = Gen2Layout.SPECIAL_PALETTE_TILESETS[index]
 		var fixed: Array = data.special_map_palettes(tileset, 0)
 		assert_eq(fixed.size(), 8, "tileset %d carries eight" % tileset)
 		for slot: int in 8:
 			assert_eq(
 				(fixed[slot] as PackedColorArray)[0],
-				Gen2Palette.from_packed(0x0100 + index * 8 + slot),
+				PokePalette.from_packed(0x0100 + index * 8 + slot),
 				"tileset %d slot %d" % [tileset, slot]
 			)
 	assert_eq(data.special_map_palettes(0x01, 0).size(), 0, "TILESET_JOHTO has none")
@@ -540,8 +540,8 @@ func test_six_tilesets_take_a_fixed_palette_set_instead_of_the_time_of_day_row()
 	# `.ice_path`'s own `cp INDOOR`: the Hall of Fame shares the tileset and is
 	# the one map handed back to the ordinary selection.
 	assert_eq(data.special_map_palettes(
-		RomLayout.SPECIAL_PALETTE_ICE_PATH,
-		RomLayout.SPECIAL_PALETTE_ENVIRONMENT_INDOOR
+		Gen2Layout.SPECIAL_PALETTE_ICE_PATH,
+		Gen2Layout.SPECIAL_PALETTE_ENVIRONMENT_INDOOR
 	).size(), 0)
 
 	var tiles: Gen2WorldTileset = data.world_tileset(UNROOFED_TILESET)
@@ -551,10 +551,10 @@ func test_six_tilesets_take_a_fixed_palette_set_instead_of_the_time_of_day_row()
 	var ordinary: Array = Gen2WorldPalette.tile_palettes(data, plain, tiles)
 	assert_eq(
 		(drawn[0] as PackedColorArray)[0],
-		Gen2Palette.from_packed(0x0100 + 3 * 8),
+		PokePalette.from_packed(0x0100 + 3 * 8),
 		"a house tile takes the house set"
 	)
-	assert_eq((ordinary[0] as PackedColorArray)[0], Gen2Palette.from_packed(0x7FFF))
+	assert_eq((ordinary[0] as PackedColorArray)[0], PokePalette.from_packed(0x7FFF))
 
 
 ## The debug readout's frame-rate line, which is what says whether a stutter was

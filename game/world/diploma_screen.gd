@@ -71,7 +71,7 @@ func handle_button(button: int) -> bool:
 	if not _open:
 		return false
 	## `CheckCancelPrint` reads B alone; `WaitPressAorB_BlinkCursor` reads both.
-	if button == Gen2Button.B or (not _printing and button == Gen2Button.A):
+	if button == PokeButton.B or (not _printing and button == PokeButton.A):
 		close()
 	return true
 

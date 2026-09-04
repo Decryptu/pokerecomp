@@ -40,17 +40,17 @@ static func stepped(shown: int, button: int, available: int) -> int:
 
 func press(button: int) -> StringName:
 	match button:
-		Gen2Button.A:
+		PokeButton.A:
 			return CONFIRMED
-		Gen2Button.B:
+		PokeButton.B:
 			return CANCELLED
-		Gen2Button.UP:
+		PokeButton.UP:
 			_step_up()
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			_step_down()
-		Gen2Button.LEFT:
+		PokeButton.LEFT:
 			_page_down()
-		Gen2Button.RIGHT:
+		PokeButton.RIGHT:
 			_page_up()
 	return PENDING
 

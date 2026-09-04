@@ -64,16 +64,16 @@ static func player_cell(data: GameData, female: bool) -> Dictionary:
 	var sheet: String = "intro_player_female" if female else "intro_player_male"
 	var strip: PackedByteArray = data.tile_indices(sheet)
 	var tile: int = Gen2Font.TILE
-	var tiles: int = RomLayout.INTRO_PLAYER_PIC_TILES
+	var tiles: int = Gen2Layout.INTRO_PLAYER_PIC_TILES
 	if strip.size() < tiles * tile * tile:
 		return {}
-	var width: int = RomLayout.INTRO_PLAYER_PIC_COLUMNS * tile
+	var width: int = Gen2Layout.INTRO_PLAYER_PIC_COLUMNS * tile
 	var indices := PackedByteArray()
-	indices.resize(width * RomLayout.INTRO_PLAYER_PIC_ROWS * tile)
+	indices.resize(width * Gen2Layout.INTRO_PLAYER_PIC_ROWS * tile)
 	var strip_width: int = tiles * tile
-	for row: int in RomLayout.INTRO_PLAYER_PIC_ROWS:
-		for column: int in RomLayout.INTRO_PLAYER_PIC_COLUMNS:
-			var source_tile: int = row * RomLayout.INTRO_PLAYER_PIC_COLUMNS + column
+	for row: int in Gen2Layout.INTRO_PLAYER_PIC_ROWS:
+		for column: int in Gen2Layout.INTRO_PLAYER_PIC_COLUMNS:
+			var source_tile: int = row * Gen2Layout.INTRO_PLAYER_PIC_COLUMNS + column
 			for y: int in tile:
 				for x: int in tile:
 					indices[(row * tile + y) * width + column * tile + x] = \

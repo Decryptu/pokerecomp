@@ -30,7 +30,7 @@ func _initialize() -> void:
 
 	var scene_path: String = args[0]
 	_output_path = args[1]
-	if Gen2ToolPath.refuses(_output_path):
+	if PokeToolPath.refuses(_output_path):
 		quit(2)
 		return
 	if args.size() >= 3:
@@ -82,7 +82,7 @@ func _process(_delta: float) -> bool:
 	if _elapsed_frames < _frames_to_wait:
 		return false
 
-	var image: Image = Gen2ToolPath.capture(root)
+	var image: Image = PokeToolPath.capture(root)
 	if image == null:
 		quit(1)
 		return true

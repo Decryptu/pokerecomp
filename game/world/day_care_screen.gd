@@ -52,7 +52,7 @@ var _role: StringName = &"man"
 var _player_name: String = ""
 var _player_id: int = 0
 var _random: RandomNumberGenerator = null
-## Every stub `RomLayout.DAY_CARE_TEXT_RUNS` names, by that name.
+## Every stub `Gen2Layout.DAY_CARE_TEXT_RUNS` names, by that name.
 var _texts: Dictionary = {}
 
 var _phase: int = Phase.DONE
@@ -146,19 +146,19 @@ func handle_button(button: int) -> bool:
 		return _party.handle_button(button)
 	if _phase == Phase.ASK:
 		match button:
-			Gen2Button.UP, Gen2Button.DOWN:
+			PokeButton.UP, PokeButton.DOWN:
 				_yes = not _yes
 				_draw_yes_no()
 				return true
-			Gen2Button.A:
+			PokeButton.A:
 				_answer(_yes)
 				return true
-			Gen2Button.B:
+			PokeButton.B:
 				## `YesNoBox` answers B with the carry each caller takes as NO.
 				_answer(false)
 				return true
 		return false
-	if _phase != Phase.TEXT or button != Gen2Button.A \
+	if _phase != Phase.TEXT or button != PokeButton.A \
 		or _text_box == null or not _text_box.visible:
 		return false
 	if _text_box.is_revealing() or _text_box.has_pages_left():

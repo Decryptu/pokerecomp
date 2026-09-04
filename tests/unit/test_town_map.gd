@@ -12,21 +12,21 @@ func test_johto_window_is_the_whole_region_and_the_cursor_wraps() -> void:
 	assert_eq(map.last_landmark(), 46)
 	assert_eq(map.cursor, 1)
 
-	map.press(Gen2Button.UP)
+	map.press(PokeButton.UP)
 	assert_eq(map.cursor, 2)
-	map.press(Gen2Button.DOWN)
+	map.press(PokeButton.DOWN)
 	assert_eq(map.cursor, 1)
 	## `.pressed_down` rewinds to one past the window's end and steps back.
-	map.press(Gen2Button.DOWN)
+	map.press(PokeButton.DOWN)
 	assert_eq(map.cursor, 46)
-	map.press(Gen2Button.UP)
+	map.press(PokeButton.UP)
 	assert_eq(map.cursor, 1)
 
 
 func test_gold_and_silver_windows_sit_one_landmark_lower() -> void:
 	var map := Gen2TownMap.create(Gen2TownMap.JOHTO_LANDMARK, false)
 	assert_eq(map.last_landmark(), 45)
-	map.press(Gen2Button.DOWN)
+	map.press(PokeButton.DOWN)
 	assert_eq(map.cursor, 45)
 
 
@@ -47,9 +47,9 @@ func test_a_cursor_outside_the_window_walks_into_it_rather_than_being_clamped() 
 	## window and the first press lands inside it.
 	var map := Gen2TownMap.create(47, true)
 	assert_eq(map.cursor, 47)
-	map.press(Gen2Button.UP)
+	map.press(PokeButton.UP)
 	assert_eq(map.cursor, 48)
-	map.press(Gen2Button.DOWN)
+	map.press(PokeButton.DOWN)
 	assert_eq(map.cursor, 47)
 
 
@@ -68,8 +68,8 @@ func test_the_fast_ship_is_kanto_on_the_poster_and_johto_on_the_card() -> void:
 
 func test_only_the_d_pad_moves_the_cursor() -> void:
 	var map := Gen2TownMap.create(10, true)
-	assert_false(map.press(Gen2Button.A))
-	assert_false(map.press(Gen2Button.LEFT))
+	assert_false(map.press(PokeButton.A))
+	assert_false(map.press(PokeButton.LEFT))
 	assert_eq(map.cursor, 10)
 
 
@@ -79,16 +79,16 @@ func test_only_the_d_pad_moves_the_cursor() -> void:
 func test_the_dex_area_walks_regions_rather_than_landmarks() -> void:
 	var map := Gen2TownMap.create(71, true, false, Gen2TownMap.SCREEN_DEX_AREA)
 	assert_eq(map.region(), Gen2TownMap.REGION_JOHTO)
-	assert_false(map.press(Gen2Button.LEFT))
-	assert_false(map.press(Gen2Button.UP))
-	assert_false(map.press(Gen2Button.RIGHT))
+	assert_false(map.press(PokeButton.LEFT))
+	assert_false(map.press(PokeButton.UP))
+	assert_false(map.press(PokeButton.RIGHT))
 	assert_eq(map.region(), Gen2TownMap.REGION_JOHTO)
 
 	var opened := Gen2TownMap.create(71, true, true, Gen2TownMap.SCREEN_DEX_AREA)
-	assert_true(opened.press(Gen2Button.RIGHT))
+	assert_true(opened.press(PokeButton.RIGHT))
 	assert_eq(opened.region(), Gen2TownMap.REGION_KANTO)
-	assert_false(opened.press(Gen2Button.RIGHT))
-	assert_true(opened.press(Gen2Button.LEFT))
+	assert_false(opened.press(PokeButton.RIGHT))
+	assert_true(opened.press(PokeButton.LEFT))
 	assert_eq(opened.region(), Gen2TownMap.REGION_JOHTO)
 
 
@@ -97,7 +97,7 @@ func test_the_dex_area_walks_regions_rather_than_landmarks() -> void:
 func test_the_dex_area_draws_the_player_only_in_their_own_region() -> void:
 	var johto := Gen2TownMap.create(1, true, true, Gen2TownMap.SCREEN_DEX_AREA)
 	assert_true(johto.player_in_region())
-	johto.press(Gen2Button.RIGHT)
+	johto.press(PokeButton.RIGHT)
 	assert_false(johto.player_in_region())
 
 	var ship := Gen2TownMap.create(
@@ -107,7 +107,7 @@ func test_the_dex_area_draws_the_player_only_in_their_own_region() -> void:
 
 	var kanto := Gen2TownMap.create(47, true, true, Gen2TownMap.SCREEN_DEX_AREA)
 	assert_false(kanto.player_in_region())
-	kanto.press(Gen2Button.RIGHT)
+	kanto.press(PokeButton.RIGHT)
 	assert_true(kanto.player_in_region())
 
 
@@ -119,15 +119,15 @@ func test_the_fly_map_opens_on_the_region_the_player_is_in() -> void:
 	assert_eq(johto.region(), Gen2TownMap.REGION_JOHTO)
 	assert_eq(johto.cursor, 0, "New Bark is Johto's default")
 	assert_eq(johto.first_landmark(), 0)
-	assert_eq(johto.last_landmark(), RomLayout.KANTO_FLYPOINT - 1)
+	assert_eq(johto.last_landmark(), Gen2Layout.KANTO_FLYPOINT - 1)
 
 	var kanto := Gen2TownMap.fly(
 		60, true, [Gen2TownMap.FLY_INDIGO] as Array[int], true
 	)
 	assert_eq(kanto.region(), Gen2TownMap.REGION_KANTO)
 	assert_eq(kanto.cursor, Gen2TownMap.FLY_INDIGO, "Indigo is Kanto's default")
-	assert_eq(kanto.first_landmark(), RomLayout.KANTO_FLYPOINT)
-	assert_eq(kanto.last_landmark(), RomLayout.FLYPOINT_COUNT - 1)
+	assert_eq(kanto.first_landmark(), Gen2Layout.KANTO_FLYPOINT)
+	assert_eq(kanto.last_landmark(), Gen2Layout.FLYPOINT_COUNT - 1)
 	# The player icon still says where the player is standing.
 	assert_eq(kanto.player_landmark, 60)
 
@@ -145,20 +145,20 @@ func test_the_fly_cursor_skips_every_flypoint_that_has_not_been_visited() -> voi
 	var map := Gen2TownMap.fly(
 		Gen2TownMap.JOHTO_LANDMARK, false, [2, 4] as Array[int], true
 	)
-	map.press(Gen2Button.UP)
+	map.press(PokeButton.UP)
 	assert_eq(map.cursor, 2)
-	map.press(Gen2Button.UP)
+	map.press(PokeButton.UP)
 	assert_eq(map.cursor, 4)
 	# Wrapping past the end lands back on the default, which is on the map
 	# whether or not it has been visited.
-	map.press(Gen2Button.UP)
+	map.press(PokeButton.UP)
 	assert_eq(map.cursor, 0)
-	map.press(Gen2Button.DOWN)
+	map.press(PokeButton.DOWN)
 	assert_eq(map.cursor, 4)
 
 
 func test_a_fly_map_with_nothing_visited_holds_its_default() -> void:
 	var map := Gen2TownMap.fly(Gen2TownMap.JOHTO_LANDMARK, false, [] as Array[int], true)
-	for press: int in [Gen2Button.UP, Gen2Button.DOWN, Gen2Button.UP]:
+	for press: int in [PokeButton.UP, PokeButton.DOWN, PokeButton.UP]:
 		map.press(press)
 		assert_eq(map.cursor, 0)

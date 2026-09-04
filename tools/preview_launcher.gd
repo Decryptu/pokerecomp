@@ -4,15 +4,38 @@ extends SceneTree
 ## set of cartridges present.
 ##   Godot --path . -s res://tools/preview_launcher.gd -- <out.png> [light|dark] \
 ##       [width] [height] [page] [empty|mixed|full|stale] [view] [mod id] [scroll] \
-##       [focus index] [fade step] [insets]
+##       [focus index] [fade step] [insets] [cartridge id]
 ## Every argument is documented at the parse below. Opens a real window.
 
-const STATES: Dictionary = {
-	"empty": {"gold": "missing", "silver": "missing", "crystal": "missing"},
-	"mixed": {"gold": "usable", "silver": "missing", "crystal": "missing"},
-	"full": {"gold": "usable", "silver": "usable", "crystal": "usable"},
-	"stale": {"gold": "stale", "silver": "usable", "crystal": "incomplete"},
+## Which bays are filled, built from [constant RomRegistry.ORDER] so a cartridge
+## added to the shelf appears in every shot without a table edit.
+static var STATES: Dictionary = {
+	"empty": _all("missing"),
+	"mixed": _only(&"gold", "usable"),
+	"full": _all("usable"),
+	"stale": _mixture(),
 }
+
+
+static func _all(state: String) -> Dictionary:
+	var out: Dictionary = {}
+	for id: StringName in RomRegistry.ORDER:
+		out[String(id)] = state
+	return out
+
+
+static func _only(wanted: StringName, state: String) -> Dictionary:
+	var out: Dictionary = _all("missing")
+	out[String(wanted)] = state
+	return out
+
+
+## One bay of each kind the launcher draws differently.
+static func _mixture() -> Dictionary:
+	var out: Dictionary = _all("usable")
+	out[String(RomRegistry.GOLD)] = "stale"
+	out[String(RomRegistry.CRYSTAL)] = "incomplete"
+	return out
 
 var _output: String = ""
 var _frames: int = 0
@@ -25,6 +48,7 @@ var _mod: String = ""
 var _scroll: int = 0
 var _focus: int = -1
 var _fade: int = 0
+var _cartridge: StringName = &""
 
 
 func _initialize() -> void:
@@ -34,7 +58,7 @@ func _initialize() -> void:
 		quit(1)
 		return
 	_output = args[0]
-	if Gen2ToolPath.refuses(_output):
+	if PokeToolPath.refuses(_output):
 		quit(2)
 		return
 	var mode: String = args[1] if args.size() > 1 else "light"
@@ -47,6 +71,7 @@ func _initialize() -> void:
 	_scroll = int(args[8]) if args.size() > 8 else 0
 	_focus = int(args[9]) if args.size() > 9 else -1
 	_fade = int(args[10]) if args.size() > 10 else 0
+	_cartridge = StringName(args[12]) if args.size() > 12 else &""
 	if args.size() > 11 and not args[11].is_empty():
 		var edges: PackedStringArray = args[11].split(",")
 		if edges.size() == 4:
@@ -80,6 +105,8 @@ func _process(_delta: float) -> bool:
 		if STATES.has(_state):
 			_launcher.preview_slot_states(STATES[_state])
 		_launcher.select_page(StringName(_page))
+		if not _cartridge.is_empty():
+			_launcher.preview_select_cartridge(_cartridge)
 		if _view == "import":
 			# Started rather than awaited: the import hands a frame back as it
 			# goes, so the ordinary shot below lands in the middle of it, which
@@ -114,7 +141,7 @@ func _process(_delta: float) -> bool:
 		_launcher.preview_fade_step(_fade)
 	if _frames < 26:
 		return false
-	var image: Image = Gen2ToolPath.capture(root)
+	var image: Image = PokeToolPath.capture(root)
 	if image == null:
 		quit(1)
 		return true

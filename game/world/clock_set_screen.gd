@@ -93,7 +93,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if _text_box != null:
-		_text_box.accelerated = Gen2Button.text_accelerating()
+		_text_box.accelerated = PokeButton.text_accelerating()
 	advance_frames(_frame_clock.tick(delta))
 
 
@@ -135,7 +135,7 @@ func handle_button(button: int) -> bool:
 		return true
 	match _phase:
 		Phase.WOKE_UP:
-			if button != Gen2Button.A and button != Gen2Button.B:
+			if button != PokeButton.A and button != PokeButton.B:
 				return false
 			if _text_box.advance():
 				return true
@@ -143,22 +143,22 @@ func handle_button(button: int) -> bool:
 			return true
 		Phase.RESPONSE:
 			# `WaitPressAorB_BlinkCursor` takes either.
-			if button != Gen2Button.A and button != Gen2Button.B:
+			if button != PokeButton.A and button != PokeButton.B:
 				return false
 			_phase = Phase.DONE
 			finished.emit(_day, _hour, _minute)
 			return true
 	if _phase == Phase.HOUR_CONFIRM or _phase == Phase.MINUTE_CONFIRM:
 		return _handle_confirm(button)
-	if button in [Gen2Button.UP, Gen2Button.DOWN]:
-		var step: int = 1 if button == Gen2Button.UP else -1
+	if button in [PokeButton.UP, PokeButton.DOWN]:
+		var step: int = 1 if button == PokeButton.UP else -1
 		if _phase == Phase.HOUR:
 			_hour = wrapi(_hour + step, 0, 24)
 		else:
 			_minute = wrapi(_minute + step, 0, 60)
 		_render()
 		return true
-	if button != Gen2Button.A:
+	if button != PokeButton.A:
 		return false
 	_begin_confirm()
 	return true
@@ -172,13 +172,13 @@ func value() -> Dictionary:
 ## NO. `InterpretTwoOptionMenu` spends `ld c, $f` on either before the box is
 ## closed, so the answer is not acted on until those frames have gone.
 func _handle_confirm(button: int) -> bool:
-	if button in [Gen2Button.UP, Gen2Button.DOWN]:
+	if button in [PokeButton.UP, PokeButton.DOWN]:
 		_confirm_cursor = 1 - _confirm_cursor
 		_render()
 		return true
-	if button != Gen2Button.A and button != Gen2Button.B:
+	if button != PokeButton.A and button != PokeButton.B:
 		return false
-	var yes: bool = button == Gen2Button.A and _confirm_cursor == 0
+	var yes: bool = button == PokeButton.A and _confirm_cursor == 0
 	_presentation.clear()
 	_presentation.push_delay(YES_NO_DELAY_FRAMES)
 	_queue(_accept_confirm.bind(yes))
@@ -310,7 +310,7 @@ func _render() -> void:
 	# Every BG palette on screen goes through the frame's own byte, which is what
 	# a hardware fade does to a screen carrying more than one palette.
 	var colors: PackedColorArray = Gen2IntroPresentation.apply_bgp(
-		Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK])),
+		PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK])),
 		_presentation.bgp()
 	)
 	Gen2PicImage.show(_view, _page.render(

@@ -337,7 +337,7 @@ func _ensure_pixels() -> void:
 ## letter, and everything else out of the species table. The atlas is indexed
 ## from zero and a letter counts from one, which is the subtraction here.
 func _battler_pic(species: int, unown_form: int, back: bool) -> Dictionary:
-	if species == RomLayout.UNOWN_SPECIES and unown_form > 0:
+	if species == Gen2Layout.UNOWN_SPECIES and unown_form > 0:
 		return _data.unown_pic(unown_form - 1, back)
 	return _data.species_pic(species, back)
 
@@ -538,10 +538,10 @@ func _grayscale() -> PackedColorArray:
 ## [code](byte >> index * 2) & 3[/code] of the pristine palette, which is why a
 ## remap never compounds.
 static func _remap(palette: PackedColorArray, dmg: int) -> PackedColorArray:
-	if palette.size() < Gen2Palette.COLORS_PER_PIC or dmg == PALETTE_IDENTITY:
+	if palette.size() < PokePalette.COLORS_PER_PIC or dmg == PALETTE_IDENTITY:
 		return palette
 	var out := PackedColorArray()
-	for index: int in Gen2Palette.COLORS_PER_PIC:
+	for index: int in PokePalette.COLORS_PER_PIC:
 		out.append(palette[(dmg >> (index * 2)) & 3])
 	return out
 
@@ -597,7 +597,7 @@ func _draw_panels() -> void:
 		_draw_trainer_hud_border(panels, border)
 		_show_layer(
 			_panels, panels,
-			Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+			PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 		)
 
 	if _layer_changed(&"enemy_bar", [enemy_hp, enemy_max_hp, enemy_hud, raster]):
@@ -866,10 +866,10 @@ func _show_layer(
 func _show_image(into: TextureRect, image: Image) -> void:
 	var rows: PackedInt32Array = PackedInt32Array(_view.get("raster_scy", []))
 	if not rows.is_empty():
-		image = Gen2Raster.scroll_rows(image, rows, MAP_HEIGHT)
+		image = PokeRaster.scroll_rows(image, rows, MAP_HEIGHT)
 	var offsets: PackedInt32Array = PackedInt32Array(_view.get("raster_scx", []))
 	if not offsets.is_empty():
-		image = Gen2Raster.scroll(image, offsets, MAP_WIDTH)
+		image = PokeRaster.scroll(image, offsets, MAP_WIDTH)
 	Gen2PicImage.show(into, image)
 	into.size = image.get_size()
 	into.position = Vector2.ZERO

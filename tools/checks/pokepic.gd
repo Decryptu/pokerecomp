@@ -67,7 +67,7 @@ func _check_egg_pic() -> void:
 	var pic: Dictionary = _r.data.egg_pic()
 	if not _r.check(not pic.is_empty(), "the cache carries no egg pic."):
 		return
-	var side: int = RomLayout.EGG_PIC_TILES * Gen2Font.TILE
+	var side: int = Gen2Layout.EGG_PIC_TILES * Gen2Font.TILE
 	_r.check(
 		int(pic["width"]) == side and int(pic["height"]) == side,
 		"the egg pic is %dx%d rather than %d square." % [

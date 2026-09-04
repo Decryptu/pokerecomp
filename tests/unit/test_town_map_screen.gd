@@ -29,16 +29,16 @@ func test_the_screen_opens_on_the_landmark_it_is_given() -> void:
 func test_b_closes_the_map_without_leaving_it_visible() -> void:
 	_screen.open(_data, 1)
 	watch_signals(_screen)
-	_screen.handle_button(Gen2Button.B)
+	_screen.handle_button(PokeButton.B)
 	assert_false(_screen.visible)
 	assert_signal_emitted(_screen, "closed")
 
 
 func test_the_d_pad_walks_the_window_and_everything_else_is_swallowed() -> void:
 	_screen.open(_data, 1)
-	_screen.handle_button(Gen2Button.UP)
+	_screen.handle_button(PokeButton.UP)
 	assert_eq(_screen.cursor_landmark(), 2)
-	assert_true(_screen.handle_button(Gen2Button.A))
+	assert_true(_screen.handle_button(PokeButton.A))
 	assert_eq(_screen.cursor_landmark(), 2)
 
 
@@ -53,7 +53,7 @@ func test_a_cache_without_the_region_map_refuses_to_open() -> void:
 ## landmark's stored point is the centre of its 16x16 icon.
 func test_the_screen_renders_both_objects_on_their_landmarks() -> void:
 	_screen.open(_data, 1)
-	_screen.handle_button(Gen2Button.UP)
+	_screen.handle_button(PokeButton.UP)
 	var image: Image = _screen.render()
 	assert_eq(image.get_width(), Gen2Screen.WIDTH)
 	assert_eq(image.get_height(), Gen2Screen.HEIGHT)
@@ -68,10 +68,10 @@ func test_the_dex_area_opens_on_johto_and_leaves_on_a() -> void:
 	assert_true(_screen.open_dex_area(_data, Fixture.TRAINER_SPECIES, [[1], [47]], 1, true))
 	assert_eq(_screen.map().region(), Gen2TownMap.REGION_JOHTO)
 	assert_eq(_screen.current_nests(), [1])
-	_screen.handle_button(Gen2Button.RIGHT)
+	_screen.handle_button(PokeButton.RIGHT)
 	assert_eq(_screen.current_nests(), [47])
 	watch_signals(_screen)
-	_screen.handle_button(Gen2Button.A)
+	_screen.handle_button(PokeButton.A)
 	assert_signal_emitted(_screen, "closed")
 
 
@@ -95,16 +95,16 @@ func test_the_nest_icons_blink_every_sixteen_frames() -> void:
 func test_select_replaces_the_nests_with_the_player_icon() -> void:
 	_screen.open_dex_area(_data, Fixture.TRAINER_SPECIES, [[1], []], 1, true)
 	var lit: Color = _nest_pixel()
-	_screen.handle_button(Gen2Button.SELECT)
+	_screen.handle_button(PokeButton.SELECT)
 	assert_eq(_screen.shadow_oam(), Gen2TownMapScreen.OAM_PLAYER)
 	assert_ne(_nest_pixel(), lit, "the nests went with it")
 
-	_screen.handle_button(Gen2Button.RIGHT)
+	_screen.handle_button(PokeButton.RIGHT)
 	_screen.advance_frame()
 	assert_eq(_screen.shadow_oam(), Gen2TownMapScreen.OAM_CLEARED, "the player is in Johto")
 
-	_screen.release_button(Gen2Button.SELECT)
-	_screen.handle_button(Gen2Button.LEFT)
+	_screen.release_button(PokeButton.SELECT)
+	_screen.handle_button(PokeButton.LEFT)
 	assert_eq(_screen.shadow_oam(), Gen2TownMapScreen.OAM_NESTS)
 	assert_eq(_nest_pixel(), lit)
 

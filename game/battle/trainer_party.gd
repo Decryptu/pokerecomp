@@ -52,7 +52,7 @@ static func build(
 static func _moves_for(
 	data: GameData, mon_type: int, species: int, level: int, stored: Array
 ) -> Array:
-	if mon_type == RomLayout.TRAINER_MON_MOVES or mon_type == RomLayout.TRAINER_MON_ITEM_MOVES:
+	if mon_type == Gen2Layout.TRAINER_MON_MOVES or mon_type == Gen2Layout.TRAINER_MON_ITEM_MOVES:
 		var out: Array = []
 		for move: Variant in stored:
 			if int(move) != 0:

@@ -130,13 +130,13 @@ static func from_data(data: GameData) -> Gen2LinkPage:
 		return null
 	## `SetTradeRoomBGPals` is `GetSGBLayout SCGB_DIPLOMA`, the same two colours
 	## every 1bpp page here is drawn through.
-	page.palette = Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+	page.palette = PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	page._tiles = data.link_border_indices()
 	page._screen = data.link_border_tilemap("screen")
 	page._cable_top = data.link_border_tilemap("cable_top")
 	page._cable_bottom = data.link_border_tilemap("cable_bottom")
-	page._tile_count = RomLayout.LINK_BORDER_TILES_CRYSTAL if not page._screen.is_empty() \
-		else RomLayout.LINK_BORDER_TILES_GOLD_SILVER
+	page._tile_count = Gen2Layout.LINK_BORDER_TILES_CRYSTAL if not page._screen.is_empty() \
+		else Gen2Layout.LINK_BORDER_TILES_GOLD_SILVER
 	page._box_tiles = CRYSTAL_BOX_TILES if not page._screen.is_empty() \
 		else GOLD_SILVER_BOX_TILES
 	return page
@@ -362,7 +362,7 @@ func _clear(indices: PackedByteArray, at: Vector2i) -> void:
 ## `_LinkTextbox` both name. A code at or above the font's own first code is a
 ## glyph instead, the way [Gen2DiplomaPage] splits them.
 func _blit(into: PackedByteArray, code: int, at: Vector2i) -> void:
-	if code >= RomLayout.FONT_FIRST_CODE:
+	if code >= Gen2Layout.FONT_FIRST_CODE:
 		font.draw_code(code, into, WIDTH, at.x * TILE, at.y * TILE)
 		return
 	if code >= _tile_count:

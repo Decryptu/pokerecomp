@@ -58,4 +58,4 @@ static func spikes_damage(max_hp: int) -> int:
 ## Whether `SpikesDamage` skips the Pokémon walking in: a Flying-type in either
 ## slot, and nothing else.
 static func spikes_spare(types: Array) -> bool:
-	return types.has(RomLayout.TYPE_FLYING)
+	return types.has(Gen2Layout.TYPE_FLYING)

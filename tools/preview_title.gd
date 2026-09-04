@@ -14,7 +14,7 @@ func _initialize() -> void:
 		push_error("Usage: preview_title.gd -- <game> <output.png> [frame;frame;...]")
 		quit(1)
 		return
-	if args.size() > 1 and Gen2ToolPath.refuses(args[1]):
+	if args.size() > 1 and PokeToolPath.refuses(args[1]):
 		quit(2)
 		return
 

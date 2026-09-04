@@ -165,7 +165,7 @@ func summary() -> String:
 	lines.append("pokerecomp diagnostics")
 	lines.append("Generated  %s" % _stamp())
 	lines.append("Build      %s, Godot %s, %s" % [
-		Gen2AppVersion.display(),
+		PokeAppVersion.display(),
 		Engine.get_version_info().get("string", "?"),
 		"debug" if OS.is_debug_build() else "release",
 	])
@@ -378,7 +378,7 @@ func _write_marker(clean: bool) -> void:
 	if file == null:
 		return
 	file.store_string(JSON.stringify({
-		"clean": clean, "version": Gen2AppVersion.VERSION, "started": _started_unix,
+		"clean": clean, "version": PokeAppVersion.VERSION, "started": _started_unix,
 	}))
 
 
@@ -406,7 +406,7 @@ func _mod_lines() -> PackedStringArray:
 	var lines: PackedStringArray = PackedStringArray(["Mods  %d installed, %d running" % [
 		manifests.size(), running.size(),
 	]])
-	for manifest: Gen2ModManifest in manifests:
+	for manifest: PokeModManifest in manifests:
 		lines.append("  %-24s %-10s api %-3d %s" % [
 			manifest.id, manifest.version, manifest.api_version,
 			"running" if running.has(manifest.id)

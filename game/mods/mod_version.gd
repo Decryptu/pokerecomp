@@ -1,4 +1,4 @@
-class_name Gen2ModVersion
+class_name PokeModVersion
 extends RefCounted
 
 ## Small SemVer range evaluator for manifest dependencies. Versions are strict

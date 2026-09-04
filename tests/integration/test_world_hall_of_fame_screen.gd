@@ -129,8 +129,8 @@ func test_no_key_advances_an_induction_panel() -> void:
 	await get_tree().process_frame
 	_spend_record_box()
 	var before: int = _host().remaining()
-	assert_true(_host().handle_button(Gen2Button.B))
-	assert_true(_host().handle_button(Gen2Button.A))
+	assert_true(_host().handle_button(PokeButton.B))
+	assert_true(_host().handle_button(PokeButton.A))
 	assert_eq(_host().remaining(), before)
 
 
@@ -187,7 +187,7 @@ func _advance_to_the_end() -> void:
 			Gen2HallOfFame.PAGE_MON:
 				_host().advance_hold_frames(Gen2HallOfFame.panel_frames(_data))
 			_:
-				_host().handle_button(Gen2Button.A)
+				_host().handle_button(PokeButton.A)
 
 
 ## `HallOfFame_FadeOutMusic`'s `ld c, 100` behind `InitDisplayForHallOfFame`.
@@ -196,6 +196,6 @@ func _spend_record_box() -> void:
 		StringName(_host().current_page()["kind"]), Gen2HallOfFame.PAGE_SAVING
 	)
 	var before: int = _host().remaining()
-	assert_true(_host().handle_button(Gen2Button.A), "the box reads no joypad")
+	assert_true(_host().handle_button(PokeButton.A), "the box reads no joypad")
 	assert_eq(_host().remaining(), before, "and does not advance on one")
 	_host().advance_hold_frames(Gen2SavePrompt.SAVING_RECORD_FRAMES)

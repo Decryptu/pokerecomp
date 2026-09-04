@@ -49,14 +49,14 @@ func _check_game() -> void:
 
 func _check_words() -> void:
 	var words: PackedStringArray = PackedStringArray()
-	for form: int in range(1, RomLayout.UNOWN_FORMS + 1):
+	for form: int in range(1, Gen2Layout.UNOWN_FORMS + 1):
 		words.append(_r.data.unown_word(form))
 	if not _r.check(
-		words.size() == RomLayout.UNOWN_FORMS,
+		words.size() == Gen2Layout.UNOWN_FORMS,
 		"the cache holds %d Unown words." % words.size()
 	):
 		return
-	for form: int in RomLayout.UNOWN_FORMS:
+	for form: int in Gen2Layout.UNOWN_FORMS:
 		var letter: String = char("A".unicode_at(0) + form)
 		_r.check(
 			words[form].begins_with(letter),
@@ -64,15 +64,15 @@ func _check_words() -> void:
 		)
 	_r.check(words[0] == FIRST_WORD, "Unown A's word is \"%s\"." % words[0])
 	_r.check(
-		words[RomLayout.UNOWN_FORMS - 1] == LAST_WORD,
-		"Unown Z's word is \"%s\"." % words[RomLayout.UNOWN_FORMS - 1]
+		words[Gen2Layout.UNOWN_FORMS - 1] == LAST_WORD,
+		"Unown Z's word is \"%s\"." % words[Gen2Layout.UNOWN_FORMS - 1]
 	)
 	_r.check(words[23] == X_WORD, "Unown X's word is \"%s\"." % words[23])
 	# A form outside the range is what a caller reading an empty dex slot asks
 	# for, and it answers nothing rather than the neighbouring word.
 	_r.check(_r.data.unown_word(0).is_empty(), "form 0 answers a word.")
 	_r.check(
-		_r.data.unown_word(RomLayout.UNOWN_FORMS + 1).is_empty(),
+		_r.data.unown_word(Gen2Layout.UNOWN_FORMS + 1).is_empty(),
 		"a form past Z answers a word."
 	)
 	if _first_words.is_empty():
@@ -87,7 +87,7 @@ func _check_words() -> void:
 ## now draws the letter a wild Unown's DVs name.
 func _check_pics() -> void:
 	var lit: int = 0
-	for form: int in RomLayout.UNOWN_FORMS:
+	for form: int in Gen2Layout.UNOWN_FORMS:
 		for back: bool in [false, true]:
 			var pic: Dictionary = _r.data.unown_pic(form, back)
 			if not _r.check(not pic.is_empty(), "Unown form %d has no pic." % form):
@@ -108,10 +108,10 @@ func _check_pics() -> void:
 			])
 			lit += drawn
 	_r.check(
-		_r.data.unown_pic(RomLayout.UNOWN_FORMS).is_empty(),
+		_r.data.unown_pic(Gen2Layout.UNOWN_FORMS).is_empty(),
 		"a form past Z answers a pic."
 	)
-	_r.note("unown pics: %d forms, %d drawn pixels." % [RomLayout.UNOWN_FORMS, lit])
+	_r.note("unown pics: %d forms, %d drawn pixels." % [Gen2Layout.UNOWN_FORMS, lit])
 
 
 ## `GetUnownLetter` over every DV word: each answers a letter in range, and the
@@ -120,15 +120,15 @@ func _check_pics() -> void:
 ## 256 packed values and each letter is reached by 256 of them.
 func _check_letters() -> void:
 	var counts: Array[int] = []
-	counts.resize(RomLayout.UNOWN_FORMS + 1)
+	counts.resize(Gen2Layout.UNOWN_FORMS + 1)
 	counts.fill(0)
 	for dvs: int in DV_WORDS:
 		var letter: int = Gen2Stats.unown_letter(dvs)
-		if letter < 1 or letter > RomLayout.UNOWN_FORMS:
+		if letter < 1 or letter > Gen2Layout.UNOWN_FORMS:
 			_r.fail("DVs $%04X answer letter %d." % [dvs, letter])
 			return
 		counts[letter] += 1
-	for letter: int in range(1, RomLayout.UNOWN_FORMS):
+	for letter: int in range(1, Gen2Layout.UNOWN_FORMS):
 		_r.check(
 			counts[letter] == 10 * 256,
 			"letter %d is reached by %d DV words, not %d." % [
@@ -136,15 +136,15 @@ func _check_letters() -> void:
 			]
 		)
 	_r.check(
-		counts[RomLayout.UNOWN_FORMS] == 6 * 256,
+		counts[Gen2Layout.UNOWN_FORMS] == 6 * 256,
 		"Z is reached by %d DV words, not %d." % [
-			counts[RomLayout.UNOWN_FORMS], 6 * 256,
+			counts[Gen2Layout.UNOWN_FORMS], 6 * 256,
 		]
 	)
 	# The two ends, which say the packing is the source's rather than a shift
 	# apart: every middle bit clear is A, every one set is Z.
 	_r.check(Gen2Stats.unown_letter(0x0000) == 1, "all-zero DVs are not A.")
-	_r.check(Gen2Stats.unown_letter(0xFFFF) == RomLayout.UNOWN_FORMS, "all-one DVs are not Z.")
+	_r.check(Gen2Stats.unown_letter(0xFFFF) == Gen2Layout.UNOWN_FORMS, "all-one DVs are not Z.")
 
 
 ## `DisplayUnownWords` on the maps that ask for it: the four Ruins of Alph
@@ -179,7 +179,7 @@ func _check_walls() -> void:
 	for word: String in said:
 		distinct[word] = true
 	_r.check(
-		distinct.size() == RomLayout.UNOWN_WALL_COUNT,
+		distinct.size() == Gen2Layout.UNOWN_WALL_COUNT,
 		"the four chambers said %d distinct words: %s." % [distinct.size(), said]
 	)
 	_r.note("unown walls: %s." % " ".join(said))
@@ -257,7 +257,7 @@ func _wall_word(number: int, cell: Vector2i) -> String:
 ## order, no duplicates, and the word the cursor lands on.
 func _check_dex_order() -> void:
 	var state := Gen2WorldState.new()
-	var dex: Gen2Pokedex = Gen2Pokedex.open(_r.data, state, RomLayout.DEXMODE_NEW)
+	var dex: Gen2Pokedex = Gen2Pokedex.open(_r.data, state, Gen2Layout.DEXMODE_NEW)
 	_r.check(not dex.unown_unlocked(), "Unown mode is unlocked before the flag is set.")
 	state.set_engine_flag(Gen2WorldState.ENGINE_UNOWN_DEX)
 	_r.check(dex.unown_unlocked(), "the Unown dex flag does not unlock the mode.")
@@ -278,18 +278,18 @@ func _check_dex_order() -> void:
 		dex.unown_word() == _r.data.unown_word(7),
 		"the cursor's word is \"%s\"." % dex.unown_word()
 	)
-	_r.check(dex.move_unown(Gen2Button.LEFT) == false, "the cursor moved left off the end.")
-	_r.check(dex.move_unown(Gen2Button.RIGHT), "the cursor did not move right.")
-	_r.check(dex.move_unown(Gen2Button.RIGHT), "the cursor did not reach the last form.")
-	_r.check(dex.move_unown(Gen2Button.RIGHT) == false, "the cursor moved right off the end.")
+	_r.check(dex.move_unown(PokeButton.LEFT) == false, "the cursor moved left off the end.")
+	_r.check(dex.move_unown(PokeButton.RIGHT), "the cursor did not move right.")
+	_r.check(dex.move_unown(PokeButton.RIGHT), "the cursor did not reach the last form.")
+	_r.check(dex.move_unown(PokeButton.RIGHT) == false, "the cursor moved right off the end.")
 	_r.check(
 		dex.selected_unown_form() == 1 and dex.unown_word() == _r.data.unown_word(1),
 		"the last form is %d." % dex.selected_unown_form()
 	)
 	# `.count_unown` stops at twenty-six however many times it is asked.
-	for form: int in range(1, RomLayout.UNOWN_FORMS + 1):
+	for form: int in range(1, Gen2Layout.UNOWN_FORMS + 1):
 		state.update_unown_dex(form)
 	_r.check(
-		state.unown_caught_count() == RomLayout.UNOWN_FORMS,
+		state.unown_caught_count() == Gen2Layout.UNOWN_FORMS,
 		"a full dex counts %d." % state.unown_caught_count()
 	)

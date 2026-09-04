@@ -5,7 +5,7 @@ extends RefCounted
 ## endings a chosen party member reaches, and the three routines beside it that
 ## decide the last one. [Gen2NameRaterScreen] is the routine itself, on the
 ## overworld's own pump. Every string is the cartridge's, off the ten `text_far`
-## stubs `RomLayout.NAME_RATER_TEXT_ORDER` pins.
+## stubs `Gen2Layout.NAME_RATER_TEXT_ORDER` pins.
 
 ## `MON_NAME_LENGTH - 1`: how many characters a nickname holds before its `@`.
 const NICKNAME_LENGTH: int = 10

@@ -1,4 +1,4 @@
-class_name Gen2ModRefusal
+class_name PokeModRefusal
 extends RefCounted
 
 ## Why a mod was refused, said to a player rather than to a log: one table for
@@ -158,13 +158,13 @@ static func text(result: Dictionary) -> String:
 		&"archive_has_no_manifest", &"missing_manifest", &"unreadable_manifest", \
 		&"invalid_manifest":
 			# The detail is a path; the filename is what a player recognises.
-			detail = Gen2ModManifest.FILENAME
+			detail = PokeModManifest.FILENAME
 		&"unsupported_api_version":
 			# The detail already names both versions.
 			return "That mod was built for a different host: %s." % detail
 		&"unsupported_index_schema":
 			return "That index uses format %s; this build reads %d." % [
-				detail, Gen2ModIndex.SCHEMA_VERSION,
+				detail, PokeModIndex.SCHEMA_VERSION,
 			]
 	if not WORDING.has(reason):
 		return "%s %s" % [reason if reason != &"" else &"refused", detail]

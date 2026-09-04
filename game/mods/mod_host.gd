@@ -75,7 +75,7 @@ const RENDERER_INPUT_METHOD: String = "handle_world_input"
 ## [Gen2BattleScreen] did not claim, so a renderer composing its own shot can let
 ## someone steer it. Answering true consumes the event.
 ##
-## A [Gen2Button] never arrives here, on either side. The screen routes every one
+## A [PokeButton] never arrives here, on either side. The screen routes every one
 ## of them to whatever owns it first, so a text box, the forget-move list and
 ## ball selection all take their press before a renderer could see it, and what
 ## is left is pointer and stick motion the screen has no opinion about.
@@ -789,7 +789,7 @@ static func shiny_roll_count(context: Dictionary) -> int:
 ## successful wild capture awards the caught Pokemon's experience. Save bound the
 ## way [method register_save_lifecycle] is, and `awards_catch_experience()` is
 ## read every capture rather than once. See `docs/MODS.md`.
-func register_catch_experience(manifest: Gen2ModManifest, provider: Object) -> Dictionary:
+func register_catch_experience(manifest: PokeModManifest, provider: Object) -> Dictionary:
 	if not _owns_manifest(manifest):
 		return {"ok": false, "reason": &"unknown_mod_save_owner"}
 	return _register_provider(
@@ -825,7 +825,7 @@ func run_button_ids() -> Array:
 ## A provider says so and B is down. Static and null-safe for the same reason
 ## [method allows_item_field_move] is.
 static func run_button_held() -> bool:
-	if _instance == null or not Gen2Button.held(Gen2Button.B):
+	if _instance == null or not PokeButton.held(PokeButton.B):
 		return false
 	for provider: Object in _instance._run_buttons.values():
 		if bool(provider.call("runs_while_held")):
@@ -835,7 +835,7 @@ static func run_button_held() -> bool:
 
 ## Registers an EXPERIENCE SCALE policy for [param manifest]'s own run, save
 ## bound for the reason [method register_catch_experience] is.
-func register_experience_scale(manifest: Gen2ModManifest, provider: Object) -> Dictionary:
+func register_experience_scale(manifest: PokeModManifest, provider: Object) -> Dictionary:
 	if not _owns_manifest(manifest):
 		return {"ok": false, "reason": &"unknown_mod_save_owner"}
 	return _register_provider(
@@ -863,7 +863,7 @@ static func experience_scale() -> float:
 
 ## Registers the one BYSTANDER SHARE policy, save bound the way
 ## [method register_experience_scale] is. See `docs/MODS.md`.
-func register_experience_bystanders(manifest: Gen2ModManifest, provider: Object) -> Dictionary:
+func register_experience_bystanders(manifest: PokeModManifest, provider: Object) -> Dictionary:
 	if not _owns_manifest(manifest):
 		return {"ok": false, "reason": &"unknown_mod_save_owner"}
 	if not _experience_bystanders.is_empty() and not _experience_bystanders.has(manifest.id):
@@ -1527,8 +1527,8 @@ func set_option_index(id: StringName, key: StringName, index: int) -> Dictionary
 	var values: Array = row["values"] as Array
 	if index < 0 or index >= values.size():
 		return {"ok": false, "reason": &"invalid_option_value", "detail": _option_name(id, key)}
-	if not Gen2ModOptions.store(id, key, values[index]):
-		return {"ok": false, "reason": &"option_not_written", "detail": Gen2ModOptions.PATH}
+	if not PokeModOptions.store(id, key, values[index]):
+		return {"ok": false, "reason": &"option_not_written", "detail": PokeModOptions.PATH}
 	option_changed.emit(id, key, values[index])
 	return {"ok": true, "id": id, "key": key, "index": index, "value": values[index]}
 
@@ -1562,8 +1562,8 @@ func _store_number(
 	id: StringName, key: StringName, row: Dictionary, value: int
 ) -> Dictionary:
 	var clamped: int = clampi(value, int(row["minimum"]), int(row["maximum"]))
-	if not Gen2ModOptions.store(id, key, clamped):
-		return {"ok": false, "reason": &"option_not_written", "detail": Gen2ModOptions.PATH}
+	if not PokeModOptions.store(id, key, clamped):
+		return {"ok": false, "reason": &"option_not_written", "detail": PokeModOptions.PATH}
 	option_changed.emit(id, key, clamped)
 	return {"ok": true, "id": id, "key": key, "index": 0, "value": clamped}
 
@@ -1571,14 +1571,14 @@ func _store_number(
 ## The stored number resolved against the range as registered now, which is what
 ## [method _stored_index] does for a ladder.
 func _stored_number(id: StringName, row: Dictionary) -> int:
-	var stored: Variant = Gen2ModOptions.value(id, StringName(row["key"]))
+	var stored: Variant = PokeModOptions.value(id, StringName(row["key"]))
 	if stored is not float and stored is not int:
 		return int(row["default"])
 	return clampi(int(stored), int(row["minimum"]), int(row["maximum"]))
 
 
 ## Declares a control of the mod's own, in the shape [method register_option] uses
-## for a setting: a `key`, a `label` and a `default` in [Gen2InputActions]'
+## for a setting: a `key`, a `label` and a `default` in [PokeInputActions]'
 ## binding shape, so a mod's action binds by key, pad button or stick and is
 ## rebound by the same controls card. A default on one of the cartridge's buttons
 ## is dropped and reported, since the screen claims those first and such a binding
@@ -1602,13 +1602,13 @@ func register_action(id: StringName, action: Dictionary) -> Dictionary:
 			continue
 		# Through the same clamp the options file uses, so a declared binding and
 		# a stored one are the same shape and can be compared at all.
-		var binding: Dictionary = Gen2InputActions.sanitize_binding(row as Dictionary)
+		var binding: Dictionary = PokeInputActions.sanitize_binding(row as Dictionary)
 		if binding.is_empty():
 			continue
-		var button: int = Gen2InputActions.button_bound_to(scheme, binding)
-		if button != Gen2Button.NONE:
+		var button: int = PokeInputActions.button_bound_to(scheme, binding)
+		if button != PokeButton.NONE:
 			taken.append("%s is %s" % [
-				Gen2InputActions.describe(binding), Gen2Button.label(button)
+				PokeInputActions.describe(binding), PokeButton.label(button)
 			])
 			continue
 		defaults.append(binding.duplicate())
@@ -1620,7 +1620,7 @@ func register_action(id: StringName, action: Dictionary) -> Dictionary:
 		})
 	rows.append({
 		"key": key, "label": label, "default": defaults,
-		"name": Gen2InputActions.mod_action_name(id, key),
+		"name": PokeInputActions.mod_action_name(id, key),
 	})
 	_actions[id] = rows
 	return {"ok": true, "id": id, "key": key, "dropped": taken.size()}
@@ -1643,7 +1643,7 @@ func actions() -> Array:
 ## pad button, a stick past the deadzone or a finger on the on-screen pad. The
 ## poll a camera wants; [signal action_pressed] is the edge.
 func action_held(id: StringName, key: StringName) -> bool:
-	var name: StringName = Gen2InputActions.mod_action_name(id, key)
+	var name: StringName = PokeInputActions.mod_action_name(id, key)
 	return InputMap.has_action(name) and Input.is_action_pressed(name)
 
 
@@ -1651,7 +1651,7 @@ func action_held(id: StringName, key: StringName) -> bool:
 ## past the deadzone, so a camera bound to the right stick moves at the rate the
 ## player is pushing it; a key answers 0 or 1.
 func action_strength(id: StringName, key: StringName) -> float:
-	var name: StringName = Gen2InputActions.mod_action_name(id, key)
+	var name: StringName = PokeInputActions.mod_action_name(id, key)
 	return Input.get_action_strength(name) if InputMap.has_action(name) else 0.0
 
 
@@ -1698,9 +1698,9 @@ func emit_action(id: StringName, key: StringName, pressed: bool) -> void:
 static func _control_scheme() -> Dictionary:
 	var runtime: Gen2InputRuntime = Gen2InputRuntime.instance()
 	if runtime == null:
-		return Gen2InputActions.defaults()
+		return PokeInputActions.defaults()
 	var scheme: Dictionary = runtime.scheme()
-	return scheme if not scheme.is_empty() else Gen2InputActions.defaults()
+	return scheme if not scheme.is_empty() else PokeInputActions.defaults()
 
 
 func _option_row(id: StringName, key: StringName) -> Dictionary:
@@ -1714,7 +1714,7 @@ func _option_row(id: StringName, key: StringName) -> Dictionary:
 ## value left by an older version of the mod falls back to the default instead of
 ## selecting nothing.
 func _stored_index(id: StringName, row: Dictionary) -> int:
-	var stored: Variant = Gen2ModOptions.value(id, StringName(row["key"]))
+	var stored: Variant = PokeModOptions.value(id, StringName(row["key"]))
 	if stored == null:
 		return int(row["default"])
 	var index: int = _value_index(row["values"] as Array, stored)
@@ -2111,9 +2111,9 @@ func discover(root: String = ROOT) -> Array:
 	var name: String = directory.get_next()
 	while name != "":
 		if directory.current_is_dir() and not name.begins_with("."):
-			var result: Dictionary = Gen2ModManifest.read("%s/%s" % [root, name])
+			var result: Dictionary = PokeModManifest.read("%s/%s" % [root, name])
 			if bool(result.get("ok", false)):
-				var manifest: Gen2ModManifest = result["manifest"]
+				var manifest: PokeModManifest = result["manifest"]
 				if _manifests.has(manifest.id):
 					_failures.append(_dependency_refusal(
 						manifest, &"duplicate_mod_id", String(manifest.id)
@@ -2155,7 +2155,7 @@ func target_game() -> StringName:
 ## would block the launcher without changing what the host provides.
 func retarget_if_same_mod_set(game_id: StringName) -> bool:
 	for raw_manifest: Variant in _manifests.values():
-		var manifest: Gen2ModManifest = raw_manifest
+		var manifest: PokeModManifest = raw_manifest
 		if not Gen2ModState.is_enabled(manifest.id):
 			continue
 		if manifest.supports_game(_target_game) != manifest.supports_game(game_id):
@@ -2167,14 +2167,14 @@ func retarget_if_same_mod_set(game_id: StringName) -> bool:
 ## A mod may read and replace only its own slot namespace. The exact manifest
 ## object handed to register() is the capability; inventing another object with
 ## the same id grants nothing.
-func read_save_data(manifest: Gen2ModManifest, save: Gen2SaveData) -> Dictionary:
+func read_save_data(manifest: PokeModManifest, save: Gen2SaveData) -> Dictionary:
 	if not _owns_manifest(manifest) or save == null:
 		return {}
 	return save.mod_data(manifest.id)
 
 
 func write_save_data(
-	manifest: Gen2ModManifest, save: Gen2SaveData, value: Dictionary
+	manifest: PokeModManifest, save: Gen2SaveData, value: Dictionary
 ) -> Dictionary:
 	if not _owns_manifest(manifest):
 		return {"ok": false, "reason": &"unknown_mod_save_owner"}
@@ -2197,7 +2197,7 @@ const SAVE_LIFECYCLE_METHODS: Array[String] = [
 ## in `docs/MODS.md`; what matters here is that the host drops every lifecycle
 ## mod's overlay contributions before a `save_activated` runs, so two slots cannot
 ## leak patches into one another.
-func register_save_lifecycle(manifest: Gen2ModManifest, provider: Object) -> Dictionary:
+func register_save_lifecycle(manifest: PokeModManifest, provider: Object) -> Dictionary:
 	if not _owns_manifest(manifest):
 		return {"ok": false, "reason": &"unknown_mod_save_owner"}
 	if provider == null or provider is Node:
@@ -2212,7 +2212,7 @@ func register_save_lifecycle(manifest: Gen2ModManifest, provider: Object) -> Dic
 			"detail": "%s: %s" % [manifest.id, ", ".join(missing)],
 		}
 	for entry: Dictionary in _save_providers:
-		if (entry["manifest"] as Gen2ModManifest).id == manifest.id:
+		if (entry["manifest"] as PokeModManifest).id == manifest.id:
 			return {"ok": false, "reason": &"duplicate_save_provider", "detail": String(manifest.id)}
 	_save_providers.append({"manifest": manifest, "provider": provider})
 	return {"ok": true, "id": manifest.id}
@@ -2221,7 +2221,7 @@ func register_save_lifecycle(manifest: Gen2ModManifest, provider: Object) -> Dic
 func save_lifecycle_ids() -> Array:
 	var out: Array = []
 	for entry: Dictionary in _save_providers:
-		out.append((entry["manifest"] as Gen2ModManifest).id)
+		out.append((entry["manifest"] as PokeModManifest).id)
 	return out
 
 
@@ -2231,10 +2231,10 @@ func save_lifecycle_ids() -> Array:
 ##
 ## The installation's mod settings are copied onto the save first, so the run
 ## records what it was created with and a later change to the installation cannot
-## reach back into it. See [method Gen2ModOptions.bind_run].
+## reach back into it. See [method PokeModOptions.bind_run].
 func created_save(save: Gen2SaveData) -> void:
 	if save != null:
-		save.run_options = Gen2ModOptions.snapshot(_options.keys())
+		save.run_options = PokeModOptions.snapshot(_options.keys())
 	for entry: Dictionary in _save_providers:
 		entry["provider"].call("save_created", save)
 
@@ -2249,11 +2249,11 @@ func created_save(save: Gen2SaveData) -> void:
 func activate_save(save: Gen2SaveData) -> void:
 	_clear_save_overlays()
 	if save == null:
-		Gen2ModOptions.unbind_run()
+		PokeModOptions.unbind_run()
 	else:
 		if save.run_options.is_empty():
-			save.run_options = Gen2ModOptions.snapshot(_options.keys())
-		Gen2ModOptions.bind_run(save.run_options)
+			save.run_options = PokeModOptions.snapshot(_options.keys())
+		PokeModOptions.bind_run(save.run_options)
 	for entry: Dictionary in _save_providers:
 		entry["provider"].call("save_activated", save)
 
@@ -2264,16 +2264,16 @@ func deactivate_save() -> void:
 	for entry: Dictionary in _save_providers:
 		entry["provider"].call("save_deactivated")
 	_clear_save_overlays()
-	Gen2ModOptions.unbind_run()
+	PokeModOptions.unbind_run()
 
 
 func _clear_save_overlays() -> void:
 	var overlay: Gen2ContentOverlay = Gen2ContentOverlay.shared()
 	for entry: Dictionary in _save_providers:
-		overlay.clear_owner((entry["manifest"] as Gen2ModManifest).id)
+		overlay.clear_owner((entry["manifest"] as PokeModManifest).id)
 
 
-func _owns_manifest(manifest: Gen2ModManifest) -> bool:
+func _owns_manifest(manifest: PokeModManifest) -> bool:
 	return manifest != null and _manifests.get(manifest.id) == manifest
 
 
@@ -2301,7 +2301,7 @@ func load_discovered() -> Array:
 		var id := StringName(raw_id)
 		if not Gen2ModState.is_enabled(id):
 			continue
-		var manifest: Gen2ModManifest = _manifests[id]
+		var manifest: PokeModManifest = _manifests[id]
 		if not manifest.supports_game(_target_game):
 			_failures.append(_dependency_refusal(
 				manifest, &"incompatible_game", RomRegistry.title_for(_target_game)
@@ -2312,7 +2312,7 @@ func load_discovered() -> Array:
 
 	# Refuse unsatisfied declarations before running any entry code.
 	for id: StringName in pending.duplicate():
-		var manifest: Gen2ModManifest = _manifests[id]
+		var manifest: PokeModManifest = _manifests[id]
 		for raw_dependency: Variant in manifest.dependencies:
 			var dependency := StringName(raw_dependency)
 			if not _manifests.has(dependency):
@@ -2329,9 +2329,9 @@ func load_discovered() -> Array:
 				failed[id] = true
 				pending.erase(id)
 				break
-			var installed: Gen2ModManifest = _manifests[dependency]
+			var installed: PokeModManifest = _manifests[dependency]
 			var wanted: String = String(manifest.dependencies[raw_dependency])
-			if not Gen2ModVersion.matches(installed.version, wanted):
+			if not PokeModVersion.matches(installed.version, wanted):
 				_failures.append(_dependency_refusal(
 					manifest, &"incompatible_dependency",
 					"%s %s (installed %s)" % [dependency, wanted, installed.version]
@@ -2343,7 +2343,7 @@ func load_discovered() -> Array:
 	while not pending.is_empty():
 		var progressed: bool = false
 		for id: StringName in pending.duplicate():
-			var manifest: Gen2ModManifest = _manifests[id]
+			var manifest: PokeModManifest = _manifests[id]
 			var waiting: bool = false
 			var broken: StringName = &""
 			for raw_dependency: Variant in manifest.dependencies:
@@ -2373,7 +2373,7 @@ func load_discovered() -> Array:
 			progressed = true
 		if not progressed:
 			for id: StringName in pending:
-				var manifest: Gen2ModManifest = _manifests[id]
+				var manifest: PokeModManifest = _manifests[id]
 				_failures.append(_dependency_refusal(
 					manifest, &"dependency_cycle", String(id)
 				))
@@ -2382,7 +2382,7 @@ func load_discovered() -> Array:
 
 
 func _dependency_refusal(
-	manifest: Gen2ModManifest, reason: StringName, detail: String
+	manifest: PokeModManifest, reason: StringName, detail: String
 ) -> Dictionary:
 	return {
 		"ok": false, "reason": reason, "detail": detail,
@@ -2393,7 +2393,7 @@ func _dependency_refusal(
 ## Refusals carry the id as well as the reason, because a manifest that parsed
 ## is only reported by whatever the caller can name it with: without this the
 ## launcher and the startup warning both say "?".
-func load_mod(manifest: Gen2ModManifest) -> Dictionary:
+func load_mod(manifest: PokeModManifest) -> Dictionary:
 	if manifest.packed():
 		var mounted: Dictionary = _mount_pack(manifest)
 		if not bool(mounted.get("ok", false)):
@@ -2440,7 +2440,7 @@ func loaded_mods() -> Array:
 ## `replace_files` is false, so a pack only adds paths and never lands on one the
 ## game ships. The engine has no unmount, which is why a reload remounts nothing
 ## and the set is kept on the host rather than the manifest.
-func _mount_pack(manifest: Gen2ModManifest) -> Dictionary:
+func _mount_pack(manifest: PokeModManifest) -> Dictionary:
 	if _mounted_packs.has(manifest.id):
 		return {"ok": true, "id": manifest.id}
 	var path: String = manifest.pack_path()
@@ -2452,7 +2452,7 @@ func _mount_pack(manifest: Gen2ModManifest) -> Dictionary:
 	return {"ok": true, "id": manifest.id}
 
 
-func _refuse_load(manifest: Gen2ModManifest, reason: StringName, path: String) -> Dictionary:
+func _refuse_load(manifest: PokeModManifest, reason: StringName, path: String) -> Dictionary:
 	return {
 		"ok": false, "reason": reason, "detail": path,
 		"id": manifest.id, "directory": manifest.directory,

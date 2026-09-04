@@ -15,7 +15,7 @@ const ATLAS_COLUMNS: int = 16
 
 ## Falkner is trainer class 1 in all three games, and the class in the middle is
 ## a walk check on a table whose entries are terminated rather than padded. The
-## class that ends the table differs between games and lives in [RomLayout].
+## class that ends the table differs between games and lives in [Gen2Layout].
 const TRAINER_FIRST_CLASS: String = "LEADER"
 const TRAINER_MIDDLE_CLASS: int = 22
 const TRAINER_MIDDLE_CLASS_NAME: String = "YOUNGSTER"
@@ -38,7 +38,7 @@ const EGG_MOVES_STARYU_GOLD_SILVER: Array[int] = [62, 112, 48]
 const EGG_MOVES_STARYU_CRYSTAL: Array[int] = []
 
 ## Tyrogue, the only species that evolves on a stat comparison, and the number of
-## ways it can go. It is worth checking on its own: [constant RomLayout.EVOLVE_STAT]
+## ways it can go. It is worth checking on its own: [constant Gen2Layout.EVOLVE_STAT]
 ## is the one entry that is four bytes rather than three, so a decoder that has
 ## the size wrong stays in step everywhere except here and comes out the far side
 ## of Tyrogue reading rubbish.
@@ -65,10 +65,10 @@ const TRAINER_PARTY_FIRST_SPECIES_2: int = 17
 ## the cartridge from pret's `TrainerClassAttributes`: no items, a reward of 25,
 ## and the AI flag word every gym leader shares.
 const TRAINER_ATTR_FIRST_REWARD: int = 25
-const TRAINER_ATTR_FIRST_AI_MOVE_WEIGHTS: int = RomLayout.AI_BASIC | RomLayout.AI_SETUP \
-	| RomLayout.AI_SMART | RomLayout.AI_AGGRESSIVE | RomLayout.AI_CAUTIOUS \
-	| RomLayout.AI_STATUS | RomLayout.AI_RISKY
-const TRAINER_ATTR_FIRST_AI_ITEM_SWITCH: int = RomLayout.CONTEXT_USE | RomLayout.SWITCH_SOMETIMES
+const TRAINER_ATTR_FIRST_AI_MOVE_WEIGHTS: int = Gen2Layout.AI_BASIC | Gen2Layout.AI_SETUP \
+	| Gen2Layout.AI_SMART | Gen2Layout.AI_AGGRESSIVE | Gen2Layout.AI_CAUTIOUS \
+	| Gen2Layout.AI_STATUS | Gen2Layout.AI_RISKY
+const TRAINER_ATTR_FIRST_AI_ITEM_SWITCH: int = Gen2Layout.CONTEXT_USE | Gen2Layout.SWITCH_SOMETIMES
 
 ## Falkner's own DVs, known independently of the cartridge from pret's
 ## `TrainerClassDVs`: attack 9, defense 10, speed 7, special 7, packed the way
@@ -178,10 +178,10 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 ]
 
 
-## Sanity-checks [RomLayout] against the cartridge before anything is decoded.
+## Sanity-checks [Gen2Layout] against the cartridge before anything is decoded.
 ## Returns { ok, message }.
 static func verify_layout(rom: RomFile) -> Dictionary:
-	var layout: Dictionary = RomLayout.for_id(rom.id)
+	var layout: Dictionary = Gen2Layout.for_id(rom.id)
 	if layout.is_empty():
 		return {"ok": false, "message": "No layout for %s." % rom.id}
 	for check: Callable in LAYOUT_CHECKS:
@@ -196,13 +196,13 @@ static func verify_layout(rom: RomFile) -> Dictionary:
 static func _verify_species_names(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var data: PackedByteArray = rom.bytes()
 	var first: String = Gen2Text.decode(
-		data, RomLayout.species_name_offset(layout, 1), RomLayout.NAME_LENGTH
+		data, Gen2Layout.species_name_offset(layout, 1), Gen2Layout.NAME_LENGTH
 	)
 	if first != "BULBASAUR":
 		return {"ok": false, "message": "Species name table: expected BULBASAUR, read %s." % first}
 	var last: String = Gen2Text.decode(
-		data, RomLayout.species_name_offset(layout, RomLayout.SPECIES_COUNT),
-		RomLayout.NAME_LENGTH
+		data, Gen2Layout.species_name_offset(layout, Gen2Layout.SPECIES_COUNT),
+		Gen2Layout.NAME_LENGTH
 	)
 	if last != "CELEBI":
 		return {"ok": false, "message": "Species name table: expected CELEBI, read %s." % last}
@@ -213,8 +213,8 @@ static func _verify_species_names(rom: RomFile, layout: Dictionary) -> Dictionar
 ## self-checks in one pass, and a stride that is off by any amount stops matching
 ## immediately.
 static func _verify_base_stats(rom: RomFile, layout: Dictionary) -> Dictionary:
-	for species: int in range(1, RomLayout.SPECIES_COUNT + 1):
-		var stored: int = rom.u8(RomLayout.base_stats_offset(layout, species))
+	for species: int in range(1, Gen2Layout.SPECIES_COUNT + 1):
+		var stored: int = rom.u8(Gen2Layout.base_stats_offset(layout, species))
 		if stored != species:
 			return {
 				"ok": false,
@@ -228,12 +228,12 @@ static func _verify_base_stats(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## whole table too far along still decoded into sprites that were the correct
 ## shapes in the wrong colours, which nothing else would catch.
 static func _verify_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var colors: int = int(float(Gen2Palette.ENTRY_BYTES) / float(Gen2Palette.COLOR_BYTES))
-	for species: int in range(1, RomLayout.SPECIES_COUNT + 1):
-		var entry: int = RomLayout.palette_offset(layout, species)
+	var colors: int = int(float(PokePalette.ENTRY_BYTES) / float(PokePalette.COLOR_BYTES))
+	for species: int in range(1, Gen2Layout.SPECIES_COUNT + 1):
+		var entry: int = Gen2Layout.palette_offset(layout, species)
 		var packed: Array = []
 		for i: int in colors:
-			packed.append(rom.u16le(entry + i * Gen2Palette.COLOR_BYTES))
+			packed.append(rom.u16le(entry + i * PokePalette.COLOR_BYTES))
 		for color: int in packed:
 			if color & 0x8000:
 				return {
@@ -252,18 +252,18 @@ static func _verify_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## table catches that; checking only the first would not.
 static func _verify_move_names(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var moves: PackedStringArray = Gen2Text.decode_sequence(
-		rom.bytes(), int(layout["move_names"]), RomLayout.MOVE_COUNT,
-		RomLayout.MAX_NAME_LENGTH
+		rom.bytes(), int(layout["move_names"]), Gen2Layout.MOVE_COUNT,
+		Gen2Layout.MAX_NAME_LENGTH
 	)
-	if moves.size() != RomLayout.MOVE_COUNT:
+	if moves.size() != Gen2Layout.MOVE_COUNT:
 		return {"ok": false, "message": "Move name table ran out after %d." % moves.size()}
 	if moves[0] != "POUND":
 		return {"ok": false, "message": "Move name table: expected POUND, read %s." % moves[0]}
-	if moves[RomLayout.MOVE_COUNT - 1] != "BEAT UP":
+	if moves[Gen2Layout.MOVE_COUNT - 1] != "BEAT UP":
 		return {
 			"ok": false,
 			"message": "Move name table: expected BEAT UP, read %s." % moves[
-				RomLayout.MOVE_COUNT - 1
+				Gen2Layout.MOVE_COUNT - 1
 			],
 		}
 	return {"ok": true}
@@ -273,13 +273,13 @@ static func _verify_move_names(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## the whole table self-checks the way the base stats do. The type byte is
 ## range-checked in the same pass because it indexes the type name table.
 static func _verify_move_data(rom: RomFile, layout: Dictionary) -> Dictionary:
-	for move: int in range(1, RomLayout.MOVE_COUNT + 1):
-		var entry: int = RomLayout.move_data_offset(layout, move)
-		var animation: int = rom.u8(entry + RomLayout.MOVE_ANIMATION)
+	for move: int in range(1, Gen2Layout.MOVE_COUNT + 1):
+		var entry: int = Gen2Layout.move_data_offset(layout, move)
+		var animation: int = rom.u8(entry + Gen2Layout.MOVE_ANIMATION)
 		if animation != move:
 			return {"ok": false, "message": "Move entry %d claims to be %d." % [move, animation]}
-		var type_number: int = rom.u8(entry + RomLayout.MOVE_TYPE)
-		if type_number >= RomLayout.TYPE_COUNT:
+		var type_number: int = rom.u8(entry + Gen2Layout.MOVE_TYPE)
+		if type_number >= Gen2Layout.TYPE_COUNT:
 			return {
 				"ok": false,
 				"message": "Move %d has type $%02X, past the end of the type table." % [
@@ -291,10 +291,10 @@ static func _verify_move_data(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 static func _verify_item_names(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var items: PackedStringArray = Gen2Text.decode_sequence(
-		rom.bytes(), int(layout["item_names"]), RomLayout.ITEM_COUNT,
-		RomLayout.MAX_NAME_LENGTH
+		rom.bytes(), int(layout["item_names"]), Gen2Layout.ITEM_COUNT,
+		Gen2Layout.MAX_NAME_LENGTH
 	)
-	if items.size() != RomLayout.ITEM_COUNT:
+	if items.size() != Gen2Layout.ITEM_COUNT:
 		return {"ok": false, "message": "Item name table ran out after %d." % items.size()}
 	if items[0] != "MASTER BALL":
 		return {"ok": false, "message": "Item name table: expected MASTER BALL, read %s." % items[0]}
@@ -310,7 +310,7 @@ static func _verify_type_names(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var first: String = type_name(rom, layout, 0)
 	if first != "NORMAL":
 		return {"ok": false, "message": "Type table: expected NORMAL, read %s." % first}
-	var last: String = type_name(rom, layout, RomLayout.TYPE_COUNT - 1)
+	var last: String = type_name(rom, layout, Gen2Layout.TYPE_COUNT - 1)
 	if last != "DARK":
 		return {"ok": false, "message": "Type table: expected DARK, read %s." % last}
 	return {"ok": true}
@@ -334,10 +334,10 @@ static func verify_copyright(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return {"ok": true, "message": "No copyright screen on this cartridge."}
 	var tiles: int = int(entry.get("tiles", 0))
 	var gfx: int = int(entry.get("gfx", -1))
-	if tiles <= 0 or not rom.in_bounds(gfx, tiles * Gen2Tiles.TILE_BYTES):
+	if tiles <= 0 or not rom.in_bounds(gfx, tiles * PokeTiles.TILE_BYTES):
 		return {"ok": false, "message": "The copyright graphic is outside the cartridge."}
 	var ink: bool = false
-	for index: int in tiles * Gen2Tiles.TILE_BYTES:
+	for index: int in tiles * PokeTiles.TILE_BYTES:
 		if rom.u8(gfx + index) != 0:
 			ink = true
 			break
@@ -348,11 +348,11 @@ static func verify_copyright(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return {"ok": false, "message": "The copyright string has no terminator."}
 	var rows: int = 1
 	for code: int in codes:
-		if code == RomLayout.COPYRIGHT_STRING_NEXT:
+		if code == Gen2Layout.COPYRIGHT_STRING_NEXT:
 			rows += 1
 			continue
-		if code < RomLayout.COPYRIGHT_FIRST_CODE \
-			or code >= RomLayout.COPYRIGHT_FIRST_CODE + tiles:
+		if code < Gen2Layout.COPYRIGHT_FIRST_CODE \
+			or code >= Gen2Layout.COPYRIGHT_FIRST_CODE + tiles:
 			return {
 				"ok": false,
 				"message": "Copyright string code $%02X is outside its %d tiles." % [
@@ -360,10 +360,10 @@ static func verify_copyright(rom: RomFile, layout: Dictionary) -> Dictionary:
 				],
 			}
 	var palette: int = int(entry.get("palette", -1))
-	if not rom.in_bounds(palette, COPYRIGHT_COLORS.size() * Gen2Palette.COLOR_BYTES):
+	if not rom.in_bounds(palette, COPYRIGHT_COLORS.size() * PokePalette.COLOR_BYTES):
 		return {"ok": false, "message": "The copyright palette is outside the cartridge."}
 	for index: int in COPYRIGHT_COLORS.size():
-		var stored: int = rom.u16le(palette + index * Gen2Palette.COLOR_BYTES)
+		var stored: int = rom.u16le(palette + index * PokePalette.COLOR_BYTES)
 		if stored != COPYRIGHT_COLORS[index]:
 			return {
 				"ok": false,
@@ -371,11 +371,11 @@ static func verify_copyright(rom: RomFile, layout: Dictionary) -> Dictionary:
 					index, stored, COPYRIGHT_COLORS[index],
 				],
 			}
-	if rows != RomLayout.COPYRIGHT_STRING_ROWS:
+	if rows != Gen2Layout.COPYRIGHT_STRING_ROWS:
 		return {
 			"ok": false,
 			"message": "The copyright string has %d rows, expected %d." % [
-				rows, RomLayout.COPYRIGHT_STRING_ROWS,
+				rows, Gen2Layout.COPYRIGHT_STRING_ROWS,
 			],
 		}
 	return {"ok": true, "message": "Copyright screen verified."}
@@ -408,32 +408,32 @@ static func verify_game_freak_presents(rom: RomFile, layout: Dictionary) -> Dict
 	if entry.is_empty():
 		return {"ok": true, "message": "No GameFreak Presents art on this cartridge."}
 	var gfx: int = int(entry.get("gfx", -1))
-	var bytes: int = RomLayout.PRESENTS_GFX_TILES * Gen2Tiles.TILE_1BPP_BYTES
+	var bytes: int = Gen2Layout.PRESENTS_GFX_TILES * PokeTiles.TILE_1BPP_BYTES
 	if not rom.in_bounds(gfx, bytes):
 		return {"ok": false, "message": "The GameFreak logo graphic is outside the cartridge."}
 	# "GAME FREAK" is capitals on the top seven rows of its tiles, which is what
 	# pins the run to a byte rather than to a tile.
-	if rom.u8(gfx) == 0 or rom.u8(gfx + Gen2Tiles.TILE_1BPP_BYTES - 1) != 0:
+	if rom.u8(gfx) == 0 or rom.u8(gfx + PokeTiles.TILE_1BPP_BYTES - 1) != 0:
 		return {"ok": false, "message": "The GameFreak word strip does not start on a tile."}
-	for tile: int in RomLayout.PRESENTS_WORD_TILES:
+	for tile: int in Gen2Layout.PRESENTS_WORD_TILES:
 		if not _tile_1bpp_has_ink(rom, gfx, tile):
 			return {
 				"ok": false,
 				"message": "GameFreak word tile %d is blank." % tile,
 			}
-	for index: int in RomLayout.PRESENTS_SECOND_WORD_TILES:
-		var tile: int = RomLayout.PRESENTS_SECOND_WORD_FIRST + index
-		for row: int in RomLayout.PRESENTS_SECOND_WORD_CLEAR_ROWS:
-			if rom.u8(gfx + tile * Gen2Tiles.TILE_1BPP_BYTES + row) != 0:
+	for index: int in Gen2Layout.PRESENTS_SECOND_WORD_TILES:
+		var tile: int = Gen2Layout.PRESENTS_SECOND_WORD_FIRST + index
+		for row: int in Gen2Layout.PRESENTS_SECOND_WORD_CLEAR_ROWS:
+			if rom.u8(gfx + tile * PokeTiles.TILE_1BPP_BYTES + row) != 0:
 				return {
 					"ok": false,
 					"message": "\"PRESENTS\" tile %d has ink on row %d." % [tile, row],
 				}
-	if _tile_1bpp_has_ink(rom, gfx, RomLayout.PRESENTS_WORD_TILES):
+	if _tile_1bpp_has_ink(rom, gfx, Gen2Layout.PRESENTS_WORD_TILES):
 		return {"ok": false, "message": "The GameFreak logo's first tile is not blank."}
 	var logo_ink: bool = false
-	for index: int in RomLayout.PRESENTS_LOGO_TILES:
-		if _tile_1bpp_has_ink(rom, gfx, RomLayout.PRESENTS_WORD_TILES + index):
+	for index: int in Gen2Layout.PRESENTS_LOGO_TILES:
+		if _tile_1bpp_has_ink(rom, gfx, Gen2Layout.PRESENTS_WORD_TILES + index):
 			logo_ink = true
 			break
 	if not logo_ink:
@@ -455,30 +455,30 @@ static func _verify_presents_sprites(rom: RomFile, entry: Dictionary) -> Diction
 
 
 static func _verify_presents_stars(rom: RomFile, entry: Dictionary, stars: int) -> Dictionary:
-	if not rom.in_bounds(stars, RomLayout.PRESENTS_STARS_TILES * Gen2Tiles.TILE_BYTES):
+	if not rom.in_bounds(stars, Gen2Layout.PRESENTS_STARS_TILES * PokeTiles.TILE_BYTES):
 		return {"ok": false, "message": "The splash star graphic is outside the cartridge."}
 	# splash.asm INCBINs the stars directly behind the logo, so the two pin
 	# each other.
 	var after: int = int(entry.get("gfx", -1)) \
-		+ RomLayout.PRESENTS_GFX_TILES * Gen2Tiles.TILE_1BPP_BYTES
+		+ Gen2Layout.PRESENTS_GFX_TILES * PokeTiles.TILE_1BPP_BYTES
 	if stars != after:
 		return {
 			"ok": false,
 			"message": "The splash stars are not behind the logo graphic.",
 		}
-	for index: int in RomLayout.PRESENTS_STAR_TILES:
+	for index: int in Gen2Layout.PRESENTS_STAR_TILES:
 		if _tile_2bpp_lit(rom, stars, index) == 0:
 			return {"ok": false, "message": "Splash star tile %d is blank." % index}
 	# `.Frameset_GSGameFreakLogoSparkle` runs its three tiles as one spark
 	# closing in on its own centre, so tile n is blank across its outer n rows
 	# top and bottom and lit on the two just inside them, and each carries
 	# fewer lit pixels than the one before.
-	var last_lit: int = Gen2Tiles.TILE_PIXELS + 1
-	for index: int in RomLayout.PRESENTS_SPARKLE_TILES:
-		var tile: int = RomLayout.PRESENTS_STAR_TILES + index
-		for row: int in Gen2Tiles.TILE_HEIGHT:
-			var edge: bool = row < index or row >= Gen2Tiles.TILE_HEIGHT - index
-			var rim: bool = row == index or row == Gen2Tiles.TILE_HEIGHT - 1 - index
+	var last_lit: int = PokeTiles.TILE_PIXELS + 1
+	for index: int in Gen2Layout.PRESENTS_SPARKLE_TILES:
+		var tile: int = Gen2Layout.PRESENTS_STAR_TILES + index
+		for row: int in PokeTiles.TILE_HEIGHT:
+			var edge: bool = row < index or row >= PokeTiles.TILE_HEIGHT - index
+			var rim: bool = row == index or row == PokeTiles.TILE_HEIGHT - 1 - index
 			var lit_row: bool = _row_2bpp_lit(rom, stars, tile, row)
 			if edge == lit_row or (rim and not lit_row):
 				return {
@@ -502,7 +502,7 @@ static func _verify_presents_ditto(rom: RomFile, entry: Dictionary) -> Dictionar
 	if ditto < 0:
 		return {"ok": false, "message": "This cartridge has neither a splash star nor a Ditto."}
 	var sheet: PackedByteArray = Gen2Lz.new().decompress(rom.bytes(), ditto)
-	var wanted: int = RomLayout.PRESENTS_DITTO_TILES * Gen2Tiles.TILE_BYTES
+	var wanted: int = Gen2Layout.PRESENTS_DITTO_TILES * PokeTiles.TILE_BYTES
 	if sheet.size() != wanted:
 		return {
 			"ok": false,
@@ -519,7 +519,7 @@ static func _verify_presents_ditto(rom: RomFile, entry: Dictionary) -> Dictionar
 		var ink: bool = false
 		for row: int in 6:
 			for column: int in 4:
-				var tile: int = (base + row * RomLayout.PRESENTS_DITTO_COLUMNS + column) & 0xFF
+				var tile: int = (base + row * Gen2Layout.PRESENTS_DITTO_COLUMNS + column) & 0xFF
 				if _sheet_tile_lit(sheet, tile) > 0:
 					ink = true
 					break
@@ -538,7 +538,7 @@ static func _verify_presents_ditto(rom: RomFile, entry: Dictionary) -> Dictionar
 ## two together rather than checking each alone.
 static func _verify_presents_palettes(rom: RomFile, entry: Dictionary) -> Dictionary:
 	var object_palette: int = int(entry.get("object_palette", -1))
-	var size: int = Gen2Palette.COLOR_BYTES
+	var size: int = PokePalette.COLOR_BYTES
 	if not rom.in_bounds(object_palette, PRESENTS_OBJECT_COLORS.size() * size):
 		return {"ok": false, "message": "The splash object palette is outside the cartridge."}
 	for index: int in PRESENTS_OBJECT_COLORS.size():
@@ -565,16 +565,16 @@ static func _verify_presents_palettes(rom: RomFile, entry: Dictionary) -> Dictio
 				],
 			}
 	var fade: int = int(entry.get("ditto_fade", -1))
-	if not rom.in_bounds(fade, RomLayout.PRESENTS_DITTO_FADE_COLORS * size):
+	if not rom.in_bounds(fade, Gen2Layout.PRESENTS_DITTO_FADE_COLORS * size):
 		return {"ok": false, "message": "The Ditto fade palette is outside the cartridge."}
 	# splash.asm INCLUDEs the fade directly in front of `GameFreakLogoGFX`, so
 	# the two pin each other.
-	if fade + RomLayout.PRESENTS_DITTO_FADE_COLORS * size != int(entry.get("gfx", -1)):
+	if fade + Gen2Layout.PRESENTS_DITTO_FADE_COLORS * size != int(entry.get("gfx", -1)):
 		return {
 			"ok": false,
 			"message": "The Ditto fade is not in front of the logo graphic.",
 		}
-	if rom.u16le(fade) != PRESENTS_DITTO_COLORS[RomLayout.PRESENTS_DITTO_FADE_COLOR]:
+	if rom.u16le(fade) != PRESENTS_DITTO_COLORS[Gen2Layout.PRESENTS_DITTO_FADE_COLOR]:
 		return {
 			"ok": false,
 			"message": "The Ditto fade does not open on the Ditto's own colour.",
@@ -582,7 +582,7 @@ static func _verify_presents_palettes(rom: RomFile, entry: Dictionary) -> Dictio
 	# Pink to orange, one colour per step: blue falls and green rises the whole
 	# way, which no neighbouring palette run does for sixteen entries.
 	var last: Vector2i = Vector2i(-1, 32)
-	for index: int in RomLayout.PRESENTS_DITTO_FADE_COLORS:
+	for index: int in Gen2Layout.PRESENTS_DITTO_FADE_COLORS:
 		var packed: int = rom.u16le(fade + index * size)
 		var green: int = (packed >> 5) & 0x1F
 		var blue: int = (packed >> 10) & 0x1F
@@ -633,9 +633,9 @@ static func verify_title(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## `TitleScreenPalettes`, in that order and nothing between them.
 static func _verify_crystal_title(rom: RomFile, entry: Dictionary) -> Dictionary:
 	var runs: Array = [
-		["suicune", int(entry["suicune"]), RomLayout.TITLE_SUICUNE_TILES],
-		["logo", int(entry["logo"]), RomLayout.TITLE_LOGO_TILES],
-		["crystal", int(entry["crystal"]), RomLayout.TITLE_CRYSTAL_TILES],
+		["suicune", int(entry["suicune"]), Gen2Layout.TITLE_SUICUNE_TILES],
+		["logo", int(entry["logo"]), Gen2Layout.TITLE_LOGO_TILES],
+		["crystal", int(entry["crystal"]), Gen2Layout.TITLE_CRYSTAL_TILES],
 	]
 	var sheets: Dictionary = {}
 	for run: Array in runs:
@@ -675,8 +675,8 @@ static func _verify_crystal_title(rom: RomFile, entry: Dictionary) -> Dictionary
 			return {"ok": false, "message": "The Suicune sheet is blank at frame $%02X." % base}
 
 	var palettes: int = int(entry["palettes"])
-	var size: int = Gen2Palette.COLOR_BYTES
-	if not rom.in_bounds(palettes, RomLayout.TITLE_PALETTES * RomLayout.TITLE_PALETTE_COLORS * size):
+	var size: int = PokePalette.COLOR_BYTES
+	if not rom.in_bounds(palettes, Gen2Layout.TITLE_PALETTES * Gen2Layout.TITLE_PALETTE_COLORS * size):
 		return {"ok": false, "message": "The title palettes are outside the cartridge."}
 	for index: int in TITLE_CRYSTAL_FIRST_COLORS.size():
 		var stored: int = rom.u16le(palettes + index * size)
@@ -694,7 +694,7 @@ static func _verify_crystal_title(rom: RomFile, entry: Dictionary) -> Dictionary
 ## in front of `GFX4`'s bird.
 static func _verify_gs_title(rom: RomFile, entry: Dictionary) -> Dictionary:
 	var bottom: Dictionary = _verify_title_run(
-		rom, "logo bottom", int(entry["logo_bottom"]), RomLayout.TITLE_LOGO_BOTTOM_TILES
+		rom, "logo bottom", int(entry["logo_bottom"]), Gen2Layout.TITLE_LOGO_BOTTOM_TILES
 	)
 	if not bottom["ok"]:
 		return bottom
@@ -702,14 +702,14 @@ static func _verify_gs_title(rom: RomFile, entry: Dictionary) -> Dictionary:
 	if top_at < int(bottom["end"]) or top_at - int(bottom["end"]) > TITLE_RUN_GAP_MAX:
 		return {"ok": false, "message": "The title logo's halves are not consecutive."}
 	var top: Dictionary = _verify_title_run(
-		rom, "logo top", top_at, RomLayout.TITLE_LOGO_TOP_TILES
+		rom, "logo top", top_at, Gen2Layout.TITLE_LOGO_TOP_TILES
 	)
 	if not top["ok"]:
 		return top
 	# `--trim-whitespace` takes the bottom half down from 120 tiles to 112 by
 	# dropping blank tiles off the end, so its last tile is drawn on. A run of the
 	# right length whose tail is blank is a different graphic.
-	if _sheet_tile_lit(bottom["sheet"], RomLayout.TITLE_LOGO_BOTTOM_TILES - 1) == 0:
+	if _sheet_tile_lit(bottom["sheet"], Gen2Layout.TITLE_LOGO_BOTTOM_TILES - 1) == 0:
 		return {"ok": false, "message": "The title logo's bottom half ends on a blank tile."}
 
 	var tilemap_at: int = int(entry["tilemap"])
@@ -718,7 +718,7 @@ static func _verify_gs_title(rom: RomFile, entry: Dictionary) -> Dictionary:
 	var tilemap: PackedByteArray = read_title_tilemap(rom, {"title": entry})
 	if tilemap.is_empty():
 		return {"ok": false, "message": "The title tilemap has no terminator in range."}
-	if tilemap.size() % RomLayout.TITLE_TILEMAP_COLUMNS != 0:
+	if tilemap.size() % Gen2Layout.TITLE_TILEMAP_COLUMNS != 0:
 		return {
 			"ok": false,
 			"message": "The title tilemap is %d bytes, not whole rows." % tilemap.size(),
@@ -733,31 +733,31 @@ static func _verify_gs_title(rom: RomFile, entry: Dictionary) -> Dictionary:
 static func _verify_gs_title_trail(rom: RomFile, entry: Dictionary) -> Dictionary:
 	var trail: int = int(entry["trail"])
 	var trail_tiles: int = int(entry["trail_tiles"])
-	if not rom.in_bounds(trail, trail_tiles * Gen2Tiles.TILE_BYTES):
+	if not rom.in_bounds(trail, trail_tiles * PokeTiles.TILE_BYTES):
 		return {"ok": false, "message": "The title trail is outside the cartridge."}
-	for tile: int in RomLayout.TITLE_TRAIL_DRAWN_TILES:
+	for tile: int in Gen2Layout.TITLE_TRAIL_DRAWN_TILES:
 		if _tile_2bpp_lit(rom, trail, tile) == 0:
 			return {"ok": false, "message": "Title trail tile %d is blank." % tile}
 	# Gold's own run is eight tiles, and the four past the trail are the
 	# whitespace the source names at its `FarCopyBytes`.
-	for index: int in trail_tiles - RomLayout.TITLE_TRAIL_DRAWN_TILES:
-		var tile: int = RomLayout.TITLE_TRAIL_DRAWN_TILES + index
+	for index: int in trail_tiles - Gen2Layout.TITLE_TRAIL_DRAWN_TILES:
+		var tile: int = Gen2Layout.TITLE_TRAIL_DRAWN_TILES + index
 		if _tile_2bpp_lit(rom, trail, tile) != 0:
 			return {"ok": false, "message": "Title trail tile %d is not blank." % tile}
 	# The bird starts where the trail's own tiles stop, which is what pins it.
-	var bird_at: int = trail + trail_tiles * Gen2Tiles.TILE_BYTES
+	var bird_at: int = trail + trail_tiles * PokeTiles.TILE_BYTES
 	if int(entry["bird"]) != bird_at:
 		return {"ok": false, "message": "The title bird is not behind the trail."}
 	return _verify_title_run(rom, "bird", bird_at, int(entry["bird_tiles"]))
 
 
 static func _verify_gs_title_palettes(rom: RomFile, entry: Dictionary) -> Dictionary:
-	var size: int = Gen2Palette.COLOR_BYTES
+	var size: int = PokePalette.COLOR_BYTES
 	var bg: int = int(entry["bg_palette"])
 	var ob: int = int(entry["ob_palette"])
-	if not rom.in_bounds(bg, RomLayout.TITLE_BG_PALETTES * RomLayout.TITLE_PALETTE_COLORS * size):
+	if not rom.in_bounds(bg, Gen2Layout.TITLE_BG_PALETTES * Gen2Layout.TITLE_PALETTE_COLORS * size):
 		return {"ok": false, "message": "The title palettes are outside the cartridge."}
-	if ob != bg + RomLayout.TITLE_BG_PALETTES * RomLayout.TITLE_PALETTE_COLORS * size:
+	if ob != bg + Gen2Layout.TITLE_BG_PALETTES * Gen2Layout.TITLE_PALETTE_COLORS * size:
 		return {"ok": false, "message": "The title object palettes do not follow the background's."}
 	if rom.u16le(bg) != TITLE_BG_FIRST_COLOR:
 		return {"ok": false, "message": "The title background palette does not open on white."}
@@ -783,7 +783,7 @@ static func _verify_title_run(
 		return {"ok": false, "message": "The title %s has no address." % name}
 	var lz := Gen2Lz.new()
 	var sheet: PackedByteArray = lz.decompress(rom.bytes(), at)
-	var wanted: int = tiles * Gen2Tiles.TILE_BYTES
+	var wanted: int = tiles * PokeTiles.TILE_BYTES
 	if sheet.size() != wanted:
 		return {
 			"ok": false,
@@ -822,13 +822,13 @@ static func verify_town_map(rom: RomFile, layout: Dictionary) -> Dictionary:
 static func _verify_town_map_sheets(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var entry: Dictionary = layout["town_map"]
 	for run: Array in [
-		["town map graphic", int(entry["gfx"]), RomLayout.TOWN_MAP_TILES],
-		["Pokegear graphic", int(entry["pokegear_gfx"]), RomLayout.POKEGEAR_TILES],
-		["Pokegear sprites", int(entry["sprites"]), RomLayout.POKEGEAR_SPRITE_TILES],
+		["town map graphic", int(entry["gfx"]), Gen2Layout.TOWN_MAP_TILES],
+		["Pokegear graphic", int(entry["pokegear_gfx"]), Gen2Layout.POKEGEAR_TILES],
+		["Pokegear sprites", int(entry["sprites"]), Gen2Layout.POKEGEAR_SPRITE_TILES],
 	]:
 		var lz := Gen2Lz.new()
 		var sheet: PackedByteArray = lz.decompress(rom.bytes(), int(run[1]))
-		var wanted: int = int(run[2]) * Gen2Tiles.TILE_BYTES
+		var wanted: int = int(run[2]) * PokeTiles.TILE_BYTES
 		if sheet.size() != wanted:
 			return {
 				"ok": false,
@@ -837,7 +837,7 @@ static func _verify_town_map_sheets(rom: RomFile, layout: Dictionary) -> Diction
 				],
 			}
 	var fast_ship: int = int(entry.get("fast_ship", -1))
-	if not rom.in_bounds(fast_ship, RomLayout.FAST_SHIP_TILES * Gen2Tiles.TILE_BYTES):
+	if not rom.in_bounds(fast_ship, Gen2Layout.FAST_SHIP_TILES * PokeTiles.TILE_BYTES):
 		return {"ok": false, "message": "The Fast Ship icon is outside the cartridge."}
 	return {"ok": true, "message": ""}
 
@@ -845,19 +845,19 @@ static func _verify_town_map_sheets(rom: RomFile, layout: Dictionary) -> Diction
 static func _verify_town_map_regions(rom: RomFile, layout: Dictionary) -> Dictionary:
 	for region: String in ["johto", "kanto"]:
 		var cells: PackedByteArray = read_town_map_region(rom, layout, region)
-		if cells.size() != RomLayout.TOWN_MAP_REGION_CELLS:
+		if cells.size() != Gen2Layout.TOWN_MAP_REGION_CELLS:
 			return {
 				"ok": false,
 				"message": "The %s map is %d cells, wanted %d." % [
-					region, cells.size(), RomLayout.TOWN_MAP_REGION_CELLS,
+					region, cells.size(), Gen2Layout.TOWN_MAP_REGION_CELLS,
 				],
 			}
 		for cell: int in cells:
-			if cell >= RomLayout.TOWN_MAP_TILES:
+			if cell >= Gen2Layout.TOWN_MAP_TILES:
 				return {
 					"ok": false,
 					"message": "The %s map names tile $%02X, past its %d tiles." % [
-						region, cell, RomLayout.TOWN_MAP_TILES,
+						region, cell, Gen2Layout.TOWN_MAP_TILES,
 					],
 				}
 	return {"ok": true, "message": ""}
@@ -865,18 +865,18 @@ static func _verify_town_map_regions(rom: RomFile, layout: Dictionary) -> Dictio
 
 static func _verify_pokegear_pages(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var cards: Dictionary = read_pokegear_cards(rom, layout)
-	if cards.size() != RomLayout.POKEGEAR_CARD_ORDER.size():
+	if cards.size() != Gen2Layout.POKEGEAR_CARD_ORDER.size():
 		return {
 			"ok": false,
 			"message": "The Pokegear cards decoded to %d tilemaps, wanted %d." % [
-				cards.size(), RomLayout.POKEGEAR_CARD_ORDER.size(),
+				cards.size(), Gen2Layout.POKEGEAR_CARD_ORDER.size(),
 			],
 		}
 	for name: String in cards:
 		for cell: int in cards[name] as PackedByteArray:
 			# Every card is drawn out of the same VRAM window the region map is,
 			# so a tile past the two sheets and the font is a wrong offset.
-			if cell >= RomLayout.POKEGEAR_FIRST_TILE + RomLayout.POKEGEAR_TILES \
+			if cell >= Gen2Layout.POKEGEAR_FIRST_TILE + Gen2Layout.POKEGEAR_TILES \
 				and cell < Gen2Text.SPACE:
 				return {
 					"ok": false,
@@ -885,7 +885,7 @@ static func _verify_pokegear_pages(rom: RomFile, layout: Dictionary) -> Dictiona
 					],
 				}
 	var texts: Dictionary = read_pokegear_texts(rom, layout)
-	if texts.size() != RomLayout.POKEGEAR_TEXT_NAMES.size():
+	if texts.size() != Gen2Layout.POKEGEAR_TEXT_NAMES.size():
 		return {"ok": false, "message": "The Pokegear texts did not decode."}
 	for name: String in texts:
 		if String(texts[name]).is_empty():
@@ -896,34 +896,34 @@ static func _verify_pokegear_pages(rom: RomFile, layout: Dictionary) -> Dictiona
 static func _verify_town_map_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var entry: Dictionary = layout["town_map"]
 	var palette_map: int = int(entry["palette_map"])
-	if not rom.in_bounds(palette_map, RomLayout.TOWN_MAP_PALETTE_MAP_BYTES):
+	if not rom.in_bounds(palette_map, Gen2Layout.TOWN_MAP_PALETTE_MAP_BYTES):
 		return {"ok": false, "message": "The region palette map is outside the cartridge."}
-	for index: int in RomLayout.TOWN_MAP_PALETTE_MAP_BYTES:
+	for index: int in Gen2Layout.TOWN_MAP_PALETTE_MAP_BYTES:
 		var packed: int = rom.u8(palette_map + index)
-		if (packed & 0x0F) >= RomLayout.TOWN_MAP_PALETTES \
-			or (packed >> 4) >= RomLayout.TOWN_MAP_PALETTES:
+		if (packed & 0x0F) >= Gen2Layout.TOWN_MAP_PALETTES \
+			or (packed >> 4) >= Gen2Layout.TOWN_MAP_PALETTES:
 			return {
 				"ok": false,
 				"message": "Region palette map byte %d is $%02X, past its %d palettes." % [
-					index, packed, RomLayout.TOWN_MAP_PALETTES,
+					index, packed, Gen2Layout.TOWN_MAP_PALETTES,
 				],
 			}
 	for name: String in ["palette", "palette_female"]:
 		var at: int = int(entry.get(name, -1))
 		if at < 0:
 			continue
-		var colors: int = RomLayout.TOWN_MAP_PALETTES * RomLayout.TOWN_MAP_PALETTE_COLORS
-		if not rom.in_bounds(at, colors * Gen2Palette.COLOR_BYTES):
+		var colors: int = Gen2Layout.TOWN_MAP_PALETTES * Gen2Layout.TOWN_MAP_PALETTE_COLORS
+		if not rom.in_bounds(at, colors * PokePalette.COLOR_BYTES):
 			return {"ok": false, "message": "The region %s is outside the cartridge." % name}
-		for palette: int in RomLayout.TOWN_MAP_PALETTES:
+		for palette: int in Gen2Layout.TOWN_MAP_PALETTES:
 			var first: int = rom.u16le(
-				at + palette * RomLayout.TOWN_MAP_PALETTE_COLORS * Gen2Palette.COLOR_BYTES
+				at + palette * Gen2Layout.TOWN_MAP_PALETTE_COLORS * PokePalette.COLOR_BYTES
 			)
-			if first != RomLayout.TOWN_MAP_PALETTE_FIRST_COLOR:
+			if first != Gen2Layout.TOWN_MAP_PALETTE_FIRST_COLOR:
 				return {
 					"ok": false,
 					"message": "Region %s %d opens on $%04X, expected $%04X." % [
-						name, palette, first, RomLayout.TOWN_MAP_PALETTE_FIRST_COLOR,
+						name, palette, first, Gen2Layout.TOWN_MAP_PALETTE_FIRST_COLOR,
 					],
 				}
 	return {"ok": true, "message": ""}
@@ -934,10 +934,10 @@ static func _verify_town_map_palettes(rom: RomFile, layout: Dictionary) -> Dicti
 ## ink and every plane byte is its own bit reversal, the icon being symmetric
 ## about its vertical axis. No other tile behind `KantoMap` is both.
 static func verify_dex_nest_icon(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var at: int = RomLayout.dex_nest_icon_offset(layout)
-	if not rom.in_bounds(at, RomLayout.DEX_NEST_ICON_TILES * Gen2Tiles.TILE_BYTES):
+	var at: int = Gen2Layout.dex_nest_icon_offset(layout)
+	if not rom.in_bounds(at, Gen2Layout.DEX_NEST_ICON_TILES * PokeTiles.TILE_BYTES):
 		return {"ok": false, "message": "The dex nest icon is outside the cartridge."}
-	for row: int in Gen2Tiles.TILE_HEIGHT:
+	for row: int in PokeTiles.TILE_HEIGHT:
 		var low: int = rom.u8(at + row * 2)
 		var high: int = rom.u8(at + row * 2 + 1)
 		if (low | high) == 0:
@@ -956,27 +956,27 @@ static func verify_dex_nest_icon(rom: RomFile, layout: Dictionary) -> Dictionary
 ## one corner mirrored across each axis, and the two arrow tiles are equal and
 ## symmetric about their own middle row. Byte identical on all three cartridges.
 static func verify_fly_map_label(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var at: int = RomLayout.fly_map_label_offset(layout)
-	var bytes: int = RomLayout.FLY_MAP_LABEL_TILES * Gen2Tiles.TILE_1BPP_BYTES
+	var at: int = Gen2Layout.fly_map_label_offset(layout)
+	var bytes: int = Gen2Layout.FLY_MAP_LABEL_TILES * PokeTiles.TILE_1BPP_BYTES
 	if not rom.in_bounds(at, bytes):
 		return {"ok": false, "message": "The fly map label border is outside the cartridge."}
 	var tiles: Array[PackedByteArray] = []
-	for tile: int in RomLayout.FLY_MAP_LABEL_TILES:
+	for tile: int in Gen2Layout.FLY_MAP_LABEL_TILES:
 		var rows := PackedByteArray()
-		for row: int in Gen2Tiles.TILE_HEIGHT:
-			rows.append(rom.u8(at + tile * Gen2Tiles.TILE_1BPP_BYTES + row))
+		for row: int in PokeTiles.TILE_HEIGHT:
+			rows.append(rom.u8(at + tile * PokeTiles.TILE_1BPP_BYTES + row))
 		tiles.append(rows)
-	for row: int in Gen2Tiles.TILE_HEIGHT:
+	for row: int in PokeTiles.TILE_HEIGHT:
 		if _reverse_byte(tiles[0][row]) != tiles[1][row] \
-			or tiles[0][Gen2Tiles.TILE_HEIGHT - 1 - row] != tiles[2][row] \
-			or tiles[1][Gen2Tiles.TILE_HEIGHT - 1 - row] != tiles[3][row] \
+			or tiles[0][PokeTiles.TILE_HEIGHT - 1 - row] != tiles[2][row] \
+			or tiles[1][PokeTiles.TILE_HEIGHT - 1 - row] != tiles[3][row] \
 			or tiles[4][row] != tiles[5][row] \
-			or tiles[4][Gen2Tiles.TILE_HEIGHT - 1 - row] != tiles[4][row]:
+			or tiles[4][PokeTiles.TILE_HEIGHT - 1 - row] != tiles[4][row]:
 			return {
 				"ok": false,
 				"message": "Fly map label row %d is not the border's own shape." % row,
 			}
-	if tiles[0].count(0) == Gen2Tiles.TILE_HEIGHT or tiles[4].count(0) == Gen2Tiles.TILE_HEIGHT:
+	if tiles[0].count(0) == PokeTiles.TILE_HEIGHT or tiles[4].count(0) == PokeTiles.TILE_HEIGHT:
 		return {"ok": false, "message": "The fly map label border is blank."}
 	return {"ok": true, "message": ""}
 
@@ -989,16 +989,16 @@ static func _reverse_byte(value: int) -> int:
 
 
 static func verify_landmarks(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var count: int = RomLayout.landmark_count(layout)
-	var bank: int = RomLayout.bank_of(RomLayout.landmark_offset(layout, 0))
+	var count: int = Gen2Layout.landmark_count(layout)
+	var bank: int = Gen2Layout.bank_of(Gen2Layout.landmark_offset(layout, 0))
 	if not rom.in_bounds(
-		RomLayout.landmark_offset(layout, 0), count * RomLayout.LANDMARK_RECORD_SIZE
+		Gen2Layout.landmark_offset(layout, 0), count * Gen2Layout.LANDMARK_RECORD_SIZE
 	):
 		return {"ok": false, "message": "The landmark table is outside the cartridge."}
 	for index: int in count:
-		var record: int = RomLayout.landmark_offset(layout, index)
-		var at: int = RomLayout.landmark_name_offset(rom, layout, index)
-		if RomLayout.bank_of(at) != bank:
+		var record: int = Gen2Layout.landmark_offset(layout, index)
+		var at: int = Gen2Layout.landmark_name_offset(rom, layout, index)
+		if Gen2Layout.bank_of(at) != bank:
 			return {
 				"ok": false,
 				"message": "Landmark %d's name pointer leaves bank $%02X." % [index, bank],
@@ -1010,14 +1010,14 @@ static func verify_landmarks(rom: RomFile, layout: Dictionary) -> Dictionary:
 				"message": "Landmark %d is at (0,0); only LANDMARK_SPECIAL is." % index,
 			}
 	var first: String = Gen2Text.decode(
-		rom.bytes(), RomLayout.landmark_name_offset(rom, layout, 0),
-		RomLayout.LANDMARK_NAME_BYTES
+		rom.bytes(), Gen2Layout.landmark_name_offset(rom, layout, 0),
+		Gen2Layout.LANDMARK_NAME_BYTES
 	)
 	if first != "SPECIAL":
 		return {"ok": false, "message": "Landmark 0: expected SPECIAL, read %s." % first}
 	var last: String = Gen2Text.decode(
-		rom.bytes(), RomLayout.landmark_name_offset(rom, layout, count - 1),
-		RomLayout.LANDMARK_NAME_BYTES
+		rom.bytes(), Gen2Layout.landmark_name_offset(rom, layout, count - 1),
+		Gen2Layout.LANDMARK_NAME_BYTES
 	)
 	if last != "FAST SHIP":
 		return {
@@ -1033,13 +1033,13 @@ static func verify_landmarks(rom: RomFile, layout: Dictionary) -> Dictionary:
 static func verify_oak_ratings(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var table: int = int(layout.get("oak_ratings", -1))
 	if not rom.in_bounds(
-		table, RomLayout.OAK_RATING_COUNT * RomLayout.OAK_RATING_SIZE
+		table, Gen2Layout.OAK_RATING_COUNT * Gen2Layout.OAK_RATING_SIZE
 	):
 		return {"ok": false, "message": "The Oak rating table is outside the cartridge."}
-	var bank: int = RomLayout.bank_of(table)
+	var bank: int = Gen2Layout.bank_of(table)
 	var previous: int = -1
-	for index: int in RomLayout.OAK_RATING_COUNT:
-		var row: int = RomLayout.oak_rating_offset(layout, index)
+	for index: int in Gen2Layout.OAK_RATING_COUNT:
+		var row: int = Gen2Layout.oak_rating_offset(layout, index)
 		var threshold: int = rom.u8(row)
 		if threshold <= previous:
 			return {
@@ -1049,20 +1049,20 @@ static func verify_oak_ratings(rom: RomFile, layout: Dictionary) -> Dictionary:
 				],
 			}
 		previous = threshold
-		if RomLayout.bank_of(RomFile.linear(bank, rom.u16le(row + 3))) != bank:
+		if Gen2Layout.bank_of(RomFile.linear(bank, rom.u16le(row + 3))) != bank:
 			return {
 				"ok": false,
 				"message": "Oak rating %d's text leaves bank $%02X." % [index, bank],
 			}
-	if previous != RomLayout.OAK_RATING_LAST_THRESHOLD:
+	if previous != Gen2Layout.OAK_RATING_LAST_THRESHOLD:
 		return {
 			"ok": false,
 			"message": "The last Oak rating stops at %d, not %d." % [
-				previous, RomLayout.OAK_RATING_LAST_THRESHOLD,
+				previous, Gen2Layout.OAK_RATING_LAST_THRESHOLD,
 			],
 		}
-	for name: String in RomLayout.OAK_TEXT_STUBS:
-		if read_oak_text(rom, layout, RomLayout.oak_text_stub_offset(rom, layout, name)).is_empty():
+	for name: String in Gen2Layout.OAK_TEXT_STUBS:
+		if read_oak_text(rom, layout, Gen2Layout.oak_text_stub_offset(rom, layout, name)).is_empty():
 			return {"ok": false, "message": "Oak's %s text did not decode." % name}
 	return {"ok": true, "message": "Prof Oak's PC verified."}
 
@@ -1072,13 +1072,13 @@ static func verify_oak_ratings(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## has to decode, which is what says the one pinned address is right.
 static func verify_pokecenter_pc(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var rows: PackedStringArray = read_pokecenter_pc_rows(rom, layout)
-	if rows.size() != RomLayout.POKECENTER_PC_ROWS.size():
+	if rows.size() != Gen2Layout.POKECENTER_PC_ROWS.size():
 		return {"ok": false, "message": "The Pokemon Center PC's rows are outside the cartridge."}
-	if read_pokecenter_pc_lists(rom, layout).size() != RomLayout.POKECENTER_PC_LISTS \
+	if read_pokecenter_pc_lists(rom, layout).size() != Gen2Layout.POKECENTER_PC_LISTS \
 		or read_pokecenter_pc_rows(rom, layout, true).size() \
-			!= RomLayout.POKECENTER_PC_PLAYERS_ROWS.size() \
+			!= Gen2Layout.POKECENTER_PC_PLAYERS_ROWS.size() \
 		or read_pokecenter_pc_lists(rom, layout, true).size() \
-			!= RomLayout.POKECENTER_PC_PLAYERS_LISTS:
+			!= Gen2Layout.POKECENTER_PC_PLAYERS_LISTS:
 		return {"ok": false, "message": "The Pokemon Center PC's menu tables did not read."}
 	if rows[rows.size() - 1] != "TURN OFF":
 		return {
@@ -1087,9 +1087,9 @@ static func verify_pokecenter_pc(rom: RomFile, layout: Dictionary) -> Dictionary
 				rows.size() - 1
 			],
 		}
-	for name: String in RomLayout.POKECENTER_PC_TEXT_AT:
+	for name: String in Gen2Layout.POKECENTER_PC_TEXT_AT:
 		if read_oak_text(
-			rom, layout, RomLayout.pokecenter_pc_text_offset(layout, name)
+			rom, layout, Gen2Layout.pokecenter_pc_text_offset(layout, name)
 		).is_empty():
 			return {
 				"ok": false,
@@ -1103,7 +1103,7 @@ static func verify_pokecenter_pc(rom: RomFile, layout: Dictionary) -> Dictionary
 ## row is the silver trophy, and all twenty-six names have to decode.
 static func verify_decorations(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var rows: Array = read_decoration_attributes(rom, layout)
-	if rows.size() != RomLayout.DECORATION_COUNT:
+	if rows.size() != Gen2Layout.DECORATION_COUNT:
 		return {"ok": false, "message": "The decoration attributes are outside the cartridge."}
 	for row: Dictionary in rows:
 		var type: int = int(row.get("type", 0))
@@ -1113,7 +1113,7 @@ static func verify_decorations(rom: RomFile, layout: Dictionary) -> Dictionary:
 				"message": "A decoration row carries type %d." % type,
 			}
 	var names: PackedStringArray = read_decoration_names(rom, layout)
-	if names.size() != RomLayout.DECORATION_NAME_COUNT:
+	if names.size() != Gen2Layout.DECORATION_NAME_COUNT:
 		return {"ok": false, "message": "The decoration names are outside the cartridge."}
 	for name: String in names:
 		if name.strip_edges().is_empty():
@@ -1127,7 +1127,7 @@ static func verify_decorations(rom: RomFile, layout: Dictionary) -> Dictionary:
 	## header or the CANCEL row would make `SetSpecificDecorationFlag` own a
 	## category instead of a decoration, and that is what a wrong offset gives.
 	var ids: Array = read_decoration_ids(rom, layout)
-	if ids.size() != RomLayout.DECORATION_ID_COUNT:
+	if ids.size() != Gen2Layout.DECORATION_ID_COUNT:
 		return {"ok": false, "message": "The decoration ids are outside the cartridge."}
 	for deco: int in ids:
 		if deco < 0 or deco >= rows.size():
@@ -1152,7 +1152,7 @@ static func verify_mom_phone(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if block.is_empty():
 		return {"ok": false, "message": "Mom's phone block is outside the cartridge."}
 	var at: int = int(layout["mom_phone"])
-	for offset: int in [0, RomLayout.MOM_DOLL_SCRIPT_AT]:
+	for offset: int in [0, Gen2Layout.MOM_DOLL_SCRIPT_AT]:
 		for command: int in 4:
 			if rom.u8(at + offset + command * 3) != Gen2WorldScript.WRITETEXT:
 				return {
@@ -1177,11 +1177,11 @@ static func verify_mom_phone(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## twenty-nine have to decode and the standard welcome has to be the word the
 ## shop opens with, which is what says the one pinned address is right.
 static func verify_mart_text(rom: RomFile, layout: Dictionary) -> Dictionary:
-	for name: String in RomLayout.MART_TEXT_AT:
-		if read_oak_text(rom, layout, RomLayout.mart_text_offset(layout, name)).is_empty():
+	for name: String in Gen2Layout.MART_TEXT_AT:
+		if read_oak_text(rom, layout, Gen2Layout.mart_text_offset(layout, name)).is_empty():
 			return {"ok": false, "message": "The mart's %s text did not decode." % name}
 	var welcome: String = read_oak_text(
-		rom, layout, RomLayout.mart_text_offset(layout, "welcome")
+		rom, layout, Gen2Layout.mart_text_offset(layout, "welcome")
 	)
 	if not welcome.begins_with("Welcome!"):
 		return {
@@ -1195,13 +1195,13 @@ static func verify_mart_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## the way the mart's are: all ten have to decode and the routine's opening line
 ## has to be the one he introduces himself with.
 static func verify_name_rater_text(rom: RomFile, layout: Dictionary) -> Dictionary:
-	for name: String in RomLayout.NAME_RATER_TEXT_ORDER:
-		if read_oak_text(rom, layout, RomLayout.name_rater_text_offset(layout, name)).is_empty():
+	for name: String in Gen2Layout.NAME_RATER_TEXT_ORDER:
+		if read_oak_text(rom, layout, Gen2Layout.name_rater_text_offset(layout, name)).is_empty():
 			return {
 				"ok": false, "message": "The Name Rater's %s text did not decode." % name,
 			}
 	var hello: String = read_oak_text(
-		rom, layout, RomLayout.name_rater_text_offset(layout, "hello")
+		rom, layout, Gen2Layout.name_rater_text_offset(layout, "hello")
 	)
 	if not hello.begins_with("Hello, hello!"):
 		return {
@@ -1214,15 +1214,15 @@ static func verify_name_rater_text(rom: RomFile, layout: Dictionary) -> Dictiona
 ## `engine/events/move_deleter.asm`'s eight `text_far` stubs, identified by
 ## content the same way.
 static func verify_move_deleter_text(rom: RomFile, layout: Dictionary) -> Dictionary:
-	for name: String in RomLayout.MOVE_DELETER_TEXT_ORDER:
+	for name: String in Gen2Layout.MOVE_DELETER_TEXT_ORDER:
 		if read_oak_text(
-			rom, layout, RomLayout.move_deleter_text_offset(layout, name)
+			rom, layout, Gen2Layout.move_deleter_text_offset(layout, name)
 		).is_empty():
 			return {
 				"ok": false, "message": "The move deleter's %s text did not decode." % name,
 			}
 	var intro: String = read_oak_text(
-		rom, layout, RomLayout.move_deleter_text_offset(layout, "intro")
+		rom, layout, Gen2Layout.move_deleter_text_offset(layout, "intro")
 	)
 	if not intro.contains("MOVE DELETER"):
 		return {
@@ -1238,13 +1238,13 @@ static func verify_move_deleter_text(rom: RomFile, layout: Dictionary) -> Dictio
 static func verify_day_care_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 	for name: String in day_care_text_names():
 		if read_oak_text(
-			rom, layout, RomLayout.day_care_text_offset(layout, name)
+			rom, layout, Gen2Layout.day_care_text_offset(layout, name)
 		).is_empty():
 			return {
 				"ok": false, "message": "The Day-Care's %s text did not decode." % name,
 			}
 	var intro: String = read_oak_text(
-		rom, layout, RomLayout.day_care_text_offset(layout, "man_intro")
+		rom, layout, Gen2Layout.day_care_text_offset(layout, "man_intro")
 	)
 	if not intro.begins_with("I'm the DAY-CARE"):
 		return {
@@ -1277,13 +1277,13 @@ const SPECIAL_TEXT_FIRST_BOX: Dictionary = {
 
 
 static func verify_special_text(rom: RomFile, layout: Dictionary) -> Dictionary:
-	for run: Variant in RomLayout.SPECIAL_TEXT_RUNS:
+	for run: Variant in Gen2Layout.SPECIAL_TEXT_RUNS:
 		var run_name: String = String(run)
-		if not RomLayout.has_special_text_run(layout, run_name):
+		if not Gen2Layout.has_special_text_run(layout, run_name):
 			continue
-		for name: String in RomLayout.special_text_names(run_name):
+		for name: String in Gen2Layout.special_text_names(run_name):
 			if read_oak_text(
-				rom, layout, RomLayout.special_text_offset(layout, run_name, name)
+				rom, layout, Gen2Layout.special_text_offset(layout, run_name, name)
 			).is_empty():
 				return {
 					"ok": false,
@@ -1293,7 +1293,7 @@ static func verify_special_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 		if expected.is_empty():
 			continue
 		var opening: String = read_oak_text(
-			rom, layout, RomLayout.special_text_offset(layout, run_name, String(expected[0]))
+			rom, layout, Gen2Layout.special_text_offset(layout, run_name, String(expected[0]))
 		)
 		if not opening.begins_with(String(expected[1])):
 			return {
@@ -1308,7 +1308,7 @@ static func verify_special_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## Every stub name across the four runs, in run order.
 static func day_care_text_names() -> Array[String]:
 	var out: Array[String] = []
-	for run: Array in RomLayout.DAY_CARE_TEXT_RUNS:
+	for run: Array in Gen2Layout.DAY_CARE_TEXT_RUNS:
 		for name: Variant in run[1] as Array:
 			out.append(String(name))
 	return out
@@ -1319,17 +1319,17 @@ static func day_care_text_names() -> Array[String]:
 ## address.
 static func read_unown_words(rom: RomFile, layout: Dictionary) -> PackedStringArray:
 	var out: PackedStringArray = PackedStringArray()
-	for form: int in range(1, RomLayout.UNOWN_WORD_ENTRIES):
-		var at: int = RomLayout.unown_word_offset(rom, layout, form)
-		if at < 0 or not rom.in_bounds(at, RomLayout.UNOWN_WORD_MAX_LENGTH):
+	for form: int in range(1, Gen2Layout.UNOWN_WORD_ENTRIES):
+		var at: int = Gen2Layout.unown_word_offset(rom, layout, form)
+		if at < 0 or not rom.in_bounds(at, Gen2Layout.UNOWN_WORD_MAX_LENGTH):
 			return PackedStringArray()
 		var word: String = ""
-		for step: int in RomLayout.UNOWN_WORD_MAX_LENGTH:
+		for step: int in Gen2Layout.UNOWN_WORD_MAX_LENGTH:
 			var code: int = rom.u8(at + step)
-			if code == RomLayout.UNOWN_WORD_TERMINATOR:
+			if code == Gen2Layout.UNOWN_WORD_TERMINATOR:
 				break
-			var letter: int = code - RomLayout.FIRST_UNOWN_CHAR
-			if letter < 0 or letter >= RomLayout.UNOWN_FORMS:
+			var letter: int = code - Gen2Layout.FIRST_UNOWN_CHAR
+			if letter < 0 or letter >= Gen2Layout.UNOWN_FORMS:
 				return PackedStringArray()
 			word += char("A".unicode_at(0) + letter)
 		if word.is_empty():
@@ -1342,15 +1342,15 @@ static func read_unown_words(rom: RomFile, layout: Dictionary) -> PackedStringAr
 ## its zeroth entry is form A's again, and the run starts where the table ends.
 static func verify_unown_words(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var words: PackedStringArray = read_unown_words(rom, layout)
-	if words.size() != RomLayout.UNOWN_FORMS:
+	if words.size() != Gen2Layout.UNOWN_FORMS:
 		return {"ok": false, "message": "The Unown words did not decode."}
 	var table: int = int(layout.get("unown_words", -1))
-	var first: int = RomLayout.unown_word_offset(rom, layout, 0)
-	if first != RomLayout.unown_word_offset(rom, layout, 1):
+	var first: int = Gen2Layout.unown_word_offset(rom, layout, 0)
+	if first != Gen2Layout.unown_word_offset(rom, layout, 1):
 		return {"ok": false, "message": "The Unown word table does not open on form A twice."}
-	if first != table + RomLayout.UNOWN_WORD_ENTRIES * RomLayout.UNOWN_WORD_POINTER_SIZE:
+	if first != table + Gen2Layout.UNOWN_WORD_ENTRIES * Gen2Layout.UNOWN_WORD_POINTER_SIZE:
 		return {"ok": false, "message": "The Unown words do not follow their own table."}
-	for form: int in RomLayout.UNOWN_FORMS:
+	for form: int in Gen2Layout.UNOWN_FORMS:
 		if not words[form].begins_with(char("A".unicode_at(0) + form)):
 			return {
 				"ok": false,
@@ -1365,17 +1365,17 @@ static func verify_unown_words(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## that does not ship them, which is Gold and Silver, and on any failure.
 static func read_unown_walls(rom: RomFile, layout: Dictionary) -> PackedStringArray:
 	var at: int = int(layout.get("unown_walls", -1))
-	if at < 0 or not rom.in_bounds(at, RomLayout.UNOWN_WALL_COUNT * RomLayout.UNOWN_WALL_MAX_LENGTH):
+	if at < 0 or not rom.in_bounds(at, Gen2Layout.UNOWN_WALL_COUNT * Gen2Layout.UNOWN_WALL_MAX_LENGTH):
 		return PackedStringArray()
 	var out: PackedStringArray = PackedStringArray()
-	for wall: int in RomLayout.UNOWN_WALL_COUNT:
+	for wall: int in Gen2Layout.UNOWN_WALL_COUNT:
 		var word: String = ""
-		for step: int in RomLayout.UNOWN_WALL_MAX_LENGTH:
+		for step: int in Gen2Layout.UNOWN_WALL_MAX_LENGTH:
 			var code: int = rom.u8(at)
 			at += 1
-			if code == RomLayout.UNOWN_WALL_TERMINATOR:
+			if code == Gen2Layout.UNOWN_WALL_TERMINATOR:
 				break
-			var letter: String = RomLayout.unown_wall_letter(code)
+			var letter: String = Gen2Layout.unown_wall_letter(code)
 			if letter.is_empty():
 				return PackedStringArray()
 			word += letter
@@ -1391,13 +1391,13 @@ static func verify_unown_walls(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if int(layout.get("unown_walls", -1)) < 0:
 		return {"ok": true, "message": "No Unown walls in this dump."}
 	var walls: PackedStringArray = read_unown_walls(rom, layout)
-	if walls.size() != RomLayout.UNOWN_WALL_COUNT:
+	if walls.size() != Gen2Layout.UNOWN_WALL_COUNT:
 		return {"ok": false, "message": "The Unown wall words did not decode."}
-	if walls[RomLayout.UNOWNWORDS_ESCAPE] != "ESCAPE":
+	if walls[Gen2Layout.UNOWNWORDS_ESCAPE] != "ESCAPE":
 		return {
 			"ok": false,
 			"message": "The first Unown wall reads \"%s\", not the word UNOWNWORDS_ESCAPE names." % [
-				walls[RomLayout.UNOWNWORDS_ESCAPE],
+				walls[Gen2Layout.UNOWNWORDS_ESCAPE],
 			],
 		}
 	var seen: Dictionary = {}
@@ -1415,21 +1415,21 @@ static func verify_unown_walls(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## Odd Egg.
 static func read_odd_eggs(rom: RomFile, layout: Dictionary) -> Array:
 	var at: int = int(layout.get("odd_eggs", -1))
-	var span: int = RomLayout.ODD_EGG_MONS_OFFSET \
-		+ RomLayout.ODD_EGG_COUNT * RomLayout.NICKNAMED_MON_BYTES
+	var span: int = Gen2Layout.ODD_EGG_MONS_OFFSET \
+		+ Gen2Layout.ODD_EGG_COUNT * Gen2Layout.NICKNAMED_MON_BYTES
 	if at < 0 or not rom.in_bounds(at, span):
 		return []
 	var out: Array = []
-	for index: int in RomLayout.ODD_EGG_COUNT:
+	for index: int in Gen2Layout.ODD_EGG_COUNT:
 		out.append({
 			## `.loop` compares the random word against this entry and takes the
 			## row when the word is no greater, so the words are cumulative and
 			## the last is $ffff.
-			"probability": rom.u16le(at + index * RomLayout.ODD_EGG_PROBABILITY_BYTES),
+			"probability": rom.u16le(at + index * Gen2Layout.ODD_EGG_PROBABILITY_BYTES),
 			"bytes": Array(rom.slice(
-				at + RomLayout.ODD_EGG_MONS_OFFSET
-					+ index * RomLayout.NICKNAMED_MON_BYTES,
-				RomLayout.NICKNAMED_MON_BYTES
+				at + Gen2Layout.ODD_EGG_MONS_OFFSET
+					+ index * Gen2Layout.NICKNAMED_MON_BYTES,
+				Gen2Layout.NICKNAMED_MON_BYTES
 			)),
 		})
 	return out
@@ -1441,7 +1441,7 @@ static func verify_odd_eggs(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if int(layout.get("odd_eggs", -1)) < 0:
 		return {"ok": true, "message": "No Odd Egg in this dump."}
 	var rows: Array = read_odd_eggs(rom, layout)
-	if rows.size() != RomLayout.ODD_EGG_COUNT:
+	if rows.size() != Gen2Layout.ODD_EGG_COUNT:
 		return {"ok": false, "message": "The Odd Egg table is outside the ROM."}
 	var previous: int = 0
 	for index: int in rows.size():
@@ -1456,21 +1456,21 @@ static func verify_odd_eggs(rom: RomFile, layout: Dictionary) -> Dictionary:
 		var mon: Gen2SaveMon = Gen2SramAdapter.read_nicknamed_mon(
 			PackedByteArray(row["bytes"]), 0
 		)
-		if mon == null or mon.species <= 0 or mon.species > RomLayout.SPECIES_COUNT:
+		if mon == null or mon.species <= 0 or mon.species > Gen2Layout.SPECIES_COUNT:
 			return {"ok": false, "message": "Odd Egg %d names no species." % index}
-		if mon.level != RomLayout.ODD_EGG_LEVEL:
+		if mon.level != Gen2Layout.ODD_EGG_LEVEL:
 			return {
 				"ok": false,
 				"message": "Odd Egg %d is level %d, not %d." % [
-					index, mon.level, RomLayout.ODD_EGG_LEVEL,
+					index, mon.level, Gen2Layout.ODD_EGG_LEVEL,
 				],
 			}
-		if mon.nickname != RomLayout.ODD_EGG_NICKNAME:
+		if mon.nickname != Gen2Layout.ODD_EGG_NICKNAME:
 			return {
 				"ok": false,
 				"message": "Odd Egg %d is nicknamed \"%s\"." % [index, mon.nickname],
 			}
-	if previous != RomLayout.ODD_EGG_PROBABILITY_TOTAL:
+	if previous != Gen2Layout.ODD_EGG_PROBABILITY_TOTAL:
 		return {
 			"ok": false,
 			"message": "The Odd Egg probabilities close on %d, not $ffff." % previous,
@@ -1484,12 +1484,12 @@ static func read_pokecenter_pc_rows(
 	rom: RomFile, layout: Dictionary, players: bool = false
 ) -> PackedStringArray:
 	var at: int = _pokecenter_pc_rows_at(layout, players)
-	var count: int = RomLayout.POKECENTER_PC_PLAYERS_ROWS.size() if players \
-		else RomLayout.POKECENTER_PC_ROWS.size()
-	if at < 0 or not rom.in_bounds(at, count * RomLayout.POKECENTER_PC_ROW_MAX_BYTES):
+	var count: int = Gen2Layout.POKECENTER_PC_PLAYERS_ROWS.size() if players \
+		else Gen2Layout.POKECENTER_PC_ROWS.size()
+	if at < 0 or not rom.in_bounds(at, count * Gen2Layout.POKECENTER_PC_ROW_MAX_BYTES):
 		return PackedStringArray()
 	return Gen2Text.decode_sequence(
-		rom.bytes(), at, count, RomLayout.POKECENTER_PC_ROW_MAX_BYTES
+		rom.bytes(), at, count, Gen2Layout.POKECENTER_PC_ROW_MAX_BYTES
 	)
 
 
@@ -1497,7 +1497,7 @@ static func _pokecenter_pc_rows_at(layout: Dictionary, players: bool) -> int:
 	var at: int = int(layout.get("pokecenter_pc", -1))
 	if at < 0:
 		return -1
-	return at + RomLayout.POKECENTER_PC_PLAYERS_AT if players else at
+	return at + Gen2Layout.POKECENTER_PC_PLAYERS_AT if players else at
 
 
 ## `.WhichPC` behind one of the row runs: each list is a count, that many row
@@ -1507,19 +1507,19 @@ static func read_pokecenter_pc_lists(
 	rom: RomFile, layout: Dictionary, players: bool = false
 ) -> Array:
 	var at: int = _pokecenter_pc_rows_at(layout, players)
-	var names: Array[String] = RomLayout.POKECENTER_PC_PLAYERS_ROWS if players \
-		else RomLayout.POKECENTER_PC_ROWS
-	if at < 0 or not rom.in_bounds(at, names.size() * RomLayout.POKECENTER_PC_ROW_MAX_BYTES):
+	var names: Array[String] = Gen2Layout.POKECENTER_PC_PLAYERS_ROWS if players \
+		else Gen2Layout.POKECENTER_PC_ROWS
+	if at < 0 or not rom.in_bounds(at, names.size() * Gen2Layout.POKECENTER_PC_ROW_MAX_BYTES):
 		return []
 	## `terminated_end` already answers past the `@`, which is where the next
 	## string starts.
 	for _row: String in names:
 		at = Gen2Text.terminated_end(
-			rom.bytes(), at, RomLayout.POKECENTER_PC_ROW_MAX_BYTES
+			rom.bytes(), at, Gen2Layout.POKECENTER_PC_ROW_MAX_BYTES
 		)
 	var out: Array = []
-	var lists: int = RomLayout.POKECENTER_PC_PLAYERS_LISTS if players \
-		else RomLayout.POKECENTER_PC_LISTS
+	var lists: int = Gen2Layout.POKECENTER_PC_PLAYERS_LISTS if players \
+		else Gen2Layout.POKECENTER_PC_LISTS
 	for _list: int in lists:
 		if not rom.in_bounds(at, 1):
 			return []
@@ -1532,7 +1532,7 @@ static func read_pokecenter_pc_lists(
 			if row >= names.size():
 				return []
 			rows.append(row)
-		if rom.u8(at + 1 + count) != RomLayout.POKECENTER_PC_LIST_END:
+		if rom.u8(at + 1 + count) != Gen2Layout.POKECENTER_PC_LIST_END:
 			return []
 		out.append(rows)
 		at += count + 2
@@ -1542,12 +1542,12 @@ static func read_pokecenter_pc_lists(
 ## One `text_far` stub, followed and decoded. Empty when the stub is not one,
 ## which is what a table that is not `OakRatings` produces.
 static func read_oak_text(rom: RomFile, _layout: Dictionary, stub: int) -> String:
-	if not rom.in_bounds(stub, RomLayout.OAK_TEXT_STUB_SIZE) \
+	if not rom.in_bounds(stub, Gen2Layout.OAK_TEXT_STUB_SIZE) \
 		or rom.u8(stub) != Gen2TextStream.TX_FAR:
 		return ""
 	var at: int = RomFile.linear(rom.u8(stub + 3), rom.u16le(stub + 1))
 	var decoded: Dictionary = Gen2WorldScript.decode_text(
-		rom.slice(at, RomLayout.OAK_TEXT_MAX_BYTES)
+		rom.slice(at, Gen2Layout.OAK_TEXT_MAX_BYTES)
 	)
 	if not bool(decoded.get("ok", false)):
 		return ""
@@ -1557,7 +1557,7 @@ static func read_oak_text(rom: RomFile, _layout: Dictionary, stub: int) -> Strin
 ## `CrystalIntro`'s art section, walked whole from its one pinned address. Every
 ## entry is decompressed and its length checked against what the routine that
 ## loads it asks VRAM for, and the next address is that length rounded up to
-## [constant RomLayout.INTRO_ENTRY_ALIGN]. Thirty-five entries landing on their
+## [constant Gen2Layout.INTRO_ENTRY_ALIGN]. Thirty-five entries landing on their
 ## exact sizes is what says the address is right; a walk that starts anywhere else
 ## fails inside the first two. Returns {name: PackedByteArray}, or empty.
 static func read_intro_section(rom: RomFile, layout: Dictionary) -> Dictionary:
@@ -1567,7 +1567,7 @@ static func read_intro_section(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return {}
 	var lz := Gen2Lz.new()
 	var out: Dictionary = {}
-	for row: Array in RomLayout.INTRO_SECTION:
+	for row: Array in Gen2Layout.INTRO_SECTION:
 		var name: String = String(row[0])
 		var kind: String = String(row[1])
 		var wanted: int = _intro_entry_bytes(kind, int(row[2]))
@@ -1584,7 +1584,7 @@ static func read_intro_section(rom: RomFile, layout: Dictionary) -> Dictionary:
 			if lz.failed or raw.size() != wanted:
 				return {}
 		out[name] = raw
-		at += _aligned(consumed, RomLayout.INTRO_ENTRY_ALIGN)
+		at += _aligned(consumed, Gen2Layout.INTRO_ENTRY_ALIGN)
 	return out
 
 
@@ -1601,10 +1601,10 @@ static func read_gs_intro_section(rom: RomFile, layout: Dictionary) -> Dictionar
 		return {}
 	var lz := Gen2Lz.new()
 	var out: Dictionary = {}
-	for row: Array in RomLayout.GS_INTRO_SECTION:
+	for row: Array in Gen2Layout.GS_INTRO_SECTION:
 		var name: String = String(row[0])
 		var raw_bytes: bool = String(row[1]) == "raw_bytes"
-		var wanted: int = int(row[2]) if raw_bytes else int(row[2]) * Gen2Tiles.TILE_BYTES
+		var wanted: int = int(row[2]) if raw_bytes else int(row[2]) * PokeTiles.TILE_BYTES
 		var raw: PackedByteArray = PackedByteArray()
 		var consumed: int = 0
 		if raw_bytes:
@@ -1618,19 +1618,19 @@ static func read_gs_intro_section(rom: RomFile, layout: Dictionary) -> Dictionar
 			if lz.failed or raw.size() != wanted:
 				return {}
 		out[name] = raw
-		at += _aligned(consumed, RomLayout.INTRO_ENTRY_ALIGN)
+		at += _aligned(consumed, Gen2Layout.INTRO_ENTRY_ALIGN)
 	return out
 
 
 static func _intro_entry_bytes(kind: String, tiles: int) -> int:
 	match kind:
 		"map", "attr":
-			return RomLayout.INTRO_MAP_BYTES
+			return Gen2Layout.INTRO_MAP_BYTES
 		"pal":
-			return RomLayout.INTRO_PALETTES * RomLayout.INTRO_PALETTE_COLORS \
-				* Gen2Palette.COLOR_BYTES
+			return Gen2Layout.INTRO_PALETTES * Gen2Layout.INTRO_PALETTE_COLORS \
+				* PokePalette.COLOR_BYTES
 		_:
-			return tiles * Gen2Tiles.TILE_BYTES
+			return tiles * PokeTiles.TILE_BYTES
 
 
 static func _aligned(value: int, to: int) -> int:
@@ -1646,11 +1646,11 @@ static func read_trade_anim_section(rom: RomFile, layout: Dictionary) -> Diction
 		return {}
 	var lz := Gen2Lz.new()
 	var out: Dictionary = {}
-	for row: Array in RomLayout.TRADE_ANIM_SECTION:
+	for row: Array in Gen2Layout.TRADE_ANIM_SECTION:
 		var name: String = String(row[0])
 		var kind: String = String(row[1])
 		var wanted: int = int(row[2]) if kind == "map" \
-			else int(row[2]) * Gen2Tiles.TILE_BYTES
+			else int(row[2]) * PokeTiles.TILE_BYTES
 		var raw: PackedByteArray = PackedByteArray()
 		var consumed: int = 0
 		if kind == "lz":
@@ -1676,8 +1676,8 @@ static func verify_trade_anim(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var section: Dictionary = read_trade_anim_section(rom, layout)
 	if section.is_empty():
 		return {"ok": false, "message": "The trade animation section does not walk."}
-	var first: int = RomLayout.TRADE_ANIM_SHEET_FIRST_TILE
-	var last: int = first + RomLayout.TRADE_ANIM_SHEET_TILES - 1
+	var first: int = Gen2Layout.TRADE_ANIM_SHEET_FIRST_TILE
+	var last: int = first + Gen2Layout.TRADE_ANIM_SHEET_TILES - 1
 	for name: String in ["game_boy_tilemap", "link_cable_tilemap"]:
 		for cell: int in (section[name] as PackedByteArray):
 			if cell < first or cell > last:
@@ -1706,7 +1706,7 @@ static func verify_intro_movie(rom: RomFile, layout: Dictionary) -> Dictionary:
 	# `IntroScene3` puts the background sheet's 128 tiles at `vTiles2`, which is
 	# where a BG tile number below $80 reads from, so no cell of its map may name
 	# a tile the sheet does not hold.
-	for cell: int in RomLayout.INTRO_MAP_BYTES:
+	for cell: int in Gen2Layout.INTRO_MAP_BYTES:
 		if int((section["background_map"] as PackedByteArray)[cell]) >= 0x80:
 			return {
 				"ok": false,
@@ -1728,14 +1728,14 @@ static func verify_intro_movie(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 	var fade: int = int(entry.get("fade", -1))
 	var pals: int = int(entry.get("unown_pals", -1))
-	var fade_bytes: int = RomLayout.INTRO_FADE_PALETTES \
-		* RomLayout.INTRO_PALETTE_COLORS * Gen2Palette.COLOR_BYTES
-	var pal_bytes: int = RomLayout.INTRO_UNOWN_PALETTES \
-		* RomLayout.INTRO_PALETTE_COLORS * Gen2Palette.COLOR_BYTES
+	var fade_bytes: int = Gen2Layout.INTRO_FADE_PALETTES \
+		* Gen2Layout.INTRO_PALETTE_COLORS * PokePalette.COLOR_BYTES
+	var pal_bytes: int = Gen2Layout.INTRO_UNOWN_PALETTES \
+		* Gen2Layout.INTRO_PALETTE_COLORS * PokePalette.COLOR_BYTES
 	if not rom.in_bounds(fade, fade_bytes) or not rom.in_bounds(pals, pal_bytes):
 		return {"ok": false, "message": "The intro fade palettes are outside the cartridge."}
-	for colour: int in RomLayout.INTRO_PALETTE_COLORS:
-		var offset: int = colour * Gen2Palette.COLOR_BYTES
+	for colour: int in Gen2Layout.INTRO_PALETTE_COLORS:
+		var offset: int = colour * PokePalette.COLOR_BYTES
 		if rom.u16le(fade + offset) != rom.u16le(pals + offset):
 			return {
 				"ok": false,
@@ -1759,16 +1759,16 @@ static func verify_unown_puzzle(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if section.is_empty():
 		return {"ok": false, "message": "The Unown puzzle section does not walk."}
 
-	var side: int = RomLayout.UNOWN_PUZZLE_PICTURE_TILES
-	for name: String in RomLayout.UNOWN_PUZZLE_PICTURES:
-		var tiles: int = int(section[name].size()) / Gen2Tiles.TILE_BYTES
+	var side: int = Gen2Layout.UNOWN_PUZZLE_PICTURE_TILES
+	for name: String in Gen2Layout.UNOWN_PUZZLE_PICTURES:
+		var tiles: int = int(section[name].size()) / PokeTiles.TILE_BYTES
 		if tiles != side * side:
 			return {
 				"ok": false,
 				"message": "The %s puzzle is not %d by %d tiles." % [name, side, side],
 			}
 
-	if RomLayout.predef_palette_offset(layout, RomLayout.PREDEFPAL_UNOWN_PUZZLE) < 0:
+	if Gen2Layout.predef_palette_offset(layout, Gen2Layout.PREDEFPAL_UNOWN_PUZZLE) < 0:
 		return {"ok": false, "message": "No PredefPals pin for the Unown puzzle palette."}
 	return {"ok": true, "message": "Unown puzzle verified."}
 
@@ -1822,9 +1822,9 @@ static func verify_link_border(rom: RomFile, layout: Dictionary) -> Dictionary:
 	## `_LinkTextbox`'s `.PlaceBorder` writes `$30` at the top left and `$37` at
 	## the bottom right, so those eight tiles are a box and not blank.
 	var box: PackedByteArray = (section["tiles"] as PackedByteArray).slice(
-		RomLayout.LINK_TEXTBOX_FIRST_TILE * Gen2Tiles.TILE_BYTES,
-		(RomLayout.LINK_TEXTBOX_FIRST_TILE + RomLayout.LINK_TEXTBOX_TILES) \
-			* Gen2Tiles.TILE_BYTES
+		Gen2Layout.LINK_TEXTBOX_FIRST_TILE * PokeTiles.TILE_BYTES,
+		(Gen2Layout.LINK_TEXTBOX_FIRST_TILE + Gen2Layout.LINK_TEXTBOX_TILES) \
+			* PokeTiles.TILE_BYTES
 	)
 	for byte: int in box:
 		if byte != 0:
@@ -1846,8 +1846,8 @@ static func verify_slots(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 	# "The first three positions are repeated to avoid needing to check indices
 	# when copying", which is what says the strips start where they should.
-	var strip: int = RomLayout.SLOTS_REEL_STRIP
-	var size: int = RomLayout.SLOTS_REEL_SIZE
+	var strip: int = Gen2Layout.SLOTS_REEL_STRIP
+	var size: int = Gen2Layout.SLOTS_REEL_SIZE
 	for reel: int in 3:
 		var reel_bytes: PackedByteArray = section["reels"].slice(
 			reel * strip, (reel + 1) * strip
@@ -1859,8 +1859,8 @@ static func verify_slots(rom: RomFile, layout: Dictionary) -> Dictionary:
 					"message": "Reel %d does not repeat its own first symbols." % [reel + 1],
 				}
 
-	for name: String in RomLayout.slots_text_names():
-		if read_oak_text(rom, layout, RomLayout.slots_text_offset(layout, name)).is_empty():
+	for name: String in Gen2Layout.slots_text_names():
+		if read_oak_text(rom, layout, Gen2Layout.slots_text_offset(layout, name)).is_empty():
 			return {"ok": false, "message": "The slot machine's %s text is not one." % name}
 
 	if int(entry.get("palettes", -1)) < 0:
@@ -1885,15 +1885,15 @@ static func verify_card_flip(rom: RomFile, layout: Dictionary) -> Dictionary:
 	# two background sheets carry rather than a character. A walk that landed
 	# anywhere else fails both.
 	var map: PackedByteArray = section["tilemap"]
-	for row: int in RomLayout.CARD_FLIP_TILEMAP_ROWS:
-		for column: int in RomLayout.CARD_FLIP_TILEMAP_COLUMNS:
-			var code: int = map[row * RomLayout.CARD_FLIP_TILEMAP_COLUMNS + column]
-			var wanted: bool = code == RomLayout.CARD_FLIP_LIGHT_OFF_TILE if column == 0 \
-				else code < RomLayout.FONT_FIRST_CODE
+	for row: int in Gen2Layout.CARD_FLIP_TILEMAP_ROWS:
+		for column: int in Gen2Layout.CARD_FLIP_TILEMAP_COLUMNS:
+			var code: int = map[row * Gen2Layout.CARD_FLIP_TILEMAP_COLUMNS + column]
+			var wanted: bool = code == Gen2Layout.CARD_FLIP_LIGHT_OFF_TILE if column == 0 \
+				else code < Gen2Layout.FONT_FIRST_CODE
 			if not wanted:
 				return {"ok": false, "message": "The card flip tilemap is not one."}
 
-	if read_card_flip_texts(rom, layout).size() != RomLayout.CARD_FLIP_TEXT_ORDER.size():
+	if read_card_flip_texts(rom, layout).size() != Gen2Layout.CARD_FLIP_TEXT_ORDER.size():
 		return {"ok": false, "message": "The card flip's texts do not walk."}
 
 	if int(entry.get("palettes", -1)) < 0:
@@ -1910,8 +1910,8 @@ static func verify_magnet_train(rom: RomFile, layout: Dictionary) -> Dictionary:
 	# The bushes above and below the train are the same two rows, which a walk
 	# landing anywhere else in the bank has no reason to repeat.
 	var bg: PackedByteArray = section["bg"]
-	var columns: int = RomLayout.MAGNET_TRAIN_BG_COLUMNS
-	var rows: int = RomLayout.MAGNET_TRAIN_BG_ROWS
+	var columns: int = Gen2Layout.MAGNET_TRAIN_BG_COLUMNS
+	var rows: int = Gen2Layout.MAGNET_TRAIN_BG_ROWS
 	for cell: int in columns * 2:
 		if bg[cell] != bg[(rows - 2) * columns + cell]:
 			return {"ok": false, "message": "The magnet train's bushes do not repeat."}
@@ -1920,7 +1920,7 @@ static func verify_magnet_train(rom: RomFile, layout: Dictionary) -> Dictionary:
 	# station map has at `vTiles2`.
 	for name: String in ["bg", "fg"]:
 		for code: int in (section[name] as PackedByteArray):
-			if code >= RomLayout.TILESET_BLOCK_TILES:
+			if code >= Gen2Layout.TILESET_BLOCK_TILES:
 				return {
 					"ok": false,
 					"message": "The magnet train's %s tilemap names tile $%02X." % [name, code],
@@ -1948,7 +1948,7 @@ static func verify_gs_intro(rom: RomFile, layout: Dictionary) -> Dictionary:
 	for pair: Array in [["water", "water"], ["grass", "grass"]]:
 		var map: PackedByteArray = section["%s_tilemap" % pair[0]]
 		var meta: PackedByteArray = section["%s_meta" % pair[1]]
-		var metatiles: int = meta.size() / RomLayout.GS_INTRO_META_BYTES
+		var metatiles: int = meta.size() / Gen2Layout.GS_INTRO_META_BYTES
 		for cell: int in map.size():
 			if int(map[cell]) >= metatiles:
 				return {
@@ -1961,17 +1961,17 @@ static func verify_gs_intro(rom: RomFile, layout: Dictionary) -> Dictionary:
 		"object_palette", -1
 	))
 	var wanted: int = predef \
-		+ RomLayout.GS_INTRO_PREDEF_GAMEFREAK_LOGO_OB * RomLayout.GS_INTRO_PREDEF_SIZE
+		+ Gen2Layout.GS_INTRO_PREDEF_GAMEFREAK_LOGO_OB * Gen2Layout.GS_INTRO_PREDEF_SIZE
 	if predef < 0 or logo != wanted:
 		return {
 			"ok": false,
 			"message": "The predef palettes do not hold the GameFreak logo's own.",
 		}
 	for name: String in ["magikarp_palettes", "shellder_lapras_palettes"]:
-		var palettes: int = RomLayout.GS_INTRO_MAGIKARP_PALETTES \
-			if name == "magikarp_palettes" else RomLayout.GS_INTRO_SHELLDER_LAPRAS_PALETTES
+		var palettes: int = Gen2Layout.GS_INTRO_MAGIKARP_PALETTES \
+			if name == "magikarp_palettes" else Gen2Layout.GS_INTRO_SHELLDER_LAPRAS_PALETTES
 		if not rom.in_bounds(
-			int(entry.get(name, -1)), palettes * RomLayout.GS_INTRO_PREDEF_SIZE
+			int(entry.get(name, -1)), palettes * Gen2Layout.GS_INTRO_PREDEF_SIZE
 		):
 			return {
 				"ok": false,
@@ -1984,9 +1984,9 @@ static func verify_gs_intro(rom: RomFile, layout: Dictionary) -> Dictionary:
 static func _verify_intro_palette_run(
 	raw: PackedByteArray, colour: int, name: String
 ) -> Dictionary:
-	var colors: int = RomLayout.INTRO_FADE_PALETTES * RomLayout.INTRO_PALETTE_COLORS
+	var colors: int = Gen2Layout.INTRO_FADE_PALETTES * Gen2Layout.INTRO_PALETTE_COLORS
 	for index: int in colors:
-		var at: int = index * Gen2Palette.COLOR_BYTES
+		var at: int = index * PokePalette.COLOR_BYTES
 		if raw[at] | (raw[at + 1] << 8) != colour:
 			return {
 				"ok": false,
@@ -2035,18 +2035,18 @@ static func verify_credits(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## dumps, so a run of four that does not is not this table.
 static func _verify_credits_palettes(rom: RomFile, entry: Dictionary) -> Dictionary:
 	var at: int = int(entry["palettes"])
-	var stride: int = int(entry["scene_palettes"]) * RomLayout.CREDITS_PALETTE_COLORS
-	var length: int = RomLayout.CREDITS_SCENES * stride * 2
+	var stride: int = int(entry["scene_palettes"]) * Gen2Layout.CREDITS_PALETTE_COLORS
+	var length: int = Gen2Layout.CREDITS_SCENES * stride * 2
 	if not rom.in_bounds(at, length):
 		return {"ok": false, "message": "The credits palettes are outside the cartridge."}
 	if at >= int(entry["gfx"]):
 		return {"ok": false, "message": "The credits palettes are behind the graphics."}
-	for colour: int in RomLayout.CREDITS_SCENES * stride:
+	for colour: int in Gen2Layout.CREDITS_SCENES * stride:
 		if rom.u16le(at + colour * 2) & 0x8000:
 			return {"ok": false, "message": "A credits palette colour is not 15-bit."}
-	for scene: int in RomLayout.CREDITS_SCENES:
-		var last: int = at + (scene * stride + RomLayout.CREDITS_PALETTE_COLORS - 1) * 2
-		if rom.u16le(last) != RomLayout.CREDITS_PALETTE_LAST_COLOR:
+	for scene: int in Gen2Layout.CREDITS_SCENES:
+		var last: int = at + (scene * stride + Gen2Layout.CREDITS_PALETTE_COLORS - 1) * 2
+		if rom.u16le(last) != Gen2Layout.CREDITS_PALETTE_LAST_COLOR:
 			return {
 				"ok": false,
 				"message": "Credits scene %d's palette does not close on RGB 07,07,07." % scene,
@@ -2062,24 +2062,24 @@ static func _verify_credits_gfx(
 	rom: RomFile, layout: Dictionary, entry: Dictionary
 ) -> Dictionary:
 	var at: int = int(entry["gfx"])
-	var tiles: int = RomLayout.CREDITS_BORDER_TILES + RomLayout.credits_mon_tiles(layout)
-	if not rom.in_bounds(at, tiles * Gen2Tiles.TILE_BYTES):
+	var tiles: int = Gen2Layout.CREDITS_BORDER_TILES + Gen2Layout.credits_mon_tiles(layout)
+	if not rom.in_bounds(at, tiles * PokeTiles.TILE_BYTES):
 		return {"ok": false, "message": "The credits graphics are outside the cartridge."}
-	if at + tiles * Gen2Tiles.TILE_BYTES != int(entry["script"]):
+	if at + tiles * PokeTiles.TILE_BYTES != int(entry["script"]):
 		return {"ok": false, "message": "The credits script does not follow the graphics."}
-	for row: int in RomLayout.CREDITS_BORDER_TILES * Gen2Tiles.TILE_HEIGHT:
+	for row: int in Gen2Layout.CREDITS_BORDER_TILES * PokeTiles.TILE_HEIGHT:
 		if rom.u8(at + row * 2) != 0:
 			return {"ok": false, "message": "The credits border is not drawn in colour 2."}
-	var solid: int = at + (RomLayout.CREDITS_BORDER_TILES - 1) * Gen2Tiles.TILE_BYTES
-	for row: int in Gen2Tiles.TILE_HEIGHT:
+	var solid: int = at + (Gen2Layout.CREDITS_BORDER_TILES - 1) * PokeTiles.TILE_BYTES
+	for row: int in PokeTiles.TILE_HEIGHT:
 		if rom.u8(solid + row * 2 + 1) != 0xFF:
 			return {"ok": false, "message": "The credits border's last tile is not solid."}
 
 	var the_end: int = int(entry["the_end"])
-	if not rom.in_bounds(the_end, RomLayout.CREDITS_THE_END_TILES * Gen2Tiles.TILE_BYTES):
+	if not rom.in_bounds(the_end, Gen2Layout.CREDITS_THE_END_TILES * PokeTiles.TILE_BYTES):
 		return {"ok": false, "message": "The End graphic is outside the cartridge."}
 	var ink: int = 0
-	for row: int in RomLayout.CREDITS_THE_END_TILES * Gen2Tiles.TILE_HEIGHT:
+	for row: int in Gen2Layout.CREDITS_THE_END_TILES * PokeTiles.TILE_HEIGHT:
 		var low: int = rom.u8(the_end + row * 2)
 		var high: int = rom.u8(the_end + row * 2 + 1)
 		if high & ~low & 0xFF:
@@ -2096,7 +2096,7 @@ static func _verify_credits_gfx(
 ## rather than trusted.
 static func _verify_credits_script(script: PackedByteArray, entry: Dictionary) -> Dictionary:
 	var count: int = int(entry["string_count"])
-	if script[0] != RomLayout.CREDITS_CLEAR:
+	if script[0] != Gen2Layout.CREDITS_CLEAR:
 		return {"ok": false, "message": "The credits script does not open on a clear."}
 	var highest: int = -1
 	var first_string: int = -1
@@ -2105,11 +2105,11 @@ static func _verify_credits_script(script: PackedByteArray, entry: Dictionary) -
 	while step < script.size():
 		var command: int = script[step]
 		step += 1
-		if command == RomLayout.CREDITS_END:
+		if command == Gen2Layout.CREDITS_END:
 			terminated = true
 			break
-		if command >= RomLayout.CREDITS_THEEND:
-			if command in RomLayout.CREDITS_OPERAND_COMMANDS:
+		if command >= Gen2Layout.CREDITS_THEEND:
+			if command in Gen2Layout.CREDITS_OPERAND_COMMANDS:
 				step += 1
 			continue
 		if command >= count:
@@ -2151,8 +2151,8 @@ static func _verify_credits_strings(
 ) -> Dictionary:
 	var bank: int = int(entry["strings_bank"])
 	for index: int in int(entry["string_count"]):
-		var at: int = RomLayout.credits_string_offset(rom, layout, index)
-		if RomLayout.bank_of(at) != bank:
+		var at: int = Gen2Layout.credits_string_offset(rom, layout, index)
+		if Gen2Layout.bank_of(at) != bank:
 			return {"ok": false, "message": "Credits string %d leaves bank $%02X." % [index, bank]}
 		if read_credits_string(rom, layout, index).is_empty():
 			return {"ok": false, "message": "Credits string %d has no terminator." % index}
@@ -2173,10 +2173,10 @@ static func read_credits_script(rom: RomFile, layout: Dictionary) -> PackedByteA
 	var at: int = int((layout.get("credits", {}) as Dictionary).get("script", -1))
 	if at < 0:
 		return PackedByteArray()
-	for length: int in range(1, RomLayout.CREDITS_SCRIPT_MAX_BYTES + 1):
+	for length: int in range(1, Gen2Layout.CREDITS_SCRIPT_MAX_BYTES + 1):
 		if not rom.in_bounds(at + length - 1, 1):
 			break
-		if rom.u8(at + length - 1) == RomLayout.CREDITS_END:
+		if rom.u8(at + length - 1) == Gen2Layout.CREDITS_END:
 			return rom.slice(at, length)
 	return PackedByteArray()
 
@@ -2187,10 +2187,10 @@ static func read_credits_script(rom: RomFile, layout: Dictionary) -> PackedByteA
 static func read_credits_string(
 	rom: RomFile, layout: Dictionary, index: int
 ) -> PackedByteArray:
-	var at: int = RomLayout.credits_string_offset(rom, layout, index)
+	var at: int = Gen2Layout.credits_string_offset(rom, layout, index)
 	if at < 0:
 		return PackedByteArray()
-	for length: int in RomLayout.CREDITS_STRING_MAX_BYTES:
+	for length: int in Gen2Layout.CREDITS_STRING_MAX_BYTES:
 		if not rom.in_bounds(at + length, 1):
 			break
 		if rom.u8(at + length) == Gen2Text.TERMINATOR:
@@ -2206,11 +2206,11 @@ static func read_town_map_region(
 	var out: PackedByteArray = PackedByteArray()
 	if at < 0:
 		return out
-	for step: int in RomLayout.TOWN_MAP_REGION_CELLS + 1:
+	for step: int in Gen2Layout.TOWN_MAP_REGION_CELLS + 1:
 		if not rom.in_bounds(at + step, 1):
 			return PackedByteArray()
 		var byte: int = rom.u8(at + step)
-		if byte == RomLayout.TOWN_MAP_REGION_TERMINATOR:
+		if byte == Gen2Layout.TOWN_MAP_REGION_TERMINATOR:
 			return out
 		out.append(byte)
 	return PackedByteArray()
@@ -2222,19 +2222,19 @@ static func read_town_map_region(
 static func read_pokegear_cards(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var at: int = int((layout.get("town_map", {}) as Dictionary).get("cards", -1))
 	var out: Dictionary = {}
-	if at < 0 or not rom.in_bounds(at, RomLayout.POKEGEAR_CARD_TILEMAP_BYTES):
+	if at < 0 or not rom.in_bounds(at, Gen2Layout.POKEGEAR_CARD_TILEMAP_BYTES):
 		return out
-	var end: int = at + RomLayout.POKEGEAR_CARD_TILEMAP_BYTES
-	for name: String in RomLayout.POKEGEAR_CARD_ORDER:
+	var end: int = at + Gen2Layout.POKEGEAR_CARD_TILEMAP_BYTES
+	for name: String in Gen2Layout.POKEGEAR_CARD_ORDER:
 		var cells: PackedByteArray = PackedByteArray()
-		while at < end and rom.u8(at) != RomLayout.POKEGEAR_CARD_TERMINATOR:
+		while at < end and rom.u8(at) != Gen2Layout.POKEGEAR_CARD_TERMINATOR:
 			if at + 1 >= end:
 				return {}
 			var tile: int = rom.u8(at)
 			for _step: int in rom.u8(at + 1):
 				cells.append(tile)
 			at += 2
-		if cells.size() != RomLayout.POKEGEAR_CARD_CELLS:
+		if cells.size() != Gen2Layout.POKEGEAR_CARD_CELLS:
 			return {}
 		out[name] = cells
 		at += 1
@@ -2246,12 +2246,12 @@ static func read_pokegear_cards(rom: RomFile, layout: Dictionary) -> Dictionary:
 static func read_pokegear_texts(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var at: int = int((layout.get("town_map", {}) as Dictionary).get("card_texts", -1))
 	var out: Dictionary = {}
-	var window: int = RomLayout.POKEGEAR_TEXT_NAMES.size() * RomLayout.POKEGEAR_TEXT_MAX_BYTES
+	var window: int = Gen2Layout.POKEGEAR_TEXT_NAMES.size() * Gen2Layout.POKEGEAR_TEXT_MAX_BYTES
 	if at < 0 or not rom.in_bounds(at, window):
 		return out
 	var data: PackedByteArray = rom.slice(at, window)
 	var offset: int = 0
-	for name: String in RomLayout.POKEGEAR_TEXT_NAMES:
+	for name: String in Gen2Layout.POKEGEAR_TEXT_NAMES:
 		var decoded: Dictionary = Gen2TextStream.decode(data, offset)
 		if not bool(decoded.get("ok", false)):
 			return {}
@@ -2269,43 +2269,43 @@ static func read_title_tilemap(rom: RomFile, layout: Dictionary) -> PackedByteAr
 	if at < 0:
 		return PackedByteArray()
 	var out: PackedByteArray = PackedByteArray()
-	for step: int in RomLayout.TITLE_TILEMAP_MAX:
+	for step: int in Gen2Layout.TITLE_TILEMAP_MAX:
 		if not rom.in_bounds(at + step, 1):
 			return PackedByteArray()
 		var byte: int = rom.u8(at + step)
-		if byte == RomLayout.TITLE_TILEMAP_TERMINATOR:
+		if byte == Gen2Layout.TITLE_TILEMAP_TERMINATOR:
 			return out
 		out.append(byte)
 	return PackedByteArray()
 
 
 static func _tile_1bpp_has_ink(rom: RomFile, offset: int, tile: int) -> bool:
-	for row: int in Gen2Tiles.TILE_1BPP_BYTES:
-		if rom.u8(offset + tile * Gen2Tiles.TILE_1BPP_BYTES + row) != 0:
+	for row: int in PokeTiles.TILE_1BPP_BYTES:
+		if rom.u8(offset + tile * PokeTiles.TILE_1BPP_BYTES + row) != 0:
 			return true
 	return false
 
 
 static func _tile_2bpp_lit(rom: RomFile, offset: int, tile: int) -> int:
 	var count: int = 0
-	for row: int in Gen2Tiles.TILE_HEIGHT:
-		var at: int = offset + tile * Gen2Tiles.TILE_BYTES + row * 2
+	for row: int in PokeTiles.TILE_HEIGHT:
+		var at: int = offset + tile * PokeTiles.TILE_BYTES + row * 2
 		var lit: int = rom.u8(at) | rom.u8(at + 1)
-		for bit: int in Gen2Tiles.TILE_WIDTH:
+		for bit: int in PokeTiles.TILE_WIDTH:
 			if lit & (1 << bit):
 				count += 1
 	return count
 
 
 static func _row_2bpp_lit(rom: RomFile, offset: int, tile: int, row: int) -> bool:
-	var at: int = offset + tile * Gen2Tiles.TILE_BYTES + row * 2
+	var at: int = offset + tile * PokeTiles.TILE_BYTES + row * 2
 	return (rom.u8(at) | rom.u8(at + 1)) != 0
 
 
 static func _sheet_tile_lit(sheet: PackedByteArray, tile: int) -> int:
 	var count: int = 0
-	for index: int in Gen2Tiles.TILE_BYTES:
-		var at: int = tile * Gen2Tiles.TILE_BYTES + index
+	for index: int in PokeTiles.TILE_BYTES:
+		var at: int = tile * PokeTiles.TILE_BYTES + index
 		if at >= sheet.size():
 			break
 		var byte: int = sheet[at]
@@ -2324,11 +2324,11 @@ static func read_copyright_string(rom: RomFile, layout: Dictionary) -> PackedByt
 	var out := PackedByteArray()
 	if at < 0:
 		return out
-	for index: int in RomLayout.COPYRIGHT_STRING_MAX:
+	for index: int in Gen2Layout.COPYRIGHT_STRING_MAX:
 		if not rom.in_bounds(at + index, 1):
 			return PackedByteArray()
 		var code: int = rom.u8(at + index)
-		if code == RomLayout.COPYRIGHT_STRING_TERMINATOR:
+		if code == Gen2Layout.COPYRIGHT_STRING_TERMINATOR:
 			return out
 		out.append(code)
 	return PackedByteArray()
@@ -2431,11 +2431,11 @@ static func verify_menu_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if entry.is_empty():
 		return {"ok": true, "message": "No menu text on this cartridge."}
 	var descriptions: Array[String] = read_menu_descriptions(rom, layout)
-	if descriptions.size() != RomLayout.MENU_DESCRIPTION_COUNT:
+	if descriptions.size() != Gen2Layout.MENU_DESCRIPTION_COUNT:
 		return {
 			"ok": false,
 			"message": "The start menu descriptions read %d of %d strings." % [
-				descriptions.size(), RomLayout.MENU_DESCRIPTION_COUNT,
+				descriptions.size(), Gen2Layout.MENU_DESCRIPTION_COUNT,
 			],
 		}
 	if descriptions[0] != MENU_DESCRIPTION_FIRST:
@@ -2456,7 +2456,7 @@ static func verify_menu_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 		## Case's is, and only on Gold and Silver.
 		if at < 0:
 			continue
-		if not rom.in_bounds(at, RomLayout.PACK_TEXT_MAX_BYTES):
+		if not rom.in_bounds(at, Gen2Layout.PACK_TEXT_MAX_BYTES):
 			return {"ok": false, "message": "Pack text %s is outside the cartridge." % key}
 		if rom.u8(at) != TEXT_MACRO_START:
 			return {
@@ -2464,7 +2464,7 @@ static func verify_menu_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 				"message": "Pack text %s does not open with the text macro." % key,
 			}
 		var decoded: Dictionary = Gen2WorldScript.decode_text(
-			rom.slice(at, RomLayout.PACK_TEXT_MAX_BYTES)
+			rom.slice(at, Gen2Layout.PACK_TEXT_MAX_BYTES)
 		)
 		if not bool(decoded.get("ok", false)):
 			return {"ok": false, "message": "Pack text %s did not decode." % key}
@@ -2485,11 +2485,11 @@ static func read_menu_descriptions(rom: RomFile, layout: Dictionary) -> Array[St
 	if at < 0:
 		return out
 	var data: PackedByteArray = rom.bytes()
-	for _index: int in RomLayout.MENU_DESCRIPTION_COUNT:
+	for _index: int in Gen2Layout.MENU_DESCRIPTION_COUNT:
 		if not rom.in_bounds(at, 1):
 			return []
-		var end: int = Gen2Text.terminated_end(data, at, RomLayout.MENU_DESCRIPTION_MAX)
-		if end <= at or end - at >= RomLayout.MENU_DESCRIPTION_MAX:
+		var end: int = Gen2Text.terminated_end(data, at, Gen2Layout.MENU_DESCRIPTION_MAX)
+		if end <= at or end - at >= Gen2Layout.MENU_DESCRIPTION_MAX:
 			return []
 		out.append(Gen2Text.decode(data, at, end - at))
 		at = end
@@ -2506,13 +2506,13 @@ static func read_menu_descriptions(rom: RomFile, layout: Dictionary) -> Array[St
 ## apart in the order `data/text_buffers.asm` lists them.
 static func verify_string_buffer_pointers(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var at: int = int(layout.get("string_buffer_pointers", -1))
-	var bytes: int = RomLayout.STRING_BUFFER_POINTER_COUNT * RomLayout.STRING_BUFFER_POINTER_SIZE
+	var bytes: int = Gen2Layout.STRING_BUFFER_POINTER_COUNT * Gen2Layout.STRING_BUFFER_POINTER_SIZE
 	if not rom.in_bounds(at, bytes):
 		return {"ok": false, "message": "String buffer pointers are outside the cartridge."}
 
 	var pointers: Array = []
-	for index: int in RomLayout.STRING_BUFFER_POINTER_COUNT:
-		var address: int = rom.u16le(RomLayout.string_buffer_pointer_offset(layout, index))
+	for index: int in Gen2Layout.STRING_BUFFER_POINTER_COUNT:
+		var address: int = rom.u16le(Gen2Layout.string_buffer_pointer_offset(layout, index))
 		if address < 0xC000 or address >= 0xE000:
 			return {
 				"ok": false,
@@ -2522,13 +2522,13 @@ static func verify_string_buffer_pointers(rom: RomFile, layout: Dictionary) -> D
 			}
 		pointers.append(address)
 
-	var third: int = int(pointers[RomLayout.STRING_BUFFER_3])
-	var stride: int = RomLayout.STRING_BUFFER_LENGTH
+	var third: int = int(pointers[Gen2Layout.STRING_BUFFER_3])
+	var stride: int = Gen2Layout.STRING_BUFFER_LENGTH
 	var expected: Dictionary = {
-		RomLayout.STRING_BUFFER_1: third - 2 * stride,
-		RomLayout.STRING_BUFFER_2: third - stride,
-		RomLayout.STRING_BUFFER_4: third + stride,
-		RomLayout.STRING_BUFFER_5: third + 2 * stride,
+		Gen2Layout.STRING_BUFFER_1: third - 2 * stride,
+		Gen2Layout.STRING_BUFFER_2: third - stride,
+		Gen2Layout.STRING_BUFFER_4: third + stride,
+		Gen2Layout.STRING_BUFFER_5: third + 2 * stride,
 	}
 	for index: int in expected:
 		if int(pointers[index]) != int(expected[index]):
@@ -2591,14 +2591,14 @@ static func verify_mail(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return input
 
 	var gfx: int = int(entry.get("gfx", -1))
-	if not rom.in_bounds(gfx, RomLayout.MAIL_GFX_BYTES):
+	if not rom.in_bounds(gfx, Gen2Layout.MAIL_GFX_BYTES):
 		return {"ok": false, "message": "Mail graphics run past the cartridge."}
 	var ends: Dictionary = {
 		gfx: MAIL_GFX_FIRST_TILE,
-		gfx + RomLayout.MAIL_GFX_BYTES - RomLayout.TILE_BYTES_1BPP: MAIL_GFX_LAST_TILE,
+		gfx + Gen2Layout.MAIL_GFX_BYTES - Gen2Layout.TILE_BYTES_1BPP: MAIL_GFX_LAST_TILE,
 	}
 	for at: int in ends:
-		if Array(rom.slice(at, RomLayout.TILE_BYTES_1BPP)) != Array(ends[at] as Array):
+		if Array(rom.slice(at, Gen2Layout.TILE_BYTES_1BPP)) != Array(ends[at] as Array):
 			return {"ok": false, "message": "Mail graphics tile at $%X is not its own." % at}
 
 	var palettes: Dictionary = _verify_mail_palettes(rom, entry)
@@ -2606,7 +2606,7 @@ static func verify_mail(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return palettes
 
 	if not rom.in_bounds(
-		int(entry.get("icon", -1)), RomLayout.MAIL_ICON_TILES * RomLayout.TILE_BYTES_2BPP
+		int(entry.get("icon", -1)), Gen2Layout.MAIL_ICON_TILES * Gen2Layout.TILE_BYTES_2BPP
 	):
 		return {"ok": false, "message": "The mail icon is outside the cartridge."}
 	return {"ok": true, "message": "Mail tables, graphics and palettes verified."}
@@ -2614,9 +2614,9 @@ static func verify_mail(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 static func _verify_mail_items(rom: RomFile, entry: Dictionary) -> Dictionary:
 	var items: int = int(entry.get("items", -1))
-	if not rom.in_bounds(items, RomLayout.MAIL_ITEM_COUNT + 1):
+	if not rom.in_bounds(items, Gen2Layout.MAIL_ITEM_COUNT + 1):
 		return {"ok": false, "message": "MailItems is outside the cartridge."}
-	for index: int in RomLayout.MAIL_ITEM_COUNT:
+	for index: int in Gen2Layout.MAIL_ITEM_COUNT:
 		if rom.u8(items + index) != MAIL_ITEM_NUMBERS[index]:
 			return {
 				"ok": false,
@@ -2624,7 +2624,7 @@ static func _verify_mail_items(rom: RomFile, entry: Dictionary) -> Dictionary:
 					index, rom.u8(items + index), MAIL_ITEM_NUMBERS[index],
 				],
 			}
-	if rom.u8(items + RomLayout.MAIL_ITEM_COUNT) != RomLayout.MAIL_ITEM_END:
+	if rom.u8(items + Gen2Layout.MAIL_ITEM_COUNT) != Gen2Layout.MAIL_ITEM_END:
 		return {"ok": false, "message": "MailItems does not end in -1."}
 	return {"ok": true}
 
@@ -2633,16 +2633,16 @@ static func _verify_mail_input(
 	rom: RomFile, layout: Dictionary, entry: Dictionary
 ) -> Dictionary:
 	var chars: int = int(entry.get("input_chars", -1))
-	var block: int = RomLayout.MAIL_INPUT_TABLES * RomLayout.MAIL_INPUT_TABLE_ROWS \
-		* RomLayout.MAIL_INPUT_ROW_BYTES
+	var block: int = Gen2Layout.MAIL_INPUT_TABLES * Gen2Layout.MAIL_INPUT_TABLE_ROWS \
+		* Gen2Layout.MAIL_INPUT_ROW_BYTES
 	if not rom.in_bounds(chars, block):
 		return {"ok": false, "message": "Mail input tables are outside the cartridge."}
-	for table: int in RomLayout.MAIL_INPUT_TABLES:
-		var start: int = RomLayout.mail_input_table_offset(layout, table)
-		var first: int = RomLayout.MAIL_INPUT_UPPER_A if table == 0 else RomLayout.MAIL_INPUT_LOWER_A
-		for column: int in RomLayout.MAIL_INPUT_COLUMNS:
+	for table: int in Gen2Layout.MAIL_INPUT_TABLES:
+		var start: int = Gen2Layout.mail_input_table_offset(layout, table)
+		var first: int = Gen2Layout.MAIL_INPUT_UPPER_A if table == 0 else Gen2Layout.MAIL_INPUT_LOWER_A
+		for column: int in Gen2Layout.MAIL_INPUT_COLUMNS:
 			var expected: int = first + column
-			var stored: int = rom.u8(start + column * RomLayout.NAME_INPUT_COLUMN_STRIDE)
+			var stored: int = rom.u8(start + column * Gen2Layout.NAME_INPUT_COLUMN_STRIDE)
 			if stored != expected:
 				return {
 					"ok": false,
@@ -2650,24 +2650,24 @@ static func _verify_mail_input(
 						table, column, stored, expected,
 					],
 				}
-		var command: int = start + (RomLayout.MAIL_INPUT_TABLE_ROWS - 1) \
-			* RomLayout.MAIL_INPUT_ROW_BYTES
+		var command: int = start + (Gen2Layout.MAIL_INPUT_TABLE_ROWS - 1) \
+			* Gen2Layout.MAIL_INPUT_ROW_BYTES
 		var expected_row: Array[int] = (
-			RomLayout.MAIL_INPUT_COMMAND_UPPER if table == 0
-			else RomLayout.MAIL_INPUT_COMMAND_LOWER
+			Gen2Layout.MAIL_INPUT_COMMAND_UPPER if table == 0
+			else Gen2Layout.MAIL_INPUT_COMMAND_LOWER
 		)
-		if Array(rom.slice(command, RomLayout.MAIL_INPUT_ROW_BYTES)) != Array(expected_row):
+		if Array(rom.slice(command, Gen2Layout.MAIL_INPUT_ROW_BYTES)) != Array(expected_row):
 			return {"ok": false, "message": "Mail input table %d has no command row." % table}
 	return {"ok": true}
 
 
 static func _verify_mail_palettes(rom: RomFile, entry: Dictionary) -> Dictionary:
 	var palettes: int = int(entry.get("palettes", -1))
-	var palette_bytes: int = RomLayout.MAIL_PALETTE_COUNT * RomLayout.MAIL_PALETTE_COLOURS * 2
+	var palette_bytes: int = Gen2Layout.MAIL_PALETTE_COUNT * Gen2Layout.MAIL_PALETTE_COLOURS * 2
 	if not rom.in_bounds(palettes, palette_bytes):
 		return {"ok": false, "message": "Mail palettes are outside the cartridge."}
-	for index: int in RomLayout.MAIL_PALETTE_COUNT:
-		var at_row: int = palettes + index * RomLayout.MAIL_PALETTE_COLOURS * 2
+	for index: int in Gen2Layout.MAIL_PALETTE_COUNT:
+		var at_row: int = palettes + index * Gen2Layout.MAIL_PALETTE_COLOURS * 2
 		if rom.u16le(at_row) != MAIL_PALETTE_FIRST[index]:
 			return {
 				"ok": false,
@@ -2675,7 +2675,7 @@ static func _verify_mail_palettes(rom: RomFile, entry: Dictionary) -> Dictionary
 					index, rom.u16le(at_row), MAIL_PALETTE_FIRST[index],
 				],
 			}
-		if rom.u16le(at_row + (RomLayout.MAIL_PALETTE_COLOURS - 1) * 2) != 0:
+		if rom.u16le(at_row + (Gen2Layout.MAIL_PALETTE_COLOURS - 1) * 2) != 0:
 			return {"ok": false, "message": "Mail palette %d does not end in black." % index}
 	return {"ok": true}
 
@@ -2693,12 +2693,12 @@ const BATTLETOWER_CHALLENGE_MENU_ROWS: Array = ["Challenge", "Explanation", "Can
 
 ## `MenuData_ChallengeExplanationCancel`'s three rows.
 static func read_challenge_menu_rows(rom: RomFile, layout: Dictionary) -> PackedStringArray:
-	if not RomLayout.has_battle_tower(layout):
+	if not Gen2Layout.has_battle_tower(layout):
 		return PackedStringArray()
-	var at: int = int(RomLayout.battle_tower(layout)["challenge_menu"]) + 2
+	var at: int = int(Gen2Layout.battle_tower(layout)["challenge_menu"]) + 2
 	return Gen2Text.decode_sequence(
-		rom.slice(at, RomLayout.OAK_TEXT_MAX_BYTES), 0,
-		RomLayout.BATTLETOWER_CHALLENGE_MENU_ROWS, RomLayout.OAK_TEXT_MAX_BYTES
+		rom.slice(at, Gen2Layout.OAK_TEXT_MAX_BYTES), 0,
+		Gen2Layout.BATTLETOWER_CHALLENGE_MENU_ROWS, Gen2Layout.OAK_TEXT_MAX_BYTES
 	)
 
 
@@ -2707,63 +2707,63 @@ static func read_challenge_menu_rows(rom: RomFile, layout: Dictionary) -> Packed
 ## trainer lines, the level menu's own rows and the challenge menu's three.
 ## Empty on Gold and Silver, which is what [GameData] answers "no tower" from.
 func _import_battle_tower(rom: RomFile, layout: Dictionary) -> Dictionary:
-	if not RomLayout.has_battle_tower(layout):
+	if not Gen2Layout.has_battle_tower(layout):
 		return {}
-	var entry: Dictionary = RomLayout.battle_tower(layout)
+	var entry: Dictionary = Gen2Layout.battle_tower(layout)
 	var trainers: Array = []
-	for index: int in RomLayout.BATTLETOWER_NUM_UNIQUE_TRAINERS:
-		var row: int = int(entry["trainers"]) + index * RomLayout.BATTLETOWER_TRAINER_ROW_BYTES
+	for index: int in Gen2Layout.BATTLETOWER_NUM_UNIQUE_TRAINERS:
+		var row: int = int(entry["trainers"]) + index * Gen2Layout.BATTLETOWER_TRAINER_ROW_BYTES
 		trainers.append({
 			"name": Gen2Text.decode_fixed(
-				rom.slice(row, RomLayout.BATTLETOWER_TRAINER_NAME_BYTES), 0,
-				RomLayout.BATTLETOWER_TRAINER_NAME_BYTES
+				rom.slice(row, Gen2Layout.BATTLETOWER_TRAINER_NAME_BYTES), 0,
+				Gen2Layout.BATTLETOWER_TRAINER_NAME_BYTES
 			),
-			"class": rom.u8(row + RomLayout.BATTLETOWER_TRAINER_NAME_BYTES),
+			"class": rom.u8(row + Gen2Layout.BATTLETOWER_TRAINER_NAME_BYTES),
 		})
 	var groups: Array = []
-	for group: int in RomLayout.BATTLETOWER_LEVEL_GROUPS:
+	for group: int in Gen2Layout.BATTLETOWER_LEVEL_GROUPS:
 		var rows: Array = []
-		for index: int in RomLayout.BATTLETOWER_NUM_UNIQUE_MON:
+		for index: int in Gen2Layout.BATTLETOWER_NUM_UNIQUE_MON:
 			rows.append({RomCache.BYTES_KEY: Array(rom.slice(
-				RomLayout.battle_tower_mon_offset(layout, group, index),
-				RomLayout.BATTLETOWER_MON_BYTES
+				Gen2Layout.battle_tower_mon_offset(layout, group, index),
+				Gen2Layout.BATTLETOWER_MON_BYTES
 			))})
 		groups.append(rows)
 	var texts: Dictionary = {}
-	for kind: int in RomLayout.BATTLETOWER_TEXT_KINDS.size():
+	for kind: int in Gen2Layout.BATTLETOWER_TEXT_KINDS.size():
 		var male: Array = []
 		var female: Array = []
-		for trainer: int in RomLayout.BATTLETOWER_MALE_TEXTS:
+		for trainer: int in Gen2Layout.BATTLETOWER_MALE_TEXTS:
 			male.append(read_oak_text(
-				rom, layout, RomLayout.battle_tower_text_offset(layout, false, trainer, kind)
+				rom, layout, Gen2Layout.battle_tower_text_offset(layout, false, trainer, kind)
 			))
-		for trainer: int in RomLayout.BATTLETOWER_FEMALE_TEXTS:
+		for trainer: int in Gen2Layout.BATTLETOWER_FEMALE_TEXTS:
 			female.append(read_oak_text(
-				rom, layout, RomLayout.battle_tower_text_offset(layout, true, trainer, kind)
+				rom, layout, Gen2Layout.battle_tower_text_offset(layout, true, trainer, kind)
 			))
-		texts[RomLayout.BATTLETOWER_TEXT_KINDS[kind]] = {"male": male, "female": female}
+		texts[Gen2Layout.BATTLETOWER_TEXT_KINDS[kind]] = {"male": male, "female": female}
 	## Kept with its own padding rather than trimmed:
 	## `BattleTowerRoomMenu_UpdatePickLevelMenu` places the row straight at
 	## `hlcoord 13, 9`, so the leading space of `" L:10 "` is the column the
 	## level stands in and `"CANCEL"` has none.
 	var levels: Array = []
-	for index: int in RomLayout.BATTLETOWER_LEVEL_ROWS:
+	for index: int in Gen2Layout.BATTLETOWER_LEVEL_ROWS:
 		levels.append(Gen2Text.decode_fixed(
 			rom.slice(
-				int(entry["level_strings"]) + index * RomLayout.BATTLETOWER_LEVEL_ROW_BYTES,
-				RomLayout.BATTLETOWER_LEVEL_ROW_BYTES
-			), 0, RomLayout.BATTLETOWER_LEVEL_ROW_BYTES
+				int(entry["level_strings"]) + index * Gen2Layout.BATTLETOWER_LEVEL_ROW_BYTES,
+				Gen2Layout.BATTLETOWER_LEVEL_ROW_BYTES
+			), 0, Gen2Layout.BATTLETOWER_LEVEL_ROW_BYTES
 		))
 	var menu_text: Dictionary = {}
-	for name: String in RomLayout.BATTLETOWER_MENU_TEXT_ORDER:
+	for name: String in Gen2Layout.BATTLETOWER_MENU_TEXT_ORDER:
 		var at: int = int((entry["text"] as Dictionary)[name])
 		var decoded: Dictionary = Gen2WorldScript.decode_text(
-			rom.slice(at, RomLayout.OAK_TEXT_MAX_BYTES)
+			rom.slice(at, Gen2Layout.OAK_TEXT_MAX_BYTES)
 		)
 		menu_text[name] = String(decoded["text"]) if bool(decoded.get("ok", false)) else ""
 	var genders: Array = []
 	var sprites: Array = []
-	for index: int in RomLayout.trainer_class_count(layout) - 1:
+	for index: int in Gen2Layout.trainer_class_count(layout) - 1:
 		genders.append(rom.u8(int(entry["class_genders"]) + index))
 		sprites.append(rom.u8(int(entry["class_sprites"]) + index))
 	return {
@@ -2786,7 +2786,7 @@ func _import_battle_tower(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## `MenuData_ChallengeExplanationCancel`'s three rows. A cartridge with no tower
 ## answers ok: Gold and Silver ship no map, routine or table for it.
 static func verify_battle_tower(rom: RomFile, layout: Dictionary) -> Dictionary:
-	if not RomLayout.has_battle_tower(layout):
+	if not Gen2Layout.has_battle_tower(layout):
 		return {"ok": true, "message": "The cartridge has no Battle Tower."}
 	for check: Callable in [
 		RomImporter._verify_battle_tower_trainers,
@@ -2802,16 +2802,16 @@ static func verify_battle_tower(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 
 static func _verify_battle_tower_trainers(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var entry: Dictionary = RomLayout.battle_tower(layout)
-	var classes: int = RomLayout.trainer_class_count(layout)
+	var entry: Dictionary = Gen2Layout.battle_tower(layout)
+	var classes: int = Gen2Layout.trainer_class_count(layout)
 	var trainers: int = int(entry["trainers"])
-	var trainer_bytes: int = RomLayout.BATTLETOWER_NUM_UNIQUE_TRAINERS \
-		* RomLayout.BATTLETOWER_TRAINER_ROW_BYTES
+	var trainer_bytes: int = Gen2Layout.BATTLETOWER_NUM_UNIQUE_TRAINERS \
+		* Gen2Layout.BATTLETOWER_TRAINER_ROW_BYTES
 	if not rom.in_bounds(trainers, trainer_bytes):
 		return {"ok": false, "message": "BattleTowerTrainers is outside the cartridge."}
-	for index: int in RomLayout.BATTLETOWER_NUM_UNIQUE_TRAINERS:
-		var row: int = trainers + index * RomLayout.BATTLETOWER_TRAINER_ROW_BYTES
-		var trainer_class: int = rom.u8(row + RomLayout.BATTLETOWER_TRAINER_NAME_BYTES)
+	for index: int in Gen2Layout.BATTLETOWER_NUM_UNIQUE_TRAINERS:
+		var row: int = trainers + index * Gen2Layout.BATTLETOWER_TRAINER_ROW_BYTES
+		var trainer_class: int = rom.u8(row + Gen2Layout.BATTLETOWER_TRAINER_NAME_BYTES)
 		if trainer_class < 1 or trainer_class > classes:
 			return {
 				"ok": false,
@@ -2822,9 +2822,9 @@ static func _verify_battle_tower_trainers(rom: RomFile, layout: Dictionary) -> D
 	for index: int in BATTLETOWER_PINNED_NAMES:
 		var name: String = Gen2Text.decode_fixed(
 			rom.slice(
-				trainers + int(index) * RomLayout.BATTLETOWER_TRAINER_ROW_BYTES,
-				RomLayout.BATTLETOWER_TRAINER_NAME_BYTES
-			), 0, RomLayout.BATTLETOWER_TRAINER_NAME_BYTES
+				trainers + int(index) * Gen2Layout.BATTLETOWER_TRAINER_ROW_BYTES,
+				Gen2Layout.BATTLETOWER_TRAINER_NAME_BYTES
+			), 0, Gen2Layout.BATTLETOWER_TRAINER_NAME_BYTES
 		)
 		if name != String(BATTLETOWER_PINNED_NAMES[index]):
 			return {
@@ -2837,20 +2837,20 @@ static func _verify_battle_tower_trainers(rom: RomFile, layout: Dictionary) -> D
 
 
 static func _verify_battle_tower_mons(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var entry: Dictionary = RomLayout.battle_tower(layout)
-	var mon_bytes: int = RomLayout.BATTLETOWER_LEVEL_GROUPS \
-		* RomLayout.BATTLETOWER_NUM_UNIQUE_MON * RomLayout.BATTLETOWER_MON_BYTES
+	var entry: Dictionary = Gen2Layout.battle_tower(layout)
+	var mon_bytes: int = Gen2Layout.BATTLETOWER_LEVEL_GROUPS \
+		* Gen2Layout.BATTLETOWER_NUM_UNIQUE_MON * Gen2Layout.BATTLETOWER_MON_BYTES
 	if not rom.in_bounds(int(entry["mons"]), mon_bytes):
 		return {"ok": false, "message": "BattleTowerMons runs past the cartridge."}
-	for group: int in RomLayout.BATTLETOWER_LEVEL_GROUPS:
+	for group: int in Gen2Layout.BATTLETOWER_LEVEL_GROUPS:
 		# `LoadRandomBattleTowerMon` indexes the group by `wBTChoiceOfLvlGroup`
 		# alone, so a group whose rows are not all its own level is the offset
 		# being wrong rather than the data being odd.
 		var level: int = (group + 1) * 10
-		for index: int in RomLayout.BATTLETOWER_NUM_UNIQUE_MON:
-			var at: int = RomLayout.battle_tower_mon_offset(layout, group, index)
+		for index: int in Gen2Layout.BATTLETOWER_NUM_UNIQUE_MON:
+			var at: int = Gen2Layout.battle_tower_mon_offset(layout, group, index)
 			var species: int = rom.u8(at)
-			if species < 1 or species > RomLayout.SPECIES_COUNT:
+			if species < 1 or species > Gen2Layout.SPECIES_COUNT:
 				return {
 					"ok": false,
 					"message": "BattleTowerMons %d/%d is species %d." % [group, index, species],
@@ -2866,8 +2866,8 @@ static func _verify_battle_tower_mons(rom: RomFile, layout: Dictionary) -> Dicti
 
 
 static func _verify_battle_tower_classes(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var entry: Dictionary = RomLayout.battle_tower(layout)
-	var classes: int = RomLayout.trainer_class_count(layout)
+	var entry: Dictionary = Gen2Layout.battle_tower(layout)
+	var classes: int = Gen2Layout.trainer_class_count(layout)
 	for key: String in ["class_genders", "class_sprites"]:
 		if not rom.in_bounds(int(entry[key]), classes - 1):
 			return {"ok": false, "message": "The Battle Tower %s table is outside the cartridge." % key}
@@ -2883,26 +2883,26 @@ static func _verify_battle_tower_classes(rom: RomFile, layout: Dictionary) -> Di
 
 
 static func _verify_battle_tower_texts(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var entry: Dictionary = RomLayout.battle_tower(layout)
-	var stubs: int = (RomLayout.BATTLETOWER_MALE_TEXTS + RomLayout.BATTLETOWER_FEMALE_TEXTS) \
-		* RomLayout.BATTLETOWER_TEXT_KINDS.size()
-	if not rom.in_bounds(int(entry["trainer_text"]), stubs * RomLayout.TEXT_FAR_STUB_BYTES):
+	var entry: Dictionary = Gen2Layout.battle_tower(layout)
+	var stubs: int = (Gen2Layout.BATTLETOWER_MALE_TEXTS + Gen2Layout.BATTLETOWER_FEMALE_TEXTS) \
+		* Gen2Layout.BATTLETOWER_TEXT_KINDS.size()
+	if not rom.in_bounds(int(entry["trainer_text"]), stubs * Gen2Layout.TEXT_FAR_STUB_BYTES):
 		return {"ok": false, "message": "The Battle Tower text stubs run past the cartridge."}
 	for index: int in stubs:
-		var stub: int = int(entry["trainer_text"]) + index * RomLayout.TEXT_FAR_STUB_BYTES
+		var stub: int = int(entry["trainer_text"]) + index * Gen2Layout.TEXT_FAR_STUB_BYTES
 		if rom.u8(stub) != Gen2TextStream.TX_FAR \
-			or rom.u8(stub + RomLayout.TEXT_FAR_STUB_BYTES - 1) != Gen2TextStream.TX_END:
+			or rom.u8(stub + Gen2Layout.TEXT_FAR_STUB_BYTES - 1) != Gen2TextStream.TX_END:
 			return {"ok": false, "message": "Battle Tower text stub %d is not a text_far." % index}
 
 	var levels: int = int(entry["level_strings"])
-	var level_bytes: int = RomLayout.BATTLETOWER_LEVEL_ROWS * RomLayout.BATTLETOWER_LEVEL_ROW_BYTES
+	var level_bytes: int = Gen2Layout.BATTLETOWER_LEVEL_ROWS * Gen2Layout.BATTLETOWER_LEVEL_ROW_BYTES
 	if not rom.in_bounds(levels, level_bytes):
 		return {"ok": false, "message": "Strings_L10ToL100 is outside the cartridge."}
 	var cancel: String = Gen2Text.decode_fixed(
 		rom.slice(
-			levels + RomLayout.BATTLETOWER_LEVEL_GROUPS * RomLayout.BATTLETOWER_LEVEL_ROW_BYTES,
-			RomLayout.BATTLETOWER_LEVEL_ROW_BYTES
-		), 0, RomLayout.BATTLETOWER_LEVEL_ROW_BYTES
+			levels + Gen2Layout.BATTLETOWER_LEVEL_GROUPS * Gen2Layout.BATTLETOWER_LEVEL_ROW_BYTES,
+			Gen2Layout.BATTLETOWER_LEVEL_ROW_BYTES
+		), 0, Gen2Layout.BATTLETOWER_LEVEL_ROW_BYTES
 	)
 	if cancel != BATTLETOWER_LEVEL_CANCEL:
 		return {
@@ -2915,10 +2915,10 @@ static func _verify_battle_tower_texts(rom: RomFile, layout: Dictionary) -> Dict
 
 
 static func _verify_battle_tower_menus(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var entry: Dictionary = RomLayout.battle_tower(layout)
+	var entry: Dictionary = Gen2Layout.battle_tower(layout)
 	var menu: int = int(entry["challenge_menu"])
 	if not rom.in_bounds(menu, 2) \
-		or rom.u8(menu + 1) != RomLayout.BATTLETOWER_CHALLENGE_MENU_ROWS:
+		or rom.u8(menu + 1) != Gen2Layout.BATTLETOWER_CHALLENGE_MENU_ROWS:
 		return {"ok": false, "message": "The challenge menu does not have three rows."}
 	var rows: Array = Array(read_challenge_menu_rows(rom, layout))
 	if rows != BATTLETOWER_CHALLENGE_MENU_ROWS:
@@ -2933,18 +2933,18 @@ static func _verify_battle_tower_menus(rom: RomFile, layout: Dictionary) -> Dict
 
 static func verify_name_input_chars(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var at: int = int(layout.get("name_input_chars", -1))
-	if not rom.in_bounds(at, RomLayout.NAME_INPUT_BLOCK_BYTES):
+	if not rom.in_bounds(at, Gen2Layout.NAME_INPUT_BLOCK_BYTES):
 		return {"ok": false, "message": "Name input table is outside the cartridge."}
-	for table: int in RomLayout.NAME_INPUT_TABLE_ROWS.size():
-		var start: int = RomLayout.name_input_table_offset(layout, table)
-		var rows: int = RomLayout.NAME_INPUT_TABLE_ROWS[table]
+	for table: int in Gen2Layout.NAME_INPUT_TABLE_ROWS.size():
+		var start: int = Gen2Layout.name_input_table_offset(layout, table)
+		var rows: int = Gen2Layout.NAME_INPUT_TABLE_ROWS[table]
 		# Tables 0 and 1 are the lower keyboards and open on "a"; 2 and 3 are the
 		# upper ones and open on "A".
 		var lower: bool = table < 2
-		var first: int = RomLayout.NAME_INPUT_LOWER_A if lower else RomLayout.NAME_INPUT_UPPER_A
-		for column: int in RomLayout.NAME_INPUT_COLUMNS:
+		var first: int = Gen2Layout.NAME_INPUT_LOWER_A if lower else Gen2Layout.NAME_INPUT_UPPER_A
+		for column: int in Gen2Layout.NAME_INPUT_COLUMNS:
 			var expected: int = first + column
-			var stored: int = rom.u8(start + column * RomLayout.NAME_INPUT_COLUMN_STRIDE)
+			var stored: int = rom.u8(start + column * Gen2Layout.NAME_INPUT_COLUMN_STRIDE)
 			if stored != expected:
 				return {
 					"ok": false,
@@ -2954,27 +2954,27 @@ static func verify_name_input_chars(rom: RomFile, layout: Dictionary) -> Diction
 				}
 		# The last row of every table is the command row, in the columns
 		# NamingScreen_GetCursorPosition splits on.
-		var command: int = start + (rows - 1) * RomLayout.NAME_INPUT_ROW_BYTES
+		var command: int = start + (rows - 1) * Gen2Layout.NAME_INPUT_ROW_BYTES
 		var expected_row: Array[int] = (
-			RomLayout.NAME_INPUT_COMMAND_LOWER if lower else RomLayout.NAME_INPUT_COMMAND_UPPER
+			Gen2Layout.NAME_INPUT_COMMAND_LOWER if lower else Gen2Layout.NAME_INPUT_COMMAND_UPPER
 		)
-		if Array(rom.slice(command, RomLayout.NAME_INPUT_ROW_BYTES)) != Array(expected_row):
+		if Array(rom.slice(command, Gen2Layout.NAME_INPUT_ROW_BYTES)) != Array(expected_row):
 			return {"ok": false, "message": "Name input table %d has no command row." % table}
 
 	# LoadNamingScreenGFX's four sheets are located from the block, so what has
 	# to be checked is that the run really extends that far and that the two
 	# markers are the dashes the entry draws. Both are one 1bpp tile of two lit
 	# rows, and which rows they are is the whole difference between them.
-	var border: int = RomLayout.naming_border_offset(layout)
-	var last: int = RomLayout.naming_under_line_offset(layout)
-	if not rom.in_bounds(border, last - border + RomLayout.TILE_BYTES_1BPP):
+	var border: int = Gen2Layout.naming_border_offset(layout)
+	var last: int = Gen2Layout.naming_under_line_offset(layout)
+	if not rom.in_bounds(border, last - border + Gen2Layout.TILE_BYTES_1BPP):
 		return {"ok": false, "message": "Name input graphics run past the cartridge."}
 	var markers: Dictionary = {
-		RomLayout.naming_middle_line_offset(layout): NAMING_MIDDLE_LINE_ROWS,
-		RomLayout.naming_under_line_offset(layout): NAMING_UNDER_LINE_ROWS,
+		Gen2Layout.naming_middle_line_offset(layout): NAMING_MIDDLE_LINE_ROWS,
+		Gen2Layout.naming_under_line_offset(layout): NAMING_UNDER_LINE_ROWS,
 	}
 	for marker: int in markers:
-		for row: int in RomLayout.TILE_BYTES_1BPP:
+		for row: int in Gen2Layout.TILE_BYTES_1BPP:
 			var expected_byte: int = NAMING_MARKER_INK if row in markers[marker] else 0
 			if rom.u8(marker + row) != expected_byte:
 				return {
@@ -3010,7 +3010,7 @@ const TEXT_BG_COLORS: Array[int] = [0x7FFF, 0x7268, 0x40A5, 0x0000]
 ## size, and neither of those is the shrink.
 static func verify_shrink_pics(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var entry: Dictionary = layout["shrink_pics"]
-	var wanted: int = RomLayout.SHRINK_PIC_TILES * Gen2Tiles.TILE_BYTES
+	var wanted: int = Gen2Layout.SHRINK_PIC_TILES * PokeTiles.TILE_BYTES
 	var lz := Gen2Lz.new()
 	for key: String in ["first", "second"]:
 		var at: int = int(entry[key])
@@ -3031,10 +3031,10 @@ static func verify_text_bg_palette(rom: RomFile, layout: Dictionary) -> Dictiona
 	var entry: int = int((layout.get("text_bg_palette", {}) as Dictionary).get("offset", -1))
 	if entry < 0:
 		return {"ok": true, "message": "No text palette on this cartridge."}
-	if not rom.in_bounds(entry, TEXT_BG_COLORS.size() * Gen2Palette.COLOR_BYTES):
+	if not rom.in_bounds(entry, TEXT_BG_COLORS.size() * PokePalette.COLOR_BYTES):
 		return {"ok": false, "message": "The text palette is outside the cartridge."}
 	for index: int in TEXT_BG_COLORS.size():
-		var stored: int = rom.u16le(entry + index * Gen2Palette.COLOR_BYTES)
+		var stored: int = rom.u16le(entry + index * PokePalette.COLOR_BYTES)
 		if stored != TEXT_BG_COLORS[index]:
 			return {
 				"ok": false,
@@ -3057,12 +3057,12 @@ static func verify_gender_screen(rom: RomFile, layout: Dictionary) -> Dictionary
 	var tile: int = int(entry.get("tile", -1))
 	if palette < 0 and tile < 0:
 		return {"ok": true, "message": "No gender screen on this cartridge."}
-	if not rom.in_bounds(palette, RomLayout.GENDER_SCREEN_PALETTE_COLORS * Gen2Palette.COLOR_BYTES) \
-			or not rom.in_bounds(tile, RomLayout.TILE_BYTES_2BPP):
+	if not rom.in_bounds(palette, Gen2Layout.GENDER_SCREEN_PALETTE_COLORS * PokePalette.COLOR_BYTES) \
+			or not rom.in_bounds(tile, Gen2Layout.TILE_BYTES_2BPP):
 		return {"ok": false, "message": "Gender screen graphics are outside the cartridge."}
 
 	for index: int in GENDER_SCREEN_COLORS.size():
-		var stored: int = rom.u16le(palette + index * Gen2Palette.COLOR_BYTES)
+		var stored: int = rom.u16le(palette + index * PokePalette.COLOR_BYTES)
 		if stored != GENDER_SCREEN_COLORS[index]:
 			return {
 				"ok": false,
@@ -3073,14 +3073,14 @@ static func verify_gender_screen(rom: RomFile, layout: Dictionary) -> Dictionary
 
 	# One 2bpp tile whose every pixel is GENDER_SCREEN_FILL_INDEX: each row is
 	# the low plane lit and the high plane clear.
-	var low: int = 0xFF if (RomLayout.GENDER_SCREEN_FILL_INDEX & 1) != 0 else 0x00
-	var high: int = 0xFF if (RomLayout.GENDER_SCREEN_FILL_INDEX & 2) != 0 else 0x00
-	for row: int in Gen2Tiles.TILE_HEIGHT:
+	var low: int = 0xFF if (Gen2Layout.GENDER_SCREEN_FILL_INDEX & 1) != 0 else 0x00
+	var high: int = 0xFF if (Gen2Layout.GENDER_SCREEN_FILL_INDEX & 2) != 0 else 0x00
+	for row: int in PokeTiles.TILE_HEIGHT:
 		if rom.u8(tile + row * 2) != low or rom.u8(tile + row * 2 + 1) != high:
 			return {
 				"ok": false,
 				"message": "Gender screen tile row %d is not a solid index %d." % [
-					row, RomLayout.GENDER_SCREEN_FILL_INDEX,
+					row, Gen2Layout.GENDER_SCREEN_FILL_INDEX,
 				],
 			}
 	return {"ok": true, "message": "Gender screen graphics verified."}
@@ -3112,7 +3112,7 @@ static func verify_map_entry_sign(rom: RomFile, layout: Dictionary) -> Dictionar
 	var at: int = int(layout.get("map_entry_sign", -1))
 	if at < 0:
 		return {"ok": true, "message": "No map name sign on this cartridge."}
-	var bytes: int = RomLayout.MAP_ENTRY_SIGN_TILES * RomLayout.TILE_BYTES_2BPP
+	var bytes: int = Gen2Layout.MAP_ENTRY_SIGN_TILES * Gen2Layout.TILE_BYTES_2BPP
 	if not rom.in_bounds(at, bytes):
 		return {"ok": false, "message": "The map name sign is outside the cartridge."}
 	var arrow: int = int((layout.get("up_arrow", {}) as Dictionary).get("offset", -1))
@@ -3135,12 +3135,12 @@ static func verify_pack(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return {"ok": true, "message": "No pack screen on this cartridge."}
 	var menu_gfx: int = int(entry["menu_gfx"])
 	var names: int = int(entry["pocket_names"])
-	if not rom.in_bounds(menu_gfx, RomLayout.PACK_MENU_TILES * RomLayout.TILE_BYTES_2BPP) \
+	if not rom.in_bounds(menu_gfx, Gen2Layout.PACK_MENU_TILES * Gen2Layout.TILE_BYTES_2BPP) \
 		or not rom.in_bounds(
-			RomLayout.pack_gfx_offset(layout),
-			RomLayout.PACK_TILES * RomLayout.TILE_BYTES_2BPP
+			Gen2Layout.pack_gfx_offset(layout),
+			Gen2Layout.PACK_TILES * Gen2Layout.TILE_BYTES_2BPP
 		) \
-		or not rom.in_bounds(names, RomLayout.PACK_NAME_CELLS):
+		or not rom.in_bounds(names, Gen2Layout.PACK_NAME_CELLS):
 		return {"ok": false, "message": "Pack graphics are outside the cartridge."}
 	if menu_gfx - names != PACK_NAME_TILEMAP_GAP:
 		return {
@@ -3149,9 +3149,9 @@ static func verify_pack(rom: RomFile, layout: Dictionary) -> Dictionary:
 				menu_gfx - names, PACK_NAME_TILEMAP_GAP,
 			],
 		}
-	for cell: int in RomLayout.PACK_NAME_CELLS:
+	for cell: int in Gen2Layout.PACK_NAME_CELLS:
 		var tile: int = rom.u8(names + cell)
-		if tile >= RomLayout.PACK_FIRST_TILE:
+		if tile >= Gen2Layout.PACK_FIRST_TILE:
 			return {
 				"ok": false,
 				"message": "Pack tilemap cell %d is tile $%02X, past the sheet." % [
@@ -3165,10 +3165,10 @@ static func verify_pack(rom: RomFile, layout: Dictionary) -> Dictionary:
 		if at < 0:
 			continue
 		var want: Array[int] = set_row[1]
-		if not rom.in_bounds(at, want.size() * Gen2Palette.COLOR_BYTES):
+		if not rom.in_bounds(at, want.size() * PokePalette.COLOR_BYTES):
 			return {"ok": false, "message": "Pack palettes are outside the cartridge."}
 		for index: int in want.size():
-			var stored: int = rom.u16le(at + index * Gen2Palette.COLOR_BYTES)
+			var stored: int = rom.u16le(at + index * PokePalette.COLOR_BYTES)
 			if stored != want[index]:
 				return {
 					"ok": false,
@@ -3211,7 +3211,7 @@ static func verify_pc(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var mail: int = int(entry["mail_gfx"])
 	var orange: int = int(entry["orange_palette"])
 	if not rom.in_bounds(mail, PC_MAIL_BYTES.size()) \
-		or not rom.in_bounds(orange, PC_ORANGE_COLORS.size() * Gen2Palette.COLOR_BYTES) \
+		or not rom.in_bounds(orange, PC_ORANGE_COLORS.size() * PokePalette.COLOR_BYTES) \
 		or select < 0 or select >= mail:
 		return {"ok": false, "message": "PC graphics are outside the cartridge."}
 	for index: int in PC_MAIL_BYTES.size():
@@ -3223,7 +3223,7 @@ static func verify_pc(rom: RomFile, layout: Dictionary) -> Dictionary:
 				],
 			}
 	for index: int in PC_ORANGE_COLORS.size():
-		var stored: int = rom.u16le(orange + index * Gen2Palette.COLOR_BYTES)
+		var stored: int = rom.u16le(orange + index * PokePalette.COLOR_BYTES)
 		if stored != PC_ORANGE_COLORS[index]:
 			return {
 				"ok": false,
@@ -3233,11 +3233,11 @@ static func verify_pc(rom: RomFile, layout: Dictionary) -> Dictionary:
 			}
 	var lz := Gen2Lz.new()
 	var raw: PackedByteArray = lz.decompress(rom.bytes(), select)
-	if lz.failed or raw.size() != RomLayout.PC_SELECT_TILES * Gen2Tiles.TILE_BYTES:
+	if lz.failed or raw.size() != Gen2Layout.PC_SELECT_TILES * PokeTiles.TILE_BYTES:
 		return {
 			"ok": false,
 			"message": "PCSelectLZ decompresses to %d bytes, expected %d." % [
-				raw.size(), RomLayout.PC_SELECT_TILES * Gen2Tiles.TILE_BYTES,
+				raw.size(), Gen2Layout.PC_SELECT_TILES * PokeTiles.TILE_BYTES,
 			],
 		}
 	var padding: int = mail - select - lz.consumed
@@ -3259,14 +3259,14 @@ static func read_matchups(rom: RomFile, layout: Dictionary) -> Array:
 	var out: Array = []
 	var after_foresight: bool = false
 
-	for _step: int in RomLayout.MAX_MATCHUPS:
-		if not rom.in_bounds(at, RomLayout.MATCHUP_ENTRY_SIZE):
+	for _step: int in Gen2Layout.MAX_MATCHUPS:
+		if not rom.in_bounds(at, Gen2Layout.MATCHUP_ENTRY_SIZE):
 			return []
 
-		var attacker: int = rom.u8(at + RomLayout.MATCHUP_ATTACKER)
-		if attacker == RomLayout.MATCHUP_END:
+		var attacker: int = rom.u8(at + Gen2Layout.MATCHUP_ATTACKER)
+		if attacker == Gen2Layout.MATCHUP_END:
 			return out
-		if attacker == RomLayout.MATCHUP_END_FORESIGHT:
+		if attacker == Gen2Layout.MATCHUP_END_FORESIGHT:
 			# The first marker is one byte, not an entry: the rows it separates
 			# follow immediately after it.
 			after_foresight = true
@@ -3275,11 +3275,11 @@ static func read_matchups(rom: RomFile, layout: Dictionary) -> Array:
 
 		out.append({
 			"attacker": attacker,
-			"defender": rom.u8(at + RomLayout.MATCHUP_DEFENDER),
-			"multiplier": rom.u8(at + RomLayout.MATCHUP_MULTIPLIER),
+			"defender": rom.u8(at + Gen2Layout.MATCHUP_DEFENDER),
+			"multiplier": rom.u8(at + Gen2Layout.MATCHUP_MULTIPLIER),
 			"negated_by_foresight": after_foresight,
 		})
-		at += RomLayout.MATCHUP_ENTRY_SIZE
+		at += Gen2Layout.MATCHUP_ENTRY_SIZE
 
 	return []
 
@@ -3299,7 +3299,7 @@ static func verify_matchups(rom: RomFile, layout: Dictionary) -> Dictionary:
 		var row: Dictionary = rows[index]
 		for side: String in ["attacker", "defender"]:
 			var type_number: int = int(row[side])
-			if not RomLayout.is_matchup_type(type_number):
+			if not Gen2Layout.is_matchup_type(type_number):
 				return {
 					"ok": false,
 					"message": "Type matchup %d: %s is $%02X, not a type." % [
@@ -3308,7 +3308,7 @@ static func verify_matchups(rom: RomFile, layout: Dictionary) -> Dictionary:
 				}
 		# A neutral matchup is an absent row, so a byte of ten here would mean the
 		# walk is reading something that is not the chart.
-		if not RomLayout.MATCHUP_MULTIPLIERS.has(int(row["multiplier"])):
+		if not Gen2Layout.MATCHUP_MULTIPLIERS.has(int(row["multiplier"])):
 			return {
 				"ok": false,
 				"message": "Type matchup %d has multiplier %d, which the chart never stores." % [
@@ -3319,18 +3319,18 @@ static func verify_matchups(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var negated: Array = rows.filter(func(row: Dictionary) -> bool:
 		return bool(row["negated_by_foresight"])
 	)
-	if rows.size() != RomLayout.MATCHUP_COUNT + RomLayout.FORESIGHT_MATCHUP_COUNT:
+	if rows.size() != Gen2Layout.MATCHUP_COUNT + Gen2Layout.FORESIGHT_MATCHUP_COUNT:
 		return {
 			"ok": false,
 			"message": "Type matchups: read %d rows, expected %d." % [
-				rows.size(), RomLayout.MATCHUP_COUNT + RomLayout.FORESIGHT_MATCHUP_COUNT,
+				rows.size(), Gen2Layout.MATCHUP_COUNT + Gen2Layout.FORESIGHT_MATCHUP_COUNT,
 			],
 		}
-	if negated.size() != RomLayout.FORESIGHT_MATCHUP_COUNT:
+	if negated.size() != Gen2Layout.FORESIGHT_MATCHUP_COUNT:
 		return {
 			"ok": false,
 			"message": "Type matchups: %d rows past the Foresight marker, expected %d." % [
-				negated.size(), RomLayout.FORESIGHT_MATCHUP_COUNT,
+				negated.size(), Gen2Layout.FORESIGHT_MATCHUP_COUNT,
 			],
 		}
 
@@ -3338,14 +3338,14 @@ static func verify_matchups(rom: RomFile, layout: Dictionary) -> Dictionary:
 	# with Normal against Rock and closes with Steel against itself, and the two
 	# rows Foresight cancels are the Ghost immunities.
 	var checks: Array = [
-		[rows[0], RomLayout.TYPE_NORMAL, RomLayout.TYPE_ROCK,
-			RomLayout.MATCHUP_NOT_VERY_EFFECTIVE, "the first row"],
-		[rows[RomLayout.MATCHUP_COUNT - 1], RomLayout.TYPE_STEEL, RomLayout.TYPE_STEEL,
-			RomLayout.MATCHUP_NOT_VERY_EFFECTIVE, "the last row"],
-		[negated[0], RomLayout.TYPE_NORMAL, RomLayout.TYPE_GHOST,
-			RomLayout.MATCHUP_NO_EFFECT, "the first Foresight row"],
-		[negated[1], RomLayout.TYPE_FIGHTING, RomLayout.TYPE_GHOST,
-			RomLayout.MATCHUP_NO_EFFECT, "the second Foresight row"],
+		[rows[0], Gen2Layout.TYPE_NORMAL, Gen2Layout.TYPE_ROCK,
+			Gen2Layout.MATCHUP_NOT_VERY_EFFECTIVE, "the first row"],
+		[rows[Gen2Layout.MATCHUP_COUNT - 1], Gen2Layout.TYPE_STEEL, Gen2Layout.TYPE_STEEL,
+			Gen2Layout.MATCHUP_NOT_VERY_EFFECTIVE, "the last row"],
+		[negated[0], Gen2Layout.TYPE_NORMAL, Gen2Layout.TYPE_GHOST,
+			Gen2Layout.MATCHUP_NO_EFFECT, "the first Foresight row"],
+		[negated[1], Gen2Layout.TYPE_FIGHTING, Gen2Layout.TYPE_GHOST,
+			Gen2Layout.MATCHUP_NO_EFFECT, "the second Foresight row"],
 	]
 	for check: Array in checks:
 		var row: Dictionary = check[0]
@@ -3364,13 +3364,13 @@ static func verify_matchups(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## Walks one species' entry in the combined evolution and level-up move table.
 ## Returns { evolutions, learnset }, empty if both terminators were not where a
 ## well-formed entry has them. `condition` is zero except for
-## [constant RomLayout.EVOLVE_STAT], the only method asking two questions.
+## [constant Gen2Layout.EVOLVE_STAT], the only method asking two questions.
 ## Level-up moves keep the cartridge's order rather than being sorted: the order
 ## decides which move a fresh Pokemon ends up with when more than four are on
 ## offer, and one species really is out of order.
 static func read_evos_attacks(rom: RomFile, layout: Dictionary, species: int) -> Dictionary:
-	var table: int = RomLayout.evos_attacks_pointer_offset(layout, species)
-	if not rom.in_bounds(table, RomLayout.EVOS_ATTACKS_POINTER_SIZE):
+	var table: int = Gen2Layout.evos_attacks_pointer_offset(layout, species)
+	if not rom.in_bounds(table, Gen2Layout.EVOS_ATTACKS_POINTER_SIZE):
 		return {}
 
 	# The pointer is an address with no bank, so it has to be one the switchable
@@ -3378,16 +3378,16 @@ static func read_evos_attacks(rom: RomFile, layout: Dictionary, species: int) ->
 	var address: int = rom.u16le(table)
 	if address < RomFile.BANK_SIZE or address >= RomFile.BANK_SIZE * 2:
 		return {}
-	var at: int = RomFile.linear(RomLayout.bank_of(table), address)
+	var at: int = RomFile.linear(Gen2Layout.bank_of(table), address)
 
 	var evolutions: Array = []
-	while rom.in_bounds(at) and rom.u8(at) != RomLayout.EVOS_ATTACKS_END:
-		if evolutions.size() >= RomLayout.MAX_EVOLUTIONS:
+	while rom.in_bounds(at) and rom.u8(at) != Gen2Layout.EVOS_ATTACKS_END:
+		if evolutions.size() >= Gen2Layout.MAX_EVOLUTIONS:
 			return {}
 		var method: int = rom.u8(at)
-		if not RomLayout.EVOLVE_METHODS.has(method):
+		if not Gen2Layout.EVOLVE_METHODS.has(method):
 			return {}
-		var size: int = RomLayout.evolution_size(method)
+		var size: int = Gen2Layout.evolution_size(method)
 		if not rom.in_bounds(at, size):
 			return {}
 		# The target is always last, which is what makes the four-byte method fit
@@ -3395,7 +3395,7 @@ static func read_evos_attacks(rom: RomFile, layout: Dictionary, species: int) ->
 		evolutions.append({
 			"method": method,
 			"parameter": rom.u8(at + 1),
-			"condition": rom.u8(at + 2) if method == RomLayout.EVOLVE_STAT else 0,
+			"condition": rom.u8(at + 2) if method == Gen2Layout.EVOLVE_STAT else 0,
 			"target": rom.u8(at + size - 1),
 		})
 		at += size
@@ -3405,8 +3405,8 @@ static func read_evos_attacks(rom: RomFile, layout: Dictionary, species: int) ->
 	at += 1
 
 	var learnset: Array = []
-	while rom.in_bounds(at) and rom.u8(at) != RomLayout.EVOS_ATTACKS_END:
-		if learnset.size() >= RomLayout.MAX_LEVEL_UP_MOVES or not rom.in_bounds(at, 2):
+	while rom.in_bounds(at) and rom.u8(at) != Gen2Layout.EVOS_ATTACKS_END:
+		if learnset.size() >= Gen2Layout.MAX_LEVEL_UP_MOVES or not rom.in_bounds(at, 2):
 			return {}
 		learnset.append({"level": rom.u8(at), "move": rom.u8(at + 1)})
 		at += 2
@@ -3424,26 +3424,26 @@ static func read_evos_attacks(rom: RomFile, layout: Dictionary, species: int) ->
 ## not merely the dump's end: continuing into the next bank would turn a missing
 ## terminator into plausible data from an unrelated section.
 static func read_egg_moves(rom: RomFile, layout: Dictionary, species: int) -> Dictionary:
-	if species < 1 or species > RomLayout.SPECIES_COUNT \
+	if species < 1 or species > Gen2Layout.SPECIES_COUNT \
 		or not layout.has("egg_move_pointers"):
 		return {}
-	var table: int = RomLayout.egg_move_pointer_offset(layout, species)
-	if not rom.in_bounds(table, RomLayout.EGG_MOVE_POINTER_SIZE):
+	var table: int = Gen2Layout.egg_move_pointer_offset(layout, species)
+	if not rom.in_bounds(table, Gen2Layout.EGG_MOVE_POINTER_SIZE):
 		return {}
 
 	var address: int = rom.u16le(table)
 	if address < RomFile.BANK_SIZE or address >= RomFile.BANK_SIZE * 2:
 		return {}
-	var bank: int = RomLayout.bank_of(table)
+	var bank: int = Gen2Layout.bank_of(table)
 	var at: int = RomFile.linear(bank, address)
 	var bank_end: int = mini((bank + 1) * RomFile.BANK_SIZE, rom.size())
 	var moves: Array[int] = []
 	while at < bank_end:
 		var move: int = rom.u8(at)
 		at += 1
-		if move == RomLayout.EGG_MOVE_END:
+		if move == Gen2Layout.EGG_MOVE_END:
 			return {"moves": moves}
-		if move < 1 or move > RomLayout.MOVE_COUNT:
+		if move < 1 or move > Gen2Layout.MOVE_COUNT:
 			return {}
 		moves.append(move)
 	return {}
@@ -3460,7 +3460,7 @@ static func verify_egg_moves(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var entries: Array = []
 	var total: int = 0
 	var nonempty: int = 0
-	for species: int in range(1, RomLayout.SPECIES_COUNT + 1):
+	for species: int in range(1, Gen2Layout.SPECIES_COUNT + 1):
 		var entry: Dictionary = read_egg_moves(rom, layout, species)
 		if entry.is_empty():
 			return {
@@ -3521,8 +3521,8 @@ static func verify_egg_moves(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## either is the source's own "no measurement" and is kept, since `.skip_height`
 ## leaves the row blank rather than printing a zero.
 static func read_dex_entry(rom: RomFile, layout: Dictionary, species: int) -> Dictionary:
-	var table: int = RomLayout.dex_entry_pointer_offset(layout, species)
-	if not rom.in_bounds(table, RomLayout.DEX_ENTRY_POINTER_SIZE):
+	var table: int = Gen2Layout.dex_entry_pointer_offset(layout, species)
+	if not rom.in_bounds(table, Gen2Layout.DEX_ENTRY_POINTER_SIZE):
 		return {}
 
 	# The pointer carries no bank; the bank is chosen by species number, so the
@@ -3532,30 +3532,30 @@ static func read_dex_entry(rom: RomFile, layout: Dictionary, species: int) -> Di
 		return {}
 
 	var data: PackedByteArray = rom.bytes()
-	var at: int = RomLayout.dex_entry_offset(layout, species, address)
+	var at: int = Gen2Layout.dex_entry_offset(layout, species, address)
 	if not rom.in_bounds(at):
 		return {}
 
 	var category: String = Gen2Text.decode(
-		data, at, RomLayout.DEX_ENTRY_MAX_CATEGORY_LENGTH
+		data, at, Gen2Layout.DEX_ENTRY_MAX_CATEGORY_LENGTH
 	)
-	at = Gen2Text.terminated_end(data, at, RomLayout.DEX_ENTRY_MAX_CATEGORY_LENGTH)
+	at = Gen2Text.terminated_end(data, at, Gen2Layout.DEX_ENTRY_MAX_CATEGORY_LENGTH)
 
-	var measurements: int = RomLayout.DEX_ENTRY_MEASUREMENT_BYTES * 2
+	var measurements: int = Gen2Layout.DEX_ENTRY_MEASUREMENT_BYTES * 2
 	if not rom.in_bounds(at, measurements):
 		return {}
 	var height: int = rom.u16le(at)
-	var weight: int = rom.u16le(at + RomLayout.DEX_ENTRY_MEASUREMENT_BYTES)
+	var weight: int = rom.u16le(at + Gen2Layout.DEX_ENTRY_MEASUREMENT_BYTES)
 	at += measurements
 
 	# The page break is the terminator itself (macros/scripts/text.asm's `page`
 	# is `db "@"`), so the two pages are simply two consecutive runs.
 	var pages: PackedStringArray = PackedStringArray()
-	for page: int in RomLayout.DEX_ENTRY_PAGES:
+	for page: int in Gen2Layout.DEX_ENTRY_PAGES:
 		if not rom.in_bounds(at):
 			return {}
-		pages.append(Gen2Text.decode(data, at, RomLayout.DEX_ENTRY_MAX_PAGE_LENGTH))
-		at = Gen2Text.terminated_end(data, at, RomLayout.DEX_ENTRY_MAX_PAGE_LENGTH)
+		pages.append(Gen2Text.decode(data, at, Gen2Layout.DEX_ENTRY_MAX_PAGE_LENGTH))
+		at = Gen2Text.terminated_end(data, at, Gen2Layout.DEX_ENTRY_MAX_PAGE_LENGTH)
 	if at > rom.size():
 		return {}
 
@@ -3573,7 +3573,7 @@ static func verify_evos_attacks(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var entries: Array = []
 	var evolutions: int = 0
 
-	for species: int in range(1, RomLayout.SPECIES_COUNT + 1):
+	for species: int in range(1, Gen2Layout.SPECIES_COUNT + 1):
 		var entry: Dictionary = read_evos_attacks(rom, layout, species)
 		if entry.is_empty():
 			return {
@@ -3597,19 +3597,19 @@ static func verify_evos_attacks(rom: RomFile, layout: Dictionary) -> Dictionary:
 		for move: Dictionary in learnset:
 			var level: int = int(move["level"])
 			var number: int = int(move["move"])
-			if level < 1 or level > RomLayout.MAX_LEVEL:
+			if level < 1 or level > Gen2Layout.MAX_LEVEL:
 				return {
 					"ok": false,
 					"message": "Species %d learns a move at level %d." % [species, level],
 				}
-			if number < 1 or number > RomLayout.MOVE_COUNT:
+			if number < 1 or number > Gen2Layout.MOVE_COUNT:
 				return {
 					"ok": false,
 					"message": "Species %d learns move %d, which does not exist." % [
 						species, number,
 					],
 				}
-			if level < previous and species != RomLayout.UNSORTED_LEARNSET_SPECIES:
+			if level < previous and species != Gen2Layout.UNSORTED_LEARNSET_SPECIES:
 				return {
 					"ok": false,
 					"message": "Species %d learns at level %d after level %d." % [
@@ -3620,11 +3620,11 @@ static func verify_evos_attacks(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 		entries.append(entry)
 
-	if evolutions != RomLayout.EVOLUTION_COUNT:
+	if evolutions != Gen2Layout.EVOLUTION_COUNT:
 		return {
 			"ok": false,
 			"message": "Read %d evolutions, expected %d." % [
-				evolutions, RomLayout.EVOLUTION_COUNT,
+				evolutions, Gen2Layout.EVOLUTION_COUNT,
 			],
 		}
 
@@ -3637,30 +3637,30 @@ static func _evolution_check(species: int, evolution: Dictionary) -> Dictionary:
 	var parameter: int = int(evolution["parameter"])
 	var target: int = int(evolution["target"])
 
-	if target < 1 or target > RomLayout.SPECIES_COUNT:
+	if target < 1 or target > Gen2Layout.SPECIES_COUNT:
 		return {
 			"ok": false,
 			"message": "Species %d evolves into %d, which does not exist." % [species, target],
 		}
 
 	match method:
-		RomLayout.EVOLVE_LEVEL, RomLayout.EVOLVE_STAT:
-			if parameter < 1 or parameter > RomLayout.MAX_LEVEL:
+		Gen2Layout.EVOLVE_LEVEL, Gen2Layout.EVOLVE_STAT:
+			if parameter < 1 or parameter > Gen2Layout.MAX_LEVEL:
 				return {
 					"ok": false,
 					"message": "Species %d evolves at level %d." % [species, parameter],
 				}
-		RomLayout.EVOLVE_HAPPINESS:
-			if parameter < RomLayout.TRIGGER_ANYTIME or parameter > RomLayout.TRIGGER_NITE:
+		Gen2Layout.EVOLVE_HAPPINESS:
+			if parameter < Gen2Layout.TRIGGER_ANYTIME or parameter > Gen2Layout.TRIGGER_NITE:
 				return {
 					"ok": false,
 					"message": "Species %d evolves on happiness trigger %d." % [species, parameter],
 				}
 
-	if method == RomLayout.EVOLVE_STAT:
+	if method == Gen2Layout.EVOLVE_STAT:
 		var condition: int = int(evolution["condition"])
-		if condition < RomLayout.ATTACK_OVER_DEFENSE \
-			or condition > RomLayout.ATTACK_EQUALS_DEFENSE:
+		if condition < Gen2Layout.ATTACK_OVER_DEFENSE \
+			or condition > Gen2Layout.ATTACK_EQUALS_DEFENSE:
 			return {
 				"ok": false,
 				"message": "Species %d evolves on stat comparison %d." % [species, condition],
@@ -3674,7 +3674,7 @@ static func _verify_known_evos_attacks(entries: Array) -> Dictionary:
 	var first: Dictionary = entries[0]
 	var first_evolutions: Array = first["evolutions"]
 	if first_evolutions.size() != 1 \
-		or int(first_evolutions[0]["method"]) != RomLayout.EVOLVE_LEVEL \
+		or int(first_evolutions[0]["method"]) != Gen2Layout.EVOLVE_LEVEL \
 		or int(first_evolutions[0]["parameter"]) != FIRST_EVOLUTION_LEVEL \
 		or int(first_evolutions[0]["target"]) != 2:
 		return {
@@ -3695,12 +3695,12 @@ static func _verify_known_evos_attacks(entries: Array) -> Dictionary:
 
 	# The last species is the far end of the pointer table, and it is one of the
 	# ones that never evolves.
-	var last_evolutions: Array = entries[RomLayout.SPECIES_COUNT - 1]["evolutions"]
+	var last_evolutions: Array = entries[Gen2Layout.SPECIES_COUNT - 1]["evolutions"]
 	if not last_evolutions.is_empty():
 		return {
 			"ok": false,
 			"message": "Species %d should not evolve, and has %d evolutions." % [
-				RomLayout.SPECIES_COUNT, last_evolutions.size(),
+				Gen2Layout.SPECIES_COUNT, last_evolutions.size(),
 			],
 		}
 
@@ -3713,7 +3713,7 @@ static func _verify_known_evos_attacks(entries: Array) -> Dictionary:
 			],
 		}
 	for evolution: Dictionary in stat_evolutions:
-		if int(evolution["method"]) != RomLayout.EVOLVE_STAT:
+		if int(evolution["method"]) != Gen2Layout.EVOLVE_STAT:
 			return {
 				"ok": false,
 				"message": "Species %d should evolve on a stat comparison, and uses method %d." % [
@@ -3730,10 +3730,10 @@ static func _verify_known_evos_attacks(entries: Array) -> Dictionary:
 static func read_dex_order(rom: RomFile, layout: Dictionary, key: String) -> PackedInt32Array:
 	var pokedex: Dictionary = layout["pokedex"]
 	var at: int = int(pokedex.get(key, -1))
-	if not rom.in_bounds(at, RomLayout.SPECIES_COUNT):
+	if not rom.in_bounds(at, Gen2Layout.SPECIES_COUNT):
 		return PackedInt32Array()
 	var out: PackedInt32Array = PackedInt32Array()
-	for index: int in RomLayout.SPECIES_COUNT:
+	for index: int in Gen2Layout.SPECIES_COUNT:
 		out.append(rom.u8(at + index))
 	return out
 
@@ -3750,7 +3750,7 @@ static func verify_pokedex(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return {"ok": false, "message": "No Pokedex offsets for this game."}
 
 	var entries: Array = []
-	for species: int in range(1, RomLayout.SPECIES_COUNT + 1):
+	for species: int in range(1, Gen2Layout.SPECIES_COUNT + 1):
 		var entry: Dictionary = read_dex_entry(rom, layout, species)
 		if entry.is_empty():
 			return {
@@ -3780,14 +3780,14 @@ static func verify_pokedex(rom: RomFile, layout: Dictionary) -> Dictionary:
 			],
 		}
 
-	var last: Dictionary = entries[RomLayout.SPECIES_COUNT - 1]
+	var last: Dictionary = entries[Gen2Layout.SPECIES_COUNT - 1]
 	if String(last["category"]) != DEX_LAST_CATEGORY \
 		or int(last["height"]) != DEX_LAST_HEIGHT \
 		or int(last["weight"]) != DEX_LAST_WEIGHT:
 		return {
 			"ok": false,
 			"message": "Pokedex entry %d: expected %s %d %d, read %s %d %d." % [
-				RomLayout.SPECIES_COUNT, DEX_LAST_CATEGORY, DEX_LAST_HEIGHT, DEX_LAST_WEIGHT,
+				Gen2Layout.SPECIES_COUNT, DEX_LAST_CATEGORY, DEX_LAST_HEIGHT, DEX_LAST_WEIGHT,
 				String(last["category"]), int(last["height"]), int(last["weight"]),
 			],
 		}
@@ -3797,7 +3797,7 @@ static func verify_pokedex(rom: RomFile, layout: Dictionary) -> Dictionary:
 	]:
 		var key: String = order[0]
 		var species_numbers: PackedInt32Array = read_dex_order(rom, layout, key)
-		if species_numbers.size() != RomLayout.SPECIES_COUNT:
+		if species_numbers.size() != Gen2Layout.SPECIES_COUNT:
 			return {"ok": false, "message": "Dex order table %s is outside the ROM." % key}
 		if species_numbers[0] != int(order[1]):
 			return {
@@ -3808,7 +3808,7 @@ static func verify_pokedex(rom: RomFile, layout: Dictionary) -> Dictionary:
 			}
 		var seen: Dictionary = {}
 		for number: int in species_numbers:
-			if number < 1 or number > RomLayout.SPECIES_COUNT or seen.has(number):
+			if number < 1 or number > Gen2Layout.SPECIES_COUNT or seen.has(number):
 				return {
 					"ok": false,
 					"message": "Dex order table %s is not a permutation: %d." % [key, number],
@@ -3825,12 +3825,12 @@ static func verify_pokedex(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## runs sit between the alphabets, so an offset out by one tile drags a blank
 ## onto "z" and a glyph onto an unmapped code, failing both ways at once.
 static func verify_font(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var offset: int = RomLayout.font_offset(layout)
-	var length: int = RomLayout.FONT_TILES * Gen2Tiles.TILE_1BPP_BYTES
+	var offset: int = Gen2Layout.font_offset(layout)
+	var length: int = Gen2Layout.FONT_TILES * PokeTiles.TILE_1BPP_BYTES
 	if not rom.in_bounds(offset, length):
 		return {"ok": false, "message": "Font runs past the end of the dump."}
 
-	for run: Array in RomLayout.FONT_INK_RUNS:
+	for run: Array in Gen2Layout.FONT_INK_RUNS:
 		for code: int in range(run[0], run[1] + 1):
 			if _glyph_ink(rom, offset, code) == 0:
 				return {
@@ -3840,7 +3840,7 @@ static func verify_font(rom: RomFile, layout: Dictionary) -> Dictionary:
 					],
 				}
 
-	for run: Array in RomLayout.FONT_BLANK_RUNS:
+	for run: Array in Gen2Layout.FONT_BLANK_RUNS:
 		for code: int in range(run[0], run[1] + 1):
 			if _glyph_ink(rom, offset, code) != 0:
 				return {
@@ -3863,21 +3863,21 @@ static func verify_font(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## three dots on the seventh, which no neighbouring sheet read a tile early or
 ## late reproduces.
 static func verify_font_extra(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var offset: int = RomLayout.font_extra_offset(layout)
-	if not rom.in_bounds(offset, RomLayout.FONT_EXTRA_TILES * Gen2Tiles.TILE_BYTES):
+	var offset: int = Gen2Layout.font_extra_offset(layout)
+	if not rom.in_bounds(offset, Gen2Layout.FONT_EXTRA_TILES * PokeTiles.TILE_BYTES):
 		return {"ok": false, "message": "FontExtra runs past the end of the dump."}
 
 	for code: int in range(
-		RomLayout.FONT_EXTRA_LOADED_FIRST, RomLayout.FONT_EXTRA_LOADED_LAST + 1
+		Gen2Layout.FONT_EXTRA_LOADED_FIRST, Gen2Layout.FONT_EXTRA_LOADED_LAST + 1
 	):
-		if _extra_glyph_rows(rom, offset, code).count(0) == Gen2Tiles.TILE_1BPP_BYTES:
+		if _extra_glyph_rows(rom, offset, code).count(0) == PokeTiles.TILE_1BPP_BYTES:
 			return {
 				"ok": false,
 				"message": "FontExtra: code $%02X has no glyph." % code,
 			}
 
 	var ellipsis: Array[int] = _extra_glyph_rows(rom, offset, Gen2Text.ELLIPSIS_CODE)
-	if ellipsis[6] == 0 or ellipsis.count(0) != Gen2Tiles.TILE_1BPP_BYTES - 1:
+	if ellipsis[6] == 0 or ellipsis.count(0) != PokeTiles.TILE_1BPP_BYTES - 1:
 		return {
 			"ok": false,
 			"message": "FontExtra: $%02X is not the ellipsis." % Gen2Text.ELLIPSIS_CODE,
@@ -3889,18 +3889,18 @@ static func verify_font_extra(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## One 2bpp tile of `FontExtra` as eight row masks, a set bit per lit pixel.
 static func _extra_glyph_rows(rom: RomFile, offset: int, code: int) -> Array[int]:
 	var at: int = offset \
-		+ (code - RomLayout.FONT_EXTRA_FIRST_CODE) * Gen2Tiles.TILE_BYTES
+		+ (code - Gen2Layout.FONT_EXTRA_FIRST_CODE) * PokeTiles.TILE_BYTES
 	var rows: Array[int] = []
-	for row: int in Gen2Tiles.TILE_1BPP_BYTES:
+	for row: int in PokeTiles.TILE_1BPP_BYTES:
 		rows.append(rom.u8(at + 2 * row) | rom.u8(at + 2 * row + 1))
 	return rows
 
 
 ## Ink in the tile for one character code, in pixels.
 static func _glyph_ink(rom: RomFile, offset: int, code: int) -> int:
-	var at: int = offset + (code - RomLayout.FONT_FIRST_CODE) * Gen2Tiles.TILE_1BPP_BYTES
+	var at: int = offset + (code - Gen2Layout.FONT_FIRST_CODE) * PokeTiles.TILE_1BPP_BYTES
 	var ink: int = 0
-	for row: int in Gen2Tiles.TILE_1BPP_BYTES:
+	for row: int in PokeTiles.TILE_1BPP_BYTES:
 		var byte: int = rom.u8(at + row)
 		for bit: int in 8:
 			ink += (byte >> bit) & 1
@@ -3912,10 +3912,10 @@ static func _glyph_ink(rom: RomFile, offset: int, code: int) -> int:
 static func verify_frames(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var seen: Array = []
 
-	for frame: int in RomLayout.FRAME_COUNT:
-		var offset: int = RomLayout.frame_offset(layout, frame)
+	for frame: int in Gen2Layout.FRAME_COUNT:
+		var offset: int = Gen2Layout.frame_offset(layout, frame)
 		var tiles: PackedByteArray = rom.slice(
-			offset, RomLayout.FRAME_TILES * Gen2Tiles.TILE_1BPP_BYTES
+			offset, Gen2Layout.FRAME_TILES * PokeTiles.TILE_1BPP_BYTES
 		)
 		if tiles.is_empty():
 			return {"ok": false, "message": "Frame %d runs past the end of the dump." % frame}
@@ -3923,10 +3923,10 @@ static func verify_frames(rom: RomFile, layout: Dictionary) -> Dictionary:
 		# A border is inset from the top of its tile row, so the top-left, top and
 		# top-right tiles all open with blank scanlines.
 		for tile: int in [
-			RomLayout.FRAME_TOP_LEFT, RomLayout.FRAME_HORIZONTAL, RomLayout.FRAME_TOP_RIGHT
+			Gen2Layout.FRAME_TOP_LEFT, Gen2Layout.FRAME_HORIZONTAL, Gen2Layout.FRAME_TOP_RIGHT
 		]:
 			for row: int in 2:
-				if tiles[tile * Gen2Tiles.TILE_1BPP_BYTES + row] != 0:
+				if tiles[tile * PokeTiles.TILE_1BPP_BYTES + row] != 0:
 					return {
 						"ok": false,
 						"message": "Frame %d tile %d has ink on row %d of its top edge." % [
@@ -3936,8 +3936,8 @@ static func verify_frames(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 		# The two bottom corners continue the vertical edge they hang from, so
 		# their first row is one the vertical tile also draws.
-		var left: int = tiles[RomLayout.FRAME_BOTTOM_LEFT * Gen2Tiles.TILE_1BPP_BYTES]
-		var right: int = tiles[RomLayout.FRAME_BOTTOM_RIGHT * Gen2Tiles.TILE_1BPP_BYTES]
+		var left: int = tiles[Gen2Layout.FRAME_BOTTOM_LEFT * PokeTiles.TILE_1BPP_BYTES]
+		var right: int = tiles[Gen2Layout.FRAME_BOTTOM_RIGHT * PokeTiles.TILE_1BPP_BYTES]
 		if left == 0 or left != right:
 			return {
 				"ok": false,
@@ -3946,8 +3946,8 @@ static func verify_frames(rom: RomFile, layout: Dictionary) -> Dictionary:
 				],
 			}
 		var vertical: PackedByteArray = tiles.slice(
-			RomLayout.FRAME_VERTICAL * Gen2Tiles.TILE_1BPP_BYTES,
-			(RomLayout.FRAME_VERTICAL + 1) * Gen2Tiles.TILE_1BPP_BYTES
+			Gen2Layout.FRAME_VERTICAL * PokeTiles.TILE_1BPP_BYTES,
+			(Gen2Layout.FRAME_VERTICAL + 1) * PokeTiles.TILE_1BPP_BYTES
 		)
 		if not vertical.has(left):
 			return {
@@ -3978,33 +3978,33 @@ static func verify_battle_graphics(rom: RomFile, layout: Dictionary) -> Dictiona
 	if not palettes["ok"]:
 		return palettes
 
-	var battle_font: PackedByteArray = Gen2Tiles.decode_2bpp_strip(
-		data, int(layout["battle_font"]), RomLayout.BATTLE_FONT_TILES
+	var battle_font: PackedByteArray = PokeTiles.decode_2bpp_strip(
+		data, int(layout["battle_font"]), Gen2Layout.BATTLE_FONT_TILES
 	)
 	var hp_bar: Dictionary = _verify_bar(
-		battle_font, RomLayout.BATTLE_FONT_TILES, RomLayout.HP_BAR_FIRST_TILE,
-		RomLayout.HP_BAR_LEVELS, "HP bar"
+		battle_font, Gen2Layout.BATTLE_FONT_TILES, Gen2Layout.HP_BAR_FIRST_TILE,
+		Gen2Layout.HP_BAR_LEVELS, "HP bar"
 	)
 	if not hp_bar["ok"]:
 		return hp_bar
 
-	var exp_bar: PackedByteArray = Gen2Tiles.decode_2bpp_strip(
-		data, int(layout["exp_bar"]), RomLayout.EXP_BAR_TILES
+	var exp_bar: PackedByteArray = PokeTiles.decode_2bpp_strip(
+		data, int(layout["exp_bar"]), Gen2Layout.EXP_BAR_TILES
 	)
 	var levels: Dictionary = _verify_bar(
-		exp_bar, RomLayout.EXP_BAR_TILES, 0, RomLayout.EXP_BAR_LEVELS, "exp bar"
+		exp_bar, Gen2Layout.EXP_BAR_TILES, 0, Gen2Layout.EXP_BAR_LEVELS, "exp bar"
 	)
 	if not levels["ok"]:
 		return levels
 
-	## `MinimizePic`, against [constant RomLayout.MINIMIZE_PIC_ROWS].
-	var minimize: PackedByteArray = Gen2Tiles.decode_2bpp_strip(
-		data, int(layout["minimize_pic"]), RomLayout.MINIMIZE_TILES
+	## `MinimizePic`, against [constant Gen2Layout.MINIMIZE_PIC_ROWS].
+	var minimize: PackedByteArray = PokeTiles.decode_2bpp_strip(
+		data, int(layout["minimize_pic"]), Gen2Layout.MINIMIZE_TILES
 	)
-	for row: int in Gen2Tiles.TILE_HEIGHT:
-		for column: int in Gen2Tiles.TILE_WIDTH:
-			var index: int = minimize[row * Gen2Tiles.TILE_WIDTH + column]
-			var lit: bool = (RomLayout.MINIMIZE_PIC_ROWS[row] >> (7 - column)) & 1 == 1
+	for row: int in PokeTiles.TILE_HEIGHT:
+		for column: int in PokeTiles.TILE_WIDTH:
+			var index: int = minimize[row * PokeTiles.TILE_WIDTH + column]
+			var lit: bool = (Gen2Layout.MINIMIZE_PIC_ROWS[row] >> (7 - column)) & 1 == 1
 			if index != (3 if lit else 0):
 				return {
 					"ok": false,
@@ -4018,27 +4018,27 @@ static func verify_battle_graphics(rom: RomFile, layout: Dictionary) -> Dictiona
 	## vertical divider, two lit columns on every row, and tile 14 is the `'⁂'`
 	## `constants/charmap.asm` points at. Both pin the address, which is walked
 	## back from the enemy HUD rather than stored.
-	var stats_tiles: PackedByteArray = Gen2Tiles.decode_2bpp_strip(
-		data, RomLayout.stats_tiles_offset(layout), RomLayout.STATS_TILES
+	var stats_tiles: PackedByteArray = PokeTiles.decode_2bpp_strip(
+		data, Gen2Layout.stats_tiles_offset(layout), Gen2Layout.STATS_TILES
 	)
 	var divider: PackedByteArray = _strip_tile(
-		stats_tiles, RomLayout.STATS_TILES, 0
+		stats_tiles, Gen2Layout.STATS_TILES, 0
 	)
-	for row: int in Gen2Tiles.TILE_HEIGHT:
-		for column: int in Gen2Tiles.TILE_WIDTH:
-			var lit: bool = divider[row * Gen2Tiles.TILE_WIDTH + column] != 0
+	for row: int in PokeTiles.TILE_HEIGHT:
+		for column: int in PokeTiles.TILE_WIDTH:
+			var lit: bool = divider[row * PokeTiles.TILE_WIDTH + column] != 0
 			if lit != (column < 2):
 				return {
 					"ok": false,
 					"message": "Stats tiles: the vertical divider is not two columns wide.",
 				}
-	if _ink(_strip_tile(stats_tiles, RomLayout.STATS_TILES, RomLayout.STATS_SHINY_TILE)) == 0:
+	if _ink(_strip_tile(stats_tiles, Gen2Layout.STATS_TILES, Gen2Layout.STATS_SHINY_TILE)) == 0:
 		return {"ok": false, "message": "Stats tiles: the shiny icon is blank."}
 
 	for name: String in ["enemy_hud", "player_hud"]:
-		var tiles: int = RomLayout.ENEMY_HUD_TILES if name == "enemy_hud" \
-			else RomLayout.PLAYER_HUD_TILES
-		var strip: PackedByteArray = Gen2Tiles.decode_1bpp_strip(
+		var tiles: int = Gen2Layout.ENEMY_HUD_TILES if name == "enemy_hud" \
+			else Gen2Layout.PLAYER_HUD_TILES
+		var strip: PackedByteArray = PokeTiles.decode_1bpp_strip(
 			data, int(layout[name]), tiles
 		)
 		var seen: Array = []
@@ -4058,7 +4058,7 @@ static func _verify_colours(
 	rom: RomFile, offset: int, wanted: Array, label: String
 ) -> Dictionary:
 	for colour: int in wanted.size():
-		var read: int = rom.u16le(offset + colour * Gen2Palette.COLOR_BYTES)
+		var read: int = rom.u16le(offset + colour * PokePalette.COLOR_BYTES)
 		if read != int(wanted[colour]):
 			return {
 				"ok": false,
@@ -4072,39 +4072,39 @@ static func _verify_colours(
 ## The bar palettes, `StatsScreenPagePals` with `StatsScreenPals`' three tints,
 ## and `BattleObjectPals`. Each tint is its page palette's own colour 1.
 static func _verify_battle_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
-	for index: int in RomLayout.BAR_PALETTE_NAMES.size():
+	for index: int in Gen2Layout.BAR_PALETTE_NAMES.size():
 		var bar: Dictionary = _verify_colours(
-			rom, RomLayout.bar_palette_offset(layout, index),
-			RomLayout.BAR_PALETTES[index],
-			"Bar palette %s" % RomLayout.BAR_PALETTE_NAMES[index],
+			rom, Gen2Layout.bar_palette_offset(layout, index),
+			Gen2Layout.BAR_PALETTES[index],
+			"Bar palette %s" % Gen2Layout.BAR_PALETTE_NAMES[index],
 		)
 		if not bar["ok"]:
 			return bar
 
-	for index: int in RomLayout.STATS_PAGE_PALETTES:
+	for index: int in Gen2Layout.STATS_PAGE_PALETTES:
 		var page: Dictionary = _verify_colours(
-			rom, RomLayout.stats_page_palette_offset(layout, index),
-			RomLayout.STATS_SCREEN_PAGE_PALETTES[index],
+			rom, Gen2Layout.stats_page_palette_offset(layout, index),
+			Gen2Layout.STATS_SCREEN_PAGE_PALETTES[index],
 			"Stats page palette %d" % index,
 		)
 		if not page["ok"]:
 			return page
-		var tint: int = rom.u16le(RomLayout.stats_page_tint_offset(layout, index))
-		if tint != int(RomLayout.STATS_SCREEN_PAGE_TINTS[index]):
+		var tint: int = rom.u16le(Gen2Layout.stats_page_tint_offset(layout, index))
+		if tint != int(Gen2Layout.STATS_SCREEN_PAGE_TINTS[index]):
 			return {
 				"ok": false,
 				"message": "Stats page tint %d: expected $%04X, read $%04X." % [
-					index, RomLayout.STATS_SCREEN_PAGE_TINTS[index], tint,
+					index, Gen2Layout.STATS_SCREEN_PAGE_TINTS[index], tint,
 				],
 			}
 
-	for index: int in RomLayout.BATTLE_OBJECT_PALETTES_STORED:
+	for index: int in Gen2Layout.BATTLE_OBJECT_PALETTES_STORED:
 		var object_palette: Dictionary = _verify_colours(
 			rom,
 			int(layout["battle_object_palettes"])
-				+ index * RomLayout.BATTLE_OBJECT_PALETTE_COLORS * Gen2Palette.COLOR_BYTES,
-			RomLayout.BATTLE_OBJECT_PALETTES[index],
-			"Battle object palette %s" % RomLayout.BATTLE_OBJECT_PALETTE_NAMES[index],
+				+ index * Gen2Layout.BATTLE_OBJECT_PALETTE_COLORS * PokePalette.COLOR_BYTES,
+			Gen2Layout.BATTLE_OBJECT_PALETTES[index],
+			"Battle object palette %s" % Gen2Layout.BATTLE_OBJECT_PALETTE_NAMES[index],
 		)
 		if not object_palette["ok"]:
 			return object_palette
@@ -4115,7 +4115,7 @@ static func _verify_battle_palettes(rom: RomFile, layout: Dictionary) -> Diction
 static func _verify_bar(
 	strip: PackedByteArray, tiles: int, first: int, levels: int, what: String
 ) -> Dictionary:
-	if strip.size() != tiles * Gen2Tiles.TILE_WIDTH * Gen2Tiles.TILE_HEIGHT:
+	if strip.size() != tiles * PokeTiles.TILE_WIDTH * PokeTiles.TILE_HEIGHT:
 		return {"ok": false, "message": "%s: strip decoded short." % what}
 
 	var previous: int = _ink(_strip_tile(strip, tiles, first))
@@ -4124,11 +4124,11 @@ static func _verify_bar(
 
 	for level: int in range(1, levels):
 		var ink: int = _ink(_strip_tile(strip, tiles, first + level))
-		if ink != previous + RomLayout.BAR_STEP_PIXELS:
+		if ink != previous + Gen2Layout.BAR_STEP_PIXELS:
 			return {
 				"ok": false,
 				"message": "%s: level %d has %d pixels, expected %d." % [
-					what, level, ink, previous + RomLayout.BAR_STEP_PIXELS,
+					what, level, ink, previous + Gen2Layout.BAR_STEP_PIXELS,
 				],
 			}
 		previous = ink
@@ -4138,13 +4138,13 @@ static func _verify_bar(
 
 ## One tile out of a strip, as its own buffer.
 static func _strip_tile(strip: PackedByteArray, tiles: int, tile: int) -> PackedByteArray:
-	var width: int = tiles * Gen2Tiles.TILE_WIDTH
+	var width: int = tiles * PokeTiles.TILE_WIDTH
 	var out: PackedByteArray = PackedByteArray()
-	out.resize(Gen2Tiles.TILE_PIXELS)
-	for row: int in Gen2Tiles.TILE_HEIGHT:
-		for column: int in Gen2Tiles.TILE_WIDTH:
-			out[row * Gen2Tiles.TILE_WIDTH + column] = strip[
-				row * width + tile * Gen2Tiles.TILE_WIDTH + column
+	out.resize(PokeTiles.TILE_PIXELS)
+	for row: int in PokeTiles.TILE_HEIGHT:
+		for column: int in PokeTiles.TILE_WIDTH:
+			out[row * PokeTiles.TILE_WIDTH + column] = strip[
+				row * width + tile * PokeTiles.TILE_WIDTH + column
 			]
 	return out
 
@@ -4164,9 +4164,9 @@ static func _ink(pixels: PackedByteArray) -> int:
 ## table has one entry more than the pic table because the player owns the first,
 ## and pic entries must decompress to the one size every trainer is drawn at.
 static func verify_trainers(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var count: int = RomLayout.trainer_class_count(layout)
+	var count: int = Gen2Layout.trainer_class_count(layout)
 	var names: PackedStringArray = Gen2Text.decode_sequence(
-		rom.bytes(), int(layout["trainer_class_names"]), count, RomLayout.MAX_NAME_LENGTH
+		rom.bytes(), int(layout["trainer_class_names"]), count, Gen2Layout.MAX_NAME_LENGTH
 	)
 	if names.size() != count:
 		return {"ok": false, "message": "Trainer class names ran out after %d." % names.size()}
@@ -4214,10 +4214,10 @@ static func verify_trainers(rom: RomFile, layout: Dictionary) -> Dictionary:
 	# The two ends are decompressed as well, which is what proves the bank repair
 	# is the same one the Pokémon pics need.
 	var lz := Gen2Lz.new()
-	var wanted: int = RomLayout.TRAINER_PIC_TILES * RomLayout.TRAINER_PIC_TILES \
-		* Gen2Tiles.TILE_BYTES
+	var wanted: int = Gen2Layout.TRAINER_PIC_TILES * Gen2Layout.TRAINER_PIC_TILES \
+		* PokeTiles.TILE_BYTES
 	for trainer_class: int in range(1, count + 1):
-		var offset: int = RomLayout.trainer_pic_pointer_offset(layout, trainer_class)
+		var offset: int = Gen2Layout.trainer_pic_pointer_offset(layout, trainer_class)
 		var pointer: Dictionary = rom.far_pointer(offset)
 		var address: int = int(pointer["address"])
 		if address < RomFile.BANK_SIZE or address >= RomFile.BANK_SIZE * 2:
@@ -4228,7 +4228,7 @@ static func verify_trainers(rom: RomFile, layout: Dictionary) -> Dictionary:
 				],
 			}
 		var start: int = RomFile.linear(
-			RomLayout.fix_pic_bank(layout, int(pointer["bank"])), address
+			Gen2Layout.fix_pic_bank(layout, int(pointer["bank"])), address
 		)
 		if not rom.in_bounds(start):
 			return {"ok": false, "message": "Trainer pic %d points past the dump." % trainer_class}
@@ -4251,12 +4251,12 @@ static func verify_trainers(rom: RomFile, layout: Dictionary) -> Dictionary:
 static func _trainer_palette_check(
 	rom: RomFile, layout: Dictionary, trainer_class: int
 ) -> Dictionary:
-	var entry: int = RomLayout.trainer_palette_offset(layout, trainer_class)
-	if not rom.in_bounds(entry, Gen2Palette.PAIR_BYTES):
+	var entry: int = Gen2Layout.trainer_palette_offset(layout, trainer_class)
+	if not rom.in_bounds(entry, PokePalette.PAIR_BYTES):
 		return {"ok": false, "message": "Trainer palette %d is past the end." % trainer_class}
 
 	var first: int = rom.u16le(entry)
-	var second: int = rom.u16le(entry + Gen2Palette.COLOR_BYTES)
+	var second: int = rom.u16le(entry + PokePalette.COLOR_BYTES)
 	if (first | second) & 0x8000:
 		return {
 			"ok": false,
@@ -4276,16 +4276,16 @@ static func _trainer_palette_check(
 ## ends, so its span is bounded by the next class's pointer and the last is walked
 ## until a byte that cannot open a name. One class per game shares its pointer
 ## with the next, the one class never sent into battle, and its honest span is
-## empty: see [constant RomLayout.EMPTY_TRAINER_CLASS].
+## empty: see [constant Gen2Layout.EMPTY_TRAINER_CLASS].
 static func read_trainer_parties(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var count: int = RomLayout.trainer_class_count(layout)
+	var count: int = Gen2Layout.trainer_class_count(layout)
 	var table: int = int(layout["trainer_parties"])
-	var bank: int = RomLayout.bank_of(table)
+	var bank: int = Gen2Layout.bank_of(table)
 
 	var pointers: Array = []
 	for trainer_class: int in range(1, count + 1):
-		var offset: int = RomLayout.trainer_party_pointer_offset(layout, trainer_class)
-		if not rom.in_bounds(offset, RomLayout.TRAINER_PARTY_POINTER_SIZE):
+		var offset: int = Gen2Layout.trainer_party_pointer_offset(layout, trainer_class)
+		if not rom.in_bounds(offset, Gen2Layout.TRAINER_PARTY_POINTER_SIZE):
 			return {
 				"ok": false,
 				"message": "Trainer party pointer %d is past the end." % trainer_class,
@@ -4349,7 +4349,7 @@ static func _read_trainer_group(rom: RomFile, start: int, end: int) -> Dictionar
 		elif not rom.in_bounds(at) or rom.u8(at) == 0:
 			break
 
-		if trainers.size() >= RomLayout.MAX_TRAINERS_PER_CLASS:
+		if trainers.size() >= Gen2Layout.MAX_TRAINERS_PER_CLASS:
 			return {"ok": false, "message": "more trainers than any real class carries."}
 
 		var trainer: Dictionary = _read_one_trainer(rom, at)
@@ -4371,7 +4371,7 @@ static func _read_one_trainer(rom: RomFile, at: int) -> Dictionary:
 	var end: int = at
 	while rom.in_bounds(end) and rom.u8(end) != Gen2Text.TERMINATOR:
 		end += 1
-		if end - start > RomLayout.MAX_NAME_LENGTH:
+		if end - start > Gen2Layout.MAX_NAME_LENGTH:
 			return {}
 	if not rom.in_bounds(end):
 		return {}
@@ -4381,13 +4381,13 @@ static func _read_one_trainer(rom: RomFile, at: int) -> Dictionary:
 	if not rom.in_bounds(pos):
 		return {}
 	var mon_type: int = rom.u8(pos)
-	if not RomLayout.TRAINER_MON_TYPES.has(mon_type):
+	if not Gen2Layout.TRAINER_MON_TYPES.has(mon_type):
 		return {}
 	pos += 1
 
 	var party: Array = []
-	while rom.in_bounds(pos) and rom.u8(pos) != RomLayout.TRAINER_PARTY_END:
-		if party.size() >= RomLayout.MAX_TRAINER_PARTY_SIZE:
+	while rom.in_bounds(pos) and rom.u8(pos) != Gen2Layout.TRAINER_PARTY_END:
+		if party.size() >= Gen2Layout.MAX_TRAINER_PARTY_SIZE:
 			return {}
 		var mon: Dictionary = _read_trainer_mon(rom, pos, mon_type)
 		if mon.is_empty():
@@ -4409,26 +4409,26 @@ static func _read_trainer_mon(rom: RomFile, at: int, mon_type: int) -> Dictionar
 		return {}
 	var level: int = rom.u8(pos)
 	var species: int = rom.u8(pos + 1)
-	if level < 1 or level > RomLayout.MAX_LEVEL:
+	if level < 1 or level > Gen2Layout.MAX_LEVEL:
 		return {}
-	if species < 1 or species > RomLayout.SPECIES_COUNT:
+	if species < 1 or species > Gen2Layout.SPECIES_COUNT:
 		return {}
 	pos += 2
 
-	if not rom.in_bounds(pos, RomLayout.trainer_mon_extra_size(mon_type)):
+	if not rom.in_bounds(pos, Gen2Layout.trainer_mon_extra_size(mon_type)):
 		return {}
 	var item: int = 0
 	var moves: Array = []
-	if mon_type == RomLayout.TRAINER_MON_ITEM or mon_type == RomLayout.TRAINER_MON_ITEM_MOVES:
+	if mon_type == Gen2Layout.TRAINER_MON_ITEM or mon_type == Gen2Layout.TRAINER_MON_ITEM_MOVES:
 		item = rom.u8(pos)
 		pos += 1
-	if mon_type == RomLayout.TRAINER_MON_MOVES or mon_type == RomLayout.TRAINER_MON_ITEM_MOVES:
-		for slot: int in RomLayout.TRAINER_MON_MOVE_COUNT:
+	if mon_type == Gen2Layout.TRAINER_MON_MOVES or mon_type == Gen2Layout.TRAINER_MON_ITEM_MOVES:
+		for slot: int in Gen2Layout.TRAINER_MON_MOVE_COUNT:
 			var move: int = rom.u8(pos + slot)
-			if move > RomLayout.MOVE_COUNT:
+			if move > Gen2Layout.MOVE_COUNT:
 				return {}
 			moves.append(move)
-		pos += RomLayout.TRAINER_MON_MOVE_COUNT
+		pos += Gen2Layout.TRAINER_MON_MOVE_COUNT
 
 	return {"level": level, "species": species, "item": item, "moves": moves, "_next": pos}
 
@@ -4453,7 +4453,7 @@ static func verify_trainer_parties(rom: RomFile, layout: Dictionary) -> Dictiona
 
 	for trainer_class: int in range(1, classes.size() + 1):
 		var group: Array = classes[trainer_class - 1]
-		var should_be_empty: bool = trainer_class == RomLayout.EMPTY_TRAINER_CLASS
+		var should_be_empty: bool = trainer_class == Gen2Layout.EMPTY_TRAINER_CLASS
 		if should_be_empty != group.is_empty():
 			return {
 				"ok": false,
@@ -4496,28 +4496,28 @@ static func verify_trainer_parties(rom: RomFile, layout: Dictionary) -> Dictiona
 ## a base money reward, and the two flag words the AI reads. A fixed stride,
 ## not a pointer, so unlike the party table nothing here is walked.
 static func read_trainer_attributes(rom: RomFile, layout: Dictionary, trainer_class: int) -> Dictionary:
-	var offset: int = RomLayout.trainer_attributes_offset(layout, trainer_class)
+	var offset: int = Gen2Layout.trainer_attributes_offset(layout, trainer_class)
 	return {
-		"item1": rom.u8(offset + RomLayout.ATTR_ITEM1),
-		"item2": rom.u8(offset + RomLayout.ATTR_ITEM2),
-		"base_reward": rom.u8(offset + RomLayout.ATTR_BASE_REWARD),
-		"ai_move_weights": rom.u16le(offset + RomLayout.ATTR_AI_MOVE_WEIGHTS),
-		"ai_item_switch": rom.u16le(offset + RomLayout.ATTR_AI_ITEM_SWITCH),
+		"item1": rom.u8(offset + Gen2Layout.ATTR_ITEM1),
+		"item2": rom.u8(offset + Gen2Layout.ATTR_ITEM2),
+		"base_reward": rom.u8(offset + Gen2Layout.ATTR_BASE_REWARD),
+		"ai_move_weights": rom.u16le(offset + Gen2Layout.ATTR_AI_MOVE_WEIGHTS),
+		"ai_item_switch": rom.u16le(offset + Gen2Layout.ATTR_AI_ITEM_SWITCH),
 	}
 
 
 ## The trainer attributes table, checked entry by entry: neither flag word may
-## carry a bit past what [constant RomLayout.AI_MOVE_WEIGHTS_MASK] and
-## [constant RomLayout.AI_ITEM_SWITCH_MASK] define, which a wrong offset fails
+## carry a bit past what [constant Gen2Layout.AI_MOVE_WEIGHTS_MASK] and
+## [constant Gen2Layout.AI_ITEM_SWITCH_MASK] define, which a wrong offset fails
 ## almost immediately and has to pass 66 or 67 times running to slip through by
 ## chance. Falkner's own entry is content whose answer is known independently,
 ## the same anchor [constant TRAINER_FIRST_CLASS] gives the class name table.
 static func verify_trainer_attributes(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var count: int = RomLayout.trainer_class_count(layout)
+	var count: int = Gen2Layout.trainer_class_count(layout)
 
 	for trainer_class: int in range(1, count + 1):
-		var offset: int = RomLayout.trainer_attributes_offset(layout, trainer_class)
-		if not rom.in_bounds(offset, RomLayout.TRAINER_ATTRIBUTES_SIZE):
+		var offset: int = Gen2Layout.trainer_attributes_offset(layout, trainer_class)
+		if not rom.in_bounds(offset, Gen2Layout.TRAINER_ATTRIBUTES_SIZE):
 			return {
 				"ok": false,
 				"message": "Trainer attributes %d is past the end." % trainer_class,
@@ -4525,7 +4525,7 @@ static func verify_trainer_attributes(rom: RomFile, layout: Dictionary) -> Dicti
 
 		var entry: Dictionary = read_trainer_attributes(rom, layout, trainer_class)
 		var weights: int = int(entry["ai_move_weights"])
-		if weights & ~RomLayout.AI_MOVE_WEIGHTS_MASK:
+		if weights & ~Gen2Layout.AI_MOVE_WEIGHTS_MASK:
 			return {
 				"ok": false,
 				"message": "Trainer attributes %d: AI move weights $%04X use undefined bits." % [
@@ -4533,7 +4533,7 @@ static func verify_trainer_attributes(rom: RomFile, layout: Dictionary) -> Dicti
 				],
 			}
 		var switch_flags: int = int(entry["ai_item_switch"])
-		if switch_flags & ~RomLayout.AI_ITEM_SWITCH_MASK:
+		if switch_flags & ~Gen2Layout.AI_ITEM_SWITCH_MASK:
 			return {
 				"ok": false,
 				"message": "Trainer attributes %d: item/switch flags $%04X use undefined bits." % [
@@ -4557,7 +4557,7 @@ static func verify_trainer_attributes(rom: RomFile, layout: Dictionary) -> Dicti
 ## and special in [method Gen2Stats.pack_dvs]'s own nibble order, so nothing
 ## here has to unpack and repack them.
 static func read_trainer_dvs(rom: RomFile, layout: Dictionary, trainer_class: int) -> int:
-	var offset: int = RomLayout.trainer_dvs_offset(layout, trainer_class)
+	var offset: int = Gen2Layout.trainer_dvs_offset(layout, trainer_class)
 	return (rom.u8(offset) << 8) | rom.u8(offset + 1)
 
 
@@ -4567,9 +4567,9 @@ static func read_trainer_dvs(rom: RomFile, layout: Dictionary, trainer_class: in
 ## the closing class (different per game, since only Crystal carries MYSTICALMAN)
 ## carries its own as [code]trainer_dvs_last[/code].
 static func verify_trainer_dvs(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var count: int = RomLayout.trainer_class_count(layout)
-	var last_offset: int = RomLayout.trainer_dvs_offset(layout, count)
-	if not rom.in_bounds(last_offset, RomLayout.TRAINER_DVS_SIZE):
+	var count: int = Gen2Layout.trainer_class_count(layout)
+	var last_offset: int = Gen2Layout.trainer_dvs_offset(layout, count)
+	if not rom.in_bounds(last_offset, Gen2Layout.TRAINER_DVS_SIZE):
 		return {"ok": false, "message": "Trainer DVs table is past the end."}
 
 	var falkner: int = read_trainer_dvs(rom, layout, 1)
@@ -4596,10 +4596,10 @@ static func verify_trainer_dvs(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 ## Resolves one entry of the type name pointer table.
 static func type_name(rom: RomFile, layout: Dictionary, type_number: int) -> String:
-	var table: int = RomLayout.type_name_pointer_offset(layout, type_number)
+	var table: int = Gen2Layout.type_name_pointer_offset(layout, type_number)
 	var address: int = rom.u16le(table)
-	var offset: int = RomFile.linear(RomLayout.bank_of(table), address)
-	return Gen2Text.decode(rom.bytes(), offset, RomLayout.MAX_NAME_LENGTH)
+	var offset: int = RomFile.linear(Gen2Layout.bank_of(table), address)
+	return Gen2Text.decode(rom.bytes(), offset, Gen2Layout.MAX_NAME_LENGTH)
 
 
 func _import_core_sections(
@@ -4619,7 +4619,7 @@ func _import_core_sections(
 	# is the honest one rather than a failure.
 	var pic_anims: Dictionary = _import_pic_anims(rom, layout, species)
 	await _breathe(yield_ms)
-	if pic_anims.is_empty() and not RomLayout.pic_anim(layout).is_empty():
+	if pic_anims.is_empty() and not Gen2Layout.pic_anim(layout).is_empty():
 		return {"ok": false, "message": "Could not decode pic animations."}
 
 	var tiles: Dictionary = _import_tiles(rom, layout, on_progress)
@@ -4711,7 +4711,7 @@ func import_rom(
 		"elapsed_ms": 0,
 	}
 
-	var layout: Dictionary = RomLayout.for_id(rom.id)
+	var layout: Dictionary = Gen2Layout.for_id(rom.id)
 	var check: Dictionary = verify_layout(rom)
 	if not check["ok"]:
 		result["message"] = check["message"]
@@ -4913,7 +4913,7 @@ func import_rom(
 		## behind it, so it is stored beside the atlases rather than in the
 		## species table every other palette lives in.
 		"egg_pic": {
-			"tiles": RomLayout.EGG_PIC_TILES,
+			"tiles": Gen2Layout.EGG_PIC_TILES,
 			"palette": _read_egg_palette(rom, layout),
 		},
 		"tiles": tiles,
@@ -5006,11 +5006,11 @@ func _import_species(rom: RomFile, layout: Dictionary, on_progress: Callable) ->
 	var data: PackedByteArray = rom.bytes()
 	var out: Array = []
 
-	for species: int in range(1, RomLayout.SPECIES_COUNT + 1):
-		var stats: int = RomLayout.base_stats_offset(layout, species)
-		var dimensions: int = rom.u8(stats + RomLayout.OFFSET_PIC_SIZE)
-		var egg_groups: int = rom.u8(stats + RomLayout.OFFSET_EGG_GROUPS)
-		var palette: int = RomLayout.palette_offset(layout, species)
+	for species: int in range(1, Gen2Layout.SPECIES_COUNT + 1):
+		var stats: int = Gen2Layout.base_stats_offset(layout, species)
+		var dimensions: int = rom.u8(stats + Gen2Layout.OFFSET_PIC_SIZE)
+		var egg_groups: int = rom.u8(stats + Gen2Layout.OFFSET_EGG_GROUPS)
+		var palette: int = Gen2Layout.palette_offset(layout, species)
 		var evos_attacks: Dictionary = read_evos_attacks(rom, layout, species)
 		var inherited: Dictionary = read_egg_moves(rom, layout, species)
 		var dex: Dictionary = read_dex_entry(rom, layout, species)
@@ -5018,31 +5018,31 @@ func _import_species(rom: RomFile, layout: Dictionary, on_progress: Callable) ->
 		out.append({
 			"number": species,
 			"name": Gen2Text.decode(
-				data, RomLayout.species_name_offset(layout, species), RomLayout.NAME_LENGTH
+				data, Gen2Layout.species_name_offset(layout, species), Gen2Layout.NAME_LENGTH
 			),
 			"stats": {
-				"hp": rom.u8(stats + RomLayout.STAT_HP),
-				"attack": rom.u8(stats + RomLayout.STAT_ATTACK),
-				"defense": rom.u8(stats + RomLayout.STAT_DEFENSE),
-				"speed": rom.u8(stats + RomLayout.STAT_SPEED),
-				"sp_attack": rom.u8(stats + RomLayout.STAT_SP_ATTACK),
-				"sp_defense": rom.u8(stats + RomLayout.STAT_SP_DEFENSE),
+				"hp": rom.u8(stats + Gen2Layout.STAT_HP),
+				"attack": rom.u8(stats + Gen2Layout.STAT_ATTACK),
+				"defense": rom.u8(stats + Gen2Layout.STAT_DEFENSE),
+				"speed": rom.u8(stats + Gen2Layout.STAT_SPEED),
+				"sp_attack": rom.u8(stats + Gen2Layout.STAT_SP_ATTACK),
+				"sp_defense": rom.u8(stats + Gen2Layout.STAT_SP_DEFENSE),
 			},
 			"types": [
-				rom.u8(stats + RomLayout.OFFSET_TYPE1),
-				rom.u8(stats + RomLayout.OFFSET_TYPE2),
+				rom.u8(stats + Gen2Layout.OFFSET_TYPE1),
+				rom.u8(stats + Gen2Layout.OFFSET_TYPE2),
 			],
-			"catch_rate": rom.u8(stats + RomLayout.OFFSET_CATCH_RATE),
-			"base_exp": rom.u8(stats + RomLayout.OFFSET_BASE_EXP),
+			"catch_rate": rom.u8(stats + Gen2Layout.OFFSET_CATCH_RATE),
+			"base_exp": rom.u8(stats + Gen2Layout.OFFSET_BASE_EXP),
 			"held_items": [
-				rom.u8(stats + RomLayout.OFFSET_ITEM1),
-				rom.u8(stats + RomLayout.OFFSET_ITEM2),
+				rom.u8(stats + Gen2Layout.OFFSET_ITEM1),
+				rom.u8(stats + Gen2Layout.OFFSET_ITEM2),
 			],
-			"gender_ratio": rom.u8(stats + RomLayout.OFFSET_GENDER_RATIO),
-			"hatch_cycles": rom.u8(stats + RomLayout.OFFSET_HATCH_CYCLES),
-			"growth_rate": rom.u8(stats + RomLayout.OFFSET_GROWTH_RATE),
+			"gender_ratio": rom.u8(stats + Gen2Layout.OFFSET_GENDER_RATIO),
+			"hatch_cycles": rom.u8(stats + Gen2Layout.OFFSET_HATCH_CYCLES),
+			"growth_rate": rom.u8(stats + Gen2Layout.OFFSET_GROWTH_RATE),
 			"egg_groups": [egg_groups >> 4, egg_groups & 0x0F],
-			"tmhm": Array(rom.slice(stats + RomLayout.OFFSET_TMHM, RomLayout.TMHM_BYTES)),
+			"tmhm": Array(rom.slice(stats + Gen2Layout.OFFSET_TMHM, Gen2Layout.TMHM_BYTES)),
 			# Both halves of one table, which is why they arrive together and are
 			# stored on the species rather than in tables of their own.
 			"evolutions": evos_attacks.get("evolutions", []),
@@ -5065,7 +5065,7 @@ func _import_species(rom: RomFile, layout: Dictionary, on_progress: Callable) ->
 		})
 
 		if on_progress.is_valid():
-			on_progress.call("species", species, RomLayout.SPECIES_COUNT)
+			on_progress.call("species", species, Gen2Layout.SPECIES_COUNT)
 
 	return out
 
@@ -5077,41 +5077,41 @@ func _import_species(rom: RomFile, layout: Dictionary, on_progress: Callable) ->
 func _import_dex_orders(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var new_order: PackedInt32Array = read_dex_order(rom, layout, "order_new")
 	var alpha_order: PackedInt32Array = read_dex_order(rom, layout, "order_alpha")
-	if new_order.size() != RomLayout.SPECIES_COUNT \
-		or alpha_order.size() != RomLayout.SPECIES_COUNT:
+	if new_order.size() != Gen2Layout.SPECIES_COUNT \
+		or alpha_order.size() != Gen2Layout.SPECIES_COUNT:
 		return {}
 	return {"new": Array(new_order), "alpha": Array(alpha_order)}
 
 
 func _import_moves(rom: RomFile, layout: Dictionary, on_progress: Callable) -> Array:
 	var names: PackedStringArray = Gen2Text.decode_sequence(
-		rom.bytes(), int(layout["move_names"]), RomLayout.MOVE_COUNT, RomLayout.MAX_NAME_LENGTH
+		rom.bytes(), int(layout["move_names"]), Gen2Layout.MOVE_COUNT, Gen2Layout.MAX_NAME_LENGTH
 	)
 	var out: Array = []
 	## `PrintMoveDescription`'s own line, which the TM/HM pocket prints for the
 	## move a TM teaches.
 	var descriptions: Array[String] = read_descriptions(
-		rom, int(layout.get("move_descriptions", -1)), RomLayout.MOVE_DESCRIPTION_COUNT
+		rom, int(layout.get("move_descriptions", -1)), Gen2Layout.MOVE_DESCRIPTION_COUNT
 	)
 
-	for move: int in range(1, RomLayout.MOVE_COUNT + 1):
-		var entry: int = RomLayout.move_data_offset(layout, move)
+	for move: int in range(1, Gen2Layout.MOVE_COUNT + 1):
+		var entry: int = Gen2Layout.move_data_offset(layout, move)
 		# The animation byte is dropped: it is the move's own number, and it is
 		# already spent proving the table is where the layout says it is.
 		out.append({
 			"number": move,
 			"name": names[move - 1],
 			"description": descriptions[move - 1] if move <= descriptions.size() else "",
-			"effect": rom.u8(entry + RomLayout.MOVE_EFFECT),
-			"power": rom.u8(entry + RomLayout.MOVE_POWER),
-			"type": rom.u8(entry + RomLayout.MOVE_TYPE),
-			"accuracy": rom.u8(entry + RomLayout.MOVE_ACCURACY),
-			"pp": rom.u8(entry + RomLayout.MOVE_PP),
-			"effect_chance": rom.u8(entry + RomLayout.MOVE_EFFECT_CHANCE),
+			"effect": rom.u8(entry + Gen2Layout.MOVE_EFFECT),
+			"power": rom.u8(entry + Gen2Layout.MOVE_POWER),
+			"type": rom.u8(entry + Gen2Layout.MOVE_TYPE),
+			"accuracy": rom.u8(entry + Gen2Layout.MOVE_ACCURACY),
+			"pp": rom.u8(entry + Gen2Layout.MOVE_PP),
+			"effect_chance": rom.u8(entry + Gen2Layout.MOVE_EFFECT_CHANCE),
 		})
 
 		if on_progress.is_valid():
-			on_progress.call("moves", move, RomLayout.MOVE_COUNT)
+			on_progress.call("moves", move, Gen2Layout.MOVE_COUNT)
 
 	return out
 
@@ -5125,17 +5125,17 @@ func _import_moves(rom: RomFile, layout: Dictionary, on_progress: Callable) -> A
 func _import_tmhm_moves(rom: RomFile, layout: Dictionary) -> Array:
 	var at: int = int(layout.get("tmhm_moves", -1))
 	var count: int = int(layout.get("tmhm_move_count", 0))
-	if count <= RomLayout.TMHM_TM_COUNT or not rom.in_bounds(at, count + 1):
+	if count <= Gen2Layout.TMHM_TM_COUNT or not rom.in_bounds(at, count + 1):
 		return []
 	if rom.u8(at + count) != 0:
 		return []
 	var out: Array = []
 	for index: int in count:
 		var move: int = rom.u8(at + index)
-		if move <= 0 or move > RomLayout.MOVE_COUNT:
+		if move <= 0 or move > Gen2Layout.MOVE_COUNT:
 			return []
 		out.append(move)
-	if int(out[RomLayout.TMHM_TM_COUNT]) != MOVE_CUT:
+	if int(out[Gen2Layout.TMHM_TM_COUNT]) != MOVE_CUT:
 		return []
 	return out
 
@@ -5149,7 +5149,7 @@ func _import_tmhm_moves(rom: RomFile, layout: Dictionary) -> Array:
 func _import_happiness_changes(rom: RomFile, layout: Dictionary) -> Array:
 	var at: int = int(layout.get("happiness_changes", -1))
 	var count: int = int(layout.get("happiness_change_count", 0))
-	var width: int = RomLayout.HAPPINESS_CHANGE_WIDTH
+	var width: int = Gen2Layout.HAPPINESS_CHANGE_WIDTH
 	if count <= 0 or not rom.in_bounds(at, count * width):
 		return []
 	var out: Array = []
@@ -5173,22 +5173,22 @@ func _import_happiness_changes(rom: RomFile, layout: Dictionary) -> Array:
 ## not one character, and the screen writes the byte itself into the name.
 func _import_name_input_chars(rom: RomFile, layout: Dictionary) -> Array:
 	var out: Array = []
-	for table: int in RomLayout.NAME_INPUT_TABLE_ROWS.size():
-		var start: int = RomLayout.name_input_table_offset(layout, table)
+	for table: int in Gen2Layout.NAME_INPUT_TABLE_ROWS.size():
+		var start: int = Gen2Layout.name_input_table_offset(layout, table)
 		var rows: Array = []
-		for row: int in RomLayout.NAME_INPUT_TABLE_ROWS[table]:
-			var at: int = start + row * RomLayout.NAME_INPUT_ROW_BYTES
-			rows.append(Array(rom.slice(at, RomLayout.NAME_INPUT_ROW_BYTES)))
+		for row: int in Gen2Layout.NAME_INPUT_TABLE_ROWS[table]:
+			var at: int = start + row * Gen2Layout.NAME_INPUT_ROW_BYTES
+			rows.append(Array(rom.slice(at, Gen2Layout.NAME_INPUT_ROW_BYTES)))
 		out.append(rows)
 	## data/text/mail_input_chars.asm's two, appended so one cache file carries
 	## every keyboard the naming screen can be on. A mail row is 19 bytes and a
 	## name row 17, which is the only difference in how they are read.
-	for table: int in RomLayout.MAIL_INPUT_TABLES:
-		var mail_start: int = RomLayout.mail_input_table_offset(layout, table)
+	for table: int in Gen2Layout.MAIL_INPUT_TABLES:
+		var mail_start: int = Gen2Layout.mail_input_table_offset(layout, table)
 		var mail_rows: Array = []
-		for row: int in RomLayout.MAIL_INPUT_TABLE_ROWS:
-			var at: int = mail_start + row * RomLayout.MAIL_INPUT_ROW_BYTES
-			mail_rows.append(Array(rom.slice(at, RomLayout.MAIL_INPUT_ROW_BYTES)))
+		for row: int in Gen2Layout.MAIL_INPUT_TABLE_ROWS:
+			var at: int = mail_start + row * Gen2Layout.MAIL_INPUT_ROW_BYTES
+			mail_rows.append(Array(rom.slice(at, Gen2Layout.MAIL_INPUT_ROW_BYTES)))
 		out.append(mail_rows)
 	return out
 
@@ -5198,7 +5198,7 @@ func _import_name_input_chars(rom: RomFile, layout: Dictionary) -> Array:
 ## is what holds the two to each other on every cartridge.
 func _import_mail_items(rom: RomFile, layout: Dictionary) -> Array:
 	var at: int = int((layout["mail"] as Dictionary)["items"])
-	return Array(rom.slice(at, RomLayout.MAIL_ITEM_COUNT))
+	return Array(rom.slice(at, Gen2Layout.MAIL_ITEM_COUNT))
 
 
 ## `LoadMailPalettes.MailPals`, four packed words per mail type in
@@ -5207,11 +5207,11 @@ func _import_mail_items(rom: RomFile, layout: Dictionary) -> Array:
 func _import_mail_palettes(rom: RomFile, layout: Dictionary) -> Array:
 	var at: int = int((layout["mail"] as Dictionary)["palettes"])
 	var out: Array = []
-	for index: int in RomLayout.MAIL_PALETTE_COUNT:
+	for index: int in Gen2Layout.MAIL_PALETTE_COUNT:
 		var colours: Array = []
-		for colour: int in RomLayout.MAIL_PALETTE_COLOURS:
+		for colour: int in Gen2Layout.MAIL_PALETTE_COLOURS:
 			colours.append(
-				rom.u16le(at + (index * RomLayout.MAIL_PALETTE_COLOURS + colour) * 2)
+				rom.u16le(at + (index * Gen2Layout.MAIL_PALETTE_COLOURS + colour) * 2)
 			)
 		out.append(colours)
 	return out
@@ -5223,8 +5223,8 @@ func _import_mail_palettes(rom: RomFile, layout: Dictionary) -> Array:
 ## way back from `$CFA4` to the buffer a script filled.
 func _import_string_buffer_pointers(rom: RomFile, layout: Dictionary) -> Array:
 	var out: Array = []
-	for index: int in RomLayout.STRING_BUFFER_POINTER_COUNT:
-		out.append(rom.u16le(RomLayout.string_buffer_pointer_offset(layout, index)))
+	for index: int in Gen2Layout.STRING_BUFFER_POINTER_COUNT:
+		out.append(rom.u16le(Gen2Layout.string_buffer_pointer_offset(layout, index)))
 	return out
 
 
@@ -5251,7 +5251,7 @@ func _import_intro_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 func _import_items(rom: RomFile, layout: Dictionary, on_progress: Callable) -> Array:
 	var names: PackedStringArray = Gen2Text.decode_sequence(
-		rom.bytes(), int(layout["item_names"]), RomLayout.ITEM_COUNT, RomLayout.MAX_NAME_LENGTH
+		rom.bytes(), int(layout["item_names"]), Gen2Layout.ITEM_COUNT, Gen2Layout.MAX_NAME_LENGTH
 	)
 	var out: Array = []
 	var status_masks: Dictionary = _read_item_status_masks(rom, layout)
@@ -5259,13 +5259,13 @@ func _import_items(rom: RomFile, layout: Dictionary, on_progress: Callable) -> A
 	## `PrintItemDescription`'s own line, which the pack's text box prints under
 	## the pocket the row is in.
 	var descriptions: Array[String] = read_descriptions(
-		rom, int(layout.get("item_descriptions", -1)), RomLayout.ITEM_COUNT
+		rom, int(layout.get("item_descriptions", -1)), Gen2Layout.ITEM_COUNT
 	)
 
-	for item: int in range(1, RomLayout.ITEM_COUNT + 1):
-		var at: int = int(layout["item_attributes"]) + (item - 1) * RomLayout.ITEM_ATTRIBUTE_SIZE
-		var packed_menu: int = rom.u8(at + RomLayout.ITEM_ATTRIBUTE_HELP)
-		var parameter: int = rom.u8(at + RomLayout.ITEM_ATTRIBUTE_PARAM)
+	for item: int in range(1, Gen2Layout.ITEM_COUNT + 1):
+		var at: int = int(layout["item_attributes"]) + (item - 1) * Gen2Layout.ITEM_ATTRIBUTE_SIZE
+		var packed_menu: int = rom.u8(at + Gen2Layout.ITEM_ATTRIBUTE_HELP)
+		var parameter: int = rom.u8(at + Gen2Layout.ITEM_ATTRIBUTE_PARAM)
 		if parameter == 0xFF:
 			parameter = -1
 		var entry: Dictionary = {
@@ -5274,8 +5274,8 @@ func _import_items(rom: RomFile, layout: Dictionary, on_progress: Callable) -> A
 			"price": rom.u16le(at),
 			"effect": rom.u8(at + 2),
 			"parameter": parameter,
-			"permissions": rom.u8(at + RomLayout.ITEM_ATTRIBUTE_PERMISSIONS),
-			"pocket": rom.u8(at + RomLayout.ITEM_ATTRIBUTE_POCKET),
+			"permissions": rom.u8(at + Gen2Layout.ITEM_ATTRIBUTE_PERMISSIONS),
+			"pocket": rom.u8(at + Gen2Layout.ITEM_ATTRIBUTE_POCKET),
 			"field_menu": packed_menu >> 4,
 			"battle_menu": packed_menu & 0x0F,
 		}
@@ -5287,7 +5287,7 @@ func _import_items(rom: RomFile, layout: Dictionary, on_progress: Callable) -> A
 			entry["heal_amount"] = int(healing_amounts[item])
 		out.append(entry)
 		if on_progress.is_valid():
-			on_progress.call("items", item, RomLayout.ITEM_COUNT)
+			on_progress.call("items", item, Gen2Layout.ITEM_COUNT)
 
 	return out
 
@@ -5295,7 +5295,7 @@ func _import_items(rom: RomFile, layout: Dictionary, on_progress: Callable) -> A
 ## One `table_width 2` description table, as [param count] decoded texts in
 ## entry order. Every pointer is an address inside the table's own bank, which is
 ## what `PrintItemDescription` and `PrintMoveDescription` read them as; an entry
-## that leaves the bank or runs past [constant RomLayout.DESCRIPTION_MAX_BYTES]
+## that leaves the bank or runs past [constant Gen2Layout.DESCRIPTION_MAX_BYTES]
 ## without a terminator answers an empty Array, since a wrong table decodes as
 ## words rather than failing.
 static func read_descriptions(rom: RomFile, at: int, count: int) -> Array[String]:
@@ -5310,9 +5310,9 @@ static func read_descriptions(rom: RomFile, at: int, count: int) -> Array[String
 			return [] as Array[String]
 		var offset: int = bank * RomFile.BANK_SIZE + (address - 0x4000)
 		var end: int = Gen2Text.terminated_end(
-			data, offset, RomLayout.DESCRIPTION_MAX_BYTES
+			data, offset, Gen2Layout.DESCRIPTION_MAX_BYTES
 		)
-		if end <= offset or end - offset >= RomLayout.DESCRIPTION_MAX_BYTES:
+		if end <= offset or end - offset >= Gen2Layout.DESCRIPTION_MAX_BYTES:
 			return [] as Array[String]
 		out.append(Gen2Text.decode(data, offset, end - offset))
 	return out
@@ -5321,24 +5321,24 @@ static func read_descriptions(rom: RomFile, at: int, count: int) -> Array[String
 ## Both description tables, checked by decoding every entry of each.
 static func verify_descriptions(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if read_descriptions(
-		rom, int(layout.get("item_descriptions", -1)), RomLayout.ITEM_COUNT
-	).size() != RomLayout.ITEM_COUNT:
+		rom, int(layout.get("item_descriptions", -1)), Gen2Layout.ITEM_COUNT
+	).size() != Gen2Layout.ITEM_COUNT:
 		return {"ok": false, "message": "The item descriptions do not decode."}
 	if read_descriptions(
-		rom, int(layout.get("move_descriptions", -1)), RomLayout.MOVE_DESCRIPTION_COUNT
-	).size() != RomLayout.MOVE_DESCRIPTION_COUNT:
+		rom, int(layout.get("move_descriptions", -1)), Gen2Layout.MOVE_DESCRIPTION_COUNT
+	).size() != Gen2Layout.MOVE_DESCRIPTION_COUNT:
 		return {"ok": false, "message": "The move descriptions do not decode."}
 	return {"ok": true, "message": "Descriptions verified."}
 
 
 static func verify_item_metadata(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var attributes: int = int(layout.get("item_attributes", -1))
-	if not rom.in_bounds(attributes, RomLayout.ITEM_COUNT * RomLayout.ITEM_ATTRIBUTE_SIZE):
+	if not rom.in_bounds(attributes, Gen2Layout.ITEM_COUNT * Gen2Layout.ITEM_ATTRIBUTE_SIZE):
 		return {"ok": false, "message": "Item attribute table is outside the ROM."}
-	if rom.u8(attributes + RomLayout.ITEM_ATTRIBUTE_POCKET) != RomLayout.ITEM_POCKET_BALL:
+	if rom.u8(attributes + Gen2Layout.ITEM_ATTRIBUTE_POCKET) != Gen2Layout.ITEM_POCKET_BALL:
 		return {"ok": false, "message": "Master Ball is not in the cartridge ball pocket."}
-	var poke_ball: int = attributes + 4 * RomLayout.ITEM_ATTRIBUTE_SIZE
-	if rom.u8(poke_ball + RomLayout.ITEM_ATTRIBUTE_POCKET) != RomLayout.ITEM_POCKET_BALL:
+	var poke_ball: int = attributes + 4 * Gen2Layout.ITEM_ATTRIBUTE_SIZE
+	if rom.u8(poke_ball + Gen2Layout.ITEM_ATTRIBUTE_POCKET) != Gen2Layout.ITEM_POCKET_BALL:
 		return {"ok": false, "message": "Poke Ball is not in the cartridge ball pocket."}
 	var status_at: int = int(layout.get("item_status_actions", -1))
 	var status_found: bool = false
@@ -5362,14 +5362,14 @@ static func verify_item_metadata(rom: RomFile, layout: Dictionary) -> Dictionary
 static func verify_world_trades(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var count: int = int(layout.get("world_trade_count", 0))
 	var at: int = int(layout.get("world_trades", -1))
-	if count <= 0 or not rom.in_bounds(at, count * RomLayout.TRADE_RECORD_SIZE):
+	if count <= 0 or not rom.in_bounds(at, count * Gen2Layout.TRADE_RECORD_SIZE):
 		return {"ok": false, "message": "NPC trade table is outside the ROM."}
 	for index: int in count:
-		var row: int = at + index * RomLayout.TRADE_RECORD_SIZE
-		if rom.u8(row + 1) <= 0 or rom.u8(row + 1) > RomLayout.SPECIES_COUNT \
-			or rom.u8(row + 2) <= 0 or rom.u8(row + 2) > RomLayout.SPECIES_COUNT:
+		var row: int = at + index * Gen2Layout.TRADE_RECORD_SIZE
+		if rom.u8(row + 1) <= 0 or rom.u8(row + 1) > Gen2Layout.SPECIES_COUNT \
+			or rom.u8(row + 2) <= 0 or rom.u8(row + 2) > Gen2Layout.SPECIES_COUNT:
 			return {"ok": false, "message": "NPC trade %d has an invalid species." % index}
-		if rom.u8(row + 30) > RomLayout.TRADE_GENDER_FEMALE or rom.u8(row + 31) != 0:
+		if rom.u8(row + 30) > Gen2Layout.TRADE_GENDER_FEMALE or rom.u8(row + 31) != 0:
 			return {"ok": false, "message": "NPC trade %d has an invalid record tail." % index}
 	return {"ok": true, "message": ""}
 
@@ -5381,7 +5381,7 @@ static func _read_item_status_masks(rom: RomFile, layout: Dictionary) -> Diction
 		var item: int = rom.u8(at)
 		if item == 0xFF:
 			break
-		if item <= 0 or item > RomLayout.ITEM_COUNT:
+		if item <= 0 or item > Gen2Layout.ITEM_COUNT:
 			break
 		out[item] = rom.u8(at + 2)
 		at += 3
@@ -5395,7 +5395,7 @@ static func _read_item_healing_amounts(rom: RomFile, layout: Dictionary) -> Dict
 		var item: int = rom.u8(at)
 		if item == 0xFF:
 			break
-		if item <= 0 or item > RomLayout.ITEM_COUNT:
+		if item <= 0 or item > Gen2Layout.ITEM_COUNT:
 			break
 		out[item] = rom.u16le(at + 1)
 		at += 3
@@ -5407,20 +5407,20 @@ static func _import_world_trades(rom: RomFile, layout: Dictionary) -> Array:
 	var count: int = int(layout["world_trade_count"])
 	var at: int = int(layout["world_trades"])
 	for index: int in count:
-		var row: int = at + index * RomLayout.TRADE_RECORD_SIZE
+		var row: int = at + index * Gen2Layout.TRADE_RECORD_SIZE
 		out.append({
 			"trade_id": index,
 			"dialog": rom.u8(row),
 			"requested_species": rom.u8(row + 1),
 			"offered_species": rom.u8(row + 2),
 			"nickname": Gen2Text.decode_fixed(
-				rom.bytes(), row + 3, RomLayout.TRADE_NAME_LENGTH
+				rom.bytes(), row + 3, Gen2Layout.TRADE_NAME_LENGTH
 			),
 			"dvs": (rom.u8(row + 14) << 8) | rom.u8(row + 15),
 			"item": rom.u8(row + 16),
 			"ot_id": rom.u16le(row + 17),
 			"ot_name": Gen2Text.decode_fixed(
-				rom.bytes(), row + 19, RomLayout.TRADE_NAME_LENGTH
+				rom.bytes(), row + 19, Gen2Layout.TRADE_NAME_LENGTH
 			),
 			"gender": rom.u8(row + 30),
 		})
@@ -5430,10 +5430,10 @@ static func _import_world_trades(rom: RomFile, layout: Dictionary) -> Array:
 func _import_types(rom: RomFile, layout: Dictionary, on_progress: Callable) -> Array:
 	var out: Array = []
 
-	for type_number: int in RomLayout.TYPE_COUNT:
+	for type_number: int in Gen2Layout.TYPE_COUNT:
 		out.append({"number": type_number, "name": type_name(rom, layout, type_number)})
 		if on_progress.is_valid():
-			on_progress.call("types", type_number + 1, RomLayout.TYPE_COUNT)
+			on_progress.call("types", type_number + 1, Gen2Layout.TYPE_COUNT)
 
 	return out
 
@@ -5445,20 +5445,20 @@ func _import_types(rom: RomFile, layout: Dictionary, on_progress: Callable) -> A
 ## rather than in separate cache files, because they are four tables one class
 ## number addresses rather than four separate questions.
 func _import_trainers(rom: RomFile, layout: Dictionary, on_progress: Callable) -> Array:
-	var count: int = RomLayout.trainer_class_count(layout)
+	var count: int = Gen2Layout.trainer_class_count(layout)
 	var names: PackedStringArray = Gen2Text.decode_sequence(
-		rom.bytes(), int(layout["trainer_class_names"]), count, RomLayout.MAX_NAME_LENGTH
+		rom.bytes(), int(layout["trainer_class_names"]), count, Gen2Layout.MAX_NAME_LENGTH
 	)
 	var parties: Dictionary = RomImporter.read_trainer_parties(rom, layout)
 	var classes: Array = parties["classes"] if parties["ok"] else []
 	var out: Array = []
 
 	for trainer_class: int in range(1, count + 1):
-		var palette: int = RomLayout.trainer_palette_offset(layout, trainer_class)
+		var palette: int = Gen2Layout.trainer_palette_offset(layout, trainer_class)
 		out.append({
 			"number": trainer_class,
 			"name": names[trainer_class - 1],
-			"palette": [rom.u16le(palette), rom.u16le(palette + Gen2Palette.COLOR_BYTES)],
+			"palette": [rom.u16le(palette), rom.u16le(palette + PokePalette.COLOR_BYTES)],
 			"trainers": classes[trainer_class - 1] if trainer_class - 1 < classes.size() else [],
 			"attributes": RomImporter.read_trainer_attributes(rom, layout, trainer_class),
 			"dvs": RomImporter.read_trainer_dvs(rom, layout, trainer_class),
@@ -5479,10 +5479,10 @@ func _import_trainers(rom: RomFile, layout: Dictionary, on_progress: Callable) -
 ## rather than through a class number.
 func _import_player_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
-	for index: int in RomLayout.PLAYER_PALETTE_NAMES.size():
-		var entry: int = RomLayout.trainer_palette_offset(layout, index)
-		out[RomLayout.PLAYER_PALETTE_NAMES[index]] = [
-			rom.u16le(entry), rom.u16le(entry + Gen2Palette.COLOR_BYTES),
+	for index: int in Gen2Layout.PLAYER_PALETTE_NAMES.size():
+		var entry: int = Gen2Layout.trainer_palette_offset(layout, index)
+		out[Gen2Layout.PLAYER_PALETTE_NAMES[index]] = [
+			rom.u16le(entry), rom.u16le(entry + PokePalette.COLOR_BYTES),
 		]
 	return out
 
@@ -5493,23 +5493,23 @@ func _import_player_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 func _import_transition_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var entry: Dictionary = layout.get("battle_transition", {}) as Dictionary
 	var out: Dictionary = {}
-	for index: int in RomLayout.TRANSITION_PALETTE_NAMES.size():
+	for index: int in Gen2Layout.TRANSITION_PALETTE_NAMES.size():
 		var at: int = int(entry.get("palette" if index == 0 else "dark_palette", -1))
 		if at < 0:
 			continue
 		var colors: Array = []
-		for color: int in RomLayout.TRANSITION_PALETTE_COLORS:
-			colors.append(rom.u16le(at + color * Gen2Palette.COLOR_BYTES))
-		out[RomLayout.TRANSITION_PALETTE_NAMES[index]] = colors
+		for color: int in Gen2Layout.TRANSITION_PALETTE_COLORS:
+			colors.append(rom.u16le(at + color * PokePalette.COLOR_BYTES))
+		out[Gen2Layout.TRANSITION_PALETTE_NAMES[index]] = colors
 	return out
 
 
 func _import_bar_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
-	for index: int in RomLayout.BAR_PALETTE_NAMES.size():
-		var entry: int = RomLayout.bar_palette_offset(layout, index)
-		out[RomLayout.BAR_PALETTE_NAMES[index]] = [
-			rom.u16le(entry), rom.u16le(entry + Gen2Palette.COLOR_BYTES),
+	for index: int in Gen2Layout.BAR_PALETTE_NAMES.size():
+		var entry: int = Gen2Layout.bar_palette_offset(layout, index)
+		out[Gen2Layout.BAR_PALETTE_NAMES[index]] = [
+			rom.u16le(entry), rom.u16le(entry + PokePalette.COLOR_BYTES),
 		]
 	return out
 
@@ -5519,24 +5519,24 @@ func _import_bar_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## is entered until `GetSGBLayout SCGB_BATTLE_COLORS` runs, several hundred
 ## frames later on the far side of `BattleIntroSlidingPics`.
 func _import_battle_grayscale_palette(rom: RomFile, layout: Dictionary) -> Array:
-	return _import_predef_palette(rom, layout, RomLayout.PREDEFPAL_BLACKOUT)
+	return _import_predef_palette(rom, layout, Gen2Layout.PREDEFPAL_BLACKOUT)
 
 
 ## `_CGB_MoveList`'s background palette, `PREDEFPAL_GOLDENROD`, which is the one
 ## colour on the move screen that is not a bar or a mon icon.
 func _import_move_screen_palette(rom: RomFile, layout: Dictionary) -> Array:
-	return _import_predef_palette(rom, layout, RomLayout.PREDEFPAL_GOLDENROD)
+	return _import_predef_palette(rom, layout, Gen2Layout.PREDEFPAL_GOLDENROD)
 
 
 ## One whole `PredefPals` entry. Empty for a layout with no pin, which is what a
 ## caller that draws white and black falls back on.
 func _import_predef_palette(rom: RomFile, layout: Dictionary, index: int) -> Array:
-	var at: int = RomLayout.predef_palette_offset(layout, index)
-	if at < 0 or not rom.in_bounds(at, RomLayout.PREDEF_PALETTE_SIZE):
+	var at: int = Gen2Layout.predef_palette_offset(layout, index)
+	if at < 0 or not rom.in_bounds(at, Gen2Layout.PREDEF_PALETTE_SIZE):
 		return []
 	var out: Array = []
-	for colour: int in RomLayout.PREDEF_PALETTE_COLORS:
-		out.append(rom.u16le(at + colour * Gen2Palette.COLOR_BYTES))
+	for colour: int in Gen2Layout.PREDEF_PALETTE_COLORS:
+		out.append(rom.u16le(at + colour * PokePalette.COLOR_BYTES))
 	return out
 
 
@@ -5546,14 +5546,14 @@ func _import_predef_palette(rom: RomFile, layout: Dictionary, index: int) -> Arr
 func _import_stats_screen_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var pages: Array = []
 	var tints: Array = []
-	for index: int in RomLayout.STATS_PAGE_PALETTES:
-		var page: int = RomLayout.stats_page_palette_offset(layout, index)
-		var tint: int = RomLayout.stats_page_tint_offset(layout, index)
-		if page < 0 or not rom.in_bounds(tint, Gen2Palette.COLOR_BYTES):
+	for index: int in Gen2Layout.STATS_PAGE_PALETTES:
+		var page: int = Gen2Layout.stats_page_palette_offset(layout, index)
+		var tint: int = Gen2Layout.stats_page_tint_offset(layout, index)
+		if page < 0 or not rom.in_bounds(tint, PokePalette.COLOR_BYTES):
 			return {}
 		var colors: Array = []
-		for colour: int in RomLayout.STATS_PAGE_PALETTE_COLORS:
-			colors.append(rom.u16le(page + colour * Gen2Palette.COLOR_BYTES))
+		for colour: int in Gen2Layout.STATS_PAGE_PALETTE_COLORS:
+			colors.append(rom.u16le(page + colour * PokePalette.COLOR_BYTES))
 		pages.append(colors)
 		tints.append(rom.u16le(tint))
 	return {"pages": pages, "tints": tints}
@@ -5567,15 +5567,15 @@ func _import_stats_screen_palettes(rom: RomFile, layout: Dictionary) -> Dictiona
 func _import_battle_object_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
 	var entry: int = int(layout["battle_object_palettes"])
-	for index: int in RomLayout.BATTLE_OBJECT_PALETTES_STORED:
+	for index: int in Gen2Layout.BATTLE_OBJECT_PALETTES_STORED:
 		var colors: Array = []
-		for color: int in RomLayout.BATTLE_OBJECT_PALETTE_COLORS:
+		for color: int in Gen2Layout.BATTLE_OBJECT_PALETTE_COLORS:
 			colors.append(rom.u16le(
 				entry
-					+ (index * RomLayout.BATTLE_OBJECT_PALETTE_COLORS + color)
-					* Gen2Palette.COLOR_BYTES
+					+ (index * Gen2Layout.BATTLE_OBJECT_PALETTE_COLORS + color)
+					* PokePalette.COLOR_BYTES
 			))
-		out[RomLayout.BATTLE_OBJECT_PALETTE_NAMES[index]] = colors
+		out[Gen2Layout.BATTLE_OBJECT_PALETTE_NAMES[index]] = colors
 	return out
 
 
@@ -5586,15 +5586,15 @@ func _import_battle_object_palettes(rom: RomFile, layout: Dictionary) -> Diction
 ## whose class the pic tables skip, so this is the only place it is read.
 func _import_card_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var background: Array = []
-	for trainer_class: int in RomLayout.CARD_PALETTE_CLASSES:
-		var entry: int = RomLayout.trainer_palette_offset(layout, trainer_class)
+	for trainer_class: int in Gen2Layout.CARD_PALETTE_CLASSES:
+		var entry: int = Gen2Layout.trainer_palette_offset(layout, trainer_class)
 		background.append([
-			rom.u16le(entry), rom.u16le(entry + Gen2Palette.COLOR_BYTES),
+			rom.u16le(entry), rom.u16le(entry + PokePalette.COLOR_BYTES),
 		])
 	var badge: Array = []
 	var badge_entry: int = int((layout["trainer_card"] as Dictionary)["badge_palette"])
-	for index: int in RomLayout.CARD_BADGE_PALETTE_COLORS:
-		badge.append(rom.u16le(badge_entry + index * Gen2Palette.COLOR_BYTES))
+	for index: int in Gen2Layout.CARD_BADGE_PALETTE_COLORS:
+		badge.append(rom.u16le(badge_entry + index * PokePalette.COLOR_BYTES))
 	return {"background": background, "badge": badge}
 
 
@@ -5611,8 +5611,8 @@ func _import_pokedex_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 		if at < 0:
 			continue
 		var colors: Array = []
-		for index: int in Gen2Palette.COLORS_PER_PIC:
-			colors.append(rom.u16le(at + index * Gen2Palette.COLOR_BYTES))
+		for index: int in PokePalette.COLORS_PER_PIC:
+			colors.append(rom.u16le(at + index * PokePalette.COLOR_BYTES))
 		out[name] = colors
 	return out
 
@@ -5625,8 +5625,8 @@ func _import_pc_palette(rom: RomFile, layout: Dictionary) -> Array:
 		return []
 	var at: int = int(entry["orange_palette"])
 	var out: Array = []
-	for index: int in RomLayout.PC_PALETTE_COLORS:
-		out.append(rom.u16le(at + index * Gen2Palette.COLOR_BYTES))
+	for index: int in Gen2Layout.PC_PALETTE_COLORS:
+		out.append(rom.u16le(at + index * PokePalette.COLOR_BYTES))
 	return out
 
 
@@ -5638,8 +5638,8 @@ func _import_text_bg_palette(rom: RomFile, layout: Dictionary) -> Array:
 	if entry < 0:
 		return []
 	var out: Array = []
-	for index: int in RomLayout.TEXT_BG_PALETTE_COLORS:
-		out.append(rom.u16le(entry + index * Gen2Palette.COLOR_BYTES))
+	for index: int in Gen2Layout.TEXT_BG_PALETTE_COLORS:
+		out.append(rom.u16le(entry + index * PokePalette.COLOR_BYTES))
 	return out
 
 
@@ -5651,8 +5651,8 @@ func _import_gender_screen_palette(rom: RomFile, layout: Dictionary) -> Array:
 	if entry < 0:
 		return []
 	var out: Array = []
-	for index: int in RomLayout.GENDER_SCREEN_PALETTE_COLORS:
-		out.append(rom.u16le(entry + index * Gen2Palette.COLOR_BYTES))
+	for index: int in Gen2Layout.GENDER_SCREEN_PALETTE_COLORS:
+		out.append(rom.u16le(entry + index * PokePalette.COLOR_BYTES))
 	return out
 
 
@@ -5668,14 +5668,14 @@ func _import_menu_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var descriptions: Dictionary = {}
 	var read: Array[String] = read_menu_descriptions(rom, layout)
 	for index: int in read.size():
-		descriptions[String(RomLayout.MENU_DESCRIPTION_ORDER[index])] = read[index]
+		descriptions[String(Gen2Layout.MENU_DESCRIPTION_ORDER[index])] = read[index]
 	out["descriptions"] = descriptions
 	for key: String in PACK_TEXT_OPENINGS:
 		var at: int = int(entry.get(key, -1))
 		if at < 0:
 			continue
 		var decoded: Dictionary = Gen2WorldScript.decode_text(
-			rom.slice(at, RomLayout.PACK_TEXT_MAX_BYTES)
+			rom.slice(at, Gen2Layout.PACK_TEXT_MAX_BYTES)
 		)
 		if not bool(decoded.get("ok", false)):
 			return {}
@@ -5683,21 +5683,21 @@ func _import_menu_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return out
 
 
-## The mart's own boxes, by the name `RomLayout.MART_TEXT_AT` gives each stub.
+## The mart's own boxes, by the name `Gen2Layout.MART_TEXT_AT` gives each stub.
 func _import_mart_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
-	for name: String in RomLayout.MART_TEXT_AT:
-		out[name] = read_oak_text(rom, layout, RomLayout.mart_text_offset(layout, name))
+	for name: String in Gen2Layout.MART_TEXT_AT:
+		out[name] = read_oak_text(rom, layout, Gen2Layout.mart_text_offset(layout, name))
 	return out
 
 
-## The Name Rater's own boxes, by the name `RomLayout.NAME_RATER_TEXT_ORDER`
+## The Name Rater's own boxes, by the name `Gen2Layout.NAME_RATER_TEXT_ORDER`
 ## gives each stub.
 func _import_name_rater_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
-	for name: String in RomLayout.NAME_RATER_TEXT_ORDER:
+	for name: String in Gen2Layout.NAME_RATER_TEXT_ORDER:
 		out[name] = read_oak_text(
-			rom, layout, RomLayout.name_rater_text_offset(layout, name)
+			rom, layout, Gen2Layout.name_rater_text_offset(layout, name)
 		)
 	return out
 
@@ -5708,7 +5708,7 @@ func _import_day_care_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
 	for name: String in day_care_text_names():
 		out[name] = read_oak_text(
-			rom, layout, RomLayout.day_care_text_offset(layout, name)
+			rom, layout, Gen2Layout.day_care_text_offset(layout, name)
 		)
 	return out
 
@@ -5718,26 +5718,26 @@ func _import_day_care_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## asking for one gets nothing rather than a run of empty strings.
 func _import_special_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
-	for run: Variant in RomLayout.SPECIAL_TEXT_RUNS:
+	for run: Variant in Gen2Layout.SPECIAL_TEXT_RUNS:
 		var run_name: String = String(run)
-		if not RomLayout.has_special_text_run(layout, run_name):
+		if not Gen2Layout.has_special_text_run(layout, run_name):
 			continue
 		var boxes: Dictionary = {}
-		for name: String in RomLayout.special_text_names(run_name):
+		for name: String in Gen2Layout.special_text_names(run_name):
 			boxes[name] = read_oak_text(
-				rom, layout, RomLayout.special_text_offset(layout, run_name, name)
+				rom, layout, Gen2Layout.special_text_offset(layout, run_name, name)
 			)
 		out[run_name] = boxes
 	return out
 
 
 ## The move deleter's own boxes, by the name
-## `RomLayout.MOVE_DELETER_TEXT_ORDER` gives each stub.
+## `Gen2Layout.MOVE_DELETER_TEXT_ORDER` gives each stub.
 func _import_move_deleter_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
-	for name: String in RomLayout.MOVE_DELETER_TEXT_ORDER:
+	for name: String in Gen2Layout.MOVE_DELETER_TEXT_ORDER:
 		out[name] = read_oak_text(
-			rom, layout, RomLayout.move_deleter_text_offset(layout, name)
+			rom, layout, Gen2Layout.move_deleter_text_offset(layout, name)
 		)
 	return out
 
@@ -5752,16 +5752,16 @@ func _import_presents_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var out: Dictionary = {
 		"object": _packed_palette(
 			rom, int(entry.get("object_palette", -1)),
-			RomLayout.PRESENTS_OBJECT_PALETTE_COLORS
+			Gen2Layout.PRESENTS_OBJECT_PALETTE_COLORS
 		),
 	}
 	var ditto: Array = _packed_palette(
-		rom, int(entry.get("ditto_palette", -1)), RomLayout.PRESENTS_DITTO_PALETTE_COLORS
+		rom, int(entry.get("ditto_palette", -1)), Gen2Layout.PRESENTS_DITTO_PALETTE_COLORS
 	)
 	if not ditto.is_empty():
 		out["ditto"] = ditto
 		out["ditto_fade"] = _packed_palette(
-			rom, int(entry.get("ditto_fade", -1)), RomLayout.PRESENTS_DITTO_FADE_COLORS
+			rom, int(entry.get("ditto_fade", -1)), Gen2Layout.PRESENTS_DITTO_FADE_COLORS
 		)
 	return out
 
@@ -5784,7 +5784,7 @@ func _import_credits(rom: RomFile, layout: Dictionary) -> Dictionary:
 		for code: int in read_credits_string(rom, layout, index):
 			codes.append(code)
 		strings.append(codes)
-	var scene_colors: int = int(entry["scene_palettes"]) * RomLayout.CREDITS_PALETTE_COLORS
+	var scene_colors: int = int(entry["scene_palettes"]) * Gen2Layout.CREDITS_PALETTE_COLORS
 	return {
 		"script": script,
 		"strings": strings,
@@ -5792,9 +5792,9 @@ func _import_credits(rom: RomFile, layout: Dictionary) -> Dictionary:
 		"copyright": int(entry["copyright"]),
 		"scene_palettes": int(entry["scene_palettes"]),
 		"palettes": _packed_palette(
-			rom, int(entry["palettes"]), RomLayout.CREDITS_SCENES * scene_colors
+			rom, int(entry["palettes"]), Gen2Layout.CREDITS_SCENES * scene_colors
 		),
-		"frames": RomLayout.credits_frames(layout).duplicate(),
+		"frames": Gen2Layout.credits_frames(layout).duplicate(),
 	}
 
 
@@ -5803,7 +5803,7 @@ func _packed_palette(rom: RomFile, at: int, colors: int) -> Array:
 		return []
 	var out: Array = []
 	for index: int in colors:
-		out.append(rom.u16le(at + index * Gen2Palette.COLOR_BYTES))
+		out.append(rom.u16le(at + index * PokePalette.COLOR_BYTES))
 	return out
 
 
@@ -5817,9 +5817,9 @@ func _import_pack(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if entry.is_empty():
 		return {}
 	var names: Array = []
-	for cell: int in RomLayout.PACK_NAME_CELLS:
+	for cell: int in Gen2Layout.PACK_NAME_CELLS:
 		names.append(rom.u8(int(entry["pocket_names"]) + cell))
-	var colors: int = RomLayout.PACK_PALETTES * RomLayout.PACK_PALETTE_COLORS
+	var colors: int = Gen2Layout.PACK_PALETTES * Gen2Layout.PACK_PALETTE_COLORS
 	return {
 		"pocket_names": names,
 		"palettes": _packed_palette(rom, int(entry["palettes"]), colors),
@@ -5846,8 +5846,8 @@ func _import_copyright_palette(rom: RomFile, layout: Dictionary) -> Array:
 	if at < 0:
 		return []
 	var out: Array = []
-	for index: int in RomLayout.COPYRIGHT_PALETTE_COLORS:
-		out.append(rom.u16le(at + index * Gen2Palette.COLOR_BYTES))
+	for index: int in Gen2Layout.COPYRIGHT_PALETTE_COLORS:
+		out.append(rom.u16le(at + index * PokePalette.COLOR_BYTES))
 	return out
 
 
@@ -5863,7 +5863,7 @@ func _import_intro_sheets(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return {}
 	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
 	var out: Dictionary = {}
-	for row: Array in RomLayout.INTRO_SECTION:
+	for row: Array in Gen2Layout.INTRO_SECTION:
 		var name: String = String(row[0])
 		var kind: String = String(row[1])
 		var raw: PackedByteArray = section[name]
@@ -5877,7 +5877,7 @@ func _import_intro_sheets(rom: RomFile, layout: Dictionary) -> Dictionary:
 			_:
 				var tiles: int = int(row[2])
 				if not RomCache.write_indices(
-					path, Gen2Tiles.decode_2bpp_strip(raw, 0, tiles)
+					path, PokeTiles.decode_2bpp_strip(raw, 0, tiles)
 				):
 					return {}
 				out["intro_%s" % name] = _strip_sheet_entry(tiles)
@@ -5897,7 +5897,7 @@ func _import_intro_movie(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var entry: Dictionary = layout["intro_movie"]
 	var palettes: Dictionary = {}
 	var maps: Array = []
-	for row: Array in RomLayout.INTRO_SECTION:
+	for row: Array in Gen2Layout.INTRO_SECTION:
 		var name: String = String(row[0])
 		match String(row[1]):
 			"pal":
@@ -5906,11 +5906,11 @@ func _import_intro_movie(rom: RomFile, layout: Dictionary) -> Dictionary:
 				maps.append(name)
 	palettes["fade"] = _packed_palette(
 		rom, int(entry["fade"]),
-		RomLayout.INTRO_FADE_PALETTES * RomLayout.INTRO_PALETTE_COLORS
+		Gen2Layout.INTRO_FADE_PALETTES * Gen2Layout.INTRO_PALETTE_COLORS
 	)
 	palettes["unown"] = _packed_palette(
 		rom, int(entry["unown_pals"]),
-		RomLayout.INTRO_UNOWN_PALETTES * RomLayout.INTRO_PALETTE_COLORS
+		Gen2Layout.INTRO_UNOWN_PALETTES * Gen2Layout.INTRO_PALETTE_COLORS
 	)
 	return {"palettes": palettes, "maps": maps}
 
@@ -5923,7 +5923,7 @@ func _import_trade_anim_sheets(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return {}
 	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
 	var out: Dictionary = {}
-	for row: Array in RomLayout.TRADE_ANIM_SECTION:
+	for row: Array in Gen2Layout.TRADE_ANIM_SECTION:
 		var name: String = String(row[0])
 		var path: String = RomCache.tile_path(directory, "trade_anim_%s" % name)
 		if String(row[1]) == "map":
@@ -5932,7 +5932,7 @@ func _import_trade_anim_sheets(rom: RomFile, layout: Dictionary) -> Dictionary:
 			continue
 		var tiles: int = int(row[2])
 		if not RomCache.write_indices(
-			path, Gen2Tiles.decode_2bpp_strip(section[name], 0, tiles)
+			path, PokeTiles.decode_2bpp_strip(section[name], 0, tiles)
 		):
 			return {}
 		out["trade_anim_%s" % name] = _strip_sheet_entry(tiles)
@@ -5946,7 +5946,7 @@ func _import_trade_anim(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if read_trade_anim_section(rom, layout).is_empty():
 		return {}
 	var maps: Array = []
-	for row: Array in RomLayout.TRADE_ANIM_SECTION:
+	for row: Array in Gen2Layout.TRADE_ANIM_SECTION:
 		if String(row[1]) == "map":
 			maps.append(String(row[0]))
 	return {
@@ -5954,8 +5954,8 @@ func _import_trade_anim(rom: RomFile, layout: Dictionary) -> Dictionary:
 		"palettes": {
 			"tube": _packed_palette(
 				rom,
-				RomLayout.predef_palette_offset(layout, RomLayout.PREDEFPAL_TRADE_TUBE),
-				RomLayout.PREDEF_PALETTE_COLORS
+				Gen2Layout.predef_palette_offset(layout, Gen2Layout.PREDEFPAL_TRADE_TUBE),
+				Gen2Layout.PREDEF_PALETTE_COLORS
 			),
 		},
 	}
@@ -5970,14 +5970,14 @@ func _import_gs_intro_sheets(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return {}
 	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
 	var out: Dictionary = {}
-	for row: Array in RomLayout.GS_INTRO_SECTION:
+	for row: Array in Gen2Layout.GS_INTRO_SECTION:
 		if String(row[1]) == "raw_bytes":
 			continue
 		var name: String = String(row[0])
 		var tiles: int = int(row[2])
 		if not RomCache.write_indices(
 			RomCache.tile_path(directory, "gs_intro_%s" % name),
-			Gen2Tiles.decode_2bpp_strip(section[name], 0, tiles)
+			PokeTiles.decode_2bpp_strip(section[name], 0, tiles)
 		):
 			return {}
 		out["gs_intro_%s" % name] = _strip_sheet_entry(tiles)
@@ -5998,7 +5998,7 @@ func _import_gs_intro(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var entry: Dictionary = layout["gs_intro"]
 	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
 	var maps: Array = []
-	for row: Array in RomLayout.GS_INTRO_SECTION:
+	for row: Array in Gen2Layout.GS_INTRO_SECTION:
 		if String(row[1]) != "raw_bytes":
 			continue
 		var name: String = String(row[0])
@@ -6007,22 +6007,22 @@ func _import_gs_intro(rom: RomFile, layout: Dictionary) -> Dictionary:
 		):
 			return {}
 		maps.append(name)
-	var colors: int = RomLayout.INTRO_PALETTE_COLORS
+	var colors: int = Gen2Layout.INTRO_PALETTE_COLORS
 	var palettes: Dictionary = {
 		"magikarp": _packed_palette(
 			rom, int(entry["magikarp_palettes"]),
-			RomLayout.GS_INTRO_MAGIKARP_PALETTES * colors
+			Gen2Layout.GS_INTRO_MAGIKARP_PALETTES * colors
 		),
 		"shellder_lapras": _packed_palette(
 			rom, int(entry["shellder_lapras_palettes"]),
-			RomLayout.GS_INTRO_SHELLDER_LAPRAS_PALETTES * colors
+			Gen2Layout.GS_INTRO_SHELLDER_LAPRAS_PALETTES * colors
 		),
 	}
 	var predef: int = int(entry["predef_pals"])
-	for name: String in RomLayout.GS_INTRO_PREDEF:
+	for name: String in Gen2Layout.GS_INTRO_PREDEF:
 		palettes[name] = _packed_palette(
 			rom,
-			predef + int(RomLayout.GS_INTRO_PREDEF[name]) * RomLayout.GS_INTRO_PREDEF_SIZE,
+			predef + int(Gen2Layout.GS_INTRO_PREDEF[name]) * Gen2Layout.GS_INTRO_PREDEF_SIZE,
 			colors
 		)
 	return {"palettes": palettes, "maps": maps}
@@ -6030,8 +6030,8 @@ func _import_gs_intro(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 static func _unpacked_words(raw: PackedByteArray) -> Array:
 	var out: Array = []
-	for index: int in raw.size() / Gen2Palette.COLOR_BYTES:
-		var at: int = index * Gen2Palette.COLOR_BYTES
+	for index: int in raw.size() / PokePalette.COLOR_BYTES:
+		var at: int = index * PokePalette.COLOR_BYTES
 		out.append(raw[at] | (raw[at + 1] << 8))
 	return out
 
@@ -6042,23 +6042,23 @@ static func _unpacked_words(raw: PackedByteArray) -> Array:
 func _import_shrink_pics(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var entry: Dictionary = layout["shrink_pics"]
 	var offsets: Array = [int(entry["first"]), int(entry["second"])]
-	var side: int = RomLayout.SHRINK_PIC_COLUMNS * Gen2Tiles.TILE_WIDTH
+	var side: int = Gen2Layout.SHRINK_PIC_COLUMNS * PokeTiles.TILE_WIDTH
 	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
 	var out: Dictionary = {}
 	for index: int in offsets.size():
 		var raw: PackedByteArray = _lz.decompress(rom.bytes(), int(offsets[index]))
-		if _lz.failed or raw.size() < RomLayout.SHRINK_PIC_TILES * Gen2Tiles.TILE_BYTES:
+		if _lz.failed or raw.size() < Gen2Layout.SHRINK_PIC_TILES * PokeTiles.TILE_BYTES:
 			return {}
-		var name: String = RomLayout.SHRINK_PIC_NAMES[index]
-		var pixels: PackedByteArray = Gen2Tiles.decode_pic(
-			raw, RomLayout.SHRINK_PIC_COLUMNS, RomLayout.SHRINK_PIC_ROWS
+		var name: String = Gen2Layout.SHRINK_PIC_NAMES[index]
+		var pixels: PackedByteArray = PokeTiles.decode_pic(
+			raw, Gen2Layout.SHRINK_PIC_COLUMNS, Gen2Layout.SHRINK_PIC_ROWS
 		)
 		if not RomCache.write_indices(RomCache.tile_path(directory, name), pixels):
 			return {}
 		out[name] = {
 			"width": side,
 			"height": side,
-			"tiles": RomLayout.SHRINK_PIC_TILES,
+			"tiles": Gen2Layout.SHRINK_PIC_TILES,
 			"first_code": 0,
 			"bits": 2,
 		}
@@ -6079,17 +6079,17 @@ func _import_title(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return {
 			"palettes": _packed_palette(
 				rom, int(entry["palettes"]),
-				RomLayout.TITLE_PALETTES * RomLayout.TITLE_PALETTE_COLORS
+				Gen2Layout.TITLE_PALETTES * Gen2Layout.TITLE_PALETTE_COLORS
 			),
 		}
 	return {
 		"bg_palettes": _packed_palette(
 			rom, int(entry["bg_palette"]),
-			RomLayout.TITLE_BG_PALETTES * RomLayout.TITLE_PALETTE_COLORS
+			Gen2Layout.TITLE_BG_PALETTES * Gen2Layout.TITLE_PALETTE_COLORS
 		),
 		"ob_palettes": _packed_palette(
 			rom, int(entry["ob_palette"]),
-			RomLayout.TITLE_OB_PALETTES * RomLayout.TITLE_PALETTE_COLORS
+			Gen2Layout.TITLE_OB_PALETTES * Gen2Layout.TITLE_PALETTE_COLORS
 		),
 		"tilemap": Array(read_title_tilemap(rom, layout)),
 	}
@@ -6109,18 +6109,18 @@ func _import_town_map(rom: RomFile, layout: Dictionary) -> Dictionary:
 		"johto": Array(read_town_map_region(rom, layout, "johto")),
 		"kanto": Array(read_town_map_region(rom, layout, "kanto")),
 		"palette_map": Array(
-			rom.slice(int(entry["palette_map"]), RomLayout.TOWN_MAP_PALETTE_MAP_BYTES)
+			rom.slice(int(entry["palette_map"]), Gen2Layout.TOWN_MAP_PALETTE_MAP_BYTES)
 		),
 		"palettes": _packed_palette(
 			rom, int(entry["palette"]),
-			RomLayout.TOWN_MAP_PALETTES * RomLayout.TOWN_MAP_PALETTE_COLORS
+			Gen2Layout.TOWN_MAP_PALETTES * Gen2Layout.TOWN_MAP_PALETTE_COLORS
 		),
 		"landmarks": _import_landmarks(rom, layout),
 	}
 	if int(entry.get("palette_female", -1)) >= 0:
 		out["palettes_female"] = _packed_palette(
 			rom, int(entry["palette_female"]),
-			RomLayout.TOWN_MAP_PALETTES * RomLayout.TOWN_MAP_PALETTE_COLORS
+			Gen2Layout.TOWN_MAP_PALETTES * Gen2Layout.TOWN_MAP_PALETTE_COLORS
 		)
 	var decoded: Dictionary = read_pokegear_cards(rom, layout)
 	var cards: Dictionary = {}
@@ -6133,11 +6133,11 @@ func _import_town_map(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 func _import_landmarks(rom: RomFile, layout: Dictionary) -> Array:
 	var out: Array = []
-	for index: int in RomLayout.landmark_count(layout):
-		var record: int = RomLayout.landmark_offset(layout, index)
-		var at: int = RomLayout.landmark_name_offset(rom, layout, index)
+	for index: int in Gen2Layout.landmark_count(layout):
+		var record: int = Gen2Layout.landmark_offset(layout, index)
+		var at: int = Gen2Layout.landmark_name_offset(rom, layout, index)
 		var codes: Array = []
-		for step: int in RomLayout.LANDMARK_NAME_BYTES:
+		for step: int in Gen2Layout.LANDMARK_NAME_BYTES:
 			var code: int = rom.u8(at + step)
 			if code == Gen2Text.TERMINATOR:
 				break
@@ -6145,8 +6145,8 @@ func _import_landmarks(rom: RomFile, layout: Dictionary) -> Array:
 		out.append({
 			# The stored bytes carry the hardware's own OAM offsets; the screen
 			# positions are what a caller wants.
-			"x": rom.u8(record) - RomLayout.LANDMARK_OAM_X,
-			"y": rom.u8(record + 1) - RomLayout.LANDMARK_OAM_Y,
+			"x": rom.u8(record) - Gen2Layout.LANDMARK_OAM_X,
+			"y": rom.u8(record + 1) - Gen2Layout.LANDMARK_OAM_Y,
 			"codes": codes,
 		})
 	return out
@@ -6156,19 +6156,19 @@ func _import_landmarks(rom: RomFile, layout: Dictionary) -> Array:
 ## `FindOakRating` bands the caught count through, each with the sfx it plays.
 func _import_oak_ratings(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
-	for name: String in RomLayout.OAK_TEXT_STUBS:
+	for name: String in Gen2Layout.OAK_TEXT_STUBS:
 		out[name] = read_oak_text(
-			rom, layout, RomLayout.oak_text_stub_offset(rom, layout, name)
+			rom, layout, Gen2Layout.oak_text_stub_offset(rom, layout, name)
 		)
 	var rows: Array = []
-	for index: int in RomLayout.OAK_RATING_COUNT:
-		var row: int = RomLayout.oak_rating_offset(layout, index)
+	for index: int in Gen2Layout.OAK_RATING_COUNT:
+		var row: int = Gen2Layout.oak_rating_offset(layout, index)
 		rows.append({
 			"threshold": rom.u8(row),
 			# `rating` stores the sfx as a word, though every id is a byte.
 			"sfx": rom.u16le(row + 1),
 			"text": read_oak_text(
-				rom, layout, RomFile.linear(RomLayout.bank_of(row), rom.u16le(row + 3))
+				rom, layout, RomFile.linear(Gen2Layout.bank_of(row), rom.u16le(row + 3))
 			),
 		})
 	out["ratings"] = rows
@@ -6176,12 +6176,12 @@ func _import_oak_ratings(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 
 ## `PokemonCenterPC`'s rows and the routine's own six texts, both keyed by the
-## names `RomLayout` gives them so nothing downstream counts positions.
+## names `Gen2Layout` gives them so nothing downstream counts positions.
 func _import_pokecenter_pc(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
 	for players: bool in [false, true]:
-		var names: Array[String] = RomLayout.POKECENTER_PC_PLAYERS_ROWS if players \
-			else RomLayout.POKECENTER_PC_ROWS
+		var names: Array[String] = Gen2Layout.POKECENTER_PC_PLAYERS_ROWS if players \
+			else Gen2Layout.POKECENTER_PC_ROWS
 		var rows: PackedStringArray = read_pokecenter_pc_rows(rom, layout, players)
 		var stored: Dictionary = {}
 		for index: int in mini(rows.size(), names.size()):
@@ -6191,9 +6191,9 @@ func _import_pokecenter_pc(rom: RomFile, layout: Dictionary) -> Dictionary:
 			rom, layout, players
 		)
 	var texts: Dictionary = {}
-	for name: String in RomLayout.POKECENTER_PC_TEXT_AT:
+	for name: String in Gen2Layout.POKECENTER_PC_TEXT_AT:
 		texts[name] = read_oak_text(
-			rom, layout, RomLayout.pokecenter_pc_text_offset(layout, name)
+			rom, layout, Gen2Layout.pokecenter_pc_text_offset(layout, name)
 		)
 	out["texts"] = texts
 	return out
@@ -6204,11 +6204,11 @@ func _import_pokecenter_pc(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## categories and a `SPRITE_*` for the three object ones.
 static func read_decoration_attributes(rom: RomFile, layout: Dictionary) -> Array:
 	var at: int = int(layout.get("decorations", -1))
-	var size: int = RomLayout.DECORATION_ATTRIBUTE_SIZE
-	if at < 0 or not rom.in_bounds(at, RomLayout.DECORATION_COUNT * size):
+	var size: int = Gen2Layout.DECORATION_ATTRIBUTE_SIZE
+	if at < 0 or not rom.in_bounds(at, Gen2Layout.DECORATION_COUNT * size):
 		return []
 	var out: Array = []
-	for index: int in RomLayout.DECORATION_COUNT:
+	for index: int in Gen2Layout.DECORATION_COUNT:
 		var row: int = at + index * size
 		out.append({
 			"type": rom.u8(row),
@@ -6224,7 +6224,7 @@ static func read_decoration_attributes(rom: RomFile, layout: Dictionary) -> Arra
 ## run does not end in the source's own `-1`, which is what a wrong offset gives.
 static func read_decoration_ids(rom: RomFile, layout: Dictionary) -> Array:
 	var at: int = int(layout.get("decoration_ids", -1))
-	var count: int = RomLayout.DECORATION_ID_COUNT
+	var count: int = Gen2Layout.DECORATION_ID_COUNT
 	if at < 0 or not rom.in_bounds(at, count + 1):
 		return []
 	if rom.u8(at + count) != 0xFF:
@@ -6240,14 +6240,14 @@ static func read_decoration_names(rom: RomFile, layout: Dictionary) -> PackedStr
 	var at: int = int(layout.get("decorations", -1))
 	if at < 0:
 		return PackedStringArray()
-	at += RomLayout.DECORATION_NAMES_AT
+	at += Gen2Layout.DECORATION_NAMES_AT
 	if not rom.in_bounds(
-		at, RomLayout.DECORATION_NAME_COUNT * RomLayout.DECORATION_NAME_MAX_BYTES
+		at, Gen2Layout.DECORATION_NAME_COUNT * Gen2Layout.DECORATION_NAME_MAX_BYTES
 	):
 		return PackedStringArray()
 	return Gen2Text.decode_sequence(
-		rom.bytes(), at, RomLayout.DECORATION_NAME_COUNT,
-		RomLayout.DECORATION_NAME_MAX_BYTES
+		rom.bytes(), at, Gen2Layout.DECORATION_NAME_COUNT,
+		Gen2Layout.DECORATION_NAME_MAX_BYTES
 	)
 
 
@@ -6267,15 +6267,15 @@ static func read_mom_phone(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var at: int = int(layout.get("mom_phone", -1))
 	if at < 0:
 		return {}
-	var size: int = RomLayout.MOM_ITEM_SIZE
-	var rows: int = RomLayout.MOM_ITEMS_1_COUNT + RomLayout.MOM_ITEMS_2_COUNT
-	var table: int = at + RomLayout.MOM_ITEMS_AT
+	var size: int = Gen2Layout.MOM_ITEM_SIZE
+	var rows: int = Gen2Layout.MOM_ITEMS_1_COUNT + Gen2Layout.MOM_ITEMS_2_COUNT
+	var table: int = at + Gen2Layout.MOM_ITEMS_AT
 	if not rom.in_bounds(table, rows * size):
 		return {}
 	var lists: Array = [[], []]
 	for index: int in rows:
 		var row: int = table + index * size
-		(lists[0 if index < RomLayout.MOM_ITEMS_1_COUNT else 1] as Array).append({
+		(lists[0 if index < Gen2Layout.MOM_ITEMS_1_COUNT else 1] as Array).append({
 			"trigger": (rom.u8(row) << 16) | (rom.u8(row + 1) << 8) | rom.u8(row + 2),
 			"cost": (rom.u8(row + 3) << 16) | (rom.u8(row + 4) << 8) | rom.u8(row + 5),
 			"kind": rom.u8(row + 6),
@@ -6285,7 +6285,7 @@ static func read_mom_phone(rom: RomFile, layout: Dictionary) -> Dictionary:
 		"items_1": lists[0],
 		"items_2": lists[1],
 		"item_script": _banked_pointer(at),
-		"doll_script": _banked_pointer(at + RomLayout.MOM_DOLL_SCRIPT_AT),
+		"doll_script": _banked_pointer(at + Gen2Layout.MOM_DOLL_SCRIPT_AT),
 	}
 
 
@@ -6305,29 +6305,29 @@ func _import_town_map_sheets(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
 	var out: Dictionary = {}
 	for run: Array in [
-		["town_map", int(entry["gfx"]), RomLayout.TOWN_MAP_TILES],
-		["pokegear", int(entry["pokegear_gfx"]), RomLayout.POKEGEAR_TILES],
-		["pokegear_sprites", int(entry["sprites"]), RomLayout.POKEGEAR_SPRITE_TILES],
+		["town_map", int(entry["gfx"]), Gen2Layout.TOWN_MAP_TILES],
+		["pokegear", int(entry["pokegear_gfx"]), Gen2Layout.POKEGEAR_TILES],
+		["pokegear_sprites", int(entry["sprites"]), Gen2Layout.POKEGEAR_SPRITE_TILES],
 	]:
 		var name: String = String(run[0])
 		var tiles: int = int(run[2])
 		var raw: PackedByteArray = _lz.decompress(rom.bytes(), int(run[1]))
-		if _lz.failed or raw.size() < tiles * Gen2Tiles.TILE_BYTES:
+		if _lz.failed or raw.size() < tiles * PokeTiles.TILE_BYTES:
 			return {}
-		var indices: PackedByteArray = Gen2Tiles.decode_2bpp_strip(raw, 0, tiles)
+		var indices: PackedByteArray = PokeTiles.decode_2bpp_strip(raw, 0, tiles)
 		if not RomCache.write_indices(RomCache.tile_path(directory, name), indices):
 			return {}
 		out[name] = _strip_sheet_entry(tiles)
 	# `_FlyMap`'s own `Request1bpp`, which lands over the first six Pokegear
 	# tiles and so is a sheet of its own rather than part of the run above.
-	var label: PackedByteArray = Gen2Tiles.decode_1bpp_strip(
-		rom.bytes(), RomLayout.fly_map_label_offset(layout), RomLayout.FLY_MAP_LABEL_TILES
+	var label: PackedByteArray = PokeTiles.decode_1bpp_strip(
+		rom.bytes(), Gen2Layout.fly_map_label_offset(layout), Gen2Layout.FLY_MAP_LABEL_TILES
 	)
 	if not RomCache.write_indices(
 		RomCache.tile_path(directory, "fly_map_label"), label
 	):
 		return {}
-	out["fly_map_label"] = _strip_sheet_entry(RomLayout.FLY_MAP_LABEL_TILES)
+	out["fly_map_label"] = _strip_sheet_entry(Gen2Layout.FLY_MAP_LABEL_TILES)
 	return out
 
 
@@ -6339,15 +6339,15 @@ func _import_pc_sheets(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return {}
 	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
 	var raw: PackedByteArray = _lz.decompress(rom.bytes(), int(entry["select_gfx"]))
-	if _lz.failed or raw.size() < RomLayout.PC_SELECT_TILES * Gen2Tiles.TILE_BYTES:
+	if _lz.failed or raw.size() < Gen2Layout.PC_SELECT_TILES * PokeTiles.TILE_BYTES:
 		return {}
 	var out: Dictionary = {}
 	for run: Array in [
-		["pc_select", Gen2Tiles.decode_2bpp_strip(raw, 0, RomLayout.PC_SELECT_TILES),
-			RomLayout.PC_SELECT_TILES],
-		["pc_mail", Gen2Tiles.decode_2bpp_strip(
-			rom.bytes(), int(entry["mail_gfx"]), RomLayout.PC_MAIL_TILES),
-			RomLayout.PC_MAIL_TILES],
+		["pc_select", PokeTiles.decode_2bpp_strip(raw, 0, Gen2Layout.PC_SELECT_TILES),
+			Gen2Layout.PC_SELECT_TILES],
+		["pc_mail", PokeTiles.decode_2bpp_strip(
+			rom.bytes(), int(entry["mail_gfx"]), Gen2Layout.PC_MAIL_TILES),
+			Gen2Layout.PC_MAIL_TILES],
 	]:
 		if not RomCache.write_indices(
 			RomCache.tile_path(directory, String(run[0])), run[1]
@@ -6368,19 +6368,19 @@ func _import_pokedex_sheets(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
 	var out: Dictionary = {}
 	for run: Array in [
-		["pokedex", int(entry["gfx"]), RomLayout.POKEDEX_TILES],
-		["pokedex_slowpoke", int(entry["slowpoke"]), RomLayout.POKEDEX_SLOWPOKE_TILES],
+		["pokedex", int(entry["gfx"]), Gen2Layout.POKEDEX_TILES],
+		["pokedex_slowpoke", int(entry["slowpoke"]), Gen2Layout.POKEDEX_SLOWPOKE_TILES],
 		[
 			"pokedex_question_mark", int(entry["question_mark"]),
-			RomLayout.POKEDEX_QUESTION_MARK_TILES,
+			Gen2Layout.POKEDEX_QUESTION_MARK_TILES,
 		],
 	]:
 		var name: String = String(run[0])
 		var tiles: int = int(run[2])
 		var raw: PackedByteArray = _lz.decompress(rom.bytes(), int(run[1]))
-		if _lz.failed or raw.size() < tiles * Gen2Tiles.TILE_BYTES:
+		if _lz.failed or raw.size() < tiles * PokeTiles.TILE_BYTES:
 			return {}
-		var indices: PackedByteArray = Gen2Tiles.decode_2bpp_strip(raw, 0, tiles)
+		var indices: PackedByteArray = PokeTiles.decode_2bpp_strip(raw, 0, tiles)
 		if not RomCache.write_indices(RomCache.tile_path(directory, name), indices):
 			return {}
 		out[name] = _strip_sheet_entry(tiles)
@@ -6399,17 +6399,17 @@ func _import_title_sheets(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var runs: Array = []
 	if int(entry.get("suicune", -1)) >= 0:
 		runs = [
-			["title_suicune", int(entry["suicune"]), RomLayout.TITLE_SUICUNE_TILES],
-			["title_logo", int(entry["logo"]), RomLayout.TITLE_LOGO_TILES],
-			["title_crystal", int(entry["crystal"]), RomLayout.TITLE_CRYSTAL_TILES],
+			["title_suicune", int(entry["suicune"]), Gen2Layout.TITLE_SUICUNE_TILES],
+			["title_logo", int(entry["logo"]), Gen2Layout.TITLE_LOGO_TILES],
+			["title_crystal", int(entry["crystal"]), Gen2Layout.TITLE_CRYSTAL_TILES],
 		]
 	else:
 		runs = [
 			[
 				"title_logo_bottom", int(entry["logo_bottom"]),
-				RomLayout.TITLE_LOGO_BOTTOM_TILES,
+				Gen2Layout.TITLE_LOGO_BOTTOM_TILES,
 			],
-			["title_logo_top", int(entry["logo_top"]), RomLayout.TITLE_LOGO_TOP_TILES],
+			["title_logo_top", int(entry["logo_top"]), Gen2Layout.TITLE_LOGO_TOP_TILES],
 			["title_bird", int(entry["bird"]), int(entry["bird_tiles"])],
 		]
 
@@ -6419,9 +6419,9 @@ func _import_title_sheets(rom: RomFile, layout: Dictionary) -> Dictionary:
 		var name: String = String(run[0])
 		var tiles: int = int(run[2])
 		var raw: PackedByteArray = _lz.decompress(rom.bytes(), int(run[1]))
-		if _lz.failed or raw.size() < tiles * Gen2Tiles.TILE_BYTES:
+		if _lz.failed or raw.size() < tiles * PokeTiles.TILE_BYTES:
 			return {}
-		var indices: PackedByteArray = Gen2Tiles.decode_2bpp_strip(raw, 0, tiles)
+		var indices: PackedByteArray = PokeTiles.decode_2bpp_strip(raw, 0, tiles)
 		if not RomCache.write_indices(RomCache.tile_path(directory, name), indices):
 			return {}
 		out[name] = _strip_sheet_entry(tiles)
@@ -6430,8 +6430,8 @@ func _import_title_sheets(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 func _strip_sheet_entry(tiles: int) -> Dictionary:
 	return {
-		"width": tiles * Gen2Tiles.TILE_WIDTH,
-		"height": Gen2Tiles.TILE_HEIGHT,
+		"width": tiles * PokeTiles.TILE_WIDTH,
+		"height": PokeTiles.TILE_HEIGHT,
 		"tiles": tiles,
 		"first_code": 0,
 		"bits": 2,
@@ -6450,14 +6450,14 @@ static func read_unown_puzzle_section(rom: RomFile, layout: Dictionary) -> Dicti
 	var at: int = int(entry.get("section", -1))
 	if borders < 0 or at < 0:
 		return {}
-	var border_bytes: int = RomLayout.UNOWN_PUZZLE_BORDER_TILES * Gen2Tiles.TILE_BYTES
+	var border_bytes: int = Gen2Layout.UNOWN_PUZZLE_BORDER_TILES * PokeTiles.TILE_BYTES
 	if not rom.in_bounds(borders, border_bytes):
 		return {}
 	var lz := Gen2Lz.new()
 	var out: Dictionary = {"tile_borders": rom.slice(borders, border_bytes)}
-	for row: Array in RomLayout.UNOWN_PUZZLE_SECTION:
+	for row: Array in Gen2Layout.UNOWN_PUZZLE_SECTION:
 		var name: String = String(row[0])
-		var wanted: int = int(row[2]) * Gen2Tiles.TILE_BYTES
+		var wanted: int = int(row[2]) * PokeTiles.TILE_BYTES
 		var raw: PackedByteArray = PackedByteArray()
 		var consumed: int = 0
 		if String(row[1]) == "raw":
@@ -6493,15 +6493,15 @@ func _import_unown_puzzle_sheets(rom: RomFile, layout: Dictionary) -> Dictionary
 	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
 	var out: Dictionary = {}
 	var rows: Array = [
-		["tile_borders", "raw", RomLayout.UNOWN_PUZZLE_BORDER_TILES]
+		["tile_borders", "raw", Gen2Layout.UNOWN_PUZZLE_BORDER_TILES]
 	]
-	rows.append_array(RomLayout.UNOWN_PUZZLE_SECTION)
+	rows.append_array(Gen2Layout.UNOWN_PUZZLE_SECTION)
 	for row: Array in rows:
 		var name: String = String(row[0])
 		var tiles: int = int(row[2])
 		var path: String = RomCache.tile_path(directory, "unown_puzzle_%s" % name)
 		if not RomCache.write_indices(
-			path, Gen2Tiles.decode_2bpp_strip(section[name], 0, tiles)
+			path, PokeTiles.decode_2bpp_strip(section[name], 0, tiles)
 		):
 			return {}
 		out["unown_puzzle_%s" % name] = _strip_sheet_entry(tiles)
@@ -6513,7 +6513,7 @@ func _import_unown_puzzle_sheets(rom: RomFile, layout: Dictionary) -> Dictionary
 ## first colour overwritten red, which is the colour the cursor is drawn in.
 func _import_unown_puzzle(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var palette: Array = _import_predef_palette(
-		rom, layout, RomLayout.PREDEFPAL_UNOWN_PUZZLE
+		rom, layout, Gen2Layout.PREDEFPAL_UNOWN_PUZZLE
 	)
 	if palette.is_empty():
 		return {}
@@ -6531,12 +6531,12 @@ static func read_slots_section(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return {}
 	var lz := Gen2Lz.new()
 	var out: Dictionary = {}
-	for row: Array in RomLayout.SLOTS_SECTION:
+	for row: Array in Gen2Layout.SLOTS_SECTION:
 		var name: String = String(row[0])
 		var kind: String = String(row[1])
 		var wanted: int = int(row[2])
 		if kind == "lz":
-			wanted *= Gen2Tiles.TILE_BYTES
+			wanted *= PokeTiles.TILE_BYTES
 			var raw: PackedByteArray = lz.decompress(rom.bytes(), at)
 			if lz.failed or raw.size() != wanted:
 				return {}
@@ -6567,14 +6567,14 @@ func _import_slots_sheets(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return {}
 	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
 	var out: Dictionary = {}
-	for row: Array in RomLayout.SLOTS_SECTION:
+	for row: Array in Gen2Layout.SLOTS_SECTION:
 		if String(row[1]) != "lz":
 			continue
 		var name: String = String(row[0])
 		var tiles: int = int(row[2])
 		if not RomCache.write_indices(
 			RomCache.tile_path(directory, name),
-			Gen2Tiles.decode_2bpp_strip(section[name], 0, tiles)
+			PokeTiles.decode_2bpp_strip(section[name], 0, tiles)
 		):
 			return {}
 		out[name] = _strip_sheet_entry(tiles)
@@ -6590,14 +6590,14 @@ func _import_slots(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if section.is_empty() or at < 0:
 		return {}
 	var reels: Array = []
-	var strip: int = RomLayout.SLOTS_REEL_STRIP
+	var strip: int = Gen2Layout.SLOTS_REEL_STRIP
 	for reel: int in 3:
 		reels.append(Array(section["reels"].slice(reel * strip, (reel + 1) * strip)))
 	return {
 		"reels": reels,
 		"tilemap": Array(section["tilemap"]),
 		"palettes": _packed_palette(
-			rom, at, RomLayout.SLOTS_PALETTES * RomLayout.PREDEF_PALETTE_COLORS
+			rom, at, Gen2Layout.SLOTS_PALETTES * Gen2Layout.PREDEF_PALETTE_COLORS
 		),
 	}
 
@@ -6608,12 +6608,12 @@ static func read_magnet_train(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var bg: int = int(entry.get("bg", -1))
 	var fg: int = int(entry.get("fg", -1))
 	if bg < 0 or fg < 0 \
-		or not rom.in_bounds(bg, RomLayout.MAGNET_TRAIN_BG_BYTES) \
-		or not rom.in_bounds(fg, RomLayout.MAGNET_TRAIN_FG_BYTES):
+		or not rom.in_bounds(bg, Gen2Layout.MAGNET_TRAIN_BG_BYTES) \
+		or not rom.in_bounds(fg, Gen2Layout.MAGNET_TRAIN_FG_BYTES):
 		return {}
 	return {
-		"bg": rom.slice(bg, RomLayout.MAGNET_TRAIN_BG_BYTES),
-		"fg": rom.slice(fg, RomLayout.MAGNET_TRAIN_FG_BYTES),
+		"bg": rom.slice(bg, Gen2Layout.MAGNET_TRAIN_BG_BYTES),
+		"fg": rom.slice(fg, Gen2Layout.MAGNET_TRAIN_FG_BYTES),
 	}
 
 
@@ -6624,12 +6624,12 @@ func _import_magnet_train(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return {"bg": Array(section["bg"]), "fg": Array(section["fg"])}
 
 
-## The slot machine's seven boxes, by the name `RomLayout.SLOTS_TEXT_RUNS` gives
+## The slot machine's seven boxes, by the name `Gen2Layout.SLOTS_TEXT_RUNS` gives
 ## each stub.
 func _import_slots_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
-	for name: String in RomLayout.slots_text_names():
-		out[name] = read_oak_text(rom, layout, RomLayout.slots_text_offset(layout, name))
+	for name: String in Gen2Layout.slots_text_names():
+		out[name] = read_oak_text(rom, layout, Gen2Layout.slots_text_offset(layout, name))
 	return out
 
 
@@ -6644,9 +6644,9 @@ static func read_card_flip_section(rom: RomFile, layout: Dictionary) -> Dictiona
 		return {}
 	var lz := Gen2Lz.new()
 	var out: Dictionary = {}
-	for row: Array in RomLayout.CARD_FLIP_SECTION:
+	for row: Array in Gen2Layout.CARD_FLIP_SECTION:
 		var name: String = String(row[0])
-		var wanted: int = int(row[2]) * Gen2Tiles.TILE_BYTES
+		var wanted: int = int(row[2]) * PokeTiles.TILE_BYTES
 		if String(row[1]) == "lz":
 			var raw: PackedByteArray = lz.decompress(rom.bytes(), at)
 			if lz.failed or raw.size() != wanted:
@@ -6658,9 +6658,9 @@ static func read_card_flip_section(rom: RomFile, layout: Dictionary) -> Dictiona
 			return {}
 		out[name] = rom.slice(at, wanted)
 		at += wanted
-	if not rom.in_bounds(at, RomLayout.CARD_FLIP_TILEMAP_BYTES):
+	if not rom.in_bounds(at, Gen2Layout.CARD_FLIP_TILEMAP_BYTES):
 		return {}
-	out["tilemap"] = rom.slice(at, RomLayout.CARD_FLIP_TILEMAP_BYTES)
+	out["tilemap"] = rom.slice(at, Gen2Layout.CARD_FLIP_TILEMAP_BYTES)
 	return out
 
 
@@ -6671,12 +6671,12 @@ func _import_card_flip_sheets(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return {}
 	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
 	var out: Dictionary = {}
-	for row: Array in RomLayout.CARD_FLIP_SECTION:
+	for row: Array in Gen2Layout.CARD_FLIP_SECTION:
 		var name: String = String(row[0])
 		var tiles: int = int(row[2])
 		if not RomCache.write_indices(
 			RomCache.tile_path(directory, name),
-			Gen2Tiles.decode_2bpp_strip(section[name], 0, tiles)
+			PokeTiles.decode_2bpp_strip(section[name], 0, tiles)
 		):
 			return {}
 		out[name] = _strip_sheet_entry(tiles)
@@ -6693,7 +6693,7 @@ func _import_card_flip(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return {
 		"tilemap": Array(section["tilemap"]),
 		"palettes": _packed_palette(
-			rom, at, RomLayout.CARD_FLIP_PALETTES * RomLayout.PREDEF_PALETTE_COLORS
+			rom, at, Gen2Layout.CARD_FLIP_PALETTES * Gen2Layout.PREDEF_PALETTE_COLORS
 		),
 	}
 
@@ -6705,9 +6705,9 @@ static func read_card_flip_texts(rom: RomFile, layout: Dictionary) -> Dictionary
 	if at < 0:
 		return {}
 	var out: Dictionary = {}
-	for name: String in RomLayout.CARD_FLIP_TEXT_ORDER:
+	for name: String in Gen2Layout.CARD_FLIP_TEXT_ORDER:
 		var decoded: Dictionary = Gen2WorldScript.decode_text(
-			rom.slice(at, RomLayout.OAK_TEXT_MAX_BYTES)
+			rom.slice(at, Gen2Layout.OAK_TEXT_MAX_BYTES)
 		)
 		if not bool(decoded.get("ok", false)) or String(decoded["text"]).is_empty():
 			return {}
@@ -6730,12 +6730,12 @@ static func verify_mystery_gift(rom: RomFile, layout: Dictionary) -> Dictionary:
 	]:
 		var at: int = int(entry.get(String(table[0]), -1))
 		var expected: Array[int] = table[1]
-		if not rom.in_bounds(at, RomLayout.MYSTERY_GIFT_TABLE_ROWS):
+		if not rom.in_bounds(at, Gen2Layout.MYSTERY_GIFT_TABLE_ROWS):
 			return {
 				"ok": false,
 				"message": "MysteryGift %s is outside the cartridge." % table[0],
 			}
-		for index: int in RomLayout.MYSTERY_GIFT_TABLE_ROWS:
+		for index: int in Gen2Layout.MYSTERY_GIFT_TABLE_ROWS:
 			if rom.u8(at + index) != expected[index]:
 				return {
 					"ok": false,
@@ -6745,7 +6745,7 @@ static func verify_mystery_gift(rom: RomFile, layout: Dictionary) -> Dictionary:
 				}
 
 	var gfx: int = int(entry.get("gfx", -1))
-	var bytes: int = int(entry.get("tiles", 0)) * Gen2Tiles.TILE_BYTES
+	var bytes: int = int(entry.get("tiles", 0)) * PokeTiles.TILE_BYTES
 	if bytes <= 0 or not rom.in_bounds(gfx, bytes):
 		return {"ok": false, "message": "MysteryGiftGFX runs past the cartridge."}
 	for name: String in ["background", "gfx2"]:
@@ -6753,8 +6753,8 @@ static func verify_mystery_gift(rom: RomFile, layout: Dictionary) -> Dictionary:
 		if at < 0:
 			continue
 		var run: int = (
-			RomLayout.MYSTERY_GIFT_BACKGROUND_BYTES if name == "background"
-			else RomLayout.MYSTERY_GIFT_GFX2_TILES * Gen2Tiles.TILE_BYTES
+			Gen2Layout.MYSTERY_GIFT_BACKGROUND_BYTES if name == "background"
+			else Gen2Layout.MYSTERY_GIFT_GFX2_TILES * PokeTiles.TILE_BYTES
 		)
 		if not rom.in_bounds(at, run):
 			return {
@@ -6764,7 +6764,7 @@ static func verify_mystery_gift(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 	var palette: int = int(entry.get("palette", -1))
 	var colors: int = int(entry.get("palettes", 0)) \
-		* RomLayout.MYSTERY_GIFT_PALETTE_COLORS
+		* Gen2Layout.MYSTERY_GIFT_PALETTE_COLORS
 	if colors <= 0 or not rom.in_bounds(palette, colors * 2):
 		return {"ok": false, "message": "The Mystery Gift palette is out of bounds."}
 	## Every `.pal` include opens on white, and a run pinned one word out does
@@ -6794,7 +6794,7 @@ static func read_mystery_gift_prompt(rom: RomFile, layout: Dictionary) -> String
 	var length: int = 0
 	while rom.in_bounds(at + length) and rom.u8(at + length) != Gen2Text.TERMINATOR:
 		length += 1
-		if length > RomLayout.OAK_TEXT_MAX_BYTES:
+		if length > Gen2Layout.OAK_TEXT_MAX_BYTES:
 			return ""
 	return Gen2Text.decode(rom.bytes(), at, length)
 
@@ -6809,7 +6809,7 @@ static func read_mystery_gift_section(rom: RomFile, layout: Dictionary) -> Dicti
 	if entry.is_empty():
 		return {}
 	var tiles: PackedByteArray = rom.slice(
-		int(entry.get("gfx", 0)), int(entry.get("tiles", 0)) * Gen2Tiles.TILE_BYTES
+		int(entry.get("gfx", 0)), int(entry.get("tiles", 0)) * PokeTiles.TILE_BYTES
 	)
 	var background: int = int(entry.get("background", -1))
 	if background >= 0:
@@ -6817,7 +6817,7 @@ static func read_mystery_gift_section(rom: RomFile, layout: Dictionary) -> Dicti
 		## loop behind it then fills plane 1 with $ff, so the tile that lands in
 		## vTiles2 is the source byte and $ff alternating.
 		var raw: PackedByteArray = rom.slice(
-			background, RomLayout.MYSTERY_GIFT_BACKGROUND_BYTES
+			background, Gen2Layout.MYSTERY_GIFT_BACKGROUND_BYTES
 		)
 		for byte: int in raw:
 			tiles.append(byte)
@@ -6825,26 +6825,26 @@ static func read_mystery_gift_section(rom: RomFile, layout: Dictionary) -> Dicti
 	var gfx2: int = int(entry.get("gfx2", -1))
 	if gfx2 >= 0:
 		tiles.append_array(rom.slice(
-			gfx2, RomLayout.MYSTERY_GIFT_GFX2_TILES * Gen2Tiles.TILE_BYTES
+			gfx2, Gen2Layout.MYSTERY_GIFT_GFX2_TILES * PokeTiles.TILE_BYTES
 		))
 		## `ld hl, vTiles2 tile $3d / ld a, $ff / ByteFill`: the solid tile the
 		## screen is filled with sits one past the last run Gold and Silver
 		## load, so it is appended here rather than left for the page to invent.
-		for _byte: int in Gen2Tiles.TILE_BYTES:
+		for _byte: int in PokeTiles.TILE_BYTES:
 			tiles.append(0xFF)
 	var colors: Array = []
 	for index: int in int(entry.get("palettes", 0)) \
-			* RomLayout.MYSTERY_GIFT_PALETTE_COLORS:
+			* Gen2Layout.MYSTERY_GIFT_PALETTE_COLORS:
 		colors.append(rom.u16le(int(entry.get("palette", 0)) + index * 2))
 	return {
 		"tiles": tiles,
 		"palette": colors,
 		"prompt": read_mystery_gift_prompt(rom, layout),
 		"items": Array(rom.slice(
-			int(entry.get("items", 0)), RomLayout.MYSTERY_GIFT_TABLE_ROWS
+			int(entry.get("items", 0)), Gen2Layout.MYSTERY_GIFT_TABLE_ROWS
 		)),
 		"decos": Array(rom.slice(
-			int(entry.get("decos", 0)), RomLayout.MYSTERY_GIFT_TABLE_ROWS
+			int(entry.get("decos", 0)), Gen2Layout.MYSTERY_GIFT_TABLE_ROWS
 		)),
 	}
 
@@ -6878,17 +6878,17 @@ static func read_diploma_section(rom: RomFile, layout: Dictionary) -> Dictionary
 		return {}
 	var lz := Gen2Lz.new()
 	var raw: PackedByteArray = lz.decompress(rom.bytes(), at)
-	if lz.failed or raw.size() != RomLayout.DIPLOMA_TILES * Gen2Tiles.TILE_BYTES:
+	if lz.failed or raw.size() != Gen2Layout.DIPLOMA_TILES * PokeTiles.TILE_BYTES:
 		return {}
 	var maps_at: int = at + lz.consumed
-	var bytes: int = RomLayout.DIPLOMA_TILEMAP_BYTES
+	var bytes: int = Gen2Layout.DIPLOMA_TILEMAP_BYTES
 	if not rom.in_bounds(maps_at, bytes * 2):
 		return {}
 	var out: Dictionary = {"tiles": raw}
 	for page: int in 2:
 		var map: PackedByteArray = rom.slice(maps_at + page * bytes, bytes)
 		for code: int in map:
-			if code >= RomLayout.DIPLOMA_TILES:
+			if code >= Gen2Layout.DIPLOMA_TILES:
 				return {}
 		out["page%d" % (page + 1)] = map
 	return out
@@ -6902,11 +6902,11 @@ static func read_printer_strings(rom: RomFile, layout: Dictionary) -> Dictionary
 	if at < 0:
 		return {}
 	var out: Dictionary = {}
-	for name: String in RomLayout.PRINTER_STATUS_STRINGS:
+	for name: String in Gen2Layout.PRINTER_STATUS_STRINGS:
 		var length: int = 0
 		while rom.in_bounds(at + length) and rom.u8(at + length) != Gen2Text.TERMINATOR:
 			length += 1
-			if length > RomLayout.OAK_TEXT_MAX_BYTES:
+			if length > Gen2Layout.OAK_TEXT_MAX_BYTES:
 				return {}
 		out[name] = Gen2Text.decode(rom.bytes(), at, length)
 		at += length + 1
@@ -6922,7 +6922,7 @@ func _import_diploma(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if section.is_empty():
 		return {}
 	var palette: Array = _import_predef_palette(
-		rom, layout, RomLayout.PREDEFPAL_DIPLOMA
+		rom, layout, Gen2Layout.PREDEFPAL_DIPLOMA
 	)
 	if palette.is_empty():
 		return {}
@@ -6941,18 +6941,18 @@ static func read_link_border(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var at: int = int(layout.get("link_border", -1))
 	if at < 0:
 		return {}
-	var tiles: int = RomLayout.LINK_BORDER_TILES_CRYSTAL if rom.id == &"crystal" \
-		else RomLayout.LINK_BORDER_TILES_GOLD_SILVER
-	if not rom.in_bounds(at, tiles * Gen2Tiles.TILE_BYTES):
+	var tiles: int = Gen2Layout.LINK_BORDER_TILES_CRYSTAL if rom.id == &"crystal" \
+		else Gen2Layout.LINK_BORDER_TILES_GOLD_SILVER
+	if not rom.in_bounds(at, tiles * PokeTiles.TILE_BYTES):
 		return {}
 	var out: Dictionary = {
-		"tiles": rom.slice(at, tiles * Gen2Tiles.TILE_BYTES), "count": tiles,
+		"tiles": rom.slice(at, tiles * PokeTiles.TILE_BYTES), "count": tiles,
 	}
 	var maps_at: int = int(layout.get("link_trade_tilemaps", -1))
 	if maps_at < 0:
 		return out
-	var screen: int = RomLayout.LINK_TRADE_TILEMAP_BYTES
-	var strip: int = RomLayout.LINK_TRADE_CABLE_ROWS_BYTES
+	var screen: int = Gen2Layout.LINK_TRADE_TILEMAP_BYTES
+	var strip: int = Gen2Layout.LINK_TRADE_CABLE_ROWS_BYTES
 	if not rom.in_bounds(maps_at, screen + strip * 2):
 		return {}
 	out["screen"] = rom.slice(maps_at, screen)
@@ -6985,13 +6985,13 @@ func _import_link_border_sheet(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
 	if not RomCache.write_indices(
 		RomCache.tile_path(directory, "link_border"),
-		Gen2Tiles.decode_2bpp_strip(section["tiles"], 0, tiles)
+		PokeTiles.decode_2bpp_strip(section["tiles"], 0, tiles)
 	):
 		return {}
 	return {
 		"link_border": {
-			"width": tiles * Gen2Tiles.TILE_WIDTH,
-			"height": Gen2Tiles.TILE_HEIGHT,
+			"width": tiles * PokeTiles.TILE_WIDTH,
+			"height": PokeTiles.TILE_HEIGHT,
 			"tiles": tiles,
 			"first_code": 0,
 			"bits": 2,
@@ -7011,14 +7011,14 @@ func _import_diploma_sheet(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
 	if not RomCache.write_indices(
 		RomCache.tile_path(directory, "diploma"),
-		Gen2Tiles.decode_2bpp_strip(section["tiles"], 0, RomLayout.DIPLOMA_TILES)
+		PokeTiles.decode_2bpp_strip(section["tiles"], 0, Gen2Layout.DIPLOMA_TILES)
 	):
 		return {}
 	return {
 		"diploma": {
-			"width": RomLayout.DIPLOMA_TILES * Gen2Tiles.TILE_WIDTH,
-			"height": Gen2Tiles.TILE_HEIGHT,
-			"tiles": RomLayout.DIPLOMA_TILES,
+			"width": Gen2Layout.DIPLOMA_TILES * PokeTiles.TILE_WIDTH,
+			"height": PokeTiles.TILE_HEIGHT,
+			"tiles": Gen2Layout.DIPLOMA_TILES,
 			"first_code": 0,
 			"bits": 2,
 		},
@@ -7032,17 +7032,17 @@ func _import_mystery_gift_sheet(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var section: Dictionary = read_mystery_gift_section(rom, layout)
 	if section.is_empty():
 		return {}
-	var tiles: int = (section["tiles"] as PackedByteArray).size() / Gen2Tiles.TILE_BYTES
+	var tiles: int = (section["tiles"] as PackedByteArray).size() / PokeTiles.TILE_BYTES
 	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
 	if not RomCache.write_indices(
 		RomCache.tile_path(directory, "mystery_gift"),
-		Gen2Tiles.decode_2bpp_strip(section["tiles"], 0, tiles)
+		PokeTiles.decode_2bpp_strip(section["tiles"], 0, tiles)
 	):
 		return {}
 	return {
 		"mystery_gift": {
-			"width": tiles * Gen2Tiles.TILE_WIDTH,
-			"height": Gen2Tiles.TILE_HEIGHT,
+			"width": tiles * PokeTiles.TILE_WIDTH,
+			"height": PokeTiles.TILE_HEIGHT,
 			"tiles": tiles,
 			"first_code": 0,
 			"bits": 2,
@@ -7058,20 +7058,20 @@ func _import_ditto_sheet(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if at < 0:
 		return {}
 	var raw: PackedByteArray = _lz.decompress(rom.bytes(), at)
-	var wanted: int = RomLayout.PRESENTS_DITTO_TILES * Gen2Tiles.TILE_BYTES
+	var wanted: int = Gen2Layout.PRESENTS_DITTO_TILES * PokeTiles.TILE_BYTES
 	if _lz.failed or raw.size() < wanted:
 		return {}
-	var indices: PackedByteArray = Gen2Tiles.decode_2bpp_strip(
-		raw, 0, RomLayout.PRESENTS_DITTO_TILES
+	var indices: PackedByteArray = PokeTiles.decode_2bpp_strip(
+		raw, 0, Gen2Layout.PRESENTS_DITTO_TILES
 	)
 	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
 	if not RomCache.write_indices(RomCache.tile_path(directory, "game_freak_ditto"), indices):
 		return {}
 	return {
 		"game_freak_ditto": {
-			"width": RomLayout.PRESENTS_DITTO_TILES * Gen2Tiles.TILE_WIDTH,
-			"height": Gen2Tiles.TILE_HEIGHT,
-			"tiles": RomLayout.PRESENTS_DITTO_TILES,
+			"width": Gen2Layout.PRESENTS_DITTO_TILES * PokeTiles.TILE_WIDTH,
+			"height": PokeTiles.TILE_HEIGHT,
+			"tiles": Gen2Layout.PRESENTS_DITTO_TILES,
 			"first_code": 0,
 			"bits": 2,
 		},
@@ -7092,26 +7092,26 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 	var presents: Dictionary = layout.get("game_freak_presents", {})
 	var sheets: Dictionary = {
 		"font": {
-			"offset": RomLayout.font_offset(layout),
-			"tiles": RomLayout.FONT_TILES,
-			"first_code": RomLayout.FONT_FIRST_CODE,
+			"offset": Gen2Layout.font_offset(layout),
+			"tiles": Gen2Layout.FONT_TILES,
+			"first_code": Gen2Layout.FONT_FIRST_CODE,
 			"bits": 1,
 		},
 		"font_extra": {
-			"offset": RomLayout.font_extra_offset(layout),
-			"tiles": RomLayout.FONT_EXTRA_TILES,
-			"first_code": RomLayout.FONT_EXTRA_FIRST_CODE,
+			"offset": Gen2Layout.font_extra_offset(layout),
+			"tiles": Gen2Layout.FONT_EXTRA_TILES,
+			"first_code": Gen2Layout.FONT_EXTRA_FIRST_CODE,
 			"bits": 2,
 		},
 		"frames": {
-			"offset": RomLayout.frame_offset(layout, 0),
-			"tiles": RomLayout.FRAME_COUNT * RomLayout.FRAME_TILES,
-			"first_code": RomLayout.FRAME_FIRST_CODE,
+			"offset": Gen2Layout.frame_offset(layout, 0),
+			"tiles": Gen2Layout.FRAME_COUNT * Gen2Layout.FRAME_TILES,
+			"first_code": Gen2Layout.FRAME_FIRST_CODE,
 			"bits": 1,
 		},
 		"battle_font": {
 			"offset": int(layout["battle_font"]),
-			"tiles": RomLayout.BATTLE_FONT_TILES,
+			"tiles": Gen2Layout.BATTLE_FONT_TILES,
 			"first_code": 0,
 			"bits": 2,
 		},
@@ -7126,19 +7126,19 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 		},
 		"enemy_hud": {
 			"offset": int(layout["enemy_hud"]),
-			"tiles": RomLayout.ENEMY_HUD_TILES,
+			"tiles": Gen2Layout.ENEMY_HUD_TILES,
 			"first_code": 0,
 			"bits": 1,
 		},
 		"player_hud": {
 			"offset": int(layout["player_hud"]),
-			"tiles": RomLayout.PLAYER_HUD_TILES,
+			"tiles": Gen2Layout.PLAYER_HUD_TILES,
 			"first_code": 0,
 			"bits": 1,
 		},
 		"exp_bar": {
 			"offset": int(layout["exp_bar"]),
-			"tiles": RomLayout.EXP_BAR_TILES,
+			"tiles": Gen2Layout.EXP_BAR_TILES,
 			"first_code": 0,
 			"bits": 2,
 		},
@@ -7146,7 +7146,7 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 		## over both huds while a battle is opening.
 		"ball_icons": {
 			"offset": int(layout["ball_icons"]),
-			"tiles": RomLayout.BALL_ICON_TILES,
+			"tiles": Gen2Layout.BALL_ICON_TILES,
 			"first_code": 0,
 			"bits": 2,
 		},
@@ -7154,46 +7154,46 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 		## for a Pokemon that has used Minimize.
 		"minimize": {
 			"offset": int(layout["minimize_pic"]),
-			"tiles": RomLayout.MINIMIZE_TILES,
+			"tiles": Gen2Layout.MINIMIZE_TILES,
 			"first_code": 0,
 			"bits": 2,
 		},
 		## `BattleTransitionTiles`, the two `DoBattleTransition` wipes with.
 		"battle_transition": {
 			"offset": int((layout["battle_transition"] as Dictionary)["tiles"]),
-			"tiles": RomLayout.BATTLE_TRANSITION_TILES,
+			"tiles": Gen2Layout.BATTLE_TRANSITION_TILES,
 			"first_code": 0,
 			"bits": 2,
 		},
 		## `StatsScreenPageTilesGFX`, which the stats screen and the move
 		## screen both load at `vTiles2 tile $31`.
 		"stats_tiles": {
-			"offset": RomLayout.stats_tiles_offset(layout),
-			"tiles": RomLayout.STATS_TILES,
+			"offset": Gen2Layout.stats_tiles_offset(layout),
+			"tiles": Gen2Layout.STATS_TILES,
 			"first_code": 0,
 			"bits": 2,
 		},
 		"card_status": {
 			"offset": int(card["status"]),
-			"tiles": RomLayout.CARD_STATUS_TILES,
+			"tiles": Gen2Layout.CARD_STATUS_TILES,
 			"first_code": 0,
 			"bits": 2,
 		},
 		"card_leaders": {
 			"offset": int(card["leaders"]),
-			"tiles": RomLayout.CARD_LEADER_TILES,
+			"tiles": Gen2Layout.CARD_LEADER_TILES,
 			"first_code": 0,
 			"bits": 2,
 		},
 		"card_badges": {
 			"offset": int(card["badges"]),
-			"tiles": RomLayout.CARD_BADGE_TILES,
+			"tiles": Gen2Layout.CARD_BADGE_TILES,
 			"first_code": 0,
 			"bits": 2,
 		},
 		"card_frame": {
 			"offset": int(card["frame"]),
-			"tiles": RomLayout.CARD_FRAME_TILES,
+			"tiles": Gen2Layout.CARD_FRAME_TILES,
 			"first_code": 0,
 			"bits": 2,
 		},
@@ -7205,13 +7205,13 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 		## sheet's own tiles rather than loading beside it.
 		"unown_font": {
 			"offset": int(layout["pokedex"]["unown_font"]),
-			"tiles": RomLayout.UNOWN_FONT_TILES,
+			"tiles": Gen2Layout.UNOWN_FONT_TILES,
 			"first_code": 0,
 			"bits": 2,
 		},
 		"footprints": {
 			"offset": int(layout["pokedex"]["footprints"]),
-			"tiles": RomLayout.FOOTPRINT_SLOTS * RomLayout.FOOTPRINT_TILES,
+			"tiles": Gen2Layout.FOOTPRINT_SLOTS * Gen2Layout.FOOTPRINT_TILES,
 			"first_code": 0,
 			"bits": 1,
 		},
@@ -7219,14 +7219,14 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 		## the two entry markers 1bpp, and all four are located from the keyboard
 		## block they are stored beside.
 		"naming_border": {
-			"offset": RomLayout.naming_border_offset(layout),
-			"tiles": RomLayout.NAMING_BORDER_TILES,
+			"offset": Gen2Layout.naming_border_offset(layout),
+			"tiles": Gen2Layout.NAMING_BORDER_TILES,
 			"first_code": 0,
 			"bits": 2,
 		},
 		"naming_cursor": {
-			"offset": RomLayout.naming_cursor_offset(layout),
-			"tiles": RomLayout.NAMING_CURSOR_TILES,
+			"offset": Gen2Layout.naming_cursor_offset(layout),
+			"tiles": Gen2Layout.NAMING_CURSOR_TILES,
 			"first_code": 0,
 			"bits": 2,
 		},
@@ -7234,25 +7234,25 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 		## index by byte, and `_ComposeMailMessage.MailIcon`'s eight 2bpp tiles.
 		"mail_gfx": {
 			"offset": int((layout["mail"] as Dictionary)["gfx"]),
-			"tiles": RomLayout.MAIL_GFX_TILES,
+			"tiles": Gen2Layout.MAIL_GFX_TILES,
 			"first_code": 0,
 			"bits": 1,
 		},
 		"mail_icon": {
 			"offset": int((layout["mail"] as Dictionary)["icon"]),
-			"tiles": RomLayout.MAIL_ICON_TILES,
+			"tiles": Gen2Layout.MAIL_ICON_TILES,
 			"first_code": 0,
 			"bits": 2,
 		},
 		"naming_middle_line": {
-			"offset": RomLayout.naming_middle_line_offset(layout),
-			"tiles": RomLayout.NAMING_MARKER_TILES,
+			"offset": Gen2Layout.naming_middle_line_offset(layout),
+			"tiles": Gen2Layout.NAMING_MARKER_TILES,
 			"first_code": 0,
 			"bits": 1,
 		},
 		"naming_under_line": {
-			"offset": RomLayout.naming_under_line_offset(layout),
-			"tiles": RomLayout.NAMING_MARKER_TILES,
+			"offset": Gen2Layout.naming_under_line_offset(layout),
+			"tiles": Gen2Layout.NAMING_MARKER_TILES,
 			"first_code": 0,
 			"bits": 1,
 		},
@@ -7261,7 +7261,7 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 		"copyright": {
 			"offset": int((layout["copyright"] as Dictionary)["gfx"]),
 			"tiles": int((layout["copyright"] as Dictionary)["tiles"]),
-			"first_code": RomLayout.COPYRIGHT_FIRST_CODE,
+			"first_code": Gen2Layout.COPYRIGHT_FIRST_CODE,
 			"bits": 2,
 		},
 		## `GameFreakLogoGFX`. Two graphics, one `Get1bpp`: the BG strings index
@@ -7269,16 +7269,16 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 		## strip the cartridge loads.
 		"game_freak_logo": {
 			"offset": int(presents.get("gfx", -1)),
-			"tiles": RomLayout.PRESENTS_GFX_TILES,
+			"tiles": Gen2Layout.PRESENTS_GFX_TILES,
 			"first_code": 0,
 			"bits": 1,
 		},
 		"card_pic_male": {
 			"offset": int(card["pic_male"]),
-			"tiles": RomLayout.CARD_PIC_TILES,
+			"tiles": Gen2Layout.CARD_PIC_TILES,
 			"first_code": 0,
 			"bits": 2,
-			"columns": RomLayout.CARD_PIC_COLUMNS,
+			"columns": Gen2Layout.CARD_PIC_COLUMNS,
 			"column_major": bool(card["pic_columns"]),
 		},
 	}
@@ -7290,19 +7290,19 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 	if not credits.is_empty():
 		sheets["credits_border"] = {
 			"offset": int(credits["gfx"]),
-			"tiles": RomLayout.CREDITS_BORDER_TILES,
-			"first_code": RomLayout.CREDITS_BORDER_FIRST_CODE,
+			"tiles": Gen2Layout.CREDITS_BORDER_TILES,
+			"first_code": Gen2Layout.CREDITS_BORDER_FIRST_CODE,
 			"bits": 2,
 		}
 		sheets["credits_the_end"] = {
 			"offset": int(credits["the_end"]),
-			"tiles": RomLayout.CREDITS_THE_END_TILES,
-			"first_code": RomLayout.CREDITS_THE_END_FIRST_CODE,
+			"tiles": Gen2Layout.CREDITS_THE_END_TILES,
+			"first_code": Gen2Layout.CREDITS_THE_END_FIRST_CODE,
 			"bits": 2,
 		}
 		sheets["credits_mons"] = {
-			"offset": RomLayout.credits_mon_gfx_offset(layout),
-			"tiles": RomLayout.credits_mon_tiles(layout),
+			"offset": Gen2Layout.credits_mon_gfx_offset(layout),
+			"tiles": Gen2Layout.credits_mon_tiles(layout),
 			"first_code": 0,
 			"bits": 2,
 		}
@@ -7311,35 +7311,35 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 	if int(card["pic_female"]) >= 0:
 		sheets["card_pic_female"] = {
 			"offset": int(card["pic_female"]),
-			"tiles": RomLayout.CARD_PIC_TILES,
+			"tiles": Gen2Layout.CARD_PIC_TILES,
 			"first_code": 0,
 			"bits": 2,
-			"columns": RomLayout.CARD_PIC_COLUMNS,
+			"columns": Gen2Layout.CARD_PIC_COLUMNS,
 			"column_major": bool(card["pic_columns"]),
 		}
 	if int(card["right_corner"]) >= 0:
 		sheets["card_right_corner"] = {
 			"offset": int(card["right_corner"]),
-			"tiles": RomLayout.CARD_RIGHT_CORNER_TILES,
+			"tiles": Gen2Layout.CARD_RIGHT_CORNER_TILES,
 			"first_code": 0,
 			"bits": 2,
 		}
 	if int(intro_player["pic_male"]) >= 0:
 		sheets["intro_player_male"] = {
 			"offset": int(intro_player["pic_male"]),
-			"tiles": RomLayout.INTRO_PLAYER_PIC_TILES,
+			"tiles": Gen2Layout.INTRO_PLAYER_PIC_TILES,
 			"first_code": 0,
 			"bits": 2,
-			"columns": RomLayout.INTRO_PLAYER_PIC_COLUMNS,
+			"columns": Gen2Layout.INTRO_PLAYER_PIC_COLUMNS,
 			"column_major": true,
 		}
 	if int(intro_player["pic_female"]) >= 0:
 		sheets["intro_player_female"] = {
 			"offset": int(intro_player["pic_female"]),
-			"tiles": RomLayout.INTRO_PLAYER_PIC_TILES,
+			"tiles": Gen2Layout.INTRO_PLAYER_PIC_TILES,
 			"first_code": 0,
 			"bits": 2,
-			"columns": RomLayout.INTRO_PLAYER_PIC_COLUMNS,
+			"columns": Gen2Layout.INTRO_PLAYER_PIC_COLUMNS,
 			"column_major": true,
 		}
 	## `GameFreakLogoStarsGFX`, Gold and Silver's own beat. Crystal spends it on
@@ -7347,7 +7347,7 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 	if int(presents.get("stars", -1)) >= 0:
 		sheets["game_freak_stars"] = {
 			"offset": int(presents["stars"]),
-			"tiles": RomLayout.PRESENTS_STARS_TILES,
+			"tiles": Gen2Layout.PRESENTS_STARS_TILES,
 			"first_code": 0,
 			"bits": 2,
 		}
@@ -7358,7 +7358,7 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 	if int(layout.get("map_entry_sign", -1)) >= 0:
 		sheets["map_entry_sign"] = {
 			"offset": int(layout["map_entry_sign"]),
-			"tiles": RomLayout.MAP_ENTRY_SIGN_TILES,
+			"tiles": Gen2Layout.MAP_ENTRY_SIGN_TILES,
 			"first_code": 0,
 			"bits": 2,
 		}
@@ -7367,7 +7367,7 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 	if int(gender_screen["tile"]) >= 0:
 		sheets["gender_screen"] = {
 			"offset": int(gender_screen["tile"]),
-			"tiles": RomLayout.GENDER_SCREEN_TILES,
+			"tiles": Gen2Layout.GENDER_SCREEN_TILES,
 			"first_code": 0,
 			"bits": 2,
 		}
@@ -7379,7 +7379,7 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 	if int(region_map.get("fast_ship", -1)) >= 0:
 		sheets["fast_ship"] = {
 			"offset": int(region_map["fast_ship"]),
-			"tiles": RomLayout.FAST_SHIP_TILES,
+			"tiles": Gen2Layout.FAST_SHIP_TILES,
 			"first_code": 0,
 			"bits": 2,
 		}
@@ -7389,16 +7389,16 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 	if int(layout.get("unown_printer_glyphs", -1)) >= 0:
 		sheets["unown_printer_glyphs"] = {
 			"offset": int(layout["unown_printer_glyphs"]),
-			"tiles": RomLayout.UNOWN_PRINTER_GLYPH_TILES,
+			"tiles": Gen2Layout.UNOWN_PRINTER_GLYPH_TILES,
 			"first_code": 0,
 			"bits": 1,
 		}
 
 	## `PokedexNestIconGFX`, the AREA screen's own object tile.
-	if RomLayout.dex_nest_icon_offset(layout) >= 0:
+	if Gen2Layout.dex_nest_icon_offset(layout) >= 0:
 		sheets["dex_nest_icon"] = {
-			"offset": RomLayout.dex_nest_icon_offset(layout),
-			"tiles": RomLayout.DEX_NEST_ICON_TILES,
+			"offset": Gen2Layout.dex_nest_icon_offset(layout),
+			"tiles": Gen2Layout.DEX_NEST_ICON_TILES,
 			"first_code": 0,
 			"bits": 2,
 		}
@@ -7410,20 +7410,20 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 	if not pack.is_empty():
 		sheets["pack_menu"] = {
 			"offset": int(pack["menu_gfx"]),
-			"tiles": RomLayout.PACK_MENU_TILES,
+			"tiles": Gen2Layout.PACK_MENU_TILES,
 			"first_code": 0,
 			"bits": 2,
 		}
 		sheets["pack_pockets"] = {
-			"offset": RomLayout.pack_gfx_offset(layout),
-			"tiles": RomLayout.PACK_TILES,
+			"offset": Gen2Layout.pack_gfx_offset(layout),
+			"tiles": Gen2Layout.PACK_TILES,
 			"first_code": 0,
 			"bits": 2,
 		}
 		if int(pack.get("female_gfx", -1)) >= 0:
 			sheets["pack_pockets_female"] = {
 				"offset": int(pack["female_gfx"]),
-				"tiles": RomLayout.PACK_TILES,
+				"tiles": Gen2Layout.PACK_TILES,
 				"first_code": 0,
 				"bits": 2,
 			}
@@ -7461,8 +7461,8 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 		if not RomCache.write_indices(RomCache.tile_path(directory, name), indices):
 			return {}
 		written[name] = {
-			"width": count * Gen2Tiles.TILE_WIDTH,
-			"height": Gen2Tiles.TILE_HEIGHT,
+			"width": count * PokeTiles.TILE_WIDTH,
+			"height": PokeTiles.TILE_HEIGHT,
 			"tiles": count,
 			"first_code": sheet["first_code"],
 			"bits": sheet["bits"],
@@ -7477,8 +7477,8 @@ func _import_tiles(rom: RomFile, layout: Dictionary, on_progress: Callable) -> D
 
 static func _decode_strip(data: PackedByteArray, sheet: Dictionary) -> PackedByteArray:
 	if int(sheet["bits"]) == 1:
-		return Gen2Tiles.decode_1bpp_strip(data, int(sheet["offset"]), int(sheet["tiles"]))
-	var strip: PackedByteArray = Gen2Tiles.decode_2bpp_strip(
+		return PokeTiles.decode_1bpp_strip(data, int(sheet["offset"]), int(sheet["tiles"]))
+	var strip: PackedByteArray = PokeTiles.decode_2bpp_strip(
 		data, int(sheet["offset"]), int(sheet["tiles"])
 	)
 	## Only the card pic carries a column count, and only Crystal stores it that
@@ -7496,7 +7496,7 @@ static func _decode_strip(data: PackedByteArray, sheet: Dictionary) -> PackedByt
 static func _rows_from_columns(
 	strip: PackedByteArray, columns: int, rows: int
 ) -> PackedByteArray:
-	var tile_pixels: int = Gen2Tiles.TILE_WIDTH * Gen2Tiles.TILE_HEIGHT
+	var tile_pixels: int = PokeTiles.TILE_WIDTH * PokeTiles.TILE_HEIGHT
 	if strip.size() < columns * rows * tile_pixels:
 		return strip
 	var out := PackedByteArray()
@@ -7505,19 +7505,19 @@ static func _rows_from_columns(
 		for row: int in rows:
 			var source_tile: int = column * rows + row
 			var target_tile: int = row * columns + column
-			for y: int in Gen2Tiles.TILE_HEIGHT:
-				for x: int in Gen2Tiles.TILE_WIDTH:
-					var from: int = source_tile * Gen2Tiles.TILE_WIDTH \
-						+ y * (strip.size() / Gen2Tiles.TILE_HEIGHT) + x
-					var to: int = target_tile * Gen2Tiles.TILE_WIDTH \
-						+ y * (strip.size() / Gen2Tiles.TILE_HEIGHT) + x
+			for y: int in PokeTiles.TILE_HEIGHT:
+				for x: int in PokeTiles.TILE_WIDTH:
+					var from: int = source_tile * PokeTiles.TILE_WIDTH \
+						+ y * (strip.size() / PokeTiles.TILE_HEIGHT) + x
+					var to: int = target_tile * PokeTiles.TILE_WIDTH \
+						+ y * (strip.size() / PokeTiles.TILE_HEIGHT) + x
 					out[to] = strip[from]
 	return out
 
 
 ## `PokemonPalettes` entry EGG, in the same two-pair shape a species carries.
 func _read_egg_palette(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var at: int = RomLayout.palette_offset(layout, RomLayout.EGG_SPECIES)
+	var at: int = Gen2Layout.palette_offset(layout, Gen2Layout.EGG_SPECIES)
 	return {
 		"normal": [rom.u16le(at), rom.u16le(at + 2)],
 		"shiny": [rom.u16le(at + 4), rom.u16le(at + 6)],
@@ -7527,25 +7527,25 @@ func _read_egg_palette(rom: RomFile, layout: Dictionary) -> Dictionary:
 func _import_pics(
 	rom: RomFile, layout: Dictionary, species: Array, on_progress: Callable
 ) -> Dictionary:
-	var front: Dictionary = _new_atlas(RomLayout.FRONTPIC_MAX_TILES, RomLayout.SPECIES_COUNT)
-	var back: Dictionary = _new_atlas(RomLayout.BACKPIC_TILES, RomLayout.SPECIES_COUNT)
-	var unown_front: Dictionary = _new_atlas(RomLayout.FRONTPIC_MAX_TILES, RomLayout.UNOWN_FORMS)
+	var front: Dictionary = _new_atlas(Gen2Layout.FRONTPIC_MAX_TILES, Gen2Layout.SPECIES_COUNT)
+	var back: Dictionary = _new_atlas(Gen2Layout.BACKPIC_TILES, Gen2Layout.SPECIES_COUNT)
+	var unown_front: Dictionary = _new_atlas(Gen2Layout.FRONTPIC_MAX_TILES, Gen2Layout.UNOWN_FORMS)
 	# `GetAnimatedEnemyFrontpic` loads the tiles past the pic's own `w * h` out
 	# of the same decompressed run, into VRAM behind the padded 7x7 block. They
 	# are frames, not a picture, so they get an atlas rather than a slot in the
 	# one beside them.
-	var animated: bool = not RomLayout.pic_anim(layout).is_empty()
-	var front_anim: Dictionary = _new_atlas(RomLayout.FRONTPIC_MAX_TILES, RomLayout.SPECIES_COUNT)
+	var animated: bool = not Gen2Layout.pic_anim(layout).is_empty()
+	var front_anim: Dictionary = _new_atlas(Gen2Layout.FRONTPIC_MAX_TILES, Gen2Layout.SPECIES_COUNT)
 	var unown_front_anim: Dictionary = _new_atlas(
-		RomLayout.FRONTPIC_MAX_TILES, RomLayout.UNOWN_FORMS
+		Gen2Layout.FRONTPIC_MAX_TILES, Gen2Layout.UNOWN_FORMS
 	)
-	var unown_back: Dictionary = _new_atlas(RomLayout.BACKPIC_TILES, RomLayout.UNOWN_FORMS)
+	var unown_back: Dictionary = _new_atlas(Gen2Layout.BACKPIC_TILES, Gen2Layout.UNOWN_FORMS)
 	# `EggPic` is entry EGG of `PokemonPicPointers`, past the 251 species and the
 	# unused slot between them, and `GetEggFrontpic` loads it the way any other
 	# front pic is loaded. It gets an atlas of its own because there is no
 	# species record to hang it on: EGG is a party species, not a Pokemon.
-	var egg_front: Dictionary = _new_atlas(RomLayout.FRONTPIC_MAX_TILES, 1)
-	var egg_side: int = RomLayout.EGG_PIC_TILES
+	var egg_front: Dictionary = _new_atlas(Gen2Layout.FRONTPIC_MAX_TILES, 1)
+	var egg_side: int = Gen2Layout.EGG_PIC_TILES
 	## Gold and Silver's table stops at NUM_POKEMON, so `_GetFrontpic` answers
 	## EGG with `ld hl, EggPic` and the pic is at an address like a back pic.
 	## Their picture is a different one.
@@ -7557,20 +7557,20 @@ func _import_pics(
 		_decode_lz_into(rom, egg_at, egg_side, egg_side, egg_front, 0)
 	else:
 		_decode_into(
-			rom, layout, RomLayout.pic_pointer_offset(layout, RomLayout.EGG_SPECIES, false),
+			rom, layout, Gen2Layout.pic_pointer_offset(layout, Gen2Layout.EGG_SPECIES, false),
 			egg_side, egg_side, egg_front, 0
 		)
-	var trainer_classes: int = RomLayout.trainer_class_count(layout)
-	var trainers: Dictionary = _new_atlas(RomLayout.TRAINER_PIC_TILES, trainer_classes)
+	var trainer_classes: int = Gen2Layout.trainer_class_count(layout)
+	var trainers: Dictionary = _new_atlas(Gen2Layout.TRAINER_PIC_TILES, trainer_classes)
 	# `GetTrainerBackpic`'s three, which are the player standing on the field
 	# before a Pokemon is sent out rather than anybody's front pic.
 	var player_back: Dictionary = _new_atlas(
-		RomLayout.PLAYER_BACKPIC_TILES, RomLayout.PLAYER_BACKPICS.size()
+		Gen2Layout.PLAYER_BACKPIC_TILES, Gen2Layout.PLAYER_BACKPICS.size()
 	)
 	var backpics: Dictionary = layout.get("player_backpic", {}) as Dictionary
-	var side: int = RomLayout.PLAYER_BACKPIC_TILES
-	for slot: int in RomLayout.PLAYER_BACKPICS.size():
-		var kind: String = RomLayout.PLAYER_BACKPICS[slot]
+	var side: int = Gen2Layout.PLAYER_BACKPIC_TILES
+	for slot: int in Gen2Layout.PLAYER_BACKPICS.size():
+		var kind: String = Gen2Layout.PLAYER_BACKPICS[slot]
 		var at: int = int(backpics.get(kind, -1))
 		if at < 0:
 			continue
@@ -7579,7 +7579,7 @@ func _import_pics(
 		# `.Decompress`. All three are stored column major, the way every pic is.
 		if kind == "kris":
 			_blit_pic(
-				rom.bytes().slice(at, at + side * side * Gen2Tiles.TILE_BYTES),
+				rom.bytes().slice(at, at + side * side * PokeTiles.TILE_BYTES),
 				side, side, player_back, slot
 			)
 			continue
@@ -7594,53 +7594,53 @@ func _import_pics(
 		# their own atlas, and the species slot gets form A so a caller that
 		# does not know about forms still gets a sprite rather than a hole.
 		var source: int = number
-		if number == RomLayout.UNOWN_SPECIES:
-			for form: int in RomLayout.UNOWN_FORMS:
+		if number == Gen2Layout.UNOWN_SPECIES:
+			for form: int in Gen2Layout.UNOWN_FORMS:
 				_decode_into(
-					rom, layout, RomLayout.unown_pic_pointer_offset(layout, form, false),
+					rom, layout, Gen2Layout.unown_pic_pointer_offset(layout, form, false),
 					tiles[0], tiles[1], unown_front, form
 				)
 				if animated:
 					_decode_into(
-						rom, layout, RomLayout.unown_pic_pointer_offset(layout, form, false),
+						rom, layout, Gen2Layout.unown_pic_pointer_offset(layout, form, false),
 						tiles[0], tiles[1], unown_front_anim, form, tiles[0] * tiles[1]
 					)
 				_decode_into(
-					rom, layout, RomLayout.unown_pic_pointer_offset(layout, form, true),
-					RomLayout.BACKPIC_TILES, RomLayout.BACKPIC_TILES, unown_back, form
+					rom, layout, Gen2Layout.unown_pic_pointer_offset(layout, form, true),
+					Gen2Layout.BACKPIC_TILES, Gen2Layout.BACKPIC_TILES, unown_back, form
 				)
 			_decode_into(
-				rom, layout, RomLayout.unown_pic_pointer_offset(layout, 0, false),
+				rom, layout, Gen2Layout.unown_pic_pointer_offset(layout, 0, false),
 				tiles[0], tiles[1], front, slot
 			)
 			_decode_into(
-				rom, layout, RomLayout.unown_pic_pointer_offset(layout, 0, true),
-				RomLayout.BACKPIC_TILES, RomLayout.BACKPIC_TILES, back, slot
+				rom, layout, Gen2Layout.unown_pic_pointer_offset(layout, 0, true),
+				Gen2Layout.BACKPIC_TILES, Gen2Layout.BACKPIC_TILES, back, slot
 			)
 		else:
 			_decode_into(
-				rom, layout, RomLayout.pic_pointer_offset(layout, source, false),
+				rom, layout, Gen2Layout.pic_pointer_offset(layout, source, false),
 				tiles[0], tiles[1], front, slot
 			)
 			if animated:
 				_decode_into(
-					rom, layout, RomLayout.pic_pointer_offset(layout, source, false),
+					rom, layout, Gen2Layout.pic_pointer_offset(layout, source, false),
 					tiles[0], tiles[1], front_anim, slot, tiles[0] * tiles[1]
 				)
 			_decode_into(
-				rom, layout, RomLayout.pic_pointer_offset(layout, source, true),
-				RomLayout.BACKPIC_TILES, RomLayout.BACKPIC_TILES, back, slot
+				rom, layout, Gen2Layout.pic_pointer_offset(layout, source, true),
+				Gen2Layout.BACKPIC_TILES, Gen2Layout.BACKPIC_TILES, back, slot
 			)
 
 		if on_progress.is_valid():
-			on_progress.call("pics", number, RomLayout.SPECIES_COUNT)
+			on_progress.call("pics", number, Gen2Layout.SPECIES_COUNT)
 
 	# Trainer pics share the pointer form and the bank repair, and differ in that
 	# every one of them is the same square and none of them has a back half.
 	for trainer_class: int in range(1, trainer_classes + 1):
 		_decode_into(
-			rom, layout, RomLayout.trainer_pic_pointer_offset(layout, trainer_class),
-			RomLayout.TRAINER_PIC_TILES, RomLayout.TRAINER_PIC_TILES, trainers, trainer_class - 1
+			rom, layout, Gen2Layout.trainer_pic_pointer_offset(layout, trainer_class),
+			Gen2Layout.TRAINER_PIC_TILES, Gen2Layout.TRAINER_PIC_TILES, trainers, trainer_class - 1
 		)
 
 		if on_progress.is_valid():
@@ -7672,7 +7672,7 @@ func _import_pics(
 
 
 func _new_atlas(cell_tiles: int, cells: int) -> Dictionary:
-	var cell: int = cell_tiles * Gen2Tiles.TILE_WIDTH
+	var cell: int = cell_tiles * PokeTiles.TILE_WIDTH
 	var rows: int = ceili(float(cells) / ATLAS_COLUMNS)
 	var width: int = ATLAS_COLUMNS * cell
 	var height: int = rows * cell
@@ -7692,7 +7692,7 @@ func _decode_lz_into(
 	if columns <= 0 or rows <= 0 or not rom.in_bounds(start):
 		return false
 	var raw: PackedByteArray = _lz.decompress(rom.bytes(), start)
-	if _lz.failed or raw.size() < columns * rows * Gen2Tiles.TILE_BYTES:
+	if _lz.failed or raw.size() < columns * rows * PokeTiles.TILE_BYTES:
 		return false
 	_blit_pic(raw, columns, rows, atlas, slot)
 	return true
@@ -7715,20 +7715,20 @@ func _decode_into(
 		return false
 
 	var pointer: Dictionary = rom.far_pointer(pointer_offset)
-	var bank: int = RomLayout.fix_pic_bank(layout, pointer["bank"])
+	var bank: int = Gen2Layout.fix_pic_bank(layout, pointer["bank"])
 	var start: int = RomFile.linear(bank, pointer["address"])
 	if not rom.in_bounds(start):
 		return false
 
 	var raw: PackedByteArray = _lz.decompress(rom.bytes(), start)
-	if _lz.failed or raw.size() < (skip_tiles + columns * rows) * Gen2Tiles.TILE_BYTES:
+	if _lz.failed or raw.size() < (skip_tiles + columns * rows) * PokeTiles.TILE_BYTES:
 		# The animation's tail is as long as the picture only when every frame
 		# tile is distinct: `front.animated.2bpp` deduplicates them, and
 		# `GetAnimatedEnemyFrontpic` copies `w * h` whatever is there, so the
 		# short ones end in tiles no frame names. Pad rather than refuse.
-		if skip_tiles <= 0 or raw.size() <= skip_tiles * Gen2Tiles.TILE_BYTES:
+		if skip_tiles <= 0 or raw.size() <= skip_tiles * PokeTiles.TILE_BYTES:
 			return false
-		raw.resize((skip_tiles + columns * rows) * Gen2Tiles.TILE_BYTES)
+		raw.resize((skip_tiles + columns * rows) * PokeTiles.TILE_BYTES)
 
 	_blit_pic(raw, columns, rows, atlas, slot, skip_tiles)
 	return true
@@ -7739,12 +7739,12 @@ func _blit_pic(
 	raw: PackedByteArray, columns: int, rows: int, atlas: Dictionary, slot: int,
 	skip_tiles: int = 0
 ) -> void:
-	var pixels: PackedByteArray = Gen2Tiles.decode_pic(
-		raw.slice(skip_tiles * Gen2Tiles.TILE_BYTES) if skip_tiles > 0 else raw, columns, rows
+	var pixels: PackedByteArray = PokeTiles.decode_pic(
+		raw.slice(skip_tiles * PokeTiles.TILE_BYTES) if skip_tiles > 0 else raw, columns, rows
 	)
 	var cell: int = atlas["cell"]
-	Gen2Tiles.blit(
-		pixels, columns * Gen2Tiles.TILE_WIDTH,
+	PokeTiles.blit(
+		pixels, columns * PokeTiles.TILE_WIDTH,
 		atlas["pixels"], atlas["width"],
 		(slot % ATLAS_COLUMNS) * cell, floori(float(slot) / float(ATLAS_COLUMNS)) * cell
 	)
@@ -7758,7 +7758,7 @@ func _blit_pic(
 ## in that order, so one byte run holds a frame and the bitmask table's own
 ## deduplication is resolved here rather than at every draw.
 func _import_pic_anims(rom: RomFile, layout: Dictionary, species: Array) -> Dictionary:
-	var pins: Dictionary = RomLayout.pic_anim(layout)
+	var pins: Dictionary = Gen2Layout.pic_anim(layout)
 	if pins.is_empty():
 		return {}
 
@@ -7767,14 +7767,14 @@ func _import_pic_anims(rom: RomFile, layout: Dictionary, species: Array) -> Dict
 		heights[int(entry["number"])] = int((entry["front_tiles"] as Array)[1])
 
 	var out: Dictionary = {"species": {}, "unown": []}
-	for number: int in range(1, RomLayout.SPECIES_COUNT + 1):
+	for number: int in range(1, Gen2Layout.SPECIES_COUNT + 1):
 		var record: Dictionary = _read_pic_anim(
 			rom, int(heights.get(number, 0)), int(pins["script_bank"]),
 			int(pins["scripts"]) + (number - 1) * 2,
 			int(pins["idle_scripts"]) + (number - 1) * 2,
 			int(pins["bitmask_pointers"]) + (number - 1) * 2, int(pins["bitmask_bank"]),
 			int(pins["frame_pointers"]) + (number - 1) * 2,
-			int(pins["kanto_frame_bank"]) if number < RomLayout.JOHTO_SPECIES \
+			int(pins["kanto_frame_bank"]) if number < Gen2Layout.JOHTO_SPECIES \
 				else int(pins["johto_frame_bank"])
 		)
 		if record.is_empty():
@@ -7783,8 +7783,8 @@ func _import_pic_anims(rom: RomFile, layout: Dictionary, species: Array) -> Dict
 
 	# Unown is one placeholder in the species tables and 26 letters here, the
 	# split `PokeAnim_GetSpeciesOrUnown` makes.
-	var unown_height: int = int(heights.get(RomLayout.UNOWN_SPECIES, 0))
-	for form: int in RomLayout.UNOWN_FORMS:
+	var unown_height: int = int(heights.get(Gen2Layout.UNOWN_SPECIES, 0))
+	for form: int in Gen2Layout.UNOWN_FORMS:
 		var record: Dictionary = _read_pic_anim(
 			rom, unown_height, int(pins["script_bank"]),
 			int(pins["unown_scripts"]) + form * 2,
@@ -7812,7 +7812,7 @@ func _read_pic_anim(
 	frame_pointer: int,
 	frame_bank: int
 ) -> Dictionary:
-	var mask_bytes: int = RomLayout.pic_anim_bitmask_bytes(height)
+	var mask_bytes: int = Gen2Layout.pic_anim_bitmask_bytes(height)
 	if mask_bytes <= 0:
 		return {}
 	var script: PackedByteArray = _read_pic_anim_script(rom, script_bank, script_pointer)

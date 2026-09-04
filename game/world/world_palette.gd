@@ -135,7 +135,7 @@ const POISON_FLASH_FRAMES: int = 4
 
 
 static func poison_flash_palette() -> PackedColorArray:
-	var colour: Color = Gen2Palette.from_packed(POISON_FLASH_COLOR)
+	var colour: Color = PokePalette.from_packed(POISON_FLASH_COLOR)
 	return PackedColorArray([colour, colour, colour, colour])
 ## `BattleTowerFade` is `FadeOutToWhite`'s four rows with `ld c, 7` instead.
 const BATTLE_TOWER_FADE_STEP_FRAMES: int = 7

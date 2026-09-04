@@ -64,24 +64,24 @@ func handle_button(button: int) -> bool:
 		return false
 	if _printing:
 		## `CheckCancelPrint` reads B alone, and the send never ends on its own.
-		if button == Gen2Button.B:
+		if button == PokeButton.B:
 			_printing = false
 			map_music_requested.emit()
 			_refresh()
 		return true
 	match button:
-		Gen2Button.B:
+		PokeButton.B:
 			close()
-		Gen2Button.A:
+		PokeButton.A:
 			_printing = true
 			music_requested.emit(MUSIC_PRINTER)
 			_refresh()
-		Gen2Button.LEFT:
+		PokeButton.LEFT:
 			## `.press_left`: zero becomes `NUM_UNOWN + 1` before the decrement,
 			## so the vacant slot is what the first letter wraps back to.
 			_slot = Gen2UnownPrinterPage.SLOTS - 1 if _slot == 0 else _slot - 1
 			_refresh()
-		Gen2Button.RIGHT:
+		PokeButton.RIGHT:
 			_slot = 0 if _slot >= Gen2UnownPrinterPage.SLOTS - 1 else _slot + 1
 			_refresh()
 	return true

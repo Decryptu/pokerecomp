@@ -117,7 +117,7 @@ const LEADER_FACE_TILES: int = 10
 const LEADER_STRIDE: int = 4
 
 ## `_CGB_TrainerCard`'s attribute map in [constant
-## RomLayout.CARD_PALETTE_CLASSES]' order, filled whatever page is on screen
+## Gen2Layout.CARD_PALETTE_CLASSES]' order, filled whatever page is on screen
 ## since the layout runs once in `.InitRAM`. The card takes the opposite
 ## gender's palette and the pic area the player's own, Clair's box is filled
 ## only for Kris, and the top-right corner is written twice.
@@ -167,8 +167,8 @@ func ready() -> bool:
 ## the same tile exactly as it does in VRAM.
 func _load_vram(data: GameData, is_female: bool) -> void:
 	var pic: String = "card_pic_female" if is_female and crystal else "card_pic_male"
-	_load_sheet(data, pic, PIC_FIRST_TILE, RomLayout.CARD_PIC_TILES)
-	_load_sheet(data, "card_frame", FRAME_FIRST_TILE, RomLayout.CARD_FRAME_TILES)
+	_load_sheet(data, pic, PIC_FIRST_TILE, Gen2Layout.CARD_PIC_TILES)
+	_load_sheet(data, "card_frame", FRAME_FIRST_TILE, Gen2Layout.CARD_FRAME_TILES)
 	if crystal:
 		_load_sheet(data, "card_right_corner", CORNER_TILE_CRYSTAL, 1)
 

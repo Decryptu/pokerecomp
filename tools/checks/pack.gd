@@ -444,10 +444,10 @@ func _verify_screen(game_id: StringName, data: GameData) -> void:
 		_r.fail("%s: the cache carries no pack graphics." % game_id)
 		return
 	var names: Dictionary = {}
-	for pocket: int in RomLayout.PACK_POCKETS:
+	for pocket: int in Gen2Layout.PACK_POCKETS:
 		var name_cells: PackedByteArray = data.pack_pocket_name(pocket)
 		_r.check(
-			name_cells.size() == RomLayout.PACK_NAME_COLUMNS * RomLayout.PACK_NAME_ROWS,
+			name_cells.size() == Gen2Layout.PACK_NAME_COLUMNS * Gen2Layout.PACK_NAME_ROWS,
 			"%s: pocket %d has no name piece." % [game_id, pocket]
 		)
 		names[name_cells] = pocket
@@ -466,7 +466,7 @@ func _verify_screen(game_id: StringName, data: GameData) -> void:
 			continue
 		_check_pack_palettes(game_id, data, image, pocket)
 	_r.check(
-		names.size() == RomLayout.PACK_POCKETS,
+		names.size() == Gen2Layout.PACK_POCKETS,
 		"%s: the four pocket names are %d distinct pieces." % [game_id, names.size()]
 	)
 	## Kris's pack is Crystal's alone, so a Gold or Silver cache carrying one
@@ -477,7 +477,7 @@ func _verify_screen(game_id: StringName, data: GameData) -> void:
 		"%s: a female pack is %spresent." % [game_id, "" if female else "not "]
 	)
 	print("%s: four pockets drawn, %d palettes, female pack %s." % [
-		game_id, RomLayout.PACK_PALETTES, "yes" if female else "no",
+		game_id, Gen2Layout.PACK_PALETTES, "yes" if female else "no",
 	])
 
 
@@ -508,7 +508,7 @@ func _check_pack_palettes(
 	):
 		return
 	var palettes: Array = []
-	for slot: int in RomLayout.PACK_PALETTES:
+	for slot: int in Gen2Layout.PACK_PALETTES:
 		palettes.append(Gen2PicImage.quantized(data.pack_palette(slot)))
 	for row: int in Gen2PackPage.ROWS:
 		for column: int in columns:
@@ -540,7 +540,7 @@ func _verify_descriptions(game_id: StringName, data: GameData) -> void:
 		rows += 1
 		for line: String in text.split("\n", false):
 			widest = maxi(widest, line.length())
-	for number: int in range(1, RomLayout.MOVE_DESCRIPTION_COUNT + 1):
+	for number: int in range(1, Gen2Layout.MOVE_DESCRIPTION_COUNT + 1):
 		var text: String = String(data.move(number).get("description", ""))
 		_r.check(not text.is_empty(), "%s: move %d has no description." % [game_id, number])
 		for line: String in text.split("\n", false):
@@ -552,5 +552,5 @@ func _verify_descriptions(game_id: StringName, data: GameData) -> void:
 		]
 	)
 	print("%s: %d item and %d move descriptions, widest line %d." % [
-		game_id, rows, RomLayout.MOVE_DESCRIPTION_COUNT, widest,
+		game_id, rows, Gen2Layout.MOVE_DESCRIPTION_COUNT, widest,
 	])

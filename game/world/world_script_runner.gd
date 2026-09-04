@@ -82,8 +82,8 @@ var _command_count: int = 0
 ## `bank:address` the cartridge would have in wScriptBank:wScriptPos when it
 ## ran. Collected only while `trace_commands` is on, which
 ## `tools/trace_world_script.gd` turns on for every runner a world builds so a
-## walked conversation can be diffed against `.claude/oracle/overworld/
-## trace_script.py`'s reading of the same one.
+## walked conversation can be diffed against the same walk taken off a real
+## cartridge.
 static var trace_commands: bool = false
 var command_trace: Array[Dictionary] = []
 ## `Script_sdefer`'s own `RUN_DEFERRED_SCRIPT`, which is the only thing that
@@ -451,7 +451,7 @@ const TRADE_DIALOG_AFTER: int = 4
 ## `GetTradeMonNames`' tail, written over the name's terminator when the row
 ## asks for a gender. TRADE_GENDER_EITHER writes nothing.
 const TRADE_GENDER_SYMBOLS: Dictionary = {
-	RomLayout.TRADE_GENDER_MALE: "\u2642", RomLayout.TRADE_GENDER_FEMALE: "\u2640",
+	Gen2Layout.TRADE_GENDER_MALE: "\u2642", Gen2Layout.TRADE_GENDER_FEMALE: "\u2640",
 }
 ## `TradedForText`'s own tail in order: the `PlayMusic MUSIC_NONE` its `text_asm`
 ## spends, the `sound_dex_fanfare_80_109` behind it, and the `RestartMapMusic`
@@ -1107,7 +1107,7 @@ func _resume_buena_prize_menu(choice: int) -> Dictionary:
 	var prize_row: int = clampi(choice, 0, BUENA_PRIZES.size() - 1)
 	_pending = {}
 	_set_text_buffer(
-		RomLayout.STRING_BUFFER_1,
+		Gen2Layout.STRING_BUFFER_1,
 		data.item_name(int(BUENA_PRIZES[prize_row][0])) if data != null else "",
 		&"buena_prize", {"special": prize_special, "prize": prize_row}
 	)
@@ -1840,7 +1840,7 @@ func _complete_battle(
 		if not bool(counted.get("ok", true)):
 			return counted
 		_set_text_buffer(
-			RomLayout.STRING_BUFFER_3, str(beaten + 1), &"battle_tower_opponent"
+			Gen2Layout.STRING_BUFFER_3, str(beaten + 1), &"battle_tower_opponent"
 		)
 		_battle_tower_opponent = {}
 		_script_value = BATTLE_RESULT_WIN
@@ -2147,7 +2147,7 @@ func _execute_early_command(opcode: int, command: Dictionary, bank: int) -> Dict
 		var variable_item: int = int(command.get("item", 0))
 		var variable_name: String = data.item_name(variable_item) if data != null else ""
 		_set_text_buffer(
-			RomLayout.STRING_BUFFER_4, variable_name, &"item_name",
+			Gen2Layout.STRING_BUFFER_4, variable_name, &"item_name",
 			{"item": variable_item}
 		)
 		var variable_given: Dictionary = _stage_item_delta(variable_item, _script_value)
@@ -3381,12 +3381,12 @@ func _set_trade_names(record: Dictionary) -> void:
 	)
 	_set_text_ram("mon_or_item_name", wanted)
 	_set_text_buffer(
-		RomLayout.STRING_BUFFER_2,
+		Gen2Layout.STRING_BUFFER_2,
 		String(data.species(int(record.get("offered_species", 0))).get("name", "")),
 		&"npc_trade_names"
 	)
 	_set_text_buffer(
-		RomLayout.STRING_BUFFER_1,
+		Gen2Layout.STRING_BUFFER_1,
 		wanted + String(TRADE_GENDER_SYMBOLS.get(int(record.get("gender", 0)), "")),
 		&"npc_trade_names"
 	)
@@ -3394,13 +3394,13 @@ func _set_trade_names(record: Dictionary) -> void:
 
 ## One `TradeTexts` cell. Crystal's two NEWBIE boxes sit in their own run.
 func _trade_dialog_text(record: Dictionary, dialog: int) -> String:
-	var name: String = RomLayout.trade_text_name(
+	var name: String = Gen2Layout.trade_text_name(
 		_crystal_commands(), dialog, int(record.get("dialog", 0))
 	)
 	if name.is_empty():
 		return ""
 	return _special_box(
-		"npc_trade_newbie" if name in RomLayout.TRADE_NEWBIE_TEXTS else "npc_trade",
+		"npc_trade_newbie" if name in Gen2Layout.TRADE_NEWBIE_TEXTS else "npc_trade",
 		name
 	)
 
@@ -3450,7 +3450,7 @@ func _finish_trade_selection(trade: Dictionary, result: Dictionary) -> Dictionar
 	if species != int(record.get("requested_species", 0)) \
 		or not Gen2WorldPartyHost.trade_gender_matches(
 			data, species, dv_word,
-			int(record.get("gender", RomLayout.TRADE_GENDER_EITHER))
+			int(record.get("gender", Gen2Layout.TRADE_GENDER_EITHER))
 		):
 		return _trade_result(_trade_box(record, TRADE_DIALOG_WRONG, true))
 	## `ld b, SET_FLAG`, spent in front of the cable line and of the swap.
@@ -3559,7 +3559,7 @@ func _command_verbosegiveitem(_source_opcode: int, command: Dictionary, _bank: i
 	var verbose_item: int = int(command.get("item", 0))
 	var verbose_name: String = data.item_name(verbose_item) if data != null else ""
 	_set_text_buffer(
-		RomLayout.STRING_BUFFER_4, verbose_name, &"item_name",
+		Gen2Layout.STRING_BUFFER_4, verbose_name, &"item_name",
 		{"item": verbose_item}
 	)
 	var given: Dictionary = _stage_item_delta(
@@ -3730,7 +3730,7 @@ func _stage_mystery_gift_item(special: int) -> Dictionary:
 	Gen2MysteryGift.clear_item(section)
 	var item_name: String = data.item_name(item) if data != null else ""
 	_set_text_buffer(
-		RomLayout.STRING_BUFFER_4, item_name, &"item_name", {"item": item}
+		Gen2Layout.STRING_BUFFER_4, item_name, &"item_name", {"item": item}
 	)
 	return _stage_internal_text(RECEIVED_ITEM_TEXT % item_name, false, {
 		"special": special, "item": item,
@@ -5214,7 +5214,7 @@ func _special_reset_lucky_number_show_flag(_special: int) -> Dictionary:
 func _special_print_todays_lucky_number(special: int) -> Dictionary:
 	_refresh_lucky_id_number()
 	_set_text_buffer(
-		RomLayout.STRING_BUFFER_3, "%05d" % _lucky_id_number(), &"lucky_number",
+		Gen2Layout.STRING_BUFFER_3, "%05d" % _lucky_id_number(), &"lucky_number",
 		{"special": special}
 	)
 	return {"ok": true}
@@ -5245,7 +5245,7 @@ func _special_check_for_lucky_number_winners(special: int) -> Dictionary:
 	var winner_name: String = String(
 		data.species(winner_species).get("name", "")
 	) if data != null else ""
-	_set_text_buffer(RomLayout.STRING_BUFFER_1, winner_name, &"lucky_number_winner", {
+	_set_text_buffer(Gen2Layout.STRING_BUFFER_1, winner_name, &"lucky_number_winner", {
 		"special": special, "species": winner_species,
 	})
 	var lucky_box: String = _special_box(
@@ -5262,7 +5262,7 @@ func _special_check_for_lucky_number_winners(special: int) -> Dictionary:
 ## zero bytes, which is what the sign shows before anyone has measured one.
 func _special_magikarp_house_sign(special: int) -> Dictionary:
 	var record: Dictionary = state.best_magikarp() if state != null else {}
-	_set_text_buffer(RomLayout.STRING_BUFFER_1, Gen2WorldPartyHost.magikarp_length_string(
+	_set_text_buffer(Gen2Layout.STRING_BUFFER_1, Gen2WorldPartyHost.magikarp_length_string(
 		int(record.get("feet", 0)), int(record.get("inches", 0))
 	), &"magikarp_length", {"special": special})
 	_set_text_ram("magikarp_record_holder", String(record.get("ot", "")))
@@ -5495,7 +5495,7 @@ func _decoration_block(slot: StringName) -> int:
 	return int(data.decoration(deco).get("sprite", 0)) if deco > 0 else 0
 
 
-## One `RomLayout.SPECIAL_TEXT_RUNS` box, with the buffers this runner has
+## One `Gen2Layout.SPECIAL_TEXT_RUNS` box, with the buffers this runner has
 ## filled written into it. The imported string still carries
 ## [Gen2TextStream]'s markers, which is what lets one cached box serve both the
 ## screen that draws it and a text staged straight onto the map.
@@ -5736,7 +5736,7 @@ func _mom_result(staged: Dictionary) -> Dictionary:
 ## `.a_button` and `.b_button`: the CANCEL row and B both leave with `$a` in
 ## wScriptVar, and a level row is refused by either check before it is stored.
 func _resolve_room_menu(choice: int) -> Dictionary:
-	var groups: int = int(_pending.get("groups", RomLayout.BATTLETOWER_LEVEL_GROUPS))
+	var groups: int = int(_pending.get("groups", Gen2Layout.BATTLETOWER_LEVEL_GROUPS))
 	_pending = {}
 	if choice < 0 or choice >= groups:
 		_script_value = ROOM_MENU_CANCELLED
@@ -5787,7 +5787,7 @@ func _check_time_capsule_compatibility() -> Dictionary:
 		return {"ok": true}
 	if _script_value == Gen2LinkSession.TIME_CAPSULE_MOVE_TOO_NEW and data != null:
 		_set_text_buffer(
-			RomLayout.STRING_BUFFER_1,
+			Gen2Layout.STRING_BUFFER_1,
 			String(data.move(int(verdict["move"])).get("name", "")),
 			&"time_capsule_move", {"move": int(verdict["move"])}
 		)
@@ -5795,7 +5795,7 @@ func _check_time_capsule_compatibility() -> Dictionary:
 	var slot: int = int(verdict["slot"])
 	if slot >= 0 and slot < names.size():
 		_set_text_buffer(
-			RomLayout.STRING_BUFFER_3, String(names[slot]), &"time_capsule_mon",
+			Gen2Layout.STRING_BUFFER_3, String(names[slot]), &"time_capsule_mon",
 			{"slot": slot, "species": int(verdict["species"])}
 		)
 	return {"ok": true}
@@ -5874,7 +5874,7 @@ func _check_battle_tower_rules() -> Dictionary:
 	## be entered prints the number out of `wStringBuffer2` rather than spelling
 	## it, so a party of the wrong size is told the rule and not just refused.
 	_set_text_buffer(
-		RomLayout.STRING_BUFFER_2, str(Gen2BattleTower.PARTY_LENGTH), &"battle_tower_rules"
+		Gen2Layout.STRING_BUFFER_2, str(Gen2BattleTower.PARTY_LENGTH), &"battle_tower_rules"
 	)
 	var boxes: Array = [_special_box("battle_tower", "excuse_me")]
 	for failure: String in failures:
@@ -5896,7 +5896,7 @@ func _check_battle_tower_rules() -> Dictionary:
 ## answers 4, which is why the script tests only Challenge and Explanation.
 func _stage_challenge_menu() -> Dictionary:
 	var rows: Array = (_battle_tower_data().get("menu_rows", []) as Array).duplicate()
-	if rows.size() != RomLayout.BATTLETOWER_CHALLENGE_MENU_ROWS:
+	if rows.size() != Gen2Layout.BATTLETOWER_CHALLENGE_MENU_ROWS:
 		return _fail(&"missing_battle_tower_menu", {"special": SPECIAL_CHALLENGE_MENU})
 	_pending = {
 		"type": &"menu",
@@ -5922,12 +5922,12 @@ func _stage_challenge_menu() -> Dictionary:
 ## and all ten after it, CANCEL behind either.
 func _stage_room_menu() -> Dictionary:
 	var rows: Array = (_battle_tower_data().get("level_rows", []) as Array).duplicate()
-	if rows.size() != RomLayout.BATTLETOWER_LEVEL_ROWS:
+	if rows.size() != Gen2Layout.BATTLETOWER_LEVEL_ROWS:
 		return _fail(&"missing_battle_tower_menu", {"special": SPECIAL_BATTLE_TOWER_ROOM_MENU})
-	var groups: int = RomLayout.BATTLETOWER_LEVEL_GROUPS if _hall_of_fame_entered() \
+	var groups: int = Gen2Layout.BATTLETOWER_LEVEL_GROUPS if _hall_of_fame_entered() \
 		else Gen2BattleTower.PRE_HALL_OF_FAME_GROUPS
 	var options: Array = rows.slice(0, groups)
-	options.append(rows[RomLayout.BATTLETOWER_LEVEL_GROUPS])
+	options.append(rows[Gen2Layout.BATTLETOWER_LEVEL_GROUPS])
 	_pending = {
 		"type": &"menu",
 		"command": &"battle_tower_room",
@@ -6077,7 +6077,7 @@ func _mom_savings_flags() -> int:
 
 ## `RestartLuckyNumberCountdown.GetDaysUntilNextFriday`, which answers seven on
 ## a Friday or a Saturday rather than nought or a negative.
-## One of the WRAM buffers `RomLayout`'s `special_text_ram` names, by that name
+## One of the WRAM buffers `Gen2Layout`'s `special_text_ram` names, by that name
 ## rather than by its address: Gold and Crystal put the same buffer in different
 ## places, and a cartridge that ships no such buffer takes no write.
 func _set_text_ram(name: String, value: String) -> void:
@@ -6214,7 +6214,7 @@ func _phone_grass_rows() -> Array:
 		return []
 	var rows: Array = [(slots as Array)[0], (slots as Array)[time_of_day]]
 	for row: Variant in rows:
-		if not row is Array or (row as Array).size() < RomLayout.WILD_GRASS_SLOT_COUNT:
+		if not row is Array or (row as Array).size() < Gen2Layout.WILD_GRASS_SLOT_COUNT:
 			return []
 	return rows
 
@@ -6469,7 +6469,7 @@ func _finish_deferred_party_selection(
 				_dv_bytes(result.get("dvs", [])), int(result.get("ot_id", 0))
 			)
 			_set_text_buffer(
-				RomLayout.STRING_BUFFER_1,
+				Gen2Layout.STRING_BUFFER_1,
 				Gen2WorldPartyHost.magikarp_length_string(length.x, length.y),
 				&"magikarp_length", {"special": special}
 			)
@@ -7180,7 +7180,7 @@ func _stage_item_gift() -> Dictionary:
 	if item <= 0 or item_name.is_empty():
 		return _fail(&"invalid_item_gift", {"item": item})
 	_set_text_buffer(
-		RomLayout.STRING_BUFFER_4, item_name, &"item_name", {"item": item}
+		Gen2Layout.STRING_BUFFER_4, item_name, &"item_name", {"item": item}
 	)
 	var given: Dictionary = _stage_item_delta(item, maxi(1, int(_request.get("quantity", 1))))
 	if not bool(given.get("ok", true)):

@@ -43,7 +43,7 @@ func _initialize() -> void:
 		return
 	var game: StringName = StringName(args[0])
 	_output_path = args[1]
-	if Gen2ToolPath.refuses(_output_path):
+	if PokeToolPath.refuses(_output_path):
 		quit(2)
 		return
 	if args.size() > 2:
@@ -154,7 +154,7 @@ func _drive(step: Vector2i) -> void:
 		return
 	if _what == "gender":
 		for _press: int in step.x - _presses_run:
-			_screen.handle_button(Gen2Button.DOWN)
+			_screen.handle_button(PokeButton.DOWN)
 		_presses_run = step.x
 		return
 	if _what == "clock":
@@ -163,7 +163,7 @@ func _drive(step: Vector2i) -> void:
 		var clock: Gen2ClockSetScreen = _screen as Gen2ClockSetScreen
 		while _presses_run < step.x:
 			_settle_frames(clock)
-			clock.handle_button(Gen2Button.A)
+			clock.handle_button(PokeButton.A)
 			_presses_run += 1
 			_frames_run = 0
 		clock.advance_frames(maxi(step.y - _frames_run, 0))
@@ -177,7 +177,7 @@ func _drive(step: Vector2i) -> void:
 		return
 	while _presses_run < step.x:
 		_settle_frames(speech)
-		speech.handle_button(Gen2Button.A)
+		speech.handle_button(PokeButton.A)
 		_presses_run += 1
 		_frames_run = 0
 	# Both halves of a step are absolute, so steps given in order photograph a
@@ -211,7 +211,7 @@ func _process(_delta: float) -> bool:
 	if _elapsed == FRAMES_BEFORE_CAPTURE:
 		_drive(_steps[_at])
 		return false
-	var image: Image = Gen2ToolPath.capture(root)
+	var image: Image = PokeToolPath.capture(root)
 	if image == null:
 		quit(1)
 		return true

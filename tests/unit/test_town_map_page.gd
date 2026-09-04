@@ -158,11 +158,11 @@ func test_every_card_draws_the_source_text_box() -> void:
 	]:
 		assert_eq(
 			_at(map, Gen2TownMapPage.CARD_TEXTBOX_AT),
-			RomLayout.FRAME_FIRST_CODE + RomLayout.FRAME_TOP_LEFT
+			Gen2Layout.FRAME_FIRST_CODE + Gen2Layout.FRAME_TOP_LEFT
 		)
 		assert_eq(
 			_at(map, Vector2i(19, 17)),
-			RomLayout.FRAME_FIRST_CODE + RomLayout.FRAME_BOTTOM_RIGHT
+			Gen2Layout.FRAME_FIRST_CODE + Gen2Layout.FRAME_BOTTOM_RIGHT
 		)
 		assert_eq(_at(map, Vector2i(1, 13)), Gen2TownMapPage.BLANK_TILE)
 
@@ -257,7 +257,7 @@ func test_the_yes_no_box_is_at_the_source_corner() -> void:
 	_page.draw_yes_no(map, 1)
 	assert_eq(
 		_at(map, Vector2i(Gen2TownMapPage.YES_NO_BOX[0], Gen2TownMapPage.YES_NO_BOX[1])),
-		RomLayout.FRAME_FIRST_CODE + RomLayout.FRAME_TOP_LEFT
+		Gen2Layout.FRAME_FIRST_CODE + Gen2Layout.FRAME_TOP_LEFT
 	)
 	assert_eq(_text(map, Vector2i(16, 8), 3), "YES")
 	assert_eq(_text(map, Vector2i(16, 10), 2), "NO")

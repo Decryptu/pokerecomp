@@ -18,7 +18,7 @@ const ACTOR_INTERACT_METHOD: String = "interact"
 const ACTOR_REQUESTS_METHOD: String = "take_requests"
 
 ## constants/script_constants.asm's EMOTE_* order, which is
-## [constant RomLayout.EMOTE_NAMES]' too. Named here so a mod asking for one over
+## [constant Gen2Layout.EMOTE_NAMES]' too. Named here so a mod asking for one over
 ## its own sprite names it rather than counting the array. The last four are the
 ## engine's own overlays rather than `showemote` arguments, and a mod naming one
 ## gets that sheet drawn where the bubble would be.
@@ -261,7 +261,7 @@ static func _span_height_offset_pixels(span: Dictionary) -> float:
 ## cache does not carry is dropped rather than drawn as a placeholder.
 func _resolve_emote(row: Dictionary) -> int:
 	var emote: int = int(row.get("emote", EMOTE_NONE))
-	if emote < 0 or emote >= RomLayout.EMOTE_NAMES.size():
+	if emote < 0 or emote >= Gen2Layout.EMOTE_NAMES.size():
 		return EMOTE_NONE
 	return emote
 

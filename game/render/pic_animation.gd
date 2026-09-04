@@ -285,7 +285,7 @@ func _apply_frame(command: int) -> void:
 	if command - 1 >= frames.size():
 		return
 	var frame: PackedByteArray = frames[command - 1]
-	var mask_bytes: int = RomLayout.pic_anim_bitmask_bytes(_height)
+	var mask_bytes: int = Gen2Layout.pic_anim_bitmask_bytes(_height)
 	if frame.size() < mask_bytes:
 		return
 
@@ -314,7 +314,7 @@ func _apply_frame(command: int) -> void:
 			var x: int = BOX - 1 - pad_column - column if mirrored \
 				else pad_column + column
 			box[x * BOX + pad_row + row] = \
-				RomLayout.pic_anim_box_tile(tile, _height) & 0xFF
+				Gen2Layout.pic_anim_box_tile(tile, _height) & 0xFF
 
 
 ## `PokeAnim_PlaceGraphic`: the whole 7x7 box filled column by column, which is

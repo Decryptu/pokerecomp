@@ -8,7 +8,7 @@ extends RefCounted
 ## are two passes over one strip, and a picture off by a nibble, a half-tile or a
 ## bitplane still draws something, so it asserts pixels rather than a checksum.
 
-const TILE: int = Gen2Tiles.TILE_WIDTH
+const TILE: int = PokeTiles.TILE_WIDTH
 
 ## `.Corners`, the sixteen `GetCurrentPuzzlePieceVTileCorner` answers for pieces
 ## 1 to 16, and its own `$e0` for none.
@@ -93,7 +93,7 @@ func run(r: RefCounted) -> void:
 			continue
 		_verify_section(game_id, data)
 		_verify_palette(game_id, data)
-		for puzzle: int in RomLayout.UNOWN_PUZZLE_PICTURES.size():
+		for puzzle: int in Gen2Layout.UNOWN_PUZZLE_PICTURES.size():
 			_verify_bank(game_id, data, puzzle)
 			_verify_board(game_id, data, puzzle)
 	_r.game_id = &""
@@ -106,7 +106,7 @@ func _verify_section(game_id: StringName, data: GameData) -> void:
 	if not _r.check(rom != null, "%s: roms/%s.gbc is unreadable." % [game_id, game_id]):
 		return
 	var section: Dictionary = RomImporter.read_unown_puzzle_section(
-		rom, RomLayout.for_id(rom.id)
+		rom, Gen2Layout.for_id(rom.id)
 	)
 	if not _r.check(
 		section.size() == STRIPS.size(),
@@ -118,13 +118,13 @@ func _verify_section(game_id: StringName, data: GameData) -> void:
 	for name: String in STRIPS:
 		var tiles: int = int(STRIPS[name])
 		_r.check(
-			int(section[name].size()) == tiles * Gen2Tiles.TILE_BYTES,
+			int(section[name].size()) == tiles * PokeTiles.TILE_BYTES,
 			"%s: %s is %d bytes, not %d tiles." % [
 				game_id, name, section[name].size(), tiles
 			]
 		)
 		_r.check(
-			data.unown_puzzle_indices(name) == Gen2Tiles.decode_2bpp_strip(
+			data.unown_puzzle_indices(name) == PokeTiles.decode_2bpp_strip(
 				section[name], 0, tiles
 			),
 			"%s: the cached %s strip is not the dump's." % [game_id, name]
@@ -138,7 +138,7 @@ func _verify_section(game_id: StringName, data: GameData) -> void:
 func _verify_palette(game_id: StringName, data: GameData) -> void:
 	var palette: PackedColorArray = data.unown_puzzle_palette()
 	if not _r.check(
-		palette.size() == RomLayout.PREDEF_PALETTE_COLORS,
+		palette.size() == Gen2Layout.PREDEF_PALETTE_COLORS,
 		"%s: the puzzle palette has %d colours." % [game_id, palette.size()]
 	):
 		return
@@ -163,13 +163,13 @@ func _verify_palette(game_id: StringName, data: GameData) -> void:
 ## `ConvertLoadedPuzzlePieces` and `UnownPuzzle_AddPuzzlePieceBorders`, per
 ## pixel, against the strip the cache holds rather than against the bank.
 func _verify_bank(game_id: StringName, data: GameData, puzzle: int) -> void:
-	var name: String = RomLayout.UNOWN_PUZZLE_PICTURES[puzzle]
+	var name: String = Gen2Layout.UNOWN_PUZZLE_PICTURES[puzzle]
 	var page: Gen2UnownPuzzlePage = Gen2UnownPuzzlePage.from_data(data, puzzle)
 	if not _r.check(page != null, "%s: %s will not build a bank." % [game_id, name]):
 		return
 	var picture: PackedByteArray = data.unown_puzzle_indices(name)
 	var borders: PackedByteArray = data.unown_puzzle_indices("tile_borders")
-	var side: int = RomLayout.UNOWN_PUZZLE_PICTURE_TILES
+	var side: int = Gen2Layout.UNOWN_PUZZLE_PICTURE_TILES
 	var wrong_pixels: int = 0
 	var wrong_borders: int = 0
 	for piece: int in Gen2UnownPuzzle.PIECES:
@@ -238,7 +238,7 @@ func _border_for(local: int) -> int:
 ## `UnownPuzzle_UpdateTilemap` and `PlaceStartCancelBox` over a whole board, in
 ## both the scattered and the solved configuration.
 func _verify_board(game_id: StringName, data: GameData, puzzle: int) -> void:
-	var name: String = RomLayout.UNOWN_PUZZLE_PICTURES[puzzle]
+	var name: String = Gen2Layout.UNOWN_PUZZLE_PICTURES[puzzle]
 	var page: Gen2UnownPuzzlePage = Gen2UnownPuzzlePage.from_data(data, puzzle)
 	if page == null:
 		return
@@ -333,15 +333,15 @@ func _verify_walk() -> void:
 	var wrong: int = 0
 	for cell: int in Gen2UnownPuzzle.CELLS:
 		for direction: int in [
-			Gen2Button.UP, Gen2Button.DOWN, Gen2Button.LEFT, Gen2Button.RIGHT
+			PokeButton.UP, PokeButton.DOWN, PokeButton.LEFT, PokeButton.RIGHT
 		]:
 			var puzzle := Gen2UnownPuzzle.create(null)
 			## The board is walked from cell 0, one step a press, so the cursor
 			## is put where the case wants it by pressing there first.
 			while puzzle.cursor() != cell:
-				var towards: int = Gen2Button.DOWN \
+				var towards: int = PokeButton.DOWN \
 					if puzzle.cursor() / Gen2UnownPuzzle.COLUMNS < cell / Gen2UnownPuzzle.COLUMNS \
-					else Gen2Button.RIGHT
+					else PokeButton.RIGHT
 				var before: int = puzzle.cursor()
 				puzzle.advance([towards], [towards])
 				if puzzle.cursor() == before:
@@ -359,15 +359,15 @@ func _verify_walk() -> void:
 ## `.d_up`, `.d_down`, `.d_left` and `.d_right`, restated.
 func _wanted_step(cell: int, direction: int) -> int:
 	match direction:
-		Gen2Button.UP:
+		PokeButton.UP:
 			return cell if cell in NO_STEP_UP else cell - 6
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			return cell if cell in NO_STEP_DOWN else cell + 6
-		Gen2Button.LEFT:
+		PokeButton.LEFT:
 			if cell == 35:
 				return 30
 			return cell if cell in NO_STEP_LEFT else cell - 1
-		Gen2Button.RIGHT:
+		PokeButton.RIGHT:
 			if cell == 30:
 				return 35
 			return cell if cell in NO_STEP_RIGHT else cell + 1

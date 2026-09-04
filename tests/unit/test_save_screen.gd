@@ -314,7 +314,7 @@ func test_box_screen_lists_the_party_with_a_cancel_row() -> void:
 	assert_eq(String((rows[0] as Dictionary)["name"]), "SPARKY")
 	assert_true(bool((rows[2] as Dictionary)["cancel"]))
 	for _press: int in 5:
-		_box_screen.handle_button(Gen2Button.DOWN)
+		_box_screen.handle_button(PokeButton.DOWN)
 	var snapshot: Dictionary = _box_screen.box_snapshot()
 	assert_eq(int(snapshot["cursor"]) + int(snapshot["scroll"]), rows.size() - 1)
 
@@ -325,19 +325,19 @@ func test_box_screen_lists_the_party_with_a_cancel_row() -> void:
 func test_a_row_opens_the_submenu_and_its_first_row_is_the_transfer() -> void:
 	var save: Gen2SaveData = _save_with_two()
 	await _open_box_screen(save)
-	_box_screen.handle_button(Gen2Button.DOWN)
-	_box_screen.handle_button(Gen2Button.A)
+	_box_screen.handle_button(PokeButton.DOWN)
+	_box_screen.handle_button(PokeButton.A)
 	var open: Dictionary = _box_screen.box_snapshot()
 	assert_eq(open["submenu"], Gen2BoxScreen.SUBMENU_ROWS)
 	assert_eq(String(open["prompt"]), Gen2BoxScreen.PROMPT_WHATS_UP)
 	assert_eq(save.party.size(), 2, "nothing moved on the way in")
 
-	_box_screen.handle_button(Gen2Button.A)
+	_box_screen.handle_button(PokeButton.A)
 	assert_eq(save.party.size(), 1)
 	assert_not_null(save.boxes[0].slots[0])
 	assert_eq(String(_box_screen.box_snapshot()["prompt"]), "Stored GEODUDE!")
 
-	assert_false(_box_screen.handle_button(Gen2Button.RIGHT))
+	assert_false(_box_screen.handle_button(PokeButton.RIGHT))
 	assert_eq(int(_box_screen.box_snapshot()["loaded"]), Gen2BoxScreen.LOADED_PARTY)
 
 
@@ -356,17 +356,17 @@ func test_the_party_list_refuses_a_transfer_that_would_leave_nobody_standing() -
 	await _open_box_screen(save)
 
 	# The cursor stands on the one Pokemon still up, and it is the one left out.
-	_box_screen.handle_button(Gen2Button.A)
-	_box_screen.handle_button(Gen2Button.A)
+	_box_screen.handle_button(PokeButton.A)
+	_box_screen.handle_button(PokeButton.A)
 	assert_eq(String(_box_screen.box_snapshot()["prompt"]), Gen2BoxScreen.PROMPT_NO_USABLE)
 	assert_eq(save.party.size(), 3, "nothing moved")
 
 	# A fainted row has two others to fall back on, so only the mail stops it.
-	_box_screen.handle_button(Gen2Button.DOWN)
+	_box_screen.handle_button(PokeButton.DOWN)
 	(save.party[1] as Gen2SaveMon).hp = 4
 	(save.party[1] as Gen2SaveMon).item = Gen2HeldItem.MAIL_ITEMS[0]
-	_box_screen.handle_button(Gen2Button.A)
-	_box_screen.handle_button(Gen2Button.A)
+	_box_screen.handle_button(PokeButton.A)
+	_box_screen.handle_button(PokeButton.A)
 	assert_eq(
 		String(_box_screen.box_snapshot()["prompt"]), Gen2BoxScreen.PROMPT_REMOVE_MAIL
 	)
@@ -458,43 +458,43 @@ func test_move_without_mail_reorders_a_list_and_moves_between_two() -> void:
 	## `.Init` loads `wCurBox`, so the screen opens on the box rather than on the
 	## party; left is what walks back to it.
 	assert_eq(int(_box_screen.box_snapshot()["loaded"]), 1)
-	assert_true(_box_screen.handle_button(Gen2Button.LEFT))
+	assert_true(_box_screen.handle_button(PokeButton.LEFT))
 	assert_eq(int(_box_screen.box_snapshot()["loaded"]), Gen2BoxScreen.LOADED_PARTY)
 
 	## The third member to the front of the party.
-	_box_screen.handle_button(Gen2Button.DOWN)
-	_box_screen.handle_button(Gen2Button.DOWN)
-	_box_screen.handle_button(Gen2Button.A)
+	_box_screen.handle_button(PokeButton.DOWN)
+	_box_screen.handle_button(PokeButton.DOWN)
+	_box_screen.handle_button(PokeButton.A)
 	assert_eq(_box_screen.box_snapshot()["submenu"], Gen2BoxScreen.SUBMENU_ROWS_MOVE)
-	_box_screen.handle_button(Gen2Button.A)
+	_box_screen.handle_button(PokeButton.A)
 	assert_eq(
 		String(_box_screen.box_snapshot()["prompt"]), Gen2BoxScreen.PROMPT_MOVE_WHERE
 	)
-	_box_screen.handle_button(Gen2Button.UP)
-	_box_screen.handle_button(Gen2Button.UP)
-	_box_screen.handle_button(Gen2Button.A)
+	_box_screen.handle_button(PokeButton.UP)
+	_box_screen.handle_button(PokeButton.UP)
+	_box_screen.handle_button(PokeButton.A)
 	## `MovePKMNWithoutMail_InsertMon`'s twenty frames and the twenty-four
 	## `MoveMonWOMail_InsertMon_SaveGame` spends behind `SFX_SAVE`, which read no
 	## joypad: the list only comes back once both are spent.
 	assert_eq(
 		String(_box_screen.box_snapshot()["prompt"]), Gen2SavePrompt.SAVING_LEAVE_ON
 	)
-	assert_true(_box_screen.handle_button(Gen2Button.B))
+	assert_true(_box_screen.handle_button(PokeButton.B))
 	_spend_insert_frames()
 	assert_eq(String((save.party[0] as Gen2SaveMon).nickname), "THIRD")
 	assert_eq(save.party.size(), 3)
 
 	## Left and right load another list, which only this mode answers.
-	assert_true(_box_screen.handle_button(Gen2Button.RIGHT))
+	assert_true(_box_screen.handle_button(PokeButton.RIGHT))
 	assert_eq(int(_box_screen.box_snapshot()["loaded"]), 1)
-	assert_true(_box_screen.handle_button(Gen2Button.LEFT))
+	assert_true(_box_screen.handle_button(PokeButton.LEFT))
 	assert_eq(int(_box_screen.box_snapshot()["loaded"]), Gen2BoxScreen.LOADED_PARTY)
 
 	## The same Pokemon into the first box, which is a different list.
-	_box_screen.handle_button(Gen2Button.A)
-	_box_screen.handle_button(Gen2Button.A)
-	_box_screen.handle_button(Gen2Button.RIGHT)
-	_box_screen.handle_button(Gen2Button.A)
+	_box_screen.handle_button(PokeButton.A)
+	_box_screen.handle_button(PokeButton.A)
+	_box_screen.handle_button(PokeButton.RIGHT)
+	_box_screen.handle_button(PokeButton.A)
 	_spend_insert_frames()
 	assert_eq(save.party.size(), 2)
 	assert_not_null(save.boxes[0].slots[0])
@@ -522,9 +522,9 @@ func test_the_withdraw_list_opens_on_the_current_box() -> void:
 	await _open_box_screen(save, Gen2BoxScreen.MODE_WITHDRAW)
 	assert_eq(int(_box_screen.box_snapshot()["loaded"]), 1)
 	assert_eq(String(_box_screen.rows()[0]["name"]), "GEODUDE")
-	_box_screen.handle_button(Gen2Button.A)
+	_box_screen.handle_button(PokeButton.A)
 	assert_eq(_box_screen.box_snapshot()["submenu"], Gen2BoxScreen.SUBMENU_ROWS_WITHDRAW)
-	_box_screen.handle_button(Gen2Button.A)
+	_box_screen.handle_button(PokeButton.A)
 	assert_eq(save.party.size(), 2)
 	assert_null(save.boxes[0].slots[0])
 	assert_eq(String(_box_screen.box_snapshot()["prompt"]), "Got GEODUDE!")
@@ -536,8 +536,8 @@ func test_the_withdraw_list_opens_on_the_current_box() -> void:
 func test_the_last_party_member_is_refused_with_the_sources_own_line() -> void:
 	var save: Gen2SaveData = _save()
 	await _open_box_screen(save)
-	_box_screen.handle_button(Gen2Button.A)
-	_box_screen.handle_button(Gen2Button.A)
+	_box_screen.handle_button(PokeButton.A)
+	_box_screen.handle_button(PokeButton.A)
 	assert_eq(String(_box_screen.box_snapshot()["prompt"]), Gen2BoxScreen.PROMPT_LAST_MON)
 	assert_eq(save.party.size(), 1)
 	assert_null(save.boxes[0].slots[0])
@@ -549,18 +549,18 @@ func test_release_asks_before_it_removes_a_stored_pokemon() -> void:
 	var save: Gen2SaveData = _save_with_two()
 	assert_true(Gen2SaveStorage.deposit_party_to_box(save, _data, 1, 0, -1, false)["ok"])
 	await _open_box_screen(save, Gen2BoxScreen.MODE_WITHDRAW)
-	_box_screen.handle_button(Gen2Button.A)
-	_box_screen.handle_button(Gen2Button.DOWN)
-	_box_screen.handle_button(Gen2Button.DOWN)
-	_box_screen.handle_button(Gen2Button.A)
+	_box_screen.handle_button(PokeButton.A)
+	_box_screen.handle_button(PokeButton.DOWN)
+	_box_screen.handle_button(PokeButton.DOWN)
+	_box_screen.handle_button(PokeButton.A)
 	assert_eq(int(_box_screen.box_snapshot()["release"]), 0)
 	assert_eq(String(_box_screen.box_snapshot()["prompt"]), Gen2BoxScreen.PROMPT_RELEASE)
 
-	_box_screen.handle_button(Gen2Button.B)
+	_box_screen.handle_button(PokeButton.B)
 	assert_not_null(save.boxes[0].slots[0], "NO leaves it where it is")
 
-	_box_screen.handle_button(Gen2Button.A)
-	_box_screen.handle_button(Gen2Button.A)
+	_box_screen.handle_button(PokeButton.A)
+	_box_screen.handle_button(PokeButton.A)
 	assert_null(save.boxes[0].slots[0])
 	assert_eq(String(_box_screen.box_snapshot()["prompt"]), "Bye, GEODUDE!")
 
@@ -706,23 +706,23 @@ func _find_button(node: Node, label: String) -> Button:
 func test_the_stats_screen_turns_its_three_pages_and_wraps_both_ways() -> void:
 	var screen: Gen2MonStatsScreen = Gen2MonStatsScreen.create(_data, _save().party)
 	assert_eq(int(screen.snapshot()["page"]), Gen2StatsScreenPage.PINK_PAGE)
-	screen.handle_button(Gen2Button.RIGHT)
+	screen.handle_button(PokeButton.RIGHT)
 	assert_eq(int(screen.snapshot()["page"]), Gen2StatsScreenPage.GREEN_PAGE)
-	screen.handle_button(Gen2Button.RIGHT)
-	screen.handle_button(Gen2Button.RIGHT)
+	screen.handle_button(PokeButton.RIGHT)
+	screen.handle_button(PokeButton.RIGHT)
 	assert_eq(int(screen.snapshot()["page"]), Gen2StatsScreenPage.PINK_PAGE)
-	screen.handle_button(Gen2Button.LEFT)
+	screen.handle_button(PokeButton.LEFT)
 	assert_eq(int(screen.snapshot()["page"]), Gen2StatsScreenPage.BLUE_PAGE)
 
 
 func test_the_stats_screen_leaves_on_b_and_on_a_over_its_last_page() -> void:
 	var screen: Gen2MonStatsScreen = Gen2MonStatsScreen.create(_data, _save().party)
 	watch_signals(screen)
-	screen.handle_button(Gen2Button.A)
-	screen.handle_button(Gen2Button.A)
+	screen.handle_button(PokeButton.A)
+	screen.handle_button(PokeButton.A)
 	assert_signal_not_emitted(screen, "closed")
 	assert_eq(int(screen.snapshot()["page"]), Gen2StatsScreenPage.BLUE_PAGE)
-	screen.handle_button(Gen2Button.A)
+	screen.handle_button(PokeButton.A)
 	assert_signal_emitted(screen, "closed")
 
 
@@ -737,15 +737,15 @@ func test_a_registered_page_joins_the_turn_order_and_becomes_the_last() -> void:
 	assert_eq(Gen2StatsScreenPage.page_count(), Gen2StatsScreenPage.NUM_PAGES + 1)
 	var screen: Gen2MonStatsScreen = Gen2MonStatsScreen.create(_data, _save().party)
 	watch_signals(screen)
-	screen.handle_button(Gen2Button.LEFT)
+	screen.handle_button(PokeButton.LEFT)
 	assert_eq(int(screen.snapshot()["page"]), Gen2StatsScreenPage.BLUE_PAGE + 1)
-	screen.handle_button(Gen2Button.RIGHT)
+	screen.handle_button(PokeButton.RIGHT)
 	assert_eq(int(screen.snapshot()["page"]), Gen2StatsScreenPage.PINK_PAGE)
 	for _press: int in 3:
-		screen.handle_button(Gen2Button.A)
+		screen.handle_button(PokeButton.A)
 	assert_signal_not_emitted(screen, "closed")
 	assert_eq(int(screen.snapshot()["page"]), Gen2StatsScreenPage.BLUE_PAGE + 1)
-	screen.handle_button(Gen2Button.A)
+	screen.handle_button(PokeButton.A)
 	assert_signal_emitted(screen, "closed")
 
 
@@ -800,10 +800,10 @@ func test_the_stats_screen_attrmap_colours_the_upper_half_the_bars_and_the_pages
 func test_the_stats_screen_walks_the_party_without_wrapping_and_cries() -> void:
 	var screen: Gen2MonStatsScreen = Gen2MonStatsScreen.create(_data, _save_with_two().party)
 	watch_signals(screen)
-	assert_false(screen.handle_button(Gen2Button.UP))
-	assert_true(screen.handle_button(Gen2Button.DOWN))
+	assert_false(screen.handle_button(PokeButton.UP))
+	assert_true(screen.handle_button(PokeButton.DOWN))
 	assert_eq(screen.cursor(), 1)
-	assert_false(screen.handle_button(Gen2Button.DOWN))
+	assert_false(screen.handle_button(PokeButton.DOWN))
 	assert_eq(get_signal_emit_count(screen, "cry_requested"), 1)
 
 
@@ -813,8 +813,8 @@ func test_the_stats_screen_walks_the_party_without_wrapping_and_cries() -> void:
 ## EGG rather than UNOWN, so it is mirrored like the rest.
 func test_the_stats_pic_is_mirrored_for_everything_but_an_unown() -> void:
 	assert_true(Gen2StatsScreenPage.pic_mirrored(Fixture.GEODUDE, false))
-	assert_false(Gen2StatsScreenPage.pic_mirrored(RomLayout.UNOWN_SPECIES, false))
-	assert_true(Gen2StatsScreenPage.pic_mirrored(RomLayout.UNOWN_SPECIES, true))
+	assert_false(Gen2StatsScreenPage.pic_mirrored(Gen2Layout.UNOWN_SPECIES, false))
+	assert_true(Gen2StatsScreenPage.pic_mirrored(Gen2Layout.UNOWN_SPECIES, true))
 
 
 ## `StatsScreen_PlaceFrontpic` opens on `GetUnownLetter`, so an Unown is drawn as
@@ -822,7 +822,7 @@ func test_the_stats_pic_is_mirrored_for_everything_but_an_unown() -> void:
 ## `EggStatsScreen` draws `GetEggFrontpic`'s.
 func test_the_stats_pic_is_the_letter_for_an_unown_and_the_egg_for_an_egg() -> void:
 	var letter: Dictionary = Gen2StatsScreenPage.pic_record(_data, {
-		"species": RomLayout.UNOWN_SPECIES, "unown_form": 3, "egg": false,
+		"species": Gen2Layout.UNOWN_SPECIES, "unown_form": 3, "egg": false,
 	})
 	assert_eq(String(letter.get("atlas", "")), "unown_front")
 	assert_eq(int(letter.get("slot", -1)), 2, "the form counts from one")
@@ -864,9 +864,9 @@ func test_the_move_screen_trades_a_moves_pp_with_the_move() -> void:
 	mon.pp[1] = 3
 	var before: Array = [mon.moves[0], mon.moves[1], mon.pp[0], mon.pp[1]]
 	var screen: Gen2MoveScreen = Gen2MoveScreen.create(_data, save.party)
-	screen.handle_button(Gen2Button.A)
-	screen.handle_button(Gen2Button.DOWN)
-	screen.handle_button(Gen2Button.A)
+	screen.handle_button(PokeButton.A)
+	screen.handle_button(PokeButton.DOWN)
+	screen.handle_button(PokeButton.A)
 	assert_eq(mon.moves[0], before[1])
 	assert_eq(mon.moves[1], before[0])
 	assert_eq(mon.pp[0], before[3])
@@ -880,13 +880,13 @@ func test_b_puts_a_held_move_back_rather_than_leaving() -> void:
 	var save: Gen2SaveData = _save()
 	var screen: Gen2MoveScreen = Gen2MoveScreen.create(_data, save.party)
 	watch_signals(screen)
-	screen.handle_button(Gen2Button.DOWN)
-	screen.handle_button(Gen2Button.A)
-	screen.handle_button(Gen2Button.B)
+	screen.handle_button(PokeButton.DOWN)
+	screen.handle_button(PokeButton.A)
+	screen.handle_button(PokeButton.B)
 	assert_signal_not_emitted(screen, "closed")
 	assert_eq(int(screen.snapshot()["held"]), -1)
 	assert_eq(int(screen.snapshot()["cursor"]), 1)
-	screen.handle_button(Gen2Button.B)
+	screen.handle_button(PokeButton.B)
 	assert_signal_emitted(screen, "closed")
 	assert_eq(save.party[0].moves[0], Fixture.TACKLE)
 
@@ -898,11 +898,11 @@ func test_the_move_screen_refuses_to_change_pokemon_while_a_move_is_held() -> vo
 	var screen: Gen2MoveScreen = Gen2MoveScreen.create(_data, save.party)
 	assert_false(screen.has_neighbour(-1))
 	assert_true(screen.has_neighbour(1))
-	screen.handle_button(Gen2Button.A)
-	assert_false(screen.handle_button(Gen2Button.RIGHT))
+	screen.handle_button(PokeButton.A)
+	assert_false(screen.handle_button(PokeButton.RIGHT))
 	assert_eq(screen.cursor(), 0)
-	screen.handle_button(Gen2Button.B)
-	assert_true(screen.handle_button(Gen2Button.RIGHT))
+	screen.handle_button(PokeButton.B)
+	assert_true(screen.handle_button(PokeButton.RIGHT))
 	assert_eq(screen.cursor(), 1)
 
 
@@ -923,7 +923,7 @@ func test_an_egg_is_offered_stats_and_switch_and_no_move_row() -> void:
 	var screen: Gen2MonStatsScreen = Gen2MonStatsScreen.create(_data, [egg])
 	watch_signals(screen)
 	## `EggStatsJoypad` answers A with `.quit` rather than with a page.
-	screen.handle_button(Gen2Button.A)
+	screen.handle_button(PokeButton.A)
 	assert_signal_emitted(screen, "closed")
 
 
@@ -937,10 +937,10 @@ func test_a_deposit_puts_the_cursor_back_on_the_first_row_and_plays_a_cry() -> v
 	save.party.append(Gen2SaveBattleAdapter.from_battle_mon(third))
 	await _open_box_screen(save)
 	watch_signals(_box_screen)
-	_box_screen.handle_button(Gen2Button.DOWN)
-	_box_screen.handle_button(Gen2Button.DOWN)
-	_box_screen.handle_button(Gen2Button.A)
-	_box_screen.handle_button(Gen2Button.A)
+	_box_screen.handle_button(PokeButton.DOWN)
+	_box_screen.handle_button(PokeButton.DOWN)
+	_box_screen.handle_button(PokeButton.A)
+	_box_screen.handle_button(PokeButton.A)
 
 	assert_eq(save.party.size(), 2)
 	assert_signal_emitted_with_parameters(_box_screen, "cry_requested", [Fixture.GEODUDE])
@@ -961,17 +961,17 @@ func test_a_full_box_refuses_under_the_submenu_which_does_not_wrap() -> void:
 		)
 	await _open_box_screen(save)
 	watch_signals(_box_screen)
-	_box_screen.handle_button(Gen2Button.A)
+	_box_screen.handle_button(PokeButton.A)
 	## Four rows, and up on the first stays on it.
-	_box_screen.handle_button(Gen2Button.UP)
+	_box_screen.handle_button(PokeButton.UP)
 	assert_eq(int(_box_screen.box_snapshot()["submenu_cursor"]), 0)
 	for _press: int in 6:
-		_box_screen.handle_button(Gen2Button.DOWN)
+		_box_screen.handle_button(PokeButton.DOWN)
 	assert_eq(int(_box_screen.box_snapshot()["submenu_cursor"]), 3)
 
 	for _press: int in 3:
-		_box_screen.handle_button(Gen2Button.UP)
-	_box_screen.handle_button(Gen2Button.A)
+		_box_screen.handle_button(PokeButton.UP)
+	_box_screen.handle_button(PokeButton.A)
 	assert_eq(save.party.size(), 2, "nothing left the party")
 	var snapshot: Dictionary = _box_screen.box_snapshot()
 	assert_eq(String(snapshot["prompt"]), Gen2BoxScreen.PROMPT_BOX_FULL)
@@ -986,12 +986,12 @@ func test_a_full_box_refuses_under_the_submenu_which_does_not_wrap() -> void:
 func test_a_finished_move_stays_on_the_list_it_moved_into() -> void:
 	var save: Gen2SaveData = _save_with_two()
 	await _open_box_screen(save, Gen2BoxScreen.MODE_MOVE)
-	_box_screen.handle_button(Gen2Button.LEFT)
+	_box_screen.handle_button(PokeButton.LEFT)
 	assert_eq(int(_box_screen.box_snapshot()["loaded"]), Gen2BoxScreen.LOADED_PARTY)
-	_box_screen.handle_button(Gen2Button.A)
-	_box_screen.handle_button(Gen2Button.A)
-	_box_screen.handle_button(Gen2Button.RIGHT)
-	_box_screen.handle_button(Gen2Button.A)
+	_box_screen.handle_button(PokeButton.A)
+	_box_screen.handle_button(PokeButton.A)
+	_box_screen.handle_button(PokeButton.RIGHT)
+	_box_screen.handle_button(PokeButton.A)
 	_spend_insert_frames()
 
 	assert_eq(save.party.size(), 1)

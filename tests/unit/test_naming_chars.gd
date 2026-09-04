@@ -4,7 +4,7 @@ extends GutTest
 ##
 ## The cache is synthetic and has the real block's shape rather than its
 ## contents: four tables of 5, 6, 5 and 6 rows, every row 17 bytes, with the
-## letter rows generated and the command row taken from [RomLayout]'s own
+## letter rows generated and the command row taken from [Gen2Layout]'s own
 ## constant. The real cartridge bytes are the job of `tools/checks/naming.gd`,
 ## which decodes all four tables out of all three dumps.
 
@@ -32,7 +32,7 @@ func after_each() -> void:
 func _write_cache() -> void:
 	var tables: Array = []
 	for table: int in TABLE_ROWS.size():
-		var first: int = RomLayout.NAME_INPUT_LOWER_A if table < 2 else RomLayout.NAME_INPUT_UPPER_A
+		var first: int = Gen2Layout.NAME_INPUT_LOWER_A if table < 2 else Gen2Layout.NAME_INPUT_UPPER_A
 		var rows: Array = []
 		for row: int in TABLE_ROWS[table]:
 			if row == TABLE_ROWS[table] - 1:
@@ -61,14 +61,14 @@ func _write_cache() -> void:
 ## the cartridge stores a row the cursor reads every second byte of.
 func _letter_row(first: int, row: int) -> Array:
 	var codes: Array[int] = []
-	for column: int in RomLayout.NAME_INPUT_COLUMNS:
-		codes.append(first + row * RomLayout.NAME_INPUT_COLUMNS + column)
+	for column: int in Gen2Layout.NAME_INPUT_COLUMNS:
+		codes.append(first + row * Gen2Layout.NAME_INPUT_COLUMNS + column)
 	return _spread(codes)
 
 
 func _command_row(table: int) -> Array:
 	var source: Array[int] = (
-		RomLayout.NAME_INPUT_COMMAND_LOWER if table < 2 else RomLayout.NAME_INPUT_COMMAND_UPPER
+		Gen2Layout.NAME_INPUT_COMMAND_LOWER if table < 2 else Gen2Layout.NAME_INPUT_COMMAND_UPPER
 	)
 	return Array(source)
 
@@ -76,9 +76,9 @@ func _command_row(table: int) -> Array:
 ## Nine values into a 17-byte row at the cursor's own stride.
 func _spread(values: Array) -> Array:
 	var row: Array[int] = []
-	for column: int in RomLayout.NAME_INPUT_COLUMNS:
+	for column: int in Gen2Layout.NAME_INPUT_COLUMNS:
 		row.append(int(values[column]))
-		if column < RomLayout.NAME_INPUT_COLUMNS - 1:
+		if column < Gen2Layout.NAME_INPUT_COLUMNS - 1:
 			row.append(SPACE)
 	return row
 
@@ -100,7 +100,7 @@ func test_every_row_is_seventeen_bytes() -> void:
 	var data: GameData = _data()
 	for table: int in TABLE_ROWS.size():
 		for row: Array in data.name_input_chars(table):
-			assert_eq(row.size(), RomLayout.NAME_INPUT_ROW_BYTES)
+			assert_eq(row.size(), Gen2Layout.NAME_INPUT_ROW_BYTES)
 
 
 func test_a_table_outside_the_block_reads_empty() -> void:
@@ -112,11 +112,11 @@ func test_a_table_outside_the_block_reads_empty() -> void:
 func test_letter_rows_read_back_at_the_cursor_stride() -> void:
 	var data: GameData = _data()
 	var rows: Array = data.name_input_chars(0)
-	assert_eq(int(rows[0][0]), RomLayout.NAME_INPUT_LOWER_A)
+	assert_eq(int(rows[0][0]), Gen2Layout.NAME_INPUT_LOWER_A)
 	# Column 1 is byte 2, not byte 1: the cursor steps two tiles.
-	assert_eq(int(rows[0][RomLayout.NAME_INPUT_COLUMN_STRIDE]), RomLayout.NAME_INPUT_LOWER_A + 1)
+	assert_eq(int(rows[0][Gen2Layout.NAME_INPUT_COLUMN_STRIDE]), Gen2Layout.NAME_INPUT_LOWER_A + 1)
 	assert_eq(int(rows[0][1]), SPACE)
-	assert_eq(int(data.name_input_chars(2)[0][0]), RomLayout.NAME_INPUT_UPPER_A)
+	assert_eq(int(data.name_input_chars(2)[0][0]), Gen2Layout.NAME_INPUT_UPPER_A)
 
 
 func test_symbol_row_keeps_its_text_codes() -> void:
@@ -124,7 +124,7 @@ func test_symbol_row_keeps_its_text_codes() -> void:
 	var row: Array = data.name_input_chars(0)[3]
 	for column: int in SYMBOL_ROW.size():
 		assert_eq(
-			int(row[column * RomLayout.NAME_INPUT_COLUMN_STRIDE]), SYMBOL_ROW[column],
+			int(row[column * Gen2Layout.NAME_INPUT_COLUMN_STRIDE]), SYMBOL_ROW[column],
 			"Symbol column %d" % column
 		)
 
@@ -136,8 +136,8 @@ func test_command_row_is_the_last_row_of_every_table() -> void:
 	for table: int in TABLE_ROWS.size():
 		var rows: Array = data.name_input_chars(table)
 		var expected: Array[int] = (
-			RomLayout.NAME_INPUT_COMMAND_LOWER if table < 2
-			else RomLayout.NAME_INPUT_COMMAND_UPPER
+			Gen2Layout.NAME_INPUT_COMMAND_LOWER if table < 2
+			else Gen2Layout.NAME_INPUT_COMMAND_UPPER
 		)
 		assert_eq(Array(rows[rows.size() - 1]), Array(expected), "Table %d command row" % table)
 
@@ -148,4 +148,4 @@ func test_block_is_the_pinned_length() -> void:
 	for table: int in TABLE_ROWS.size():
 		for row: Array in data.name_input_chars(table):
 			total += row.size()
-	assert_eq(total, RomLayout.NAME_INPUT_BLOCK_BYTES)
+	assert_eq(total, Gen2Layout.NAME_INPUT_BLOCK_BYTES)

@@ -537,7 +537,7 @@ static func _species() -> Array:
 			"growth_rate": entry[3],
 			"base_exp": entry[4],
 			"evolutions": [{
-				"method": RomLayout.EVOLVE_LEVEL, "parameter": 16,
+				"method": Gen2Layout.EVOLVE_LEVEL, "parameter": 16,
 				"condition": 0, "target": 2,
 			}] if number == BULBASAUR else [],
 			"gender_ratio": entry[6],
@@ -563,9 +563,9 @@ static func _species() -> Array:
 static func _dex_orders() -> Dictionary:
 	var forward: Array = []
 	var backward: Array = []
-	for number: int in range(1, RomLayout.SPECIES_COUNT + 1):
+	for number: int in range(1, Gen2Layout.SPECIES_COUNT + 1):
 		forward.append(number)
-		backward.append(RomLayout.SPECIES_COUNT + 1 - number)
+		backward.append(Gen2Layout.SPECIES_COUNT + 1 - number)
 	return {"new": forward, "alpha": backward}
 
 
@@ -808,7 +808,7 @@ static func _moves() -> Array:
 
 static func _types() -> Array:
 	var out: Array = []
-	for number: int in RomLayout.TYPE_COUNT:
+	for number: int in Gen2Layout.TYPE_COUNT:
 		out.append({"number": number, "name": "TYPE%d" % number})
 	return out
 

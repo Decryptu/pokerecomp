@@ -20,7 +20,7 @@ func test_level_evolution_is_selected_in_source_order_and_respects_everstone() -
 func test_happiness_and_time_predicates_match_the_three_source_triggers() -> void:
 	var mon := Gen2BattleMon.create(_data, Fixture.BULBASAUR, 5, [])
 	mon.happiness = Gen2Evolution.HAPPINESS_TO_EVOLVE - 1
-	var row := {"method": RomLayout.EVOLVE_HAPPINESS, "parameter": RomLayout.TRIGGER_MORNDAY}
+	var row := {"method": Gen2Layout.EVOLVE_HAPPINESS, "parameter": Gen2Layout.TRIGGER_MORNDAY}
 	assert_false(Gen2Evolution._eligible(row, mon, Gen2WorldPalette.TIME_DAY))
 	mon.happiness = Gen2Evolution.HAPPINESS_TO_EVOLVE
 	assert_true(Gen2Evolution._eligible(row, mon, Gen2WorldPalette.TIME_DAY))
@@ -53,18 +53,18 @@ func _with_evolution_rows() -> GameData:
 		match int(raw["number"]):
 			Fixture.BULBASAUR:
 				(raw["evolutions"] as Array).append({
-					"method": RomLayout.EVOLVE_ITEM, "parameter": ITEM_STONE,
+					"method": Gen2Layout.EVOLVE_ITEM, "parameter": ITEM_STONE,
 					"condition": 0, "target": TRADE_TARGET,
 				})
 			Fixture.GEODUDE:
 				raw["evolutions"] = [{
-					"method": RomLayout.EVOLVE_TRADE,
+					"method": Gen2Layout.EVOLVE_TRADE,
 					"parameter": Gen2Evolution.TRADE_NO_ITEM,
 					"condition": 0, "target": TRADE_TARGET,
 				}]
 			Fixture.GASTLY:
 				raw["evolutions"] = [{
-					"method": RomLayout.EVOLVE_TRADE, "parameter": TRADE_HELD_ITEM,
+					"method": Gen2Layout.EVOLVE_TRADE, "parameter": TRADE_HELD_ITEM,
 					"condition": 0, "target": TRADE_TARGET,
 				}]
 	RomCache.write_json(RomCache.species_path(directory), species)

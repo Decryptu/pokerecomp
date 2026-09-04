@@ -1,4 +1,4 @@
-class_name RomLayout
+class_name Gen2Layout
 extends RefCounted
 
 ## Where the data lives inside each supported cartridge. Offsets are absolute
@@ -138,7 +138,7 @@ const EMOTE_NAMES: Array[String] = [
 ## table NUM_ICONS + 1 entries long and its first two entries equal.
 const MON_ICON_COUNT: int = 38
 const MON_ICON_TILES: int = 8
-const MON_ICON_BYTES: int = MON_ICON_TILES * Gen2Tiles.TILE_BYTES
+const MON_ICON_BYTES: int = MON_ICON_TILES * PokeTiles.TILE_BYTES
 const ICON_POINTER_COUNT: int = MON_ICON_COUNT + 1
 const ICON_POINTER_SIZE: int = 2
 
@@ -1389,7 +1389,7 @@ const CARD_FLIP_TEXT_ORDER: Array[String] = [
 const PREDEFPAL_GOLDENROD: int = 0x10
 const PREDEFPAL_BLACKOUT: int = 0x1A
 const PREDEF_PALETTE_COLORS: int = 4
-const PREDEF_PALETTE_SIZE: int = PREDEF_PALETTE_COLORS * Gen2Palette.COLOR_BYTES
+const PREDEF_PALETTE_SIZE: int = PREDEF_PALETTE_COLORS * PokePalette.COLOR_BYTES
 
 
 ## The offset of one `PredefPals` entry, or -1 for a layout with no pin.
@@ -1403,7 +1403,7 @@ static func predef_palette_offset(layout: Dictionary, index: int) -> int:
 ## base is already pinned: `game_freak_presents.object_palette` is
 ## `PREDEFPAL_GAMEFREAK_LOGO_OB`, index 77 of this table, which is what
 ## `verify_gs_intro` checks the base against for nothing.
-const GS_INTRO_PREDEF_SIZE: int = INTRO_PALETTE_COLORS * Gen2Palette.COLOR_BYTES
+const GS_INTRO_PREDEF_SIZE: int = INTRO_PALETTE_COLORS * PokePalette.COLOR_BYTES
 const GS_INTRO_PREDEF: Dictionary = {
 	"jigglypuff_pikachu_bg": 56,
 	"jigglypuff_pikachu_ob": 57,
@@ -1859,7 +1859,7 @@ const BAR_PALETTES: Array = [
 const STATS_PAGE_PALETTES: int = 3
 const STATS_PAGE_PALETTE_COLORS: int = 4
 const STATS_PAGE_TINTS_OFFSET: int = (
-	STATS_PAGE_PALETTES * STATS_PAGE_PALETTE_COLORS * Gen2Palette.COLOR_BYTES
+	STATS_PAGE_PALETTES * STATS_PAGE_PALETTE_COLORS * PokePalette.COLOR_BYTES
 )
 
 ## What that run holds, the way [constant BAR_PALETTES] pins the bars': pink,
@@ -1876,14 +1876,14 @@ const STATS_SCREEN_PAGE_TINTS: Array = [0x7E7F, 0x3BF5, 0x7FF1]
 static func stats_page_palette_offset(layout: Dictionary, index: int) -> int:
 	var base: int = int(layout.get("stats_screen_palettes", -1))
 	return -1 if base < 0 else base \
-		+ index * STATS_PAGE_PALETTE_COLORS * Gen2Palette.COLOR_BYTES
+		+ index * STATS_PAGE_PALETTE_COLORS * PokePalette.COLOR_BYTES
 
 
 ## The offset of one `StatsScreenPals` colour, or -1 for a layout with no pin.
 static func stats_page_tint_offset(layout: Dictionary, index: int) -> int:
 	var base: int = int(layout.get("stats_screen_palettes", -1))
 	return -1 if base < 0 else base + STATS_PAGE_TINTS_OFFSET \
-		+ index * Gen2Palette.COLOR_BYTES
+		+ index * PokePalette.COLOR_BYTES
 
 
 ## An HP bar is green down to half and yellow down to a fifth, measured in lit
@@ -3656,7 +3656,7 @@ static func dex_entry_offset(layout: Dictionary, species: int, address: int) -> 
 ## The palette table carries a leading entry before Bulbasaur, so unlike every
 ## other table here it is indexed by species number directly.
 static func palette_offset(layout: Dictionary, species: int) -> int:
-	return int(layout["palettes"]) + species * Gen2Palette.ENTRY_BYTES
+	return int(layout["palettes"]) + species * PokePalette.ENTRY_BYTES
 
 
 ## Pointers come in pairs, front then back.
@@ -3710,7 +3710,7 @@ static func unown_pic_pointer_offset(layout: Dictionary, form: int, back: bool) 
 
 ## One of the four bar palettes, by its position in [constant BAR_PALETTE_NAMES].
 static func bar_palette_offset(layout: Dictionary, index: int) -> int:
-	return int(layout["bar_palettes"]) + index * Gen2Palette.PAIR_BYTES
+	return int(layout["bar_palettes"]) + index * PokePalette.PAIR_BYTES
 
 
 static func trainer_class_count(layout: Dictionary) -> int:
@@ -3795,7 +3795,7 @@ static func trainer_pic_pointer_offset(layout: Dictionary, trainer_class: int) -
 ## so it is indexed by class number where the pic table is indexed by class
 ## number minus one. The two are one entry out of step on purpose.
 static func trainer_palette_offset(layout: Dictionary, trainer_class: int) -> int:
-	return int(layout["trainer_palettes"]) + trainer_class * Gen2Palette.PAIR_BYTES
+	return int(layout["trainer_palettes"]) + trainer_class * PokePalette.PAIR_BYTES
 
 
 ## Where a trainer class's own pointer sits in the trainer party table. The
@@ -4035,7 +4035,7 @@ static func credits_mon_tiles(layout: Dictionary) -> int:
 ## `CreditsBorderGFX`, which is the one offset pinned. -1 without a credits entry.
 static func credits_mon_gfx_offset(layout: Dictionary) -> int:
 	var at: int = int((layout.get("credits", {}) as Dictionary).get("gfx", -1))
-	return at + CREDITS_BORDER_TILES * Gen2Tiles.TILE_BYTES if at >= 0 else -1
+	return at + CREDITS_BORDER_TILES * PokeTiles.TILE_BYTES if at >= 0 else -1
 
 
 ## The dump offset `CreditsStringsPointers` entry [param index] names. Its bank
@@ -4063,7 +4063,7 @@ static func dex_nest_icon_offset(layout: Dictionary) -> int:
 ## with no region map.
 static func fly_map_label_offset(layout: Dictionary) -> int:
 	var nest: int = dex_nest_icon_offset(layout)
-	return nest + DEX_NEST_ICON_TILES * Gen2Tiles.TILE_BYTES if nest >= 0 else -1
+	return nest + DEX_NEST_ICON_TILES * PokeTiles.TILE_BYTES if nest >= 0 else -1
 
 
 static func landmark_count(layout: Dictionary) -> int:
@@ -4093,7 +4093,7 @@ static func font_offset(layout: Dictionary) -> int:
 ## three dumps, so the pinned font offset walks it too and it needs no address
 ## of its own. Its own content is what checks that (`verify_layout`).
 static func font_extra_offset(layout: Dictionary) -> int:
-	return font_offset(layout) - FONT_EXTRA_TILES * Gen2Tiles.TILE_BYTES
+	return font_offset(layout) - FONT_EXTRA_TILES * PokeTiles.TILE_BYTES
 
 
 ## `StatsScreenPageTilesGFX` is the entry immediately before
@@ -4101,12 +4101,12 @@ static func font_extra_offset(layout: Dictionary) -> int:
 ## enemy HUD offset walks back to it and it needs no address of its own. Its own
 ## content is what checks that (`verify_layout`).
 static func stats_tiles_offset(layout: Dictionary) -> int:
-	return int(layout["enemy_hud"]) - STATS_TILES * Gen2Tiles.TILE_BYTES
+	return int(layout["enemy_hud"]) - STATS_TILES * PokeTiles.TILE_BYTES
 
 
 ## Frames are stored back to back in selection order, six tiles of 1bpp each.
 static func frame_offset(layout: Dictionary, frame: int) -> int:
-	return int(layout["frames"]) + frame * FRAME_TILES * Gen2Tiles.TILE_1BPP_BYTES
+	return int(layout["frames"]) + frame * FRAME_TILES * PokeTiles.TILE_1BPP_BYTES
 
 
 ## The bank a dump offset falls in, for resolving a pointer that carries an

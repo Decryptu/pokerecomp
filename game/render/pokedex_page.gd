@@ -238,8 +238,8 @@ static func from_data(data: GameData) -> Gen2PokedexPage:
 func ready() -> bool:
 	return font != null and not _sheet.is_empty() and not _footprints.is_empty() \
 		and not _objects.is_empty() and not _question_mark.is_empty() \
-		and _object_palette.size() == Gen2Palette.COLORS_PER_PIC \
-		and _palette.size() == Gen2Palette.COLORS_PER_PIC
+		and _object_palette.size() == PokePalette.COLORS_PER_PIC \
+		and _palette.size() == PokePalette.COLORS_PER_PIC
 
 
 ## A screen filled the way `Pokedex_FillBackgroundColor2` fills one.
@@ -551,9 +551,9 @@ func unown_map(forms: Array, cursor: int, word: String = "") -> PackedInt32Array
 ## `FIRST_UNOWN_CHAR`, which the letter walk adds the form to. The letters are
 ## `UnownFont` inverted into the dex sheet's own numbering, so a form's cell is a
 ## sheet tile rather than a character.
-const UNOWN_FIRST_CHAR: int = RomLayout.UNOWN_FONT_FIRST_TILE
+const UNOWN_FIRST_CHAR: int = Gen2Layout.UNOWN_FONT_FIRST_TILE
 ## `FIRST_UNOWN_CHAR + NUM_UNOWN`, the diamond that follows the alphabet.
-const UNOWN_CURSOR_CHAR: int = UNOWN_FIRST_CHAR + RomLayout.UNOWN_FORMS
+const UNOWN_CURSOR_CHAR: int = UNOWN_FIRST_CHAR + Gen2Layout.UNOWN_FORMS
 ## `UnownModeLetterAndCursorCoords`, as (letter x, letter y, cursor x, cursor y)
 ## per form in catching order.
 const UNOWN_COORDS: Array = [
@@ -753,17 +753,17 @@ func _blit_object(
 ## slot, column major like every pic and drawn through the dex's own
 ## `question_mark` palette. `PokedexSlowpokeLZ` is a different asset.
 func unseen_pic() -> Image:
-	if _question_mark.is_empty() or _question_mark_palette.size() != Gen2Palette.COLORS_PER_PIC:
+	if _question_mark.is_empty() or _question_mark_palette.size() != PokePalette.COLORS_PER_PIC:
 		return null
-	var side: int = RomLayout.POKEDEX_QUESTION_MARK_COLUMNS * TILE
+	var side: int = Gen2Layout.POKEDEX_QUESTION_MARK_COLUMNS * TILE
 	var indices := PackedByteArray()
 	indices.resize(side * side)
 	@warning_ignore("integer_division")
 	var width: int = _question_mark.size() / TILE
-	for slot: int in RomLayout.POKEDEX_QUESTION_MARK_TILES:
+	for slot: int in Gen2Layout.POKEDEX_QUESTION_MARK_TILES:
 		@warning_ignore("integer_division")
-		var column: int = slot / RomLayout.POKEDEX_QUESTION_MARK_COLUMNS
-		var row: int = slot % RomLayout.POKEDEX_QUESTION_MARK_COLUMNS
+		var column: int = slot / Gen2Layout.POKEDEX_QUESTION_MARK_COLUMNS
+		var row: int = slot % Gen2Layout.POKEDEX_QUESTION_MARK_COLUMNS
 		Gen2Font.blit_slot(
 			_question_mark, width, slot, indices, side, column * TILE, row * TILE
 		)
@@ -915,7 +915,7 @@ func _blit_tile(
 	# `Pokedex_LoadUnownFont` lands on top of the sheet, so this run is the
 	# alphabet on the Unown screen and the sheet's own tiles everywhere else.
 	if _unown_letters and tile >= UNOWN_FIRST_CHAR \
-		and tile < UNOWN_FIRST_CHAR + RomLayout.UNOWN_FONT_TILES:
+		and tile < UNOWN_FIRST_CHAR + Gen2Layout.UNOWN_FONT_TILES:
 		@warning_ignore("integer_division")
 		Gen2Font.blit_slot(
 			_unown_font, _unown_font.size() / TILE, tile - UNOWN_FIRST_CHAR,
@@ -932,7 +932,7 @@ func _blit_tile(
 		)
 		_invert(into, into_width, at_x, at_y)
 		return
-	if tile >= SHEET_FIRST_TILE and tile < SHEET_FIRST_TILE + RomLayout.POKEDEX_TILES:
+	if tile >= SHEET_FIRST_TILE and tile < SHEET_FIRST_TILE + Gen2Layout.POKEDEX_TILES:
 		@warning_ignore("integer_division")
 		Gen2Font.blit_slot(
 			_sheet, _sheet.size() / TILE, tile - SHEET_FIRST_TILE,

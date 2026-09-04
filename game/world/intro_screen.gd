@@ -114,13 +114,13 @@ func animation_frames_left() -> int:
 ## The eight hardware buttons and nothing else, the way every other screen here
 ## reads input; see `docs/CONTRIBUTING.md`.
 func _unhandled_input(event: InputEvent) -> void:
-	var button: int = Gen2Button.pressed_in(event)
+	var button: int = PokeButton.pressed_in(event)
 	if button != 0 and handle_button(button):
 		get_viewport().set_input_as_handled()
 		return
 	## The title screen is the one screen here that reads `hJoyDown` rather than
 	## a press: its two chords are three buttons at once, which no press can say.
-	var released: int = Gen2Button.released_in(event)
+	var released: int = PokeButton.released_in(event)
 	if released != 0 and release_button(released):
 		get_viewport().set_input_as_handled()
 

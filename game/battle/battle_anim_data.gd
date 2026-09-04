@@ -105,7 +105,7 @@ func object_row(index: int) -> Dictionary:
 	if index < 0 or index >= count(&"objects"):
 		return {}
 	var base: int = int(region(&"objects")["address"]) \
-		+ index * RomLayout.BATTLE_ANIM_OBJECT_SIZE
+		+ index * Gen2Layout.BATTLE_ANIM_OBJECT_SIZE
 	var out: Dictionary = {}
 	for field: int in OBJECT_FIELDS.size():
 		out[OBJECT_FIELDS[field]] = byte_at(&"objects", base + field)
@@ -123,7 +123,7 @@ func oam_set(index: int) -> Dictionary:
 	if index < 0 or index >= count(&"oam_sets"):
 		return {}
 	var base: int = int(region(&"oam_sets")["address"]) \
-		+ index * RomLayout.BATTLE_ANIM_OAM_SET_SIZE
+		+ index * Gen2Layout.BATTLE_ANIM_OAM_SET_SIZE
 	return {
 		"vtile": byte_at(&"oam_sets", base + Gen2BattleAnimImporter.OAM_SET_VTILE),
 		"length": byte_at(&"oam_sets", base + Gen2BattleAnimImporter.OAM_SET_LENGTH),
@@ -133,7 +133,7 @@ func oam_set(index: int) -> Dictionary:
 
 ## One `dbsprite`: y, x, tile offset, attributes.
 func oam_sprite(address: int, index: int) -> Dictionary:
-	var at: int = address + index * RomLayout.BATTLE_ANIM_OAM_SPRITE_SIZE
+	var at: int = address + index * Gen2Layout.BATTLE_ANIM_OAM_SPRITE_SIZE
 	return {
 		"y": byte_at(&"oam_sets", at),
 		"x": byte_at(&"oam_sets", at + 1),

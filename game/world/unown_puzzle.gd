@@ -153,7 +153,7 @@ func advance(pressed: Array = [], held: Array = []) -> Dictionary:
 	if _awaiting_solved_press:
 		## `SimpleWaitPressAorB`, the one press between the solved fanfare and
 		## the exit. No other button reaches it.
-		if Gen2Button.A in pressed or Gen2Button.B in pressed:
+		if PokeButton.A in pressed or PokeButton.B in pressed:
 			_awaiting_solved_press = false
 			_solved = true
 			_finished = true
@@ -161,11 +161,11 @@ func advance(pressed: Array = [], held: Array = []) -> Dictionary:
 
 	var repeating: bool = _joy_text_delay(not pressed.is_empty())
 
-	if Gen2Button.START in pressed:
+	if PokeButton.START in pressed:
 		_finished = true
 		return {"sounds": sounds, "solved": false, "wait_sfx": false}
 
-	if Gen2Button.A in pressed:
+	if PokeButton.A in pressed:
 		return _press_a()
 
 	if repeating:
@@ -249,17 +249,17 @@ static func solved_piece_at(cell: int) -> int:
 ## right in that order and takes the first, so a diagonal is one direction.
 func _step_for(buttons: Array) -> int:
 	var column: int = _cursor % COLUMNS
-	if Gen2Button.UP in buttons:
+	if PokeButton.UP in buttons:
 		return _cursor - COLUMNS if _cursor >= COLUMNS else _cursor
-	if Gen2Button.DOWN in buttons:
+	if PokeButton.DOWN in buttons:
 		if _cursor in NO_STEP_DOWN or _cursor >= BOX_LEFT_CELL:
 			return _cursor
 		return _cursor + COLUMNS
-	if Gen2Button.LEFT in buttons:
+	if PokeButton.LEFT in buttons:
 		if _cursor == BOX_RIGHT_CELL:
 			return BOX_LEFT_CELL
 		return _cursor if column == 0 else _cursor - 1
-	if Gen2Button.RIGHT in buttons:
+	if PokeButton.RIGHT in buttons:
 		if _cursor == BOX_LEFT_CELL:
 			return BOX_RIGHT_CELL
 		return _cursor if column == COLUMNS - 1 else _cursor + 1

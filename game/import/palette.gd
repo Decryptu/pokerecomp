@@ -1,4 +1,4 @@
-class_name Gen2Palette
+class_name PokePalette
 extends RefCounted
 
 ## Game Boy Color palette entries. A colour is 15 bits packed little-endian as

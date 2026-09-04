@@ -16,7 +16,7 @@ const PORTRAIT_CONTROL_SHARE: float = 0.44
 
 var _screen: Gen2Screen = null
 var _pad: Gen2TouchPad = null
-var _gesture := Gen2TapGesture.new()
+var _gesture := PokeTapGesture.new()
 
 
 func _ready() -> void:

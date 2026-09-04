@@ -39,29 +39,29 @@ func test_it_opens_on_boy() -> void:
 
 
 func test_a_answers_with_the_gender_the_cursor_is_on() -> void:
-	_screen.handle_button(Gen2Button.A)
+	_screen.handle_button(PokeButton.A)
 	assert_eq(_chosen, [Gen2SaveData.GENDER_MALE])
 
 
 func test_moving_down_then_a_answers_girl() -> void:
-	_screen.handle_button(Gen2Button.DOWN)
+	_screen.handle_button(PokeButton.DOWN)
 	assert_eq(_screen.menu().selected_index(), 1)
-	_screen.handle_button(Gen2Button.A)
+	_screen.handle_button(PokeButton.A)
 	assert_eq(_chosen, [Gen2SaveData.GENDER_FEMALE])
 
 
 ## STATICMENU_WRAP is on `.MenuData`, so the cursor wraps at both ends.
 func test_the_cursor_wraps() -> void:
-	_screen.handle_button(Gen2Button.UP)
+	_screen.handle_button(PokeButton.UP)
 	assert_eq(_screen.menu().selected_index(), 1, "up off the first wraps to the last")
-	_screen.handle_button(Gen2Button.DOWN)
+	_screen.handle_button(PokeButton.DOWN)
 	assert_eq(_screen.menu().selected_index(), 0)
 
 
 ## STATICMENU_DISABLE_B keeps B out of `wMenuJoypadFilter`, so there is no way
 ## out of this screen but a choice.
 func test_b_does_nothing() -> void:
-	assert_false(_screen.handle_button(Gen2Button.B))
+	assert_false(_screen.handle_button(PokeButton.B))
 	assert_eq(_chosen, [])
 
 
@@ -93,10 +93,10 @@ func test_the_page_draws_the_question_and_the_menu() -> void:
 func test_the_page_fills_the_field_with_the_light_blue_tile() -> void:
 	var page := Gen2GenderScreenPage.from_data(GameData.open_directory(Fixture.directory()))
 	var indices: PackedByteArray = page.draw(QUESTION, 0)
-	assert_eq(indices[0], RomLayout.GENDER_SCREEN_FILL_INDEX, "the top-left corner of the field")
+	assert_eq(indices[0], Gen2Layout.GENDER_SCREEN_FILL_INDEX, "the top-left corner of the field")
 	assert_eq(
 		_at(indices, Vector2i(2, 11)),
-		RomLayout.GENDER_SCREEN_FILL_INDEX,
+		Gen2Layout.GENDER_SCREEN_FILL_INDEX,
 		"and the row above the text box, which no box reaches"
 	)
 	# `TextboxBorder` runs ' ' across the interior rows, so the field does not
@@ -109,9 +109,9 @@ func test_the_page_fills_the_field_with_the_light_blue_tile() -> void:
 ## `gfx/new_game/gender_screen.pal` names rather than a chosen one.
 func test_the_page_carries_the_source_palette() -> void:
 	var page := Gen2GenderScreenPage.from_data(GameData.open_directory(Fixture.directory()))
-	assert_eq(page.palette.size(), RomLayout.GENDER_SCREEN_PALETTE_COLORS)
+	assert_eq(page.palette.size(), Gen2Layout.GENDER_SCREEN_PALETTE_COLORS)
 	assert_eq(page.palette[0], Color.WHITE)
-	assert_eq(page.palette[1], Gen2Palette.from_packed(0x7FC9))
+	assert_eq(page.palette[1], PokePalette.from_packed(0x7FC9))
 	assert_eq(page.palette[3], Color.BLACK)
 
 

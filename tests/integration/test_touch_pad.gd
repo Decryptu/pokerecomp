@@ -44,9 +44,9 @@ func test_touch_geometry_has_the_same_physical_size_in_game_and_settings() -> vo
 		var pixels_per_unit: float = float(window.size.x) / window.get_visible_rect().size.x
 		var button: Rect2 = _pad.layout().button_rects(
 			_pad.area(), _pad.orientation()
-		)[Gen2Button.A]
+		)[PokeButton.A]
 		assert_almost_eq(button.size.x * unit * pixels_per_unit, 56.0 * 3.0, 0.01)
-		assert_eq(_pad.button_at(button.get_center() * unit), Gen2Button.A)
+		assert_eq(_pad.button_at(button.get_center() * unit), PokeButton.A)
 	window.content_scale_size = previous_base
 	window.content_scale_factor = previous_factor
 
@@ -68,7 +68,7 @@ func test_only_the_screen_furniture_the_pad_stands_on_is_reserved() -> void:
 
 func test_touch_controls_have_a_dark_fill_and_a_light_outline() -> void:
 	assert_lt(Gen2TouchPad.FILL.get_luminance(), 0.1)
-	assert_gte(Gen2TouchPad.FILL.a * Gen2TouchLayout.DEFAULT_OPACITY, 0.5)
+	assert_gte(Gen2TouchPad.FILL.a * PokeTouchLayout.DEFAULT_OPACITY, 0.5)
 	assert_gt(Gen2TouchPad.BORDER.get_luminance(), 0.9)
 
 
@@ -95,19 +95,19 @@ func _centre_of(button: int) -> Vector2:
 
 func _dpad(offset: Vector2) -> Vector2:
 	var rect: Rect2 = _pad.layout().group_rect(
-		Gen2TouchLayout.GROUP_PAD, _pad.area(), _pad.orientation()
+		PokeTouchLayout.GROUP_PAD, _pad.area(), _pad.orientation()
 	)
 	return rect.get_center() + offset * rect.size * 0.45
 
 
-## What the pad is holding, back in [Gen2Button] terms. The pad itself holds
+## What the pad is holding, back in [PokeButton] terms. The pad itself holds
 ## [InputMap] action names, because a mod's own on-screen button is one of the
 ## things a finger can be on and it is not one of the eight.
 func _held() -> Dictionary:
 	var out: Dictionary = {}
 	for action: StringName in (_pad.get("_held") as Dictionary):
-		var button: int = Gen2Button.from_action(action)
-		if button != Gen2Button.NONE:
+		var button: int = PokeButton.from_action(action)
+		if button != PokeButton.NONE:
 			out[button] = true
 		else:
 			out[action] = true
@@ -123,24 +123,24 @@ func test_the_pad_is_shown_when_the_setting_pins_it_on() -> void:
 ## downstream knows a touchscreen was involved.
 func test_a_touch_on_the_dpad_presses_that_direction() -> void:
 	_touch(0, _dpad(Vector2.LEFT), true)
-	assert_true(_held().has(Gen2Button.LEFT))
+	assert_true(_held().has(PokeButton.LEFT))
 
 	await get_tree().process_frame
-	assert_true(Input.is_action_pressed(Gen2Button.action(Gen2Button.LEFT)))
+	assert_true(Input.is_action_pressed(PokeButton.action(PokeButton.LEFT)))
 
 	_touch(0, _dpad(Vector2.LEFT), false)
 	await get_tree().process_frame
-	assert_false(Input.is_action_pressed(Gen2Button.action(Gen2Button.LEFT)))
+	assert_false(Input.is_action_pressed(PokeButton.action(PokeButton.LEFT)))
 
 
 func test_lifting_a_finger_releases_only_that_button() -> void:
 	_touch(0, _dpad(Vector2.UP), true)
-	_touch(1, _centre_of(Gen2Button.A), true)
+	_touch(1, _centre_of(PokeButton.A), true)
 	assert_eq(_held().size(), 2)
 
-	_touch(1, _centre_of(Gen2Button.A), false)
-	assert_true(_held().has(Gen2Button.UP))
-	assert_false(_held().has(Gen2Button.A))
+	_touch(1, _centre_of(PokeButton.A), false)
+	assert_true(_held().has(PokeButton.UP))
+	assert_false(_held().has(PokeButton.A))
 
 
 ## Rolling a thumb around the d-pad without lifting is how anyone turns a corner.
@@ -148,8 +148,8 @@ func test_sliding_across_the_dpad_swaps_the_direction() -> void:
 	_touch(0, _dpad(Vector2.LEFT), true)
 	_drag(0, _dpad(Vector2.RIGHT))
 
-	assert_true(_held().has(Gen2Button.RIGHT))
-	assert_false(_held().has(Gen2Button.LEFT))
+	assert_true(_held().has(PokeButton.RIGHT))
+	assert_false(_held().has(PokeButton.LEFT))
 
 
 ## A thumb that drifts a few pixels past the edge mid-step should not stop the
@@ -157,7 +157,7 @@ func test_sliding_across_the_dpad_swaps_the_direction() -> void:
 func test_sliding_off_the_controller_keeps_the_button_held() -> void:
 	_touch(0, _dpad(Vector2.DOWN), true)
 	_drag(0, Vector2(-200, -200))
-	assert_true(_held().has(Gen2Button.DOWN))
+	assert_true(_held().has(PokeButton.DOWN))
 
 
 func test_a_touch_on_nothing_presses_nothing() -> void:
@@ -166,14 +166,14 @@ func test_a_touch_on_nothing_presses_nothing() -> void:
 
 
 func test_two_fingers_on_one_button_hold_it_until_both_lift() -> void:
-	var at: Vector2 = _centre_of(Gen2Button.A)
+	var at: Vector2 = _centre_of(PokeButton.A)
 	_touch(0, at, true)
 	_touch(1, at, true)
 	_touch(0, at, false)
-	assert_true(_held().has(Gen2Button.A))
+	assert_true(_held().has(PokeButton.A))
 
 	_touch(1, at, false)
-	assert_false(_held().has(Gen2Button.A))
+	assert_false(_held().has(PokeButton.A))
 
 
 ## A button still held when the screen changes would walk the player into a wall
@@ -181,11 +181,11 @@ func test_two_fingers_on_one_button_hold_it_until_both_lift() -> void:
 func test_leaving_the_tree_lets_go_of_everything() -> void:
 	_touch(0, _dpad(Vector2.UP), true)
 	await get_tree().process_frame
-	assert_true(Input.is_action_pressed(Gen2Button.action(Gen2Button.UP)))
+	assert_true(Input.is_action_pressed(PokeButton.action(PokeButton.UP)))
 
 	remove_child(_pad)
 	await get_tree().process_frame
-	assert_false(Input.is_action_pressed(Gen2Button.action(Gen2Button.UP)))
+	assert_false(Input.is_action_pressed(PokeButton.action(PokeButton.UP)))
 	add_child(_pad)
 
 
@@ -225,13 +225,13 @@ func test_hiding_the_controller_lets_go_of_what_it_held() -> void:
 func test_edit_mode_drags_a_group_instead_of_pressing_it() -> void:
 	_pad.set_edit_mode(true)
 	# The arrangement the pad is placing is the window's, not the pad's own shape.
-	var before: Vector2 = _pad.layout().anchor(_pad.orientation(), Gen2TouchLayout.GROUP_PAD)
+	var before: Vector2 = _pad.layout().anchor(_pad.orientation(), PokeTouchLayout.GROUP_PAD)
 
 	_touch(0, _dpad(Vector2.ZERO), true)
 	assert_true(_held().is_empty())
 	_drag(0, _dpad(Vector2.ZERO) + Vector2(0, -120))
 	_touch(0, _dpad(Vector2.ZERO), false)
 
-	var after: Vector2 = _pad.layout().anchor(_pad.orientation(), Gen2TouchLayout.GROUP_PAD)
+	var after: Vector2 = _pad.layout().anchor(_pad.orientation(), PokeTouchLayout.GROUP_PAD)
 	assert_lt(after.y, before.y)
 	assert_eq(after.x, before.x)

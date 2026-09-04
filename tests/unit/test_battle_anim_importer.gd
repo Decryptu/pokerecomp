@@ -43,7 +43,7 @@ func before_each() -> void:
 ## A plausible `BattleAnimations`: POUND at entry 1 and a bare `anim_ret`
 ## everywhere else.
 func _write_scripts() -> void:
-	for index: int in RomLayout.BATTLE_ANIM_SCRIPT_COUNT:
+	for index: int in Gen2Layout.BATTLE_ANIM_SCRIPT_COUNT:
 		_word(SCRIPTS + index * 2, POUND_BODY if index == 1 else DUMMY_BODY)
 	for index: int in Gen2BattleAnimImporter.POUND_BYTES.size():
 		_dump[POUND_BODY + index] = Gen2BattleAnimImporter.POUND_BYTES[index]
@@ -52,8 +52,8 @@ func _write_scripts() -> void:
 
 ## 188 rows whose four table indexes are all in range.
 func _write_objects() -> void:
-	for index: int in RomLayout.BATTLE_ANIM_OBJECT_COUNT:
-		var row: int = OBJECTS + index * RomLayout.BATTLE_ANIM_OBJECT_SIZE
+	for index: int in Gen2Layout.BATTLE_ANIM_OBJECT_COUNT:
+		var row: int = OBJECTS + index * Gen2Layout.BATTLE_ANIM_OBJECT_SIZE
 		_dump[row + Gen2BattleAnimImporter.OBJECT_FLAGS] = 0x01
 		_dump[row + Gen2BattleAnimImporter.OBJECT_Y_FIX] = 0xFF
 		_dump[row + Gen2BattleAnimImporter.OBJECT_FRAMESET] = 0
@@ -64,7 +64,7 @@ func _write_objects() -> void:
 
 ## Every frameset pointing at one `oamframe` and an `oamend`.
 func _write_framesets() -> void:
-	for index: int in RomLayout.BATTLE_ANIM_FRAMESET_COUNT:
+	for index: int in Gen2Layout.BATTLE_ANIM_FRAMESET_COUNT:
 		_word(FRAMESETS + index * 2, FRAMESET_STREAM)
 	_dump[FRAMESET_STREAM] = 0x00
 	_dump[FRAMESET_STREAM + 1] = 0x06
@@ -73,24 +73,24 @@ func _write_framesets() -> void:
 
 ## Every OAM set naming one sprite.
 func _write_oam_sets() -> void:
-	for index: int in RomLayout.BATTLE_ANIM_OAM_SET_COUNT:
-		var row: int = OAM_SETS + index * RomLayout.BATTLE_ANIM_OAM_SET_SIZE
+	for index: int in Gen2Layout.BATTLE_ANIM_OAM_SET_COUNT:
+		var row: int = OAM_SETS + index * Gen2Layout.BATTLE_ANIM_OAM_SET_SIZE
 		_dump[row + Gen2BattleAnimImporter.OAM_SET_VTILE] = 0
 		_dump[row + Gen2BattleAnimImporter.OAM_SET_LENGTH] = 1
 		_word(row + Gen2BattleAnimImporter.OAM_SET_POINTER, OAM_SPRITES)
 
 
 func _write_object_gfx() -> void:
-	for index: int in RomLayout.BATTLE_ANIM_GFX_COUNT:
-		var row: int = OBJECT_GFX + index * RomLayout.BATTLE_ANIM_GFX_SIZE
+	for index: int in Gen2Layout.BATTLE_ANIM_GFX_COUNT:
+		var row: int = OBJECT_GFX + index * Gen2Layout.BATTLE_ANIM_GFX_SIZE
 		_dump[row + Gen2BattleAnimImporter.GFX_TILES] = 1
 		_dump[row + Gen2BattleAnimImporter.GFX_POINTER] = 0
 		_word(row + Gen2BattleAnimImporter.GFX_POINTER + 1, GFX_DATA)
 
 
 func _write_sine() -> void:
-	for index: int in RomLayout.BATTLE_ANIM_SINE_BYTES:
-		_dump[SINE + index] = RomLayout.BATTLE_ANIM_SINE_WAVE[index]
+	for index: int in Gen2Layout.BATTLE_ANIM_SINE_BYTES:
+		_dump[SINE + index] = Gen2Layout.BATTLE_ANIM_SINE_WAVE[index]
 
 
 func _word(at: int, value: int) -> void:
@@ -120,17 +120,17 @@ func _read(layout: Dictionary = _layout()) -> Dictionary:
 func test_a_plausible_layer_verifies() -> void:
 	var result: Dictionary = _read()
 	assert_true(bool(result["ok"]), String(result.get("message", "")))
-	assert_eq(int(result["counts"]["scripts"]), RomLayout.BATTLE_ANIM_SCRIPT_COUNT)
-	assert_eq(int(result["counts"]["objects"]), RomLayout.BATTLE_ANIM_OBJECT_COUNT)
-	assert_eq(int(result["counts"]["framesets"]), RomLayout.BATTLE_ANIM_FRAMESET_COUNT)
-	assert_eq(int(result["counts"]["oam_sets"]), RomLayout.BATTLE_ANIM_OAM_SET_COUNT)
+	assert_eq(int(result["counts"]["scripts"]), Gen2Layout.BATTLE_ANIM_SCRIPT_COUNT)
+	assert_eq(int(result["counts"]["objects"]), Gen2Layout.BATTLE_ANIM_OBJECT_COUNT)
+	assert_eq(int(result["counts"]["framesets"]), Gen2Layout.BATTLE_ANIM_FRAMESET_COUNT)
+	assert_eq(int(result["counts"]["oam_sets"]), Gen2Layout.BATTLE_ANIM_OAM_SET_COUNT)
 
 
 ## The sine table is stored as the cartridge's own bytes, quarter turn included:
 ## $0100 is what says it was read rather than derived in eight bits.
 func test_the_sine_table_keeps_its_sixteen_bit_quarter_turn() -> void:
 	var bytes: Array = _read()["anims"]["sine"]["bytes"]
-	assert_eq(bytes.size(), RomLayout.BATTLE_ANIM_SINE_BYTES)
+	assert_eq(bytes.size(), Gen2Layout.BATTLE_ANIM_SINE_BYTES)
 	assert_eq(int(bytes[32]), 0x00)
 	assert_eq(int(bytes[33]), 0x01)
 
@@ -203,7 +203,7 @@ func test_a_called_body_joins_the_region() -> void:
 
 func test_an_object_naming_a_frameset_past_the_table_fails() -> void:
 	_dump[OBJECTS + Gen2BattleAnimImporter.OBJECT_FRAMESET] = \
-		RomLayout.BATTLE_ANIM_FRAMESET_COUNT
+		Gen2Layout.BATTLE_ANIM_FRAMESET_COUNT
 	var result: Dictionary = _read()
 	assert_false(bool(result["ok"]))
 	assert_string_contains(String(result["message"]), "names frameset")
@@ -230,7 +230,7 @@ func test_a_frameset_stream_that_never_ends_fails() -> void:
 
 
 func test_a_frameset_naming_an_oam_set_past_the_table_fails() -> void:
-	_dump[FRAMESET_STREAM] = RomLayout.BATTLE_ANIM_OAM_SET_COUNT
+	_dump[FRAMESET_STREAM] = Gen2Layout.BATTLE_ANIM_OAM_SET_COUNT
 	var result: Dictionary = _read()
 	assert_false(bool(result["ok"]))
 	assert_string_contains(String(result["message"]), "names OAM set")
@@ -266,12 +266,12 @@ func test_an_oam_set_with_no_sprites_fails() -> void:
 ## and the last two are the `NULL` rows the battler-graphics commands fill in.
 func test_three_graphics_rows_carry_no_sheet() -> void:
 	var rows: Array = _read()["anims"]["object_gfx"]
-	assert_eq(rows.size(), RomLayout.BATTLE_ANIM_GFX_COUNT)
+	assert_eq(rows.size(), Gen2Layout.BATTLE_ANIM_GFX_COUNT)
 	assert_false(bool(rows[0]["sheet"]))
-	assert_true(bool(rows[RomLayout.BATTLE_ANIM_GFX_FIRST_SHEET]["sheet"]))
-	assert_true(bool(rows[RomLayout.BATTLE_ANIM_GFX_LAST_SHEET]["sheet"]))
-	assert_false(bool(rows[RomLayout.BATTLE_ANIM_GFX_LAST_SHEET + 1]["sheet"]))
-	assert_false(bool(rows[RomLayout.BATTLE_ANIM_GFX_COUNT - 1]["sheet"]))
+	assert_true(bool(rows[Gen2Layout.BATTLE_ANIM_GFX_FIRST_SHEET]["sheet"]))
+	assert_true(bool(rows[Gen2Layout.BATTLE_ANIM_GFX_LAST_SHEET]["sheet"]))
+	assert_false(bool(rows[Gen2Layout.BATTLE_ANIM_GFX_LAST_SHEET + 1]["sheet"]))
+	assert_false(bool(rows[Gen2Layout.BATTLE_ANIM_GFX_COUNT - 1]["sheet"]))
 
 
 func test_a_layout_without_the_section_fails_rather_than_reading_zero() -> void:

@@ -73,7 +73,7 @@ func _initialize() -> void:
 	_game = game
 	if args.size() > 1:
 		_output_path = args[1]
-		if Gen2ToolPath.refuses(_output_path):
+		if PokeToolPath.refuses(_output_path):
 			quit(2)
 			return
 	if args.size() > 2:
@@ -157,7 +157,7 @@ func _process(_delta: float) -> bool:
 		_screen.move_player(Vector2i(0, 1))
 	# Before the press below, so a capture keeps the box that press would answer.
 	if _frames == _capture_frame and not _output_path.is_empty():
-		var image: Image = Gen2ToolPath.capture(root)
+		var image: Image = PokeToolPath.capture(root)
 		if image == null:
 			quit(1)
 			return true
@@ -165,7 +165,7 @@ func _process(_delta: float) -> bool:
 		print("Wrote %s at frame %d" % [_output_path, _frames])
 	if not _trace.is_empty() and bool(_trace[-1]["waiting_input"]):
 		# Every question answered YES, the way the other preview drivers do.
-		_screen.press_button(Gen2Button.A)
+		_screen.press_button(PokeButton.A)
 	elif not _trace.is_empty() and not bool(_trace[-1]["script_busy"]):
 		_drive_talk()
 	_screen._process(FRAME)
@@ -189,7 +189,7 @@ func _drive_talk() -> void:
 	if step == Vector2i.ZERO:
 		step = Vector2i(0, signi(target.y - world.player_cell.y))
 	if step == Vector2i.ZERO and world.player_facing == Gen2WorldSprite.FACING_LEFT:
-		_screen.press_button(Gen2Button.A)
+		_screen.press_button(PokeButton.A)
 		return
 	_screen.move_player(step if step != Vector2i.ZERO else Vector2i(-1, 0))
 

@@ -18,8 +18,8 @@ const ITEM_BICYCLE: int = 0x07
 const ITEM_REPEL: int = 0x14
 
 const BUTTONS: Dictionary = {
-	"u": Gen2Button.UP, "d": Gen2Button.DOWN, "l": Gen2Button.LEFT,
-	"r": Gen2Button.RIGHT, "a": Gen2Button.A, "b": Gen2Button.B,
+	"u": PokeButton.UP, "d": PokeButton.DOWN, "l": PokeButton.LEFT,
+	"r": PokeButton.RIGHT, "a": PokeButton.A, "b": PokeButton.B,
 }
 
 var _output_path: String = ""
@@ -47,7 +47,7 @@ func _initialize() -> void:
 		return
 	var game: StringName = StringName(args[0])
 	_output_path = args[1]
-	if Gen2ToolPath.refuses(_output_path):
+	if PokeToolPath.refuses(_output_path):
 		quit(2)
 		return
 	if args.size() > 2:
@@ -58,7 +58,7 @@ func _initialize() -> void:
 			_programs.append(program)
 	_shiny = args.has("shiny")
 	if args.has("max"):
-		_lead_level = RomLayout.MAX_LEVEL
+		_lead_level = Gen2Layout.MAX_LEVEL
 
 	var directory: String = _find_cache(game)
 	if directory.is_empty():
@@ -116,7 +116,7 @@ func _build(data: GameData) -> Control:
 	## shipped example's own page is registered here: this is the one place the
 	## fourth page and its relaid-out indicators can be looked at.
 	if _what == "stats":
-		var manifest: Dictionary = Gen2ModManifest.read("res://mods/examples/new_content")
+		var manifest: Dictionary = PokeModManifest.read("res://mods/examples/new_content")
 		if not bool(manifest.get("ok", false)) \
 			or not bool(Gen2ModHost.instance().load_mod(manifest["manifest"]).get("ok", false)):
 			push_error("Could not load the example mod's stats page.")
@@ -199,7 +199,7 @@ func _process(_delta: float) -> bool:
 	if _elapsed == FRAMES_BEFORE_CAPTURE:
 		_drive(_programs[_at])
 		return false
-	var image: Image = Gen2ToolPath.capture(root)
+	var image: Image = PokeToolPath.capture(root)
 	if image == null:
 		quit(1)
 		return true

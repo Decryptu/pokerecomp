@@ -28,10 +28,10 @@ var _scheme: Dictionary = {}
 var _mod_controls: Dictionary = {}
 var _touch_mode: StringName = Gen2Options.TOUCH_AUTO
 ## Which letters a badge prints for a pad button. See [member Gen2Options.pad_layout].
-var _pad_layout: StringName = Gen2InputActions.PAD_LAYOUT_AUTO
-var _layout: Gen2TouchLayout = Gen2TouchLayout.new()
-var _device: StringName = Gen2InputDevice.KEYBOARD
-var _handheld: bool = Gen2InputDevice.is_handheld()
+var _pad_layout: StringName = PokeInputActions.PAD_LAYOUT_AUTO
+var _layout: PokeTouchLayout = PokeTouchLayout.new()
+var _device: StringName = PokeInputDevice.KEYBOARD
+var _handheld: bool = PokeInputDevice.is_handheld()
 var _touch_shown: bool = false
 ## Held directions in the order they were pressed, so the newest wins. Two
 ## directions at once is normal play, not an error: a player turning a corner
@@ -65,7 +65,7 @@ const FRAME_SECONDS: float = 1.0 / 60.0
 ## The four buttons a Game Boy resets on. `home/init.asm` wires them to the
 ## hardware rather than to a routine, so no game code can decline the chord.
 const RESET_CHORD: Array[int] = [
-	Gen2Button.A, Gen2Button.B, Gen2Button.START, Gen2Button.SELECT,
+	PokeButton.A, PokeButton.B, PokeButton.START, PokeButton.SELECT,
 ]
 
 ## The autoload, cached after the first lookup.
@@ -88,7 +88,7 @@ func _ready() -> void:
 	# Before any event has arrived the only evidence is the hardware. A phone
 	# should show its controller on the first frame rather than after the first
 	# tap, and a desktop should not show one at all.
-	_device = Gen2InputDevice.kind_for_hardware(
+	_device = PokeInputDevice.kind_for_hardware(
 		not Input.get_connected_joypads().is_empty(),
 		DisplayServer.is_touchscreen_available(),
 	)
@@ -107,7 +107,7 @@ func apply_options(options: Gen2Options) -> void:
 	_touch_mode = options.touch_mode
 	_layout = options.touch_layout
 	_pad_layout = options.pad_layout
-	Gen2InputActions.install(_scheme)
+	PokeInputActions.install(_scheme)
 	install_mod_actions()
 	scheme_changed.emit()
 	_refresh_touch_controls()
@@ -118,7 +118,7 @@ func apply_options(options: Gen2Options) -> void:
 ## actions during its own entry script and the options were applied before that.
 func install_mod_actions() -> void:
 	var actions: Array = Gen2ModHost.instance().actions()
-	Gen2InputActions.install_mod_actions(actions, _mod_controls)
+	PokeInputActions.install_mod_actions(actions, _mod_controls)
 	# The on-screen controller places one button per action, so it needs the
 	# labels; where each one sits, and whether they are drawn at all, is the
 	# player's and stays in the layout.
@@ -137,7 +137,7 @@ func mod_controls() -> Dictionary:
 	return _mod_controls
 
 
-func touch_layout() -> Gen2TouchLayout:
+func touch_layout() -> PokeTouchLayout:
 	return _layout
 
 
@@ -171,7 +171,7 @@ func reveal_touch_controls() -> bool:
 	_touch_mode = Gen2Options.TOUCH_AUTO
 	# The gesture is a touch, so the device is a touchscreen whatever was last
 	# used. Saying so is what makes `auto` resolve to shown on this same frame.
-	_set_device(Gen2InputDevice.TOUCH)
+	_set_device(PokeInputDevice.TOUCH)
 	_refresh_touch_controls()
 	return true
 
@@ -211,7 +211,7 @@ func release(button: int) -> void:
 
 
 func _send(button: int, pressed: bool) -> void:
-	send_action(Gen2Button.action(button), pressed)
+	send_action(PokeButton.action(button), pressed)
 
 
 ## The same for an action named directly, which is what the on-screen controller
@@ -232,8 +232,8 @@ func send_action(action: StringName, pressed: bool) -> void:
 ## engine's own focus navigation, and [method _advance_direction_repeat] puts back
 ## the repeat the hardware had.
 func _gate_direction_repeat(event: InputEvent) -> bool:
-	var button: int = Gen2Button.direction_in(event)
-	if button == Gen2Button.NONE:
+	var button: int = PokeButton.direction_in(event)
+	if button == PokeButton.NONE:
 		return false
 	if bool(_repeat_open.get(button, false)):
 		_repeat_open[button] = false
@@ -244,11 +244,11 @@ func _gate_direction_repeat(event: InputEvent) -> bool:
 	return false
 
 
-## The direction currently held, or [constant Gen2Button.NONE]. Polled rather than
+## The direction currently held, or [constant PokeButton.NONE]. Polled rather than
 ## read off events: walking continues while a direction is held, and the operating
 ## system's key repeat is not the rate the hardware walked at.
 func held_direction() -> int:
-	return _direction_order.back() if not _direction_order.is_empty() else Gen2Button.NONE
+	return _direction_order.back() if not _direction_order.is_empty() else PokeButton.NONE
 
 
 func _notification(what: int) -> void:
@@ -257,8 +257,8 @@ func _notification(what: int) -> void:
 
 
 func _process(delta: float) -> void:
-	for button: int in Gen2Button.DIRECTIONS:
-		var held: bool = Gen2Button.held(button)
+	for button: int in PokeButton.DIRECTIONS:
+		var held: bool = PokeButton.held(button)
 		var at: int = _direction_order.find(button)
 		if held and at < 0:
 			_direction_order.append(button)
@@ -273,7 +273,7 @@ func _process(delta: float) -> void:
 func _poll_reset_chord() -> void:
 	var down: bool = true
 	for button: int in RESET_CHORD:
-		if not Gen2Button.held(button):
+		if not PokeButton.held(button):
 			down = false
 			break
 	if down and not _reset_chord_down:
@@ -285,7 +285,7 @@ func _poll_reset_chord() -> void:
 ## seen pressed carries a clock; when it runs out the direction is pressed again
 ## on the player's behalf, which is what lets a held d-pad walk a list at all.
 func _advance_direction_repeat(delta: float) -> void:
-	for button: int in Gen2Button.DIRECTIONS:
+	for button: int in PokeButton.DIRECTIONS:
 		if not _direction_pressed(button):
 			_repeat_clock.erase(button)
 			_repeat_open.erase(button)
@@ -305,43 +305,43 @@ func _advance_direction_repeat(delta: float) -> void:
 ## [method Input.parse_input_event]: a repeat is an edge, not a state. `Input`
 ## keeps an action's API half apart from its device half and reports either as
 ## pressed, and only an action release clears the API half, so a repeat sent as a
-## press latched the direction. The key came up, [method Gen2Button.held] stayed
+## press latched the direction. The key came up, [method PokeButton.held] stayed
 ## true, and the walk, the menu and the repeat ran on with nothing to stop them.
 func _emit_repeat(button: int) -> void:
 	var viewport: Viewport = get_viewport()
 	if viewport == null:
 		return
 	var event := InputEventAction.new()
-	event.action = Gen2Button.action(button)
+	event.action = PokeButton.action(button)
 	event.pressed = true
 	viewport.push_input(event)
 
 
 ## Whether a direction is down on either vocabulary; see
-## [constant Gen2Button.UI_ACTIONS].
+## [constant PokeButton.UI_ACTIONS].
 static func _direction_pressed(button: int) -> bool:
-	return Gen2Button.held(button) \
-		or Input.is_action_pressed(Gen2Button.UI_ACTIONS[button])
+	return PokeButton.held(button) \
+		or Input.is_action_pressed(PokeButton.UI_ACTIONS[button])
 
 
 ## Watches every event and consumes none, except a directional press the
 ## hardware would not have reported: see [method _gate_direction_repeat]. What
 ## counts as another device being picked up is
-## [method Gen2InputDevice.evidence_of] rather than where the event came from.
+## [method PokeInputDevice.evidence_of] rather than where the event came from.
 func _input(event: InputEvent) -> void:
 	if _gate_direction_repeat(event):
 		var viewport: Viewport = get_viewport()
 		if viewport != null:
 			viewport.set_input_as_handled()
 		return
-	var kind: StringName = Gen2InputDevice.evidence_of(event, _handheld)
+	var kind: StringName = PokeInputDevice.evidence_of(event, _handheld)
 	if kind.is_empty():
 		return
 	_set_device(kind)
 
 
 func _on_joypad_changed(_device_id: int, _connected: bool) -> void:
-	if _pad_layout == Gen2InputActions.PAD_LAYOUT_AUTO:
+	if _pad_layout == PokeInputActions.PAD_LAYOUT_AUTO:
 		scheme_changed.emit()
 
 
@@ -361,7 +361,7 @@ func _refresh_touch_controls() -> void:
 		Gen2Options.TOUCH_NEVER:
 			shown = false
 		_:
-			shown = _device == Gen2InputDevice.TOUCH
+			shown = _device == PokeInputDevice.TOUCH
 	if shown == _touch_shown:
 		return
 	_touch_shown = shown

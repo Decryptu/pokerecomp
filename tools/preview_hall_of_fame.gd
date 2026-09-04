@@ -25,7 +25,7 @@ func _initialize() -> void:
 		quit(1)
 		return
 	_output_path = args[1]
-	if Gen2ToolPath.refuses(_output_path):
+	if PokeToolPath.refuses(_output_path):
 		quit(2)
 		return
 	_advance = int(args[2]) if args.size() > 2 else 0
@@ -73,7 +73,7 @@ func _process(_delta: float) -> bool:
 				_screen._hall_of_fame_host.advance()
 	if _frames < SETTLE_FRAMES:
 		return false
-	var image: Image = Gen2ToolPath.capture(root)
+	var image: Image = PokeToolPath.capture(root)
 	if image == null:
 		quit(1)
 		return true

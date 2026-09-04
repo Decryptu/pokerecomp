@@ -37,7 +37,7 @@ func _build() -> void:
 		_theme,
 		"Keyboard, controller and the on-screen buttons all press the same eight."
 	))
-	for button: int in Gen2Button.ALL:
+	for button: int in PokeButton.ALL:
 		add_child(_binding_row(button))
 	_build_mod_actions()
 
@@ -174,7 +174,7 @@ func _bindings_label() -> Label:
 
 
 func _label_for(button: int) -> Label:
-	var label: Label = Gen2LauncherUI.body(_theme, Gen2Button.label(button))
+	var label: Label = Gen2LauncherUI.body(_theme, PokeButton.label(button))
 	label.custom_minimum_size = Vector2(90, 0)
 	return label
 
@@ -193,8 +193,8 @@ static func describe(bindings: Array) -> String:
 	var keys: Array[String] = []
 	var pads: Array[String] = []
 	for binding: Dictionary in bindings:
-		var text: String = Gen2InputActions.describe(binding)
-		if Gen2InputActions.device_of(binding) == Gen2InputActions.DEVICE_KEYBOARD:
+		var text: String = PokeInputActions.describe(binding)
+		if PokeInputActions.device_of(binding) == PokeInputActions.DEVICE_KEYBOARD:
 			keys.append(text)
 		else:
 			pads.append(text)
@@ -216,12 +216,12 @@ func _open_editor(button: int) -> void:
 
 
 func _reset() -> void:
-	_options.controls = Gen2InputActions.defaults()
+	_options.controls = PokeInputActions.defaults()
 	# A mod's own bindings go back to what it declared, which is what an empty
 	# override means: the install falls through to the registered default.
 	_options.mod_controls = {}
-	_options.touch_layout = Gen2TouchLayout.new()
-	for button: int in Gen2Button.ALL:
+	_options.touch_layout = PokeTouchLayout.new()
+	for button: int in PokeButton.ALL:
 		_refresh_row(button)
 	for action: Dictionary in Gen2ModHost.instance().actions():
 		_refresh_mod_row(action["name"])

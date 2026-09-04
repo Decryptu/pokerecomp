@@ -100,12 +100,12 @@ func test_a_or_b_walks_the_pages_and_hands_the_box_back_to_the_script() -> void:
 	_run_script()
 	for _press: int in PRESSES_PER_PAGE * 2:
 		_settle_text()
-		_world_screen.press_button(Gen2Button.B)
+		_world_screen.press_button(PokeButton.B)
 	assert_eq(_world_screen._oak_pc_pages.size(), 1, "the rating is up")
 
 	for _press: int in PRESSES_PER_PAGE:
 		_settle_text()
-		_world_screen.press_button(Gen2Button.A)
+		_world_screen.press_button(PokeButton.A)
 	assert_eq(_world_screen._oak_pc_pages.size(), 0)
 	assert_true(_world_screen._text_box.visible, "the script's own text now")
 	assert_eq(_world_screen._script_prompt, "A: advance text")

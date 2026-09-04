@@ -717,7 +717,7 @@ func test_sram_game_time_round_trips_both_profile_layouts() -> void:
 			game_id, data.sha1, 0, raw, data
 		)
 		assert_true(imported["ok"], imported["message"])
-		var source_time: Gen2GameTime = imported["save"].game_time
+		var source_time: PokeGameTime = imported["save"].game_time
 		assert_eq(source_time.hours, 321, String(game_id))
 		assert_eq(source_time.minutes, 45, String(game_id))
 		assert_eq(source_time.seconds, 12, String(game_id))
@@ -725,7 +725,7 @@ func test_sram_game_time_round_trips_both_profile_layouts() -> void:
 		assert_true(source_time.capped, String(game_id))
 
 		var save: Gen2SaveData = imported["save"]
-		save.game_time = Gen2GameTime.create(999, 59, 58, 42, true)
+		save.game_time = PokeGameTime.create(999, 59, 58, 42, true)
 		var exported: Dictionary = Gen2SramAdapter.export_bytes(save, raw, data)
 		assert_true(exported["ok"], exported["message"])
 		var output: PackedByteArray = exported["raw"]
@@ -736,7 +736,7 @@ func test_sram_game_time_round_trips_both_profile_layouts() -> void:
 			game_id, data.sha1, 0, output, data
 		)
 		assert_true(round_trip["ok"], round_trip["message"])
-		var restored_time: Gen2GameTime = round_trip["save"].game_time
+		var restored_time: PokeGameTime = round_trip["save"].game_time
 		assert_eq(restored_time.to_dict(), save.game_time.to_dict(), String(game_id))
 
 

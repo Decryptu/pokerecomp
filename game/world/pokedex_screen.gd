@@ -197,23 +197,23 @@ func release_button(button: int) -> void:
 ## `Pokedex_UpdateMainScreen`.
 func _handle_list(button: int) -> bool:
 	match button:
-		Gen2Button.B:
+		PokeButton.B:
 			_exit()
 			return true
-		Gen2Button.A:
+		PokeButton.A:
 			if _dex.can_open_entry():
 				_dex.open_entry()
 				_open_entry_mode(Mode.LIST)
 			return true
-		Gen2Button.SELECT:
+		PokeButton.SELECT:
 			_open_option_mode()
 			return true
-		Gen2Button.START:
+		PokeButton.START:
 			_open_search_mode()
 			return true
 	if _dex.move_listing(button):
 		_refresh()
-	return Gen2Button.is_direction(button)
+	return PokeButton.is_direction(button)
 
 
 ## `Pokedex_UpdateDexEntryScreen`: B returns to the listing, A turns the page,
@@ -226,7 +226,7 @@ func _handle_entry(button: int) -> bool:
 	if _entry_only:
 		return _handle_new_entry(button)
 	match button:
-		Gen2Button.B:
+		PokeButton.B:
 			## `wPrevDexEntryJumptableIndex`, which `Pokedex_UpdateMainScreen`
 			## and `Pokedex_UpdateSearchResultsScreen` each write before they
 			## open an entry: B goes back to whichever listing that was, not
@@ -236,17 +236,17 @@ func _handle_entry(button: int) -> bool:
 				return true
 			_open_list_mode()
 			return true
-		Gen2Button.A:
+		PokeButton.A:
 			_entry_action()
 			return true
-		Gen2Button.LEFT, Gen2Button.RIGHT:
+		PokeButton.LEFT, PokeButton.RIGHT:
 			## `DexEntryScreen_ArrowCursorData` allows left and right only, over
 			## four positions, and stops at either end.
-			var next: int = _entry_cursor + (1 if button == Gen2Button.RIGHT else -1)
+			var next: int = _entry_cursor + (1 if button == PokeButton.RIGHT else -1)
 			_entry_cursor = clampi(next, 0, ENTRY_BUTTONS.size() - 1)
 			_refresh()
 			return true
-		Gen2Button.UP, Gen2Button.DOWN:
+		PokeButton.UP, PokeButton.DOWN:
 			if _dex.step_entry(button):
 				## `Pokedex_ReinitDexEntryScreen` calls `Pokedex_InitArrowCursor`,
 				## so a new entry opens on PAGE whatever the last one ended on.
@@ -259,7 +259,7 @@ func _handle_entry(button: int) -> bool:
 ## `NewPokedexEntry` runs no jumptable: `WaitPressAorB_BlinkCursor`, page 2, that
 ## wait again. A and B are one button and nothing else does anything.
 func _handle_new_entry(button: int) -> bool:
-	if button != Gen2Button.A and button != Gen2Button.B:
+	if button != PokeButton.A and button != PokeButton.B:
 		return false
 	if _dex.page == Gen2Pokedex.PAGE_1:
 		_dex.toggle_page()
@@ -327,16 +327,16 @@ func _on_area_closed() -> void:
 ## takes the row's mode.
 func _handle_option(button: int) -> bool:
 	match button:
-		Gen2Button.B, Gen2Button.SELECT:
+		PokeButton.B, PokeButton.SELECT:
 			_open_list_mode()
 			return true
-		Gen2Button.A:
+		PokeButton.A:
 			_choose_mode()
 			return true
-		Gen2Button.UP, Gen2Button.DOWN:
+		PokeButton.UP, PokeButton.DOWN:
 			## `.ArrowCursorData` allows up and down only, and
 			## `Pokedex_MoveArrowCursor` stops at either end rather than wrapping.
-			var next: int = _option_cursor + (1 if button == Gen2Button.DOWN else -1)
+			var next: int = _option_cursor + (1 if button == PokeButton.DOWN else -1)
 			_option_cursor = clampi(next, 0, _mode_rows.size() - 1)
 			_refresh()
 			return true
@@ -351,7 +351,7 @@ func _handle_option(button: int) -> bool:
 ## had and the Unown screen answers back to OPTION rather than to the listing.
 func _choose_mode() -> void:
 	var row: Dictionary = _mode_rows[_option_cursor]
-	if int(row["mode"]) == RomLayout.DEXMODE_UNOWN:
+	if int(row["mode"]) == Gen2Layout.DEXMODE_UNOWN:
 		_open_unown_mode()
 		return
 	if _dex.change_mode(int(row["mode"])):
@@ -409,10 +409,10 @@ func _open_option_mode() -> void:
 ## both leave. `.a_b` goes back to DEXSTATE_OPTION_SCR, not to the listing.
 func _handle_unown(button: int) -> bool:
 	match button:
-		Gen2Button.A, Gen2Button.B:
+		PokeButton.A, PokeButton.B:
 			_open_option_mode()
 			return true
-		Gen2Button.LEFT, Gen2Button.RIGHT:
+		PokeButton.LEFT, PokeButton.RIGHT:
 			if _dex.move_unown(button):
 				_refresh()
 			return true
@@ -432,18 +432,18 @@ func _open_unown_mode() -> void:
 ## both cancel back to the listing.
 func _handle_search(button: int) -> bool:
 	match button:
-		Gen2Button.B, Gen2Button.START:
+		PokeButton.B, PokeButton.START:
 			_open_list_mode()
 			return true
-		Gen2Button.A:
+		PokeButton.A:
 			_confirm_search_row()
 			return true
-		Gen2Button.UP, Gen2Button.DOWN:
-			var next: int = _dex.search_cursor + (1 if button == Gen2Button.DOWN else -1)
+		PokeButton.UP, PokeButton.DOWN:
+			var next: int = _dex.search_cursor + (1 if button == PokeButton.DOWN else -1)
 			_dex.search_cursor = clampi(next, 0, Gen2Pokedex.SEARCH_ROWS.size() - 1)
 			_refresh()
 			return true
-		Gen2Button.LEFT, Gen2Button.RIGHT:
+		PokeButton.LEFT, PokeButton.RIGHT:
 			if _dex.move_search_type(button):
 				_refresh()
 			return true
@@ -455,7 +455,7 @@ func _handle_search(button: int) -> bool:
 func _confirm_search_row() -> void:
 	match _dex.search_cursor:
 		Gen2Pokedex.SEARCH_ROW_TYPE_1, Gen2Pokedex.SEARCH_ROW_TYPE_2:
-			_dex.move_search_type(Gen2Button.RIGHT)
+			_dex.move_search_type(PokeButton.RIGHT)
 			_refresh()
 		Gen2Pokedex.SEARCH_ROW_BEGIN:
 			## `.MenuAction_BeginSearch` searches first and only then spends
@@ -472,18 +472,18 @@ func _confirm_search_row() -> void:
 ## over four rows instead of seven, A opens an entry and B goes back to SEARCH.
 func _handle_search_results(button: int) -> bool:
 	match button:
-		Gen2Button.B:
+		PokeButton.B:
 			_dex.leave_search_results()
 			_open_search_mode()
 			return true
-		Gen2Button.A:
+		PokeButton.A:
 			if _dex.can_open_entry():
 				_dex.open_entry()
 				_open_entry_mode(Mode.SEARCH_RESULTS)
 			return true
 	if _dex.move_listing(button):
 		_refresh()
-	return Gen2Button.is_direction(button)
+	return PokeButton.is_direction(button)
 
 
 ## `Pokedex_InitSearchScreen`, which resets both type rows every time.
@@ -579,7 +579,7 @@ func render() -> Image:
 			)
 	# The listing's own cursor is an object frame rather than the arrow the other
 	# screens blink, so it is up on every frame the listing is.
-	var old_mode: bool = _dex.mode == RomLayout.DEXMODE_OLD
+	var old_mode: bool = _dex.mode == Gen2Layout.DEXMODE_OLD
 	return _page.image_main(
 		_page.main_background(_dex.seen_count(), _dex.caught_count()),
 		_page.window_map(_dex.rows(), old_mode), old_mode, _selected_pic(),
@@ -632,7 +632,7 @@ func _selected_pic() -> Image:
 		# `ld a, UNOWN / ld [wCurPartySpecies], a`, so the box is drawn through
 		# UNOWN's palette whatever the listing was left on.
 		return _pic_image(
-			_data.unown_pic(forms[_dex.unown_cursor] - 1), RomLayout.UNOWN_SPECIES
+			_data.unown_pic(forms[_dex.unown_cursor] - 1), Gen2Layout.UNOWN_SPECIES
 		)
 	# `Pokedex_CheckSeen`, which is what `can_open_entry` already answers for the
 	# selected row.
@@ -641,7 +641,7 @@ func _selected_pic() -> Image:
 	# `ld a, [wFirstUnownSeen] / ld [wUnownLetter], a` in front of `GetMonFrontpic`:
 	# every UNOWN row in the listing and its entry are drawn as the first Unown
 	# this save met, not as form A.
-	if species == RomLayout.UNOWN_SPECIES and _dex.first_unown_seen() > 0:
+	if species == Gen2Layout.UNOWN_SPECIES and _dex.first_unown_seen() > 0:
 		return _pic_image(_data.unown_pic(_dex.first_unown_seen() - 1), species)
 	return _pic_image(_data.species_pic(species), species)
 
@@ -659,7 +659,7 @@ func _pic_image(pic: Dictionary, species: int) -> Image:
 	var listing: bool = _mode == Mode.LIST or _mode == Mode.SEARCH_RESULTS
 	var palette: PackedColorArray = _data.pokedex_palette("question_mark") \
 		if listing else _data.palette(species)
-	if palette.size() < Gen2Palette.COLORS_PER_PIC:
+	if palette.size() < PokePalette.COLORS_PER_PIC:
 		return _page.unseen_pic()
 	return Gen2PokedexPage.pad_pic(
 		Gen2PicImage.from_atlas(

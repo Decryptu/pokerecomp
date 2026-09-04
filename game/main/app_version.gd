@@ -1,4 +1,4 @@
-class_name Gen2AppVersion
+class_name PokeAppVersion
 extends RefCounted
 
 ## Host application version. Keep this numeric value aligned with export metadata.

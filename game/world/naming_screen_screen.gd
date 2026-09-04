@@ -137,20 +137,20 @@ func handle_button(button: int) -> bool:
 	if _screen == null:
 		return false
 	match button:
-		Gen2Button.A:
+		PokeButton.A:
 			if _screen.press_a() == Gen2NamingScreen.RESULT_END:
 				closed.emit(_screen.stored_name())
 				return true
-		Gen2Button.B:
+		PokeButton.B:
 			_screen.press_b()
-		Gen2Button.START:
+		PokeButton.START:
 			_screen.press_start()
-		Gen2Button.SELECT:
+		PokeButton.SELECT:
 			_screen.press_select()
 		_:
-			if not Gen2Button.is_direction(button):
+			if not PokeButton.is_direction(button):
 				return false
-			_screen.move(Gen2Button.vector(button))
+			_screen.move(PokeButton.vector(button))
 	_refresh()
 	return true
 
@@ -167,6 +167,6 @@ func _refresh() -> void:
 ## `SCGB_DIPLOMA`, which is two colours here the way every other 1bpp screen in
 ## this project is, unless a caller has handed one in.
 func _colors() -> PackedColorArray:
-	return palette if palette.size() == 4 else Gen2Palette.pic_palette(
+	return palette if palette.size() == 4 else PokePalette.pic_palette(
 		PackedColorArray([Color.WHITE, Color.BLACK])
 	)

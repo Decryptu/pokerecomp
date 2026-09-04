@@ -29,7 +29,7 @@ enum Phase {
 
 var _data: GameData = null
 var _save: Gen2SaveData = null
-## Every stub `RomLayout.MOVE_DELETER_TEXT_ORDER` names, by that name.
+## Every stub `Gen2Layout.MOVE_DELETER_TEXT_ORDER` names, by that name.
 var _texts: Dictionary = {}
 
 var _phase: int = Phase.DONE
@@ -98,18 +98,18 @@ func handle_button(button: int) -> bool:
 		return used
 	if _phase in [Phase.INTRO_ASK, Phase.DELETE_ASK]:
 		match button:
-			Gen2Button.UP, Gen2Button.DOWN:
+			PokeButton.UP, PokeButton.DOWN:
 				_yes = not _yes
 				_draw_yes_no()
 				return true
-			Gen2Button.A:
+			PokeButton.A:
 				_answer(_yes)
 				return true
-			Gen2Button.B:
+			PokeButton.B:
 				_answer(false)
 				return true
 		return false
-	if button != Gen2Button.A or _text_box == null or not _text_box.visible:
+	if button != PokeButton.A or _text_box == null or not _text_box.visible:
 		return false
 	if _text_box.is_revealing() or _text_box.has_pages_left():
 		_text_box.advance()

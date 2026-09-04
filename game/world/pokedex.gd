@@ -29,22 +29,22 @@ const PAGE_2: int = 1
 ## `.NoUnownModeArrowCursorData`'s three rows are what the screen gets.
 const MODE_ROWS: Array[Dictionary] = [
 	{
-		"mode": RomLayout.DEXMODE_NEW,
+		"mode": Gen2Layout.DEXMODE_NEW,
 		"label": "NEW #DEX MODE",
 		"description": "PKMN are listed by\nevolution type.",
 	},
 	{
-		"mode": RomLayout.DEXMODE_OLD,
+		"mode": Gen2Layout.DEXMODE_OLD,
 		"label": "OLD #DEX MODE",
 		"description": "PKMN are listed by\nofficial type.",
 	},
 	{
-		"mode": RomLayout.DEXMODE_ABC,
+		"mode": Gen2Layout.DEXMODE_ABC,
 		"label": "A to Z MODE",
 		"description": "PKMN are listed\nalphabetically.",
 	},
 	{
-		"mode": RomLayout.DEXMODE_UNOWN,
+		"mode": Gen2Layout.DEXMODE_UNOWN,
 		"label": "UNOWN MODE",
 		"description": "UNOWN are listed\nin catching order.",
 	},
@@ -58,14 +58,14 @@ const CHANGING_MODES_TEXT: String = "Changing modes.\nPlease wait."
 ## search row's 1-based position into a type number. Its order is not the type
 ## numbering: FIRE follows NORMAL, the search screen listing specials first.
 ## Named rather than imported, like the matchup multipliers: all seventeen are
-## types [RomLayout] already names and the table is identical in both pins.
+## types [Gen2Layout] already names and the table is identical in both pins.
 const SEARCH_TYPES: Array[int] = [
-	RomLayout.TYPE_NORMAL, RomLayout.TYPE_FIRE, RomLayout.TYPE_WATER,
-	RomLayout.TYPE_GRASS, RomLayout.TYPE_ELECTRIC, RomLayout.TYPE_ICE,
-	RomLayout.TYPE_FIGHTING, RomLayout.TYPE_POISON, RomLayout.TYPE_GROUND,
-	RomLayout.TYPE_FLYING, RomLayout.TYPE_PSYCHIC, RomLayout.TYPE_BUG,
-	RomLayout.TYPE_ROCK, RomLayout.TYPE_GHOST, RomLayout.TYPE_DRAGON,
-	RomLayout.TYPE_DARK, RomLayout.TYPE_STEEL,
+	Gen2Layout.TYPE_NORMAL, Gen2Layout.TYPE_FIRE, Gen2Layout.TYPE_WATER,
+	Gen2Layout.TYPE_GRASS, Gen2Layout.TYPE_ELECTRIC, Gen2Layout.TYPE_ICE,
+	Gen2Layout.TYPE_FIGHTING, Gen2Layout.TYPE_POISON, Gen2Layout.TYPE_GROUND,
+	Gen2Layout.TYPE_FLYING, Gen2Layout.TYPE_PSYCHIC, Gen2Layout.TYPE_BUG,
+	Gen2Layout.TYPE_ROCK, Gen2Layout.TYPE_GHOST, Gen2Layout.TYPE_DRAGON,
+	Gen2Layout.TYPE_DARK, Gen2Layout.TYPE_STEEL,
 ]
 ## `NUM_TYPES`, which is [constant SEARCH_TYPES]' own length and the highest
 ## value either search row takes.
@@ -90,7 +90,7 @@ const SEARCH_ROWS: Array[String] = ["TYPE1", "TYPE2", "BEGIN SEARCH!!", "CANCEL"
 ## `Pokedex_DisplayTypeNotFoundMessage`'s own text.
 const TYPE_NOT_FOUND_TEXT: String = "The specified type\nwas not found."
 
-var mode: int = RomLayout.DEXMODE_NEW
+var mode: int = Gen2Layout.DEXMODE_NEW
 ## `wDexListingScrollOffset` and `wDexListingCursor`. The selected row is their
 ## sum, which is what `Pokedex_GetSelectedMon` adds.
 var scroll: int = 0
@@ -127,7 +127,7 @@ var _state: Gen2WorldState = null
 ## `wPrevDexEntryBackup`, which `.show_search_results` fills so leaving the
 ## results screen puts the main listing back exactly where it was.
 var _listing_backup: Dictionary = {}
-## `wPokedexOrder`, [constant RomLayout.SPECIES_COUNT] long plus one slot per mod
+## `wPokedexOrder`, [constant Gen2Layout.SPECIES_COUNT] long plus one slot per mod
 ## species. ABC mode zero-fills its tail, and a zero is what `.PrintEntry` draws
 ## nothing for.
 var _order: PackedInt32Array = PackedInt32Array()
@@ -142,8 +142,8 @@ static func open(
 	dex._data = data
 	dex._state = state
 	dex.mode = last_mode if last_mode in [
-		RomLayout.DEXMODE_NEW, RomLayout.DEXMODE_OLD, RomLayout.DEXMODE_ABC,
-	] else RomLayout.DEXMODE_NEW
+		Gen2Layout.DEXMODE_NEW, Gen2Layout.DEXMODE_OLD, Gen2Layout.DEXMODE_ABC,
+	] else Gen2Layout.DEXMODE_NEW
 	dex.prev_entry = previous_entry
 	dex.order_by_mode()
 	dex.init_cursor_position()
@@ -152,27 +152,27 @@ static func open(
 
 ## `Pokedex_OrderMonsByMode`. NEW copies the new-dex table, OLD counts from 1,
 ## ABC keeps the seen species and zero-fills the rest. Both tables are exactly
-## [constant RomLayout.SPECIES_COUNT] entries and OLD counts that far, so a mod's
+## [constant Gen2Layout.SPECIES_COUNT] entries and OLD counts that far, so a mod's
 ## species can only follow the cartridge's run, ascending by number.
 func order_by_mode() -> void:
 	var mod_species: Array[int] = _data.mod_species_numbers() if _data != null \
 		else [] as Array[int]
 	_order = PackedInt32Array()
-	_order.resize(RomLayout.SPECIES_COUNT + mod_species.size())
+	_order.resize(Gen2Layout.SPECIES_COUNT + mod_species.size())
 	match mode:
-		RomLayout.DEXMODE_ABC:
+		Gen2Layout.DEXMODE_ABC:
 			_order_abc(mod_species)
-		RomLayout.DEXMODE_OLD:
-			for index: int in RomLayout.SPECIES_COUNT:
+		Gen2Layout.DEXMODE_OLD:
+			for index: int in Gen2Layout.SPECIES_COUNT:
 				_order[index] = index + 1
-			_append_mod_species(mod_species, RomLayout.SPECIES_COUNT)
+			_append_mod_species(mod_species, Gen2Layout.SPECIES_COUNT)
 			_find_last_seen()
 		_:
 			var table: PackedInt32Array = _data.dex_order_new() if _data != null \
 				else PackedInt32Array()
-			for index: int in RomLayout.SPECIES_COUNT:
+			for index: int in Gen2Layout.SPECIES_COUNT:
 				_order[index] = table[index] if index < table.size() else 0
-			_append_mod_species(mod_species, RomLayout.SPECIES_COUNT)
+			_append_mod_species(mod_species, Gen2Layout.SPECIES_COUNT)
 			_find_last_seen()
 
 
@@ -224,7 +224,7 @@ func init_cursor_position() -> void:
 		return
 	# A mod species is numbered past the cartridge's range, so the bound is the
 	# order itself rather than the count.
-	if prev_entry > RomLayout.SPECIES_COUNT and not _order.has(prev_entry):
+	if prev_entry > Gen2Layout.SPECIES_COUNT and not _order.has(prev_entry):
 		return
 	var index: int = 0
 	# Both walks count in sevens whatever `wDexListingHeight` holds: `cp $8`,
@@ -265,7 +265,7 @@ func rows() -> Array:
 		out.append({
 			"species": species,
 			"empty": species == 0,
-			"number": "%03d" % species if mode == RomLayout.DEXMODE_OLD and species != 0 else "",
+			"number": "%03d" % species if mode == Gen2Layout.DEXMODE_OLD and species != 0 else "",
 			"seen": seen,
 			"caught": _has_caught(species),
 			"name": _species_name(species) if seen else NOT_SEEN_NAME,
@@ -332,12 +332,12 @@ func unown_word() -> String:
 func move_unown(button: int) -> bool:
 	var count: int = unown_forms().size()
 	match button:
-		Gen2Button.RIGHT:
+		PokeButton.RIGHT:
 			if unown_cursor + 1 >= count:
 				return false
 			unown_cursor += 1
 			return true
-		Gen2Button.LEFT:
+		PokeButton.LEFT:
 			if unown_cursor <= 0:
 				return false
 			unown_cursor -= 1
@@ -350,16 +350,16 @@ func move_unown(button: int) -> bool:
 ## the source checking `wDexListingHeight` against `wDexListingEnd` first.
 func move_listing(button: int) -> bool:
 	match button:
-		Gen2Button.UP:
+		PokeButton.UP:
 			return _move_cursor_up()
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			return _move_cursor_down()
 	if listing_height >= listing_end:
 		return false
 	match button:
-		Gen2Button.LEFT:
+		PokeButton.LEFT:
 			return _move_up_one_page()
-		Gen2Button.RIGHT:
+		PokeButton.RIGHT:
 			return _move_down_one_page()
 	return false
 
@@ -441,12 +441,12 @@ func toggle_page() -> void:
 ## Answers whether it moved. A move re-enters the entry screen at page 1, which
 ## is `Pokedex_ReinitDexEntryScreen`.
 func step_entry(button: int) -> bool:
-	if button != Gen2Button.UP and button != Gen2Button.DOWN:
+	if button != PokeButton.UP and button != PokeButton.DOWN:
 		return false
 	var backup_cursor: int = cursor
 	var backup_scroll: int = scroll
 	while true:
-		var moved: bool = _move_cursor_up() if button == Gen2Button.UP else _move_cursor_down()
+		var moved: bool = _move_cursor_up() if button == PokeButton.UP else _move_cursor_down()
 		if not moved:
 			cursor = backup_cursor
 			scroll = backup_scroll
@@ -532,7 +532,7 @@ static func weight_text(weight: int) -> String:
 static func mode_rows(with_unown: bool = false) -> Array:
 	var out: Array = []
 	for row: Dictionary in MODE_ROWS:
-		if int(row["mode"]) == RomLayout.DEXMODE_UNOWN and not with_unown:
+		if int(row["mode"]) == Gen2Layout.DEXMODE_UNOWN and not with_unown:
 			continue
 		out.append(row.duplicate(true))
 	return out
@@ -595,10 +595,10 @@ func move_search_type(button: int) -> bool:
 	if search_cursor > SEARCH_ROW_TYPE_2:
 		return false
 	match button:
-		Gen2Button.RIGHT:
+		PokeButton.RIGHT:
 			_step_search_type(1)
 			return true
-		Gen2Button.LEFT:
+		PokeButton.LEFT:
 			_step_search_type(-1)
 			return true
 	return false

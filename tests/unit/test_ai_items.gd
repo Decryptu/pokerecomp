@@ -12,9 +12,9 @@ const Fixture := preload("res://tests/unit/battle_fixture.gd")
 ## Enough of a class word to drive each branch. The three switch bits are
 ## irrelevant to every item decision and are left out.
 const NO_FLAGS: int = 0
-const ALWAYS: int = RomLayout.ALWAYS_USE
-const CONTEXT: int = RomLayout.CONTEXT_USE
-const UNKNOWN: int = RomLayout.UNKNOWN_USE
+const ALWAYS: int = Gen2Layout.ALWAYS_USE
+const CONTEXT: int = Gen2Layout.CONTEXT_USE
+const UNKNOWN: int = Gen2Layout.UNKNOWN_USE
 
 var _directory: String = ""
 var _data: GameData = null

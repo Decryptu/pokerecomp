@@ -2,7 +2,7 @@ extends SceneTree
 
 ## Every hardware frame of a walk on the real world screen: where the map is
 ## scrolled to, where the player is drawn, and which of `Facings` is up. The port
-## half of `.claude/oracle/overworld/trace_walk.py`. Diff `screen_x` against the
+## half of the hardware walk trace. Diff `screen_x` against the
 ## cartridge's OAM slot 0 minus rSCX, not against its `wPlayerSpriteX - hSCX`:
 ## `HandleMapObjects` writes the object field before `NextOverworldFrame` spends its
 ## two frames, so that pair reads two pixels of lead the screen never shows. Ten
@@ -29,7 +29,7 @@ func _run() -> void:
 		quit(2)
 		return
 	var direction: int = _button_for(args[5])
-	if direction == Gen2Button.NONE:
+	if direction == PokeButton.NONE:
 		push_error("direction is one of up, down, left, right")
 		quit(2)
 		return
@@ -64,7 +64,7 @@ func _run() -> void:
 		screen.advance_frame()
 		lines.append(_sample(screen._world, frame))
 	var out: String = args[7]
-	if Gen2ToolPath.refuses(out):
+	if PokeToolPath.refuses(out):
 		quit(2)
 		return
 	FileAccess.open(out, FileAccess.WRITE).store_string("\n".join(lines) + "\n")
@@ -89,8 +89,8 @@ func _sample(world: Gen2WorldAPI, frame: int) -> String:
 
 func _button_for(name: String) -> int:
 	match name.to_lower():
-		"up": return Gen2Button.UP
-		"down": return Gen2Button.DOWN
-		"left": return Gen2Button.LEFT
-		"right": return Gen2Button.RIGHT
-	return Gen2Button.NONE
+		"up": return PokeButton.UP
+		"down": return PokeButton.DOWN
+		"left": return PokeButton.LEFT
+		"right": return PokeButton.RIGHT
+	return PokeButton.NONE

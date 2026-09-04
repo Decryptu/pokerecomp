@@ -11,7 +11,7 @@ extends RefCounted
 ## apart, a pair of lamps down each side of the window.
 
 const TILE: int = Gen2Font.TILE
-const SCREEN_COLUMNS: int = RomLayout.SLOTS_TILEMAP_COLUMNS
+const SCREEN_COLUMNS: int = Gen2Layout.SLOTS_TILEMAP_COLUMNS
 const SCREEN_ROWS: int = 18
 const WIDTH: int = SCREEN_COLUMNS * TILE
 const HEIGHT: int = SCREEN_ROWS * TILE
@@ -157,7 +157,7 @@ static func from_data(data: GameData) -> Gen2SlotMachinePage:
 	var three: PackedByteArray = data.slots_indices("slots_3")
 	var map: PackedByteArray = data.slots_tilemap()
 	if glyphs == null or one.is_empty() or two.is_empty() or three.is_empty() \
-		or map.size() < RomLayout.SLOTS_TILEMAP_BYTES:
+		or map.size() < Gen2Layout.SLOTS_TILEMAP_BYTES:
 		return null
 
 	var page := Gen2SlotMachinePage.new()
@@ -170,7 +170,7 @@ static func from_data(data: GameData) -> Gen2SlotMachinePage:
 	page._object_tiles = _bank(
 		[[OBJECT_SLOTS_2_FIRST_TILE, two], [OBJECT_SLOTS_3_FIRST_TILE, three]]
 	)
-	for index: int in RomLayout.SLOTS_PALETTES:
+	for index: int in Gen2Layout.SLOTS_PALETTES:
 		page._palettes.append(data.slots_palette(index))
 	return page
 
@@ -185,7 +185,7 @@ static func _bank(runs: Array) -> PackedByteArray:
 		var first: int = int(run[0])
 		var strip: PackedByteArray = run[1]
 		@warning_ignore("integer_division")
-		var tiles: int = strip.size() / Gen2Tiles.TILE_PIXELS
+		var tiles: int = strip.size() / PokeTiles.TILE_PIXELS
 		var strip_width: int = tiles * TILE
 		for tile: int in tiles:
 			var column: int = (first + tile) * TILE
@@ -230,7 +230,7 @@ func render(machine: Gen2SlotMachine, state: Dictionary = {}) -> Image:
 	var indices := PackedByteArray()
 	indices.resize(WIDTH * HEIGHT)
 	var map: PackedByteArray = tilemap(machine)
-	for row: int in RomLayout.SLOTS_TILEMAP_ROWS:
+	for row: int in Gen2Layout.SLOTS_TILEMAP_ROWS:
 		for column: int in SCREEN_COLUMNS:
 			_blit_background(
 				indices, int(map[row * SCREEN_COLUMNS + column]),
@@ -288,7 +288,7 @@ func _place_number(map: PackedByteArray, at: Vector2i, value: int) -> void:
 
 func _write(map: PackedByteArray, at: Vector2i, tile: int) -> void:
 	if at.x < 0 or at.x >= SCREEN_COLUMNS or at.y < 0 \
-		or at.y >= RomLayout.SLOTS_TILEMAP_ROWS:
+		or at.y >= Gen2Layout.SLOTS_TILEMAP_ROWS:
 		return
 	map[at.y * SCREEN_COLUMNS + at.x] = tile
 
@@ -299,7 +299,7 @@ func _blit_background(into: PackedByteArray, code: int, at: Vector2i) -> void:
 	## The window is signed here, so a BG tile from $80 up is the font's own half
 	## and anything below it is the slots' sheets, which is why `.InitGFX` loads
 	## no font and the counts still print.
-	if code >= RomLayout.FONT_FIRST_CODE:
+	if code >= Gen2Layout.FONT_FIRST_CODE:
 		font.draw_code(code, into, WIDTH, at.x, at.y)
 		return
 	Gen2Font.blit_slot(_background_tiles, BANK_WIDTH, code, into, WIDTH, at.x, at.y)

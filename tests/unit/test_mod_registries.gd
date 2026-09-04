@@ -272,15 +272,15 @@ func test_the_shipped_example_mod_registers_everything_it_documents() -> void:
 	# mods/examples/new_content/ is the reference a mod author copies, so it is
 	# run here rather than only read: a registration it gets wrong would be
 	# refused silently and the example would teach the refusal.
-	var manifest: Dictionary = Gen2ModManifest.read("res://mods/examples/new_content")
+	var manifest: Dictionary = PokeModManifest.read("res://mods/examples/new_content")
 	assert_true(bool(manifest.get("ok", false)), "example manifest reads")
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	## Discovered rather than only read: a save-bound registration takes the
 	## manifest object THIS host discovered as the capability, so a copy with the
 	## same id grants nothing.
 	host.discover("res://mods/examples")
-	var discovered: Gen2ModManifest = null
-	for candidate: Gen2ModManifest in host.manifests():
+	var discovered: PokeModManifest = null
+	for candidate: PokeModManifest in host.manifests():
 		if candidate.id == &"new_content":
 			discovered = candidate
 	assert_not_null(discovered)
@@ -323,11 +323,11 @@ func test_the_shipped_example_mod_registers_everything_it_documents() -> void:
 	# current one and demonstrates each surface a version added. A host bump with
 	# the example left behind fails here rather than in a mod author's reading.
 	for id: String in ["new_content", "voxel_preview"]:
-		var declared: Dictionary = Gen2ModManifest.read("res://mods/examples/%s" % id)
+		var declared: Dictionary = PokeModManifest.read("res://mods/examples/%s" % id)
 		assert_true(bool(declared.get("ok", false)), id)
 		assert_eq(
-			(declared["manifest"] as Gen2ModManifest).api_version,
-			Gen2ModManifest.API_VERSION,
+			(declared["manifest"] as PokeModManifest).api_version,
+			PokeModManifest.API_VERSION,
 			id
 		)
 	# 9: its item names the evolution using it causes, as a field rather than a
@@ -336,7 +336,7 @@ func test_the_shipped_example_mod_registers_everything_it_documents() -> void:
 		int(overlay.resolve(
 			Gen2ContentOverlay.KIND_ITEM, Gen2ContentOverlay.FIRST_MOD_NUMBER, {}
 		)["evolution"]["method"]),
-		RomLayout.EVOLVE_TRADE
+		Gen2Layout.EVOLVE_TRADE
 	)
 	# 4: a type of its own, and a chart exception naming it.
 	assert_eq(
@@ -346,10 +346,10 @@ func test_the_shipped_example_mod_registers_everything_it_documents() -> void:
 	assert_eq(int(overlay.resolve(
 		Gen2ContentOverlay.KIND_MATCHUP,
 		Gen2ContentOverlay.matchup_number(
-			Gen2ContentOverlay.FIRST_MOD_NUMBER, RomLayout.TYPE_STEEL
+			Gen2ContentOverlay.FIRST_MOD_NUMBER, Gen2Layout.TYPE_STEEL
 		),
-		{"multiplier": RomLayout.MATCHUP_EFFECTIVE}
-	).get("multiplier", 0)), RomLayout.MATCHUP_SUPER_EFFECTIVE)
+		{"multiplier": Gen2Layout.MATCHUP_EFFECTIVE}
+	).get("multiplier", 0)), Gen2Layout.MATCHUP_SUPER_EFFECTIVE)
 	# 4: decoded art, which is exactly tiles * tiles * 64 indices or it is dropped.
 	var voltling: Dictionary = overlay.resolve(
 		Gen2ContentOverlay.KIND_SPECIES, Gen2ContentOverlay.FIRST_MOD_NUMBER, {}
@@ -477,11 +477,11 @@ func test_every_refusal_reason_the_mod_layer_produces_has_player_wording() -> vo
 		&"empty_notice", &"notice_line_too_long", &"unknown_notice_sound",
 		&"invalid_notice_icon", &"notice_queue_full",
 	]:
-		var text: String = Gen2ModRefusal.text({"reason": reason, "detail": "x/y.zip"})
+		var text: String = PokeModRefusal.text({"reason": reason, "detail": "x/y.zip"})
 		assert_false(text.begins_with(String(reason)), "worded: %s" % reason)
 		assert_false(text.is_empty())
 	# An unworded reason still names something a search finds.
-	assert_string_contains(Gen2ModRefusal.text({"reason": &"brand_new"}), "brand_new")
+	assert_string_contains(PokeModRefusal.text({"reason": &"brand_new"}), "brand_new")
 
 
 ## `register_stats_page` refuses what it cannot draw, and refuses a sixth page:

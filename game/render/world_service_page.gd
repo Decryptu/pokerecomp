@@ -49,7 +49,7 @@ func render(title: String, prompt: String, rows: Array, cursor: int,
 			font.draw_text(lines[row], indices, Gen2Screen.WIDTH, TILE, (2 + row * 2) * TILE)
 		var part: Image = Gen2PicImage.from_indices(
 			indices, Gen2Screen.WIDTH, message_box.size.y * TILE,
-			Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+			PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 		)
 		image.blit_rect(
 			part, Rect2i(Vector2i.ZERO, part.get_size()), message_box.position * TILE
@@ -72,7 +72,7 @@ func _draw_note(image: Image, note: Dictionary) -> void:
 		font.draw_text(String(line.get("text", "")), indices, width, at.x * TILE, at.y * TILE)
 	var part: Image = Gen2PicImage.from_indices(
 		indices, width, rect.size.y * TILE,
-		Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+		PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	)
 	image.blit_rect(part, Rect2i(Vector2i.ZERO, part.get_size()), rect.position * TILE)
 

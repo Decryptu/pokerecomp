@@ -61,7 +61,7 @@ func test_the_screen_is_the_source_s_own_writes() -> void:
 	)
 	assert_eq(map[7 * Gen2PackPage.COLUMNS], NAME_TILES[0], "the pocket name")
 	assert_eq(
-		map[12 * Gen2PackPage.COLUMNS], RomLayout.FRAME_FIRST_CODE + RomLayout.FRAME_TOP_LEFT,
+		map[12 * Gen2PackPage.COLUMNS], Gen2Layout.FRAME_FIRST_CODE + Gen2Layout.FRAME_TOP_LEFT,
 		"the text box"
 	)
 
@@ -131,16 +131,16 @@ func test_the_tmhm_pocket_prints_its_number() -> void:
 func test_each_pocket_draws_its_own_picture() -> void:
 	var page: Gen2PackPage = _page()
 	var seen: Dictionary = {}
-	for pocket: int in RomLayout.PACK_POCKETS:
+	for pocket: int in Gen2Layout.PACK_POCKETS:
 		var map: PackedInt32Array = page.pocket_map(pocket, [], -1, "", _name_piece(pocket))
 		var indices: PackedByteArray = page.compose(map, pocket)
 		var pixel: int = indices[3 * Gen2PackPage.TILE * Gen2Screen.WIDTH]
 		assert_eq(
-			pixel, RomLayout.PACK_POCKET_PICTURES[pocket],
+			pixel, Gen2Layout.PACK_POCKET_PICTURES[pocket],
 			"pocket %d draws its own piece" % pocket
 		)
 		seen[pixel] = pocket
-	assert_eq(seen.size(), RomLayout.PACK_POCKETS, "four distinct pictures")
+	assert_eq(seen.size(), Gen2Layout.PACK_POCKETS, "four distinct pictures")
 
 
 ## `_CGB_PackPals` picks Kris's six palettes over Chris's, and her pack over his.
@@ -170,46 +170,46 @@ func _name_piece(pocket: int) -> PackedByteArray:
 func _write_cache() -> void:
 	var sheets: Dictionary = {}
 	for row_name: String in ["font", "frames"]:
-		var tiles: int = RomLayout.FONT_TILES if row_name == "font" \
-			else RomLayout.FRAME_COUNT * RomLayout.FRAME_TILES
+		var tiles: int = Gen2Layout.FONT_TILES if row_name == "font" \
+			else Gen2Layout.FRAME_COUNT * Gen2Layout.FRAME_TILES
 		var indices := PackedByteArray()
-		indices.resize(tiles * Gen2Tiles.TILE_PIXELS)
+		indices.resize(tiles * PokeTiles.TILE_PIXELS)
 		indices.fill(3)
 		RomCache.write_indices(RomCache.tile_path(_directory, row_name), indices)
-		sheets[row_name] = _sheet_entry(tiles, RomLayout.FONT_FIRST_CODE \
-			if row_name == "font" else RomLayout.FRAME_FIRST_CODE)
+		sheets[row_name] = _sheet_entry(tiles, Gen2Layout.FONT_FIRST_CODE \
+			if row_name == "font" else Gen2Layout.FRAME_FIRST_CODE)
 
 	var menu := PackedByteArray()
-	menu.resize(RomLayout.PACK_MENU_TILES * Gen2Tiles.TILE_PIXELS)
+	menu.resize(Gen2Layout.PACK_MENU_TILES * PokeTiles.TILE_PIXELS)
 	menu.fill(SHEET_INDEX)
 	RomCache.write_indices(RomCache.tile_path(_directory, "pack_menu"), menu)
-	sheets["pack_menu"] = _sheet_entry(RomLayout.PACK_MENU_TILES, 0)
+	sheets["pack_menu"] = _sheet_entry(Gen2Layout.PACK_MENU_TILES, 0)
 
 	# Piece p is filled with index p, and the female sheet with the piece after
 	# it, so which sheet and which piece reached the screen are both readable.
 	for row_name: String in ["pack_pockets", "pack_pockets_female"]:
 		var strip := PackedByteArray()
-		var width: int = RomLayout.PACK_TILES * Gen2Tiles.TILE_WIDTH
-		strip.resize(width * Gen2Tiles.TILE_HEIGHT)
+		var width: int = Gen2Layout.PACK_TILES * PokeTiles.TILE_WIDTH
+		strip.resize(width * PokeTiles.TILE_HEIGHT)
 		var shift: int = 1 if row_name.ends_with("female") else 0
-		for row: int in Gen2Tiles.TILE_HEIGHT:
+		for row: int in PokeTiles.TILE_HEIGHT:
 			for column: int in width:
 				@warning_ignore("integer_division")
-				var piece: int = column / (RomLayout.PACK_POCKET_TILES * Gen2Tiles.TILE_WIDTH)
-				strip[row * width + column] = (piece + shift) % RomLayout.PACK_POCKETS
+				var piece: int = column / (Gen2Layout.PACK_POCKET_TILES * PokeTiles.TILE_WIDTH)
+				strip[row * width + column] = (piece + shift) % Gen2Layout.PACK_POCKETS
 		RomCache.write_indices(RomCache.tile_path(_directory, row_name), strip)
-		sheets[row_name] = _sheet_entry(RomLayout.PACK_TILES, 0)
+		sheets[row_name] = _sheet_entry(Gen2Layout.PACK_TILES, 0)
 
 	var names: Array = []
-	for pocket: int in RomLayout.PACK_POCKETS:
-		for _cell: int in RomLayout.PACK_NAME_COLUMNS * RomLayout.PACK_NAME_ROWS:
+	for pocket: int in Gen2Layout.PACK_POCKETS:
+		for _cell: int in Gen2Layout.PACK_NAME_COLUMNS * Gen2Layout.PACK_NAME_ROWS:
 			names.append(NAME_TILES[pocket])
 	var palettes: Array = []
 	var female_palettes: Array = []
-	for index: int in RomLayout.PACK_PALETTES * RomLayout.PACK_PALETTE_COLORS:
-		palettes.append(0x7FFF if index % RomLayout.PACK_PALETTE_COLORS == 0 else 0x001F)
+	for index: int in Gen2Layout.PACK_PALETTES * Gen2Layout.PACK_PALETTE_COLORS:
+		palettes.append(0x7FFF if index % Gen2Layout.PACK_PALETTE_COLORS == 0 else 0x001F)
 		female_palettes.append(
-			0x7FFF if index % RomLayout.PACK_PALETTE_COLORS == 0 else 0x7C00
+			0x7FFF if index % Gen2Layout.PACK_PALETTE_COLORS == 0 else 0x7C00
 		)
 
 	RomCache.write_json(RomCache.manifest_path(_directory), {
@@ -228,8 +228,8 @@ func _write_cache() -> void:
 
 func _sheet_entry(tiles: int, first_code: int) -> Dictionary:
 	return {
-		"width": tiles * Gen2Tiles.TILE_WIDTH,
-		"height": Gen2Tiles.TILE_HEIGHT,
+		"width": tiles * PokeTiles.TILE_WIDTH,
+		"height": PokeTiles.TILE_HEIGHT,
 		"tiles": tiles,
 		"first_code": first_code,
 		"bits": 1,

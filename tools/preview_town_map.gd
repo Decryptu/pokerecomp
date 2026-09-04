@@ -13,9 +13,9 @@ const NEW_BARK_GROUP: int = 24
 const NEW_BARK_MAP: int = 7
 
 const BUTTONS: Dictionary = {
-	"u": Gen2Button.UP, "d": Gen2Button.DOWN,
-	"l": Gen2Button.LEFT, "r": Gen2Button.RIGHT,
-	"a": Gen2Button.A, "b": Gen2Button.B, "sel": Gen2Button.SELECT,
+	"u": PokeButton.UP, "d": PokeButton.DOWN,
+	"l": PokeButton.LEFT, "r": PokeButton.RIGHT,
+	"a": PokeButton.A, "b": PokeButton.B, "sel": PokeButton.SELECT,
 }
 
 
@@ -32,7 +32,7 @@ func _initialize() -> void:
 		)
 		quit(1)
 		return
-	if Gen2ToolPath.refuses(args[1]):
+	if PokeToolPath.refuses(args[1]):
 		quit(2)
 		return
 
@@ -93,7 +93,7 @@ static func _parse_presses(spec: String) -> Dictionary:
 		elif key.begins_with("f"):
 			steps.append(["frames", maxi(1, int(key.substr(1)))])
 		elif key == "rel":
-			steps.append(["release", Gen2Button.SELECT])
+			steps.append(["release", PokeButton.SELECT])
 		elif BUTTONS.has(key):
 			steps.append(["press", int(BUTTONS[key])])
 	return {"steps": steps, "hall_of_fame": hall_of_fame}

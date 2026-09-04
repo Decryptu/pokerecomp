@@ -338,7 +338,7 @@ var _recording_input: bool = false
 var _input_replay: Dictionary = {}
 var _replaying_input: bool = false
 ## What a replay is holding down, in place of the runtime's own poll.
-var _replay_held_direction: int = Gen2Button.NONE
+var _replay_held_direction: int = PokeButton.NONE
 ## Beside the held direction: a hold that changes a step's duration and is not in
 ## the log makes every replay taken while running wrong.
 var _replay_running: bool = false
@@ -376,8 +376,8 @@ func _ready() -> void:
 	# phone. Same flag as the shortcuts they describe. The scene keeps them
 	# hidden, so a release build never draws the placeholder text for the frame
 	# between the node entering the tree and this line.
-	_caption.visible = Gen2DebugKeys.enabled()
-	_hint.visible = Gen2DebugKeys.enabled()
+	_caption.visible = PokeDebugKeys.enabled()
+	_hint.visible = PokeDebugKeys.enabled()
 	_data = _injected_data if _injected_data != null else _selected_runtime_data()
 	_build_world()
 	var input: Gen2InputRuntime = Gen2InputRuntime.instance()
@@ -941,7 +941,7 @@ func _refresh_if(moved: bool) -> void:
 ## on from inside a command, plus VBlank's `GameTimer` and `AnimateTileset`.
 func _advance_presentation(map_pass: bool) -> void:
 	if _text_box != null:
-		_text_box.accelerated = Gen2Button.text_accelerating()
+		_text_box.accelerated = PokeButton.text_accelerating()
 		_text_box.advance_frame()
 	if _world != null:
 		_world.advance_frame_counter()
@@ -1135,20 +1135,20 @@ func replay_input(entries: Array) -> void:
 		var entry: Dictionary = raw
 		var frame: int = int(entry.get("frame", 0))
 		var at: Dictionary = _input_replay.get(
-			frame, {"hold": Gen2Button.NONE, "run": false, "presses": []}
+			frame, {"hold": PokeButton.NONE, "run": false, "presses": []}
 		)
 		if String(entry.get("kind", "")) == "hold":
-			at["hold"] = int(entry.get("button", Gen2Button.NONE))
+			at["hold"] = int(entry.get("button", PokeButton.NONE))
 			at["run"] = bool(entry.get("run", false))
 		else:
-			(at["presses"] as Array).append(int(entry.get("button", Gen2Button.NONE)))
+			(at["presses"] as Array).append(int(entry.get("button", PokeButton.NONE)))
 		_input_replay[frame] = at
 	_replaying_input = true
 
 
 func _apply_replayed_input(frame: int) -> void:
 	var at: Dictionary = _input_replay.get(frame, {})
-	_replay_held_direction = int(at.get("hold", Gen2Button.NONE))
+	_replay_held_direction = int(at.get("hold", PokeButton.NONE))
 	_replay_running = bool(at.get("run", false))
 	for button: int in at.get("presses", []) as Array:
 		press_button(button)
@@ -1210,7 +1210,7 @@ func _advance_held_direction() -> void:
 		else Gen2ModHost.run_button_held()
 	if _world != null:
 		_world.run_held = running
-	if _recording_input and _world != null and direction != Gen2Button.NONE:
+	if _recording_input and _world != null and direction != PokeButton.NONE:
 		_input_recording.append({
 			"frame": _world.frame_number, "kind": "hold", "button": direction,
 			"run": running,
@@ -1221,8 +1221,8 @@ func _advance_held_direction() -> void:
 	## `.CheckForced` sits in front of `.GetAction` in all three of
 	## `.TranslateIntoMovement`'s branches, so a player standing on ice keeps
 	## walking with nothing held and obeys nothing that is.
-	var held: Vector2i = Vector2i.ZERO if direction == Gen2Button.NONE \
-		else Gen2Button.vector(direction)
+	var held: Vector2i = Vector2i.ZERO if direction == PokeButton.NONE \
+		else PokeButton.vector(direction)
 	var walking: Vector2i = _world.effective_input_direction(held)
 	if walking != Vector2i.ZERO:
 		move_player(walking)
@@ -1295,30 +1295,30 @@ func _objects_may_move() -> bool:
 		and not _world.fishing_busy()
 
 
-## Every control the cartridge had arrives here as a [Gen2Button], whichever
+## Every control the cartridge had arrives here as a [PokeButton], whichever
 ## device produced it. What is left over is a development shortcut or something
 ## only a renderer could want.
 func _unhandled_input(event: InputEvent) -> void:
 	if _world == null:
 		return
-	var button: int = Gen2Button.pressed_in(event)
-	if button != Gen2Button.NONE:
+	var button: int = PokeButton.pressed_in(event)
+	if button != PokeButton.NONE:
 		if press_button(button):
 			accept_event()
 		return
 	## The dex area's SELECT, the credits' A and B and the Unown puzzle's
 	## directions are held states rather than presses, and those three overlays
 	## are the only ones with anything to do with a release.
-	var released: int = Gen2Button.released_in(event)
-	if released != Gen2Button.NONE and _unown_puzzle_host != null:
+	var released: int = PokeButton.released_in(event)
+	if released != PokeButton.NONE and _unown_puzzle_host != null:
 		_unown_puzzle_host.release_button(released)
 		accept_event()
 		return
-	if released != Gen2Button.NONE and _pokedex_host != null:
+	if released != PokeButton.NONE and _pokedex_host != null:
 		_pokedex_host.release_button(released)
 		accept_event()
 		return
-	if released != Gen2Button.NONE and _credits_host != null:
+	if released != PokeButton.NONE and _credits_host != null:
 		_credits_host.release_button(released)
 		accept_event()
 		return
@@ -1350,7 +1350,7 @@ func _unhandled_input(event: InputEvent) -> void:
 ## place a press is recorded. A press between two frames is consumed by the world
 ## at the start of the next one, which is the frame the log names.
 func press_button(button: int) -> bool:
-	if _world == null or button == Gen2Button.NONE:
+	if _world == null or button == PokeButton.NONE:
 		return false
 	if _recording_input:
 		_input_recording.append({
@@ -1434,18 +1434,18 @@ func _handle_button(button: int) -> bool:
 		if host != null:
 			return bool(host.call(&"handle_button", button))
 	if _world.fishing_busy():
-		if button == Gen2Button.A:
+		if button == PokeButton.A:
 			_handle_fishing_result(_world.advance_fishing())
 		return true
 	if _world.script_input_waiting():
-		if button == Gen2Button.A:
+		if button == PokeButton.A:
 			_advance_script_pause()
 		return true
 	## The d-pad first, because `DoPlayerMovement` runs in front of
 	## `CheckStandingOnIce` in `OWPlayerInput` and has already decided what a
 	## direction means while a slide is running.
-	if Gen2Button.is_direction(button):
-		move_player(_world.effective_input_direction(Gen2Button.vector(button)))
+	if PokeButton.is_direction(button):
+		move_player(_world.effective_input_direction(PokeButton.vector(button)))
 		return true
 	## `OWPlayerInput`'s own comment: "Can't perform button actions while sliding
 	## on ice." `CheckStandingOnIce` stands in front of `CheckAPressOW` and
@@ -1453,12 +1453,12 @@ func _handle_button(button: int) -> bool:
 	if _world.standing_on_ice():
 		return true
 	match button:
-		Gen2Button.A:
+		PokeButton.A:
 			return interact()
-		Gen2Button.START:
+		PokeButton.START:
 			_open_start_menu()
 			return true
-		Gen2Button.SELECT:
+		PokeButton.SELECT:
 			open_select_menu()
 			return true
 	return false
@@ -1478,17 +1478,17 @@ func _input_locked() -> bool:
 
 func _handle_prompt_button(button: int) -> bool:
 	if _field_move_text:
-		if button == Gen2Button.A:
+		if button == PokeButton.A:
 			_acknowledge_field_move_text()
 		return true
 	if not _oak_pc_pages.is_empty():
 		## `JoyWaitAorB`, which is what waits between each of the three texts.
-		if button in [Gen2Button.A, Gen2Button.B]:
+		if button in [PokeButton.A, PokeButton.B]:
 			_advance_prof_oaks_pc()
 		return true
 	if _unown_wall_box != null:
 		## `DisplayUnownWords`' own `JoyWaitAorB`, and the click it plays after.
-		if button in [Gen2Button.A, Gen2Button.B]:
+		if button in [PokeButton.A, PokeButton.B]:
 			_close_unown_wall()
 		return true
 	return false
@@ -1619,7 +1619,7 @@ func _persist_zoom() -> void:
 ## Every method behind them stays public, which is how the preview tools drive
 ## the same paths without a key press.
 func _handle_debug_key(event: InputEvent) -> bool:
-	if not Gen2DebugKeys.enabled():
+	if not PokeDebugKeys.enabled():
 		return false
 	var key: InputEventKey = event as InputEventKey
 	if key == null:
@@ -2008,8 +2008,8 @@ func _soft_reset() -> void:
 ## Offered as a B, which backs out of whatever owns the screen. Nothing on a
 ## bare map takes one, and a press nobody took is the pause menu.
 func _on_back_requested() -> void:
-	if not press_button(Gen2Button.B):
-		press_button(Gen2Button.START)
+	if not press_button(PokeButton.B):
+		press_button(PokeButton.START)
 
 
 ## The first chord ever asks over the pause menu's own box, so four buttons hit
@@ -2361,7 +2361,7 @@ func _open_diploma(request: Dictionary) -> bool:
 	_screen.display(host)
 	var save: Gen2SaveData = _injected_save if _injected_save != null \
 		else _selected_runtime_save()
-	var clock: Gen2GameTime = save.game_time if save != null else null
+	var clock: PokeGameTime = save.game_time if save != null else null
 	if not host.open(
 		_data, _player_display_name(),
 		{
@@ -3635,7 +3635,7 @@ func _preview_field_move_use(move: int, badge: int) -> void:
 		return
 	_preview_field_move(move, badge)
 	if _party_host != null:
-		_party_host.handle_button(Gen2Button.A)
+		_party_host.handle_button(PokeButton.A)
 
 
 func _preview_field_move(move: int, badge: int) -> void:
@@ -3660,7 +3660,7 @@ func _preview_field_move(move: int, badge: int) -> void:
 	_open_embedded_party()
 	if _party_host == null:
 		return
-	_party_host.handle_button(Gen2Button.A)
+	_party_host.handle_button(PokeButton.A)
 
 
 ## Public screenshot driver for the scene-free party item transaction. It uses a
@@ -3705,7 +3705,7 @@ func preview_pack_use() -> void:
 	if _world == null or _data == null:
 		return
 	if _start_menu_host != null:
-		_start_menu_host.handle_button(Gen2Button.A)
+		_start_menu_host.handle_button(PokeButton.A)
 		return
 	var save: Gen2SaveData = _embedded_party_save()
 	if save == null or save.party.is_empty():
@@ -3720,7 +3720,7 @@ func preview_pack_use() -> void:
 		return
 	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_PACK):
 		return
-	_start_menu_host.handle_button(Gen2Button.A)
+	_start_menu_host.handle_button(PokeButton.A)
 
 
 ## Public screenshot driver for a field evolution, which is the pack's USE on a
@@ -3734,7 +3734,7 @@ func preview_item_evolution_use() -> void:
 	if _start_menu_host != null:
 		# USE, then the party list, then the first member.
 		for _press: int in 3:
-			_start_menu_host.handle_button(Gen2Button.A)
+			_start_menu_host.handle_button(PokeButton.A)
 		return
 	var save: Gen2SaveData = _embedded_party_save()
 	if save == null or save.party.is_empty():
@@ -3756,7 +3756,7 @@ func preview_item_evolution_use() -> void:
 		return
 	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_PACK):
 		return
-	_start_menu_host.handle_button(Gen2Button.A)
+	_start_menu_host.handle_button(PokeButton.A)
 	var rows: Array = _start_menu_host.call("_current_pocket_items")
 	for index: int in rows.size():
 		if int((rows[index] as Dictionary).get("item", 0)) == int(stone["item"]):
@@ -3794,9 +3794,9 @@ func preview_unown_printer(slot: int = 0, printing: bool = false) -> void:
 	if _unown_printer_host == null:
 		return
 	for _step: int in maxi(slot, 0):
-		_unown_printer_host.handle_button(Gen2Button.RIGHT)
+		_unown_printer_host.handle_button(PokeButton.RIGHT)
 	if printing:
-		_unown_printer_host.handle_button(Gen2Button.A)
+		_unown_printer_host.handle_button(PokeButton.A)
 
 
 ## Public screenshot driver for `_Diploma` and `_PrintDiploma`, which no fixture
@@ -3967,8 +3967,8 @@ func preview_slot_machine(
 		host.advance_frame()
 	## `Slots_AskBet`'s menu opens on " 3", so a bet of one is two presses down.
 	for _step: int in clampi(3 - bet, 0, 2):
-		host.handle_button(Gen2Button.DOWN)
-	host.handle_button(Gen2Button.A)
+		host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.A)
 	## Every reel is stopped by an A press, which is the only way a spin ends at
 	## all: the driver hands one over whenever the loop is waiting for it.
 	for _frame: int in maxi(frames, 0):
@@ -3986,7 +3986,7 @@ func preview_slot_machine(
 			Gen2SlotMachine.SLOTS_WAIT_REEL1, Gen2SlotMachine.SLOTS_WAIT_REEL2,
 			Gen2SlotMachine.SLOTS_WAIT_REEL3,
 		]:
-			host.handle_button(Gen2Button.A)
+			host.handle_button(PokeButton.A)
 
 
 ## How long `preview_card_flip` gives the loop to reach a prompt.
@@ -4017,7 +4017,7 @@ func preview_card_flip(coins: int = 100, frames: int = 0) -> void:
 		match host.prompt():
 			Gen2CardFlip.Prompt.YES_NO, Gen2CardFlip.Prompt.PRESS, \
 			Gen2CardFlip.Prompt.CHOOSE, Gen2CardFlip.Prompt.BET:
-				host.handle_button(Gen2Button.A)
+				host.handle_button(PokeButton.A)
 			_:
 				pass
 
@@ -4052,8 +4052,8 @@ func _press_puzzle_a() -> void:
 	var host: Gen2UnownPuzzleScreen = _unown_puzzle_host
 	if host == null:
 		return
-	host.handle_button(Gen2Button.A)
-	host.release_button(Gen2Button.A)
+	host.handle_button(PokeButton.A)
+	host.release_button(PokeButton.A)
 	## The wait is the driver's, and a screenshot spends no wall clock for it to
 	## finish in, so the effect is cut rather than waited out: `SFXChannelsOff`
 	## is what the cartridge itself does to a sound it will not wait for.
@@ -4087,12 +4087,12 @@ func _walk_puzzle_cursor(cell: int) -> void:
 	## button and `.Function` takes the first direction it finds, so a driver
 	## that never lets go would walk up for ever.
 	for _step: int in Gen2UnownPuzzle.ROWS:
-		_tap_puzzle(Gen2Button.LEFT)
-		_tap_puzzle(Gen2Button.UP)
+		_tap_puzzle(PokeButton.LEFT)
+		_tap_puzzle(PokeButton.UP)
 	for _step: int in cell / Gen2UnownPuzzle.COLUMNS:
-		_tap_puzzle(Gen2Button.DOWN)
+		_tap_puzzle(PokeButton.DOWN)
 	for _step: int in cell % Gen2UnownPuzzle.COLUMNS:
-		_tap_puzzle(Gen2Button.RIGHT)
+		_tap_puzzle(PokeButton.RIGHT)
 
 
 func _tap_puzzle(button: int) -> void:
@@ -4247,7 +4247,7 @@ func preview_whiteout() -> void:
 func _first_stone_evolution() -> Dictionary:
 	for species: int in range(1, _data.species_count() + 1):
 		for row: Dictionary in _data.evolutions(species):
-			if int(row.get("method", 0)) == RomLayout.EVOLVE_ITEM:
+			if int(row.get("method", 0)) == Gen2Layout.EVOLVE_ITEM:
 				return {"species": species, "item": int(row.get("parameter", 0))}
 	return {}
 
@@ -4297,7 +4297,7 @@ func preview_level_evolution() -> void:
 func _first_level_evolution() -> Dictionary:
 	for species: int in range(1, _data.species_count() + 1):
 		for row: Dictionary in _data.evolutions(species):
-			if int(row.get("method", 0)) == RomLayout.EVOLVE_LEVEL:
+			if int(row.get("method", 0)) == Gen2Layout.EVOLVE_LEVEL:
 				return {"species": species, "row": row}
 	return {}
 
@@ -4315,7 +4315,7 @@ func preview_start_menu() -> void:
 		_refresh_party_summary()
 		_open_start_menu()
 		return
-	_start_menu_host.handle_button(Gen2Button.DOWN)
+	_start_menu_host.handle_button(PokeButton.DOWN)
 
 
 ## Public screenshot driver for the reset chord's own question, which no cell
@@ -4330,7 +4330,7 @@ func preview_reset_question() -> void:
 			host.ask_soft_reset()
 		)
 		return
-	_start_menu_host.handle_button(Gen2Button.A)
+	_start_menu_host.handle_button(PokeButton.A)
 
 
 ## The same for the HOME row's own question, walked to off the list the way a
@@ -4341,8 +4341,8 @@ func preview_launcher_question() -> void:
 		return
 	var menu: Gen2WorldStartMenu = _start_menu_host.get("_menu")
 	while menu != null and menu.selected_kind() != Gen2WorldStartMenu.ITEM_LAUNCHER:
-		_start_menu_host.handle_button(Gen2Button.DOWN)
-	_start_menu_host.handle_button(Gen2Button.A)
+		_start_menu_host.handle_button(PokeButton.DOWN)
+	_start_menu_host.handle_button(PokeButton.A)
 
 
 ## Public screenshot driver for the cover a view switch is hidden behind: the
@@ -4369,7 +4369,7 @@ func preview_mod_views() -> void:
 		return
 	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_MODS):
 		return
-	_start_menu_host.handle_button(Gen2Button.A)
+	_start_menu_host.handle_button(PokeButton.A)
 
 
 ## Public screenshot driver for the MOVES entry, which needs a registered
@@ -4400,16 +4400,16 @@ func preview_field_moves_menu() -> void:
 		return
 	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_FIELD_MOVES):
 		return
-	_start_menu_host.handle_button(Gen2Button.A)
+	_start_menu_host.handle_button(PokeButton.A)
 
 
 ## `GetTMHMItemMove` walked backwards: the HM whose own move is [param move], or
 ## 0. Only a preview needs the inverse, so it is here rather than beside the
 ## lookup every other caller uses.
 func _preview_hm_item(move: int) -> int:
-	for number: int in range(RomLayout.TMHM_TM_COUNT + 1, _data.tmhm_moves().size() + 1):
+	for number: int in range(Gen2Layout.TMHM_TM_COUNT + 1, _data.tmhm_moves().size() + 1):
 		if _data.tmhm_move(number) == move:
-			return RomLayout.item_for_tmhm_number(number, _data.tmhm_moves().size())
+			return Gen2Layout.item_for_tmhm_number(number, _data.tmhm_moves().size())
 	return 0
 
 
@@ -4458,7 +4458,7 @@ func preview_options() -> void:
 		return
 	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_OPTION):
 		return
-	_start_menu_host.handle_button(Gen2Button.A)
+	_start_menu_host.handle_button(PokeButton.A)
 
 
 ## Walks the open start menu's cursor onto [param kind] and answers whether it
@@ -4476,7 +4476,7 @@ func _walk_start_menu_to(kind: StringName) -> bool:
 	for _row: int in maxi(int(menu.size()), 1):
 		if menu.selected_kind() == kind:
 			return true
-		_start_menu_host.handle_button(Gen2Button.DOWN)
+		_start_menu_host.handle_button(PokeButton.DOWN)
 	if menu.selected_kind() == kind:
 		return true
 	_script_prompt = "The start menu is not offering %s" % kind
@@ -4503,7 +4503,7 @@ func preview_pokegear() -> void:
 			return
 		## The row opens the overlay through the same signal a press does, so
 		## the card list is up by the time this returns.
-		_start_menu_host.handle_button(Gen2Button.A)
+		_start_menu_host.handle_button(PokeButton.A)
 
 
 ## Public screenshot drivers for `SaveMenu`, one per box it puts up:
@@ -4534,7 +4534,7 @@ func _preview_save_menu(answers: int) -> void:
 	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_SAVE):
 		return
 	for _press: int in answers + 1:
-		_start_menu_host.handle_button(Gen2Button.A)
+		_start_menu_host.handle_button(PokeButton.A)
 
 
 ## Public screenshot driver for `TossMenu`. Grants a stack on an injected save
@@ -4553,7 +4553,7 @@ func preview_pack_toss() -> void:
 					== Gen2WorldPack.ACTION_TOSS:
 					_start_menu_host.set("_item_cursor", index)
 					break
-		_start_menu_host.handle_button(Gen2Button.A)
+		_start_menu_host.handle_button(PokeButton.A)
 		return
 	var save: Gen2SaveData = _embedded_party_save()
 	if save == null:
@@ -4567,7 +4567,7 @@ func preview_pack_toss() -> void:
 		return
 	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_PACK):
 		return
-	_start_menu_host.handle_button(Gen2Button.A)
+	_start_menu_host.handle_button(PokeButton.A)
 
 
 ## Public screenshot driver for ForgetMove. It fills the first party member's
@@ -4581,7 +4581,7 @@ func preview_move_forget() -> void:
 	if _world == null or _data == null:
 		return
 	if _start_menu_host != null:
-		_start_menu_host.handle_button(Gen2Button.A)
+		_start_menu_host.handle_button(PokeButton.A)
 		return
 	var save: Gen2SaveData = _embedded_party_save()
 	if save == null or save.party.is_empty():
@@ -4605,12 +4605,12 @@ func preview_move_forget() -> void:
 		return
 	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_PACK):
 		return
-	_start_menu_host.handle_button(Gen2Button.A)
+	_start_menu_host.handle_button(PokeButton.A)
 	# The pack opens on the ITEM pocket, and the granted item is in the TM/HM
 	# one. The guard bounds the walk in case no such pocket is built.
 	var guard: int = Gen2WorldPack.POCKET_ORDER.size() + 1
 	while guard > 0 and _previewed_pocket() != Gen2WorldPack.TYPE_TM_HM:
-		_start_menu_host.handle_button(Gen2Button.RIGHT)
+		_start_menu_host.handle_button(PokeButton.RIGHT)
 		guard -= 1
 
 
@@ -4629,7 +4629,7 @@ func _teachable_tmhm_for(species: int) -> int:
 	for number: int in range(1, count + 1):
 		var move: int = _data.tmhm_move(number)
 		if move > 0 and Gen2WorldTMHM.can_learn(_data, species, move):
-			return RomLayout.item_for_tmhm_number(number, count)
+			return Gen2Layout.item_for_tmhm_number(number, count)
 	return 0
 
 
@@ -4830,14 +4830,14 @@ func preview_field_item(item: int = Gen2WorldPack.ITEM_ITEMFINDER) -> void:
 		return
 	if not _walk_start_menu_to(Gen2WorldStartMenu.ITEM_PACK):
 		return
-	_start_menu_host.handle_button(Gen2Button.A)
+	_start_menu_host.handle_button(PokeButton.A)
 	# The row itself, rather than whichever one the pocket opens on: the save may
 	# already own other key items, and a capture has to photograph the named one.
 	if not bool(_start_menu_host.call("_select_pack_item", item)):
 		return
 	# The row's submenu, and then its first action, which for a key item is USE.
-	_start_menu_host.handle_button(Gen2Button.A)
-	_start_menu_host.handle_button(Gen2Button.A)
+	_start_menu_host.handle_button(PokeButton.A)
+	_start_menu_host.handle_button(PokeButton.A)
 	if _text_box != null:
 		# The box reveals a tile at a time off wall-clock delta, and a capture
 		# owning its own frames spends none on that.
@@ -5211,7 +5211,7 @@ func _on_enemy_seen(species: int, unown_form: int) -> void:
 	if _world == null or _world.state == null:
 		return
 	_world.state.set_species_seen(species)
-	if species == RomLayout.UNOWN_SPECIES:
+	if species == Gen2Layout.UNOWN_SPECIES:
 		_world.state.note_first_unown_seen(unown_form)
 
 

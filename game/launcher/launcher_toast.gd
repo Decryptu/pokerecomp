@@ -17,7 +17,7 @@ const ICON: float = 22.0
 
 var _theme: Gen2LauncherTheme = null
 var _card: Gen2LauncherCard = null
-var _icon: Gen2LauncherIcon = null
+var _icon: PokeLauncherIcon = null
 var _heading: Label = null
 var _detail: Label = null
 var _progress: ProgressBar = null
@@ -66,7 +66,7 @@ func _build() -> void:
 	_card.add_child(column)
 	var line: HBoxContainer = Gen2LauncherUI.row(Gen2LauncherUI.GAP_MD)
 	column.add_child(line)
-	_icon = Gen2LauncherIcon.create(&"about", ICON, _theme.on_surface)
+	_icon = PokeLauncherIcon.create(&"about", ICON, _theme.on_surface)
 	_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	line.add_child(_icon)
 	var text: VBoxContainer = Gen2LauncherUI.column(2)

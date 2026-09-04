@@ -33,9 +33,12 @@ const FONT_BODY: int = 15
 const FONT_SMALL: int = 13
 const FONT_TINY: int = 11
 
-## The three cartridges, tinted so the stage lights up in the colour of whatever
-## is selected. Keys match [RomRegistry.ORDER].
+## One tint per cartridge, so the stage lights up in the colour of whatever is
+## selected. Keys match [constant RomRegistry.ORDER] and no two are equal.
 const GAME_TINTS: Dictionary = {
+	&"red": Color("#d2483d"),
+	&"blue": Color("#4a7ad2"),
+	&"yellow": Color("#e8cf45"),
 	&"gold": Color("#dfa63a"),
 	&"silver": Color("#93a6bd"),
 	&"crystal": Color("#3ab9bf"),

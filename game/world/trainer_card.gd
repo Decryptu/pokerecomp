@@ -36,7 +36,7 @@ static func page(
 		return {}
 	var state: Gen2WorldState = world.state if world != null else null
 	var crystal: bool = Gen2WorldState.is_crystal_profile(world.data) if world != null else true
-	var time: Gen2GameTime = save.game_time if save.game_time != null else Gen2GameTime.new()
+	var time: PokeGameTime = save.game_time if save.game_time != null else PokeGameTime.new()
 	return {
 		"page": page_number,
 		"player_name": save.player_name,
@@ -81,19 +81,19 @@ static func badges(state: Gen2WorldState, page_number: int, crystal: bool) -> Ar
 static func next_page(page_number: int, button: int) -> Dictionary:
 	match page_number:
 		PAGE_1:
-			if button == Gen2Button.RIGHT or button == Gen2Button.A:
+			if button == PokeButton.RIGHT or button == PokeButton.A:
 				return {"page": PAGE_2}
 		PAGE_2:
-			if button == Gen2Button.A:
+			if button == PokeButton.A:
 				return {"exit": true}
-			if button == Gen2Button.LEFT:
+			if button == PokeButton.LEFT:
 				return {"page": PAGE_1}
 		PAGE_3:
-			if button == Gen2Button.LEFT:
+			if button == PokeButton.LEFT:
 				return {"page": PAGE_2}
-			if button == Gen2Button.RIGHT:
+			if button == PokeButton.RIGHT:
 				return {"page": PAGE_1}
 	## `.loop`'s own `and PAD_B`, which leaves from any page.
-	if button == Gen2Button.B:
+	if button == PokeButton.B:
 		return {"exit": true}
 	return {}

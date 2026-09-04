@@ -74,14 +74,14 @@ func test_every_export_preset_states_the_app_version() -> void:
 		for key: String in VERSION_KEYS[section]:
 			assert_eq(
 				String(file.get_value(section, key, "")),
-				Gen2AppVersion.VERSION,
+				PokeAppVersion.VERSION,
 				"%s/%s" % [section, key]
 			)
 
 
 func test_the_project_settings_state_the_app_version() -> void:
 	assert_eq(String(ProjectSettings.get_setting("application/config/version", "")),
-		Gen2AppVersion.VERSION)
+		PokeAppVersion.VERSION)
 
 
 func test_a_published_release_is_announced_without_committing_the_webhook() -> void:
@@ -105,7 +105,7 @@ func test_every_file_that_names_the_engine_names_the_same_one() -> void:
 	var tag: String = _engine_pin(templates, "GODOT_VERSION")
 	var commit: String = _engine_pin(templates, "GODOT_COMMIT")
 	# The tag and the directory the templates unpack into differ by one
-	# character, which is what `release.yml` says and DEVICES.md repeats.
+	# character, which is what `release.yml` says.
 	var directory: String = tag.replace("-", ".")
 	assert_ne(tag, "", "export-templates.yml names a Godot release")
 	assert_ne(commit, "", "export-templates.yml names a Godot commit")
@@ -131,7 +131,7 @@ static func _engine_pin(workflow: String, key: String) -> String:
 ## Android refuses an in-place update whose version code did not rise, so the
 ## code is a function of the version rather than a number bumped by hand.
 func test_the_android_version_code_derives_from_the_app_version() -> void:
-	var parts: Array[int] = Gen2UpdateCheck.parse_version(Gen2AppVersion.VERSION)
+	var parts: Array[int] = PokeUpdateCheck.parse_version(PokeAppVersion.VERSION)
 	assert_eq(parts.size(), 3, "the app version is major.minor.patch")
 	var expected: int = parts[0] * 10000 + parts[1] * 100 + parts[2]
 	assert_eq(int(_presets().get_value("preset.3.options", "version/code", 0)), expected)
@@ -301,3 +301,49 @@ func test_the_release_notes_carry_no_em_dash() -> void:
 		FileAccess.get_file_as_string(RELEASE_NOTES).contains(char(0x2014)),
 		"the release notes carry an em dash"
 	)
+
+
+## Files that are in the repository but never leave this machine, and so name
+## nothing a reader who clones it can open. Excluding this script itself is the
+## one hole: it has to spell them to look for them.
+const LOCAL_ONLY: Array[String] = ["CLAUDE.md", "HANDOFF.md", "DEVICES.md", ".claude/"]
+const LOCAL_ONLY_SKIPPED: Array[String] = [
+	"res://.gitignore", "res://tests/unit/test_export_presets.gd",
+]
+## Where text that ships or is read from the repository lives.
+const PUBLISHED_ROOTS: Array[String] = [
+	"res://game", "res://tools", "res://tests", "res://autoload", "res://docs",
+	"res://mods", "res://.github",
+]
+const PUBLISHED_FILES: Array[String] = ["res://README.md", "res://LICENSE"]
+const PUBLISHED_SUFFIXES: Array[String] = [".gd", ".md", ".sh", ".yml", ".json", ".tscn"]
+
+
+func _published_text(from: String, into: Array[String]) -> void:
+	for entry: String in DirAccess.get_directories_at(from):
+		_published_text(from.path_join(entry), into)
+	for entry: String in DirAccess.get_files_at(from):
+		var path: String = from.path_join(entry)
+		if LOCAL_ONLY_SKIPPED.has(path):
+			continue
+		for suffix: String in PUBLISHED_SUFFIXES:
+			if entry.ends_with(suffix):
+				into.append(path)
+				break
+
+
+## A clone has none of these files, so a comment or an error message naming one
+## sends a contributor looking for something that is not there. Swept over the
+## tree rather than over the nineteen files that had one, because the next will
+## be different files.
+func test_no_published_file_names_something_only_this_machine_has() -> void:
+	var paths: Array[String] = PUBLISHED_FILES.duplicate()
+	for root: String in PUBLISHED_ROOTS:
+		_published_text(root, paths)
+	var offenders: Array[String] = []
+	for path: String in paths:
+		var text: String = FileAccess.get_file_as_string(path)
+		for name: String in LOCAL_ONLY:
+			if text.contains(name):
+				offenders.append("%s names %s" % [path, name])
+	assert_eq(offenders, [] as Array[String], "\n".join(offenders))

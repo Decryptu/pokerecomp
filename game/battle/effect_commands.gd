@@ -878,7 +878,7 @@ static func _transform(turn: Gen2Turn) -> void:
 	turn.emit(Gen2Battle.TRANSFORMED, {
 		"species": turn.attacker().species, "target": turn.target,
 		"unown_form": Gen2Stats.unown_letter(turn.attacker().dvs) \
-			if turn.attacker().species == RomLayout.UNOWN_SPECIES else 0,
+			if turn.attacker().species == Gen2Layout.UNOWN_SPECIES else 0,
 		"shiny": Gen2Stats.is_shiny(turn.attacker().dvs),
 	})
 
@@ -900,7 +900,7 @@ static func _critical(turn: Gen2Turn) -> void:
 static func _damage_stats(turn: Gen2Turn) -> void:
 	var stats: Array = Gen2Damage.damage_stats(
 		turn.attacker(), turn.defender(),
-		int(turn.effective_move().get("type", RomLayout.TYPE_NORMAL)),
+		int(turn.effective_move().get("type", Gen2Layout.TYPE_NORMAL)),
 		turn.critical, turn.battle.screens[turn.target], turn.battle.is_link_battle
 	)
 	turn.attack_stat = int(stats[0])
@@ -915,7 +915,7 @@ static func _damage_calc(turn: Gen2Turn) -> void:
 		turn.attacker(), int(effective.get("power", 0)),
 		turn.attack_stat, turn.defense_stat,
 		turn.effect() == Gen2MoveEffect.SELFDESTRUCT,
-		int(effective.get("type", RomLayout.TYPE_NORMAL)), turn.critical,
+		int(effective.get("type", Gen2Layout.TYPE_NORMAL)), turn.critical,
 		turn.level_override
 	)
 
@@ -1081,7 +1081,7 @@ static func _reset_type_matchup(turn: Gen2Turn) -> void:
 		turn.emit(Gen2Battle.NO_EFFECT, {"target": turn.target})
 		turn.end()
 		return
-	turn.effectiveness = RomLayout.MATCHUP_EFFECTIVE
+	turn.effectiveness = Gen2Layout.MATCHUP_EFFECTIVE
 
 
 ## `BattleCommand_HealBell`: every Pokémon in the user's party loses its status,
@@ -1206,7 +1206,7 @@ static func _metronome(turn: Gen2Turn) -> void:
 	_animate_current_move(turn)
 	for _attempt: int in 4096:
 		var picked: int = turn.rng().randi_range(0, 255)
-		if picked <= 0 or picked > RomLayout.MOVE_COUNT:
+		if picked <= 0 or picked > Gen2Layout.MOVE_COUNT:
 			continue
 		if METRONOME_EXCEPTS.has(picked) or turn.attacker().moves.has(picked):
 			continue
@@ -1293,7 +1293,7 @@ static func _conversion(turn: Gen2Turn) -> void:
 		var move: Dictionary = turn.data().move(int(attacker.moves[slot]))
 		if move.is_empty():
 			break
-		move_types.append(int(move.get("type", RomLayout.TYPE_NORMAL)))
+		move_types.append(int(move.get("type", Gen2Layout.TYPE_NORMAL)))
 	var has_candidate: bool = false
 	for move_type: int in move_types:
 		if move_type != CURSE_TYPE and not current.has(move_type):
@@ -1334,7 +1334,7 @@ static func _conversion_2(turn: Gen2Turn) -> void:
 		if not CONVERSION_2_TYPES.has(picked):
 			continue
 		if turn.data().type_effectiveness(attacking_type, [picked, picked]) \
-			>= RomLayout.MATCHUP_EFFECTIVE:
+			>= Gen2Layout.MATCHUP_EFFECTIVE:
 			continue
 		turn.attacker().set_battle_type(picked)
 		turn.emit(Gen2Battle.TYPE_CHANGED, {"type_number": picked})
@@ -1612,14 +1612,14 @@ static func _counter(turn: Gen2Turn, mirror_coat: bool) -> void:
 		and int(remembered.get("effect", -1)) != expected_effect \
 		and not last_move.is_empty() \
 		and int(last_move.get("power", 0)) > 0 \
-		and Gen2Damage.is_physical(int(last_move.get("type", RomLayout.TYPE_NORMAL))) != mirror_coat \
+		and Gen2Damage.is_physical(int(last_move.get("type", Gen2Layout.TYPE_NORMAL))) != mirror_coat \
 		and int(remembered.get("damage", 0)) > 0
 
 	if valid:
 		var matchup: int = turn.data().type_effectiveness(
-			int(turn.move.get("type", RomLayout.TYPE_NORMAL)), turn.defender().types()
+			int(turn.move.get("type", Gen2Layout.TYPE_NORMAL)), turn.defender().types()
 		)
-		if matchup == RomLayout.MATCHUP_NO_EFFECT:
+		if matchup == Gen2Layout.MATCHUP_NO_EFFECT:
 			turn.emit(Gen2Battle.NO_EFFECT, {"target": turn.target})
 			turn.end()
 			return
@@ -1962,12 +1962,12 @@ static func _status_interrupts(turn: Gen2Turn, flag: int) -> void:
 static func _status_type_refuses(turn: Gen2Turn, flag: int) -> bool:
 	var types: Array = turn.defender().types()
 	if flag == Gen2Status.POISON:
-		return types.has(RomLayout.TYPE_POISON)
+		return types.has(Gen2Layout.TYPE_POISON)
 	if flag != Gen2Status.BURN and flag != Gen2Status.FREEZE:
 		return false
 
-	var move_type: int = int(turn.move.get("type", RomLayout.TYPE_NORMAL))
-	if move_type == RomLayout.TYPE_NORMAL:
+	var move_type: int = int(turn.move.get("type", Gen2Layout.TYPE_NORMAL))
+	if move_type == Gen2Layout.TYPE_NORMAL:
 		return false
 	return types.has(move_type)
 
@@ -2698,7 +2698,7 @@ static func _leech_seed(turn: Gen2Turn) -> void:
 		return
 
 	var defender: Gen2BattleMon = turn.defender()
-	if defender.types().has(RomLayout.TYPE_GRASS):
+	if defender.types().has(Gen2Layout.TYPE_GRASS):
 		turn.emit(Gen2Battle.NO_EFFECT, {"target": turn.target})
 		return
 
@@ -2735,7 +2735,7 @@ static func _nightmare(turn: Gen2Turn) -> void:
 ## Speed that could not fall from swallowing the raises.
 static func _curse(turn: Gen2Turn) -> void:
 	var user: Gen2BattleMon = turn.attacker()
-	if user.types().has(RomLayout.TYPE_GHOST):
+	if user.types().has(Gen2Layout.TYPE_GHOST):
 		_curse_ghost(turn, user)
 		return
 

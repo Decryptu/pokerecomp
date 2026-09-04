@@ -17,16 +17,16 @@ const SHA1: String = "0123456789abcdef"
 ## even numbers before the odd ones.
 static func new_order() -> Array:
 	var out: Array = []
-	for number: int in range(RomLayout.SPECIES_COUNT, 0, -1):
+	for number: int in range(Gen2Layout.SPECIES_COUNT, 0, -1):
 		out.append(number)
 	return out
 
 
 static func alpha_order() -> Array:
 	var out: Array = []
-	for number: int in range(2, RomLayout.SPECIES_COUNT + 1, 2):
+	for number: int in range(2, Gen2Layout.SPECIES_COUNT + 1, 2):
 		out.append(number)
-	for number: int in range(1, RomLayout.SPECIES_COUNT + 1, 2):
+	for number: int in range(1, Gen2Layout.SPECIES_COUNT + 1, 2):
 		out.append(number)
 	return out
 
@@ -42,7 +42,7 @@ static func species_name(number: int) -> String:
 ## find.
 static func types_for(number: int) -> Array:
 	var first: int = Gen2Pokedex.SEARCH_TYPES[(number - 1) % Gen2Pokedex.SEARCH_TYPES.size()]
-	var second: int = RomLayout.TYPE_FIRE if number % 10 == 0 else first
+	var second: int = Gen2Layout.TYPE_FIRE if number % 10 == 0 else first
 	return [first, second]
 
 
@@ -50,7 +50,7 @@ static func types_for(number: int) -> Array:
 ## cartridge's do, so a test can tell which form the dex is showing.
 static func unown_words() -> Array:
 	var out: Array = []
-	for form: int in RomLayout.UNOWN_FORMS:
+	for form: int in Gen2Layout.UNOWN_FORMS:
 		out.append("%sWORD" % char("A".unicode_at(0) + form))
 	return out
 
@@ -89,7 +89,7 @@ static func build() -> GameData:
 ## can pick a number and know what it should read without a table here.
 static func _species() -> Array:
 	var out: Array = []
-	for number: int in range(1, RomLayout.SPECIES_COUNT + 1):
+	for number: int in range(1, Gen2Layout.SPECIES_COUNT + 1):
 		out.append({
 			"number": number,
 			"name": species_name(number),
@@ -110,22 +110,22 @@ static func _species() -> Array:
 static func _tiles(path: String) -> Dictionary:
 	var sheets: Dictionary = {}
 	for entry: Array in [
-		["font", RomLayout.FONT_TILES, 3, RomLayout.FONT_FIRST_CODE],
-		["pokedex", RomLayout.POKEDEX_TILES, 1, 0],
-		["pokedex_slowpoke", RomLayout.POKEDEX_SLOWPOKE_TILES, 2, 0],
-		["pokedex_question_mark", RomLayout.POKEDEX_QUESTION_MARK_TILES, 2, 0],
-		["unown_font", RomLayout.UNOWN_FONT_TILES, 3, 0],
-		["footprints", RomLayout.FOOTPRINT_SLOTS * RomLayout.FOOTPRINT_TILES, 1, 0],
+		["font", Gen2Layout.FONT_TILES, 3, Gen2Layout.FONT_FIRST_CODE],
+		["pokedex", Gen2Layout.POKEDEX_TILES, 1, 0],
+		["pokedex_slowpoke", Gen2Layout.POKEDEX_SLOWPOKE_TILES, 2, 0],
+		["pokedex_question_mark", Gen2Layout.POKEDEX_QUESTION_MARK_TILES, 2, 0],
+		["unown_font", Gen2Layout.UNOWN_FONT_TILES, 3, 0],
+		["footprints", Gen2Layout.FOOTPRINT_SLOTS * Gen2Layout.FOOTPRINT_TILES, 1, 0],
 	]:
 		var name: String = String(entry[0])
 		var count: int = int(entry[1])
 		var indices := PackedByteArray()
-		indices.resize(count * Gen2Tiles.TILE_PIXELS)
+		indices.resize(count * PokeTiles.TILE_PIXELS)
 		indices.fill(int(entry[2]))
 		RomCache.write_indices(RomCache.tile_path(path, name), indices)
 		sheets[name] = {
-			"width": count * Gen2Tiles.TILE_WIDTH,
-			"height": Gen2Tiles.TILE_HEIGHT,
+			"width": count * PokeTiles.TILE_WIDTH,
+			"height": PokeTiles.TILE_HEIGHT,
 			"tiles": count,
 			"first_code": int(entry[3]),
 			"bits": 1,

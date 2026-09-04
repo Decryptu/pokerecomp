@@ -123,7 +123,7 @@ func _check_blocks(pin: String) -> void:
 
 ## The highest block [param map] names, and a failure when that is past its
 ## tileset's own table. A metatile run's length is only the distance to the next
-## label, so `RomLayout.tileset_block_counts` is the one number the pins state
+## label, so `Gen2Layout.tileset_block_counts` is the one number the pins state
 ## nowhere; `TilesetForest`'s 40 is why it is checked rather than assumed.
 func _check_block_reach(id: String, map: Gen2WorldMap) -> int:
 	var tileset: Gen2WorldTileset = _r.data.world_tileset(map.tileset)
@@ -178,7 +178,7 @@ func _check_tilesets(pin: String) -> void:
 		# the distance to the next one: Crystal's is 112 bytes, the two graphics
 		# blocks with the sixteen `$ff` the unusable $60..$7F range costs between
 		# them, and Gold and Silver's is 48, the first block alone. The importer
-		# reads RomLayout.WORLD_PALETTE_MAP_BYTES for both, which is the overread
+		# reads Gen2Layout.WORLD_PALETTE_MAP_BYTES for both, which is the overread
 		# the cartridge performs, so the pin's length is the comparable span and
 		# `_check_palette_reach` is what says the rest is reachable.
 		var palettes: PackedByteArray = _palette_map_bytes(
@@ -208,8 +208,8 @@ func _check_tilesets(pin: String) -> void:
 func _check_palette_reach(number: int, tileset: Gen2WorldTileset) -> void:
 	var highest: int = -1
 	for block: int in tileset.block_count:
-		for tile: int in RomLayout.MAP_BLOCK_TILE_WIDTH * RomLayout.MAP_BLOCK_TILE_WIDTH:
-			var at: int = block * RomLayout.TILESET_META_BYTES_PER_BLOCK + tile
+		for tile: int in Gen2Layout.MAP_BLOCK_TILE_WIDTH * Gen2Layout.MAP_BLOCK_TILE_WIDTH:
+			var at: int = block * Gen2Layout.TILESET_META_BYTES_PER_BLOCK + tile
 			var index: int = tileset.meta[at] if at < tileset.meta.size() else 0
 			if index < tileset.tile_count:
 				highest = maxi(highest, index)
@@ -230,14 +230,14 @@ func _check_roofs(pin: String) -> void:
 		_report("the pin carries no roof tables.")
 		return
 	_r.check(
-		groups.size() == RomLayout.MAP_GROUP_ROOF_COUNT
-			and palettes.size() == RomLayout.MAP_GROUP_ROOF_COUNT,
+		groups.size() == Gen2Layout.MAP_GROUP_ROOF_COUNT
+			and palettes.size() == Gen2Layout.MAP_GROUP_ROOF_COUNT,
 		"the pin lists %d roof groups and %d palettes, %d expected." % [
-			groups.size(), palettes.size(), RomLayout.MAP_GROUP_ROOF_COUNT,
+			groups.size(), palettes.size(), Gen2Layout.MAP_GROUP_ROOF_COUNT,
 		],
 	)
 	var roofed: int = 0
-	for group: int in mini(groups.size(), RomLayout.MAP_GROUP_ROOF_COUNT):
+	for group: int in mini(groups.size(), Gen2Layout.MAP_GROUP_ROOF_COUNT):
 		var ours: int = _r.data.map_group_roof(group)
 		var pinned: int = -1 if groups[group] == 0xFF else int(groups[group])
 		if ours != pinned:
@@ -247,9 +247,9 @@ func _check_roofs(pin: String) -> void:
 			continue
 		roofed += 1
 		_r.check(
-			pinned < RomLayout.ROOF_COUNT,
+			pinned < Gen2Layout.ROOF_COUNT,
 			"map group %d names roof %d, past the %d the cartridge holds." % [
-				group, pinned, RomLayout.ROOF_COUNT,
+				group, pinned, Gen2Layout.ROOF_COUNT,
 			],
 		)
 		for night: bool in [false, true]:
@@ -262,7 +262,7 @@ func _check_roofs(pin: String) -> void:
 				])
 				continue
 			for index: int in 2:
-				var pinned_color: Color = Gen2Palette.from_packed(int(expected[at + index]))
+				var pinned_color: Color = PokePalette.from_packed(int(expected[at + index]))
 				if not colors[index].is_equal_approx(pinned_color):
 					_report("map group %d colour %d (%s) is %s, the pin says %s." % [
 						group, index, "nite" if night else "morn/day",
@@ -282,8 +282,8 @@ func _check_roofs(pin: String) -> void:
 func _check_roof_strips(pin: String) -> void:
 	var seen: Dictionary = {}
 	var pairs: int = 0
-	for group: int in RomLayout.MAP_GROUP_ROOF_COUNT:
-		for number: int in RomLayout.MAP_GROUP_ROOF_COUNT * 16:
+	for group: int in Gen2Layout.MAP_GROUP_ROOF_COUNT:
+		for number: int in Gen2Layout.MAP_GROUP_ROOF_COUNT * 16:
 			var map: Gen2WorldMap = _r.data.world_map(group, number)
 			if map == null:
 				continue
@@ -323,13 +323,13 @@ func _compare_roof_strip(
 		])
 		return
 	var pinned: PackedByteArray = _roof_pixels(pin, roof)
-	var width: int = tileset.tile_count * Gen2Tiles.TILE_WIDTH
-	var left: int = RomLayout.ROOF_VRAM_TILE * Gen2Tiles.TILE_WIDTH
-	var roof_width: int = RomLayout.ROOF_TILES * Gen2Tiles.TILE_WIDTH
-	if roof >= 0 and pinned.size() != roof_width * Gen2Tiles.TILE_HEIGHT:
+	var width: int = tileset.tile_count * PokeTiles.TILE_WIDTH
+	var left: int = Gen2Layout.ROOF_VRAM_TILE * PokeTiles.TILE_WIDTH
+	var roof_width: int = Gen2Layout.ROOF_TILES * PokeTiles.TILE_WIDTH
+	if roof >= 0 and pinned.size() != roof_width * PokeTiles.TILE_HEIGHT:
 		_report("roof %d is not in the pin, so nothing was compared." % roof)
 		return
-	for y: int in Gen2Tiles.TILE_HEIGHT:
+	for y: int in PokeTiles.TILE_HEIGHT:
 		for x: int in width:
 			var inside: bool = roof >= 0 and x >= left and x < left + roof_width
 			var expected: int = (
@@ -354,17 +354,17 @@ func _roof_pixels(pin: String, roof: int) -> PackedByteArray:
 		if image.load(path) != OK:
 			return PackedByteArray()
 		var out: PackedByteArray = PackedByteArray()
-		var width: int = RomLayout.ROOF_TILES * Gen2Tiles.TILE_WIDTH
-		out.resize(width * Gen2Tiles.TILE_HEIGHT)
+		var width: int = Gen2Layout.ROOF_TILES * PokeTiles.TILE_WIDTH
+		out.resize(width * PokeTiles.TILE_HEIGHT)
 		# The sheet is a 3x3 block of tiles walked the way rgbgfx walks one, left
 		# to right and then down; the strip is one row of nine.
-		var columns: int = image.get_width() / Gen2Tiles.TILE_WIDTH
-		for tile: int in RomLayout.ROOF_TILES:
-			var at := Vector2i(tile % columns, tile / columns) * Gen2Tiles.TILE_WIDTH
-			for y: int in Gen2Tiles.TILE_HEIGHT:
-				for x: int in Gen2Tiles.TILE_WIDTH:
+		var columns: int = image.get_width() / PokeTiles.TILE_WIDTH
+		for tile: int in Gen2Layout.ROOF_TILES:
+			var at := Vector2i(tile % columns, tile / columns) * PokeTiles.TILE_WIDTH
+			for y: int in PokeTiles.TILE_HEIGHT:
+				for x: int in PokeTiles.TILE_WIDTH:
 					var shade: float = image.get_pixel(at.x + x, at.y + y).r
-					out[y * width + tile * Gen2Tiles.TILE_WIDTH + x] = 3 - roundi(shade * 3.0)
+					out[y * width + tile * PokeTiles.TILE_WIDTH + x] = 3 - roundi(shade * 3.0)
 		return out
 	)
 
@@ -424,7 +424,7 @@ const SPECIAL_PALETTE_FILES: Dictionary = {
 func _check_special_palettes(pin: String) -> void:
 	var crystal: bool = _r.game_id == &"crystal"
 	var compared: int = 0
-	for tileset: int in RomLayout.SPECIAL_PALETTE_TILESETS:
+	for tileset: int in Gen2Layout.SPECIAL_PALETTE_TILESETS:
 		var ours: Array = _r.data.special_map_palettes(tileset, 0)
 		if not crystal:
 			_r.check(
@@ -442,7 +442,7 @@ func _check_special_palettes(pin: String) -> void:
 		for slot: int in 8:
 			var colors: PackedColorArray = ours[slot]
 			for color: int in 4:
-				var want: Color = Gen2Palette.from_packed(int((pinned[slot] as Array)[color]))
+				var want: Color = PokePalette.from_packed(int((pinned[slot] as Array)[color]))
 				if not colors[color].is_equal_approx(want):
 					_report("tileset %d %s colour %d is %s, the pin says %s." % [
 						tileset, BG_PALETTES[slot], color, colors[color], want,
@@ -451,8 +451,8 @@ func _check_special_palettes(pin: String) -> void:
 	if crystal:
 		_r.check(
 			_r.data.special_map_palettes(
-				RomLayout.SPECIAL_PALETTE_ICE_PATH,
-				RomLayout.SPECIAL_PALETTE_ENVIRONMENT_INDOOR
+				Gen2Layout.SPECIAL_PALETTE_ICE_PATH,
+				Gen2Layout.SPECIAL_PALETTE_ENVIRONMENT_INDOOR
 			).is_empty(),
 			"the Hall of Fame's INDOOR ice path took the special palette."
 		)
@@ -461,15 +461,15 @@ func _check_special_palettes(pin: String) -> void:
 
 func _special_palette(pin: String, tileset: int) -> Array:
 	var read: Array = _packed_palette(pin, String(SPECIAL_PALETTE_FILES[tileset]))
-	if tileset != RomLayout.SPECIAL_PALETTE_MANSION or read.size() < 9:
+	if tileset != Gen2Layout.SPECIAL_PALETTE_MANSION or read.size() < 9:
 		return read.slice(0, 8) if read.size() >= 8 else []
 	var yellow: Array = _packed_palette(pin, "mansion_2")
 	if yellow.is_empty():
 		return []
 	var out: Array = read.slice(0, 8)
-	out[RomLayout.PAL_BG_YELLOW] = yellow[0]
-	out[RomLayout.PAL_BG_WATER] = read[6]
-	out[RomLayout.PAL_BG_ROOF] = read[8]
+	out[Gen2Layout.PAL_BG_YELLOW] = yellow[0]
+	out[Gen2Layout.PAL_BG_WATER] = read[6]
+	out[Gen2Layout.PAL_BG_ROOF] = read[8]
 	return out
 
 

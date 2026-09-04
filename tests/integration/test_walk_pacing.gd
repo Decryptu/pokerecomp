@@ -42,8 +42,7 @@ func _walk_frames() -> int:
 ## The screen's own frames for a count of overworld passes. `HandleMap` runs one
 ## pass per `NextOverworldFrame`, and `MaxOverworldDelay` is 2, so a duration
 ## read off `InitStep` or off `wLandmarkSignTimer` costs twice its number of
-## frames. Measured on a real cartridge with
-## `.claude/oracle/overworld/trace_walk.py`.
+## frames. Measured on a real cartridge.
 func _screen_frames(passes: int) -> int:
 	return passes * Gen2WorldAPI.FRAMES_PER_OVERWORLD_PASS
 
@@ -248,7 +247,7 @@ func test_no_input_is_taken_while_the_warp_fade_runs() -> void:
 	assert_false(_screen.map_fade().is_empty(), "the fade is up")
 	var cell: Vector2i = _screen._world.player_cell
 	assert_false(_screen.move_player(Vector2i.DOWN), "no step is taken")
-	assert_true(_screen.press_button(Gen2Button.A), "and A is swallowed rather than used")
+	assert_true(_screen.press_button(PokeButton.A), "and A is swallowed rather than used")
 	assert_eq(_screen._world.player_cell, cell)
 
 
@@ -390,14 +389,14 @@ func test_a_recording_carries_the_run_state_and_a_replay_reads_it_back() -> void
 	_screen = await _screen_at(Fixture.WARP_CELL + Vector2i.DOWN)
 	## Held rather than called: `_advance_held_direction` polls the input runtime,
 	## which is the poll the run state is recorded beside.
-	for button: int in [Gen2Button.B, Gen2Button.LEFT]:
-		Input.action_press(Gen2Button.ACTIONS[button])
+	for button: int in [PokeButton.B, PokeButton.LEFT]:
+		Input.action_press(PokeButton.ACTIONS[button])
 	await get_tree().process_frame
 	_screen.record_input()
 	for _frame: int in _walk_screen_frames():
 		_screen.advance_frame()
-	for button: int in [Gen2Button.B, Gen2Button.LEFT]:
-		Input.action_release(Gen2Button.ACTIONS[button])
+	for button: int in [PokeButton.B, PokeButton.LEFT]:
+		Input.action_release(PokeButton.ACTIONS[button])
 	Gen2ModHost.reset()
 
 	var holds: Array = _screen.input_recording().filter(

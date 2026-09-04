@@ -133,7 +133,7 @@ func render(state: Dictionary) -> Image:
 		)
 	return Gen2PicImage.from_indices(
 		indices, width, Gen2Screen.HEIGHT,
-		Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+		PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	)
 
 
@@ -182,7 +182,7 @@ static func balance_window(
 			page._text(indices, width, money_string(money), MONEY_TEXT_AT)
 	var image: Image = Gen2PicImage.from_indices(
 		indices, width, Gen2Screen.HEIGHT,
-		Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+		PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	)
 	return {
 		"image": image.get_region(Rect2i(at * TILE, box * TILE)),
@@ -226,7 +226,7 @@ static func bank_window(
 		)
 	var image: Image = Gen2PicImage.from_indices(
 		indices, width, Gen2Screen.HEIGHT,
-		Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+		PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	)
 	return {
 		"image": image.get_region(Rect2i(BANK_AT * TILE, BANK_SIZE * TILE)),

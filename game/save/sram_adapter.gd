@@ -420,9 +420,9 @@ static func read_nicknamed_mon(raw: PackedByteArray, start: int) -> Gen2SaveMon:
 	return mon
 
 
-static func _read_game_time(raw: PackedByteArray, layout: Dictionary) -> Gen2GameTime:
+static func _read_game_time(raw: PackedByteArray, layout: Dictionary) -> PokeGameTime:
 	var capped: bool = (int(raw[int(layout["cap"])]) & 1) != 0
-	return Gen2GameTime.create(
+	return PokeGameTime.create(
 		_read_u16_be(raw, int(layout["hours"])),
 		int(raw[int(layout["minutes"])]),
 		int(raw[int(layout["seconds"])]),
@@ -432,7 +432,7 @@ static func _read_game_time(raw: PackedByteArray, layout: Dictionary) -> Gen2Gam
 
 
 static func _write_game_time(
-	raw: PackedByteArray, layout: Dictionary, time: Gen2GameTime
+	raw: PackedByteArray, layout: Dictionary, time: PokeGameTime
 ) -> void:
 	if time == null:
 		return

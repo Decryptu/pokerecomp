@@ -67,7 +67,7 @@ func open_deletion() -> void:
 ## narrowed to the control pad, A and B. Returns whether the button was used.
 func handle_button(button: int) -> bool:
 	match button:
-		Gen2Button.B:
+		PokeButton.B:
 			## `.ChooseMoveToDelete`'s own `.a_button` and `.b_button` reach
 			## neither `PlayClickSFX` nor `WaitSFX`, where `MoveScreenLoop`'s
 			## both do, so the deleter's list answers silently.
@@ -83,7 +83,7 @@ func handle_button(button: int) -> bool:
 				return true
 			closed.emit()
 			return true
-		Gen2Button.A:
+		PokeButton.A:
 			if _deleting:
 				selection_made.emit(_row)
 				return true
@@ -94,13 +94,13 @@ func handle_button(button: int) -> bool:
 			_swap(_held, _row)
 			_held = -1
 			return true
-		Gen2Button.UP:
+		PokeButton.UP:
 			return _move_row(-1)
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			return _move_row(1)
-		Gen2Button.LEFT:
+		PokeButton.LEFT:
 			return _cycle(-1)
-		Gen2Button.RIGHT:
+		PokeButton.RIGHT:
 			return _cycle(1)
 	return false
 

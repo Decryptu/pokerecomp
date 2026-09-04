@@ -451,7 +451,7 @@ func test_every_staged_roll_names_a_row_of_its_own_table() -> void:
 		)
 		for key: String in ["which_item", "which_deco"]:
 			var index: int = int(staged[key])
-			assert_between(index, 0, RomLayout.MYSTERY_GIFT_TABLE_ROWS - 1)
+			assert_between(index, 0, Gen2Layout.MYSTERY_GIFT_TABLE_ROWS - 1)
 			bands[index / 8] = true
 	assert_true(bands.has(0), "the common band is reached")
 	assert_true(bands.has(4), "the rarest band is reached")

@@ -30,7 +30,7 @@ static func item_evolution(data: GameData, mon: Gen2BattleMon, item: int) -> Dic
 	if data == null or mon == null:
 		return {}
 	for row: Dictionary in data.evolutions(mon.species):
-		if int(row.get("method", 0)) == RomLayout.EVOLVE_ITEM \
+		if int(row.get("method", 0)) == Gen2Layout.EVOLVE_ITEM \
 			and int(row.get("parameter", 0)) == item:
 			return row.duplicate(true)
 	return {}
@@ -44,7 +44,7 @@ static func trade_evolution(data: GameData, mon: Gen2BattleMon) -> Dictionary:
 	if data == null or mon == null or mon.item == EVERSTONE:
 		return {}
 	for row: Dictionary in data.evolutions(mon.species):
-		if int(row.get("method", 0)) != RomLayout.EVOLVE_TRADE:
+		if int(row.get("method", 0)) != Gen2Layout.EVOLVE_TRADE:
 			continue
 		var parameter: int = int(row.get("parameter", TRADE_NO_ITEM))
 		if parameter == TRADE_NO_ITEM:
@@ -88,28 +88,28 @@ static func nickname_after_evolution(
 static func _eligible(row: Dictionary, mon: Gen2BattleMon, time_of_day: int) -> bool:
 	var method: int = int(row.get("method", 0))
 	var parameter: int = int(row.get("parameter", 0))
-	if method == RomLayout.EVOLVE_LEVEL:
+	if method == Gen2Layout.EVOLVE_LEVEL:
 		return mon.level >= parameter
-	if method == RomLayout.EVOLVE_HAPPINESS:
+	if method == Gen2Layout.EVOLVE_HAPPINESS:
 		if mon.happiness < HAPPINESS_TO_EVOLVE:
 			return false
-		if parameter == RomLayout.TRIGGER_ANYTIME:
+		if parameter == Gen2Layout.TRIGGER_ANYTIME:
 			return true
-		if parameter == RomLayout.TRIGGER_MORNDAY:
+		if parameter == Gen2Layout.TRIGGER_MORNDAY:
 			return time_of_day != Gen2WorldPalette.TIME_NIGHT
-		return parameter == RomLayout.TRIGGER_NITE \
+		return parameter == Gen2Layout.TRIGGER_NITE \
 			and time_of_day == Gen2WorldPalette.TIME_NIGHT
-	if method == RomLayout.EVOLVE_STAT:
+	if method == Gen2Layout.EVOLVE_STAT:
 		if mon.level < parameter:
 			return false
 		var attack: int = int(mon.stats.get("attack", 0))
 		var defense: int = int(mon.stats.get("defense", 0))
 		var condition: int = int(row.get("condition", 0))
-		if condition == RomLayout.ATTACK_OVER_DEFENSE:
+		if condition == Gen2Layout.ATTACK_OVER_DEFENSE:
 			return attack > defense
-		if condition == RomLayout.ATTACK_UNDER_DEFENSE:
+		if condition == Gen2Layout.ATTACK_UNDER_DEFENSE:
 			return attack < defense
-		return condition == RomLayout.ATTACK_EQUALS_DEFENSE \
+		return condition == Gen2Layout.ATTACK_EQUALS_DEFENSE \
 			and attack == defense
 	return false
 

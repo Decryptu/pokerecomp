@@ -1,4 +1,4 @@
-class_name Gen2DebugKeys
+class_name PokeDebugKeys
 extends RefCounted
 
 ## Whether the development shortcuts and readouts are live. The game screens carry

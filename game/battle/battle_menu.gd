@@ -183,13 +183,13 @@ static func main_moved(position: int, button: int) -> int:
 	var column: int = index % MAIN_COLUMNS
 	var row: int = index / MAIN_COLUMNS
 	match button:
-		Gen2Button.LEFT:
+		PokeButton.LEFT:
 			column = maxi(0, column - 1)
-		Gen2Button.RIGHT:
+		PokeButton.RIGHT:
 			column = mini(MAIN_COLUMNS - 1, column + 1)
-		Gen2Button.UP:
+		PokeButton.UP:
 			row = maxi(0, row - 1)
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			row = mini(MAIN_ROWS - 1, row + 1)
 	return row * MAIN_COLUMNS + column + 1
 
@@ -227,9 +227,9 @@ static func move_cursor_moved(cursor: int, button: int, rows: int) -> int:
 	if rows <= 0:
 		return 0
 	match button:
-		Gen2Button.UP:
+		PokeButton.UP:
 			return (cursor + rows - 1) % rows
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			return (cursor + 1) % rows
 	return clampi(cursor, 0, rows - 1)
 

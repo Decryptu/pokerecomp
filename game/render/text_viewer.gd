@@ -156,7 +156,7 @@ func _build_chart() -> void:
 
 	var image: Image = Gen2PicImage.from_indices(
 		indices, width, height,
-		Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+		PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	)
 	Gen2PicImage.show(_chart, image)
 	_chart.size = Vector2(width, height)

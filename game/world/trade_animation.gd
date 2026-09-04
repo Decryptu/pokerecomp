@@ -498,7 +498,7 @@ func _cmd_enter_link_tube_1() -> void:
 	_scx = 0xA0
 	_copy_box(
 		_tilemap_run("link_cable_tilemap"),
-		RomLayout.TRADE_ANIM_LINK_CABLE_SIZE, Vector2i(8, 2)
+		Gen2Layout.TRADE_ANIM_LINK_CABLE_SIZE, Vector2i(8, 2)
 	)
 	_wait_bg_map()
 	_tube_palette = true
@@ -662,13 +662,13 @@ func _load_ball_gfx() -> void:
 
 
 func _cmd_tube_to_ot_1() -> void:
-	_place_stats_on_tube(RomLayout.TRADE_ANIM_RIGHT_ARROW_CODE)
+	_place_stats_on_tube(Gen2Layout.TRADE_ANIM_RIGHT_ARROW_CODE)
 	_icon_species = _sendmon
 	_init_tube_anim(TUBE_STATE_0, Vector2i(88, 44), 0)
 
 
 func _cmd_tube_to_player_1() -> void:
-	_place_stats_on_tube(RomLayout.TRADE_ANIM_LEFT_ARROW_CODE)
+	_place_stats_on_tube(Gen2Layout.TRADE_ANIM_LEFT_ARROW_CODE)
 	_icon_species = _getmon
 	_init_tube_anim(TUBE_STATE_2, Vector2i(148, 76), 4)
 
@@ -899,7 +899,7 @@ func _tube_anim_tilemap(state: int) -> void:
 		_tilemap[3 * COLUMNS + 10 + column] = CABLE_STRAIGHT
 	_copy_box(
 		_tilemap_run("game_boy_tilemap"),
-		RomLayout.TRADE_ANIM_GAME_BOY_SIZE, Vector2i(3, 2)
+		Gen2Layout.TRADE_ANIM_GAME_BOY_SIZE, Vector2i(3, 2)
 	)
 	_wait_bg_map()
 
@@ -914,7 +914,7 @@ func _tube_anim_tilemap_two() -> void:
 	_tilemap[7 * COLUMNS + 17] = CABLE_END_LEFT
 	_copy_box(
 		_tilemap_run("game_boy_tilemap"),
-		RomLayout.TRADE_ANIM_GAME_BOY_SIZE, Vector2i(10, 6)
+		Gen2Layout.TRADE_ANIM_GAME_BOY_SIZE, Vector2i(10, 6)
 	)
 
 

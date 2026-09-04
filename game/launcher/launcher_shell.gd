@@ -149,7 +149,7 @@ func _build() -> void:
 	_apply_layout()
 	_place_toast()
 	_focus = Gen2FocusGuard.attach(self)
-	_focus.edge_targets = {Gen2Button.UP: _tab_landing}
+	_focus.edge_targets = {PokeButton.UP: _tab_landing}
 
 
 func _now() -> String:
@@ -256,7 +256,7 @@ func select(id: StringName) -> void:
 	# with another page change; a pointer moves no ring at all.
 	if _focus != null:
 		_focus.preferred = _page_landing()
-		if _focus.preferred != null and not Gen2InputDevice.is_pointer(
+		if _focus.preferred != null and not PokeInputDevice.is_pointer(
 			Gen2InputRuntime.instance().device()
 		):
 			_focus_page_landing.call_deferred()
@@ -491,12 +491,12 @@ func _tab_landing(from: Control) -> Control:
 func _on_tab_input(event: InputEvent, id: StringName) -> void:
 	var at: int = _index_of(id)
 	var target: Control = null
-	match Gen2Button.direction_in(event):
-		Gen2Button.LEFT:
+	match PokeButton.direction_in(event):
+		PokeButton.LEFT:
 			target = _buttons.get(StringName(_entries[posmod(at - 1, _entries.size())]["id"]))
-		Gen2Button.RIGHT:
+		PokeButton.RIGHT:
 			target = _buttons.get(StringName(_entries[posmod(at + 1, _entries.size())]["id"]))
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			target = _page_landing()
 		_:
 			return

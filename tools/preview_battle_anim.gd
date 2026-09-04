@@ -56,7 +56,7 @@ func _initialize() -> void:
 		quit(1)
 		return
 	_output_path = args[1]
-	if Gen2ToolPath.refuses(_output_path):
+	if PokeToolPath.refuses(_output_path):
 		quit(2)
 		return
 	_move = CATCH_MOVE if args[2] == "catch" else int(args[2])
@@ -129,7 +129,7 @@ func _process(_delta: float) -> bool:
 	if _frames < SETTLE_FRAMES + DRAW_FRAMES:
 		return false
 
-	var image: Image = Gen2ToolPath.capture(root)
+	var image: Image = PokeToolPath.capture(root)
 	if image == null:
 		quit(1)
 		return true
@@ -175,7 +175,7 @@ func _shoot_range() -> bool:
 		# this driver's frames, and an uncomposited one hands back the last
 		# picture that was: a whole capture can come out as one frame repeated.
 		# Drawing on demand is what makes a run of this tool reproducible.
-		var image: Image = Gen2ToolPath.capture(root)
+		var image: Image = PokeToolPath.capture(root)
 		if image == null:
 			quit(1)
 			return true

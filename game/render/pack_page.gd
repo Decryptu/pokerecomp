@@ -14,8 +14,8 @@ const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20
 const ROWS: int = 18
 
-const SHEET_TILES: int = RomLayout.PACK_MENU_TILES
-const PACK_FIRST_TILE: int = RomLayout.PACK_FIRST_TILE
+const SHEET_TILES: int = Gen2Layout.PACK_MENU_TILES
+const PACK_FIRST_TILE: int = Gen2Layout.PACK_FIRST_TILE
 const BLANK_TILE: int = 0x7F
 
 ## `Pack_InitGFX`'s own three writes: the field `ByteFill`ed over rows 1 to 11,
@@ -175,7 +175,7 @@ func pocket_map(
 		@warning_ignore("integer_division")
 		_put(
 			map,
-			NAME_AT + Vector2i(cell % RomLayout.PACK_NAME_COLUMNS, cell / RomLayout.PACK_NAME_COLUMNS),
+			NAME_AT + Vector2i(cell % Gen2Layout.PACK_NAME_COLUMNS, cell / Gen2Layout.PACK_NAME_COLUMNS),
 			pocket_name[cell]
 		)
 	_draw_textbox(map, description)
@@ -243,21 +243,21 @@ func _draw_textbox(map: PackedInt32Array, text: String) -> void:
 ## tiles including the frame. Every box the pack opens over its own screen is one
 ## of these, so the arithmetic lives here once.
 func draw_frame(map: PackedInt32Array, at: Vector2i, size: Vector2i) -> void:
-	var first: int = RomLayout.FRAME_FIRST_CODE
+	var first: int = Gen2Layout.FRAME_FIRST_CODE
 	var right: int = at.x + size.x - 1
 	var bottom: int = at.y + size.y - 1
 	for column: int in range(at.x + 1, right):
-		_put(map, Vector2i(column, at.y), first + RomLayout.FRAME_HORIZONTAL)
-		_put(map, Vector2i(column, bottom), first + RomLayout.FRAME_HORIZONTAL)
+		_put(map, Vector2i(column, at.y), first + Gen2Layout.FRAME_HORIZONTAL)
+		_put(map, Vector2i(column, bottom), first + Gen2Layout.FRAME_HORIZONTAL)
 	for row: int in range(at.y + 1, bottom):
-		_put(map, Vector2i(at.x, row), first + RomLayout.FRAME_VERTICAL)
-		_put(map, Vector2i(right, row), first + RomLayout.FRAME_VERTICAL)
+		_put(map, Vector2i(at.x, row), first + Gen2Layout.FRAME_VERTICAL)
+		_put(map, Vector2i(right, row), first + Gen2Layout.FRAME_VERTICAL)
 		for column: int in range(at.x + 1, right):
 			_put(map, Vector2i(column, row), BLANK_TILE)
-	_put(map, at, first + RomLayout.FRAME_TOP_LEFT)
-	_put(map, Vector2i(right, at.y), first + RomLayout.FRAME_TOP_RIGHT)
-	_put(map, Vector2i(at.x, bottom), first + RomLayout.FRAME_BOTTOM_LEFT)
-	_put(map, Vector2i(right, bottom), first + RomLayout.FRAME_BOTTOM_RIGHT)
+	_put(map, at, first + Gen2Layout.FRAME_TOP_LEFT)
+	_put(map, Vector2i(right, at.y), first + Gen2Layout.FRAME_TOP_RIGHT)
+	_put(map, Vector2i(at.x, bottom), first + Gen2Layout.FRAME_BOTTOM_LEFT)
+	_put(map, Vector2i(right, bottom), first + Gen2Layout.FRAME_BOTTOM_RIGHT)
 
 
 ## `MenuBox` and `PlaceVerticalMenuItems`: one of the pack's `MENU_BACKUP_TILES`
@@ -317,12 +317,12 @@ func image(
 	var indices: PackedByteArray = compose(map, pocket, female)
 	var slots: PackedInt32Array = attributes()
 	var palettes: Array = []
-	for slot: int in RomLayout.PACK_PALETTES:
+	for slot: int in Gen2Layout.PACK_PALETTES:
 		var colors: PackedColorArray = data.pack_palette(slot, female)
 		if colors.is_empty():
 			colors = data.pack_palette(slot)
 		palettes.append(colors if not colors.is_empty() \
-			else Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK])))
+			else PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK])))
 	return Gen2PicImage.from_attributes(
 		indices, Gen2Screen.WIDTH, Gen2Screen.HEIGHT, slots, COLUMNS, palettes
 	)
@@ -341,23 +341,23 @@ func compose(
 		and not _pockets_female.is_empty() else _pockets
 	@warning_ignore("integer_division")
 	var strip_tiles: int = strip.size() / TILE
-	var picture: int = RomLayout.PACK_POCKET_PICTURES[
-		clampi(pocket, 0, RomLayout.PACK_POCKETS - 1)
-	] * RomLayout.PACK_POCKET_TILES
+	var picture: int = Gen2Layout.PACK_POCKET_PICTURES[
+		clampi(pocket, 0, Gen2Layout.PACK_POCKETS - 1)
+	] * Gen2Layout.PACK_POCKET_TILES
 	for row: int in ROWS:
 		for column: int in COLUMNS:
 			var tile: int = map[row * COLUMNS + column]
 			var at := Vector2i(column * TILE, row * TILE)
 			if tile >= PACK_FIRST_TILE \
-				and tile < PACK_FIRST_TILE + RomLayout.PACK_POCKET_TILES:
+				and tile < PACK_FIRST_TILE + Gen2Layout.PACK_POCKET_TILES:
 				Gen2Font.blit_slot(
 					strip, strip_tiles, picture + tile - PACK_FIRST_TILE,
 					indices, width, at.x, at.y
 				)
 			elif _tiles.has(tile):
 				_blit(indices, width, _tiles[tile], at)
-			elif tile >= RomLayout.FRAME_FIRST_CODE \
-				and tile < RomLayout.FRAME_FIRST_CODE + RomLayout.FRAME_TILES:
+			elif tile >= Gen2Layout.FRAME_FIRST_CODE \
+				and tile < Gen2Layout.FRAME_FIRST_CODE + Gen2Layout.FRAME_TILES:
 				font.draw_frame_code(frame_style, tile, indices, width, at.x, at.y)
 			elif tile != BLANK_TILE:
 				font.draw_code(tile, indices, width, at.x, at.y, Gen2Text.FONT_MAIN)

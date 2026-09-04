@@ -5,7 +5,7 @@ extends RefCounted
 ##
 ## [method update_sound] is one `_UpdateSound`, which the cartridge runs once per
 ## LCD frame: it parses each of the eight channel streams and writes the hardware
-## registers, and [Gen2Apu] turns those writes into samples. Vibrato, pitch
+## registers, and [PokeApu] turns those writes into samples. Vibrato, pitch
 ## slides, the rotating duty pattern, envelopes, noise and sfx stealing music
 ## channels are all the driver's own state machine at its own rate.
 
@@ -186,7 +186,7 @@ class Channel:
 		vibrato_override = false
 
 
-var apu: Gen2Apu = null
+var apu: PokeApu = null
 
 var channels: Array[Channel] = []
 var music_playing: bool = false
@@ -237,8 +237,8 @@ var _drumkits: PackedByteArray = PackedByteArray()
 var _drumkits_address: int = 0
 
 
-func _init(shared_apu: Gen2Apu = null) -> void:
-	apu = shared_apu if shared_apu != null else Gen2Apu.new()
+func _init(shared_apu: PokeApu = null) -> void:
+	apu = shared_apu if shared_apu != null else PokeApu.new()
 	channels.resize(NUM_CHANNELS)
 	for index: int in NUM_CHANNELS:
 		channels[index] = Channel.new()

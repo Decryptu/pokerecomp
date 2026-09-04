@@ -121,24 +121,24 @@ func _verify_section(game_id: StringName, data: GameData) -> void:
 	var rom: RomFile = RomFile.open_verified("res://roms/%s.gbc" % game_id)
 	if not _r.check(rom != null, "%s: roms/%s.gbc is unreadable." % [game_id, game_id]):
 		return
-	var section: Dictionary = RomImporter.read_slots_section(rom, RomLayout.for_id(rom.id))
+	var section: Dictionary = RomImporter.read_slots_section(rom, Gen2Layout.for_id(rom.id))
 	if not _r.check(
-		section.size() == RomLayout.SLOTS_SECTION.size(),
+		section.size() == Gen2Layout.SLOTS_SECTION.size(),
 		"%s: the slots section walked %d records, not %d." % [
-			game_id, section.size(), RomLayout.SLOTS_SECTION.size()
+			game_id, section.size(), Gen2Layout.SLOTS_SECTION.size()
 		]
 	):
 		return
 	for name: String in SECTION:
 		var tiles: int = int(SECTION[name])
 		_r.check(
-			int(section[name].size()) == tiles * Gen2Tiles.TILE_BYTES,
+			int(section[name].size()) == tiles * PokeTiles.TILE_BYTES,
 			"%s: %s is %d bytes, not %d tiles." % [
 				game_id, name, section[name].size(), tiles
 			]
 		)
 		_r.check(
-			data.slots_indices(name) == Gen2Tiles.decode_2bpp_strip(
+			data.slots_indices(name) == PokeTiles.decode_2bpp_strip(
 				section[name], 0, tiles
 			),
 			"%s: the cached %s strip is not the dump's." % [game_id, name]
@@ -159,9 +159,9 @@ func _verify_strips(game_id: StringName, data: GameData) -> void:
 			Array(data.slots_reel(reel)) == REELS[reel],
 			"%s: reel %d is not `Reel%dTilemap`." % [game_id, reel + 1, reel + 1]
 		)
-	for index: int in RomLayout.SLOTS_PALETTES:
+	for index: int in Gen2Layout.SLOTS_PALETTES:
 		_r.check(
-			data.slots_palette(index).size() == RomLayout.PREDEF_PALETTE_COLORS,
+			data.slots_palette(index).size() == Gen2Layout.PREDEF_PALETTE_COLORS,
 			"%s: palette %d is not four colours." % [game_id, index]
 		)
 	var page: Gen2SlotMachinePage = Gen2SlotMachinePage.from_data(data)
@@ -182,7 +182,7 @@ func _verify_strips(game_id: StringName, data: GameData) -> void:
 
 ## The seven boxes, each of which has to have decoded out of a `text_far` stub.
 func _verify_text(game_id: StringName, data: GameData) -> void:
-	for name: String in RomLayout.slots_text_names():
+	for name: String in Gen2Layout.slots_text_names():
 		_r.check(
 			not data.slots_text(name).is_empty(),
 			"%s: the %s box is empty." % [game_id, name]

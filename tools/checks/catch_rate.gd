@@ -5,7 +5,7 @@ var _r: RefCounted = null
 ## `wFinalCatchRate` on all three cartridges, against what the cartridges
 ## themselves answered. `PokeBallEffect` settles the whole catch rate before it
 ## rolls, so the answer is a pure function of eleven bytes and can be asked of a
-## real dump directly; `.claude/oracle/battle/catch_rate.py` prints one line per
+## real dump directly; running the same rolls on hardware prints one line per
 ## case and this topic builds the same 4,779 here. The sweep is the whole corpus:
 ## every species against every ball, every byte boundary of the health term against
 ## every status bit, and Level Ball's whole ladder. What is pinned is the digest
@@ -90,7 +90,7 @@ const PINNED: Array = [
 
 ## `docs/bugs_and_glitches.md`'s three wrong-bank species, whose Heavy Ball
 ## answer differs between the profiles. SUNFLORA is not here: the cartridge does
-## not answer at all (see `HANDOFF.md`).
+## not answer at all.
 const PINNED_CRYSTAL: Array = [
 	[[0x9D, 64, 100, 100, 100, 0, 10, 50, 0], 40],
 	[[0x9D, 128, 100, 100, 100, 0, 10, 50, 0], 46],
@@ -134,7 +134,7 @@ func run(r: RefCounted) -> void:
 ## corpus rather than the rows above.
 func _verify_sweep(game_id: StringName, data: GameData) -> void:
 	var lines: PackedStringArray = PackedStringArray()
-	for species: int in range(1, RomLayout.SPECIES_COUNT + 1):
+	for species: int in range(1, Gen2Layout.SPECIES_COUNT + 1):
 		for ball: int in BALLS:
 			lines.append(_line(data, [ball, species, 100, 100, 100, 0, 10, 50, 0]))
 			if ball == 0xA0:

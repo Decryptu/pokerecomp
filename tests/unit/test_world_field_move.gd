@@ -98,11 +98,11 @@ const ESCAPE_KABUTO_DOOR: Vector2i = Vector2i(1, 3)
 var _directory: String = ""
 
 
-## `TMHMMoves`' real shape, so `RomLayout.tmhm_number_for_item` addresses the HM
+## `TMHMMoves`' real shape, so `Gen2Layout.tmhm_number_for_item` addresses the HM
 ## rows where the cartridge does. The seven HM moves are written in
 ## [constant Gen2WorldFieldMove.HM_FIELD_MOVES] order at HM01 onward.
-const TMHM_TM_COUNT: int = RomLayout.TMHM_TM_COUNT
-const TMHM_ENTRIES: int = TMHM_TM_COUNT + RomLayout.TMHM_HM_COUNT + 3
+const TMHM_TM_COUNT: int = Gen2Layout.TMHM_TM_COUNT
+const TMHM_ENTRIES: int = TMHM_TM_COUNT + Gen2Layout.TMHM_HM_COUNT + 3
 
 
 func before_each() -> void:
@@ -166,7 +166,7 @@ func _write_cache() -> void:
 	})
 
 	var pixels := PackedByteArray()
-	pixels.resize(RomLayout.TILESET_TILE_COUNT * Gen2Tiles.TILE_PIXELS)
+	pixels.resize(Gen2Layout.TILESET_TILE_COUNT * PokeTiles.TILE_PIXELS)
 	for index: int in pixels.size():
 		pixels[index] = index % 4
 	for number: int in [TILESET_CUTTABLE, TILESET_NO_ENTRY, TILESET_POKECENTER]:
@@ -266,7 +266,7 @@ func _tileset(number: int) -> Dictionary:
 	return {
 		"number": number,
 		"block_count": BLOCK_COUNT,
-		"tile_count": RomLayout.TILESET_TILE_COUNT,
+		"tile_count": Gen2Layout.TILESET_TILE_COUNT,
 		"meta": meta,
 		"collision": collision,
 	}
@@ -1601,7 +1601,7 @@ func test_walking_into_a_pokemon_centre_records_the_spawn() -> void:
 
 func test_a_blackout_with_no_pokemon_centre_behind_it_falls_back_to_home() -> void:
 	# `GetWhiteoutSpawn`'s own `xor a`: a game that has entered none goes home.
-	assert_eq(_escape_world().whiteout_spawn(), RomLayout.SPAWN_HOME)
+	assert_eq(_escape_world().whiteout_spawn(), Gen2Layout.SPAWN_HOME)
 
 
 func test_dig_takes_the_warp_the_cave_was_entered_by() -> void:
@@ -1950,7 +1950,7 @@ func test_the_visited_flypoints_are_the_engine_flags_of_their_own_spawns() -> vo
 ## `Gen2WorldFieldMove.HM_FIELD_MOVES` order, so the fixture's HM rows and the
 ## item numbers below agree without a second table.
 func _hm_item(move: int) -> int:
-	return RomLayout.item_for_tmhm_number(
+	return Gen2Layout.item_for_tmhm_number(
 		TMHM_TM_COUNT + Gen2WorldFieldMove.HM_FIELD_MOVES.find(move) + 1, TMHM_ENTRIES
 	)
 

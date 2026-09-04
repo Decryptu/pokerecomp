@@ -138,14 +138,14 @@ func text_lines() -> PackedStringArray:
 ## `.WaitFrames_CheckPressedB` reads `hJoyDown`, which is the button being HELD
 ## rather than a fresh press, and only inside the flash loop.
 func handle_button(button: int) -> bool:
-	if button == Gen2Button.B:
+	if button == PokeButton.B:
 		_b_held = true
 		return true
-	if button == Gen2Button.A and _text_box != null and _text_box.visible \
+	if button == PokeButton.A and _text_box != null and _text_box.visible \
 		and (_text_box.is_revealing() or _text_box.has_pages_left()):
 		_text_box.advance()
 		return true
-	if button == Gen2Button.A and _phase == Phase.CANCELED:
+	if button == PokeButton.A and _phase == Phase.CANCELED:
 		_finish_plan()
 		return true
 	return false

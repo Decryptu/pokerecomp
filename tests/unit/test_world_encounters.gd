@@ -8,7 +8,7 @@ func test_grass_uses_the_selected_time_of_day_slots() -> void:
 	var morning: Array = []
 	var day: Array = []
 	var night: Array = []
-	for _slot: int in RomLayout.WILD_GRASS_SLOT_COUNT:
+	for _slot: int in Gen2Layout.WILD_GRASS_SLOT_COUNT:
 		morning.append({"level": 3, "species": 16})
 		day.append({"level": 7, "species": 19})
 		night.append({"level": 9, "species": 25})
@@ -86,7 +86,7 @@ func test_swarm_source_and_repel_are_resolved_after_the_candidate_roll() -> void
 	var morning: Array = []
 	var day: Array = []
 	var night: Array = []
-	for _slot: int in RomLayout.WILD_GRASS_SLOT_COUNT:
+	for _slot: int in Gen2Layout.WILD_GRASS_SLOT_COUNT:
 		morning.append({"level": 4, "species": 16})
 		day.append({"level": 4, "species": 16})
 		night.append({"level": 4, "species": 16})
@@ -118,7 +118,7 @@ func test_swarm_source_and_repel_are_resolved_after_the_candidate_roll() -> void
 ## both `sla b`/`srl b` on the rate byte: a rate of 200 doubled is 144, not 255.
 func test_the_rate_is_shifted_by_the_map_music_and_by_a_cleanse_tag() -> void:
 	var slots: Array = []
-	for _slot: int in RomLayout.WILD_GRASS_SLOT_COUNT:
+	for _slot: int in Gen2Layout.WILD_GRASS_SLOT_COUNT:
 		slots.append({"level": 4, "species": 16})
 	var record: Dictionary = {"rates": [200, 200, 200], "slots": [slots, slots, slots]}
 	var cases: Array = [
@@ -140,9 +140,9 @@ func test_the_rate_is_shifted_by_the_map_music_and_by_a_cleanse_tag() -> void:
 
 func test_roaming_selection_uses_the_land_roll_before_normal_slots() -> void:
 	var slots: Array = []
-	for _time_of_day: int in RomLayout.WILD_TIME_COUNT:
+	for _time_of_day: int in Gen2Layout.WILD_TIME_COUNT:
 		var day_slots: Array = []
-		for _slot: int in RomLayout.WILD_GRASS_SLOT_COUNT:
+		for _slot: int in Gen2Layout.WILD_GRASS_SLOT_COUNT:
 			day_slots.append({"level": 5, "species": 16})
 		slots.append(day_slots)
 	var record: Dictionary = {
@@ -174,9 +174,9 @@ func test_roaming_selection_uses_the_land_roll_before_normal_slots() -> void:
 ## carries no species and is never selected.
 func test_a_roaming_encounter_carries_the_struct_the_last_fight_left() -> void:
 	var slots: Array = []
-	for _time_of_day: int in RomLayout.WILD_TIME_COUNT:
+	for _time_of_day: int in Gen2Layout.WILD_TIME_COUNT:
 		var day_slots: Array = []
-		for _slot: int in RomLayout.WILD_GRASS_SLOT_COUNT:
+		for _slot: int in Gen2Layout.WILD_GRASS_SLOT_COUNT:
 			day_slots.append({"level": 5, "species": 16})
 		slots.append(day_slots)
 	var record: Dictionary = {"rates": [255, 255, 255], "slots": slots}
@@ -224,8 +224,8 @@ func _first_roaming_encounter(record: Dictionary, mons: Array) -> Dictionary:
 
 
 func test_layout_exposes_swarm_fishing_and_roaming_tables() -> void:
-	var gold: Dictionary = RomLayout.for_id(RomRegistry.GOLD)
-	var crystal: Dictionary = RomLayout.for_id(RomRegistry.CRYSTAL)
+	var gold: Dictionary = Gen2Layout.for_id(RomRegistry.GOLD)
+	var crystal: Dictionary = Gen2Layout.for_id(RomRegistry.CRYSTAL)
 	assert_eq(gold["wild_encounters"]["swarm_grass_count"], 4)
 	assert_eq(gold["wild_encounters"]["swarm_water_count"], 1)
 	assert_eq(gold["wild_encounters"]["fish_groups"], 0x929F7)
@@ -235,8 +235,8 @@ func test_layout_exposes_swarm_fishing_and_roaming_tables() -> void:
 
 
 func test_layout_exposes_verified_normal_encounter_tables() -> void:
-	var gold: Dictionary = RomLayout.for_id(RomRegistry.GOLD)
-	var crystal: Dictionary = RomLayout.for_id(RomRegistry.CRYSTAL)
+	var gold: Dictionary = Gen2Layout.for_id(RomRegistry.GOLD)
+	var crystal: Dictionary = Gen2Layout.for_id(RomRegistry.CRYSTAL)
 	assert_eq(gold["wild_encounters"]["grass_johto"], 0x2AB35)
 	assert_eq(gold["wild_encounters"]["water_kanto_count"], 24)
 	assert_eq(crystal["wild_encounters"]["grass_johto"], 0x2A5E9)
@@ -254,8 +254,8 @@ const TREEMON_SET_ROCK: int = 7
 
 
 func test_layout_exposes_verified_treemon_tables() -> void:
-	var gold: Dictionary = RomLayout.for_id(RomRegistry.GOLD)
-	var crystal: Dictionary = RomLayout.for_id(RomRegistry.CRYSTAL)
+	var gold: Dictionary = Gen2Layout.for_id(RomRegistry.GOLD)
+	var crystal: Dictionary = Gen2Layout.for_id(RomRegistry.CRYSTAL)
 	assert_eq(crystal["wild_encounters"]["tree_maps"], 0xB825E)
 	assert_eq(crystal["wild_encounters"]["rock_maps"], 0xB82C5)
 	assert_eq(crystal["wild_encounters"]["treemon_sets"], 0xB82E8)
@@ -271,8 +271,8 @@ func test_layout_exposes_verified_treemon_tables() -> void:
 
 func test_treemon_tables_parse_maps_sets_and_the_asleep_lists() -> void:
 	var result: Dictionary = Gen2WorldEncounterImporter.read_treemons(
-		_treemon_rom(), RomLayout.for_id(RomRegistry.CRYSTAL),
-		RomLayout.for_id(RomRegistry.CRYSTAL)["wild_encounters"]
+		_treemon_rom(), Gen2Layout.for_id(RomRegistry.CRYSTAL),
+		Gen2Layout.for_id(RomRegistry.CRYSTAL)["wild_encounters"]
 	)
 	assert_true(bool(result.get("ok", false)), String(result.get("message", "")))
 	assert_eq(int(result["tree_maps"]), 34)
@@ -294,8 +294,8 @@ func test_treemon_tables_parse_maps_sets_and_the_asleep_lists() -> void:
 ## and its trailing unused entry both point at CANYON's bytes.
 func test_aliased_set_pointers_read_as_the_same_table() -> void:
 	var treemons: Dictionary = Gen2WorldEncounterImporter.read_treemons(
-		_treemon_rom(), RomLayout.for_id(RomRegistry.CRYSTAL),
-		RomLayout.for_id(RomRegistry.CRYSTAL)["wild_encounters"]
+		_treemon_rom(), Gen2Layout.for_id(RomRegistry.CRYSTAL),
+		Gen2Layout.for_id(RomRegistry.CRYSTAL)["wild_encounters"]
 	)["treemons"]
 	var sets: Array = treemons["sets"]
 	assert_eq(sets[0], sets[1], "NONE aliases CANYON")
@@ -307,8 +307,8 @@ func test_aliased_set_pointers_read_as_the_same_table() -> void:
 ## back empty rather than as garbage.
 func test_a_set_with_no_rare_table_reads_an_empty_rare_half() -> void:
 	var treemons: Dictionary = Gen2WorldEncounterImporter.read_treemons(
-		_treemon_rom(), RomLayout.for_id(RomRegistry.CRYSTAL),
-		RomLayout.for_id(RomRegistry.CRYSTAL)["wild_encounters"]
+		_treemon_rom(), Gen2Layout.for_id(RomRegistry.CRYSTAL),
+		Gen2Layout.for_id(RomRegistry.CRYSTAL)["wild_encounters"]
 	)["treemons"]
 	var rock: Dictionary = (treemons["sets"] as Array)[TREEMON_SET_ROCK]
 	assert_eq((rock["common"] as Array).size(), 2)
@@ -322,8 +322,8 @@ func test_a_set_with_no_rare_table_reads_an_empty_rare_half() -> void:
 func test_a_treemon_map_table_without_its_sentinel_is_refused() -> void:
 	var rom: RomFile = _treemon_rom(false)
 	var result: Dictionary = Gen2WorldEncounterImporter.read_treemons(
-		rom, RomLayout.for_id(RomRegistry.CRYSTAL),
-		RomLayout.for_id(RomRegistry.CRYSTAL)["wild_encounters"]
+		rom, Gen2Layout.for_id(RomRegistry.CRYSTAL),
+		Gen2Layout.for_id(RomRegistry.CRYSTAL)["wild_encounters"]
 	)
 	assert_false(bool(result.get("ok", false)))
 	assert_string_contains(String(result["message"]), "exceeds its verified count")
@@ -334,7 +334,7 @@ func test_a_treemon_map_table_without_its_sentinel_is_refused() -> void:
 ## is terminator-driven, so a two-row table proves the same walk a six-row one
 ## would.
 func _treemon_rom(terminate_maps: bool = true) -> RomFile:
-	var layout: Dictionary = RomLayout.for_id(RomRegistry.CRYSTAL)["wild_encounters"]
+	var layout: Dictionary = Gen2Layout.for_id(RomRegistry.CRYSTAL)["wild_encounters"]
 	var bytes: PackedByteArray = PackedByteArray()
 	bytes.resize(0xC0000)
 	var tree_rows: Array = [[24, 1, 4]]

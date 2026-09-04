@@ -61,15 +61,14 @@ func _handle(path: String, verify_only: bool) -> bool:
 		"ok" if header.header_checksum == RomHeader.compute_header_checksum(rom) else "MISMATCH"
 	))
 
-	var check: Dictionary = RomImporter.verify_layout(rom)
+	var check: Dictionary = RomImport.verify_layout(rom)
 	print("    layout: %s" % check["message"])
 	if not check["ok"]:
 		return false
 	if verify_only:
 		return true
 
-	var importer := RomImporter.new()
-	var result: Dictionary = await importer.import_rom(rom, _report)
+	var result: Dictionary = await RomImport.import_rom(rom, _report)
 	print("    %s" % result["message"])
 	if result["ok"]:
 		print("    cache: %s" % ProjectSettings.globalize_path(result["directory"]))

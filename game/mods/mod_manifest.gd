@@ -1,4 +1,4 @@
-class_name Gen2ModManifest
+class_name PokeModManifest
 extends RefCounted
 
 ## One mod's declared identity, read from its `mod.json`. Parsing is separate from
@@ -31,10 +31,10 @@ var entry: String = ""
 var pack: String = ""
 var description: String = ""
 ## An optional icon beside the manifest, for the launcher's list. Empty means
-## the conventional names are tried instead; see [Gen2ModArt].
+## the conventional names are tried instead; see [PokeModArt].
 var icon: String = ""
 ## An optional 16:9 thumbnail beside the manifest, for a listing site. Nothing
-## in the game draws one; see [Gen2ModArt].
+## in the game draws one; see [PokeModArt].
 var thumbnail: String = ""
 ## Required mod ids to accepted semantic-version ranges.
 var dependencies: Dictionary = {}
@@ -71,7 +71,7 @@ static func read(folder: String) -> Dictionary:
 ## Validates an already-parsed manifest. Split out so a test, and a future pack
 ## reader, do not need a file on disk.
 static func from_dictionary(source: Dictionary, folder: String) -> Dictionary:
-	var manifest := Gen2ModManifest.new()
+	var manifest := PokeModManifest.new()
 	manifest.directory = folder
 	manifest.id = StringName(String(source.get("id", "")))
 	manifest.name = String(source.get("name", String(manifest.id)))
@@ -112,7 +112,7 @@ static func from_dictionary(source: Dictionary, folder: String) -> Dictionary:
 	return {"ok": true, "manifest": manifest}
 
 
-static func _check_names(manifest: Gen2ModManifest, regex: RegEx) -> Dictionary:
+static func _check_names(manifest: PokeModManifest, regex: RegEx) -> Dictionary:
 	if regex.search(String(manifest.id)) == null:
 		return _refuse(&"invalid_id", String(manifest.id))
 	if manifest.api_version < MIN_API_VERSION or manifest.api_version > API_VERSION:
@@ -120,21 +120,21 @@ static func _check_names(manifest: Gen2ModManifest, regex: RegEx) -> Dictionary:
 			&"unsupported_api_version",
 			"mod declares %d, host provides %d" % [manifest.api_version, API_VERSION]
 		)
-	if not Gen2ModVersion.valid_version(manifest.version):
+	if not PokeModVersion.valid_version(manifest.version):
 		return _refuse(&"invalid_mod_version", manifest.version)
 	for raw_id: Variant in manifest.dependencies:
 		var dependency_id: String = String(raw_id)
 		var wanted: String = String(manifest.dependencies[raw_id])
 		if regex.search(dependency_id) == null or dependency_id == String(manifest.id):
 			return _refuse(&"invalid_dependency", dependency_id)
-		if not Gen2ModVersion.valid_range(wanted):
+		if not PokeModVersion.valid_range(wanted):
 			return _refuse(&"invalid_dependency_range", "%s %s" % [dependency_id, wanted])
 	return {}
 
 
 ## An entry is a path inside the mod's own folder. Anything that climbs out of
 ## it, or reaches for an absolute location, is refused.
-static func _check_entry(manifest: Gen2ModManifest) -> Dictionary:
+static func _check_entry(manifest: PokeModManifest) -> Dictionary:
 	if manifest.entry.is_empty():
 		return _refuse(&"missing_entry", String(manifest.id))
 	if manifest.entry.begins_with("/") or manifest.entry.contains("..") \
@@ -149,7 +149,7 @@ static func _check_entry(manifest: Gen2ModManifest) -> Dictionary:
 
 ## A pack is a file beside the manifest, not a path: it is mounted rather than
 ## read, so there is nothing to gain by letting it point anywhere else.
-static func _check_pack(manifest: Gen2ModManifest) -> Dictionary:
+static func _check_pack(manifest: PokeModManifest) -> Dictionary:
 	if manifest.pack.is_empty():
 		return {}
 	if manifest.pack.begins_with("/") or manifest.pack.contains("..") \
@@ -162,7 +162,7 @@ static func _check_pack(manifest: Gen2ModManifest) -> Dictionary:
 
 ## Art is read from the mod directory rather than mounted or run, so the only
 ## rule is the entry's: a path that stays inside the mod's own folder.
-static func _check_art(manifest: Gen2ModManifest) -> Dictionary:
+static func _check_art(manifest: PokeModManifest) -> Dictionary:
 	for art: String in [manifest.icon, manifest.thumbnail]:
 		if art.is_empty():
 			continue
@@ -227,8 +227,8 @@ func summary() -> Dictionary:
 		"pack": pack,
 		"dependencies": dependencies.duplicate(),
 		"games": games.duplicate(),
-		"icon": Gen2ModArt.icon_path(self),
-		"thumbnail": Gen2ModArt.thumbnail_path(self),
+		"icon": PokeModArt.icon_path(self),
+		"thumbnail": PokeModArt.thumbnail_path(self),
 	}
 
 

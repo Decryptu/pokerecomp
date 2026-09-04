@@ -74,7 +74,7 @@ static func render(
 	if data == null:
 		return null
 	var sheet: PackedByteArray = data.tile_indices("map_entry_sign")
-	if sheet.size() < RomLayout.MAP_ENTRY_SIGN_TILES * TILE * TILE:
+	if sheet.size() < Gen2Layout.MAP_ENTRY_SIGN_TILES * TILE * TILE:
 		return null
 	var font: Gen2Font = Gen2Font.from_data(data)
 	if font == null:
@@ -82,11 +82,11 @@ static func render(
 	var slots: Array = Gen2WorldPalette.palette_slots(environment, time_of_day)
 	var palette: PackedColorArray = data.world_palette(int(slots[PAL_BG_TEXT]))
 	if palette.size() < 4:
-		palette = Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+		palette = PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	var width: int = COLUMNS * TILE
 	var indices := PackedByteArray()
 	indices.resize(width * ROWS * TILE)
-	var strip_width: int = RomLayout.MAP_ENTRY_SIGN_TILES * TILE
+	var strip_width: int = Gen2Layout.MAP_ENTRY_SIGN_TILES * TILE
 	for row: int in ROWS:
 		var tiles: Array[int] = _row_tiles(row)
 		for column: int in COLUMNS:
@@ -121,13 +121,13 @@ static func render_notice(
 	var slots: Array = Gen2WorldPalette.palette_slots(environment, time_of_day)
 	var palette: PackedColorArray = data.world_palette(int(slots[PAL_BG_TEXT]))
 	if palette.size() < 4:
-		palette = Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+		palette = PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	var width: int = COLUMNS * TILE
 	var indices := PackedByteArray()
 	indices.resize(width * ROWS * TILE)
 	var sheet: PackedByteArray = data.tile_indices("map_entry_sign")
-	if sheet.size() >= RomLayout.MAP_ENTRY_SIGN_TILES * TILE * TILE:
-		var strip_width: int = RomLayout.MAP_ENTRY_SIGN_TILES * TILE
+	if sheet.size() >= Gen2Layout.MAP_ENTRY_SIGN_TILES * TILE * TILE:
+		var strip_width: int = Gen2Layout.MAP_ENTRY_SIGN_TILES * TILE
 		for row: int in ROWS:
 			var tiles: Array[int] = _row_tiles(row)
 			for column: int in COLUMNS:
@@ -169,7 +169,7 @@ static func render_notice_icon(
 		if tiles.is_empty():
 			return null
 		@warning_ignore("integer_division")
-		var strip: int = tiles.size() / Gen2Tiles.TILE_PIXELS
+		var strip: int = tiles.size() / PokeTiles.TILE_PIXELS
 		var table: PackedInt32Array = Gen2PicImage.lookup(data.card_badge_palette())
 		var pixels: PackedInt32Array = Gen2PicImage.canvas(side, side)
 		for quadrant: int in 4:
@@ -228,13 +228,13 @@ static func _notice_tile_indices(value: Variant) -> PackedByteArray:
 		for entry: Variant in value as Array:
 			if entry is not int and entry is not float:
 				return PackedByteArray()
-			out.append(clampi(int(entry), 0, Gen2Tiles.INK))
+			out.append(clampi(int(entry), 0, PokeTiles.INK))
 	else:
 		return PackedByteArray()
 	if out.size() != side * side:
 		return PackedByteArray()
 	for index: int in out:
-		if index > Gen2Tiles.INK:
+		if index > PokeTiles.INK:
 			return PackedByteArray()
 	return out
 
@@ -249,16 +249,16 @@ const BADGE_ART_ROWS: int = 8
 static func _draw_text_frame(
 	font: Gen2Font, frame_style: int, indices: PackedByteArray, width: int
 ) -> void:
-	var first: int = RomLayout.FRAME_FIRST_CODE
+	var first: int = Gen2Layout.FRAME_FIRST_CODE
 	for column: int in COLUMNS:
-		var top: int = first + RomLayout.FRAME_HORIZONTAL
+		var top: int = first + Gen2Layout.FRAME_HORIZONTAL
 		var bottom: int = top
 		if column == 0:
-			top = first + RomLayout.FRAME_TOP_LEFT
-			bottom = first + RomLayout.FRAME_BOTTOM_LEFT
+			top = first + Gen2Layout.FRAME_TOP_LEFT
+			bottom = first + Gen2Layout.FRAME_BOTTOM_LEFT
 		elif column == COLUMNS - 1:
-			top = first + RomLayout.FRAME_TOP_RIGHT
-			bottom = first + RomLayout.FRAME_BOTTOM_RIGHT
+			top = first + Gen2Layout.FRAME_TOP_RIGHT
+			bottom = first + Gen2Layout.FRAME_BOTTOM_RIGHT
 		font.draw_frame_code(frame_style, top, indices, width, column * TILE, 0)
 		font.draw_frame_code(
 			frame_style, bottom, indices, width, column * TILE, (ROWS - 1) * TILE
@@ -266,7 +266,7 @@ static func _draw_text_frame(
 	for row: int in range(1, ROWS - 1):
 		for column: int in [0, COLUMNS - 1]:
 			font.draw_frame_code(
-				frame_style, first + RomLayout.FRAME_VERTICAL,
+				frame_style, first + Gen2Layout.FRAME_VERTICAL,
 				indices, width, column * TILE, row * TILE
 			)
 

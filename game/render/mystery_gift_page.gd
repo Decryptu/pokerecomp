@@ -251,7 +251,7 @@ static func _fill(
 
 
 func _blit(into: PackedByteArray, code: int, at: Vector2i) -> void:
-	if code >= RomLayout.FONT_FIRST_CODE or code >= _tile_count:
+	if code >= Gen2Layout.FONT_FIRST_CODE or code >= _tile_count:
 		font.draw_code(code, into, WIDTH, at.x * TILE, at.y * TILE)
 		return
 	Gen2Font.blit_slot(

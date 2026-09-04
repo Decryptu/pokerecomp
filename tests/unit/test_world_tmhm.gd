@@ -7,8 +7,8 @@ extends GutTest
 ## the rows the tests name carry meaningful moves; the rest are filler, which is
 ## enough because every routine here indexes rather than searches by content.
 
-const TM_COUNT: int = RomLayout.TMHM_TM_COUNT
-const HM_COUNT: int = RomLayout.TMHM_HM_COUNT
+const TM_COUNT: int = Gen2Layout.TMHM_TM_COUNT
+const HM_COUNT: int = Gen2Layout.TMHM_HM_COUNT
 const TUTOR_COUNT: int = 3
 const ENTRY_COUNT: int = TM_COUNT + HM_COUNT + TUTOR_COUNT
 
@@ -80,7 +80,7 @@ func _write_cache() -> void:
 
 func _species(number: int, learnable: Array) -> Dictionary:
 	var flags: Array = []
-	flags.resize(RomLayout.TMHM_BYTES)
+	flags.resize(Gen2Layout.TMHM_BYTES)
 	for index: int in flags.size():
 		flags[index] = 0
 	for tmnum: int in learnable:
@@ -104,25 +104,25 @@ func test_item_numbers_skip_the_two_dummy_items() -> void:
 		[0xF3, 51], [0xF6, 54], [0xF9, 57],  # HM01, HM04, HM07
 	]:
 		assert_eq(
-			RomLayout.tmhm_number_for_item(int(pair[0]), ENTRY_COUNT), int(pair[1]),
+			Gen2Layout.tmhm_number_for_item(int(pair[0]), ENTRY_COUNT), int(pair[1]),
 			"item $%02x" % int(pair[0])
 		)
 		assert_eq(
-			RomLayout.item_for_tmhm_number(int(pair[1]), ENTRY_COUNT), int(pair[0]),
+			Gen2Layout.item_for_tmhm_number(int(pair[1]), ENTRY_COUNT), int(pair[0]),
 			"number %d" % int(pair[1])
 		)
 	# Both dummies and everything below TM01 have no number of their own.
 	for item: int in [0x00, 0x01, 0xBE, 0xC3, 0xDC]:
 		assert_eq(
-			RomLayout.tmhm_number_for_item(item, ENTRY_COUNT), 0, "item $%02x" % item
+			Gen2Layout.tmhm_number_for_item(item, ENTRY_COUNT), 0, "item $%02x" % item
 		)
 	# Every number in range maps to exactly one item and back.
 	var seen: Dictionary = {}
 	for number: int in range(1, ENTRY_COUNT + 1):
-		var item: int = RomLayout.item_for_tmhm_number(number, ENTRY_COUNT)
+		var item: int = Gen2Layout.item_for_tmhm_number(number, ENTRY_COUNT)
 		assert_false(seen.has(item), "item $%02x claimed twice" % item)
 		seen[item] = true
-		assert_eq(RomLayout.tmhm_number_for_item(item, ENTRY_COUNT), number)
+		assert_eq(Gen2Layout.tmhm_number_for_item(item, ENTRY_COUNT), number)
 
 
 func test_is_tm_hm_and_is_hm_follow_the_source_thresholds() -> void:
@@ -134,7 +134,7 @@ func test_is_tm_hm_and_is_hm_follow_the_source_thresholds() -> void:
 	assert_true(Gen2WorldTMHM.is_hm(0xF9))
 	# The run ends where the byte does: a defined item past it is neither, where
 	# the unbounded `cp TM01` made every one of them both.
-	assert_true(Gen2WorldTMHM.is_tm_hm(RomLayout.ITEM_BYTE_MAX))
+	assert_true(Gen2WorldTMHM.is_tm_hm(Gen2Layout.ITEM_BYTE_MAX))
 	assert_false(Gen2WorldTMHM.is_tm_hm(Gen2ContentOverlay.FIRST_MOD_NUMBER))
 	assert_false(Gen2WorldTMHM.is_hm(Gen2ContentOverlay.FIRST_MOD_NUMBER))
 

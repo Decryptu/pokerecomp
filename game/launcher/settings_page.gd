@@ -167,10 +167,10 @@ func _build_look(pane: VBoxContainer) -> void:
 		_host
 	))
 	pane.add_child(Gen2LauncherUI.choice(
-		_theme, &"pad", "Controller letters", _titles(Gen2InputActions.PAD_LAYOUTS),
-		maxi(Gen2InputActions.PAD_LAYOUTS.find(_options.pad_layout), 0),
+		_theme, &"pad", "Controller letters", _titles(PokeInputActions.PAD_LAYOUTS),
+		maxi(PokeInputActions.PAD_LAYOUTS.find(_options.pad_layout), 0),
 		func(index: int) -> void:
-			_options.pad_layout = Gen2InputActions.PAD_LAYOUTS[index]
+			_options.pad_layout = PokeInputActions.PAD_LAYOUTS[index]
 			_persist()
 			Gen2InputRuntime.instance().apply_options(_options),
 		_host

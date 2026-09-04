@@ -66,10 +66,10 @@ func _check_game() -> void:
 	for species: int in range(FIRST_SPECIES, LAST_SPECIES + 1):
 		used[_r.data.mon_menu_icon(species)] = true
 	var lit: int = 0
-	for icon: int in range(1, RomLayout.MON_ICON_COUNT + 1):
+	for icon: int in range(1, Gen2Layout.MON_ICON_COUNT + 1):
 		var strip: PackedByteArray = _r.data.overworld_icon_indices(icon)
 		if not _r.check(
-			strip.size() == RomLayout.MON_ICON_TILES * Gen2Tiles.TILE_PIXELS,
+			strip.size() == Gen2Layout.MON_ICON_TILES * PokeTiles.TILE_PIXELS,
 			"icon %d decoded %d pixels." % [icon, strip.size()]
 		):
 			continue
@@ -80,9 +80,9 @@ func _check_game() -> void:
 		_r.check(drawn > 0, "icon %d is blank." % icon)
 		lit += drawn
 	_r.check(
-		used.size() == RomLayout.MON_ICON_COUNT - 1,
+		used.size() == Gen2Layout.MON_ICON_COUNT - 1,
 		"%d of the %d shapes are used; only ICON_EGG should be spare." % [
-			used.size(), RomLayout.MON_ICON_COUNT,
+			used.size(), Gen2Layout.MON_ICON_COUNT,
 		]
 	)
 
@@ -97,7 +97,7 @@ func _check_game() -> void:
 func _check_held_item_icons() -> void:
 	var held: PackedByteArray = _r.data.held_item_icon_indices()
 	_r.check(
-		held.size() == RomLayout.HELD_ITEM_ICON_TILES * Gen2Tiles.TILE_PIXELS,
+		held.size() == Gen2Layout.HELD_ITEM_ICON_TILES * PokeTiles.TILE_PIXELS,
 		"HeldItemIcons decoded %d pixels." % held.size()
 	)
 
@@ -109,7 +109,7 @@ func _check_held_item_icons() -> void:
 func _check_palette() -> void:
 	var colors: PackedColorArray = _r.data.party_menu_icon_palette()
 	if not _r.check(
-		colors.size() == Gen2Palette.COLORS_PER_PIC,
+		colors.size() == PokePalette.COLORS_PER_PIC,
 		"the icon palette holds %d colours." % colors.size()
 	):
 		return

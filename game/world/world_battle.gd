@@ -271,7 +271,7 @@ static func _roll_dvs(
 	generator: RandomNumberGenerator, species: int, unlocked_unowns: int,
 	values: Dictionary = {}
 ) -> int:
-	var gated: bool = species == RomLayout.UNOWN_SPECIES and unlocked_unowns > 0
+	var gated: bool = species == Gen2Layout.UNOWN_SPECIES and unlocked_unowns > 0
 	var mask: int = unlocked_unowns & ((1 << Gen2WorldState.UNOWN_LETTER_SETS.size()) - 1)
 	while true:
 		var word: int = (generator.randi_range(0, 255) << 8) | generator.randi_range(0, 255)

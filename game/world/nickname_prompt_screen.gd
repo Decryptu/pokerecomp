@@ -148,25 +148,25 @@ func handle_button(button: int) -> bool:
 			return _naming.handle_button(button) if _naming != null else false
 		Phase.ASK:
 			if _text_owes_frames():
-				if button == Gen2Button.A:
+				if button == PokeButton.A:
 					_text_box.advance()
 					_refresh_yes_no()
 					return true
 				return false
 			match button:
-				Gen2Button.UP, Gen2Button.DOWN:
+				PokeButton.UP, PokeButton.DOWN:
 					_yes = not _yes
 					_draw_yes_no()
 					return true
-				Gen2Button.A:
+				PokeButton.A:
 					_answer_question(_yes)
 					return true
-				Gen2Button.B:
+				PokeButton.B:
 					## `YesNoBox` answers B as NO, which is `.skip_nickname`.
 					_answer_question(false)
 					return true
 		Phase.AFTER_TEXT:
-			if button != Gen2Button.A:
+			if button != PokeButton.A:
 				return false
 			if _text_box != null and (_text_box.is_revealing() or _text_box.has_pages_left()):
 				_text_box.advance()

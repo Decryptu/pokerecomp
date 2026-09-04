@@ -74,7 +74,7 @@ func open(data: GameData, gender: int) -> bool:
 		return false
 	_text_palette = data.text_bg_palette()
 	if _text_palette.size() != 4:
-		_text_palette = Gen2Palette.pic_palette(
+		_text_palette = PokePalette.pic_palette(
 			PackedColorArray([Color.WHITE, Color.BLACK])
 		)
 	if is_inside_tree():
@@ -114,7 +114,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if _text_box != null:
-		_text_box.accelerated = Gen2Button.text_accelerating()
+		_text_box.accelerated = PokeButton.text_accelerating()
 	advance_frames(_frame_clock.tick(delta))
 
 
@@ -182,7 +182,7 @@ func handle_button(button: int) -> bool:
 		return _name_menu.handle_button(button)
 	if _naming != null:
 		return _naming.handle_button(button)
-	if button != Gen2Button.A:
+	if button != PokeButton.A:
 		return false
 	advance()
 	return true
@@ -534,9 +534,9 @@ func _start_audio() -> void:
 func _show_shrink_pic(which: int) -> void:
 	if _pic == null or _data == null:
 		return
-	var pic_name: String = RomLayout.SHRINK_PIC_NAMES[which]
+	var pic_name: String = Gen2Layout.SHRINK_PIC_NAMES[which]
 	var indices: PackedByteArray = _data.tile_indices(pic_name)
-	var side: int = RomLayout.SHRINK_PIC_COLUMNS * TILE
+	var side: int = Gen2Layout.SHRINK_PIC_COLUMNS * TILE
 	if indices.size() < side * side:
 		return
 	_pic_cell = {"indices": indices, "width": side, "height": side}

@@ -69,13 +69,13 @@ static func calculate_with(
 	link_battle: bool = false
 ) -> Dictionary:
 	var out: Dictionary = {
-		"damage": 0, "critical": critical, "effectiveness": RomLayout.MATCHUP_EFFECTIVE,
+		"damage": 0, "critical": critical, "effectiveness": Gen2Layout.MATCHUP_EFFECTIVE,
 		"stab": false, "immune": false,
 	}
 	if attacker == null or defender == null:
 		return out
 
-	var move_type: int = int(move.get("type", RomLayout.TYPE_NORMAL))
+	var move_type: int = int(move.get("type", Gen2Layout.TYPE_NORMAL))
 	var stats: Array = damage_stats(
 		attacker, defender, move_type, critical, defender_screens, link_battle
 	)
@@ -177,7 +177,7 @@ static func stab_damage(
 ) -> Dictionary:
 	var out: Dictionary = {
 		"damage": damage, "stab": false, "immune": false,
-		"effectiveness": RomLayout.MATCHUP_EFFECTIVE,
+		"effectiveness": Gen2Layout.MATCHUP_EFFECTIVE,
 	}
 	if attacker == null or defender == null:
 		return out
@@ -185,7 +185,7 @@ static func stab_damage(
 		return out
 
 	var data: GameData = attacker.data
-	var move_type: int = int(move.get("type", RomLayout.TYPE_NORMAL))
+	var move_type: int = int(move.get("type", Gen2Layout.TYPE_NORMAL))
 	var defending: Array = defender.types()
 	out["effectiveness"] = data.type_effectiveness(move_type, defending, foresight)
 
@@ -206,7 +206,7 @@ static func stab_damage(
 
 	for defending_type: int in data.ordered_defending_types(move_type, defending):
 		var multiplier: int = data.type_matchup(move_type, defending_type, foresight)
-		if multiplier == RomLayout.MATCHUP_NO_EFFECT:
+		if multiplier == Gen2Layout.MATCHUP_NO_EFFECT:
 			out["immune"] = true
 			out["damage"] = 0
 			return out
@@ -214,7 +214,7 @@ static func stab_damage(
 		# rounded away, and a powerless move stays at nothing regardless.
 		if worked > 0:
 			@warning_ignore("integer_division")
-			worked = maxi(worked * multiplier / RomLayout.MATCHUP_EFFECTIVE, 1)
+			worked = maxi(worked * multiplier / Gen2Layout.MATCHUP_EFFECTIVE, 1)
 
 	out["damage"] = worked
 	return out
@@ -309,7 +309,7 @@ static func confusion_damage(
 	return damage_calc(
 		mon, CONFUSION_POWER, int(truncated[0]), int(truncated[1]),
 		int(move.get("effect", -1)) == Gen2MoveEffect.SELFDESTRUCT,
-		int(move.get("type", RomLayout.TYPE_NORMAL))
+		int(move.get("type", Gen2Layout.TYPE_NORMAL))
 	)
 
 
@@ -404,10 +404,10 @@ static func hidden_power(dvs: int) -> Dictionary:
 
 	var move_type: int = (defense & 3) | ((attack & 3) << 2)
 	move_type += 1
-	if move_type >= RomLayout.TYPE_BIRD:
+	if move_type >= Gen2Layout.TYPE_BIRD:
 		move_type += 1
-	if move_type >= RomLayout.TYPE_UNUSED_START:
-		move_type += RomLayout.TYPE_UNUSED_END - RomLayout.TYPE_UNUSED_START
+	if move_type >= Gen2Layout.TYPE_UNUSED_START:
+		move_type += Gen2Layout.TYPE_UNUSED_END - Gen2Layout.TYPE_UNUSED_START
 	return {"type": move_type, "power": power}
 
 
@@ -462,9 +462,9 @@ static func psywave_damage(level: int, rng: RandomNumberGenerator) -> int:
 ## row instead, since there is no number to compare it against. Only such a
 ## number reaches the overlay, so a cartridge battle pays one comparison.
 static func is_physical(move_type: int) -> bool:
-	if move_type >= RomLayout.TYPE_COUNT:
+	if move_type >= Gen2Layout.TYPE_COUNT:
 		return Gen2ContentOverlay.shared().type_is_physical(move_type)
-	return move_type < RomLayout.SPECIAL_TYPES_START
+	return move_type < Gen2Layout.SPECIAL_TYPES_START
 
 
 ## `ThickClubBoost` on the physical branch and `LightBallBoost` on the special

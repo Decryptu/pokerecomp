@@ -9,7 +9,7 @@ extends RefCounted
 ## map and fly one bird over it. [Gen2TitleScene] owns the frames and the
 ## positions; this owns the pixels.
 
-const TILE: int = Gen2Tiles.TILE_WIDTH
+const TILE: int = PokeTiles.TILE_WIDTH
 const COLUMNS: int = 20
 const ROWS: int = 18
 ## The shadow-OAM origin [Gen2GameFreakPresentsPage] records.
@@ -18,8 +18,8 @@ const OAM_ORIGIN := Vector2i(8, 16)
 const SHADOW_OAM_SPRITES: int = 40
 ## `TILEMAP_WIDTH_PX`/`TILEMAP_HEIGHT_PX`: the BG map is 32 tiles square and
 ## wraps, and Crystal's `hSCY` of 8 is what makes the height matter.
-const MAP_WIDTH: int = RomLayout.TITLE_TILEMAP_COLUMNS * Gen2Tiles.TILE_WIDTH
-const MAP_HEIGHT: int = RomLayout.TITLE_TILEMAP_COLUMNS * Gen2Tiles.TILE_HEIGHT
+const MAP_WIDTH: int = Gen2Layout.TITLE_TILEMAP_COLUMNS * PokeTiles.TILE_WIDTH
+const MAP_HEIGHT: int = Gen2Layout.TITLE_TILEMAP_COLUMNS * PokeTiles.TILE_HEIGHT
 ## `set B_LCDC_OBJ_SIZE`: every object on this screen is two tiles tall.
 const OBJECT_HEIGHT: int = 2
 
@@ -259,7 +259,7 @@ func draw_backdrop(view: Vector2i, origin: Vector2i) -> Image:
 	# the picture.
 	var columns := PackedInt32Array()
 	columns.resize(width)
-	var band: int = RomLayout.TITLE_TILEMAP_COLUMNS - COLUMNS
+	var band: int = Gen2Layout.TITLE_TILEMAP_COLUMNS - COLUMNS
 	for x: int in width:
 		var offset: int = x - origin.x
 		@warning_ignore("integer_division")
@@ -458,8 +458,8 @@ func _draw_crystal_suicune(scene: Gen2TitleScene) -> void:
 ## into the BG, and one palette per band of rows.
 func _draw_gs_background() -> void:
 	for row: int in ROWS:
-		for column: int in RomLayout.TITLE_TILEMAP_COLUMNS:
-			var at: int = row * RomLayout.TITLE_TILEMAP_COLUMNS + column
+		for column: int in Gen2Layout.TITLE_TILEMAP_COLUMNS:
+			var at: int = row * Gen2Layout.TITLE_TILEMAP_COLUMNS + column
 			if at >= _tilemap.size():
 				continue
 			var code: int = _tilemap[at]

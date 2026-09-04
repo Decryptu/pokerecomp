@@ -67,7 +67,7 @@ const SECOND_SCREENS: Array[StringName] = [&"auto", &"window", &"off"]
 const UI_THEMES: Array[StringName] = [&"light", &"dark"]
 ## `auto` shows the on-screen controller while the player is using the
 ## touchscreen and hides it the moment they press a key or a pad. `never` is for
-## a phone with a controller attached; [Gen2TapGesture] is the way back from it.
+## a phone with a controller attached; [PokeTapGesture] is the way back from it.
 const TOUCH_AUTO: StringName = &"auto"
 const TOUCH_ALWAYS: StringName = &"always"
 const TOUCH_NEVER: StringName = &"never"
@@ -104,7 +104,7 @@ var max_fps: int = 0
 var second_screen: StringName = &"auto"
 var game_speed: StringName = &"normal"
 var ui_theme: StringName = &"light"
-## Button bindings, in the shape [Gen2InputActions] stores. Held as data rather
+## Button bindings, in the shape [PokeInputActions] stores. Held as data rather
 ## than as an [InputMap] state so the file is the whole scheme and nothing has
 ## to read the engine back to know what the player chose.
 ## What the engine does where this project and the cartridge disagree, and the
@@ -112,16 +112,16 @@ var ui_theme: StringName = &"light"
 ## installation: see [Gen2Rules] and [member Gen2SaveData.run_rules].
 var rules: Gen2Rules = Gen2Rules.new()
 
-var controls: Dictionary = Gen2InputActions.defaults()
+var controls: Dictionary = PokeInputActions.defaults()
 ## What the player bound a mod's own actions to, keyed by the [InputMap] action
 ## name rather than by a button. Separate from [member controls] because a mod's
 ## action is not one of the cartridge's eight and an uninstalled mod's leftover
 ## row should be visibly not one of them.
 var mod_controls: Dictionary = {}
-## See [method Gen2InputActions.resolve_pad_layout].
-var pad_layout: StringName = Gen2InputActions.PAD_LAYOUT_AUTO
+## See [method PokeInputActions.resolve_pad_layout].
+var pad_layout: StringName = PokeInputActions.PAD_LAYOUT_AUTO
 var touch_mode: StringName = TOUCH_AUTO
-var touch_layout: Gen2TouchLayout = Gen2TouchLayout.new()
+var touch_layout: PokeTouchLayout = PokeTouchLayout.new()
 ## Whether the player has answered the question the reset chord asks the first
 ## time it is used. An installation setting rather than a run's, because the
 ## chord belongs to the machine: see [method Gen2InputRuntime.reset_chord_held].
@@ -232,7 +232,7 @@ func to_dict() -> Dictionary:
 		"game_speed": String(game_speed),
 		"ui_theme": String(ui_theme),
 		"rules": rules.to_dict(),
-		"controls": Gen2InputActions.to_dict(controls),
+		"controls": PokeInputActions.to_dict(controls),
 		"mod_controls": mod_controls.duplicate(true),
 		"pad_layout": String(pad_layout),
 		"touch_mode": String(touch_mode),
@@ -275,11 +275,11 @@ static func parse(raw: Variant) -> Gen2Options:
 	options.max_fps = fps if FPS_CHOICES.has(fps) else 0
 	options.second_screen = _one_of(row.get("second_screen", ""), SECOND_SCREENS)
 	options.rules = Gen2Rules.parse(row.get("rules"))
-	options.controls = Gen2InputActions.sanitize(row.get("controls"))
-	options.mod_controls = Gen2InputActions.sanitize_mod_controls(row.get("mod_controls"))
-	options.pad_layout = _one_of(row.get("pad_layout", ""), Gen2InputActions.PAD_LAYOUTS)
+	options.controls = PokeInputActions.sanitize(row.get("controls"))
+	options.mod_controls = PokeInputActions.sanitize_mod_controls(row.get("mod_controls"))
+	options.pad_layout = _one_of(row.get("pad_layout", ""), PokeInputActions.PAD_LAYOUTS)
 	options.touch_mode = _one_of(row.get("touch_mode", ""), TOUCH_MODES)
-	options.touch_layout = Gen2TouchLayout.parse(row.get("touch_layout"))
+	options.touch_layout = PokeTouchLayout.parse(row.get("touch_layout"))
 	options.soft_reset_acknowledged = bool(row.get("soft_reset_acknowledged", false))
 	return options
 

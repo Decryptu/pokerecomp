@@ -31,32 +31,32 @@ func _write_cache(complete: bool = true) -> void:
 		{"number": 0, "name": "NORMAL"}, {"number": 1, "name": "FIGHTING"},
 	])
 	RomCache.write_json(RomCache.matchups_path(_directory), [
-		_matchup(0x14, 0x16, RomLayout.MATCHUP_SUPER_EFFECTIVE),
-		_matchup(0x17, 0x04, RomLayout.MATCHUP_NO_EFFECT),
-		_matchup(0x16, 0x16, RomLayout.MATCHUP_NOT_VERY_EFFECTIVE),
-		_matchup(0x16, 0x14, RomLayout.MATCHUP_NOT_VERY_EFFECTIVE),
-		_matchup(0x14, 0x09, RomLayout.MATCHUP_SUPER_EFFECTIVE),
-		_matchup(RomLayout.TYPE_NORMAL, RomLayout.TYPE_GHOST, RomLayout.MATCHUP_NO_EFFECT, true),
+		_matchup(0x14, 0x16, Gen2Layout.MATCHUP_SUPER_EFFECTIVE),
+		_matchup(0x17, 0x04, Gen2Layout.MATCHUP_NO_EFFECT),
+		_matchup(0x16, 0x16, Gen2Layout.MATCHUP_NOT_VERY_EFFECTIVE),
+		_matchup(0x16, 0x14, Gen2Layout.MATCHUP_NOT_VERY_EFFECTIVE),
+		_matchup(0x14, 0x09, Gen2Layout.MATCHUP_SUPER_EFFECTIVE),
+		_matchup(Gen2Layout.TYPE_NORMAL, Gen2Layout.TYPE_GHOST, Gen2Layout.MATCHUP_NO_EFFECT, true),
 	])
 	RomCache.write_json(RomCache.trainers_path(_directory), [
 		{
 			"number": 1, "name": "LEADER", "palette": [0x1234, 0x5678],
 			"attributes": {
 				"item1": 0, "item2": 0, "base_reward": 25,
-				"ai_move_weights": RomLayout.AI_BASIC | RomLayout.AI_STATUS,
-				"ai_item_switch": RomLayout.CONTEXT_USE | RomLayout.SWITCH_SOMETIMES,
+				"ai_move_weights": Gen2Layout.AI_BASIC | Gen2Layout.AI_STATUS,
+				"ai_item_switch": Gen2Layout.CONTEXT_USE | Gen2Layout.SWITCH_SOMETIMES,
 			},
 				"dvs": 0x9A77,
 			"trainers": [
 				{
-					"name": "FALKNER", "type": RomLayout.TRAINER_MON_NORMAL,
+					"name": "FALKNER", "type": Gen2Layout.TRAINER_MON_NORMAL,
 					"party": [
 						{"level": 7, "species": 1, "item": 0, "moves": []},
 						{"level": 9, "species": 2, "item": 0, "moves": []},
 					],
 				},
 				{
-					"name": "PICKY", "type": RomLayout.TRAINER_MON_ITEM_MOVES,
+					"name": "PICKY", "type": Gen2Layout.TRAINER_MON_ITEM_MOVES,
 					"party": [{"level": 20, "species": 1, "item": 5, "moves": [1, 0, 0, 0]}],
 				},
 			],
@@ -147,15 +147,15 @@ func _write_battle_anims() -> void:
 ## cartridge's own colours back unchanged.
 func _battle_object_palettes() -> Dictionary:
 	var out: Dictionary = {}
-	for index: int in RomLayout.BATTLE_OBJECT_PALETTES_STORED:
-		out[RomLayout.BATTLE_OBJECT_PALETTE_NAMES[index]] = \
-			RomLayout.BATTLE_OBJECT_PALETTES[index]
+	for index: int in Gen2Layout.BATTLE_OBJECT_PALETTES_STORED:
+		out[Gen2Layout.BATTLE_OBJECT_PALETTE_NAMES[index]] = \
+			Gen2Layout.BATTLE_OBJECT_PALETTES[index]
 	return out
 
 
 func _blank_tile() -> PackedByteArray:
 	var out := PackedByteArray()
-	out.resize(Gen2Tiles.TILE_PIXELS)
+	out.resize(PokeTiles.TILE_PIXELS)
 	return out
 
 
@@ -163,8 +163,8 @@ func _blank_tile() -> PackedByteArray:
 ## differ only in direction, which is enough to tell them apart.
 func _dex_order(forward: bool) -> Array:
 	var out: Array = []
-	for number: int in range(1, RomLayout.SPECIES_COUNT + 1):
-		out.append(number if forward else RomLayout.SPECIES_COUNT + 1 - number)
+	for number: int in range(1, Gen2Layout.SPECIES_COUNT + 1):
+		out.append(number if forward else Gen2Layout.SPECIES_COUNT + 1 - number)
 	return out
 
 
@@ -189,7 +189,7 @@ func _species(number: int, row_name: String, normal: int, shiny: int) -> Diction
 		"palette": {"normal": [normal, normal], "shiny": [shiny, shiny]},
 		# Both halves of one cartridge table, cached on the species that owns them.
 		"evolutions": [] if number != 1 else [{
-			"method": RomLayout.EVOLVE_LEVEL, "parameter": 16, "condition": 0, "target": 2,
+			"method": Gen2Layout.EVOLVE_LEVEL, "parameter": 16, "condition": 0, "target": 2,
 		}],
 		"learnset": [{"level": 1, "move": 33}, {"level": 4, "move": 45}],
 		"dex": {
@@ -343,7 +343,7 @@ func test_only_the_rows_with_graphics_carry_a_sheet() -> void:
 	assert_eq(data.battle_anim_gfx(1), {
 		"tiles": 1, "bank": 0x21, "address": 0x4A2E, "sheet": true,
 	})
-	assert_eq(data.battle_anim_gfx_indices(1).size(), Gen2Tiles.TILE_PIXELS)
+	assert_eq(data.battle_anim_gfx_indices(1).size(), PokeTiles.TILE_PIXELS)
 	assert_true(data.battle_anim_gfx(2).is_empty())
 
 
@@ -354,11 +354,11 @@ func test_the_first_two_object_palettes_come_from_the_battlers() -> void:
 	var data: GameData = GameData.open_directory(_directory)
 	var enemy: Array = [0x1234, 0x5678]
 	var player: Array = [0x0C63, 0x1084]
-	assert_eq(data.battle_object_palette(0, enemy, player)[1], Gen2Palette.from_packed(0x1234))
-	assert_eq(data.battle_object_palette(1, enemy, player)[1], Gen2Palette.from_packed(0x0C63))
+	assert_eq(data.battle_object_palette(0, enemy, player)[1], PokePalette.from_packed(0x1234))
+	assert_eq(data.battle_object_palette(1, enemy, player)[1], PokePalette.from_packed(0x0C63))
 	# Without a pair there is nothing to draw with, so it falls back rather than
 	# reading the table's first row and colouring the mon wrong.
-	assert_eq(data.battle_object_palette(0), Gen2Palette.pic_palette(
+	assert_eq(data.battle_object_palette(0), PokePalette.pic_palette(
 		PackedColorArray([Color.WHITE, Color.BLACK])
 	))
 
@@ -367,14 +367,14 @@ func test_a_stored_object_palette_is_four_colours() -> void:
 	_write_cache()
 	var data: GameData = GameData.open_directory(_directory)
 	var gray: PackedColorArray = data.battle_object_palette(
-		RomLayout.BATTLE_OBJECT_PALETTE_FIRST_STORED
+		Gen2Layout.BATTLE_OBJECT_PALETTE_FIRST_STORED
 	)
-	assert_eq(gray.size(), RomLayout.BATTLE_OBJECT_PALETTE_COLORS)
-	assert_eq(gray[0], Gen2Palette.from_packed(0x7FFF))
-	assert_ne(gray, data.battle_object_palette(RomLayout.BATTLE_OBJECT_PALETTE_COUNT - 1))
+	assert_eq(gray.size(), Gen2Layout.BATTLE_OBJECT_PALETTE_COLORS)
+	assert_eq(gray[0], PokePalette.from_packed(0x7FFF))
+	assert_ne(gray, data.battle_object_palette(Gen2Layout.BATTLE_OBJECT_PALETTE_COUNT - 1))
 	assert_eq(
-		data.battle_object_palette(RomLayout.BATTLE_OBJECT_PALETTE_COUNT).size(),
-		Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK])).size(),
+		data.battle_object_palette(Gen2Layout.BATTLE_OBJECT_PALETTE_COUNT).size(),
+		PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK])).size(),
 		"a ninth palette falls back rather than reading past the table"
 	)
 
@@ -384,25 +384,25 @@ func test_a_matchup_the_chart_does_not_list_is_neutral() -> void:
 	# fits in 332 bytes. Everything else is ten tenths.
 	_write_cache()
 	var data: GameData = GameData.open_directory(_directory)
-	assert_eq(data.type_matchup(0x14, 0x16), RomLayout.MATCHUP_SUPER_EFFECTIVE)
-	assert_eq(data.type_matchup(0x17, 0x04), RomLayout.MATCHUP_NO_EFFECT)
-	assert_eq(data.type_matchup(0x14, 0x15), RomLayout.MATCHUP_EFFECTIVE, "not in the chart")
-	assert_eq(data.type_matchup(0x13, 0x13), RomLayout.MATCHUP_EFFECTIVE, "nor is Curse's type")
+	assert_eq(data.type_matchup(0x14, 0x16), Gen2Layout.MATCHUP_SUPER_EFFECTIVE)
+	assert_eq(data.type_matchup(0x17, 0x04), Gen2Layout.MATCHUP_NO_EFFECT)
+	assert_eq(data.type_matchup(0x14, 0x15), Gen2Layout.MATCHUP_EFFECTIVE, "not in the chart")
+	assert_eq(data.type_matchup(0x13, 0x13), Gen2Layout.MATCHUP_EFFECTIVE, "nor is Curse's type")
 
 
 func test_foresight_cancels_the_ghost_immunities_and_nothing_else() -> void:
 	_write_cache()
 	var data: GameData = GameData.open_directory(_directory)
 	assert_eq(
-		data.type_matchup(RomLayout.TYPE_NORMAL, RomLayout.TYPE_GHOST),
-		RomLayout.MATCHUP_NO_EFFECT
+		data.type_matchup(Gen2Layout.TYPE_NORMAL, Gen2Layout.TYPE_GHOST),
+		Gen2Layout.MATCHUP_NO_EFFECT
 	)
 	assert_eq(
-		data.type_matchup(RomLayout.TYPE_NORMAL, RomLayout.TYPE_GHOST, true),
-		RomLayout.MATCHUP_EFFECTIVE
+		data.type_matchup(Gen2Layout.TYPE_NORMAL, Gen2Layout.TYPE_GHOST, true),
+		Gen2Layout.MATCHUP_EFFECTIVE
 	)
 	assert_eq(
-		data.type_matchup(0x17, 0x04, true), RomLayout.MATCHUP_NO_EFFECT,
+		data.type_matchup(0x17, 0x04, true), Gen2Layout.MATCHUP_NO_EFFECT,
 		"Foresight does not make a Ground type hittable by Electric"
 	)
 
@@ -421,13 +421,13 @@ func test_a_single_type_defender_is_not_hit_twice() -> void:
 	# row once whichever slot matched it.
 	_write_cache()
 	var data: GameData = GameData.open_directory(_directory)
-	assert_eq(data.type_effectiveness(0x14, [0x16, 0x16]), RomLayout.MATCHUP_SUPER_EFFECTIVE)
+	assert_eq(data.type_effectiveness(0x14, [0x16, 0x16]), Gen2Layout.MATCHUP_SUPER_EFFECTIVE)
 
 
 func test_an_immunity_beats_a_weakness_whichever_way_round_they_are() -> void:
 	_write_cache()
 	var data: GameData = GameData.open_directory(_directory)
-	assert_eq(data.type_effectiveness(RomLayout.TYPE_NORMAL, [RomLayout.TYPE_GHOST, 0x16]), 0)
+	assert_eq(data.type_effectiveness(Gen2Layout.TYPE_NORMAL, [Gen2Layout.TYPE_GHOST, 0x16]), 0)
 
 
 func test_a_cache_with_no_chart_reads_everything_as_neutral() -> void:
@@ -436,7 +436,7 @@ func test_a_cache_with_no_chart_reads_everything_as_neutral() -> void:
 	_write_cache()
 	DirAccess.remove_absolute(RomCache.matchups_path(_directory))
 	var data: GameData = GameData.open_directory(_directory)
-	assert_eq(data.type_matchup(0x14, 0x16), RomLayout.MATCHUP_EFFECTIVE)
+	assert_eq(data.type_matchup(0x14, 0x16), Gen2Layout.MATCHUP_EFFECTIVE)
 
 
 func test_an_unknown_number_answers_empty_rather_than_failing() -> void:
@@ -453,7 +453,7 @@ func test_a_palette_is_four_colours_with_white_and_black_implied() -> void:
 	_write_cache()
 	var data: GameData = GameData.open_directory(_directory)
 	var palette: PackedColorArray = data.palette(1)
-	assert_eq(palette.size(), Gen2Palette.COLORS_PER_PIC)
+	assert_eq(palette.size(), PokePalette.COLORS_PER_PIC)
 	assert_eq(palette[0], Color.WHITE)
 	assert_eq(palette[3], Color.BLACK)
 
@@ -469,7 +469,7 @@ func test_a_species_pic_reports_its_own_size_not_the_cell_size() -> void:
 	var data: GameData = GameData.open_directory(_directory)
 	var pic: Dictionary = data.species_pic(1)
 	assert_eq(pic["slot"], 0, "slots are zero-based, species numbers are not")
-	assert_eq(pic["width"], Gen2Tiles.TILE_WIDTH, "one tile, not the two-tile cell")
+	assert_eq(pic["width"], PokeTiles.TILE_WIDTH, "one tile, not the two-tile cell")
 
 
 func test_back_pics_always_fill_their_cell() -> void:
@@ -500,7 +500,7 @@ func test_a_trainer_palette_has_no_shiny_half() -> void:
 	_write_cache()
 	var data: GameData = GameData.open_directory(_directory)
 	var palette: PackedColorArray = data.trainer_palette(1)
-	assert_eq(palette.size(), Gen2Palette.COLORS_PER_PIC)
+	assert_eq(palette.size(), PokePalette.COLORS_PER_PIC)
 	assert_eq(palette[0], Color.WHITE)
 	assert_ne(palette, data.trainer_palette(2))
 
@@ -528,7 +528,7 @@ func test_a_trainer_classs_own_trainers_are_counted_and_read_back() -> void:
 
 	var falkner: Dictionary = data.trainer_party(1, 0)
 	assert_eq(falkner["name"], "FALKNER")
-	assert_eq(falkner["type"], RomLayout.TRAINER_MON_NORMAL)
+	assert_eq(falkner["type"], Gen2Layout.TRAINER_MON_NORMAL)
 	assert_eq((falkner["party"] as Array).size(), 2)
 	assert_eq(int(falkner["party"][1]["level"]), 9, "JSON's one number type, coerced back")
 	assert_eq(int(falkner["party"][1]["species"]), 2)
@@ -539,9 +539,9 @@ func test_a_trainer_classs_own_attributes_read_back_as_ints() -> void:
 	var data: GameData = GameData.open_directory(_directory)
 	var attributes: Dictionary = data.trainer_attributes(1)
 	assert_eq(int(attributes["base_reward"]), 25, "JSON's one number type, coerced back")
-	assert_eq(int(attributes["ai_move_weights"]), RomLayout.AI_BASIC | RomLayout.AI_STATUS)
+	assert_eq(int(attributes["ai_move_weights"]), Gen2Layout.AI_BASIC | Gen2Layout.AI_STATUS)
 	assert_eq(
-		int(attributes["ai_item_switch"]), RomLayout.CONTEXT_USE | RomLayout.SWITCH_SOMETIMES
+		int(attributes["ai_item_switch"]), Gen2Layout.CONTEXT_USE | Gen2Layout.SWITCH_SOMETIMES
 	)
 	assert_true(data.trainer_attributes(0).is_empty(), "class 0 is the player, who has no entry")
 
@@ -635,7 +635,7 @@ func test_evolutions_come_back_coerced_and_only_where_there_are_any() -> void:
 	var evolutions: Array = data.evolutions(1)
 	assert_eq(evolutions.size(), 1)
 	assert_true(evolutions[0]["method"] is int)
-	assert_eq(int(evolutions[0]["method"]), RomLayout.EVOLVE_LEVEL)
+	assert_eq(int(evolutions[0]["method"]), Gen2Layout.EVOLVE_LEVEL)
 	assert_eq(int(evolutions[0]["target"]), 2)
 	assert_eq(data.evolutions(2), [], "the second species does not evolve")
 
@@ -662,9 +662,9 @@ func test_a_dex_entry_comes_back_with_its_numbers_coerced() -> void:
 func test_both_dex_order_tables_come_back_as_species_numbers() -> void:
 	_write_cache()
 	var data: GameData = GameData.open_directory(_directory)
-	assert_eq(data.dex_order_new().size(), RomLayout.SPECIES_COUNT)
+	assert_eq(data.dex_order_new().size(), Gen2Layout.SPECIES_COUNT)
 	assert_eq(data.dex_order_new()[0], 1)
-	assert_eq(data.dex_order_alpha()[0], RomLayout.SPECIES_COUNT)
+	assert_eq(data.dex_order_alpha()[0], Gen2Layout.SPECIES_COUNT)
 
 
 ## A table that is not the full species range would list a species number of

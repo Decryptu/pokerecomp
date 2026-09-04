@@ -68,7 +68,7 @@ static func menu_box(word: String) -> Gen2MenuBox:
 ##
 ## `tiles` are tile numbers in the chamber's own tileset. `bank1` says which of
 ## the two graphics blocks they are in, which is `OAM_BANK1` in the attribute
-## map and [constant RomLayout.TILESET_BLOCK_STRIDE] into the flat strip here.
+## map and [constant Gen2Layout.TILESET_BLOCK_STRIDE] into the flat strip here.
 ## Empty when the word holds a character the charmap has no tile for.
 static func blocks(word: String) -> Array:
 	var out: Array = []

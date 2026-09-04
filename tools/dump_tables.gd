@@ -34,58 +34,58 @@ const GROWTH_NAMES: PackedStringArray = [
 ## How an evolution method is written out. The parameter that follows it means
 ## something different in each case, which is the point of naming them here.
 const EVOLVE_NAMES: Dictionary = {
-	RomLayout.EVOLVE_LEVEL: "level",
-	RomLayout.EVOLVE_ITEM: "item",
-	RomLayout.EVOLVE_TRADE: "trade",
-	RomLayout.EVOLVE_HAPPINESS: "happiness",
-	RomLayout.EVOLVE_STAT: "level",
+	Gen2Layout.EVOLVE_LEVEL: "level",
+	Gen2Layout.EVOLVE_ITEM: "item",
+	Gen2Layout.EVOLVE_TRADE: "trade",
+	Gen2Layout.EVOLVE_HAPPINESS: "happiness",
+	Gen2Layout.EVOLVE_STAT: "level",
 }
 
 const TRIGGER_NAMES: Dictionary = {
-	RomLayout.TRIGGER_ANYTIME: "any time",
-	RomLayout.TRIGGER_MORNDAY: "morning or day",
-	RomLayout.TRIGGER_NITE: "night",
+	Gen2Layout.TRIGGER_ANYTIME: "any time",
+	Gen2Layout.TRIGGER_MORNDAY: "morning or day",
+	Gen2Layout.TRIGGER_NITE: "night",
 }
 
 const CONDITION_NAMES: Dictionary = {
-	RomLayout.ATTACK_OVER_DEFENSE: "attack over defense",
-	RomLayout.ATTACK_UNDER_DEFENSE: "attack under defense",
-	RomLayout.ATTACK_EQUALS_DEFENSE: "attack equals defense",
+	Gen2Layout.ATTACK_OVER_DEFENSE: "attack over defense",
+	Gen2Layout.ATTACK_UNDER_DEFENSE: "attack under defense",
+	Gen2Layout.ATTACK_EQUALS_DEFENSE: "attack equals defense",
 }
 
 ## Which of a move's scoring routines a class's AI move weight word turns on.
 const AI_MOVE_FLAG_NAMES: Dictionary = {
-	RomLayout.AI_BASIC: "basic",
-	RomLayout.AI_SETUP: "setup",
-	RomLayout.AI_TYPES: "types",
-	RomLayout.AI_OFFENSIVE: "offensive",
-	RomLayout.AI_SMART: "smart",
-	RomLayout.AI_OPPORTUNIST: "opportunist",
-	RomLayout.AI_AGGRESSIVE: "aggressive",
-	RomLayout.AI_CAUTIOUS: "cautious",
-	RomLayout.AI_STATUS: "status",
-	RomLayout.AI_RISKY: "risky",
+	Gen2Layout.AI_BASIC: "basic",
+	Gen2Layout.AI_SETUP: "setup",
+	Gen2Layout.AI_TYPES: "types",
+	Gen2Layout.AI_OFFENSIVE: "offensive",
+	Gen2Layout.AI_SMART: "smart",
+	Gen2Layout.AI_OPPORTUNIST: "opportunist",
+	Gen2Layout.AI_AGGRESSIVE: "aggressive",
+	Gen2Layout.AI_CAUTIOUS: "cautious",
+	Gen2Layout.AI_STATUS: "status",
+	Gen2Layout.AI_RISKY: "risky",
 }
 
 ## How a class's item/switch word decides what its trainers do with a held item
 ## and when they switch out.
 const AI_SWITCH_FLAG_NAMES: Dictionary = {
-	RomLayout.SWITCH_OFTEN: "switch often",
-	RomLayout.SWITCH_RARELY: "switch rarely",
-	RomLayout.SWITCH_SOMETIMES: "switch sometimes",
-	RomLayout.ALWAYS_USE: "always use item",
-	RomLayout.UNKNOWN_USE: "unknown use",
-	RomLayout.CONTEXT_USE: "context use",
+	Gen2Layout.SWITCH_OFTEN: "switch often",
+	Gen2Layout.SWITCH_RARELY: "switch rarely",
+	Gen2Layout.SWITCH_SOMETIMES: "switch sometimes",
+	Gen2Layout.ALWAYS_USE: "always use item",
+	Gen2Layout.UNKNOWN_USE: "unknown use",
+	Gen2Layout.CONTEXT_USE: "context use",
 }
 
 ## How a multiplier is drawn in the matchup grid. Symbols rather than numbers so
 ## that a column stays narrow enough for all seventeen types to fit on a line,
 ## and so that a wrong chart looks wrong at a glance instead of having to be read.
 const MATCHUP_SYMBOLS: Dictionary = {
-	RomLayout.MATCHUP_NO_EFFECT: "0",
-	RomLayout.MATCHUP_NOT_VERY_EFFECTIVE: "-",
-	RomLayout.MATCHUP_EFFECTIVE: ".",
-	RomLayout.MATCHUP_SUPER_EFFECTIVE: "+",
+	Gen2Layout.MATCHUP_NO_EFFECT: "0",
+	Gen2Layout.MATCHUP_NOT_VERY_EFFECTIVE: "-",
+	Gen2Layout.MATCHUP_EFFECTIVE: ".",
+	Gen2Layout.MATCHUP_SUPER_EFFECTIVE: "+",
 }
 
 
@@ -332,14 +332,14 @@ func _describe_evolution(evolution: Dictionary, items: Array, species: Array) ->
 	var how: String = String(EVOLVE_NAMES.get(method, "method %d" % method))
 
 	match method:
-		RomLayout.EVOLVE_ITEM:
+		Gen2Layout.EVOLVE_ITEM:
 			how += " %s" % _name_at(items, parameter)
-		RomLayout.EVOLVE_TRADE:
+		Gen2Layout.EVOLVE_TRADE:
 			# $FF is the trades that need nothing held, which is most of them.
 			how += " holding %s" % _name_at(items, parameter) if parameter != 0xFF else ""
-		RomLayout.EVOLVE_HAPPINESS:
+		Gen2Layout.EVOLVE_HAPPINESS:
 			how += " %s" % String(TRIGGER_NAMES.get(parameter, "trigger %d" % parameter))
-		RomLayout.EVOLVE_STAT:
+		Gen2Layout.EVOLVE_STAT:
 			how += " %d, %s" % [
 				parameter,
 				String(CONDITION_NAMES.get(
@@ -386,12 +386,12 @@ func _dump_matchups(directory: String, rows: Array) -> void:
 		# Every row is in the grid, the flagged ones included: they are matchups
 		# that hold until Foresight cancels them, not extras it adds. Which two
 		# they are is printed under the grid.
-		chart[int(row["attacker"]) * RomLayout.TYPE_COUNT + int(row["defender"])] = \
+		chart[int(row["attacker"]) * Gen2Layout.TYPE_COUNT + int(row["defender"])] = \
 			int(row["multiplier"])
 
 	var types: Array = []
-	for number: int in RomLayout.TYPE_COUNT:
-		if RomLayout.is_matchup_type(number) and number < names.size():
+	for number: int in Gen2Layout.TYPE_COUNT:
+		if Gen2Layout.is_matchup_type(number) and number < names.size():
 			types.append(number)
 
 	var header: String = " ".repeat(10)
@@ -403,7 +403,7 @@ func _dump_matchups(directory: String, rows: Array) -> void:
 		var line: String = "%-10s" % String(names[attacker]).substr(0, 9)
 		for defender: int in types:
 			var multiplier: int = int(chart.get(
-				attacker * RomLayout.TYPE_COUNT + defender, RomLayout.MATCHUP_EFFECTIVE
+				attacker * Gen2Layout.TYPE_COUNT + defender, Gen2Layout.MATCHUP_EFFECTIVE
 			))
 			line += "%-4s" % String(MATCHUP_SYMBOLS.get(multiplier, "?"))
 		print("  %s" % line)

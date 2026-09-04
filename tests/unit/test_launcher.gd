@@ -37,9 +37,9 @@ func after_each() -> void:
 	Gen2ModInstaller.uninstall(PROBE_MOD_ID)
 	Gen2ModInstaller.uninstall(VIEW_MOD_ID)
 	for feed: String in PROBE_FEEDS:
-		Gen2ModIndex.unfollow(feed)
+		PokeModIndex.unfollow(feed)
 	for game_id: StringName in RomRegistry.ORDER:
-		Gen2CartridgeArt.revert(game_id)
+		PokeCartridgeArt.revert(game_id)
 	_clear_art_scratch()
 
 
@@ -254,7 +254,7 @@ func _write_probe_mod_zip() -> void:
 	var files: Dictionary = {
 		"%s/mod.json" % PROBE_MOD_ID: JSON.stringify({
 			"id": String(PROBE_MOD_ID), "name": "Launcher Probe", "version": "1.0.0",
-			"api_version": Gen2ModManifest.API_VERSION, "entry": "mod.gd",
+			"api_version": PokeModManifest.API_VERSION, "entry": "mod.gd",
 		}),
 		"%s/mod.gd" % PROBE_MOD_ID:
 			"extends RefCounted\n\nfunc register(_h, _m) -> void:\n\tpass\n",
@@ -275,7 +275,7 @@ func test_launcher_installs_a_mod_zip_and_lists_it_without_a_restart() -> void:
 	assert_eq(result["id"], PROBE_MOD_ID)
 	# Loaded into the live host, not merely written to disk.
 	assert_true(Gen2ModHost.instance().manifests().any(
-		func(manifest: Gen2ModManifest) -> bool: return manifest.id == PROBE_MOD_ID
+		func(manifest: PokeModManifest) -> bool: return manifest.id == PROBE_MOD_ID
 	))
 	assert_string_contains(_launcher.launcher_snapshot()["status"], "Launcher Probe")
 
@@ -323,7 +323,7 @@ func test_a_source_that_cannot_be_read_falls_back_to_the_copy_on_disk() -> void:
 	var page: Gen2ModsPage = _mods_page()
 
 	var text: String = JSON.stringify({
-		"schema_version": Gen2ModIndex.SCHEMA_VERSION,
+		"schema_version": PokeModIndex.SCHEMA_VERSION,
 		"name": "Example",
 		"mods": [{"id": "voxel", "name": "Voxel", "version": "1.2.0",
 			"download": "https://example.com/voxel.zip"}],
@@ -338,7 +338,7 @@ func test_a_source_that_cannot_be_read_falls_back_to_the_copy_on_disk() -> void:
 	page.receive_feed_response(feed, true, "not json")
 	assert_string_contains(page.status_text(), "Showing the copy saved")
 
-	Gen2ModIndex.forget_cache(feed)
+	PokeModIndex.forget_cache(feed)
 	page.receive_feed_response(feed, false, "", "That source could not be read (HTTP 503).")
 	assert_string_contains(page.status_text(), "HTTP 503")
 	assert_false(page.status_text().contains("Showing the copy"))
@@ -356,7 +356,7 @@ func test_a_source_names_the_mods_a_newer_version_is_listed_for() -> void:
 	var feed: String = "https://mods.example.com/updates.json"
 	var page: Gen2ModsPage = _mods_page()
 	page.receive_feed_response(feed, true, JSON.stringify({
-		"schema_version": Gen2ModIndex.SCHEMA_VERSION,
+		"schema_version": PokeModIndex.SCHEMA_VERSION,
 		"name": "Example",
 		"mods": [{"id": String(PROBE_MOD_ID), "name": "Launcher Probe", "version": "9.9.9",
 			"download": "https://example.com/probe.zip"}],
@@ -365,14 +365,14 @@ func test_a_source_names_the_mods_a_newer_version_is_listed_for() -> void:
 
 	# The same listing at the installed version offers a reinstall and no update.
 	page.receive_feed_response(feed, true, JSON.stringify({
-		"schema_version": Gen2ModIndex.SCHEMA_VERSION,
+		"schema_version": PokeModIndex.SCHEMA_VERSION,
 		"name": "Example",
 		"mods": [{"id": String(PROBE_MOD_ID), "name": "Launcher Probe",
 			"version": String(installed["version"]),
 			"download": "https://example.com/probe.zip"}],
 	}))
 	assert_false(page.status_text().contains("can be updated"))
-	Gen2ModIndex.forget_cache(feed)
+	PokeModIndex.forget_cache(feed)
 
 
 ## The header carries one button and it offers whichever of its two actions is
@@ -385,13 +385,13 @@ func test_the_header_button_offers_update_all_once_a_source_lists_one() -> void:
 	Gen2ModHost.instance().discover()
 
 	var feed: String = PROBE_FEEDS[0]
-	assert_true(bool(Gen2ModIndex.follow(feed).get("ok", false)))
+	assert_true(bool(PokeModIndex.follow(feed).get("ok", false)))
 	var page: Gen2ModsPage = _mods_page()
 	var button: Gen2LauncherButton = page._check_updates_button
 	assert_eq(button.get("_glyph"), &"refresh_all", "nothing to update yet")
 
 	page.receive_feed_response(feed, true, JSON.stringify({
-		"schema_version": Gen2ModIndex.SCHEMA_VERSION,
+		"schema_version": PokeModIndex.SCHEMA_VERSION,
 		"name": "Example",
 		"mods": [{"id": String(PROBE_MOD_ID), "name": "Launcher Probe", "version": "9.9.9",
 			"download": "https://example.com/probe.zip"}],
@@ -415,10 +415,10 @@ func test_update_all_walks_its_queue_and_reports_what_it_installed() -> void:
 	Gen2ModHost.instance().discover()
 
 	var feed: String = PROBE_FEEDS[1]
-	assert_true(bool(Gen2ModIndex.follow(feed).get("ok", false)))
+	assert_true(bool(PokeModIndex.follow(feed).get("ok", false)))
 	var page: Gen2ModsPage = _mods_page()
 	page.receive_feed_response(feed, true, JSON.stringify({
-		"schema_version": Gen2ModIndex.SCHEMA_VERSION,
+		"schema_version": PokeModIndex.SCHEMA_VERSION,
 		"name": "Example",
 		"mods": [{"id": String(PROBE_MOD_ID), "name": "Launcher Probe", "version": "9.9.9",
 			"download": "https://example.com/probe.zip"}],
@@ -563,7 +563,7 @@ func _write_view_mod_zip() -> void:
 	var files: Dictionary = {
 		"%s/mod.json" % VIEW_MOD_ID: JSON.stringify({
 			"id": String(VIEW_MOD_ID), "name": "Launcher View Probe", "version": "1.0.0",
-			"api_version": Gen2ModManifest.API_VERSION, "entry": "mod.gd",
+			"api_version": PokeModManifest.API_VERSION, "entry": "mod.gd",
 		}),
 		"%s/world.gd" % VIEW_MOD_ID: """extends Node2D
 func set_world(_world, _animation = null) -> void:
@@ -675,7 +675,7 @@ func _card_lines(page: Gen2ModsPage) -> int:
 
 
 ## Only a run on the device can say why the Switch build dims its page and draws
-## no toast, so the launcher can say what it built (`HANDOFF.md`).
+## no toast, so the launcher can say what it built.
 func test_the_shell_can_report_what_it_layered() -> void:
 	await _open_launcher()
 	var shell: Gen2LauncherShell = _launcher.get("_shell")
@@ -738,6 +738,9 @@ func test_a_crashed_session_is_reported_at_the_next_launch() -> void:
 func test_the_shelf_names_a_button_for_everything_it_offers() -> void:
 	var page: Gen2ShelfPage = Gen2ShelfPage.create(Gen2LauncherTheme.active(), false)
 	add_child_autofree(page)
+	# The bar answers for the selected cartridge, and the carousel opens on the
+	# oldest one rather than on this generation's.
+	page.stage().select(RomRegistry.ORDER.find(RomRegistry.GOLD), false)
 	page.set_slot_state(&"gold", RomCache.STATE_MISSING, "No cartridge yet")
 	assert_eq(_hint_labels(page.hints()), ["Add cartridge"], "an empty bay is filled, not played")
 	page.set_slot_state(&"gold", RomCache.STATE_USABLE, "Ready")
@@ -858,31 +861,31 @@ func _write_image(path: String, width: int, height: int) -> String:
 ## chosen, and it is never larger than the shell it stands in for.
 func test_chosen_cartridge_art_is_re_encoded_and_fitted_to_the_shell() -> void:
 	var source: String = _write_image("%s/source.png" % ART_SCRATCH, 3000, 1500)
-	assert_false(Gen2CartridgeArt.has_custom_art(&"gold", ART_SCRATCH))
+	assert_false(PokeCartridgeArt.has_custom_art(&"gold", ART_SCRATCH))
 
-	var taken: Dictionary = Gen2CartridgeArt.adopt(&"gold", source, ART_SCRATCH)
+	var taken: Dictionary = PokeCartridgeArt.adopt(&"gold", source, ART_SCRATCH)
 	assert_true(bool(taken.get("ok", false)), JSON.stringify(taken))
-	assert_true(Gen2CartridgeArt.has_custom_art(&"gold", ART_SCRATCH))
+	assert_true(PokeCartridgeArt.has_custom_art(&"gold", ART_SCRATCH))
 
-	var texture: Texture2D = Gen2CartridgeArt.texture_for(&"gold", ART_SCRATCH)
+	var texture: Texture2D = PokeCartridgeArt.texture_for(&"gold", ART_SCRATCH)
 	assert_not_null(texture)
-	assert_eq(texture.get_size().x, float(Gen2CartridgeArt.STORED_SIDE), "the long side")
-	assert_eq(texture.get_size().y, float(Gen2CartridgeArt.STORED_SIDE / 2), "aspect kept")
+	assert_eq(texture.get_size().x, float(PokeCartridgeArt.STORED_SIDE), "the long side")
+	assert_eq(texture.get_size().y, float(PokeCartridgeArt.STORED_SIDE / 2), "aspect kept")
 
 	## Smaller than the shell is left where it is: a 32x32 sprite is drawn small
 	## rather than smeared over a cartridge.
-	assert_true(bool(Gen2CartridgeArt.adopt(
+	assert_true(bool(PokeCartridgeArt.adopt(
 		&"gold", _write_image("%s/small.png" % ART_SCRATCH, 32, 48), ART_SCRATCH
 	).get("ok", false)))
 	assert_eq(
-		Gen2CartridgeArt.texture_for(&"gold", ART_SCRATCH).get_size(), Vector2(32, 48),
+		PokeCartridgeArt.texture_for(&"gold", ART_SCRATCH).get_size(), Vector2(32, 48),
 		"and the texture is the new picture rather than the cached first one"
 	)
 
-	assert_true(Gen2CartridgeArt.revert(&"gold", ART_SCRATCH))
-	assert_false(Gen2CartridgeArt.has_custom_art(&"gold", ART_SCRATCH))
-	assert_null(Gen2CartridgeArt.texture_for(&"gold", ART_SCRATCH))
-	assert_false(Gen2CartridgeArt.revert(&"gold", ART_SCRATCH), "nothing left to remove")
+	assert_true(PokeCartridgeArt.revert(&"gold", ART_SCRATCH))
+	assert_false(PokeCartridgeArt.has_custom_art(&"gold", ART_SCRATCH))
+	assert_null(PokeCartridgeArt.texture_for(&"gold", ART_SCRATCH))
+	assert_false(PokeCartridgeArt.revert(&"gold", ART_SCRATCH), "nothing left to remove")
 
 
 ## Every way a chosen file can be refused, each with a sentence rather than an
@@ -895,16 +898,16 @@ func test_a_file_that_is_not_cartridge_art_is_refused_with_a_reason() -> void:
 	file.close()
 
 	var rows: Array = [
-		[&"unknown_cartridge", Gen2CartridgeArt.adopt(&"", text, ART_SCRATCH)],
-		[&"missing_file", Gen2CartridgeArt.adopt(&"gold", "%s/nope.png" % ART_SCRATCH, ART_SCRATCH)],
-		[&"not_an_image", Gen2CartridgeArt.adopt(&"gold", text, ART_SCRATCH)],
+		[&"unknown_cartridge", PokeCartridgeArt.adopt(&"", text, ART_SCRATCH)],
+		[&"missing_file", PokeCartridgeArt.adopt(&"gold", "%s/nope.png" % ART_SCRATCH, ART_SCRATCH)],
+		[&"not_an_image", PokeCartridgeArt.adopt(&"gold", text, ART_SCRATCH)],
 	]
 	for row: Array in rows:
 		var answer: Dictionary = row[1]
 		assert_false(bool(answer.get("ok", false)), String(row[0]))
 		assert_eq(StringName(answer["reason"]), StringName(row[0]))
-		assert_false(Gen2CartridgeArt.refusal_text(row[0]).is_empty(), String(row[0]))
-	assert_false(Gen2CartridgeArt.has_custom_art(&"gold", ART_SCRATCH), "and nothing was stored")
+		assert_false(PokeCartridgeArt.refusal_text(row[0]).is_empty(), String(row[0]))
+	assert_false(PokeCartridgeArt.has_custom_art(&"gold", ART_SCRATCH), "and nothing was stored")
 
 
 ## The cartridge draws the player's picture where it has one and the shipped
@@ -918,12 +921,12 @@ func test_a_cartridge_wears_the_players_own_art_and_goes_back_to_the_default() -
 	assert_eq(art.stretch_mode, TextureRect.STRETCH_KEEP_ASPECT_CENTERED, "contained, not stretched")
 	assert_eq(art.texture, Gen2Cartridge.ART[&"gold"], "the shipped shell")
 
-	assert_true(bool(Gen2CartridgeArt.adopt(
+	assert_true(bool(PokeCartridgeArt.adopt(
 		&"gold", _write_image("%s/mine.png" % ART_SCRATCH, 700, 300)
 	).get("ok", false)))
 	card.refresh_art()
 	assert_ne(art.texture, Gen2Cartridge.ART[&"gold"], "the player\'s own")
 
-	Gen2CartridgeArt.revert(&"gold")
+	PokeCartridgeArt.revert(&"gold")
 	card.refresh_art()
 	assert_eq(art.texture, Gen2Cartridge.ART[&"gold"])

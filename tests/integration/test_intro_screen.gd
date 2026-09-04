@@ -83,7 +83,7 @@ func _accept_clock() -> void:
 		_settle()
 		if not (_screen.current() is Gen2ClockSetScreen):
 			return
-		_screen.handle_button(Gen2Button.A)
+		_screen.handle_button(PokeButton.A)
 	_settle()
 
 
@@ -94,7 +94,7 @@ func _press_a_until(stop: Callable, limit: int = 200) -> void:
 		_settle()
 		if stop.call():
 			return
-		_screen.handle_button(Gen2Button.A)
+		_screen.handle_button(PokeButton.A)
 
 
 func _at_naming() -> bool:
@@ -110,13 +110,13 @@ func _done() -> bool:
 func _run_intro(female: bool = false) -> String:
 	_begin()
 	if female:
-		_screen.handle_button(Gen2Button.DOWN)
-	_screen.handle_button(Gen2Button.A)
+		_screen.handle_button(PokeButton.DOWN)
+	_screen.handle_button(PokeButton.A)
 	_accept_clock()
 	_press_a_until(_at_naming)
-	_screen.handle_button(Gen2Button.A)
-	_screen.handle_button(Gen2Button.START)
-	_screen.handle_button(Gen2Button.A)
+	_screen.handle_button(PokeButton.A)
+	_screen.handle_button(PokeButton.START)
+	_screen.handle_button(PokeButton.A)
 	_settle()
 	var speech: Gen2OakSpeechScreen = _screen.current() as Gen2OakSpeechScreen
 	var typed: String = speech.player_name()
@@ -145,7 +145,7 @@ func test_the_copyright_screen_comes_before_the_gender_question() -> void:
 func test_the_gender_question_comes_first() -> void:
 	_begin()
 	assert_true(_screen.current() is Gen2GenderScreen)
-	_screen.handle_button(Gen2Button.A)
+	_screen.handle_button(PokeButton.A)
 	assert_true(_screen.current() is Gen2GenderScreen,
 		"still standing under `RotateFourPalettesLeft`")
 	_settle()
@@ -159,7 +159,7 @@ func test_the_gender_question_comes_first() -> void:
 ## `PlayersHouse1F.asm` calls, so a new game leaves the RTC's own SUNDAY alone.
 func test_clock_set_wraps_each_source_dial_and_reaches_the_speech() -> void:
 	_begin()
-	_screen.handle_button(Gen2Button.A)
+	_screen.handle_button(PokeButton.A)
 	_settle()
 	var clock: Gen2ClockSetScreen = _screen.current() as Gen2ClockSetScreen
 	assert_not_null(clock)
@@ -167,26 +167,26 @@ func test_clock_set_wraps_each_source_dial_and_reaches_the_speech() -> void:
 	for _page: int in 3:
 		_settle()
 		assert_true(_screen.current() is Gen2ClockSetScreen, "still in the text")
-		clock.handle_button(Gen2Button.A)
+		clock.handle_button(PokeButton.A)
 	_settle()
-	clock.handle_button(Gen2Button.DOWN)
-	clock.handle_button(Gen2Button.A)
+	clock.handle_button(PokeButton.DOWN)
+	clock.handle_button(PokeButton.A)
 	_settle()
 	# `YesNoBox` defaults to YES, and `InterpretTwoOptionMenu` holds `ld c, $f`
 	# before the answer is acted on.
-	clock.handle_button(Gen2Button.A)
+	clock.handle_button(PokeButton.A)
 	assert_eq(clock.value()["minute"], 0, "the minutes dial has not been reached")
 	_settle()
-	clock.handle_button(Gen2Button.DOWN)
+	clock.handle_button(PokeButton.DOWN)
 	assert_eq(clock.value(), {"day": 0, "hour": 9, "minute": 59})
-	clock.handle_button(Gen2Button.A)
+	clock.handle_button(PokeButton.A)
 	_settle()
-	clock.handle_button(Gen2Button.A)
+	clock.handle_button(PokeButton.A)
 	_settle()
 	# `.MinutesAreSet`'s `OakText_ResponseToSetTime`, which waits with
 	# `WaitPressAorB_BlinkCursor` before the routine returns.
 	assert_true(_screen.current() is Gen2ClockSetScreen, "Oak answers the time")
-	clock.handle_button(Gen2Button.A)
+	clock.handle_button(PokeButton.A)
 	assert_true(_screen.current() is Gen2OakSpeechScreen)
 
 
@@ -196,25 +196,25 @@ func test_clock_set_wraps_each_source_dial_and_reaches_the_speech() -> void:
 ## asks nothing.
 func test_each_yes_no_names_the_value_it_is_asking_about() -> void:
 	_begin()
-	_screen.handle_button(Gen2Button.A)
+	_screen.handle_button(PokeButton.A)
 	_settle()
 	var clock: Gen2ClockSetScreen = _screen.current() as Gen2ClockSetScreen
 	for _page: int in 3:
 		_settle()
-		clock.handle_button(Gen2Button.A)
+		clock.handle_button(PokeButton.A)
 	_settle()
 	var box: Gen2TextBox = clock.get("_text_box")
 	assert_eq(Array(box.text_lines()), ["What time is it?"])
 
-	clock.handle_button(Gen2Button.A)
+	clock.handle_button(PokeButton.A)
 	_settle()
 	assert_eq(Array(box.text_lines()), ["What?", "DAY 10 o'clock?"])
 
-	clock.handle_button(Gen2Button.A)
+	clock.handle_button(PokeButton.A)
 	_settle()
 	assert_eq(Array(box.text_lines()), ["How many minutes?"])
 
-	clock.handle_button(Gen2Button.A)
+	clock.handle_button(PokeButton.A)
 	_settle()
 	assert_eq(Array(box.text_lines()), ["Whoa! 0 min.?"])
 
@@ -224,17 +224,17 @@ func test_each_yes_no_names_the_value_it_is_asking_about() -> void:
 ## a button on the frame it is drawn.
 func test_a_dial_reads_no_button_until_its_delay_frames_have_gone() -> void:
 	_begin()
-	_screen.handle_button(Gen2Button.A)
+	_screen.handle_button(PokeButton.A)
 	_settle()
 	var clock: Gen2ClockSetScreen = _screen.current() as Gen2ClockSetScreen
 	for _page: int in 3:
 		_settle()
-		clock.handle_button(Gen2Button.A)
+		clock.handle_button(PokeButton.A)
 	assert_eq(clock.animation_frames_left(), Gen2ClockSetScreen.DIAL_DELAY_FRAMES)
-	clock.handle_button(Gen2Button.DOWN)
+	clock.handle_button(PokeButton.DOWN)
 	assert_eq(clock.value()["hour"], 10, "the dial is still held")
 	_settle()
-	clock.handle_button(Gen2Button.DOWN)
+	clock.handle_button(PokeButton.DOWN)
 	assert_eq(clock.value()["hour"], 9)
 
 
@@ -243,7 +243,7 @@ func test_a_dial_reads_no_button_until_its_delay_frames_have_gone() -> void:
 func test_nothing_is_written_while_the_intro_runs() -> void:
 	_begin()
 	assert_false(Gen2SaveStore.exists(_data.id, _data.sha1, SLOT))
-	_screen.handle_button(Gen2Button.A)
+	_screen.handle_button(PokeButton.A)
 	_accept_clock()
 	_press_a_until(_at_naming)
 	assert_false(
@@ -256,7 +256,7 @@ func test_nothing_is_written_while_the_intro_runs() -> void:
 ## nothing half-written to leave.
 func test_abandoning_the_intro_leaves_no_slot() -> void:
 	_begin()
-	_screen.handle_button(Gen2Button.A)
+	_screen.handle_button(PokeButton.A)
 	_accept_clock()
 	_press_a_until(_at_naming)
 	_screen.free()

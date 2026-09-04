@@ -304,7 +304,7 @@ static func from_data(data: GameData) -> Gen2CardFlipPage:
 	var three: PackedByteArray = data.card_flip_indices("card_flip_3")
 	var tilemap: PackedByteArray = data.card_flip_tilemap()
 	if glyphs == null or one.is_empty() or two.is_empty() or three.is_empty() \
-		or tilemap.size() < RomLayout.CARD_FLIP_TILEMAP_BYTES:
+		or tilemap.size() < Gen2Layout.CARD_FLIP_TILEMAP_BYTES:
 		return null
 
 	var page := Gen2CardFlipPage.new()
@@ -318,7 +318,7 @@ static func from_data(data: GameData) -> Gen2CardFlipPage:
 	page._object_tiles = three
 	page._light_off = data.card_flip_indices("card_flip_off")
 	page._light_on = data.card_flip_indices("card_flip_on")
-	for index: int in RomLayout.CARD_FLIP_PALETTES:
+	for index: int in Gen2Layout.CARD_FLIP_PALETTES:
 		page._palettes.append(data.card_flip_palette(index))
 	return page
 
@@ -333,7 +333,7 @@ static func _bank(runs: Array, tiles: int) -> PackedByteArray:
 		var first: int = int(run[0])
 		var strip: PackedByteArray = run[1]
 		@warning_ignore("integer_division")
-		var count: int = strip.size() / Gen2Tiles.TILE_PIXELS
+		var count: int = strip.size() / PokeTiles.TILE_PIXELS
 		var strip_width: int = count * TILE
 		for tile: int in count:
 			var column: int = (first + tile) * TILE
@@ -402,13 +402,13 @@ func _attributes(game: Gen2CardFlip) -> PackedInt32Array:
 ## A background cell. The two lamps are characters `_CardFlip` overwrote, so
 ## they are tested before the font and before the sheets.
 func _blit_background(into: PackedByteArray, code: int, at: Vector2i) -> void:
-	if code == RomLayout.CARD_FLIP_LIGHT_OFF_TILE:
+	if code == Gen2Layout.CARD_FLIP_LIGHT_OFF_TILE:
 		Gen2Font.blit_slot(_light_off, TILE, 0, into, WIDTH, at.x, at.y)
 		return
-	if code == RomLayout.CARD_FLIP_LIGHT_ON_TILE:
+	if code == Gen2Layout.CARD_FLIP_LIGHT_ON_TILE:
 		Gen2Font.blit_slot(_light_on, TILE, 0, into, WIDTH, at.x, at.y)
 		return
-	if code >= RomLayout.FONT_FIRST_CODE:
+	if code >= Gen2Layout.FONT_FIRST_CODE:
 		_draw_code(code, into, at.x, at.y)
 		return
 	Gen2Font.blit_slot(_background_tiles, BACKGROUND_WIDTH, code, into, WIDTH, at.x, at.y)
@@ -417,8 +417,8 @@ func _blit_background(into: PackedByteArray, code: int, at: Vector2i) -> void:
 ## `CardFlip_ShiftDigitsUpOnePixel`: a digit's rows move up one and its last row
 ## is blank, which the routine gets for free from the row above being blank.
 func _draw_code(code: int, into: PackedByteArray, at_x: int, at_y: int) -> void:
-	var digit: bool = code >= RomLayout.FONT_DIGIT_ZERO_CODE \
-		and code < RomLayout.FONT_DIGIT_ZERO_CODE + 10
+	var digit: bool = code >= Gen2Layout.FONT_DIGIT_ZERO_CODE \
+		and code < Gen2Layout.FONT_DIGIT_ZERO_CODE + 10
 	if not digits_lifted or not digit:
 		font.draw_code(code, into, WIDTH, at_x, at_y)
 		return
@@ -461,7 +461,7 @@ func _draw_boxes(
 	)).lpad(COIN_DIGITS, "0")
 	for index: int in COIN_DIGITS:
 		_draw_code(
-			RomLayout.FONT_DIGIT_ZERO_CODE + coins.unicode_at(index) - "0".unicode_at(0),
+			Gen2Layout.FONT_DIGIT_ZERO_CODE + coins.unicode_at(index) - "0".unicode_at(0),
 			into, (COIN_COUNT_AT.x + index) * TILE, COIN_COUNT_AT.y * TILE
 		)
 	var blink: int = int(state.get("blink", -1))

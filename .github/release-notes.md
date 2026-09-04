@@ -7,11 +7,12 @@ It is a changelog, not an essay. `## Added`, `## Changed`, `## Fixed`, one
 bullet per change, and no opening sentence summarising the release: a reader
 scanning for their own bug does not want a paragraph about the shape of the
 work. No `**Bold label.**` in front of a bullet, no contrast frame on every
-line ("X rather than Y", "not X, Y"), and no em-dash. `CLAUDE.md`'s "Writing"
-section is the whole rule; a reader called an earlier body AI-written and was
-right. Rewrite from the line that is exactly `## Added`: an edit that searches
-for the first one in the file lands inside this note and takes its closing
-marker with it, which is how 0.1.17 published an empty body. -->
+line ("X rather than Y", "not X, Y"), and no em-dash. Vary the sentence length:
+a body of uniform 15 to 25 word sentences reads as machine-written, and one
+here was called that and deserved it. Rewrite from the line that is exactly
+`## Added`: an edit that searches for the first one in the file lands inside
+this note and takes its closing marker with it, which is how 0.1.17 published
+an empty body. -->
 
 ## Added
 

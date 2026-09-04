@@ -148,11 +148,11 @@ func test_the_copyright_string_starts_two_columns_in() -> void:
 	var map: PackedInt32Array = credits.bg_map()
 	var row: int = Gen2Credits.TEXT_TOP_ROW + Gen2Credits.TEXT_LINE_SPACING
 	assert_eq(
-		_cell(map, Gen2Credits.COPYRIGHT_COLUMN, row), RomLayout.COPYRIGHT_FIRST_CODE
+		_cell(map, Gen2Credits.COPYRIGHT_COLUMN, row), Gen2Layout.COPYRIGHT_FIRST_CODE
 	)
 	assert_eq(
 		_cell(map, Gen2Credits.COPYRIGHT_COLUMN, row + Gen2Credits.TEXT_LINE_SPACING),
-		RomLayout.COPYRIGHT_FIRST_CODE + 2,
+		Gen2Layout.COPYRIGHT_FIRST_CODE + 2,
 		"and its <NEXT> keeps that column"
 	)
 
@@ -245,21 +245,21 @@ func test_the_script_asks_for_its_music_and_fades_into_the_next() -> void:
 ## and refuses entirely without STATUSFLAGS_HALL_OF_FAME_F.
 func test_b_only_skips_on_a_replay_and_only_past_the_header() -> void:
 	var first: Gen2Credits = Gen2Credits.create(_data, false)
-	_spend(first, Gen2Credits.CYCLE_FRAMES * 2, [Gen2Button.B])
+	_spend(first, Gen2Credits.CYCLE_FRAMES * 2, [PokeButton.B])
 	assert_eq(first.timer(), FIRST_WAIT - 1, "an unskippable run spends one tick a cycle")
 
 	var replay: Gen2Credits = Gen2Credits.create(_data, true)
-	_spend(replay, 1, [Gen2Button.B])
+	_spend(replay, 1, [PokeButton.B])
 	assert_lt(
 		replay.position(), Gen2Credits.SKIP_FROM_POSITION,
 		"the header is still under the skip's own position"
 	)
 	assert_eq(replay.timer(), FIRST_WAIT, "so nothing was burned yet")
 
-	_spend(replay, Gen2Credits.CYCLE_FRAMES * 7, [Gen2Button.B])
+	_spend(replay, Gen2Credits.CYCLE_FRAMES * 7, [PokeButton.B])
 	assert_gt(replay.position(), Gen2Credits.SKIP_FROM_POSITION)
 	var standing: int = replay.timer()
-	_spend(replay, 2, [Gen2Button.B])
+	_spend(replay, 2, [PokeButton.B])
 	assert_eq(replay.timer(), standing - 2, "and past it a held B burns a tick a frame")
 
 
@@ -267,11 +267,11 @@ func test_b_only_skips_on_a_replay_and_only_past_the_header() -> void:
 ## script has run out.
 func test_a_only_leaves_once_the_script_has_run_out() -> void:
 	var credits: Gen2Credits = Gen2Credits.create(_data)
-	assert_false(credits.may_finish([Gen2Button.A]))
+	assert_false(credits.may_finish([PokeButton.A]))
 	_spend(credits, Gen2Credits.CYCLE_FRAMES * 40)
 	assert_true(credits.finished())
 	assert_false(credits.may_finish([]), "and it is a held button, not a state")
-	assert_true(credits.may_finish([Gen2Button.A]))
+	assert_true(credits.may_finish([PokeButton.A]))
 
 
 ## The page resolves a banner tile through `.Frames`' block rather than through
@@ -299,10 +299,10 @@ func test_gold_blacks_out_the_text_slots_last_colour() -> void:
 	var gold: GameData = _gold()
 	var page: Gen2CreditsPage = Gen2CreditsPage.from_data(gold)
 	var border: PackedColorArray = page.palette(gold, 0, Gen2Credits.PALETTE_BORDER)
-	assert_eq(border[RomLayout.CREDITS_PALETTE_COLORS - 1], Color.BLACK)
+	assert_eq(border[Gen2Layout.CREDITS_PALETTE_COLORS - 1], Color.BLACK)
 	assert_ne(
 		page.palette(gold, 0, Gen2Credits.PALETTE_BANNER)[
-			RomLayout.CREDITS_PALETTE_COLORS - 1
+			Gen2Layout.CREDITS_PALETTE_COLORS - 1
 		],
 		Color.BLACK,
 		"and the banner keeps its own"
@@ -311,7 +311,7 @@ func test_gold_blacks_out_the_text_slots_last_colour() -> void:
 	var crystal_page: Gen2CreditsPage = Gen2CreditsPage.from_data(_data)
 	assert_ne(
 		crystal_page.palette(_data, 0, Gen2Credits.PALETTE_BORDER)[
-			RomLayout.CREDITS_PALETTE_COLORS - 1
+			Gen2Layout.CREDITS_PALETTE_COLORS - 1
 		],
 		Color.BLACK,
 		"and Crystal's three palettes are left alone"

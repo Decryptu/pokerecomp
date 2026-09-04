@@ -1026,7 +1026,7 @@ func test_level_damage_deals_exactly_the_users_level() -> void:
 	Gen2EffectCommands.run(Gen2EffectCommands.RESET_TYPE_MATCHUP, turn)
 	assert_eq(turn.damage, turn.attacker().level)
 	assert_false(turn.critical, "constant damage never criticals")
-	assert_eq(turn.effectiveness, RomLayout.MATCHUP_EFFECTIVE, "no effectiveness line for it either")
+	assert_eq(turn.effectiveness, Gen2Layout.MATCHUP_EFFECTIVE, "no effectiveness line for it either")
 
 
 func test_static_damage_deals_exactly_the_moves_own_power() -> void:
@@ -2062,7 +2062,7 @@ func test_reversal_keeps_the_matchup_the_constant_damage_moves_throw_away() -> v
 	)
 	var battle: Gen2Battle = _battle()
 	var turn: Gen2Turn = _run_move(battle, Fixture.FLAIL)
-	assert_eq(turn.effectiveness, RomLayout.MATCHUP_NOT_VERY_EFFECTIVE)
+	assert_eq(turn.effectiveness, Gen2Layout.MATCHUP_NOT_VERY_EFFECTIVE)
 
 
 func test_hidden_power_reads_a_type_and_a_power_out_of_the_dvs() -> void:
@@ -2072,13 +2072,13 @@ func test_hidden_power_reads_a_type_and_a_power_out_of_the_dvs() -> void:
 	# unused, which is Dark: the flawless Hidden Power every guide names.
 	var perfect: Dictionary = Gen2Damage.hidden_power(Gen2BattleMon.PERFECT_DVS)
 	assert_eq(int(perfect["power"]), 70)
-	assert_eq(int(perfect["type"]), RomLayout.TYPE_DARK)
+	assert_eq(int(perfect["type"]), Gen2Layout.TYPE_DARK)
 
 	# All zero: the nibble is 0, power is 0 / 2 + 31 = 31, and the type is 0,
 	# which becomes 1 on the skip past Normal.
 	var empty: Dictionary = Gen2Damage.hidden_power(0)
 	assert_eq(int(empty["power"]), 31)
-	assert_eq(int(empty["type"]), RomLayout.TYPE_FIGHTING)
+	assert_eq(int(empty["type"]), Gen2Layout.TYPE_FIGHTING)
 
 
 func test_hidden_powers_type_steps_over_bird_and_the_unused_run() -> void:
@@ -2087,11 +2087,11 @@ func test_hidden_powers_type_steps_over_bird_and_the_unused_run() -> void:
 		for defense: int in range(0, 16):
 			var dvs: int = Gen2Stats.pack_dvs(attack, defense, 0, 0)
 			var resolved: int = int(Gen2Damage.hidden_power(dvs)["type"])
-			assert_ne(resolved, RomLayout.TYPE_NORMAL, "never Normal")
-			assert_ne(resolved, RomLayout.TYPE_BIRD, "never BIRD")
+			assert_ne(resolved, Gen2Layout.TYPE_NORMAL, "never Normal")
+			assert_ne(resolved, Gen2Layout.TYPE_BIRD, "never BIRD")
 			assert_false(
-				resolved >= RomLayout.TYPE_UNUSED_START
-					and resolved < RomLayout.TYPE_UNUSED_END,
+				resolved >= Gen2Layout.TYPE_UNUSED_START
+					and resolved < Gen2Layout.TYPE_UNUSED_END,
 				"never one of the ten unused"
 			)
 
@@ -2108,7 +2108,7 @@ func test_hidden_power_runs_damagestats_off_the_type_it_chose() -> void:
 
 	var battle: Gen2Battle = _battle()
 	var turn: Gen2Turn = _run_move(battle, Fixture.HIDDEN_POWER)
-	assert_eq(turn.type_override, RomLayout.TYPE_DARK)
+	assert_eq(turn.type_override, Gen2Layout.TYPE_DARK)
 	assert_eq(turn.power_override, 70)
 	assert_gt(turn.attack_stat, 0, "the stats were picked after the type was")
 
@@ -3807,7 +3807,7 @@ func test_an_identified_ghost_can_be_hit_by_normal_and_fighting() -> void:
 			"immune while unidentified")
 		assert_eq(
 			_data.type_matchup(attacking, Fixture.GHOST, true),
-			RomLayout.MATCHUP_EFFECTIVE,
+			Gen2Layout.MATCHUP_EFFECTIVE,
 			"identified, the immunity is gone"
 		)
 	# Nothing else moves: Psychic against Dark is not a Ghost immunity.
@@ -4204,7 +4204,7 @@ func test_beat_up_uses_base_stats_and_each_members_own_level() -> void:
 	assert_eq(turn.level_override, 10)
 	assert_eq(turn.power_override, 10, "the move's own power, not a stat")
 	# No `stab`, so no matchup and no immunity however the chart reads.
-	assert_eq(turn.effectiveness, RomLayout.MATCHUP_EFFECTIVE)
+	assert_eq(turn.effectiveness, Gen2Layout.MATCHUP_EFFECTIVE)
 	assert_false(turn.immune)
 
 
@@ -4609,7 +4609,7 @@ func test_conversion2_picks_a_type_that_resists_the_last_move() -> void:
 	var picked: int = int(battle.player.types()[0])
 	assert_lt(
 		_data.type_effectiveness(Fixture.NORMAL, [picked, picked]),
-		RomLayout.MATCHUP_EFFECTIVE
+		Gen2Layout.MATCHUP_EFFECTIVE
 	)
 	assert_eq(battle.player.types()[1], picked)
 	assert_eq(_of_type(turn.events, Gen2Battle.TYPE_CHANGED).size(), 1)

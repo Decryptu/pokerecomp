@@ -124,18 +124,18 @@ func handle_button(button: int) -> bool:
 		return _handle_forget_list(button)
 	if _phase in [Phase.FORGET_ASK, Phase.STOP_ASK]:
 		match button:
-			Gen2Button.UP, Gen2Button.DOWN:
+			PokeButton.UP, PokeButton.DOWN:
 				_yes = not _yes
 				_draw_yes_no()
 				return true
-			Gen2Button.A:
+			PokeButton.A:
 				_answer(_yes)
 				return true
-			Gen2Button.B:
+			PokeButton.B:
 				_answer(false)
 				return true
 		return false
-	if _phase != Phase.REFUSAL or button != Gen2Button.A or _text_box == null:
+	if _phase != Phase.REFUSAL or button != PokeButton.A or _text_box == null:
 		return false
 	if _text_box.is_revealing() or _text_box.has_pages_left():
 		_text_box.advance()
@@ -152,22 +152,22 @@ func advance_frame() -> void:
 
 func _handle_forget_list(button: int) -> bool:
 	match button:
-		Gen2Button.UP, Gen2Button.DOWN:
+		PokeButton.UP, PokeButton.DOWN:
 			if _forget_moves.is_empty():
 				return true
 			## No `STATICMENU_WRAP`: `w2DMenuFlags1` is `$20` and the list stops
 			## at either end.
 			_forget_cursor = clampi(
-				_forget_cursor + (1 if button == Gen2Button.DOWN else -1),
+				_forget_cursor + (1 if button == PokeButton.DOWN else -1),
 				0, _forget_moves.size() - 1
 			)
 			_forget_refusal = ""
 			_draw_forget_list()
 			return true
-		Gen2Button.A:
+		PokeButton.A:
 			_confirm_forget()
 			return true
-		Gen2Button.B:
+		PokeButton.B:
 			## `.cancel` sets carry, which `LearnMove` reads as `.cancel`.
 			_open_stop_ask()
 			return true

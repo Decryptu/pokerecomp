@@ -11,7 +11,7 @@ extends GutTest
 ## `IntroSceneJumper.scenes` is seventeen entries, and `IntroScene17` is the one
 ## that sets `JUMPTABLE_EXIT_F`.
 func test_the_jumptable_is_seventeen_scenes() -> void:
-	assert_eq(RomLayout.GS_INTRO_SCENES, 17)
+	assert_eq(Gen2Layout.GS_INTRO_SCENES, 17)
 	var movie: Gen2GoldSilverIntro = Gen2GoldSilverIntro.create(null)
 	assert_eq(movie.scene(), 0)
 	assert_false(movie.finished())
@@ -26,7 +26,7 @@ func test_a_movie_without_art_still_walks_its_scenes() -> void:
 			break
 		movie.advance_frame()
 	assert_true(movie.finished(), "the exit bit is reached without a cache")
-	assert_eq(movie.scene(), RomLayout.GS_INTRO_SCENES - 1)
+	assert_eq(movie.scene(), Gen2Layout.GS_INTRO_SCENES - 1)
 
 
 ## `.PlayFrame` reads `hJoyLast and PAD_BUTTONS` before anything else, so a

@@ -12,6 +12,10 @@ extends RefCounted
 var id: StringName = &""
 var sha1: String = ""
 var directory: String = ""
+## Which generation wrote this cache. Read from the manifest rather than from
+## [RomRegistry], so a cache opened by path alone still knows what it holds and
+## a stale one cannot claim a shape it was not written in.
+var generation: int = RomRegistry.GEN2
 
 ## Mod content, consulted ahead of the cached tables by [method _content]. Null
 ## for a [GameData] built by hand, which is what a fixture does.
@@ -226,6 +230,7 @@ static func open_directory(path: String) -> GameData:
 	data.directory = path
 	data.id = StringName(manifest.get("game_id", ""))
 	data.sha1 = String(manifest.get("sha1", ""))
+	data.generation = int(manifest.get("generation", RomRegistry.GEN2))
 	for key: String in MANIFEST_DICTIONARIES:
 		var section: Variant = manifest.get(key, {})
 		if section is Dictionary:
@@ -268,10 +273,13 @@ func _read_cache(path: String) -> void:
 	_build_matchups(_read_array(RomCache.matchups_path(path)))
 
 
-## The first registry game with a usable cache, or null if none has been
-## imported. For development views that just want something to draw.
+## The first playable registry game with a usable cache, or null if none has
+## been imported. For development views that just want something to draw, so a
+## cartridge whose world is not built is skipped: those views draw one.
 static func open_any() -> GameData:
 	for game_id: StringName in RomRegistry.ORDER:
+		if not RomRegistry.is_playable(game_id):
+			continue
 		var data: GameData = open(game_id)
 		if data != null:
 			return data
@@ -845,8 +853,8 @@ func battle_anim_object(index: int) -> Dictionary:
 	if region.is_empty() or index < 0 or index >= int(region["count"]):
 		return {}
 	var data: PackedByteArray = region["data"]
-	var at: int = index * RomLayout.BATTLE_ANIM_OBJECT_SIZE
-	if at + RomLayout.BATTLE_ANIM_OBJECT_SIZE > data.size():
+	var at: int = index * Gen2Layout.BATTLE_ANIM_OBJECT_SIZE
+	if at + Gen2Layout.BATTLE_ANIM_OBJECT_SIZE > data.size():
 		return {}
 	return {
 		"flags": data[at + Gen2BattleAnimImporter.OBJECT_FLAGS],
@@ -929,7 +937,7 @@ func overworld_effect(name: String) -> Dictionary:
 		var record: Dictionary = row as Dictionary
 		var colors: PackedColorArray = PackedColorArray()
 		for packed: Variant in (record.get("colors", []) as Array):
-			colors.append(Gen2Palette.from_packed(int(packed)))
+			colors.append(PokePalette.from_packed(int(packed)))
 		return {
 			"name": name,
 			"tiles": int(record.get("tiles", 0)),
@@ -945,7 +953,7 @@ func overworld_effect(name: String) -> Dictionary:
 
 ## The reusable icon strip indexed by constants/icon_constants.asm.
 func overworld_icon(icon_number: int) -> Gen2WorldSprite:
-	if icon_number <= 0 or icon_number > RomLayout.MON_ICON_COUNT:
+	if icon_number <= 0 or icon_number > Gen2Layout.MON_ICON_COUNT:
 		return null
 	return Gen2WorldSprite.from_mon_icon(icon_number)
 
@@ -970,10 +978,10 @@ func overworld_icon_indices(icon_number: int) -> PackedByteArray:
 ## [method species_icon_indices].
 func mon_menu_icon(species_number: int, egg: bool = false) -> int:
 	if egg:
-		return RomLayout.ICON_EGG
+		return Gen2Layout.ICON_EGG
 	var icon: Variant = species(species_number).get("icon", null)
 	if icon is int or icon is float:
-		if int(icon) > 0 and int(icon) <= RomLayout.MON_ICON_COUNT:
+		if int(icon) > 0 and int(icon) <= Gen2Layout.MON_ICON_COUNT:
 			return int(icon)
 	var table: PackedByteArray = mon_menu_icon_table()
 	if species_number < 1 or species_number > table.size():
@@ -1022,7 +1030,7 @@ func party_menu_icon_palette(index: int = 0) -> PackedColorArray:
 		return PackedColorArray()
 	var out := PackedColorArray()
 	for packed: Variant in palettes[index] as Array:
-		out.append(Gen2Palette.from_packed(int(packed)))
+		out.append(PokePalette.from_packed(int(packed)))
 	return out
 
 
@@ -1030,8 +1038,8 @@ func party_menu_icon_palette(index: int = 0) -> PackedColorArray:
 ## The source's palette override bit selects the same eight rows while marking
 ## that the object event, rather than the sprite table, supplied the choice.
 func overworld_sprite_palette(palette_index: int, time_of_day: int) -> PackedColorArray:
-	var group: int = clampi(time_of_day, 0, 3) * RomLayout.OVERWORLD_SPRITE_PALETTE_COUNT \
-		+ (palette_index & (RomLayout.OVERWORLD_SPRITE_PALETTE_COUNT - 1))
+	var group: int = clampi(time_of_day, 0, 3) * Gen2Layout.OVERWORLD_SPRITE_PALETTE_COUNT \
+		+ (palette_index & (Gen2Layout.OVERWORLD_SPRITE_PALETTE_COUNT - 1))
 	if group < 0 or group >= _sprite_palettes().size():
 		return PackedColorArray()
 	var raw: Variant = _sprite_palettes()[group]
@@ -1039,7 +1047,7 @@ func overworld_sprite_palette(palette_index: int, time_of_day: int) -> PackedCol
 		return PackedColorArray()
 	var out := PackedColorArray()
 	for packed: Variant in raw as Array:
-		out.append(Gen2Palette.from_packed(int(packed)))
+		out.append(PokePalette.from_packed(int(packed)))
 	return out
 
 
@@ -1056,7 +1064,7 @@ func world_palette(number: int) -> PackedColorArray:
 	if not raw is Array:
 		return out
 	for packed: Variant in raw as Array:
-		out.append(Gen2Palette.from_packed(int(packed)))
+		out.append(PokePalette.from_packed(int(packed)))
 	_decoded_palettes[number] = out
 	return out
 
@@ -1064,13 +1072,13 @@ func world_palette(number: int) -> PackedColorArray:
 ## `LoadSpecialMapPalette`'s eight, or nothing for a tileset with no set and for
 ## the INDOOR Hall of Fame sharing `TILESET_ICE_PATH`.
 func special_map_palettes(tileset: int, environment: int) -> Array:
-	var index: int = RomLayout.SPECIAL_PALETTE_TILESETS.find(tileset)
+	var index: int = Gen2Layout.SPECIAL_PALETTE_TILESETS.find(tileset)
 	if index < 0:
 		return []
-	if tileset == RomLayout.SPECIAL_PALETTE_ICE_PATH \
-		and (environment & 0x07) == RomLayout.SPECIAL_PALETTE_ENVIRONMENT_INDOOR:
+	if tileset == Gen2Layout.SPECIAL_PALETTE_ICE_PATH \
+		and (environment & 0x07) == Gen2Layout.SPECIAL_PALETTE_ENVIRONMENT_INDOOR:
 		return []
-	var base: int = RomLayout.SPECIAL_PALETTE_BASE + index * 8
+	var base: int = Gen2Layout.SPECIAL_PALETTE_BASE + index * 8
 	if base + 8 > _palettes().size():
 		return []
 	var out: Array = []
@@ -1117,7 +1125,7 @@ func map_group_roof(map_group: int) -> int:
 
 
 ## One roof run as an eight-row index strip, the shape a tileset's own tiles come
-## in, so [constant RomLayout.ROOF_TILES] tiles can be written straight over
+## in, so [constant Gen2Layout.ROOF_TILES] tiles can be written straight over
 ## `vTiles2 tile $0a`.
 func roof_tile_indices(roof: int) -> PackedByteArray:
 	var tiles: Variant = _roofs().get("tiles", [])
@@ -1146,7 +1154,7 @@ func roof_palette(map_group: int, night: bool) -> PackedColorArray:
 		return out
 	var at: int = 2 if night else 0
 	for index: int in 2:
-		out.append(Gen2Palette.from_packed(int((raw as Array)[at + index])))
+		out.append(PokePalette.from_packed(int((raw as Array)[at + index])))
 	return out
 
 
@@ -1163,14 +1171,14 @@ func roofed_tile_indices(
 	if roof < 0:
 		return indices
 	var tiles: PackedByteArray = roof_tile_indices(roof)
-	var roof_width: int = RomLayout.ROOF_TILES * Gen2Tiles.TILE_WIDTH
-	var width: int = tile_count * Gen2Tiles.TILE_WIDTH
-	var left: int = RomLayout.ROOF_VRAM_TILE * Gen2Tiles.TILE_WIDTH
-	if tiles.size() < roof_width * Gen2Tiles.TILE_HEIGHT \
-		or indices.size() < width * Gen2Tiles.TILE_HEIGHT or left + roof_width > width:
+	var roof_width: int = Gen2Layout.ROOF_TILES * PokeTiles.TILE_WIDTH
+	var width: int = tile_count * PokeTiles.TILE_WIDTH
+	var left: int = Gen2Layout.ROOF_VRAM_TILE * PokeTiles.TILE_WIDTH
+	if tiles.size() < roof_width * PokeTiles.TILE_HEIGHT \
+		or indices.size() < width * PokeTiles.TILE_HEIGHT or left + roof_width > width:
 		return indices
 	var out: PackedByteArray = indices.duplicate()
-	for y: int in Gen2Tiles.TILE_HEIGHT:
+	for y: int in PokeTiles.TILE_HEIGHT:
 		for x: int in roof_width:
 			out[y * width + left + x] = tiles[y * roof_width + x]
 	return out
@@ -1200,7 +1208,7 @@ func world_animation_asset(name: String) -> PackedByteArray:
 
 
 ## Indexed 2bpp pixels for one tileset's overworld tiles, loaded on demand.
-## The strip is [constant RomLayout.TILESET_TILE_COUNT] tiles wide and is indexed
+## The strip is [constant Gen2Layout.TILESET_TILE_COUNT] tiles wide and is indexed
 ## by the metatile byte itself, so both graphics blocks are addressable; see that
 ## constant for what sits where.
 func world_tileset_indices(number: int) -> PackedByteArray:
@@ -1229,9 +1237,9 @@ func learnset(number: int) -> Array:
 
 ## How a species evolves, as { method, parameter, condition, target }. Empty for
 ## the ones that do not. [code]method[/code] is one of the
-## [code]RomLayout.EVOLVE_*[/code] constants and decides what
+## [code]Gen2Layout.EVOLVE_*[/code] constants and decides what
 ## [code]parameter[/code] means: a level, an item, a held item or a time of day.
-## [code]condition[/code] is only ever set by [constant RomLayout.EVOLVE_STAT].
+## [code]condition[/code] is only ever set by [constant Gen2Layout.EVOLVE_STAT].
 func evolutions(number: int) -> Array:
 	return _rows(species(number), "evolutions", ["method", "parameter", "condition", "target"])
 
@@ -1274,7 +1282,7 @@ func dex_entry(number: int) -> Dictionary:
 
 ## Every species number a mod defined, ascending, and empty when no mod did.
 ## Both dex order tables are cartridge data of exactly [constant
-## RomLayout.SPECIES_COUNT] entries, so a mod row can only follow them; see
+## Gen2Layout.SPECIES_COUNT] entries, so a mod row can only follow them; see
 ## [method Gen2Pokedex.order_by_mode].
 func mod_species_numbers() -> Array[int]:
 	if _overlay == null:
@@ -1303,7 +1311,7 @@ func _load_dex_orders(path: String) -> void:
 		return
 	for key: String in ["new", "alpha"]:
 		var value: Variant = (raw as Dictionary).get(key, [])
-		if not value is Array or (value as Array).size() != RomLayout.SPECIES_COUNT:
+		if not value is Array or (value as Array).size() != Gen2Layout.SPECIES_COUNT:
 			continue
 		var order: PackedInt32Array = PackedInt32Array()
 		for number: Variant in value as Array:
@@ -1419,11 +1427,11 @@ func mail_items() -> Array:
 ## `LoadPalette_White_Col1_Col2_Black` expands.
 func mail_palette(index: int) -> PackedColorArray:
 	if index < 0 or index >= _mail_palettes.size():
-		return Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+		return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	var stored: Array = _mail_palettes[index]
 	var out := PackedColorArray()
 	for word: Variant in stored:
-		out.append(Gen2Palette.from_packed(int(word)))
+		out.append(PokePalette.from_packed(int(word)))
 	return out
 
 
@@ -1457,6 +1465,12 @@ func item_name(number: int) -> String:
 	return String(item(number).get("name", ""))
 
 
+## How many items the cartridge carried, the counterpart of
+## [method species_count]: mod items are numbered above this run.
+func item_count() -> int:
+	return _items.size()
+
+
 ## One imported NPC trade record, or an empty dictionary when this cartridge
 ## does not contain the requested row.
 func world_trade(index: int) -> Dictionary:
@@ -1465,6 +1479,13 @@ func world_trade(index: int) -> Dictionary:
 
 func world_trade_count() -> int:
 	return _world_trades.size()
+
+
+## How many types the cartridge carried. Generation 1 leaves an eleven-entry
+## hole in its own numbering and does not cache it, so this is not the highest
+## type number plus one.
+func type_count() -> int:
+	return _types.size()
 
 
 ## Type names are indexed from zero, unlike everything else here, which is why
@@ -1483,7 +1504,7 @@ func type_is_physical(number: int) -> bool:
 
 
 ## Every type number a mod defined, ascending. The cartridge's own run is
-## [constant RomLayout.TYPE_COUNT] wide and includes the padding these follow.
+## [constant Gen2Layout.TYPE_COUNT] wide and includes the padding these follow.
 func mod_type_numbers() -> Array[int]:
 	if _overlay == null:
 		return [] as Array[int]
@@ -1518,11 +1539,11 @@ func type_matchup(attacking: int, defending: int, foresight: bool = false) -> in
 			Gen2ContentOverlay.KIND_MATCHUP, key, _matchup_row(key)
 		)
 		if foresight and bool(row.get("negated_by_foresight", false)):
-			return RomLayout.MATCHUP_EFFECTIVE
-		return int(row.get("multiplier", RomLayout.MATCHUP_EFFECTIVE))
+			return Gen2Layout.MATCHUP_EFFECTIVE
+		return int(row.get("multiplier", Gen2Layout.MATCHUP_EFFECTIVE))
 	if foresight and _foresight_matchups.has(key):
-		return RomLayout.MATCHUP_EFFECTIVE
-	return int(_matchups.get(key, RomLayout.MATCHUP_EFFECTIVE))
+		return Gen2Layout.MATCHUP_EFFECTIVE
+	return int(_matchups.get(key, Gen2Layout.MATCHUP_EFFECTIVE))
 
 
 ## The cartridge's own row for a pair, in the shape a patch merges onto. Never
@@ -1531,7 +1552,7 @@ func type_matchup(attacking: int, defending: int, foresight: bool = false) -> in
 ## empty base untouched.
 func _matchup_row(key: int) -> Dictionary:
 	return {
-		"multiplier": int(_matchups.get(key, RomLayout.MATCHUP_EFFECTIVE)),
+		"multiplier": int(_matchups.get(key, Gen2Layout.MATCHUP_EFFECTIVE)),
 		"negated_by_foresight": _foresight_matchups.has(key),
 	}
 
@@ -1544,11 +1565,11 @@ func _matchup_row(key: int) -> Dictionary:
 ## a dual type reports 2 rather than 2.5. Use [method type_matchup] per type for
 ## damage. A single-type Pokemon carries its type in both slots and repeats skip.
 func type_effectiveness(attacking: int, defending: Array, foresight: bool = false) -> int:
-	var out: int = RomLayout.MATCHUP_EFFECTIVE
+	var out: int = Gen2Layout.MATCHUP_EFFECTIVE
 	for defending_type: int in ordered_defending_types(attacking, defending):
 		@warning_ignore("integer_division")
 		out = out * type_matchup(attacking, defending_type, foresight) \
-			/ RomLayout.MATCHUP_EFFECTIVE
+			/ Gen2Layout.MATCHUP_EFFECTIVE
 	return out
 
 
@@ -1570,26 +1591,26 @@ func _build_matchups(rows: Array) -> void:
 func palette(number: int, shiny: bool = false) -> PackedColorArray:
 	var entry: Dictionary = species(number)
 	if entry.is_empty():
-		return Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+		return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 
 	var stored: Array = entry["palette"]["shiny" if shiny else "normal"]
-	return Gen2Palette.pic_palette(PackedColorArray([
-		Gen2Palette.from_packed(int(stored[0])),
-		Gen2Palette.from_packed(int(stored[1])),
+	return PokePalette.pic_palette(PackedColorArray([
+		PokePalette.from_packed(int(stored[0])),
+		PokePalette.from_packed(int(stored[1])),
 	]))
 
 
 ## One of the battle bars' palettes, by the names in
-## [constant RomLayout.BAR_PALETTE_NAMES]. An unknown name answers with white and
+## [constant Gen2Layout.BAR_PALETTE_NAMES]. An unknown name answers with white and
 ## black, which draws a bar that is legible and obviously not coloured.
 func bar_palette(name: String) -> PackedColorArray:
 	var stored: Variant = _bar_palettes.get(name, null)
 	if not stored is Array or (stored as Array).size() < 2:
-		return Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+		return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 
-	return Gen2Palette.pic_palette(PackedColorArray([
-		Gen2Palette.from_packed(int(stored[0])),
-		Gen2Palette.from_packed(int(stored[1])),
+	return PokePalette.pic_palette(PackedColorArray([
+		PokePalette.from_packed(int(stored[0])),
+		PokePalette.from_packed(int(stored[1])),
 	]))
 
 
@@ -1598,11 +1619,11 @@ func bar_palette(name: String) -> PackedColorArray:
 func card_palette(slot: int) -> PackedColorArray:
 	var stored: Variant = _card_palettes.get("background", [])
 	if not stored is Array or slot < 0 or slot >= (stored as Array).size():
-		return Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+		return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	var pair: Array = (stored as Array)[slot]
-	return Gen2Palette.pic_palette(PackedColorArray([
-		Gen2Palette.from_packed(int(pair[0])),
-		Gen2Palette.from_packed(int(pair[1])),
+	return PokePalette.pic_palette(PackedColorArray([
+		PokePalette.from_packed(int(pair[0])),
+		PokePalette.from_packed(int(pair[1])),
 	]))
 
 
@@ -1615,49 +1636,49 @@ func card_palette(slot: int) -> PackedColorArray:
 func battle_object_palette(
 	slot: int, enemy: Array = [], player: Array = []
 ) -> PackedColorArray:
-	if slot < 0 or slot >= RomLayout.BATTLE_OBJECT_PALETTE_COUNT:
-		return Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
-	if slot < RomLayout.BATTLE_OBJECT_PALETTE_FIRST_STORED:
+	if slot < 0 or slot >= Gen2Layout.BATTLE_OBJECT_PALETTE_COUNT:
+		return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+	if slot < Gen2Layout.BATTLE_OBJECT_PALETTE_FIRST_STORED:
 		# `LoadPalette_White_Col1_Col2_Black` over the battler's own pair.
 		var pair: Array = enemy if slot == 0 else player
 		if pair.size() < 2:
-			return Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
-		return Gen2Palette.pic_palette(PackedColorArray([
-			Gen2Palette.from_packed(int(pair[0])),
-			Gen2Palette.from_packed(int(pair[1])),
+			return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+		return PokePalette.pic_palette(PackedColorArray([
+			PokePalette.from_packed(int(pair[0])),
+			PokePalette.from_packed(int(pair[1])),
 		]))
-	var name: String = RomLayout.BATTLE_OBJECT_PALETTE_NAMES[
-		slot - RomLayout.BATTLE_OBJECT_PALETTE_FIRST_STORED
+	var name: String = Gen2Layout.BATTLE_OBJECT_PALETTE_NAMES[
+		slot - Gen2Layout.BATTLE_OBJECT_PALETTE_FIRST_STORED
 	]
 	var stored: Variant = _battle_object_palettes.get(name, null)
 	if not stored is Array \
-			or (stored as Array).size() < RomLayout.BATTLE_OBJECT_PALETTE_COLORS:
-		return Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+			or (stored as Array).size() < Gen2Layout.BATTLE_OBJECT_PALETTE_COLORS:
+		return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	var colors := PackedColorArray()
 	for packed: Variant in stored as Array:
-		colors.append(Gen2Palette.from_packed(int(packed)))
+		colors.append(PokePalette.from_packed(int(packed)))
 	return colors
 
 
 ## `Palette_TextBG7`, the four colours a text box is drawn through. Empty on a
 ## cartridge that ships none, which leaves a caller on its own black-on-white.
 func text_bg_palette() -> PackedColorArray:
-	if _text_bg_palette.size() < RomLayout.TEXT_BG_PALETTE_COLORS:
+	if _text_bg_palette.size() < Gen2Layout.TEXT_BG_PALETTE_COLORS:
 		return PackedColorArray()
 	var colors := PackedColorArray()
 	for packed: Variant in _text_bg_palette:
-		colors.append(Gen2Palette.from_packed(int(packed)))
+		colors.append(PokePalette.from_packed(int(packed)))
 	return colors
 
 
 ## `LoadGenderScreenPal`'s four colours, whole. Empty on a cartridge with no
 ## gender screen, which is the caller's cue that the screen is not asked for.
 func gender_screen_palette() -> PackedColorArray:
-	if _gender_screen_palette.size() < RomLayout.GENDER_SCREEN_PALETTE_COLORS:
+	if _gender_screen_palette.size() < Gen2Layout.GENDER_SCREEN_PALETTE_COLORS:
 		return PackedColorArray()
 	var colors := PackedColorArray()
 	for packed: Variant in _gender_screen_palette:
-		colors.append(Gen2Palette.from_packed(int(packed)))
+		colors.append(PokePalette.from_packed(int(packed)))
 	return colors
 
 
@@ -1674,11 +1695,11 @@ func copyright_string() -> PackedByteArray:
 ## PREDEFPAL_GAMEFREAK_LOGO_BG, the copyright screen's own four colours. Empty
 ## on a cache imported before they were.
 func copyright_palette() -> PackedColorArray:
-	if _copyright_palette.size() < RomLayout.COPYRIGHT_PALETTE_COLORS:
+	if _copyright_palette.size() < Gen2Layout.COPYRIGHT_PALETTE_COLORS:
 		return PackedColorArray()
 	var colors := PackedColorArray()
 	for packed: Variant in _copyright_palette:
-		colors.append(Gen2Palette.from_packed(int(packed)))
+		colors.append(PokePalette.from_packed(int(packed)))
 	return colors
 
 
@@ -1691,7 +1712,7 @@ func menu_text(key: String) -> String:
 
 
 ## One of `engine/items/mart.asm`'s own boxes, by the name
-## `RomLayout.MART_TEXT_AT` gives its stub, still carrying [Gen2TextStream]'s
+## `Gen2Layout.MART_TEXT_AT` gives its stub, still carrying [Gen2TextStream]'s
 ## markers for the quantity, the item name and the price. Empty on a cache
 ## imported before them.
 func mart_text(name: String) -> String:
@@ -1699,7 +1720,7 @@ func mart_text(name: String) -> String:
 
 
 ## One of `engine/events/name_rater.asm`'s own boxes, by the name
-## `RomLayout.NAME_RATER_TEXT_ORDER` gives its stub, still carrying
+## `Gen2Layout.NAME_RATER_TEXT_ORDER` gives its stub, still carrying
 ## [Gen2TextStream]'s marker for the nickname. Empty on a cache imported before
 ## them.
 func name_rater_text(name: String) -> String:
@@ -1707,21 +1728,21 @@ func name_rater_text(name: String) -> String:
 
 
 ## One of `engine/events/move_deleter.asm`'s own boxes, by the name
-## `RomLayout.MOVE_DELETER_TEXT_ORDER` gives its stub, still carrying
+## `Gen2Layout.MOVE_DELETER_TEXT_ORDER` gives its stub, still carrying
 ## [Gen2TextStream]'s marker for the move name. Empty on a cache imported before
 ## them.
 func move_deleter_text(name: String) -> String:
 	return String(_move_deleter_text.get(name, ""))
 
 
-## One of the Day-Care's own boxes, by the name `RomLayout.DAY_CARE_TEXT_RUNS`
+## One of the Day-Care's own boxes, by the name `Gen2Layout.DAY_CARE_TEXT_RUNS`
 ## gives its stub, still carrying [Gen2TextStream]'s markers for the nickname
 ## and money it prints. Empty on a cache imported before them.
 func day_care_text(name: String) -> String:
 	return String(_day_care_text.get(name, ""))
 
 
-## One box of one `RomLayout.SPECIAL_TEXT_RUNS` run, still carrying
+## One box of one `Gen2Layout.SPECIAL_TEXT_RUNS` run, still carrying
 ## [Gen2TextStream]'s markers. Empty for a run this cartridge does not ship,
 ## which is what a Gold or Silver reader of the three Crystal-only runs gets.
 func special_text(run: String, name: String) -> String:
@@ -1730,7 +1751,7 @@ func special_text(run: String, name: String) -> String:
 
 
 ## The WRAM address a `text_ram` in one of those boxes names, by the name
-## `RomLayout`'s own `special_text_ram` gives it, or -1 on a cartridge that
+## `Gen2Layout`'s own `special_text_ram` gives it, or -1 on a cartridge that
 ## ships no such buffer.
 func special_text_ram(name: String) -> int:
 	return int(_special_text_ram.get(name, -1))
@@ -1763,7 +1784,7 @@ func presents_palette(name: String) -> PackedColorArray:
 		return PackedColorArray()
 	var colors := PackedColorArray()
 	for packed: Variant in stored as Array:
-		colors.append(Gen2Palette.from_packed(int(packed)))
+		colors.append(PokePalette.from_packed(int(packed)))
 	return colors
 
 
@@ -1777,10 +1798,10 @@ func title_palettes(name: String) -> Array[PackedColorArray]:
 	if not stored is Array:
 		return out
 	var packed: Array = stored
-	for first: int in range(0, packed.size(), RomLayout.TITLE_PALETTE_COLORS):
+	for first: int in range(0, packed.size(), Gen2Layout.TITLE_PALETTE_COLORS):
 		var colors := PackedColorArray()
-		for index: int in RomLayout.TITLE_PALETTE_COLORS:
-			colors.append(Gen2Palette.from_packed(int(packed[first + index])))
+		for index: int in Gen2Layout.TITLE_PALETTE_COLORS:
+			colors.append(PokePalette.from_packed(int(packed[first + index])))
 		out.append(colors)
 	return out
 
@@ -1806,7 +1827,7 @@ func oak_pc_text(name: String) -> String:
 
 
 ## One row string of either of the PC's two menus, by the name
-## `RomLayout.POKECENTER_PC_ROWS` or `POKECENTER_PC_PLAYERS_ROWS` gives it.
+## `Gen2Layout.POKECENTER_PC_ROWS` or `POKECENTER_PC_PLAYERS_ROWS` gives it.
 ## `<PLAYER>` is still in `players_pc`, the way the cartridge stores it. Empty on
 ## a cache imported without them.
 func pokecenter_pc_row(name: String, players: bool = false) -> String:
@@ -1833,7 +1854,7 @@ func pokecenter_pc_lists(players: bool = false) -> Array:
 
 
 ## One of the routine's own six texts, by the name
-## `RomLayout.POKECENTER_PC_TEXT_AT` gives it.
+## `Gen2Layout.POKECENTER_PC_TEXT_AT` gives it.
 func pokecenter_pc_text(name: String) -> String:
 	var texts: Variant = _pokecenter_pc.get("texts", {})
 	return String((texts as Dictionary).get(name, "")) if texts is Dictionary else ""
@@ -1989,14 +2010,14 @@ func has_gs_intro() -> bool:
 
 
 ## One of `GoldSilverIntro`'s metatile runs, by the name
-## `RomLayout.GS_INTRO_SECTION` gives it: a `_tilemap` is a 16-wide map of
+## `Gen2Layout.GS_INTRO_SECTION` gives it: a `_tilemap` is a 16-wide map of
 ## metatile numbers and a `_meta` the four tiles each of those names.
 func gs_intro_map(name: String) -> PackedByteArray:
 	return tile_indices("gs_intro_%s" % name)
 
 
 ## One of `GoldSilverIntro`'s palette runs: `magikarp` and `shellder_lapras` for
-## the two INCLUDEd inside the code, and the `RomLayout.GS_INTRO_PREDEF` names
+## the two INCLUDEd inside the code, and the `Gen2Layout.GS_INTRO_PREDEF` names
 ## for the entries the scenes take out of `PredefPals`.
 func gs_intro_palette(name: String) -> PackedColorArray:
 	var stored: Variant = (_gs_intro.get("palettes", {}) as Dictionary).get(name, [])
@@ -2004,7 +2025,7 @@ func gs_intro_palette(name: String) -> PackedColorArray:
 	if not stored is Array:
 		return colors
 	for packed: Variant in stored as Array:
-		colors.append(Gen2Palette.from_packed(int(packed)))
+		colors.append(PokePalette.from_packed(int(packed)))
 	return colors
 
 
@@ -2024,18 +2045,18 @@ func trade_anim_palette(name: String) -> PackedColorArray:
 	if not stored is Array:
 		return colors
 	for packed: Variant in stored as Array:
-		colors.append(Gen2Palette.from_packed(int(packed)))
+		colors.append(PokePalette.from_packed(int(packed)))
 	return colors
 
 
 ## One of the intro movie's 32x32 BG maps or attribute planes, by the name
-## `RomLayout.INTRO_SECTION` gives it. Empty on a cache without the movie.
+## `Gen2Layout.INTRO_SECTION` gives it. Empty on a cache without the movie.
 func intro_map(name: String) -> PackedByteArray:
 	return tile_indices("intro_%s" % name)
 
 
 ## One of the intro movie's palette runs, by the name
-## `RomLayout.INTRO_SECTION` gives it, plus `fade` and `unown`. Sixteen
+## `Gen2Layout.INTRO_SECTION` gives it, plus `fade` and `unown`. Sixteen
 ## palettes for a scene's own run, eight for the fade and two for the Unown.
 func intro_palette(name: String) -> PackedColorArray:
 	var stored: Variant = (_intro_movie.get("palettes", {}) as Dictionary).get(name, [])
@@ -2043,7 +2064,7 @@ func intro_palette(name: String) -> PackedColorArray:
 	if not stored is Array:
 		return colors
 	for packed: Variant in stored as Array:
-		colors.append(Gen2Palette.from_packed(int(packed)))
+		colors.append(PokePalette.from_packed(int(packed)))
 	return colors
 
 
@@ -2054,7 +2075,7 @@ func has_unown_puzzle() -> bool:
 
 
 ## One of `_UnownPuzzle`'s tile strips, by the name
-## `RomLayout.UNOWN_PUZZLE_SECTION` gives it plus `tile_borders`.
+## `Gen2Layout.UNOWN_PUZZLE_SECTION` gives it plus `tile_borders`.
 func unown_puzzle_indices(name: String) -> PackedByteArray:
 	return tile_indices("unown_puzzle_%s" % name)
 
@@ -2064,7 +2085,7 @@ func unown_puzzle_indices(name: String) -> PackedByteArray:
 func unown_puzzle_palette() -> PackedColorArray:
 	var colors := PackedColorArray()
 	for packed: Variant in _unown_puzzle.get("palette", []) as Array:
-		colors.append(Gen2Palette.from_packed(int(packed)))
+		colors.append(PokePalette.from_packed(int(packed)))
 	return colors
 
 
@@ -2091,7 +2112,7 @@ func diploma_tilemap(page: int) -> PackedByteArray:
 func diploma_palette() -> PackedColorArray:
 	var colors := PackedColorArray()
 	for packed: Variant in _diploma.get("palette", []) as Array:
-		colors.append(Gen2Palette.from_packed(int(packed)))
+		colors.append(PokePalette.from_packed(int(packed)))
 	return colors
 
 
@@ -2111,7 +2132,7 @@ func mystery_gift_indices() -> PackedByteArray:
 func mystery_gift_palette() -> PackedColorArray:
 	var colors := PackedColorArray()
 	for packed: Variant in _mystery_gift.get("palette", []) as Array:
-		colors.append(Gen2Palette.from_packed(int(packed)))
+		colors.append(PokePalette.from_packed(int(packed)))
 	return colors
 
 
@@ -2167,7 +2188,7 @@ func has_slots() -> bool:
 
 
 ## One of `_SlotMachine`'s three tile strips, by the name
-## `RomLayout.SLOTS_SECTION` gives it.
+## `Gen2Layout.SLOTS_SECTION` gives it.
 func slots_indices(name: String) -> PackedByteArray:
 	return tile_indices(name)
 
@@ -2192,8 +2213,8 @@ func magnet_train_tilemap(name: String) -> PackedByteArray:
 
 
 func has_magnet_train() -> bool:
-	return magnet_train_tilemap("bg").size() == RomLayout.MAGNET_TRAIN_BG_BYTES \
-		and magnet_train_tilemap("fg").size() == RomLayout.MAGNET_TRAIN_FG_BYTES
+	return magnet_train_tilemap("bg").size() == Gen2Layout.MAGNET_TRAIN_BG_BYTES \
+		and magnet_train_tilemap("fg").size() == Gen2Layout.MAGNET_TRAIN_FG_BYTES
 
 
 ## `SlotsTilemap`, the twelve rows above the text box.
@@ -2212,16 +2233,16 @@ func slots_palette(index: int) -> PackedColorArray:
 	var colors := PackedColorArray()
 	if not stored is Array or index < 0:
 		return colors
-	var first: int = index * RomLayout.PREDEF_PALETTE_COLORS
-	if first + RomLayout.PREDEF_PALETTE_COLORS > (stored as Array).size():
+	var first: int = index * Gen2Layout.PREDEF_PALETTE_COLORS
+	if first + Gen2Layout.PREDEF_PALETTE_COLORS > (stored as Array).size():
 		return colors
-	for offset: int in RomLayout.PREDEF_PALETTE_COLORS:
-		colors.append(Gen2Palette.from_packed(int((stored as Array)[first + offset])))
+	for offset: int in Gen2Layout.PREDEF_PALETTE_COLORS:
+		colors.append(PokePalette.from_packed(int((stored as Array)[first + offset])))
 	return colors
 
 
 ## One of the slot machine's seven boxes, by the name
-## `RomLayout.SLOTS_TEXT_RUNS` gives it.
+## `Gen2Layout.SLOTS_TEXT_RUNS` gives it.
 func slots_text(name: String) -> String:
 	return String(_slots_text.get(name, ""))
 
@@ -2233,7 +2254,7 @@ func has_card_flip() -> bool:
 
 
 ## One of `_CardFlip`'s five tile strips, by the name
-## `RomLayout.CARD_FLIP_SECTION` gives it.
+## `Gen2Layout.CARD_FLIP_SECTION` gives it.
 func card_flip_indices(name: String) -> PackedByteArray:
 	return tile_indices(name)
 
@@ -2255,16 +2276,16 @@ func card_flip_palette(index: int) -> PackedColorArray:
 	var colors := PackedColorArray()
 	if not stored is Array or index < 0:
 		return colors
-	var first: int = index * RomLayout.PREDEF_PALETTE_COLORS
-	if first + RomLayout.PREDEF_PALETTE_COLORS > (stored as Array).size():
+	var first: int = index * Gen2Layout.PREDEF_PALETTE_COLORS
+	if first + Gen2Layout.PREDEF_PALETTE_COLORS > (stored as Array).size():
 		return colors
-	for offset: int in RomLayout.PREDEF_PALETTE_COLORS:
-		colors.append(Gen2Palette.from_packed(int((stored as Array)[first + offset])))
+	for offset: int in Gen2Layout.PREDEF_PALETTE_COLORS:
+		colors.append(PokePalette.from_packed(int((stored as Array)[first + offset])))
 	return colors
 
 
 ## One of the card flip's eight boxes, by the name
-## `RomLayout.CARD_FLIP_TEXT_ORDER` gives it.
+## `Gen2Layout.CARD_FLIP_TEXT_ORDER` gives it.
 func card_flip_text(name: String) -> String:
 	return String(_card_flip_text.get(name, ""))
 
@@ -2281,11 +2302,11 @@ func credits_palette(scene: int, slot: int = 0) -> PackedColorArray:
 	var packed: Array = stored
 	var first: int = (
 		scene * per_scene + mini(slot, per_scene - 1)
-	) * RomLayout.CREDITS_PALETTE_COLORS
-	if first + RomLayout.CREDITS_PALETTE_COLORS > packed.size():
+	) * Gen2Layout.CREDITS_PALETTE_COLORS
+	if first + Gen2Layout.CREDITS_PALETTE_COLORS > packed.size():
 		return colors
-	for index: int in RomLayout.CREDITS_PALETTE_COLORS:
-		colors.append(Gen2Palette.from_packed(int(packed[first + index])))
+	for index: int in Gen2Layout.CREDITS_PALETTE_COLORS:
+		colors.append(PokePalette.from_packed(int(packed[first + index])))
 	return colors
 
 
@@ -2293,7 +2314,7 @@ func credits_palette(scene: int, slot: int = 0) -> PackedColorArray:
 ## scene's frame draws. -1 outside the table.
 func credits_frame_block(scene: int, frame: int) -> int:
 	var stored: Variant = _credits.get("frames", [])
-	var at: int = scene * RomLayout.CREDITS_SCENE_FRAMES + frame
+	var at: int = scene * Gen2Layout.CREDITS_SCENE_FRAMES + frame
 	if not stored is Array or at < 0 or at >= (stored as Array).size():
 		return -1
 	return int((stored as Array)[at])
@@ -2326,7 +2347,7 @@ func pokegear_card(card: StringName) -> PackedByteArray:
 	return out
 
 
-## One of the Pokegear's own two texts, by the name `RomLayout` gives it.
+## One of the Pokegear's own two texts, by the name `Gen2Layout` gives it.
 func pokegear_text(name: String) -> String:
 	var texts: Variant = _town_map.get("card_texts", {})
 	if not texts is Dictionary:
@@ -2339,7 +2360,7 @@ func pokegear_text(name: String) -> String:
 ## that has no palette map.
 func town_map_palette_of(tile: int) -> int:
 	var stored: Variant = _town_map.get("palette_map", [])
-	if not stored is Array or tile < 0 or tile >= RomLayout.TOWN_MAP_PALETTE_MAP_LIMIT:
+	if not stored is Array or tile < 0 or tile >= Gen2Layout.TOWN_MAP_PALETTE_MAP_LIMIT:
 		return 0
 	var packed: Array = stored
 	@warning_ignore("integer_division")
@@ -2357,14 +2378,14 @@ func town_map_palette(slot: int, female: bool = false) -> PackedColorArray:
 		else "palettes"
 	var stored: Variant = _town_map.get(name, [])
 	var colors := PackedColorArray()
-	if not stored is Array or slot < 0 or slot >= RomLayout.TOWN_MAP_PALETTES:
+	if not stored is Array or slot < 0 or slot >= Gen2Layout.TOWN_MAP_PALETTES:
 		return colors
 	var packed: Array = stored
-	var first: int = slot * RomLayout.TOWN_MAP_PALETTE_COLORS
-	if first + RomLayout.TOWN_MAP_PALETTE_COLORS > packed.size():
+	var first: int = slot * Gen2Layout.TOWN_MAP_PALETTE_COLORS
+	if first + Gen2Layout.TOWN_MAP_PALETTE_COLORS > packed.size():
 		return colors
-	for index: int in RomLayout.TOWN_MAP_PALETTE_COLORS:
-		colors.append(Gen2Palette.from_packed(int(packed[first + index])))
+	for index: int in Gen2Layout.TOWN_MAP_PALETTE_COLORS:
+		colors.append(PokePalette.from_packed(int(packed[first + index])))
 	return colors
 
 
@@ -2401,11 +2422,11 @@ func landmark_name(index: int) -> String:
 ## `PREDEFPAL_CGB_BADGE`, stored whole rather than as a pair.
 func card_badge_palette() -> PackedColorArray:
 	var stored: Variant = _card_palettes.get("badge", [])
-	if not stored is Array or (stored as Array).size() < RomLayout.CARD_BADGE_PALETTE_COLORS:
-		return Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+	if not stored is Array or (stored as Array).size() < Gen2Layout.CARD_BADGE_PALETTE_COLORS:
+		return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	var colors := PackedColorArray()
 	for packed: Variant in stored as Array:
-		colors.append(Gen2Palette.from_packed(int(packed)))
+		colors.append(PokePalette.from_packed(int(packed)))
 	return colors
 
 
@@ -2414,22 +2435,22 @@ func card_badge_palette() -> PackedColorArray:
 ## `cursor` the arrow's object palette. Empty when the cache does not carry it.
 func pokedex_palette(name: String) -> PackedColorArray:
 	var stored: Variant = _pokedex_palettes.get(name, [])
-	if not stored is Array or (stored as Array).size() < Gen2Palette.COLORS_PER_PIC:
+	if not stored is Array or (stored as Array).size() < PokePalette.COLORS_PER_PIC:
 		return PackedColorArray()
 	var colors := PackedColorArray()
 	for packed: Variant in stored as Array:
-		colors.append(Gen2Palette.from_packed(int(packed)))
+		colors.append(PokePalette.from_packed(int(packed)))
 	return colors
 
 
 ## `BillsPCOrangePalette`, the mon-pic box's colours while the PC's cursor
 ## stands on a row holding no Pokemon. Empty for a cache without the screen.
 func pc_palette() -> PackedColorArray:
-	if _pc_palette.size() < RomLayout.PC_PALETTE_COLORS:
+	if _pc_palette.size() < Gen2Layout.PC_PALETTE_COLORS:
 		return PackedColorArray()
 	var colors := PackedColorArray()
 	for packed: Variant in _pc_palette:
-		colors.append(Gen2Palette.from_packed(int(packed)))
+		colors.append(PokePalette.from_packed(int(packed)))
 	return colors
 
 
@@ -2438,9 +2459,9 @@ func pc_palette() -> PackedColorArray:
 ## four the tilemap holds.
 func pack_pocket_name(pocket: int) -> PackedByteArray:
 	var stored: Variant = _pack.get("pocket_names", [])
-	var cells: int = RomLayout.PACK_NAME_COLUMNS * RomLayout.PACK_NAME_ROWS
-	if not stored is Array or pocket < 0 or pocket >= RomLayout.PACK_POCKETS \
-		or (stored as Array).size() < RomLayout.PACK_NAME_CELLS:
+	var cells: int = Gen2Layout.PACK_NAME_COLUMNS * Gen2Layout.PACK_NAME_ROWS
+	if not stored is Array or pocket < 0 or pocket >= Gen2Layout.PACK_POCKETS \
+		or (stored as Array).size() < Gen2Layout.PACK_NAME_CELLS:
 		return PackedByteArray()
 	var out := PackedByteArray()
 	for cell: int in cells:
@@ -2453,32 +2474,32 @@ func pack_pocket_name(pocket: int) -> PackedByteArray:
 ## the female set.
 func pack_palette(index: int, female: bool = false) -> PackedColorArray:
 	var stored: Variant = _pack.get("female_palettes" if female else "palettes", [])
-	if not stored is Array or index < 0 or index >= RomLayout.PACK_PALETTES:
+	if not stored is Array or index < 0 or index >= Gen2Layout.PACK_PALETTES:
 		return PackedColorArray()
-	var first: int = index * RomLayout.PACK_PALETTE_COLORS
-	if (stored as Array).size() < first + RomLayout.PACK_PALETTE_COLORS:
+	var first: int = index * Gen2Layout.PACK_PALETTE_COLORS
+	if (stored as Array).size() < first + Gen2Layout.PACK_PALETTE_COLORS:
 		return PackedColorArray()
 	var colors := PackedColorArray()
-	for offset: int in RomLayout.PACK_PALETTE_COLORS:
-		colors.append(Gen2Palette.from_packed(int((stored as Array)[first + offset])))
+	for offset: int in Gen2Layout.PACK_PALETTE_COLORS:
+		colors.append(PokePalette.from_packed(int((stored as Array)[first + offset])))
 	return colors
 
 
 ## The four tiles of a species' footprint, in the `footprints` strip's own
 ## numbering: the two top halves where the species sits, and the two bottom
-## halves [constant RomLayout.FOOTPRINT_HALF_STRIDE] tiles further on, which is
+## halves [constant Gen2Layout.FOOTPRINT_HALF_STRIDE] tiles further on, which is
 ## the offset the source calls a forgotten tile-editor fix. Empty for a species
 ## outside the run.
 func footprint_tiles(number: int) -> PackedInt32Array:
-	if number < 1 or number > RomLayout.FOOTPRINT_SPECIES:
+	if number < 1 or number > Gen2Layout.FOOTPRINT_SPECIES:
 		return PackedInt32Array()
 	var index: int = number - 1
-	var first: int = (index / 8) * (8 * RomLayout.FOOTPRINT_TILES) \
-		+ (index % 8) * RomLayout.FOOTPRINT_HALF_TILES
+	var first: int = (index / 8) * (8 * Gen2Layout.FOOTPRINT_TILES) \
+		+ (index % 8) * Gen2Layout.FOOTPRINT_HALF_TILES
 	return PackedInt32Array([
 		first, first + 1,
-		first + RomLayout.FOOTPRINT_HALF_STRIDE,
-		first + RomLayout.FOOTPRINT_HALF_STRIDE + 1,
+		first + Gen2Layout.FOOTPRINT_HALF_STRIDE,
+		first + Gen2Layout.FOOTPRINT_HALF_STRIDE + 1,
 	])
 
 
@@ -2498,9 +2519,9 @@ static func hp_bar_palette_name(lit: int) -> String:
 ## `GetHPPal`'s own answer, HP_GREEN, HP_YELLOW or HP_RED, for the callers that
 ## index a table with it rather than naming a palette.
 static func hp_bar_palette_index(lit: int) -> int:
-	if lit >= RomLayout.HP_GREEN_PIXELS:
+	if lit >= Gen2Layout.HP_GREEN_PIXELS:
 		return 0
-	if lit >= RomLayout.HP_YELLOW_PIXELS:
+	if lit >= Gen2Layout.HP_YELLOW_PIXELS:
 		return 1
 	return 2
 
@@ -2525,17 +2546,17 @@ func trainer_name(number: int) -> String:
 func trainer_palette(number: int) -> PackedColorArray:
 	var entry: Dictionary = trainer(number)
 	if entry.is_empty():
-		return Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+		return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 
 	var stored: Array = entry["palette"]
-	return Gen2Palette.pic_palette(PackedColorArray([
-		Gen2Palette.from_packed(int(stored[0])),
-		Gen2Palette.from_packed(int(stored[1])),
+	return PokePalette.pic_palette(PackedColorArray([
+		PokePalette.from_packed(int(stored[0])),
+		PokePalette.from_packed(int(stored[1])),
 	]))
 
 
 ## How many individual trainers trainer class [param number] carries. One class
-## in every game carries none: see [constant RomLayout.EMPTY_TRAINER_CLASS].
+## in every game carries none: see [constant Gen2Layout.EMPTY_TRAINER_CLASS].
 func trainer_party_count(number: int) -> int:
 	return (trainer(number).get("trainers", []) as Array).size()
 
@@ -2543,7 +2564,7 @@ func trainer_party_count(number: int) -> int:
 ## One of a trainer class's individual trainers, as { name, type, party }, where
 ## `party` is that trainer's Pokemon in the cartridge's own order, each
 ## { level, species, item, moves }. Empty for a class or an index this class does
-## not have. `type` is one of the `RomLayout.TRAINER_MON_*` constants and decides
+## not have. `type` is one of the `Gen2Layout.TRAINER_MON_*` constants and decides
 ## whether a member knows what its level teaches or the moves stored with it, and
 ## whether it holds an item. See [Gen2TrainerParty].
 func trainer_party(number: int, index: int) -> Dictionary:
@@ -2610,10 +2631,10 @@ func trainer_dvs(number: int) -> int:
 func player_palette(kind: String) -> PackedColorArray:
 	var stored: Variant = _player_palettes.get(kind, null)
 	if not stored is Array or (stored as Array).size() < 2:
-		return Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
-	return Gen2Palette.pic_palette(PackedColorArray([
-		Gen2Palette.from_packed(int((stored as Array)[0])),
-		Gen2Palette.from_packed(int((stored as Array)[1])),
+		return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+	return PokePalette.pic_palette(PackedColorArray([
+		PokePalette.from_packed(int((stored as Array)[0])),
+		PokePalette.from_packed(int((stored as Array)[1])),
 	]))
 
 
@@ -2622,11 +2643,11 @@ func player_palette(kind: String) -> PackedColorArray:
 ## own `GetSGBLayout` until `SCGB_BATTLE_COLORS` replaces it after
 ## `BattleIntroSlidingPics`, which is why a battle slides in without colour.
 func battle_grayscale_palette() -> PackedColorArray:
-	if _battle_grayscale_palette.size() < RomLayout.PREDEF_PALETTE_COLORS:
+	if _battle_grayscale_palette.size() < Gen2Layout.PREDEF_PALETTE_COLORS:
 		return PackedColorArray()
 	var out := PackedColorArray()
 	for packed: Variant in _battle_grayscale_palette:
-		out.append(Gen2Palette.from_packed(int(packed)))
+		out.append(PokePalette.from_packed(int(packed)))
 	return out
 
 
@@ -2643,7 +2664,7 @@ func move_screen_palette() -> PackedColorArray:
 func stats_page_palette(page: int) -> PackedColorArray:
 	var pages: Variant = _stats_screen_palettes.get("pages", [])
 	if not pages is Array or (pages as Array).is_empty():
-		return Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+		return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	return _predef_colors((pages as Array)[_stats_page_index(page, (pages as Array).size())])
 
 
@@ -2654,7 +2675,7 @@ func stats_page_tint(page: int) -> Color:
 	var tints: Variant = _stats_screen_palettes.get("tints", [])
 	if not tints is Array or (tints as Array).is_empty():
 		return Color.WHITE
-	return Gen2Palette.from_packed(
+	return PokePalette.from_packed(
 		int((tints as Array)[_stats_page_index(page, (tints as Array).size())])
 	)
 
@@ -2666,11 +2687,11 @@ func _stats_page_index(page: int, count: int) -> int:
 
 
 func _predef_colors(stored: Variant) -> PackedColorArray:
-	if not stored is Array or (stored as Array).size() < RomLayout.PREDEF_PALETTE_COLORS:
-		return Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+	if not stored is Array or (stored as Array).size() < Gen2Layout.PREDEF_PALETTE_COLORS:
+		return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	var out := PackedColorArray()
 	for packed: Variant in stored as Array:
-		out.append(Gen2Palette.from_packed(int(packed)))
+		out.append(PokePalette.from_packed(int(packed)))
 	return out
 
 
@@ -2679,16 +2700,16 @@ func _predef_colors(stored: Variant) -> PackedColorArray:
 ## `wTimeOfDayPal`'s `DARKNESS_F`.
 func battle_transition_palette(dark: bool = false) -> PackedColorArray:
 	var stored: Variant = _transition_palettes.get("dark" if dark else "day", null)
-	if not stored is Array or (stored as Array).size() < RomLayout.TRANSITION_PALETTE_COLORS:
-		return Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+	if not stored is Array or (stored as Array).size() < Gen2Layout.TRANSITION_PALETTE_COLORS:
+		return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	var out := PackedColorArray()
 	for packed: Variant in stored as Array:
-		out.append(Gen2Palette.from_packed(int(packed)))
+		out.append(PokePalette.from_packed(int(packed)))
 	return out
 
 
 func player_backpic(kind: String) -> Dictionary:
-	var slot: int = RomLayout.PLAYER_BACKPICS.find(kind)
+	var slot: int = Gen2Layout.PLAYER_BACKPICS.find(kind)
 	if slot < 0:
 		return {}
 	var cell: int = int(atlas("player_back").get("cell", 0))
@@ -2785,8 +2806,8 @@ func species_pic(number: int, back: bool = false) -> Dictionary:
 	return {
 		"atlas": name,
 		"slot": number - 1,
-		"width": int(tiles[0]) * Gen2Tiles.TILE_WIDTH,
-		"height": int(tiles[1]) * Gen2Tiles.TILE_HEIGHT,
+		"width": int(tiles[0]) * PokeTiles.TILE_WIDTH,
+		"height": int(tiles[1]) * PokeTiles.TILE_HEIGHT,
 	}
 
 
@@ -2796,7 +2817,7 @@ func egg_pic() -> Dictionary:
 	if _egg_pic.is_empty() or atlas("egg_front").is_empty():
 		return {}
 	var name: String = "egg_front"
-	var side: int = int(_egg_pic.get("tiles", 0)) * Gen2Tiles.TILE_WIDTH
+	var side: int = int(_egg_pic.get("tiles", 0)) * PokeTiles.TILE_WIDTH
 	return {"atlas": name, "slot": 0, "width": side, "height": side}
 
 
@@ -2806,10 +2827,10 @@ func egg_palette(shiny: bool = false) -> PackedColorArray:
 		"shiny" if shiny else "normal", null
 	)
 	if not stored is Array or (stored as Array).size() < 2:
-		return Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
-	return Gen2Palette.pic_palette(PackedColorArray([
-		Gen2Palette.from_packed(int((stored as Array)[0])),
-		Gen2Palette.from_packed(int((stored as Array)[1])),
+		return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+	return PokePalette.pic_palette(PackedColorArray([
+		PokePalette.from_packed(int((stored as Array)[0])),
+		PokePalette.from_packed(int((stored as Array)[1])),
 	]))
 
 
@@ -2830,8 +2851,8 @@ func _supplied_pic(art: Variant) -> Dictionary:
 		"atlas": "",
 		"slot": -1,
 		"indices": indices,
-		"width": tiles * Gen2Tiles.TILE_WIDTH,
-		"height": tiles * Gen2Tiles.TILE_HEIGHT,
+		"width": tiles * PokeTiles.TILE_WIDTH,
+		"height": tiles * PokeTiles.TILE_HEIGHT,
 	}
 
 
@@ -2846,7 +2867,7 @@ func species_pic_animation(number: int, unown_form: int = 0) -> Dictionary:
 	var pic: Dictionary = species_pic(number, false)
 	if pic.is_empty() or pic.has("indices"):
 		return {}
-	if number == RomLayout.UNOWN_SPECIES and unown_form > 0:
+	if number == Gen2Layout.UNOWN_SPECIES and unown_form > 0:
 		pic["atlas"] = "unown_front_anim"
 		pic["slot"] = unown_form - 1
 		return pic
@@ -2866,7 +2887,7 @@ func pic_animation(number: int, unown_form: int = 0) -> Dictionary:
 		return {}
 
 	var value: Variant = null
-	if number == RomLayout.UNOWN_SPECIES and unown_form > 0:
+	if number == Gen2Layout.UNOWN_SPECIES and unown_form > 0:
 		var letters: Variant = section.get("unown", [])
 		if letters is Array and unown_form - 1 < (letters as Array).size():
 			value = (letters as Array)[unown_form - 1]
@@ -2923,10 +2944,10 @@ func _pic_anims() -> Dictionary:
 
 ## One of Unown's 26 letter forms, which live outside the species tables.
 func unown_pic(form: int, back: bool = false) -> Dictionary:
-	if form < 0 or form >= RomLayout.UNOWN_FORMS:
+	if form < 0 or form >= Gen2Layout.UNOWN_FORMS:
 		return {}
 
-	var pic: Dictionary = species_pic(RomLayout.UNOWN_SPECIES, back)
+	var pic: Dictionary = species_pic(Gen2Layout.UNOWN_SPECIES, back)
 	if pic.is_empty():
 		return {}
 

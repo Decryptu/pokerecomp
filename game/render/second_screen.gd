@@ -465,7 +465,7 @@ func _redraw_strip() -> void:
 		_draw_underline(paper, width, height)
 	Gen2PicImage.show(_strip_art, Gen2PicImage.from_indices(
 		paper, width, height,
-		Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+		PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	))
 
 
@@ -481,8 +481,8 @@ func _draw_box(glyphs: Gen2Font, into: PackedByteArray, width: int, height: int)
 	var tile: int = Gen2Font.TILE
 	var right: int = width - tile
 	var bottom: int = height - tile
-	var horizontal: int = RomLayout.FRAME_FIRST_CODE + RomLayout.FRAME_HORIZONTAL
-	var vertical: int = RomLayout.FRAME_FIRST_CODE + RomLayout.FRAME_VERTICAL
+	var horizontal: int = Gen2Layout.FRAME_FIRST_CODE + Gen2Layout.FRAME_HORIZONTAL
+	var vertical: int = Gen2Layout.FRAME_FIRST_CODE + Gen2Layout.FRAME_VERTICAL
 	var x: int = tile
 	while x < right:
 		glyphs.draw_frame_code(style, horizontal, into, width, mini(x, right - 1), 0)
@@ -494,12 +494,12 @@ func _draw_box(glyphs: Gen2Font, into: PackedByteArray, width: int, height: int)
 		glyphs.draw_frame_code(style, vertical, into, width, right, mini(y, bottom - 1))
 		y += tile
 	for corner: Array in [
-		[RomLayout.FRAME_TOP_LEFT, 0, 0], [RomLayout.FRAME_TOP_RIGHT, right, 0],
-		[RomLayout.FRAME_BOTTOM_LEFT, 0, bottom],
-		[RomLayout.FRAME_BOTTOM_RIGHT, right, bottom],
+		[Gen2Layout.FRAME_TOP_LEFT, 0, 0], [Gen2Layout.FRAME_TOP_RIGHT, right, 0],
+		[Gen2Layout.FRAME_BOTTOM_LEFT, 0, bottom],
+		[Gen2Layout.FRAME_BOTTOM_RIGHT, right, bottom],
 	]:
 		glyphs.draw_frame_code(
-			style, RomLayout.FRAME_FIRST_CODE + int(corner[0]), into, width,
+			style, Gen2Layout.FRAME_FIRST_CODE + int(corner[0]), into, width,
 			int(corner[1]), int(corner[2])
 		)
 

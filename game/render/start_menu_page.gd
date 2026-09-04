@@ -370,4 +370,4 @@ func _text(
 
 ## `PAL_BG_TEXT`, which is what every one of these boxes is drawn with.
 func _palette() -> PackedColorArray:
-	return Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+	return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))

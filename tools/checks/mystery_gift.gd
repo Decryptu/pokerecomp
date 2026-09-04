@@ -65,9 +65,9 @@ func _verify_tables(game_id: StringName, data: GameData) -> void:
 		var table: Array = data.mystery_gift_table(decorations)
 		var label: String = "MysteryGiftDecos" if decorations else "MysteryGiftItems"
 		if not _r.check(
-			table.size() == RomLayout.MYSTERY_GIFT_TABLE_ROWS,
+			table.size() == Gen2Layout.MYSTERY_GIFT_TABLE_ROWS,
 			"%s: %s is %d rows, not %d." % [
-				game_id, label, table.size(), RomLayout.MYSTERY_GIFT_TABLE_ROWS,
+				game_id, label, table.size(), Gen2Layout.MYSTERY_GIFT_TABLE_ROWS,
 			]
 		):
 			continue
@@ -96,7 +96,7 @@ func _verify_tables(game_id: StringName, data: GameData) -> void:
 		_r.check(
 			Gen2MysteryGift.gift_at(
 				data.mystery_gift_table(decorations),
-				RomLayout.MYSTERY_GIFT_TABLE_ROWS
+				Gen2Layout.MYSTERY_GIFT_TABLE_ROWS
 			) == Gen2MysteryGift.FALLBACK_GIFT,
 			"%s: an index past the table's end is not the fallback." % game_id
 		)
@@ -148,7 +148,7 @@ func _verify_screen(game_id: StringName, data: GameData) -> PackedByteArray:
 	if not _r.check(page != null, "%s: the Mystery Gift page did not build." % game_id):
 		return PackedByteArray()
 	_r.check(
-		page.palette.size() == int(PALETTES[game_id]) * RomLayout.PREDEF_PALETTE_COLORS,
+		page.palette.size() == int(PALETTES[game_id]) * Gen2Layout.PREDEF_PALETTE_COLORS,
 		"%s: the screen carries %d colours, not %d palettes' worth." % [
 			game_id, page.palette.size(), int(PALETTES[game_id]),
 		]
@@ -160,13 +160,13 @@ func _verify_screen(game_id: StringName, data: GameData) -> PackedByteArray:
 		]
 	)
 	var tiles: int = data.mystery_gift_indices().size() / (
-		Gen2Tiles.TILE_WIDTH * Gen2Tiles.TILE_HEIGHT
+		PokeTiles.TILE_WIDTH * PokeTiles.TILE_HEIGHT
 	)
 	var highest: int = 0
 	for code: int in page.tilemap():
 		## `ClearBox`'s own blank is a font glyph rather than a tile of the
 		## screen's art, which is what the cartridge blanks a box with too.
-		if code < RomLayout.FONT_FIRST_CODE \
+		if code < Gen2Layout.FONT_FIRST_CODE \
 				and code != Gen2MysteryGiftPage.BLANK_CODE:
 			highest = maxi(highest, code)
 	_r.check(
@@ -297,7 +297,7 @@ func _verify_live_screen(game_id: StringName, data: GameData) -> void:
 			and host.visible_text().is_empty(),
 		"%s: the screen did not open on its prompt." % game_id
 	)
-	host.handle_button(Gen2Button.A)
+	host.handle_button(PokeButton.A)
 	host.settle()
 	_r.check(
 		host.step() == Gen2MysteryGiftScreen.STEP.MESSAGE,
