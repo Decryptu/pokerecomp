@@ -112,6 +112,22 @@ static func from_battle_party(
 	return out
 
 
+static func from_world_battle(
+	data: GameData, battle: Gen2Battle, source_save: Gen2SaveData
+) -> Gen2SaveData:
+	if data == null or battle == null or source_save == null:
+		return null
+	if battle.in_battle_tower:
+		# RunBattleTowerTrainer reloads Pokemon data, then heals the restored party.
+		var restored: Gen2SaveData = Gen2SaveData.from_dict(source_save.to_dict())
+		if restored == null or Gen2WorldPartyHost.heal_party_rows(data, restored) < 0:
+			return null
+		return restored
+	return from_battle_party(
+		data.id, data.sha1, source_save.slot, battle.party(Gen2Battle.PLAYER), "", source_save
+	)
+
+
 static func _egg_slots(party: Gen2Party, source_save: Gen2SaveData) -> int:
 	if party == null or party.mons.is_empty() or party.mons.size() > Gen2Party.MAX_SIZE:
 		return -1

@@ -210,6 +210,9 @@ func _informing() -> bool:
 
 
 func _open() -> void:
+	if _stage.begins_with("tower_"):
+		_open_tower_stage()
+		return
 	if _stage == "prize":
 		_open_prize()
 		return
@@ -545,3 +548,39 @@ func _button(name: String) -> int:
 		"r": return Gen2Button.RIGHT
 		"b": return Gen2Button.B
 		_: return Gen2Button.A
+
+
+func _open_tower_stage() -> void:
+	var random := RandomNumberGenerator.new()
+	random.seed = 19
+	var tower := Gen2BattleTower.new()
+	var opponent: Dictionary = tower.load_opponent(_screen._data, random)
+	var result_text: Dictionary = tower.trainer_line(_screen._data, int(opponent["class"]),
+		Gen2BattleTower.TEXT_LOSS, random, 0)
+	_screen.start_world_battle({"values": {
+		"win_text": result_text,
+		"kind": &"battle_tower", "trainer_class": opponent["class"],
+		"trainer_name": opponent["name"], "enemy_party": opponent["mons"],
+	}})
+	if _stage == "tower_intro":
+		_settle()
+		_screen.finish()
+		return
+	_drain_to_menu()
+	if _stage == "tower_result":
+		for member: Gen2BattleMon in _screen._battle.party(Gen2Battle.ENEMY).mons:
+			if member != _screen._battle.enemy:
+				member.hp = 0
+		for _hit: int in 100:
+			_screen.hurt_enemy()
+		for _press: int in 60:
+			_settle()
+			if _screen.battle_snapshot()["message"] == result_text["text"]:
+				_screen.finish()
+				return
+			_screen.finish()
+			_screen.advance()
+		return
+	_screen.set_battle_pack(PACK_ITEMS, PACK_QUANTITIES)
+	_screen.open_battle_pack()
+	_screen.finish()

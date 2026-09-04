@@ -235,6 +235,10 @@ func test_the_first_focusable_skips_what_cannot_take_focus() -> void:
 	var off := Button.new()
 	off.disabled = true
 	root.add_child(off)
+	var blocked := Control.new()
+	blocked.focus_behavior_recursive = Control.FOCUS_BEHAVIOR_DISABLED
+	root.add_child(blocked)
+	blocked.add_child(Button.new())
 	var wanted := Button.new()
 	root.add_child(wanted)
 

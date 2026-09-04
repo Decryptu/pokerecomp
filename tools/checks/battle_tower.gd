@@ -73,8 +73,12 @@ func run(r: RefCounted) -> void:
 		_verify_strings()
 		_verify_class_tables()
 		_verify_sampler()
+		_verify_stored_stats()
+		_verify_result_lines()
 		_verify_rules()
 		_verify_battle_room()
+		_verify_challenge(true)
+		_verify_challenge(false)
 	)
 
 
@@ -148,6 +152,53 @@ func _verify_mons() -> void:
 				first,
 			]
 		)
+
+
+func _verify_stored_stats() -> void:
+	var different: int = 0
+	var keys: Array[String] = ["hp", "attack", "defense", "speed", "sp_attack", "sp_defense"]
+	for group: int in 10:
+		for index: int in 21:
+			var raw: PackedByteArray = _r.data.battle_tower_mon(group, index)
+			var record: Dictionary = Gen2BattleTower.mon_record(_r.data, group, index)
+			var plain: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(
+				_r.data, Gen2SaveMon.from_dict(record)
+			)
+			var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(_r.data, {"values": {
+				"kind": &"battle_tower", "enemy_party": [record],
+			}}, Gen2Party.of(plain))
+			if not _r.check(bool(prepared.get("ok", false)), "Tower row failed to prepare"):
+				return
+			var enemy: Gen2BattleMon = (prepared["battle"] as Gen2Battle).enemy
+			var changed: bool = false
+			for stat: int in 6:
+				var offset: int = 36 + stat * 2
+				var expected: int = (int(raw[offset]) << 8) | int(raw[offset + 1])
+				_r.check(int(enemy.stats[keys[stat]]) == expected,
+					"Tower %d/%d %s differs from its stored stat" % [group, index, keys[stat]])
+				changed = changed or int(plain.stats[keys[stat]]) != expected
+			different += int(changed)
+			_r.check(String(record["nickname"]) == String(_r.data.species(enemy.species)["name"]),
+				"Tower nickname was not replaced by GetPokemonName")
+	_r.check(different == 117, "Tower stored stats differ on %d rows, expected 117" % different)
+	print("crystal tower: 210 stored stat rows, 117 differ from recalculation; 1260 stats checked.")
+
+
+func _verify_result_lines() -> void:
+	var tower := Gen2BattleTower.new()
+	var random := RandomNumberGenerator.new()
+	var texts: Dictionary = _r.data.battle_tower()["texts"]
+	for row: Dictionary in _r.data.battle_tower()["trainers"]:
+		var trainer_class: int = int(row["class"])
+		var gender: String = "female" if Gen2BattleTower.is_class_female(_r.data, trainer_class) else "male"
+		var count: int = 15 if gender == "female" else 25
+		for index: int in count:
+			for kind: int in [1, 2]:
+				var before: int = random.state
+				var line: Dictionary = tower.trainer_line(_r.data, trainer_class, kind, random, index)
+				var expected: String = String(texts[RomLayout.BATTLETOWER_TEXT_KINDS[kind]][gender][index])
+				_r.check(line["text"] == expected and random.state == before,
+					"Tower result text lost the greeting's index")
 
 
 func _verify_strings() -> void:
@@ -253,7 +304,7 @@ func _verify_sampler() -> void:
 			tower.beaten += 1
 			var species: Array = []
 			var items: Array = []
-			for mon: Gen2SaveMon in opponent["mons"] as Array:
+			for mon: Dictionary in opponent["mons"] as Array:
 				_r.check(
 					mon.level == (group + 1) * 10,
 					"group %d drew a level %d opponent" % [group, mon.level]
@@ -346,6 +397,9 @@ func _verify_battle_room() -> void:
 		"the challenge is not in progress by the time the first fight starts"
 	)
 	_r.check(state.battle_tower().beaten == 1, "the first trainer was not counted")
+	for key: String in ["win_text", "loss_text"]:
+		_r.check(not String((values.get(key, {}) as Dictionary).get("text", "")).is_empty(),
+			"the Tower request lost its %s" % key)
 	var greeted: bool = false
 	var sprited: bool = false
 	for result: Dictionary in results:
@@ -408,3 +462,36 @@ func _verify_rules() -> void:
 		) == -1,
 		"the ubers check refused a Lv.70 room, which it never reads"
 	)
+
+
+func _verify_challenge(won: bool) -> void:
+	var state := Gen2WorldState.new()
+	state.battle_tower().chosen_group = 3
+	var world: Gen2WorldAPI = _r.open_world(
+		BATTLE_ROOM_GROUP, BATTLE_ROOM_MAP, BATTLE_ROOM_CELL, state
+	)
+	if world == null:
+		return
+	world.set_party_summary(3, false, [1, 4, 7] as Array[int], [[], [], []],
+		["A", "B", "C"], [false, false, false], {"levels": [30, 30, 30]})
+	world.dispatch_map_entry()
+	var battles: int = 0
+	for _frame: int in BATTLE_ROOM_FRAME_CAP * 8:
+		var request: Dictionary = world.pending_runtime_request()
+		if not request.is_empty():
+			var answer: Dictionary = {"ok": true}
+			if request.get("kind", &"") == &"battle_requested":
+				battles += 1
+				answer["outcome"] = &"won" if won else &"lost"
+			world.complete_runtime_request(answer)
+		elif not world.pending_script_wait().is_empty():
+			world.advance_script_presentation_frame()
+		elif world.script_busy():
+			world.run_event_queue(true, 0)
+		else:
+			break
+	_r.check(battles == (7 if won else 1), "Tower challenge stopped after %d fights" % battles)
+	_r.check(not world.script_busy(), "Tower challenge did not return to reception")
+	var expected: int = Gen2BattleTower.RECEIVED_REWARD if won else Gen2BattleTower.NO_CHALLENGE
+	_r.check(state.battle_tower().challenge_state == expected,
+		"Tower challenge ended in state %d, expected %d" % [state.battle_tower().challenge_state, expected])

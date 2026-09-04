@@ -152,3 +152,9 @@ static func stamp(map: PackedByteArray, player_side: bool) -> void:
 			if x < 0 or x >= COLUMNS or y < 0 or y >= ROWS:
 				continue
 			map[y * COLUMNS + x] = (base + column * side + row) & 0xFF
+
+
+static func result_trainer_step(map: PackedByteArray, columns: int) -> void:
+	for column: int in columns:
+		for row: int in ENEMY_SIDE:
+			map[row * COLUMNS + COLUMNS - columns + column] = column * ENEMY_SIDE + row

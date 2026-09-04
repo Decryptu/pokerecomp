@@ -215,6 +215,7 @@ var _world_battle_request: Dictionary = {}
 ## battle has none and plays the installed set.
 var _injected_rules: Gen2Rules = null
 var _world_battle_completion_sent: bool = false
+var _world_battle_result_picture_shown: bool = false
 var _world_battle_terminal_text_shown: bool = false
 var _world_battle_recovery_shown: bool = false
 var _world_battle_recovery: Dictionary = {}
@@ -638,6 +639,10 @@ func advance_faint() -> bool:
 	Gen2BattleScreenMap.faint_step(_bg_map, bool(faint["player_side"]))
 	if int(faint["step"]) >= Gen2BattleScreenMap.FAINT_STEPS:
 		_faints.remove_at(0)
+		if bool(faint["player_side"]):
+			_player_hud_visible = false
+		else:
+			_enemy_hud_visible = false
 	_push_view()
 	return true
 
@@ -652,6 +657,8 @@ func advance_slide() -> bool:
 	if _slides.is_empty():
 		return false
 	var slide: Dictionary = _slides[0]
+	if bool(slide.get("incoming", false)):
+		return _advance_result_slide(slide)
 	slide["delay"] = int(slide["delay"]) - 1
 	if int(slide["delay"]) > 0:
 		return true
@@ -665,6 +672,23 @@ func advance_slide() -> bool:
 	)
 	if int(slide["step"]) >= int(Gen2BattleScreenMap.SLIDE_STEPS[player_side]):
 		_slides.remove_at(0)
+	_push_view()
+	return true
+
+
+func _advance_result_slide(slide: Dictionary) -> bool:
+	slide["delay"] = int(slide["delay"]) - 1
+	if int(slide["delay"]) > 0:
+		return true
+	var step: int = int(slide["step"])
+	if step == 6:
+		_slides.remove_at(0)
+		return true
+	step += 1
+	slide["step"] = step
+	slide["delay"] = 44 if step == 6 else 4
+	Gen2BattleScreenMap.result_trainer_step(_bg_map, step)
+	_slid_pixels[Gen2Battle.ENEMY] = float((8 - step) * Gen2Tiles.TILE_WIDTH)
 	_push_view()
 	return true
 
@@ -1002,6 +1026,7 @@ func show_matchup(
 	_world_battle_tutorial = false
 	_world_battle_request = {}
 	_world_battle_completion_sent = false
+	_world_battle_result_picture_shown = false
 	_world_battle_terminal_text_shown = false
 	_world_battle_recovery_shown = false
 	_earnings_computed = {}
@@ -1041,6 +1066,7 @@ func show_trainer(
 	_world_battle_tutorial = false
 	_world_battle_request = {}
 	_world_battle_completion_sent = false
+	_world_battle_result_picture_shown = false
 	_world_battle_terminal_text_shown = false
 	_world_battle_recovery_shown = false
 	_earnings_computed = {}
@@ -1087,6 +1113,7 @@ func show_saved_party(save: Gen2SaveData) -> bool:
 	_world_battle_tutorial = false
 	_world_battle_request = {}
 	_world_battle_completion_sent = false
+	_world_battle_result_picture_shown = false
 	_world_battle_terminal_text_shown = false
 	_world_battle_recovery_shown = false
 	_earnings_computed = {}
@@ -1185,6 +1212,7 @@ func _begin_world_battle(prepared: Dictionary, save: Gen2SaveData) -> void:
 	_world_battle_request = (prepared.get("request", {}) as Dictionary).duplicate(true)
 	_world_battle_tutorial = bool(_world_battle_request.get("tutorial", false))
 	_world_battle_completion_sent = false
+	_world_battle_result_picture_shown = false
 	_world_battle_terminal_text_shown = false
 	_world_battle_recovery_shown = false
 	_earnings_computed = {}
@@ -1362,7 +1390,8 @@ func entrance_running() -> bool:
 func _init_battle_display() -> void:
 	## The engine is scene-free, so `wOptions` is injected here, the one place
 	## every battle passes through.
-	_battle.battle_style_set = Gen2OptionsStore.current().battle_style_set
+	_battle.battle_style_set = _battle.in_battle_tower \
+		or Gen2OptionsStore.current().battle_style_set
 	_battle.battle_scene_on = Gen2OptionsStore.current().battle_scene
 	## `InitBattleDisplay` draws both pics, so the letters start from the party
 	## the same way the species above do; every later change is a send-out.
@@ -1457,7 +1486,7 @@ func _build_entrance() -> void:
 			show_message(text)
 		return
 
-	var trainer: bool = _enemy_trainer_class > 0
+	var trainer: bool = _battle.is_trainer_battle
 	if trainer:
 		_entrance_stages.append({
 			"sfx": SFX_SHINE, "wait_sfx": true, "delay": TRAINER_START_FRAMES,
@@ -1645,7 +1674,7 @@ func _apply_entrance_step(what: StringName) -> void:
 func _enemy_battler_label() -> String:
 	if _data == null:
 		return "Enemy"
-	if _enemy_trainer_class <= 0:
+	if _enemy_trainer_class <= 0 or (_battle != null and _battle.is_link_battle):
 		## `wOTPlayerName`, which the request carries: a link opponent is not in
 		## any trainer table, so there is nothing to look the name up in.
 		var linked: String = String(_world_battle_request.get("trainer_name", ""))
@@ -1712,7 +1741,7 @@ func _build_trainer_huds() -> void:
 	_hud_balls = []
 	_hud_border = []
 	_add_trainer_hud(Gen2Battle.PLAYER)
-	if _enemy_trainer_class > 0:
+	if _battle != null and _battle.is_trainer_battle:
 		_add_trainer_hud(Gen2Battle.ENEMY)
 
 
@@ -2709,6 +2738,10 @@ func battle_pack_items() -> Array[int]:
 func open_battle_pack() -> Dictionary:
 	if _battle == null or _battle.is_over() or not _pending.is_empty():
 		return {"ok": false, "reason": &"battle_events_pending"}
+	_close_battle_menu()
+	if not _battle.allows_bag_items():
+		show_message("Items can't be\nused here.")
+		return {"ok": false, "reason": &"items_cant_be_used_here"}
 	if _pack_rows.is_empty():
 		show_message("You have no items to use!")
 		return {"ok": false, "reason": &"no_usable_items"}
@@ -3360,13 +3393,7 @@ func _hurt(mon: Gen2BattleMon) -> void:
 	_read_hp()
 
 
-## Plays one turn out, and the events come back to be shown one at a time.
-##
-## The player picks at random from what it knows, since no menu exists yet; so
-## does the enemy, unless it is a real trainer ([method show_trainer] rather than
-## [method show_matchup]), where [Gen2BattleAI] scores the choice from that
-## class's AI flags. Random rather than the first slot, so the other three moves
-## are ever seen.
+## Development turn driver: random player move and the opponent's usual policy.
 func take_turn() -> void:
 	if _battle == null or _battle.is_over() or not _pending.is_empty():
 		return
@@ -3819,6 +3846,8 @@ func _finish_battle() -> void:
 	if _world_battle_active and not _battle.has_fled():
 		# A run shows neither a win nor a loss text and blacks nobody out:
 		# `wBattleResult` is DRAW and the party is still standing.
+		if _show_world_battle_result_picture():
+			return
 		if _show_world_battle_terminal_text():
 			return
 		## `.give_money` is the next thing `BattleWon` does once
@@ -3851,6 +3880,8 @@ func _finish_battle() -> void:
 func sync_live_party() -> bool:
 	if _source_save == null or _battle == null or _data == null:
 		return false
+	if _battle.in_battle_tower:
+		return true
 	var fought: Gen2SaveData = Gen2SaveBattleAdapter.from_battle_party(
 		_data.id, _data.sha1, _source_save.slot, _battle.party(Gen2Battle.PLAYER),
 		"", _source_save
@@ -3867,14 +3898,7 @@ func sync_live_party() -> bool:
 func _save_battle_result() -> bool:
 	if _save_slot < 0 or _save_written or _battle == null:
 		return true
-	## `wPartyMon` holds the fighting copy on the cartridge, so damage taken, PP
-	## spent and experience gained belong to the party whatever ended the battle.
-	## A loss is no exception: nothing puts the pre-battle party back, and the
-	## full HP a blacked-out player walks away with is `Script_Whiteout`'s own
-	## `special HealParty` rather than a party that was never written.
-	var save: Gen2SaveData = Gen2SaveBattleAdapter.from_battle_party(
-		_data.id, _data.sha1, _save_slot, _battle.party(Gen2Battle.PLAYER), "", _source_save
-	)
+	var save: Gen2SaveData = Gen2SaveBattleAdapter.from_world_battle(_data, _battle, _source_save)
 	# The world host credits its live state from the completion result below;
 	# mirror the same award into the snapshot being written now so neither the
 	# prize nor the Pay Day money is lost between the battle save and that
@@ -3891,9 +3915,7 @@ func _save_battle_result() -> bool:
 				"message": result.get("message", ""),
 			})
 		return false
-	# from_battle_party() returns a clone; without this, the fought party's HP,
-	# experience and PP reach disk but never the live save the world screen and
-	# the next battle read, so both keep showing the pre-battle party.
+	# Publish the saved candidate to the live world before its next battle.
 	Gen2WorldTransaction.copy_into(_source_save, save)
 	_save_written = true
 	return true
@@ -4014,6 +4036,28 @@ func _show_pay_day_text() -> bool:
 	return true
 
 
+# `BattleWinSlideInEnemyTrainerFrontpic`: six columns at four frames, then 40 frames.
+func _show_world_battle_result_picture() -> bool:
+	if _world_battle_result_picture_shown:
+		return false
+	_world_battle_result_picture_shown = true
+	if not _battle.is_trainer_battle or _battle.is_link_battle:
+		return false
+	if _battle.winner() != Gen2Battle.PLAYER:
+		if not _battle.in_battle_tower and not bool(_world_battle_request.get("can_lose", false)):
+			return false
+		_enemy_hud_visible = false
+		for index: int in 8 * Gen2BattleScreenMap.COLUMNS:
+			_bg_map[index] = Gen2BattleScreenMap.BLANK_TILE
+	_enemy_hud_visible = false
+	_enemy_trainer_pic = _enemy_trainer_class
+	_slid_pixels[Gen2Battle.ENEMY] = 56.0
+	Gen2BattleScreenMap.result_trainer_step(_bg_map, 1)
+	_slides.append({"incoming": true, "step": 1, "delay": 4})
+	_push_view()
+	return true
+
+
 func _show_world_battle_terminal_text() -> bool:
 	if _world_battle_terminal_text_shown:
 		return false
@@ -4025,6 +4069,10 @@ func _show_world_battle_terminal_text() -> bool:
 	if not raw_pointer is Dictionary:
 		return false
 	var pointer: Dictionary = raw_pointer as Dictionary
+	var text: String = String(pointer.get("text", ""))
+	if not text.is_empty():
+		show_message(text)
+		return true
 	var address: int = int(pointer.get("address", 0))
 	if address <= 0:
 		return false
@@ -4036,7 +4084,7 @@ func _show_world_battle_terminal_text() -> bool:
 			"bank": bank, "address": address, "text_kind": key,
 		})
 		return true
-	var text: String = String(decoded.get("text", ""))
+	text = String(decoded.get("text", ""))
 	if text.is_empty():
 		return false
 	show_message(text)
@@ -4166,17 +4214,13 @@ func _choose_battle_menu() -> void:
 			_close_battle_menu()
 			_open_switch_pick(&"player")
 		Gen2BattleMenu.PACK:
-			## `BattleMenu_Pack` opens the whole pack; the only item this screen
-			## can use is a ball, so a wild battle reaches ball selection and a
-			## trainer battle is told what `.UseItem`'s own `wWildMon` test would
-			## have refused anyway. Its `.contest` branch skips the pack outright
-			## and throws the one ball a contest has.
+			# `BattleMenu_Pack.contest` skips the pack and throws a Park Ball.
 			_close_battle_menu()
 			if _is_bug_contest_battle():
 				if bool(begin_capture().get("ok", false)):
 					throw_capture_ball()
 				return
-			if not _pack_rows.is_empty():
+			if not _battle.allows_bag_items() or not _pack_rows.is_empty():
 				open_battle_pack()
 				return
 			## No bag was handed over, which is every battle outside the world
@@ -4566,9 +4610,9 @@ func _show_switch_refusal(text: String) -> void:
 
 ## `PlaceEnemysName`: the opponent's class name, a space, and their own name.
 func _enemy_label() -> String:
-	if _enemy_trainer_class <= 0 or _data == null:
+	if _battle == null or not _battle.is_trainer_battle:
 		return _name_of(_enemy)
-	return "%s %s" % [_data.trainer_name(_enemy_trainer_class), _enemy_trainer_name()]
+	return _enemy_battler_label()
 
 
 ## `<PLAYER>`. A development battle has no save to read a name off, so
@@ -5201,16 +5245,19 @@ func _apply_event_state(event: Dictionary) -> void:
 			# here does. The level is part of that: a trainer's own party is not
 			# all one level the way the invented one used to be.
 			if int(event["side"]) == Gen2Battle.ENEMY:
-				enemy_seen.emit(int(event["species"]), int(event.get("unown_form", 0)))
+				if not _battle.in_battle_tower and not _battle.is_link_battle:
+					enemy_seen.emit(int(event["species"]), int(event.get("unown_form", 0)))
 				_enemy = int(event["species"])
 				_enemy_unown_form = int(event.get("unown_form", 0))
 				_enemy_shiny = bool(event.get("shiny", false))
+				_enemy_hud_visible = true
 				_enemy_level = int(event["level"])
 				set_hp(int(event["hp"]), int(event["max_hp"]), _player_hp, _player_max_hp)
 			else:
 				_player = int(event["species"])
 				_player_unown_form = int(event.get("unown_form", 0))
 				_player_shiny = bool(event.get("shiny", false))
+				_player_hud_visible = true
 				_player_level = int(event["level"])
 				set_hp(_enemy_hp, _enemy_max_hp, int(event["hp"]), int(event["max_hp"]))
 			# A send-out draws a picture through `GetBattleMonBackpic` or
@@ -5691,8 +5738,7 @@ func _read_hp() -> void:
 	)
 
 
-## The cartridge's own controls first, then the development drivers that stand
-## in for a battle menu this screen does not have yet.
+## The battle controls first, then the development drivers.
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_ready() or _driven:
 		return
@@ -6013,14 +6059,14 @@ func cycle_view() -> Dictionary:
 	return select_view(ids[posmod(at + 1, ids.size())])
 
 
-## `wild` or `trainer`, decided the way the battle itself decides it: a trainer
-## class of zero is a wild battle, which is what `wOtherTrainerClass` holds and
-## what `Gen2Battle.trainer_battle` was built from.
 func _battle_kind() -> StringName:
-	return &"trainer" if _enemy_trainer_class > 0 else &"wild"
+	return &"trainer" if _battle != null and _battle.is_trainer_battle else &"wild"
 
 
 func _enemy_trainer_name() -> String:
+	var named: String = String(_world_battle_request.get("trainer_name", ""))
+	if not named.is_empty():
+		return named
 	if _enemy_trainer_class <= 0 or _data == null:
 		return ""
 	return String(_data.trainer_party(_enemy_trainer_class, _enemy_trainer_index).get("name", ""))
@@ -6091,7 +6137,7 @@ func _push_view() -> void:
 			and _anim_hud_hidden != Gen2Battle.PLAYER,
 		## `DrawEnemyHUDBorder`'s last line, which leaves on `wBattleMode`: only
 		## a wild battle marks a species the Pokedex already holds.
-		"enemy_caught": _enemy_caught_before and _enemy_trainer_class == 0,
+		"enemy_caught": _enemy_caught_before and _is_wild_battle(),
 		## `BattleStart_TrainerHuds`' party balls and the frame they hang in.
 		"trainer_hud_balls": _hud_balls,
 		"trainer_hud_border": _hud_border,

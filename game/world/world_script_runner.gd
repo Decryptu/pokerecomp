@@ -5823,7 +5823,7 @@ func _stage_link_room(special: int) -> Dictionary:
 ## separate rolls in the source and must not repeat here.
 func _battle_tower_random(offset: int) -> RandomNumberGenerator:
 	var random := RandomNumberGenerator.new()
-	random.seed = int(_request.get("battle_tower_seed", randi())) + offset
+	random.seed = (int(_request["battle_tower_seed"]) if _request.has("battle_tower_seed") else randi()) + offset
 	return random
 
 
@@ -5991,14 +5991,11 @@ func _load_battle_tower_opponent() -> Dictionary:
 		return _fail(
 			&"missing_battle_tower_data", {"special": SPECIAL_LOAD_BATTLE_TOWER_OPPONENT}
 		)
-	var mons: Array = []
-	for mon: Gen2SaveMon in opponent["mons"] as Array:
-		mons.append(mon.to_dict())
 	_battle_tower_opponent = {
 		"trainer": int(opponent["trainer"]),
 		"name": String(opponent["name"]),
 		"class": int(opponent["class"]),
-		"mons": mons,
+		"mons": opponent["mons"],
 	}
 	_events.append({
 		"type": &"battle_tower_opponent_loaded",
@@ -6028,14 +6025,22 @@ func _stage_battle_tower_battle() -> Dictionary:
 	return _stage_runtime_request(&"battle_requested", {
 		"kind": &"battle_tower",
 		"special": SPECIAL_BATTLE_TOWER_BATTLE,
-		## `set BATTLE_SHIFT, [hl]` for the length of the fight and
-		## `farcall HealParty` on both sides of it.
-		"force_switch_mode": true,
-		"heal_party": true,
+		"win_text": _battle_tower_result_text(Gen2BattleTower.TEXT_LOSS),
+		"loss_text": _battle_tower_result_text(Gen2BattleTower.TEXT_WIN),
 		"trainer_class": int(_battle_tower_opponent["class"]),
 		"trainer_name": String(_battle_tower_opponent["name"]),
 		"enemy_party": (_battle_tower_opponent["mons"] as Array).duplicate(true),
 	})
+
+
+func _battle_tower_result_text(kind: int) -> Dictionary:
+	var random: RandomNumberGenerator = null
+	if _battle_tower_text_index < 0:
+		random = _battle_tower_random(1 + kind)
+	return _battle_tower().trainer_line(
+		data, int(_battle_tower_opponent["class"]), kind,
+		random, _battle_tower_text_index
+	)
 
 
 ## `battletowertext`, which is `BattleTowerText` for the opponent's own class:
@@ -6044,9 +6049,12 @@ func _stage_battle_tower_battle() -> Dictionary:
 func _stage_battle_tower_text(kind: int) -> Dictionary:
 	if _battle_tower_opponent.is_empty():
 		return _fail(&"missing_battle_tower_opponent", {"kind": kind})
+	var random: RandomNumberGenerator = null
+	if kind == 1 or _battle_tower_text_index < 0:
+		random = _battle_tower_random(1 + kind)
 	var line: Dictionary = _battle_tower().trainer_line(
 		data, int(_battle_tower_opponent["class"]), clampi(kind - 1, 0, 2),
-		_battle_tower_random(1 + kind), _battle_tower_text_index
+		random, _battle_tower_text_index
 	)
 	_battle_tower_text_index = int(line["index"])
 	var text: String = String(line["text"])

@@ -424,3 +424,16 @@ func test_the_sprites_stand_over_the_wedges_until_the_outro_hides_them() -> void
 					sprites, Gen2BattleTransition.SPRITES_ALL,
 					"the flash hides nothing: `RespawnPlayerAndOpponent` is the outro's"
 				)
+
+
+func test_result_trainer_slide_copies_six_column_major_slices() -> void:
+	var map := PackedByteArray()
+	map.resize(20 * 18)
+	map.fill(0x7F)
+	for step: int in range(1, 7):
+		Gen2BattleScreenMap.result_trainer_step(map, step)
+		for column: int in step:
+			for row: int in 7:
+				assert_eq(int(map[row * 20 + 20 - step + column]), column * 7 + row)
+		assert_eq(int(map[20 - step - 1]), 0x7F)
+		assert_eq(int(map[7 * 20]), 0x7F)

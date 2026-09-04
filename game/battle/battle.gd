@@ -1163,7 +1163,8 @@ func _enemy_entrance(events: Array, offer: bool) -> void:
 ## one, given a started battle, somebody else to send, SET off and the player's
 ## own Pokémon standing. A wild has no trainer to switch.
 func should_offer_switch() -> bool:
-	return is_trainer_battle and not battle_style_set \
+	return is_trainer_battle and not battle_style_set and not in_battle_tower \
+		and not is_link_battle \
 		and party(PLAYER).healthy_count() > 1 and not mon(PLAYER).is_fainted()
 
 
@@ -2431,6 +2432,10 @@ func _use_trainer_item(side: int, item: int, events: Array) -> void:
 	})
 
 
+func allows_bag_items() -> bool:
+	return not in_battle_tower and not is_link_battle
+
+
 ## `DoItemEffect` with `wBattleMode` set, the pack's own USE inside a battle:
 ## applied here rather than in the turn loop, as the cartridge applies it in the
 ## menu and then spends the turn as `BATTLEPLAYERACTION_USEITEM`.
@@ -2440,6 +2445,8 @@ func _use_trainer_item(side: int, item: int, events: Array) -> void:
 func use_bag_item(item: int, target_index: int = -1, move_slot: int = -1) -> Dictionary:
 	if data == null or is_over():
 		return _item_failure(&"battle_not_running")
+	if not allows_bag_items():
+		return _item_failure(&"items_cant_be_used_here")
 	var definition: Dictionary = data.item(item)
 	if definition.is_empty():
 		return _item_failure(&"unknown_item")
