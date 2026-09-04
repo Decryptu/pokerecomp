@@ -288,8 +288,11 @@ static func _resolve_data_request(world: Gen2WorldAPI, request: Dictionary) -> D
 static func _resolve_mart(world: Gen2WorldAPI, values: Dictionary) -> Dictionary:
 	var dialog_id: int = int(values.get("dialog", 0))
 	var mart_id: int = int(values.get("address", 0)) & 0xFF
+	## `{item, price}` is the shape `Gen2WorldMartHost.entries` already reads, so
+	## a shelf travelling with the request charges its own prices.
+	var inline: Array = values["items"] if values.get("items", null) is Array else []
 	var mart_result: Dictionary = Gen2WorldMartHost.resolve_mart(
-		world.data, dialog_id, mart_id, world.state.hall_of_fame(), world.state
+		world.data, dialog_id, mart_id, world.state.hall_of_fame(), world.state, inline
 	)
 	if not bool(mart_result.get("ok", false)):
 		return {
@@ -297,13 +300,6 @@ static func _resolve_mart(world: Gen2WorldAPI, values: Dictionary) -> Dictionary
 			"reason": StringName(mart_result.get("reason", &"mart_data_unavailable")),
 		}
 	var mart: Dictionary = mart_result["mart"]
-	## A catalog site may sell its own shelf. `{item, price}` is the shape
-	## `Gen2WorldMartHost.entries` already reads, so a patched price is
-	## the price the counter charges and nothing else changes.
-	if values.has("items") and values["items"] is Array \
-		and not (values["items"] as Array).is_empty():
-		mart = mart.duplicate(true)
-		mart["items"] = (values["items"] as Array).duplicate(true)
 	return {
 		"ok": true,
 		"data": {"mart": mart, "mart_id": mart_id, "dialog": dialog_id},

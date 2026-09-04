@@ -62,6 +62,12 @@ static func bank_of(offset: int) -> int:
 	return offset / BANK_SIZE
 
 
+## Just past the last byte of a bank, which is where a run whose length nothing
+## states has to stop: a Generation 1 `text_far` target names no length.
+static func bank_end(bank: int) -> int:
+	return (bank + 1) * BANK_SIZE
+
+
 func size() -> int:
 	return _bytes.size()
 

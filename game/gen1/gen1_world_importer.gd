@@ -141,12 +141,12 @@ static func _read_encounters(rom: RomFile, layout: Dictionary) -> Dictionary:
 		var at: int = RomFile.linear(
 			bank, rom.u16le(table + map_id * Gen1Layout.POINTER_SIZE)
 		)
-		var block: Dictionary = _read_wild_block(rom, at, map_id)
+		var block: Dictionary = _read_wild_block(rom, layout, at, map_id)
 		if not bool(block["ok"]):
 			return block
 		if not (block["row"] as Dictionary).is_empty():
 			grass["0:%d" % map_id] = block["row"]
-		block = _read_wild_block(rom, int(block["at"]), map_id)
+		block = _read_wild_block(rom, layout, int(block["at"]), map_id)
 		if not bool(block["ok"]):
 			return block
 		if not (block["row"] as Dictionary).is_empty():
@@ -162,7 +162,9 @@ static func _read_encounters(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 ## One `def_grass_wildmons` or `def_water_wildmons` block: a rate byte, and ten
 ## (level, species) pairs behind it unless the rate is zero, which ends it.
-static func _read_wild_block(rom: RomFile, at: int, map_id: int) -> Dictionary:
+static func _read_wild_block(
+	rom: RomFile, layout: Dictionary, at: int, map_id: int
+) -> Dictionary:
 	if not rom.in_bounds(at):
 		return _error("Map %d's wild data is outside the ROM." % map_id)
 	var rate: int = rom.u8(at)
@@ -173,10 +175,12 @@ static func _read_wild_block(rom: RomFile, at: int, map_id: int) -> Dictionary:
 	var slots: Array = []
 	for slot: int in Gen1Layout.WILD_SLOT_COUNT:
 		var row: int = at + 1 + slot * 2
-		var species: int = rom.u8(row + 1)
-		if species < 1 or species > Gen1Layout.INDEX_COUNT:
-			return _error("Map %d's wild slot %d names index %d." % [map_id, slot, species])
-		slots.append({"level": rom.u8(row), "species": species})
+		var dex: int = Gen1Layout.dex_of_index(rom, layout, rom.u8(row + 1))
+		if dex < 1:
+			return _error("Map %d's wild slot %d names index %d." % [
+				map_id, slot, rom.u8(row + 1),
+			])
+		slots.append({"level": rom.u8(row), "species": dex})
 	return {
 		"ok": true,
 		"row": {"map": "0:%d" % map_id, "rate": rate, "slots": slots},
@@ -201,7 +205,7 @@ static func _read_super_rod(rom: RomFile, layout: Dictionary) -> Dictionary:
 			return _error("The Super Rod names map %d." % map_id)
 		var key: int = at + 1 if flat else RomFile.linear(bank, rom.u16le(at + 1))
 		if not seen.has(key):
-			var group: Dictionary = _read_rod_group(rom, key, flat, map_id)
+			var group: Dictionary = _read_rod_group(rom, layout, key, flat, map_id)
 			if not bool(group["ok"]):
 				return group
 			groups.append(group["group"])
@@ -216,7 +220,7 @@ static func _read_super_rod(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## One group: a count and that many (level, species) rows, or Yellow's four
 ## (species, level) rows with the byte `GenerateRandomFishingEncounter` reads.
 static func _read_rod_group(
-	rom: RomFile, at: int, flat: bool, map_id: int
+	rom: RomFile, layout: Dictionary, at: int, flat: bool, map_id: int
 ) -> Dictionary:
 	var count: int = Gen1Layout.SUPER_ROD_SLOTS_YELLOW if flat else rom.u8(at)
 	if count < 1 or count > Gen1Layout.SUPER_ROD_MAX_SLOTS:
@@ -228,10 +232,11 @@ static func _read_rod_group(
 	for slot: int in count:
 		var row: int = first + slot * 2
 		var species: int = rom.u8(row + 1 if not flat else row)
-		if species < 1 or species > Gen1Layout.INDEX_COUNT:
+		var dex: int = Gen1Layout.dex_of_index(rom, layout, species)
+		if dex < 1:
 			return _error("Map %d's fishing slot %d names index %d." % [map_id, slot, species])
 		var entry: Dictionary = {
-			"level": rom.u8(row if not flat else row + 1), "species": species,
+			"level": rom.u8(row if not flat else row + 1), "species": dex,
 		}
 		if flat:
 			entry["threshold"] = Gen1Layout.SUPER_ROD_THRESHOLDS_YELLOW[slot]
@@ -323,7 +328,7 @@ static func _read_tileset(
 	var block_count: int = Gen1Layout.tileset_blocks(rom.id)[number]
 	var meta_size: int = block_count * Gen1Layout.TILESET_BLOCK_TILES
 	var meta_at: int = RomFile.linear(bank, block_address)
-	if meta_at + meta_size > _bank_end(bank):
+	if meta_at + meta_size > RomFile.bank_end(bank):
 		return _error("Tileset %d's %d blocks run past bank $%02X." % [number, block_count, bank])
 	var meta: PackedByteArray = rom.slice(meta_at, meta_size)
 	if meta.size() != meta_size:
@@ -362,7 +367,7 @@ static func _verify_block_counts(rom: RomFile, layout: Dictionary, count: int) -
 	for number: int in count:
 		var row: Array = rows[number]
 		var start: int = RomFile.linear(int(row[0]), int(row[1]))
-		var limit: int = _bank_end(int(row[0]))
+		var limit: int = RomFile.bank_end(int(row[0]))
 		for other: Array in rows:
 			var graphics: int = RomFile.linear(int(other[0]), int(other[2]))
 			if int(other[0]) == int(row[0]) and graphics > start:
@@ -381,13 +386,9 @@ static func _verify_block_counts(rom: RomFile, layout: Dictionary, count: int) -
 static func _tileset_strip(rom: RomFile, bank: int, graphics_address: int) -> PackedByteArray:
 	var at: int = RomFile.linear(bank, graphics_address)
 	var wanted: int = Gen1Layout.TILESET_TILE_COUNT * PokeTiles.TILE_BYTES
-	var graphics: PackedByteArray = rom.slice(at, mini(wanted, _bank_end(bank) - at))
+	var graphics: PackedByteArray = rom.slice(at, mini(wanted, RomFile.bank_end(bank) - at))
 	graphics.resize(wanted)
 	return PokeTiles.decode_2bpp_strip(graphics, 0, Gen1Layout.TILESET_TILE_COUNT)
-
-
-static func _bank_end(bank: int) -> int:
-	return (bank + 1) * RomFile.BANK_SIZE
 
 
 static func _bit_count(value: int) -> int:
@@ -443,7 +444,7 @@ static func _read_map(
 	)
 
 	var events: Dictionary = _read_events(
-		rom, bank, rom.u16le(object_address), map_id, width, height, block_count
+		rom, layout, bank, rom.u16le(object_address), map_id, width, height, block_count
 	)
 	if not bool(events.get("ok", false)):
 		return events
@@ -532,7 +533,8 @@ static func _read_connections(rom: RomFile, at: int, connection_flags: int) -> A
 ## `<Map>_Object`: the border block, then warps, signs and objects, each a count
 ## and its rows.
 static func _read_events(
-	rom: RomFile, bank: int, address: int, map_id: int, width: int, height: int, block_count: int
+	rom: RomFile, layout: Dictionary, bank: int, address: int, map_id: int,
+	width: int, height: int, block_count: int
 ) -> Dictionary:
 	var at: int = RomFile.linear(bank, address)
 	if not rom.in_bounds(at):
@@ -552,13 +554,13 @@ static func _read_events(
 	var signs: Dictionary = _read_signs(rom, int(warps["at"]), map_id, cell_width, cell_height)
 	if not bool(signs.get("ok", false)):
 		return signs
-	var objects: Dictionary = _read_objects(rom, int(signs["at"]), map_id)
+	var objects: Dictionary = _read_objects(rom, layout, int(signs["at"]), map_id)
 	if not bool(objects.get("ok", false)):
 		return objects
 	# The block ends in one `warp_to` a warp, which names only WRAM.
 	var end: int = int(objects["at"]) \
 		+ (warps["events"] as Array).size() * Gen1Layout.WARP_TO_SIZE
-	if end > _bank_end(bank):
+	if end > RomFile.bank_end(bank):
 		return _error("Map %d's object block runs past bank $%02X." % [map_id, bank])
 
 	return {
@@ -625,7 +627,9 @@ static func _read_signs(
 ## An object's coordinates may sit in the runtime's own border padding, so unlike
 ## a warp or a sign they are not bounded by the map. The TRAINER bit covers a
 ## standing wild Pokemon too; [constant Gen1Layout.OPPONENT_ID_OFFSET] splits them.
-static func _read_objects(rom: RomFile, at: int, map_id: int) -> Dictionary:
+static func _read_objects(
+	rom: RomFile, layout: Dictionary, at: int, map_id: int
+) -> Dictionary:
 	var count: int = rom.u8(at)
 	at += 1
 	if count > Gen1Layout.MAX_OBJECT_EVENTS:
@@ -653,7 +657,7 @@ static func _read_objects(rom: RomFile, at: int, map_id: int) -> Dictionary:
 				object["trainer_class"] = opponent - Gen1Layout.OPPONENT_ID_OFFSET
 				object["trainer_number"] = rom.u8(at + 1)
 			else:
-				object["species"] = opponent
+				object["species"] = Gen1Layout.dex_of_index(rom, layout, opponent)
 				object["level"] = rom.u8(at + 1)
 		elif (text & Gen1Layout.OBJECT_ITEM_FLAG) != 0:
 			object["item"] = rom.u8(at)
@@ -666,31 +670,43 @@ static func _read_objects(rom: RomFile, at: int, map_id: int) -> Dictionary:
 ## machine code; only `text_far` and `text_start` are a text, and the rest keep
 ## the byte naming them. The table has no end, so the map's own events bound it.
 static func _read_texts(rom: RomFile, bank: int, address: int, events: Dictionary) -> Array:
-	var table: int = _banked(bank, address)
+	var table: int = Gen1Layout.banked(bank, address)
 	var out: Array = []
 	for id: int in _highest_text_id(events):
 		out.append(_read_text(rom, bank, rom.u16le(table + id * 2)))
 	return out
 
 
+## A `TX_SCRIPT_*` row keeps its own inventory where it has one, so nothing
+## downstream has to read the cartridge again to open the shop.
 static func _read_text(rom: RomFile, bank: int, pointer: int) -> Dictionary:
-	var at: int = _banked(bank, pointer)
-	var command: int = rom.u8(at)
-	var row: Dictionary = {"command": command, "text": ""}
-	if command != Gen1Text.TEXT_FAR and command != Gen1Text.TEXT_START:
-		return row
-	var decoded: Dictionary = Gen2TextStream.decode(rom.bytes(), at, {
-		"generation": RomRegistry.GEN1,
-		"far": func(far_bank: int, far_address: int) -> PackedByteArray:
-			var start: int = _banked(far_bank, far_address)
-			return rom.slice(start, _bank_end(RomFile.bank_of(start)) - start),
-	})
+	var at: int = Gen1Layout.banked(bank, pointer)
+	var decoded: Dictionary = Gen1Text.decode_stream(rom, at)
+	var row: Dictionary = {"command": rom.u8(at), "text": ""}
 	if not bool(decoded.get("ok", false)):
-		row["reason"] = String(decoded.get("reason", "invalid_text"))
+		if int(row["command"]) == Gen1Layout.TEXT_SCRIPT_MART:
+			row["items"] = _read_mart_items(rom, at)
+		elif String(decoded.get("reason", "")) != "text_script":
+			row["reason"] = String(decoded.get("reason", "invalid_text"))
 		return row
 	row["text"] = String(decoded["text"])
 	row["prompt"] = bool(decoded.get("prompt", false))
 	return row
+
+
+## `script_mart`'s inline list, which `LoadItemList` copies straight out of the
+## text pointer. A count past `wItemList` is not a shop at all.
+static func _read_mart_items(rom: RomFile, at: int) -> Array:
+	var count: int = rom.u8(at + Gen1Layout.MART_COUNT_AT)
+	if count < 1 or count > Gen1Layout.MART_MAX_ITEMS:
+		return []
+	var out: Array = []
+	for slot: int in count:
+		var item: int = rom.u8(at + Gen1Layout.MART_ITEMS_AT + slot)
+		if item < 1:
+			return []
+		out.append(item)
+	return out
 
 
 static func _highest_text_id(events: Dictionary) -> int:
@@ -699,11 +715,6 @@ static func _highest_text_id(events: Dictionary) -> int:
 		for event: Dictionary in events.get(kind, []) as Array:
 			highest = maxi(highest, int(event.get("text", 0)))
 	return highest
-
-
-## A `dw` inside a banked map: below $4000 is home, whatever bank is switched in.
-static func _banked(bank: int, address: int) -> int:
-	return RomFile.linear(0 if address < RomFile.BANK_SIZE else bank, address)
 
 
 static func _object_extra_bytes(text: int) -> int:

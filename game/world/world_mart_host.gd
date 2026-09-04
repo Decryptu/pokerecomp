@@ -18,9 +18,13 @@ const MARTTYPE_ROOFTOP: int = 4
 ## Resolves the source pokemart dialog before the UI is opened. Standard,
 ## bitter and pharmacy shops use the indexed pointer; bargain and rooftop
 ## shops use their imported priced records.
+##
+## [param inline_items] stands in for the indexed record when the inventory
+## travels with the request: a catalog site's shelf, and every Generation 1
+## counter, whose list `script_mart` writes into the text pointer.
 static func resolve_mart(
 	data: GameData, dialog_id: int, mart_id: int, rooftop_after_hall: bool = false,
-	world_state: Gen2WorldState = null
+	world_state: Gen2WorldState = null, inline_items: Array = []
 ) -> Dictionary:
 	if data == null:
 		return _failure(&"missing_data", {})
@@ -50,6 +54,8 @@ static func resolve_mart(
 			label = "ROOFTOP SALE"
 		_:
 			return _failure(&"unsupported_mart_dialog", {"dialog": dialog_id})
+	if not inline_items.is_empty():
+		mart = {"items": inline_items.duplicate(true)}
 	if variant == &"bargain" and world_state != null \
 		and world_state.bargain_merchant_closed(Gen2WorldState.is_crystal_profile(data)):
 		return _failure(&"bargain_mart_closed", {"dialog": dialog_id})

@@ -27,6 +27,7 @@ const KIND_HELP: Dictionary = {
 	&"mart_sell": "cell in front of the counter: the SELL row (DepositSellPack)",
 	&"pokepic": "cell: Script_pokepic's box over the map, holding Chikorita",
 	&"sign": "none: DisplayTextID's box, read by facing up from where the player stands",
+	&"nurse": "presses: DisplayPokemonCenterDialogue_, talked to from below the counter. 0 the welcome, 1 the YES/NO, 2 the heal",
 	&"trade_animation": "frames, half: TradeAnimation over the map, that many frames into the half named",
 	&"magnet_train": "frames, direction: special MagnetTrain, that many frames in. Direction 1 rides to Goldenrod",
 	&"pet_actor": "cell: a mod's world actor one cell ahead, pressed with A so it wears a showemote heart",
@@ -133,8 +134,9 @@ const POKEPIC_SPECIES: int = 152
 const SCREEN_DRIVER: String = "preview_%s"
 
 ## `.HowMayIHelpYou` prints without waiting, so `pokemart` opens straight on the
-## BUY/SELL/QUIT menu and one press reaches the list.
-const MART_PRESSES: int = 0
+## BUY/SELL/QUIT menu and one press reaches the list. `DisplayPokemartDialogue`
+## does wait, and prints again behind the row, which is what this bounds.
+const MART_PRESSES: int = 4
 ## Frames spent between two presses of a driven menu, so the box a press opened
 ## owes nothing before the next one lands: nothing shortens a printing text.
 const TEXT_SETTLE_FRAMES: int = 20
@@ -146,7 +148,12 @@ const TEXT_SETTLE_FRAMES: int = 20
 ## climb runs four passes a cell, so 26 lands a few cells up.
 const STAGED_FRAMES: int = 2
 ## `sign` spends the whole reveal: no press finishes a page early.
-const STAGED_FRAMES_BY_KIND: Dictionary = {&"cut": 12, &"waterfall_use": 26, &"sign": 120}
+const STAGED_FRAMES_BY_KIND: Dictionary = {
+	&"cut": 12, &"waterfall_use": 26, &"sign": BOX_REVEAL_FRAMES,
+	&"nurse": BOX_REVEAL_FRAMES,
+}
+## Enough for the longest box in the game to finish revealing.
+const BOX_REVEAL_FRAMES: int = 120
 
 const PREVIEW_BATTLE_SPECIES: int = 16 ## `preview_battle_request`'s PIDGEY.
 
@@ -303,6 +310,19 @@ func _stage_battle_tower_party() -> void:
 	_screen._refresh_party_summary()
 
 
+## A party with something to heal: `HealParty` is a save transaction.
+func _stage_hurt_party() -> void:
+	var save: Gen2SaveData = _screen.active_save()
+	if save == null:
+		save = Gen2SaveStore.create_development_save(_screen._data, 0)
+		_screen.set_save(save)
+	if save == null:
+		return
+	for mon: Gen2SaveMon in save.party:
+		mon.hp = 1
+	_screen._refresh_party_summary()
+
+
 func _settle_mon_special(host_property: String) -> void:
 	for _frame: int in MON_SPECIAL_FRAME_CAP:
 		var routine: Control = _screen.get(host_property)
@@ -373,6 +393,7 @@ const STAGERS: Dictionary = {
 	&"mod_page": &"_stage_mod_page",
 	&"pokepic": &"_stage_pokepic",
 	&"sign": &"_stage_sign",
+	&"nurse": &"_stage_nurse",
 	&"unown_printer": &"_stage_unown_printer",
 	&"diploma": &"_stage_diploma",
 	&"start_menu": &"_stage_start_menu",
@@ -706,8 +727,7 @@ func _stage_npc_trade() -> void:
 func _stage_mart() -> void:
 	_screen.press_button(PokeButton.LEFT)
 	_screen.interact()
-	for _press: int in MART_PRESSES:
-		_screen.press_button(PokeButton.A)
+	_clear_mart_boxes()
 	## `StandardMart`'s BUY/SELL/QUIT loop is what the welcome box hands
 	## the shop to. `mart` takes its BUY row, `mart_sell` the one below.
 	if _kind == &"mart_top":
@@ -715,6 +735,18 @@ func _stage_mart() -> void:
 	if _kind == &"mart_sell":
 		_screen.press_button(PokeButton.DOWN)
 	_screen.press_button(PokeButton.A)
+	_clear_mart_boxes()
+
+
+## Presses through whatever boxes the shop is holding on, so a kind lands on the
+## same stage on either generation.
+func _clear_mart_boxes() -> void:
+	for _press: int in MART_PRESSES:
+		var host: Gen2WorldServiceScreen = _screen.get("_service_host")
+		if host == null or StringName(host.get("_mart_stage")) \
+			!= Gen2WorldServiceScreen.MART_MESSAGE:
+			return
+		_screen.press_button(PokeButton.A)
 
 
 ## The floor panel, read from the cell below it: `bg_event 3, 0`'s own `elevator` is
@@ -857,6 +889,20 @@ func _stage_pokepic() -> void:
 func _stage_sign() -> void:
 	_screen.press_button(PokeButton.UP)
 	_screen.interact()
+
+
+## The nurse, reached over her counter from the cell below it, which is the
+## range `IsSpriteOrSignInFrontOfPlayer` doubles. The number is boxes to press past.
+func _stage_nurse() -> void:
+	_stage_hurt_party()
+	_screen.press_button(PokeButton.UP)
+	for _frame: int in TEXT_SETTLE_FRAMES:
+		_screen.advance_frame()
+	_screen.interact()
+	for _press: int in maxi(_cell.x, 0):
+		for _frame: int in BOX_REVEAL_FRAMES:
+			_screen.advance_frame()
+		_screen.press_button(PokeButton.A)
 
 
 ## `_UnownPrinter`'s browser: the first number is the slot, where 26 is the vacant

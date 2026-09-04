@@ -92,8 +92,16 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_pic_pointers,
 	_verify_font,
 	_verify_text_box,
+	_verify_facility_text,
 	_verify_world,
 ]
+
+## The `text_far` runs a facility's own boxes live in, by the [method
+## GameData.special_text] run name each is stored under. The shop's are stored
+## under `mart_text` instead, because the shop screen already reads that.
+const FACILITY_TEXT_RUNS: Dictionary = {
+	"pokecenter": ["pokecenter_text", Gen1Layout.POKECENTER_TEXT_AT],
+}
 
 
 static func verify_layout(rom: RomFile) -> Dictionary:
@@ -119,7 +127,7 @@ static func _ok() -> Dictionary:
 ## `PokedexOrder` rather than at a fixed row.
 static func _verify_species_names(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var data: PackedByteArray = rom.bytes()
-	var slots: PackedInt32Array = read_index_of_dex(rom, layout)
+	var slots: PackedInt32Array = Gen1Layout.index_of_dex(rom, layout)
 	if slots.size() != Gen1Layout.SPECIES_COUNT + 1:
 		return _fail("PokedexOrder does not name %d species." % Gen1Layout.SPECIES_COUNT)
 	var first: String = Gen1Text.decode_fixed(
@@ -275,7 +283,7 @@ static func _verify_wild_constants(rom: RomFile, layout: Dictionary) -> Dictiona
 ## with the byte the pointer lands on proves the pointer, the bank rule and the
 ## stride for every species at once.
 static func _verify_pic_pointers(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var slots: PackedInt32Array = read_index_of_dex(rom, layout)
+	var slots: PackedInt32Array = Gen1Layout.index_of_dex(rom, layout)
 	for dex: int in range(1, Gen1Layout.SPECIES_COUNT + 1):
 		var stats: int = Gen1Layout.base_stats_offset(layout, dex)
 		var front: int = _pic_offset(rom, layout, stats + Gen1Layout.BASE_FRONT_PIC, slots[dex])
@@ -338,6 +346,23 @@ static func _verify_text_box(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## Every map and tileset decodes, which is the world layout's own check: a wrong
 ## table reaches a tileset number, a map size or a block index the cartridge
 ## cannot hold.
+## Each run is one contiguous block of `text_far` stubs, so a base offset that
+## has slipped shows up as a slot that does not decode at all.
+static func _verify_facility_text(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var runs: Dictionary = {"mart": ["mart_text", Gen1Layout.MART_TEXT_AT]}
+	runs.merge(FACILITY_TEXT_RUNS)
+	for run: String in runs:
+		var key: String = String((runs[run] as Array)[0])
+		var slots: Dictionary = (runs[run] as Array)[1]
+		for name: String in slots:
+			var at: int = Gen1Layout.facility_text_offset(layout, key, slots, name)
+			if facility_text(rom, at).is_empty():
+				return _fail("%s's %s box does not decode at $%05X." % [run, name, at])
+	if facility_text(rom, int(layout["mart_greeting"])).is_empty():
+		return _fail("PokemartGreetingText does not decode.")
+	return _ok()
+
+
 static func _verify_world(rom: RomFile, _layout: Dictionary) -> Dictionary:
 	return Gen1WorldImporter.verify_layout(rom)
 
@@ -370,17 +395,12 @@ static func _verify_trainer_names(rom: RomFile, layout: Dictionary) -> Dictionar
 	return _ok()
 
 
-## `PokedexOrder` inverted: dex number to internal index, row 0 unused so a dex
-## number indexes it directly.
-static func read_index_of_dex(rom: RomFile, layout: Dictionary) -> PackedInt32Array:
-	var out: PackedInt32Array = PackedInt32Array()
-	out.resize(Gen1Layout.SPECIES_COUNT + 1)
-	var order: int = int(layout["dex_order"])
-	for index: int in range(1, Gen1Layout.INDEX_COUNT + 1):
-		var dex: int = rom.u8(order + index - 1)
-		if dex >= 1 and dex <= Gen1Layout.SPECIES_COUNT:
-			out[dex] = index
-	return out
+## One facility box, already laid out. Empty for a stub that does not decode.
+static func facility_text(rom: RomFile, at: int) -> String:
+	if at < 0:
+		return ""
+	var decoded: Dictionary = Gen1Text.decode_stream(rom, at)
+	return String(decoded["text"]) if bool(decoded.get("ok", false)) else ""
 
 
 static func read_type_name(rom: RomFile, layout: Dictionary, type: int) -> String:
@@ -442,7 +462,7 @@ static func _evolution_row(
 	rom: RomFile, layout: Dictionary, at: int, method: int, size: int
 ) -> Dictionary:
 	var target: int = rom.u8(at + size - 1)
-	var row: Dictionary = {"method": method, "species": dex_of_index(rom, layout, target)}
+	var row: Dictionary = {"method": method, "species": Gen1Layout.dex_of_index(rom, layout, target)}
 	if method == Gen1Layout.EVOLVE_LEVEL:
 		row["level"] = rom.u8(at + 1)
 	elif method == Gen1Layout.EVOLVE_ITEM:
@@ -451,14 +471,6 @@ static func _evolution_row(
 	else:
 		row["level"] = rom.u8(at + 1)
 	return row
-
-
-## `PokedexOrder` read forwards: the dex number an internal index carries, or
-## zero for a slot no species claims.
-static func dex_of_index(rom: RomFile, layout: Dictionary, index: int) -> int:
-	if index < 1 or index > Gen1Layout.INDEX_COUNT:
-		return 0
-	return rom.u8(int(layout["dex_order"]) + index - 1)
 
 
 ## Reads the cartridge into its cache. Answers the same { ok, message, ... }
@@ -564,6 +576,8 @@ func import_rom(
 		"encounter_count": int(world["encounters"]),
 		"atlases": pics,
 		"tiles": tiles,
+		"mart_text": _import_mart_text(rom, layout),
+		"special_text": _import_facility_text(rom, layout),
 		"complete": true,
 	}
 	if not RomCache.write_json(RomCache.manifest_path(directory), manifest):
@@ -608,7 +622,7 @@ static func _count_of(species: Array, key: String) -> int:
 ## kept for a reader that needs the cartridge's own numbering.
 func _import_species(rom: RomFile, layout: Dictionary, on_progress: Callable) -> Array:
 	var data: PackedByteArray = rom.bytes()
-	var slots: PackedInt32Array = read_index_of_dex(rom, layout)
+	var slots: PackedInt32Array = Gen1Layout.index_of_dex(rom, layout)
 	var out: Array = []
 
 	for dex: int in range(1, Gen1Layout.SPECIES_COUNT + 1):
@@ -625,14 +639,16 @@ func _import_species(rom: RomFile, layout: Dictionary, on_progress: Callable) ->
 			"name": Gen1Text.decode_fixed(
 				data, Gen1Layout.species_name_offset(layout, index), Gen1Layout.NAME_LENGTH
 			),
-			# One Special stat: the split into Sp. Attack and Sp. Defense is
-			# Generation 2's.
+			# One Special stat: Generation 2 split it, and both halves answer
+			# with it so a base stat reads the same either way.
 			"stats": {
 				"hp": rom.u8(stats + Gen1Layout.BASE_HP),
 				"attack": rom.u8(stats + Gen1Layout.BASE_ATTACK),
 				"defense": rom.u8(stats + Gen1Layout.BASE_DEFENSE),
 				"speed": rom.u8(stats + Gen1Layout.BASE_SPEED),
 				"special": special,
+				"sp_attack": special,
+				"sp_defense": special,
 			},
 			"types": [
 				rom.u8(stats + Gen1Layout.BASE_TYPE_1),
@@ -723,6 +739,33 @@ func _import_moves(rom: RomFile, layout: Dictionary, on_progress: Callable) -> A
 
 ## The 27 rows of `TypeNames` less the $09 to $13 hole, which is filled with
 ## NORMAL and named by nothing.
+## The shop's own boxes under the slot names [Gen2WorldServiceScreen] gives
+## them. `welcome` is `DisplayPokemartDialogue`'s greeting, which sits in home
+## rather than in `engine/events/pokemart.asm`'s run.
+func _import_mart_text(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var out: Dictionary = {"welcome": facility_text(rom, int(layout["mart_greeting"]))}
+	for name: String in Gen1Layout.MART_TEXT_AT:
+		out[name] = facility_text(rom, Gen1Layout.facility_text_offset(
+			layout, "mart_text", Gen1Layout.MART_TEXT_AT, name
+		))
+	return out
+
+
+## The other two runs, in [method GameData.special_text]'s run/slot shape.
+func _import_facility_text(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for run: String in FACILITY_TEXT_RUNS:
+		var key: String = String((FACILITY_TEXT_RUNS[run] as Array)[0])
+		var slots: Dictionary = (FACILITY_TEXT_RUNS[run] as Array)[1]
+		var boxes: Dictionary = {}
+		for name: String in slots:
+			boxes[name] = facility_text(
+				rom, Gen1Layout.facility_text_offset(layout, key, slots, name)
+			)
+		out[run] = boxes
+	return out
+
+
 func _import_types(rom: RomFile, layout: Dictionary) -> Array:
 	var out: Array = []
 	for type: int in Gen1Layout.TYPE_COUNT:
@@ -759,14 +802,40 @@ func _import_items(rom: RomFile, layout: Dictionary) -> Array:
 	var names: PackedStringArray = Gen1Text.decode_sequence(
 		rom.bytes(), int(layout["item_names"]), Gen1Layout.ITEM_COUNT, MAX_NAME_LENGTH
 	)
+	## `GetMachineName` spells an HM's or a TM's name from its own number and
+	## `GetMachinePrice` reads a nybble table an HM never reaches, so the two
+	## runs above `ItemNames` are built rather than read. The table is dense
+	## because [method GameData.item] indexes it by number less one; the ids
+	## between the two runs are the ones no `item_constants.asm` row names.
 	var out: Array = []
-	for item: int in range(1, Gen1Layout.ITEM_COUNT + 1):
+	for item: int in range(1, Gen1Layout.TM_FIRST_ITEM + Gen1Layout.TM_COUNT):
 		out.append({
 			"number": item,
-			"name": names[item - 1],
-			"price": _bcd3(rom, Gen1Layout.item_price_offset(layout, item)),
+			"name": _item_name(names, item),
+			"price": _item_price(rom, layout, item),
 		})
 	return out
+
+
+static func _item_name(names: PackedStringArray, item: int) -> String:
+	if item <= Gen1Layout.ITEM_COUNT:
+		return names[item - 1]
+	if item < Gen1Layout.TM_FIRST_ITEM:
+		return "HM%02d" % (item - Gen1Layout.HM_FIRST_ITEM + 1) \
+			if item >= Gen1Layout.HM_FIRST_ITEM else ""
+	return "TM%02d" % (item - Gen1Layout.TM_FIRST_ITEM + 1)
+
+
+static func _item_price(rom: RomFile, layout: Dictionary, item: int) -> int:
+	if item <= Gen1Layout.ITEM_COUNT:
+		return _bcd3(rom, Gen1Layout.item_price_offset(layout, item))
+	if item < Gen1Layout.TM_FIRST_ITEM:
+		return 0
+	var machine: int = item - Gen1Layout.TM_FIRST_ITEM
+	@warning_ignore("integer_division")
+	var packed: int = rom.u8(int(layout["tm_prices"]) + machine / 2)
+	var nybble: int = (packed >> 4) if machine % 2 == 0 else (packed & 0x0F)
+	return nybble * Gen1Layout.MACHINE_PRICE_UNIT
 
 
 ## `bcd3`, which is how both a price and a trainer's reward money are stored.

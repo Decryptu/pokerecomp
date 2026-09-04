@@ -365,7 +365,7 @@ or a group, or `all`; with no argument it lists them.
 | `art` | Both intro movies, the credits, the region map, all 278 battle animations, the map name sign |
 | `tables` | TM/HM, naming, world scripts, the opening lane |
 | `trainers` | The Route 30 trainer on each profile |
-| `gen1` | Red, Blue and Yellow's species, move, type, item and trainer tables, every picture their sprite codec decodes, all 226 or 227 maps with their tilesets, and the text box and wild encounter a map reads |
+| `gen1` | Red, Blue and Yellow's species, move, type, item and trainer tables, every picture their sprite codec decodes, all 226 or 227 maps with their tilesets, and the text box, shop inventory and wild encounter a map reads |
 
 The rest are previews and dumps, each driving a real screen or table:
 

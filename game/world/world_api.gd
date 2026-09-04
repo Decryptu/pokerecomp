@@ -3650,11 +3650,17 @@ var _gen1: bool = false
 ## `wLastMap`, the outdoor map a [constant Gen1Layout.WARP_TO_LAST_MAP] warp
 ## comes back out to. Generation 2 has no such warp and never writes it.
 var _gen1_last_map: int = -1
+## The [method GameData.special_text] run `DisplayPokemonCenterDialogue_`'s own
+## boxes are imported under.
+const GEN1_POKECENTER_RUN: String = "pokecenter"
+
 ## `wRivalName`, which no Generation 1 save model holds yet.
 var gen1_rival_name: String = Gen2WorldScriptRunner.UNNAMED
-## `DisplayTextID` holds `HandleMap` until its press, and there is no script
-## here to hold the world instead.
-var _gen1_text_open: bool = false
+## What `DisplayTextID` is holding `HandleMap` with, in order, since there is no
+## script here to hold the world instead: a box waiting for its press, a YES/NO,
+## a frame wait, or a facility request waiting for its host. A plain text is one
+## box; `DisplayPokemonCenterDialogue_` is five of them around a choice.
+var _gen1_steps: Array = []
 
 
 ## The raw cartridge permission byte at a walk cell.
@@ -3701,21 +3707,75 @@ func _gen1_interact() -> Array:
 	if text_id <= 0:
 		text_id = _gen1_text_id_at(object_facing_cell(), &"objects")
 	var row: Dictionary = current_map.text_at(text_id)
-	var text: String = Gen2TextStream.fill_names(String(row.get("text", "")), {
-		"player": _player_name if not _player_name.is_empty() \
-			else Gen2WorldScriptRunner.UNNAMED,
-		"rival": gen1_rival_name,
-	})
-	if text.is_empty():
+	_gen1_steps = _gen1_facility_steps(row)
+	if _gen1_steps.is_empty():
+		var text: String = Gen2TextStream.fill_names(String(row.get("text", "")), {
+			"player": _player_name if not _player_name.is_empty() \
+				else Gen2WorldScriptRunner.UNNAMED,
+			"rival": gen1_rival_name,
+		})
+		if text.is_empty():
+			return []
+		_gen1_steps = [{"type": &"text", "text": text}]
+	return _gen1_result()
+
+
+## `DisplayTextID`'s own dispatch, which reads the first byte of the text a
+## pointer stands at: a `TX_SCRIPT_*` id runs a routine and prints nothing.
+func _gen1_facility_steps(row: Dictionary) -> Array:
+	match int(row.get("command", 0)):
+		Gen1Layout.TEXT_SCRIPT_MART:
+			return _gen1_mart_steps(row)
+		Gen1Layout.TEXT_SCRIPT_POKECENTER_NURSE:
+			return _gen1_nurse_steps()
+	return []
+
+
+## `MartDialog`'s counter is the whole of a Generation 1 shop, so the request
+## carries the inventory `script_mart` wrote behind the id.
+func _gen1_mart_steps(row: Dictionary) -> Array:
+	var items: Variant = row.get("items", [])
+	if not items is Array or (items as Array).is_empty():
 		return []
-	_gen1_text_open = true
-	## `AfterDisplayingTextID` ends every one of these on
-	## `WaitForTextScrollButtonPress`, whatever the string's last byte said.
-	return [{
-		"ok": true,
-		"status": &"waiting",
-		"event": {"type": &"text", "text": text, "prompt": true},
-	}]
+	return [{"type": &"request", "values": {
+		"kind": &"mart_requested",
+		"values": {
+			"dialog": Gen2WorldMartHost.MARTTYPE_STANDARD,
+			"address": 0,
+			"items": (items as Array).duplicate(),
+		},
+	}}]
+
+
+## `DisplayPokemonCenterDialogue_`. `BIT_USED_POKECENTER` only decides whether
+## the question is asked again, and `YesNoChoicePokeCenter` runs either way, so
+## the box is spent every time here rather than the first time only.
+## `SetLastBlackoutMap` is YES's, ahead of the heal.
+func _gen1_nurse_steps() -> Array:
+	var farewell: Array = [_gen1_pokecenter_box("farewell")]
+	return [
+		_gen1_pokecenter_box("welcome"),
+		{
+			"type": &"choice",
+			"text": _gen1_pokecenter_text("shall_we_heal"),
+			"yes": [
+				_gen1_pokecenter_box("need_your_pokemon"),
+				{"type": &"request", "values": {
+					"kind": &"party_heal_requested", "values": {},
+				}},
+				_gen1_pokecenter_box("fighting_fit"),
+			] + farewell,
+			"no": farewell,
+		},
+	]
+
+
+func _gen1_pokecenter_box(name: String) -> Dictionary:
+	return {"type": &"text", "text": _gen1_pokecenter_text(name)}
+
+
+func _gen1_pokecenter_text(name: String) -> String:
+	return data.special_text(GEN1_POKECENTER_RUN, name) if data != null else ""
 
 
 func _gen1_text_id_at(cell: Vector2i, kind: StringName) -> int:
@@ -3856,14 +3916,57 @@ func dispatch_sight_events() -> Array:
 
 
 func script_input_waiting() -> bool:
-	return _gen1_text_open or (_active_script != null and _active_script.is_waiting())
+	return _gen1_holding() or (_active_script != null and _active_script.is_waiting())
 
 
 ## True while a script holds the world, either running or still queued. A host
 ## that drives ambient motion checks this so a script keeps sole ownership of
 ## the objects it may be moving.
 func script_busy() -> bool:
-	return _gen1_text_open or _active_script != null or not _script_queue.is_empty()
+	return _gen1_holding() or _active_script != null or not _script_queue.is_empty()
+
+
+## Whether a Generation 1 interaction is still standing in front of the map.
+func _gen1_holding() -> bool:
+	return not _gen1_steps.is_empty()
+
+
+func _gen1_step(type: StringName) -> Dictionary:
+	if _gen1_steps.is_empty():
+		return {}
+	var step: Dictionary = _gen1_steps[0]
+	return step if StringName(step.get("type", &"")) == type else {}
+
+
+## The result the head step is waiting on, empty once the list is spent.
+func _gen1_result() -> Array:
+	if _gen1_steps.is_empty():
+		return []
+	var step: Dictionary = _gen1_steps[0]
+	var type: StringName = StringName(step["type"])
+	if type == &"request":
+		return [{
+			"ok": true, "status": &"waiting",
+			"event": {"type": &"runtime_request", "request": step["values"]},
+		}]
+	if type == &"choice":
+		return [{"ok": true, "status": &"waiting", "event": {"type": &"choice"}}]
+	## `AfterDisplayingTextID` ends every box on `WaitForTextScrollButtonPress`,
+	## whatever the string's last byte said.
+	return [{
+		"ok": true, "status": &"waiting",
+		"event": {"type": &"text", "text": String(step["text"]), "prompt": true},
+	}]
+
+
+## Spends the head step and answers with whatever the next one waits on.
+## [param choice] is the row a YES/NO was answered with.
+func _gen1_advance(choice: int) -> Array:
+	var step: Dictionary = _gen1_steps.pop_front()
+	if StringName(step.get("type", &"")) == &"choice":
+		var branch: Array = step.get("yes" if choice == 0 else "no", [])
+		_gen1_steps = branch.duplicate(true) + _gen1_steps
+	return _gen1_result()
 
 
 ## Whether the script holding the world is one that stops the map around it.
@@ -3879,6 +3982,9 @@ func script_stops_the_map() -> bool:
 
 
 func pending_runtime_request() -> Dictionary:
+	var step: Dictionary = _gen1_step(&"request")
+	if not step.is_empty():
+		return (step["values"] as Dictionary).duplicate(true)
 	return _active_script.pending_runtime_request() if _active_script != null else {}
 
 
@@ -3919,6 +4025,13 @@ func party_with_player() -> bool:
 
 
 func pending_script_input() -> Dictionary:
+	var step: Dictionary = _gen1_step(&"choice")
+	if not step.is_empty():
+		return {
+			"type": &"choice",
+			"choices": Gen2WorldMenu.YES_NO_KEYS.duplicate(),
+			"text": String(step.get("text", "")),
+		}
 	return _active_script.pending_input() if _active_script != null else {}
 
 
@@ -3981,7 +4094,7 @@ func load_object_masks() -> void:
 ## This is the explicit interaction boundary for NPCs, signs and item-like
 ## objects. It never executes a hidden object or invents a fallback action.
 func interact() -> Array:
-	if _active_script != null or not _script_queue.is_empty() or _gen1_text_open:
+	if _active_script != null or not _script_queue.is_empty() or _gen1_holding():
 		return run_event_queue(false)
 	if _gen1:
 		return _gen1_interact()
@@ -4105,9 +4218,8 @@ func _tile_collision_script_request(cell: Vector2i) -> Dictionary:
 func run_event_queue(acknowledge: bool = false, choice: int = -1) -> Array:
 	## `AfterDisplayingTextID` waits for the press and `CloseTextDisplay` returns
 	## to `HandleMap`, with no script behind it to resume.
-	if _gen1_text_open:
-		_gen1_text_open = not acknowledge
-		return []
+	if _gen1_holding():
+		return _gen1_advance(choice) if acknowledge else []
 	var results: Array = []
 	var accept: bool = acknowledge
 	var selected_choice: int = choice
@@ -4158,6 +4270,10 @@ func cancel_script_input() -> Array:
 ## scene-free script invocation. The world API owns the runner lifecycle, so a
 ## screen never needs to reach into the runner or replace its state.
 func complete_runtime_request(result: Dictionary) -> Array:
+	## `AfterDisplayingTextID` returns to `HandleMap` with nothing behind it, so
+	## a Generation 1 facility walks its own list instead of resuming a script.
+	if not _gen1_step(&"request").is_empty():
+		return _gen1_advance(-1)
 	if _active_script == null:
 		return []
 	var results: Array = []
@@ -6695,7 +6811,7 @@ func _apply_map(
 		target_map.group, target_map.number, target_map.tileset, target_cell,
 	])
 	_record_escape_points(target_map, from_warp)
-	_gen1_text_open = false
+	_gen1_steps = []
 	## `WarpFound2`'s `CheckIfInOutsideMap`: leaving a town or a route records it,
 	## and that is the map a `LAST_MAP` warp comes back out to.
 	if _gen1 and current_map != null and Gen1Layout.is_outside_tileset(current_map.tileset):

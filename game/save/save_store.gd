@@ -287,11 +287,21 @@ static func import_slot(source_path: String, data: GameData) -> Dictionary:
 
 ## Creates the same deterministic development party the old battle screen used,
 ## but puts it into a real save slot so the screen no longer owns that state.
+## A starter and its first evolution, per generation: Cyndaquil and Quilava are
+## outside a Generation 1 cartridge's 151 species, and a party member that does
+## not exist is a save that cannot be built.
+const DEVELOPMENT_PARTY_GEN2: Array[int] = [155, 156]
+const DEVELOPMENT_PARTY: Dictionary = {
+	RomRegistry.GEN1: [1, 2],
+	RomRegistry.GEN2: DEVELOPMENT_PARTY_GEN2,
+}
+
+
 static func create_development_save(data: GameData, slot: int) -> Gen2SaveData:
 	if data == null or not _valid_slot(slot):
 		return null
 	var members: Array = []
-	for species: int in [155, 156]:
+	for species: int in DEVELOPMENT_PARTY.get(data.generation, DEVELOPMENT_PARTY_GEN2):
 		var mon: Gen2BattleMon = Gen2BattleMon.create(
 			data, species, 5, data.moves_at_level(species, 5)
 		)

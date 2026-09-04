@@ -134,6 +134,23 @@ static func decode_sequence(
 	return out
 
 
+## One printed box, as [method Gen2TextStream.decode]'s { ok, text, prompt } and
+## a `reason` when the stream does not decode. `DisplayTextID` dispatches the
+## `TX_SCRIPT_*` ids and hands everything else to `PrintText`, so every other
+## first byte is a text command, `text_asm`'s jump into code included. A far
+## target names no length, so its slice runs to the end of its own bank.
+static func decode_stream(rom: RomFile, at: int) -> Dictionary:
+	var command: int = rom.u8(at)
+	if Gen1Layout.TEXT_SCRIPT_IDS.has(command):
+		return {"ok": false, "reason": "text_script", "command": command}
+	return Gen2TextStream.decode(rom.bytes(), at, {
+		"generation": RomRegistry.GEN1,
+		"far": func(bank: int, address: int) -> PackedByteArray:
+			var start: int = Gen1Layout.banked(bank, address)
+			return rom.slice(start, RomFile.bank_end(RomFile.bank_of(start)) - start),
+	})
+
+
 ## Just past the terminator: a Pokedex entry's height follows its category.
 static func terminated_end(data: PackedByteArray, offset: int, max_length: int) -> int:
 	var end: int = offset

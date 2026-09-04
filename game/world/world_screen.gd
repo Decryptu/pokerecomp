@@ -4937,13 +4937,14 @@ func _handle_fishing_result(result: Dictionary) -> void:
 func _start_battle_request(request: Dictionary) -> void:
 	if _battle_host != null or _battle_transition != null or _data == null:
 		return
-	## No Generation 1 battle engine: its species are internal indexes and its
-	## stats a different formula, so the request is reported rather than fought.
-	## `RomRegistry`'s `playable` flag is what keeps a player off this path.
+	## No Generation 1 battle engine: its move effects are numbered its own way,
+	## so the request is reported rather than fought. `RomRegistry`'s `playable`
+	## flag is what keeps a player off this path.
 	if _data.generation == RomRegistry.GEN1:
-		_script_prompt = "Wild %d, level %d" % [
-			int((request.get("values", {}) as Dictionary).get("pokemon", 0)),
-			int((request.get("values", {}) as Dictionary).get("level", 0)),
+		var wild: Dictionary = request.get("values", {})
+		_script_prompt = "Wild %s, level %d" % [
+			_data.species(int(wild.get("pokemon", 0))).get("name", "?"),
+			int(wild.get("level", 0)),
 		]
 		_refresh_labels()
 		return

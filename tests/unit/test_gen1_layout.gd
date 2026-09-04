@@ -17,6 +17,7 @@ const REQUIRED_KEYS: Array[String] = [
 	"mon_palettes", "super_palettes", "trainer_names", "evos_moves", "evos_moves_bank",
 	"cries", "font", "text_box", "map_headers", "map_header_banks", "map_songs",
 	"tilesets", "water_tilesets", "tileset_collision_bank", "overworld_sprites",
+	"tm_prices", "mart_greeting", "mart_text", "pokecenter_text",
 ]
 
 
@@ -379,3 +380,61 @@ func test_every_sprite_row_is_inside_the_table() -> void:
 			Gen1Layout.sprite_count(id) - Gen1Layout.first_still_sprite(id) + 1, 12,
 			"%s still sprites" % id
 		)
+
+
+func test_every_text_script_id_is_named_and_the_two_built_are_among_them() -> void:
+	for code: Variant in Gen1Layout.TEXT_SCRIPT_IDS:
+		assert_between(int(code), 0xF5, 0xFF, "a TX_SCRIPT id is outside the run")
+	assert_true(Gen1Layout.TEXT_SCRIPT_IDS.has(Gen1Layout.TEXT_SCRIPT_MART))
+	assert_true(Gen1Layout.TEXT_SCRIPT_IDS.has(Gen1Layout.TEXT_SCRIPT_POKECENTER_NURSE))
+
+
+## A run of `text_far` stubs steps five bytes; the only wider gaps are the two
+## `text_pause`s `engine/events/pokecenter.asm` puts in front of a stub.
+func test_a_facility_text_run_steps_one_stub_at_a_time() -> void:
+	for slots: Dictionary in [Gen1Layout.MART_TEXT_AT, Gen1Layout.POKECENTER_TEXT_AT]:
+		var previous: int = -Gen1Layout.TEXT_FAR_STUB_BYTES
+		for slot: String in slots:
+			var delta: int = int(slots[slot]) - previous
+			assert_between(delta, Gen1Layout.TEXT_FAR_STUB_BYTES,
+				Gen1Layout.TEXT_FAR_STUB_BYTES + 1, "%s is %d bytes on" % [slot, delta])
+			previous = int(slots[slot])
+
+
+func test_a_facility_text_offset_is_its_run_plus_its_own_delta() -> void:
+	for id: StringName in RomRegistry.ids_of_generation(RomRegistry.GEN1):
+		var layout: Dictionary = Gen1Layout.for_id(id)
+		for slot: String in Gen1Layout.MART_TEXT_AT:
+			assert_eq(
+				Gen1Layout.facility_text_offset(layout, "mart_text", Gen1Layout.MART_TEXT_AT, slot),
+				int(layout["mart_text"]) + int(Gen1Layout.MART_TEXT_AT[slot])
+			)
+		assert_eq(
+			Gen1Layout.facility_text_offset(layout, "mart_text", Gen1Layout.MART_TEXT_AT, "none"),
+			-1, "a slot the table does not name has no offset"
+		)
+
+
+## `_IsTilePassable` and every map pointer below $4000 is home whatever bank is
+## switched in, and everything above it belongs to the bank it was read from.
+func test_a_bankless_pointer_below_the_window_is_home() -> void:
+	assert_eq(Gen1Layout.banked(0x1D, 0x2A55), 0x2A55)
+	assert_eq(Gen1Layout.banked(0x1D, 0x4000), 0x1D * RomFile.BANK_SIZE)
+	assert_eq(Gen1Layout.banked(0x00, 0x7FFF), 0x3FFF)
+
+
+## The two runs are the only items above `ItemNames`, and the gap between them
+## is the ids no `item_constants.asm` row names.
+func test_the_machine_items_sit_above_the_named_ones() -> void:
+	assert_eq(Gen1Layout.TM_FIRST_ITEM, Gen1Layout.HM_FIRST_ITEM + Gen1Layout.HM_COUNT)
+	assert_true(Gen1Layout.HM_FIRST_ITEM > Gen1Layout.ITEM_COUNT)
+	assert_between(
+		Gen1Layout.TM_FIRST_ITEM + Gen1Layout.TM_COUNT - 1, Gen1Layout.TM_FIRST_ITEM, 0xFF
+	)
+
+
+func test_a_mart_inventory_fits_the_buffer_it_is_copied_into() -> void:
+	assert_eq(Gen1Layout.MART_ITEMS_AT, Gen1Layout.MART_COUNT_AT + 1)
+	## `wItemList` is sixteen bytes: the count, the items and a terminator, which
+	## is the whole of what `LoadItemList` copies out of the text pointer.
+	assert_true(1 + Gen1Layout.MART_MAX_ITEMS + 1 <= 16)
