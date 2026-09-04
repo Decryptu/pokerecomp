@@ -15,7 +15,8 @@ const REQUIRED_KEYS: Array[String] = [
 	"dex_entries", "dex_entries_bank", "moves", "move_names", "type_names",
 	"type_names_bank", "type_effects", "item_names", "item_prices", "tmhm_moves",
 	"mon_palettes", "super_palettes", "trainer_names", "evos_moves", "evos_moves_bank",
-	"cries", "font", "text_box",
+	"cries", "font", "text_box", "map_headers", "map_header_banks", "map_songs",
+	"tilesets", "water_tilesets", "tileset_collision_bank",
 ]
 
 
@@ -215,3 +216,50 @@ func test_the_text_box_carries_its_own_border_and_space() -> void:
 		"the border's column is inside TextBoxGraphics"
 	)
 	assert_between(Gen1Layout.FRAME_VERTICAL_ROW, 1, 0xFF)
+
+
+func test_the_map_and_tileset_counts_split_by_profile() -> void:
+	assert_eq(Gen1Layout.map_count(RomRegistry.RED), Gen1Layout.MAP_COUNT_RED_BLUE)
+	assert_eq(Gen1Layout.map_count(RomRegistry.BLUE), Gen1Layout.MAP_COUNT_RED_BLUE)
+	# Yellow's Summer Beach House is the extra map, and its Beach House the
+	# extra tileset.
+	assert_eq(Gen1Layout.map_count(RomRegistry.YELLOW), Gen1Layout.MAP_COUNT_RED_BLUE + 1)
+	assert_eq(Gen1Layout.tileset_count(RomRegistry.YELLOW), Gen1Layout.TILESET_COUNT_RED_BLUE + 1)
+	for id: StringName in RomRegistry.ids_of_generation(RomRegistry.GEN1):
+		assert_eq(
+			Gen1Layout.tileset_blocks(id).size(), Gen1Layout.tileset_count(id),
+			"%s pins a block count for every tileset" % id
+		)
+		for blocks: int in Gen1Layout.tileset_blocks(id):
+			assert_between(blocks, 1, 128, "%s block count" % id)
+
+
+func test_the_unused_maps_are_inside_the_table_and_in_order() -> void:
+	var sorted: Array[int] = Gen1Layout.UNUSED_MAPS.duplicate()
+	sorted.sort()
+	assert_eq(sorted, Gen1Layout.UNUSED_MAPS)
+	for map_id: int in Gen1Layout.UNUSED_MAPS:
+		assert_false(Gen1Layout.is_real_map(map_id), "$%02X is unused" % map_id)
+		assert_lt(map_id, Gen1Layout.MAP_COUNT_RED_BLUE, "$%02X is inside the table" % map_id)
+	assert_true(Gen1Layout.is_real_map(0), "Pallet Town is a real map")
+
+
+## The corner `_GetTileAndCoordsInFrontOfPlayer` reads: the bottom-left tile of
+## each 2x2 quarter of the block, which is rows 1 and 3 of the sixteen.
+func test_a_walk_cell_reads_its_bottom_left_tile() -> void:
+	assert_eq(Gen1Layout.cell_tile_index(0, 0), 4)
+	assert_eq(Gen1Layout.cell_tile_index(1, 0), 6)
+	assert_eq(Gen1Layout.cell_tile_index(0, 1), 12)
+	assert_eq(Gen1Layout.cell_tile_index(1, 1), 14)
+
+
+func test_the_object_row_widths_match_the_macro() -> void:
+	assert_eq(
+		Gen1Layout.OBJECT_TRAINER_FLAG | Gen1Layout.OBJECT_ITEM_FLAG, 0xC0,
+		"TRAINER and ITEM are the top two bits of the text byte"
+	)
+	assert_eq(Gen1Layout.TILESET_BLOCK_TILES, 16)
+	assert_eq(
+		Gen1Layout.TM_FIRST_ITEM + Gen1Layout.TM_COUNT - 1, 0xFA,
+		"the last TM is item $FA"
+	)

@@ -120,9 +120,7 @@ func _render_sheet(directory: String, sheet: Dictionary, name: String) -> Image:
 
 	return Gen2PicImage.from_indices(
 		folded, width, rows * PokeTiles.TILE_HEIGHT,
-		PokePalette.pic_palette(PackedColorArray([
-			Color(0.66, 0.66, 0.66), Color(0.33, 0.33, 0.33),
-		]))
+		PokePalette.monochrome()
 	)
 
 
@@ -191,9 +189,7 @@ static func _palette_of(packed: Variant) -> PackedColorArray:
 			out.append(PokePalette.from_packed(int(value)))
 		return out
 	if colors.size() < 2:
-		return PokePalette.pic_palette(PackedColorArray([
-			Color(0.66, 0.66, 0.66), Color(0.33, 0.33, 0.33),
-		]))
+		return PokePalette.monochrome()
 	return PokePalette.pic_palette(PackedColorArray([
 		PokePalette.from_packed(int(colors[0])),
 		PokePalette.from_packed(int(colors[1])),
