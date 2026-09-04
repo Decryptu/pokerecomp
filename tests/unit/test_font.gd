@@ -17,6 +17,7 @@ const FONT_EXTRA_INK: int = 1
 
 var _directory: String = ""
 var _font: Gen2Font = null
+var _gen1_directory: String = ""
 
 
 func before_each() -> void:
@@ -29,6 +30,48 @@ func before_each() -> void:
 
 func after_each() -> void:
 	RomCache.clear(_directory)
+	if not _gen1_directory.is_empty():
+		RomCache.clear(_gen1_directory)
+		_gen1_directory = ""
+
+
+## A Generation 1 cache: `TextBoxGraphics` and no `frames` sheet, which is where
+## that generation keeps its one border. Its ink says which strip a pixel came
+## from, the way the sheets above do.
+func _gen1_font() -> Gen2Font:
+	_gen1_directory = RomCache.directory_for(&"fontgame1", "0123456789abcdef")
+	RomCache.clear(_gen1_directory)
+	RomCache.prepare(_gen1_directory)
+
+	var glyphs: PackedByteArray = PackedByteArray()
+	glyphs.resize(WIDTH * Gen2Font.TILE)
+	glyphs.fill(PokeTiles.INK)
+	RomCache.write_indices(RomCache.tile_path(_gen1_directory, "font"), glyphs)
+
+	var extra: PackedByteArray = PackedByteArray()
+	extra.resize(FONT_EXTRA_WIDTH * Gen2Font.TILE)
+	extra.fill(FONT_EXTRA_INK)
+	RomCache.write_indices(RomCache.tile_path(_gen1_directory, "font_extra"), extra)
+
+	RomCache.write_json(RomCache.manifest_path(_gen1_directory), {
+		"format_version": RomCache.FORMAT_VERSION,
+		"game_id": "fontgame1",
+		"sha1": "0123456789abcdef",
+		"complete": true,
+		"generation": RomRegistry.GEN1,
+		"tiles": {
+			"font": {
+				"width": WIDTH, "height": Gen2Font.TILE,
+				"tiles": SHEET_TILES, "first_code": Gen1Layout.FONT_FIRST_CODE,
+			},
+			"font_extra": {
+				"width": FONT_EXTRA_WIDTH, "height": Gen2Font.TILE,
+				"tiles": Gen1Layout.FONT_EXTRA_TILES,
+				"first_code": Gen1Layout.FONT_EXTRA_FIRST_CODE,
+			},
+		},
+	})
+	return Gen2Font.from_data(GameData.open_directory(_gen1_directory))
 
 
 ## Three solid glyphs and one frame of six solid border tiles.
@@ -266,3 +309,34 @@ func test_drawing_stops_at_the_bound_and_marks_it() -> void:
 	var into: PackedByteArray = _canvas(4)
 	assert_eq(_font.draw_text("AAAA", into, 4 * Gen2Font.TILE, 0, 0, Gen2Text.FONT_MAIN, 2), 2)
 	assert_eq(into[Gen2Font.TILE * 2], 0, "nothing past the bound")
+
+
+func test_generation_1_draws_its_border_out_of_the_text_box_sheet() -> void:
+	# `LoadTextBoxTilePatterns` is the whole of that generation's border: the six
+	# tiles sit inside `TextBoxGraphics` at $79 and there is no `frames` sheet.
+	var font: Gen2Font = _gen1_font()
+	assert_not_null(font)
+	assert_eq(font.frame_count(), 1)
+	var into: PackedByteArray = _canvas(4)
+	font.draw_box(0, into, 2 * Gen2Font.TILE, 0, 0, 2, 2)
+	assert_eq(into[0], FONT_EXTRA_INK, "the corner comes off the text box sheet")
+
+
+func test_generation_1_answers_every_frame_style_with_its_one_border() -> void:
+	# The options screen offers eight; only Generation 2 has eight to offer.
+	var font: Gen2Font = _gen1_font()
+	var first: PackedByteArray = _canvas(1)
+	var last: PackedByteArray = _canvas(1)
+	font.draw_frame_code(0, Gen1Layout.FRAME_FIRST_CODE, first, Gen2Font.TILE, 0, 0)
+	font.draw_frame_code(
+		Gen2Layout.FRAME_COUNT - 1, Gen1Layout.FRAME_FIRST_CODE, last, Gen2Font.TILE, 0, 0
+	)
+	assert_eq(first, last)
+	assert_eq(first.count(FONT_EXTRA_INK), first.size())
+
+
+func test_generation_1_encodes_through_its_own_codec() -> void:
+	# $d4 is Crystal's `\u0027s` and a blank tile in `FontGraphics`, so a box
+	# encoded by the wrong codec prints a hole.
+	assert_eq(_gen1_font().encode("'s"), Gen1Text.encode("'s"))
+	assert_eq(_font.encode("'s"), Gen2Text.encode("'s"))

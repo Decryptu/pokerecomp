@@ -5,7 +5,7 @@ extends RefCounted
 ## wild encounter table into the shared world sections of the cache, the
 ## counterpart of [Gen2WorldImporter]. A map is named by one flat id, so a
 ## record's group is zero and its number is that id. A script is machine code
-## here, so the header's script and text pointers are kept as addresses.
+## here, so the header keeps its address and its text pointer is followed.
 
 const LIST_END: int = Gen1Layout.TILESET_LIST_END
 
@@ -466,10 +466,10 @@ static func _read_map(
 		"scripts": {
 			"bank": bank,
 			"address": rom.u16le(header + 7),
-			"text_address": rom.u16le(header + 5),
 			"scenes": [],
 			"callbacks": [],
 		},
+		"texts": _read_texts(rom, bank, rom.u16le(header + 5), events),
 		"events": {
 			"bank": bank,
 			"address": rom.u16le(object_address),
@@ -660,6 +660,50 @@ static func _read_objects(rom: RomFile, at: int, map_id: int) -> Dictionary:
 		at += extra
 		out.append(object)
 	return {"ok": true, "events": out, "at": at}
+
+
+## `<Map>_TextPointers`, which `DisplayTextID` indexes with a text id. A row is
+## machine code; only `text_far` and `text_start` are a text, and the rest keep
+## the byte naming them. The table has no end, so the map's own events bound it.
+static func _read_texts(rom: RomFile, bank: int, address: int, events: Dictionary) -> Array:
+	var table: int = _banked(bank, address)
+	var out: Array = []
+	for id: int in _highest_text_id(events):
+		out.append(_read_text(rom, bank, rom.u16le(table + id * 2)))
+	return out
+
+
+static func _read_text(rom: RomFile, bank: int, pointer: int) -> Dictionary:
+	var at: int = _banked(bank, pointer)
+	var command: int = rom.u8(at)
+	var row: Dictionary = {"command": command, "text": ""}
+	if command != Gen1Text.TEXT_FAR and command != Gen1Text.TEXT_START:
+		return row
+	var decoded: Dictionary = Gen2TextStream.decode(rom.bytes(), at, {
+		"generation": RomRegistry.GEN1,
+		"far": func(far_bank: int, far_address: int) -> PackedByteArray:
+			var start: int = _banked(far_bank, far_address)
+			return rom.slice(start, _bank_end(RomFile.bank_of(start)) - start),
+	})
+	if not bool(decoded.get("ok", false)):
+		row["reason"] = String(decoded.get("reason", "invalid_text"))
+		return row
+	row["text"] = String(decoded["text"])
+	row["prompt"] = bool(decoded.get("prompt", false))
+	return row
+
+
+static func _highest_text_id(events: Dictionary) -> int:
+	var highest: int = 0
+	for kind: String in ["bg_events", "objects"]:
+		for event: Dictionary in events.get(kind, []) as Array:
+			highest = maxi(highest, int(event.get("text", 0)))
+	return highest
+
+
+## A `dw` inside a banked map: below $4000 is home, whatever bank is switched in.
+static func _banked(bank: int, address: int) -> int:
+	return RomFile.linear(0 if address < RomFile.BANK_SIZE else bank, address)
 
 
 static func _object_extra_bytes(text: int) -> int:

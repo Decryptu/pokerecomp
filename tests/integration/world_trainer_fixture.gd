@@ -1037,12 +1037,13 @@ static func _write_battle_graphics(cache_directory: String, manifest: Dictionary
 		"mail_gfx": [Gen2Layout.MAIL_GFX_TILES, PokeTiles.INK],
 		"mail_icon": [Gen2Layout.MAIL_ICON_TILES, 2],
 	}
-	## The font and the frames are the two sheets addressed by character code
-	## rather than by slot, so both need their real first code. A frames sheet
+	## The font, the frames and `FontExtra` are the sheets addressed by character
+	## code rather than by slot, so each needs its real first code. A frames sheet
 	## left on 0 draws nothing at all, since every box-drawing code is then past
 	## the end of the strip.
 	var first_codes: Dictionary = {
 		"font": Gen2Layout.FONT_FIRST_CODE,
+		"font_extra": Gen2Layout.FONT_EXTRA_FIRST_CODE,
 		"frames": Gen2Layout.FRAME_FIRST_CODE,
 		"copyright": Gen2Layout.COPYRIGHT_FIRST_CODE,
 		"up_arrow": Gen2Text.UP_ARROW_CODE,

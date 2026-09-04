@@ -44,7 +44,8 @@ static func resolve(
 	if random == null:
 		generator.randomize()
 
-	var rate: int = _rate(record, method, time_of_day)
+	var gen1: bool = int(options.get("generation", RomRegistry.GEN2)) == RomRegistry.GEN1
+	var rate: int = _rate(record, method, time_of_day, gen1)
 	rate = apply_music_effect(rate, int(options.get("map_music", 0)))
 	if bool(options.get("cleanse_tag", false)):
 		rate >>= 1
@@ -85,7 +86,7 @@ static func resolve(
 				values["dvs"] = int(roaming.get("dvs", 0))
 			return roamer
 
-	var mon: Dictionary = _wild_mon(record, method, time_of_day, generator, options)
+	var mon: Dictionary = _wild_mon(record, method, time_of_day, generator, options, gen1)
 	if mon.is_empty():
 		return {}
 	var level: int = int(mon["level"])
@@ -101,10 +102,10 @@ static func resolve(
 ## `ChooseWildEncounter`: the drawn slot, with `.surfmon`'s variance spent.
 static func _wild_mon(
 	record: Dictionary, method: StringName, time_of_day: int,
-	generator: RandomNumberGenerator, options: Dictionary
+	generator: RandomNumberGenerator, options: Dictionary, gen1: bool = false
 ) -> Dictionary:
-	var slots: Array = _slots(record, method, time_of_day)
-	var slot: int = _choose_slot(generator, method)
+	var slots: Array = _slots(record, method, time_of_day, gen1)
+	var slot: int = _choose_slot(generator, method, gen1)
 	if slot < 0 or slot >= slots.size():
 		return {}
 	var selected: Variant = slots[slot]
@@ -112,7 +113,8 @@ static func _wild_mon(
 		return {}
 	var species: int = int((selected as Dictionary).get("species", 0))
 	var level: int = int((selected as Dictionary).get("level", 0))
-	if species < 1 or species > Gen2Layout.SPECIES_COUNT or level < 1 or level > Gen2Layout.MAX_LEVEL:
+	var highest: int = Gen1Layout.INDEX_COUNT if gen1 else Gen2Layout.SPECIES_COUNT
+	if species < 1 or species > highest or level < 1 or level > Gen2Layout.MAX_LEVEL:
 		return {}
 	## The last test, after `ValidateTempWildMonSpecies` and on the drawn slot
 	## rather than the table: a wild UNOWN is refused outright while
@@ -120,7 +122,9 @@ static func _wild_mon(
 	if species == Gen2Layout.UNOWN_SPECIES and int(options.get("unlocked_unowns", -1)) == 0:
 		return {}
 	var level_roll: int = -1
-	if method == METHOD_SURF:
+	## `.surfmon`'s variance is Generation 2's: a Generation 1 water slot carries
+	## its own level and `TryDoWildEncounter` reads it unchanged.
+	if method == METHOD_SURF and not gen1:
 		level_roll = generator.randi_range(0, 255)
 		level = mini(level + _surf_level_bonus(level_roll), Gen2Layout.MAX_LEVEL)
 	return {"slot": slot, "species": species, "level": level, "level_roll": level_roll}
@@ -309,8 +313,11 @@ static func _append_nest(out: Array, data: GameData, map_key: String) -> void:
 		out.append(map.location)
 
 
-static func _rate(record: Dictionary, method: StringName, time_of_day: int) -> int:
-	if method == METHOD_SURF:
+static func _rate(
+	record: Dictionary, method: StringName, time_of_day: int, gen1: bool = false
+) -> int:
+	## One `def_grass_wildmons` rate byte a block, with no time of day behind it.
+	if gen1 or method == METHOD_SURF:
 		return int(record.get("rate", 0))
 	var rates: Variant = record.get("rates", [])
 	if not rates is Array or (rates as Array).is_empty():
@@ -335,11 +342,13 @@ static func apply_music_effect(rate: int, map_music: int) -> int:
 	return rate
 
 
-static func _slots(record: Dictionary, method: StringName, time_of_day: int) -> Array:
+static func _slots(
+	record: Dictionary, method: StringName, time_of_day: int, gen1: bool = false
+) -> Array:
 	var value: Variant = record.get("slots", [])
 	if not value is Array:
 		return []
-	if method == METHOD_SURF:
+	if gen1 or method == METHOD_SURF:
 		return value as Array
 	var index: int = mini(2, maxi(0, time_of_day))
 	return (value as Array)[index] if index < (value as Array).size() and (value as Array)[index] is Array else []
@@ -349,9 +358,11 @@ static func _slots(record: Dictionary, method: StringName, time_of_day: int) -> 
 ## `{species, min_level, max_level}`. A cartridge table names one level per slot,
 ## so the bounds are equal; the shape is the Bug Contest's, whose rows are a
 ## range. See [method Gen2WorldAPI.active_encounter_tables].
-static func active_slots(record: Dictionary, method: StringName, time_of_day: int) -> Array:
+static func active_slots(
+	record: Dictionary, method: StringName, time_of_day: int, gen1: bool = false
+) -> Array:
 	var out: Array = []
-	for slot: Variant in _slots(record, method, time_of_day):
+	for slot: Variant in _slots(record, method, time_of_day, gen1):
 		if not slot is Dictionary:
 			continue
 		var level: int = int((slot as Dictionary).get("level", 0))
@@ -363,7 +374,18 @@ static func active_slots(record: Dictionary, method: StringName, time_of_day: in
 	return out
 
 
-static func _choose_slot(random: RandomNumberGenerator, method: StringName) -> int:
+static func _choose_slot(
+	random: RandomNumberGenerator, method: StringName, gen1: bool = false
+) -> int:
+	## `.determineEncounterSlot`: one byte of the generator against
+	## `WildMonEncounterSlotChances`' cumulative column, which sums to 256, so
+	## there is nothing to reject and grass and water draw from one table.
+	if gen1:
+		var roll: int = random.randi_range(0, 255)
+		for slot: int in Gen1Layout.WILD_SLOT_CHANCES.size():
+			if roll <= Gen1Layout.WILD_SLOT_CHANCES[slot]:
+				return slot
+		return -1
 	var probabilities: Array[int] = (
 		Gen2Layout.WILD_WATER_PROBABILITIES if method == METHOD_SURF
 		else Gen2Layout.WILD_GRASS_PROBABILITIES

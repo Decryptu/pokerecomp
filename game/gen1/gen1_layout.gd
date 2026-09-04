@@ -142,8 +142,20 @@ const FONT_EXTRA_FIRST_CODE: int = 0x60
 const FONT_INK_RUNS: Array = [[0x80, 0xBF], [0xE0, 0xFF]]
 const FONT_BLANK_RUNS: Array = [[0xC0, 0xDF]]
 const SPACE_CODE: int = 0x7F
-const FRAME_VERTICAL_CODE: int = 0x7C
+## `TextBoxBorder` prints `┌─┐│└┘`, the six codes `charmap.asm` puts at $79.
+## Generation 2 spells them the same way in a table of eight frames.
+const FRAME_FIRST_CODE: int = 0x79
+const FRAME_LAST_CODE: int = 0x7E
+const FRAME_VERTICAL_CODE: int = FRAME_FIRST_CODE + Gen2Layout.FRAME_VERTICAL
 const FRAME_VERTICAL_ROW: int = 0b00101000
+
+## `TX_SCRIPT_*`: a text pointer standing at one of these opens a facility
+## rather than a box, `DisplayTextID` dispatching before it prints.
+const TEXT_SCRIPT_IDS: Dictionary = {
+	0xF5: "vending machine", 0xF6: "cable club receptionist", 0xF7: "prize vendor",
+	0xF9: "Pokemon Center PC", 0xFC: "the player's PC", 0xFD: "Bill's PC",
+	0xFE: "mart", 0xFF: "Pokemon Center nurse",
+}
 
 ## `MapHeaderPointers` is flat: one `dw` a map id, with `MapHeaderBanks` beside
 ## it. `SwitchToMapRomBank` selects that bank once, which is what puts a map's
@@ -259,6 +271,7 @@ const TILESET_CEMETERY: int = 15
 const TILESET_CAVERN: int = 17
 const TILESET_OVERWORLD: int = 0
 const TILESET_PLATEAU: int = 23
+const TILESET_FOREST: int = 3
 const TILESET_SHIP: int = 13
 const TILESET_SHIP_PORT: int = 14
 
@@ -627,3 +640,10 @@ static func flat_super_rod(id: StringName) -> bool:
 static func cell_tile_index(cell_x: int, cell_y: int) -> int:
 	return (cell_y * MAP_BLOCK_CELL_WIDTH + 1) * MAP_BLOCK_TILE_WIDTH \
 		+ cell_x * MAP_BLOCK_CELL_WIDTH
+
+
+## `TryDoWildEncounter` reads `hlcoord 9, 9` where everything else reads
+## `hlcoord 8, 9`: the bottom right tile of the quarter block the player stands
+## in rather than its bottom left, which is why a left shore rolls on grass.
+static func cell_encounter_tile_index(cell_x: int, cell_y: int) -> int:
+	return cell_tile_index(cell_x, cell_y) + 1

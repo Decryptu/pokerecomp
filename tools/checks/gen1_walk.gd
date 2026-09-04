@@ -41,6 +41,18 @@ const REDS_HOUSE_1F: int = 37
 const PALLET_DOOR := Vector2i(5, 5)
 const REDS_HOUSE_MAT := Vector2i(2, 7)
 
+## `PalletTown_Object`'s third `bg_event` and its second `object_event`, each
+## read from the cell below it.
+const PALLET_HOUSE_SIGN := Vector2i(3, 6)
+const PALLET_GIRL := Vector2i(3, 9)
+const PALLET_GIRL_TEXT: String = "I'm raising\nPOKéMON too!"
+
+## `ViridianMart_Object`'s clerk, who stands at 0,5 behind the counter at 1,5.
+## `.extendRangeOverCounter` is what lets the player at 2,5 reach them.
+const VIRIDIAN_MART: int = 42
+const MART_COUNTER := Vector2i(2, 5)
+const MART_CLERK := Vector2i(0, 5)
+
 var _r: RefCounted = null
 
 
@@ -53,6 +65,7 @@ func _one_game() -> void:
 	_check_warps()
 	_check_ledges()
 	_check_last_map_round_trip()
+	_check_text_boxes()
 
 
 ## Every warp on every map: its destination resolves, it fires from some facing,
@@ -174,3 +187,39 @@ func _check_last_map_round_trip() -> void:
 		return
 	_r.check(world.map_id() == Vector2i(0, PALLET_TOWN) and world.player_cell == PALLET_DOOR,
 		"the way back led to %s %s." % [world.map_id(), world.player_cell])
+
+
+## `DisplayTextID` driven through the world: the box carries the map's own string
+## with `<PLAYER>` filled and the press closing it leaves nothing waiting. The
+## mart counter is `.extendRangeOverCounter`, whose reach is two cells.
+func _check_text_boxes() -> void:
+	var world: Gen2WorldAPI = _r.open_world(0, PALLET_TOWN, PALLET_HOUSE_SIGN)
+	if world == null:
+		return
+	world.set_player_name("RED")
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	var read: String = _box_text(world)
+	_r.check(read == "RED's house ", "the house sign read %s." % [read])
+	_r.check(world.script_input_waiting(), "the house sign left nothing waiting.")
+	world.run_event_queue(true)
+	_r.check(not world.script_input_waiting(), "the press left the box open.")
+
+	world.player_cell = PALLET_GIRL
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	var girl: String = _box_text(world)
+	_r.check(girl.begins_with(PALLET_GIRL_TEXT), "the girl said %s." % [girl])
+
+	var mart: Gen2WorldAPI = _r.open_world(0, VIRIDIAN_MART, MART_COUNTER)
+	if mart == null:
+		return
+	mart.player_facing = Gen2WorldSprite.FACING_LEFT
+	_r.check(mart.object_facing_cell() == MART_CLERK,
+		"the mart counter reaches %s." % [mart.object_facing_cell()])
+
+
+## The string one interaction puts in a box, or "" when it opened none.
+func _box_text(world: Gen2WorldAPI) -> String:
+	var results: Array = world.interact()
+	if results.is_empty():
+		return ""
+	return String((results[0].get("event", {}) as Dictionary).get("text", ""))

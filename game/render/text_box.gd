@@ -393,7 +393,7 @@ func _start_page() -> void:
 	var already: int = 0
 	if _page < _pages.size():
 		for line: String in _pages[_page]["lines"]:
-			var codes: PackedByteArray = Gen2Text.encode(line)
+			var codes: PackedByteArray = _encode(line)
 			if _lines.size() < carried:
 				already += codes.size()
 			_lines.append(codes)
@@ -405,6 +405,11 @@ func _start_page() -> void:
 	if reveal_speed <= 0.0:
 		_shown = float(_tiles_on_page)
 	_redraw()
+
+
+## The codes one line draws as. A box with no font still paginates.
+func _encode(line: String) -> PackedByteArray:
+	return font.encode(line) if font != null else Gen2Text.encode(line)
 
 
 func _redraw() -> void:

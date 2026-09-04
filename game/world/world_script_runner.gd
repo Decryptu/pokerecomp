@@ -119,7 +119,7 @@ var _text_buffers: Dictionary = {}
 ## Magikarp record holder's name and the Poke Seer's five. Keyed by address so
 ## they reach `TextCommand_RAM` through the same map the string buffers do.
 var _text_ram: Dictionary = {}
-var _rival_name: String = "???"
+var _rival_name: String = UNNAMED
 ## wPlayerName, mirrored from the selected save the way Gen2WorldAPI mirrors
 ## wPlayerID. `<PLAYER>` is a `CheckDict` entry, so a text carrying one cannot
 ## be printed without it; empty leaves the marker visible rather than inventing
@@ -138,6 +138,9 @@ var _random := RandomNumberGenerator.new()
 var _cur_party_species: int = 0
 ## Which balance window `engine/menus/menu_2.asm` left standing, empty for none.
 var _money_window: StringName = &""
+
+## What `<RIVAL>` prints before a rival has been named, in either generation.
+const UNNAMED: String = "???"
 
 const PIKACHU: int = 25
 const PIKACHU_DEBUG_LEVEL: int = 5

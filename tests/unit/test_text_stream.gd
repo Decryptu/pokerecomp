@@ -150,3 +150,62 @@ func test_the_two_scrolls_that_wait_for_nothing_are_their_own_break() -> void:
 	assert_true(command["ok"])
 	assert_eq(command["text"], "A" + Gen2TextStream.SCROLL_NOWAIT_BREAK + "B")
 	assert_false(bool(command["prompt"]))
+
+
+## `macros/scripts/text.asm` in pokered: the first eleven commands agree with
+## Crystal's and then part. `TX_FAR` is $17 there, $14 to $16 are three more
+## cries, and a reader that took Crystal's $16 for the far pointer read a cry as
+## one and walked into whatever followed it.
+func test_generation_1_reads_its_own_command_set() -> void:
+	var far: PackedByteArray = PackedByteArray([0x00, 0x82, 0x57])
+	var decoded: Dictionary = Gen2TextStream.decode(
+		PackedByteArray([0x00, 0x80, 0x50, 0x14, 0x15, 0x16, 0x17, 0x00, 0x40, 0x03]),
+		0,
+		{
+			"generation": RomRegistry.GEN1,
+			"far": func(bank: int, address: int) -> PackedByteArray:
+				return far if bank == 3 and address == 0x4000 else PackedByteArray(),
+		}
+	)
+	assert_true(decoded["ok"])
+	assert_eq(decoded["text"], "AC", "the three cries draw nothing and $17 is the far pointer")
+
+
+## `PlaceNextChar`'s dictionary is not `CheckDict`'s: $49 is `PageChar` there and
+## `<MOM>` in Crystal, and Generation 1 has no `<LF>`, `<BSP>` or `<WBR>`.
+func test_generation_1_breaks_its_line_on_page_where_crystal_names_mom() -> void:
+	var bytes: PackedByteArray = PackedByteArray([0x00, 0x80, 0x49, 0x81, 0x57])
+	assert_eq(
+		Gen2TextStream.decode(bytes, 0, {"generation": RomRegistry.GEN1})["text"], "A\nB"
+	)
+	assert_eq(Gen2TextStream.decode(bytes, 0, {"mom": "MUM"})["text"], "AMUMB")
+
+
+## `PlacePKMN` places two narrow tiles and `PlacePOKe` four letters, so the two
+## dictionary entries are not spellings. Generation 1 keeps the ligatures and the
+## accented e in a different run from Crystal's.
+func test_generation_1_takes_its_glyphs_from_its_own_codec() -> void:
+	var decoded: Dictionary = Gen2TextStream.decode(
+		PackedByteArray([0x00, 0xBD, 0xBA, 0x4A, 0x57]), 0,
+		{"generation": RomRegistry.GEN1}
+	)
+	assert_eq(decoded["text"], "'sé<PKMN>")
+
+
+## `text_move` is `db TX_MOVE` and `dw \1`: two operand bytes, not three. Taking
+## a third slid every command behind it by one.
+func test_a_cursor_move_consumes_two_operand_bytes() -> void:
+	var decoded: Dictionary = Gen2TextStream.decode(
+		PackedByteArray([0x03, 0x00, 0xC5, 0x00, 0x80, 0x57])
+	)
+	assert_true(decoded["ok"])
+	assert_eq(decoded["text"], "A")
+
+
+## The print-time names a text decoded before a save existed still carries, which
+## is every Generation 1 map text.
+func test_a_marker_left_by_a_decode_is_filled_by_name() -> void:
+	assert_eq(
+		Gen2TextStream.fill_names("<PLAYER> met <RIVAL>", {"player": "RED", "rival": "BLUE"}),
+		"RED met BLUE"
+	)

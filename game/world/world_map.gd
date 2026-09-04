@@ -32,6 +32,9 @@ var connection_flags: int = 0
 var connections: Array = []
 var scripts: Dictionary = {}
 var events: Dictionary = {}
+## `<Map>_TextPointers` decoded, one row a text id from 1 up. Generation 1 only:
+## a Generation 2 map's text is inside the script its event names.
+var texts: Array = []
 
 
 static func from_cache(value: Dictionary) -> Gen2WorldMap:
@@ -62,7 +65,15 @@ static func from_cache(value: Dictionary) -> Gen2WorldMap:
 		out.connections = []
 	out.scripts = _scripts_from_cache(value.get("scripts", {}))
 	out.events = _events_from_cache(value.get("events", {}))
+	out.texts = _text_rows(value.get("texts", []))
 	return out
+
+
+## The text one id names. Ids count from one, as `DisplayTextID`'s `dec a` says.
+func text_at(id: int) -> Dictionary:
+	if id < 1 or id > texts.size():
+		return {}
+	return texts[id - 1]
 
 
 func block_at(block_x: int, block_y: int) -> int:
@@ -89,6 +100,17 @@ static func _scripts_from_cache(value: Variant) -> Dictionary:
 		"scenes": _script_pointer_rows(script_values.get("scenes", [])),
 		"callbacks": _script_pointer_rows(script_values.get("callbacks", [])),
 	}
+
+
+static func _text_rows(value: Variant) -> Array:
+	if not value is Array:
+		return []
+	var out: Array = []
+	for raw: Dictionary in value as Array:
+		var row: Dictionary = raw.duplicate(true)
+		row["command"] = int(raw.get("command", 0))
+		out.append(row)
+	return out
 
 
 static func _script_pointer_rows(value: Variant) -> Array:
