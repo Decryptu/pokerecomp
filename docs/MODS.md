@@ -33,7 +33,7 @@ user://mods/<id>/
 | `id` | Lowercase `[a-z0-9][a-z0-9_-]*`. Addresses the directory and the registry keys |
 | `name` | Shown to the player |
 | `version` | The mod's own version. Strict `major.minor.patch` |
-| `api_version` | The oldest host this mod runs on, not a number to keep current: raise it when the mod starts using a newer seam. `PokeModManifest.API_VERSION` is the number [Contract versions](#contract-versions) ends on, and a host accepts 1 to that. [Contract versions](#contract-versions) says what each added |
+| `api_version` | The oldest host this mod runs on, not a number to keep current: raise it when the mod starts using a newer seam. A host accepts `PokeModManifest.MIN_API_VERSION` to `API_VERSION`, which are the ends of the [Contract versions](#contract-versions) table it carries |
 | `entry` | A `.gd` path inside the mod directory, or inside the pack when there is one |
 | `pack` | Optional `.pck` or `.zip` beside `mod.json`, holding the mod's files |
 | `description` | Optional |
@@ -97,8 +97,9 @@ loader and no mod.
 ## Contract versions
 
 What each `api_version` added. Declare the oldest one that carries every seam the
-mod reaches; a host refuses a number above its own, and an older number still
-runs, since every version so far has only added.
+mod reaches, and a host refuses a number above its own. Every version up to 29
+only added, so an older number still ran. Version 30 renamed classes, and a host
+carrying it answers 30 alone.
 
 | Version | Added |
 |---|---|
@@ -131,6 +132,7 @@ runs, since every version so far has only added.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 30 | The classes both generations reach take the `Poke` prefix: `PokeTiles`, `PokePalette`, `PokeRaster`, `PokeApu`, `PokeAudioRender`, `PokeGameTime`, `PokeModManifest`, `PokeModVersion` and the input and launcher classes beside them. `RomLayout` becomes `Gen2Layout`, beside the new `Gen1Layout`. Nothing else changed, so a mod moves by renaming what it names |
 
 ## Installing
 
