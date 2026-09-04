@@ -65,7 +65,8 @@ static func calculate_with(
 	variation: int,
 	weather: int = Gen2Weather.NONE,
 	defender_screens: int = Gen2Screens.NONE,
-	foresight: bool = false
+	foresight: bool = false,
+	link_battle: bool = false
 ) -> Dictionary:
 	var out: Dictionary = {
 		"damage": 0, "critical": critical, "effectiveness": RomLayout.MATCHUP_EFFECTIVE,
@@ -76,7 +77,7 @@ static func calculate_with(
 
 	var move_type: int = int(move.get("type", RomLayout.TYPE_NORMAL))
 	var stats: Array = damage_stats(
-		attacker, defender, move_type, critical, defender_screens
+		attacker, defender, move_type, critical, defender_screens, link_battle
 	)
 	var damage: int = damage_calc(
 		attacker, int(move.get("power", 0)), int(stats[0]), int(stats[1]),
@@ -105,14 +106,15 @@ static func damage_stats(
 	defender: Gen2BattleMon,
 	move_type: int,
 	critical: bool,
-	defender_screens: int = Gen2Screens.NONE
+	defender_screens: int = Gen2Screens.NONE,
+	link_battle: bool = false
 ) -> Array:
 	if attacker == null or defender == null:
 		return [1, 1]
 	return metal_powder_pair(defender, truncate_stats(
 		_attack_stat(attacker, defender, move_type, critical),
 		_defense_stat(attacker, defender, move_type, critical, defender_screens),
-		Gen2WorldState.is_crystal_profile(attacker.data)
+		Gen2WorldState.is_crystal_profile(attacker.data) and not link_battle
 	))
 
 
@@ -299,13 +301,14 @@ static func roll_variation(rng: RandomNumberGenerator) -> int:
 ## [param screens] is the confused Pokémon's own side's, doubled off exactly as
 ## `PlayerAttackDamage` doubles, so a Reflect halves what confusion takes.
 static func confusion_damage(
-	mon: Gen2BattleMon, rng: RandomNumberGenerator, screens: int = Gen2Screens.NONE
+	mon: Gen2BattleMon, rng: RandomNumberGenerator, screens: int = Gen2Screens.NONE,
+	link_battle: bool = false
 ) -> int:
 	var defense: int = mon.stat("defense")
 	if Gen2Screens.has(screens, Gen2Screens.REFLECT):
 		defense *= Gen2Screens.DEFENCE_MULTIPLIER
 	var truncated: Array = truncate_stats(
-		mon.stat("attack"), defense, Gen2WorldState.is_crystal_profile(mon.data)
+		mon.stat("attack"), defense, Gen2WorldState.is_crystal_profile(mon.data) and not link_battle
 	)
 	var damage: int = base_damage(
 		mon.level, CONFUSION_POWER, int(truncated[0]), int(truncated[1])
@@ -457,7 +460,7 @@ static func psywave_damage(level: int, rng: RandomNumberGenerator) -> int:
 
 
 ## The split is by type, not by move: below Fire is physical and Fire up
-## special, which is why Hyper Beam is special and Bite physical.
+## special, which is why Hyper Beam is physical and Bite special.
 ##
 ## A type past the cartridge's chart is a mod's own and carries the choice on its
 ## row instead, since there is no number to compare it against. Only such a

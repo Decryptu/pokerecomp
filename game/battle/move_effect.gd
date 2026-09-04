@@ -860,8 +860,7 @@ const TRAP_TARGET_SEQUENCE: Array = [
 
 ## The heal family, the same four-step shape as the weather moves: announce,
 ## spend, heal. Neither list rolls accuracy, so the 100% every one of the seven
-## carries is never read. The cartridge's own lists open with `checkobedience`,
-## which this engine does not model and no other list here carries either.
+## carries is never read. `checkobedience` runs before every list.
 const HEAL_SEQUENCE: Array = [
 	Gen2EffectCommands.USED_MOVE_TEXT,
 	Gen2EffectCommands.DO_TURN,

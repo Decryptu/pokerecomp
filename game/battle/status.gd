@@ -77,9 +77,9 @@ static func tick_sleep(status: int) -> int:
 	return (status & ~SLEEP_MASK) | ((status & SLEEP_MASK) - 1)
 
 
-## How long a Pokémon put to sleep stays asleep.
-static func roll_sleep(rng: RandomNumberGenerator) -> int:
-	return rng.randi_range(MIN_SLEEP, MAX_SLEEP)
+## `BattleCommand_SleepTarget`: the Tower mask limits the initial count to 2..4.
+static func roll_sleep(rng: RandomNumberGenerator, battle_tower: bool = false) -> int:
+	return rng.randi_range(MIN_SLEEP, 4 if battle_tower else MAX_SLEEP)
 
 
 ## Whether a paralysed Pokémon cannot move this turn.

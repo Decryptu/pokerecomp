@@ -72,10 +72,13 @@ func test_a_battle_party_round_trips_into_persistent_fields() -> void:
 
 func test_a_saved_pokemon_restores_stats_hp_status_exp_and_pp() -> void:
 	var save: Gen2SaveData = _save()
+	save.party[0].ot_id = 1234
 	var restored: Gen2Party = Gen2SaveBattleAdapter.to_battle_party(_data, save)
 	assert_not_null(restored)
 	var original: Gen2BattleMon = _party().at(0)
 	var mon: Gen2BattleMon = restored.at(0)
+	assert_eq(mon.ot_id, 1234)
+	assert_eq(Gen2SaveBattleAdapter.from_battle_mon(mon).ot_id, 1234)
 	assert_eq(mon.species, original.species)
 	assert_eq(mon.level, original.level)
 	assert_eq(mon.dvs, original.dvs)

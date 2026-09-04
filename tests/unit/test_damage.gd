@@ -601,3 +601,18 @@ func test_damage_calc_takes_a_level_of_its_own() -> void:
 		Gen2Damage.damage_calc(attacker, 10, 55, 30, false, Fixture.DARK, false, -1),
 		Gen2Damage.damage_calc(attacker, 10, 55, 30, false, Fixture.DARK, false, 50)
 	)
+
+
+func test_crystal_link_stats_use_one_shift_for_hits_and_confusion() -> void:
+	_data = Fixture.build(_directory, "crystal")
+	var attacker: Gen2BattleMon = _mon(Fixture.CHARMANDER)
+	var defender: Gen2BattleMon = _mon(Fixture.CHARMANDER)
+	attacker.stats["attack"] = 100
+	defender.stats["defense"] = 600
+	assert_eq(Gen2Damage.damage_stats(attacker, defender, 0, false, Gen2Screens.REFLECT), [6, 75])
+	assert_eq(Gen2Damage.damage_stats(attacker, defender, 0, false, Gen2Screens.REFLECT, true), [25, 44])
+	attacker.stats["defense"] = 600
+	var generator := RandomNumberGenerator.new()
+	generator.seed = 1
+	assert_between(Gen2Damage.confusion_damage(attacker, generator, Gen2Screens.REFLECT), 2, 3)
+	assert_between(Gen2Damage.confusion_damage(attacker, generator, Gen2Screens.REFLECT, true), 10, 12)

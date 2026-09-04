@@ -21,8 +21,7 @@ extends EditorPlugin
 ## Without the flag the plugin does nothing at all, so an ordinary editor session
 ## is untouched by it.
 ##
-## It costs what opening every script in the editor costs: this project's 566
-## take a few minutes and about three gigabytes, because `edit_script` adds a tab
+## A full sweep takes a few minutes and about three gigabytes: `edit_script` adds a tab
 ## per script and the editor exposes no way to close one. Name a directory rather
 ## than sweeping everything when only part of the tree moved.
 

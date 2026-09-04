@@ -550,8 +550,7 @@ const HEAL_TIMES: Dictionary = {
 ## Wheel and Sacred Fire, by move number.
 const THAWING_MOVES: Array = [172, 221]
 
-## `.fast_asleep`'s own two by number, Snore and Sleep Talk. The second has no
-## effect list yet and is named anyway: the bypass is the sleep check's rule.
+## `.fast_asleep` permits Snore and Sleep Talk through the sleep check.
 const SLEEPING_MOVES: Array = [173, 214]
 
 ## What Encore refuses to lock a target into, by number: Encore itself, which
@@ -900,7 +899,7 @@ static func _damage_stats(turn: Gen2Turn) -> void:
 	var stats: Array = Gen2Damage.damage_stats(
 		turn.attacker(), turn.defender(),
 		int(turn.effective_move().get("type", RomLayout.TYPE_NORMAL)),
-		turn.critical, turn.battle.screens[turn.target]
+		turn.critical, turn.battle.screens[turn.target], turn.battle.is_link_battle
 	)
 	turn.attack_stat = int(stats[0])
 	turn.defense_stat = int(stats[1])
@@ -1809,12 +1808,7 @@ static func _check_status(turn: Gen2Turn) -> void:
 			turn.emit(Gen2Battle.CONFUSED)
 			if Gen2Substatus.rolls_confusion_hit(turn.rng()):
 				_cancel_charge(mon)
-				var dealt: int = mon.take_damage(Gen2Damage.confusion_damage(
-					mon, turn.rng(), turn.battle.screens[turn.side]
-				))
-				turn.emit(Gen2Battle.HURT_ITSELF, {
-					"amount": dealt, "hp": mon.hp, "max_hp": mon.max_hp(),
-				})
+				_hurt_self(turn)
 				turn.end()
 				return
 
@@ -1883,6 +1877,10 @@ static func _status_target(turn: Gen2Turn, flag: int) -> void:
 	if not primary and _substitute_refuses(turn):
 		return
 
+	if _primary_status_misses(turn, flag):
+		turn.emit(Gen2Battle.MOVE_FAILED)
+		return
+
 	if Gen2Status.is_afflicted(defender.status):
 		# `BattleCommand_BurnTarget` is the one that does not simply return here:
 		# its `jp nz, Defrost` thaws a frozen target instead.
@@ -1914,7 +1912,7 @@ static func _status_target(turn: Gen2Turn, flag: int) -> void:
 		_animate_current_move(turn)
 
 	if flag == Gen2Status.SLEEP_MASK:
-		defender.status = Gen2Status.roll_sleep(turn.rng())
+		defender.status = Gen2Status.roll_sleep(turn.rng(), turn.battle.in_battle_tower)
 	else:
 		defender.status |= flag
 
@@ -1989,6 +1987,10 @@ static func _toxic_target(turn: Gen2Turn) -> void:
 	# passes that command's own `CheckIfTargetIsPoisonType` on the way in: a
 	# Poison-type is no more badly poisoned than ordinarily poisoned.
 	if _status_type_refuses(turn, Gen2Status.POISON):
+		return
+
+	if _computer_effect_misses(turn):
+		turn.emit(Gen2Battle.MOVE_FAILED)
 		return
 
 	# `.dont_sample_failure`, which is where that command asks about the doll:
@@ -3290,7 +3292,7 @@ static func _heal(turn: Gen2Turn) -> void:
 ## time of day, which is the cartridge's real rule: matching the clock buys
 ## nothing, missing it costs. Then one step up in sun, or one step down in any
 ## other weather, so the worst case is an eighth and the best is the whole bar.
-## Link battles skip the time step; there are none here.
+## Link battles skip the time step.
 static func _timed_heal(turn: Gen2Turn) -> void:
 	var attacker: Gen2BattleMon = turn.attacker()
 	if attacker.hp >= attacker.max_hp():
@@ -3298,7 +3300,9 @@ static func _timed_heal(turn: Gen2Turn) -> void:
 		return
 
 	var index: int = HEAL_HALF
-	if turn.battle.time_of_day != HEAL_TIMES.get(turn.effect(), Gen2WorldPalette.TIME_DAY):
+	if not turn.battle.is_link_battle and turn.battle.time_of_day != HEAL_TIMES.get(
+		turn.effect(), Gen2WorldPalette.TIME_DAY
+	):
 		index -= 1
 	if Gen2Weather.is_active(turn.battle.weather):
 		index += 1 if turn.battle.weather == Gen2Weather.SUN else -1
@@ -3613,13 +3617,34 @@ static func _stat_change(command: StringName, turn: Gen2Turn) -> void:
 ## player's stats fails a quarter of the time, exempting Lock-On and
 ## `EFFECT_ACCURACY_DOWN_HIT`. It sits behind `.CantLower`, which never rolls.
 static func _computer_stat_down_misses(turn: Gen2Turn) -> bool:
-	if turn.side != Gen2Battle.ENEMY:
+	if turn.effect() == Gen2MoveEffect.ACCURACY_DOWN_HIT:
+		return false
+	return _computer_effect_misses(turn)
+
+
+static func _computer_effect_misses(turn: Gen2Turn) -> bool:
+	if turn.side != Gen2Battle.ENEMY or turn.battle.is_link_battle or turn.battle.in_battle_tower:
 		return false
 	if Gen2Substatus.has(turn.defender().substatus, Gen2Substatus.LOCK_ON):
 		return false
-	if turn.effect() == Gen2MoveEffect.ACCURACY_DOWN_HIT:
-		return false
 	return turn.rng().randi_range(0, 0xFF) < 64
+
+
+static func _primary_status_misses(turn: Gen2Turn, flag: int) -> bool:
+	if not _status_move_animates(turn, flag):
+		return false
+	var status: int = turn.defender().status
+	match flag:
+		Gen2Status.SLEEP_MASK:
+			if Gen2Status.is_asleep(status) or turn.missed:
+				return false
+		Gen2Status.POISON:
+			if Gen2Status.is_afflicted(status) or _status_type_refuses(turn, flag) or turn.immune:
+				return false
+		Gen2Status.PARALYSIS:
+			if Gen2Status.has(status, flag) or turn.immune:
+				return false
+	return _computer_effect_misses(turn)
 
 
 ## Minimize's move number, which is the whole of what `MinimizeDropSub` compares
@@ -3683,4 +3708,105 @@ static func _stat_fail_text(turn: Gen2Turn) -> void:
 		return
 	turn.emit(Gen2Battle.STAT_CHANGE_FAILED, {
 		"target": turn.stat_target, "stat": turn.stat_key, "by": turn.stat_by,
+	})
+
+
+## `BattleCommand_CheckObedience` runs before every effect list, after CheckTurn.
+static func check_obedience(turn: Gen2Turn) -> void:
+	var battle: Gen2Battle = turn.battle
+	var user: Gen2BattleMon = turn.attacker()
+	if turn.side != Gen2Battle.PLAYER or turn.locked or turn.called or turn.disobeyed:
+		return
+	if battle.is_link_battle or battle.in_battle_tower or battle.player_id < 0:
+		return
+	if user.ot_id < 0 or user.ot_id == battle.player_id:
+		return
+	var limit: int = _obedience_level(battle.player_badge_mask)
+	if user.level <= limit:
+		return
+	var total: int = mini(limit + user.level, 255)
+	if _obedience_roll(turn, total, true) < limit:
+		return
+	if SLEEPING_MOVES.has(turn.move_number) and Gen2Status.is_asleep(user.status):
+		turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"ignored_sleeping"})
+		turn.end()
+		return
+	if _obedience_roll(turn, total, false) < limit:
+		_disobedient_move(turn)
+	else:
+		_disobedient_action(turn, user.level - limit)
+	user.last_move_used = 0
+	user.last_counter_move = 0
+	user.encored_slot = -1
+	user.encore_turns = 0
+	turn.end()
+
+
+static func _obedience_level(badges: int) -> int:
+	for row: Array in [[7, 101], [5, 70], [3, 50], [1, 30]]:
+		if badges & (1 << int(row[0])):
+			return int(row[1])
+	return 10
+
+
+static func _obedience_roll(turn: Gen2Turn, upper: int, swap: bool) -> int:
+	while true:
+		var value: int = turn.rng().randi_range(0, 255)
+		if swap:
+			value = ((value << 4) | (value >> 4)) & 255
+		if value < upper:
+			return value
+	return 0
+
+
+static func _disobedient_move(turn: Gen2Turn) -> void:
+	var user: Gen2BattleMon = turn.attacker()
+	var available: Array[int] = []
+	for slot: int in user.moves.size():
+		if slot != turn.slot and user.can_use(slot):
+			available.append(slot)
+	if user.moves.size() < 2 or user.disabled_slot >= 0 or available.is_empty():
+		_disobedient_idle(turn)
+		return
+	var chosen: int = turn.rng().randi_range(0, 255) & 3
+	while not available.has(chosen):
+		chosen = turn.rng().randi_range(0, 255) & 3
+	var number: int = int(user.moves[chosen])
+	var alternate: Gen2Turn = Gen2Turn.create(
+		turn.battle, turn.side, chosen, number, turn.data().move(number), turn.events
+	)
+	alternate.disobeyed = true
+	turn.battle.run_move_effect(alternate)
+
+
+static func _disobedient_action(turn: Gen2Turn, difference: int) -> void:
+	var value: int = _obedience_roll(turn, 256, true)
+	if value < difference:
+		var sleep: int = 0
+		while sleep == 0:
+			var doubled: int = (turn.rng().randi_range(0, 255) << 1) & 255
+			sleep = (doubled >> 4) & Gen2Status.SLEEP_MASK
+		turn.attacker().status = sleep
+		turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"began_to_nap"})
+	elif value < difference * 2:
+		turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"wont_obey"})
+		_hurt_self(turn)
+	else:
+		_disobedient_idle(turn)
+
+
+static func _disobedient_idle(turn: Gen2Turn) -> void:
+	var reasons: Array[StringName] = [
+		&"loafing", &"wont_obey", &"turned_away", &"ignored_orders",
+	]
+	turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": reasons[turn.rng().randi_range(0, 255) & 3]})
+
+
+static func _hurt_self(turn: Gen2Turn) -> void:
+	var user: Gen2BattleMon = turn.attacker()
+	var dealt: int = user.take_damage(Gen2Damage.confusion_damage(
+		user, turn.rng(), turn.battle.screens[turn.side], turn.battle.is_link_battle
+	))
+	turn.emit(Gen2Battle.HURT_ITSELF, {
+		"amount": dealt, "hp": user.hp, "max_hp": user.max_hp(),
 	})

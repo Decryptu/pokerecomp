@@ -1832,3 +1832,18 @@ func test_risky_wants_strictly_more_damage_than_the_bar() -> void:
 	assert_eq(int(_scores(pikachu, charmander, RomLayout.AI_RISKY)[0]), 20, "exactly the bar")
 	charmander.hp = damage - 1
 	assert_eq(int(_scores(pikachu, charmander, RomLayout.AI_RISKY)[0]), 15, "one under it")
+
+
+func test_link_predictions_use_the_same_stat_truncation_as_the_hit() -> void:
+	_data = Fixture.build(_directory, "crystal")
+	var attacker: Gen2BattleMon = _mon(Fixture.CHARMANDER, 50, [Fixture.BODY_SLAM_ALWAYS_PARALYZES, Fixture.STATIC_DAMAGE_MOVE])
+	var defender: Gen2BattleMon = _mon(Fixture.CHARMANDER, 50, [Fixture.TACKLE])
+	attacker.stats["attack"] = 100
+	defender.stats["defense"] = 600
+	for linked: bool in [false, true]:
+		var selected: int = Gen2BattleAI.choose_slot(
+			attacker, defender, _data, RomLayout.AI_AGGRESSIVE, _rng,
+			0, 0, Gen2Weather.NONE, Gen2Screens.NONE, Gen2Screens.REFLECT,
+			false, Gen2AISwitch.BASE_SCORE, false, [], Gen2Status.NONE, linked
+		)
+		assert_eq(selected, 0 if linked else 1)

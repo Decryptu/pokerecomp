@@ -36,6 +36,7 @@ var data: GameData = null
 
 var species: int = 0
 var level: int = 1
+var ot_id: int = -1
 var dvs: int = PERFECT_DVS
 var stat_exp: Dictionary = {}
 

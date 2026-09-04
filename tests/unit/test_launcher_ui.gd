@@ -199,7 +199,7 @@ func test_a_browse_sheet_walks_into_a_directory_and_answers_with_a_file() -> voi
 	var answers: Array[String] = []
 	sheet.chosen.connect(func(path: String) -> void: answers.append(path))
 	sheet.open(host)
-	await wait_frames(2)
+	await wait_process_frames(2)
 	var rows: Array[Button] = _row_buttons(sheet)
 	assert_eq(rows.size(), 1, "the directory is the only row at the top")
 	rows[0].pressed.emit()

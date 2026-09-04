@@ -13,6 +13,7 @@ static func from_battle_mon(mon: Gen2BattleMon) -> Gen2SaveMon:
 	out.item = mon.item
 	out.level = mon.level
 	out.exp = mon.exp
+	out.ot_id = maxi(mon.ot_id, 0)
 	out.dvs = mon.persistent_dvs()
 	out.stat_exp = {}
 	for key: String in Gen2SaveMon.STAT_EXP_KEYS:
@@ -46,6 +47,7 @@ static func to_battle_mon(data: GameData, saved: Gen2SaveMon) -> Gen2BattleMon:
 	if out == null:
 		return null
 	out.exp = saved.exp
+	out.ot_id = saved.ot_id
 	out.status = saved.status
 	out.happiness = saved.happiness
 	out.caught_location = saved.caught_location & Gen2BattleMon.CAUGHT_LOCATION_MASK

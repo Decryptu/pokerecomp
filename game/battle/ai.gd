@@ -20,6 +20,7 @@ class Context extends RefCounted:
 	var atk_turns: int = 0
 	var def_turns: int = 0
 	var weather: int = Gen2Weather.NONE
+	var link_battle: bool = false
 	var attacker_screens: int = Gen2Screens.NONE
 	var defender_screens: int = Gen2Screens.NONE
 	var has_bench: bool = false
@@ -50,7 +51,8 @@ class Context extends RefCounted:
 		p_matchup_score: int = Gen2AISwitch.BASE_SCORE,
 		p_defender_has_bench: bool = false,
 		p_defender_used_moves: Array = [],
-		p_bench_status_mask: int = Gen2Status.NONE
+		p_bench_status_mask: int = Gen2Status.NONE,
+		p_link_battle: bool = false
 	) -> Context:
 		var out := Context.new()
 		out.attacker = p_attacker
@@ -67,6 +69,7 @@ class Context extends RefCounted:
 		out.defender_has_bench = p_defender_has_bench
 		out.defender_used_moves.assign(p_defender_used_moves)
 		out.bench_status_mask = p_bench_status_mask
+		out.link_battle = p_link_battle
 		return out
 
 
@@ -254,14 +257,15 @@ static func choose_slot(
 	matchup_score: int = Gen2AISwitch.BASE_SCORE,
 	defender_has_bench: bool = false,
 	defender_used_moves: Array = [],
-	bench_status_mask: int = Gen2Status.NONE
+	bench_status_mask: int = Gen2Status.NONE,
+	link_battle: bool = false
 ) -> int:
 	return _pick_lowest(
 		score_slots(
 			attacker, defender, data, ai_move_weights, rng,
 			attacker_turns_taken, defender_turns_taken, weather,
 			attacker_screens, defender_screens, has_bench, matchup_score,
-			defender_has_bench, defender_used_moves, bench_status_mask
+			defender_has_bench, defender_used_moves, bench_status_mask, link_battle
 		),
 		attacker, rng
 	)
@@ -285,7 +289,8 @@ static func score_slots(
 	matchup_score: int = Gen2AISwitch.BASE_SCORE,
 	defender_has_bench: bool = false,
 	defender_used_moves: Array = [],
-	bench_status_mask: int = Gen2Status.NONE
+	bench_status_mask: int = Gen2Status.NONE,
+	link_battle: bool = false
 ) -> Array:
 	var scores: Array = []
 	for slot: int in Gen2BattleMon.MAX_MOVES:
@@ -294,7 +299,7 @@ static func score_slots(
 	var context := Context.of(
 		attacker, defender, data, rng, attacker_turns_taken, defender_turns_taken,
 		weather, attacker_screens, defender_screens, has_bench, matchup_score,
-		defender_has_bench, defender_used_moves, bench_status_mask
+		defender_has_bench, defender_used_moves, bench_status_mask, link_battle
 	)
 
 	if ai_move_weights & RomLayout.AI_BASIC:
@@ -1439,7 +1444,7 @@ static func _estimate_damage(c: Context, move: Dictionary, constant: bool = true
 		return Gen2Damage.constant_damage(effect, c.attacker, c.defender, move, c.rng)
 	return int(Gen2Damage.calculate_with(
 		c.attacker, c.defender, move, false, Gen2Damage.MAX_VARIATION,
-		Gen2Weather.NONE, c.defender_screens
+		Gen2Weather.NONE, c.defender_screens, false, c.link_battle
 	)["damage"])
 
 

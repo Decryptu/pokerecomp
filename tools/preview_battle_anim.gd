@@ -4,7 +4,7 @@ extends SceneTree
 ## `tools/screenshot.gd` cannot drive: an animation needs a turn taken, an event
 ## queue walked to the animation it wants, and a counted number of frames spent
 ## inside it. The flags and the `catch`, `0`, `miss` and frame-range forms are
-## documented below.
+## documented below; `disobey` captures a traded Pokemon ignoring an order.
 ##   Godot --path . -s res://tools/preview_battle_anim.gd -- \
 ##       <game> <output.png> <move> <side> <frames> [scene_off] [matchup=<enemy>,<player>]
 
@@ -42,6 +42,7 @@ var _last_trace: String = ""
 var _scene_off: bool = false
 var _with_intro: bool = false
 var _miss: bool = false
+var _disobey: bool = false
 var _frames: int = 0
 var _matchup: Vector2i = DEFAULT_MATCHUP
 
@@ -83,6 +84,8 @@ func _initialize() -> void:
 				_with_intro = true
 			"miss":
 				_miss = true
+			"disobey":
+				_disobey = true
 			_:
 				push_error("Unknown flag %s" % flag)
 				quit(1)
@@ -333,6 +336,8 @@ func _drive_miss(battle: Gen2Battle) -> bool:
 
 
 func _drive() -> bool:
+	if _disobey:
+		return _drive_disobedience()
 	if _move == 0:
 		return _drive_entrance()
 	if _move == CATCH_MOVE:
@@ -370,4 +375,37 @@ func _drive() -> bool:
 		_screen.finish()
 		_screen.advance()
 	push_error("No animation on that side in %d steps. %s" % [MAX_STEPS, JSON.stringify(_screen.battle_snapshot())])
+	return false
+
+
+func _drive_disobedience() -> bool:
+	var data: GameData = _screen._data
+	var member: Gen2BattleMon = Gen2BattleMon.create(data, _matchup.y, 100, [_move])
+	member.ot_id = 2
+	var save: Gen2SaveData = Gen2SaveBattleAdapter.from_battle_party(
+		data.id, data.sha1, -1, Gen2Party.create([member]), "PLAYER"
+	)
+	save.player_id = 1
+	if not _screen.start_world_battle({"values": {
+		"kind": &"wild", "pokemon": _matchup.x, "level": 100,
+	}}, save):
+		return false
+	_settle_entrance()
+	_screen.set_random_seed(7)
+	_screen.take_turn_with(0, 0)
+	for _step: int in MAX_STEPS:
+		var message: String = String(_screen.battle_snapshot()["message"])
+		for ending: String in ["nap!", "obey!", "around!", "away!", "orders!"]:
+			if message.ends_with(ending):
+				_screen.finish()
+				print(message)
+				return true
+		if _screen._audio_player != null:
+			_screen._audio_player.stop_all()
+		if _screen.frames_running():
+			_screen.advance_frame()
+			continue
+		_screen.finish()
+		_screen.advance()
+	push_error("The traded Pokemon did not disobey.")
 	return false

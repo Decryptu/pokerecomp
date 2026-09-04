@@ -4846,3 +4846,165 @@ func test_transform_refuses_an_already_transformed_target() -> void:
 	var turn: Gen2Turn = _run_move(battle, Fixture.TRANSFORM)
 	assert_eq(_of_type(turn.events, Gen2Battle.MOVE_FAILED).size(), 1)
 	assert_eq(battle.player.species, Fixture.PIKACHU)
+
+
+func test_link_healing_ignores_time_but_keeps_weather_for_every_heal() -> void:
+	for number: int in [Fixture.MORNING_SUN, Fixture.SYNTHESIS, Fixture.MOONLIGHT]:
+		for time: int in 3:
+			for weather: int in 4:
+				for side: int in 2:
+					var battle: Gen2Battle = _battle()
+					battle.is_link_battle = true
+					battle.time_of_day = time
+					battle.weather = weather
+					battle.mon(side).stats["hp"] = 160
+					battle.mon(side).hp = 1
+					var turn := Gen2Turn.create(battle, side, 0, number, _data.move(number), [])
+					Gen2EffectCommands.run(Gen2EffectCommands.TIMED_HEAL, turn)
+					var amount: int = [80, 40, 160, 40][weather]
+					assert_eq(battle.mon(side).hp, mini(1 + amount, 160))
+
+
+func test_link_and_tower_stat_drops_spend_no_computer_failure_roll() -> void:
+	for mode: int in 2:
+		var battle: Gen2Battle = _battle()
+		battle.is_link_battle = mode == 0
+		battle.in_battle_tower = mode == 1
+		var before: int = battle.rng.state
+		var turn := Gen2Turn.create(battle, Gen2Battle.ENEMY, 0,
+			Fixture.GROWL, _data.move(Fixture.GROWL), [])
+		Gen2EffectCommands.run(Gen2EffectCommands.ATTACK_DOWN, turn)
+		assert_eq(int(battle.player.stages["attack"]), -1)
+		assert_eq(battle.rng.state, before)
+
+
+func test_primary_status_failures_share_the_link_and_tower_exemptions() -> void:
+	for number: int in [Fixture.SLEEP_POWDER, Fixture.POISON_POWDER, Fixture.THUNDER_WAVE, Fixture.TOXIC]:
+		for mode: int in 3:
+			var misses: int = 0
+			for seed_value: int in 100:
+				var battle: Gen2Battle = _battle()
+				battle.is_link_battle = mode == 1
+				battle.in_battle_tower = mode == 2
+				battle.rng.seed = seed_value
+				var turn := Gen2Turn.create(battle, Gen2Battle.ENEMY, 0,
+					number, _data.move(number), [])
+				var commands: Dictionary = {
+					Fixture.SLEEP_POWDER: Gen2EffectCommands.SLEEP_TARGET,
+					Fixture.POISON_POWDER: Gen2EffectCommands.POISON_TARGET,
+					Fixture.THUNDER_WAVE: Gen2EffectCommands.PARALYZE_TARGET,
+					Fixture.TOXIC: Gen2EffectCommands.TOXIC_TARGET,
+				}
+				Gen2EffectCommands.run(commands[number], turn)
+				if battle.player.status == 0:
+					misses += 1
+			if mode == 0:
+				assert_between(misses, 10, 40)
+			else:
+				assert_eq(misses, 0)
+
+
+func test_tower_sleep_is_one_to_three_lost_turns_on_either_side() -> void:
+	for side: int in 2:
+		var seen: Dictionary = {}
+		for seed_value: int in 100:
+			var battle: Gen2Battle = _battle()
+			battle.in_battle_tower = true
+			battle.rng.seed = seed_value
+			var turn := Gen2Turn.create(battle, side, 0, Fixture.SLEEP_POWDER, _data.move(Fixture.SLEEP_POWDER), [])
+			Gen2EffectCommands.run(Gen2EffectCommands.SLEEP_TARGET, turn)
+			var status: int = turn.defender().status
+			assert_between(status, 2, 4)
+			seen[status] = true
+		assert_eq(seen.size(), 3)
+
+
+func test_obedience_exemptions_do_not_draw_randomness() -> void:
+	for reason: String in ["owner", "level", "badges", "link", "tower", "locked", "called", "enemy"]:
+		var battle: Gen2Battle = _battle()
+		battle.player_id = 1
+		battle.player.ot_id = 2
+		battle.enemy.ot_id = 2
+		battle.is_link_battle = reason == "link"
+		battle.in_battle_tower = reason == "tower"
+		if reason == "owner":
+			battle.player.ot_id = 1
+		if reason == "level":
+			battle.player.level = 10
+		if reason == "badges":
+			battle.player_badge_mask = 1 << 3
+		var turn := Gen2Turn.create(battle, Gen2Battle.ENEMY if reason == "enemy" else Gen2Battle.PLAYER,
+			0, Fixture.TACKLE, _data.move(Fixture.TACKLE), [])
+		turn.locked = reason == "locked"
+		turn.called = reason == "called"
+		var before: int = battle.rng.state
+		Gen2EffectCommands.check_obedience(turn)
+		assert_false(turn.ended, reason)
+		assert_eq(battle.rng.state, before, reason)
+
+
+func test_obedience_badge_thresholds_use_only_the_four_source_badges() -> void:
+	for mask: int in 256:
+		var expected: int = 10
+		for row: Array in [[1, 30], [3, 50], [5, 70], [7, 101]]:
+			if mask & (1 << int(row[0])):
+				expected = int(row[1])
+		assert_eq(Gen2EffectCommands._obedience_level(mask), expected)
+
+
+func test_disobedience_reaches_every_outcome_and_clears_encore() -> void:
+	var outcomes: Dictionary = {}
+	for seed_value: int in 300:
+		var battle: Gen2Battle = _battle()
+		battle.player_id = 1
+		battle.player.ot_id = 2
+		battle.player.moves = [Fixture.GROWL, Fixture.SPLASH]
+		battle.player.pp = [20, 20]
+		battle.player.last_move_used = Fixture.TACKLE
+		battle.player.last_counter_move = Fixture.TACKLE
+		battle.player.encored_slot = 0
+		battle.player.encore_turns = 3
+		battle.rng.seed = seed_value
+		var turn: Gen2Turn = _turn(battle, Fixture.GROWL)
+		Gen2EffectCommands.check_obedience(turn)
+		if not turn.ended:
+			outcomes[&"obeyed"] = true
+			continue
+		assert_eq(battle.player.last_move_used, 0)
+		assert_eq(battle.player.last_counter_move, 0)
+		assert_eq(battle.player.encored_slot, -1)
+		assert_eq(battle.player.encore_turns, 0)
+		assert_eq(int(battle.player.pp[0]), 20)
+		for event: Dictionary in turn.events:
+			if event["type"] == Gen2Battle.CANNOT_MOVE:
+				outcomes[event["reason"]] = true
+			if event["type"] == Gen2Battle.HURT_ITSELF:
+				outcomes[&"hurt_self"] = true
+			if event["type"] == Gen2Battle.USED_MOVE:
+				outcomes[&"alternate"] = true
+				assert_eq(int(event["move"]), Fixture.SPLASH)
+				assert_eq(int(battle.player.pp[1]), 19)
+	for outcome: StringName in [&"obeyed", &"began_to_nap", &"hurt_self", &"alternate",
+		&"loafing", &"wont_obey", &"turned_away", &"ignored_orders"]:
+		assert_true(outcomes.has(outcome), String(outcome))
+
+
+func test_a_disobedient_sleeping_move_preserves_encore_and_spends_no_pp() -> void:
+	var seen: bool = false
+	for seed_value: int in 100:
+		var battle: Gen2Battle = _battle()
+		battle.player_id = 1
+		battle.player.ot_id = 2
+		battle.player.status = 3
+		battle.player.encored_slot = 0
+		battle.player.encore_turns = 3
+		battle.rng.seed = seed_value
+		var turn: Gen2Turn = _turn(battle, Fixture.SLEEP_TALK)
+		Gen2EffectCommands.check_obedience(turn)
+		if not turn.ended:
+			continue
+		seen = true
+		assert_eq(turn.events[0]["reason"], &"ignored_sleeping")
+		assert_eq(battle.player.encore_turns, 3)
+		assert_eq(battle.player.status, 3)
+	assert_true(seen)

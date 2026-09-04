@@ -1,9 +1,6 @@
 extends GutTest
 
 ## The source budget: how much branching and how much prose the tree is allowed.
-## Both are capped because both track defect count the way line count does, and a
-## ceiling nothing measures is a wish. `CLAUDE.md`'s "The budget" is this table
-## in prose; this file is what fails.
 
 const ROOTS: Array[String] = ["autoload", "game", "mods", "tests", "tools"]
 ## Where the comment total is counted. The tests and the shipped example mods are
@@ -18,7 +15,7 @@ const MAX_COMPLEXITY: int = 20
 const MAX_COMMENT_BLOCK: int = 8
 ## Comment lines under [constant COUNTED_ROOTS]. A ceiling, not a target: lower
 ## it whenever a pass leaves room, and never raise it.
-const MAX_COMMENT_LINES: int = 37768
+const MAX_COMMENT_LINES: int = 37762
 
 ## The functions still over [constant MAX_COMPLEXITY], as `path:function`. Empty,
 ## and it stays empty: a function over the ceiling fails the test rather than
