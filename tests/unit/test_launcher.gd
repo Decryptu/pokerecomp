@@ -838,6 +838,8 @@ const ART_SCRATCH: String = "user://cartridge_art_tests"
 
 
 func _clear_art_scratch() -> void:
+	if not DirAccess.dir_exists_absolute(ART_SCRATCH):
+		return
 	var listing: PackedStringArray = DirAccess.get_files_at(ART_SCRATCH)
 	for entry: String in listing:
 		DirAccess.remove_absolute("%s/%s" % [ART_SCRATCH, entry])

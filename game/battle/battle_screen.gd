@@ -39,6 +39,12 @@ const PARTY_SIZE: int = 2
 ## Keyed by the names [Gen2Status] answers with, so a status the engine grows
 ## later shows up here as a missing key rather than as a wrong sentence.
 const STOPPED_BY: Dictionary = {
+	&"ignored_sleeping": "ignored orders…sleeping!",
+	&"began_to_nap": "began to nap!",
+	&"loafing": "is loafing around!",
+	&"wont_obey": "won't obey!",
+	&"turned_away": "turned away!",
+	&"ignored_orders": "ignored orders!",
 	&"sleep": "is fast asleep!",
 	&"freeze": "is frozen solid!",
 	&"paralysis": "is fully paralyzed!",
@@ -1134,7 +1140,8 @@ func start_world_battle(
 	var crystal: bool = Gen2WorldState.is_crystal_profile(_data)
 	var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(
 		_data, _stamped_request(request, save, crystal), player_party, _rng,
-		_world_badge_mask(save, crystal, player_badges), _injected_rules
+		_world_badge_mask(save, crystal, player_badges), _injected_rules,
+		save.player_id if save != null else -1
 	)
 	if not bool(prepared.get("ok", false)):
 		_emit_world_battle_failure(
@@ -3413,7 +3420,7 @@ func _enemy_slot() -> int:
 		_battle.screens[Gen2Battle.ENEMY], _battle.screens[Gen2Battle.PLAYER],
 		Gen2AISwitch.has_bench(_battle), Gen2AISwitch.matchup_score(_battle),
 		Gen2AISwitch.has_bench(_battle, Gen2Battle.PLAYER), _battle.player_used_moves,
-		_party_status_mask(Gen2Battle.ENEMY)
+		_party_status_mask(Gen2Battle.ENEMY), _battle.is_link_battle
 	)
 
 

@@ -88,21 +88,26 @@ func test_wild_request_builds_a_one_mon_enemy_party() -> void:
 	assert_eq((prepared["battle"] as Gen2Battle).enemy.species, SPECIES_TWO)
 
 
-func test_a_battle_tower_request_marks_the_battle_for_its_ai_rules() -> void:
+func test_special_battle_requests_keep_their_context() -> void:
 	var opponent := Gen2SaveMon.new()
 	opponent.species = SPECIES_TWO
 	opponent.level = 5
 	opponent.moves = [TACKLE]
 	opponent.pp = [35]
 	opponent.hp = 10
-	var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(
-		_data, {"values": {
-			"kind": &"battle_tower", "trainer_class": 1,
-			"enemy_party": [opponent.to_dict()],
-		}}, _player_party(), RandomNumberGenerator.new()
-	)
-	assert_true(bool(prepared["ok"]), String(prepared.get("reason", "")))
-	assert_true((prepared["battle"] as Gen2Battle).in_battle_tower)
+	for kind: StringName in [&"battle_tower", &"link_battle"]:
+		var prepared: Dictionary = Gen2WorldBattleAdapter.prepare(
+			_data, {"values": {
+				"kind": kind, "trainer_class": 1,
+				"enemy_party": [opponent.to_dict()],
+			}}, _player_party(), RandomNumberGenerator.new(), 0, null, 123
+		)
+		assert_true(bool(prepared["ok"]), String(prepared.get("reason", "")))
+		var battle: Gen2Battle = prepared["battle"]
+		assert_eq(battle.in_battle_tower, kind == &"battle_tower")
+		assert_eq(battle.is_link_battle, kind == &"link_battle")
+		assert_eq(battle.player_id, 123)
+
 
 
 ## `LoadEnemyMon.WildItem` spends its item roll before the two DV bytes. Sweep

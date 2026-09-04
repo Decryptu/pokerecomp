@@ -494,9 +494,10 @@ var rules: Gen2Rules = null
 var is_trainer_battle: bool = false
 
 var in_battle_tower: bool = false
+var is_link_battle: bool = false
+var player_id: int = -1
 
-## `wBattleType`, read by running alone so far and set on the world path by a
-## `loadvar VAR_BATTLETYPE` before `startbattle`.
+## `wBattleType`, set by `loadvar VAR_BATTLETYPE` before `startbattle`.
 var battle_type: int = BATTLETYPE_NORMAL
 
 ## Earned player badges as source-order bits. Zero is the battle-safe default
@@ -2832,6 +2833,9 @@ func _act(side: int, slot: int, move_number: int, events: Array) -> void:
 ## once-per-action status gate. A fresh [Gen2Turn] is that clean move-struct copy,
 ## keeping the acting side and the one event stream.
 func run_move_effect(turn: Gen2Turn, depth: int = 0) -> void:
+	if turn.ended:
+		return
+	Gen2EffectCommands.check_obedience(turn)
 	var sequence: Array = Gen2MoveEffect.sequence_for(turn.effect())
 	var counter: int = 0
 	while counter < sequence.size():

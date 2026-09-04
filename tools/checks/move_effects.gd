@@ -20,9 +20,7 @@ const PINS: Dictionary = {
 ## not as a command of its own; anything not in it and not a name we use is an
 ## unread step and fails.
 const FOLDED: Dictionary = {
-	# `CheckTurn` is called before `DoMove` and `checkobedience` is the first
-	# command of every list; both are the once-per-action gate `Gen2Battle._act`
-	# runs as `checkstatus` in front of the sequence.
+	# `CheckTurn` runs in `_act`; `checkobedience` opens `run_move_effect`.
 	&"checkturn": "",
 	&"checkobedience": "",
 	# Text and pacing. Every one of these prints what the step in front of it
@@ -87,6 +85,7 @@ func run(r: RefCounted) -> void:
 			continue
 		_r.game_id = game_id
 		compared += _compare(pin, data)
+		_check_obedience_corpus(data)
 		_r.game_id = &""
 	if compared == 0:
 		print("no pin was checked out; move_effects compared nothing.")
@@ -229,3 +228,25 @@ func _reference_root() -> String:
 	if override != "":
 		return override
 	return ProjectSettings.globalize_path("res://").path_join(".references")
+
+
+func _check_obedience_corpus(data: GameData) -> void:
+	var checked: int = 0
+	for number: int in range(1, 252):
+		var battle: Gen2Battle = Gen2Battle.create(
+			data, Gen2BattleMon.create(data, 25, 100, [number]),
+			Gen2BattleMon.create(data, 1, 100, [1]), RandomNumberGenerator.new()
+		)
+		battle.player_id = 1
+		battle.player.ot_id = 2
+		for mode: int in 3:
+			battle.is_link_battle = mode == 1
+			battle.in_battle_tower = mode == 2
+			battle.player_badge_mask = 128 if mode == 0 else 0
+			var before: int = battle.rng.state
+			var turn := Gen2Turn.create(battle, 0, 0, number, data.move(number), [])
+			Gen2EffectCommands.check_obedience(turn)
+			_r.check(not turn.ended and battle.rng.state == before,
+				"move %d obedience exemption %d" % [number, mode])
+			checked += 1
+	print("%s: %d move obedience exemptions." % [data.id, checked])

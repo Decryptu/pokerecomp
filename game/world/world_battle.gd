@@ -33,6 +33,7 @@ static func prepare(
 	random: RandomNumberGenerator = null,
 	player_badges: int = 0,
 	battle_rules: Gen2Rules = null,
+	player_id: int = -1,
 ) -> Dictionary:
 	if data == null or player_party == null or player_party.is_wiped():
 		return _failure(&"missing_player_party")
@@ -47,9 +48,7 @@ static func prepare(
 	var trainer_index: int = 0
 	# wBattleType, which a `loadvar VAR_BATTLETYPE` before `startbattle` sets.
 	# Read before the party is built, since `LoadEnemyMon` branches a wild's DVs
-	# on it. Running is the only other thing that reads it so far, and four of
-	# its values are what make Celebi, Suicune and the Rocket trap battles
-	# inescapable.
+	# on it. Four values make Celebi, Suicune and the Rocket traps inescapable.
 	var battle_type: int = int(values.get("battle_type", Gen2Battle.BATTLETYPE_NORMAL))
 	# `BattleRandom`, so a wild's DVs come out of the run's own sequence and a
 	# replay of the same seed meets the same Pokemon.
@@ -103,6 +102,8 @@ static func prepare(
 		return _failure(&"battle_setup_failed")
 	battle.battle_type = battle_type
 	battle.in_battle_tower = kind == &"battle_tower"
+	battle.is_link_battle = kind == &"link_battle"
+	battle.player_id = player_id
 	## `InitEnemyTrainer` belongs to setting the opponent up rather than to
 	## whoever draws the fight, so every host gets the class's two items, its
 	## gym-leader happiness and `ComputeTrainerReward` from one place. Only a

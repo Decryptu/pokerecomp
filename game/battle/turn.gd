@@ -60,6 +60,7 @@ var locked: bool = false
 ## Mirror Move or Sleep Talk spends no PP and adds no second turn. Not
 ## [member locked], which is a real continuation.
 var called: bool = false
+var disobeyed: bool = false
 
 ## A called-move command's request to restart at another move's first command,
 ## zero for none. [Gen2Battle] consumes it as soon as the command returns.
