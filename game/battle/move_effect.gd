@@ -244,6 +244,9 @@ const FORCE_SWITCH: int = 28
 ## the move's animation byte against `ROAR`, and every move here animates as
 ## itself, so the number is what tells the pair apart.
 const ROAR_MOVE: int = 46
+## Teleport's, for the same reason: Generation 1 runs all three through
+## `SwitchAndTeleportEffect` and picks its line by move number.
+const TELEPORT_MOVE: int = 100
 
 ## Baton Pass, the one effect whose player half cannot be resolved inside the
 ## turn that started it.
@@ -1592,6 +1595,48 @@ const CONVERSION_2_SEQUENCE: Array = [
 	Gen2EffectCommands.END_MOVE,
 ]
 
+## The four lists Generation 1 reads instead, keyed by the same effect byte.
+## Three are one command swapped; the fourth moves `gen1traptarget` in front of
+## `checkhit`, because `TrappingEffect` is in `SpecialEffectsCont` and runs
+## before `MoveHitTest`, which is what lets a miss undo it.
+const GEN1_SEQUENCES: Dictionary = {
+	HAZE: [
+		Gen2EffectCommands.USED_MOVE_TEXT,
+		Gen2EffectCommands.DO_TURN,
+		Gen2EffectCommands.GEN1_HAZE,
+		Gen2EffectCommands.END_MOVE,
+	],
+	CONVERSION: [
+		Gen2EffectCommands.USED_MOVE_TEXT,
+		Gen2EffectCommands.DO_TURN,
+		Gen2EffectCommands.GEN1_CONVERSION,
+		Gen2EffectCommands.END_MOVE,
+	],
+	FORCE_SWITCH: [
+		Gen2EffectCommands.USED_MOVE_TEXT,
+		Gen2EffectCommands.DO_TURN,
+		Gen2EffectCommands.GEN1_FORCE_SWITCH,
+		Gen2EffectCommands.END_MOVE,
+	],
+	TRAP_TARGET: [
+		Gen2EffectCommands.USED_MOVE_TEXT,
+		Gen2EffectCommands.DO_TURN,
+		Gen2EffectCommands.GEN1_TRAP_TARGET,
+		Gen2EffectCommands.CHECK_HIT,
+		Gen2EffectCommands.CRITICAL,
+		Gen2EffectCommands.DAMAGE_STATS,
+		Gen2EffectCommands.DAMAGE_CALC,
+		Gen2EffectCommands.STAB,
+		Gen2EffectCommands.CHECK_IMMUNE,
+		Gen2EffectCommands.DAMAGE_VARIATION,
+		Gen2EffectCommands.MOVE_ANIM,
+		Gen2EffectCommands.APPLY_DAMAGE,
+		Gen2EffectCommands.CHECK_FAINT,
+		Gen2EffectCommands.BUILD_OPPONENT_RAGE,
+		Gen2EffectCommands.END_MOVE,
+	],
+}
+
 ## Snore: a flinch chance whose own command sits between the roll and the
 ## animation, so a Snore used awake fails before anything is drawn.
 const SNORE_SEQUENCE: Array = [
@@ -2075,9 +2120,12 @@ static func _table() -> Dictionary:
 ## A registered effect wins over the cartridge's, which is what lets a mod
 ## rewrite one as well as add one. [method register_effect] is where that is
 ## refused for the effects the engine relies on reading back off a turn.
-static func sequence_for(effect: int) -> Array:
+## [param generation] picks [constant GEN1_SEQUENCES]' four.
+static func sequence_for(effect: int, generation: int = RomRegistry.GEN2) -> Array:
 	if _registered_sequences.has(effect):
 		return _registered_sequences[effect]
+	if generation == RomRegistry.GEN1 and GEN1_SEQUENCES.has(effect):
+		return GEN1_SEQUENCES[effect]
 	return _table().get(effect, NORMAL_HIT)
 
 

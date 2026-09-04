@@ -4954,12 +4954,9 @@ func _start_battle_request(request: Dictionary) -> void:
 func _build_battle_transition(request: Dictionary) -> Gen2BattleTransition:
 	if _world == null or _data == null:
 		return null
-	## `BattleTransition` is Generation 1's own subsystem, drawn out of nothing
-	## but the tilemap: none of its four wipes is built here, so a Generation 1
-	## fight opens where Crystal's animation would start.
-	if _data.generation == RomRegistry.GEN1:
-		return null
 	var values: Dictionary = request.get("values", {})
+	if _data.generation == RomRegistry.GEN1:
+		return _build_gen1_battle_transition(values)
 	if bool(values.get("tutorial", false)):
 		return null
 	## A link battle starts from `LinkCommunications`' own screen rather than
@@ -4981,6 +4978,23 @@ func _build_battle_transition(request: Dictionary) -> Gen2BattleTransition:
 	)
 
 
+## `BattleTransition`'s own three bits: `GetBattleTransitionID_WildOrTrainer`,
+## `..._CompareLevels` and `..._IsDungeonMap` over `DungeonMaps1` and
+## `DungeonMaps2`. The level read is `wCurEnemyLevel`, this battle's own, where
+## Crystal reads the previous fight's `wEnemyMonLevel`.
+func _build_gen1_battle_transition(values: Dictionary) -> Gen2BattleTransition:
+	var map_id: int = _world.current_map.number if _world.current_map != null else 0
+	var index: int = 0
+	if int(values.get("trainer_class", 0)) > 0:
+		index |= Gen2BattleTransition.GEN1_TRAINER_BIT
+	if _battle_lead_level() + Gen2BattleTransition.STRONGER_MARGIN \
+		<= int(values.get("level", 0)):
+		index |= Gen2BattleTransition.GEN1_STRONGER_BIT
+	if Gen1Layout.is_dungeon_map(map_id):
+		index |= Gen2BattleTransition.GEN1_DUNGEON_BIT
+	return Gen2BattleTransition.create_gen1(index)
+
+
 ## `wBattleMonLevel` as `FindFirstAliveMonAndStartBattle` writes it in front of
 ## the transition: the first party member with HP left, not the lead.
 func _battle_lead_level() -> int:
@@ -4996,13 +5010,17 @@ func _battle_lead_level() -> int:
 
 ## `DoBattleTransition` alone, driven to [param frames] frames in, for a
 ## screenshot: the transition over the map it actually runs on, without the
-## battle behind it. [param trainer] is the branch that draws the Poke Ball and
-## floods every background tile with `PAL_BG_TEXT`.
-func preview_battle_transition(frames: int, trainer: bool = false) -> void:
-	_battle_transition = Gen2BattleTransition.create(
-		false, false, trainer, false, _encounter_random,
-		_data.battle_anim_sine() if _data != null else PackedByteArray()
-	)
+## battle behind it. A non-zero [param variant] is the trainer branch, which
+## draws the Poke Ball and floods every background tile with `PAL_BG_TEXT`; on a
+## Generation 1 cartridge it is `BattleTransitions`' own index instead, so any of
+## the four wild rows can be photographed on any map.
+func preview_battle_transition(frames: int, variant: int = 0) -> void:
+	_battle_transition = Gen2BattleTransition.create_gen1(variant) \
+		if _data != null and _data.generation == RomRegistry.GEN1 \
+		else Gen2BattleTransition.create(
+			false, false, variant != 0, false, _encounter_random,
+			_data.battle_anim_sine() if _data != null else PackedByteArray()
+		)
 	_apply_interface_mask()
 	_apply_battle_transition()
 	for _frame: int in maxi(frames, 0):

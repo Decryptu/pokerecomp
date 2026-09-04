@@ -472,3 +472,18 @@ func test_an_effect_byte_the_table_does_not_carry_is_a_normal_hit() -> void:
 	assert_eq(Gen1Layout.move_effect(1, 0x57), 0)
 	assert_eq(Gen1Layout.move_effect(1, -1), 0)
 	assert_eq(Gen1Layout.move_power(1, 40), 40)
+
+
+## `DungeonMaps1`'s four ids and `DungeonMaps2`'s four ranges, with the maps
+## either side of a range and the ones the file says it misses.
+func test_the_dungeon_list_is_the_one_the_transition_reads() -> void:
+	for map_id: int in [0x33, 0x52, 0xC0, 0xE8, 0x3B, 0x3C, 0x3D, 0x5F, 0x76, 0x8D,
+		0x97, 0xCF, 0xE4]:
+		assert_true(Gen1Layout.is_dungeon_map(map_id), "map $%02X is a dungeon" % map_id)
+	## Pallet Town, the ids either side of two ranges, and six of the dungeons
+	## the source's own comment says the list fails to recognise: the Power
+	## Plant, Seafoam Islands B1F, Pokemon Mansion 1F, Victory Road 2F,
+	## Diglett's Cave and Silph Co 9F.
+	for map_id: int in [0x00, 0x3A, 0x3E, 0x5E, 0x77, 0x53, 0x9F, 0xA5, 0xC2,
+		0xC5, 0xE9]:
+		assert_false(Gen1Layout.is_dungeon_map(map_id), "map $%02X is not" % map_id)

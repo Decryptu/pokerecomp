@@ -74,6 +74,10 @@ const TRANSFORMED: int = 1 << 28
 ## arrangement and what `supereffectivelooptext` reads.
 const IN_LOOP: int = 1 << 29
 
+## `HazeEffect_` writing `$ff` over the target's selected move: it loses the turn
+## it was about to take. Generation 1 only, and cleared by the turn it costs.
+const GEN1_LOST_TURN: int = 1 << 30
+
 const NONE: int = 0
 
 ## Rolled the shape [constant Gen2Status.MIN_SLEEP] is, both ends inclusive.
@@ -158,6 +162,17 @@ static func rolls_attract_immobile(rng: RandomNumberGenerator) -> bool:
 
 static func roll_trap_turns(rng: RandomNumberGenerator) -> int:
 	return rng.randi_range(MIN_TRAP_TURNS, MAX_TRAP_TURNS)
+
+
+## `TrappingEffect`'s own roll, which is not a range: two bits, and a second draw
+## of the same two whenever the first is 2 or 3. So one and two continuations are
+## 3/8 each and three and four are 1/8, which is the source's "3/8 chance for 2
+## and 3 attacks, and 1/8 chance for 4 and 5".
+static func roll_gen1_trap_turns(rng: RandomNumberGenerator) -> int:
+	var rolled: int = rng.randi_range(0, 255) & 0b11
+	if rolled >= 2:
+		rolled = rng.randi_range(0, 255) & 0b11
+	return rolled + 1
 
 
 static func trap_damage(max_hp: int) -> int:

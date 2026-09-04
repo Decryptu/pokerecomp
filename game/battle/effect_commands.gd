@@ -276,6 +276,14 @@ const CURL: StringName = &"curl"
 ## either Pokémon's status byte or [Gen2Substatus].
 const HAZE: StringName = &"haze"
 
+## The four routines Generation 1 keeps under an effect byte whose Crystal
+## command list does something else. [method Gen2MoveEffect.sequence_for] picks
+## between the two by generation.
+const GEN1_HAZE: StringName = &"gen1haze"
+const GEN1_TRAP_TARGET: StringName = &"gen1traptarget"
+const GEN1_CONVERSION: StringName = &"gen1conversion"
+const GEN1_FORCE_SWITCH: StringName = &"gen1forceswitch"
+
 ## Half the user's maximum HP for an Attack straight to the top of its range.
 ## Fails free if it has no more than half, or if Attack is already there.
 const BELLY_DRUM: StringName = &"bellydrum"
@@ -650,6 +658,10 @@ static var HANDLERS: Dictionary = {
 	RAMPAGE: _rampage,
 	CURL: _curl,
 	HAZE: _haze,
+	GEN1_HAZE: _gen1_haze,
+	GEN1_TRAP_TARGET: _gen1_trap_target,
+	GEN1_CONVERSION: _gen1_conversion,
+	GEN1_FORCE_SWITCH: _gen1_force_switch,
 	BELLY_DRUM: _belly_drum,
 	PSYCH_UP: _psych_up,
 	DISABLE: _disable,
@@ -1380,6 +1392,12 @@ static func _check_immune(turn: Gen2Turn) -> void:
 ## `.Missed`'s own tail, which every gate in the hit check shares.
 static func _miss(turn: Gen2Turn, event: StringName = Gen2Battle.MISSED) -> void:
 	turn.missed = true
+	## `MoveHitTest.moveMissed` zeroes `wDamage` and clears
+	## `USING_TRAPPING_MOVE`, so a Wrap that misses binds nothing at all.
+	if turn.battle.gen1_trapping_move(turn.side) != 0:
+		turn.defender().trapped_turns = 0
+		turn.defender().trapping_move = 0
+		turn.battle.last_damage_dealt = 0
 	turn.emit(event, {"target": turn.target})
 	if not CONTINUES_AFTER_MISS.has(turn.effect()):
 		_failure_text(turn)
@@ -1559,6 +1577,7 @@ static func _apply_damage(turn: Gen2Turn) -> void:
 
 	turn.dealt = defender.take_damage(turn.damage)
 	turn.damage = turn.dealt # DoPlayerDamage and DoEnemyDamage replace wCurDamage on underflow.
+	turn.battle.last_damage_dealt = turn.damage
 	# `wCriticalHit` at 2 is the one-hit line rather than the critical one, which
 	# is the only thing that tells an OHKO's own hit apart from any other.
 	turn.emit(Gen2Battle.OHKO if turn.one_hit_ko else Gen2Battle.HIT, {
@@ -1794,6 +1813,20 @@ static func _check_status(turn: Gen2Turn) -> void:
 			turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"freeze"})
 			turn.end()
 			return
+
+	## `.HeldInPlaceCheck` and `HazeEffect_`'s `$ff`, both between the freeze
+	## check and the flinch one, and both Generation 1's alone.
+	if turn.battle.gen1_trapping_move(turn.target) != 0:
+		_cant_move(mon)
+		turn.emit(Gen2Battle.CANNOT_MOVE, {"reason": &"held_in_place"})
+		turn.end()
+		return
+
+	if Gen2Substatus.has(mon.substatus, Gen2Substatus.GEN1_LOST_TURN):
+		_cant_move(mon)
+		mon.substatus &= ~Gen2Substatus.GEN1_LOST_TURN
+		turn.end()
+		return
 
 	if Gen2Substatus.has(mon.substatus, Gen2Substatus.FLINCHED):
 		_cant_move(mon)
@@ -2385,6 +2418,115 @@ static func _haze(turn: Gen2Turn) -> void:
 	turn.battle.mon(Gen2Battle.ENEMY).reset_stages()
 	_animate_current_move(turn)
 	turn.emit(Gen2Battle.STAGES_CLEARED)
+
+
+## `HazeEffect_` (engine/battle/move_effects/haze.asm), a good deal more than
+## Crystal's stage reset. The non-volatile status is cured on the target alone,
+## and a target that was asleep or frozen has `$ff` written over its selected
+## move, so it loses the turn it was about to take.
+static func _gen1_haze(turn: Gen2Turn) -> void:
+	for side: int in [Gen2Battle.PLAYER, Gen2Battle.ENEMY]:
+		_gen1_cure_volatile(turn.battle, side)
+	var defender: Gen2BattleMon = turn.defender()
+	var was_immobile: bool = Gen2Status.has(defender.status, Gen2Status.FREEZE) \
+		or Gen2Status.is_asleep(defender.status)
+	defender.status = Gen2Status.NONE
+	## The write only costs a turn the target has not taken yet: on the next one
+	## its own selection lands over the `$ff`.
+	if was_immobile and not turn.battle.opponent_went_first(turn.side):
+		defender.substatus |= Gen2Substatus.GEN1_LOST_TURN
+	_animate_current_move(turn)
+	turn.emit(Gen2Battle.STAGES_CLEARED)
+
+
+## `CureVolatileStatuses` and the stage reset in front of it, for one side: the
+## mask keeps `TRANSFORMED` and drops confusion, X Accuracy, Mist, Focus Energy,
+## Leech Seed, the bad-poison counter and both screens.
+static func _gen1_cure_volatile(battle: Gen2Battle, side: int) -> void:
+	var mon: Gen2BattleMon = battle.mon(side)
+	mon.reset_stages()
+	mon.substatus &= ~(
+		Gen2Substatus.CONFUSED | Gen2Substatus.X_ACCURACY | Gen2Substatus.MIST
+		| Gen2Substatus.FOCUS_ENERGY | Gen2Substatus.LEECH_SEED
+	)
+	mon.confusion_turns = 0
+	mon.toxic_counter = 0
+	mon.disabled_slot = -1
+	mon.disable_turns = 0
+	battle.screens[side] = Gen2Screens.NONE
+	battle.light_screen_turns[side] = 0
+	battle.reflect_turns[side] = 0
+
+
+## `TrappingEffect`. The counter goes on the target, where
+## [member Gen2BattleMon.trapped_turns] already lives, and Generation 1 spends it
+## by repeating the move rather than by bleeding: [method Gen2Battle.move_for]
+## forces the move on the user and [method _check_status] holds the target in
+## place. `.MultiturnMoveCheck` jumps past the damage calculation, the accuracy
+## roll and `DecrementPP`, which is the skip here.
+static func _gen1_trap_target(turn: Gen2Turn) -> void:
+	var defender: Gen2BattleMon = turn.defender()
+	if defender.trapping_move != 0:
+		defender.trapped_turns -= 1
+		turn.damage = turn.battle.last_damage_dealt
+		turn.skip_to = DAMAGE_VARIATION
+		turn.emit(Gen2Battle.ATTACK_CONTINUES)
+		return
+
+	## `ClearHyperBeam`: the target owes no recharge even if this misses.
+	defender.substatus &= ~Gen2Substatus.RECHARGING
+	defender.trapped_turns = Gen2Substatus.roll_gen1_trap_turns(turn.rng())
+	defender.trapping_move = turn.move_number
+	turn.emit(Gen2Battle.TRAPPED, {
+		"target": turn.target, "move": turn.move_number, "turns": defender.trapped_turns,
+	})
+
+
+## `ConversionEffect_`: the user takes both of the target's types. Its one
+## refusal is a target that is flying or underground.
+static func _gen1_conversion(turn: Gen2Turn) -> void:
+	var defender: Gen2BattleMon = turn.defender()
+	if _is_hidden(defender.substatus):
+		turn.emit(Gen2Battle.MOVE_FAILED)
+		return
+	var copied: Array = defender.types()
+	if copied.size() < 2:
+		turn.emit(Gen2Battle.MOVE_FAILED)
+		return
+	turn.attacker().battle_types = [int(copied[0]), int(copied[1])]
+	_animate_current_move(turn)
+	turn.emit(Gen2Battle.TYPE_COPIED, {"target": turn.target})
+
+
+## `SwitchAndTeleportEffect`, which is Roar, Whirlwind and Teleport in one
+## routine. Against a trainer all three say so and nothing switches; against a
+## wild the battle ends on the same level roll Crystal kept in two commands.
+static func _gen1_force_switch(turn: Gen2Turn) -> void:
+	if turn.battle.is_trainer_battle:
+		turn.emit(Gen2Battle.MOVE_FAILED)
+		return
+	var user_level: int = turn.attacker().level
+	var other_level: int = turn.defender().level
+	if user_level < other_level:
+		var span: int = user_level + other_level + 1
+		if turn.rng().randi_range(0, span - 1) < other_level >> 2:
+			turn.emit(Gen2Battle.MOVE_FAILED)
+			return
+
+	## `.playAnimAndPrintText` reads the move number back for its line: Teleport
+	## takes the user out of the fight and the other two blow the target out.
+	var teleporting: bool = turn.move_number == Gen2MoveEffect.TELEPORT_MOVE
+	turn.battle.force_out(turn.side if teleporting else turn.target)
+	turn.battle.battle_anim_param = FORCE_SWITCH_ANIM_PARAM
+	_animate_current_move(turn)
+	if teleporting:
+		turn.emit(Gen2Battle.FLED_FROM_BATTLE)
+		return
+	turn.emit(
+		Gen2Battle.FLED_IN_FEAR if turn.move_number == Gen2MoveEffect.ROAR_MOVE
+		else Gen2Battle.BLOWN_AWAY,
+		{"target": turn.target}
+	)
 
 
 ## Belly Drum. Fails and costs nothing unless the user has more than half its

@@ -328,6 +328,14 @@ const COLOSSEUM: int = 0xF0
 const LORELEIS_ROOM: int = 0xF5
 const BRUNOS_ROOM: int = 0xF6
 
+## `GetBattleTransitionID_IsDungeonMap`: `DungeonMaps1`'s four ids and
+## `DungeonMaps2`'s four inclusive ranges. The file's own comment lists the
+## dungeons the pair misses, Victory Road 2F and Diglett's Cave among them.
+const DUNGEON_MAPS: Array[int] = [0x33, 0x52, 0xC0, 0xE8]
+const DUNGEON_MAP_RANGES: Array = [
+	[0x3B, 0x3D], [0x5F, 0x76], [0x8D, 0x97], [0xCF, 0xE4],
+]
+
 ## The `tileset` macro: the bank holding both graphics and blocks, the three
 ## pointers, three counter tiles, the grass tile and the animation kind, with
 ## $FF for "none" in all four tile columns.
@@ -718,6 +726,16 @@ static func map_count(id: StringName) -> int:
 ## `CheckIfInOutsideMap`: which maps write `wLastMap` on the way out of them.
 static func is_outside_tileset(tileset: int) -> bool:
 	return tileset == TILESET_OVERWORLD or tileset == TILESET_PLATEAU
+
+
+## `BIT_DUNGEON_BATTLE_TRANSITION`, which picks the stripes over the circles.
+static func is_dungeon_map(map_id: int) -> bool:
+	if DUNGEON_MAPS.has(map_id):
+		return true
+	for range_pair: Array in DUNGEON_MAP_RANGES:
+		if map_id >= int(range_pair[0]) and map_id <= int(range_pair[1]):
+			return true
+	return false
 
 
 ## `ExtraWarpCheck`: whether a warp the player is not standing on the tile of

@@ -464,3 +464,83 @@ func test_the_generation_one_player_square_is_seven_tiles_of_its_own() -> void:
 	var head: int = Gen2BattleScreenMap.ENEMY_AT.y * Gen2BattleScreenMap.COLUMNS \
 		+ Gen2BattleScreenMap.ENEMY_AT.x
 	assert_eq(int(map[head]), Gen2BattleScreenMap.ENEMY_BASE_TILE)
+
+
+## `BattleTransitions`' four wild rows, each driven to its own end. The counts
+## are the routines' own `Delay3`s: nine frames of prologue, then 72 of
+## `BattleTransition_FlashScreen` for the two circles, then three frames a step
+## and one to go black.
+const GEN1_TRANSITION_FRAMES: Dictionary = {0: 112, 2: 142, 4: 70, 6: 64}
+
+
+func _run_gen1_transition(index: int) -> Dictionary:
+	var transition: Gen2BattleTransition = Gen2BattleTransition.create_gen1(index)
+	var frames: int = 0
+	var orders: Array[int] = []
+	var sprites: Array[int] = []
+	while transition.advance_frame() and frames < 4000:
+		frames += 1
+		if not orders.has(transition.palette_order()):
+			orders.append(transition.palette_order())
+		if not sprites.has(transition.sprites()):
+			sprites.append(transition.sprites())
+	return {
+		"frames": frames, "orders": orders, "sprites": sprites,
+		"black": _count(transition.cells(), Gen2BattleTransition.CELL_BLACK),
+		"squares": _count(transition.cells(), Gen2BattleTransition.CELL_SQUARE),
+		"order": transition.palette_order(),
+	}
+
+
+func test_every_generation_1_wipe_ends_black_in_its_own_frame_count() -> void:
+	for index: int in GEN1_TRANSITION_FRAMES:
+		var ran: Dictionary = _run_gen1_transition(index)
+		assert_eq(int(ran["frames"]), int(GEN1_TRANSITION_FRAMES[index]),
+			"row %d spends its own frames" % index)
+		assert_eq(int(ran["black"]),
+			Gen2BattleTransition.COLUMNS * Gen2BattleTransition.ROWS,
+			"BattleTransition_BlackScreen leaves nothing showing")
+		assert_eq(int(ran["squares"]), 0, "there is no square tile in Generation 1")
+		assert_eq(int(ran["order"]), Gen2BattleTransition.GEN1_BLACK_ORDER)
+
+
+## `BattleTransition_FlashScreen` is called by the two circles and by neither
+## pair of stripes.
+func test_only_the_generation_1_circles_flash_the_screen() -> void:
+	for index: int in [0, 2]:
+		assert_true((_run_gen1_transition(index)["orders"] as Array).has(0x90),
+			"row %d walks BattleTransition_FlashScreenPalettes" % index)
+	for index: int in [4, 6]:
+		assert_eq(Array(_run_gen1_transition(index)["orders"]),
+			[Gen2BattleTransition.IDENTITY, Gen2BattleTransition.GEN1_BLACK_ORDER],
+			"row %d writes rBGP once, at the end" % index)
+
+
+## The OAM clear at the top of `BattleTransition` keeps the player's block and
+## the enemy trainer's, where Generation 2 sheds them only at its outro.
+func test_a_generation_1_wipe_opens_with_the_battlers_alone() -> void:
+	assert_eq(Array(_run_gen1_transition(0)["sprites"]), [
+		Gen2BattleTransition.SPRITES_BATTLERS, Gen2BattleTransition.SPRITES_NONE,
+	])
+
+
+## `BattleTransition_Spiral`, `..._Shrink` and `..._Split` are the four trainer
+## rows, and the last two move the map's own tiles rather than blacking cells.
+func test_the_generation_1_trainer_rows_have_no_animation_yet() -> void:
+	for index: int in [1, 3, 5, 7]:
+		assert_null(Gen2BattleTransition.create_gen1(index))
+
+
+## `BattleTransition_CircleData1` to `...5` are `.wedge1` to `.wedge5` byte for
+## byte, and the two half-circle tables cover `spin_quadrants`' twenty positions.
+func test_the_two_generations_draw_one_circle() -> void:
+	var seen: Array = []
+	for entry: Array in Gen2BattleTransition.GEN1_HALF_CIRCLE_1 \
+		+ Gen2BattleTransition.GEN1_HALF_CIRCLE_2:
+		seen.append([int(entry[0]), int(entry[1]), int(entry[2]), int(entry[3])])
+	var spin: Array = []
+	for entry: Array in Gen2BattleTransition.SPIN_QUADRANTS:
+		spin.append([int(entry[0]), int(entry[1]), int(entry[2]), int(entry[3])])
+	seen.sort()
+	spin.sort()
+	assert_eq(seen, spin)

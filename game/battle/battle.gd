@@ -140,6 +140,9 @@ const SKETCHED_MOVE: StringName = &"sketched_move"
 ## Conversion and Conversion2 both print `TransformedTypeText` after replacing
 ## both of the user's active type bytes.
 const TYPE_CHANGED: StringName = &"type_changed"
+## `_ConvertedTypeText`: Generation 1's Conversion copies the target's pair
+## rather than picking one, so its line names the target and not a type.
+const TYPE_COPIED: StringName = &"type_copied"
 
 ## Disable locked a slot and later let it go, [code]slot[/code] and
 ## [code]move[/code] being the target's. A Pokémon locked into the disabled move
@@ -293,6 +296,9 @@ const CRASHED: StringName = &"crashed"
 const TRAPPED: StringName = &"trapped"
 const HURT_BY_TRAP: StringName = &"hurt_by_trap"
 const RELEASED_FROM_TRAP: StringName = &"released_from_trap"
+## `AttackContinuesText`, which only Generation 1's trapping moves print: the
+## user repeats the move and the target spends the turn held in place.
+const ATTACK_CONTINUES: StringName = &"attack_continues"
 
 ## Mean Look and Spider Web landed. Set on the user, cleared by any send-out;
 ## a second one from the same user is [constant MOVE_FAILED].
@@ -613,6 +619,11 @@ var _faint_charged: Dictionary = {}
 ## Mirror Coat read after the faster side has acted. Cleared each pair: the
 ## cartridge's `wCurDamage` is move-local, not a history.
 var _last_damage_taken: Dictionary = {PLAYER: {}, ENEMY: {}}
+
+## `wDamage` outliving the move that wrote it. Generation 1's trapping moves are
+## the one reader: `.MultiturnMoveCheck` jumps past the damage calculation, so a
+## continuation deals the first hit's figure again.
+var last_damage_dealt: int = 0
 
 ## `DoMove`'s own artefact: every effect command executed, in the order the read
 ## cycle reached it, skips and loop passes included. Collected only while
@@ -1575,7 +1586,7 @@ func _clear_trapping() -> void:
 ## Whether `TryPlayerSwitch` would refuse the recall: bound, or held by Mean Look
 ## or Spider Web. Player-only, `AI_Switch` making no such check.
 func switch_blocked() -> bool:
-	return mon(PLAYER).trapped_turns > 0 \
+	return mon(PLAYER).trapped_turns > 0 or gen1_trapping_move(ENEMY) != 0 \
 		or Gen2Substatus.has(mon(ENEMY).substatus, Gen2Substatus.CANT_RUN)
 
 
@@ -1998,6 +2009,16 @@ func _tick_weather(events: Array) -> void:
 ## release and costs nothing, which is why three to six rolled turns are two to
 ## five turns of damage.
 func _tick_wrap(events: Array) -> void:
+	## Generation 1 has no `ResidualDamage` entry for a trapping move: the
+	## counter is spent by `.MultiturnMoveCheck` repeating the move instead, and
+	## `CheckNumAttacksLeft` at the end of the whole turn is what lets go. So the
+	## turn the counter empties still holds the target, whichever side moves
+	## first on it.
+	if data != null and data.generation == RomRegistry.GEN1:
+		for side: int in [PLAYER, ENEMY]:
+			if mon(side).trapped_turns <= 0:
+				mon(side).trapping_move = 0
+		return
 	for side: int in [PLAYER, ENEMY]:
 		var current: Gen2BattleMon = mon(side)
 		if current.is_fainted() or current.trapped_turns <= 0:
@@ -2719,8 +2740,20 @@ func move_for(side: int, slot: int) -> int:
 	if Gen2Substatus.has(attacker.substatus, Gen2Substatus.RAMPAGING) \
 		and attacker.rampage_move != 0:
 		return attacker.rampage_move
+	var held: int = gen1_trapping_move(side)
+	if held != 0:
+		return held
 	var chosen_slot: int = effective_slot(side, slot)
 	return int(attacker.moves[chosen_slot]) if attacker.can_use(chosen_slot) else Gen2Damage.STRUGGLE
+
+
+## `USING_TRAPPING_MOVE` read from the user's side: while the opponent is bound,
+## Generation 1 repeats the move that bound it and spends no PP on the repeat.
+## Answers 0 on Generation 2, where a bound target still takes its turn.
+func gen1_trapping_move(side: int) -> int:
+	if data == null or data.generation != RomRegistry.GEN1:
+		return 0
+	return mon(1 - side).trapping_move
 
 
 ## Who goes first, as the two sides in the order they act. A switch is settled
@@ -2822,6 +2855,7 @@ func _act(side: int, slot: int, move_number: int, events: Array) -> void:
 		or Gen2Substatus.has(active_substatus, Gen2Substatus.ROLLOUT)
 		or Gen2Substatus.has(active_substatus, Gen2Substatus.RAMPAGING)
 		or Gen2Substatus.has(active_substatus, Gen2Substatus.BIDE)
+		or gen1_trapping_move(side) == move_number
 	) and move_number != 0
 
 	# Whether the Pokémon can move at all is asked before the effect is looked up,
@@ -2842,7 +2876,9 @@ func run_move_effect(turn: Gen2Turn, depth: int = 0) -> void:
 	if turn.ended:
 		return
 	Gen2EffectCommands.check_obedience(turn)
-	var sequence: Array = Gen2MoveEffect.sequence_for(turn.effect())
+	var sequence: Array = Gen2MoveEffect.sequence_for(
+		turn.effect(), data.generation if data != null else RomRegistry.GEN2
+	)
 	var counter: int = 0
 	while counter < sequence.size():
 		if turn.ended:
