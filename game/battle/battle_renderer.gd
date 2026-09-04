@@ -599,15 +599,17 @@ func _battler_palette(species: int, slot: int, shiny: bool) -> PackedColorArray:
 ## between.
 func gen1_screen_palette(slot: int) -> PackedColorArray:
 	var player: bool = slot == GEN1_PAL_PLAYER_BAR or slot == GEN1_PAL_PLAYER_MON
-	if slot == GEN1_PAL_PLAYER_MON or slot == GEN1_PAL_ENEMY_MON:
-		return _data.palette(
-			int(_view.get("player_species" if player else "enemy_species", 0)),
-			bool(_view.get("player_shiny" if player else "enemy_shiny", false))
-		)
-	return _hp_palette(
+	var base: PackedColorArray = _data.palette(
+		int(_view.get("player_species" if player else "enemy_species", 0)),
+		bool(_view.get("player_shiny" if player else "enemy_shiny", false))
+	) if slot == GEN1_PAL_PLAYER_MON or slot == GEN1_PAL_ENEMY_MON else _hp_palette(
 		int(_view.get("player_hp" if player else "enemy_hp", 0)),
 		int(_view.get("player_max_hp" if player else "enemy_max_hp", 0))
 	)
+	# `rBGP` is one byte for the whole screen where the Color hardware has a map
+	# per palette, so every block takes slot 0's. It is what
+	# `SetAnimationBGPalette` and `AnimationFlashScreen` darken the screen with.
+	return _remap(base, _palette_map("bg_palette_maps", 0))
 
 
 ## `_CGB_BattleGrayscale`'s palette while the view says the battle is still in
@@ -814,11 +816,12 @@ func _blit_sprite(into: Image, sprite: Dictionary, backpic: bool = false) -> voi
 	if pixels.is_empty():
 		return
 	var attributes: int = int(sprite.get("attributes", 0))
-	var palette: PackedColorArray = _object_palette(attributes & OAM_PALETTE)
+	var palette: PackedColorArray = _gen1_object_palette(attributes) if _gen1() \
+		else _object_palette(attributes & OAM_PALETTE)
 	var grayscale: PackedColorArray = _grayscale()
 	if not grayscale.is_empty():
 		palette = grayscale
-	else:
+	elif not _gen1():
 		palette = _remap(palette, _palette_map("ob_palette_maps", attributes & OAM_PALETTE))
 	var lookup: Image = Gen2PicImage.from_indices(pixels, TILE, TILE, palette, true)
 	if (attributes & OAM_XFLIP) != 0:
@@ -905,6 +908,17 @@ static func pic_tile(pixels: PackedByteArray, side: int, index: int) -> PackedBy
 		for column: int in TILE:
 			out[row * TILE + column] = pixels[from + column]
 	return out
+
+
+## `SetAnimationPalette` and the `rOBP0` `PlayAnimation` swaps in for the length
+## of a subanimation. Its $F0 reads only colours 0 and 3, which every
+## `SuperPalettes` row shares, so the Super Game Boy block a sprite happens to be
+## over cannot change what it is drawn in; $6C, which the attribute bit picks,
+## reads the two between and takes the square's own.
+func _gen1_object_palette(attributes: int) -> PackedColorArray:
+	var dmg: int = Gen1Layout.ANIM_OBP1 \
+		if (attributes & Gen1Layout.ANIM_OAM_OBP1) != 0 else Gen1Layout.ANIM_OBP0
+	return _remap(gen1_screen_palette(GEN1_PAL_PLAYER_MON), dmg)
 
 
 ## `PAL_BATTLE_OB_*`. Slots 0 and 1 are the two battlers' own rather than

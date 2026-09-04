@@ -37,6 +37,12 @@ const FIRST_DEX_WEIGHT: int = 150
 const FIRST_TM_MOVE: int = 0x05
 const LAST_HM_MOVE: int = 0x94
 
+## `PoundAnim` whole: one subanimation row at tileset 0 and delay 8, POUND's own
+## sound and `SUBANIM_0_STAR_TWICE`, then the terminator.
+const POUND_ANIM: Array[int] = [0x08, 0x00, 0x01, 0xFF]
+## `BASECOORD_00`, the corner every frame block is placed from.
+const FIRST_BASE_COORD: Array[int] = [0x10, 0x68]
+
 ## `TypeEffects`' first row, water beating fire twice over.
 const FIRST_MATCHUP: Array[int] = [0x15, 0x14, 20]
 
@@ -49,6 +55,24 @@ const FIRST_PALETTE_COLORS: Dictionary = {
 	RomRegistry.BLUE: [32703, 17236, 11913, 2115],
 	RomRegistry.YELLOW: [31743, 19352, 16045, 6342],
 }
+
+## Where a bank-local pointer points: every one of them addresses $4000 up.
+const BANK_BASE: int = 0x4000
+
+## The battle animation offsets [method _import_battle_anims] reads, in the one
+## order that lets each be checked against the tables it indexes.
+const ANIM_TABLES: Array[String] = [
+	"special_effects", "frame_blocks", "subanims", "attack_anims", "base_coords",
+	"anim_tilesets", "falling_deltas",
+]
+## Byte position of the tile id in one `dbsprite`, after its y and x offsets.
+const FRAME_BLOCK_TILE: int = 2
+## `SpecialEffectPointers` is 40 rows and its terminator; both dumps agree.
+const MIN_SPECIAL_EFFECTS: int = 32
+const MAX_SPECIAL_EFFECTS: int = 64
+## A runaway guard for one animation's `battle_anim` rows. The longest in any of
+## the three dumps is eleven.
+const MAX_ANIM_ROWS: int = 64
 
 ## A runaway guard for the terminated name tables, longer than any entry.
 const MAX_NAME_LENGTH: int = 20
@@ -93,6 +117,7 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_font,
 	_verify_text_box,
 	_verify_battle_tiles,
+	_verify_battle_anims,
 	_verify_facility_text,
 	_verify_world,
 ]
@@ -385,6 +410,24 @@ static func _verify_battle_tiles(rom: RomFile, layout: Dictionary) -> Dictionary
 	return _ok()
 
 
+## `PoundAnim` and `FrameBlockBaseCoords`' first row, which pin the two ends of
+## the animation layer: a subanimation entry of the right shape and the flat
+## table the frame blocks are placed by. The walk in [method
+## _import_battle_anims] checks the rest against each other.
+static func _verify_battle_anims(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var anims: int = Gen1Layout.banked(Gen1Layout.ANIM_BANK, int(layout["attack_anims"]))
+	if not rom.in_bounds(anims, Gen1Layout.anim_count(rom.id) * Gen1Layout.POINTER_SIZE):
+		return _fail("AttackAnimationPointers runs past the end of the dump.")
+	var pound: int = Gen1Layout.banked(Gen1Layout.ANIM_BANK, rom.u16le(anims))
+	for index: int in POUND_ANIM.size():
+		if rom.u8(pound + index) != POUND_ANIM[index]:
+			return _fail("AttackAnimationPointers: entry 0 is not POUND's animation.")
+	var coords: int = Gen1Layout.banked(Gen1Layout.ANIM_BANK, int(layout["base_coords"]))
+	if rom.u8(coords) != FIRST_BASE_COORD[0] or rom.u8(coords + 1) != FIRST_BASE_COORD[1]:
+		return _fail("FrameBlockBaseCoords: row 0 is not BASECOORD_00.")
+	return _ok()
+
+
 ## Every map and tileset decodes, which is the world layout's own check: a wrong
 ## table reaches a tileset number, a map size or a block index the cartridge
 ## cannot hold.
@@ -603,6 +646,18 @@ func import_rom(
 		result["message"] = String(world["message"])
 		return result
 	await _breathe(yield_ms)
+	var anims: Dictionary = _import_battle_anims(rom, layout, directory)
+	if anims.is_empty():
+		result["message"] = "Could not decode the battle animations."
+		return result
+	if not RomCache.write_section(
+		RomCache.battle_anims_path(directory),
+		RomCache.blob_path(RomCache.battle_anims_path(directory)),
+		anims["section"]
+	):
+		result["message"] = "Could not write the battle animations."
+		return result
+	await _breathe(yield_ms)
 
 	var sections: Dictionary = {
 		RomCache.species_path(directory): species,
@@ -633,6 +688,7 @@ func import_rom(
 		"tileset_count": int(world["tilesets"]),
 		"overworld_sprite_count": int(world["sprites"]),
 		"encounter_count": int(world["encounters"]),
+		"battle_anim_count": int(anims["anims"]),
 		"atlases": pics,
 		"tiles": tiles,
 		"bar_palettes": _import_bar_palettes(rom, layout),
@@ -657,15 +713,18 @@ func import_rom(
 	result["tilesets"] = int(world["tilesets"])
 	result["sprites"] = int(world["sprites"])
 	result["encounters"] = int(world["encounters"])
+	result["battle_anims"] = int(anims["anims"])
+	result["subanim_frames"] = int(anims["subanim_frames"])
+	result["frame_block_sprites"] = int(anims["frame_block_sprites"])
 	result["elapsed_ms"] = Time.get_ticks_msec() - started
 	result["message"] = ("%d species, %d moves, %d items, %d type matchups, "
 		+ "%d trainer classes, %d evolutions, %d level-up moves, %d maps, "
-		+ "%d tilesets, %d overworld sprites and %d wild encounter tables "
-		+ "in %d ms.") % [
+		+ "%d tilesets, %d overworld sprites, %d wild encounter tables and "
+		+ "%d battle animations in %d ms.") % [
 		species.size(), moves.size(), items.size(), matchups.size(), trainers.size(),
 		result["evolutions"], result["learnset_moves"], result["maps"],
 		result["tilesets"], result["sprites"], result["encounters"],
-		result["elapsed_ms"],
+		result["battle_anims"], result["elapsed_ms"],
 	]
 	return result
 
@@ -1067,3 +1126,227 @@ func _decode_pic(
 		PokeTiles.decode_pic(raw, codec.columns, codec.rows), codec.columns, atlas, slot
 	)
 	return true
+
+
+## `AttackAnimationPointers` and the three tables its subanimations reach, plus
+## `MoveAnimationTilesPointers`' sheets. Empty when anything fails to walk, so a
+## wrong offset refuses the import rather than animating noise.
+##
+## The four tables and their data are interleaved through bank $1E, so the cache
+## holds one region spanning all of them and each table is an address inside it.
+func _import_battle_anims(rom: RomFile, layout: Dictionary, directory: String) -> Dictionary:
+	var bank: PackedByteArray = rom.slice(
+		Gen1Layout.ANIM_BANK * RomFile.BANK_SIZE, RomFile.BANK_SIZE
+	)
+	if bank.size() != RomFile.BANK_SIZE:
+		return {}
+
+	var tables: Dictionary = {}
+	for name: String in ANIM_TABLES:
+		tables[name] = BANK_BASE + int(layout[name]) % RomFile.BANK_SIZE
+
+	if not _in_bank(int(tables["falling_deltas"]) + Gen1Layout.FALLING_DELTA_BYTES - 1):
+		return {}
+	var effects: Array = _read_special_effects(bank, int(tables["special_effects"]))
+	var frame_blocks: Dictionary = _walk_frame_blocks(bank, int(tables["frame_blocks"]))
+	var subanims: Dictionary = _walk_subanims(bank, int(tables["subanims"]), frame_blocks)
+	var anims: Dictionary = _walk_anims(
+		bank, int(tables["attack_anims"]), Gen1Layout.anim_count(rom.id), effects
+	)
+	var sheets: Array = _import_anim_tilesets(rom, int(tables["anim_tilesets"]), directory)
+	if effects.is_empty() or frame_blocks.is_empty() or subanims.is_empty() \
+			or anims.is_empty() or sheets.is_empty():
+		return {}
+
+	var spans: Array = [anims, subanims, frame_blocks]
+	var lowest: int = int(tables["attack_anims"])
+	var highest: int = int(tables["base_coords"]) \
+		+ Gen1Layout.BASE_COORD_COUNT * Gen1Layout.BASE_COORD_SIZE
+	for span: Dictionary in spans:
+		lowest = mini(lowest, int(span["lowest"]))
+		highest = maxi(highest, int(span["highest"]))
+
+	return {
+		"section": {
+			"anims": {
+				"bank": Gen1Layout.ANIM_BANK,
+				"address": lowest,
+				"count": Gen1Layout.anim_count(rom.id),
+				"bytes": _bank_bytes(bank, lowest, highest),
+			},
+			"tables": {
+				"subanims": tables["subanims"],
+				"frame_blocks": tables["frame_blocks"],
+				"base_coords": tables["base_coords"],
+			},
+			"special_effects": effects,
+			"falling_deltas": _bank_bytes(
+				bank, int(tables["falling_deltas"]),
+				int(tables["falling_deltas"]) + Gen1Layout.FALLING_DELTA_BYTES
+			),
+			"object_gfx": sheets,
+		},
+		"anims": Gen1Layout.anim_count(rom.id),
+		"subanim_frames": int(subanims["frames"]),
+		"frame_block_sprites": int(frame_blocks["sprites"]),
+	}
+
+
+## `SpecialEffectPointers`, as the ids alone: the addresses beside them are
+## routines this port answers with its own. Empty when the table never ends.
+func _read_special_effects(bank: PackedByteArray, table: int) -> Array:
+	var out: Array = []
+	var at: int = table
+	while out.size() <= MAX_SPECIAL_EFFECTS:
+		var id: int = _bank_u8(bank, at)
+		if id == Gen1Layout.ANIM_END:
+			return out if out.size() >= MIN_SPECIAL_EFFECTS else []
+		if id < Gen1Layout.ANIM_FIRST_SE_ID or out.has(id):
+			return []
+		out.append(id)
+		at += Gen1Layout.SPECIAL_EFFECT_ROW_SIZE
+	return []
+
+
+## `FrameBlockPointers` and every `dbsprite` run behind it. Answers
+## [code]{ lowest, highest, sprites, tiles }[/code], `tiles` being the highest
+## tile id any of them draws, which pins the tileset the sheets have to hold.
+func _walk_frame_blocks(bank: PackedByteArray, table: int) -> Dictionary:
+	var lowest: int = table
+	var highest: int = table + Gen1Layout.FRAME_BLOCK_COUNT * Gen1Layout.POINTER_SIZE
+	var sprites: int = 0
+	var tiles: int = 0
+	for index: int in Gen1Layout.FRAME_BLOCK_COUNT:
+		var address: int = _bank_u16(bank, table + index * Gen1Layout.POINTER_SIZE)
+		if not _in_bank(address):
+			return {}
+		var count: int = _bank_u8(bank, address)
+		var end: int = address + 1 + count * Gen1Layout.FRAME_BLOCK_SPRITE_SIZE
+		if not _in_bank(end - 1):
+			return {}
+		for sprite: int in count:
+			var at: int = address + 1 + sprite * Gen1Layout.FRAME_BLOCK_SPRITE_SIZE
+			tiles = maxi(tiles, _bank_u8(bank, at + FRAME_BLOCK_TILE))
+		sprites += count
+		lowest = mini(lowest, address)
+		highest = maxi(highest, end)
+	return {"lowest": lowest, "highest": highest, "sprites": sprites, "tiles": tiles + 1}
+
+
+## `SubanimationPointers` and the three-byte rows behind each header. Every row
+## is checked against the two tables it indexes, which is what makes a plausible
+## but wrong offset fail here rather than on screen.
+func _walk_subanims(
+	bank: PackedByteArray, table: int, frame_blocks: Dictionary
+) -> Dictionary:
+	if frame_blocks.is_empty():
+		return {}
+	var lowest: int = table
+	var highest: int = table + Gen1Layout.SUBANIM_COUNT * Gen1Layout.POINTER_SIZE
+	var frames: int = 0
+	for index: int in Gen1Layout.SUBANIM_COUNT:
+		var address: int = _bank_u16(bank, table + index * Gen1Layout.POINTER_SIZE)
+		if not _in_bank(address):
+			return {}
+		var header: int = _bank_u8(bank, address)
+		var count: int = header & Gen1Layout.SUBANIM_COUNT_MASK
+		var kind: int = header >> Gen1Layout.SUBANIM_TYPE_SHIFT
+		var end: int = address + 1 + count * Gen1Layout.SUBANIM_ROW_SIZE
+		if count == 0 or kind >= Gen1Layout.SUBANIMTYPE_COUNT or not _in_bank(end - 1):
+			return {}
+		for row: int in count:
+			var at: int = address + 1 + row * Gen1Layout.SUBANIM_ROW_SIZE
+			if _bank_u8(bank, at) >= Gen1Layout.FRAME_BLOCK_COUNT \
+					or _bank_u8(bank, at + 1) >= Gen1Layout.BASE_COORD_COUNT \
+					or _bank_u8(bank, at + 2) >= Gen1Layout.FRAMEBLOCKMODE_COUNT:
+				return {}
+		frames += count
+		lowest = mini(lowest, address)
+		highest = maxi(highest, end)
+	return {"lowest": lowest, "highest": highest, "frames": frames}
+
+
+## `AttackAnimationPointers` and every `battle_anim` row behind it, with each
+## row's subanimation id and special effect id checked against its table.
+func _walk_anims(
+	bank: PackedByteArray, table: int, count: int, effects: Array
+) -> Dictionary:
+	var lowest: int = table
+	var highest: int = table + count * Gen1Layout.POINTER_SIZE
+	for index: int in count:
+		var address: int = _bank_u16(bank, table + index * Gen1Layout.POINTER_SIZE)
+		if not _in_bank(address):
+			return {}
+		var at: int = address
+		var rows: int = 0
+		while true:
+			rows += 1
+			if rows > MAX_ANIM_ROWS or not _in_bank(at):
+				return {}
+			var byte: int = _bank_u8(bank, at)
+			if byte == Gen1Layout.ANIM_END:
+				at += 1
+				break
+			if byte >= Gen1Layout.ANIM_FIRST_SE_ID:
+				if not effects.has(byte):
+					return {}
+				at += Gen1Layout.ANIM_SE_SIZE
+				continue
+			if _bank_u8(bank, at + 2) >= Gen1Layout.SUBANIM_COUNT:
+				return {}
+			at += Gen1Layout.ANIM_SUBANIM_SIZE
+		lowest = mini(lowest, address)
+		highest = maxi(highest, at)
+	return {"lowest": lowest, "highest": highest}
+
+
+## `MoveAnimationTilesPointers`' three rows, decoded as raw 2bpp strips into the
+## same files a Generation 2 `AnimObjGFX` sheet uses. Rows 0 and 2 name the same
+## bytes, the third being the first cut to 64 tiles, so both are written.
+func _import_anim_tilesets(rom: RomFile, table: int, directory: String) -> Array:
+	var out: Array = []
+	for index: int in Gen1Layout.ANIM_TILESET_COUNT:
+		var row: int = Gen1Layout.banked(Gen1Layout.ANIM_BANK, table) \
+			+ index * Gen1Layout.ANIM_TILESET_ROW_SIZE
+		var tiles: int = rom.u8(row + Gen1Layout.ANIM_TILESET_TILES)
+		var address: int = rom.u16le(row + Gen1Layout.ANIM_TILESET_POINTER)
+		var start: int = Gen1Layout.banked(Gen1Layout.ANIM_BANK, address)
+		if tiles <= 0 or not _in_bank(address) \
+				or not rom.in_bounds(start, tiles * PokeTiles.TILE_BYTES):
+			return []
+		if not RomCache.write_indices(
+			RomCache.battle_anim_gfx_path(directory, index),
+			PokeTiles.decode_strip(rom.bytes(), start, tiles, 2)
+		):
+			return []
+		out.append({
+			"tiles": tiles,
+			"bank": Gen1Layout.ANIM_BANK,
+			"address": address,
+			"sheet": true,
+		})
+	return out
+
+
+## The slice of bank $1E between two of its own addresses, as an Array the cache
+## moves into the section blob.
+func _bank_bytes(bank: PackedByteArray, from: int, to: int) -> Array:
+	var slice: PackedByteArray = bank.slice(from - BANK_BASE, to - BANK_BASE)
+	var out: Array = []
+	out.resize(slice.size())
+	for index: int in slice.size():
+		out[index] = slice[index]
+	return out
+
+
+func _bank_u8(bank: PackedByteArray, address: int) -> int:
+	var at: int = address - BANK_BASE
+	return bank[at] if at >= 0 and at < bank.size() else 0
+
+
+func _bank_u16(bank: PackedByteArray, address: int) -> int:
+	return _bank_u8(bank, address) | (_bank_u8(bank, address + 1) << 8)
+
+
+static func _in_bank(address: int) -> bool:
+	return address >= BANK_BASE and address < BANK_BASE + RomFile.BANK_SIZE

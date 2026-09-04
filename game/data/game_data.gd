@@ -817,9 +817,11 @@ func world_encounter_count(method: StringName) -> int:
 
 ## One battle animation region: the cached bytes plus the bank and address the
 ## cartridge holds them at, so an in-bank pointer resolves by subtraction.
-## [param name] is `scripts`, `objects`, `framesets` or `oam_sets`. Answers
-## [code]{ bank, address, count, data }[/code], empty when the section is absent
-## or the name is not one of the four.
+## [param name] is `scripts`, `objects`, `framesets` or `oam_sets` on a
+## Generation 2 cache and the single `anims` on a Generation 1 one, whose four
+## tables share a bank and are reached through [method battle_anim_table].
+## Answers [code]{ bank, address, count, data }[/code], empty when the section is
+## absent or the name is not one the cache holds.
 func battle_anim_region(name: StringName) -> Dictionary:
 	var value: Variant = _battle_anims().get(String(name), null)
 	if not value is Dictionary:
@@ -846,6 +848,39 @@ func battle_anim_address(index: int) -> int:
 	if at + 2 > data.size():
 		return -1
 	return data[at] | (data[at + 1] << 8)
+
+
+## Where one of the Generation 1 animation layer's tables stands inside the
+## `anims` region: `subanims`, `frame_blocks` or `base_coords`. -1 on a
+## Generation 2 cache, which gives each table a region of its own.
+func battle_anim_table(name: StringName) -> int:
+	var value: Variant = _battle_anims().get("tables", null)
+	if not value is Dictionary:
+		return -1
+	return int((value as Dictionary).get(String(name), -1))
+
+
+## `SpecialEffectPointers`' ids, which is every special effect a Generation 1
+## animation may name. Empty on a Generation 2 cache.
+func battle_anim_special_effects() -> PackedInt32Array:
+	var value: Variant = _battle_anims().get("special_effects", null)
+	var out := PackedInt32Array()
+	if value is Array:
+		for effect: Variant in value as Array:
+			out.append(int(effect))
+	return out
+
+
+## `FallingObjects_DeltaXs` and the bytes past it two of Petal Dance's objects
+## read as their own drift; see [constant Gen1Layout.FALLING_DELTA_BYTES]. Empty
+## on a Generation 2 cache.
+func battle_anim_falling_deltas() -> PackedInt32Array:
+	var value: Variant = _battle_anims().get("falling_deltas", null)
+	var out := PackedInt32Array()
+	if value is Array:
+		for byte: Variant in value as Array:
+			out.append(int(byte))
+	return out
 
 
 ## `BattleAnimSineWave` as its own 64 cartridge bytes, or empty when the section
