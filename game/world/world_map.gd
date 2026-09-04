@@ -1,9 +1,12 @@
 class_name Gen2WorldMap
 extends RefCounted
 
-## Node-free map data decoded from a Generation 2 map header and event block.
-## Coordinates are row-major, with y increasing from the top as on the
-## cartridge. Collision values are the raw cartridge permissions, not booleans.
+## Node-free map data decoded from either generation's map header and event
+## block. Coordinates are row-major, y increasing from the top as on the
+## cartridge, and Generation 1's one flat map id is [member number] under
+## [member group] 0. Collision values are the raw byte the cartridge tests: a
+## permission byte in Generation 2, and the tile the cell draws in Generation 1,
+## which [method Gen2WorldTileset.tile_passable] answers for.
 
 var group: int = 0
 var number: int = 0
@@ -105,12 +108,15 @@ static func _connection_rows(value: Array) -> Array:
 	var out: Array = []
 	for raw: Dictionary in value:
 		var connection: Dictionary = raw.duplicate(true)
+		# Generation 2 records two offsets where Generation 1 records two
+		# alignments, so a connection carries four of these six.
 		for field: String in [
 			"map_group", "map_number", "length", "target_width_blocks",
-			"x_offset", "y_offset", "target_block_pointer", "map_pointer",
-			"window_pointer",
+			"x_offset", "y_offset", "x_alignment", "y_alignment",
+			"target_block_pointer", "map_pointer", "window_pointer",
 		]:
-			connection[field] = int(raw.get(field, 0))
+			if raw.has(field):
+				connection[field] = int(raw[field])
 		out.append(connection)
 	return out
 
@@ -124,10 +130,15 @@ static func _events_from_cache(value: Variant) -> Dictionary:
 		"address": int(event_values.get("address", 0)),
 		"warps": _event_rows(event_values.get("warps", []), ["x", "y", "destination", "map_group", "map_number"]),
 		"coord_events": _event_rows(event_values.get("coord_events", []), ["scene", "x", "y", "script"]),
-		"bg_events": _event_rows(event_values.get("bg_events", []), ["x", "y", "type", "script"]),
+		"bg_events": _event_rows(
+			event_values.get("bg_events", []), ["x", "y", "type", "script", "text"]
+		),
+		# The last seven are Generation 1's, whose events carry a text id where
+		# Generation 2's carry a script pointer.
 		"objects": _event_rows(event_values.get("objects", []), [
 			"sprite", "x", "y", "movement", "x_radius", "y_radius", "hour_1", "hour_2",
 			"palette", "object_type", "sight_range", "script", "event_flag",
+			"range", "text", "trainer_class", "trainer_number", "species", "level", "item",
 		]),
 	}
 
@@ -138,7 +149,9 @@ static func _event_rows(value: Variant, integer_fields: Array[String]) -> Array:
 	var out: Array = []
 	for raw: Dictionary in value as Array:
 		var event: Dictionary = raw.duplicate(true)
+		# An absent field stays absent: an object names a trainer or an item.
 		for field: String in integer_fields:
-			event[field] = int(raw.get(field, 0))
+			if raw.has(field):
+				event[field] = int(raw[field])
 		out.append(event)
 	return out

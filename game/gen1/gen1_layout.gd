@@ -71,9 +71,11 @@ const ITEM_COUNT: int = 83
 const ITEM_PRICE_SIZE: int = 3
 
 ## `NUM_TMS` and `NUM_HMS`: `TechnicalMachines` is one move number per row and
-## the HMs follow the TMs in the same table.
+## the HMs follow the TMs. As items they sit above the named ones, `HM01` at $C4.
 const TM_COUNT: int = 50
 const HM_COUNT: int = 5
+const HM_FIRST_ITEM: int = 0xC4
+const TM_FIRST_ITEM: int = HM_FIRST_ITEM + HM_COUNT
 
 ## A `PokedexEntry`: category, feet, inches, weight in tenths of a pound, then
 ## `text_far`'s $17 with a `dab` pointer to the description.
@@ -131,6 +133,104 @@ const SPACE_CODE: int = 0x7F
 const FRAME_VERTICAL_CODE: int = 0x7C
 const FRAME_VERTICAL_ROW: int = 0b00101000
 
+## `MapHeaderPointers` is flat: one `dw` a map id, with `MapHeaderBanks` beside
+## it. `SwitchToMapRomBank` selects that bank once, which is what puts a map's
+## blocks, objects, text and script in the bank its header sits in.
+const MAP_COUNT_RED_BLUE: int = 248
+const MAP_COUNT_YELLOW: int = 249
+
+## `map_header`: tileset, height, width, the blocks, text and script pointers,
+## then the connection byte; `end_map_header` puts the object pointer behind
+## whatever connection records were emitted.
+const MAP_HEADER_SIZE: int = 10
+const MAP_CONNECTION_RECORD_SIZE: int = 11
+const MAP_OBJECT_POINTER_SIZE: int = 2
+const MAP_CONNECTION_FLAG_EAST: int = 1
+const MAP_CONNECTION_FLAG_WEST: int = 2
+const MAP_CONNECTION_FLAG_SOUTH: int = 4
+const MAP_CONNECTION_FLAG_NORTH: int = 8
+
+## `map_constants.asm`'s largest map.
+const MAP_MAX_WIDTH_BLOCKS: int = 50
+const MAP_MAX_HEIGHT_BLOCKS: int = 72
+
+## The 22 ids `map_header_pointers.asm` marks UNUSED, the same 22 in all three.
+## Their `dw` repeats a real header while their bank byte is a $01, $11 or $1D
+## placeholder naming a different one, so the pair decodes to noise.
+const UNUSED_MAPS: Array[int] = [
+	0x0B, 0x69, 0x6A, 0x6B, 0x6D, 0x6E, 0x6F, 0x70, 0x72, 0x73, 0x74, 0x75,
+	0xCC, 0xCD, 0xCE, 0xE7, 0xED, 0xEE, 0xF1, 0xF2, 0xF3, 0xF4,
+]
+
+## `MapSongBanks`: the map's music id and the bank that music lives in.
+const MAP_SONG_SIZE: int = 2
+
+## `<Map>_Object`: a border block, a counted list each of warps, signs and
+## objects, then one `warp_to` a warp that names only WRAM.
+const WARP_EVENT_SIZE: int = 4
+const SIGN_EVENT_SIZE: int = 3
+const OBJECT_EVENT_SIZE: int = 6
+const WARP_TO_SIZE: int = 4
+## `object_event` writes coordinates four higher, as Generation 2 does.
+const OBJECT_COORD_BIAS: int = 4
+## `TRAINER | text` and `ITEM | text`, each carrying extra bytes behind the row;
+## `LoadMapHeader`'s `.loadSpriteLoop` masks the byte with $3F for the text id.
+const OBJECT_TRAINER_FLAG: int = 0x40
+const OBJECT_ITEM_FLAG: int = 0x80
+const OBJECT_TEXT_MASK: int = 0x3F
+const OBJECT_TRAINER_BYTES: int = 2
+const OBJECT_ITEM_BYTES: int = 1
+## `InitBattleEnemyParameters`' `cp OPP_ID_OFFSET`: the extra byte is this plus
+## a trainer class, or below it a species, and the next its number or level.
+const OPPONENT_ID_OFFSET: int = 200
+## `MAX_WARP_EVENTS`, `MAX_BG_EVENTS` and `MAX_OBJECT_EVENTS`.
+const MAX_WARP_EVENTS: int = 32
+const MAX_SIGN_EVENTS: int = 16
+const MAX_OBJECT_EVENTS: int = 16
+## `warp_event`'s indoor exit: `wLastMap`, the outdoor map the player came from.
+const WARP_TO_LAST_MAP: int = 0xFF
+
+## The `tileset` macro: the bank holding both graphics and blocks, the three
+## pointers, three counter tiles, the grass tile and the animation kind, with
+## $FF for "none" in all four tile columns.
+const TILESET_RECORD_SIZE: int = 12
+const TILESET_COUNT_RED_BLUE: int = 24
+const TILESET_COUNT_YELLOW: int = 25
+const TILESET_COUNTER_TILES: int = 3
+const TILESET_NO_TILE: int = 0xFF
+## `MAP_TILESET_SIZE`: `LoadTilesetTilePatternData` copies this many tiles to
+## `vTileset` whatever the tileset holds, so a short one's tail is whatever
+## follows it in the bank.
+const TILESET_TILE_COUNT: int = 96
+const TILESET_BLOCK_TILES: int = MAP_BLOCK_TILE_WIDTH * MAP_BLOCK_TILE_WIDTH
+
+## Blocks per tileset, in table order. Nothing in the cartridge records it:
+## `<Tileset>_Block` is an INCBIN whose length only the assembler knew. Read off
+## the pinned checkouts' `.bst` files, and bracketed at import by the blocks the
+## maps use and by where the next tileset's graphics start.
+const TILESET_BLOCKS_RED_BLUE: Array[int] = [
+	128, 19, 37, 128, 19, 116, 37, 116, 35, 128, 128, 17,
+	128, 62, 23, 110, 58, 128, 79, 72, 58, 36, 128, 73,
+]
+## Yellow gave the Mart and Pokemon Center three more and added the Beach House.
+const TILESET_BLOCKS_YELLOW: Array[int] = [
+	128, 19, 40, 128, 19, 116, 40, 116, 35, 128, 128, 17,
+	128, 62, 23, 110, 58, 128, 79, 72, 58, 36, 128, 73, 20,
+]
+
+## `WaterTilesets`, a $FF-terminated list, and the tile
+## `IsNextTileShoreOrWater` calls water on one of them.
+const TILESET_LIST_END: int = 0xFF
+const WATER_TILE: int = 0x14
+
+## A walk cell's collision tile is the bottom-left of its 2x2 quarter of the
+## block, the corner Generation 2 also picks. `_GetTileAndCoordsInFrontOfPlayer`
+## reads (8, 11), (8, 7), (6, 9) and (10, 9) and the player's cell starts at
+## screen (8, 8); reading them as top-left leaves 53 of Red's 226 maps with no
+## cell a player can stand on, the Pokemon Centers among them.
+const MAP_BLOCK_TILE_WIDTH: int = 4
+const MAP_BLOCK_CELL_WIDTH: int = 2
+
 ## `NUM_TRAINERS`, the trainer classes rather than the individual trainers.
 const TRAINER_CLASS_COUNT: int = 47
 
@@ -179,6 +279,14 @@ const RED_BLUE: Dictionary = {
 	"text_box": 0x12288,
 	"pic_player_back": 0x33E0A,
 	"pic_old_man_back": 0x33E9A,
+	"map_headers": 0x001AE,
+	"map_header_banks": 0x0C23D,
+	"map_songs": 0x0C04D,
+	"tilesets": 0x0C7BE,
+	"water_tilesets": 0x0E8E0,
+	## `_IsTilePassable` and the lists it walks share a bank, and the pointer in
+	## a tileset row names no bank of its own. Red and Blue keep both in home.
+	"tileset_collision_bank": 0x00,
 }
 
 const YELLOW: Dictionary = {
@@ -210,6 +318,12 @@ const YELLOW: Dictionary = {
 	## Yellow moved both back pics out of "Pics 4" and into their own bank.
 	"pic_player_back": 0xF43B1,
 	"pic_old_man_back": 0xF4441,
+	"map_headers": 0xFC1F2,
+	"map_header_banks": 0xFC3E4,
+	"map_songs": 0xFC000,
+	"tilesets": 0x0C558,
+	"water_tilesets": 0x0E834,
+	"tileset_collision_bank": 0x01,
 }
 
 
@@ -307,3 +421,50 @@ static func pic_bank(layout: Dictionary, index: int) -> int:
 		if index < PIC_BANK_THRESHOLDS[step]:
 			return PIC_BANKS[step]
 	return PIC_BANKS[PIC_BANKS.size() - 1]
+
+
+## How many map ids the flat table holds. Yellow added the Summer Beach House
+## behind Agatha's room.
+static func map_count(id: StringName) -> int:
+	return MAP_COUNT_YELLOW if id == RomRegistry.YELLOW else MAP_COUNT_RED_BLUE
+
+
+static func tileset_count(id: StringName) -> int:
+	return TILESET_COUNT_YELLOW if id == RomRegistry.YELLOW else TILESET_COUNT_RED_BLUE
+
+
+## Blocks per tileset, in `Tilesets` order.
+static func tileset_blocks(id: StringName) -> Array[int]:
+	return TILESET_BLOCKS_YELLOW if id == RomRegistry.YELLOW else TILESET_BLOCKS_RED_BLUE
+
+
+## Whether a map id decodes to a header at all: see [constant UNUSED_MAPS].
+static func is_real_map(map_id: int) -> bool:
+	return not UNUSED_MAPS.has(map_id)
+
+
+## Where one map's header sits, through `MapHeaderBanks` and `MapHeaderPointers`
+## together. Everything the header points at is in the same bank.
+static func map_header_offset(rom: RomFile, layout: Dictionary, map_id: int) -> int:
+	return RomFile.linear(
+		map_bank(rom, layout, map_id),
+		rom.u16le(int(layout["map_headers"]) + map_id * POINTER_SIZE)
+	)
+
+
+static func map_bank(rom: RomFile, layout: Dictionary, map_id: int) -> int:
+	return rom.u8(int(layout["map_header_banks"]) + map_id)
+
+
+static func tileset_offset(layout: Dictionary, number: int) -> int:
+	return int(layout["tilesets"]) + number * TILESET_RECORD_SIZE
+
+
+static func map_song_offset(layout: Dictionary, map_id: int) -> int:
+	return int(layout["map_songs"]) + map_id * MAP_SONG_SIZE
+
+
+## Which of a block's sixteen tiles decides one walk cell.
+static func cell_tile_index(cell_x: int, cell_y: int) -> int:
+	return (cell_y * MAP_BLOCK_CELL_WIDTH + 1) * MAP_BLOCK_TILE_WIDTH \
+		+ cell_x * MAP_BLOCK_CELL_WIDTH

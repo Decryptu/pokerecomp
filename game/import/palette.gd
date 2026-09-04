@@ -40,6 +40,13 @@ static func pic_palette(middle: PackedColorArray) -> PackedColorArray:
 	return out
 
 
+## The four shades a Game Boy shows where nothing has applied a palette.
+static func monochrome() -> PackedColorArray:
+	return pic_palette(PackedColorArray([
+		Color(0.66, 0.66, 0.66), Color(0.33, 0.33, 0.33),
+	]))
+
+
 ## Reads one species' entry as { normal, shiny }, each a two-colour array.
 static func decode_entry(data: PackedByteArray, offset: int) -> Dictionary:
 	return {

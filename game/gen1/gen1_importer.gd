@@ -91,6 +91,7 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_pic_pointers,
 	_verify_font,
 	_verify_text_box,
+	_verify_world,
 ]
 
 
@@ -311,6 +312,13 @@ static func _verify_text_box(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return _ok()
 
 
+## Every map and tileset decodes, which is the world layout's own check: a wrong
+## table reaches a tileset number, a map size or a block index the cartridge
+## cannot hold.
+static func _verify_world(rom: RomFile, _layout: Dictionary) -> Dictionary:
+	return Gen1WorldImporter.verify_layout(rom)
+
+
 ## One tile as eight row masks, a set bit per lit pixel; the 2bpp sheet folds
 ## its two planes together.
 static func _font_rows(rom: RomFile, layout: Dictionary, code: int) -> Array[int]:
@@ -451,6 +459,8 @@ func import_rom(
 		"trainers": 0,
 		"evolutions": 0,
 		"learnset_moves": 0,
+		"maps": 0,
+		"tilesets": 0,
 		"elapsed_ms": 0,
 	}
 
@@ -492,6 +502,11 @@ func import_rom(
 		result["message"] = "Could not write the font."
 		return result
 	await _breathe(yield_ms)
+	var world: Dictionary = Gen1WorldImporter.import_to_cache(rom, layout, directory, on_progress)
+	if not bool(world["ok"]):
+		result["message"] = String(world["message"])
+		return result
+	await _breathe(yield_ms)
 
 	var sections: Dictionary = {
 		RomCache.species_path(directory): species,
@@ -518,6 +533,8 @@ func import_rom(
 		"type_count": types.size(),
 		"matchup_count": matchups.size(),
 		"trainer_count": trainers.size(),
+		"map_count": int(world["maps"]),
+		"tileset_count": int(world["tilesets"]),
 		"atlases": pics,
 		"tiles": tiles,
 		"complete": true,
@@ -535,11 +552,15 @@ func import_rom(
 	result["trainers"] = trainers.size()
 	result["evolutions"] = _count_of(species, "evolutions")
 	result["learnset_moves"] = _count_of(species, "learnset")
+	result["maps"] = int(world["maps"])
+	result["tilesets"] = int(world["tilesets"])
 	result["elapsed_ms"] = Time.get_ticks_msec() - started
 	result["message"] = ("%d species, %d moves, %d items, %d type matchups, "
-		+ "%d trainer classes, %d evolutions and %d level-up moves in %d ms.") % [
+		+ "%d trainer classes, %d evolutions, %d level-up moves, %d maps and "
+		+ "%d tilesets in %d ms.") % [
 		species.size(), moves.size(), items.size(), matchups.size(), trainers.size(),
-		result["evolutions"], result["learnset_moves"], result["elapsed_ms"],
+		result["evolutions"], result["learnset_moves"], result["maps"],
+		result["tilesets"], result["elapsed_ms"],
 	]
 	return result
 

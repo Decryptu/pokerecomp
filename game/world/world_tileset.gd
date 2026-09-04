@@ -15,6 +15,13 @@ var tile_count: int = Gen2Layout.TILESET_TILE_COUNT
 ## command list stays an Array, because its entries are records.
 var meta: PackedByteArray = PackedByteArray()
 var collision: PackedByteArray = PackedByteArray()
+## Generation 1 leaves [member collision] empty: `_IsTilePassable` walks a list
+## of tile numbers, and the four columns beside it are its `tileset` macro's.
+var passable_tiles: PackedByteArray = PackedByteArray()
+var counter_tiles: PackedByteArray = PackedByteArray()
+var grass_tile: int = Gen1Layout.TILESET_NO_TILE
+var animation: int = 0
+var water: bool = false
 var animation_pointer: int = 0
 var palette_map_pointer: int = 0
 var palette_map: PackedByteArray = PackedByteArray()
@@ -28,6 +35,11 @@ static func from_cache(value: Dictionary) -> Gen2WorldTileset:
 	out.tile_count = int(value.get("tile_count", Gen2Layout.TILESET_TILE_COUNT))
 	out.meta = RomCache.packed_bytes(value.get("meta", []))
 	out.collision = RomCache.packed_bytes(value.get("collision", []))
+	out.passable_tiles = RomCache.packed_bytes(value.get("passable_tiles", []))
+	out.counter_tiles = RomCache.packed_bytes(value.get("counter_tiles", []))
+	out.grass_tile = int(value.get("grass_tile", Gen1Layout.TILESET_NO_TILE))
+	out.animation = int(value.get("animation", 0))
+	out.water = bool(value.get("water", false))
 	out.animation_pointer = int(value.get("animation_pointer", 0))
 	out.palette_map_pointer = int(value.get("palette_map_pointer", 0))
 	out.palette_map = RomCache.packed_bytes(value.get("palette_map", []))
@@ -48,6 +60,12 @@ func tile_index(block: int, tile: int) -> int:
 		return 0
 	var index: int = meta[at]
 	return index if index < tile_count else 0
+
+
+## Whether a walk cell drawing this tile can be stepped on, Generation 1's
+## question where Generation 2 reads a permission byte.
+func tile_passable(tile: int) -> bool:
+	return passable_tiles.has(tile)
 
 
 func collision_index(block: int, cell_x: int, cell_y: int) -> int:
