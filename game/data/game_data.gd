@@ -662,6 +662,17 @@ func world_fishing_group(group: int) -> Dictionary:
 	)
 
 
+## Generation 1's `SuperRodData` index: the one-based fishing group a map is
+## named by, or zero for a map no row names, which is `ReadSuperRodData`'s own
+## "no fish on this map". [method world_fishing_group] reads the group itself.
+func world_fishing_map(map_number: int) -> int:
+	var fishing: Variant = _encounters().get("fishing", {})
+	if not fishing is Dictionary:
+		return 0
+	var maps: Variant = (fishing as Dictionary).get("maps", {})
+	return int((maps as Dictionary).get(str(map_number), 0)) if maps is Dictionary else 0
+
+
 ## The twenty-two day/night fishing substitutions used by entries whose
 ## species byte is zero in the cartridge stream.
 func world_fishing_time_groups() -> Array:

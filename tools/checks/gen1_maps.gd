@@ -1,10 +1,10 @@
 extends RefCounted
 
-## Every Generation 1 map and tileset in the cache, swept on Red, Blue and
-## Yellow. The counts come from pret's own `data/maps` and `gfx/blocksets`, and
-## the structural rules are the map macros' own assertions: a sign's text id
-## sits above the object ids, an object's inside them, and every warp and
-## connection names a map that exists.
+## Every Generation 1 map, tileset, SGB palette and overworld sprite in the
+## cache, swept on Red, Blue and Yellow. The counts come from pret's own
+## `data/maps`, `gfx/blocksets` and `data/sprites`, and the structural rules are
+## the map macros' own assertions: a sign's text id sits above the object ids,
+## an object's inside them, and every warp and connection names a real map.
 
 ## Real maps of the flat table's 248 or 249 ids, and the tilesets behind them.
 const MAP_COUNTS: Dictionary = {&"red": 226, &"blue": 226, &"yellow": 227}
@@ -66,6 +66,43 @@ const POWER_PLANT_WILD: Dictionary = {0x06: 6, 0x8D: 2, 0x4B: 1}
 ## the elevator's own script rewrites the destination before either is taken.
 const SILPH_CO_ELEVATOR: int = 236
 
+## `NUM_SGB_PALS`, and `PAL_ROUTE`'s own four, the row every route draws in.
+const PALETTE_COUNTS: Dictionary = {&"red": 37, &"blue": 37, &"yellow": 40}
+const ROUTE_COLORS: Dictionary = {
+	&"red": [0x7FBF, 0x2F95, 0x7F54, 0x0843],
+	&"blue": [0x7FBF, 0x2F95, 0x7F54, 0x0843],
+	&"yellow": [0x7BFF, 0x4F57, 0x7F77, 0x18C6],
+}
+
+## Every branch of `SetPal_Overworld`, as map id, `wLastMap` and the row wanted.
+## The ids are the same in all three; only the link rooms answer differently.
+const PINNED_PALETTES: Array = [
+	[0x00, -1, 0x01], [0x0A, -1, 0x0B], [0x0C, -1, 0x00],
+	[0x28, 0x00, 0x01], [0x28, 0x0C, 0x00],
+	[0x3B, -1, 0x23], [0x8F, -1, 0x19], [0xF7, -1, 0x19],
+	[0xE2, -1, 0x23], [0xE4, -1, 0x23], [0xF5, -1, 0x01], [0xF6, -1, 0x23],
+]
+const LINK_ROOMS: Array[int] = [0xEF, 0xF0]
+
+## What the corpus lands on with no `wLastMap`: eleven cities one each, Lorelei's
+## room beside Pallet Town's, twenty caves, the Tower and Agatha grey, and the
+## rest the route row. Yellow's extra grey pair is the link rooms.
+const PALETTE_CENSUS: Dictionary = {
+	&"red": {0: 186, 1: 2, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1, 10: 1,
+		11: 1, 25: 8, 35: 20},
+	&"blue": {0: 186, 1: 2, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1, 10: 1,
+		11: 1, 25: 8, 35: 20},
+	&"yellow": {0: 185, 1: 2, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1, 10: 1,
+		11: 1, 25: 10, 35: 20},
+}
+
+## `NUM_SPRITES` and `FIRST_STILL_SPRITE`, with `SpriteSheetPointerTable`'s
+## first row: `RedSprite`, $C0 bytes in bank $05.
+const SPRITE_COUNTS: Dictionary = {&"red": 72, &"blue": 72, &"yellow": 82}
+const SPRITE_STILL_FIRST: Dictionary = {&"red": 0x3D, &"blue": 0x3D, &"yellow": 0x47}
+const PLAYER_SPRITE: Array = [0x4180, 0x05]
+const PLAYER_SPRITE_YELLOW: Array = [0x4571, 0x05]
+
 var _r: RefCounted = null
 var _maps: Dictionary = {}
 
@@ -85,6 +122,8 @@ func _one_game() -> void:
 	_geometry()
 	_events()
 	_wild_objects()
+	_palettes()
+	_sprites()
 
 
 func _counts() -> void:
@@ -277,6 +316,113 @@ static func _is_item(item: int) -> bool:
 		return true
 	return item >= Gen1Layout.HM_FIRST_ITEM \
 		and item < Gen1Layout.TM_FIRST_ITEM + Gen1Layout.TM_COUNT
+
+
+## `SuperPalettes` and the row `SetPal_Overworld` hands each map.
+func _palettes() -> void:
+	var wanted: int = int(PALETTE_COUNTS[_r.game_id])
+	var last: PackedColorArray = _r.data.world_palette(wanted - 1)
+	if not _r.check(
+		_r.data.world_palette(wanted).is_empty() and last.size() == 4,
+		"the cache holds %d SGB palettes, wanted %d." % [_palette_count(), wanted]
+	):
+		return
+	var route: Array = []
+	for color: Color in _r.data.world_palette(Gen1Layout.PAL_ROUTE):
+		route.append(_packed(color))
+	_r.check(route == ROUTE_COLORS[_r.game_id], "PAL_ROUTE reads %s." % [route])
+
+	for row: Array in PINNED_PALETTES:
+		_pinned_palette(int(row[0]), int(row[1]), int(row[2]))
+	# Yellow gives the two link rooms `PAL_GRAYMON` by name; Red and Blue have
+	# the same two maps and let them fall through to `wLastMap`.
+	var link: int = Gen1Layout.PAL_GRAYMON if _r.game_id == RomRegistry.YELLOW \
+		else Gen1Layout.PAL_PALLET
+	for map_id: int in LINK_ROOMS:
+		_pinned_palette(map_id, 0x00, link)
+
+	var census: Dictionary = {}
+	for map: Gen2WorldMap in _maps.values():
+		var palette: int = Gen1Layout.overworld_palette(_r.game_id, map.number, map.tileset)
+		if not _r.check(palette >= 0 and palette < wanted,
+			"map %d draws in SGB palette %d." % [map.number, palette]):
+			continue
+		census[palette] = int(census.get(palette, 0)) + 1
+	var pinned: Dictionary = PALETTE_CENSUS[_r.game_id]
+	for palette: int in pinned:
+		_r.check(int(census.get(palette, 0)) == int(pinned[palette]),
+			"%d maps draw in SGB palette %d, pinned %d." % [
+				int(census.get(palette, 0)), palette, int(pinned[palette]),
+			])
+	_r.check(census.size() == pinned.size(), "the corpus lands on %d palettes, pinned %d." % [
+		census.size(), pinned.size(),
+	])
+	_r.note("gen1 map palettes %s" % census)
+
+
+func _pinned_palette(map_id: int, last_map: int, wanted: int) -> void:
+	var map: Gen2WorldMap = _maps.get(map_id, null)
+	if not _r.check(map != null, "map $%02X is missing." % map_id):
+		return
+	var got: int = Gen1Layout.overworld_palette(_r.game_id, map_id, map.tileset, last_map)
+	_r.check(got == wanted, "map $%02X out of map %d draws in palette %d, wanted %d." % [
+		map_id, last_map, got, wanted,
+	])
+
+
+## How many rows the cache really holds, for the message when the count is wrong.
+func _palette_count() -> int:
+	var out: int = 0
+	while not _r.data.world_palette(out).is_empty():
+		out += 1
+	return out
+
+
+static func _packed(color: Color) -> int:
+	return int(round(color.r * 31.0)) | (int(round(color.g * 31.0)) << 5) \
+		| (int(round(color.b * 31.0)) << 10)
+
+
+## `SpriteSheetPointerTable`'s strips, and the picture id every object names.
+func _sprites() -> void:
+	var wanted: int = int(SPRITE_COUNTS[_r.game_id])
+	var still_first: int = int(SPRITE_STILL_FIRST[_r.game_id])
+	if not _r.check(_r.data.overworld_sprite_count() == wanted,
+		"the cache holds %d overworld sprites, wanted %d." % [
+			_r.data.overworld_sprite_count(), wanted,
+		]):
+		return
+	var player: Array = PLAYER_SPRITE_YELLOW if _r.game_id == RomRegistry.YELLOW \
+		else PLAYER_SPRITE
+	var red: Gen2WorldSprite = _r.data.overworld_sprite(1)
+	_r.check(red.address == int(player[0]) and red.bank == int(player[1]),
+		"RedSprite reads $%02X:$%04X." % [red.bank, red.address])
+
+	var census: Dictionary = {"walking": 0, "still": 0}
+	for number: int in range(1, wanted + 1):
+		var sprite: Gen2WorldSprite = _r.data.overworld_sprite(number)
+		if not _r.check(sprite != null, "sprite %d is missing." % number):
+			continue
+		var still: bool = number >= still_first
+		var tiles: int = Gen1Layout.SPRITE_STILL_TILES if still \
+			else Gen1Layout.SPRITE_WALKING_TILES * 2
+		census["still" if still else "walking"] += 1
+		_r.check(sprite.tiles == tiles and sprite.is_walking() != still,
+			"sprite %d holds %d tiles as type %d, wanted %d." % [
+				number, sprite.tiles, sprite.sprite_type, tiles,
+			])
+		_r.check(
+			_r.data.overworld_sprite_indices(number).size() == tiles * PokeTiles.TILE_PIXELS,
+			"sprite %d's strip is the wrong size." % number
+		)
+	_r.check(census == {"walking": still_first - 1, "still": wanted - still_first + 1},
+		"the sheets read %s." % [census])
+
+	for map: Gen2WorldMap in _maps.values():
+		for object: Dictionary in map.events["objects"] as Array:
+			var picture: int = int(object["sprite"])
+			_r.check(picture >= 1 and picture <= wanted,
+				"map %d has an object drawn with picture id %d." % [map.number, picture])
 
 
 func _wild_objects() -> void:

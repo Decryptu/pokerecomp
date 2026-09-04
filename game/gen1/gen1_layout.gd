@@ -89,6 +89,18 @@ const POINTER_SIZE: int = 2
 ## colours of each, and a DMG reads neither and shows four greys.
 const SUPER_PALETTE_COLORS: int = 4
 const SUPER_PALETTE_BYTES: int = SUPER_PALETTE_COLORS * PokePalette.COLOR_BYTES
+## `NUM_SGB_PALS`: Yellow put Pikachu's Beach's three behind `PAL_GAMEFREAK` and
+## recoloured every row above them.
+const SUPER_PALETTE_COUNT_RED_BLUE: int = 37
+const SUPER_PALETTE_COUNT_YELLOW: int = 40
+const PAL_ROUTE: int = 0x00
+const PAL_PALLET: int = 0x01
+const PAL_GRAYMON: int = 0x19
+const PAL_CAVE: int = 0x23
+
+## `GBPalNormal`'s `rOBP0`, %11010000: an object's colours 1, 2 and 3 take
+## shades 0, 1 and 3, so a sprite never shows the palette's third colour.
+const OBJECT_SHADES: Array[int] = [0, 0, 1, 3]
 
 ## Evolutions by method until a zero byte, then (level, move) pairs until
 ## another; `EVOLVE_ITEM` is the only four-byte row.
@@ -190,6 +202,16 @@ const MAX_OBJECT_EVENTS: int = 16
 ## `warp_event`'s indoor exit: `wLastMap`, the outdoor map the player came from.
 const WARP_TO_LAST_MAP: int = 0xFF
 
+## The map ids `SetPal_Overworld` splits on; only the link rooms are Yellow's.
+const NUM_CITY_MAPS: int = 0x0B
+const FIRST_INDOOR_MAP: int = 0x25
+const CERULEAN_CAVE_2F: int = 0xE2
+const CERULEAN_CAVE_1F: int = 0xE4
+const TRADE_CENTER: int = 0xEF
+const COLOSSEUM: int = 0xF0
+const LORELEIS_ROOM: int = 0xF5
+const BRUNOS_ROOM: int = 0xF6
+
 ## The `tileset` macro: the bank holding both graphics and blocks, the three
 ## pointers, three counter tiles, the grass tile and the animation kind, with
 ## $FF for "none" in all four tile columns.
@@ -223,6 +245,37 @@ const TILESET_BLOCKS_YELLOW: Array[int] = [
 const TILESET_LIST_END: int = 0xFF
 const WATER_TILE: int = 0x14
 
+## The two tilesets `SetPal_Overworld` tests before it looks at the map id.
+const TILESET_CEMETERY: int = 15
+const TILESET_CAVERN: int = 17
+
+## `WildDataPointers`, one `dw` a map id and $FFFF behind the last. A block is
+## its rate byte alone when the rate is zero and `WILDDATA_LENGTH` otherwise,
+## ten (level, species) pairs behind it; grass first, water in the same shape.
+const WILD_SLOT_COUNT: int = 10
+const WILD_DATA_LENGTH: int = 1 + WILD_SLOT_COUNT * 2
+const WILD_POINTERS_END: int = 0xFFFF
+
+## `WildMonEncounterSlotChances`, as the cumulative byte each slot wins on; its
+## second column is the slot doubled, and the ten sum to 256.
+const WILD_CHANCE_SIZE: int = 2
+const WILD_SLOT_CHANCES: Array[int] = [50, 101, 140, 165, 190, 215, 228, 241, 252, 255]
+
+## `GoodRodMons`. The Old Rod has no table: `ItemUseOldRod` carries its one pair
+## as `lb bc, 5, MAGIKARP`, and neither rod reads the map.
+const GOOD_ROD_SLOTS: Array = [[10, 0x9D], [10, 0x47]]
+
+## `SuperRodData`, a map id and a pointer to `count` (level, species) rows that
+## `ReadSuperRodData` picks between by rejecting a two-bit roll. Yellow's
+## `SuperRodFishingSlots` is one row a map, four (species, level) pairs picked by
+## a byte threshold. Both end on $FF where a map id would be.
+const SUPER_ROD_ROW_SIZE: int = 3
+const SUPER_ROD_ROW_SIZE_YELLOW: int = 9
+const SUPER_ROD_SLOTS_YELLOW: int = 4
+const SUPER_ROD_THRESHOLDS_YELLOW: Array[int] = [0x65, 0xB1, 0xE4, 0xFF]
+const SUPER_ROD_MAX_SLOTS: int = 4
+const ROD_LIST_END: int = 0xFF
+
 ## A walk cell's collision tile is the bottom-left of its 2x2 quarter of the
 ## block, the corner Generation 2 also picks. `_GetTileAndCoordsInFrontOfPlayer`
 ## reads (8, 11), (8, 7), (6, 9) and (10, 9) and the player's cell starts at
@@ -230,6 +283,18 @@ const WATER_TILE: int = 0x14
 ## cell a player can stand on, the Pokemon Centers among them.
 const MAP_BLOCK_TILE_WIDTH: int = 4
 const MAP_BLOCK_CELL_WIDTH: int = 2
+
+## `SpriteSheetPointerTable`: a CPU address, the bytes of one half and the bank,
+## with a picture id one past the row. `LoadMapSpriteTilePatterns` reads a row
+## below `FIRST_STILL_SPRITE` twice, the second time $C0 further on, which is the
+## `$80` the walking rows of `SpriteFacingAndAnimationTable` add.
+const SPRITE_RECORD_SIZE: int = 4
+const SPRITE_COUNT_RED_BLUE: int = 72
+const SPRITE_COUNT_YELLOW: int = 82
+const SPRITE_STILL_FIRST_RED_BLUE: int = 0x3D
+const SPRITE_STILL_FIRST_YELLOW: int = 0x47
+const SPRITE_WALKING_TILES: int = 12
+const SPRITE_STILL_TILES: int = 4
 
 ## `NUM_TRAINERS`, the trainer classes rather than the individual trainers.
 const TRAINER_CLASS_COUNT: int = 47
@@ -284,6 +349,11 @@ const RED_BLUE: Dictionary = {
 	"map_songs": 0x0C04D,
 	"tilesets": 0x0C7BE,
 	"water_tilesets": 0x0E8E0,
+	"overworld_sprites": 0x17B27,
+	"wild_data": 0x0CEEB,
+	"wild_chances": 0x13918,
+	"good_rod": 0x0E27F,
+	"super_rod": 0x0E919,
 	## `_IsTilePassable` and the lists it walks share a bank, and the pointer in
 	## a tileset row names no bank of its own. Red and Blue keep both in home.
 	"tileset_collision_bank": 0x00,
@@ -323,6 +393,12 @@ const YELLOW: Dictionary = {
 	"map_songs": 0xFC000,
 	"tilesets": 0x0C558,
 	"water_tilesets": 0x0E834,
+	"overworld_sprites": 0x142A9,
+	"wild_data": 0x0CB95,
+	"wild_chances": 0x138E2,
+	"good_rod": 0x0E12C,
+	## Yellow's is a flat slot table rather than an index into groups.
+	"super_rod": 0xF5EDA,
 	"tileset_collision_bank": 0x01,
 }
 
@@ -402,6 +478,36 @@ static func super_palette_offset(layout: Dictionary, palette: int) -> int:
 	return int(layout["super_palettes"]) + palette * SUPER_PALETTE_BYTES
 
 
+## `SetPal_Overworld`: the `SuperPalettes` row a map's four colours come from.
+## The two tilesets answer before the map id is read at all. A city's row is its
+## map id plus one and every route shares [constant PAL_ROUTE]; an indoor map no
+## branch names takes `wLastMap`'s, which is [param last_map].
+static func overworld_palette(
+	id: StringName, map_id: int, tileset: int, last_map: int = -1
+) -> int:
+	if tileset == TILESET_CEMETERY:
+		return PAL_GRAYMON
+	if tileset == TILESET_CAVERN:
+		return PAL_CAVE
+	if map_id < FIRST_INDOOR_MAP:
+		return _town_palette(map_id)
+	if map_id >= CERULEAN_CAVE_2F and map_id <= CERULEAN_CAVE_1F:
+		return PAL_CAVE
+	if map_id == BRUNOS_ROOM:
+		return PAL_CAVE
+	if map_id == LORELEIS_ROOM:
+		return PAL_PALLET
+	if id == RomRegistry.YELLOW and (map_id == TRADE_CENTER or map_id == COLOSSEUM):
+		return PAL_GRAYMON
+	return _town_palette(last_map)
+
+
+## `.townOrRoute` and the `inc a` behind it: every id past the last city answers
+## [constant PAL_ROUTE], the routine's own `ld a, PAL_ROUTE - 1`.
+static func _town_palette(map_id: int) -> int:
+	return map_id + 1 if map_id >= 0 and map_id < NUM_CITY_MAPS else PAL_ROUTE
+
+
 ## Resolves one row of a near-pointer table whose bank the layout records.
 static func pointer_target(rom: RomFile, layout: Dictionary, key: String, row: int) -> int:
 	var table: int = int(layout[key])
@@ -433,6 +539,26 @@ static func tileset_count(id: StringName) -> int:
 	return TILESET_COUNT_YELLOW if id == RomRegistry.YELLOW else TILESET_COUNT_RED_BLUE
 
 
+## `NUM_SPRITES`. Yellow added ten walking sprites in front of the still ones.
+static func sprite_count(id: StringName) -> int:
+	return SPRITE_COUNT_YELLOW if id == RomRegistry.YELLOW else SPRITE_COUNT_RED_BLUE
+
+
+static func super_palette_count(id: StringName) -> int:
+	return SUPER_PALETTE_COUNT_YELLOW if id == RomRegistry.YELLOW \
+		else SUPER_PALETTE_COUNT_RED_BLUE
+
+
+## `FIRST_STILL_SPRITE`, the picture id from which a sheet is four tiles.
+static func first_still_sprite(id: StringName) -> int:
+	return SPRITE_STILL_FIRST_YELLOW if id == RomRegistry.YELLOW \
+		else SPRITE_STILL_FIRST_RED_BLUE
+
+
+static func sprite_offset(layout: Dictionary, number: int) -> int:
+	return int(layout["overworld_sprites"]) + (number - 1) * SPRITE_RECORD_SIZE
+
+
 ## Blocks per tileset, in `Tilesets` order.
 static func tileset_blocks(id: StringName) -> Array[int]:
 	return TILESET_BLOCKS_YELLOW if id == RomRegistry.YELLOW else TILESET_BLOCKS_RED_BLUE
@@ -462,6 +588,11 @@ static func tileset_offset(layout: Dictionary, number: int) -> int:
 
 static func map_song_offset(layout: Dictionary, map_id: int) -> int:
 	return int(layout["map_songs"]) + map_id * MAP_SONG_SIZE
+
+
+## Whether the Super Rod is read as Yellow's flat slot table.
+static func flat_super_rod(id: StringName) -> bool:
+	return id == RomRegistry.YELLOW
 
 
 ## Which of a block's sixteen tiles decides one walk cell.

@@ -1,11 +1,11 @@
 class_name Gen1WorldImporter
 extends RefCounted
 
-## Decodes every Generation 1 map and tileset into the shared world sections of
-## the cache, the counterpart of [Gen2WorldImporter]. A map is named by one flat
-## id, so a record's group is zero and its number is that id. A script is machine
-## code here rather than an interpreted command stream, so the header's script
-## and text pointers are kept as addresses and nothing follows them.
+## Decodes every Generation 1 map, tileset, SGB palette, overworld sprite and
+## wild encounter table into the shared world sections of the cache, the
+## counterpart of [Gen2WorldImporter]. A map is named by one flat id, so a
+## record's group is zero and its number is that id. A script is machine code
+## here, so the header's script and text pointers are kept as addresses.
 
 const LIST_END: int = Gen1Layout.TILESET_LIST_END
 
@@ -25,19 +25,35 @@ static func import_to_cache(
 		return result
 
 	var tilesets: Array = result["tilesets"]
-	if not RomCache.write_json(RomCache.world_maps_path(directory), result["maps"]):
-		return _error("Could not write overworld map data.")
-	if not RomCache.write_json(RomCache.world_tilesets_path(directory), tilesets):
-		return _error("Could not write overworld tileset data.")
+	var sprites: Array = result["sprites"]
+	var sections: Dictionary = {
+		RomCache.world_maps_path(directory): result["maps"],
+		RomCache.world_tilesets_path(directory): tilesets,
+		RomCache.world_palettes_path(directory): result["palettes"],
+		RomCache.overworld_sprites_path(directory): sprites,
+		RomCache.world_encounters_path(directory): result["encounters"],
+	}
+	for path: String in sections:
+		if not RomCache.write_json(path, sections[path]):
+			return _error("Could not write %s." % path.get_file())
 	var graphics: Dictionary = result["graphics"]
 	for number: int in graphics:
 		if not RomCache.write_indices(RomCache.world_tile_path(directory, number), graphics[number]):
 			return _error("Could not write overworld tileset %d." % number)
+	var sheets: Dictionary = result["sprite_graphics"]
+	for number: int in sheets:
+		if not RomCache.write_indices(
+			RomCache.overworld_sprite_path(directory, number), sheets[number]
+		):
+			return _error("Could not write overworld sprite %d." % number)
 
 	return {
 		"ok": true,
 		"maps": (result["maps"] as Array).size(),
 		"tilesets": tilesets.size(),
+		"sprites": sprites.size(),
+		"encounters": (result["encounters"]["grass"] as Dictionary).size()
+			+ (result["encounters"]["water"] as Dictionary).size(),
 	}
 
 
@@ -47,6 +63,15 @@ static func read_world(
 ) -> Dictionary:
 	if layout.is_empty():
 		return _error("No layout for %s." % rom.id)
+	var palettes: Dictionary = _read_palettes(rom, layout)
+	if not bool(palettes["ok"]):
+		return palettes
+	var sprites: Dictionary = _read_sprites(rom, layout)
+	if not bool(sprites["ok"]):
+		return sprites
+	var encounters: Dictionary = _read_encounters(rom, layout)
+	if not bool(encounters["ok"]):
+		return encounters
 	var water: PackedByteArray = _read_list(rom, int(layout["water_tilesets"]))
 	var tilesets: Array = []
 	var graphics: Dictionary = {}
@@ -77,7 +102,16 @@ static func read_world(
 		if on_progress.is_valid():
 			on_progress.call("maps", maps.size(), map_count - Gen1Layout.UNUSED_MAPS.size())
 
-	return {"ok": true, "maps": maps, "tilesets": tilesets, "graphics": graphics}
+	return {
+		"ok": true,
+		"maps": maps,
+		"tilesets": tilesets,
+		"graphics": graphics,
+		"palettes": palettes["palettes"],
+		"sprites": sprites["sprites"],
+		"sprite_graphics": sprites["graphics"],
+		"encounters": encounters["encounters"],
+	}
 
 
 static func _error(message: String) -> Dictionary:
@@ -91,6 +125,180 @@ static func _read_list(rom: RomFile, at: int, limit: int = 256) -> PackedByteArr
 		out.append(rom.u8(at))
 		at += 1
 	return out
+
+
+## `WildDataPointers` and the rod tables behind it. Grass and water take the
+## shared sections' shape under group zero; fishing keeps the Super Rod's index.
+static func _read_encounters(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var table: int = int(layout["wild_data"])
+	var count: int = Gen1Layout.map_count(rom.id)
+	if rom.u16le(table + count * Gen1Layout.POINTER_SIZE) != Gen1Layout.WILD_POINTERS_END:
+		return _error("WildDataPointers does not end behind map %d." % (count - 1))
+	var bank: int = RomFile.bank_of(table)
+	var grass: Dictionary = {}
+	var water: Dictionary = {}
+	for map_id: int in count:
+		var at: int = RomFile.linear(
+			bank, rom.u16le(table + map_id * Gen1Layout.POINTER_SIZE)
+		)
+		var block: Dictionary = _read_wild_block(rom, at, map_id)
+		if not bool(block["ok"]):
+			return block
+		if not (block["row"] as Dictionary).is_empty():
+			grass["0:%d" % map_id] = block["row"]
+		block = _read_wild_block(rom, int(block["at"]), map_id)
+		if not bool(block["ok"]):
+			return block
+		if not (block["row"] as Dictionary).is_empty():
+			water["0:%d" % map_id] = block["row"]
+
+	var fishing: Dictionary = _read_super_rod(rom, layout)
+	if not bool(fishing["ok"]):
+		return fishing
+	return {"ok": true, "encounters": {
+		"grass": grass, "water": water, "fishing": fishing["fishing"],
+	}}
+
+
+## One `def_grass_wildmons` or `def_water_wildmons` block: a rate byte, and ten
+## (level, species) pairs behind it unless the rate is zero, which ends it.
+static func _read_wild_block(rom: RomFile, at: int, map_id: int) -> Dictionary:
+	if not rom.in_bounds(at):
+		return _error("Map %d's wild data is outside the ROM." % map_id)
+	var rate: int = rom.u8(at)
+	if rate == 0:
+		return {"ok": true, "row": {}, "at": at + 1}
+	if not rom.in_bounds(at, Gen1Layout.WILD_DATA_LENGTH):
+		return _error("Map %d's wild slots are outside the ROM." % map_id)
+	var slots: Array = []
+	for slot: int in Gen1Layout.WILD_SLOT_COUNT:
+		var row: int = at + 1 + slot * 2
+		var species: int = rom.u8(row + 1)
+		if species < 1 or species > Gen1Layout.INDEX_COUNT:
+			return _error("Map %d's wild slot %d names index %d." % [map_id, slot, species])
+		slots.append({"level": rom.u8(row), "species": species})
+	return {
+		"ok": true,
+		"row": {"map": "0:%d" % map_id, "rate": rate, "slots": slots},
+		"at": at + Gen1Layout.WILD_DATA_LENGTH,
+	}
+
+
+## `SuperRodData`'s map index, or Yellow's `SuperRodFishingSlots`, whose row is
+## its own group. An entry is the group [method GameData.world_fishing_map] reads.
+static func _read_super_rod(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var at: int = int(layout["super_rod"])
+	var bank: int = RomFile.bank_of(at)
+	var flat: bool = Gen1Layout.flat_super_rod(rom.id)
+	var stride: int = Gen1Layout.SUPER_ROD_ROW_SIZE_YELLOW if flat \
+		else Gen1Layout.SUPER_ROD_ROW_SIZE
+	var maps: Dictionary = {}
+	var groups: Array = []
+	var seen: Dictionary = {}
+	while rom.in_bounds(at, stride) and rom.u8(at) != Gen1Layout.ROD_LIST_END:
+		var map_id: int = rom.u8(at)
+		if not Gen1Layout.is_real_map(map_id) or map_id >= Gen1Layout.map_count(rom.id):
+			return _error("The Super Rod names map %d." % map_id)
+		var key: int = at + 1 if flat else RomFile.linear(bank, rom.u16le(at + 1))
+		if not seen.has(key):
+			var group: Dictionary = _read_rod_group(rom, key, flat, map_id)
+			if not bool(group["ok"]):
+				return group
+			groups.append(group["group"])
+			seen[key] = groups.size()
+		maps[str(map_id)] = int(seen[key])
+		at += stride
+	if maps.is_empty():
+		return _error("The Super Rod table is empty.")
+	return {"ok": true, "fishing": {"maps": maps, "groups": groups}}
+
+
+## One group: a count and that many (level, species) rows, or Yellow's four
+## (species, level) rows with the byte `GenerateRandomFishingEncounter` reads.
+static func _read_rod_group(
+	rom: RomFile, at: int, flat: bool, map_id: int
+) -> Dictionary:
+	var count: int = Gen1Layout.SUPER_ROD_SLOTS_YELLOW if flat else rom.u8(at)
+	if count < 1 or count > Gen1Layout.SUPER_ROD_MAX_SLOTS:
+		return _error("Map %d's fishing group holds %d slots." % [map_id, count])
+	var first: int = at if flat else at + 1
+	if not rom.in_bounds(first, count * 2):
+		return _error("Map %d's fishing group is outside the ROM." % map_id)
+	var slots: Array = []
+	for slot: int in count:
+		var row: int = first + slot * 2
+		var species: int = rom.u8(row + 1 if not flat else row)
+		if species < 1 or species > Gen1Layout.INDEX_COUNT:
+			return _error("Map %d's fishing slot %d names index %d." % [map_id, slot, species])
+		var entry: Dictionary = {
+			"level": rom.u8(row if not flat else row + 1), "species": species,
+		}
+		if flat:
+			entry["threshold"] = Gen1Layout.SUPER_ROD_THRESHOLDS_YELLOW[slot]
+		slots.append(entry)
+	return {"ok": true, "group": {"slots": slots}}
+
+
+## `SuperPalettes`. `SetPal_Overworld` names one row a map and the
+## `BlkPacket_WholeScreen` behind it gives that row art and objects alike.
+static func _read_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var count: int = Gen1Layout.super_palette_count(rom.id)
+	var at: int = int(layout["super_palettes"])
+	if not rom.in_bounds(at, count * Gen1Layout.SUPER_PALETTE_BYTES):
+		return _error("SuperPalettes is outside the ROM.")
+	var out: Array = []
+	for row: int in count:
+		var colors: Array = []
+		for slot: int in Gen1Layout.SUPER_PALETTE_COLORS:
+			var packed: int = rom.u16le(
+				Gen1Layout.super_palette_offset(layout, row) + slot * PokePalette.COLOR_BYTES
+			)
+			if (packed & 0x8000) != 0:
+				return _error("SuperPalettes row %d has bit 15 set." % row)
+			colors.append(packed)
+		out.append(colors)
+	return {"ok": true, "palettes": out}
+
+
+## `SpriteSheetPointerTable` and the strips behind it. A walking sprite's row
+## names half its graphics and `LoadMapSpriteTilePatterns` copies that many
+## bytes twice, which `GetUsedSprite` also does: [Gen2WorldSprite] reads both.
+static func _read_sprites(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var count: int = Gen1Layout.sprite_count(rom.id)
+	var still_first: int = Gen1Layout.first_still_sprite(rom.id)
+	var sprites: Array = []
+	var graphics: Dictionary = {}
+	for number: int in range(1, count + 1):
+		var at: int = Gen1Layout.sprite_offset(layout, number)
+		if not rom.in_bounds(at, Gen1Layout.SPRITE_RECORD_SIZE):
+			return _error("Sprite %d's record is outside the ROM." % number)
+		var address: int = rom.u16le(at)
+		if address < RomFile.BANK_SIZE or address >= RomFile.BANK_SIZE * 2:
+			return _error("Sprite %d names CPU address $%04X." % [number, address])
+		var still: bool = number >= still_first
+		var half: int = Gen1Layout.SPRITE_STILL_TILES if still \
+			else Gen1Layout.SPRITE_WALKING_TILES
+		if rom.u8(at + 2) != half * PokeTiles.TILE_BYTES:
+			return _error("Sprite %d is %d bytes, wanted %d." % [
+				number, rom.u8(at + 2), half * PokeTiles.TILE_BYTES,
+			])
+		var tiles: int = half if still else half * 2
+		var raw: PackedByteArray = rom.slice(
+			RomFile.linear(rom.u8(at + 3), address), tiles * PokeTiles.TILE_BYTES
+		)
+		if raw.size() != tiles * PokeTiles.TILE_BYTES:
+			return _error("Sprite %d's graphics are truncated." % number)
+		graphics[number] = PokeTiles.decode_2bpp_strip(raw, 0, tiles)
+		sprites.append({
+			"number": number,
+			"address": address,
+			"bank": rom.u8(at + 3),
+			"bytes": tiles * PokeTiles.TILE_BYTES,
+			"tiles": tiles,
+			"type": Gen2WorldSprite.TYPE_STILL if still else Gen2WorldSprite.TYPE_WALKING,
+			"palette": 0,
+		})
+	return {"ok": true, "sprites": sprites, "graphics": graphics}
 
 
 ## One row of `Tilesets`, its blockset, its graphics and the list of tiles

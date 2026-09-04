@@ -162,10 +162,6 @@ static func read_world_encounters(rom: RomFile, layout: Dictionary) -> Dictionar
 			"roaming": roam_result["roaming"],
 			"treemons": treemon_result["treemons"],
 			"bug_contest": contest_result["bug_contest"],
-			"probabilities": {
-				"grass": Gen2Layout.WILD_GRASS_PROBABILITIES,
-				"water": Gen2Layout.WILD_WATER_PROBABILITIES,
-			},
 		},
 		"counts": {
 			"grass": grass.size(),
@@ -590,7 +586,7 @@ static func read_treemons(
 	var set_count: int = int(configured.get("treemon_set_count", -1))
 	if pointer_offset < 0 or set_count < 1:
 		return _error("Treemon set layout is incomplete.")
-	var bank: int = Gen2Layout.bank_of(pointer_offset)
+	var bank: int = RomFile.bank_of(pointer_offset)
 
 	var tree_maps: Dictionary = _read_treemon_maps(rom, layout, configured, "tree")
 	if not bool(tree_maps.get("ok", false)):

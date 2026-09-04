@@ -366,10 +366,6 @@ static func _write_world(cache_directory: String, crystal_commands: bool = true)
 			}],
 			"time_groups": [],
 		},
-		"probabilities": {
-			"grass": Gen2Layout.WILD_GRASS_PROBABILITIES,
-			"water": Gen2Layout.WILD_WATER_PROBABILITIES,
-		},
 	})
 
 	# These two scripts are stored at the object's/coord event's own address,

@@ -499,7 +499,7 @@ static func _check_icon_pointers(rom: RomFile, layout: Dictionary) -> Dictionary
 	var base: int = int(layout["overworld_icons"])
 	for index: int in Gen2Layout.ICON_POINTER_COUNT:
 		var address: int = rom.u16le(table + index * Gen2Layout.ICON_POINTER_SIZE)
-		var expected: int = RomFile.linear(Gen2Layout.bank_of(base), address)
+		var expected: int = RomFile.linear(RomFile.bank_of(base), address)
 		var wanted: int = base + maxi(index - 1, 0) * Gen2Layout.MON_ICON_BYTES
 		if not _valid_cpu_address(address) or expected != wanted:
 			return _error(

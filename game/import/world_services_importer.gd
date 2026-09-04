@@ -130,7 +130,7 @@ static func read_services(
 
 static func _read_marts(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var table: int = int(layout["mart_table"])
-	var bank: int = Gen2Layout.bank_of(table)
+	var bank: int = RomFile.bank_of(table)
 	if not rom.in_bounds(table, Gen2Layout.MART_COUNT * Gen2Layout.MART_POINTER_SIZE):
 		return _error("Mart pointer table is outside the cartridge.")
 

@@ -314,10 +314,6 @@ func _write_cache(game_id: String = "testworld") -> void:
 			],
 			"mons": [{"species": 0xF3, "level": 40, "map_group": 1, "map_number": 2}],
 		},
-		"probabilities": {
-			"grass": Gen2Layout.WILD_GRASS_PROBABILITIES,
-			"water": Gen2Layout.WILD_WATER_PROBABILITIES,
-		},
 	})
 	RomCache.write_json(RomCache.world_scripts_path(_directory), {
 		"48:6000": [0x33, 7, 0, 0x4C, 0x00, 0x70, 0x91],

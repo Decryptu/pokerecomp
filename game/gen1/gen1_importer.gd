@@ -88,6 +88,7 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_dex_entries,
 	_verify_trainer_names,
 	_verify_palettes,
+	_verify_wild_constants,
 	_verify_pic_pointers,
 	_verify_font,
 	_verify_text_box,
@@ -245,6 +246,28 @@ static func _verify_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 		colors.append(rom.u16le(at + slot * PokePalette.COLOR_BYTES))
 	if colors != FIRST_PALETTE_COLORS.get(rom.id, []):
 		return _fail("PAL_GREENMON reads %s." % str(colors))
+	return _ok()
+
+
+## The two wild tables this port keeps as constants rather than importing:
+## `WildMonEncounterSlotChances`, whose second column is the slot it already is,
+## and `GoodRodMons`. Neither is per-map, and reading them back is what says the
+## constants still describe the cartridge.
+static func _verify_wild_constants(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var at: int = int(layout["wild_chances"])
+	for slot: int in Gen1Layout.WILD_SLOT_CHANCES.size():
+		var row: int = at + slot * Gen1Layout.WILD_CHANCE_SIZE
+		if rom.u8(row) != Gen1Layout.WILD_SLOT_CHANCES[slot] or rom.u8(row + 1) != slot * 2:
+			return _fail("Wild slot %d wins on %d, not %d." % [
+				slot, rom.u8(row), Gen1Layout.WILD_SLOT_CHANCES[slot],
+			])
+	at = int(layout["good_rod"])
+	for slot: int in Gen1Layout.GOOD_ROD_SLOTS.size():
+		var row: Array = Gen1Layout.GOOD_ROD_SLOTS[slot]
+		if rom.u8(at + slot * 2) != int(row[0]) or rom.u8(at + slot * 2 + 1) != int(row[1]):
+			return _fail("GoodRodMons row %d reads level %d, index %d." % [
+				slot, rom.u8(at + slot * 2), rom.u8(at + slot * 2 + 1),
+			])
 	return _ok()
 
 
@@ -461,6 +484,8 @@ func import_rom(
 		"learnset_moves": 0,
 		"maps": 0,
 		"tilesets": 0,
+		"sprites": 0,
+		"encounters": 0,
 		"elapsed_ms": 0,
 	}
 
@@ -535,6 +560,8 @@ func import_rom(
 		"trainer_count": trainers.size(),
 		"map_count": int(world["maps"]),
 		"tileset_count": int(world["tilesets"]),
+		"overworld_sprite_count": int(world["sprites"]),
+		"encounter_count": int(world["encounters"]),
 		"atlases": pics,
 		"tiles": tiles,
 		"complete": true,
@@ -554,13 +581,17 @@ func import_rom(
 	result["learnset_moves"] = _count_of(species, "learnset")
 	result["maps"] = int(world["maps"])
 	result["tilesets"] = int(world["tilesets"])
+	result["sprites"] = int(world["sprites"])
+	result["encounters"] = int(world["encounters"])
 	result["elapsed_ms"] = Time.get_ticks_msec() - started
 	result["message"] = ("%d species, %d moves, %d items, %d type matchups, "
-		+ "%d trainer classes, %d evolutions, %d level-up moves, %d maps and "
-		+ "%d tilesets in %d ms.") % [
+		+ "%d trainer classes, %d evolutions, %d level-up moves, %d maps, "
+		+ "%d tilesets, %d overworld sprites and %d wild encounter tables "
+		+ "in %d ms.") % [
 		species.size(), moves.size(), items.size(), matchups.size(), trainers.size(),
 		result["evolutions"], result["learnset_moves"], result["maps"],
-		result["tilesets"], result["elapsed_ms"],
+		result["tilesets"], result["sprites"], result["encounters"],
+		result["elapsed_ms"],
 	]
 	return result
 

@@ -183,6 +183,41 @@ const ENVIRONMENT_TOWN: int = 1
 const ENVIRONMENT_ROUTE: int = 2
 
 
+## Generation 1's answer to [method tile_palettes]. There are no eight slots:
+## `SetPal_Overworld` names one `SuperPalettes` row and the
+## `BlkPacket_WholeScreen` behind it gives that row every attribute block, so
+## the whole screen draws in the same four colours. [param last_map] is
+## `wLastMap`, which only an indoor map the routine does not name reads.
+static func gen1_tile_palettes(
+	data: GameData,
+	map: Gen2WorldMap,
+	tileset: Gen2WorldTileset,
+	last_map: int = -1,
+	fade_order: int = FADE_IDENTITY,
+) -> Array:
+	var colors: PackedColorArray = fade_palette(gen1_map_colors(data, map, last_map), fade_order)
+	var out: Array = []
+	out.resize(tileset.tile_count)
+	out.fill(colors)
+	return out
+
+
+## The four colours one Generation 1 map draws in.
+static func gen1_map_colors(
+	data: GameData, map: Gen2WorldMap, last_map: int = -1
+) -> PackedColorArray:
+	return data.world_palette(
+		Gen1Layout.overworld_palette(data.id, map.number, map.tileset, last_map)
+	)
+
+
+## The same four through `GBPalNormal`'s `rOBP0`, which is what every object on
+## a Generation 1 map is drawn with. Colour 0 is the object's transparent index,
+## so a sprite never shows the map's own background colour.
+static func gen1_object_colors(colors: PackedColorArray) -> PackedColorArray:
+	return PokePalette.through_shades(colors, Gen1Layout.OBJECT_SHADES)
+
+
 ## One palette per tile of [param tileset], in tile order.
 ##
 ## Every tile of the strip shares eight palette slots, so the eight are resolved
