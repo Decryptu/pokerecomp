@@ -437,3 +437,30 @@ func test_result_trainer_slide_copies_six_column_major_slices() -> void:
 				assert_eq(int(map[row * 20 + 20 - step + column]), column * 7 + row)
 		assert_eq(int(map[20 - step - 1]), 0x7F)
 		assert_eq(int(map[7 * 20]), 0x7F)
+
+
+## `LoadMonBackPic`'s square is a whole tile bigger than Crystal's and sits a row
+## and a column further out, and the enemy's is where it always was. The tile
+## numbers are the same run either way: seven times seven is exactly the $31 the
+## player's picture starts at.
+func test_the_generation_one_player_square_is_seven_tiles_of_its_own() -> void:
+	assert_eq(Gen2BattleScreenMap.player_box_at(RomRegistry.GEN1), Vector2i(1, 5))
+	assert_eq(Gen2BattleScreenMap.player_box_side(RomRegistry.GEN1), 7)
+	assert_eq(Gen2BattleScreenMap.player_box_at(RomRegistry.GEN2), Gen2BattleScreenMap.PLAYER_AT)
+	assert_eq(
+		Gen2BattleScreenMap.player_box_side(RomRegistry.GEN2), Gen2BattleScreenMap.PLAYER_SIDE
+	)
+
+	var map: PackedByteArray = Gen2BattleScreenMap.seeded(RomRegistry.GEN1)
+	var at: Vector2i = Gen2BattleScreenMap.player_box_at(RomRegistry.GEN1)
+	for row: int in 7:
+		for column: int in 7:
+			var cell: int = (at.y + row) * Gen2BattleScreenMap.COLUMNS + at.x + column
+			assert_eq(
+				int(map[cell]),
+				Gen2BattleScreenMap.PLAYER_BASE_TILE + column * 7 + row,
+				"the square is column major from $31"
+			)
+	var head: int = Gen2BattleScreenMap.ENEMY_AT.y * Gen2BattleScreenMap.COLUMNS \
+		+ Gen2BattleScreenMap.ENEMY_AT.x
+	assert_eq(int(map[head]), Gen2BattleScreenMap.ENEMY_BASE_TILE)

@@ -15,6 +15,11 @@ const MAX_MOVES: int = Gen2Learnset.MOVE_SLOTS
 
 ## The stats a stage can be applied to, in the order the cartridge keeps them.
 const STAGED_STATS: Array = ["attack", "defense", "speed", "sp_attack", "sp_defense"]
+## Generation 1 keeps one Special stat and one stage byte for it, so a change
+## to either half is the same byte moving. The base halves already agree.
+const SPECIAL_STAGE_TWIN: Dictionary = {
+	"sp_attack": "sp_defense", "sp_defense": "sp_attack",
+}
 
 ## Accuracy and evasion are staged like a stat and are not stats: they have their
 ## own multiplier table, and there is no number behind them for a stage to
@@ -373,6 +378,9 @@ func change_stage(key: String, by: int) -> bool:
 	var limited: bool = _stat_at_limit(key, by)
 	var after: int = clampi(stage(key) + by, Gen2Stats.MIN_STAGE, Gen2Stats.MAX_STAGE)
 	stages[key] = after - signi(by) if limited else after
+	if SPECIAL_STAGE_TWIN.has(key) and data != null \
+		and data.generation == RomRegistry.GEN1:
+		stages[String(SPECIAL_STAGE_TWIN[key])] = stages[key]
 	return not limited
 
 

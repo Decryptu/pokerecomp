@@ -308,3 +308,68 @@ func _ink_in_row(screen: PackedByteArray, row: int) -> int:
 			if screen[y * Gen2Screen.WIDTH + x] != 0:
 				out += 1
 	return out
+
+
+## The same cache written the way a Generation 1 importer writes it: four sheets
+## rather than six, each filled with one index so the page can be read back.
+func _write_gen1_cache() -> void:
+	var sheets: Dictionary = {}
+	var written: Dictionary = {
+		"font_extra": [Gen1Layout.FONT_EXTRA_TILES, Gen1Layout.FONT_EXTRA_FIRST_CODE, 1],
+		"battle_font": [Gen1Layout.BATTLE_FONT_TILES, Gen1Layout.BATTLE_FONT_FIRST_CODE, 2],
+		"battle_hud_1": [Gen1Layout.BATTLE_HUD_1_TILES, Gen1Layout.BATTLE_HUD_1_FIRST_CODE, 3],
+		"battle_hud_2": [Gen1Layout.BATTLE_HUD_2_TILES, Gen1Layout.BATTLE_HUD_2_FIRST_CODE, 1],
+		"font": [Gen1Layout.FONT_TILES, Gen1Layout.FONT_FIRST_CODE, 3],
+	}
+	for row_name: String in written:
+		var row: Array = written[row_name]
+		var indices: PackedByteArray = PackedByteArray()
+		indices.resize(int(row[0]) * PokeTiles.TILE_WIDTH * PokeTiles.TILE_HEIGHT)
+		indices.fill(int(row[2]))
+		RomCache.write_indices(RomCache.tile_path(_directory, row_name), indices)
+		sheets[row_name] = {
+			"width": int(row[0]) * PokeTiles.TILE_WIDTH,
+			"height": PokeTiles.TILE_HEIGHT,
+			"tiles": int(row[0]),
+			"first_code": int(row[1]),
+			"bits": 1,
+		}
+	RomCache.write_json(RomCache.manifest_path(_directory), {
+		"format_version": RomCache.FORMAT_VERSION,
+		"game_id": "battletest",
+		"sha1": "0123456789abcdef",
+		"generation": RomRegistry.GEN1,
+		"tiles": sheets,
+		"complete": true,
+	})
+
+
+## `LoadTextBoxTilePatterns` lays the box's 32 tiles at $60 and
+## `LoadHudAndHpBarAndStatusTilePatterns` writes over all but the first two of
+## them, so only $60 and $61 are still the box's own.
+func test_the_generation_one_page_overlaps_the_text_box_sheet() -> void:
+	_write_gen1_cache()
+	var page: Gen2BattleTiles = Gen2BattleTiles.from_data(_data())
+	assert_not_null(page)
+	assert_eq(_drawn(page, Gen2BattleTiles.GEN1_FONT_EXTRA_AT), 1, "the box keeps $60")
+	assert_eq(_drawn(page, Gen2BattleTiles.GEN1_HP_BAR_EMPTY), 2, "the bar is the battle font's")
+	assert_eq(_drawn(page, Gen2BattleTiles.GEN1_HUD_1_AT), 3, "the first HUD sheet overwrites")
+	assert_eq(_drawn(page, Gen2BattleTiles.GEN1_HUD_2_AT), 1, "so does the second")
+	## The page stops where Crystal's does: the text box border above it is
+	## drawn from the font's own frames rather than from here.
+	assert_eq(_drawn(page, Gen1Layout.FRAME_FIRST_CODE), 0)
+	assert_eq(page.hp_label, Gen2BattleTiles.GEN1_HP_LABEL)
+	assert_eq(page.hp_bar_end, Gen2BattleTiles.GEN1_HP_BAR_END)
+	assert_eq(page.enemy_side, Gen2BattleTiles.GEN1_ENEMY_SIDE)
+	assert_true(Gen2BattleHud.from_data(_data()).gen1)
+
+
+## `CenterMonName`: two spaces for a name of one or two letters, one for three or
+## four, and nothing for anything longer.
+func test_a_short_generation_one_name_is_centred() -> void:
+	for pair: Array in [["A", 2], ["AB", 2], ["ABC", 1], ["ABCD", 1], ["ABCDE", 0]]:
+		assert_eq(
+			Gen2BattleHud.name_column(1, String(pair[0]), true), 1 + int(pair[1]),
+			"%s is centred" % pair[0]
+		)
+		assert_eq(Gen2BattleHud.name_column(1, String(pair[0]), false), 1)

@@ -51,10 +51,28 @@ const SHARED_PIC_ROWS: Array[int] = [27, 28]
 
 ## SHA-1 of each tile strip. All three cartridges hold the one font and the one
 ## text box; re-earn these against `gfx/font/font.png` and `font_extra.png`.
+## SHA-1 of each tile strip. All three cartridges hold the same five; re-earn
+## these against `gfx/font/font.png`, `font_extra.png`, `font_battle_extra.png`
+## and `gfx/battle/battle_hud_*.png`.
 const SHEET_DIGESTS: Dictionary = {
 	"font": "8146fe98bbbd27f9d67509e3da62044b44785a3a",
 	"font_extra": "ca0735bbbf8d2ce178a3f06a8d95ac6395dc8f7e",
+	"battle_font": "91f966f8c57286416ccec63a798e299417fb16b3",
+	"battle_hud_1": "f3c855d6f6f97f4994d4cd1967a2a205e8adac3d",
+	"battle_hud_2": "cc45fdec1282f49f07f31d80d2919a7b40ae8fce",
 }
+
+## What the assembled page has to hold once the four sheets have overlapped:
+## the empty bar, the panel edge, the level symbol and the two bar caps, by tile
+## number and by whether any pixel of that tile is set.
+const BATTLE_PAGE_TILES: Array[int] = [0x62, 0x63, 0x6B, 0x6C, 0x6D, 0x6E, 0x76, 0x78]
+
+## `ScaleSpriteByTwo` walks 28 of a back pic's 32 rows and takes four pixels
+## from the last column, so a battle never draws past this. Nine back pics are
+## drawn past it and are cut on hardware: eight have a 29th row and Persian has
+## a 29th column.
+const BACK_PIC_KEPT: int = 28
+const CROPPED_BACK_PICS: Array[int] = [20, 26, 40, 51, 53, 58, 77, 125, 137]
 
 var _r: RefCounted = null
 
@@ -73,6 +91,7 @@ func _one_game() -> void:
 	_trainer_pics()
 	_player_pics()
 	_sheets()
+	_battle_page()
 	_digests()
 
 
@@ -172,6 +191,45 @@ func _sheets() -> void:
 	_r.note("gen1 sheets %d font codes drawn, %d text box tiles" % [
 		drawn, Gen1Layout.FONT_EXTRA_TILES,
 	])
+
+
+## The battle's own tile page, assembled the way a battle assembles it, and the
+## crop `ScaleSpriteByTwo` puts every back pic through: the four rows and four
+## columns it drops have to be blank on all 153 of them or a battle is drawing
+## less than the cartridge does.
+func _battle_page() -> void:
+	var page: Gen2BattleTiles = Gen2BattleTiles.from_data(_r.data)
+	if not _r.check(page != null, "the battle tile page does not assemble."):
+		return
+	var blank: PackedByteArray = PackedByteArray()
+	blank.resize(PokeTiles.TILE_WIDTH * PokeTiles.TILE_HEIGHT)
+	for tile: int in BATTLE_PAGE_TILES:
+		var drawn: PackedByteArray = blank.duplicate()
+		page.draw(tile, drawn, PokeTiles.TILE_WIDTH, 0, 0)
+		_r.check(drawn != blank, "battle tile $%02X is blank." % tile)
+
+	var cropped: Array[int] = []
+	for slot: int in SPECIES_COUNT + Gen1Layout.PLAYER_BACKPICS.size():
+		var name: String = "back" if slot < SPECIES_COUNT else "player_back"
+		if _draws_outside_crop(name, slot if slot < SPECIES_COUNT else slot - SPECIES_COUNT):
+			cropped.append(slot + 1)
+	_r.check(cropped == CROPPED_BACK_PICS, "back pics cut by the scaler read %s" % str(cropped))
+	_r.note("gen1 battle page %d tiles, %d back pics cut to %dx%d" % [
+		BATTLE_PAGE_TILES.size(), cropped.size(), BACK_PIC_KEPT, BACK_PIC_KEPT,
+	])
+
+
+func _draws_outside_crop(name: String, slot: int) -> bool:
+	var cell: Dictionary = _cell(name, slot)
+	var width: int = int(cell.get("width", 0))
+	var indices: PackedByteArray = cell.get("indices", PackedByteArray())
+	for y: int in int(cell.get("height", 0)):
+		for x: int in width:
+			if x < BACK_PIC_KEPT and y < BACK_PIC_KEPT:
+				continue
+			if indices[y * width + x] != 0:
+				return true
+	return false
 
 
 ## Whether the tile one character code addresses has any pixel set.

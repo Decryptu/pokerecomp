@@ -80,8 +80,9 @@ godot --headless --path . -s res://tools/verify_rom.gd
 Matching uses SHA-1, never filenames. Unknown hashes are refused because an
 uncharacterised bank layout could produce corrupt assets. The three Generation 1
 cartridges import their species, move, type, item and trainer tables, every map
-and tileset, and every map text; the launcher seats one and does not offer Play
-until its battle engine is built.
+and tileset, and every map text, and a wild fight on one of their maps is fought
+on the battle screen; the launcher seats one and does not offer Play until its
+map scripts are interpreted.
 
 | Game | SHA-1 |
 |---|---|

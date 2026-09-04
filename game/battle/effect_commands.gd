@@ -887,9 +887,19 @@ static func _transform(turn: Gen2Turn) -> void:
 ## add up to. A powerless move never rolls (`and a / ret z`).
 static func _critical(turn: Gen2Turn) -> void:
 	var attacker: Gen2BattleMon = turn.attacker()
+	var focus_energy: bool = Gen2Substatus.has(
+		attacker.substatus, Gen2Substatus.FOCUS_ENERGY
+	)
+	## `CriticalHitTest` reads `wMonHBaseSpeed`, so Generation 1's chance is the
+	## attacker's species rather than anything the turn has raised.
+	if turn.data() != null and turn.data().generation == RomRegistry.GEN1:
+		turn.critical = Gen2Damage.roll_gen1_critical(
+			turn.effective_move(), turn.rng(), focus_energy,
+			_base_stat(turn, attacker.species, "speed")
+		)
+		return
 	turn.critical = Gen2Damage.roll_critical(
-		turn.effective_move(), turn.rng(),
-		Gen2Substatus.has(attacker.substatus, Gen2Substatus.FOCUS_ENERGY),
+		turn.effective_move(), turn.rng(), focus_energy,
 		Gen2HeldItem.effect_of(turn.data(), attacker.item) == Gen2HeldItem.CRITICAL_UP,
 		attacker.species, attacker.item
 	)
@@ -1456,7 +1466,8 @@ static func _check_hit(turn: Gen2Turn) -> void:
 	if Gen2HeldItem.effect_of(turn.data(), powder.item) == Gen2HeldItem.BRIGHTPOWDER:
 		chance = maxi(chance - Gen2HeldItem.parameter_of(turn.data(), powder.item), 0)
 
-	if Gen2Accuracy.rolls_hit(turn.rng(), chance):
+	var generation: int = turn.data().generation if turn.data() != null else RomRegistry.GEN2
+	if Gen2Accuracy.rolls_hit(turn.rng(), chance, generation):
 		return
 	# `.Miss` keeps the worked-out damage for Jump Kick alone, since
 	# `BattleCommand_FailureText` is about to take an eighth of it off the user.

@@ -438,3 +438,37 @@ func test_a_mart_inventory_fits_the_buffer_it_is_copied_into() -> void:
 	## `wItemList` is sixteen bytes: the count, the items and a terminator, which
 	## is the whole of what `LoadItemList` copies out of the text pointer.
 	assert_true(1 + Gen1Layout.MART_MAX_ITEMS + 1 <= 16)
+
+
+## `MoveEffectPointerTable` has an entry for every effect byte but $00, so the
+## translation is one longer than the pointer table.
+func test_the_effect_table_covers_every_effect_byte() -> void:
+	assert_eq(Gen1Layout.MOVE_EFFECTS.size(), 0x57)
+	for effect: int in Gen1Layout.MOVE_EFFECTS.size():
+		assert_between(Gen1Layout.MOVE_EFFECTS[effect], 0, 0x9C, "effect $%02X" % effect)
+
+
+## The three routines that stand for more than one of Crystal's effects, split
+## by the move number the routine itself compares against.
+func test_a_move_that_shares_an_effect_byte_is_split_by_number() -> void:
+	## SONICBOOM and DRAGON_RAGE carry their damage where Crystal keeps it, and
+	## the two level-damage moves keep the power the cartridge gave them.
+	assert_eq(Gen1Layout.move_effect(49, 0x29), 41)
+	assert_eq(Gen1Layout.move_power(49, 1), 20)
+	assert_eq(Gen1Layout.move_effect(82, 0x29), 41)
+	assert_eq(Gen1Layout.move_power(82, 1), 40)
+	assert_eq(Gen1Layout.move_effect(69, 0x29), 87)
+	assert_eq(Gen1Layout.move_power(69, 1), 1)
+	assert_eq(Gen1Layout.move_effect(149, 0x29), 88)
+	## TOXIC alone out of `PoisonEffect`, and DIG alone out of `ChargeEffect`.
+	assert_eq(Gen1Layout.move_effect(92, 0x42), 33)
+	assert_eq(Gen1Layout.move_effect(90, 0x42), 66)
+	assert_eq(Gen1Layout.move_effect(91, 0x27), 155)
+	assert_eq(Gen1Layout.move_effect(13, 0x27), 39)
+
+
+## A byte outside the table reads as an ordinary attack rather than off the end.
+func test_an_effect_byte_the_table_does_not_carry_is_a_normal_hit() -> void:
+	assert_eq(Gen1Layout.move_effect(1, 0x57), 0)
+	assert_eq(Gen1Layout.move_effect(1, -1), 0)
+	assert_eq(Gen1Layout.move_power(1, 40), 40)

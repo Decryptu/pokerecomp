@@ -101,6 +101,11 @@ const PAL_ROUTE: int = 0x00
 const PAL_PALLET: int = 0x01
 const PAL_GRAYMON: int = 0x19
 const PAL_CAVE: int = 0x23
+## The three rows `GetHealthBarColor` picks between, under the names
+## [method GameData.bar_palette] takes them by. Generation 1 has no exp bar.
+const HP_BAR_PALETTES: Dictionary = {
+	"hp_green": 0x1F, "hp_yellow": 0x20, "hp_red": 0x21,
+}
 
 ## `GBPalNormal`'s `rOBP0`, %11010000: an object's colours 1, 2 and 3 take
 ## shades 0, 1 and 3, so a sprite never shows the palette's third colour.
@@ -139,6 +144,63 @@ const FONT_TILES: int = 128
 const FONT_FIRST_CODE: int = 0x80
 const FONT_EXTRA_TILES: int = 32
 const FONT_EXTRA_FIRST_CODE: int = 0x60
+
+## `MoveEffectPointerTable` in Crystal's own numbering, indexed by the effect
+## byte a move row carries. `SpecialDamageEffect` and `PoisonEffect` each stand
+## for several of Crystal's effects and split by move, which is the pair below.
+const MOVE_EFFECTS: Array[int] = [
+	0, 1, 2, 3, 4, 5, 6, 7, 8, 9, # $00 to $09, which Crystal kept in order
+	10, 11, 12, 13, 15, 16, # the six UP1s, Crystal's SP_DEF_UP splitting them
+	34, 17, # PAY_DAY, SWIFT
+	18, 19, 20, 21, 23, 24, # the six DOWN1s
+	30, 25, 26, 27, 28, 29, 29, 31, # CONVERSION to FLINCH_SIDE_EFFECT1
+	1, 2, 4, 5, 6, 31, # the same six statuses again, always rather than on a roll
+	38, 39, 40, 41, 42, 155, 44, 45, 46, 47, 48, 49, # OHKO to CONFUSION
+	50, 51, 52, 53, 55, 56, # the six UP2s
+	32, 57, # HEAL, TRANSFORM
+	58, 59, 60, 61, 63, 64, # the six DOWN2s
+	35, 65, 66, 67, # LIGHT_SCREEN, REFLECT, POISON, PARALYZE
+	68, 69, 70, 71, # the four drops that ride on a hit
+	0, 0, 0, 0, # $48 to $4B, which `const_skip` leaves without a pointer
+	76, 77, 0, # CONFUSION_SIDE, TWINEEDLE, $4E
+	79, 80, 81, 82, 83, 84, 85, 86, # SUBSTITUTE to DISABLE
+]
+
+## Those two entries split, `ChargeEffect`'s own `cp DIG`, and the two damage
+## constants that come with the first: `SONICBOOM_DAMAGE` and
+## `DRAGON_RAGE_DAMAGE` sit in the routine here and in the power column there.
+const MOVE_EFFECT_BY_MOVE: Dictionary = {
+	49: 41, 69: 87, 82: 41, 91: 155, 92: 33, 101: 87, 149: 88,
+}
+const MOVE_POWER_BY_MOVE: Dictionary = {49: 20, 82: 40}
+
+
+static func move_effect(number: int, effect: int) -> int:
+	if MOVE_EFFECT_BY_MOVE.has(number):
+		return int(MOVE_EFFECT_BY_MOVE[number])
+	return MOVE_EFFECTS[effect] if effect >= 0 and effect < MOVE_EFFECTS.size() else 0
+
+
+static func move_power(number: int, power: int) -> int:
+	return int(MOVE_POWER_BY_MOVE.get(number, power))
+
+
+## What a battle loads over the middle of that box: `HpBarAndStatusGraphics` at
+## $62 as 2bpp, `BattleHudTiles1` at $6d and `BattleHudTiles2` with
+## `BattleHudTiles3` contiguous behind it at $73, both doubled from 1bpp.
+const BATTLE_FONT_TILES: int = 30
+const BATTLE_FONT_FIRST_CODE: int = 0x62
+const BATTLE_HUD_1_TILES: int = 3
+const BATTLE_HUD_1_FIRST_CODE: int = 0x6D
+const BATTLE_HUD_2_TILES: int = 6
+const BATTLE_HUD_2_FIRST_CODE: int = 0x73
+
+## What pins the two sheets: the edge under both panels is two solid rows in
+## the middle of six blank ones, and the empty bar is a rule top and bottom.
+const HUD_BOTTOM_CODE: int = 0x76
+const HUD_BOTTOM_ROWS: Array[int] = [0, 0, 0, 0xFF, 0xFF, 0, 0, 0]
+const HP_BAR_EMPTY_CODE: int = 0x63
+const HP_BAR_EMPTY_ROWS: Array[int] = [0, 0, 0xFF, 0, 0, 0xFF, 0, 0]
 
 ## What checks the two offsets: every code [Gen1Text] draws has ink, the hole
 ## between "'v" and "'" has none, the space is the text box's only blank tile,
@@ -410,6 +472,9 @@ const RED_BLUE: Dictionary = {
 	"pokecenter_text": 0x0705D,
 	"font": 0x11A80,
 	"text_box": 0x12288,
+	"battle_font": 0x11EA0,
+	"battle_hud_1": 0x12080,
+	"battle_hud_2": 0x12098,
 	"pic_player_back": 0x33E0A,
 	"pic_old_man_back": 0x33E9A,
 	"map_headers": 0x001AE,
@@ -457,6 +522,9 @@ const YELLOW: Dictionary = {
 	"pokecenter_text": 0x06ED0,
 	"font": 0x10600,
 	"text_box": 0x10E18,
+	"battle_font": 0x10A20,
+	"battle_hud_1": 0x10C00,
+	"battle_hud_2": 0x10C18,
 	## Yellow moved both back pics out of "Pics 4" and into their own bank.
 	"pic_player_back": 0xF43B1,
 	"pic_old_man_back": 0xF4441,

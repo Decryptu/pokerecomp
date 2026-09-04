@@ -92,9 +92,30 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_pic_pointers,
 	_verify_font,
 	_verify_text_box,
+	_verify_battle_tiles,
 	_verify_facility_text,
 	_verify_world,
 ]
+
+## What `LoadHudAndHpBarAndStatusTilePatterns` copies over the text box's own,
+## in load order and under the names [Gen2BattleTiles] assembles a page from.
+const BATTLE_TILE_SHEETS: Dictionary = {
+	"battle_font": {
+		"tiles": Gen1Layout.BATTLE_FONT_TILES,
+		"first_code": Gen1Layout.BATTLE_FONT_FIRST_CODE,
+		"bits": 2,
+	},
+	"battle_hud_1": {
+		"tiles": Gen1Layout.BATTLE_HUD_1_TILES,
+		"first_code": Gen1Layout.BATTLE_HUD_1_FIRST_CODE,
+		"bits": 1,
+	},
+	"battle_hud_2": {
+		"tiles": Gen1Layout.BATTLE_HUD_2_TILES,
+		"first_code": Gen1Layout.BATTLE_HUD_2_FIRST_CODE,
+		"bits": 1,
+	},
+}
 
 ## The `text_far` runs a facility's own boxes live in, by the [method
 ## GameData.special_text] run name each is stored under. The shop's are stored
@@ -343,6 +364,27 @@ static func _verify_text_box(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return _ok()
 
 
+## Those three, pinned on the two shapes nothing beside them repeats:
+## `HpBarAndStatusGraphics`' empty bar and `BattleHudTiles3`'s panel edge.
+static func _verify_battle_tiles(rom: RomFile, layout: Dictionary) -> Dictionary:
+	for sheet: String in BATTLE_TILE_SHEETS:
+		var run: Dictionary = BATTLE_TILE_SHEETS[sheet]
+		var bytes: int = PokeTiles.TILE_BYTES if int(run["bits"]) == 2 \
+			else PokeTiles.TILE_1BPP_BYTES
+		if not rom.in_bounds(int(layout[sheet]), int(run["tiles"]) * bytes):
+			return _fail("%s runs past the end of the dump." % sheet)
+
+	if _battle_tile_rows(rom, layout, "battle_font", Gen1Layout.HP_BAR_EMPTY_CODE) \
+		!= Gen1Layout.HP_BAR_EMPTY_ROWS:
+		return _fail("HpBarAndStatusGraphics: $%02X is not the empty bar." % \
+			Gen1Layout.HP_BAR_EMPTY_CODE)
+	if _battle_tile_rows(rom, layout, "battle_hud_2", Gen1Layout.HUD_BOTTOM_CODE) \
+		!= Gen1Layout.HUD_BOTTOM_ROWS:
+		return _fail("BattleHudTiles3: $%02X is not the panel's edge." % \
+			Gen1Layout.HUD_BOTTOM_CODE)
+	return _ok()
+
+
 ## Every map and tileset decodes, which is the world layout's own check: a wrong
 ## table reaches a tileset number, a map size or a block index the cartridge
 ## cannot hold.
@@ -374,6 +416,23 @@ static func _font_rows(rom: RomFile, layout: Dictionary, code: int) -> Array[int
 	var rows: Array[int] = []
 	for row: int in PokeTiles.TILE_1BPP_BYTES:
 		rows.append(rom.u8(at + row))
+	return rows
+
+
+## One tile of one battle sheet, in [method _font_rows]' shape. `FarCopyDataDouble`
+## writes a 1bpp sheet into both planes, so folding them answers either way.
+static func _battle_tile_rows(
+	rom: RomFile, layout: Dictionary, sheet: String, code: int
+) -> Array[int]:
+	var run: Dictionary = BATTLE_TILE_SHEETS[sheet]
+	var wide: bool = int(run["bits"]) == 2
+	var stride: int = PokeTiles.TILE_BYTES if wide else PokeTiles.TILE_1BPP_BYTES
+	var at: int = int(layout[sheet]) + (code - int(run["first_code"])) * stride
+	var rows: Array[int] = []
+	for row: int in PokeTiles.TILE_1BPP_BYTES:
+		rows.append(
+			rom.u8(at + 2 * row) | rom.u8(at + 2 * row + 1) if wide else rom.u8(at + row)
+		)
 	return rows
 
 
@@ -576,6 +635,7 @@ func import_rom(
 		"encounter_count": int(world["encounters"]),
 		"atlases": pics,
 		"tiles": tiles,
+		"bar_palettes": _import_bar_palettes(rom, layout),
 		"mart_text": _import_mart_text(rom, layout),
 		"special_text": _import_facility_text(rom, layout),
 		"complete": true,
@@ -703,6 +763,21 @@ static func _pic_offset(rom: RomFile, layout: Dictionary, at: int, index: int) -
 	return RomFile.linear(Gen1Layout.pic_bank(layout, index), address)
 
 
+## `PAL_GREENBAR` and the two rows behind it, whole: `SetPal_Battle` hands an
+## HP bar a Super Game Boy palette of its own, so a bar here is four colours.
+static func _import_bar_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for name: String in Gen1Layout.HP_BAR_PALETTES:
+		var at: int = Gen1Layout.super_palette_offset(
+			layout, int(Gen1Layout.HP_BAR_PALETTES[name])
+		)
+		var colors: Array = []
+		for slot: int in Gen1Layout.SUPER_PALETTE_COLORS:
+			colors.append(rom.u16le(at + slot * PokePalette.COLOR_BYTES))
+		out[name] = colors
+	return out
+
+
 ## The four colours a Super Game Boy or a Game Boy Color draws this species in,
 ## as the cartridge's own packed 15-bit values.
 static func _import_palette(rom: RomFile, layout: Dictionary, dex: int) -> Dictionary:
@@ -722,12 +797,17 @@ func _import_moves(rom: RomFile, layout: Dictionary, on_progress: Callable) -> A
 	for move: int in range(1, Gen1Layout.MOVE_COUNT + 1):
 		var entry: int = Gen1Layout.move_offset(layout, move)
 		# The animation byte is dropped: [method _verify_move_data] has already
-		# spent it proving the stride.
+		# spent it proving the stride. The effect byte is Crystal's own number
+		# by the time it lands, so one battle engine reads either cartridge.
 		out.append({
 			"number": move,
 			"name": names[move - 1],
-			"effect": rom.u8(entry + Gen1Layout.MOVE_EFFECT),
-			"power": rom.u8(entry + Gen1Layout.MOVE_POWER),
+			"effect": Gen1Layout.move_effect(
+				move, rom.u8(entry + Gen1Layout.MOVE_EFFECT)
+			),
+			"power": Gen1Layout.move_power(
+				move, rom.u8(entry + Gen1Layout.MOVE_POWER)
+			),
 			"type": rom.u8(entry + Gen1Layout.MOVE_TYPE),
 			"accuracy": rom.u8(entry + Gen1Layout.MOVE_ACCURACY),
 			"pp": rom.u8(entry + Gen1Layout.MOVE_PP),
@@ -951,6 +1031,10 @@ func _import_tiles(rom: RomFile, layout: Dictionary) -> Dictionary:
 			"bits": 2,
 		},
 	}
+	for sheet: String in BATTLE_TILE_SHEETS:
+		var run: Dictionary = (BATTLE_TILE_SHEETS[sheet] as Dictionary).duplicate()
+		run["offset"] = int(layout[sheet])
+		sheets[sheet] = run
 	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
 	var out: Dictionary = {}
 	for name: String in sheets:

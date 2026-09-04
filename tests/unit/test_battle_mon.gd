@@ -385,3 +385,21 @@ func test_badges_follow_stage_rounding_and_glacier_reads_the_staged_special_atta
 	assert_eq(mon.stat("sp_defense"), 100)
 	mon.stages.sp_attack = 1
 	assert_eq(mon.stat("sp_defense"), 112)
+
+
+## Generation 1 keeps one Special stat and one stage byte for it, so a raise
+## through either half moves both. Crystal's two are independent.
+func test_a_generation_one_special_stage_moves_both_halves() -> void:
+	var data: GameData = Fixture.build(_directory, "testgame", RomRegistry.GEN1)
+	var mon: Gen2BattleMon = Gen2BattleMon.create(data, Fixture.PIKACHU, 50)
+	assert_true(mon.change_stage("sp_attack", 2))
+	assert_eq(mon.stage("sp_attack"), 2)
+	assert_eq(mon.stage("sp_defense"), 2)
+	assert_true(mon.change_stage("sp_defense", -1))
+	assert_eq(mon.stage("sp_attack"), 1)
+	assert_true(mon.change_stage("attack", 1))
+	assert_eq(mon.stage("defense"), 0, "only the Special halves are one byte")
+
+	var crystal: Gen2BattleMon = Gen2BattleMon.create(_data, Fixture.PIKACHU, 50)
+	assert_true(crystal.change_stage("sp_attack", 2))
+	assert_eq(crystal.stage("sp_defense"), 0)

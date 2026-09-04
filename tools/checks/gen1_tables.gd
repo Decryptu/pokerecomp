@@ -40,6 +40,24 @@ const PINNED_MOVES: Dictionary = {
 	1: ["POUND", 0, 40, 0x00, 255, 35],
 	165: ["STRUGGLE", 48, 50, 0x00, 255, 10],
 }
+## `MoveEffectPointerTable` translated ([constant Gen1Layout.MOVE_EFFECTS]),
+## as effect id to how many of the 165 moves land on it. The whole table stands
+## behind this: a row that moves shows up as two counts that disagree.
+const EFFECT_CENSUS: Dictionary = {
+	0: 31, 1: 5, 2: 3, 3: 3, 4: 4, 5: 3, 6: 6, 7: 2, 8: 1, 9: 1, 10: 2, 11: 3,
+	13: 1, 16: 2, 17: 1, 18: 1, 19: 2, 20: 1, 23: 4, 25: 1, 26: 1, 27: 2, 28: 3,
+	29: 7, 30: 1, 31: 7, 32: 3, 33: 1, 34: 1, 35: 1, 38: 3, 39: 4, 40: 1, 41: 2,
+	42: 4, 44: 2, 45: 2, 46: 1, 47: 1, 48: 4, 49: 2, 50: 1, 51: 2, 52: 1, 53: 1,
+	57: 1, 59: 1, 65: 1, 66: 2, 67: 3, 68: 1, 69: 1, 70: 3, 71: 1, 76: 2, 77: 1,
+	79: 1, 80: 1, 81: 1, 82: 1, 83: 1, 84: 1, 85: 1, 86: 1, 87: 2, 88: 1, 155: 2,
+}
+
+## The seven rows `SpecialDamageEffect`, `PoisonEffect` and `ChargeEffect` split
+## by move, and the two the first of them carries its damage in.
+const PINNED_EFFECTS: Dictionary = {
+	49: [41, 20], 69: [87, 1], 82: [41, 40], 91: [155, 100],
+	92: [33, 0], 101: [87, 0], 149: [88, 1],
+}
 
 ## `TechnicalMachines`: TM01 through TM05, then the five HMs.
 const PINNED_TMS: Array[int] = [5, 13, 14, 18, 25]
@@ -189,7 +207,27 @@ func _moves() -> void:
 			_r.check(read == want, "move %d reads %s, expected %s" % [
 				number, str(read), str(want)
 			])
+	_move_effects()
 	_r.note("%d moves" % MOVE_COUNT)
+
+
+## Every move's effect byte in the shared numbering: one the battle engine has a
+## command list for, and the same census on all three cartridges.
+func _move_effects() -> void:
+	var census: Dictionary = {}
+	for number: int in range(1, MOVE_COUNT + 1):
+		var move: Dictionary = _r.data.move(number)
+		var effect: int = int(move["effect"])
+		census[effect] = int(census.get(effect, 0)) + 1
+		var known: bool = effect == Gen2MoveEffect.NORMAL_HIT_EFFECT \
+			or Gen2MoveEffect.is_written(effect)
+		_r.check(known, "%s reads effect %d, which is unwritten" % [move["name"], effect])
+		if PINNED_EFFECTS.has(number):
+			var read: Array = [effect, int(move["power"])]
+			_r.check(read == PINNED_EFFECTS[number], "move %d reads %s, expected %s" % [
+				number, str(read), str(PINNED_EFFECTS[number])
+			])
+	_r.check(census == EFFECT_CENSUS, "the effect census reads %s" % str(census))
 
 
 func _types() -> void:

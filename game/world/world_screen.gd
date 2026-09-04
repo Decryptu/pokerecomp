@@ -4937,17 +4937,6 @@ func _handle_fishing_result(result: Dictionary) -> void:
 func _start_battle_request(request: Dictionary) -> void:
 	if _battle_host != null or _battle_transition != null or _data == null:
 		return
-	## No Generation 1 battle engine: its move effects are numbered its own way,
-	## so the request is reported rather than fought. `RomRegistry`'s `playable`
-	## flag is what keeps a player off this path.
-	if _data.generation == RomRegistry.GEN1:
-		var wild: Dictionary = request.get("values", {})
-		_script_prompt = "Wild %s, level %d" % [
-			_data.species(int(wild.get("pokemon", 0))).get("name", "?"),
-			int(wild.get("level", 0)),
-		]
-		_refresh_labels()
-		return
 	_play_battle_music(request)
 	_battle_transition_request = request.duplicate(true)
 	_battle_transition = _build_battle_transition(request)
@@ -4964,6 +4953,11 @@ func _start_battle_request(request: Dictionary) -> void:
 ## PREVIOUS battle's enemy, which `docs/bugs_and_glitches.md` calls out.
 func _build_battle_transition(request: Dictionary) -> Gen2BattleTransition:
 	if _world == null or _data == null:
+		return null
+	## `BattleTransition` is Generation 1's own subsystem, drawn out of nothing
+	## but the tilemap: none of its four wipes is built here, so a Generation 1
+	## fight opens where Crystal's animation would start.
+	if _data.generation == RomRegistry.GEN1:
 		return null
 	var values: Dictionary = request.get("values", {})
 	if bool(values.get("tutorial", false)):

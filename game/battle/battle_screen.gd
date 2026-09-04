@@ -850,6 +850,12 @@ func set_data(data: GameData) -> void:
 	_injected_data = data
 
 
+## Which generation's screen this is, for the two boxes the pictures sit in. A
+## battle that never reached [method set_data] seeds Crystal's map.
+func _generation() -> int:
+	return _data.generation if _data != null else RomRegistry.GEN2
+
+
 ## `CleanUpBattleRAM` zeroes `wLowHealthAlarm`. A driver this screen does not own
 ## outlives it, so the byte is cleared where the screen goes rather than where a
 ## fight ends: every way out of a battle, including a wipe and a failed setup, is
@@ -1433,6 +1439,10 @@ func _init_battle_display() -> void:
 ## `GetTrainerBackpic`'s choice: the Dude for the catching tutorial, and the
 ## player's own picture otherwise.
 func player_backpic_kind() -> String:
+	## `GetTrainerBackPic` has two: the player, and the old man who borrows the
+	## screen for the catching tutorial.
+	if _data != null and _data.generation == RomRegistry.GEN1:
+		return Gen1Layout.PLAYER_BACKPICS[1 if _world_battle_tutorial else 0]
 	if _world_battle_tutorial:
 		return "dude"
 	return "kris" if player_is_female() else "chris"
@@ -1740,6 +1750,10 @@ func _begin_slide(side: int) -> void:
 func _build_trainer_huds() -> void:
 	_hud_balls = []
 	_hud_border = []
+	## Generation 1 draws party balls on the link battle's versus screen and
+	## nowhere else: `SetupPlayerAndEnemyPokeballs` has that one caller.
+	if _data != null and _data.generation == RomRegistry.GEN1:
+		return
 	_add_trainer_hud(Gen2Battle.PLAYER)
 	if _battle != null and _battle.is_trainer_battle:
 		_add_trainer_hud(Gen2Battle.ENEMY)
@@ -2007,7 +2021,9 @@ func _begin_animation(event: Dictionary) -> void:
 	# `hBGMapMode = 1`, three delays and `WaitSFX`.
 	_step(ANIM_DELAY, {"frames": 3})
 	_step(ANIM_WAIT_SFX, {})
-	if bool(event.get("restore_user_pic", false)):
+	# A send-out draws the picture itself and the ball animation only shows it
+	# arriving, so a cache with no animation layer still owes the square one.
+	if bool(event.get("restore_user_pic", false)) or (not is_move and _anim_data == null):
 		_step(ANIM_APPEAR_USER, {})
 	_run_next_anim_step()
 
@@ -2183,7 +2199,7 @@ func _carry_battler_reports() -> void:
 ## `PlaceGraphic` putting a whole picture back on a square, which is the one
 ## thing that undoes every report above.
 func _restamp_battler(player_side: bool) -> void:
-	Gen2BattleScreenMap.stamp(_bg_map, player_side)
+	Gen2BattleScreenMap.stamp(_bg_map, player_side, _generation())
 	var side: int = Gen2Battle.PLAYER if player_side else Gen2Battle.ENEMY
 	_battler_visible[side] = true
 	_battler_scale[side] = 1.0
@@ -2334,7 +2350,7 @@ func _audio_assets() -> Dictionary:
 ## every fresh battle does. `ClearBattleAnims` never touches the map, so a Fly
 ## that took a picture off it leaves it off until something stamps it back.
 func _reseed_bg_map() -> void:
-	_bg_map = Gen2BattleScreenMap.seeded()
+	_bg_map = Gen2BattleScreenMap.seeded(_generation())
 	_faints.clear()
 	## A slide still owed walks the picture this put back off its own square.
 	_slides.clear()

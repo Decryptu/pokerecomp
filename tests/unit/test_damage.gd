@@ -648,3 +648,35 @@ func test_species_items_read_the_persistent_species_through_transform() -> void:
 	ditto.item = Fixture.METAL_POWDER
 	assert_true(ditto.transform_into(_mon(Fixture.PIKACHU)))
 	assert_eq(Gen2Damage.metal_powder_pair(ditto, [100, 100]), [100, 150])
+
+
+## `CriticalHitTest`'s shifts, worked out by hand: the base speed halved, then
+## doubled for an ordinary move and halved again, or halved twice under Focus
+## Energy, and a high-critical move worth eight times the first halving.
+func test_the_generation_one_critical_chance_is_the_attackers_base_speed() -> void:
+	assert_eq(Gen2Damage.gen1_critical_chance(0, false, false), 0)
+	assert_eq(Gen2Damage.gen1_critical_chance(40, false, false), 20)
+	assert_eq(Gen2Damage.gen1_critical_chance(40, true, false), 5)
+	assert_eq(Gen2Damage.gen1_critical_chance(40, false, true), 160)
+	## Every left shift caps at the byte rather than wrapping, so a high-critical
+	## move saturates from base speed 64 up and an ordinary one never does.
+	assert_eq(Gen2Damage.gen1_critical_chance(64, false, true), 0xFF)
+	assert_eq(Gen2Damage.gen1_critical_chance(63, false, true), 248)
+	assert_eq(Gen2Damage.gen1_critical_chance(255, false, false), 127)
+	assert_eq(Gen2Damage.gen1_critical_chance(255, true, true), 252)
+
+
+## `MoveHitTest` rolls whatever the accuracy is, so a stored 255 still misses one
+## time in 256. Crystal's `ret z` above the roll is what exempts it.
+func test_a_generation_one_move_can_miss_at_full_accuracy() -> void:
+	var rng := RandomNumberGenerator.new()
+	var misses: int = 0
+	for roll: int in 512:
+		rng.seed = roll
+		if not Gen2Accuracy.rolls_hit(rng, Gen2Accuracy.ALWAYS_HITS, RomRegistry.GEN1):
+			misses += 1
+		assert_true(
+			Gen2Accuracy.rolls_hit(rng, Gen2Accuracy.ALWAYS_HITS),
+			"Crystal never rolls at full accuracy"
+		)
+	assert_true(misses > 0, "a Generation 1 move at full accuracy missed nothing in 512 rolls")
