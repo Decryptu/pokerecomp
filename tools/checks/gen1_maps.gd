@@ -96,6 +96,19 @@ const PALETTE_CENSUS: Dictionary = {
 		11: 1, 25: 10, 35: 20},
 }
 
+## Every row of `<Map>_TextPointers` the maps' signs and objects reach, by the
+## byte that opens it. Yellow's six bare `text_end`s are Jessie and James, whose
+## two ids share one on three maps.
+const TEXT_CENSUS: Dictionary = {
+	&"red": {0x08: 626, 0x17: 456, 0xF5: 3, 0xF6: 12, 0xF7: 3, 0xFE: 14, 0xFF: 12},
+	&"blue": {0x08: 626, 0x17: 456, 0xF5: 3, 0xF6: 12, 0xF7: 3, 0xFE: 14, 0xFF: 12},
+	&"yellow": {0x08: 675, 0x17: 429, 0x50: 6, 0xF5: 3, 0xF6: 12, 0xF7: 3,
+		0xFE: 14, 0xFF: 12},
+}
+
+## `_MtMoonPokecenterClipboardText`, the corpus's one empty box.
+const EMPTY_TEXTS: Dictionary = {&"red": 1, &"blue": 1, &"yellow": 1}
+
 ## `NUM_SPRITES` and `FIRST_STILL_SPRITE`, with `SpriteSheetPointerTable`'s
 ## first row: `RedSprite`, $C0 bytes in bank $05.
 const SPRITE_COUNTS: Dictionary = {&"red": 72, &"blue": 72, &"yellow": 82}
@@ -121,6 +134,7 @@ func _one_game() -> void:
 	_pallet_town()
 	_geometry()
 	_events()
+	_texts()
 	_wild_objects()
 	_palettes()
 	_sprites()
@@ -214,6 +228,59 @@ func _pallet_town() -> void:
 			_rows(map.connections, ["direction", "map_number", "y_alignment"]),
 		]
 	)
+	## `text/PalletTown.asm` as pret writes it: the town sign's `cont` is a
+	## scroll and the two house signs keep the names a print fills in.
+	var pinned: Array[String] = [
+		"OAK POKéMON\nRESEARCH LAB",
+		"PALLET TOWN\nShades of your%sjourney await!" % Gen2TextStream.SCROLL_BREAK,
+		"<PLAYER>'s house ",
+		"<RIVAL>'s house ",
+	]
+	for index: int in pinned.size():
+		var text: String = String(map.text_at(index + 4).get("text", ""))
+		_r.check(text == pinned[index], "Pallet Town's text %d reads %s." % [index + 4, text])
+
+
+## Every decoded text in the corpus: what each row opens with, and that every
+## character of a box draws a tile. `FontGraphics` is blank from $c0 to $df, so a
+## code from the wrong generation's codec is a hole rather than a wrong letter.
+func _texts() -> void:
+	var font: Gen2Font = Gen2Font.from_data(_r.data)
+	if not _r.check(font != null, "the cache has no font."):
+		return
+	var census: Dictionary = {}
+	var empty: int = 0
+	var blank: Array[String] = []
+	for map: Gen2WorldMap in _maps.values():
+		for row: Dictionary in map.texts:
+			var command: int = int(row["command"])
+			census[command] = int(census.get(command, 0)) + 1
+			var text: String = String(row.get("text", ""))
+			if text.is_empty():
+				empty += 1 if command in [Gen1Text.TEXT_FAR, Gen1Text.TEXT_START] else 0
+				continue
+			for line: String in text.split("\n"):
+				if not _drawn(font, line) and blank.size() < 4:
+					blank.append("map %d: %s" % [map.number, line])
+	_r.check(blank.is_empty(), "texts draw a blank tile: %s." % [blank])
+	_r.check(census == TEXT_CENSUS[_r.game_id], "the text rows read %s." % [census])
+	_r.check(empty == int(EMPTY_TEXTS[_r.game_id]),
+		"%d texts decoded to nothing, pinned %d." % [empty, int(EMPTY_TEXTS[_r.game_id])])
+	_r.note("gen1 texts %s" % [census])
+
+
+## Whether every code [param line] encodes to has ink behind it.
+static func _drawn(font: Gen2Font, line: String) -> bool:
+	for code: int in font.encode(line):
+		if code == Gen1Text.SPACE \
+			or (code >= Gen1Layout.FONT_EXTRA_FIRST_CODE and code <= Gen1Layout.FRAME_LAST_CODE):
+			continue
+		var inked: bool = false
+		for ink: Array in Gen1Layout.FONT_INK_RUNS:
+			inked = inked or (code >= int(ink[0]) and code <= int(ink[1]))
+		if not inked:
+			return false
+	return true
 
 
 static func _rows(events: Array, fields: Array) -> Array:

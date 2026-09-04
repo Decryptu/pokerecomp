@@ -1266,9 +1266,18 @@ func facing_direction() -> Vector2i:
 func object_facing_cell() -> Vector2i:
 	var direction: Vector2i = _direction_for_facing(player_facing)
 	var faced: Vector2i = player_cell + direction
-	if Gen2WorldCollision.is_counter(gen2_code_at(faced)):
+	if _counter_ahead(faced):
 		return faced + direction
 	return faced
+
+
+## `.extendRangeOverCounter`'s list: the tileset's own three
+## `wTilesetTalkingOverTiles` in Generation 1, a collision code in Generation 2.
+func _counter_ahead(cell: Vector2i) -> bool:
+	if not _gen1:
+		return Gen2WorldCollision.is_counter(gen2_code_at(cell))
+	return current_tileset != null \
+		and current_tileset.counter_tiles.has(_gen1_tile_drawn_at(cell))
 
 
 func fishing_request(
@@ -2198,6 +2207,8 @@ func can_encounter_wild_mon() -> bool:
 func can_encounter_wild_mon_at(cell: Vector2i) -> bool:
 	if state.wild_encounters_off():
 		return false
+	if _gen1:
+		return _gen1_encounter_rate_at(cell) > 0
 	var code: int = gen2_code_at(cell)
 	var environment: int = current_map.environment if current_map != null else 0
 	if environment != ENVIRONMENT_CAVE and environment != ENVIRONMENT_DUNGEON \
@@ -2224,12 +2235,27 @@ func visible_encounter_cells() -> Dictionary:
 			var cell := Vector2i(x, y)
 			if not can_encounter_wild_mon_at(cell):
 				continue
-			var permission: int = collision_permission_at(cell)
-			if permission == Gen2WorldCollision.WATER_TILE:
-				out[Gen2WorldEncounter.METHOD_SURF].append(Vector2(cell))
-			elif permission == Gen2WorldCollision.LAND_TILE:
-				out[Gen2WorldEncounter.METHOD_GRASS].append(Vector2(cell))
+			var terrain: StringName = _terrain_method(cell)
+			if out.has(terrain):
+				out[terrain].append(Vector2(cell))
 	return out
+
+
+## The table a step on [param cell] rolls on, empty for a cell that stands on
+## neither. `.gotWildEncounterType` reads the bottom left tile of the quarter
+## block in Generation 1; Generation 2 reads the standing permission itself.
+func _terrain_method(cell: Vector2i) -> StringName:
+	var permission: int = collision_permission_at(cell)
+	if permission != Gen2WorldCollision.WATER_TILE \
+		and permission != Gen2WorldCollision.LAND_TILE:
+		return &""
+	if _gen1:
+		return Gen2WorldEncounter.METHOD_SURF \
+			if _gen1_tile_drawn_at(cell) == Gen1Layout.WATER_TILE \
+			else Gen2WorldEncounter.METHOD_GRASS
+	return Gen2WorldEncounter.METHOD_SURF \
+		if permission == Gen2WorldCollision.WATER_TILE \
+		else Gen2WorldEncounter.METHOD_GRASS
 
 
 ## `wildoff`. The only thing that empties [method visible_encounter_cells] while
@@ -2284,7 +2310,9 @@ func active_encounter_tables() -> Dictionary:
 			continue
 		out[method] = {
 			"source": source,
-			"slots": Gen2WorldEncounter.active_slots(record, method, object_time_of_day),
+			"slots": Gen2WorldEncounter.active_slots(
+				record, method, object_time_of_day, _gen1
+			),
 		}
 	return out
 
@@ -2314,12 +2342,8 @@ func encounter_request(
 			return {}
 		if not can_encounter_wild_mon():
 			return {}
-	var permission: int = collision_permission_at(player_cell)
-	var terrain_method: StringName = method
-	if terrain_method == &"auto" and permission == Gen2WorldCollision.WATER_TILE:
-		terrain_method = Gen2WorldEncounter.METHOD_SURF
-	elif terrain_method == &"auto" and permission == Gen2WorldCollision.LAND_TILE:
-		terrain_method = Gen2WorldEncounter.METHOD_GRASS
+	var terrain_method: StringName = _terrain_method(player_cell) \
+		if method == &"auto" else method
 	if terrain_method not in [Gen2WorldEncounter.METHOD_GRASS, Gen2WorldEncounter.METHOD_SURF]:
 		return {}
 	## `RandomEncounter`'s Bug Contest branch, which replaces the map's own
@@ -2328,7 +2352,7 @@ func encounter_request(
 		return _bug_contest_request(random, force_encounter, lead_level, cleanse_tag)
 	var source: StringName = Gen2WorldEncounter.SOURCE_NORMAL
 	var record: Dictionary = data.world_encounter(terrain_method, current_map.group, current_map.number)
-	if state.swarm_active_on(current_map.group, current_map.number):
+	if not _gen1 and state.swarm_active_on(current_map.group, current_map.number):
 		var swarm_method: StringName = &"swarm_grass" if terrain_method == Gen2WorldEncounter.METHOD_GRASS else &"swarm_water"
 		var swarm_record: Dictionary = data.world_encounter(
 			swarm_method, current_map.group, current_map.number
@@ -2339,13 +2363,19 @@ func encounter_request(
 	var resolved: Dictionary = Gen2WorldEncounter.resolve(
 		record, terrain_method, object_time_of_day, random, force_encounter, {
 			"source": source,
-			"roaming_mons": state.roaming_mons(),
+			## `.RoamMon1` is Generation 2's; nothing roams Kanto in Generation 1,
+			## and an empty list would still spend the draw the walk reads.
+			"roaming_mons": [] if _gen1 else state.roaming_mons(),
 			"map_group": current_map.group,
 			"map_number": current_map.number,
 			"repel_steps": state.repel_steps(),
 			"lead_level": lead_level,
-			"map_music": state.map_music(),
-			"cleanse_tag": cleanse_tag,
+			## Generation 1 has neither `ApplyMusicEffectOnEncounterRate` nor a
+			## Cleanse Tag, and its own music ids overlap the three that routine
+			## reads, so both are Generation 2's alone.
+			"map_music": 0 if _gen1 else state.map_music(),
+			"cleanse_tag": cleanse_tag and not _gen1,
+			"generation": data.generation,
 			## `ChooseWildEncounter`'s own `ld a, [wUnlockedUnowns] / and a`, and
 			## the guard that keeps `CheckUnownLetter`'s reroll answerable: on a
 			## save that has solved no Ruins of Alph puzzle there is no letter to
@@ -3620,6 +3650,11 @@ var _gen1: bool = false
 ## `wLastMap`, the outdoor map a [constant Gen1Layout.WARP_TO_LAST_MAP] warp
 ## comes back out to. Generation 2 has no such warp and never writes it.
 var _gen1_last_map: int = -1
+## `wRivalName`, which no Generation 1 save model holds yet.
+var gen1_rival_name: String = Gen2WorldScriptRunner.UNNAMED
+## `DisplayTextID` holds `HandleMap` until its press, and there is no script
+## here to hold the world instead.
+var _gen1_text_open: bool = false
 
 
 ## The raw cartridge permission byte at a walk cell.
@@ -3654,6 +3689,40 @@ func collision_code_at(cell: Vector2i) -> int:
 ## `SetPal_Overworld` names no branch of its own. -1 until a warp writes it.
 func gen1_last_map() -> int:
 	return _gen1_last_map
+
+
+## `IsSpriteOrSignInFrontOfPlayer`: a sign on the faced cell answers first and
+## returns, and only then is a sprite looked for. A Generation 1 script is
+## machine code this port does not run, so a box is the whole of an interaction.
+func _gen1_interact() -> Array:
+	if current_map == null:
+		return []
+	var text_id: int = _gen1_text_id_at(facing_cell(), &"bg_events")
+	if text_id <= 0:
+		text_id = _gen1_text_id_at(object_facing_cell(), &"objects")
+	var row: Dictionary = current_map.text_at(text_id)
+	var text: String = Gen2TextStream.fill_names(String(row.get("text", "")), {
+		"player": _player_name if not _player_name.is_empty() \
+			else Gen2WorldScriptRunner.UNNAMED,
+		"rival": gen1_rival_name,
+	})
+	if text.is_empty():
+		return []
+	_gen1_text_open = true
+	## `AfterDisplayingTextID` ends every one of these on
+	## `WaitForTextScrollButtonPress`, whatever the string's last byte said.
+	return [{
+		"ok": true,
+		"status": &"waiting",
+		"event": {"type": &"text", "text": text, "prompt": true},
+	}]
+
+
+func _gen1_text_id_at(cell: Vector2i, kind: StringName) -> int:
+	for event: Dictionary in _active_events_at(cell):
+		if event.get("kind", &"") == kind and int(event.get("text", 0)) > 0:
+			return int(event["text"])
+	return 0
 
 
 ## A Generation 2 collision code at [param cell], or -1 on a Generation 1 map,
@@ -3787,14 +3856,14 @@ func dispatch_sight_events() -> Array:
 
 
 func script_input_waiting() -> bool:
-	return _active_script != null and _active_script.is_waiting()
+	return _gen1_text_open or (_active_script != null and _active_script.is_waiting())
 
 
 ## True while a script holds the world, either running or still queued. A host
 ## that drives ambient motion checks this so a script keeps sole ownership of
 ## the objects it may be moving.
 func script_busy() -> bool:
-	return _active_script != null or not _script_queue.is_empty()
+	return _gen1_text_open or _active_script != null or not _script_queue.is_empty()
 
 
 ## Whether the script holding the world is one that stops the map around it.
@@ -3912,8 +3981,10 @@ func load_object_masks() -> void:
 ## This is the explicit interaction boundary for NPCs, signs and item-like
 ## objects. It never executes a hidden object or invents a fallback action.
 func interact() -> Array:
-	if _active_script != null or not _script_queue.is_empty():
+	if _active_script != null or not _script_queue.is_empty() or _gen1_text_open:
 		return run_event_queue(false)
+	if _gen1:
+		return _gen1_interact()
 	var target: Vector2i = facing_cell()
 	var events: Array = []
 	## TryObjectEvent runs before TryBGEvent in the cartridge event loop. Keep
@@ -4032,6 +4103,11 @@ func _tile_collision_script_request(cell: Vector2i) -> Dictionary:
 ## script. Completed results retain the source event so a screen can react to
 ## them without reaching into the runner.
 func run_event_queue(acknowledge: bool = false, choice: int = -1) -> Array:
+	## `AfterDisplayingTextID` waits for the press and `CloseTextDisplay` returns
+	## to `HandleMap`, with no script behind it to resume.
+	if _gen1_text_open:
+		_gen1_text_open = not acknowledge
+		return []
 	var results: Array = []
 	var accept: bool = acknowledge
 	var selected_choice: int = choice
@@ -5248,6 +5324,55 @@ func edge_warp_ready(direction: Vector2i) -> bool:
 ## `LoadTileBlockMap` fills the three blocks past every edge with the map's own
 ## border block, so `_GetTileAndCoordsInFrontOfPlayer` reads that rather than
 ## nothing at the edge. -1 stays -1 where the border block is the $FF naming none.
+## `TryDoWildEncounter`'s own gate, which reads the tile a cell draws rather than
+## a permission byte: `wGrassTile` takes the grass rate, $14 the water rate, and
+## an indoor map takes the grass rate anywhere but Viridian Forest and the Safari
+## Zone. Zero is a cell no wild can be met on.
+func _gen1_encounter_rate_at(cell: Vector2i) -> int:
+	if current_map == null or current_tileset == null or data == null:
+		return 0
+	## `IsPlayerJustOutsideMap`, which compares each coordinate with the map's own
+	## dimension doubled: exactly one cell past the bottom or right edge, and
+	## nothing on the other two sides.
+	if cell.x == current_map.collision_width or cell.y == current_map.collision_height:
+		return 0
+	var standing: int = _gen1_tile_drawn_at(cell)
+	if Gen2WorldCollision.gen1_is_warp_tile(current_map.tileset, standing) \
+		or Gen2WorldCollision.gen1_is_door_tile(current_map.tileset, standing):
+		return 0
+	var tile: int = _gen1_encounter_tile_at(cell)
+	if tile == current_tileset.grass_tile:
+		return _gen1_encounter_rate(Gen2WorldEncounter.METHOD_GRASS)
+	if tile == Gen1Layout.WATER_TILE:
+		return _gen1_encounter_rate(Gen2WorldEncounter.METHOD_SURF)
+	if current_map.number < Gen1Layout.FIRST_INDOOR_MAP \
+		or current_map.tileset == Gen1Layout.TILESET_FOREST:
+		return 0
+	return _gen1_encounter_rate(Gen2WorldEncounter.METHOD_GRASS)
+
+
+func _gen1_encounter_rate(method: StringName) -> int:
+	return int(data.world_encounter(
+		method, current_map.group, current_map.number
+	).get("rate", 0))
+
+
+## The bottom right tile of the quarter block [param cell] is, which only
+## `TryDoWildEncounter` reads. Off the map that is the border block's, as it is
+## for the bottom left the grid holds.
+func _gen1_encounter_tile_at(cell: Vector2i) -> int:
+	if current_map == null or current_tileset == null:
+		return -1
+	var block: int = current_map.border_block if collision_code_at(cell) < 0 \
+		else block_at(cell.x >> 1, cell.y >> 1)
+	if block >= current_tileset.block_count:
+		return -1
+	return current_tileset.tile_index(block, Gen1Layout.cell_encounter_tile_index(
+		posmod(cell.x, Gen2Layout.MAP_BLOCK_CELL_WIDTH),
+		posmod(cell.y, Gen2Layout.MAP_BLOCK_CELL_WIDTH)
+	))
+
+
 func _gen1_tile_drawn_at(cell: Vector2i) -> int:
 	var code: int = collision_code_at(cell)
 	if code >= 0 or current_map == null or current_tileset == null \
@@ -6570,6 +6695,7 @@ func _apply_map(
 		target_map.group, target_map.number, target_map.tileset, target_cell,
 	])
 	_record_escape_points(target_map, from_warp)
+	_gen1_text_open = false
 	## `WarpFound2`'s `CheckIfInOutsideMap`: leaving a town or a route records it,
 	## and that is the map a `LAST_MAP` warp comes back out to.
 	if _gen1 and current_map != null and Gen1Layout.is_outside_tileset(current_map.tileset):

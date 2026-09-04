@@ -44,11 +44,19 @@ const NUMBER_MARKER: String = "<NUM_"
 ## `TextSFX`: the seven command bytes that play an effect and `WaitSFX`.
 const TX_SOUND: Array[int] = [0x0B, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13]
 
+## Generation 1's `TextCommands` agree as far as `TX_PAUSE` and then part: $14 to
+## $16 are three more cries where Crystal has the buffer, the weekday and TX_FAR.
+const GEN1_TX_SOUND: Array[int] = [
+	0x0B, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16,
+]
+const GEN1_TX_FAR: int = 0x17
+
 ## `CheckDict` entries that are not characters.
 const CHAR_NULL: int = 0x00
 const CHAR_BSP: int = 0x1F
 const CHAR_LF: int = 0x22
 const CHAR_WBR: int = 0x25
+const CHAR_PAGE: int = 0x49
 const CHAR_CONT_RAW: int = 0x4B
 const CHAR_SCROLL: int = 0x4C
 const CHAR_NEXT: int = 0x4E
@@ -77,6 +85,38 @@ const WEEKDAYS: Array[String] = [
 	"SUN", "MON", "TUES", "WEDNES", "THURS", "FRI", "SATUR",
 ]
 
+## What a character does to the laid-out string instead of drawing itself.
+## Anything not here is a glyph or a name.
+const BREAKS: Dictionary = {
+	CHAR_LF: "\n", CHAR_NEXT: "\n", CHAR_LINE: "\n",
+	CHAR_PARA: PAGE_BREAK,
+	CHAR_CONT: SCROLL_BREAK, CHAR_CONT_RAW: SCROLL_BREAK,
+	CHAR_SCROLL: SCROLL_NOWAIT_BREAK,
+	CHAR_WBR: "", CHAR_BSP: " ", CHAR_DEXEND: ".",
+}
+
+## Generation 1's, whose `PlaceNextChar` has no `<LF>`, `<BSP>` or `<WBR>` and
+## reaches `PageChar` on the $49 Crystal spends on `<MOM>`.
+const GEN1_BREAKS: Dictionary = {
+	CHAR_PAGE: "\n", CHAR_NEXT: "\n", CHAR_LINE: "\n",
+	CHAR_PARA: PAGE_BREAK,
+	CHAR_CONT: SCROLL_BREAK, CHAR_CONT_RAW: SCROLL_BREAK,
+	CHAR_SCROLL: SCROLL_NOWAIT_BREAK,
+	CHAR_DEXEND: ".",
+}
+
+## `CheckDict`'s `print_name` entries: the [param context] key each code reads.
+const NAMES: Dictionary = {
+	CHAR_PLAY_G: "player", 0x52: "player", 0x53: "rival", 0x49: "mom",
+	0x38: "red", 0x39: "green", 0x3F: "enemy", 0x59: "target", 0x5A: "user",
+}
+
+## Generation 1's four; its other `print_name` entries spell whole words rather
+## than reading RAM, so [Gen1Text] answers them.
+const GEN1_NAMES: Dictionary = {
+	0x52: "player", 0x53: "rival", 0x59: "target", 0x5A: "user",
+}
+
 
 ## Runs a text from [param offset] to its terminator.
 ##
@@ -96,6 +136,9 @@ static func decode(
 static func _run(
 	data: PackedByteArray, offset: int, context: Dictionary, depth: int
 ) -> Dictionary:
+	var gen1: bool = is_gen1(context)
+	var far_command: int = GEN1_TX_FAR if gen1 else TX_FAR
+	var sounds: Array[int] = GEN1_TX_SOUND if gen1 else TX_SOUND
 	var out: String = ""
 	var at: int = offset
 	var prompt: bool = false
@@ -116,40 +159,45 @@ static func _run(
 					"prompt": bool(placed.get("prompt", false)),
 				}
 			continue
-		if command in TX_SOUND:
+		if command in sounds:
 			# The effect plays and `WaitSFX` holds the printer; nothing is drawn.
 			continue
-		match command:
-			TX_FAR:
-				if not _has(data, at, 3):
-					return _truncated(out, &"truncated_text_far")
-				var far_address: int = data[at] | (data[at + 1] << 8)
-				var far_bank: int = int(data[at + 2])
-				at += 3
-				var far: Dictionary = _far(context, far_bank, far_address, depth)
-				out += String(far.get("text", ""))
-				if not bool(far.get("ok", false)):
-					return {"ok": false, "reason": far.get("reason", &"invalid_far_text"), "text": out}
-				return {
-					"ok": true, "text": out, "bytes": at,
-					"prompt": bool(far.get("prompt", false)),
-				}
-			TX_START_ASM:
-				# `jp hl` into code. Nothing after it can be read as text.
-				return {"ok": true, "text": out, "bytes": at, "prompt": prompt}
-			_:
-				var step: Dictionary = _step_command(data, at, context, command)
-				if step.has("reason"):
-					return _truncated(out, StringName(step["reason"]))
-				if step.is_empty():
-					return {
-						"ok": false, "reason": &"unknown_text_command",
-						"text": out, "command": command,
-					}
-				out += String(step.get("text", ""))
-				at = int(step["at"])
-				prompt = prompt or bool(step.get("prompt", false))
+		if command == far_command:
+			return _far_command(data, at, context, depth, out)
+		if command == TX_START_ASM:
+			# `jp hl` into code. Nothing after it can be read as text.
+			return {"ok": true, "text": out, "bytes": at, "prompt": prompt}
+		var step: Dictionary = _step_command(data, at, context, command)
+		if step.has("reason"):
+			return _truncated(out, StringName(step["reason"]))
+		if step.is_empty():
+			return {
+				"ok": false, "reason": &"unknown_text_command",
+				"text": out, "command": command,
+			}
+		out += String(step.get("text", ""))
+		at = int(step["at"])
+		prompt = prompt or bool(step.get("prompt", false))
 	return {"ok": false, "reason": &"missing_text_terminator", "text": out}
+
+
+## `TextCommand_FAR`'s three operands and the text they name, which ends the
+## text the command appears in either way.
+static func _far_command(
+	data: PackedByteArray, at: int, context: Dictionary, depth: int, out: String
+) -> Dictionary:
+	if not _has(data, at, 3):
+		return _truncated(out, &"truncated_text_far")
+	var far: Dictionary = _far(
+		context, int(data[at + 2]), data[at] | (data[at + 1] << 8), depth
+	)
+	var text: String = out + String(far.get("text", ""))
+	if not bool(far.get("ok", false)):
+		return {"ok": false, "reason": far.get("reason", &"invalid_far_text"), "text": text}
+	return {
+		"ok": true, "text": text, "bytes": at + 3,
+		"prompt": bool(far.get("prompt", false)),
+	}
 
 
 ## A `reason` means the operands ran off the end; empty means another opcode.
@@ -192,12 +240,18 @@ static func _step_command(
 				"text": _decimal_string(context, data[at] | (data[at + 1] << 8)),
 				"at": at + 3,
 			}
-		TX_BCD, TX_MOVE:
-			# Three bytes of operand each, and each prints from live RAM this
-			# project does not model. Skipped rather than drawn wrong.
+		TX_BCD:
+			# `dw address, db flags`, printed from live RAM this project does not
+			# model. Skipped rather than drawn wrong.
 			if not _has(data, at, 3):
 				return {"reason": &"truncated_text_command"}
 			return {"at": at + 3}
+		TX_MOVE:
+			# `dw address` alone, and it prints nothing. Reading a third byte here
+			# slid every command behind it.
+			if not _has(data, at, 2):
+				return {"reason": &"truncated_text_command"}
+			return {"at": at + 2}
 		TX_BOX:
 			if not _has(data, at, 4):
 				return {"reason": &"truncated_text_command"}
@@ -207,71 +261,58 @@ static func _step_command(
 
 ## `PlaceString`/`CheckDict`: characters until the `@` that ends the literal.
 static func _place(data: PackedByteArray, offset: int, context: Dictionary) -> Dictionary:
+	var gen1: bool = is_gen1(context)
+	var breaks: Dictionary = GEN1_BREAKS if gen1 else BREAKS
 	var out: String = ""
 	var at: int = offset
 	while at < data.size():
 		var byte: int = int(data[at])
 		at += 1
-		match byte:
-			TX_END:
-				return {"text": out, "at": at, "ended": false}
-			CHAR_DONE:
-				return {"text": out, "at": at, "ended": true, "prompt": false}
-			CHAR_PROMPT:
-				# `PromptText` waits for a press and falls through to `DoneText`.
-				return {"text": out, "at": at, "ended": true, "prompt": true}
-			CHAR_NULL:
-				# `NullChar` prints a debugging error string. Treated as an end
-				# rather than reproduced.
-				return {"text": out, "at": at, "ended": true, "prompt": false}
-			CHAR_LINE, CHAR_NEXT, CHAR_LF:
-				out += "\n"
-			CHAR_PARA:
-				out += PAGE_BREAK
-			CHAR_CONT, CHAR_CONT_RAW:
-				out += SCROLL_BREAK
-			CHAR_SCROLL:
-				out += SCROLL_NOWAIT_BREAK
-			CHAR_WBR:
-				pass
-			CHAR_BSP:
-				out += " "
-			CHAR_DEXEND:
-				out += "."
-			_:
-				out += _dict(byte, context)
+		if byte == TX_END:
+			return {"text": out, "at": at, "ended": false}
+		# `NullChar` prints a debugging error string, so it ends the text rather
+		# than being reproduced.
+		if byte == CHAR_DONE or byte == CHAR_NULL:
+			return {"text": out, "at": at, "ended": true, "prompt": false}
+		if byte == CHAR_PROMPT:
+			return {"text": out, "at": at, "ended": true, "prompt": true}
+		if breaks.has(byte):
+			out += String(breaks[byte])
+			continue
+		out += _dict(byte, context, gen1)
 	# Off the end of the data with no `@`, `<DONE>` or `<PROMPT>`: the text
 	# is truncated, which is a wrong offset rather than a finished string.
 	return {"text": out, "at": at, "truncated": true}
 
 
-## The `print_name` half of `CheckDict`. Everything else is a glyph.
-static func _dict(byte: int, context: Dictionary) -> String:
-	match byte:
-		CHAR_PLAY_G, 0x52:
-			# `PlaceGenderedPlayerName` places `wPlayerName`, the same string
-			# `PrintPlayerName` does; the honorific is the Japanese build's.
-			return _name(context, "player", "<PLAYER>")
-		0x53:
-			return _name(context, "rival", "<RIVAL>")
-		0x49:
-			return _name(context, "mom", "<MOM>")
-		0x38:
-			return _name(context, "red", "<RED>")
-		0x39:
-			return _name(context, "green", "<GREEN>")
-		0x3F:
-			return _name(context, "enemy", "<ENEMY>")
-		0x59:
-			return _name(context, "target", "<TARGET>")
-		0x5A:
-			return _name(context, "user", "<USER>")
-	return Gen2Text.character(byte)
+## The `print_name` half of `CheckDict`; everything else is a glyph the
+## generation's own codec answers. `PlaceGenderedPlayerName` places `wPlayerName`.
+static func _dict(byte: int, context: Dictionary, gen1: bool) -> String:
+	var names: Dictionary = GEN1_NAMES if gen1 else NAMES
+	if names.has(byte):
+		var key: String = String(names[byte])
+		return _name(context, key, "<%s>" % key.to_upper())
+	return Gen1Text.character(byte) if gen1 else Gen2Text.character(byte)
+
+
+## Whether [param context] names a Generation 1 cartridge; absent is Generation 2.
+static func is_gen1(context: Dictionary) -> bool:
+	return int(context.get("generation", RomRegistry.GEN2)) == RomRegistry.GEN1
 
 
 static func _name(context: Dictionary, key: String, fallback: String) -> String:
 	var value: String = String(context.get(key, ""))
 	return value if not value.is_empty() else fallback
+
+
+## The print-time names still standing as markers, keyed as [constant NAMES]
+## values are. Generation 1's texts are decoded at import, with no save to read
+## a name out of.
+static func fill_names(text: String, names: Dictionary) -> String:
+	var out: String = text
+	for key: String in names:
+		out = out.replace("<%s>" % key.to_upper(), String(names[key]))
+	return out
 
 
 ## Replaces the first marker of [param prefix] in [param text] with

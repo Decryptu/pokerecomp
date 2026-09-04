@@ -70,3 +70,31 @@ func test_a_dex_description_ends_on_dexend_and_breaks_on_its_line_codes() -> voi
 func test_decoding_stops_at_the_end_of_the_buffer() -> void:
 	assert_eq(Gen1Text.decode(_bytes([0x80]), 0, 40), "A")
 	assert_eq(Gen1Text.decode(PackedByteArray(), 0, 40), "")
+
+
+## `font_extra.png`, which `LoadTextBoxTilePatterns` parks at $60 and which the
+## charmap maps as characters: the ellipsis is written as itself in source text,
+## so a text carrying one has to encode back to the tile that draws it.
+func test_the_text_box_sheet_is_characters_as_well_as_a_border() -> void:
+	assert_eq(Gen1Text.character(Gen1Text.ELLIPSIS_CODE), "\u2026")
+	assert_eq(Gen1Text.character(0x72), "\u201c")
+	assert_eq(Gen1Text.character(Gen1Layout.FRAME_FIRST_CODE), "\u250c")
+	assert_eq(Gen1Text.encode("\u2026"), _bytes([Gen1Text.ELLIPSIS_CODE]))
+
+
+## A name too long to be one tile stays decode-only, the way `<PLAYER>` does:
+## [method encode] matches two characters at a time.
+func test_an_unused_bold_letter_does_not_encode() -> void:
+	assert_eq(Gen1Text.character(0x60), "<BOLD_A>")
+	assert_eq(Gen1Text.encode("<BOLD_A>").size(), 8, "eight characters, not one tile")
+
+
+## `PlacePKMN`'s text is `db "<PK><MN>@"`: two narrow tiles, never six letters.
+func test_pkmn_places_its_own_two_tiles() -> void:
+	assert_eq(Gen1Text.encode("<PKMN>"), _bytes([0xE1, 0xE2]))
+
+
+## `PlacePOKe` prints four characters for `#`, all of which the font draws, so
+## the word needs no pair of its own.
+func test_poke_is_four_letters() -> void:
+	assert_eq(Gen1Text.encode(Gen1Text.character(0x54)).size(), 4)

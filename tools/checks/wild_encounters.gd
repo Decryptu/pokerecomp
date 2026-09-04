@@ -52,12 +52,30 @@ const ROAM_WALK_UPDATES: int = 400
 
 
 ## Generation 1's `WildDataPointers` and `SuperRodData`: what the corpus holds
-## and the rows read end to end off pret's `data/wild`. Nothing rolls on it yet.
+## and the rows read end to end off pret's `data/wild`.
 const GEN1_CENSUS: Dictionary = {
 	&"red": {"grass": 55, "water": 3, "fishing_maps": 33, "fishing_groups": 10},
 	&"blue": {"grass": 55, "water": 3, "fishing_maps": 33, "fishing_groups": 10},
 	&"yellow": {"grass": 55, "water": 8, "fishing_maps": 31, "fishing_groups": 31},
 }
+
+## What `TryDoWildEncounter`'s gate offers across the corpus: encounter cells,
+## how many of them read the water table, the maps holding one, and the left
+## shores among them.
+const GEN1_CELL_CENSUS: Dictionary = {
+	&"red": [17875, 3624, 57, 34],
+	&"blue": [17875, 3624, 57, 34],
+	&"yellow": [19317, 5172, 57, 38],
+}
+
+## Viridian Forest's FOREST tileset is the one indoor map that does not roll off
+## its own grass; Mt Moon's cave floor is the one that does.
+const GEN1_INDOOR_BRANCH: Array = [[0x33, false], [0x3B, true]]
+
+## Enough steps for a 1-in-256 slot and a rate of 25/256 to both show.
+const GEN1_ROLL_STEPS: int = 8000
+const GEN1_ROLL_SEED: int = 7
+const GEN1_ROLL_TOLERANCE: float = 0.01
 
 ## `Route1.asm`: rate 25 and ten slots of PIDGEY and RATTATA, by internal index.
 const GEN1_ROUTE_1: int = 0x0C
@@ -104,7 +122,120 @@ func _verify_gen1_tables() -> void:
 	_gen1_route_1()
 	_gen1_sea_routes()
 	_gen1_super_rod()
+	_gen1_cells()
+	_gen1_rolls()
 	_r.note("gen1 encounters %s" % census)
+
+
+## `TryDoWildEncounter`'s gate over the whole corpus. The census is the point:
+## a cave floor rolls everywhere and a route rolls only on `wGrassTile`, so one
+## number says both branches are live. A left shore is a half block whose bottom
+## right tile is water and whose bottom left is not, which gates on the water
+## rate and then reads the grass table.
+func _gen1_cells() -> void:
+	var pinned: Array = GEN1_CELL_CENSUS[_r.game_id]
+	var cells: int = 0
+	var surf: int = 0
+	var maps: int = 0
+	var shores: int = 0
+	for map: Gen2WorldMap in _r.data.world_maps():
+		var world: Gen2WorldAPI = _r.open_world(0, map.number, Vector2i.ZERO)
+		if world == null:
+			continue
+		var found: Dictionary = world.visible_encounter_cells()
+		var here: int = found[Gen2WorldEncounter.METHOD_GRASS].size() \
+			+ found[Gen2WorldEncounter.METHOD_SURF].size()
+		cells += here
+		surf += found[Gen2WorldEncounter.METHOD_SURF].size()
+		maps += 1 if here > 0 else 0
+		shores += _gen1_left_shores(world)
+	_r.check([cells, surf, maps, shores] == pinned,
+		"the corpus offers %s, pinned %s." % [[cells, surf, maps, shores], pinned])
+	_r.note("gen1 encounter cells %d, %d of them surf, on %d maps" % [cells, surf, maps])
+
+
+func _gen1_left_shores(world: Gen2WorldAPI) -> int:
+	var out: int = 0
+	var size: Vector2i = world.map_size_cells()
+	for y: int in size.y:
+		for x: int in size.x:
+			var cell := Vector2i(x, y)
+			if world.can_encounter_wild_mon_at(cell) \
+				and world._gen1_encounter_tile_at(cell) == Gen1Layout.WATER_TILE \
+				and world._gen1_tile_drawn_at(cell) != Gen1Layout.WATER_TILE:
+				out += 1
+	return out
+
+
+## Route 1 walked: `.CanEncounter`'s rate against the generator's first byte and
+## `.determineEncounterSlot`'s against its second. Every drawn row is one of the
+## map's ten, every slot is reachable, and the hit share lands on the rate.
+func _gen1_rolls() -> void:
+	var row: Dictionary = _r.data.world_encounter(&"grass", 0, GEN1_ROUTE_1)
+	var world: Gen2WorldAPI = _r.open_world(0, GEN1_ROUTE_1, Vector2i.ZERO)
+	if world == null or row.is_empty():
+		return
+	var grass: PackedVector2Array = world.visible_encounter_cells()[
+		Gen2WorldEncounter.METHOD_GRASS
+	]
+	if not _r.check(not grass.is_empty(), "Route 1 offers no grass cell."):
+		return
+	world.player_cell = Vector2i(grass[0])
+	var generator := RandomNumberGenerator.new()
+	generator.seed = GEN1_ROLL_SEED
+	var met: int = 0
+	var slots: Dictionary = {}
+	for _step: int in GEN1_ROLL_STEPS:
+		var wild: Dictionary = world.encounter_request(generator)
+		if wild.is_empty():
+			continue
+		met += 1
+		slots[int(wild["slot"])] = true
+		var slot: Dictionary = (row["slots"] as Array)[int(wild["slot"])]
+		_r.check(
+			int(wild["pokemon"]) == int(slot["species"]) and int(wild["level"]) == int(slot["level"]),
+			"slot %d gave index %d level %d." % [
+				int(wild["slot"]), int(wild["pokemon"]), int(wild["level"]),
+			]
+		)
+	_r.check(slots.size() == Gen1Layout.WILD_SLOT_COUNT,
+		"%d of the ten slots were drawn." % slots.size())
+	var share: float = float(met) / float(GEN1_ROLL_STEPS)
+	var wanted: float = float(row["rate"]) / 256.0
+	_r.check(absf(share - wanted) < GEN1_ROLL_TOLERANCE,
+		"Route 1 met %d of %d steps, a rate of %.3f against %.3f." % [
+			met, GEN1_ROLL_STEPS, share, wanted,
+		])
+	_gen1_indoor_branch()
+	_r.note("gen1 Route 1 met %d of %d steps" % [met, GEN1_ROLL_STEPS])
+
+
+## The branch behind the two tile tests: an indoor map rolls on any tile, and
+## Viridian Forest and the Safari Zone are the tileset it does not.
+func _gen1_indoor_branch() -> void:
+	for row: Array in GEN1_INDOOR_BRANCH:
+		var world: Gen2WorldAPI = _r.open_world(0, int(row[0]), Vector2i.ZERO)
+		if world == null:
+			continue
+		var off_grass: Vector2i = _gen1_bare_floor(world)
+		if not _r.check(off_grass.x >= 0, "map %d has no cell off its grass tile." % row[0]):
+			continue
+		_r.check(world.can_encounter_wild_mon_at(off_grass) == bool(row[1]),
+			"map %d answers %s off its grass tile at %s." % [
+				row[0], world.can_encounter_wild_mon_at(off_grass), off_grass,
+			])
+
+
+## The first walkable cell whose own encounter tile is not the tileset's grass.
+func _gen1_bare_floor(world: Gen2WorldAPI) -> Vector2i:
+	var size: Vector2i = world.map_size_cells()
+	for y: int in size.y:
+		for x: int in size.x:
+			var cell := Vector2i(x, y)
+			if world.collision_permission_at(cell) == Gen2WorldCollision.LAND_TILE \
+				and world._gen1_encounter_tile_at(cell) != world.current_tileset.grass_tile:
+				return cell
+	return Vector2i(-1, -1)
 
 
 ## One block's own rules: a rate a roll can hit, and ten slots naming a real

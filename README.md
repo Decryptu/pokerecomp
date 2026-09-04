@@ -79,9 +79,9 @@ godot --headless --path . -s res://tools/verify_rom.gd
 
 Matching uses SHA-1, never filenames. Unknown hashes are refused because an
 uncharacterised bank layout could produce corrupt assets. The three Generation 1
-cartridges import their species, move, type, item and trainer tables and every
-map and tileset; the launcher seats one and does not offer Play until its world
-is built.
+cartridges import their species, move, type, item and trainer tables, every map
+and tileset, and every map text; the launcher seats one and does not offer Play
+until its battle engine is built.
 
 | Game | SHA-1 |
 |---|---|
@@ -365,7 +365,7 @@ or a group, or `all`; with no argument it lists them.
 | `art` | Both intro movies, the credits, the region map, all 278 battle animations, the map name sign |
 | `tables` | TM/HM, naming, world scripts, the opening lane |
 | `trainers` | The Route 30 trainer on each profile |
-| `gen1` | Red, Blue and Yellow's species, move, type, item and trainer tables, every picture their sprite codec decodes, and all 226 or 227 maps with their tilesets |
+| `gen1` | Red, Blue and Yellow's species, move, type, item and trainer tables, every picture their sprite codec decodes, all 226 or 227 maps with their tilesets, and the text box and wild encounter a map reads |
 
 The rest are previews and dumps, each driving a real screen or table:
 

@@ -21,6 +21,10 @@ var _frames: PackedByteArray = PackedByteArray()
 var _frame_width: int = 0
 var _frame_first_code: int = Gen2Layout.FRAME_FIRST_CODE
 var _frame_tiles: int = 0
+## Where the border starts in the strip holding it, and how far one frame is from
+## the next. A zero stride is one border answering every frame style.
+var _frame_slot: int = 0
+var _frame_stride: int = Gen2Layout.FRAME_TILES
 
 var _battle_extra: PackedByteArray = PackedByteArray()
 var _battle_extra_width: int = 0
@@ -32,6 +36,11 @@ var _battle_extra_tiles: int = 0
 var _extra: PackedByteArray = PackedByteArray()
 var _extra_width: int = 0
 var _extra_tiles: int = 0
+var _extra_first_code: int = Gen2Layout.FONT_EXTRA_FIRST_CODE
+var _extra_loaded_first: int = Gen2Layout.FONT_EXTRA_LOADED_FIRST
+var _extra_loaded_last: int = Gen2Layout.FONT_EXTRA_LOADED_LAST
+
+var _generation: int = RomRegistry.GEN2
 
 
 ## `PrintLevel`'s `cp 100`, "distinct from MAX_LEVEL": three digits overwrite the
@@ -73,8 +82,26 @@ static func from_data(data: GameData) -> Gen2Font:
 	out._extra = data.tile_indices("font_extra")
 	out._extra_width = int(extra.get("width", 0))
 	out._extra_tiles = int(extra.get("tiles", 0))
+	out._extra_first_code = int(extra.get("first_code", Gen2Layout.FONT_EXTRA_FIRST_CODE))
+
+	out._generation = data.generation
+	if out._generation == RomRegistry.GEN1:
+		out._take_gen1_frames()
 
 	return out if out.is_usable() else null
+
+
+## Generation 1 has no `frames` sheet: `LoadTextBoxTilePatterns` copies
+## `TextBoxGraphics` to $60 and `TextBoxBorder` prints `┌─┐│└┘` out of it at $79.
+func _take_gen1_frames() -> void:
+	_frames = _extra
+	_frame_width = _extra_width
+	_frame_tiles = _extra_tiles
+	_frame_first_code = Gen1Layout.FRAME_FIRST_CODE
+	_frame_slot = Gen1Layout.FRAME_FIRST_CODE - _extra_first_code
+	_frame_stride = 0
+	_extra_loaded_first = _extra_first_code
+	_extra_loaded_last = Gen1Layout.FRAME_LAST_CODE
 
 
 func is_usable() -> bool:
@@ -82,10 +109,10 @@ func is_usable() -> bool:
 
 
 func frame_count() -> int:
-	if Gen2Layout.FRAME_TILES <= 0:
-		return 0
+	if _frame_stride <= 0:
+		return 1 if _frame_tiles > 0 else 0
 	@warning_ignore("integer_division")
-	return _frame_tiles / Gen2Layout.FRAME_TILES
+	return _frame_tiles / _frame_stride
 
 
 func has_battle_extra() -> bool:
@@ -113,9 +140,8 @@ func draw_code(
 		return
 	# `_LoadFontsExtra1`'s own run, which is under the main font everywhere the
 	# battle's strip is not: a code below the font's $80 draws from FontExtra.
-	if code >= Gen2Layout.FONT_EXTRA_LOADED_FIRST \
-		and code <= Gen2Layout.FONT_EXTRA_LOADED_LAST:
-		var extra_slot: int = code - Gen2Layout.FONT_EXTRA_FIRST_CODE
+	if code >= _extra_loaded_first and code <= _extra_loaded_last:
+		var extra_slot: int = code - _extra_first_code
 		if extra_slot < _extra_tiles:
 			blit_slot(_extra, _extra_width, extra_slot, into, into_width, at_x, at_y)
 		return
@@ -137,7 +163,7 @@ func draw_text(
 	text: String, into: PackedByteArray, into_width: int, at_x: int, at_y: int,
 	font: StringName = Gen2Text.FONT_MAIN, max_tiles: int = -1
 ) -> int:
-	var codes: PackedByteArray = fit(text, max_tiles, font)
+	var codes: PackedByteArray = fit(text, max_tiles, font, _generation)
 	for i: int in codes.size():
 		draw_code(codes[i], into, into_width, at_x + i * TILE, at_y, font)
 	return codes.size()
@@ -147,18 +173,27 @@ func draw_text(
 ## ellipsis where anything was dropped. Negative is no bound. Exposed so a
 ## caller that measures before it draws asks the same question once.
 static func fit(
-	text: String, max_tiles: int, font: StringName = Gen2Text.FONT_MAIN
+	text: String, max_tiles: int, font: StringName = Gen2Text.FONT_MAIN,
+	generation: int = RomRegistry.GEN2
 ) -> PackedByteArray:
-	var codes: PackedByteArray = Gen2Text.encode(text, font)
+	var codes: PackedByteArray = Gen1Text.encode(text) \
+		if generation == RomRegistry.GEN1 else Gen2Text.encode(text, font)
 	if max_tiles < 0 or codes.size() <= max_tiles:
 		return codes
 	if max_tiles <= 0:
 		return PackedByteArray()
-	if font == Gen2Text.FONT_BATTLE_EXTRA:
+	if font == Gen2Text.FONT_BATTLE_EXTRA and generation != RomRegistry.GEN1:
 		return codes.slice(0, max_tiles)
 	var out: PackedByteArray = codes.slice(0, max_tiles - 1)
 	out.append(Gen2Text.ELLIPSIS_CODE)
 	return out
+
+
+## The codes [param text] draws as under this font, for a caller composing its
+## own row of tiles: Generation 1 keeps `'s` at $bd and Crystal at $d4, which is
+## a blank tile in the other's `FontGraphics`.
+func encode(text: String, font: StringName = Gen2Text.FONT_MAIN) -> PackedByteArray:
+	return fit(text, -1, font, _generation)
 
 
 ## Draws one tile of one text box border. [param code] is a box-drawing code
@@ -170,7 +205,7 @@ func draw_frame_code(
 	var within: int = code - _frame_first_code
 	if within < 0 or within >= Gen2Layout.FRAME_TILES:
 		return
-	var slot: int = frame * Gen2Layout.FRAME_TILES + within
+	var slot: int = _frame_slot + frame * _frame_stride + within
 	if frame < 0 or slot >= _frame_tiles:
 		return
 	blit_slot(_frames, _frame_width, slot, into, into_width, at_x, at_y)

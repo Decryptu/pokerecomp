@@ -26,6 +26,7 @@ const KIND_HELP: Dictionary = {
 	&"mart": "cell in front of the counter: BuyMenu",
 	&"mart_sell": "cell in front of the counter: the SELL row (DepositSellPack)",
 	&"pokepic": "cell: Script_pokepic's box over the map, holding Chikorita",
+	&"sign": "none: DisplayTextID's box, read by facing up from where the player stands",
 	&"trade_animation": "frames, half: TradeAnimation over the map, that many frames into the half named",
 	&"magnet_train": "frames, direction: special MagnetTrain, that many frames in. Direction 1 rides to Goldenrod",
 	&"pet_actor": "cell: a mod's world actor one cell ahead, pressed with A so it wears a showemote heart",
@@ -144,7 +145,8 @@ const TEXT_SETTLE_FRAMES: int = 20
 ## instead: Cut's tree stands three frames before it splits, and the waterfall
 ## climb runs four passes a cell, so 26 lands a few cells up.
 const STAGED_FRAMES: int = 2
-const STAGED_FRAMES_BY_KIND: Dictionary = {&"cut": 12, &"waterfall_use": 26}
+## `sign` spends the whole reveal: no press finishes a page early.
+const STAGED_FRAMES_BY_KIND: Dictionary = {&"cut": 12, &"waterfall_use": 26, &"sign": 120}
 
 const PREVIEW_BATTLE_SPECIES: int = 16 ## `preview_battle_request`'s PIDGEY.
 
@@ -370,6 +372,7 @@ const STAGERS: Dictionary = {
 	&"mod_notice": &"_stage_mod_notice",
 	&"mod_page": &"_stage_mod_page",
 	&"pokepic": &"_stage_pokepic",
+	&"sign": &"_stage_sign",
 	&"unown_printer": &"_stage_unown_printer",
 	&"diploma": &"_stage_diploma",
 	&"start_menu": &"_stage_start_menu",
@@ -848,6 +851,12 @@ func _stage_mod_page() -> void:
 
 func _stage_pokepic() -> void:
 	_screen.preview_pokepic(POKEPIC_SPECIES)
+
+
+## `DisplayTextID`'s box, read by facing the cell above the `x y` argument.
+func _stage_sign() -> void:
+	_screen.press_button(PokeButton.UP)
+	_screen.interact()
 
 
 ## `_UnownPrinter`'s browser: the first number is the slot, where 26 is the vacant
