@@ -67,6 +67,31 @@ const PLAYER_BOTTOM_LEFT: int = 0x6F
 const PLAYER_BOTTOM_RIGHT: int = 0x77
 const HUD_BOTTOM: int = 0x76
 
+## Generation 1's own numbers for the six roles it spells differently. Both
+## panel borders are at the tiles Crystal keeps them at.
+const GEN1_FIRST_TILE: int = 0x60
+const GEN1_HP_LABEL: int = 0x71
+const GEN1_HP_LABEL_END: int = 0x62
+const GEN1_HP_BAR_EMPTY: int = 0x63
+const GEN1_HP_BAR_FULL: int = 0x6B
+const GEN1_HP_BAR_END: int = 0x6C
+const GEN1_ENEMY_SIDE: int = 0x73
+
+## Where its four sheets land: `LoadTextBoxTilePatterns` first and
+## `LoadHudAndHpBarAndStatusTilePatterns` over the middle of it.
+const GEN1_FONT_EXTRA_AT: int = 0x60
+const GEN1_BATTLE_FONT_AT: int = 0x62
+const GEN1_HUD_1_AT: int = 0x6D
+const GEN1_HUD_2_AT: int = 0x73
+
+## Read through the instance so one panel-drawing routine serves both.
+var hp_label: int = HP_LABEL
+var hp_label_end: int = HP_LABEL + 1
+var hp_bar_empty: int = HP_BAR_EMPTY
+var hp_bar_full: int = HP_BAR_FULL
+var hp_bar_end: int = HP_BAR_END
+var enemy_side: int = ENEMY_SIDE
+
 var _tiles: PackedByteArray = PackedByteArray()
 var _width: int = 0
 ## The tile number the strip starts and ends at, which is the one thing a
@@ -79,6 +104,8 @@ var _last: int = LAST_TILE
 static func from_data(data: GameData) -> Gen2BattleTiles:
 	if data == null:
 		return null
+	if data.generation == RomRegistry.GEN1:
+		return _gen1_page(data)
 
 	var out := Gen2BattleTiles.new()
 	out._first = FIRST_TILE
@@ -101,6 +128,38 @@ static func from_data(data: GameData) -> Gen2BattleTiles:
 		if out._copy(data.tile_indices(name), int(meta.get("width", 0)), int(sheet[1])):
 			loaded += 1
 
+	return out if loaded == sheets.size() else null
+
+
+## The page as Generation 1 assembles it: the text box's 32 tiles at $60,
+## `HpBarAndStatusGraphics` over all but the first two, and the HUD sheets over
+## the middle. The border at $79 survives, both sheets drawing it the same way.
+static func _gen1_page(data: GameData) -> Gen2BattleTiles:
+	var out := Gen2BattleTiles.new()
+	out._first = GEN1_FIRST_TILE
+	out._last = LAST_TILE
+	out._width = (LAST_TILE - GEN1_FIRST_TILE + 1) * TILE
+	out._tiles.resize(out._width * TILE)
+	out.hp_label = GEN1_HP_LABEL
+	out.hp_label_end = GEN1_HP_LABEL_END
+	out.hp_bar_empty = GEN1_HP_BAR_EMPTY
+	out.hp_bar_full = GEN1_HP_BAR_FULL
+	out.hp_bar_end = GEN1_HP_BAR_END
+	out.enemy_side = GEN1_ENEMY_SIDE
+
+	var sheets: Array = [
+		["font_extra", GEN1_FONT_EXTRA_AT], ["battle_font", GEN1_BATTLE_FONT_AT],
+		["battle_hud_1", GEN1_HUD_1_AT], ["battle_hud_2", GEN1_HUD_2_AT],
+	]
+	var loaded: int = 0
+	for sheet: Array in sheets:
+		var meta: Dictionary = data.tile_sheet(String(sheet[0]))
+		if meta.is_empty():
+			continue
+		if out._copy(
+			data.tile_indices(String(sheet[0])), int(meta.get("width", 0)), int(sheet[1])
+		):
+			loaded += 1
 	return out if loaded == sheets.size() else null
 
 

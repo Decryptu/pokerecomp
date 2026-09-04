@@ -162,7 +162,7 @@ func _draw_pics() -> void:
 	# when the square is holding a trainer, which it is until that trainer has
 	# sent something out.
 	var enemy_trainer: int = int(_view.get("enemy_trainer_pic", 0))
-	if enemy_trainer > 0 and not bool(_view.get("grayscale", false)):
+	if enemy_trainer > 0 and not bool(_view.get("grayscale", false)) and not _gen1():
 		enemy_palette = _remap(
 			_data.trainer_palette(enemy_trainer),
 			_palette_map("bg_palette_maps", Gen2BattleAnimBackground.PAL_BG_ENEMY)
@@ -189,7 +189,7 @@ func _draw_pics() -> void:
 	# `GetPlayerOrMonPalettePointer`'s `and a / jp nz`: a zero species is the
 	# player standing there, and the palette is the player's own.
 	var backpic: String = String(_view.get("player_backpic", ""))
-	if not backpic.is_empty() and not bool(_view.get("grayscale", false)):
+	if not backpic.is_empty() and not bool(_view.get("grayscale", false)) and not _gen1():
 		player_palette = _remap(
 			_data.player_palette(String(_view.get("player_backpic_palette", "chris"))),
 			_palette_map("bg_palette_maps", Gen2BattleAnimBackground.PAL_BG_PLAYER)
@@ -204,10 +204,19 @@ func _draw_pics() -> void:
 			_player_pic,
 			_pic_layer(
 				map, Gen2BattleScreenMap.PLAYER_BASE_TILE,
-				Gen2BattleScreenMap.PLAYER_SIDE, _player_pixels, vbank1
+				Gen2BattleScreenMap.player_box_side(_data.generation),
+				_player_pixels, vbank1
 			),
 			player_palette
 		)
+
+
+## `BlkPacket_Battle` gives each square one of four Super Game Boy palettes and
+## `SetPal_Battle` fills two of them from `DeterminePaletteID`, which reads a
+## species and nothing else. So a Generation 1 trainer, the player's back pic
+## included, wears the palette of the mon whose square it is standing in.
+func _gen1() -> bool:
+	return _data != null and _data.generation == RomRegistry.GEN1
 
 
 ## `wAttrmap` bit 3 over the screen, which is the VRAM bank each cell's tile
@@ -317,20 +326,56 @@ func _ensure_pixels() -> void:
 	]
 	if player_key != _player_pixels_key:
 		if not String(player_key[3]).is_empty():
-			_player_pixels = padded_pic(_data,
-				_data.player_backpic(String(player_key[3])),
-				Gen2BattleScreenMap.PLAYER_SIDE
-			)
+			_player_pixels = _back_pixels(_data.player_backpic(String(player_key[3])))
 		elif bool(player_key[1]):
 			_player_pixels = _substitute_pic(true)
 		elif bool(player_key[4]):
 			_player_pixels = _minimize_pic(true)
 		else:
-			_player_pixels = padded_pic(_data,
-				_battler_pic(int(player_key[0]), int(player_key[2]), true),
-				Gen2BattleScreenMap.PLAYER_SIDE
+			_player_pixels = _back_pixels(
+				_battler_pic(int(player_key[0]), int(player_key[2]), true)
 			)
 		_player_pixels_key = player_key
+
+
+## The back pic in its own box, which Generation 1 doubles on the way in.
+func _back_pixels(pic: Dictionary) -> PackedByteArray:
+	var side: int = Gen2BattleScreenMap.player_box_side(_data.generation)
+	if _data.generation == RomRegistry.GEN1:
+		return doubled_pic(_data, pic, side)
+	return padded_pic(_data, pic, side)
+
+
+## `ScaleSpriteByTwo`: a 32x32 back pic drawn 56x56. It walks 28 of the 32 rows
+## and takes four pixels from the last column rather than eight, so the last
+## four of each are dropped and what is left is drawn twice each way.
+static func doubled_pic(data: GameData, pic: Dictionary, side: int) -> PackedByteArray:
+	var box: int = side * TILE
+	var out: PackedByteArray = PackedByteArray()
+	out.resize(box * box)
+	if pic.is_empty():
+		return out
+	var atlas_name: String = String(pic.get("atlas", ""))
+	var cell: Dictionary = Gen2PicImage.atlas_cell(
+		data.atlas_indices(atlas_name), data.atlas(atlas_name), pic
+	)
+	if cell.is_empty():
+		return out
+
+	var indices: PackedByteArray = cell["indices"]
+	var stride: int = int(cell["width"])
+	@warning_ignore("integer_division")
+	var half: int = box / 2
+	var rows: int = mini(half, int(cell["height"]))
+	var columns: int = mini(half, stride)
+	for y: int in rows:
+		for x: int in columns:
+			var value: int = indices[y * stride + x]
+			for down: int in 2:
+				var to: int = (y * 2 + down) * box + x * 2
+				out[to] = value
+				out[to + 1] = value
+	return out
 
 
 ## `_GetFrontpic`'s own branch: Unown is drawn out of `UnownPicPointers` by
@@ -343,17 +388,21 @@ func _battler_pic(species: int, unown_form: int, back: bool) -> Dictionary:
 
 
 func _substitute_pic(player_side: bool) -> PackedByteArray:
-	return substitute_pixels(_data.overworld_sprite_indices(SUBSTITUTE_SPRITE), player_side)
+	return substitute_pixels(
+		_data.overworld_sprite_indices(SUBSTITUTE_SPRITE), player_side, _data.generation
+	)
 
 
 func _minimize_pic(player_side: bool) -> PackedByteArray:
-	return minimize_pixels(_data.tile_indices("minimize"), player_side)
+	return minimize_pixels(_data.tile_indices("minimize"), player_side, _data.generation)
 
 
 ## `GetMinimizePic`: a blank box with `MinimizePic`'s single tile copied into it.
 ## Static for the same reason [method substitute_pixels] is.
-static func minimize_pixels(tile: PackedByteArray, player_side: bool) -> PackedByteArray:
-	var side: int = Gen2BattleScreenMap.PLAYER_SIDE if player_side \
+static func minimize_pixels(
+	tile: PackedByteArray, player_side: bool, generation: int = RomRegistry.GEN2
+) -> PackedByteArray:
+	var side: int = Gen2BattleScreenMap.player_box_side(generation) if player_side \
 		else Gen2BattleScreenMap.ENEMY_SIDE
 	var box: int = side * TILE
 	var out: PackedByteArray = PackedByteArray()
@@ -375,8 +424,10 @@ static func minimize_pixels(tile: PackedByteArray, player_side: bool) -> PackedB
 ##
 ## Static because it is the whole of the picture and takes no screen: a check
 ## sweeping three caches builds it the same way the renderer does.
-static func substitute_pixels(strip: PackedByteArray, player_side: bool) -> PackedByteArray:
-	var side: int = Gen2BattleScreenMap.PLAYER_SIDE if player_side \
+static func substitute_pixels(
+	strip: PackedByteArray, player_side: bool, generation: int = RomRegistry.GEN2
+) -> PackedByteArray:
+	var side: int = Gen2BattleScreenMap.player_box_side(generation) if player_side \
 		else Gen2BattleScreenMap.ENEMY_SIDE
 	var box: int = side * TILE
 	var out: PackedByteArray = PackedByteArray()
@@ -453,7 +504,9 @@ static func padded_pic(
 	var pad_y: int = 0
 	if front:
 		@warning_ignore("integer_division")
-		pad_x = Gen2PicImage.frontpic_pad_columns(width / TILE) * TILE
+		pad_x = Gen2PicImage.frontpic_pad_columns(
+			width / TILE, false, data.generation
+		) * TILE
 		@warning_ignore("integer_division")
 		pad_y = Gen2PicImage.frontpic_pad_rows(height / TILE) * TILE
 	var strip: int = box + extra
@@ -618,7 +671,9 @@ func _draw_panels() -> void:
 
 	if _layer_changed(&"exp_bar", [exp_pixels, player_hud, raster]):
 		var gained: PackedByteArray = _new_buffer()
-		if player_hud:
+		# Generation 1's panel has no exp bar: the row under the HP numbers is
+		# the border's own edge and nothing else.
+		if player_hud and not _hud.gen1:
 			_hud.draw_exp_bar(gained, Gen2Screen.WIDTH, exp_pixels)
 		_show_layer(_exp_bar, gained, _data.bar_palette(GameData.EXP_BAR_PALETTE))
 
@@ -789,7 +844,7 @@ func _sprite_tile(tile: int) -> PackedByteArray:
 func _battler_tile(vram: int) -> PackedByteArray:
 	var enemy: bool = vram < Gen2BattleScreenMap.PLAYER_BASE_TILE
 	var side: int = Gen2BattleScreenMap.ENEMY_SIDE if enemy \
-		else Gen2BattleScreenMap.PLAYER_SIDE
+		else Gen2BattleScreenMap.player_box_side(_data.generation)
 	var base: int = Gen2BattleScreenMap.ENEMY_BASE_TILE if enemy \
 		else Gen2BattleScreenMap.PLAYER_BASE_TILE
 	return pic_tile(_enemy_pixels if enemy else _player_pixels, side, vram - base)

@@ -18,6 +18,20 @@ const PLAYER_AT: Vector2i = Vector2i(2, 6)
 const ENEMY_SIDE: int = 7
 const PLAYER_SIDE: int = 6
 
+## `LoadMonBackPic`'s `hlcoord 1, 5`, and the seven tiles a side
+## `ScaleSpriteByTwo` doubles a 32x32 back pic up to. Crystal shrank it to 6x6.
+const GEN1_PLAYER_AT: Vector2i = Vector2i(1, 5)
+const GEN1_PLAYER_SIDE: int = 7
+
+
+static func player_box_at(generation: int) -> Vector2i:
+	return GEN1_PLAYER_AT if generation == RomRegistry.GEN1 else PLAYER_AT
+
+
+static func player_box_side(generation: int) -> int:
+	return GEN1_PLAYER_SIDE if generation == RomRegistry.GEN1 else PLAYER_SIDE
+
+
 ## Where each picture's tiles start in VRAM. `AppearUser` names both, `xor a` for
 ## the enemy and `ld a, $31` for the player, and `.BGSquares`' own offsets are
 ## counted from the same two.
@@ -40,12 +54,12 @@ const FAINT_STEP_FRAMES: int = 2
 
 
 ## The map a battle sits at: both pictures whole, blank everywhere else.
-static func seeded() -> PackedByteArray:
+static func seeded(generation: int = RomRegistry.GEN2) -> PackedByteArray:
 	var out: PackedByteArray = PackedByteArray()
 	out.resize(COLUMNS * ROWS)
 	out.fill(BLANK_TILE)
-	stamp(out, false)
-	stamp(out, true)
+	stamp(out, false, generation)
+	stamp(out, true, generation)
 	return out
 
 
@@ -139,11 +153,13 @@ static func clear_intro_box(map: PackedByteArray) -> void:
 ## `PlaceGraphic` over one battler's box: a tile is
 ## [code]base + column * side + row[/code], the column-major order `.BGSquares`
 ## indexes and `AppearUser` restores.
-static func stamp(map: PackedByteArray, player_side: bool) -> void:
+static func stamp(
+	map: PackedByteArray, player_side: bool, generation: int = RomRegistry.GEN2
+) -> void:
 	if map.size() != COLUMNS * ROWS:
 		return
-	var at: Vector2i = PLAYER_AT if player_side else ENEMY_AT
-	var side: int = PLAYER_SIDE if player_side else ENEMY_SIDE
+	var at: Vector2i = player_box_at(generation) if player_side else ENEMY_AT
+	var side: int = player_box_side(generation) if player_side else ENEMY_SIDE
 	var base: int = PLAYER_BASE_TILE if player_side else ENEMY_BASE_TILE
 	for column: int in side:
 		for row: int in side:

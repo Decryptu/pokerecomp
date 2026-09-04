@@ -1,0 +1,186 @@
+extends RefCounted
+
+## A Generation 1 fight, swept on Red, Blue and Yellow: the four moves every one
+## of the 151 species is created knowing, all 165 moves used once each through
+## the shared engine, `CriticalHitTest`'s chance over the whole base speed
+## column, and one wild battle fought to a faint. The move sweep is what the
+## effect translation is worth: an effect byte that lands on the wrong list
+## either throws or stops producing events.
+
+const SPECIES_COUNT: int = 151
+const MOVE_COUNT: int = 165
+const MOVE_SLOTS: int = 4
+
+## The levels the created-knowing sweep asks at: the first, the one a starter is
+## met at, and the three a learnset has usually run out by.
+const SWEEP_LEVELS: Array[int] = [1, 5, 25, 50, 100]
+
+## How many species know one, two, three and four moves at level 1: the base
+## stats column with whatever `WriteMonMoves` finds at level 1 over it. Yellow
+## rewrote 23 learnsets and moves three species along by one.
+const STARTING_MOVE_CENSUS: Dictionary = {
+	&"red": [32, 53, 40, 26], &"blue": [32, 53, 40, 26], &"yellow": [35, 54, 38, 24],
+}
+
+## Bulbasaur against Pidgey, both at a level where every move has something to
+## work with, and the seed the fight is reproducible from.
+const SWEEP_PLAYER: int = 1
+const SWEEP_ENEMY: int = 16
+const SWEEP_LEVEL: int = 50
+const SWEEP_SEED: int = 20260930
+
+## The wild fight: a level five starter against the level three Pidgey Route 1
+## really offers, run to a faint. Pinned so a change to a damage rule shows up
+## as a different number of turns.
+const FIGHT_LEVELS: Array[int] = [5, 3]
+const FIGHT_TURN_CAP: int = 64
+const FIGHT_TURNS: int = 4
+
+## `CriticalHitTest`, spot-checked where the shifts are interesting: no speed at
+## all, a slow one, Persian's 115 already saturating a high-critical move, and
+## the byte's own end. Each row is base speed, then the ordinary chance, the one
+## under Focus Energy, and the one a high-critical move gets.
+const CRITICAL_CHANCES: Array = [
+	[0, 0, 0, 0],
+	[40, 20, 5, 160],
+	[115, 57, 14, 255],
+	[255, 127, 31, 255],
+]
+
+var _r: RefCounted = null
+
+
+func run(r: RefCounted) -> void:
+	_r = r
+	r.each_game_of(RomRegistry.GEN1, _one_game)
+
+
+func _one_game() -> void:
+	_created_knowing()
+	_critical_chances()
+	_every_move()
+	_a_wild_fight()
+
+
+## `AddPartyMon`'s four base moves and `WriteMonMoves` over them, for every
+## species at five levels: never empty, never more than four, never a repeat and
+## never a move the cartridge does not carry.
+func _created_knowing() -> void:
+	var census: Array[int] = [0, 0, 0, 0]
+	for species: int in range(1, SPECIES_COUNT + 1):
+		for level: int in SWEEP_LEVELS:
+			var moves: Array = _r.data.moves_at_level(species, level)
+			var name: String = String(_r.data.species(species).get("name", "?"))
+			if not _r.check(
+				not moves.is_empty() and moves.size() <= MOVE_SLOTS,
+				"%s at level %d knows %d moves" % [name, level, moves.size()]
+			):
+				continue
+			for move: int in moves:
+				_r.check(move >= 1 and move <= MOVE_COUNT, "%s knows move %d" % [name, move])
+			_r.check(_distinct(moves), "%s at level %d knows %s" % [name, level, str(moves)])
+			if level == SWEEP_LEVELS[0]:
+				census[moves.size() - 1] += 1
+	_r.check(Array(census) == (STARTING_MOVE_CENSUS[_r.game_id] as Array),
+		"the level one move census reads %s" % str(census))
+	_r.note("gen1 battle %d species created knowing at %d levels" % [
+		SPECIES_COUNT, SWEEP_LEVELS.size(),
+	])
+
+
+## The chance itself, and the whole base speed column read through it: nothing
+## in the corpus reaches the cap on an ordinary move, and a high-critical move,
+## worth eight times the shift, saturates from base speed 64 up.
+func _critical_chances() -> void:
+	for row: Array in CRITICAL_CHANCES:
+		var speed: int = int(row[0])
+		var read: Array = [
+			speed,
+			Gen2Damage.gen1_critical_chance(speed, false, false),
+			Gen2Damage.gen1_critical_chance(speed, true, false),
+			Gen2Damage.gen1_critical_chance(speed, false, true),
+		]
+		_r.check(read == row, "base speed %d reads %s, expected %s" % [
+			speed, str(read), str(row)
+		])
+
+	var saturated: int = 0
+	for species: int in range(1, SPECIES_COUNT + 1):
+		var speed: int = int(
+			(_r.data.species(species).get("stats", {}) as Dictionary).get("speed", 0)
+		)
+		var ordinary: int = Gen2Damage.gen1_critical_chance(speed, false, false)
+		@warning_ignore("integer_division")
+		_r.check(ordinary == speed / 2, "%d base speed gives %d in 256" % [speed, ordinary])
+		if Gen2Damage.gen1_critical_chance(speed, false, true) == 0xFF:
+			saturated += 1
+	_r.note("gen1 battle %d species saturate a high-critical move" % saturated)
+
+
+## Every move used once through the engine, which is what an effect byte read
+## into the wrong list breaks: the turn either produces nothing or the command
+## list asks for state the move never set.
+func _every_move() -> void:
+	var used: int = 0
+	var damaged: int = 0
+	for move: int in range(1, MOVE_COUNT + 1):
+		var battle: Gen2Battle = _fight(SWEEP_LEVEL, SWEEP_LEVEL, [move], SWEEP_SEED + move)
+		if not _r.check(battle != null, "no battle could be built for move %d" % move):
+			return
+		var before: int = battle.enemy.hp
+		var events: Array = battle.take_turn(0, 0)
+		var name: String = String(_r.data.move(move).get("name", "?"))
+		if not _r.check(not events.is_empty(), "%s produced no events" % name):
+			continue
+		used += 1
+		if battle.enemy.hp < before:
+			damaged += 1
+	_r.check(used == MOVE_COUNT, "%d of %d moves ran" % [used, MOVE_COUNT])
+	_r.note("gen1 battle %d moves run, %d took HP off the target" % [used, damaged])
+
+
+## One wild battle to a faint, both sides picking their first move every turn.
+func _a_wild_fight() -> void:
+	var battle: Gen2Battle = _fight(FIGHT_LEVELS[0], FIGHT_LEVELS[1], [], SWEEP_SEED)
+	if not _r.check(battle != null, "no wild fight could be built"):
+		return
+	var turns: int = 0
+	while turns < FIGHT_TURN_CAP:
+		if battle.player.is_fainted() or battle.enemy.is_fainted():
+			break
+		battle.take_turn(0, 0)
+		turns += 1
+	_r.check(turns < FIGHT_TURN_CAP, "the wild fight did not end in %d turns" % FIGHT_TURN_CAP)
+	_r.check(turns == FIGHT_TURNS, "the wild fight took %d turns, pinned %d" % [
+		turns, FIGHT_TURNS,
+	])
+	_r.note("gen1 battle a wild %s went down in %d turns" % [
+		_r.data.species(SWEEP_ENEMY).get("name", "?"), turns,
+	])
+
+
+## [param moves] empty takes whatever the level gives, which is what a wild
+## encounter and a party member both carry.
+func _fight(player_level: int, enemy_level: int, moves: Array, seed_value: int) -> Gen2Battle:
+	var generator := RandomNumberGenerator.new()
+	generator.seed = seed_value
+	var player_moves: Array = moves if not moves.is_empty() \
+		else _r.data.moves_at_level(SWEEP_PLAYER, player_level)
+	return Gen2Battle.create(
+		_r.data,
+		Gen2BattleMon.create(_r.data, SWEEP_PLAYER, player_level, player_moves),
+		Gen2BattleMon.create(
+			_r.data, SWEEP_ENEMY, enemy_level,
+			_r.data.moves_at_level(SWEEP_ENEMY, enemy_level)
+		),
+		generator
+	)
+
+
+static func _distinct(moves: Array) -> bool:
+	var seen: Dictionary = {}
+	for move: int in moves:
+		if seen.has(move):
+			return false
+		seen[move] = true
+	return true

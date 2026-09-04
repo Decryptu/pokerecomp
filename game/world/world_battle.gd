@@ -328,11 +328,17 @@ static func music_for(
 	)
 
 
+## [param first_species] of -1 takes the cache's own starter: 155 wrapped into
+## Generation 1's 151 species lands on Charmander.
 static func fallback_party(
-	data: GameData, first_species: int = 155, level: int = 5, size: int = 2
+	data: GameData, first_species: int = -1, level: int = 5, size: int = 2
 ) -> Gen2Party:
 	if data == null or data.species_count() <= 0 or size < 1 or size > Gen2Party.MAX_SIZE:
 		return null
+	if first_species < 0:
+		first_species = int((Gen2SaveStore.DEVELOPMENT_PARTY.get(
+			data.generation, Gen2SaveStore.DEVELOPMENT_PARTY_GEN2
+		) as Array)[0])
 	var members: Array = []
 	for offset: int in size:
 		var species: int = wrapi(first_species + offset, 1, data.species_count() + 1)

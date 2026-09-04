@@ -28,6 +28,9 @@ const CRITICAL_CHANCES: Array = [17, 32, 64, 85, 128, 128, 128]
 
 ## Moves with a raised critical rate, worth two critical levels each.
 const HIGH_CRITICAL_MOVES: Array = [0x02, 0x0D, 0x4B, 0x98, 0xA3, 0xB1, 0xEE]
+## `HighCriticalMoves`, which is four rather than seven: Crystal put Razor Wind
+## on the list beside Aeroblast and Cross Chop, neither of which exists there.
+const GEN1_HIGH_CRITICAL_MOVES: Array = [0x02, 0x4B, 0x98, 0xA3]
 
 ## Focus Energy: a state the attacker is in, not a property of the move.
 const FOCUS_ENERGY_LEVELS: int = 1
@@ -142,8 +145,12 @@ static func damage_calc(
 		@warning_ignore("integer_division")
 		used_defense = maxi(used_defense / 2, 1)
 
+	## `sla e`: a Generation 1 critical runs the whole formula at twice the
+	## level where Crystal doubles the answer it got.
+	var gen1: bool = attacker.data != null and attacker.data.generation == RomRegistry.GEN1
+	var used_level: int = attacker.level if level < 0 else level
 	var damage: int = base_damage(
-		attacker.level if level < 0 else level, power, attack, used_defense
+		used_level * 2 if gen1 and critical else used_level, power, attack, used_defense
 	)
 
 	# Where `PlayerAttackDamage` applies them: after the divide by fifty and
@@ -155,7 +162,7 @@ static func damage_calc(
 			damage, Gen2HeldItem.parameter_of(attacker.data, attacker.item)
 		)
 
-	if critical:
+	if critical and not gen1:
 		damage *= CRITICAL_MULTIPLIER
 	return mini(damage, DAMAGE_CAP) + MIN_DAMAGE
 
@@ -270,6 +277,32 @@ static func roll_critical(
 	return rng.randi_range(0, 255) < CRITICAL_CHANCES[
 		critical_level(int(move.get("number", 0)), focus_energy, scope_lens, species, item)
 	]
+
+
+## `CriticalHitTest`: the chance is the attacker's own base speed rather than a
+## table indexed by a stage count. `BattleRandom` is rotated three bits rather
+## than multiplied, so the roll stays uniform over the byte.
+static func roll_gen1_critical(
+	move: Dictionary, rng: RandomNumberGenerator, focus_energy: bool, base_speed: int
+) -> bool:
+	if int(move.get("power", 0)) <= 0:
+		return false
+	return rng.randi_range(0, STAT_BYTE_MAX) < gen1_critical_chance(
+		base_speed, focus_energy,
+		GEN1_HIGH_CRITICAL_MOVES.has(int(move.get("number", 0)))
+	)
+
+
+## The shifts themselves, out of 256. Focus Energy shifts right where the
+## routine means to shift left, and a left shift caps at 255 rather than wraps.
+static func gen1_critical_chance(
+	base_speed: int, focus_energy: bool, high_critical: bool
+) -> int:
+	var chance: int = base_speed >> 1
+	chance = chance >> 1 if focus_energy else mini(chance << 1, STAT_BYTE_MAX)
+	if not high_critical:
+		return chance >> 1
+	return mini(mini(chance << 1, STAT_BYTE_MAX) << 1, STAT_BYTE_MAX)
 
 
 ## Two for a high-critical move, one for Focus Energy, one for the Scope Lens,
@@ -529,6 +562,10 @@ static func _ignores_stages(
 ) -> bool:
 	if not critical:
 		return false
+	## `GetDamageVarsForPlayerAttack` reloads both base stats on any critical,
+	## and the screen doubling with them.
+	if attacker.data != null and attacker.data.generation == RomRegistry.GEN1:
+		return true
 	if is_physical(move_type):
 		return defender.stage("defense") >= attacker.stage("attack")
 	return defender.stage("sp_defense") >= attacker.stage("sp_attack")

@@ -572,3 +572,26 @@ func test_tower_preparation_heals_even_a_wiped_party_before_choosing_the_lead() 
 	assert_eq((prepared["battle"] as Gen2Battle).enemy.stats, enemy["battle_stats"])
 	assert_eq((prepared["battle"] as Gen2Battle).enemy.hp, 40)
 	assert_true(prepared["trainer_battle"])
+
+
+## A fight with no save behind it is furnished from the cache's own starter, and
+## the two generations name different ones. The cache here carries two species,
+## so Crystal's 155 would wrap onto the second of them.
+func test_the_fallback_party_takes_the_generations_own_starter() -> void:
+	var gen2: Gen2Party = Gen2WorldBattleAdapter.fallback_party(_data, -1, 5, 1)
+	assert_not_null(gen2)
+	assert_eq(
+		gen2.active_mon().species,
+		int((Gen2SaveStore.DEVELOPMENT_PARTY_GEN2 as Array)[0]) % _data.species_count()
+	)
+
+	RomCache.write_json(RomCache.manifest_path(_directory), {
+		"format_version": RomCache.FORMAT_VERSION,
+		"game_id": "worldbattletest", "sha1": "0123456789abcdef",
+		"generation": RomRegistry.GEN1, "complete": true,
+	})
+	var gen1: Gen2Party = Gen2WorldBattleAdapter.fallback_party(
+		GameData.open_directory(_directory), -1, 5, 1
+	)
+	assert_not_null(gen1)
+	assert_eq(gen1.active_mon().species, SPECIES_ONE)

@@ -1332,7 +1332,19 @@ func _load_dex_orders(path: String) -> void:
 
 ## The moves a Pokémon of this species is created knowing at [param level].
 func moves_at_level(number: int, level: int) -> Array:
-	return Gen2Learnset.moves_at_level(learnset(number), level)
+	var known: Array = starting_moves(number)
+	Gen2Learnset.fill_moves(learnset(number), known, level)
+	return known
+
+
+## `wMonHMoves`: the four moves a Generation 1 base-stats row carries, which
+## `AddPartyMon` writes before `WriteMonMoves` walks the learnset over them.
+## Crystal dropped the column and starts every Pokemon empty.
+func starting_moves(number: int) -> Array:
+	var out: Array = []
+	for known: Variant in species(number).get("starting_moves", []) as Array:
+		out.append(int(known))
+	return out
 
 
 ## The moves a Pokémon of this species is offered on reaching exactly
@@ -1627,6 +1639,13 @@ func bar_palette(name: String) -> PackedColorArray:
 	if not stored is Array or (stored as Array).size() < 2:
 		return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 
+	# Generation 1 stores a `SuperPalettes` row whole; Crystal stores only the
+	# two colours that sit between white and black.
+	if (stored as Array).size() >= Gen1Layout.SUPER_PALETTE_COLORS:
+		var row := PackedColorArray()
+		for packed: Variant in stored as Array:
+			row.append(PokePalette.from_packed(int(packed)))
+		return row
 	return PokePalette.pic_palette(PackedColorArray([
 		PokePalette.from_packed(int(stored[0])),
 		PokePalette.from_packed(int(stored[1])),

@@ -647,6 +647,21 @@ func test_a_species_knows_what_its_level_says_it_knows() -> void:
 	assert_eq(data.moves_at_level(1, 4), [33, 45])
 
 
+## `AddPartyMon` writes `wMonHMoves` and `WriteMonMoves` walks the learnset over
+## them, so a Generation 1 species knows its base moves before it learns
+## anything. The row is absent on Crystal and the answer is the learnset alone.
+func test_a_generation_one_species_starts_with_its_base_moves() -> void:
+	_write_cache()
+	var rows: Array = RomCache.read_json(RomCache.species_path(_directory)) as Array
+	(rows[0] as Dictionary)["starting_moves"] = [1, 39, 22, 73]
+	RomCache.write_json(RomCache.species_path(_directory), rows)
+	var data: GameData = GameData.open_directory(_directory)
+	assert_eq(data.starting_moves(1), [1, 39, 22, 73])
+	assert_eq(data.moves_at_level(1, 1), [39, 22, 73, 33], "the oldest slot is pushed out")
+	assert_eq(data.moves_at_level(1, 4), [22, 73, 33, 45])
+	assert_eq(data.starting_moves(2), [], "a species with no such row starts empty")
+
+
 ## The dex entry travels on the species, so a number with no species has none.
 func test_a_dex_entry_comes_back_with_its_numbers_coerced() -> void:
 	_write_cache()

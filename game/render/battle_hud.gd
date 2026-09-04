@@ -38,8 +38,14 @@ const EDGE_TILES: int = 8
 ## between them.
 const HP_DIGITS: int = 3
 
+## Two columns left of where Crystal prints the same number.
+const GEN1_ENEMY_LEVEL: Vector2i = Vector2i(4, 1)
+
 var font: Gen2Font = null
 var tiles: Gen2BattleTiles = null
+## Generation 1 has no exp bar and no caught ball, and it centres a short name
+## where Crystal prints every one from the same column.
+var gen1: bool = false
 
 
 ## Reads what it draws with out of a cache, or null if any of it is missing.
@@ -52,7 +58,16 @@ static func from_data(data: GameData) -> Gen2BattleHud:
 	var out := Gen2BattleHud.new()
 	out.font = glyphs
 	out.tiles = page
+	out.gen1 = data.generation == RomRegistry.GEN1
 	return out
+
+
+## `CenterMonName`: a name of one or two letters is printed two columns right of
+## where a longer one starts, and one of three or four a single column right.
+static func name_column(at: int, name: String, centred: bool) -> int:
+	if not centred or name.length() > 4:
+		return at
+	return at + (2 if name.length() <= 2 else 1)
 
 
 ## How much of a bar is lit, in pixels.
@@ -85,19 +100,22 @@ static func bar_pixels(current: int, maximum: int, length: int) -> int:
 func draw_enemy(
 	into: PackedByteArray, width: int, name: String, level: int, caught: bool = false
 ) -> void:
-	font.draw_text(name, into, width, ENEMY_NAME.x * TILE, ENEMY_NAME.y * TILE)
-	if caught:
+	font.draw_text(
+		name, into, width, name_column(ENEMY_NAME.x, name, gen1) * TILE,
+		ENEMY_NAME.y * TILE
+	)
+	if caught and not gen1:
 		tiles.draw(
 			Gen2BattleTiles.CAUGHT_BALL, into, width,
 			ENEMY_CAUGHT.x * TILE, ENEMY_CAUGHT.y * TILE
 		)
-	draw_level(into, width, ENEMY_LEVEL, level)
-	draw_bar_frame(into, width, ENEMY_BAR, Gen2BattleTiles.HP_BAR_END)
+	draw_level(into, width, GEN1_ENEMY_LEVEL if gen1 else ENEMY_LEVEL, level)
+	draw_bar_frame(into, width, ENEMY_BAR, tiles.hp_bar_end)
 
 	# The edge, which starts beside the bar and turns under it.
 	var left: int = ENEMY_EDGE.x * TILE
 	var top: int = ENEMY_EDGE.y * TILE
-	tiles.draw(Gen2BattleTiles.ENEMY_SIDE, into, width, left, top)
+	tiles.draw(tiles.enemy_side, into, width, left, top)
 	tiles.draw(Gen2BattleTiles.ENEMY_CORNER, into, width, left, top + TILE)
 	tiles.draw_run(Gen2BattleTiles.HUD_BOTTOM, EDGE_TILES, into, width, left + TILE, top + TILE)
 	tiles.draw(
@@ -111,9 +129,12 @@ func draw_enemy(
 func draw_player(
 	into: PackedByteArray, width: int, name: String, level: int, hp: int, max_hp: int
 ) -> void:
-	font.draw_text(name, into, width, PLAYER_NAME.x * TILE, PLAYER_NAME.y * TILE)
+	font.draw_text(
+		name, into, width, name_column(PLAYER_NAME.x, name, gen1) * TILE,
+		PLAYER_NAME.y * TILE
+	)
 	draw_level(into, width, PLAYER_LEVEL, level)
-	draw_bar_frame(into, width, PLAYER_BAR, Gen2BattleTiles.HP_BAR_END + 1)
+	draw_bar_frame(into, width, PLAYER_BAR, tiles.hp_bar_end + 1)
 
 	# Right-aligned in a fixed field, as the games print any number in a panel:
 	# the digits line up and the leading spaces draw nothing.
@@ -149,7 +170,7 @@ func draw_hp_bar(
 		if within <= 0:
 			continue
 		tiles.draw(
-			Gen2BattleTiles.HP_BAR_EMPTY + within, into, width, left + tile * TILE, at.y * TILE
+			tiles.hp_bar_empty + within, into, width, left + tile * TILE, at.y * TILE
 		)
 
 
@@ -167,9 +188,9 @@ func draw_exp_bar(
 	var top: int = at.y * TILE
 
 	for tile: int in EXP_BAR_TILES:
-		var number: int = Gen2BattleTiles.HP_BAR_EMPTY
+		var number: int = tiles.hp_bar_empty
 		if remaining >= TILE:
-			number = Gen2BattleTiles.HP_BAR_FULL
+			number = tiles.hp_bar_full
 			remaining -= TILE
 		elif remaining > 0:
 			number = Gen2BattleTiles.EXP_BAR_FIRST_PARTIAL + remaining - 1
@@ -192,9 +213,9 @@ func draw_level(into: PackedByteArray, width: int, at: Vector2i, level: int) -> 
 func draw_bar_frame(into: PackedByteArray, width: int, at: Vector2i, cap: int) -> void:
 	var left: int = at.x * TILE
 	var top: int = at.y * TILE
-	tiles.draw(Gen2BattleTiles.HP_LABEL, into, width, left, top)
-	tiles.draw(Gen2BattleTiles.HP_LABEL + 1, into, width, left + TILE, top)
+	tiles.draw(tiles.hp_label, into, width, left, top)
+	tiles.draw(tiles.hp_label_end, into, width, left + TILE, top)
 	tiles.draw_run(
-		Gen2BattleTiles.HP_BAR_EMPTY, HP_BAR_TILES, into, width, left + 2 * TILE, top
+		tiles.hp_bar_empty, HP_BAR_TILES, into, width, left + 2 * TILE, top
 	)
 	tiles.draw(cap, into, width, left + (2 + HP_BAR_TILES) * TILE, top)

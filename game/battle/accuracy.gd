@@ -60,8 +60,13 @@ static func apply_stage(value: int, stage: int) -> int:
 ## Rolls a hit against a chance out of 255.
 ##
 ## A chance of exactly 255 connects without rolling. Rolling would miss one time
-## in 256, and the cartridge goes out of its way not to.
-static func rolls_hit(rng: RandomNumberGenerator, hit_chance: int) -> bool:
-	if hit_chance >= ALWAYS_HITS:
+## in 256, and Crystal goes out of its way not to. [param generation] is
+## `MoveHitTest`, which does not: pret's own comment there says even the highest
+## accuracy is 255 in 256, and Swift is exempt because the routine returns above
+## the roll rather than because 255 is special.
+static func rolls_hit(
+	rng: RandomNumberGenerator, hit_chance: int, generation: int = RomRegistry.GEN2
+) -> bool:
+	if hit_chance >= ALWAYS_HITS and generation != RomRegistry.GEN1:
 		return true
 	return rng.randi_range(0, 255) < hit_chance

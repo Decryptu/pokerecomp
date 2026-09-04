@@ -26,7 +26,7 @@ const SILVER: StringName = &"silver"
 const CRYSTAL: StringName = &"crystal"
 
 ## sha1 (lowercase hex) -> { id, title, revision, generation, playable }
-## `playable` is false while a generation has an importer but no world to walk:
+## `playable` is false while a generation has an importer but no story to walk:
 ## the launcher seats such a cartridge and reads it, and offers no Play.
 const BY_SHA1: Dictionary = {
 	"ea9bcae617fdf159b045185467ae58b2e4a48b9a": {
