@@ -14,12 +14,9 @@ here was called that and deserved it. Rewrite from the line that is exactly
 this note and takes its closing marker with it, which is how 0.1.17 published
 an empty body. -->
 
-## Added
+## Changed
 
-- Red, Blue and Yellow are recognised and imported. A dump is verified by SHA-1, and the launcher then reads its 151 species with their stats, types, evolutions, level-up moves and Pokedex entries, plus 165 moves, 82 type matchups, 83 items, the 50 TMs, the 5 HMs and 47 trainer classes.
-- Every picture in those three cartridges is decoded too, in the cartridge's own palettes: 151 front sprites, 151 back sprites, the 47 trainer classes, and the two a battle puts behind the player and the old man.
-- A Generation 1 cartridge has no Play button yet. Nothing draws its world, its battles or its menus, so the launcher seats the dump, tells you what it read, and stops there.
-- The Pokemon and trainer sprite sheets of any cartridge can be dumped to a PNG for checking, in either generation.
+- The mod contract is at version 30, and a host at 30 answers 30 alone. 0.1.26 renamed the classes both generations reach, so a mod built before it names a class this build no longer declares. Installed mods are refused with a message until their author republishes; nothing else about them changed, and a mod moves by renaming what it names.
 
 ## Which file
 

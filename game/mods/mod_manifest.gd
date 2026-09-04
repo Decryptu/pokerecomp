@@ -10,12 +10,12 @@ extends RefCounted
 
 const FILENAME: String = "mod.json"
 ## Bumped in the same commit as any seam added to the contract, so a mod has a
-## number that says the seam is there: `docs/MODS.md` lists what each version
-## added. An optional field a mod may send and an older host may drop is
-## deliberately not a bump.
-const API_VERSION: int = 29
-## The oldest contract this host still answers. See [constant API_VERSION].
-const MIN_API_VERSION: int = 1
+## number that says the seam is there; `docs/MODS.md` lists each version. An
+## optional field an older host may drop is deliberately not a bump.
+const API_VERSION: int = 30
+## The oldest contract this host still answers. Version 30 renamed classes, so a
+## mod below it names one this host no longer declares and cannot parse.
+const MIN_API_VERSION: int = 30
 ## Ids address directories and registry keys, so they stay to a plain lowercase
 ## alphabet. A mod cannot name itself something that escapes its own folder.
 const ID_PATTERN: String = "^[a-z0-9][a-z0-9_-]*$"
