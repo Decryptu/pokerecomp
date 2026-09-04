@@ -14,7 +14,7 @@ extends RefCounted
 ## background palette and the first two object ones.
 const BG_PALETTES: int = 1
 const OBJECT_PALETTES: int = 2
-const PALETTE_COLORS: int = RomLayout.INTRO_PALETTE_COLORS
+const PALETTE_COLORS: int = Gen2Layout.INTRO_PALETTE_COLORS
 
 const COLUMNS: int = 20
 const ROWS: int = 18
@@ -27,8 +27,8 @@ const SCREEN_HEIGHT_PX: int = 144
 
 ## `Intro_Draw2x2Tiles`: a metatile map is sixteen wide and each byte indexes
 ## four tiles in the scene's own `.bin`.
-const META_COLUMNS: int = RomLayout.GS_INTRO_META_COLUMNS
-const META_BYTES: int = RomLayout.GS_INTRO_META_BYTES
+const META_COLUMNS: int = Gen2Layout.GS_INTRO_META_COLUMNS
+const META_BYTES: int = Gen2Layout.GS_INTRO_META_BYTES
 
 ## `wLYOverrides` and `wLYOverrides2`. The first is one `hSCY` per scanline; the
 ## second is the sine `Intro_InitSineLYOverrides` fills and
@@ -319,7 +319,7 @@ func scroll_y_at(line: int) -> int:
 	return _ly[maxi(line - 1, 0)]
 
 
-## Which cutscene's sheets are loaded, as the `RomLayout.GS_INTRO_SECTION` name
+## Which cutscene's sheets are loaded, as the `Gen2Layout.GS_INTRO_SECTION` name
 ## prefix: `water`, `grass` or `fire`. Empty before the first scene has run.
 func cutscene() -> StringName:
 	return _cutscene
@@ -351,7 +351,7 @@ func _reordered(run: PackedInt32Array, index: int, order: int) -> PackedColorArr
 	if base + PALETTE_COLORS > run.size():
 		return out
 	for colour: int in PALETTE_COLORS:
-		out.append(Gen2Palette.from_packed(
+		out.append(PokePalette.from_packed(
 			run[base + ((order >> (colour * 2)) & 0x03)]
 		))
 	return out
@@ -450,7 +450,7 @@ func _step_scene() -> bool:
 ## four `DelayFrame`s while the LCD is still on, and one more falls after
 ## `EnableLCD`, so the scene costs nine frames beyond its own.
 func _scene_water_setup() -> void:
-	_load_cutscene(CUTSCENE_WATER, RomLayout.GS_INTRO_WATER_FIRST_ROW)
+	_load_cutscene(CUTSCENE_WATER, Gen2Layout.GS_INTRO_WATER_FIRST_ROW)
 	_scy = 0
 	_global_y = 0
 	_global_x = 0

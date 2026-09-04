@@ -57,12 +57,12 @@ const MAIL_LINE_LENGTH: int = Gen2SaveMail.LINE_LENGTH
 const MAIL_LINE_BREAK: int = Gen2SaveMail.LINE_BREAK
 
 ## The cursor's own columns, which is every second byte of a row.
-const COLUMNS: int = RomLayout.NAME_INPUT_COLUMNS
-const COLUMN_STRIDE: int = RomLayout.NAME_INPUT_COLUMN_STRIDE
+const COLUMNS: int = Gen2Layout.NAME_INPUT_COLUMNS
+const COLUMN_STRIDE: int = Gen2Layout.NAME_INPUT_COLUMN_STRIDE
 ## `.LetterEntries` has nine entries, so the last column is 8. Mail's own
 ## `ComposeMail_AnimateCursor.LetterEntries` has ten.
 const LAST_COLUMN: int = COLUMNS - 1
-const MAIL_COLUMNS: int = RomLayout.MAIL_INPUT_COLUMNS
+const MAIL_COLUMNS: int = Gen2Layout.MAIL_INPUT_COLUMNS
 const MAIL_LAST_COLUMN: int = MAIL_COLUMNS - 1
 ## `.CaseDelEnd` snaps the cursor to three groups three columns apart, on both
 ## screens: mail's own table repeats $00, $30 and $60 the same way.

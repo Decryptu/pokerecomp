@@ -4,7 +4,7 @@ name: release
 # release. CI has no cartridge, so a build ships the importer and no game data;
 # the player brings their own ROM the way a source checkout does.
 #
-# The version is not stamped here. `Gen2AppVersion.VERSION` is the one place it
+# The version is not stamped here. `PokeAppVersion.VERSION` is the one place it
 # is written and `tests/unit/test_update_check.gd` holds the export presets to
 # it, so this workflow only refuses a tag that disagrees.
 
@@ -182,7 +182,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${KEYSTORE_B64:-}" ]; then
-            echo "::error::ANDROID_RELEASE_KEYSTORE_B64 is not set. See DEVICES.md."
+            echo "::error::ANDROID_RELEASE_KEYSTORE_B64 is not set."
             exit 1
           fi
           printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"

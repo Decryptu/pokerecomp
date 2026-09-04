@@ -106,7 +106,7 @@ func test_the_setval_in_front_of_it_picks_the_picture() -> void:
 	var page: Gen2UnownPuzzlePage = _host().page()
 	assert_not_null(page)
 	var wanted: PackedByteArray = _data.unown_puzzle_indices(
-		RomLayout.UNOWN_PUZZLE_PICTURES[PUZZLE]
+		Gen2Layout.UNOWN_PUZZLE_PICTURES[PUZZLE]
 	)
 	## The fixture fills each picture with its own index, so the doubled bank's
 	## first pixel says which strip it was built from. The border is ORed onto
@@ -122,7 +122,7 @@ func test_the_setval_in_front_of_it_picks_the_picture() -> void:
 func test_start_closes_the_board_and_answers_the_script_zero() -> void:
 	await _open_world()
 	_run_script()
-	_world_screen.press_button(Gen2Button.START)
+	_world_screen.press_button(PokeButton.START)
 	assert_null(_host(), "START must close the board")
 	assert_false(
 		_world_screen._world.state.is_event_flag_active(SOLVED_EVENT),
@@ -134,5 +134,5 @@ func test_start_closes_the_board_and_answers_the_script_zero() -> void:
 func test_the_world_moves_again_once_the_board_closes() -> void:
 	await _open_world()
 	_run_script()
-	_world_screen.press_button(Gen2Button.START)
+	_world_screen.press_button(PokeButton.START)
 	assert_true(_world_screen.move_player(Vector2i.RIGHT))

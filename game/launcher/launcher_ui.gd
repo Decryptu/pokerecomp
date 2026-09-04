@@ -334,7 +334,7 @@ class SettingRow extends Button:
 	var _name: Label = null
 	var _value: Label = null
 	var _bar: ProgressBar = null
-	var _chevron: Gen2LauncherIcon = null
+	var _chevron: PokeLauncherIcon = null
 	var _switch: Gen2LauncherToggle = null
 
 	static func make(
@@ -358,7 +358,7 @@ class SettingRow extends Button:
 		_row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		add_child(_row)
 		if not glyph.is_empty():
-			var mark: Gen2LauncherIcon = Gen2LauncherIcon.create(glyph, 22.0, _theme.muted)
+			var mark: PokeLauncherIcon = PokeLauncherIcon.create(glyph, 22.0, _theme.muted)
 			mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			_row.add_child(mark)
 		var column: VBoxContainer = Gen2LauncherUI.column(1)
@@ -376,7 +376,7 @@ class SettingRow extends Button:
 		_bar.max_value = maxf(float(_choices.size() - 1), 1.0)
 		_bar.visible = false
 		column.add_child(_bar)
-		_chevron = Gen2LauncherIcon.create(&"chevron", 20.0, _theme.muted)
+		_chevron = PokeLauncherIcon.create(&"chevron", 20.0, _theme.muted)
 		_chevron.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		_row.add_child(_chevron)
 		pressed.connect(_on_pressed)
@@ -432,11 +432,11 @@ class SettingRow extends Button:
 
 	## Left and right change the value; the guard sees what is left over.
 	func _gui_input(event: InputEvent) -> void:
-		match Gen2Button.direction_in(event):
-			Gen2Button.LEFT:
+		match PokeButton.direction_in(event):
+			PokeButton.LEFT:
 				accept_event()
 				step(-1)
-			Gen2Button.RIGHT:
+			PokeButton.RIGHT:
 				accept_event()
 				step(1)
 
@@ -547,7 +547,7 @@ static func mod_icon(
 	theme: Gen2LauncherTheme, texture: Texture2D, side: float = MOD_ICON_SIDE
 ) -> Control:
 	if texture == null:
-		var glyph: Gen2LauncherIcon = Gen2LauncherIcon.create(&"mods", side * 0.62, theme.faint)
+		var glyph: PokeLauncherIcon = PokeLauncherIcon.create(&"mods", side * 0.62, theme.faint)
 		glyph.custom_minimum_size = Vector2(side, side)
 		glyph.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		return glyph
@@ -565,10 +565,10 @@ static func mod_icon(
 ## Swaps the picture into a square [method mod_icon] already drew, for an icon
 ## that arrived from the network after its row was built. A square holding the
 ## fallback glyph answers false and is replaced by its owner instead:
-## [Gen2LauncherIcon] is a [TextureRect] too, so filling one would leave a node
+## [PokeLauncherIcon] is a [TextureRect] too, so filling one would leave a node
 ## that draws a mod's art while still believing it is a tinted glyph.
 static func set_mod_icon(square: Control, texture: Texture2D) -> bool:
-	if square is Gen2LauncherIcon or square is not TextureRect or texture == null:
+	if square is PokeLauncherIcon or square is not TextureRect or texture == null:
 		return false
 	(square as TextureRect).texture = texture
 	return true

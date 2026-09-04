@@ -15,7 +15,7 @@ func before_each() -> void:
 	_save = Gen2SaveStore.create_development_save(_data, 0)
 	_save.player_name = "GOLD"
 	_save.player_id = 54321
-	_save.game_time = Gen2GameTime.create(37, 8, 0, 0)
+	_save.game_time = PokeGameTime.create(37, 8, 0, 0)
 
 
 func after_each() -> void:
@@ -66,37 +66,37 @@ func test_page_one_has_no_badges_and_the_two_badge_pages_split_johto_from_kanto(
 ## nothing reaches page 3, and B leaves from anywhere.
 func test_the_page_walk_is_the_source_jumptable() -> void:
 	assert_eq(
-		Gen2TrainerCard.next_page(Gen2TrainerCard.PAGE_1, Gen2Button.RIGHT),
+		Gen2TrainerCard.next_page(Gen2TrainerCard.PAGE_1, PokeButton.RIGHT),
 		{"page": Gen2TrainerCard.PAGE_2}
 	)
 	assert_eq(
-		Gen2TrainerCard.next_page(Gen2TrainerCard.PAGE_1, Gen2Button.A),
+		Gen2TrainerCard.next_page(Gen2TrainerCard.PAGE_1, PokeButton.A),
 		{"page": Gen2TrainerCard.PAGE_2}
 	)
-	assert_eq(Gen2TrainerCard.next_page(Gen2TrainerCard.PAGE_1, Gen2Button.LEFT), {})
+	assert_eq(Gen2TrainerCard.next_page(Gen2TrainerCard.PAGE_1, PokeButton.LEFT), {})
 
 	assert_eq(
-		Gen2TrainerCard.next_page(Gen2TrainerCard.PAGE_2, Gen2Button.LEFT),
+		Gen2TrainerCard.next_page(Gen2TrainerCard.PAGE_2, PokeButton.LEFT),
 		{"page": Gen2TrainerCard.PAGE_1}
 	)
 	assert_eq(
-		Gen2TrainerCard.next_page(Gen2TrainerCard.PAGE_2, Gen2Button.A), {"exit": true}
+		Gen2TrainerCard.next_page(Gen2TrainerCard.PAGE_2, PokeButton.A), {"exit": true}
 	)
 	assert_eq(
-		Gen2TrainerCard.next_page(Gen2TrainerCard.PAGE_2, Gen2Button.RIGHT), {},
+		Gen2TrainerCard.next_page(Gen2TrainerCard.PAGE_2, PokeButton.RIGHT), {},
 		"nothing on page 2 reaches page 3"
 	)
 
 	assert_eq(
-		Gen2TrainerCard.next_page(Gen2TrainerCard.PAGE_3, Gen2Button.LEFT),
+		Gen2TrainerCard.next_page(Gen2TrainerCard.PAGE_3, PokeButton.LEFT),
 		{"page": Gen2TrainerCard.PAGE_2}
 	)
 	assert_eq(
-		Gen2TrainerCard.next_page(Gen2TrainerCard.PAGE_3, Gen2Button.RIGHT),
+		Gen2TrainerCard.next_page(Gen2TrainerCard.PAGE_3, PokeButton.RIGHT),
 		{"page": Gen2TrainerCard.PAGE_1}
 	)
 	for page: int in [Gen2TrainerCard.PAGE_1, Gen2TrainerCard.PAGE_2, Gen2TrainerCard.PAGE_3]:
-		assert_eq(Gen2TrainerCard.next_page(page, Gen2Button.B), {"exit": true})
+		assert_eq(Gen2TrainerCard.next_page(page, PokeButton.B), {"exit": true})
 
 
 func test_no_save_answers_no_page() -> void:

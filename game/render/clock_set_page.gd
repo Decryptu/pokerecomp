@@ -70,7 +70,7 @@ func render(
 		drawn.append(Rect2i(14, 7, 6, 5))
 	var image: Image = Gen2PicImage.from_indices(
 		indices, Gen2Screen.WIDTH, Gen2Screen.HEIGHT,
-		palette if palette.size() == 4 else Gen2Palette.pic_palette(
+		palette if palette.size() == 4 else PokePalette.pic_palette(
 			PackedColorArray([Color.WHITE, Color.BLACK]))
 	)
 	return _boxes_only(image, drawn) if over_map else image

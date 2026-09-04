@@ -1,4 +1,4 @@
-class_name Gen2Tiles
+class_name PokeTiles
 extends RefCounted
 
 ## Game Boy 2bpp tile data to one-byte-per-pixel colour indices. A tile is 8x8 in

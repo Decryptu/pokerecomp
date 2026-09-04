@@ -19,7 +19,7 @@ const BLANK_TILE: int = Gen2Credits.BLANK_TILE
 ## The banner cell is addressed by `Credits_LoadBorderGFX.Frames`' block rather
 ## than by tile number, so these sixteen are resolved against the block the frame
 ## is drawing and not against a strip position.
-const BANNER_TILES: int = RomLayout.CREDITS_MON_FRAME_TILES
+const BANNER_TILES: int = Gen2Layout.CREDITS_MON_FRAME_TILES
 
 var font: Gen2Font = null
 ## The VRAM window, as one indices strip per tile number.
@@ -37,9 +37,9 @@ static func from_data(data: GameData) -> Gen2CreditsPage:
 		return null
 	var out := Gen2CreditsPage.new()
 	out.font = glyphs
-	out._load_sheet(data, "credits_border", RomLayout.CREDITS_BORDER_FIRST_CODE)
-	out._load_sheet(data, "credits_the_end", RomLayout.CREDITS_THE_END_FIRST_CODE)
-	out._load_sheet(data, "copyright", RomLayout.COPYRIGHT_FIRST_CODE)
+	out._load_sheet(data, "credits_border", Gen2Layout.CREDITS_BORDER_FIRST_CODE)
+	out._load_sheet(data, "credits_the_end", Gen2Layout.CREDITS_THE_END_FIRST_CODE)
+	out._load_sheet(data, "copyright", Gen2Layout.COPYRIGHT_FIRST_CODE)
 	out._mons = data.tile_indices("credits_mons")
 	out._mons_width = out._mons.size() / TILE if out._mons.size() > 0 else 0
 	return out
@@ -47,8 +47,8 @@ static func from_data(data: GameData) -> Gen2CreditsPage:
 
 func ready() -> bool:
 	return font != null and _mons_width > 0 \
-		and _tiles.has(RomLayout.CREDITS_BORDER_FIRST_CODE) \
-		and _tiles.has(RomLayout.CREDITS_THE_END_FIRST_CODE)
+		and _tiles.has(Gen2Layout.CREDITS_BORDER_FIRST_CODE) \
+		and _tiles.has(Gen2Layout.CREDITS_THE_END_FIRST_CODE)
 
 
 ## The whole 160x144 screen. [param state] is [method Gen2Credits.frame_state].
@@ -92,10 +92,10 @@ func image(data: GameData, state: Dictionary) -> Image:
 ## slot's last colour, which is the one the font's ink lands on.
 func palette(data: GameData, scene: int, slot: int) -> PackedColorArray:
 	var colors: PackedColorArray = data.credits_palette(scene, slot)
-	if colors.size() < RomLayout.CREDITS_PALETTE_COLORS:
+	if colors.size() < Gen2Layout.CREDITS_PALETTE_COLORS:
 		return colors
 	if slot == Gen2Credits.PALETTE_BORDER and not Gen2WorldState.is_crystal_profile(data):
-		colors[RomLayout.CREDITS_PALETTE_COLORS - 1] = Color.BLACK
+		colors[Gen2Layout.CREDITS_PALETTE_COLORS - 1] = Color.BLACK
 	return colors
 
 

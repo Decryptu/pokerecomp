@@ -21,7 +21,7 @@ const BGEVENT_SCRIPT_TYPES: Array[int] = [0, 1, 2, 3, 4]
 ## bytes use x as the low bit and y as the high bit.
 
 static func verify_layout(rom: RomFile) -> Dictionary:
-	var result: Dictionary = read_world(rom, RomLayout.for_id(rom.id))
+	var result: Dictionary = read_world(rom, Gen2Layout.for_id(rom.id))
 	if not bool(result.get("ok", false)):
 		return {"ok": false, "message": String(result.get("message", "World data failed validation."))}
 	return {"ok": true, "message": ""}
@@ -157,7 +157,7 @@ static func read_world(
 
 	var tilesets: Array = []
 	var graphics: Dictionary = {}
-	for number: int in RomLayout.tileset_count(layout):
+	for number: int in Gen2Layout.tileset_count(layout):
 		var tileset: Dictionary = _read_tileset(rom, layout, number)
 		if not bool(tileset.get("ok", false)):
 			return tileset
@@ -172,15 +172,15 @@ static func read_world(
 	var script_data: Dictionary = {}
 	var text_data: Dictionary = {}
 	var movement_data: Dictionary = {}
-	for group: int in range(1, RomLayout.MAP_GROUP_COUNT + 1):
-		var pointer_offset: int = RomLayout.map_group_pointer_offset(layout, group)
-		if not rom.in_bounds(pointer_offset, RomLayout.MAP_GROUP_POINTER_SIZE):
+	for group: int in range(1, Gen2Layout.MAP_GROUP_COUNT + 1):
+		var pointer_offset: int = Gen2Layout.map_group_pointer_offset(layout, group)
+		if not rom.in_bounds(pointer_offset, Gen2Layout.MAP_GROUP_POINTER_SIZE):
 			return _error("Map group %d pointer is outside the ROM." % group)
 		var group_pointer: int = rom.u16le(pointer_offset)
 		if not _valid_cpu_address(group_pointer):
 			return _error("Map group %d starts at invalid address $%04X." % [group, group_pointer])
 
-		var group_count: int = RomLayout.map_group_count(layout, group)
+		var group_count: int = Gen2Layout.map_group_count(layout, group)
 		for number: int in range(1, group_count + 1):
 			var map_result: Dictionary = _read_map(
 				rom, layout, tilesets, group, number, group_pointer,
@@ -191,7 +191,7 @@ static func read_world(
 			map_result.erase("ok")
 			maps.append(map_result)
 			if on_progress.is_valid():
-				on_progress.call("world_maps", maps.size(), RomLayout.map_count(layout))
+				on_progress.call("world_maps", maps.size(), Gen2Layout.map_count(layout))
 
 	var standard_result: Dictionary = _read_standard_scripts(
 		rom, script_data, text_data, movement_data
@@ -366,20 +366,20 @@ static func _read_standard_scripts(
 ## independent of map objects: an object event's sprite byte indexes it, while
 ## the event supplies its movement, visibility and optional palette override.
 static func _read_overworld_sprites(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var count: int = RomLayout.overworld_sprite_count(layout)
+	var count: int = Gen2Layout.overworld_sprite_count(layout)
 	var table: int = int(layout.get("overworld_sprites", -1))
-	if count <= 0 or not rom.in_bounds(table, count * RomLayout.OVERWORLD_SPRITE_RECORD_SIZE):
+	if count <= 0 or not rom.in_bounds(table, count * Gen2Layout.OVERWORLD_SPRITE_RECORD_SIZE):
 		return _error("Overworld sprite table is outside the cartridge.")
 
 	var palette_offset: int = int(layout.get("overworld_sprite_palettes", -1))
-	if not rom.in_bounds(palette_offset, RomLayout.OVERWORLD_SPRITE_PALETTE_BYTES):
+	if not rom.in_bounds(palette_offset, Gen2Layout.OVERWORLD_SPRITE_PALETTE_BYTES):
 		return _error("Overworld sprite palettes are outside the cartridge.")
 
 	var palettes: Array = []
-	for group: int in RomLayout.OVERWORLD_SPRITE_PALETTE_GROUP_COUNT:
+	for group: int in Gen2Layout.OVERWORLD_SPRITE_PALETTE_GROUP_COUNT:
 		var colors: Array = []
 		for color: int in 4:
-			var at: int = palette_offset + group * RomLayout.OVERWORLD_SPRITE_PALETTE_GROUP_BYTES + color * 2
+			var at: int = palette_offset + group * Gen2Layout.OVERWORLD_SPRITE_PALETTE_GROUP_BYTES + color * 2
 			var packed: int = rom.u16le(at)
 			if packed & 0x8000:
 				return _error("Overworld sprite palette %d has bit 15 set." % group)
@@ -396,7 +396,7 @@ static func _read_overworld_sprites(rom: RomFile, layout: Dictionary) -> Diction
 	var sprites: Array = []
 	var graphics: Dictionary = {}
 	for number: int in range(1, count + 1):
-		var at: int = RomLayout.overworld_sprite_offset(layout, number)
+		var at: int = Gen2Layout.overworld_sprite_offset(layout, number)
 		var address: int = rom.u16le(at)
 		var byte_size: int = rom.u8(at + 2)
 		var bank: int = rom.u8(at + 3)
@@ -404,11 +404,11 @@ static func _read_overworld_sprites(rom: RomFile, layout: Dictionary) -> Diction
 		var default_palette: int = rom.u8(at + 5)
 		if address < RomFile.BANK_SIZE or address >= RomFile.BANK_SIZE * 2:
 			return _error("Overworld sprite %d has an invalid CPU address." % number)
-		if byte_size <= 0 or byte_size % Gen2Tiles.TILE_BYTES != 0:
+		if byte_size <= 0 or byte_size % PokeTiles.TILE_BYTES != 0:
 			return _error("Overworld sprite %d has an invalid byte length." % number)
-		if sprite_type not in RomLayout.OVERWORLD_SPRITE_TYPES:
+		if sprite_type not in Gen2Layout.OVERWORLD_SPRITE_TYPES:
 			return _error("Overworld sprite %d has unknown type %d." % [number, sprite_type])
-		if default_palette < 0 or default_palette >= RomLayout.OVERWORLD_SPRITE_PALETTE_COUNT:
+		if default_palette < 0 or default_palette >= Gen2Layout.OVERWORLD_SPRITE_PALETTE_COUNT:
 			return _error("Overworld sprite %d has palette %d." % [number, default_palette])
 
 		# A walking sprite's record names half its graphics. GetUsedSprite
@@ -424,9 +424,9 @@ static func _read_overworld_sprites(rom: RomFile, layout: Dictionary) -> Diction
 		var raw: PackedByteArray = rom.slice(graphics_offset, read_size)
 		if raw.size() != read_size:
 			return _error("Overworld sprite %d graphics are truncated." % number)
-		var tiles: int = floori(float(read_size) / float(Gen2Tiles.TILE_BYTES))
-		var pixels: PackedByteArray = Gen2Tiles.decode_2bpp_strip(raw, 0, tiles)
-		if pixels.size() != tiles * Gen2Tiles.TILE_PIXELS:
+		var tiles: int = floori(float(read_size) / float(PokeTiles.TILE_BYTES))
+		var pixels: PackedByteArray = PokeTiles.decode_2bpp_strip(raw, 0, tiles)
+		if pixels.size() != tiles * PokeTiles.TILE_PIXELS:
 			return _error("Overworld sprite %d graphics did not decode." % number)
 		graphics[number] = pixels
 		sprites.append({
@@ -451,18 +451,18 @@ static func _read_overworld_sprites(rom: RomFile, layout: Dictionary) -> Diction
 ## party menu icon needs.
 static func _read_overworld_icons(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var offset: int = int(layout.get("overworld_icons", -1))
-	var size: int = RomLayout.MON_ICON_COUNT * RomLayout.MON_ICON_BYTES
+	var size: int = Gen2Layout.MON_ICON_COUNT * Gen2Layout.MON_ICON_BYTES
 	if offset < 0 or not rom.in_bounds(offset, size):
 		return _error("Overworld mon icons are outside the cartridge.")
 	var graphics: Dictionary = {}
-	for number: int in range(1, RomLayout.MON_ICON_COUNT + 1):
+	for number: int in range(1, Gen2Layout.MON_ICON_COUNT + 1):
 		var raw: PackedByteArray = rom.slice(
-			RomLayout.overworld_icon_offset(layout, number), RomLayout.MON_ICON_BYTES
+			Gen2Layout.overworld_icon_offset(layout, number), Gen2Layout.MON_ICON_BYTES
 		)
-		var pixels: PackedByteArray = Gen2Tiles.decode_2bpp_strip(
-			raw, 0, RomLayout.MON_ICON_TILES
+		var pixels: PackedByteArray = PokeTiles.decode_2bpp_strip(
+			raw, 0, Gen2Layout.MON_ICON_TILES
 		)
-		if pixels.size() != RomLayout.MON_ICON_TILES * Gen2Tiles.TILE_PIXELS:
+		if pixels.size() != Gen2Layout.MON_ICON_TILES * PokeTiles.TILE_PIXELS:
 			return _error("Overworld mon icon %d did not decode." % number)
 		graphics[number] = pixels
 
@@ -492,15 +492,15 @@ static func _read_overworld_icons(rom: RomFile, layout: Dictionary) -> Dictionar
 ## `NullIcon`, which is `PoliwagIcon`, so the first two entries are the base
 ## itself and every entry after that is eight tiles on from the one before.
 static func _check_icon_pointers(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var table: int = RomLayout.icon_pointers_offset(layout)
-	var span: int = RomLayout.ICON_POINTER_COUNT * RomLayout.ICON_POINTER_SIZE
+	var table: int = Gen2Layout.icon_pointers_offset(layout)
+	var span: int = Gen2Layout.ICON_POINTER_COUNT * Gen2Layout.ICON_POINTER_SIZE
 	if table < 0 or not rom.in_bounds(table, span):
 		return _error("IconPointers is outside the cartridge.")
 	var base: int = int(layout["overworld_icons"])
-	for index: int in RomLayout.ICON_POINTER_COUNT:
-		var address: int = rom.u16le(table + index * RomLayout.ICON_POINTER_SIZE)
-		var expected: int = RomFile.linear(RomLayout.bank_of(base), address)
-		var wanted: int = base + maxi(index - 1, 0) * RomLayout.MON_ICON_BYTES
+	for index: int in Gen2Layout.ICON_POINTER_COUNT:
+		var address: int = rom.u16le(table + index * Gen2Layout.ICON_POINTER_SIZE)
+		var expected: int = RomFile.linear(Gen2Layout.bank_of(base), address)
+		var wanted: int = base + maxi(index - 1, 0) * Gen2Layout.MON_ICON_BYTES
 		if not _valid_cpu_address(address) or expected != wanted:
 			return _error(
 				"IconPointers entry %d names $%04X, which is not icon %d." % [
@@ -514,16 +514,16 @@ static func _check_icon_pointers(rom: RomFile, layout: Dictionary) -> Dictionary
 ## `ReadMonMenuIcon` answers it before the lookup, which is why the run is
 ## exactly NUM_POKEMON long.
 static func _read_mon_menu_icons(rom: RomFile, layout: Dictionary) -> Dictionary:
-	var offset: int = RomLayout.mon_menu_icons_offset(layout)
-	if offset < 0 or not rom.in_bounds(offset, RomLayout.SPECIES_COUNT):
+	var offset: int = Gen2Layout.mon_menu_icons_offset(layout)
+	if offset < 0 or not rom.in_bounds(offset, Gen2Layout.SPECIES_COUNT):
 		return _error("MonMenuIcons is outside the cartridge.")
-	var numbers: PackedByteArray = rom.slice(offset, RomLayout.SPECIES_COUNT)
-	for species: int in RomLayout.SPECIES_COUNT:
+	var numbers: PackedByteArray = rom.slice(offset, Gen2Layout.SPECIES_COUNT)
+	for species: int in Gen2Layout.SPECIES_COUNT:
 		var icon: int = numbers[species]
-		if icon < 1 or icon > RomLayout.MON_ICON_COUNT:
+		if icon < 1 or icon > Gen2Layout.MON_ICON_COUNT:
 			return _error(
 				"MonMenuIcons entry %d is icon %d, which is not one of the %d." % [
-					species + 1, icon, RomLayout.MON_ICON_COUNT,
+					species + 1, icon, Gen2Layout.MON_ICON_COUNT,
 				]
 			)
 	return {"ok": true, "numbers": numbers}
@@ -534,22 +534,22 @@ static func _read_mon_menu_icons(rom: RomFile, layout: Dictionary) -> Dictionary
 ## read here is not.
 static func _read_held_item_icons(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var offset: int = int(layout.get("held_item_icons", -1))
-	var size: int = RomLayout.HELD_ITEM_ICON_TILES * Gen2Tiles.TILE_BYTES
+	var size: int = Gen2Layout.HELD_ITEM_ICON_TILES * PokeTiles.TILE_BYTES
 	if offset < 0 or not rom.in_bounds(offset, size):
 		return _error("HeldItemIcons is outside the cartridge.")
-	var pixels: PackedByteArray = Gen2Tiles.decode_2bpp_strip(
-		rom.slice(offset, size), 0, RomLayout.HELD_ITEM_ICON_TILES
+	var pixels: PackedByteArray = PokeTiles.decode_2bpp_strip(
+		rom.slice(offset, size), 0, Gen2Layout.HELD_ITEM_ICON_TILES
 	)
-	if pixels.size() != RomLayout.HELD_ITEM_ICON_TILES * Gen2Tiles.TILE_PIXELS:
+	if pixels.size() != Gen2Layout.HELD_ITEM_ICON_TILES * PokeTiles.TILE_PIXELS:
 		return _error("HeldItemIcons did not decode.")
 	# Both tiles are one strip, so a row of one is eight pixels into the row of
 	# the whole rather than sixty-four into the buffer.
-	var width: int = RomLayout.HELD_ITEM_ICON_TILES * Gen2Tiles.TILE_WIDTH
-	for tile: int in RomLayout.HELD_ITEM_ICON_TILES:
-		var at: int = tile * Gen2Tiles.TILE_WIDTH
-		for column: int in Gen2Tiles.TILE_WIDTH:
+	var width: int = Gen2Layout.HELD_ITEM_ICON_TILES * PokeTiles.TILE_WIDTH
+	for tile: int in Gen2Layout.HELD_ITEM_ICON_TILES:
+		var at: int = tile * PokeTiles.TILE_WIDTH
+		for column: int in PokeTiles.TILE_WIDTH:
 			var top: int = pixels[at + column]
-			var bottom: int = pixels[(Gen2Tiles.TILE_HEIGHT - 1) * width + at + column]
+			var bottom: int = pixels[(PokeTiles.TILE_HEIGHT - 1) * width + at + column]
 			if top != 3 or bottom != 3:
 				return _error("HeldItemIcons tile %d is not a bordered box." % tile)
 	return {"ok": true, "pixels": pixels}
@@ -561,21 +561,21 @@ static func _read_held_item_icons(rom: RomFile, layout: Dictionary) -> Dictionar
 ## black in the last slot of each, and one differing colour between the two.
 static func _read_party_menu_ob_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var offset: int = int(layout.get("party_menu_ob_palettes", -1))
-	var count: int = RomLayout.PARTY_MENU_OB_PALETTE_COUNT
-	if offset < 0 or not rom.in_bounds(offset, count * RomLayout.PARTY_MENU_OB_PALETTE_BYTES):
+	var count: int = Gen2Layout.PARTY_MENU_OB_PALETTE_COUNT
+	if offset < 0 or not rom.in_bounds(offset, count * Gen2Layout.PARTY_MENU_OB_PALETTE_BYTES):
 		return _error("PartyMenuOBPals is outside the cartridge.")
 	var palettes: Array = []
 	for index: int in count:
 		var packed: Array = []
-		for slot: int in Gen2Palette.COLORS_PER_PIC:
+		for slot: int in PokePalette.COLORS_PER_PIC:
 			var color: int = rom.u16le(
-				offset + index * RomLayout.PARTY_MENU_OB_PALETTE_BYTES
-					+ slot * Gen2Palette.COLOR_BYTES
+				offset + index * Gen2Layout.PARTY_MENU_OB_PALETTE_BYTES
+					+ slot * PokePalette.COLOR_BYTES
 			)
 			if color & 0x8000:
 				return _error("PartyMenuOBPals colour %d/%d is not colour data." % [index, slot])
 			packed.append(color)
-		if packed[Gen2Palette.COLORS_PER_PIC - 1] != 0:
+		if packed[PokePalette.COLORS_PER_PIC - 1] != 0:
 			return _error("PartyMenuOBPals palette %d does not end in black." % index)
 		palettes.append(packed)
 	var first: Array = palettes[0]
@@ -637,32 +637,32 @@ const HEAL_MACHINE_PALETTE_COLORS: int = 4
 
 static func _read_overworld_effects(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var table: int = int(layout.get("emotes", -1))
-	if not rom.in_bounds(table, RomLayout.EMOTE_COUNT * RomLayout.EMOTE_RECORD_SIZE):
+	if not rom.in_bounds(table, Gen2Layout.EMOTE_COUNT * Gen2Layout.EMOTE_RECORD_SIZE):
 		return _error("Emote table is outside the cartridge.")
 
 	var effects: Array = []
-	for index: int in RomLayout.EMOTE_COUNT:
-		var at: int = RomLayout.emote_offset(layout, index)
+	for index: int in Gen2Layout.EMOTE_COUNT:
+		var at: int = Gen2Layout.emote_offset(layout, index)
 		var address: int = rom.u16le(at)
 		var byte_size: int = rom.u8(at + 2)
 		var bank: int = rom.u8(at + 3)
 		var destination: int = rom.u16le(at + 4)
-		var tiles: int = int(float(byte_size) / float(Gen2Tiles.TILE_BYTES))
-		var vtile: int = int(float(destination - RomLayout.VTILES0) / float(Gen2Tiles.TILE_BYTES))
+		var tiles: int = int(float(byte_size) / float(PokeTiles.TILE_BYTES))
+		var vtile: int = int(float(destination - Gen2Layout.VTILES0) / float(PokeTiles.TILE_BYTES))
 		var expected: Array = EMOTE_TILE_LAYOUT[index]
 		if not _valid_cpu_address(address):
 			return _error("Emote %d has an invalid CPU address." % index)
-		if byte_size % Gen2Tiles.TILE_BYTES != 0 or tiles != int(expected[0]):
+		if byte_size % PokeTiles.TILE_BYTES != 0 or tiles != int(expected[0]):
 			return _error("Emote %d is %d bytes, not %d tiles." % [index, byte_size, expected[0]])
 		if vtile != int(expected[1]):
 			return _error("Emote %d loads to tile $%02X, not $%02X." % [index, vtile, expected[1]])
-		var pixels: PackedByteArray = Gen2Tiles.decode_2bpp_strip(
+		var pixels: PackedByteArray = PokeTiles.decode_2bpp_strip(
 			rom.slice(RomFile.linear(bank, address), byte_size), 0, tiles
 		)
-		if pixels.size() != tiles * Gen2Tiles.TILE_PIXELS:
+		if pixels.size() != tiles * PokeTiles.TILE_PIXELS:
 			return _error("Emote %d graphics did not decode." % index)
 		effects.append({
-			"name": RomLayout.EMOTE_NAMES[index],
+			"name": Gen2Layout.EMOTE_NAMES[index],
 			"tiles": tiles,
 			"vtile": vtile,
 			"bytes": Array(pixels),
@@ -675,14 +675,14 @@ static func _read_overworld_effects(rom: RomFile, layout: Dictionary) -> Diction
 		var signature: Array = sheet[4]
 		if offset == -1: # Kris's sheet, which only Crystal ships.
 			continue
-		if not rom.in_bounds(offset, sheet_tiles * Gen2Tiles.TILE_BYTES):
+		if not rom.in_bounds(offset, sheet_tiles * PokeTiles.TILE_BYTES):
 			return _error("%s graphics are outside the cartridge." % name)
 		if Array(rom.slice(offset, signature.size())) != signature:
 			return _error("%s graphics do not start with the sheet's first row." % name)
-		var sheet_pixels: PackedByteArray = Gen2Tiles.decode_2bpp_strip(
-			rom.slice(offset, sheet_tiles * Gen2Tiles.TILE_BYTES), 0, sheet_tiles
+		var sheet_pixels: PackedByteArray = PokeTiles.decode_2bpp_strip(
+			rom.slice(offset, sheet_tiles * PokeTiles.TILE_BYTES), 0, sheet_tiles
 		)
-		if sheet_pixels.size() != sheet_tiles * Gen2Tiles.TILE_PIXELS:
+		if sheet_pixels.size() != sheet_tiles * PokeTiles.TILE_PIXELS:
 			return _error("%s graphics did not decode." % name)
 		var record: Dictionary = {
 			"name": name,
@@ -705,12 +705,12 @@ static func _read_overworld_effects(rom: RomFile, layout: Dictionary) -> Diction
 ## the animation's colour.
 static func _read_heal_machine_palette(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var offset: int = int(layout.get("heal_machine_palette", -1))
-	var bytes: int = HEAL_MACHINE_PALETTE_COLORS * Gen2Palette.COLOR_BYTES
+	var bytes: int = HEAL_MACHINE_PALETTE_COLORS * PokePalette.COLOR_BYTES
 	if offset < 0 or not rom.in_bounds(offset, bytes):
 		return _error("The heal machine palette is outside the cartridge.")
 	var colors: Array = []
 	for slot: int in HEAL_MACHINE_PALETTE_COLORS:
-		var color: int = rom.u16le(offset + slot * Gen2Palette.COLOR_BYTES)
+		var color: int = rom.u16le(offset + slot * PokePalette.COLOR_BYTES)
 		if color & 0x8000:
 			return _error("Heal machine palette colour %d is not colour data." % slot)
 		colors.append(color)
@@ -720,8 +720,8 @@ static func _read_heal_machine_palette(rom: RomFile, layout: Dictionary) -> Dict
 
 
 static func _read_tileset(rom: RomFile, layout: Dictionary, number: int) -> Dictionary:
-	var table: int = RomLayout.tileset_offset(layout, number)
-	if not rom.in_bounds(table, RomLayout.TILESET_RECORD_SIZE):
+	var table: int = Gen2Layout.tileset_offset(layout, number)
+	if not rom.in_bounds(table, Gen2Layout.TILESET_RECORD_SIZE):
 		return _error("Tileset %d record is outside the ROM." % number)
 
 	var gfx: Dictionary = rom.far_pointer(table)
@@ -730,18 +730,18 @@ static func _read_tileset(rom: RomFile, layout: Dictionary, number: int) -> Dict
 	var gfx_offset: int = _far_offset(rom, gfx)
 	var meta_offset: int = _far_offset(rom, meta)
 	var collision_offset: int = _far_offset(rom, collision)
-	var block_count: int = RomLayout.tileset_block_count(layout, number)
+	var block_count: int = Gen2Layout.tileset_block_count(layout, number)
 	if gfx_offset < 0 or meta_offset < 0 or collision_offset < 0:
 		return _error("Tileset %d has an invalid far pointer." % number)
 
 	var lz := Gen2Lz.new()
 	var raw_graphics: PackedByteArray = lz.decompress(rom.bytes(), gfx_offset)
-	var block_bytes: int = RomLayout.TILESET_BLOCK_TILES * Gen2Tiles.TILE_BYTES
+	var block_bytes: int = Gen2Layout.TILESET_BLOCK_TILES * PokeTiles.TILE_BYTES
 	if lz.failed or raw_graphics.size() < block_bytes:
 		return _error("Tileset %d graphics decoded to %d bytes, expected at least %d." % [number, raw_graphics.size(), block_bytes])
 
-	var meta_size: int = block_count * RomLayout.TILESET_META_BYTES_PER_BLOCK
-	var collision_size: int = block_count * RomLayout.TILESET_COLLISION_BYTES_PER_BLOCK
+	var meta_size: int = block_count * Gen2Layout.TILESET_META_BYTES_PER_BLOCK
+	var collision_size: int = block_count * Gen2Layout.TILESET_COLLISION_BYTES_PER_BLOCK
 	var meta_bytes: PackedByteArray = rom.slice(meta_offset, meta_size)
 	var collision_bytes: PackedByteArray = rom.slice(collision_offset, collision_size)
 	if meta_bytes.size() != meta_size or collision_bytes.size() != collision_size:
@@ -750,8 +750,8 @@ static func _read_tileset(rom: RomFile, layout: Dictionary, number: int) -> Dict
 	var palette_map_offset: int = RomFile.linear(
 		int(layout["tileset_palette_bank"]), rom.u16le(table + 13)
 	)
-	var palette_map: PackedByteArray = rom.slice(palette_map_offset, RomLayout.WORLD_PALETTE_MAP_BYTES)
-	if palette_map.size() != RomLayout.WORLD_PALETTE_MAP_BYTES:
+	var palette_map: PackedByteArray = rom.slice(palette_map_offset, Gen2Layout.WORLD_PALETTE_MAP_BYTES)
+	if palette_map.size() != Gen2Layout.WORLD_PALETTE_MAP_BYTES:
 		return _error("Tileset %d palette map is outside the cartridge." % number)
 
 	var animation: Dictionary = _read_animation(rom, layout, rom.u16le(table + 9), number)
@@ -762,7 +762,7 @@ static func _read_tileset(rom: RomFile, layout: Dictionary, number: int) -> Dict
 		"ok": true,
 		"number": number,
 		"block_count": block_count,
-		"tile_count": RomLayout.TILESET_TILE_COUNT,
+		"tile_count": Gen2Layout.TILESET_TILE_COUNT,
 		"meta": Array(meta_bytes),
 		"collision": Array(collision_bytes),
 		"animation_pointer": rom.u16le(table + 9),
@@ -774,22 +774,22 @@ static func _read_tileset(rom: RomFile, layout: Dictionary, number: int) -> Dict
 
 
 ## One tileset's graphics as a 224-tile indexed strip addressed by the metatile
-## byte itself: see [constant RomLayout.TILESET_TILE_COUNT] for the layout.
+## byte itself: see [constant Gen2Layout.TILESET_TILE_COUNT] for the layout.
 static func _tileset_strip(raw_graphics: PackedByteArray) -> PackedByteArray:
 	var out := PackedByteArray()
-	out.resize(RomLayout.TILESET_TILE_COUNT * Gen2Tiles.TILE_PIXELS)
-	var block_bytes: int = RomLayout.TILESET_BLOCK_TILES * Gen2Tiles.TILE_BYTES
-	var row_pixels: int = RomLayout.TILESET_TILE_COUNT * Gen2Tiles.TILE_WIDTH
-	var block_pixels: int = RomLayout.TILESET_BLOCK_TILES * Gen2Tiles.TILE_WIDTH
+	out.resize(Gen2Layout.TILESET_TILE_COUNT * PokeTiles.TILE_PIXELS)
+	var block_bytes: int = Gen2Layout.TILESET_BLOCK_TILES * PokeTiles.TILE_BYTES
+	var row_pixels: int = Gen2Layout.TILESET_TILE_COUNT * PokeTiles.TILE_WIDTH
+	var block_pixels: int = Gen2Layout.TILESET_BLOCK_TILES * PokeTiles.TILE_WIDTH
 	for block: int in 2:
 		var at: int = block * block_bytes
 		if raw_graphics.size() < at + block_bytes:
 			break
-		var pixels: PackedByteArray = Gen2Tiles.decode_2bpp_strip(
-			raw_graphics, at, RomLayout.TILESET_BLOCK_TILES
+		var pixels: PackedByteArray = PokeTiles.decode_2bpp_strip(
+			raw_graphics, at, Gen2Layout.TILESET_BLOCK_TILES
 		)
-		var left: int = block * RomLayout.TILESET_BLOCK_STRIDE * Gen2Tiles.TILE_WIDTH
-		for y: int in Gen2Tiles.TILE_HEIGHT:
+		var left: int = block * Gen2Layout.TILESET_BLOCK_STRIDE * PokeTiles.TILE_WIDTH
+		for y: int in PokeTiles.TILE_HEIGHT:
 			for x: int in block_pixels:
 				out[y * row_pixels + left + x] = pixels[y * block_pixels + x]
 	return out
@@ -797,7 +797,7 @@ static func _tileset_strip(raw_graphics: PackedByteArray) -> PackedByteArray:
 
 static func _read_world_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var groups: Array = _read_palette_run(
-		rom, int(layout["world_palette_offset"]), RomLayout.WORLD_PALETTE_GROUP_COUNT
+		rom, int(layout["world_palette_offset"]), Gen2Layout.WORLD_PALETTE_GROUP_COUNT
 	)
 	if groups.is_empty():
 		return _error("Overworld palette data is outside the cartridge.")
@@ -814,20 +814,20 @@ static func _read_special_map_palettes(rom: RomFile, layout: Dictionary) -> Vari
 	var offsets: Array = layout.get("special_map_palettes", [])
 	var out: Array = []
 	for index: int in offsets.size():
-		var tileset: int = int(RomLayout.SPECIAL_PALETTE_TILESETS[index])
-		var wanted: int = 9 if tileset == RomLayout.SPECIAL_PALETTE_MANSION else 8
+		var tileset: int = int(Gen2Layout.SPECIAL_PALETTE_TILESETS[index])
+		var wanted: int = 9 if tileset == Gen2Layout.SPECIAL_PALETTE_MANSION else 8
 		var read: Array = _read_palette_run(rom, int(offsets[index]), wanted)
 		if read.is_empty():
 			return _error("A special map palette is outside the cartridge.")
-		if tileset == RomLayout.SPECIAL_PALETTE_MANSION:
+		if tileset == Gen2Layout.SPECIAL_PALETTE_MANSION:
 			var yellow: Array = _read_palette_run(
 				rom, int(layout.get("mansion_palette_yellow", 0)), 1
 			)
 			if yellow.is_empty():
 				return _error("The mansion's yellow palette is outside the cartridge.")
-			read[RomLayout.PAL_BG_YELLOW] = yellow[0]
-			read[RomLayout.PAL_BG_WATER] = read[6]
-			read[RomLayout.PAL_BG_ROOF] = read[8]
+			read[Gen2Layout.PAL_BG_YELLOW] = yellow[0]
+			read[Gen2Layout.PAL_BG_WATER] = read[6]
+			read[Gen2Layout.PAL_BG_ROOF] = read[8]
 			read.resize(8)
 		out.append_array(read)
 	return out
@@ -835,15 +835,15 @@ static func _read_special_map_palettes(rom: RomFile, layout: Dictionary) -> Vari
 
 static func _read_palette_run(rom: RomFile, offset: int, palettes: int) -> Array:
 	var bytes: PackedByteArray = rom.slice(
-		offset, palettes * RomLayout.WORLD_PALETTE_GROUP_BYTES
+		offset, palettes * Gen2Layout.WORLD_PALETTE_GROUP_BYTES
 	)
-	if bytes.size() != palettes * RomLayout.WORLD_PALETTE_GROUP_BYTES:
+	if bytes.size() != palettes * Gen2Layout.WORLD_PALETTE_GROUP_BYTES:
 		return []
 	var out: Array = []
 	for palette: int in palettes:
 		var colors: Array = []
 		for color: int in 4:
-			var at: int = palette * RomLayout.WORLD_PALETTE_GROUP_BYTES + color * 2
+			var at: int = palette * Gen2Layout.WORLD_PALETTE_GROUP_BYTES + color * 2
 			colors.append(int(bytes[at]) | (int(bytes[at + 1]) << 8))
 		out.append(colors)
 	return out
@@ -854,23 +854,23 @@ static func _read_palette_run(rom: RomFile, offset: int, palettes: int) -> Array
 ## takes is the renderer's question.
 static func _read_world_roofs(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var groups: PackedByteArray = rom.slice(
-		int(layout["map_group_roofs"]), RomLayout.MAP_GROUP_ROOF_COUNT
+		int(layout["map_group_roofs"]), Gen2Layout.MAP_GROUP_ROOF_COUNT
 	)
-	if groups.size() != RomLayout.MAP_GROUP_ROOF_COUNT:
+	if groups.size() != Gen2Layout.MAP_GROUP_ROOF_COUNT:
 		return _error("The map group roof table is outside the cartridge.")
-	var tile_bytes: int = RomLayout.ROOF_COUNT * RomLayout.ROOF_TILE_BYTES
+	var tile_bytes: int = Gen2Layout.ROOF_COUNT * Gen2Layout.ROOF_TILE_BYTES
 	var raw: PackedByteArray = rom.slice(int(layout["roof_tiles"]), tile_bytes)
 	if raw.size() != tile_bytes:
 		return _error("The roof tiles are outside the cartridge.")
 	var palettes: Array = _read_palette_run(
-		rom, int(layout["roof_palettes"]), RomLayout.MAP_GROUP_ROOF_COUNT
+		rom, int(layout["roof_palettes"]), Gen2Layout.MAP_GROUP_ROOF_COUNT
 	)
 	if palettes.is_empty():
 		return _error("The roof palettes are outside the cartridge.")
 	var tiles: Array = []
-	for roof: int in RomLayout.ROOF_COUNT:
-		tiles.append(Array(Gen2Tiles.decode_2bpp_strip(
-			raw, roof * RomLayout.ROOF_TILE_BYTES, RomLayout.ROOF_TILES
+	for roof: int in Gen2Layout.ROOF_COUNT:
+		tiles.append(Array(PokeTiles.decode_2bpp_strip(
+			raw, roof * Gen2Layout.ROOF_TILE_BYTES, Gen2Layout.ROOF_TILES
 		)))
 	return {"ok": true, "roofs": {
 		"groups": Array(groups), "tiles": tiles, "palettes": palettes,
@@ -890,14 +890,14 @@ static func _read_world_animation_assets(rom: RomFile, layout: Dictionary) -> Di
 
 
 static func _read_animation(rom: RomFile, layout: Dictionary, pointer: int, number: int) -> Dictionary:
-	var offset: int = RomFile.linear(RomLayout.WORLD_ANIMATION_BANK, pointer)
+	var offset: int = RomFile.linear(Gen2Layout.WORLD_ANIMATION_BANK, pointer)
 	var functions: Dictionary = layout.get("world_animation_functions", {})
 	var done: int = int(layout["world_animation_done"])
 	var commands: Array = []
 	var found_done: bool = false
-	for index: int in RomLayout.WORLD_ANIMATION_MAX_COMMANDS:
-		var at: int = offset + index * RomLayout.WORLD_ANIMATION_COMMAND_BYTES
-		if not rom.in_bounds(at, RomLayout.WORLD_ANIMATION_COMMAND_BYTES):
+	for index: int in Gen2Layout.WORLD_ANIMATION_MAX_COMMANDS:
+		var at: int = offset + index * Gen2Layout.WORLD_ANIMATION_COMMAND_BYTES
+		if not rom.in_bounds(at, Gen2Layout.WORLD_ANIMATION_COMMAND_BYTES):
 			return _error("Tileset %d animation table is truncated." % number)
 		var parameter: int = rom.u16le(at)
 		var function: int = rom.u16le(at + 2)
@@ -911,7 +911,7 @@ static func _read_animation(rom: RomFile, layout: Dictionary, pointer: int, numb
 		if command["operation"] in ["water", "fountain", "scroll_horizontal", "scroll_vertical", "read_buffer", "write_buffer"]:
 			command["tile"] = _vram_tile(parameter)
 		elif command["operation"] in ["tower", "whirlpool"]:
-			var target: int = RomFile.linear(RomLayout.WORLD_ANIMATION_BANK, parameter)
+			var target: int = RomFile.linear(Gen2Layout.WORLD_ANIMATION_BANK, parameter)
 			if not rom.in_bounds(target, 4):
 				return _error("Tileset %d animation target is outside the cartridge." % number)
 			command["tile"] = _vram_tile(rom.u16le(target))
@@ -928,9 +928,9 @@ static func _read_animation(rom: RomFile, layout: Dictionary, pointer: int, numb
 
 
 static func _vram_tile(address: int) -> int:
-	if address < 0x9000 or address >= 0xA000 or (address - 0x9000) % Gen2Tiles.TILE_BYTES != 0:
+	if address < 0x9000 or address >= 0xA000 or (address - 0x9000) % PokeTiles.TILE_BYTES != 0:
 		return -1
-	return floori(float(address - 0x9000) / float(Gen2Tiles.TILE_BYTES))
+	return floori(float(address - 0x9000) / float(PokeTiles.TILE_BYTES))
 
 
 static func _animation_asset_index(_rom: RomFile, layout: Dictionary, operation: String, pointer: int) -> int:
@@ -938,7 +938,7 @@ static func _animation_asset_index(_rom: RomFile, layout: Dictionary, operation:
 	var spec: Dictionary = layout["world_animation_assets"][name]
 	var base: int = int(spec["offset"])
 	var stride: int = 80 if name == "tower" else 64
-	var offset: int = RomFile.linear(RomLayout.WORLD_ANIMATION_BANK, pointer)
+	var offset: int = RomFile.linear(Gen2Layout.WORLD_ANIMATION_BANK, pointer)
 	var delta: int = offset - base
 	if delta < 0 or delta % stride != 0 or delta >= int(spec["bytes"]):
 		return -1
@@ -956,8 +956,8 @@ static func _read_map(
 	text_data: Dictionary,
 	movement_data: Dictionary,
 ) -> Dictionary:
-	var record: int = RomLayout.map_record_offset(layout, group_pointer, number)
-	if not rom.in_bounds(record, RomLayout.MAP_RECORD_SIZE):
+	var record: int = Gen2Layout.map_record_offset(layout, group_pointer, number)
+	if not rom.in_bounds(record, Gen2Layout.MAP_RECORD_SIZE):
 		return _error("Map %d/%d record is outside the ROM." % [group, number])
 
 	var tileset_number: int = rom.u8(record + 1)
@@ -967,14 +967,14 @@ static func _read_map(
 	var attr_bank: int = rom.u8(record)
 	var attr_address: int = rom.u16le(record + 3)
 	var attributes: int = _far_offset(rom, {"bank": attr_bank, "address": attr_address})
-	if attributes < 0 or not rom.in_bounds(attributes, RomLayout.MAP_ATTRIBUTES_SIZE):
+	if attributes < 0 or not rom.in_bounds(attributes, Gen2Layout.MAP_ATTRIBUTES_SIZE):
 		return _error("Map %d/%d has an invalid attributes pointer." % [group, number])
 
 	var border_block: int = rom.u8(attributes)
 	var height: int = rom.u8(attributes + 1)
 	var width: int = rom.u8(attributes + 2)
-	if width <= 0 or width > RomLayout.MAP_MAX_WIDTH_BLOCKS or height <= 0 \
-		or height > RomLayout.MAP_MAX_HEIGHT_BLOCKS:
+	if width <= 0 or width > Gen2Layout.MAP_MAX_WIDTH_BLOCKS or height <= 0 \
+		or height > Gen2Layout.MAP_MAX_HEIGHT_BLOCKS:
 		return _error("Map %d/%d has dimensions %dx%d blocks." % [group, number, width, height])
 
 	var blocks_result: Dictionary = _read_map_blocks(
@@ -996,7 +996,7 @@ static func _read_map(
 	if (connection_flags & 0xF0) != 0:
 		return _error("Map %d/%d has undefined connection flags $%02X." % [group, number, connection_flags])
 	var connections: Array = _read_connections(
-		rom, layout, attributes + RomLayout.MAP_ATTRIBUTES_SIZE, connection_flags
+		rom, layout, attributes + Gen2Layout.MAP_ATTRIBUTES_SIZE, connection_flags
 	)
 	if connections.is_empty() and connection_flags != 0:
 		return _error("Map %d/%d connection records are truncated or invalid." % [group, number])
@@ -1114,12 +1114,12 @@ static func _collision_grid(
 	tileset: Dictionary, block_bytes: PackedByteArray, width: int, height: int
 ) -> Array:
 	var collision_grid: Array = []
-	for cell_y: int in height * RomLayout.MAP_BLOCK_CELL_WIDTH:
-		for cell_x: int in width * RomLayout.MAP_BLOCK_CELL_WIDTH:
+	for cell_y: int in height * Gen2Layout.MAP_BLOCK_CELL_WIDTH:
+		for cell_x: int in width * Gen2Layout.MAP_BLOCK_CELL_WIDTH:
 			var block: int = int(block_bytes[(cell_y >> 1) * width + (cell_x >> 1)])
 			var value: int = -1
 			if block > 0:
-				var collision_at: int = block * RomLayout.TILESET_COLLISION_BYTES_PER_BLOCK \
+				var collision_at: int = block * Gen2Layout.TILESET_COLLISION_BYTES_PER_BLOCK \
 					+ (cell_x & 1) + ((cell_y & 1) * 2)
 				value = int(tileset["collision"][collision_at])
 			collision_grid.append(value)
@@ -1133,22 +1133,22 @@ static func _read_connections(
 	# The cartridge emits connection records in this order, regardless of which
 	# direction bits are present: north, south, west, east.
 	var directions: Array = [
-		["north", RomLayout.MAP_CONNECTION_FLAG_NORTH],
-		["south", RomLayout.MAP_CONNECTION_FLAG_SOUTH],
-		["west", RomLayout.MAP_CONNECTION_FLAG_WEST],
-		["east", RomLayout.MAP_CONNECTION_FLAG_EAST],
+		["north", Gen2Layout.MAP_CONNECTION_FLAG_NORTH],
+		["south", Gen2Layout.MAP_CONNECTION_FLAG_SOUTH],
+		["west", Gen2Layout.MAP_CONNECTION_FLAG_WEST],
+		["east", Gen2Layout.MAP_CONNECTION_FLAG_EAST],
 	]
 	for direction: Array in directions:
 		var name: String = String(direction[0])
 		var flag: int = int(direction[1])
 		if (connection_flags & flag) == 0:
 			continue
-		if not rom.in_bounds(at, RomLayout.MAP_CONNECTION_RECORD_SIZE):
+		if not rom.in_bounds(at, Gen2Layout.MAP_CONNECTION_RECORD_SIZE):
 			return []
 		var map_group: int = rom.u8(at)
 		var map_number: int = rom.u8(at + 1)
-		if map_group <= 0 or map_group > RomLayout.MAP_GROUP_COUNT \
-			or map_number <= 0 or map_number > RomLayout.map_group_count(layout, map_group):
+		if map_group <= 0 or map_group > Gen2Layout.MAP_GROUP_COUNT \
+			or map_number <= 0 or map_number > Gen2Layout.map_group_count(layout, map_group):
 			return []
 		out.append({
 			"direction": name,
@@ -1162,7 +1162,7 @@ static func _read_connections(
 			"x_offset": _signed_byte(rom.u8(at + 9)),
 			"window_pointer": rom.u16le(at + 10),
 		})
-		at += RomLayout.MAP_CONNECTION_RECORD_SIZE
+		at += Gen2Layout.MAP_CONNECTION_RECORD_SIZE
 	return out
 
 
@@ -1174,9 +1174,9 @@ static func _read_events(
 	rom: RomFile, bank: int, address: int, group: int, number: int, cell_width: int, cell_height: int
 ) -> Dictionary:
 	var at: int = _far_offset(rom, {"bank": bank, "address": address})
-	if at < 0 or not rom.in_bounds(at, RomLayout.MAP_EVENT_HEADER_SIZE):
+	if at < 0 or not rom.in_bounds(at, Gen2Layout.MAP_EVENT_HEADER_SIZE):
 		return _error("Map %d/%d events are outside the ROM." % [group, number])
-	at += RomLayout.MAP_EVENT_HEADER_SIZE
+	at += Gen2Layout.MAP_EVENT_HEADER_SIZE
 
 	var out: Dictionary = {"ok": true}
 	for reader: Callable in [_read_warp_events, _read_coord_events, _read_bg_events]:
@@ -1202,7 +1202,7 @@ static func _read_warp_events(
 	at += 1
 	var warps: Array = []
 	for _i: int in count:
-		if not rom.in_bounds(at, RomLayout.MAP_WARP_EVENT_SIZE):
+		if not rom.in_bounds(at, Gen2Layout.MAP_WARP_EVENT_SIZE):
 			return _error("Map %d/%d warp events are truncated." % [group, number])
 		var y: int = rom.u8(at)
 		var x: int = rom.u8(at + 1)
@@ -1215,7 +1215,7 @@ static func _read_warp_events(
 			"map_group": rom.u8(at + 3),
 			"map_number": rom.u8(at + 4),
 		})
-		at += RomLayout.MAP_WARP_EVENT_SIZE
+		at += Gen2Layout.MAP_WARP_EVENT_SIZE
 	return {"ok": true, "kind": "warps", "events": warps, "at": at}
 
 
@@ -1228,7 +1228,7 @@ static func _read_coord_events(
 	at += 1
 	var coord_events: Array = []
 	for _i: int in count:
-		if not rom.in_bounds(at, RomLayout.MAP_COORD_EVENT_SIZE):
+		if not rom.in_bounds(at, Gen2Layout.MAP_COORD_EVENT_SIZE):
 			return _error("Map %d/%d coordinate events are truncated." % [group, number])
 		var y: int = rom.u8(at + 1)
 		var x: int = rom.u8(at + 2)
@@ -1240,7 +1240,7 @@ static func _read_coord_events(
 			"y": y,
 			"script": rom.u16le(at + 4),
 		})
-		at += RomLayout.MAP_COORD_EVENT_SIZE
+		at += Gen2Layout.MAP_COORD_EVENT_SIZE
 	return {"ok": true, "kind": "coord_events", "events": coord_events, "at": at}
 
 
@@ -1253,7 +1253,7 @@ static func _read_bg_events(
 	at += 1
 	var bg_events: Array = []
 	for _i: int in count:
-		if not rom.in_bounds(at, RomLayout.MAP_BG_EVENT_SIZE):
+		if not rom.in_bounds(at, Gen2Layout.MAP_BG_EVENT_SIZE):
 			return _error("Map %d/%d background events are truncated." % [group, number])
 		var y: int = rom.u8(at)
 		var x: int = rom.u8(at + 1)
@@ -1265,7 +1265,7 @@ static func _read_bg_events(
 			"type": rom.u8(at + 2),
 			"script": rom.u16le(at + 3),
 		})
-		at += RomLayout.MAP_BG_EVENT_SIZE
+		at += Gen2Layout.MAP_BG_EVENT_SIZE
 	return {"ok": true, "kind": "bg_events", "events": bg_events, "at": at}
 
 
@@ -1278,7 +1278,7 @@ static func _read_object_events(
 	at += 1
 	var objects: Array = []
 	for _i: int in count:
-		if not rom.in_bounds(at, RomLayout.MAP_OBJECT_EVENT_SIZE):
+		if not rom.in_bounds(at, Gen2Layout.MAP_OBJECT_EVENT_SIZE):
 			return _error("Map %d/%d object events are truncated." % [group, number])
 		var radius: int = rom.u8(at + 4)
 		var palette_type: int = rom.u8(at + 7)
@@ -1309,7 +1309,7 @@ static func _read_object_events(
 			if not trainer.is_empty():
 				object["trainer"] = trainer
 		objects.append(object)
-		at += RomLayout.MAP_OBJECT_EVENT_SIZE
+		at += Gen2Layout.MAP_OBJECT_EVENT_SIZE
 	return {"ok": true, "kind": "objects", "events": objects, "at": at}
 
 
@@ -1353,33 +1353,33 @@ static func _read_map_scripts(
 		return _error("Map %d/%d scripts are outside the ROM." % [group, number])
 
 	var scene_count: int = rom.u8(at)
-	if scene_count > RomLayout.MAP_MAX_SCENE_SCRIPTS:
+	if scene_count > Gen2Layout.MAP_MAX_SCENE_SCRIPTS:
 		return _error("Map %d/%d has %d scene scripts." % [group, number, scene_count])
 	at += 1
 	var scenes: Array = []
 	for scene: int in scene_count:
-		if not rom.in_bounds(at, RomLayout.MAP_SCENE_SCRIPT_SIZE):
+		if not rom.in_bounds(at, Gen2Layout.MAP_SCENE_SCRIPT_SIZE):
 			return _error("Map %d/%d scene scripts are truncated." % [group, number])
 		var script_address: int = rom.u16le(at)
 		scenes.append({"id": scene, "script": script_address})
 		_collect_script(rom, bank, script_address, script_data, text_data, movement_data)
-		at += RomLayout.MAP_SCENE_SCRIPT_SIZE
+		at += Gen2Layout.MAP_SCENE_SCRIPT_SIZE
 
 	if not rom.in_bounds(at):
 		return _error("Map %d/%d has no callback count." % [group, number])
 	var callback_count: int = rom.u8(at)
-	if callback_count > RomLayout.MAP_MAX_CALLBACKS:
+	if callback_count > Gen2Layout.MAP_MAX_CALLBACKS:
 		return _error("Map %d/%d has %d callbacks." % [group, number, callback_count])
 	at += 1
 	var callbacks: Array = []
 	for _callback: int in callback_count:
-		if not rom.in_bounds(at, RomLayout.MAP_CALLBACK_SIZE):
+		if not rom.in_bounds(at, Gen2Layout.MAP_CALLBACK_SIZE):
 			return _error("Map %d/%d callbacks are truncated." % [group, number])
 		var callback_type: int = rom.u8(at)
 		var script_address: int = rom.u16le(at + 1)
 		callbacks.append({"type": callback_type, "script": script_address})
 		_collect_script(rom, bank, script_address, script_data, text_data, movement_data)
-		at += RomLayout.MAP_CALLBACK_SIZE
+		at += Gen2Layout.MAP_CALLBACK_SIZE
 
 	return {"ok": true, "scenes": scenes, "callbacks": callbacks}
 

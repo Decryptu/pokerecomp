@@ -16,7 +16,7 @@ const FIXTURE_SPECIES: int = 25
 const ICON_FIRST_PACKED: int = 0x03E0
 const ICON_SECOND_PACKED: int = 0x001F
 ## The four tiles of the shape's first frame, which is half the strip.
-const HALF_ICON_COLUMNS: int = 4 * Gen2Tiles.TILE_WIDTH
+const HALF_ICON_COLUMNS: int = 4 * PokeTiles.TILE_WIDTH
 
 var _directory: String = ""
 
@@ -36,28 +36,28 @@ func after_each() -> void:
 func _write_cache() -> void:
 	var sheets: Dictionary = {}
 	var written: Dictionary = {
-		"exp_bar": RomLayout.EXP_BAR_TILES,
-		"battle_font": RomLayout.BATTLE_FONT_TILES,
-		"enemy_hud": RomLayout.ENEMY_HUD_TILES,
-		"player_hud": RomLayout.PLAYER_HUD_TILES,
-		"font": RomLayout.FONT_TILES,
-		"frames": RomLayout.FRAME_COUNT * RomLayout.FRAME_TILES,
+		"exp_bar": Gen2Layout.EXP_BAR_TILES,
+		"battle_font": Gen2Layout.BATTLE_FONT_TILES,
+		"enemy_hud": Gen2Layout.ENEMY_HUD_TILES,
+		"player_hud": Gen2Layout.PLAYER_HUD_TILES,
+		"font": Gen2Layout.FONT_TILES,
+		"frames": Gen2Layout.FRAME_COUNT * Gen2Layout.FRAME_TILES,
 		## Only the stats and move screens read this one, and both are drawn from
 		## the same cache the party menu is.
-		"stats_tiles": RomLayout.STATS_TILES,
+		"stats_tiles": Gen2Layout.STATS_TILES,
 	}
 	var first_codes: Dictionary = {
-		"font": RomLayout.FONT_FIRST_CODE, "frames": RomLayout.FRAME_FIRST_CODE,
+		"font": Gen2Layout.FONT_FIRST_CODE, "frames": Gen2Layout.FRAME_FIRST_CODE,
 	}
 	for row_name: String in written:
 		var tiles: int = written[row_name]
 		var indices: PackedByteArray = PackedByteArray()
-		indices.resize(tiles * Gen2Tiles.TILE_WIDTH * Gen2Tiles.TILE_HEIGHT)
+		indices.resize(tiles * PokeTiles.TILE_WIDTH * PokeTiles.TILE_HEIGHT)
 		indices.fill(2 if row_name == "battle_font" else 3)
 		RomCache.write_indices(RomCache.tile_path(_directory, row_name), indices)
 		sheets[row_name] = {
-			"width": tiles * Gen2Tiles.TILE_WIDTH,
-			"height": Gen2Tiles.TILE_HEIGHT,
+			"width": tiles * PokeTiles.TILE_WIDTH,
+			"height": PokeTiles.TILE_HEIGHT,
 			"tiles": tiles,
 			"first_code": int(first_codes.get(row_name, 0)),
 			"bits": 1,
@@ -84,20 +84,20 @@ func _write_cache() -> void:
 ## marker in index 3, and the two palettes `InitPartyMenuOBPals` copies.
 func _write_icons() -> void:
 	var strip: PackedByteArray = PackedByteArray()
-	strip.resize(RomLayout.MON_ICON_TILES * Gen2Tiles.TILE_PIXELS)
-	var width: int = RomLayout.MON_ICON_TILES * Gen2Tiles.TILE_WIDTH
-	for row: int in Gen2Tiles.TILE_HEIGHT:
+	strip.resize(Gen2Layout.MON_ICON_TILES * PokeTiles.TILE_PIXELS)
+	var width: int = Gen2Layout.MON_ICON_TILES * PokeTiles.TILE_WIDTH
+	for row: int in PokeTiles.TILE_HEIGHT:
 		for column: int in width:
 			strip[row * width + column] = 1 if column < HALF_ICON_COLUMNS else 2
 	RomCache.write_indices(RomCache.overworld_icon_path(_directory, FIXTURE_ICON), strip)
 
 	var held: PackedByteArray = PackedByteArray()
-	held.resize(RomLayout.HELD_ITEM_ICON_TILES * Gen2Tiles.TILE_PIXELS)
+	held.resize(Gen2Layout.HELD_ITEM_ICON_TILES * PokeTiles.TILE_PIXELS)
 	held.fill(3)
 	RomCache.write_indices(RomCache.held_item_icon_path(_directory), held)
 
 	var species: PackedByteArray = PackedByteArray()
-	species.resize(RomLayout.SPECIES_COUNT)
+	species.resize(Gen2Layout.SPECIES_COUNT)
 	species[FIXTURE_SPECIES - 1] = FIXTURE_ICON
 	RomCache.write_indices(RomCache.mon_menu_icons_path(_directory), species)
 
@@ -195,7 +195,7 @@ func test_the_chosen_row_moves_its_icon_out_of_the_cursor_column() -> void:
 		"an unselected icon stops at column 1"
 	)
 	assert_eq(
-		_animated(rows, 1, 1).get_pixelv(right), Gen2Palette.from_packed(ICON_FIRST_PACKED),
+		_animated(rows, 1, 1).get_pixelv(right), PokePalette.from_packed(ICON_FIRST_PACKED),
 		"and the chosen row's reaches column 2"
 	)
 
@@ -206,11 +206,11 @@ func test_the_icon_steps_to_its_second_frame_after_nine_passes() -> void:
 	var rows: Array = _rows(1)
 	var at := Vector2i(Gen2Font.TILE, 1 * Gen2Font.TILE)
 	assert_eq(
-		_animated(rows, -1, 9).get_pixelv(at), Gen2Palette.from_packed(ICON_FIRST_PACKED),
+		_animated(rows, -1, 9).get_pixelv(at), PokePalette.from_packed(ICON_FIRST_PACKED),
 		"the first frame lasts nine passes"
 	)
 	assert_eq(
-		_animated(rows, -1, 10).get_pixelv(at), Gen2Palette.from_packed(ICON_SECOND_PACKED),
+		_animated(rows, -1, 10).get_pixelv(at), PokePalette.from_packed(ICON_SECOND_PACKED),
 		"and the second follows it"
 	)
 
@@ -238,7 +238,7 @@ func test_a_held_item_replaces_the_icons_bottom_left_tile() -> void:
 	var bare: Color = _animated(rows, -1, 1).get_pixelv(quadrant)
 	rows[0]["item"] = 1
 	var held: Color = _animated(rows, -1, 1).get_pixelv(quadrant)
-	assert_eq(bare, Gen2Palette.from_packed(ICON_FIRST_PACKED), "the icon's own tile")
+	assert_eq(bare, PokePalette.from_packed(ICON_FIRST_PACKED), "the icon's own tile")
 	assert_eq(held, Color.BLACK, "and the marker's, which the fixture fills with index 3")
 
 
@@ -386,7 +386,7 @@ func test_an_egg_row_draws_its_nickname_and_no_other_quality() -> void:
 func test_an_egg_takes_the_egg_icon_rather_than_its_species_own() -> void:
 	var data: GameData = GameData.open_directory(_directory)
 	assert_eq(data.mon_menu_icon(FIXTURE_SPECIES), FIXTURE_ICON)
-	assert_eq(data.mon_menu_icon(FIXTURE_SPECIES, true), RomLayout.ICON_EGG)
+	assert_eq(data.mon_menu_icon(FIXTURE_SPECIES, true), Gen2Layout.ICON_EGG)
 
 
 ## `StatsScreen_LoadFont`'s page, which the stats and move screens share: the
@@ -421,7 +421,7 @@ func _stats_page() -> Gen2StatsScreenPage:
 func _stats_image(page: Dictionary) -> Image:
 	return Gen2PicImage.from_indices(
 		_stats_page().draw(page), Gen2Screen.WIDTH, Gen2Screen.HEIGHT,
-		Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+		PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	)
 
 
@@ -598,7 +598,7 @@ func test_the_move_screen_marks_the_row_it_is_holding() -> void:
 	}
 	var listed: Image = Gen2PicImage.from_indices(
 		page.draw(snapshot), Gen2Screen.WIDTH, Gen2Screen.HEIGHT,
-		Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+		PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	)
 	var second_row: int = Gen2MoveScreenPage.CURSOR_FIRST_ROW \
 		+ Gen2MoveScreenPage.CURSOR_ROW_STEP
@@ -613,7 +613,7 @@ func test_the_move_screen_marks_the_row_it_is_holding() -> void:
 	snapshot["held"] = 1
 	var holding: Image = Gen2PicImage.from_indices(
 		page.draw(snapshot), Gen2Screen.WIDTH, Gen2Screen.HEIGHT,
-		Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+		PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	)
 	assert_eq(
 		_ink_in_tile(

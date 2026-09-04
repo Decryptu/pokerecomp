@@ -23,7 +23,7 @@ func _initialize() -> void:
 		push_error("Usage: preview_mail.gd -- <game> <output.png> [type|all]")
 		quit(1)
 		return
-	if Gen2ToolPath.refuses(args[1]):
+	if PokeToolPath.refuses(args[1]):
 		quit(2)
 		return
 
@@ -39,8 +39,8 @@ func _initialize() -> void:
 		return
 
 	var wanted: String = args[2] if args.size() > 2 else "all"
-	var types: Array = range(RomLayout.MAIL_PALETTE_COUNT) if wanted == "all" \
-		else [clampi(int(wanted), 0, RomLayout.MAIL_PALETTE_COUNT - 1)]
+	var types: Array = range(Gen2Layout.MAIL_PALETTE_COUNT) if wanted == "all" \
+		else [clampi(int(wanted), 0, Gen2Layout.MAIL_PALETTE_COUNT - 1)]
 	var columns: int = mini(COLUMNS, types.size())
 	@warning_ignore("integer_division")
 	var rows: int = (types.size() + columns - 1) / columns

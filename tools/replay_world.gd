@@ -19,7 +19,7 @@ const DEFAULT_FRAMES: int = 1200
 ## still inside the same clock minute.
 const BATTLE_FRAMES: int = 3000
 const DIRECTIONS: Array[int] = [
-	Gen2Button.UP, Gen2Button.DOWN, Gen2Button.LEFT, Gen2Button.RIGHT
+	PokeButton.UP, PokeButton.DOWN, PokeButton.LEFT, PokeButton.RIGHT
 ]
 ## `Gen2WorldSpawn`'s own group, whose map numbering is the same on all three
 ## cartridges, so one route list sweeps every profile.
@@ -390,7 +390,7 @@ func _drive(screen: Gen2WorldScreen, frames: int) -> int:
 				## to move before the choice is taken.
 				var picking: bool = screen._battle_host._switch_stage == &"pick"
 				screen.press_button(
-					Gen2Button.DOWN if picking and cursor_moved % 2 == 0 else Gen2Button.A
+					PokeButton.DOWN if picking and cursor_moved % 2 == 0 else PokeButton.A
 				)
 				if picking:
 					cursor_moved += 1
@@ -405,7 +405,7 @@ func _drive(screen: Gen2WorldScreen, frames: int) -> int:
 			var step: int = screen._world.frame_number \
 				/ Gen2WorldAPI.passes_in_frames(Gen2WorldAPI.STEP_PASSES_WALK)
 			screen.press_button(
-				Gen2Button.DOWN if step % 2 == 0 else Gen2Button.UP
+				PokeButton.DOWN if step % 2 == 0 else PokeButton.UP
 			)
 		screen.advance_frame()
 	return battles
@@ -423,7 +423,7 @@ func _program(seed_value: int, frames: int, errand: bool = false) -> Array:
 	var frame: int = 1
 	while frame <= frames:
 		if random.randi_range(0, 9) == 0:
-			log_lines.append({"frame": frame, "kind": "press", "button": Gen2Button.A})
+			log_lines.append({"frame": frame, "kind": "press", "button": PokeButton.A})
 			frame += random.randi_range(2, 8)
 			continue
 		var direction: int = DIRECTIONS[random.randi_range(0, DIRECTIONS.size() - 1)]
@@ -452,7 +452,7 @@ func _errand_program(frames: int) -> Array:
 	var log_lines: Array = []
 	var walk: int = mini(frames, (MART_DOOR.y - MART_COUNTER.y) * _walk_frames())
 	for frame: int in range(1, walk + 1):
-		log_lines.append({"frame": frame, "kind": "hold", "button": Gen2Button.UP})
+		log_lines.append({"frame": frame, "kind": "hold", "button": PokeButton.UP})
 	## Clear of the walk rather than up against it: `move_player` refuses a press
 	## while the last step is still in flight, and a turn that is refused leaves
 	## the player facing the wall behind the counter instead of the clerk.
@@ -460,11 +460,11 @@ func _errand_program(frames: int) -> Array:
 		log_lines.append({
 			"frame": walk + _walk_frames() * 3,
 			"kind": "press",
-			"button": Gen2Button.LEFT,
+			"button": PokeButton.LEFT,
 		})
 	var frame: int = walk + _walk_frames() * 5
 	while frame <= frames:
-		log_lines.append({"frame": frame, "kind": "press", "button": Gen2Button.A})
+		log_lines.append({"frame": frame, "kind": "press", "button": PokeButton.A})
 		frame += 8
 	return log_lines
 

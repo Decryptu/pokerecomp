@@ -252,7 +252,7 @@ func test_a_scroll_landing_on_the_last_page_runs_the_script_on_without_a_press()
 	assert_true(_world_screen._text_box.visible)
 
 	# The `<CONT>`.
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 	assert_true(_world_screen._text_box.is_scrolling(), "TextScroll is running")
 	_settle_text_box(_world_screen)
 	assert_eq(
@@ -263,7 +263,7 @@ func test_a_scroll_landing_on_the_last_page_runs_the_script_on_without_a_press()
 	assert_true(_world_screen._text_box.visible, "closetext takes the box down, not this")
 
 	# The `waitbutton`.
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 	assert_true(_world_screen._world.pending_script_input().is_empty())
 	assert_false(_world_screen._text_box.visible)
 

@@ -1,4 +1,4 @@
-class_name Gen2InputDevice
+class_name PokeInputDevice
 extends RefCounted
 
 ## Which kind of device an event came from.
@@ -66,7 +66,7 @@ static func evidence_of(event: InputEvent, handheld: bool) -> StringName:
 	if event is InputEventMouseMotion:
 		return &""
 	var motion := event as InputEventJoypadMotion
-	if motion != null and absf(motion.axis_value) < Gen2InputActions.DEADZONE:
+	if motion != null and absf(motion.axis_value) < PokeInputActions.DEADZONE:
 		return &""
 	return kind
 

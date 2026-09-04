@@ -159,16 +159,16 @@ const DUDE_PACK_QUANTITIES: Dictionary = {
 ## poll more than its value (`home/joypad.asm`'s `.auto`), which is not a frame.
 ## See [constant DUDE_POLLS_PER_FRAME].
 const DUDE_AUTO_INPUT: Dictionary = {
-	&"text": [[Gen2Button.NONE, 0x50], [Gen2Button.A, 0x00]],
+	&"text": [[PokeButton.NONE, 0x50], [PokeButton.A, 0x00]],
 	&"pack": [
-		[Gen2Button.NONE, 0x08], [Gen2Button.RIGHT, 0x00],
-		[Gen2Button.NONE, 0x08], [Gen2Button.A, 0x00],
+		[PokeButton.NONE, 0x08], [PokeButton.RIGHT, 0x00],
+		[PokeButton.NONE, 0x08], [PokeButton.A, 0x00],
 	],
 	&"menu": [
-		[Gen2Button.NONE, 0xFE], [Gen2Button.NONE, 0xFE], [Gen2Button.NONE, 0xFE],
-		[Gen2Button.NONE, 0xFE], [Gen2Button.DOWN, 0x00],
-		[Gen2Button.NONE, 0xFE], [Gen2Button.NONE, 0xFE], [Gen2Button.NONE, 0xFE],
-		[Gen2Button.NONE, 0xFE], [Gen2Button.A, 0x00],
+		[PokeButton.NONE, 0xFE], [PokeButton.NONE, 0xFE], [PokeButton.NONE, 0xFE],
+		[PokeButton.NONE, 0xFE], [PokeButton.DOWN, 0x00],
+		[PokeButton.NONE, 0xFE], [PokeButton.NONE, 0xFE], [PokeButton.NONE, 0xFE],
+		[PokeButton.NONE, 0xFE], [PokeButton.A, 0x00],
 	],
 }
 
@@ -546,7 +546,7 @@ var _battle_music: int = Gen2Battle.MUSIC_NONE
 ## `DelayFrame` are both hardware frame counts.
 func _process(delta: float) -> void:
 	if _box != null:
-		_box.accelerated = Gen2Button.text_accelerating()
+		_box.accelerated = PokeButton.text_accelerating()
 	## A screen someone else spends frames for must not also spend them off real
 	## time. The world drives a battle from its own pump
 	## ([method advance_hardware_frame]), so with this clock running as well every
@@ -668,7 +668,7 @@ func advance_slide() -> bool:
 	Gen2BattleScreenMap.slide_step(_bg_map, player_side)
 	var side: int = Gen2Battle.PLAYER if player_side else Gen2Battle.ENEMY
 	_slid_pixels[side] = float(_slid_pixels[side]) + (
-		-float(Gen2Tiles.TILE_WIDTH) if player_side else float(Gen2Tiles.TILE_WIDTH)
+		-float(PokeTiles.TILE_WIDTH) if player_side else float(PokeTiles.TILE_WIDTH)
 	)
 	if int(slide["step"]) >= int(Gen2BattleScreenMap.SLIDE_STEPS[player_side]):
 		_slides.remove_at(0)
@@ -688,7 +688,7 @@ func _advance_result_slide(slide: Dictionary) -> bool:
 	slide["step"] = step
 	slide["delay"] = 44 if step == 6 else 4
 	Gen2BattleScreenMap.result_trainer_step(_bg_map, step)
-	_slid_pixels[Gen2Battle.ENEMY] = float((8 - step) * Gen2Tiles.TILE_WIDTH)
+	_slid_pixels[Gen2Battle.ENEMY] = float((8 - step) * PokeTiles.TILE_WIDTH)
 	_push_view()
 	return true
 
@@ -962,14 +962,14 @@ func _spend_auto_input_poll() -> void:
 	_auto_input_index += 1
 	_auto_input_delay = int(entry[1])
 	var button: int = int(entry[0])
-	if button != Gen2Button.NONE:
+	if button != PokeButton.NONE:
 		_handle_button(button)
 
 
 ## One button, from the funnel rather than from an [InputEvent]. Public so the
 ## world can forward what it consumed and a tool can drive a fight by hand.
 func press_button(button: int) -> bool:
-	if not is_ready() or button == Gen2Button.NONE:
+	if not is_ready() or button == PokeButton.NONE:
 		return false
 	return _handle_button(button)
 
@@ -2310,13 +2310,13 @@ func _play_hit_sound() -> void:
 	if after != Gen2BattleAnimPlayer.AFTER_ANIM_ENEMY_DAMAGE \
 			and after != Gen2BattleAnimPlayer.AFTER_ANIM_PLAYER_DAMAGE:
 		return
-	var effectiveness: int = int(_anim_event.get("effectiveness", RomLayout.MATCHUP_EFFECTIVE))
+	var effectiveness: int = int(_anim_event.get("effectiveness", Gen2Layout.MATCHUP_EFFECTIVE))
 	if effectiveness == 0:
 		return
 	var sfx: int = SFX_DAMAGE
-	if effectiveness > RomLayout.MATCHUP_EFFECTIVE:
+	if effectiveness > Gen2Layout.MATCHUP_EFFECTIVE:
 		sfx = SFX_SUPER_EFFECTIVE
-	elif effectiveness < RomLayout.MATCHUP_EFFECTIVE:
+	elif effectiveness < Gen2Layout.MATCHUP_EFFECTIVE:
 		sfx = SFX_NOT_VERY_EFFECTIVE
 	_play_sfx(sfx, true)
 
@@ -2551,7 +2551,7 @@ func info_snapshot() -> Dictionary:
 		var out: Dictionary = row.duplicate(true)
 		out["effectiveness"] = _data.type_effectiveness(
 			int(row.get("type", 0)), defending, identified
-		) if _data != null else RomLayout.MATCHUP_EFFECTIVE
+		) if _data != null else Gen2Layout.MATCHUP_EFFECTIVE
 		rows.append(out)
 	return {
 		"ready": is_ready(),
@@ -2581,7 +2581,7 @@ func info_snapshot() -> Dictionary:
 		"move_rows_right": Gen2BattleMenu.MOVE_RIGHT - 1,
 		## `EFFECTIVE` itself, so a provider compares against the engine's own
 		## neutral rather than repeating the number.
-		"neutral": RomLayout.MATCHUP_EFFECTIVE,
+		"neutral": Gen2Layout.MATCHUP_EFFECTIVE,
 	}
 
 
@@ -2650,7 +2650,7 @@ func _refresh_annotations() -> void:
 		_annotation_layer,
 		Gen2PicImage.from_indices(
 			indices, Gen2Screen.WIDTH, Gen2Screen.HEIGHT,
-			Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK])),
+			PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK])),
 			true
 		),
 		Vector2i.ZERO
@@ -3592,26 +3592,26 @@ func _answer_forget(button: int) -> void:
 	## AskForgetMoveText is three paragraphs, so the box still has pages to turn.
 	## A confirm reveals and pages first, the way [method advance] does, rather
 	## than answering a question the player has not finished reading.
-	if button == Gen2Button.A and _box != null and _box.advance():
+	if button == PokeButton.A and _box != null and _box.advance():
 		return
 	match _forget_stage:
 		&"ask", &"stop":
-			if Gen2Button.is_direction(button):
+			if PokeButton.is_direction(button):
 				_forget_confirm_cursor = 1 - _forget_confirm_cursor
 				_show_forget_confirm()
-			elif button == Gen2Button.A:
+			elif button == PokeButton.A:
 				_confirm_forget_stage()
 		&"list":
 			match button:
-				Gen2Button.UP:
+				PokeButton.UP:
 					_forget_cursor = wrapi(_forget_cursor - 1, 0, _forget_moves.size())
 					_show_forget_list()
-				Gen2Button.DOWN:
+				PokeButton.DOWN:
 					_forget_cursor = wrapi(_forget_cursor + 1, 0, _forget_moves.size())
 					_show_forget_list()
-				Gen2Button.A:
+				PokeButton.A:
 					_confirm_forget_slot()
-				Gen2Button.B:
+				PokeButton.B:
 					_show_forget_stage(&"stop")
 
 
@@ -3681,7 +3681,7 @@ func advance() -> void:
 	## The battle menu is answered with A, which is what this call is: the source
 	## reads one joypad for the box and for the menu over it.
 	if _menu_stage != &"":
-		_answer_menu(Gen2Button.A)
+		_answer_menu(PokeButton.A)
 		return
 	_continue_after_messages()
 
@@ -4193,13 +4193,13 @@ func _answer_menu(button: int) -> void:
 ## header's own STATICMENU_DISABLE_B.
 func _answer_battle_menu(button: int) -> void:
 	match button:
-		Gen2Button.UP, Gen2Button.DOWN, Gen2Button.LEFT, Gen2Button.RIGHT:
+		PokeButton.UP, PokeButton.DOWN, PokeButton.LEFT, PokeButton.RIGHT:
 			var moved: int = Gen2BattleMenu.main_moved(_menu_position, button)
 			if moved == _menu_position:
 				return
 			_menu_position = moved
 			_refresh_menu_layer()
-		Gen2Button.A:
+		PokeButton.A:
 			_choose_battle_menu()
 
 
@@ -4238,15 +4238,15 @@ func _choose_battle_menu() -> void:
 ## it, and A either refuses the slot or spends the turn on it.
 func _answer_move_menu(button: int) -> void:
 	match button:
-		Gen2Button.UP, Gen2Button.DOWN:
+		PokeButton.UP, PokeButton.DOWN:
 			_move_cursor = Gen2BattleMenu.move_cursor_moved(
 				_move_cursor, button, _move_rows.size()
 			)
 			_refresh_menu_layer()
-		Gen2Button.B:
+		PokeButton.B:
 			_menu_stage = &"main"
 			_reopen_menu_layer()
-		Gen2Button.A:
+		PokeButton.A:
 			var row: Dictionary = _move_rows[_move_cursor]
 			var refusal: String = Gen2BattleMenu.refusal_for(row)
 			if not refusal.is_empty():
@@ -4429,16 +4429,16 @@ const CONTEST_LEVEL_CODE: int = 0x6E
 
 func _answer_contest_replace(button: int) -> void:
 	if _offer_still_reading():
-		if button == Gen2Button.A:
+		if button == PokeButton.A:
 			_box.advance()
 			_refresh_menu_layer()
 		return
 	match button:
-		Gen2Button.UP, Gen2Button.DOWN:
-			_switch_offer.move(Vector2i(0, 1 if button == Gen2Button.DOWN else -1))
+		PokeButton.UP, PokeButton.DOWN:
+			_switch_offer.move(Vector2i(0, 1 if button == PokeButton.DOWN else -1))
 			_refresh_menu_layer()
-		Gen2Button.A, Gen2Button.B:
-			var replace: bool = button == Gen2Button.A \
+		PokeButton.A, PokeButton.B:
+			var replace: bool = button == PokeButton.A \
 				and _switch_offer.selected_index() == 0
 			_close_switch()
 			var capture: Dictionary = _capture_result.duplicate(true)
@@ -4454,20 +4454,20 @@ func _answer_switch_offer_button(button: int) -> void:
 	## anything, the way [method _answer_forget] does. The box is not up on
 	## hardware until the text is either.
 	if _offer_still_reading():
-		if button == Gen2Button.A:
+		if button == PokeButton.A:
 			_box.advance()
 			_refresh_menu_layer()
 		return
 	match button:
-		Gen2Button.UP, Gen2Button.DOWN:
-			_switch_offer.move(Vector2i(0, 1 if button == Gen2Button.DOWN else -1))
+		PokeButton.UP, PokeButton.DOWN:
+			_switch_offer.move(Vector2i(0, 1 if button == PokeButton.DOWN else -1))
 			_refresh_menu_layer()
-		Gen2Button.A:
+		PokeButton.A:
 			if _switch_offer.selected_index() == 0:
 				_open_switch_pick(&"offer")
 			else:
 				_decline_switch_offer()
-		Gen2Button.B:
+		PokeButton.B:
 			_decline_switch_offer()
 
 
@@ -4477,17 +4477,17 @@ func _answer_switch_offer_button(button: int) -> void:
 ## with one too.
 func _answer_use_next_button(button: int) -> void:
 	if _offer_still_reading():
-		if button == Gen2Button.A:
+		if button == PokeButton.A:
 			_box.advance()
 			_refresh_menu_layer()
 		return
 	match button:
-		Gen2Button.UP, Gen2Button.DOWN:
-			_switch_offer.move(Vector2i(0, 1 if button == Gen2Button.DOWN else -1))
+		PokeButton.UP, PokeButton.DOWN:
+			_switch_offer.move(Vector2i(0, 1 if button == PokeButton.DOWN else -1))
 			_refresh_menu_layer()
-		Gen2Button.A:
+		PokeButton.A:
 			_answer_use_next(_switch_offer.selected_index() == 0)
-		Gen2Button.B:
+		PokeButton.B:
 			_answer_use_next(false)
 
 
@@ -4513,13 +4513,13 @@ func _offer_still_reading() -> bool:
 ## else ignored.
 func _answer_switch_pick(button: int) -> void:
 	match button:
-		Gen2Button.UP:
+		PokeButton.UP:
 			_switch_menu.move(-1)
 			_refresh_menu_layer()
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			_switch_menu.move(1)
 			_refresh_menu_layer()
-		Gen2Button.A:
+		PokeButton.A:
 			## `UseItem_SelectMon` makes neither of `PickPartyMonInBattle`'s two
 			## checks: a fainted member is exactly what a Revive wants, and the
 			## one already out is what a potion usually goes on. The item's own
@@ -4531,7 +4531,7 @@ func _answer_switch_pick(button: int) -> void:
 				})
 				return
 			_resolve_switch(_switch_menu.confirm())
-		Gen2Button.B:
+		PokeButton.B:
 			_resolve_switch(_switch_menu.cancel())
 
 
@@ -4764,7 +4764,7 @@ func _draw_contest_stats() -> void:
 	var rows: int = (CONTEST_THIS_TOP + CONTEST_STATS_HEIGHT + 1) * Gen2Font.TILE
 	var image: Image = Gen2PicImage.from_indices(
 		indices, width, Gen2Screen.HEIGHT,
-		Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+		PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	).get_region(Rect2i(0, 0, width, rows))
 	_show_menu_image(image, Vector2i.ZERO)
 
@@ -5559,9 +5559,9 @@ func _line_argument(code: StringName, event: Dictionary) -> Variant:
 func _hit_text(event: Dictionary) -> String:
 	if bool(event["critical"]):
 		return "A critical hit!"
-	if int(event["effectiveness"]) > RomLayout.MATCHUP_EFFECTIVE:
+	if int(event["effectiveness"]) > Gen2Layout.MATCHUP_EFFECTIVE:
 		return "It's super effective!"
-	if int(event["effectiveness"]) < RomLayout.MATCHUP_EFFECTIVE:
+	if int(event["effectiveness"]) < Gen2Layout.MATCHUP_EFFECTIVE:
 		return "It's not very effective..."
 	return ""
 
@@ -5742,8 +5742,8 @@ func _read_hp() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_ready() or _driven:
 		return
-	var button: int = Gen2Button.pressed_in(event)
-	if button != Gen2Button.NONE:
+	var button: int = PokeButton.pressed_in(event)
+	if button != PokeButton.NONE:
 		if _handle_button(button):
 			accept_event()
 		return
@@ -5797,7 +5797,7 @@ func _handle_button(button: int) -> bool:
 	for row: Array in _keyed_modals():
 		if bool(row[0]):
 			return (row[1] as Callable).call(button)
-	if button == Gen2Button.A:
+	if button == PokeButton.A:
 		advance()
 		return true
 	return false
@@ -5817,17 +5817,17 @@ func _keyed_modals() -> Array:
 
 func _button_pack_move(button: int) -> bool:
 	match button:
-		Gen2Button.RIGHT, Gen2Button.DOWN:
+		PokeButton.RIGHT, PokeButton.DOWN:
 			_pack_move_index = posmod(_pack_move_index + 1, _pack_move_slots.size())
 			_show_pack_move_selection()
-		Gen2Button.LEFT, Gen2Button.UP:
+		PokeButton.LEFT, PokeButton.UP:
 			_pack_move_index = posmod(_pack_move_index - 1, _pack_move_slots.size())
 			_show_pack_move_selection()
-		Gen2Button.A:
+		PokeButton.A:
 			_use_pack_item(
 				_pack_item, _pack_move_target, int(_pack_move_slots[_pack_move_index])
 			)
-		Gen2Button.B:
+		PokeButton.B:
 			_close_pack_move()
 			open_battle_pack()
 		_:
@@ -5837,13 +5837,13 @@ func _button_pack_move(button: int) -> bool:
 
 func _button_pack_action(button: int) -> bool:
 	match button:
-		Gen2Button.RIGHT, Gen2Button.DOWN:
+		PokeButton.RIGHT, PokeButton.DOWN:
 			_pack_action_index = posmod(_pack_action_index + 1, PACK_ACTIONS.size())
 			_reopen_menu_layer()
-		Gen2Button.LEFT, Gen2Button.UP:
+		PokeButton.LEFT, PokeButton.UP:
 			_pack_action_index = posmod(_pack_action_index - 1, PACK_ACTIONS.size())
 			_reopen_menu_layer()
-		Gen2Button.A:
+		PokeButton.A:
 			var over: StringName = _pack_action_stage
 			_pack_action_stage = &""
 			if _pack_action_index != 0:
@@ -5852,7 +5852,7 @@ func _button_pack_action(button: int) -> bool:
 				throw_capture_ball()
 			else:
 				use_selected_pack_item()
-		Gen2Button.B:
+		PokeButton.B:
 			## `.Quit` is a bare `ret`, so the list the row was chosen from
 			## is still standing under the box that just closed.
 			_pack_action_stage = &""
@@ -5864,11 +5864,11 @@ func _button_pack_action(button: int) -> bool:
 
 func _button_pack(button: int) -> bool:
 	match button:
-		Gen2Button.RIGHT, Gen2Button.DOWN:
+		PokeButton.RIGHT, PokeButton.DOWN:
 			select_pack_row(_pack_index + 1)
-		Gen2Button.LEFT, Gen2Button.UP:
+		PokeButton.LEFT, PokeButton.UP:
 			select_pack_row(_pack_index - 1)
-		Gen2Button.A:
+		PokeButton.A:
 			## `BattleMenu_Pack.tutorial` discards what `TutorialPack` answered
 			## and throws a POKE BALL anyway, so there is no USE submenu.
 			if _world_battle_tutorial:
@@ -5876,7 +5876,7 @@ func _button_pack(button: int) -> bool:
 				_throw_ball(Gen2WorldPartyHost.ITEM_POKE_BALL, &"pack")
 			else:
 				_open_pack_action(&"pack")
-		Gen2Button.B:
+		PokeButton.B:
 			close_battle_pack()
 		_:
 			return false
@@ -5885,13 +5885,13 @@ func _button_pack(button: int) -> bool:
 
 func _button_capture(button: int) -> bool:
 	match button:
-		Gen2Button.RIGHT, Gen2Button.DOWN:
+		PokeButton.RIGHT, PokeButton.DOWN:
 			select_capture_ball(_capture_ball_index + 1)
-		Gen2Button.LEFT, Gen2Button.UP:
+		PokeButton.LEFT, PokeButton.UP:
 			select_capture_ball(_capture_ball_index - 1)
-		Gen2Button.A:
+		PokeButton.A:
 			_open_pack_action(&"capture")
-		Gen2Button.B:
+		PokeButton.B:
 			_clear_capture_action()
 			show_message("Choose an action.")
 		_:
@@ -5903,7 +5903,7 @@ func _button_capture(button: int) -> bool:
 ## a side, switch, run and step through species. Debug builds only, and off the
 ## keys a button is bound to, so nothing here competes with a real control.
 func _handle_debug_key(event: InputEvent) -> bool:
-	if not Gen2DebugKeys.enabled():
+	if not PokeDebugKeys.enabled():
 		return false
 	var key: InputEventKey = event as InputEventKey
 	if key == null:
@@ -6194,7 +6194,7 @@ func battler_side(side: int) -> Dictionary:
 	elif person:
 		offset = float(_slid_pixels[side])
 		var walked: float = float(
-			int(Gen2BattleScreenMap.SLIDE_STEPS[player_side]) * Gen2Tiles.TILE_WIDTH
+			int(Gen2BattleScreenMap.SLIDE_STEPS[player_side]) * PokeTiles.TILE_WIDTH
 		)
 		kind = &"none" if absf(offset) >= walked else &"trainer"
 	return {
@@ -6219,7 +6219,7 @@ func _faint_offset(side: int) -> Vector2:
 		var player_side: bool = side == Gen2Battle.PLAYER
 		if bool(faint["player_side"]) != player_side:
 			continue
-		return Vector2(0.0, float(int(faint["step"]) * Gen2Tiles.TILE_HEIGHT))
+		return Vector2(0.0, float(int(faint["step"]) * PokeTiles.TILE_HEIGHT))
 	return Vector2.ZERO
 
 

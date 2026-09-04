@@ -80,7 +80,7 @@ func _write_cache(game_id: String = "testworld") -> void:
 	RomCache.write_json(RomCache.world_tilesets_path(_directory), [{
 		"number": 0,
 		"block_count": 2,
-		"tile_count": RomLayout.TILESET_TILE_COUNT,
+		"tile_count": Gen2Layout.TILESET_TILE_COUNT,
 		"meta": meta,
 		"collision": [0, 0, 0, 0, 0x29, 0x29, 0x29, 0x29],
 	}])
@@ -206,7 +206,7 @@ func _write_cache(game_id: String = "testworld") -> void:
 		"collision": collision,
 		"collision_width": 16,
 		"collision_height": 12,
-		"connection_flags": RomLayout.MAP_CONNECTION_FLAG_EAST,
+		"connection_flags": Gen2Layout.MAP_CONNECTION_FLAG_EAST,
 		"connections": [{
 			"direction": "east", "map_group": 1, "map_number": 2,
 			"length": 6, "target_width_blocks": 8,
@@ -230,7 +230,7 @@ func _write_cache(game_id: String = "testworld") -> void:
 		"collision": target_collision,
 		"collision_width": 16,
 		"collision_height": 12,
-		"connection_flags": RomLayout.MAP_CONNECTION_FLAG_WEST,
+		"connection_flags": Gen2Layout.MAP_CONNECTION_FLAG_WEST,
 		"connections": [{
 			"direction": "west", "map_group": 1, "map_number": 1,
 			"length": 6, "target_width_blocks": 8,
@@ -315,8 +315,8 @@ func _write_cache(game_id: String = "testworld") -> void:
 			"mons": [{"species": 0xF3, "level": 40, "map_group": 1, "map_number": 2}],
 		},
 		"probabilities": {
-			"grass": RomLayout.WILD_GRASS_PROBABILITIES,
-			"water": RomLayout.WILD_WATER_PROBABILITIES,
+			"grass": Gen2Layout.WILD_GRASS_PROBABILITIES,
+			"water": Gen2Layout.WILD_WATER_PROBABILITIES,
 		},
 	})
 	RomCache.write_json(RomCache.world_scripts_path(_directory), {
@@ -338,7 +338,7 @@ func _write_cache(game_id: String = "testworld") -> void:
 	})
 
 	var pixels := PackedByteArray()
-	pixels.resize(RomLayout.TILESET_TILE_COUNT * Gen2Tiles.TILE_PIXELS)
+	pixels.resize(Gen2Layout.TILESET_TILE_COUNT * PokeTiles.TILE_PIXELS)
 	for index: int in pixels.size():
 		pixels[index] = index % 4
 	RomCache.write_indices(RomCache.world_tile_path(_directory, 0), pixels)
@@ -348,11 +348,11 @@ func _write_cache(game_id: String = "testworld") -> void:
 		"tiles": 4, "type": Gen2WorldSprite.TYPE_STILL, "palette": 0,
 	}])
 	var sprite_palettes: Array = []
-	for _group: int in RomLayout.OVERWORLD_SPRITE_PALETTE_GROUP_COUNT:
+	for _group: int in Gen2Layout.OVERWORLD_SPRITE_PALETTE_GROUP_COUNT:
 		sprite_palettes.append([0x7FFF, 0x421F, 0x2108, 0])
 	RomCache.write_json(RomCache.overworld_sprite_palettes_path(_directory), sprite_palettes)
 	var sprite_pixels := PackedByteArray()
-	sprite_pixels.resize(4 * Gen2Tiles.TILE_PIXELS)
+	sprite_pixels.resize(4 * PokeTiles.TILE_PIXELS)
 	for index: int in sprite_pixels.size():
 		sprite_pixels[index] = index % 4
 	RomCache.write_indices(RomCache.overworld_sprite_path(_directory, 1), sprite_pixels)
@@ -382,7 +382,7 @@ func _write_cache(game_id: String = "testworld") -> void:
 			"item_script": {"bank": 48, "address": 0x4234},
 			"doll_script": {"bank": 48, "address": 0x5678},
 		},
-		## The `RomLayout.SPECIAL_TEXT_RUNS` boxes the deferred routines print,
+		## The `Gen2Layout.SPECIAL_TEXT_RUNS` boxes the deferred routines print,
 		## with the `text_ram` markers a real cache carries so a filled buffer is
 		## told from an unfilled one.
 		"special_text": {
@@ -650,23 +650,23 @@ func test_mom_picks_at_random_only_on_a_mom_money_boundary() -> void:
 	var data: GameData = GameData.open_directory(_directory)
 	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 1, 1, Vector2i(7, 6))
 	var savings: int = Gen2WorldScriptRunner.ACCOUNT_MOMS_MONEY
-	world.state.set_mom_purchase(2, 0, RomLayout.MOM_MONEY)
+	world.state.set_mom_purchase(2, 0, Gen2Layout.MOM_MONEY)
 
 	world.state.apply_changes({}, {}, {"money": {savings: 5000}})
 	assert_false(bool(world.mom_purchase()["bought"]), "5000 is not a multiple")
 	assert_eq(
-		world.state.mom_item_trigger_balance(), RomLayout.MOM_MONEY * 3,
+		world.state.mom_item_trigger_balance(), Gen2Layout.MOM_MONEY * 3,
 		"and the walk's own climb is kept"
 	)
 
-	world.state.set_mom_purchase(2, 0, RomLayout.MOM_MONEY)
-	world.state.apply_changes({}, {}, {"money": {savings: RomLayout.MOM_MONEY * 4}})
+	world.state.set_mom_purchase(2, 0, Gen2Layout.MOM_MONEY)
+	world.state.apply_changes({}, {}, {"money": {savings: Gen2Layout.MOM_MONEY * 4}})
 	var bought: Dictionary = world.mom_purchase()
 	assert_true(bool(bought["bought"]), JSON.stringify(bought))
 	assert_eq(world.state.mom_item_index(), 2, "a random pick leaves the ladder alone")
 	assert_eq(world.state.mom_item_set(), 1)
 	assert_eq(
-		world.state.mom_item_trigger_balance(), RomLayout.MOM_MONEY * 5,
+		world.state.mom_item_trigger_balance(), Gen2Layout.MOM_MONEY * 5,
 		"and the next boundary is one step past the one she landed on"
 	)
 
@@ -991,7 +991,7 @@ func _write_grass_rows(morning_rare: int, night_rare: int) -> void:
 	var rows: Array = []
 	for rare: int in [morning_rare, morning_rare, night_rare]:
 		var row: Array = []
-		for index: int in RomLayout.WILD_GRASS_SLOT_COUNT:
+		for index: int in Gen2Layout.WILD_GRASS_SLOT_COUNT:
 			row.append({
 				"level": 5, "species": (16 + index) if index < 4 else rare + index - 4,
 			})
@@ -5156,8 +5156,8 @@ func test_the_crystal_name_commands_fill_their_string_buffers() -> void:
 	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
 	# getlandmarkname STRING_BUFFER_4, 1 | gettrainerclassname STRING_BUFFER_5, 1
 	scripts["48:6200"] = [
-		0xA5, 1, RomLayout.STRING_BUFFER_4,
-		0xA6, 1, RomLayout.STRING_BUFFER_5,
+		0xA5, 1, Gen2Layout.STRING_BUFFER_4,
+		0xA6, 1, Gen2Layout.STRING_BUFFER_5,
 		Gen2WorldScript.END,
 	]
 	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
@@ -5168,8 +5168,8 @@ func test_the_crystal_name_commands_fill_their_string_buffers() -> void:
 
 	assert_eq(runner.advance()["status"], &"complete")
 	var buffers: Dictionary = runner.text_context().get("buffers", {})
-	assert_eq(String(buffers.get(RomLayout.STRING_BUFFER_4, "")), data.landmark_name(1))
-	assert_eq(String(buffers.get(RomLayout.STRING_BUFFER_5, "")), data.trainer_name(1))
+	assert_eq(String(buffers.get(Gen2Layout.STRING_BUFFER_4, "")), data.landmark_name(1))
+	assert_eq(String(buffers.get(Gen2Layout.STRING_BUFFER_5, "")), data.trainer_name(1))
 
 
 ## An event is handed to its caller once. The runner drains its list on every
@@ -7609,7 +7609,7 @@ func test_verbosegiveitem_fills_the_buffer_its_text_reads_by_address() -> void:
 	)
 	assert_eq(String(ram[0xCFA4]), data.item_name(1))
 	assert_eq(
-		String(context["buffers"][RomLayout.STRING_BUFFER_4]), data.item_name(1),
+		String(context["buffers"][Gen2Layout.STRING_BUFFER_4]), data.item_name(1),
 		"the same value is still reachable by text_buffer number"
 	)
 
@@ -7692,7 +7692,7 @@ func test_text_ram_resolves_through_the_cartridges_own_pointer_table() -> void:
 	# getitemname into STRING_BUFFER_1, which the table puts at $CF6B on Gold.
 	# The macro emits the item before the buffer (macros/scripts/events.asm:437).
 	scripts["48:6410"] = [
-		Gen2WorldScript.GETITEMNAME, 1, RomLayout.STRING_BUFFER_1, Gen2WorldScript.END,
+		Gen2WorldScript.GETITEMNAME, 1, Gen2Layout.STRING_BUFFER_1, Gen2WorldScript.END,
 	]
 	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
 	var data: GameData = GameData.open_directory(_directory)
@@ -7717,7 +7717,7 @@ func test_getstring_reads_a_name_and_not_a_text_stream() -> void:
 	RomCache.write_json(RomCache.world_text_path(_directory), texts)
 	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
 	scripts["48:6430"] = [
-		Gen2WorldScript.GETSTRING, 0x00, 0x65, RomLayout.STRING_BUFFER_4,
+		Gen2WorldScript.GETSTRING, 0x00, 0x65, Gen2Layout.STRING_BUFFER_4,
 		Gen2WorldScript.END,
 	]
 	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
@@ -7728,7 +7728,7 @@ func test_getstring_reads_a_name_and_not_a_text_stream() -> void:
 	runner.advance()
 
 	var context: Dictionary = runner.text_context()
-	assert_eq(String(context["buffers"][RomLayout.STRING_BUFFER_4]), "POKéGEAR")
+	assert_eq(String(context["buffers"][Gen2Layout.STRING_BUFFER_4]), "POKéGEAR")
 	assert_eq(
 		String((context["ram"] as Dictionary)[0xCFA4]), "POKéGEAR",
 		"_ReceivedItemText reads wStringBuffer4 by address, not by number"
@@ -7864,7 +7864,7 @@ const FRUIT_TREE_ITEM: int = 0x61
 
 func _write_fruit_tree_cache() -> void:
 	var rows: Array = []
-	for index: int in RomLayout.FRUIT_TREE_COUNT:
+	for index: int in Gen2Layout.FRUIT_TREE_COUNT:
 		rows.append(FRUIT_TREE_ITEM if index == FRUIT_TREE_AZALEA - 1 else 0xAD)
 	RomCache.write_json(RomCache.world_fruit_trees_path(_directory), rows)
 	var items: Array = RomCache.read_json(RomCache.items_path(_directory))
@@ -8590,7 +8590,7 @@ func _shiny_anim_data() -> Gen2BattleAnimData:
 	for value: int in [0xD0, 0x00, 0x50, 0x40, 0x00, 0x01, 0xFF]:
 		bytes.append(value)
 	var frameset: int = base + 2
-	var oam: int = base + RomLayout.BATTLE_ANIM_OAM_SET_SIZE
+	var oam: int = base + Gen2Layout.BATTLE_ANIM_OAM_SET_SIZE
 	return Gen2BattleAnimData.create({
 		&"scripts": {
 			"bank": 0x32, "address": base,
@@ -8846,7 +8846,7 @@ func test_a_patched_trade_uses_both_halves_without_moving_the_record() -> void:
 	RomCache.write_json(RomCache.world_trades_path(_directory), [{
 		"trade_id": 0, "dialog": 0, "requested_species": 16, "offered_species": 19,
 		"nickname": "SWAPPY", "ot_name": "MIKE", "ot_id": 1234, "dvs": 0,
-		"item": 0, "gender": RomLayout.TRADE_GENDER_EITHER,
+		"item": 0, "gender": Gen2Layout.TRADE_GENDER_EITHER,
 	}])
 	var overlay := Gen2ContentOverlay.new()
 	var data: GameData = GameData.open_directory(_directory)
@@ -9082,7 +9082,7 @@ func test_connected_map_objects_are_drawn_but_not_in_the_object_table() -> void:
 	var object: Gen2WorldObject = entry["object"]
 	assert_eq(
 		entry["offset"],
-		Vector2i(world.current_map.width_blocks * RomLayout.MAP_BLOCK_CELL_WIDTH, 0),
+		Vector2i(world.current_map.width_blocks * Gen2Layout.MAP_BLOCK_CELL_WIDTH, 0),
 	)
 	assert_false(world.objects.has(object), "not one of this map's own")
 	assert_null(
@@ -9395,32 +9395,32 @@ func test_the_change_row_turns_her_saving_on_and_off() -> void:
 func test_her_dial_steps_by_the_column_it_stands_on_and_clamps() -> void:
 	var dial := Gen2WorldMoneyDial.open(Gen2WorldMoneyDial.MODE_DEPOSIT, 0, 0)
 	assert_eq(dial.cursor, Gen2WorldMoneyDial.DIGITS - 1, "it opens on the ones column")
-	assert_eq(dial.press(Gen2Button.UP), Gen2WorldMoneyDial.PENDING)
+	assert_eq(dial.press(PokeButton.UP), Gen2WorldMoneyDial.PENDING)
 	assert_eq(dial.value, 1)
 	assert_eq(dial.amount_string(), "¥000001")
 	for _step: int in 5:
-		dial.press(Gen2Button.LEFT)
+		dial.press(PokeButton.LEFT)
 	assert_eq(dial.cursor, 0)
-	dial.press(Gen2Button.LEFT)
+	dial.press(PokeButton.LEFT)
 	assert_eq(dial.cursor, 0, "the cursor stops at the edge rather than wrapping")
-	dial.press(Gen2Button.UP)
+	dial.press(PokeButton.UP)
 	assert_eq(dial.value, 100001)
 	for _step: int in 9:
-		dial.press(Gen2Button.UP)
+		dial.press(PokeButton.UP)
 	assert_eq(dial.value, Gen2WorldInventory.MAX_MONEY, "GiveMoney clamps at the ceiling")
-	dial.press(Gen2Button.DOWN)
-	dial.press(Gen2Button.DOWN)
-	dial.press(Gen2Button.DOWN)
-	dial.press(Gen2Button.DOWN)
-	dial.press(Gen2Button.DOWN)
-	dial.press(Gen2Button.DOWN)
-	dial.press(Gen2Button.DOWN)
-	dial.press(Gen2Button.DOWN)
-	dial.press(Gen2Button.DOWN)
-	dial.press(Gen2Button.DOWN)
+	dial.press(PokeButton.DOWN)
+	dial.press(PokeButton.DOWN)
+	dial.press(PokeButton.DOWN)
+	dial.press(PokeButton.DOWN)
+	dial.press(PokeButton.DOWN)
+	dial.press(PokeButton.DOWN)
+	dial.press(PokeButton.DOWN)
+	dial.press(PokeButton.DOWN)
+	dial.press(PokeButton.DOWN)
+	dial.press(PokeButton.DOWN)
 	assert_eq(dial.value, 0, "TakeMoney leaves zero rather than borrowing past it")
-	assert_eq(dial.press(Gen2Button.A), Gen2WorldMoneyDial.CONFIRMED)
-	assert_eq(dial.press(Gen2Button.B), Gen2WorldMoneyDial.CANCELLED)
+	assert_eq(dial.press(PokeButton.A), Gen2WorldMoneyDial.CONFIRMED)
+	assert_eq(dial.press(PokeButton.B), Gen2WorldMoneyDial.CANCELLED)
 
 
 ## `GiveMoney` writes `MAX_MONEY` and `TakeMoney` writes zero rather than either

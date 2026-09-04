@@ -223,7 +223,7 @@ func _open_overworld(fill: bool = true) -> Dictionary:
 		var leg: int = (frame / 120) % 4
 		log_lines.append({
 			"frame": frame, "kind": "hold",
-			"button": [Gen2Button.DOWN, Gen2Button.RIGHT, Gen2Button.UP, Gen2Button.LEFT][leg],
+			"button": [PokeButton.DOWN, PokeButton.RIGHT, PokeButton.UP, PokeButton.LEFT][leg],
 		})
 	screen.replay_input(log_lines)
 	return {"node": screen, "step": func() -> void: screen.advance_frame()}
@@ -265,17 +265,17 @@ func _open_battle() -> Dictionary:
 
 ## `StartMenu` over the map, which is the menu a player opens most.
 func _open_start_menu() -> Dictionary:
-	return await _open_world_menu(Gen2Button.START)
+	return await _open_world_menu(PokeButton.START)
 
 
 ## The pack, which draws a list, an item's own picture and the map behind it.
 func _open_pack() -> Dictionary:
-	var opened: Dictionary = await _open_world_menu(Gen2Button.START)
+	var opened: Dictionary = await _open_world_menu(PokeButton.START)
 	if opened.is_empty():
 		return {}
 	var screen: Gen2WorldScreen = opened["node"]
 	## Down to PACK and A, on the pass the menu reads a press on.
-	for button: int in [Gen2Button.DOWN, Gen2Button.A]:
+	for button: int in [PokeButton.DOWN, PokeButton.A]:
 		screen.press_button(button)
 		for _frame: int in 16:
 			screen.advance_frame()

@@ -95,7 +95,7 @@ static func from_cache(value: Dictionary) -> Gen2WorldSprite:
 	out.bank = int(value.get("bank", 0))
 	out.bytes = int(value.get("bytes", 0))
 	out.tiles = int(value.get(
-		"tiles", floori(float(out.bytes) / float(Gen2Tiles.TILE_BYTES))
+		"tiles", floori(float(out.bytes) / float(PokeTiles.TILE_BYTES))
 	))
 	out.sprite_type = int(value.get("type", TYPE_STILL))
 	out.default_palette = int(value.get("palette", 0))
@@ -107,7 +107,7 @@ static func from_mon_icon(icon: int) -> Gen2WorldSprite:
 	out.number = icon
 	out.icon_number = icon
 	out.tiles = 8
-	out.bytes = out.tiles * Gen2Tiles.TILE_BYTES
+	out.bytes = out.tiles * PokeTiles.TILE_BYTES
 	out.sprite_type = TYPE_MON_ICON
 	return out
 
@@ -176,7 +176,7 @@ static func image_for(
 	var pixels: PackedInt32Array = Gen2PicImage.canvas(16, 16)
 	if sprite == null or sprite.tiles < 4:
 		return Gen2PicImage.canvas_image(pixels, 16, 16)
-	var width: int = sprite.tiles * Gen2Tiles.TILE_WIDTH
+	var width: int = sprite.tiles * PokeTiles.TILE_WIDTH
 	var source_tile: int = sprite.frame_tile_offset(facing, frame)
 	if source_tile < 0 or source_tile + 4 > sprite.tiles or indices.size() < width * 8:
 		return Gen2PicImage.canvas_image(pixels, 16, 16)
@@ -185,7 +185,7 @@ static func image_for(
 	for tile: int in 4:
 		Gen2PicImage.blit_tile(
 			pixels, 16, 16, indices, sprite.tiles, source_tile + tile,
-			(tile & 1) * Gen2Tiles.TILE_WIDTH, (tile >> 1) * Gen2Tiles.TILE_HEIGHT,
+			(tile & 1) * PokeTiles.TILE_WIDTH, (tile >> 1) * PokeTiles.TILE_HEIGHT,
 			table
 		)
 
@@ -209,7 +209,7 @@ static func big_image_for(
 	if sprite == null or shape == BIG_SHAPE_NONE:
 		return Gen2PicImage.canvas_image(pixels, 32, 32)
 	var tile_width: int = sprite.tiles
-	if tile_width <= 0 or indices.size() < tile_width * Gen2Tiles.TILE_PIXELS:
+	if tile_width <= 0 or indices.size() < tile_width * PokeTiles.TILE_PIXELS:
 		return Gen2PicImage.canvas_image(pixels, 32, 32)
 	var table: PackedInt32Array = Gen2PicImage.lookup(palette, true)
 	for placement: Array in _big_placements(shape):

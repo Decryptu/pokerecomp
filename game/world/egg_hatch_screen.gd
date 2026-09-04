@@ -162,29 +162,29 @@ func handle_button(button: int) -> bool:
 		return _naming.handle_button(button)
 	if _phase == Phase.ASK_NICKNAME:
 		if _menu == null or not _menu.visible:
-			if button == Gen2Button.A and _text_box != null \
+			if button == PokeButton.A and _text_box != null \
 				and (_text_box.is_revealing() or _text_box.has_pages_left()):
 				_text_box.advance()
 				return true
 			return false
 		match button:
-			Gen2Button.UP, Gen2Button.DOWN:
+			PokeButton.UP, PokeButton.DOWN:
 				_nickname_yes = not _nickname_yes
 				_draw_yes_no()
 				return true
-			Gen2Button.A:
+			PokeButton.A:
 				_answer_nickname(_nickname_yes)
 				return true
-			Gen2Button.B:
+			PokeButton.B:
 				## `YesNoBox` answers B as NO, which is `.nonickname`.
 				_answer_nickname(false)
 				return true
 		return false
-	if button == Gen2Button.A and _text_box != null and _text_box.visible \
+	if button == PokeButton.A and _text_box != null and _text_box.visible \
 		and (_text_box.is_revealing() or _text_box.has_pages_left()):
 		_text_box.advance()
 		return true
-	if button == Gen2Button.A and _phase == Phase.HATCHED:
+	if button == PokeButton.A and _phase == Phase.HATCHED:
 		_open_nickname_question()
 		return true
 	return false

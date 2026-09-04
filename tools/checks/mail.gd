@@ -171,31 +171,31 @@ func _verify_items() -> void:
 ## The two keyboards' shape, letters, symbol rows and command rows.
 func _verify_keyboards() -> void:
 	var flat: Array = []
-	for table: int in RomLayout.MAIL_INPUT_TABLES:
+	for table: int in Gen2Layout.MAIL_INPUT_TABLES:
 		var rows: Array = _r.data.name_input_chars(
 			Gen2NamingScreen.Keyboard.MAIL_UPPER + table
 		)
 		if not _r.check(
-			rows.size() == RomLayout.MAIL_INPUT_TABLE_ROWS,
+			rows.size() == Gen2Layout.MAIL_INPUT_TABLE_ROWS,
 			"mail table %d has %d rows, not %d." % [
-				table, rows.size(), RomLayout.MAIL_INPUT_TABLE_ROWS,
+				table, rows.size(), Gen2Layout.MAIL_INPUT_TABLE_ROWS,
 			]
 		):
 			continue
 		for row: Array in rows:
 			_r.check(
-				row.size() == RomLayout.MAIL_INPUT_ROW_BYTES,
+				row.size() == Gen2Layout.MAIL_INPUT_ROW_BYTES,
 				"mail table %d has a %d-byte row, not %d." % [
-					table, row.size(), RomLayout.MAIL_INPUT_ROW_BYTES,
+					table, row.size(), Gen2Layout.MAIL_INPUT_ROW_BYTES,
 				]
 			)
 			flat.append_array(row)
 		# Rows 0 and 1 spell the first twenty letters ten at a time.
-		var first: int = RomLayout.MAIL_INPUT_UPPER_A if table == 0 \
-			else RomLayout.MAIL_INPUT_LOWER_A
+		var first: int = Gen2Layout.MAIL_INPUT_UPPER_A if table == 0 \
+			else Gen2Layout.MAIL_INPUT_LOWER_A
 		for row: int in 2:
-			for column: int in RomLayout.MAIL_INPUT_COLUMNS:
-				var expected: int = first + row * RomLayout.MAIL_INPUT_COLUMNS + column
+			for column: int in Gen2Layout.MAIL_INPUT_COLUMNS:
+				var expected: int = first + row * Gen2Layout.MAIL_INPUT_COLUMNS + column
 				var stored: int = _cell(rows, row, column)
 				_r.check(
 					stored == expected,
@@ -203,17 +203,17 @@ func _verify_keyboards() -> void:
 						table, row, column, stored, expected,
 					]
 				)
-		var command: Array[int] = RomLayout.MAIL_INPUT_COMMAND_UPPER if table == 0 \
-			else RomLayout.MAIL_INPUT_COMMAND_LOWER
+		var command: Array[int] = Gen2Layout.MAIL_INPUT_COMMAND_UPPER if table == 0 \
+			else Gen2Layout.MAIL_INPUT_COMMAND_LOWER
 		_r.check(
-			Array(rows[RomLayout.MAIL_INPUT_TABLE_ROWS - 1]) == Array(command),
+			Array(rows[Gen2Layout.MAIL_INPUT_TABLE_ROWS - 1]) == Array(command),
 			"mail table %d has no command row." % table
 		)
 	for entry: Array in EXPECTED_SYMBOL_ROWS:
 		var rows: Array = _r.data.name_input_chars(
 			Gen2NamingScreen.Keyboard.MAIL_UPPER + int(entry[0])
 		)
-		if rows.size() != RomLayout.MAIL_INPUT_TABLE_ROWS:
+		if rows.size() != Gen2Layout.MAIL_INPUT_TABLE_ROWS:
 			continue
 		var codes: Array = entry[2]
 		for column: int in codes.size():
@@ -233,7 +233,7 @@ func _verify_keyboards() -> void:
 
 func _cell(rows: Array, row: int, column: int) -> int:
 	var codes: Array = rows[row]
-	var at: int = column * RomLayout.NAME_INPUT_COLUMN_STRIDE
+	var at: int = column * Gen2Layout.NAME_INPUT_COLUMN_STRIDE
 	return int(codes[at]) if at < codes.size() else -1
 
 
@@ -241,22 +241,22 @@ func _cell(rows: Array, row: int, column: int) -> int:
 ## last black.
 func _verify_palettes() -> void:
 	var stored: Array = []
-	for index: int in RomLayout.MAIL_PALETTE_COUNT:
+	for index: int in Gen2Layout.MAIL_PALETTE_COUNT:
 		var colours: PackedColorArray = _r.data.mail_palette(index)
 		if not _r.check(
-			colours.size() == RomLayout.MAIL_PALETTE_COLOURS,
+			colours.size() == Gen2Layout.MAIL_PALETTE_COLOURS,
 			"mail palette %d has %d colours, not %d." % [
-				index, colours.size(), RomLayout.MAIL_PALETTE_COLOURS,
+				index, colours.size(), Gen2Layout.MAIL_PALETTE_COLOURS,
 			]
 		):
 			continue
-		var expected: Color = Gen2Palette.from_packed(EXPECTED_PALETTE_FIRST[index])
+		var expected: Color = PokePalette.from_packed(EXPECTED_PALETTE_FIRST[index])
 		_r.check(
 			colours[0].is_equal_approx(expected),
 			"mail palette %d opens on %s, not %s." % [index, colours[0], expected]
 		)
 		_r.check(
-			colours[RomLayout.MAIL_PALETTE_COLOURS - 1].is_equal_approx(Color.BLACK),
+			colours[Gen2Layout.MAIL_PALETTE_COLOURS - 1].is_equal_approx(Color.BLACK),
 			"mail palette %d does not end in black." % index
 		)
 		for colour: Color in colours:
@@ -324,7 +324,7 @@ func _verify_pages() -> void:
 				== Gen2Text.encode(SAMPLE_AUTHOR)[0],
 			"mail %d does not print its author at column %d." % [index, author_x]
 		)
-	_r.note("ten mail types drawn, %d tiles of graphics." % RomLayout.MAIL_GFX_TILES)
+	_r.note("ten mail types drawn, %d tiles of graphics." % Gen2Layout.MAIL_GFX_TILES)
 
 
 ## One composed message on both lines, which is what `_ComposeMailMessage`

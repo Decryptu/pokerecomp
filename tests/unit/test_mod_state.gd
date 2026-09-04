@@ -37,11 +37,11 @@ func _install(id: StringName) -> void:
 	var directory: String = "%s/%s" % [ROOT, id]
 	DirAccess.make_dir_recursive_absolute(directory)
 	var manifest: FileAccess = FileAccess.open(
-		"%s/%s" % [directory, Gen2ModManifest.FILENAME], FileAccess.WRITE
+		"%s/%s" % [directory, PokeModManifest.FILENAME], FileAccess.WRITE
 	)
 	manifest.store_string(JSON.stringify({
 		"id": String(id), "name": "State probe", "version": "1.0.0", "entry": "mod.gd",
-		"api_version": Gen2ModManifest.API_VERSION,
+		"api_version": PokeModManifest.API_VERSION,
 	}))
 	manifest.close()
 	var entry: FileAccess = FileAccess.open("%s/mod.gd" % directory, FileAccess.WRITE)

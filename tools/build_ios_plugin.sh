@@ -6,7 +6,7 @@
 #
 # The engine is linked, not bundled: a plugin compiles against the headers of
 # the exact engine the export templates were built from, so GODOT_SOURCE must be
-# a checkout at the pin in DEVICES.md. Two libraries are built per plugin
+# a checkout at the recorded pin. Two libraries are built per plugin
 # because DEBUG_ENABLED changes what the engine's headers declare, and an
 # export-debug build links the one that matches it.
 set -euo pipefail
@@ -16,7 +16,7 @@ GODOT_SOURCE="${GODOT_SOURCE:-$ROOT/.references/godot}"
 MIN_IOS="${MIN_IOS:-14.0}"
 
 if [ ! -f "$GODOT_SOURCE/core/object/object.h" ]; then
-	echo "No engine headers at $GODOT_SOURCE. See DEVICES.md for the checkout." >&2
+	echo "No engine headers at $GODOT_SOURCE. Set GODOT_SOURCE to a Godot checkout." >&2
 	exit 1
 fi
 

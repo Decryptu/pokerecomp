@@ -30,7 +30,7 @@ func _model() -> Gen2NamingScreen:
 
 
 func _to_end() -> void:
-	_screen.handle_button(Gen2Button.START)
+	_screen.handle_button(PokeButton.START)
 
 
 func test_it_opens_on_the_upper_keyboard_with_an_empty_entry() -> void:
@@ -41,35 +41,35 @@ func test_it_opens_on_the_upper_keyboard_with_an_empty_entry() -> void:
 
 
 func test_the_dpad_moves_the_cursor_and_never_ends_the_screen() -> void:
-	assert_true(_screen.handle_button(Gen2Button.RIGHT))
+	assert_true(_screen.handle_button(PokeButton.RIGHT))
 	assert_eq(_model().column, 1)
-	assert_true(_screen.handle_button(Gen2Button.DOWN))
+	assert_true(_screen.handle_button(PokeButton.DOWN))
 	assert_eq(_model().row, 1)
 	assert_eq(_closed.size(), 0)
 
 
 func test_a_types_a_letter_and_b_takes_it_back() -> void:
-	_screen.handle_button(Gen2Button.A)
+	_screen.handle_button(PokeButton.A)
 	assert_eq(_model().length, 1)
-	_screen.handle_button(Gen2Button.B)
+	_screen.handle_button(PokeButton.B)
 	assert_eq(_model().length, 0)
 	assert_eq(_closed.size(), 0)
 
 
 func test_select_flips_the_case() -> void:
-	_screen.handle_button(Gen2Button.SELECT)
+	_screen.handle_button(PokeButton.SELECT)
 	assert_eq(_model().keyboard(), Gen2NamingScreen.Keyboard.NAME_LOWER)
 
 
 ## `.start` puts the cursor on END, so START then A is the shortest way out.
 func test_start_then_a_closes_with_what_was_typed() -> void:
-	_screen.handle_button(Gen2Button.A)
-	_screen.handle_button(Gen2Button.RIGHT)
-	_screen.handle_button(Gen2Button.A)
+	_screen.handle_button(PokeButton.A)
+	_screen.handle_button(PokeButton.RIGHT)
+	_screen.handle_button(PokeButton.A)
 	var typed: String = _model().stored_name()
 	_to_end()
 	assert_eq(_closed.size(), 0, "START alone does not end the screen")
-	_screen.handle_button(Gen2Button.A)
+	_screen.handle_button(PokeButton.A)
 	assert_eq(_closed, [typed])
 	assert_eq(typed.length(), 2)
 
@@ -78,7 +78,7 @@ func test_start_then_a_closes_with_what_was_typed() -> void:
 ## an empty name and it is the caller that decides what to do with one.
 func test_ending_with_nothing_typed_reports_an_empty_name() -> void:
 	_to_end()
-	_screen.handle_button(Gen2Button.A)
+	_screen.handle_button(PokeButton.A)
 	assert_eq(_closed, [""])
 
 
@@ -108,7 +108,7 @@ func test_the_letter_bracket_is_a_nine_by_nine_ring_around_one_tile() -> void:
 	## The ring belongs to the cursor rather than to the keyboard under it, and it
 	## steps a whole cell: both corners change when the cursor moves one column,
 	## which is what pins the -1 offset without depending on the fixture's font.
-	_screen.handle_button(Gen2Button.RIGHT)
+	_screen.handle_button(PokeButton.RIGHT)
 	var moved: PackedByteArray = page.draw(_model(), "YOUR NAME?")
 	assert_ne(moved[63 * WIDTH + 15], indices[63 * WIDTH + 15], "top-left corner moved")
 	assert_ne(moved[71 * WIDTH + 23], indices[71 * WIDTH + 23], "bottom-right corner moved")
@@ -120,5 +120,5 @@ func test_the_letter_bracket_is_a_nine_by_nine_ring_around_one_tile() -> void:
 func test_moving_the_cursor_redraws_the_page() -> void:
 	var page := Gen2NamingScreenPage.from_data(GameData.open_directory(Fixture.directory()))
 	var before: PackedByteArray = page.draw(_model(), "YOUR NAME?")
-	_screen.handle_button(Gen2Button.RIGHT)
+	_screen.handle_button(PokeButton.RIGHT)
 	assert_ne(page.draw(_model(), "YOUR NAME?"), before)

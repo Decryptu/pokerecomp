@@ -139,19 +139,19 @@ static func resolve_runtime_request(
 ## a reason to invent his lines. Public because the screenshot driver opens the
 ## routine with no script behind it and needs the same answer.
 static func name_rater_texts(data: GameData) -> Dictionary:
-	return _stub_run(data, RomLayout.NAME_RATER_TEXT_ORDER, "name_rater_text")
+	return _stub_run(data, Gen2Layout.NAME_RATER_TEXT_ORDER, "name_rater_text")
 
 
 ## `MoveDeletion`'s own eight, read and refused the same way.
 static func move_deleter_texts(data: GameData) -> Dictionary:
-	return _stub_run(data, RomLayout.MOVE_DELETER_TEXT_ORDER, "move_deleter_text")
+	return _stub_run(data, Gen2Layout.MOVE_DELETER_TEXT_ORDER, "move_deleter_text")
 
 ## The Day-Care's own thirty-two, across its four runs, read and refused the same
 ## way. Public for the same reason: the screenshot driver opens the routine with
 ## no script behind it.
 static func day_care_texts(data: GameData) -> Dictionary:
 	var order: Array[String] = []
-	for run: Array in RomLayout.DAY_CARE_TEXT_RUNS:
+	for run: Array in Gen2Layout.DAY_CARE_TEXT_RUNS:
 		for name: Variant in run[1] as Array:
 			order.append(String(name))
 	return _stub_run(data, order, "day_care_text")

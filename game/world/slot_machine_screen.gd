@@ -103,11 +103,11 @@ func handle_button(button: int) -> bool:
 		Gen2SlotMachine.Prompt.PLAY_AGAIN:
 			_handle_yes_no_button(button)
 		Gen2SlotMachine.Prompt.TEXT, Gen2SlotMachine.Prompt.PRESS:
-			if button == Gen2Button.A or button == Gen2Button.B:
+			if button == PokeButton.A or button == PokeButton.B:
 				_machine.dismiss_text()
 				_drain()
 		_:
-			if button == Gen2Button.A:
+			if button == PokeButton.A:
 				_machine.press_a()
 			_pass()
 			_acted = true
@@ -118,15 +118,15 @@ func handle_button(button: int) -> bool:
 ## `VerticalMenu` over `Slots_AskBet.MenuData`: three items, no wrap, B cancels.
 func _handle_bet_button(button: int) -> void:
 	match button:
-		Gen2Button.UP:
+		PokeButton.UP:
 			_bet_cursor = maxi(1, _bet_cursor - 1)
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			_bet_cursor = mini(Gen2SlotMachinePage.BET_MENU_ITEMS.size(), _bet_cursor + 1)
-		Gen2Button.A:
+		PokeButton.A:
 			_text = ""
 			_machine.answer_bet(_bet_cursor)
 			_drain()
-		Gen2Button.B:
+		PokeButton.B:
 			_text = ""
 			_machine.answer_bet(-1)
 			_drain()
@@ -137,16 +137,16 @@ func _handle_bet_button(button: int) -> void:
 ## `PlaceYesNoBox`, which opens on YES and takes B as NO.
 func _handle_yes_no_button(button: int) -> void:
 	match button:
-		Gen2Button.UP:
+		PokeButton.UP:
 			_yes_no_cursor = 1
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			_yes_no_cursor = 2
-		Gen2Button.A:
+		PokeButton.A:
 			_text = ""
 			_machine.answer_play_again(_yes_no_cursor == 1)
 			_yes_no_cursor = 1
 			_drain()
-		Gen2Button.B:
+		PokeButton.B:
 			_text = ""
 			_machine.answer_play_again(false)
 			_yes_no_cursor = 1

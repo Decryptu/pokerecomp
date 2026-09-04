@@ -763,7 +763,7 @@ func _fit() -> void:
 		_mask.queue_redraw()
 	if _interface != null:
 		_interface.position = ((Vector2(view - Vector2i(WIDTH, HEIGHT)) * 0.5)
-			/ float(Gen2Tiles.TILE_WIDTH)).floor() * float(Gen2Tiles.TILE_WIDTH)
+			/ float(PokeTiles.TILE_WIDTH)).floor() * float(PokeTiles.TILE_WIDTH)
 		_interface.size = Vector2(WIDTH, HEIGHT)
 		_content.position = _interface.position
 		_content.size = _interface.size

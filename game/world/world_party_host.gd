@@ -202,7 +202,7 @@ const HEAVY_BALL_LIGHT_PENALTY: int = 20
 ## Pokemon": `HeavyBall_GetDexEntryBank` masks the species without taking one off
 ## first, so 64, 128 and 192 read their own entry's address out of the next bank
 ## up. Crystal only; pokegold's `HeavyBallMultiplier` decrements first. Both rows
-## are measured (`.claude/oracle/battle/catch_rate.py`). SUNFLORA's walk never
+## are measured on a real cartridge. SUNFLORA's walk never
 ## ends and the cartridge locks up, so the fall-through below is its guard.
 const HEAVY_BALL_WRONG_BANK: Dictionary = {64: 20, 128: 40}
 
@@ -710,7 +710,7 @@ static func teach_tm_hm(
 	var happiness: int = learner.happiness
 	if consumed:
 		learner.happiness = change_happiness(
-			world.data, learner.happiness, RomLayout.HAPPINESS_LEARNMOVE
+			world.data, learner.happiness, Gen2Layout.HAPPINESS_LEARNMOVE
 		)
 	var applied: Dictionary = {"ok": true}
 	if consumed:
@@ -869,7 +869,7 @@ static func teach_tutor_move(
 ) -> Dictionary:
 	return learn_move(
 		world, save, party_index, move, forget_slot, persist,
-		true, RomLayout.HAPPINESS_LEARNMOVE
+		true, Gen2Layout.HAPPINESS_LEARNMOVE
 	)
 
 
@@ -884,7 +884,7 @@ static func change_happiness(data: GameData, happiness: int, kind: int) -> int:
 	var changes: Array[int] = []
 	if data != null:
 		changes = data.happiness_changes(kind)
-	if changes.size() < RomLayout.HAPPINESS_CHANGE_WIDTH:
+	if changes.size() < Gen2Layout.HAPPINESS_CHANGE_WIDTH:
 		return happiness
 	var row: int = 0 if happiness < HAPPINESS_THRESHOLD_1 \
 		else (1 if happiness < HAPPINESS_THRESHOLD_2 else 2)
@@ -1275,7 +1275,7 @@ static func _capture_refusal(
 	var definition: Dictionary = world.data.item(ball)
 	if definition.is_empty():
 		return _failure(&"unknown_ball", {"ball": ball})
-	if int(definition.get("pocket", 0)) != RomLayout.ITEM_POCKET_BALL:
+	if int(definition.get("pocket", 0)) != Gen2Layout.ITEM_POCKET_BALL:
 		return _failure(&"item_is_not_a_ball", {"ball": ball})
 	if ball not in CAPTURE_BALLS:
 		return _failure(&"unsupported_ball_effect", {"ball": ball})
@@ -1617,7 +1617,7 @@ static func _apply_trade_request(
 		return {"ok": false, "reason": &"trade_candidate_mismatch"}
 	if not trade_gender_matches(
 		world.data, requested.species, requested.dvs,
-		int(trade.get("gender", RomLayout.TRADE_GENDER_EITHER))
+		int(trade.get("gender", Gen2Layout.TRADE_GENDER_EITHER))
 	):
 		return {"ok": false, "reason": &"trade_candidate_gender_mismatch"}
 	var received: Gen2SaveMon = _new_mon(
@@ -1633,7 +1633,7 @@ static func _apply_trade_request(
 	## 0 in CAUGHT_GENDER_MASK, so only a GIRL trader is recorded as female.
 	set_caught_data(
 		received, 0, -1,
-		int(trade.get("dialog", 0)) >= RomLayout.TRADE_DIALOGSET_GIRL, LANDMARK_GIFT
+		int(trade.get("dialog", 0)) >= Gen2Layout.TRADE_DIALOGSET_GIRL, LANDMARK_GIFT
 	)
 	## `RemoveMonFromPartyOrBox` closes the gap and `TryAddMonToParty` writes at
 	## `wPartyCount`, so what arrives is last and the slots behind move up. That
@@ -1702,7 +1702,7 @@ static func _register_caught(world: Gen2WorldAPI, species: int) -> void:
 ## routine runs under `wMonType` PARTYMON alone, so an Unown caught with a full
 ## party is caught without entering the Unown dex.
 static func _unown_form(species: int, dvs: int, destination: Dictionary) -> int:
-	if species != RomLayout.UNOWN_SPECIES:
+	if species != Gen2Layout.UNOWN_SPECIES:
 		return 0
 	if StringName(destination.get("destination", &"")) != &"party":
 		return 0
@@ -1767,7 +1767,7 @@ static func trade_record(data: GameData, values: Dictionary) -> Dictionary:
 
 static func _find_trade_candidate(data: GameData, save: Gen2SaveData, trade: Dictionary) -> int:
 	var requested_species: int = int(trade.get("requested_species", 0))
-	var required_gender: int = int(trade.get("gender", RomLayout.TRADE_GENDER_EITHER))
+	var required_gender: int = int(trade.get("gender", Gen2Layout.TRADE_GENDER_EITHER))
 	for index: int in save.party.size():
 		var mon: Gen2SaveMon = save.party[index]
 		if mon == null or mon.is_egg or mon.species != requested_species:
@@ -1782,12 +1782,12 @@ static func _find_trade_candidate(data: GameData, save: Gen2SaveData, trade: Dic
 static func trade_gender_matches(
 	data: GameData, species: int, dvs: int, required_gender: int
 ) -> bool:
-	if required_gender == RomLayout.TRADE_GENDER_EITHER:
+	if required_gender == Gen2Layout.TRADE_GENDER_EITHER:
 		return true
 	var gender: StringName = Gen2BattleMon.gender_for(data, species, dvs)
-	if required_gender == RomLayout.TRADE_GENDER_MALE:
+	if required_gender == Gen2Layout.TRADE_GENDER_MALE:
 		return gender == Gen2BattleMon.GENDER_MALE
-	return required_gender == RomLayout.TRADE_GENDER_FEMALE \
+	return required_gender == Gen2Layout.TRADE_GENDER_FEMALE \
 		and gender == Gen2BattleMon.GENDER_FEMALE
 
 
@@ -2047,7 +2047,7 @@ static func _apply_item_evolution(data: GameData, mon: Gen2SaveMon, item: int) -
 		return {}
 	var row: Dictionary = {}
 	match method:
-		0, RomLayout.EVOLVE_ITEM:
+		0, Gen2Layout.EVOLVE_ITEM:
 			# `EvoStoneEffect`'s own `cp EVERSTONE / jr z, .NoEffect`, which is
 			# where the stone path refuses one and `.item` does not: the check is
 			# the item effect's rather than the predicate's, so a link or field
@@ -2057,7 +2057,7 @@ static func _apply_item_evolution(data: GameData, mon: Gen2SaveMon, item: int) -
 			row = Gen2Evolution.item_evolution(
 				data, battle_mon, int(declared.get("parameter", item))
 			)
-		RomLayout.EVOLVE_TRADE:
+		Gen2Layout.EVOLVE_TRADE:
 			row = Gen2Evolution.trade_evolution(data, battle_mon)
 		_:
 			return {}
@@ -2229,7 +2229,7 @@ static func _capture_outcome(
 ## `wFinalCatchRate`: everything `PokeBallEffect` settles between `ld a,
 ## [wEnemyMonCatchRate]` and the `call Random` that reads the answer. Split out
 ## from the throw because the cartridge can be asked the same question directly:
-## `.claude/oracle/battle/catch_rate.py` runs those instructions on a real dump
+## Running those instructions on a real dump
 ## for a grid of cases, and [param case] is that grid's own row. The keys are
 ## the bytes the routine reads, named for the WRAM labels it reads them from.
 static func final_catch_rate(data: GameData, ball: int, case: Dictionary) -> int:
@@ -2338,7 +2338,7 @@ static func _level_ball(wild_level: int, thrower_level: int, catch_rate: int) ->
 ## next evolution's method or the terminator. Nothing is ever boosted.
 static func _moon_ball(data: GameData, species: int, catch_rate: int) -> int:
 	var rows: Array = data.evolutions(species)
-	if rows.is_empty() or int((rows[0] as Dictionary).get("method", 0)) != RomLayout.EVOLVE_ITEM:
+	if rows.is_empty() or int((rows[0] as Dictionary).get("method", 0)) != Gen2Layout.EVOLVE_ITEM:
 		return catch_rate
 	var next_method: int = int((rows[1] as Dictionary).get("method", 0)) if rows.size() > 1 else 0
 	if next_method != MOON_BALL_STONE:
@@ -2389,7 +2389,7 @@ static func _source_hp_catch_rate(max_hp: int, current_hp: int, catch_rate: int)
 		## 342 and 683 max HP are the two values whose shifted divisor is a whole
 		## multiple of 256, and `_Divide`'s `.loop` never leaves on a zero
 		## divisor: the cartridge locks up here rather than answering. Measured,
-		## not read: `.claude/oracle/battle/catch_rate.py` never returns on
+		## not read: a real cartridge never returns on
 		## either. Guarded with both operands untruncated, which is the ratio the
 		## routine was reaching for; there is no cartridge answer to match.
 		divisor = three_max
@@ -2546,7 +2546,7 @@ static func _world_name(data: GameData, bank: int, address: int) -> String:
 	if bank < 0 or address < 0:
 		return ""
 	var bytes: PackedByteArray = data.world_text(bank, address)
-	return Gen2Text.decode_fixed(bytes, 0, RomLayout.TRADE_NAME_LENGTH) if not bytes.is_empty() else ""
+	return Gen2Text.decode_fixed(bytes, 0, Gen2Layout.TRADE_NAME_LENGTH) if not bytes.is_empty() else ""
 
 
 static func _failure(reason: StringName, details: Dictionary) -> Dictionary:
@@ -2889,7 +2889,7 @@ static func _apply_give_odd_egg(
 	## is `wMobileMonMiscSpecies`, which `_GiveOddEgg` sets to EGG and
 	## `AddMobileMonToParty` writes into `wPartySpecies` beside the struct.
 	mon.is_egg = true
-	mon.original_trainer = RomLayout.ODD_EGG_OT_NAME
+	mon.original_trainer = Gen2Layout.ODD_EGG_OT_NAME
 	if candidate.party.size() >= Gen2SaveData.MAX_PARTY:
 		return {
 			"ok": true, "accepted": false, "reason": &"party_full",

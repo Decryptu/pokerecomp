@@ -58,24 +58,24 @@ func run(r: RefCounted) -> void:
 ## for. The walk is what says the one pinned address is right, so a cache whose
 ## sheets are the wrong length has been imported from the wrong offset.
 func _verify_section(game_id: StringName, data: GameData) -> void:
-	for row: Array in RomLayout.INTRO_SECTION:
+	for row: Array in Gen2Layout.INTRO_SECTION:
 		var name: String = String(row[0])
 		match String(row[1]):
 			"pal":
 				_r.check(
 					data.intro_palette(name).size()
-						== RomLayout.INTRO_PALETTES * RomLayout.INTRO_PALETTE_COLORS,
+						== Gen2Layout.INTRO_PALETTES * Gen2Layout.INTRO_PALETTE_COLORS,
 					"%s: intro palette run %s is not sixteen palettes." % [game_id, name]
 				)
 			"map", "attr":
 				_r.check(
-					data.intro_map(name).size() == RomLayout.INTRO_MAP_BYTES,
+					data.intro_map(name).size() == Gen2Layout.INTRO_MAP_BYTES,
 					"%s: intro map %s is not a whole BG map." % [game_id, name]
 				)
 			_:
 				var strip: PackedByteArray = data.tile_indices("intro_%s" % name)
 				_r.check(
-					strip.size() == int(row[2]) * Gen2Tiles.TILE_WIDTH * Gen2Tiles.TILE_HEIGHT,
+					strip.size() == int(row[2]) * PokeTiles.TILE_WIDTH * PokeTiles.TILE_HEIGHT,
 					"%s: intro sheet %s is not %d tiles." % [game_id, name, int(row[2])]
 				)
 	for name: String in ["fade", "unown"]:
@@ -89,8 +89,8 @@ func _verify_section(game_id: StringName, data: GameData) -> void:
 ## tile a scroll that is not a multiple of eight reaches into.
 static func _steps(size: int) -> Array[int]:
 	var out: Array[int] = []
-	for step: int in size / Gen2Tiles.TILE_WIDTH:
-		out.append(step * Gen2Tiles.TILE_WIDTH)
+	for step: int in size / PokeTiles.TILE_WIDTH:
+		out.append(step * PokeTiles.TILE_WIDTH)
 	out.append(size - 1)
 	return out
 
@@ -112,7 +112,7 @@ func _sheet_tiles(data: GameData, name: String) -> int:
 func _verify_sampled_tiles(game_id: StringName, movie: Gen2IntroMovie, data: GameData) -> bool:
 	var map: PackedByteArray = movie.bg_map()
 	var attr: PackedByteArray = movie.bg_attr()
-	if map.size() != RomLayout.INTRO_MAP_BYTES:
+	if map.size() != Gen2Layout.INTRO_MAP_BYTES:
 		return true
 	var screen: PackedByteArray = movie.screen_tilemap()
 	var low: int = _sheet_tiles(data, movie.sheet("bg")) - movie.sheet_first_tile("bg")
@@ -121,11 +121,11 @@ func _verify_sampled_tiles(game_id: StringName, movie: Gen2IntroMovie, data: Gam
 	var scy: int = movie.scroll().y
 	for line: int in _steps(Gen2Screen.HEIGHT):
 		var scx: int = movie.scroll_x_at(line)
-		var map_row: int = (((line + scy) & 0xFF) / Gen2Tiles.TILE_HEIGHT) % RomLayout.INTRO_MAP_ROWS
+		var map_row: int = (((line + scy) & 0xFF) / PokeTiles.TILE_HEIGHT) % Gen2Layout.INTRO_MAP_ROWS
 		for x: int in _steps(Gen2Screen.WIDTH):
 			var map_column: int = ((((x + scx) & 0xFF)
-				/ Gen2Tiles.TILE_WIDTH) % RomLayout.INTRO_MAP_COLUMNS)
-			var cell: int = map_row * RomLayout.INTRO_MAP_COLUMNS + map_column
+				/ PokeTiles.TILE_WIDTH) % Gen2Layout.INTRO_MAP_COLUMNS)
+			var cell: int = map_row * Gen2Layout.INTRO_MAP_COLUMNS + map_column
 			var tile: int = map[cell]
 			if not screen.is_empty() and map_column < Gen2IntroMovie.COLUMNS \
 					and map_row < Gen2IntroMovie.ROWS:

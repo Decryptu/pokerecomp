@@ -68,16 +68,21 @@ func hints() -> Array:
 		return []
 	var id: StringName = _stage.selected_id()
 	var card: Gen2Cartridge = _stage.selected_cartridge()
-	var playable: bool = card != null and card.imported
-	var entries: Array = [{
-		"action": &"ui_accept",
-		"label": "Play" if playable else "Add cartridge",
-		"run": func() -> void:
-			if playable:
-				play_requested.emit(id)
-			else:
-				insert_requested.emit(id),
-	}]
+	var seated: bool = card != null and card.imported
+	# A generation with an importer and no world to walk seats its cartridge and
+	# reads it; only the registry says whether pressing it can start a game.
+	var playable: bool = seated and RomRegistry.is_playable(id)
+	var entries: Array = []
+	if not seated or playable:
+		entries.append({
+			"action": &"ui_accept",
+			"label": "Play" if playable else "Add cartridge",
+			"run": func() -> void:
+				if playable:
+					play_requested.emit(id)
+				else:
+					insert_requested.emit(id),
+		})
 	if card != null and card.cache_state != RomCache.STATE_MISSING:
 		entries.append({
 			"action": &"ui_menu",

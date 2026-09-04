@@ -25,25 +25,25 @@ func _write_cache(with_sheets: bool = true) -> void:
 	var sheets: Dictionary = {}
 	if with_sheets:
 		var written: Dictionary = {
-			"exp_bar": [RomLayout.EXP_BAR_TILES, 2],
-			"battle_font": [RomLayout.BATTLE_FONT_TILES, 1],
-			"enemy_hud": [RomLayout.ENEMY_HUD_TILES, 2],
-			"player_hud": [RomLayout.PLAYER_HUD_TILES, 3],
-			"font": [RomLayout.FONT_TILES, 3],
-			"frames": [RomLayout.FRAME_COUNT * RomLayout.FRAME_TILES, 3],
+			"exp_bar": [Gen2Layout.EXP_BAR_TILES, 2],
+			"battle_font": [Gen2Layout.BATTLE_FONT_TILES, 1],
+			"enemy_hud": [Gen2Layout.ENEMY_HUD_TILES, 2],
+			"player_hud": [Gen2Layout.PLAYER_HUD_TILES, 3],
+			"font": [Gen2Layout.FONT_TILES, 3],
+			"frames": [Gen2Layout.FRAME_COUNT * Gen2Layout.FRAME_TILES, 3],
 		}
 		for row_name: String in written:
 			var tiles: int = written[row_name][0]
 			var value: int = written[row_name][1]
 			var indices: PackedByteArray = PackedByteArray()
-			indices.resize(tiles * Gen2Tiles.TILE_WIDTH * Gen2Tiles.TILE_HEIGHT)
+			indices.resize(tiles * PokeTiles.TILE_WIDTH * PokeTiles.TILE_HEIGHT)
 			indices.fill(value)
 			RomCache.write_indices(RomCache.tile_path(_directory, row_name), indices)
 			sheets[row_name] = {
-				"width": tiles * Gen2Tiles.TILE_WIDTH,
-				"height": Gen2Tiles.TILE_HEIGHT,
+				"width": tiles * PokeTiles.TILE_WIDTH,
+				"height": PokeTiles.TILE_HEIGHT,
 				"tiles": tiles,
-				"first_code": RomLayout.FONT_FIRST_CODE if row_name == "font" else 0,
+				"first_code": Gen2Layout.FONT_FIRST_CODE if row_name == "font" else 0,
 				"bits": 1,
 			}
 
@@ -69,8 +69,8 @@ func _data() -> GameData:
 ## The index one tile of the page draws, read back out of a buffer.
 func _drawn(page: Gen2BattleTiles, tile: int) -> int:
 	var into: PackedByteArray = PackedByteArray()
-	into.resize(Gen2Tiles.TILE_WIDTH * Gen2Tiles.TILE_HEIGHT)
-	page.draw(tile, into, Gen2Tiles.TILE_WIDTH, 0, 0)
+	into.resize(PokeTiles.TILE_WIDTH * PokeTiles.TILE_HEIGHT)
+	page.draw(tile, into, PokeTiles.TILE_WIDTH, 0, 0)
 	return into[0]
 
 
@@ -115,13 +115,13 @@ func test_a_three_digit_level_overwrites_the_level_symbol() -> void:
 ## The first index of each of the four cells a level could reach, drawn into a
 ## buffer that wide so nothing else can put ink in them.
 func _level_cells(hud: Gen2BattleHud, level: int) -> Array[int]:
-	var width: int = 4 * Gen2Tiles.TILE_WIDTH
+	var width: int = 4 * PokeTiles.TILE_WIDTH
 	var into: PackedByteArray = PackedByteArray()
-	into.resize(width * Gen2Tiles.TILE_HEIGHT)
+	into.resize(width * PokeTiles.TILE_HEIGHT)
 	hud.draw_level(into, width, Vector2i.ZERO, level)
 	var out: Array[int] = []
 	for column: int in 4:
-		out.append(int(into[column * Gen2Tiles.TILE_WIDTH]))
+		out.append(int(into[column * PokeTiles.TILE_WIDTH]))
 	return out
 
 
@@ -160,17 +160,17 @@ func test_the_bar_colour_follows_what_is_drawn_not_the_hit_points() -> void:
 	# red: the rule is about pixels, which is why a bar can turn red on a
 	# Pokémon with hit points left.
 	assert_eq(GameData.hp_bar_palette_name(48), "hp_green")
-	assert_eq(GameData.hp_bar_palette_name(RomLayout.HP_GREEN_PIXELS), "hp_green")
-	assert_eq(GameData.hp_bar_palette_name(RomLayout.HP_GREEN_PIXELS - 1), "hp_yellow")
-	assert_eq(GameData.hp_bar_palette_name(RomLayout.HP_YELLOW_PIXELS), "hp_yellow")
-	assert_eq(GameData.hp_bar_palette_name(RomLayout.HP_YELLOW_PIXELS - 1), "hp_red")
+	assert_eq(GameData.hp_bar_palette_name(Gen2Layout.HP_GREEN_PIXELS), "hp_green")
+	assert_eq(GameData.hp_bar_palette_name(Gen2Layout.HP_GREEN_PIXELS - 1), "hp_yellow")
+	assert_eq(GameData.hp_bar_palette_name(Gen2Layout.HP_YELLOW_PIXELS), "hp_yellow")
+	assert_eq(GameData.hp_bar_palette_name(Gen2Layout.HP_YELLOW_PIXELS - 1), "hp_red")
 
 
 func test_a_bar_palette_comes_back_as_four_colours() -> void:
 	_write_cache()
 	var data: GameData = _data()
 	var palette: PackedColorArray = data.bar_palette("hp_green")
-	assert_eq(palette.size(), Gen2Palette.COLORS_PER_PIC)
+	assert_eq(palette.size(), PokePalette.COLORS_PER_PIC)
 	assert_eq(palette[0], Color.WHITE)
 	assert_eq(palette[3], Color.BLACK)
 	assert_ne(palette, data.bar_palette("hp_red"))

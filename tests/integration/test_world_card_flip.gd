@@ -100,7 +100,7 @@ func _drive_to_prompt(prompt: int, frames: int = 2400) -> bool:
 		_host().advance_frame()
 		if _host() != null and _host().prompt() != prompt \
 			and _host().prompt() != Gen2CardFlip.Prompt.NONE:
-			_world_screen.press_button(Gen2Button.A)
+			_world_screen.press_button(PokeButton.A)
 	return false
 
 
@@ -121,7 +121,7 @@ func test_the_round_is_taken_out_of_the_coin_case() -> void:
 	assert_eq(
 		_host().prompt(), Gen2CardFlip.Prompt.YES_NO, "the table opens on its question"
 	)
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 	assert_eq(_host().game().coins(), COINS - 3, "the table takes three coins")
 
 
@@ -130,7 +130,7 @@ func test_the_round_is_taken_out_of_the_coin_case() -> void:
 func test_saying_no_closes_the_table_and_writes_the_coins_back() -> void:
 	await _open_world()
 	_run_script()
-	_world_screen.press_button(Gen2Button.B)
+	_world_screen.press_button(PokeButton.B)
 	for _frame: int in 240:
 		if _host() == null:
 			break
@@ -155,8 +155,8 @@ func test_a_played_round_reaches_the_world_state() -> void:
 	)
 	var walked: int = _host().game().coins()
 	assert_ne(walked, COINS, "a played round cannot leave the balance untouched")
-	_world_screen.press_button(Gen2Button.A)
-	_world_screen.press_button(Gen2Button.B)
+	_world_screen.press_button(PokeButton.A)
+	_world_screen.press_button(PokeButton.B)
 	for _frame: int in 240:
 		if _host() == null:
 			break
@@ -183,6 +183,6 @@ func test_an_empty_purse_leaves_the_table_shut() -> void:
 		if not _world_screen._world.script_busy():
 			break
 		_world_screen.advance_frame()
-		_world_screen.press_button(Gen2Button.A)
+		_world_screen.press_button(PokeButton.A)
 	assert_false(_world_screen._world.script_busy(), "the press ends the script")
 	assert_true(_world_screen.move_player(Vector2i.RIGHT))

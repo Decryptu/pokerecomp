@@ -23,7 +23,7 @@ func _initialize() -> void:
 		quit(1)
 		return
 	_output_path = args[1]
-	if Gen2ToolPath.refuses(_output_path):
+	if PokeToolPath.refuses(_output_path):
 		quit(2)
 		return
 
@@ -52,13 +52,13 @@ func _prepare_target() -> void:
 		for _step: int in 200:
 			if _screen.choosing_name():
 				break
-			_screen.handle_button(Gen2Button.A)
+			_screen.handle_button(PokeButton.A)
 		if _target == "player" and _screen.choosing_name():
-			_screen.handle_button(Gen2Button.DOWN)
-			_screen.handle_button(Gen2Button.A)
+			_screen.handle_button(PokeButton.DOWN)
+			_screen.handle_button(PokeButton.A)
 	else:
 		for _step: int in int(_target):
-			_screen.handle_button(Gen2Button.A)
+			_screen.handle_button(PokeButton.A)
 
 
 func _process(_delta: float) -> bool:

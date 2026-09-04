@@ -4,7 +4,7 @@ extends RefCounted
 ## Scores an enemy trainer's move choice the way the cartridge's own AI does.
 ##
 ## Every slot starts at 20, or 80 with no PP. Each bit set in the trainer class's
-## [constant RomLayout.ATTR_AI_MOVE_WEIGHTS] runs one scoring layer over the four
+## [constant Gen2Layout.ATTR_AI_MOVE_WEIGHTS] runs one scoring layer over the four
 ## slots, nudging scores up (discourage) or down (encourage); lowest wins, ties
 ## broken at random. `scoring.asm` finds that minimum by decrementing counters,
 ## which is an argmin rather than a rule, so [method choose_slot] takes it
@@ -81,7 +81,7 @@ const UNUSABLE_SCORE: int = 80
 ## right now, short of being unusable outright.
 const DISCOURAGE_MOVE: int = 10
 
-## The status conditions [constant RomLayout.AI_BASIC] will not stack a second
+## The status conditions [constant Gen2Layout.AI_BASIC] will not stack a second
 ## of onto a target that already carries one, because the cartridge's own
 ## status byte refuses a second status the same way [Gen2Status] does.
 const STATUS_ONLY_EFFECTS: Array = [
@@ -174,7 +174,7 @@ const RESIDUAL_MOVE_NUMBERS: Array = [54, 73, 77, 78, 86, 116, 117, 139, 144, 16
 ## `AI_SwitchOrTryItem`: pull the Pokemon out, reach for an item, or use a move.
 ## An item is only considered once the switch is refused, which is the
 ## cartridge's `DontSwitch` fallthrough. [param item_switch_flags] is the class's
-## own [constant RomLayout.ATTR_AI_ITEM_SWITCH].
+## own [constant Gen2Layout.ATTR_AI_ITEM_SWITCH].
 static func choose_action(
 	battle: Gen2Battle, item_switch_flags: int, move_slot: int, rng: RandomNumberGenerator
 ) -> Dictionary:
@@ -302,25 +302,25 @@ static func score_slots(
 		defender_has_bench, defender_used_moves, bench_status_mask, link_battle
 	)
 
-	if ai_move_weights & RomLayout.AI_BASIC:
+	if ai_move_weights & Gen2Layout.AI_BASIC:
 		_apply_basic(scores, context)
-	if ai_move_weights & RomLayout.AI_SETUP:
+	if ai_move_weights & Gen2Layout.AI_SETUP:
 		_apply_setup(scores, context)
-	if ai_move_weights & RomLayout.AI_TYPES:
+	if ai_move_weights & Gen2Layout.AI_TYPES:
 		_apply_types(scores, context)
-	if ai_move_weights & RomLayout.AI_OFFENSIVE:
+	if ai_move_weights & Gen2Layout.AI_OFFENSIVE:
 		_apply_offensive(scores, context)
-	if ai_move_weights & RomLayout.AI_SMART:
+	if ai_move_weights & Gen2Layout.AI_SMART:
 		_apply_smart(scores, context)
-	if ai_move_weights & RomLayout.AI_OPPORTUNIST:
+	if ai_move_weights & Gen2Layout.AI_OPPORTUNIST:
 		_apply_opportunist(scores, context)
-	if ai_move_weights & RomLayout.AI_AGGRESSIVE:
+	if ai_move_weights & Gen2Layout.AI_AGGRESSIVE:
 		_apply_aggressive(scores, context)
-	if ai_move_weights & RomLayout.AI_CAUTIOUS:
+	if ai_move_weights & Gen2Layout.AI_CAUTIOUS:
 		_apply_cautious(scores, context)
-	if ai_move_weights & RomLayout.AI_STATUS:
+	if ai_move_weights & Gen2Layout.AI_STATUS:
 		_apply_status(scores, context)
-	if ai_move_weights & RomLayout.AI_RISKY:
+	if ai_move_weights & Gen2Layout.AI_RISKY:
 		_apply_risky(scores, context)
 
 	return scores
@@ -437,7 +437,7 @@ static func _skip_80_20(rng: RandomNumberGenerator) -> bool:
 	return rng.randi_range(0, 255) < 50
 
 
-## [constant RomLayout.AI_BASIC]: nothing redundant. Mist, Focus Energy,
+## [constant Gen2Layout.AI_BASIC]: nothing redundant. Mist, Focus Energy,
 ## Substitute and Mean Look read the attacker's own side, because that is where
 ## each of them lands; everything else reads the target's.
 static func _apply_basic(scores: Array, c: Context) -> void:
@@ -524,7 +524,7 @@ static func _attract_redundant(c: Context) -> bool:
 		return true
 	return Gen2Substatus.has(c.defender.substatus, Gen2Substatus.ATTRACTED)
 
-## [constant RomLayout.AI_SETUP]: use a stat move on the first turn. Raising is
+## [constant Gen2Layout.AI_SETUP]: use a stat move on the first turn. Raising is
 ## encouraged only on the attacker's first turn and lowering only on the
 ## defender's; past that both are heavily discouraged.
 static func _apply_setup(scores: Array, c: Context) -> void:
@@ -560,7 +560,7 @@ static func _in_run(effect: int, base: int) -> bool:
 	return effect >= base and effect < base + Gen2MoveEffect.STAT_RUN_LENGTH
 
 
-## [constant RomLayout.AI_TYPES]: dismiss a move the defender is immune to,
+## [constant Gen2Layout.AI_TYPES]: dismiss a move the defender is immune to,
 ## encourage a super-effective one, and discourage a not-very-effective one
 ## unless it is the only type of damage on offer.
 static func _apply_types(scores: Array, c: Context) -> void:
@@ -571,7 +571,7 @@ static func _apply_types(scores: Array, c: Context) -> void:
 		if not attacker.can_use(slot):
 			continue
 		var move: Dictionary = _move_at(attacker, data, slot)
-		var move_type: int = int(move.get("type", RomLayout.TYPE_NORMAL))
+		var move_type: int = int(move.get("type", Gen2Layout.TYPE_NORMAL))
 		# `AI_Types` sets `hBattleTurn` to the enemy before every
 		# `BattleCheckTypeMatchup`, so the Foresight flag it reads is the player's:
 		# the defender's from the side doing the scoring.
@@ -580,11 +580,11 @@ static func _apply_types(scores: Array, c: Context) -> void:
 			Gen2Substatus.has(defender.substatus, Gen2Substatus.IDENTIFIED)
 		)
 
-		if effectiveness == RomLayout.MATCHUP_NO_EFFECT:
+		if effectiveness == Gen2Layout.MATCHUP_NO_EFFECT:
 			_discourage(scores, slot)
-		elif effectiveness == RomLayout.MATCHUP_EFFECTIVE:
+		elif effectiveness == Gen2Layout.MATCHUP_EFFECTIVE:
 			continue
-		elif effectiveness > RomLayout.MATCHUP_EFFECTIVE:
+		elif effectiveness > Gen2Layout.MATCHUP_EFFECTIVE:
 			if _power(move) > 0:
 				_encourage(scores, slot)
 		else:
@@ -602,7 +602,7 @@ static func _apply_types(scores: Array, c: Context) -> void:
 					break
 
 
-## [constant RomLayout.AI_OFFENSIVE]: heavily discourage a move with no power,
+## [constant Gen2Layout.AI_OFFENSIVE]: heavily discourage a move with no power,
 ## for a class whose whole strategy is to attack.
 static func _apply_offensive(scores: Array, c: Context) -> void:
 	var attacker: Gen2BattleMon = c.attacker
@@ -639,10 +639,10 @@ static var SMART_HANDLERS: Dictionary = {
 	Gen2MoveEffect.THUNDER: _smart_thunder,
 	Gen2MoveEffect.SANDSTORM: _smart_sandstorm,
 	Gen2MoveEffect.RAIN_DANCE: _smart_weather_move.bind(
-		RomLayout.TYPE_WATER, RomLayout.TYPE_FIRE, RAIN_DANCE_MOVE_NUMBERS
+		Gen2Layout.TYPE_WATER, Gen2Layout.TYPE_FIRE, RAIN_DANCE_MOVE_NUMBERS
 	),
 	Gen2MoveEffect.SUNNY_DAY: _smart_weather_move.bind(
-		RomLayout.TYPE_FIRE, RomLayout.TYPE_WATER, SUNNY_DAY_MOVE_NUMBERS
+		Gen2Layout.TYPE_FIRE, Gen2Layout.TYPE_WATER, SUNNY_DAY_MOVE_NUMBERS
 	),
 	Gen2MoveEffect.TRAP_TARGET: _smart_trap_target,
 	Gen2MoveEffect.HEAL: _smart_heal,
@@ -710,7 +710,7 @@ static var SMART_HANDLERS: Dictionary = {
 }
 
 
-## [constant RomLayout.AI_SMART]: context-specific scoring, per move effect.
+## [constant Gen2Layout.AI_SMART]: context-specific scoring, per move effect.
 ## [constant SMART_HANDLERS] is which effects have a handler.
 static func _apply_smart(scores: Array, c: Context) -> void:
 	for slot: int in Gen2BattleMon.MAX_MOVES:
@@ -852,13 +852,13 @@ static func _smart_mimic(scores: Array, slot: int, c: Context) -> void:
 	if move.is_empty():
 		return
 	var effectiveness: int = c.data.type_effectiveness(
-		int(move.get("type", RomLayout.TYPE_NORMAL)), c.defender.types(),
+		int(move.get("type", Gen2Layout.TYPE_NORMAL)), c.defender.types(),
 		Gen2Substatus.has(c.defender.substatus, Gen2Substatus.IDENTIFIED)
 	)
-	if effectiveness < RomLayout.MATCHUP_EFFECTIVE:
+	if effectiveness < Gen2Layout.MATCHUP_EFFECTIVE:
 		_discourage(scores, slot, 1)
 		return
-	if effectiveness > RomLayout.MATCHUP_EFFECTIVE and not _skip_50_50(c.rng):
+	if effectiveness > Gen2Layout.MATCHUP_EFFECTIVE and not _skip_50_50(c.rng):
 		_encourage(scores, slot, 1)
 	if USEFUL_MOVE_NUMBERS.has(copied) and not _skip_50_50(c.rng):
 		_encourage(scores, slot, 1)
@@ -1139,9 +1139,9 @@ static func _lock_on_has_wanting_move(
 		if int(move.get("accuracy", Gen2Accuracy.ALWAYS_HITS)) >= LOCK_ON_WANTED_ACCURACY:
 			continue
 		if data.type_effectiveness(
-			int(move.get("type", RomLayout.TYPE_NORMAL)), defender.types(),
+			int(move.get("type", Gen2Layout.TYPE_NORMAL)), defender.types(),
 			Gen2Substatus.has(defender.substatus, Gen2Substatus.IDENTIFIED)
-		) >= RomLayout.MATCHUP_EFFECTIVE:
+		) >= Gen2Layout.MATCHUP_EFFECTIVE:
 			return true
 	return false
 
@@ -1199,7 +1199,7 @@ const THIEF_PENALTY: int = 30
 static func _smart_foresight(scores: Array, slot: int, c: Context) -> void:
 	var wanted: bool = c.attacker.stage("accuracy") < -2 \
 		or c.defender.stage("evasion") >= 3 \
-		or c.defender.types().has(RomLayout.TYPE_GHOST)
+		or c.defender.types().has(Gen2Layout.TYPE_GHOST)
 	if not wanted:
 		if _roll(c.rng, FORESIGHT_DISCOURAGE_SKIP_PERCENT):
 			return
@@ -1375,7 +1375,7 @@ static func _smart_psych_up(scores: Array, slot: int, c: Context) -> void:
 	_encourage(scores, slot, 1)
 
 
-## [constant RomLayout.AI_OPPORTUNIST]: discourage [constant STALL_MOVE_NUMBERS]
+## [constant Gen2Layout.AI_OPPORTUNIST]: discourage [constant STALL_MOVE_NUMBERS]
 ## once its own HP is low, more insistently the lower it is.
 static func _apply_opportunist(scores: Array, c: Context) -> void:
 	var attacker: Gen2BattleMon = c.attacker
@@ -1394,7 +1394,7 @@ static func _apply_opportunist(scores: Array, c: Context) -> void:
 			_discourage(scores, slot, 1)
 
 
-## [constant RomLayout.AI_AGGRESSIVE]: discourage every damaging move but
+## [constant Gen2Layout.AI_AGGRESSIVE]: discourage every damaging move but
 ## whichever deals the most, unless it would cost the mon itself
 ## ([constant RECKLESS_EFFECTS]) or does one point of damage that is really a
 ## fixed-damage move ([code]power < 2[/code]).
@@ -1448,7 +1448,7 @@ static func _estimate_damage(c: Context, move: Dictionary, constant: bool = true
 	)["damage"])
 
 
-## [constant RomLayout.AI_CAUTIOUS]: discourage [constant RESIDUAL_MOVE_NUMBERS]
+## [constant Gen2Layout.AI_CAUTIOUS]: discourage [constant RESIDUAL_MOVE_NUMBERS]
 ## once it is no longer the attacker's first turn.
 ##
 ## Diverges from a documented source bug (`docs/bugs_and_glitches.md`,
@@ -1474,7 +1474,7 @@ static func _apply_cautious(scores: Array, c: Context) -> void:
 			return
 
 
-## [constant RomLayout.AI_STATUS]: dismiss anything the defender's typing shrugs
+## [constant Gen2Layout.AI_STATUS]: dismiss anything the defender's typing shrugs
 ## off. Its comment says status moves; the code reads the four named status
 ## effects and then every move that does damage, and passes over the rest.
 static func _apply_status(scores: Array, c: Context) -> void:
@@ -1490,7 +1490,7 @@ static func _apply_status(scores: Array, c: Context) -> void:
 			# `.poisonimmunity` stands in front of the chart, and the chart
 			# cannot answer it: Poison against Poison is resisted rather than
 			# refused, and Steel is the only typing the move itself cannot touch.
-			if defender.types().has(RomLayout.TYPE_POISON):
+			if defender.types().has(Gen2Layout.TYPE_POISON):
 				_discourage(scores, slot)
 				continue
 		elif effect != Gen2MoveEffect.SLEEP and effect != Gen2MoveEffect.PARALYZE:
@@ -1500,11 +1500,11 @@ static func _apply_status(scores: Array, c: Context) -> void:
 			if _power(move) <= 0:
 				continue
 
-		if _matchup(c, move) == RomLayout.MATCHUP_NO_EFFECT:
+		if _matchup(c, move) == Gen2Layout.MATCHUP_NO_EFFECT:
 			_discourage(scores, slot)
 
 
-## [constant RomLayout.AI_RISKY]: greatly encourage anything that would
+## [constant Gen2Layout.AI_RISKY]: greatly encourage anything that would
 ## faint the defender outright. [constant RISKY_EFFECTS] (a move that costs
 ## the user its own faint, or skips the formula for a guaranteed hit) is held
 ## back on unless the attacker is already hurt.
@@ -1534,7 +1534,7 @@ static func _apply_risky(scores: Array, c: Context) -> void:
 ## to whoever is standing opposite, Foresight included.
 static func _matchup(c: Context, move: Dictionary) -> int:
 	return c.data.type_effectiveness(
-		int(move.get("type", RomLayout.TYPE_NORMAL)), c.defender.types(),
+		int(move.get("type", Gen2Layout.TYPE_NORMAL)), c.defender.types(),
 		Gen2Substatus.has(c.defender.substatus, Gen2Substatus.IDENTIFIED)
 	)
 
@@ -1555,11 +1555,11 @@ static func _is_semi_invulnerable(mon: Gen2BattleMon) -> bool:
 ## and there is room to put the drain, and mostly not worth it when it is not.
 static func _smart_leech_hit(scores: Array, slot: int, c: Context) -> void:
 	var matchup: int = _matchup(c, _move_at(c.attacker, c.data, slot))
-	if matchup < RomLayout.MATCHUP_EFFECTIVE:
+	if matchup < Gen2Layout.MATCHUP_EFFECTIVE:
 		if not _rolls_under(c.rng, AI_39_PERCENT_PLUS_ONE):
 			_discourage(scores, slot, 1)
 		return
-	if matchup == RomLayout.MATCHUP_EFFECTIVE:
+	if matchup == Gen2Layout.MATCHUP_EFFECTIVE:
 		return
 	if _at_max_hp(c.attacker):
 		return
@@ -1779,7 +1779,7 @@ static func _smart_counter(scores: Array, slot: int, c: Context, physical: bool)
 		var move: Dictionary = c.data.move(number)
 		if _power(move) <= 0:
 			continue
-		if Gen2Damage.is_physical(int(move.get("type", RomLayout.TYPE_NORMAL))) != physical:
+		if Gen2Damage.is_physical(int(move.get("type", Gen2Layout.TYPE_NORMAL))) != physical:
 			continue
 		seen += 1
 
@@ -1792,7 +1792,7 @@ static func _smart_counter(scores: Array, slot: int, c: Context, physical: bool)
 		var last: Dictionary = c.data.move(c.defender.last_counter_move)
 		if _power(last) <= 0:
 			return
-		if Gen2Damage.is_physical(int(last.get("type", RomLayout.TYPE_NORMAL))) != physical:
+		if Gen2Damage.is_physical(int(last.get("type", Gen2Layout.TYPE_NORMAL))) != physical:
 			return
 	if _rolls_under(c.rng, AI_39_PERCENT_PLUS_ONE):
 		return
@@ -1816,12 +1816,12 @@ static func _smart_encore(scores: Array, slot: int, c: Context) -> void:
 		# player's last move lands on itself, which is the other direction from
 		# every other matchup in this file.
 		var matchup: int = c.data.type_effectiveness(
-			int(last.get("type", RomLayout.TYPE_NORMAL)), c.attacker.types(),
+			int(last.get("type", Gen2Layout.TYPE_NORMAL)), c.attacker.types(),
 			Gen2Substatus.has(c.attacker.substatus, Gen2Substatus.IDENTIFIED)
 		)
-		if matchup >= RomLayout.MATCHUP_EFFECTIVE:
+		if matchup >= Gen2Layout.MATCHUP_EFFECTIVE:
 			weak = true
-		elif matchup != RomLayout.MATCHUP_NO_EFFECT:
+		elif matchup != Gen2Layout.MATCHUP_NO_EFFECT:
 			return
 	if weak and not ENCORE_MOVE_NUMBERS.has(c.defender.last_counter_move):
 		_discourage(scores, slot, 3)
@@ -1864,7 +1864,7 @@ static func _smart_priority_hit(scores: Array, slot: int, c: Context) -> void:
 
 ## `AI_Smart_Curse`, two routines under one label, split on the user's typing.
 static func _smart_curse(scores: Array, slot: int, c: Context) -> void:
-	if c.attacker.types().has(RomLayout.TYPE_GHOST):
+	if c.attacker.types().has(Gen2Layout.TYPE_GHOST):
 		_smart_ghost_curse(scores, slot, c)
 		return
 	if not _above_half(c.attacker) or c.attacker.stage("attack") >= 4:
@@ -1873,8 +1873,8 @@ static func _smart_curse(scores: Array, slot: int, c: Context) -> void:
 	if c.attacker.stage("attack") >= 2:
 		return
 	var types: Array = c.defender.types()
-	var first: int = int(types[0]) if not types.is_empty() else RomLayout.TYPE_NORMAL
-	if first == RomLayout.TYPE_GHOST:
+	var first: int = int(types[0]) if not types.is_empty() else Gen2Layout.TYPE_NORMAL
+	if first == Gen2Layout.TYPE_GHOST:
 		_discourage(scores, slot, 2)
 		return
 	# A player made of special types will not feel the defence, so the attack
@@ -1990,8 +1990,8 @@ static func _smart_hidden_power(scores: Array, slot: int, c: Context) -> void:
 		Gen2Substatus.has(c.defender.substatus, Gen2Substatus.IDENTIFIED)
 	)
 	var power: int = int(resolved["power"])
-	if matchup < RomLayout.MATCHUP_EFFECTIVE or power < 50:
+	if matchup < Gen2Layout.MATCHUP_EFFECTIVE or power < 50:
 		_discourage(scores, slot, 1)
 		return
-	if matchup > RomLayout.MATCHUP_EFFECTIVE or power >= 70:
+	if matchup > Gen2Layout.MATCHUP_EFFECTIVE or power >= 70:
 		_encourage(scores, slot, 1)

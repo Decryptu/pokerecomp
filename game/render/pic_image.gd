@@ -221,13 +221,13 @@ static func lookup(
 	palette: PackedColorArray, transparent_background: bool = false
 ) -> PackedInt32Array:
 	var out := PackedInt32Array()
-	var count: int = maxi(palette.size(), Gen2Palette.COLORS_PER_PIC)
+	var count: int = maxi(palette.size(), PokePalette.COLORS_PER_PIC)
 	out.resize(count)
 
 	for i: int in count:
 		var color: Color = palette[i] if i < palette.size() else Color.MAGENTA
 		# The palette's own alpha, so a translucent colour needs no second
-		# flag. Every cartridge palette is opaque, Gen2Palette.decode_color
+		# flag. Every cartridge palette is opaque, PokePalette.decode_color
 		# building an opaque Color.
 		var alpha: int = 0 if transparent_background and i == 0 \
 			else int(clampf(color.a, 0.0, 1.0) * 255.0)
@@ -286,12 +286,12 @@ static func frontpic_pad_rows(height: int) -> int:
 ## mirrored. [param size] is the pic's own pixel size.
 static func frontpic_origin(size: Vector2i, mirrored: bool = false) -> Vector2i:
 	@warning_ignore("integer_division")
-	var columns: int = size.x / Gen2Tiles.TILE_WIDTH
+	var columns: int = size.x / PokeTiles.TILE_WIDTH
 	@warning_ignore("integer_division")
-	var rows: int = size.y / Gen2Tiles.TILE_WIDTH
+	var rows: int = size.y / PokeTiles.TILE_WIDTH
 	return Vector2i(
 		frontpic_pad_columns(columns, mirrored), frontpic_pad_rows(rows)
-	) * Gen2Tiles.TILE_WIDTH
+	) * PokeTiles.TILE_WIDTH
 
 
 ## The 7x7 box a [Gen2PicAnimation] leaves, read out of the strip
@@ -301,7 +301,7 @@ static func frontpic_origin(size: Vector2i, mirrored: bool = false) -> Vector2i:
 static func animation_box_indices(
 	box: PackedByteArray, pixels: PackedByteArray, side: int
 ) -> PackedByteArray:
-	var span: int = side * Gen2Tiles.TILE_WIDTH
+	var span: int = side * PokeTiles.TILE_WIDTH
 	var out := PackedByteArray()
 	if box.size() != side * side or pixels.is_empty() or side <= 0:
 		return out
@@ -312,15 +312,15 @@ static func animation_box_indices(
 		for row: int in side:
 			var tile: int = int(box[column * side + row])
 			@warning_ignore("integer_division")
-			var source_x: int = (tile / side) * Gen2Tiles.TILE_WIDTH
-			var source_y: int = (tile % side) * Gen2Tiles.TILE_WIDTH
-			if source_x + Gen2Tiles.TILE_WIDTH > strip:
+			var source_x: int = (tile / side) * PokeTiles.TILE_WIDTH
+			var source_y: int = (tile % side) * PokeTiles.TILE_WIDTH
+			if source_x + PokeTiles.TILE_WIDTH > strip:
 				continue
-			for line: int in Gen2Tiles.TILE_WIDTH:
+			for line: int in PokeTiles.TILE_WIDTH:
 				var from: int = (source_y + line) * strip + source_x
-				var to: int = (row * Gen2Tiles.TILE_WIDTH + line) * span \
-					+ column * Gen2Tiles.TILE_WIDTH
-				for x: int in Gen2Tiles.TILE_WIDTH:
+				var to: int = (row * PokeTiles.TILE_WIDTH + line) * span \
+					+ column * PokeTiles.TILE_WIDTH
+				for x: int in PokeTiles.TILE_WIDTH:
 					out[to + x] = pixels[from + x]
 	return out
 
@@ -336,13 +336,13 @@ static func tile_flipped_indices(indices: PackedByteArray, width: int) -> Packed
 	@warning_ignore("integer_division")
 	var height: int = indices.size() / width
 	@warning_ignore("integer_division")
-	var tiles: int = width / Gen2Tiles.TILE_WIDTH
+	var tiles: int = width / PokeTiles.TILE_WIDTH
 	for y: int in height:
 		var row: int = y * width
 		for tile: int in tiles:
-			var left: int = tile * Gen2Tiles.TILE_WIDTH
-			for x: int in Gen2Tiles.TILE_WIDTH:
-				out[row + left + x] = indices[row + left + Gen2Tiles.TILE_WIDTH - 1 - x]
+			var left: int = tile * PokeTiles.TILE_WIDTH
+			for x: int in PokeTiles.TILE_WIDTH:
+				out[row + left + x] = indices[row + left + PokeTiles.TILE_WIDTH - 1 - x]
 	return out
 
 
@@ -424,25 +424,25 @@ static func blit_tile(
 ) -> void:
 	if strip_tiles <= 0 or tile < 0 or tile >= strip_tiles or table.is_empty():
 		return
-	var stride: int = strip_tiles * Gen2Tiles.TILE_WIDTH
-	var left: int = tile * Gen2Tiles.TILE_WIDTH
+	var stride: int = strip_tiles * PokeTiles.TILE_WIDTH
+	var left: int = tile * PokeTiles.TILE_WIDTH
 	var colors: int = table.size()
-	for row: int in Gen2Tiles.TILE_HEIGHT:
+	for row: int in PokeTiles.TILE_HEIGHT:
 		var y: int = at_y + row
 		if y < 0 or y >= height:
 			continue
 		var from: int = (
-			(Gen2Tiles.TILE_HEIGHT - 1 - row) if flip_y else row
+			(PokeTiles.TILE_HEIGHT - 1 - row) if flip_y else row
 		) * stride + left
-		if from < 0 or from + Gen2Tiles.TILE_WIDTH > strip.size():
+		if from < 0 or from + PokeTiles.TILE_WIDTH > strip.size():
 			continue
 		var to_row: int = y * width
-		for column: int in Gen2Tiles.TILE_WIDTH:
+		for column: int in PokeTiles.TILE_WIDTH:
 			var x: int = at_x + column
 			if x < 0 or x >= width:
 				continue
 			var index: int = strip[
-				from + ((Gen2Tiles.TILE_WIDTH - 1 - column) if flip_x else column)
+				from + ((PokeTiles.TILE_WIDTH - 1 - column) if flip_x else column)
 			]
 			if index == skip_index:
 				continue

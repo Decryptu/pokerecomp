@@ -17,7 +17,7 @@ const SHEET_FIRST: int = Gen2PokedexPage.SHEET_FIRST_TILE
 
 ## Every species has a footprint, so a slot with no lit pixel at all is a defect
 ## rather than a species that has none.
-const SPECIES: int = RomLayout.FOOTPRINT_SPECIES
+const SPECIES: int = Gen2Layout.FOOTPRINT_SPECIES
 
 ## `PokedexTypeSearchStrings` (data/types/search_strings.asm) verbatim, minus its
 ## terminator. [method Gen2Pokedex.search_type_string] centres the imported name
@@ -56,11 +56,11 @@ func _validate(game_id: StringName) -> String:
 
 	var ok: bool = true
 	for sheet: Array in [
-		["pokedex", RomLayout.POKEDEX_TILES],
-		["pokedex_slowpoke", RomLayout.POKEDEX_SLOWPOKE_TILES],
-		["pokedex_question_mark", RomLayout.POKEDEX_QUESTION_MARK_TILES],
-		["unown_font", RomLayout.UNOWN_FONT_TILES],
-		["footprints", RomLayout.FOOTPRINT_SLOTS * RomLayout.FOOTPRINT_TILES],
+		["pokedex", Gen2Layout.POKEDEX_TILES],
+		["pokedex_slowpoke", Gen2Layout.POKEDEX_SLOWPOKE_TILES],
+		["pokedex_question_mark", Gen2Layout.POKEDEX_QUESTION_MARK_TILES],
+		["unown_font", Gen2Layout.UNOWN_FONT_TILES],
+		["footprints", Gen2Layout.FOOTPRINT_SLOTS * Gen2Layout.FOOTPRINT_TILES],
 	]:
 		var name: String = String(sheet[0])
 		var wanted: int = int(sheet[1])
@@ -74,7 +74,7 @@ func _validate(game_id: StringName) -> String:
 		return ""
 
 	for name: String in ["interface", "question_mark", "cursor"]:
-		if data.pokedex_palette(name).size() != Gen2Palette.COLORS_PER_PIC:
+		if data.pokedex_palette(name).size() != PokePalette.COLORS_PER_PIC:
 			print("FAIL %s: the %s palette is not four colours" % [game_id, name])
 			return ""
 
@@ -91,7 +91,7 @@ func _validate(game_id: StringName) -> String:
 
 	# `Pokedex_PlaceTypeString` reads a fixed-width table, so the two search rows
 	# and the results screen's line are only right if the centring answers it.
-	var dex: Gen2Pokedex = Gen2Pokedex.open(data, null, RomLayout.DEXMODE_NEW)
+	var dex: Gen2Pokedex = Gen2Pokedex.open(data, null, Gen2Layout.DEXMODE_NEW)
 	for value: int in SEARCH_STRINGS.size():
 		var drawn: String = dex.search_type_string(value)
 		if drawn != SEARCH_STRINGS[value]:
@@ -112,9 +112,9 @@ func _validate(game_id: StringName) -> String:
 		return ""
 
 	print("%s: sheet=%d slowpoke=%d question_mark=%d unown_font=%d footprints=%d species=%d" % [
-		game_id, RomLayout.POKEDEX_TILES, RomLayout.POKEDEX_SLOWPOKE_TILES,
-		RomLayout.POKEDEX_QUESTION_MARK_TILES,
-		RomLayout.UNOWN_FONT_TILES, SPECIES, RomLayout.SPECIES_COUNT,
+		game_id, Gen2Layout.POKEDEX_TILES, Gen2Layout.POKEDEX_SLOWPOKE_TILES,
+		Gen2Layout.POKEDEX_QUESTION_MARK_TILES,
+		Gen2Layout.UNOWN_FONT_TILES, SPECIES, Gen2Layout.SPECIES_COUNT,
 	])
 	return "%s/%s/%s/%s" % [
 		indices.slice(0, 4096).hex_encode().sha1_text().substr(0, 8),
@@ -129,23 +129,23 @@ func _validate(game_id: StringName) -> String:
 ## it would be a stride error rather than an absent footprint.
 func _check_footprints(data: GameData, game_id: StringName, indices: PackedByteArray) -> bool:
 	@warning_ignore("integer_division")
-	var width: int = indices.size() / Gen2Tiles.TILE_HEIGHT
+	var width: int = indices.size() / PokeTiles.TILE_HEIGHT
 	var blank: Array[int] = []
 	for species: int in range(1, SPECIES + 1):
 		var tiles: PackedInt32Array = data.footprint_tiles(species)
-		if tiles.size() != RomLayout.FOOTPRINT_TILES:
+		if tiles.size() != Gen2Layout.FOOTPRINT_TILES:
 			print("FAIL %s: species %d has no footprint" % [game_id, species])
 			return false
 		var lit: int = 0
 		for tile: int in tiles:
-			if (tile + 1) * Gen2Tiles.TILE_WIDTH > width:
+			if (tile + 1) * PokeTiles.TILE_WIDTH > width:
 				print("FAIL %s: footprint tile %d of species %d is off the strip" % [
 					game_id, tile, species,
 				])
 				return false
-			for y: int in Gen2Tiles.TILE_HEIGHT:
-				for x: int in Gen2Tiles.TILE_WIDTH:
-					if indices[y * width + tile * Gen2Tiles.TILE_WIDTH + x] != 0:
+			for y: int in PokeTiles.TILE_HEIGHT:
+				for x: int in PokeTiles.TILE_WIDTH:
+					if indices[y * width + tile * PokeTiles.TILE_WIDTH + x] != 0:
 						lit += 1
 		if lit == 0:
 			blank.append(species)
@@ -160,7 +160,7 @@ func _check_footprints(data: GameData, game_id: StringName, indices: PackedByteA
 ## Every entry screen, so a short dex record is found here rather than on it.
 func _check_entries(data: GameData, game_id: StringName, page: Gen2PokedexPage) -> bool:
 	var short_entries: Array[int] = []
-	for species: int in range(1, RomLayout.SPECIES_COUNT + 1):
+	for species: int in range(1, Gen2Layout.SPECIES_COUNT + 1):
 		var entry: Dictionary = data.dex_entry(species)
 		if entry.is_empty() or String(entry.get("category", "")).is_empty():
 			short_entries.append(species)

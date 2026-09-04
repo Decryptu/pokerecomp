@@ -80,14 +80,14 @@ func handle_button(button: int) -> bool:
 		return false
 	match _step:
 		STEP.PROMPT:
-			if button == Gen2Button.A:
+			if button == PokeButton.A:
 				_step = STEP.EXCHANGING
 				_frames = EXCHANGE_FRAMES
 				_refresh()
-			elif button == Gen2Button.B:
+			elif button == PokeButton.B:
 				closed.emit()
 		STEP.MESSAGE:
-			if button in [Gen2Button.A, Gen2Button.B]:
+			if button in [PokeButton.A, PokeButton.B]:
 				if _page_index + 1 < _pages.size():
 					_page_index += 1
 					_refresh()
@@ -169,11 +169,11 @@ static func box_text(
 				String(buffers[buffer])
 			)
 	var buffer_1: Array[int] = data.string_buffer_addresses()
-	if buffer_1.size() > RomLayout.STRING_BUFFER_1:
+	if buffer_1.size() > Gen2Layout.STRING_BUFFER_1:
 		text = Gen2TextStream.fill_all_markers(
 			text,
 			"%s%04X>" % [
-				Gen2TextStream.RAM_MARKER, buffer_1[RomLayout.STRING_BUFFER_1],
+				Gen2TextStream.RAM_MARKER, buffer_1[Gen2Layout.STRING_BUFFER_1],
 			],
 			gift
 		)

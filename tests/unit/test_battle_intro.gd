@@ -113,7 +113,7 @@ func test_the_last_frame_is_short_and_the_settle_is_the_caller_s() -> void:
 		assert_false(intro.advance_frame(), "a finished intro never ticks")
 
 
-## The offsets are read straight back through [Gen2Raster], so a band edge falls
+## The offsets are read straight back through [PokeRaster], so a band edge falls
 ## where the walk says it does rather than where a layer happens to end.
 func test_the_middle_band_cuts_through_the_player_panel() -> void:
 	# The player's panel runs from its name row to the bottom of its exp bar.

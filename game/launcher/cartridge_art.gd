@@ -1,4 +1,4 @@
-class_name Gen2CartridgeArt
+class_name PokeCartridgeArt
 extends RefCounted
 
 ## A picture the player put on a cartridge in place of the shipped shell. Under
@@ -23,7 +23,7 @@ const SIGNATURES: Array = [
 	[[0xFF, 0xD8, 0xFF], &"jpg"],
 ]
 
-## Keyed by content, as [Gen2ModArt]'s is: the shelf rebuilds on any change.
+## Keyed by content, as [PokeModArt]'s is: the shelf rebuilds on any change.
 static var _textures: Dictionary = {}
 
 

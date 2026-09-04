@@ -6,7 +6,7 @@ extends RefCounted
 ## tiles are whatever the station left in VRAM, so this draws with the live
 ## tileset strip; only the palettes are the scene's own.
 
-const TILE: int = Gen2Tiles.TILE_WIDTH
+const TILE: int = PokeTiles.TILE_WIDTH
 const WIDTH: int = Gen2Screen.WIDTH
 const HEIGHT: int = Gen2Screen.HEIGHT
 const MAP_COLUMNS: int = 32
@@ -40,7 +40,7 @@ static func create(
 	if data == null or tileset == null or not data.has_magnet_train():
 		return null
 	var strip: PackedByteArray = data.world_tileset_indices(tileset.number)
-	if strip.size() < tileset.tile_count * Gen2Tiles.TILE_PIXELS:
+	if strip.size() < tileset.tile_count * PokeTiles.TILE_PIXELS:
 		return null
 	var page := Gen2MagnetTrainPage.new()
 	page._sprite = data.overworld_sprite(
@@ -152,14 +152,14 @@ static func _tilemap(data: GameData) -> PackedByteArray:
 	var fg: PackedByteArray = data.magnet_train_tilemap("fg")
 	var out := PackedByteArray()
 	out.resize(MAP_COLUMNS * MAP_ROWS)
-	var columns: int = RomLayout.MAGNET_TRAIN_BG_COLUMNS
+	var columns: int = Gen2Layout.MAGNET_TRAIN_BG_COLUMNS
 	for row: int in MAP_ROWS:
 		for column: int in MAP_COLUMNS:
 			out[row * MAP_COLUMNS + column] = bg[row * columns + (column % columns)]
-	for row: int in RomLayout.MAGNET_TRAIN_FG_ROWS:
-		for column: int in RomLayout.MAGNET_TRAIN_FG_COLUMNS:
-			out[(RomLayout.MAGNET_TRAIN_FG_ROW + row) * MAP_COLUMNS + column] = \
-				fg[row * RomLayout.MAGNET_TRAIN_FG_COLUMNS + column]
+	for row: int in Gen2Layout.MAGNET_TRAIN_FG_ROWS:
+		for column: int in Gen2Layout.MAGNET_TRAIN_FG_COLUMNS:
+			out[(Gen2Layout.MAGNET_TRAIN_FG_ROW + row) * MAP_COLUMNS + column] = \
+				fg[row * Gen2Layout.MAGNET_TRAIN_FG_COLUMNS + column]
 	return out
 
 

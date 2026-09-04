@@ -10,9 +10,9 @@ extends RefCounted
 ## cache-free, like the rest of `game/save/`.
 
 ## `MAIL_LINE_LENGTH`, `MAIL_MSG_LENGTH` and `MAILBOX_CAPACITY`.
-const LINE_LENGTH: int = RomLayout.MAIL_LINE_LENGTH
-const MESSAGE_LENGTH: int = RomLayout.MAIL_MSG_LENGTH
-const CAPACITY: int = RomLayout.MAILBOX_CAPACITY
+const LINE_LENGTH: int = Gen2Layout.MAIL_LINE_LENGTH
+const MESSAGE_LENGTH: int = Gen2Layout.MAIL_MSG_LENGTH
+const CAPACITY: int = Gen2Layout.MAILBOX_CAPACITY
 ## The `<NEXT>` byte between the two lines, which `_ComposeMailMessage` writes
 ## once and neither the entry nor the delete may overwrite.
 const LINE_BREAK: int = Gen2Text.NEXT_LINE
@@ -23,7 +23,7 @@ const BUFFER_LENGTH: int = MESSAGE_LENGTH + 1
 ## author runs two bytes into the `Nationality` word behind it and no cartridge
 ## in this project's allowlist ever writes a nationality. Ten is what is stored
 ## and ten is what `MailboxPC_GetMailAuthor` reads back.
-const AUTHOR_LENGTH: int = RomLayout.MAIL_AUTHOR_LENGTH
+const AUTHOR_LENGTH: int = Gen2Layout.MAIL_AUTHOR_LENGTH
 
 ## The typed message, `BUFFER_LENGTH` raw codes with `'@'` behind what was
 ## entered. Raw rather than a String because the break is a code and the two

@@ -50,23 +50,23 @@ static func open(mode_name: StringName, saved_balance: int, held_balance: int) -
 
 func press(button: int) -> StringName:
 	match button:
-		Gen2Button.A:
+		PokeButton.A:
 			return CONFIRMED
-		Gen2Button.B:
+		PokeButton.B:
 			return CANCELLED
-		Gen2Button.UP:
+		PokeButton.UP:
 			## `.incrementdigit` is `GiveMoney`, so the whole amount is clamped
 			## at the ceiling rather than the digit wrapping.
 			value = mini(value + _step(), MAXIMUM)
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			## `.decrementdigit` is `TakeMoney`, which leaves zero rather than
 			## borrowing past it.
 			value = maxi(value - _step(), 0)
-		Gen2Button.LEFT:
+		PokeButton.LEFT:
 			## `.movecursorleft` and `.movecursorright` both `ret` at the edge:
 			## the cursor stops rather than wrapping.
 			cursor = maxi(cursor - 1, 0)
-		Gen2Button.RIGHT:
+		PokeButton.RIGHT:
 			cursor = mini(cursor + 1, DIGITS - 1)
 	return PENDING
 

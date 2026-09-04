@@ -30,7 +30,7 @@ func test_map_reads_directional_connections_and_signed_offsets() -> void:
 		"number": 1,
 		"width_blocks": 4,
 		"height_blocks": 3,
-		"connection_flags": RomLayout.MAP_CONNECTION_FLAG_NORTH,
+		"connection_flags": Gen2Layout.MAP_CONNECTION_FLAG_NORTH,
 		"connections": [{
 			"direction": "north", "map_group": 2, "map_number": 4,
 			"length": 5, "target_width_blocks": 8,
@@ -38,7 +38,7 @@ func test_map_reads_directional_connections_and_signed_offsets() -> void:
 		}],
 	})
 
-	assert_eq(map.connection_flags, RomLayout.MAP_CONNECTION_FLAG_NORTH)
+	assert_eq(map.connection_flags, Gen2Layout.MAP_CONNECTION_FLAG_NORTH)
 	assert_eq(map.connections.size(), 1)
 	assert_eq(map.connections[0]["direction"], "north")
 	assert_eq(map.connections[0]["map_group"], 2)
@@ -93,14 +93,14 @@ func test_a_block_names_the_second_graphics_block_and_a_placeholder_names_nothin
 		"meta": meta,
 	})
 
-	assert_eq(tileset.tile_count, RomLayout.TILESET_TILE_COUNT)
+	assert_eq(tileset.tile_count, Gen2Layout.TILESET_TILE_COUNT)
 	assert_eq(tileset.tile_index(0, 0), 211)
 	assert_eq(tileset.tile_index(0, 1), 0)
 
 
 func test_a_second_block_palette_nibble_drops_the_vram_bank_bit() -> void:
 	var palette_map: Array = []
-	palette_map.resize(RomLayout.WORLD_PALETTE_MAP_BYTES)
+	palette_map.resize(Gen2Layout.WORLD_PALETTE_MAP_BYTES)
 	palette_map.fill(0)
 	palette_map[64] = 0x0B
 	palette_map[111] = 0xC0
@@ -130,23 +130,23 @@ func test_world_palette_environment_rows_match_the_cartridge_table() -> void:
 
 
 func test_layout_carries_verified_world_table_shapes() -> void:
-	var gold: Dictionary = RomLayout.for_id(RomRegistry.GOLD)
-	var silver: Dictionary = RomLayout.for_id(RomRegistry.SILVER)
-	var crystal: Dictionary = RomLayout.for_id(RomRegistry.CRYSTAL)
-	assert_eq(RomLayout.map_count(gold), 368)
-	assert_eq(RomLayout.map_count(crystal), 388)
-	assert_eq(RomLayout.tileset_count(gold), 29)
-	assert_eq(RomLayout.tileset_count(crystal), 37)
-	assert_eq(RomLayout.tileset_block_count(gold, 4), 64)
-	assert_eq(RomLayout.tileset_block_count(crystal, 31), 40)
+	var gold: Dictionary = Gen2Layout.for_id(RomRegistry.GOLD)
+	var silver: Dictionary = Gen2Layout.for_id(RomRegistry.SILVER)
+	var crystal: Dictionary = Gen2Layout.for_id(RomRegistry.CRYSTAL)
+	assert_eq(Gen2Layout.map_count(gold), 368)
+	assert_eq(Gen2Layout.map_count(crystal), 388)
+	assert_eq(Gen2Layout.tileset_count(gold), 29)
+	assert_eq(Gen2Layout.tileset_count(crystal), 37)
+	assert_eq(Gen2Layout.tileset_block_count(gold, 4), 64)
+	assert_eq(Gen2Layout.tileset_block_count(crystal, 31), 40)
 	# NUM_OVERWORLD_SPRITES, which is the last SPRITE_* constant's own value:
 	# pokegold ends at SPRITE_SILVER_TROPHY ($5f) and pokecrystal at
 	# SPRITE_STANDING_YOUNGSTER ($66), the three beasts among the rows between.
-	assert_eq(RomLayout.overworld_sprite_count(gold), 95)
-	assert_eq(RomLayout.overworld_sprite_count(crystal), 102)
-	assert_eq(RomLayout.overworld_sprite_offset(gold, 1), 0x147DE)
-	assert_eq(RomLayout.overworld_sprite_offset(crystal, 1), 0x14736)
-	assert_eq(RomLayout.MON_ICON_COUNT, 38)
-	assert_eq(RomLayout.overworld_icon_offset(gold, 1), 0x8EABE)
-	assert_eq(RomLayout.overworld_icon_offset(silver, 1), 0x8EAA4)
-	assert_eq(RomLayout.overworld_icon_offset(crystal, 1), 0x8EC0D)
+	assert_eq(Gen2Layout.overworld_sprite_count(gold), 95)
+	assert_eq(Gen2Layout.overworld_sprite_count(crystal), 102)
+	assert_eq(Gen2Layout.overworld_sprite_offset(gold, 1), 0x147DE)
+	assert_eq(Gen2Layout.overworld_sprite_offset(crystal, 1), 0x14736)
+	assert_eq(Gen2Layout.MON_ICON_COUNT, 38)
+	assert_eq(Gen2Layout.overworld_icon_offset(gold, 1), 0x8EABE)
+	assert_eq(Gen2Layout.overworld_icon_offset(silver, 1), 0x8EAA4)
+	assert_eq(Gen2Layout.overworld_icon_offset(crystal, 1), 0x8EC0D)

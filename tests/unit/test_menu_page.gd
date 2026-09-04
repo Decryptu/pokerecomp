@@ -187,10 +187,10 @@ func test_cancelling_an_unown_print_restarts_the_map_music() -> void:
 	screen.music_requested.connect(func(track: int) -> void: tracks.append(track))
 	screen.map_music_requested.connect(func() -> void: restarts.append(true))
 
-	screen.handle_button(Gen2Button.A)
+	screen.handle_button(PokeButton.A)
 	assert_eq(tracks, [Gen2UnownPrinterScreen.MUSIC_PRINTER])
 	assert_true(screen.printing())
-	screen.handle_button(Gen2Button.B)
+	screen.handle_button(PokeButton.B)
 
 	assert_eq(restarts.size(), 1)
 	assert_false(screen.printing())

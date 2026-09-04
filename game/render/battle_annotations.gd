@@ -23,8 +23,8 @@ const PIXELS_INDEXED: int = TILE * TILE
 ## are decoded to, so a symbol a mod supplies is the same ink as the text beside
 ## it. It is also the highest index the hardware's four-colour palette has, which
 ## is what an indexed tile is checked against.
-const INK_INDEX: int = Gen2Tiles.INK
-const MAX_INDEX: int = Gen2Tiles.INK
+const INK_INDEX: int = PokeTiles.INK
+const MAX_INDEX: int = PokeTiles.INK
 
 ## The interface's own font. A provider writes strings and the host writes them
 ## the way every other box does.

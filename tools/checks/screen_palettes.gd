@@ -66,8 +66,8 @@ func _verify_shiny_palettes() -> void:
 	for species: int in range(FIRST_SPECIES, LAST_SPECIES + 1):
 		var normal: PackedColorArray = _r.data.palette(species, false)
 		var shiny: PackedColorArray = _r.data.palette(species, true)
-		if normal.size() != Gen2Palette.COLORS_PER_PIC \
-			or shiny.size() != Gen2Palette.COLORS_PER_PIC:
+		if normal.size() != PokePalette.COLORS_PER_PIC \
+			or shiny.size() != PokePalette.COLORS_PER_PIC:
 			missing += 1
 			continue
 		## The two middle colours are the Pokemon; 0 and 3 are white and black on
@@ -237,9 +237,9 @@ func _check_move_screen() -> void:
 		return
 	var goldenrod: PackedColorArray = Gen2PicImage.quantized(_r.data.move_screen_palette())
 	_r.check(
-		goldenrod.size() == RomLayout.PREDEF_PALETTE_COLORS,
+		goldenrod.size() == Gen2Layout.PREDEF_PALETTE_COLORS,
 		"the move screen's palette is %d colours, not %d." % [
-			goldenrod.size(), RomLayout.PREDEF_PALETTE_COLORS,
+			goldenrod.size(), Gen2Layout.PREDEF_PALETTE_COLORS,
 		]
 	)
 	var image: Image = page.render(

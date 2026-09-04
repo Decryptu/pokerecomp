@@ -91,7 +91,7 @@ func _verify_fly_walk(game_id: StringName, _data: GameData) -> void:
 		)
 		var opened: int = map.cursor
 		var seen: Dictionary = {}
-		for _press: int in RomLayout.KANTO_FLYPOINT:
+		for _press: int in Gen2Layout.KANTO_FLYPOINT:
 			seen[map.cursor] = true
 			var landmark: int = int(_data.flypoint(map.cursor).get("landmark", -1))
 			var point: Dictionary = _data.landmark(landmark)
@@ -101,12 +101,12 @@ func _verify_fly_walk(game_id: StringName, _data: GameData) -> void:
 					game_id, map.cursor, landmark,
 				]
 			)
-			map.press(Gen2Button.UP)
+			map.press(PokeButton.UP)
 		_r.check(
-			seen.size() == RomLayout.KANTO_FLYPOINT,
+			seen.size() == Gen2Layout.KANTO_FLYPOINT,
 			"%s: the %s fly walk reached %d flypoints, not %d." % [
 				game_id, "Kanto" if in_kanto else "Johto", seen.size(),
-				RomLayout.KANTO_FLYPOINT,
+				Gen2Layout.KANTO_FLYPOINT,
 			]
 		)
 		_r.check(
@@ -119,16 +119,16 @@ func _verify_fly_walk(game_id: StringName, _data: GameData) -> void:
 
 func _verify_flypoints(game_id: StringName, _data: GameData) -> void:
 	if not _r.check(
-		_data.flypoint_count() == RomLayout.FLYPOINT_COUNT,
+		_data.flypoint_count() == Gen2Layout.FLYPOINT_COUNT,
 		"%s: %d flypoints, not %d." % [
-			game_id, _data.flypoint_count(), RomLayout.FLYPOINT_COUNT,
+			game_id, _data.flypoint_count(), Gen2Layout.FLYPOINT_COUNT,
 		]
 	):
 		return
 	if not _r.check(
-		_data.spawn_point_count() == RomLayout.SPAWN_COUNT,
+		_data.spawn_point_count() == Gen2Layout.SPAWN_COUNT,
 		"%s: %d spawn points, not %d." % [
-			game_id, _data.spawn_point_count(), RomLayout.SPAWN_COUNT,
+			game_id, _data.spawn_point_count(), Gen2Layout.SPAWN_COUNT,
 		]
 	):
 		return
@@ -162,7 +162,7 @@ func _verify_flypoints(game_id: StringName, _data: GameData) -> void:
 		# off that split alone.
 		_r.check(
 			(landmark < Gen2WorldRadio.kanto_landmark(Gen2WorldState.is_crystal_profile(_data)))
-				== (index < RomLayout.KANTO_FLYPOINT),
+				== (index < Gen2Layout.KANTO_FLYPOINT),
 			"%s: flypoint %d is on the wrong side of the region split." % [game_id, index]
 		)
 	for index: int in _data.spawn_point_count():
@@ -175,13 +175,13 @@ func _verify_flypoints(game_id: StringName, _data: GameData) -> void:
 		)
 	_verify_fly_walk(game_id, _data)
 	print("%s: %d flypoints over %d spawn points, %d of them Johto." % [
-		game_id, _data.flypoint_count(), _data.spawn_point_count(), RomLayout.KANTO_FLYPOINT,
+		game_id, _data.flypoint_count(), _data.spawn_point_count(), Gen2Layout.KANTO_FLYPOINT,
 	])
 
 
 func _verify_landmarks(game_id: StringName, _data: GameData, crystal: bool) -> void:
-	var wanted: int = RomLayout.LANDMARK_COUNT if crystal \
-		else RomLayout.LANDMARK_COUNT_GOLD_SILVER
+	var wanted: int = Gen2Layout.LANDMARK_COUNT if crystal \
+		else Gen2Layout.LANDMARK_COUNT_GOLD_SILVER
 	if not _r.check(
 		_data.landmark_count() == wanted,
 		"%s: %d landmarks, expected %d." % [game_id, _data.landmark_count(), wanted]
@@ -244,35 +244,35 @@ func _verify_regions(game_id: StringName, _data: GameData) -> void:
 	for region: String in ["johto", "kanto"]:
 		var cells: PackedByteArray = _data.town_map_region(region)
 		if not _r.check(
-			cells.size() == RomLayout.TOWN_MAP_REGION_CELLS,
+			cells.size() == Gen2Layout.TOWN_MAP_REGION_CELLS,
 			"%s: the %s map is %d cells, expected %d." % [
-				game_id, region, cells.size(), RomLayout.TOWN_MAP_REGION_CELLS,
+				game_id, region, cells.size(), Gen2Layout.TOWN_MAP_REGION_CELLS,
 			]
 		):
 			continue
 		for cell: int in cells:
 			if not _r.check(
-				cell < RomLayout.TOWN_MAP_TILES,
+				cell < Gen2Layout.TOWN_MAP_TILES,
 				"%s: the %s map names tile $%02X, past TownMapGFX." % [game_id, region, cell]
 			):
 				break
 
 
 func _verify_palettes(game_id: StringName, _data: GameData, crystal: bool) -> void:
-	for slot: int in RomLayout.TOWN_MAP_PALETTES:
+	for slot: int in Gen2Layout.TOWN_MAP_PALETTES:
 		var colors: PackedColorArray = _data.town_map_palette(slot)
 		if not _r.check(
-			colors.size() == RomLayout.TOWN_MAP_PALETTE_COLORS,
+			colors.size() == Gen2Layout.TOWN_MAP_PALETTE_COLORS,
 			"%s: region palette %d has %d colours." % [game_id, slot, colors.size()]
 		):
 			continue
 		_r.check(
-			colors[0] == Gen2Palette.from_packed(RomLayout.TOWN_MAP_PALETTE_FIRST_COLOR),
+			colors[0] == PokePalette.from_packed(Gen2Layout.TOWN_MAP_PALETTE_FIRST_COLOR),
 			"%s: region palette %d does not open on the shared off-white." % [game_id, slot]
 		)
 	# `TownMapPals`' table stops at $60; the font above it takes palette 0.
 	_r.check(
-		_data.town_map_palette_of(RomLayout.TOWN_MAP_PALETTE_MAP_LIMIT) == 0,
+		_data.town_map_palette_of(Gen2Layout.TOWN_MAP_PALETTE_MAP_LIMIT) == 0,
 		"%s: a tile past the palette map is not on palette 0." % game_id
 	)
 	# `FemalePokegearPals` differs from the male run in its city palette alone,
@@ -298,14 +298,14 @@ func _verify_cursor_walk(game_id: StringName, _data: GameData, crystal: bool) ->
 			var length: int = map.last_landmark() - map.first_landmark() + 1
 			for _step: int in length:
 				seen[map.cursor] = true
-				map.press(Gen2Button.UP)
+				map.press(PokeButton.UP)
 			_r.check(
 				seen.size() == length and map.cursor == map.first_landmark(),
 				"%s: the %d..%d window walks %d landmarks and lands on %d." % [
 					game_id, map.first_landmark(), map.last_landmark(), seen.size(), map.cursor,
 				]
 			)
-			map.press(Gen2Button.DOWN)
+			map.press(PokeButton.DOWN)
 			_r.check(
 				map.cursor == map.last_landmark(),
 				"%s: DOWN from %d reached %d, not %d." % [
@@ -334,13 +334,13 @@ func _verify_page(game_id: StringName, _data: GameData, crystal: bool) -> void:
 		return
 	# The two objects the screen draws come off strips of their own.
 	for sheet: Array in [
-		["pokegear_sprites", RomLayout.POKEGEAR_SPRITE_TILES],
-		["fast_ship", RomLayout.FAST_SHIP_TILES],
-		["fly_map_label", RomLayout.FLY_MAP_LABEL_TILES],
+		["pokegear_sprites", Gen2Layout.POKEGEAR_SPRITE_TILES],
+		["fast_ship", Gen2Layout.FAST_SHIP_TILES],
+		["fly_map_label", Gen2Layout.FLY_MAP_LABEL_TILES],
 	]:
 		_r.check(
 			_data.tile_indices(String(sheet[0])).size()
-				== int(sheet[1]) * Gen2Tiles.TILE_PIXELS,
+				== int(sheet[1]) * PokeTiles.TILE_PIXELS,
 			"%s: the %s strip is not %d tiles." % [game_id, sheet[0], int(sheet[1])]
 		)
 	for screen: StringName in [
@@ -404,13 +404,13 @@ func _verify_fly_bubble(game_id: StringName, region: String, map: PackedInt32Arr
 func _verify_nests(game_id: StringName, _data: GameData, crystal: bool) -> void:
 	_r.check(
 		_data.tile_indices("dex_nest_icon").size()
-			== RomLayout.DEX_NEST_ICON_TILES * Gen2Tiles.TILE_PIXELS,
+			== Gen2Layout.DEX_NEST_ICON_TILES * PokeTiles.TILE_PIXELS,
 		"%s: the dex nest icon is not one tile." % game_id
 	)
 	var kanto_first: int = Gen2WorldRadio.kanto_landmark(crystal)
 	var roaming: Array = _data.world_roaming_mons()
 	var deepest: int = 0
-	for species: int in range(1, RomLayout.SPECIES_COUNT + 1):
+	for species: int in range(1, Gen2Layout.SPECIES_COUNT + 1):
 		for region: int in Gen2TownMap.REGION_NAMES.size():
 			var list: Array = Gen2WorldEncounter.nests(
 				_data, species, Gen2TownMap.region_name(region), roaming
@@ -468,18 +468,18 @@ func _verify_cards(game_id: StringName, _data: GameData) -> void:
 		"%s: the cache holds no Pokegear card tilemaps." % game_id
 	):
 		return
-	for card: String in RomLayout.POKEGEAR_CARD_ORDER:
+	for card: String in Gen2Layout.POKEGEAR_CARD_ORDER:
 		var cells: PackedByteArray = _data.pokegear_card(StringName(card))
 		if not _r.check(
-			cells.size() == RomLayout.POKEGEAR_CARD_CELLS,
+			cells.size() == Gen2Layout.POKEGEAR_CARD_CELLS,
 			"%s: the %s card is %d cells, wanted %d." % [
-				game_id, card, cells.size(), RomLayout.POKEGEAR_CARD_CELLS,
+				game_id, card, cells.size(), Gen2Layout.POKEGEAR_CARD_CELLS,
 			]
 		):
 			continue
 		for cell: int in cells:
 			if not _r.check(
-				cell < RomLayout.POKEGEAR_FIRST_TILE + RomLayout.POKEGEAR_TILES
+				cell < Gen2Layout.POKEGEAR_FIRST_TILE + Gen2Layout.POKEGEAR_TILES
 					or cell == Gen2TownMapPage.BLANK_TILE,
 				"%s: the %s card names tile $%02X, past its sheets." % [game_id, card, cell]
 			):
@@ -511,7 +511,7 @@ func _verify_cards(game_id: StringName, _data: GameData) -> void:
 		]
 	)
 	print("%s: 3 Pokegear cards of %d cells, %d texts." % [
-		game_id, RomLayout.POKEGEAR_CARD_CELLS, CARD_TEXTS.size(),
+		game_id, Gen2Layout.POKEGEAR_CARD_CELLS, CARD_TEXTS.size(),
 	])
 
 

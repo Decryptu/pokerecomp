@@ -322,20 +322,20 @@ func handle_button(button: int) -> bool:
 	if _submenu_open:
 		return _handle_submenu_button(button)
 	match button:
-		Gen2Button.UP:
+		PokeButton.UP:
 			_press_up()
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			_press_down()
-		Gen2Button.LEFT, Gen2Button.RIGHT:
+		PokeButton.LEFT, PokeButton.RIGHT:
 			## `MoveMonWithoutMail_DPad`'s carry: left and right load the list
 			## before or after this one, and the cursor starts again at its top.
 			## They belong to MOVE PKMN W/O MAIL alone and do nothing elsewhere.
 			if _mode != MODE_MOVE:
 				return false
-			_load_neighbour(-1 if button == Gen2Button.LEFT else 1)
-		Gen2Button.A:
+			_load_neighbour(-1 if button == PokeButton.LEFT else 1)
+		PokeButton.A:
 			_confirm()
-		Gen2Button.B:
+		PokeButton.B:
 			_back()
 		_:
 			return false
@@ -347,14 +347,14 @@ func handle_button(button: int) -> bool:
 ## `STATICMENU_WRAP`, so both stop at their ends.
 func _handle_submenu_button(button: int) -> bool:
 	match button:
-		Gen2Button.UP:
+		PokeButton.UP:
 			_submenu_cursor = maxi(_submenu_cursor - 1, 0)
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			_submenu_cursor = mini(_submenu_cursor + 1, _submenu_labels().size() - 1)
-		Gen2Button.A:
+		PokeButton.A:
 			_confirm_submenu()
 			return true
-		Gen2Button.B:
+		PokeButton.B:
 			_close_submenu()
 			return true
 		_:
@@ -366,11 +366,11 @@ func _handle_submenu_button(button: int) -> bool:
 ## `PlaceYesNoBox`, whose B is its NO.
 func _handle_release_button(button: int) -> bool:
 	match button:
-		Gen2Button.UP:
+		PokeButton.UP:
 			_release_cursor = maxi(_release_cursor - 1, 0)
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			_release_cursor = mini(_release_cursor + 1, RELEASE_OPTIONS.size() - 1)
-		Gen2Button.A:
+		PokeButton.A:
 			_release_open = false
 			if _release_cursor == 0:
 				_close_submenu(false)
@@ -379,7 +379,7 @@ func _handle_release_button(button: int) -> bool:
 				_prompt = PROMPT_WHATS_UP
 				_refresh()
 			return true
-		Gen2Button.B:
+		PokeButton.B:
 			_release_open = false
 			_prompt = PROMPT_WHATS_UP
 			_refresh()
@@ -712,7 +712,7 @@ func _interface_palette() -> PackedColorArray:
 	var colors: PackedColorArray = _data.pokedex_palette("interface") if _data != null \
 		else PackedColorArray()
 	if colors.is_empty():
-		return Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+		return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	return colors
 
 
@@ -823,7 +823,7 @@ func _cursor_image(
 	var cell := PackedByteArray()
 	cell.resize(side * side)
 	Gen2Font.blit_slot(
-		sheet, RomLayout.PC_SELECT_TILES * side, tile, cell, side, 0, 0
+		sheet, Gen2Layout.PC_SELECT_TILES * side, tile, cell, side, 0, 0
 	)
 	var image: Image = Gen2PicImage.from_indices(cell, side, side, palette, true)
 	if flip_x:

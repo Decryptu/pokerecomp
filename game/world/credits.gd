@@ -223,7 +223,7 @@ func frame_state() -> Dictionary:
 ## the two `PlayMusic` calls and nothing else.
 func advance_frame(held: Array = []) -> Array:
 	var events: Array = []
-	if Gen2Button.B in held:
+	if PokeButton.B in held:
 		_skip()
 	var at_step: int = _step
 	_step = STEP_PARSE if at_step >= CYCLE_FRAMES - 1 else at_step + 1
@@ -245,7 +245,7 @@ func advance_frame(held: Array = []) -> Array:
 ## Whether holding A now leaves, which `Credits_HandleAButton` only allows once
 ## the script has run out.
 func may_finish(held: Array = []) -> bool:
-	return _finished and Gen2Button.A in held
+	return _finished and PokeButton.A in held
 
 
 ## `Credits_HandleBButton`, which burns one tick of the wait a frame rather than
@@ -274,7 +274,7 @@ func _load_banner() -> void:
 		_block = -1
 		return
 	_block = _data.credits_frame_block(_scene, _frame)
-	_frame = (_frame + 1) % RomLayout.CREDITS_SCENE_FRAMES
+	_frame = (_frame + 1) % Gen2Layout.CREDITS_SCENE_FRAMES
 
 
 ## `ParseCredits`. A tick is spent here, or the whole batch up to the next wait is
@@ -290,7 +290,7 @@ func _parse() -> Array:
 	while true:
 		var command: int = _next()
 		match command:
-			RomLayout.CREDITS_END:
+			Gen2Layout.CREDITS_END:
 				_finished = true
 				events.append({
 					"type": &"music_fade_requested",
@@ -298,24 +298,24 @@ func _parse() -> Array:
 					"frames": POST_CREDITS_FADE_FRAMES,
 				})
 				return events
-			RomLayout.CREDITS_WAIT:
+			Gen2Layout.CREDITS_WAIT:
 				_timer = _next()
 				_copying = true
 				_third = 0
 				return events
-			RomLayout.CREDITS_WAIT2:
+			Gen2Layout.CREDITS_WAIT2:
 				## The same wait with no BG map update behind it, so the batch it
 				## closes is written and never shown.
 				_timer = _next()
 				return events
-			RomLayout.CREDITS_SCENE:
-				_scene = _next() % RomLayout.CREDITS_SCENES
+			Gen2Layout.CREDITS_SCENE:
+				_scene = _next() % Gen2Layout.CREDITS_SCENES
 				_frame = 0
-			RomLayout.CREDITS_CLEAR:
+			Gen2Layout.CREDITS_CLEAR:
 				_frame = BLANK_FRAME
-			RomLayout.CREDITS_MUSIC:
+			Gen2Layout.CREDITS_MUSIC:
 				events.append({"type": &"music_requested", "music": MUSIC_CREDITS})
-			RomLayout.CREDITS_THEEND:
+			Gen2Layout.CREDITS_THEEND:
 				_draw_the_end()
 			_:
 				_place_string(command, _next())
@@ -327,7 +327,7 @@ func _parse() -> Array:
 ## always terminates; the importer refuses a script that does.
 func _next() -> int:
 	if _position >= _script.size():
-		return RomLayout.CREDITS_END
+		return Gen2Layout.CREDITS_END
 	var byte: int = _script[_position]
 	_position += 1
 	return byte
@@ -359,7 +359,7 @@ func _clear_text() -> void:
 
 func _draw_the_end() -> void:
 	var at: Vector2i = THE_END_AT if _crystal else THE_END_AT_GOLD_SILVER
-	for tile: int in RomLayout.CREDITS_THE_END_TILES:
+	for tile: int in Gen2Layout.CREDITS_THE_END_TILES:
 		@warning_ignore("integer_division")
 		var row: int = tile / THE_END_COLUMNS
 		_put(

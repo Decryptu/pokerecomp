@@ -103,7 +103,7 @@ func _drive_to_prompt(prompt: int, frames: int = 2400) -> bool:
 				Gen2SlotMachine.SLOTS_WAIT_REEL1, Gen2SlotMachine.SLOTS_WAIT_REEL2,
 				Gen2SlotMachine.SLOTS_WAIT_REEL3,
 			]:
-			_world_screen.press_button(Gen2Button.A)
+			_world_screen.press_button(PokeButton.A)
 	return false
 
 
@@ -122,7 +122,7 @@ func test_the_bet_is_taken_out_of_the_coin_case() -> void:
 	await _open_world()
 	_run_script()
 	assert_true(_drive_to_prompt(Gen2SlotMachine.Prompt.BET), "the menu must open")
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 	assert_eq(_host().machine().coins(), COINS - 3, "the machine takes three coins")
 
 
@@ -132,11 +132,11 @@ func test_cancelling_closes_the_machine_and_writes_the_coins_back() -> void:
 	await _open_world()
 	_run_script()
 	assert_true(_drive_to_prompt(Gen2SlotMachine.Prompt.BET))
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 	var spent: int = _host().machine().coins()
 	assert_true(_drive_to_prompt(Gen2SlotMachine.Prompt.PRESS), "the spin must end")
-	_world_screen.press_button(Gen2Button.A)
-	_world_screen.press_button(Gen2Button.B)
+	_world_screen.press_button(PokeButton.A)
+	_world_screen.press_button(PokeButton.B)
 	for _frame: int in 240:
 		if _host() == null:
 			break
@@ -155,7 +155,7 @@ func test_the_world_moves_again_once_the_machine_closes() -> void:
 	await _open_world()
 	_run_script()
 	assert_true(_drive_to_prompt(Gen2SlotMachine.Prompt.BET))
-	_world_screen.press_button(Gen2Button.B)
+	_world_screen.press_button(PokeButton.B)
 	for _frame: int in 240:
 		if _host() == null:
 			break

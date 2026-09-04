@@ -51,7 +51,7 @@ func _build(
 		[0xF8, 0xF8, 0x00, 0x00],
 		[0xF8, 0x00, 0x01, 0x00],
 	]
-	var sprite_at: int = BASE + RomLayout.BATTLE_ANIM_OAM_SET_SIZE
+	var sprite_at: int = BASE + Gen2Layout.BATTLE_ANIM_OAM_SET_SIZE
 	var oam_body: Array = [0x00, sprite_rows.size(), sprite_at & 0xFF, sprite_at >> 8]
 	for row: Array in sprite_rows:
 		oam_body.append_array(row)

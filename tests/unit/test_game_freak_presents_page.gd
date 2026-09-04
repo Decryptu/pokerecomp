@@ -65,10 +65,10 @@ func test_the_screen_opens_cleared_and_the_words_land_on_their_own_rows() -> voi
 	# Gold places "GAME FREAK" at (5,12) and "PRESENTS" at (7,13).
 	var both: Image = page.draw(_run(&"gold", 196))
 	var rows: Array[Vector2i] = Presents.WORD_AT_GOLD
-	assert_ne(both.get_pixelv(rows[0] * Gen2Tiles.TILE_WIDTH), BACKGROUND, "GAME FREAK")
-	assert_ne(both.get_pixelv(rows[1] * Gen2Tiles.TILE_WIDTH), BACKGROUND, "PRESENTS")
+	assert_ne(both.get_pixelv(rows[0] * PokeTiles.TILE_WIDTH), BACKGROUND, "GAME FREAK")
+	assert_ne(both.get_pixelv(rows[1] * PokeTiles.TILE_WIDTH), BACKGROUND, "PRESENTS")
 	assert_eq(
-		both.get_pixelv(Vector2i(rows[0].x - 1, rows[0].y) * Gen2Tiles.TILE_WIDTH),
+		both.get_pixelv(Vector2i(rows[0].x - 1, rows[0].y) * PokeTiles.TILE_WIDTH),
 		BACKGROUND, "and nothing in front of them"
 	)
 

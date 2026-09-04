@@ -23,7 +23,7 @@ func _initialize() -> void:
 		quit(1)
 		return
 	_output_path = args[0]
-	if Gen2ToolPath.refuses(_output_path):
+	if PokeToolPath.refuses(_output_path):
 		quit(2)
 		return
 	_with_mod_buttons = args.size() > 1 and args[1] == "mod"
@@ -82,7 +82,7 @@ func _process(_delta: float) -> bool:
 		return false
 	if _frames < 18:
 		return false
-	var image: Image = Gen2ToolPath.capture(root)
+	var image: Image = PokeToolPath.capture(root)
 	if image == null:
 		quit(1)
 		return true

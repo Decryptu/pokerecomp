@@ -14,10 +14,10 @@ var _r: RefCounted = null
 ## two pins: the only thing data/battle_anims differs on is nothing, and
 ## animations.asm differs only inside eight bodies.
 const EXPECTED_COUNTS: Dictionary = {
-	&"scripts": RomLayout.BATTLE_ANIM_SCRIPT_COUNT,
-	&"objects": RomLayout.BATTLE_ANIM_OBJECT_COUNT,
-	&"framesets": RomLayout.BATTLE_ANIM_FRAMESET_COUNT,
-	&"oam_sets": RomLayout.BATTLE_ANIM_OAM_SET_COUNT,
+	&"scripts": Gen2Layout.BATTLE_ANIM_SCRIPT_COUNT,
+	&"objects": Gen2Layout.BATTLE_ANIM_OBJECT_COUNT,
+	&"framesets": Gen2Layout.BATTLE_ANIM_FRAMESET_COUNT,
+	&"oam_sets": Gen2Layout.BATTLE_ANIM_OAM_SET_COUNT,
 }
 
 ## `BattleAnim_Pound`, decoded. The seven commands `anim_1gfx`, `anim_sound`,
@@ -317,8 +317,8 @@ func _verify_the_transition(game_id: StringName, data: GameData) -> void:
 	var sheet: Dictionary = data.tile_sheet("battle_transition")
 	var indices: PackedByteArray = data.tile_indices("battle_transition")
 	if not _r.check(
-		int(sheet.get("tiles", 0)) == RomLayout.BATTLE_TRANSITION_TILES
-			and indices.size() == RomLayout.BATTLE_TRANSITION_TILES * Gen2Tiles.TILE_PIXELS,
+		int(sheet.get("tiles", 0)) == Gen2Layout.BATTLE_TRANSITION_TILES
+			and indices.size() == Gen2Layout.BATTLE_TRANSITION_TILES * PokeTiles.TILE_PIXELS,
 		"%s: the transition sheet is %d tiles, %d pixels." % [
 			game_id, int(sheet.get("tiles", 0)), indices.size(),
 		]
@@ -327,10 +327,10 @@ func _verify_the_transition(game_id: StringName, data: GameData) -> void:
 	var width: int = int(sheet["width"])
 	var square: Array[int] = []
 	var black: Array[int] = []
-	for y: int in Gen2Tiles.TILE_HEIGHT:
-		for x: int in Gen2Tiles.TILE_WIDTH:
+	for y: int in PokeTiles.TILE_HEIGHT:
+		for x: int in PokeTiles.TILE_WIDTH:
 			square.append(int(indices[y * width + x]))
-			black.append(int(indices[y * width + Gen2Tiles.TILE_WIDTH + x]))
+			black.append(int(indices[y * width + PokeTiles.TILE_WIDTH + x]))
 	_r.check(
 		black.count(3) == black.size(),
 		"%s: BATTLETRANSITION_BLACK is not solid colour 3." % game_id
@@ -342,7 +342,7 @@ func _verify_the_transition(game_id: StringName, data: GameData) -> void:
 	for dark: bool in [false, true]:
 		var palette: PackedColorArray = data.battle_transition_palette(dark)
 		_r.check(
-			palette.size() == RomLayout.TRANSITION_PALETTE_COLORS,
+			palette.size() == Gen2Layout.TRANSITION_PALETTE_COLORS,
 			"%s: the %s transition palette has %d colours." % [
 				game_id, "dark" if dark else "day", palette.size(),
 			]
@@ -658,17 +658,17 @@ func _verify_regions(game_id: StringName, data: GameData) -> void:
 func _verify_sine(game_id: StringName, data: GameData) -> void:
 	var table: PackedByteArray = data.battle_anim_sine()
 	if not _r.check(
-		table.size() == RomLayout.BATTLE_ANIM_SINE_BYTES,
+		table.size() == Gen2Layout.BATTLE_ANIM_SINE_BYTES,
 		"%s: sine table holds %d bytes, not %d." % [
-			game_id, table.size(), RomLayout.BATTLE_ANIM_SINE_BYTES,
+			game_id, table.size(), Gen2Layout.BATTLE_ANIM_SINE_BYTES,
 		]
 	):
 		return
 	for index: int in table.size():
 		if not _r.check(
-			table[index] == int(RomLayout.BATTLE_ANIM_SINE_WAVE[index]),
+			table[index] == int(Gen2Layout.BATTLE_ANIM_SINE_WAVE[index]),
 			"%s: sine byte %d is $%02X, not the pinned $%02X." % [
-				game_id, index, table[index], int(RomLayout.BATTLE_ANIM_SINE_WAVE[index]),
+				game_id, index, table[index], int(Gen2Layout.BATTLE_ANIM_SINE_WAVE[index]),
 			]
 		):
 			return
@@ -680,7 +680,7 @@ func _verify_sine(game_id: StringName, data: GameData) -> void:
 		]
 	)
 	print("%s: %d-sample sine table, quarter turn $%04X." % [
-		game_id, RomLayout.BATTLE_ANIM_SINE_SAMPLES, anims.sine_word(SINE_QUARTER),
+		game_id, Gen2Layout.BATTLE_ANIM_SINE_SAMPLES, anims.sine_word(SINE_QUARTER),
 	])
 
 
@@ -799,32 +799,32 @@ func _verify_palettes(game_id: StringName, data: GameData) -> void:
 	var player: Array = [0x0C63, 0x1084]
 	_r.check(
 		data.battle_object_palette(0, enemy, player)[1]
-			== Gen2Palette.from_packed(enemy[0]),
+			== PokePalette.from_packed(enemy[0]),
 		"%s: PAL_BATTLE_OB_ENEMY did not come from the battler's own pair." % game_id
 	)
 	_r.check(
 		data.battle_object_palette(1, enemy, player)[1]
-			== Gen2Palette.from_packed(player[0]),
+			== PokePalette.from_packed(player[0]),
 		"%s: PAL_BATTLE_OB_PLAYER did not come from the battler's own pair." % game_id
 	)
-	for index: int in RomLayout.BATTLE_OBJECT_PALETTES_STORED:
-		var slot: int = index + RomLayout.BATTLE_OBJECT_PALETTE_FIRST_STORED
+	for index: int in Gen2Layout.BATTLE_OBJECT_PALETTES_STORED:
+		var slot: int = index + Gen2Layout.BATTLE_OBJECT_PALETTE_FIRST_STORED
 		var colors: PackedColorArray = data.battle_object_palette(slot)
-		var wanted: Array = RomLayout.BATTLE_OBJECT_PALETTES[index]
+		var wanted: Array = Gen2Layout.BATTLE_OBJECT_PALETTES[index]
 		if not _r.check(
-			colors.size() == RomLayout.BATTLE_OBJECT_PALETTE_COLORS,
+			colors.size() == Gen2Layout.BATTLE_OBJECT_PALETTE_COLORS,
 			"%s: object palette %d has %d colours." % [game_id, slot, colors.size()]
 		):
 			continue
 		for colour: int in wanted.size():
 			_r.check(
-				colors[colour] == Gen2Palette.from_packed(int(wanted[colour])),
+				colors[colour] == PokePalette.from_packed(int(wanted[colour])),
 				"%s: object palette %d colour %d is not the pinned $%04X." % [
 					game_id, slot, colour, int(wanted[colour]),
 				]
 			)
 	print("%s: %d object palettes, plus the two the battlers supply." % [
-		game_id, RomLayout.BATTLE_OBJECT_PALETTES_STORED,
+		game_id, Gen2Layout.BATTLE_OBJECT_PALETTES_STORED,
 	])
 
 
@@ -839,7 +839,7 @@ func _verify_gfx(game_id: StringName, data: GameData) -> void:
 		tiles += int(row["tiles"])
 		var indices: PackedByteArray = data.battle_anim_gfx_indices(index)
 		_r.check(
-			indices.size() == int(row["tiles"]) * Gen2Tiles.TILE_PIXELS,
+			indices.size() == int(row["tiles"]) * PokeTiles.TILE_PIXELS,
 			"%s: graphics %d decoded %d pixels for %d tiles." % [
 				game_id, index, indices.size(), int(row["tiles"]),
 			]

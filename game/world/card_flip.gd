@@ -82,7 +82,7 @@ const PROMPT_TEXTS: Array[String] = ["not_enough_coins", "shuffled"]
 const GREEN_TILE: int = 0x29
 ## `CardFlipTilemap` sits at `hlcoord 9, 0`; the two cards stand in the nine
 ## columns and twelve rows left of it, which `.ChooseACard` fills green.
-const BOARD_AT: Vector2i = Vector2i(RomLayout.CARD_FLIP_TILEMAP_AT_COLUMN, 0)
+const BOARD_AT: Vector2i = Vector2i(Gen2Layout.CARD_FLIP_TILEMAP_AT_COLUMN, 0)
 const TABLE_SIZE: Vector2i = Vector2i(9, 12)
 const CARD_SIZE: Vector2i = Vector2i(5, 6)
 ## `GetCoordsOfChosenCard`'s two `hlcoord`s, in the order `wCardFlipWhichCard`
@@ -422,7 +422,7 @@ func _enter_choose_a_card() -> void:
 	_border_at = -1
 	_cursor_visible = false
 	_fill(Vector2i.ZERO, TABLE_SIZE, GREEN_TILE)
-	_write(Vector2i(BOARD_AT.x, _cards_played), RomLayout.CARD_FLIP_LIGHT_ON_TILE)
+	_write(Vector2i(BOARD_AT.x, _cards_played), Gen2Layout.CARD_FLIP_LIGHT_ON_TILE)
 
 
 ## The deal and the toggle, one pass a frame.
@@ -481,19 +481,19 @@ func _enter_place_your_bet() -> void:
 	_prompt = Prompt.BET
 
 
-## `ChooseCard_HandleJoypad`. [param direction] is a [enum Gen2Button] value.
+## `ChooseCard_HandleJoypad`. [param direction] is a [enum PokeButton] value.
 func move_cursor(direction: int) -> void:
 	if _prompt != Prompt.BET:
 		return
 	var moved: bool = false
 	match direction:
-		Gen2Button.LEFT:
+		PokeButton.LEFT:
 			moved = _cursor_left()
-		Gen2Button.RIGHT:
+		PokeButton.RIGHT:
 			moved = _cursor_right()
-		Gen2Button.UP:
+		PokeButton.UP:
 			moved = _cursor_up()
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			moved = _cursor_down()
 		_:
 			return
@@ -734,11 +734,11 @@ func _init_tilemap() -> void:
 
 
 func _draw_board() -> void:
-	for row: int in RomLayout.CARD_FLIP_TILEMAP_ROWS:
-		for column: int in RomLayout.CARD_FLIP_TILEMAP_COLUMNS:
+	for row: int in Gen2Layout.CARD_FLIP_TILEMAP_ROWS:
+		for column: int in Gen2Layout.CARD_FLIP_TILEMAP_COLUMNS:
 			_write(
 				BOARD_AT + Vector2i(column, row),
-				int(_board[row * RomLayout.CARD_FLIP_TILEMAP_COLUMNS + column])
+				int(_board[row * Gen2Layout.CARD_FLIP_TILEMAP_COLUMNS + column])
 			)
 
 
@@ -749,7 +749,7 @@ func _init_attributes() -> void:
 		_attrmap[cell] = 0
 	for mon: int in MONS:
 		_fill_attributes(Vector2i(12 + mon * 2, 1), Vector2i(2, 2), mon + 1)
-	_fill_attributes(BOARD_AT, Vector2i(1, RomLayout.CARD_FLIP_TILEMAP_ROWS), 1)
+	_fill_attributes(BOARD_AT, Vector2i(1, Gen2Layout.CARD_FLIP_TILEMAP_ROWS), 1)
 
 
 ## `CardFlip_CopyToBox` for one of the two card slots.
@@ -767,7 +767,7 @@ func _draw_card_face(slot: int, card: int) -> void:
 	var at: Vector2i = CARD_AT[slot]
 	var mon: int = card & 0x3
 	var level: int = (card & 0x1C) >> 2
-	_write(at + CARD_LEVEL_AT, RomLayout.FONT_DIGIT_ZERO_CODE + level + 1)
+	_write(at + CARD_LEVEL_AT, Gen2Layout.FONT_DIGIT_ZERO_CODE + level + 1)
 	var first: int = CARD_PIC_TILES[mon]
 	for row: int in CARD_PIC_SIZE:
 		for column: int in CARD_PIC_SIZE:

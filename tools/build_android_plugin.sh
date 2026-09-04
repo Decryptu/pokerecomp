@@ -12,14 +12,14 @@
 # Every Kotlin class under `kotlin/` goes in, and each GodotPlugin needs its own
 # meta-data line in the manifest below.
 #
-# Needs a JDK, gradle and the Android SDK. See DEVICES.md for where each comes
+# Needs a JDK, gradle and the Android SDK. See the project's device notes for where each comes
 # from; ANDROID_HOME and JAVA_HOME override the defaults below.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLUGIN="$ROOT/addons/android_native"
 # The engine pin, which is the release the Android library is taken from. Bump
-# with the pin in DEVICES.md.
+# with the recorded pin.
 GODOT_TAG="${GODOT_TAG:-4.8-dev4}"
 GODOT_LIB_VERSION="${GODOT_LIB_VERSION:-4.8.dev4}"
 # Built through a wrapper at a pinned Gradle rather than whatever gradle is on
@@ -37,7 +37,7 @@ if [ -z "${JAVA_HOME:-}" ] && [ -x /usr/libexec/java_home ]; then
 fi
 
 if [ ! -d "$ANDROID_HOME" ]; then
-	echo "No Android SDK at $ANDROID_HOME. See DEVICES.md." >&2
+	echo "No Android SDK at $ANDROID_HOME. Set ANDROID_HOME." >&2
 	exit 1
 fi
 

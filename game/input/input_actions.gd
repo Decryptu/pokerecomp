@@ -1,7 +1,7 @@
-class_name Gen2InputActions
+class_name PokeInputActions
 extends RefCounted
 
-## What a device has to do to produce a [Gen2Button], as data: a plain dictionary,
+## What a device has to do to produce a [PokeButton], as data: a plain dictionary,
 ## so the whole control scheme survives a trip through the options file and the
 ## remap UI can describe one without holding an [InputEvent]. Three kinds cover
 ## every device the engine reports, `key`, `pad_button` and `pad_axis`, each with
@@ -54,46 +54,46 @@ const UI_KEYS: Dictionary = {
 const MAX_BINDINGS: int = 6
 
 const DEFAULTS: Dictionary = {
-	Gen2Button.UP: [
+	PokeButton.UP: [
 		{"kind": KIND_KEY, "code": KEY_UP},
 		{"kind": KIND_KEY, "code": KEY_W},
 		{"kind": KIND_PAD_BUTTON, "code": JOY_BUTTON_DPAD_UP},
 		{"kind": KIND_PAD_AXIS, "code": JOY_AXIS_LEFT_Y, "sign": -1},
 	],
-	Gen2Button.DOWN: [
+	PokeButton.DOWN: [
 		{"kind": KIND_KEY, "code": KEY_DOWN},
 		{"kind": KIND_KEY, "code": KEY_S},
 		{"kind": KIND_PAD_BUTTON, "code": JOY_BUTTON_DPAD_DOWN},
 		{"kind": KIND_PAD_AXIS, "code": JOY_AXIS_LEFT_Y, "sign": 1},
 	],
-	Gen2Button.LEFT: [
+	PokeButton.LEFT: [
 		{"kind": KIND_KEY, "code": KEY_LEFT},
 		{"kind": KIND_KEY, "code": KEY_A},
 		{"kind": KIND_PAD_BUTTON, "code": JOY_BUTTON_DPAD_LEFT},
 		{"kind": KIND_PAD_AXIS, "code": JOY_AXIS_LEFT_X, "sign": -1},
 	],
-	Gen2Button.RIGHT: [
+	PokeButton.RIGHT: [
 		{"kind": KIND_KEY, "code": KEY_RIGHT},
 		{"kind": KIND_KEY, "code": KEY_D},
 		{"kind": KIND_PAD_BUTTON, "code": JOY_BUTTON_DPAD_RIGHT},
 		{"kind": KIND_PAD_AXIS, "code": JOY_AXIS_LEFT_X, "sign": 1},
 	],
-	Gen2Button.A: [
+	PokeButton.A: [
 		{"kind": KIND_KEY, "code": KEY_Z},
 		{"kind": KIND_KEY, "code": KEY_SPACE},
 		{"kind": KIND_PAD_BUTTON, "code": JOY_BUTTON_A},
 	],
-	Gen2Button.B: [
+	PokeButton.B: [
 		{"kind": KIND_KEY, "code": KEY_X},
 		{"kind": KIND_KEY, "code": KEY_ESCAPE},
 		{"kind": KIND_PAD_BUTTON, "code": JOY_BUTTON_B},
 	],
-	Gen2Button.START: [
+	PokeButton.START: [
 		{"kind": KIND_KEY, "code": KEY_ENTER},
 		{"kind": KIND_KEY, "code": KEY_KP_ENTER},
 		{"kind": KIND_PAD_BUTTON, "code": JOY_BUTTON_START},
 	],
-	Gen2Button.SELECT: [
+	PokeButton.SELECT: [
 		{"kind": KIND_KEY, "code": KEY_BACKSPACE},
 		{"kind": KIND_KEY, "code": KEY_TAB},
 		{"kind": KIND_PAD_BUTTON, "code": JOY_BUTTON_BACK},
@@ -191,7 +191,7 @@ const PAD_AXIS_NAMES: Dictionary = {
 ## The stock scheme, as a fresh copy the caller may edit.
 static func defaults() -> Dictionary:
 	var scheme: Dictionary = {}
-	for button: int in Gen2Button.ALL:
+	for button: int in PokeButton.ALL:
 		var bindings: Array = []
 		for binding: Dictionary in DEFAULTS[button]:
 			bindings.append(binding.duplicate())
@@ -204,8 +204,8 @@ static func defaults() -> Dictionary:
 ## Rebuilt rather than merged: a rebind that only added would leave the previous
 ## key working, and the player would have two keys where the screen says one.
 static func install(scheme: Dictionary) -> void:
-	for button: int in Gen2Button.ALL:
-		var name: StringName = Gen2Button.action(button)
+	for button: int in PokeButton.ALL:
+		var name: StringName = PokeButton.action(button)
 		if not InputMap.has_action(name):
 			InputMap.add_action(name, DEADZONE)
 		else:
@@ -374,7 +374,7 @@ static func action_badge(
 ) -> String:
 	if not InputMap.has_action(action):
 		return ""
-	var wanted: StringName = DEVICE_GAMEPAD if device == Gen2InputDevice.GAMEPAD \
+	var wanted: StringName = DEVICE_GAMEPAD if device == PokeInputDevice.GAMEPAD \
 		else DEVICE_KEYBOARD
 	for event: InputEvent in InputMap.action_get_events(action):
 		var binding: Dictionary = from_event(event)
@@ -396,10 +396,10 @@ static func sanitize(raw: Variant) -> Dictionary:
 	if raw is not Dictionary:
 		return scheme
 	var stored: Dictionary = raw
-	for button: int in Gen2Button.ALL:
+	for button: int in PokeButton.ALL:
 		# JSON has no integer keys, so a scheme that has been through the
 		# options file is keyed by the action name rather than the button.
-		var entry: Variant = stored.get(String(Gen2Button.action(button)))
+		var entry: Variant = stored.get(String(PokeButton.action(button)))
 		if entry is not Array:
 			continue
 		var bindings: Array = []
@@ -450,11 +450,11 @@ static func _sanitize_binding(row: Dictionary) -> Dictionary:
 ## has no integer keys and a round trip would otherwise turn one into a string.
 static func to_dict(scheme: Dictionary) -> Dictionary:
 	var row: Dictionary = {}
-	for button: int in Gen2Button.ALL:
+	for button: int in PokeButton.ALL:
 		var bindings: Array = []
 		for binding: Dictionary in scheme.get(button, []):
 			bindings.append(binding.duplicate())
-		row[String(Gen2Button.action(button))] = bindings
+		row[String(PokeButton.action(button))] = bindings
 	return row
 
 
@@ -469,7 +469,7 @@ static func is_default(scheme: Dictionary) -> bool:
 ## since one key doing two things is the player's call to make.
 static func conflicts(scheme: Dictionary, binding: Dictionary, excluding: int) -> Array[int]:
 	var found: Array[int] = []
-	for button: int in Gen2Button.ALL:
+	for button: int in PokeButton.ALL:
 		if button == excluding:
 			continue
 		for existing: Dictionary in scheme.get(button, []):
@@ -480,12 +480,12 @@ static func conflicts(scheme: Dictionary, binding: Dictionary, excluding: int) -
 
 
 ## The first of the eight already bound to [param binding], or
-## [constant Gen2Button.NONE]. What a mod's declared default is checked against:
+## [constant PokeButton.NONE]. What a mod's declared default is checked against:
 ## a mod cannot see the eight, so a default on W would never fire and nothing
 ## would say why.
 static func button_bound_to(scheme: Dictionary, binding: Dictionary) -> int:
-	var found: Array[int] = conflicts(scheme, binding, Gen2Button.NONE)
-	return found[0] if not found.is_empty() else Gen2Button.NONE
+	var found: Array[int] = conflicts(scheme, binding, PokeButton.NONE)
+	return found[0] if not found.is_empty() else PokeButton.NONE
 
 
 ## A mod's own actions, installed beside the eight. Same three binding kinds, same

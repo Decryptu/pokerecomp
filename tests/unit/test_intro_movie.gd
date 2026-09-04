@@ -2,11 +2,11 @@ extends GutTest
 
 ## `CrystalIntro`'s jumptable, driven without a cache.
 ##
-## Every frame count here is the cartridge's own, measured under
-## `.claude/oracle`: the scenes count in `wIntroSceneFrameCounter` and spend
-## `DelayFrames`, neither of which depends on the art being imported, so the
-## whole movie runs and lands on the same frame with no [GameData] at all. tools/checks/intro_movie.gd is what checks the
-## art it draws with.
+## Every frame count here is the cartridge's own, measured on hardware: the
+## scenes count in `wIntroSceneFrameCounter` and spend `DelayFrames`, neither of
+## which depends on the art being imported, so the whole movie runs and lands on
+## the same frame with no [GameData] at all. `tools/checks/intro_movie.gd` is
+## what checks the art it draws with.
 
 ## Longer than the movie, whose own total is asserted below.
 const FRAME_CAP: int = 20000
@@ -38,7 +38,7 @@ func test_the_movie_runs_every_scene_and_sets_its_own_exit_bit() -> void:
 	assert_true(movie.finished())
 	assert_eq(movie.frame(), MOVIE_FRAMES)
 	assert_eq(starts, SCENE_STARTS)
-	assert_eq(starts.size(), RomLayout.INTRO_SCENES)
+	assert_eq(starts.size(), Gen2Layout.INTRO_SCENES)
 
 
 ## `IntroScene13` is the only `PlayMusic` in the movie, so the GameFreak logo's

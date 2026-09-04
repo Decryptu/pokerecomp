@@ -33,7 +33,7 @@ user://mods/<id>/
 | `id` | Lowercase `[a-z0-9][a-z0-9_-]*`. Addresses the directory and the registry keys |
 | `name` | Shown to the player |
 | `version` | The mod's own version. Strict `major.minor.patch` |
-| `api_version` | The oldest host this mod runs on, not a number to keep current: raise it when the mod starts using a newer seam. `Gen2ModManifest.API_VERSION` is the number [Contract versions](#contract-versions) ends on, and a host accepts 1 to that. [Contract versions](#contract-versions) says what each added |
+| `api_version` | The oldest host this mod runs on, not a number to keep current: raise it when the mod starts using a newer seam. `PokeModManifest.API_VERSION` is the number [Contract versions](#contract-versions) ends on, and a host accepts 1 to that. [Contract versions](#contract-versions) says what each added |
 | `entry` | A `.gd` path inside the mod directory, or inside the pack when there is one |
 | `pack` | Optional `.pck` or `.zip` beside `mod.json`, holding the mod's files |
 | `description` | Optional |
@@ -78,7 +78,7 @@ manifest is read.
 ```gdscript
 extends RefCounted
 
-func register(host: Gen2ModHost, manifest: Gen2ModManifest) -> void:
+func register(host: Gen2ModHost, manifest: PokeModManifest) -> void:
 	host.register_world_renderer(manifest.id, load("%s/renderer.gd" % manifest.directory), "Voxel")
 ```
 
@@ -193,7 +193,7 @@ subdirectory. The path must stay inside the mod folder; one that climbs out is
 refused as `art_escapes_mod`.
 
 An icon is drawn at a whole multiple of 32x32 with nearest filtering, so the
-pixels stay square. Anything up to `Gen2ModArt.MAX_ICON_SIDE` is accepted and
+pixels stay square. Anything up to `PokeModArt.MAX_ICON_SIDE` is accepted and
 never stretched. Past that, past a megabyte, or not a PNG, WebP or JPEG by its own
 magic, it is ignored and the row keeps the generic glyph.
 
@@ -307,7 +307,7 @@ can give a field item:
 host.register_content(Gen2ContentOverlay.KIND_ITEM, manifest.id, 256, {
 	"name": "LINKING CORD",
 	"field_menu": Gen2WorldPack.ITEMMENU_PARTY,
-	"evolution": {"method": RomLayout.EVOLVE_TRADE},
+	"evolution": {"method": Gen2Layout.EVOLVE_TRADE},
 })
 ```
 
@@ -358,8 +358,8 @@ is a sparse table of exceptions and an absent pair is already neutral.
 `multiplier` is in tenths, the way the damage formula divides.
 
 ```gdscript
-host.patch_type_matchup(manifest.id, 256, RomLayout.TYPE_NORMAL, {
-	"multiplier": RomLayout.MATCHUP_SUPER_EFFECTIVE,
+host.patch_type_matchup(manifest.id, 256, Gen2Layout.TYPE_NORMAL, {
+	"multiplier": Gen2Layout.MATCHUP_SUPER_EFFECTIVE,
 })
 ```
 
@@ -797,7 +797,7 @@ should hold a screen; it may connect to the signal.
 
 Players reach the view from three places: the mod's launcher page, the VIEW row at
 the top of the start menu's MODS entry (present as soon as more than one view is
-registered), and `V` where `Gen2DebugKeys` is enabled. A mod must not register a
+registered), and `V` where `PokeDebugKeys` is enabled. A mod must not register a
 view button of its own.
 
 The switch is covered. Building a renderer can stall a whole frame, and nothing on
@@ -937,7 +937,7 @@ A battle renderer has two optional methods of its own:
 | `handle_battle_input(event: InputEvent) -> bool` | Every input event the battle screen did not use. True consumes it |
 
 `handle_battle_input` follows `handle_world_input`'s rule: the screen claims what
-it needs and offers the rest. A `Gen2Button` is routed to whatever owns the screen
+it needs and offers the rest. A `PokeButton` is routed to whatever owns the screen
 first, so the text box, the forget-move list, the pack rows and ball selection each
 take their press and what arrives here is pointer and stick motion. Those three
 also withhold everything else while up. A draining bar, the opening slide and a
@@ -1178,7 +1178,7 @@ previous run registers a world **actor**, and the built-in view draws it with th
 map's own objects.
 
 ```gdscript
-func register(host: Gen2ModHost, manifest: Gen2ModManifest) -> void:
+func register(host: Gen2ModHost, manifest: PokeModManifest) -> void:
     host.register_world_actor(manifest.id, Follower.new())
 ```
 
@@ -1264,7 +1264,7 @@ registers a provider. It owns the population and nothing else; every rule a
 cartridge owns stays in `Gen2WorldAPI`.
 
 ```gdscript
-func register(host: Gen2ModHost, manifest: Gen2ModManifest) -> void:
+func register(host: Gen2ModHost, manifest: PokeModManifest) -> void:
     host.register_visible_encounters(manifest.id, Roamers.new())
 ```
 
@@ -1988,7 +1988,7 @@ host.register_action(manifest.id, {
 |---|---|
 | `key` | Addresses the control within the mod |
 | `label` | Shown wherever the control is listed or drawn |
-| `default` | Optional. Bindings in `Gen2InputActions`' own shape |
+| `default` | Optional. Bindings in `PokeInputActions`' own shape |
 
 `default` takes the same three kinds the cartridge's eight take:
 

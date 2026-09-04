@@ -207,20 +207,20 @@ func clear_flags() -> void:
 ## cartridge's game any more.
 func ai_move_weights(imported: int) -> int:
 	if challenge == CHALLENGE_HARD:
-		return RomLayout.AI_MOVE_WEIGHTS_MASK
-	return imported & RomLayout.AI_MOVE_WEIGHTS_MASK
+		return Gen2Layout.AI_MOVE_WEIGHTS_MASK
+	return imported & Gen2Layout.AI_MOVE_WEIGHTS_MASK
 
 
 ## When a trainer class reaches into its bag and how readily it switches out.
 ## [constant CHALLENGE_HARD] moves every class onto
-## [constant RomLayout.SWITCH_OFTEN] and leaves the item bits alone: a class with
+## [constant Gen2Layout.SWITCH_OFTEN] and leaves the item bits alone: a class with
 ## no held items has none to use, and giving it some would be a rewritten team.
 func ai_item_switch(imported: int) -> int:
-	var flags: int = imported & RomLayout.AI_ITEM_SWITCH_MASK
+	var flags: int = imported & Gen2Layout.AI_ITEM_SWITCH_MASK
 	if challenge != CHALLENGE_HARD:
 		return flags
-	flags &= ~(RomLayout.SWITCH_RARELY | RomLayout.SWITCH_SOMETIMES)
-	return flags | RomLayout.SWITCH_OFTEN
+	flags &= ~(Gen2Layout.SWITCH_RARELY | Gen2Layout.SWITCH_SOMETIMES)
+	return flags | Gen2Layout.SWITCH_OFTEN
 
 
 ## The level a trainer's Pokemon actually arrives at. One level is the floor, so

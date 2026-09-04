@@ -70,13 +70,13 @@ func test_one_enormous_message_cannot_fill_the_report() -> void:
 
 func test_the_summary_names_the_build_the_machine_and_every_mod() -> void:
 	var summary: String = _diagnostics().summary()
-	assert_string_contains(summary, Gen2AppVersion.VERSION)
+	assert_string_contains(summary, PokeAppVersion.VERSION)
 	assert_string_contains(summary, OS.get_distribution_name())
 	assert_string_contains(summary, "Cartridges")
 	assert_string_contains(summary, "Settings")
 	for game_id: StringName in RomRegistry.ORDER:
 		assert_string_contains(summary, RomRegistry.title_for(game_id))
-	for manifest: Gen2ModManifest in Gen2ModHost.instance().manifests():
+	for manifest: PokeModManifest in Gen2ModHost.instance().manifests():
 		assert_string_contains(summary, String(manifest.id))
 
 
@@ -200,7 +200,7 @@ func test_the_marker_reads_a_crash_and_nothing_else() -> void:
 	assert_false(Gen2Diagnostics.unclean_marker("{ half writ"), "nor is a torn file")
 
 
-## `Gen2ToolPath`: a tool runs with `--path <this project>`, so a relative output
+## `PokeToolPath`: a tool runs with `--path <this project>`, so a relative output
 ## path lands in the checkout rather than where the command was run. The test is
 ## where a path resolves, not how it is spelt, which is what a guard written on
 ## prefixes gets wrong: `res://out.png` is absolute to `is_absolute_path()` and
@@ -212,7 +212,7 @@ func test_an_output_path_inside_the_project_is_refused() -> void:
 		ProjectSettings.globalize_path("res://").path_join("out.png"),
 	]:
 		assert_ne(
-			Gen2ToolPath.refusal(path), "", "%s is inside the project" % path
+			PokeToolPath.refusal(path), "", "%s is inside the project" % path
 		)
 
 
@@ -226,5 +226,5 @@ func test_an_output_path_outside_the_project_is_allowed() -> void:
 		"%s-notes/out.png" % project, project.get_base_dir().path_join("out.png"),
 	]:
 		assert_eq(
-			Gen2ToolPath.refusal(path), "", "%s is outside the project" % path
+			PokeToolPath.refusal(path), "", "%s is outside the project" % path
 		)

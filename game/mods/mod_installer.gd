@@ -37,7 +37,7 @@ static func locate_root(paths: PackedStringArray) -> Dictionary:
 	var top_directories: Array[String] = []
 	var holds_manifest: Dictionary = {}
 	for path: String in paths:
-		if path == Gen2ModManifest.FILENAME:
+		if path == PokeModManifest.FILENAME:
 			return {"ok": true, "prefix": ""}
 		var separator: int = path.find("/")
 		if separator <= 0:
@@ -46,7 +46,7 @@ static func locate_root(paths: PackedStringArray) -> Dictionary:
 		var rest: String = path.substr(separator + 1)
 		if not top_directories.has(top):
 			top_directories.append(top)
-		if rest == Gen2ModManifest.FILENAME:
+		if rest == PokeModManifest.FILENAME:
 			holds_manifest[top] = true
 	if top_directories.size() == 1 and holds_manifest.has(top_directories[0]):
 		return {"ok": true, "prefix": top_directories[0]}
@@ -107,22 +107,22 @@ static func install_zip(
 		return _refuse(StringName(located.get("reason", &"archive_has_no_manifest")), path)
 	var prefix: String = String(located["prefix"])
 
-	var manifest_entry: String = Gen2ModManifest.FILENAME
+	var manifest_entry: String = PokeModManifest.FILENAME
 	if not prefix.is_empty():
-		manifest_entry = "%s/%s" % [prefix, Gen2ModManifest.FILENAME]
+		manifest_entry = "%s/%s" % [prefix, PokeModManifest.FILENAME]
 	var raw: String = reader.read_file(manifest_entry).get_string_from_utf8()
 	var parsed: Variant = JSON.parse_string(raw)
 	if not parsed is Dictionary:
 		reader.close()
 		return _refuse(&"invalid_manifest", manifest_entry)
 
-	var read: Dictionary = Gen2ModManifest.from_dictionary(parsed as Dictionary, root)
+	var read: Dictionary = PokeModManifest.from_dictionary(parsed as Dictionary, root)
 	if not bool(read.get("ok", false)):
 		reader.close()
 		return _refuse(
 			StringName(read.get("reason", &"invalid_manifest")), String(read.get("detail", ""))
 		)
-	var manifest: Gen2ModManifest = read["manifest"]
+	var manifest: PokeModManifest = read["manifest"]
 	if not expect_id.is_empty() and manifest.id != expect_id:
 		reader.close()
 		return _refuse(&"unexpected_mod_id", "%s, expected %s" % [manifest.id, expect_id])
@@ -200,7 +200,7 @@ static func uninstall(id: StringName, root: String = Gen2ModHost.ROOT) -> Dictio
 	# reinstalling it later does not find it silently disabled, or configured, by
 	# a decision about a mod that no longer exists.
 	Gen2ModState.forget(id)
-	Gen2ModOptions.forget(id)
+	PokeModOptions.forget(id)
 	if not DirAccess.dir_exists_absolute(directory):
 		return {"ok": true, "id": id, "removed": false}
 	_remove_tree(directory)

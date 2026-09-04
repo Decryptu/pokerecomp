@@ -334,7 +334,7 @@ func _cell_color(cell: Vector2i, permission: int) -> Color:
 	)
 	var block: int = _world.block_at(cell.x >> 1, cell.y >> 1)
 	var tile: int = _world.current_tileset.tile_index(
-		block, (cell.y & 1) * 2 * RomLayout.MAP_BLOCK_TILE_WIDTH + (cell.x & 1) * 2
+		block, (cell.y & 1) * 2 * Gen2Layout.MAP_BLOCK_TILE_WIDTH + (cell.x & 1) * 2
 	)
 	if tile < 0 or tile >= palettes.size():
 		return Color("#6f9c4a")

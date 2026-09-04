@@ -277,7 +277,7 @@ var _radio_channel: int = -1
 ## `wLastDexMode`, which sits in the saved player data beside `wPokegearFlags`
 ## and `wRadioTuningKnob` rather than in the Pokedex's own cleared block: the
 ## dex takes its mode from here on opening and writes the mode back on exit.
-var _last_dex_mode: int = RomLayout.DEXMODE_NEW
+var _last_dex_mode: int = Gen2Layout.DEXMODE_NEW
 ## The eight `wDeco*` slots, four of which stamp a block into the bedroom and
 ## four of which fill a variable sprite. Values are decoration ids from
 ## data/decorations/decorations.asm, not the blocks or sprites they stamp.
@@ -346,7 +346,7 @@ var _blue_card_balance: int = 0
 ## boundary her savings have to land on exactly.
 var _mom_item_index: int = 0
 var _mom_item_set: int = 0
-var _mom_item_trigger_balance: int = RomLayout.MOM_MONEY
+var _mom_item_trigger_balance: int = Gen2Layout.MOM_MONEY
 
 ## `wVariableSprites`, the sixteen `SPRITE_VARS` slots `GetMonSprite` resolves a
 ## variable sprite through. It sits inside `wPlayerData`, which `SaveData` copies
@@ -585,7 +585,7 @@ static func from_dict(raw: Variant) -> Gen2WorldState:
 	restored._map_music = maxi(0, int(source.get("map_music", MUSIC_NONE)))
 	restored.set_radio_knob(int(source.get("radio_knob", Gen2WorldRadio.KNOB_MIN)))
 	restored._radio_channel = int(source.get("radio_channel", -1))
-	restored.set_last_dex_mode(int(source.get("last_dex_mode", RomLayout.DEXMODE_NEW)))
+	restored.set_last_dex_mode(int(source.get("last_dex_mode", Gen2Layout.DEXMODE_NEW)))
 	restored.set_kurt_apricorn_quantity(int(source.get("kurt_apricorn_quantity", 0)))
 	## Absent in a state written before the Unown dex, which reads as an empty
 	## one: the flag that unlocks the mode is an engine flag and survives on its
@@ -666,7 +666,7 @@ static func _restore_deferred(restored: Gen2WorldState, source: Dictionary) -> v
 	restored._mom_item_index = maxi(int(source.get("mom_item_index", 0)), 0)
 	restored._mom_item_set = maxi(int(source.get("mom_item_set", 0)), 0)
 	restored._mom_item_trigger_balance = clampi(
-		int(source.get("mom_item_trigger_balance", RomLayout.MOM_MONEY)),
+		int(source.get("mom_item_trigger_balance", Gen2Layout.MOM_MONEY)),
 		0, Gen2WorldInventory.MAX_MONEY
 	)
 	restored._blue_card_balance = int(source.get("blue_card_balance", 0)) & 0xFF
@@ -970,7 +970,7 @@ static func flypoint_flag(spawn: int, crystal: bool = true) -> int:
 ## run skips.
 const ENGINE_FLYPOINT_FIRST: int = 51
 const SPAWN_UNION_CAVE: int = 17
-const NUM_SPAWNS: int = RomLayout.SPAWN_COUNT
+const NUM_SPAWNS: int = Gen2Layout.SPAWN_COUNT
 
 
 ## The engine flag SetStrengthFlag sets and TryStrengthOW and
@@ -1444,7 +1444,7 @@ func last_dex_mode() -> int:
 ## DEXMODE_UNOWN, is the Unown dex, which never becomes `wCurDexMode`.
 func set_last_dex_mode(mode: int) -> void:
 	if mode not in [
-		RomLayout.DEXMODE_NEW, RomLayout.DEXMODE_OLD, RomLayout.DEXMODE_ABC,
+		Gen2Layout.DEXMODE_NEW, Gen2Layout.DEXMODE_OLD, Gen2Layout.DEXMODE_ABC,
 	] or mode == _last_dex_mode:
 		return
 	_last_dex_mode = mode
@@ -1975,12 +1975,12 @@ func set_species_caught(species: int, caught: bool = true) -> void:
 ## `GeneratePartyMonStats` runs it only for a PARTYMON, so an Unown sent straight
 ## to the PC is caught without entering the dex.
 func update_unown_dex(form: int) -> void:
-	if form < 1 or form > RomLayout.UNOWN_FORMS:
+	if form < 1 or form > Gen2Layout.UNOWN_FORMS:
 		return
 	## `.registerunowndex`'s own tail: the `wFirstUnownSeen` write sits behind the
 	## `UpdateUnownDex` call and runs whether or not the form was new.
 	note_first_unown_seen(form)
-	if form in _unown_dex or _unown_dex.size() >= RomLayout.UNOWN_FORMS:
+	if form in _unown_dex or _unown_dex.size() >= Gen2Layout.UNOWN_FORMS:
 		return
 	_unown_dex.append(form)
 
@@ -1989,7 +1989,7 @@ func update_unown_dex(form: int) -> void:
 ## only while the byte is still zero, so the first Unown the save meets is the
 ## one every dex entry is drawn as.
 func note_first_unown_seen(form: int) -> void:
-	if _first_unown_seen != 0 or form < 1 or form > RomLayout.UNOWN_FORMS:
+	if _first_unown_seen != 0 or form < 1 or form > Gen2Layout.UNOWN_FORMS:
 		return
 	_first_unown_seen = form
 	changed.emit()
@@ -2270,7 +2270,7 @@ const CHANGE_MAPS: Array[Array] = [
 	["phone_contacts", "_phone_contacts", MERGE_FLAGS, 0, UNBOUNDED, UNBOUNDED,
 		&"invalid_phone_contacts", &"invalid_phone_contact",
 		PHONE_CONTACT_CAPACITY, &"phone_contact_capacity"],
-	["fruit_trees", "_picked_fruit_trees", MERGE_FLAGS, 1, RomLayout.FRUIT_TREE_COUNT,
+	["fruit_trees", "_picked_fruit_trees", MERGE_FLAGS, 1, Gen2Layout.FRUIT_TREE_COUNT,
 		UNBOUNDED, &"invalid_fruit_trees", &"invalid_fruit_trees", UNBOUNDED, &""],
 	["npc_trades", "_npc_trades", MERGE_FLAGS, 0, UNBOUNDED, UNBOUNDED,
 		&"invalid_npc_trades", &"invalid_npc_trade", UNBOUNDED, &""],

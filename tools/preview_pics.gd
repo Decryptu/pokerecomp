@@ -34,7 +34,7 @@ func _initialize() -> void:
 
 	var game: StringName = StringName(positional[0])
 	var out_path: String = positional[1]
-	if Gen2ToolPath.refuses(out_path):
+	if PokeToolPath.refuses(out_path):
 		quit(2)
 		return
 	var atlas_name: String = positional[2] if positional.size() > 2 else "front"
@@ -98,23 +98,23 @@ func _render_sheet(directory: String, sheet: Dictionary, name: String) -> Image:
 
 	var columns: int = mini(SHEET_COLUMNS, tiles)
 	var rows: int = ceili(float(tiles) / columns)
-	var width: int = columns * Gen2Tiles.TILE_WIDTH
+	var width: int = columns * PokeTiles.TILE_WIDTH
 	var folded: PackedByteArray = PackedByteArray()
-	folded.resize(width * rows * Gen2Tiles.TILE_HEIGHT)
+	folded.resize(width * rows * PokeTiles.TILE_HEIGHT)
 
 	for tile: int in tiles:
 		@warning_ignore("integer_division")
-		var at_y: int = (tile / columns) * Gen2Tiles.TILE_HEIGHT
-		var at_x: int = (tile % columns) * Gen2Tiles.TILE_WIDTH
-		for y: int in Gen2Tiles.TILE_HEIGHT:
-			var from: int = y * strip_width + tile * Gen2Tiles.TILE_WIDTH
+		var at_y: int = (tile / columns) * PokeTiles.TILE_HEIGHT
+		var at_x: int = (tile % columns) * PokeTiles.TILE_WIDTH
+		for y: int in PokeTiles.TILE_HEIGHT:
+			var from: int = y * strip_width + tile * PokeTiles.TILE_WIDTH
 			var to: int = (at_y + y) * width + at_x
-			for x: int in Gen2Tiles.TILE_WIDTH:
+			for x: int in PokeTiles.TILE_WIDTH:
 				folded[to + x] = indices[from + x]
 
 	return Gen2PicImage.from_indices(
-		folded, width, rows * Gen2Tiles.TILE_HEIGHT,
-		Gen2Palette.pic_palette(PackedColorArray([
+		folded, width, rows * PokeTiles.TILE_HEIGHT,
+		PokePalette.pic_palette(PackedColorArray([
 			Color(0.66, 0.66, 0.66), Color(0.33, 0.33, 0.33),
 		]))
 	)
@@ -162,8 +162,8 @@ func _palettes(directory: String, name: String, shiny: bool) -> Array:
 	var species: Array = RomCache.read_json(RomCache.species_path(directory))
 	var key: String = "shiny" if shiny else "normal"
 	if name.begins_with("unown"):
-		var unown: Dictionary = species[RomLayout.UNOWN_SPECIES - 1]
-		for form: int in RomLayout.UNOWN_FORMS:
+		var unown: Dictionary = species[Gen2Layout.UNOWN_SPECIES - 1]
+		for form: int in Gen2Layout.UNOWN_FORMS:
 			out.append(_palette_of(unown["palette"][key]))
 		return out
 
@@ -173,7 +173,7 @@ func _palettes(directory: String, name: String, shiny: bool) -> Array:
 
 
 func _palette_of(packed: Array) -> PackedColorArray:
-	return Gen2Palette.pic_palette(PackedColorArray([
-		Gen2Palette.from_packed(int(packed[0])),
-		Gen2Palette.from_packed(int(packed[1])),
+	return PokePalette.pic_palette(PackedColorArray([
+		PokePalette.from_packed(int(packed[0])),
+		PokePalette.from_packed(int(packed[1])),
 	]))

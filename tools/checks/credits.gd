@@ -62,7 +62,7 @@ func _verify_strings(game_id: StringName, data: GameData) -> void:
 				or code == Gen2Credits.CODE_NEXT_LINE or code == Gen2Credits.CODE_POKE:
 				continue
 			_r.check(
-				index == copyright and code >= RomLayout.COPYRIGHT_FIRST_CODE,
+				index == copyright and code >= Gen2Layout.COPYRIGHT_FIRST_CODE,
 				"%s: credits string %d carries code $%02X, which is not a glyph." % [
 					game_id, index, code,
 				]
@@ -76,18 +76,18 @@ func _verify_palettes_and_frames(game_id: StringName, data: GameData) -> void:
 	var blocks: int = 0
 	if not strip.is_empty():
 		@warning_ignore("integer_division")
-		blocks = strip.size() / Gen2Tiles.TILE_HEIGHT / Gen2Tiles.TILE_WIDTH \
-			/ RomLayout.CREDITS_MON_FRAME_TILES
-	for scene: int in RomLayout.CREDITS_SCENES:
+		blocks = strip.size() / PokeTiles.TILE_HEIGHT / PokeTiles.TILE_WIDTH \
+			/ Gen2Layout.CREDITS_MON_FRAME_TILES
+	for scene: int in Gen2Layout.CREDITS_SCENES:
 		for slot: int in [
 			Gen2Credits.PALETTE_BANNER, Gen2Credits.PALETTE_BORDER, Gen2Credits.PALETTE_TEXT,
 		]:
 			_r.check(
 				data.credits_palette(scene, slot).size() \
-					== RomLayout.CREDITS_PALETTE_COLORS,
+					== Gen2Layout.CREDITS_PALETTE_COLORS,
 				"%s: credits scene %d has no palette in slot %d." % [game_id, scene, slot]
 			)
-		for frame: int in RomLayout.CREDITS_SCENE_FRAMES:
+		for frame: int in Gen2Layout.CREDITS_SCENE_FRAMES:
 			var block: int = data.credits_frame_block(scene, frame)
 			_r.check(
 				block >= 0 and block < blocks,

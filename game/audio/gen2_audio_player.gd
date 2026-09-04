@@ -3,7 +3,7 @@ extends Node
 
 ## Runs the cartridge sound driver in real time.
 ##
-## One [Gen2SoundEngine] and one [Gen2Apu] behind a single generator stream:
+## One [Gen2SoundEngine] and one [PokeApu] behind a single generator stream:
 ## music, effects and cries share the four hardware channels and steal them from
 ## each other exactly as they do on the cartridge, so nothing here mixes or
 ## prioritises. Each serviced step is one `_UpdateSound` plus the frame of
@@ -17,7 +17,7 @@ const BUFFER_SECONDS: float = 0.1
 
 ## Driver frames kept queued ahead of the output, and so the press-to-sound delay
 ## this player adds before the platform's own: three frames is 50 ms at
-## [constant Gen2Apu.SAMPLE_RATE]. Measured worst emptiness on a desktop run was a
+## [constant PokeApu.SAMPLE_RATE]. Measured worst emptiness on a desktop run was a
 ## quarter of the buffer's 125 ms depth, about two driver frames between two
 ## services; three is that with one to spare, and a device that cannot hold it
 ## says so by running the queue dry, which raises the target.
@@ -56,7 +56,7 @@ var _playback: AudioStreamGeneratorPlayback = null
 ## [method timeline_updates].
 var _timeline_updates: int = 0
 var _engine: Gen2SoundEngine = null
-var _apu: Gen2Apu = null
+var _apu: PokeApu = null
 var _music_key: String = ""
 ## What a SOUND change restarts.
 var _music_record: Dictionary = {}
@@ -89,10 +89,10 @@ const SERVICE_GAP_FRAMES: int = 12
 ## The driver exists before the node enters the tree: a host that plays its map
 ## music while it is still building itself has to reach a live engine.
 func _init() -> void:
-	_apu = Gen2Apu.new()
+	_apu = PokeApu.new()
 	_engine = Gen2SoundEngine.new(_apu)
 	_engine.init_sound()
-	_buffer.resize(Gen2Apu.SAMPLES_PER_FRAME)
+	_buffer.resize(PokeApu.SAMPLES_PER_FRAME)
 
 
 func _ready() -> void:
@@ -360,7 +360,7 @@ func _ensure_output() -> void:
 	if _player != null:
 		return
 	_generator = AudioStreamGenerator.new()
-	_generator.mix_rate = Gen2Apu.SAMPLE_RATE
+	_generator.mix_rate = PokeApu.SAMPLE_RATE
 	_generator.buffer_length = BUFFER_SECONDS
 	_player = AudioStreamPlayer.new()
 	_player.name = "MusicPlayer"
@@ -420,9 +420,9 @@ func _service_timeline(delta: float = 0.0) -> void:
 	if known > 0 and available >= known and _timeline_updates > 0:
 		_underruns += 1
 		_target_frames = mini(_target_frames + 1, TARGET_FRAMES_MAX)
-	var target: int = mini(_target_frames * Gen2Apu.SAMPLES_PER_FRAME, _capacity)
+	var target: int = mini(_target_frames * PokeApu.SAMPLES_PER_FRAME, _capacity)
 	var pushed: int = 0
-	while available >= Gen2Apu.SAMPLES_PER_FRAME and _capacity - available < target:
+	while available >= PokeApu.SAMPLES_PER_FRAME and _capacity - available < target:
 		_timeline_updates += 1
 		_engine.update_sound()
 		_apu.render_frame(_buffer)

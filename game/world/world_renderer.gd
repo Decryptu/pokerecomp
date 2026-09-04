@@ -218,7 +218,7 @@ func _repaint_atlas(
 			_paint_tile(words, tiles, indices, entry["tables"], background, tile)
 	entry["words"] = words
 	(entry["texture"] as ImageTexture).update(
-		Gen2PicImage.canvas_image(words, tiles * Gen2Tiles.TILE_WIDTH, Gen2Tiles.TILE_HEIGHT)
+		Gen2PicImage.canvas_image(words, tiles * PokeTiles.TILE_WIDTH, PokeTiles.TILE_HEIGHT)
 	)
 
 
@@ -261,7 +261,7 @@ func _atlas_for(map: Gen2WorldMap, tileset: Gen2WorldTileset) -> Dictionary:
 		and not _animation.current_indices().is_empty()
 	if animated:
 		indices = _animation.current_indices()
-	if indices.size() < tileset.tile_count * Gen2Tiles.TILE_PIXELS:
+	if indices.size() < tileset.tile_count * PokeTiles.TILE_PIXELS:
 		return {}
 	var roof: int = _world.data.map_roof(map, tileset)
 	indices = _world.data.roofed_tile_indices(indices, roof, tileset.tile_count)
@@ -271,13 +271,13 @@ func _atlas_for(map: Gen2WorldMap, tileset: Gen2WorldTileset) -> Dictionary:
 		PackedColorArray([_background_color])
 	)[0]
 	var words: PackedInt32Array = Gen2PicImage.canvas(
-		tileset.tile_count * Gen2Tiles.TILE_WIDTH, Gen2Tiles.TILE_HEIGHT
+		tileset.tile_count * PokeTiles.TILE_WIDTH, PokeTiles.TILE_HEIGHT
 	)
 	for tile: int in tileset.tile_count:
 		_paint_tile(words, tileset.tile_count, indices, tables, background, tile)
 	var entry: Dictionary = {
 		"texture": ImageTexture.create_from_image(Gen2PicImage.canvas_image(
-			words, tileset.tile_count * Gen2Tiles.TILE_WIDTH, Gen2Tiles.TILE_HEIGHT
+			words, tileset.tile_count * PokeTiles.TILE_WIDTH, PokeTiles.TILE_HEIGHT
 		)),
 		## The strip before its conversion, so an animation frame repaints the
 		## one or two tiles it rewrote rather than recolouring the whole run.
@@ -365,14 +365,14 @@ func _paint_tile(
 	words: PackedInt32Array, tiles: int, indices: PackedByteArray, tables: Array,
 	background: int, tile: int
 ) -> void:
-	var width: int = tiles * Gen2Tiles.TILE_WIDTH
+	var width: int = tiles * PokeTiles.TILE_WIDTH
 	var table: PackedInt32Array = tables[tile] if tile < tables.size() \
 		else PackedInt32Array()
 	var colors: int = table.size()
-	var left: int = tile * Gen2Tiles.TILE_WIDTH
-	for y: int in Gen2Tiles.TILE_HEIGHT:
+	var left: int = tile * PokeTiles.TILE_WIDTH
+	for y: int in PokeTiles.TILE_HEIGHT:
 		var row: int = y * width + left
-		for x: int in Gen2Tiles.TILE_WIDTH:
+		for x: int in PokeTiles.TILE_WIDTH:
 			var color_index: int = indices[row + x]
 			words[row + x] = table[color_index] if color_index < colors else background
 
@@ -468,20 +468,20 @@ func _draw_transition(
 	## of something wider.
 	var origin: Vector2 = screen_offset()
 	var screen_tile := Vector2i(
-		floori((camera_pixels.x + origin.x) / float(Gen2Tiles.TILE_WIDTH)),
-		floori((camera_pixels.y + origin.y) / float(Gen2Tiles.TILE_HEIGHT)),
+		floori((camera_pixels.x + origin.x) / float(PokeTiles.TILE_WIDTH)),
+		floori((camera_pixels.y + origin.y) / float(PokeTiles.TILE_HEIGHT)),
 	)
 	## The whole screen, or the few cells a sprite's own lower half falls in.
 	var first := Vector2i.ZERO
 	var last := Vector2i(Gen2BattleTransition.COLUMNS - 1, Gen2BattleTransition.ROWS - 1)
 	if priority:
 		first = Vector2i(
-			floori((clip.position.x - origin.x) / Gen2Tiles.TILE_WIDTH),
-			floori((clip.position.y - origin.y) / Gen2Tiles.TILE_HEIGHT),
+			floori((clip.position.x - origin.x) / PokeTiles.TILE_WIDTH),
+			floori((clip.position.y - origin.y) / PokeTiles.TILE_HEIGHT),
 		)
 		last = Vector2i(
-			mini(ceili((clip.end.x - origin.x) / Gen2Tiles.TILE_WIDTH), last.x),
-			mini(ceili((clip.end.y - origin.y) / Gen2Tiles.TILE_HEIGHT), last.y),
+			mini(ceili((clip.end.x - origin.x) / PokeTiles.TILE_WIDTH), last.x),
+			mini(ceili((clip.end.y - origin.y) / PokeTiles.TILE_HEIGHT), last.y),
 		)
 	for y: int in range(maxi(first.y, 0), last.y + 1):
 		for x: int in range(maxi(first.x, 0), last.x + 1):
@@ -489,8 +489,8 @@ func _draw_transition(
 			if cell == Gen2BattleTransition.CELL_NONE:
 				continue
 			var at := Rect2(
-				origin + Vector2(x * Gen2Tiles.TILE_WIDTH, y * Gen2Tiles.TILE_HEIGHT),
-				Vector2(Gen2Tiles.TILE_WIDTH, Gen2Tiles.TILE_HEIGHT)
+				origin + Vector2(x * PokeTiles.TILE_WIDTH, y * PokeTiles.TILE_HEIGHT),
+				Vector2(PokeTiles.TILE_WIDTH, PokeTiles.TILE_HEIGHT)
 			)
 			var covered: Rect2 = at if not priority else at.intersection(clip)
 			if covered.size.x <= 0.0 or covered.size.y <= 0.0:
@@ -517,18 +517,18 @@ func _draw_transition(
 func _transition_texture(
 	palette: PackedColorArray, transparent_zero: bool
 ) -> Texture2D:
-	if _transition_tiles.size() < Gen2Tiles.TILE_PIXELS:
+	if _transition_tiles.size() < PokeTiles.TILE_PIXELS:
 		return null
 	var key: String = "%d:%d" % [hash(palette), int(transparent_zero)]
 	var texture: Texture2D = _transition_textures.get(key, null)
 	if texture != null:
 		return texture
 	var image := Image.create(
-		Gen2Tiles.TILE_WIDTH, Gen2Tiles.TILE_HEIGHT, false, Image.FORMAT_RGBA8
+		PokeTiles.TILE_WIDTH, PokeTiles.TILE_HEIGHT, false, Image.FORMAT_RGBA8
 	)
-	for y: int in Gen2Tiles.TILE_HEIGHT:
-		for x: int in Gen2Tiles.TILE_WIDTH:
-			var index: int = int(_transition_tiles[y * Gen2Tiles.TILE_WIDTH + x])
+	for y: int in PokeTiles.TILE_HEIGHT:
+		for x: int in PokeTiles.TILE_WIDTH:
+			var index: int = int(_transition_tiles[y * PokeTiles.TILE_WIDTH + x])
 			var color: Color = palette[index] if index < palette.size() else Color.BLACK
 			if index == 0 and transparent_zero:
 				color.a = 0.0
@@ -582,7 +582,7 @@ func _sync_map_layers() -> void:
 	var tileset: Gen2WorldTileset = _world.current_tileset
 	var camera: Vector2 = _background_camera()
 	var view := Vector2(view_pixels())
-	var block_pixels: int = RomLayout.MAP_BLOCK_CELL_WIDTH * Gen2WorldAPI.CELL_PIXELS
+	var block_pixels: int = Gen2Layout.MAP_BLOCK_CELL_WIDTH * Gen2WorldAPI.CELL_PIXELS
 	var used: int = 0
 
 	var fill: Gen2WorldMapLayer = _map_layer(used)
@@ -697,7 +697,7 @@ func _blocks_texture(map: Gen2WorldMap) -> ImageTexture:
 func _tiles_texture(tileset: Gen2WorldTileset) -> ImageTexture:
 	if _tiles_textures.has(tileset.number):
 		return _tiles_textures[tileset.number]
-	var slots: int = RomLayout.MAP_BLOCK_TILE_WIDTH * RomLayout.MAP_BLOCK_TILE_WIDTH
+	var slots: int = Gen2Layout.MAP_BLOCK_TILE_WIDTH * Gen2Layout.MAP_BLOCK_TILE_WIDTH
 	var bytes := PackedByteArray()
 	bytes.resize(slots * maxi(tileset.block_count, 1))
 	for at: int in bytes.size():
@@ -732,7 +732,7 @@ func view_pixels() -> Vector2i:
 ## first -- is laid out in tiles.
 func screen_offset() -> Vector2:
 	return ((Vector2(view_pixels() - Gen2WorldAPI.VIEW_PIXELS) * 0.5)
-		/ float(Gen2Tiles.TILE_WIDTH)).floor() * float(Gen2Tiles.TILE_WIDTH)
+		/ float(PokeTiles.TILE_WIDTH)).floor() * float(PokeTiles.TILE_WIDTH)
 
 
 func _draw() -> void:
@@ -768,19 +768,19 @@ func _draw_hidden_trees(background: Vector2) -> void:
 	## the cell are painted over with the tileset's own blank one.
 	for cell: Vector2i in (_effects.hidden_tree_cells() if _effects != null else []):
 		var at: Vector2 = Vector2(cell * Gen2WorldAPI.CELL_PIXELS) - background
-		for row: int in RomLayout.MAP_BLOCK_CELL_WIDTH:
-			for column: int in RomLayout.MAP_BLOCK_CELL_WIDTH:
+		for row: int in Gen2Layout.MAP_BLOCK_CELL_WIDTH:
+			for column: int in Gen2Layout.MAP_BLOCK_CELL_WIDTH:
 				draw_texture_rect_region(
 					_atlas,
 					Rect2(
-						at + Vector2(column * Gen2Tiles.TILE_WIDTH, row * Gen2Tiles.TILE_HEIGHT),
-						Vector2(Gen2Tiles.TILE_WIDTH, Gen2Tiles.TILE_HEIGHT),
+						at + Vector2(column * PokeTiles.TILE_WIDTH, row * PokeTiles.TILE_HEIGHT),
+						Vector2(PokeTiles.TILE_WIDTH, PokeTiles.TILE_HEIGHT),
 					),
 					Rect2(
 						Vector2(
-							Gen2WorldEffects.HEADBUTT_TREE_HIDDEN_TILE * Gen2Tiles.TILE_WIDTH, 0
+							Gen2WorldEffects.HEADBUTT_TREE_HIDDEN_TILE * PokeTiles.TILE_WIDTH, 0
 						),
-						Vector2(Gen2Tiles.TILE_WIDTH, Gen2Tiles.TILE_HEIGHT),
+						Vector2(PokeTiles.TILE_WIDTH, PokeTiles.TILE_HEIGHT),
 					),
 				)
 
@@ -1005,9 +1005,9 @@ func _sort_objects(first: Gen2WorldObject, second: Gen2WorldObject) -> bool:
 ## `SpawnEmote`: four tiles of the emote's own sheet, two rows above the object
 ## the source's `MovementFunction_Emote` writes `-2 * TILE_WIDTH` for.
 func _draw_emote(emote_id: int, pixel: Vector2) -> void:
-	if emote_id < 0 or emote_id >= RomLayout.EMOTE_NAMES.size():
+	if emote_id < 0 or emote_id >= Gen2Layout.EMOTE_NAMES.size():
 		return
-	var sheet: Dictionary = _effect_sheet(RomLayout.EMOTE_NAMES[emote_id])
+	var sheet: Dictionary = _effect_sheet(Gen2Layout.EMOTE_NAMES[emote_id])
 	if sheet.is_empty():
 		return
 	for index: int in 4:
@@ -1037,25 +1037,25 @@ func _draw_grass_over(pixel: Vector2, background: Vector2) -> void:
 	if _priority_atlas == null:
 		return
 	var over := Rect2(
-		pixel + Vector2(0, Gen2Tiles.TILE_HEIGHT),
-		Vector2(Gen2WorldAPI.CELL_PIXELS, Gen2Tiles.TILE_HEIGHT),
+		pixel + Vector2(0, PokeTiles.TILE_HEIGHT),
+		Vector2(Gen2WorldAPI.CELL_PIXELS, PokeTiles.TILE_HEIGHT),
 	)
 	## The tuft is sixteen by eight pixels, so it covers at most three tiles by
 	## two. Walking the whole page for it cost the view's every tile once per
 	## sprite standing in grass, which a window-filling view cannot afford.
 	var first := Vector2i(
-		floori((over.position.x + background.x) / float(Gen2Tiles.TILE_WIDTH)),
-		floori((over.position.y + background.y) / float(Gen2Tiles.TILE_HEIGHT)),
+		floori((over.position.x + background.x) / float(PokeTiles.TILE_WIDTH)),
+		floori((over.position.y + background.y) / float(PokeTiles.TILE_HEIGHT)),
 	)
 	var last := Vector2i(
-		ceili((over.end.x + background.x) / float(Gen2Tiles.TILE_WIDTH)),
-		ceili((over.end.y + background.y) / float(Gen2Tiles.TILE_HEIGHT)),
+		ceili((over.end.x + background.x) / float(PokeTiles.TILE_WIDTH)),
+		ceili((over.end.y + background.y) / float(PokeTiles.TILE_HEIGHT)),
 	)
 	for y: int in range(first.y, last.y + 1):
 		for x: int in range(first.x, last.x + 1):
 			var at := Rect2(
-				Vector2(x * Gen2Tiles.TILE_WIDTH, y * Gen2Tiles.TILE_HEIGHT) - background,
-				Vector2(Gen2Tiles.TILE_WIDTH, Gen2Tiles.TILE_HEIGHT),
+				Vector2(x * PokeTiles.TILE_WIDTH, y * PokeTiles.TILE_HEIGHT) - background,
+				Vector2(PokeTiles.TILE_WIDTH, PokeTiles.TILE_HEIGHT),
 			)
 			var covered: Rect2 = at.intersection(over)
 			if covered.size.x <= 0.0 or covered.size.y <= 0.0:
@@ -1068,7 +1068,7 @@ func _draw_grass_over(pixel: Vector2, background: Vector2) -> void:
 					_priority_atlas,
 					piece,
 					Rect2(
-						Vector2(tile * Gen2Tiles.TILE_WIDTH, 0) + (piece.position - at.position),
+						Vector2(tile * PokeTiles.TILE_WIDTH, 0) + (piece.position - at.position),
 						piece.size,
 					),
 				)
@@ -1084,7 +1084,7 @@ func _draw_grass_over(pixel: Vector2, background: Vector2) -> void:
 func _drawn_tile_at(tile_x: int, tile_y: int) -> int:
 	if _world == null or _world.current_tileset == null:
 		return -1
-	var width: int = RomLayout.MAP_BLOCK_TILE_WIDTH
+	var width: int = Gen2Layout.MAP_BLOCK_TILE_WIDTH
 	var block: int = _world.expanded_block_at(
 		floori(float(tile_x) / float(width)), floori(float(tile_y) / float(width))
 	)
@@ -1101,12 +1101,12 @@ func _priority_pieces(rect: Rect2) -> Array[Rect2]:
 	var out: Array[Rect2] = []
 	var top: float = rect.position.y
 	while top < rect.end.y:
-		var bottom: float = minf(floorf(top / Gen2Tiles.TILE_HEIGHT) * Gen2Tiles.TILE_HEIGHT \
-			+ Gen2Tiles.TILE_HEIGHT, rect.end.y)
+		var bottom: float = minf(floorf(top / PokeTiles.TILE_HEIGHT) * PokeTiles.TILE_HEIGHT \
+			+ PokeTiles.TILE_HEIGHT, rect.end.y)
 		var left: float = rect.position.x
 		while left < rect.end.x:
-			var right: float = minf(floorf(left / Gen2Tiles.TILE_WIDTH) * Gen2Tiles.TILE_WIDTH \
-				+ Gen2Tiles.TILE_WIDTH, rect.end.x)
+			var right: float = minf(floorf(left / PokeTiles.TILE_WIDTH) * PokeTiles.TILE_WIDTH \
+				+ PokeTiles.TILE_WIDTH, rect.end.x)
 			if not _transition_wrote(Vector2(left, top)):
 				out.append(Rect2(Vector2(left, top), Vector2(right - left, bottom - top)))
 			left = right
@@ -1117,8 +1117,8 @@ func _priority_pieces(rect: Rect2) -> Array[Rect2]:
 ## Whether the transition has taken the screen cell [param at] falls in.
 func _transition_wrote(at: Vector2) -> bool:
 	var screen: Vector2 = at - screen_offset()
-	var x: int = floori(screen.x / Gen2Tiles.TILE_WIDTH)
-	var y: int = floori(screen.y / Gen2Tiles.TILE_HEIGHT)
+	var x: int = floori(screen.x / PokeTiles.TILE_WIDTH)
+	var y: int = floori(screen.y / PokeTiles.TILE_HEIGHT)
 	if x < 0 or x >= Gen2BattleTransition.COLUMNS \
 		or y < 0 or y >= Gen2BattleTransition.ROWS:
 		return false
@@ -1135,17 +1135,17 @@ func _build_priority_atlas() -> void:
 	var entry: Dictionary = _atlas_for(_world.current_map, _world.current_tileset)
 	if entry.is_empty():
 		return
-	var width: int = int(entry["tile_count"]) * Gen2Tiles.TILE_WIDTH
-	if _priority_indices.size() < width * Gen2Tiles.TILE_HEIGHT:
+	var width: int = int(entry["tile_count"]) * PokeTiles.TILE_WIDTH
+	if _priority_indices.size() < width * PokeTiles.TILE_HEIGHT:
 		return
 	var words: PackedInt32Array = (entry["words"] as PackedInt32Array).duplicate()
-	for y: int in Gen2Tiles.TILE_HEIGHT:
+	for y: int in PokeTiles.TILE_HEIGHT:
 		var row: int = y * width
 		for x: int in width:
 			if int(_priority_indices[row + x]) == 0:
 				words[row + x] = 0
 	_priority_atlas = ImageTexture.create_from_image(
-		Gen2PicImage.canvas_image(words, width, Gen2Tiles.TILE_HEIGHT)
+		Gen2PicImage.canvas_image(words, width, PokeTiles.TILE_HEIGHT)
 	)
 
 
@@ -1177,7 +1177,7 @@ func _draw_fishing_body(player_texture: Texture2D, pixel: Vector2) -> bool:
 		var tile: Dictionary = pair[cell]
 		_draw_effect_tile(
 			sheet, int(tile["tile"]), _world.player_palette(), bool(tile["flip_x"]),
-			pixel + Vector2(cell * Gen2Tiles.TILE_WIDTH, half)
+			pixel + Vector2(cell * PokeTiles.TILE_WIDTH, half)
 		)
 	return true
 
@@ -1200,8 +1200,8 @@ func _draw_fishing_rod(pixel: Vector2) -> void:
 ## an animation aimed at it is written around this, so translating its centre
 ## onto a walk cell's is what puts the sparkle over the Pokemon out here.
 const BATTLER_CENTRE := Vector2(
-	(Gen2BattleScreenMap.ENEMY_AT.x + 0.5 * Gen2BattleScreenMap.ENEMY_SIDE) * Gen2Tiles.TILE_WIDTH,
-	(Gen2BattleScreenMap.ENEMY_AT.y + 0.5 * Gen2BattleScreenMap.ENEMY_SIDE) * Gen2Tiles.TILE_HEIGHT
+	(Gen2BattleScreenMap.ENEMY_AT.x + 0.5 * Gen2BattleScreenMap.ENEMY_SIDE) * PokeTiles.TILE_WIDTH,
+	(Gen2BattleScreenMap.ENEMY_AT.y + 0.5 * Gen2BattleScreenMap.ENEMY_SIDE) * PokeTiles.TILE_HEIGHT
 )
 
 
@@ -1256,17 +1256,17 @@ func _pulse_texture(
 		return _anim_textures[key]
 	var strip: PackedByteArray = _world.data.battle_anim_gfx_indices(gfx)
 	@warning_ignore("integer_division")
-	var width: int = strip.size() / Gen2Tiles.TILE_HEIGHT
-	if width <= 0 or (tile + 1) * Gen2Tiles.TILE_WIDTH > width:
+	var width: int = strip.size() / PokeTiles.TILE_HEIGHT
+	if width <= 0 or (tile + 1) * PokeTiles.TILE_WIDTH > width:
 		return null
 	var pixels := PackedByteArray()
-	pixels.resize(Gen2Tiles.TILE_PIXELS)
-	for row: int in Gen2Tiles.TILE_HEIGHT:
-		var from: int = row * width + tile * Gen2Tiles.TILE_WIDTH
-		for column: int in Gen2Tiles.TILE_WIDTH:
-			pixels[row * Gen2Tiles.TILE_WIDTH + column] = strip[from + column]
+	pixels.resize(PokeTiles.TILE_PIXELS)
+	for row: int in PokeTiles.TILE_HEIGHT:
+		var from: int = row * width + tile * PokeTiles.TILE_WIDTH
+		for column: int in PokeTiles.TILE_WIDTH:
+			pixels[row * PokeTiles.TILE_WIDTH + column] = strip[from + column]
 	var image: Image = Gen2PicImage.from_indices(
-		pixels, Gen2Tiles.TILE_WIDTH, Gen2Tiles.TILE_HEIGHT,
+		pixels, PokeTiles.TILE_WIDTH, PokeTiles.TILE_HEIGHT,
 		_world.data.battle_object_palette(
 			attributes & Gen2BattleAnimObject.OAM_PALETTE, pair
 		),
@@ -1379,16 +1379,16 @@ func _draw_effect_tile(
 	if texture == null:
 		var indices: PackedByteArray = sheet["indices"]
 		var tiles: int = int(sheet["tiles"])
-		if tile < 0 or tile >= tiles or indices.size() < tiles * Gen2Tiles.TILE_PIXELS:
+		if tile < 0 or tile >= tiles or indices.size() < tiles * PokeTiles.TILE_PIXELS:
 			return
 		var palette: PackedColorArray = _effect_palette(sheet, palette_index, rotation_step)
 		var image := Image.create(
-			Gen2Tiles.TILE_WIDTH, Gen2Tiles.TILE_HEIGHT, false, Image.FORMAT_RGBA8
+			PokeTiles.TILE_WIDTH, PokeTiles.TILE_HEIGHT, false, Image.FORMAT_RGBA8
 		)
-		var width: int = tiles * Gen2Tiles.TILE_WIDTH
-		for y: int in Gen2Tiles.TILE_HEIGHT:
-			for x: int in Gen2Tiles.TILE_WIDTH:
-				var color_index: int = int(indices[y * width + tile * Gen2Tiles.TILE_WIDTH + x])
+		var width: int = tiles * PokeTiles.TILE_WIDTH
+		for y: int in PokeTiles.TILE_HEIGHT:
+			for x: int in PokeTiles.TILE_WIDTH:
+				var color_index: int = int(indices[y * width + tile * PokeTiles.TILE_WIDTH + x])
 				var color: Color = palette[color_index] if color_index < palette.size() \
 					else Color.MAGENTA
 				if color_index == 0:

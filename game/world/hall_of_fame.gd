@@ -66,7 +66,7 @@ static func pages(
 static func _player_pages(
 	data: GameData, save: Gen2SaveData, state: Gen2WorldState
 ) -> Array:
-	var time: Gen2GameTime = save.game_time if save.game_time != null else Gen2GameTime.new()
+	var time: PokeGameTime = save.game_time if save.game_time != null else PokeGameTime.new()
 	var panel: Dictionary = {
 		"kind": PAGE_PLAYER,
 		"player_name": save.player_name,
@@ -114,7 +114,7 @@ static func _mon_page(data: GameData, mon: Gen2SaveMon) -> Dictionary:
 		## `DisplayHOFMon` draws the pic through `GetMonFrontpic`, which reads
 		## `wUnownLetter`: an Unown in the Hall of Fame is its own letter, not A.
 		"unown_form": Gen2Stats.unown_letter(mon.dvs) \
-			if mon.species == RomLayout.UNOWN_SPECIES else 0,
+			if mon.species == Gen2Layout.UNOWN_SPECIES else 0,
 		## `SCGB_PLAYER_OR_MON_FRONTPIC_PALS` reaches
 		## `GetMonNormalOrShinyPalettePointer`.
 		"shiny": Gen2Stats.is_shiny(mon.dvs),
@@ -183,7 +183,7 @@ static func record_pages(data: GameData, record: Dictionary) -> Array:
 			"ot_id": int(mon.get("ot_id", 0)),
 			"gender": Gen2BattleMon.gender_for(data, species, dvs),
 			"unown_form": Gen2Stats.unown_letter(dvs) \
-				if species == RomLayout.UNOWN_SPECIES else 0,
+				if species == Gen2Layout.UNOWN_SPECIES else 0,
 			"shiny": Gen2Stats.is_shiny(dvs),
 			## `.print_num_hof`'s "-Time Famer", which is the one line the viewer
 			## draws that an induction does not.

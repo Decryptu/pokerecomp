@@ -184,10 +184,10 @@ func test_one_repeat_of_a_held_direction_moves_the_ring_one_control() -> void:
 	assert_not_null(next, "the guard names what is below")
 
 	var runtime: Gen2InputRuntime = Gen2InputRuntime.instance()
-	runtime.send_action(Gen2Button.action(Gen2Button.DOWN), true)
+	runtime.send_action(PokeButton.action(PokeButton.DOWN), true)
 	await get_tree().process_frame
 	assert_same(_focus_owner(), next, "one repeat is one control, not two")
-	runtime.send_action(Gen2Button.action(Gen2Button.DOWN), false)
+	runtime.send_action(PokeButton.action(PokeButton.DOWN), false)
 	await get_tree().process_frame
 
 
@@ -204,7 +204,7 @@ func test_a_pane_hands_a_direction_on_once_it_has_nowhere_left_to_scroll() -> vo
 	await get_tree().process_frame
 
 	var down := InputEventAction.new()
-	down.action = Gen2Button.action(Gen2Button.DOWN)
+	down.action = PokeButton.action(PokeButton.DOWN)
 	down.pressed = true
 	assert_true(pane._scroll_by(down), "there is room below")
 	for _step: int in 400:
@@ -213,7 +213,7 @@ func test_a_pane_hands_a_direction_on_once_it_has_nowhere_left_to_scroll() -> vo
 	assert_false(pane._scroll_by(down), "the bottom hands the press on")
 
 	var up := InputEventAction.new()
-	up.action = Gen2Button.action(Gen2Button.UP)
+	up.action = PokeButton.action(PokeButton.UP)
 	up.pressed = true
 	assert_true(pane._scroll_by(up), "and up still moves from there")
 

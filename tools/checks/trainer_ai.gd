@@ -68,10 +68,10 @@ func _check_layers(
 	game_id: StringName, data: GameData, attacker: Gen2BattleMon,
 	defender: Gen2BattleMon, rng: RandomNumberGenerator
 ) -> void:
-	var types: Array = _layer(data, attacker, defender, rng, RomLayout.AI_TYPES)
-	var status: Array = _layer(data, attacker, defender, rng, RomLayout.AI_STATUS)
+	var types: Array = _layer(data, attacker, defender, rng, Gen2Layout.AI_TYPES)
+	var status: Array = _layer(data, attacker, defender, rng, Gen2Layout.AI_STATUS)
 	var safeguarded: Array = Gen2BattleAI.score_slots(
-		attacker, defender, data, RomLayout.AI_BASIC, rng, 0, 0, Gen2Weather.NONE,
+		attacker, defender, data, Gen2Layout.AI_BASIC, rng, 0, 0, Gen2Weather.NONE,
 		Gen2Screens.NONE, Gen2Screens.SAFEGUARD
 	)
 	_check_aggressive(game_id, data, attacker, defender, rng)
@@ -83,8 +83,8 @@ func _check_layers(
 		var effect: int = int(move.get("effect", 0))
 		var power: int = int(move.get("power", 0))
 		var immune: bool = data.type_effectiveness(
-			int(move.get("type", RomLayout.TYPE_NORMAL)), defender.types()
-		) == RomLayout.MATCHUP_NO_EFFECT
+			int(move.get("type", Gen2Layout.TYPE_NORMAL)), defender.types()
+		) == Gen2Layout.MATCHUP_NO_EFFECT
 
 		if immune:
 			_r.check(
@@ -93,7 +93,7 @@ func _check_layers(
 			)
 
 		var poisoning: bool = effect == Gen2MoveEffect.TOXIC or effect == Gen2MoveEffect.POISON
-		var poison_shortcut: bool = poisoning and defender.types().has(RomLayout.TYPE_POISON)
+		var poison_shortcut: bool = poisoning and defender.types().has(Gen2Layout.TYPE_POISON)
 		# `.poisonimmunity` falls into `.typeimmunity`, so a Poison move against
 		# anything else is still read by the chart.
 		var read_by_status: bool = poisoning or power > 0 \
@@ -123,7 +123,7 @@ func _check_aggressive(
 	game_id: StringName, data: GameData, attacker: Gen2BattleMon,
 	defender: Gen2BattleMon, rng: RandomNumberGenerator
 ) -> void:
-	var scores: Array = _layer(data, attacker, defender, rng, RomLayout.AI_AGGRESSIVE)
+	var scores: Array = _layer(data, attacker, defender, rng, Gen2Layout.AI_AGGRESSIVE)
 	var ordinary: int = 0
 	var untouched: int = 0
 	var damaging: bool = false

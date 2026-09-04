@@ -198,7 +198,7 @@ func test_the_title_phase_runs_its_own_screen_and_answers_the_host() -> void:
 		boot.advance_frame()
 	assert_eq(boot.phase(), Boot.PHASE_TITLE, "and it waits for a button")
 
-	var answered: Array[Dictionary] = boot.advance_frame([Gen2Button.START])
+	var answered: Array[Dictionary] = boot.advance_frame([PokeButton.START])
 	assert_true(answered.any(func(event: Dictionary) -> bool:
 		return event["type"] == &"title_menu"
 	))
@@ -234,7 +234,7 @@ func test_a_chord_is_reported_and_the_screen_stays_up() -> void:
 	for _frame: int in 4:
 		boot.advance_frame()
 	var chord: Array[Dictionary] = boot.advance_frame([
-		Gen2Button.UP, Gen2Button.B, Gen2Button.SELECT,
+		PokeButton.UP, PokeButton.B, PokeButton.SELECT,
 	])
 	var reported: Array = chord.filter(func(event: Dictionary) -> bool:
 		return event["type"] == &"title_chord"

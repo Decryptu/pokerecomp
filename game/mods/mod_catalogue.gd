@@ -6,7 +6,7 @@ extends RefCounted
 ## player chose. That is the whole ownership rule and it needs nothing written
 ## down: uninstalling one from a source leaves it listed and re-downloadable,
 ## while uninstalling one that came from a file removes the only copy there was.
-## Pure: it takes what [Gen2ModHost], [Gen2ModIndex] and [Gen2ModState] already
+## Pure: it takes what [Gen2ModHost], [PokeModIndex] and [Gen2ModState] already
 ## answer and decides nothing about the network or the screen.
 
 ## The group a mod nothing lists belongs to.
@@ -17,13 +17,13 @@ const SOURCE_FILE_LABEL: String = "Installed from a file"
 ## The groups to draw, in the order to draw them: each followed source that has
 ## anything in it, in the order the player added them, then the file group.
 ##
-## [param sources] is [method Gen2ModIndex.followed]'s rows, [param listings] is
+## [param sources] is [method PokeModIndex.followed]'s rows, [param listings] is
 ## feed to that feed's entries, and [param manifests] is
 ## [method Gen2ModHost.manifests]. A group is
 ## `{feed, label, rows}`; see [method _row] for a row.
 static func groups(manifests: Array, sources: Array, listings: Dictionary) -> Array:
 	var installed: Dictionary = {}
-	for manifest: Gen2ModManifest in manifests:
+	for manifest: PokeModManifest in manifests:
 		installed[manifest.id] = manifest
 
 	var out: Array = []
@@ -59,7 +59,7 @@ static func groups(manifests: Array, sources: Array, listings: Dictionary) -> Ar
 ## `version` is what the row shows: the installed version when there is one,
 ## because that is the copy the player has, and the listed version otherwise.
 static func _row(
-	id: StringName, entry: Dictionary, manifest: Gen2ModManifest, feed: String, label: String
+	id: StringName, entry: Dictionary, manifest: PokeModManifest, feed: String, label: String
 ) -> Dictionary:
 	var listed_version: String = String(entry.get("version", ""))
 	var installed_version: String = manifest.version if manifest != null else ""
@@ -73,7 +73,7 @@ static func _row(
 		"download": String(entry.get("download", "")),
 		# The installed copy's own file when there is one, and the listing's URL
 		# otherwise, so a mod has a face while it is still only being browsed.
-		"icon": Gen2ModArt.icon_path(manifest),
+		"icon": PokeModArt.icon_path(manifest),
 		"icon_url": String(entry.get("icon", "")),
 		# What the listing says it is for. The installed manifest is the truth
 		# when there is one; this is what the card has before then.
@@ -83,7 +83,7 @@ static func _row(
 		"installed": manifest != null,
 		"listed": not entry.is_empty(),
 		"enabled": manifest != null and Gen2ModState.is_enabled(id),
-		"update": Gen2ModIndex.update_state(listed_version, installed_version),
+		"update": PokeModIndex.update_state(listed_version, installed_version),
 		"manifest": manifest,
 	}
 
@@ -94,7 +94,7 @@ static func _row(
 static func action_for(row: Dictionary) -> StringName:
 	if not bool(row.get("installed", false)):
 		return &"download"
-	if StringName(row.get("update", Gen2ModIndex.UNKNOWN)) == Gen2ModIndex.UPDATE_AVAILABLE:
+	if StringName(row.get("update", PokeModIndex.UNKNOWN)) == PokeModIndex.UPDATE_AVAILABLE:
 		return &"update"
 	return &"remove"
 

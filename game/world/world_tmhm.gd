@@ -11,17 +11,17 @@ extends RefCounted
 
 ## constants/item_constants.asm. The run from TM01 to HM07 is not contiguous:
 ## ITEM_C3 and ITEM_DC sit inside it as dummies, which is why the number a TM
-## carries comes from RomLayout.tmhm_number_for_item() rather than subtraction.
-const ITEM_TM01: int = RomLayout.ITEM_TM01
-const ITEM_HM01: int = RomLayout.ITEM_HM01
+## carries comes from Gen2Layout.tmhm_number_for_item() rather than subtraction.
+const ITEM_TM01: int = Gen2Layout.ITEM_TM01
+const ITEM_HM01: int = Gen2Layout.ITEM_HM01
 ## `cp TM01` needs no ceiling on hardware because an item number is a byte. A
 ## defined item is not one: Gen2ContentOverlay.FIRST_MOD_NUMBER is 256, so
 ## without this every mod item read as a TM, and as an HM.
-const ITEM_BYTE_MAX: int = RomLayout.ITEM_BYTE_MAX
+const ITEM_BYTE_MAX: int = Gen2Layout.ITEM_BYTE_MAX
 
 ## Eight bytes of learnable flags on each species, one bit per TMNUM, indexed by
 ## the entry's own zero-based place in TMHMMoves.
-const TMHM_FLAG_BYTES: int = RomLayout.TMHM_BYTES
+const TMHM_FLAG_BYTES: int = Gen2Layout.TMHM_BYTES
 
 
 ## AskTeachTMHM's first test, `cp TM01` before anything else: an item below TM01
@@ -40,7 +40,7 @@ static func is_hm(item: int) -> bool:
 static func move_for_item(data: GameData, item: int) -> int:
 	if data == null or not is_tm_hm(item):
 		return 0
-	var number: int = RomLayout.tmhm_number_for_item(item, data.tmhm_moves().size())
+	var number: int = Gen2Layout.tmhm_number_for_item(item, data.tmhm_moves().size())
 	return data.tmhm_move(number)
 
 

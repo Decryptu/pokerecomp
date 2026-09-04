@@ -7,7 +7,7 @@ extends RefCounted
 ## first move above the level being filled for; [method moves_learned_at] offers a
 ## just-levelled one something new and takes entries at exactly the level reached.
 ## One species' list is not ascending
-## ([constant RomLayout.UNSORTED_LEARNSET_SPECIES]), so a wild Muk really is short
+## ([constant Gen2Layout.UNSORTED_LEARNSET_SPECIES]), so a wild Muk really is short
 ## three moves a raised Muk has.
 
 ## How many moves a Pokémon can know at once.

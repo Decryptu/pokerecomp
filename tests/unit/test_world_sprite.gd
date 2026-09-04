@@ -64,7 +64,7 @@ func test_image_composition_applies_palette_and_transparency() -> void:
 		"type": Gen2WorldSprite.TYPE_STILL, "palette": 0,
 	})
 	var indices := PackedByteArray()
-	indices.resize(4 * Gen2Tiles.TILE_PIXELS)
+	indices.resize(4 * PokeTiles.TILE_PIXELS)
 	for index: int in indices.size():
 		indices[index] = index % 4
 	var palette := PackedColorArray([Color.WHITE, Color.RED, Color.BLUE, Color.BLACK])
@@ -78,11 +78,11 @@ func test_image_composition_applies_palette_and_transparency() -> void:
 func test_symmetric_big_object_uses_the_source_sixteen_tile_layout() -> void:
 	var sprite := Gen2WorldSprite.from_cache({"number": 33, "tiles": 8, "type": 3})
 	var indices := PackedByteArray()
-	indices.resize(8 * Gen2Tiles.TILE_PIXELS)
-	for y: int in Gen2Tiles.TILE_HEIGHT:
+	indices.resize(8 * PokeTiles.TILE_PIXELS)
+	for y: int in PokeTiles.TILE_HEIGHT:
 		for tile: int in 8:
-			for x: int in Gen2Tiles.TILE_WIDTH:
-				indices[y * 8 * Gen2Tiles.TILE_WIDTH + tile * Gen2Tiles.TILE_WIDTH + x] = tile + 1
+			for x: int in PokeTiles.TILE_WIDTH:
+				indices[y * 8 * PokeTiles.TILE_WIDTH + tile * PokeTiles.TILE_WIDTH + x] = tile + 1
 	var palette := PackedColorArray()
 	palette.resize(9)
 	for color: int in palette.size():
@@ -100,11 +100,11 @@ func test_symmetric_big_object_uses_the_source_sixteen_tile_layout() -> void:
 func test_asymmetric_big_object_keeps_source_holes_and_flips() -> void:
 	var sprite := Gen2WorldSprite.from_cache({"number": 0, "tiles": 12, "type": 3})
 	var indices := PackedByteArray()
-	indices.resize(12 * Gen2Tiles.TILE_PIXELS)
-	for y: int in Gen2Tiles.TILE_HEIGHT:
+	indices.resize(12 * PokeTiles.TILE_PIXELS)
+	for y: int in PokeTiles.TILE_HEIGHT:
 		for tile: int in 12:
-			for x: int in Gen2Tiles.TILE_WIDTH:
-				indices[y * 12 * Gen2Tiles.TILE_WIDTH + tile * Gen2Tiles.TILE_WIDTH + x] = tile + 1
+			for x: int in PokeTiles.TILE_WIDTH:
+				indices[y * 12 * PokeTiles.TILE_WIDTH + tile * PokeTiles.TILE_WIDTH + x] = tile + 1
 	var palette := PackedColorArray()
 	palette.resize(13)
 	for color: int in palette.size():

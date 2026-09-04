@@ -13,8 +13,8 @@ const OPENING_FRAME_CAP: int = 6000
 
 ## The twelve BG-map columns the hardware screen never reaches, in pixels: what
 ## the title draws around itself and how far it repeats.
-const BAND: int = (RomLayout.TITLE_TILEMAP_COLUMNS - Gen2TitlePage.COLUMNS) \
-	* Gen2Tiles.TILE_WIDTH
+const BAND: int = (Gen2Layout.TITLE_TILEMAP_COLUMNS - Gen2TitlePage.COLUMNS) \
+	* PokeTiles.TILE_WIDTH
 
 const REQUIRED_SECTIONS: Dictionary = {
 	"maps": RomCache.WORLD_MAPS,

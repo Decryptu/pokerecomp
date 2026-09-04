@@ -1,4 +1,4 @@
-class_name Gen2Apu
+class_name PokeApu
 extends RefCounted
 
 ## DMG audio processing unit: the four hardware channels behind $ff10-$ff3f.

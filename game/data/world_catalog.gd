@@ -320,7 +320,7 @@ func field_hm_items() -> Array[int]:
 		return out
 	var count: int = _data.tmhm_moves().size()
 	for number: int in count:
-		var item: int = RomLayout.item_for_tmhm_number(number + 1, count)
+		var item: int = Gen2Layout.item_for_tmhm_number(number + 1, count)
 		if not Gen2WorldTMHM.is_hm(item):
 			continue
 		if Gen2WorldFieldMove.is_field_move(_data.tmhm_move(number + 1)):
@@ -775,10 +775,10 @@ func _add_event(
 ## mod as somewhere to put a Pokemon.
 func _plausible(row: Dictionary) -> bool:
 	var species: int = int(row.get("species", 0))
-	if row.has("species") and (species < 1 or species > RomLayout.SPECIES_COUNT):
+	if row.has("species") and (species < 1 or species > Gen2Layout.SPECIES_COUNT):
 		return false
 	var level: int = int(row.get("level", 0))
-	if row.has("level") and (level < 1 or level > RomLayout.MAX_LEVEL):
+	if row.has("level") and (level < 1 or level > Gen2Layout.MAX_LEVEL):
 		return false
 	var item: int = int(row.get("item", 0))
 	if row.has("item") and item != 0 and _data != null and _data.item(item).is_empty():

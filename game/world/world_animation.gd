@@ -7,7 +7,7 @@ extends RefCounted
 ## keeps the same command order and timer semantics, but applies those writes to
 ## the indexed tile strip held by GameData.
 
-const TILE_BYTES: int = Gen2Tiles.TILE_BYTES
+const TILE_BYTES: int = PokeTiles.TILE_BYTES
 ## The hardware VBlank, and the project's one definition of it: every timer in
 ## the game is counted in these, and [FrameClock] is the single place real time
 ## is converted into them.
@@ -349,12 +349,12 @@ static func _cycle(frames: Array[PackedByteArray]) -> Array[PackedByteArray]:
 ## the atlas is built from.
 func _tile_indices(tile: int) -> PackedByteArray:
 	var out := PackedByteArray()
-	out.resize(Gen2Tiles.TILE_WIDTH * Gen2Tiles.TILE_HEIGHT)
-	var width: int = tileset.tile_count * Gen2Tiles.TILE_WIDTH
-	for y: int in Gen2Tiles.TILE_HEIGHT:
-		for x: int in Gen2Tiles.TILE_WIDTH:
-			out[y * Gen2Tiles.TILE_WIDTH + x] = _indices[
-				y * width + tile * Gen2Tiles.TILE_WIDTH + x
+	out.resize(PokeTiles.TILE_WIDTH * PokeTiles.TILE_HEIGHT)
+	var width: int = tileset.tile_count * PokeTiles.TILE_WIDTH
+	for y: int in PokeTiles.TILE_HEIGHT:
+		for x: int in PokeTiles.TILE_WIDTH:
+			out[y * PokeTiles.TILE_WIDTH + x] = _indices[
+				y * width + tile * PokeTiles.TILE_WIDTH + x
 			]
 	return out
 
@@ -503,12 +503,12 @@ func _tile_bytes(tile: int) -> PackedByteArray:
 	out.resize(TILE_BYTES)
 	if tile < 0 or tile >= tileset.tile_count:
 		return out
-	var width: int = tileset.tile_count * Gen2Tiles.TILE_WIDTH
-	for y: int in Gen2Tiles.TILE_HEIGHT:
+	var width: int = tileset.tile_count * PokeTiles.TILE_WIDTH
+	for y: int in PokeTiles.TILE_HEIGHT:
 		var low: int = 0
 		var high: int = 0
-		for x: int in Gen2Tiles.TILE_WIDTH:
-			var value: int = int(_indices[y * width + tile * Gen2Tiles.TILE_WIDTH + x])
+		for x: int in PokeTiles.TILE_WIDTH:
+			var value: int = int(_indices[y * width + tile * PokeTiles.TILE_WIDTH + x])
 			low |= (value & 1) << (7 - x)
 			high |= ((value >> 1) & 1) << (7 - x)
 		out[y * 2] = low
@@ -519,13 +519,13 @@ func _tile_bytes(tile: int) -> PackedByteArray:
 func _set_tile_bytes(tile: int, bytes: PackedByteArray) -> void:
 	if tile < 0 or tile >= tileset.tile_count or bytes.size() < TILE_BYTES:
 		return
-	var width: int = tileset.tile_count * Gen2Tiles.TILE_WIDTH
-	for y: int in Gen2Tiles.TILE_HEIGHT:
+	var width: int = tileset.tile_count * PokeTiles.TILE_WIDTH
+	for y: int in PokeTiles.TILE_HEIGHT:
 		var low: int = int(bytes[y * 2])
 		var high: int = int(bytes[y * 2 + 1])
-		for x: int in Gen2Tiles.TILE_WIDTH:
+		for x: int in PokeTiles.TILE_WIDTH:
 			var value: int = ((low >> (7 - x)) & 1) | (((high >> (7 - x)) & 1) << 1)
-			var at: int = y * width + tile * Gen2Tiles.TILE_WIDTH + x
+			var at: int = y * width + tile * PokeTiles.TILE_WIDTH + x
 			if _indices[at] == value:
 				continue
 			_indices[at] = value
@@ -535,7 +535,7 @@ func _set_tile_bytes(tile: int, bytes: PackedByteArray) -> void:
 
 func _scroll_horizontal() -> void:
 	var direction_right: bool = (_timer & 4) == 0  # `and %100 / jr nz` is left
-	for y: int in Gen2Tiles.TILE_HEIGHT:
+	for y: int in PokeTiles.TILE_HEIGHT:
 		var low: int = int(_buffer[y * 2])
 		var high: int = int(_buffer[y * 2 + 1])
 		if direction_right:
@@ -552,7 +552,7 @@ func _scroll_horizontal() -> void:
 ## cartridge ever scrolls a tile the other way and there is no timer in this one.
 func _scroll_vertical() -> void:
 	var copy: PackedByteArray = _buffer.duplicate()
-	for y: int in Gen2Tiles.TILE_HEIGHT:
+	for y: int in PokeTiles.TILE_HEIGHT:
 		var source_y: int = (y - 1) & 7
 		_buffer[y * 2] = copy[source_y * 2]
 		_buffer[y * 2 + 1] = copy[source_y * 2 + 1]

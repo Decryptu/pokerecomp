@@ -9,7 +9,7 @@ extends RefCounted
 ## `GameFreakLogoStarsGFX`, one contiguous run from `vTiles1` tile $0d.
 ## [Gen2GameFreakPresents] owns the frames and the positions; this owns the pixels.
 
-const TILE: int = Gen2Tiles.TILE_WIDTH
+const TILE: int = PokeTiles.TILE_WIDTH
 const COLUMNS: int = 20
 const ROWS: int = 18
 ## `ClearTilemap` leaves the blank tile everywhere, which through
@@ -53,7 +53,7 @@ const GOLD_STAR_FLIPPED: Array[bool] = [false, true, false, true]
 const GOLD_SPARKLE_AT := Vector2i(-4, -4)
 ## `SPRITE_ANIM_DICT_GS_SPLASH` is $8d, the first tile of `gamefreak_logo.1bpp`,
 ## so a sprite tile past the logo's fifteen is one of the star sheet's five.
-const GOLD_SPRITE_FIRST_TILE: int = RomLayout.PRESENTS_WORD_TILES
+const GOLD_SPRITE_FIRST_TILE: int = Gen2Layout.PRESENTS_WORD_TILES
 ## The VRAM tile the dictionary maps those objects to, which is what a shadow-OAM
 ## byte holds. Crystal decompresses the Ditto to `vTiles0` and counts from zero.
 const GOLD_SPRITE_VRAM_BASE: int = 0x8D
@@ -214,7 +214,7 @@ func _object_palette(
 	if step < 0 or step >= _fade.size():
 		return _object
 	var out: PackedColorArray = _object.duplicate()
-	out[RomLayout.PRESENTS_DITTO_FADE_COLOR] = _fade[step]
+	out[Gen2Layout.PRESENTS_DITTO_FADE_COLOR] = _fade[step]
 	return out
 
 
@@ -255,7 +255,7 @@ func _oam_set(kind: StringName, index: int) -> Array[Dictionary]:
 							(row - DITTO_LARGE_ROWS + 1) * TILE
 						),
 						"tile": (
-							base + row * RomLayout.PRESENTS_DITTO_COLUMNS + column
+							base + row * Gen2Layout.PRESENTS_DITTO_COLUMNS + column
 						) & 0xFF,
 					})
 			return out
@@ -272,16 +272,16 @@ func _oam_set(kind: StringName, index: int) -> Array[Dictionary]:
 				var part: Vector3i = GOLD_STAR[at]
 				out.append({
 					"at": Vector2i(part.x, part.y),
-					"tile": RomLayout.PRESENTS_LOGO_TILES + part.z,
+					"tile": Gen2Layout.PRESENTS_LOGO_TILES + part.z,
 					"flip_x": GOLD_STAR_FLIPPED[at],
 				})
 			return out
 		Gen2GameFreakPresents.SPRITE_SPARKLE:
 			out.append({
 				"at": GOLD_SPARKLE_AT,
-				"tile": RomLayout.PRESENTS_LOGO_TILES
-					+ RomLayout.PRESENTS_STAR_TILES
-					+ clampi(index, 0, RomLayout.PRESENTS_SPARKLE_TILES - 1),
+				"tile": Gen2Layout.PRESENTS_LOGO_TILES
+					+ Gen2Layout.PRESENTS_STAR_TILES
+					+ clampi(index, 0, Gen2Layout.PRESENTS_SPARKLE_TILES - 1),
 			})
 	return out
 
@@ -315,12 +315,12 @@ func _blit_sprite_tile(
 	if _profile != RomRegistry.CRYSTAL:
 		# The splash's object tiles run from `vTiles1` tile $0d: the logo's
 		# fifteen out of `GameFreakLogoGFX`, then the star sheet's five.
-		if tile < RomLayout.PRESENTS_LOGO_TILES:
+		if tile < Gen2Layout.PRESENTS_LOGO_TILES:
 			index = tile + GOLD_SPRITE_FIRST_TILE
 		else:
 			tiles = _star_tiles
 			stride = _star_width
-			index = tile - RomLayout.PRESENTS_LOGO_TILES
+			index = tile - Gen2Layout.PRESENTS_LOGO_TILES
 	if stride <= 0 or index < 0:
 		return
 	var width: int = COLUMNS * TILE

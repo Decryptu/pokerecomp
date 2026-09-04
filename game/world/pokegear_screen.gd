@@ -238,7 +238,7 @@ func handle_button(button: int) -> bool:
 	if not _message.is_empty():
 		# `_GearOutOfServiceText` ends on `prompt`, so `PrintText` holds the card
 		# until a button; `PokegearAskWhoCallText` is printed behind it.
-		if button in [Gen2Button.A, Gen2Button.B]:
+		if button in [PokeButton.A, PokeButton.B]:
 			_message = ""
 			_refresh()
 		return true
@@ -249,14 +249,14 @@ func handle_button(button: int) -> bool:
 		_press_submenu(button)
 		return true
 	match button:
-		Gen2Button.B:
+		PokeButton.B:
 			close()
 			return true
-		Gen2Button.LEFT, Gen2Button.RIGHT:
-			switched.emit(-1 if button == Gen2Button.LEFT else 1)
+		PokeButton.LEFT, PokeButton.RIGHT:
+			switched.emit(-1 if button == PokeButton.LEFT else 1)
 			return true
-	if _card == CARD_RADIO and button in [Gen2Button.UP, Gen2Button.DOWN]:
-		var step: int = Gen2WorldRadio.KNOB_STEP * (1 if button == Gen2Button.UP else -1)
+	if _card == CARD_RADIO and button in [PokeButton.UP, PokeButton.DOWN]:
+		var step: int = Gen2WorldRadio.KNOB_STEP * (1 if button == PokeButton.UP else -1)
 		var next: int = clampi(_knob + step, Gen2WorldRadio.KNOB_MIN, Gen2WorldRadio.KNOB_MAX)
 		if next != _knob:
 			tuned.emit(next)
@@ -265,15 +265,15 @@ func handle_button(button: int) -> bool:
 		# `PokegearClock_Joypad` quits on `PAD_BUTTONS`, so its up and down do
 		# nothing at all; A on the radio card is swallowed, the dial being that
 		# card's whole input.
-		if _card == CARD_CLOCK and not Gen2Button.is_direction(button):
+		if _card == CARD_CLOCK and not PokeButton.is_direction(button):
 			close()
 		return true
 	match button:
-		Gen2Button.UP:
+		PokeButton.UP:
 			_move_phone(-1)
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			_move_phone(1)
-		Gen2Button.A:
+		PokeButton.A:
 			## `.a` refuses an empty slot before it opens the submenu.
 			if selected_contact() >= 0:
 				_open_submenu()
@@ -305,14 +305,14 @@ func _can_delete_selected() -> bool:
 ## and B is CANCEL wherever it is.
 func _press_submenu(button: int) -> void:
 	match button:
-		Gen2Button.UP:
+		PokeButton.UP:
 			_submenu_cursor = maxi(_submenu_cursor - 1, 0)
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			_submenu_cursor = mini(_submenu_cursor + 1, _submenu.size() - 1)
-		Gen2Button.B:
+		PokeButton.B:
 			_close_submenu()
 			return
-		Gen2Button.A:
+		PokeButton.A:
 			match String(_submenu[_submenu_cursor]):
 				SUBMENU_CALL:
 					var contact: int = selected_contact()
@@ -332,15 +332,15 @@ func _press_submenu(button: int) -> void:
 ## `YesNoBox`, whose B is the same answer NO is.
 func _press_yes_no(button: int) -> void:
 	match button:
-		Gen2Button.UP:
+		PokeButton.UP:
 			_yes_no_cursor = 0
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			_yes_no_cursor = 1
-		Gen2Button.B:
+		PokeButton.B:
 			## `InterpretTwoOptionMenu` answers a B the way NO answers.
 			_close_submenu()
 			return
-		Gen2Button.A:
+		PokeButton.A:
 			var contact: int = selected_contact()
 			var yes: bool = _yes_no_cursor == 0
 			_close_submenu()
@@ -521,7 +521,7 @@ func _icon(first: int, columns: int, rows: int, repeat: bool = false) -> Image:
 	if tiles.is_empty() or palette.is_empty():
 		return Gen2PicImage.canvas_image(out, pixels.x, pixels.y)
 	@warning_ignore("integer_division")
-	var strip_tiles: int = tiles.size() / Gen2Tiles.TILE_PIXELS
+	var strip_tiles: int = tiles.size() / PokeTiles.TILE_PIXELS
 	var table: PackedInt32Array = Gen2PicImage.lookup(palette)
 	for row: int in rows:
 		for column: int in columns:

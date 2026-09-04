@@ -1,4 +1,4 @@
-class_name Gen2TapGesture
+class_name PokeTapGesture
 extends RefCounted
 
 ## Counts quick repeated taps in roughly one place: the one way back from hidden

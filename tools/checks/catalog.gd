@@ -282,7 +282,7 @@ func _verify_progression(_catalog: Gen2WorldCatalog) -> void:
 	var patches: Dictionary = {behind: {"item": surf_item}}
 	for row: Dictionary in _catalog.rows(Gen2WorldCatalog.KIND_ITEM):
 		if int(row["item"]) == surf_item and int(row["id"]) != behind:
-			patches[int(row["id"])] = {"item": RomLayout.ITEM_TM01}
+			patches[int(row["id"])] = {"item": Gen2Layout.ITEM_TM01}
 	var locked: Dictionary = Gen2WorldProgression.validate(data, patches)
 	_r.check(not bool(locked["ok"]), "a placement hiding Surf behind Surf validated.")
 	_r.check(

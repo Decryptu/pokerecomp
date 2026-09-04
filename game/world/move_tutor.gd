@@ -36,4 +36,4 @@ static func move_for_value(data: GameData, value: int) -> int:
 	## else falls through to ICE_BEAM.
 	var tutor: int = clampi(value, VALUE_FLAMETHROWER, VALUE_ICE_BEAM) \
 		if value in [VALUE_FLAMETHROWER, VALUE_THUNDERBOLT] else VALUE_ICE_BEAM
-	return data.tmhm_move(RomLayout.TMHM_TM_COUNT + RomLayout.TMHM_HM_COUNT + tutor)
+	return data.tmhm_move(Gen2Layout.TMHM_TM_COUNT + Gen2Layout.TMHM_HM_COUNT + tutor)

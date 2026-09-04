@@ -3,7 +3,7 @@ extends SceneTree
 ## Every hardware frame of a map's tileset animation: which of the tileset's tiles
 ## `_AnimateTileset` rewrote, where the command list stands, and what the two
 ## palette commands are holding. The port half of
-## `.claude/oracle/overworld/trace_tiles.py`, which reads vTiles2 once a frame. The
+## the hardware tile trace, which reads vTiles2 once a frame. The
 ## line is `frame anim_frame timer water cave tiles`, and `anim_frame` is read after
 ## the frame is spent, which is where `hTileAnimFrame` stands on that side.
 ## Arguments: `<game> <group> <map> <frames> <out.txt> [time_of_day]`.
@@ -19,7 +19,7 @@ func _run() -> void:
 		push_error("usage: <game> <group> <map> <frames> <out.txt> [time_of_day]")
 		quit(2)
 		return
-	if Gen2ToolPath.refuses(args[4]):
+	if PokeToolPath.refuses(args[4]):
 		quit(2)
 		return
 	var data: GameData = GameData.open(StringName(args[0]))

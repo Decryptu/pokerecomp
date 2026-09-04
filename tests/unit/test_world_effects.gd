@@ -164,7 +164,7 @@ func test_a_jump_shadow_is_two_mirrored_tiles_under_the_jumper() -> void:
 ## offsets are read out of rather than derived from.
 func _sine_bytes() -> PackedByteArray:
 	var out := PackedByteArray()
-	for value: int in RomLayout.BATTLE_ANIM_SINE_WAVE:
+	for value: int in Gen2Layout.BATTLE_ANIM_SINE_WAVE:
 		out.append(value)
 	return out
 
@@ -380,7 +380,7 @@ func test_an_actor_naming_art_that_is_not_there_draws_nothing() -> void:
 	var actor := TestActor.new()
 	actor.out = [
 		{"icon": 0, "position_cells": Vector2.ZERO},
-		{"icon": RomLayout.MON_ICON_COUNT + 1, "position_cells": Vector2.ZERO},
+		{"icon": Gen2Layout.MON_ICON_COUNT + 1, "position_cells": Vector2.ZERO},
 		{"position_cells": Vector2.ZERO},
 		"not a sprite",
 	]
@@ -533,12 +533,12 @@ func test_a_consumed_press_recollects_the_sprites() -> void:
 	RomCache.clear(ActorFixture.directory())
 
 
-## An index outside `RomLayout.EMOTE_NAMES` is no emote rather than a wrong
+## An index outside `Gen2Layout.EMOTE_NAMES` is no emote rather than a wrong
 ## sheet, the way art the cache does not carry is dropped.
 func test_an_out_of_range_emote_is_no_emote() -> void:
 	var world: Gen2WorldAPI = _actor_world()
 	var actor := TestActor.new()
-	actor.out = [{"icon": 1, "position_cells": Vector2.ZERO, "emote": RomLayout.EMOTE_COUNT}]
+	actor.out = [{"icon": 1, "position_cells": Vector2.ZERO, "emote": Gen2Layout.EMOTE_COUNT}]
 	var actors := Gen2WorldActors.new()
 	actors.set_actors([actor])
 	actors.set_world(world)

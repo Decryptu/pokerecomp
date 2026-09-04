@@ -103,17 +103,17 @@ func handle_button(button: int) -> bool:
 		Gen2CardFlip.Prompt.YES_NO:
 			_handle_yes_no_button(button)
 		Gen2CardFlip.Prompt.PRESS:
-			if button == Gen2Button.A or button == Gen2Button.B:
+			if button == PokeButton.A or button == PokeButton.B:
 				_game.dismiss_text()
 				_drain()
 		Gen2CardFlip.Prompt.BET:
-			if button == Gen2Button.A:
+			if button == PokeButton.A:
 				_game.press_a()
 			else:
 				_game.move_cursor(button)
 			_drain()
 		Gen2CardFlip.Prompt.CHOOSE:
-			if button == Gen2Button.A:
+			if button == PokeButton.A:
 				_game.press_a()
 			_drain()
 		_:
@@ -125,17 +125,17 @@ func handle_button(button: int) -> bool:
 ## `PlaceYesNoBox`, which opens on YES and takes B as NO.
 func _handle_yes_no_button(button: int) -> void:
 	match button:
-		Gen2Button.UP:
+		PokeButton.UP:
 			_yes_no_cursor = 1
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			_yes_no_cursor = 2
-		Gen2Button.A:
+		PokeButton.A:
 			_text = ""
 			var yes: bool = _yes_no_cursor == 1
 			_yes_no_cursor = 1
 			_game.answer_yes_no(yes)
 			_drain()
-		Gen2Button.B:
+		PokeButton.B:
 			_text = ""
 			_yes_no_cursor = 1
 			_game.answer_yes_no(false)

@@ -140,7 +140,7 @@ func test_an_unown_letter_is_unlocked_by_any_set_that_holds_it() -> void:
 		for letter: int in one_set:
 			assert_false(seen.has(letter), "letter %d is in two sets" % letter)
 			seen[letter] = true
-	assert_eq(seen.size(), RomLayout.UNOWN_FORMS)
+	assert_eq(seen.size(), Gen2Layout.UNOWN_FORMS)
 
 
 ## BIKEFLAGS_STRENGTH_ACTIVE_F sits three flags ahead of ENGINE_ZEPHYRBADGE, so
@@ -506,18 +506,18 @@ func test_roaming_does_not_roll_without_an_injected_generator() -> void:
 ## way the radio knob beside it does.
 func test_the_last_dex_mode_round_trips() -> void:
 	var state := Gen2WorldState.new()
-	assert_eq(state.last_dex_mode(), RomLayout.DEXMODE_NEW, "a fresh state opens on NEW")
-	state.set_last_dex_mode(RomLayout.DEXMODE_ABC)
+	assert_eq(state.last_dex_mode(), Gen2Layout.DEXMODE_NEW, "a fresh state opens on NEW")
+	state.set_last_dex_mode(Gen2Layout.DEXMODE_ABC)
 	var restored := Gen2WorldState.from_dict(state.to_dict())
-	assert_eq(restored.last_dex_mode(), RomLayout.DEXMODE_ABC)
+	assert_eq(restored.last_dex_mode(), Gen2Layout.DEXMODE_ABC)
 
 
 ## DEXMODE_UNOWN is the Unown dex rather than a listing order, and never becomes
 ## wCurDexMode, so it is refused rather than stored.
 func test_the_unown_dex_is_not_a_listing_mode() -> void:
 	var state := Gen2WorldState.new()
-	state.set_last_dex_mode(RomLayout.DEXMODE_UNOWN)
-	assert_eq(state.last_dex_mode(), RomLayout.DEXMODE_NEW)
+	state.set_last_dex_mode(Gen2Layout.DEXMODE_UNOWN)
+	assert_eq(state.last_dex_mode(), Gen2Layout.DEXMODE_NEW)
 
 
 ## `UpdateUnownDex` walks to the first empty slot: a form already listed keeps
@@ -531,7 +531,7 @@ func test_the_unown_dex_appends_in_catching_order_and_never_twice() -> void:
 
 	# A form outside the twenty-six is not a slot the loop can reach.
 	state.update_unown_dex(0)
-	state.update_unown_dex(RomLayout.UNOWN_FORMS + 1)
+	state.update_unown_dex(Gen2Layout.UNOWN_FORMS + 1)
 	assert_eq(state.unown_caught_count(), 3)
 
 	var restored := Gen2WorldState.from_dict(state.to_dict())

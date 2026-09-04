@@ -13,7 +13,7 @@ func before_each() -> void:
 
 
 func after_each() -> void:
-	for button: int in Gen2Button.ALL:
+	for button: int in PokeButton.ALL:
 		_runtime.release(button)
 	await get_tree().process_frame
 	_runtime.apply_options(Gen2Options.new())
@@ -35,60 +35,60 @@ func test_the_autoload_is_reachable_without_the_global_name() -> void:
 ## A synthesised press has to arrive both at the event handlers and at the polled
 ## state, or a screen would see the button and the walk would not.
 func test_a_pressed_button_reaches_the_polled_input_state() -> void:
-	_runtime.press(Gen2Button.A)
+	_runtime.press(PokeButton.A)
 	await _settle()
 	assert_true(Input.is_action_pressed(&"gen2_a"))
 
-	_runtime.release(Gen2Button.A)
+	_runtime.release(PokeButton.A)
 	await _settle()
 	assert_false(Input.is_action_pressed(&"gen2_a"))
 
 
 func test_pressing_nothing_is_harmless() -> void:
-	_runtime.press(Gen2Button.NONE)
+	_runtime.press(PokeButton.NONE)
 	await _settle()
-	assert_eq(_runtime.held_direction(), Gen2Button.NONE)
+	assert_eq(_runtime.held_direction(), PokeButton.NONE)
 
 
 ## Turning a corner means pressing the next direction before releasing the last,
 ## so the newest held one wins and the walk turns rather than stalling.
 func test_the_newest_held_direction_wins_and_the_older_one_survives_it() -> void:
-	_runtime.press(Gen2Button.UP)
+	_runtime.press(PokeButton.UP)
 	await _settle()
-	assert_eq(_runtime.held_direction(), Gen2Button.UP)
+	assert_eq(_runtime.held_direction(), PokeButton.UP)
 
-	_runtime.press(Gen2Button.LEFT)
+	_runtime.press(PokeButton.LEFT)
 	await _settle()
-	assert_eq(_runtime.held_direction(), Gen2Button.LEFT)
+	assert_eq(_runtime.held_direction(), PokeButton.LEFT)
 
-	_runtime.release(Gen2Button.LEFT)
+	_runtime.release(PokeButton.LEFT)
 	await _settle()
-	assert_eq(_runtime.held_direction(), Gen2Button.UP)
+	assert_eq(_runtime.held_direction(), PokeButton.UP)
 
-	_runtime.release(Gen2Button.UP)
+	_runtime.release(PokeButton.UP)
 	await _settle()
-	assert_eq(_runtime.held_direction(), Gen2Button.NONE)
+	assert_eq(_runtime.held_direction(), PokeButton.NONE)
 
 
 func test_the_active_device_follows_the_events() -> void:
 	_runtime._input(InputEventKey.new())
-	assert_eq(_runtime.device(), Gen2InputDevice.KEYBOARD)
+	assert_eq(_runtime.device(), PokeInputDevice.KEYBOARD)
 
 	_runtime._input(InputEventJoypadButton.new())
-	assert_eq(_runtime.device(), Gen2InputDevice.GAMEPAD)
+	assert_eq(_runtime.device(), PokeInputDevice.GAMEPAD)
 
 	_runtime._input(InputEventScreenTouch.new())
-	assert_eq(_runtime.device(), Gen2InputDevice.TOUCH)
+	assert_eq(_runtime.device(), PokeInputDevice.TOUCH)
 
 
 ## A knocked desk should not hide the interface a pad player is looking at.
 func test_mouse_motion_alone_does_not_change_the_device() -> void:
 	_runtime._input(InputEventJoypadButton.new())
 	_runtime._input(InputEventMouseMotion.new())
-	assert_eq(_runtime.device(), Gen2InputDevice.GAMEPAD)
+	assert_eq(_runtime.device(), PokeInputDevice.GAMEPAD)
 
 	_runtime._input(InputEventMouseButton.new())
-	assert_eq(_runtime.device(), Gen2InputDevice.MOUSE)
+	assert_eq(_runtime.device(), PokeInputDevice.MOUSE)
 
 
 func test_automatic_shows_the_controller_only_while_a_finger_is_on_the_screen() -> void:
@@ -119,12 +119,12 @@ func test_a_phone_key_does_not_put_the_on_screen_controller_away() -> void:
 	back.physical_keycode = KEY_BACK
 	back.pressed = true
 	_runtime._input(back)
-	assert_eq(_runtime.device(), Gen2InputDevice.TOUCH, "Back is the phone, not a keyboard")
+	assert_eq(_runtime.device(), PokeInputDevice.TOUCH, "Back is the phone, not a keyboard")
 	assert_true(_runtime.touch_controls_shown(), "and the controller stays up")
 
 	_runtime._input(InputEventJoypadButton.new())
 	assert_false(_runtime.touch_controls_shown(), "a pad plugged into it still does")
-	_runtime._handheld = Gen2InputDevice.is_handheld()
+	_runtime._handheld = PokeInputDevice.is_handheld()
 
 
 func test_the_pinned_modes_ignore_the_device() -> void:
@@ -141,8 +141,8 @@ func test_the_pinned_modes_ignore_the_device() -> void:
 
 func test_applying_a_scheme_installs_it_in_the_input_map() -> void:
 	var options := Gen2Options.new()
-	options.controls[Gen2Button.START] = [
-		{"kind": Gen2InputActions.KIND_KEY, "code": KEY_F9},
+	options.controls[PokeButton.START] = [
+		{"kind": PokeInputActions.KIND_KEY, "code": KEY_F9},
 	]
 	_runtime.apply_options(options)
 
@@ -174,11 +174,11 @@ func test_a_held_direction_repeats_at_the_source_rate_and_not_faster() -> void:
 	assert_true(_runtime._gate_direction_repeat(down))
 
 	## The repeat the gate owes, spent as frames rather than as presses.
-	_runtime.press(Gen2Button.DOWN)
+	_runtime.press(PokeButton.DOWN)
 	await _settle()
 	assert_eq(_spend(Gen2InputRuntime.REPEAT_DELAY_FRAMES + 1), 1,
 		"one repeat in the first fifteen frames, not fifteen")
-	_runtime.release(Gen2Button.DOWN)
+	_runtime.release(PokeButton.DOWN)
 	await _settle()
 
 
@@ -210,13 +210,13 @@ func test_a_held_direction_lets_go_the_moment_the_key_does() -> void:
 	Input.parse_input_event(_key(true))
 	_runtime._input(_key(true))
 	await _settle()
-	assert_eq(_runtime.held_direction(), Gen2Button.DOWN)
+	assert_eq(_runtime.held_direction(), PokeButton.DOWN)
 	assert_gt(_spend(120), 15, "two seconds of a held key is repeating")
 
 	Input.parse_input_event(_key(false))
 	await _settle()
 	assert_false(Input.is_action_pressed(&"gen2_down"), "a repeat must not latch it")
-	assert_eq(_runtime.held_direction(), Gen2Button.NONE, "the walk stops with the key")
+	assert_eq(_runtime.held_direction(), PokeButton.NONE, "the walk stops with the key")
 	assert_eq(_spend(120), 0, "and so does the menu")
 
 
@@ -230,9 +230,9 @@ func test_the_reset_chord_is_reported_once_while_it_is_held() -> void:
 	await _settle()
 	await _settle()
 	assert_eq(fired.size(), 1, "held for four frames, reported once")
-	_runtime.release(Gen2Button.SELECT)
+	_runtime.release(PokeButton.SELECT)
 	await _settle()
-	_runtime.press(Gen2Button.SELECT)
+	_runtime.press(PokeButton.SELECT)
 	await _settle()
 	assert_eq(fired.size(), 2, "let go and pressed again is a second reset")
 	for button: int in Gen2InputRuntime.RESET_CHORD:

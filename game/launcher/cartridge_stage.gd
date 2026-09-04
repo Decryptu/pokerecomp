@@ -164,11 +164,11 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _step_by(event: InputEvent) -> bool:
-	match Gen2Button.direction_in(event):
-		Gen2Button.LEFT:
+	match PokeButton.direction_in(event):
+		PokeButton.LEFT:
 			step(-1)
 			return true
-		Gen2Button.RIGHT:
+		PokeButton.RIGHT:
 			step(1)
 			return true
 	return false

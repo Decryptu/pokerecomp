@@ -167,7 +167,7 @@ func _verify_cursor_walk() -> void:
 	while not pending.is_empty():
 		var at: Vector2i = pending.pop_back()
 		for button: int in [
-			Gen2Button.LEFT, Gen2Button.RIGHT, Gen2Button.UP, Gen2Button.DOWN
+			PokeButton.LEFT, PokeButton.RIGHT, PokeButton.UP, PokeButton.DOWN
 		]:
 			var path: PackedInt32Array = (paths[at] as PackedInt32Array).duplicate()
 			path.append(button)
@@ -209,7 +209,7 @@ func _bet_ready(seed_value: int) -> Gen2CardFlip:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 	var board := PackedByteArray()
-	board.resize(RomLayout.CARD_FLIP_TILEMAP_BYTES)
+	board.resize(Gen2Layout.CARD_FLIP_TILEMAP_BYTES)
 	var game: Gen2CardFlip = Gen2CardFlip.create(board, 100, rng)
 	for _frame: int in GAME_FRAME_CAP:
 		if game.prompt() == Gen2CardFlip.Prompt.BET:
@@ -235,25 +235,25 @@ func _verify_section(game_id: StringName, data: GameData) -> void:
 	if not _r.check(rom != null, "%s: roms/%s.gbc is unreadable." % [game_id, game_id]):
 		return
 	var section: Dictionary = RomImporter.read_card_flip_section(
-		rom, RomLayout.for_id(rom.id)
+		rom, Gen2Layout.for_id(rom.id)
 	)
 	if not _r.check(
-		section.size() == RomLayout.CARD_FLIP_SECTION.size() + 1,
+		section.size() == Gen2Layout.CARD_FLIP_SECTION.size() + 1,
 		"%s: the card flip section walked %d records, not %d." % [
-			game_id, section.size(), RomLayout.CARD_FLIP_SECTION.size() + 1
+			game_id, section.size(), Gen2Layout.CARD_FLIP_SECTION.size() + 1
 		]
 	):
 		return
 	for name: String in SECTION:
 		var tiles: int = int(SECTION[name])
 		_r.check(
-			int(section[name].size()) == tiles * Gen2Tiles.TILE_BYTES,
+			int(section[name].size()) == tiles * PokeTiles.TILE_BYTES,
 			"%s: %s is %d bytes, not %d tiles." % [
 				game_id, name, section[name].size(), tiles
 			]
 		)
 		_r.check(
-			data.card_flip_indices(name) == Gen2Tiles.decode_2bpp_strip(
+			data.card_flip_indices(name) == PokeTiles.decode_2bpp_strip(
 				section[name], 0, tiles
 			),
 			"%s: the cached %s strip is not the dump's." % [game_id, name]
@@ -262,14 +262,14 @@ func _verify_section(game_id: StringName, data: GameData) -> void:
 		Array(data.card_flip_tilemap()) == BOARD,
 		"%s: the cached tilemap is not `CardFlipTilemap`." % game_id
 	)
-	for index: int in RomLayout.CARD_FLIP_PALETTES:
+	for index: int in Gen2Layout.CARD_FLIP_PALETTES:
 		_r.check(
-			data.card_flip_palette(index).size() == RomLayout.PREDEF_PALETTE_COLORS,
+			data.card_flip_palette(index).size() == Gen2Layout.PREDEF_PALETTE_COLORS,
 			"%s: card flip palette %d is not four colours." % [game_id, index]
 		)
 	_r.note("%s: %d card flip records, %d tiles, %d tilemap cells, %d palettes." % [
 		game_id, SECTION.size(), 7 + 1 + 1 + 62 + 52, BOARD.size(),
-		RomLayout.CARD_FLIP_PALETTES
+		Gen2Layout.CARD_FLIP_PALETTES
 	])
 
 
@@ -295,7 +295,7 @@ func _verify_cards(game_id: StringName, data: GameData) -> void:
 	for card: int in DECK.size():
 		var row: Array = DECK[card]
 		_r.check(
-			RomLayout.FONT_DIGIT_ZERO_CODE + ((card & 0x1C) >> 2) + 1
+			Gen2Layout.FONT_DIGIT_ZERO_CODE + ((card & 0x1C) >> 2) + 1
 				== int(Gen2Text.encode(String(row[0]))[0]),
 			"%s: card %d is not level %s." % [game_id, card, row[0]]
 		)

@@ -241,7 +241,7 @@ func import_mod_path(path: String, replace: bool = false) -> Dictionary:
 	if StringName(result.get("reason", &"")) == &"already_installed":
 		_confirm_mod_replace(path, String(result.get("detail", "That mod")))
 		return result
-	_set_status(&"error", "That mod was not installed.", Gen2ModRefusal.text(result))
+	_set_status(&"error", "That mod was not installed.", PokeModRefusal.text(result))
 	return result
 
 
@@ -311,11 +311,11 @@ func check_for_updates() -> void:
 	if _importing or _update_http == null:
 		return
 	_about.set_update_result("Checking...", _palette.muted)
-	_set_status(&"busy", "Checking for updates...", Gen2UpdateCheck.RELEASES_API)
+	_set_status(&"busy", "Checking for updates...", PokeUpdateCheck.RELEASES_API)
 	var headers: PackedStringArray = PackedStringArray([
 		"Accept: application/vnd.github+json",
 	])
-	if _update_http.request(Gen2UpdateCheck.RELEASES_API, headers) != OK:
+	if _update_http.request(PokeUpdateCheck.RELEASES_API, headers) != OK:
 		_set_status(&"error", "The update check could not start.", "No request was made.")
 
 
@@ -323,26 +323,26 @@ func _on_update_response(
 	result: int, code: int, _headers: PackedStringArray, body: PackedByteArray
 ) -> void:
 	if result != HTTPRequest.RESULT_SUCCESS:
-		var offline: String = "This build is %s." % Gen2UpdateCheck.current_version()
+		var offline: String = "This build is %s." % PokeUpdateCheck.current_version()
 		_about.set_update_result("The check did not reach the network.", _palette.error)
 		_set_status(&"error", "The update check did not reach the network.", offline)
 		return
-	var status: Dictionary = Gen2UpdateCheck.status_for(code, body.get_string_from_utf8())
+	var status: Dictionary = PokeUpdateCheck.status_for(code, body.get_string_from_utf8())
 	var kind: StringName = &"info"
 	var colour: Color = _palette.muted
 	match int(status["status"]):
-		Gen2UpdateCheck.Status.UPDATE_AVAILABLE:
+		PokeUpdateCheck.Status.UPDATE_AVAILABLE:
 			kind = &"info"
 			colour = _palette.accent
-		Gen2UpdateCheck.Status.UP_TO_DATE:
+		PokeUpdateCheck.Status.UP_TO_DATE:
 			kind = &"success"
 			colour = _palette.success
-		Gen2UpdateCheck.Status.UNREADABLE:
+		PokeUpdateCheck.Status.UNREADABLE:
 			kind = &"error"
 			colour = _palette.error
-	var message: String = Gen2UpdateCheck.describe(status)
+	var message: String = PokeUpdateCheck.describe(status)
 	_about.set_update_result(message, colour)
-	_set_status(kind, message, String(status.get("url", Gen2UpdateCheck.RELEASES_PAGE)))
+	_set_status(kind, message, String(status.get("url", PokeUpdateCheck.RELEASES_PAGE)))
 
 
 func _open_manage_sheet(game_id: StringName) -> void:
@@ -388,7 +388,7 @@ func _open_manage_sheet(game_id: StringName) -> void:
 		_art_dialog.show_picker(Vector2i(920, 620))
 	)
 	body.add_child(art)
-	if Gen2CartridgeArt.has_custom_art(game_id):
+	if PokeCartridgeArt.has_custom_art(game_id):
 		var default_art: Gen2LauncherButton = Gen2LauncherButton.create(
 			_palette, "Use the default art", Gen2LauncherButton.Variant.NEUTRAL, &"refresh"
 		)
@@ -456,12 +456,12 @@ static func _cache_state_copy(state: StringName, column: int) -> String:
 func adopt_cartridge_art(path: String) -> Dictionary:
 	var game_id: StringName = _art_game_id
 	_art_game_id = &""
-	var taken: Dictionary = Gen2CartridgeArt.adopt(game_id, path)
+	var taken: Dictionary = PokeCartridgeArt.adopt(game_id, path)
 	if not bool(taken.get("ok", false)):
 		_set_status(
 			&"error",
 			"That art was not used.",
-			Gen2CartridgeArt.refusal_text(StringName(taken.get("reason", &""))),
+			PokeCartridgeArt.refusal_text(StringName(taken.get("reason", &""))),
 		)
 		return taken
 	_refresh_cartridge_art(game_id)
@@ -474,7 +474,7 @@ func adopt_cartridge_art(path: String) -> Dictionary:
 
 
 func revert_cartridge_art(game_id: StringName) -> void:
-	if not Gen2CartridgeArt.revert(game_id):
+	if not PokeCartridgeArt.revert(game_id):
 		return
 	_refresh_cartridge_art(game_id)
 	_set_status(
@@ -580,6 +580,14 @@ func preview_slot_states(states: Dictionary) -> void:
 	_refresh_backdrop()
 
 
+## Preview seam: turns the carousel without a press, so a shelf longer than the
+## three cartridges on screen can be photographed whole.
+func preview_select_cartridge(game_id: StringName) -> void:
+	var index: int = RomRegistry.ORDER.find(game_id)
+	if index >= 0:
+		_shelf.stage().select(index, false)
+
+
 ## Preview seam: opens one of the mods page's own views, so a mod's page and
 ## the sources page can be photographed without a press.
 func preview_mods_view(view: StringName, id: StringName = &"") -> void:
@@ -635,7 +643,7 @@ func preview_sheet(view: StringName) -> void:
 		&"binding":
 			select_page(&"settings")
 			var sheet: Gen2BindingSheet = Gen2BindingSheet.for_button(
-				_palette, Gen2OptionsStore.current(), Gen2Button.A
+				_palette, Gen2OptionsStore.current(), PokeButton.A
 			)
 			sheet.open(self)
 		&"delete_mod":
@@ -656,6 +664,15 @@ func preview_theme(wanted: StringName) -> void:
 ## scene change so the sound and the movement both finish on this screen.
 func _launch_game(game_id: StringName) -> void:
 	if _importing:
+		return
+	# Both ways in, the shelf hint and a press on the stage, arrive here, so this
+	# is the one place a cartridge with no world behind it is turned away.
+	if not RomRegistry.is_playable(game_id):
+		_set_status(
+			&"info",
+			"%s is not playable yet." % RomRegistry.title_for(game_id),
+			"Its cartridge is read and cached; the world is not built.",
+		)
 		return
 	var data: GameData = GameData.open(game_id)
 	if data == null:
@@ -741,13 +758,12 @@ func _on_file_selected(path: String) -> void:
 	# The layout check reads the whole overworld once, which is most of a second
 	# on a phone, and it is the last thing before the import proper.
 	await get_tree().process_frame
-	var layout_check: Dictionary = RomImporter.verify_layout(rom)
+	var layout_check: Dictionary = RomImport.verify_layout(rom)
 	if not layout_check["ok"]:
 		_finish_import(false, String(layout_check["message"]))
 		return
 
-	var importer := RomImporter.new()
-	var result: Dictionary = await importer.import_rom(
+	var result: Dictionary = await RomImport.import_rom(
 		rom, _on_import_progress, IMPORT_YIELD_MS
 	)
 	if not result["ok"]:

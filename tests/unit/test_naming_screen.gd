@@ -33,36 +33,36 @@ func after_each() -> void:
 func _write_cache() -> void:
 	var tables: Array = []
 	for table: int in TABLE_ROWS.size():
-		var first: int = RomLayout.NAME_INPUT_LOWER_A if table < 2 else RomLayout.NAME_INPUT_UPPER_A
+		var first: int = Gen2Layout.NAME_INPUT_LOWER_A if table < 2 else Gen2Layout.NAME_INPUT_UPPER_A
 		var rows: Array = []
 		for row: int in TABLE_ROWS[table]:
 			if row == TABLE_ROWS[table] - 1:
 				rows.append(Array(
-					RomLayout.NAME_INPUT_COMMAND_LOWER if table < 2
-					else RomLayout.NAME_INPUT_COMMAND_UPPER
+					Gen2Layout.NAME_INPUT_COMMAND_LOWER if table < 2
+					else Gen2Layout.NAME_INPUT_COMMAND_UPPER
 				))
 				continue
 			var codes: Array[int] = []
-			for column: int in RomLayout.NAME_INPUT_COLUMNS:
-				codes.append(first + row * RomLayout.NAME_INPUT_COLUMNS + column)
+			for column: int in Gen2Layout.NAME_INPUT_COLUMNS:
+				codes.append(first + row * Gen2Layout.NAME_INPUT_COLUMNS + column)
 			rows.append(_spread(codes))
 		tables.append(rows)
 	## `mail_input_chars.asm`'s two behind them, ten columns rather than nine.
-	for table: int in RomLayout.MAIL_INPUT_TABLES:
-		var first: int = RomLayout.MAIL_INPUT_UPPER_A if table == 0 \
-			else RomLayout.MAIL_INPUT_LOWER_A
+	for table: int in Gen2Layout.MAIL_INPUT_TABLES:
+		var first: int = Gen2Layout.MAIL_INPUT_UPPER_A if table == 0 \
+			else Gen2Layout.MAIL_INPUT_LOWER_A
 		var rows: Array = []
-		for row: int in RomLayout.MAIL_INPUT_TABLE_ROWS:
-			if row == RomLayout.MAIL_INPUT_TABLE_ROWS - 1:
+		for row: int in Gen2Layout.MAIL_INPUT_TABLE_ROWS:
+			if row == Gen2Layout.MAIL_INPUT_TABLE_ROWS - 1:
 				rows.append(Array(
-					RomLayout.MAIL_INPUT_COMMAND_UPPER if table == 0
-					else RomLayout.MAIL_INPUT_COMMAND_LOWER
+					Gen2Layout.MAIL_INPUT_COMMAND_UPPER if table == 0
+					else Gen2Layout.MAIL_INPUT_COMMAND_LOWER
 				))
 				continue
 			var codes: Array[int] = []
-			for column: int in RomLayout.MAIL_INPUT_COLUMNS:
-				codes.append(first + row * RomLayout.MAIL_INPUT_COLUMNS + column)
-				if column < RomLayout.MAIL_INPUT_COLUMNS - 1:
+			for column: int in Gen2Layout.MAIL_INPUT_COLUMNS:
+				codes.append(first + row * Gen2Layout.MAIL_INPUT_COLUMNS + column)
+				if column < Gen2Layout.MAIL_INPUT_COLUMNS - 1:
 					codes.append(SPACE)
 			rows.append(codes)
 		tables.append(rows)
@@ -82,9 +82,9 @@ func _write_cache() -> void:
 
 func _spread(values: Array) -> Array:
 	var row: Array[int] = []
-	for column: int in RomLayout.NAME_INPUT_COLUMNS:
+	for column: int in Gen2Layout.NAME_INPUT_COLUMNS:
 		row.append(int(values[column]))
-		if column < RomLayout.NAME_INPUT_COLUMNS - 1:
+		if column < Gen2Layout.NAME_INPUT_COLUMNS - 1:
 			row.append(SPACE)
 	return row
 
@@ -96,8 +96,8 @@ func _screen() -> Gen2NamingScreen:
 ## The code the generated keyboard puts at a cell, so a test can say which key
 ## the cursor is standing on.
 func _letter(upper: bool, row: int, column: int) -> int:
-	var first: int = RomLayout.NAME_INPUT_UPPER_A if upper else RomLayout.NAME_INPUT_LOWER_A
-	return first + row * RomLayout.NAME_INPUT_COLUMNS + column
+	var first: int = Gen2Layout.NAME_INPUT_UPPER_A if upper else Gen2Layout.NAME_INPUT_LOWER_A
+	return first + row * Gen2Layout.NAME_INPUT_COLUMNS + column
 
 
 func _type(screen: Gen2NamingScreen, cells: Array) -> void:
@@ -375,17 +375,17 @@ func test_a_screen_without_keyboards_reads_no_character() -> void:
 func test_the_mail_keyboard_is_six_rows_of_ten() -> void:
 	var mail: Gen2NamingScreen = Gen2NamingScreen.for_mail(_data)
 	assert_true(mail.is_mail)
-	assert_eq(mail.row_count(), RomLayout.MAIL_INPUT_TABLE_ROWS)
-	assert_eq(mail.command_row(), RomLayout.MAIL_INPUT_TABLE_ROWS - 1)
+	assert_eq(mail.row_count(), Gen2Layout.MAIL_INPUT_TABLE_ROWS)
+	assert_eq(mail.command_row(), Gen2Layout.MAIL_INPUT_TABLE_ROWS - 1)
 	assert_eq(mail.last_column(), Gen2NamingScreen.MAIL_LAST_COLUMN)
-	assert_eq(mail.rows().size(), RomLayout.MAIL_INPUT_TABLE_ROWS)
+	assert_eq(mail.rows().size(), Gen2Layout.MAIL_INPUT_TABLE_ROWS)
 	assert_eq(mail.keyboard(), Gen2NamingScreen.Keyboard.MAIL_UPPER)
 	mail.press_select()
 	assert_eq(mail.keyboard(), Gen2NamingScreen.Keyboard.MAIL_LOWER)
 	## `.start` sets VAR1 to $9 and VAR2 to $5, which is the tenth column.
 	mail.press_start()
 	assert_eq(mail.column, Gen2NamingScreen.MAIL_LAST_COLUMN)
-	assert_eq(mail.row, RomLayout.MAIL_INPUT_TABLE_ROWS - 1)
+	assert_eq(mail.row, Gen2Layout.MAIL_INPUT_TABLE_ROWS - 1)
 
 
 ## `.InitBlankMail`'s `ld [hl], '<NEXT>'`, and the `wNamingScreenMaxNameLength`
@@ -427,6 +427,6 @@ func test_a_stored_mail_entry_keeps_its_break_and_terminates_the_rest() -> void:
 	mail.press_a()
 	var stored: PackedByteArray = mail.stored_entry()
 	assert_eq(stored.size(), Gen2SaveMail.BUFFER_LENGTH)
-	assert_eq(stored[0], RomLayout.MAIL_INPUT_UPPER_A)
+	assert_eq(stored[0], Gen2Layout.MAIL_INPUT_UPPER_A)
 	assert_eq(stored[1], Gen2NamingScreen.TERMINATOR)
 	assert_eq(int(stored[Gen2SaveMail.LINE_LENGTH]), Gen2SaveMail.LINE_BREAK)

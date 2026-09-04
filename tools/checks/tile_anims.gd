@@ -4,7 +4,7 @@ var _r: RefCounted = null
 
 ## Every tileset's `wTilesetAnim` command list, on all three cartridges, run for a
 ## whole cycle. The list and its commands are byte identical between the pins apart
-## from the addresses `RomLayout`'s `world_animation_functions` names. What a
+## from the addresses `Gen2Layout`'s `world_animation_functions` names. What a
 ## reading of them costs is which command ticks `wTileAnimationTimer`:
 ## `StandingTileFrame8` and `StandingTileFrame` do, and so does
 ## `ScrollTileRightLeft`, which is the **only** tick the cave, dark cave and ice

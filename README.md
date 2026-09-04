@@ -13,11 +13,12 @@
   <a href="https://x.com/DecryptTV"><img src="https://img.shields.io/badge/follow-%40DecryptTV-000000?style=flat-square&logo=x&logoColor=white" alt="X"></a>
 </p>
 
-A native [Godot 4](https://godotengine.org) reimplementation of Generation 2
-Game Boy Color games Gold, Silver and Crystal. It is written from scratch in
-GDScript, not an emulator, static recompilation or disassembly. A user-supplied
-cartridge dump is SHA-1 verified, decoded once into a cache, then released. No
-game data ships here: bring your own ROM.
+A native [Godot 4](https://godotengine.org) reimplementation of the Game Boy
+Pokémon games. Gold, Silver and Crystal are playable end to end; Red, Blue and
+Yellow are read and cached, and their world is being built. It is written from
+scratch in GDScript, not an emulator, static recompilation or disassembly. A
+user-supplied cartridge dump is SHA-1 verified, decoded once into a cache, then
+released. No game data ships here: bring your own ROM.
 
 ## Download
 
@@ -58,7 +59,7 @@ The About page tells you when a newer release exists. It does not install it:
 download the new file and replace the old one. Saves live elsewhere and survive.
 
 <p align="center">
-  <img src="assets/brand/launcher.webp" alt="The launcher's Play page, a shelf of three cartridges" width="820">
+  <img src="assets/brand/launcher.webp" alt="The launcher's Play page, a shelf of cartridges" width="820">
 </p>
 
 ## Getting started
@@ -77,10 +78,15 @@ godot --headless --path . -s res://tools/verify_rom.gd
 ```
 
 Matching uses SHA-1, never filenames. Unknown hashes are refused because an
-uncharacterised bank layout could produce corrupt assets.
+uncharacterised bank layout could produce corrupt assets. The three Generation 1
+cartridges import their species, move, type, item and trainer tables; the
+launcher seats one and does not offer Play until its world is built.
 
 | Game | SHA-1 |
 |---|---|
+| Red (USA/Europe) | `ea9bcae617fdf159b045185467ae58b2e4a48b9a` |
+| Blue (USA/Europe) | `d7037c83e1ae5b39bde3c30787637ba1d4c48ce2` |
+| Yellow (USA/Europe) | `cc7d03262ebfaf2f06772c1a480c7d9d5f4a38e1` |
 | Gold (USA/Europe) | `d8b8a3600a465308c9953dfa04f0081c05bdcb94` |
 | Silver (USA/Europe) | `49b163f7e57702bc939d642a18f591de55d92dae` |
 | Crystal (USA/Europe Rev 1) | `f2f52230b536214ef7c9924f483392993e226cfb` |
@@ -132,7 +138,7 @@ rendering needs no duplicate images.
 godot --headless --path . --quit-after 30
 ```
 
-The launcher is a shelf of three cartridges. An unimported bay is drawn in the
+The launcher is a shelf of six cartridges. An unimported bay is drawn in the
 cartridge's own outline: drop a dump on it, or click to browse. Mods, settings
 and about are in the dock underneath. Light and dark, and the same layout works
 on a phone. The clock and the charge across the top are the machine's own; a
@@ -346,8 +352,8 @@ godot --headless --path . -s res://tools/validate.gd -- all
 ```
 
 `tools/validate.gd` is the check suite: one topic per subject under
-`tools/checks/`, each run against all three cartridges. Name topics or a group,
-or `all`; with no argument it lists them.
+`tools/checks/`, each run against every cartridge of its generation. Name topics
+or a group, or `all`; with no argument it lists them.
 
 | Group | Topics |
 |---|---|
@@ -358,6 +364,7 @@ or `all`; with no argument it lists them.
 | `art` | Both intro movies, the credits, the region map, all 278 battle animations, the map name sign |
 | `tables` | TM/HM, naming, world scripts, the opening lane |
 | `trainers` | The Route 30 trainer on each profile |
+| `gen1` | Red, Blue and Yellow's species, move, type, item and trainer tables |
 
 The rest are previews and dumps, each driving a real screen or table:
 

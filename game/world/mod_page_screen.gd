@@ -86,16 +86,16 @@ func scroll() -> int:
 ## choose here, the way there is nothing to choose on a trainer card. B leaves.
 func handle_button(button: int) -> bool:
 	match button:
-		Gen2Button.B, Gen2Button.START:
+		PokeButton.B, PokeButton.START:
 			closed.emit()
 			return true
-		Gen2Button.UP:
+		PokeButton.UP:
 			return _scroll_by(-1)
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			return _scroll_by(1)
-		Gen2Button.LEFT:
+		PokeButton.LEFT:
 			return _scroll_by(-VISIBLE_ROWS)
-		Gen2Button.RIGHT:
+		PokeButton.RIGHT:
 			return _scroll_by(VISIBLE_ROWS)
 	return false
 

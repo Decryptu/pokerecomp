@@ -14,8 +14,8 @@ const MOVIE_GAMES: Array[StringName] = [&"gold", &"silver"]
 
 ## The palette runs outside the section, as their colour counts.
 const EXPECTED_PALETTES: Dictionary = {
-	"magikarp": RomLayout.GS_INTRO_MAGIKARP_PALETTES,
-	"shellder_lapras": RomLayout.GS_INTRO_SHELLDER_LAPRAS_PALETTES,
+	"magikarp": Gen2Layout.GS_INTRO_MAGIKARP_PALETTES,
+	"shellder_lapras": Gen2Layout.GS_INTRO_SHELLDER_LAPRAS_PALETTES,
 	"jigglypuff_pikachu_bg": 1,
 	"jigglypuff_pikachu_ob": 1,
 	"starters_transition": 1,
@@ -157,11 +157,11 @@ func _sprite_count(movie: Gen2GoldSilverIntro) -> int:
 ## own length, since pret checks those in as binary.
 func _verify_section(game_id: StringName, data: GameData) -> void:
 	var section: Dictionary = {}
-	for row: Array in RomLayout.GS_INTRO_SECTION:
+	for row: Array in Gen2Layout.GS_INTRO_SECTION:
 		var name: String = String(row[0])
 		var raw: PackedByteArray = data.gs_intro_map(name)
 		var wanted: int = int(row[2]) if String(row[1]) == "raw_bytes" \
-			else int(row[2]) * Gen2Tiles.TILE_WIDTH * Gen2Tiles.TILE_HEIGHT
+			else int(row[2]) * PokeTiles.TILE_WIDTH * PokeTiles.TILE_HEIGHT
 		_r.check(
 			raw.size() == wanted,
 			"%s: gs intro entry %s is %d bytes, not %d." % [
@@ -180,7 +180,7 @@ func _verify_metatiles(game_id: StringName, data: GameData) -> void:
 	for name: String in ["water", "grass"]:
 		var map: PackedByteArray = data.gs_intro_map("%s_tilemap" % name)
 		var meta: PackedByteArray = data.gs_intro_map("%s_meta" % name)
-		var metatiles: int = meta.size() / RomLayout.GS_INTRO_META_BYTES
+		var metatiles: int = meta.size() / Gen2Layout.GS_INTRO_META_BYTES
 		if not _r.check(
 			metatiles > 0, "%s: the %s metatile table is empty." % [game_id, name]
 		):
@@ -196,10 +196,10 @@ func _verify_metatiles(game_id: StringName, data: GameData) -> void:
 		)
 		# `Intro_DrawBackground` draws sixteen metatile rows of sixteen, so a map
 		# has to hold at least one screenful from wherever the scene starts in it.
-		var rows: int = map.size() / RomLayout.GS_INTRO_META_COLUMNS
-		var first: int = RomLayout.GS_INTRO_WATER_FIRST_ROW if name == "water" else 0
+		var rows: int = map.size() / Gen2Layout.GS_INTRO_META_COLUMNS
+		var first: int = Gen2Layout.GS_INTRO_WATER_FIRST_ROW if name == "water" else 0
 		_r.check(
-			rows >= first + RomLayout.GS_INTRO_META_COLUMNS,
+			rows >= first + Gen2Layout.GS_INTRO_META_COLUMNS,
 			"%s: the %s map is %d metatile rows, too few to draw from row %d." % [
 				game_id, name, rows, first,
 			]
@@ -208,7 +208,7 @@ func _verify_metatiles(game_id: StringName, data: GameData) -> void:
 
 func _verify_palettes(game_id: StringName, data: GameData) -> void:
 	for name: String in EXPECTED_PALETTES:
-		var wanted: int = int(EXPECTED_PALETTES[name]) * RomLayout.INTRO_PALETTE_COLORS
+		var wanted: int = int(EXPECTED_PALETTES[name]) * Gen2Layout.INTRO_PALETTE_COLORS
 		_r.check(
 			data.gs_intro_palette(name).size() == wanted,
 			"%s: gs intro palette %s is %d colours, not %d." % [
@@ -225,7 +225,7 @@ func _compare_cartridges() -> void:
 		return
 	var gold: Dictionary = _sections[&"gold"]
 	var silver: Dictionary = _sections[&"silver"]
-	for row: Array in RomLayout.GS_INTRO_SECTION:
+	for row: Array in Gen2Layout.GS_INTRO_SECTION:
 		var name: String = String(row[0])
 		_r.check(
 			PackedByteArray(gold[name]) == PackedByteArray(silver[name]),

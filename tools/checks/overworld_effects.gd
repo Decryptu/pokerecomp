@@ -57,9 +57,9 @@ func _check_game() -> void:
 		)
 		var indices: PackedByteArray = sheet["indices"]
 		if not _r.check(
-			indices.size() == int(row[1]) * Gen2Tiles.TILE_PIXELS,
+			indices.size() == int(row[1]) * PokeTiles.TILE_PIXELS,
 			"%s decoded %d pixels, not %d." % [
-				name, indices.size(), int(row[1]) * Gen2Tiles.TILE_PIXELS,
+				name, indices.size(), int(row[1]) * PokeTiles.TILE_PIXELS,
 			]
 		):
 			continue
@@ -86,7 +86,7 @@ func _check_game() -> void:
 				"the heal machine carries %d colours, not four." % colors.size()
 			):
 				for slot: int in colors.size():
-					var want: Color = Gen2Palette.from_packed(HEAL_MACHINE_COLORS[slot])
+					var want: Color = PokePalette.from_packed(HEAL_MACHINE_COLORS[slot])
 					_r.check(
 						colors[slot].is_equal_approx(want),
 						"heal machine colour %d is %s, not the source's %s." % [

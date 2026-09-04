@@ -107,7 +107,7 @@ func test_a_defined_species_reads_back_like_a_cartridge_one() -> void:
 			"types": [0, 0],
 			"learnset": [{"level": 1, "move": 1}, {"level": 7, "move": 2}],
 			"evolutions": [{
-				"method": RomLayout.EVOLVE_LEVEL, "parameter": 16, "condition": 0, "target": 1,
+				"method": Gen2Layout.EVOLVE_LEVEL, "parameter": 16, "condition": 0, "target": 1,
 			}],
 		}
 	).get("ok", false)))
@@ -213,17 +213,17 @@ func test_an_item_may_name_an_evolution_method_and_only_a_real_one() -> void:
 	assert_true(bool(host.register_content(
 		Gen2ContentOverlay.KIND_ITEM, MOD, Gen2ContentOverlay.FIRST_MOD_NUMBER, {
 			"name": "LINKING CORD",
-			"evolution": {"method": RomLayout.EVOLVE_TRADE},
+			"evolution": {"method": Gen2Layout.EVOLVE_TRADE},
 		}
 	).get("ok", false)))
 	assert_eq(
 		int(_data().item(Gen2ContentOverlay.FIRST_MOD_NUMBER)["evolution"]["method"]),
-		RomLayout.EVOLVE_TRADE
+		Gen2Layout.EVOLVE_TRADE
 	)
 	assert_true(_data().item(1).get("evolution", {}).is_empty(), "a cartridge item names none")
 	assert_false(bool(host.register_content(
 		Gen2ContentOverlay.KIND_ITEM, MOD, Gen2ContentOverlay.FIRST_MOD_NUMBER + 3, {
-			"evolution": {"method": RomLayout.EVOLVE_HAPPINESS},
+			"evolution": {"method": Gen2Layout.EVOLVE_HAPPINESS},
 		}
 	).get("ok", false)))
 	assert_false(bool(host.register_content(
@@ -424,7 +424,7 @@ func test_a_type_is_patched_at_zero_and_defined_past_the_cartridge() -> void:
 	# The stat pair a mod type uses is its own row's, since Generation II splits
 	# by type number and a number past the chart compares against nothing.
 	assert_true(data.type_is_physical(NEW_TYPE))
-	assert_false(data.type_is_physical(RomLayout.SPECIAL_TYPES_START))
+	assert_false(data.type_is_physical(Gen2Layout.SPECIAL_TYPES_START))
 	assert_true(Gen2Damage.is_physical(NEW_TYPE), "and the damage formula agrees")
 
 
@@ -442,25 +442,25 @@ func test_a_defined_type_defaults_to_the_special_side() -> void:
 func test_a_type_matchup_is_patched_by_its_pair() -> void:
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	assert_true(bool(host.patch_type_matchup(
-		MOD, NEW_TYPE, RomLayout.TYPE_NORMAL,
-		{"multiplier": RomLayout.MATCHUP_SUPER_EFFECTIVE}
+		MOD, NEW_TYPE, Gen2Layout.TYPE_NORMAL,
+		{"multiplier": Gen2Layout.MATCHUP_SUPER_EFFECTIVE}
 	).get("ok", false)))
 	assert_true(bool(host.patch_type_matchup(
-		MOD, RomLayout.TYPE_NORMAL, NEW_TYPE, {"multiplier": RomLayout.MATCHUP_NO_EFFECT}
+		MOD, Gen2Layout.TYPE_NORMAL, NEW_TYPE, {"multiplier": Gen2Layout.MATCHUP_NO_EFFECT}
 	).get("ok", false)))
 
 	var data: GameData = _data()
 	assert_eq(
-		data.type_matchup(NEW_TYPE, RomLayout.TYPE_NORMAL),
-		RomLayout.MATCHUP_SUPER_EFFECTIVE
+		data.type_matchup(NEW_TYPE, Gen2Layout.TYPE_NORMAL),
+		Gen2Layout.MATCHUP_SUPER_EFFECTIVE
 	)
 	assert_eq(
-		data.type_matchup(RomLayout.TYPE_NORMAL, NEW_TYPE), RomLayout.MATCHUP_NO_EFFECT,
+		data.type_matchup(Gen2Layout.TYPE_NORMAL, NEW_TYPE), Gen2Layout.MATCHUP_NO_EFFECT,
 		"the pair is ordered: attacking against defending is not its own reverse"
 	)
 	assert_eq(
-		data.type_matchup(RomLayout.TYPE_NORMAL, RomLayout.TYPE_NORMAL),
-		RomLayout.MATCHUP_EFFECTIVE,
+		data.type_matchup(Gen2Layout.TYPE_NORMAL, Gen2Layout.TYPE_NORMAL),
+		Gen2Layout.MATCHUP_EFFECTIVE,
 		"and a pair nobody named is still neutral"
 	)
 	assert_eq(
@@ -472,14 +472,14 @@ func test_a_type_matchup_is_patched_by_its_pair() -> void:
 func test_a_patched_matchup_carries_its_own_foresight_rule() -> void:
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	assert_true(bool(host.patch_type_matchup(
-		MOD, RomLayout.TYPE_NORMAL, NEW_TYPE, {
-			"multiplier": RomLayout.MATCHUP_NO_EFFECT, "negated_by_foresight": true,
+		MOD, Gen2Layout.TYPE_NORMAL, NEW_TYPE, {
+			"multiplier": Gen2Layout.MATCHUP_NO_EFFECT, "negated_by_foresight": true,
 		}
 	).get("ok", false)))
 	var data: GameData = _data()
-	assert_eq(data.type_matchup(RomLayout.TYPE_NORMAL, NEW_TYPE), RomLayout.MATCHUP_NO_EFFECT)
+	assert_eq(data.type_matchup(Gen2Layout.TYPE_NORMAL, NEW_TYPE), Gen2Layout.MATCHUP_NO_EFFECT)
 	assert_eq(
-		data.type_matchup(RomLayout.TYPE_NORMAL, NEW_TYPE, true), RomLayout.MATCHUP_EFFECTIVE,
+		data.type_matchup(Gen2Layout.TYPE_NORMAL, NEW_TYPE, true), Gen2Layout.MATCHUP_EFFECTIVE,
 		"identified, the immunity is cancelled the way the Ghost ones are"
 	)
 	assert_eq(
@@ -502,13 +502,13 @@ func test_a_defined_species_draws_its_own_pixels() -> void:
 
 	var data: GameData = _data()
 	var pic: Dictionary = data.species_pic(NEW_SPECIES)
-	assert_eq(int(pic["width"]), 2 * Gen2Tiles.TILE_WIDTH)
+	assert_eq(int(pic["width"]), 2 * PokeTiles.TILE_WIDTH)
 	assert_eq(int(pic["slot"]), -1, "there is no atlas cell behind it")
 	var cell: Dictionary = Gen2PicImage.atlas_cell(
 		data.atlas_indices("front"), data.atlas("front"), pic
 	)
 	assert_eq(cell["indices"], pixels)
-	assert_eq(int(cell["width"]), 2 * Gen2Tiles.TILE_WIDTH)
+	assert_eq(int(cell["width"]), 2 * PokeTiles.TILE_WIDTH)
 	# The back pic was not supplied, so it is the cartridge's own answer: an
 	# atlas slot no cell holds, which draws nothing rather than the wrong species.
 	assert_eq(int(data.species_pic(NEW_SPECIES, true)["slot"]), NEW_SPECIES - 1)
@@ -545,7 +545,7 @@ func test_a_defined_trainer_class_draws_its_own_pixels() -> void:
 	).get("ok", false)))
 	var pic: Dictionary = _data().trainer_pic(Gen2ContentOverlay.FIRST_MOD_NUMBER)
 	assert_eq(pic["indices"], pixels)
-	assert_eq(int(pic["height"]), 7 * Gen2Tiles.TILE_HEIGHT)
+	assert_eq(int(pic["height"]), 7 * PokeTiles.TILE_HEIGHT)
 
 
 ## Its party icon is either one of the cartridge's 38 strips or the mod's own two
@@ -554,9 +554,9 @@ func test_a_defined_species_names_or_supplies_its_party_icon() -> void:
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	assert_true(bool(host.register_content(
 		Gen2ContentOverlay.KIND_SPECIES, MOD, NEW_SPECIES,
-		{"name": "VOLTLING", "icon": RomLayout.ICON_EGG}
+		{"name": "VOLTLING", "icon": Gen2Layout.ICON_EGG}
 	).get("ok", false)))
-	assert_eq(_data().mon_menu_icon(NEW_SPECIES), RomLayout.ICON_EGG)
+	assert_eq(_data().mon_menu_icon(NEW_SPECIES), Gen2Layout.ICON_EGG)
 
 	var strip: PackedByteArray = _icon_strip()
 	assert_true(bool(host.register_content(
@@ -569,7 +569,7 @@ func test_a_defined_species_names_or_supplies_its_party_icon() -> void:
 	assert_eq(
 		StringName(host.register_content(
 			Gen2ContentOverlay.KIND_SPECIES, MOD, NEW_SPECIES,
-			{"icon": RomLayout.MON_ICON_COUNT + 1}
+			{"icon": Gen2Layout.MON_ICON_COUNT + 1}
 		)["reason"]),
 		&"invalid_content_icon"
 	)
@@ -592,7 +592,7 @@ func test_egg_moves_read_off_the_species_row() -> void:
 ## menu steps through carries.
 func _icon_strip() -> PackedByteArray:
 	var out: PackedByteArray = PackedByteArray()
-	out.resize(8 * Gen2Tiles.TILE_PIXELS)
+	out.resize(8 * PokeTiles.TILE_PIXELS)
 	out.fill(2)
 	return out
 
@@ -601,6 +601,6 @@ func _icon_strip() -> PackedByteArray:
 ## validator has something to reject when it is not.
 func _indices(tiles: int, value: int) -> PackedByteArray:
 	var out: PackedByteArray = PackedByteArray()
-	out.resize(tiles * tiles * Gen2Tiles.TILE_PIXELS)
+	out.resize(tiles * tiles * PokeTiles.TILE_PIXELS)
 	out.fill(value)
 	return out

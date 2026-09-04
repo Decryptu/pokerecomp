@@ -93,7 +93,7 @@ func test_a_move_with_no_power_deals_nothing_but_still_has_a_matchup() -> void:
 	var hit: Dictionary = _hit(_mon(Fixture.PIKACHU), _mon(Fixture.BULBASAUR), Fixture.GROWL)
 	assert_eq(hit["damage"], 0)
 	assert_false(hit["immune"])
-	assert_eq(hit["effectiveness"], RomLayout.MATCHUP_EFFECTIVE)
+	assert_eq(hit["effectiveness"], Gen2Layout.MATCHUP_EFFECTIVE)
 
 
 func test_struggle_gets_neither_stab_nor_the_type_chart() -> void:
@@ -103,7 +103,7 @@ func test_struggle_gets_neither_stab_nor_the_type_chart() -> void:
 	var hit: Dictionary = _hit(_mon(Fixture.PIKACHU), _mon(Fixture.BULBASAUR), Fixture.STRUGGLE)
 	assert_eq(hit["damage"], 25)
 	assert_false(hit["stab"])
-	assert_eq(hit["effectiveness"], RomLayout.MATCHUP_EFFECTIVE)
+	assert_eq(hit["effectiveness"], Gen2Layout.MATCHUP_EFFECTIVE)
 
 
 func test_the_split_is_by_the_move_type_not_by_the_move() -> void:
@@ -224,7 +224,7 @@ func test_the_weather_multiplies_before_stab_and_the_matchup() -> void:
 func test_the_weather_reads_the_type_table_before_the_move_table() -> void:
 	assert_eq(
 		Gen2Weather.damage_modifier(
-			Gen2Weather.RAIN, RomLayout.TYPE_WATER, Gen2MoveEffect.SOLARBEAM
+			Gen2Weather.RAIN, Gen2Layout.TYPE_WATER, Gen2MoveEffect.SOLARBEAM
 		),
 		Gen2Weather.BOOSTED,
 		"a Water Solarbeam does not exist, but the type row still wins"
@@ -566,7 +566,7 @@ func test_foresight_opens_a_ghost_to_normal_damage() -> void:
 	)
 	assert_false(opened["immune"])
 	assert_eq(opened["damage"], 40, "neutral, so the figure is untouched")
-	assert_eq(opened["effectiveness"], RomLayout.MATCHUP_EFFECTIVE)
+	assert_eq(opened["effectiveness"], Gen2Layout.MATCHUP_EFFECTIVE)
 
 
 ## Nothing else moves: the flag cancels the two Ghost rows and no other.

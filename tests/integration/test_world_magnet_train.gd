@@ -96,8 +96,8 @@ func test_the_special_opens_the_ride_and_holds_the_world() -> void:
 func test_a_press_does_not_end_the_ride() -> void:
 	await _open_world()
 	_run_script()
-	_world_screen.press_button(Gen2Button.A)
-	_world_screen.press_button(Gen2Button.B)
+	_world_screen.press_button(PokeButton.A)
+	_world_screen.press_button(PokeButton.B)
 	assert_not_null(_host(), "a press must not close the ride")
 
 

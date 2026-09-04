@@ -83,11 +83,11 @@ func _verify_border() -> void:
 	var data: GameData = _r.data
 	if not _r.check(data.has_link_border(), "no trade screen border in the cache"):
 		return
-	var tiles: int = RomLayout.LINK_BORDER_TILES_CRYSTAL if _r.crystal \
-		else RomLayout.LINK_BORDER_TILES_GOLD_SILVER
+	var tiles: int = Gen2Layout.LINK_BORDER_TILES_CRYSTAL if _r.crystal \
+		else Gen2Layout.LINK_BORDER_TILES_GOLD_SILVER
 	_r.check(
-		data.link_border_indices().size() == tiles * Gen2Tiles.TILE_WIDTH \
-			* Gen2Tiles.TILE_HEIGHT,
+		data.link_border_indices().size() == tiles * PokeTiles.TILE_WIDTH \
+			* PokeTiles.TILE_HEIGHT,
 		"the border strip is not %d tiles" % tiles
 	)
 	var screen: PackedByteArray = data.link_border_tilemap("screen")
@@ -100,12 +100,12 @@ func _verify_border() -> void:
 	if not _r.crystal:
 		return
 	_r.check(
-		screen.size() == RomLayout.LINK_TRADE_TILEMAP_BYTES,
+		screen.size() == Gen2Layout.LINK_TRADE_TILEMAP_BYTES,
 		"the screen tilemap is %d bytes" % screen.size()
 	)
 	for name: String in ["cable_top", "cable_bottom"]:
 		_r.check(
-			data.link_border_tilemap(name).size() == RomLayout.LINK_TRADE_CABLE_ROWS_BYTES,
+			data.link_border_tilemap(name).size() == Gen2Layout.LINK_TRADE_CABLE_ROWS_BYTES,
 			"%s is %d bytes" % [name, data.link_border_tilemap(name).size()]
 		)
 	var page: Gen2LinkPage = Gen2LinkPage.from_data(data)
@@ -157,8 +157,8 @@ func _verify_trade_anim_art() -> void:
 	var data: GameData = _r.data
 	if not _r.check(data.has_trade_anim(), "no trade animation art in the cache"):
 		return
-	var first: int = RomLayout.TRADE_ANIM_SHEET_FIRST_TILE
-	for row: Array in RomLayout.TRADE_ANIM_SECTION:
+	var first: int = Gen2Layout.TRADE_ANIM_SHEET_FIRST_TILE
+	for row: Array in Gen2Layout.TRADE_ANIM_SECTION:
 		var name: String = String(row[0])
 		if String(row[1]) == "map":
 			var cells: PackedByteArray = data.trade_anim_tilemap(name)
@@ -168,18 +168,18 @@ func _verify_trade_anim_art() -> void:
 				continue
 			for cell: int in cells:
 				if not _r.check(
-					cell >= first and cell < first + RomLayout.TRADE_ANIM_SHEET_TILES,
+					cell >= first and cell < first + Gen2Layout.TRADE_ANIM_SHEET_TILES,
 					"trade %s names tile $%02x, outside its sheet" % [name, cell]
 				):
 					break
 			continue
 		var strip: PackedByteArray = data.tile_indices("trade_anim_%s" % name)
 		_r.check(
-			strip.size() == int(row[2]) * Gen2Tiles.TILE_WIDTH * Gen2Tiles.TILE_HEIGHT,
+			strip.size() == int(row[2]) * PokeTiles.TILE_WIDTH * PokeTiles.TILE_HEIGHT,
 			"trade sheet %s is not %d tiles" % [name, int(row[2])]
 		)
 	_r.check(
-		data.trade_anim_palette("tube").size() == Gen2Palette.COLORS_PER_PIC,
+		data.trade_anim_palette("tube").size() == PokePalette.COLORS_PER_PIC,
 		"the trade tube palette is not four colours"
 	)
 
@@ -270,7 +270,7 @@ func _verify_trade_anim_corpus() -> void:
 		):
 			return
 		if not _r.check(
-			movie.frontpic_palette().size() == Gen2Palette.COLORS_PER_PIC,
+			movie.frontpic_palette().size() == PokePalette.COLORS_PER_PIC,
 			"species %d drew no frontpic palette" % species
 		):
 			return

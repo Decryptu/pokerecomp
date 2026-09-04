@@ -35,7 +35,7 @@ var _data: GameData = null
 var _save: Gen2SaveData = null
 var _player_name: String = ""
 var _player_id: int = 0
-## Every stub `RomLayout.NAME_RATER_TEXT_ORDER` names, by that name.
+## Every stub `Gen2Layout.NAME_RATER_TEXT_ORDER` names, by that name.
 var _texts: Dictionary = {}
 
 var _phase: int = Phase.DONE
@@ -114,19 +114,19 @@ func handle_button(button: int) -> bool:
 		return _naming.handle_button(button)
 	if _phase in [Phase.HELLO_ASK, Phase.BETTER_ASK]:
 		match button:
-			Gen2Button.UP, Gen2Button.DOWN:
+			PokeButton.UP, PokeButton.DOWN:
 				_yes = not _yes
 				_draw_yes_no()
 				return true
-			Gen2Button.A:
+			PokeButton.A:
 				_answer(_yes)
 				return true
-			Gen2Button.B:
+			PokeButton.B:
 				## `YesNoBox` answers B with the carry `jp c, .cancel` takes.
 				_answer(false)
 				return true
 		return false
-	if button != Gen2Button.A or _text_box == null or not _text_box.visible:
+	if button != PokeButton.A or _text_box == null or not _text_box.visible:
 		return false
 	if _text_box.is_revealing() or _text_box.has_pages_left():
 		_text_box.advance()

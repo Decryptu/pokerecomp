@@ -416,20 +416,20 @@ func handle_button(button: int) -> bool:
 		var pressed: bool = _press_toss_quantity(button)
 		_render_hardware()
 		return pressed
-	if Gen2Button.is_direction(button):
-		_move(Gen2Button.vector(button))
+	if PokeButton.is_direction(button):
+		_move(PokeButton.vector(button))
 		_render_hardware()
 		return true
 	match button:
-		Gen2Button.A:
+		PokeButton.A:
 			_confirm()
 			_render_hardware()
 			return true
-		Gen2Button.B:
+		PokeButton.B:
 			_cancel()
 			_render_hardware()
 			return true
-		Gen2Button.SELECT:
+		PokeButton.SELECT:
 			if _mode != Mode.PACK:
 				return false
 			_press_pack_select()
@@ -803,7 +803,7 @@ func _open_mods_mode() -> void:
 ## The rows MODS shows: the host's own VIEW row where there is more than one view
 ## to choose from, then one row per mod that registered a setting. The view is
 ## the host's rather than any mod's, since `Gen2ModHost` holds one selection for
-## both surfaces; `V` is behind [method Gen2DebugKeys.enabled], so this is the
+## both surfaces; `V` is behind [method PokeDebugKeys.enabled], so this is the
 ## only place a shipped build can change it.
 func _mod_rows() -> Array:
 	var rows: Array = []
@@ -878,7 +878,7 @@ func _field_move_labels() -> Array:
 ## The name the player installed, falling back to the id for a mod registered
 ## without a manifest, which is what a test or the built-in host does.
 func _mod_name(id: StringName) -> String:
-	for manifest: Gen2ModManifest in Gen2ModHost.instance().manifests():
+	for manifest: PokeModManifest in Gen2ModHost.instance().manifests():
 		if manifest.id == id:
 			return manifest.name
 	return String(id)
@@ -2211,8 +2211,8 @@ func _process(delta: float) -> void:
 ## badge bytes beside them.
 func _save_state() -> Dictionary:
 	var state: Gen2WorldState = _world.state if _world != null else null
-	var time: Gen2GameTime = _pack_save.game_time \
-		if _pack_save != null and _pack_save.game_time != null else Gen2GameTime.new()
+	var time: PokeGameTime = _pack_save.game_time \
+		if _pack_save != null and _pack_save.game_time != null else PokeGameTime.new()
 	var crystal: bool = Gen2WorldState.is_crystal_profile(_data)
 	return {
 		"player_name": _pack_save.player_name if _pack_save != null else "",

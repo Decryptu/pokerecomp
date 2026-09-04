@@ -23,7 +23,7 @@ func before_each() -> void:
 ## spawned, so the pool stays empty and the callbacks are called directly.
 func _make_player(enemy_turn: bool = false) -> Gen2BattleAnimPlayer:
 	var sine := PackedByteArray()
-	for value: int in RomLayout.BATTLE_ANIM_SINE_WAVE:
+	for value: int in Gen2Layout.BATTLE_ANIM_SINE_WAVE:
 		sine.append(value)
 	var data: Gen2BattleAnimData = Gen2BattleAnimData.create({
 		&"scripts": {

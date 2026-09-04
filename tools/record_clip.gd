@@ -49,7 +49,7 @@ var _frame_size: Vector2i = DEFAULT_WINDOW
 var _window: Vector2i = DEFAULT_WINDOW
 var _view: StringName = &""
 var _restore_view: StringName = &""
-var _hold: int = Gen2Button.NONE
+var _hold: int = PokeButton.NONE
 var _frames: int = 0
 var _length: int = int(DEFAULT_SECONDS * FRAMES_PER_SECOND)
 var _actions: Dictionary = {}
@@ -420,7 +420,7 @@ func _build() -> void:
 		_quit_failed()
 		return
 
-	## Read by `.claude/clip.sh`, which scales a hardware screen and a launcher
+	## Read by the clip script, which scales a hardware screen and a launcher
 	## page differently: one is square pixels and the other is not.
 	print("FRAME=%dx%d LAYOUT=%dx%d SCREEN=%s" % [
 		_frame_size.x, _frame_size.y, _window.x, _window.y, _kind,
@@ -616,11 +616,11 @@ func _add_action(frame: int, action: String) -> void:
 
 func _direction(name: String) -> int:
 	match name:
-		"up": return Gen2Button.UP
-		"down": return Gen2Button.DOWN
-		"left": return Gen2Button.LEFT
-		"right": return Gen2Button.RIGHT
-	return Gen2Button.NONE
+		"up": return PokeButton.UP
+		"down": return PokeButton.DOWN
+		"left": return PokeButton.LEFT
+		"right": return PokeButton.RIGHT
+	return PokeButton.NONE
 
 
 func _facing_for(name: String) -> int:
@@ -721,7 +721,7 @@ func _spend_by_state() -> void:
 		return
 	var state: StringName = _screen_state()
 	if _auto_text and state == &"text":
-		_screen.press_button(Gen2Button.A)
+		_screen.press_button(PokeButton.A)
 		_state_ready = now + _read_gap
 		return
 	var action: String = ""
@@ -733,7 +733,7 @@ func _spend_by_state() -> void:
 	else:
 		return
 	var button: int = _button(action)
-	if button != Gen2Button.NONE:
+	if button != PokeButton.NONE:
 		_screen.press_button(button)
 	else:
 		_perform(action)
@@ -904,16 +904,16 @@ func _input_log() -> Array:
 	for frame: int in _length + 1:
 		for action: String in _actions.get(frame, []) as Array:
 			if action == "hold-none":
-				held = Gen2Button.NONE
+				held = PokeButton.NONE
 			elif action.begins_with("hold-"):
 				held = _direction(action.trim_prefix("hold-"))
 			else:
 				var button: int = _button(action)
-				if button != Gen2Button.NONE:
+				if button != PokeButton.NONE:
 					entries.append({
 						"frame": _base + frame, "kind": "press", "button": button,
 					})
-		if held != Gen2Button.NONE:
+		if held != PokeButton.NONE:
 			entries.append({"frame": _base + frame, "kind": "hold", "button": held})
 	return entries
 
@@ -936,7 +936,7 @@ func _perform(action: String) -> void:
 		"meet-shiny":
 			_meet_visible_encounter(true)
 		"menu-off":
-			_screen.press_button(Gen2Button.B)
+			_screen.press_button(PokeButton.B)
 		"text-off":
 			_auto_text = false
 		"text-on":
@@ -1079,10 +1079,10 @@ static func _find_line_edit(node: Node) -> LineEdit:
 
 func _button(action: String) -> int:
 	match action:
-		"a": return Gen2Button.A
-		"b": return Gen2Button.B
-		"start": return Gen2Button.START
-		"select": return Gen2Button.SELECT
+		"a": return PokeButton.A
+		"b": return PokeButton.B
+		"start": return PokeButton.START
+		"select": return PokeButton.SELECT
 	return _direction(action)
 
 

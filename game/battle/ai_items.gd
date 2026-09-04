@@ -159,7 +159,7 @@ static func _will_use(
 		# the context, will spend one on a status at full health instead.
 		if _heal_gate(user, flags, rng):
 			return true
-		if not _has(flags, RomLayout.CONTEXT_USE):
+		if not _has(flags, Gen2Layout.CONTEXT_USE):
 			return false
 		return _status_gate(user, flags, rng)
 
@@ -178,7 +178,7 @@ static func _status_gate(user: Gen2BattleMon, flags: int, rng: RandomNumberGener
 	if not Gen2Status.is_afflicted(user.status):
 		return false
 
-	if _has(flags, RomLayout.CONTEXT_USE):
+	if _has(flags, Gen2Layout.CONTEXT_USE):
 		# A Toxic that has been ramping for four turns is worth curing on a coin
 		# flip; otherwise only sleep and freeze, the two that cost whole turns.
 		if user.toxic_counter >= TOXIC_PATIENCE and _roll(rng, CHANCE_50):
@@ -186,7 +186,7 @@ static func _status_gate(user: Gen2BattleMon, flags: int, rng: RandomNumberGener
 		return Gen2Status.is_asleep(user.status) \
 			or Gen2Status.has(user.status, Gen2Status.FREEZE)
 
-	if _has(flags, RomLayout.ALWAYS_USE):
+	if _has(flags, Gen2Layout.ALWAYS_USE):
 		return true
 	return _roll(rng, CHANCE_20)
 
@@ -194,7 +194,7 @@ static func _status_gate(user: Gen2BattleMon, flags: int, rng: RandomNumberGener
 ## `.HealItem`, the gate every potion shares. Above half health nothing is ever
 ## spent; below a quarter it always is; in between it depends on the class.
 static func _heal_gate(user: Gen2BattleMon, flags: int, rng: RandomNumberGenerator) -> bool:
-	if _has(flags, RomLayout.CONTEXT_USE):
+	if _has(flags, Gen2Layout.CONTEXT_USE):
 		# `.CheckHalfOrQuarterHP`
 		if _above_half(user):
 			return false
@@ -205,7 +205,7 @@ static func _heal_gate(user: Gen2BattleMon, flags: int, rng: RandomNumberGenerat
 	if _above_half(user):
 		return false
 
-	if _has(flags, RomLayout.UNKNOWN_USE):
+	if _has(flags, Gen2Layout.UNKNOWN_USE):
 		# `.CheckQuarterHP`: this branch alone refuses while still above a
 		# quarter, so it is strictly stingier than the one below it.
 		if _above_quarter(user):
@@ -221,15 +221,15 @@ static func _heal_gate(user: Gen2BattleMon, flags: int, rng: RandomNumberGenerat
 ## almost never after it, since the point is to set up before trading hits.
 static func _x_item_gate(flags: int, turns_taken: int, rng: RandomNumberGenerator) -> bool:
 	if turns_taken > 0:
-		if not _has(flags, RomLayout.ALWAYS_USE):
+		if not _has(flags, Gen2Layout.ALWAYS_USE):
 			return false
 		return _roll(rng, CHANCE_20)
 
-	if _has(flags, RomLayout.ALWAYS_USE):
+	if _has(flags, Gen2Layout.ALWAYS_USE):
 		return true
 	if _roll(rng, CHANCE_50):
 		return false
-	if _has(flags, RomLayout.CONTEXT_USE):
+	if _has(flags, Gen2Layout.CONTEXT_USE):
 		return true
 	return not _roll(rng, CHANCE_50)
 

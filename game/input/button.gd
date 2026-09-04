@@ -1,4 +1,4 @@
-class_name Gen2Button
+class_name PokeButton
 extends RefCounted
 
 ## The eight buttons the hardware had, and the input actions that stand for them.
@@ -6,8 +6,8 @@ extends RefCounted
 ## Every screen that reads the cartridge's own controls speaks this vocabulary
 ## and nothing else, so a key, a pad button and an on-screen button are already
 ## the same thing by the time a screen sees one. What a device has to do to
-## produce a button is [Gen2InputActions]' business, and which device the player
-## is holding is [Gen2InputDevice]'s.
+## produce a button is [PokeInputActions]' business, and which device the player
+## is holding is [PokeInputDevice]'s.
 
 const NONE: int = 0
 const UP: int = 1
@@ -107,7 +107,7 @@ static func pressed_in(event: InputEvent) -> int:
 ## The direction an event presses, counting Godot's own `ui_*` family beside the
 ## cartridge's four. A focus ring moves on `ui_up`, a menu on `gen2_up`, and the
 ## same key, pad button and stick produce both, so anything that reads a
-## direction off an event has to answer for either. [constant Gen2Button.NONE]
+## direction off an event has to answer for either. [constant PokeButton.NONE]
 ## when the event presses none of the eight.
 static func direction_in(event: InputEvent) -> int:
 	for button: int in DIRECTIONS:

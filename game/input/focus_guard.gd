@@ -43,10 +43,10 @@ func _process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	var button: int = Gen2Button.direction_in(event)
-	if button == Gen2Button.NONE:
+	var button: int = PokeButton.direction_in(event)
+	if button == PokeButton.NONE:
 		return
-	var direction := Vector2(Gen2Button.vector(button))
+	var direction := Vector2(PokeButton.vector(button))
 	if move_focus(direction):
 		_root.get_viewport().set_input_as_handled()
 
@@ -75,7 +75,7 @@ func _ready() -> void:
 func refresh() -> void:
 	if _root == null or not _root.is_inside_tree():
 		return
-	if Gen2InputDevice.is_pointer(Gen2InputRuntime.instance().device()):
+	if PokeInputDevice.is_pointer(Gen2InputRuntime.instance().device()):
 		return
 	var viewport: Viewport = _root.get_viewport()
 	if viewport == null:
@@ -162,7 +162,7 @@ func _toward(
 	var best: Control = _neighbor(current, direction, controls)
 	if best != null or not edges:
 		return best
-	var make: Variant = edge_targets.get(Gen2Button.from_vector(Vector2i(direction)))
+	var make: Variant = edge_targets.get(PokeButton.from_vector(Vector2i(direction)))
 	if make is not Callable:
 		return null
 	var target := (make as Callable).call(current) as Control

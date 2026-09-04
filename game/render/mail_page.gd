@@ -315,7 +315,7 @@ var font: Gen2Font = null
 ## puts under its frame.
 var _data: GameData = null
 
-## The `gfx/mail.asm` run as one index strip, `RomLayout.MAIL_GFX_TILES` wide.
+## The `gfx/mail.asm` run as one index strip, `Gen2Layout.MAIL_GFX_TILES` wide.
 var _strip: PackedByteArray = PackedByteArray()
 ## The VRAM window the last [method draw] built, tile number to 64 indices,
 ## and the tilemap it wrote over it. Both are kept so `tools/checks/mail.gd` can
@@ -340,7 +340,7 @@ static func from_data(data: GameData) -> Gen2MailPage:
 
 func ready() -> bool:
 	return font != null \
-		and _strip.size() == RomLayout.MAIL_GFX_TILES * TILE * TILE
+		and _strip.size() == Gen2Layout.MAIL_GFX_TILES * TILE * TILE
 
 
 ## Which `MailGFXPointers` row [param item] reaches. The source walks the table
@@ -457,7 +457,7 @@ func _build_vram(index: int) -> void:
 
 
 ## One 1bpp byte out of the run, as the eight pixels it lights. The strip is
-## already decoded, so a lit pixel is [constant Gen2Tiles.INK] and the row is
+## already decoded, so a lit pixel is [constant PokeTiles.INK] and the row is
 ## read off it rather than out of the byte.
 func _source_row(byte_offset: int) -> PackedByteArray:
 	var out := PackedByteArray()
@@ -465,8 +465,8 @@ func _source_row(byte_offset: int) -> PackedByteArray:
 	@warning_ignore("integer_division")
 	var tile: int = byte_offset / TILE
 	var row: int = byte_offset % TILE
-	var width: int = RomLayout.MAIL_GFX_TILES * TILE
-	if tile < 0 or tile >= RomLayout.MAIL_GFX_TILES:
+	var width: int = Gen2Layout.MAIL_GFX_TILES * TILE
+	if tile < 0 or tile >= Gen2Layout.MAIL_GFX_TILES:
 		return out
 	for column: int in TILE:
 		out[column] = _strip[row * width + tile * TILE + column]
@@ -485,7 +485,7 @@ func _write_row(source: PackedByteArray, colour: int, constant_fill: bool = fals
 	for column: int in TILE:
 		if constant_fill:
 			cell[_cursor_row * TILE + column] = colour
-		elif column < source.size() and source[column] == Gen2Tiles.INK:
+		elif column < source.size() and source[column] == PokeTiles.INK:
 			cell[_cursor_row * TILE + column] = colour
 	_vram[_cursor_tile] = cell
 	_cursor_row += 1

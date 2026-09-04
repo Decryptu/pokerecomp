@@ -859,7 +859,7 @@ func test_a_mods_page_opens_from_the_start_menu_and_lists_what_it_answers() -> v
 	assert_eq(page.row_count(), 2)
 	assert_eq(String((page.visible_rows()[1] as Dictionary)["label"]), "CHAMPION")
 	## Nothing of the world may be pressed while the page is up, and B leaves it.
-	assert_true(_world_screen.press_button(Gen2Button.B))
+	assert_true(_world_screen.press_button(PokeButton.B))
 	await get_tree().process_frame
 	assert_null(_world_screen._mod_page_host)
 
@@ -1159,7 +1159,7 @@ func test_a_battle_information_provider_annotates_over_the_interface() -> void:
 		"hud_visible", "menu_stage",
 	]:
 		assert_true(snapshot.has(key), key)
-	assert_eq(int(snapshot["neutral"]), RomLayout.MATCHUP_EFFECTIVE)
+	assert_eq(int(snapshot["neutral"]), Gen2Layout.MATCHUP_EFFECTIVE)
 
 
 ## A placement the grid cannot hold is refused rather than clipped, and a second

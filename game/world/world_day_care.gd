@@ -62,7 +62,7 @@ const COMPATIBILITY_CARES: String = "appears_to_care"
 const COMPATIBILITY_FRIENDLY: String = "friendly"
 const COMPATIBILITY_INTEREST: String = "shows_interest"
 
-## `PrintDayCareText`'s own indices, by the stub name `RomLayout` pins.
+## `PrintDayCareText`'s own indices, by the stub name `Gen2Layout` pins.
 const TEXT_MAN_INTRO: String = "man_intro"
 const TEXT_MAN_INTRO_EGG: String = "man_intro_egg"
 const TEXT_LADY_INTRO: String = "lady_intro"
@@ -168,7 +168,7 @@ static func mother_or_non_ditto(data: GameData, mon1: Gen2SaveMon, mon2: Gen2Sav
 static func pre_evolution(data: GameData, species: int) -> int:
 	if data == null:
 		return species
-	for candidate: int in range(1, RomLayout.SPECIES_COUNT + 1):
+	for candidate: int in range(1, Gen2Layout.SPECIES_COUNT + 1):
 		for row: Dictionary in data.evolutions(candidate):
 			if int(row.get("target", 0)) == species:
 				return candidate

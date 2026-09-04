@@ -2,7 +2,7 @@ extends SceneTree
 
 ## Dumps the opening's shadow OAM, one line per sprite per frame, against a real
 ## cache. `phase` is `presents`, `intro`, `gs_intro`, `title` or `trade`, and the
-## artefact is the one `.claude/verification.md` step 2 asks for: two faithful
+## artefact is the one the verification order asks for: two faithful
 ## implementations of `PlaySpriteAnimations` put the same sprites in the same
 ## slots on the same frames. A line is `frame slot y x tile`, the OAM bytes as a
 ## cartridge's buffer holds them. `<game> <phase> [out.txt] [frames]`.
@@ -36,7 +36,7 @@ func _initialize() -> void:
 		quit(1)
 		return
 	if args.size() > 2:
-		if Gen2ToolPath.refuses(args[2]):
+		if PokeToolPath.refuses(args[2]):
 			quit(2)
 			return
 		_shot_prefix = args[2].get_basename()

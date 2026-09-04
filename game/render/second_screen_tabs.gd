@@ -160,7 +160,7 @@ static func icon(
 	var row: Dictionary = spec
 	var strip: PackedByteArray = _sheet(data, String(row["sheet"]), female)
 	var colors: PackedColorArray = _palette(data, kind, female)
-	if strip.is_empty() or colors.size() < Gen2Palette.COLORS_PER_PIC:
+	if strip.is_empty() or colors.size() < PokePalette.COLORS_PER_PIC:
 		return null
 	return _crop(
 		strip, int(row["stride"]), row.get("at", Vector2i.ZERO),
@@ -177,7 +177,7 @@ static func _species_icon(data: GameData, species: int, egg: bool) -> Image:
 		return null
 	var strip: PackedByteArray = data.species_icon_indices(species, egg)
 	var colors: PackedColorArray = data.party_menu_icon_palette()
-	if strip.is_empty() or colors.size() < Gen2Palette.COLORS_PER_PIC:
+	if strip.is_empty() or colors.size() < PokePalette.COLORS_PER_PIC:
 		return null
 	return _crop(
 		strip, 2, Vector2i.ZERO, Vector2i(ICON_SIZE, ICON_SIZE), 1, colors, 0
@@ -202,20 +202,20 @@ static func _crop(
 	if stride <= 0 or lookup.is_empty() or out.x <= 0 or out.y <= 0:
 		return Gen2PicImage.canvas_image(pixels, maxi(out.x, 1), maxi(out.y, 1))
 	@warning_ignore("integer_division")
-	var width: int = strip.size() / Gen2Tiles.TILE_HEIGHT
+	var width: int = strip.size() / PokeTiles.TILE_HEIGHT
 	for y: int in out.y:
 		@warning_ignore("integer_division")
 		var source_y: int = at.y + y / factor
 		@warning_ignore("integer_division")
-		var row: int = source_y / Gen2Tiles.TILE_HEIGHT
-		var line: int = source_y % Gen2Tiles.TILE_HEIGHT
+		var row: int = source_y / PokeTiles.TILE_HEIGHT
+		var line: int = source_y % PokeTiles.TILE_HEIGHT
 		for x: int in out.x:
 			@warning_ignore("integer_division")
 			var source_x: int = at.x + x / factor
 			@warning_ignore("integer_division")
-			var tile: int = row * stride + source_x / Gen2Tiles.TILE_WIDTH
+			var tile: int = row * stride + source_x / PokeTiles.TILE_WIDTH
 			var offset: int = line * width \
-				+ tile * Gen2Tiles.TILE_WIDTH + source_x % Gen2Tiles.TILE_WIDTH
+				+ tile * PokeTiles.TILE_WIDTH + source_x % PokeTiles.TILE_WIDTH
 			if offset < 0 or offset >= strip.size():
 				continue
 			var index: int = strip[offset]
@@ -247,7 +247,7 @@ static func _palette(data: GameData, kind: StringName, female: bool) -> PackedCo
 		Gen2WorldStartMenu.ITEM_POKEDEX:
 			## `HUDBallIcons` is two colours, drawn through whatever the HUD's
 			## own palette is; the marker is black on white wherever it appears.
-			return Gen2Palette.pic_palette(
+			return PokePalette.pic_palette(
 				PackedColorArray([Color.WHITE, Color.BLACK])
 			)
 		Gen2WorldStartMenu.ITEM_PACK:
@@ -255,7 +255,7 @@ static func _palette(data: GameData, kind: StringName, female: bool) -> PackedCo
 			return pack if not pack.is_empty() else data.pack_palette(PACK_PICTURE_PALETTE)
 		Gen2WorldStartMenu.ITEM_POKEGEAR:
 			return data.town_map_palette(
-				data.town_map_palette_of(RomLayout.POKEGEAR_FIRST_TILE + 0x10), female
+				data.town_map_palette_of(Gen2Layout.POKEGEAR_FIRST_TILE + 0x10), female
 			)
 		Gen2WorldStartMenu.ITEM_PLAYER:
 			return data.card_palette(1 if female else 0)

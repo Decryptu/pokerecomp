@@ -10,7 +10,7 @@ extends RefCounted
 ## The starters are the one thing not read out of the intro's own sheets, their
 ## OAM sets indexing the pic atlas the cache holds.
 
-const TILE: int = Gen2Tiles.TILE_WIDTH
+const TILE: int = PokeTiles.TILE_WIDTH
 const WIDTH: int = Gen2Screen.WIDTH
 const HEIGHT: int = Gen2Screen.HEIGHT
 const MAP_COLUMNS: int = Gen2GoldSilverIntro.MAP_COLUMNS

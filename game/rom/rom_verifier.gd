@@ -58,9 +58,9 @@ static func identify(path: String) -> Dictionary:
 		result["message"] = "No file at %s" % path
 		return result
 
-	# Cheap rejection before hashing: every Gen 2 cartridge is exactly 2 MiB, so
-	# a mismatch is a wrong file (or a headered/trimmed dump) and hashing it
-	# would only waste the read.
+	# Cheap rejection before hashing: a supported cartridge is 1 MiB (Gen 1) or
+	# 2 MiB (Gen 2), so any other length is a wrong file, or a headered or
+	# trimmed dump, and hashing it would only waste the read.
 	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
 	if file == null:
 		result["message"] = "Could not open %s" % path
@@ -68,11 +68,11 @@ static func identify(path: String) -> Dictionary:
 	var size: int = file.get_length()
 	file.close()
 
-	if size != RomRegistry.EXPECTED_SIZE:
+	if not RomRegistry.is_known_size(size):
 		result["status"] = Status.WRONG_SIZE
 		result["message"] = (
-			"That file is %d bytes; a Gen 2 cartridge is %d."
-			% [size, RomRegistry.EXPECTED_SIZE]
+			"That file is %d bytes; a supported cartridge is %s."
+			% [size, " or ".join(_size_list())]
 		)
 		return result
 
@@ -83,8 +83,8 @@ static func identify(path: String) -> Dictionary:
 	if row.is_empty():
 		result["status"] = Status.UNKNOWN_ROM
 		result["message"] = (
-			"Unrecognised ROM (sha1 %s). pokerecomp supports Gold, Silver and Crystal."
-			% sha1
+			"Unrecognised ROM (sha1 %s). pokerecomp supports %s."
+			% [sha1, _title_list()]
 		)
 		return result
 
@@ -98,3 +98,21 @@ static func identify(path: String) -> Dictionary:
 
 static func is_valid(path: String) -> bool:
 	return identify(path)["status"] == Status.OK
+
+
+## The dump lengths and the cartridge titles the refusals name, both built from
+## the registry so adding a cartridge cannot leave a message behind.
+static func _size_list() -> PackedStringArray:
+	var out: PackedStringArray = []
+	for size: int in RomRegistry.SIZES.values():
+		out.append("%d bytes" % size)
+	return out
+
+
+static func _title_list() -> String:
+	var titles: PackedStringArray = []
+	for id: StringName in RomRegistry.ORDER:
+		titles.append(RomRegistry.title_for(id))
+	var last: String = titles[titles.size() - 1]
+	titles.remove_at(titles.size() - 1)
+	return "%s and %s" % [", ".join(titles), last]

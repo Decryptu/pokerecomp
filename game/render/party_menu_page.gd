@@ -89,8 +89,8 @@ const ICON_BOBS: Array[int] = [-2, -1, 0]
 ## `.SpawnItemIcon`'s marker over the icon's own bottom-left one, which is
 ## `HeldItemIcons`' first tile for a held mail ($08 in
 ## `.OAMData_PartyMonWithMail1`) and its second for anything else ($09).
-const ICON_ITEM_TILE: int = RomLayout.HELD_ITEM_ICON_ITEM
-const ICON_MAIL_TILE: int = RomLayout.HELD_ITEM_ICON_MAIL
+const ICON_ITEM_TILE: int = Gen2Layout.HELD_ITEM_ICON_ITEM
+const ICON_MAIL_TILE: int = Gen2Layout.HELD_ITEM_ICON_MAIL
 const ICON_ITEM_QUADRANT: int = 2
 
 ## `PlaceStatusString`'s three-letter strings, in the order
@@ -170,7 +170,7 @@ func render(
 	_draw_prompt(page, width, prompt)
 
 	var pixels: PackedInt32Array = Gen2PicImage.canvas_from_indices(
-		page, width, height, Gen2Palette.pic_palette(
+		page, width, height, PokePalette.pic_palette(
 			PackedColorArray([Color.WHITE, Color.BLACK])
 		)
 	)
@@ -269,7 +269,7 @@ func _blend_icons(pixels: PackedInt32Array, count: int) -> void:
 	if data == null or _icons.is_empty():
 		return
 	var colors: PackedColorArray = data.party_menu_icon_palette()
-	if colors.size() != Gen2Palette.COLORS_PER_PIC:
+	if colors.size() != PokePalette.COLORS_PER_PIC:
 		return
 	var held: PackedByteArray = data.held_item_icon_indices()
 	for index: int in mini(count, _icons.size()):
@@ -306,7 +306,7 @@ static func blend_tile(
 	colors: PackedColorArray, at: Vector2i
 ) -> void:
 	@warning_ignore("integer_division")
-	var tiles: int = strip.size() / Gen2Tiles.TILE_PIXELS
+	var tiles: int = strip.size() / PokeTiles.TILE_PIXELS
 	Gen2PicImage.blit_tile(
 		pixels, Gen2Screen.WIDTH, Gen2Screen.HEIGHT, strip, tiles, tile,
 		at.x, at.y, Gen2PicImage.lookup(colors), false, false, 0

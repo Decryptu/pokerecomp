@@ -13,7 +13,7 @@ var _collisions: int = 0
 ## terminates, and Gold and Silver have no records at all.
 
 const FIRST_SPECIES: int = 1
-const LAST_SPECIES: int = RomLayout.SPECIES_COUNT
+const LAST_SPECIES: int = Gen2Layout.SPECIES_COUNT
 
 ## `PokeAnim_PlaceGraphic`'s box and the tiles behind it.
 const BOX_TILES: int = Gen2PicImage.FRONTPIC_TILES * Gen2PicImage.FRONTPIC_TILES
@@ -35,8 +35,8 @@ func _check_game() -> void:
 	_collisions = 0
 	for species: int in range(FIRST_SPECIES, LAST_SPECIES + 1):
 		var forms: Array = [0]
-		if species == RomLayout.UNOWN_SPECIES:
-			forms = range(1, RomLayout.UNOWN_FORMS + 1)
+		if species == Gen2Layout.UNOWN_SPECIES:
+			forms = range(1, Gen2Layout.UNOWN_FORMS + 1)
 		for form: int in forms:
 			var record: Dictionary = _r.data.pic_animation(species, form)
 			if record.is_empty():
@@ -54,7 +54,7 @@ func _check_game() -> void:
 		return
 
 	_r.check(
-		records == LAST_SPECIES + RomLayout.UNOWN_FORMS - 1,
+		records == LAST_SPECIES + Gen2Layout.UNOWN_FORMS - 1,
 		"pic_anim has %d records, not the 251 species and 26 Unown letters." % records
 	)
 	_r.note("pic_anim %d records over %d frames, heights %s, %d frames reach the player's own run" % [
@@ -66,7 +66,7 @@ func _check_game() -> void:
 func _check_record(record: Dictionary, species: int, form: int) -> int:
 	var where: String = "species %d" % species if form == 0 else "Unown %d" % form
 	var height: int = int(record["height"])
-	var mask_bytes: int = RomLayout.pic_anim_bitmask_bytes(height)
+	var mask_bytes: int = Gen2Layout.pic_anim_bitmask_bytes(height)
 	if not _r.check(mask_bytes > 0, "%s has height %d, which has no bitmask size." % [
 		where, height
 	]):
@@ -90,7 +90,7 @@ func _check_record(record: Dictionary, species: int, form: int) -> int:
 		])
 		var reaches: bool = false
 		for at: int in range(mask_bytes, frame.size()):
-			var tile: int = RomLayout.pic_anim_box_tile(int(frame[at]), height)
+			var tile: int = Gen2Layout.pic_anim_box_tile(int(frame[at]), height)
 			_r.check(tile < subject, "%s frame %d names tile %d, past the %d loaded." % [
 				where, index, tile, subject
 			])

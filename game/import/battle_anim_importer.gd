@@ -11,7 +11,7 @@ extends RefCounted
 ## exception: LZ streams reached by far pointer, decoded into tile strips.
 
 ## `BattleAnim_Pound` whole, the anchor the script table was located from. Held
-## here rather than in [RomLayout] because it is a check, not an offset: the
+## here rather than in [Gen2Layout] because it is a check, not an offset: the
 ## first entry of `BattleAnimations` is `BattleAnim_Dummy`, which is a bare
 ## `anim_ret` and proves nothing.
 const POUND_BYTES: Array[int] = [
@@ -65,7 +65,7 @@ const PALETTE_COUNT: int = 8
 
 
 static func verify_layout(rom: RomFile) -> Dictionary:
-	var result: Dictionary = read_battle_anims(rom, RomLayout.for_id(rom.id))
+	var result: Dictionary = read_battle_anims(rom, Gen2Layout.for_id(rom.id))
 	if not bool(result.get("ok", false)):
 		return {
 			"ok": false,
@@ -154,10 +154,10 @@ static func read_battle_anims(rom: RomFile, layout: Dictionary) -> Dictionary:
 			"sine": sine["region"],
 		},
 		"counts": {
-			"scripts": RomLayout.BATTLE_ANIM_SCRIPT_COUNT,
-			"objects": RomLayout.BATTLE_ANIM_OBJECT_COUNT,
-			"framesets": RomLayout.BATTLE_ANIM_FRAMESET_COUNT,
-			"oam_sets": RomLayout.BATTLE_ANIM_OAM_SET_COUNT,
+			"scripts": Gen2Layout.BATTLE_ANIM_SCRIPT_COUNT,
+			"objects": Gen2Layout.BATTLE_ANIM_OBJECT_COUNT,
+			"framesets": Gen2Layout.BATTLE_ANIM_FRAMESET_COUNT,
+			"oam_sets": Gen2Layout.BATTLE_ANIM_OAM_SET_COUNT,
 		},
 	}
 
@@ -168,7 +168,7 @@ static func read_battle_anims(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## body only some other body jumps into is still measured, and refuses anything
 ## that leaves the bank or never reaches a top-level `anim_ret`.
 static func _read_scripts(rom: RomFile, table: int) -> Dictionary:
-	var count: int = RomLayout.BATTLE_ANIM_SCRIPT_COUNT
+	var count: int = Gen2Layout.BATTLE_ANIM_SCRIPT_COUNT
 	if not rom.in_bounds(table, count * 2):
 		return {"ok": false, "message": "Battle animation script table is outside the cartridge."}
 
@@ -276,15 +276,15 @@ static func _walk_body(bank_bytes: PackedByteArray, address: int) -> Dictionary:
 ## several times in a dump, so the offset is only trustworthy against the values,
 ## and this is the one copy in the animation bank.
 static func _read_sine(rom: RomFile, table: int) -> Dictionary:
-	if not rom.in_bounds(table, RomLayout.BATTLE_ANIM_SINE_BYTES):
+	if not rom.in_bounds(table, Gen2Layout.BATTLE_ANIM_SINE_BYTES):
 		return {"ok": false, "message": "Battle animation sine table is outside the cartridge."}
-	var data: PackedByteArray = rom.slice(table, RomLayout.BATTLE_ANIM_SINE_BYTES)
-	for index: int in RomLayout.BATTLE_ANIM_SINE_BYTES:
-		if data[index] != RomLayout.BATTLE_ANIM_SINE_WAVE[index]:
+	var data: PackedByteArray = rom.slice(table, Gen2Layout.BATTLE_ANIM_SINE_BYTES)
+	for index: int in Gen2Layout.BATTLE_ANIM_SINE_BYTES:
+		if data[index] != Gen2Layout.BATTLE_ANIM_SINE_WAVE[index]:
 			return {
 				"ok": false,
 				"message": "Battle animation sine table byte %d is $%02X, expected $%02X." % [
-					index, data[index], RomLayout.BATTLE_ANIM_SINE_WAVE[index],
+					index, data[index], Gen2Layout.BATTLE_ANIM_SINE_WAVE[index],
 				],
 			}
 	return {"ok": true, "region": {"bytes": _bytes_of(data)}}
@@ -293,15 +293,15 @@ static func _read_sine(rom: RomFile, table: int) -> Dictionary:
 ## `BattleAnimObjects`, whose rows carry no pointers, so the region is the table
 ## and nothing else.
 static func _read_objects(rom: RomFile, table: int) -> Dictionary:
-	var count: int = RomLayout.BATTLE_ANIM_OBJECT_COUNT
-	var size: int = count * RomLayout.BATTLE_ANIM_OBJECT_SIZE
+	var count: int = Gen2Layout.BATTLE_ANIM_OBJECT_COUNT
+	var size: int = count * Gen2Layout.BATTLE_ANIM_OBJECT_SIZE
 	if not rom.in_bounds(table, size):
 		return {"ok": false, "message": "Battle animation object table is outside the cartridge."}
 
 	for index: int in count:
-		var row: int = table + index * RomLayout.BATTLE_ANIM_OBJECT_SIZE
+		var row: int = table + index * Gen2Layout.BATTLE_ANIM_OBJECT_SIZE
 		var frameset: int = rom.u8(row + OBJECT_FRAMESET)
-		if frameset >= RomLayout.BATTLE_ANIM_FRAMESET_COUNT:
+		if frameset >= Gen2Layout.BATTLE_ANIM_FRAMESET_COUNT:
 			return {
 				"ok": false,
 				"message": "Battle animation object %d names frameset %d, past the table." % [
@@ -325,7 +325,7 @@ static func _read_objects(rom: RomFile, table: int) -> Dictionary:
 				],
 			}
 		var gfx: int = rom.u8(row + OBJECT_GFX)
-		if gfx >= RomLayout.BATTLE_ANIM_GFX_COUNT:
+		if gfx >= Gen2Layout.BATTLE_ANIM_GFX_COUNT:
 			return {
 				"ok": false,
 				"message": "Battle animation object %d names graphics %d, past the table." % [
@@ -346,7 +346,7 @@ static func _read_objects(rom: RomFile, table: int) -> Dictionary:
 
 ## `BattleAnimFrameData` and the `oamframe` streams it points at, as one region.
 static func _read_framesets(rom: RomFile, table: int) -> Dictionary:
-	var count: int = RomLayout.BATTLE_ANIM_FRAMESET_COUNT
+	var count: int = Gen2Layout.BATTLE_ANIM_FRAMESET_COUNT
 	if not rom.in_bounds(table, count * 2):
 		return {"ok": false, "message": "Battle animation frameset table is outside the cartridge."}
 
@@ -398,7 +398,7 @@ static func _walk_frameset(bank_bytes: PackedByteArray, address: int) -> Diction
 		var byte: int = bank_bytes[at]
 		if byte == OAM_END or byte == OAM_RESTART or byte == OAM_DELETE:
 			return {"ok": true, "end": 0x4000 + at + 1}
-		if byte < FIRST_OAM_COMMAND and byte >= RomLayout.BATTLE_ANIM_OAM_SET_COUNT:
+		if byte < FIRST_OAM_COMMAND and byte >= Gen2Layout.BATTLE_ANIM_OAM_SET_COUNT:
 			return {
 				"ok": false,
 				"message": "Frameset stream at $%04X names OAM set %d, past the table." % [
@@ -411,8 +411,8 @@ static func _walk_frameset(bank_bytes: PackedByteArray, address: int) -> Diction
 
 ## `BattleAnimOAMData` and the `dbsprite` records it points at, as one region.
 static func _read_oam_sets(rom: RomFile, table: int) -> Dictionary:
-	var count: int = RomLayout.BATTLE_ANIM_OAM_SET_COUNT
-	var size: int = count * RomLayout.BATTLE_ANIM_OAM_SET_SIZE
+	var count: int = Gen2Layout.BATTLE_ANIM_OAM_SET_COUNT
+	var size: int = count * Gen2Layout.BATTLE_ANIM_OAM_SET_SIZE
 	if not rom.in_bounds(table, size):
 		return {"ok": false, "message": "Battle animation OAM table is outside the cartridge."}
 
@@ -425,12 +425,12 @@ static func _read_oam_sets(rom: RomFile, table: int) -> Dictionary:
 	var lowest: int = base
 	var highest: int = base + size
 	for index: int in count:
-		var row: int = table + index * RomLayout.BATTLE_ANIM_OAM_SET_SIZE
+		var row: int = table + index * Gen2Layout.BATTLE_ANIM_OAM_SET_SIZE
 		var length: int = rom.u8(row + OAM_SET_LENGTH)
 		if length <= 0:
 			return {"ok": false, "message": "OAM set %d holds no sprites." % index}
 		var address: int = rom.u16le(row + OAM_SET_POINTER)
-		var span: int = length * RomLayout.BATTLE_ANIM_OAM_SPRITE_SIZE
+		var span: int = length * Gen2Layout.BATTLE_ANIM_OAM_SPRITE_SIZE
 		if address < 0x4000 or address + span > 0x8000:
 			return {
 				"ok": false,
@@ -455,17 +455,17 @@ static func _read_oam_sets(rom: RomFile, table: int) -> Dictionary:
 ## `AnimObjGFX`, kept as rows rather than a region: its pointers are far ones
 ## into the compressed graphics banks, so nothing follows the table.
 static func _read_object_gfx(rom: RomFile, table: int) -> Dictionary:
-	var count: int = RomLayout.BATTLE_ANIM_GFX_COUNT
-	var size: int = count * RomLayout.BATTLE_ANIM_GFX_SIZE
+	var count: int = Gen2Layout.BATTLE_ANIM_GFX_COUNT
+	var size: int = count * Gen2Layout.BATTLE_ANIM_GFX_SIZE
 	if not rom.in_bounds(table, size):
 		return {"ok": false, "message": "Battle animation graphics table is outside the cartridge."}
 
 	var rows: Array = []
 	for index: int in count:
-		var row: int = table + index * RomLayout.BATTLE_ANIM_GFX_SIZE
+		var row: int = table + index * Gen2Layout.BATTLE_ANIM_GFX_SIZE
 		var pointer: Dictionary = rom.far_pointer(row + GFX_POINTER)
-		var sheet: bool = index >= RomLayout.BATTLE_ANIM_GFX_FIRST_SHEET \
-			and index <= RomLayout.BATTLE_ANIM_GFX_LAST_SHEET
+		var sheet: bool = index >= Gen2Layout.BATTLE_ANIM_GFX_FIRST_SHEET \
+			and index <= Gen2Layout.BATTLE_ANIM_GFX_LAST_SHEET
 		if sheet and not rom.in_bounds(
 			RomFile.linear(int(pointer["bank"]), int(pointer["address"]))
 		):
@@ -496,14 +496,14 @@ static func _decode_sheets(rom: RomFile, rows: Array) -> Dictionary:
 		var count: int = int(row["tiles"])
 		var start: int = RomFile.linear(int(row["bank"]), int(row["address"]))
 		var raw: PackedByteArray = lz.decompress(rom.bytes(), start)
-		if lz.failed or raw.size() < count * Gen2Tiles.TILE_BYTES:
+		if lz.failed or raw.size() < count * PokeTiles.TILE_BYTES:
 			return {
 				"ok": false,
 				"message": "Battle animation graphics %d decompressed to %d bytes, short of %d." % [
-					index, raw.size(), count * Gen2Tiles.TILE_BYTES,
+					index, raw.size(), count * PokeTiles.TILE_BYTES,
 				],
 			}
-		strips[index] = Gen2Tiles.decode_2bpp_strip(raw, 0, count)
+		strips[index] = PokeTiles.decode_2bpp_strip(raw, 0, count)
 		tiles += count
 	return {"ok": true, "strips": strips, "sheets": strips.size(), "tiles": tiles}
 

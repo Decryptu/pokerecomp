@@ -3,8 +3,8 @@ extends GutTest
 ## The hardware behind the registers: what a given write actually sounds like.
 
 
-func _apu() -> Gen2Apu:
-	var apu := Gen2Apu.new()
+func _apu() -> PokeApu:
+	var apu := PokeApu.new()
 	apu.write(0xFF26, 0x80)
 	apu.write(0xFF24, 0x77)
 	apu.write(0xFF25, 0xFF)
@@ -14,7 +14,7 @@ func _apu() -> Gen2Apu:
 ## One frame is too short to measure a low note against, so every reading below
 ## takes a stretch of them. The first frames are dropped because the analog
 ## stage starts discharged and its settling swamps a peak reading.
-func _render(apu: Gen2Apu, frames: int, warmup: int = 8) -> PackedInt32Array:
+func _render(apu: PokeApu, frames: int, warmup: int = 8) -> PackedInt32Array:
 	for _frame: int in warmup:
 		apu.render_frame_pcm()
 	var out := PackedInt32Array()
@@ -51,7 +51,7 @@ func _hertz(pcm: PackedInt32Array) -> float:
 		if previous <= 0 and value > 0:
 			count += 1
 		previous = value
-	return float(count) * Gen2Apu.SAMPLE_RATE / float(pcm.size() / 2)
+	return float(count) * PokeApu.SAMPLE_RATE / float(pcm.size() / 2)
 
 
 ## Sample-to-sample changes, which counts how busy a noise waveform is.
@@ -70,7 +70,7 @@ func test_duty_patterns_are_bit_masks_rather_than_thresholds() -> void:
 	# $10, $30, $3c, $cf hold one, two, four and six set bits: 12.5, 25, 50, 75
 	# percent. A threshold comparison would make the first and last identical.
 	var widths: Array = []
-	for duty: int in Gen2Apu.DUTY_PATTERNS:
+	for duty: int in PokeApu.DUTY_PATTERNS:
 		var bits: int = 0
 		for index: int in 8:
 			bits += 1 if (int(duty) & (1 << index)) != 0 else 0
@@ -79,7 +79,7 @@ func test_duty_patterns_are_bit_masks_rather_than_thresholds() -> void:
 
 
 func test_square_frequency_follows_the_register_divider() -> void:
-	var apu: Gen2Apu = _apu()
+	var apu: PokeApu = _apu()
 	# $700 is 131072 / (2048 - 1792) = 512 Hz.
 	apu.write(0xFF11, 0x80)
 	apu.write(0xFF12, 0xF0)
@@ -89,7 +89,7 @@ func test_square_frequency_follows_the_register_divider() -> void:
 
 
 func test_the_wave_channel_runs_an_octave_below_the_pulse_channels() -> void:
-	var apu: Gen2Apu = _apu()
+	var apu: PokeApu = _apu()
 	for index: int in 16:
 		# A square wave in the sample table: eight high nibbles then eight low.
 		apu.write(0xFF30 + index, 0xFF if index < 8 else 0x00)
@@ -105,7 +105,7 @@ func test_the_wave_channel_runs_an_octave_below_the_pulse_channels() -> void:
 func test_the_wave_output_level_halves_rather_than_muting() -> void:
 	var levels: Array = []
 	for level: int in [0x00, 0x20, 0x40, 0x60]:
-		var apu: Gen2Apu = _apu()
+		var apu: PokeApu = _apu()
 		for index: int in 16:
 			apu.write(0xFF30 + index, 0xF0)
 		apu.write(0xFF1A, 0x80)
@@ -124,7 +124,7 @@ func test_the_wave_output_level_halves_rather_than_muting() -> void:
 
 
 func test_the_volume_envelope_decays_at_sixty_four_steps_a_second() -> void:
-	var apu: Gen2Apu = _apu()
+	var apu: PokeApu = _apu()
 	apu.write(0xFF11, 0x80)
 	# Volume 15, decreasing, one step per 1/64 second: silent after 15/64 s.
 	apu.write(0xFF12, 0xF1)
@@ -138,7 +138,7 @@ func test_the_volume_envelope_decays_at_sixty_four_steps_a_second() -> void:
 
 
 func _noise(poly: int) -> PackedInt32Array:
-	var apu: Gen2Apu = _apu()
+	var apu: PokeApu = _apu()
 	apu.write(0xFF20, 0x3F)
 	apu.write(0xFF21, 0xF0)
 	apu.write(0xFF22, poly)
@@ -168,7 +168,7 @@ func test_the_narrow_shift_register_is_a_different_sound() -> void:
 
 
 func test_powering_the_apu_down_clears_every_register_but_the_wave_table() -> void:
-	var apu: Gen2Apu = _apu()
+	var apu: PokeApu = _apu()
 	apu.write(0xFF30, 0xAB)
 	apu.write(0xFF12, 0xF0)
 	apu.write(0xFF26, 0x00)
@@ -180,7 +180,7 @@ func test_powering_the_apu_down_clears_every_register_but_the_wave_table() -> vo
 
 
 func test_the_master_level_scales_each_output_independently() -> void:
-	var apu: Gen2Apu = _apu()
+	var apu: PokeApu = _apu()
 	apu.write(0xFF24, 0x70)
 	apu.write(0xFF11, 0x80)
 	apu.write(0xFF12, 0xF0)
@@ -189,7 +189,7 @@ func test_the_master_level_scales_each_output_independently() -> void:
 	var pcm: PackedInt32Array = apu.render_frame_pcm()
 	var left: int = 0
 	var right: int = 0
-	for index: int in Gen2Apu.SAMPLES_PER_FRAME:
+	for index: int in PokeApu.SAMPLES_PER_FRAME:
 		left = maxi(left, absi(pcm[index * 2]))
 		right = maxi(right, absi(pcm[index * 2 + 1]))
 	assert_gt(left, 0)
@@ -200,7 +200,7 @@ func test_a_frame_is_the_vblank_rate_not_sixty_hertz() -> void:
 	# 32,768 / (4,194,304 / 70,224) is 548.6 samples per frame, truncated to a
 	# whole sample. Frequencies are exact; only the frame clock runs 0.11
 	# percent fast, which is under two cents of tempo.
-	assert_eq(Gen2Apu.SAMPLES_PER_FRAME, 548)
-	var implied: float = float(Gen2Apu.SAMPLE_RATE) / Gen2Apu.SAMPLES_PER_FRAME
+	assert_eq(PokeApu.SAMPLES_PER_FRAME, 548)
+	var implied: float = float(PokeApu.SAMPLE_RATE) / PokeApu.SAMPLES_PER_FRAME
 	assert_almost_eq(implied, 59.7275, 0.08)
 	assert_lt(absf(implied - 59.7275) / 59.7275, 0.002)

@@ -17,7 +17,7 @@ func _table(coins: int = 100, seed_value: int = 1) -> Gen2CardFlip:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 	var board := PackedByteArray()
-	board.resize(RomLayout.CARD_FLIP_TILEMAP_BYTES)
+	board.resize(Gen2Layout.CARD_FLIP_TILEMAP_BYTES)
 	return Gen2CardFlip.create(board, coins, rng)
 
 
@@ -123,11 +123,11 @@ func test_the_cursor_and_the_border_are_never_up_together() -> void:
 func test_leaving_the_pokemon_rows_lands_on_one_cell() -> void:
 	var game: Gen2CardFlip = _table()
 	assert_true(_drive_to(game, Prompt.BET))
-	game.move_cursor(Gen2Button.LEFT)
+	game.move_cursor(PokeButton.LEFT)
 	assert_eq(game.cursor(), Vector2i(1, 2), "a Pokemon column steps left one cell")
-	game.move_cursor(Gen2Button.UP)
+	game.move_cursor(PokeButton.UP)
 	assert_eq(game.cursor(), Vector2i(2, 1), "`.up_to_mon_group`'s own fixed cell")
-	game.move_cursor(Gen2Button.LEFT)
+	game.move_cursor(PokeButton.LEFT)
 	assert_eq(game.cursor(), Vector2i(1, 2), "`.left_to_number_gp`'s own fixed cell")
 
 
@@ -136,11 +136,11 @@ func test_leaving_the_pokemon_rows_lands_on_one_cell() -> void:
 func test_a_two_number_bet_walks_two_rows_at_a_time() -> void:
 	var game: Gen2CardFlip = _table()
 	assert_true(_drive_to(game, Prompt.BET))
-	game.move_cursor(Gen2Button.LEFT)
-	game.move_cursor(Gen2Button.LEFT)
+	game.move_cursor(PokeButton.LEFT)
+	game.move_cursor(PokeButton.LEFT)
 	assert_eq(game.cursor(), Vector2i(0, 2))
 	for _step_count: int in 6:
-		game.move_cursor(Gen2Button.DOWN)
+		game.move_cursor(PokeButton.DOWN)
 	assert_eq(game.cursor(), Vector2i(0, 6), "the last pair is where it stops")
 
 

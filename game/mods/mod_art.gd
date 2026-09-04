@@ -1,4 +1,4 @@
-class_name Gen2ModArt
+class_name PokeModArt
 extends RefCounted
 
 ## A mod's own pictures: the icon the launcher draws beside its name, and the
@@ -40,7 +40,7 @@ static var _textures: Dictionary = {}
 
 
 ## The icon file for [param manifest], or an empty string for a mod without one.
-static func icon_path(manifest: Gen2ModManifest) -> String:
+static func icon_path(manifest: PokeModManifest) -> String:
 	if manifest == null:
 		return ""
 	return locate(manifest.directory, ICON_NAMES, manifest.icon)
@@ -48,7 +48,7 @@ static func icon_path(manifest: Gen2ModManifest) -> String:
 
 ## The thumbnail file for [param manifest], or an empty string. See the class
 ## note: nothing in the game reads this, and a packaging script does.
-static func thumbnail_path(manifest: Gen2ModManifest) -> String:
+static func thumbnail_path(manifest: PokeModManifest) -> String:
 	if manifest == null:
 		return ""
 	return locate(manifest.directory, THUMBNAIL_NAMES, manifest.thumbnail)
@@ -93,7 +93,7 @@ static func icon_texture_from_bytes(bytes: PackedByteArray) -> Texture2D:
 
 
 ## Where a fetched icon is kept. Named by hash of its URL, the way
-## [method Gen2ModIndex.cache_path] names a feed, because a URL is not a
+## [method PokeModIndex.cache_path] names a feed, because a URL is not a
 ## filename.
 static func cache_path(url: String, directory: String = CACHE_DIRECTORY) -> String:
 	return "%s/%s" % [directory, url.sha256_text().substr(0, 32)]
@@ -122,7 +122,7 @@ static func cached_icon(url: String, directory: String = CACHE_DIRECTORY) -> Tex
 ## True when [param url] is worth fetching an icon from: https, like every other
 ## address this project reads, and not already on disk.
 static func wants_fetch(url: String, directory: String = CACHE_DIRECTORY) -> bool:
-	if not Gen2ModIndex.is_downloadable(url):
+	if not PokeModIndex.is_downloadable(url):
 		return false
 	return not FileAccess.file_exists(cache_path(url, directory))
 

@@ -5,7 +5,7 @@ extends GutTest
 ## table needs, so malformed pointers and terminators are still testable without
 ## depending on a commercial dump being present in a checkout.
 
-var _layout: Dictionary = RomLayout.for_id(RomRegistry.GOLD)
+var _layout: Dictionary = Gen2Layout.for_id(RomRegistry.GOLD)
 
 
 func test_marts_phone_audio_and_referenced_menu_are_imported() -> void:
@@ -31,18 +31,18 @@ func test_marts_phone_audio_and_referenced_menu_are_imported() -> void:
 
 	assert_true(result["ok"], result.get("message", ""))
 	var marts: Dictionary = result["marts"]
-	assert_eq((marts["marts"] as Array).size(), RomLayout.MART_COUNT)
+	assert_eq((marts["marts"] as Array).size(), Gen2Layout.MART_COUNT)
 	assert_eq((marts["marts"][0]["items"] as Array), [0x12, 0x09])
 	assert_eq((marts["default"]["items"] as Array), [0x05, 0x12])
 	assert_eq((marts["special"]["bargain"] as Array)[0]["price"], 4500)
 
 	var phone: Dictionary = result["phone"]
-	assert_eq((phone["contacts"] as Array).size(), RomLayout.PHONE_CONTACT_COUNT)
+	assert_eq((phone["contacts"] as Array).size(), Gen2Layout.PHONE_CONTACT_COUNT)
 	assert_eq(phone["contacts"][1]["map_group"], 1)
 	assert_eq(phone["contacts"][1]["non_trainer_id"], 1)
 	assert_eq(phone["contacts"][1]["caller_label"], "MOM")
 	assert_eq(phone["non_trainer_names"][1]["name"], "MOM")
-	assert_eq((phone["special_calls"] as Array).size(), RomLayout.SPECIAL_PHONE_CALL_COUNT)
+	assert_eq((phone["special_calls"] as Array).size(), Gen2Layout.SPECIAL_PHONE_CALL_COUNT)
 	assert_eq(phone["special_calls"][0]["condition_kind"], &"outside")
 	assert_eq(phone["special_calls"][1]["condition_kind"], &"anywhere")
 	assert_eq(phone["metadata"]["hang_up_click"], "Click!")
@@ -59,12 +59,12 @@ func test_marts_phone_audio_and_referenced_menu_are_imported() -> void:
 	assert_eq((audio["sfx"] as Array).size(), int(_layout["sfx_count"]))
 	assert_eq(audio["music"][0]["bank"], int(_layout["music_first_bank"]))
 	assert_eq(audio["sfx"][0]["address"], int(_layout["sfx_first_address"]))
-	assert_eq((audio["cries"] as Array).size(), RomLayout.AUDIO_CRY_COUNT)
+	assert_eq((audio["cries"] as Array).size(), Gen2Layout.AUDIO_CRY_COUNT)
 	assert_eq(audio["cries"][0]["address"], int(_layout["cry_first_address"]))
-	assert_eq((audio["mon_cries"] as Array).size(), RomLayout.MON_CRY_COUNT)
+	assert_eq((audio["mon_cries"] as Array).size(), Gen2Layout.MON_CRY_COUNT)
 	assert_eq(audio["mon_cries"][0], {"index": 15, "pitch": 128, "length": 129})
-	assert_eq(audio["wave_samples"]["sample_count"], RomLayout.AUDIO_WAVE_SAMPLE_COUNT)
-	assert_eq(audio["drumkits"]["byte_count"], RomLayout.AUDIO_DRUMKIT_BYTES)
+	assert_eq(audio["wave_samples"]["sample_count"], Gen2Layout.AUDIO_WAVE_SAMPLE_COUNT)
+	assert_eq(audio["drumkits"]["byte_count"], Gen2Layout.AUDIO_DRUMKIT_BYTES)
 	assert_gt(audio["music"][0]["byte_count"], 0)
 
 	var menus: Dictionary = result["menus"]
@@ -115,23 +115,23 @@ func _write_fruit_trees(data: PackedByteArray) -> void:
 ## rest.
 func _write_spawns(data: PackedByteArray) -> void:
 	var offset: int = int(_layout["spawn_points"])
-	for index: int in RomLayout.SPAWN_COUNT:
-		var at: int = offset + index * RomLayout.SPAWN_RECORD_SIZE
+	for index: int in Gen2Layout.SPAWN_COUNT:
+		var at: int = offset + index * Gen2Layout.SPAWN_RECORD_SIZE
 		data[at] = 1 + index % 3
 		data[at + 1] = index
-		data[at + 2] = int(RomLayout.SPAWN_COORDINATES[index * 2])
-		data[at + 3] = int(RomLayout.SPAWN_COORDINATES[index * 2 + 1])
-	for byte: int in RomLayout.SPAWN_RECORD_SIZE:
-		data[offset + RomLayout.SPAWN_COUNT * RomLayout.SPAWN_RECORD_SIZE + byte] = \
-			RomLayout.SPAWN_TERMINATOR
+		data[at + 2] = int(Gen2Layout.SPAWN_COORDINATES[index * 2])
+		data[at + 3] = int(Gen2Layout.SPAWN_COORDINATES[index * 2 + 1])
+	for byte: int in Gen2Layout.SPAWN_RECORD_SIZE:
+		data[offset + Gen2Layout.SPAWN_COUNT * Gen2Layout.SPAWN_RECORD_SIZE + byte] = \
+			Gen2Layout.SPAWN_TERMINATOR
 
 	var fly: int = int(_layout["flypoints"])
-	for index: int in RomLayout.FLYPOINT_COUNT:
-		data[fly + index * RomLayout.FLYPOINT_RECORD_SIZE] = 1 + index
-		data[fly + index * RomLayout.FLYPOINT_RECORD_SIZE + 1] = \
-			int(RomLayout.FLYPOINT_SPAWNS[index])
-	data[fly + RomLayout.FLYPOINT_COUNT * RomLayout.FLYPOINT_RECORD_SIZE] = \
-		RomLayout.FLYPOINT_TERMINATOR
+	for index: int in Gen2Layout.FLYPOINT_COUNT:
+		data[fly + index * Gen2Layout.FLYPOINT_RECORD_SIZE] = 1 + index
+		data[fly + index * Gen2Layout.FLYPOINT_RECORD_SIZE + 1] = \
+			int(Gen2Layout.FLYPOINT_SPAWNS[index])
+	data[fly + Gen2Layout.FLYPOINT_COUNT * Gen2Layout.FLYPOINT_RECORD_SIZE] = \
+		Gen2Layout.FLYPOINT_TERMINATOR
 
 
 func test_a_spawn_table_at_the_wrong_offset_is_refused() -> void:
@@ -161,7 +161,7 @@ func test_a_flypoint_table_without_its_terminator_is_refused() -> void:
 	_write_fruit_trees(data)
 	_write_spawns(data)
 	data[int(_layout["flypoints"])
-		+ RomLayout.FLYPOINT_COUNT * RomLayout.FLYPOINT_RECORD_SIZE] = 0x00
+		+ Gen2Layout.FLYPOINT_COUNT * Gen2Layout.FLYPOINT_RECORD_SIZE] = 0x00
 	var result: Dictionary = Gen2WorldServicesImporter.read_services(
 		RomFile.from_bytes(data, RomRegistry.GOLD), _layout
 	)
@@ -206,7 +206,7 @@ func test_the_fruit_tree_table_reads_thirty_rows_in_source_order() -> void:
 	)
 	assert_true(result["ok"], String(result.get("message", "")))
 	var items: Array = result["items"]
-	assert_eq(items.size(), RomLayout.FRUIT_TREE_COUNT)
+	assert_eq(items.size(), Gen2Layout.FRUIT_TREE_COUNT)
 	## FRUITTREE_AZALEA_TOWN is row 20 and bears the apricorn Kurt asks for.
 	assert_eq(int(items[19]), 0x61)
 	assert_eq(int(items[0]), 0xAD)
@@ -214,7 +214,7 @@ func test_the_fruit_tree_table_reads_thirty_rows_in_source_order() -> void:
 
 func _write_marts(data: PackedByteArray) -> void:
 	var table: int = int(_layout["mart_table"])
-	for index: int in RomLayout.MART_COUNT:
+	for index: int in Gen2Layout.MART_COUNT:
 		var address: int = 0x7000 + index * 0x10
 		_write_u16(data, table + index * 2, address)
 		var offset: int = RomFile.linear(5, address)
@@ -245,7 +245,7 @@ func _write_phone(data: PackedByteArray) -> void:
 		var address: int = 0x7600 + index * 0x10
 		_write_u16(
 			data,
-			name_table + index * RomLayout.PHONE_NON_TRAINER_NAME_POINTER_SIZE,
+			name_table + index * Gen2Layout.PHONE_NON_TRAINER_NAME_POINTER_SIZE,
 			address
 		)
 		var encoded: PackedByteArray = Gen2Text.encode(names[index])
@@ -254,8 +254,8 @@ func _write_phone(data: PackedByteArray) -> void:
 		for byte_index: int in encoded.size():
 			data[name_offset + byte_index] = encoded[byte_index]
 	var table: int = int(_layout["phone_contacts"])
-	for index: int in RomLayout.PHONE_CONTACT_COUNT:
-		var at: int = table + index * RomLayout.PHONE_CONTACT_SIZE
+	for index: int in Gen2Layout.PHONE_CONTACT_COUNT:
+		var at: int = table + index * Gen2Layout.PHONE_CONTACT_SIZE
 		data[at] = 0
 		data[at + 1] = index
 		data[at + 2] = 1 if index == 1 else 0
@@ -265,8 +265,8 @@ func _write_phone(data: PackedByteArray) -> void:
 		data[at + 8] = 0
 		_write_far(data, at + 9, 5, 0x7400)
 	var special: int = int(_layout["special_phone_calls"])
-	for index: int in RomLayout.SPECIAL_PHONE_CALL_COUNT:
-		var at: int = special + index * RomLayout.SPECIAL_PHONE_CALL_SIZE
+	for index: int in Gen2Layout.SPECIAL_PHONE_CALL_COUNT:
+		var at: int = special + index * Gen2Layout.SPECIAL_PHONE_CALL_SIZE
 		var condition: int = 0x4000
 		if index == 0:
 			condition = int(_layout["phone_condition_outside"])
@@ -289,12 +289,12 @@ func _write_audio(data: PackedByteArray) -> void:
 	var wave_offset: int = int(_layout["wave_samples"])
 	data[wave_offset] = 0x02
 	data[wave_offset + 1] = 0x46
-	data[wave_offset + RomLayout.AUDIO_WAVE_SAMPLE_COUNT * RomLayout.AUDIO_WAVE_SAMPLE_BYTES - 2] = 0x43
-	data[wave_offset + RomLayout.AUDIO_WAVE_SAMPLE_COUNT * RomLayout.AUDIO_WAVE_SAMPLE_BYTES - 1] = 0x21
+	data[wave_offset + Gen2Layout.AUDIO_WAVE_SAMPLE_COUNT * Gen2Layout.AUDIO_WAVE_SAMPLE_BYTES - 2] = 0x43
+	data[wave_offset + Gen2Layout.AUDIO_WAVE_SAMPLE_COUNT * Gen2Layout.AUDIO_WAVE_SAMPLE_BYTES - 1] = 0x21
 	var drum_offset: int = int(_layout["drumkits"])
 	data[drum_offset] = 0x5E
 	data[drum_offset + 1] = 0x4E
-	data[drum_offset + RomLayout.AUDIO_DRUMKIT_BYTES - 1] = 0xCB
+	data[drum_offset + Gen2Layout.AUDIO_DRUMKIT_BYTES - 1] = 0xCB
 	var music_table: int = int(_layout["music_pointers"])
 	for index: int in int(_layout["music_count"]):
 		var address: int = int(_layout["music_first_address"]) + index
@@ -306,7 +306,7 @@ func _write_audio(data: PackedByteArray) -> void:
 		_write_far(data, sfx_table + index * 3, int(_layout["sfx_first_bank"]), address)
 		data[RomFile.linear(int(_layout["sfx_first_bank"]), address)] = 0xFF
 	var cry_table: int = int(_layout["cry_pointers"])
-	for index: int in RomLayout.AUDIO_CRY_COUNT:
+	for index: int in Gen2Layout.AUDIO_CRY_COUNT:
 		var address: int = int(_layout["cry_first_address"]) + index
 		_write_far(data, cry_table + index * 3, int(_layout["cry_first_bank"]), address)
 		data[RomFile.linear(int(_layout["cry_first_bank"]), address)] = 0xFF
@@ -317,9 +317,9 @@ func _write_audio(data: PackedByteArray) -> void:
 ## those five and leaves the rest silent.
 func _write_mon_cries(data: PackedByteArray) -> void:
 	var table: int = int(_layout["mon_cries"])
-	for species: int in RomLayout.MON_CRY_COUNT:
-		var at: int = table + species * RomLayout.MON_CRY_ROW_SIZE
-		var row: Array = RomLayout.MON_CRY_PINS.get(species + 1, [0, 0, 0])
+	for species: int in Gen2Layout.MON_CRY_COUNT:
+		var at: int = table + species * Gen2Layout.MON_CRY_ROW_SIZE
+		var row: Array = Gen2Layout.MON_CRY_PINS.get(species + 1, [0, 0, 0])
 		_write_u16(data, at, int(row[0]))
 		_write_u16(data, at + 2, int(row[1]))
 		_write_u16(data, at + 4, int(row[2]))
@@ -388,14 +388,14 @@ func test_the_spawn_and_flypoint_tables_read_in_source_order() -> void:
 	assert_true(result["ok"], String(result.get("message", "")))
 	var spawns: Array = (result["data"] as Dictionary)["spawns"]
 	var flypoints: Array = (result["data"] as Dictionary)["flypoints"]
-	assert_eq(spawns.size(), RomLayout.SPAWN_COUNT)
-	assert_eq(flypoints.size(), RomLayout.FLYPOINT_COUNT)
+	assert_eq(spawns.size(), Gen2Layout.SPAWN_COUNT)
+	assert_eq(flypoints.size(), Gen2Layout.FLYPOINT_COUNT)
 	# `SPAWN_HOME` is the bedroom and carries the table's first coordinates.
-	assert_eq(int(spawns[RomLayout.SPAWN_HOME]["x"]), 3)
-	assert_eq(int(spawns[RomLayout.SPAWN_HOME]["y"]), 3)
+	assert_eq(int(spawns[Gen2Layout.SPAWN_HOME]["x"]), 3)
+	assert_eq(int(spawns[Gen2Layout.SPAWN_HOME]["y"]), 3)
 	# Johto first: flypoint 0 is New Bark and the Kanto half starts at 12.
-	assert_eq(int(flypoints[0]["spawn"]), int(RomLayout.FLYPOINT_SPAWNS[0]))
+	assert_eq(int(flypoints[0]["spawn"]), int(Gen2Layout.FLYPOINT_SPAWNS[0]))
 	assert_eq(
-		int(flypoints[RomLayout.KANTO_FLYPOINT]["spawn"]),
-		int(RomLayout.FLYPOINT_SPAWNS[RomLayout.KANTO_FLYPOINT])
+		int(flypoints[Gen2Layout.KANTO_FLYPOINT]["spawn"]),
+		int(Gen2Layout.FLYPOINT_SPAWNS[Gen2Layout.KANTO_FLYPOINT])
 	)

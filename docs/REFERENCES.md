@@ -14,12 +14,21 @@ checkouts the fetch and status scripts manage.
 
 | Game | Repository | Pinned revision | Useful areas |
 | --- | --- | --- | --- |
+| Red and Blue | [pret/pokered](https://github.com/pret/pokered) | `a1a22aaf84d1675bcdbaeb194592379d586d838e` | Generation 1 data, maps, scripts, battle behavior |
+| Yellow | [pret/pokeyellow](https://github.com/pret/pokeyellow) | `e89ead154b9968aa50eed9328ff2b38b6c194382` | The same for Yellow, which moved most tables and retuned every palette |
 | Crystal | [pret/pokecrystal](https://github.com/pret/pokecrystal) | `8e8f7e20052a596371a77022f0392c285e51bbf1` | Maps, scripts, events, data, battle behavior |
 | Gold and Silver | [pret/pokegold](https://github.com/pret/pokegold) | `a0dad0957ac8a9ffa67e950ee3ab6715a212ded5` | Maps, scripts, events, data, battle behavior |
 | Crystal, C port | [DanZC/suiCune](https://github.com/DanZC/suiCune) | `201d70028249b3297c441be195489e579bbf231a` | Secondary reference only: a C99 rewrite of pokecrystal, useful for how a routine reads once the GameBoy hardware assumptions are removed. Behavior is settled against pret, never against this port. |
 
 The lock file is the source of truth. The branch name recorded there is the
 upstream branch the revision was pinned from, never a substitute for the hash.
+
+Each of these builds a ROM that is byte for byte the retail cartridge: the
+hashes in a checkout's `roms.sha1` are the ones [`RomRegistry`](../game/rom/rom_registry.gd)
+matches a dump against. A `.sym` file from such a build is where every offset in
+`Gen1Layout` and `Gen2Layout` comes from, which is stronger evidence than
+searching a dump for known bytes. Building one needs `rgbds` and writes into the
+checkout, so build a copy outside `.references/` and leave the checkout clean.
 
 ## Local checkout workflow
 

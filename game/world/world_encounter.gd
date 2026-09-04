@@ -112,17 +112,17 @@ static func _wild_mon(
 		return {}
 	var species: int = int((selected as Dictionary).get("species", 0))
 	var level: int = int((selected as Dictionary).get("level", 0))
-	if species < 1 or species > RomLayout.SPECIES_COUNT or level < 1 or level > RomLayout.MAX_LEVEL:
+	if species < 1 or species > Gen2Layout.SPECIES_COUNT or level < 1 or level > Gen2Layout.MAX_LEVEL:
 		return {}
 	## The last test, after `ValidateTempWildMonSpecies` and on the drawn slot
 	## rather than the table: a wild UNOWN is refused outright while
 	## `wUnlockedUnowns` is zero, so on every save before the first Alph puzzle.
-	if species == RomLayout.UNOWN_SPECIES and int(options.get("unlocked_unowns", -1)) == 0:
+	if species == Gen2Layout.UNOWN_SPECIES and int(options.get("unlocked_unowns", -1)) == 0:
 		return {}
 	var level_roll: int = -1
 	if method == METHOD_SURF:
 		level_roll = generator.randi_range(0, 255)
-		level = mini(level + _surf_level_bonus(level_roll), RomLayout.MAX_LEVEL)
+		level = mini(level + _surf_level_bonus(level_roll), Gen2Layout.MAX_LEVEL)
 	return {"slot": slot, "species": species, "level": level, "level_roll": level_roll}
 
 
@@ -200,7 +200,7 @@ static func resolve_fishing(
 	var time_group: int = int(mon["time_group"])
 	var species: int = int(mon["species"])
 	var level: int = int(mon["level"])
-	if species < 1 or species > RomLayout.SPECIES_COUNT or level < 1 or level > RomLayout.MAX_LEVEL:
+	if species < 1 or species > Gen2Layout.SPECIES_COUNT or level < 1 or level > Gen2Layout.MAX_LEVEL:
 		return {}
 	return {
 		"kind": &"wild_encounter_requested",
@@ -365,8 +365,8 @@ static func active_slots(record: Dictionary, method: StringName, time_of_day: in
 
 static func _choose_slot(random: RandomNumberGenerator, method: StringName) -> int:
 	var probabilities: Array[int] = (
-		RomLayout.WILD_WATER_PROBABILITIES if method == METHOD_SURF
-		else RomLayout.WILD_GRASS_PROBABILITIES
+		Gen2Layout.WILD_WATER_PROBABILITIES if method == METHOD_SURF
+		else Gen2Layout.WILD_GRASS_PROBABILITIES
 	)
 	for _attempt: int in 128:
 		var roll: int = random.randi_range(0, 255)
@@ -429,7 +429,7 @@ static func _rod_index(rod: StringName) -> int:
 
 
 static func _surf_level_bonus(roll: int) -> int:
-	for bonus: int in RomLayout.WILD_SURF_LEVEL_THRESHOLDS.size():
-		if roll < RomLayout.WILD_SURF_LEVEL_THRESHOLDS[bonus]:
+	for bonus: int in Gen2Layout.WILD_SURF_LEVEL_THRESHOLDS.size():
+		if roll < Gen2Layout.WILD_SURF_LEVEL_THRESHOLDS[bonus]:
 			return bonus
-	return RomLayout.WILD_SURF_LEVEL_THRESHOLDS.size()
+	return Gen2Layout.WILD_SURF_LEVEL_THRESHOLDS.size()

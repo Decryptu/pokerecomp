@@ -14,8 +14,8 @@ const TILE: int = Gen2Font.TILE
 const COLUMNS: int = 20
 const ROWS: int = 18
 
-const TOWN_MAP_FIRST_TILE: int = RomLayout.TOWN_MAP_FIRST_TILE
-const POKEGEAR_FIRST_TILE: int = RomLayout.POKEGEAR_FIRST_TILE
+const TOWN_MAP_FIRST_TILE: int = Gen2Layout.TOWN_MAP_FIRST_TILE
+const POKEGEAR_FIRST_TILE: int = Gen2Layout.POKEGEAR_FIRST_TILE
 const BLANK_TILE: int = 0x7F
 
 ## `_TownMap.InitTilemap`'s corner box: a lid across the top left, a wall down
@@ -168,24 +168,24 @@ static func from_data(data: GameData) -> Gen2TownMapPage:
 	out.font = glyphs
 	out.frame_style = Gen2OptionsStore.current().textbox_frame
 	out._load_sheet(
-		data, "town_map", TOWN_MAP_FIRST_TILE, RomLayout.TOWN_MAP_TILES, out._tiles
+		data, "town_map", TOWN_MAP_FIRST_TILE, Gen2Layout.TOWN_MAP_TILES, out._tiles
 	)
 	out._load_sheet(
-		data, "pokegear", POKEGEAR_FIRST_TILE, RomLayout.POKEGEAR_TILES, out._tiles
+		data, "pokegear", POKEGEAR_FIRST_TILE, Gen2Layout.POKEGEAR_TILES, out._tiles
 	)
 	out._load_sheet(
-		data, "fly_map_label", RomLayout.FLY_MAP_LABEL_FIRST_TILE,
-		RomLayout.FLY_MAP_LABEL_TILES, out._fly_tiles,
+		data, "fly_map_label", Gen2Layout.FLY_MAP_LABEL_FIRST_TILE,
+		Gen2Layout.FLY_MAP_LABEL_TILES, out._fly_tiles,
 	)
-	for card: String in RomLayout.POKEGEAR_CARD_ORDER:
+	for card: String in Gen2Layout.POKEGEAR_CARD_ORDER:
 		var cells: PackedByteArray = data.pokegear_card(StringName(card))
-		if cells.size() == RomLayout.POKEGEAR_CARD_CELLS:
+		if cells.size() == Gen2Layout.POKEGEAR_CARD_CELLS:
 			out._cards[card] = cells
 	return out
 
 
 func ready() -> bool:
-	return font != null and _tiles.size() >= RomLayout.TOWN_MAP_TILES + RomLayout.POKEGEAR_TILES
+	return font != null and _tiles.size() >= Gen2Layout.TOWN_MAP_TILES + Gen2Layout.POKEGEAR_TILES
 
 
 ## [param window] is which VRAM window the strip lands in: the shared one, or the
@@ -242,7 +242,7 @@ func tilemap(
 
 
 func cards_ready() -> bool:
-	return _cards.size() == RomLayout.POKEGEAR_CARD_ORDER.size()
+	return _cards.size() == Gen2Layout.POKEGEAR_CARD_ORDER.size()
 
 
 ## `.Clock`: the card, its own SWITCH label, the cleared face, the weekday and
@@ -376,21 +376,21 @@ func draw_yes_no(map: PackedInt32Array, cursor: int) -> void:
 ## `Textbox`'s border and its cleared interior, as the tile numbers
 ## `TextBoxBorder` writes: [param size] counts the border in.
 func _draw_box(map: PackedInt32Array, at: Vector2i, size: Vector2i) -> void:
-	var first: int = RomLayout.FRAME_FIRST_CODE
+	var first: int = Gen2Layout.FRAME_FIRST_CODE
 	var right: int = at.x + size.x - 1
 	var bottom: int = at.y + size.y - 1
 	for column: int in range(at.x + 1, right):
-		_put(map, Vector2i(column, at.y), first + RomLayout.FRAME_HORIZONTAL)
-		_put(map, Vector2i(column, bottom), first + RomLayout.FRAME_HORIZONTAL)
+		_put(map, Vector2i(column, at.y), first + Gen2Layout.FRAME_HORIZONTAL)
+		_put(map, Vector2i(column, bottom), first + Gen2Layout.FRAME_HORIZONTAL)
 	for row: int in range(at.y + 1, bottom):
-		_put(map, Vector2i(at.x, row), first + RomLayout.FRAME_VERTICAL)
-		_put(map, Vector2i(right, row), first + RomLayout.FRAME_VERTICAL)
+		_put(map, Vector2i(at.x, row), first + Gen2Layout.FRAME_VERTICAL)
+		_put(map, Vector2i(right, row), first + Gen2Layout.FRAME_VERTICAL)
 		for column: int in range(at.x + 1, right):
 			_put(map, Vector2i(column, row), BLANK_TILE)
-	_put(map, at, first + RomLayout.FRAME_TOP_LEFT)
-	_put(map, Vector2i(right, at.y), first + RomLayout.FRAME_TOP_RIGHT)
-	_put(map, Vector2i(at.x, bottom), first + RomLayout.FRAME_BOTTOM_LEFT)
-	_put(map, Vector2i(right, bottom), first + RomLayout.FRAME_BOTTOM_RIGHT)
+	_put(map, at, first + Gen2Layout.FRAME_TOP_LEFT)
+	_put(map, Vector2i(right, at.y), first + Gen2Layout.FRAME_TOP_RIGHT)
+	_put(map, Vector2i(at.x, bottom), first + Gen2Layout.FRAME_BOTTOM_LEFT)
+	_put(map, Vector2i(right, bottom), first + Gen2Layout.FRAME_BOTTOM_RIGHT)
 
 
 func _draw_string(map: PackedInt32Array, at: Vector2i, text: String) -> void:
@@ -510,7 +510,7 @@ func image(
 	var out: PackedInt32Array = Gen2PicImage.canvas(Gen2Screen.WIDTH, Gen2Screen.HEIGHT)
 	var tables: Array[PackedInt32Array] = []
 	var sizes := PackedInt32Array()
-	for slot: int in RomLayout.TOWN_MAP_PALETTES:
+	for slot: int in Gen2Layout.TOWN_MAP_PALETTES:
 		var palette: PackedColorArray = data.town_map_palette(slot, female)
 		tables.append(
 			PackedInt32Array() if palette.is_empty() else Gen2PicImage.lookup(palette)
@@ -551,8 +551,8 @@ func compose(
 				_blit(indices, width, over[tile], at)
 			elif _tiles.has(tile):
 				_blit(indices, width, _tiles[tile], at)
-			elif tile >= RomLayout.FRAME_FIRST_CODE \
-				and tile < RomLayout.FRAME_FIRST_CODE + RomLayout.FRAME_TILES:
+			elif tile >= Gen2Layout.FRAME_FIRST_CODE \
+				and tile < Gen2Layout.FRAME_FIRST_CODE + Gen2Layout.FRAME_TILES:
 				font.draw_frame_code(frame_style, tile, indices, width, at.x, at.y)
 			elif tile != BLANK_TILE:
 				font.draw_code(tile, indices, width, at.x, at.y, Gen2Text.FONT_MAIN)

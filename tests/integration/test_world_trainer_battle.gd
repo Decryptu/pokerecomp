@@ -458,10 +458,10 @@ func test_a_battle_is_spent_and_steered_by_the_world_that_opened_it() -> void:
 	## And one press, through the world, reaches the fight rather than the map:
 	## the funnel is what makes a recorded log complete.
 	_world_screen.record_input()
-	assert_true(_world_screen.press_button(Gen2Button.A))
+	assert_true(_world_screen.press_button(PokeButton.A))
 	var recorded: Array = _world_screen.input_recording()
 	assert_eq(recorded.size(), 1, "the world recorded the battle's own press")
-	assert_eq(int(recorded[0]["button"]), Gen2Button.A)
+	assert_eq(int(recorded[0]["button"]), PokeButton.A)
 
 
 ## Two runs of the same fight from the same seed decide the same things, which is
@@ -481,7 +481,7 @@ func test_two_battles_from_one_seed_choose_the_same_enemy_moves() -> void:
 			var message: String = String(host.battle_snapshot()["message"])
 			if message.begins_with("Enemy ") and (seen.is_empty() or seen[-1] != message):
 				seen.append(message)
-			_world_screen.press_button(Gen2Button.A)
+			_world_screen.press_button(PokeButton.A)
 		choices.append(seen)
 		_world_screen.queue_free()
 		await get_tree().process_frame
@@ -1149,14 +1149,14 @@ func test_a_caught_pokemon_is_named_over_the_battle() -> void:
 	]))
 	assert_eq(prompt.nickname_cursor(), 0, "YesNoBox opens on YES")
 
-	host.press_button(Gen2Button.A)
+	host.press_button(PokeButton.A)
 	assert_eq(prompt.phase(), Gen2NicknamePromptScreen.Phase.NAMING)
 	var model: Gen2NamingScreen = prompt.naming_screen().model()
 	assert_eq(model.max_length, Gen2NamingScreen.MON_MAX_LENGTH)
 	model.press_a()
 	model.column = Gen2NamingScreen.LAST_COLUMN
 	model.row = model.command_row()
-	host.press_button(Gen2Button.A)
+	host.press_button(PokeButton.A)
 	await get_tree().process_frame
 
 	assert_null(_battle_host(), "and the fight ends behind it")
@@ -1200,12 +1200,12 @@ func test_a_boxed_catch_prints_bills_pc_with_the_name_the_keyboard_stored() -> v
 	var host: Gen2BattleScreen = await _catch_the_wild()
 	var prompt: Gen2NicknamePromptScreen = host.get("_capture_nickname_host")
 	_settle_capture_nickname_text(host, prompt)
-	host.press_button(Gen2Button.A)
+	host.press_button(PokeButton.A)
 	var model: Gen2NamingScreen = prompt.naming_screen().model()
 	model.press_a()
 	model.column = Gen2NamingScreen.LAST_COLUMN
 	model.row = model.command_row()
-	host.press_button(Gen2Button.A)
+	host.press_button(PokeButton.A)
 	assert_eq(prompt.phase(), Gen2NicknamePromptScreen.Phase.AFTER_TEXT)
 	_settle_capture_nickname_text(host, prompt)
 	var entered: String = " ".join(prompt.text_lines()).split(" was")[0]
@@ -1214,7 +1214,7 @@ func test_a_boxed_catch_prints_bills_pc_with_the_name_the_keyboard_stored() -> v
 		" ".join(prompt.text_lines()),
 		Gen2WorldPartyHost.sent_to_box_text(entered).replace("\n", " ")
 	)
-	host.press_button(Gen2Button.A)
+	host.press_button(PokeButton.A)
 	await get_tree().process_frame
 	assert_null(_battle_host())
 	assert_eq(save.party.size(), Gen2SaveData.MAX_PARTY)
@@ -1256,7 +1256,7 @@ func _settle_capture_nickname_text(
 		elif not prompt._text_box.is_revealing() and not prompt._text_box.has_pages_left():
 			return
 		if not prompt._text_box.is_revealing() and prompt._text_box.has_pages_left():
-			host.press_button(Gen2Button.A)
+			host.press_button(PokeButton.A)
 		host.advance_hardware_frame()
 
 
@@ -1270,9 +1270,9 @@ func _refuse_capture_nickname(host: Gen2BattleScreen) -> void:
 		if prompt.question_ready():
 			break
 		if not prompt._text_box.is_revealing() and prompt._text_box.has_pages_left():
-			host.press_button(Gen2Button.A)
+			host.press_button(PokeButton.A)
 		host.advance_hardware_frame()
-	host.press_button(Gen2Button.B)
+	host.press_button(PokeButton.B)
 
 
 func _event_value(events: Array, event_type: StringName, key: String) -> Variant:
@@ -1302,7 +1302,7 @@ func _add_capture_metadata() -> void:
 	var items: Array = RomCache.read_json(RomCache.items_path(Fixture.directory()))
 	for raw: Dictionary in items:
 		if int(raw["number"]) in Gen2WorldPartyHost.capture_ball_items():
-			raw["pocket"] = RomLayout.ITEM_POCKET_BALL
+			raw["pocket"] = Gen2Layout.ITEM_POCKET_BALL
 	RomCache.write_json(RomCache.items_path(Fixture.directory()), items)
 
 
@@ -1550,7 +1550,7 @@ func test_a_press_during_the_battle_transition_leaves_the_script_running() -> vo
 		if StringName(waiting.get("type", &"")) in [&"text", &"button"]:
 			_world_screen._advance_script_input()
 	assert_true(_world_screen.battle_transition_running(), "the transition is on screen")
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 	assert_eq(
 		_world_screen.world_snapshot()["script_prompt"], "Battle starting",
 		"the press was swallowed rather than answering the script"
@@ -1589,7 +1589,7 @@ func _write_level_evolution() -> void:
 			EVOLVING_SPECIES:
 				raw["name"] = "CHIKORITA"
 				raw["evolutions"] = [{
-					"method": RomLayout.EVOLVE_LEVEL, "parameter": EVOLVE_LEVEL,
+					"method": Gen2Layout.EVOLVE_LEVEL, "parameter": EVOLVE_LEVEL,
 					"condition": 0, "target": EVOLVED_SPECIES,
 				}]
 			EVOLVED_SPECIES:
@@ -1613,9 +1613,9 @@ func _settle_evolution(cancel: bool = false) -> void:
 			await get_tree().process_frame
 			return
 		if cancel and screen.phase() == Gen2EvolutionScreen.Phase.FLASH:
-			_world_screen.press_button(Gen2Button.B)
+			_world_screen.press_button(PokeButton.B)
 		elif screen.awaiting_press():
-			_world_screen.press_button(Gen2Button.A)
+			_world_screen.press_button(PokeButton.A)
 	fail_test("the evolution screen never closed")
 
 
@@ -1677,18 +1677,18 @@ func _settle_hatch(nickname: bool = false) -> void:
 		if screen.phase() == Gen2EggHatchScreen.Phase.NAMING:
 			var model: Gen2NamingScreen = screen.naming_screen().model()
 			if model.length == 0:
-				_world_screen.press_button(Gen2Button.A)
+				_world_screen.press_button(PokeButton.A)
 			else:
 				## END, which is `NamingScreen_StoreEntry`.
 				model.column = Gen2NamingScreen.LAST_COLUMN
 				model.row = model.command_row()
-				_world_screen.press_button(Gen2Button.A)
+				_world_screen.press_button(PokeButton.A)
 			continue
 		if screen.phase() == Gen2EggHatchScreen.Phase.ASK_NICKNAME and not nickname:
-			_world_screen.press_button(Gen2Button.B)
+			_world_screen.press_button(PokeButton.B)
 			continue
 		if screen.awaiting_press():
-			_world_screen.press_button(Gen2Button.A)
+			_world_screen.press_button(PokeButton.A)
 	fail_test("the hatch screen never closed")
 
 
@@ -1715,7 +1715,7 @@ func test_an_egg_hatches_into_the_species_it_was_carrying() -> void:
 			break
 		_world_screen.advance_frame()
 		if screen.awaiting_press():
-			_world_screen.press_button(Gen2Button.A)
+			_world_screen.press_button(PokeButton.A)
 	assert_eq(
 		" ".join(screen.text_lines()),
 		Gen2WorldPartyHost.hatch_text(species_name).replace("\n", " ")
@@ -1743,7 +1743,7 @@ func test_yes_opens_the_naming_screen_and_its_entry_becomes_the_nickname() -> vo
 			break
 		_world_screen.advance_frame()
 		if screen.awaiting_press():
-			_world_screen.press_button(Gen2Button.A)
+			_world_screen.press_button(PokeButton.A)
 	assert_eq(screen.nickname_cursor(), 0, "YesNoBox opens on YES")
 	## `YesNoBox` stands behind `PrintText` returning, so the menu is not up
 	## while the question is still printing and A spends the text instead.
@@ -1751,14 +1751,14 @@ func test_yes_opens_the_naming_screen_and_its_entry_becomes_the_nickname() -> vo
 		if screen._menu.visible:
 			break
 		_world_screen.advance_frame()
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 	assert_eq(screen.phase(), Gen2EggHatchScreen.Phase.NAMING)
 	var model: Gen2NamingScreen = screen.naming_screen().model()
 	assert_eq(model.max_length, Gen2NamingScreen.MON_MAX_LENGTH)
 	model.press_a()
 	model.column = Gen2NamingScreen.LAST_COLUMN
 	model.row = model.command_row()
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 
 	await _settle_hatch()
 	assert_null(_world_screen.get("_hatch_host"))
@@ -1796,7 +1796,7 @@ func _settle_nickname_text() -> void:
 		if not host._text_box.is_revealing():
 			if not host._text_box.has_pages_left():
 				break
-			_world_screen.press_button(Gen2Button.A)
+			_world_screen.press_button(PokeButton.A)
 		_world_screen.advance_frame()
 	_world_screen.advance_frame()
 
@@ -1823,7 +1823,7 @@ func test_a_gift_asks_for_a_nickname_and_no_keeps_the_species_name() -> void:
 		"the %s you" % species_name, "received?",
 	]))
 	assert_eq(host.nickname_cursor(), 0, "YesNoBox opens on YES")
-	_world_screen.press_button(Gen2Button.B)
+	_world_screen.press_button(PokeButton.B)
 	assert_null(_world_screen.get("_nickname_host"), "and B closes it as NO")
 	assert_eq(save.party.size(), before + 1, "the row is written behind the prompt")
 	assert_eq(save.party[before].nickname, species_name)
@@ -1841,14 +1841,14 @@ func test_a_gift_takes_the_name_the_keyboard_stored() -> void:
 	var before: int = save.party.size()
 	var host: Gen2NicknamePromptScreen = _run_givepoke()
 	_settle_nickname_text()
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 	assert_eq(host.phase(), Gen2NicknamePromptScreen.Phase.NAMING)
 	var model: Gen2NamingScreen = host.naming_screen().model()
 	assert_eq(model.max_length, Gen2NamingScreen.MON_MAX_LENGTH)
 	model.press_a()
 	model.column = Gen2NamingScreen.LAST_COLUMN
 	model.row = model.command_row()
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 
 	assert_null(_world_screen.get("_nickname_host"))
 	assert_eq(save.party.size(), before + 1)
@@ -1867,7 +1867,7 @@ func test_a_boxed_gift_prints_bills_pc_and_keeps_the_species_name() -> void:
 		save.party.append(Gen2SaveMon.from_dict(save.party[0].to_dict()))
 	var host: Gen2NicknamePromptScreen = _run_givepoke()
 	_settle_nickname_text()
-	_world_screen.press_button(Gen2Button.B)
+	_world_screen.press_button(PokeButton.B)
 	assert_eq(host.phase(), Gen2NicknamePromptScreen.Phase.AFTER_TEXT)
 	_settle_nickname_text()
 	var species_name: String = String(
@@ -1877,7 +1877,7 @@ func test_a_boxed_gift_prints_bills_pc_and_keeps_the_species_name() -> void:
 		" ".join(host.text_lines()),
 		Gen2WorldPartyHost.sent_to_box_text(species_name).replace("\n", " ")
 	)
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 	assert_null(_world_screen.get("_nickname_host"))
 	assert_eq(save.party.size(), Gen2SaveData.MAX_PARTY)
 	assert_eq(save.boxes[0].slots[0].nickname, species_name)
@@ -1896,17 +1896,17 @@ func test_a_boxed_gift_names_the_typed_nickname_and_stores_the_species() -> void
 		save.party.append(Gen2SaveMon.from_dict(save.party[0].to_dict()))
 	var host: Gen2NicknamePromptScreen = _run_givepoke()
 	_settle_nickname_text()
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 	var model: Gen2NamingScreen = host.naming_screen().model()
 	model.press_a()
 	model.column = Gen2NamingScreen.LAST_COLUMN
 	model.row = model.command_row()
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 	assert_eq(host.phase(), Gen2NicknamePromptScreen.Phase.AFTER_TEXT)
 	_settle_nickname_text()
 	var named: String = " ".join(host.text_lines()).split(" was")[0]
 	assert_eq(named.length(), 1, "the line names what the keyboard stored")
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 	assert_null(_world_screen.get("_nickname_host"))
 	var species_name: String = String(
 		_data.species(Fixture.TRAINER_SPECIES).get("name", "")
@@ -1965,7 +1965,7 @@ func test_the_last_member_fainting_to_poison_opens_the_whiteout() -> void:
 		"".join(_world_screen._text_box.text_lines()).contains("fainted"),
 		"_PoisonFaintText comes first"
 	)
-	_world_screen.press_button(Gen2Button.A)
+	_world_screen.press_button(PokeButton.A)
 	assert_true(
 		"".join(_world_screen._text_box.text_lines()).contains("whited"),
 		"_WhitedOutText stands behind it"
@@ -1976,7 +1976,7 @@ func test_the_last_member_fainting_to_poison_opens_the_whiteout() -> void:
 		if not _world_screen._field_move_text:
 			break
 		_world_screen.advance_frame()
-		_world_screen.press_button(Gen2Button.A)
+		_world_screen.press_button(PokeButton.A)
 	assert_false(_world_screen._field_move_text, "and the last press runs it")
 	assert_true(mon.hp > 0, "Script_Whiteout's own `special HealParty`")
 
@@ -2022,7 +2022,7 @@ func test_a_nuzlocke_wipe_ends_the_run_instead_of_whiting_out() -> void:
 		if not _world_screen._field_move_text:
 			break
 		_world_screen.advance_frame()
-		_world_screen.press_button(Gen2Button.A)
+		_world_screen.press_button(PokeButton.A)
 	assert_true(said.contains("gone"), "the loss is said before the verdict")
 	assert_true(said.contains("NUZLOCKE is over"), "and `_WhitedOutText` is replaced")
 	assert_false(_world_screen._field_move_text, "the last press runs it")
@@ -2050,7 +2050,7 @@ func _register_catch_experience() -> void:
 	var manifest: FileAccess = FileAccess.open("%s/mod.json" % directory, FileAccess.WRITE)
 	manifest.store_string(JSON.stringify({
 		"id": "qol", "name": "QoL", "version": "1.0.0",
-		"api_version": Gen2ModManifest.API_VERSION, "entry": "mod.gd",
+		"api_version": PokeModManifest.API_VERSION, "entry": "mod.gd",
 	}))
 	manifest.close()
 	var entry: FileAccess = FileAccess.open("%s/mod.gd" % directory, FileAccess.WRITE)
@@ -2220,7 +2220,7 @@ func test_the_new_dex_page_takes_the_press_that_closes_it() -> void:
 	for _frame: int in 1200:
 		if _world_screen.get("_pokedex_host") != null:
 			break
-		_world_screen.press_button(Gen2Button.A)
+		_world_screen.press_button(PokeButton.A)
 		_world_screen.advance_frame()
 	var page: Gen2PokedexScreen = _world_screen.get("_pokedex_host")
 	assert_not_null(page, "the page opened over the fight")
@@ -2231,14 +2231,14 @@ func test_the_new_dex_page_takes_the_press_that_closes_it() -> void:
 
 	## `NewPokedexEntry` is two `WaitPressAorB_BlinkCursor` waits either side of
 	## page 2, so the first press turns the page and the second closes it.
-	_world_screen.press_button(Gen2Button.B)
+	_world_screen.press_button(PokeButton.B)
 	assert_not_null(_world_screen.get("_pokedex_host"), "the first press is page 2")
-	_world_screen.press_button(Gen2Button.B)
+	_world_screen.press_button(PokeButton.B)
 	assert_null(_world_screen.get("_pokedex_host"), "and the second took the page down")
 	for _frame: int in 1200:
 		if host.get("_capture_nickname_host") != null:
 			break
-		_world_screen.press_button(Gen2Button.A)
+		_world_screen.press_button(PokeButton.A)
 		_world_screen.advance_frame()
 	assert_not_null(
 		host.get("_capture_nickname_host"),

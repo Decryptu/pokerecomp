@@ -39,7 +39,7 @@ func test_every_band_answers_its_own_row() -> void:
 
 func test_the_last_row_answers_a_full_dex() -> void:
 	var rating: Dictionary = Gen2ProfOaksPC.rating_for(_data, 251)
-	assert_eq(int(rating["threshold"]), RomLayout.OAK_RATING_LAST_THRESHOLD)
+	assert_eq(int(rating["threshold"]), Gen2Layout.OAK_RATING_LAST_THRESHOLD)
 	assert_eq(String(rating["text"]), "RATING19")
 
 

@@ -51,12 +51,12 @@ func run(r: RefCounted) -> void:
 ## art is a wrong pin and a short map is a wrong length.
 func _verify_tilemaps(game_id: StringName, data: GameData) -> void:
 	var tiles: int = data.diploma_indices().size() / (
-		Gen2Tiles.TILE_WIDTH * Gen2Tiles.TILE_HEIGHT
+		PokeTiles.TILE_WIDTH * PokeTiles.TILE_HEIGHT
 	)
 	_r.check(
-		tiles == RomLayout.DIPLOMA_TILES,
+		tiles == Gen2Layout.DIPLOMA_TILES,
 		"%s: the diploma's strip is %d tiles, not %d." % [
-			game_id, tiles, RomLayout.DIPLOMA_TILES,
+			game_id, tiles, Gen2Layout.DIPLOMA_TILES,
 		]
 	)
 	for page: int in [1, 2]:
@@ -72,13 +72,13 @@ func _verify_tilemaps(game_id: StringName, data: GameData) -> void:
 		for code: int in map:
 			highest = maxi(highest, code)
 		_r.check(
-			highest < RomLayout.DIPLOMA_TILES,
+			highest < Gen2Layout.DIPLOMA_TILES,
 			"%s: diploma page %d indexes tile %d, past its own art." % [
 				game_id, page, highest,
 			]
 		)
 	_r.check(
-		data.diploma_palette().size() == RomLayout.PREDEF_PALETTE_COLORS,
+		data.diploma_palette().size() == Gen2Layout.PREDEF_PALETTE_COLORS,
 		"%s: the diploma's palette is not four colours." % game_id
 	)
 

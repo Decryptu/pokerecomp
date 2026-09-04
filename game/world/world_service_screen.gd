@@ -431,17 +431,17 @@ func handle_button(button: int) -> bool:
 		return _mail_reader.handle_button(button)
 	if _mail_party != null:
 		return _mail_party.handle_button(button)
-	if Gen2Button.is_direction(button):
-		_move_direction(Gen2Button.vector(button))
+	if PokeButton.is_direction(button):
+		_move_direction(PokeButton.vector(button))
 		return true
 	match button:
-		Gen2Button.A:
+		PokeButton.A:
 			_confirm()
 			return true
-		Gen2Button.B:
+		PokeButton.B:
 			_cancel()
 			return true
-		Gen2Button.SELECT:
+		PokeButton.SELECT:
 			return _press_pc_item_select()
 	return false
 
@@ -580,11 +580,11 @@ func _render_elevator() -> void:
 
 func _press_elevator(button: int) -> void:
 	var floors: Array = _elevator_floors()
-	if button == Gen2Button.B:
+	if button == PokeButton.B:
 		## `.cancel`'s `scf`, which `Script_elevator`'s `ret c` leaves as FALSE.
 		_finish_runtime({"ok": true})
 		return
-	if button == Gen2Button.A:
+	if button == PokeButton.A:
 		if _cursor < 0 or _cursor >= floors.size():
 			return
 		## `Elevator`'s own `cp [hl] / jr z, .quit`: choosing the floor the car
@@ -594,9 +594,9 @@ func _press_elevator(button: int) -> void:
 			return
 		_finish_runtime({"ok": true, "floor": (floors[_cursor] as Dictionary).duplicate()})
 		return
-	if button == Gen2Button.UP:
+	if button == PokeButton.UP:
 		_cursor = maxi(0, _cursor - 1)
-	elif button == Gen2Button.DOWN:
+	elif button == PokeButton.DOWN:
 		_cursor = mini(floors.size() - 1, _cursor + 1)
 	else:
 		return
@@ -768,7 +768,7 @@ func _mart_selection() -> Dictionary:
 func _press_mart(button: int) -> void:
 	match _mart_stage:
 		MART_MESSAGE:
-			if button in [Gen2Button.A, Gen2Button.B]:
+			if button in [PokeButton.A, PokeButton.B]:
 				_advance_mart_text()
 		MART_TOP:
 			_press_mart_top(button)
@@ -788,13 +788,13 @@ func _press_mart(button: int) -> void:
 
 func _press_mart_list(button: int) -> void:
 	match button:
-		Gen2Button.UP:
+		PokeButton.UP:
 			_move_mart_cursor(-1)
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			_move_mart_cursor(1)
-		Gen2Button.B:
+		PokeButton.B:
 			_leave_mart()
-		Gen2Button.A:
+		PokeButton.A:
 			var entry: Dictionary = _mart_selection()
 			if entry.is_empty():
 				_leave_mart()
@@ -837,13 +837,13 @@ func _move_mart_cursor(delta: int) -> void:
 func _press_mart_quantity(button: int) -> void:
 	var maximum: int = Gen2WorldMartHost.MAX_ITEM_STACK
 	match button:
-		Gen2Button.UP, Gen2Button.DOWN, Gen2Button.LEFT, Gen2Button.RIGHT:
+		PokeButton.UP, PokeButton.DOWN, PokeButton.LEFT, PokeButton.RIGHT:
 			_mart_quantity = Gen2WorldQuantityPrompt.stepped(
 				_mart_quantity, button, maximum
 			)
-		Gen2Button.B:
+		PokeButton.B:
 			_mart_stage = MART_LIST
-		Gen2Button.A:
+		PokeButton.A:
 			_ask_mart_confirm()
 			return
 	_render_mart()
@@ -867,11 +867,11 @@ func _ask_mart_confirm() -> void:
 
 func _press_mart_confirm(button: int) -> void:
 	match button:
-		Gen2Button.UP, Gen2Button.DOWN:
+		PokeButton.UP, PokeButton.DOWN:
 			_mart_confirm = 1 - _mart_confirm
-		Gen2Button.B:
+		PokeButton.B:
 			_mart_stage = MART_LIST
-		Gen2Button.A:
+		PokeButton.A:
 			if _mart_confirm == 0:
 				_buy_mart_selection()
 				return
@@ -927,14 +927,14 @@ func _quit_mart() -> void:
 ## takes, so B is QUIT rather than a way back out of the shop.
 func _press_mart_top(button: int) -> void:
 	match button:
-		Gen2Button.UP:
+		PokeButton.UP:
 			_cursor = wrapi(_cursor - 1, 0, MART_TOP_ROWS.size())
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			_cursor = wrapi(_cursor + 1, 0, MART_TOP_ROWS.size())
-		Gen2Button.B:
+		PokeButton.B:
 			_quit_mart()
 			return
-		Gen2Button.A:
+		PokeButton.A:
 			match _cursor:
 				MART_TOP_BUY:
 					_mart_stage = MART_LIST
@@ -984,13 +984,13 @@ func _refresh_mart_sell_entries() -> void:
 
 func _press_mart_sell_list(button: int) -> void:
 	match button:
-		Gen2Button.UP:
+		PokeButton.UP:
 			_move_mart_cursor(-1)
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			_move_mart_cursor(1)
-		Gen2Button.B:
+		PokeButton.B:
 			_leave_mart()
-		Gen2Button.A:
+		PokeButton.A:
 			var entry: Dictionary = _mart_selection()
 			if entry.is_empty():
 				_leave_mart()
@@ -1013,13 +1013,13 @@ func _press_mart_sell_list(button: int) -> void:
 func _press_mart_sell_quantity(button: int) -> void:
 	var maximum: int = maxi(1, int(_mart_selection().get("quantity", 1)))
 	match button:
-		Gen2Button.UP, Gen2Button.DOWN, Gen2Button.LEFT, Gen2Button.RIGHT:
+		PokeButton.UP, PokeButton.DOWN, PokeButton.LEFT, PokeButton.RIGHT:
 			_mart_quantity = Gen2WorldQuantityPrompt.stepped(
 				_mart_quantity, button, maximum
 			)
-		Gen2Button.B:
+		PokeButton.B:
 			_mart_stage = MART_SELL
-		Gen2Button.A:
+		PokeButton.A:
 			_mart_confirm = 0
 			_mart_stage = MART_SELL_CONFIRM
 			_mart_pages = Gen2TextLayout.lay_out(
@@ -1036,11 +1036,11 @@ func _press_mart_sell_quantity(button: int) -> void:
 
 func _press_mart_sell_confirm(button: int) -> void:
 	match button:
-		Gen2Button.UP, Gen2Button.DOWN:
+		PokeButton.UP, PokeButton.DOWN:
 			_mart_confirm = 1 - _mart_confirm
-		Gen2Button.B:
+		PokeButton.B:
 			_mart_stage = MART_SELL
-		Gen2Button.A:
+		PokeButton.A:
 			if _mart_confirm == 0:
 				_sell_mart_selection()
 				return
@@ -1629,7 +1629,7 @@ func _change_pc_quantity(step: int) -> void:
 		return
 	var owned: int = int(_pc_entries[_cursor].get("quantity", 1))
 	_pc_quantity = Gen2WorldQuantityPrompt.stepped(
-		_pc_quantity, Gen2Button.UP if step > 0 else Gen2Button.DOWN, owned
+		_pc_quantity, PokeButton.UP if step > 0 else PokeButton.DOWN, owned
 	)
 	_render_rows()
 
@@ -2533,7 +2533,7 @@ func _scrolling_rows() -> int:
 
 func _move_direction(direction: Vector2i) -> void:
 	if _mode == MODE.TOWN_MAP and _town_map != null:
-		_town_map.handle_button(Gen2Button.from_vector(direction))
+		_town_map.handle_button(PokeButton.from_vector(direction))
 		return
 	if _mode == MODE.MENU and _menu != null:
 		if _menu.move(direction):

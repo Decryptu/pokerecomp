@@ -9,12 +9,12 @@ extends GutTest
 ## a sweep cannot single out, which is every one that turns on what the cursor is
 ## carrying or on the order two presses happen in.
 
-const UP: int = Gen2Button.UP
-const DOWN: int = Gen2Button.DOWN
-const LEFT: int = Gen2Button.LEFT
-const RIGHT: int = Gen2Button.RIGHT
-const A: int = Gen2Button.A
-const START: int = Gen2Button.START
+const UP: int = PokeButton.UP
+const DOWN: int = PokeButton.DOWN
+const LEFT: int = PokeButton.LEFT
+const RIGHT: int = PokeButton.RIGHT
+const A: int = PokeButton.A
+const START: int = PokeButton.START
 
 
 func _press(puzzle: Gen2UnownPuzzle, button: int) -> Dictionary:

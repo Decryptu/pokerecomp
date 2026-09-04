@@ -74,15 +74,15 @@ func menu() -> Gen2WorldMenu:
 func handle_button(button: int) -> bool:
 	if _menu == null:
 		return false
-	if button == Gen2Button.A:
+	if button == PokeButton.A:
 		closed.emit(
 			Gen2SaveData.GENDER_FEMALE if _menu.selected_index() == 1
 			else Gen2SaveData.GENDER_MALE
 		)
 		return true
-	if not Gen2Button.is_direction(button):
+	if not PokeButton.is_direction(button):
 		return false
-	if _menu.move(Gen2Button.vector(button)):
+	if _menu.move(PokeButton.vector(button)):
 		_refresh()
 	return true
 
@@ -102,6 +102,6 @@ func _refresh() -> void:
 ## here uses rather than refusing to draw.
 func _palette() -> PackedColorArray:
 	var colors: PackedColorArray = _page.palette
-	if colors.size() < RomLayout.GENDER_SCREEN_PALETTE_COLORS:
-		colors = Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+	if colors.size() < Gen2Layout.GENDER_SCREEN_PALETTE_COLORS:
+		colors = PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	return Gen2IntroPresentation.apply_bgp(colors, bgp)

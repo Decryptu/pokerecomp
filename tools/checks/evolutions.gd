@@ -46,7 +46,7 @@ func _census(game_id: StringName, data: GameData) -> void:
 			rows += 1
 			var method: int = int(row.get("method", 0))
 			if not _r.check(
-				method in RomLayout.EVOLVE_METHODS,
+				method in Gen2Layout.EVOLVE_METHODS,
 				"%s: species %d carries evolution method %d." % [game_id, species, method]
 			):
 				continue
@@ -59,9 +59,9 @@ func _census(game_id: StringName, data: GameData) -> void:
 				]
 			)
 			_r.check(
-				method != RomLayout.EVOLVE_STAT or int(row.get("condition", 0)) in [
-					RomLayout.ATTACK_OVER_DEFENSE, RomLayout.ATTACK_UNDER_DEFENSE,
-					RomLayout.ATTACK_EQUALS_DEFENSE,
+				method != Gen2Layout.EVOLVE_STAT or int(row.get("condition", 0)) in [
+					Gen2Layout.ATTACK_OVER_DEFENSE, Gen2Layout.ATTACK_UNDER_DEFENSE,
+					Gen2Layout.ATTACK_EQUALS_DEFENSE,
 				],
 				"%s: species %d's EVOLVE_STAT row has no Attack/Defense condition." % [
 					game_id, species,

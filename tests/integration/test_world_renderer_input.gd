@@ -113,7 +113,7 @@ func test_a_controller_opens_and_walks_the_start_menu() -> void:
 	assert_ne(second, first, "the d-pad moves the cursor")
 
 	var repeat := InputEventAction.new()
-	repeat.action = Gen2Button.action(Gen2Button.DOWN)
+	repeat.action = PokeButton.action(PokeButton.DOWN)
 	repeat.pressed = true
 	_world_screen._unhandled_input(repeat)
 	assert_ne(host.cursor(), second, "a held direction keeps moving it")
@@ -147,7 +147,7 @@ func test_a_held_direction_stops_the_menu_the_moment_the_key_comes_up() -> void:
 	Input.parse_input_event(_key(false))
 	await get_tree().process_frame
 	await get_tree().process_frame
-	assert_eq(runtime.held_direction(), Gen2Button.NONE, "the walk stops with it")
+	assert_eq(runtime.held_direction(), PokeButton.NONE, "the walk stops with it")
 
 	at = host.cursor()
 	var after: int = 0

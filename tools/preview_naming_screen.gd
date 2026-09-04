@@ -14,14 +14,14 @@ const SETTLE_FRAMES: int = 8
 const PREVIEW_SPECIES: int = 155
 
 const BUTTONS: Dictionary = {
-	"u": Gen2Button.UP,
-	"d": Gen2Button.DOWN,
-	"l": Gen2Button.LEFT,
-	"r": Gen2Button.RIGHT,
-	"a": Gen2Button.A,
-	"b": Gen2Button.B,
-	"s": Gen2Button.START,
-	"c": Gen2Button.SELECT,
+	"u": PokeButton.UP,
+	"d": PokeButton.DOWN,
+	"l": PokeButton.LEFT,
+	"r": PokeButton.RIGHT,
+	"a": PokeButton.A,
+	"b": PokeButton.B,
+	"s": PokeButton.START,
+	"c": PokeButton.SELECT,
 }
 
 var _screen: Gen2NamingScreenScreen = null
@@ -36,7 +36,7 @@ func _initialize() -> void:
 		quit(1)
 		return
 	_output_path = args[1]
-	if Gen2ToolPath.refuses(_output_path):
+	if PokeToolPath.refuses(_output_path):
 		quit(2)
 		return
 
@@ -90,7 +90,7 @@ func _process(_delta: float) -> bool:
 	_frames += 1
 	if _frames < SETTLE_FRAMES:
 		return false
-	var image: Image = Gen2ToolPath.capture(root)
+	var image: Image = PokeToolPath.capture(root)
 	if image == null:
 		quit(1)
 		return true

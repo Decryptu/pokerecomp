@@ -8,7 +8,7 @@ const BLUE: Color = Color(0, 0, 1)
 
 
 func _palette() -> PackedColorArray:
-	return Gen2Palette.pic_palette(PackedColorArray([RED, BLUE]))
+	return PokePalette.pic_palette(PackedColorArray([RED, BLUE]))
 
 
 func test_each_index_becomes_its_palette_colour() -> void:
@@ -275,7 +275,7 @@ func test_a_pic_animations_tiles_collide_with_the_players_own_run() -> void:
 		Gen2PicImage.FRONTPIC_TILES * Gen2PicImage.FRONTPIC_TILES,
 		Gen2BattleScreenMap.PLAYER_BASE_TILE
 	)
-	assert_eq(RomLayout.pic_anim_box_tile(25, 5), Gen2BattleScreenMap.PLAYER_BASE_TILE)
+	assert_eq(Gen2Layout.pic_anim_box_tile(25, 5), Gen2BattleScreenMap.PLAYER_BASE_TILE)
 
 
 ## `PokeAnim_SetVBank1`'s rule, which is what stops the enemy's animation tiles
@@ -342,7 +342,7 @@ func test_a_tile_is_drawn_in_the_palette_its_attrmap_slot_names() -> void:
 ## animation indexes by tile number needs: `PokeAnim_PlaceGraphic` runs the
 ## columns back itself, so the buffer owes only each tile's own pixels.
 func test_tile_flipped_indices_mirrors_inside_a_tile_and_not_across_two() -> void:
-	var tile: int = Gen2Tiles.TILE_WIDTH
+	var tile: int = PokeTiles.TILE_WIDTH
 	var indices := PackedByteArray()
 	indices.resize(tile * 2)
 	indices[0] = 1
@@ -356,7 +356,7 @@ func test_tile_flipped_indices_mirrors_inside_a_tile_and_not_across_two() -> voi
 ## `PadFrontpic` leaves a shorter pic bottom-aligned one column in, and
 ## `PlaceGraphic`'s `.right` puts that blank column on the other side.
 func test_frontpic_origin_puts_a_mirrored_pic_against_the_far_column() -> void:
-	var tile: int = Gen2Tiles.TILE_WIDTH
+	var tile: int = PokeTiles.TILE_WIDTH
 	var five := Vector2i(5 * tile, 5 * tile)
 
 	assert_eq(Gen2PicImage.frontpic_origin(five), Vector2i(tile, 2 * tile))
@@ -372,7 +372,7 @@ func test_frontpic_origin_puts_a_mirrored_pic_against_the_far_column() -> void:
 ## value is a tile number down the strip's own columns.
 func test_animation_box_indices_reads_the_strip_by_tile_number() -> void:
 	var side: int = 2
-	var tile: int = Gen2Tiles.TILE_WIDTH
+	var tile: int = PokeTiles.TILE_WIDTH
 	var span: int = side * tile
 	var pixels := PackedByteArray()
 	pixels.resize(span * span)

@@ -37,7 +37,7 @@ func _initialize() -> void:
 	frames.sort()
 
 	_output_path = args[1]
-	if Gen2ToolPath.refuses(_output_path):
+	if PokeToolPath.refuses(_output_path):
 		quit(2)
 		return
 	if args.size() > 3 and args[3] == "live":
@@ -52,7 +52,7 @@ func _initialize() -> void:
 		quit(1)
 		return
 
-	var buttons: Array = [Gen2Button.B] if held else []
+	var buttons: Array = [PokeButton.B] if held else []
 	var spent: int = 0
 	for wanted: int in frames:
 		while spent < wanted:

@@ -51,9 +51,9 @@ const EXPECTED_HAPPINESS_CHANGES: Array = [
 	[3, 3, 1], [10, 6, 4],
 ]
 const EXPECTED_HAPPINESS_ROWS: Dictionary = {
-	&"gold": RomLayout.HAPPINESS_CHANGE_COUNT_GOLD_SILVER,
-	&"silver": RomLayout.HAPPINESS_CHANGE_COUNT_GOLD_SILVER,
-	&"crystal": RomLayout.HAPPINESS_CHANGE_COUNT,
+	&"gold": Gen2Layout.HAPPINESS_CHANGE_COUNT_GOLD_SILVER,
+	&"silver": Gen2Layout.HAPPINESS_CHANGE_COUNT_GOLD_SILVER,
+	&"crystal": Gen2Layout.HAPPINESS_CHANGE_COUNT,
 }
 
 ## Caterpie, Ditto, Kakuna, Magikarp, Metapod, Smeargle, Unown, Weedle and
@@ -145,42 +145,42 @@ func _verify_item_numbers(game_id: StringName, data: GameData) -> void:
 	var count: int = data.tmhm_moves().size()
 	var claimed: Dictionary = {}
 	for number: int in range(1, count + 1):
-		var item: int = RomLayout.item_for_tmhm_number(number, count)
+		var item: int = Gen2Layout.item_for_tmhm_number(number, count)
 		_r.check(
 			not claimed.has(item),
 			"%s: item $%02X is claimed by two TM/HM numbers." % [game_id, item]
 		)
 		claimed[item] = number
 		_r.check(
-			RomLayout.tmhm_number_for_item(item, count) == number,
+			Gen2Layout.tmhm_number_for_item(item, count) == number,
 			"%s: item $%02X answers TM/HM %d, not %d." % [
-				game_id, item, RomLayout.tmhm_number_for_item(item, count), number,
+				game_id, item, Gen2Layout.tmhm_number_for_item(item, count), number,
 			]
 		)
 		_r.check(
 			Gen2WorldTMHM.move_for_item(data, item) == data.tmhm_move(number),
 			"%s: item $%02X teaches the wrong move for TM/HM %d." % [game_id, item, number]
 		)
-	for item: int in [RomLayout.ITEM_DUMMY_TM04_05, RomLayout.ITEM_DUMMY_TM28_29]:
+	for item: int in [Gen2Layout.ITEM_DUMMY_TM04_05, Gen2Layout.ITEM_DUMMY_TM28_29]:
 		_r.check(
-			RomLayout.tmhm_number_for_item(item, count) == 0,
+			Gen2Layout.tmhm_number_for_item(item, count) == 0,
 			"%s: dummy item $%02X answered a TM/HM number." % [game_id, item]
 		)
 	# HM01 is where the HM run starts, which is also where ConsumeTM stops.
 	_r.check(
-		Gen2WorldTMHM.is_hm(RomLayout.ITEM_HM01)
-			and not Gen2WorldTMHM.is_hm(RomLayout.ITEM_HM01 - 1),
-		"%s: the HM threshold is not at $%02X." % [game_id, RomLayout.ITEM_HM01]
+		Gen2WorldTMHM.is_hm(Gen2Layout.ITEM_HM01)
+			and not Gen2WorldTMHM.is_hm(Gen2Layout.ITEM_HM01 - 1),
+		"%s: the HM threshold is not at $%02X." % [game_id, Gen2Layout.ITEM_HM01]
 	)
 	# The run ends where the byte does. `cp TM01` needs no ceiling on hardware;
 	# a defined item is not a byte, so without one every mod item read as a TM
 	# and as an HM, and answered a move's description instead of its own.
 	_r.check(
-		Gen2WorldTMHM.is_tm_hm(RomLayout.ITEM_BYTE_MAX)
+		Gen2WorldTMHM.is_tm_hm(Gen2Layout.ITEM_BYTE_MAX)
 			and not Gen2WorldTMHM.is_tm_hm(Gen2ContentOverlay.FIRST_MOD_NUMBER)
 			and not Gen2WorldTMHM.is_hm(Gen2ContentOverlay.FIRST_MOD_NUMBER),
 		"%s: a defined item past $%02X still reads as a TM/HM." % [
-			game_id, RomLayout.ITEM_BYTE_MAX,
+			game_id, Gen2Layout.ITEM_BYTE_MAX,
 		]
 	)
 
@@ -194,7 +194,7 @@ func _census(game_id: StringName, data: GameData) -> void:
 	for species: int in range(1, data.species_count() + 1):
 		var flags: Array = data.species(species).get("tmhm", [])
 		if not _r.check(
-			flags.size() == RomLayout.TMHM_BYTES,
+			flags.size() == Gen2Layout.TMHM_BYTES,
 			"%s: species %d carries %d TM/HM flag bytes." % [game_id, species, flags.size()]
 		):
 			return
@@ -204,7 +204,7 @@ func _census(game_id: StringName, data: GameData) -> void:
 				learnable += 1
 		# The top four bits of the eight-byte run are past the last TM/HM number
 		# in both games, so no species may set them.
-		var spare: int = int(flags[RomLayout.TMHM_BYTES - 1]) >> (table.size() - 56)
+		var spare: int = int(flags[Gen2Layout.TMHM_BYTES - 1]) >> (table.size() - 56)
 		_r.check(
 			spare == 0,
 			"%s: species %d sets a flag past TM/HM %d." % [game_id, species, table.size()]
@@ -250,11 +250,11 @@ func _verify_happiness_changes(game_id: StringName, data: GameData) -> void:
 	## `TeachTMHM`'s own row, named so the one the project actually runs is
 	## checked by constant rather than by index.
 	_r.check(
-		data.happiness_changes(RomLayout.HAPPINESS_LEARNMOVE) == [1, 1, 0],
+		data.happiness_changes(Gen2Layout.HAPPINESS_LEARNMOVE) == [1, 1, 0],
 		"%s: HAPPINESS_LEARNMOVE is %s, not +1, +1, +0." % [
-			game_id, data.happiness_changes(RomLayout.HAPPINESS_LEARNMOVE),
+			game_id, data.happiness_changes(Gen2Layout.HAPPINESS_LEARNMOVE),
 		]
 	)
 	print("%s: %d happiness rows, HAPPINESS_LEARNMOVE %s." % [
-		game_id, rows, data.happiness_changes(RomLayout.HAPPINESS_LEARNMOVE),
+		game_id, rows, data.happiness_changes(Gen2Layout.HAPPINESS_LEARNMOVE),
 	])

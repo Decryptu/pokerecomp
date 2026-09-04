@@ -149,7 +149,7 @@ func _refresh_page() -> void:
 ## is eight palettes at once.
 func _image_from(indices: PackedByteArray, attributes: PackedInt32Array) -> Image:
 	var palettes: Array = []
-	for slot: int in RomLayout.CARD_PALETTE_CLASSES.size():
+	for slot: int in Gen2Layout.CARD_PALETTE_CLASSES.size():
 		palettes.append(_data.card_palette(slot))
 	return Gen2PicImage.from_attributes(
 		indices, Gen2Screen.WIDTH, Gen2Screen.HEIGHT, attributes,
@@ -201,7 +201,7 @@ func _badge_image(frame_tile: int) -> Image:
 	if tiles.is_empty():
 		return Gen2PicImage.canvas_image(pixels, side, side)
 	@warning_ignore("integer_division")
-	var strip_tiles: int = tiles.size() / Gen2Tiles.TILE_PIXELS
+	var strip_tiles: int = tiles.size() / PokeTiles.TILE_PIXELS
 	var first: int = frame_tile & ~BADGE_FLIP
 	## Object colour zero is transparent under the hardware's own rules, which
 	## is what lets a badge sit over the card.

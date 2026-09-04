@@ -21,7 +21,7 @@ const NUM_SLOT_REELS: int = 6
 const SLOTS_NO_MATCH: int = -1
 const SLOTS_NO_BIAS: int = -1
 
-const REEL_SIZE: int = RomLayout.SLOTS_REEL_SIZE
+const REEL_SIZE: int = Gen2Layout.SLOTS_REEL_SIZE
 const REELS: int = 3
 ## `MAX_COINS`, which `Slots_CheckCoinCaseFull` refuses to pass.
 const MAX_COINS: int = 9999
@@ -1183,7 +1183,7 @@ static func _sine(angle: int, amplitude: int) -> int:
 	var index: int = angle & 0x3F
 	var negative: bool = index >= 0x20
 	var at: int = (index & 0x1F) * 2
-	var word: int = RomLayout.BATTLE_ANIM_SINE_WAVE[at] \
-		| (RomLayout.BATTLE_ANIM_SINE_WAVE[at + 1] << 8)
+	var word: int = Gen2Layout.BATTLE_ANIM_SINE_WAVE[at] \
+		| (Gen2Layout.BATTLE_ANIM_SINE_WAVE[at + 1] << 8)
 	var value: int = (((amplitude & 0xFF) * word) >> 8) & 0xFF
 	return (-value) & 0xFF if negative else value

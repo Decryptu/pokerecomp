@@ -23,7 +23,7 @@ func _initialize() -> void:
 		quit(1)
 		return
 	_output_path = args[0]
-	if Gen2ToolPath.refuses(_output_path):
+	if PokeToolPath.refuses(_output_path):
 		quit(2)
 		return
 	if args.size() >= 4:
@@ -57,7 +57,7 @@ func _process(_delta: float) -> bool:
 		_screen.preview_fishing()
 	if _frames < 18:
 		return false
-	var image: Image = Gen2ToolPath.capture(root)
+	var image: Image = PokeToolPath.capture(root)
 	if image == null:
 		quit(1)
 		return true

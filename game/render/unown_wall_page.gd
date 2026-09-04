@@ -22,7 +22,7 @@ static func render(
 	if blocks.is_empty():
 		return null
 	var indices: PackedByteArray = data.map_tile_indices(map, tileset)
-	if indices.size() < RomLayout.TILESET_TILE_COUNT * Gen2Tiles.TILE_PIXELS:
+	if indices.size() < Gen2Layout.TILESET_TILE_COUNT * PokeTiles.TILE_PIXELS:
 		return null
 	var menu: Gen2MenuPage = Gen2MenuPage.from_data(data)
 	if menu == null:
@@ -41,7 +41,7 @@ static func render(
 			Gen2UnownWall.block_position(box, index) - box.border_position()
 		) * TILE
 		var tiles: Array = block["tiles"]
-		var base: int = RomLayout.TILESET_BLOCK_STRIDE if bool(block["bank1"]) else 0
+		var base: int = Gen2Layout.TILESET_BLOCK_STRIDE if bool(block["bank1"]) else 0
 		for corner: int in tiles.size():
 			_draw_tile(
 				image, indices, palette, base + int(tiles[corner]),
@@ -55,10 +55,10 @@ static func _draw_tile(
 	image: Image, indices: PackedByteArray, palette: PackedColorArray,
 	tile: int, at: Vector2i
 ) -> void:
-	var stride: int = RomLayout.TILESET_TILE_COUNT * Gen2Tiles.TILE_WIDTH
-	var left: int = tile * Gen2Tiles.TILE_WIDTH
-	for y: int in Gen2Tiles.TILE_HEIGHT:
-		for x: int in Gen2Tiles.TILE_WIDTH:
+	var stride: int = Gen2Layout.TILESET_TILE_COUNT * PokeTiles.TILE_WIDTH
+	var left: int = tile * PokeTiles.TILE_WIDTH
+	for y: int in PokeTiles.TILE_HEIGHT:
+		for x: int in PokeTiles.TILE_WIDTH:
 			var to: Vector2i = at + Vector2i(x, y)
 			if to.x < 0 or to.y < 0 or to.x >= image.get_width() or to.y >= image.get_height():
 				continue

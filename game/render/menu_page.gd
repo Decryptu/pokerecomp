@@ -148,7 +148,7 @@ func render(
 	indices.resize(width * Gen2Screen.HEIGHT)
 	draw(box, options, cursor, indices, width, title, title_indent, extras)
 	var colors: PackedColorArray = palette if palette.size() >= 4 \
-		else Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+		else PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	return Gen2PicImage.from_indices(
 		indices, width, Gen2Screen.HEIGHT, colors
 	).get_region(Rect2i(box.border_position() * TILE, box.border_size() * TILE))

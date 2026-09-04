@@ -68,7 +68,7 @@ func _animation_event(extra: Dictionary = {}) -> Dictionary:
 		"type": Gen2Battle.ANIMATION, "side": Gen2Battle.PLAYER,
 		"index": 33, "param": 0,
 		"after_anim": Gen2BattleAnimPlayer.AFTER_ANIM_ENEMY_DAMAGE,
-		"enemy_turn": false, "effectiveness": RomLayout.MATCHUP_EFFECTIVE,
+		"enemy_turn": false, "effectiveness": Gen2Layout.MATCHUP_EFFECTIVE,
 		"restore_user_pic": false,
 	}
 	event.merge(extra, true)

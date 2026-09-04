@@ -57,10 +57,10 @@ func run(r: RefCounted) -> void:
 ## pic box for a row with no Pokemon on it.
 func _verify_graphics(game_id: StringName, data: GameData) -> void:
 	for run_row: Array in [
-		["pc_select", RomLayout.PC_SELECT_TILES], ["pc_mail", RomLayout.PC_MAIL_TILES],
+		["pc_select", Gen2Layout.PC_SELECT_TILES], ["pc_mail", Gen2Layout.PC_MAIL_TILES],
 	]:
 		var strip: PackedByteArray = data.tile_indices(String(run_row[0]))
-		var want: int = int(run_row[1]) * Gen2Tiles.TILE_WIDTH * Gen2Tiles.TILE_HEIGHT
+		var want: int = int(run_row[1]) * PokeTiles.TILE_WIDTH * PokeTiles.TILE_HEIGHT
 		_r.check(
 			strip.size() == want,
 			"%s: %s is %d pixels, not the %d its %d tiles need." % [
@@ -69,15 +69,15 @@ func _verify_graphics(game_id: StringName, data: GameData) -> void:
 		)
 	var palette: PackedColorArray = data.pc_palette()
 	if not _r.check(
-		palette.size() == RomLayout.PC_PALETTE_COLORS,
+		palette.size() == Gen2Layout.PC_PALETTE_COLORS,
 		"%s: the PC palette holds %d colours, not %d." % [
-			game_id, palette.size(), RomLayout.PC_PALETTE_COLORS,
+			game_id, palette.size(), Gen2Layout.PC_PALETTE_COLORS,
 		]
 	):
 		return
 	for index: int in ORANGE.size():
 		_r.check(
-			palette[index].is_equal_approx(Gen2Palette.from_packed(ORANGE[index])),
+			palette[index].is_equal_approx(PokePalette.from_packed(ORANGE[index])),
 			"%s: PC colour %d is %s, not the pinned $%04X." % [
 				game_id, index, palette[index], ORANGE[index],
 			]

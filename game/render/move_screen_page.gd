@@ -134,7 +134,7 @@ func render(page: Dictionary, data: GameData) -> Image:
 		return Gen2PicImage.canvas_image(pixels, width, height)
 	var colors: PackedColorArray = data.party_menu_icon_palette()
 	var strip: PackedByteArray = data.species_icon_indices(int(page.get("species", 0)))
-	if strip.is_empty() or colors.size() != Gen2Palette.COLORS_PER_PIC:
+	if strip.is_empty() or colors.size() != PokePalette.COLORS_PER_PIC:
 		return Gen2PicImage.canvas_image(pixels, width, height)
 	var first: int = _frame * ICON_FRAME_TILES
 	for quadrant: int in ICON_FRAME_TILES:
@@ -161,7 +161,7 @@ func _background(page: Dictionary, data: GameData) -> PackedInt32Array:
 	if data == null:
 		return Gen2PicImage.canvas_from_indices(
 			indices, COLUMNS * TILE, ROWS * TILE,
-			Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+			PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 		)
 	var lit: int = Gen2BattleHud.bar_pixels(
 		int(page.get("hp", 0)), int(page.get("max_hp", 0)),

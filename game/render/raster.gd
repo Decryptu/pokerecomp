@@ -1,4 +1,4 @@
-class_name Gen2Raster
+class_name PokeRaster
 extends RefCounted
 
 ## A background scrolled by a different amount on each scanline, which is what the

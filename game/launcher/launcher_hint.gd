@@ -98,11 +98,11 @@ func refresh() -> void:
 	if _theme == null:
 		return
 	var input: Gen2InputRuntime = Gen2InputRuntime.instance()
-	var device: StringName = input.device() if input != null else Gen2InputDevice.KEYBOARD
+	var device: StringName = input.device() if input != null else PokeInputDevice.KEYBOARD
 	var layout: StringName = input.pad_layout() if input != null \
-		else Gen2InputActions.PAD_LAYOUT_AUTO
-	var printed: String = "" if Gen2InputDevice.is_pointer(device) \
-		else Gen2InputActions.action_badge(_action, device, layout)
+		else PokeInputActions.PAD_LAYOUT_AUTO
+	var printed: String = "" if PokeInputDevice.is_pointer(device) \
+		else PokeInputActions.action_badge(_action, device, layout)
 	_badge.set_badge(_theme, printed, _lit)
 	# A wordless chip with nothing printed on it is no legend at all.
 	visible = not printed.is_empty() or not _label.text.is_empty()

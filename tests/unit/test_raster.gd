@@ -31,7 +31,7 @@ func _source_column(image: Image, x: int, y: int = 0) -> int:
 
 
 func test_no_offset_leaves_the_image_alone() -> void:
-	var out: Image = Gen2Raster.scroll(_numbered(), _flat(0), MAP)
+	var out: Image = PokeRaster.scroll(_numbered(), _flat(0), MAP)
 	assert_eq(_source_column(out, 0), 0)
 	assert_eq(_source_column(out, WIDTH - 1), WIDTH - 1)
 
@@ -39,7 +39,7 @@ func test_no_offset_leaves_the_image_alone() -> void:
 ## An offset is a distance to look right into the map, so the drawn content
 ## moves left and the map's blank columns follow it in.
 func test_an_offset_pushes_the_drawn_content_left_and_brings_blank_in() -> void:
-	var out: Image = Gen2Raster.scroll(_numbered(), _flat(40), MAP)
+	var out: Image = PokeRaster.scroll(_numbered(), _flat(40), MAP)
 	assert_eq(_source_column(out, 0), 40, "screen 0 shows map column 40")
 	assert_eq(_source_column(out, WIDTH - 41), WIDTH - 1, "the last drawn column, moved left")
 	assert_eq(_source_column(out, WIDTH - 40), -1, "and blank map behind it")
@@ -50,7 +50,7 @@ func test_an_offset_pushes_the_drawn_content_left_and_brings_blank_in() -> void:
 ## content back in on the other side. `BattleIntroSlidingPics` starts at $90,
 ## which is already past the point where that happens.
 func test_an_offset_past_the_map_wraps_the_content_back_in() -> void:
-	var out: Image = Gen2Raster.scroll(_numbered(), _flat(0x90), MAP)
+	var out: Image = PokeRaster.scroll(_numbered(), _flat(0x90), MAP)
 	assert_eq(_source_column(out, 0), 0x90, "the right end of the drawn content")
 	assert_eq(_source_column(out, WIDTH - 0x90 - 1), WIDTH - 1, "up to its last column")
 	assert_eq(_source_column(out, WIDTH - 0x90), -1, "then the map's blank")
@@ -63,7 +63,7 @@ func test_an_offset_past_the_map_wraps_the_content_back_in() -> void:
 
 ## An offset of the whole map is no offset at all.
 func test_an_offset_of_a_whole_map_is_the_image_itself() -> void:
-	var out: Image = Gen2Raster.scroll(_numbered(), _flat(MAP), MAP)
+	var out: Image = PokeRaster.scroll(_numbered(), _flat(MAP), MAP)
 	assert_eq(_source_column(out, 0), 0)
 	assert_eq(_source_column(out, WIDTH - 1), WIDTH - 1)
 
@@ -74,7 +74,7 @@ func test_each_scanline_takes_its_own_offset() -> void:
 	var offsets: PackedInt32Array = _flat(0)
 	for row: int in HEIGHT:
 		offsets[row] = 8 if row < 10 else 24
-	var out: Image = Gen2Raster.scroll(_numbered(), offsets, MAP)
+	var out: Image = PokeRaster.scroll(_numbered(), offsets, MAP)
 	assert_eq(_source_column(out, 0, 0), 8)
 	assert_eq(_source_column(out, 0, 9), 8)
 	assert_eq(_source_column(out, 0, 10), 24)
@@ -84,5 +84,5 @@ func test_each_scanline_takes_its_own_offset() -> void:
 ## A caller that has no offsets for every row gets its image back rather than a
 ## partly scrolled one.
 func test_a_short_offset_list_scrolls_nothing() -> void:
-	var out: Image = Gen2Raster.scroll(_numbered(), PackedInt32Array([4, 4]), MAP)
+	var out: Image = PokeRaster.scroll(_numbered(), PackedInt32Array([4, 4]), MAP)
 	assert_eq(_source_column(out, 0), 0)

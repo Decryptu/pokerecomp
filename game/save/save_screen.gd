@@ -808,8 +808,8 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if _mystery_gift == null:
 		return
-	var button: int = Gen2Button.pressed_in(event)
-	if button == Gen2Button.NONE:
+	var button: int = PokeButton.pressed_in(event)
+	if button == PokeButton.NONE:
 		return
 	get_viewport().set_input_as_handled()
 	_mystery_gift.handle_button(button)

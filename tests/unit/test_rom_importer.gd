@@ -1,5 +1,7 @@
 extends GutTest
 
+const GEN2_ROM_SIZE: int = RomRegistry.SIZES[RomRegistry.GEN2]
+
 ## The font, border and trainer layout checks, against dumps this test builds.
 ##
 ## No cartridge is opened here. What is being tested is not where the font is,
@@ -12,18 +14,18 @@ extends GutTest
 const PIC_BANK: int = 0x21
 const PIC_ADDRESS: int = 0x4010
 
-var _layout: Dictionary = RomLayout.for_id(RomRegistry.GOLD)
+var _layout: Dictionary = Gen2Layout.for_id(RomRegistry.GOLD)
 
 
 ## A dump with a plausible font and eight plausible borders at the offsets the
 ## layout claims, and nothing else in it.
 func _dump() -> PackedByteArray:
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
-	_write(data, RomLayout.font_offset(_layout), _font())
-	_write(data, RomLayout.font_extra_offset(_layout), _font_extra())
-	for frame: int in RomLayout.FRAME_COUNT:
-		_write(data, RomLayout.frame_offset(_layout, frame), _frame(frame))
+	data.resize(GEN2_ROM_SIZE)
+	_write(data, Gen2Layout.font_offset(_layout), _font())
+	_write(data, Gen2Layout.font_extra_offset(_layout), _font_extra())
+	for frame: int in Gen2Layout.FRAME_COUNT:
+		_write(data, Gen2Layout.frame_offset(_layout, frame), _frame(frame))
 	return data
 
 
@@ -36,12 +38,12 @@ func _write(data: PackedByteArray, at: int, bytes: PackedByteArray) -> void:
 ## not. The glyphs themselves are nonsense; only their presence is checked.
 func _font() -> PackedByteArray:
 	var out: PackedByteArray = PackedByteArray()
-	out.resize(RomLayout.FONT_TILES * Gen2Tiles.TILE_1BPP_BYTES)
-	for tile: int in RomLayout.FONT_TILES:
-		if _is_blank_code(RomLayout.FONT_FIRST_CODE + tile):
+	out.resize(Gen2Layout.FONT_TILES * PokeTiles.TILE_1BPP_BYTES)
+	for tile: int in Gen2Layout.FONT_TILES:
+		if _is_blank_code(Gen2Layout.FONT_FIRST_CODE + tile):
 			continue
-		for row: int in Gen2Tiles.TILE_1BPP_BYTES:
-			out[tile * Gen2Tiles.TILE_1BPP_BYTES + row] = 0x7E
+		for row: int in PokeTiles.TILE_1BPP_BYTES:
+			out[tile * PokeTiles.TILE_1BPP_BYTES + row] = 0x7E
 	return out
 
 
@@ -49,21 +51,21 @@ func _font() -> PackedByteArray:
 ## of dots on the seventh, which is the shape the check pins.
 func _font_extra() -> PackedByteArray:
 	var out: PackedByteArray = PackedByteArray()
-	out.resize(RomLayout.FONT_EXTRA_TILES * Gen2Tiles.TILE_BYTES)
+	out.resize(Gen2Layout.FONT_EXTRA_TILES * PokeTiles.TILE_BYTES)
 	for code: int in range(
-		RomLayout.FONT_EXTRA_LOADED_FIRST, RomLayout.FONT_EXTRA_LOADED_LAST + 1
+		Gen2Layout.FONT_EXTRA_LOADED_FIRST, Gen2Layout.FONT_EXTRA_LOADED_LAST + 1
 	):
-		var tile: int = code - RomLayout.FONT_EXTRA_FIRST_CODE
+		var tile: int = code - Gen2Layout.FONT_EXTRA_FIRST_CODE
 		var rows: Array = [6] if code == Gen2Text.ELLIPSIS_CODE else range(
-			Gen2Tiles.TILE_1BPP_BYTES
+			PokeTiles.TILE_1BPP_BYTES
 		)
 		for row: int in rows:
-			out[tile * Gen2Tiles.TILE_BYTES + 2 * row] = 0x92
+			out[tile * PokeTiles.TILE_BYTES + 2 * row] = 0x92
 	return out
 
 
 func _is_blank_code(code: int) -> bool:
-	for run: Array in RomLayout.FONT_BLANK_RUNS:
+	for run: Array in Gen2Layout.FONT_BLANK_RUNS:
 		if code >= run[0] and code <= run[1]:
 			return true
 	return false
@@ -73,23 +75,23 @@ func _is_blank_code(code: int) -> bool:
 ## corners that carry the side's pattern into their first row.
 func _frame(number: int) -> PackedByteArray:
 	var out: PackedByteArray = PackedByteArray()
-	out.resize(RomLayout.FRAME_TILES * Gen2Tiles.TILE_1BPP_BYTES)
+	out.resize(Gen2Layout.FRAME_TILES * PokeTiles.TILE_1BPP_BYTES)
 
 	for tile: int in [
-		RomLayout.FRAME_TOP_LEFT, RomLayout.FRAME_HORIZONTAL, RomLayout.FRAME_TOP_RIGHT
+		Gen2Layout.FRAME_TOP_LEFT, Gen2Layout.FRAME_HORIZONTAL, Gen2Layout.FRAME_TOP_RIGHT
 	]:
-		for row: int in range(2, Gen2Tiles.TILE_1BPP_BYTES):
-			out[tile * Gen2Tiles.TILE_1BPP_BYTES + row] = 0x3C
+		for row: int in range(2, PokeTiles.TILE_1BPP_BYTES):
+			out[tile * PokeTiles.TILE_1BPP_BYTES + row] = 0x3C
 
-	for row: int in Gen2Tiles.TILE_1BPP_BYTES:
-		out[RomLayout.FRAME_VERTICAL * Gen2Tiles.TILE_1BPP_BYTES + row] = 0x18
+	for row: int in PokeTiles.TILE_1BPP_BYTES:
+		out[Gen2Layout.FRAME_VERTICAL * PokeTiles.TILE_1BPP_BYTES + row] = 0x18
 
-	for tile: int in [RomLayout.FRAME_BOTTOM_LEFT, RomLayout.FRAME_BOTTOM_RIGHT]:
-		out[tile * Gen2Tiles.TILE_1BPP_BYTES] = 0x18
-		out[tile * Gen2Tiles.TILE_1BPP_BYTES + 1] = 0x3C
+	for tile: int in [Gen2Layout.FRAME_BOTTOM_LEFT, Gen2Layout.FRAME_BOTTOM_RIGHT]:
+		out[tile * PokeTiles.TILE_1BPP_BYTES] = 0x18
+		out[tile * PokeTiles.TILE_1BPP_BYTES + 1] = 0x3C
 
 	# So that no two frames are the same, which is itself a check.
-	out[RomLayout.FRAME_TOP_LEFT * Gen2Tiles.TILE_1BPP_BYTES + 7] = 0x10 + number
+	out[Gen2Layout.FRAME_TOP_LEFT * PokeTiles.TILE_1BPP_BYTES + 7] = 0x10 + number
 	return out
 
 
@@ -108,7 +110,7 @@ func test_a_plausible_font_and_borders_verify() -> void:
 func test_a_font_extra_one_tile_out_fails() -> void:
 	var data: PackedByteArray = _dump()
 	_write(
-		data, RomLayout.font_extra_offset(_layout) + Gen2Tiles.TILE_BYTES,
+		data, Gen2Layout.font_extra_offset(_layout) + PokeTiles.TILE_BYTES,
 		_font_extra()
 	)
 	assert_false(RomImporter.verify_font(_rom(data), _layout)["ok"])
@@ -116,9 +118,9 @@ func test_a_font_extra_one_tile_out_fails() -> void:
 
 func test_a_font_extra_with_no_ellipsis_fails() -> void:
 	var data: PackedByteArray = _dump()
-	var at: int = RomLayout.font_extra_offset(_layout) \
-		+ (Gen2Text.ELLIPSIS_CODE - RomLayout.FONT_EXTRA_FIRST_CODE) * Gen2Tiles.TILE_BYTES
-	for row: int in Gen2Tiles.TILE_1BPP_BYTES:
+	var at: int = Gen2Layout.font_extra_offset(_layout) \
+		+ (Gen2Text.ELLIPSIS_CODE - Gen2Layout.FONT_EXTRA_FIRST_CODE) * PokeTiles.TILE_BYTES
+	for row: int in PokeTiles.TILE_1BPP_BYTES:
 		data[at + 2 * row] = 0xFF
 	assert_false(RomImporter.verify_font_extra(_rom(data), _layout)["ok"])
 
@@ -127,16 +129,16 @@ func test_a_font_one_tile_out_fails() -> void:
 	# The failure this check exists for. A shifted font still draws letters, so
 	# nothing downstream would report it.
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
-	_write(data, RomLayout.font_offset(_layout) + Gen2Tiles.TILE_1BPP_BYTES, _font())
+	data.resize(GEN2_ROM_SIZE)
+	_write(data, Gen2Layout.font_offset(_layout) + PokeTiles.TILE_1BPP_BYTES, _font())
 	assert_false(RomImporter.verify_font(_rom(data), _layout)["ok"])
 
 
 func test_a_font_with_a_missing_letter_fails() -> void:
 	var data: PackedByteArray = _dump()
-	var at: int = RomLayout.font_offset(_layout) + (0x99 - RomLayout.FONT_FIRST_CODE) \
-		* Gen2Tiles.TILE_1BPP_BYTES
-	for row: int in Gen2Tiles.TILE_1BPP_BYTES:
+	var at: int = Gen2Layout.font_offset(_layout) + (0x99 - Gen2Layout.FONT_FIRST_CODE) \
+		* PokeTiles.TILE_1BPP_BYTES
+	for row: int in PokeTiles.TILE_1BPP_BYTES:
 		data[at + row] = 0
 	var result: Dictionary = RomImporter.verify_font(_rom(data), _layout)
 	assert_false(result["ok"])
@@ -145,8 +147,8 @@ func test_a_font_with_a_missing_letter_fails() -> void:
 
 func test_a_glyph_where_the_charmap_has_no_character_fails() -> void:
 	var data: PackedByteArray = _dump()
-	var at: int = RomLayout.font_offset(_layout) + (0xBA - RomLayout.FONT_FIRST_CODE) \
-		* Gen2Tiles.TILE_1BPP_BYTES
+	var at: int = Gen2Layout.font_offset(_layout) + (0xBA - Gen2Layout.FONT_FIRST_CODE) \
+		* PokeTiles.TILE_1BPP_BYTES
 	data[at] = 0x18
 	assert_false(RomImporter.verify_font(_rom(data), _layout)["ok"])
 
@@ -155,13 +157,13 @@ func test_a_solid_row_means_it_is_not_a_font() -> void:
 	# No glyph fills eight pixels: every character leaves the spacing column
 	# clear. A run of $FF is graphics.
 	var data: PackedByteArray = _dump()
-	data[RomLayout.font_offset(_layout)] = 0xFF
+	data[Gen2Layout.font_offset(_layout)] = 0xFF
 	assert_false(RomImporter.verify_font(_rom(data), _layout)["ok"])
 
 
 func test_blank_space_where_the_font_should_be_fails() -> void:
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	assert_false(RomImporter.verify_font(_rom(data), _layout)["ok"])
 
 
@@ -169,33 +171,33 @@ func test_a_border_with_ink_on_its_top_scanlines_fails() -> void:
 	# A box border is inset from the top of its tile row. Ink there means the
 	# offset landed on something that is not a frame.
 	var data: PackedByteArray = _dump()
-	data[RomLayout.frame_offset(_layout, 0)] = 0x18
+	data[Gen2Layout.frame_offset(_layout, 0)] = 0x18
 	assert_false(RomImporter.verify_frames(_rom(data), _layout)["ok"])
 
 
 func test_corners_that_do_not_meet_their_sides_fail() -> void:
 	var data: PackedByteArray = _dump()
 	data[
-		RomLayout.frame_offset(_layout, 3)
-		+ RomLayout.FRAME_BOTTOM_RIGHT * Gen2Tiles.TILE_1BPP_BYTES
+		Gen2Layout.frame_offset(_layout, 3)
+		+ Gen2Layout.FRAME_BOTTOM_RIGHT * PokeTiles.TILE_1BPP_BYTES
 	] = 0x81
 	assert_false(RomImporter.verify_frames(_rom(data), _layout)["ok"])
 
 
 func test_a_side_that_never_draws_what_its_corners_do_fails() -> void:
 	var data: PackedByteArray = _dump()
-	var at: int = RomLayout.frame_offset(_layout, 2) \
-		+ RomLayout.FRAME_VERTICAL * Gen2Tiles.TILE_1BPP_BYTES
-	for row: int in Gen2Tiles.TILE_1BPP_BYTES:
+	var at: int = Gen2Layout.frame_offset(_layout, 2) \
+		+ Gen2Layout.FRAME_VERTICAL * PokeTiles.TILE_1BPP_BYTES
+	for row: int in PokeTiles.TILE_1BPP_BYTES:
 		data[at + row] = 0x24
 	assert_false(RomImporter.verify_frames(_rom(data), _layout)["ok"])
 
 
 func test_eight_identical_borders_mean_it_is_not_the_table() -> void:
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
-	for frame: int in RomLayout.FRAME_COUNT:
-		_write(data, RomLayout.frame_offset(_layout, frame), _frame(0))
+	data.resize(GEN2_ROM_SIZE)
+	for frame: int in Gen2Layout.FRAME_COUNT:
+		_write(data, Gen2Layout.frame_offset(_layout, frame), _frame(0))
 	assert_false(RomImporter.verify_frames(_rom(data), _layout)["ok"])
 
 
@@ -207,7 +209,7 @@ func test_a_dump_too_short_to_hold_the_font_fails_rather_than_reading_past_it() 
 ## Names, palettes and pic pointers for every class, all three agreeing.
 func _trainer_dump() -> PackedByteArray:
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_class_names(data, int(_layout["trainer_class_names"]))
 	_write_trainer_palettes(data, true)
 	_write_trainer_pointers(data)
@@ -216,7 +218,7 @@ func _trainer_dump() -> PackedByteArray:
 
 
 func _write_class_names(data: PackedByteArray, at: int) -> void:
-	var count: int = RomLayout.trainer_class_count(_layout)
+	var count: int = Gen2Layout.trainer_class_count(_layout)
 	var cursor: int = at
 	for trainer_class: int in range(1, count + 1):
 		var row_name: String = "LASS"
@@ -235,17 +237,17 @@ func _write_class_names(data: PackedByteArray, at: int) -> void:
 ## The player's entry plus one per class, and then something that is not a
 ## palette, because the table ending where it should is half of what is checked.
 func _write_trainer_palettes(data: PackedByteArray, ends: bool) -> void:
-	var count: int = RomLayout.trainer_class_count(_layout)
+	var count: int = Gen2Layout.trainer_class_count(_layout)
 	for trainer_class: int in range(0, count + 2):
-		var at: int = RomLayout.trainer_palette_offset(_layout, trainer_class)
+		var at: int = Gen2Layout.trainer_palette_offset(_layout, trainer_class)
 		var high: int = 0x80 if ends and trainer_class == count + 1 else 0x00
 		_write(data, at, PackedByteArray([0x34, 0x12, 0x78, 0x56 | high]))
 
 
 func _write_trainer_pointers(data: PackedByteArray) -> void:
-	for trainer_class: int in range(1, RomLayout.trainer_class_count(_layout) + 1):
+	for trainer_class: int in range(1, Gen2Layout.trainer_class_count(_layout) + 1):
 		_write(
-			data, RomLayout.trainer_pic_pointer_offset(_layout, trainer_class),
+			data, Gen2Layout.trainer_pic_pointer_offset(_layout, trainer_class),
 			PackedByteArray([PIC_BANK, PIC_ADDRESS & 0xFF, PIC_ADDRESS >> 8])
 		)
 
@@ -253,8 +255,8 @@ func _write_trainer_pointers(data: PackedByteArray) -> void:
 ## A long-form zero fill of exactly one trainer pic, then the terminator. The
 ## pixels do not matter here; the length is what the check reads.
 func _trainer_pic() -> PackedByteArray:
-	var pixels: int = RomLayout.TRAINER_PIC_TILES * RomLayout.TRAINER_PIC_TILES \
-		* Gen2Tiles.TILE_BYTES
+	var pixels: int = Gen2Layout.TRAINER_PIC_TILES * Gen2Layout.TRAINER_PIC_TILES \
+		* PokeTiles.TILE_BYTES
 	var length: int = pixels - 1
 	return PackedByteArray([
 		0xE0 | (Gen2Lz.Op.ZERO << 2) | (length >> 8), length & 0xFF, Gen2Lz.TERMINATOR,
@@ -284,7 +286,7 @@ func test_a_palette_table_that_does_not_end_where_the_classes_do_fails() -> void
 
 func test_a_blank_trainer_palette_fails() -> void:
 	var data: PackedByteArray = _trainer_dump()
-	_write(data, RomLayout.trainer_palette_offset(_layout, 3), PackedByteArray([0, 0, 0, 0]))
+	_write(data, Gen2Layout.trainer_palette_offset(_layout, 3), PackedByteArray([0, 0, 0, 0]))
 	assert_false(RomImporter.verify_trainers(_rom(data), _layout)["ok"])
 
 
@@ -293,7 +295,7 @@ func test_a_pointer_outside_the_banked_window_fails() -> void:
 	# that lands there means the table is not a pointer table.
 	var data: PackedByteArray = _trainer_dump()
 	_write(
-		data, RomLayout.trainer_pic_pointer_offset(_layout, 5),
+		data, Gen2Layout.trainer_pic_pointer_offset(_layout, 5),
 		PackedByteArray([PIC_BANK, 0x00, 0x20])
 	)
 	assert_false(RomImporter.verify_trainers(_rom(data), _layout)["ok"])
@@ -310,7 +312,7 @@ func test_a_pic_that_is_short_of_a_full_trainer_fails() -> void:
 
 func test_a_dump_with_no_trainers_in_it_fails() -> void:
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	assert_false(RomImporter.verify_trainers(_rom(data), _layout)["ok"])
 
 
@@ -324,13 +326,13 @@ func test_a_dump_with_no_trainers_in_it_fails() -> void:
 ## hand-verified against the cartridges once, not bytes copied out of one.
 func _trainer_party_dump() -> PackedByteArray:
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_trainer_parties(data, _trainer_party_classes())
 	return data
 
 
 func _trainer_party_classes() -> Array:
-	var count: int = RomLayout.trainer_class_count(_layout)
+	var count: int = Gen2Layout.trainer_class_count(_layout)
 	var total: int = int(_layout["trainer_party_total"])
 	var last_name: String = String(_layout["trainer_party_last_trainer"])
 
@@ -340,7 +342,7 @@ func _trainer_party_classes() -> Array:
 		classes[i] = []
 
 	classes[0] = [{
-		"name": RomImporter.TRAINER_PARTY_FIRST_NAME, "type": RomLayout.TRAINER_MON_NORMAL,
+		"name": RomImporter.TRAINER_PARTY_FIRST_NAME, "type": Gen2Layout.TRAINER_MON_NORMAL,
 		"party": [
 			{"level": RomImporter.TRAINER_PARTY_FIRST_LEVEL_1,
 				"species": RomImporter.TRAINER_PARTY_FIRST_SPECIES_1},
@@ -348,10 +350,10 @@ func _trainer_party_classes() -> Array:
 				"species": RomImporter.TRAINER_PARTY_FIRST_SPECIES_2},
 		],
 	}]
-	# RomLayout.EMPTY_TRAINER_CLASS is left as the empty Array _trainer_party_classes()
+	# Gen2Layout.EMPTY_TRAINER_CLASS is left as the empty Array _trainer_party_classes()
 	# already gave it.
 	classes[count - 1] = [{
-		"name": last_name, "type": RomLayout.TRAINER_MON_NORMAL,
+		"name": last_name, "type": Gen2Layout.TRAINER_MON_NORMAL,
 		"party": [{"level": 5, "species": 1}],
 	}]
 
@@ -360,7 +362,7 @@ func _trainer_party_classes() -> Array:
 	# _evos_entries() pads out the evolution count.
 	var filler_classes: Array = []
 	for trainer_class: int in range(1, count + 1):
-		if trainer_class != 1 and trainer_class != RomLayout.EMPTY_TRAINER_CLASS \
+		if trainer_class != 1 and trainer_class != Gen2Layout.EMPTY_TRAINER_CLASS \
 			and trainer_class != count:
 			filler_classes.append(trainer_class)
 
@@ -373,7 +375,7 @@ func _trainer_party_classes() -> Array:
 		var trainers: Array = []
 		for _n: int in mine:
 			trainers.append({
-				"name": "FILLER", "type": RomLayout.TRAINER_MON_NORMAL,
+				"name": "FILLER", "type": Gen2Layout.TRAINER_MON_NORMAL,
 				"party": [{"level": 5, "species": 1}],
 			})
 		classes[trainer_class - 1] = trainers
@@ -387,12 +389,12 @@ func _trainer_party_classes() -> Array:
 ## real cartridge does for the one class with no party of its own.
 func _write_trainer_parties(data: PackedByteArray, classes: Array) -> void:
 	var table: int = int(_layout["trainer_parties"])
-	var bank: int = RomLayout.bank_of(table)
-	var at: int = table + classes.size() * RomLayout.TRAINER_PARTY_POINTER_SIZE
+	var bank: int = Gen2Layout.bank_of(table)
+	var at: int = table + classes.size() * Gen2Layout.TRAINER_PARTY_POINTER_SIZE
 
 	for i: int in classes.size():
 		var address: int = RomFile.BANK_SIZE + (at % RomFile.BANK_SIZE)
-		var pointer: int = table + i * RomLayout.TRAINER_PARTY_POINTER_SIZE
+		var pointer: int = table + i * Gen2Layout.TRAINER_PARTY_POINTER_SIZE
 		data[pointer] = address & 0xFF
 		data[pointer + 1] = address >> 8
 
@@ -407,10 +409,10 @@ func _write_trainer_parties(data: PackedByteArray, classes: Array) -> void:
 				data[at] = int(mon["level"])
 				data[at + 1] = int(mon["species"])
 				at += 2
-			data[at] = RomLayout.TRAINER_PARTY_END
+			data[at] = Gen2Layout.TRAINER_PARTY_END
 			at += 1
 
-	assert(RomLayout.bank_of(at) == bank, "the filler table overran its own bank")
+	assert(Gen2Layout.bank_of(at) == bank, "the filler table overran its own bank")
 
 
 func test_a_plausible_trainer_party_table_verifies() -> void:
@@ -430,17 +432,17 @@ func test_falkners_team_reads_back() -> void:
 func test_the_one_class_with_no_party_reads_back_empty() -> void:
 	var result: Dictionary = RomImporter.read_trainer_parties(_rom(_trainer_party_dump()), _layout)
 	assert_true(result["ok"], result["message"])
-	var empty_class: Array = result["classes"][RomLayout.EMPTY_TRAINER_CLASS - 1]
+	var empty_class: Array = result["classes"][Gen2Layout.EMPTY_TRAINER_CLASS - 1]
 	assert_eq(empty_class.size(), 0)
 
 
 func test_a_trainer_class_that_is_not_empty_where_the_layout_says_it_is_fails() -> void:
 	var classes: Array = _trainer_party_classes()
-	classes[RomLayout.EMPTY_TRAINER_CLASS - 1] = [{
-		"name": "OOPS", "type": RomLayout.TRAINER_MON_NORMAL, "party": [{"level": 5, "species": 1}],
+	classes[Gen2Layout.EMPTY_TRAINER_CLASS - 1] = [{
+		"name": "OOPS", "type": Gen2Layout.TRAINER_MON_NORMAL, "party": [{"level": 5, "species": 1}],
 	}]
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_trainer_parties(data, classes)
 	var result: Dictionary = RomImporter.verify_trainer_parties(_rom(data), _layout)
 	assert_false(result["ok"])
@@ -450,7 +452,7 @@ func test_a_trainer_party_with_the_wrong_total_fails() -> void:
 	var classes: Array = _trainer_party_classes()
 	classes[1] = []
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_trainer_parties(data, classes)
 	var result: Dictionary = RomImporter.verify_trainer_parties(_rom(data), _layout)
 	assert_false(result["ok"])
@@ -461,7 +463,7 @@ func test_falkners_team_not_matching_what_is_known_fails() -> void:
 	var classes: Array = _trainer_party_classes()
 	classes[0][0]["party"][0]["species"] = 99
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_trainer_parties(data, classes)
 	var result: Dictionary = RomImporter.verify_trainer_parties(_rom(data), _layout)
 	assert_false(result["ok"])
@@ -471,11 +473,11 @@ func test_falkners_team_not_matching_what_is_known_fails() -> void:
 func test_a_stored_moves_trainer_reads_its_moves_and_item() -> void:
 	var classes: Array = _trainer_party_classes()
 	classes[1] = [{
-		"name": "PICKY", "type": RomLayout.TRAINER_MON_ITEM_MOVES,
+		"name": "PICKY", "type": Gen2Layout.TRAINER_MON_ITEM_MOVES,
 		"party": [{"level": 20, "species": 4, "item": 5, "moves": [10, 20, 0, 0]}],
 	}]
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_full_trainer_parties(data, classes)
 	var result: Dictionary = RomImporter.read_trainer_parties(_rom(data), _layout)
 	assert_true(result["ok"], result["message"])
@@ -490,11 +492,11 @@ func test_a_stored_moves_trainer_reads_its_moves_and_item() -> void:
 ## needs a MOVES or ITEM trainer rather than a plain one.
 func _write_full_trainer_parties(data: PackedByteArray, classes: Array) -> void:
 	var table: int = int(_layout["trainer_parties"])
-	var at: int = table + classes.size() * RomLayout.TRAINER_PARTY_POINTER_SIZE
+	var at: int = table + classes.size() * Gen2Layout.TRAINER_PARTY_POINTER_SIZE
 
 	for i: int in classes.size():
 		var address: int = RomFile.BANK_SIZE + (at % RomFile.BANK_SIZE)
-		var pointer: int = table + i * RomLayout.TRAINER_PARTY_POINTER_SIZE
+		var pointer: int = table + i * Gen2Layout.TRAINER_PARTY_POINTER_SIZE
 		data[pointer] = address & 0xFF
 		data[pointer + 1] = address >> 8
 
@@ -510,16 +512,16 @@ func _write_full_trainer_parties(data: PackedByteArray, classes: Array) -> void:
 				data[at] = int(mon["level"])
 				data[at + 1] = int(mon["species"])
 				at += 2
-				if mon_type == RomLayout.TRAINER_MON_ITEM \
-					or mon_type == RomLayout.TRAINER_MON_ITEM_MOVES:
+				if mon_type == Gen2Layout.TRAINER_MON_ITEM \
+					or mon_type == Gen2Layout.TRAINER_MON_ITEM_MOVES:
 					data[at] = int(mon.get("item", 0))
 					at += 1
-				if mon_type == RomLayout.TRAINER_MON_MOVES \
-					or mon_type == RomLayout.TRAINER_MON_ITEM_MOVES:
+				if mon_type == Gen2Layout.TRAINER_MON_MOVES \
+					or mon_type == Gen2Layout.TRAINER_MON_ITEM_MOVES:
 					for move: Variant in (mon.get("moves", [0, 0, 0, 0]) as Array):
 						data[at] = int(move)
 						at += 1
-			data[at] = RomLayout.TRAINER_PARTY_END
+			data[at] = Gen2Layout.TRAINER_PARTY_END
 			at += 1
 
 
@@ -533,11 +535,11 @@ func test_a_trainer_party_pointer_table_with_no_terminator_anywhere_fails() -> v
 	# The failure the last class's own walk exists for: nothing bounds it but a
 	# padding byte, and a dump with none reads on into whatever comes next.
 	var data: PackedByteArray = _trainer_party_dump()
-	var count: int = RomLayout.trainer_class_count(_layout)
+	var count: int = Gen2Layout.trainer_class_count(_layout)
 	var last_pointer: int = int(_layout["trainer_parties"]) \
-		+ (count - 1) * RomLayout.TRAINER_PARTY_POINTER_SIZE
+		+ (count - 1) * Gen2Layout.TRAINER_PARTY_POINTER_SIZE
 	var address: int = data[last_pointer] | (data[last_pointer + 1] << 8)
-	var bank: int = RomLayout.bank_of(int(_layout["trainer_parties"]))
+	var bank: int = Gen2Layout.bank_of(int(_layout["trainer_parties"]))
 	var at: int = RomFile.linear(bank, address)
 	for i: int in RomFile.BANK_SIZE - (at % RomFile.BANK_SIZE):
 		data[at + i] = 0x41
@@ -548,13 +550,13 @@ func test_a_trainer_party_pointer_table_with_no_terminator_anywhere_fails() -> v
 ## every flag word is in range and class 1 matches what is known of it.
 func _trainer_attributes_dump() -> PackedByteArray:
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_trainer_attributes(data, _trainer_attributes_entries())
 	return data
 
 
 func _trainer_attributes_entries() -> Array:
-	var count: int = RomLayout.trainer_class_count(_layout)
+	var count: int = Gen2Layout.trainer_class_count(_layout)
 	var entries: Array = []
 	for _i: int in count:
 		entries.append({
@@ -569,16 +571,16 @@ func _trainer_attributes_entries() -> Array:
 func _write_trainer_attributes(data: PackedByteArray, entries: Array) -> void:
 	for trainer_class: int in range(1, entries.size() + 1):
 		var entry: Dictionary = entries[trainer_class - 1]
-		var at: int = RomLayout.trainer_attributes_offset(_layout, trainer_class)
-		data[at + RomLayout.ATTR_ITEM1] = int(entry["item1"])
-		data[at + RomLayout.ATTR_ITEM2] = int(entry["item2"])
-		data[at + RomLayout.ATTR_BASE_REWARD] = int(entry["base_reward"])
+		var at: int = Gen2Layout.trainer_attributes_offset(_layout, trainer_class)
+		data[at + Gen2Layout.ATTR_ITEM1] = int(entry["item1"])
+		data[at + Gen2Layout.ATTR_ITEM2] = int(entry["item2"])
+		data[at + Gen2Layout.ATTR_BASE_REWARD] = int(entry["base_reward"])
 		var weights: int = int(entry["ai_move_weights"])
-		data[at + RomLayout.ATTR_AI_MOVE_WEIGHTS] = weights & 0xFF
-		data[at + RomLayout.ATTR_AI_MOVE_WEIGHTS + 1] = (weights >> 8) & 0xFF
+		data[at + Gen2Layout.ATTR_AI_MOVE_WEIGHTS] = weights & 0xFF
+		data[at + Gen2Layout.ATTR_AI_MOVE_WEIGHTS + 1] = (weights >> 8) & 0xFF
 		var switch_flags: int = int(entry["ai_item_switch"])
-		data[at + RomLayout.ATTR_AI_ITEM_SWITCH] = switch_flags & 0xFF
-		data[at + RomLayout.ATTR_AI_ITEM_SWITCH + 1] = (switch_flags >> 8) & 0xFF
+		data[at + Gen2Layout.ATTR_AI_ITEM_SWITCH] = switch_flags & 0xFF
+		data[at + Gen2Layout.ATTR_AI_ITEM_SWITCH + 1] = (switch_flags >> 8) & 0xFF
 
 
 func test_a_plausible_trainer_attributes_table_verifies() -> void:
@@ -590,18 +592,18 @@ func test_a_plausible_trainer_attributes_table_verifies() -> void:
 ## that is not a decoding failure: a class is allowed to score nothing.
 func test_a_zero_ai_move_weight_is_allowed() -> void:
 	var entries: Array = _trainer_attributes_entries()
-	entries[1]["ai_move_weights"] = RomLayout.NO_AI
+	entries[1]["ai_move_weights"] = Gen2Layout.NO_AI
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_trainer_attributes(data, entries)
 	assert_true(RomImporter.verify_trainer_attributes(_rom(data), _layout)["ok"])
 
 
 func test_an_ai_move_weight_with_an_undefined_bit_fails() -> void:
 	var entries: Array = _trainer_attributes_entries()
-	entries[1]["ai_move_weights"] = RomLayout.AI_MOVE_WEIGHTS_MASK + 1
+	entries[1]["ai_move_weights"] = Gen2Layout.AI_MOVE_WEIGHTS_MASK + 1
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_trainer_attributes(data, entries)
 	assert_false(RomImporter.verify_trainer_attributes(_rom(data), _layout)["ok"])
 
@@ -611,7 +613,7 @@ func test_an_item_switch_word_with_an_undefined_bit_fails() -> void:
 	# Bit 3 is skipped in the cartridge's own numbering, so it is never legal.
 	entries[1]["ai_item_switch"] = 1 << 3
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_trainer_attributes(data, entries)
 	assert_false(RomImporter.verify_trainer_attributes(_rom(data), _layout)["ok"])
 
@@ -620,7 +622,7 @@ func test_falkners_attributes_not_matching_what_is_known_fails() -> void:
 	var entries: Array = _trainer_attributes_entries()
 	entries[0]["base_reward"] = 99
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_trainer_attributes(data, entries)
 	assert_false(RomImporter.verify_trainer_attributes(_rom(data), _layout)["ok"])
 
@@ -630,7 +632,7 @@ func test_trainer_attributes_read_back_by_class() -> void:
 	entries[4]["item1"] = 0x10 # HYPER POTION, Pryce's own entry on the real cartridge.
 	entries[4]["base_reward"] = 42
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_trainer_attributes(data, entries)
 
 	var pryce: Dictionary = RomImporter.read_trainer_attributes(_rom(data), _layout, 5)
@@ -644,20 +646,20 @@ func test_trainer_attributes_read_back_by_class() -> void:
 ## A plausible trainer DVs table: Falkner's own known word at class 1, and the
 ## layout's own known word at the last class.
 func _write_trainer_dvs(data: PackedByteArray, entries: Dictionary = {}) -> void:
-	var count: int = RomLayout.trainer_class_count(_layout)
+	var count: int = Gen2Layout.trainer_class_count(_layout)
 	for trainer_class: int in range(1, count + 1):
 		var word: int = int(entries.get(
 			trainer_class,
 			RomImporter.TRAINER_DVS_FIRST if trainer_class == 1 else int(_layout["trainer_dvs_last"])
 		))
-		var at: int = RomLayout.trainer_dvs_offset(_layout, trainer_class)
+		var at: int = Gen2Layout.trainer_dvs_offset(_layout, trainer_class)
 		data[at] = (word >> 8) & 0xFF
 		data[at + 1] = word & 0xFF
 
 
 func test_a_plausible_trainer_dvs_table_verifies() -> void:
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_trainer_dvs(data)
 	var result: Dictionary = RomImporter.verify_trainer_dvs(_rom(data), _layout)
 	assert_true(result["ok"], result["message"])
@@ -668,22 +670,22 @@ func test_a_plausible_trainer_dvs_table_verifies() -> void:
 ## what fails it.
 func test_falkners_dvs_not_matching_what_is_known_fails() -> void:
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_trainer_dvs(data, {1: 0x0000})
 	assert_false(RomImporter.verify_trainer_dvs(_rom(data), _layout)["ok"])
 
 
 func test_the_last_classs_dvs_not_matching_what_is_known_fails() -> void:
-	var count: int = RomLayout.trainer_class_count(_layout)
+	var count: int = Gen2Layout.trainer_class_count(_layout)
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_trainer_dvs(data, {count: 0x0000})
 	assert_false(RomImporter.verify_trainer_dvs(_rom(data), _layout)["ok"])
 
 
 func test_trainer_dvs_read_back_by_class() -> void:
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_trainer_dvs(data, {5: 0x7C33}) # Pryce, made up: attack 7, defense 12, speed 3, special 3.
 	assert_eq(RomImporter.read_trainer_dvs(_rom(data), _layout, 5), 0x7C33)
 	assert_eq(RomImporter.read_trainer_dvs(_rom(data), _layout, 1), RomImporter.TRAINER_DVS_FIRST)
@@ -693,11 +695,11 @@ func test_trainer_dvs_read_back_by_class() -> void:
 ## two HUD borders whose tiles all differ.
 func _battle_dump() -> PackedByteArray:
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
-	_write_bar(data, int(_layout["battle_font"]), RomLayout.HP_BAR_FIRST_TILE, RomLayout.HP_BAR_LEVELS)
-	_write_bar(data, int(_layout["exp_bar"]), 0, RomLayout.EXP_BAR_LEVELS)
-	_write_hud(data, int(_layout["enemy_hud"]), RomLayout.ENEMY_HUD_TILES)
-	_write_hud(data, int(_layout["player_hud"]), RomLayout.PLAYER_HUD_TILES)
+	data.resize(GEN2_ROM_SIZE)
+	_write_bar(data, int(_layout["battle_font"]), Gen2Layout.HP_BAR_FIRST_TILE, Gen2Layout.HP_BAR_LEVELS)
+	_write_bar(data, int(_layout["exp_bar"]), 0, Gen2Layout.EXP_BAR_LEVELS)
+	_write_hud(data, int(_layout["enemy_hud"]), Gen2Layout.ENEMY_HUD_TILES)
+	_write_hud(data, int(_layout["player_hud"]), Gen2Layout.PLAYER_HUD_TILES)
 	_write_bar_palettes(data)
 	_write_battle_object_palettes(data)
 	_write_stats_screen_palettes(data)
@@ -709,10 +711,10 @@ func _battle_dump() -> PackedByteArray:
 ## `MinimizePic`, the one tile whose own shape is what pins its address.
 func _write_minimize_pic(data: PackedByteArray) -> void:
 	var tile: PackedByteArray = PackedByteArray()
-	tile.resize(Gen2Tiles.TILE_BYTES)
-	for row: int in Gen2Tiles.TILE_HEIGHT:
-		tile[row * 2] = RomLayout.MINIMIZE_PIC_ROWS[row]
-		tile[row * 2 + 1] = RomLayout.MINIMIZE_PIC_ROWS[row]
+	tile.resize(PokeTiles.TILE_BYTES)
+	for row: int in PokeTiles.TILE_HEIGHT:
+		tile[row * 2] = Gen2Layout.MINIMIZE_PIC_ROWS[row]
+		tile[row * 2 + 1] = Gen2Layout.MINIMIZE_PIC_ROWS[row]
 	_write(data, int(_layout["minimize_pic"]), tile)
 
 
@@ -720,46 +722,46 @@ func _write_minimize_pic(data: PackedByteArray) -> void:
 ## two shapes `verify_battle_graphics` reads, its two-column divider and the
 ## `⁂` fourteen tiles on.
 func _write_stats_tiles(data: PackedByteArray) -> void:
-	var at: int = RomLayout.stats_tiles_offset(_layout)
+	var at: int = Gen2Layout.stats_tiles_offset(_layout)
 	var divider: PackedByteArray = PackedByteArray()
-	divider.resize(Gen2Tiles.TILE_BYTES)
-	for row: int in Gen2Tiles.TILE_HEIGHT:
+	divider.resize(PokeTiles.TILE_BYTES)
+	for row: int in PokeTiles.TILE_HEIGHT:
 		divider[row * 2] = 0xC0
 	_write(data, at, divider)
 	_write(
-		data, at + RomLayout.STATS_SHINY_TILE * Gen2Tiles.TILE_BYTES,
-		_lit_tile(Gen2Tiles.TILE_WIDTH)
+		data, at + Gen2Layout.STATS_SHINY_TILE * PokeTiles.TILE_BYTES,
+		_lit_tile(PokeTiles.TILE_WIDTH)
 	)
 
 
 ## The four bar palettes, whose values are the check on where they are.
 func _write_bar_palettes(data: PackedByteArray) -> void:
-	for index: int in RomLayout.BAR_PALETTE_NAMES.size():
-		var at: int = RomLayout.bar_palette_offset(_layout, index)
-		_write_palette(data, at, RomLayout.BAR_PALETTES[index])
+	for index: int in Gen2Layout.BAR_PALETTE_NAMES.size():
+		var at: int = Gen2Layout.bar_palette_offset(_layout, index)
+		_write_palette(data, at, Gen2Layout.BAR_PALETTES[index])
 
 
 ## `StatsScreenPagePals` and the `StatsScreenPals` tints behind it, one run.
 func _write_stats_screen_palettes(data: PackedByteArray) -> void:
-	for index: int in RomLayout.STATS_PAGE_PALETTES:
+	for index: int in Gen2Layout.STATS_PAGE_PALETTES:
 		_write_palette(
-			data, RomLayout.stats_page_palette_offset(_layout, index),
-			RomLayout.STATS_SCREEN_PAGE_PALETTES[index]
+			data, Gen2Layout.stats_page_palette_offset(_layout, index),
+			Gen2Layout.STATS_SCREEN_PAGE_PALETTES[index]
 		)
 		_write_palette(
-			data, RomLayout.stats_page_tint_offset(_layout, index),
-			[RomLayout.STATS_SCREEN_PAGE_TINTS[index]]
+			data, Gen2Layout.stats_page_tint_offset(_layout, index),
+			[Gen2Layout.STATS_SCREEN_PAGE_TINTS[index]]
 		)
 
 
 ## The six `BattleObjectPals`, checked the same way and for the same reason.
 func _write_battle_object_palettes(data: PackedByteArray) -> void:
 	var at: int = int(_layout["battle_object_palettes"])
-	for index: int in RomLayout.BATTLE_OBJECT_PALETTES_STORED:
+	for index: int in Gen2Layout.BATTLE_OBJECT_PALETTES_STORED:
 		_write_palette(
 			data,
-			at + index * RomLayout.BATTLE_OBJECT_PALETTE_COLORS * Gen2Palette.COLOR_BYTES,
-			RomLayout.BATTLE_OBJECT_PALETTES[index]
+			at + index * Gen2Layout.BATTLE_OBJECT_PALETTE_COLORS * PokePalette.COLOR_BYTES,
+			Gen2Layout.BATTLE_OBJECT_PALETTES[index]
 		)
 
 
@@ -767,7 +769,7 @@ func _write_palette(data: PackedByteArray, at: int, colours: Array) -> void:
 	for colour: int in colours.size():
 		var packed: int = int(colours[colour])
 		_write(
-			data, at + colour * Gen2Palette.COLOR_BYTES,
+			data, at + colour * PokePalette.COLOR_BYTES,
 			PackedByteArray([packed & 0xFF, packed >> 8])
 		)
 
@@ -776,19 +778,19 @@ func _write_palette(data: PackedByteArray, at: int, colours: Array) -> void:
 func _write_bar(data: PackedByteArray, at: int, first: int, levels: int) -> void:
 	for level: int in levels:
 		_write(
-			data, at + (first + level) * Gen2Tiles.TILE_BYTES,
-			_lit_tile(Gen2Tiles.TILE_WIDTH + level * RomLayout.BAR_STEP_PIXELS)
+			data, at + (first + level) * PokeTiles.TILE_BYTES,
+			_lit_tile(PokeTiles.TILE_WIDTH + level * Gen2Layout.BAR_STEP_PIXELS)
 		)
 
 
 ## A 2bpp tile with [param pixels] lit, filled row by row.
 func _lit_tile(pixels: int) -> PackedByteArray:
 	var out: PackedByteArray = PackedByteArray()
-	out.resize(Gen2Tiles.TILE_BYTES)
+	out.resize(PokeTiles.TILE_BYTES)
 	for pixel: int in pixels:
 		@warning_ignore("integer_division")
-		var row: int = pixel / Gen2Tiles.TILE_WIDTH
-		out[row * 2] |= 1 << (7 - pixel % Gen2Tiles.TILE_WIDTH)
+		var row: int = pixel / PokeTiles.TILE_WIDTH
+		out[row * 2] |= 1 << (7 - pixel % PokeTiles.TILE_WIDTH)
 	return out
 
 
@@ -796,10 +798,10 @@ func _lit_tile(pixels: int) -> PackedByteArray:
 func _write_hud(data: PackedByteArray, at: int, tiles: int) -> void:
 	for tile: int in tiles:
 		var bytes: PackedByteArray = PackedByteArray()
-		bytes.resize(Gen2Tiles.TILE_1BPP_BYTES)
+		bytes.resize(PokeTiles.TILE_1BPP_BYTES)
 		bytes[0] = 0xFF << (7 - tile) & 0xFF
 		bytes[1] = 0x18
-		_write(data, at + tile * Gen2Tiles.TILE_1BPP_BYTES, bytes)
+		_write(data, at + tile * PokeTiles.TILE_1BPP_BYTES, bytes)
 
 
 func test_battle_graphics_that_count_up_verify() -> void:
@@ -812,7 +814,7 @@ func test_battle_graphics_that_count_up_verify() -> void:
 ## the run.
 func test_a_stats_page_palette_that_is_not_the_pinned_one_fails() -> void:
 	var data: PackedByteArray = _battle_dump()
-	data[RomLayout.stats_page_tint_offset(_layout, 1)] = 0x00
+	data[Gen2Layout.stats_page_tint_offset(_layout, 1)] = 0x00
 	var result: Dictionary = RomImporter.verify_battle_graphics(_rom(data), _layout)
 	assert_false(result["ok"])
 	assert_string_contains(String(result["message"]), "Stats page tint 1")
@@ -834,8 +836,8 @@ func test_a_bar_whose_levels_do_not_climb_fails() -> void:
 	var data: PackedByteArray = _battle_dump()
 	_write(
 		data,
-		int(_layout["battle_font"]) + (RomLayout.HP_BAR_FIRST_TILE + 4) * Gen2Tiles.TILE_BYTES,
-		_lit_tile(Gen2Tiles.TILE_WIDTH)
+		int(_layout["battle_font"]) + (Gen2Layout.HP_BAR_FIRST_TILE + 4) * PokeTiles.TILE_BYTES,
+		_lit_tile(PokeTiles.TILE_WIDTH)
 	)
 	assert_false(RomImporter.verify_battle_graphics(_rom(data), _layout)["ok"])
 
@@ -844,7 +846,7 @@ func test_a_bar_whose_levels_do_not_climb_fails() -> void:
 ## HUD, so its own two shapes are what pin it.
 func test_stats_tiles_that_are_not_where_the_enemy_hud_says_fail() -> void:
 	var data: PackedByteArray = _battle_dump()
-	data[RomLayout.stats_tiles_offset(_layout)] = 0xFF
+	data[Gen2Layout.stats_tiles_offset(_layout)] = 0xFF
 	var result: Dictionary = RomImporter.verify_battle_graphics(_rom(data), _layout)
 	assert_false(result["ok"])
 	assert_string_contains(String(result["message"]), "vertical divider")
@@ -854,7 +856,7 @@ func test_stats_tiles_that_are_not_where_the_enemy_hud_says_fail() -> void:
 ## still decodes and is not `MinimizePic`.
 func test_a_minimize_pic_drawn_in_the_wrong_colour_fails() -> void:
 	var data: PackedByteArray = _battle_dump()
-	for row: int in Gen2Tiles.TILE_HEIGHT:
+	for row: int in PokeTiles.TILE_HEIGHT:
 		data[int(_layout["minimize_pic"]) + row * 2 + 1] = 0x00
 	var result: Dictionary = RomImporter.verify_battle_graphics(_rom(data), _layout)
 	assert_false(result["ok"])
@@ -863,16 +865,16 @@ func test_a_minimize_pic_drawn_in_the_wrong_colour_fails() -> void:
 
 func test_stats_tiles_missing_their_shiny_icon_fail() -> void:
 	var data: PackedByteArray = _battle_dump()
-	var at: int = RomLayout.stats_tiles_offset(_layout) \
-		+ RomLayout.STATS_SHINY_TILE * Gen2Tiles.TILE_BYTES
-	for i: int in Gen2Tiles.TILE_BYTES:
+	var at: int = Gen2Layout.stats_tiles_offset(_layout) \
+		+ Gen2Layout.STATS_SHINY_TILE * PokeTiles.TILE_BYTES
+	for i: int in PokeTiles.TILE_BYTES:
 		data[at + i] = 0
 	assert_false(RomImporter.verify_battle_graphics(_rom(data), _layout)["ok"])
 
 
 func test_an_exp_bar_that_is_not_there_fails() -> void:
 	var data: PackedByteArray = _battle_dump()
-	for i: int in RomLayout.EXP_BAR_TILES * Gen2Tiles.TILE_BYTES:
+	for i: int in Gen2Layout.EXP_BAR_TILES * PokeTiles.TILE_BYTES:
 		data[int(_layout["exp_bar"]) + i] = 0
 	assert_false(RomImporter.verify_battle_graphics(_rom(data), _layout)["ok"])
 
@@ -881,7 +883,7 @@ func test_a_bar_palette_that_is_not_the_colour_it_should_be_fails() -> void:
 	# These are known values rather than a shape, so a wrong offset is caught by
 	# the colours themselves.
 	var data: PackedByteArray = _battle_dump()
-	_write(data, RomLayout.bar_palette_offset(_layout, 2), PackedByteArray([0x00, 0x00]))
+	_write(data, Gen2Layout.bar_palette_offset(_layout, 2), PackedByteArray([0x00, 0x00]))
 	var result: Dictionary = RomImporter.verify_battle_graphics(_rom(data), _layout)
 	assert_false(result["ok"])
 	assert_string_contains(result["message"], "hp_red")
@@ -889,16 +891,16 @@ func test_a_bar_palette_that_is_not_the_colour_it_should_be_fails() -> void:
 
 func test_a_blank_hud_tile_fails() -> void:
 	var data: PackedByteArray = _battle_dump()
-	for row: int in Gen2Tiles.TILE_1BPP_BYTES:
-		data[int(_layout["player_hud"]) + 2 * Gen2Tiles.TILE_1BPP_BYTES + row] = 0
+	for row: int in PokeTiles.TILE_1BPP_BYTES:
+		data[int(_layout["player_hud"]) + 2 * PokeTiles.TILE_1BPP_BYTES + row] = 0
 	assert_false(RomImporter.verify_battle_graphics(_rom(data), _layout)["ok"])
 
 
 func test_hud_tiles_that_repeat_mean_it_is_not_the_border() -> void:
 	var data: PackedByteArray = _battle_dump()
 	_write(
-		data, int(_layout["enemy_hud"]) + Gen2Tiles.TILE_1BPP_BYTES,
-		data.slice(int(_layout["enemy_hud"]), int(_layout["enemy_hud"]) + Gen2Tiles.TILE_1BPP_BYTES)
+		data, int(_layout["enemy_hud"]) + PokeTiles.TILE_1BPP_BYTES,
+		data.slice(int(_layout["enemy_hud"]), int(_layout["enemy_hud"]) + PokeTiles.TILE_1BPP_BYTES)
 	)
 	assert_false(RomImporter.verify_battle_graphics(_rom(data), _layout)["ok"])
 
@@ -907,7 +909,7 @@ func test_hud_tiles_that_repeat_mean_it_is_not_the_border() -> void:
 ## content is known, filler that is valid but says nothing, and both terminators.
 func _matchup_dump() -> PackedByteArray:
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write(data, int(_layout["type_matchups"]), _matchup_table())
 	return data
 
@@ -915,23 +917,23 @@ func _matchup_dump() -> PackedByteArray:
 func _matchup_table() -> PackedByteArray:
 	var out: PackedByteArray = PackedByteArray()
 	out.append_array(_row(
-		RomLayout.TYPE_NORMAL, RomLayout.TYPE_ROCK, RomLayout.MATCHUP_NOT_VERY_EFFECTIVE
+		Gen2Layout.TYPE_NORMAL, Gen2Layout.TYPE_ROCK, Gen2Layout.MATCHUP_NOT_VERY_EFFECTIVE
 	))
-	for _filler: int in RomLayout.MATCHUP_COUNT - 2:
+	for _filler: int in Gen2Layout.MATCHUP_COUNT - 2:
 		out.append_array(_row(
-			RomLayout.TYPE_FIGHTING, RomLayout.TYPE_NORMAL, RomLayout.MATCHUP_SUPER_EFFECTIVE
+			Gen2Layout.TYPE_FIGHTING, Gen2Layout.TYPE_NORMAL, Gen2Layout.MATCHUP_SUPER_EFFECTIVE
 		))
 	out.append_array(_row(
-		RomLayout.TYPE_STEEL, RomLayout.TYPE_STEEL, RomLayout.MATCHUP_NOT_VERY_EFFECTIVE
+		Gen2Layout.TYPE_STEEL, Gen2Layout.TYPE_STEEL, Gen2Layout.MATCHUP_NOT_VERY_EFFECTIVE
 	))
-	out.append(RomLayout.MATCHUP_END_FORESIGHT)
+	out.append(Gen2Layout.MATCHUP_END_FORESIGHT)
 	out.append_array(_row(
-		RomLayout.TYPE_NORMAL, RomLayout.TYPE_GHOST, RomLayout.MATCHUP_NO_EFFECT
+		Gen2Layout.TYPE_NORMAL, Gen2Layout.TYPE_GHOST, Gen2Layout.MATCHUP_NO_EFFECT
 	))
 	out.append_array(_row(
-		RomLayout.TYPE_FIGHTING, RomLayout.TYPE_GHOST, RomLayout.MATCHUP_NO_EFFECT
+		Gen2Layout.TYPE_FIGHTING, Gen2Layout.TYPE_GHOST, Gen2Layout.MATCHUP_NO_EFFECT
 	))
-	out.append(RomLayout.MATCHUP_END)
+	out.append(Gen2Layout.MATCHUP_END)
 	return out
 
 
@@ -946,17 +948,17 @@ func test_a_plausible_matchup_chart_verifies() -> void:
 
 func test_the_chart_reads_back_as_rows_with_the_foresight_ones_flagged() -> void:
 	var rows: Array = RomImporter.read_matchups(_rom(_matchup_dump()), _layout)
-	assert_eq(rows.size(), RomLayout.MATCHUP_COUNT + RomLayout.FORESIGHT_MATCHUP_COUNT)
+	assert_eq(rows.size(), Gen2Layout.MATCHUP_COUNT + Gen2Layout.FORESIGHT_MATCHUP_COUNT)
 	assert_false(rows[0]["negated_by_foresight"], "the chart proper is not conditional")
 	assert_true(rows[rows.size() - 1]["negated_by_foresight"], "past $FE it is")
-	assert_eq(int(rows[0]["multiplier"]), RomLayout.MATCHUP_NOT_VERY_EFFECTIVE)
+	assert_eq(int(rows[0]["multiplier"]), Gen2Layout.MATCHUP_NOT_VERY_EFFECTIVE)
 
 
 func test_a_chart_one_byte_out_fails() -> void:
 	# The failure this check exists for. Three-byte rows mean a slide of one byte
 	# still reads as rows, and every one of them is then a lie.
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write(data, int(_layout["type_matchups"]) + 1, _matchup_table())
 	assert_false(RomImporter.verify_matchups(_rom(data), _layout)["ok"])
 
@@ -965,7 +967,7 @@ func test_a_multiplier_the_chart_never_stores_fails() -> void:
 	# A neutral matchup is an absent row, so a ten here means the walk has left
 	# the table and is reading something else.
 	var data: PackedByteArray = _matchup_dump()
-	data[int(_layout["type_matchups"]) + RomLayout.MATCHUP_MULTIPLIER] = RomLayout.MATCHUP_EFFECTIVE
+	data[int(_layout["type_matchups"]) + Gen2Layout.MATCHUP_MULTIPLIER] = Gen2Layout.MATCHUP_EFFECTIVE
 	var result: Dictionary = RomImporter.verify_matchups(_rom(data), _layout)
 	assert_false(result["ok"])
 	assert_string_contains(result["message"], "multiplier")
@@ -975,15 +977,15 @@ func test_a_type_number_in_the_padding_run_fails() -> void:
 	# $0A to $13 have names but no matchups. Landing on one is what a wrong
 	# offset does almost immediately, because it is most of the byte range.
 	var data: PackedByteArray = _matchup_dump()
-	data[int(_layout["type_matchups"]) + RomLayout.MATCHUP_DEFENDER] = 0x0E
+	data[int(_layout["type_matchups"]) + Gen2Layout.MATCHUP_DEFENDER] = 0x0E
 	assert_false(RomImporter.verify_matchups(_rom(data), _layout)["ok"])
 
 
 func test_a_chart_of_the_wrong_length_fails() -> void:
 	var data: PackedByteArray = _matchup_dump()
 	var short: PackedByteArray = _matchup_table()
-	short.resize(short.size() - RomLayout.MATCHUP_ENTRY_SIZE)
-	short[short.size() - 1] = RomLayout.MATCHUP_END
+	short.resize(short.size() - Gen2Layout.MATCHUP_ENTRY_SIZE)
+	short[short.size() - 1] = Gen2Layout.MATCHUP_END
 	_write(data, int(_layout["type_matchups"]), short)
 	var result: Dictionary = RomImporter.verify_matchups(_rom(data), _layout)
 	assert_false(result["ok"])
@@ -992,9 +994,9 @@ func test_a_chart_of_the_wrong_length_fails() -> void:
 
 func test_a_chart_with_no_terminator_fails_rather_than_running_away() -> void:
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
-	for i: int in RomLayout.MAX_MATCHUPS * RomLayout.MATCHUP_ENTRY_SIZE:
-		data[int(_layout["type_matchups"]) + i] = RomLayout.TYPE_NORMAL
+	data.resize(GEN2_ROM_SIZE)
+	for i: int in Gen2Layout.MAX_MATCHUPS * Gen2Layout.MATCHUP_ENTRY_SIZE:
+		data[int(_layout["type_matchups"]) + i] = Gen2Layout.TYPE_NORMAL
 	assert_false(RomImporter.verify_matchups(_rom(data), _layout)["ok"])
 
 
@@ -1005,63 +1007,63 @@ func test_a_chart_with_no_terminator_fails_rather_than_running_away() -> void:
 ## valid and says nothing. Only the first species, Tyrogue and the last are real.
 func _evos_dump() -> PackedByteArray:
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_evos(data, _evos_entries())
 	return data
 
 
 func _evos_entries() -> Array:
 	var out: Array = []
-	for _species: int in RomLayout.SPECIES_COUNT:
+	for _species: int in Gen2Layout.SPECIES_COUNT:
 		out.append({"evolutions": [], "learnset": [[1, 33]]})
 
-	out[0]["evolutions"] = [[RomLayout.EVOLVE_LEVEL, RomImporter.FIRST_EVOLUTION_LEVEL, 0, 2]]
+	out[0]["evolutions"] = [[Gen2Layout.EVOLVE_LEVEL, RomImporter.FIRST_EVOLUTION_LEVEL, 0, 2]]
 	out[0]["learnset"] = [[1, RomImporter.FIRST_LEARNSET_MOVE], [7, 45]]
 
 	out[RomImporter.STAT_EVOLUTION_SPECIES - 1]["evolutions"] = [
-		[RomLayout.EVOLVE_STAT, 20, RomLayout.ATTACK_OVER_DEFENSE, 106],
-		[RomLayout.EVOLVE_STAT, 20, RomLayout.ATTACK_UNDER_DEFENSE, 107],
-		[RomLayout.EVOLVE_STAT, 20, RomLayout.ATTACK_EQUALS_DEFENSE, 237],
+		[Gen2Layout.EVOLVE_STAT, 20, Gen2Layout.ATTACK_OVER_DEFENSE, 106],
+		[Gen2Layout.EVOLVE_STAT, 20, Gen2Layout.ATTACK_UNDER_DEFENSE, 107],
+		[Gen2Layout.EVOLVE_STAT, 20, Gen2Layout.ATTACK_EQUALS_DEFENSE, 237],
 	]
 
 	# Enough ordinary evolutions elsewhere to reach the total the check knows,
 	# kept well clear of the three species that are checked by name.
-	var filler: int = RomLayout.EVOLUTION_COUNT - 1 - RomImporter.STAT_EVOLUTION_COUNT
+	var filler: int = Gen2Layout.EVOLUTION_COUNT - 1 - RomImporter.STAT_EVOLUTION_COUNT
 	for species: int in range(2, 2 + filler):
-		out[species - 1]["evolutions"] = [[RomLayout.EVOLVE_LEVEL, 20, 0, species + 1]]
+		out[species - 1]["evolutions"] = [[Gen2Layout.EVOLVE_LEVEL, 20, 0, species + 1]]
 
 	return out
 
 
 func _write_evos(data: PackedByteArray, entries: Array) -> void:
 	var table: int = int(_layout["evos_attacks"])
-	var at: int = table + RomLayout.SPECIES_COUNT * RomLayout.EVOS_ATTACKS_POINTER_SIZE
+	var at: int = table + Gen2Layout.SPECIES_COUNT * Gen2Layout.EVOS_ATTACKS_POINTER_SIZE
 
-	for species: int in RomLayout.SPECIES_COUNT:
+	for species: int in Gen2Layout.SPECIES_COUNT:
 		# A two-byte pointer carries an address and no bank, so it is written the
 		# way the cartridge writes one: an offset into the bank it is already in.
 		var address: int = RomFile.BANK_SIZE + (at % RomFile.BANK_SIZE)
-		var pointer: int = table + species * RomLayout.EVOS_ATTACKS_POINTER_SIZE
+		var pointer: int = table + species * Gen2Layout.EVOS_ATTACKS_POINTER_SIZE
 		data[pointer] = address & 0xFF
 		data[pointer + 1] = address >> 8
 
 		var entry: Dictionary = entries[species]
 		for evolution: Array in entry["evolutions"]:
-			var size: int = RomLayout.evolution_size(int(evolution[0]))
+			var size: int = Gen2Layout.evolution_size(int(evolution[0]))
 			data[at] = evolution[0]
 			data[at + 1] = evolution[1]
-			if int(evolution[0]) == RomLayout.EVOLVE_STAT:
+			if int(evolution[0]) == Gen2Layout.EVOLVE_STAT:
 				data[at + 2] = evolution[2]
 			data[at + size - 1] = evolution[3]
 			at += size
-		data[at] = RomLayout.EVOS_ATTACKS_END
+		data[at] = Gen2Layout.EVOS_ATTACKS_END
 		at += 1
 
 		for move: Array in entry["learnset"]:
 			data[at] = move[0]
 			data[at + 1] = move[1]
 			at += 2
-		data[at] = RomLayout.EVOS_ATTACKS_END
+		data[at] = Gen2Layout.EVOS_ATTACKS_END
 		at += 1
 
 
@@ -1088,20 +1090,20 @@ func test_the_four_byte_method_keeps_the_walk_in_step() -> void:
 	)
 	var evolutions: Array = entry["evolutions"]
 	assert_eq(evolutions.size(), RomImporter.STAT_EVOLUTION_COUNT)
-	assert_eq(int(evolutions[0]["condition"]), RomLayout.ATTACK_OVER_DEFENSE)
+	assert_eq(int(evolutions[0]["condition"]), Gen2Layout.ATTACK_OVER_DEFENSE)
 	assert_eq(int(evolutions[2]["target"]), 237)
 	assert_eq(int(entry["learnset"][0]["level"]), 1, "the moves still start where they should")
 
 
 func test_a_pointer_table_one_byte_out_fails() -> void:
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_evos(data, _evos_entries())
 	# Slide every pointer by a byte, which is what a wrong offset looks like: the
 	# addresses stay inside the bank and point at nothing in particular.
 	var table: int = int(_layout["evos_attacks"])
-	for species: int in RomLayout.SPECIES_COUNT:
-		var at: int = table + species * RomLayout.EVOS_ATTACKS_POINTER_SIZE
+	for species: int in Gen2Layout.SPECIES_COUNT:
+		var at: int = table + species * Gen2Layout.EVOS_ATTACKS_POINTER_SIZE
 		data[at] = (data[at] + 1) & 0xFF
 	assert_false(RomImporter.verify_evos_attacks(_rom(data), _layout)["ok"])
 
@@ -1116,16 +1118,16 @@ func test_a_byte_that_is_not_an_evolution_method_fails() -> void:
 	var entries: Array = _evos_entries()
 	entries[9]["evolutions"] = [[0x42, 20, 0, 11]]
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_evos(data, entries)
 	assert_false(RomImporter.verify_evos_attacks(_rom(data), _layout)["ok"])
 
 
 func test_an_evolution_into_a_species_that_does_not_exist_fails() -> void:
 	var entries: Array = _evos_entries()
-	entries[9]["evolutions"] = [[RomLayout.EVOLVE_LEVEL, 20, 0, 255]]
+	entries[9]["evolutions"] = [[Gen2Layout.EVOLVE_LEVEL, 20, 0, 255]]
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_evos(data, entries)
 	var result: Dictionary = RomImporter.verify_evos_attacks(_rom(data), _layout)
 	assert_false(result["ok"])
@@ -1134,9 +1136,9 @@ func test_an_evolution_into_a_species_that_does_not_exist_fails() -> void:
 
 func test_a_happiness_evolution_with_no_such_trigger_fails() -> void:
 	var entries: Array = _evos_entries()
-	entries[9]["evolutions"] = [[RomLayout.EVOLVE_HAPPINESS, 9, 0, 11]]
+	entries[9]["evolutions"] = [[Gen2Layout.EVOLVE_HAPPINESS, 9, 0, 11]]
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_evos(data, entries)
 	assert_false(RomImporter.verify_evos_attacks(_rom(data), _layout)["ok"])
 
@@ -1145,7 +1147,7 @@ func test_a_move_learned_above_the_level_cap_fails() -> void:
 	var entries: Array = _evos_entries()
 	entries[9]["learnset"] = [[1, 33], [200, 45]]
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_evos(data, entries)
 	var result: Dictionary = RomImporter.verify_evos_attacks(_rom(data), _layout)
 	assert_false(result["ok"])
@@ -1156,7 +1158,7 @@ func test_a_species_that_learns_nothing_fails() -> void:
 	var entries: Array = _evos_entries()
 	entries[9]["learnset"] = []
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_evos(data, entries)
 	assert_false(RomImporter.verify_evos_attacks(_rom(data), _layout)["ok"])
 
@@ -1168,15 +1170,15 @@ func test_levels_out_of_order_fail_everywhere_but_the_one_species() -> void:
 	var entries: Array = _evos_entries()
 	var scrambled: Array = [[1, 33], [40, 45], [20, 46]]
 
-	entries[RomLayout.UNSORTED_LEARNSET_SPECIES - 1]["learnset"] = scrambled
+	entries[Gen2Layout.UNSORTED_LEARNSET_SPECIES - 1]["learnset"] = scrambled
 	var allowed: PackedByteArray = PackedByteArray()
-	allowed.resize(RomRegistry.EXPECTED_SIZE)
+	allowed.resize(GEN2_ROM_SIZE)
 	_write_evos(allowed, entries)
 	assert_true(RomImporter.verify_evos_attacks(_rom(allowed), _layout)["ok"])
 
 	entries[9]["learnset"] = scrambled
 	var refused: PackedByteArray = PackedByteArray()
-	refused.resize(RomRegistry.EXPECTED_SIZE)
+	refused.resize(GEN2_ROM_SIZE)
 	_write_evos(refused, entries)
 	assert_false(RomImporter.verify_evos_attacks(_rom(refused), _layout)["ok"])
 
@@ -1185,7 +1187,7 @@ func test_a_table_with_the_wrong_number_of_evolutions_fails() -> void:
 	var entries: Array = _evos_entries()
 	entries[9]["evolutions"] = []
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_evos(data, entries)
 	var result: Dictionary = RomImporter.verify_evos_attacks(_rom(data), _layout)
 	assert_false(result["ok"])
@@ -1195,8 +1197,8 @@ func test_a_table_with_the_wrong_number_of_evolutions_fails() -> void:
 func test_a_learnset_with_no_terminator_fails_rather_than_running_away() -> void:
 	var data: PackedByteArray = _evos_dump()
 	var at: int = int(_layout["evos_attacks"]) \
-		+ RomLayout.SPECIES_COUNT * RomLayout.EVOS_ATTACKS_POINTER_SIZE
-	for i: int in RomLayout.MAX_LEVEL_UP_MOVES * 2 + 8:
+		+ Gen2Layout.SPECIES_COUNT * Gen2Layout.EVOS_ATTACKS_POINTER_SIZE
+	for i: int in Gen2Layout.MAX_LEVEL_UP_MOVES * 2 + 8:
 		data[at + i] = 1
 	assert_false(RomImporter.verify_evos_attacks(_rom(data), _layout)["ok"])
 
@@ -1206,7 +1208,7 @@ func test_a_learnset_with_no_terminator_fails_rather_than_running_away() -> void
 ## species carry the Gold/Silver lists, this dump being a Gold one.
 func _egg_move_entries() -> Array:
 	var out: Array = []
-	for _species: int in RomLayout.SPECIES_COUNT:
+	for _species: int in Gen2Layout.SPECIES_COUNT:
 		out.append([] as Array[int])
 	out[RomImporter.EGG_MOVE_BULBASAUR_SPECIES - 1] = \
 		RomImporter.EGG_MOVES_BULBASAUR_GOLD_SILVER.duplicate()
@@ -1229,22 +1231,22 @@ func _egg_move_entries() -> Array:
 
 func _write_egg_moves(data: PackedByteArray, entries: Array) -> void:
 	var table: int = int(_layout["egg_move_pointers"])
-	var at: int = table + RomLayout.SPECIES_COUNT * RomLayout.EGG_MOVE_POINTER_SIZE
-	for species: int in RomLayout.SPECIES_COUNT:
+	var at: int = table + Gen2Layout.SPECIES_COUNT * Gen2Layout.EGG_MOVE_POINTER_SIZE
+	for species: int in Gen2Layout.SPECIES_COUNT:
 		var address: int = RomFile.BANK_SIZE + (at % RomFile.BANK_SIZE)
-		var pointer: int = table + species * RomLayout.EGG_MOVE_POINTER_SIZE
+		var pointer: int = table + species * Gen2Layout.EGG_MOVE_POINTER_SIZE
 		data[pointer] = address & 0xFF
 		data[pointer + 1] = address >> 8
 		for move: int in entries[species] as Array:
 			data[at] = move
 			at += 1
-		data[at] = RomLayout.EGG_MOVE_END
+		data[at] = Gen2Layout.EGG_MOVE_END
 		at += 1
 
 
 func _egg_move_dump() -> PackedByteArray:
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_egg_moves(data, _egg_move_entries())
 	return data
 
@@ -1273,8 +1275,8 @@ func test_a_plausible_egg_move_table_verifies_and_reads_back() -> void:
 func test_an_egg_move_pointer_table_one_byte_out_fails() -> void:
 	var data: PackedByteArray = _egg_move_dump()
 	var table: int = int(_layout["egg_move_pointers"])
-	for species: int in RomLayout.SPECIES_COUNT:
-		var at: int = table + species * RomLayout.EGG_MOVE_POINTER_SIZE
+	for species: int in Gen2Layout.SPECIES_COUNT:
+		var at: int = table + species * Gen2Layout.EGG_MOVE_POINTER_SIZE
 		data[at] = (data[at] + 1) & 0xFF
 	assert_false(RomImporter.verify_egg_moves(_rom(data), _layout)["ok"])
 
@@ -1287,9 +1289,9 @@ func test_an_egg_move_pointer_outside_the_banked_window_fails() -> void:
 
 func test_an_egg_move_that_is_not_a_move_fails() -> void:
 	var entries: Array = _egg_move_entries()
-	entries[9] = [RomLayout.MOVE_COUNT + 1] as Array[int]
+	entries[9] = [Gen2Layout.MOVE_COUNT + 1] as Array[int]
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_egg_moves(data, entries)
 	assert_false(RomImporter.verify_egg_moves(_rom(data), _layout)["ok"])
 
@@ -1299,8 +1301,8 @@ func test_an_egg_move_that_is_not_a_move_fails() -> void:
 func test_an_egg_move_list_with_no_terminator_fails() -> void:
 	var data: PackedByteArray = _egg_move_dump()
 	var at: int = int(_layout["egg_move_pointers"]) \
-		+ RomLayout.SPECIES_COUNT * RomLayout.EGG_MOVE_POINTER_SIZE
-	var bank_end: int = (RomLayout.bank_of(at) + 1) * RomFile.BANK_SIZE
+		+ Gen2Layout.SPECIES_COUNT * Gen2Layout.EGG_MOVE_POINTER_SIZE
+	var bank_end: int = (Gen2Layout.bank_of(at) + 1) * RomFile.BANK_SIZE
 	for i: int in bank_end - at:
 		data[at + i] = 1
 	assert_false(RomImporter.verify_egg_moves(_rom(data), _layout)["ok"])
@@ -1310,7 +1312,7 @@ func test_an_egg_move_census_that_disagrees_with_the_layout_fails() -> void:
 	var entries: Array = _egg_move_entries()
 	(entries[RomImporter.EGG_MOVE_BULBASAUR_SPECIES - 1] as Array).append(1)
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	_write_egg_moves(data, entries)
 	var result: Dictionary = RomImporter.verify_egg_moves(_rom(data), _layout)
 	assert_false(result["ok"])
@@ -1334,16 +1336,16 @@ func _copyright_dump() -> PackedByteArray:
 	var entry: Dictionary = _layout["copyright"]
 	var tiles: int = int(entry["tiles"])
 	var strip := PackedByteArray()
-	strip.resize(tiles * Gen2Tiles.TILE_BYTES)
+	strip.resize(tiles * PokeTiles.TILE_BYTES)
 	strip.fill(0x18)
 	_write(data, int(entry["gfx"]), strip)
 	var codes := PackedByteArray()
-	for row: int in RomLayout.COPYRIGHT_STRING_ROWS:
+	for row: int in Gen2Layout.COPYRIGHT_STRING_ROWS:
 		if row > 0:
-			codes.append(RomLayout.COPYRIGHT_STRING_NEXT)
+			codes.append(Gen2Layout.COPYRIGHT_STRING_NEXT)
 		for index: int in 4:
-			codes.append(RomLayout.COPYRIGHT_FIRST_CODE + index)
-	codes.append(RomLayout.COPYRIGHT_STRING_TERMINATOR)
+			codes.append(Gen2Layout.COPYRIGHT_FIRST_CODE + index)
+	codes.append(Gen2Layout.COPYRIGHT_STRING_TERMINATOR)
 	_write(data, int(entry["string"]), codes)
 	var palette := PackedByteArray()
 	for color: int in RomImporter.COPYRIGHT_COLORS:
@@ -1360,7 +1362,7 @@ func test_a_plausible_copyright_screen_verifies() -> void:
 func test_a_copyright_string_with_a_code_outside_its_strip_fails() -> void:
 	var data: PackedByteArray = _copyright_dump()
 	var at: int = int((_layout["copyright"] as Dictionary)["string"])
-	data[at + 1] = RomLayout.COPYRIGHT_FIRST_CODE + int(
+	data[at + 1] = Gen2Layout.COPYRIGHT_FIRST_CODE + int(
 		(_layout["copyright"] as Dictionary)["tiles"]
 	)
 	assert_false(RomImporter.verify_copyright(_rom(data), _layout)["ok"])
@@ -1369,15 +1371,15 @@ func test_a_copyright_string_with_a_code_outside_its_strip_fails() -> void:
 func test_a_copyright_string_with_the_wrong_number_of_rows_fails() -> void:
 	var data: PackedByteArray = _copyright_dump()
 	var at: int = int((_layout["copyright"] as Dictionary)["string"])
-	data[at + 4] = RomLayout.COPYRIGHT_FIRST_CODE
+	data[at + 4] = Gen2Layout.COPYRIGHT_FIRST_CODE
 	assert_false(RomImporter.verify_copyright(_rom(data), _layout)["ok"])
 
 
 func test_a_copyright_string_that_never_terminates_fails() -> void:
 	var data: PackedByteArray = _copyright_dump()
 	var at: int = int((_layout["copyright"] as Dictionary)["string"])
-	for index: int in RomLayout.COPYRIGHT_STRING_MAX + 1:
-		data[at + index] = RomLayout.COPYRIGHT_FIRST_CODE
+	for index: int in Gen2Layout.COPYRIGHT_STRING_MAX + 1:
+		data[at + index] = Gen2Layout.COPYRIGHT_FIRST_CODE
 	assert_false(RomImporter.verify_copyright(_rom(data), _layout)["ok"])
 	assert_true(RomImporter.read_copyright_string(_rom(data), _layout).is_empty())
 
@@ -1386,7 +1388,7 @@ func test_a_blank_copyright_graphic_fails() -> void:
 	var data: PackedByteArray = _copyright_dump()
 	var entry: Dictionary = _layout["copyright"]
 	var blank := PackedByteArray()
-	blank.resize(int(entry["tiles"]) * Gen2Tiles.TILE_BYTES)
+	blank.resize(int(entry["tiles"]) * PokeTiles.TILE_BYTES)
 	_write(data, int(entry["gfx"]), blank)
 	assert_false(RomImporter.verify_copyright(_rom(data), _layout)["ok"])
 
@@ -1404,13 +1406,13 @@ func test_a_copyright_palette_that_is_not_the_logo_palette_fails() -> void:
 ## its rank from `FIRST_UNOWN_CHAR` and terminated with $FF.
 func _unown_dump() -> PackedByteArray:
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	var table: int = int(_layout["unown_words"])
-	var run: int = table + RomLayout.UNOWN_WORD_ENTRIES * RomLayout.UNOWN_WORD_POINTER_SIZE
+	var run: int = table + Gen2Layout.UNOWN_WORD_ENTRIES * Gen2Layout.UNOWN_WORD_POINTER_SIZE
 	var at: int = run
-	for form: int in RomLayout.UNOWN_FORMS:
+	for form: int in Gen2Layout.UNOWN_FORMS:
 		var pointer: int = RomFile.BANK_SIZE + (at % RomFile.BANK_SIZE)
-		var entry: int = table + (form + 1) * RomLayout.UNOWN_WORD_POINTER_SIZE
+		var entry: int = table + (form + 1) * Gen2Layout.UNOWN_WORD_POINTER_SIZE
 		data[entry] = pointer & 0xFF
 		data[entry + 1] = pointer >> 8
 		if form == 0:
@@ -1418,9 +1420,9 @@ func _unown_dump() -> PackedByteArray:
 			data[table + 1] = pointer >> 8
 		# Two letters each: the form's own, then A, which is enough for the
 		# check that every word opens on its own letter.
-		data[at] = RomLayout.FIRST_UNOWN_CHAR + form
-		data[at + 1] = RomLayout.FIRST_UNOWN_CHAR
-		data[at + 2] = RomLayout.UNOWN_WORD_TERMINATOR
+		data[at] = Gen2Layout.FIRST_UNOWN_CHAR + form
+		data[at + 1] = Gen2Layout.FIRST_UNOWN_CHAR
+		data[at + 2] = Gen2Layout.UNOWN_WORD_TERMINATOR
 		at += 3
 	return data
 
@@ -1429,9 +1431,9 @@ func test_a_plausible_unown_word_table_verifies() -> void:
 	var rom: RomFile = _rom(_unown_dump())
 	assert_true(RomImporter.verify_unown_words(rom, _layout)["ok"])
 	var words: PackedStringArray = RomImporter.read_unown_words(rom, _layout)
-	assert_eq(words.size(), RomLayout.UNOWN_FORMS)
+	assert_eq(words.size(), Gen2Layout.UNOWN_FORMS)
 	assert_eq(words[0], "AA")
-	assert_eq(words[RomLayout.UNOWN_FORMS - 1], "ZA")
+	assert_eq(words[Gen2Layout.UNOWN_FORMS - 1], "ZA")
 
 
 ## The table's zeroth entry is what says the address is the table's rather than
@@ -1447,10 +1449,10 @@ func test_a_table_that_does_not_open_on_form_a_twice_fails() -> void:
 func test_words_that_do_not_follow_their_table_fail() -> void:
 	var data: PackedByteArray = _unown_dump()
 	var table: int = int(_layout["unown_words"])
-	for form: int in RomLayout.UNOWN_WORD_ENTRIES:
-		var entry: int = table + form * RomLayout.UNOWN_WORD_POINTER_SIZE
+	for form: int in Gen2Layout.UNOWN_WORD_ENTRIES:
+		var entry: int = table + form * Gen2Layout.UNOWN_WORD_POINTER_SIZE
 		var moved: int = int(data[entry]) | (int(data[entry + 1]) << 8)
-		moved += RomLayout.UNOWN_WORD_POINTER_SIZE
+		moved += Gen2Layout.UNOWN_WORD_POINTER_SIZE
 		data[entry] = moved & 0xFF
 		data[entry + 1] = moved >> 8
 	assert_false(RomImporter.verify_unown_words(_rom(data), _layout)["ok"])
@@ -1461,8 +1463,8 @@ func test_words_that_do_not_follow_their_table_fail() -> void:
 func test_a_word_with_a_byte_outside_the_alphabet_fails() -> void:
 	var data: PackedByteArray = _unown_dump()
 	var run: int = int(_layout["unown_words"]) \
-		+ RomLayout.UNOWN_WORD_ENTRIES * RomLayout.UNOWN_WORD_POINTER_SIZE
-	data[run] = RomLayout.FIRST_UNOWN_CHAR + RomLayout.UNOWN_FORMS
+		+ Gen2Layout.UNOWN_WORD_ENTRIES * Gen2Layout.UNOWN_WORD_POINTER_SIZE
+	data[run] = Gen2Layout.FIRST_UNOWN_CHAR + Gen2Layout.UNOWN_FORMS
 	assert_false(RomImporter.verify_unown_words(_rom(data), _layout)["ok"])
 	assert_true(RomImporter.read_unown_words(_rom(data), _layout).is_empty())
 
@@ -1475,10 +1477,10 @@ func test_the_pokegear_cards_decode_as_tile_then_length() -> void:
 	var data: PackedByteArray = _dump()
 	_write(data, int((_layout["town_map"] as Dictionary)["cards"]), _cards())
 	var cards: Dictionary = RomImporter.read_pokegear_cards(_rom(data), _layout)
-	assert_eq(cards.size(), RomLayout.POKEGEAR_CARD_ORDER.size())
-	for row_name: String in RomLayout.POKEGEAR_CARD_ORDER:
+	assert_eq(cards.size(), Gen2Layout.POKEGEAR_CARD_ORDER.size())
+	for row_name: String in Gen2Layout.POKEGEAR_CARD_ORDER:
 		var cells: PackedByteArray = cards[row_name]
-		assert_eq(cells.size(), RomLayout.POKEGEAR_CARD_CELLS)
+		assert_eq(cells.size(), Gen2Layout.POKEGEAR_CARD_CELLS)
 		assert_eq(cells[0], Gen2TownMapPage.CARD_BLANK_TILE)
 
 
@@ -1525,12 +1527,12 @@ func _text(words: String) -> PackedByteArray:
 ## a byte, so a screen takes two pairs.
 func _cards() -> PackedByteArray:
 	var out: PackedByteArray = PackedByteArray()
-	for _card: String in RomLayout.POKEGEAR_CARD_ORDER:
-		var left: int = RomLayout.POKEGEAR_CARD_CELLS
+	for _card: String in Gen2Layout.POKEGEAR_CARD_ORDER:
+		var left: int = Gen2Layout.POKEGEAR_CARD_CELLS
 		while left > 0:
 			var run: int = mini(left, 0xFF)
 			out.append(Gen2TownMapPage.CARD_BLANK_TILE)
 			out.append(run)
 			left -= run
-		out.append(RomLayout.POKEGEAR_CARD_TERMINATOR)
+		out.append(Gen2Layout.POKEGEAR_CARD_TERMINATOR)
 	return out

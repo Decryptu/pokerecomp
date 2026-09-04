@@ -61,9 +61,9 @@ func _verify_shape(game_id: StringName, data: GameData) -> void:
 			continue
 		for row: Array in rows:
 			_r.check(
-				row.size() == RomLayout.NAME_INPUT_ROW_BYTES,
+				row.size() == Gen2Layout.NAME_INPUT_ROW_BYTES,
 				"%s: table %d has a %d-byte row, not %d." % [
-					game_id, table, row.size(), RomLayout.NAME_INPUT_ROW_BYTES,
+					game_id, table, row.size(), Gen2Layout.NAME_INPUT_ROW_BYTES,
 				]
 			)
 	## The two mail keyboards follow in the same cache file and are 19 bytes a
@@ -71,8 +71,8 @@ func _verify_shape(game_id: StringName, data: GameData) -> void:
 	## fifth table of the wrong width. `tools/checks/mail.gd` owns the pair.
 	var mail: Array = data.name_input_chars(EXPECTED_ROWS.size())
 	_r.check(
-		mail.size() == RomLayout.MAIL_INPUT_TABLE_ROWS
-			and (mail[0] as Array).size() == RomLayout.MAIL_INPUT_ROW_BYTES,
+		mail.size() == Gen2Layout.MAIL_INPUT_TABLE_ROWS
+			and (mail[0] as Array).size() == Gen2Layout.MAIL_INPUT_ROW_BYTES,
 		"%s: the table after the four keyboards is not a mail keyboard." % game_id
 	)
 
@@ -84,8 +84,8 @@ func _verify_letters(game_id: StringName, data: GameData) -> void:
 	for table: int in EXPECTED_ROWS.size():
 		var first: int = LOWER_A if table < 2 else UPPER_A
 		for row: int in 3:
-			for column: int in RomLayout.NAME_INPUT_COLUMNS:
-				var letter: int = row * RomLayout.NAME_INPUT_COLUMNS + column
+			for column: int in Gen2Layout.NAME_INPUT_COLUMNS:
+				var letter: int = row * Gen2Layout.NAME_INPUT_COLUMNS + column
 				var expected: int = SPACE if letter >= 26 else first + letter
 				var stored: int = _cell(data, table, row, column)
 				_r.check(
@@ -121,8 +121,8 @@ func _verify_command_row(game_id: StringName, data: GameData) -> void:
 			continue
 		var row: Array = rows[rows.size() - 1]
 		var expected: Array[int] = (
-			RomLayout.NAME_INPUT_COMMAND_LOWER if table < 2
-			else RomLayout.NAME_INPUT_COMMAND_UPPER
+			Gen2Layout.NAME_INPUT_COMMAND_LOWER if table < 2
+			else Gen2Layout.NAME_INPUT_COMMAND_UPPER
 		)
 		_r.check(
 			Array(row) == Array(expected),
@@ -146,9 +146,9 @@ func _verify_identical() -> void:
 	for game_id: StringName in _blocks:
 		var block: PackedByteArray = _blocks[game_id]
 		_r.check(
-			block.size() == RomLayout.NAME_INPUT_BLOCK_BYTES,
+			block.size() == Gen2Layout.NAME_INPUT_BLOCK_BYTES,
 			"%s: block is %d bytes, not the pinned %d." % [
-				game_id, block.size(), RomLayout.NAME_INPUT_BLOCK_BYTES,
+				game_id, block.size(), Gen2Layout.NAME_INPUT_BLOCK_BYTES,
 			]
 		)
 		if expected == &"":
@@ -160,7 +160,7 @@ func _verify_identical() -> void:
 		)
 	if not _blocks.is_empty():
 		print("Name input block: %d bytes, identical in %d games." % [
-			RomLayout.NAME_INPUT_BLOCK_BYTES, _blocks.size(),
+			Gen2Layout.NAME_INPUT_BLOCK_BYTES, _blocks.size(),
 		])
 
 
@@ -169,5 +169,5 @@ func _cell(data: GameData, table: int, row: int, column: int) -> int:
 	if row < 0 or row >= rows.size():
 		return -1
 	var codes: Array = rows[row]
-	var at: int = column * RomLayout.NAME_INPUT_COLUMN_STRIDE
+	var at: int = column * Gen2Layout.NAME_INPUT_COLUMN_STRIDE
 	return int(codes[at]) if at < codes.size() else -1

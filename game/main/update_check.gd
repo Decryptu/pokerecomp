@@ -1,17 +1,17 @@
-class_name Gen2UpdateCheck
+class_name PokeUpdateCheck
 extends RefCounted
 
 ## Compares this build against the project's published releases.
 ##
 ## Everything here is pure: no HTTP and no filesystem, so the version rules and
 ## the shape of a release feed are testable without a network. The launcher owns
-## the request itself, the way [Gen2ModIndex] leaves fetching to its dialog.
+## the request itself, the way [PokeModIndex] leaves fetching to its dialog.
 ##
 ## The check never runs on its own. It reaches a third party and reports that
 ## this build exists, so it happens when the player asks and not before.
 
 const RELEASES_API: String = "https://api.github.com/repos/Decryptu/pokerecomp/releases/latest"
-const RELEASES_PAGE: String = "%s/releases" % Gen2AppVersion.REPOSITORY
+const RELEASES_PAGE: String = "%s/releases" % PokeAppVersion.REPOSITORY
 ## A release document is metadata. Anything larger is not one.
 const MAX_RESPONSE_BYTES: int = 1024 * 1024
 
@@ -27,7 +27,7 @@ enum Status {
 ## The running build, kept in code so the launcher can identify development
 ## builds before a GitHub release exists.
 static func current_version() -> String:
-	return Gen2AppVersion.VERSION
+	return PokeAppVersion.VERSION
 
 
 ## Splits a version into comparable integers. A leading "v" is accepted because

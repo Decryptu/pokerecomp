@@ -72,16 +72,16 @@ func handle_button(button: int) -> bool:
 	if _hold_frames > 0:
 		## Both holds end on `DelayFrames`, which reads no joypad.
 		return true
-	if button == Gen2Button.A:
+	if button == PokeButton.A:
 		advance()
 		return true
 	if not viewer:
 		return false
-	if button == Gen2Button.B:
+	if button == PokeButton.B:
 		cancelled = true
 		closed.emit()
 		return true
-	if button == Gen2Button.START:
+	if button == PokeButton.START:
 		_index = _pages.size()
 		closed.emit()
 		return true
@@ -141,7 +141,7 @@ func _refresh() -> void:
 	var indices: PackedByteArray = _page_renderer.draw(page)
 	var image: Image = Gen2PicImage.from_indices(
 		indices, Gen2Screen.WIDTH, Gen2Screen.HEIGHT,
-		Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK])),
+		PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK])),
 		true
 	)
 	Gen2PicImage.show(_background, image)

@@ -1,9 +1,9 @@
-class_name Gen2AudioRender
+class_name PokeAudioRender
 extends RefCounted
 
 ## Offline render of one audio record: run the driver for a fixed number of
 ## frames and keep the samples. Used by the parity tool and by tests; live
-## playback drives [Gen2SoundEngine] and [Gen2Apu] directly.
+## playback drives [Gen2SoundEngine] and [PokeApu] directly.
 
 
 ## Returns `pcm` as interleaved 16-bit stereo, and `trace` as the driver's
@@ -19,7 +19,7 @@ static func render(
 ) -> Dictionary:
 	if record.is_empty():
 		return {"ok": false, "reason": &"audio_data_unavailable"}
-	var apu := Gen2Apu.new()
+	var apu := PokeApu.new()
 	var engine := Gen2SoundEngine.new(apu)
 	engine.stereo = stereo
 	engine.set_assets(assets)
@@ -40,7 +40,7 @@ static func render(
 		return {"ok": false, "reason": &"audio_record_unplayable"}
 
 	var pcm := PackedInt32Array()
-	pcm.resize(maxi(frames, 1) * Gen2Apu.SAMPLES_PER_FRAME * 2)
+	pcm.resize(maxi(frames, 1) * PokeApu.SAMPLES_PER_FRAME * 2)
 	var cursor: int = 0
 	for frame: int in maxi(frames, 1):
 		apu.trace_frame = frame
@@ -70,8 +70,8 @@ static func write_wav(path: String, pcm: PackedInt32Array) -> bool:
 	file.store_32(16)
 	file.store_16(1)
 	file.store_16(2)
-	file.store_32(Gen2Apu.SAMPLE_RATE)
-	file.store_32(Gen2Apu.SAMPLE_RATE * 4)
+	file.store_32(PokeApu.SAMPLE_RATE)
+	file.store_32(PokeApu.SAMPLE_RATE * 4)
 	file.store_16(4)
 	file.store_16(16)
 	file.store_buffer("data".to_ascii_buffer())

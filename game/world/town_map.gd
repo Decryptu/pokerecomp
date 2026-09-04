@@ -29,7 +29,7 @@ const SCREEN_DEX_AREA: StringName = &"dex_area"
 const SCREEN_FLY: StringName = &"fly"
 
 ## Kanto's default flypoint, and the one `FlyMap` tests before drawing Kanto.
-const FLY_INDIGO: int = RomLayout.FLYPOINT_COUNT - 1
+const FLY_INDIGO: int = Gen2Layout.FLYPOINT_COUNT - 1
 
 var crystal: bool = true
 var screen: StringName = SCREEN_TOWN_MAP
@@ -64,12 +64,12 @@ static func fly(
 	# still says where the player stands while the cursor walks flypoints.
 	out.player_landmark = landmark
 	if in_kanto and visited.has(FLY_INDIGO):
-		out._first = RomLayout.KANTO_FLYPOINT
-		out._last = RomLayout.FLYPOINT_COUNT - 1
+		out._first = Gen2Layout.KANTO_FLYPOINT
+		out._last = Gen2Layout.FLYPOINT_COUNT - 1
 		out.cursor = FLY_INDIGO
 	else:
 		out._first = 0
-		out._last = RomLayout.KANTO_FLYPOINT - 1
+		out._last = Gen2Layout.KANTO_FLYPOINT - 1
 		out.cursor = 0
 	return out
 
@@ -119,7 +119,7 @@ func region() -> int:
 		return cursor
 	# `.NoKanto` is what puts a player standing in Kanto on Johto's map.
 	if screen == SCREEN_FLY:
-		return REGION_KANTO if _first == RomLayout.KANTO_FLYPOINT else REGION_JOHTO
+		return REGION_KANTO if _first == Gen2Layout.KANTO_FLYPOINT else REGION_JOHTO
 	if screen == SCREEN_POKEGEAR_CARD \
 		and player_landmark == Gen2WorldRadio.fast_ship_landmark(crystal):
 		return REGION_JOHTO
@@ -154,23 +154,23 @@ func last_landmark() -> int:
 func press(button: int) -> bool:
 	if screen == SCREEN_DEX_AREA:
 		match button:
-			Gen2Button.LEFT:
+			PokeButton.LEFT:
 				if cursor == REGION_JOHTO:
 					return false
 				cursor = REGION_JOHTO
 				return true
-			Gen2Button.RIGHT:
+			PokeButton.RIGHT:
 				if not hall_of_fame or cursor == REGION_KANTO:
 					return false
 				cursor = REGION_KANTO
 				return true
 		return false
 	match button:
-		Gen2Button.UP:
+		PokeButton.UP:
 			cursor = _first if cursor >= _last else cursor + 1
 			_skip_unvisited(1)
 			return true
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			cursor = _last if cursor == _first else cursor - 1
 			_skip_unvisited(-1)
 			return true
@@ -182,7 +182,7 @@ func press(button: int) -> bool:
 func _skip_unvisited(step: int) -> void:
 	if screen != SCREEN_FLY:
 		return
-	for _guard: int in RomLayout.FLYPOINT_COUNT:
+	for _guard: int in Gen2Layout.FLYPOINT_COUNT:
 		if visited_flypoints.has(cursor) or cursor == _default_flypoint():
 			return
 		if step > 0:
@@ -193,4 +193,4 @@ func _skip_unvisited(step: int) -> void:
 
 ## The flypoint the map opened on, which the source leaves reachable regardless.
 func _default_flypoint() -> int:
-	return FLY_INDIGO if _first == RomLayout.KANTO_FLYPOINT else 0
+	return FLY_INDIGO if _first == Gen2Layout.KANTO_FLYPOINT else 0

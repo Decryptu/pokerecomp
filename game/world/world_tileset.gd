@@ -9,7 +9,7 @@ extends RefCounted
 
 var number: int = 0
 var block_count: int = 0
-var tile_count: int = RomLayout.TILESET_TILE_COUNT
+var tile_count: int = Gen2Layout.TILESET_TILE_COUNT
 ## The three lookup tables are cartridge bytes and are read once per drawn tile,
 ## so they are packed rather than kept as Arrays of Variants. Only the animation
 ## command list stays an Array, because its entries are records.
@@ -25,7 +25,7 @@ static func from_cache(value: Dictionary) -> Gen2WorldTileset:
 	var out := Gen2WorldTileset.new()
 	out.number = int(value.get("number", 0))
 	out.block_count = int(value.get("block_count", 0))
-	out.tile_count = int(value.get("tile_count", RomLayout.TILESET_TILE_COUNT))
+	out.tile_count = int(value.get("tile_count", Gen2Layout.TILESET_TILE_COUNT))
 	out.meta = RomCache.packed_bytes(value.get("meta", []))
 	out.collision = RomCache.packed_bytes(value.get("collision", []))
 	out.animation_pointer = int(value.get("animation_pointer", 0))
@@ -41,9 +41,9 @@ static func from_cache(value: Dictionary) -> Gen2WorldTileset:
 ## resolves to 0, so a caller can index [method GameData.world_tileset_indices]
 ## with the answer.
 func tile_index(block: int, tile: int) -> int:
-	if block < 0 or block >= block_count or tile < 0 or tile >= RomLayout.MAP_BLOCK_TILE_WIDTH * RomLayout.MAP_BLOCK_TILE_WIDTH:
+	if block < 0 or block >= block_count or tile < 0 or tile >= Gen2Layout.MAP_BLOCK_TILE_WIDTH * Gen2Layout.MAP_BLOCK_TILE_WIDTH:
 		return 0
-	var at: int = block * RomLayout.TILESET_META_BYTES_PER_BLOCK + tile
+	var at: int = block * Gen2Layout.TILESET_META_BYTES_PER_BLOCK + tile
 	if at >= meta.size():
 		return 0
 	var index: int = meta[at]
@@ -53,7 +53,7 @@ func tile_index(block: int, tile: int) -> int:
 func collision_index(block: int, cell_x: int, cell_y: int) -> int:
 	if block <= 0 or block >= block_count or cell_x < 0 or cell_x >= 2 or cell_y < 0 or cell_y >= 2:
 		return -1
-	var at: int = block * RomLayout.TILESET_COLLISION_BYTES_PER_BLOCK + cell_x + cell_y * 2
+	var at: int = block * Gen2Layout.TILESET_COLLISION_BYTES_PER_BLOCK + cell_x + cell_y * 2
 	return collision[at] if at < collision.size() else -1
 
 

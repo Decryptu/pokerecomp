@@ -1,12 +1,14 @@
 extends RefCounted
 
-## The harness every `tools/validate.gd` topic shares: the three cartridges, the
+## The harness every `tools/validate.gd` topic shares: the cartridges, the
 ## failure list, and the world helpers a map check needs.
 ## A topic is a script under `tools/checks/` with `func run(r) -> void`. It
 ## reports through [method check] and prints its own census lines with
 ## [method note]; the runner owns the exit code.
 
-const GAME_IDS: Array[StringName] = [&"gold", &"silver", &"crystal"]
+## The Generation 2 cartridges, which is what a topic naming these means: every
+## topic here but `gen1_tables` is about that generation's tables and maps.
+static var GAME_IDS: Array[StringName] = RomRegistry.ids_of_generation(RomRegistry.GEN2)
 
 ## The party [code]CheckPartyMove[/code] gates every field move against. These
 ## checks are about the tables and the map rather than the party, so a world one
@@ -41,21 +43,29 @@ func note(message: String) -> void:
 	print("%s: %s" % [game_id, message] if game_id != &"" else message)
 
 
-## Runs [param body] once per cartridge with [member data], [member game_id] and
-## [member crystal] set. A cache that will not open is one failure, not a crash.
+## Runs [param body] once per Generation 2 cartridge with [member data],
+## [member game_id] and [member crystal] set.
 func each_game(body: Callable) -> void:
-	for id: StringName in GAME_IDS:
+	each_game_of(RomRegistry.GEN2, body)
+
+
+## The same for one generation's cartridges. A cache that will not open is one
+## failure, not a crash. [member crystal] is meaningless outside Generation 2
+## and stays false there.
+func each_game_of(generation: int, body: Callable) -> void:
+	for id: StringName in RomRegistry.ids_of_generation(generation):
 		var opened: GameData = GameData.open(id)
 		if opened == null:
 			game_id = &""
-			fail("%s cache is unavailable. Import roms/%s.gbc first." % [id, id])
+			fail("%s cache is unavailable. Import its dump into roms/ first." % id)
 			continue
 		game_id = id
 		data = opened
-		crystal = Gen2WorldState.is_crystal_profile(opened)
+		crystal = generation == RomRegistry.GEN2 and Gen2WorldState.is_crystal_profile(opened)
 		body.call()
 	game_id = &""
 	data = null
+	crystal = false
 
 
 ## A world opened on [param cell], with [param state] or a fresh one. Answers

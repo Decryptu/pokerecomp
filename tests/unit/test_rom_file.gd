@@ -1,5 +1,7 @@
 extends GutTest
 
+const GEN2_ROM_SIZE: int = RomRegistry.SIZES[RomRegistry.GEN2]
+
 ## Addressing and header parsing, on a synthetic cartridge. No real dump is
 ## involved: the bytes here are built to exercise the arithmetic, not to
 ## resemble a game.
@@ -21,7 +23,7 @@ func after_each() -> void:
 
 func _blank_cartridge() -> PackedByteArray:
 	var data: PackedByteArray = PackedByteArray()
-	data.resize(RomRegistry.EXPECTED_SIZE)
+	data.resize(GEN2_ROM_SIZE)
 	return data
 
 
@@ -68,8 +70,8 @@ func test_the_switchable_window_folds_onto_its_bank() -> void:
 
 
 func test_the_last_bank_of_a_cartridge_still_fits() -> void:
-	var banks: int = RomRegistry.EXPECTED_SIZE / RomFile.BANK_SIZE
-	assert_eq(RomFile.linear(banks - 1, 0x7FFF), RomRegistry.EXPECTED_SIZE - 1)
+	var banks: int = GEN2_ROM_SIZE / RomFile.BANK_SIZE
+	assert_eq(RomFile.linear(banks - 1, 0x7FFF), GEN2_ROM_SIZE - 1)
 
 
 func test_an_unverified_file_is_refused() -> void:
@@ -102,7 +104,7 @@ func test_header_fields_are_read_from_their_documented_places() -> void:
 	assert_eq(header.cgb_flag, RomHeader.CGB_COMPATIBLE)
 	assert_eq(header.cart_type, 0x10)
 	assert_eq(header.version, 1)
-	assert_eq(header.declared_rom_size(), RomRegistry.EXPECTED_SIZE)
+	assert_eq(header.declared_rom_size(), GEN2_ROM_SIZE)
 	assert_true(header.is_color_game())
 
 

@@ -1,4 +1,4 @@
-class_name Gen2ModOptions
+class_name PokeModOptions
 extends RefCounted
 
 ## What the player chose for each mod's registered settings. The file under

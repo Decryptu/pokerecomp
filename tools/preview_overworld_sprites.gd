@@ -24,7 +24,7 @@ func _initialize() -> void:
 		push_error("Usage: -s tools/preview_overworld_sprites.gd -- <game> <output.png>")
 		quit(1)
 		return
-	if Gen2ToolPath.refuses(args[1]):
+	if PokeToolPath.refuses(args[1]):
 		quit(2)
 		return
 	var data: GameData = GameData.open(StringName(args[0]))
@@ -62,7 +62,7 @@ func _initialize() -> void:
 	## facings and no frames: a wrong offset shows up as noise here.
 	var effects_top: int = (rows - 1) * TILE_H + 1
 	var at_x: int = 1
-	for name: String in RomLayout.EMOTE_NAMES + ["headbutt_tree"] as Array[String]:
+	for name: String in Gen2Layout.EMOTE_NAMES + ["headbutt_tree"] as Array[String]:
 		var effect: Dictionary = data.overworld_effect(name)
 		if effect.is_empty():
 			continue
@@ -74,16 +74,16 @@ func _initialize() -> void:
 		var indices: PackedByteArray = effect["indices"]
 		var tiles: int = int(effect["tiles"])
 		for tile: int in tiles:
-			for y: int in Gen2Tiles.TILE_HEIGHT:
-				for x: int in Gen2Tiles.TILE_WIDTH:
+			for y: int in PokeTiles.TILE_HEIGHT:
+				for x: int in PokeTiles.TILE_WIDTH:
 					var index: int = int(indices[
-						y * tiles * Gen2Tiles.TILE_WIDTH + tile * Gen2Tiles.TILE_WIDTH + x
+						y * tiles * PokeTiles.TILE_WIDTH + tile * PokeTiles.TILE_WIDTH + x
 					])
 					sheet.set_pixel(
 						at_x + x, effects_top + y,
 						palette[index] if index < palette.size() else Color.MAGENTA
 					)
-			at_x += Gen2Tiles.TILE_WIDTH
+			at_x += PokeTiles.TILE_WIDTH
 		at_x += 2
 	sheet.resize(sheet.get_width() * SCALE, sheet.get_height() * SCALE, Image.INTERPOLATE_NEAREST)
 	if sheet.save_png(args[1]) != OK:

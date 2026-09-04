@@ -617,8 +617,7 @@ var _last_damage_taken: Dictionary = {PLAYER: {}, ENEMY: {}}
 ## `DoMove`'s own artefact: every effect command executed, in the order the read
 ## cycle reached it, skips and loop passes included. Collected only while
 ## `trace_commands` is on, which `tools/trace_battle_commands.gd` turns on so a
-## fought turn can be diffed against `.claude/oracle/battle/trace_move_commands.py`'s
-## reading of the same one.
+## fought turn can be diffed against the same trace taken off a real cartridge.
 static var trace_commands: bool = false
 var command_trace: Array[StringName] = []
 
@@ -850,7 +849,7 @@ func opponent_of(side: int) -> int:
 ## `GetUnownLetter` fills from the same DVs the stats came from: a display value
 ## like the level in an event, so it travels with the send-out.
 static func unown_form_of(battler: Gen2BattleMon) -> int:
-	if battler == null or battler.species != RomLayout.UNOWN_SPECIES:
+	if battler == null or battler.species != Gen2Layout.UNOWN_SPECIES:
 		return 0
 	return Gen2Stats.unown_letter(battler.persistent_dvs())
 
@@ -2101,7 +2100,7 @@ func _handle_berserk_gene(events: Array) -> void:
 			"param": battle_anim_param,
 			"after_anim": Gen2BattleAnimPlayer.AFTER_ANIM_NONE,
 			"enemy_turn": side == ENEMY,
-			"effectiveness": RomLayout.MATCHUP_EFFECTIVE,
+			"effectiveness": Gen2Layout.MATCHUP_EFFECTIVE,
 			"restore_user_pic": false,
 		})
 		events.append({"type": CONFUSE_INFLICTED, "target": side})

@@ -32,7 +32,7 @@ func _initialize() -> void:
 		push_error("Usage: preview_link.gd -- <game> <output.png> [screen|all]")
 		quit(1)
 		return
-	if Gen2ToolPath.refuses(args[1]):
+	if PokeToolPath.refuses(args[1]):
 		quit(2)
 		return
 	var data: GameData = GameData.open(StringName(args[0]))

@@ -176,7 +176,7 @@ func test_the_built_in_renderer_ignores_a_world_context() -> void:
 	assert_not_null(_battle_screen.world_context())
 
 
-## The battle side of Gen2WorldScreen's own renderer-input seam. A Gen2Button is
+## The battle side of Gen2WorldScreen's own renderer-input seam. A PokeButton is
 ## claimed by the screen before this and never arrives, so what a renderer is
 ## offered is the motion the screen has no opinion about.
 func test_a_battle_renderer_is_offered_the_input_the_screen_did_not_claim() -> void:
@@ -211,7 +211,7 @@ func handle_battle_input(event) -> bool:
 
 	# A button belongs to whatever owns the screen, so it never reaches here.
 	var press := InputEventAction.new()
-	press.action = Gen2Button.ACTIONS[Gen2Button.A]
+	press.action = PokeButton.ACTIONS[PokeButton.A]
 	press.pressed = true
 	_battle_screen._unhandled_input(press)
 	assert_eq((renderer.get("seen") as Array).size(), 1, "a button reached the renderer")
@@ -381,7 +381,7 @@ func test_a_hit_drains_the_bar_before_it_says_what_the_hit_was() -> void:
 	_battle_screen._pending = [{
 		"type": Gen2Battle.HIT, "side": Gen2Battle.PLAYER, "target": Gen2Battle.ENEMY,
 		"hp": 24, "max_hp": 48, "critical": false,
-		"effectiveness": RomLayout.MATCHUP_SUPER_EFFECTIVE,
+		"effectiveness": Gen2Layout.MATCHUP_SUPER_EFFECTIVE,
 	}]
 	_battle_screen._show_next_event()
 
@@ -417,7 +417,7 @@ func test_a_hit_that_says_nothing_still_empties_the_bar_before_the_faint() -> vo
 		{
 			"type": Gen2Battle.HIT, "side": Gen2Battle.PLAYER,
 			"target": Gen2Battle.ENEMY, "hp": 0, "max_hp": 48, "critical": false,
-			"effectiveness": RomLayout.MATCHUP_EFFECTIVE,
+			"effectiveness": Gen2Layout.MATCHUP_EFFECTIVE,
 		},
 		{"type": Gen2Battle.FAINTED, "side": Gen2Battle.ENEMY},
 	]
@@ -869,7 +869,7 @@ func test_the_entrance_says_who_is_on_each_square_and_how_far_off_it() -> void:
 	# `SlideBattlePicOut` walks the player's square nine tiles to the left and
 	# the opponent's eight to the right, and the opening slide brings each in
 	# from the side it later leaves towards.
-	var step: int = Gen2Tiles.TILE_WIDTH
+	var step: int = PokeTiles.TILE_WIDTH
 	assert_eq(
 		lows["player"], -float((int(Gen2BattleScreenMap.SLIDE_STEPS[true]) - 1) * step),
 		"the player walks off to the left, all but the step it is replaced on"
@@ -980,7 +980,7 @@ func test_a_faint_sinks_the_battlers_own_offset() -> void:
 	assert_gt(steps, 0, "the faint ran")
 	assert_eq(
 		deepest,
-		float((Gen2BattleScreenMap.FAINT_STEPS - 1) * Gen2Tiles.TILE_HEIGHT),
+		float((Gen2BattleScreenMap.FAINT_STEPS - 1) * PokeTiles.TILE_HEIGHT),
 		"the picture sank a tile row a step and never rose",
 	)
 	assert_eq(
@@ -1075,7 +1075,7 @@ func test_a_press_reaches_nothing_while_a_pic_slides_off_its_square() -> void:
 	assert_gt(guard, 0, "the opening reaches SlideBattlePicOut")
 
 	var stages: int = _battle_screen._entrance_stages.size()
-	_battle_screen.press_button(Gen2Button.A)
+	_battle_screen.press_button(PokeButton.A)
 	assert_true(_battle_screen.sliding(), "the slide is still owed after the press")
 	assert_eq(
 		_battle_screen._entrance_stages.size(), stages,

@@ -22,7 +22,7 @@ var events: Array = []
 ## What the damage steps worked out, for the steps after them.
 var damage: int = 0
 var critical: bool = false
-var effectiveness: int = RomLayout.MATCHUP_EFFECTIVE
+var effectiveness: int = Gen2Layout.MATCHUP_EFFECTIVE
 var immune: bool = false
 var missed: bool = false
 

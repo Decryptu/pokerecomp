@@ -143,22 +143,22 @@ static func _write_odd_eggs(manifest: Dictionary, crystal: bool) -> void:
 		manifest["odd_eggs"] = []
 		return
 	var rows: Array = []
-	var probabilities: Array[int] = [0x7FFF, RomLayout.ODD_EGG_PROBABILITY_TOTAL]
+	var probabilities: Array[int] = [0x7FFF, Gen2Layout.ODD_EGG_PROBABILITY_TOTAL]
 	var species: Array[int] = [25, 133]
 	for index: int in probabilities.size():
 		var bytes: PackedByteArray = PackedByteArray()
-		bytes.resize(RomLayout.NICKNAMED_MON_BYTES)
+		bytes.resize(Gen2Layout.NICKNAMED_MON_BYTES)
 		bytes.fill(0)
 		bytes[0] = species[index]
-		bytes[31] = RomLayout.ODD_EGG_LEVEL
+		bytes[31] = Gen2Layout.ODD_EGG_LEVEL
 		## The struct carries its own experience, and a row whose level and
 		## experience disagree is what `Gen2WorldTransaction` refuses.
-		var experience: int = RomLayout.ODD_EGG_LEVEL ** 3
+		var experience: int = Gen2Layout.ODD_EGG_LEVEL ** 3
 		bytes[8] = (experience >> 16) & 0xFF
 		bytes[9] = (experience >> 8) & 0xFF
 		bytes[10] = experience & 0xFF
 		## `dname` pads the whole name field with the terminator behind the word.
-		var nickname: PackedByteArray = Gen2Text.encode(RomLayout.ODD_EGG_NICKNAME)
+		var nickname: PackedByteArray = Gen2Text.encode(Gen2Layout.ODD_EGG_NICKNAME)
 		for step: int in Gen2SramAdapter.MON_NAME_LENGTH:
 			bytes[Gen2SramAdapter.PARTYMON_SIZE + step] = nickname[step] \
 				if step < nickname.size() else Gen2Text.TERMINATOR
@@ -171,41 +171,41 @@ static func _write_odd_eggs(manifest: Dictionary, crystal: bool) -> void:
 ## `naming_screen.asm`; the command row and the row counts decide everything.
 static func _write_name_input_chars(cache_directory: String) -> void:
 	var tables: Array = []
-	for table: int in RomLayout.NAME_INPUT_TABLE_ROWS.size():
-		var first: int = RomLayout.NAME_INPUT_LOWER_A if table < 2 else RomLayout.NAME_INPUT_UPPER_A
+	for table: int in Gen2Layout.NAME_INPUT_TABLE_ROWS.size():
+		var first: int = Gen2Layout.NAME_INPUT_LOWER_A if table < 2 else Gen2Layout.NAME_INPUT_UPPER_A
 		var rows: Array = []
-		var count: int = RomLayout.NAME_INPUT_TABLE_ROWS[table]
+		var count: int = Gen2Layout.NAME_INPUT_TABLE_ROWS[table]
 		for row: int in count:
 			if row == count - 1:
 				rows.append(Array(
-					RomLayout.NAME_INPUT_COMMAND_LOWER if table < 2
-					else RomLayout.NAME_INPUT_COMMAND_UPPER
+					Gen2Layout.NAME_INPUT_COMMAND_LOWER if table < 2
+					else Gen2Layout.NAME_INPUT_COMMAND_UPPER
 				))
 				continue
 			var codes: Array[int] = []
-			for column: int in RomLayout.NAME_INPUT_COLUMNS:
-				codes.append(first + row * RomLayout.NAME_INPUT_COLUMNS + column)
-				if column < RomLayout.NAME_INPUT_COLUMNS - 1:
+			for column: int in Gen2Layout.NAME_INPUT_COLUMNS:
+				codes.append(first + row * Gen2Layout.NAME_INPUT_COLUMNS + column)
+				if column < Gen2Layout.NAME_INPUT_COLUMNS - 1:
 					codes.append(Gen2Text.SPACE)
 			rows.append(codes)
 		tables.append(rows)
 	## `mail_input_chars.asm`'s two, appended the way the importer appends them:
 	## ten columns two bytes apart, six rows, and the command row last.
-	for table: int in RomLayout.MAIL_INPUT_TABLES:
-		var first: int = RomLayout.MAIL_INPUT_UPPER_A if table == 0 \
-			else RomLayout.MAIL_INPUT_LOWER_A
+	for table: int in Gen2Layout.MAIL_INPUT_TABLES:
+		var first: int = Gen2Layout.MAIL_INPUT_UPPER_A if table == 0 \
+			else Gen2Layout.MAIL_INPUT_LOWER_A
 		var rows: Array = []
-		for row: int in RomLayout.MAIL_INPUT_TABLE_ROWS:
-			if row == RomLayout.MAIL_INPUT_TABLE_ROWS - 1:
+		for row: int in Gen2Layout.MAIL_INPUT_TABLE_ROWS:
+			if row == Gen2Layout.MAIL_INPUT_TABLE_ROWS - 1:
 				rows.append(Array(
-					RomLayout.MAIL_INPUT_COMMAND_UPPER if table == 0
-					else RomLayout.MAIL_INPUT_COMMAND_LOWER
+					Gen2Layout.MAIL_INPUT_COMMAND_UPPER if table == 0
+					else Gen2Layout.MAIL_INPUT_COMMAND_LOWER
 				))
 				continue
 			var codes: Array[int] = []
-			for column: int in RomLayout.MAIL_INPUT_COLUMNS:
-				codes.append(first + row * RomLayout.MAIL_INPUT_COLUMNS + column)
-				if column < RomLayout.MAIL_INPUT_COLUMNS - 1:
+			for column: int in Gen2Layout.MAIL_INPUT_COLUMNS:
+				codes.append(first + row * Gen2Layout.MAIL_INPUT_COLUMNS + column)
+				if column < Gen2Layout.MAIL_INPUT_COLUMNS - 1:
 					codes.append(Gen2Text.SPACE)
 			rows.append(codes)
 		tables.append(rows)
@@ -245,7 +245,7 @@ static func _write_trainers(cache_directory: String) -> void:
 		},
 		"trainers": [{
 			"name": "RIVAL",
-			"type": RomLayout.TRAINER_MON_ITEM_MOVES,
+			"type": Gen2Layout.TRAINER_MON_ITEM_MOVES,
 			"party": [{
 				"level": 5,
 				"species": TRAINER_SPECIES,
@@ -343,7 +343,7 @@ static func _write_world(cache_directory: String, crystal_commands: bool = true)
 	}]}
 	RomCache.write_json(RomCache.world_maps_path(cache_directory), [map, home_map])
 	var grass_slots: Array = []
-	for _slot: int in RomLayout.WILD_GRASS_SLOT_COUNT:
+	for _slot: int in Gen2Layout.WILD_GRASS_SLOT_COUNT:
 		grass_slots.append({"level": 5, "species": TRAINER_SPECIES})
 	var grass_times: Array = [grass_slots.duplicate(true), grass_slots.duplicate(true), grass_slots.duplicate(true)]
 	var home_key: String = "%d:%d" % [
@@ -367,8 +367,8 @@ static func _write_world(cache_directory: String, crystal_commands: bool = true)
 			"time_groups": [],
 		},
 		"probabilities": {
-			"grass": RomLayout.WILD_GRASS_PROBABILITIES,
-			"water": RomLayout.WILD_WATER_PROBABILITIES,
+			"grass": Gen2Layout.WILD_GRASS_PROBABILITIES,
+			"water": Gen2Layout.WILD_WATER_PROBABILITIES,
 		},
 	})
 
@@ -404,15 +404,15 @@ static func _write_world(cache_directory: String, crystal_commands: bool = true)
 	RomCache.write_json(RomCache.world_movements_path(cache_directory), {})
 
 	var meta: Array = []
-	for tile: int in RomLayout.MAP_BLOCK_TILE_WIDTH * RomLayout.MAP_BLOCK_TILE_WIDTH:
+	for tile: int in Gen2Layout.MAP_BLOCK_TILE_WIDTH * Gen2Layout.MAP_BLOCK_TILE_WIDTH:
 		meta.append(tile)
 	var palette_map: Array = []
-	palette_map.resize((RomLayout.TILESET_TILE_COUNT + 1) / 2)
+	palette_map.resize((Gen2Layout.TILESET_TILE_COUNT + 1) / 2)
 	palette_map.fill(0)
 	RomCache.write_json(RomCache.world_tilesets_path(cache_directory), [{
 		"number": 0,
 		"block_count": 1,
-		"tile_count": RomLayout.TILESET_TILE_COUNT,
+		"tile_count": Gen2Layout.TILESET_TILE_COUNT,
 		"meta": meta,
 		"collision": [],
 		"palette_map": palette_map,
@@ -436,28 +436,28 @@ static func _write_overworld_graphics(cache_directory: String) -> void:
 		"palette": 0,
 	}])
 	var palettes: Array = []
-	for _group: int in RomLayout.OVERWORLD_SPRITE_PALETTE_GROUP_COUNT:
+	for _group: int in Gen2Layout.OVERWORLD_SPRITE_PALETTE_GROUP_COUNT:
 		palettes.append([0x7FFF, 0x421F, 0x2108, 0])
 	RomCache.write_json(RomCache.overworld_sprite_palettes_path(cache_directory), palettes)
 
 	var tiles: PackedByteArray = PackedByteArray()
-	tiles.resize(RomLayout.TILESET_TILE_COUNT * Gen2Tiles.TILE_PIXELS)
+	tiles.resize(Gen2Layout.TILESET_TILE_COUNT * PokeTiles.TILE_PIXELS)
 	tiles.fill(1)
 	RomCache.write_indices(RomCache.world_tile_path(cache_directory, 0), tiles)
 
 	var sprite: PackedByteArray = PackedByteArray()
-	sprite.resize(4 * Gen2Tiles.TILE_PIXELS)
+	sprite.resize(4 * PokeTiles.TILE_PIXELS)
 	sprite.fill(1)
 	RomCache.write_indices(RomCache.overworld_sprite_path(cache_directory, TRAINER_SPRITE), sprite)
 
 	## `MonMenuIcons`, one row per species: every one of them icon 1, which is
 	## all anything drawing a party icon or a visible encounter needs here.
 	var menu_icons: PackedByteArray = PackedByteArray()
-	menu_icons.resize(RomLayout.SPECIES_COUNT)
+	menu_icons.resize(Gen2Layout.SPECIES_COUNT)
 	menu_icons.fill(1)
 	RomCache.write_indices(RomCache.mon_menu_icons_path(cache_directory), menu_icons)
 	var icon: PackedByteArray = PackedByteArray()
-	icon.resize(8 * Gen2Tiles.TILE_PIXELS)
+	icon.resize(8 * PokeTiles.TILE_PIXELS)
 	icon.fill(1)
 	RomCache.write_indices(RomCache.overworld_icon_path(cache_directory, 1), icon)
 
@@ -602,7 +602,7 @@ static func _write_menu_text(manifest: Dictionary) -> void:
 ## `UnownWords`' do, so a test can tell which form the dex is showing.
 static func _write_unown_words(manifest: Dictionary) -> void:
 	var words: Array = []
-	for form: int in RomLayout.UNOWN_FORMS:
+	for form: int in Gen2Layout.UNOWN_FORMS:
 		words.append("%sWORD" % char("A".unicode_at(0) + form))
 	manifest["unown_words"] = words
 
@@ -614,24 +614,24 @@ static func _write_unown_words(manifest: Dictionary) -> void:
 ## drawn from the wrong one is visible rather than merely different.
 static func _write_unown_puzzle(cache_directory: String, manifest: Dictionary) -> void:
 	var sheets: Dictionary = manifest.get("tiles", {})
-	var rows: Array = [["tile_borders", RomLayout.UNOWN_PUZZLE_BORDER_TILES]]
+	var rows: Array = [["tile_borders", Gen2Layout.UNOWN_PUZZLE_BORDER_TILES]]
 	rows.append(["cursor", 4])
 	rows.append(["start_cancel", 19])
-	var side: int = RomLayout.UNOWN_PUZZLE_PICTURE_TILES
-	for name: String in RomLayout.UNOWN_PUZZLE_PICTURES:
+	var side: int = Gen2Layout.UNOWN_PUZZLE_PICTURE_TILES
+	for name: String in Gen2Layout.UNOWN_PUZZLE_PICTURES:
 		rows.append([name, side * side])
 	var fill: int = 0
 	for row: Array in rows:
 		var key: String = "unown_puzzle_%s" % String(row[0])
 		var tile_count: int = int(row[1])
 		var indices: PackedByteArray = PackedByteArray()
-		indices.resize(tile_count * Gen2Tiles.TILE_PIXELS)
+		indices.resize(tile_count * PokeTiles.TILE_PIXELS)
 		indices.fill(fill % 4)
 		fill += 1
 		RomCache.write_indices(RomCache.tile_path(cache_directory, key), indices)
 		sheets[key] = {
-			"width": tile_count * Gen2Tiles.TILE_WIDTH,
-			"height": Gen2Tiles.TILE_HEIGHT,
+			"width": tile_count * PokeTiles.TILE_WIDTH,
+			"height": PokeTiles.TILE_HEIGHT,
 			"tiles": tile_count,
 			"first_code": 0,
 			"bits": 2,
@@ -651,40 +651,40 @@ static func _write_unown_puzzle(cache_directory: String, manifest: Dictionary) -
 ## real cartridges reads them as.
 static func _write_magnet_train(manifest: Dictionary) -> void:
 	var bg: Array = []
-	for cell: int in RomLayout.MAGNET_TRAIN_BG_BYTES:
-		bg.append(cell % RomLayout.TILESET_BLOCK_TILES)
+	for cell: int in Gen2Layout.MAGNET_TRAIN_BG_BYTES:
+		bg.append(cell % Gen2Layout.TILESET_BLOCK_TILES)
 	var fg: Array = []
-	for cell: int in RomLayout.MAGNET_TRAIN_FG_BYTES:
-		fg.append((cell + 1) % RomLayout.TILESET_BLOCK_TILES)
+	for cell: int in Gen2Layout.MAGNET_TRAIN_FG_BYTES:
+		fg.append((cell + 1) % Gen2Layout.TILESET_BLOCK_TILES)
 	manifest["magnet_train"] = {"bg": bg, "fg": fg}
 
 
 static func _write_slots(cache_directory: String, manifest: Dictionary) -> void:
 	var sheets: Dictionary = manifest.get("tiles", {})
 	var fill: int = 1
-	for row: Array in RomLayout.SLOTS_SECTION:
+	for row: Array in Gen2Layout.SLOTS_SECTION:
 		if String(row[1]) != "lz":
 			continue
 		var name: String = String(row[0])
 		var tile_count: int = int(row[2])
 		var indices: PackedByteArray = PackedByteArray()
-		indices.resize(tile_count * Gen2Tiles.TILE_PIXELS)
+		indices.resize(tile_count * PokeTiles.TILE_PIXELS)
 		indices.fill(fill % 4)
 		fill += 1
 		RomCache.write_indices(RomCache.tile_path(cache_directory, name), indices)
 		sheets[name] = {
-			"width": tile_count * Gen2Tiles.TILE_WIDTH,
-			"height": Gen2Tiles.TILE_HEIGHT,
+			"width": tile_count * PokeTiles.TILE_WIDTH,
+			"height": PokeTiles.TILE_HEIGHT,
 			"tiles": tile_count,
 			"first_code": 0,
 			"bits": 2,
 		}
 	manifest["tiles"] = sheets
 	var tilemap: Array = []
-	for cell: int in RomLayout.SLOTS_TILEMAP_BYTES:
+	for cell: int in Gen2Layout.SLOTS_TILEMAP_BYTES:
 		tilemap.append(cell % 0x25)
 	var palettes: Array = []
-	for slot: int in RomLayout.SLOTS_PALETTES * RomLayout.PREDEF_PALETTE_COLORS:
+	for slot: int in Gen2Layout.SLOTS_PALETTES * Gen2Layout.PREDEF_PALETTE_COLORS:
 		palettes.append([0x7FFF, 0x2E98, 0x2DB2, 0x0000][slot % 4])
 	manifest["slots"] = {
 		"reels": SLOT_REELS, "tilemap": tilemap, "palettes": palettes,
@@ -705,30 +705,30 @@ static func _write_slots(cache_directory: String, manifest: Dictionary) -> void:
 static func _write_card_flip(cache_directory: String, manifest: Dictionary) -> void:
 	var sheets: Dictionary = manifest.get("tiles", {})
 	var fill: int = 1
-	for row: Array in RomLayout.CARD_FLIP_SECTION:
+	for row: Array in Gen2Layout.CARD_FLIP_SECTION:
 		var name: String = String(row[0])
 		var tile_count: int = int(row[2])
 		var indices: PackedByteArray = PackedByteArray()
-		indices.resize(tile_count * Gen2Tiles.TILE_PIXELS)
+		indices.resize(tile_count * PokeTiles.TILE_PIXELS)
 		indices.fill(fill % 4)
 		fill += 1
 		RomCache.write_indices(RomCache.tile_path(cache_directory, name), indices)
 		sheets[name] = {
-			"width": tile_count * Gen2Tiles.TILE_WIDTH,
-			"height": Gen2Tiles.TILE_HEIGHT,
+			"width": tile_count * PokeTiles.TILE_WIDTH,
+			"height": PokeTiles.TILE_HEIGHT,
 			"tiles": tile_count,
 			"first_code": 0,
 			"bits": 2,
 		}
 	manifest["tiles"] = sheets
 	var board: Array = []
-	for row: int in RomLayout.CARD_FLIP_TILEMAP_ROWS:
-		for column: int in RomLayout.CARD_FLIP_TILEMAP_COLUMNS:
+	for row: int in Gen2Layout.CARD_FLIP_TILEMAP_ROWS:
+		for column: int in Gen2Layout.CARD_FLIP_TILEMAP_COLUMNS:
 			board.append(
-				RomLayout.CARD_FLIP_LIGHT_OFF_TILE if column == 0 else column + row
+				Gen2Layout.CARD_FLIP_LIGHT_OFF_TILE if column == 0 else column + row
 			)
 	var palettes: Array = []
-	for slot: int in RomLayout.CARD_FLIP_PALETTES * RomLayout.PREDEF_PALETTE_COLORS:
+	for slot: int in Gen2Layout.CARD_FLIP_PALETTES * Gen2Layout.PREDEF_PALETTE_COLORS:
 		palettes.append([0x7FFF, 0x2E98, 0x2DB2, 0x0000][slot % 4])
 	manifest["card_flip"] = {"tilemap": board, "palettes": palettes}
 	manifest["card_flip_text"] = {
@@ -781,7 +781,7 @@ static func _write_decorations(manifest: Dictionary) -> void:
 	## 44 so the trophy boxes reach them; the run between is the CANCEL row, which
 	## is what an index no fixture decoration answers gives on a cartridge too.
 	var ids: Array = []
-	for _index: int in RomLayout.DECORATION_ID_COUNT:
+	for _index: int in Gen2Layout.DECORATION_ID_COUNT:
 		ids.append(0)
 	var flag_index: int = 0
 	for row: Array in DECORATION_FIXTURE:
@@ -840,36 +840,36 @@ static func _write_credits(
 ) -> void:
 	var frames: Array = []
 	if crystal:
-		for block: int in RomLayout.CREDITS_SCENES * RomLayout.CREDITS_SCENE_FRAMES:
+		for block: int in Gen2Layout.CREDITS_SCENES * Gen2Layout.CREDITS_SCENE_FRAMES:
 			frames.append(block)
 	else:
-		for scene: int in RomLayout.CREDITS_SCENES - 1:
+		for scene: int in Gen2Layout.CREDITS_SCENES - 1:
 			frames.append_array([scene * 3, scene * 3 + 1, scene * 3, scene * 3 + 2])
 		frames.append_array([9, 10, 11, 12])
 	## `GetCreditsPalette.UpdatePals` copies 24 bytes on Crystal and 8 twice on
 	## the other two, which is three palettes against one.
 	var scene_palettes: int = 3 if crystal else 1
 	var palettes: Array = []
-	for colour: int in RomLayout.CREDITS_SCENES * scene_palettes \
-		* RomLayout.CREDITS_PALETTE_COLORS:
+	for colour: int in Gen2Layout.CREDITS_SCENES * scene_palettes \
+		* Gen2Layout.CREDITS_PALETTE_COLORS:
 		palettes.append(0x0400 * (colour % 4) + colour)
 	manifest["credits"] = {
 		"script": [
-			RomLayout.CREDITS_CLEAR,
+			Gen2Layout.CREDITS_CLEAR,
 			CREDITS_STAFF, 1,
-			RomLayout.CREDITS_WAIT, 2,
-			RomLayout.CREDITS_MUSIC,
-			RomLayout.CREDITS_WAIT2, 1,
-			RomLayout.CREDITS_WAIT, 1,
-			RomLayout.CREDITS_SCENE, 1,
+			Gen2Layout.CREDITS_WAIT, 2,
+			Gen2Layout.CREDITS_MUSIC,
+			Gen2Layout.CREDITS_WAIT2, 1,
+			Gen2Layout.CREDITS_WAIT, 1,
+			Gen2Layout.CREDITS_SCENE, 1,
 			CREDITS_NAME_A, 0,
 			CREDITS_NAME_B, 2,
-			RomLayout.CREDITS_WAIT, 2,
+			Gen2Layout.CREDITS_WAIT, 2,
 			CREDITS_COPYRIGHT, 1,
-			RomLayout.CREDITS_WAIT, 1,
-			RomLayout.CREDITS_THEEND,
-			RomLayout.CREDITS_WAIT, 1,
-			RomLayout.CREDITS_END,
+			Gen2Layout.CREDITS_WAIT, 1,
+			Gen2Layout.CREDITS_THEEND,
+			Gen2Layout.CREDITS_WAIT, 1,
+			Gen2Layout.CREDITS_END,
 		],
 		"strings": [
 			[0x80, 0x81, 0x82],
@@ -877,9 +877,9 @@ static func _write_credits(
 			## The copyright is the one string drawn out of `CopyrightGFX` and
 			## the one printed from column 2.
 			[
-				RomLayout.COPYRIGHT_FIRST_CODE, RomLayout.COPYRIGHT_FIRST_CODE + 1,
+				Gen2Layout.COPYRIGHT_FIRST_CODE, Gen2Layout.COPYRIGHT_FIRST_CODE + 1,
 				Gen2Credits.CODE_NEXT_LINE,
-				RomLayout.COPYRIGHT_FIRST_CODE + 2,
+				Gen2Layout.COPYRIGHT_FIRST_CODE + 2,
 			],
 			## `#` and a `<NEXT>`, which are the two things `PlaceString` does
 			## that placing a code does not.
@@ -894,27 +894,27 @@ static func _write_credits(
 	var sheets: Dictionary = manifest.get("tiles", {})
 	var blocks: int = int(frames.max()) + 1
 	for entry: Array in [
-		["credits_border", RomLayout.CREDITS_BORDER_TILES, RomLayout.CREDITS_BORDER_FIRST_CODE],
-		["credits_the_end", RomLayout.CREDITS_THE_END_TILES, RomLayout.CREDITS_THE_END_FIRST_CODE],
-		["credits_mons", blocks * RomLayout.CREDITS_MON_FRAME_TILES, 0],
+		["credits_border", Gen2Layout.CREDITS_BORDER_TILES, Gen2Layout.CREDITS_BORDER_FIRST_CODE],
+		["credits_the_end", Gen2Layout.CREDITS_THE_END_TILES, Gen2Layout.CREDITS_THE_END_FIRST_CODE],
+		["credits_mons", blocks * Gen2Layout.CREDITS_MON_FRAME_TILES, 0],
 	]:
 		var count: int = int(entry[1])
 		var indices := PackedByteArray()
-		indices.resize(count * Gen2Tiles.TILE_PIXELS)
+		indices.resize(count * PokeTiles.TILE_PIXELS)
 		for tile: int in count:
 			@warning_ignore("integer_division")
-			var block: int = tile / RomLayout.CREDITS_MON_FRAME_TILES
+			var block: int = tile / Gen2Layout.CREDITS_MON_FRAME_TILES
 			var index: int = block % CREDITS_BLOCK_INDEXES if entry[0] == "credits_mons" else 2
-			for pixel: int in Gen2Tiles.TILE_PIXELS:
+			for pixel: int in PokeTiles.TILE_PIXELS:
 				## The strips are strips, so a tile's pixels are a column of the
 				## row rather than a run of it.
-				var y: int = pixel / Gen2Tiles.TILE_WIDTH
-				indices[y * count * Gen2Tiles.TILE_WIDTH
-					+ tile * Gen2Tiles.TILE_WIDTH + pixel % Gen2Tiles.TILE_WIDTH] = index
+				var y: int = pixel / PokeTiles.TILE_WIDTH
+				indices[y * count * PokeTiles.TILE_WIDTH
+					+ tile * PokeTiles.TILE_WIDTH + pixel % PokeTiles.TILE_WIDTH] = index
 		RomCache.write_indices(RomCache.tile_path(cache_directory, String(entry[0])), indices)
 		sheets[String(entry[0])] = {
-			"width": count * Gen2Tiles.TILE_WIDTH,
-			"height": Gen2Tiles.TILE_HEIGHT,
+			"width": count * PokeTiles.TILE_WIDTH,
+			"height": PokeTiles.TILE_HEIGHT,
 			"tiles": count,
 			"first_code": int(entry[2]),
 			"bits": 2,
@@ -930,30 +930,30 @@ static func _write_splash_graphics(
 	cache_directory: String, manifest: Dictionary, crystal: bool
 ) -> void:
 	var sheets: Dictionary = manifest.get("tiles", {})
-	## The 1bpp logo carries `Gen2Tiles.INK`, since that is the only index a 1bpp
+	## The 1bpp logo carries `PokeTiles.INK`, since that is the only index a 1bpp
 	## graphic ever decodes to. The object sheets carry the Ditto fade's own
 	## colour, which is the one both profiles' sprites are mostly drawn in and
 	## the one `GameFreakLogo_Transform` moves.
 	var counts: Dictionary = {
-		"game_freak_logo": [RomLayout.PRESENTS_GFX_TILES, Gen2Tiles.INK],
+		"game_freak_logo": [Gen2Layout.PRESENTS_GFX_TILES, PokeTiles.INK],
 	}
 	if crystal:
 		counts["game_freak_ditto"] = [
-			RomLayout.PRESENTS_DITTO_TILES, RomLayout.PRESENTS_DITTO_FADE_COLOR,
+			Gen2Layout.PRESENTS_DITTO_TILES, Gen2Layout.PRESENTS_DITTO_FADE_COLOR,
 		]
 	else:
 		counts["game_freak_stars"] = [
-			RomLayout.PRESENTS_STARS_TILES, RomLayout.PRESENTS_DITTO_FADE_COLOR,
+			Gen2Layout.PRESENTS_STARS_TILES, Gen2Layout.PRESENTS_DITTO_FADE_COLOR,
 		]
 	for name: String in counts:
 		var tile_count: int = int(counts[name][0])
 		var indices: PackedByteArray = PackedByteArray()
-		indices.resize(tile_count * Gen2Tiles.TILE_PIXELS)
+		indices.resize(tile_count * PokeTiles.TILE_PIXELS)
 		indices.fill(int(counts[name][1]))
 		RomCache.write_indices(RomCache.tile_path(cache_directory, name), indices)
 		sheets[name] = {
-			"width": tile_count * Gen2Tiles.TILE_WIDTH,
-			"height": Gen2Tiles.TILE_HEIGHT,
+			"width": tile_count * PokeTiles.TILE_WIDTH,
+			"height": PokeTiles.TILE_HEIGHT,
 			"tiles": tile_count,
 			"first_code": 0,
 			"bits": 1 if name == "game_freak_logo" else 2,
@@ -965,7 +965,7 @@ static func _write_splash_graphics(
 	if crystal:
 		palettes["ditto"] = [0x7FFF, 0x016D, 0x7197, 0x0000]
 		var fade: Array = []
-		for step: int in RomLayout.PRESENTS_DITTO_FADE_COLORS:
+		for step: int in Gen2Layout.PRESENTS_DITTO_FADE_COLORS:
 			fade.append(0x7197 - step)
 		palettes["ditto_fade"] = fade
 	manifest["presents_palettes"] = palettes
@@ -974,55 +974,55 @@ static func _write_splash_graphics(
 static func _write_battle_graphics(cache_directory: String, manifest: Dictionary) -> void:
 	var sheets: Dictionary = {}
 	var sheet_tiles: Dictionary = {
-		"exp_bar": [RomLayout.EXP_BAR_TILES, 2],
-		"battle_font": [RomLayout.BATTLE_FONT_TILES, 1],
+		"exp_bar": [Gen2Layout.EXP_BAR_TILES, 2],
+		"battle_font": [Gen2Layout.BATTLE_FONT_TILES, 1],
 		## `_LoadFontsExtra1`'s strip, on an index of its own so a code the
 		## battle strip also owns says which of the two it was drawn from.
-		"font_extra": [RomLayout.FONT_EXTRA_TILES, 2],
-		"enemy_hud": [RomLayout.ENEMY_HUD_TILES, 2],
-		"player_hud": [RomLayout.PLAYER_HUD_TILES, 3],
-		"font": [RomLayout.FONT_TILES, 3],
+		"font_extra": [Gen2Layout.FONT_EXTRA_TILES, 2],
+		"enemy_hud": [Gen2Layout.ENEMY_HUD_TILES, 2],
+		"player_hud": [Gen2Layout.PLAYER_HUD_TILES, 3],
+		"font": [Gen2Layout.FONT_TILES, 3],
 		## A different index from the font's, so a glyph written over the box's
 		## own border (`ScrollingMenu_UpdateDisplay`'s two arrows) is visible as
 		## something other than the frame it replaces.
-		"frames": [RomLayout.FRAME_COUNT * RomLayout.FRAME_TILES, 2],
+		"frames": [Gen2Layout.FRAME_COUNT * Gen2Layout.FRAME_TILES, 2],
 		## The trainer card's own sheets. Flat fills like the rest of these: the
 		## card's layout is what a test checks, and real artwork would say
 		## nothing about it.
-		"card_status": [RomLayout.CARD_STATUS_TILES, 1],
-		"card_leaders": [RomLayout.CARD_LEADER_TILES, 2],
-		"card_badges": [RomLayout.CARD_BADGE_TILES, 3],
-		"card_frame": [RomLayout.CARD_FRAME_TILES, 1],
-		"card_pic_male": [RomLayout.CARD_PIC_TILES, 2],
-		"card_pic_female": [RomLayout.CARD_PIC_TILES, 3],
-		"card_right_corner": [RomLayout.CARD_RIGHT_CORNER_TILES, 1],
+		"card_status": [Gen2Layout.CARD_STATUS_TILES, 1],
+		"card_leaders": [Gen2Layout.CARD_LEADER_TILES, 2],
+		"card_badges": [Gen2Layout.CARD_BADGE_TILES, 3],
+		"card_frame": [Gen2Layout.CARD_FRAME_TILES, 1],
+		"card_pic_male": [Gen2Layout.CARD_PIC_TILES, 2],
+		"card_pic_female": [Gen2Layout.CARD_PIC_TILES, 3],
+		"card_right_corner": [Gen2Layout.CARD_RIGHT_CORNER_TILES, 1],
 		## LoadNamingScreenGFX's four. The cursor gets its own index so the
 		## bracket can be told from the keyboard under it.
-		"naming_border": [RomLayout.NAMING_BORDER_TILES, 1],
-		"naming_cursor": [RomLayout.NAMING_CURSOR_TILES, 2],
-		"naming_middle_line": [RomLayout.NAMING_MARKER_TILES, 1],
-		"naming_under_line": [RomLayout.NAMING_MARKER_TILES, 1],
+		"naming_border": [Gen2Layout.NAMING_BORDER_TILES, 1],
+		"naming_cursor": [Gen2Layout.NAMING_CURSOR_TILES, 2],
+		"naming_middle_line": [Gen2Layout.NAMING_MARKER_TILES, 1],
+		"naming_under_line": [Gen2Layout.NAMING_MARKER_TILES, 1],
 		## `LoadGenderScreenLightBlueTile`'s one tile, on the index the real one
 		## carries, since the page reads the fill out of it rather than assuming.
-		"gender_screen": [RomLayout.GENDER_SCREEN_TILES, RomLayout.GENDER_SCREEN_FILL_INDEX],
+		"gender_screen": [Gen2Layout.GENDER_SCREEN_TILES, Gen2Layout.GENDER_SCREEN_FILL_INDEX],
 		## `DrawIntroPlayerPic`'s ChrisPic and KrisPic, which `HOF_LoadTrainerFrontpic`
 		## loads as well. A different index each, so a capture says which was drawn.
-		"intro_player_male": [RomLayout.INTRO_PLAYER_PIC_TILES, 2],
-		"intro_player_female": [RomLayout.INTRO_PLAYER_PIC_TILES, 3],
+		"intro_player_male": [Gen2Layout.INTRO_PLAYER_PIC_TILES, 2],
+		"intro_player_female": [Gen2Layout.INTRO_PLAYER_PIC_TILES, 3],
 		## `ShrinkPlayer`'s two pictures, flat fills like the rest: what a test
 		## checks is when each is drawn, not what is in it.
-		"shrink_1": [RomLayout.SHRINK_PIC_TILES, 2],
-		"shrink_2": [RomLayout.SHRINK_PIC_TILES, 1],
+		"shrink_1": [Gen2Layout.SHRINK_PIC_TILES, 2],
+		"shrink_2": [Gen2Layout.SHRINK_PIC_TILES, 1],
 		## `CopyrightGFX`, four tiles rather than the cartridge's twenty-nine:
 		## the string below names those four, and what a test checks is where
 		## each lands.
 		"copyright": [COPYRIGHT_TILES, 3],
 		## `Pokegear_LoadGFX`'s three sheets, at their real lengths so a page can
 		## address every tile a region map or a card frame names.
-		"town_map": [RomLayout.TOWN_MAP_TILES, 1],
-		"pokegear": [RomLayout.POKEGEAR_TILES, 2],
-		"pokegear_sprites": [RomLayout.POKEGEAR_SPRITE_TILES, 3],
-		"dex_nest_icon": [RomLayout.DEX_NEST_ICON_TILES, 3],
+		"town_map": [Gen2Layout.TOWN_MAP_TILES, 1],
+		"pokegear": [Gen2Layout.POKEGEAR_TILES, 2],
+		"pokegear_sprites": [Gen2Layout.POKEGEAR_SPRITE_TILES, 3],
+		"dex_nest_icon": [Gen2Layout.DEX_NEST_ICON_TILES, 3],
 		## `'▲'`, the single tile a scrolling menu draws its own arrow from.
 		"up_arrow": [1, 3],
 		## `Pokedex_LoadGFX`'s two runs, `LoadQuestionMarkPic`'s pic, `UnownFont`
@@ -1030,36 +1030,36 @@ static func _write_battle_graphics(cache_directory: String, manifest: Dictionary
 		## their real lengths so the dex page can address every tile a layout
 		## names. Flat fills like the rest: what a test checks is where each
 		## lands.
-		"pokedex": [RomLayout.POKEDEX_TILES, 1],
-		"pokedex_slowpoke": [RomLayout.POKEDEX_SLOWPOKE_TILES, 2],
-		"pokedex_question_mark": [RomLayout.POKEDEX_QUESTION_MARK_TILES, 2],
-		"unown_font": [RomLayout.UNOWN_FONT_TILES, 3],
-		"footprints": [RomLayout.FOOTPRINT_SLOTS * RomLayout.FOOTPRINT_TILES, 1],
+		"pokedex": [Gen2Layout.POKEDEX_TILES, 1],
+		"pokedex_slowpoke": [Gen2Layout.POKEDEX_SLOWPOKE_TILES, 2],
+		"pokedex_question_mark": [Gen2Layout.POKEDEX_QUESTION_MARK_TILES, 2],
+		"unown_font": [Gen2Layout.UNOWN_FONT_TILES, 3],
+		"footprints": [Gen2Layout.FOOTPRINT_SLOTS * Gen2Layout.FOOTPRINT_TILES, 1],
 		## `gfx/mail.asm`'s one run and `_ComposeMailMessage.MailIcon`. The run
 		## is at its real length so every `Load*MailGFX` program can address it;
 		## a flat fill of ink is what makes each type's own tiles visible.
-		"mail_gfx": [RomLayout.MAIL_GFX_TILES, Gen2Tiles.INK],
-		"mail_icon": [RomLayout.MAIL_ICON_TILES, 2],
+		"mail_gfx": [Gen2Layout.MAIL_GFX_TILES, PokeTiles.INK],
+		"mail_icon": [Gen2Layout.MAIL_ICON_TILES, 2],
 	}
 	## The font and the frames are the two sheets addressed by character code
 	## rather than by slot, so both need their real first code. A frames sheet
 	## left on 0 draws nothing at all, since every box-drawing code is then past
 	## the end of the strip.
 	var first_codes: Dictionary = {
-		"font": RomLayout.FONT_FIRST_CODE,
-		"frames": RomLayout.FRAME_FIRST_CODE,
-		"copyright": RomLayout.COPYRIGHT_FIRST_CODE,
+		"font": Gen2Layout.FONT_FIRST_CODE,
+		"frames": Gen2Layout.FRAME_FIRST_CODE,
+		"copyright": Gen2Layout.COPYRIGHT_FIRST_CODE,
 		"up_arrow": Gen2Text.UP_ARROW_CODE,
 	}
 	for name: String in sheet_tiles:
 		var tile_count: int = int(sheet_tiles[name][0])
 		var indices: PackedByteArray = PackedByteArray()
-		indices.resize(tile_count * Gen2Tiles.TILE_PIXELS)
+		indices.resize(tile_count * PokeTiles.TILE_PIXELS)
 		indices.fill(int(sheet_tiles[name][1]))
 		RomCache.write_indices(RomCache.tile_path(cache_directory, name), indices)
 		sheets[name] = {
-			"width": tile_count * Gen2Tiles.TILE_WIDTH,
-			"height": Gen2Tiles.TILE_HEIGHT,
+			"width": tile_count * PokeTiles.TILE_WIDTH,
+			"height": PokeTiles.TILE_HEIGHT,
 			"tiles": tile_count,
 			"first_code": int(first_codes.get(name, 0)),
 			"bits": 1,
@@ -1077,7 +1077,7 @@ static func _write_battle_graphics(cache_directory: String, manifest: Dictionary
 	## would reach the wrong type.
 	manifest["mail_items"] = Gen2MailPage.ITEM_NUMBERS.duplicate()
 	var mail_palettes: Array = []
-	for index: int in RomLayout.MAIL_PALETTE_COUNT:
+	for index: int in Gen2Layout.MAIL_PALETTE_COUNT:
 		mail_palettes.append([0x7FFF, 0x2A9F + index, 0x195A, 0x0000])
 	manifest["mail_palettes"] = mail_palettes
 	## `_CGB_Pokedex`'s three: PREDEFPAL_POKEDEX and the two the screen loads
@@ -1092,11 +1092,11 @@ static func _write_battle_graphics(cache_directory: String, manifest: Dictionary
 	## `CopyrightString`'s shape: three `next`-separated rows of the strip's own
 	## codes, and PREDEFPAL_GAMEFREAK_LOGO_BG, whose first colour is black.
 	var copyright_string: Array = []
-	for row: int in RomLayout.COPYRIGHT_STRING_ROWS:
+	for row: int in Gen2Layout.COPYRIGHT_STRING_ROWS:
 		if row > 0:
-			copyright_string.append(RomLayout.COPYRIGHT_STRING_NEXT)
+			copyright_string.append(Gen2Layout.COPYRIGHT_STRING_NEXT)
 		for index: int in COPYRIGHT_TILES:
-			copyright_string.append(RomLayout.COPYRIGHT_FIRST_CODE + index)
+			copyright_string.append(Gen2Layout.COPYRIGHT_FIRST_CODE + index)
 	manifest["copyright_string"] = copyright_string
 	manifest["copyright_palette"] = [0x0000, 0x2D68, 0x56B5, 0x7FFF]
 	manifest["bar_palettes"] = {
@@ -1108,12 +1108,12 @@ static func _write_battle_graphics(cache_directory: String, manifest: Dictionary
 	manifest["town_map"] = _town_map()
 	manifest["oak_ratings"] = _oak_ratings()
 
-	var cell: int = 7 * Gen2Tiles.TILE_WIDTH
+	var cell: int = 7 * PokeTiles.TILE_WIDTH
 	var columns: int = 16
 	var atlas_width: int = columns * cell
 	var rows: int = int(ceil(float(BattleFixture.MAGCARGO) / float(columns)))
 	var atlas_indices: PackedByteArray = PackedByteArray()
-	atlas_indices.resize(atlas_width * rows * Gen2Tiles.TILE_PIXELS)
+	atlas_indices.resize(atlas_width * rows * PokeTiles.TILE_PIXELS)
 	atlas_indices.fill(1)
 	var atlases: Dictionary = manifest.get("atlases", {})
 	for name: String in ["front", "back"]:
@@ -1133,7 +1133,7 @@ static func _write_battle_graphics(cache_directory: String, manifest: Dictionary
 ## caught count lands in; the texts are short stand-ins.
 static func _oak_ratings() -> Dictionary:
 	var rows: Array = []
-	for index: int in RomLayout.OAK_RATING_COUNT:
+	for index: int in Gen2Layout.OAK_RATING_COUNT:
 		rows.append({
 			"threshold": OAK_THRESHOLDS[index],
 			"sfx": OAK_FIRST_SFX + index,
@@ -1156,33 +1156,33 @@ static func _oak_ratings() -> Dictionary:
 static func _town_map() -> Dictionary:
 	var johto: Array = []
 	var kanto: Array = []
-	for cell: int in RomLayout.TOWN_MAP_REGION_CELLS:
+	for cell: int in Gen2Layout.TOWN_MAP_REGION_CELLS:
 		johto.append(TOWN_MAP_JOHTO_TILE)
 		kanto.append(TOWN_MAP_KANTO_TILE)
 	var palette_map: Array = []
-	for index: int in RomLayout.TOWN_MAP_PALETTE_MAP_BYTES:
+	for index: int in Gen2Layout.TOWN_MAP_PALETTE_MAP_BYTES:
 		## Every even tile earth, every odd one mountain, so a tile's palette is
 		## a function of its number and nothing else.
 		palette_map.append((TOWN_MAP_MOUNTAIN << 4) | TOWN_MAP_EARTH)
 	var palettes: Array = []
 	var palettes_female: Array = []
-	for slot: int in RomLayout.TOWN_MAP_PALETTES:
-		for index: int in RomLayout.TOWN_MAP_PALETTE_COLORS:
-			palettes.append(RomLayout.TOWN_MAP_PALETTE_FIRST_COLOR if index == 0 else slot)
+	for slot: int in Gen2Layout.TOWN_MAP_PALETTES:
+		for index: int in Gen2Layout.TOWN_MAP_PALETTE_COLORS:
+			palettes.append(Gen2Layout.TOWN_MAP_PALETTE_FIRST_COLOR if index == 0 else slot)
 			palettes_female.append(
-				RomLayout.TOWN_MAP_PALETTE_FIRST_COLOR if index == 0 else slot + 0x100
+				Gen2Layout.TOWN_MAP_PALETTE_FIRST_COLOR if index == 0 else slot + 0x100
 			)
 	var landmarks: Array = []
-	for index: int in RomLayout.LANDMARK_COUNT:
+	for index: int in Gen2Layout.LANDMARK_COUNT:
 		landmarks.append({"x": index, "y": index, "codes": _codes("SPECIAL")})
 	landmarks[1] = {"x": 140, "y": 100, "codes": _codes("NEW BARK<BSP>TOWN")}
 	landmarks[2] = {"x": 128, "y": 100, "codes": _codes("ROUTE 29")}
 	## The three card tilemaps, each a flat fill of the Pokegear sheet's own
 	## blank: a card test reads what the page draws over one, never the art.
 	var cards: Dictionary = {}
-	for card: String in RomLayout.POKEGEAR_CARD_ORDER:
+	for card: String in Gen2Layout.POKEGEAR_CARD_ORDER:
 		var cells: Array = []
-		for cell: int in RomLayout.POKEGEAR_CARD_CELLS:
+		for cell: int in Gen2Layout.POKEGEAR_CARD_CELLS:
 			cells.append(Gen2TownMapPage.CARD_BLANK_TILE)
 		cards[card] = cells
 	return {

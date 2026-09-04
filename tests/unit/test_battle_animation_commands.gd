@@ -355,7 +355,7 @@ func test_every_status_animation_is_past_the_move_ids() -> void:
 		Gen2BattleAnimPlayer.ANIM_PAR,
 	]:
 		assert_gt(index, 0xFF)
-		assert_lt(index, RomLayout.BATTLE_ANIM_SCRIPT_COUNT)
+		assert_lt(index, Gen2Layout.BATTLE_ANIM_SCRIPT_COUNT)
 
 
 ## The substitute's doll, which is the sixth route: `lowersub` and `raisesub`

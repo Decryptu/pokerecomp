@@ -126,19 +126,19 @@ func result() -> Dictionary:
 
 func _press_list(button: int) -> void:
 	match button:
-		Gen2Button.UP:
+		PokeButton.UP:
 			## `_2DMenu` moves inside the window and hands the edge to
 			## `ScrollingMenuJoyAction`, which scrolls instead of wrapping.
 			if cursor_y > 1:
 				cursor_y -= 1
 			elif scroll > 0:
 				scroll -= 1
-		Gen2Button.DOWN:
+		PokeButton.DOWN:
 			if cursor_y < rows():
 				cursor_y += 1
 			elif scroll + MENU_HEIGHT <= entries.size():
 				scroll += 1
-		Gen2Button.A:
+		PokeButton.A:
 			var entry: Dictionary = selected_entry()
 			if entry.is_empty():
 				_cancel()
@@ -152,7 +152,7 @@ func _press_list(button: int) -> void:
 				return
 			prompt = Gen2WorldQuantityPrompt.open(available)
 			phase = SELECT_QUANTITY
-		Gen2Button.B:
+		PokeButton.B:
 			_cancel()
 
 

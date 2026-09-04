@@ -93,13 +93,13 @@ func run(r: RefCounted) -> void:
 
 func _verify_texts(data: GameData) -> void:
 	var decoded: int = 0
-	for name: String in RomLayout.NAME_RATER_TEXT_ORDER:
+	for name: String in Gen2Layout.NAME_RATER_TEXT_ORDER:
 		if not data.name_rater_text(name).is_empty():
 			decoded += 1
 	_r.check(
-		decoded == RomLayout.NAME_RATER_TEXT_ORDER.size(),
+		decoded == Gen2Layout.NAME_RATER_TEXT_ORDER.size(),
 		"%d of %d Name Rater texts decoded" % [
-			decoded, RomLayout.NAME_RATER_TEXT_ORDER.size(),
+			decoded, Gen2Layout.NAME_RATER_TEXT_ORDER.size(),
 		]
 	)
 	for name: String in EXPECTED_TEXT_OPENINGS:
@@ -131,13 +131,13 @@ func _verify_texts(data: GameData) -> void:
 
 func _verify_deleter_texts(data: GameData) -> void:
 	var decoded: int = 0
-	for name: String in RomLayout.MOVE_DELETER_TEXT_ORDER:
+	for name: String in Gen2Layout.MOVE_DELETER_TEXT_ORDER:
 		if not data.move_deleter_text(name).is_empty():
 			decoded += 1
 	_r.check(
-		decoded == RomLayout.MOVE_DELETER_TEXT_ORDER.size(),
+		decoded == Gen2Layout.MOVE_DELETER_TEXT_ORDER.size(),
 		"%d of %d move deleter texts decoded" % [
-			decoded, RomLayout.MOVE_DELETER_TEXT_ORDER.size(),
+			decoded, Gen2Layout.MOVE_DELETER_TEXT_ORDER.size(),
 		]
 	)
 	for name: String in EXPECTED_DELETER_OPENINGS:

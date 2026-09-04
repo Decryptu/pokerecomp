@@ -67,14 +67,14 @@ func _write_cache() -> void:
 			"dvs": 0x9A77, # Falkner's own: attack 9, defense 10, speed 7, special 7.
 			"trainers": [
 				{
-					"name": "FALKNER", "type": RomLayout.TRAINER_MON_NORMAL,
+					"name": "FALKNER", "type": Gen2Layout.TRAINER_MON_NORMAL,
 					"party": [
 						{"level": 7, "species": PIDGEY, "item": 0, "moves": []},
 						{"level": 9, "species": PIDGEOTTO, "item": 0, "moves": []},
 					],
 				},
 				{
-					"name": "PICKY", "type": RomLayout.TRAINER_MON_ITEM_MOVES,
+					"name": "PICKY", "type": Gen2Layout.TRAINER_MON_ITEM_MOVES,
 					"party": [{
 						"level": 20, "species": PIDGEOTTO, "item": 5,
 						"moves": [GUST, TACKLE, 0, 0],

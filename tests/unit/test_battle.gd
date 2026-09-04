@@ -317,7 +317,7 @@ func test_a_send_out_carries_the_unown_letter_its_dvs_name() -> void:
 		[
 			_mon(Fixture.PIKACHU, 20, [Fixture.TACKLE]),
 			Gen2BattleMon.create(
-				_data, RomLayout.UNOWN_SPECIES, 20, [Fixture.TACKLE], letter_dvs
+				_data, Gen2Layout.UNOWN_SPECIES, 20, [Fixture.TACKLE], letter_dvs
 			),
 		],
 		[_mon(Fixture.CHARMANDER, 20, [Fixture.TACKLE])]

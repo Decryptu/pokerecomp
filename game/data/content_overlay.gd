@@ -126,7 +126,7 @@ const DEFAULTS: Dictionary = {
 		"field_menu": 0,
 		"battle_menu": 0,
 		# What using the item on a party member evolves it by, as a fact the host
-		# acts on rather than a callback: `{"method": RomLayout.EVOLVE_*}`, with
+		# acts on rather than a callback: `{"method": Gen2Layout.EVOLVE_*}`, with
 		# an optional `"parameter"`. Empty is every cartridge item.
 		"evolution": {},
 	},
@@ -294,7 +294,7 @@ func type_is_physical(number: int) -> bool:
 	var patched: Dictionary = _patched.get(KIND_TYPE, {})
 	if patched.has(number):
 		return bool((patched[number] as Dictionary).get("physical", false))
-	return number < RomLayout.SPECIAL_TYPES_START
+	return number < Gen2Layout.SPECIAL_TYPES_START
 
 
 func owner_of(kind: StringName, number: int) -> StringName:
@@ -370,12 +370,12 @@ func _validate_species(fields: Dictionary) -> Dictionary:
 		return {"ok": true}
 	var icon: Variant = fields["icon"]
 	if icon is int or icon is float:
-		if int(icon) < 0 or int(icon) > RomLayout.MON_ICON_COUNT:
+		if int(icon) < 0 or int(icon) > Gen2Layout.MON_ICON_COUNT:
 			return _invalid(&"invalid_content_icon", "icon %d" % int(icon))
 		return {"ok": true}
 	if not icon is Dictionary:
 		return _invalid(&"invalid_content_icon", "species icon")
-	if not _valid_indices((icon as Dictionary).get("indices", null), 8 * Gen2Tiles.TILE_PIXELS):
+	if not _valid_indices((icon as Dictionary).get("indices", null), 8 * PokeTiles.TILE_PIXELS):
 		return _invalid(&"invalid_content_icon", "custom icon")
 	return {"ok": true}
 
@@ -389,7 +389,7 @@ func _validate_item(fields: Dictionary) -> Dictionary:
 	if (evolution as Dictionary).is_empty():
 		return {"ok": true}
 	var method: int = int((evolution as Dictionary).get("method", 0))
-	if method not in [RomLayout.EVOLVE_ITEM, RomLayout.EVOLVE_TRADE]:
+	if method not in [Gen2Layout.EVOLVE_ITEM, Gen2Layout.EVOLVE_TRADE]:
 		return _invalid(&"invalid_content_evolution", "method %d" % method)
 	return {"ok": true}
 
@@ -428,7 +428,7 @@ func _validate_pic(value: Variant, maximum_tiles: int) -> Dictionary:
 	if tiles < 1 or tiles > maximum_tiles:
 		return _invalid(&"invalid_content_pic", "pic tiles %d" % tiles)
 	if not _valid_indices(
-		(value as Dictionary).get("indices", null), tiles * tiles * Gen2Tiles.TILE_PIXELS
+		(value as Dictionary).get("indices", null), tiles * tiles * PokeTiles.TILE_PIXELS
 	):
 		return _invalid(&"invalid_content_pic", "pic indices")
 	return {"ok": true}

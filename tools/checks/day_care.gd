@@ -53,8 +53,8 @@ func _verify_odd_eggs(game_id: StringName, data: GameData) -> void:
 		_r.check(rows.is_empty(), "%s: ships %d Odd Eggs." % [game_id, rows.size()])
 		return
 	if not _r.check(
-		rows.size() == RomLayout.ODD_EGG_COUNT,
-		"%s: %d Odd Eggs, not %d." % [game_id, rows.size(), RomLayout.ODD_EGG_COUNT]
+		rows.size() == Gen2Layout.ODD_EGG_COUNT,
+		"%s: %d Odd Eggs, not %d." % [game_id, rows.size(), Gen2Layout.ODD_EGG_COUNT]
 	):
 		return
 	var probabilities: Array = []
@@ -69,11 +69,11 @@ func _verify_odd_eggs(game_id: StringName, data: GameData) -> void:
 			"%s: Odd Egg %d names species %d." % [game_id, index, mon.species]
 		)
 		_r.check(
-			mon.level == RomLayout.ODD_EGG_LEVEL,
+			mon.level == Gen2Layout.ODD_EGG_LEVEL,
 			"%s: Odd Egg %d is level %d." % [game_id, index, mon.level]
 		)
 		_r.check(
-			mon.nickname == RomLayout.ODD_EGG_NICKNAME,
+			mon.nickname == Gen2Layout.ODD_EGG_NICKNAME,
 			"%s: Odd Egg %d is nicknamed \"%s\"." % [game_id, index, mon.nickname]
 		)
 		_r.check(
@@ -88,7 +88,7 @@ func _verify_odd_eggs(game_id: StringName, data: GameData) -> void:
 			"%s: the word %d does not land on Odd Egg %d." % [game_id, below, index]
 		)
 	_r.check(
-		probabilities[-1] == RomLayout.ODD_EGG_PROBABILITY_TOTAL,
+		probabilities[-1] == Gen2Layout.ODD_EGG_PROBABILITY_TOTAL,
 		"%s: the Odd Egg probabilities close on %d." % [game_id, probabilities[-1]]
 	)
 
@@ -97,7 +97,7 @@ func _verify_odd_eggs(game_id: StringName, data: GameData) -> void:
 ## say the pin is that run and not its neighbour.
 func _verify_texts(game_id: StringName, data: GameData) -> void:
 	var found: int = 0
-	for subject: Array in RomLayout.DAY_CARE_TEXT_RUNS:
+	for subject: Array in Gen2Layout.DAY_CARE_TEXT_RUNS:
 		for raw_name: Variant in subject[1] as Array:
 			var name: String = String(raw_name)
 			var text: String = data.day_care_text(name)

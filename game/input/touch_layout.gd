@@ -1,4 +1,4 @@
-class_name Gen2TouchLayout
+class_name PokeTouchLayout
 extends RefCounted
 
 ## Where the on-screen controller's five clusters sit, how big they are and how
@@ -26,10 +26,10 @@ const GROUP_FACE: StringName = &"face"
 ## The one button each single-button group carries. Every group but the d-pad is
 ## one of these: the d-pad is one control with four answers.
 const GROUP_BUTTONS: Dictionary = {
-	GROUP_A: Gen2Button.A,
-	GROUP_B: Gen2Button.B,
-	GROUP_START: Gen2Button.START,
-	GROUP_SELECT: Gen2Button.SELECT,
+	GROUP_A: PokeButton.A,
+	GROUP_B: PokeButton.B,
+	GROUP_START: PokeButton.START,
+	GROUP_SELECT: PokeButton.SELECT,
 }
 
 const ORIENTATION_PORTRAIT: StringName = &"portrait"
@@ -229,7 +229,7 @@ func group_rect(group: StringName, area: Rect2, placing: StringName = &"") -> Re
 	return Rect2(centre - half, size)
 
 
-## Every pressable rectangle, keyed by [Gen2Button]. The d-pad is not in here:
+## Every pressable rectangle, keyed by [PokeButton]. The d-pad is not in here:
 ## it is one control with four answers, which [method direction_at] resolves.
 func button_rects(area: Rect2, placing: StringName = &"") -> Dictionary:
 	var rects: Dictionary = {}
@@ -238,18 +238,18 @@ func button_rects(area: Rect2, placing: StringName = &"") -> Dictionary:
 	return rects
 
 
-## The button a point presses, or [constant Gen2Button.NONE]. The d-pad is asked
+## The button a point presses, or [constant PokeButton.NONE]. The d-pad is asked
 ## first, so a finger sliding off it onto an overlapping face button keeps
 ## walking rather than swapping to A halfway through a step.
 func button_at(point: Vector2, area: Rect2, placing: StringName = &"") -> int:
 	var direction: int = direction_at(point, area, placing)
-	if direction != Gen2Button.NONE:
+	if direction != PokeButton.NONE:
 		return direction
 	var rects: Dictionary = button_rects(area, placing)
 	for button: int in rects:
 		if (rects[button] as Rect2).has_point(point):
 			return button
-	return Gen2Button.NONE
+	return PokeButton.NONE
 
 
 ## Which way the d-pad reads at a point, by dominant axis from its centre. One
@@ -259,14 +259,14 @@ func button_at(point: Vector2, area: Rect2, placing: StringName = &"") -> int:
 func direction_at(point: Vector2, area: Rect2, placing: StringName = &"") -> int:
 	var rect: Rect2 = group_rect(GROUP_PAD, area, placing)
 	if not rect.has_point(point):
-		return Gen2Button.NONE
+		return PokeButton.NONE
 	var local: Vector2 = (point - rect.get_center()) / (rect.size * 0.5)
 	if local.length() < PAD_CENTRE_DEAD:
-		return Gen2Button.NONE
+		return PokeButton.NONE
 	# Equal diagonals keep the horizontal tie-break despite coordinate rounding.
 	if absf(local.x) >= absf(local.y) or is_equal_approx(absf(local.x), absf(local.y)):
-		return Gen2Button.RIGHT if local.x > 0.0 else Gen2Button.LEFT
-	return Gen2Button.DOWN if local.y > 0.0 else Gen2Button.UP
+		return PokeButton.RIGHT if local.x > 0.0 else PokeButton.LEFT
+	return PokeButton.DOWN if local.y > 0.0 else PokeButton.UP
 
 
 func to_dict() -> Dictionary:
@@ -291,8 +291,8 @@ func to_dict() -> Dictionary:
 
 ## Clamped like the rest of the options file: an unreadable position costs that
 ## cluster its place, not the whole layout.
-static func parse(raw: Variant) -> Gen2TouchLayout:
-	var layout := Gen2TouchLayout.new()
+static func parse(raw: Variant) -> PokeTouchLayout:
+	var layout := PokeTouchLayout.new()
 	if raw is not Dictionary:
 		return layout
 	var stored: Dictionary = raw
@@ -339,8 +339,8 @@ func _split_face(orientation: StringName, stored: Dictionary) -> void:
 	groups.erase(GROUP_FACE)
 
 
-func duplicate_layout() -> Gen2TouchLayout:
-	var copy: Gen2TouchLayout = Gen2TouchLayout.parse(to_dict())
+func duplicate_layout() -> PokeTouchLayout:
+	var copy: PokeTouchLayout = PokeTouchLayout.parse(to_dict())
 	# Which mods registered a button is not the player's setting and is not in
 	# the file; it comes from the host and has to travel with the copy.
 	copy.mod_buttons = mod_buttons.duplicate(true)
@@ -348,4 +348,4 @@ func duplicate_layout() -> Gen2TouchLayout:
 
 
 func is_default() -> bool:
-	return to_dict() == Gen2TouchLayout.new().to_dict()
+	return to_dict() == PokeTouchLayout.new().to_dict()

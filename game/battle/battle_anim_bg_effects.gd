@@ -726,8 +726,8 @@ static func _remove_mon(
 			## left, one tile column per step, which is the same sign the
 			## entrance's own walk off carries.
 			var removed_side: bool = effect.battle_turn != 0
-			var step: float = -float(Gen2Tiles.TILE_WIDTH) if removed_side \
-				else float(Gen2Tiles.TILE_WIDTH)
+			var step: float = -float(PokeTiles.TILE_WIDTH) if removed_side \
+				else float(PokeTiles.TILE_WIDTH)
 			background.report_battler(
 				removed_side, effect.param != 0, -1.0,
 				(background.battler_shift[removed_side] as Vector2) + Vector2(step, 0.0)

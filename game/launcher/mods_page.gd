@@ -78,7 +78,7 @@ func _build() -> void:
 	add_child(_http)
 	_icons = HTTPRequest.new()
 	_icons.use_threads = true
-	_icons.body_size_limit = Gen2ModArt.MAX_ICON_BYTES
+	_icons.body_size_limit = PokeModArt.MAX_ICON_BYTES
 	_icons.request_completed.connect(_on_icon_arrived)
 	add_child(_icons)
 
@@ -143,8 +143,8 @@ func focus_target() -> Control:
 ## is what makes opening this page instant and offline.
 func refresh() -> void:
 	_listings = {}
-	for source: Dictionary in Gen2ModIndex.followed():
-		var cached: Dictionary = Gen2ModIndex.cached_feed(String(source["feed"]))
+	for source: Dictionary in PokeModIndex.followed():
+		var cached: Dictionary = PokeModIndex.cached_feed(String(source["feed"]))
 		if bool(cached.get("ok", false)):
 			_listings[String(source["feed"])] = cached["entries"]
 	_relist()
@@ -174,7 +174,7 @@ func _read_unread_sources() -> void:
 		return
 	if not _may_fetch_unprompted():
 		return
-	for source: Dictionary in Gen2ModIndex.followed():
+	for source: Dictionary in PokeModIndex.followed():
 		var feed: String = String(source["feed"])
 		if not _listings.has(feed) and not _read_once.has(feed):
 			_read_once[feed] = true
@@ -192,7 +192,7 @@ func _relist() -> void:
 	Gen2LauncherUI.clear(_list)
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	var groups: Array = Gen2ModCatalogue.groups(
-		host.manifests(), Gen2ModIndex.followed(), _listings
+		host.manifests(), PokeModIndex.followed(), _listings
 	)
 	var failures: Array = host.failures()
 	_note.text = "Loaded from %s" % Gen2ModHost.ROOT
@@ -219,7 +219,7 @@ func _empty_state() -> Control:
 	var box: VBoxContainer = Gen2LauncherUI.column(Gen2LauncherUI.GAP_SM)
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
 	panel.add_child(box)
-	var icon: Gen2LauncherIcon = Gen2LauncherIcon.create(&"mods", 28.0, _theme.faint)
+	var icon: PokeLauncherIcon = PokeLauncherIcon.create(&"mods", 28.0, _theme.faint)
 	icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	box.add_child(icon)
 	var line: Label = Gen2LauncherUI.muted(
@@ -339,9 +339,9 @@ static func _version_line(row: Dictionary) -> String:
 	if not bool(row["installed"]):
 		return "%s  Not installed" % line
 	match StringName(row["update"]):
-		Gen2ModIndex.UPDATE_AVAILABLE:
+		PokeModIndex.UPDATE_AVAILABLE:
 			return "%s  %s available" % [line, row["listed_version"]]
-		Gen2ModIndex.INSTALLED_IS_NEWER:
+		PokeModIndex.INSTALLED_IS_NEWER:
 			return "%s  newer than this source" % line
 	return line
 
@@ -350,14 +350,14 @@ func _refusal(failure: Dictionary) -> Control:
 	var panel: Gen2LauncherCard = Gen2LauncherCard.well(_theme, Gen2LauncherTheme.RADIUS_MD, 18)
 	var line: HBoxContainer = Gen2LauncherUI.row(Gen2LauncherUI.GAP_MD)
 	panel.add_child(line)
-	line.add_child(Gen2LauncherIcon.create(&"warning", 20.0, _theme.warning))
+	line.add_child(PokeLauncherIcon.create(&"warning", 20.0, _theme.warning))
 	var text: VBoxContainer = Gen2LauncherUI.column(1)
 	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	line.add_child(text)
 	text.add_child(Gen2LauncherUI.body(
 		_theme, String(failure.get("directory", failure.get("id", "?")))
 	))
-	text.add_child(Gen2LauncherUI.muted(_theme, Gen2ModRefusal.text(failure)))
+	text.add_child(Gen2LauncherUI.muted(_theme, PokeModRefusal.text(failure)))
 	return panel
 
 
@@ -365,7 +365,7 @@ func _refusal(failure: Dictionary) -> Control:
 ## mod that has since been removed and is listed nowhere.
 func _row_for(id: StringName) -> Dictionary:
 	for group: Dictionary in Gen2ModCatalogue.groups(
-		Gen2ModHost.instance().manifests(), Gen2ModIndex.followed(), _listings
+		Gen2ModHost.instance().manifests(), PokeModIndex.followed(), _listings
 	):
 		for row: Dictionary in group["rows"] as Array:
 			if StringName(row["id"]) == id:
@@ -435,7 +435,7 @@ func _on_followed(feed: String) -> void:
 
 
 ## Asks a source for its listing. Everything it can answer is
-## [method Gen2ModIndex.receive_feed]'s, so a failure falls back to the copy on
+## [method PokeModIndex.receive_feed]'s, so a failure falls back to the copy on
 ## disk rather than emptying the list.
 func fetch_feed(feed: String) -> void:
 	_fetch_feed(feed)
@@ -445,7 +445,7 @@ func check_for_updates() -> void:
 	if _busy or not _check_queue.is_empty() or not _update_queue.is_empty():
 		return
 	# Never empty: every build follows this project's own index.
-	for source: Dictionary in Gen2ModIndex.followed():
+	for source: Dictionary in PokeModIndex.followed():
 		_read_once[String(source["feed"])] = true
 		_check_queue.append(String(source["feed"]))
 	_reading_quietly = false
@@ -480,7 +480,7 @@ func available_update_count() -> int:
 func update_rows() -> Array:
 	var out: Array = []
 	for group: Dictionary in Gen2ModCatalogue.groups(
-		Gen2ModHost.instance().manifests(), Gen2ModIndex.followed(), _listings
+		Gen2ModHost.instance().manifests(), PokeModIndex.followed(), _listings
 	):
 		for row: Dictionary in group["rows"] as Array:
 			if Gen2ModCatalogue.action_for(row) == &"update":
@@ -561,7 +561,7 @@ func _fetch_feed(feed: String, finished: Callable = Callable()) -> void:
 func receive_feed_response(
 	feed: String, ok: bool, text: String = "", problem: String = ""
 ) -> Dictionary:
-	var received: Dictionary = Gen2ModIndex.receive_feed(feed, ok, text, problem)
+	var received: Dictionary = PokeModIndex.receive_feed(feed, ok, text, problem)
 	if not bool(received.get("ok", false)):
 		_status(String(received.get("detail", "That source could not be read.")), _theme.error)
 		return received
@@ -569,7 +569,7 @@ func receive_feed_response(
 	_relist()
 	if bool(received.get("stale", false)):
 		_status("%s Showing the copy saved %s ago." % [
-			received.get("problem", ""), Gen2ModIndex.age_text(int(received.get("age", 0)))
+			received.get("problem", ""), PokeModIndex.age_text(int(received.get("age", 0)))
 		], _theme.warning)
 	else:
 		_status(_listing_text(received), _theme.muted)
@@ -583,7 +583,7 @@ func _listing_text(received: Dictionary) -> String:
 		source_name if not source_name.is_empty() else "That source",
 		entries.size(), "" if entries.size() == 1 else "s",
 	]
-	var updates: int = Gen2ModIndex.update_count(entries, _installed_versions())
+	var updates: int = PokeModIndex.update_count(entries, _installed_versions())
 	if updates > 0:
 		line += "  %d can be updated." % updates
 	return line
@@ -591,7 +591,7 @@ func _listing_text(received: Dictionary) -> String:
 
 func _installed_versions() -> Dictionary:
 	var installed: Dictionary = {}
-	for manifest: Gen2ModManifest in Gen2ModHost.instance().manifests():
+	for manifest: PokeModManifest in Gen2ModHost.instance().manifests():
 		installed[manifest.id] = manifest.version
 	return installed
 
@@ -599,7 +599,7 @@ func _installed_versions() -> Dictionary:
 ## Downloads and installs one listed row, which is the same press for a mod that
 ## is absent, out of date, or reinstalled. [param finished] takes whether it landed.
 func download(row: Dictionary, finished: Callable = Callable()) -> void:
-	if not Gen2ModIndex.is_downloadable(String(row.get("download", ""))):
+	if not PokeModIndex.is_downloadable(String(row.get("download", ""))):
 		_status("%s has no download in its source." % row.get("name", "That mod"), _theme.error)
 		_settled(finished, false)
 		return
@@ -639,7 +639,7 @@ func install_entry_bytes(row: Dictionary, body: PackedByteArray) -> Dictionary:
 	)
 	if not bool(installed.get("ok", false)):
 		_status("%s was not installed: %s" % [
-			row.get("name", row["id"]), Gen2ModRefusal.text(installed)
+			row.get("name", row["id"]), PokeModRefusal.text(installed)
 		], _theme.error)
 		return installed
 	_reload()
@@ -710,7 +710,7 @@ func _reload() -> void:
 
 
 func _request(url: String, handler: Callable) -> bool:
-	if not Gen2ModIndex.is_downloadable(url):
+	if not PokeModIndex.is_downloadable(url):
 		_status("That address is not an https URL.", _theme.error)
 		return false
 	if _http == null or _busy:
@@ -736,12 +736,12 @@ func _request(url: String, handler: Callable) -> bool:
 ## already handed over, and the network only for a listing whose icon is not on
 ## disk yet.
 func _icon_square(row: Dictionary) -> Control:
-	var texture: Texture2D = Gen2ModArt.icon_texture(String(row.get("icon", "")))
+	var texture: Texture2D = PokeModArt.icon_texture(String(row.get("icon", "")))
 	var url: String = String(row.get("icon_url", ""))
 	if texture == null and not url.is_empty():
-		texture = Gen2ModArt.cached_icon(url)
+		texture = PokeModArt.cached_icon(url)
 	var square: Control = Gen2LauncherUI.mod_icon(_theme, texture)
-	if texture == null and Gen2ModArt.wants_fetch(url) and not _icon_targets.has(url):
+	if texture == null and PokeModArt.wants_fetch(url) and not _icon_targets.has(url):
 		# Only a TextureRect can be filled in later, and a square with no picture
 		# is the fallback glyph. It is replaced through its parent instead.
 		_icon_targets[url] = square
@@ -783,9 +783,9 @@ func _on_icon_arrived(
 	# A missing icon is not a failure worth telling anyone about: the row keeps
 	# its glyph and nothing is retried until the list is built again.
 	if result == HTTPRequest.RESULT_SUCCESS and code == 200:
-		var texture: Texture2D = Gen2ModArt.icon_texture_from_bytes(body)
+		var texture: Texture2D = PokeModArt.icon_texture_from_bytes(body)
 		if texture != null:
-			Gen2ModArt.cache_icon(url, body)
+			PokeModArt.cache_icon(url, body)
 			_place_icon(url, texture)
 	_icon_targets.erase(url)
 	_fetch_next_icon()

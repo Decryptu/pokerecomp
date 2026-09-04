@@ -47,13 +47,13 @@ static func resolve(
 	## reaches her savings, and she buys only when it lands on them exactly.
 	var trigger: int = state.mom_item_trigger_balance()
 	while trigger < savings:
-		trigger += RomLayout.MOM_MONEY
+		trigger += Gen2Layout.MOM_MONEY
 	if trigger != savings:
 		return {
 			"ok": false, "reason": &"mom_balance_not_on_a_boundary",
 			"trigger_balance": trigger,
 		}
-	trigger += RomLayout.MOM_MONEY
+	trigger += Gen2Layout.MOM_MONEY
 	var count: int = data.mom_item_count(1)
 	if count <= 0:
 		return {"ok": false, "reason": &"mom_items_unavailable"}

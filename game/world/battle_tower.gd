@@ -16,11 +16,11 @@ const CHALLENGE_IN_PROGRESS: int = 2
 const WON_CHALLENGE: int = 3
 const RECEIVED_REWARD: int = 4
 
-const PARTY_LENGTH: int = RomLayout.BATTLETOWER_PARTY_LENGTH
-const STREAK_LENGTH: int = RomLayout.BATTLETOWER_STREAK_LENGTH
-const NUM_UNIQUE_MON: int = RomLayout.BATTLETOWER_NUM_UNIQUE_MON
-const NUM_UNIQUE_TRAINERS: int = RomLayout.BATTLETOWER_NUM_UNIQUE_TRAINERS
-const LEVEL_GROUPS: int = RomLayout.BATTLETOWER_LEVEL_GROUPS
+const PARTY_LENGTH: int = Gen2Layout.BATTLETOWER_PARTY_LENGTH
+const STREAK_LENGTH: int = Gen2Layout.BATTLETOWER_STREAK_LENGTH
+const NUM_UNIQUE_MON: int = Gen2Layout.BATTLETOWER_NUM_UNIQUE_MON
+const NUM_UNIQUE_TRAINERS: int = Gen2Layout.BATTLETOWER_NUM_UNIQUE_TRAINERS
+const LEVEL_GROUPS: int = Gen2Layout.BATTLETOWER_LEVEL_GROUPS
 ## `sBTTrainers` is filled with `$ff` by `ResetBattleTowerTrainersSRAM`, which is
 ## also what makes "no trainer sampled yet" a value no trainer index can be.
 const NO_TRAINER: int = 0xFF
@@ -211,7 +211,7 @@ static func ubers_check(party: Dictionary, group: int) -> int:
 	for index: int in species.size():
 		var number: int = int(species[index])
 		var uber: bool = number == UBER_MEWTWO or number == UBER_MEW \
-			or (number >= UBER_FIRST_LEGENDARY and number <= RomLayout.SPECIES_COUNT)
+			or (number >= UBER_FIRST_LEGENDARY and number <= Gen2Layout.SPECIES_COUNT)
 		if uber and index < levels.size() and int(levels[index]) < UBER_MIN_LEVEL:
 			return index
 	return -1
@@ -373,7 +373,7 @@ func trainer_line(
 	var texts: Dictionary = data.battle_tower().get("texts", {}) as Dictionary
 	var female: bool = is_class_female(data, trainer_class)
 	var lines: Array = ((texts.get(
-		RomLayout.BATTLETOWER_TEXT_KINDS[kind], {}
+		Gen2Layout.BATTLETOWER_TEXT_KINDS[kind], {}
 	) as Dictionary).get("female" if female else "male", []) as Array)
 	if lines.is_empty():
 		return {"index": 0, "text": ""}

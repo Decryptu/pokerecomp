@@ -1,4 +1,4 @@
-class_name Gen2ModIndex
+class_name PokeModIndex
 extends RefCounted
 
 ## A published list of mods a player chose to follow: metadata only, a JSON feed
@@ -133,16 +133,16 @@ static func is_downloadable(url: String) -> bool:
 
 ## What a listed entry is to the copy already installed: [constant NOT_INSTALLED],
 ## [constant UNKNOWN] when either side has no orderable version, or one of the
-## three orderings. [Gen2UpdateCheck.compare_versions] is the same comparison the
+## three orderings. [PokeUpdateCheck.compare_versions] is the same comparison the
 ## launcher makes against the project's own releases, so a feed and a release are
 ## ordered by one rule.
 static func update_state(listed: String, installed: String) -> StringName:
 	if installed.strip_edges().is_empty():
 		return NOT_INSTALLED
-	if not Gen2ModVersion.valid_version(listed) \
-		or not Gen2ModVersion.valid_version(installed):
+	if not PokeModVersion.valid_version(listed) \
+		or not PokeModVersion.valid_version(installed):
 		return UNKNOWN
-	var order: int = Gen2UpdateCheck.compare_versions(installed, listed)
+	var order: int = PokeUpdateCheck.compare_versions(installed, listed)
 	if order < 0:
 		return UPDATE_AVAILABLE
 	return UP_TO_DATE if order == 0 else INSTALLED_IS_NEWER
@@ -223,7 +223,7 @@ static func receive_feed(
 			cache_feed(feed, text)
 			parsed["stale"] = false
 			return parsed
-		problem = Gen2ModRefusal.text(parsed)
+		problem = PokeModRefusal.text(parsed)
 	var cached: Dictionary = cached_feed(feed)
 	if not bool(cached.get("ok", false)):
 		return {"ok": false, "reason": &"index_request_failed", "detail": problem}
@@ -259,7 +259,7 @@ static func _entry_from(raw: Dictionary) -> Dictionary:
 	if id.is_empty() or not is_downloadable(download):
 		return {}
 	var regex := RegEx.new()
-	regex.compile(Gen2ModManifest.ID_PATTERN)
+	regex.compile(PokeModManifest.ID_PATTERN)
 	if regex.search(id) == null:
 		return {}
 	return {
@@ -280,7 +280,7 @@ static func _entry_from(raw: Dictionary) -> Dictionary:
 
 
 ## The [RomRegistry] ids in a listing's `games`, deduplicated. Shape only, like
-## [method Gen2ModManifest.from_dictionary]: an id this build has never heard of
+## [method PokeModManifest.from_dictionary]: an id this build has never heard of
 ## is kept, because a feed may list a mod for a cartridge a later launcher ships.
 ## A malformed id is dropped on its own rather than costing the row, the way a
 ## bad art URL is: the manifest inside the archive is what decides what runs.

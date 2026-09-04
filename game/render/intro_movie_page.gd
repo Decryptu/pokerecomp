@@ -10,11 +10,11 @@ extends RefCounted
 ## below $80 reads from `vTiles2` and $80 up from `vTiles1`. Shadow OAM holds
 ## forty sprites, so `IntroScene10`'s forty-first, Pichu's last tile, is not drawn.
 
-const TILE: int = Gen2Tiles.TILE_WIDTH
+const TILE: int = PokeTiles.TILE_WIDTH
 const WIDTH: int = Gen2Screen.WIDTH
 const HEIGHT: int = Gen2Screen.HEIGHT
-const MAP_COLUMNS: int = RomLayout.INTRO_MAP_COLUMNS
-const MAP_ROWS: int = RomLayout.INTRO_MAP_ROWS
+const MAP_COLUMNS: int = Gen2Layout.INTRO_MAP_COLUMNS
+const MAP_ROWS: int = Gen2Layout.INTRO_MAP_ROWS
 ## The screen `Intro_LoadTilemap` copies into `wTilemap`, which is the part of
 ## the BG map the two Suicune scenes rewrite in place.
 const COLUMNS: int = Gen2IntroMovie.COLUMNS
@@ -268,7 +268,7 @@ func _draw_background(pixels: PackedInt32Array, movie: Gen2IntroMovie) -> Array:
 	var forced := PackedByteArray()
 	var map: PackedByteArray = movie.bg_map()
 	var attr: PackedByteArray = movie.bg_attr()
-	if map.size() < RomLayout.INTRO_MAP_BYTES:
+	if map.size() < Gen2Layout.INTRO_MAP_BYTES:
 		return [behind, forced]
 	behind.resize(WIDTH * HEIGHT)
 	forced.resize(WIDTH * HEIGHT)

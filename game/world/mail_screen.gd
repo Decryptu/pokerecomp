@@ -39,10 +39,10 @@ func _ready() -> void:
 ## `.loop`: A and B leave, START reaches the printer and comes back. Nothing
 ## else is read, so the d-pad does not close the screen.
 func handle_button(button: int) -> bool:
-	if button == Gen2Button.A or button == Gen2Button.B:
+	if button == PokeButton.A or button == PokeButton.B:
 		closed.emit()
 		return true
-	return button == Gen2Button.START
+	return button == PokeButton.START
 
 
 func _build() -> void:
@@ -69,5 +69,5 @@ func _refresh() -> void:
 ## through four cartridge colours rather than a white-to-black pair.
 func _colours() -> PackedColorArray:
 	if _data == null or _mail == null:
-		return Gen2Palette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+		return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 	return _data.mail_palette(Gen2MailPage.palette_index(_mail))

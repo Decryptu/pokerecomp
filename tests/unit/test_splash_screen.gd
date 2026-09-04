@@ -68,15 +68,15 @@ func test_it_closes_once_and_owes_no_more_frames() -> void:
 func test_only_the_gamefreak_half_reads_a_button() -> void:
 	assert_true(_splash.open(_data))
 	_splash.advance_frames(Gen2BootCinema.COPYRIGHT_PRELUDE_FRAMES)
-	assert_true(_splash.handle_button(Gen2Button.A))
-	assert_true(_splash.handle_button(Gen2Button.B))
-	assert_true(_splash.handle_button(Gen2Button.START))
+	assert_true(_splash.handle_button(PokeButton.A))
+	assert_true(_splash.handle_button(PokeButton.B))
+	assert_true(_splash.handle_button(PokeButton.START))
 	assert_eq(_splash.visible_image(), &"copyright")
 	assert_eq(_closed, 0)
 
 	_splash.advance_frames(Gen2BootCinema.COPYRIGHT_HOLD_FRAMES + 20)
 	assert_eq(_splash.visible_image(), &"game_freak_presents")
-	assert_true(_splash.handle_button(Gen2Button.A))
+	assert_true(_splash.handle_button(PokeButton.A))
 	_splash.advance_frames(
 		Gen2GameFreakPresents.CLEAR_TILEMAP_FRAMES
 		+ Gen2GameFreakPresents.CLEANUP_FRAMES - 1

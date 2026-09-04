@@ -42,7 +42,7 @@ func _initialize() -> void:
 		quit(1)
 		return
 	_output_path = args[0]
-	if Gen2ToolPath.refuses(_output_path):
+	if PokeToolPath.refuses(_output_path):
 		quit(2)
 		return
 	if args.size() > 1:
@@ -106,7 +106,7 @@ func _process(_delta: float) -> bool:
 			# The Pokegear on its clock card, then one `Pokegear_SwitchPage`
 			# right onto MAP, which is the live path the region map is reached by.
 			_screen._open_pokegear()
-			_screen._service_host.handle_button(Gen2Button.RIGHT)
+			_screen._service_host.handle_button(PokeButton.RIGHT)
 		elif _kind == &"pokegear":
 			# The clock card `.InitTilemap` opens on: `presses` walks
 			# `Pokegear_SwitchPage` to whichever of the others is wanted.
@@ -119,8 +119,8 @@ func _process(_delta: float) -> bool:
 			# The live path: the dex's own OPTION screen, its fourth row.
 			_screen._open_pokedex()
 			for button: int in [
-				Gen2Button.SELECT, Gen2Button.DOWN, Gen2Button.DOWN,
-				Gen2Button.DOWN, Gen2Button.A,
+				PokeButton.SELECT, PokeButton.DOWN, PokeButton.DOWN,
+				PokeButton.DOWN, PokeButton.A,
 			]:
 				_screen._pokedex_host.handle_button(button)
 		else:
@@ -138,7 +138,7 @@ func _process(_delta: float) -> bool:
 				_screen.press_button(button)
 	if _frames < 18:
 		return false
-	var image: Image = Gen2ToolPath.capture(root)
+	var image: Image = PokeToolPath.capture(root)
 	if image == null:
 		quit(1)
 		return true
@@ -155,13 +155,13 @@ func _process(_delta: float) -> bool:
 
 static func _button(name: String) -> int:
 	match name.to_lower():
-		"up": return Gen2Button.UP
-		"down": return Gen2Button.DOWN
-		"left": return Gen2Button.LEFT
-		"right": return Gen2Button.RIGHT
-		"a": return Gen2Button.A
-		"b": return Gen2Button.B
-	return Gen2Button.NONE
+		"up": return PokeButton.UP
+		"down": return PokeButton.DOWN
+		"left": return PokeButton.LEFT
+		"right": return PokeButton.RIGHT
+		"a": return PokeButton.A
+		"b": return PokeButton.B
+	return PokeButton.NONE
 
 
 func _write_service_cache() -> void:

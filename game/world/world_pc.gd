@@ -126,8 +126,8 @@ static func _list(data: GameData, players: bool, index: int) -> Array:
 static func _rows(
 	data: GameData, players: bool, list: Array, player_name: String
 ) -> Array:
-	var order: Array[String] = RomLayout.POKECENTER_PC_PLAYERS_ORDER if players \
-		else RomLayout.POKECENTER_PC_ROWS
+	var order: Array[String] = Gen2Layout.POKECENTER_PC_PLAYERS_ORDER if players \
+		else Gen2Layout.POKECENTER_PC_ROWS
 	var out: Array = []
 	for raw_row: Variant in list:
 		var row: int = int(raw_row)

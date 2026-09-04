@@ -31,7 +31,7 @@ func _data(body: Array, rows: int = 2, function: int = 0) -> Gen2BattleAnimData:
 		object_body.append_array([0x00, 0x90, 0x00, function, 0x02, 0x01])
 
 	var frameset_at: int = BASE + 2
-	var sprite_at: int = BASE + RomLayout.BATTLE_ANIM_OAM_SET_SIZE
+	var sprite_at: int = BASE + Gen2Layout.BATTLE_ANIM_OAM_SET_SIZE
 	return Gen2BattleAnimData.create({
 		&"scripts": {
 			"bank": 0x32, "address": BASE, "count": 1,

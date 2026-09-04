@@ -47,7 +47,7 @@ const CRYSTAL_SCY: int = 8
 const WINDOW_OFF_Y: int = 144
 const WINDOW_Y: int = 0x88
 const CRYSTAL_START_Y: int = -0x22
-const CRYSTAL_END_Y: int = 6 + 2 * Gen2Tiles.TILE_HEIGHT
+const CRYSTAL_END_Y: int = 6 + 2 * PokeTiles.TILE_HEIGHT
 const CRYSTAL_STEP: int = 2
 
 ## `SuicuneFrameIterator`: the counter rises every frame and the frame it names
@@ -80,7 +80,7 @@ const CRYSTAL_X_STEP: int = 8
 
 ## `depixel 12, 11`, the bird's struct coordinate. `_InitSpriteAnimStruct` takes
 ## x in e and y in d and `ldpixel` loads the first operand high, so it is (y, x).
-const BIRD_AT := Vector2i(11 * Gen2Tiles.TILE_WIDTH, 12 * Gen2Tiles.TILE_HEIGHT)
+const BIRD_AT := Vector2i(11 * PokeTiles.TILE_WIDTH, 12 * PokeTiles.TILE_HEIGHT)
 ## `AnimSeq_GSIntroHoOhLugia`: Gold counts its sine input up and scales by two,
 ## Silver counts down and scales by eight, and the answer is the y offset.
 const BIRD_SINE_GOLD: int = 2
@@ -452,13 +452,13 @@ func _advance_main(held: Array) -> void:
 		_answer(OPTION_RESTART)
 		return
 	_timer -= 1
-	if _chord(held, [Gen2Button.UP, Gen2Button.B, Gen2Button.SELECT]):
+	if _chord(held, [PokeButton.UP, PokeButton.B, PokeButton.SELECT]):
 		_answer(OPTION_DELETE_SAVE_DATA)
 		return
-	if _chord(held, [Gen2Button.DOWN, Gen2Button.B, Gen2Button.SELECT]):
+	if _chord(held, [PokeButton.DOWN, PokeButton.B, PokeButton.SELECT]):
 		_answer(OPTION_RESET_CLOCK)
 		return
-	if held.has(Gen2Button.START) or held.has(Gen2Button.A):
+	if held.has(PokeButton.START) or held.has(PokeButton.A):
 		_answer(OPTION_MAIN_MENU)
 
 

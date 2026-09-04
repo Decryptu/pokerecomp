@@ -184,8 +184,8 @@ func _column_feet(world: Gen2WorldAPI) -> Array[Vector2i]:
 
 
 func _border_is_waterfall(world: Gen2WorldAPI, map: Gen2WorldMap) -> bool:
-	for quadrant_y: int in RomLayout.MAP_BLOCK_CELL_WIDTH:
-		for quadrant_x: int in RomLayout.MAP_BLOCK_CELL_WIDTH:
+	for quadrant_y: int in Gen2Layout.MAP_BLOCK_CELL_WIDTH:
+		for quadrant_x: int in Gen2Layout.MAP_BLOCK_CELL_WIDTH:
 			if Gen2WorldFieldMove.waterfall_tile(world.current_tileset.collision_index(
 				map.border_block, quadrant_x, quadrant_y
 			)):

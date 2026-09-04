@@ -76,7 +76,7 @@ const ACCELERATED_SPEED: float = 60.0
 ## Per-scanline background offsets for the box's own rows, empty when the
 ## background is sitting still. A box is drawn into the background plane like
 ## everything else, so a routine that scrolls the plane scrolls the box with it;
-## see [Gen2Raster].
+## see [PokeRaster].
 @export var raster_scx: PackedInt32Array = PackedInt32Array():
 	set(value):
 		raster_scx = value
@@ -286,7 +286,7 @@ func advance() -> bool:
 ## Redraws with a different border. All eight are in the cache; the games let
 ## the player pick.
 func set_frame_style(style: int) -> void:
-	var count: int = font.frame_count() if font != null else RomLayout.FRAME_COUNT
+	var count: int = font.frame_count() if font != null else Gen2Layout.FRAME_COUNT
 	frame_style = wrapi(style, 0, maxi(count, 1))
 	_redraw()
 
@@ -425,14 +425,14 @@ func _redraw() -> void:
 		indices, width, height, _colors()
 	)
 	if not raster_scx.is_empty():
-		image = Gen2Raster.scroll(image, raster_scx, Gen2BattleIntro.MAP_WIDTH)
+		image = PokeRaster.scroll(image, raster_scx, Gen2BattleIntro.MAP_WIDTH)
 	Gen2PicImage.show(self, image)
 	size = Vector2(width, height)
 
 
 ## Index 0 is the field and index 3 the ink; 1bpp graphics have no middle
 ## colours, so the two between them are never drawn. Written out rather than
-## taken from Gen2Palette.pic_palette because only the field carries alpha, and
+## taken from PokePalette.pic_palette because only the field carries alpha, and
 ## [member field_opacity] is applied to whichever palette is in force.
 func _colors() -> PackedColorArray:
 	var source: PackedColorArray = (

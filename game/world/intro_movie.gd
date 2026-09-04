@@ -17,16 +17,16 @@ extends RefCounted
 ## the Unown's purple, Pichu's yellow and Wooper's blue are all in the second
 ## half of a run whose first half is a scene's backgrounds.
 const BG_PALETTES: int = 8
-const PALETTES: int = RomLayout.INTRO_PALETTES
-const PALETTE_COLORS: int = RomLayout.INTRO_PALETTE_COLORS
+const PALETTES: int = Gen2Layout.INTRO_PALETTES
+const PALETTE_COLORS: int = Gen2Layout.INTRO_PALETTE_COLORS
 ## `ClearPalettes` fills both buffers with $ffff rather than blanking them.
 const WHITE: int = 0xFFFF
 
 ## `SCREEN_WIDTH`/`SCREEN_HEIGHT` and the BG map behind them.
 const COLUMNS: int = 20
 const ROWS: int = 18
-const MAP_COLUMNS: int = RomLayout.INTRO_MAP_COLUMNS
-const MAP_ROWS: int = RomLayout.INTRO_MAP_ROWS
+const MAP_COLUMNS: int = Gen2Layout.INTRO_MAP_COLUMNS
+const MAP_ROWS: int = Gen2Layout.INTRO_MAP_ROWS
 const SCREEN_HEIGHT_PX: int = 144
 
 ## The sound effects the movie asks for, as their `SFX_*` numbers.
@@ -142,7 +142,7 @@ const UNOWN_SOUNDS: Array[Array] = [
 ## tile numbers below $80 read from, `bg_first` how far into it that half starts,
 ## and `bg_high` the sheet $80 and up reads from; `obj` is the sheet a sprite tile
 ## reads from and `obj_bank1` the one an `OAM_BANK1` sprite does. `map` and `attr`
-## name the 32x32 BG maps. The names are `RomLayout.INTRO_SECTION`'s, and a missing
+## name the 32x32 BG maps. The names are `Gen2Layout.INTRO_SECTION`'s, and a missing
 ## key keeps what the scene before it left in that part of VRAM, which is what the
 ## source's own `Intro_DecompressRequest2bpp_*` calls do.
 const SCENE_VRAM: Dictionary = {
@@ -226,7 +226,7 @@ const SETUP_OVERRUN_KEY: int = -1
 ## by `wIntroSceneFrameCounter` at the top of that pass. The cause is `Decompress`,
 ## the sprite pass and `Intro_ColoredSuicuneFrameSwap` costing more CPU than a
 ## frame has left, so the `DelayFrame` the loop ends on lands a frame late.
-## Measured against a real dump under `.claude/oracle` rather than derived: with it
+## Measured against a real dump rather than derived: with it
 ## the movie's own `wJumptableIndex` and counter agree with the cartridge's on all
 ## 2,441 frames, and without it the port ends 101 frames early.
 const SCENE_OVERRUN: Dictionary = {
@@ -249,7 +249,7 @@ const SCENE_OVERRUN: Dictionary = {
 ## $09` swapped every four frames for the first thirty-six of `IntroScene10`.
 const GRASS_FRAMES: Array[String] = ["grass_1", "grass_2", "grass_3", "grass_2"]
 const GRASS_RUSTLE_FRAMES: int = 36
-const GRASS_FIRST_TILE: int = RomLayout.INTRO_GRASS_FIRST_TILE
+const GRASS_FIRST_TILE: int = Gen2Layout.INTRO_GRASS_FIRST_TILE
 const GRASS_TILES: int = 4
 
 ## The bare `Request2bpp` a setup scene makes on top of its own sheets, as
@@ -259,8 +259,8 @@ const GRASS_TILES: int = 4
 ## at `vTiles1 tile $7f`, so tile $ff is. The wave of grass the last two scenes
 ## run Suicune through is twenty sprites of that one tile.
 const SCENE_OVERLAY: Dictionary = {
-	14: [0x80, 1, RomLayout.INTRO_GRASS_BLANK],
-	18: [0xFF, 1, RomLayout.INTRO_GRASS_BLANK],
+	14: [0x80, 1, Gen2Layout.INTRO_GRASS_BLANK],
+	18: [0xFF, 1, Gen2Layout.INTRO_GRASS_BLANK],
 }
 
 var _data: GameData = null
@@ -408,7 +408,7 @@ func _palette_at(index: int) -> PackedColorArray:
 	if index < 0 or index >= PALETTES:
 		return out
 	for colour: int in PALETTE_COLORS:
-		out.append(Gen2Palette.from_packed(_palettes[index * PALETTE_COLORS + colour]))
+		out.append(PokePalette.from_packed(_palettes[index * PALETTE_COLORS + colour]))
 	return out
 
 
@@ -780,7 +780,7 @@ func _scene_suicune_runs_in() -> void:
 func _scene_attribute_bands() -> void:
 	_ly_active = false
 	var attr := PackedByteArray()
-	attr.resize(RomLayout.INTRO_MAP_BYTES)
+	attr.resize(Gen2Layout.INTRO_MAP_BYTES)
 	for row: int in MAP_ROWS:
 		var value: int = 3
 		if row < 12:
@@ -1024,7 +1024,7 @@ func _rustle_grass() -> void:
 ## into `wTilemap` so `Intro_ColoredSuicuneFrameSwap` has something to rewrite.
 func _load_tilemap() -> void:
 	var map: PackedByteArray = bg_map()
-	if map.size() < RomLayout.INTRO_MAP_BYTES:
+	if map.size() < Gen2Layout.INTRO_MAP_BYTES:
 		return
 	var out := PackedByteArray()
 	out.resize(COLUMNS * ROWS)
@@ -1094,7 +1094,7 @@ func _appear_unown(which: int) -> void:
 ## is one palette, copied over all eight.
 func _apply_palette_fade(at: int) -> void:
 	var run: PackedInt32Array = _packed("fade")
-	var first: int = at / Gen2Palette.COLOR_BYTES
+	var first: int = at / PokePalette.COLOR_BYTES
 	if first + PALETTE_COLORS > run.size():
 		return
 	for slot: int in BG_PALETTES:
