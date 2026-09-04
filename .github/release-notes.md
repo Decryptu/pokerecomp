@@ -15,15 +15,19 @@ marker with it, which is how 0.1.17 published an empty body. -->
 
 ## Added
 
-- Wild Pokemon can carry their species' common and rare held items at the original 23% and 2% rates. Forced-item encounters always carry the common item.
+- Battle Tower fights now use the cartridge's stored opponent stats, fixed trainer policy, pack restrictions and result flow.
+- Battle Tower entry heals the player's party and restores party state after the fight, including held items, moves and happiness.
 
 ## Changed
 
-- The deterministic Gold, Silver and Crystal story routes reactivate Strength after Blackthorn Gym's door warp and stock enough Great Balls for Crystal's Dratini catches.
+- Traded Pokemon now follow the cartridge's badge-based obedience thresholds and outcomes, while link and Battle Tower battles bypass obedience checks.
+- Battle effects now match cartridge damage, type-rounding, critical-stat, item, status, Bide, Rollout, recoil and turn-state behavior.
 
 ## Fixed
 
-- Lock-On and Mind Reader hold their spawn position for the first frame before moving on the next frame.
+- Cancelling an Unown print resumes the current map music and keeps the Unown browser open.
+- Battle Tower opponents use the fixed move-scoring and switch policy without trainer-class inventory items.
+- Battle Tower result portraits, fainted panels and launcher focus now follow the source and current-page rules.
 
 ## Which file
 
