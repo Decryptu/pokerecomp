@@ -364,14 +364,14 @@ or a group, or `all`; with no argument it lists them.
 | `art` | Both intro movies, the credits, the region map, all 278 battle animations, the map name sign |
 | `tables` | TM/HM, naming, world scripts, the opening lane |
 | `trainers` | The Route 30 trainer on each profile |
-| `gen1` | Red, Blue and Yellow's species, move, type, item and trainer tables |
+| `gen1` | Red, Blue and Yellow's species, move, type, item and trainer tables, and every picture their sprite codec decodes |
 
 The rest are previews and dumps, each driving a real screen or table:
 
 | Tool | Does |
 |---|---|
 | `dump_tables.gd <game> <table>` | Prints a decoded table: `species`, `moves`, `items`, `types`, `matchups`, `trainers`, `learnsets`, `egg_moves`, `evolutions`, `growth` or `all` |
-| `preview_pics.gd <game> <png> [kind]` | Contact sheet of `front`, `trainers`, `font` or `frames` |
+| `preview_pics.gd <game> <png> [kind]` | Contact sheet of `front`, `back`, `trainers`, `player_back`, `font` or `frames`, in either generation |
 | `preview_*.gd` | One per screen: the intro, title, credits, Hall of Fame, region map, party, marts, mail, fishing, battle switch and animations, overworld sprites and collision |
 | `preview_world_story.gd` | Map entry callbacks, event-flag visibility, facing interactions and the whole story route |
 | `replay_world.gd [game ...] [frames]` | Records `(frame, button)` from a real run and replays it into a fresh world; the same seed and log must reach the same snapshot, party and battle outcome byte for byte, at 30 fps and at 144. One route fights: a wild battle is spent from the world's own pump and steered through its own funnel |

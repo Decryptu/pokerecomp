@@ -343,7 +343,7 @@ func test_no_published_file_names_something_only_this_machine_has() -> void:
 	var offenders: Array[String] = []
 	for path: String in paths:
 		var text: String = FileAccess.get_file_as_string(path)
-		for name: String in LOCAL_ONLY:
-			if text.contains(name):
-				offenders.append("%s names %s" % [path, name])
+		for local: String in LOCAL_ONLY:
+			if text.contains(local):
+				offenders.append("%s names %s" % [path, local])
 	assert_eq(offenders, [] as Array[String], "\n".join(offenders))

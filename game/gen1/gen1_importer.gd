@@ -413,6 +413,11 @@ func import_rom(
 	var tmhm_moves: Array = _import_tmhm_moves(rom, layout)
 	var trainers: Array = _import_trainers(rom, layout)
 	await _breathe(yield_ms)
+	var pics: Dictionary = _import_pics(rom, layout, species, on_progress)
+	if pics.is_empty():
+		result["message"] = "Could not decode every picture."
+		return result
+	await _breathe(yield_ms)
 
 	var sections: Dictionary = {
 		RomCache.species_path(directory): species,
@@ -439,6 +444,7 @@ func import_rom(
 		"type_count": types.size(),
 		"matchup_count": matchups.size(),
 		"trainer_count": trainers.size(),
+		"atlases": pics,
 		"complete": true,
 	}
 	if not RomCache.write_json(RomCache.manifest_path(directory), manifest):
@@ -515,8 +521,9 @@ func _import_species(rom: RomFile, layout: Dictionary, on_progress: Callable) ->
 			"evolutions": evos_moves["evolutions"],
 			"learnset": evos_moves["learnset"],
 			# Width in the high nybble, height in the low one, in tiles.
-			"front_tiles": [dimensions & 0x0F, dimensions >> 4],
-			"pics": {
+			"front_tiles": [dimensions >> 4, dimensions & 0x0F],
+			# Not `pics`, which is the key a mod's own artwork arrives under.
+			"pic_offsets": {
 				"front": _pic_offset(rom, layout, stats + Gen1Layout.BASE_FRONT_PIC, index),
 				"back": _pic_offset(rom, layout, stats + Gen1Layout.BASE_BACK_PIC, index),
 			},
@@ -630,12 +637,13 @@ func _import_items(rom: RomFile, layout: Dictionary) -> Array:
 		out.append({
 			"number": item,
 			"name": names[item - 1],
-			"price": _bcd_price(rom, Gen1Layout.item_price_offset(layout, item)),
+			"price": _bcd3(rom, Gen1Layout.item_price_offset(layout, item)),
 		})
 	return out
 
 
-static func _bcd_price(rom: RomFile, at: int) -> int:
+## `bcd3`, which is how both a price and a trainer's reward money are stored.
+static func _bcd3(rom: RomFile, at: int) -> int:
 	var out: int = 0
 	for byte: int in Gen1Layout.ITEM_PRICE_SIZE:
 		var packed: int = rom.u8(at + byte)
@@ -659,5 +667,85 @@ func _import_trainers(rom: RomFile, layout: Dictionary) -> Array:
 	)
 	var out: Array = []
 	for trainer_class: int in range(1, Gen1Layout.TRAINER_CLASS_COUNT + 1):
-		out.append({"number": trainer_class, "name": names[trainer_class - 1]})
+		var row: int = int(layout["trainer_pics"]) \
+			+ (trainer_class - 1) * Gen1Layout.TRAINER_PIC_SIZE
+		out.append({
+			"number": trainer_class,
+			"name": names[trainer_class - 1],
+			# `GetTrainerInformation`: times the last enemy's level.
+			"base_money": _bcd3(rom, row + Gen1Layout.POINTER_SIZE),
+		})
 	return out
+
+
+## Every picture the cartridge draws, through [Gen1SpriteCodec]: the pics
+## `BaseStats` names, `TrainerPicAndMoneyPointers`' 47, and the two back ones.
+func _import_pics(
+	rom: RomFile, layout: Dictionary, species: Array, on_progress: Callable
+) -> Dictionary:
+	var codec := Gen1SpriteCodec.new()
+	var front: Dictionary = PokeTiles.new_atlas(
+		Gen1Layout.FRONTPIC_MAX_TILES, Gen1Layout.SPECIES_COUNT
+	)
+	var back: Dictionary = PokeTiles.new_atlas(
+		Gen1Layout.BACKPIC_TILES, Gen1Layout.SPECIES_COUNT
+	)
+	for entry: Dictionary in species:
+		var slot: int = int(entry["number"]) - 1
+		var offsets: Dictionary = entry["pic_offsets"]
+		_decode_pic(codec, rom, int(offsets["front"]), front, slot)
+		_decode_pic(codec, rom, int(offsets["back"]), back, slot)
+		if on_progress.is_valid():
+			on_progress.call("pics", slot + 1, Gen1Layout.SPECIES_COUNT)
+
+	var trainers: Dictionary = PokeTiles.new_atlas(
+		Gen1Layout.TRAINER_PIC_TILES, Gen1Layout.TRAINER_CLASS_COUNT
+	)
+	for trainer_class: int in range(1, Gen1Layout.TRAINER_CLASS_COUNT + 1):
+		_decode_pic(
+			codec, rom, Gen1Layout.trainer_pic_offset(rom, layout, trainer_class),
+			trainers, trainer_class - 1
+		)
+
+	var player_back: Dictionary = PokeTiles.new_atlas(
+		Gen1Layout.BACKPIC_TILES, Gen1Layout.PLAYER_BACKPICS.size()
+	)
+	for slot: int in Gen1Layout.PLAYER_BACKPICS.size():
+		_decode_pic(
+			codec, rom, int(layout["pic_%s_back" % Gen1Layout.PLAYER_BACKPICS[slot]]),
+			player_back, slot
+		)
+
+	# A wrong offset decodes nothing, so an atlas short of a cell is a bad pin.
+	var wanted: Dictionary = {
+		"front": Gen1Layout.SPECIES_COUNT, "back": Gen1Layout.SPECIES_COUNT,
+		"trainers": Gen1Layout.TRAINER_CLASS_COUNT,
+		"player_back": Gen1Layout.PLAYER_BACKPICS.size(),
+	}
+	var atlases: Dictionary = {
+		"front": front, "back": back, "trainers": trainers, "player_back": player_back,
+	}
+	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
+	var out: Dictionary = {}
+	for name: String in atlases:
+		var atlas: Dictionary = atlases[name]
+		if int(atlas["decoded"]) != int(wanted[name]):
+			return {}
+		if not RomCache.write_indices(RomCache.pic_path(directory, name), atlas["pixels"]):
+			return {}
+		out[name] = PokeTiles.atlas_record(atlas)
+	return out
+
+
+func _decode_pic(
+	codec: Gen1SpriteCodec, rom: RomFile, start: int, atlas: Dictionary, slot: int
+) -> bool:
+	if start < 0:
+		return false
+	var raw: PackedByteArray = codec.decompress(rom.bytes(), start)
+	if codec.failed:
+		return false
+	PokeTiles.blit_pic(
+		PokeTiles.decode_pic(raw, codec.columns, codec.rows), codec.columns, atlas, slot
+	)
+	return true

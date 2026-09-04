@@ -7,7 +7,9 @@ extends SceneTree
 ## correct decode from a plausible wrong one. The font comes out folded to sixteen
 ## tiles a row, the shape the charmap describes.
 
-const ATLASES: PackedStringArray = ["front", "back", "unown_front", "unown_back", "trainers"]
+const ATLASES: PackedStringArray = [
+	"front", "back", "unown_front", "unown_back", "trainers", "player_back",
+]
 const SHEETS: PackedStringArray = [
 	"font", "frames", "battle_font", "enemy_hud", "player_hud", "exp_bar",
 ]
@@ -148,19 +150,23 @@ func _render(
 
 
 ## One palette per cell of an atlas, in slot order.
-## The three kinds of atlas are indexed differently: a species atlas by species,
-## the trainer atlas by class, and Unown's by letter form, all twenty-six of
-## which are the one species and so share its colours.
+## The kinds of atlas are indexed differently: a species atlas by species, the
+## trainer atlas by class, and Unown's by letter form, all twenty-six of which
+## are the one species and so share its colours. A Generation 1 cartridge names
+## no colours for a trainer or a back pic, so those come out in Game Boy greys.
 func _palettes(directory: String, name: String, shiny: bool) -> Array:
 	var out: Array = []
+	var key: String = "shiny" if shiny else "normal"
+
+	if name == "player_back":
+		return [_palette_of([])]
 
 	if name == "trainers":
 		for entry: Dictionary in RomCache.read_json(RomCache.trainers_path(directory)):
-			out.append(_palette_of(entry["palette"]))
+			out.append(_palette_of(entry.get("palette", [])))
 		return out
 
 	var species: Array = RomCache.read_json(RomCache.species_path(directory))
-	var key: String = "shiny" if shiny else "normal"
 	if name.begins_with("unown"):
 		var unown: Dictionary = species[Gen2Layout.UNOWN_SPECIES - 1]
 		for form: int in Gen2Layout.UNOWN_FORMS:
@@ -168,12 +174,23 @@ func _palettes(directory: String, name: String, shiny: bool) -> Array:
 		return out
 
 	for entry: Dictionary in species:
-		out.append(_palette_of(entry["palette"][key]))
+		var palette: Dictionary = entry["palette"]
+		out.append(_palette_of(palette.get("colors", palette.get(key, []))))
 	return out
 
 
-func _palette_of(packed: Array) -> PackedColorArray:
+static func _palette_of(packed: Variant) -> PackedColorArray:
+	var colors: Array = packed as Array if packed is Array else []
+	if colors.size() >= PokePalette.COLORS_PER_PIC:
+		var out: PackedColorArray = PackedColorArray()
+		for value: Variant in colors:
+			out.append(PokePalette.from_packed(int(value)))
+		return out
+	if colors.size() < 2:
+		return PokePalette.pic_palette(PackedColorArray([
+			Color(0.66, 0.66, 0.66), Color(0.33, 0.33, 0.33),
+		]))
 	return PokePalette.pic_palette(PackedColorArray([
-		PokePalette.from_packed(int(packed[0])),
-		PokePalette.from_packed(int(packed[1])),
+		PokePalette.from_packed(int(colors[0])),
+		PokePalette.from_packed(int(colors[1])),
 	]))

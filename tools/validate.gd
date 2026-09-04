@@ -44,7 +44,7 @@ const GROUPS: Dictionary = {
 		&"battle_tower", &"npc_trade",
 	],
 	&"trainers": [&"crystal_route30_trainer", &"gold_route30_trainer"],
-	&"gen1": [&"gen1_tables"],
+	&"gen1": [&"gen1_tables", &"gen1_pics"],
 }
 
 

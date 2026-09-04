@@ -14,6 +14,8 @@ const TILE_PIXELS: int = 64
 const TILE_BYTES: int = 16
 ## Bytes of 1bpp data per tile: one row per byte, with no second plane.
 const TILE_1BPP_BYTES: int = 8
+## Sixteen cells to an atlas row.
+const ATLAS_COLUMNS: int = 16
 ## The index a set 1bpp pixel decodes to. The hardware widens 1bpp graphics by
 ## copying the byte into both planes, so a lit pixel is index 3 and the rest is
 ## index 0: text is black on white, and the two middle colours never appear.
@@ -127,9 +129,37 @@ static func decode_pic(data: PackedByteArray, columns: int, rows: int) -> Packed
 	return out
 
 
-## Copies an index buffer into a larger one. Pics are stored in fixed-size atlas
-## cells so the renderer can index them arithmetically, and a 5x5 pic has to
-## land in a 7x7 cell somewhere.
+## Cells are the largest pic that goes in them, so a renderer finds one by
+## arithmetic and a smaller pic sits in the top-left of its own.
+static func new_atlas(cell_tiles: int, cells: int) -> Dictionary:
+	var cell: int = cell_tiles * TILE_WIDTH
+	var width: int = ATLAS_COLUMNS * cell
+	var pixels: PackedByteArray = PackedByteArray()
+	var height: int = ceili(float(cells) / ATLAS_COLUMNS) * cell
+	pixels.resize(width * height)
+	return {"pixels": pixels, "width": width, "height": height, "cell": cell, "decoded": 0}
+
+
+static func blit_pic(
+	pixels: PackedByteArray, columns: int, atlas: Dictionary, slot: int
+) -> void:
+	var cell: int = atlas["cell"]
+	blit(
+		pixels, columns * TILE_WIDTH, atlas["pixels"], atlas["width"],
+		(slot % ATLAS_COLUMNS) * cell, floori(float(slot) / float(ATLAS_COLUMNS)) * cell
+	)
+	atlas["decoded"] = int(atlas["decoded"]) + 1
+
+
+## What the manifest keeps about an atlas once its pixels are in their own file.
+static func atlas_record(atlas: Dictionary) -> Dictionary:
+	return {
+		"width": atlas["width"], "height": atlas["height"], "cell": atlas["cell"],
+		"columns": ATLAS_COLUMNS, "decoded": atlas["decoded"],
+	}
+
+
+## Copies an index buffer into a larger one.
 static func blit(
 	source: PackedByteArray,
 	source_width: int,

@@ -75,9 +75,6 @@ const ITEM_PRICE_SIZE: int = 3
 const TM_COUNT: int = 50
 const HM_COUNT: int = 5
 
-## `NUM_TRAINERS`, the trainer classes rather than the individual trainers.
-const TRAINER_CLASS_COUNT: int = 47
-
 ## A `PokedexEntry`: category, feet, inches, weight in tenths of a pound, then
 ## `text_far`'s $17 with a `dab` pointer to the description.
 const DEX_TEXT_FAR: int = 0x17
@@ -115,6 +112,24 @@ const PIC_INDEX_MEW: int = 0x15
 const PIC_INDEX_FOSSIL_KABUTOPS: int = 0xB6
 const PIC_BANK_FOSSIL_KABUTOPS: int = 0x0B
 
+## `NUM_TRAINERS`, the trainer classes rather than the individual trainers.
+const TRAINER_CLASS_COUNT: int = 47
+
+## `TrainerPicAndMoneyPointers`: a near pointer and the class's base reward
+## money as three packed-decimal bytes. Every trainer picture is in the one bank
+## the layout records, and `ChiefPic` and `ScientistPic` are the same address.
+const TRAINER_PIC_SIZE: int = 5
+
+## Sides in tiles: `_LoadTrainerPic`'s `ld a, $77`, the widest front pic, and
+## every back pic, which `ScaleSpriteByTwo` doubles before a battle draws it.
+const TRAINER_PIC_TILES: int = 7
+const FRONTPIC_MAX_TILES: int = 7
+const BACKPIC_TILES: int = 4
+
+## `GetTrainerBackpic`'s counterpart, in the `player_back` atlas's slot order:
+## the player, and the old man who borrows the screen for the catching tutorial.
+const PLAYER_BACKPICS: Array[String] = ["player", "old_man"]
+
 const RED_BLUE: Dictionary = {
 	"species_names": 0x1C21E,
 	"base_stats": 0x383DE,
@@ -139,6 +154,10 @@ const RED_BLUE: Dictionary = {
 	"evos_moves": 0x3B05C,
 	"evos_moves_bank": 0x0E,
 	"cries": 0x39446,
+	"trainer_pics": 0x39914,
+	"trainer_pics_bank": 0x13,
+	"pic_player_back": 0x33E0A,
+	"pic_old_man_back": 0x33E9A,
 }
 
 const YELLOW: Dictionary = {
@@ -163,6 +182,11 @@ const YELLOW: Dictionary = {
 	"evos_moves": 0x3B1E5,
 	"evos_moves_bank": 0x0E,
 	"cries": 0x39462,
+	"trainer_pics": 0x39893,
+	"trainer_pics_bank": 0x13,
+	## Yellow moved both back pics out of "Pics 4" and into their own bank.
+	"pic_player_back": 0xF43B1,
+	"pic_old_man_back": 0xF4441,
 }
 
 
@@ -213,6 +237,12 @@ static func item_price_offset(layout: Dictionary, item: int) -> int:
 
 static func cry_offset(layout: Dictionary, index: int) -> int:
 	return int(layout["cries"]) + (index - 1) * CRY_SIZE
+
+
+## The pic behind one row of `TrainerPicAndMoneyPointers`.
+static func trainer_pic_offset(rom: RomFile, layout: Dictionary, trainer_class: int) -> int:
+	var row: int = int(layout["trainer_pics"]) + (trainer_class - 1) * TRAINER_PIC_SIZE
+	return RomFile.linear(int(layout["trainer_pics_bank"]), rom.u16le(row))
 
 
 ## `NUM_POKEMON + 1` rows in dex order with MISSINGNO's first, so the dex number

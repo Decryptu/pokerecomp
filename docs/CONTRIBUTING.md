@@ -324,7 +324,7 @@ the suite.
 |---|---|
 | Cyclomatic complexity of one function | 20 |
 | Lines in one comment block | 8 |
-| Comment lines under `game/`, `tools/` and `autoload/` | the number recorded in the test, which goes down except for a generation the tree did not carry before |
+| Comment lines under `game/`, `tools/` and `autoload/` | the number recorded in the test, which goes down except while a generation the tree did not carry is being brought in |
 
 Complexity counts `if`, `elif`, `while`, `for`, `and`, `or`, an inline `if` and
 one per `match` arm. Over the ceiling, the remedy is a lookup table, a guard
