@@ -1048,7 +1048,7 @@ func test_hp_experience_and_pp_survive_into_the_next_wild_battle() -> void:
 
 
 ## `wPartyMon` is the fighting copy, so a run keeps the damage taken and the PP
-## spent exactly as a win does; only a blackout puts the pre-battle party back.
+## spent exactly as a win does. Tower battles restore the original party.
 ## `_save_battle_result` used to refuse every battle the player did not win, so
 ## a wild encounter walked away from cost nothing.
 func test_running_away_keeps_the_damage_taken_and_the_pp_spent() -> void:
@@ -2401,3 +2401,85 @@ func test_a_thrown_ball_asks_for_the_throw_animation() -> void:
 
 	_settle_frames(host)
 	assert_false(host.animation_running(), "and its frames are spent")
+
+
+func _open_special_battle(kind: StringName) -> Gen2BattleScreen:
+	var host: Gen2BattleScreen = load("res://game/battle/battle_screen.tscn").instantiate()
+	host.set_data(_data)
+	host.set_driven(true)
+	add_child(host)
+	host.set_process(false)
+	var opponent: Gen2SaveMon = Gen2SaveBattleAdapter.from_battle_mon(
+		Gen2BattleMon.create(_data, Fixture.TRAINER_SPECIES, 5, [BattleFixture.TACKLE])
+	)
+	assert_true(host.start_world_battle({"values": {
+		"kind": kind, "trainer_name": "VISITOR",
+		"trainer_class": Fixture.TRAINER_CLASS if kind == &"battle_tower" else 0,
+		"enemy_party": [opponent.to_dict()],
+		"win_text": {"text": "TOWER LOSS"}, "loss_text": {"text": "TOWER WIN"},
+	}}))
+	return host
+
+
+func test_special_battles_show_the_opponent_name_and_refuse_the_pack() -> void:
+	for kind: StringName in [&"battle_tower", &"link_battle"]:
+		var host: Gen2BattleScreen = _open_special_battle(kind)
+		var seen: Array = []
+		host.enemy_seen.connect(func(species: int, form: int) -> void: seen.append([species, form]))
+		_settle_frames(host)
+		var label: String = "LEADER VISITOR" if kind == &"battle_tower" else "VISITOR"
+		assert_eq(host.battle_snapshot()["message"], label + "\nwants to battle!")
+		for _frame: int in 4000:
+			if not host.frames_running() and not host.entrance_running():
+				break
+			host.advance_frame()
+			if not host.frames_running() and host.entrance_running():
+				host.finish()
+				host.advance()
+		host.set_battle_pack([0x12], {0x12: 1})
+		assert_eq(host.open_battle_pack().get("reason"), &"items_cant_be_used_here")
+		assert_eq(host.battle_snapshot()["message"], "Items can't be\nused here.")
+		assert_eq(host.battle_snapshot()["menu_stage"], &"")
+		assert_true(seen.is_empty())
+		assert_eq(host._battle_kind(), &"trainer")
+		if kind == &"battle_tower":
+			assert_true(host._battle.battle_style_set)
+		host.free()
+
+
+func test_tower_victory_and_defeat_print_the_matching_result_line() -> void:
+	for won: bool in [true, false]:
+		var host: Gen2BattleScreen = _open_special_battle(&"battle_tower")
+		if not won:
+			for member: Gen2BattleMon in host._battle.party(Gen2Battle.PLAYER).mons:
+				if member != host._battle.mon(Gen2Battle.PLAYER):
+					member.hp = 0
+		for _hit: int in 12:
+			if won:
+				host.hurt_enemy()
+			else:
+				host.hurt_player()
+		var expected: String = "TOWER LOSS" if won else "TOWER WIN"
+		for _frame: int in 4000:
+			if host.battle_snapshot()["message"] == expected:
+				break
+			host.advance_frame()
+			if not host.frames_running():
+				host.finish()
+				host.advance()
+		assert_eq(host.battle_snapshot()["message"], expected)
+		assert_eq(host.battler_side(Gen2Battle.ENEMY)["kind"], &"trainer")
+		assert_eq(host._slid_pixels[Gen2Battle.ENEMY], 16.0)
+		host.free()
+
+
+func test_result_portrait_spends_sixty_four_frames_before_the_dialogue() -> void:
+	var host: Gen2BattleScreen = _open_special_battle(&"battle_tower")
+	host._battle.enemy.hp = 0
+	assert_true(host._show_world_battle_result_picture())
+	for frame: int in 64:
+		assert_true(host.sliding(), "result picture still owns frame %d" % frame)
+		host.advance_slide()
+	assert_false(host.sliding())
+	assert_false(host._show_world_battle_result_picture())
+	host.free()

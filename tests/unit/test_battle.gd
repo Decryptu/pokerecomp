@@ -4669,3 +4669,22 @@ func test_a_berserk_gene_runs_on_the_confusion_count_the_last_pokemon_left() -> 
 	battle.take_actions(Gen2Battle.switch_to(1), Gen2Battle.use_move(0))
 	battle.take_turn(0, 0)
 	assert_eq(battle.player.confusion_turns, 2)
+
+
+func test_tower_and_link_battles_refuse_bag_items_and_free_switches() -> void:
+	for mode: int in 3:
+		var player: Gen2BattleMon = _mon(Fixture.PIKACHU, 20, [Fixture.TACKLE])
+		var bench: Gen2BattleMon = _mon(Fixture.PIKACHU, 20, [Fixture.TACKLE])
+		var enemy: Gen2BattleMon = _mon(Fixture.PIKACHU, 20, [Fixture.TACKLE])
+		var battle: Gen2Battle = Gen2Battle.create_parties(
+			_data, Gen2Party.create([player, bench]), Gen2Party.of(enemy), _rng, true
+		)
+		battle.in_battle_tower = mode == 1
+		battle.is_link_battle = mode == 2
+		player.hp = 1
+		assert_eq(battle.should_offer_switch(), mode == 0)
+		var result: Dictionary = battle.use_bag_item(Fixture.POTION, 0)
+		assert_eq(bool(result["ok"]), mode == 0)
+		if mode > 0:
+			assert_eq(result["reason"], &"items_cant_be_used_here")
+			assert_eq(player.hp, 1)

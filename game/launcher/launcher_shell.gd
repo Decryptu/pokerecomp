@@ -259,10 +259,17 @@ func select(id: StringName) -> void:
 		if _focus.preferred != null and not Gen2InputDevice.is_pointer(
 			Gen2InputRuntime.instance().device()
 		):
-			_focus.preferred.grab_focus.call_deferred()
+			_focus_page_landing.call_deferred()
 		_focus.refresh.call_deferred()
 	_refresh_hints()
 	page_selected.emit(id)
+
+
+func _focus_page_landing() -> void:
+	var target: Control = _page_landing()
+	if target != null and target.is_visible_in_tree() \
+		and target.get_focus_mode_with_override() == Control.FOCUS_ALL:
+		target.grab_focus()
 
 
 ## The page's own hints, plus the way back every page but the first carries.

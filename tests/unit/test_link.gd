@@ -320,7 +320,7 @@ func test_a_link_battle_request_builds_the_peers_party() -> void:
 	)
 	assert_true(bool(prepared.get("ok", false)), String(prepared.get("reason", "")))
 	assert_eq((prepared["enemy_party"] as Gen2Party).size(), 1)
-	assert_eq(int(prepared["trainer_class"]), 0)
+	assert_eq(int(prepared["trainer_class"]), 12, "Link Battle uses CAL for the trainer picture")
 
 
 func _world() -> Gen2WorldAPI:

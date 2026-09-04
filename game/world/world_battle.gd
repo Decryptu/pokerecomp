@@ -4,6 +4,8 @@ extends RefCounted
 ## Scene-free preparation of overworld battle requests. The battle screen owns
 ## presentation and input; this boundary builds the existing battle model.
 
+const LINK_TRAINER_CLASS: int = 12
+
 const OUTCOME_WON: StringName = &"won"
 const OUTCOME_LOST: StringName = &"lost"
 const OUTCOME_CAUGHT: StringName = &"caught"
@@ -35,7 +37,7 @@ static func prepare(
 	battle_rules: Gen2Rules = null,
 	player_id: int = -1,
 ) -> Dictionary:
-	if data == null or player_party == null or player_party.is_wiped():
+	if data == null or player_party == null:
 		return _failure(&"missing_player_party")
 
 	var raw_values: Variant = request.get("values", request)
@@ -43,6 +45,11 @@ static func prepare(
 		return _failure(&"invalid_battle_request")
 	var values: Dictionary = (raw_values as Dictionary).duplicate(true)
 	var kind: StringName = StringName(values.get("kind", &""))
+	if kind == &"battle_tower":
+		for member: Gen2BattleMon in player_party.mons:
+			member.restore_health()
+	if player_party.is_wiped():
+		return _failure(&"missing_player_party")
 	var enemy_party: Gen2Party = null
 	var trainer_class: int = 0
 	var trainer_index: int = 0
@@ -71,21 +78,8 @@ static func prepare(
 					"trainer_class": trainer_class, "trainer_index": trainer_index,
 				})
 		&"battle_tower", &"link_battle":
-			## `ReadBTTrainerParty` copies a whole `wOTPartyMon` block out of the
-			## sampled record rather than building one from a trainer table, so
-			## the party arrives with the request and nothing is rolled here.
-			## A link battle is the same shape one caller further out:
-			## `Link_PrepPartyData_Gen2` sends whole party structs and the other
-			## Game Boy's arrive the same way, with no trainer class behind them.
-			trainer_class = int(values.get("trainer_class", 0))
-			var members: Array = []
-			for raw_mon: Variant in values.get("enemy_party", []) as Array:
-				var saved: Gen2SaveMon = Gen2SaveMon.from_dict(raw_mon)
-				var member: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(data, saved)
-				if member == null:
-					return _failure(&"invalid_battle_tower_mon", {"mon": raw_mon})
-				members.append(member)
-			enemy_party = Gen2Party.create(members)
+			trainer_class = int(values.get("trainer_class", LINK_TRAINER_CLASS if kind == &"link_battle" else 0))
+			enemy_party = _recorded_party(data, values, kind == &"battle_tower")
 		_:
 			return _failure(&"unsupported_battle_kind", {"kind": kind})
 
@@ -120,8 +114,24 @@ static func prepare(
 		"enemy_party": enemy_party,
 		"trainer_class": trainer_class,
 		"trainer_index": trainer_index,
-		"trainer_battle": kind == &"trainer",
+		"trainer_battle": battle.is_trainer_battle,
 	}
+
+
+static func _recorded_party(data: GameData, values: Dictionary, tower: bool) -> Gen2Party:
+	var members: Array = []
+	for raw_mon: Variant in values.get("enemy_party", []) as Array:
+		if not raw_mon is Dictionary:
+			return null
+		var saved: Gen2SaveMon = Gen2SaveMon.from_dict(raw_mon)
+		var member: Gen2BattleMon = Gen2SaveBattleAdapter.to_battle_mon(data, saved)
+		if member == null:
+			return null
+		if tower and raw_mon.has("battle_stats"):
+			member.stats = (raw_mon["battle_stats"] as Dictionary).duplicate()
+			member.hp = clampi(saved.hp, 0, member.max_hp())
+		members.append(member)
+	return Gen2Party.create(members)
 
 
 ## `LoadEnemyMon` for a wild, on the run's own generator.

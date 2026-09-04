@@ -636,6 +636,12 @@ func heal(amount: int) -> int:
 	return healed
 
 
+func restore_health() -> void:
+	hp = max_hp()
+	status = Gen2Status.NONE
+	restore_pp()
+
+
 ## PP for a move slot, or zero for a slot that holds nothing.
 func pp_left(slot: int) -> int:
 	return int(pp[slot]) if slot >= 0 and slot < pp.size() else 0

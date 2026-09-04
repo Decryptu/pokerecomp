@@ -259,12 +259,8 @@ static func _values_are_unique(values: Array, eggs: Array) -> bool:
 
 
 ## `LoadOpponentTrainerAndPokemon`: a trainer this streak has not sampled, and
-## three Pokemon of the chosen level group that share no species or held item with
-## each other or with either of the last two teams. The sampled trainer is written
-## into `sBTTrainers[beaten]` and the two previous-team lists shift, so calling
-## this twice in a row gives two different opponents the way the cartridge's own
-## streak does. Answers { trainer, name, class, mons }, or an empty Dictionary
-## when the cartridge has no tower.
+## three Pokemon sharing no species or item within the team. Species from the
+## last two teams are excluded too. Each mon carries its stored battle stats.
 func load_opponent(data: GameData, random: RandomNumberGenerator) -> Dictionary:
 	if data == null or not data.has_battle_tower():
 		return {}
@@ -277,8 +273,8 @@ func load_opponent(data: GameData, random: RandomNumberGenerator) -> Dictionary:
 	var record: Dictionary = rows[trainer % rows.size()] as Dictionary
 	var mons: Array = _sample_mons(data, random)
 	var sampled: Array = []
-	for mon: Gen2SaveMon in mons:
-		sampled.append(mon.species)
+	for mon: Dictionary in mons:
+		sampled.append(int(mon["species"]))
 	earlier_mons = previous_mons.duplicate()
 	previous_mons = sampled
 	return {
@@ -322,44 +318,49 @@ func _sample_mons(data: GameData, random: RandomNumberGenerator) -> Array:
 	var out: Array = []
 	var group: int = clampi(chosen_group, 1, LEVEL_GROUPS) - 1
 	for _slot: int in PARTY_LENGTH:
-		var chosen: Gen2SaveMon = null
+		var chosen: Dictionary = {}
 		for _attempt: int in RESAMPLE_LIMIT:
 			var roll: int = random.randi() & 0x1F
 			if roll >= NUM_UNIQUE_MON:
 				continue
-			var candidate: Gen2SaveMon = _read_mon(data, group, roll)
-			if candidate == null or not _mon_is_free(candidate, out):
+			var candidate: Dictionary = mon_record(data, group, roll)
+			if candidate.is_empty() or not _mon_is_free(candidate, out):
 				continue
 			chosen = candidate
 			break
-		if chosen == null:
+		if chosen.is_empty():
 			chosen = _first_free_mon(data, group, out)
-		if chosen != null:
+		if not chosen.is_empty():
 			out.append(chosen)
 	return out
 
 
-func _mon_is_free(candidate: Gen2SaveMon, team: Array) -> bool:
-	for mon: Gen2SaveMon in team:
+func _mon_is_free(candidate: Dictionary, team: Array) -> bool:
+	for mon: Dictionary in team:
 		if mon.species == candidate.species or mon.item == candidate.item:
 			return false
 	return not previous_mons.has(candidate.species) \
 		and not earlier_mons.has(candidate.species)
 
 
-func _first_free_mon(data: GameData, group: int, team: Array) -> Gen2SaveMon:
+func _first_free_mon(data: GameData, group: int, team: Array) -> Dictionary:
 	for index: int in NUM_UNIQUE_MON:
-		var candidate: Gen2SaveMon = _read_mon(data, group, index)
-		if candidate != null and _mon_is_free(candidate, team):
+		var candidate: Dictionary = mon_record(data, group, index)
+		if not candidate.is_empty() and _mon_is_free(candidate, team):
 			return candidate
-	return null
+	return {}
 
 
-## One `BattleTowerMons` row, which is the nicknamed-mon struct
-## [method Gen2SramAdapter.read_nicknamed_mon] reads wherever a ROM table stores
-## a whole Pokemon.
-static func _read_mon(data: GameData, group: int, index: int) -> Gen2SaveMon:
-	return Gen2SramAdapter.read_nicknamed_mon(data.battle_tower_mon(group, index), 0)
+## `InitEnemyMon` copies the six stored stats; `ValidateBTParty` is unreferenced.
+static func mon_record(data: GameData, group: int, index: int) -> Dictionary:
+	var raw: PackedByteArray = data.battle_tower_mon(group, index)
+	var saved: Gen2SaveMon = Gen2SramAdapter.read_nicknamed_mon(raw, 0)
+	if saved == null:
+		return {}
+	saved.nickname = String(data.species(saved.species).get("name", ""))
+	var record: Dictionary = saved.to_dict()
+	record["battle_stats"] = Gen2SramAdapter.read_party_stats(raw, 0)
+	return record
 
 
 ## `BattleTowerText`: a male class draws from 25 lines and a female from 15, and
@@ -413,7 +414,7 @@ static func class_sprite(data: GameData, trainer_class: int) -> int:
 	return int(sprites[index])
 
 
-## `BattleTower_RandomlyChooseReward`: one of the six stat boosters, LUCKY_PUNCH
+## `BattleTower_RandomlyChooseReward`: one of the five stat boosters, LUCKY_PUNCH
 ## rerolled because it sits inside the run without being a reward. Stored rather
 ## than handed over, so the item the player gets after seven wins was decided
 ## before the first.

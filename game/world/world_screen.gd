@@ -5401,7 +5401,9 @@ func _finish_battle_exit(result: Dictionary, fought_save: Gen2SaveData) -> void:
 	_reap_nuzlocke_faints(fought_save, Gen2Nuzlocke.CAUSE_BATTLE)
 	## The encounter this fight claimed is over, whatever it came to.
 	_world.nuzlocke_area_open = -1
-	if StringName(result.get("outcome", &"")) == Gen2WorldBattleAdapter.OUTCOME_WON:
+	if StringName(result.get("outcome", &"")) == Gen2WorldBattleAdapter.OUTCOME_WON \
+		and StringName((result.get("request", {}) as Dictionary).get("kind", &"")) \
+			not in [&"battle_tower", &"link_battle"]:
 		Gen2WorldPartyHost.give_pokerus_and_convert_berries(
 			_data, fought_save, _world, _encounter_random
 		)

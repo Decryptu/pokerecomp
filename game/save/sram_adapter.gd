@@ -397,6 +397,16 @@ static func read_party_mon(raw: PackedByteArray, start: int) -> Gen2SaveMon:
 	return mon
 
 
+static func read_party_stats(raw: PackedByteArray, start: int) -> Dictionary:
+	if start < 0 or start + PARTYMON_SIZE > raw.size():
+		return {}
+	var stats: Dictionary = {}
+	var keys: Array[String] = ["hp", "attack", "defense", "speed", "sp_attack", "sp_defense"]
+	for index: int in keys.size():
+		stats[keys[index]] = _read_u16_be(raw, start + 36 + index * 2)
+	return stats
+
+
 ## `NICKNAMED_MON_STRUCT_LENGTH`: the same 48 bytes with the nickname behind
 ## them. That is how a ROM table stores a whole Pokemon no save file ever wrote,
 ## which is `BattleTowerMons`' rows and `OddEggs`' fourteen.

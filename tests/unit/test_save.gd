@@ -1020,3 +1020,34 @@ func test_a_mystery_gift_block_round_trips_through_the_file() -> void:
 	var restored: Gen2SaveData = Gen2SaveData.from_dict(save.to_dict())
 	assert_not_null(restored)
 	assert_eq(restored.mystery_gift, save.mystery_gift)
+
+
+func test_tower_exit_restores_the_original_party_and_heals_it() -> void:
+	for tower: bool in [false, true]:
+		var source: Gen2SaveData = _save()
+		var original: Gen2SaveMon = source.party[0]
+		original.nickname = "SPARK"
+		original.item = Fixture.POTION
+		var party: Gen2Party = Gen2SaveBattleAdapter.to_battle_party(_data, source)
+		var battle: Gen2Battle = Gen2Battle.create_parties(
+			_data, party, Gen2Party.of(Gen2BattleMon.create(_data, Fixture.PIKACHU, 20, [Fixture.TACKLE])),
+			RandomNumberGenerator.new(), true
+		)
+		battle.in_battle_tower = tower
+		var fought: Gen2BattleMon = party.at(0)
+		fought.hp = 0
+		fought.item = 0
+		fought.happiness = 1
+		fought.replace_move(0, Fixture.THUNDERBOLT)
+		var written: Gen2SaveData = Gen2SaveBattleAdapter.from_world_battle(_data, battle, source)
+		assert_not_null(written)
+		var restored: Gen2SaveMon = written.party[0]
+		assert_eq(restored.hp, fought.max_hp() if tower else 0)
+		assert_eq(restored.item, original.item if tower else 0)
+		assert_eq(restored.happiness, original.happiness if tower else 1)
+		assert_eq(restored.moves[0], original.moves[0] if tower else Fixture.THUNDERBOLT)
+		assert_eq(restored.nickname, "SPARK")
+		if tower:
+			assert_eq(restored.status, Gen2Status.NONE)
+			assert_eq(restored.pp[0], int(_data.move(original.moves[0])["pp"]))
+		assert_eq(source.party[0], original, "the candidate does not mutate the live save")

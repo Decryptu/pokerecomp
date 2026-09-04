@@ -166,7 +166,7 @@ func _toward(
 	if make is not Callable:
 		return null
 	var target := (make as Callable).call(current) as Control
-	return target if target != null and target != current and target.is_visible_in_tree() \
+	return target if target != null and target != current and target.is_visible_in_tree() and _focusable(target) \
 		else null
 
 
@@ -291,14 +291,14 @@ static func _takes_focus(control: Control) -> bool:
 
 
 static func _focusable(control: Control) -> bool:
-	return control.focus_mode == Control.FOCUS_ALL and not _is_disabled(control)
+	return control.get_focus_mode_with_override() == Control.FOCUS_ALL and not _is_disabled(control)
 
 
 static func _first_focusable(root: Node, skip_panes: bool) -> Control:
 	for child: Node in root.get_children():
 		var control := child as Control
 		if control != null:
-			if not control.visible or control.is_in_group(ASIDE_GROUP):
+			if not control.is_visible_in_tree() or control.is_in_group(ASIDE_GROUP):
 				continue
 			if _focusable(control) and not (skip_panes and _scroll_with_controls(control)):
 				return control

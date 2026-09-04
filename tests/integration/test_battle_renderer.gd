@@ -1090,3 +1090,21 @@ func test_a_press_reaches_nothing_while_a_pic_slides_off_its_square() -> void:
 		_battle_screen._bg_map, Gen2BattleScreenMap.seeded(),
 		"both pictures stand on their own squares and nowhere else"
 	)
+
+
+func test_fainting_hides_each_panel_until_its_replacement_enters() -> void:
+	await _open_battle()
+	_battle_screen.show_matchup(16, 155, 7, 9)
+	_settle_intro()
+	for side: int in [Gen2Battle.PLAYER, Gen2Battle.ENEMY]:
+		var key: String = "player_hud_visible" if side == Gen2Battle.PLAYER else "enemy_hud_visible"
+		_battle_screen._begin_faint(side)
+		for frame: int in 14:
+			assert_true(bool(_battle_screen._renderer._view[key]))
+			_battle_screen.advance_faint()
+		assert_false(bool(_battle_screen._renderer._view[key]))
+		_battle_screen._apply_event_state({
+			"type": Gen2Battle.SENT_OUT, "side": side, "species": 16,
+			"level": 7, "hp": 30, "max_hp": 30,
+		})
+		assert_true(bool(_battle_screen._renderer._view[key]))

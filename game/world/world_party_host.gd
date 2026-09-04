@@ -530,11 +530,11 @@ static func heal_party_rows(data: GameData, save: Gen2SaveData) -> int:
 		var max_hp: int = battle_mon.max_hp()
 		if mon.hp != max_hp or mon.status != Gen2Status.NONE:
 			healed += 1
-		mon.hp = max_hp
-		mon.status = Gen2Status.NONE
+		battle_mon.restore_health()
+		mon.hp = battle_mon.hp
+		mon.status = battle_mon.status
 		for slot: int in Gen2SaveMon.MAX_MOVES:
-			var move_number: int = int(mon.moves[slot])
-			mon.pp[slot] = int(data.move(move_number).get("pp", 0)) if move_number > 0 else 0
+			mon.pp[slot] = battle_mon.pp_left(slot)
 	return healed
 
 
