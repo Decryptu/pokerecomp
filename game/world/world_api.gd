@@ -469,6 +469,7 @@ func _init(
 	world_rules: Gen2Rules = null,
 ) -> void:
 	data = game_data
+	_gen1 = data != null and data.generation == RomRegistry.GEN1
 	# Opening a world is the run starting, so its rules become the installed ones:
 	# the statics that read them ([Gen2Experience], [Gen2Damage], [Gen2BattleAI])
 	# take no world object, and one installed set is what keeps them from
@@ -1265,7 +1266,7 @@ func facing_direction() -> Vector2i:
 func object_facing_cell() -> Vector2i:
 	var direction: Vector2i = _direction_for_facing(player_facing)
 	var faced: Vector2i = player_cell + direction
-	if Gen2WorldCollision.is_counter(collision_code_at(faced)):
+	if Gen2WorldCollision.is_counter(gen2_code_at(faced)):
 		return faced + direction
 	return faced
 
@@ -1431,8 +1432,7 @@ func surf_request(species: int = 0) -> Dictionary:
 	var direction: Vector2i = _direction_for_facing(player_facing)
 	# CheckDirection: the standing cell's own permissions must not wall off the
 	# way the player faces.
-	var face: int = Gen2WorldCollision.face_mask_for_direction(direction)
-	if face != 0 and (tile_permissions_at(player_cell) & face) != 0:
+	if _edge_step_blocked(player_cell, collision_code_at(target), direction):
 		return _surf_failure(&"cannot_surf")
 	# CheckFacingObject is Crystal only. pokegold's .TrySurf omits it and carries
 	# the "You can Surf on top of NPCs" bug comment.
@@ -2198,7 +2198,7 @@ func can_encounter_wild_mon() -> bool:
 func can_encounter_wild_mon_at(cell: Vector2i) -> bool:
 	if state.wild_encounters_off():
 		return false
-	var code: int = collision_code_at(cell)
+	var code: int = gen2_code_at(cell)
 	var environment: int = current_map.environment if current_map != null else 0
 	if environment != ENVIRONMENT_CAVE and environment != ENVIRONMENT_DUNGEON \
 		and not Gen2WorldCollision.gates_encounter(code):
@@ -2406,7 +2406,7 @@ func _bug_contest_request(
 ) -> Dictionary:
 	var contest: Dictionary = Gen2WorldBugContest.resolve(
 		data.bug_contest_mons(),
-		Gen2WorldCollision.is_long_grass(collision_code_at(player_cell)),
+		Gen2WorldCollision.is_long_grass(gen2_code_at(player_cell)),
 		random if random != null else RandomNumberGenerator.new(),
 		force_encounter,
 		{
@@ -2974,7 +2974,7 @@ func take_grass_rustles() -> Array:
 	var out: Array = []
 	if _player_step_began:
 		_player_step_began = false
-		if Gen2WorldCollision.is_grass(collision_code_at(player_cell)):
+		if Gen2WorldCollision.is_grass(gen2_code_at(player_cell)):
 			out.append({
 				"object_index": -1,
 				"cell": player_cell,
@@ -2986,7 +2986,7 @@ func take_grass_rustles() -> Array:
 		object.step_began = false
 		if not object.active or object.deleted:
 			continue
-		if not Gen2WorldCollision.is_grass(collision_code_at(object.cell)):
+		if not Gen2WorldCollision.is_grass(gen2_code_at(object.cell)):
 			continue
 		out.append({
 			"object_index": object.index,
@@ -3283,7 +3283,7 @@ func warp_index_at(cell: Vector2i) -> int:
 func stone_queue_script(boulder: Gen2WorldObject) -> Dictionary:
 	if boulder == null or not boulder.is_strength_boulder() or boulder.is_stepping():
 		return {}
-	if not Gen2WorldCollision.is_pit_tile(collision_code_at(boulder.cell)):
+	if not Gen2WorldCollision.is_pit_tile(gen2_code_at(boulder.cell)):
 		return {}
 	var warp: int = warp_index_at(boulder.cell)
 	if warp <= 0:
@@ -3614,6 +3614,14 @@ static func _overridden_block_at(
 	return map.block_at(block_x, block_y)
 
 
+## Whether this world is a Generation 1 one, which decides every question below:
+## its collision grid holds the tile a cell draws rather than a permission byte.
+var _gen1: bool = false
+## `wLastMap`, the outdoor map a [constant Gen1Layout.WARP_TO_LAST_MAP] warp
+## comes back out to. Generation 2 has no such warp and never writes it.
+var _gen1_last_map: int = -1
+
+
 ## The raw cartridge permission byte at a walk cell.
 ##
 ## The imported grid already holds the code the tileset gave each cell, so it is
@@ -3630,6 +3638,11 @@ func collision_code_at(cell: Vector2i) -> int:
 	var block: int = block_at(block_x, block_y)
 	if block == current_map.block_at(block_x, block_y):
 		return current_map.collision_at(cell.x, cell.y)
+	if _gen1:
+		return current_tileset.tile_index(block, Gen1Layout.cell_tile_index(
+			cell.x & (Gen2Layout.MAP_BLOCK_CELL_WIDTH - 1),
+			cell.y & (Gen2Layout.MAP_BLOCK_CELL_WIDTH - 1),
+		))
 	return current_tileset.collision_index(
 		block,
 		cell.x & (Gen2Layout.MAP_BLOCK_CELL_WIDTH - 1),
@@ -3637,8 +3650,47 @@ func collision_code_at(cell: Vector2i) -> int:
 	)
 
 
+## `wLastMap`, which a Generation 1 indoor map's four colours are chosen by when
+## `SetPal_Overworld` names no branch of its own. -1 until a warp writes it.
+func gen1_last_map() -> int:
+	return _gen1_last_map
+
+
+## A Generation 2 collision code at [param cell], or -1 on a Generation 1 map,
+## whose grid holds the tile a cell draws instead. Grass, ice, pits, counters,
+## warp carpets and the forced tiles are all families of that code, and -1
+## answers no to every one of them.
+func gen2_code_at(cell: Vector2i) -> int:
+	return -1 if _gen1 else collision_code_at(cell)
+
+
 func collision_permission_at(cell: Vector2i) -> int:
-	return Gen2WorldCollision.permission_for(collision_code_at(cell))
+	return permission_for_code(collision_code_at(cell))
+
+
+## `CollisionPermissionTable`, or Generation 1's `CheckTilePassable` against the
+## tileset of the map the code was read from, which defaults to the loaded one.
+func permission_for_code(code: int, tileset: Gen2WorldTileset = null) -> int:
+	if not _gen1:
+		return Gen2WorldCollision.permission_for(code)
+	return Gen2WorldCollision.gen1_permission(
+		tileset if tileset != null else current_tileset, code
+	)
+
+
+## The leave-side test one step owes: `GetMovementPermissions`' face mask in
+## Generation 2, and `CheckForTilePairCollisions` in Generation 1, which reads
+## the faced tile as well as the one stood on.
+func _edge_step_blocked(from: Vector2i, to_code: int, direction: Vector2i) -> bool:
+	var face: int = Gen2WorldCollision.face_mask_for_direction(direction)
+	if face == 0:
+		return false
+	if not _gen1:
+		return (tile_permissions_at(from) & face) != 0
+	return Gen2WorldCollision.gen1_pair_blocked(
+		current_map.tileset, collision_code_at(from), to_code,
+		movement_mode == MOVEMENT_SURF
+	)
 
 
 ## home/map.asm's GetMovementPermissions for a player standing at [param cell]:
@@ -3944,10 +3996,9 @@ func _surf_prompt_applies(cell: Vector2i) -> bool:
 		return false
 	if collision_permission_at(cell) != Gen2WorldCollision.WATER_TILE:
 		return false
-	var face: int = Gen2WorldCollision.face_mask_for_direction(
-		_direction_for_facing(player_facing)
+	return not _edge_step_blocked(
+		player_cell, collision_code_at(cell), _direction_for_facing(player_facing)
 	)
-	return face == 0 or (tile_permissions_at(player_cell) & face) == 0
 
 
 ## engine/events/std_collision.asm's CheckFacingTileForStdScript. Keyed by the
@@ -3958,7 +4009,7 @@ func _surf_prompt_applies(cell: Vector2i) -> bool:
 func _tile_collision_script_request(cell: Vector2i) -> Dictionary:
 	if current_map == null or data == null:
 		return {}
-	var collision: int = collision_code_at(cell)
+	var collision: int = gen2_code_at(cell)
 	var index: int = Gen2WorldCollision.tile_collision_std_index(
 		collision, Gen2WorldState.is_crystal_profile(data)
 	)
@@ -5170,9 +5221,12 @@ func _apply_script_warp(request: Dictionary) -> Dictionary:
 ## which clears carry on the four warp carpets: landing on one of those warps
 ## nothing, and only [method edge_warp_ready] takes it.
 func warp_pending(cell: Vector2i = player_cell) -> bool:
+	if warp_at(cell).is_empty():
+		return false
+	if _gen1:
+		return _warp_tile_allows(cell)
 	var code: int = collision_code_at(cell)
-	return not warp_at(cell).is_empty() \
-		and Gen2WorldCollision.is_warp_tile(code) \
+	return Gen2WorldCollision.is_warp_tile(code) \
 		and not Gen2WorldCollision.is_directional_warp(code)
 
 
@@ -5181,7 +5235,7 @@ func warp_pending(cell: Vector2i = player_cell) -> bool:
 ## warp. The press takes the warp instead of bumping, which is why an interior
 ## door is stood on first and walked into afterwards.
 func edge_warp_ready(direction: Vector2i) -> bool:
-	var code: int = collision_code_at(player_cell)
+	var code: int = gen2_code_at(player_cell)
 	if Gen2WorldCollision.directional_warp_direction(code) != direction:
 		return false
 	## `ld a, [wPlayerDirection] / rrca / rrca` against wWalkingDirection: the
@@ -5191,6 +5245,55 @@ func edge_warp_ready(direction: Vector2i) -> bool:
 	return not warp_at(player_cell).is_empty()
 
 
+## `LoadTileBlockMap` fills the three blocks past every edge with the map's own
+## border block, so `_GetTileAndCoordsInFrontOfPlayer` reads that rather than
+## nothing at the edge. -1 stays -1 where the border block is the $FF naming none.
+func _gen1_tile_drawn_at(cell: Vector2i) -> int:
+	var code: int = collision_code_at(cell)
+	if code >= 0 or current_map == null or current_tileset == null \
+		or current_map.border_block >= current_tileset.block_count:
+		return code
+	return current_tileset.tile_index(current_map.border_block, Gen1Layout.cell_tile_index(
+		posmod(cell.x, Gen2Layout.MAP_BLOCK_CELL_WIDTH),
+		posmod(cell.y, Gen2Layout.MAP_BLOCK_CELL_WIDTH)
+	))
+
+
+## Where a warp puts the player: the destination's own cell, unless
+## `LoadTilesetHeader`'s gate skips `LoadDestinationWarpPosition` altogether
+## ([constant Gen2WorldCollision.GEN1_DUNGEON_TILESETS]).
+func _warp_landing_cell(
+	target_map: Gen2WorldMap, target_warp: Dictionary, from: Vector2i
+) -> Vector2i:
+	if _gen1 and target_map.tileset == current_map.tileset \
+		and not Gen2WorldCollision.gen1_is_dungeon_tileset(target_map.tileset):
+		return from
+	return Vector2i(int(target_warp["x"]), int(target_warp["y"]))
+
+
+## `CheckWarpCollision` in Generation 2, and `CheckWarpsNoCollision`'s own pair
+## of tests in Generation 1: a warp fires at once off a warp or a door tile, and
+## otherwise wants a carpet or the edge of the map in front of the player, who
+## is still holding the direction that walked them onto it.
+func _warp_tile_allows(cell: Vector2i) -> bool:
+	var standing: int = collision_code_at(cell)
+	if not _gen1:
+		return Gen2WorldCollision.is_warp_tile(standing)
+	var tileset: int = current_map.tileset
+	if Gen2WorldCollision.gen1_is_warp_tile(tileset, standing) \
+		or Gen2WorldCollision.gen1_is_door_tile(tileset, standing):
+		return true
+	var direction: Vector2i = _direction_for_facing(player_facing)
+	var ahead: Vector2i = cell + direction
+	if current_map.number == Gen1Layout.MAP_SS_ANNE_BOW:
+		return _gen1_tile_drawn_at(ahead) == Gen1Layout.SS_ANNE_BOW_WARP_TILE
+	## `IsPlayerFacingEdgeOfMap` compares the player's own coordinate against the
+	## map, where the carpet test reads the drawn tile and so sees the border.
+	if not Gen1Layout.warp_wants_carpet(current_map.number, tileset):
+		return collision_code_at(ahead) < 0
+	return Gen2WorldCollision.gen1_is_warp_carpet(direction, _gen1_tile_drawn_at(ahead))
+
+
 func try_warp(cell: Vector2i = player_cell) -> Dictionary:
 	var source_warp: Dictionary = warp_at(cell)
 	if source_warp.is_empty():
@@ -5198,10 +5301,14 @@ func try_warp(cell: Vector2i = player_cell) -> Dictionary:
 	## CheckWarpCollision gates every warp on the tile's own code, so a
 	## warp_event sitting on ordinary floor never fires. Burned Tower B1F's
 	## (10,8) is one, and the walk to the beasts crosses it.
-	if not Gen2WorldCollision.is_warp_tile(collision_code_at(cell)):
+	if not _warp_tile_allows(cell):
 		return {}
 	var target_group: int = int(source_warp.get("map_group", -1))
 	var target_number: int = int(source_warp.get("map_number", -1))
+	## `.goBackOutside`: a Generation 1 indoor warp names `LAST_MAP` rather than a
+	## map of its own, and comes back out to the town or route it was entered from.
+	if _gen1 and target_number == Gen1Layout.WARP_TO_LAST_MAP:
+		target_number = _gen1_last_map
 	var target_map: Gen2WorldMap = data.world_map(target_group, target_number) if data != null else null
 	if target_map == null:
 		return {
@@ -5216,8 +5323,12 @@ func try_warp(cell: Vector2i = player_cell) -> Dictionary:
 	## warp and no map of its own, and the three bytes at `wBackupWarpNumber` are
 	## read contiguously in its place. The map named beside such a byte is a
 	## placeholder (POKECENTER_2F names itself), so it is replaced too.
-	var destination_index: int = int(source_warp.get("destination", 0)) - 1
-	if int(source_warp.get("destination", 0)) == BACKUP_WARP_DESTINATION:
+	## `warp_event` writes `\4 - 1`, so Generation 1's stored byte already indexes
+	## the destination map's warps where Generation 2's counts from one.
+	var destination_index: int = int(source_warp.get("destination", 0))
+	if not _gen1:
+		destination_index -= 1
+	if not _gen1 and int(source_warp.get("destination", 0)) == BACKUP_WARP_DESTINATION:
 		if backup_warp.is_empty():
 			return {
 				"ok": false,
@@ -5265,7 +5376,7 @@ func try_warp(cell: Vector2i = player_cell) -> Dictionary:
 	## itself a -1 warp records the warp and the map the player came from, and
 	## that is what walking back out of it spends. Behind the read above, as in
 	## the source, so a -1 warp taken back out of a -1 warp reads the old value.
-	if int(target_warp.get("destination", 0)) == BACKUP_WARP_DESTINATION:
+	if not _gen1 and int(target_warp.get("destination", 0)) == BACKUP_WARP_DESTINATION:
 		var walked: int = warp_index_at(cell)
 		if walked > 0:
 			backup_warp = {
@@ -5275,9 +5386,8 @@ func try_warp(cell: Vector2i = player_cell) -> Dictionary:
 	# Rope comes back out of. `WarpToNewMapScript`, the pitfall and the magnet
 	# train name DOOR, FALL and TRAIN, which are one setup-script body.
 	_apply_map(
-		target_map, target_tileset,
-		Vector2i(int(target_warp["x"]), int(target_warp["y"])), false,
-		warp_index_at(cell), MAP_ENTRY_DOOR
+		target_map, target_tileset, _warp_landing_cell(target_map, target_warp, cell),
+		false, warp_index_at(cell), MAP_ENTRY_DOOR
 	)
 	return {
 		"ok": true,
@@ -5435,11 +5545,11 @@ func can_walk_to(cell: Vector2i, direction: Vector2i = Vector2i.ZERO) -> bool:
 func _connection_step_allows(
 	target_map: Gen2WorldMap, target_cell: Vector2i, direction: Vector2i
 ) -> bool:
-	var face: int = Gen2WorldCollision.face_mask_for_direction(direction)
-	if face != 0 and (tile_permissions_at(player_cell) & face) != 0:
+	var target_code: int = target_map.collision_at(target_cell.x, target_cell.y)
+	if _edge_step_blocked(player_cell, target_code, direction):
 		return false
-	var permission: int = Gen2WorldCollision.permission_for(
-		target_map.collision_at(target_cell.x, target_cell.y)
+	var permission: int = permission_for_code(
+		target_code, data.world_tileset(target_map.tileset) if data != null else null
 	)
 	if movement_mode == MOVEMENT_SURF:
 		if collision_permission_at(player_cell) == Gen2WorldCollision.WATER_TILE:
@@ -5455,10 +5565,9 @@ func _step_permission_allows(cell: Vector2i, direction: Vector2i) -> bool:
 	if current_map == null or cell.x < 0 or cell.y < 0 \
 		or cell.x >= current_map.collision_width or cell.y >= current_map.collision_height:
 		return false
-	if direction != Vector2i.ZERO:
-		var face: int = Gen2WorldCollision.face_mask_for_direction(direction)
-		if face != 0 and (tile_permissions_at(player_cell) & face) != 0:
-			return false
+	if direction != Vector2i.ZERO \
+		and _edge_step_blocked(player_cell, collision_code_at(cell), direction):
+		return false
 	var permission: int = collision_permission_at(cell)
 	if movement_mode == MOVEMENT_SURF:
 		var current_permission: int = collision_permission_at(player_cell)
@@ -5490,9 +5599,11 @@ func can_object_walk_to(
 	var wanted: int = Gen2WorldCollision.WATER_TILE if moving.is_swimming() \
 		else Gen2WorldCollision.LAND_TILE
 	for checked: Vector2i in checked_cells:
-		if Gen2WorldCollision.permission_for(collision_code_at(checked)) != wanted:
+		if permission_for_code(collision_code_at(checked)) != wanted:
 			return false
-	if direction != Vector2i.ZERO and Gen2WorldCollision.side_wall_step_blocked(
+	# `CheckForTilePairCollisions` is the player's own routine, so a Generation 1
+	# map object has no leave-side rule at all.
+	if not _gen1 and direction != Vector2i.ZERO and Gen2WorldCollision.side_wall_step_blocked(
 		collision_code_at(moving.cell), collision_code_at(cell), direction
 	):
 		return false
@@ -6070,7 +6181,7 @@ func move_result(direction: Vector2i) -> Dictionary:
 	## branch sits in front of `.BikeCheck`.
 	var kind_of_step: StringName = STEP_KIND_WALK
 	var passes: int = _step_frames_for_movement()
-	if Gen2WorldCollision.is_ice(collision_code_at(from_cell)):
+	if Gen2WorldCollision.is_ice(gen2_code_at(from_cell)):
 		kind_of_step = &"fast_slide_step"
 		passes = STEP_PASSES_FAST
 	player_cell = destination
@@ -6097,7 +6208,7 @@ func _refused_move(direction: Vector2i, reason: StringName) -> Dictionary:
 	_stand_in_place()
 	var into_carpet: bool = movement_mode != MOVEMENT_SURF \
 		and Gen2WorldCollision.directional_warp_direction(
-			collision_code_at(player_cell)
+			gen2_code_at(player_cell)
 		) == direction
 	return {"ok": false, "kind": &"move", "reason": reason, "bump": not into_carpet}
 
@@ -6128,7 +6239,7 @@ func note_standing_still() -> void:
 func standing_on_ice() -> bool:
 	if _player_turning_direction == 0 or current_map == null:
 		return false
-	return Gen2WorldCollision.is_ice(collision_code_at(player_cell))
+	return Gen2WorldCollision.is_ice(gen2_code_at(player_cell))
 
 
 ## `.CheckForced`, then `.GetAction`. `and PAD_BUTTONS` drops the whole d-pad
@@ -6145,7 +6256,7 @@ func effective_input_direction(held: Vector2i) -> Vector2i:
 func forced_movement() -> Dictionary:
 	if current_map == null:
 		return {"kind": &"none"}
-	return Gen2WorldCollision.forced_action(collision_code_at(player_cell))
+	return Gen2WorldCollision.forced_action(gen2_code_at(player_cell))
 
 
 ## Whatever the standing tile forces, with no input: the source polls .CheckTile
@@ -6229,7 +6340,7 @@ func _try_push_boulder(direction: Vector2i, destination: Vector2i) -> Dictionary
 	var boulder: Gen2WorldObject = object_at(destination)
 	if boulder == null or not boulder.is_strength_boulder() or boulder.is_stepping():
 		return {}
-	if Gen2WorldCollision.is_pit_tile(collision_code_at(boulder.cell)):
+	if Gen2WorldCollision.is_pit_tile(gen2_code_at(boulder.cell)):
 		return {}
 	var landing: Vector2i = boulder.cell + direction
 	# CanObjectMoveInDirection with the boulder's own flags: WONT_DELETE,
@@ -6285,7 +6396,7 @@ func _try_push_boulder(direction: Vector2i, destination: Vector2i) -> Dictionary
 func _try_ledge_hop(direction: Vector2i) -> Dictionary:
 	if movement_mode == MOVEMENT_SURF:
 		return {}
-	if not Gen2WorldCollision.allows_hop(collision_code_at(player_cell), direction):
+	if not _allows_hop(direction):
 		return {}
 	var landing: Vector2i = player_cell + direction * 2
 	if landing.x < 0 or landing.y < 0 \
@@ -6308,6 +6419,18 @@ func _try_ledge_hop(direction: Vector2i) -> Dictionary:
 		"to_map": from_map,
 		"to_cell": player_cell,
 	}
+
+
+## `HandleLedges` reads the faced tile as well as the one stood on, and runs in
+## front of the passability check rather than behind it. A ledge tile is never
+## passable, so the step is refused either way and the hop is the same one.
+func _allows_hop(direction: Vector2i) -> bool:
+	if not _gen1:
+		return Gen2WorldCollision.allows_hop(collision_code_at(player_cell), direction)
+	return Gen2WorldCollision.gen1_allows_hop(
+		current_map.tileset, collision_code_at(player_cell),
+		collision_code_at(player_cell + direction), direction
+	)
 
 
 ## Moves exactly one walk cell in a cardinal direction, or two when a ledge
@@ -6447,6 +6570,10 @@ func _apply_map(
 		target_map.group, target_map.number, target_map.tileset, target_cell,
 	])
 	_record_escape_points(target_map, from_warp)
+	## `WarpFound2`'s `CheckIfInOutsideMap`: leaving a town or a route records it,
+	## and that is the map a `LAST_MAP` warp comes back out to.
+	if _gen1 and current_map != null and Gen1Layout.is_outside_tileset(current_map.tileset):
+		_gen1_last_map = current_map.number
 	## `RefreshPlayerSprite` clears `wPlayerTurningDirection`, and every warp and
 	## connection reaches it, so a slide never survives a map change.
 	_stand_in_place()
@@ -6496,7 +6623,7 @@ func _apply_map(
 	# face its automatic downward exit instead of retaining the direction used on
 	# the previous map.
 	if not custom_facing and Gen2WorldCollision.faces_down_on_spawn(
-		collision_code_at(player_cell)
+		gen2_code_at(player_cell)
 	):
 		player_facing = Gen2WorldSprite.FACING_DOWN
 	_apply_map_setup_player_state()

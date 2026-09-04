@@ -201,6 +201,13 @@ const MAX_SIGN_EVENTS: int = 16
 const MAX_OBJECT_EVENTS: int = 16
 ## `warp_event`'s indoor exit: `wLastMap`, the outdoor map the player came from.
 const WARP_TO_LAST_MAP: int = 0xFF
+## `ExtraWarpCheck`'s four named maps, which take the warp-carpet test their own
+## tileset would not give them, and the two the routine answers by hand:
+## SS Anne 3F asks for the map edge instead, and the Bow has one carpet tile.
+const WARP_CARPET_MAPS: Array[int] = [0x52, 0xC7, 0xC8, 0xCA]
+const MAP_SS_ANNE_3F: int = 0x61
+const MAP_SS_ANNE_BOW: int = 0x63
+const SS_ANNE_BOW_WARP_TILE: int = 0x15
 
 ## The map ids `SetPal_Overworld` splits on; only the link rooms are Yellow's.
 const NUM_CITY_MAPS: int = 0x0B
@@ -245,9 +252,15 @@ const TILESET_BLOCKS_YELLOW: Array[int] = [
 const TILESET_LIST_END: int = 0xFF
 const WATER_TILE: int = 0x14
 
-## The two tilesets `SetPal_Overworld` tests before it looks at the map id.
+## The two tilesets `SetPal_Overworld` tests before the map id, the two
+## `CheckIfInOutsideMap` calls a town or a route, and the two beside them that
+## `ExtraWarpCheck` reads a carpet on.
 const TILESET_CEMETERY: int = 15
 const TILESET_CAVERN: int = 17
+const TILESET_OVERWORLD: int = 0
+const TILESET_PLATEAU: int = 23
+const TILESET_SHIP: int = 13
+const TILESET_SHIP_PORT: int = 14
 
 ## `WildDataPointers`, one `dw` a map id and $FFFF behind the last. A block is
 ## its rate byte alone when the rate is zero and `WILDDATA_LENGTH` otherwise,
@@ -533,6 +546,21 @@ static func pic_bank(layout: Dictionary, index: int) -> int:
 ## behind Agatha's room.
 static func map_count(id: StringName) -> int:
 	return MAP_COUNT_YELLOW if id == RomRegistry.YELLOW else MAP_COUNT_RED_BLUE
+
+
+## `CheckIfInOutsideMap`: which maps write `wLastMap` on the way out of them.
+static func is_outside_tileset(tileset: int) -> bool:
+	return tileset == TILESET_OVERWORLD or tileset == TILESET_PLATEAU
+
+
+## `ExtraWarpCheck`: whether a warp the player is not standing on the tile of
+## asks for a carpet in front of them rather than for the edge of the map.
+static func warp_wants_carpet(map_id: int, tileset: int) -> bool:
+	if map_id == MAP_SS_ANNE_3F:
+		return false
+	if WARP_CARPET_MAPS.has(map_id):
+		return true
+	return tileset in [TILESET_OVERWORLD, TILESET_SHIP, TILESET_SHIP_PORT, TILESET_PLATEAU]
 
 
 static func tileset_count(id: StringName) -> int:

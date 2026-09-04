@@ -398,3 +398,84 @@ func test_water_and_the_walkable_floor_are_not_grass() -> void:
 		)
 	assert_false(Gen2WorldCollision.is_grass(-1))
 	assert_false(Gen2WorldCollision.is_grass(0x100))
+
+
+## The Generation 1 half, against pokered revision
+## a1a22aaf84d1675bcdbaeb194592379d586d838e, whose six tables Red, Blue and
+## Yellow ship byte for byte but for the two rows named below.
+func _gen1_tileset(number: int, passable: Array, water: bool) -> Gen2WorldTileset:
+	return Gen2WorldTileset.from_cache({
+		"number": number, "block_count": 1, "tile_count": 96,
+		"passable_tiles": passable, "water": water,
+	})
+
+
+func test_gen1_permission_reads_the_tilesets_own_passable_list() -> void:
+	var overworld: Gen2WorldTileset = _gen1_tileset(0, [0x00, 0x1B], true)
+	assert_eq(Gen2WorldCollision.gen1_permission(overworld, 0x00), Gen2WorldCollision.LAND_TILE)
+	assert_eq(Gen2WorldCollision.gen1_permission(overworld, 0x0A), Gen2WorldCollision.WALL_TILE)
+	assert_eq(Gen2WorldCollision.gen1_permission(overworld, -1), Gen2WorldCollision.WALL_TILE)
+	assert_eq(Gen2WorldCollision.gen1_permission(null, 0x00), Gen2WorldCollision.WALL_TILE)
+
+
+## `IsNextTileShoreOrWater` asks `WaterTilesets` before it looks at the tile, so
+## $14 is water on a route and Red's own doormat inside a house.
+func test_gen1_water_tile_needs_a_water_tileset() -> void:
+	assert_eq(
+		Gen2WorldCollision.gen1_permission(_gen1_tileset(0, [0x00], true), 0x14),
+		Gen2WorldCollision.WATER_TILE
+	)
+	assert_eq(
+		Gen2WorldCollision.gen1_permission(_gen1_tileset(1, [0x00, 0x14], false), 0x14),
+		Gen2WorldCollision.LAND_TILE
+	)
+
+
+## `TilePairCollisionsLand` and `TilePairCollisionsWater`: a row forbids crossing
+## in either order, and only on the tileset it names.
+func test_gen1_tile_pairs_block_both_ways_on_their_own_tileset() -> void:
+	assert_true(Gen2WorldCollision.gen1_pair_blocked(3, 0x30, 0x2E, false))
+	assert_true(Gen2WorldCollision.gen1_pair_blocked(3, 0x2E, 0x30, false))
+	assert_false(Gen2WorldCollision.gen1_pair_blocked(0, 0x30, 0x2E, false))
+	assert_false(Gen2WorldCollision.gen1_pair_blocked(3, 0x30, 0x2E, true))
+	assert_true(Gen2WorldCollision.gen1_pair_blocked(3, 0x14, 0x2E, true))
+	assert_true(Gen2WorldCollision.gen1_pair_blocked(17, 0x05, 0x21, false))
+	assert_false(Gen2WorldCollision.gen1_pair_blocked(17, 0x05, 0x22, false))
+
+
+## `HandleLedges` returns before reading the table on any tileset but OVERWORLD,
+## and each row names the tile stood on as well as the ledge.
+func test_gen1_hops_are_the_ledge_table_on_the_overworld_tileset() -> void:
+	assert_true(Gen2WorldCollision.gen1_allows_hop(0, 0x2C, 0x37, Vector2i.DOWN))
+	assert_false(Gen2WorldCollision.gen1_allows_hop(0, 0x2C, 0x37, Vector2i.UP))
+	assert_false(Gen2WorldCollision.gen1_allows_hop(0, 0x2C, 0x36, Vector2i.DOWN))
+	assert_true(Gen2WorldCollision.gen1_allows_hop(0, 0x39, 0x36, Vector2i.DOWN))
+	assert_true(Gen2WorldCollision.gen1_allows_hop(0, 0x2C, 0x27, Vector2i.LEFT))
+	assert_true(Gen2WorldCollision.gen1_allows_hop(0, 0x2C, 0x1D, Vector2i.RIGHT))
+	assert_false(Gen2WorldCollision.gen1_allows_hop(3, 0x2C, 0x37, Vector2i.DOWN))
+	assert_false(Gen2WorldCollision.gen1_allows_hop(0, 0x2C, 0x37, Vector2i.ZERO))
+
+
+## `WarpTileIDPointers`, `DoorTileIDPointers` and `WarpTileListPointers`, each
+## keyed the way its own routine indexes it. INTERIOR's doors are Yellow's row;
+## `SHIP_PORT` and `CLUB` have no warp tiles at all.
+func test_gen1_warp_door_and_carpet_tables_answer_by_their_own_key() -> void:
+	assert_true(Gen2WorldCollision.gen1_is_warp_tile(0, 0x1B))
+	assert_false(Gen2WorldCollision.gen1_is_warp_tile(0, 0x1A))
+	assert_true(Gen2WorldCollision.gen1_is_warp_tile(15, 0x13))
+	assert_false(Gen2WorldCollision.gen1_is_warp_tile(14, 0x1B))
+	assert_true(Gen2WorldCollision.gen1_is_door_tile(16, 0x15))
+	assert_false(Gen2WorldCollision.gen1_is_door_tile(1, 0x1A))
+	assert_true(Gen2WorldCollision.gen1_is_warp_carpet(Vector2i.DOWN, 0x01))
+	assert_false(Gen2WorldCollision.gen1_is_warp_carpet(Vector2i.UP, 0x12))
+	assert_true(Gen2WorldCollision.gen1_is_warp_carpet(Vector2i.LEFT, 0x4B))
+	assert_true(Gen2WorldCollision.gen1_is_warp_carpet(Vector2i.RIGHT, 0x4E))
+
+
+## `DungeonTilesets`, the list `LoadTilesetHeader` walks before it compares the
+## new tileset with the one already loaded.
+func test_gen1_dungeon_tilesets_are_the_source_list() -> void:
+	for number: int in [3, 7, 10, 12, 13, 15, 17, 18, 19, 20, 22]:
+		assert_true(Gen2WorldCollision.gen1_is_dungeon_tileset(number), "tileset %d" % number)
+	for number: int in [0, 1, 2, 14, 21, 23, 24]:
+		assert_false(Gen2WorldCollision.gen1_is_dungeon_tileset(number), "tileset %d" % number)

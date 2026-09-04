@@ -183,7 +183,8 @@ const ENVIRONMENT_TOWN: int = 1
 const ENVIRONMENT_ROUTE: int = 2
 
 
-## Generation 1's answer to [method tile_palettes]. There are no eight slots:
+## What [method tile_palettes] answers on a Generation 1 cartridge. There are no
+## eight slots:
 ## `SetPal_Overworld` names one `SuperPalettes` row and the
 ## `BlkPacket_WholeScreen` behind it gives that row every attribute block, so
 ## the whole screen draws in the same four colours. [param last_map] is
@@ -218,6 +219,19 @@ static func gen1_object_colors(colors: PackedColorArray) -> PackedColorArray:
 	return PokePalette.through_shades(colors, Gen1Layout.OBJECT_SHADES)
 
 
+## `FillWhiteBGColor`, which only the fade out of the map runs: every background
+## palette takes palette 0's own colour 0, so the order that flattens a palette
+## onto it flattens the screen onto one white.
+static func _flood_white(resolved: Array) -> void:
+	if resolved.is_empty():
+		return
+	var white: Color = (resolved[0] as PackedColorArray)[0]
+	for slot: int in range(1, resolved.size()):
+		var palette: PackedColorArray = resolved[slot]
+		palette[0] = white
+		resolved[slot] = palette
+
+
 ## One palette per tile of [param tileset], in tile order.
 ##
 ## Every tile of the strip shares eight palette slots, so the eight are resolved
@@ -233,7 +247,10 @@ static func tile_palettes(
 	cave_color: int = -1,
 	fade_order: int = FADE_IDENTITY,
 	white_fill: bool = false,
+	last_map: int = -1,
 ) -> Array:
+	if data.generation == RomRegistry.GEN1:
+		return gen1_tile_palettes(data, map, tileset, last_map, fade_order)
 	## `LoadMapPals` asks `LoadSpecialMapPalette` first, and its carry skips the
 	## environment and time-of-day pair entirely.
 	var special: Array = data.special_map_palettes(map.tileset, map.environment)
@@ -259,15 +276,8 @@ static func tile_palettes(
 			slot_palette[1] = roof[0]
 			slot_palette[2] = roof[1]
 			resolved[PAL_BG_ROOF] = slot_palette
-	# `FillWhiteBGColor`, which only the fade out of the map runs: every
-	# background palette takes palette 0's own colour 0, so the order that
-	# flattens a palette onto it flattens the screen onto one white.
-	if white_fill and not resolved.is_empty():
-		var white: Color = (resolved[0] as PackedColorArray)[0]
-		for slot: int in range(1, resolved.size()):
-			var palette: PackedColorArray = resolved[slot]
-			palette[0] = white
-			resolved[slot] = palette
+	if white_fill:
+		_flood_white(resolved)
 	if fade_order != FADE_IDENTITY:
 		for slot: int in resolved.size():
 			resolved[slot] = fade_palette(resolved[slot], fade_order)

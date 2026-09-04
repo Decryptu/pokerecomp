@@ -9761,3 +9761,163 @@ func test_a_cancelled_party_list_prints_the_two_boxes_that_have_one() -> void:
 			}))
 			assert_eq(results[0]["status"], &"waiting")
 			assert_eq(results[0]["event"]["text"], String(row[1 if chosen < 0 else 2]))
+
+
+## A Generation 1 cache: three maps whose collision grid holds the tile each cell
+## draws, which is what `CheckTilePassable` reads. Map 0 is a town with a door
+## tile and a ledge, map 1 the house behind it, whose mat warps back through
+## `LAST_MAP`, and map 2 a FOREST map holding one `TilePairCollisionsLand` pair.
+const GEN1_FLOOR: int = 0x00
+const GEN1_WALL: int = 0x0A
+const GEN1_DOOR: int = 0x1B
+const GEN1_MAT: int = 0x14
+const GEN1_TOWN_CELLS: Array[int] = [
+	0x0A, 0x0A, 0x0A, 0x0A,
+	0x00, 0x1B, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x2C, 0x00, 0x00,
+	0x00, 0x37, 0x00, 0x14,
+	0x00, 0x00, 0x00, 0x00,
+]
+const GEN1_HOUSE_CELLS: Array[int] = [
+	0x0A, 0x0A, 0x0A, 0x0A,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x14, 0x00, 0x0A,
+]
+const GEN1_FOREST_CELLS: Array[int] = [
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x30, 0x2E, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
+]
+
+
+func _gen1_directory() -> String:
+	return RomCache.directory_for(&"testred", "fedcba9876543210")
+
+
+func _write_gen1_cache() -> void:
+	var directory: String = _gen1_directory()
+	RomCache.clear(directory)
+	RomCache.prepare(directory)
+	for path: String in [
+		RomCache.species_path(directory), RomCache.moves_path(directory),
+		RomCache.items_path(directory), RomCache.types_path(directory),
+		RomCache.matchups_path(directory), RomCache.trainers_path(directory),
+	]:
+		RomCache.write_json(path, [])
+	var wall_block: Array = []
+	for _tile: int in 16:
+		wall_block.append(GEN1_WALL)
+	var tilesets: Array = []
+	for number: int in 4:
+		tilesets.append({
+			"number": number, "block_count": 1, "tile_count": 96,
+			"meta": wall_block, "passable_tiles": [GEN1_FLOOR, GEN1_DOOR, 0x2C, 0x30, 0x2E],
+			"counter_tiles": [], "grass_tile": 0xFF, "animation": 0,
+			"water": number == Gen1Layout.TILESET_OVERWORLD,
+		})
+	tilesets[1]["passable_tiles"] = [GEN1_FLOOR, GEN1_MAT]
+	RomCache.write_json(RomCache.world_tilesets_path(directory), tilesets)
+	RomCache.write_json(RomCache.world_maps_path(directory), [
+		_gen1_map(0, Gen1Layout.TILESET_OVERWORLD, 2, 3, GEN1_TOWN_CELLS,
+			[{"x": 1, "y": 1, "destination": 0, "map_group": 0, "map_number": 1}]),
+		_gen1_map(1, 1, 2, 2, GEN1_HOUSE_CELLS, [{
+			"x": 1, "y": 3, "destination": 0, "map_group": 0,
+			"map_number": Gen1Layout.WARP_TO_LAST_MAP,
+		}]),
+		_gen1_map(2, 3, 2, 2, GEN1_FOREST_CELLS, []),
+	])
+	var pixels := PackedByteArray()
+	pixels.resize(96 * PokeTiles.TILE_PIXELS)
+	for number: int in 4:
+		RomCache.write_indices(RomCache.world_tile_path(directory, number), pixels)
+	RomCache.write_json(RomCache.manifest_path(directory), {
+		"format_version": RomCache.FORMAT_VERSION,
+		"game_id": "red",
+		"generation": RomRegistry.GEN1,
+		"sha1": "fedcba9876543210",
+		"complete": true,
+	})
+
+
+func _gen1_map(
+	number: int, tileset: int, width: int, height: int, cells: Array[int], warps: Array
+) -> Dictionary:
+	var blocks: Array = []
+	for _block: int in width * height:
+		blocks.append(0)
+	return {
+		"group": 0, "number": number, "tileset": tileset, "border_block": 0,
+		"width_blocks": width, "height_blocks": height, "blocks": blocks,
+		"collision": cells, "collision_width": width * 2, "collision_height": height * 2,
+		"connection_flags": 0, "connections": [],
+		"events": {"warps": warps, "coord_events": [], "bg_events": [], "objects": []},
+	}
+
+
+func _gen1_world(number: int, start: Vector2i) -> Gen2WorldAPI:
+	_write_gen1_cache()
+	return Gen2WorldAPI.open(
+		GameData.open_directory(_gen1_directory()), 0, number, start, Gen2WorldState.new()
+	)
+
+
+## `CheckTilePassable` walks the tileset's own list, so a tile that is not on it
+## walls the cell whatever a Generation 2 permission table would have said of it.
+func test_gen1_walking_reads_the_tilesets_passable_list() -> void:
+	var world: Gen2WorldAPI = _gen1_world(0, Vector2i(1, 1))
+	assert_eq(world.collision_permission_at(Vector2i(1, 1)), Gen2WorldCollision.LAND_TILE)
+	assert_eq(world.collision_permission_at(Vector2i(1, 0)), Gen2WorldCollision.WALL_TILE)
+	assert_false(world.move(Vector2i.UP), "the wall row let the player through")
+	assert_true(world.move(Vector2i.DOWN))
+	RomCache.clear(_gen1_directory())
+
+
+## `IsNextTileShoreOrWater`: $14 is water on a `WaterTilesets` row and the mat in
+## front of Red's own door everywhere else.
+func test_gen1_water_needs_a_water_tileset() -> void:
+	var world: Gen2WorldAPI = _gen1_world(0, Vector2i(0, 4))
+	assert_eq(world.collision_permission_at(Vector2i(3, 4)), Gen2WorldCollision.WATER_TILE)
+	world = _gen1_world(1, Vector2i(1, 2))
+	assert_eq(world.collision_permission_at(Vector2i(1, 3)), Gen2WorldCollision.LAND_TILE)
+	RomCache.clear(_gen1_directory())
+
+
+## `warp_event` stores its destination already counting from zero, and the way
+## back out names `LAST_MAP` rather than a map of its own.
+func test_gen1_warp_and_the_way_back_through_last_map() -> void:
+	var world: Gen2WorldAPI = _gen1_world(0, Vector2i(1, 1))
+	world.player_facing = Gen2WorldSprite.FACING_UP
+	assert_true(bool(world.try_warp().get("ok", false)), "the door refused")
+	assert_eq(world.map_id(), Vector2i(0, 1))
+	assert_eq(world.player_cell, Vector2i(1, 3))
+	assert_eq(world.gen1_last_map(), 0)
+	world.player_facing = Gen2WorldSprite.FACING_DOWN
+	assert_true(bool(world.try_warp().get("ok", false)), "the mat refused")
+	assert_eq(world.map_id(), Vector2i(0, 0))
+	assert_eq(world.player_cell, Vector2i(1, 1))
+	RomCache.clear(_gen1_directory())
+
+
+## `HandleLedges` reads the faced tile as well as the one stood on, and the hop
+## covers two cells as `wSimulatedJoypadStatesIndex`'s 2 does.
+func test_gen1_ledge_hop_crosses_the_ledge_tile() -> void:
+	var world: Gen2WorldAPI = _gen1_world(0, Vector2i(1, 3))
+	var hop: Dictionary = world.move_result(Vector2i.DOWN)
+	assert_eq(StringName(hop.get("kind", &"")), &"ledge_hop")
+	assert_eq(world.player_cell, Vector2i(1, 5))
+	RomCache.clear(_gen1_directory())
+
+
+## `CheckForTilePairCollisions`: two passable FOREST tiles the player may not
+## cross between, refused in either order.
+func test_gen1_tile_pair_collision_blocks_a_step_between_two_passable_tiles() -> void:
+	var world: Gen2WorldAPI = _gen1_world(2, Vector2i(1, 1))
+	assert_eq(world.collision_permission_at(Vector2i(2, 1)), Gen2WorldCollision.LAND_TILE)
+	assert_false(world.move(Vector2i.RIGHT), "the pair let the player across")
+	world = _gen1_world(2, Vector2i(2, 1))
+	assert_false(world.move(Vector2i.LEFT), "the pair let the player back")
+	assert_true(world.move(Vector2i.UP))
+	RomCache.clear(_gen1_directory())
