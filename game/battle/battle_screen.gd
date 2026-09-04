@@ -1992,6 +1992,7 @@ func _begin_animation(event: Dictionary) -> void:
 	var index: int = int(event.get("index", 0))
 	var after: int = int(event.get("after_anim", 0))
 	var is_move: bool = index < ANIM_MOVE_LIMIT
+	var gen1: bool = _anim_data != null and _anim_data.gen1()
 
 	# `PlayFXAnimID`'s own `ld c, 3 / call DelayFrames`, then `_PlayBattleAnim`'s
 	# six, `BattleAnimAssignPals`/`..._RequestPals` and one more. The two pal
@@ -2003,11 +2004,15 @@ func _begin_animation(event: Dictionary) -> void:
 
 	if is_move:
 		if Gen2OptionsStore.current().battle_scene:
-			_step(ANIM_CLEAR_HUD, {})
+			# `MoveAnimation` leaves the panels where they are: only Crystal's
+			# `_PlayBattleAnim` takes the acting side's hud off the map first.
+			if not gen1:
+				_step(ANIM_CLEAR_HUD, {})
 			_step(ANIM_SCRIPT, {"index": index})
 			# `xor a / ldh [hSCX] / ldh [hSCY]`, a delay, then the huds.
 			_step(ANIM_DELAY, {"frames": 1})
-			_step(ANIM_RESTORE_HUD, {})
+			if not gen1:
+				_step(ANIM_RESTORE_HUD, {})
 		else:
 			_apply_sub_pic_no_anim(index, int(event.get("param", 0)))
 		if after != 0:
@@ -2026,7 +2031,7 @@ func _begin_animation(event: Dictionary) -> void:
 	_step(ANIM_WAIT_SFX, {})
 	# A send-out draws the picture itself and the ball animation only shows it
 	# arriving, so a cache with no animation layer still owes the square one.
-	if bool(event.get("restore_user_pic", false)) or (not is_move and _anim_data == null):
+	if bool(event.get("restore_user_pic", false)) or (not is_move and _anim_row(index) < 0):
 		_step(ANIM_APPEAR_USER, {})
 	_run_next_anim_step()
 
@@ -2132,18 +2137,50 @@ func _run_next_anim_step() -> void:
 	_push_view()
 
 
+## `AttackAnimationPointers`' rows for the ids the engine names past a move
+## number. Generation 1 numbers those differently from Crystal, and both of the
+## status pairs are picked by which side the animation is playing on.
+const GEN1_ANIM_IDS: Dictionary = {
+	Gen2BattleAnimPlayer.ANIM_CONFUSED: [190, 191],
+	Gen2BattleAnimPlayer.ANIM_BRN: [186, 186],
+	Gen2BattleAnimPlayer.ANIM_PSN: [186, 186],
+	Gen2BattleAnimPlayer.ANIM_PAR: [184, 184],
+}
+
+
+## `wAnimationID` less one, which is what `AttackAnimationPointers` is indexed
+## by. Crystal's own table is indexed by the id itself, so this is the identity
+## there. -1 is an id this cartridge has no row for: `ANIM_SEND_OUT_MON`, the
+## thrown ball and the four after-anims are all their own routines in Generation
+## 1 rather than entries in the table, and `ANIM_FRZ` has no animation at all.
+func _anim_row(index: int) -> int:
+	if _anim_data == null:
+		return -1
+	if not _anim_data.gen1():
+		return index
+	if index < ANIM_MOVE_LIMIT:
+		return index - 1
+	var pair: Variant = GEN1_ANIM_IDS.get(index, null)
+	if not pair is Array:
+		return -1
+	return int((pair as Array)[1 if bool(_anim_event.get("enemy_turn", false)) else 0]) - 1
+
+
 ## `RunBattleAnimScript`, which is `ClearBattleAnims` and then a frame loop. The
 ## tilemap the battle is showing is what the effects edit, so it goes in here
 ## and comes back out at the end. A cache carrying no animation layer answers
 ## with no player, and the step is skipped rather than the whole framing: the
 ## delays and the hud belong to the screen, not to the data.
 func _start_script(index: int) -> bool:
-	if _anim_data == null:
+	var row: int = _anim_row(index)
+	if _anim_data == null or row < 0:
 		return false
 	var wobbles: Array[int] = []
 	wobbles.assign(_anim_event.get("wobbles", []))
-	_anim = Gen2BattleAnimPlayer.create(
-		_anim_data, index, bool(_anim_event.get("enemy_turn", false)),
+	_anim = Gen2BattleAnimPlayer.create_gen1(
+		_anim_data, row, bool(_anim_event.get("enemy_turn", false))
+	) if _anim_data.gen1() else Gen2BattleAnimPlayer.create(
+		_anim_data, row, bool(_anim_event.get("enemy_turn", false)),
 		int(_anim_event.get("param", 0)), wobbles
 	)
 	if _anim == null:

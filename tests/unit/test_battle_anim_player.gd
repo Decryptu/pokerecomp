@@ -289,7 +289,9 @@ func test_a_callback_or_effect_past_its_table_is_reported() -> void:
 		SPAWN + [0xF0, 0x22, 0x00, 0x00, 0x00] + [0x01] + RET, 2, 0x09
 	)
 	whole.advance_frame()
-	assert_eq(whole.unimplemented(), {"bg_effects": [], "functions": []})
+	assert_eq(
+		whole.unimplemented(), {"bg_effects": [], "functions": [], "gen1_effects": []}
+	)
 
 
 ## An animation the cache does not carry answers null rather than an empty
@@ -297,3 +299,165 @@ func test_a_callback_or_effect_past_its_table_is_reported() -> void:
 func test_an_animation_the_cache_does_not_have_answers_null() -> void:
 	assert_null(Gen2BattleAnimPlayer.create(_data(RET), 1))
 	assert_null(Gen2BattleAnimPlayer.create(null, 0))
+
+
+## `PlayAnimation`'s own layer, built by hand the same way: one animation, one
+## subanimation and one frame block, so `DrawFrameBlock`'s four transforms and
+## `FRAMEBLOCKMODE_*` are checked against the coordinates rather than against a
+## cartridge's own tables.
+const GEN1_ANIMS: int = BASE
+const GEN1_SUBANIMS: int = BASE + 0x40
+const GEN1_BLOCKS: int = BASE + 0x60
+const GEN1_COORDS: int = BASE + 0x80
+## `BASECOORD_00`, which every case below is placed from.
+const GEN1_BASE_Y: int = 0x10
+const GEN1_BASE_X: int = 0x68
+
+
+## One animation playing subanimation 0 at [param delay], whose one row draws
+## frame block 0 at base coordinate 0 in [param mode]. The frame block is one
+## sprite at the corner, so a transform shows as the coordinates alone.
+func _gen1_data(
+	kind: int, mode: int = 0, delay: int = 4, rows: int = 1, attributes: int = 0
+) -> Gen2BattleAnimData:
+	var bytes: Array = []
+	bytes.resize(0x100)
+	bytes.fill(0)
+	var write := func(at: int, values: Array) -> void:
+		for index: int in values.size():
+			bytes[at - BASE + index] = int(values[index]) & 0xFF
+
+	write.call(GEN1_ANIMS, [(GEN1_ANIMS + 2) & 0xFF, (GEN1_ANIMS + 2) >> 8])
+	write.call(GEN1_ANIMS + 2, [delay, Gen1Layout.ANIM_NO_SOUND, 0x00, Gen1Layout.ANIM_END])
+	write.call(GEN1_SUBANIMS, [(GEN1_SUBANIMS + 2) & 0xFF, (GEN1_SUBANIMS + 2) >> 8])
+	var subanim: Array = [(kind << Gen1Layout.SUBANIM_TYPE_SHIFT) | rows]
+	for row: int in rows:
+		subanim.append_array([0x00, 0x00, mode])
+	write.call(GEN1_SUBANIMS + 2, subanim)
+	write.call(GEN1_BLOCKS, [(GEN1_BLOCKS + 2) & 0xFF, (GEN1_BLOCKS + 2) >> 8])
+	write.call(GEN1_BLOCKS + 2, [0x01, 0x00, 0x00, 0x00, attributes])
+	write.call(GEN1_COORDS, [GEN1_BASE_Y, GEN1_BASE_X])
+
+	return Gen2BattleAnimData.create_gen1(
+		{"bank": Gen1Layout.ANIM_BANK, "address": BASE, "count": 1, "data": _bytes(bytes)},
+		[{"tiles": 79, "sheet": true}],
+		{
+			&"subanims": GEN1_SUBANIMS,
+			&"frame_blocks": GEN1_BLOCKS,
+			&"base_coords": GEN1_COORDS,
+		},
+		PackedInt32Array(), PackedInt32Array()
+	)
+
+
+func _gen1_sprite(
+	kind: int, enemy_turn: bool, attributes: int = 0
+) -> Dictionary:
+	var player: Gen2BattleAnimPlayer = Gen2BattleAnimPlayer.create_gen1(
+		_gen1_data(kind, 0, 4, 1, attributes), 0, enemy_turn
+	)
+	player.advance_frame()
+	return (player.sprites() as Array)[0]
+
+
+## `GetSubanimationTransform1`: a subanimation is drawn untransformed on the
+## player's turn whatever its type says, and takes its type on the enemy's.
+func test_a_generation_1_subanimation_is_untransformed_on_the_players_turn() -> void:
+	var sprite: Dictionary = _gen1_sprite(Gen1Layout.SUBANIMTYPE_HVFLIP, false)
+	assert_eq(
+		[sprite["y"], sprite["x"], sprite["tile"]],
+		[GEN1_BASE_Y, GEN1_BASE_X, Gen1Layout.ANIM_BASE_TILE]
+	)
+
+
+## `DrawFrameBlock`'s three coordinate branches, each about its own constant.
+func test_a_generation_1_subanimation_takes_its_transform_on_the_enemys_turn() -> void:
+	var flipped: Dictionary = _gen1_sprite(Gen1Layout.SUBANIMTYPE_HVFLIP, true)
+	assert_eq(
+		[flipped["y"], flipped["x"]],
+		[Gen1Layout.ANIM_FLIP_Y - GEN1_BASE_Y, Gen1Layout.ANIM_FLIP_X - GEN1_BASE_X]
+	)
+	assert_eq(
+		flipped["attributes"],
+		Gen2BattleAnimObject.OAM_YFLIP | Gen2BattleAnimObject.OAM_XFLIP,
+		"a bare frame block flips both ways under SUBANIMTYPE_HVFLIP"
+	)
+
+	var half: Dictionary = _gen1_sprite(Gen1Layout.SUBANIMTYPE_HFLIP, true)
+	assert_eq(
+		[half["y"], half["x"], half["attributes"]],
+		[
+			GEN1_BASE_Y + Gen1Layout.ANIM_HFLIP_DROP,
+			Gen1Layout.ANIM_FLIP_X - GEN1_BASE_X,
+			Gen2BattleAnimObject.OAM_XFLIP,
+		]
+	)
+
+	var coords: Dictionary = _gen1_sprite(Gen1Layout.SUBANIMTYPE_COORDFLIP, true)
+	assert_eq(
+		[coords["y"], coords["x"], coords["attributes"]],
+		[
+			Gen1Layout.ANIM_FLIP_Y - GEN1_BASE_Y,
+			Gen1Layout.ANIM_FLIP_X - GEN1_BASE_X,
+			0,
+		]
+	)
+
+
+## `SUBANIMTYPE_ENEMY` is the one type read the other way round.
+func test_the_enemy_subanimation_type_flips_on_the_players_turn() -> void:
+	var mine: Dictionary = _gen1_sprite(Gen1Layout.SUBANIMTYPE_ENEMY, false)
+	assert_eq(mine["x"], Gen1Layout.ANIM_FLIP_X - GEN1_BASE_X)
+	var theirs: Dictionary = _gen1_sprite(Gen1Layout.SUBANIMTYPE_ENEMY, true)
+	assert_eq(theirs["x"], GEN1_BASE_X)
+
+
+## `SUBANIMTYPE_HVFLIP` compares the whole attribute byte against three
+## constants, so an OBP1 bit falls through to no flags rather than being kept.
+func test_the_hvflip_transform_drops_an_attribute_it_does_not_recognise() -> void:
+	var sprite: Dictionary = _gen1_sprite(
+		Gen1Layout.SUBANIMTYPE_HVFLIP, true, Gen1Layout.ANIM_OAM_OBP1
+	)
+	assert_eq(sprite["attributes"], 0)
+
+
+## The delay is what a frame block is shown for, and `FRAMEBLOCKMODE_00` clears
+## the buffer after it where `FRAMEBLOCKMODE_02` keeps it and takes no delay.
+func test_a_generation_1_frame_block_is_shown_for_its_own_delay() -> void:
+	var player: Gen2BattleAnimPlayer = Gen2BattleAnimPlayer.create_gen1(
+		_gen1_data(Gen1Layout.SUBANIMTYPE_NORMAL, 0, 3, 2), 0
+	)
+	var counts: Array[int] = []
+	for _frame: int in 8:
+		player.advance_frame()
+		counts.append((player.sprites() as Array).size())
+	assert_eq(counts, [1, 1, 1, 1, 1, 1, 0, 0], "three frames a block, two blocks")
+
+	var kept: Gen2BattleAnimPlayer = Gen2BattleAnimPlayer.create_gen1(
+		_gen1_data(Gen1Layout.SUBANIMTYPE_NORMAL, Gen1Layout.FRAMEBLOCKMODE_KEEP, 3, 2), 0
+	)
+	var stacked: Array[int] = []
+	for _frame: int in 7:
+		kept.advance_frame()
+		stacked.append((kept.sprites() as Array).size())
+	assert_eq(stacked, [1, 1, 1, 2, 2, 2, 0], "FRAMEBLOCKMODE_03 keeps the buffer")
+
+	var quick: Gen2BattleAnimPlayer = Gen2BattleAnimPlayer.create_gen1(
+		_gen1_data(
+			Gen1Layout.SUBANIMTYPE_NORMAL, Gen1Layout.FRAMEBLOCKMODE_KEEP_NO_DELAY, 3, 2
+		), 0
+	)
+	quick.advance_frame()
+	assert_true(
+		quick.finished(), "FRAMEBLOCKMODE_02 takes no delay, so both blocks land at once"
+	)
+
+
+## An animation the cache does not carry answers null on either engine.
+func test_a_generation_1_animation_outside_the_table_answers_null() -> void:
+	assert_null(Gen2BattleAnimPlayer.create_gen1(_gen1_data(0), 1))
+	assert_null(Gen2BattleAnimPlayer.create_gen1(null, 0))
+	assert_null(
+		Gen2BattleAnimPlayer.create_gen1(_data(RET), 0),
+		"a Generation 2 layer has no `anims` region to walk"
+	)

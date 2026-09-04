@@ -195,6 +195,89 @@ const BATTLE_HUD_1_FIRST_CODE: int = 0x6D
 const BATTLE_HUD_2_TILES: int = 6
 const BATTLE_HUD_2_FIRST_CODE: int = 0x73
 
+## The battle animation layer, all of it in bank $1E: `AttackAnimationPointers`,
+## `SubanimationPointers`, `FrameBlockPointers` and `FrameBlockBaseCoords` with
+## their data interleaved between them, so the cache holds one region and every
+## table resolves inside it.
+const ANIM_COUNT_RED_BLUE: int = 203
+## Yellow drops `ZigZagScreenAnim`, the one entry past `NUM_ATTACK_ANIMS`.
+const ANIM_COUNT_YELLOW: int = 202
+const SUBANIM_COUNT: int = 86
+const FRAME_BLOCK_COUNT: int = 122
+const BASE_COORD_COUNT: int = 177
+const BASE_COORD_SIZE: int = 2
+const SUBANIM_ROW_SIZE: int = 3
+const FRAME_BLOCK_SPRITE_SIZE: int = 4
+const SPECIAL_EFFECT_ROW_SIZE: int = 3
+
+## One `battle_anim` row. A byte at or above `FIRST_SE_ID` names a special
+## effect and takes a sound after it; anything below is a subanimation's tileset
+## in the top two bits and its frame delay in the low six, then a sound and a
+## subanimation id.
+const ANIM_FIRST_SE_ID: int = 0xC0
+const ANIM_END: int = 0xFF
+## `NO_MOVE - 1`, the sound byte that plays nothing.
+const ANIM_NO_SOUND: int = 0xFF
+const ANIM_DELAY_MASK: int = 0x3F
+const ANIM_TILESET_SHIFT: int = 6
+const ANIM_SE_SIZE: int = 2
+const ANIM_SUBANIM_SIZE: int = 3
+
+## One `subanim` header: the count in the low five bits, the type in the top
+## three.
+const SUBANIM_COUNT_MASK: int = 0x1F
+const SUBANIM_TYPE_SHIFT: int = 5
+const SUBANIMTYPE_NORMAL: int = 0
+const SUBANIMTYPE_HVFLIP: int = 1
+const SUBANIMTYPE_HFLIP: int = 2
+const SUBANIMTYPE_COORDFLIP: int = 3
+const SUBANIMTYPE_REVERSE: int = 4
+const SUBANIMTYPE_ENEMY: int = 5
+const SUBANIMTYPE_COUNT: int = 6
+
+## `FRAMEBLOCKMODE_*`. 02 keeps the sprites and skips the delay, 03 keeps them
+## and takes it, 04 keeps them and does not advance the write position.
+const FRAMEBLOCKMODE_COUNT: int = 5
+const FRAMEBLOCKMODE_KEEP_NO_DELAY: int = 2
+const FRAMEBLOCKMODE_KEEP: int = 3
+const FRAMEBLOCKMODE_HOLD: int = 4
+
+## What `DrawFrameBlock` flips a coordinate about, and the offset
+## `SUBANIMTYPE_HFLIP` translates down by.
+const ANIM_FLIP_Y: int = 136
+const ANIM_FLIP_X: int = 168
+const ANIM_HFLIP_DROP: int = 40
+
+## `FallingObjects_DeltaXs` is nine bytes and `FallingObjects_UpdateMovementByte`
+## only wraps a movement byte that reaches nine, so the two objects
+## `FallingObjects_InitialMovementData` starts at nine walk off the end and read
+## the routine's own machine code as their drift. The byte is masked to seven
+## bits, so 128 is as far as one can reach; the two dumps disagree past the ninth
+## and both are cached.
+const FALLING_DELTA_BYTES: int = 128
+const FALLING_DELTA_TABLE: int = 9
+
+## `MoveAnimationTilesPointers`: three `anim_tileset` rows of a tile count, a
+## bank-local pointer and a padding byte. Tileset 2 is tileset 0 cut short.
+const ANIM_TILESET_COUNT: int = 3
+const ANIM_TILESET_ROW_SIZE: int = 4
+const ANIM_TILESET_TILES: int = 0
+const ANIM_TILESET_POINTER: int = 1
+
+## The bank every table above lives in, and `vSprites tile $31`, which
+## `DrawFrameBlock` adds to a frame block's tile so the id is an index into the
+## loaded tileset.
+const ANIM_BANK: int = 0x1E
+const ANIM_BASE_TILE: int = 0x31
+
+## `SetAnimationPalette` on the Super Game Boy: `rOBP0` while a subanimation
+## draws is `wAnimPalette`, $F0, and `rOBP1` is $6C throughout.
+const ANIM_OBP0: int = 0xF0
+const ANIM_OBP1: int = 0x6C
+## The DMG palette bit of an OAM attribute byte, where Generation 2 keeps a
+## three-bit Game Boy Color palette.
+const ANIM_OAM_OBP1: int = 0x10
+
 ## What pins the two sheets: the edge under both panels is two solid rows in
 ## the middle of six blank ones, and the empty bar is a rule top and bottom.
 const HUD_BOTTOM_CODE: int = 0x76
@@ -495,6 +578,15 @@ const RED_BLUE: Dictionary = {
 	"wild_chances": 0x13918,
 	"good_rod": 0x0E27F,
 	"super_rod": 0x0E919,
+	## `data/battle_anims`, every one of them in bank $1E and reached from
+	## `AttackAnimationPointers`.
+	"attack_anims": 0x7A07D,
+	"subanims": 0x7A76D,
+	"frame_blocks": 0x7AF74,
+	"base_coords": 0x7BC85,
+	"special_effects": 0x790DA,
+	"anim_tilesets": 0x781F2,
+	"falling_deltas": 0x79D0D,
 	## `_IsTilePassable` and the lists it walks share a bank, and the pointer in
 	## a tileset row names no bank of its own. Red and Blue keep both in home.
 	"tileset_collision_bank": 0x00,
@@ -547,6 +639,13 @@ const YELLOW: Dictionary = {
 	"good_rod": 0x0E12C,
 	## Yellow's is a flat slot table rather than an index into groups.
 	"super_rod": 0xF5EDA,
+	"attack_anims": 0x7A22A,
+	"subanims": 0x7A915,
+	"frame_blocks": 0x7B11C,
+	"base_coords": 0x7BE2D,
+	"special_effects": 0x79145,
+	"anim_tilesets": 0x7822B,
+	"falling_deltas": 0x79E96,
 	"tileset_collision_bank": 0x01,
 }
 
@@ -750,6 +849,11 @@ static func warp_wants_carpet(map_id: int, tileset: int) -> bool:
 
 static func tileset_count(id: StringName) -> int:
 	return TILESET_COUNT_YELLOW if id == RomRegistry.YELLOW else TILESET_COUNT_RED_BLUE
+
+
+## How many `AttackAnimationPointers` rows the cartridge holds.
+static func anim_count(id: StringName) -> int:
+	return ANIM_COUNT_YELLOW if id == RomRegistry.YELLOW else ANIM_COUNT_RED_BLUE
 
 
 ## `NUM_SPRITES`. Yellow added ten walking sprites in front of the still ones.
